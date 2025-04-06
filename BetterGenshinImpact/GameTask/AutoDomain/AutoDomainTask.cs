@@ -89,7 +89,7 @@ public class AutoDomainTask : ISoloTask
     {
         _ct = ct;
 
-        Init();//c23
+        Init();//c234
         Notify.Event(NotificationEvent.DomainStart).Success("自动秘境启动");
 
         // 3次复活重试
