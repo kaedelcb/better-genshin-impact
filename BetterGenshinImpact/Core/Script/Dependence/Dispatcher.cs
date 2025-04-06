@@ -151,6 +151,32 @@ public class Dispatcher
                 await new AutoFishingTask(AutoFishingTaskParam.BuildFromSoloTaskConfig(soloTask.Config)).Start(
                     CancellationContext.Instance.Cts.Token);
                 break;
+            
+            
+            //钓鱼标打开API--LCB
+            case "AutoFishingBIAOOPEN":
+                /*throw new ArgumentException("钓鱼标打开");*/
+                TaskContext.Instance().Config.AutoFishingConfig.Enabled = true; //钓鱼触发
+                break;
+            
+            //钓鱼标关闭API--LCB
+            case "AutoFishingBIAOCLOSE":
+                /*throw new ArgumentException("钓鱼标关闭");*/
+                TaskContext.Instance().Config.AutoFishingConfig.Enabled = false; //钓鱼关闭触发
+                break;
+            
+            case "LCBautoConfigOPEN":
+                /*throw new ArgumentException("标打开");*/
+                TaskContext.Instance().Config.LCBauto.Enabled = true; //触发
+                break;
+            
+            //钓鱼标关闭API--LCB
+            case "LCBautoConfigCLOSE":
+                /*throw new ArgumentException("标关闭");*/
+                TaskContext.Instance().Config.LCBauto.Enabled = false; //关闭触发
+                break;
+            
+            
 
             default:
                 throw new ArgumentException($"未知的任务名称: {soloTask.Name}", nameof(soloTask.Name));

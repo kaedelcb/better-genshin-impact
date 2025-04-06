@@ -40,7 +40,7 @@ public class CheckRewardsTask
         try
         {
             await new ReturnMainUiTask().Start(ct);
-            Simulation.SendInput.SimulateAction(GIActions.OpenAdventurerHandbook); // F1 开书
+            //Simulation.SendInput.SimulateAction(GIActions.OpenAdventurerHandbook); // F1 开书
             await Delay(2000, ct);
             // OCR识别每日是否完成
             var assetScale = TaskContext.Instance().SystemInfo.AssetScale;
@@ -50,13 +50,20 @@ public class CheckRewardsTask
             if (done != null)
             {
                 Logger.LogInformation("检查每日奖励结果：{Msg}", "今日奖励已领取");
+                //==============================完成一条龙后打开钓鱼标记======LCB==========================================
+                TaskContext.Instance().Config.AutoFishingConfig.Enabled = true; //钓鱼触发新功能
+                //==============================================================================
                 Notify.Event(NotificationEvent.DailyReward).Success("检查每日奖励：已领取");
             }
             else
             {
                 Logger.LogWarning("检查每日奖励结果：{Msg}，请手动检查！", "未领取");
+                //==============================完成一条龙后打开钓鱼标记======LCB==========================================
+                TaskContext.Instance().Config.AutoFishingConfig.Enabled = true; //钓鱼触发新功能
+                //==============================================================================
                 Notify.Event(NotificationEvent.DailyReward).Error("检查到每日奖励未领取，请手动查看！");
             }
+            
         }
         catch (Exception e)
         {

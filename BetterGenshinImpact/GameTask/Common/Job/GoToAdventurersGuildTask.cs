@@ -156,6 +156,15 @@ public class GoToAdventurersGuildTask
         };
         await pathingTask.Pathing(task);
 
+        //===========向前走备份不生效，看情况====LCB
+        Logger.LogInformation("到达，向前寻找按钮");
+        Simulation.SendInput.Keyboard.KeyDown(User32.VK.VK_A);
+        Simulation.SendInput.Keyboard.KeyDown(User32.VK.VK_W);
+        await Delay(100, ct);
+        Simulation.SendInput.Keyboard.KeyUp(User32.VK.VK_A);
+        Simulation.SendInput.Keyboard.KeyUp(User32.VK.VK_W);
+        //===========向前走备份不生效====LCB
+        
         await Delay(600, ct);
 
         const int retryTalkTimes = 3;

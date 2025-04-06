@@ -83,6 +83,7 @@ namespace BetterGenshinImpact.ViewModel
                 StatusList.Add(new StatusItem("\ue5c8 邀约", Config.AutoSkipConfig, "AutoHangoutEventEnabled"));
                 StatusList.Add(new StatusItem("\uf578 钓鱼", Config.AutoFishingConfig));
                 StatusList.Add(new StatusItem("\uf3c5 传送", Config.QuickTeleportConfig));
+                StatusList.Add(new StatusItem("\uf1b9 自制", Config.LCBauto)); //LCB自制标志
             }
         }
 

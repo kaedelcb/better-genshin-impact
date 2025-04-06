@@ -48,6 +48,12 @@ public partial class OneDragonTaskItem : ObservableObject
 
     public void InitAction(OneDragonFlowConfig config)
     {
+        
+        //===========一条龙开始关闭自动钓鱼和值制标记=======LCB========
+        TaskContext.Instance().Config.AutoFishingConfig.Enabled = false; //钓鱼触发
+        TaskContext.Instance().Config.LCBauto.Enabled = false; //触发
+        //===========一条龙开始关闭自动钓鱼和值制标记=======LCB========
+        
         if (config.TaskEnabledList.TryGetValue(Name, out _))
         {
             config.TaskEnabledList[Name] = IsEnabled;
@@ -92,11 +98,20 @@ public partial class OneDragonTaskItem : ObservableObject
 
                     var (partyName, domainName) = config.GetDomainConfig();
 
+                    //LCB=========未配置秘境名称============
                     if (string.IsNullOrEmpty(domainName))
                     {
-                        TaskControl.Logger.LogError("一条龙配置内{Msg}需要刷的秘境，跳过","未选择");
+                        TaskControl.Logger.LogInformation("自动秘境任务：未配置秘境名称，跳过执行");
+                        TaskContext.Instance().Config.LCBauto.Enabled = true; //触发
                         return;
                     }
+                    else
+                    {
+                        TaskControl.Logger.LogInformation("自动秘境任务：执行");
+                        TaskContext.Instance().Config.LCBauto.Enabled = false; //触发
+                    }
+                    //LCB===========未配置秘境名称==========
+
 
                     var autoDomainParam = new AutoDomainParam(0, path)
                     {

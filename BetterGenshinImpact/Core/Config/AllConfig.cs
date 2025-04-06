@@ -28,6 +28,14 @@ namespace BetterGenshinImpact.Core.Config;
 [Serializable]
 public partial class AllConfig : ObservableObject
 {
+    
+    /// <summary>
+    ///     自制
+    /// </summary>
+    //================================LCB
+    public LCBautoConfig LCBauto { get; set; } = new();
+    //================================LCB
+
     /// <summary>
     ///     窗口捕获的方式
     /// </summary>
@@ -195,6 +203,7 @@ public partial class AllConfig : ObservableObject
 
     public void InitEvent()
     {
+        LCBauto.PropertyChanged += OnAnyPropertyChanged;
         PropertyChanged += OnAnyPropertyChanged;
         MaskWindowConfig.PropertyChanged += OnAnyPropertyChanged;
         CommonConfig.PropertyChanged += OnAnyPropertyChanged;

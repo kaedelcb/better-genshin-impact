@@ -318,9 +318,9 @@ public partial class HotKeyPageViewModel : ObservableObject, IViewModel
             true
         );
         timerDirectory.Children.Add(quickTeleportTickHotKeySettingModel);
-
+        //LCB
         var turnAroundHotKeySettingModel = new HotKeySettingModel(
-            "长按旋转视角 - 那维莱特转圈",
+            "LCB自制调用旋转吸取API",
             nameof(Config.HotKeyConfig.TurnAroundHotkey),
             Config.HotKeyConfig.TurnAroundHotkey,
             Config.HotKeyConfig.TurnAroundHotkeyType,
