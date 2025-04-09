@@ -176,6 +176,17 @@ public class Dispatcher
                 TaskContext.Instance().Config.LCBauto.Enabled = false; //关闭触发
                 break;
             
+            //关闭实时自动拾取API--LCB
+            case "LCBAutoPickCLOSE":
+                /*throw new ArgumentException("标关闭");*/
+                TaskContext.Instance().Config.AutoPickConfig.Enabled = false; //关闭触发
+                break;
+            
+            //关闭实时自动拾取API--LCB
+            case "LCBAutoPickOPEN":
+                /*throw new ArgumentException("标关闭");*/
+                TaskContext.Instance().Config.AutoPickConfig.Enabled = true; //关闭触发
+                break;
             
 
             default:
