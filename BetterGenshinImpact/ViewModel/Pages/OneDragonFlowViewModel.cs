@@ -156,6 +156,34 @@ public partial class OneDragonFlowViewModel : ViewModel
         SetSomeSelectedConfig(SelectedConfig);
     }
 
+    // OneDragonFlowViewModel.cs LCB 
+    public void SaveConfig()
+    {
+        if (SelectedConfig == null)
+        {
+            return;
+        }
+
+        // 清空现有的 TaskEnabledList
+        SelectedConfig.TaskEnabledList.Clear();
+
+        // 遍历 TaskList，将每个任务项的 IsEnabled 值保存到 TaskEnabledList 中
+        foreach (var task in TaskList)
+        {
+            SelectedConfig.TaskEnabledList[task.Name] = task.IsEnabled;
+        }
+
+        // 调用 WriteConfig 方法将配置写入文件
+        WriteConfig(SelectedConfig);
+    }
+    
+    // OneDragonFlowViewModel.cs
+    [RelayCommand]
+    private void SaveConfigCommandExecute()
+    {
+        SaveConfig();
+    }
+    
     private void SetSomeSelectedConfig(OneDragonFlowConfig? selected)
     {
         if (SelectedConfig != null)
