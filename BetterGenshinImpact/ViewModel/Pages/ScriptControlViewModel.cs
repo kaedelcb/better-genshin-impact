@@ -1429,7 +1429,7 @@ public partial class ScriptControlViewModel : ViewModel
         }
     }
 
-    private async Task StartGroups(List<ScriptGroup> scriptGroups)
+    public async Task StartGroups(List<ScriptGroup> scriptGroups)
     {
         _logger.LogInformation("开始连续执行选中配置组:{Names}", string.Join(",", scriptGroups.Select(x => x.Name)));
         try

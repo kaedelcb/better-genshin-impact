@@ -11,6 +11,48 @@ using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.ViewModel.Pages;
 using Microsoft.Extensions.Logging;
+using BetterGenshinImpact.Core.Script;
+using BetterGenshinImpact.Core.Script.Group;
+using BetterGenshinImpact.Service.Interface;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using BetterGenshinImpact.Core.Script.Project;
+using System.Windows;
+using BetterGenshinImpact.Core.Script.Group;
+using BetterGenshinImpact.ViewModel.Pages;
+using Wpf.Ui;
+using Wpf.Ui.Violeta.Controls;
+using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Service;
+using BetterGenshinImpact.Core.Script.Group;
+using System.IO;
+using BetterGenshinImpact.View.Windows;
+using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.Core.Script;
+using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
+
+using BetterGenshinImpact.View;
+using BetterGenshinImpact.View.Drawable;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using BetterGenshinImpact.Helpers;
+using Wpf.Ui.Violeta.Controls;
+using static BetterGenshinImpact.GameTask.Common.TaskControl;
+using BetterGenshinImpact.Service;
+using BetterGenshinImpact.Service.Notification;
+using BetterGenshinImpact.Service.Notification.Model.Enum;
+using System.Collections.ObjectModel;
+using BetterGenshinImpact.Service;
+using CommunityToolkit.Mvvm.ComponentModel;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.Text.Json;
+using BetterGenshinImpact.View.Windows.Editable;
+using WinRT;
 
 namespace BetterGenshinImpact.Model;
 
@@ -29,31 +71,16 @@ public partial class OneDragonTaskItem : ObservableObject
     private OneDragonBaseViewModel? _viewModel;
 
     public Func<Task>? Action { get; private set; }
-
+    public Func<Task>? Action2 { get; private set; }
+    
     public OneDragonTaskItem(string name)
     {
         Name = name;
     }
-
-    // public OneDragonTaskItem(Type viewModelType, Func<Task> action)
-    // {
-    //     ViewModel = App.GetService(viewModelType) as OneDragonBaseViewModel;
-    //     if (ViewModel == null)
-    //     {
-    //         throw new ArgumentException("Invalid view model type", nameof(viewModelType));
-    //     }
-    //     Name = ViewModel.Title;
-    //     Action = action;
-    // }
-
+    private readonly ScriptControlViewModel _scriptControlViewModel;
+    
     public void InitAction(OneDragonFlowConfig config)
     {
-        
-        //===========一条龙开始关闭自动钓鱼和值制标记=======LCB========
-        TaskContext.Instance().Config.AutoFishingConfig.Enabled = false; //钓鱼触发
-        TaskContext.Instance().Config.LCBauto.Enabled = false; //触发
-        //===========一条龙开始关闭自动钓鱼和值制标记=======LCB========
-        
         if (config.TaskEnabledList.TryGetValue(Name, out _))
         {
             config.TaskEnabledList[Name] = IsEnabled;
@@ -99,19 +126,18 @@ public partial class OneDragonTaskItem : ObservableObject
                     var (partyName, domainName) = config.GetDomainConfig();
 
                     //LCB=========未配置秘境名称============
-                    if (string.IsNullOrEmpty(domainName))
+                    if (string.IsNullOrEmpty(domainName) || partyName == "地脉花")
                     {
-                        TaskControl.Logger.LogInformation("自动秘境任务：未配置秘境名称，跳过执行");
-                        TaskContext.Instance().Config.LCBauto.Enabled = true; //触发
+                        TaskControl.Logger.LogInformation("自动秘境任务：未配置秘境名称或设置了地脉花，跳过执行");
+                        TaskContext.Instance().Config.LCBauto.Enabled = false; //触发
                         return;
                     }
                     else
                     {
                         TaskControl.Logger.LogInformation("自动秘境任务：执行");
-                        TaskContext.Instance().Config.LCBauto.Enabled = false; //触发
+                        TaskContext.Instance().Config.LCBauto.Enabled = true; //触发
                     }
                     //LCB===========未配置秘境名称==========
-
 
                     var autoDomainParam = new AutoDomainParam(0, path)
                     {
@@ -133,4 +159,135 @@ public partial class OneDragonTaskItem : ObservableObject
                 break;
         }
     }
+
+    public void InitActionPEI(OneDragonFlowConfig config)
+    {
+        if (config.TaskEnabledList.TryGetValue(Name, out _))
+        {
+            config.TaskEnabledList[Name] = IsEnabled;
+        }
+        else
+        {
+            config.TaskEnabledList.Add(Name, IsEnabled);
+        }   
+        
+        switch (Name)
+        {
+            case "默认配置组":
+                Action2 = async () => 
+                {
+                    
+                    TaskRunner.LockManager.ReleaseLock();
+                    await Task.Delay(2000);
+                   var snackbarService = new SnackbarService();
+                    var scriptService = new ScriptService();
+                    
+                    // 确保 ScriptControlViewModel 已正确初始化
+                    var viewModel = new ScriptControlViewModel(snackbarService, scriptService);
+                    string basePath = AppDomain.CurrentDomain.BaseDirectory;
+                    string relativePath = @"User\\ScriptGroup\\杂项和狗粮组========================.json";
+                    string filePath = Path.Combine(basePath, relativePath);
+                    viewModel.SelectedScriptGroup = new ScriptGroup { Name = "杂项和狗粮组========================" };
+                    viewModel.SelectedScriptGroup = ScriptGroup.FromJson(File.ReadAllText(filePath));
+                    
+                    if (TaskContext.Instance().Config.LCBauto.Enabled == true )
+                    { 
+                        viewModel.SelectedScriptGroup.Projects.RemoveAt(1); 
+                        //var addProject = new ScriptGroupProject(new ScriptProject("开始标志")); // JS脚本项目
+                        //viewModel.SelectedScriptGroup.Projects.Add(addProject); //增加
+                    }
+                    await viewModel.StartScriptGroupCommand.ExecuteAsync(viewModel.SelectedScriptGroup);
+                    await Task.Delay(1000);
+                    TaskRunner.LockManager.ReleaseLock();
+                    
+                    //单个脚本项目
+                    // var projectList = new List<ScriptGroupProject>
+                    // {
+                    //     new ScriptGroupProject(new ScriptProject("Auto全自动“枫丹”地脉花")), // JS脚本项目
+                    //     ScriptGroupProject.BuildKeyMouseProject("AutoClick"), // 键鼠脚本项目
+                    // };
+                    // var scriptService = App.GetService<IScriptService>(); // 假设我们使用依赖注入获取服务实例
+                    // await scriptService.RunMulti(projectList, "默认配置组");
+                };
+                break;
+            
+            case "临时组":
+                Action2 = async () => 
+                {
+                    TaskRunner.LockManager.ReleaseLock();
+                    await Task.Delay(2000);
+                    var snackbarService = new SnackbarService();
+                    var scriptService = new ScriptService();
+                    
+                    // 确保 ScriptControlViewModel 已正确初始化
+                    var viewModel = new ScriptControlViewModel(snackbarService, scriptService);
+                    string basePath = AppDomain.CurrentDomain.BaseDirectory;
+                    string relativePath = @"User\ScriptGroup\临时组.json";     
+                    string filePath = Path.Combine(basePath, relativePath);
+                    viewModel.SelectedScriptGroup = new ScriptGroup { Name = "临时组" };
+                    //var json = File.ReadAllText(file);
+                    viewModel.SelectedScriptGroup = ScriptGroup.FromJson(File.ReadAllText(filePath));
+                    await viewModel.StartScriptGroupCommand.ExecuteAsync(viewModel.SelectedScriptGroup);
+                    await Task.Delay(1000);
+                    TaskRunner.LockManager.ReleaseLock();
+                };
+                break;
+            
+            case "测试":
+                Action2 = async () => 
+                {
+                    TaskRunner.LockManager.ReleaseLock();
+                    await Task.Delay(2000);
+                    var snackbarService = new SnackbarService();
+                    var scriptService = new ScriptService();
+                    
+                    // 确保 ScriptControlViewModel 已正确初始化
+                    var viewModel = new ScriptControlViewModel(snackbarService, scriptService);
+                    string basePath = AppDomain.CurrentDomain.BaseDirectory;
+                    string relativePath = @"User\ScriptGroup\测试.json";     
+                    string filePath = Path.Combine(basePath, relativePath);
+                    viewModel.SelectedScriptGroup = new ScriptGroup { Name = "测试" };
+                    //var json = File.ReadAllText(file);
+                    viewModel.SelectedScriptGroup = ScriptGroup.FromJson(File.ReadAllText(filePath));
+                    await viewModel.StartScriptGroupCommand.ExecuteAsync(viewModel.SelectedScriptGroup);
+                    await Task.Delay(1000);
+                    TaskRunner.LockManager.ReleaseLock();
+                };
+                break;
+            
+            case "连续执行配置组":
+                Action2 = async () =>
+                {
+                    TaskRunner.LockManager.ReleaseLock();
+                    await Task.Delay(1000);
+                    var snackbarService = new SnackbarService();
+                    var scriptService = new ScriptService();
+                    var viewModel = new ScriptControlViewModel(snackbarService, scriptService);
+                    string basePath = AppDomain.CurrentDomain.BaseDirectory;
+                    string relativePath1 = @"User\ScriptGroup\打怪材料组1.json";
+                    string relativePath2 = @"User\ScriptGroup\资源采集组1.json";
+                    
+                    string filePath1 = Path.Combine(basePath, relativePath1);
+                    string filePath2 = Path.Combine(basePath, relativePath2);
+                    
+                    var selectedGroups = new List<ScriptGroup>();
+                    selectedGroups.Add(ScriptGroup.FromJson(File.ReadAllText(filePath1)));
+                    selectedGroups.Add(ScriptGroup.FromJson(File.ReadAllText(filePath2)));
+                    
+                    await viewModel.StartGroups( selectedGroups);  
+                    await Task.Delay(1000);
+                    TaskRunner.LockManager.ReleaseLock();
+                };
+                break;  
+            
+            default:
+                Action2 = () => Task.CompletedTask;
+                break;
+        }
+        
+        
+    }
+    
+    
+    
 }
