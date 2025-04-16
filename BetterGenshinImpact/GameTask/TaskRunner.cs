@@ -31,6 +31,36 @@ public class TaskRunner
     {
     }
 
+    public static class LockManager
+{
+    private static bool _hasLock = false;
+    private static readonly object _lockObj = new object();
+
+    // 公共属性（外部通过 LockManager.HasLock 访问）
+    public static bool HasLock
+    {
+        get { lock (_lockObj) return _hasLock; }
+        set { lock (_lockObj) _hasLock = value; }
+    }
+
+    // 强制设置 HasLock 为 true
+    public static void ForceLock()
+    {
+        lock (_lockObj)
+        {
+            _hasLock = true;
+        }
+    }
+
+    // 手动恢复为 false
+    public static void ReleaseLock()
+    {
+        lock (_lockObj)
+        {
+            _hasLock = false;
+        }
+    }
+}
     // public TaskRunner(DispatcherTimerOperationEnum timerOperation)
     // {
     //     _timerOperation = timerOperation;

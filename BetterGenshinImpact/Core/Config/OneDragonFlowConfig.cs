@@ -106,7 +106,7 @@ public partial class OneDragonFlowConfig : ObservableObject
             return dayOfWeek switch
             {
                 DayOfWeek.Monday => (MondayPartyName, MondayDomainName),
-                DayOfWeek.Tuesday => (ThursdayPartyName, ThursdayDomainName),
+                DayOfWeek.Tuesday => (TuesdayPartyName, TuesdayDomainName),
                 DayOfWeek.Wednesday => (WednesdayPartyName, WednesdayDomainName),
                 DayOfWeek.Thursday => (ThursdayPartyName, ThursdayDomainName),
                 DayOfWeek.Friday => (FridayPartyName, FridayDomainName),
