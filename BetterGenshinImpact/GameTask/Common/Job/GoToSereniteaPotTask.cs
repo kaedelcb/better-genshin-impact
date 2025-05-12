@@ -300,7 +300,7 @@ internal class GoToSereniteaPotTask
             await Delay(300, ct);
             Simulation.SendInput.Mouse.LeftButtonDown();
             await Delay(300, ct);
-            Simulation.SendInput.Mouse.MoveMouseBy(numberBtn.Width * 15, 0);
+            numberBtn.MoveTo(ra.Width/7,0);//moveby会超出边界，改用MoveTo
             await Delay(300, ct);
             Simulation.SendInput.Mouse.LeftButtonUp();
         }
@@ -417,10 +417,11 @@ internal class GoToSereniteaPotTask
                         var itemRo = CaptureToRectArea().Find(item);
                         if (itemRo.IsExist())
                         {
+                            Logger.LogInformation("领取尘歌壶奖励:购买 {text} ", item.Name);
                             itemRo.Click();
-                            await Delay(500, ct);
+                            await Delay(600, ct);
                             await BuyMaxNumber(ct);
-                            await Delay(500, ct);
+                            await Delay(1200, ct);//等待购买动画结束
                         }
                     }
                     await Delay(900, ct);

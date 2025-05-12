@@ -21,7 +21,7 @@ public partial class OneDragonTaskItem : ObservableObject
     [ObservableProperty] private Brush _statusColor = Brushes.Gray;
 
     [ObservableProperty] private bool _isEnabled = true;
-
+    
     [ObservableProperty] private OneDragonBaseViewModel? _viewModel;
 
     public Func<Task>? Action { get; private set; }
