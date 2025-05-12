@@ -51,7 +51,7 @@ public class ApplicationHostService(IServiceProvider serviceProvider) : IHostedS
             var args = Environment.GetCommandLineArgs();
             if (args.Length > 1)
             {
-                if (args[1].Contains("startOneDragon"))
+                if (args[1].Contains("startOneDragon") || args[1].Contains("startContinuousOneDragon"))
                 {
 
                     // 通过命令行参数启动「一条龙」 => 跳转到一条龙配置页。
@@ -89,7 +89,7 @@ public class ApplicationHostService(IServiceProvider serviceProvider) : IHostedS
                 _ = _navigationWindow.Navigate(typeof(HomePage));
             }
         }
-        //
+
         await Task.CompletedTask;
     }
 }
