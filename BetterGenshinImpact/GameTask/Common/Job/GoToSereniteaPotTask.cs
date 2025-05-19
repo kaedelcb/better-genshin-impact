@@ -420,7 +420,7 @@ internal class GoToSereniteaPotTask
                             itemRo.Click();
                             await Delay(500, ct);
                             await BuyMaxNumber(ct);
-                            await Delay(500, ct);
+                            await Delay(1200, ct);//等待购买动画结束
                         }
                     }
                     await Delay(900, ct);
