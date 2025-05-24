@@ -646,7 +646,11 @@ public partial class OneDragonFlowViewModel : ViewModel
           Config.SelectedOneDragonFlowPlanName = selectedPlan;
           InitConfigList();
           RefreshFilteredConfigList();
-          SelectedConfig = ConfigList.LastOrDefault(c => c.ScheduleName == selectedPlan);
+          var lastConfig = ConfigList.LastOrDefault(c => c.ScheduleName == selectedPlan);
+          if (lastConfig != null)
+          {
+              SelectedConfig = lastConfig;
+          }
       }
     }
     
