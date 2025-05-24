@@ -729,11 +729,15 @@ public partial class OneDragonFlowViewModel : ViewModel
                                 SelectedConfig = defaultConfig;
                             }
                             RefreshFilteredConfigList();
-                            // 刷新序号
                             var configs = ConfigList.Where(c => c.ScheduleName == Config.SelectedOneDragonFlowPlanName).ToList();
                             for (int i = 0; i < configs.Count; i++)
                             {
                                 configs[i].IndexId = i + 1;
+                            }
+                            var lastConfig = ConfigList.LastOrDefault(c => c.ScheduleName == Config.SelectedOneDragonFlowPlanName);
+                            if (lastConfig != null)
+                            {
+                                SelectedConfig = lastConfig;
                             }
                             Toast.Success($"配置 {configName} 已删除");
                         }
