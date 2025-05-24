@@ -1267,7 +1267,6 @@ public partial class OneDragonFlowViewModel : ViewModel
     //连续执行一条龙配置单
     private bool _continuousExecutionMark = false;
     private int _executionSuccessCount = 0; 
-    private string? _selectedScheduleName = TaskContext.Instance().Config.SelectedOneDragonFlowPlanName;
     [RelayCommand]
     private async Task OnOneKeyContinuousExecutionOneKey()
     {
@@ -1290,10 +1289,10 @@ public partial class OneDragonFlowViewModel : ViewModel
             Toast.Warning("配置单空，尝试初始化！");
             InitConfigList();
         }
-        var boundConfigs = ConfigList.Where(config => config.AccountBinding == true && (config.Period == todayNow || config.Period == "每日") && config.ScheduleName == _selectedScheduleName)
+        var boundConfigs = ConfigList.Where(config => config.AccountBinding == true && (config.Period == todayNow || config.Period == "每日") && config.ScheduleName == Config.SelectedOneDragonFlowPlanName)
             .OrderBy(config => config.IndexId)
             .ToList();
-        _logger.LogInformation("连续一条龙：今天 {todayNow} ，执行 {ScheduleName} 计划，生效配置单数量 {BoundConfigCount}",todayNow,_selectedScheduleName,boundConfigs.Count);
+        _logger.LogInformation("连续一条龙：今天 {todayNow} ，执行 {ScheduleName} 计划，生效配置单数量 {BoundConfigCount}",todayNow,Config.SelectedOneDragonFlowPlanName,boundConfigs.Count);
         //Toast.Success(boundConfigs.Count+"  "+ConfigList.Count);
         if (ConfigList.Count == 0 || boundConfigs.Count == 0) 
         {
@@ -1306,7 +1305,7 @@ public partial class OneDragonFlowViewModel : ViewModel
             configIndex++;
             SelectedConfig = config;
             _logger.LogInformation("正在执行 {ScheduleName} 计划的第 {ConfigIndex} / {boundConfigs.Count} 个配置单：{Config.Name}，绑定UID {Config.GenshinUid}", 
-                _selectedScheduleName,configIndex,boundConfigs.Count,config.Name, config.GenshinUid);
+                Config.SelectedOneDragonFlowPlanName,configIndex,boundConfigs.Count,config.Name, config.GenshinUid);
             await Task.Delay(1000);
             await OnOneKeyExecute();
             await new ReturnMainUiTask().Start(CancellationToken.None);
