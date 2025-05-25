@@ -423,6 +423,11 @@ internal class GoToSereniteaPotTask
                             await BuyMaxNumber(ct);
                             await Delay(1200, ct);//等待购买动画结束
                         }
+                        else
+                        {
+                            await Delay(1200, ct);
+                            Logger.LogInformation("领取尘歌壶奖励: {text} 未找到", item.Name);
+                        }
                     }
                     await Delay(900, ct);
                     Logger.LogInformation("领取尘歌壶奖励:{text}", "购买商店物品完成");
