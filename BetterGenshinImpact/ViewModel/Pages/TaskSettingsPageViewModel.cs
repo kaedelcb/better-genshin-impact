@@ -164,10 +164,13 @@ public partial class TaskSettingsPageViewModel : ViewModel
     {
         if (OneDragonFlowViewModel == null || OneDragonFlowViewModel.SelectedConfig == null)
         {
+            OneDragonFlowViewModel.OnNavigatedTo();
+        }
+        if (OneDragonFlowViewModel == null || OneDragonFlowViewModel.SelectedConfig == null)
+        {
             Toast.Warning("未设置任务!");
             return;
         }
-        OneDragonFlowViewModel.OnNavigatedTo();
         await OneDragonFlowViewModel.OnOneKeyExecute();
     }
 
