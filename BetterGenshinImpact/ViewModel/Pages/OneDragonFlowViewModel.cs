@@ -523,7 +523,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         FilteredConfigList = CollectionViewSource.GetDefaultView(ConfigList);
         FilteredConfigList.Filter = FilterLogic;
     }
-    
+
     [RelayCommand]
     private async Task ShowAndSwitchPlanAsync()
     {
@@ -1078,6 +1078,11 @@ public partial class OneDragonFlowViewModel : ViewModel
     [RelayCommand]
     private void AddTaskGroup()
     {
+        if(SelectedConfig == null || SelectedConfig.ScheduleName != Config.SelectedOneDragonFlowPlanName)
+        {
+            Toast.Warning("请先选择一条龙配置单");
+            return;
+        }
         AddNewTaskGroup();
         SaveConfig();
         SelectedTask = null;
@@ -1585,6 +1590,11 @@ public partial class OneDragonFlowViewModel : ViewModel
     [RelayCommand]
     private void DeleteTaskGroup()
     {
+        if (SelectedConfig == null || SelectedConfig.ScheduleName != Config.SelectedOneDragonFlowPlanName)
+        {
+            Toast.Warning("请先选择一条龙配置单");
+            return;
+        }
         DeleteConfigDisplayTaskListFromConfig();
         SaveConfig();
         InputScriptGroupName = null;
@@ -1593,7 +1603,6 @@ public partial class OneDragonFlowViewModel : ViewModel
     [RelayCommand]
     private void OnAddConfig()
     {
-        // 添加配置
         var str = PromptDialog.Prompt("请输入一条龙配置单名称", "新增一条龙配置单");
         if (!string.IsNullOrEmpty(str))
         {

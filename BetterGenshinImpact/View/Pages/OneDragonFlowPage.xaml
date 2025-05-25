@@ -1139,7 +1139,8 @@
                         dd:DragDrop.IsDragSource="True"
                         dd:DragDrop.IsDropTarget="True"
                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"     
-                        dd:DragDrop.UseDefaultDragAdorner="True">
+                        dd:DragDrop.UseDefaultDragAdorner="True"
+                        dd:DragDrop.SelectDroppedItems="True">
                         <ui:ListView.ItemTemplate>
                             <DataTemplate>
                             <ui:Card
