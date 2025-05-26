@@ -1267,6 +1267,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                 { 
                     // 设定配置，配置下拉框会选定。
                     Config.SelectedOneDragonFlowPlanName = argsOneDragonPlan;
+                    RefreshFilteredConfigList();
                     string todayNow = DateTime.Now.DayOfWeek switch
                     {
                         DayOfWeek.Monday => "星期一",
