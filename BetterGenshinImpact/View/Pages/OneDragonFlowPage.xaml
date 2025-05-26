@@ -156,13 +156,15 @@
                                                 </Grid.ColumnDefinitions>
                                                 <!-- <ui:FontIcon Grid.Column="0" -->
                                                 <!--              Glyph="&#xe411;" -->
-                                                <!--              Style="{StaticResource FaFontIconStyleForOneDragon}" /> -->
+                                                <!--              Style="{StaticResource FaFontIconStyleForOneDragon}" />
+                                                Command="{Binding Path=DataContext.LoadConfigCommand, RelativeSource={RelativeSource AncestorType=ui:ListView}}"
+                                                 -->
                                                 <Button Grid.Column="0"
-                                                        MaxWidth="30"
+                                                        MaxWidth="20"
                                                         VerticalAlignment="Center"
                                                         HorizontalAlignment="Left"
                                                         Margin="0,0,-5,0"
-                                                        Command="{Binding Path=DataContext.LookConfigCommand, RelativeSource={RelativeSource AncestorType=ui:ListView}}"
+                                                        Command="{Binding Path=DataContext.LoadConfigCommand, RelativeSource={RelativeSource AncestorType=ui:ListView}}"
                                                         Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}">
                                                     <ui:FontIcon Glyph="&#xe411;"
                                                                  Margin="-10,0,0,0"
@@ -171,12 +173,12 @@
                                                                  Style="{StaticResource FaFontIconStyleForOneDragon}"
                                                                  Foreground="White" />
                                                 </Button>
-                                                <!-- <Ellipse Grid.Column="1" -->
-                                                <!--          Width="10" -->
-                                                <!--          Height="10" -->
-                                                <!--          Margin="8,0,8,0" -->
-                                                <!--          Fill="{Binding StatusColor}" -->
-                                                <!--          IsHitTestVisible="False" /> -->
+                                                <Ellipse Grid.Column="1"
+                                                         Width="10"
+                                                         Height="10"
+                                                         Margin="0,0,8,0"
+                                                         Fill="{Binding StatusColor}"
+                                                         IsHitTestVisible="False" />
                                                 <TextBlock Grid.Column="2"
                                                            VerticalAlignment="Center"
                                                            HorizontalAlignment="Left"
