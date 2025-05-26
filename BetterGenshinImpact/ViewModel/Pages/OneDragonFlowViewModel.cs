@@ -634,6 +634,13 @@ public partial class OneDragonFlowViewModel : ViewModel
                     Config.SelectedOneDragonFlowPlanName = "默认计划表";
                 }
                 RefreshFilteredConfigList();
+                var lastConfig = ConfigList.LastOrDefault(c => c.ScheduleName == Config.SelectedOneDragonFlowPlanName);
+                if (lastConfig != null)
+                {
+                    Toast.Warning($"计划表 \"{Config.SelectedOneDragonFlowPlanName}\" 下有配置单，将自动选择最后一条配置单");
+                    SelectedConfig = lastConfig;
+                    OnConfigDropDownChanged();
+                }
           }
           else
           {
