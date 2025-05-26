@@ -158,10 +158,10 @@
                                                 <!--              Glyph="&#xe411;" -->
                                                 <!--              Style="{StaticResource FaFontIconStyleForOneDragon}" /> -->
                                                 <Button Grid.Column="0"
-                                                        MaxWidth="30"
+                                                        MaxWidth="20"
                                                         VerticalAlignment="Center"
                                                         HorizontalAlignment="Left"
-                                                        Margin="0,0,-5,0"
+                                                        Margin="0,0,0,0"
                                                         Command="{Binding Path=DataContext.LookConfigCommand, RelativeSource={RelativeSource AncestorType=ui:ListView}}"
                                                         Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}">
                                                     <ui:FontIcon Glyph="&#xe411;"
