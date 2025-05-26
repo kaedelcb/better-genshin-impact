@@ -1202,15 +1202,29 @@ public partial class OneDragonFlowViewModel : ViewModel
             return;
         }
         _autoRun = false;
-        // 提取ConfigList中所有计划表的名称并去除重复值
-        var distinctScheduleNames = ConfigList.Select(x => x.ScheduleName).Distinct().ToList();
         
-        // 将去重后的计划表名称插入到Config.ScheduleList中，不影响原来已有的内容
+        var distinctScheduleNames = ConfigList.Select(x => x.ScheduleName).Distinct().ToList();
         foreach (var scheduleName in distinctScheduleNames)
         {
             if (!Config.ScheduleList.Contains(scheduleName))
             {
                 Config.ScheduleList.Add(scheduleName);
+            }
+        }
+        foreach (var config in ConfigList)
+        {
+            if (string.IsNullOrWhiteSpace(config.ScheduleName))
+            {
+                try
+                {
+                    config.ScheduleName = "默认计划表";
+                    _isLoading = true;
+                    WriteConfig(config);
+                }
+                finally
+                {
+                    _isLoading = false;
+                }
             }
         }
         
