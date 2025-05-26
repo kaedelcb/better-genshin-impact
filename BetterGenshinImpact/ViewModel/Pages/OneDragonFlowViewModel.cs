@@ -1213,7 +1213,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         var distinctScheduleNames = ConfigList.Select(x => x.ScheduleName).Distinct().ToList();
         foreach (var scheduleName in distinctScheduleNames)
         {
-            if (!Config.ScheduleList.Contains(scheduleName))
+            if (!string.IsNullOrEmpty(scheduleName) && !Config.ScheduleList.Contains(scheduleName))
             {
                 Config.ScheduleList.Add(scheduleName);
             }
