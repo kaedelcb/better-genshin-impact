@@ -17,13 +17,14 @@
              ui:Design.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
              FontFamily="{StaticResource TextThemeFontFamily}"
              Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+             
              mc:Ignorable="d">
     <b:Interaction.Triggers>
         <b:EventTrigger EventName="Loaded">
             <b:InvokeCommandAction Command="{Binding LoadedCommand}" CommandParameter="{Binding}" />
         </b:EventTrigger>
     </b:Interaction.Triggers>
-
+    
     <Grid Margin="22,16,18,12">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" MaxWidth="300" />
@@ -153,15 +154,29 @@
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
-                                                <ui:FontIcon Grid.Column="0"
-                                                             Glyph="&#xe411;"
-                                                             Style="{StaticResource FaFontIconStyleForOneDragon}" />
-                                                <Ellipse Grid.Column="1"
-                                                         Width="10"
-                                                         Height="10"
-                                                         Margin="10,0,10,0"
-                                                         Fill="{Binding StatusColor}"
-                                                         IsHitTestVisible="False" />
+                                                <!-- <ui:FontIcon Grid.Column="0" -->
+                                                <!--              Glyph="&#xe411;" -->
+                                                <!--              Style="{StaticResource FaFontIconStyleForOneDragon}" /> -->
+                                                <Button Grid.Column="0"
+                                                        MaxWidth="30"
+                                                        VerticalAlignment="Center"
+                                                        HorizontalAlignment="Left"
+                                                        Margin="0,0,-5,0"
+                                                        Command="{Binding Path=DataContext.LookConfigCommand, RelativeSource={RelativeSource AncestorType=ui:ListView}}"
+                                                        Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}">
+                                                    <ui:FontIcon Glyph="&#xe411;"
+                                                                 Margin="-10,0,0,0"
+                                                                 VerticalAlignment="Center"
+                                                                 HorizontalAlignment="Center"
+                                                                 Style="{StaticResource FaFontIconStyleForOneDragon}"
+                                                                 Foreground="White" />
+                                                </Button>
+                                                <!-- <Ellipse Grid.Column="1" -->
+                                                <!--          Width="10" -->
+                                                <!--          Height="10" -->
+                                                <!--          Margin="8,0,8,0" -->
+                                                <!--          Fill="{Binding StatusColor}" -->
+                                                <!--          IsHitTestVisible="False" /> -->
                                                 <TextBlock Grid.Column="2"
                                                            VerticalAlignment="Center"
                                                            HorizontalAlignment="Left"
@@ -231,6 +246,8 @@
         </ContentControl>
     </DockPanel>
 
+        
+        
             <!--    右侧顶部 -->  
             <DockPanel Grid.Column="1" Margin="7,0,0,0">
                 <StackPanel Margin="0,0,0,10" DockPanel.Dock="Top">
