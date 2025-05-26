@@ -101,6 +101,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         if (item is OneDragonFlowConfig config)
         {
             SelectedConfig = config;
+            OnConfigDropDownChanged();
             return config.ScheduleName == Config.SelectedOneDragonFlowPlanName;
         }
         return false;
@@ -649,7 +650,9 @@ public partial class OneDragonFlowViewModel : ViewModel
           var lastConfig = ConfigList.LastOrDefault(c => c.ScheduleName == selectedPlan);
           if (lastConfig != null)
           {
+              Toast.Warning($"计划表 \"{selectedPlan}\" 下有配置单，将自动选择最后一条配置单");
               SelectedConfig = lastConfig;
+              OnConfigDropDownChanged();
           }
       }
     }
@@ -709,6 +712,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                             if (nextConfig != null)
                             {
                                 SelectedConfig = nextConfig;
+                                OnConfigDropDownChanged();
                             }
                             else
                             {
@@ -727,6 +731,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                                     ConfigList.Add(defaultConfig);
                                 }
                                 SelectedConfig = defaultConfig;
+                                OnConfigDropDownChanged();
                             }
                             RefreshFilteredConfigList();
                             var configs = ConfigList.Where(c => c.ScheduleName == Config.SelectedOneDragonFlowPlanName).ToList();
@@ -738,6 +743,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                             if (lastConfig != null)
                             {
                                 SelectedConfig = lastConfig;
+                                OnConfigDropDownChanged();
                             }
                             Toast.Success($"配置 {configName} 已删除");
                         }
@@ -990,7 +996,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         }
         SelectedConfig = selected;
         LoadDisplayTaskListFromConfig();
-        SetSomeSelectedConfig(SelectedConfig);
+        OnConfigDropDownChanged();
     }
 
     // 新增方法：从配置文件加载 DisplayTaskList
@@ -1196,7 +1202,18 @@ public partial class OneDragonFlowViewModel : ViewModel
             return;
         }
         _autoRun = false;
-        //
+        // 提取ConfigList中所有计划表的名称并去除重复值
+        var distinctScheduleNames = ConfigList.Select(x => x.ScheduleName).Distinct().ToList();
+        
+        // 将去重后的计划表名称插入到Config.ScheduleList中，不影响原来已有的内容
+        foreach (var scheduleName in distinctScheduleNames)
+        {
+            if (!Config.ScheduleList.Contains(scheduleName))
+            {
+                Config.ScheduleList.Add(scheduleName);
+            }
+        }
+        
         var args = Environment.GetCommandLineArgs();
         if (args.Length > 1 && args[1].Contains("startOneDragon"))
         {
@@ -1309,6 +1326,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         {
             configIndex++;
             SelectedConfig = config;
+            OnConfigDropDownChanged();
             _logger.LogInformation("正在执行 {ScheduleName} 计划的第 {ConfigIndex} / {boundConfigs.Count} 个配置单：{Config.Name}，绑定UID {Config.GenshinUid}", 
                 Config.SelectedOneDragonFlowPlanName,configIndex,boundConfigs.Count,config.Name, config.GenshinUid);
             await Task.Delay(1000);
@@ -1626,6 +1644,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                 else
                     ConfigList.Insert(index, nc);
                 SelectedConfig = nc;
+                OnConfigDropDownChanged();
             }
             SaveConfig();
         }
