@@ -541,7 +541,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         ReadScriptGroup(); 
         if (ScriptGroups.FirstOrDefault(sg => sg.Name == SelectedTask.Name) != null)
         {
-            _selectedProject = ScriptGroups.FirstOrDefault(sg => sg.Name == SelectedTask.Name);
+            _selectedProject = ScriptGroups.FirstOrDefault(sg => sg.Name == SelectedTask.Name)?? ScriptGroups.First();
         }
         var scriptGroupsSelect = new ObservableCollection<ScriptGroup>(
             ScriptGroups.Where(sg => !ScriptGroupsdefault.Any(dg => dg.Name == sg.Name))
