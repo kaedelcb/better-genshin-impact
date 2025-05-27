@@ -139,6 +139,7 @@
                             <ui:ListView dd:DragDrop.IsDragSource="True"
                                          dd:DragDrop.IsDropTarget="True"
                                          dd:DragDrop.UseDefaultDragAdorner="True"
+                                         dd:DragDrop.SelectDroppedItems="True"
                                          ItemsSource="{Binding TaskList}"
                                          SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -163,7 +164,7 @@
                                                         MaxWidth="20"
                                                         VerticalAlignment="Center"
                                                         HorizontalAlignment="Left"
-                                                        Margin="0,0,-5,0"
+                                                        Margin="0,0,0,0"
                                                         Command="{Binding Path=DataContext.LoadConfigCommand, RelativeSource={RelativeSource AncestorType=ui:ListView}}"
                                                         Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}">
                                                     <ui:FontIcon Glyph="&#xe411;"
@@ -173,12 +174,12 @@
                                                                  Style="{StaticResource FaFontIconStyleForOneDragon}"
                                                                  Foreground="White" />
                                                 </Button>
-                                                <Ellipse Grid.Column="1"
-                                                         Width="10"
-                                                         Height="10"
-                                                         Margin="0,0,8,0"
-                                                         Fill="{Binding StatusColor}"
-                                                         IsHitTestVisible="False" />
+                                                <!-- <Ellipse Grid.Column="1" -->
+                                                <!--          Width="10" -->
+                                                <!--          Height="10" -->
+                                                <!--          Margin="0,0,8,0" -->
+                                                <!--          Fill="{Binding StatusColor}" -->
+                                                <!--          IsHitTestVisible="False" /> -->
                                                 <TextBlock Grid.Column="2"
                                                            VerticalAlignment="Center"
                                                            HorizontalAlignment="Left"

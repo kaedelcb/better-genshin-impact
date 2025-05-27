@@ -524,80 +524,14 @@ public partial class OneDragonFlowViewModel : ViewModel
         FilteredConfigList = CollectionViewSource.GetDefaultView(ConfigList);
         FilteredConfigList.Filter = FilterLogic;
     }
-    
 
-[RelayCommand]
-private async Task LoadConfig()
-{
-    Toast.Warning("弹窗显示配置组内容/开发中...");
-    ReadScriptGroup();
-    // 创建并初始化 listBox
-    var listBox = new ListBox
-    {
-        ItemsSource = ScriptGroups.Select(g => g.Name),
-        SelectedItem = SelectedTask?.Name,
-        MinWidth = 180
-    };
-
-    // 处理 listBox 的 SelectionChanged 事件
-    listBox.SelectionChanged += ListBox_SelectionChanged;
-
-    // 创建并初始化 listBoxHide
-    var listBoxHide = new ListBox
-    {
-        
-        ItemsSource = SelectedTask?.Name,
-        MinWidth = 360
-    };
-
-    // 创建消息框
-    var uiMessageBox = new Wpf.Ui.Controls.MessageBox
-    {
-        Title = "配置组和任务",
-        Owner = Application.Current.MainWindow,
-        WindowStartupLocation = WindowStartupLocation.CenterOwner,
-        Content = new Grid
-        {
-            ColumnDefinitions = 
-            {
-                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
-            },
-            Children = 
-            {
-                listBox,
-                listBoxHide
-            }
-        }
-    };
-
-    await uiMessageBox.ShowDialogAsync();
-}
-private ListBox listBoxHide; // 定义为成员变量
-private void ListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-{
-    // 获取选中的配置组名称
-    var selectedGroupName = (sender as ListBox)?.SelectedItem as string;
-
-    // 根据名称找到对应的 ScriptGroup
-    var selectedScriptGroup = ScriptGroups.FirstOrDefault(g => g.Name == selectedGroupName);
-
-    // 更新右边 listBoxHide 的 ItemsSource 为选中的配置组的任务名称列表
-    if (selectedScriptGroup != null)
-    {
-        listBoxHide.ItemsSource = selectedScriptGroup.Name;
-    }
-    else
-    {
-        listBoxHide.ItemsSource = null;
-    }
-}
-
-
-
-    
-    
     [RelayCommand]
+    private async Task LoadConfig()
+    {
+        Toast.Warning("弹窗显示配置组内容/开发中...");
+        return;
+    }
+    
     private async Task ShowAndSwitchPlanAsync()
     {
         var listBox = new ListBox
