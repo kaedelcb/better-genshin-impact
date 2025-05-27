@@ -286,7 +286,7 @@
                                    VerticalAlignment="Center">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">
-                                    <Setter Property="Text" Value="{Binding SelectedConfig.GenshinUid, StringFormat='已绑定UID:{0}', Mode=OneWay}" />
+                                    <Setter Property="Text" Value="{Binding SelectedConfig.GenshinUid, StringFormat='已绑定UID：{0}', Mode=OneWay}" />
                                     <Style.Triggers>
                                         <MultiDataTrigger>
                                             <MultiDataTrigger.Conditions>

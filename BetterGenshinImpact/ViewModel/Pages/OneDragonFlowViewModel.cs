@@ -539,16 +539,16 @@ public partial class OneDragonFlowViewModel : ViewModel
         Toast.Warning("功能开发中...");
         // return;
         ReadScriptGroup(); 
-        if (ScriptGroups.FirstOrDefault(sg => sg.Name == SelectedTask.Name) != null)
-        {
-            _selectedProject = ScriptGroups.FirstOrDefault(sg => sg.Name == SelectedTask.Name)?? ScriptGroups.First();
-        }
         var scriptGroupsSelect = new ObservableCollection<ScriptGroup>(
             ScriptGroups.Where(sg => !ScriptGroupsdefault.Any(dg => dg.Name == sg.Name))
         );
         foreach (var task in ScriptGroupsdefault)
         {
             scriptGroupsSelect.Remove(task);
+        }
+        if (ScriptGroups.FirstOrDefault(sg => sg.Name == SelectedTask.Name) != null)
+        {
+            _selectedProject = scriptGroupsSelect.FirstOrDefault(sg => sg.Name == SelectedTask.Name)?? scriptGroupsSelect.First();
         }
         
         ScriptControlViewModel scriptControlViewModel = new ScriptControlViewModel( _snackbarService, _scriptService,scriptGroupsSelect,_selectedProject,true);
