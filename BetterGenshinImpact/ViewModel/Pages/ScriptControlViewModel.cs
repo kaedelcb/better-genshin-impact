@@ -38,6 +38,7 @@ using TextBox = Wpf.Ui.Controls.TextBox;
 using Button = Wpf.Ui.Controls.Button;
 using MessageBoxResult = Wpf.Ui.Controls.MessageBoxResult;
 using TextBlock = Wpf.Ui.Controls.TextBlock;
+using  Microsoft.Extensions.DependencyInjection;
 
 namespace BetterGenshinImpact.ViewModel.Pages;
 
@@ -75,6 +76,21 @@ public partial class ScriptControlViewModel : ViewModel
         _snackbarService = snackbarService;
         _scriptService = scriptService;
         ScriptGroups.CollectionChanged += ScriptGroupsCollectionChanged;
+    }
+    
+    public ScriptControlViewModel(ISnackbarService snackbarService, IScriptService scriptService,ObservableCollection<ScriptGroup> scriptGroups,ScriptGroup? selectedScriptGroup)
+    {
+        _snackbarService = snackbarService;
+        _scriptService = scriptService;
+        ScriptGroups = scriptGroups;
+        SelectedScriptGroup = selectedScriptGroup;
+        ScriptGroups.CollectionChanged += ScriptGroupsCollectionChanged;
+    }
+    
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<ISnackbarService, SnackbarService>();
+        services.AddTransient<ScriptControlViewModel>();
     }
 
     [RelayCommand]
@@ -612,6 +628,13 @@ public partial class ScriptControlViewModel : ViewModel
                 null,
                 TimeSpan.FromSeconds(3)
             );
+        }
+        if (ScriptGroups.Count() != 0)//如果删除的是当前选中的配置组，则清空选中项
+        {
+            SelectedScriptGroup = ScriptGroups.First();
+        }else
+        {
+            SelectedScriptGroup = null;
         }
     }
 

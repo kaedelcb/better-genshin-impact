@@ -63,12 +63,17 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using System.Windows.Input;
 using System.Collections.Specialized;
+using Windows.ApplicationModel.Core;
+using Windows.UI.Core; // 添加这一行
+using BetterGenshinImpact.View.Pages;
+using System;
+using System.Threading.Tasks;
+using Windows.UI.Xaml;
+using BetterGenshinImpact.Core.Script.Group;
+using Wpf.Ui;
 
-using System.Collections.ObjectModel;
-using System.Collections.Specialized;
-using System.Linq;
-using GongSolutions.Wpf.DragDrop;
-using GongSolutions.Wpf.DragDrop;
+
+
 
 namespace BetterGenshinImpact.ViewModel.Pages;
 
@@ -79,6 +84,10 @@ public partial class OneDragonFlowViewModel : ViewModel
     public static readonly string OneDragonFlowConfigFolder = Global.Absolute(@"User\OneDragon");
 
     private readonly ScriptService _scriptService;
+    
+    private readonly ISnackbarService _snackbarService;
+    
+    private ScriptGroup _selectedProject;
 
     [ObservableProperty] private ObservableCollection<OneDragonTaskItem> _taskList =
     [
@@ -131,6 +140,7 @@ public partial class OneDragonFlowViewModel : ViewModel
 
     [ObservableProperty]
     private ObservableCollection<ScriptGroup> _scriptGroups = new ObservableCollection<ScriptGroup>();
+    
 
     [ObservableProperty] private ObservableCollection<ScriptGroup> _scriptGroupsdefault =
         new ObservableCollection<ScriptGroup>()
@@ -523,6 +533,46 @@ public partial class OneDragonFlowViewModel : ViewModel
         };
         FilteredConfigList = CollectionViewSource.GetDefaultView(ConfigList);
         FilteredConfigList.Filter = FilterLogic;
+        ReadScriptGroup(); 
+    }
+
+    [RelayCommand]
+    private async Task LookConfig()
+    {
+        Toast.Warning("功能开发中...");
+        // return;
+        if (ScriptGroups.FirstOrDefault(sg => sg.Name == SelectedTask.Name) != null)
+        {
+            _selectedProject = ScriptGroups.FirstOrDefault(sg => sg.Name == SelectedTask.Name);
+        }
+        
+        var scriptGroupsSelect = ScriptGroups;
+     
+        foreach (var task in ScriptGroupsdefault)
+        {
+            scriptGroupsSelect.Remove(task);
+        }
+        
+        ScriptControlViewModel scriptControlViewModel = new ScriptControlViewModel(_snackbarService, _scriptService,scriptGroupsSelect,_selectedProject);
+        
+        var dialog = new Wpf.Ui.Controls.MessageBox
+        {
+            Title = "配置组管理",
+            Content = new ScrollViewer
+            {
+                Content = new ScriptControlPage(scriptControlViewModel), 
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            },
+            CloseButtonText = "关闭",
+            Owner = Application.Current.ShutdownMode == ShutdownMode.OnMainWindowClose ? null : Application.Current.MainWindow,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            SizeToContent = SizeToContent.Width, 
+            MinWidth = 700,
+            MinHeight = 600,
+            Topmost = false 
+        };
+        // 订阅 Closed 事件
+        await dialog.ShowDialogAsync();
     }
 
     [RelayCommand]

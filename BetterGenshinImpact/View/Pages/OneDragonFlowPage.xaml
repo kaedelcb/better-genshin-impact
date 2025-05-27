@@ -139,6 +139,7 @@
                             <ui:ListView dd:DragDrop.IsDragSource="True"
                                          dd:DragDrop.IsDropTarget="True"
                                          dd:DragDrop.UseDefaultDragAdorner="True"
+                                         dd:DragDrop.SelectDroppedItems="True"
                                          ItemsSource="{Binding TaskList}"
                                          SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -159,6 +160,7 @@
                                                 <!--              Style="{StaticResource FaFontIconStyleForOneDragon}" /> -->
                                                 <Button Grid.Column="0"
                                                         MaxWidth="20"
+                                                        GotFocus="ConfigRow_GotFocus"
                                                         VerticalAlignment="Center"
                                                         HorizontalAlignment="Left"
                                                         Margin="0,0,0,0"
@@ -178,13 +180,14 @@
                                                 <!--          Fill="{Binding StatusColor}" -->
                                                 <!--          IsHitTestVisible="False" /> -->
                                                 <TextBlock Grid.Column="2"
+                                                           GotFocus="ConfigRow_GotFocus"
                                                            VerticalAlignment="Center"
                                                            HorizontalAlignment="Left"
                                                            IsHitTestVisible="False"
                                                            Text="{Binding Name}" 
                                                            TextTrimming="CharacterEllipsis"
                                                            Margin="0,0,5,0"/>
-                                                <ui:ToggleSwitch Grid.Column="3" IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
+                                                <ui:ToggleSwitch Grid.Column="3" GotFocus="ConfigRow_GotFocus" IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
                                             </Grid>
                                         </ui:Card>
                                     </DataTemplate>
