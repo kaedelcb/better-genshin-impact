@@ -532,6 +532,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         return;
     }
     
+    [RelayCommand]
     private async Task ShowAndSwitchPlanAsync()
     {
         var listBox = new ListBox
@@ -1137,7 +1138,7 @@ public partial class OneDragonFlowViewModel : ViewModel
             }
             else
             {
-                Toast.Warning("错误触发！");
+                Toast.Warning("计划切换中！");
             }
         }
         finally
@@ -1160,7 +1161,7 @@ public partial class OneDragonFlowViewModel : ViewModel
             } 
             else
             {
-                Toast.Warning("错误触发！！");
+                Toast.Warning("计划切换中！！");
             }
         }
         finally
