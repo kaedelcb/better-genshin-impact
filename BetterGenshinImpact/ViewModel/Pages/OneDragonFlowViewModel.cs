@@ -531,7 +531,6 @@ public partial class OneDragonFlowViewModel : ViewModel
         };
         FilteredConfigList = CollectionViewSource.GetDefaultView(ConfigList);
         FilteredConfigList.Filter = FilterLogic;
-        ReadScriptGroup(); 
     }
 
     [RelayCommand]
@@ -539,13 +538,14 @@ public partial class OneDragonFlowViewModel : ViewModel
     {
         Toast.Warning("功能开发中...");
         // return;
+        ReadScriptGroup(); 
         if (ScriptGroups.FirstOrDefault(sg => sg.Name == SelectedTask.Name) != null)
         {
             _selectedProject = ScriptGroups.FirstOrDefault(sg => sg.Name == SelectedTask.Name);
         }
-        
-        var scriptGroupsSelect = ScriptGroups;
-     
+        var scriptGroupsSelect = new ObservableCollection<ScriptGroup>(
+            ScriptGroups.Where(sg => !ScriptGroupsdefault.Any(dg => dg.Name == sg.Name))
+        );
         foreach (var task in ScriptGroupsdefault)
         {
             scriptGroupsSelect.Remove(task);
