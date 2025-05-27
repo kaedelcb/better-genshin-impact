@@ -83,7 +83,7 @@ public partial class OneDragonFlowViewModel : ViewModel
 
     private readonly ScriptService _scriptService;
     
-    private readonly ISnackbarService _snackbarService;
+    private readonly ISnackbarService _snackbarService = App.GetService<ISnackbarService>();
     
     private ScriptGroup _selectedProject;
 
@@ -531,12 +531,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         };
         FilteredConfigList = CollectionViewSource.GetDefaultView(ConfigList);
         FilteredConfigList.Filter = FilterLogic;
-    }
-    
-    public OneDragonFlowViewModel(ISnackbarService snackbarService, IScriptService scriptService)
-    {
         ReadScriptGroup(); 
-        _snackbarService = snackbarService ?? throw new ArgumentNullException(nameof(snackbarService));
     }
 
     [RelayCommand]
@@ -556,7 +551,6 @@ public partial class OneDragonFlowViewModel : ViewModel
             scriptGroupsSelect.Remove(task);
         }
         
-        var viewModel = new OneDragonFlowViewModel(_snackbarService, _scriptService);
         ScriptControlViewModel scriptControlViewModel = new ScriptControlViewModel( _snackbarService, _scriptService,scriptGroupsSelect,_selectedProject,true);
         
         var dialog = new Wpf.Ui.Controls.MessageBox
@@ -1263,7 +1257,6 @@ public partial class OneDragonFlowViewModel : ViewModel
             return;
         }
         _autoRun = false;
-        
         var distinctScheduleNames = ConfigList.Select(x => x.ScheduleName).Distinct().ToList();
         foreach (var scheduleName in distinctScheduleNames)
         {
