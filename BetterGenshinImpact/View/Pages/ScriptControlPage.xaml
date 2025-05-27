@@ -74,6 +74,7 @@
                     </ui:ListView.ContextMenu>
                 </ui:ListView>
                 <ui:Button Grid.Row="2"
+                           Visibility="{Binding IsInsetMode, Converter={StaticResource BooleanToVisibilityRevertConverter}, ConverterParameter=Visible}"
                            Margin="0,2,0,2"
                            HorizontalAlignment="Stretch"
                            Command="{Binding StartMultiScriptGroupCommand}"
@@ -86,6 +87,7 @@
                      HorizontalAlignment="Center" Glyph="&#xf7a5;" Style="{StaticResource FaFontIconStyle}" />
         <GridSplitter Grid.Column="1"
                       Width="12"
+                      Visibility="{Binding IsInsetMode, Converter={StaticResource BooleanToVisibilityRevertConverter}, ConverterParameter=Visible}"
                       HorizontalAlignment="Stretch"
                       Background="{DynamicResource ControlStrongFillColorDisabledBrush}"
                       Focusable="False"

@@ -71,9 +71,7 @@ using System.Threading.Tasks;
 using Windows.UI.Xaml;
 using BetterGenshinImpact.Core.Script.Group;
 using Wpf.Ui;
-
-
-
+using static Wpf.Ui.ISnackbarService;
 
 namespace BetterGenshinImpact.ViewModel.Pages;
 
@@ -533,14 +531,19 @@ public partial class OneDragonFlowViewModel : ViewModel
         };
         FilteredConfigList = CollectionViewSource.GetDefaultView(ConfigList);
         FilteredConfigList.Filter = FilterLogic;
+    }
+    
+    public OneDragonFlowViewModel(ISnackbarService snackbarService, IScriptService scriptService)
+    {
         ReadScriptGroup(); 
+        _snackbarService = snackbarService ?? throw new ArgumentNullException(nameof(snackbarService));
     }
 
     [RelayCommand]
     private async Task LookConfig()
     {
         Toast.Warning("功能开发中...");
-        return;
+        // return;
         if (ScriptGroups.FirstOrDefault(sg => sg.Name == SelectedTask.Name) != null)
         {
             _selectedProject = ScriptGroups.FirstOrDefault(sg => sg.Name == SelectedTask.Name);
@@ -553,26 +556,26 @@ public partial class OneDragonFlowViewModel : ViewModel
             scriptGroupsSelect.Remove(task);
         }
         
-        ScriptControlViewModel scriptControlViewModel = new ScriptControlViewModel(_snackbarService, _scriptService,scriptGroupsSelect,_selectedProject,true);
+        var viewModel = new OneDragonFlowViewModel(_snackbarService, _scriptService);
+        ScriptControlViewModel scriptControlViewModel = new ScriptControlViewModel( _snackbarService, _scriptService,scriptGroupsSelect,_selectedProject,true);
         
         var dialog = new Wpf.Ui.Controls.MessageBox
         {
             Title = "配置组管理",
             Content = new ScrollViewer
             {
-                Content = new ScriptControlPage(scriptControlViewModel), 
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = new ScriptControlPage(scriptControlViewModel),
+                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
             },
             CloseButtonText = "关闭",
             Owner = Application.Current.ShutdownMode == ShutdownMode.OnMainWindowClose ? null : Application.Current.MainWindow,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             SizeToContent = SizeToContent.Width, 
             MinWidth = 700,
-            MinHeight = 300,
-            MaxHeight = 600,
+            MinHeight = 500,
+            MaxHeight = 650,
             Topmost = false 
         };
-        // 订阅 Closed 事件
         await dialog.ShowDialogAsync();
     }
 
