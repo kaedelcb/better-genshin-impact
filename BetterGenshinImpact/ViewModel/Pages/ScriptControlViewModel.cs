@@ -1097,7 +1097,7 @@ public partial class ScriptControlViewModel : ViewModel
         }
     }
 
-    private void ScriptProjectsPChanged(object? sender, PropertyChangedEventArgs e)
+    public void ScriptProjectsPChanged(object? sender, PropertyChangedEventArgs e)
     {
         foreach (var group in ScriptGroups)
         {
@@ -1105,7 +1105,7 @@ public partial class ScriptControlViewModel : ViewModel
         }
     }
 
-    private void ScriptProjectsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    public void ScriptProjectsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         // 补充排序字段
         if (SelectedScriptGroup is { Projects.Count: > 0 })

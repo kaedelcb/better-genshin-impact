@@ -568,9 +568,15 @@ public partial class OneDragonFlowViewModel : ViewModel
             MinWidth = 700,
             MinHeight = 500,
             MaxHeight = 650,
-            Topmost = false 
+            Topmost = false,
         };
-        await dialog.ShowDialogAsync();
+        var result =await dialog.ShowDialogAsync();
+        if (result == Wpf.Ui.Controls.MessageBoxResult.None)
+        {
+            //一些实时触发的配置无法实时触发，关闭窗口后手动保存一下
+            scriptControlViewModel.ScriptProjectsCollectionChanged(ScriptGroups, 
+                new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+        }
     }
 
     [RelayCommand]
