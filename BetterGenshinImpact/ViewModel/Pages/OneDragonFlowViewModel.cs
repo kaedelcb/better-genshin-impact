@@ -540,7 +540,7 @@ public partial class OneDragonFlowViewModel : ViewModel
     private async Task LookConfig()
     {
         Toast.Warning("功能开发中...");
-        // return;
+        return;
         if (ScriptGroups.FirstOrDefault(sg => sg.Name == SelectedTask.Name) != null)
         {
             _selectedProject = ScriptGroups.FirstOrDefault(sg => sg.Name == SelectedTask.Name);
