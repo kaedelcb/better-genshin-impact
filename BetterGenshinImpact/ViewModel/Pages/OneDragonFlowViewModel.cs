@@ -33,7 +33,33 @@ using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script.Project;
 using BetterGenshinImpact.Service.Interface;
 using TextBlock = Wpf.Ui.Controls.TextBlock;
+using WinForms = System.Windows.Forms;
+using BetterGenshinImpact.Core.Simulator;
+using Vanara.PInvoke;
+using static BetterGenshinImpact.GameTask.Common.TaskControl;
+using static Vanara.PInvoke.User32;
+using BetterGenshinImpact.GameTask.AutoSkip.Assets;
+using BetterGenshinImpact.GameTask.AutoWood.Assets;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using BetterGenshinImpact.Core.Simulator;
+using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
+using BetterGenshinImpact.GameTask.AutoWood.Assets;
+using BetterGenshinImpact.GameTask.AutoWood.Utils;
+using BetterGenshinImpact.GameTask.Common.BgiVision;
+using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.Core.Recognition;
+using BetterGenshinImpact.GameTask.Common;
+using Rect = OpenCvSharp.Rect;
+using System.Collections.Generic;
+using System.Windows.Data;
+using CommunityToolkit.Mvvm.Input;
+using Grid = System.Windows.Controls.Grid;
+using System.Windows.Media;
+using Button = Wpf.Ui.Controls.Button;
 using System.Collections.Specialized;
+
 
 namespace BetterGenshinImpact.ViewModel.Pages;
 
