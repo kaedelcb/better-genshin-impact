@@ -553,7 +553,7 @@ public partial class OneDragonFlowViewModel : ViewModel
             scriptGroupsSelect.Remove(task);
         }
         
-        ScriptControlViewModel scriptControlViewModel = new ScriptControlViewModel(_snackbarService, _scriptService,scriptGroupsSelect,_selectedProject);
+        ScriptControlViewModel scriptControlViewModel = new ScriptControlViewModel(_snackbarService, _scriptService,scriptGroupsSelect,_selectedProject,true);
         
         var dialog = new Wpf.Ui.Controls.MessageBox
         {
@@ -568,7 +568,8 @@ public partial class OneDragonFlowViewModel : ViewModel
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             SizeToContent = SizeToContent.Width, 
             MinWidth = 700,
-            MinHeight = 600,
+            MinHeight = 300,
+            MaxHeight = 600,
             Topmost = false 
         };
         // 订阅 Closed 事件
@@ -1327,13 +1328,13 @@ public partial class OneDragonFlowViewModel : ViewModel
                     RefreshFilteredConfigList();
                     string todayNow = DateTime.Now.DayOfWeek switch
                     {
-                        DayOfWeek.Monday => "星期一",
-                        DayOfWeek.Tuesday => "星期二",
-                        DayOfWeek.Wednesday => "星期三",
-                        DayOfWeek.Thursday => "星期四",
-                        DayOfWeek.Friday => "星期五",
-                        DayOfWeek.Saturday => "星期六",
-                        DayOfWeek.Sunday => "星期日",
+                        DayOfWeek.Monday => "周一",
+                        DayOfWeek.Tuesday => "周二",
+                        DayOfWeek.Wednesday => "周三",
+                        DayOfWeek.Thursday => "周四",
+                        DayOfWeek.Friday => "周五",
+                        DayOfWeek.Saturday => "周六",
+                        DayOfWeek.Sunday => "周日",
                         _ => "未知"
                     };
                     //确认配置单是否存在
@@ -1369,13 +1370,13 @@ public partial class OneDragonFlowViewModel : ViewModel
         _executionSuccessCount = 0; 
         string todayNow = DateTime.Now.DayOfWeek switch
         {
-            DayOfWeek.Monday => "星期一",
-            DayOfWeek.Tuesday => "星期二",
-            DayOfWeek.Wednesday => "星期三",
-            DayOfWeek.Thursday => "星期四",
-            DayOfWeek.Friday => "星期五",
-            DayOfWeek.Saturday => "星期六",
-            DayOfWeek.Sunday => "星期日",
+            DayOfWeek.Monday => "周一",
+            DayOfWeek.Tuesday => "周二",
+            DayOfWeek.Wednesday => "周三",
+            DayOfWeek.Thursday => "周四",
+            DayOfWeek.Friday => "周五",
+            DayOfWeek.Saturday => "周六",
+            DayOfWeek.Sunday => "周日",
             _ => "未知"
         };
         if (ConfigList.Count == 0)//命令行启动时，没有初始化，或者没有配置单，再次确认

@@ -176,7 +176,9 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Orientation="Horizontal">
+                <StackPanel Grid.Row="0" 
+                            Visibility="{Binding IsInsetMode, Converter={StaticResource BooleanToVisibilityRevertConverter}, ConverterParameter=Visible}"
+                            Orientation="Horizontal">
                     <ui:TextBlock Margin="0,0,0,8"
                                   FontTypography="BodyStrong"
                                   Text="（实验功能）配置组 - " />
@@ -186,6 +188,7 @@
                 </StackPanel>
 
                 <ui:TextBlock Grid.Row="1"
+                              Visibility="{Binding IsInsetMode, Converter={StaticResource BooleanToVisibilityRevertConverter}, ConverterParameter=Visible}"
                               Margin="0,0,0,8"
                               Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
                               TextWrapping="Wrap">
@@ -195,6 +198,7 @@
 
                 <StackPanel Grid.Row="2" Orientation="Horizontal">
                     <ui:Button Command="{Binding StartScriptGroupCommand}"
+                               Visibility="{Binding IsInsetMode, Converter={StaticResource BooleanToVisibilityRevertConverter}, ConverterParameter=Visible}"
                                Content="运行"
                                Icon="{ui:SymbolIcon Play24}" />
                     <Separator Width="10" Opacity="0" />
@@ -235,6 +239,7 @@
                 </StackPanel>
 
                 <Separator Grid.Row="3"
+                           Visibility="{Binding IsInsetMode, Converter={StaticResource BooleanToVisibilityRevertConverter}, ConverterParameter=Visible}"
                            Height="8"
                            Opacity="0" />
 

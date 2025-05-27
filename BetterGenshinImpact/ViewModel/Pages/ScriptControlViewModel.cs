@@ -50,6 +50,8 @@ public partial class ScriptControlViewModel : ViewModel
 
     private readonly IScriptService _scriptService;
     
+    [ObservableProperty] private Boolean _isInsetMode = false;
+    
     /// <summary>
     /// 配置组配置
     /// </summary>
@@ -78,12 +80,13 @@ public partial class ScriptControlViewModel : ViewModel
         ScriptGroups.CollectionChanged += ScriptGroupsCollectionChanged;
     }
     
-    public ScriptControlViewModel(ISnackbarService snackbarService, IScriptService scriptService,ObservableCollection<ScriptGroup> scriptGroups,ScriptGroup? selectedScriptGroup)
+    public ScriptControlViewModel(ISnackbarService snackbarService, IScriptService scriptService,ObservableCollection<ScriptGroup> scriptGroups,ScriptGroup? selectedScriptGroup,bool isInsetMode)
     {
         _snackbarService = snackbarService;
         _scriptService = scriptService;
         ScriptGroups = scriptGroups;
         SelectedScriptGroup = selectedScriptGroup;
+        _isInsetMode = isInsetMode;
         ScriptGroups.CollectionChanged += ScriptGroupsCollectionChanged;
     }
     
