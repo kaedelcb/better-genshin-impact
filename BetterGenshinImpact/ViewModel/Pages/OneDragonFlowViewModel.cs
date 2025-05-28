@@ -83,7 +83,8 @@ public partial class OneDragonFlowViewModel : ViewModel
 
     private readonly ScriptService _scriptService;
     
-    private readonly ISnackbarService _snackbarService = App.GetService<ISnackbarService>();
+    private readonly ISnackbarService _snackbarService = App.GetService<ISnackbarService>()??
+                                                         throw new NullReferenceException("未找到Snackbar服务");
     
     private ScriptGroup _selectedProject;
 
@@ -119,8 +120,8 @@ public partial class OneDragonFlowViewModel : ViewModel
         FilteredConfigList.Filter = FilterLogic;
         FilteredConfigList.Refresh();
     }
-    
-    [ObservableProperty] private OneDragonTaskItem _selectedTask;
+
+    [ObservableProperty] private OneDragonTaskItem? _selectedTask;
 
     partial void OnSelectedTaskChanged(OneDragonTaskItem value)
     {
@@ -177,7 +178,8 @@ public partial class OneDragonFlowViewModel : ViewModel
                     var json = File.ReadAllText(file);
                     var group = ScriptGroup.FromJson(json);
 
-                    var nst = TaskContext.Instance().Config.NextScheduledTask.Find(item => item.Item1 == group.Name);
+                    var nst = TaskContext.Instance().Config.NextScheduledTask.
+                        Find(item => item.Item1 == group.Name);
                     foreach (var item in group.Projects)
                     {
                         item.NextFlag = false;
@@ -538,20 +540,21 @@ public partial class OneDragonFlowViewModel : ViewModel
     {
         Toast.Warning("功能开发中...");
         // return;
+        
         ReadScriptGroup(); 
         var scriptGroupsSelect = new ObservableCollection<ScriptGroup>(
-            ScriptGroups.Where(sg => !ScriptGroupsdefault.Any(dg => dg.Name == sg.Name))
-        );
+            ScriptGroups.Where(sg => !ScriptGroupsdefault.Any(dg => dg.Name == sg.Name)));
+        
         foreach (var task in ScriptGroupsdefault)
         {
             scriptGroupsSelect.Remove(task);
         }
-        if (ScriptGroups.FirstOrDefault(sg => sg.Name == SelectedTask.Name) != null)
-        {
-            _selectedProject = scriptGroupsSelect.FirstOrDefault(sg => sg.Name == SelectedTask.Name)?? scriptGroupsSelect.First();
-        }
+
+        _selectedProject = scriptGroupsSelect.FirstOrDefault(sg => sg.Name == SelectedTask.Name)??
+                           scriptGroupsSelect.FirstOrDefault()?? null;
         
-        ScriptControlViewModel scriptControlViewModel = new ScriptControlViewModel( _snackbarService, _scriptService,scriptGroupsSelect,_selectedProject,true);
+        ScriptControlViewModel scriptControlViewModel = new ScriptControlViewModel( _snackbarService, 
+            _scriptService,scriptGroupsSelect,_selectedProject,true);
         
         var dialog = new Wpf.Ui.Controls.MessageBox
         {
@@ -564,7 +567,7 @@ public partial class OneDragonFlowViewModel : ViewModel
             CloseButtonText = "关闭",
             Owner = Application.Current.ShutdownMode == ShutdownMode.OnMainWindowClose ? null : Application.Current.MainWindow,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            SizeToContent = SizeToContent.Width, 
+            SizeToContent = SizeToContent.Height, 
             MinWidth = 700,
             MinHeight = 500,
             MaxHeight = 650,
@@ -661,7 +664,9 @@ public partial class OneDragonFlowViewModel : ViewModel
               var selectedcopy = selected;// 保存选择的计划表名称
               if (ConfigList.Any(c => c.ScheduleName == selected))
                 {
-                    if (MessageBox.Show($"计划表 \"{selected}\" 下有配置单，配置单将移至 <默认计划表> 中，确定要删除计划表 \"{selected}\" ？", "删除计划表", System.Windows.MessageBoxButton.YesNo) == System.Windows.MessageBoxResult.Yes)
+                    if (MessageBox.Show($"计划表 \"{selected}\" " +
+                                        $"下有配置单，配置单将移至 <默认计划表> 中，确定要删除计划表 \"{selected}\" ？", 
+                            "删除计划表", System.Windows.MessageBoxButton.YesNo) == System.Windows.MessageBoxResult.Yes)
                     {
                         foreach (var config in ConfigList.Where(c => c.ScheduleName == selected))
                         {
@@ -675,7 +680,8 @@ public partial class OneDragonFlowViewModel : ViewModel
                 }
                 else
                 {
-                    if (MessageBox.Show($"计划表 \"{selected}\" 下没有配置单，可以直接删除。", "删除计划表", System.Windows.MessageBoxButton.YesNo) == System.Windows.MessageBoxResult.Yes)
+                    if (MessageBox.Show($"计划表 \"{selected}\" 下没有配置单，可以直接删除。", "删除计划表",
+                            System.Windows.MessageBoxButton.YesNo) == System.Windows.MessageBoxResult.Yes)
                     {
                         Config.ScheduleList = new ObservableCollection<string>(Config.ScheduleList.Where(x => x != selected));
                         Toast.Success($"计划表 \"{selected}\" 删除成功！");
@@ -688,7 +694,8 @@ public partial class OneDragonFlowViewModel : ViewModel
                     Config.SelectedOneDragonFlowPlanName = "默认计划表";
                 }
                 RefreshFilteredConfigList();
-                var lastConfig = ConfigList.LastOrDefault(c => c.ScheduleName == Config.SelectedOneDragonFlowPlanName);
+                var lastConfig = ConfigList.LastOrDefault(c => c.ScheduleName 
+                                                               == Config.SelectedOneDragonFlowPlanName);
                 if (lastConfig != null)
                 {
                     Toast.Warning($"计划表 \"{Config.SelectedOneDragonFlowPlanName}\" 下有配置单，将自动选择最后一条配置单");
@@ -757,7 +764,9 @@ public partial class OneDragonFlowViewModel : ViewModel
             var configToDelete = ConfigList.FirstOrDefault(c => c.Name == configName);
             if (configToDelete != null)
             {
-                var result = MessageBox.Show($"确定要删除 {configName} 配置单吗？删除后无法恢复！", "确认删除", System.Windows.MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                var result = MessageBox.Show($"确定要删除 {configName} 配置单吗？删除后无法恢复！", 
+                    "确认删除", System.Windows.MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                
                 if (result == System.Windows.MessageBoxResult.Yes)
                 {
                     string filePath = Path.Combine(_basePath, _configPath, $"{configName}.json");
@@ -769,7 +778,8 @@ public partial class OneDragonFlowViewModel : ViewModel
                             ConfigList.Remove(configToDelete);
     
                             // 删除后处理 SelectedConfig
-                            var nextConfig = ConfigList.LastOrDefault(c => c.ScheduleName == Config.SelectedOneDragonFlowPlanName);
+                            var nextConfig = ConfigList.LastOrDefault(c => c.ScheduleName 
+                                                                           == Config.SelectedOneDragonFlowPlanName);
                             if (nextConfig != null)
                             {
                                 SelectedConfig = nextConfig;
@@ -795,12 +805,14 @@ public partial class OneDragonFlowViewModel : ViewModel
                                 OnConfigDropDownChanged();
                             }
                             RefreshFilteredConfigList();
-                            var configs = ConfigList.Where(c => c.ScheduleName == Config.SelectedOneDragonFlowPlanName).ToList();
+                            var configs = ConfigList.Where(c => c.ScheduleName 
+                                                                == Config.SelectedOneDragonFlowPlanName).ToList();
                             for (int i = 0; i < configs.Count; i++)
                             {
                                 configs[i].IndexId = i + 1;
                             }
-                            var lastConfig = ConfigList.LastOrDefault(c => c.ScheduleName == Config.SelectedOneDragonFlowPlanName);
+                            var lastConfig = ConfigList.LastOrDefault(c => c.ScheduleName 
+                                                                           == Config.SelectedOneDragonFlowPlanName);
                             if (lastConfig != null)
                             {
                                 SelectedConfig = lastConfig;
@@ -999,7 +1011,8 @@ public partial class OneDragonFlowViewModel : ViewModel
                 config.ScheduleName = "默认计划表";
             }
             
-            Config.ScheduleList = new ObservableCollection<string>(Config.ScheduleList.Where(schedule => schedule != selectedSchedule));
+            Config.ScheduleList = new ObservableCollection<string>(Config.ScheduleList.Where
+                (schedule => schedule != selectedSchedule));
 
             Toast.Success($"计划表 \"{selectedSchedule}\" 删除成功！");
         }
@@ -1152,7 +1165,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         }
         AddNewTaskGroup();
         SaveConfig();
-        SelectedTask = null;
+        SelectedTask = TaskList.LastOrDefault();
     }
     
     private void SetSomeSelectedConfig(OneDragonFlowConfig? selected)
@@ -1340,10 +1353,12 @@ public partial class OneDragonFlowViewModel : ViewModel
                         _ => "未知"
                     };
                     //确认配置单是否存在
-                    var boundConfigs = ConfigList.Where(config => config.AccountBinding == true && (config.Period == "每日" 
-                            || config.Period == todayNow) && config.ScheduleName == argsOneDragonPlan)
+                    var boundConfigs = ConfigList.Where(config => config.AccountBinding == true 
+                                                                  && (config.Period == "每日" 
+                                || config.Period == todayNow) && config.ScheduleName == argsOneDragonPlan)
                         .OrderBy(config => config.IndexId)
                         .ToList();
+                    
                     if (boundConfigs.Count == 0)
                     {
                         Toast.Warning("没有可执行的配置单，请先设定配置单");
@@ -1386,11 +1401,14 @@ public partial class OneDragonFlowViewModel : ViewModel
             Toast.Warning("配置单空，尝试初始化！");
             InitConfigList();
         }
-        var boundConfigs = ConfigList.Where(config => config.AccountBinding == true && (config.Period == todayNow || config.Period == "每日") && config.ScheduleName == Config.SelectedOneDragonFlowPlanName)
+        var boundConfigs = ConfigList.Where(config => config.AccountBinding == true 
+                                                      && (config.Period == todayNow || config.Period == "每日") 
+                                                      && config.ScheduleName == Config.SelectedOneDragonFlowPlanName)
             .OrderBy(config => config.IndexId)
             .ToList();
-        _logger.LogInformation("连续一条龙：今天 {todayNow} ，执行 {ScheduleName} 计划，生效配置单数量 {BoundConfigCount}",todayNow,Config.SelectedOneDragonFlowPlanName,boundConfigs.Count);
-        //Toast.Success(boundConfigs.Count+"  "+ConfigList.Count);
+        _logger.LogInformation("连续一条龙：今天 {todayNow} ，执行 {ScheduleName} 计划，生效配置单数量 {BoundConfigCount}",
+            todayNow,Config.SelectedOneDragonFlowPlanName,boundConfigs.Count);
+        
         if (ConfigList.Count == 0 || boundConfigs.Count == 0) 
         {
             Toast.Warning("连续一条龙需绑定UID,请先设定配置单");
@@ -1402,8 +1420,10 @@ public partial class OneDragonFlowViewModel : ViewModel
             configIndex++;
             SelectedConfig = config;
             OnConfigDropDownChanged();
+            
             _logger.LogInformation("正在执行 {ScheduleName} 计划的第 {ConfigIndex} / {boundConfigs.Count} 个配置单：{Config.Name}，绑定UID {Config.GenshinUid}", 
                 Config.SelectedOneDragonFlowPlanName,configIndex,boundConfigs.Count,config.Name, config.GenshinUid);
+            
             await Task.Delay(1000);
             await OnOneKeyExecute();
             await new ReturnMainUiTask().Start(CancellationToken.None);
@@ -1421,8 +1441,12 @@ public partial class OneDragonFlowViewModel : ViewModel
         await new TaskRunner().RunThreadAsync(async () =>
         {
             await Task.Delay(500);
-            Notify.Event(NotificationEvent.DragonEnd).Success($"连续一条龙：{Config.SelectedOneDragonFlowPlanName} 共完成 {_executionSuccessCount} / {boundConfigs.Count} 个配置单一条龙任务");
-            _logger.LogInformation("连续一条龙：{_selectedOneDragonFlowPlanName} 共完成 {_executionSuccessCount} / {boundConfigs.Count} 个配置单一条龙任务",Config.SelectedOneDragonFlowPlanName,_executionSuccessCount,boundConfigs.Count);
+            
+            Notify.Event(NotificationEvent.DragonEnd).Success($"连续一条龙：{Config.SelectedOneDragonFlowPlanName} " +
+                                                              $"共完成 {_executionSuccessCount} / {boundConfigs.Count} 个配置单一条龙任务");
+            _logger.LogInformation("连续一条龙：{_selectedOneDragonFlowPlanName} 共完成 {_executionSuccessCount} / " +
+                                   "{boundConfigs.Count} 个配置单一条龙任务",Config.SelectedOneDragonFlowPlanName,_executionSuccessCount,boundConfigs.Count);
+           
             _continuousExecutionMark = false;// 标记连续执行结束
             _executionSuccessCount = 0;// 重置连续执行成功次数
             if (SelectedConfig != null && !string.IsNullOrEmpty(Config.ContinuousCompletionAction))
@@ -1505,7 +1529,8 @@ public partial class OneDragonFlowViewModel : ViewModel
                     reTrySwitchCount ++;
                     if (reTrySwitchCount >= reTrySwitchTimes)
                     {
-                        _logger.LogError("UID验证:  {SelectedConfig.Name} / {SelectedConfig.GenshinUid} 配置单任务,切换账号 {reTrySwitchTimes} 次,验证UID仍然失败,退出执行",
+                        _logger.LogError("UID验证:  {SelectedConfig.Name} / {SelectedConfig.GenshinUid} 配置单任务," +
+                                         "切换账号 {reTrySwitchTimes} 次,验证UID仍然失败,退出执行",
                             SelectedConfig.Name,SelectedConfig.GenshinUid,reTrySwitchTimes-1);
                         return;
                     }
@@ -1631,9 +1656,11 @@ public partial class OneDragonFlowViewModel : ViewModel
             _executionSuccessCount++;
             await new CheckRewardsTask().Start(CancellationContext.Instance.Cts.Token);
             await Task.Delay(500);
+            
             Notify.Event(NotificationEvent.DragonEnd).Success($"配置单 {SelectedConfig.Name} 绑定 {SelectedConfig.GenshinUid}，一条龙和配置组任务结束");
             _logger.LogInformation("配置单 {SelectedConfig.Name} 绑定UID {GenshinUid} 一条龙和配置组任务结束",
                 SelectedConfig.Name,string.IsNullOrEmpty(SelectedConfig.GenshinUid) ? "未绑定" : SelectedConfig.GenshinUid);
+            
             // 单次执行完成后，不执行后续的完成任务
             if (!_continuousExecutionMark)
             {
@@ -1707,17 +1734,14 @@ public partial class OneDragonFlowViewModel : ViewModel
             else
             {
                 int index = ConfigList.Count(c => c.ScheduleName == Config.SelectedOneDragonFlowPlanName);
+                Toast.Success($"一条龙配置单 {str} 已添加，位置 {index+1}");
                 var nc = new OneDragonFlowConfig
                 {
                     ScheduleName = Config.SelectedOneDragonFlowPlanName, // 设置为当前选定的计划表
                     IndexId = index + 1,
                     Name = str
                 };
-                // 如果 index 超出范围则直接 Add
-                if (index >= ConfigList.Count)
-                    ConfigList.Add(nc);
-                else
-                    ConfigList.Insert(index, nc);
+                ConfigList.Add(nc);
                 SelectedConfig = nc;
                 OnConfigDropDownChanged();
             }
@@ -1985,6 +2009,7 @@ public partial class OneDragonFlowViewModel : ViewModel
             else
             {
                 await new BlessingOfTheWelkinMoonTask().Start(CancellationContext.Instance.Cts.Token);
+                GameCaptureRegion.GameRegion1080PPosClick(955, 656);//非凌晨4点，点击屏幕
             }
             await Delay(1000, cts.Cts.Token);
             
