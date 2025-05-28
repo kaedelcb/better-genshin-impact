@@ -82,35 +82,40 @@ internal class GoToSereniteaPotTask
         // 进入 壶
         await ChangeCountryForce("尘歌壶", ct);
         
-        
-
-        
         // 若未找到 ElementAssets.Instance.SereniteaPotRo 就是已经在尘歌壶了
-        var ra = CaptureToRectArea();
-        //确定洞天名称
-        var list = ra.FindMulti(new RecognitionObject
-        {
-            RecognitionType = RecognitionTypes.Ocr,
-            RegionOfInterest = new Rect((int)(ra.Width * 0.86), ra.Height*9/10, (int)(ra.Width * 0.073), (int)(ra.Height*0.04))
-        });
-        if (list.Count > 0)
-        {
-            dongTianName = list[0].Text;
-            Logger.LogInformation("领取尘歌壶奖励:{text}", "洞天名称：" + dongTianName);
+        var  ra = CaptureToRectArea();
+        for (int i = 0; i < 5; i++){
+            ra = CaptureToRectArea();
+            //确定洞天名称
+            var list = ra.FindMulti(new RecognitionObject
+            {
+                RecognitionType = RecognitionTypes.Ocr,
+                RegionOfInterest = new Rect((int)(ra.Width * 0.86), ra.Height*9/10, (int)(ra.Width * 0.073), (int)(ra.Height*0.04))
+            });
+            if (list.Count > 0)
+            {
+                dongTianName = list[0].Text;
+                Logger.LogInformation("领取尘歌壶奖励:{text}", "洞天名称：" + dongTianName);
+                await Task.Delay(100, ct);
+                break;
+            }
+            else
+            {
+                dongTianName = "";
+                Logger.LogInformation("领取尘歌壶奖励:{text}", "未识别到洞天名称");
+            }
+            await Task.Delay(100, ct);
         }
-        else
-        {
-            dongTianName = "";
-            Logger.LogInformation("领取尘歌壶奖励:{text}", "未识别到洞天名称");
-        }
-        
-        for (int i = 0; i < 3; i++)
+
+        for (int i = 0; i < 5; i++)
         {
             var sereniteaPotHomeIcon = ra.Find(ElementAssets.Instance.SereniteaPotHomeRo);
             if (!sereniteaPotHomeIcon.IsExist())
             {
-                Logger.LogInformation("领取尘歌壶奖励:{text}", "住宅图标未找到，调整地图缩放至3.0。");
-                await new Core.Script.Dependence.Genshin().SetBigMapZoomLevel(3.0);
+                Logger.LogInformation("领取尘歌壶奖励:{text}", "住宅图标未找到，调整地图缩放至2。");
+                await Task.Delay(1000, ct);
+                await new Core.Script.Dependence.Genshin().SetBigMapZoomLevel(2.5-i*0.2);
+                await Task.Delay(1000, ct);
             }
             else
             {
