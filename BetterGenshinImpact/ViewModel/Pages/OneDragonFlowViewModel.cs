@@ -206,23 +206,33 @@ public partial class OneDragonFlowViewModel : ViewModel
             _logger.LogInformation(e, "读取配置组配置时失败");
         }
     }
+    
+    //新增办法，生成任务序号
+    private int FindNextAvailableIndex()
+    {
+        var usedIndices = TaskList.Select(task => task.Index).ToHashSet();
+        for (int i = 0; i <= 999; i++)
+        {
+            if (!usedIndices.Contains(i))
+            {
+                return i;
+            }
+        }
+        throw new InvalidOperationException("未找到可用的 Index 值");
+    }
 
     private async void AddNewTaskGroup()
     {
+        if (TaskList.Count >= 999)
+        {
+            Toast.Warning("任务数量已达上限 999 个，请删除部分任务后再添加");
+            return;
+        }
         ReadScriptGroup();
         var selectedGroupNamePick = await OnStartMultiScriptGroupAsync();
         if (selectedGroupNamePick == null)
         {
             return;
-        }
-        if (TaskList.Count > 3)
-        {
-            //对所有任务重新排序
-            for (int i = 0; i < TaskList.Count; i++)
-            {
-                TaskList[i].Index = i + 1;
-            }
-            Toast.Warning("任务数量已达上限999，重新排序");
         }
         int pickTaskCount = selectedGroupNamePick.Split(',').Count();
         foreach (var selectedGroupName in selectedGroupNamePick.Split(','))
@@ -230,9 +240,9 @@ public partial class OneDragonFlowViewModel : ViewModel
             var taskItem = new OneDragonTaskItem(selectedGroupName)
             {
                 IsEnabled = true,
-                Index = TaskList.Count + 1,
+                Index = FindNextAvailableIndex(),
             };
-            if (TaskList.All(task => task.Name != taskItem.Name))
+            if (TaskList.All(task => task.Name != taskItem.Name) || true)//测试
             {
                 var names = selectedGroupName.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
                     .Select(name => name.Trim())
@@ -266,6 +276,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                 else
                 {
                     TaskList.Add(taskItem);
+                    
                     if (pickTaskCount == 1)
                     {
                         Toast.Success("配置组添加成功");
@@ -295,7 +306,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         {
             if (TaskList.Any(taskName => scriptGroup.Name.Contains(taskName.Name)))
             {
-                continue; // 不显示已经存在的配置组
+                //continue; // 不显示已经存在的配置组
             }
             var checkBox = new CheckBox
             {
@@ -1115,8 +1126,10 @@ public partial class OneDragonFlowViewModel : ViewModel
         {
             var taskItem = new OneDragonTaskItem(kvp.Key)
             {
-                IsEnabled = kvp.Value.Item1
+                IsEnabled = kvp.Value.Item1,
+                Index = kvp.Value.Item2
             };
+            //删除指定的index的任务
             if (taskItem.Name != InputScriptGroupName)
             {
                 TaskList.Add(taskItem);
