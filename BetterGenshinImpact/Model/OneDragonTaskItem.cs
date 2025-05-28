@@ -16,6 +16,8 @@ namespace BetterGenshinImpact.Model;
 
 public partial class OneDragonTaskItem : ObservableObject
 {
+    [ObservableProperty] private int _index;
+    
     [ObservableProperty] private string _name;
 
     [ObservableProperty] private Brush _statusColor = Brushes.Gray;
@@ -30,7 +32,7 @@ public partial class OneDragonTaskItem : ObservableObject
     {
         Name = name;
     }
-
+    
     // public OneDragonTaskItem(Type viewModelType, Func<Task> action)
     // {
     //     ViewModel = App.GetService(viewModelType) as OneDragonBaseViewModel;
@@ -44,13 +46,13 @@ public partial class OneDragonTaskItem : ObservableObject
 
     public void InitAction(OneDragonFlowConfig config)
     {
-        if (config.TaskEnabledList.TryGetValue(Name, out _))
+        if (config.TaskEnabledList.TryGetValue(Name, out var taskStatus))
         {
-            config.TaskEnabledList[Name] = IsEnabled;
+            config.TaskEnabledList[Name] =  (IsEnabled, taskStatus.Item2);
         }
         else
         {
-            config.TaskEnabledList.Add(Name, IsEnabled);
+            config.TaskEnabledList.Add(Name, (IsEnabled, taskStatus.Item2));
         }
 
         switch (Name)
