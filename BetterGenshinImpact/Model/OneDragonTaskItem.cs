@@ -33,6 +33,13 @@ public partial class OneDragonTaskItem : ObservableObject
         Name = name;
     }
     
+    public OneDragonTaskItem(string name,bool isEnabled,int index)
+    {
+        Name = name;
+        IsEnabled = isEnabled;
+        Index = index;
+    }
+    
     // public OneDragonTaskItem(Type viewModelType, Func<Task> action)
     // {
     //     ViewModel = App.GetService(viewModelType) as OneDragonBaseViewModel;

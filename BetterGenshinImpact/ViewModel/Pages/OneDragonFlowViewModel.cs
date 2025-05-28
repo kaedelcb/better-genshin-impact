@@ -242,14 +242,14 @@ public partial class OneDragonFlowViewModel : ViewModel
                 IsEnabled = true,
                 Index = FindNextAvailableIndex(),
             };
-            if (TaskList.All(task => task.Name != taskItem.Name) || true)//测试
+            if (TaskList.All(task => task.Name != taskItem.Name) || true)//允许重复添加
             {
                 var names = selectedGroupName.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
                     .Select(name => name.Trim())
-                    .ToList();
+                    .ToList();// 用于存储所有选中的项
                 bool containsAnyDefaultGroup =
-                    names.Any(name => ScriptGroupsdefault.Any(defaultSg => defaultSg.Name == name));
-                if (containsAnyDefaultGroup)
+                    names.Any(name => ScriptGroupsdefault.Any(defaultSg => defaultSg.Name == name));// 判断是否包含默认组
+                if (containsAnyDefaultGroup)//如果包含默认组，则插入到默认组后面
                 {
                     int lastDefaultGroupIndex = -1;
                     for (int i = TaskList.Count - 1; i >= 0; i--)
@@ -276,7 +276,6 @@ public partial class OneDragonFlowViewModel : ViewModel
                 else
                 {
                     TaskList.Add(taskItem);
-                    
                     if (pickTaskCount == 1)
                     {
                         Toast.Success("配置组添加成功");
@@ -1124,13 +1123,14 @@ public partial class OneDragonFlowViewModel : ViewModel
         TaskList.Clear();
         foreach (var kvp in SelectedConfig.TaskEnabledList)
         {
-            var taskItem = new OneDragonTaskItem(kvp.Key)
+            var taskItem = new OneDragonTaskItem(kvp.Key, kvp.Value.Item1, kvp.Value.Item2)
             {
-                IsEnabled = kvp.Value.Item1,
-                Index = kvp.Value.Item2
+                Name = kvp.Key,
+                Index = kvp.Value.Item2,
+                IsEnabled = kvp.Value.Item1
             };
-            //删除指定的index的任务
-            if (taskItem.Name != InputScriptGroupName)
+           
+            if (InputScriptGroupName != taskItem.Name)
             {
                 TaskList.Add(taskItem);
                 taskItem = null;
@@ -1138,6 +1138,9 @@ public partial class OneDragonFlowViewModel : ViewModel
             }
         }
     }
+    // SelectedConfig.TaskEnabledList.TryGetValue(kvp.Key, out var taskStatus);
+    // if (taskStatus.Item2 != kvp.Value.Item2) 
+    
 
     [RelayCommand]
     private void OnConfigDropDownChanged()
@@ -1163,9 +1166,18 @@ public partial class OneDragonFlowViewModel : ViewModel
         SelectedConfig.TaskEnabledList.Clear();
         foreach (var task in TaskList)
         {
-            SelectedConfig.TaskEnabledList[task.Name] = (task.IsEnabled, task.Index);
+            // 使用任务名称和索引和使能状态的组合作为键,同名如果INDEX不同，也添加到字典
+            // 使用任务名称和索引的组合作为键
+            string key = $"{task.Name}_{task.Index}";
+            if (!SelectedConfig.TaskEnabledList.ContainsKey(key))
+            {
+                SelectedConfig.TaskEnabledList[key] = (task.IsEnabled, task.Index);
+            }else
+            {
+                // 这里保留原有条目，不做覆盖
+                SelectedConfig.TaskEnabledList[key] = (task.IsEnabled, task.Index);
+            }
         }
-        
         WriteConfig(SelectedConfig);
     }
 
