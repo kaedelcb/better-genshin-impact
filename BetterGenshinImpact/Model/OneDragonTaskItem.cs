@@ -33,7 +33,7 @@ public partial class OneDragonTaskItem : ObservableObject
         Name = name;
     }
     
-    public OneDragonTaskItem(string name,bool isEnabled,int index)
+    public OneDragonTaskItem(int index,bool isEnabled,string name)
     {
         Name = name;
         IsEnabled = isEnabled;
@@ -53,13 +53,13 @@ public partial class OneDragonTaskItem : ObservableObject
 
     public void InitAction(OneDragonFlowConfig config)
     {
-        if (config.TaskEnabledList.TryGetValue(Name, out var taskStatus))
+        if (config.TaskEnabledList.TryGetValue(Index, out var taskStatus))
         {
-            config.TaskEnabledList[Name] =  (IsEnabled, taskStatus.Item2);
+            config.TaskEnabledList[Index] =  (IsEnabled, taskStatus.Item2);
         }
         else
         {
-            config.TaskEnabledList.Add(Name, (IsEnabled, taskStatus.Item2));
+            config.TaskEnabledList.Add(Index, (IsEnabled, taskStatus.Item2));
         }
 
         switch (Name)
