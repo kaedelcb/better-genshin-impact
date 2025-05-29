@@ -100,6 +100,25 @@ public partial class OneDragonFlowViewModel : ViewModel
         new ("领取尘歌壶奖励"),
         // new ("自动七圣召唤"),
     ];
+    
+    // 定义旧版本的配置类
+    [Serializable]
+    public partial class OneDragonFlowConfigV0 : ObservableObject
+    {
+        // 配置名
+        [ObservableProperty]
+        private string _name = string.Empty;
+
+        // 配置序号
+        [ObservableProperty]
+        private int _indexId = 1;
+
+        // 旧版本的 TaskEnabledList
+        [ObservableProperty]
+        private Dictionary<string, bool> _taskEnabledList = new Dictionary<string, bool>();
+    }
+    
+    
     //更新右上角的任务列表
     public ICollectionView FilteredConfigList { get; }
 
@@ -1033,8 +1052,84 @@ public partial class OneDragonFlowViewModel : ViewModel
         }
     }
     
+    [RelayCommand]
+    public void AdaptVersions()
+    {
+        Directory.CreateDirectory(OneDragonFlowConfigFolder);
+        var configFiles = Directory.GetFiles(OneDragonFlowConfigFolder, "*.json");
+        var configs = new List<OneDragonFlowConfig>();
+        OneDragonFlowConfig? selected = null;
+        foreach (var configFile in configFiles)
+        {
+            var json = File.ReadAllText(configFile);
+            var config = UpgradeConfig(json);
+            if (config != null)
+            {
+                configs.Add(config);
+                if (config.Name == TaskContext.Instance().Config.SelectedOneDragonFlowConfigName)
+                {
+                    selected = config;
+                }
+            }
+        }
+    }
+    
+    private OneDragonFlowConfig? UpgradeConfig(string json)
+    {
+        try
+        {
+           // 如果反序列化失败，尝试反序列化为旧版本的配置
+            var oldConfig = JsonConvert.DeserializeObject<OneDragonFlowConfigV0>(json);
+            if (oldConfig != null)
+            {
+                // TaskEnabledList字段改为新版本的TaskEnabledList（Dictionary<int, (bool, string)>），int为序号，由大到小，bool改为旧的bool，string为旧的string，
+                var newConfigFromOld1 = oldConfig;
+                
+                var newConfigFromOld = new OneDragonFlowConfig
+                {
+                    Name = oldConfig.Name,
+                    IndexId = oldConfig.IndexId,
+                    TaskEnabledList = AdaptTaskEnabledList(oldConfig.TaskEnabledList)
+                };
+               
+                // 保存适配后的新版本配置文件
+                SaveConfig(newConfigFromOld, OneDragonFlowConfigFolder + $"\\{newConfigFromOld.Name}.json");
+
+                return newConfigFromOld;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"反序列化错误: {ex.Message}");
+        }
+
+        return null;
+    }
+    
+    // 适配方法
+    private Dictionary<int, (bool, string)> AdaptTaskEnabledList(Dictionary<string, bool> oldTaskEnabledList)
+    {
+        var newTaskEnabledList = new Dictionary<int, (bool, string)>();
+        int index = oldTaskEnabledList.Count; // 从大到小开始索引
+
+        foreach (var kvp in oldTaskEnabledList)
+        {
+            newTaskEnabledList[index] = (kvp.Value, kvp.Key);
+            index--;
+        }
+
+        return newTaskEnabledList;
+    }
+    
+    private void SaveConfig(OneDragonFlowConfig config, string filePath)
+    {
+        var json = JsonConvert.SerializeObject(config, Formatting.Indented);
+        File.WriteAllText(filePath, json);
+    }
+    
     public override void OnNavigatedTo()
     {
+        AdaptVersions();
         InitConfigList();
     }
 
