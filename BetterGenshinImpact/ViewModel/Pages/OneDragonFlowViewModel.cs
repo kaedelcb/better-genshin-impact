@@ -589,6 +589,7 @@ public partial class OneDragonFlowViewModel : ViewModel
             //一些实时触发的配置无法实时触发，关闭窗口后手动保存一下
             scriptControlViewModel.ScriptProjectsCollectionChanged(ScriptGroups, 
                 new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+            LoadDisplayTaskListFromConfig();//刷新显示列表
         }
     }
 
@@ -1072,6 +1073,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                 configs.Add(selected);
             }
         }
+        
         configs = configs.OrderBy(config => config.IndexId).ToList();
         ConfigList.Clear();
         foreach (var config in configs)
@@ -1084,22 +1086,28 @@ public partial class OneDragonFlowViewModel : ViewModel
     }
 
     // 新增方法：从配置文件加载 DisplayTaskList
-    public void LoadDisplayTaskListFromConfig()
+    private void LoadDisplayTaskListFromConfig()
     {
         if (string.IsNullOrEmpty(SelectedConfig.Name) || string.IsNullOrEmpty(SelectedConfig.TaskEnabledList.ToString())) 
         {
             return;
         }
 
+        ReadScriptGroup();
         TaskList.Clear();
+        
         foreach (var kvp in SelectedConfig.TaskEnabledList)
         {
-            var taskItem = new OneDragonTaskItem(kvp.Key, kvp.Value.Item1, kvp.Value.Item2)
+            if (ScriptGroups.Any(scriptGroup => scriptGroup.Name == kvp.Value.Item2) || ScriptGroupsdefault.Any(scriptGroup => scriptGroup.Name == kvp.Value.Item2))
             {
-                IsEnabled = kvp.Value.Item1
-            };
-            TaskList.Add(taskItem);
+                var taskItem = new OneDragonTaskItem(kvp.Key, kvp.Value.Item1, kvp.Value.Item2)
+                {
+                    IsEnabled = kvp.Value.Item1
+                };
+                TaskList.Add(taskItem);
+            }
         }
+        SaveConfig();
     }
 
     [RelayCommand]
