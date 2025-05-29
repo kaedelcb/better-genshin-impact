@@ -545,7 +545,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         };
         FilteredConfigList = CollectionViewSource.GetDefaultView(ConfigList);
         FilteredConfigList.Filter = FilterLogic;
-        
+        if(_autoRun) AdaptVersions();//自动适配版本
     }
 
     [RelayCommand]
@@ -1038,7 +1038,7 @@ public partial class OneDragonFlowViewModel : ViewModel
     
 
     [RelayCommand]
-    public void AdaptVersions()
+    private void AdaptVersions()
     {
         Directory.CreateDirectory(OneDragonFlowConfigFolder);
         var configFiles = Directory.GetFiles(OneDragonFlowConfigFolder, "*.json");
@@ -1050,11 +1050,6 @@ public partial class OneDragonFlowViewModel : ViewModel
             {
                 WriteConfig(config);
             }
-            else
-            {
-                Toast.Success("配置文件已是最新版本，无需升级");
-                // break;//只判断一次就可以
-            }
         }
     }
     
@@ -1062,53 +1057,42 @@ public partial class OneDragonFlowViewModel : ViewModel
     {
         try
         {
-           // 如果反序列化失败，尝试反序列化为旧版本的配置
             var oldConfig = JsonConvert.DeserializeObject<OneDragonFlowConfigV0>(json);
             
-            // 检查 oldConfig Version是否为0，即为旧版本
             if (oldConfig != null && oldConfig.Version <= 0)
             {
-               Toast.Warning("升级配置文件后，请重新启动软件...");
+               Toast.Warning("升级配置升级中...");
             }
             else
             {
                 return null;
             }
             
-            if (oldConfig != null )
+            var newConfigFromOld = new OneDragonFlowConfig();
+            foreach (var property in typeof(OneDragonFlowConfigV0).GetProperties())
             {
-                var newConfigFromOld = new OneDragonFlowConfig();
-                
-                foreach (var property in typeof(OneDragonFlowConfigV0).GetProperties())
+                var newProperty = typeof(OneDragonFlowConfig).GetProperty(property.Name);// 新版本的属性
+                if (newProperty != null && newProperty.CanWrite)
                 {
-                    var newProperty = typeof(OneDragonFlowConfig).GetProperty(property.Name);// 新版本的属性
-                    if (newProperty != null && newProperty.CanWrite)
+                    if (property.Name == "TaskEnabledList")
                     {
-                        if (property.Name == "TaskEnabledList")
-                        {
-                            newProperty.SetValue(newConfigFromOld, AdaptTaskEnabledList(oldConfig.TaskEnabledList));
-                        }else if (property.Name == "Version")
-                        {
-                            newProperty.SetValue(newConfigFromOld, 1);
-                        }
-                        else
-                        {
-                            newProperty.SetValue(newConfigFromOld, property.GetValue(oldConfig));// 其他属性直接复制
-                        }
+                        newProperty.SetValue(newConfigFromOld, AdaptTaskEnabledList(oldConfig.TaskEnabledList));
+                    }else if (property.Name == "Version")
+                    {
+                        newProperty.SetValue(newConfigFromOld, 1);
+                    }
+                    else
+                    {
+                        newProperty.SetValue(newConfigFromOld, property.GetValue(oldConfig));// 其他属性直接复制
                     }
                 }
-                return newConfigFromOld;
             }
-            else
-            {
-                return null;
-            }
+            return newConfigFromOld;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"反序列化错误: {ex.Message}");
         }
-
         return null;
     }
     
@@ -1129,9 +1113,6 @@ public partial class OneDragonFlowViewModel : ViewModel
     
     public override void OnNavigatedTo()
     {
-        // _isLoading = true;
-        // AdaptVersions();
-        // _isLoading = false;
         InitConfigList();
     }
 
@@ -1387,9 +1368,6 @@ public partial class OneDragonFlowViewModel : ViewModel
         {
             return;
         }
-        // _isLoading = true;
-        // // AdaptVersions();
-        // _isLoading = false;
         _autoRun = false;
         var distinctScheduleNames = ConfigList.Select(x => x.ScheduleName).Distinct().ToList();
         foreach (var scheduleName in distinctScheduleNames)
