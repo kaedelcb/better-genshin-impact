@@ -589,7 +589,7 @@ public partial class OneDragonFlowViewModel : ViewModel
             //一些实时触发的配置无法实时触发，关闭窗口后手动保存一下
             scriptControlViewModel.ScriptProjectsCollectionChanged(ScriptGroups, 
                 new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
-            LoadDisplayTaskListFromConfig();//刷新显示列表
+            InitConfigList();
         }
     }
 
@@ -1092,22 +1092,17 @@ public partial class OneDragonFlowViewModel : ViewModel
         {
             return;
         }
-
-        ReadScriptGroup();
         TaskList.Clear();
         
         foreach (var kvp in SelectedConfig.TaskEnabledList)
         {
-            if (ScriptGroups.Any(scriptGroup => scriptGroup.Name == kvp.Value.Item2) || ScriptGroupsdefault.Any(scriptGroup => scriptGroup.Name == kvp.Value.Item2))
+            var taskItem = new OneDragonTaskItem(kvp.Key, kvp.Value.Item1, kvp.Value.Item2)
             {
-                var taskItem = new OneDragonTaskItem(kvp.Key, kvp.Value.Item1, kvp.Value.Item2)
-                {
-                    IsEnabled = kvp.Value.Item1
-                };
-                TaskList.Add(taskItem);
-            }
+                IsEnabled = kvp.Value.Item1
+            };
+            TaskList.Add(taskItem);
         }
-        SaveConfig();
+        // SaveConfig();
     }
 
     [RelayCommand]

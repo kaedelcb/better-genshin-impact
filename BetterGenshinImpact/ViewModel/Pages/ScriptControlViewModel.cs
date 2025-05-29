@@ -644,6 +644,29 @@ public partial class ScriptControlViewModel : ViewModel
         
         try
         {
+            var ViewModel = new OneDragonFlowViewModel();
+            ViewModel.InitConfigList();
+            var configList = ViewModel.ConfigList;
+            // 读取ConfigList中所有的配置单，检查每个配置单中的TaskEnabledList，如果含有和item.Name相同的配置组，则把这个TaskEnabledList中的配置组删除
+            foreach (var config in configList)
+            {
+                if (config.TaskEnabledList.Any(task => task.Value.Item2 == item.Name))
+                {
+                    var oldName = item.Name;
+                    foreach (var task in config.TaskEnabledList)
+                    {
+                        if (task.Value.Item2 == oldName)
+                        {
+                            config.TaskEnabledList.Remove(task.Key);
+                        }
+                    }
+                    ViewModel.WriteConfig(config);
+                }
+            }
+            
+            
+            
+            
             ScriptGroups.Remove(item);
             File.Delete(Path.Combine(ScriptGroupPath, $"{item.Name}.json"));
             _snackbarService.Show(
