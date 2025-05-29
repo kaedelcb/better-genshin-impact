@@ -586,6 +586,7 @@ public partial class ScriptControlViewModel : ViewModel
         {
             if (item.Name == str)
             {
+                Toast.Warning("新名称与旧名称相同");
                 return;
             }
 
@@ -602,9 +603,16 @@ public partial class ScriptControlViewModel : ViewModel
             }
             else
             {
+                var result = MessageBox.Show("所有配置单中名为 < " + item.Name + " > 配置组将重命名为 < " + str + " > ，是否继续？", "重名配置组", System.Windows.MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (result != System.Windows.MessageBoxResult.Yes)
+                {
+                    return;
+                }
+                
                 var ViewModel = new OneDragonFlowViewModel();
                 ViewModel.InitConfigList();
                 var configList = ViewModel.ConfigList;
+                
                // 读取ConfigList中所有的配置单，检查每个配置单中的TaskEnabledList，如果含有和item.Name相同的配置组，则把这个TaskEnabledList中的配置组改为str
                 foreach (var config in configList)
                 {
@@ -636,7 +644,7 @@ public partial class ScriptControlViewModel : ViewModel
             return;
         }
         //弹窗提示"配置单中的所有同名配置组将被删除，是否继续？，取消退出，确认执行删除操作"
-        var result = MessageBox.Show("配置单中的所有同名配置组将被删除，是否继续？", "删除配置组", System.Windows.MessageBoxButton.YesNo, MessageBoxImage.Question);
+        var result = MessageBox.Show("所有配置单中名为 < " + item.Name + " > 配置组将被删除，是否继续？", "删除配置组", System.Windows.MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (result != System.Windows.MessageBoxResult.Yes)
         {
             return;

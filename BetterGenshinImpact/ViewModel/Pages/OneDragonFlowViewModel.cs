@@ -1044,11 +1044,12 @@ public partial class OneDragonFlowViewModel : ViewModel
         // 读取文件夹内所有json配置，按创建时间正序
         var configFiles = Directory.GetFiles(OneDragonFlowConfigFolder, "*.json");
         var configs = new List<OneDragonFlowConfig>();
+        
         OneDragonFlowConfig? selected = null;
         foreach (var configFile in configFiles)
         {
-            var json = File.ReadAllText(configFile);
-            var config = JsonConvert.DeserializeObject<OneDragonFlowConfig>(json);
+            var json = File.ReadAllText(configFile);// 读取配置文件内容
+            var config = JsonConvert.DeserializeObject<OneDragonFlowConfig>(json);// 反序列化配置
             if (config != null)
             {
                 configs.Add(config);
@@ -1058,6 +1059,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                 }
             }
         }
+        
         if (selected == null)
         {
             if (configs.Count > 0)
@@ -1068,7 +1070,7 @@ public partial class OneDragonFlowViewModel : ViewModel
             {
                 selected = new OneDragonFlowConfig
                 {
-                    Name = "默认配置"
+                    Name = "默认配置",
                 };
                 configs.Add(selected);
             }
