@@ -95,6 +95,10 @@ public partial class OneDragonFlowConfig : ObservableObject
 {
     public static AllConfig Config { get; set; } = TaskContext.Instance().Config;
     
+    //版本号
+    [ObservableProperty]
+    private int _version = 1;
+    
     // 配置名
     [ObservableProperty]
     private string _name = string.Empty;

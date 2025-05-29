@@ -1071,6 +1071,11 @@ public partial class OneDragonFlowViewModel : ViewModel
                     selected = config;
                 }
             }
+            else
+            {
+                Toast.Success("配置文件已是最新版本，无需升级");
+                return;//只判断一次就可以
+            }
         }
     }
     
@@ -1080,21 +1085,38 @@ public partial class OneDragonFlowViewModel : ViewModel
         {
            // 如果反序列化失败，尝试反序列化为旧版本的配置
             var oldConfig = JsonConvert.DeserializeObject<OneDragonFlowConfigV0>(json);
-            if (oldConfig != null)
+            
+            // 检查 oldConfig 是否含有 Version 属性
+            var versionProperty = typeof(OneDragonFlowConfigV0).GetProperty("Version");
+            if (versionProperty != null)
+            {
+                // Version 属性存在，返回 null 或进行其他处理
+                return null;
+            }
+            
+            if (oldConfig != null )
             {
                 // TaskEnabledList字段改为新版本的TaskEnabledList（Dictionary<int, (bool, string)>），int为序号，由大到小，bool改为旧的bool，string为旧的string，
-                var newConfigFromOld1 = oldConfig;
+                var newConfigFromOld = new OneDragonFlowConfig();
                 
-                var newConfigFromOld = new OneDragonFlowConfig
+                // 使用反射将属性值从 oldConfig 复制到 newConfigFromOld
+                foreach (var property in typeof(OneDragonFlowConfigV0).GetProperties())
                 {
-                    Name = oldConfig.Name,
-                    IndexId = oldConfig.IndexId,
-                    TaskEnabledList = AdaptTaskEnabledList(oldConfig.TaskEnabledList)
-                };
-               
-                // 保存适配后的新版本配置文件
-                SaveConfig(newConfigFromOld, OneDragonFlowConfigFolder + $"\\{newConfigFromOld.Name}.json");
-
+                    var newProperty = typeof(OneDragonFlowConfig).GetProperty(property.Name);
+                    if (newProperty != null && newProperty.CanWrite)
+                    {
+                        if (property.Name == "TaskEnabledList")
+                        {
+                            newProperty.SetValue(newConfigFromOld, AdaptTaskEnabledList(oldConfig.TaskEnabledList));
+                        }
+                        else
+                        {
+                            // 其他属性直接复制
+                            newProperty.SetValue(newConfigFromOld, property.GetValue(oldConfig));
+                        }
+                    }
+                    WriteConfig(newConfigFromOld);
+                }
                 return newConfigFromOld;
             }
         }
@@ -1121,15 +1143,8 @@ public partial class OneDragonFlowViewModel : ViewModel
         return newTaskEnabledList;
     }
     
-    private void SaveConfig(OneDragonFlowConfig config, string filePath)
-    {
-        var json = JsonConvert.SerializeObject(config, Formatting.Indented);
-        File.WriteAllText(filePath, json);
-    }
-    
     public override void OnNavigatedTo()
     {
-        AdaptVersions();
         InitConfigList();
     }
 
@@ -1385,6 +1400,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         {
             return;
         }
+        AdaptVersions();
         _autoRun = false;
         var distinctScheduleNames = ConfigList.Select(x => x.ScheduleName).Distinct().ToList();
         foreach (var scheduleName in distinctScheduleNames)
