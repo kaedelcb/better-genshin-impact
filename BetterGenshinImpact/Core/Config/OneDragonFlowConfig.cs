@@ -131,6 +131,13 @@ public partial class OneDragonFlowConfig : ObservableObject
     /// </summary>
     public Dictionary<int,(bool,string)> TaskEnabledList { get; set; } = new();
     
+    // 定义旧版本的TaskEnabledList
+    [Serializable]
+    public class TaskEnabledListOld
+    {
+        public Dictionary<string, bool> TaskEnabledList { get; set; } = new();
+    }
+    
     // 合成树脂的国家
     [ObservableProperty]
     private string _craftingBenchCountry = "枫丹";
