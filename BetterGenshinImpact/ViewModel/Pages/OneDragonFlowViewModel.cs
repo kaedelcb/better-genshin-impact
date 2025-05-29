@@ -545,7 +545,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         };
         FilteredConfigList = CollectionViewSource.GetDefaultView(ConfigList);
         FilteredConfigList.Filter = FilterLogic;
-        if(_autoRun) AdaptVersions();//自动适配版本
+        if(_autoRun) AdaptVersions();//自动适配版本，一两个大版本后可以注释掉，后续有改动再用
     }
 
     [RelayCommand]
@@ -1049,6 +1049,9 @@ public partial class OneDragonFlowViewModel : ViewModel
             if (config != null)
             {
                 WriteConfig(config);
+            }else
+            {
+                return;//失败一次退出
             }
         }
     }
@@ -1665,11 +1668,13 @@ public partial class OneDragonFlowViewModel : ViewModel
 
         foreach (var scriptGroup in ScriptGroups)
         {
-            var keyToRemove = SelectedConfig.TaskEnabledList.FirstOrDefault(x => x.Value.Item2 == scriptGroup.Name).Key;
+            var keyToRemove = SelectedConfig.TaskEnabledList.FirstOrDefault(x =>
+                x.Value.Item2 == scriptGroup.Name).Key;
             SelectedConfig.TaskEnabledList.Remove(keyToRemove); // 得出一条龙启动数量
         }
 
-        if (string.IsNullOrEmpty(SelectedConfig.TaskEnabledList.Values.Select(t => t.Item2).Distinct().ToString()) || taskListCopy.Count(t => t.IsEnabled) == 0)
+        if (string.IsNullOrEmpty(SelectedConfig.TaskEnabledList.Values.Select(t => t.Item2).Distinct().
+                ToString()) || taskListCopy.Count(t => t.IsEnabled) == 0)
         {
             Toast.Warning("请先选择任务");
             _logger.LogInformation("没有配置,退出执行!");
