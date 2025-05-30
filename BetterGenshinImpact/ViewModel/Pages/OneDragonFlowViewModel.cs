@@ -208,20 +208,6 @@ public partial class OneDragonFlowViewModel : ViewModel
             _logger.LogInformation(e, "读取配置组配置时失败");
         }
     }
-    
-    //新增办法，生成任务序号
-    private int FindNextAvailableIndex()
-    {
-        var usedIndices = TaskList.Select(task => task.Index).ToHashSet();
-        for (int i = 1; i <= 999; i++)
-        {
-            if (!usedIndices.Contains(i))
-            {
-                return i;
-            }
-        }
-        return -1;
-    }
 
     private async void AddNewTaskGroup()
     {
@@ -287,6 +273,20 @@ public partial class OneDragonFlowViewModel : ViewModel
         {
                 Toast.Success(pickTaskCount + " 个任务添加成功");  
         }
+    }
+    
+    //新增办法，生成任务序号
+    private int FindNextAvailableIndex()
+    {
+        var usedIndices = TaskList.Select(task => task.Index).ToHashSet();
+        for (int i = 1; i <= 999; i++)
+        {
+            if (!usedIndices.Contains(i))
+            {
+                return i;
+            }
+        }
+        return -1;
     }
 
     public async Task<string?> OnStartMultiScriptGroupAsync()
