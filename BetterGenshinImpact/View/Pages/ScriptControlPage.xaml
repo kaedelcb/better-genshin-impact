@@ -233,6 +233,10 @@
                     <ui:Button Command="{Binding OpenScriptGroupSettingsCommand}"
                                Content="设置"
                                Icon="{ui:SymbolIcon Settings24}" />
+                    <Separator Width="10" Opacity="0" />
+                    <ui:Button Command="{Binding OpenLocalScriptRepoCommand}"
+                               Content="打开脚本仓库"
+                               Icon="{ui:SymbolIcon FolderOpen24}" />
                     <!--<ui:TextBlock VerticalAlignment="Center"
                                   FontSize="16"
                                   Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
@@ -242,7 +246,6 @@
                 </StackPanel>
 
                 <Separator Grid.Row="3"
-                           Visibility="{Binding IsInsetMode, Converter={StaticResource BooleanToVisibilityRevertConverter}, ConverterParameter=Visible}"
                            Height="8"
                            Opacity="0" />
 

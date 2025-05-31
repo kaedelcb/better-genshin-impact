@@ -52,27 +52,12 @@ using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask.Common;
 using Rect = OpenCvSharp.Rect;
-using System.Collections.Generic;
 using System.Windows.Data;
-using CommunityToolkit.Mvvm.Input;
 using Grid = System.Windows.Controls.Grid;
-using System.Windows.Media;
 using Button = Wpf.Ui.Controls.Button;
-using System.Windows.Media.Animation;
-using System.Windows.Controls.Primitives;
-using System.Windows.Threading;
-using System.Windows.Input;
 using System.Collections.Specialized;
-using Windows.ApplicationModel.Core;
-using Windows.UI.Core; // 添加这一行
 using BetterGenshinImpact.View.Pages;
-using System;
-using System.Threading.Tasks;
-using Windows.UI.Xaml;
-using BetterGenshinImpact.Core.Script.Group;
-using Wpf.Ui;
-using static Wpf.Ui.ISnackbarService;
-using BetterGenshinImpact.Core.Config;
+
 
 namespace BetterGenshinImpact.ViewModel.Pages;
 
@@ -133,7 +118,7 @@ public partial class OneDragonFlowViewModel : ViewModel
     }
 
     // 其他属性和方法...
-    [ObservableProperty] private int inputScriptGroupName = 0;
+    [ObservableProperty] private int _inputScriptGroupName = 1;
 
     [ObservableProperty]
     private ObservableCollection<OneDragonTaskItem> _playTaskList = new ObservableCollection<OneDragonTaskItem>();
@@ -141,8 +126,7 @@ public partial class OneDragonFlowViewModel : ViewModel
     [ObservableProperty]
     private ObservableCollection<ScriptGroup> _scriptGroups = new ObservableCollection<ScriptGroup>();
     
-
-    [ObservableProperty] private ObservableCollection<ScriptGroup> _scriptGroupsdefault =
+    [ObservableProperty] private ObservableCollection<ScriptGroup> _scriptGroupsDefault =
         new ObservableCollection<ScriptGroup>()
         {
             new() { Name = "领取邮件" },
@@ -166,7 +150,7 @@ public partial class OneDragonFlowViewModel : ViewModel
             }
 
             ScriptGroups.Clear();
-            foreach (var group in _scriptGroupsdefault)
+            foreach (var group in ScriptGroupsDefault)
             {
                 ScriptGroups.Add(group);
             }
@@ -235,13 +219,13 @@ public partial class OneDragonFlowViewModel : ViewModel
                 .Select(name => name.Trim())
                 .ToList();// 用于存储所有选中的项
             bool containsAnyDefaultGroup =
-                names.Any(name => ScriptGroupsdefault.Any(defaultSg => defaultSg.Name == name));// 判断是否包含默认组
+                names.Any(name => ScriptGroupsDefault.Any(defaultSg => defaultSg.Name == name));// 判断是否包含默认组
             if (containsAnyDefaultGroup)//如果包含默认组，则插入到默认组后面
             {
                 int lastDefaultGroupIndex = -1;
                 for (int i = TaskList.Count - 1; i >= 0; i--)
                 {
-                    if (ScriptGroupsdefault.Any(defaultSg => defaultSg.Name == TaskList[i].Name))
+                    if (ScriptGroupsDefault.Any(defaultSg => defaultSg.Name == TaskList[i].Name))
                     {
                         lastDefaultGroupIndex = i;
                         break;
@@ -549,25 +533,17 @@ public partial class OneDragonFlowViewModel : ViewModel
     }
 
     [RelayCommand]
-    private async Task LookConfig()
+    private async Task ScriptControlPageAsync()
     {
-        Toast.Warning("功能开发中...");
-        // return;
-        
         ReadScriptGroup(); 
-        var scriptGroupsSelect = new ObservableCollection<ScriptGroup>(
-            ScriptGroups.Where(sg => !ScriptGroupsdefault.Any(dg => dg.Name == sg.Name)));
-        
-        foreach (var task in ScriptGroupsdefault)
-        {
-            scriptGroupsSelect.Remove(task);
-        }
+        var scriptGroupsFilter = new ObservableCollection<ScriptGroup>(
+            ScriptGroups.Where(sg => !ScriptGroupsDefault.Any(dg => dg.Name == sg.Name)));//非实时更新，关闭窗口再保存
 
-        _selectedProject = scriptGroupsSelect.FirstOrDefault(sg => sg.Name == SelectedTask.Name)??
-                           scriptGroupsSelect.FirstOrDefault()?? null;
+        _selectedProject = scriptGroupsFilter.FirstOrDefault(sg => sg.Name == SelectedTask.Name)??
+                           scriptGroupsFilter.FirstOrDefault()?? null;
         
         ScriptControlViewModel scriptControlViewModel = new ScriptControlViewModel( _snackbarService, 
-            _scriptService,scriptGroupsSelect,_selectedProject,true);
+            _scriptService,scriptGroupsFilter,_selectedProject,true);
         
         var dialog = new Wpf.Ui.Controls.MessageBox
         {
@@ -589,10 +565,10 @@ public partial class OneDragonFlowViewModel : ViewModel
         var result =await dialog.ShowDialogAsync();
         if (result == Wpf.Ui.Controls.MessageBoxResult.None)
         {
-            //一些实时触发的配置无法实时触发，关闭窗口后手动保存一下
+            //一些实时触发的配置不实时触发，关闭窗口后手动保存一下
             scriptControlViewModel.ScriptProjectsCollectionChanged(ScriptGroups, 
                 new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
-            InitConfigList();
+            InitConfigList();//重新加载配置列表
         }
     }
 
@@ -675,7 +651,7 @@ public partial class OneDragonFlowViewModel : ViewModel
       {
           if (listBox.SelectedItem is string selected && selected != "默认计划表")
           {
-              var selectedcopy = selected;// 保存选择的计划表名称
+              var selectedCopy = selected;// 保存选择的计划表名称
               if (ConfigList.Any(c => c.ScheduleName == selected))
                 {
                     if (MessageBox.Show($"计划表 \"{selected}\" " +
@@ -703,7 +679,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                         listBox.SelectedItem = "默认计划表";
                     }
                 }
-                if (selectedcopy == Config.SelectedOneDragonFlowPlanName)
+                if (selectedCopy == Config.SelectedOneDragonFlowPlanName)
                 {
                     Config.SelectedOneDragonFlowPlanName = "默认计划表";
                 }
@@ -743,8 +719,7 @@ public partial class OneDragonFlowViewModel : ViewModel
     private void AddScheduleItem()
     {
         var newScheduleName = PromptDialog.Prompt("请输入新的计划表名称", "新增计划表");
-    
-        // 检查输入是否为空或重复
+        
         if (!string.IsNullOrEmpty(newScheduleName))
         {
             if (!Config.ScheduleList.Contains(newScheduleName))
@@ -1089,8 +1064,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         LoadDisplayTaskListFromConfig();
         OnConfigDropDownChanged();
     }
-
-    // 新增方法：从配置文件加载 DisplayTaskList
+    
     private void LoadDisplayTaskListFromConfig()
     {
         if (string.IsNullOrEmpty(SelectedConfig.Name) || string.IsNullOrEmpty(SelectedConfig.TaskEnabledList.ToString())) 
@@ -1583,7 +1557,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         // 验证UID结束
 
         ReadScriptGroup();
-        foreach (var task in ScriptGroupsdefault)
+        foreach (var task in ScriptGroupsDefault)
         {
             ScriptGroups.Remove(task);//得出已经有的配置组数量
         }
@@ -1622,7 +1596,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         {
             if (task is { IsEnabled: true, Action: not null })
             {
-                if (ScriptGroupsdefault.Any(defaultSg => defaultSg.Name == task.Name))
+                if (ScriptGroupsDefault.Any(defaultSg => defaultSg.Name == task.Name))
                 {
                     _logger.LogInformation($"一条龙任务执行: {finishOneTaskcount++}/{enabledoneTaskCount}");
                     await new TaskRunner().RunThreadAsync(async () =>
@@ -1884,7 +1858,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         // 1点击账号切换按钮
         Logger.LogInformation("点击 {text} 按钮", "账号切换");
         var exitSwitchClickCnt = 0;
-        for (var i = 0; i < 50; i++)
+        for (var i = 0; i < 20; i++)
         {
             await Delay(1, cts.Cts.Token);
             using var contentRegion = CaptureToRectArea();
@@ -1912,7 +1886,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         // 2点击“退出”按钮
         Logger.LogInformation("点击 {text} 按钮", "退出");
         var exitClickCnt = 0;
-        for (var i = 0; i < 50; i++)
+        for (var i = 0; i < 20; i++)
         {
             await Delay(1, cts.Cts.Token);
             var ra = CaptureToRectArea();
@@ -1942,7 +1916,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         
         // 3点击账号选择按钮
         var exitPhoneClickCnt = 0;
-        for (var i = 0; i < 50; i++)
+        for (var i = 0; i < 20; i++)
         {
             await Delay(1, cts.Cts.Token);
             using var contentRegion = CaptureToRectArea();

@@ -167,7 +167,7 @@
                                                         VerticalAlignment="Center"
                                                         HorizontalAlignment="Left"
                                                         Margin="0,0,0,0"
-                                                        Command="{Binding Path=DataContext.LookConfigCommand, RelativeSource={RelativeSource AncestorType=ui:ListView}}"
+                                                        Command="{Binding Path=DataContext.ScriptControlPageCommand, RelativeSource={RelativeSource AncestorType=ui:ListView}}"
                                                         Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}">
                                                     <ui:FontIcon Glyph="&#xe411;"
                                                                  GotFocus="ConfigRow_GotFocus"
