@@ -88,7 +88,8 @@ public partial class ScriptControlViewModel : ViewModel
         ScriptGroups.CollectionChanged += ScriptGroupsCollectionChanged;
     }
     
-    public ScriptControlViewModel(ISnackbarService snackbarService, IScriptService scriptService,ObservableCollection<ScriptGroup> scriptGroups,ScriptGroup? selectedScriptGroup,bool isInsetMode)
+    public ScriptControlViewModel(ISnackbarService snackbarService, IScriptService scriptService,
+        ObservableCollection<ScriptGroup> scriptGroups,ScriptGroup? selectedScriptGroup,bool isInsetMode)
     {
         _snackbarService = snackbarService;
         _scriptService = scriptService;
@@ -132,7 +133,8 @@ public partial class ScriptControlViewModel : ViewModel
     private void ClearTasks()
     {
         // 确认？
-        var result = MessageBox.Show("是否清空所有任务？", "清空任务", System.Windows.MessageBoxButton.YesNo, MessageBoxImage.Question);
+        var result = MessageBox.Show("是否清空所有任务？", "清空任务", 
+            System.Windows.MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (result != System.Windows.MessageBoxResult.Yes)
         {
             return;
@@ -603,7 +605,9 @@ public partial class ScriptControlViewModel : ViewModel
             }
             else
             {
-                var result = MessageBox.Show("所有配置单中名为 < " + item.Name + " > 配置组将重命名为 < " + str + " > ，是否继续？", "重名配置组", System.Windows.MessageBoxButton.YesNo, MessageBoxImage.Question);
+                var result = MessageBox.Show("所有配置单中名为 < " + item.Name + " > 配置组将重命名为 < " + str + " > ，是否继续？", 
+                    "重名配置组", System.Windows.MessageBoxButton.YesNo, MessageBoxImage.Question);
+                
                 if (result != System.Windows.MessageBoxResult.Yes)
                 {
                     return;
@@ -643,8 +647,11 @@ public partial class ScriptControlViewModel : ViewModel
         {
             return;
         }
+        
         //弹窗提示"配置单中的所有同名配置组将被删除，是否继续？，取消退出，确认执行删除操作"
-        var result = MessageBox.Show("所有配置单中名为 < " + item.Name + " > 配置组将被删除，是否继续？", "删除配置组", System.Windows.MessageBoxButton.YesNo, MessageBoxImage.Question);
+        var result = MessageBox.Show("所有配置单中名为 < " + item.Name + " > 配置组将被删除，是否继续？", 
+            "删除配置组", System.Windows.MessageBoxButton.YesNo, MessageBoxImage.Question);
+        
         if (result != System.Windows.MessageBoxResult.Yes)
         {
             return;
@@ -745,7 +752,9 @@ public partial class ScriptControlViewModel : ViewModel
     [RelayCommand]
     private void OnAddShell()
     {
-        var str = PromptDialog.Prompt("执行 shell 操作存在极大风险！请勿输入你看不懂的指令！以免引发安全隐患并损坏系统！\n执行 shell 的时候，游戏可能会失去焦点","请输入需要执行的shell");
+        var str = PromptDialog.Prompt("执行 shell 操作存在极大风险！请勿输入你看不懂的指令！以免引发安全隐患并损坏系统！" +
+                                      "\n执行 shell 的时候，游戏可能会失去焦点","请输入需要执行的shell");
+        
         if (!string.IsNullOrEmpty(str))
         {
             SelectedScriptGroup?.AddProject(ScriptGroupProject.BuildShellProject(str));
@@ -758,7 +767,9 @@ public partial class ScriptControlViewModel : ViewModel
         var root = FileTreeNodeHelper.LoadDirectory<PathingTask>(MapPathingViewModel.PathJsonPath);
         var stackPanel = CreatePathingScriptSelectionPanel(root.Children);
 
-        var result = PromptDialog.Prompt("请选择需要添加的地图追踪任务", "请选择需要添加的地图追踪任务", stackPanel, new Size(500, 600));
+        var result = PromptDialog.Prompt("请选择需要添加的地图追踪任务", "请选择需要添加的地图追踪任务",
+            stackPanel, new Size(500, 600));
+        
         if (!string.IsNullOrEmpty(result))
         {
             AddSelectedPathingScripts((StackPanel)stackPanel.Content);
@@ -813,7 +824,9 @@ public partial class ScriptControlViewModel : ViewModel
 
         if (excludeSelectedFolder ?? false)
         {
-            List<string> skipFolderNames = SelectedScriptGroup?.Projects.ToList().Select(item => item.FolderName).Distinct().ToList() ?? [];
+            List<string> skipFolderNames = SelectedScriptGroup?.Projects.ToList().Select(item => 
+                item.FolderName).Distinct().ToList() ?? [];
+            
             //复制Nodes
             string jsonString = JsonSerializer.Serialize(nodes);
             var copiedNodes = JsonSerializer.Deserialize<ObservableCollection<FileTreeNode<PathingTask>>>(jsonString);
@@ -1092,7 +1105,9 @@ public partial class ScriptControlViewModel : ViewModel
             return;
         }
 
-        var toBeDeletedProjects = SelectedScriptGroup?.Projects.ToList().Where(item2 => item2.FolderName == item.FolderName);
+        var toBeDeletedProjects = SelectedScriptGroup?.Projects.ToList().Where
+            (item2 => item2.FolderName == item.FolderName);
+        
         if (toBeDeletedProjects != null)
         {
             foreach (var project in toBeDeletedProjects)
