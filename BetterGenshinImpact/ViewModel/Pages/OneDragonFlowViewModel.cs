@@ -1557,16 +1557,21 @@ public partial class OneDragonFlowViewModel : ViewModel
         // 验证UID结束
 
         ReadScriptGroup();
-        foreach (var task in ScriptGroupsDefault)
-        {
-            ScriptGroups.Remove(task);//得出已经有的配置组数量
-        }
+        
+        // 使用HashSet来存储已经统计过的scriptGroup.Name和INDEX
+        HashSet<(string Name, int Index)> countedScriptGroups = new HashSet<(string Name, int Index)>();
 
         foreach (var scriptGroup in ScriptGroups)
         {
+            // 检查当前scriptGroup.Name和INDEX是否已经被统计过
             var keyToRemove = SelectedConfig.TaskEnabledList.FirstOrDefault(x =>
-                x.Value.Item2 == scriptGroup.Name).Key;
-            SelectedConfig.TaskEnabledList.Remove(keyToRemove); // 得出一条龙启动数量
+                x.Value.Item2 == scriptGroup.Name && !countedScriptGroups.Contains((scriptGroup.Name, scriptGroup.Index))).Key;
+
+            if (keyToRemove != 0)
+            {
+                SelectedConfig.TaskEnabledList.Remove(keyToRemove);
+                countedScriptGroups.Add((scriptGroup.Name, scriptGroup.Index)); // 添加到已统计集合
+            }
         }
 
         if (string.IsNullOrEmpty(SelectedConfig.TaskEnabledList.Values.Select(t => t.Item2).Distinct().
@@ -1576,15 +1581,14 @@ public partial class OneDragonFlowViewModel : ViewModel
             _logger.LogInformation("没有配置,退出执行!");
             return;
         }
-
-        int enabledoneTaskCount = SelectedConfig.TaskEnabledList.Count(t => t.Value.Item1 == true);
+        
+        int enabledTaskCount = SelectedConfig.TaskEnabledList.Count(t => t.Value.Item1 == true);
+        int enabledoneTaskCount = enabledTaskCountall - enabledTaskCount;
         _logger.LogInformation($"启用一条龙任务的数量: {enabledoneTaskCount}");
+        _logger.LogInformation($"启用配置组任务的数量: {enabledTaskCount}");
         
         await ScriptService.StartGameTask();
         SaveConfig();
-        
-        int enabledTaskCount = enabledTaskCountall - enabledoneTaskCount;
-        _logger.LogInformation($"启用配置组任务的数量: {enabledTaskCount}");
 
         if (enabledoneTaskCount <= 0)
         {
