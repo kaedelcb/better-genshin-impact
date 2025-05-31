@@ -233,10 +233,20 @@
                     <ui:Button Command="{Binding OpenScriptGroupSettingsCommand}"
                                Content="设置"
                                Icon="{ui:SymbolIcon Settings24}" />
+                    <!-- <Separator Width="10" Opacity="0" /> -->
+                    <!-- <ui:Button Command="{Binding OpenLocalScriptRepoCommand}" -->
+                    <!--            Content="仓库" -->
+                    <!--            Icon="{ui:SymbolIcon AppStore24}" /> -->
                     <Separator Width="10" Opacity="0" />
-                    <ui:Button Command="{Binding OpenLocalScriptRepoCommand}"
-                               Content="打开脚本仓库"
-                               Icon="{ui:SymbolIcon FolderOpen24}" />
+                    <ui:DropDownButton Content="脚本目录"  Icon="{ui:SymbolIcon Folder24}">
+                        <ui:DropDownButton.Flyout>
+                            <ContextMenu>
+                                <MenuItem Header="JS脚本目录" Command="{Binding OpenScriptsFolderCommand}" CommandParameter="JS"/>
+                                <MenuItem Header="地图追踪目录" Command="{Binding OpenScriptsFolderCommand}" CommandParameter="DT"/>
+                                <MenuItem Header="键鼠脚本目录" Command="{Binding OpenScriptsFolderCommand}" CommandParameter="KM"/>
+                            </ContextMenu>
+                        </ui:DropDownButton.Flyout>
+                    </ui:DropDownButton>
                     <!--<ui:TextBlock VerticalAlignment="Center"
                                   FontSize="16"
                                   Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"

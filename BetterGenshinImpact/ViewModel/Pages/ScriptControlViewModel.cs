@@ -60,6 +60,13 @@ public partial class ScriptControlViewModel : ViewModel
         set => _oneDragonFlowViewModel.ConfigList = value;
     }
     
+    public static class AppPaths
+    {
+        public const string JsScripts = @"User\JsScript";
+        public const string MapTracks = @"User\AutoPathing";
+        public const string MouseScripts = @"User\KeyMouseScript";
+    }
+    
     /// <summary>
     /// 配置组配置
     /// </summary>
@@ -479,6 +486,21 @@ public partial class ScriptControlViewModel : ViewModel
     {
         TaskContext.Instance().Config.ScriptConfig.ScriptRepoHintDotVisible = false;
         ScriptRepoUpdater.Instance.OpenLocalRepoInWebView();
+    }
+    
+    [RelayCommand]
+    public void OnOpenScriptsFolder(string directoryType)
+    {
+        
+        string path = directoryType switch
+        {
+            "JS" => AppPaths.JsScripts,
+            "DT" => AppPaths.MapTracks,
+            "KM" => AppPaths.MouseScripts,
+            _ => AppPaths.JsScripts,
+        };
+    
+        Process.Start("explorer.exe", path);
     }
 
     [RelayCommand]
