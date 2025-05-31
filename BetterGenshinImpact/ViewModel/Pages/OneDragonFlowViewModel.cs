@@ -1474,6 +1474,8 @@ public partial class OneDragonFlowViewModel : ViewModel
             return;
         }
         
+        ReadScriptGroup();
+        
         var taskListCopy = new List<OneDragonTaskItem>(TaskList);//避免执行过程中修改TaskList
         foreach (var task in taskListCopy)
         {
@@ -1482,6 +1484,8 @@ public partial class OneDragonFlowViewModel : ViewModel
 
         int finishOneTaskcount = 1;
         int finishTaskcount = 1;
+        int enabledTaskCount = 0;
+        int enabledoneTaskCount = 0;
         int enabledTaskCountall = SelectedConfig.TaskEnabledList.Count(t => t.Value.Item1);
         _logger.LogInformation($"启用任务总数量: {enabledTaskCountall}");
 
@@ -1556,40 +1560,28 @@ public partial class OneDragonFlowViewModel : ViewModel
         }
         // 验证UID结束
 
-        ReadScriptGroup();
-        
-        // 使用HashSet来存储已经统计过的scriptGroup.Name和INDEX
-        HashSet<(string Name, int Index)> countedScriptGroups = new HashSet<(string Name, int Index)>();
-
-        foreach (var scriptGroup in ScriptGroups)
-        {
-            // 检查当前scriptGroup.Name和INDEX是否已经被统计过
-            var keyToRemove = SelectedConfig.TaskEnabledList.FirstOrDefault(x =>
-                x.Value.Item2 == scriptGroup.Name && !countedScriptGroups.Contains((scriptGroup.Name, scriptGroup.Index))).Key;
-
-            if (keyToRemove != 0)
-            {
-                SelectedConfig.TaskEnabledList.Remove(keyToRemove);
-                countedScriptGroups.Add((scriptGroup.Name, scriptGroup.Index)); // 添加到已统计集合
-            }
-        }
-
         if (string.IsNullOrEmpty(SelectedConfig.TaskEnabledList.Values.Select(t => t.Item2).Distinct().
                 ToString()) || taskListCopy.Count(t => t.IsEnabled) == 0)
         {
             Toast.Warning("请先选择任务");
             _logger.LogInformation("没有配置,退出执行!");
+            Notify.Event(NotificationEvent.DragonEnd).Success("没有配置,退出执行!");
             return;
         }
+
+        var selectedConfigCopy = SelectedConfig; // 防止修改SelectedConfig导致死循环
         
-        int enabledTaskCount = SelectedConfig.TaskEnabledList.Count(t => t.Value.Item1 == true);
-        int enabledoneTaskCount = enabledTaskCountall - enabledTaskCount;
-        _logger.LogInformation($"启用一条龙任务的数量: {enabledoneTaskCount}");
-        _logger.LogInformation($"启用配置组任务的数量: {enabledTaskCount}");
+        // 筛选出配置组任务
+        var scriptGroupsDefaultNames = ScriptGroupsDefault.Select(sgd => sgd.Name).ToHashSet();
+        enabledTaskCount = selectedConfigCopy.TaskEnabledList.Count(t => t.Value.Item1 && !scriptGroupsDefaultNames.Contains(taskListCopy.FirstOrDefault(tl => tl.Index == t.Key)?.Name));
+        
+        enabledoneTaskCount = enabledTaskCountall - enabledTaskCount;
+         _logger.LogInformation($"启用一条龙任务的数量: {enabledoneTaskCount}");
+         _logger.LogInformation($"启用配置组任务的数量: {enabledTaskCount}");
         
         await ScriptService.StartGameTask();
         SaveConfig();
-
+        
         if (enabledoneTaskCount <= 0)
         {
             _logger.LogInformation("没有一条龙任务!");
