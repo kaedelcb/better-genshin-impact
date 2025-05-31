@@ -52,13 +52,13 @@ public partial class ScriptControlViewModel : ViewModel
     
     [ObservableProperty] private Boolean _isInsetMode = false;
     
-    private readonly OneDragonFlowViewModel _oneDragonFlowViewModel;
-    
-    private ObservableCollection<OneDragonFlowConfig> ConfigList
-    {
-        get => _oneDragonFlowViewModel.ConfigList;
-        set => _oneDragonFlowViewModel.ConfigList = value;
-    }
+    // private readonly OneDragonFlowViewModel _oneDragonFlowViewModel;
+    //
+    // private ObservableCollection<OneDragonFlowConfig> ConfigList
+    // {
+    //     get => _oneDragonFlowViewModel.ConfigList;
+    //     set => _oneDragonFlowViewModel.ConfigList = value;
+    // }
     
     public static class AppPaths
     {
