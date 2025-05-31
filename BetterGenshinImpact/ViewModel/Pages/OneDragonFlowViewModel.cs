@@ -2026,7 +2026,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         private int _version = 0;
     }
     
-       private void AdaptVersions()
+    private void AdaptVersions()
     {
         Directory.CreateDirectory(OneDragonFlowConfigFolder);
         var configFiles = Directory.GetFiles(OneDragonFlowConfigFolder, "*.json");
@@ -2044,6 +2044,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         }
     }
     
+    private static bool _hasConfigBackup = false; // 备份标志
     private  OneDragonFlowConfig? UpgradeConfig(string json)
     {
         try
@@ -2052,7 +2053,28 @@ public partial class OneDragonFlowViewModel : ViewModel
             
             if (oldConfig != null && oldConfig.Version <= 0)
             {
-               Toast.Warning("升级配置升级中...");
+               if (!_hasConfigBackup)
+               {
+                   var backupPath = Path.Combine(
+                       AppContext.BaseDirectory, 
+                       "Backups",
+                       $"ConfigBackup_{DateTime.Now:yyyyMMdd_HHmmss}"
+                   );
+                
+                   Directory.CreateDirectory(backupPath);
+                
+                   // 备份整个配置目录
+                   foreach (var file in Directory.GetFiles(OneDragonFlowConfigFolder))
+                   {
+                       File.Copy(
+                           file,
+                           Path.Combine(backupPath, Path.GetFileName(file)),
+                           overwrite: true
+                       );
+                   }
+                   Toast.Warning("备份配置文件到 Backups 文件夹，配置升级中...",ToastLocation.TopCenter,default,6000);
+                   _hasConfigBackup = true;
+               }
             }
             else
             {
