@@ -73,6 +73,8 @@ public partial class OneDragonFlowViewModel : ViewModel
                                                          throw new NullReferenceException("未找到Snackbar服务");
     
     private ScriptGroup _selectedProject;
+    
+    private ScriptControlViewModel _scriptControlViewModel;
 
     [ObservableProperty] private ObservableCollection<OneDragonTaskItem> _taskList =
     [
@@ -150,11 +152,7 @@ public partial class OneDragonFlowViewModel : ViewModel
             }
 
             ScriptGroups.Clear();
-            foreach (var group in ScriptGroupsDefault)
-            {
-                ScriptGroups.Add(group);
-            }
-
+            
             var files = Directory.GetFiles(_scriptGroupPath, "*.json");
             foreach (var file in files)
             {
@@ -278,12 +276,19 @@ public partial class OneDragonFlowViewModel : ViewModel
         var stackPanel = new StackPanel();
         var checkBoxes = new Dictionary<ScriptGroup, CheckBox>();
         CheckBox selectedCheckBox = null; // 用于保存当前选中的 CheckBox
+        foreach (var scriptGroup in ScriptGroupsDefault)
+        {
+            var checkBox = new CheckBox
+            {
+                Content = scriptGroup.Name,
+                Tag = scriptGroup,
+                IsChecked = false
+            };
+            checkBoxes[scriptGroup] = checkBox;
+            stackPanel.Children.Add(checkBox);
+        }
         foreach (var scriptGroup in ScriptGroups)
         {
-            if (TaskList.Any(taskName => scriptGroup.Name.Contains(taskName.Name)))
-            {
-                //continue; // 不显示已经存在的配置组
-            }
             var checkBox = new CheckBox
             {
                 Content = scriptGroup.Name,
@@ -531,26 +536,23 @@ public partial class OneDragonFlowViewModel : ViewModel
         FilteredConfigList.Filter = FilterLogic;
         if(_autoRun) AdaptVersions();//自动适配版本，一两个大版本后可以注释掉，后续有改动再用
     }
-
+    
     [RelayCommand]
     private async Task ScriptControlPageAsync()
     {
         ReadScriptGroup(); 
-        var scriptGroupsFilter = new ObservableCollection<ScriptGroup>(
-            ScriptGroups.Where(sg => !ScriptGroupsDefault.Any(dg => dg.Name == sg.Name)));//非实时更新，关闭窗口再保存
-
-        _selectedProject = scriptGroupsFilter.FirstOrDefault(sg => sg.Name == SelectedTask.Name)??
-                           scriptGroupsFilter.FirstOrDefault()?? null;
+        _selectedProject = ScriptGroups.FirstOrDefault(sg => sg.Name == SelectedTask.Name)??
+                           ScriptGroups.FirstOrDefault()?? null;
         
-        ScriptControlViewModel scriptControlViewModel = new ScriptControlViewModel( _snackbarService, 
-            _scriptService,scriptGroupsFilter,_selectedProject,true);
+        _scriptControlViewModel = new ScriptControlViewModel( _snackbarService, 
+            _scriptService,ScriptGroups,_selectedProject,true);
         
         var dialog = new Wpf.Ui.Controls.MessageBox
         {
-            Title = "配置组管理",
+            Title = "配置组管理（关闭本窗口后才会保存配置信息）",
             Content = new ScrollViewer
             {
-                Content = new ScriptControlPage(scriptControlViewModel),
+                Content = new ScriptControlPage(_scriptControlViewModel),
                 VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
             },
             CloseButtonText = "关闭",
@@ -565,10 +567,9 @@ public partial class OneDragonFlowViewModel : ViewModel
         var result =await dialog.ShowDialogAsync();
         if (result == Wpf.Ui.Controls.MessageBoxResult.None)
         {
-            //一些实时触发的配置不实时触发，关闭窗口后手动保存一下
-            scriptControlViewModel.ScriptGroupsCollectionChanged(ScriptGroups, 
-                new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
-            InitConfigList();//重新加载配置列表
+            _scriptControlViewModel.ScriptProjectsCollectionChanged(ScriptGroups,
+                new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset)); //关闭窗口后保存配置信息
+            InitConfigList();
         }
     }
 
@@ -1560,8 +1561,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         }
         // 验证UID结束
 
-        if (string.IsNullOrEmpty(SelectedConfig.TaskEnabledList.Values.Select(t => t.Item2).Distinct().
-                ToString()) || taskListCopy.Count(t => t.IsEnabled) == 0)
+        if (taskListCopy.Count(t => t.IsEnabled) == 0)
         {
             Toast.Warning("请先选择任务");
             _logger.LogInformation("没有配置,退出执行!");
