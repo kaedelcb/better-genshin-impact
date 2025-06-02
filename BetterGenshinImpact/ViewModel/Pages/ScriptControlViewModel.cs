@@ -51,15 +51,7 @@ public partial class ScriptControlViewModel : ViewModel
     private readonly IScriptService _scriptService;
     
     [ObservableProperty] private Boolean _isInsetMode = false;
-    
-    // private readonly OneDragonFlowViewModel _oneDragonFlowViewModel;
-    //
-    // private ObservableCollection<OneDragonFlowConfig> ConfigList
-    // {
-    //     get => _oneDragonFlowViewModel.ConfigList;
-    //     set => _oneDragonFlowViewModel.ConfigList = value;
-    // }
-    
+
     public static class AppPaths
     {
         public const string JsScripts = @"User\JsScript";
@@ -482,14 +474,14 @@ public partial class ScriptControlViewModel : ViewModel
     }
 
     [RelayCommand]
-    public void OnOpenLocalScriptRepo()
+    private void OnOpenLocalScriptRepo()
     {
         TaskContext.Instance().Config.ScriptConfig.ScriptRepoHintDotVisible = false;
         ScriptRepoUpdater.Instance.OpenLocalRepoInWebView();
     }
     
     [RelayCommand]
-    public void OnOpenScriptsFolder(string directoryType)
+    private void OnOpenScriptsFolder(string directoryType)
     {
         
         string path = directoryType switch
@@ -562,7 +554,7 @@ public partial class ScriptControlViewModel : ViewModel
     }
 
     [RelayCommand]
-    public void OnCopyScriptGroup(ScriptGroup? item)
+    private void OnCopyScriptGroup(ScriptGroup? item)
     {
         if (item == null)
         {
@@ -598,7 +590,7 @@ public partial class ScriptControlViewModel : ViewModel
     }
 
     [RelayCommand]
-    public void OnRenameScriptGroup(ScriptGroup? item)
+    private void OnRenameScriptGroup(ScriptGroup? item)
     {
         if (item == null)
         {
@@ -663,7 +655,7 @@ public partial class ScriptControlViewModel : ViewModel
     }
 
     [RelayCommand]
-    public void OnDeleteScriptGroup(ScriptGroup? item)
+    private void OnDeleteScriptGroup(ScriptGroup? item)
     {
         if (item == null)
         {
@@ -1008,7 +1000,7 @@ public partial class ScriptControlViewModel : ViewModel
     }
 
     [RelayCommand]
-    public void OnEditScriptCommon(ScriptGroupProject? item)
+    private void OnEditScriptCommon(ScriptGroupProject? item)
     {
         if (item == null)
         {
@@ -1047,7 +1039,7 @@ public partial class ScriptControlViewModel : ViewModel
         item.NextFlag = true;
     }
 
-    public static void ShowEditWindow(ScriptGroupProject project)
+    private static void ShowEditWindow(ScriptGroupProject project)
     {
         var viewModel = new ScriptGroupProjectEditorViewModel(project);
         var editor = new ScriptGroupProjectEditor(project)
