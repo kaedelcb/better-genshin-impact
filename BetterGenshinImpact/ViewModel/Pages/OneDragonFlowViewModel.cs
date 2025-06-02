@@ -549,7 +549,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         
         var dialog = new Wpf.Ui.Controls.MessageBox
         {
-            Title = "配置组管理（关闭本窗口后才会保存配置信息）",
+            Title = "配置组管理",
             Content = new ScrollViewer
             {
                 Content = new ScriptControlPage(_scriptControlViewModel),
