@@ -114,7 +114,7 @@ internal class GoToSereniteaPotTask
             {
                 Logger.LogInformation("领取尘歌壶奖励:{text}", "住宅图标未找到，调整地图缩放至2。");
                 await Task.Delay(1000, ct);
-                await new Core.Script.Dependence.Genshin().SetBigMapZoomLevel(2.5-i*0.2);
+                await new Core.Script.Dependence.Genshin().SetBigMapZoomLevel(2.5-i*0.2);//尝试缩放地图
                 await Task.Delay(1000, ct);
             }
             else
@@ -145,8 +145,6 @@ internal class GoToSereniteaPotTask
 
         await NewRetry.WaitForAction(() => Bv.IsInMainUi(CaptureToRectArea()), ct);
     }
-
-    
 
     // 寻找阿圆并靠近
     private async Task FindAYuan(CancellationToken ct)
@@ -376,7 +374,6 @@ internal class GoToSereniteaPotTask
                 if (shopOption == TalkOptionRes.FoundAndClick)
                 {
                     Logger.LogInformation("领取尘歌壶奖励:{text}", "购买商店物品");
-                    
                     await Delay(500, ct);
                     // 购买的物品清单
                     var buy = new List<RecognitionObject>();
@@ -387,28 +384,36 @@ internal class GoToSereniteaPotTask
                         switch (potBuyItem)
                         {
                             case "布匹":
-                                buy.Add(ElementAssets.Instance.AYuanClothRo);
+                                buy.Add(ElementAssets.Instance.AYuanClothRo);       
+                                Logger.LogInformation("领取尘歌壶奖励:加入 {text} ", potBuyItem);
                                 break;
                             case "须臾树脂":
                                 buy.Add(ElementAssets.Instance.AYuanresinRo);
+                                Logger.LogInformation("领取尘歌壶奖励:加入 {text} ", potBuyItem);
                                 break;
                             case "大英雄的经验":
                                 buy.Add(ElementAssets.Instance.SereniteapotExpBookRo);
+                                Logger.LogInformation("领取尘歌壶奖励:加入 {text} ", potBuyItem);
                                 break;
                             case "流浪者的经验":
                                 buy.Add(ElementAssets.Instance.SereniteapotExpBookSmallRo);
+                                Logger.LogInformation("领取尘歌壶奖励:加入 {text} ", potBuyItem);
                                 break;
                             case "精锻用魔矿":
                                 buy.Add(ElementAssets.Instance.AYuanMagicmineralprecisionRo);
+                                Logger.LogInformation("领取尘歌壶奖励:加入 {text} ", potBuyItem);
                                 break;
                             case "摩拉":
                                 buy.Add(ElementAssets.Instance.AYuanMOlaRo);
+                                Logger.LogInformation("领取尘歌壶奖励:加入 {text} ", potBuyItem);
                                 break;
                             case "祝圣精华":
                                 buy.Add(ElementAssets.Instance.AYuanExpBottleBigRo);
+                                Logger.LogInformation("领取尘歌壶奖励:加入 {text} ", potBuyItem);
                                 break;
                             case "祝圣油膏":
                                 buy.Add(ElementAssets.Instance.AYuanExpBottleSmallRo);
+                                Logger.LogInformation("领取尘歌壶奖励:加入 {text} ", potBuyItem);
                                 break;
                             default:
                                 Logger.LogInformation("未知的商品");
