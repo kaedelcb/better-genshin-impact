@@ -1157,7 +1157,7 @@ public partial class ScriptControlViewModel : ViewModel
         );
     }
 
-    private void ScriptGroupsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    public void ScriptGroupsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (e.NewItems != null)
         {

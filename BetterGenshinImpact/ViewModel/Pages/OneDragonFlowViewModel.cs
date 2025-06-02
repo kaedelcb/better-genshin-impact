@@ -566,7 +566,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         if (result == Wpf.Ui.Controls.MessageBoxResult.None)
         {
             //一些实时触发的配置不实时触发，关闭窗口后手动保存一下
-            scriptControlViewModel.ScriptProjectsCollectionChanged(ScriptGroups, 
+            scriptControlViewModel.ScriptGroupsCollectionChanged(ScriptGroups, 
                 new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
             InitConfigList();//重新加载配置列表
         }
