@@ -143,7 +143,7 @@ public partial class OneDragonFlowViewModel : ViewModel
     private readonly string _configPath = Global.Absolute(@"User\OneDragon");
     private readonly string _basePath = AppDomain.CurrentDomain.BaseDirectory;
     
-    private void ReadScriptGroup()
+   private void ReadScriptGroup()
     {
         try
         {
@@ -153,8 +153,8 @@ public partial class OneDragonFlowViewModel : ViewModel
             }
 
             ScriptGroups.Clear();
-            
             var files = Directory.GetFiles(_scriptGroupPath, "*.json");
+            List<ScriptGroup> groups = [];
             foreach (var file in files)
             {
                 try
@@ -162,8 +162,8 @@ public partial class OneDragonFlowViewModel : ViewModel
                     var json = File.ReadAllText(file);
                     var group = ScriptGroup.FromJson(json);
 
-                    var nst = TaskContext.Instance().Config.NextScheduledTask.
-                        Find(item => item.Item1 == group.Name);
+
+                    var nst = TaskContext.Instance().Config.NextScheduledTask.Find(item => item.Item1 == group.Name);
                     foreach (var item in group.Projects)
                     {
                         item.NextFlag = false;
@@ -176,19 +176,42 @@ public partial class OneDragonFlowViewModel : ViewModel
                         }
                     }
 
-                    ScriptGroups.Add(group);
+                    if (group.Name == TaskContext.Instance().Config.NextScriptGroupName)
+                    {
+                        group.NextFlag = true;
+                    }
+                    groups.Add(group);
                 }
                 catch (Exception e)
                 {
-                    _logger.LogInformation(e, "读取配置组配置时失败");
+                    _logger.LogDebug(e, "读取单个配置组配置时失败");
+                    _snackbarService.Show(
+                        "读取配置组配置失败",
+                        "读取配置组配置失败:" + e.Message,
+                        ControlAppearance.Danger,
+                        null,
+                        TimeSpan.FromSeconds(3)
+                    );
                 }
             }
 
-            ScriptGroups = new ObservableCollection<ScriptGroup>(ScriptGroups.OrderBy(g => g.Index));
+            // 按index排序
+            groups.Sort((a, b) => a.Index.CompareTo(b.Index));
+            foreach (var group in groups)
+            {
+                ScriptGroups.Add(group);
+            }
         }
         catch (Exception e)
         {
-            _logger.LogInformation(e, "读取配置组配置时失败");
+            _logger.LogDebug(e, "读取配置组配置时失败");
+            _snackbarService.Show(
+                "读取配置组配置失败",
+                "读取配置组配置失败！",
+                ControlAppearance.Danger,
+                null,
+                TimeSpan.FromSeconds(3)
+            );
         }
     }
 
