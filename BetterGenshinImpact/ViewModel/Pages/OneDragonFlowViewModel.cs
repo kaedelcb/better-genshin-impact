@@ -568,7 +568,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         var result =await dialog.ShowDialogAsync();
         if (result == Wpf.Ui.Controls.MessageBoxResult.None)
         {
-            _scriptControlViewModel.ScriptProjectsCollectionChanged(ScriptGroups,
+            _scriptControlViewModel.ScriptGroupsCollectionChanged(ScriptGroups,
                 new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset)); //关闭窗口后保存配置信息
             InitConfigList();
         }
