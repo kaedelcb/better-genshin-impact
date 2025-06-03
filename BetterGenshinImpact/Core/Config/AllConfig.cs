@@ -19,6 +19,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoTrackPath;
 using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
+using System.Collections.ObjectModel;
 
 namespace BetterGenshinImpact.Core.Config;
 
@@ -86,7 +87,29 @@ public partial class AllConfig : ObservableObject
     /// </summary>
     [ObservableProperty]
     private string _selectedOneDragonFlowConfigName = string.Empty;
-
+    
+    // 连续执行配置单完成后操作
+    [ObservableProperty]
+    private string _continuousCompletionAction = string.Empty;
+    
+    /// <summary>
+    /// 一条龙选中使用的计划表
+    /// </summary>
+    [ObservableProperty]
+    private string _selectedOneDragonFlowPlanName = "默认计划表";
+    
+    // 计划表列表
+    [ObservableProperty]
+    private ObservableCollection<string> _scheduleList = new();
+    
+    public AllConfig()
+    {
+        if (_scheduleList.Count == 0)
+        {
+            _scheduleList.Add("默认计划表");
+        }
+    }
+    
     /// <summary>
     ///     遮罩窗口配置
     /// </summary>

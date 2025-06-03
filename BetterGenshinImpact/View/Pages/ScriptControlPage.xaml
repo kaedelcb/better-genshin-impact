@@ -50,6 +50,7 @@
                              dd:DragDrop.IsDragSource="True"
                              dd:DragDrop.IsDropTarget="True"
                              dd:DragDrop.UseDefaultDragAdorner="True"
+                             dd:DragDrop.SelectDroppedItems="True"
                              ItemsSource="{Binding ScriptGroups, Mode=TwoWay}"
                              SelectedItem="{Binding SelectedScriptGroup, Mode=TwoWay}"
                              SelectionMode="Single">
@@ -87,7 +88,7 @@
                         </ContextMenu>
                     </ui:ListView.ContextMenu>
                 </ui:ListView>
-                <Grid Grid.Row="2">
+                <Grid Grid.Row="2" Visibility="{Binding IsInsetMode, Converter={StaticResource BooleanToVisibilityRevertConverter}, ConverterParameter=Visible}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -113,6 +114,7 @@
                      HorizontalAlignment="Center" Glyph="&#xf7a5;" Style="{StaticResource FaFontIconStyle}" />
         <GridSplitter Grid.Column="1"
                       Width="12"
+                      Visibility="{Binding IsInsetMode, Converter={StaticResource BooleanToVisibilityRevertConverter}, ConverterParameter=Visible}"
                       HorizontalAlignment="Stretch"
                       Background="{DynamicResource ControlStrongFillColorDisabledBrush}"
                       Focusable="False"
@@ -203,7 +205,9 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Orientation="Horizontal">
+                <StackPanel Grid.Row="0" 
+                            Visibility="{Binding IsInsetMode, Converter={StaticResource BooleanToVisibilityRevertConverter}, ConverterParameter=Visible}"
+                            Orientation="Horizontal">
                     <ui:TextBlock Margin="0,0,0,8"
                                   FontTypography="BodyStrong"
                                   Text="（实验功能）配置组 - " />
@@ -213,6 +217,7 @@
                 </StackPanel>
 
                 <ui:TextBlock Grid.Row="1"
+                              Visibility="{Binding IsInsetMode, Converter={StaticResource BooleanToVisibilityRevertConverter}, ConverterParameter=Visible}"
                               Margin="0,0,0,8"
                               Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
                               TextWrapping="Wrap">
@@ -222,6 +227,7 @@
 
                 <StackPanel Grid.Row="2" Orientation="Horizontal">
                     <ui:Button Command="{Binding StartScriptGroupCommand}"
+                               Visibility="{Binding IsInsetMode, Converter={StaticResource BooleanToVisibilityRevertConverter}, ConverterParameter=Visible}"
                                Content="运行"
                                Icon="{ui:SymbolIcon Play24}" />
                     <Separator Width="10" Opacity="0" />
@@ -253,6 +259,21 @@
                     <ui:Button Command="{Binding OpenScriptGroupSettingsCommand}"
                                Content="设置"
                                Icon="{ui:SymbolIcon Settings24}" />
+                    <!-- <Separator Width="10" Opacity="0" /> -->
+                    <!-- <ui:Button Command="{Binding OpenLocalScriptRepoCommand}" -->
+                    <!--            Content="仓库" -->
+                    <!--            Icon="{ui:SymbolIcon AppStore24}" /> -->
+                    <Separator Width="10" Opacity="0" />
+                    <ui:DropDownButton Content="本地目录"  Icon="{ui:SymbolIcon Folder24}">
+                        <ui:DropDownButton.Flyout>
+                            <ContextMenu>
+                                <MenuItem Header="JS脚本目录" Command="{Binding OpenScriptsFolderCommand}" CommandParameter="JS"/>
+                                <MenuItem Header="地图追踪目录" Command="{Binding OpenScriptsFolderCommand}" CommandParameter="DT"/>
+                                <MenuItem Header="键鼠脚本目录" Command="{Binding OpenScriptsFolderCommand}" CommandParameter="KM"/>
+                                <MenuItem Header="前往订阅脚本" Command="{Binding OpenLocalScriptRepoCommand}" />
+                            </ContextMenu>
+                        </ui:DropDownButton.Flyout>
+                    </ui:DropDownButton>
                     <!--<ui:TextBlock VerticalAlignment="Center"
                                   FontSize="16"
                                   Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
@@ -284,6 +305,7 @@
                              dd:DragDrop.IsDragSource="True"
                              dd:DragDrop.IsDropTarget="True"
                              dd:DragDrop.UseDefaultDragAdorner="True"
+                             dd:DragDrop.SelectDroppedItems="True"
                              ItemsSource="{Binding SelectedScriptGroup.Projects, Mode=TwoWay}"
                              SelectionMode="Single">
      
