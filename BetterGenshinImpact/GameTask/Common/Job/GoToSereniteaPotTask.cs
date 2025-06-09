@@ -431,13 +431,14 @@ internal class GoToSereniteaPotTask
                             itemRo.Click();
                             await Delay(600, ct);
                             await BuyMaxNumber(ct);
-                            await Delay(2000, ct);//等待购买动画结束
+                            await Delay(1000, ct);//等待购买动画结束
                         }
                         else
                         {
-                            await Delay(2000, ct);
+                            await Delay(1000, ct);
                             Logger.LogInformation("领取尘歌壶奖励: {text} 未找到", item.Name);
                         }
+                        await Delay(1000, ct);//等待购买动画结束
                     }
                     await Delay(900, ct);
                     Logger.LogInformation("领取尘歌壶奖励:{text}", "购买商店物品完成");
