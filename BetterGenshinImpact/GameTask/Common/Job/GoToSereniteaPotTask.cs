@@ -311,7 +311,7 @@ internal class GoToSereniteaPotTask
         await Delay(300, ct);
         ra.Find(ElementAssets.Instance.BtnWhiteConfirm).Click();
         await Delay(500, ct);
-        ra.Find(ElementAssets.Instance.BtnWhiteConfirm).Click();
+        TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.OpenPaimonMenu); // ESC 
     }
 
     private async Task GetReward(CancellationToken ct)
