@@ -59,6 +59,26 @@ using Button = Wpf.Ui.Controls.Button;
 using System.Collections.Specialized;
 using BetterGenshinImpact.View.Pages;
 
+using System;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using Wpf.Ui.Controls;
+using CommunityToolkit.Mvvm.Input;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using System.Windows.Controls;
+using System.Windows.Threading;
+using System.Diagnostics;
+using Wpf.Ui.Controls;
+using CommunityToolkit.Mvvm.Input;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using System.Windows.Controls;
+using System.Diagnostics;
+
 
 namespace BetterGenshinImpact.ViewModel.Pages;
 
@@ -293,6 +313,208 @@ public partial class OneDragonFlowViewModel : ViewModel
             }
         }
         return -1;
+    }
+
+    //自动秘境树脂使用优先级
+    [RelayCommand]
+    public async Task<string> OnResinUsageSequenceAsync()
+    {
+        if (!SelectedConfig?.ResinOrder.Any() ?? true)
+        {
+            Toast.Warning("优先级至少需要三个，自动设置为浓缩树脂、原粹树脂、无", ToastLocation.TopCenter, default, 4000);
+            SelectedConfig.ResinOrder = new List<string> { "浓缩树脂", "原粹树脂", "无" , "无"};
+        }
+        var stackPanel = new StackPanel();
+        var resinTypes = new List<string> { "浓缩树脂", "原粹树脂", "脆弱树脂","须臾树脂", "无" };
+        var resinComboBox1 = new ComboBox
+        {
+            ItemsSource = resinTypes,
+            SelectedItem = SelectedConfig.ResinOrder?[0]?? "浓缩树脂",
+            FontSize = 12,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        var resinComboBox2 = new ComboBox
+        {
+            ItemsSource = resinTypes,
+            SelectedItem = SelectedConfig.ResinOrder?[1]?? "原粹树脂",
+            FontSize = 12,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        var resinComboBox3 = new ComboBox
+        {
+            ItemsSource = resinTypes,
+            SelectedItem = SelectedConfig.ResinOrder?[2]?? "无",
+            FontSize = 12,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        var resinComboBox4 = new ComboBox
+        {
+            ItemsSource = resinTypes,
+            SelectedItem = SelectedConfig.ResinOrder?[3]?? "无",
+            FontSize = 12,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        stackPanel.Children.Add(resinComboBox1);
+        stackPanel.Children.Add(resinComboBox2);
+        stackPanel.Children.Add(resinComboBox3);
+        stackPanel.Children.Add(resinComboBox4);
+        var uiMessageBox = new Wpf.Ui.Controls.MessageBox
+        {
+            Title = "优先级从上往下",
+            Content = new ScrollViewer
+            {
+                Content = stackPanel,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            },
+            CloseButtonText = "关闭",
+            PrimaryButtonText = "确认",
+            Owner = Application.Current.ShutdownMode == ShutdownMode.OnMainWindowClose
+                ? null
+                : Application.Current.MainWindow,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            SizeToContent = SizeToContent.Width, // 确保弹窗根据内容自动调整大小
+            MinWidth = 200,
+            MaxHeight = 310,
+        };
+
+        string resinType11 = resinComboBox1.SelectedItem?.ToString() ?? string.Empty;
+        string resinType22 = resinComboBox2.SelectedItem?.ToString() ?? string.Empty;
+        string resinType33 = resinComboBox3.SelectedItem?.ToString() ?? string.Empty; 
+        string resinType44 = resinComboBox4.SelectedItem?.ToString() ?? string.Empty;
+        resinComboBox1.SelectionChanged += (sender, e) =>
+        {
+            var selectedItem = resinComboBox1.SelectedItem?.ToString() ?? "无";
+            if (selectedItem != "无" && selectedItem == resinComboBox2.SelectedItem?.ToString() && resinComboBox2.SelectedItem?.ToString() != "无")
+            {
+                resinComboBox2.SelectedItem = resinType11;
+            }
+            if (selectedItem != "无" && selectedItem == resinComboBox3.SelectedItem?.ToString() && resinComboBox3.SelectedItem?.ToString() != "无")
+            {
+                resinComboBox3.SelectedItem = resinType11;
+            }
+            if (selectedItem != "无" && selectedItem == resinComboBox4.SelectedItem?.ToString() && resinComboBox4.SelectedItem?.ToString() != "无")
+            {
+                resinComboBox4.SelectedItem = resinType11;
+            }
+            resinType11 = selectedItem;
+        };
+
+        resinComboBox2.SelectionChanged += (sender, e) =>
+        {
+            var selectedItem = resinComboBox2.SelectedItem?.ToString() ?? "无";
+            if (selectedItem != "无" && selectedItem == resinComboBox1.SelectedItem?.ToString() && resinComboBox1.SelectedItem?.ToString() != "无")
+            {
+                resinComboBox1.SelectedItem = resinType22;
+            }
+            if (selectedItem != "无" && selectedItem == resinComboBox3.SelectedItem?.ToString() && resinComboBox3.SelectedItem?.ToString() != "无")
+            {
+                resinComboBox3.SelectedItem = resinType22;
+            }
+            if (selectedItem != "无" && selectedItem == resinComboBox4.SelectedItem?.ToString() && resinComboBox4.SelectedItem?.ToString() != "无")
+            {
+                resinComboBox4.SelectedItem = resinType22;
+            }
+            resinType22 = selectedItem;
+        };  
+
+         resinComboBox3.SelectionChanged += (sender, e) =>
+        {
+            var selectedItem = resinComboBox3.SelectedItem?.ToString() ?? "无";
+            if (selectedItem != "无" && selectedItem == resinComboBox1.SelectedItem?.ToString() && resinComboBox1.SelectedItem?.ToString() != "无")
+            {
+                resinComboBox1.SelectedItem = resinType33;
+            }
+            if (selectedItem != "无" && selectedItem == resinComboBox2.SelectedItem?.ToString() && resinComboBox2.SelectedItem?.ToString() != "无")
+            {
+                resinComboBox2.SelectedItem = resinType33;
+            }
+            if (selectedItem != "无" && selectedItem == resinComboBox4.SelectedItem?.ToString() && resinComboBox4.SelectedItem?.ToString() != "无")
+            {
+                resinComboBox4.SelectedItem = resinType33;
+            }
+            resinType33 = selectedItem;
+        };
+         resinComboBox4.SelectionChanged += (sender, e) =>
+        {
+            var selectedItem = resinComboBox4.SelectedItem?.ToString() ?? "无";
+            if (selectedItem != "无" && selectedItem == resinComboBox1.SelectedItem?.ToString() && resinComboBox1.SelectedItem?.ToString() != "无")
+            {
+                resinComboBox1.SelectedItem = resinType44;
+            }
+            if (selectedItem != "无" && selectedItem == resinComboBox2.SelectedItem?.ToString() && resinComboBox2.SelectedItem?.ToString() != "无")
+            {
+                resinComboBox2.SelectedItem = resinType44;
+            }
+            if (selectedItem != "无" && selectedItem == resinComboBox3.SelectedItem?.ToString() && resinComboBox3.SelectedItem?.ToString() != "无")
+            {
+                resinComboBox3.SelectedItem = resinType44;
+            }
+            resinType44 = selectedItem;
+        };
+        
+        var result = await uiMessageBox.ShowDialogAsync();
+        if (result == Wpf.Ui.Controls.MessageBoxResult.Primary)
+        {
+            var resinType1 = resinComboBox1.SelectedItem?.ToString() ?? "无";
+            var resinType2 = resinComboBox2.SelectedItem?.ToString() ?? "无";
+            var resinType3 = resinComboBox3.SelectedItem?.ToString() ?? "无";
+            var resinType4 = resinComboBox4.SelectedItem?.ToString() ?? "无";
+
+            if ((resinType1 != "无" && resinType1 == resinType2) ||
+                (resinType1 != "无" && resinType1 == resinType3) ||
+                (resinType2 != "无" && resinType2 == resinType3) ||
+                (resinType1 != "无" && resinType1 == resinType4))
+            {
+                Toast.Warning("不能选择重复的树脂类型,请重新选择", ToastLocation.TopCenter, default, 4000);
+                return await OnResinUsageSequenceAsync();
+            }
+            // 检查是否所有都为“无”
+            if (resinComboBox1.SelectedItem?.ToString() == "无" &&
+                resinComboBox2.SelectedItem?.ToString() == "无" &&
+                resinComboBox3.SelectedItem?.ToString() == "无" &&
+                resinComboBox4.SelectedItem?.ToString() == "无")
+            {
+                Toast.Warning("至少选择一种树脂类型", ToastLocation.TopCenter, default, 4000);
+                return await OnResinUsageSequenceAsync();
+            }
+            //必须含有原粹树脂
+            if (!(resinType1 == "原粹树脂" || resinType2 == "原粹树脂" || resinType3 == "原粹树脂" || resinType4 == "原粹树脂"))
+            {
+                Toast.Warning("必须含有 原粹树脂 ", ToastLocation.TopCenter, default, 4000);
+                return await OnResinUsageSequenceAsync();
+            }
+            //如果含有脆弱树脂，再次进行弹窗确认，确认继续，取消返回
+            if (resinType1 == "脆弱树脂" || resinType2 == "脆弱树脂" || resinType3 == "脆弱树脂" || resinType4 == "脆弱树脂")
+            {
+                var uiMessageBox2 = new Wpf.Ui.Controls.MessageBox
+                {
+                    Title = "是否继续",
+                    Content = "选择了脆弱树脂（小月亮），会耗尽脆弱树脂，是否继续？",
+                    CloseButtonText = "取消",
+                    PrimaryButtonText = "继续",
+                    Owner = Application.Current.ShutdownMode == ShutdownMode.OnMainWindowClose ? null : Application.Current.MainWindow,
+                    WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                    SizeToContent = SizeToContent.Width, // 确保弹窗根据内容自动调整大小
+                    MinWidth = 200,
+                    MaxHeight = 150,
+                };
+                var result2 = await uiMessageBox2.ShowDialogAsync();
+                if (result2 == Wpf.Ui.Controls.MessageBoxResult.Primary)
+                {
+                    SelectedConfig.ResinOrder = new List<string> { resinType1, resinType2, resinType3 , resinType4 };
+                    return resinType1 + "," + resinType2 + "," + resinType3 + "," + resinType4;
+                }
+                else
+                {
+                    return await OnResinUsageSequenceAsync();
+                }
+            }
+            
+            //修改配置文件
+            SelectedConfig.ResinOrder = new List<string> { resinType1, resinType2, resinType3 , resinType4 };
+            return resinType1 + "," + resinType2 + "," + resinType3 + "," + resinType4;
+        }
+        return null;
     }
 
     public async Task<string?> OnStartMultiScriptGroupAsync()
@@ -544,6 +766,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                     newItem.PropertyChanged += TaskPropertyChanged;
                 }
             }
+
             if (e.OldItems != null)
             {
                 foreach (OneDragonTaskItem oldItem in e.OldItems)
@@ -2032,7 +2255,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         return true;
     }
     
-    // 旧版本的 OneDragonFlowConfigV0
+     // 旧版本的 OneDragonFlowConfigV0
     #region 
     [Serializable]
     public partial class OneDragonFlowConfigV0 : OneDragonFlowConfig

@@ -833,40 +833,64 @@
                             </StackPanel>
                         </ui:CardExpander>
 
-                        <ui:CardControl Margin="0,0,0,12">
-                            <ui:CardControl.Icon>
-                                <ui:FontIcon Glyph="&#xf68a;" Style="{StaticResource FaFontIconStyle}" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                    </Grid.RowDefinitions>
-                                    <ui:TextBlock Grid.Row="0"
-                                                  Grid.Column="0"
-                                                  FontTypography="Body"
-                                                  Text="结束后自动快速分解圣遗物"
-                                                  TextWrapping="Wrap" />
-                                    <ui:TextBlock Grid.Row="1"
-                                                  Grid.Column="0"
-                                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                                  Text="需要分解圣遗物的最高星级"
-                                                  TextWrapping="Wrap" />
-                                </Grid>
-                            </ui:CardControl.Header>
-                            <StackPanel Orientation="Horizontal">
-                                <ComboBox
-                                    Width="80"
+                       <ui:CardControl Margin="0,0,0,12">
+                        <ui:CardControl.Icon>
+                            <ui:FontIcon Glyph="&#xf68a;" Style="{StaticResource FaFontIconStyle}" />
+                        </ui:CardControl.Icon>
+                        <ui:CardControl.Header>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Button
+                                    HorizontalAlignment="Center"
+                                    Grid.Row="0"
+                                    Grid.Column="0"
+                                    Grid.RowSpan="2"
+                                    MinWidth="100"
                                     Margin="0,0,10,0"
-                                    ItemsSource="{Binding  Source={x:Static pages:TaskSettingsPageViewModel.ArtifactSalvageStarList}}"
-                                    SelectedItem="{Binding Config.AutoArtifactSalvageConfig.MaxArtifactStar, Mode=TwoWay}">
-                                </ComboBox>
-                                <ui:ToggleSwitch
-                                    Margin="0,0,36,0"
-                                    IsChecked="{Binding Config.AutoDomainConfig.AutoArtifactSalvage, Mode=TwoWay}" />
-                            </StackPanel>
-                        </ui:CardControl>
+                                    Content="领奖树脂顺序"
+                                    Command="{Binding ResinUsageSequenceCommand}"/>
+                                <ui:TextBlock Grid.Row="0"
+                                              Grid.Column="1"
+                                              FontTypography="Body"
+                                              Text="分解圣遗物"
+                                              HorizontalAlignment="Right"
+                                              TextWrapping="Wrap" />
+                                <ui:TextBlock Grid.Row="1"
+                                              Grid.Column="1"
+                                              Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                              Text="最高的等级"
+                                              HorizontalAlignment="Right"
+                                              TextWrapping="Wrap" />
+                                <StackPanel 
+                                    Grid.Row="0"
+                                    Grid.Column="2"
+                                    Grid.RowSpan="2"
+                                    Margin="15,0,0,0"
+                                    Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <ComboBox
+                                        Width="60"
+                                        Margin="0,0,13,0"
+                                        ItemsSource="{Binding  Source={x:Static pages:TaskSettingsPageViewModel.ArtifactSalvageStarList}}"
+                                        SelectedItem="{Binding Config.AutoArtifactSalvageConfig.MaxArtifactStar, Mode=TwoWay}">
+                                    </ComboBox>
+                                    <ui:ToggleSwitch
+                                        Margin="0,0,36,0"
+                                        IsChecked="{Binding Config.AutoDomainConfig.AutoArtifactSalvage, Mode=TwoWay}" />
+                                </StackPanel>
+
+                        
+                            </Grid>
+                        </ui:CardControl.Header>
+                        
+                    </ui:CardControl>
 
                         <!--  领取奖励  -->
                         <TextBlock Margin="4,0,0,4"
