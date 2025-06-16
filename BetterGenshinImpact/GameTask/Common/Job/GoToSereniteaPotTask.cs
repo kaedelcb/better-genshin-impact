@@ -300,15 +300,15 @@ internal class GoToSereniteaPotTask
         if (numberBtn.IsExist())
         {
             numberBtn.Move();
-            await Delay(300, ct);
+            await Delay(700, ct);//减慢速度，设备差异导致的延迟
             Simulation.SendInput.Mouse.LeftButtonDown();
-            await Delay(300, ct);
+            await Delay(700, ct);
             numberBtn.MoveTo(ra.Width/7,0);//moveby会超出边界，改用MoveTo
-            await Delay(300, ct);
+            await Delay(700, ct);
             Simulation.SendInput.Mouse.LeftButtonUp();
         }
 
-        await Delay(300, ct);
+        await Delay(700, ct);
         ra.Find(ElementAssets.Instance.BtnWhiteConfirm).Click();
         await Delay(500, ct);
         TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.OpenPaimonMenu); // ESC 
@@ -384,36 +384,28 @@ internal class GoToSereniteaPotTask
                         switch (potBuyItem)
                         {
                             case "布匹":
-                                buy.Add(ElementAssets.Instance.AYuanClothRo);       
-                                Logger.LogInformation("领取尘歌壶奖励:加入 {text} ", potBuyItem);
+                                buy.Add(ElementAssets.Instance.AYuanClothRo);
                                 break;
                             case "须臾树脂":
                                 buy.Add(ElementAssets.Instance.AYuanresinRo);
-                                Logger.LogInformation("领取尘歌壶奖励:加入 {text} ", potBuyItem);
                                 break;
                             case "大英雄的经验":
                                 buy.Add(ElementAssets.Instance.SereniteapotExpBookRo);
-                                Logger.LogInformation("领取尘歌壶奖励:加入 {text} ", potBuyItem);
                                 break;
                             case "流浪者的经验":
                                 buy.Add(ElementAssets.Instance.SereniteapotExpBookSmallRo);
-                                Logger.LogInformation("领取尘歌壶奖励:加入 {text} ", potBuyItem);
                                 break;
                             case "精锻用魔矿":
                                 buy.Add(ElementAssets.Instance.AYuanMagicmineralprecisionRo);
-                                Logger.LogInformation("领取尘歌壶奖励:加入 {text} ", potBuyItem);
                                 break;
                             case "摩拉":
                                 buy.Add(ElementAssets.Instance.AYuanMOlaRo);
-                                Logger.LogInformation("领取尘歌壶奖励:加入 {text} ", potBuyItem);
                                 break;
                             case "祝圣精华":
                                 buy.Add(ElementAssets.Instance.AYuanExpBottleBigRo);
-                                Logger.LogInformation("领取尘歌壶奖励:加入 {text} ", potBuyItem);
                                 break;
                             case "祝圣油膏":
                                 buy.Add(ElementAssets.Instance.AYuanExpBottleSmallRo);
-                                Logger.LogInformation("领取尘歌壶奖励:加入 {text} ", potBuyItem);
                                 break;
                             default:
                                 Logger.LogInformation("未知的商品");
