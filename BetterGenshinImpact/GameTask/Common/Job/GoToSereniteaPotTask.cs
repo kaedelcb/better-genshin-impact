@@ -300,17 +300,17 @@ internal class GoToSereniteaPotTask
         if (numberBtn.IsExist())
         {
             numberBtn.Move();
-            await Delay(700, ct);//减慢速度，设备差异导致的延迟
+            await Delay(600, ct);//减慢速度，设备差异导致的延迟
             Simulation.SendInput.Mouse.LeftButtonDown();
-            await Delay(700, ct);
+            await Delay(600, ct);
             numberBtn.MoveTo(ra.Width/7,0);//moveby会超出边界，改用MoveTo
-            await Delay(700, ct);
+            await Delay(600, ct);
             Simulation.SendInput.Mouse.LeftButtonUp();
         }
 
-        await Delay(700, ct);
+        await Delay(600, ct);
         ra.Find(ElementAssets.Instance.BtnWhiteConfirm).Click();
-        await Delay(500, ct);
+        await Delay(600, ct);
         TaskContext.Instance().PostMessageSimulator.SimulateAction(GIActions.OpenPaimonMenu); // ESC 
     }
 
@@ -412,25 +412,40 @@ internal class GoToSereniteaPotTask
                                 break;
                         }
                     }
-
+                    
+                    //对比购买成功和buy的数量，如果不等，重试一次
+                    var buyCount = 0;
+                    var retryBuy= 0;
                     // 直接购买最大数量
-                    foreach (var item in buy)
+                    while (retryBuy < 2)
                     {
-                        var itemRo = CaptureToRectArea().Find(item);
-                        if (itemRo.IsExist())
+                        foreach (var item in buy)
                         {
-                            Logger.LogInformation("领取尘歌壶奖励:购买 {text} ", item.Name);
-                            itemRo.Click();
-                            await Delay(600, ct);
-                            await BuyMaxNumber(ct);
-                            await Delay(1000, ct);//等待购买动画结束
+                            var itemRo = CaptureToRectArea().Find(item);
+                            if (itemRo.IsExist())
+                            {
+                                buyCount++;
+                                Logger.LogInformation("领取尘歌壶奖励:购买 {text} ", item.Name);
+                                itemRo.Click();
+                                await Delay(600, ct);
+                                await BuyMaxNumber(ct);
+                                await Delay(1000, ct);//等待购买动画结束
+                            }
+                            else
+                            {
+                                await Delay(700, ct);
+                                Logger.LogInformation("领取尘歌壶奖励: {text} 未找到", item.Name);
+                            }
+                            await Delay(700, ct);
                         }
-                        else
+                        if (buyCount < buy.Count)
                         {
-                            await Delay(1000, ct);
-                            Logger.LogInformation("领取尘歌壶奖励: {text} 未找到", item.Name);
+                            retryBuy++;
+                            await Delay(500, ct);
+                        }else
+                        {
+                            break;
                         }
-                        await Delay(1000, ct);//等待购买动画结束
                     }
                     await Delay(900, ct);
                     Logger.LogInformation("领取尘歌壶奖励:{text}", "购买商店物品完成");
