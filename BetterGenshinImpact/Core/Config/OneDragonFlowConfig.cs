@@ -177,6 +177,8 @@ public partial class OneDragonFlowConfig : ObservableObject
     [ObservableProperty]
     private List<string> _secretTreasureObjects = new();
     
+    //树脂使用顺序
+    [ObservableProperty] private List<string> _resinOrder = new();
     
     private string _genshinUid = string.Empty;
     public string GenshinUid
