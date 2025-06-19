@@ -1105,7 +1105,7 @@ public class AutoDomainTask : ISoloTask
                     resinType.Remove("浓缩树脂");
                 }
 
-                if (resinType.Count > 0 && resinType[0] == "原粹树脂" && useOriginalResinRa.IsEmpty() || replenishStringdone != null)
+                if (resinType.Count > 0 && resinType[0] == "原粹树脂"  && useOriginalResinRa.IsEmpty() || replenishStringdone != null)
                 {
                     Logger.LogInformation("测试LOG：没有原粹树脂了");
                     resinType.Remove("原粹树脂");
@@ -1291,9 +1291,6 @@ public class AutoDomainTask : ISoloTask
         var originalResinCount = 0; //原粹树脂
         var fragileResinCount = 0; //脆弱树脂
 
-        // 确保全部找到
-        var findedCount = 1;
-
         var ra = CaptureToRectArea();
 
         //判断是否启用了跳过动画
@@ -1354,15 +1351,33 @@ public class AutoDomainTask : ISoloTask
 
             if (!extracted)
             {
-                Logger.LogInformation("两次识别都无法提取原粹树脂数量，设置默认值");
-                originalResinCount = 20; // 或者其他默认值
+                Logger.LogInformation("两次识别都无法提取原粹树脂数量，设置识别值");
+                originalResinCount = 0; // 或者其他默认值
             }
         }
         else
         {
-            Logger.LogInformation("未检测到原粹树脂数量");
+            Logger.LogInformation("未检测到原粹树脂数量，设置识别值");
             originalResinCount = 0; // 设置为0或其他合理的默认值
         }
+
+        if (originalResinCount == 0)
+        {
+            var replenishStringArea = ra.FindMulti(RecognitionObject.Ocr(ra.Width * 0.5, ra.Height * 0.3,
+                ra.Width * 0.25, ra.Height * 0.3));
+            var replenishStringdone = replenishStringArea.LastOrDefault(t =>
+                Regex.IsMatch(t.Text, this.replenishString));//补充原粹树脂按钮文字
+            if (replenishStringdone != null)
+            {
+                Logger.LogInformation("检测到补充原粹树脂按钮,原粹树脂不足");
+                originalResinCount = 0;
+            }else
+            {
+                Logger.LogInformation("未检测到补充原粹树脂按钮,强制设定树脂数量 20");
+                originalResinCount = 20; // 强制设定树脂数量 20
+            }
+        }
+        
 
         // 脆弱树脂 //可以识别 √
         var fragileResinCountRa = ra.Find(AutoFightAssets.Instance.FragileResinCountRa);
