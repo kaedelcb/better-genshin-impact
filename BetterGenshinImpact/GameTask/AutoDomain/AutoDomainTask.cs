@@ -168,11 +168,11 @@ public class AutoDomainTask : ISoloTask
         }
         Logger.LogInformation("领取奖励使用顺序：{ResinOrder}", _taskParam.ResinOrder);
 
-        while (true)
-        {
-            GetRemainResinStatus();
-            await Delay(500, _ct);
-        }
+        // while (true)//测试用
+        // {
+        //     GetRemainResinStatus();
+        //     await Delay(500, _ct);
+        // }
         
         // 传送到秘境
         await TpDomain();
