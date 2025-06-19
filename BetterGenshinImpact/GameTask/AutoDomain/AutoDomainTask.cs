@@ -1380,7 +1380,7 @@ public class AutoDomainTask : ISoloTask
         
 
         // 脆弱树脂 //可以识别 √
-        var fragileResinCountRa = ra.Find(AutoFightAssets.Instance.FragileResinCountRa);
+        var fragileResinCountRa = ra.Find(AutoFightAssets.Instance.FragileResinCountRa); 
         if (!fragileResinCountRa.IsEmpty())
         {
             Logger.LogInformation("检测到脆弱树脂");
