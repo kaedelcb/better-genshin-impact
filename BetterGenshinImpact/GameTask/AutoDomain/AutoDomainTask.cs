@@ -167,6 +167,12 @@ public class AutoDomainTask : ISoloTask
             _taskParam.ResinOrder = new List<string> { "浓缩树脂", "原粹树脂", "无" , "无"};
         }
         Logger.LogInformation("领取奖励使用顺序：{ResinOrder}", _taskParam.ResinOrder);
+
+        while (true)
+        {
+            GetRemainResinStatus();
+            await Delay(500, _ct);
+        }
         
         // 传送到秘境
         await TpDomain();
@@ -1318,17 +1324,44 @@ public class AutoDomainTask : ISoloTask
             var countArea = ra.DeriveCrop(originalResinCountRa.X + originalResinCountRa.Width,
                 originalResinCountRa.Y,
                 (int)(originalResinCountRa.Width * 3), originalResinCountRa.Height);
-            var count = OcrFactory.Paddle.Ocr(countArea.SrcMat);
-            Logger.LogInformation("原粹树脂数量：{Count}", count);
-            // 截取最后4位字符前的数值部分
-            var numericPart = count.Substring(0, count.Length - 4);
-            originalResinCount = StringUtils.TryParseInt(numericPart);
+            
+            bool extracted = false;
 
-            // originalResinCount = StringUtils.TryParseInt(count);
+            for (int i = 0; i < 2 && !extracted; i++)
+            {
+                string count;
+                if (i == 0)
+                {
+                    count = OcrFactory.Paddle.OcrWithoutDetector(countArea.SrcMat);
+                    Logger.LogInformation("第一次识别原粹树脂数量：{Count}", count);
+                }
+                else
+                {
+                    count = OcrFactory.Paddle.Ocr(countArea.SrcMat);
+                    Logger.LogInformation("第二次识别原粹树脂数量：{Count}", count);
+                }
+
+                // 使用正则表达式提取 1 或 / 前面的纯数值
+                var match = System.Text.RegularExpressions.Regex.Match(count, @"(\d+)\s*[/1]\s*200");
+                if (match.Success)
+                {
+                    var numericPart = match.Groups[1].Value;
+                    originalResinCount = StringUtils.TryParseInt(numericPart);
+                    Logger.LogInformation("提取到的原粹树脂数量：{OriginalResinCount}", originalResinCount);
+                    extracted = true;
+                }
+            }
+
+            if (!extracted)
+            {
+                Logger.LogInformation("两次识别都无法提取原粹树脂数量，设置默认值");
+                originalResinCount = 20; // 或者其他默认值
+            }
         }
         else
         {
             Logger.LogInformation("未检测到原粹树脂数量");
+            originalResinCount = 0; // 设置为0或其他合理的默认值
         }
 
         // 脆弱树脂 //可以识别 √
