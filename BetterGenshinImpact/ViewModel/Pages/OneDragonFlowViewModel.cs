@@ -834,11 +834,14 @@ public partial class OneDragonFlowViewModel : ViewModel
         var newButton = new Button { Content = "新建计划表", Margin = new Thickness(0, 0, 10, 0) };
         var deleteButton = new Button { Content = "删除计划表" };
         var restoreButton = new Button { Content = "还原配置单文件到旧版本", Margin = new Thickness(10, 0, 0, 0) }; // 新增按钮
+        var backupButton = new Button { Content = "备份User", Margin = new Thickness(10, 0, 0, 0) };
+        var openUserFolderButton = new Button { Content = "打开User", Margin = new Thickness(10, 0, 0, 0) };
         
         var buttonPanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 10, 0, 0),
             Children = { newButton, deleteButton }
         };
@@ -846,10 +849,28 @@ public partial class OneDragonFlowViewModel : ViewModel
         var buttonPanel2 = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Left,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 10, 0, 0),
             Children = {restoreButton }
+        };
+        
+        var buttonPanel3 = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 10, 0, 0),
+            Children = {backupButton ,openUserFolderButton}
+        };
+        
+        openUserFolderButton.Click += (s, e) =>
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = _configPath,
+                UseShellExecute = true
+            });
         };
 
         var grid = new Grid();
@@ -857,6 +878,9 @@ public partial class OneDragonFlowViewModel : ViewModel
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 列表
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 按钮
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 按钮
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 按钮
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 按钮
+
 
         grid.Children.Add(new TextBlock { Text = "请选择计划表：", Margin = new Thickness(0, 0, 0, 5), FontSize = 14 });
         Grid.SetRow(grid.Children[^1], 0);
@@ -873,10 +897,12 @@ public partial class OneDragonFlowViewModel : ViewModel
         Grid.SetRow(buttonPanel, 2);
         grid.Children.Add(buttonPanel2);
         Grid.SetRow(buttonPanel2, 3);
+        grid.Children.Add(buttonPanel3);
+        Grid.SetRow(buttonPanel3, 4);
 
         var messageBox = new Wpf.Ui.Controls.MessageBox
         {
-            Title = "切换计划表",
+            Title = "配置单编辑器",
             Content = grid,
             CloseButtonText = "取消",
             PrimaryButtonText = "确认",
@@ -884,15 +910,34 @@ public partial class OneDragonFlowViewModel : ViewModel
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             SizeToContent = SizeToContent.Width,
             MinWidth = 220,
-            MaxHeight = 400
+            MaxWidth = 220,
+            Height = 700,
+            MaxHeight = 700
+        };
+        
+        openUserFolderButton.Click += (s, e) =>
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "User",
+                UseShellExecute = true
+            });
         };
         
         restoreButton.Click += (sender, args) =>
         {
-            var result = MessageBox.Show("生成公版BGI配置文件！您确定要生成配置单文件到旧版本吗？", "确认还原", System.Windows.MessageBoxButton.OKCancel, MessageBoxImage.Question);
+            var result = MessageBox.Show("生成公版BGI配置文件！您确定要生成配置单文件旧版本吗？", "确认生成", System.Windows.MessageBoxButton.OKCancel, MessageBoxImage.Question);
             if (result == System.Windows.MessageBoxResult .OK)
             {
                 RestoreOldVersions();
+            }
+        };
+        backupButton.Click += (sender, args) =>
+        {
+            var result = MessageBox.Show("备份整个User文件夹到 Backups 文件夹！您确定要备份User文件夹吗？", "确认备份", System.Windows.MessageBoxButton.OKCancel, MessageBoxImage.Question);
+            if (result == System.Windows.MessageBoxResult.OK)
+            {
+                BackupUser();
             }
         };
         newButton.Click += async (s, e) =>
@@ -2389,138 +2434,144 @@ public partial class OneDragonFlowViewModel : ViewModel
         return newTaskEnabledList;
     }
     
- private void RestoreOldVersions()
-{
-    string oldConfigFolder = "User";
-    string oldConfigOneDragonFolder = Path.Combine(oldConfigFolder, "OneDragon");
-    string backupFolder = "NewUserBackups";
-    string restoredFolder = "NewToOldUser";
-    string restoredUserFolder = Path.Combine(restoredFolder, "User", "OneDragon");
-
-    Directory.CreateDirectory(backupFolder);
-    Directory.CreateDirectory(restoredFolder);
-
-
-    // 备份整个配置目录及其子目录和文件到以时间命名的文件夹
-    string timestampedBackupFolder = Path.Combine(backupFolder, DateTime.Now.ToString("yyyyMMdd_HHmmss"));
-    BackupDirectory(oldConfigFolder, timestampedBackupFolder);
-    Toast.Warning($"备份现在的配置文件到 {timestampedBackupFolder} 文件夹，开始还原...", ToastLocation.TopCenter, default, 3000);
-
-    // 再备份整个USER文件夹到restoredFolder
-    BackupDirectory(oldConfigFolder, restoredFolder);
-    
-    // 还原配置文件
-    foreach (var configFile in Directory.GetFiles(oldConfigOneDragonFolder, "*.json", SearchOption.AllDirectories))
+    //备份USER目录及其子目录和文件到以时间命名的文件夹
+    private void BackupUser()
     {
-        var json = File.ReadAllText(configFile);
-        var newConfig = JsonConvert.DeserializeObject<OneDragonFlowConfig>(json);
-        
-        if (newConfig != null)
-        {
-            var oldConfig = DowngradeConfig(newConfig);
-            if (oldConfig != null)
-            {
-                string restoredUserFolder1 = Path.Combine("NewToOldUser", "OneDragon");
-                string relativePath = Path.GetRelativePath(oldConfigOneDragonFolder, configFile);
-                string restoredFilePath = Path.Combine(restoredUserFolder1, relativePath);
-                Directory.CreateDirectory(Path.GetDirectoryName(restoredFilePath));
-                WriteConfig(oldConfig, restoredFilePath);
+        string backupFolder = "Backups";
+        string timestampedBackupFolder = Path.Combine(backupFolder, DateTime.Now.ToString("yyyyMMdd_HHmmss"));
+        BackupDirectory("User", timestampedBackupFolder);
+        Toast.Warning($"备份 User 文件夹到 {timestampedBackupFolder} 文件夹", ToastLocation.TopCenter, default, 5000);
+    }
+    
+    
+     private void RestoreOldVersions()
+    {
+        string oldConfigFolder = "User";
+        string oldConfigOneDragonFolder = Path.Combine(oldConfigFolder, "OneDragon");
+        string backupFolder = "NewUserBackups";
+        string restoredFolder = "NewToOldUser";
+        string restoredUserFolder = Path.Combine(restoredFolder, "User", "OneDragon");
 
+        Directory.CreateDirectory(backupFolder);
+        Directory.CreateDirectory(restoredFolder);
+
+
+        // 备份整个配置目录及其子目录和文件到以时间命名的文件夹
+        string timestampedBackupFolder = Path.Combine(backupFolder, DateTime.Now.ToString("yyyyMMdd_HHmmss"));
+        BackupDirectory(oldConfigFolder, timestampedBackupFolder);
+        Toast.Warning($"备份现在的配置文件到 {timestampedBackupFolder} 文件夹，开始还原...", ToastLocation.TopCenter, default, 3000);
+
+        // 再备份整个USER文件夹到restoredFolder
+        BackupDirectory(oldConfigFolder, restoredFolder);
+        
+        // 还原配置文件
+        foreach (var configFile in Directory.GetFiles(oldConfigOneDragonFolder, "*.json", SearchOption.AllDirectories))
+        {
+            var json = File.ReadAllText(configFile);
+            var newConfig = JsonConvert.DeserializeObject<OneDragonFlowConfig>(json);
+            
+            if (newConfig != null)
+            {
+                var oldConfig = DowngradeConfig(newConfig);
+                if (oldConfig != null)
+                {
+                    string restoredUserFolder1 = Path.Combine("NewToOldUser", "OneDragon");
+                    string relativePath = Path.GetRelativePath(oldConfigOneDragonFolder, configFile);
+                    string restoredFilePath = Path.Combine(restoredUserFolder1, relativePath);
+                    Directory.CreateDirectory(Path.GetDirectoryName(restoredFilePath));
+                    WriteConfig(oldConfig, restoredFilePath);
+
+                }
+                else
+                {
+                    Toast.Error("还原失败", ToastLocation.TopCenter, default, 6000);
+                    return; 
+                }
             }
             else
             {
-                Toast.Error("还原失败", ToastLocation.TopCenter, default, 6000);
-                return; 
+                Toast.Error("反序列化新配置文件错误", ToastLocation.TopCenter, default, 6000);
+                return;
             }
         }
-        else
+        Toast.Success("还原成功，文件在 NewToOldUser 文件夹下，请重启BGI！", ToastLocation.TopCenter, default, 10000);
+    }
+
+    // 备份目录及其子目录和文件
+    private static void BackupDirectory(string sourceDir, string targetDir)
+    {
+        Directory.CreateDirectory(targetDir);
+
+        foreach (var file in Directory.GetFiles(sourceDir))
         {
-            Toast.Error("反序列化新配置文件错误", ToastLocation.TopCenter, default, 6000);
-            return;
+            string targetFilePath = Path.Combine(targetDir, Path.GetFileName(file));
+            File.Copy(file, targetFilePath, overwrite: true);
+        }
+
+        foreach (var directory in Directory.GetDirectories(sourceDir))
+        {
+            string targetSubDirPath = Path.Combine(targetDir, Path.GetFileName(directory));
+            BackupDirectory(directory, targetSubDirPath);
         }
     }
-    Toast.Success("还原成功，文件在 NewToOldUser 文件夹下，请重启BGI！", ToastLocation.TopCenter, default, 10000);
-}
 
-// 备份目录及其子目录和文件
-private static void BackupDirectory(string sourceDir, string targetDir)
-{
-    Directory.CreateDirectory(targetDir);
-
-    foreach (var file in Directory.GetFiles(sourceDir))
+    private OneDragonFlowConfigV0? DowngradeConfig(OneDragonFlowConfig newConfig)
     {
-        string targetFilePath = Path.Combine(targetDir, Path.GetFileName(file));
-        File.Copy(file, targetFilePath, overwrite: true);
-    }
-
-    foreach (var directory in Directory.GetDirectories(sourceDir))
-    {
-        string targetSubDirPath = Path.Combine(targetDir, Path.GetFileName(directory));
-        BackupDirectory(directory, targetSubDirPath);
-    }
-}
-
-private OneDragonFlowConfigV0? DowngradeConfig(OneDragonFlowConfig newConfig)
-{
-    try
-    {
-        var oldConfig = new OneDragonFlowConfigV0();
-        foreach (var property in typeof(OneDragonFlowConfig).GetProperties())
+        try
         {
-            var oldProperty = typeof(OneDragonFlowConfig).GetProperty(property.Name);// 旧版本的属性
-            if (oldProperty != null && oldProperty.CanWrite)
+            var oldConfig = new OneDragonFlowConfigV0();
+            foreach (var property in typeof(OneDragonFlowConfig).GetProperties())
             {
-                if (property.Name == "TaskEnabledList")
+                var oldProperty = typeof(OneDragonFlowConfig).GetProperty(property.Name);// 旧版本的属性
+                if (oldProperty != null && oldProperty.CanWrite)
                 {
-                    Dictionary<string, bool> oldTaskEnabledList = ReverseAdaptTaskEnabledList(newConfig.TaskEnabledList);
-                    oldConfig.TaskEnabledList = oldTaskEnabledList;
-                    continue;
-                }
-                
-                 if (property.Name == "Config" || property.Name == "Config" || property.Name == "IndexId"
-                     || property.Name == "Period" || property.Name == "SelectedPeriodList" || property.Name == "ScheduleName"
-                     || property.Name == "ResinOrder" || property.Name == "GenshinUid" || property.Name == "AccountBinding")
-                {
-                    oldProperty.SetValue(oldConfig, null);
-                    continue;
-                }
+                    if (property.Name == "TaskEnabledList")
+                    {
+                        Dictionary<string, bool> oldTaskEnabledList = ReverseAdaptTaskEnabledList(newConfig.TaskEnabledList);
+                        oldConfig.TaskEnabledList = oldTaskEnabledList;
+                        continue;
+                    }
+                    
+                    if (property.Name == "Config" || property.Name == "Config" || property.Name == "IndexId"
+                         || property.Name == "Period" || property.Name == "SelectedPeriodList" || property.Name == "ScheduleName"
+                         || property.Name == "ResinOrder" || property.Name == "GenshinUid" || property.Name == "AccountBinding")
+                    {
+                        oldProperty.SetValue(oldConfig, null);
+                        continue;
+                    }
 
-                oldProperty.SetValue(oldConfig, property.GetValue(newConfig));// 其他属性直接复制
+                    oldProperty.SetValue(oldConfig, property.GetValue(newConfig));// 其他属性直接复制
 
+                }
             }
+            return oldConfig;
         }
-        return oldConfig;
+        catch (Exception ex)
+        {
+            Console.WriteLine($"序列化错误: {ex.Message}");
+        }
+        return null;
     }
-    catch (Exception ex)
+
+    // 适配方法，将新的 TaskEnabledList 转换为旧的格式
+    private static Dictionary<string, bool> ReverseAdaptTaskEnabledList(Dictionary<int, (bool, string)> newTaskEnabledList)
     {
-        Console.WriteLine($"序列化错误: {ex.Message}");
+        var oldTaskEnabledList = new Dictionary<string, bool>();
+
+        foreach (var kvp in newTaskEnabledList)
+        {
+            oldTaskEnabledList[kvp.Value.Item2] = kvp.Value.Item1;
+        }
+        
+        return oldTaskEnabledList;
     }
-    return null;
-}
 
-// 适配方法，将新的 TaskEnabledList 转换为旧的格式
-private static Dictionary<string, bool> ReverseAdaptTaskEnabledList(Dictionary<int, (bool, string)> newTaskEnabledList)
-{
-    var oldTaskEnabledList = new Dictionary<string, bool>();
-
-    foreach (var kvp in newTaskEnabledList)
+    // 写入配置文件 (旧版本)
+    private void WriteConfig(OneDragonFlowConfig config, string filePath)
     {
-        oldTaskEnabledList[kvp.Value.Item2] = kvp.Value.Item1;
+        string json = JsonConvert.SerializeObject(config, Formatting.Indented);
+        File.WriteAllText(filePath, json);
     }
-    
-    return oldTaskEnabledList;
-}
-
-// 写入配置文件 (旧版本)
-private void WriteConfig(OneDragonFlowConfig config, string filePath)
-{
-    string json = JsonConvert.SerializeObject(config, Formatting.Indented);
-    File.WriteAllText(filePath, json);
-}
-
-
-
-
     
     #endregion
 }
