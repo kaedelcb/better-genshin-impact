@@ -2478,16 +2478,18 @@ private OneDragonFlowConfigV0? DowngradeConfig(OneDragonFlowConfig newConfig)
                     oldConfig.TaskEnabledList = oldTaskEnabledList;
                     continue;
                 }
-                else  if (property.Name == "Version" || property.Name == "Config" || property.Name == "IndexId"
-                          || property.Name == "Period" || property.Name == "SelectedPeriodList" || property.Name == "ScheduleName"
-                          || property.Name == "ResinOrder" || property.Name == "GenshinUid" || property.Name == "AccountBinding")
+                
+                 if (property.Name == "Config" || property.Name == "Config" || property.Name == "IndexId"
+                     || property.Name == "Period" || property.Name == "SelectedPeriodList" || property.Name == "ScheduleName"
+                     || property.Name == "ResinOrder" || property.Name == "GenshinUid" || property.Name == "AccountBinding")
                 {
+                    //删除这些属性不需要的参数
+                    oldProperty.SetValue(oldConfig, null);
                     continue;
                 }
-                else
-                {
-                    oldProperty.SetValue(oldConfig, property.GetValue(newConfig));// 其他属性直接复制
-                }
+
+                oldProperty.SetValue(oldConfig, property.GetValue(newConfig));// 其他属性直接复制
+
             }
         }
         return oldConfig;

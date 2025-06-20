@@ -93,7 +93,7 @@ namespace BetterGenshinImpact.Core.Config;
 [Serializable]
 public partial class OneDragonFlowConfig : ObservableObject
 {
-    // public static AllConfig Config { get; set; } = TaskContext.Instance().Config;
+     public static AllConfig Config { get; set; } = TaskContext.Instance().Config;
     
     //版本号
     [ObservableProperty]
