@@ -2408,8 +2408,7 @@ public partial class OneDragonFlowViewModel : ViewModel
 
     // 再备份整个USER文件夹到restoredFolder
     BackupDirectory(oldConfigFolder, restoredFolder);
-
-    Toast.Warning($"正在还原配置文件...", ToastLocation.TopCenter, default, 8000);
+    
     // 还原配置文件
     foreach (var configFile in Directory.GetFiles(oldConfigOneDragonFolder, "*.json", SearchOption.AllDirectories))
     {
@@ -2421,7 +2420,6 @@ public partial class OneDragonFlowViewModel : ViewModel
             var oldConfig = DowngradeConfig(newConfig);
             if (oldConfig != null)
             {
-                // 修改 restoredUserFolder 路径为 NewToOldUser\OneDragon
                 string restoredUserFolder1 = Path.Combine("NewToOldUser", "OneDragon");
                 string relativePath = Path.GetRelativePath(oldConfigOneDragonFolder, configFile);
                 string restoredFilePath = Path.Combine(restoredUserFolder1, relativePath);
@@ -2432,16 +2430,16 @@ public partial class OneDragonFlowViewModel : ViewModel
             else
             {
                 Toast.Error("还原失败", ToastLocation.TopCenter, default, 6000);
-                return; // 失败一次退出
+                return; 
             }
         }
         else
         {
             Toast.Error("反序列化新配置文件错误", ToastLocation.TopCenter, default, 6000);
-            return; // 失败一次退出
+            return;
         }
     }
-    Toast.Success("还原成功，文件在 NewToOldUser 文件夹下", ToastLocation.TopCenter, default, 10000);
+    Toast.Success("还原成功，文件在 NewToOldUser 文件夹下，请重启BGI！", ToastLocation.TopCenter, default, 10000);
 }
 
 // 备份目录及其子目录和文件
@@ -2483,7 +2481,6 @@ private OneDragonFlowConfigV0? DowngradeConfig(OneDragonFlowConfig newConfig)
                      || property.Name == "Period" || property.Name == "SelectedPeriodList" || property.Name == "ScheduleName"
                      || property.Name == "ResinOrder" || property.Name == "GenshinUid" || property.Name == "AccountBinding")
                 {
-                    //删除这些属性不需要的参数
                     oldProperty.SetValue(oldConfig, null);
                     continue;
                 }
