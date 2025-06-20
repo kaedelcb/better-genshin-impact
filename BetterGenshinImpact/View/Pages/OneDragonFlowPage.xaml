@@ -29,7 +29,7 @@
             <ColumnDefinition Width="*" MaxWidth="300" />
             <ColumnDefinition Width="2*" />
         </Grid.ColumnDefinitions>
-
+        
         <!--  左侧任务列表  -->
        <DockPanel 
            Grid.Column="0">
@@ -267,6 +267,51 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
+                        
+                        <Grid.Resources>
+                            <Storyboard x:Key="TextFadeStoryboard">
+                                <!-- 文字逐渐出现 -->
+                                <DoubleAnimation Storyboard.TargetName="ConfigTextBlock"
+                                                 Storyboard.TargetProperty="Opacity"
+                                                 From="0"
+                                                 To="1"
+                                                 Duration="0:0:1" 
+                                                 BeginTime="0:0:0" />
+                                <!-- 文字逐渐消失 -->
+                                <DoubleAnimation Storyboard.TargetName="ConfigTextBlock"
+                                                 Storyboard.TargetProperty="Opacity"
+                                                 From="1"
+                                                 To="0"
+                                                 Duration="0:0:0"
+                                                 BeginTime="0:0:3" />
+                                <!-- 文字逐渐出现 -->
+                                <DoubleAnimation Storyboard.TargetName="ConfigTextBlock"
+                                                 Storyboard.TargetProperty="Opacity"
+                                                 From="0"
+                                                 To="1"
+                                                 Duration="0:0:1" 
+                                                 BeginTime="0:0:3" />
+                                <!-- 文字逐渐消失 -->
+                                <DoubleAnimation Storyboard.TargetName="ConfigTextBlock"
+                                                 Storyboard.TargetProperty="Opacity"
+                                                 From="1"
+                                                 To="0"
+                                                 Duration="0:0:1"
+                                                 BeginTime="0:0:6" />
+                                <!-- 文字直接隐藏 -->
+                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ConfigTextBlock"
+                                                               Storyboard.TargetProperty="(UIElement.Visibility)">
+                                    <DiscreteObjectKeyFrame KeyTime="0:0:8">
+                                        <DiscreteObjectKeyFrame.Value>
+                                            <Visibility>Collapsed</Visibility>
+                                        </DiscreteObjectKeyFrame.Value>
+                                    </DiscreteObjectKeyFrame>
+                                </ObjectAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </Grid.Resources>
+
+                        
+                        
                         <TextBlock  Visibility="{Binding IsChecked, ElementName=PlanToggle, Converter={StaticResource BooleanToVisibilityConverter}}"
                                     Grid.Column="0"
                                     FontSize="16"
@@ -280,6 +325,7 @@
                                    FontWeight="Bold"
                                    VerticalAlignment="Center"
                                    Text="配置单" />
+                        
                         <TextBlock Grid.Column="1"
                                    Visibility="{Binding IsChecked, ElementName=PlanToggle, Converter={StaticResource BooleanToVisibilityRevertConverter}}"
                                    Margin="10,0,0,0"
@@ -310,12 +356,41 @@
                             </TextBlock.Style>
                         </TextBlock>
                         
+                        <TextBlock x:Name="ConfigTextBlock"
+                                   Grid.Column="2"
+                                   Margin="5,0,5,0"
+                                   FontSize="12"
+                                   FontWeight="Bold"
+                                   Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Center"
+                                   Text="切换配置单编辑页面-->"
+                                   Opacity="0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding SelectedConfig.AccountBinding}" Value="False"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Text" Value="未绑定UID"/>
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                            <TextBlock.Triggers>
+                                <EventTrigger RoutedEvent="TextBlock.Loaded">
+                                    <BeginStoryboard Storyboard="{StaticResource TextFadeStoryboard}" />
+                                </EventTrigger>
+                            </TextBlock.Triggers>
+                        </TextBlock>
                         <!-- 切换按钮 -->
                         <ui:Button
                             Grid.Column="5"
                             Icon="{ui:SymbolIcon CameraSwitch20}"
                             Margin="5,0,5,0"
                             Command="{Binding ShowAndSwitchPlanCommand}" />
+                        
                         <ui:ToggleSwitch
                             Grid.Column="4"
                             Margin="5,0,5,0"
