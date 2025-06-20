@@ -434,7 +434,7 @@
                         <TextBlock Margin="4,0,0,4"
                                    FontSize="14"
                                    Foreground="{DynamicResource SystemAccentColorPrimaryBrush}"
-                                   Text="合成树脂" />
+                                   Text="合成树脂"/>
                         
                         <ui:CardControl Margin="0,0,0,12" Icon="{ui:SymbolIcon WeatherMoon24}">
                             <ui:CardControl.Header>
