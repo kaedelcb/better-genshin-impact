@@ -78,7 +78,7 @@ public partial class ScriptGroupProject : ObservableObject
     /// <summary>
     /// 下一个从此执行标志
     /// </summary>
-    [JsonIgnore]
+    // [JsonIgnore]
     public bool? NextFlag
     {
         get => _nextFlag;

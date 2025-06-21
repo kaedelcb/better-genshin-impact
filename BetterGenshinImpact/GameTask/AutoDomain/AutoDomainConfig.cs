@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using System;
+using System.Collections.Generic;
 
 namespace BetterGenshinImpact.GameTask.AutoDomain;
 
@@ -51,4 +52,8 @@ public partial class AutoDomainConfig : ObservableObject
     // 周日奖励序号
     [ObservableProperty]
     private string _sundaySelectedValue = string.Empty;
+    
+    //树脂使用顺序
+    [ObservableProperty] private List<string> _resinOrder = new();
+
 }

@@ -40,6 +40,7 @@ using Button = Wpf.Ui.Controls.Button;
 using MessageBoxButton = System.Windows.MessageBoxButton;
 using MessageBoxResult = Wpf.Ui.Controls.MessageBoxResult;
 using TextBlock = Wpf.Ui.Controls.TextBlock;
+using  Microsoft.Extensions.DependencyInjection;
 
 namespace BetterGenshinImpact.ViewModel.Pages;
 
@@ -50,6 +51,15 @@ public partial class ScriptControlViewModel : ViewModel
     private readonly ILogger<ScriptControlViewModel> _logger = App.GetLogger<ScriptControlViewModel>();
 
     private readonly IScriptService _scriptService;
+    
+    [ObservableProperty] private Boolean _isInsetMode = false;
+
+    public static class AppPaths
+    {
+        public const string JsScripts = @"User\JsScript";
+        public const string MapTracks = @"User\AutoPathing";
+        public const string MouseScripts = @"User\KeyMouseScript";
+    }
     
     /// <summary>
     /// 配置组配置
@@ -77,6 +87,23 @@ public partial class ScriptControlViewModel : ViewModel
         _snackbarService = snackbarService;
         _scriptService = scriptService;
         ScriptGroups.CollectionChanged += ScriptGroupsCollectionChanged;
+    }
+    
+    public ScriptControlViewModel(ISnackbarService snackbarService, IScriptService scriptService,
+        ObservableCollection<ScriptGroup> scriptGroups,ScriptGroup? selectedScriptGroup,bool isInsetMode)
+    {
+        _snackbarService = snackbarService;
+        _scriptService = scriptService;
+        ScriptGroups = scriptGroups;
+        SelectedScriptGroup = selectedScriptGroup;
+        _isInsetMode = isInsetMode;
+        ScriptGroups.CollectionChanged += ScriptGroupsCollectionChanged;
+    }
+    
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<ISnackbarService, SnackbarService>();
+        services.AddTransient<ScriptControlViewModel>();
     }
 
     [RelayCommand]
@@ -107,7 +134,8 @@ public partial class ScriptControlViewModel : ViewModel
     private void ClearTasks()
     {
         // 确认？
-        var result = MessageBox.Show("是否清空所有任务？", "清空任务", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        var result = MessageBox.Show("是否清空所有任务？", "清空任务", 
+            System.Windows.MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (result != System.Windows.MessageBoxResult.Yes)
         {
             return;
@@ -453,6 +481,21 @@ public partial class ScriptControlViewModel : ViewModel
         TaskContext.Instance().Config.ScriptConfig.ScriptRepoHintDotVisible = false;
         ScriptRepoUpdater.Instance.OpenScriptRepoWindow();
     }
+    
+    [RelayCommand]
+    private void OnOpenScriptsFolder(string directoryType)
+    {
+        
+        string path = directoryType switch
+        {
+            "JS" => AppPaths.JsScripts,
+            "DT" => AppPaths.MapTracks,
+            "KM" => AppPaths.MouseScripts,
+            _ => AppPaths.JsScripts,
+        };
+    
+        Process.Start("explorer.exe", path);
+    }
 
     [RelayCommand]
     private void UpdateTasks()
@@ -576,6 +619,7 @@ public partial class ScriptControlViewModel : ViewModel
         {
             if (item.Name == str)
             {
+                Toast.Warning("新名称与旧名称相同");
                 return;
             }
 
@@ -592,6 +636,34 @@ public partial class ScriptControlViewModel : ViewModel
             }
             else
             {
+                var result = MessageBox.Show("所有配置单中名为 < " + item.Name + " > 配置组将重命名为 < " + str + " > ，是否继续？", 
+                    "重名配置组", System.Windows.MessageBoxButton.YesNo, MessageBoxImage.Question);
+                
+                if (result != System.Windows.MessageBoxResult.Yes)
+                {
+                    return;
+                }
+                
+                var ViewModel = new OneDragonFlowViewModel();
+                ViewModel.InitConfigList();
+                var configList = ViewModel.ConfigList;
+                
+               // 读取ConfigList中所有的配置单，检查每个配置单中的TaskEnabledList，如果含有和item.Name相同的配置组，则把这个TaskEnabledList中的配置组改为str
+                foreach (var config in configList)
+                {
+                    if (config.TaskEnabledList.Any(task => task.Value.Item2 == item.Name))
+                    {
+                        var oldName = item.Name;
+                        foreach (var task in config.TaskEnabledList)
+                        {
+                            if (task.Value.Item2 == oldName)
+                            {
+                                config.TaskEnabledList[task.Key] = (task.Value.Item1, str);
+                            }
+                        }
+                        ViewModel.WriteConfig(config);
+                    }
+                }
                 File.Move(Path.Combine(ScriptGroupPath, $"{item.Name}.json"), Path.Combine(ScriptGroupPath, $"{str}.json"));
                 item.Name = str;
                 if (item.NextFlag)
@@ -610,9 +682,41 @@ public partial class ScriptControlViewModel : ViewModel
         {
             return;
         }
-
+        
+        //弹窗提示"配置单中的所有同名配置组将被删除，是否继续？，取消退出，确认执行删除操作"
+        var result = MessageBox.Show("所有配置单中名为 < " + item.Name + " > 配置组将被删除，是否继续？", 
+            "删除配置组", System.Windows.MessageBoxButton.YesNo, MessageBoxImage.Question);
+        
+        if (result != System.Windows.MessageBoxResult.Yes)
+        {
+            return;
+        }
+        
         try
         {
+            var ViewModel = new OneDragonFlowViewModel();
+            ViewModel.InitConfigList();
+            var configList = ViewModel.ConfigList;
+            // 读取ConfigList中所有的配置单，检查每个配置单中的TaskEnabledList，如果含有和item.Name相同的配置组，则把这个TaskEnabledList中的配置组删除
+            foreach (var config in configList)
+            {
+                if (config.TaskEnabledList.Any(task => task.Value.Item2 == item.Name))
+                {
+                    var oldName = item.Name;
+                    foreach (var task in config.TaskEnabledList)
+                    {
+                        if (task.Value.Item2 == oldName)
+                        {
+                            config.TaskEnabledList.Remove(task.Key);
+                        }
+                    }
+                    ViewModel.WriteConfig(config);
+                }
+            }
+            
+            
+            
+            
             ScriptGroups.Remove(item);
             File.Delete(Path.Combine(ScriptGroupPath, $"{item.Name}.json"));
             _snackbarService.Show(
@@ -633,6 +737,13 @@ public partial class ScriptControlViewModel : ViewModel
                 null,
                 TimeSpan.FromSeconds(3)
             );
+        }
+        if (ScriptGroups.Count() != 0)//如果删除的是当前选中的配置组，则清空选中项
+        {
+            SelectedScriptGroup = ScriptGroups.First();
+        }else
+        {
+            SelectedScriptGroup = null;
         }
     }
 
@@ -676,7 +787,9 @@ public partial class ScriptControlViewModel : ViewModel
     [RelayCommand]
     private void OnAddShell()
     {
-        var str = PromptDialog.Prompt("执行 shell 操作存在极大风险！请勿输入你看不懂的指令！以免引发安全隐患并损坏系统！\n执行 shell 的时候，游戏可能会失去焦点","请输入需要执行的shell");
+        var str = PromptDialog.Prompt("执行 shell 操作存在极大风险！请勿输入你看不懂的指令！以免引发安全隐患并损坏系统！" +
+                                      "\n执行 shell 的时候，游戏可能会失去焦点","请输入需要执行的shell");
+        
         if (!string.IsNullOrEmpty(str))
         {
             SelectedScriptGroup?.AddProject(ScriptGroupProject.BuildShellProject(str));
@@ -689,7 +802,9 @@ public partial class ScriptControlViewModel : ViewModel
         var root = FileTreeNodeHelper.LoadDirectory<PathingTask>(MapPathingViewModel.PathJsonPath);
         var stackPanel = CreatePathingScriptSelectionPanel(root.Children);
 
-        var result = PromptDialog.Prompt("请选择需要添加的地图追踪任务", "请选择需要添加的地图追踪任务", stackPanel, new Size(500, 600));
+        var result = PromptDialog.Prompt("请选择需要添加的地图追踪任务", "请选择需要添加的地图追踪任务",
+            stackPanel, new Size(500, 600));
+        
         if (!string.IsNullOrEmpty(result))
         {
             AddSelectedPathingScripts((StackPanel)stackPanel.Content);
@@ -744,7 +859,9 @@ public partial class ScriptControlViewModel : ViewModel
 
         if (excludeSelectedFolder ?? false)
         {
-            List<string> skipFolderNames = SelectedScriptGroup?.Projects.ToList().Select(item => item.FolderName).Distinct().ToList() ?? [];
+            List<string> skipFolderNames = SelectedScriptGroup?.Projects.ToList().Select(item => 
+                item.FolderName).Distinct().ToList() ?? [];
+            
             //复制Nodes
             string jsonString = JsonSerializer.Serialize(nodes);
             var copiedNodes = JsonSerializer.Deserialize<ObservableCollection<FileTreeNode<PathingTask>>>(jsonString);
@@ -1023,7 +1140,9 @@ public partial class ScriptControlViewModel : ViewModel
             return;
         }
 
-        var toBeDeletedProjects = SelectedScriptGroup?.Projects.ToList().Where(item2 => item2.FolderName == item.FolderName);
+        var toBeDeletedProjects = SelectedScriptGroup?.Projects.ToList().Where
+            (item2 => item2.FolderName == item.FolderName);
+        
         if (toBeDeletedProjects != null)
         {
             foreach (var project in toBeDeletedProjects)
@@ -1051,7 +1170,7 @@ public partial class ScriptControlViewModel : ViewModel
         );
     }
 
-    private void ScriptGroupsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    public void ScriptGroupsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (e.NewItems != null)
         {

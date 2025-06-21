@@ -179,6 +179,7 @@
 	    <XamlRuntime>Wpf</XamlRuntime>
 	    <SubType>Designer</SubType>
 	  </Page>
+	  <Page Remove="View\Pages\OneDragonFlowPageInset.xaml" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -186,6 +187,7 @@
 	    <SubType>Code</SubType>
 	    <DependentUpon>WelcomeDialog.xaml</DependentUpon>
 	  </Compile>
+	  <Compile Remove="View\Pages\OneDragonFlowPageInset.xaml.cs" />
 	</ItemGroup>
 	
 </Project>
