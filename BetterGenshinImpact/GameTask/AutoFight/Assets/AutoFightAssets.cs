@@ -36,7 +36,9 @@ public class AutoFightAssets : BaseAssets<AutoFightAssets>
     public RecognitionObject OriginalResinCountRa;
 
     public RecognitionObject FragileResinCountRa;
-
+    // public RecognitionObject LockIconRa; // 锁定辅助图标
+    public RecognitionObject CondensedResinTopIconRa;
+    public RecognitionObject OriginalResinTopIconRa;
     public Dictionary<string, string> AvatarCostumeMap;
 
     // 联机

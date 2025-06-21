@@ -868,7 +868,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         {
             Process.Start(new ProcessStartInfo
             {
-                FileName = _configPath,
+                FileName = "User",
                 UseShellExecute = true
             });
         };
