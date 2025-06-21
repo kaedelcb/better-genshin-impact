@@ -2519,6 +2519,7 @@ public partial class OneDragonFlowViewModel : ViewModel
     {
         try
         {
+            //删除旧版本中不存在的属性
             var oldConfig = new OneDragonFlowConfigV0();
             foreach (var property in typeof(OneDragonFlowConfig).GetProperties())
             {
