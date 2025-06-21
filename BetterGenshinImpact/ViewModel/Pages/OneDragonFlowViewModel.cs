@@ -2372,17 +2372,10 @@ public partial class OneDragonFlowViewModel : ViewModel
                    );
                 
                    Directory.CreateDirectory(backupPath);
-                
-                   // 备份整个配置目录
-                   foreach (var file in Directory.GetFiles(OneDragonFlowConfigFolder))
-                   {
-                       File.Copy(
-                           file,
-                           Path.Combine(backupPath, Path.GetFileName(file)),
-                           overwrite: true
-                       );
-                   }
-                   Toast.Warning("备份配置文件到 Backups 文件夹，配置升级中...",ToastLocation.TopCenter,default,6000);
+                   // 再备份整个USER文件夹到restoredFolder
+                   BackupDirectory("User", backupPath);
+
+                   Toast.Warning("备份User文件夹到 Backups 文件夹，配置升级中...",ToastLocation.TopCenter,default,6000);
                    _hasConfigBackup = true;
                }
             }
@@ -2450,7 +2443,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         string oldConfigOneDragonFolder = Path.Combine(oldConfigFolder, "OneDragon");
         string backupFolder = "NewUserBackups";
         string restoredFolder = "NewToOldUser";
-        string restoredUserFolder = Path.Combine(restoredFolder, "User", "OneDragon");
+        string restoredUserFolder = Path.Combine(restoredFolder, "OneDragon");
 
         Directory.CreateDirectory(backupFolder);
         Directory.CreateDirectory(restoredFolder);
@@ -2469,29 +2462,34 @@ public partial class OneDragonFlowViewModel : ViewModel
         {
             var json = File.ReadAllText(configFile);
             var newConfig = JsonConvert.DeserializeObject<OneDragonFlowConfig>(json);
-            
             if (newConfig != null)
             {
                 var oldConfig = DowngradeConfig(newConfig);
-                if (oldConfig != null)
-                {
-                    string restoredUserFolder1 = Path.Combine("NewToOldUser", "OneDragon");
-                    string relativePath = Path.GetRelativePath(oldConfigOneDragonFolder, configFile);
-                    string restoredFilePath = Path.Combine(restoredUserFolder1, relativePath);
-                    Directory.CreateDirectory(Path.GetDirectoryName(restoredFilePath));
-                    WriteConfig(oldConfig, restoredFilePath);
+                // 将 oldConfig 对象转换成 JSON 字符串
+                string json2 = JsonConvert.SerializeObject(oldConfig);
 
-                }
-                else
-                {
-                    Toast.Error("还原失败", ToastLocation.TopCenter, default, 6000);
-                    return; 
-                }
-            }
-            else
-            {
-                Toast.Error("反序列化新配置文件错误", ToastLocation.TopCenter, default, 6000);
-                return;
+                // 使用 JObject 解析 JSON 字符串
+                JObject jObject = JObject.Parse(json2);
+
+                // 删除特定元素，例如 "SomeProperty"
+                jObject.Remove("AccountBinding");
+                jObject.Remove("Config");
+                jObject.Remove("IndexId");
+                jObject.Remove("Period");
+                jObject.Remove("SelectedPeriodList");
+                jObject.Remove("ScheduleName");
+                jObject.Remove("ResinOrder");
+                jObject.Remove("GenshinUid");
+                jObject.Remove("AccountBinding");
+                jObject.Remove("Version");
+                // 将修改后的 JObject 转换回 JSON 字符串
+                string json3 = jObject.ToString();
+                // 把json3写入NewToOldUser\OneDragon\文件夹下的配置文件
+                string restoredConfigFile = Path.Combine(restoredUserFolder, Path.GetFileName(configFile));
+                File.WriteAllText(restoredConfigFile, json3);
+  
+               
+                // File.WriteAllText(configFile.Replace(oldConfigFolder, restoredUserFolder), json3);
             }
         }
         Toast.Success("还原成功，文件在 NewToOldUser 文件夹下，请重启BGI！", ToastLocation.TopCenter, default, 10000);
@@ -2533,7 +2531,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                         continue;
                     }
                     
-                    if (property.Name == "Config" || property.Name == "Config" || property.Name == "IndexId"
+                    if (property.Name == "Config"  || property.Name == "IndexId"
                          || property.Name == "Period" || property.Name == "SelectedPeriodList" || property.Name == "ScheduleName"
                          || property.Name == "ResinOrder" || property.Name == "GenshinUid" || property.Name == "AccountBinding")
                     {
