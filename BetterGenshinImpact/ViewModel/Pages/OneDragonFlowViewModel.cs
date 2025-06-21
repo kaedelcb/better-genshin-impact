@@ -833,7 +833,7 @@ public partial class OneDragonFlowViewModel : ViewModel
 
         var newButton = new Button { Content = "新建计划表", Margin = new Thickness(0, 0, 10, 0) };
         var deleteButton = new Button { Content = "删除计划表" };
-        var restoreButton = new Button { Content = "还原配置单文件到旧版本", Margin = new Thickness(10, 0, 0, 0) }; // 新增按钮
+        var restoreButton = new Button { Content = "生成USER文件夹到公版BGI", Margin = new Thickness(0, 0, 0, 0) }; // 新增按钮
         var backupButton = new Button { Content = "备份User", Margin = new Thickness(10, 0, 0, 0) };
         var openUserFolderButton = new Button { Content = "打开User", Margin = new Thickness(10, 0, 0, 0) };
         
@@ -849,7 +849,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         var buttonPanel2 = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 10, 0, 0),
             Children = {restoreButton }
@@ -926,7 +926,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         
         restoreButton.Click += (sender, args) =>
         {
-            var result = MessageBox.Show("生成公版BGI配置文件！您确定要生成配置单文件旧版本吗？", "确认生成", System.Windows.MessageBoxButton.OKCancel, MessageBoxImage.Question);
+            var result = MessageBox.Show("生成公版BGI配置文件到 NewToOldUser 文件夹！确定？", "确认生成", System.Windows.MessageBoxButton.OKCancel, MessageBoxImage.Question);
             if (result == System.Windows.MessageBoxResult .OK)
             {
                 RestoreOldVersions();
@@ -2536,6 +2536,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                          || property.Name == "Period" || property.Name == "SelectedPeriodList" || property.Name == "ScheduleName"
                          || property.Name == "ResinOrder" || property.Name == "GenshinUid" || property.Name == "AccountBinding")
                     {
+                        // 这些属性在旧版本中不存在
                         oldProperty.SetValue(oldConfig, null);
                         continue;
                     }
