@@ -117,6 +117,12 @@ public partial class PathingPartyConfig : ObservableObject
     //在连续执行时是否隐藏
     [ObservableProperty]
     private bool _hideOnRepeat = false;
+
+    /// <summary>
+    /// 关闭地图追踪过程中的自动领取派遣奖励
+    /// </summary>
+    [ObservableProperty]
+    private bool _disableAutoFetchDispatch = false;  // 默认关闭
     
     //执行周期配置
     [ObservableProperty]
