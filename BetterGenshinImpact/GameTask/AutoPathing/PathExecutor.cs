@@ -233,7 +233,7 @@ public class PathExecutor
                             await HandleTeleportWaypoint(waypoint);
                             if (_lastWaypoint == null || waypoint.MapName != _lastWaypoint.MapName)
                             {
-                                Logger.LogInformation("线路切换，强制校验");
+                                // Logger.LogInformation("线路切换，强制校验");
                                 await ValidateGameWithTask(task,true);
                             }
                         }
@@ -1142,7 +1142,7 @@ public class PathExecutor
         var targetOrientation = Navigation.GetTargetOrientation(waypoint, position);
         Logger.LogDebug("朝向点，位置({x2},{y2})", $"{waypoint.GameX:F1}", $"{waypoint.GameY:F1}");
         await WaitUntilRotatedTo(targetOrientation, 2);
-        await Delay(500, ct);
+        await Delay(450, ct);
     }
 
     public DateTime moveToStartTime;
@@ -2105,8 +2105,8 @@ public class PathExecutor
                 // 自动疾跑
                 if (distance > 20 && PartyConfig.AutoRunEnabled)
                 {
-                    var dushTime = nextDistance > 90 ? 3500 : 2500;
-                    if (Math.Abs((fastModeColdTime - DateTime.UtcNow).TotalMilliseconds) > dushTime) //冷却时间2.5s，回复体力用
+                    // var dashTime = nextDistance > 90 ? 3500 : 2500;
+                    if (Math.Abs((fastModeColdTime - DateTime.UtcNow).TotalMilliseconds) > 2500) //冷却时间2.5s，回复体力用
                     {
                         fastModeColdTime = DateTime.UtcNow;
                         Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
@@ -2125,7 +2125,7 @@ public class PathExecutor
                 }
             }
 
-            await Delay(100, ct);
+            await Delay(80, ct);
             
         }
         
@@ -2209,7 +2209,7 @@ public class PathExecutor
         Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
 
         // 到达目的地后停顿一秒
-        await Delay(string.IsNullOrEmpty(_hurryOnAvatar)?1000:400, ct);
+        await Delay(string.IsNullOrEmpty(_hurryOnAvatar)?1000:300, ct);
       
     }
 

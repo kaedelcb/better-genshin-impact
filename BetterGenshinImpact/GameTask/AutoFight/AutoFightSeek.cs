@@ -849,8 +849,8 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                     var skillAra = !skills
                         ? new Rect(image2.Width * 1800 / 1920, image2.Height * 817 / 1080,
                             image2.Width * 36 / 1920, image2.Height * 17 / 1080) //药物区域
-                        : new Rect(image2.Width * 946 / 1920, image2.Height * 1007 / 1080,
-                            image2.Width * 16 / 1920, image2.Height * 5 / 1080); //血条数字
+                        : new Rect(image2.Width * 928 / 1920, image2.Height * 1006 / 1080,
+                            image2.Width * 58 / 1920, image2.Height * 8 / 1080); //血条数字 986 1014
         
                     using var mask2 = OpenCvCommonHelper.Threshold(
                         image2.DeriveCrop(skillAra).SrcMat,
@@ -863,17 +863,26 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                     using var centroids2 = new Mat();
         
                     int numLabels2 = Cv2.ConnectedComponentsWithStats(mask2, labels2, stats2, centroids2,
-                        connectivity: PixelConnectivity.Connectivity8, ltype: MatType.CV_32S);
+                        connectivity: skills? PixelConnectivity.Connectivity4:PixelConnectivity.Connectivity8, ltype: MatType.CV_32S);
         
                     logger.LogInformation("药物状态：{Skill} 状态 {Text} ：{n}",
-                         skills ? "恢复药" : "复活药", numLabels2 > 2 ? "冷却中" : "就绪", numLabels2);
+                         skills ? "结束状态" : "复活药", numLabels2 > 2 ? "冷却中" : "就绪", numLabels2);
         
                     if (numLabels2 > 2)
                     {
                         //识别到文字
-                        var replenishStringArea = image2.FindMulti(RecognitionObject.Ocr(skillAra));
-                        //如果replenishStringArea为空
-                        if (replenishStringArea.Count != 0) return Task.FromResult(true);
+                        if (skills)
+                        {
+                            // Logger.LogWarning("测试1：{t},{t2}",numLabels2,skills);
+                            return Task.FromResult(true);
+                        }
+                        else
+                        {
+                            // Logger.LogWarning("测试2：{t},{t2}",numLabels2,skills);
+                            var replenishStringArea = image2.FindMulti(RecognitionObject.Ocr(skillAra));
+                            //如果replenishStringArea为空
+                            if (replenishStringArea.Count != 0) return Task.FromResult(true);
+                        }
                     }
         
                     attempt++;

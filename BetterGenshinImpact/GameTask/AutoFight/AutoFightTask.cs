@@ -68,6 +68,8 @@ public class AutoFightTask : ISoloTask
     private static volatile bool _isExperiencePickup = false;
 
     public static bool IsTpForRecover {get; set;} = false;
+    
+    public static volatile  bool FightEndTotoly = false;
 
     // 战斗点位
     public static WaypointForTrack? FightWaypoint  {get; set;} = null;
@@ -537,8 +539,9 @@ public class AutoFightTask : ISoloTask
             try
             {
                 FightStatusFlag = true;
+                FightEndTotoly = false;
                 
-                while (!cts2.Token.IsCancellationRequested)
+                while (!cts2.Token.IsCancellationRequested && !FightEndTotoly)
                 {
                    // 所有战斗角色都可以被取消
                     #region 本次战斗的跳过战斗判定
@@ -857,6 +860,7 @@ public class AutoFightTask : ISoloTask
                             TaskControl.Logger.LogInformation(AutoFightSeek.RotationCount >= rotationLimit ? "旋转次数达到上限，战斗结束" : "战斗超时结束");
                             fightEndFlag = true;
                             timeOutFlag = true;
+                            FightEndTotoly  = true;
                             break;
                         }
 
@@ -877,7 +881,7 @@ public class AutoFightTask : ISoloTask
                         #region check动作触发战斗结束检测
                         if (command.Method == Method.Check)
                         {
-                            fightEndFlag = await CheckFightFinish(delayTime, detectDelayTime);
+                            fightEndFlag = await CheckFightFinish(delayTime, detectDelayTime,cts2.Token,avatar);
                         }
                         #endregion
 
@@ -1342,11 +1346,15 @@ public class AutoFightTask : ISoloTask
                        IsYellow(pixelValue2.Item2, pixelValue2.Item1,
                            pixelValue2.Item0));
         }
+
+        var aa = AutoFightSkill.MedicinalCdAsync(Logger, true, 1, ct).Result;
         
-        if (!paiMon2 && !AutoFightSkill.MedicinalCdAsync(Logger, true, 1,ct).Result)
+        if (!paiMon2 && !aa)
         {
+            // Logger.LogWarning("测试3：{t},{t2}",paiMon2,aa);
             TaskControl.Logger.LogInformation("{t}：识别到战斗结束",_taskParam.FinishDetectConfig.EndModel? "快速模式" : "默认模式");
             //取消正在进行的换队
+            FightEndTotoly  = true;
             Simulation.SendInput.SimulateAction(GIActions.OpenPartySetupScreen);
             return true;
         }
@@ -1629,7 +1637,7 @@ public class AutoFightTask : ISoloTask
                                             }
                                             else
                                             {
-                                                bool isSimilar = IsPixelSimilar(bloodtRect.SrcMat.At<Vec3b>(1, 1), bloodtRect.SrcMat.At<Vec3b>(3, 3), 2);
+                                                bool isSimilar = IsPixelSimilar(bloodtRect.SrcMat.At<Vec3b>(1, 1), bloodtRect.SrcMat.At<Vec3b>(2, 2), 3);
                                                 // Logger.LogWarning("自动吃药：检测到血量颜色异常，是否与之前的血量颜色相似：{isSimilar}", isSimilar);
                                                 if (isSimilar)
                                                 {
