@@ -26,6 +26,11 @@ on:
         description: '上传到 Steambird'
         required: true
         default: false
+      only-build-portable:
+        type: boolean
+        description: '仅构建便携版（跳过安装程序构建）'
+        required: true
+        default: true
 
 jobs:
   # Add validation job to check version format
@@ -38,18 +43,19 @@ jobs:
         id: set-version
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # Validate manual input version format
-            if ! [[ "${{ github.event.inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
-              echo "❌ 错误：版本格式必须符合语义化版本规范 (例如: 1.2.3, 1.2.3-alpha, 1.2.3+build.123)"
-              exit 1
-            fi
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-            echo "✨ 手动触发构建，版本号：${{ github.event.inputs.version }}"
+              # 宽松验证：非空且不含空格即可
+              VERSION="${{ github.event.inputs.version }}"
+              if [[ -z "$VERSION" ]] || [[ "$VERSION" =~ [[:space:]] ]]; then
+                  echo "❌ 错误：版本号不能为空或包含空格"
+                  exit 1
+              fi
+              echo "version=$VERSION" >> $GITHUB_OUTPUT
+              echo "✨ 手动触发构建，版本号：$VERSION"
           else
-            # Extract version from tag name (remove 'v' prefix)
-            VERSION=${GITHUB_REF#refs/tags/v}
-            echo "version=${VERSION}" >> $GITHUB_OUTPUT
-            echo "🏷️ 从 tag 触发构建，版本号：${VERSION}"
+              # Extract version from tag name (remove 'v' prefix)
+              VERSION=${GITHUB_REF#refs/tags/v}
+              echo "version=${VERSION}" >> $GITHUB_OUTPUT
+              echo "🏷️ 从 tag 触发构建，版本号：${VERSION}"
           fi
 
   build_web_map_editor:
@@ -193,6 +199,7 @@ jobs:
           path: dist/BetterGI_*.7z
 
   build_installer:
+    if: github.event.inputs.only-build-portable == 'false'
     runs-on: windows-latest
     needs: [validate, build_dist]
     steps:
@@ -309,6 +316,7 @@ jobs:
           path: dist/BetterGI/BetterGI.update.exe
 
   build_setup:
+    if: github.event.inputs.only-build-portable == 'false'
     runs-on: windows-latest
     needs: [validate, build_dist]
     steps:
@@ -346,8 +354,12 @@ jobs:
 
   # 创建 GitHub Release
   create_release:
-    if: github.event.inputs.create-release == 'true'
     needs: [validate, build_dist, build_installer]
+    if: |
+      always() &&
+      github.event.inputs.create-release == 'true' &&
+      !failure() &&
+      !cancelled()
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -363,7 +375,7 @@ jobs:
           name: BetterGI v${{ needs.validate.outputs.version }}
           draft: true
           prerelease: ${{ contains(needs.validate.outputs.version, '-') }}
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
           files: |
             artifacts/BetterGI_7z/*.7z
             artifacts/BetterGI_Install/*.exe
