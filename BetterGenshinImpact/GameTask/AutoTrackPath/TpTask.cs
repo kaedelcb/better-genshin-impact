@@ -127,8 +127,7 @@ public class TpTask
         // 提前调整至恰当的缩放以更快的传送
         if (_tpConfig.MapZoomEnabled || _tpConfig.MapMoveStepDivisor)
         {
-            using var ra3 = CaptureToRectArea();
-            double currentZoomLevel = GetBigMapZoomLevel(ra3);
+            double currentZoomLevel = await GetBigMapZoomLevelForStatueOfTheSevenAsync();
             if (currentZoomLevel > DisplayTpPointZoomLevel)
             {
                 await AdjustMapZoomLevel(currentZoomLevel, DisplayTpPointZoomLevel);
@@ -173,6 +172,33 @@ public class TpTask
         }
 
         await Delay((int)(_tpConfig.HpRestoreDuration * 1000), ct);
+    }
+
+    private async Task<double> GetBigMapZoomLevelForStatueOfTheSevenAsync()
+    {
+        const int retryTimes = 20;
+        Exception? lastException = null;
+
+        for (int i = 0; i < retryTimes; i++)
+        {
+            try
+            {
+                using var region = CaptureToRectArea();
+                var scale = Bv.GetBigMapScale(region);
+                return (-5 * scale) + 6;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                lastException = ex;
+                if (i < retryTimes - 1)
+                {
+                    TaskControl.Logger.LogWarning("获取七天神像传送前大地图缩放级别失败，重试中...（{Attempt}/{RetryTimes}）：{Message}", i + 1, retryTimes, ex.Message);
+                    await Delay(100, ct);
+                }
+            }
+        }
+
+        throw new InvalidOperationException("多次重试后，获取七天神像传送前大地图缩放级别失败", lastException);
     }
 
     /// <summary>
