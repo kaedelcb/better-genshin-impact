@@ -156,6 +156,18 @@ public partial class PathingPartyConfig : ObservableObject
     
     [ObservableProperty]
     private bool _mwkFlyEnabled = true;
+
+    /// <summary>
+    /// 玛薇卡跳飞开关
+    /// </summary>
+    [ObservableProperty]
+    private bool _mwkJumpFlyEnabled = true;
+
+    /// <summary>
+    /// 玛薇卡跳飞间隔（秒）
+    /// </summary>
+    [ObservableProperty]
+    private double _mwkJumpFlyIntervalSeconds = 1.4;
     
     [ObservableProperty]
     private string? _recoverAvatarIndex = null;

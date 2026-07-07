@@ -25,6 +25,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Recognition.OCR;
+using BetterGenshinImpact.GameTask.AutoFight.Script;
 using BetterGenshinImpact.GameTask.AutoPathing.Suspend;
 using BetterGenshinImpact.GameTask.Common;
 using Vanara.PInvoke;
@@ -269,6 +270,102 @@ public class PathExecutor
 
     private DateTime _elementalSkillLastUseTime = DateTime.MinValue;
     private DateTime _useGadgetLastUseTime = DateTime.MinValue;
+
+    private bool _isJumpFlyActive = false;
+    private DateTime _lastJumpFlyTime = DateTime.MinValue;
+    private bool _isJumpFlyExecuting = false;
+
+    private async Task<bool> ExecuteJumpFly(double distance, CancellationToken ct)
+    {
+        if (_isJumpFlyExecuting)
+        {
+            return false;
+        }
+        _isJumpFlyExecuting = true;
+        try
+        {
+            var avatar = _combatScenes?.SelectAvatar(1);
+        if (avatar?.Name != "玛薇卡")
+        {
+            Logger.LogInformation("自动赶路：角色不为玛薇卡，退出玛薇卡跳飞");
+            _isJumpFlyActive = false;
+            return true;
+        }
+
+        using var climbCheckRegion = CaptureToRectArea();
+        if (Bv.GetMotionStatus(climbCheckRegion) == MotionStatus.Climb)
+        {
+            return true;
+        }
+
+        var jumpFlyThreshold = Math.Max((int)(PartyConfig.Distance * 1.5), 55);
+        if (distance <= jumpFlyThreshold)
+        {
+            return true;
+        }
+
+        var interval = PartyConfig.MwkJumpFlyIntervalSeconds > 0 ? PartyConfig.MwkJumpFlyIntervalSeconds : 2;
+        var remainingMs = (_lastJumpFlyTime + TimeSpan.FromSeconds(interval) - DateTime.UtcNow).TotalMilliseconds;
+        if (remainingMs > 100)
+        {
+            return false;
+        }
+        if (remainingMs > 0)
+        {
+            await Delay((int)remainingMs, ct);
+        }
+
+        using var preJumpRegion = CaptureToRectArea();
+        var preJumpRa = preJumpRegion.DeriveCrop(AutoFightAssets.Instance.ECooldownRect);
+        using var preJumpRaWhite = OpenCvCommonHelper.InRangeHsv(preJumpRa.SrcMat, new Scalar(0, 0, 235), new Scalar(0, 25, 255));
+        var preJumpCdText = OcrFactory.Paddle.OcrWithoutDetector(preJumpRaWhite);
+        var cd = StringUtils.TryParseDouble(preJumpCdText);
+        if (!string.IsNullOrEmpty(preJumpCdText) && cd >= 1 && !(preJumpCdText.Length == 2 && preJumpCdText.StartsWith("0")))
+        {
+            Logger.LogInformation("自动赶路：检测到技能CD{cd}，退出玛薇卡跳飞", preJumpCdText);
+            _isJumpFlyActive = false;
+            return true;
+        }
+
+        Logger.LogInformation("自动赶路：玛薇卡跳飞赶路 距离下个节点距离 {d}", Math.Round((double)distance));
+        await Delay(50, ct);
+        Simulation.SendInput.SimulateAction(GIActions.Jump);
+        await Delay(150, ct);
+        Simulation.SendInput.SimulateAction(GIActions.Jump);
+        await Delay(100, ct);
+        Simulation.SendInput.SimulateAction(GIActions.Jump);
+        await Delay(10, ct);
+        Simulation.SendInput.SimulateAction(GIActions.Jump);
+        await Delay(150, ct);
+        _lastJumpFlyTime = DateTime.UtcNow;
+
+        using var jumpCheckRegion = CaptureToRectArea();
+        if (Bv.GetMotionStatus(jumpCheckRegion) == MotionStatus.Fly)
+        {
+            Logger.LogInformation("自动赶路：异常进入飞行姿态，退出玛薇卡跳飞");
+            Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+            await Delay(300, ct);
+            for (int i = 0; i < 5; i++)
+            {
+                using var retryRegion = CaptureToRectArea();
+                if (Bv.GetMotionStatus(retryRegion) == MotionStatus.Fly)
+                {
+                    Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+                    await Delay(300, ct);
+                }
+                else break;
+            }
+            _isJumpFlyActive = false;
+            return true;
+        }
+
+        return false;
+        }
+        finally
+        {
+            _isJumpFlyExecuting = false;
+        }
+    }
 
     private const int RetryTimes = 2;
     private int _inTrap = 0;
@@ -2972,7 +3069,7 @@ public class PathExecutor
 
                     hurryOnLogo = false; 
               
-                    if(num%2 == 1)Logger.LogInformation("自动赶路：{t} 赶路...{t2}",avatar.Name,Math.Round(distance));
+                    if(num%2 == 1 && !_isJumpFlyActive)Logger.LogInformation("自动赶路：{t} 赶路...{t2}",avatar.Name,Math.Round(distance));
                     if (avatar.Name == "玛薇卡") //连续点按E类型
                     {
                         // 获取两个点的颜色值
@@ -2997,6 +3094,25 @@ public class PathExecutor
                                 await Delay(300, ct);
                                 Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
                                 await Delay(700, ct);
+
+                                if (PartyConfig.MwkJumpFlyEnabled)
+                                {
+                                    _isJumpFlyActive = true;
+                                    Logger.LogInformation("自动赶路：进入玛薇卡跳飞状态");
+                                }
+
+                                // OCR 读取 CD 并记录到 ESkillCdTracker（内部兜底处理）
+                                using var cdRegion = CaptureToRectArea();
+                                var eRa = cdRegion.DeriveCrop(AutoFightAssets.Instance.ECooldownRect);
+                                using var eRaWhite = OpenCvCommonHelper.InRangeHsv(eRa.SrcMat, new Scalar(0, 0, 235), new Scalar(0, 25, 255));
+                                var text = OcrFactory.Paddle.OcrWithoutDetector(eRaWhite);
+                                var cd = StringUtils.TryParseDouble(text);
+                                ESkillCdTracker.Record("玛薇卡", cd);
+                                if (cd <= 0)
+                                {
+                                    ESkillCdTracker.ApplyFallback("玛薇卡");
+                                }
+
                                 // Simulation.SendInput.SimulateAction(GIActions.SprintMouse, KeyType.KeyDown);
                                 // await Delay(400, ct);
                                 
@@ -3097,14 +3213,20 @@ public class PathExecutor
                                     {
                                         if (waypoint.MoveMode == MoveModeEnum.Dash.Code)
                                         {
-                                            Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
+                                            if (!_isJumpFlyActive || await ExecuteJumpFly(distance, ct))
+                                            {
+                                                Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
+                                            }
                                         }
                                         else if (waypoint.MoveMode == MoveModeEnum.Run.Code)
                                         {
                                             runCount++;
                                             if (runCount < 5)
                                             {
-                                                Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
+                                                if (!_isJumpFlyActive || await ExecuteJumpFly(distance, ct))
+                                                {
+                                                    Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
+                                                }
                                             }
                                         }
                                         else if(waypoint.MoveMode == MoveModeEnum.Fly.Code && isFlyingMwk)
@@ -3121,7 +3243,7 @@ public class PathExecutor
                                                 _ => 0 
                                             };
 
-                                            Logger.LogInformation("自动赶路：{t} 飞行 {t2} ms 距离 {t3}","玛薇卡", flyTime,Math.Round(distance));
+                                            if (!_isJumpFlyActive) Logger.LogInformation("自动赶路：{t} 飞行 {t2} ms 距离 {t3}","玛薇卡", flyTime,Math.Round(distance));
                                             
                                             if (flyTime > 0)
                                             {
@@ -3591,7 +3713,7 @@ public class PathExecutor
             }
 
             // 只有设置为run才会一直疾跑
-            if (waypoint.MoveMode == MoveModeEnum.Run.Code)
+            if (waypoint.MoveMode == MoveModeEnum.Run.Code && !_isJumpFlyActive)
             {
                 if (distance > ((waypoint.Action == ActionEnum.Fight.Code ? 5 :20))!= fastMode) // 距离大于20时可以使用疾跑/自由泳
                 {
@@ -3613,76 +3735,93 @@ public class PathExecutor
             }
             else if (waypoint.MoveMode == MoveModeEnum.Dash.Code)
             {
-                if (distance > (waypoint.Action == ActionEnum.Fight.Code ? 5 : (!hurryOnLogo ? 35 : 20))) // 距离大于25时可以使用疾跑
+                if (!_isJumpFlyActive || await ExecuteJumpFly(distance, ct))
                 {
-                    if (Math.Abs((fastModeColdTime - DateTime.UtcNow).TotalMilliseconds) > 1000) //冷却一会
+                    if (distance > (waypoint.Action == ActionEnum.Fight.Code ? 5 : (!hurryOnLogo ? 35 : 20))) // 距离大于25时可以使用疾跑
                     {
-                        fastModeColdTime = DateTime.UtcNow;
-                        if (!hurryOnLogo && dushed)
+                        if (Math.Abs((fastModeColdTime - DateTime.UtcNow).TotalMilliseconds) > 1000) //冷却一会
                         {
-                            dushed = false;
-                            Task.Run(async () =>
+                            fastModeColdTime = DateTime.UtcNow;
+                            if (!hurryOnLogo && dushed)
                             {
-                                Simulation.SendInput.SimulateAction(GIActions.SprintMouse, KeyType.KeyDown);
-                                await Delay(200, ct);
-                                Simulation.SendInput.SimulateAction(GIActions.SprintMouse, KeyType.KeyUp);
-                                dushed = true;
-                            }, ct);
-                        }
-                        else
-                        {
-                            Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
+                                dushed = false;
+                                Task.Run(async () =>
+                                {
+                                    Simulation.SendInput.SimulateAction(GIActions.SprintMouse, KeyType.KeyDown);
+                                    await Delay(200, ct);
+                                    Simulation.SendInput.SimulateAction(GIActions.SprintMouse, KeyType.KeyUp);
+                                    dushed = true;
+                                }, ct);
+                            }
+                            else
+                            {
+                                Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
+                            }
                         }
                     }
                 }
             }
             else if (waypoint.MoveMode != MoveModeEnum.Climb.Code) //否则自动短疾跑
             {
-                // 使用 E 技能
-                if (distance > 10 && !string.IsNullOrEmpty(PartyConfig.GuardianAvatarIndex) &&
-                    double.TryParse(PartyConfig.GuardianElementalSkillSecondInterval, out var s))
+                if (_isJumpFlyActive)
                 {
-                    if (s < 1)
+                    await ExecuteJumpFly(distance, ct);
+                }
+                if (!_isJumpFlyActive)
+                {
+                    // 使用 E 技能
+                    if (distance > 10 && !string.IsNullOrEmpty(PartyConfig.GuardianAvatarIndex) &&
+                        double.TryParse(PartyConfig.GuardianElementalSkillSecondInterval, out var s))
                     {
-                        Logger.LogWarning("元素战技冷却时间设置太短，不执行！");
-                        return;
-                    }
-
-                    var ms = s * 1000;
-                    if ((DateTime.UtcNow - _elementalSkillLastUseTime).TotalMilliseconds > ms)
-                    {
-                        // 可能刚切过人在冷却时间内
-                        if (num <= 5 && (!string.IsNullOrEmpty(PartyConfig.MainAvatarIndex) &&
-                                         PartyConfig.GuardianAvatarIndex != PartyConfig.MainAvatarIndex))
+                        if (s < 1)
                         {
-                            await Delay(800, ct); // 总共1s
+                            Logger.LogWarning("元素战技冷却时间设置太短，不执行！");
+                            return;
                         }
 
-                        await UseElementalSkill();
-                        _elementalSkillLastUseTime = DateTime.UtcNow;
-                    }
-                }
+                        var ms = s * 1000;
+                        if ((DateTime.UtcNow - _elementalSkillLastUseTime).TotalMilliseconds > ms)
+                        {
+                            // 可能刚切过人在冷却时间内
+                            if (num <= 5 && (!string.IsNullOrEmpty(PartyConfig.MainAvatarIndex) &&
+                                             PartyConfig.GuardianAvatarIndex != PartyConfig.MainAvatarIndex))
+                            {
+                                await Delay(800, ct); // 总共1s
+                            }
 
-                // 自动疾跑
-                if (distance > 20 && PartyConfig.AutoRunEnabled)
-                {
-                    // var dashTime = nextDistance > 90 ? 3500 : 2500;
-                    if (Math.Abs((fastModeColdTime - DateTime.UtcNow).TotalMilliseconds) > 2500) //冷却时间2.5s，回复体力用
+                            await UseElementalSkill();
+                            _elementalSkillLastUseTime = DateTime.UtcNow;
+                        }
+                    }
+
+                    // 自动疾跑
+                    if (distance > 20 && PartyConfig.AutoRunEnabled)
                     {
-                        fastModeColdTime = DateTime.UtcNow;
-                        Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
+                        // var dashTime = nextDistance > 90 ? 3500 : 2500;
+                        if (Math.Abs((fastModeColdTime - DateTime.UtcNow).TotalMilliseconds) > 2500) //冷却时间2.5s，回复体力用
+                        {
+                            fastModeColdTime = DateTime.UtcNow;
+                            Simulation.SendInput.SimulateAction(GIActions.SprintMouse);
+                        }
                     }
                 }
             }
 
             // 使用小道具
-            if (PartyConfig.UseGadgetIntervalMs > 0)
+            if (_isJumpFlyActive)
             {
-                if ((DateTime.UtcNow - _useGadgetLastUseTime).TotalMilliseconds > PartyConfig.UseGadgetIntervalMs)
+                await ExecuteJumpFly(distance, ct);
+            }
+            if (!_isJumpFlyActive)
+            {
+                if (PartyConfig.UseGadgetIntervalMs > 0)
                 {
-                    Simulation.ReleaseAllKey();
-                    Simulation.SendInput.SimulateAction(GIActions.QuickUseGadget);
-                    _useGadgetLastUseTime = DateTime.UtcNow;
+                    if ((DateTime.UtcNow - _useGadgetLastUseTime).TotalMilliseconds > PartyConfig.UseGadgetIntervalMs)
+                    {
+                        Simulation.ReleaseAllKey();
+                        Simulation.SendInput.SimulateAction(GIActions.QuickUseGadget);
+                        _useGadgetLastUseTime = DateTime.UtcNow;
+                    }
                 }
             }
 
