@@ -182,6 +182,16 @@ public class Avatar
     {
         if (!AutoFightTask.IsTpForRecover && Bv.IsInRevivePrompt(region))
         {
+            // 关闭自动吃药时，直接关闭弹窗去神像（同公版逻辑）
+            if (!TaskContext.Instance().Config.AutoEatConfig.Enabled)
+            {
+                Logger.LogWarning("检测到复苏界面，自动吃药已关闭，前往七天神像复活");
+                Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                Sleep(600, ct);
+                TpForRecover(ct, new RetryException("检测到复苏界面，前往七天神像复活"));
+                return;
+            }
+
             // AutoEatCount >= MaxRecoverAttempts 表示吃药超额，直接去七天神像
             if (AutoEatRecoveryDecisions.ShouldGoStatue(PathingConditionConfig.AutoEatCount))
             {
