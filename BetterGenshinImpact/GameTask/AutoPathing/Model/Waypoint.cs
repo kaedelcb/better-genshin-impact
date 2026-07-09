@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
@@ -71,4 +71,10 @@ public class Waypoint
     /// 老 JSON 保持 null，行为完全不变。
     /// </summary>
     public string? SyncPointId { get; set; }
+
+    /// <summary>
+    /// 当前路径点禁用赶路的角色列表。
+    /// null = 退到全局配置；空数组 = 不禁用任何角色；非空 = 禁用列表中的角色的赶路分支。
+    /// </summary>
+    public List<string>? DisabledHurryAvatars { get; set; }
 }

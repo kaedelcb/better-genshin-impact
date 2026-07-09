@@ -60,5 +60,10 @@ public class PathingTaskInfo
     
     
     public List<MaterialInfo> Items { get; set; } = [];
-    
+
+    /// <summary>
+    /// 全局禁用赶路的角色名称列表，匹配的角色不会进入其赶路分支。
+    /// waypoint 级别的 DisabledHurryAvatars 可覆盖此设置。
+    /// </summary>
+    public List<string>? DisabledHurryAvatars { get; set; }
 }

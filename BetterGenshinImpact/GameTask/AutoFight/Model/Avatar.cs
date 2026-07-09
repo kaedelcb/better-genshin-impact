@@ -295,17 +295,26 @@ public class Avatar
     /// </summary>
     public static bool SwimmingConfirm(Region region)
     {
-        using var regionMat = region.ToImageRegion().DeriveCrop(1819, 1028, 9, 7);
-        using var mask = OpenCvCommonHelper.Threshold(regionMat.SrcMat, 
-            new Scalar(242, 223, 39),new Scalar(255, 233, 44));// new Scalar(242, 223, 39),new Scalar(255, 233, 44));
-        using var labels = new Mat();
-        using var stats = new Mat();
-        using var centroids = new Mat();
+        var fullRegion = region.ToImageRegion();
+        bool ownRegion = fullRegion != region; // ToImageRegion 对 ImageRegion 返回自身，不 dispose
+        try
+        {
+            using var regionMat = fullRegion.DeriveCrop(1819, 1028, 9, 7);
+            using var mask = OpenCvCommonHelper.Threshold(regionMat.SrcMat,
+                new Scalar(242, 223, 39),new Scalar(255, 233, 44));// new Scalar(242, 223, 39),new Scalar(255, 233, 44));
+            using var labels = new Mat();
+            using var stats = new Mat();
+            using var centroids = new Mat();
 
-        var numLabels = Cv2.ConnectedComponentsWithStats(mask, labels, stats, centroids,
-            connectivity: PixelConnectivity.Connectivity4, ltype: MatType.CV_32S);
+            var numLabels = Cv2.ConnectedComponentsWithStats(mask, labels, stats, centroids,
+                connectivity: PixelConnectivity.Connectivity4, ltype: MatType.CV_32S);
 
-        return numLabels > 1;
+            return numLabels > 1;
+        }
+        finally
+        {
+            if (ownRegion) fullRegion.Dispose();
+        }
     }
 
     /// <summary>
@@ -1201,6 +1210,8 @@ public class Avatar
                     ManualSkillCd = -1;
                     var cdRounded = Math.Round(DateTime.UtcNow.Subtract(LastSkillTime).TotalSeconds, 2);
                     Logger.LogInformation("{Name} 元素战技，技能cd:{Cd} 秒", Name, cdRounded > 0 && cdRounded <= 16 ? cdRounded : "未更新");
+                    ESkillCdTracker.Record(Name, cdRounded > 0 && cdRounded <= 16 ? cdRounded : 0);
+                    ESkillCdTracker.ApplyFallback(Name);
                 }
                 Sleep(150, Ct);
             }
@@ -1226,11 +1237,10 @@ public class Avatar
                     recordedCd = ESkillCdTracker.ApplyFallback(Name);
                 }
             
-                if (cd > 0)
+                if (recordedCd > 0)
                 {
                     Logger.LogInformation(hold ? "{Name} 长按元素战技，cd:{Cd} 秒" : "{Name} 点按元素战技，cd:{Cd} 秒", Name,
-                        Math.Round(cd, 2));
-                    return;
+                        Math.Round(recordedCd, 2));
                 } 
             }
         }
@@ -1845,57 +1855,6 @@ public class Avatar
                 break;
             default:
                 Simulation.SendInput.Keyboard.KeyUp(vk);
-                if (vk == User32.VK.VK_E)
-                {
-                    if (Monitor.TryEnter(SkillCheckLock))
-                    {
-                        try
-                        {
-                            Task.Run(() =>
-                            {
-                                Thread.Sleep(200);
-                                double cd = 0;
-                                var cooldownDetected = false;
-
-                                for (var attempt = 0; attempt < 4; attempt++)
-                                {
-                                    using var region = CaptureToRectArea();
-                                    cd = AfterUseSkill(region);
-                                    region.Dispose();
-
-                                    if (cd > 0)
-                                    {
-                                        cooldownDetected = true;
-                                        break;
-                                    }
-
-                                    if (attempt < 3)
-                                    {
-                                        Thread.Sleep(100);
-                                    }
-                                }
-
-                                if (cooldownDetected)
-                                {
-                                    Logger.LogInformation("{Name} 元素战技，cd:{Cooldown} 秒",
-                                        Name, Math.Round(cd, 2));
-                                }
-                                else
-                                {
-                                    Logger.LogWarning("{Name} 战技cd未更新", Name);
-                                }
-                            },Ct);
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.LogError(ex, "元素战技检测异常");
-                        }
-                        finally
-                        {
-                            Monitor.Exit(SkillCheckLock);
-                        }
-                    }
-                }
                 break;
         }
     }
@@ -1949,57 +1908,6 @@ public class Avatar
                 break;
             default:
                 Simulation.SendInput.Keyboard.KeyPress(vk);
-                if (vk == User32.VK.VK_E)
-                {
-                    if (Monitor.TryEnter(SkillCheckLock))
-                    {
-                        try
-                        {
-                            Task.Run(() =>
-                            {
-                                Thread.Sleep(200);
-                                double cd = 0;
-                                var cooldownDetected = false;
-
-                                for (var attempt = 0; attempt < 4; attempt++)
-                                {
-                                    using var region = CaptureToRectArea();
-                                    cd = AfterUseSkill(region);
-                                    region.Dispose();
-
-                                    if (cd > 0)
-                                    {
-                                        cooldownDetected = true;
-                                        break;
-                                    }
-
-                                    if (attempt < 3)
-                                    {
-                                        Thread.Sleep(100);
-                                    }
-                                }
-
-                                if (cooldownDetected)
-                                {
-                                    Logger.LogInformation("{Name} 元素战技，cd:{Cooldown} 秒",
-                                        Name, Math.Round(cd, 2));
-                                }
-                                else
-                                {
-                                    Logger.LogWarning("{Name} 战技cd未更新", Name);
-                                }
-                            },Ct);
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.LogError(ex, "元素战技检测异常");
-                        }
-                        finally
-                        {
-                            Monitor.Exit(SkillCheckLock);
-                        }
-                    }
-                }
                 break;
         }
     }

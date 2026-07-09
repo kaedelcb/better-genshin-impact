@@ -1,4 +1,4 @@
-﻿using BetterGenshinImpact.GameTask.Common.Map;
+using BetterGenshinImpact.GameTask.Common.Map;
 using System;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
 using BetterGenshinImpact.GameTask.AutoPathing.Model.Enum;
@@ -50,6 +50,7 @@ public class WaypointForTrack : Waypoint
         // route-variant-sync-by-logical-id spec / R3：透传逻辑同步点标记，
         // 使手动模式 BuildSyncPointMapManual 能从 WaypointForTrack 读到 SyncPointId。
         SyncPointId = waypoint.SyncPointId;
+        DisabledHurryAvatars = waypoint.DisabledHurryAvatars;
         GameX = waypoint.X;
         GameY = waypoint.Y;
         MapName = mapName;

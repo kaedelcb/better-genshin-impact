@@ -141,9 +141,16 @@ public partial class PathingPartyConfig : ObservableObject
     
     [ObservableProperty]
     private int _distance = 45;
+
+    /// <summary>
+    /// 接近停车距离，到达此距离时触发接近逻辑（下车/切人/退出赶路状态）。
+    /// 强制小于等于 <see cref="Distance"/>，越界时自动使用 Distance 的值。
+    /// </summary>
+    [ObservableProperty]
+    private int _approachStopDistance = 25;
     
     [JsonIgnore]
-    public List<string> HurryOnAvatarList { get; } = ["","自动","玛薇卡","瓦雷莎","希诺宁"];
+    public List<string> HurryOnAvatarList { get; } = ["","自动","玛薇卡","闲云","桑多涅","恰斯卡","流浪者","伊法","希诺宁","瓦雷莎"];
     
     [JsonIgnore]
     public List<string> TravelModeList { get; } = ["精准靠近","连续赶路"];
@@ -154,8 +161,26 @@ public partial class PathingPartyConfig : ObservableObject
     [ObservableProperty]
     private string _travelMode = "精准靠近";
     
+    /// <summary>
+    /// 接近节点时切人步行（火神同款），适用于除闲云外所有角色
+    /// </summary>
+    [ObservableProperty]
+    private bool _switchToWalkEnabled = false;
+    
     [ObservableProperty]
     private bool _mwkFlyEnabled = true;
+
+    /// <summary>
+    /// 玛薇卡跳飞开关
+    /// </summary>
+    [ObservableProperty]
+    private bool _mwkJumpFlyEnabled = true;
+
+    /// <summary>
+    /// 玛薇卡跳飞间隔（秒）
+    /// </summary>
+    [ObservableProperty]
+    private double _mwkJumpFlyIntervalSeconds = 1.4;
     
     [ObservableProperty]
     private string? _recoverAvatarIndex = null;
