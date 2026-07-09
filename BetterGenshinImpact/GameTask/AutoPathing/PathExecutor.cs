@@ -3491,50 +3491,44 @@ public class PathExecutor
                             PathingConditionConfig.AutoEatCount = 3;
                             AutoFightTask.RecoverCount = 3;
                             
-                            if (_inTrap > 0)
+                            // 第 3 次卡死 → 放弃路线
+                            if (_inTrap >= 2)
                             {
                                 throw new RetryException("此路线出现3次卡死，重试一次路线或放弃此路线！");
                             }
                             
+                            // 简单脱困：i=1 按 S(后退)，i=2 按 A(左移)，同时连点空格+X，持续 1 秒
+                            _inTrap++;
+                            var escapeKey = _inTrap == 1 ? GIActions.MoveBackward : GIActions.MoveLeft;
+                            var escapeName = _inTrap == 1 ? "后退(S)" : "左移(A)";
+                            Logger.LogWarning("疑似卡死，第{InTrap}次脱困：按住W+{EscapeName}，连点空格+X", _inTrap, escapeName);
+                            
+                            // 停走 + 取消攀爬
                             Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                             Simulation.SendInput.SimulateAction(GIActions.Drop);
-                            await Delay(1000, ct);
-                            Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
-                            Simulation.SendInput.SimulateAction(GIActions.Jump);
-                            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
                             
-                            if (_lastWaypoint is not null && _inTrap == 0 && !_faceToMark)
+                            // 按住 W + 方向键
+                            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+                            Simulation.SendInput.SimulateAction(escapeKey, KeyType.KeyDown);
+                            
+                            // 1 秒内连点 空格(Jump) + X(Drop)
+                            var escapeStart = DateTime.UtcNow;
+                            while ((DateTime.UtcNow - escapeStart).TotalMilliseconds < 1000)
                             {
-                                _faceToMark = true;
-                                Logger.LogWarning("尝试朝向上一个节点...");
-                                Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
-                                Simulation.SendInput.SimulateAction(GIActions.Drop);
-                                await Delay(500, ct);
-                                Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
                                 Simulation.SendInput.SimulateAction(GIActions.Jump);
-                                
-                                await FaceTo(_lastWaypoint);
-                                Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
-                                await Delay(1500, ct);
-                                await FaceTo(waypoint);
-                                await Delay(500, ct);
-                                Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
+                                await Delay(80, ct);
                                 Simulation.SendInput.SimulateAction(GIActions.Drop);
-                                Simulation.SendInput.SimulateAction(GIActions.Jump);
-                                Logger.LogInformation("尝试继续行走...");
-                                
-                                PathingConditionConfig.AutoEatCount = autoEatCount;
-                                AutoFightTask.RecoverCount = recoverCount;
-                                continue;
+                                await Delay(80, ct);
                             }
                             
-                            _inTrap++;
-                            Logger.LogWarning("疑似卡死，尝试随机脱离...");
-                            //调用脱困代码，由TrapEscaper接管移动
-                            await _trapEscaper.RotateAndMove();
-                            await _trapEscaper.MoveTo(waypoint);
+                            // 松开所有按键
+                            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                            Simulation.SendInput.SimulateAction(escapeKey, KeyType.KeyUp);
+                            
+                            // 重新朝向目标点
+                            Logger.LogInformation("脱困第{InTrap}轮结束，重新朝向目标点", _inTrap);
+                            await FaceTo(waypoint);
                             Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
-                            Logger.LogInformation("卡死脱离结束");
 
                             PathingConditionConfig.AutoEatCount = autoEatCount;
                             AutoFightTask.RecoverCount = recoverCount;
