@@ -1189,6 +1189,8 @@ public class Avatar
                     var startTime = DateTime.UtcNow;
                     var consecutiveNoBlood = 0;
                     var hadBloodBar = false;
+                    var hadLegendaryBar = false;
+                    var legendaryLostFrames = 0;
                     var rotationCount = 0;
                     var distinctBulletPatterns = new HashSet<string>();
                     var lastBulletPatternTime = DateTime.UtcNow;
@@ -1236,6 +1238,20 @@ public class Avatar
                         var bloodBars = Avatar.FindBloodBars();
                         var regularBars = bloodBars.Where(b => b.y >= 96).ToList();
                         var legendaryBars = bloodBars.Where(b => b.y >= 50 && b.y < 96).ToList();
+                        // 传奇已被击杀检测：曾出现传奇血条，现在不再存在 → 持续2帧确认后退出
+                        if (hadLegendaryBar && legendaryBars.Count == 0)
+                        {
+                            legendaryLostFrames++;
+                            if (legendaryLostFrames >= 2)
+                            {
+                                Logger.LogInformation("传奇血条消失，推测已击杀，退出循环");
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            legendaryLostFrames = 0;
+                        }
                         using (var drawRegion = CaptureToRectArea())
                         {
                             if (regularBars.Count > 0 && legendaryBars.Count == 0)
@@ -1273,6 +1289,7 @@ public class Avatar
                                 VisionContext.Instance().DrawContent.PutOrRemoveRectList("ChascaBloodBars", drawList);
                                 consecutiveNoBlood = 0;
                                 hadBloodBar = true;
+                                hadLegendaryBar = true;
 
                                 if ((DateTime.UtcNow - lastBulletPatternTime).TotalSeconds >= chascaInterval * rotateIntervalMultiplier)
                                 {
