@@ -10,6 +10,7 @@ using BetterGenshinImpact.Helpers;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,6 +28,7 @@ using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.GameTask.AutoPathing.Model.Enum;
 using BetterGenshinImpact.Core.Recognition.ONNX;
 using BetterGenshinImpact.GameTask.Common;
+using BetterGenshinImpact.View.Drawable;
 using Compunet.YoloSharp;
 using Compunet.YoloSharp.Data;
 using Microsoft.Extensions.DependencyInjection;
@@ -1163,6 +1165,171 @@ public class Avatar
                     Thread.Sleep(200);
                     Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyPress);
                 }
+                else if (Name == "恰斯卡")
+                {
+                    Logger.LogInformation("进入恰斯卡特化逻辑");
+                    // 恰斯卡e(hold)：先确保E抬起，再点按E起飞，然后按住左键进入瞄准蓄力
+                    Logger.LogInformation("恰斯卡：释放E键（确保抬起）");
+                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
+                    Sleep(100, Ct);
+                    Logger.LogInformation("恰斯卡：点按E键起飞");
+                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyPress);
+                    Sleep(500, Ct);
+                    Logger.LogInformation("恰斯卡：按住左键进入瞄准蓄力");
+                    Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
+
+                    var dpi = TaskContext.Instance().DpiScale;
+
+                    // 目标瞄准点：对应1920×1080屏幕的(960, 500) — 左右居中
+                    // FindBloodBars的检测区域为1500×900左上裁切，该点在此空间内为(960, 500)
+                    const double targetX = 960;
+                    const double targetY = 500;
+
+                    // 循环检测，直到退出飞行姿态或超时（20秒）
+                    var startTime = DateTime.UtcNow;
+                    var consecutiveNoBlood = 0;
+                    var hadBloodBar = false;
+                    var rotationCount = 0;
+                    var distinctBulletPatterns = new HashSet<string>();
+                    var lastBulletPatternTime = DateTime.UtcNow;
+                    var rotateIntervalMultiplier = 1.0;
+                    while (true)
+                    {
+                        Sleep(50, Ct);
+                        var chascaX = TaskContext.Instance().Config.AutoFightConfig.ChascaXSensitivity;
+                        var chascaY = TaskContext.Instance().Config.AutoFightConfig.ChascaYSensitivity;
+                        var chascaInterval = TaskContext.Instance().Config.AutoFightConfig.ChascaLegendaryRotateInterval;
+                        var chascaRotateLimit = TaskContext.Instance().Config.AutoFightConfig.ChascaRotateCountLimit;
+
+                        // 退出条件
+                        if (!Avatar.IsFlying())
+                        {
+                            break;
+                        }
+                        if ((DateTime.UtcNow - startTime).TotalSeconds >= 20)
+                        {
+                            break;
+                        }
+
+                        // 每帧检测有效子弹数量（子弹按顺序填充，0-6）
+                        var (bulletStatusChars, _, _, _) = Avatar.AnalyzeAllChascaBullets();
+                        var effectiveBulletCount = bulletStatusChars.Count(c => c != '空');
+                        // 压缩子弹类型：风水冰视为一种（记作冻），生成模式签名（排除第1格，取2-6格）
+                        var compressedChars = bulletStatusChars.Skip(1).Select(c => c == '风' || c == '水' || c == '冰' ? '冻' : c).ToArray();
+                        var pattern = new string(compressedChars);
+                        Logger.LogInformation("当前子弹有效数量：{Count}，子弹类型{Pattern}", effectiveBulletCount, pattern);
+                        // 满弹（≥6）→ 进入双倍超时模式
+                        if (effectiveBulletCount >= 6)
+                        {
+                            rotateIntervalMultiplier = 2.0;
+                        }
+                        distinctBulletPatterns.Add(pattern);
+                        // 当出现第3种不同模式时，重置计时器（说明正在稳定命中，子弹变化多样）
+                        if (distinctBulletPatterns.Count > 2)
+                        {
+                            distinctBulletPatterns.Clear();
+                            distinctBulletPatterns.Add(pattern);
+                            lastBulletPatternTime = DateTime.UtcNow;
+                        }
+
+                        // 血条检测
+                        var bloodBars = Avatar.FindBloodBars();
+                        var regularBars = bloodBars.Where(b => b.y >= 96).ToList();
+                        var legendaryBars = bloodBars.Where(b => b.y >= 50 && b.y < 96).ToList();
+                        using (var drawRegion = CaptureToRectArea())
+                        {
+                            if (regularBars.Count > 0 && legendaryBars.Count == 0)
+                            {
+                                // 逻辑1：有普通血条，且无传奇血条 → 索敌
+                                Logger.LogInformation("识别到{Count}个血条", regularBars.Count);
+                                var nearest = regularBars
+                                    .OrderBy(b => Math.Pow(b.x - targetX, 2) + Math.Pow(b.y - targetY, 2))
+                                    .First();
+                                var drawList = regularBars
+                                    .Select(b =>
+                                    {
+                                        var rect = new Rect(b.x, b.y, b.width, b.height);
+                                        if (b.x == nearest.x && b.y == nearest.y && b.width == nearest.width && b.height == nearest.height)
+                                            return drawRegion.ToRectDrawable(rect, "target", new System.Drawing.Pen(System.Drawing.Color.LimeGreen, 2));
+                                        return drawRegion.ToRectDrawable(rect, "blood");
+                                    })
+                                    .ToList();
+                                VisionContext.Instance().DrawContent.PutOrRemoveRectList("ChascaBloodBars", drawList);
+                                consecutiveNoBlood = 0;
+                                hadBloodBar = true;
+                                var offsetX = nearest.x - targetX;
+                                var offsetY = nearest.y - targetY;
+                                Simulation.SendInput.Mouse.MoveMouseBy(
+                                    (int)(offsetX * dpi * 0.45),
+                                    (int)(offsetY * dpi * 0.80));
+                                Sleep(200, Ct);
+                            }
+                            else if (legendaryBars.Count > 0)
+                            {
+                                // 逻辑3：有传奇血条 → 根据子弹填充状态判断
+                                var drawList = legendaryBars
+                                    .Select(lb => drawRegion.ToRectDrawable(new Rect(lb.x, lb.y, lb.width, lb.height), "legendary", new System.Drawing.Pen(System.Drawing.Color.Orange, 2)))
+                                    .ToList();
+                                VisionContext.Instance().DrawContent.PutOrRemoveRectList("ChascaBloodBars", drawList);
+                                consecutiveNoBlood = 0;
+                                hadBloodBar = true;
+
+                                if ((DateTime.UtcNow - lastBulletPatternTime).TotalSeconds >= chascaInterval * rotateIntervalMultiplier)
+                                {
+                                    Logger.LogInformation("传奇：子弹模式在{Count}种状态间变化超过{Interval}s，旋转搜索（倍率={Mult}）", distinctBulletPatterns.Count, chascaInterval * rotateIntervalMultiplier, rotateIntervalMultiplier);
+                                    Simulation.SendInput.Mouse.MoveMouseBy(
+                                        (int)(500 * dpi * chascaX),
+                                        (int)(50 * 0.23 * 8 * dpi * chascaY));
+                                    Sleep(300, Ct);
+                                    distinctBulletPatterns.Clear();
+                                    lastBulletPatternTime = DateTime.UtcNow;
+                                    rotateIntervalMultiplier = 1.0;
+                                }
+                                else
+                                {
+                                    Sleep(50, Ct);
+                                }
+                            }
+                            else
+                            {
+                                // 逻辑2：无任何血条 → 旋转
+                                VisionContext.Instance().DrawContent.PutOrRemoveRectList("ChascaBloodBars", null);
+                                if (hadBloodBar)
+                                {
+                                    // 刚从有血条切换到无血条，容错一帧不旋转
+                                    hadBloodBar = false;
+                                    Logger.LogInformation("血条丢失，容错一帧");
+                                    Sleep(200, Ct);
+                                }
+                                else
+                                {
+                                    consecutiveNoBlood++;
+                                    rotationCount++;
+                                    Logger.LogInformation("无血条，进行旋转（第{Count}次）", consecutiveNoBlood);
+                                    if (consecutiveNoBlood >= chascaRotateLimit)
+                                    {
+                                        break;
+                                    }
+                                    Simulation.SendInput.Mouse.MoveMouseBy(
+                                        (int)(500 * dpi * chascaX),
+                                        rotationCount % 5 == 0 ? (int)(50 * 0.23 * 4 * dpi * chascaY) : 0);
+                                    Sleep(300, Ct);
+                                }
+                            }
+                        }
+                    }
+
+                    // 下车：松左键 → 200ms → 松所有键 → 100ms → 点按E → 100ms → 松所有键
+                    Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
+                    Sleep(500, Ct);
+                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
+                    Sleep(100, Ct);
+                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyPress);
+                    Sleep(100, Ct);
+                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
+                    Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
+                    Logger.LogInformation("恰斯卡特化逻辑结束");
+                }
                 else
                 {
                     Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.Hold);
@@ -2057,5 +2224,331 @@ public class Avatar
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// 检测当前帧视野内所有红色血条的位置和高度。
+    /// 照抄 AutoFightSeek 的色值 + 连通域逻辑，返回 (x, y, width, height) 列表。
+    /// </summary>
+    public static List<(int x, int y, int width, int height)> FindBloodBars()
+    {
+        var results = new List<(int x, int y, int width, int height)>();
+
+        using var image = CaptureToRectArea();
+        var bloodLower = new Scalar(255, 90, 90); // BGR 红色
+
+        using Mat mask = OpenCvCommonHelper.Threshold(
+            image.DeriveCrop(0, 0, 1500, 900).SrcMat, bloodLower);
+
+        using Mat labels = new Mat();
+        using Mat stats = new Mat();
+        using Mat centroids = new Mat();
+
+        int numLabels = Cv2.ConnectedComponentsWithStats(
+            mask, labels, stats, centroids,
+            connectivity: PixelConnectivity.Connectivity4, ltype: MatType.CV_32S);
+
+        for (int i = 1; i < numLabels; i++)
+        {
+            using Mat row = stats.Row(i);
+            if (row.GetArray(out int[] arr))
+            {
+                int x = arr[0], y = arr[1], width = arr[2], height = arr[3];
+                // 排除顶部玩家自身血条（y < 50）
+                if (y < 50)
+                    continue;
+                results.Add((x, y, width, height));
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// 使用元素视野方法定位传奇（首领）敌人的身体中心位置。
+    /// 返回是否存在传奇敌人及其中心坐标（检测空间 1500×900 内）。
+    /// 基于传奇血条位置估计身体位置，待后续补充实际视觉检测逻辑。
+    /// </summary>
+    public static (bool exists, int centerX, int centerY) FindLegendaryBoss()
+    {
+        // 激活元素视野，等待1秒后截图检测
+        Simulation.SendInput.Mouse.MiddleButtonDown();
+        Sleep(1000);
+        try
+        {
+            var bloodBars = FindBloodBars();
+            var legendaryBars = bloodBars.Where(b => b.y >= 50 && b.y < 96).ToList();
+            if (legendaryBars.Count == 0)
+                return (false, 0, 0);
+
+            // 取所有传奇血条中面积最大的作为目标
+            var best = legendaryBars.OrderByDescending(b => b.width * b.height).First();
+            var bloodCenterX = best.x + best.width / 2;
+            var bloodCenterY = best.y + best.height / 2;
+            // 身体中心Y ≈ 血条中心Y + 350px（从屏幕顶部血条到身体中心的偏移）
+            return (true, bloodCenterX, bloodCenterY + 350);
+        }
+        finally
+        {
+            Simulation.SendInput.Mouse.MiddleButtonUp();
+        }
+    }
+
+    /// <summary>
+    /// 检测恰斯卡/流浪者等飞行角色是否处于飞行姿态。
+    /// 原理：读取 (1584, 1028) 位置的像素，若为白色（RGB >= 250），
+    /// 说明空格键图标处于活跃状态（飞行中）。
+    /// 提取自 SpaceAtSecondPlaceExist（SkillBoostHelper）。
+    /// </summary>
+    public static bool IsFlying()
+    {
+        using var region = CaptureToRectArea();
+        var pixel = region.SrcMat.At<Vec3b>(1028, 1584);
+        return pixel.Item0 >= 250 && pixel.Item1 >= 250 && pixel.Item2 >= 250;
+    }
+
+    /// <summary>
+    /// 恰斯卡子弹元素样本颜色。对每个像素找最近的参考点，距离小于阈值则归入对应分组。
+    /// </summary>
+    private static readonly (string name, string[] hexColors)[] ChascaBulletSamples =
+    [
+        ("风", ["#8CFFFF", "#94D0D2", "#4C8EA3", "#85FFFF", "#9BD3D5"]),
+        ("水", ["#1D65B4", "#1D65B5", "#98FBFE", "#E2FEFE", "#89F4FD", "#56BEF6"]),
+        ("冰", ["#DBFFFF", "#D9FEFF", "#63B3E4", "#FDFFFF", "#D6FCFF"]),
+        ("火", ["#FFE791", "#9B5D33", "#FCD682", "#ECAD72", "#FCC074", "#D07635"]),
+        ("雷", ["#74488A", "#FBE7FC", "#FFC4FF", "#A261BB", "#FBBDFF", "#9D8CA2", "#EEB0F8"]),
+    ];
+
+    /// <summary>
+    /// 所有参考点（元素样本 + 纯白），静态初始化时由 hex 自动转换。
+    /// </summary>
+    private static readonly (string group, int r, int g, int b)[] ChascaReferencePoints;
+
+    /// <summary>
+    /// 最近邻分类的距离阈值（RGB Euclidean）。小于此值才归入对应分组，否则为"其他"。
+    /// </summary>
+    private const double ChascaColorThreshold = 80;
+
+    static Avatar()
+    {
+        var list = new List<(string, int, int, int)>();
+
+        // 元素样本
+        foreach (var (name, hexes) in ChascaBulletSamples)
+        {
+            foreach (var hex in hexes)
+            {
+                list.Add((name,
+                    Convert.ToInt32(hex.Substring(1, 2), 16),
+                    Convert.ToInt32(hex.Substring(3, 2), 16),
+                    Convert.ToInt32(hex.Substring(5, 2), 16)));
+            }
+        }
+
+        // 纯白参考点
+        list.Add(("白", 255, 255, 255));
+
+        ChascaReferencePoints = list.ToArray();
+    }
+
+    /// <summary>
+    /// 对一个 RGB 像素，通过最近邻分类归入分组。
+    /// 返回 (groupName, distance) — groupName 为空串表示"其他"（距离过大）。
+    /// </summary>
+    private static (string name, double dist) ClassifyBulletPixel(int r, int g, int b)
+    {
+        var bestName = "";
+        var bestDist = ChascaColorThreshold; // 超过阈值即为"其他"
+
+        foreach (var (group, sr, sg, sb) in ChascaReferencePoints)
+        {
+            var dr = r - sr;
+            var dg = g - sg;
+            var db = b - sb;
+            var dist = Math.Sqrt(dr * dr + dg * dg + db * db);
+
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                bestName = group;
+            }
+        }
+
+        return (bestName, bestDist);
+    }
+
+    /// <summary>
+    /// 检测恰斯卡当前已装填的子弹数量（0~6）。
+    /// </summary>
+    public static int GetChascaBulletCount()
+    {
+        return GetChascaBulletStatus().Count(c => c != '空');
+    }
+
+    /// <summary>
+    /// 调试用：检测恰斯卡6个弹匣的详细状态。
+    /// 返回如 "风雷火冰冰空" 的字符串（元素名/空），始终检测全部6个位置。
+    /// </summary>
+    public static string DebugGetChascaBulletStatus()
+    {
+        return GetChascaBulletStatus();
+    }
+
+    /// <summary>
+    /// 调试用：详细分析恰斯卡6个弹匣的倾向。
+    /// 输出格式："子弹倾向分析：冰56% 火70% 雷30% | 推测结果：冰火空空空空"
+    /// </summary>
+    public static string DebugAnalyzeChascaBullets()
+    {
+        var (statusChars, perRegionCounts, otherCounts, totals) = AnalyzeAllChascaBullets();
+        var parts = new List<string>();
+
+        for (int i = 0; i < statusChars.Length; i++)
+        {
+            var counts = perRegionCounts[i];
+            var total = totals[i];
+            var whiteCount = counts.GetValueOrDefault("白", 0);
+            var nonWhiteTotal = total - whiteCount;
+
+            var freezeCount = counts.GetValueOrDefault("风", 0) + counts.GetValueOrDefault("水", 0) + counts.GetValueOrDefault("冰", 0);
+            var fireCount = counts.GetValueOrDefault("火", 0);
+            var electroCount = counts.GetValueOrDefault("雷", 0);
+
+            if (nonWhiteTotal <= 0)
+            {
+                parts.Add("");
+                continue;
+            }
+
+            // 找最高分组
+            var best = new[] { ("冻", freezeCount), ("火", fireCount), ("雷", electroCount) }
+                .OrderByDescending(g => g.Item2)
+                .First();
+            parts.Add($"{best.Item1}{(double)best.Item2 / nonWhiteTotal * 100:F0}%");
+        }
+
+        return $"当前子弹倾向分析：{string.Join(" ", parts)} | 推测子弹属性：{string.Join(" ", statusChars.Select(c => c.ToString()))}";
+    }
+
+    /// <summary>
+    /// 核心检测逻辑：对6个弹匣逐像素最近邻分类，返回状态字符。
+    /// </summary>
+    private static string GetChascaBulletStatus()
+    {
+        return new string(AnalyzeAllChascaBullets().statusChars);
+    }
+
+    /// <summary>
+    /// 6个子弹区域 (x, y, width, height) @ 1920x1080
+    /// </summary>
+    private static readonly (int x, int y, int w, int h)[] ChascaBulletRects =
+    [
+        (906,  144, 54, 76),
+        (1016, 163, 33, 58),
+        (1113, 190, 39, 49),
+        (1189, 256, 50, 46),
+        (1237, 339, 63, 39),
+        (1266, 427, 102, 40),
+    ];
+
+    /// <summary>
+    /// 对所有6个弹匣执行最近邻分析，返回 (statusChars, perRegionCounts, otherCounts, totals)。
+    /// statusChars：6字符状态串（"风"/"水"/"冰"/"火"/"雷"/"空"）
+    /// perRegionCounts：每个区域的逐元素像素计数（含"白"不含"其他"）
+    /// otherCounts：每个区域未分类（其他）像素数
+    /// totals：每个区域总采样像素数
+    /// </summary>
+    private static (char[] statusChars, Dictionary<string, int>[] perRegionCounts, int[] otherCounts, int[] totals) AnalyzeAllChascaBullets()
+    {
+        var assetScale = TaskContext.Instance().SystemInfo.AssetScale;
+        using var image = CaptureToRectArea();
+
+        var statusChars = new char[ChascaBulletRects.Length];
+        var allCounts = new Dictionary<string, int>[ChascaBulletRects.Length];
+        var otherCounts = new int[ChascaBulletRects.Length];
+        var totals = new int[ChascaBulletRects.Length];
+
+        for (int i = 0; i < ChascaBulletRects.Length; i++)
+        {
+            var r = ChascaBulletRects[i];
+            var scaledRect = new Rect(
+                (int)(r.x * assetScale),
+                (int)(r.y * assetScale),
+                (int)(r.w * assetScale),
+                (int)(r.h * assetScale));
+
+            using var region = image.DeriveCrop(scaledRect).SrcMat;
+
+            // 逐像素分类计数（stride 2 兼顾性能）
+            var counts = new Dictionary<string, int>();
+            var otherCount = 0;
+            var totalSampled = 0;
+
+            for (int y = 0; y < region.Height; y += 2)
+            {
+                for (int x = 0; x < region.Width; x += 2)
+                {
+                    var bgr = region.At<Vec3b>(y, x);
+                    var (group, _) = ClassifyBulletPixel(bgr.Item2, bgr.Item1, bgr.Item0);
+                    totalSampled++;
+
+                    if (group == "") // "其他"
+                    {
+                        otherCount++;
+                    }
+                    else
+                    {
+                        counts.TryGetValue(group, out var c);
+                        counts[group] = c + 1;
+                    }
+                }
+            }
+
+            allCounts[i] = counts;
+            otherCounts[i] = otherCount;
+            totals[i] = totalSampled;
+
+            // 排除白色像素后，计算三大组占比
+            var whiteCount = counts.GetValueOrDefault("白", 0);
+            var nonWhiteTotal = totalSampled - whiteCount;
+
+            var freezeCount = counts.GetValueOrDefault("风", 0) + counts.GetValueOrDefault("水", 0) + counts.GetValueOrDefault("冰", 0);
+            var fireCount = counts.GetValueOrDefault("火", 0);
+            var electroCount = counts.GetValueOrDefault("雷", 0);
+
+            var freezeRatio = nonWhiteTotal > 0 ? (double)freezeCount / nonWhiteTotal : 0;
+            var fireRatio = nonWhiteTotal > 0 ? (double)fireCount / nonWhiteTotal : 0;
+            var electroRatio = nonWhiteTotal > 0 ? (double)electroCount / nonWhiteTotal : 0;
+
+            var bestRatio = Math.Max(freezeRatio, Math.Max(fireRatio, electroRatio));
+
+            if (bestRatio > 0.6)
+            {
+                char bestGroupChar;
+                if (freezeRatio >= fireRatio && freezeRatio >= electroRatio)
+                    bestGroupChar = '冻';
+                else if (fireRatio >= freezeRatio && fireRatio >= electroRatio)
+                    bestGroupChar = '火';
+                else
+                    bestGroupChar = '雷';
+
+                if (bestGroupChar == '冻')
+                {
+                    var bestElem = new[] { ("风", counts.GetValueOrDefault("风", 0)), ("水", counts.GetValueOrDefault("水", 0)), ("冰", counts.GetValueOrDefault("冰", 0)) }
+                        .OrderByDescending(e => e.Item2).First().Item1;
+                    statusChars[i] = bestElem[0];
+                }
+                else
+                {
+                    statusChars[i] = bestGroupChar;
+                }
+            }
+            else
+            {
+                statusChars[i] = '空';
+            }
+        }
+
+        return (statusChars, allCounts, otherCounts, totals);
     }
 }
