@@ -1202,6 +1202,7 @@ public class Avatar
                         var chascaY = TaskContext.Instance().Config.AutoFightConfig.ChascaYSensitivity;
                         var chascaInterval = TaskContext.Instance().Config.AutoFightConfig.ChascaLegendaryRotateInterval;
                         var chascaRotateLimit = TaskContext.Instance().Config.AutoFightConfig.ChascaRotateCountLimit;
+                        var chascaFrameMs = TaskContext.Instance().Config.AutoFightConfig.SpecializedFrameIntervalMs;
 
                         // 退出条件
                         if (!Avatar.IsFlying())
@@ -1278,7 +1279,7 @@ public class Avatar
                                 Simulation.SendInput.Mouse.MoveMouseBy(
                                     (int)(offsetX * dpi * 0.45),
                                     (int)(offsetY * dpi * 0.80));
-                                Sleep(200, Ct);
+                                Sleep(4 * chascaFrameMs, Ct);
                             }
                             else if (legendaryBars.Count > 0)
                             {
@@ -1297,14 +1298,14 @@ public class Avatar
                                     Simulation.SendInput.Mouse.MoveMouseBy(
                                         (int)(500 * dpi * chascaX),
                                         (int)(50 * 0.23 * 8 * dpi * chascaY));
-                                    Sleep(300, Ct);
+                                    Sleep(6 * chascaFrameMs, Ct);
                                     distinctBulletPatterns.Clear();
                                     lastBulletPatternTime = DateTime.UtcNow;
                                     rotateIntervalMultiplier = 1.0;
                                 }
                                 else
                                 {
-                                    Sleep(50, Ct);
+                                    Sleep(chascaFrameMs, Ct);
                                 }
                             }
                             else
@@ -1316,7 +1317,7 @@ public class Avatar
                                     // 刚从有血条切换到无血条，容错一帧不旋转
                                     hadBloodBar = false;
                                     Logger.LogInformation("血条丢失，容错一帧");
-                                    Sleep(200, Ct);
+                                    Sleep(2 * chascaFrameMs, Ct);
                                 }
                                 else
                                 {
@@ -1330,7 +1331,7 @@ public class Avatar
                                     Simulation.SendInput.Mouse.MoveMouseBy(
                                         (int)(500 * dpi * chascaX),
                                         rotationCount % 5 == 0 ? (int)(50 * 0.23 * 4 * dpi * chascaY) : 0);
-                                    Sleep(300, Ct);
+                                    Sleep(6 * chascaFrameMs, Ct);
                                 }
                             }
                         }
@@ -1854,6 +1855,193 @@ public class Avatar
                 ms -= 25;
             }
 
+            Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
+        }
+        else if (Name == "桑多涅")
+        {
+            var dpi = TaskContext.Instance().DpiScale;
+            var cfg = TaskContext.Instance().Config.AutoFightConfig;
+            var preAimX = cfg.SandroneChargePreAimX;
+            var timeSeqStr = cfg.SandroneChargeTimeSequence;
+            var rotateSpeed = cfg.SandroneChargeRotateSpeed;
+
+            // 旋转速度为0时禁用特化逻辑，使用标准重击
+            if (rotateSpeed == 0)
+            {
+                Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
+                Sleep(ms);
+                Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
+                return;
+            }
+
+            // 解析时间序列（逗号分隔，单位秒）
+            var seq = new List<double>();
+            if (!string.IsNullOrWhiteSpace(timeSeqStr))
+            {
+                foreach (var part in timeSeqStr.Split(new[] { ',', '，' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (double.TryParse(part.Trim(), out var sec))
+                        seq.Add(sec);
+                }
+            }
+
+            var startTime = DateTime.UtcNow;
+            var maxMs = ms;
+
+            Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyDown);
+
+            // 预计算累计时间边界（ms）
+            var boundaries = new double[seq.Count];
+            double sum = 0;
+            for (int i = 0; i < seq.Count; i++) { sum += seq[i] * 1000; boundaries[i] = sum; }
+
+            var prevSeg = -2;                // 上一帧所属段
+            var bloodFoundInOdd = false;     // 当前奇数段是否见过血条
+            var exitAfterEven = false;       // 等待偶数段结束退出
+            var lastSeenBlood = DateTime.UtcNow; // 序列耗尽后使用
+            var logged = false;              // 偶数段日志
+
+            while (!Ct.IsCancellationRequested && (DateTime.UtcNow - startTime).TotalMilliseconds < maxMs)
+            {
+                var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
+
+                // 确定当前段索引（-1 表示超出序列）
+                int seg = -1;
+                for (int i = 0; i < boundaries.Length; i++) { if (elapsed < boundaries[i]) { seg = i; break; } }
+
+                // 段切换处理
+                if (seg != prevSeg)
+                {
+                    if (prevSeg >= 0 && prevSeg % 2 == 0 && !bloodFoundInOdd && prevSeg + 1 < seq.Count)
+                    {
+                        // 奇数段无血条 → 执行完下一个偶数段后退出
+                        exitAfterEven = true;
+                    }
+                    bloodFoundInOdd = false;
+                    logged = false;
+                    prevSeg = seg;
+                }
+
+                double segMs = seg >= 0 ? seq[seg] * 1000 : 0;
+                double segStart = seg > 0 ? boundaries[seg - 1] : 0;
+                double segElapsed = seg >= 0 ? elapsed - segStart : 0;
+                double progress = segMs > 0 ? segElapsed / segMs : 0;
+
+                switch (seg)
+                {
+                    case -1:
+                        // 序列耗尽后：持续对准 + 旋转搜索
+                        var exhaustedBars = FindBloodBars();
+                        var exhaustedValid = exhaustedBars.Where(b => b.x > 200 && b.y >= 96).ToList();
+                        using (var drawRegion = CaptureToRectArea())
+                        {
+                            var drawList = new List<View.Drawable.RectDrawable>
+                            {
+                                drawRegion.ToRectDrawable(new Rect(preAimX - 25, 540 - 25, 50, 50), "preAim", new System.Drawing.Pen(System.Drawing.Color.Red, 2))
+                            };
+                            if (exhaustedValid.Count > 0)
+                            {
+                                lastSeenBlood = DateTime.UtcNow;
+                                var nearest = exhaustedValid.OrderBy(b => Math.Abs((b.x + b.width / 2) - preAimX)).First();
+                                var offsetX = (nearest.x + nearest.width / 2) - preAimX;
+                                var offsetY = (nearest.y + nearest.height / 2) - 480;
+                                Simulation.SendInput.Mouse.MoveMouseBy((int)(offsetX * 0.5 * dpi), (int)(offsetY * 0.5 * dpi));
+
+                                foreach (var b in exhaustedValid)
+                                {
+                                    var rect = new Rect(b.x, b.y, b.width, b.height);
+                                    if (b.x == nearest.x && b.y == nearest.y && b.width == nearest.width && b.height == nearest.height)
+                                        drawList.Add(drawRegion.ToRectDrawable(rect, "target", new System.Drawing.Pen(System.Drawing.Color.LimeGreen, 2)));
+                                    else
+                                        drawList.Add(drawRegion.ToRectDrawable(rect, "blood"));
+                                }
+                            }
+                            else
+                            {
+                                Simulation.SendInput.Mouse.MoveMouseBy((int)(500 * rotateSpeed * dpi), 0);
+                                if ((DateTime.UtcNow - lastSeenBlood).TotalSeconds >= 1)
+                                {
+                                    Logger.LogInformation("序列耗尽后超过1秒未找到血条，提前退出");
+                                    VisionContext.Instance().DrawContent.PutOrRemoveRectList("SandroneBloodBars", drawList);
+                                    goto done;
+                                }
+                            }
+                            VisionContext.Instance().DrawContent.PutOrRemoveRectList("SandroneBloodBars", drawList);
+                        }
+                        break;
+
+                    default:
+                        if (seg % 2 == 0)
+                        {
+                            // 奇数段：瞄准阶段
+                            var bars = FindBloodBars();
+                            var valid = bars.Where(b => b.x > 200 && b.y >= 96).ToList();
+                            using (var drawRegion = CaptureToRectArea())
+                            {
+                                var drawList = new List<View.Drawable.RectDrawable>
+                                {
+                                    drawRegion.ToRectDrawable(new Rect(preAimX - 25, 540 - 25, 50, 50), "preAim", new System.Drawing.Pen(System.Drawing.Color.Red, 2))
+                                };
+                                if (valid.Count > 0)
+                                {
+                                    bloodFoundInOdd = true;
+
+                                    int targetX;
+                                    (int x, int y, int w, int h) tracked = (0, 0, 0, 0);
+                                    // 后半段（closest）至少占1s
+                                    var secondHalfMs = Math.Max(1000.0, segMs * 0.5);
+                                    var splitThreshold = segMs > 0 ? Math.Max(0, 1.0 - secondHalfMs / segMs) : 0.5;
+                                    if (progress < splitThreshold)
+                                    {
+                                        var leftmost = valid.OrderBy(b => b.x).First();
+                                        targetX = leftmost.x + leftmost.width / 2;
+                                        tracked = (leftmost.x, leftmost.y, leftmost.width, leftmost.height);
+                                    }
+                                    else
+                                    {
+                                        var closest = valid.OrderBy(b => Math.Abs((b.x + b.width / 2) - preAimX)).First();
+                                        targetX = closest.x + closest.width / 2;
+                                        tracked = (closest.x, closest.y, closest.width, closest.height);
+                                    }
+
+                                    foreach (var b in valid)
+                                    {
+                                        var rect = new Rect(b.x, b.y, b.width, b.height);
+                                        if (b.x == tracked.x && b.y == tracked.y && b.width == tracked.w && b.height == tracked.h)
+                                            drawList.Add(drawRegion.ToRectDrawable(rect, "target", new System.Drawing.Pen(System.Drawing.Color.LimeGreen, 2)));
+                                        else
+                                            drawList.Add(drawRegion.ToRectDrawable(rect, "blood"));
+                                    }
+
+                                    var offset = targetX - preAimX;
+                                    Simulation.SendInput.Mouse.MoveMouseBy((int)(offset * 0.25 * dpi), 0);
+                                }
+                                else
+                                {
+                                    Simulation.SendInput.Mouse.MoveMouseBy((int)(500 * rotateSpeed * dpi), 0);
+                                }
+                                VisionContext.Instance().DrawContent.PutOrRemoveRectList("SandroneBloodBars", drawList);
+                            }
+                        }
+                        else
+                        {
+                            // 偶数段：纯向右水平旋转
+                            if (!logged) { Logger.LogInformation("向右 转！"); logged = true; }
+                            Simulation.SendInput.Mouse.MoveMouseBy((int)(500 * rotateSpeed * dpi), 0);
+
+                            if (exitAfterEven && elapsed >= boundaries[seg])
+                            {
+                                Logger.LogInformation("奇数段无血条，偶数段完毕，提前退出");
+                                goto done;
+                            }
+                        }
+                        break;
+                }
+
+                Sleep(cfg.SpecializedFrameIntervalMs);
+            }
+
+            done:
             Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
         }
         else if (MavuikaMotorcycleCheckEnabled && Name == "玛薇卡")

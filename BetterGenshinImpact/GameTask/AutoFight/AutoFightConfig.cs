@@ -95,6 +95,27 @@ public partial class AutoFightConfig : ObservableObject
     [ObservableProperty] private int _chascaRotateCountLimit = 12;
 
     /// <summary>
+    /// 特化逻辑帧间隔（毫秒，默认 50）。
+    /// 供恰斯卡飞行/桑多涅重击等特化循环使用，控制每帧 Sleep 时长。
+    /// </summary>
+    [ObservableProperty] private int _specializedFrameIntervalMs = 50;
+
+    /// <summary>
+    /// 桑多涅（Sandrone）重击时间序列（字符串，格式待定）。
+    /// </summary>
+    [ObservableProperty] private string _sandroneChargeTimeSequence = "";
+
+    /// <summary>
+    /// 桑多涅重击预瞄点 X 坐标（默认 840）。
+    /// </summary>
+    [ObservableProperty] private int _sandroneChargePreAimX = 840;
+
+    /// <summary>
+    /// 桑多涅（木偶）重击旋转速度系数（默认 1.0）。
+    /// </summary>
+    [ObservableProperty] private double _sandroneChargeRotateSpeed = 1.0;
+
+    /// <summary>
     /// 只拾取精英掉落
     /// Closed ：关闭功能
     /// AllowAutoPickupForNonElite: 非精英允许自动拾取：战斗过程中掉落脚下的可以自动拾取，但不会执行万叶拾取和拾取配置逻辑。

@@ -26,6 +26,11 @@ Tmp/
 node_modules/
 github_actions_cache/
 
+# Build 目录产物
+Build/*.7z
+Build/*.exe
+Build/dist/
+
 *.zip
 
 # Rider

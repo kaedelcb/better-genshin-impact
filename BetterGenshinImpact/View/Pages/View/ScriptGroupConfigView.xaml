@@ -1441,6 +1441,87 @@
                                             Text="{Binding PathingConfig.AutoFightConfig.ChascaRotateCountLimit, Mode=TwoWay}" />
                             </Grid>
 
+                            <!-- 桑多涅特化配置 -->
+                            <Grid Margin="0,12,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ui:TextBlock Grid.Row="0"
+                                              Grid.Column="0"
+                                              FontTypography="Body"
+                                              Text="桑多涅重击时间序列"
+                                              TextWrapping="Wrap" />
+                                <ui:TextBlock Grid.Row="1"
+                                              Grid.Column="0"
+                                              Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                              Text="重击时间序列，多个时间用英文逗号分隔"
+                                              TextWrapping="Wrap" />
+                                <ui:TextBox Grid.Row="0"
+                                            Grid.RowSpan="2"
+                                            Grid.Column="1"
+                                            Width="120"
+                                            Margin="0,0,12,0"
+                                            Text="{Binding PathingConfig.AutoFightConfig.SandroneChargeTimeSequence, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid Margin="0,12,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ui:TextBlock Grid.Row="0"
+                                              Grid.Column="0"
+                                              FontTypography="Body"
+                                              Text="桑多涅重击预瞄点X坐标"
+                                              TextWrapping="Wrap" />
+                                <ui:TextBlock Grid.Row="1"
+                                              Grid.Column="0"
+                                              Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                              Text="重击时鼠标预瞄的X坐标，默认840"
+                                              TextWrapping="Wrap" />
+                                <ui:TextBox Grid.Row="0"
+                                              Grid.RowSpan="2"
+                                              Grid.Column="1"
+                                              Width="80"
+                                              Margin="0,0,12,0"
+                                              Text="{Binding PathingConfig.AutoFightConfig.SandroneChargePreAimX, Mode=TwoWay}" />
+                            </Grid>
+                            <!-- 桑多涅重击旋转速度 -->
+                            <Grid Margin="0,12,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ui:TextBlock Grid.Row="0"
+                                              Grid.Column="0"
+                                              FontTypography="Body"
+                                              Text="桑多涅重击旋转速度"
+                                              TextWrapping="Wrap" />
+                                <ui:TextBlock Grid.Row="1"
+                                              Grid.Column="0"
+                                              Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                              Text="重击旋转速度系数，默认1.0；为0时禁用桑多涅特化重击逻辑"
+                                              TextWrapping="Wrap" />
+                                <ui:TextBox Grid.Row="0"
+                                              Grid.RowSpan="2"
+                                              Grid.Column="1"
+                                              Width="80"
+                                              Margin="0,0,12,0"
+                                              Text="{Binding PathingConfig.AutoFightConfig.SandroneChargeRotateSpeed, Mode=TwoWay}" />
+                            </Grid>
+
                         </StackPanel>
                     </ui:CardExpander>
 

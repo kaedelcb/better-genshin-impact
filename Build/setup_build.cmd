@@ -7,7 +7,7 @@ for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio
 
 @echo [prepare version]
 cd /d ..\BetterGenshinImpact
-set "script=Get-Content 'BetterGenshinImpact.csproj' | Select-String -Pattern 'AssemblyVersion\>(.*)\<\/AssemblyVersion' | ForEach-Object { $_.Matches.Groups[1].Value }"
+set "script=Get-Content 'BetterGenshinImpact.csproj' | Select-String -Pattern '\<Version\>(.*)\<\/Version' | ForEach-Object { $_.Matches.Groups[1].Value }"
 for /f "usebackq delims=" %%i in (`powershell -NoLogo -NoProfile -Command "%script%"`) do set version=%%i
 echo current version is %version%
 if "%b%"=="" ( set "b=%version%" )
@@ -20,7 +20,7 @@ echo [build app using vs2022]
 cd /d %~dp0
 rd /s /q ..\BetterGenshinImpact\bin\x64\Release\net8.0-windows10.0.22621.0\publish\win-x64\
 cd ..\
-dotnet publish -c Release -p:PublishProfile=FolderProfile
+dotnet publish BetterGenshinImpact\BetterGenshinImpact.csproj -c Release -p:PublishProfile=FolderProfile
 
 echo [pack app using 7z]
 cd /d %~dp0
