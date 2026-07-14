@@ -553,6 +553,10 @@ public class AutoFightTask : ISoloTask
 
         LogScreenResolution();
 
+        // 点位配置同时供正常战斗流程和 C1 兜底流程使用，整场战斗保持不变。
+        var rewardEndDetection = _taskParam.RewardEndDetection;
+        LogRewardEndDetectionEnabled(rewardEndDetection);
+
         // 重置兜底信号位（每个 fight waypoint 独立判定）
         _useC1Fallback = false;
 
@@ -562,7 +566,7 @@ public class AutoFightTask : ISoloTask
         // 立即委派给简化 EQA 循环，不进入后续脚本匹配 / 战斗循环
         if (_useC1Fallback)
         {
-            await RunC1FallbackLoopAsync(ct);
+            await RunC1FallbackLoopAsync(ct, rewardEndDetection);
             return;
         }
 
@@ -731,6 +735,9 @@ public class AutoFightTask : ISoloTask
         SwitchTryCount = 0;
         var fightEndFlag = false;
         var timeOutFlag = false;
+        // 后台识别任务写、主流程读；命中后复用原超时结束的战后处理分支。
+        var rewardTimeoutEndFlag = 0;
+        Task? rewardTimeoutEndTask = null;
         string lastFightName = "";
 
         //统计切换人打架次数
@@ -844,38 +851,7 @@ public class AutoFightTask : ISoloTask
         //旋转次数
         var rotationLimit = _taskParam.RotaryFactor == 1 ? 500 : _taskParam.FinishDetectConfig.RotationMode && _taskParam.FinishDetectConfig.RotateFindEnemyEnabled ? 50 : 6;
 
-        // === 共享战斗配额结束同步：订阅 AllFightDone + 上报参与者（subscribe-before-action）===
-        // 仅 IsEnabled（联机+连接+房主开关）时启用；否则三字段保持默认，全程零回归。
-        _quorumVoted = false;
-        _allFightDoneReceived = false;
-        _currentFightSyncKey = "";
-        var __quorumCoordinator = BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.CurrentMultiplayerCoordinator;
-        Action<string>? __onAllFightDone = null;
-        var __quorumEnabled = SharedFightEndQuorumDecisions.IsEnabled(
-            __quorumCoordinator != null,
-            __quorumCoordinator?.IsConnected ?? false,
-            __quorumCoordinator?.EffectiveConfig.SharedFightEndQuorumEnabled ?? false);
-        if (__quorumEnabled)
-        {
-            var __wp = FightWaypoint;
-            var __routeIndex = __quorumCoordinator!.CurrentRouteIndex;
-            _currentFightSyncKey = __wp == null
-                ? $"{__routeIndex}:0:0"
-                : $"{__routeIndex}:{__wp.X.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}:{__wp.Y.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}";
-            __onAllFightDone = key =>
-            {
-                if (key == _currentFightSyncKey)
-                {
-                    _allFightDoneReceived = true;
-                    FightEndTotoly = true; // 立即打断仍在酣战的主循环
-                    Logger.LogInformation("[联机][结束配额] 收到全队战斗结束广播，结束本场战斗 syncKey={Key}", _currentFightSyncKey);
-                }
-            };
-            __quorumCoordinator.Client.AllFightDone += __onAllFightDone;
-            // 先订阅再上报参与者（配额分母）；与投票同源 syncKey 保证一致
-            _ = __quorumCoordinator.ReportFightParticipantAsync(_currentFightSyncKey);
-            Logger.LogInformation("[联机][结束配额] 已启用，订阅 AllFightDone 并上报参与者 syncKey={Key}", _currentFightSyncKey);
-        }
+        var (__quorumCoordinator, __onAllFightDone) = StartSharedFightEndCoordination();
 
         // 战斗操作
         var fightTask = Task.Run(async () =>
@@ -889,6 +865,16 @@ public class AutoFightTask : ISoloTask
             _totolyEndCount = 0;
             _2ndEndFlag = false;
             LastEnemySeenAt = DateTime.UtcNow;
+            // 与原 CheckFightFinish 并行运行，不受 FightFinishDetectEnabled 开关影响。
+            if (rewardEndDetection is not null)
+            {
+                rewardTimeoutEndTask = StartRewardTimeoutEndLoop(cts2.Token, rewardEndDetection, _ =>
+                {
+                    // 联机配额模式可能不会立即退出，也必须保留本机已命中的结果。
+                    Interlocked.Exchange(ref rewardTimeoutEndFlag, 1);
+                    HandleRewardEndDetected(rewardEndDetection);
+                });
+            }
 
             // return-to-point-stale-prev-position-drift-fix (b) 战斗开始首帧播种：
             // 进入战斗、任何后台子任务（持续回点循环 / SeekAndFightAsync）首次 GetPosition 之前，
@@ -1619,12 +1605,15 @@ public class AutoFightTask : ISoloTask
         }, cts2.Token);
 
         await fightTask;
+        await WaitForRewardEndDetectionTaskAsync(rewardTimeoutEndTask);
 
-        // === 共享战斗配额结束同步：解订阅 AllFightDone（subscribe-before-action 配对清理）===
-        if (__onAllFightDone != null && __quorumCoordinator != null)
+        // 奖励识别结束与战斗超时共用 timeOutFlag 行为，例如不执行换队拾取。
+        if (Volatile.Read(ref rewardTimeoutEndFlag) == 1)
         {
-            __quorumCoordinator.Client.AllFightDone -= __onAllFightDone;
+            timeOutFlag = true;
         }
+
+        StopSharedFightEndCoordination(__quorumCoordinator, __onAllFightDone);
 
         // fight-end-return-loop-not-joined-movement-overlap-fix:
         // 战斗结束：先 cancel 回点 CTS 立即打断进行中的 MoveCloseTo(万叶)/MoveTo(通用)，
@@ -2066,6 +2055,59 @@ public class AutoFightTask : ISoloTask
     private volatile bool _allFightDoneReceived;   // 是否已收到本场 syncKey 的 AllFightDone 广播
     private string _currentFightSyncKey = "";      // 本场战斗 syncKey（routeIndex:X:Y）
 
+    // === 共享战斗配额结束同步：订阅 AllFightDone + 上报参与者（subscribe-before-action）===
+    // 仅当 IsEnabled（联机+连接+房主开关）时启用；否则三字段保持默认，全程零回归。
+    private (MultiplayerCoordinator? Coordinator, Action<string>? AllFightDoneHandler) StartSharedFightEndCoordination()
+    {
+        _quorumVoted = false;
+        _allFightDoneReceived = false;
+        _currentFightSyncKey = "";
+
+        var coordinator = PathExecutor.CurrentMultiplayerCoordinator;
+        if (!SharedFightEndQuorumDecisions.IsEnabled(
+                coordinator != null,
+                coordinator?.IsConnected ?? false,
+                coordinator?.EffectiveConfig.SharedFightEndQuorumEnabled ?? false))
+        {
+            return (coordinator, null);
+        }
+
+        var waypoint = FightWaypoint;
+        var routeIndex = coordinator!.CurrentRouteIndex;
+        _currentFightSyncKey = waypoint == null
+            ? $"{routeIndex}:0:0"
+            : $"{routeIndex}:{waypoint.X.ToString("R", CultureInfo.InvariantCulture)}:{waypoint.Y.ToString("R", CultureInfo.InvariantCulture)}";
+
+        Action<string> onAllFightDone = key =>
+        {
+            if (key != _currentFightSyncKey)
+            {
+                return;
+            }
+
+            _allFightDoneReceived = true;
+            FightEndTotoly = true; // 立即打断仍在酣战的主循环
+            Logger.LogInformation("[联机][结束配额] 收到全队战斗结束广播，结束本场战斗 syncKey={Key}", _currentFightSyncKey);
+        };
+
+        coordinator.Client.AllFightDone += onAllFightDone;
+        // 先订阅再上报参与者（配额分母）；与投票同源 syncKey 保证一致
+        _ = coordinator.ReportFightParticipantAsync(_currentFightSyncKey);
+        Logger.LogInformation("[联机][结束配额] 已启用，订阅 AllFightDone 并上报参与者 syncKey={Key}", _currentFightSyncKey);
+        return (coordinator, onAllFightDone);
+    }
+
+    // === 共享战斗配额结束同步：解订阅 AllFightDone（subscribe-before-action 配对清理）===
+    private static void StopSharedFightEndCoordination(
+        MultiplayerCoordinator? coordinator,
+        Action<string>? onAllFightDone)
+    {
+        if (coordinator != null && onAllFightDone != null)
+        {
+            coordinator.Client.AllFightDone -= onAllFightDone;
+        }
+    }
+
     /// <summary>
     /// 共享战斗配额结束协调：返回 true=应立即真结束（维持原语义 / 已收到全队广播）；
     /// false=已投票，继续战斗循环等待 AllFightDone 或超时（multiplayer-shared-fight-end-quorum-sync spec）。
@@ -2352,6 +2394,174 @@ public class AutoFightTask : ISoloTask
         return (r >= 240 && r <= 255) &&
                (g >= 240 && g <= 255) &&
                (b >= 240 && b <= 255);
+    }
+
+    private static string GetRewardEndDetectionTypeName(RewardEndDetectionType rewardType)
+    {
+        return rewardType == RewardEndDetectionType.Experience ? "经验值" : "摩拉";
+    }
+
+    private static string GetRewardEndDetectionModeName(RewardEndDetectionType rewardType)
+    {
+        return rewardType == RewardEndDetectionType.Experience ? "经验" : "摩拉";
+    }
+
+    private static void LogRewardEndDetectionEnabled(RewardEndDetectionConfig? config)
+    {
+        if (config is null)
+        {
+            return;
+        }
+
+        var valueDescription = config.Type == RewardEndDetectionType.Mora && config.MoraValues is not null
+            ? $"（{string.Join("/", config.MoraValues.Order())}）"
+            : "";
+        Logger.LogInformation("当前地图追踪战斗点启用{RewardType}{RewardValues}识别结束战斗",
+            GetRewardEndDetectionTypeName(config.Type),
+            valueDescription);
+    }
+
+    private void HandleRewardEndDetected(RewardEndDetectionConfig config)
+    {
+        TaskControl.Logger.LogInformation("{RewardType}检测模式：识别到战斗结束",
+            GetRewardEndDetectionModeName(config.Type));
+        // 单机/配额关闭时立即结束；配额开启时只投票，等待 AllFightDone 广播统一结束。
+        if (TryCoordinateSharedFightEnd())
+        {
+            FightEndTotoly = true;
+        }
+    }
+
+    private static async Task WaitForRewardEndDetectionTaskAsync(Task? rewardEndDetectionTask)
+    {
+        if (rewardEndDetectionTask is null)
+        {
+            return;
+        }
+
+        // 战斗结束后最多等待 500ms 收尾，不能让后台识别阻塞后续地图追踪。
+        var waitTask = await Task.WhenAny(rewardEndDetectionTask, Task.Delay(500));
+        if (waitTask == rewardEndDetectionTask && rewardEndDetectionTask.IsFaulted)
+        {
+            Logger.LogWarning(rewardEndDetectionTask.Exception, "奖励后台识别任务异常，已忽略");
+        }
+    }
+
+    private Task StartRewardTimeoutEndLoop(CancellationToken token, RewardEndDetectionConfig config, Action<int> onFound)
+    {
+        return Task.Run(async () =>
+        {
+            // 首次命中即退出；未命中时按 200ms 间隔检测，直到战斗结束或任务取消。
+            while (!token.IsCancellationRequested && !FightEndTotoly)
+            {
+                try
+                {
+                    if (CheckRewardForTimeoutEnd(config, out var rewardValue))
+                    {
+                        onFound(rewardValue);
+                        return;
+                    }
+
+                    await Task.Delay(200, token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (ObjectDisposedException)
+                {
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogDebug(ex, "奖励后台识别异常");
+                    await Task.Delay(200, token);
+                }
+            }
+        }, token);
+    }
+
+    private bool CheckRewardForTimeoutEnd(RewardEndDetectionConfig config, out int rewardValue)
+    {
+        rewardValue = 0;
+
+        return config.Type switch
+        {
+            RewardEndDetectionType.Experience => CheckExperienceRewardByTemplate(out rewardValue),
+            _ => CheckMoraRewardByTemplate(config, out rewardValue)
+        };
+    }
+
+    private bool CheckMoraRewardByTemplate(RewardEndDetectionConfig config, out int mora)
+    {
+        mora = 0;
+
+        try
+        {
+            using var ra = CaptureToRectArea();
+            foreach (var moraRewardRa in AutoFightAssets.Instance.MoraRewardRas)
+            {
+                if (!int.TryParse(moraRewardRa.Name?.Replace("mora_", ""), out var templateMora) ||
+                    !config.IsMoraValueEnabled(templateMora))
+                {
+                    continue;
+                }
+
+                var found = ra.Find(moraRewardRa);
+                if (!found.IsExist())
+                {
+                    continue;
+                }
+
+                mora = templateMora;
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "摩拉奖励模板识别异常");
+        }
+
+        return false;
+    }
+
+    private bool CheckExperienceRewardByTemplate(out int experience)
+    {
+        experience = 0;
+
+        try
+        {
+            using var ra = CaptureToRectArea();
+            foreach (var experienceRa in AutoFightAssets.Instance.ExperienceRewardRas)
+            {
+                var found = ra.Find(experienceRa);
+                if (!found.IsExist())
+                {
+                    continue;
+                }
+
+                var iconX = found.X - 147;
+                if (iconX < 0)
+                {
+                    continue;
+                }
+
+                // 同时校验数值左侧经验图标的特征色，避免把其他白色 UI 数字当成经验值。
+                var pixelValue = ra.SrcMat.At<Vec3b>(found.Y, iconX);
+                if (pixelValue[0] != 253 || pixelValue[1] != 247 || pixelValue[2] != 172)
+                {
+                    continue;
+                }
+
+                return int.TryParse(experienceRa.Name, out experience);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "经验值奖励模板识别异常");
+        }
+
+        return false;
     }
     
     //基于万叶经验值判断是否拾取
@@ -2750,7 +2960,9 @@ public class AutoFightTask : ISoloTask
     /// 沿用 _taskParam.Timeout 作为兜底超时上限。
     /// 详见 .kiro/specs/fight-strategy-fallback-use-real-flow/design.md §2.6。
     /// </summary>
-    private async Task RunC1FallbackLoopAsync(CancellationToken ct)
+    private async Task RunC1FallbackLoopAsync(
+        CancellationToken ct,
+        RewardEndDetectionConfig? rewardEndDetection)
     {
         Logger.LogWarning(
             "[联机][兜底][C1] 队伍识别失败，启用简化 EQA 循环 + CheckFightFinish 检测，超时 {Timeout}s",
@@ -2763,6 +2975,18 @@ public class AutoFightTask : ISoloTask
         _2ndEndFlag = false;
         _fightDurationExceeded = false;
         _totolyFlag = false;
+
+        // C1 会绕过正常战斗主循环，因此在此单独建立联机配额和奖励识别生命周期。
+        var (quorumCoordinator, onAllFightDone) = StartSharedFightEndCoordination();
+        using var rewardEndDetectionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        Task? rewardEndDetectionTask = null;
+        if (rewardEndDetection is not null)
+        {
+            rewardEndDetectionTask = StartRewardTimeoutEndLoop(
+                rewardEndDetectionCts.Token,
+                rewardEndDetection,
+                _ => HandleRewardEndDetected(rewardEndDetection));
+        }
 
         var sw = Stopwatch.StartNew();
         var timeoutMs = (long)_taskParam.Timeout * 1000L;
@@ -2815,9 +3039,13 @@ public class AutoFightTask : ISoloTask
         }
         finally
         {
+            FightEndTotoly = true;
+            // 与正常流程一致：停止奖励识别并解除本场 AllFightDone 订阅。
+            rewardEndDetectionCts.Cancel();
+            await WaitForRewardEndDetectionTaskAsync(rewardEndDetectionTask);
+            StopSharedFightEndCoordination(quorumCoordinator, onAllFightDone);
             Simulation.ReleaseAllKey();
             FightStatusFlag = false;
-            FightEndTotoly = true;
             Logger.LogInformation(
                 "[联机][兜底][C1] 简化兜底结束，耗时 {Elapsed:F1}s",
                 sw.Elapsed.TotalSeconds);

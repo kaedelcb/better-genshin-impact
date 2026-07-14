@@ -2,6 +2,8 @@ using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask.Model;
 using OpenCvSharp;
 using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Model;
 
 
@@ -69,8 +71,12 @@ public class AutoFightAssets : BaseAssets<AutoFightAssets>
 
     public RecognitionObject AbnormalIconRa;
     
-    // 经验图标
+    // 原有万叶拾取逻辑使用的单个经验模板
     public RecognitionObject ExperienceRa;
+
+    // 地图追踪奖励结束检测复用的模板对象，避免 200ms 检测循环反复加载图片。
+    public List<RecognitionObject> ExperienceRewardRas;
+    public List<RecognitionObject> MoraRewardRas;
     
     private  Vanara.PInvoke.RECT _gameScreenSize = SystemControl.GetGameScreenRect(TaskContext.Instance().GameHandle);
 
@@ -432,9 +438,21 @@ public class AutoFightAssets : BaseAssets<AutoFightAssets>
             RegionOfInterest = new Rect((int)(570 * AssetScale), (int)(490 * AssetScale), (int)(780 * AssetScale), (int)(110 * AssetScale)),
             DrawOnWindow = false
         }.InitTemplate();
+        ExperienceRewardRas = InitializeExperienceRewardRecognitionObjects();
+        MoraRewardRas = InitializeMoraRewardRecognitionObjects();
     }
     
     public RecognitionObject InitializeRecognitionObject(int experience)
+    {
+        // 保留原万叶拾取检测范围；奖励结束检测使用独立的较小 ROI，不能互相覆盖。
+        ExperienceRa = CreateExperienceRecognitionObject(
+            experience,
+            new Rect((int)(CaptureRect.Width * 0.145), (int)(CaptureRect.Height * 0.5),
+                (int)(CaptureRect.Width * 0.02), (int)(CaptureRect.Height * 0.22)));
+        return ExperienceRa;
+    }
+
+    private RecognitionObject CreateExperienceRecognitionObject(int experience, Rect regionOfInterest)
     {
         var threshold = 0.9;
         
@@ -447,18 +465,62 @@ public class AutoFightAssets : BaseAssets<AutoFightAssets>
             threshold =0.6;
         }
         
-        ExperienceRa = new RecognitionObject
+        return new RecognitionObject
         {
             Name = experience.ToString(),
             RecognitionType = RecognitionTypes.TemplateMatch,
             TemplateImageMat = GameTaskManager.LoadAssetImage("AutoFight", "experience_" + experience + ".png"),
-            RegionOfInterest = new Rect((int)(CaptureRect.Width*0.145),(int)(CaptureRect.Height*0.5), (int)(CaptureRect.Width*0.02), (int)(CaptureRect.Height*0.22)),
+            RegionOfInterest = regionOfInterest,
             UseMask = true,
             Threshold = threshold,
             DrawOnWindow = true,
         }.InitTemplate();
-        return  ExperienceRa;
-    }  
+    }
+
+    private List<RecognitionObject> InitializeExperienceRewardRecognitionObjects()
+    {
+        // 奖励结束只扫描左侧经验数值出现区域，避免沿用万叶拾取所需的纵向大范围。
+        var region = new Rect(
+            (int)(CaptureRect.Width * 0.145),
+            (int)(CaptureRect.Height * 0.5),
+            (int)(CaptureRect.Width * 0.03),
+            (int)(CaptureRect.Height * 0.08));
+
+        return new[] { 180, 120, 60, 58, 57 }
+            .Select(experience => CreateExperienceRecognitionObject(experience, region))
+            .ToList();
+    }
+
+    private List<RecognitionObject> InitializeMoraRewardRecognitionObjects()
+    {
+        var threshold = 0.86;
+
+        if (_gameScreenSize.Width > 1920)
+        {
+            threshold = 0.65;
+        }
+
+        // 摩拉提示可能纵向堆叠，ROI 覆盖左侧多行奖励数值区域。
+        var region = new Rect(
+            (int)(CaptureRect.Width * 0.1),
+            (int)(CaptureRect.Height * 0.48),
+            (int)(CaptureRect.Width * 0.12),
+            (int)(CaptureRect.Height * 0.18));
+
+        return new[] { 200, 400, 600, 1200, 3000 }
+            .Select(mora => new RecognitionObject
+            {
+                Name = "mora_" + mora,
+                RecognitionType = RecognitionTypes.TemplateMatch,
+                TemplateImageMat = GameTaskManager.LoadAssetImage("AutoFight", "mora_" + mora + ".png"),
+                RegionOfInterest = region,
+                UseMask = true,
+                Threshold = threshold,
+                DrawOnWindow = true,
+                DrawOnWindowPen = new Pen(Color.Lime, 2)
+            }.InitTemplate())
+            .ToList();
+    }
     
     public RecognitionObject InitializeCondensedResin(int condensedResinCount)
     {

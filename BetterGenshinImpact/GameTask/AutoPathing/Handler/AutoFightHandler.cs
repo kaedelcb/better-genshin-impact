@@ -54,6 +54,9 @@ internal class AutoFightHandler : IActionHandler
                     taskParams.Timeout = number;
                 }
             }
+
+            ApplyWaypointRewardEndDetection(taskParams, waypointForTrack);
+
             if(Dispatcher.IsCustomCts)
             {
                 _logger.LogWarning("异步战斗任务，关闭打开队伍的战斗结束检测");
@@ -69,6 +72,7 @@ internal class AutoFightHandler : IActionHandler
         else
         {
             taskParams = new AutoFightParam(GetFightStrategy(), TaskContext.Instance().Config.AutoFightConfig);
+            ApplyWaypointRewardEndDetection(taskParams, waypointForTrack);
 
             // 联机模式：房主同步的战斗超时覆盖（不修改原始配置）
             if (PathingConditionConfig.MultiplayerFightTimeoutOverride.HasValue)
@@ -195,4 +199,29 @@ internal class AutoFightHandler : IActionHandler
     {
         return GetFightStrategy(TaskContext.Instance().Config.AutoFightConfig);
     }
+
+    /// <summary>
+    /// 将当前战斗点的奖励结束检测注入本次任务参数，不修改配置组或全局自动战斗配置。
+    /// </summary>
+    private void ApplyWaypointRewardEndDetection(AutoFightParam taskParams, WaypointForTrack? waypointForTrack)
+    {
+        var autoFight = waypointForTrack?.AutoFight;
+        if (autoFight is null)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(autoFight.RewardType))
+        {
+            if (RewardEndDetectionConfig.TryCreate(autoFight.RewardType, autoFight.MoraValues, out var rewardEndDetection))
+            {
+                taskParams.RewardEndDetection = rewardEndDetection;
+            }
+            else
+            {
+                _logger.LogWarning("地图追踪点位的奖励结束检测参数无效：{RewardType}", autoFight.RewardType);
+            }
+        }
+    }
+
 }
