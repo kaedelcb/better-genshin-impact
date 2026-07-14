@@ -26,10 +26,18 @@ Tmp/
 node_modules/
 github_actions_cache/
 
+# 截图调试残留
+[0-9a-f]*-[0-9a-f]*-[0-9a-f]*-[0-9a-f]*-[0-9a-f]*.png
+
 # Build 目录产物
 Build/*.7z
 Build/*.exe
+Build/*.png
+Build/BetterGI_*/
 Build/dist/
+
+# Visual Studio 临时文件
+*_wpftmp.csproj
 
 *.zip
 

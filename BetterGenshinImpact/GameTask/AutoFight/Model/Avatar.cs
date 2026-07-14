@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,6 +27,7 @@ using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Model;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.GameTask.AutoPathing.Model.Enum;
+using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.ONNX;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.View.Drawable;
@@ -1195,6 +1197,8 @@ public class Avatar
                     var distinctBulletPatterns = new HashSet<string>();
                     var lastBulletPatternTime = DateTime.UtcNow;
                     var rotateIntervalMultiplier = 1.0;
+                    var ocrResetCount = 0;
+                    var ocrResetCap = 2;
                     while (true)
                     {
                         Sleep(50, Ct);
@@ -1217,10 +1221,12 @@ public class Avatar
                         // 每帧检测有效子弹数量（子弹按顺序填充，0-6）
                         var (bulletStatusChars, _, _, _) = Avatar.AnalyzeAllChascaBullets();
                         var effectiveBulletCount = bulletStatusChars.Count(c => c != '空');
-                        // 压缩子弹类型：风水冰视为一种（记作冻），生成模式签名（排除第1格，取2-6格）
-                        var compressedChars = bulletStatusChars.Skip(1).Select(c => c == '风' || c == '水' || c == '冰' ? '冻' : c).ToArray();
+                        // 子弹类型直接使用检测结果：火/水/雷/冰/空
+                        var compressedChars = bulletStatusChars.Skip(1).ToArray();
                         var pattern = new string(compressedChars);
                         Logger.LogInformation("当前子弹有效数量：{Count}，子弹类型{Pattern}", effectiveBulletCount, pattern);
+                        // 调试采样：每帧输出亮度花纹，不干扰原逻辑
+                        Avatar.DebugSampleChascaBullets(bulletStatusChars);
                         // 满弹（≥6）→ 进入双倍超时模式
                         if (effectiveBulletCount >= 6)
                         {
@@ -1233,19 +1239,21 @@ public class Avatar
                             distinctBulletPatterns.Clear();
                             distinctBulletPatterns.Add(pattern);
                             lastBulletPatternTime = DateTime.UtcNow;
+                            ocrResetCount = 0;
                         }
 
                         // 血条检测
                         var bloodBars = Avatar.FindBloodBars();
                         var regularBars = bloodBars.Where(b => b.y >= 96).ToList();
                         var legendaryBars = bloodBars.Where(b => b.y >= 50 && b.y < 96).ToList();
-                        // 传奇已被击杀检测：曾出现传奇血条，现在不再存在 → 持续2帧确认后退出
+                        // 传奇已被击杀检测：曾出现传奇血条，现在不再存在且子弹不再变动 → 退出
                         if (hadLegendaryBar && legendaryBars.Count == 0)
                         {
                             legendaryLostFrames++;
-                            if (legendaryLostFrames >= 2)
+                            if (legendaryLostFrames >= 2 &&
+                                (DateTime.UtcNow - lastBulletPatternTime).TotalSeconds >= chascaInterval)
                             {
-                                Logger.LogInformation("传奇血条消失，推测已击杀，退出循环");
+                                Logger.LogInformation("传奇血条消失且子弹不再变动，推测已击杀，退出循环");
                                 break;
                             }
                         }
@@ -1302,10 +1310,24 @@ public class Avatar
                                     distinctBulletPatterns.Clear();
                                     lastBulletPatternTime = DateTime.UtcNow;
                                     rotateIntervalMultiplier = 1.0;
+                                    ocrResetCount = 0;
                                 }
                                 else
                                 {
-                                    Sleep(chascaFrameMs, Ct);
+                                    // 子弹变动中且有传奇血条，尝试OCR寻敌
+                                    if (OcrSeekEnemy(dpi, chascaFrameMs, Ct))
+                                    {
+                                        // OCR命中 → 重置旋转超时（认为还在打）
+                                        if (ocrResetCount < ocrResetCap)
+                                        {
+                                            lastBulletPatternTime = DateTime.UtcNow;
+                                            ocrResetCount++;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        Sleep(chascaFrameMs, Ct);
+                                    }
                                 }
                             }
                             else
@@ -1927,6 +1949,18 @@ public class Avatar
                 double segElapsed = seg >= 0 ? elapsed - segStart : 0;
                 double progress = segMs > 0 ? segElapsed / segMs : 0;
 
+                // 传奇血条检测：跳过序列逻辑，使用OCR寻敌
+                var legendaryBars = FindBloodBars().Where(b => b.x > 200 && b.y >= 50 && b.y < 96).ToList();
+                if (legendaryBars.Count > 0)
+                {
+                    if (!OcrSeekEnemy(dpi, cfg.SpecializedFrameIntervalMs, Ct, 900, 540))
+                    {
+                        Simulation.SendInput.Mouse.MoveMouseBy((int)(500 * rotateSpeed * dpi), 0);
+                    }
+                    Sleep(cfg.SpecializedFrameIntervalMs);
+                    continue;
+                }
+
                 switch (seg)
                 {
                     case -1:
@@ -1958,12 +1992,20 @@ public class Avatar
                             }
                             else
                             {
-                                Simulation.SendInput.Mouse.MoveMouseBy((int)(500 * rotateSpeed * dpi), 0);
-                                if ((DateTime.UtcNow - lastSeenBlood).TotalSeconds >= 1)
+                                // 无血条时先用OCR替补
+                                if (!OcrSeekEnemy(dpi, cfg.SpecializedFrameIntervalMs, Ct, 900, 540))
                                 {
-                                    Logger.LogInformation("序列耗尽后超过1秒未找到血条，提前退出");
-                                    VisionContext.Instance().DrawContent.PutOrRemoveRectList("SandroneBloodBars", drawList);
-                                    goto done;
+                                    Simulation.SendInput.Mouse.MoveMouseBy((int)(500 * rotateSpeed * dpi), 0);
+                                    if ((DateTime.UtcNow - lastSeenBlood).TotalSeconds >= 1)
+                                    {
+                                        Logger.LogInformation("序列耗尽后超过1秒未找到血条，提前退出");
+                                        VisionContext.Instance().DrawContent.PutOrRemoveRectList("SandroneBloodBars", drawList);
+                                        goto done;
+                                    }
+                                }
+                                else
+                                {
+                                    lastSeenBlood = DateTime.UtcNow; // OCR命中，重置计时
                                 }
                             }
                             VisionContext.Instance().DrawContent.PutOrRemoveRectList("SandroneBloodBars", drawList);
@@ -2470,6 +2512,50 @@ public class Avatar
     }
 
     /// <summary>
+    /// OCR寻敌 — 仅传奇模式使用。
+    /// 在 450,240-1600,900 区域进行OCR识别，按文字区域大小加权计算目标中心，移动视角朝向该坐标。
+    /// 力度为普通血条对准的 1/3 (0.45→0.15, 0.80→0.27)。
+    /// </summary>
+    public static bool OcrSeekEnemy(double dpi, int frameMs, CancellationToken ct, double targetX = 960, double targetY = 500)
+    {
+        using var ra = CaptureToRectArea();
+        var ocrResults = ra.FindMulti(RecognitionObject.Ocr(450, 240, 1150, 660));
+
+        if (ocrResults == null || ocrResults.Count == 0)
+            return false;
+
+        var validResults = ocrResults.Where(r => !string.IsNullOrWhiteSpace(r.Text) && !r.Text.StartsWith("+")).ToList();
+        if (validResults.Count == 0)
+            return false;
+
+        // 按面积加权计算中心
+        double totalWeight = 0, wx = 0, wy = 0;
+        foreach (var r in validResults)
+        {
+            double w = r.Width * r.Height;
+            wx += (r.X + r.Width / 2.0) * w;
+            wy += (r.Y + r.Height / 2.0) * w;
+            totalWeight += w;
+        }
+
+        double cx = wx / totalWeight;
+        double cy = wy / totalWeight;
+
+        var dx = cx - targetX;
+        var dy = cy - targetY;
+
+        Simulation.SendInput.Mouse.MoveMouseBy(
+            (int)(dx * dpi * 0.15),
+            (int)(dy * dpi * 0.27));
+
+        Logger.LogInformation("OCR寻敌：加权中心({Cx:F0},{Cy:F0}) 偏移({Dx:F0},{Dy:F0}) 共{Count}个文本",
+            cx, cy, dx, dy, validResults.Count);
+
+        Sleep(frameMs, ct);
+        return true;
+    }
+
+    /// <summary>
     /// 使用元素视野方法定位传奇（首领）敌人的身体中心位置。
     /// 返回是否存在传奇敌人及其中心坐标（检测空间 1500×900 内）。
     /// 基于传奇血条位置估计身体位置，待后续补充实际视觉检测逻辑。
@@ -2600,39 +2686,13 @@ public class Avatar
     }
 
     /// <summary>
-    /// 调试用：详细分析恰斯卡6个弹匣的倾向。
-    /// 输出格式："子弹倾向分析：冰56% 火70% 雷30% | 推测结果：冰火空空空空"
+    /// 调试用：返回恰斯卡6个弹匣的检测结果摘要。
+    /// 输出格式："子弹分析：空 空 火 雷 冰 水"
     /// </summary>
     public static string DebugAnalyzeChascaBullets()
     {
-        var (statusChars, perRegionCounts, otherCounts, totals) = AnalyzeAllChascaBullets();
-        var parts = new List<string>();
-
-        for (int i = 0; i < statusChars.Length; i++)
-        {
-            var counts = perRegionCounts[i];
-            var total = totals[i];
-            var whiteCount = counts.GetValueOrDefault("白", 0);
-            var nonWhiteTotal = total - whiteCount;
-
-            var freezeCount = counts.GetValueOrDefault("风", 0) + counts.GetValueOrDefault("水", 0) + counts.GetValueOrDefault("冰", 0);
-            var fireCount = counts.GetValueOrDefault("火", 0);
-            var electroCount = counts.GetValueOrDefault("雷", 0);
-
-            if (nonWhiteTotal <= 0)
-            {
-                parts.Add("");
-                continue;
-            }
-
-            // 找最高分组
-            var best = new[] { ("冻", freezeCount), ("火", fireCount), ("雷", electroCount) }
-                .OrderByDescending(g => g.Item2)
-                .First();
-            parts.Add($"{best.Item1}{(double)best.Item2 / nonWhiteTotal * 100:F0}%");
-        }
-
-        return $"当前子弹倾向分析：{string.Join(" ", parts)} | 推测子弹属性：{string.Join(" ", statusChars.Select(c => c.ToString()))}";
+        var (statusChars, _, _, _) = AnalyzeAllChascaBullets();
+        return $"当前子弹分析：{string.Join(" ", statusChars.Select(c => c.ToString()))}";
     }
 
     /// <summary>
@@ -2656,12 +2716,83 @@ public class Avatar
         (1266, 427, 102, 40),
     ];
 
+    // ========== HSV 条件（数据驱动） ==========
+    private static bool IsFireBright(int h, int s, int v) => h >= 8 && h <= 30 && s > 100 && v > 180;
+    private static bool IsFireDark(int h, int s, int v) => h >= 5 && h <= 25 && s >= 110 && s <= 230 && v >= 100 && v <= 180;
+
+    private static bool IsElectroBright(int h, int s, int v) => h >= 130 && h <= 152 && s > 80 && v > 180;
+    private static bool IsElectroDark(int h, int s, int v) => h >= 135 && h <= 150 && s >= 90 && s <= 160 && v >= 100 && v <= 175;
+
+    private static bool IsCryoBright(int h, int s, int v) => false; // 冰弹无明暗之分
+    private static bool IsCryoDark(int h, int s, int v) => h >= 95 && h <= 110 && s > 100 && v > 220;
+
+    private static bool IsHydroBright(int h, int s, int v) => h >= 90 && h <= 115 && s > 100 && v > 230;
+    private static bool IsHydroDark(int h, int s, int v) => h >= 90 && h <= 120 && s > 160 && v >= 130 && v <= 195;
+
+    // ===== 共识花纹模板数据 =====
+    // 实际数据存储在 GameTask/AutoFight/Assets/chasca-patterns.json（JSON资源文件）
+    // 由 generate_csharp_templates.py 生成
+    private static readonly Lazy<(int cols, int rows, byte[] data)[][]> _ptTemplatesLazy
+        = new Lazy<(int cols, int rows, byte[] data)[][]>(LoadChascaPatterns);
+
+    private static (int cols, int rows, byte[] data)[][] _ptTemplates => _ptTemplatesLazy.Value;
+
+    private static (int cols, int rows, byte[] data)[][] LoadChascaPatterns()
+    {
+        var jsonPath = System.IO.Path.Combine(
+            AppContext.BaseDirectory,
+            "GameTask", "AutoFight", "Assets", "chasca-patterns.json");
+        var json = System.IO.File.ReadAllText(jsonPath);
+        var dict = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, ChascaSlotData>>(json);
+
+        string[] slotKeys = ["slot2", "slot3", "slot4", "slot5", "slot6"];
+        string[] elemKeys = ["fire", "electro", "cryo", "hydro"];
+
+        var result = new (int cols, int rows, byte[] data)[5][];
+        for (int ti = 0; ti < 5; ti++)
+        {
+            var slot = dict[slotKeys[ti]];
+            int cols = slot.cols;
+            int rows = slot.rows;
+            var arr = new (int cols, int rows, byte[] data)[4];
+            for (int e = 0; e < 4; e++)
+            {
+                var list = e switch
+                {
+                    0 => slot.fire,
+                    1 => slot.electro,
+                    2 => slot.cryo,
+                    3 => slot.hydro,
+                    _ => null
+                };
+                if (list == null || list.Count == 0)
+                {
+                    arr[e] = (0, 0, Array.Empty<byte>());
+                    continue;
+                }
+                var bytes = list.Select(v => (byte)v).ToArray();
+                arr[e] = (cols, rows, bytes);
+            }
+            result[ti] = arr;
+        }
+        return result;
+    }
+
+    private class ChascaSlotData
+    {
+        public int cols { get; set; }
+        public int rows { get; set; }
+        public List<int> fire { get; set; }
+        public List<int> electro { get; set; }
+        public List<int> cryo { get; set; }
+        public List<int> hydro { get; set; }
+    }
+
     /// <summary>
-    /// 对所有6个弹匣执行最近邻分析，返回 (statusChars, perRegionCounts, otherCounts, totals)。
-    /// statusChars：6字符状态串（"风"/"水"/"冰"/"火"/"雷"/"空"）
-    /// perRegionCounts：每个区域的逐元素像素计数（含"白"不含"其他"）
-    /// otherCounts：每个区域未分类（其他）像素数
-    /// totals：每个区域总采样像素数
+    /// 基于共识花纹模板的 Jaccard 匹配检测。
+    /// 对每个槽位划分网格，逐格采样 HSV 后与内置花纹模板计算 Jaccard 相似度，
+    /// 取最高分元素，低于阈值则标空。
+    /// 仅第1槽（第1发）固定为风弹标空；第2-6槽参与检测。
     /// </summary>
     private static (char[] statusChars, Dictionary<string, int>[] perRegionCounts, int[] otherCounts, int[] totals) AnalyzeAllChascaBullets()
     {
@@ -2672,9 +2803,21 @@ public class Avatar
         var allCounts = new Dictionary<string, int>[ChascaBulletRects.Length];
         var otherCounts = new int[ChascaBulletRects.Length];
         var totals = new int[ChascaBulletRects.Length];
+        string[] elemNames = ["火", "雷", "冰", "水"];
 
+        // 6个槽位依次处理
         for (int i = 0; i < ChascaBulletRects.Length; i++)
         {
+            // 仅第1槽（第1发）固定为风弹，直接标空
+            if (i == 0)
+            {
+                statusChars[i] = '空';
+                allCounts[i] = new Dictionary<string, int>();
+                otherCounts[i] = 0;
+                totals[i] = 0;
+                continue;
+            }
+
             var r = ChascaBulletRects[i];
             var scaledRect = new Rect(
                 (int)(r.x * assetScale),
@@ -2683,77 +2826,181 @@ public class Avatar
                 (int)(r.h * assetScale));
 
             using var region = image.DeriveCrop(scaledRect).SrcMat;
+            using var hsv = new Mat();
+            Cv2.CvtColor(region, hsv, ColorConversionCodes.BGR2HSV);
 
-            // 逐像素分类计数（stride 2 兼顾性能）
-            var counts = new Dictionary<string, int>();
-            var otherCount = 0;
-            var totalSampled = 0;
+            int totalPixels = hsv.Width * hsv.Height;
+            totals[i] = totalPixels;
 
-            for (int y = 0; y < region.Height; y += 2)
+            // 获取当前槽位的模板索引（i=1→slot2, i=2→slot3, i=3→slot4, i=4→slot5, i=5→slot6）
+            int ti = i - 1;
+            bool hasTemplate = ti >= 0 && _ptTemplates.Length > ti;
+
+            // 每个元素的 Jaccard 相似度 + 检测cell数
+            double[] jaccardScores = new double[4];
+            int[] detectedCells = new int[4];
+
+            if (hasTemplate)
             {
-                for (int x = 0; x < region.Width; x += 2)
+                for (int e = 0; e < 4; e++)
                 {
-                    var bgr = region.At<Vec3b>(y, x);
-                    var (group, _) = ClassifyBulletPixel(bgr.Item2, bgr.Item1, bgr.Item0);
-                    totalSampled++;
+                    int cols = _ptTemplates[ti][e].cols;
+                    int rows = _ptTemplates[ti][e].rows;
+                    if (cols <= 0 || rows <= 0) continue;
 
-                    if (group == "") // "其他"
+                    byte[] template = _ptTemplates[ti][e].data;
+                    double cellW = (double)hsv.Width / cols;
+                    double cellH = (double)hsv.Height / rows;
+
+                    int match = 0;      // detected ∩ template
+                    int detected = 0;   // detected
+                    int templateActive = 0; // template
+
+                    for (int rIdx = 0; rIdx < rows; rIdx++)
                     {
-                        otherCount++;
+                        for (int cIdx = 0; cIdx < cols; cIdx++)
+                        {
+                            // 采样cell中心像素
+                            int px = (int)(cIdx * cellW + cellW / 2);
+                            int py = (int)(rIdx * cellH + cellH / 2);
+                            px = Math.Min(px, hsv.Width - 1);
+                            py = Math.Min(py, hsv.Height - 1);
+
+                            var pixel = hsv.At<Vec3b>(py, px);
+                            int h = pixel.Item0, s = pixel.Item1, v = pixel.Item2;
+
+                            bool activated = e switch
+                            {
+                                0 => IsFireDark(h, s, v) || IsFireBright(h, s, v),
+                                1 => IsElectroDark(h, s, v) || IsElectroBright(h, s, v),
+                                2 => IsCryoDark(h, s, v),
+                                3 => IsHydroDark(h, s, v) || IsHydroBright(h, s, v),
+                                _ => false
+                            };
+
+                            bool isTpl = template[rIdx * cols + cIdx] == 1;
+                            if (isTpl) templateActive++;
+
+                            if (activated)
+                            {
+                                detected++;
+                                if (isTpl) match++;
+                            }
+                        }
                     }
-                    else
-                    {
-                        counts.TryGetValue(group, out var c);
-                        counts[group] = c + 1;
-                    }
+
+                    detectedCells[e] = detected;
+                    int union = detected + templateActive - match;
+                    jaccardScores[e] = union > 0 ? (double)match / union : 0;
+
+                    // 覆盖率辅助：检测到的cell数占总cell比例
+                    double coverage = (double)detected / (cols * rows);
+
+                    // 对Jaccard施加覆盖率影响：低覆盖率时降分
+                    // 使用 sqrt(coverage) 作为乘数，使得 coverage=0.25 时 ×0.5, coverage=1.0 时 ×1.0
+                    jaccardScores[e] *= Math.Sqrt(coverage);
                 }
             }
 
-            allCounts[i] = counts;
-            otherCounts[i] = otherCount;
-            totals[i] = totalSampled;
-
-            // 排除白色像素后，计算三大组占比
-            var whiteCount = counts.GetValueOrDefault("白", 0);
-            var nonWhiteTotal = totalSampled - whiteCount;
-
-            var freezeCount = counts.GetValueOrDefault("风", 0) + counts.GetValueOrDefault("水", 0) + counts.GetValueOrDefault("冰", 0);
-            var fireCount = counts.GetValueOrDefault("火", 0);
-            var electroCount = counts.GetValueOrDefault("雷", 0);
-
-            var freezeRatio = nonWhiteTotal > 0 ? (double)freezeCount / nonWhiteTotal : 0;
-            var fireRatio = nonWhiteTotal > 0 ? (double)fireCount / nonWhiteTotal : 0;
-            var electroRatio = nonWhiteTotal > 0 ? (double)electroCount / nonWhiteTotal : 0;
-
-            var bestRatio = Math.Max(freezeRatio, Math.Max(fireRatio, electroRatio));
-
-            if (bestRatio > 0.6)
+            // 找最高Jaccard分数的元素
+            int bestElem = -1;
+            double bestScore = 0;
+            for (int e = 0; e < 4; e++)
             {
-                char bestGroupChar;
-                if (freezeRatio >= fireRatio && freezeRatio >= electroRatio)
-                    bestGroupChar = '冻';
-                else if (fireRatio >= freezeRatio && fireRatio >= electroRatio)
-                    bestGroupChar = '火';
-                else
-                    bestGroupChar = '雷';
+                if (jaccardScores[e] > bestScore)
+                {
+                    bestScore = jaccardScores[e];
+                    bestElem = e;
+                }
+            }
 
-                if (bestGroupChar == '冻')
-                {
-                    var bestElem = new[] { ("风", counts.GetValueOrDefault("风", 0)), ("水", counts.GetValueOrDefault("水", 0)), ("冰", counts.GetValueOrDefault("冰", 0)) }
-                        .OrderByDescending(e => e.Item2).First().Item1;
-                    statusChars[i] = bestElem[0];
-                }
-                else
-                {
-                    statusChars[i] = bestGroupChar;
-                }
+            // 空判定
+            var counts = new Dictionary<string, int>();
+            allCounts[i] = counts;
+
+            if (bestElem < 0 || bestScore < 0.15)
+            {
+                statusChars[i] = '空';
+                otherCounts[i] = totalPixels;
             }
             else
             {
-                statusChars[i] = '空';
+                char elem = elemNames[bestElem][0];
+                statusChars[i] = elem;
+                counts[elem.ToString()] = detectedCells[bestElem];
+                otherCounts[i] = totalPixels - detectedCells[bestElem];
             }
         }
 
         return (statusChars, allCounts, otherCounts, totals);
+    }
+
+    /// <summary>
+    /// 调试用：采样6个子弹槽位的 HSV 并写入文件。
+    /// 每个采样点输出 H/S/V 值，附带每槽平均值。
+    /// 写入到解决方案根目录的 chasca-bullet-samples.txt（追加模式）。
+    /// 每次测试后请重命名该文件以标注对应元素类型，然后清空或删除以便下次采集。
+    /// </summary>
+    public static void DebugSampleChascaBullets(char[] label)
+    {
+        // 定位到解决方案根目录（向上查找 .sln 文件）
+        var solutionDir = AppContext.BaseDirectory;
+        var dir = new DirectoryInfo(solutionDir);
+        while (dir != null && !dir.GetFiles("*.sln").Any())
+            dir = dir.Parent;
+        var outputDir = dir?.FullName ?? solutionDir;
+        var filePath = System.IO.Path.Combine(outputDir, "chasca-bullet-samples.txt");
+
+        var assetScale = TaskContext.Instance().SystemInfo.AssetScale;
+        using var image = CaptureToRectArea();
+
+        using var writer = new StreamWriter(filePath, append: true);
+
+        var frameTime = DateTime.UtcNow.ToString("HH:mm:ss.fff");
+        writer.WriteLine($"=== Frame {frameTime} ===");
+
+        for (int si = 0; si < ChascaBulletRects.Length; si++)
+        {
+            var (rx, ry, rw, rh) = ChascaBulletRects[si];
+            var scaledRect = new OpenCvSharp.Rect(
+                (int)(rx * assetScale),
+                (int)(ry * assetScale),
+                (int)(rw * assetScale),
+                (int)(rh * assetScale));
+
+            using var region = image.DeriveCrop(scaledRect).SrcMat;
+            using var hsv = new Mat();
+            Cv2.CvtColor(region, hsv, ColorConversionCodes.BGR2HSV);
+
+            // 自适应步长，目标输出约 12x10 个采样点
+            var stepX = Math.Max(1, region.Width / 12);
+            var stepY = Math.Max(1, region.Height / 10);
+
+            var labelChar = si < label.Length ? label[si] : '?';
+            writer.WriteLine($"Slot{si} label={labelChar} ({rw}x{rh}) step={stepX},{stepY}:");
+
+            double sumH = 0, sumS = 0, sumV = 0;
+            int count = 0;
+
+            for (int y = 0; y < hsv.Height; y += stepY)
+            {
+                for (int x = 0; x < hsv.Width; x += stepX)
+                {
+                    var pixel = hsv.At<Vec3b>(y, x);
+                    int h = pixel.Item0, s = pixel.Item1, v = pixel.Item2;
+                    writer.Write($"{h,3}/{s,3}/{v,3} ");
+                    sumH += h; sumS += s; sumV += v;
+                    count++;
+                }
+                writer.Write('\n');
+            }
+
+            if (count > 0)
+            {
+                writer.WriteLine($"  => avg H={sumH / count:F0} S={sumS / count:F0} V={sumV / count:F0}  n={count}");
+            }
+        }
+
+        writer.WriteLine(); // 空行分隔帧
     }
 }
