@@ -1244,8 +1244,8 @@ public class Avatar
 
                         // 血条检测
                         var bloodBars = Avatar.FindBloodBars();
-                        var regularBars = bloodBars.Where(b => b.y >= 96).ToList();
-                        var legendaryBars = bloodBars.Where(b => b.y >= 50 && b.y < 96).ToList();
+                        var regularBars = bloodBars.Where(b => !IsLegendaryBar(b.y)).ToList();
+                        var legendaryBars = bloodBars.Where(b => IsLegendaryBar(b.y)).ToList();
                         // 传奇已被击杀检测：曾出现传奇血条，现在不再存在且子弹不再变动 → 退出
                         if (hadLegendaryBar && legendaryBars.Count == 0)
                         {
@@ -1950,7 +1950,7 @@ public class Avatar
                 double progress = segMs > 0 ? segElapsed / segMs : 0;
 
                 // 传奇血条检测：跳过序列逻辑，使用OCR寻敌
-                var legendaryBars = FindBloodBars().Where(b => b.x > 200 && b.y >= 50 && b.y < 96).ToList();
+                var legendaryBars = FindBloodBars().Where(b => b.x > 200 && IsLegendaryBar(b.y)).ToList();
                 if (legendaryBars.Count > 0)
                 {
                     if (!OcrSeekEnemy(dpi, cfg.SpecializedFrameIntervalMs, Ct, 900, 540))
@@ -2474,6 +2474,56 @@ public class Avatar
     }
 
     /// <summary>
+    /// 传奇血条动态追踪字典：2px粒度的 y → 连续出现计数。
+    /// y 96-200 范围的血条在连续5帧中出现时被标记为传奇。
+    /// </summary>
+    private static readonly Dictionary<int, int> _legendaryBarTracker = new();
+    private const int LegendaryBarTrackThreshold = 5;
+
+    /// <summary>
+    /// 更新传奇血条动态追踪状态。
+    /// 对 y 96-200 的血条进行帧间连续性追踪，连续出现达到阈值后标记为传奇。
+    /// 允许1帧容错：某帧未出现时计数递减而非直接清零。
+    /// </summary>
+    private static void UpdateLegendaryBarTracker(IEnumerable<int> barYs)
+    {
+        var currentBins = barYs.Where(y => y >= 96 && y < 200)
+                               .Select(y => y / 2 * 2)
+                               .ToHashSet();
+
+        // 存在的 y：递增（上限为阈值）
+        foreach (var bin in currentBins)
+        {
+            if (_legendaryBarTracker.TryGetValue(bin, out var cnt))
+                _legendaryBarTracker[bin] = Math.Min(cnt + 1, LegendaryBarTrackThreshold);
+            else
+                _legendaryBarTracker[bin] = 1;
+        }
+
+        // 不存在的 y：递减（1帧容错），归零则移除
+        foreach (var bin in _legendaryBarTracker.Keys.ToArray())
+        {
+            if (!currentBins.Contains(bin))
+            {
+                _legendaryBarTracker[bin]--;
+                if (_legendaryBarTracker[bin] <= 0)
+                    _legendaryBarTracker.Remove(bin);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 判断指定 y 坐标的血条是否为传奇血条。
+    /// y < 96 直接判定为传奇；y 96-200 使用动态追踪结果；y >= 200 视为普通。
+    /// </summary>
+    private static bool IsLegendaryBar(int y)
+    {
+        if (y < 96) return true;
+        if (y >= 200) return false;
+        return _legendaryBarTracker.TryGetValue(y / 2 * 2, out var cnt) && cnt >= LegendaryBarTrackThreshold;
+    }
+
+    /// <summary>
     /// 检测当前帧视野内所有红色血条的位置和高度。
     /// 照抄 AutoFightSeek 的色值 + 连通域逻辑，返回 (x, y, width, height) 列表。
     /// </summary>
@@ -2501,12 +2551,14 @@ public class Avatar
             if (row.GetArray(out int[] arr))
             {
                 int x = arr[0], y = arr[1], width = arr[2], height = arr[3];
-                // 排除顶部玩家自身血条（y < 50）
                 if (y < 50)
                     continue;
                 results.Add((x, y, width, height));
             }
         }
+
+        // 自动更新传奇血条动态追踪
+        UpdateLegendaryBarTracker(results.Select(r => r.y));
 
         return results;
     }
@@ -2568,7 +2620,7 @@ public class Avatar
         try
         {
             var bloodBars = FindBloodBars();
-            var legendaryBars = bloodBars.Where(b => b.y >= 50 && b.y < 96).ToList();
+            var legendaryBars = bloodBars.Where(b => IsLegendaryBar(b.y)).ToList();
             if (legendaryBars.Count == 0)
                 return (false, 0, 0);
 
