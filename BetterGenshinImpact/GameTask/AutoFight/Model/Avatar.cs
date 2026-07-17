@@ -1227,8 +1227,8 @@ public class Avatar
                         Logger.LogInformation("当前子弹有效数量：{Count}，子弹类型{Pattern}", effectiveBulletCount, pattern);
                         // 调试采样：每帧输出亮度花纹，不干扰原逻辑
                         Avatar.DebugSampleChascaBullets(bulletStatusChars);
-                        // 满弹（≥6）→ 进入双倍超时模式
-                        if (effectiveBulletCount >= 6)
+                        // 接近满弹（≥4）→ 进入双倍超时模式（第1槽固定为空，实际最多5发有效）
+                        if (effectiveBulletCount >= 4)
                         {
                             rotateIntervalMultiplier = 2.0;
                         }
@@ -1368,6 +1368,23 @@ public class Avatar
                     Sleep(100, Ct);
                     Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
                     Simulation.SendInput.SimulateAction(GIActions.NormalAttack, KeyType.KeyUp);
+
+                    // 下车后检测E技能CD，检测不到则重试一次下车动作
+                    Sleep(200, Ct);
+                    using (var dismountRegion = CaptureToRectArea())
+                    {
+                        var dismountCd = AfterUseSkill(dismountRegion);
+                        if (dismountCd <= 0)
+                        {
+                            Logger.LogInformation("下车后未检测到E技能CD，重新点按E");
+                            Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
+                            Sleep(100, Ct);
+                            Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyPress);
+                            Sleep(100, Ct);
+                            Simulation.SendInput.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
+                            Sleep(200, Ct);
+                        }
+                    }
                     Logger.LogInformation("恰斯卡特化逻辑结束");
                 }
                 else
