@@ -1953,7 +1953,7 @@ public class Avatar
                 {
                     if (prevSeg >= 0 && prevSeg % 2 == 0 && !bloodFoundInOdd && prevSeg + 1 < seq.Count)
                     {
-                        // 奇数段无血条 → 执行完下一个偶数段后退出
+                        // 偶数段瞄准无血条 → 执行完下一个奇数段旋转后退出
                         exitAfterEven = true;
                     }
                     bloodFoundInOdd = false;
@@ -1966,13 +1966,16 @@ public class Avatar
                 double segElapsed = seg >= 0 ? elapsed - segStart : 0;
                 double progress = segMs > 0 ? segElapsed / segMs : 0;
 
+                // 旋转方向：seg%4 为 0 或 1 时右旋，否则左旋（实现 RRLL 交替）
+                var rotateDir = seg >= 0 && (seg % 4 == 0 || seg % 4 == 1) ? 1 : -1;
+
                 // 传奇血条检测：跳过序列逻辑，使用OCR寻敌
                 var legendaryBars = FindBloodBars().Where(b => b.x > 200 && IsLegendaryBar(b.y)).ToList();
                 if (legendaryBars.Count > 0)
                 {
                     if (!OcrSeekEnemy(dpi, cfg.SpecializedFrameIntervalMs, Ct, 900, 540))
                     {
-                        Simulation.SendInput.Mouse.MoveMouseBy((int)(500 * rotateSpeed * dpi), 0);
+                        Simulation.SendInput.Mouse.MoveMouseBy((int)(500 * rotateSpeed * dpi * rotateDir), 0);
                     }
                     Sleep(cfg.SpecializedFrameIntervalMs);
                     continue;
@@ -2012,7 +2015,7 @@ public class Avatar
                                 // 无血条时先用OCR替补
                                 if (!OcrSeekEnemy(dpi, cfg.SpecializedFrameIntervalMs, Ct, 900, 540))
                                 {
-                                    Simulation.SendInput.Mouse.MoveMouseBy((int)(500 * rotateSpeed * dpi), 0);
+                                    Simulation.SendInput.Mouse.MoveMouseBy((int)(500 * rotateSpeed * dpi * rotateDir), 0);
                                     if ((DateTime.UtcNow - lastSeenBlood).TotalSeconds >= 1)
                                     {
                                         Logger.LogInformation("序列耗尽后超过1秒未找到血条，提前退出");
@@ -2032,7 +2035,7 @@ public class Avatar
                     default:
                         if (seg % 2 == 0)
                         {
-                            // 奇数段：瞄准阶段
+                            // 偶数段：瞄准阶段
                             var bars = FindBloodBars();
                             var valid = bars.Where(b => b.x > 200 && b.y >= 96).ToList();
                             using (var drawRegion = CaptureToRectArea())
@@ -2077,16 +2080,16 @@ public class Avatar
                                 }
                                 else
                                 {
-                                    Simulation.SendInput.Mouse.MoveMouseBy((int)(500 * rotateSpeed * dpi), 0);
+                                    Simulation.SendInput.Mouse.MoveMouseBy((int)(500 * rotateSpeed * dpi * rotateDir), 0);
                                 }
                                 VisionContext.Instance().DrawContent.PutOrRemoveRectList("SandroneBloodBars", drawList);
                             }
                         }
                         else
                         {
-                            // 偶数段：纯向右水平旋转
-                            if (!logged) { Logger.LogInformation("向右 转！"); logged = true; }
-                            Simulation.SendInput.Mouse.MoveMouseBy((int)(500 * rotateSpeed * dpi), 0);
+                            // 奇数段：纯旋转
+                            if (!logged) { Logger.LogInformation("旋转！seg={Seg}, dir={Dir}", seg, rotateDir > 0 ? "右" : "左"); logged = true; }
+                            Simulation.SendInput.Mouse.MoveMouseBy((int)(500 * rotateSpeed * dpi * rotateDir), 0);
 
                             if (exitAfterEven && elapsed >= boundaries[seg])
                             {
