@@ -1444,6 +1444,40 @@
                                             Margin="0,0,12,0"
                                             Text="{Binding PathingConfig.AutoFightConfig.ChascaRotateCountLimit, Mode=TwoWay}" />
                             </Grid>
+
+                            <!-- 伤害数字识别方案 -->
+                            <Grid Margin="0,12,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ui:TextBlock Grid.Row="0"
+                                              Grid.Column="0"
+                                              FontTypography="Body"
+                                              Text="伤害数字识别方案"
+                                              TextWrapping="Wrap" />
+                                <ui:TextBlock Grid.Row="1"
+                                              Grid.Column="0"
+                                              Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                              Text="OCR：传统文字识别；颜色分析：根据伤害数字颜色进行像素分析"
+                                              TextWrapping="Wrap" />
+                                <ComboBox Grid.Row="0"
+                                          Grid.RowSpan="2"
+                                          Grid.Column="1"
+                                          MinWidth="100"
+                                          Margin="0,0,12,0"
+                                          SelectedIndex="0"
+                                          SelectedValue="{Binding PathingConfig.AutoFightConfig.DamageNumberDetectMode, Mode=TwoWay}"
+                                          SelectedValuePath="Content">
+                                    <ComboBoxItem Content="OCR" />
+                                    <ComboBoxItem Content="颜色分析" />
+                                </ComboBox>
+                            </Grid>
+
                             <Grid Margin="0,12,0,0">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />

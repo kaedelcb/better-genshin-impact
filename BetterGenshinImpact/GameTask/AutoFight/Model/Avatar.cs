@@ -2414,35 +2414,17 @@ public class Avatar
     }
 
     /// <summary>
-    /// OCR寻敌 — 仅传奇模式使用。
-    /// 在 450,240-1600,900 区域进行OCR识别，按文字区域大小加权计算目标中心，移动视角朝向该坐标。
+    /// OCR/颜色分析寻敌 — 仅传奇模式使用。
+    /// 委托 FindDamageNumber 识别伤害数字，移动视角朝向识别结果。
     /// 力度为普通血条对准的 1/3 (0.45→0.15, 0.80→0.27)。
     /// </summary>
     public static bool OcrSeekEnemy(double dpi, int frameMs, CancellationToken ct, double targetX = 960, double targetY = 500)
     {
-        using var ra = CaptureToRectArea();
-        var ocrResults = ra.FindMulti(RecognitionObject.Ocr(450, 240, 1150, 660));
-
-        if (ocrResults == null || ocrResults.Count == 0)
+        var result = FindDamageNumber();
+        if (!result.HasValue)
             return false;
 
-        var validResults = ocrResults.Where(r => !string.IsNullOrWhiteSpace(r.Text) && !r.Text.StartsWith("+")).ToList();
-        if (validResults.Count == 0)
-            return false;
-
-        // 按面积加权计算中心
-        double totalWeight = 0, wx = 0, wy = 0;
-        foreach (var r in validResults)
-        {
-            double w = r.Width * r.Height;
-            wx += (r.X + r.Width / 2.0) * w;
-            wy += (r.Y + r.Height / 2.0) * w;
-            totalWeight += w;
-        }
-
-        double cx = wx / totalWeight;
-        double cy = wy / totalWeight;
-
+        var (cx, cy, _) = result.Value;
         var dx = cx - targetX;
         var dy = cy - targetY;
 
@@ -2450,42 +2432,13 @@ public class Avatar
             (int)(dx * dpi * 0.15),
             (int)(dy * dpi * 0.27));
 
-        Logger.LogInformation("OCR寻敌：加权中心({Cx:F0},{Cy:F0}) 偏移({Dx:F0},{Dy:F0}) 共{Count}个文本",
-            cx, cy, dx, dy, validResults.Count);
+        Logger.LogInformation("寻敌：加权中心({Cx:F0},{Cy:F0}) 偏移({Dx:F0},{Dy:F0})",
+            cx, cy, dx, dy);
 
         Sleep(frameMs, ct);
         return true;
     }
 
-    /// <summary>
-    /// 使用元素视野方法定位传奇（首领）敌人的身体中心位置。
-    /// 返回是否存在传奇敌人及其中心坐标（检测空间 1500×900 内）。
-    /// 基于传奇血条位置估计身体位置，待后续补充实际视觉检测逻辑。
-    /// </summary>
-    public static (bool exists, int centerX, int centerY) FindLegendaryBoss()
-    {
-        // 激活元素视野，等待1秒后截图检测
-        Simulation.SendInput.Mouse.MiddleButtonDown();
-        Sleep(1000);
-        try
-        {
-            var bloodBars = FindBloodBars();
-            var legendaryBars = bloodBars.Where(b => IsLegendaryBar(b.y)).ToList();
-            if (legendaryBars.Count == 0)
-                return (false, 0, 0);
-
-            // 取所有传奇血条中面积最大的作为目标
-            var best = legendaryBars.OrderByDescending(b => b.width * b.height).First();
-            var bloodCenterX = best.x + best.width / 2;
-            var bloodCenterY = best.y + best.height / 2;
-            // 身体中心Y ≈ 血条中心Y + 350px（从屏幕顶部血条到身体中心的偏移）
-            return (true, bloodCenterX, bloodCenterY + 350);
-        }
-        finally
-        {
-            Simulation.SendInput.Mouse.MiddleButtonUp();
-        }
-    }
 
     /// <summary>
     /// 检测恰斯卡/流浪者等飞行角色是否处于飞行姿态。
@@ -2498,76 +2451,6 @@ public class Avatar
         using var region = CaptureToRectArea();
         var pixel = region.SrcMat.At<Vec3b>(1028, 1584);
         return pixel.Item0 >= 250 && pixel.Item1 >= 250 && pixel.Item2 >= 250;
-    }
-
-    /// <summary>
-    /// 恰斯卡子弹元素样本颜色。对每个像素找最近的参考点，距离小于阈值则归入对应分组。
-    /// </summary>
-    private static readonly (string name, string[] hexColors)[] ChascaBulletSamples =
-    [
-        ("风", ["#8CFFFF", "#94D0D2", "#4C8EA3", "#85FFFF", "#9BD3D5"]),
-        ("水", ["#1D65B4", "#1D65B5", "#98FBFE", "#E2FEFE", "#89F4FD", "#56BEF6"]),
-        ("冰", ["#DBFFFF", "#D9FEFF", "#63B3E4", "#FDFFFF", "#D6FCFF"]),
-        ("火", ["#FFE791", "#9B5D33", "#FCD682", "#ECAD72", "#FCC074", "#D07635"]),
-        ("雷", ["#74488A", "#FBE7FC", "#FFC4FF", "#A261BB", "#FBBDFF", "#9D8CA2", "#EEB0F8"]),
-    ];
-
-    /// <summary>
-    /// 所有参考点（元素样本 + 纯白），静态初始化时由 hex 自动转换。
-    /// </summary>
-    private static readonly (string group, int r, int g, int b)[] ChascaReferencePoints;
-
-    /// <summary>
-    /// 最近邻分类的距离阈值（RGB Euclidean）。小于此值才归入对应分组，否则为"其他"。
-    /// </summary>
-    private const double ChascaColorThreshold = 80;
-
-    static Avatar()
-    {
-        var list = new List<(string, int, int, int)>();
-
-        // 元素样本
-        foreach (var (name, hexes) in ChascaBulletSamples)
-        {
-            foreach (var hex in hexes)
-            {
-                list.Add((name,
-                    Convert.ToInt32(hex.Substring(1, 2), 16),
-                    Convert.ToInt32(hex.Substring(3, 2), 16),
-                    Convert.ToInt32(hex.Substring(5, 2), 16)));
-            }
-        }
-
-        // 纯白参考点
-        list.Add(("白", 255, 255, 255));
-
-        ChascaReferencePoints = list.ToArray();
-    }
-
-    /// <summary>
-    /// 对一个 RGB 像素，通过最近邻分类归入分组。
-    /// 返回 (groupName, distance) — groupName 为空串表示"其他"（距离过大）。
-    /// </summary>
-    private static (string name, double dist) ClassifyBulletPixel(int r, int g, int b)
-    {
-        var bestName = "";
-        var bestDist = ChascaColorThreshold; // 超过阈值即为"其他"
-
-        foreach (var (group, sr, sg, sb) in ChascaReferencePoints)
-        {
-            var dr = r - sr;
-            var dg = g - sg;
-            var db = b - sb;
-            var dist = Math.Sqrt(dr * dr + dg * dg + db * db);
-
-            if (dist < bestDist)
-            {
-                bestDist = dist;
-                bestName = group;
-            }
-        }
-
-        return (bestName, bestDist);
     }
 
     /// <summary>
@@ -2838,15 +2721,25 @@ public class Avatar
     }
     
     /// <summary>
-    /// OCR 寻找伤害数字/反应文字作为追踪目标（备用寻敌）。
-    /// 在 450,240-1600,900 区域 OCR，过滤条件：
-    ///   - 有效项1：排除首位 '+'，去除非数字后纯数字 ≥4 位
-    ///   - 有效项2：文本包含反应关键词（免疫/蒸发/感电/结晶/扩散/绽放/冻结/超载/融化/燃烧/超导/激化），跳过数字过滤
-    /// 按 h²×文本字数 加权得到中心坐标，返回离加权中心最近的有效项。
+    /// OCR / 颜色分析 寻找伤害数字/反应文字作为追踪目标（备用寻敌）。
+    /// 根据 AutoFightConfig.DamageNumberDetectMode 选择方案：
+    ///   - OCR：在 450,240-1600,900 区域 OCR，过滤条件：
+    ///       有效项1：排除首位 '+'，去除非数字后纯数字 ≥4 位
+    ///       有效项2：文本包含反应关键词，跳过数字过滤
+    ///     按 h²×文本字数 加权得到中心坐标，返回离加权中心最近的有效项。
+    ///   - 颜色分析：同区域，找固定颜色的像素做连通域分析，舍弃太小区域后取加权中心。
     /// </summary>
     public static (int centerX, int centerY, string text)? FindDamageNumber(ImageRegion? existingCapture = null)
     {
         using var ra = existingCapture ?? CaptureToRectArea();
+
+        // 颜色分析模式
+        if (TaskContext.Instance().Config.AutoFightConfig.DamageNumberDetectMode == "颜色分析")
+        {
+            return FindDamageNumberByColor(ra);
+        }
+
+        // 默认 OCR 模式
         var ocrResults = ra.FindMulti(RecognitionObject.Ocr(450, 240, 1150, 660));
 
         string[] reactionKeywords = ["免疫", "蒸发", "感电", "结晶", "扩散", "绽放", "冻结", "超载", "融化", "燃烧", "超导", "激化"];
@@ -2885,6 +2778,75 @@ public class Avatar
 
         var closest = validItems.OrderBy(i => Math.Abs(i.cx - avgX) + Math.Abs(i.cy - avgY)).First();
         return (closest.cx, closest.cy, closest.text);
+    }
+
+    /// <summary>
+    /// 颜色分析模式：在 450,240-1600,900 区域内查找固定颜色的像素，
+    /// 经连通域分析后舍弃高度小于20、宽度小于80的区域，返回加权中心。
+    /// </summary>
+    private static (int centerX, int centerY, string text)? FindDamageNumberByColor(ImageRegion ra)
+    {
+        // 目标颜色 (RGB)
+        Scalar[] targetColors =
+        [
+            new(225, 155, 255), // 雷 #E19BFF
+            new(153, 255, 255), // 冰 #99FFFF
+            new(51, 204, 255),  // 水 #33CCFF
+            new(102, 255, 204), // 风 #66FFCC
+            new(255, 155, 0),   // 火 #FF9B00
+            new(0, 234, 82),    // 草 #00EA52
+            new(255, 204, 102), // 岩 #FFCC66
+        ];
+
+        const int roiX = 450;
+        const int roiY = 240;
+        const int roiW = 1150;
+        const int roiH = 660;
+
+        using var cropped = ra.DeriveCrop(roiX, roiY, roiW, roiH);
+        using var rgbMat = new Mat();
+        Cv2.CvtColor(cropped.SrcMat, rgbMat, ColorConversionCodes.BGR2RGB);
+
+        using var combinedMask = new Mat(cropped.SrcMat.Size(), MatType.CV_8UC1, Scalar.All(0));
+
+        foreach (var color in targetColors)
+        {
+            using var mask = new Mat();
+            Cv2.InRange(rgbMat, color, color, mask);
+            Cv2.BitwiseOr(combinedMask, mask, combinedMask);
+        }
+
+        using var labels = new Mat();
+        using var stats = new Mat();
+        using var centroids = new Mat();
+        var numLabels = Cv2.ConnectedComponentsWithStats(combinedMask, labels, stats, centroids,
+            connectivity: PixelConnectivity.Connectivity4, ltype: MatType.CV_32S);
+
+        if (numLabels <= 1) return null;
+
+        var validItems = new List<(int cx, int cy, int area)>();
+        for (int i = 1; i < numLabels; i++)
+        {
+            int x = stats.At<int>(i, (int)ConnectedComponentsTypes.Left);
+            int y = stats.At<int>(i, (int)ConnectedComponentsTypes.Top);
+            int width = stats.At<int>(i, (int)ConnectedComponentsTypes.Width);
+            int height = stats.At<int>(i, (int)ConnectedComponentsTypes.Height);
+
+            if (height < 20) continue;
+
+            int area = stats.At<int>(i, (int)ConnectedComponentsTypes.Area);
+            validItems.Add((x + width / 2 + roiX, y + height / 2 + roiY, area));
+        }
+
+        if (validItems.Count == 0) return null;
+
+        int totalArea = validItems.Sum(i => i.area);
+        if (totalArea == 0) return null;
+
+        int avgX = (int)Math.Round((double)validItems.Sum(i => i.cx * i.area) / totalArea);
+        int avgY = (int)Math.Round((double)validItems.Sum(i => i.cy * i.area) / totalArea);
+
+        return (avgX, avgY, "");
     }
 
     /// <summary>

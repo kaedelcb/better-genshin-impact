@@ -116,6 +116,11 @@ public partial class AutoFightConfig : ObservableObject
     [ObservableProperty] private double _sandroneChargeRotateSpeed = 1.0;
 
     /// <summary>
+    /// 伤害数字识别方案（OCR / 颜色分析）。
+    /// </summary>
+    [ObservableProperty] private string _damageNumberDetectMode = "OCR";
+
+    /// <summary>
     /// 只拾取精英掉落
     /// Closed ：关闭功能
     /// AllowAutoPickupForNonElite: 非精英允许自动拾取：战斗过程中掉落脚下的可以自动拾取，但不会执行万叶拾取和拾取配置逻辑。
