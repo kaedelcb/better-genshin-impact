@@ -9,6 +9,13 @@ namespace BetterGenshinImpact.GameTask.AutoTrackPath;
 
 public partial class TpConfig : ObservableValidator
 {
+    public const int MinTeleportOperationDelayMilliseconds = 2;
+    public const int MaxTeleportOperationDelayMilliseconds = 100;
+    public const int DefaultTeleportOperationDelayMilliseconds = 20;
+
+    [ObservableProperty]
+    private bool _useOfficialTeleport = false; // 使用公版传送模式（开关，切换两套传送实现）
+
     [ObservableProperty]
     private bool _mapZoomEnabled = true; // 地图缩放开关
 
@@ -48,6 +55,22 @@ public partial class TpConfig : ObservableValidator
             StepIntervalMilliseconds = 20;
         }
     }
+
+    [ObservableProperty]
+    private bool _mapDragUseRelativeMove = false; // 大地图拖动使用相对鼠标移动
+
+    [ObservableProperty]
+    [NotifyDataErrorInfo] 
+    [Range(MinTeleportOperationDelayMilliseconds, MaxTeleportOperationDelayMilliseconds, ErrorMessage = "恰当的传送操作间隔:2-100")]
+    private int _teleportOperationDelayMilliseconds = DefaultTeleportOperationDelayMilliseconds; // 传送操作速度基准间隔，单位：ms
+    partial void OnTeleportOperationDelayMillisecondsChanged(int value)
+    {
+        if (value is < MinTeleportOperationDelayMilliseconds or > MaxTeleportOperationDelayMilliseconds)
+        {
+            TeleportOperationDelayMilliseconds = DefaultTeleportOperationDelayMilliseconds;
+        }
+    }
+
     [ObservableProperty]
     [NotifyDataErrorInfo] 
     [Range(1.0, 6.0)]
@@ -132,10 +155,10 @@ public partial class TpConfig : ObservableValidator
     private int _maxMouseMove = 300; // 单次移动最大距离
     
     [ObservableProperty]
-    private bool _mapMoveStepDivisor = false; // 快速拖动
+    private bool _mapMoveStepDivisor = true; // 快速拖动（默认开启）
 
     [ObservableProperty]
-    private bool _fastDragRecognitionEnabled = false; // 快速拖动模式下：自适应等地图稳定再识别（fast-drag-recognition-acceleration spec）
+    private bool _fastDragRecognitionEnabled = true; // 快速拖动模式下：自适应等地图稳定再识别（默认开启）
 
     partial void OnMaxMouseMoveChanged(int value)
     {
