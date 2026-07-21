@@ -55,6 +55,13 @@ public class TpTaskFastDrag
     private readonly IStringLocalizer stringLocalizer;
     private readonly double _screenHeight;
 
+    /// <summary>
+    /// MapZoomDistanceForce > 0 时的额外延时系数。
+    /// 值越大延时越多，用于低配电脑在传送过程中给渲染留更多时间。
+    /// 公式：1 + MapZoomDistanceForce * 0.2，例如 force=1 → 1.2×, force=5 → 2.0×
+    /// </summary>
+    private readonly double _extraDelayFactor = 1.0;
+
     // 分层先验区块限定匹配（teleport-bigmap-position-region-constrained-match spec）：
     // 单次传送生命周期内有效。仅 TpOnce 路径设置；其它调用方（七天神像/地脉花）不设 → 保持 null → 走全图旧路径。
     private Point2f? _miniMapPriorGenshin = null;   // 第一层先验（原神坐标），TpOnce 打开大地图前采集
@@ -127,23 +134,29 @@ public class TpTaskFastDrag
         var gameScreen = Screen.FromHandle(gameHandle);
         var gameScreenBounds = gameScreen.Bounds;
         if (_tpConfig.MapMoveStepDivisor)Simulation.SendInput.Mouse.LeftButtonUp();
-        if (_tpConfig.MapZoomDistanceForce == 0)
-        {
-            _screenHeight = gameScreenBounds.Height > SystemControl.GetGameScreenRect(TaskContext.Instance().GameHandle).Height 
-                ? (SystemControl.GetGameScreenRect(TaskContext.Instance().GameHandle).Height <= 1080 ? 3 : 2) 
-                : 2.3;
-        }
-        else
-        {
-            _screenHeight = _tpConfig.MapZoomDistanceForce;
-        }
+        // _screenHeight 始终自动适配，MapZoomDistanceForce 不再控制固定倍率，只控制额外延时系数
+        _screenHeight = gameScreenBounds.Height > SystemControl.GetGameScreenRect(TaskContext.Instance().GameHandle).Height 
+            ? (SystemControl.GetGameScreenRect(TaskContext.Instance().GameHandle).Height <= 1080 ? 3 : 2) 
+            : 2.3;
+        _extraDelayFactor = _tpConfig.MapZoomDistanceForce > 0 ? 1.0 + _tpConfig.MapZoomDistanceForce * 0.2 : 1.0;
         
-        // 快速拖动 + MapZoomDistanceForce==0 → 动态跑道模式（边缘感知截断）；!=0 → 自定义固定倍数；关 → 经典。
-        TaskControl.Logger.LogDebug("屏幕宽高：{gameScreenBounds} 游戏分辨率：{GetGameScreenRect} 传送参数：{screenHeight} 拖动模式={Mode}",
+        // 快速拖动 + MapZoomDistanceForce==0 → 动态跑道模式（边缘感知截断）；>0 → 动态跑道 + 额外延时；关 → 经典。
+        TaskControl.Logger.LogDebug("屏幕宽高：{gameScreenBounds} 游戏分辨率：{GetGameScreenRect} 传送参数：{screenHeight} 拖动模式={Mode} 额外延时系数={Factor}",
             gameScreenBounds.Size,
             SystemControl.GetGameScreenRect(TaskContext.Instance().GameHandle).Size,
             _screenHeight,
-            (_tpConfig.MapMoveStepDivisor && _tpConfig.MapZoomDistanceForce == 0) ? "动态跑道" : (_tpConfig.MapMoveStepDivisor ? "自定义固定倍数" : "经典"));
+            (_tpConfig.MapMoveStepDivisor && _tpConfig.MapZoomDistanceForce == 0) ? "动态跑道" : (_tpConfig.MapMoveStepDivisor ? "动态跑道+额外延时" : "经典"),
+            _extraDelayFactor);
+    }
+
+    /// <summary>
+    /// 根据 _extraDelayFactor 缩放延时值。
+    /// _extraDelayFactor == 1.0 时返回原值（零开销，MapZoomDistanceForce==0 时的默认行为）。
+    /// </summary>
+    private int ApplyExtraDelay(int baseDelayMs)
+    {
+        if (_extraDelayFactor <= 1.0) return baseDelayMs;
+        return (int)Math.Round(baseDelayMs * _extraDelayFactor);
     }
 
     private static RecognitionObject GetQuickTeleportRecognitionObject(string objectName)
@@ -356,15 +369,15 @@ public class TpTaskFastDrag
         {
             // await Delay(200, ct);
             // await WaitMapStableOrTimeoutAsync(300); 
-            if (!await WaitForBigMapUiOrTimeoutAsync(2000))
+            if (!await WaitForBigMapUiOrTimeoutAsync(ApplyExtraDelay(2000)))
             {
                 Logger.LogWarning("等待大地图界面超时（2000ms），可能地图尚未打开，继续按原逻辑读取缩放级别");
             }
         }
         else
         {
-            await Delay(500, ct);
-            if (!await WaitForBigMapUiOrTimeoutAsync(2000))
+            await Delay(ApplyExtraDelay(500), ct);
+            if (!await WaitForBigMapUiOrTimeoutAsync(ApplyExtraDelay(2000)))
             {
                 Logger.LogWarning("等待大地图界面超时（2000ms），可能地图尚未打开，继续按原逻辑读取缩放级别2");
             }
@@ -439,16 +452,16 @@ public class TpTaskFastDrag
                     int timeoutMs = 800 + _tpConfig.StepIntervalMilliseconds * 10;
                     if (_tpConfig.FastDragRecognitionEnabled)
                     {
-                        await WaitMapStableOrTimeoutAsync(500); // fast-drag-recognition-acceleration spec
+                        await WaitMapStableOrTimeoutAsync(ApplyExtraDelay(500)); // fast-drag-recognition-acceleration spec
                     }
                     else
                     {
-                        await Delay(timeoutMs, ct); // 等待地图移动完成（旧行为）
+                        await Delay(ApplyExtraDelay(timeoutMs), ct); // 等待地图移动完成（旧行为）
                     }
                 }
                 else
                 {
-                    await Delay(300, ct); // 等待地图移动完成
+                    await Delay(ApplyExtraDelay(300), ct); // 等待地图移动完成
                 }
             }
             else
@@ -481,7 +494,7 @@ public class TpTaskFastDrag
             if (Math.Abs(zoomNow - 5.5) > _tpConfig.PrecisionThreshold)
             {
                 await AdjustMapZoomLevel(zoomNow, 5.5);
-                await Delay(200, ct);
+                await Delay(ApplyExtraDelay(200), ct);
                 TaskControl.Logger.LogInformation("点击未出现传送点重试：缩放拉到 5.5 稳定地图边沿位置识别");
             }
             edgeZoomApplied = true;
@@ -496,7 +509,7 @@ public class TpTaskFastDrag
             if (Math.Abs(zoomNow - 2.0) > _tpConfig.PrecisionThreshold)
             {
                 await AdjustMapZoomLevel(zoomNow, 2.0);
-                await Delay(200, ct);
+                await Delay(ApplyExtraDelay(200), ct);
                 TaskControl.Logger.LogInformation("重试第{Retry}次：缩放拉到 2.0 放大传送点图标避免标记物遮挡", retryTimes);
             }
             // 重试时手动拉了缩放，需要重新计算 bigMapInAllMapRect
@@ -528,16 +541,16 @@ public class TpTaskFastDrag
                 {
                     // 加速：等像素稳定（远比连续两次模板匹配 GetBigMapRect 快），稳定后再单次 GetBigMapRect
                     // fast-drag-recognition-acceleration spec / design.md §4.2（feedback adjustment）
-                    await WaitMapStableOrTimeoutAsync(1000);
+                    await WaitMapStableOrTimeoutAsync(ApplyExtraDelay(1000));
                 }
                 else
                 {
-                    await Delay(timeoutMs, ct); // 等待地图移动完成（旧行为）
+                    await Delay(ApplyExtraDelay(timeoutMs), ct); // 等待地图移动完成（旧行为）
                 }
             }
             else
             {
-                await Delay(300, ct); // 等待地图移动完成
+                await Delay(ApplyExtraDelay(300), ct); // 等待地图移动完成
             }
             bigMapInAllMapRect = GetBigMapRect(mapName);
         } while (true);
@@ -571,7 +584,7 @@ public class TpTaskFastDrag
             if (Math.Abs(zoomBack - DisplayTpPointZoomLevel) > _tpConfig.PrecisionThreshold)
             {
                 await AdjustMapZoomLevel(zoomBack, DisplayTpPointZoomLevel);
-                await Delay(200, ct);
+                await Delay(ApplyExtraDelay(200), ct);
                 TaskControl.Logger.LogInformation("边沿重试：点击前缩放降回 {Z:0.0} 恢复传送点渲染", DisplayTpPointZoomLevel);
                 bigMapInAllMapRect = GetBigMapRect(mapName);
             }
@@ -591,7 +604,7 @@ public class TpTaskFastDrag
             if (ShouldCollapseZoomBeforeClick(zoomNow, DisplayTpPointZoomLevel, _tpConfig.PrecisionThreshold))
             {
                 await AdjustMapZoomLevel(zoomNow, DisplayTpPointZoomLevel);
-                await Delay(200, ct);
+                await Delay(ApplyExtraDelay(200), ct);
                 TaskControl.Logger.LogInformation("点击前缩放兜底：{From:0.0} 高于可点击档，降回 {To:0.0} 恢复传送点渲染", zoomNow, DisplayTpPointZoomLevel);
                 bigMapInAllMapRect = GetBigMapRect(mapName);
             }
@@ -617,7 +630,7 @@ public class TpTaskFastDrag
                     if (Math.Abs(zoomNow - finalZoom) > _tpConfig.PrecisionThreshold)
                     {
                         await AdjustMapZoomLevel(zoomNow, finalZoom);
-                        await Delay(200, ct);
+                        await Delay(ApplyExtraDelay(200), ct);
                     }
                     TaskControl.Logger.LogInformation(
                         "命中特殊相邻传送点，点击前放大到 {FinalZoom:0.00}（minZoom={MinZoom:0.00}, specialZoom={SpecZoom:0.00}）并重新定位（基准 {X:0},{Y:0}）",
@@ -628,16 +641,16 @@ public class TpTaskFastDrag
                     {
                         if (_tpConfig.FastDragRecognitionEnabled)
                         {
-                            await WaitMapStableOrTimeoutAsync(500);
+                            await WaitMapStableOrTimeoutAsync(ApplyExtraDelay(500));
                         }
                         else
                         {
-                            await Delay(300, ct);
+                            await Delay(ApplyExtraDelay(300), ct);
                         }
                     }
                     else
                     {
-                        await Delay(300, ct);
+                        await Delay(ApplyExtraDelay(300), ct);
                     }
                     bigMapInAllMapRect = GetBigMapRect(mapName);
                 }
@@ -655,16 +668,16 @@ public class TpTaskFastDrag
                         int timeoutMs = retryTimes > 0 ? 600 : 200;
                         if (_tpConfig.FastDragRecognitionEnabled)
                         {
-                            await WaitMapStableOrTimeoutAsync(1000);
+                            await WaitMapStableOrTimeoutAsync(ApplyExtraDelay(1000));
                         }
                         else
                         {
-                            await Delay(timeoutMs, ct);
+                            await Delay(ApplyExtraDelay(timeoutMs), ct);
                         }
                     }
                     else
                     {
-                        await Delay(300, ct);
+                        await Delay(ApplyExtraDelay(300), ct);
                     }
                     bigMapInAllMapRect = GetBigMapRect(mapName);
                 }
@@ -694,7 +707,7 @@ public class TpTaskFastDrag
         }
         else
         {
-            await Delay(500, ct);
+            await Delay(ApplyExtraDelay(500), ct);
             using var ra1 = CaptureToRectArea();
             await ClickTpPoint(ra1);
         }
@@ -903,7 +916,7 @@ public class TpTaskFastDrag
         if (!await TryToOpenBigMapUi(retryCount))
         {
             await new ReturnMainUiTask().Start(ct);
-            await Delay(500, ct);
+            await Delay(ApplyExtraDelay(500), ct);
             if (!await TryToOpenBigMapUi(retryCount))
             {
                 throw new RetryException("打开大地图失败，请检查按键绑定中「打开地图」按键设置是否和原神游戏中一致！");
@@ -934,7 +947,7 @@ public class TpTaskFastDrag
             // await WaitMapStableOrTimeoutAsync(timeoutMs: 1300); 
             //
             // await WaitMapStableOrTimeoutAsync(200);
-            if (!await WaitForBigMapUiOrTimeoutAsync(2000))
+            if (!await WaitForBigMapUiOrTimeoutAsync(ApplyExtraDelay(2000)))
             {
                 Logger.LogWarning("等待大地图界面超时（2000ms），可能地图尚未打开");
             }
@@ -946,8 +959,8 @@ public class TpTaskFastDrag
         }
         else
         {
-            await Delay(500, ct);
-            if (!await WaitForBigMapUiOrTimeoutAsync(2000))
+            await Delay(ApplyExtraDelay(500), ct);
+            if (!await WaitForBigMapUiOrTimeoutAsync(ApplyExtraDelay(2000)))
             {
                 Logger.LogWarning("等待大地图界面超时（2000ms），可能地图尚未打开，继续按原逻辑读取缩放级别");
             }
@@ -1257,9 +1270,9 @@ public class TpTaskFastDrag
             int moveMouseX, moveMouseY;
             (double, double)? landingOverride = null;
 
-            // Dynamic_Runway_Mode：快速拖动 且 MapZoomDistanceForce==0 → 边缘感知动态跑道截断
+            // Dynamic_Runway_Mode：快速拖动 且 MapZoomDistanceForce==0 或 >0 均走动态跑道（>0 时额外加延时）
             // 详见 .kiro/specs/teleport-drag-edge-aware-runway-clamp/design.md §Components 2
-            bool dynamicRunway = _tpConfig.MapMoveStepDivisor && _tpConfig.MapZoomDistanceForce == 0;
+            bool dynamicRunway = _tpConfig.MapMoveStepDivisor;
 
             var moveStepDivisor = _tpConfig.MapMoveStepDivisor ? 40 : 10;
             if (dynamicRunway)
@@ -1340,7 +1353,7 @@ public class TpTaskFastDrag
             // 使小 StepInterval 也能一次到位。仅动态模式；其它路径行为不变。
             if (dynamicRunway)
             {
-                await WaitMapStableOrTimeoutAsync(300);
+                await WaitMapStableOrTimeoutAsync(ApplyExtraDelay(300));
             }
 
             // 推算理论上的移动后坐标 (惯性预测)
@@ -1476,14 +1489,14 @@ public class TpTaskFastDrag
     {
         // GlobalMethod.MoveMouseTo(x1, y1);
         GameCaptureRegion.GameRegionMove((rect, scale) => (x1 * scale, y1 * scale));
-        await Delay(50, ct);
+        await Delay(ApplyExtraDelay(50), ct);
         GlobalMethod.LeftButtonDown();
-        await Delay(50, ct);
+        await Delay(ApplyExtraDelay(50), ct);
         // GlobalMethod.MoveMouseTo(x2, y2);
         GameCaptureRegion.GameRegionMove((rect, scale) => (x2 * scale, y2 * scale));
-        await Delay(50, ct);
+        await Delay(ApplyExtraDelay(50), ct);
         GlobalMethod.LeftButtonUp();
-        await Delay(50, ct);
+        await Delay(ApplyExtraDelay(50), ct);
         GameCaptureRegion.GameRegionMove((rect, scale) => (rect.Width / 2d, rect.Width / 2d));
     }
 
@@ -1552,10 +1565,10 @@ public class TpTaskFastDrag
         await MouseClickAndMove(_tpConfig.ZoomButtonX+10, initialY, _tpConfig.ZoomButtonX+10, targetY);
         if (_tpConfig.MapMoveStepDivisor)
         {
-            await Delay(50, ct);
+            await Delay(ApplyExtraDelay(50), ct);
         }else
         {
-            await Delay(100, ct);
+            await Delay(ApplyExtraDelay(100), ct);
         }
     }
 
@@ -1592,9 +1605,9 @@ public class TpTaskFastDrag
                     rect.Height / 2d + Random.Shared.Next(-rect.Height / 6, rect.Height / 6)));
         }
 
-        await Delay(50+_tpConfig.StepIntervalMilliseconds-2, ct);
+        await Delay(ApplyExtraDelay(50+_tpConfig.StepIntervalMilliseconds-2), ct);
         Simulation.SendInput.Mouse.LeftButtonDown();
-        await Delay(50+_tpConfig.StepIntervalMilliseconds-2, ct);
+        await Delay(ApplyExtraDelay(50+_tpConfig.StepIntervalMilliseconds-2), ct);
 
         // 动态跑道自校准：拖动前读真实光标物理坐标（GetCursorPos 返回物理像素），
         // 拖动后再读一次，用前后差实测 MoveMouseBy 放大比值。仅动态跑道模式需要。
@@ -1646,9 +1659,9 @@ public class TpTaskFastDrag
                     // 绝对定位（动态跑道）用精确延时，让 StepInterval<15ms 真正生效（否则被系统计时精度钳到 ~15.6ms）；
                     // 其它路径保持原 Task.Delay 行为不变。
                     if (__absDrag)
-                        await PreciseDelay(_tpConfig.StepIntervalMilliseconds, ct);
+                        await PreciseDelay(ApplyExtraDelay(_tpConfig.StepIntervalMilliseconds), ct);
                     else
-                        await Delay(_tpConfig.StepIntervalMilliseconds, ct);
+                        await Delay(ApplyExtraDelay(_tpConfig.StepIntervalMilliseconds), ct);
                     
                     if (i >= steps/2 && steps > 3 && isMark)
                     {
@@ -2444,14 +2457,14 @@ public class TpTaskFastDrag
         // fast-drag-recognition-acceleration spec / SwitchArea menu popup optimization
         if (_tpConfig.MapMoveStepDivisor && _tpConfig.FastDragRecognitionEnabled)
         {
-            await Delay(100, ct);
+            await Delay(ApplyExtraDelay(100), ct);
             var systemInfo = TaskContext.Instance().SystemInfo;
             var captureRect = systemInfo.ScaleMax1080PCaptureRect;
-            await WaitForElementOrTimeoutAsync(QuickTeleportAssets.Get(captureRect.Width, captureRect.Height).MapCloseButtonWhiteRo, timeoutMs:1000);
+            await WaitForElementOrTimeoutAsync(QuickTeleportAssets.Get(captureRect.Width, captureRect.Height).MapCloseButtonWhiteRo, timeoutMs:ApplyExtraDelay(1000));
         }
         else
         {
-            await Delay(300, ct);
+            await Delay(ApplyExtraDelay(300), ct);
         }
 
         using var ra = CaptureToRectArea();
@@ -2505,12 +2518,12 @@ public class TpTaskFastDrag
         // fast-drag-recognition-acceleration spec / SwitchArea tail wait optimization
         if (_tpConfig.MapMoveStepDivisor && _tpConfig.FastDragRecognitionEnabled)
         {
-            await Delay(100, ct);
-            await WaitMapStableOrTimeoutAsync(timeoutMs: 500);
+            await Delay(ApplyExtraDelay(100), ct);
+            await WaitMapStableOrTimeoutAsync(timeoutMs: ApplyExtraDelay(500));
         }
         else
         {
-            await Delay(500, ct);
+            await Delay(ApplyExtraDelay(500), ct);
         }
     }
 
