@@ -268,7 +268,45 @@ public static class Feature2DExtensions
         SpeedTimer speedTimer = new();
         using var queryDescriptors = new Mat();
 #pragma warning disable CS8604 // 引用类型参数可能为 null。
-        feature2D.DetectAndCompute(queryMat, queryMatMask, out var queryKeyPoints, queryDescriptors);
+        // === 纹理复杂度分析：生成 mask 屏蔽低纹理区域，仅在高纹理区域提取关键点 ===
+        Mat textureMask = new Mat(queryMat.Size(), MatType.CV_8UC1, Scalar.All(0));
+        try
+        {
+            Mat gradX = new Mat(), gradY = new Mat(), gradMag = new Mat();
+            Cv2.Sobel(queryMat, gradX, MatType.CV_32F, 1, 0);
+            Cv2.Sobel(queryMat, gradY, MatType.CV_32F, 0, 1);
+            Cv2.Magnitude(gradX, gradY, gradMag);
+            int cols = 12, rows = 8;
+            int cellW = queryMat.Width / cols, cellH = queryMat.Height / rows;
+            var cellScores = new List<(int ri, int ci, double score)>();
+            for (int ri = 0; ri < rows; ri++)
+            {
+                for (int ci = 0; ci < cols; ci++)
+                {
+                    var cellRect = new Rect(ci * cellW, ri * cellH, cellW, cellH);
+                    using var cellMag = new Mat(gradMag, cellRect);
+                    double mean = Cv2.Mean(cellMag).Val0;
+                    cellScores.Add((ri, ci, mean));
+                }
+            }
+            int topN = Math.Max(1, cellScores.Count / 3);
+            var topCells = cellScores.OrderByDescending(x => x.score).Take(topN).ToList();
+            foreach (var (ri, ci, _) in topCells)
+            {
+                var cellRect = new Rect(ci * cellW, ri * cellH, cellW, cellH);
+                textureMask.Rectangle(cellRect, Scalar.White, -1);
+            }
+            BetterGenshinImpact.GameTask.Common.TaskControl.Logger.LogDebug(
+                "[纹理分析] KnnMatchCorners 网格={Grid}x{Grid2} 高纹理区域={TopN}/{Total} 最高分={MaxScore:0.0}",
+                cols, rows, topCells.Count, cellScores.Count, topCells.First().score);
+        }
+        catch (Exception ex)
+        {
+            BetterGenshinImpact.GameTask.Common.TaskControl.Logger.LogDebug(ex, "[纹理分析] KnnMatchCorners 异常，使用全图");
+            textureMask = null;
+        }
+
+        feature2D.DetectAndCompute(queryMat, textureMask ?? queryMatMask, out var queryKeyPoints, queryDescriptors);
 #pragma warning restore CS8604 // 引用类型参数可能为 null。
         speedTimer.Record("模板生成KeyPoint");
         var matches = GetMatcher(matcherType).KnnMatch(queryDescriptors, trainDescriptors, k: 2);
