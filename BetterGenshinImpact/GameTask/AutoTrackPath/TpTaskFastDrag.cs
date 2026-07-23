@@ -1,4 +1,4 @@
-﻿using BetterGenshinImpact.Core.Recognition;
+using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.Core.Script.Dependence;
 using BetterGenshinImpact.Core.Simulator;
@@ -1367,7 +1367,9 @@ public class TpTaskFastDrag
             // 拖动滑动窗口先验：中心=预测位置，半径=预测移动距离*2（至少给个下限防止半径过小锁死）。
             // 仅提瓦特启用（GetBigMapCenterPoint 内部有 mapName/类型判断兜底）。
             _dragPriorCenterGenshin = predictedPoint;
-            _dragPriorRadiusGenshin = Math.Max(expectedMoveLen * 2, 200);
+            _dragPriorRadiusGenshin = Math.Clamp(expectedMoveLen, 200, 300);
+
+
 
             try
             {
@@ -1375,13 +1377,28 @@ public class TpTaskFastDrag
 
                 // 计算识别坐标与预测坐标的偏差
                 double jumpDistance = Math.Sqrt(Math.Pow(newCenterPoint.X - predictedPoint.X, 2) + Math.Pow(newCenterPoint.Y - predictedPoint.Y, 2));
-                
-                // 如果实际识别坐标产生超出物理可能的远距离跳跃 (比如原本只移动了50单位，但是坐标跳跃了300单位以上)
-                // 则判定为低特征区域产生的误识别（假阳性），抛出异常进入下面的盲走抓取逻辑
-                if (jumpDistance > Math.Max(200, expectedMoveLen * 2))
+                double predictedDeltaX = predictedPoint.X - mapCenterPoint.X;
+                double predictedDeltaY = predictedPoint.Y - mapCenterPoint.Y;
+                double actualDeltaX = newCenterPoint.X - mapCenterPoint.X;
+                double actualDeltaY = newCenterPoint.Y - mapCenterPoint.Y;
+                double actualMoveLen = Math.Sqrt(actualDeltaX * actualDeltaX + actualDeltaY * actualDeltaY);
+                double moveRatio = expectedMoveLen > 0 ? actualMoveLen / expectedMoveLen : 0;
+                double expectedLen = Math.Sqrt(predictedDeltaX * predictedDeltaX + predictedDeltaY * predictedDeltaY);
+                double moveDirectionCos = (expectedLen <= 1 || actualMoveLen <= 1) ? 1.0
+                    : (predictedDeltaX * actualDeltaX + predictedDeltaY * actualDeltaY) / (expectedLen * actualMoveLen);
+
+                Logger.LogDebug("[诊断-拖动循环] 迭代={I} 当前中心=({CX:0},{CY:0}) 预测=({PX:0},{PY:0}) 识别=({NX:0},{NY:0}) jumpDist={J:0} expectedMoveLen={E:0} ratio={R:0.00} cos={Cos:0.00}",
+                    exceptionTimes, mapCenterPoint.X, mapCenterPoint.Y, predictedPoint.X, predictedPoint.Y,
+                    newCenterPoint.X, newCenterPoint.Y, jumpDistance, expectedMoveLen, moveRatio, moveDirectionCos);
+
+                bool isMoveAnomaly = jumpDistance > Math.Max(200, expectedMoveLen * 2)
+                    || (expectedMoveLen > 1200 && (moveRatio < 0.55 || moveRatio > 1.85))
+                    || (expectedMoveLen > 1200 && actualMoveLen > 120 && moveDirectionCos < 0.65);
+
+                if (isMoveAnomaly)
                 {
                     if (_tpConfig.MapMoveStepDivisor)Simulation.SendInput.Mouse.LeftButtonUp();
-                    Logger.LogDebug("坐标异常跳跃({dist:0.0})，判定为误识别", jumpDistance);
+                    Logger.LogDebug("坐标异常跳跃({dist:0.0}) ratio={Ratio:0.00} cos={Cos:0.00}，判定为误识别", jumpDistance, moveRatio, moveDirectionCos);
                     throw new MapPositionNotRecognizedException("中心点识别坐标异常跳跃");
                 }
 
@@ -2103,6 +2120,14 @@ public class TpTaskFastDrag
             var g = ToGenshin(r256);
             bool acc1 = g is Point2f gpChk1
                 && BigMapPriorMatchDecisions.IsResultAcceptable(false, gpChk1, c1, layer1Range);
+            if (g is Point2f gpL1)
+            {
+                double distL1 = BigMapPriorMatchDecisions.Distance(gpL1, c1);
+                Logger.LogDebug("[诊断-分层先验] 第一层 中心=({CX:0},{CY:0}) 半径={R:0} 结果=({RX:0},{RY:0}) 距中心={D:0} 采纳={Acc}",
+                    c1.X, c1.Y, layer1Range, gpL1.X, gpL1.Y, distL1, acc1);
+            }
+            else
+                Logger.LogDebug("[诊断-分层先验] 第一层 中心=({CX:0},{CY:0}) 半径={R:0} 结果=空", c1.X, c1.Y, layer1Range);
             if (g is Point2f gp && acc1)
             {
                 result256 = r256;
@@ -2126,6 +2151,14 @@ public class TpTaskFastDrag
             var g = ToGenshin(r256);
             bool acc2 = g is Point2f gpChk2
                 && BigMapPriorMatchDecisions.IsResultAcceptable(false, gpChk2, c2, BigMapPriorMatchDecisions.Layer2RangeGenshin);
+            if (g is Point2f gpL2)
+            {
+                double distL2 = BigMapPriorMatchDecisions.Distance(gpL2, c2);
+                Logger.LogDebug("[诊断-分层先验] 第二层 中心=({CX:0},{CY:0}) 半径={R:0} 结果=({RX:0},{RY:0}) 距中心={D:0} 采纳={Acc}",
+                    c2.X, c2.Y, BigMapPriorMatchDecisions.Layer2RangeGenshin, gpL2.X, gpL2.Y, distL2, acc2);
+            }
+            else
+                Logger.LogDebug("[诊断-分层先验] 第二层 中心=({CX:0},{CY:0}) 半径={R:0} 结果=空", c2.X, c2.Y, BigMapPriorMatchDecisions.Layer2RangeGenshin);
             if (g is Point2f gp && acc2)
             {
                 result256 = r256;
@@ -2136,7 +2169,10 @@ public class TpTaskFastDrag
         if (result256.IsEmpty())
         {
             Logger.LogWarning("[大地图定位] 前两层先验均未采纳，进入全图盲搜兜底（此路径存在自相似区误识别风险）");
-            result256 = teyvat.GetBigMapPosition(greyBigMapMat);
+            var full = teyvat.GetBigMapPosition(greyBigMapMat);
+            var fullG = ToGenshin(full);
+            Logger.LogDebug("[诊断-分层先验] 全图盲搜结果=({FX:0},{FY:0})", fullG is Point2f fg ? fg.X : 0, fullG is Point2f fg2 ? fg2.Y : 0);
+            result256 = full;
         }
 
         return result256;
@@ -2170,14 +2206,30 @@ public class TpTaskFastDrag
         bool acc = g is Point2f gp
             && BigMapPriorMatchDecisions.IsResultAcceptable(false, gp, dragCenter, radiusGenshin);
 
+        // 【诊断】拖动先验局部搜索结果
+        if (g is Point2f gpLog)
+        {
+            double distLog = BigMapPriorMatchDecisions.Distance(gpLog, dragCenter);
+            Logger.LogDebug("[诊断-拖动先验] 中心=({CX:0},{CY:0}) 半径={R:0} 局部搜索结果=({RX:0},{RY:0}) 距中心={D:0} 采纳={Acc}",
+                dragCenter.X, dragCenter.Y, radiusGenshin, gpLog.X, gpLog.Y, distLog, acc);
+        }
+        else
+        {
+            Logger.LogDebug("[诊断-拖动先验] 中心=({CX:0},{CY:0}) 半径={R:0} 局部搜索结果=空 采纳=false",
+                dragCenter.X, dragCenter.Y, radiusGenshin);
+        }
+
         if (g is Point2f gpFinal && acc)
         {
             return r256;
         }
 
         // 降级全图盲搜
-        Logger.LogDebug("[大地图定位] 拖动先验未采纳，降级全图盲搜");
-        return teyvat.GetBigMapPosition(greyBigMapMat);
+        var full256 = teyvat.GetBigMapPosition(greyBigMapMat);
+        var fullG = ToGenshin(full256);
+        Logger.LogDebug("[诊断-拖动先验] 降级全图盲搜结果=({FX:0},{FY:0})",
+            fullG is Point2f fg ? fg.X : 0, fullG is Point2f fg2 ? fg2.Y : 0);
+        return full256;
     }
 
     public Point2f GetBigMapCenterPoint(string mapName, bool usePrior = true)
