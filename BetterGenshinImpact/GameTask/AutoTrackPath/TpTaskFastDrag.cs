@@ -2019,17 +2019,34 @@ public class TpTaskFastDrag
             }
         }, TimeSpan.FromMilliseconds(60), 20);
 
-        // 识别结束：若曾为识别临时拉过 5.5，复原到原缩放，避免污染调用方（成功或失败都要复原）
+        // 识别结束：若曾为识别临时拉过 5.5，复原到 4.4（传送点可点击档），避免污染调用方
         if (zoomChangedForRecover && savedZoomLevel > 0)
         {
             try
             {
                 using var raNow = CaptureToRectArea();
                 double zoomNow = GetBigMapZoomLevel(raNow);
-                if (Math.Abs(zoomNow - savedZoomLevel) > _tpConfig.PrecisionThreshold)
+                // 复原到 4.4，不是 savedZoomLevel（1.9 下 GetBigMapRect 不稳定才触发拉 5.5）
+                double targetZoom = DisplayTpPointZoomLevel;
+                if (Math.Abs(zoomNow - targetZoom) > _tpConfig.PrecisionThreshold)
                 {
-                    AdjustMapZoomLevel(zoomNow, savedZoomLevel).GetAwaiter().GetResult();
-                    TaskControl.Logger.LogInformation("识别完成：缩放复原到 {Z:0.0}", savedZoomLevel);
+                    // 复原前，按缩放比例修正 rect，使其对应 4.4 缩放
+                    if (rect != default && Math.Abs(zoomNow - 5.5) < 0.5)
+                    {
+                        double scale = targetZoom / 5.5;
+                        double cx = rect.X + rect.Width / 2.0;
+                        double cy = rect.Y + rect.Height / 2.0;
+                        rect = new Rect(
+                            (int)(cx - rect.Width * scale / 2.0),
+                            (int)(cy - rect.Height * scale / 2.0),
+                            (int)(rect.Width * scale),
+                            (int)(rect.Height * scale));
+                        TaskControl.Logger.LogInformation("修正 rect 按缩放比例 {Scale:0.00}（{From:0.0}→{To:0.0}）：{Rect}",
+                            scale, zoomNow, targetZoom, rect);
+                    }
+
+                    AdjustMapZoomLevel(zoomNow, targetZoom).GetAwaiter().GetResult();
+                    TaskControl.Logger.LogInformation("识别完成：缩放复原到 {Z:0.0}（传送点可点击档）", targetZoom);
                 }
             }
             catch (Exception ex)
