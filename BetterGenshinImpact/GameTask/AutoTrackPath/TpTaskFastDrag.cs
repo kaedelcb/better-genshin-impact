@@ -1367,7 +1367,7 @@ public class TpTaskFastDrag
             // 拖动滑动窗口先验：中心=预测位置，半径=预测移动距离*2（至少给个下限防止半径过小锁死）。
             // 仅提瓦特启用（GetBigMapCenterPoint 内部有 mapName/类型判断兜底）。
             _dragPriorCenterGenshin = predictedPoint;
-            _dragPriorRadiusGenshin = Math.Clamp(expectedMoveLen, 200, 300);
+            _dragPriorRadiusGenshin = Math.Clamp(expectedMoveLen+500, 200, 2000);
 
 
 
