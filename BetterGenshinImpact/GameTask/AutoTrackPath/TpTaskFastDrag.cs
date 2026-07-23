@@ -76,6 +76,9 @@ public class TpTaskFastDrag
     private Point2f? _dragPriorCenterGenshin = null;
     private double _dragPriorRadiusGenshin = 0;
 
+    /// <summary>拖动结束时保存的最终中心点，供步骤 6 点击坐标反推时做拖动先验。</summary>
+    private Point2f? _lastDragCenterGenshin = null;
+
     /// <summary>
     /// 直接通过缩放比例按钮计算放大按钮的Y坐标
     /// </summary>
@@ -1418,6 +1421,11 @@ public class TpTaskFastDrag
                 mapCenterPoint = predictedPoint;
             }
 
+            // 清掉拖动滑动窗口先验前，把最终中心点保存到 _lastDragCenterGenshin
+            if (_dragPriorCenterGenshin is Point2f lastCenter)
+            {
+                _lastDragCenterGenshin = lastCenter;
+            }
             // 清掉拖动滑动窗口先验，避免影响本轮循环内后续识别（亮度切图等）
             _dragPriorCenterGenshin = null;
             _dragPriorRadiusGenshin = 0;
@@ -2257,6 +2265,14 @@ public class TpTaskFastDrag
                         && _dragPriorRadiusGenshin > 0)
                     {
                         p = ResolveDragPriorPosition(sceneDrag, ra.CacheGreyMat, dragCenter, _dragPriorRadiusGenshin);
+                    }
+                    // 拖动先验已清空但 _lastDragCenterGenshin 有值：用保存的最终中心点再试一次
+                    else if (mapName == MapTypes.Teyvat.ToString()
+                        && (scene is TeyvatMap || scene is TeyvatMapTest)
+                        && scene is SceneBaseMap sceneLastDrag
+                        && _lastDragCenterGenshin is Point2f lastCenter)
+                    {
+                        p = ResolveDragPriorPosition(sceneLastDrag, ra.CacheGreyMat, lastCenter, 2500);
                     }
                     // 提瓦特大地图(真实类型) + 至少有一层先验 + usePrior=true → 分层区块限定；否则逐字节走旧全图路径
                     else if (mapName == MapTypes.Teyvat.ToString()
