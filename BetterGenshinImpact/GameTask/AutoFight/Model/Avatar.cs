@@ -762,9 +762,9 @@ public class Avatar
     var qiTimes = 0;
 
     // 新增：计时变量
-    var lastChargeTime = DateTime.Now;
-    var redTime = DateTime.Now;
-    var qiTime = DateTime.Now;
+    var lastChargeTime = DateTime.UtcNow;
+    var redTime = DateTime.UtcNow;
+    var qiTime = DateTime.UtcNow;
 
     while (ms >= 0)
     {
@@ -782,7 +782,7 @@ public class Avatar
             Avatar? alqn = CombatScenes.SelectAvatar("阿蕾奇诺");
             using var region1 = CaptureToRectArea();
             // 每隔5秒执行一次 Charge(350)
-            if ((DateTime.Now - lastChargeTime).TotalMilliseconds >= 1080)
+            if ((DateTime.UtcNow - lastChargeTime).TotalMilliseconds >= 1080)
             {
                 // Logger.LogWarning("闪A");
                 Simulation.SendInput.SimulateAction(GIActions.SprintMouse, KeyType.KeyDown);
@@ -806,7 +806,7 @@ public class Avatar
                     return;
                 }
                 Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
-                lastChargeTime = DateTime.Now; // 重置计时
+                lastChargeTime = DateTime.UtcNow; // 重置计时
                 return;
             }
             else
@@ -924,9 +924,9 @@ public class Avatar
 
                 if (aa)
                 {
-                    if ((DateTime.Now - redTime).TotalMilliseconds >= 100)
+                    if ((DateTime.UtcNow - redTime).TotalMilliseconds >= 100)
                     {
-                        redTime = DateTime.Now;
+                        redTime = DateTime.UtcNow;
                         isTimes += 2; 
                     }
                     else
@@ -937,9 +937,9 @@ public class Avatar
 
                 if (bb22)
                 {
-                    if ((DateTime.Now - qiTime).TotalMilliseconds >= 100)
+                    if ((DateTime.UtcNow - qiTime).TotalMilliseconds >= 100)
                     {
-                        qiTime = DateTime.Now;
+                        qiTime = DateTime.UtcNow;
                         qiTimes += 1; 
                     }
                     else
