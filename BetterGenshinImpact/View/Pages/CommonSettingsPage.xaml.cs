@@ -16,7 +16,7 @@ using BetterGenshinImpact.View.Windows;
 
 namespace BetterGenshinImpact.View.Pages;
 
-public partial class CommonSettingsPage : Page
+public partial class CommonSettingsPage : System.Windows.Controls.Page
 {
     private CommonSettingsPageViewModel ViewModel { get; }
     
