@@ -10,6 +10,7 @@ using BetterGenshinImpact.Helpers.Extensions;
 using BetterGenshinImpact.Helpers.Ui;
 using BetterGenshinImpact.Model;
 using BetterGenshinImpact.Service.ChildSession;
+using BetterGenshinImpact.Service.Instance;
 using BetterGenshinImpact.Service.Interface;
 using BetterGenshinImpact.View;
 using BetterGenshinImpact.View.Controls.Markdown;
@@ -62,7 +63,7 @@ public partial class HomePageViewModel : ViewModel
 
     public AllConfig Config { get; set; }
 
-    public bool IsChildSessionEntryVisible => !CommandLineOptions.Instance.IsChildSession;
+    public bool IsChildSessionEntryVisible => CommandLineOptions.Instance.IsPrimaryInstance;
 
     private MaskWindow? _maskWindow;
     private readonly ILogger<HomePageViewModel> _logger = App.GetLogger<HomePageViewModel>();
@@ -148,11 +149,20 @@ public partial class HomePageViewModel : ViewModel
 
         _autoRun = false;
 
-        var args = Environment.GetCommandLineArgs();
-        if (args.Length > 1 && args[1].Contains("start"))
+        // 只对纯 "start" 参数自动启动截图器
+        // startOneDragon、--startGroups 等由各自流程中的 StartGameTask 处理
+        HandleActivation(CommandLineOptions.Instance);
+    }
+
+    public void HandleActivation(CommandLineOptions commandLineOptions)
+    {
+        if (commandLineOptions.Action == CommandLineAction.Start)
         {
             _ = OnStartTriggerAsync();
         }
+
+        // TODO: 多实例独立任务选择面板入口预留。
+        // 后续在此判断可用子实例，并由选择面板决定 task.* 请求的目标实例。
     }
 
     private void OnClosed()

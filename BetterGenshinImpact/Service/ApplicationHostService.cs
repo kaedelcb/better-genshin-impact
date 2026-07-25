@@ -1,4 +1,4 @@
-﻿using BetterGenshinImpact.View;
+using BetterGenshinImpact.View;
 using BetterGenshinImpact.View.Pages;
 using BetterGenshinImpact.ViewModel.Pages;
 using Microsoft.Extensions.Hosting;
@@ -11,6 +11,8 @@ using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Common;
 using Microsoft.Extensions.Logging;
+using BetterGenshinImpact.Helpers;
+using BetterGenshinImpact.Service.Instance;
 using Wpf.Ui;
 
 namespace BetterGenshinImpact.Service;
@@ -18,7 +20,9 @@ namespace BetterGenshinImpact.Service;
 /// <summary>
 /// Managed host of the application.
 /// </summary>
-public class ApplicationHostService(IServiceProvider serviceProvider) : IHostedService
+public class ApplicationHostService(
+    IServiceProvider serviceProvider,
+    InstanceService instanceService) : IHostedService
 {
     private INavigationWindow? _navigationWindow;
 
@@ -29,6 +33,7 @@ public class ApplicationHostService(IServiceProvider serviceProvider) : IHostedS
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await HandleActivationAsync();
+        instanceService.MarkApplicationReady();
     }
 
     /// <summary>

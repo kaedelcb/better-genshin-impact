@@ -1,5 +1,6 @@
 using BetterGenshinImpact.View.Windows;
 using BetterGenshinImpact.Helpers;
+using BetterGenshinImpact.Service.Instance;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -38,7 +39,7 @@ public class SystemControl
         var cfg = TaskContext.Instance().Config.GenshinStartConfig;
         var workdir = Path.GetDirectoryName(path) ?? "";
         var arg = cfg.GenshinStartArgs.Trim();
-        if (CommandLineOptions.Instance.IsChildSession)
+        if (CommandLineOptions.Instance.InstanceType == BetterGiInstanceType.ChildSession)
         {
             arg = string.IsNullOrEmpty(arg)
                 ? ChildSessionGenshinStartArgs
