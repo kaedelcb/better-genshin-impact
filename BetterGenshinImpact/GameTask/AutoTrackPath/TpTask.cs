@@ -6,6 +6,7 @@ using BetterGenshinImpact.GameTask.AutoTrackPath.Model;
 using BetterGenshinImpact.GameTask.Common.Map.Maps.Base;
 using BetterGenshinImpact.GameTask.Model.Area;
 using OpenCvSharp;
+using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask.AutoTrackPath;
 
@@ -97,6 +98,26 @@ public class TpTask
         else
         {
             await _fastDrag.MoveMapTo(x, y, mapName, finalZoomLevel, country, retryTimes, enableEarlyStop);
+        }
+    }
+
+    /// <summary>
+    /// 点击大地图上的指定坐标。
+    /// </summary>
+    /// <param name="x">目标 x 坐标。</param>
+    /// <param name="y">目标 y 坐标。</param>
+    /// <param name="mapName">大地图名称。</param>
+    public async Task ClickMapPoint(double x, double y, string mapName)
+    {
+        if (UseOfficial)
+        {
+            await _official.ClickMapPoint(x, y, mapName);
+        }
+        else
+        {
+            await _fastDrag.MoveMapTo(x, y, mapName);
+            using var clickCapture = CaptureToRectArea();
+            clickCapture.ClickTo(clickCapture.Width / 2, clickCapture.Height / 2);
         }
     }
 
