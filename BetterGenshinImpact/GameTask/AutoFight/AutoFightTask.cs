@@ -1159,6 +1159,20 @@ public class AutoFightTask : ISoloTask
                                         {
                                             lastFightName = avatarQ.Name;
                                             countFight++;
+                                            
+                                            if (_taskParam.FinishDetectConfig.RotationMode &&
+                                                _taskParam.FinishDetectConfig.RotateFindEnemyEnabled)
+                                            {
+                                                var aa = CheckFightFinish(0, detectDelayTime, cts2.Token).Result
+                                                         || CheckFightFinish(0, detectDelayTime, cts2.Token).Result;
+                                                if (aa)
+                                                {
+                                                    FightEndTotoly  = true;
+                                                    fightEndFlag = true;
+                                                    break;
+                                                }
+                                            }
+                                            
                                             if (useE && !await AutoFightSkill.AvatarSkillAsync(Logger, avatarQ, false, 1, cts2.Token))
                                             {
                                                 Logger.LogInformation("自动EQ战斗：使用序号 {name} 角色E技能 {cd}", num,avatarQ.GetSkillCdSeconds());
@@ -1210,6 +1224,17 @@ public class AutoFightTask : ISoloTask
                                                 finally
                                                 {
                                                     imageAfterUseSkill.Dispose();
+                                                    if (_taskParam.FinishDetectConfig.RotationMode &&
+                                                        _taskParam.FinishDetectConfig.RotateFindEnemyEnabled)
+                                                    {
+                                                        var aa = CheckFightFinish(0, detectDelayTime, cts2.Token).Result
+                                                                 || CheckFightFinish(0, detectDelayTime, cts2.Token).Result;
+                                                        if (aa)
+                                                        {
+                                                            FightEndTotoly  = true;
+                                                            fightEndFlag = true;
+                                                        }
+                                                    }
                                                 }
                                             }
                                             
@@ -1218,7 +1243,7 @@ public class AutoFightTask : ISoloTask
                                                 break; 
                                             }
                                             
-                                            fightEndFlag = await CheckFightFinish(0, detectDelayTime, cts2.Token,avatarQ) || FightEndTotoly;
+                                            if (!fightEndFlag) fightEndFlag = await CheckFightFinish(0, detectDelayTime, cts2.Token,avatarQ) || FightEndTotoly;
                                             if (!fightEndFlag)
                                             { 
                                                 Simulation.SendInput.SimulateAction(GIActions.ElementalBurst);
