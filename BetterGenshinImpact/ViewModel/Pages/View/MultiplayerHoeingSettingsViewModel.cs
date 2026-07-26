@@ -93,6 +93,23 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
     // ===== 调试（hoeing-multiplayer-solo-debug-mode）：单人调试模式，纯本地 =====
     [ObservableProperty] private bool _soloDebugMode;
 
+    // ===== 按周期吃食物（multiplayer-hoeing-auto-eat-food-by-period，纯本地）=====
+    [ObservableProperty] private int _medicineFoodSlot1 = 1;
+    [ObservableProperty] private int _medicineFoodSlot2 = 2;
+    [ObservableProperty] private int _medicineFoodSlot3 = 3;
+    [ObservableProperty] private int _medicineFoodSlot4 = 4;
+    [ObservableProperty] private string _medicineFoodPeriod1 = "0";
+    [ObservableProperty] private string _medicineFoodPeriod2 = "0";
+    [ObservableProperty] private string _medicineFoodPeriod3 = "0";
+    [ObservableProperty] private string _medicineFoodPeriod4 = "0";
+    [ObservableProperty] private string _medicineFoodRouteKeywords1 = "";
+    [ObservableProperty] private string _medicineFoodRouteKeywords2 = "";
+    [ObservableProperty] private string _medicineFoodRouteKeywords3 = "";
+    [ObservableProperty] private string _medicineFoodRouteKeywords4 = "";
+
+    /// <summary>食物序号下拉可选项 1~4。</summary>
+    public IReadOnlyList<int> MedicineSlotOptions { get; } = new[] { 1, 2, 3, 4 };
+
     // ===== D 成员区 =====
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TargetHostEnabled))]
@@ -230,6 +247,20 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         _routeModeSelection = RouteModeDecisions.MapUseFixedToRouteMode(GetBool("useFixedDebugRoutes", g.UseFixedDebugRoutes));
         _fixedDebugRoutePath = GetStr("fixedDebugRoutePath", g.FixedDebugRoutePath);
         _groupIndex = RouteModeDecisions.ResolveSelectedOrDefault(groupOptions, GetStr("groupIndex", groupDefault), groupDefault);
+
+        // multiplayer-hoeing-auto-eat-food-by-period：按周期吃食物 4 行初值（纯本地，缺省回退全局 AutoHoeingConfig）
+        _medicineFoodSlot1 = GetInt("medicineFoodSlot1", g.MedicineFoodSlot1);
+        _medicineFoodSlot2 = GetInt("medicineFoodSlot2", g.MedicineFoodSlot2);
+        _medicineFoodSlot3 = GetInt("medicineFoodSlot3", g.MedicineFoodSlot3);
+        _medicineFoodSlot4 = GetInt("medicineFoodSlot4", g.MedicineFoodSlot4);
+        _medicineFoodPeriod1 = GetInt("medicineFoodPeriod1", g.MedicineFoodPeriod1).ToString();
+        _medicineFoodPeriod2 = GetInt("medicineFoodPeriod2", g.MedicineFoodPeriod2).ToString();
+        _medicineFoodPeriod3 = GetInt("medicineFoodPeriod3", g.MedicineFoodPeriod3).ToString();
+        _medicineFoodPeriod4 = GetInt("medicineFoodPeriod4", g.MedicineFoodPeriod4).ToString();
+        _medicineFoodRouteKeywords1 = GetStr("medicineFoodRouteKeywords1", g.MedicineFoodRouteKeywords1);
+        _medicineFoodRouteKeywords2 = GetStr("medicineFoodRouteKeywords2", g.MedicineFoodRouteKeywords2);
+        _medicineFoodRouteKeywords3 = GetStr("medicineFoodRouteKeywords3", g.MedicineFoodRouteKeywords3);
+        _medicineFoodRouteKeywords4 = GetStr("medicineFoodRouteKeywords4", g.MedicineFoodRouteKeywords4);
     }
 
     /// <summary>
@@ -292,6 +323,20 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         if (int.TryParse(MultiWorldCount, out var mwc)) settings["multiWorldCount"] = mwc;
         settings["pickupMode"] = PickupMode;
         settings["groupIndex"] = GroupIndex;
+
+        // 按周期吃食物（multiplayer-hoeing-auto-eat-food-by-period）：序号直接写，周期 TryParse 失败的行不写
+        settings["medicineFoodSlot1"] = MedicineFoodSlot1;
+        settings["medicineFoodSlot2"] = MedicineFoodSlot2;
+        settings["medicineFoodSlot3"] = MedicineFoodSlot3;
+        settings["medicineFoodSlot4"] = MedicineFoodSlot4;
+        if (int.TryParse(MedicineFoodPeriod1, out var __mfp1)) settings["medicineFoodPeriod1"] = __mfp1;
+        if (int.TryParse(MedicineFoodPeriod2, out var __mfp2)) settings["medicineFoodPeriod2"] = __mfp2;
+        if (int.TryParse(MedicineFoodPeriod3, out var __mfp3)) settings["medicineFoodPeriod3"] = __mfp3;
+        if (int.TryParse(MedicineFoodPeriod4, out var __mfp4)) settings["medicineFoodPeriod4"] = __mfp4;
+        settings["medicineFoodRouteKeywords1"] = MedicineFoodRouteKeywords1;
+        settings["medicineFoodRouteKeywords2"] = MedicineFoodRouteKeywords2;
+        settings["medicineFoodRouteKeywords3"] = MedicineFoodRouteKeywords3;
+        settings["medicineFoodRouteKeywords4"] = MedicineFoodRouteKeywords4;
     }
 }
 

@@ -429,6 +429,9 @@
                                   Foreground="DarkRed"
                                   Text="联机战斗策略为针对联机优化过，大部分角色的普通战斗策略和联机可能不一样，可打开《联机战斗策略.txt》查看和编辑相关角色的策略。"
                                   TextWrapping="Wrap" />
+                    <ui:Button x:Name="OpenMedicineEatSettingsButton"
+                               Margin="0,10,0,0"
+                               Content="按周期吃食物设置" />
                 </StackPanel>
             </ui:CardExpander>
 

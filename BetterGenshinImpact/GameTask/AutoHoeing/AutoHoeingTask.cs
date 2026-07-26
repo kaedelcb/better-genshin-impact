@@ -454,6 +454,20 @@ public class AutoHoeingTask : ISoloTask
             // === 单人调试模式重置（hoeing-multiplayer-solo-debug-mode，纯本地）===
             _config.SoloDebugMode = false;
 
+            // === 按周期吃食物重置（multiplayer-hoeing-auto-eat-food-by-period，纯本地）===
+            _config.MedicineFoodSlot1 = 1;
+            _config.MedicineFoodSlot2 = 2;
+            _config.MedicineFoodSlot3 = 3;
+            _config.MedicineFoodSlot4 = 4;
+            _config.MedicineFoodPeriod1 = 0;
+            _config.MedicineFoodPeriod2 = 0;
+            _config.MedicineFoodPeriod3 = 0;
+            _config.MedicineFoodPeriod4 = 0;
+            _config.MedicineFoodRouteKeywords1 = "";
+            _config.MedicineFoodRouteKeywords2 = "";
+            _config.MedicineFoodRouteKeywords3 = "";
+            _config.MedicineFoodRouteKeywords4 = "";
+
             ApplySettingsOverride();
         }
 
@@ -3917,6 +3931,20 @@ public class AutoHoeingTask : ISoloTask
             _config.SharedFightEndQuorumEnabled = Get("sharedFightEndQuorumEnabled", _config.SharedFightEndQuorumEnabled);
             _config.SharedFightEndQuorumRatio = Multiplayer.SharedFightEndQuorumDecisions.ClampRatio(
                 Get("sharedFightEndQuorumRatio", _config.SharedFightEndQuorumRatio));
+
+            // === 按周期吃食物（multiplayer-hoeing-auto-eat-food-by-period，纯本地）===
+            _config.MedicineFoodSlot1 = Get("medicineFoodSlot1", _config.MedicineFoodSlot1);
+            _config.MedicineFoodSlot2 = Get("medicineFoodSlot2", _config.MedicineFoodSlot2);
+            _config.MedicineFoodSlot3 = Get("medicineFoodSlot3", _config.MedicineFoodSlot3);
+            _config.MedicineFoodSlot4 = Get("medicineFoodSlot4", _config.MedicineFoodSlot4);
+            _config.MedicineFoodPeriod1 = Get("medicineFoodPeriod1", _config.MedicineFoodPeriod1);
+            _config.MedicineFoodPeriod2 = Get("medicineFoodPeriod2", _config.MedicineFoodPeriod2);
+            _config.MedicineFoodPeriod3 = Get("medicineFoodPeriod3", _config.MedicineFoodPeriod3);
+            _config.MedicineFoodPeriod4 = Get("medicineFoodPeriod4", _config.MedicineFoodPeriod4);
+            _config.MedicineFoodRouteKeywords1 = Get("medicineFoodRouteKeywords1", _config.MedicineFoodRouteKeywords1);
+            _config.MedicineFoodRouteKeywords2 = Get("medicineFoodRouteKeywords2", _config.MedicineFoodRouteKeywords2);
+            _config.MedicineFoodRouteKeywords3 = Get("medicineFoodRouteKeywords3", _config.MedicineFoodRouteKeywords3);
+            _config.MedicineFoodRouteKeywords4 = Get("medicineFoodRouteKeywords4", _config.MedicineFoodRouteKeywords4);
         }
         else
         {

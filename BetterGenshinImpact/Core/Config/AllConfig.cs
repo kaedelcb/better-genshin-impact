@@ -339,6 +339,11 @@ public partial class AllConfig : ObservableObject
     /// </summary>
     public ChildSessionConfig ChildSessionConfig { get; set; } = new();
 
+    /// <summary>
+    /// 联机锄地按周期吃食物的全局 CD 时间戳存储（纯本地，不同步给其他玩家）
+    /// </summary>
+    public MedicineEatCdConfig MedicineEatCdConfig { get; set; } = new();
+
     [JsonIgnore]
     public Action? OnAnyChangedAction { get; set; }
 
@@ -382,6 +387,7 @@ public partial class AllConfig : ObservableObject
         ChildSessionConfig.PropertyChanged += OnAnyPropertyChanged;
         SkillCdConfig.PropertyChanged += OnAnyPropertyChanged;
         MiniMapMatchTuningConfig.PropertyChanged += OnAnyPropertyChanged;
+        MedicineEatCdConfig.PropertyChanged += OnAnyPropertyChanged;
     }
 
     public void OnAnyPropertyChanged(object? sender, EventArgs args)

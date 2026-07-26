@@ -79,6 +79,7 @@ public partial class MultiplayerHoeingSettingsView : UserControl
         HookFightStrategyButton(); // "打开联机战斗策略文件" → MultiplayerFightStrategyFileHelper.OpenForEdit()
         HookDocButtons();          // 变体卡 Header 的"使用教程"/"制作规则" → OpenDoc
         HookFightStrategyCombo();  // E 卡片复刻战斗策略下拉（绑配置组 AutoFightConfig.StrategyName）
+        HookMedicineEatButton();    // 按周期吃食物设置按钮 → 弹窗
 
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;   // 衔接 UpdateButtonStates
     }
@@ -850,6 +851,107 @@ public partial class MultiplayerHoeingSettingsView : UserControl
         {
             // 加载策略列表失败不应阻断弹窗（可恢复异常）
             _logger.LogWarning(ex, "[联机战斗策略] 加载策略下拉失败");
+        }
+    }
+
+    // ===== 按周期吃食物设置（multiplayer-hoeing-auto-eat-food-by-period）=====
+    private void HookMedicineEatButton()
+    {
+        OpenMedicineEatSettingsButton.Click += async (_, _) => await ShowMedicineEatSettingsDialogAsync();
+    }
+
+    private async Task ShowMedicineEatSettingsDialogAsync()
+    {
+        try
+        {
+            var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 0) };
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = "使用前请先在原神【背包-食物】页面，给要吃的食物点击右上角星标「加星置顶」，"
+                     + "使目标食物固定排在食物页最前 4 格。本功能按下方序号点击对应格子的食物。\n"
+                     + "序号 1~4 对应食物页前 4 格；周期填 0 表示该格不启用周期吃药。\n"
+                     + "线路关键词（逗号分隔）：当前线路名包含任一关键词时，到达该线路的传送点就吃这格——"
+                     + "无视吃药周期与 CD（哪怕周期填 0 或刚吃过也会吃）。周期与线路两个条件任一满足即吃。",
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 10),
+                Foreground = System.Windows.Media.Brushes.IndianRed
+            });
+
+            // 4 行：第N格（固定序号=行号）+ 周期输入(窄) + 线路关键词输入
+            var periodBoxes = new TextBox[4];
+            var routeBoxes = new TextBox[4];
+            string[] curPeriods = { ViewModel.MedicineFoodPeriod1, ViewModel.MedicineFoodPeriod2, ViewModel.MedicineFoodPeriod3, ViewModel.MedicineFoodPeriod4 };
+            string[] curRoutes = { ViewModel.MedicineFoodRouteKeywords1, ViewModel.MedicineFoodRouteKeywords2, ViewModel.MedicineFoodRouteKeywords3, ViewModel.MedicineFoodRouteKeywords4 };
+            // 列标题行（与数据行同列定义以对齐）：第一列（第N格）留空，第二列=执行周期，第三列=强制吃药线路
+            var headerRow = new System.Windows.Controls.Grid { Margin = new Thickness(0, 2, 0, 2) };
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) });
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var hPeriod = new TextBlock { Text = "周期(秒)", FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0), TextWrapping = TextWrapping.Wrap };
+            var hRoute = new TextBlock { Text = "强制吃药线路", FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0) };
+            System.Windows.Controls.Grid.SetColumn(hPeriod, 1);
+            System.Windows.Controls.Grid.SetColumn(hRoute, 2);
+            headerRow.Children.Add(hPeriod);
+            headerRow.Children.Add(hRoute);
+            panel.Children.Add(headerRow);
+            for (int i = 0; i < 4; i++)
+            {
+                var row = new System.Windows.Controls.Grid { Margin = new Thickness(0, 4, 0, 0) };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) });   // 第N格 标签
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });   // 周期(窄)
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // 线路关键词(占满剩余)
+
+                var label = new TextBlock { Text = $"第{i + 1}格", VerticalAlignment = VerticalAlignment.Center };
+                var periodBox = new TextBox { Text = curPeriods[i], PlaceholderText = "周期秒", Margin = new Thickness(4, 0, 4, 0) };
+                var routeBox = new TextBox { Text = curRoutes[i], PlaceholderText = "吃药线路关键词（逗号分隔，可留空）", Margin = new Thickness(4, 0, 4, 0) };
+
+                System.Windows.Controls.Grid.SetColumn(label, 0);
+                System.Windows.Controls.Grid.SetColumn(periodBox, 1);
+                System.Windows.Controls.Grid.SetColumn(routeBox, 2);
+                row.Children.Add(label);
+                row.Children.Add(periodBox);
+                row.Children.Add(routeBox);
+                panel.Children.Add(row);
+
+                periodBoxes[i] = periodBox;
+                routeBoxes[i] = routeBox;
+            }
+
+            var dialog = new Wpf.Ui.Controls.MessageBox
+            {
+                Title = "按周期吃食物设置",
+                Content = panel,
+                MinWidth = 620,
+                PrimaryButtonText = "确定",
+                CloseButtonText = "取消",
+                Owner = Application.Current.MainWindow,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            };
+            var r = await dialog.ShowDialogAsync();
+            if (r != MessageBoxResult.Primary) return;
+
+            // 写回 ViewModel（Save() 会经 WriteMultiplayerSettings 落盘；周期非法留原值由 VM 保留字符串）
+            // 序号固定绑定格号（第N格→序号N），归正历史配置里可能的乱序值
+            ViewModel.MedicineFoodSlot1 = 1;
+            ViewModel.MedicineFoodSlot2 = 2;
+            ViewModel.MedicineFoodSlot3 = 3;
+            ViewModel.MedicineFoodSlot4 = 4;
+            ViewModel.MedicineFoodPeriod1 = periodBoxes[0].Text?.Trim() ?? "0";
+            ViewModel.MedicineFoodPeriod2 = periodBoxes[1].Text?.Trim() ?? "0";
+            ViewModel.MedicineFoodPeriod3 = periodBoxes[2].Text?.Trim() ?? "0";
+            ViewModel.MedicineFoodPeriod4 = periodBoxes[3].Text?.Trim() ?? "0";
+            ViewModel.MedicineFoodRouteKeywords1 = routeBoxes[0].Text?.Trim() ?? "";
+            ViewModel.MedicineFoodRouteKeywords2 = routeBoxes[1].Text?.Trim() ?? "";
+            ViewModel.MedicineFoodRouteKeywords3 = routeBoxes[2].Text?.Trim() ?? "";
+            ViewModel.MedicineFoodRouteKeywords4 = routeBoxes[3].Text?.Trim() ?? "";
+            Toast.Success("按周期吃食物设置已保存");
+        }
+        catch (Exception ex)
+        {
+            // 弹窗构建/读写异常不应让配置弹窗崩溃（可恢复异常）
+            _logger.LogWarning(ex, "[按周期吃食物] 设置弹窗异常");
+            Toast.Warning("按周期吃食物设置失败，请查看日志");
         }
     }
 

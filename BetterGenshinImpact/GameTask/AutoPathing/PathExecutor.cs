@@ -119,6 +119,13 @@ public partial class PathExecutor
     private bool _perRouteSwitchDone = false;
 
     /// <summary>
+    /// 本次传送点的「按周期吃食物」计划（进程内运行时标记）：传送 loading 间隙由 BuildPlan 算出，
+    /// 传送完成执行后清空。单机 / 非联机时恒为 Empty。multiplayer-hoeing-auto-eat-food-by-period spec。
+    /// </summary>
+    private BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.MedicineEatPlan _pendingMedicineEatPlan
+        = BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.MedicineEatPlan.Empty;
+
+    /// <summary>
     /// 异常恢复后，需要在下一个同步点等待前上报 Normal（恢复参与全员判定）。
     /// </summary>
     private bool _needReportNormalBeforeSync = false;
@@ -639,6 +646,33 @@ public partial class PathExecutor
                                 .ResolveFastSyncIdForWaypoint(__tpFastSyncId,
                                     PerRouteSwitchHook?.RouteHasSwitch ?? false, __isFirstTeleportForSwitch);
 
+                            // 按周期吃食物（multiplayer-hoeing-auto-eat-food-by-period，检测时机=传送 loading 间隙）：
+                            // 算本次吃药计划；ShouldEat 时把 __tpFastSyncId 置 null 抑制该传送点快速抢报（等吃完再严格上报）。
+                            // 单机 / MultiplayerCoordinator==null 时不计算，plan 保持 Empty，__tpFastSyncId 逐字节不变（单机零回归）。
+                            _pendingMedicineEatPlan = BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.MedicineEatPlan.Empty;
+                            if (MultiplayerCoordinator != null)
+                            {
+                                var __medCfg = MultiplayerCoordinator.EffectiveConfig;
+                                var __medCd = TaskContext.Instance().Config.MedicineEatCdConfig;
+                                var __medRouteName = System.IO.Path.GetFileNameWithoutExtension(task.FileName ?? string.Empty);
+                                var __medRows = new System.Collections.Generic.List<BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.MedicineEatDecisions.FoodRow>
+                                {
+                                    new(__medCfg.MedicineFoodSlot1, __medCfg.MedicineFoodPeriod1, __medCfg.MedicineFoodRouteKeywords1),
+                                    new(__medCfg.MedicineFoodSlot2, __medCfg.MedicineFoodPeriod2, __medCfg.MedicineFoodRouteKeywords2),
+                                    new(__medCfg.MedicineFoodSlot3, __medCfg.MedicineFoodPeriod3, __medCfg.MedicineFoodRouteKeywords3),
+                                    new(__medCfg.MedicineFoodSlot4, __medCfg.MedicineFoodPeriod4, __medCfg.MedicineFoodRouteKeywords4),
+                                };
+                                _pendingMedicineEatPlan = BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.MedicineEatDecisions.BuildPlan(
+                                    __medRows,
+                                    __slot => __medCd.GetLastEatTime(__slot),
+                                    DateTime.UtcNow,
+                                    isMultiplayer: __medCfg.MultiplayerEnabled,
+                                    isConnected: MultiplayerCoordinator.IsConnected,
+                                    currentRouteName: __medRouteName);
+                                __tpFastSyncId = BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.MedicineEatDecisions
+                                    .ResolveFastSyncIdForMedicine(__tpFastSyncId, _pendingMedicineEatPlan.ShouldEat);
+                            }
+
                             if (MultiplayerCoordinator != null)
                             {
                                 try
@@ -700,6 +734,61 @@ public partial class PathExecutor
                                 {
                                     WorldStateMonitor?.EndRoleSwitch();
                                     BetterGenshinImpact.GameTask.AutoHoeing.Services.TemplatePickupService.SuppressPickupInput = false;
+                                }
+                            }
+
+                            // 按周期吃食物执行（multiplayer-hoeing-auto-eat-food-by-period，执行时机=传送同步点）：
+                            // 传送完成 → 若本次需吃药 → 打开食物页依次吃各到期格 → 仅当食物页成功打开才对每格写全局 CD 时间戳 →
+                            // 随后落到下方既有 WaitForAllPlayers 严格上报（抢报已在传送前抑制）。
+                            // plan.ShouldEat==false 或单机（plan 恒 Empty）时整块短路，不吃药路径逐字节不变。
+                            if (MultiplayerCoordinator != null && _pendingMedicineEatPlan.ShouldEat)
+                            {
+                                var __medSlots = _pendingMedicineEatPlan.FoodSlots;
+                                // 吃药打开食物页期间抑制后台拾取输入（滚轮/按F 会滚动食物格）与异常检测输入（ESC/空格会关背包），
+                                // 复用换人块同一静态标志（TemplatePickupService.SuppressPickupInput，AnomalyDetector 也查它）。
+                                BetterGenshinImpact.GameTask.AutoHoeing.Services.TemplatePickupService.SuppressPickupInput = true;
+                                WorldStateMonitor?.BeginMedicineEat();   // 吃药开背包 IsInMultiGame=false 属合法窗口，抑制被踢误判
+                                try
+                                {
+                                    var __medExecutor = new BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.MedicineEatExecutor();
+                                    var __medResult = await __medExecutor.EatFoodAsync(__medSlots, ct);
+                                    if (__medResult.Opened)
+                                    {
+                                        var __medCd2 = TaskContext.Instance().Config.MedicineEatCdConfig;
+                                        var __medNow = DateTime.UtcNow;
+                                        foreach (var __medSlot in __medSlots) __medCd2.SetLastEatTime(__medSlot, __medNow);
+                                        Logger.LogInformation("[按周期吃食物] 已吃 {N} 格食物并更新 CD 时间戳", __medSlots.Count);
+
+                                        // 恢复药格（需选角、不支持）→ 本次运行把对应配置行周期置 0，后续不再吃该格（仅改运行时 EffectiveConfig，不落盘）。
+                                        if (__medResult.RecoverySlots.Count > 0)
+                                        {
+                                            var __medCfgRt = MultiplayerCoordinator.EffectiveConfig;
+                                            foreach (var __recSlot in __medResult.RecoverySlots)
+                                            {
+                                                if (__medCfgRt.MedicineFoodSlot1 == __recSlot) __medCfgRt.MedicineFoodPeriod1 = 0;
+                                                if (__medCfgRt.MedicineFoodSlot2 == __recSlot) __medCfgRt.MedicineFoodPeriod2 = 0;
+                                                if (__medCfgRt.MedicineFoodSlot3 == __recSlot) __medCfgRt.MedicineFoodPeriod3 = 0;
+                                                if (__medCfgRt.MedicineFoodSlot4 == __recSlot) __medCfgRt.MedicineFoodPeriod4 = 0;
+                                            }
+                                            Logger.LogInformation("[按周期吃食物] {N} 个恢复药格已在本次运行内停用（周期置0）", __medResult.RecoverySlots.Count);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        Logger.LogWarning("[按周期吃食物] 食物页未成功打开，本次不更新 CD，下个传送点自然重试");
+                                    }
+                                }
+                                catch (OperationCanceledException) { throw; } // 取消透传
+                                catch (Exception __medEx)
+                                {
+                                    // 可恢复：吃药失败不应中断锄地主流程，也不写 CD；落到下方严格上报避免队友空等
+                                    Logger.LogWarning(__medEx, "[按周期吃食物] 执行异常，跳过本次吃药，继续上报同步点");
+                                }
+                                finally
+                                {
+                                    BetterGenshinImpact.GameTask.AutoHoeing.Services.TemplatePickupService.SuppressPickupInput = false; // 复位抑制（与换人块一致）
+                                    WorldStateMonitor?.EndMedicineEat();
+                                    _pendingMedicineEatPlan = BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.MedicineEatPlan.Empty; // 清标记
                                 }
                             }
 

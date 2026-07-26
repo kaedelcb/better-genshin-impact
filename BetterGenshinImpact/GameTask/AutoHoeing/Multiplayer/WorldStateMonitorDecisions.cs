@@ -41,7 +41,8 @@ public readonly record struct MonitorState(
     bool IsPartyPhase,              // IsPartyPhase
     bool IsSuspend,                 // RunnerContext.Instance.IsSuspend
     bool ScreenshotThrew,           // 截图/识别抛异常
-    bool IsRoleSwitching);          // _isRoleSwitching（按线路换角色抑制中）
+    bool IsRoleSwitching,           // _isRoleSwitching（按线路换角色抑制中）
+    bool IsEatingMedicine);         // _isEatingMedicine（按周期吃食物抑制中）
 
 /// <summary>
 /// 决策结果：分类 + 是否应清零 _connectedButNotInGame。
@@ -91,8 +92,8 @@ public static class WorldStateMonitorDecisions
         if (suppressed)
             return new WorldStateDecision(WorldStateDecisionKind.Ignore, ResetConnectedCount: false);
 
-        // 7) 轮次切换 / 换角色（step 3c）——两者语义一致：忽略本帧、不累计不重置
-        if (x.IsRoundSwitching || x.IsRoleSwitching)
+        // 7) 轮次切换 / 换角色 / 吃药（step 3c/3d/3e）——语义一致：忽略本帧、不累计不重置
+        if (x.IsRoundSwitching || x.IsRoleSwitching || x.IsEatingMedicine)
             return new WorldStateDecision(WorldStateDecisionKind.Ignore, ResetConnectedCount: false);
 
         // 8) 信号融合（step 4）：IsInMultiGame=false + SignalR
