@@ -71,6 +71,12 @@ public partial class PathExecutor
     // 玛薇卡挑飞触发距离阈值，从 PartyConfig.MwkFlyJumpDistance 读取（默认 75，0=不挑飞）
     private int _mwkFlyJumpDistance = 75;
     private readonly ReturnMainUiTask _returnMainUiTask = new();
+
+    // 玛薇卡飞行等待期间的脱离飞行检测参数（ms）
+    // 起飞瞬间未进入稳定飞行，宽限期内不检测，避免刚起飞就被误判打断
+    private const int TakeoffGracePeriod = 400;
+    // 宽限期后每隔该间隔截图判定一次运动状态
+    private const int DetectInterval = 200;
     
     public PathingPartyConfig PartyConfig
     {
@@ -3194,6 +3200,10 @@ public partial class PathExecutor
                                         {
                                             var flyTime = distance switch
                                             {
+                                                > 220 => 5900,
+                                                > 200 => 5000,
+                                                > 180 => 4500,
+                                                > 160 => 4000,
                                                 > 140 => 3500,
                                                 > 100 => 2400,
                                                 > 80 => 900,
@@ -3209,7 +3219,62 @@ public partial class PathExecutor
                                             if (flyTime > 0)
                                             {
                                                 waypoint.MoveMode = MoveModeEnum.Dash.Code;
-                                                await Delay(flyTime, ct);
+                                                using var flyDetectCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                                                var detectToken = flyDetectCts.Token;
+                                                // 后台检测循环：宽限期后每隔 DetectInterval 截图判定，若脱离飞行则取消主等待提前收尾
+                                                var detectTask = Task.Run(async () =>
+                                                {
+                                                    try
+                                                    {
+                                                        // 宽限期内不检测，避免刚起飞未进入稳定飞行就被误判打断
+                                                        await Task.Delay(TakeoffGracePeriod, detectToken);
+                                                        while (!detectToken.IsCancellationRequested)
+                                                        {
+                                                            try
+                                                            {
+                                                                await Task.Delay(DetectInterval, detectToken);
+                                                                using var ra = CaptureToRectArea();
+                                                                // 获取两个点的颜色值
+                                                                var pos33 = ra.SrcMat.At<Vec3b>(1028, 1584);
+                                                                var isMwk = (pos33.Item0 == 255 && pos33.Item1 == 255 && pos33.Item2 == 255);
+                                                                if (!isMwk)
+                                                                {
+                                                                    // Logger.LogWarning("111");
+                                                                    flyDetectCts.Cancel();
+                                                                    break;
+                                                                }
+                                                            }
+                                                            catch (OperationCanceledException)
+                                                            {
+                                                                // 主等待结束或外部取消触发的检测间隔等待被取消，正常退出检测循环
+                                                                break;
+                                                            }
+                                                            catch (Exception ex)
+                                                            {
+                                                                // 截图/识别异常：降级为不提前结束、走满 flyTime，不传播中断赶路
+                                                                Logger.LogWarning(ex, "自动赶路：玛薇卡飞行脱离检测截图/识别异常，降级为走满 flyTime");
+                                                            }
+                                                        }
+                                                    }
+                                                    catch (OperationCanceledException)
+                                                    {
+                                                        // 宽限期等待期间主等待已结束或外部取消，正常退出检测任务（此时不应打断，走满 flyTime 逻辑由主等待负责）
+                                                    }
+                                                }, detectToken);
+                                                try
+                                                {
+                                                    await Delay(flyTime, detectToken);
+                                                }
+                                                catch (Exception ex) when (ex is (OperationCanceledException or NormalEndException) && !ct.IsCancellationRequested)
+                                                {
+                                                    // 内部检测提前结束等待，非外部取消，正常继续收尾
+                                                    _ = ex;
+                                                }
+                                                finally
+                                                {
+                                                    flyDetectCts.Cancel();
+                                                    await detectTask;
+                                                }
                                             }
                                             waypoint.MoveMode = MoveModeEnum.Fly.Code;
                                             hurryOnLogo = false;
@@ -3480,15 +3545,18 @@ public partial class PathExecutor
                     }
                     
                     //防转圈，卡地形
-                    if (distance < 15)
+                    if (distance < 15)distanceCount = distanceCount+2;
+                    if (distance < 30)distanceCount = distanceCount+1;
+                    if (waypoint?.MoveMode == MoveModeEnum.Dash.Code)
                     {
-                        distanceCount ++;
-                        if (distanceCount > 10)
-                        {
-                            Logger.LogWarning("战斗节点靠近超时-1");
-                            break;
-                        }
-                    }                   
+                        if (distance > 4 && distance < 30)distanceCount = distanceCount+2; 
+                    }
+                    if (distanceCount > 20)
+                    {
+                        Logger.LogWarning("战斗节点靠近超时-1");
+                        break;
+                    }
+                                     
                 }
             }
             
