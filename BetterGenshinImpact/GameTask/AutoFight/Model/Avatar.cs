@@ -1421,7 +1421,7 @@ public class Avatar
                 ThrowWhenDefeated(region, Ct);
             
                 double cd = 0;
-                for (var attempt = 0; attempt < 2; attempt++)
+                for (var attempt = 0; attempt < (Name == "莉奈娅"? 4:2); attempt++)
                 {
                     if (attempt > 0) region = CaptureToRectArea(); // 非首次尝试时重新截图
                     cd = AfterUseSkill(region);

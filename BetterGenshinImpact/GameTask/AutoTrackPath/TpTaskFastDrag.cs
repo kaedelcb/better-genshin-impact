@@ -503,9 +503,11 @@ public class TpTaskFastDrag
             edgeZoomApplied = true;
         }
 
-        // 重试时（retryTimes > 0）强制缩放到 2.0，使传送点图标放大避免被大地图标记物（地脉花等）遮挡。
+        // 重试时（retryTimes >= 2）强制缩放到 2.0，使传送点图标放大避免被大地图标记物（地脉花等）遮挡。
         // 放在 pullZoomForEdgeRecognition 之后以覆盖其 5.5 拉升，确保点击前缩放到放大状态。
-        if (retryTimes > 0 && (_tpConfig.MapZoomEnabled || _tpConfig.MapMoveStepDivisor))
+        // 第一次重试（retryTimes == 1）不走 2.0，保留 5.5→4.4 降回逻辑（步骤 5.6），
+        // 避免 2.0 下地图放大过多导致 GetBigMapRect 识别精度下降。
+        if (retryTimes >= 2 && (_tpConfig.MapZoomEnabled || _tpConfig.MapMoveStepDivisor))
         {
             using var raRetry = CaptureToRectArea();
             double zoomNow = GetBigMapZoomLevel(raRetry);
@@ -513,7 +515,7 @@ public class TpTaskFastDrag
             {
                 await AdjustMapZoomLevel(zoomNow, 2.0);
                 await Delay(ApplyExtraDelay(200), ct);
-                TaskControl.Logger.LogInformation("重试第{Retry}次：缩放拉到 2.0 放大传送点图标避免标记物遮挡", retryTimes);
+                TaskControl.Logger.LogInformation("重试第{Retry}次：缩放拉到 2.0 放大传送点图标避免标记物遮挡（retryTimes>=2 触发）", retryTimes);
             }
             // 重试时手动拉了缩放，需要重新计算 bigMapInAllMapRect
             // 清除 edgeZoomApplied 标志，防止步骤 5.6 又把缩放降回 4.4
