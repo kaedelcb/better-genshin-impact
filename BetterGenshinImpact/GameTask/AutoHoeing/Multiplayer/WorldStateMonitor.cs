@@ -79,6 +79,16 @@ public class WorldStateMonitor : IAsyncDisposable
     /// <summary>是否正在按线路换角色中（公开只读，供诊断/未来事件处理器使用）。</summary>
     public bool IsRoleSwitching => _isRoleSwitching;
 
+    // === 吃药抑制（multiplayer-hoeing-auto-eat-food-by-period）===
+    // 吃药打开背包食物页浮层期间 IsInMultiGame=false 但 SignalR 正常，属合法窗口。
+    // 与换角色/轮次切换同模式：抑制期忽略 IsInMultiGame=false，墙钟兜底防卡死。
+    private volatile bool _isEatingMedicine;
+    private DateTime _eatingMedicineStart;
+    private const int EatingMedicineSafeFloorSeconds = 60; // 吃药耗时远小于此，兜底防永久关闭被踢检测
+
+    /// <summary>是否正在按周期吃食物中（公开只读，供诊断使用）。</summary>
+    public bool IsEatingMedicine => _isEatingMedicine;
+
     // === 心跳失败独立退出路径（EC-03）===
     private int _consecutiveHeartbeatFailures;
     private const int HeartbeatFailureExitThreshold = 6; // 6次 × 5秒 = 30秒
@@ -213,6 +223,22 @@ public class WorldStateMonitor : IAsyncDisposable
         _logger.LogInformation("[WorldStateMonitor] 换角色完成，已重置内部状态");
     }
 
+    /// <summary>PathExecutor 吃药打开食物页前调用，进入吃药抑制期。</summary>
+    public void BeginMedicineEat()
+    {
+        _eatingMedicineStart = DateTime.UtcNow;
+        _isEatingMedicine = true;
+        _logger.LogDebug("[WorldStateMonitor] 进入吃药抑制状态");
+    }
+
+    /// <summary>吃药完成，恢复检测并重置内部累计状态。</summary>
+    public void EndMedicineEat()
+    {
+        _isEatingMedicine = false;
+        ResetInternalState();
+        _logger.LogDebug("[WorldStateMonitor] 吃药完成，已重置内部状态");
+    }
+
     /// <summary>心跳连续失败时由 CoordinatorClient 调用。</summary>
     public void NotifyHeartbeatFailure()
     {
@@ -333,6 +359,17 @@ public class WorldStateMonitor : IAsyncDisposable
             return;
         }
 
+        // 0d. 吃药抑制超时自动解除（兜底防吃药卡死永久关闭被踢检测）。
+        // 与换角色不同：吃药超时只解除抑制 + 清零累计，不终止任务（吃药是小动作，不值得因它退联机）。
+        if (_isEatingMedicine &&
+            (DateTime.UtcNow - _eatingMedicineStart).TotalSeconds > EatingMedicineSafeFloorSeconds)
+        {
+            _isEatingMedicine = false;
+            _connectedButNotInGame = 0;
+            _logger.LogWarning("[WorldStateMonitor] 吃药抑制超过 {Timeout}s 未解除，自动解除",
+                EatingMedicineSafeFloorSeconds);
+        }
+
         // 1. 截图检测 IsInMultiGame
         bool isInMultiGame;
         try
@@ -399,6 +436,13 @@ public class WorldStateMonitor : IAsyncDisposable
         if (_isRoleSwitching)
         {
             _logger.LogDebug("[WorldStateMonitor] 换角色中，忽略 IsInMultiGame=false");
+            return;
+        }
+
+        // 3e. 吃药中忽略（multiplayer-hoeing-auto-eat-food-by-period，与换角色同语义）
+        if (_isEatingMedicine)
+        {
+            _logger.LogDebug("[WorldStateMonitor] 吃药中，忽略 IsInMultiGame=false");
             return;
         }
 

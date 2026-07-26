@@ -587,6 +587,37 @@ public partial class AutoHoeingConfig : ObservableObject
     [ObservableProperty]
     private int _routeRevivalCap = 3;
 
+    // ========== 按周期自动吃食物（纯本地：不同步给其他玩家，不写入任何 RoomConfig / SignalR） ==========
+    // multiplayer-hoeing-auto-eat-food-by-period spec。参考 MultiplayerUseFixedFightStrategy 的"纯本地"先例。
+    // 每个玩家各自的食物/CD，不由房主下发。
+
+    /// <summary>吃食物第1行：食物页固定格子序号（1~4）</summary>
+    [ObservableProperty] private int _medicineFoodSlot1 = 1;
+    /// <summary>吃食物第2行：食物页固定格子序号（1~4）</summary>
+    [ObservableProperty] private int _medicineFoodSlot2 = 2;
+    /// <summary>吃食物第3行：食物页固定格子序号（1~4）</summary>
+    [ObservableProperty] private int _medicineFoodSlot3 = 3;
+    /// <summary>吃食物第4行：食物页固定格子序号（1~4）</summary>
+    [ObservableProperty] private int _medicineFoodSlot4 = 4;
+
+    /// <summary>吃食物第1行：执行周期（秒），0 表示该行不启用</summary>
+    [ObservableProperty] private int _medicineFoodPeriod1 = 0;
+    /// <summary>吃食物第2行：执行周期（秒），0 表示该行不启用</summary>
+    [ObservableProperty] private int _medicineFoodPeriod2 = 0;
+    /// <summary>吃食物第3行：执行周期（秒），0 表示该行不启用</summary>
+    [ObservableProperty] private int _medicineFoodPeriod3 = 0;
+    /// <summary>吃食物第4行：执行周期（秒），0 表示该行不启用</summary>
+    [ObservableProperty] private int _medicineFoodPeriod4 = 0;
+
+    /// <summary>吃食物第1格：吃药线路关键词（逗号分隔，全/半角均可）。当前线路名含任一关键词即吃该格，无视周期/CD。空=线路维度不启用。</summary>
+    [ObservableProperty] private string _medicineFoodRouteKeywords1 = "";
+    /// <summary>吃食物第2格：吃药线路关键词（逗号分隔）。含任一关键词即吃该格，无视周期/CD。空=不启用。</summary>
+    [ObservableProperty] private string _medicineFoodRouteKeywords2 = "";
+    /// <summary>吃食物第3格：吃药线路关键词（逗号分隔）。含任一关键词即吃该格，无视周期/CD。空=不启用。</summary>
+    [ObservableProperty] private string _medicineFoodRouteKeywords3 = "";
+    /// <summary>吃食物第4格：吃药线路关键词（逗号分隔）。含任一关键词即吃该格，无视周期/CD。空=不启用。</summary>
+    [ObservableProperty] private string _medicineFoodRouteKeywords4 = "";
+
     // === 路线变体偏好（route-variant-sync-by-logical-id spec / R13）===
 
     /// <summary>
