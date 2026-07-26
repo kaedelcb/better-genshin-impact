@@ -418,7 +418,7 @@ public class TpTaskFastDrag
             try
             {
                 var (hitSpecialEarly, specialZoomEarly) = SpecialAdjacentTpPointDecisions.IsSpecialAdjacentPoint(
-                    GetSpecialAdjacentTpPointList(), adjBaseX, adjBaseY, tolerance: 50.0, defaultZoom: 1.5);
+                    GetSpecialAdjacentTpPointList(), adjBaseX, adjBaseY, tolerance: 50.0, defaultZoom: 1.9);
                 if (hitSpecialEarly)
                 {
                     skipStep4DueToSpecial = true;
