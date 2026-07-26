@@ -536,9 +536,10 @@ public class TpTaskFastDrag
                 throw new Exception("多次尝试未移动到目标传送点，传送失败");
             }
             
-            TaskControl.Logger.LogInformation("传送点不在当前大地图范围内，重新调整地图位置-1");
+            TaskControl.Logger.LogInformation("传送点不在当前大地图范围内，重新调整地图位置-1（保持当前缩放，不强制归一到 2.0）");
 
-            await MoveMapTo(x, y, mapName,2,country, retryTimes);
+            // 改法 B：keepCurrentZoom=true，定位循环不强行把缩放归一到 2.0，保留拖动进入时的实际缩放。
+            await MoveMapTo(x, y, mapName, 2, country, retryTimes, keepCurrentZoom: true);
             if (_tpConfig.MapMoveStepDivisor)
             {
                 int timeoutMs = retryTimes > 0 ? 600 : 200;
@@ -1109,18 +1110,30 @@ public class TpTaskFastDrag
     /// <param name="country">传送地图国家</param>
     /// <param name="retryTimes">重试次数</param>
     /// <param name="enableEarlyStop">是否启用早停机制（几何早停和容差早停）。默认为 true 保持向后兼容，设为 false 时将精确拖动到目标点正中心</param>
-    public async Task MoveMapTo(double x, double y, string mapName, double finalZoomLevel = 2, string? country = null, int retryTimes = 0, bool enableEarlyStop = true)
+    public async Task MoveMapTo(double x, double y, string mapName, double finalZoomLevel = 2, string? country = null, int retryTimes = 0, bool enableEarlyStop = true, bool keepCurrentZoom = false)
     {
         // 参数初始化
         using var ra1 = CaptureToRectArea();
-        // 旧日之海地图上用户配置优先于 2.0 下限：取 Math.Max(finalZoomLevel, _tpConfig.MinZoomLevel)
-        // 确保用户配置（如 3.0）不被钳制后的 finalZoomLevel（2.0）压低。
-        // 非旧日之海地图保持原有 Math.Min 行为不变。
-        double minZoomLevel = mapName == "SeaOfBygoneEras"
-            ? Math.Max(finalZoomLevel, _tpConfig.MinZoomLevel)
-            : Math.Min(finalZoomLevel, _tpConfig.MinZoomLevel);
-        double maxZoomLevel = _tpConfig.MaxZoomLevel;
         double currentZoomLevel = GetBigMapZoomLevel(ra1);
+        // 改法 B（keepCurrentZoom=true）：定位循环里不再把缩放强行归一到 finalZoomLevel(2.0)，
+        // 而是保持拖动进入时的实际缩放（把放大下限设为当前缩放本身）。这样纹理少的地图（如沙漠）
+        // 不会被强行放大到 2.0 导致 GetBigMapRect 认偏、点空。点击前 >4.4 的上限仍由步骤 5.6b 兜底。
+        // 注意：只锁"放大下限"，远距离时仍允许缩小(zoom-out)以把目标拖进屏幕。
+        double minZoomLevel;
+        if (keepCurrentZoom)
+        {
+            minZoomLevel = currentZoomLevel;
+        }
+        else
+        {
+            // 旧日之海地图上用户配置优先于 2.0 下限：取 Math.Max(finalZoomLevel, _tpConfig.MinZoomLevel)
+            // 确保用户配置（如 3.0）不被钳制后的 finalZoomLevel（2.0）压低。
+            // 非旧日之海地图保持原有 Math.Min 行为不变。
+            minZoomLevel = mapName == "SeaOfBygoneEras"
+                ? Math.Max(finalZoomLevel, _tpConfig.MinZoomLevel)
+                : Math.Min(finalZoomLevel, _tpConfig.MinZoomLevel);
+        }
+        double maxZoomLevel = _tpConfig.MaxZoomLevel;
         int exceptionTimes = 0;
         var falseCount = 0;
         Point2f mapCenterPoint;
