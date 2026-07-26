@@ -1071,17 +1071,6 @@ public class TpTaskFastDrag
                 // 传送点未激活或不存在 按ESC回到大地图界面
                 Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
                 await Delay(300, ct);
-                // 拉到 5.5，让下次 TpOnce 中 GetBigMapRect 在 5.5 下识别，修正 rect 到 4.4
-                try
-                {
-                    using var ra = CaptureToRectArea();
-                    double zoomNow = GetBigMapZoomLevel(ra);
-                    if (Math.Abs(zoomNow - 5.5) > _tpConfig.PrecisionThreshold)
-                    {
-                        await AdjustMapZoomLevel(zoomNow, 5.5);
-                    }
-                }
-                catch { }
                 TaskControl.Logger.LogWarning(e.Message + "  重试");
                 // 联机锄地：传送失败重试视为"仍在合法传送中"，刷新 WorldStateMonitor 抑制计时窗口，
                 // 避免长传送被墙钟超时误判被踢出。单机 CurrentWorldStateMonitor==null → no-op。
