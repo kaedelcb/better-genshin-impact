@@ -132,12 +132,10 @@ internal class QuickTeleportTrigger : ITaskTrigger
     {
         var hasMapChooseIcon = false;
 
-        var isHdrCapture = TaskContext.Instance().Config.CaptureMode == nameof(CaptureModes.WindowsGraphicsCaptureHdr);
-
         // 全匹配一遍
         var assets = _assets ?? QuickTeleportAssets.Get(content.CaptureRectArea);
         using var mapChooseIconRoi = content.CaptureRectArea.CacheGreyMat[assets.MapChooseIconRoi].Clone();
-        var rResultList = MatchTemplateHelper.MatchMultiPicForOnePic(mapChooseIconRoi, assets.MapChooseIconGreyMatList, isHdrCapture ? 0.7 : 0.8);
+        var rResultList = MatchTemplateHelper.MatchMultiPicForOnePic(mapChooseIconRoi, assets.MapChooseIconGreyMatList, 0.8);
 
         // 按高度排序
         if (rResultList.Count > 0)
@@ -151,9 +149,10 @@ internal class QuickTeleportTrigger : ITaskTrigger
                 using var textRegion = ra.Find(new RecognitionObject
                 {
                     // RecognitionType = RecognitionTypes.Ocr,
-                    RecognitionType = isHdrCapture ? RecognitionTypes.Ocr : RecognitionTypes.ColorRangeAndOcr,
-                    LowerColor = new Scalar(249, 249, 249), // 只取白色文字
-                    UpperColor = new Scalar(255, 255, 255),
+                    RecognitionType = RecognitionTypes.ColorRangeAndOcr,
+                    ColorConversionCode = ColorConversionCodes.BGR2HLS,
+                    LowerColor = new Scalar(0, 245, 0),
+                    UpperColor = new Scalar(180, 255, 15),
                 });
                 if (string.IsNullOrEmpty(textRegion.Text) || textRegion.Text.Length == 1)
                 {
