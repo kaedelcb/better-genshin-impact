@@ -71,6 +71,12 @@ public class MultiplayerCoordinator : IAsyncDisposable
     private int _consecutiveSyncTimeoutCount;
     private int _consecutiveSkipCount;
 
+    // === 基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop）===
+    /// <summary>本机连续无经验的有效战斗节点计数。</summary>
+    private int _consecutiveNoExpCount;
+    /// <summary>本机当前是否处于"已上报达上限"态（上报/撤回反复翻转，非一次性闩锁）。</summary>
+    private bool _expCapReported;
+
     // === 跳过同步点标志 ===
     private volatile bool _skipNextSyncPoint;
 
@@ -132,6 +138,9 @@ public class MultiplayerCoordinator : IAsyncDisposable
         // 集体卡死跳段事件订阅（multiplayer-mutual-wait-collective-skip §8.6）
         _client.RequestSkipToProgressReceived += OnRequestSkipToProgressReceived;
         _client.CollectiveSkipDegradedReceived += OnCollectiveSkipDegradedReceived;
+
+        // 基于经验判断停止锄地：全员达上限广播订阅（multiplayer-hoeing-exp-cap-stop）
+        _client.AllReachedExpCap += OnAllReachedExpCap;
 
         _logger.LogInformation("[联机] 子协调器初始化完成");
     }
@@ -200,6 +209,50 @@ public class MultiplayerCoordinator : IAsyncDisposable
         StopCts?.Cancel();
     }
 
+    // === 基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop）===
+
+    /// <summary>本机是否启用经验上限停止（供 PathExecutor 门控读取）。配置开 ∧ 已连接。</summary>
+    public bool IsExpCapStopEnabled =>
+        ExpCapDecisions.IsEnabled(_config.EnableExpCapStop, _client.IsConnected);
+
+    /// <summary>
+    /// 服务端广播"全员达经验上限"→ 触发协调停止（fire-and-forget，照搬集体跳段降级停止模式）。
+    /// multiplayer-hoeing-exp-cap-stop R5.1。
+    /// </summary>
+    private void OnAllReachedExpCap()
+    {
+        _logger.LogWarning("[联机][经验上限] 收到全员达上限广播，触发协调停止");
+        _ = TriggerCoordinatedStop(IsHost, "全员达经验上限");
+    }
+
+    /// <summary>
+    /// PathExecutor 在一个"有效战斗节点"收尾后调用，传入本节点是否检测到经验。
+    /// 更新连续无经验计数，按状态机决定上报/撤回/无动作（幂等，仅翻转时通知服务端）。
+    /// 仅在 IsExpCapStopEnabled 时被调用（调用方门控）。multiplayer-hoeing-exp-cap-stop R3。
+    /// </summary>
+    public async Task OnFightNodeExpResultAsync(bool hasExp, CancellationToken ct)
+    {
+        _consecutiveNoExpCount = ExpCapDecisions.NextCount(_consecutiveNoExpCount, hasExp);
+        var action = ExpCapDecisions.NextReportAction(_consecutiveNoExpCount, hasExp, _expCapReported);
+        _logger.LogInformation("[联机][经验上限] 本节点{HasExp}经验，连续无经验={Count}/{Th}，动作={Action}",
+            hasExp ? "有" : "无", _consecutiveNoExpCount, ExpCapDecisions.ConsecutiveNoExpThreshold, action);
+
+        switch (action)
+        {
+            case ExpCapReportAction.Report:
+                _expCapReported = true;
+                await _client.NotifyExpCapReachedAsync(ct);
+                break;
+            case ExpCapReportAction.Clear:
+                _expCapReported = false;
+                _logger.LogInformation("[联机][经验上限] 又见经验，撤回上报");
+                await _client.NotifyExpCapClearedAsync(ct);
+                break;
+            default:
+                break;
+        }
+    }
+
     /// <summary>
     /// 重置连续超时计数（需求 5）
     /// </summary>
@@ -234,6 +287,10 @@ public class MultiplayerCoordinator : IAsyncDisposable
         _skipNextSyncPoint = false;
         IsExitTriggered = false;
         IsAbortRequested = false;
+
+        // 基于经验判断停止锄地：新轮次复位本机计数与上报态（multiplayer-hoeing-exp-cap-stop R6.1）
+        _consecutiveNoExpCount = 0;
+        _expCapReported = false;
 
         // 集体卡死跳段信号位重置（multiplayer-mutual-wait-collective-skip §8.6 改动 4）
         Interlocked.Exchange(ref _remoteSkipRequested, 0);
@@ -685,6 +742,8 @@ public class MultiplayerCoordinator : IAsyncDisposable
         {
             _client.RequestSkipToProgressReceived -= OnRequestSkipToProgressReceived;
             _client.CollectiveSkipDegradedReceived -= OnCollectiveSkipDegradedReceived;
+            // 基于经验判断停止锄地：退订全员达上限广播（multiplayer-hoeing-exp-cap-stop）
+            _client.AllReachedExpCap -= OnAllReachedExpCap;
         }
         catch (System.Exception ex)
         {

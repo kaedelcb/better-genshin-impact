@@ -82,4 +82,8 @@ public class RoomConfig
     public bool OnlyInTeleportRecover { get; set; } = false;
     /// <summary>游泳检测。源字段 AutoFightConfig.SwimmingEnabled（默认 true）</summary>
     public bool SwimmingEnabled { get; set; } = true;
+
+    // === 基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop, 与客户端 RoomConfig 严格对称）===
+    /// <summary>启用基于经验判断停止锄地（房主设置同步成员）。默认 false。multiplayer-hoeing-exp-cap-stop</summary>
+    public bool EnableExpCapStop { get; set; } = false;
 }

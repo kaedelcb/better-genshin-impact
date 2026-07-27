@@ -276,6 +276,14 @@
                                                 PlaceholderText="0-1，默认0.5"
                                                 Text="{Binding SharedFightEndQuorumRatio, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                 </StackPanel>
+                                <!--  基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop）  -->
+                                <ui:ToggleSwitch Margin="0,8,0,4"
+                                                 Content="基于经验判断停止锄地"
+                                                 IsChecked="{Binding EnableExpCapStop, Mode=TwoWay}" />
+                                <ui:TextBlock Margin="12,0,0,0"
+                                              Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                              Text="全员连续2场战斗无怪物经验(达每日上限)后，自动结束本次联机锄地，不再打完剩余线路。"
+                                              TextWrapping="Wrap" />
                             </StackPanel>
                         </ui:CardExpander>
 

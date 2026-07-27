@@ -61,6 +61,11 @@ public class CoordinatorClient : IAsyncDisposable
     public event Action? OnDegraded;
     public event Action<string>? RoomClosed;
     public event Action? RouteVerificationAllDone;
+
+    /// <summary>服务端判定全员达经验上限后广播（multiplayer-hoeing-exp-cap-stop）。无参。
+    /// 旧客户端不订阅 → 广播静默丢弃，行为退化为不提前终止。</summary>
+    public event Action? AllReachedExpCap;
+
     public event Action<string>? KazuhaPlayerUpdated;
     public event Action? AllWorldJoined;
     public event Action<bool>? HostReadyChanged;
@@ -212,6 +217,10 @@ public class CoordinatorClient : IAsyncDisposable
 
             _connection.On("RouteVerificationAllDone",
                 () => RouteVerificationAllDone?.Invoke());
+
+            // === 基于经验判断停止锄地：全员达上限广播（multiplayer-hoeing-exp-cap-stop）===
+            _connection.On("AllReachedExpCap",
+                () => AllReachedExpCap?.Invoke());
 
             _connection.On<string>("KazuhaPlayerUpdated",
                 playerUid => KazuhaPlayerUpdated?.Invoke(playerUid));
@@ -720,6 +729,41 @@ public class CoordinatorClient : IAsyncDisposable
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "[联机][结束配额] NotifyFightDoneAsync 失败（静默忽略）syncKey={Key}", syncKey);
+        }
+    }
+
+    /// <summary>
+    /// 上报本机达经验上限（multiplayer-hoeing-exp-cap-stop）。
+    /// 失败静默忽略，旧服务端无此 Hub 方法 → HubException 被吞，行为退化为不提前终止。
+    /// </summary>
+    public async Task NotifyExpCapReachedAsync(CancellationToken ct = default)
+    {
+        if (_connection == null || !IsConnected) return;
+        try
+        {
+            await _connection.InvokeAsync("ReportExpCapReached", ct);
+            _logger.LogInformation("[联机][经验上限] 已上报本机达经验上限");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[联机][经验上限] NotifyExpCapReachedAsync 失败（静默忽略）");
+        }
+    }
+
+    /// <summary>
+    /// 撤回本机达经验上限（又见经验，multiplayer-hoeing-exp-cap-stop）。失败静默忽略。
+    /// </summary>
+    public async Task NotifyExpCapClearedAsync(CancellationToken ct = default)
+    {
+        if (_connection == null || !IsConnected) return;
+        try
+        {
+            await _connection.InvokeAsync("ReportExpCapCleared", ct);
+            _logger.LogInformation("[联机][经验上限] 已撤回本机达经验上限");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[联机][经验上限] NotifyExpCapClearedAsync 失败（静默忽略）");
         }
     }
 

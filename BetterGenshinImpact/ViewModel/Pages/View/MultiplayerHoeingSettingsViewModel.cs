@@ -70,6 +70,9 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
     private bool _sharedFightEndQuorumEnabled;
     [ObservableProperty] private string _sharedFightEndQuorumRatio = "";
 
+    // ===== 基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop, 房主设置同步成员）=====
+    [ObservableProperty] private bool _enableExpCapStop;
+
     // ===== C 万叶聚物同步 =====
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(KazuhaParamsEnabled))]
@@ -218,6 +221,9 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         _sharedFightEndQuorumEnabled = GetBool("sharedFightEndQuorumEnabled", g.SharedFightEndQuorumEnabled);
         _sharedFightEndQuorumRatio = GetStr("sharedFightEndQuorumRatio", g.SharedFightEndQuorumRatio.ToString());
 
+        // 基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop）
+        _enableExpCapStop = GetBool("enableExpCapStop", g.EnableExpCapStop);
+
         _enableKazuhaSync = GetBool("enableKazuhaSync", g.EnableKazuhaSync);
         _kazuhaSyncWaitSeconds = GetInt("kazuhaSyncWaitSeconds", g.KazuhaSyncWaitSeconds).ToString();
         _kazuhaSyncTimeoutSeconds = GetInt("kazuhaSyncTimeoutSeconds", g.KazuhaSyncTimeoutSeconds).ToString();
@@ -315,6 +321,9 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
 
         settings["sharedFightEndQuorumEnabled"] = SharedFightEndQuorumEnabled;
         if (double.TryParse(SharedFightEndQuorumRatio, out var sfeqr)) settings["sharedFightEndQuorumRatio"] = sfeqr;
+
+        // 基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop）
+        settings["enableExpCapStop"] = EnableExpCapStop;
 
         settings["debugMode"] = DebugMode;
         settings["useFixedDebugRoutes"] = RouteModeDecisions.MapRouteModeToUseFixed(RouteModeSelection);

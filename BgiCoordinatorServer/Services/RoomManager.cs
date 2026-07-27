@@ -405,6 +405,50 @@ public class RoomManager
         }
     }
 
+    /// <summary>
+    /// 记录成员达经验上限，当所有在线成员均处于达上限态且本轮未广播过时返回 true。
+    /// multiplayer-hoeing-exp-cap-stop。照搬 RecordRouteVerificationDone 的在线清理 + AllOnlineMembersReported。
+    /// </summary>
+    public bool RecordExpCapReached(string roomCode, string connectionId)
+    {
+        if (!_rooms.TryGetValue(roomCode, out var room))
+            return false;
+
+        lock (room)
+        {
+            if (room.ExpCapBroadcasted) return false; // 本轮已广播，幂等短路
+
+            room.ExpCapReachedSet.Add(connectionId);
+
+            // 在线清理（与 RecordRouteVerificationDone 对称）
+            var onlineConnectionIds = room.Players
+                .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
+                .Select(p => p.ConnectionId)
+                .ToHashSet();
+            room.ExpCapReachedSet.IntersectWith(onlineConnectionIds);
+
+            if (AllOnlineMembersReported(room, room.ExpCapReachedSet))
+            {
+                room.ExpCapBroadcasted = true;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 撤回成员达上限（又检测到经验）。仅在本轮未广播时从集合移除。multiplayer-hoeing-exp-cap-stop。
+    /// </summary>
+    public void RecordExpCapCleared(string roomCode, string connectionId)
+    {
+        if (!_rooms.TryGetValue(roomCode, out var room)) return;
+        lock (room)
+        {
+            if (room.ExpCapBroadcasted) return; // 已广播，撤回无意义
+            room.ExpCapReachedSet.Remove(connectionId);
+        }
+    }
+
     public (int OnlineCount, int ReportedCount) GetRouteVerificationStatus(string roomCode)
     {
         if (!_rooms.TryGetValue(roomCode, out var room))

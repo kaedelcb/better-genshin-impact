@@ -675,6 +675,33 @@ public class CoordinatorHub : Hub
         }
     }
 
+    /// <summary>上报本机达经验上限，全员达上限时广播 AllReachedExpCap。multiplayer-hoeing-exp-cap-stop</summary>
+    public async Task ReportExpCapReached()
+    {
+        var (_, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
+        if (roomCode == null) return;
+
+        _roomManager.UpdateHeartbeat(Context.ConnectionId);
+        var allReached = _roomManager.RecordExpCapReached(roomCode, Context.ConnectionId);
+
+        if (allReached)
+        {
+            _logger.LogInformation("房间 {Code} 全员达经验上限，广播终止", roomCode);
+            await Clients.Group(roomCode).SendAsync("AllReachedExpCap");
+        }
+    }
+
+    /// <summary>撤回本机达经验上限（又见经验）。multiplayer-hoeing-exp-cap-stop</summary>
+    public Task ReportExpCapCleared()
+    {
+        var (_, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
+        if (roomCode == null) return Task.CompletedTask;
+
+        _roomManager.UpdateHeartbeat(Context.ConnectionId);
+        _roomManager.RecordExpCapCleared(roomCode, Context.ConnectionId);
+        return Task.CompletedTask;
+    }
+
     /// <summary>更新白名单（仅房主）</summary>
     public async Task UpdateWhitelist(List<string>? whitelist = null)
     {
@@ -1208,6 +1235,10 @@ public class CoordinatorHub : Hub
             room.FightParticipantSets.Clear();
             room.FightDoneSets.Clear();
             room.FightDoneBroadcasted.Clear();
+
+            // multiplayer-hoeing-exp-cap-stop: 多世界轮换清空经验上限集合与广播标志
+            room.ExpCapReachedSet.Clear();
+            room.ExpCapBroadcasted = false;
 
             _logger.LogInformation("[ResetForNewWorldRound] 房间{RoomCode}进入第{Round}轮，等待点、异常状态、万叶候选已重置", roomCode, newRound);
         }

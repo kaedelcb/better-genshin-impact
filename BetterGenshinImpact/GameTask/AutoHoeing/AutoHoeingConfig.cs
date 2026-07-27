@@ -391,6 +391,15 @@ public partial class AutoHoeingConfig : ObservableObject
     private double _sharedFightEndQuorumRatio = 0.5;
 
     /// <summary>
+    /// 启用"基于经验判断停止锄地"（房主设置，同步成员）。默认 false。
+    /// 开启后联机锄地每个有效战斗节点检测怪物经验，连续 2 场无经验判本机达上限；
+    /// 全员达上限后服务端广播 AllReachedExpCap，各端优雅停止。零回归：false 时所有路径短路。
+    /// multiplayer-hoeing-exp-cap-stop。
+    /// </summary>
+    [ObservableProperty]
+    private bool _enableExpCapStop = false;
+
+    /// <summary>
     /// 启用万叶聚物同步流程。默认 false，用户需显式打勾才启用，避免无万叶队伍走无效流程。
     /// 替代旧的 KazuhaPlayerIndex 字段（kazuha-player-auto-detection：从"按索引指定"改为"运行时声明"）。
     /// 启用判定：EnableKazuhaSync ∧ isConnected。

@@ -312,6 +312,14 @@ public partial class PathExecutor
 
 //记录上一个节点
     private WaypointForTrack? _lastWaypoint = null;
+
+    /// <summary>
+    /// 联机"基于经验判断停止锄地"当前战斗节点的经验检测器（multiplayer-hoeing-exp-cap-stop）。
+    /// 仅 MultiplayerCoordinator.IsExpCapStopEnabled 时创建；战斗节点正常走完在 _lastWaypoint 赋值处
+    /// 消费结果 + 释放；创建前防御式释放上一节点残留实例（重试/异常路径泄漏兜底）。
+    /// 后台循环 _linkedCts 链接寻路 ct，任务结束 ct 取消即停，无长期泄漏。
+    /// </summary>
+    private BetterGenshinImpact.GameTask.AutoFight.ExperienceDetector? _expCapDetector = null;
     
     // 朝向标记位
     private bool _faceToMark = false;
@@ -946,6 +954,24 @@ public partial class PathExecutor
                             {
                                 if (waypoint.Action == ActionEnum.Fight.Code)
                                 {
+                                    // === 基于经验判断停止锄地：战斗节点起点创建经验检测器（multiplayer-hoeing-exp-cap-stop）===
+                                    // 创建前先释放上一节点残留实例（重试/异常路径泄漏兜底），保证至多一个存活。
+                                    // 检测窗口覆盖：战斗 + 战后回点 + 万叶聚物/拾取，直到 _lastWaypoint 赋值处消费。
+                                    if (MultiplayerCoordinator?.IsExpCapStopEnabled == true)
+                                    {
+                                        _expCapDetector?.Dispose();
+                                        _expCapDetector = null;
+                                        var expSysInfo = TaskContext.Instance().SystemInfo;
+                                        var expCaptureRect = expSysInfo.ScaleMax1080PCaptureRect;
+                                        var expAssets = AutoFightAssets.Get(expCaptureRect.Width, expCaptureRect.Height);
+                                        var expRos = expAssets.InitializeRecognitionObjects();
+                                        if (expRos.Count > 0)
+                                        {
+                                            _expCapDetector = new BetterGenshinImpact.GameTask.AutoFight.ExperienceDetector(expRos, ct);
+                                            _expCapDetector.Start();
+                                        }
+                                    }
+
                                     AutoFightTask.FightWaypoint = waypoint;
                                     PathingConditionConfig.CombatScenesGoBackUp = _combatScenes;//把地图追踪的战斗CD等同步给战斗节点
                                     
@@ -1284,6 +1310,28 @@ public partial class PathExecutor
                                 }
                             }
                         }
+
+                        // === 基于经验判断停止锄地：战斗节点正常走完，消费经验检测结果（multiplayer-hoeing-exp-cap-stop）===
+                        // 仅当本节点创建过检测器（战斗节点 + IsExpCapStopEnabled）才进入。走到此处说明未因
+                        // 复苏/跳段 RetryException 中断（那些路径直接跳到 for-i 的 catch，不经过这里）。
+                        if (_expCapDetector != null)
+                        {
+                            var detector = _expCapDetector;
+                            _expCapDetector = null;
+                            try
+                            {
+                                await detector.StopAsync();
+                                if (!ct.IsCancellationRequested && MultiplayerCoordinator != null)
+                                {
+                                    await MultiplayerCoordinator.OnFightNodeExpResultAsync(detector.HasDetectedExperience, ct);
+                                }
+                            }
+                            finally
+                            {
+                                detector.Dispose();
+                            }
+                        }
+
                         _lastWaypoint = waypoint;
                     }
 

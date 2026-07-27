@@ -42,6 +42,19 @@ public class Room
     /// </summary>
     public HashSet<string> FightDoneBroadcasted { get; set; } = [];
 
+    /// <summary>
+    /// 已上报"达经验上限"的 connectionId 集合（multiplayer-hoeing-exp-cap-stop）。
+    /// 可增可减：ReportExpCapReached 加入、ReportExpCapCleared（撤回）移除。
+    /// 与 RouteVerificationDoneSet 同构的在线清理。多世界轮换 ResetForNewWorldRound 清空。
+    /// </summary>
+    public HashSet<string> ExpCapReachedSet { get; set; } = [];
+
+    /// <summary>
+    /// 本轮世界是否已广播过 AllReachedExpCap（幂等标志，multiplayer-hoeing-exp-cap-stop）。
+    /// ResetForNewWorldRound 复位 false。
+    /// </summary>
+    public bool ExpCapBroadcasted { get; set; } = false;
+
     /// <summary>房主筛选后的最终路线文件名列表（按执行顺序）</summary>
     public List<string> HostRouteList { get; set; } = [];
 

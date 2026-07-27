@@ -82,6 +82,11 @@ public class AutoHoeingTask : ISoloTask
     private string? _stopReason;
     private CancellationTokenSource? _linkedStopCts;
 
+    // 基于经验判断停止锄地：本次结束是否由"全员达经验上限"触发（multiplayer-hoeing-exp-cap-stop）。
+    // 仅此路径在退世界后额外传送七天神像（任务结束时可能停在怪堆/危险地形，去神像收尾更安全）；
+    // 其它停止路径（超时/被踢/掉房/正常跑完）不触发，保持原行为。
+    private volatile bool _expCapStopTriggered;
+
     // 联机组队是否达到"可开锄"状态。仅在 InitializeMultiplayerAsync 成功走到末尾时置 true；
     // 任何失败/降级路径（连不上服务器、加不进房间、拿不到房主 UID、房主未就绪超时、
     // 加入世界失败、等待组队超时、初始化异常）都会提前 return，标志保持 false。
@@ -451,6 +456,9 @@ public class AutoHoeingTask : ISoloTask
             _config.EnableLaggingCatchUp = false;
             _config.LagSegmentThreshold = 1;
 
+            // === 基于经验判断停止锄地重置（multiplayer-hoeing-exp-cap-stop）===
+            _config.EnableExpCapStop = false;
+
             // === 单人调试模式重置（hoeing-multiplayer-solo-debug-mode，纯本地）===
             _config.SoloDebugMode = false;
 
@@ -585,6 +593,23 @@ public class AutoHoeingTask : ISoloTask
                     var left = await autoParty.LeaveWorldAsync(leaveWorldCts.Token);
                     if (!left)
                         _logger.LogWarning("[联机] 退出世界未确认成功");
+
+                    // === 基于经验判断停止锄地：仅此路径退世界后额外传送七天神像（multiplayer-hoeing-exp-cap-stop）===
+                    // 任务在此结束时角色可能停在怪堆/危险地形，回到自己世界后传送到最近七天神像收尾更安全。
+                    // 仅 _expCapStopTriggered 时执行；超时/被踢/掉房/正常跑完等其它停止路径不受影响（零回归）。
+                    if (_expCapStopTriggered)
+                    {
+                        try
+                        {
+                            _logger.LogInformation("[联机][经验上限] 退世界完成，传送最近七天神像收尾");
+                            using var tpStatueCts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                            await new AutoTrackPath.TpTask(tpStatueCts.Token).TpToStatueOfTheSeven();
+                        }
+                        catch (Exception exTp)
+                        {
+                            _logger.LogWarning(exTp, "[联机][经验上限] 传送七天神像失败（忽略）");
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -818,6 +843,8 @@ public class AutoHoeingTask : ISoloTask
                     // === 落后追赶上传（hoeing-lagging-catchup-host-synced-setting spec）===
                     EnableLaggingCatchUp = _config.EnableLaggingCatchUp,
                     LagSegmentThreshold = Math.Clamp(_config.LagSegmentThreshold, 1, 3),
+                    // === 基于经验判断停止锄地上传（multiplayer-hoeing-exp-cap-stop）===
+                    EnableExpCapStop = _config.EnableExpCapStop,
                     // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params spec §C1）===
                     // 上传源统一取房主当前配置组 _partyConfig（房主锄地实际生效实例，OQ-1）；
                     // _partyConfig 为 null 时退回全局 AutoFightConfig（AutoFight 类）或字段默认。
@@ -906,6 +933,8 @@ public class AutoHoeingTask : ISoloTask
                 _config.SharedFightEndQuorumEnabled, _config.SharedFightEndQuorumRatio);
             _logger.LogInformation("[联机] 落后追赶：启用={E}, 触发阈值={T}段（房主同步，房主与成员都参与）",
                 _config.EnableLaggingCatchUp, _config.LagSegmentThreshold);
+            _logger.LogInformation("[联机] 基于经验判断停止锄地：启用={E}（房主同步，全员连续2场无经验后统一结束）",
+                _config.EnableExpCapStop);
             _logger.LogInformation("[联机] =====================================");
 
             _multiplayerCoordinator.OnDegraded += reason =>
@@ -990,6 +1019,20 @@ public class AutoHoeingTask : ISoloTask
                 }
                 _stopReason = $"房间已关闭: {reason}";
                 _sessionTerminated = true;
+                try { _linkedStopCts?.Cancel(); }
+                catch (ObjectDisposedException) { }
+                catch { }
+            };
+
+            // === 基于经验判断停止锄地：全员达上限广播 → 设 _stopReason 走退世界流程（multiplayer-hoeing-exp-cap-stop）===
+            // 关键：MultiplayerCoordinator.OnAllReachedExpCap 只做 TriggerCoordinatedStop（置 IsExitTriggered + 房主关房 + Cancel），
+            // 不设 _stopReason。这里补一处 task 级订阅，保证房主与成员收到广播后 finally 都能走 LeaveWorldAsync 退回单人世界，
+            // 而不是把角色停在房主世界里。与 RoomClosed 处理器同构（设 _stopReason + _sessionTerminated + Cancel，幂等）。
+            client.AllReachedExpCap += () =>
+            {
+                _stopReason = "全员达经验上限，自动结束联机锄地";
+                _sessionTerminated = true;
+                _expCapStopTriggered = true; // 标记此路径，退世界后额外去七天神像收尾
                 try { _linkedStopCts?.Cancel(); }
                 catch (ObjectDisposedException) { }
                 catch { }
@@ -1225,6 +1268,8 @@ public class AutoHoeingTask : ISoloTask
                         // === 落后追赶同步（hoeing-lagging-catchup-host-synced-setting spec，成员回填房主下发值）===
                         _config.EnableLaggingCatchUp = hostConfig.EnableLaggingCatchUp;
                         _config.LagSegmentThreshold = Math.Clamp(hostConfig.LagSegmentThreshold, 1, 3);
+                        // === 基于经验判断停止锄地同步（multiplayer-hoeing-exp-cap-stop，成员回填房主下发值）===
+                        _config.EnableExpCapStop = hostConfig.EnableExpCapStop;
 
                         // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params §C2）===
                         ApplyHostExecParams(hostConfig);
@@ -3931,6 +3976,8 @@ public class AutoHoeingTask : ISoloTask
             _config.SharedFightEndQuorumEnabled = Get("sharedFightEndQuorumEnabled", _config.SharedFightEndQuorumEnabled);
             _config.SharedFightEndQuorumRatio = Multiplayer.SharedFightEndQuorumDecisions.ClampRatio(
                 Get("sharedFightEndQuorumRatio", _config.SharedFightEndQuorumRatio));
+            // === 基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop）：配置组场景必须经此 override 才能传到运行时 EffectiveConfig ===
+            _config.EnableExpCapStop = Get("enableExpCapStop", _config.EnableExpCapStop);
 
             // === 按周期吃食物（multiplayer-hoeing-auto-eat-food-by-period，纯本地）===
             _config.MedicineFoodSlot1 = Get("medicineFoodSlot1", _config.MedicineFoodSlot1);
@@ -3972,6 +4019,8 @@ public class AutoHoeingTask : ISoloTask
             // === 落后追赶（单机重置为默认值，hoeing-lagging-catchup-host-synced-setting spec）===
             _config.EnableLaggingCatchUp = false;
             _config.LagSegmentThreshold = 1;
+            // === 基于经验判断停止锄地（单机重置为默认值，multiplayer-hoeing-exp-cap-stop）===
+            _config.EnableExpCapStop = false;
 
             // 单机模式：重置固定调试线路字段，避免联机全局配置残留影响
             // 如果 settings 显式包含这些键，后续 ContainsKey 逻辑会覆盖回来
