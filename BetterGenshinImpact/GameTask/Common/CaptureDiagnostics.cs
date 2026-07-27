@@ -52,9 +52,33 @@ public static class CaptureDiagnostics
     // ---- GC ----
     private static double _lastGcCostMs;
 
+    // 【诊断·线程驻留计数】此刻有多少线程"卡在"各嫌疑点内部（进入+1/退出-1）。
+    // 线程池饥饿时，心跳打印这些值 → 直接看出 52 个线程分别堵在哪。
+    private static int _inNetworkCheck;   // 卡在 CheckNetworkStatusAsync 内
+    private static int _inPingSend;       // 卡在 ping.Send（无超时同步阻塞）内
+    private static int _inTrySuspendLoop; // 卡在 TrySuspend 的 while 暂停循环内
+    private static int _inSyncSleep;      // 卡在同步 TaskControl.Sleep 的 Thread.Sleep 内
+    private static int _inOcr;            // 卡在 OCR 识别内
+
     // ---- 心跳线程 ----
     private static Timer? _heartbeat;
     private static long _lastHeartbeatCaptureCount;
+
+    // 【诊断·CPU占用】用于区分"线程卡在等待(CPU低)"vs"线程真干活榨干CPU(CPU高)"。
+    private static TimeSpan _lastCpuTime = TimeSpan.Zero;
+    private static long _lastCpuSampleTicks;
+
+    // 驻留计数增减（在嫌疑点入口/出口调用）。用 Scope 保证异常路径也能 -1。
+    public static void EnterNetworkCheck() { if (Enabled) Interlocked.Increment(ref _inNetworkCheck); }
+    public static void ExitNetworkCheck() { if (Enabled) Interlocked.Decrement(ref _inNetworkCheck); }
+    public static void EnterPingSend() { if (Enabled) Interlocked.Increment(ref _inPingSend); }
+    public static void ExitPingSend() { if (Enabled) Interlocked.Decrement(ref _inPingSend); }
+    public static void EnterTrySuspendLoop() { if (Enabled) Interlocked.Increment(ref _inTrySuspendLoop); }
+    public static void ExitTrySuspendLoop() { if (Enabled) Interlocked.Decrement(ref _inTrySuspendLoop); }
+    public static void EnterSyncSleep() { if (Enabled) Interlocked.Increment(ref _inSyncSleep); }
+    public static void ExitSyncSleep() { if (Enabled) Interlocked.Decrement(ref _inSyncSleep); }
+    public static void EnterOcr() { if (Enabled) Interlocked.Increment(ref _inOcr); }
+    public static void ExitOcr() { if (Enabled) Interlocked.Decrement(ref _inOcr); }
 
     public static void EnsureStarted()
     {
@@ -201,9 +225,35 @@ public static class CaptureDiagnostics
             var totalThreads = ThreadPool.ThreadCount;          // 线程池当前总线程数
             var soloRunning = TaskControl.TaskSemaphore.CurrentCount == 0; // 有独立任务(联机锄地)在跑
 
+            // 【诊断·线程驻留】此刻卡在各嫌疑点的线程数快照
+            var inNet = Volatile.Read(ref _inNetworkCheck);
+            var inPing = Volatile.Read(ref _inPingSend);
+            var inSuspend = Volatile.Read(ref _inTrySuspendLoop);
+            var inSleep = Volatile.Read(ref _inSyncSleep);
+            var inOcr = Volatile.Read(ref _inOcr);
+
+            // 【诊断·CPU占用】进程 CPU 时间增量 / 墙钟增量 / 核心数 = 整机 CPU 占用率。
+            var cpuPercent = -1.0;
+            var coreCount = Environment.ProcessorCount;
+            try
+            {
+                var proc = Process.GetCurrentProcess();
+                var cpuNow = proc.TotalProcessorTime;
+                var nowTicks = Stopwatch.GetTimestamp();
+                if (_lastCpuSampleTicks != 0)
+                {
+                    var wall = Stopwatch.GetElapsedTime(_lastCpuSampleTicks, nowTicks).TotalMilliseconds;
+                    var cpuMs = (cpuNow - _lastCpuTime).TotalMilliseconds;
+                    if (wall > 0) cpuPercent = cpuMs / (wall * coreCount) * 100.0;
+                }
+                _lastCpuTime = cpuNow;
+                _lastCpuSampleTicks = nowTicks;
+            }
+            catch { /* 采样失败忽略 */ }
+
             // 一行汇总。重点字段含义见文件头注释。
             Logger.LogInformation(
-                "[Diag] CapRate={CapRate}/s 距上次截图={SinceCap}ms 单帧={CapMs:F1}ms GDI={GdiMs:F1}ms | 画面{StaleFlag} 距变化={SinceChange}ms 连续同帧={Stale} | Tick执行={TickRun} 距上次={SinceTick}ms 锁跳过={SkipLock} 分支跳过={SkipBranch} 末端={Branch} | 线程池:忙={BusyWorker}/{MaxWorker} 待处理={Pending} 总线程={TotalThreads} Solo={Solo} | 存活缓冲={LiveBuf} 累计分配={TotalAlloc} | Suspend={Suspend}(cap={ByCap}/net={ByNet}) Cancel={Cancel} 前台原神={Active} GC={GcMs:F0}ms",
+                "[Diag] CapRate={CapRate}/s 距上次截图={SinceCap}ms 单帧={CapMs:F1}ms GDI={GdiMs:F1}ms | 画面{StaleFlag} 距变化={SinceChange}ms 连续同帧={Stale} | Tick执行={TickRun} 距上次={SinceTick}ms 锁跳过={SkipLock} 分支跳过={SkipBranch} 末端={Branch} | CPU={Cpu:F0}%/{Cores}核 线程池:忙={BusyWorker}/{MaxWorker} 待处理={Pending} 总线程={TotalThreads} Solo={Solo} | 驻留:网络检查={InNet} ping={InPing} 暂停循环={InSuspend} 同步Sleep={InSleep} OCR={InOcr} | 存活缓冲={LiveBuf} 累计分配={TotalAlloc} | Suspend={Suspend}(cap={ByCap}/net={ByNet}) Cancel={Cancel} 前台原神={Active} GC={GcMs:F0}ms",
                 capRate,
                 sinceCap,
                 _lastCaptureCostMs,
@@ -216,11 +266,18 @@ public static class CaptureDiagnostics
                 Interlocked.Read(ref _tickSkipLockCount),
                 Interlocked.Read(ref _tickSkipBranchCount),
                 _lastTickBranch,
+                cpuPercent,
+                coreCount,
                 busyWorker,
                 maxWorker,
                 pendingItems,
                 totalThreads,
                 soloRunning,
+                inNet,
+                inPing,
+                inSuspend,
+                inSleep,
+                inOcr,
                 liveBuf,
                 totalAlloc,
                 suspend,
