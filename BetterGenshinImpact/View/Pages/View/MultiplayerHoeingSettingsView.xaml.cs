@@ -875,7 +875,7 @@ public partial class MultiplayerHoeingSettingsView : UserControl
                      + "无视吃药周期与 CD（哪怕周期填 0 或刚吃过也会吃）。周期与线路两个条件任一满足即吃。",
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 10),
-                Foreground = System.Windows.Media.Brushes.DarkRed
+                Foreground = System.Windows.Media.Brushes.IndianRed
             });
 
             // 4 行：第N格（固定序号=行号）+ 周期输入(窄) + 线路关键词输入
@@ -888,7 +888,7 @@ public partial class MultiplayerHoeingSettingsView : UserControl
             headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) });
             headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
             headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var hPeriod = new TextBlock { Text = "执行周期(秒)", FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0), TextWrapping = TextWrapping.Wrap };
+            var hPeriod = new TextBlock { Text = "周期(秒)", FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0), TextWrapping = TextWrapping.Wrap };
             var hRoute = new TextBlock { Text = "强制吃药线路", FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0) };
             System.Windows.Controls.Grid.SetColumn(hPeriod, 1);
             System.Windows.Controls.Grid.SetColumn(hRoute, 2);

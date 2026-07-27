@@ -1,5 +1,6 @@
 ﻿using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.Helpers;
+using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
 using System.Diagnostics;
@@ -98,6 +99,16 @@ namespace BetterGenshinImpact.GameTask.Model
             {
                 ScaleMax1080PCaptureRect = new Rect(CaptureAreaRect.X, CaptureAreaRect.Y, CaptureAreaRect.Width, CaptureAreaRect.Height);
             }
+
+            // 【诊断】SystemInfo 每次重建都打印实际算出的关键尺寸。这是 #3250 之后的资产缓存 key 来源，
+            // 也是不同 DPI/分辨率/多显示器机器行为分叉的核心。若这里出现异常值(0/负/与游戏实际不符)，
+            // 就是"部分机器卡住"的元凶。任务切换(停止→启动联机锄地)会触发本构造。
+            App.GetLogger<SystemInfo>().LogWarning(
+                "[Diag] SystemInfo重建 GameScreenSize={GW}x{GH} CaptureAreaRect=({CX},{CY},{CW}x{CH}) ScaleMax1080P=({SX},{SY},{SW}x{SH}) ScaleTo1080PRatio={Ratio:F4} DisplaySize={DW}x{DH}",
+                GameScreenSize.Width, GameScreenSize.Height,
+                CaptureAreaRect.X, CaptureAreaRect.Y, CaptureAreaRect.Width, CaptureAreaRect.Height,
+                ScaleMax1080PCaptureRect.X, ScaleMax1080PCaptureRect.Y, ScaleMax1080PCaptureRect.Width, ScaleMax1080PCaptureRect.Height,
+                ScaleTo1080PRatio, DisplaySize.Width, DisplaySize.Height);
         }
     }
 }

@@ -237,7 +237,18 @@ public class SystemControl
         var top = windowRect.Top + windowRect.Height - gameScreenRect.Height;
         var right = left + gameScreenRect.Width;
         var bottom = top + gameScreenRect.Height;
-        return new RECT(left, top, right, bottom);
+        var result = new RECT(left, top, right, bottom);
+
+        // 【诊断】打印两套原始矩形。DWM扩展边界(windowRect)是物理像素，客户区(gameScreenRect)是
+        // GetClientRect 结果。DPI缩放≠100%或多显示器时两者可能不匹配，导致 result 尺寸/位置异常。
+        // 这是"部分机器卡住"的底层根因候选。频繁调用(SyncMaskWindowPosition每帧)，用 Debug 级避免刷屏。
+        App.GetLogger<SystemControl>().LogDebug(
+            "[Diag] GetCaptureRect DWM窗口=({WL},{WT},{WW}x{WH}) 客户区={CW}x{CH} => 捕获=({RL},{RT},{RW}x{RH})",
+            windowRect.Left, windowRect.Top, windowRect.Width, windowRect.Height,
+            gameScreenRect.Width, gameScreenRect.Height,
+            result.Left, result.Top, result.Width, result.Height);
+
+        return result;
     }
 
     public static void ActivateWindow(nint hWnd)
