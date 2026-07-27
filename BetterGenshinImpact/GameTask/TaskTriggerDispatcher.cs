@@ -280,6 +280,7 @@ namespace BetterGenshinImpact.GameTask
                 if (!hasLock)
                 {
                     _metricsService?.RecordSkippedTick();
+                    CaptureDiagnostics.NotifyTickSkipLock(); // 【诊断】上一帧还没处理完，本帧被锁跳过
                     // 正在执行时跳过
                     return;
                 }
@@ -398,6 +399,9 @@ namespace BetterGenshinImpact.GameTask
                     // // 移动游戏窗口的时候同步遮罩窗口的位置,此时不进行捕获
                     if (SyncMaskWindowPosition())
                     {
+                        // 【诊断】前台状态下，因窗口矩形变化(_gameRect!=currentRect)跳过本帧截图。
+                        // 若此分支被反复命中 → 说明 GetCaptureRect 每帧都在变，是"卡住"的元凶。
+                        CaptureDiagnostics.NotifyTickSkipBranch("SyncMaskWindowPosition(rect变化跳过)");
                         return;
                     }
                 }
@@ -416,16 +420,21 @@ namespace BetterGenshinImpact.GameTask
                 // 从真正开始截图处计时，前面的窗口状态检查不计入 BetterGI 本轮处理耗时。
                 tickMetrics.Begin();
                 // 捕获游戏画面
+                var _diagCapSw = Stopwatch.GetTimestamp(); // 【诊断】
                 var captureFrame = GameCapture.Capture();
                 var bitmap = captureFrame?.Frame;
+                CaptureDiagnostics.NotifyCapture(Stopwatch.GetElapsedTime(_diagCapSw).TotalMilliseconds, bitmap); // 【诊断】记录截图耗时+画面指纹
                 tickMetrics.EndCapture();
                 speedTimer.Record("截图");
 
                 if (bitmap == null)
                 {
                     _logger.LogWarning("截图失败!");
+                    CaptureDiagnostics.NotifyTickSkipBranch("bitmap=null"); // 【诊断】
                     return;
                 }
+
+                CaptureDiagnostics.NotifyTickRun("captured"); // 【诊断】本帧成功截到图并进入处理
 
                 if (shouldShowPictureInPicture && !active)
                 {
@@ -484,6 +493,12 @@ namespace BetterGenshinImpact.GameTask
                                 trigger.OnCapture(content);
                                 tickMetrics.AddTriggerCost(triggerStart);
                                 speedTimer.Record(trigger.Name);
+                                // 【诊断】某触发器 OnCapture 若阻塞过久，会持有 _locker 导致后续 Tick 全部锁跳过 → 表现为卡住。
+                                var _diagTrigMs = Stopwatch.GetElapsedTime(triggerStart).TotalMilliseconds;
+                                if (_diagTrigMs > 200)
+                                {
+                                    _logger.LogWarning("[Diag] 触发器 {Name} 单帧耗时 {Ms:F0}ms 偏高，可能阻塞调度循环", trigger.Name, _diagTrigMs);
+                                }
                             }
                         }
 
@@ -499,7 +514,9 @@ namespace BetterGenshinImpact.GameTask
 
                 if ((DateTime.Now - _prevManualGc).TotalSeconds > 2)
                 {
+                    var _diagGcSw = Stopwatch.GetTimestamp(); // 【诊断】
                     GC.Collect();
+                    CaptureDiagnostics.NotifyGc(Stopwatch.GetElapsedTime(_diagGcSw).TotalMilliseconds); // 【诊断】GC.Collect 阻塞耗时
                     _prevManualGc = DateTime.Now;
                 }
 
@@ -544,6 +561,12 @@ namespace BetterGenshinImpact.GameTask
                 {
                     _logger.LogError("► 游戏窗口大小发生变化 {W}x{H}->{CW}x{CH}, 无需重新启动截图器。", _gameRect.Width, _gameRect.Height, currentRect.Width, currentRect.Height);
                 }
+
+                // 【诊断】打印 rect 变化前后的完整数值。若每帧都变(哪怕只差1px或位置抖动)，
+                // 会导致每帧都在此 return 跳过截图 → 画面卡住。这条日志能直接证实/排除该机制。
+                _logger.LogWarning("[Diag] 窗口矩形变化 旧=({OL},{OT},{OW}x{OH}) 新=({NL},{NT},{NW}x{NH})",
+                    _gameRect.Left, _gameRect.Top, _gameRect.Width, _gameRect.Height,
+                    currentRect.Left, currentRect.Top, currentRect.Width, currentRect.Height);
 
                 _gameRect = new RECT(currentRect);
                 TaskContext.Instance().SystemInfo.CaptureAreaRect = currentRect;

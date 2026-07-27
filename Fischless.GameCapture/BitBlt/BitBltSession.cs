@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading;
 using OpenCvSharp;
 using Vanara.PInvoke;
 
@@ -36,6 +37,12 @@ public class BitBltSession : IDisposable
 
     // Bitmap 内存池
     private readonly ConcurrentStack<IntPtr> _bufferPool = [];
+
+    // 【诊断】跨会话静态计数，供 app 层心跳读取，定位缓冲池泄漏（Mat 未释放会导致每帧 AllocHGlobal 新 6MB）。
+    // 排查完可删除本区块及其引用。
+    public static long DiagTotalBufferAllocations;   // 累计 AllocHGlobal 次数
+    public static long DiagLiveBufferCount;          // 已分配但尚未回池的缓冲数(=未释放的 Mat 数)
+    public static double DiagLastGdiBlitMs;          // 上一次 GDI BitBlt+拷贝耗时
 
     // 窗口原宽高
     public int Width { get; }
@@ -156,10 +163,16 @@ public class BitBltSession : IDisposable
     {
         lock (_lockObject)
         {
+            var _diagBlitSw = Stopwatch.StartNew(); // 【诊断】
             // 截图
             var success = Gdi32.BitBlt(_hdcDest, 0, 0, Width, Height,
                 _hdcSrc, 0, 0, Gdi32.RasterOperationMode.SRCCOPY);
-            if (!success || !Gdi32.GdiFlush()) return null;
+            if (!success || !Gdi32.GdiFlush())
+            {
+                _diagBlitSw.Stop();
+                DiagLastGdiBlitMs = _diagBlitSw.Elapsed.TotalMilliseconds; // 【诊断】即使失败也记录耗时
+                return null;
+            }
 
             // 新Mat
             var buffer = AcquireBuffer();
@@ -175,14 +188,18 @@ public class BitBltSession : IDisposable
                     Buffer.MemoryCopy((void*)(_bitsPtr + _stride * i), (void*)(buffer + step * i), step, step);
                 }
             }
+            _diagBlitSw.Stop();
+            DiagLastGdiBlitMs = _diagBlitSw.Elapsed.TotalMilliseconds; // 【诊断】GDI 截图+拷贝耗时
             return BitBltMat.FromPixelData(this, Height, Width, MatType.CV_8UC3, buffer, step);
         }
     }
 
     private IntPtr AcquireBuffer()
     {
+        Interlocked.Increment(ref DiagLiveBufferCount); // 【诊断】取出一个缓冲(对应一个 Mat 诞生)
         if (!_bufferPool.TryPop(out var buffer))
         {
+            Interlocked.Increment(ref DiagTotalBufferAllocations); // 【诊断】池空→真的分配新 6MB
             buffer = Marshal.AllocHGlobal(_bufferSize);
         }
 
@@ -191,6 +208,7 @@ public class BitBltSession : IDisposable
 
     public void ReleaseBuffer(IntPtr buffer)
     {
+        Interlocked.Decrement(ref DiagLiveBufferCount); // 【诊断】Mat 释放→缓冲回池
         _bufferPool.Push(buffer);
     }
 

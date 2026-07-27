@@ -623,7 +623,10 @@ public class TaskControl
     public static Mat CaptureGameImage(IGameCapture? gameCapture)
     {
         // 第 1 次尝试（正常路径，零延迟、零日志、零副作用）
+        var _diagSw = System.Diagnostics.Stopwatch.GetTimestamp(); // 【诊断】
         var image = gameCapture?.Capture();
+        // 【诊断】SoloTask(联机锄地等)取帧入口，记录耗时+画面指纹。与调度器共用同一诊断器。
+        CaptureDiagnostics.NotifyCapture(System.Diagnostics.Stopwatch.GetElapsedTime(_diagSw).TotalMilliseconds, image?.Frame);
         if (image != null) return image.Frame;
 
         // 进入恢复等待循环：≤ MaxRecoveryWait（30s）
