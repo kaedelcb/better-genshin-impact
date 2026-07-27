@@ -118,11 +118,13 @@ public class Genshin
     /// <param name="forceCountry">强制指定移动大地图时先切换的国家，默认为null</param>
     public async Task MoveMapTo(double x, double y, string? forceCountry = null)
     {
-        TpTask tpTask = new TpTask(CancellationContext.Instance.Cts.Token);
+        // 强制使用公版传送（TpTaskOfficial），绕开 UseOfficialTeleport 开关，
+        // 不受茶包版快速拖动传送影响，两者互相独立。
+        TpTaskOfficial tpTask = new TpTaskOfficial(CancellationContext.Instance.Cts.Token);
         await tpTask.CheckInBigMapUi();
         await tpTask.SwitchRecentlyCountryMap(x, y, forceCountry);
         // finalZoomLevel=6（最缩小）：防止 MoveMapTo 自动放大，保持当前缩放让调用方自行控制
-        await tpTask.MoveMapTo(x, y, MapTypes.Teyvat.ToString(), finalZoomLevel: 6, enableEarlyStop: false);
+        await tpTask.MoveMapTo(x, y, MapTypes.Teyvat.ToString(), finalZoomLevel: 6);
         
         // 等待地图移动完成（画面稳定）
         // 快速拖动优化后，MoveMapTo 内部拖动结束时画面可能仍在渲染中。
