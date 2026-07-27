@@ -298,7 +298,16 @@ public class PaddleOcrService : IOcrService, IDisposable
     private OcrResult _OcrResult(Mat mat)
     {
         var startTime = Stopwatch.GetTimestamp();
-        var result = RunAll(mat);
+        BetterGenshinImpact.GameTask.Common.CaptureDiagnostics.EnterOcr(); // 【诊断】统计此刻并发跑 OCR 的线程数
+        OcrResult result;
+        try
+        {
+            result = RunAll(mat);
+        }
+        finally
+        {
+            BetterGenshinImpact.GameTask.Common.CaptureDiagnostics.ExitOcr(); // 【诊断】
+        }
         var time = Stopwatch.GetElapsedTime(startTime);
         // Debug.WriteLine($"PaddleOcr 耗时 {time.TotalMilliseconds}ms 结果: {result.Text}");
         return result;

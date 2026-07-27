@@ -103,6 +103,7 @@ public class TaskControl
             return;
         }
 
+        CaptureDiagnostics.EnterNetworkCheck(); // 【诊断】进入网络检查主体（已过门控）
         try
         {
             if (DateTime.UtcNow - _lastCheckTime < CheckInterval)
@@ -173,8 +174,17 @@ public class TaskControl
             try
             {
                 using var ping = new Ping();
-                var reply = ping.Send(TaskContext.Instance().Config.OtherConfig.NetworkDetectionUrl);
-                isSuspend = reply.Status != IPStatus.Success;
+                // 【诊断】ping.Send 无超时参数，网络过渡期可能长阻塞。计数此刻卡在这里的线程数。
+                CaptureDiagnostics.EnterPingSend();
+                try
+                {
+                    var reply = ping.Send(TaskContext.Instance().Config.OtherConfig.NetworkDetectionUrl);
+                    isSuspend = reply.Status != IPStatus.Success;
+                }
+                finally
+                {
+                    CaptureDiagnostics.ExitPingSend();
+                }
             }
             catch (Exception ex)
             {
@@ -266,6 +276,7 @@ public class TaskControl
         }
         finally
         {
+            CaptureDiagnostics.ExitNetworkCheck(); // 【诊断】
             // 无论走哪个 return（节流跳过 / 窗口分支 / 正常完成 / 异常），都保证释放门控，绝不死锁。
             _networkCheckGate.Release();
         }
@@ -307,8 +318,10 @@ public class TaskControl
         var first = true;
         //此处为了记录最开始的暂停状态
         var isSuspend = RunnerContext.Instance.IsSuspend || networkBlocking;
+        var _diagInSuspendLoop = false; // 【诊断】标记本线程是否进过暂停循环，保证只 -1 一次
         while (RunnerContext.Instance.IsSuspend || (IsSuspendedByNetwork && !_inNetworkRecovery.Value))
         {
+            if (!_diagInSuspendLoop) { _diagInSuspendLoop = true; CaptureDiagnostics.EnterTrySuspendLoop(); } // 【诊断】
             // 仅在用户手动暂停时清除网络暂停标志并置 RecoveryNetworkDone=true（手动暂停无需走网络恢复流程）。
             // 修复前此行缺大括号，导致 NetworkRecovery.RecoveryNetworkDone = true 每秒无条件执行，
             // 短路了 NetworkRecovery.Start 的实际恢复动作，使网络恢复后无法解除暂停。
@@ -349,6 +362,8 @@ public class TaskControl
 
             Thread.Sleep(1000);
         }
+
+        if (_diagInSuspendLoop) { CaptureDiagnostics.ExitTrySuspendLoop(); } // 【诊断】离开暂停循环
 
         //从暂停中解除
         if (isSuspend)

@@ -22,6 +22,9 @@ public class SystemControl
     private const string ChildSessionGenshinStartArgs =
         "-popupwindow -screen-width 1920 -screen-height 1080";
 
+    // 【诊断】GetCaptureRect 去重用：记录上次打印的 rect 组合，仅在变化时打印。
+    private static string _diagLastCaptureRectKey = "";
+
     public static nint FindGenshinImpactHandle()
     {
         var processNames = TaskContext.Instance().GetGenshinGameProcessNameList();
@@ -239,14 +242,17 @@ public class SystemControl
         var bottom = top + gameScreenRect.Height;
         var result = new RECT(left, top, right, bottom);
 
-        // 【诊断】打印两套原始矩形。DWM扩展边界(windowRect)是物理像素，客户区(gameScreenRect)是
-        // GetClientRect 结果。DPI缩放≠100%或多显示器时两者可能不匹配，导致 result 尺寸/位置异常。
-        // 这是"部分机器卡住"的底层根因候选。频繁调用(SyncMaskWindowPosition每帧)，用 Debug 级避免刷屏。
-        App.GetLogger<SystemControl>().LogDebug(
-            "[Diag] GetCaptureRect DWM窗口=({WL},{WT},{WW}x{WH}) 客户区={CW}x{CH} => 捕获=({RL},{RT},{RW}x{RH})",
-            windowRect.Left, windowRect.Top, windowRect.Width, windowRect.Height,
-            gameScreenRect.Width, gameScreenRect.Height,
-            result.Left, result.Top, result.Width, result.Height);
+        // 【诊断】rect 已确认全程稳定，为避免每帧刷屏淹没 [Diag] 心跳，改为仅在值变化时打印一次。
+        var _diagKey = $"{windowRect.Left},{windowRect.Top},{windowRect.Width},{windowRect.Height}|{gameScreenRect.Width},{gameScreenRect.Height}|{result.Left},{result.Top},{result.Width},{result.Height}";
+        if (_diagKey != _diagLastCaptureRectKey)
+        {
+            _diagLastCaptureRectKey = _diagKey;
+            App.GetLogger<SystemControl>().LogWarning(
+                "[Diag] GetCaptureRect 变化 DWM窗口=({WL},{WT},{WW}x{WH}) 客户区={CW}x{CH} => 捕获=({RL},{RT},{RW}x{RH})",
+                windowRect.Left, windowRect.Top, windowRect.Width, windowRect.Height,
+                gameScreenRect.Width, gameScreenRect.Height,
+                result.Left, result.Top, result.Width, result.Height);
+        }
 
         return result;
     }
