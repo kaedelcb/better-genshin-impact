@@ -248,18 +248,33 @@ public class GameLoadingTrigger : ITaskTrigger
             return;
         }
         
+        // 【诊断】拆分本轮各识别阶段耗时 + 打印看到的状态，定位 400ms 花在哪、以及为何一直进不了主界面。
+        var _diagSw = System.Diagnostics.Stopwatch.StartNew();
+
         // 成功进入游戏判断    
-        if (Bv.IsInMainUi(content.CaptureRectArea) || Bv.IsInAnyClosableUi(content.CaptureRectArea) || Bv.IsInDomain(content.CaptureRectArea))
+        var _diagInMain = Bv.IsInMainUi(content.CaptureRectArea);
+        var _diagClosable = _diagInMain || Bv.IsInAnyClosableUi(content.CaptureRectArea);
+        var _diagInDomain = _diagClosable || Bv.IsInDomain(content.CaptureRectArea);
+        var _diagUiCheckMs = _diagSw.ElapsedMilliseconds;
+        if (_diagInMain || _diagClosable || _diagInDomain)
         {
-            // _logger.LogInformation("当前在游戏主界面");
+            _logger.LogInformation("[Diag] 自动开门: 已进入游戏(main={M}/closable={C}/domain={D})，禁用触发器，UI判定耗时={Ms}ms",
+                _diagInMain, _diagClosable, _diagInDomain, _diagUiCheckMs);
             InnerSetEnabled(false);
             return;
         }
 
+        var _diagOcrMs = -1L;
         if ((DateTime.Now - _prevAgePromptOcrTime).TotalMilliseconds >= 1000)
         {
             _prevAgePromptOcrTime = DateTime.Now;
+            var _diagOcrStart = _diagSw.ElapsedMilliseconds;
             _latestLoadingOcrRegions = content.CaptureRectArea.FindMulti(RecognitionObject.OcrThis);
+            _diagOcrMs = _diagSw.ElapsedMilliseconds - _diagOcrStart;
+            // 【诊断】打印本轮 OCR 识别到的全部文字，用于判断游戏当前停在哪个界面（登录门口/加载/年龄提示/黑屏等）
+            _logger.LogInformation("[Diag] 自动开门 OCR({Ms}ms) 识别文字: [{Texts}]",
+                _diagOcrMs,
+                string.Join(" | ", _latestLoadingOcrRegions.Select(r => r.Text)));
             if (_latestLoadingOcrRegions.Any(region =>
                     region.Text.Contains("适龄") || region.Text.Contains("监护")))
             {
@@ -312,6 +327,7 @@ public class GameLoadingTrigger : ITaskTrigger
             var extraEnterGameBtn = content.CaptureRectArea.Find(RecognitionAssets.Get("GameLoading", "ChooseEnterGame", content.CaptureRectArea));
             if (!extraEnterGameBtn.IsEmpty())
             {
+                _logger.LogInformation("[Diag] 自动开门: 识别到 ChooseEnterGame 按钮并点击，本轮总耗时={Ms}ms", _diagSw.ElapsedMilliseconds);
                 extraEnterGameBtn.Click();
                 return;
             }
@@ -322,10 +338,15 @@ public class GameLoadingTrigger : ITaskTrigger
 
         if (!ra.IsEmpty())
         {
+            _logger.LogInformation("[Diag] 自动开门: 识别到 EnterGame 按钮并点击(后台)，本轮总耗时={Ms}ms", _diagSw.ElapsedMilliseconds);
             TaskContext.Instance().PostMessageSimulator.LeftButtonClickBackground();
             biliLoginClicked = true;
             return;
         }
+
+        // 【诊断】本轮既没进主界面、也没识别到任何进入按钮 → 打印总耗时+各阶段，判断是"识别不到"还是"游戏没响应点击"
+        _logger.LogWarning("[Diag] 自动开门: 本轮未进主界面且未找到进入按钮 (UI判定={UiMs}ms OCR={OcrMs}ms 总={TotalMs}ms IsBili={Bili} biliClicked={Clicked})",
+            _diagUiCheckMs, _diagOcrMs, _diagSw.ElapsedMilliseconds, IsBili, biliLoginClicked);
 
         // 只有在"进入游戏"按钮未出现时，才进行B服登录处理
         if (IsBili && !biliLoginClicked)

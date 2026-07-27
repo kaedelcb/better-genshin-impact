@@ -191,9 +191,19 @@ public static class CaptureDiagnostics
             var totalAlloc = Interlocked.Read(ref Fischless.GameCapture.BitBlt.BitBltSession.DiagTotalBufferAllocations);
             var gdiMs = Fischless.GameCapture.BitBlt.BitBltSession.DiagLastGdiBlitMs;
 
+            // 【诊断·线程池饥饿探针】截图率骤降到 2-3/s 但单帧只要 5ms → 定时器回调在线程池排队
+            // 等不到工作线程，强烈指向线程池饥饿（联机 SignalR 大量 async + 可能的阻塞等待 .Wait()/
+            // .Result/Thread.Sleep 占死工作线程）。卡住时若"忙线程逼近上限、待处理项暴涨"即铁证。
+            ThreadPool.GetAvailableThreads(out var availWorker, out _);
+            ThreadPool.GetMaxThreads(out var maxWorker, out _);
+            var busyWorker = maxWorker - availWorker;           // 正在被占用的工作线程数
+            var pendingItems = ThreadPool.PendingWorkItemCount; // 排队等待的工作项
+            var totalThreads = ThreadPool.ThreadCount;          // 线程池当前总线程数
+            var soloRunning = TaskControl.TaskSemaphore.CurrentCount == 0; // 有独立任务(联机锄地)在跑
+
             // 一行汇总。重点字段含义见文件头注释。
             Logger.LogInformation(
-                "[Diag] CapRate={CapRate}/s 距上次截图={SinceCap}ms 单帧={CapMs:F1}ms GDI={GdiMs:F1}ms | 画面{StaleFlag} 距变化={SinceChange}ms 连续同帧={Stale} | Tick执行={TickRun} 距上次={SinceTick}ms 锁跳过={SkipLock} 分支跳过={SkipBranch} 末端={Branch} | 存活缓冲={LiveBuf} 累计分配={TotalAlloc} | Suspend={Suspend}(cap={ByCap}/net={ByNet}) Cancel={Cancel} 前台原神={Active} GC={GcMs:F0}ms",
+                "[Diag] CapRate={CapRate}/s 距上次截图={SinceCap}ms 单帧={CapMs:F1}ms GDI={GdiMs:F1}ms | 画面{StaleFlag} 距变化={SinceChange}ms 连续同帧={Stale} | Tick执行={TickRun} 距上次={SinceTick}ms 锁跳过={SkipLock} 分支跳过={SkipBranch} 末端={Branch} | 线程池:忙={BusyWorker}/{MaxWorker} 待处理={Pending} 总线程={TotalThreads} Solo={Solo} | 存活缓冲={LiveBuf} 累计分配={TotalAlloc} | Suspend={Suspend}(cap={ByCap}/net={ByNet}) Cancel={Cancel} 前台原神={Active} GC={GcMs:F0}ms",
                 capRate,
                 sinceCap,
                 _lastCaptureCostMs,
@@ -206,6 +216,11 @@ public static class CaptureDiagnostics
                 Interlocked.Read(ref _tickSkipLockCount),
                 Interlocked.Read(ref _tickSkipBranchCount),
                 _lastTickBranch,
+                busyWorker,
+                maxWorker,
+                pendingItems,
+                totalThreads,
+                soloRunning,
                 liveBuf,
                 totalAlloc,
                 suspend,

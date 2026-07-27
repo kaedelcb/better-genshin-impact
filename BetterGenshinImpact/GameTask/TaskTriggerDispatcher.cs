@@ -447,7 +447,14 @@ namespace BetterGenshinImpact.GameTask
 
                 // 循环执行所有触发器 有独占状态的触发器的时候只执行独占触发器
                 using var content = new CaptureContent(bitmap, _frameIndex, _timer.Interval);
+                // 【诊断】DetectChatUi 每帧必调且未埋点，怀疑它在特定UI状态下走满OCR导致每帧~350ms。
+                var _diagChatSw = Stopwatch.GetTimestamp();
                 ChatUiHotkeyGuard.UpdateVisualState(Bv.DetectChatUi(content.CaptureRectArea));
+                var _diagChatMs = Stopwatch.GetElapsedTime(_diagChatSw).TotalMilliseconds;
+                if (_diagChatMs > 100)
+                {
+                    _logger.LogWarning("[Diag] Bv.DetectChatUi 单帧耗时 {Ms:F0}ms 偏高", _diagChatMs);
+                }
 
                 if (!hasEnabledTriggers)
                 {
@@ -476,7 +483,14 @@ namespace BetterGenshinImpact.GameTask
                     if (needRunTriggers.Count > 0)
                     {
                         // 判断当前UI
+                        // 【诊断】WhichGameUiForTriggers 每帧必调且未埋点，怀疑它在特定UI状态下走满OCR导致每帧~350ms。
+                        var _diagUiSw = Stopwatch.GetTimestamp();
                         content.CurrentGameUiCategory = Bv.WhichGameUiForTriggers(content.CaptureRectArea);
+                        var _diagUiMs = Stopwatch.GetElapsedTime(_diagUiSw).TotalMilliseconds;
+                        if (_diagUiMs > 100)
+                        {
+                            _logger.LogWarning("[Diag] Bv.WhichGameUiForTriggers 单帧耗时 {Ms:F0}ms 偏高，识别类别={Cat}", _diagUiMs, content.CurrentGameUiCategory);
+                        }
                         
                         if (content.CurrentGameUiCategory != PrevGameUiCategory)
                         {
