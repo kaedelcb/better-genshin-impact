@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading;
 using BetterGenshinImpact.Service.Model;
 using BetterGenshinImpact.Service.Model.OverlayMetric;
 
@@ -236,13 +237,13 @@ public sealed class OverlayMetricsService : IDisposable
 
     private void RefreshHardwareMetrics(MaskWindowConfig config, DateTime now)
     {
-        lock (_hardwareLocker)
+        if (!Monitor.TryEnter(_hardwareLocker, 0)) return;
+        try
         {
             var previousRefreshTime = _lastHardwareRefreshTime;
             _lastHardwareRefreshTime = now;
             if (previousRefreshTime != DateTime.MinValue && now - previousRefreshTime > GpuQueryResetInterval)
             {
-                // 休眠或长时间暂停后重新建立 PDH 基线，避免展示跨越长时间窗口的平均值。
                 ReleaseGpuUsageProvider(resetAvailability: true);
             }
 
@@ -265,6 +266,10 @@ public sealed class OverlayMetricsService : IDisposable
                 _gpuUsage = gpuEnabled ? gpuUsage : null;
                 _memoryUsage = memoryEnabled ? memoryUsage : null;
             }
+        }
+        finally
+        {
+            Monitor.Exit(_hardwareLocker);
         }
     }
 
