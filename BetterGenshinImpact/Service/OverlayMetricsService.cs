@@ -50,6 +50,11 @@ public sealed class OverlayMetricsService : IDisposable
     private DateTime _lastPublishTime = DateTime.MinValue;
     private DateTime _lastHardwareRefreshTime = DateTime.MinValue;
 
+    // 硬件采样（LibreHardwareMonitor + PDH）是几百毫秒级原生 I/O，必须在独立后台线程执行，
+    // 绝不能放在调度器 tick 线程上（否则 tick 变慢时回调堆积 + 抢 _hardwareLocker → 线程池饥饿）。
+    // 见 spec overlay-metrics-tick-decouple / D1。
+    private readonly Timer _hardwareSamplingTimer;
+
     public event EventHandler<OverlayMetricsSnapshot>? MetricsUpdated;
 
     public OverlayMetricsSnapshot CurrentSnapshot { get; private set; } = OverlayMetricsSnapshot.Empty;
@@ -61,6 +66,40 @@ public sealed class OverlayMetricsService : IDisposable
         if (_maskWindowConfig != null)
         {
             _maskWindowConfig.PropertyChanged += MaskWindowConfigOnPropertyChanged;
+        }
+
+        // 后台按 HardwareRefreshInterval 采样硬件指标，写入缓存字段；tick 线程只读缓存。
+        _hardwareSamplingTimer = new Timer(_ => HardwareSamplingTick(), null, HardwareRefreshInterval, HardwareRefreshInterval);
+    }
+
+    /// <summary>
+    /// 后台硬件采样回调（独立 Timer 线程）。承接原先在 tick 线程上做的重量级原生 I/O：
+    /// GPU provider 生命周期维护 + CPU/GPU/内存采样。整段兜底，绝不让异常冒泡打断 Timer。
+    /// 见 spec overlay-metrics-tick-decouple / D1。
+    /// </summary>
+    private void HardwareSamplingTick()
+    {
+        try
+        {
+            var config = _configService?.Get()?.MaskWindowConfig;
+            if (config == null)
+            {
+                return;
+            }
+
+            // GPU provider 的释放（用户关闭 GPU 指标时）随采样节奏在后台线程做，不占 tick 线程。
+            MaintainGpuMetricsLifecycle(config);
+
+            var now = DateTime.UtcNow;
+            if (ShouldRefreshHardware(config, now))
+            {
+                RefreshHardwareMetrics(config, now);
+            }
+        }
+        catch (Exception ex)
+        {
+            // 硬件采样是可选辅助能力，任何异常只记录一次警告并静默降级，绝不打断后台 Timer 或主流程。
+            LogHardwareWarning(ex);
         }
     }
 
@@ -107,11 +146,11 @@ public sealed class OverlayMetricsService : IDisposable
         if (e.PropertyName is nameof(MaskWindowConfig.ShowOverlayMetrics)
             or nameof(MaskWindowConfig.OverlayMetricItems))
         {
-            TryPublish(force: true, refreshHardware: false);
+            TryPublish(force: true);
         }
     }
 
-    private void TryPublish(bool force = false, bool refreshHardware = true)
+    private void TryPublish(bool force = false)
     {
         var allConfig = _configService?.Get();
         var config = allConfig?.MaskWindowConfig;
@@ -121,7 +160,6 @@ public sealed class OverlayMetricsService : IDisposable
         }
 
         config.EnsureOverlayMetricItems();
-        MaintainGpuMetricsLifecycle(config);
         var now = DateTime.UtcNow;
         // 即使实时触发器高频运行，遮罩只需要半秒级更新；手动刷新和配置变更用 force 立即同步。
         if (!force && now - _lastPublishTime < PublishInterval)
@@ -129,11 +167,9 @@ public sealed class OverlayMetricsService : IDisposable
             return;
         }
 
-        // 硬件采样相对更重，只有用户开启对应指标时才按秒级刷新。
-        if (refreshHardware && ShouldRefreshHardware(config, now))
-        {
-            RefreshHardwareMetrics(config, now);
-        }
+        // 硬件采样（含 MaintainGpuMetricsLifecycle）已移至后台 HardwareSamplingTimer 线程，
+        // 此处只读缓存值构建快照，tick 线程绝不做原生 I/O / 抢 _hardwareLocker。
+        // 见 spec overlay-metrics-tick-decouple / D1。
 
         OverlayMetricsSnapshot snapshot;
         lock (_locker)
@@ -182,9 +218,20 @@ public sealed class OverlayMetricsService : IDisposable
             return;
         }
 
-        lock (_hardwareLocker)
+        // 非阻塞抢锁：抢不到（Dispose 或采样正在持锁）本次不释放，1s 后 Timer 重试，无泄漏。
+        // 见 spec overlay-metrics-tick-decouple / D2。
+        if (!Monitor.TryEnter(_hardwareLocker, 0))
+        {
+            return;
+        }
+
+        try
         {
             ReleaseGpuUsageProvider(resetAvailability: true);
+        }
+        finally
+        {
+            Monitor.Exit(_hardwareLocker);
         }
     }
 
@@ -453,6 +500,10 @@ public sealed class OverlayMetricsService : IDisposable
         {
             _maskWindowConfig.PropertyChanged -= MaskWindowConfigOnPropertyChanged;
         }
+
+        // 先停后台采样 Timer，确保没有回调会在资源释放后重新初始化 _computer / provider。
+        // 见 spec overlay-metrics-tick-decouple / Dispose 生命周期。
+        _hardwareSamplingTimer.Dispose();
 
         lock (_hardwareLocker)
         {

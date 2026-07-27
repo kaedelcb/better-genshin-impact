@@ -269,7 +269,13 @@ namespace BetterGenshinImpact.ViewModel
             var gameScreenRect = SystemControl.GetGameScreenRect(TaskContext.Instance().GameHandle);
             if (gameScreenRect.Width > 0)
             {
-                Config.MaskWindowConfig.ScaleTo1080PRatio = gameScreenRect.Width / 1920d;
+                var newRatio = gameScreenRect.Width / 1920d;
+                // 去重：比值未实际变化时不赋值，避免 SizeChanged 抖动触发 ScaleTo1080PRatio 的 7 连派生属性通知
+                // （EffectiveFontSize 等）在 UI 线程上做无谓重算。见 spec overlay-metrics-tick-decouple / D4。
+                if (Math.Abs(Config.MaskWindowConfig.ScaleTo1080PRatio - newRatio) > 1e-6)
+                {
+                    Config.MaskWindowConfig.ScaleTo1080PRatio = newRatio;
+                }
             }
         }
 
@@ -443,8 +449,10 @@ namespace BetterGenshinImpact.ViewModel
 
         private void OverlayMetricsServiceOnMetricsUpdated(object? sender, OverlayMetricsSnapshot snapshot)
         {
-            // OverlayMetricsService 可能在计时器线程发布事件，绑定集合必须切回 UI 线程更新。
-            UIDispatcherHelper.Invoke(() =>
+            // OverlayMetricsService 在后台线程发布事件，绑定集合必须切回 UI 线程更新。
+            // 用 BeginInvoke 异步派发：发布线程不同步等待 UI 线程，避免 UI 繁忙时反向拖住发布/调度链。
+            // snapshot 按值捕获，dispatcher 队列 FIFO 保证顺序。见 spec overlay-metrics-tick-decouple / D3。
+            UIDispatcherHelper.BeginInvoke(() =>
             {
                 OverlayMetricDisplayItems = snapshot.Items;
                 OverlayMetricsText = snapshot.CombinedText;
