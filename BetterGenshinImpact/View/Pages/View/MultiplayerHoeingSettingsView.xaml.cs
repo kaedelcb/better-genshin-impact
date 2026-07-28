@@ -80,6 +80,7 @@ public partial class MultiplayerHoeingSettingsView : UserControl
         HookDocButtons();          // 变体卡 Header 的"使用教程"/"制作规则" → OpenDoc
         HookFightStrategyCombo();  // E 卡片复刻战斗策略下拉（绑配置组 AutoFightConfig.StrategyName）
         HookMedicineEatButton();    // 按周期吃食物设置按钮 → 弹窗
+        HookPickupParamsButton();   // 配置拾取参数按钮 → 弹窗（4 个共享参数）
 
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;   // 衔接 UpdateButtonStates
     }
@@ -954,6 +955,95 @@ public partial class MultiplayerHoeingSettingsView : UserControl
             Toast.Warning("按周期吃食物设置失败，请查看日志");
         }
     }
+
+    // ===== 配置拾取参数（联机/单机共享 AutoHoeingConfig 的 4 个参数）=====
+    private void HookPickupParamsButton()
+    {
+        OpenPickupParamsButton.Click += async (_, _) => await ShowPickupParamsDialogAsync();
+    }
+
+    private async Task ShowPickupParamsDialogAsync()
+    {
+        try
+        {
+            var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 0) };
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = "以下参数与单机锄地共用，联机与单机为同一份配置。",
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 10),
+                Foreground = SystemColors.GrayTextBrush
+            });
+
+            // 4 个参数：标签 + 说明 + NumberBox（范围与主界面一致）
+            var findFBox = AddPickupParamRow(panel,
+                "识别间隔(ms)", "两次检测F图标之间等待时间，建议10-200",
+                ViewModel.FindFInterval, 10, 200);
+            var pickupDelayBox = AddPickupParamRow(panel,
+                "拾取后延时(ms)", "连续拾取相同物品时建议调大，建议32-200",
+                ViewModel.PickupDelay, 16, 500);
+            var rollingDelayBox = AddPickupParamRow(panel,
+                "滚动后延时(ms)", "拾取错误时建议调大，建议16-100",
+                ViewModel.RollingDelay, 16, 200);
+            var scrollCycleBox = AddPickupParamRow(panel,
+                "单次滚动周期(ms)", "上下滚动不全时建议调大，建议800-2000",
+                ViewModel.ScrollCycle, 500, 3000);
+
+            var dialog = new Wpf.Ui.Controls.MessageBox
+            {
+                Title = "配置拾取参数",
+                Content = panel,
+                MinWidth = 460,
+                PrimaryButtonText = "确定",
+                CloseButtonText = "取消",
+                Owner = Application.Current.MainWindow,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            };
+            var r = await dialog.ShowDialogAsync();
+            if (r != MessageBoxResult.Primary) return;
+
+            // 写回 ViewModel（Save() 经 WriteMultiplayerSettings 落盘）；NumberBox.Value 为 double?，取整回填，null 保留原值
+            ViewModel.FindFInterval = ToIntOr(findFBox.Value, ViewModel.FindFInterval);
+            ViewModel.PickupDelay = ToIntOr(pickupDelayBox.Value, ViewModel.PickupDelay);
+            ViewModel.RollingDelay = ToIntOr(rollingDelayBox.Value, ViewModel.RollingDelay);
+            ViewModel.ScrollCycle = ToIntOr(scrollCycleBox.Value, ViewModel.ScrollCycle);
+            Toast.Success("拾取参数已保存");
+        }
+        catch (Exception ex)
+        {
+            // 弹窗构建/读写异常不应让配置弹窗崩溃（可恢复异常）
+            _logger.LogWarning(ex, "[配置拾取参数] 设置弹窗异常");
+            Toast.Warning("配置拾取参数失败，请查看日志");
+        }
+    }
+
+    // 构建单个拾取参数行（标签 + 说明 + NumberBox），返回 NumberBox 以便读回
+    private static Wpf.Ui.Controls.NumberBox AddPickupParamRow(
+        StackPanel host, string label, string desc, int value, double min, double max)
+    {
+        host.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 6, 0, 2) });
+        host.Children.Add(new TextBlock
+        {
+            Text = desc,
+            Margin = new Thickness(0, 0, 0, 2),
+            Foreground = SystemColors.GrayTextBrush,
+            TextWrapping = TextWrapping.Wrap
+        });
+        var box = new Wpf.Ui.Controls.NumberBox
+        {
+            Value = value,
+            Minimum = min,
+            Maximum = max,
+            SpinButtonPlacementMode = Wpf.Ui.Controls.NumberBoxSpinButtonPlacementMode.Inline,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        host.Children.Add(box);
+        return box;
+    }
+
+    private static int ToIntOr(double? value, int fallback)
+        => value.HasValue ? (int)Math.Round(value.Value) : fallback;
 
     private void HookDocButtons()
     {

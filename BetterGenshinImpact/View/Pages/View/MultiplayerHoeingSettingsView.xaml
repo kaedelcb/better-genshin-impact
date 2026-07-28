@@ -104,9 +104,20 @@
                         </StackPanel>
                     </Grid>
                     <ui:TextBlock Margin="0,0,0,2" Text="拾取模式" />
-                    <ComboBox Margin="0,0,0,2"
-                              ItemsSource="{Binding PickupOptions}"
-                              SelectedItem="{Binding PickupMode, Mode=TwoWay}" />
+                    <!--  拾取模式下拉框（占满剩余宽度）+ 右侧「配置拾取参数」按钮  -->
+                    <Grid Margin="0,0,0,2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ComboBox Grid.Column="0"
+                                  ItemsSource="{Binding PickupOptions}"
+                                  SelectedItem="{Binding PickupMode, Mode=TwoWay}" />
+                        <ui:Button x:Name="OpenPickupParamsButton"
+                                   Grid.Column="1"
+                                   Margin="8,0,0,0"
+                                   Content="配置拾取参数" />
+                    </Grid>
                     <ui:TextBlock Margin="0,0,0,8"
                                   Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
                                   Text="推荐使用模板匹配拾取，BGI原版拾取性能开销大、准确度低"
@@ -421,7 +432,7 @@
                              Icon="{ui:SymbolIcon Flash24}"
                              IsExpanded="True">
                 <ui:CardExpander.Header>
-                    <ui:TextBlock FontTypography="Body" Text="联机战斗策略" />
+                    <ui:TextBlock FontTypography="Body" Text="战斗策略/吃药" />
                 </ui:CardExpander.Header>
                 <StackPanel>
                     <ui:TextBlock Margin="0,0,0,6"

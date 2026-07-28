@@ -203,10 +203,10 @@ public partial class AutoHoeingConfig : ObservableObject
     // ========== 第四部分：联机配置 ==========
 
     /// <summary>
-    /// 启用联机模式
+    /// 启用联机模式（默认开启：新配置组默认进入联机锄地界面）
     /// </summary>
     [ObservableProperty]
-    private bool _multiplayerEnabled = false;
+    private bool _multiplayerEnabled = true;
 
     /// <summary>
     /// 联机队伍名称（为空则不切换）

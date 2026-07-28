@@ -34,6 +34,13 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
     [ObservableProperty] private string _playerName = "";
     [ObservableProperty] private string _playerUid = "";
     [ObservableProperty] private string _pickupMode = "";
+
+    // ===== 拾取参数（联机/单机共享 AutoHoeingConfig，弹窗配置）=====
+    // 与主界面 NumberBox / AutoHoeingConfig 对齐为 int；单机由 solo 控件写同 key，联机由本 VM 写同 key。
+    [ObservableProperty] private int _findFInterval = 100;
+    [ObservableProperty] private int _pickupDelay = 50;
+    [ObservableProperty] private int _rollingDelay = 32;
+    [ObservableProperty] private int _scrollCycle = 1000;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowPreSwitchWeaponArea))]
     private string _multiplayerPartyName = "";
@@ -196,13 +203,21 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
 
         // hoeing-multiplayer-account-name-config：账户名初值，缺失回退全局配置的 AccountName（R1.3）
         _accountName = GetStr("accountName", g.AccountName);
-        _multiplayerEnabled = GetBool("multiplayerEnabled", g.MultiplayerEnabled);
+        // 新建独立任务默认开启联机锄地：settings 缺键时回退 true。
+        // 不跟随磁盘存量全局值 g.MultiplayerEnabled——老 config.json 里已持久化 false，
+        // 会让"默认开启"对存量安装失效。已保存过该键的任务仍用自身存值，不受影响。
+        _multiplayerEnabled = GetBool("multiplayerEnabled", true);
         _roleSelection = GetStr("multiplayerRole", "host") == "member" ? "成员（加入房间）" : "房主（创建房间）";
 
         _coordinatorServerUrl = GetStr("coordinatorServerUrl", g.CoordinatorServerUrl);
         _playerName = GetStr("playerName", g.PlayerName);
         _playerUid = GetStr("playerUid", g.PlayerUid);
         _pickupMode = GetStr("pickupMode", g.PickupMode);
+        // 拾取参数（联机/单机共享 AutoHoeingConfig，缺省回退全局配置）
+        _findFInterval = GetInt("findFInterval", g.FindFInterval);
+        _pickupDelay = GetInt("pickupDelay", g.PickupDelay);
+        _rollingDelay = GetInt("rollingDelay", g.RollingDelay);
+        _scrollCycle = GetInt("scrollCycle", g.ScrollCycle);
         _multiplayerPartyName = GetStr("multiplayerPartyName", g.MultiplayerPartyName);
         _multiplayerStartAvatarName = GetStr("multiplayerStartAvatarName", g.MultiplayerStartAvatarName);
 
@@ -339,6 +354,11 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         settings["multiWorldEnabled"] = MultiWorldEnabled;
         if (int.TryParse(MultiWorldCount, out var mwc)) settings["multiWorldCount"] = mwc;
         settings["pickupMode"] = PickupMode;
+        // 拾取参数（联机/单机共享，直接写 int）
+        settings["findFInterval"] = FindFInterval;
+        settings["pickupDelay"] = PickupDelay;
+        settings["rollingDelay"] = RollingDelay;
+        settings["scrollCycle"] = ScrollCycle;
         settings["groupIndex"] = GroupIndex;
 
         // 按周期吃食物（multiplayer-hoeing-auto-eat-food-by-period）：序号直接写，周期 TryParse 失败的行不写
