@@ -77,7 +77,6 @@ public class Genshin
         await new TpTask(CancellationContext.Instance.Cts.Token).Tp(x, y, mapName, force);
     }
 
-
     public async Task Tp(double x, double y, bool force)
     {
         await new TpTask(CancellationContext.Instance.Cts.Token).Tp(x, y, MapTypes.Teyvat.ToString(), force);
@@ -118,20 +117,10 @@ public class Genshin
     /// <param name="forceCountry">强制指定移动大地图时先切换的国家，默认为null</param>
     public async Task MoveMapTo(double x, double y, string? forceCountry = null)
     {
-        // 强制使用公版传送（TpTaskOfficial），绕开 UseOfficialTeleport 开关，
-        // 不受茶包版快速拖动传送影响，两者互相独立。
         TpTaskOfficial tpTask = new TpTaskOfficial(CancellationContext.Instance.Cts.Token);
         await tpTask.CheckInBigMapUi();
         await tpTask.SwitchRecentlyCountryMap(x, y, forceCountry);
-        // finalZoomLevel=6（最缩小）：防止 MoveMapTo 自动放大，保持当前缩放让调用方自行控制
-        await tpTask.MoveMapTo(x, y, MapTypes.Teyvat.ToString(), finalZoomLevel: 6);
-        
-        // 等待地图移动完成（画面稳定）
-        // 快速拖动优化后，MoveMapTo 内部拖动结束时画面可能仍在渲染中。
-        // 单独调用时（如 JS 脚本），紧接着的操作（如 SetBigMapZoomLevel / GetPositionFromBigMap）
-        // 会读到中间态导致识别错误。此处统一等待 500ms 确保画面稳定。
-        // TpOnce 内部调用时，外层已有更长的等待（500-1000ms），此等待会被"吸收"，零额外开销。
-        await Delay(500, CancellationContext.Instance.Cts.Token);
+        await tpTask.MoveMapTo(x, y, MapTypes.Teyvat.ToString());
     }
 
     /// <summary>
