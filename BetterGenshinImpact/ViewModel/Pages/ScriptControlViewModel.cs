@@ -1918,7 +1918,9 @@ public partial class ScriptControlViewModel : ViewModel
         item.SoloTaskSettingsObject ??= new Dictionary<string, object?>();
 
         // 锄地一条龙：统一弹窗，顶部有单机/联机切换开关
-        if (item.Name == "锄地一条龙")
+        // 新显示名「锄地一条龙（联机）」+ 旧名「锄地一条龙」都路由到专用弹窗（与 SoloTaskRegistry.CreateTask / GetSettingItems 的名称判定保持一致）。
+        // 否则新名任务会落到下方通用扁平弹窗，缺少顶部「启用联机锄地模式」开关。
+        if (item.Name is "锄地一条龙（联机）" or "锄地一条龙")
         {
             ShowHoeingSettingsDialog(item);
             return;
