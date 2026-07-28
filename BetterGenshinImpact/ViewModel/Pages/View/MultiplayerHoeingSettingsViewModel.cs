@@ -71,7 +71,11 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
     [ObservableProperty] private string _sharedFightEndQuorumRatio = "";
 
     // ===== 基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop, 房主设置同步成员）=====
-    [ObservableProperty] private bool _enableExpCapStop;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ExpCapDetectAllExpEnabled))]
+    private bool _enableExpCapStop;
+    // 检测模式：false=只检测精英经验，true=检测所有经验。依附主开关。
+    [ObservableProperty] private bool _expCapDetectAllExp;
 
     // ===== C 万叶聚物同步 =====
     [ObservableProperty]
@@ -157,6 +161,8 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
     public bool KazuhaParamsEnabled => EnableKazuhaSync;
     public bool FastSyncParamsEnabled => FastSyncPointEnabled;
     public bool SharedFightEndQuorumParamsEnabled => SharedFightEndQuorumEnabled;
+    // 检测模式开关仅在"基于经验判断停止锄地"启用时可编辑（从属关系）。
+    public bool ExpCapDetectAllExpEnabled => EnableExpCapStop;
     public bool MultiWorldCountEnabled => MultiWorldEnabled;
     public bool FightStrategySelectable => !MultiplayerUseFixedFightStrategy;
     public bool IsBuiltinOnlineMode => RouteModeDecisions.IsBuiltinOnline(RouteModeSelection);
@@ -223,6 +229,7 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
 
         // 基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop）
         _enableExpCapStop = GetBool("enableExpCapStop", g.EnableExpCapStop);
+        _expCapDetectAllExp = GetBool("expCapDetectAllExp", g.ExpCapDetectAllExp);
 
         _enableKazuhaSync = GetBool("enableKazuhaSync", g.EnableKazuhaSync);
         _kazuhaSyncWaitSeconds = GetInt("kazuhaSyncWaitSeconds", g.KazuhaSyncWaitSeconds).ToString();
@@ -324,6 +331,7 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
 
         // 基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop）
         settings["enableExpCapStop"] = EnableExpCapStop;
+        settings["expCapDetectAllExp"] = ExpCapDetectAllExp;
 
         settings["debugMode"] = DebugMode;
         settings["useFixedDebugRoutes"] = RouteModeDecisions.MapRouteModeToUseFixed(RouteModeSelection);

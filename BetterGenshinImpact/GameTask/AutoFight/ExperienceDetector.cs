@@ -15,7 +15,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight;
 /// 经验值检测器：在战斗过程中异步检测屏幕上怪物死亡时掉落的经验值数字图标，
 /// 用于判断是否有精英怪被击杀，从而决定战后是否执行拾取。
 /// </summary>
-public sealed class ExperienceDetector : IDisposable
+public sealed class ExperienceDetector : IExperienceDetector
 {
     private static readonly ILogger Logger = TaskControl.Logger;
 

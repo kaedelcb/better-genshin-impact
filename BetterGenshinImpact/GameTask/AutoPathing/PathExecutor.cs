@@ -319,7 +319,7 @@ public partial class PathExecutor
     /// 消费结果 + 释放；创建前防御式释放上一节点残留实例（重试/异常路径泄漏兜底）。
     /// 后台循环 _linkedCts 链接寻路 ct，任务结束 ct 取消即停，无长期泄漏。
     /// </summary>
-    private BetterGenshinImpact.GameTask.AutoFight.ExperienceDetector? _expCapDetector = null;
+    private BetterGenshinImpact.GameTask.AutoFight.IExperienceDetector? _expCapDetector = null;
     
     // 朝向标记位
     private bool _faceToMark = false;
@@ -961,14 +961,24 @@ public partial class PathExecutor
                                     {
                                         _expCapDetector?.Dispose();
                                         _expCapDetector = null;
-                                        var expSysInfo = TaskContext.Instance().SystemInfo;
-                                        var expCaptureRect = expSysInfo.ScaleMax1080PCaptureRect;
-                                        var expAssets = AutoFightAssets.Get(expCaptureRect.Width, expCaptureRect.Height);
-                                        var expRos = expAssets.InitializeRecognitionObjects();
-                                        if (expRos.Count > 0)
+                                        if (MultiplayerCoordinator.ExpCapDetectAllExp)
                                         {
-                                            _expCapDetector = new BetterGenshinImpact.GameTask.AutoFight.ExperienceDetector(expRos, ct);
+                                            // 检测所有经验（精英+小怪）：复用好感任务 exp.png 通用模板
+                                            _expCapDetector = new BetterGenshinImpact.GameTask.AutoFight.AllExpDetector(ct);
                                             _expCapDetector.Start();
+                                        }
+                                        else
+                                        {
+                                            // 仅检测精英经验（57/58/60 数字模板）：复用自动战斗 ExperienceDetector
+                                            var expSysInfo = TaskContext.Instance().SystemInfo;
+                                            var expCaptureRect = expSysInfo.ScaleMax1080PCaptureRect;
+                                            var expAssets = AutoFightAssets.Get(expCaptureRect.Width, expCaptureRect.Height);
+                                            var expRos = expAssets.InitializeRecognitionObjects();
+                                            if (expRos.Count > 0)
+                                            {
+                                                _expCapDetector = new BetterGenshinImpact.GameTask.AutoFight.ExperienceDetector(expRos, ct);
+                                                _expCapDetector.Start();
+                                            }
                                         }
                                     }
 
@@ -3235,6 +3245,7 @@ public partial class PathExecutor
                                 
                                 if (waypoint?.MoveMode == MoveModeEnum.Fly.Code && _MwkFly)
                                 {
+                                    await Delay(100, ct);
                                     var pos33 = region3.SrcMat.At<Vec3b>(1028, 1584);
                                     isFlyingMwk = (pos33.Item0 == 255 && pos33.Item1 == 255 && pos33.Item2 == 255);
                                     

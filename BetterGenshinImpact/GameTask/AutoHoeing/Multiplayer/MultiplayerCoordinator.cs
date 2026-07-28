@@ -215,6 +215,9 @@ public class MultiplayerCoordinator : IAsyncDisposable
     public bool IsExpCapStopEnabled =>
         ExpCapDecisions.IsEnabled(_config.EnableExpCapStop, _client.IsConnected);
 
+    /// <summary>经验上限检测模式：true=检测所有经验，false=只检测精英经验（供 PathExecutor 选择检测器）。multiplayer-hoeing-exp-cap-stop</summary>
+    public bool ExpCapDetectAllExp => _config.ExpCapDetectAllExp;
+
     /// <summary>
     /// 服务端广播"全员达经验上限"→ 触发协调停止（fire-and-forget，照搬集体跳段降级停止模式）。
     /// multiplayer-hoeing-exp-cap-stop R5.1。

@@ -400,6 +400,15 @@ public partial class AutoHoeingConfig : ObservableObject
     private bool _enableExpCapStop = false;
 
     /// <summary>
+    /// 经验上限检测模式（房主设置，同步成员）。默认 false。multiplayer-hoeing-exp-cap-stop。
+    /// - false（默认）：只检测精英经验（57/58/60 数字模板），小怪经验不计入 → 精英上限即判达上限。
+    /// - true：检测所有经验（复用好感任务 exp.png 通用图标），精英+小怪任一掉经验都算"有经验"。
+    /// 依附于 EnableExpCapStop：仅在其为 true 时有意义。
+    /// </summary>
+    [ObservableProperty]
+    private bool _expCapDetectAllExp = false;
+
+    /// <summary>
     /// 启用万叶聚物同步流程。默认 false，用户需显式打勾才启用，避免无万叶队伍走无效流程。
     /// 替代旧的 KazuhaPlayerIndex 字段（kazuha-player-auto-detection：从"按索引指定"改为"运行时声明"）。
     /// 启用判定：EnableKazuhaSync ∧ isConnected。

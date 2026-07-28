@@ -458,6 +458,7 @@ public class AutoHoeingTask : ISoloTask
 
             // === 基于经验判断停止锄地重置（multiplayer-hoeing-exp-cap-stop）===
             _config.EnableExpCapStop = false;
+            _config.ExpCapDetectAllExp = false;
 
             // === 单人调试模式重置（hoeing-multiplayer-solo-debug-mode，纯本地）===
             _config.SoloDebugMode = false;
@@ -845,6 +846,7 @@ public class AutoHoeingTask : ISoloTask
                     LagSegmentThreshold = Math.Clamp(_config.LagSegmentThreshold, 1, 3),
                     // === 基于经验判断停止锄地上传（multiplayer-hoeing-exp-cap-stop）===
                     EnableExpCapStop = _config.EnableExpCapStop,
+                    ExpCapDetectAllExp = _config.ExpCapDetectAllExp,
                     // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params spec §C1）===
                     // 上传源统一取房主当前配置组 _partyConfig（房主锄地实际生效实例，OQ-1）；
                     // _partyConfig 为 null 时退回全局 AutoFightConfig（AutoFight 类）或字段默认。
@@ -933,8 +935,8 @@ public class AutoHoeingTask : ISoloTask
                 _config.SharedFightEndQuorumEnabled, _config.SharedFightEndQuorumRatio);
             _logger.LogInformation("[联机] 落后追赶：启用={E}, 触发阈值={T}段（房主同步，房主与成员都参与）",
                 _config.EnableLaggingCatchUp, _config.LagSegmentThreshold);
-            _logger.LogInformation("[联机] 基于经验判断停止锄地：启用={E}（房主同步，全员连续2场无经验后统一结束）",
-                _config.EnableExpCapStop);
+            _logger.LogInformation("[联机] 基于经验判断停止锄地：启用={E}，检测模式={M}（房主同步，全员连续2场无经验后统一结束）",
+                _config.EnableExpCapStop, _config.ExpCapDetectAllExp ? "所有经验" : "仅精英经验");
             _logger.LogInformation("[联机] =====================================");
 
             _multiplayerCoordinator.OnDegraded += reason =>
@@ -1270,6 +1272,7 @@ public class AutoHoeingTask : ISoloTask
                         _config.LagSegmentThreshold = Math.Clamp(hostConfig.LagSegmentThreshold, 1, 3);
                         // === 基于经验判断停止锄地同步（multiplayer-hoeing-exp-cap-stop，成员回填房主下发值）===
                         _config.EnableExpCapStop = hostConfig.EnableExpCapStop;
+                        _config.ExpCapDetectAllExp = hostConfig.ExpCapDetectAllExp;
 
                         // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params §C2）===
                         ApplyHostExecParams(hostConfig);
@@ -3978,6 +3981,7 @@ public class AutoHoeingTask : ISoloTask
                 Get("sharedFightEndQuorumRatio", _config.SharedFightEndQuorumRatio));
             // === 基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop）：配置组场景必须经此 override 才能传到运行时 EffectiveConfig ===
             _config.EnableExpCapStop = Get("enableExpCapStop", _config.EnableExpCapStop);
+            _config.ExpCapDetectAllExp = Get("expCapDetectAllExp", _config.ExpCapDetectAllExp);
 
             // === 按周期吃食物（multiplayer-hoeing-auto-eat-food-by-period，纯本地）===
             _config.MedicineFoodSlot1 = Get("medicineFoodSlot1", _config.MedicineFoodSlot1);
@@ -4021,6 +4025,7 @@ public class AutoHoeingTask : ISoloTask
             _config.LagSegmentThreshold = 1;
             // === 基于经验判断停止锄地（单机重置为默认值，multiplayer-hoeing-exp-cap-stop）===
             _config.EnableExpCapStop = false;
+            _config.ExpCapDetectAllExp = false;
 
             // 单机模式：重置固定调试线路字段，避免联机全局配置残留影响
             // 如果 settings 显式包含这些键，后续 ContainsKey 逻辑会覆盖回来

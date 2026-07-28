@@ -284,6 +284,14 @@
                                               Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
                                               Text="全员连续2场战斗无怪物经验(达每日上限)后，自动结束本次联机锄地，不再打完剩余线路。"
                                               TextWrapping="Wrap" />
+                                <StackPanel Margin="12,4,0,0">
+                                    <ui:ToggleSwitch Content="检测所有经验(默认关=仅检测精英经验)"
+                                                     IsChecked="{Binding ExpCapDetectAllExp, Mode=TwoWay}"
+                                                     IsEnabled="{Binding ExpCapDetectAllExpEnabled}" />
+                                    <ui:TextBlock Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                  Text="关：只看精英经验，精英达上限即判定(小怪经验不干扰)。开：精英+小怪任一掉经验都算有经验。"
+                                                  TextWrapping="Wrap" />
+                                </StackPanel>
                             </StackPanel>
                         </ui:CardExpander>
 

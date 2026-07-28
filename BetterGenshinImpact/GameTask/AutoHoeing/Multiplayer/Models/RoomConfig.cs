@@ -87,4 +87,6 @@ public class RoomConfig
     // === 基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop, 与服务端 RoomConfig 严格对称）===
     /// <summary>启用基于经验判断停止锄地（房主设置同步成员）。默认 false。multiplayer-hoeing-exp-cap-stop</summary>
     public bool EnableExpCapStop { get; set; } = false;
+    /// <summary>经验上限检测模式：false=只检测精英经验，true=检测所有经验（房主设置同步成员）。默认 false。multiplayer-hoeing-exp-cap-stop</summary>
+    public bool ExpCapDetectAllExp { get; set; } = false;
 }
