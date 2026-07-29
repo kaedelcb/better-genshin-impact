@@ -305,7 +305,7 @@ public partial class PathExecutor
                                     Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
                                     await Delay(300, ct);
                                     Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
-                                    await Delay(700, ct); 
+                                    await Delay(600, ct); 
                                 }
                                 using var region3 = CaptureToRectArea();
 
@@ -313,7 +313,6 @@ public partial class PathExecutor
                                 
                                 if (waypoint?.MoveMode == MoveModeEnum.Fly.Code && _MwkFly)
                                 {
-                                    await Delay(100, ct);
                                     var pos33 = region3.SrcMat.At<Vec3b>(1028, 1584);
                                     st.IsFlyingMwk = (pos33.Item0 == 255 && pos33.Item1 == 255 && pos33.Item2 == 255);
                                     
@@ -425,7 +424,8 @@ public partial class PathExecutor
                                                 > 80 => 900,
                                                 > 70 => 500,
                                                 > 60 => 270,
-                                                > 50 => 80,
+                                                > 55 => 80,
+                                                > 50 => 55,
                                                 // > 40 => 10, 
                                                 _ => 0 
                                             };

@@ -1135,7 +1135,10 @@ public class TpTaskFastDrag
         }
         double maxZoomLevel = _tpConfig.MaxZoomLevel;
         int exceptionTimes = 0;
-        var falseCount = 0;
+        // 亮度过低"连续"轮数：只在亮度恢复正常时清零（连续性中断即重置），
+        // 切区域重识别成功不清此账——否则暗图恒能识别会让它永远 ≤1，"地图亮度过低，重新传送"升级永不触发。
+        // 与 exceptionTimes（中心点跳变账）职责独立，二者不再互相清零。
+        var brightnessLowStreak = 0;
         Point2f mapCenterPoint;
         try
         {
@@ -1229,6 +1232,13 @@ public class TpTaskFastDrag
         // 开始移动并放大地图
         for (var iteration = 0; iteration < _tpConfig.MaxIterations; iteration++)
         {
+            // 联机锄地：传送主循环每轮迭代都视为"仍在合法传送中"，刷新 WorldStateMonitor 抑制计时窗口。
+            // 补齐既有心跳盲区：RefreshTeleportSuppression 原本只在 Tp() 重试 catch 分支调用，覆盖不到
+            // MoveMapTo 内部的长循环（亮度切区域/多轮拖动），导致单次 MoveMapTo 卡超 40s 时被墙钟强拆抑制、
+            // 假判被踢出。此处每轮刷新使墙钟窗口随迭代滑动，传送真在进行就不会被误拆。
+            // 非抑制态 / 单机（CurrentWorldStateMonitor==null）→ null-conditional + 内部 !_isTeleportSuppressed 判空 no-op，单机零感知。
+            PathExecutor.CurrentWorldStateMonitor?.RefreshTeleportSuppression();
+
             // 放大决策抽为纯函数 TeleportZoomDecisions.ShouldZoomInThisIteration（便于 PBT）。
             // 修复：快速拖动模式下 mouseDistance 已进入收工区间(<收工阈值) 且 缩放已在传送点可见档时
             // 不再触发对定位无意义的放大；缩放仍大于显示档(普通点不渲染)时即使到位也继续放大，避免点空。
@@ -1454,15 +1464,15 @@ public class TpTaskFastDrag
                 TaskControl.Logger.LogDebug("地图亮度:{brightness}", brightness);
                 if (brightness < (mapName=="SeaOfBygoneEras" ? 32:50))
                 {
-                    falseCount++;
+                    brightnessLowStreak++;
                 
-                    if (falseCount > 1)
+                    if (brightnessLowStreak > 1)
                     {
                         if (_tpConfig.MapMoveStepDivisor)Simulation.SendInput.Mouse.LeftButtonUp();
                         throw new Exception("地图亮度过低，重新传送");
                     }
 
-                    if (falseCount > 0)
+                    if (brightnessLowStreak > 0)
                     {
                         Simulation.SendInput.Mouse.LeftButtonUp();
                         TaskControl.Logger.LogWarning("地图亮度过低");
@@ -1492,8 +1502,11 @@ public class TpTaskFastDrag
                             // 否则切图前旧地图上累积的 exceptionTimes 会赖到切图后的新地图账上，使容错额度被历史
                             // 欠账吃掉——动态跑道模式阈值仅 1，切图后再有一次跳跃即撞线抛"惯性推算失效"，
                             // 导致"地图正常、传送点已可点击"却误报传送失败重试。
+                            // 只清跳变账 exceptionTimes（切图后新地图不该背旧地图的跳变欠账）。
+                            // 【关键】不再清 brightnessLowStreak：亮度过低是否持续，只由"亮度是否恢复正常"决定；
+                            // 切区域重识别成功≠亮度恢复（暗图半径2500兜底几乎恒能识别）。清零会让连续亮度过低
+                            // 永远升不到 >1，"地图亮度过低，重新传送"永不触发，传送在大地图空转数十秒（本 bug 根因）。
                             exceptionTimes = 0;
-                            falseCount = 0; // 切换地图后识别成功，重置亮度过低计数器，避免死循环
                             TaskControl.Logger.LogDebug("亮度过低切换地图后重新识别中心点成功");
                         }
                         catch (MapPositionNotRecognizedException)
@@ -1506,7 +1519,8 @@ public class TpTaskFastDrag
                 }
                 else
                 {
-                    falseCount = 0;
+                    // 亮度恢复正常 → 连续亮度过低中断，清零累计（连续性语义）
+                    brightnessLowStreak = 0;
                 }  
             }
 

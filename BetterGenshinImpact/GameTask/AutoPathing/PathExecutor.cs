@@ -3088,15 +3088,23 @@ public partial class PathExecutor
                     }
                     
                     //防转圈，卡地形
-                    if (distance < 15)distanceCount = distanceCount+2;
-                    if (distance < 30)distanceCount = distanceCount+1;
-                    if (waypoint?.MoveMode == MoveModeEnum.Dash.Code)
+                    if (distance < 15)
                     {
-                        if (distance > 4 && distance < 30)distanceCount = distanceCount+2; 
+                        distanceCount = distanceCount+2;
                     }
-                    if (distanceCount > 20)
+                    else if (distance < 30)
                     {
-                        Logger.LogWarning("战斗节点靠近超时-1");
+                        distanceCount = distanceCount+1;
+                    }
+                    else if (waypoint?.MoveMode == MoveModeEnum.Dash.Code)
+                    {
+                        if (distance > 4 && distance < 30)distanceCount = distanceCount+1; 
+                    }
+                    
+                    if (distanceCount > 25)
+                    {
+                        Logger.LogWarning("战斗节点靠近超时-1 {t}",distanceCount);
+                        distanceCount = 0;
                         break;
                     }
                                      
