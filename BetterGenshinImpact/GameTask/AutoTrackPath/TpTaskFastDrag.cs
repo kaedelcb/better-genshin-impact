@@ -691,6 +691,40 @@ public class TpTaskFastDrag
         }
 
         // 6. 计算传送点位置并点击
+        // 点击前硬校验（teleport-click-outside-game-window-misclick-fix）：
+        // step5.6b 降档（更放大）可能把 step5 do-while 判为可点的边缘点推出游戏窗口。
+        // 若直接点，多屏环境下越界坐标会打到下方屏幕的其他程序（QQ）→失焦→传送失败。
+        // 故点击前用 IsPointInBigMapWindow（含 IsWithinScreen 屏幕内硬边界）复核落点；
+        // 不可点则回定位循环重拖（用可点档 4.4，把点拖回窗口中段），有限次后仍不可点则抛
+        // 可重试异常走既有 RetryException 流程。正常路径（点本就在窗口内）首轮即通过，零额外开销。
+        int clickGuardRetry = 0;
+        while (!IsPointInBigMapWindow(mapName, bigMapInAllMapRect, x, y))
+        {
+            if (clickGuardRetry++ >= 3)
+            {
+                TaskControl.Logger.LogWarning("点击前校验：传送点多次无法拖入可点窗口（可能被降档推出屏幕），放弃本次点击重试");
+                throw new RetryException("传送点不在可点击窗口内，重新传送");
+            }
+            TaskControl.Logger.LogInformation("点击前校验：传送点不在可点窗口内（第 {N} 次），用可点档重新定位", clickGuardRetry);
+            await MoveMapTo(x, y, mapName, DisplayTpPointZoomLevel, country, retryTimes, keepCurrentZoom: false);
+            if (_tpConfig.MapMoveStepDivisor)
+            {
+                if (_tpConfig.FastDragRecognitionEnabled)
+                {
+                    await WaitMapStableOrTimeoutAsync(ApplyExtraDelay(1000));
+                }
+                else
+                {
+                    await Delay(ApplyExtraDelay(600), ct);
+                }
+            }
+            else
+            {
+                await Delay(ApplyExtraDelay(300), ct);
+            }
+            bigMapInAllMapRect = GetBigMapRect(mapName);
+        }
+
         // Debug.WriteLine($"({x},{y}) 在 {bigMapInAllMapRect} 内，计算它在窗体内的位置");
         // 注意这个坐标的原点是中心区域某个点，所以要转换一下点击坐标（点击坐标是左上角为原点的坐标系），不能只是缩放
         var (clickX, clickY) = ConvertToGameRegionPosition(mapName, bigMapInAllMapRect, x, y);

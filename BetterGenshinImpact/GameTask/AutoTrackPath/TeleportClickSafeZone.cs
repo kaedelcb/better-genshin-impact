@@ -62,10 +62,24 @@ public static class TeleportClickSafeZone
     }
 
     /// <summary>
-    /// 点击点是否可安全点击（不落在任何 UI 危险矩形内）。
+    /// 点击点是否落在游戏窗口（屏幕）内（硬边界，无 margin）。
+    /// 1080P 基准屏幕 [0,1920]×[0,1080]，判定时每维度 × ratio 适配实际分辨率。
+    /// 用途：拦截"计算点击坐标越出游戏窗口"的点——多屏环境下越界点会打到相邻屏幕的其他程序（如 QQ）。
+    /// 【关键】只用硬边界、绝不加 margin：加 margin 会把大量贴边合法传送点误判不可点，
+    /// 导致每次传送多拖 1~2 轮拖慢。贴边但仍在窗口内的点必须保持可点。
+    /// </summary>
+    /// <param name="clickX">点击点 X（已 × ratio 的实际捕获区坐标）。</param>
+    /// <param name="clickY">点击点 Y（已 × ratio 的实际捕获区坐标）。</param>
+    /// <param name="ratio">1080P 到实际分辨率的缩放系数。</param>
+    public static bool IsWithinScreen(double clickX, double clickY, double ratio)
+        => clickX >= 0 && clickX <= ScreenWidth1080 * ratio
+        && clickY >= 0 && clickY <= ScreenHeight1080 * ratio;
+
+    /// <summary>
+    /// 点击点是否可安全点击：必须落在游戏窗口内，且不落在任何 UI 危险矩形内。
     /// </summary>
     public static bool IsClickable(double clickX, double clickY, double ratio)
-        => !IsInDangerZone(clickX, clickY, ratio);
+        => IsWithinScreen(clickX, clickY, ratio) && !IsInDangerZone(clickX, clickY, ratio);
 
     // ===== 早停优化（teleport-drag-early-stop-when-clickable spec）=====
     // 快速拖动定位时，传送点一旦落在含 margin 的可点击安全区就提前 break 去点击，
