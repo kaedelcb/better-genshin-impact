@@ -330,7 +330,7 @@
                                         <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
                                             <Setter Property="Visibility" Value="Visible"/>
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding PathingConfig.HurryOnAvatar}" Value="">
+                                                <DataTrigger Binding="{Binding PathingConfig.TeapotHurryOnAvatar}" Value="">
                                                     <Setter Property="IsEnabled" Value="False"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
@@ -359,7 +359,7 @@
                                         <Style TargetType="ui:TextBox" BasedOn="{StaticResource {x:Type ui:TextBox}}">
                                             <Setter Property="Visibility" Value="Visible"/>
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding PathingConfig.HurryOnAvatar}" Value="">
+                                                <DataTrigger Binding="{Binding PathingConfig.TeapotHurryOnAvatar}" Value="">
                                                     <Setter Property="IsEnabled" Value="False"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
@@ -381,8 +381,8 @@
                                   Grid.RowSpan="2"
                                   Grid.Column="3"
                                   Width="100"
-                                  ItemsSource="{Binding PathingConfig.HurryOnAvatarList}"
-                                  SelectedItem="{Binding PathingConfig.HurryOnAvatar}" />
+                                  ItemsSource="{Binding PathingConfig.TeapotHurryOnAvatarList}"
+                                  SelectedItem="{Binding PathingConfig.TeapotHurryOnAvatar}" />
                         
                         <ui:TextBlock Grid.Row="0"
                                       Grid.RowSpan="2"
@@ -406,7 +406,7 @@
                                                      <Setter Property="IsEnabled" Value="False"/>
                                                      <Style.Triggers>
                                                          <!-- 当 HurryOnAvatar 等于 '玛位卡' 时启用 -->
-                                                         <DataTrigger Binding="{Binding PathingConfig.HurryOnAvatar}" Value="玛薇卡">
+                                                         <DataTrigger Binding="{Binding PathingConfig.TeapotHurryOnAvatar}" Value="玛薇卡">
                                                              <Setter Property="IsEnabled" Value="True"/>
                                                          </DataTrigger>
                                                      </Style.Triggers>
@@ -439,7 +439,7 @@
                                     <Setter Property="IsEnabled" Value="False"/>
                                     <Style.Triggers>
                                         <!-- 当 HurryOnAvatar 等于 '玛薇卡' 时启用 -->
-                                        <DataTrigger Binding="{Binding PathingConfig.HurryOnAvatar}" Value="玛薇卡">
+                                        <DataTrigger Binding="{Binding PathingConfig.TeapotHurryOnAvatar}" Value="玛薇卡">
                                             <Setter Property="IsEnabled" Value="True"/>
                                         </DataTrigger>
                                     </Style.Triggers>
@@ -503,8 +503,8 @@
                                       Grid.RowSpan="2"
                                       Grid.Column="1"
                                       MinWidth="120"
-                                      ItemsSource="{Binding PathingConfig.HurryOnAvatarList}"
-                                      SelectedItem="{Binding PathingConfig.HurryOnAvatar}" />
+                                      ItemsSource="{Binding PathingConfig.NewHurryOnAvatarList}"
+                                      SelectedItem="{Binding PathingConfig.NewHurryOnAvatar}" />
                         </Grid>
 
                         <Grid Margin="16,0,16,10">

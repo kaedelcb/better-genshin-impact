@@ -32,7 +32,7 @@ internal static class RecoverTimingMigration
 }
 
 [Serializable]
-public partial class PathingPartyConfig : ObservableObject
+public partial class PathingPartyConfig : ObservableObject, IJsonOnDeserialized
 {
     // 配置是否启用，不启用会使用地图追踪内的条件配置
     [ObservableProperty]
@@ -176,16 +176,37 @@ public partial class PathingPartyConfig : ObservableObject
     [ObservableProperty]
     private int _distance = 45;
     
+    // 公版/新版赶路角色列表（UseNewHurrySystem == true）
     [JsonIgnore]
-    public List<string> HurryOnAvatarList => UseNewHurrySystem
-        ? ["","自动","玛薇卡","闲云","桑多涅","恰斯卡","流浪者","伊法","希诺宁"]
-        : ["","自动","玛薇卡","瓦雷莎","希诺宁"];
+    public List<string> NewHurryOnAvatarList { get; } = ["","自动","玛薇卡","闲云","桑多涅","恰斯卡","流浪者","伊法","希诺宁"];
+
+    // 茶包版赶路角色列表（UseNewHurrySystem == false）
+    [JsonIgnore]
+    public List<string> TeapotHurryOnAvatarList { get; } = ["","自动","玛薇卡","瓦雷莎","希诺宁"];
+
+    // 当前生效版本对应的角色列表（业务逻辑与 InitializeTravelMode 使用）
+    [JsonIgnore]
+    public List<string> HurryOnAvatarList => UseNewHurrySystem ? NewHurryOnAvatarList : TeapotHurryOnAvatarList;
     
     [JsonIgnore]
     public List<string> TravelModeList { get; } = ["精准靠近","连续赶路"];
-    
+
+    // 茶包版记忆的赶路角色（方案 A：两个版本各记各的，切换时互不影响）。
     [ObservableProperty]
-    private string _hurryOnAvatar = "";
+    [NotifyPropertyChangedFor(nameof(HurryOnAvatar))]
+    private string _teapotHurryOnAvatar = "";
+
+    // 公版/新版记忆的赶路角色（方案 A：两个版本各记各的，切换时互不影响）。
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HurryOnAvatar))]
+    private string _newHurryOnAvatar = "";
+
+    // 当前生效的赶路角色：按版本返回对应记忆字段。
+    // 只读计算属性，业务逻辑（PathExecutor / SkillBoostHelper）保持零改动地读取它。
+    // 切换版本时通过 UseNewHurrySystem 的 NotifyPropertyChangedFor 触发本属性刷新，
+    // 因此各版本各自的选择在来回切换时天然保留，不会互相覆盖或显示空白。
+    [JsonIgnore]
+    public string HurryOnAvatar => UseNewHurrySystem ? NewHurryOnAvatar : TeapotHurryOnAvatar;
     
     [ObservableProperty]
     private string _travelMode = "精准靠近";
@@ -208,8 +229,43 @@ public partial class PathingPartyConfig : ObservableObject
         }
     }
     
+    // 切换赶路系统版本会改变 HurryOnAvatarList（可选列表）与 HurryOnAvatar（当前生效角色，
+    // 按版本返回对应记忆字段）。二者都需在切换时刷新，否则 ComboBox 不实时更新（旧 bug）。
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HurryOnAvatarList))]
+    [NotifyPropertyChangedFor(nameof(HurryOnAvatar))]
     private bool _useNewHurrySystem = false;
+
+    // 旧配置迁移：历史版本只存单一 hurryOnAvatar 字段。反序列化完成后（此时 UseNewHurrySystem
+    // 已确定，与字段读取顺序无关），把旧值回填到当时激活版本对应的记忆字段，避免升级后丢选择。
+    // 新配置不再写出 hurryOnAvatar（HurryOnAvatar 已 [JsonIgnore]），故本迁移只对旧配置生效一次。
+    // public 属性 + public set（供 STJ 反序列化写入旧键）+ private get（序列化时无可访问 getter，
+    // STJ 自动跳过，不再写出该键）。故意不用 [JsonInclude]：它对非 public 属性会在运行时抛异常。
+    [JsonPropertyName("hurryOnAvatar")]
+    public string? LegacyHurryOnAvatar { private get; set; }
+
+    void IJsonOnDeserialized.OnDeserialized()
+    {
+        if (!string.IsNullOrEmpty(LegacyHurryOnAvatar))
+        {
+            // 仅当目标版本记忆字段为空（未被新格式覆盖）时才迁移，避免覆盖新写入的值。
+            if (UseNewHurrySystem)
+            {
+                if (string.IsNullOrEmpty(NewHurryOnAvatar) && NewHurryOnAvatarList.Contains(LegacyHurryOnAvatar))
+                {
+                    NewHurryOnAvatar = LegacyHurryOnAvatar;
+                }
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(TeapotHurryOnAvatar) && TeapotHurryOnAvatarList.Contains(LegacyHurryOnAvatar))
+                {
+                    TeapotHurryOnAvatar = LegacyHurryOnAvatar;
+                }
+            }
+            LegacyHurryOnAvatar = null;
+        }
+    }
 
     [ObservableProperty]
     private bool _switchToWalkEnabled = false;
