@@ -194,7 +194,7 @@ public class Genshin
     /// <param name="zoomLevel">目标缩放等级，范围 1.0-6.0</param>
     public async Task SetBigMapZoomLevel(double zoomLevel)
     {
-        TpTask tpTask = new(CancellationContext.Instance.Cts.Token);
+        TpTaskOfficial tpTask = new(CancellationContext.Instance.Cts.Token);
         double currentZoomLevel = GetBigMapZoomLevel();
         await tpTask.AdjustMapZoomLevel(currentZoomLevel, zoomLevel);
     }
@@ -214,7 +214,7 @@ public class Genshin
     /// <returns>包含X和Y坐标的Point2f结构体</returns>
     public Point2f? GetPositionFromBigMap()
     {
-        TpTask tpTask = new TpTask(CancellationContext.Instance.Cts.Token);
+        TpTaskOfficial tpTask = new TpTaskOfficial(CancellationContext.Instance.Cts.Token);
         return tpTask.GetPositionFromBigMap(MapTypes.Teyvat.ToString());
     }
 
