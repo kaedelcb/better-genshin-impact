@@ -253,7 +253,9 @@ public partial class OneDragonFlowConfig : ObservableObject
 
     [ObservableProperty]
     private bool _autoBossRewardRecognitionEnabled = false;
-
+    
+    [ObservableProperty]
+    private int _autoBossTimeout = 240;
     partial void OnAutoBossSpecifyRunCountChanged(bool value)
     {
         if (value)

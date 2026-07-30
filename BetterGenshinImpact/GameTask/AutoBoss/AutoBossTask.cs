@@ -907,7 +907,7 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
             return;
         }
 
-        // 保留原 AutoBoss 行为：战斗开始前先切到策略首个角色。
+// 保留原 AutoBoss 行为：战斗开始前先切到策略首个角色。
         var combatScenes = GetCombatScenesWithRetry();
         FindCombatScriptAndSwitchAvatar(combatScenes);
 
@@ -960,9 +960,9 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
             ExpKazuhaPickup = false,
             KazuhaPartyName = string.Empty,
             BattleThresholdForLoot = -1,
-            OnlyPickEliteDropsMode = "DisableAutoPickupForNonElite"
+            OnlyPickEliteDropsMode = "DisableAutoPickupForNonElite",
+            Timeout = _taskParam.Timeout
         };
-
         return taskParam;
     }
 
