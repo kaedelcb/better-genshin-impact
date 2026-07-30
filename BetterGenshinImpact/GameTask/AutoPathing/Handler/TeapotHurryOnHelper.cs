@@ -200,7 +200,7 @@ public partial class PathExecutor
                             {
                                 st.MavikaFlyCount++;
                                 
-                                if (st.MavikaFlyCount > (st.MwktiaoIn?8:5) && avatar.IsActive(screen2))
+                                if (st.MavikaFlyCount > (st.MwktiaoIn?7:4) && avatar.IsActive(screen2))
                                 {
                                     if(nextWaypoint?.MoveMode != MoveModeEnum.Fly.Code && Bv.GetMotionStatus(screen2) == MotionStatus.Fly)Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
                                     if(st.MwktiaoIn &&colorDifference44 <15)Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
@@ -420,12 +420,13 @@ public partial class PathExecutor
                                                 > 180 => 4500,
                                                 > 160 => 4000,
                                                 > 140 => 3500,
-                                                > 100 => 2400,
+                                                > 115 => 2400,
+                                                > 100 => 2100,
                                                 > 80 => 900,
                                                 > 70 => 500,
                                                 > 60 => 270,
                                                 > 55 => 80,
-                                                > 50 => 55,
+                                                > 50 => 10,
                                                 // > 40 => 10, 
                                                 _ => 0 
                                             };
@@ -492,6 +493,8 @@ public partial class PathExecutor
                                                     await detectTask;
                                                 }
                                             }
+
+                                            Simulation.SendInput.SimulateAction(GIActions.Jump);
                                             waypoint.MoveMode = MoveModeEnum.Fly.Code;
                                             st.HurryOnLogo = false;
                                         }
