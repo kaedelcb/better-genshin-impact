@@ -841,10 +841,10 @@ public class Avatar
                         return;
                     }
 
-                    for (int i = 0; i < 3; i++)
+                    for (int i = 0; i < 4; i++)
                     {
                         Charge(450);
-                        Sleep(150, Ct);
+                        Sleep(i==3?400:150, Ct);
                         using var region13 = CaptureToRectArea();
                         var bb = IsQi(region13);
                         if (bb)
@@ -1099,7 +1099,7 @@ public class Avatar
                         for (int jj = 0; jj < 3; jj++)
                         {
                             Charge(350);
-                            Sleep(100, Ct);
+                            Sleep(i==3?400:150, Ct);
                             using var region13 = CaptureToRectArea();
                             var bb = IsQi(region13);
                             if (bb)
