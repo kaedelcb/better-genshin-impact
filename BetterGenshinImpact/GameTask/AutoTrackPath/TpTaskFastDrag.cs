@@ -353,6 +353,19 @@ public class TpTaskFastDrag
             minZoomLevel = Math.Max(minZoomLevel, 2.0);
         }
 
+        // 点击前"降档目标"缩放（clickZoomLevel）：
+        //   缩放数字越大越缩小，越小越放大（相邻传送点在屏幕上越分散）。
+        //   步骤4已在 minZoomLevel(旧日之海≥2.0) 把相邻点拉开定位，但边沿重试(5.6)/兜底(5.6b)/
+        //   点击前重拖(步骤6) 历史上一律把缩放降回固定的 DisplayTpPointZoomLevel(4.4)——4.4 比
+        //   2.0 更"缩小"，会让刚被拉开的相邻点在屏幕上重新挤近，偶发点到隔壁传送点。
+        //   仅对旧日之海：降档目标取 Math.Min(4.4, minZoomLevel)，保留步骤4的相邻点间距。
+        //     - minZoomLevel=2.0 → Math.Min(4.4,2.0)=2.0：更放大、点更分散，且 2.0≤4.4 图标正常渲染、≥2.0 画面不暗。
+        //     - minZoomLevel≥4.4（远距离点）→ Math.Min=4.4：与旧行为一致，远点本就无需额外分散。
+        //   非旧日之海：clickZoomLevel 恒 = DisplayTpPointZoomLevel(4.4)，所有下游降档逐字节不变、零回归。
+        double clickZoomLevel = mapName == "SeaOfBygoneEras"
+            ? Math.Min(DisplayTpPointZoomLevel, minZoomLevel)
+            : DisplayTpPointZoomLevel;
+
         // 特殊相邻传送点命中判定基准（决策 e）：用最近真实传送点坐标，独立于 force 的 (x,y)。仅取值，无 IO。
         double adjBaseX = nTpPoints[0].X;
         double adjBaseY = nTpPoints[0].Y;
@@ -587,11 +600,13 @@ public class TpTaskFastDrag
         {
             using var raBack = CaptureToRectArea();
             double zoomBack = GetBigMapZoomLevel(raBack);
-            if (Math.Abs(zoomBack - DisplayTpPointZoomLevel) > _tpConfig.PrecisionThreshold)
+            // 降档目标由 DisplayTpPointZoomLevel 改为 clickZoomLevel：非旧日之海仍 = 4.4（逐字节不变），
+            // 旧日之海 = Math.Min(4.4, minZoomLevel)，避免把步骤4拉开的相邻点重新挤近导致点错隔壁。
+            if (Math.Abs(zoomBack - clickZoomLevel) > _tpConfig.PrecisionThreshold)
             {
-                await AdjustMapZoomLevel(zoomBack, DisplayTpPointZoomLevel);
+                await AdjustMapZoomLevel(zoomBack, clickZoomLevel);
                 await Delay(ApplyExtraDelay(200), ct);
-                TaskControl.Logger.LogInformation("边沿重试：点击前缩放降回 {Z:0.0} 恢复传送点渲染", DisplayTpPointZoomLevel);
+                TaskControl.Logger.LogInformation("边沿重试：点击前缩放降回 {Z:0.0} 恢复传送点渲染", clickZoomLevel);
                 bigMapInAllMapRect = GetBigMapRect(mapName);
             }
         }
@@ -607,11 +622,13 @@ public class TpTaskFastDrag
         {
             using var raCollapse = CaptureToRectArea();
             double zoomNow = GetBigMapZoomLevel(raCollapse);
-            if (ShouldCollapseZoomBeforeClick(zoomNow, DisplayTpPointZoomLevel, _tpConfig.PrecisionThreshold))
+            // 降档目标由 DisplayTpPointZoomLevel 改为 clickZoomLevel：非旧日之海仍 = 4.4（触发阈值与降档目标逐字节不变），
+            // 旧日之海 = Math.Min(4.4, minZoomLevel)（2.0≤4.4，图标正常渲染、画面不暗），保留步骤4相邻点间距。
+            if (ShouldCollapseZoomBeforeClick(zoomNow, clickZoomLevel, _tpConfig.PrecisionThreshold))
             {
-                await AdjustMapZoomLevel(zoomNow, DisplayTpPointZoomLevel);
+                await AdjustMapZoomLevel(zoomNow, clickZoomLevel);
                 await Delay(ApplyExtraDelay(200), ct);
-                TaskControl.Logger.LogInformation("点击前缩放兜底：{From:0.0} 高于可点击档，降回 {To:0.0} 恢复传送点渲染", zoomNow, DisplayTpPointZoomLevel);
+                TaskControl.Logger.LogInformation("点击前缩放兜底：{From:0.0} 高于可点击档，降回 {To:0.0} 恢复传送点渲染", zoomNow, clickZoomLevel);
                 bigMapInAllMapRect = GetBigMapRect(mapName);
             }
         }
@@ -706,7 +723,9 @@ public class TpTaskFastDrag
                 throw new RetryException("传送点不在可点击窗口内，重新传送");
             }
             TaskControl.Logger.LogInformation("点击前校验：传送点不在可点窗口内（第 {N} 次），用可点档重新定位", clickGuardRetry);
-            await MoveMapTo(x, y, mapName, DisplayTpPointZoomLevel, country, retryTimes, keepCurrentZoom: false);
+            // 重拖目标缩放由 DisplayTpPointZoomLevel 改为 clickZoomLevel：非旧日之海仍 = 4.4（逐字节不变），
+            // 旧日之海 = Math.Min(4.4, minZoomLevel)，与 5.6/5.6b 一致，避免重拖把相邻点重新挤近。
+            await MoveMapTo(x, y, mapName, clickZoomLevel, country, retryTimes, keepCurrentZoom: false);
             if (_tpConfig.MapMoveStepDivisor)
             {
                 if (_tpConfig.FastDragRecognitionEnabled)
@@ -729,6 +748,15 @@ public class TpTaskFastDrag
         // 注意这个坐标的原点是中心区域某个点，所以要转换一下点击坐标（点击坐标是左上角为原点的坐标系），不能只是缩放
         var (clickX, clickY) = ConvertToGameRegionPosition(mapName, bigMapInAllMapRect, x, y);
         using var ra4 = CaptureToRectArea();
+        // [点击诊断] 仅旧日之海（门控，避免对其它地图每次点击多跑一次 GetBigMapZoomLevel 识别）：
+        //   记录"点击那一刻"的实测缩放 + 定位矩形 + 目标点(原神) + 计算落点，供偶发误点复现时归因。
+        if (mapName == "SeaOfBygoneEras")
+        {
+            Logger.LogDebug(
+                "[点击诊断] map={Map} retry={Retry} 实测缩放={Zoom:0.00} 定位矩形={Rect} 目标点(原神)=({X:0},{Y:0}) 计算落点=({CX:0},{CY:0})",
+                mapName, retryTimes, GetBigMapZoomLevel(ra4), bigMapInAllMapRect, x, y, clickX, clickY);
+        }
+
         ra4.ClickTo((int)clickX, (int)clickY-12);
 
         // 7. 触发一次快速传送功能

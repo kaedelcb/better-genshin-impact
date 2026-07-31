@@ -83,7 +83,12 @@ public class SeaOfBygoneErasMap : SceneBaseMap
         return base.GetBigMapRect(greyBigMapMat);
     }
 
-    private Rect GetBigMapRectByTeleports(Mat greyBigMapMat)
+    /// <summary>
+    /// 模板匹配 + 非极大抑制：在灰度大地图截图上找出所有传送点图标的"原始匹配点"（模板左上角，未 +12 居中）。
+    /// 由几何拟合定位（GetBigMapRectByTeleports）与点击纹理吸附（DetectTeleportScreenPixels）共用，
+    /// 保证两条路径的检测口径逐字节一致。纯检测、无副作用、可重复调用（CQS 查询）。
+    /// </summary>
+    private static List<Point> DetectTeleportRawPoints(Mat greyBigMapMat)
     {
         // It's fine to miss some, but definitely no false positive results.
         const double threshold = 0.99;
@@ -129,8 +134,18 @@ public class SeaOfBygoneErasMap : SceneBaseMap
             }
         }
 
+        return teleportPoints;
+    }
+
+    private Rect GetBigMapRectByTeleports(Mat greyBigMapMat)
+    {
+        var teleportPoints = DetectTeleportRawPoints(greyBigMapMat);
+
         if (teleportPoints.Count < 2)
         {
+            // [定位诊断] 屏幕上可见传送点 < 2，无法反推矩形（放大档最易发生）。
+            // 独立地图靠可见传送点数量反推 bigMapInAllMapRect，可见点越少 scale 越不稳、落点越易偏。
+            TaskControl.Logger.LogDebug("[旧日之海定位] 可见传送点={Count} (<2)，本次矩形识别失败，走 SIFT 兜底", teleportPoints.Count);
             return default;
         }
         teleportPoints = teleportPoints.Select(i => new Point(i.X + 12, i.Y + 12)).
@@ -234,6 +249,70 @@ public class SeaOfBygoneErasMap : SceneBaseMap
                 }
             }
         }
+        // [最小二乘精化] 上面的相似变换(scale+平移，无旋转)仅由 2 个参照点(rp0,rp1↔mp0,mp1)外推，
+        //   对这两点的像素噪声极敏感（实测 scale 在 0.68~0.81 抖、残差逼近拒绝线）。尤其"站在目标传送点上"时，
+        //   大地图以玩家为中心、目标图标正好被玩家箭头遮住检测不到，2 点拟合缺正中心锚点 → 矩形整体偏移
+        //   → 落点偏出目标数百像素点在空白（"选项列表不存在传送点"）。
+        //   这里用"当前检测到的全部传送点"对最佳变换做一次最小二乘精化：以 2 点变换建立 screen↔map 内点对应，
+        //   对所有内点闭式重解 各向同性 scale + 平移。10+ 点铺满全屏、约束强，少一个中心点几乎无影响，
+        //   矩形不再歪、落点回到目标真实屏幕位置（箭头底下的点击热区仍响应）。
+        //   仅在精化后残差 ≤ 原残差时才采用（防内点误配把结果带偏）→ 最坏 no-op、零回归。纯几何、无副作用。
+        if (minDeviation < double.MaxValue)
+        {
+            const double inlierThreshold = 60.0; // map 图像坐标系下判定"屏幕点↔地图点"为同一点的最大距离
+            var pairs = new List<(Point s, Point m)>();
+            foreach (var s in teleportPoints)
+            {
+                var tp = new Point(s.X * transformParamScale + transformParamDeltaX, s.Y * transformParamScale + transformParamDeltaY);
+                Point nearest = default;
+                double nd = double.MaxValue;
+                foreach (var m in MapTeleports)
+                {
+                    double d = m.DistanceTo(tp);
+                    if (d < nd) { nd = d; nearest = m; }
+                }
+                if (nd < inlierThreshold) { pairs.Add((s, nearest)); }
+            }
+
+            if (pairs.Count >= 3)
+            {
+                double sxBar = pairs.Average(p => (double)p.s.X);
+                double syBar = pairs.Average(p => (double)p.s.Y);
+                double mxBar = pairs.Average(p => (double)p.m.X);
+                double myBar = pairs.Average(p => (double)p.m.Y);
+                double num = 0, den = 0;
+                foreach (var (s, m) in pairs)
+                {
+                    double dsx = s.X - sxBar, dsy = s.Y - syBar;
+                    double dmx = m.X - mxBar, dmy = m.Y - myBar;
+                    num += dsx * dmx + dsy * dmy;
+                    den += dsx * dsx + dsy * dsy;
+                }
+                if (den > 1e-6)
+                {
+                    double lsScale = num / den;
+                    double lsDeltaX = mxBar - lsScale * sxBar;
+                    double lsDeltaY = myBar - lsScale * syBar;
+                    double lsDeviation = 0;
+                    foreach (var s in teleportPoints)
+                    {
+                        var tp = new Point(s.X * lsScale + lsDeltaX, s.Y * lsScale + lsDeltaY);
+                        lsDeviation += MapTeleports.Select(m => m.DistanceTo(tp)).Min();
+                    }
+                    if (lsScale > 0 && lsDeviation <= minDeviation)
+                    {
+                        TaskControl.Logger.LogDebug(
+                            "[旧日之海定位] 最小二乘精化：内点={N} scale {S0:0.0000}->{S1:0.0000} 残差 {D0:0.0}->{D1:0.0}",
+                            pairs.Count, transformParamScale, lsScale, minDeviation, lsDeviation);
+                        transformParamScale = lsScale;
+                        transformParamDeltaX = lsDeltaX;
+                        transformParamDeltaY = lsDeltaY;
+                        minDeviation = lsDeviation;
+                    }
+                }
+            }
+        }
+
         // Logger.LogInformation("Min deviation: {d}", minDeviation);
         if (minDeviation < 200)
         {
@@ -244,10 +323,18 @@ public class SeaOfBygoneErasMap : SceneBaseMap
             var pTopLeft = transformPoint(new Point(0, 0));
             var pBottomRight = transformPoint(new Point(greyBigMapMat.Width, greyBigMapMat.Height));
             // Logger.LogInformation("Rect: {a}, {b}", pTopLeft, pBottomRight);
+            // [定位诊断] 矩形识别成功。minDeviation 是拟合残差：越接近 200 越勉强（落点越可能偏），
+            //   可见传送点越少残差越易偏大。偶发误点复现时看这里的 count 与 minDeviation。
+            TaskControl.Logger.LogDebug(
+                "[旧日之海定位] 矩形识别成功 可见传送点={Count} 拟合残差minDeviation={Dev:0.0} scale={Scale:0.0000}",
+                teleportPoints.Count, minDeviation, transformParamScale);
             return new Rect(pTopLeft.X, pTopLeft.Y, pBottomRight.X - pTopLeft.X, pBottomRight.Y - pTopLeft.Y);
         }
 
-
+        // [定位诊断] 拟合残差超阈值(≥200)，矩形识别失败，走 SIFT 兜底。残差过大说明可见传送点分布/数量不足以稳定定标。
+        TaskControl.Logger.LogDebug(
+            "[旧日之海定位] 矩形识别失败 可见传送点={Count} 拟合残差minDeviation={Dev:0.0} (≥200)，走 SIFT 兜底",
+            teleportPoints.Count, minDeviation);
         return default;
     }
 
