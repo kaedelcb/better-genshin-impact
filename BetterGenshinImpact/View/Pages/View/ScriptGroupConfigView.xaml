@@ -450,8 +450,7 @@
                     </Grid>
                 <!-- 新版赶路系统（实验性） -->
                 <ui:CardExpander Margin="16,5,16,10" 
-                                 ContentPadding="0"
-                                 IsExpanded="{Binding PathingConfig.UseNewHurrySystem, Mode=TwoWay}">
+                                 ContentPadding="0">
                     <ui:CardExpander.Header>
                         <Grid>
                             <Grid.RowDefinitions>
@@ -479,7 +478,7 @@
                                              IsChecked="{Binding PathingConfig.UseNewHurrySystem, Mode=TwoWay}" />
                         </Grid>
                     </ui:CardExpander.Header>
-                    <StackPanel Visibility="{Binding PathingConfig.UseNewHurrySystem, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel>
                         <Grid Margin="16,16,16,10">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
