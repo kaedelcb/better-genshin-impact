@@ -62,6 +62,13 @@ public class SyncBarrier
         };
 
         _client.AllArrived += handler;
+        Action<string>? roomClosedHandler = null;
+        roomClosedHandler = (reason) =>
+        {
+            _logger.LogWarning("[SyncBarrier] 收到 RoomClosed，停止等待集合点: {SyncId}，原因: {Reason}", syncPointId, reason);
+            tcs.TrySetResult(false);
+        };
+        _client.RoomClosed += roomClosedHandler;
         try
         {
             // 上报到达（带预期人数）
@@ -103,6 +110,7 @@ public class SyncBarrier
         finally
         {
             _client.AllArrived -= handler;
+            _client.RoomClosed -= roomClosedHandler;
         }
     }
 

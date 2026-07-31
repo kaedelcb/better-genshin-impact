@@ -87,6 +87,9 @@ public class AutoHoeingTask : ISoloTask
     // 其它停止路径（超时/被踢/掉房/正常跑完）不触发，保持原行为。
     private volatile bool _expCapStopTriggered;
 
+    // 本次任务开始时间（用于上限退出时输出总用时汇总）。在 Start() 入口设置。
+    private DateTime _taskStartTime = DateTime.MinValue;
+
     // 联机组队是否达到"可开锄"状态。仅在 InitializeMultiplayerAsync 成功走到末尾时置 true；
     // 任何失败/降级路径（连不上服务器、加不进房间、拿不到房主 UID、房主未就绪超时、
     // 加入世界失败、等待组队超时、初始化异常）都会提前 return，标志保持 false。
@@ -409,6 +412,7 @@ public class AutoHoeingTask : ISoloTask
 
     public async Task Start(CancellationToken ct)
     {
+        _taskStartTime = DateTime.Now;
         _ct = ct;
         _config = TaskContext.Instance().Config.AutoHoeingConfig;
 
@@ -587,9 +591,13 @@ public class AutoHoeingTask : ISoloTask
                 // 房主和成员都退出联机世界回到单人世界
                 try
                 {
+                    _logger.LogInformation("[联机] ===== 联机锄地退出（原因: {Reason}）=====", _stopReason);
                     _logger.LogInformation("[联机] {Role}退出联机世界",
                         _config.MultiplayerRole == "member" ? "成员" : "房主");
-                    using var leaveWorldCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                    // 使用 60 秒超时，给 LeaveWorldAsync 的 5 次重试留出充足时间。
+                    // 每次重试约需 25-30 秒（回主界面 10s + 开F2 + 弹窗 8s + 等待加载 10s + 复核 1.5s），
+                    // 60 秒足够 2 次完整重试。15 秒太紧，一次弹窗处理稍慢就超时，后续重试全浪费。
+                    using var leaveWorldCts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
                     var autoParty = new AutoPartyTask();
                     var left = await autoParty.LeaveWorldAsync(leaveWorldCts.Token);
                     if (!left)
@@ -610,6 +618,30 @@ public class AutoHoeingTask : ISoloTask
                         {
                             _logger.LogWarning(exTp, "[联机][经验上限] 传送七天神像失败（忽略）");
                         }
+
+                        // === 基于经验判断停止锄地：输出完整汇总日志（multiplayer-hoeing-exp-cap-stop）===
+                        // 经验上限触发的退出在 ProcessRoutesByGroup 中被 OperationCanceledException 中断，
+                        // 路线循环末尾的汇总日志（完成数/跳过数/用时）不会被执行。
+                        // 这里在 finally 块中补输出，确保用户能看到本次锄地的完整信息。
+                        var taskElapsed = DateTime.Now - _taskStartTime;
+                        _logger.LogInformation(
+                            "[联机][经验上限] ===== 本次锄地汇总（经验上限退出）=====");
+                        _logger.LogInformation(
+                            "[联机][经验上限] 总用时: {H}时{Min}分{S}秒",
+                            (int)taskElapsed.TotalHours, taskElapsed.Minutes, taskElapsed.Seconds);
+                        _logger.LogInformation(
+                            "[联机][经验上限] 停止原因: {Reason}", _stopReason);
+                        _logger.LogInformation(
+                            "[联机][经验上限] 角色: {Role}",
+                            _config.MultiplayerRole == "member" ? "成员" : "房主");
+                        if (_config.MultiWorldEnabled)
+                        {
+                            _logger.LogInformation(
+                                "[联机][经验上限] 多世界模式: 启用（配置 {Count} 轮）",
+                                _config.MultiWorldCount);
+                        }
+                        _logger.LogInformation(
+                            "[联机][经验上限] ==========================================");
                     }
                 }
                 catch (Exception ex)
@@ -1923,9 +1955,10 @@ public class AutoHoeingTask : ISoloTask
             {
                 _logger.LogInformation("[多世界] 第 {Round} 轮锄地完成，等待全员同步", round + 1);
                 // 轮次切换期间忽略 WorldStateMonitor 的 IsInMultiGame 检测（需求 2）
-                // SyncRoundEndAsync 用 PartyTimeoutSeconds 构造 SyncBarrier，墙钟兜底必须 > 该集合点超时，
-                // 故传 PartyTimeoutSeconds，由 Resolve 叠加 60s 余量后作为兜底上界（Property 1）。
-                _worldStateMonitor?.BeginRoundSwitch(_config.PartyTimeoutSeconds);
+                // SyncRoundEndAsync 用固定 120s 构造 SyncBarrier（轮次同步只需等所有人跑完当前轮，
+                // 不应使用 PartyTimeoutSeconds 组队超时，用户可能设得很长如 3600s）。
+                // 墙钟兜底同样以 120s 为基准 + 60s 余量 = 180s，确保兜底 > 集合点超时。
+                _worldStateMonitor?.BeginRoundSwitch(120);
                 await SyncRoundEndAsync(round, client);
 
                 // 离开世界：成员先主动离开，房主等待后再关闭房间
@@ -2404,8 +2437,9 @@ public class AutoHoeingTask : ISoloTask
         {
             var syncId = $"round_end_{round}";
             _logger.LogInformation("[多世界] 同步轮次结束: {SyncId}", syncId);
-            // 用 PartyTimeoutSeconds 作为超时，因为需要等所有人跑完本轮全部路线
-            var barrier = new SyncBarrier(client, _config.PartyTimeoutSeconds);
+            // 用固定 120s 作为超时：轮次同步只需等所有人跑完本轮路线，不应使用
+            // PartyTimeoutSeconds（组队超时，用户可能设得很长如 3600s）。
+            var barrier = new SyncBarrier(client, 120);
             await barrier.WaitAsync(syncId, _ct);
         }
         catch (OperationCanceledException) { throw; }
@@ -3474,12 +3508,31 @@ public class AutoHoeingTask : ISoloTask
         }
 
         // 本轮锄地结束统计：用时 + 完成/跳过线路数（需求：每轮结束输出统计信息）
-        var roundElapsed = DateTime.Now - groupStartTime;
-        _logger.LogInformation(
-            "{Prefix}本轮锄地结束统计：用时 {H}时{Min}分{S}秒，完成 {Done} 条 / 跳过 {Skip} 条（计划共 {Total} 条）",
-            roundPrefix,
-            (int)roundElapsed.TotalHours, roundElapsed.Minutes, roundElapsed.Seconds,
-            completedCount, skippedCount, groupRoutes.Count);
+        // 使用 try-catch 确保即使被取消（如经验上限触发）也能输出汇总日志。
+        try
+        {
+            var roundElapsed = DateTime.Now - groupStartTime;
+            _logger.LogInformation(
+                "{Prefix}本轮锄地结束统计：用时 {H}时{Min}分{S}秒，完成 {Done} 条 / 跳过 {Skip} 条（计划共 {Total} 条）",
+                roundPrefix,
+                (int)roundElapsed.TotalHours, roundElapsed.Minutes, roundElapsed.Seconds,
+                completedCount, skippedCount, groupRoutes.Count);
+        }
+        catch (OperationCanceledException)
+        {
+            // 取消异常：汇总日志已输出，继续向上传播取消信号
+            var roundElapsed = DateTime.Now - groupStartTime;
+            _logger.LogInformation(
+                "{Prefix}本轮锄地结束统计（被中断）：用时 {H}时{Min}分{S}秒，完成 {Done} 条 / 跳过 {Skip} 条（计划共 {Total} 条）",
+                roundPrefix,
+                (int)roundElapsed.TotalHours, roundElapsed.Minutes, roundElapsed.Seconds,
+                completedCount, skippedCount, groupRoutes.Count);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "{Prefix}输出本轮锄地汇总日志时异常（忽略）", roundPrefix);
+        }
     }
 
     /// <summary>
