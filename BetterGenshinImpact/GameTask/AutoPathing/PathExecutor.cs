@@ -686,7 +686,10 @@ public partial class PathExecutor
                             // 算本次吃药计划；ShouldEat 时把 __tpFastSyncId 置 null 抑制该传送点快速抢报（等吃完再严格上报）。
                             // 单机 / MultiplayerCoordinator==null 时不计算，plan 保持 Empty，__tpFastSyncId 逐字节不变（单机零回归）。
                             _pendingMedicineEatPlan = BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.MedicineEatPlan.Empty;
-                            if (MultiplayerCoordinator != null)
+                            // 线路重试模式（hoeing-multiplayer-route-retry-mode spec）：重跑本段时（_skipNextSyncWaitOnRetry==true）
+                            // 不再计算按周期吃食物计划 → plan 保持 Empty → 下方执行块短路，重跑不重复吃药（人刚复苏满血，吃药无意义且浪费时间）。
+                            // 非重跑路径该标志恒 false，吃药逻辑逐字节不变。
+                            if (MultiplayerCoordinator != null && !_skipNextSyncWaitOnRetry)
                             {
                                 var __medCfg = MultiplayerCoordinator.EffectiveConfig;
                                 var __medCd = TaskContext.Instance().Config.MedicineEatCdConfig;

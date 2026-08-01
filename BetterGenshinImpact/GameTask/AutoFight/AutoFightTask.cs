@@ -1767,8 +1767,11 @@ public class AutoFightTask : ISoloTask
         }
       
         if(_taskParam.KazuhaPickupEnabled && _taskParam.ExpKazuhaPickup) TaskControl.Logger.LogInformation("基于怪物经验判断：{text} 万叶拾取", _isExperiencePickup? "执行" : "不执行");
-        
-        if (_taskParam.KazuhaPickupEnabled && (!_taskParam.ExpKazuhaPickup || _isExperiencePickup))
+
+        // 线路重试模式（hoeing-multiplayer-route-retry-mode spec）：命中重试线路的复苏掐断战斗后，人已死亡被随机传走、
+        // 战斗未打完，战后万叶聚物拾取无意义且浪费时间 → 跳过。非 RetrySegment 场景恒 false，行为一字不变。
+        if (_taskParam.KazuhaPickupEnabled && (!_taskParam.ExpKazuhaPickup || _isExperiencePickup)
+            && !BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.ShouldAbortFightForRetryRevival())
         {
             // Logger.LogInformation("开始 _isExperiencePickup：{_isExperiencePickup}",_isExperiencePickup);
             // 队伍中存在万叶的时候使用一次长E
@@ -2075,9 +2078,12 @@ public class AutoFightTask : ISoloTask
             }
         }
         
-        if (_taskParam is { PickDropsAfterFightEnabled: true } )
+        if (_taskParam is { PickDropsAfterFightEnabled: true }
+            && !BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.ShouldAbortFightForRetryRevival())
         {
             // 执行扫描掉落物光柱并靠近的功能
+            // 线路重试模式（hoeing-multiplayer-route-retry-mode spec）：复苏掐断战斗后，战斗未打完、人被传走，
+            // 光柱拾取无意义 → 跳过。非 RetrySegment 场景恒 false，行为一字不变。
             await new ScanPickTask().Start(ct, _taskParam.PickDropsAfterFightSeconds);
         }
 
