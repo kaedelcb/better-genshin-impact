@@ -28,6 +28,7 @@ namespace BetterGenshinImpact.GameTask
     {
         private readonly ILogger<TaskTriggerDispatcher> _logger = App.GetLogger<TaskTriggerDispatcher>();
         private readonly OverlayMetricsService? _metricsService = App.GetService<OverlayMetricsService>();
+        private readonly CustomHtmlMaskService? _customHtmlMaskService = App.GetService<CustomHtmlMaskService>();
 
         private static TaskTriggerDispatcher? _instance;
 
@@ -391,6 +392,7 @@ namespace BetterGenshinImpact.GameTask
                             }
                         }
                     });
+                    _customHtmlMaskService?.ShowIfEnabled();
                     HtmlMaskWindow.ShowAll();
                     // }
 

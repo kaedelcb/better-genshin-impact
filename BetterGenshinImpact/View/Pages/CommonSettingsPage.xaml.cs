@@ -1,14 +1,16 @@
-﻿using BetterGenshinImpact.ViewModel.Pages;
+using BetterGenshinImpact.ViewModel.Pages;
+using System;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using BetterGenshinImpact.GameTask.AutoFight.Config;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Windows;
+using System.Windows.Media;
 using System.Windows.Navigation;
 using Wpf.Ui.Violeta.Controls;
 using BetterGenshinImpact.Core.Config;
-using System;
 using System.IO;
 using System.Linq;
 using BetterGenshinImpact.View.Windows;
@@ -19,14 +21,109 @@ namespace BetterGenshinImpact.View.Pages;
 public partial class CommonSettingsPage : System.Windows.Controls.Page
 {
     private CommonSettingsPageViewModel ViewModel { get; }
-    
+
     private DefaultAutoFightConfig ViewModelDefaultAuto { get; }
+
+    private Window? _hostWindow;
 
     public CommonSettingsPage(CommonSettingsPageViewModel viewModel)
     {
         DataContext = ViewModel = viewModel;
         ViewModelDefaultAuto = new DefaultAutoFightConfig();
         InitializeComponent();
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        var hostWindow = Window.GetWindow(this);
+        if (_hostWindow == hostWindow)
+        {
+            return;
+        }
+
+        DetachHostWindow();
+        _hostWindow = hostWindow;
+        if (_hostWindow != null)
+        {
+            _hostWindow.Deactivated += HostWindowOnDeactivated;
+        }
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        DetachHostWindow();
+    }
+
+    private void HostWindowOnDeactivated(object? sender, EventArgs e)
+    {
+        if (CommitFocusedTextBox())
+        {
+            Keyboard.ClearFocus();
+        }
+    }
+
+    private void DetachHostWindow()
+    {
+        if (_hostWindow == null)
+        {
+            return;
+        }
+
+        _hostWindow.Deactivated -= HostWindowOnDeactivated;
+        _hostWindow = null;
+    }
+
+    private bool CommitFocusedTextBox()
+    {
+        if (Keyboard.FocusedElement is not DependencyObject focusedElement || !IsInsideThisPage(focusedElement))
+        {
+            return false;
+        }
+
+        var textBox = FindParentTextBox(focusedElement);
+        if (textBox == null)
+        {
+            return false;
+        }
+
+        var binding = BindingOperations.GetBindingExpression(textBox, TextBox.TextProperty);
+        binding?.UpdateSource();
+        return binding != null;
+    }
+
+    private bool IsInsideThisPage(DependencyObject element)
+    {
+        for (DependencyObject? current = element; current != null; current = GetParent(current))
+        {
+            if (ReferenceEquals(current, this))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static TextBox? FindParentTextBox(DependencyObject element)
+    {
+        for (DependencyObject? current = element; current != null; current = GetParent(current))
+        {
+            if (current is TextBox textBox)
+            {
+                return textBox;
+            }
+        }
+
+        return null;
+    }
+
+    private static DependencyObject? GetParent(DependencyObject element)
+    {
+        return element is Visual or System.Windows.Media.Media3D.Visual3D
+            ? VisualTreeHelper.GetParent(element)
+            : LogicalTreeHelper.GetParent(element);
     }
     
     private void PopupCloseButtonClick(object sender, RoutedEventArgs e)
