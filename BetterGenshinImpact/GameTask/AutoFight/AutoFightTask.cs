@@ -1012,6 +1012,16 @@ public class AutoFightTask : ISoloTask
                     }
                     
                     if(FightEndTotoly) break;
+
+                    // === 线路重试模式（hoeing-multiplayer-route-retry-mode spec, EB-4）===
+                    // 复苏信号 + escalation==RetrySegment 时，立即结束战斗、无视共享战斗配额，
+                    // 让 PathExecutor 战斗结束钩子尽快消费复苏信号进入重跑。非 RetrySegment / 单机恒 false，零回归。
+                    if (BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.ShouldAbortFightForRetryRevival())
+                    {
+                        Logger.LogWarning("[联机][重试模式] 战斗中检测到复苏（RetrySegment）→ 立即结束战斗、无视配额");
+                        FightEndTotoly = true;
+                        break;
+                    }
                     // 所有战斗角色都可以被取消
                     #region 本次战斗的跳过战斗判定
 
@@ -2244,11 +2254,11 @@ public class AutoFightTask : ISoloTask
             return false;
         }
 
-        if (Dispatcher.IsCustomCts)
-        {
-            _totolyFlag = false;
-            return false;
-        }
+        // if (Dispatcher.IsCustomCts)
+        // {
+        //     _totolyFlag = false;
+        //     return false;
+        // }
         if (_finishDetectConfig.RotateFindEnemyEnabled)
         {
             bool? result = null;
@@ -2289,6 +2299,12 @@ public class AutoFightTask : ISoloTask
                 _totolyFlag = false;
                 return result.Value;
             }
+        }
+        
+        if (Dispatcher.IsCustomCts)
+        {
+            _totolyFlag = false;
+            return false;
         }
 
         if (_finishDetectConfig.RotateFindEnemyEnabled && !_taskParam.FinishDetectConfig.EndModel)await Delay(delayTime, _ct);
