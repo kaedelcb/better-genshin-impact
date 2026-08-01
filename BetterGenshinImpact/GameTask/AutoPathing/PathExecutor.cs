@@ -165,6 +165,15 @@ public partial class PathExecutor
     private bool _skipNextSyncWaitOnRetry = false;
 
     /// <summary>
+    /// 线路重试模式重跑块（hoeing-multiplayer-route-retry-mode spec / retry_positions 方案）：
+    /// Pathing 开头把 task.RetryPositions 用 ConvertWaypointsForTrack 转换后展平缓存的重跑节点段。
+    /// 仅联机（MultiplayerCoordinator != null）且线路含 retry_positions 时非空；否则保持 null。
+    /// RetrySegment 触发时若本字段非空，则用它替换本段重跑（自带传送直奔战斗点开打）。
+    /// 单机永不构建、永不使用 → 单机零回归。
+    /// </summary>
+    private List<WaypointForTrack>? _retryBlockWaypoints = null;
+
+    /// <summary>
     /// 供 AutoFightTask 战斗主循环探测：当前是否"已收到复苏信号 且 待处理 escalation==RetrySegment"。
     /// 仅探测不消费（不改信号位、不改 escalation）。用于让战斗循环在 RetrySegment 场景无视共享战斗配额、
     /// 立即结束战斗，尽快进入重跑（hoeing-multiplayer-route-retry-mode spec, EB-4）。
@@ -408,6 +417,22 @@ public partial class PathExecutor
         // 转换、按传送点分割路径
         var waypointsList = ConvertWaypointsForTrack(task.Positions, task);
 
+        // === 线路重试模式重跑块（hoeing-multiplayer-route-retry-mode spec / retry_positions 方案）===
+        // 仅联机 + 线路含 retry_positions 时构建：把重跑节点用同一套 ConvertWaypointsForTrack 转换后展平成一段，
+        // 缓存供 RetrySegment 分支替换本段重跑。单机（MultiplayerCoordinator==null）不构建，_retryBlockWaypoints 保持 null。
+        // 展平（SelectMany）：重跑块正常是单段（开头一个 teleport），即使作者写了多个 teleport 也合并成一串顺序执行。
+        _retryBlockWaypoints = null;
+        if (MultiplayerCoordinator != null && task.RetryPositions is { Count: > 0 })
+        {
+            var __retrySegs = ConvertWaypointsForTrack(task.RetryPositions, task);
+            var __flat = __retrySegs.SelectMany(s => s).ToList();
+            if (__flat.Count > 0)
+            {
+                _retryBlockWaypoints = __flat;
+                Logger.LogInformation("[联机][重试模式] 本线路含重跑块 retry_positions，节点数={N}，RetrySegment 时将用重跑块替换本段重跑", __flat.Count);
+            }
+        }
+
         // 联机模式：预计算所有战斗点的集合点映射
         // key = listIdx * 10000 + syncPointIdx（集合点索引），value = syncPointId
         // route-variant-sync-by-logical-id spec / R2：自动 vs 手动模式分流。
@@ -499,8 +524,19 @@ public partial class PathExecutor
             AutoFightTask.IsTpForRecover = false;
             _faceToMark = false;
             CurWaypoints = (waypointsList.FindIndex(wps => wps == waypoints), waypoints);
+
+            // === 线路重试模式重跑块激活标志（hoeing-multiplayer-route-retry-mode spec / retry_positions 方案）===
+            // RetrySegment catch 分支命中且本线路含重跑块时置 true，下一轮 for-i 用重跑块替换本段节点执行。
+            // 声明在 for-i 外、段循环内 → 跨 continue 存活、每段重置为 false（新段默认跑正常节点）。
+            bool runRetryBlock = false;
             for (var i = 0; i < RetryTimes; i++)
             {
+                // === 本轮活动节点段（hoeing-multiplayer-route-retry-mode spec）===
+                // 正常 = 本段 waypoints（逐字节不变）；重跑块激活 = _retryBlockWaypoints（自带传送直奔战斗点开打）。
+                // 段身份判断（成功收尾 waypoints==waypointsList.Last()、段索引 CurWaypoints）仍用原 waypoints，不受影响。
+                var activeWaypoints = (runRetryBlock && _retryBlockWaypoints != null)
+                    ? _retryBlockWaypoints
+                    : waypoints;
                 try
                 {
                     ResetRecoveryStateForNewAttempt();
@@ -508,15 +544,15 @@ public partial class PathExecutor
                     await ResolveAnomalies(); // 异常场景处理
 
                     // 如果首个点是非TP点位，强制设置在这个点位附近优先做局部匹配
-                    if (waypoints[0].Type != WaypointType.Teleport.Code)
+                    if (activeWaypoints[0].Type != WaypointType.Teleport.Code)
                     {
-                        Navigation.SetPrevPosition((float)waypoints[0].X, (float)waypoints[0].Y);
+                        Navigation.SetPrevPosition((float)activeWaypoints[0].X, (float)activeWaypoints[0].Y);
                     }
                     
                     Waypoint? nextWaypoint = null;
                     double? nextDdistance = null;
                     var last2Waypoints = false;
-                    foreach (var waypoint in waypoints) // 一条路径
+                    foreach (var waypoint in activeWaypoints) // 一条路径
                     {
                         // === 实时中断检查（multiplayer-abort-and-realign spec）===
                         // 在每个路径点迭代时检查是否收到中断指令
@@ -546,7 +582,7 @@ public partial class PathExecutor
                             throw new RetryException("联机：主循环检测到已倒下复苏，神像回血后按异常处理");
                         }
                         
-                        CurWaypoint = (waypoints.FindIndex(wps => wps == waypoint), waypoint);
+                        CurWaypoint = (activeWaypoints.FindIndex(wps => wps == waypoint), waypoint);
 
                         // return-to-point-stale-prev-position-drift-fix (d) 线路中间节点首帧播种（进入该节点一次，Q8）：
                         // 区别于上方第 0 个 waypoint 首帧播种（waypoints[0] 非 TP 时已 SetPrevPosition）——此处处理 i>=1 的中间节点。
@@ -558,7 +594,7 @@ public partial class PathExecutor
                             var __curIdx = CurWaypoint.Item1;
                             if (__curIdx >= 1)
                             {
-                                var __prevWp = waypoints[__curIdx - 1];
+                                var __prevWp = activeWaypoints[__curIdx - 1];
                                 // 排除 orientation 朝向点：朝向点不移动角色，角色仍停在上一帧真实位置，
                                 // 不能用 waypoint 坐标播种锚点（否则局部匹配锚错到目标点附近，导致坐标漂移、朝向角度跳变走歪）。
                                 // 仅对会真实移动角色的节点做中间节点播种。
@@ -607,15 +643,15 @@ public partial class PathExecutor
                                     __bestSyncId = __kv.Value;
                                 }
                             }
-                            if (__bestSyncId != null && __bestWpIdx < waypoints.Count)
+                            if (__bestSyncId != null && __bestWpIdx < activeWaypoints.Count)
                             {
                                 __nextPendingSyncId = __bestSyncId;
-                                __nextPendingSyncWaypoint = waypoints[__bestWpIdx];
+                                __nextPendingSyncWaypoint = activeWaypoints[__bestWpIdx];
                             }
                         }
 
                         //计算下一个节点到当前节点的距离
-                        nextWaypoint = waypoint == waypoints.Last() ? null : waypoints[waypoints.IndexOf(waypoint) + 1];
+                        nextWaypoint = waypoint == activeWaypoints.Last() ? null : activeWaypoints[activeWaypoints.IndexOf(waypoint) + 1];
                         if (nextWaypoint != null)
                         {
                            nextDdistance = Navigation.GetDistance(waypoint, new Point2f((float)nextWaypoint.X, (float)nextWaypoint.Y));
@@ -1496,8 +1532,24 @@ public partial class PathExecutor
                     {
                         _skipNextSyncWaitOnRetry = true;      // 重跑时跳过本段入口那一次 WaitForAllPlayers
                         SkipToNextSegment = false;            // 显式清掉，确保是"重跑本段"而非"跳下一段"
-                        StartSkipOtherOperations();
-                        Logger.LogWarning("[联机][重试模式] RetrySegment：不上报、跳过本段入口同步等待，重跑本段，原因: {Msg}", retryException.Message);
+
+                        // === retry_positions 重跑块分支（hoeing-multiplayer-route-retry-mode spec）===
+                        // 本线路含重跑块 → 下一轮 for-i 用重跑块替换本段节点执行（自带传送直奔战斗点开打）。
+                        //   - 不调 StartSkipOtherOperations()：重跑块的 fight 节点必须正常执行（skipOtherOperations 会跳过非 CombatScript 的 action）。
+                        //   - 置 _wpIdxToSyncIdCache=null：重跑块不参与快速同步点抢报，避免用原段的 wpIdx→syncId 缓存错配误触发。
+                        //   - 重跑块不写 sync_point_id，天然不等队友。
+                        // 无重跑块 → fallback 现有原地重跑（StartSkipOtherOperations 跳到复苏点前的节点，逐字节保留原行为）。
+                        if (_retryBlockWaypoints != null)
+                        {
+                            runRetryBlock = true;
+                            _wpIdxToSyncIdCache = null;
+                            Logger.LogWarning("[联机][重试模式] RetrySegment：本线路含重跑块，改跑 retry_positions（传送后直奔战斗点开打，不等队友），原因: {Msg}", retryException.Message);
+                        }
+                        else
+                        {
+                            StartSkipOtherOperations();
+                            Logger.LogWarning("[联机][重试模式] RetrySegment：无重跑块，原地重跑本段（跳过本段入口同步等待、跳到复苏点前节点），原因: {Msg}", retryException.Message);
+                        }
                         ResetRecoveryStateForNewAttempt();
                         continue; // 继续 for-i：重跑本段（含段起点传送）
                     }

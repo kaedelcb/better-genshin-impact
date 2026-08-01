@@ -59,6 +59,16 @@ public class PathingTask
     public FarmingSession  FarmingInfo { get; set; } = new();
     public List<Waypoint> Positions { get; set; } = [];
 
+    /// <summary>
+    /// 线路重试模式重跑块（hoeing-multiplayer-route-retry-mode spec / retry_positions 方案）。
+    /// 顶层独立数组，SnakeCaseLower 命名策略映射 JSON 的 "retry_positions"。
+    /// 与 Positions 物理隔离：正常锄地只遍历 Positions 切出的段，永远不执行 RetryPositions；
+    /// 仅联机线路重试模式第 1 次复苏（RetrySegment）时，若本字段非空，则用它替换本段重跑
+    /// （自带传送点直奔战斗点开打、不写 sync_point_id 故不等队友）。
+    /// 老 JSON 无此字段 → 空列表 → 单机与不含重跑块的联机线路逐字节零回归。
+    /// </summary>
+    public List<Waypoint> RetryPositions { get; set; } = [];
+
     public bool HasAction(string actionName)
     {
         return Positions.Exists(p => p.Action == actionName);
