@@ -121,6 +121,9 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
     [ObservableProperty] private string _medicineFoodRouteKeywords3 = "";
     [ObservableProperty] private string _medicineFoodRouteKeywords4 = "";
 
+    // ===== 线路重试模式（hoeing-multiplayer-route-retry-mode spec，纯本地）=====
+    [ObservableProperty] private string _routeRetryModeKeywords = "";
+
     /// <summary>食物序号下拉可选项 1~4。</summary>
     public IReadOnlyList<int> MedicineSlotOptions { get; } = new[] { 1, 2, 3, 4 };
 
@@ -289,6 +292,8 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         _medicineFoodRouteKeywords2 = GetStr("medicineFoodRouteKeywords2", g.MedicineFoodRouteKeywords2);
         _medicineFoodRouteKeywords3 = GetStr("medicineFoodRouteKeywords3", g.MedicineFoodRouteKeywords3);
         _medicineFoodRouteKeywords4 = GetStr("medicineFoodRouteKeywords4", g.MedicineFoodRouteKeywords4);
+        // 线路重试模式（hoeing-multiplayer-route-retry-mode spec，纯本地）
+        _routeRetryModeKeywords = GetStr("routeRetryModeKeywords", g.RouteRetryModeKeywords);
     }
 
     /// <summary>
@@ -374,6 +379,8 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         settings["medicineFoodRouteKeywords2"] = MedicineFoodRouteKeywords2;
         settings["medicineFoodRouteKeywords3"] = MedicineFoodRouteKeywords3;
         settings["medicineFoodRouteKeywords4"] = MedicineFoodRouteKeywords4;
+        // 线路重试模式（hoeing-multiplayer-route-retry-mode spec，纯本地）
+        settings["routeRetryModeKeywords"] = RouteRetryModeKeywords;
     }
 }
 

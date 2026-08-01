@@ -158,6 +158,28 @@ public partial class PathExecutor
         => SignalMultiplayerRevival(BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.Continue);
 
     /// <summary>
+    /// 线路重试模式（hoeing-multiplayer-route-retry-mode spec）：RetrySegment 重跑本段时置 true，
+    /// 使本段入口那一次正常同步点 WaitForAllPlayers 被跳过（复苏者不独自空等已被队友过掉的同步点）。
+    /// 消费一次即复位。默认 false，非 RetrySegment 路径永不置位。
+    /// </summary>
+    private bool _skipNextSyncWaitOnRetry = false;
+
+    /// <summary>
+    /// 供 AutoFightTask 战斗主循环探测：当前是否"已收到复苏信号 且 待处理 escalation==RetrySegment"。
+    /// 仅探测不消费（不改信号位、不改 escalation）。用于让战斗循环在 RetrySegment 场景无视共享战斗配额、
+    /// 立即结束战斗，尽快进入重跑（hoeing-multiplayer-route-retry-mode spec, EB-4）。
+    /// CurrentActiveInstance==null（单机/无活动实例）时返回 false。
+    /// </summary>
+    public static bool ShouldAbortFightForRetryRevival()
+    {
+        var instance = CurrentActiveInstance;
+        if (instance == null) return false;
+        // 两个字段都是 volatile int，普通读即可见。
+        return instance._multiplayerRevivalDetected == 1
+            && instance._pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment;
+    }
+
+    /// <summary>
     /// 联机模式专用：外部（RouteExecutionEngine）检测到反复复苏触发升级动作时调用。
     /// 仅在联机模式下有效，单机模式忽略以保留原有行为。
     /// 升级动作通过 _pendingRevivalEscalation 字段透传到 RetryException catch 块。
@@ -513,6 +535,12 @@ public partial class PathExecutor
                         // 此为兜底路径：战斗结束钩子和脱困入口未能消费时由这里兜底处理
                         if (TryConsumeRevivalSignal())
                         {
+                            // 线路重试模式（RetrySegment）：不去神像，直接抛 RetryException，由 catch 块 RetrySegment 分支重跑本段。
+                            if (_pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment)
+                            {
+                                Logger.LogWarning("[联机][重试模式] 主循环兜底检测到复苏信号（RetrySegment）→ 跳过神像，直接重跑本段");
+                                throw new RetryException("联机：线路重试模式，直接重跑本段");
+                            }
                             Logger.LogWarning("[联机] 主循环兜底路径检测到复苏信号，前往七天神像回血");
                             await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null);
                             throw new RetryException("联机：主循环检测到已倒下复苏，神像回血后按异常处理");
@@ -845,6 +873,14 @@ public partial class PathExecutor
                                         // 正常同步点：统一等待（传送必等待默认启用）
                                         else
                                         {
+                                            // === 线路重试模式（hoeing-multiplayer-route-retry-mode spec）：重跑本段时跳过本段入口这一次同步等待（消费即复位）===
+                                            if (_skipNextSyncWaitOnRetry)
+                                            {
+                                                _skipNextSyncWaitOnRetry = false;
+                                                Logger.LogWarning("[联机][重试模式] 重跑本段：跳过本段入口同步点等待，syncId={SyncId}，不等队友直接继续", tpSyncId);
+                                            }
+                                            else
+                                            {
                                             // === 落后追赶判定（hoeing-multiplayer-lagging-member-catchup spec / 关键问题 1 + BUG-C/D/E）===
                                             // 仅此处（段起点传送点正常同步块=段边界）插入；集合点/异常点/强制点均不插入（BUG-E）。
                                             // 两项本地标志守卫：异常恢复未占用 SkipToNextSegment、本轮无待收尾跳段（关键问题 4）。
@@ -866,6 +902,7 @@ public partial class PathExecutor
                                             Logger.LogInformation("[联机] 传送完成，等待所有玩家同步，syncId={SyncId}, 进度={P}", tpSyncId, tpProgress);
                                             await MultiplayerCoordinator.WaitForAllPlayers(tpSyncId, ct, tpProgress);
                                             Logger.LogInformation("[联机] 传送同步完成，继续前进，syncId={SyncId}", tpSyncId);
+                                            }
                                         }
                                     }
                                 }
@@ -1046,6 +1083,12 @@ public partial class PathExecutor
                                     // 避免无谓重置后又抛异常
                                     if (TryConsumeRevivalSignal())
                                     {
+                                        // 线路重试模式（RetrySegment）：不去神像，直接抛 RetryException 重跑本段。
+                                        if (_pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment)
+                                        {
+                                            Logger.LogWarning("[联机][重试模式] 战斗结束钩子检测到复苏信号（RetrySegment）→ 跳过神像，直接重跑本段");
+                                            throw new RetryException("联机：线路重试模式，直接重跑本段");
+                                        }
                                         Logger.LogWarning("[联机] 战斗中曾触发复苏（已倒下色块检测），战斗结束后前往七天神像回血");
                                         await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null);
                                         throw new RetryException("联机：战斗中触发复苏，神像回血后跳到下一段汇合");
@@ -1413,6 +1456,19 @@ public partial class PathExecutor
                     // SkipRoute / SkipSegment 都需要先上报 Reviving + targetProgress 保留信号链路语义。
                     var escalation = (BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction)
                         System.Threading.Interlocked.Exchange(ref _pendingRevivalEscalation, 0);
+
+                    // === 线路重试模式（hoeing-multiplayer-route-retry-mode spec）：最高优先，先于 SkipRoute/SkipSegment ===
+                    // 第 1 次复苏重跑本段：不上报任何状态、不去神像（消费点已跳过）、跳过本段入口同步等待、原地重跑。
+                    if (escalation == BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment
+                        && MultiplayerCoordinator != null)
+                    {
+                        _skipNextSyncWaitOnRetry = true;      // 重跑时跳过本段入口那一次 WaitForAllPlayers
+                        SkipToNextSegment = false;            // 显式清掉，确保是"重跑本段"而非"跳下一段"
+                        StartSkipOtherOperations();
+                        Logger.LogWarning("[联机][重试模式] RetrySegment：不上报、跳过本段入口同步等待，重跑本段，原因: {Msg}", retryException.Message);
+                        ResetRecoveryStateForNewAttempt();
+                        continue; // 继续 for-i：重跑本段（含段起点传送）
+                    }
 
                     if (escalation == BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.SkipRoute
                         && MultiplayerCoordinator != null)
@@ -3259,6 +3315,12 @@ public partial class PathExecutor
                             // 注意：此处不修改 _inTrap 计数（不增不减），保持隐含语义；段入口段循环重置即可
                             if (TryConsumeRevivalSignal())
                             {
+                                // 线路重试模式（RetrySegment）：不去神像，直接抛 RetryException 重跑本段。
+                                if (_pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment)
+                                {
+                                    Logger.LogWarning("[联机][重试模式] 脱困入口检测到复苏信号（RetrySegment）→ 跳过神像，直接重跑本段");
+                                    throw new RetryException("联机：线路重试模式，直接重跑本段");
+                                }
                                 Logger.LogWarning("[联机] 路上检测到复苏 + 位置不变（疑似复苏后卡住），跳过随机脱困，前往七天神像回血");
                                 await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null);
                                 throw new RetryException("联机：路上复苏 + 卡住，神像回血后跳到下一段汇合");

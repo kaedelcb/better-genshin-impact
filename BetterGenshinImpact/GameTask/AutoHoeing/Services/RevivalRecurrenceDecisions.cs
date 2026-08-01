@@ -16,6 +16,13 @@ public enum RevivalEscalationAction
 
     /// <summary>跳整路线 + 神像回血（防死循环）。</summary>
     SkipRoute = 2,
+
+    /// <summary>
+    /// 线路重试模式（hoeing-multiplayer-route-retry-mode spec）：命中白名单 &amp;&amp; 本线路第 1 次复苏时，
+    /// 由 RouteExecutionEngine 覆盖产生。不去神像、不上报、跳过本段入口同步等待，直接重跑本线段。
+    /// Decide() 永不返回本值——它只由 RouteExecutionEngine 显式覆盖写入。
+    /// </summary>
+    RetrySegment = 3,
 }
 
 /// <summary>

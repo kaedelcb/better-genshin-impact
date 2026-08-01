@@ -45,6 +45,10 @@ public class RouteExecutionEngine
     // ExecuteRoute 入口 Reset 同时覆盖多世界轮换（design §2.6）。
     private readonly RevivalRecurrenceTracker _revivalTracker = new();
 
+    // 线路重试模式（hoeing-multiplayer-route-retry-mode spec）：ExecuteRoute 入口按线路名 + 白名单算一次，
+    // defeat 回调读它决定是否把 escalation 覆盖为 RetrySegment。多世界轮换每次 ExecuteRoute 重算。
+    private volatile bool _currentRouteRetryModeEnabled;
+
     /// <summary>注入按线路切角色 Provider（hoeing-multiplayer-per-route-switch-roles）。null = 不启用。</summary>
     public void SetPerRouteSwitchProvider(PerRouteSwitchRolesProvider? provider) => _perRouteSwitchProvider = provider;
 
@@ -81,6 +85,15 @@ public class RouteExecutionEngine
                     _config.RapidRevivalWindowSeconds,
                     _config.RapidRevivalThreshold,
                     _config.RouteRevivalCap);
+
+                // 线路重试模式覆盖（hoeing-multiplayer-route-retry-mode spec）：
+                // 命中白名单 && 本线路第 1 次复苏（Track 后 Count==1）→ 覆盖为 RetrySegment（重跑本段，不跳段）。
+                // 第 2 次及以后（Count>=2）不覆盖 → 走 Decide 原动作（默认 SkipSegment），即"只重试一次"。
+                if (_currentRouteRetryModeEnabled && _revivalTracker.Count == 1)
+                {
+                    Logger.LogWarning("[联机][重试模式] 本线路第 1 次复苏 → 覆盖为 RetrySegment（重跑本段，不去神像/不上报/不等待）");
+                    action = RevivalEscalationAction.RetrySegment;
+                }
 
                 if (action != RevivalEscalationAction.Continue)
                 {
@@ -129,6 +142,14 @@ public class RouteExecutionEngine
 
         // multi-revival-rapid-recurrence-fallback：每条路线开始时清空时间戳列表（OQ-4 = B 多世界轮换自动覆盖）
         _revivalTracker.Reset();
+
+        // 线路重试模式（hoeing-multiplayer-route-retry-mode spec）：按本线路文件名（去扩展名）+ 白名单关键词算一次，
+        // 缓存供 defeat 回调读取。多世界轮换每次进入 ExecuteRoute 重算。
+        var __retryKeywords = RouteRetryModeDecisions.ParseKeywords(_config.RouteRetryModeKeywords);
+        _currentRouteRetryModeEnabled = RouteRetryModeDecisions.IsRetryRoute(
+            System.IO.Path.GetFileNameWithoutExtension(route.FileName), __retryKeywords);
+        if (_currentRouteRetryModeEnabled)
+            Logger.LogInformation("[联机][重试模式] 本线路启用线路重试模式: {Name}", route.FileName);
 
         // 设置路线相关材料过滤
         if (_config.UseRouteRelatedMaterialsOnly)

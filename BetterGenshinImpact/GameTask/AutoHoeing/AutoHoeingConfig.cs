@@ -636,6 +636,13 @@ public partial class AutoHoeingConfig : ObservableObject
     /// <summary>吃食物第4格：吃药线路关键词（逗号分隔）。含任一关键词即吃该格，无视周期/CD。空=不启用。</summary>
     [ObservableProperty] private string _medicineFoodRouteKeywords4 = "";
 
+    // === 线路重试模式（hoeing-multiplayer-route-retry-mode spec，纯本地：不进 RoomConfig、不经 SignalR）===
+    /// <summary>
+    /// 线路重试模式关键词（逗号分隔，全/半角）。线路名含任一关键词的线路，复苏后第 1 次不跳段而是重跑本线段。
+    /// 空=不启用任何线路。纯本地配置，每个玩家各自决定，不同步给其他玩家。
+    /// </summary>
+    [ObservableProperty] private string _routeRetryModeKeywords = "";
+
     // === 路线变体偏好（route-variant-sync-by-logical-id spec / R13）===
 
     /// <summary>

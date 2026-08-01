@@ -480,6 +480,8 @@ public class AutoHoeingTask : ISoloTask
             _config.MedicineFoodRouteKeywords2 = "";
             _config.MedicineFoodRouteKeywords3 = "";
             _config.MedicineFoodRouteKeywords4 = "";
+            // 线路重试模式（hoeing-multiplayer-route-retry-mode spec，纯本地）
+            _config.RouteRetryModeKeywords = "";
 
             ApplySettingsOverride();
         }
@@ -4049,6 +4051,8 @@ public class AutoHoeingTask : ISoloTask
             _config.MedicineFoodRouteKeywords2 = Get("medicineFoodRouteKeywords2", _config.MedicineFoodRouteKeywords2);
             _config.MedicineFoodRouteKeywords3 = Get("medicineFoodRouteKeywords3", _config.MedicineFoodRouteKeywords3);
             _config.MedicineFoodRouteKeywords4 = Get("medicineFoodRouteKeywords4", _config.MedicineFoodRouteKeywords4);
+            // 线路重试模式（hoeing-multiplayer-route-retry-mode spec，纯本地）
+            _config.RouteRetryModeKeywords = Get("routeRetryModeKeywords", _config.RouteRetryModeKeywords);
         }
         else
         {
