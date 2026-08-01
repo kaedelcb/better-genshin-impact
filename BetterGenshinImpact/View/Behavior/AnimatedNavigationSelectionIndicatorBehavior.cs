@@ -340,7 +340,7 @@ public sealed class AnimatedNavigationSelectionIndicatorBehavior : Behavior<Navi
     {
         for (DependencyObject? current = child;
              current is not null;
-             current = VisualTreeHelper.GetParent(current))
+             current = GetParentObject(current))
         {
             if (current is T ancestor)
             {
@@ -349,6 +349,30 @@ public sealed class AnimatedNavigationSelectionIndicatorBehavior : Behavior<Navi
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// 安全地向上取父节点。<see cref="VisualTreeHelper.GetParent"/> 只接受
+    /// <see cref="Visual"/>/<see cref="System.Windows.Media.Media3D.Visual3D"/>，
+    /// 而鼠标事件的 OriginalSource 可能是 <see cref="ContentElement"/>（如
+    /// <see cref="Run"/>），此时必须改走内容/逻辑树，否则会抛
+    /// InvalidOperationException。
+    /// </summary>
+    private static DependencyObject? GetParentObject(DependencyObject child)
+    {
+        switch (child)
+        {
+            case Visual:
+            case System.Windows.Media.Media3D.Visual3D:
+                return VisualTreeHelper.GetParent(child);
+            case ContentElement contentElement:
+                // ContentOperations 适用于富文本内容（Run/Span 等）；
+                // 若已到内容树根，则回退到逻辑父级（FrameworkContentElement.Parent）。
+                return ContentOperations.GetParent(contentElement)
+                       ?? (contentElement as FrameworkContentElement)?.Parent;
+            default:
+                return null;
+        }
     }
 
     private static T? FindVisualDescendant<T>(
