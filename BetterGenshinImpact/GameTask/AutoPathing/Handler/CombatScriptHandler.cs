@@ -26,6 +26,7 @@ public class CombatScriptHandler : IActionHandler
                 return;
             }
 
+            combatScenes.BeforeTask(ct);
             await CombatScriptExecutor.ExecuteAsync(combatScript, ct, Logger, combatScenes);
         }
         else
