@@ -340,7 +340,7 @@ public sealed class AnimatedNavigationSelectionIndicatorBehavior : Behavior<Navi
     {
         for (DependencyObject? current = child;
              current is not null;
-             current = GetParentObject(current))
+             current = GetParent(current))
         {
             if (current is T ancestor)
             {
@@ -373,6 +373,19 @@ public sealed class AnimatedNavigationSelectionIndicatorBehavior : Behavior<Navi
             default:
                 return null;
         }
+    }
+
+    private static DependencyObject? GetParent(DependencyObject element)
+    {
+        if (element is ContentElement contentElement)
+        {
+            return ContentOperations.GetParent(contentElement)
+                   ?? (contentElement as FrameworkContentElement)?.Parent;
+        }
+
+        return element is Visual or System.Windows.Media.Media3D.Visual3D
+            ? VisualTreeHelper.GetParent(element)
+            : LogicalTreeHelper.GetParent(element);
     }
 
     private static T? FindVisualDescendant<T>(
