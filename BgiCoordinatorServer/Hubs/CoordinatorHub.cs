@@ -702,6 +702,23 @@ public class CoordinatorHub : Hub
         return Task.CompletedTask;
     }
 
+    /// <summary>成员上报团队 arming（本机吃到经验，或连续 5 场无经验兜底）。置 ExpCapArmed=true；
+    /// 若 arming 后已满足全员上报（全员满级兜底场景）则补广播 AllReachedExpCap。multiplayer-hoeing-exp-cap-stop R7</summary>
+    public async Task ReportExpArmed()
+    {
+        var (_, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
+        if (roomCode == null) return;
+
+        _roomManager.UpdateHeartbeat(Context.ConnectionId);
+        var allReached = _roomManager.RecordExpArmed(roomCode, Context.ConnectionId);
+
+        if (allReached)
+        {
+            _logger.LogInformation("房间 {Code} 团队 arming 后全员达经验上限，广播终止", roomCode);
+            await Clients.Group(roomCode).SendAsync("AllReachedExpCap");
+        }
+    }
+
     /// <summary>更新白名单（仅房主）</summary>
     public async Task UpdateWhitelist(List<string>? whitelist = null)
     {
@@ -1239,6 +1256,8 @@ public class CoordinatorHub : Hub
             // multiplayer-hoeing-exp-cap-stop: 多世界轮换清空经验上限集合与广播标志
             room.ExpCapReachedSet.Clear();
             room.ExpCapBroadcasted = false;
+            // 团队 arming 门控每轮复位（multiplayer-hoeing-exp-cap-stop R7.6）
+            room.ExpCapArmed = false;
 
             _logger.LogInformation("[ResetForNewWorldRound] 房间{RoomCode}进入第{Round}轮，等待点、异常状态、万叶候选已重置", roomCode, newRound);
         }

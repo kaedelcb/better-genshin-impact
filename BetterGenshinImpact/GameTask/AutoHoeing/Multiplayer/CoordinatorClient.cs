@@ -768,6 +768,25 @@ public class CoordinatorClient : IAsyncDisposable
     }
 
     /// <summary>
+    /// 上报团队 arming（本机吃到经验，或连续 5 场无经验兜底触发，multiplayer-hoeing-exp-cap-stop R7）。
+    /// 服务端据此置 ExpCapArmed=true——广播 AllReachedExpCap 的必要条件之一。
+    /// 失败静默忽略，旧服务端无此 Hub 方法 → HubException 被吞，行为退化为不提前终止（不误停、不卡死）。
+    /// </summary>
+    public async Task NotifyExpArmedAsync(CancellationToken ct = default)
+    {
+        if (_connection == null || !IsConnected) return;
+        try
+        {
+            await _connection.InvokeAsync("ReportExpArmed", ct);
+            _logger.LogInformation("[联机][经验上限] 已上报团队 arming");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[联机][经验上限] NotifyExpArmedAsync 失败（静默忽略）");
+        }
+    }
+
+    /// <summary>
     /// 万叶玩家广播"开始执行聚物动作"。
     /// multiplayer-kazuha-collect-point-broadcast: 加 syncKey + 聚物点 (collectX, collectY) 三参。
     /// 调用方在朝向 / 位置识别失败时传 (NaN, NaN)，由 **客户端 + 服务端 + 其他客户端订阅** 三层 IsValid 守卫过滤。

@@ -55,6 +55,14 @@ public class Room
     /// </summary>
     public bool ExpCapBroadcasted { get; set; } = false;
 
+    /// <summary>
+    /// 本轮世界团队是否已 arming（任意成员吃到经验，或连续 5 场无经验兜底触发）。
+    /// 广播 AllReachedExpCap 的必要条件之一：仅当 ExpCapArmed==true 且全员上报达上限才广播。
+    /// 防"重启空线路误停"（全员没吃过经验就连续无经验 → 未 arming → 不广播）。
+    /// ResetForNewWorldRound 复位 false。multiplayer-hoeing-exp-cap-stop R7.3。
+    /// </summary>
+    public bool ExpCapArmed { get; set; } = false;
+
     /// <summary>房主筛选后的最终路线文件名列表（按执行顺序）</summary>
     public List<string> HostRouteList { get; set; } = [];
 

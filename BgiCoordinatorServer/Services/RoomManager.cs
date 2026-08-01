@@ -427,6 +427,40 @@ public class RoomManager
                 .ToHashSet();
             room.ExpCapReachedSet.IntersectWith(onlineConnectionIds);
 
+            // 团队 arming 门控（multiplayer-hoeing-exp-cap-stop R7.4）：全员上报 且 团队已 arming 才广播。
+            // 收紧不放宽（P11）：未 arming 时即便全员上报也不广播，防"重启空线路误停"。
+            if (room.ExpCapArmed && AllOnlineMembersReported(room, room.ExpCapReachedSet))
+            {
+                room.ExpCapBroadcasted = true;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 记录团队 arming（任意成员吃到经验，或连续 5 场无经验兜底触发）。置 ExpCapArmed=true 并重查广播条件：
+    /// 若此前已全员上报但因未 arming 未广播（全员满级 + 全部走兜底自点亮场景），此刻补触发广播，返回 true。
+    /// 否则返回 false。multiplayer-hoeing-exp-cap-stop R7.3/R7.5。
+    /// </summary>
+    public bool RecordExpArmed(string roomCode, string connectionId)
+    {
+        if (!_rooms.TryGetValue(roomCode, out var room))
+            return false;
+
+        lock (room)
+        {
+            if (room.ExpCapBroadcasted) return false; // 本轮已广播，幂等短路
+
+            room.ExpCapArmed = true;
+
+            // 在线清理（与 RecordExpCapReached 对称），再重查广播条件（解全员满级死锁）
+            var onlineConnectionIds = room.Players
+                .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
+                .Select(p => p.ConnectionId)
+                .ToHashSet();
+            room.ExpCapReachedSet.IntersectWith(onlineConnectionIds);
+
             if (AllOnlineMembersReported(room, room.ExpCapReachedSet))
             {
                 room.ExpCapBroadcasted = true;

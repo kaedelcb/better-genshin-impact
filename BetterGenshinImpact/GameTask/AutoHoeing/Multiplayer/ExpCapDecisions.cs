@@ -47,4 +47,15 @@ public static class ExpCapDecisions
     /// <summary>是否启用本功能（配置开 ∧ 已连接）。IsConnected==false 时不上报（无法送达服务端）。</summary>
     public static bool IsEnabled(bool enableExpCapStop, bool isConnected)
         => enableExpCapStop && isConnected;
+
+    // === 团队 arming 门控兜底（multiplayer-hoeing-exp-cap-stop R7，后补）===
+
+    /// <summary>连续无经验"无条件兜底自点亮 arming"阈值（固定 5，不可配）。
+    /// 覆盖"全队进房即满级、谁都吃不到经验、团队 arming 永远点不亮"的死锁。R7.2。</summary>
+    public const int ConsecutiveNoExpUnconditionalThreshold = 5;
+
+    /// <summary>是否应"兜底自点亮团队 arming"：连续无经验计数达无条件阈值即为真。
+    /// 纯函数，PBT 友好。R7.2。仅决定"是否发 arming 信号"，不影响 R3 上报/撤回。</summary>
+    public static bool ShouldForceArm(int count)
+        => count >= ConsecutiveNoExpUnconditionalThreshold;
 }

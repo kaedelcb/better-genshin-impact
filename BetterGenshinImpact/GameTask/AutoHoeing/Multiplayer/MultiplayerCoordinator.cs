@@ -76,6 +76,8 @@ public class MultiplayerCoordinator : IAsyncDisposable
     private int _consecutiveNoExpCount;
     /// <summary>本机当前是否处于"已上报达上限"态（上报/撤回反复翻转，非一次性闩锁）。</summary>
     private bool _expCapReported;
+    /// <summary>本轮世界本机是否已发送过团队 arming 信号（幂等门控，每轮至多一次）。multiplayer-hoeing-exp-cap-stop R7.1。</summary>
+    private bool _expArmedSent;
 
     // === 跳过同步点标志 ===
     private volatile bool _skipNextSyncPoint;
@@ -254,6 +256,17 @@ public class MultiplayerCoordinator : IAsyncDisposable
             default:
                 break;
         }
+
+        // 团队 arming（multiplayer-hoeing-exp-cap-stop R7）：吃到经验、或连续5场无经验兜底 → 发一次 arming（每轮幂等）。
+        // 必须放在 switch（含 Clear 上报）之后：保证本机的 ExpCapCleared 先于 ExpArmed 送达服务端，
+        // 从而 arming 到达时本机已从 ExpCapReachedSet 移除，不会触发误广播（design §14.3 竞态安全）。
+        if (!_expArmedSent && (hasExp || ExpCapDecisions.ShouldForceArm(_consecutiveNoExpCount)))
+        {
+            _expArmedSent = true;
+            _logger.LogInformation("[联机][经验上限] {Reason}，发送团队 arming 信号",
+                hasExp ? "本机吃到经验" : $"连续{_consecutiveNoExpCount}场无经验兜底");
+            await _client.NotifyExpArmedAsync(ct);
+        }
     }
 
     /// <summary>
@@ -294,6 +307,8 @@ public class MultiplayerCoordinator : IAsyncDisposable
         // 基于经验判断停止锄地：新轮次复位本机计数与上报态（multiplayer-hoeing-exp-cap-stop R6.1）
         _consecutiveNoExpCount = 0;
         _expCapReported = false;
+        // 团队 arming 幂等门控每轮复位（multiplayer-hoeing-exp-cap-stop R7.6）
+        _expArmedSent = false;
 
         // 集体卡死跳段信号位重置（multiplayer-mutual-wait-collective-skip §8.6 改动 4）
         Interlocked.Exchange(ref _remoteSkipRequested, 0);
