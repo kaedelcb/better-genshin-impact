@@ -642,7 +642,9 @@ public class AutoSwitchRolesTask : ISoloTask
             {
                 var before = IsMultiplayerPairingPageOpen();
                 Click(coords[secondIdx.Value].X, coords[secondIdx.Value].Y);
-                await Delay(_mpOverride.ProbeClickWaitMs, _ct);
+                await Delay(_mpOverride.ProbeClickWaitMs/2, _ct);
+                Click(coords[secondIdx.Value].X, coords[secondIdx.Value].Y);
+                await Delay(_mpOverride.ProbeClickWaitMs/2, _ct);
                 var after = IsMultiplayerPairingPageOpen();
                 if (PerRouteSwitchRolesDecisions.IsMyPositionDetected(before, after))
                 {
@@ -785,6 +787,15 @@ public class AutoSwitchRolesTask : ISoloTask
         {
             // 筛选无结果：ESC 已退出筛选/角色页，直接返回不切该号位
             return;
+        }
+
+        // 进入角色选择页后先等列表加载完再识别：探测点击后仅等 300ms 判断页面切换，
+        // 此时角色列表可能尚未渲染完成，直接识别会漏掉第一排角色并触发下滑而错过（用户反馈）。
+        // 与单机点号位后固定等 1000ms 对齐。
+        var loadWaitMs = _mpOverride?.SelectionPageLoadWaitMs ?? MultiplayerSwitchConstants.SelectionPageLoadWaitMs;
+        if (loadWaitMs > 0)
+        {
+            await Delay(loadWaitMs, _ct);
         }
 
         // 角色头像查找：最多 3 页，每页内 num 从 1 递增直到头像文件不存在（与单机一致）

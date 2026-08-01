@@ -34,6 +34,12 @@ public sealed class MultiplayerSwitchOverride
     /// <summary>R7.2：每点击一个候选格子后、检测 MapCloseButton 前的等待毫秒数。</summary>
     public int ProbeClickWaitMs { get; init; } = MultiplayerSwitchConstants.ProbeClickWaitMs;
 
+    /// <summary>
+    /// 进入角色选择页后、开始识别头像前的等待毫秒数。默认 1000ms（与单机点号位后等待一致）。
+    /// 用于保证角色列表加载完成后再识别，避免第一排角色未渲染就被下滑滚过而漏识别。
+    /// </summary>
+    public int SelectionPageLoadWaitMs { get; init; } = MultiplayerSwitchConstants.SelectionPageLoadWaitMs;
+
     /// <summary>R7.6：探测序列最大重试次数（4 候选全未命中算一轮失败，最多重试 2 次）。</summary>
     public int ProbeMaxRetries { get; init; } = MultiplayerSwitchConstants.ProbeMaxRetries;
 

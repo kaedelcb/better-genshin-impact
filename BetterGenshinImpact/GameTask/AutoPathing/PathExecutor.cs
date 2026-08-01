@@ -1137,6 +1137,35 @@ public partial class PathExecutor
                                             Logger.LogInformation("[联机] 战斗完成，走回战斗点集合");
                                             waypoint.Type =  WaypointType.Target.Code;
 
+                                            // 玛薇卡摩托下车（恒开，无需配置）：
+                                            // 战后回点第一段 MoveTo 粗接近前，若当前出战为玛薇卡且在摩托上则按一下 E 下车，
+                                            // 避免骑摩托高速冲过战斗点 / 干扰后续小地图坐标识别。
+                                            // 三层门控保证零误触（队里有玛薇卡 + 当前出战是玛薇卡 + IsMotorcycle 色差命中），
+                                            // 三者缺一即跳过 → 非玛薇卡队伍 / 玛薇卡未出战 / 非摩托态一次都不按 E（不会误骑上车）。
+                                            // 整块 try-catch 兜底：检测/按键任何异常都不影响后续回点主流程（取消透传）。
+                                            try
+                                            {
+                                                var __mavuika = _combatScenes?.SelectAvatar("玛薇卡");
+                                                if (__mavuika != null)
+                                                {
+                                                    using var __dismountRegion = CaptureToRectArea();
+                                                    var __activeIndex = _combatScenes!.GetActiveAvatarIndex(
+                                                        __dismountRegion,
+                                                        new BetterGenshinImpact.GameTask.AutoFight.Model.AvatarActiveCheckContext());
+                                                    if (__activeIndex == __mavuika.Index && __mavuika.IsMotorcycle())
+                                                    {
+                                                        Logger.LogInformation("[联机] 战后回点：检测到玛薇卡在摩托上，按 E 下车");
+                                                        Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                                        await Delay(800, ct);
+                                                    }
+                                                }
+                                            }
+                                            catch (OperationCanceledException) { throw; }
+                                            catch (Exception __dismountEx)
+                                            {
+                                                Logger.LogWarning(__dismountEx, "[联机] 战后回点：玛薇卡摩托下车检测异常，跳过下车继续回点");
+                                            }
+
                                             // kazuha-collect-fightpoint-position-misrecognition-fix 方案 A（首帧播种）：
                                             // 走回战斗点的 MoveTo/MoveCloseTo 逐帧 GetPosition 之前，用战斗点坐标播种 Navigation 单例锚点，
                                             // 避免沿用上一段远处残留的 _prevX/_prevY 导致局部匹配锚错 / 全局 garbage（BC1/BC2）。

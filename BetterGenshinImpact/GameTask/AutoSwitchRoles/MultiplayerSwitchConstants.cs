@@ -16,6 +16,14 @@ public static class MultiplayerSwitchConstants
     /// <summary>OQ-5/R7.2：每点击一个候选后、检测 MapCloseButton 前的等待毫秒数。</summary>
     public const int ProbeClickWaitMs = 300;
 
+    /// <summary>
+    /// 进入角色选择页后、开始识别头像（首次识别与滚动）前的等待毫秒数。
+    /// 探测点击后仅等 ProbeClickWaitMs(300ms) 判断页面切换，此时角色列表可能尚未加载完成，
+    /// 直接识别会漏掉第一排角色并触发下滑而错过。此延时保证列表加载完再识别。
+    /// 与单机点击号位后固定等 1000ms 对齐。
+    /// </summary>
+    public const int SelectionPageLoadWaitMs = 1000;
+
     /// <summary>OQ-5/R7.6：探测序列最大重试次数（4 候选全未命中算一轮，最多重试 2 次）。</summary>
     public const int ProbeMaxRetries = 2;
 }
