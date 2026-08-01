@@ -21,20 +21,11 @@
     {
       "action": "",
       "action_params": "",
-      "id": 1,
+      "d": 2,
       "move_mode": "dash",
       "type": "path",
-      "x": -2741.25,
-      "y": -3441
-    },
-    {
-      "action": "",
-      "action_params": "",
-      "id": 2,
-      "move_mode": "dash",
-      "type": "path",
-      "x": -2753.04,
-      "y": -3459.3025
+      "x": -2751.459,
+      "y": -3461.3145
     }
   ]
 }
