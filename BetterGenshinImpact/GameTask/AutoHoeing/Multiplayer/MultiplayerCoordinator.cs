@@ -207,8 +207,15 @@ public class MultiplayerCoordinator : IAsyncDisposable
         {
             try { await _client.CloseRoomAsync(); } catch { }
         }
-        
-        StopCts?.Cancel();
+
+        // StopCts 与 AutoHoeingTask._linkedStopCts 是同一实例。任务收尾时
+        // AutoHoeingTask 会先 Dispose 该 CTS，若此后（或并发）收到 AllReachedExpCap /
+        // CollectiveSkipDegraded 等广播再走到这里，Cancel() 会抛 ObjectDisposedException，
+        // 冒泡为未处理异常弹窗并阻塞后续任务。与 AutoHoeingTask 中所有 _linkedStopCts?.Cancel()
+        // 调用点一致，吞掉已释放异常（幂等，停止信号已由 IsExitTriggered/其他路径覆盖）。
+        try { StopCts?.Cancel(); }
+        catch (ObjectDisposedException) { }
+        catch (Exception ex) { _logger.LogWarning(ex, "[联机] 触发协调停止时 Cancel 异常（已忽略）"); }
     }
 
     // === 基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop）===
