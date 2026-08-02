@@ -636,10 +636,10 @@ public partial class AutoHoeingConfig : ObservableObject
     /// <summary>吃食物第4格：吃药线路关键词（逗号分隔）。含任一关键词即吃该格，无视周期/CD。空=不启用。</summary>
     [ObservableProperty] private string _medicineFoodRouteKeywords4 = "";
 
-    // === 线路重试模式（hoeing-multiplayer-route-retry-mode spec，纯本地：不进 RoomConfig、不经 SignalR）===
+    // === 线路重试模式 v2（hoeing-multiplayer-route-retry-mode §0，房主设置同步给成员，进 RoomConfig）===
     /// <summary>
-    /// 线路重试模式关键词（逗号分隔，全/半角）。线路名含任一关键词的线路，复苏后第 1 次不跳段而是重跑本线段。
-    /// 空=不启用任何线路。纯本地配置，每个玩家各自决定，不同步给其他玩家。
+    /// 线路重试模式关键词（逗号分隔，全/半角）。线路名含任一关键词的线路启用：任一成员复苏 → 全员停战斗+跳拾取+回神像+重跑本段（正常同步），只重试一次。
+    /// 空=不启用任何线路。由房主设置并通过 RoomConfig 同步给所有成员（成员本地填写会被房主同步覆盖）；UI 绑定本字段。
     /// </summary>
     [ObservableProperty] private string _routeRetryModeKeywords = "";
 

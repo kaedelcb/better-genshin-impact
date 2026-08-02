@@ -158,22 +158,6 @@ public partial class PathExecutor
         => SignalMultiplayerRevival(BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.Continue);
 
     /// <summary>
-    /// 线路重试模式（hoeing-multiplayer-route-retry-mode spec）：RetrySegment 重跑本段时置 true，
-    /// 使本段入口那一次正常同步点 WaitForAllPlayers 被跳过（复苏者不独自空等已被队友过掉的同步点）。
-    /// 消费一次即复位。默认 false，非 RetrySegment 路径永不置位。
-    /// </summary>
-    private bool _skipNextSyncWaitOnRetry = false;
-
-    /// <summary>
-    /// 线路重试模式重跑块（hoeing-multiplayer-route-retry-mode spec / retry_positions 方案）：
-    /// Pathing 开头把 task.RetryPositions 用 ConvertWaypointsForTrack 转换后展平缓存的重跑节点段。
-    /// 仅联机（MultiplayerCoordinator != null）且线路含 retry_positions 时非空；否则保持 null。
-    /// RetrySegment 触发时若本字段非空，则用它替换本段重跑（自带传送直奔战斗点开打）。
-    /// 单机永不构建、永不使用 → 单机零回归。
-    /// </summary>
-    private List<WaypointForTrack>? _retryBlockWaypoints = null;
-
-    /// <summary>
     /// 供 AutoFightTask 战斗主循环探测：当前是否"已收到复苏信号 且 待处理 escalation==RetrySegment"。
     /// 仅探测不消费（不改信号位、不改 escalation）。用于让战斗循环在 RetrySegment 场景无视共享战斗配额、
     /// 立即结束战斗，尽快进入重跑（hoeing-multiplayer-route-retry-mode spec, EB-4）。
@@ -417,22 +401,6 @@ public partial class PathExecutor
         // 转换、按传送点分割路径
         var waypointsList = ConvertWaypointsForTrack(task.Positions, task);
 
-        // === 线路重试模式重跑块（hoeing-multiplayer-route-retry-mode spec / retry_positions 方案）===
-        // 仅联机 + 线路含 retry_positions 时构建：把重跑节点用同一套 ConvertWaypointsForTrack 转换后展平成一段，
-        // 缓存供 RetrySegment 分支替换本段重跑。单机（MultiplayerCoordinator==null）不构建，_retryBlockWaypoints 保持 null。
-        // 展平（SelectMany）：重跑块正常是单段（开头一个 teleport），即使作者写了多个 teleport 也合并成一串顺序执行。
-        _retryBlockWaypoints = null;
-        if (MultiplayerCoordinator != null && task.RetryPositions is { Count: > 0 })
-        {
-            var __retrySegs = ConvertWaypointsForTrack(task.RetryPositions, task);
-            var __flat = __retrySegs.SelectMany(s => s).ToList();
-            if (__flat.Count > 0)
-            {
-                _retryBlockWaypoints = __flat;
-                Logger.LogInformation("[联机][重试模式] 本线路含重跑块 retry_positions，节点数={N}，RetrySegment 时将用重跑块替换本段重跑", __flat.Count);
-            }
-        }
-
         // 联机模式：预计算所有战斗点的集合点映射
         // key = listIdx * 10000 + syncPointIdx（集合点索引），value = syncPointId
         // route-variant-sync-by-logical-id spec / R2：自动 vs 手动模式分流。
@@ -525,18 +493,8 @@ public partial class PathExecutor
             _faceToMark = false;
             CurWaypoints = (waypointsList.FindIndex(wps => wps == waypoints), waypoints);
 
-            // === 线路重试模式重跑块激活标志（hoeing-multiplayer-route-retry-mode spec / retry_positions 方案）===
-            // RetrySegment catch 分支命中且本线路含重跑块时置 true，下一轮 for-i 用重跑块替换本段节点执行。
-            // 声明在 for-i 外、段循环内 → 跨 continue 存活、每段重置为 false（新段默认跑正常节点）。
-            bool runRetryBlock = false;
             for (var i = 0; i < RetryTimes; i++)
             {
-                // === 本轮活动节点段（hoeing-multiplayer-route-retry-mode spec）===
-                // 正常 = 本段 waypoints（逐字节不变）；重跑块激活 = _retryBlockWaypoints（自带传送直奔战斗点开打）。
-                // 段身份判断（成功收尾 waypoints==waypointsList.Last()、段索引 CurWaypoints）仍用原 waypoints，不受影响。
-                var activeWaypoints = (runRetryBlock && _retryBlockWaypoints != null)
-                    ? _retryBlockWaypoints
-                    : waypoints;
                 try
                 {
                     ResetRecoveryStateForNewAttempt();
@@ -544,15 +502,15 @@ public partial class PathExecutor
                     await ResolveAnomalies(); // 异常场景处理
 
                     // 如果首个点是非TP点位，强制设置在这个点位附近优先做局部匹配
-                    if (activeWaypoints[0].Type != WaypointType.Teleport.Code)
+                    if (waypoints[0].Type != WaypointType.Teleport.Code)
                     {
-                        Navigation.SetPrevPosition((float)activeWaypoints[0].X, (float)activeWaypoints[0].Y);
+                        Navigation.SetPrevPosition((float)waypoints[0].X, (float)waypoints[0].Y);
                     }
                     
                     Waypoint? nextWaypoint = null;
                     double? nextDdistance = null;
                     var last2Waypoints = false;
-                    foreach (var waypoint in activeWaypoints) // 一条路径
+                    foreach (var waypoint in waypoints) // 一条路径
                     {
                         // === 实时中断检查（multiplayer-abort-and-realign spec）===
                         // 在每个路径点迭代时检查是否收到中断指令
@@ -571,18 +529,12 @@ public partial class PathExecutor
                         // 此为兜底路径：战斗结束钩子和脱困入口未能消费时由这里兜底处理
                         if (TryConsumeRevivalSignal())
                         {
-                            // 线路重试模式（RetrySegment）：不去神像，直接抛 RetryException，由 catch 块 RetrySegment 分支重跑本段。
-                            if (_pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment)
-                            {
-                                Logger.LogWarning("[联机][重试模式] 主循环兜底检测到复苏信号（RetrySegment）→ 跳过神像，直接重跑本段");
-                                throw new RetryException("联机：线路重试模式，直接重跑本段");
-                            }
                             Logger.LogWarning("[联机] 主循环兜底路径检测到复苏信号，前往七天神像回血");
                             await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null);
                             throw new RetryException("联机：主循环检测到已倒下复苏，神像回血后按异常处理");
                         }
                         
-                        CurWaypoint = (activeWaypoints.FindIndex(wps => wps == waypoint), waypoint);
+                        CurWaypoint = (waypoints.FindIndex(wps => wps == waypoint), waypoint);
 
                         // return-to-point-stale-prev-position-drift-fix (d) 线路中间节点首帧播种（进入该节点一次，Q8）：
                         // 区别于上方第 0 个 waypoint 首帧播种（waypoints[0] 非 TP 时已 SetPrevPosition）——此处处理 i>=1 的中间节点。
@@ -594,7 +546,7 @@ public partial class PathExecutor
                             var __curIdx = CurWaypoint.Item1;
                             if (__curIdx >= 1)
                             {
-                                var __prevWp = activeWaypoints[__curIdx - 1];
+                                var __prevWp = waypoints[__curIdx - 1];
                                 // 排除 orientation 朝向点：朝向点不移动角色，角色仍停在上一帧真实位置，
                                 // 不能用 waypoint 坐标播种锚点（否则局部匹配锚错到目标点附近，导致坐标漂移、朝向角度跳变走歪）。
                                 // 仅对会真实移动角色的节点做中间节点播种。
@@ -643,15 +595,15 @@ public partial class PathExecutor
                                     __bestSyncId = __kv.Value;
                                 }
                             }
-                            if (__bestSyncId != null && __bestWpIdx < activeWaypoints.Count)
+                            if (__bestSyncId != null && __bestWpIdx < waypoints.Count)
                             {
                                 __nextPendingSyncId = __bestSyncId;
-                                __nextPendingSyncWaypoint = activeWaypoints[__bestWpIdx];
+                                __nextPendingSyncWaypoint = waypoints[__bestWpIdx];
                             }
                         }
 
                         //计算下一个节点到当前节点的距离
-                        nextWaypoint = waypoint == activeWaypoints.Last() ? null : activeWaypoints[activeWaypoints.IndexOf(waypoint) + 1];
+                        nextWaypoint = waypoint == waypoints.Last() ? null : waypoints[waypoints.IndexOf(waypoint) + 1];
                         if (nextWaypoint != null)
                         {
                            nextDdistance = Navigation.GetDistance(waypoint, new Point2f((float)nextWaypoint.X, (float)nextWaypoint.Y));
@@ -722,10 +674,7 @@ public partial class PathExecutor
                             // 算本次吃药计划；ShouldEat 时把 __tpFastSyncId 置 null 抑制该传送点快速抢报（等吃完再严格上报）。
                             // 单机 / MultiplayerCoordinator==null 时不计算，plan 保持 Empty，__tpFastSyncId 逐字节不变（单机零回归）。
                             _pendingMedicineEatPlan = BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.MedicineEatPlan.Empty;
-                            // 线路重试模式（hoeing-multiplayer-route-retry-mode spec）：重跑本段时（_skipNextSyncWaitOnRetry==true）
-                            // 不再计算按周期吃食物计划 → plan 保持 Empty → 下方执行块短路，重跑不重复吃药（人刚复苏满血，吃药无意义且浪费时间）。
-                            // 非重跑路径该标志恒 false，吃药逻辑逐字节不变。
-                            if (MultiplayerCoordinator != null && !_skipNextSyncWaitOnRetry)
+                            if (MultiplayerCoordinator != null)
                             {
                                 var __medCfg = MultiplayerCoordinator.EffectiveConfig;
                                 var __medCd = TaskContext.Instance().Config.MedicineEatCdConfig;
@@ -912,14 +861,6 @@ public partial class PathExecutor
                                         // 正常同步点：统一等待（传送必等待默认启用）
                                         else
                                         {
-                                            // === 线路重试模式（hoeing-multiplayer-route-retry-mode spec）：重跑本段时跳过本段入口这一次同步等待（消费即复位）===
-                                            if (_skipNextSyncWaitOnRetry)
-                                            {
-                                                _skipNextSyncWaitOnRetry = false;
-                                                Logger.LogWarning("[联机][重试模式] 重跑本段：跳过本段入口同步点等待，syncId={SyncId}，不等队友直接继续", tpSyncId);
-                                            }
-                                            else
-                                            {
                                             // === 落后追赶判定（hoeing-multiplayer-lagging-member-catchup spec / 关键问题 1 + BUG-C/D/E）===
                                             // 仅此处（段起点传送点正常同步块=段边界）插入；集合点/异常点/强制点均不插入（BUG-E）。
                                             // 两项本地标志守卫：异常恢复未占用 SkipToNextSegment、本轮无待收尾跳段（关键问题 4）。
@@ -941,7 +882,6 @@ public partial class PathExecutor
                                             Logger.LogInformation("[联机] 传送完成，等待所有玩家同步，syncId={SyncId}, 进度={P}", tpSyncId, tpProgress);
                                             await MultiplayerCoordinator.WaitForAllPlayers(tpSyncId, ct, tpProgress);
                                             Logger.LogInformation("[联机] 传送同步完成，继续前进，syncId={SyncId}", tpSyncId);
-                                            }
                                         }
                                     }
                                 }
@@ -1122,12 +1062,6 @@ public partial class PathExecutor
                                     // 避免无谓重置后又抛异常
                                     if (TryConsumeRevivalSignal())
                                     {
-                                        // 线路重试模式（RetrySegment）：不去神像，直接抛 RetryException 重跑本段。
-                                        if (_pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment)
-                                        {
-                                            Logger.LogWarning("[联机][重试模式] 战斗结束钩子检测到复苏信号（RetrySegment）→ 跳过神像，直接重跑本段");
-                                            throw new RetryException("联机：线路重试模式，直接重跑本段");
-                                        }
                                         Logger.LogWarning("[联机] 战斗中曾触发复苏（已倒下色块检测），战斗结束后前往七天神像回血");
                                         await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null);
                                         throw new RetryException("联机：战斗中触发复苏，神像回血后跳到下一段汇合");
@@ -1525,33 +1459,27 @@ public partial class PathExecutor
                     var escalation = (BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction)
                         System.Threading.Interlocked.Exchange(ref _pendingRevivalEscalation, 0);
 
-                    // === 线路重试模式（hoeing-multiplayer-route-retry-mode spec）：最高优先，先于 SkipRoute/SkipSegment ===
-                    // 第 1 次复苏重跑本段：不上报任何状态、不去神像（消费点已跳过）、跳过本段入口同步等待、原地重跑。
+                    // === 线路重试模式 v2（hoeing-multiplayer-route-retry-mode spec §0）：最高优先，先于 SkipRoute/SkipSegment ===
+                    // 全员回神像重跑本段：消费点已 TpStatueOfTheSeven 回血，这里上报 Reviving（本段开头进度）+ 重跑本段，
+                    // 保留正常同步（同步点正常汇合）。不同于普通 Continue 的 _syncPointReached 分流——retry-mode 无论
+                    // 同步点是否到达都强制"重跑本段"（不跳下一段），因为战斗点带 sync_point_id 时 _syncPointReached 可能为 true。
+                    // 不调 StartSkipOtherOperations()：按原 JSON 完整重跑本段（全员从段起点一起重新拉怪 + 战斗，用户要求"直接按原来的 JSON 执行"）。
                     if (escalation == BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment
                         && MultiplayerCoordinator != null)
                     {
-                        _skipNextSyncWaitOnRetry = true;      // 重跑时跳过本段入口那一次 WaitForAllPlayers
-                        SkipToNextSegment = false;            // 显式清掉，确保是"重跑本段"而非"跳下一段"
-
-                        // === retry_positions 重跑块分支（hoeing-multiplayer-route-retry-mode spec）===
-                        // 本线路含重跑块 → 下一轮 for-i 用重跑块替换本段节点执行（自带传送直奔战斗点开打）。
-                        //   - 不调 StartSkipOtherOperations()：重跑块的 fight 节点必须正常执行（skipOtherOperations 会跳过非 CombatScript 的 action）。
-                        //   - 置 _wpIdxToSyncIdCache=null：重跑块不参与快速同步点抢报，避免用原段的 wpIdx→syncId 缓存错配误触发。
-                        //   - 重跑块不写 sync_point_id，天然不等队友。
-                        // 无重跑块 → fallback 现有原地重跑（StartSkipOtherOperations 跳到复苏点前的节点，逐字节保留原行为）。
-                        if (_retryBlockWaypoints != null)
+                        long retryProgress = ComputeProgress(CurWaypoints.Item1, 0); // 本段开头，让服务端在本段同步点继续等本玩家
+                        Logger.LogWarning("[联机][重试模式] RetrySegment：回神像后重跑本段（正常同步），上报 Reviving 本段开头进度={P}，原因: {Msg}",
+                            retryProgress, retryException.Message);
+                        try
                         {
-                            runRetryBlock = true;
-                            _wpIdxToSyncIdCache = null;
-                            Logger.LogWarning("[联机][重试模式] RetrySegment：本线路含重跑块，改跑 retry_positions（传送后直奔战斗点开打，不等队友），原因: {Msg}", retryException.Message);
+                            await MultiplayerCoordinator.ReportFightingStatusAsync(false);
+                            await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Reviving, retryProgress);
                         }
-                        else
-                        {
-                            StartSkipOtherOperations();
-                            Logger.LogWarning("[联机][重试模式] RetrySegment：无重跑块，原地重跑本段（跳过本段入口同步等待、跳到复苏点前节点），原因: {Msg}", retryException.Message);
-                        }
+                        catch { }
+                        SkipToNextSegment = false;   // 显式清掉，确保"重跑本段"而非"跳下一段"
+                        _needReportNormalBeforeSync = true; // 重跑到本段同步点前上报 Normal，恢复正常同步语义
                         ResetRecoveryStateForNewAttempt();
-                        continue; // 继续 for-i：重跑本段（含段起点传送）
+                        continue; // 继续 for-i：重跑本段（含段起点传送 + 正常同步汇合）
                     }
 
                     if (escalation == BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.SkipRoute
@@ -3399,12 +3327,6 @@ public partial class PathExecutor
                             // 注意：此处不修改 _inTrap 计数（不增不减），保持隐含语义；段入口段循环重置即可
                             if (TryConsumeRevivalSignal())
                             {
-                                // 线路重试模式（RetrySegment）：不去神像，直接抛 RetryException 重跑本段。
-                                if (_pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment)
-                                {
-                                    Logger.LogWarning("[联机][重试模式] 脱困入口检测到复苏信号（RetrySegment）→ 跳过神像，直接重跑本段");
-                                    throw new RetryException("联机：线路重试模式，直接重跑本段");
-                                }
                                 Logger.LogWarning("[联机] 路上检测到复苏 + 位置不变（疑似复苏后卡住），跳过随机脱困，前往七天神像回血");
                                 await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null);
                                 throw new RetryException("联机：路上复苏 + 卡住，神像回血后跳到下一段汇合");

@@ -367,6 +367,26 @@
                                 </StackPanel>
                             </StackPanel>
                         </ui:CardExpander>
+
+                        <!--  同步子卡 3：线路重试模式（hoeing-multiplayer-route-retry-mode §0，房主设置同步给成员）  -->
+                        <ui:CardExpander Margin="0,8,0,0"
+                                         ContentPadding="12"
+                                         Icon="{ui:SymbolIcon ArrowSync24}"
+                                         IsExpanded="False">
+                            <ui:CardExpander.Header>
+                                <ui:TextBlock FontTypography="Body" Text="线路重试模式" />
+                            </ui:CardExpander.Header>
+                            <StackPanel>
+                                <ui:TextBlock Margin="0,0,0,2"
+                                              Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                              Text="填线路名关键词（逗号分隔，全/半角均可）。命中的线路：任一成员复苏时，全员立即停止战斗、跳过战后拾取、传送七天神像回血后重跑本线段（正常同步），仅重试一次。留空则不启用。由房主设置并同步给所有成员。"
+                                              TextWrapping="Wrap" />
+                                <ui:TextBox Margin="0,6,0,0"
+                                            HorizontalAlignment="Stretch"
+                                            PlaceholderText="例如：深渊,丘丘,遗迹　（留空不启用）"
+                                            Text="{Binding RouteRetryModeKeywords, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </ui:CardExpander>
                     </StackPanel>
                 </ui:Card>
             </StackPanel>
@@ -432,7 +452,7 @@
                              Icon="{ui:SymbolIcon Flash24}"
                              IsExpanded="True">
                 <ui:CardExpander.Header>
-                    <ui:TextBlock FontTypography="Body" Text="战斗策略/吃药/线路重跑" />
+                    <ui:TextBlock FontTypography="Body" Text="战斗策略/吃药" />
                 </ui:CardExpander.Header>
                 <StackPanel>
                     <ui:TextBlock Margin="0,0,0,6"
@@ -460,21 +480,6 @@
                                Margin="0,10,0,0"
                                Content="按周期吃食物设置" />
 
-                    <!--  线路重试模式（hoeing-multiplayer-route-retry-mode）  -->
-                    <Border Margin="0,12,0,0"
-                            BorderBrush="{ui:ThemeResource ControlFillColorSecondaryBrush}"
-                            BorderThickness="0,1,0,0" />
-                    <ui:TextBlock Margin="0,10,0,0"
-                                  FontTypography="BodyStrong"
-                                  Text="线路重试模式" />
-                    <ui:TextBlock Margin="0,2,0,0"
-                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                  Text="填线路名关键词（逗号分隔，全/半角均可）。命中的线路遇到复苏，第一次不跳段而是原地重跑本线段，各自设置，不同步。留空则不启用。"
-                                  TextWrapping="Wrap" />
-                    <ui:TextBox Margin="0,6,0,0"
-                                HorizontalAlignment="Stretch"
-                                PlaceholderText="例如：深渊,丘丘,遗迹　（留空不启用）"
-                                Text="{Binding RouteRetryModeKeywords, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                 </StackPanel>
             </ui:CardExpander>
 

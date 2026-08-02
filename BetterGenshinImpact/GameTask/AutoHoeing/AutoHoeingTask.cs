@@ -848,6 +848,8 @@ public class AutoHoeingTask : ISoloTask
                     SyncPointMinDistance = _config.SyncPointMinDistance,
                     StartRouteIndex = _config.StartRouteIndex,
                     RouteFilterKeywords = _config.RouteFilterKeywords,
+                    // 线路重试模式关键词房主同步（hoeing-multiplayer-route-retry-mode §0 / EB-v2-4）
+                    RouteRetryModeKeywords = _config.RouteRetryModeKeywords,
                     UseFixedDebugRoutes = _config.UseFixedDebugRoutes,
                     FixedDebugRoutePath = _config.FixedDebugRoutePath,
                     DebugMode = _config.DebugMode,
@@ -1275,6 +1277,8 @@ public class AutoHoeingTask : ISoloTask
                         _config.SyncPointMinDistance = hostConfig.SyncPointMinDistance;
                         _config.StartRouteIndex = hostConfig.StartRouteIndex;
                         _config.RouteFilterKeywords = hostConfig.RouteFilterKeywords;
+                        // 线路重试模式关键词房主同步（hoeing-multiplayer-route-retry-mode §0 / EB-v2-4）
+                        _config.RouteRetryModeKeywords = hostConfig.RouteRetryModeKeywords;
                         _config.UseFixedDebugRoutes = hostConfig.UseFixedDebugRoutes;
                         _config.FixedDebugRoutePath = hostConfig.FixedDebugRoutePath;
                         _config.DebugMode = hostConfig.DebugMode;
@@ -2267,6 +2271,8 @@ public class AutoHoeingTask : ISoloTask
                     _config.SyncPointMinDistance = hostConfig.SyncPointMinDistance;
                     _config.StartRouteIndex = hostConfig.StartRouteIndex;
                     _config.RouteFilterKeywords = hostConfig.RouteFilterKeywords;
+                    // 线路重试模式关键词房主同步（hoeing-multiplayer-route-retry-mode §0 / EB-v2-4）
+                    _config.RouteRetryModeKeywords = hostConfig.RouteRetryModeKeywords;
                     _config.UseFixedDebugRoutes = hostConfig.UseFixedDebugRoutes;
                     _config.FixedDebugRoutePath = hostConfig.FixedDebugRoutePath;
                     _config.DebugMode = hostConfig.DebugMode;

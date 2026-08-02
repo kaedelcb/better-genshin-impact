@@ -7,6 +7,8 @@ public class RoomConfig
     public int StartRouteIndex { get; set; } = 0;
     /// <summary>线路关键词过滤（逗号分隔，全角/半角），文件名含任一关键词的线路跳过。默认空=不过滤。hoeing-route-keyword-filter，与客户端 RoomConfig 严格对称</summary>
     public string RouteFilterKeywords { get; set; } = "";
+    /// <summary>线路重试模式关键词（逗号分隔，全角/半角），文件名含任一关键词的线路启用"任一成员复苏→全员回神像重跑本段"。默认空=不启用。hoeing-multiplayer-route-retry-mode §0，房主设置同步给成员，与客户端 RoomConfig 严格对称</summary>
+    public string RouteRetryModeKeywords { get; set; } = "";
     public bool UseFixedDebugRoutes { get; set; } = false;
     public string FixedDebugRoutePath { get; set; } = "";
     public bool DebugMode { get; set; } = false;
