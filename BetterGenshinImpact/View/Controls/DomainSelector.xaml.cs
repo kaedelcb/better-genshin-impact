@@ -1,4 +1,5 @@
 using System;
+using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoTrackPath.Model;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
 using System.Collections.Generic;
@@ -20,17 +21,29 @@ public partial class DomainSelector : UserControl
     }
 
     /// <summary>
-    /// 重建 Countries 列表：标准国家 + 可选的"自定义"分类
+    /// 重建 Countries 列表：标准国家 + 可选的"事件任务"伪分类 + 可选的"自定义"分类
     /// </summary>
     private void RebuildCountries()
     {
         var countries = MapLazyAssets.Get().CountryToDomains.Keys.Reverse().ToList();
+
+        // 仅在显式开启时追加"事件任务"伪分类（如一条龙秘境选择），单机自动秘境页面默认不显示
+        if (ShowEventTasks)
+        {
+            countries.Add(EventTaskCategory);
+        }
+
         if (CustomDomains != null && CustomDomains.Count > 0)
         {
             countries.Add("自定义");
         }
         Countries = countries;
     }
+
+    /// <summary>
+    /// "事件任务"伪分类名称：选中后右列列出"首领讨伐""幽境危战"等独立任务标记。
+    /// </summary>
+    private const string EventTaskCategory = "事件任务";
 
     /// <summary>
     /// 控件卸载时清理事件处理器，防止内存泄漏
@@ -63,6 +76,28 @@ public partial class DomainSelector : UserControl
             typeof(DomainSelector),
             new PropertyMetadata(null, OnCustomDomainsChanged));
 
+    /// <summary>
+    /// 是否在下拉中显示"事件任务"分类（首领讨伐 / 幽境危战）。
+    /// 默认 false，保证单机自动秘境等既有调用方行为不变；仅一条龙秘境选择显式开启。
+    /// </summary>
+    public bool ShowEventTasks
+    {
+        get => (bool)GetValue(ShowEventTasksProperty);
+        set => SetValue(ShowEventTasksProperty, value);
+    }
+
+    public static readonly DependencyProperty ShowEventTasksProperty =
+        DependencyProperty.Register(
+            "ShowEventTasks",
+            typeof(bool),
+            typeof(DomainSelector),
+            new PropertyMetadata(false, OnShowEventTasksChanged));
+
+    private static void OnShowEventTasksChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        ((DomainSelector)d).RebuildCountries();
+    }
+
     private static void OnCustomDomainsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var control = (DomainSelector)d;
@@ -92,6 +127,15 @@ public partial class DomainSelector : UserControl
         if (string.IsNullOrEmpty(country))
         {
             control.FilteredDomains = new List<Tuple<string, string>>();
+        }
+        else if (country == EventTaskCategory)
+        {
+            // "事件任务"伪分类：右列列出各独立任务标记（显示名 = 存储值）
+            control.FilteredDomains = new List<Tuple<string, string>>
+            {
+                new(OneDragonFlowConfig.BossEventMarker, OneDragonFlowConfig.BossEventMarker),
+                new(OneDragonFlowConfig.StygianEventMarker, OneDragonFlowConfig.StygianEventMarker),
+            };
         }
         else if (country == "自定义")
         {
@@ -148,6 +192,16 @@ public partial class DomainSelector : UserControl
         var domain = (string)e.NewValue;
 
         if (string.IsNullOrEmpty(domain)) return;
+
+        // 事件任务标记（首领讨伐 / 幽境危战）反查到"事件任务"伪分类
+        if (domain == OneDragonFlowConfig.BossEventMarker || domain == OneDragonFlowConfig.StygianEventMarker)
+        {
+            if (control.SelectedCountry != EventTaskCategory)
+            {
+                control.SelectedCountry = EventTaskCategory;
+            }
+            return;
+        }
 
         // First try standard domain reverse lookup
         var country = MapLazyAssets.Get().GetCountryByDomain(domain);

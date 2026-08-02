@@ -95,6 +95,19 @@ namespace BetterGenshinImpact.Core.Config;
 public partial class OneDragonFlowConfig : ObservableObject
 {
      public static AllConfig Config { get; set; } = TaskContext.Instance().Config;
+
+     /// <summary>
+     /// 秘境选择器中"首领讨伐"事件任务的标记值。
+     /// 当 DomainName 等于此值时，一条龙"自动秘境"会改为委派"自动首领讨伐"独立任务，
+     /// 所有参数沿用独立任务自身配置（AutoBoss* 字段 / AutoStygianOnslaughtConfig）。
+     /// </summary>
+     public const string BossEventMarker = "首领讨伐";
+
+     /// <summary>
+     /// 秘境选择器中"幽境危战"事件任务的标记值。
+     /// 当 DomainName 等于此值时，一条龙"自动秘境"会改为委派"自动幽境危战"独立任务。
+     /// </summary>
+     public const string StygianEventMarker = "幽境危战";
     
     //版本号
     [ObservableProperty]
@@ -297,10 +310,6 @@ public partial class OneDragonFlowConfig : ObservableObject
     [ObservableProperty]
     private string _sundayEverySelectedValue = "0";
     
-    // 领取每日奖励的好感数量
-    [ObservableProperty]
-    private string _sundaySelectedValue = "0";
-    
     // 尘歌壶传送方式，1. 地图传送 2. 尘歌壶道具
     [ObservableProperty]
     private string _sereniteaPotTpType = "地图传送";
@@ -497,6 +506,10 @@ public partial class OneDragonFlowConfig : ObservableObject
     
     [ObservableProperty]
     private string _mondayDomainName = string.Empty;
+
+    // 周一领奖奖励序号，留空则不指定（取默认奖励）
+    [ObservableProperty]
+    private string _mondaySelectedValue = string.Empty;
     
     
     //周二
@@ -505,6 +518,10 @@ public partial class OneDragonFlowConfig : ObservableObject
     
     [ObservableProperty]
     private string _tuesdayDomainName = string.Empty;
+
+    // 周二领奖奖励序号，留空则不指定（取默认奖励）
+    [ObservableProperty]
+    private string _tuesdaySelectedValue = string.Empty;
     
     //周三
     [ObservableProperty]
@@ -512,6 +529,10 @@ public partial class OneDragonFlowConfig : ObservableObject
     
     [ObservableProperty]
     private string _wednesdayDomainName = string.Empty;
+
+    // 周三领奖奖励序号，留空则不指定（取默认奖励）
+    [ObservableProperty]
+    private string _wednesdaySelectedValue = string.Empty;
     
     //周四
     [ObservableProperty]
@@ -519,6 +540,10 @@ public partial class OneDragonFlowConfig : ObservableObject
     
     [ObservableProperty]
     private string _thursdayDomainName = string.Empty;
+
+    // 周四领奖奖励序号，留空则不指定（取默认奖励）
+    [ObservableProperty]
+    private string _thursdaySelectedValue = string.Empty;
     
     //周五
     [ObservableProperty]
@@ -526,6 +551,10 @@ public partial class OneDragonFlowConfig : ObservableObject
     
     [ObservableProperty]
     private string _fridayDomainName = string.Empty;
+
+    // 周五领奖奖励序号，留空则不指定（取默认奖励）
+    [ObservableProperty]
+    private string _fridaySelectedValue = string.Empty;
     
     //周六
     [ObservableProperty]
@@ -533,6 +562,10 @@ public partial class OneDragonFlowConfig : ObservableObject
     
     [ObservableProperty]
     private string _saturdayDomainName = string.Empty;
+
+    // 周六领奖奖励序号，留空则不指定（取默认奖励）
+    [ObservableProperty]
+    private string _saturdaySelectedValue = string.Empty;
     
     //周日
     [ObservableProperty]
@@ -540,6 +573,10 @@ public partial class OneDragonFlowConfig : ObservableObject
 
     [ObservableProperty]
     private string _sundayDomainName = string.Empty;
+
+    // 周日领奖奖励序号，留空则不指定（取默认奖励）
+    [ObservableProperty]
+    private string _sundayDaySelectedValue = string.Empty;
 
     // 单次执行配置单完成后操作
     [ObservableProperty]
@@ -553,14 +590,14 @@ public partial class OneDragonFlowConfig : ObservableObject
             var dayOfWeek = (DateTime.Now.Hour >= 4 ? DateTime.Today : DateTime.Today.AddDays(-1)).DayOfWeek;
             return dayOfWeek switch
             {
-                DayOfWeek.Monday => (MondayPartyName, MondayDomainName,SundaySelectedValue,ResinCount,SpecifyResinUse),
-                DayOfWeek.Tuesday => (TuesdayPartyName, TuesdayDomainName,SundaySelectedValue,ResinCount,SpecifyResinUse),
-                DayOfWeek.Wednesday => (WednesdayPartyName, WednesdayDomainName,SundaySelectedValue,ResinCount,SpecifyResinUse),
-                DayOfWeek.Thursday => (ThursdayPartyName, ThursdayDomainName,SundaySelectedValue,ResinCount,SpecifyResinUse),
-                DayOfWeek.Friday => (FridayPartyName, FridayDomainName,SundaySelectedValue,ResinCount,SpecifyResinUse),
-                DayOfWeek.Saturday => (SaturdayPartyName, SaturdayDomainName,SundaySelectedValue,ResinCount,SpecifyResinUse),
-                DayOfWeek.Sunday => (SundayPartyName, SundayDomainName,SundaySelectedValue,ResinCount,SpecifyResinUse),
-                _ => (PartyName, DomainName,SundaySelectedValue,ResinCount,SpecifyResinUse)
+                DayOfWeek.Monday => (MondayPartyName, MondayDomainName, MondaySelectedValue, ResinCount, SpecifyResinUse),
+                DayOfWeek.Tuesday => (TuesdayPartyName, TuesdayDomainName, TuesdaySelectedValue, ResinCount, SpecifyResinUse),
+                DayOfWeek.Wednesday => (WednesdayPartyName, WednesdayDomainName, WednesdaySelectedValue, ResinCount, SpecifyResinUse),
+                DayOfWeek.Thursday => (ThursdayPartyName, ThursdayDomainName, ThursdaySelectedValue, ResinCount, SpecifyResinUse),
+                DayOfWeek.Friday => (FridayPartyName, FridayDomainName, FridaySelectedValue, ResinCount, SpecifyResinUse),
+                DayOfWeek.Saturday => (SaturdayPartyName, SaturdayDomainName, SaturdaySelectedValue, ResinCount, SpecifyResinUse),
+                DayOfWeek.Sunday => (SundayPartyName, SundayDomainName, SundayDaySelectedValue, ResinCount, SpecifyResinUse),
+                _ => (PartyName, DomainName, string.Empty, ResinCount, SpecifyResinUse)
             };
         }
         else

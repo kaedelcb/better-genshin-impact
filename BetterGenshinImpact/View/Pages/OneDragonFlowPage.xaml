@@ -638,6 +638,7 @@
                                                             Margin="5,0,10,0"
                                                             SelectedDomain="{Binding SelectedConfig.DomainName, Mode=TwoWay}"
                                                             CustomDomains="{Binding SelectedConfig.CustomDomainList}"
+                                                            ShowEventTasks="True"
                                                             MouseRightButtonUp="DomainSelector_MouseRightButtonDown" />
                                     <Button
                                         Grid.Row="0"
@@ -835,13 +836,24 @@
                                                 VerticalAlignment="Center"
                                                 TextAlignment="Center"
                                                 PlaceholderText="填写队伍名称 " />
-                                    <controls:DomainSelector Grid.Row="0"
-                                                            Grid.Column="2"
-                                                            Width="140"
-                                                            Margin="0,0,36,0"
+                                    <StackPanel Grid.Row="0"
+                                                Grid.Column="2"
+                                                Orientation="Horizontal">
+                                        <controls:DomainSelector Width="140"
+                                                            Margin="0,0,10,0"
                                                             SelectedDomain="{Binding SelectedConfig.MondayDomainName, Mode=TwoWay}"
                                                             CustomDomains="{Binding SelectedConfig.CustomDomainList}"
+                                                            ShowEventTasks="True"
                                                             MouseRightButtonUp="DomainSelector_MouseRightButtonDown" />
+                                        <ComboBox Width="60"
+                                                  Margin="0,0,36,0"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalContentAlignment="Center"
+                                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                  ToolTip="领奖奖励序号，留空则使用下方全局设置"
+                                                  ItemsSource="{Binding SundaySelectedValueList}"
+                                                  SelectedItem="{Binding SelectedConfig.MondaySelectedValue, Mode=TwoWay}" />
+                                    </StackPanel>
                                 </Grid>
                                 <Grid Margin="16">
                                     <Grid.ColumnDefinitions>
@@ -865,13 +877,24 @@
                                                 VerticalAlignment="Center"
                                                 TextAlignment="Center"
                                                 PlaceholderText="填写队伍名称 " />
-                                    <controls:DomainSelector Grid.Row="0"
-                                                            Grid.Column="2"
-                                                            Width="140"
-                                                            Margin="0,0,36,0"
+                                    <StackPanel Grid.Row="0"
+                                                Grid.Column="2"
+                                                Orientation="Horizontal">
+                                        <controls:DomainSelector Width="140"
+                                                            Margin="0,0,10,0"
                                                             SelectedDomain="{Binding SelectedConfig.TuesdayDomainName, Mode=TwoWay}"
                                                             CustomDomains="{Binding SelectedConfig.CustomDomainList}"
+                                                            ShowEventTasks="True"
                                                             MouseRightButtonUp="DomainSelector_MouseRightButtonDown" />
+                                        <ComboBox Width="60"
+                                                  Margin="0,0,36,0"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalContentAlignment="Center"
+                                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                  ToolTip="领奖奖励序号，留空则使用下方全局设置"
+                                                  ItemsSource="{Binding SundaySelectedValueList}"
+                                                  SelectedItem="{Binding SelectedConfig.TuesdaySelectedValue, Mode=TwoWay}" />
+                                    </StackPanel>
                                 </Grid>
                                 <Grid Margin="16">
                                     <Grid.ColumnDefinitions>
@@ -894,13 +917,24 @@
                                                 VerticalAlignment="Center"
                                                 TextAlignment="Center"
                                                 PlaceholderText="填写队伍名称 " />
-                                    <controls:DomainSelector Grid.Row="0"
-                                                            Grid.Column="2"
-                                                            Width="140"
-                                                            Margin="0,0,36,0"
+                                    <StackPanel Grid.Row="0"
+                                                Grid.Column="2"
+                                                Orientation="Horizontal">
+                                        <controls:DomainSelector Width="140"
+                                                            Margin="0,0,10,0"
                                                             SelectedDomain="{Binding SelectedConfig.WednesdayDomainName, Mode=TwoWay}"
                                                             CustomDomains="{Binding SelectedConfig.CustomDomainList}"
+                                                            ShowEventTasks="True"
                                                             MouseRightButtonUp="DomainSelector_MouseRightButtonDown" />
+                                        <ComboBox Width="60"
+                                                  Margin="0,0,36,0"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalContentAlignment="Center"
+                                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                  ToolTip="领奖奖励序号，留空则使用下方全局设置"
+                                                  ItemsSource="{Binding SundaySelectedValueList}"
+                                                  SelectedItem="{Binding SelectedConfig.WednesdaySelectedValue, Mode=TwoWay}" />
+                                    </StackPanel>
 
                                 </Grid>
                                 <Grid Margin="16">
@@ -924,13 +958,24 @@
                                                 VerticalAlignment="Center"
                                                 TextAlignment="Center"
                                                 PlaceholderText="填写队伍名称 " />
-                                    <controls:DomainSelector Grid.Row="0"
-                                                            Grid.Column="2"
-                                                            Width="140"
-                                                            Margin="0,0,36,0"
+                                    <StackPanel Grid.Row="0"
+                                                Grid.Column="2"
+                                                Orientation="Horizontal">
+                                        <controls:DomainSelector Width="140"
+                                                            Margin="0,0,10,0"
                                                             SelectedDomain="{Binding SelectedConfig.ThursdayDomainName, Mode=TwoWay}"
                                                             CustomDomains="{Binding SelectedConfig.CustomDomainList}"
+                                                            ShowEventTasks="True"
                                                             MouseRightButtonUp="DomainSelector_MouseRightButtonDown" />
+                                        <ComboBox Width="60"
+                                                  Margin="0,0,36,0"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalContentAlignment="Center"
+                                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                  ToolTip="领奖奖励序号，留空则使用下方全局设置"
+                                                  ItemsSource="{Binding SundaySelectedValueList}"
+                                                  SelectedItem="{Binding SelectedConfig.ThursdaySelectedValue, Mode=TwoWay}" />
+                                    </StackPanel>
 
                                 </Grid>
                                 <Grid Margin="16">
@@ -954,13 +999,24 @@
                                                 VerticalAlignment="Center"
                                                 TextAlignment="Center"
                                                 PlaceholderText="填写队伍名称 " />
-                                    <controls:DomainSelector Grid.Row="0"
-                                                            Grid.Column="2"
-                                                            Width="140"
-                                                            Margin="0,0,36,0"
+                                    <StackPanel Grid.Row="0"
+                                                Grid.Column="2"
+                                                Orientation="Horizontal">
+                                        <controls:DomainSelector Width="140"
+                                                            Margin="0,0,10,0"
                                                             SelectedDomain="{Binding SelectedConfig.FridayDomainName, Mode=TwoWay}"
                                                             CustomDomains="{Binding SelectedConfig.CustomDomainList}"
+                                                            ShowEventTasks="True"
                                                             MouseRightButtonUp="DomainSelector_MouseRightButtonDown" />
+                                        <ComboBox Width="60"
+                                                  Margin="0,0,36,0"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalContentAlignment="Center"
+                                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                  ToolTip="领奖奖励序号，留空则使用下方全局设置"
+                                                  ItemsSource="{Binding SundaySelectedValueList}"
+                                                  SelectedItem="{Binding SelectedConfig.FridaySelectedValue, Mode=TwoWay}" />
+                                    </StackPanel>
 
                                 </Grid>
                                 <Grid Margin="16">
@@ -984,13 +1040,24 @@
                                                 VerticalAlignment="Center"
                                                 TextAlignment="Center"
                                                 PlaceholderText="填写队伍名称 " />
-                                    <controls:DomainSelector Grid.Row="0"
-                                                            Grid.Column="2"
-                                                            Width="140"
-                                                            Margin="0,0,36,0"
+                                    <StackPanel Grid.Row="0"
+                                                Grid.Column="2"
+                                                Orientation="Horizontal">
+                                        <controls:DomainSelector Width="140"
+                                                            Margin="0,0,10,0"
                                                             SelectedDomain="{Binding SelectedConfig.SaturdayDomainName, Mode=TwoWay}"
                                                             CustomDomains="{Binding SelectedConfig.CustomDomainList}"
+                                                            ShowEventTasks="True"
                                                             MouseRightButtonUp="DomainSelector_MouseRightButtonDown" />
+                                        <ComboBox Width="60"
+                                                  Margin="0,0,36,0"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalContentAlignment="Center"
+                                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                  ToolTip="领奖奖励序号，留空则使用下方全局设置"
+                                                  ItemsSource="{Binding SundaySelectedValueList}"
+                                                  SelectedItem="{Binding SelectedConfig.SaturdaySelectedValue, Mode=TwoWay}" />
+                                    </StackPanel>
 
                                 </Grid>
                                 <Grid Margin="16">
@@ -1019,39 +1086,24 @@
                                                 VerticalAlignment="Center"
                                                 TextAlignment="Center"
                                                 PlaceholderText="填写队伍名称 " />
-                                    <controls:DomainSelector Grid.Row="0"
-                                                            Grid.Column="2"
-                                                            Width="140"
-                                                            Margin="0,0,36,0"
+                                    <StackPanel Grid.Row="0"
+                                                Grid.Column="2"
+                                                Orientation="Horizontal">
+                                        <controls:DomainSelector Width="140"
+                                                            Margin="0,0,10,0"
                                                             SelectedDomain="{Binding SelectedConfig.SundayDomainName, Mode=TwoWay}"
                                                             CustomDomains="{Binding SelectedConfig.CustomDomainList}"
+                                                            ShowEventTasks="True"
                                                             MouseRightButtonUp="DomainSelector_MouseRightButtonDown" />
-                                    <Border Grid.Row="1"
-                                            Grid.Column="0"
-                                            Grid.ColumnSpan="3"
-                                            Grid.RowSpan="2"
-                                            Margin="0,21,100,10"
-                                            Background="#80595959"
-                                            CornerRadius="5"
-                                            Width="Auto"
-                                            HorizontalAlignment="Right"
-                                            Padding="10">
-                                        <ui:TextBlock FontTypography="Body"
-                                                      FontSize="13" 
-                                                      Text="周日或限时三种奖励,从上往下（1/2/3）序号:"
-                                                      TextAlignment="Justify"
-                                                      TextWrapping="Wrap" />
-                                    </Border>
-                                    <ComboBox Grid.Row="1"
-                                              Grid.Column="2"
-                                              Grid.RowSpan="2"
-                                              Margin="20,11,37,0"
-                                              Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                              HorizontalAlignment="Right"
-                                              VerticalAlignment="Center"
-                                              ItemsSource="{Binding SundaySelectedValueList , Mode=TwoWay}"
-                                              SelectedItem="{Binding SelectedConfig.SundaySelectedValue, Mode=TwoWay}">
-                                    </ComboBox>
+                                        <ComboBox Width="60"
+                                                  Margin="0,0,36,0"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalContentAlignment="Center"
+                                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                  ToolTip="领奖奖励序号，留空则使用下方全局设置"
+                                                  ItemsSource="{Binding SundaySelectedValueList}"
+                                                  SelectedItem="{Binding SelectedConfig.SundayDaySelectedValue, Mode=TwoWay}" />
+                                    </StackPanel>
                                 </Grid>
                             </StackPanel>
                         </ui:CardExpander>

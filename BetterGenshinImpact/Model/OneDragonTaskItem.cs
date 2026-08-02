@@ -93,6 +93,24 @@ public partial class OneDragonTaskItem : ObservableObject
             case "自动秘境":
                 Action = async () =>
                 {
+                    // 先取出当天配置的秘境名。若命中事件任务标记，则改为委派对应独立任务，
+                    // 所有参数沿用独立任务自身配置（不走秘境流程）。
+                    var (partyName, domainName, sundaySelectedValue, resinCount, specifyResinUse) = config.GetDomainConfig();
+
+                    if (domainName == OneDragonFlowConfig.BossEventMarker)
+                    {
+                        TaskControl.Logger.LogInformation("自动秘境任务：当天配置为{Text}，改为执行", "首领讨伐");
+                        await RunAutoBossFromIndependentConfigAsync();
+                        return;
+                    }
+
+                    if (domainName == OneDragonFlowConfig.StygianEventMarker)
+                    {
+                        TaskControl.Logger.LogInformation("自动秘境任务：当天配置为{Text}，改为执行", "幽境危战");
+                        await RunAutoStygianAsync();
+                        return;
+                    }
+
                     if (string.IsNullOrEmpty(TaskContext.Instance().Config.AutoFightConfig.StrategyName))
                     {
                         TaskContext.Instance().Config.AutoFightConfig.StrategyName = "根据队伍自动选择";
@@ -105,7 +123,6 @@ public partial class OneDragonTaskItem : ObservableObject
                         return;
                     }
 
-                    var (partyName, domainName, sundaySelectedValue,resinCount,specifyResinUse) = config.GetDomainConfig();
                     if (string.IsNullOrEmpty(domainName))
                     {
                         TaskControl.Logger.LogError("一条龙配置内{Msg}需要刷的秘境，跳过", "未选择");
@@ -128,61 +145,10 @@ public partial class OneDragonTaskItem : ObservableObject
                 };
                 break;
             case "自动首领讨伐":
-                Action = async () =>
-                {
-                    if (string.IsNullOrEmpty(config.AutoBossStrategyName))
-                    {
-                        config.AutoBossStrategyName = "根据队伍自动选择";
-                    }
-
-                    var taskSettingsPageViewModel = App.GetService<TaskSettingsPageViewModel>();
-                    if (taskSettingsPageViewModel!.GetFightStrategy(config.AutoBossStrategyName, out var path))
-                    {
-                        TaskControl.Logger.LogError("自动首领讨伐战斗策略{Msg}，跳过", "未配置");
-                        return;
-                    }
-
-                    if (string.IsNullOrWhiteSpace(config.AutoBossName))
-                    {
-                        TaskControl.Logger.LogError("一条龙配置内{Msg}需要讨伐的首领，跳过", "未选择");
-                        return;
-                    }
-
-                    AutoBossParam param = AutoBossParam.CreateWithoutDefaultConfig(path);
-                    param.BossName = config.AutoBossName;
-                    param.StrategyName = config.AutoBossStrategyName;
-                    param.TeamName = config.AutoBossTeamName;
-                    param.SpecifyRunCount = config.AutoBossSpecifyRunCount;
-                    param.RunCount = config.AutoBossRunCount;
-                    param.UseTransientResin = config.AutoBossUseTransientResin;
-                    param.UseFragileResin = config.AutoBossUseFragileResin;
-                    param.ReviveRetryCount = config.AutoBossReviveRetryCount;
-                    param.ReturnToStatueAfterEachRound = config.AutoBossReturnToStatueAfterEachRound;
-                    param.RewardRecognitionEnabled = config.AutoBossRewardRecognitionEnabled;
-                    param.RewardRecognitionEnabled = config.AutoBossRewardRecognitionEnabled;
-                    param.Timeout = config.AutoBossTimeout;
-                    await new AutoBossTask(param).Start(CancellationContext.Instance.Cts.Token);
-                };
+                Action = async () => await RunAutoBossAsync(config);
                 break;
             case "自动幽境危战":
-                Action = async () =>
-                {
-                    if (string.IsNullOrEmpty(TaskContext.Instance().Config.AutoStygianOnslaughtConfig.StrategyName))
-                    {
-                        TaskContext.Instance().Config.AutoStygianOnslaughtConfig.StrategyName = "根据队伍自动选择";
-                    }
-
-                    var taskSettingsPageViewModel = App.GetService<TaskSettingsPageViewModel>();
-                    if (taskSettingsPageViewModel!.GetFightStrategy(TaskContext.Instance().Config.AutoStygianOnslaughtConfig.StrategyName, out var path))
-                    {
-                        TaskControl.Logger.LogError("自动幽境危战战斗策略{Msg}，跳过", "未配置");
-                        return;
-                    }
-
-                    AutoStygianOnslaughtParam param = new AutoStygianOnslaughtParam();
-                    param.SetAutoStygianOnslaughtConfig(TaskContext.Instance().Config.AutoStygianOnslaughtConfig);
-                    await new AutoStygianOnslaughtTask(param, path).Start(CancellationContext.Instance.Cts.Token);
-                };
+                Action = async () => await RunAutoStygianAsync();
                 break;
             case "领取每日奖励":
                 Action = async () =>
@@ -251,5 +217,97 @@ public partial class OneDragonTaskItem : ObservableObject
                 Action = () => Task.CompletedTask;
                 break;
         }
+    }
+
+    /// <summary>
+    /// 执行"自动首领讨伐"独立任务。参数全部来自一条龙配置的 AutoBoss* 字段，
+    /// 与任务列表中的"自动首领讨伐"条目行为完全一致。
+    /// 供"自动首领讨伐"条目与"自动秘境"命中首领标记时共用。
+    /// </summary>
+    private static async Task RunAutoBossAsync(OneDragonFlowConfig config)
+    {
+        if (string.IsNullOrEmpty(config.AutoBossStrategyName))
+        {
+            config.AutoBossStrategyName = "根据队伍自动选择";
+        }
+
+        var taskSettingsPageViewModel = App.GetService<TaskSettingsPageViewModel>();
+        if (taskSettingsPageViewModel!.GetFightStrategy(config.AutoBossStrategyName, out var path))
+        {
+            TaskControl.Logger.LogError("自动首领讨伐战斗策略{Msg}，跳过", "未配置");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(config.AutoBossName))
+        {
+            TaskControl.Logger.LogError("一条龙配置内{Msg}需要讨伐的首领，跳过", "未选择");
+            return;
+        }
+
+        AutoBossParam param = AutoBossParam.CreateWithoutDefaultConfig(path);
+        param.BossName = config.AutoBossName;
+        param.StrategyName = config.AutoBossStrategyName;
+        param.TeamName = config.AutoBossTeamName;
+        param.SpecifyRunCount = config.AutoBossSpecifyRunCount;
+        param.RunCount = config.AutoBossRunCount;
+        param.UseTransientResin = config.AutoBossUseTransientResin;
+        param.UseFragileResin = config.AutoBossUseFragileResin;
+        param.ReviveRetryCount = config.AutoBossReviveRetryCount;
+        param.ReturnToStatueAfterEachRound = config.AutoBossReturnToStatueAfterEachRound;
+        param.RewardRecognitionEnabled = config.AutoBossRewardRecognitionEnabled;
+        param.Timeout = config.AutoBossTimeout;
+        await new AutoBossTask(param).Start(CancellationContext.Instance.Cts.Token);
+    }
+
+    /// <summary>
+    /// 执行"自动首领讨伐"独立任务，参数全部来自独立任务自身配置 AutoBossConfig
+    /// （即 TaskSettingsPage"自动首领讨伐"面板里选的首领 / 策略 / 队伍等）。
+    /// 逻辑与独立任务启动按钮 OnSwitchAutoBoss 完全一致。
+    /// 供"自动秘境"命中"首领讨伐"标记时使用。
+    /// </summary>
+    private static async Task RunAutoBossFromIndependentConfigAsync()
+    {
+        var bossConfig = TaskContext.Instance().Config.AutoBossConfig;
+
+        var taskSettingsPageViewModel = App.GetService<TaskSettingsPageViewModel>();
+        if (taskSettingsPageViewModel!.GetFightStrategy(bossConfig.StrategyName, out var path))
+        {
+            TaskControl.Logger.LogError("自动首领讨伐战斗策略{Msg}，跳过", "未配置");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(bossConfig.BossName))
+        {
+            TaskControl.Logger.LogError("独立任务内{Msg}需要讨伐的首领，跳过", "未选择");
+            return;
+        }
+
+        AutoBossParam param = new AutoBossParam(path);
+        param.SetAutoBossConfig(bossConfig);
+        await new AutoBossTask(param).Start(CancellationContext.Instance.Cts.Token);
+    }
+
+    /// <summary>
+    /// 执行"自动幽境危战"独立任务。参数全部来自 AutoStygianOnslaughtConfig，
+    /// 与任务列表中的"自动幽境危战"条目行为完全一致。
+    /// 供"自动幽境危战"条目与"自动秘境"命中幽境标记时共用。
+    /// </summary>
+    private static async Task RunAutoStygianAsync()
+    {
+        if (string.IsNullOrEmpty(TaskContext.Instance().Config.AutoStygianOnslaughtConfig.StrategyName))
+        {
+            TaskContext.Instance().Config.AutoStygianOnslaughtConfig.StrategyName = "根据队伍自动选择";
+        }
+
+        var taskSettingsPageViewModel = App.GetService<TaskSettingsPageViewModel>();
+        if (taskSettingsPageViewModel!.GetFightStrategy(TaskContext.Instance().Config.AutoStygianOnslaughtConfig.StrategyName, out var path))
+        {
+            TaskControl.Logger.LogError("自动幽境危战战斗策略{Msg}，跳过", "未配置");
+            return;
+        }
+
+        AutoStygianOnslaughtParam param = new AutoStygianOnslaughtParam();
+        param.SetAutoStygianOnslaughtConfig(TaskContext.Instance().Config.AutoStygianOnslaughtConfig);
+        await new AutoStygianOnslaughtTask(param, path).Start(CancellationContext.Instance.Cts.Token);
     }
 }
