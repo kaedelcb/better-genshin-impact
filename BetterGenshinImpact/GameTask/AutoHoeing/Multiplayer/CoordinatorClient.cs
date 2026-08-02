@@ -768,7 +768,7 @@ public class CoordinatorClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// 上报团队 arming（本机吃到经验，或连续 5 场无经验兜底触发，multiplayer-hoeing-exp-cap-stop R7）。
+    /// 上报团队 arming（本机吃到经验，或连续 6 场无经验兜底触发，multiplayer-hoeing-exp-cap-stop R7）。
     /// 服务端据此置 ExpCapArmed=true——广播 AllReachedExpCap 的必要条件之一。
     /// 失败静默忽略，旧服务端无此 Hub 方法 → HubException 被吞，行为退化为不提前终止（不误停、不卡死）。
     /// </summary>

@@ -257,7 +257,7 @@ public class MultiplayerCoordinator : IAsyncDisposable
                 break;
         }
 
-        // 团队 arming（multiplayer-hoeing-exp-cap-stop R7）：吃到经验、或连续5场无经验兜底 → 发一次 arming（每轮幂等）。
+        // 团队 arming（multiplayer-hoeing-exp-cap-stop R7）：吃到经验、或连续6场无经验兜底 → 发一次 arming（每轮幂等）。
         // 必须放在 switch（含 Clear 上报）之后：保证本机的 ExpCapCleared 先于 ExpArmed 送达服务端，
         // 从而 arming 到达时本机已从 ExpCapReachedSet 移除，不会触发误广播（design §14.3 竞态安全）。
         if (!_expArmedSent && (hasExp || ExpCapDecisions.ShouldForceArm(_consecutiveNoExpCount)))

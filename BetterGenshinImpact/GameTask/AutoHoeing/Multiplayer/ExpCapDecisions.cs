@@ -19,8 +19,8 @@ public enum ExpCapReportAction
 /// </summary>
 public static class ExpCapDecisions
 {
-    /// <summary>连续无经验判定阈值（固定 2，不可配）。</summary>
-    public const int ConsecutiveNoExpThreshold = 2;
+    /// <summary>连续无经验判定阈值（固定 4，不可配）。</summary>
+    public const int ConsecutiveNoExpThreshold = 4;
 
     /// <summary>
     /// 下一个"连续无经验计数"：hasExp==true 归零；false 则 +1。
@@ -50,9 +50,9 @@ public static class ExpCapDecisions
 
     // === 团队 arming 门控兜底（multiplayer-hoeing-exp-cap-stop R7，后补）===
 
-    /// <summary>连续无经验"无条件兜底自点亮 arming"阈值（固定 5，不可配）。
+    /// <summary>连续无经验"无条件兜底自点亮 arming"阈值（固定 6，不可配）。
     /// 覆盖"全队进房即满级、谁都吃不到经验、团队 arming 永远点不亮"的死锁。R7.2。</summary>
-    public const int ConsecutiveNoExpUnconditionalThreshold = 5;
+    public const int ConsecutiveNoExpUnconditionalThreshold = 6;
 
     /// <summary>是否应"兜底自点亮团队 arming"：连续无经验计数达无条件阈值即为真。
     /// 纯函数，PBT 友好。R7.2。仅决定"是否发 arming 信号"，不影响 R3 上报/撤回。</summary>
