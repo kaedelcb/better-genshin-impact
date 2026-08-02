@@ -1119,14 +1119,18 @@ public partial class PathExecutor
                                                 if (__mavuika != null)
                                                 {
                                                     using var __dismountRegion = CaptureToRectArea();
-                                                    var __activeIndex = _combatScenes!.GetActiveAvatarIndex(
-                                                        __dismountRegion,
-                                                        new BetterGenshinImpact.GameTask.AutoFight.Model.AvatarActiveCheckContext());
-                                                    if (__activeIndex == __mavuika.Index && __mavuika.IsMotorcycle())
+                                                    // 出战判定：
+                                                    // - 联机单角色（队伍只有1人）：右侧队伍栏只有一个头像，IsActive 靠编号框高亮对比判不出来，
+                                                    //   队里唯一角色就是玛薇卡时直接判定"已出战"。
+                                                    // - 多角色：用 IsActive（直接判玛薇卡自己的编号框是否高亮），与战斗内已验证可用的
+                                                    //   摩托检测写法一致（AutoFightTask：colorDiff<15 && avatar.IsActive(region)）。
+                                                    //   不用 GetActiveAvatarIndex（要在多个框里认出哪个高亮，此场景常返回 -1 → 门控永假 → 从不下车）。
+                                                    var __mavuikaActive = _combatScenes!.AvatarCount <= 1 || __mavuika.IsActive(__dismountRegion);
+                                                    if (__mavuikaActive && __mavuika.IsMotorcycle())
                                                     {
                                                         Logger.LogInformation("[联机] 战后回点：检测到玛薇卡在摩托上，按 E 下车");
                                                         Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
-                                                        await Delay(800, ct);
+                                                        await Delay(500, ct);
                                                     }
                                                 }
                                             }
