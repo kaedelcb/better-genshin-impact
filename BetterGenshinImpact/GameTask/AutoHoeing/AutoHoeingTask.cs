@@ -1907,7 +1907,10 @@ public class AutoHoeingTask : ISoloTask
                 // 抑制墙钟兜底按集合点超时联动（PartyTimeoutSeconds + 余量，Resolve 内叠加）：
                 // SetupNextRoundAsync 内部多处等待（WaitForMembers / AllJoined / HostReady）均以
                 // PartyTimeoutSeconds 为单次超时，故兜底以同一量级 + 余量作上界，避免误杀重组队长等待。
-                _worldStateMonitor?.BeginRoundSwitch(_config.PartyTimeoutSeconds);
+                // 但 PartyTimeoutSeconds 可能被用户设得很长（如 3600s），钳到 120s 安全下限，保证
+                // 墙钟兜底至少能覆盖 WaitForMembers 的 120s 最小超时，同时避免 3660s 的不合理兜底。
+                var roundSwitchTimeout = Math.Max(120, _config.PartyTimeoutSeconds);
+                _worldStateMonitor?.BeginRoundSwitch(roundSwitchTimeout);
                 var setupGroupTags = BuildGroupTags();
                 var setupOutcome = await SetupNextRoundAsync(round, roundHostPlayer, amIHost, client, playerOrder.Count, setupGroupTags);
                 _worldStateMonitor?.EndRoundSwitch();
@@ -2376,6 +2379,8 @@ public class AutoHoeingTask : ISoloTask
             // 重建 coordinator
             var resolver = new SyncPointResolver();
             _multiplayerCoordinator = new MultiplayerCoordinator(client, resolver, _config);
+            // 将当前 _linkedStopCts 赋给新 coordinator，确保协调停止能传播到 _ct
+            _multiplayerCoordinator.StopCts = _linkedStopCts;
 
             _multiplayerCoordinator.OnDegraded += reason =>
                 _logger.LogWarning("[联机] 已降级为单机模式，原因：{Reason}", reason);
