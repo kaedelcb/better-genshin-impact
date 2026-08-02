@@ -182,7 +182,7 @@ public class TemplatePickupService
                     {
                         // 拾取
                         Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_F);
-                        Logger.LogInformation("交互或拾取：\"{Name}\"", itemName);
+                        Logger.LogInformation("交互或拾取：{Name}", itemName);
                         lastCenterYF = centerYF;
                         lastItemName = itemName;
                         await Task.Delay(pickupDelay, ct);
