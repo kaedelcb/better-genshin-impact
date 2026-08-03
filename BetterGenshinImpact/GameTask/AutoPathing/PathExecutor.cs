@@ -70,6 +70,13 @@ public partial class PathExecutor
     private bool _MwkFly = true;
     // 玛薇卡挑飞触发距离阈值，从 PartyConfig.MwkFlyJumpDistance 读取（默认 75，0=不挑飞）
     private int _mwkFlyJumpDistance = 75;
+
+    // 玛薇卡摩托状态模板匹配识别对象（战后回点下车检测用）。
+    // 参考 AutoFontaineLeyLine/main.js：imageRecognition(mwk,2,0,0,1682,972,35,42,0.7,false)
+    // —— 模板 mwk.png（绿底掩膜），ROI (1682,972,35,42)，阈值 0.7。模板文件位于
+    // GameTask\AutoFight\Assets\1920x1080\mwk.png（随构建输出）。
+    // 首次使用时惰性构建并缓存，避免每次回点重复读盘 / InitTemplate。
+    private static RecognitionObject? _mwkMotorcycleRo;
     private readonly ReturnMainUiTask _returnMainUiTask = new();
 
     // 玛薇卡飞行等待期间的脱离飞行检测参数（ms）
@@ -90,6 +97,39 @@ public partial class PathExecutor
         _rotateTask = new(ct);
         this.ct = ct;
         pathExecutorSuspend = new PathExecutorSuspend(this);
+    }
+
+    /// <summary>
+    /// 用目标模板匹配判断玛薇卡是否处于摩托状态（战后回点下车检测用）。
+    /// 参考 AutoFontaineLeyLine/main.js: imageRecognition(mwk,...,1682,972,35,42,...)，ROI (1682,972,35,42)。
+    /// mwk.png 为绿底 + 白箭头（下车提示图标），故启用掩膜 UseMask=true，
+    /// MaskColor 用默认绿 (0,255,0) 把绿底抠掉，只匹配白箭头本体（模板位于
+    /// GameTask\AutoFight\Assets\1920x1080\mwk.png，随构建输出）。
+    /// 匹配模式用 SqDiffNormed（OpenCV 支持掩膜；默认 CCoeffNormed 配掩膜会算出 NaN）。
+    /// 实测 7 帧：SqDiffNormed 原始分 在摩托≤0.0144 / 徒步≥0.123，中间空档 0.11；
+    /// C# 侧 isLowerBetter → scoreThreshold = 1 - Threshold，设 Threshold=0.93 即原始分≤0.07 判命中。
+    /// 首次调用惰性构建并缓存 RecognitionObject，避免每次回点重复读盘 / InitTemplate。
+    /// 传入已截取的当前画面 region，直接在其上 Find（不重复截图）。
+    /// </summary>
+    private static bool IsMavuikaOnMotorcycleByTemplate(ImageRegion region)
+    {
+        if (_mwkMotorcycleRo == null)
+        {
+            var mat = GameTaskManager.LoadAssetImage("AutoFight", "mwk.png");
+            _mwkMotorcycleRo = new RecognitionObject
+            {
+                Name = "MwkMotorcycle",
+                RecognitionType = RecognitionTypes.TemplateMatch,
+                TemplateImageMat = mat,
+                RegionOfInterest = new Rect(1682, 972, 35, 42),
+                TemplateMatchMode = TemplateMatchModes.SqDiffNormed,
+                UseMask = true, // 绿底模板：抠掉 (0,255,0) 背景，只匹配白箭头本体
+                Threshold = 0.93, // isLowerBetter：等价原始 SqDiff 分 ≤ 0.07
+            }.InitTemplate();
+        }
+
+        using var result = region.Find(_mwkMotorcycleRo);
+        return result.IsExist();
     }
     
     /// <summary>
@@ -1129,27 +1169,32 @@ public partial class PathExecutor
                                             // 玛薇卡摩托下车（恒开，无需配置）：
                                             // 战后回点第一段 MoveTo 粗接近前，若当前出战为玛薇卡且在摩托上则按一下 E 下车，
                                             // 避免骑摩托高速冲过战斗点 / 干扰后续小地图坐标识别。
-                                            // 三层门控保证零误触（队里有玛薇卡 + 当前出战是玛薇卡 + IsMotorcycle 色差命中），
+                                            // 三层门控保证零误触（队里有玛薇卡 + 当前出战是玛薇卡 + 摩托模板命中），
                                             // 三者缺一即跳过 → 非玛薇卡队伍 / 玛薇卡未出战 / 非摩托态一次都不按 E（不会误骑上车）。
+                                            // 摩托判定用目标模板匹配（SqDiffNormed + 掩膜，见 IsMavuikaOnMotorcycleByTemplate）。
                                             // 整块 try-catch 兜底：检测/按键任何异常都不影响后续回点主流程（取消透传）。
                                             try
                                             {
                                                 var __mavuika = _combatScenes?.SelectAvatar("玛薇卡");
                                                 if (__mavuika != null)
                                                 {
+                                                    // 画面稳定门控：战斗刚结束画面未稳定，摩托图标 / 队伍栏尚未渲染，
+                                                    // 直接截图会 MISS。识别前先等派蒙菜单图标出现（最多 2 秒：10×200ms），
+                                                    // 确认已回到主界面、画面稳定后再截取用于 IsActive + 摩托模板匹配。
+                                                    await Bv.WaitUntilFound(
+                                                        ElementAssets.Instance.PaimonMenuRo, ct, retryTimes: 10, delayMs: 200);
+
                                                     using var __dismountRegion = CaptureToRectArea();
                                                     // 出战判定：
                                                     // - 联机单角色（队伍只有1人）：右侧队伍栏只有一个头像，IsActive 靠编号框高亮对比判不出来，
                                                     //   队里唯一角色就是玛薇卡时直接判定"已出战"。
                                                     // - 多角色：用 IsActive（直接判玛薇卡自己的编号框是否高亮），与战斗内已验证可用的
-                                                    //   摩托检测写法一致（AutoFightTask：colorDiff<15 && avatar.IsActive(region)）。
-                                                    //   不用 GetActiveAvatarIndex（要在多个框里认出哪个高亮，此场景常返回 -1 → 门控永假 → 从不下车）。
                                                     var __mavuikaActive = _combatScenes!.AvatarCount <= 1 || __mavuika.IsActive(__dismountRegion);
-                                                    if (__mavuikaActive)
+                                                    if (__mavuikaActive && IsMavuikaOnMotorcycleByTemplate(__dismountRegion))
                                                     {
                                                         Logger.LogInformation("[联机] 战后回点：检测到玛薇卡在摩托上，按 E 下车");
                                                         Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
-                                                        await Delay(500, ct);
+                                                        await Delay(100, ct);
                                                     }
                                                 }
                                             }
