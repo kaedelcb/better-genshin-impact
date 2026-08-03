@@ -171,6 +171,9 @@
 		      Link="User\JsScript\AutoSwitchRoles\Assets\characterimage\%(Filename)%(Extension)">
 		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
+		<None Update="GameTask\CharacterDevelopment\Assets\1920x1080\**">
+		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
 		<None Update="GameTask\AutoFishing\Assets\**">
 		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
