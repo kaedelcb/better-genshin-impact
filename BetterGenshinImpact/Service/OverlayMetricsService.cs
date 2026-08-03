@@ -290,7 +290,14 @@ public sealed class OverlayMetricsService : IDisposable
 
     private void RefreshHardwareMetrics(MaskWindowConfig config, DateTime now)
     {
-        if (!Monitor.TryEnter(_hardwareLocker, 0)) return;
+        // 多个 TP Worker 会并发进入本方法（Timer 触发器线程 + 脚本线程）。
+        // LibreHardwareMonitor 传感器采样较慢，用 TryEnter 避免排队等锁；
+        // 抢不到说明上一轮采样还没结束，直接跳过本轮（秒级节流，跳过无影响）。
+        if (!Monitor.TryEnter(_hardwareLocker, 0))
+        {
+            return;
+        }
+
         try
         {
             var previousRefreshTime = _lastHardwareRefreshTime;
