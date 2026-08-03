@@ -151,6 +151,14 @@ public partial class PathExecutor
     private volatile int _pendingRevivalEscalation = 0;
 
     /// <summary>
+    /// 线路重试模式 v2（hoeing-multiplayer-route-retry-mode §0）：RetrySegment 重跑本段时置 true。
+    /// 使本段起点传送块跳过"按周期吃食物"和"按线路切角色"两个多余动作
+    /// （已回神像满血 + 复苏者战斗中途，重跑时再吃药/换人无意义且浪费时间）。
+    /// 段起点切角色块执行后消费即复位。默认 false，非重跑路径永不置位。保留正常同步不受影响。
+    /// </summary>
+    private bool _rerunSuppressExtrasOnce = false;
+
+    /// <summary>
     /// 联机模式专用：外部（AnomalyDetector）检测到联机已倒下界面时调用。
     /// 仅在联机模式下有效，单机模式忽略以保留原有行为。
     /// </summary>
@@ -529,8 +537,9 @@ public partial class PathExecutor
                         // 此为兜底路径：战斗结束钩子和脱困入口未能消费时由这里兜底处理
                         if (TryConsumeRevivalSignal())
                         {
-                            Logger.LogWarning("[联机] 主循环兜底路径检测到复苏信号，前往七天神像回血");
-                            await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null);
+                            bool __retryForce = _pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment;
+                            Logger.LogWarning("[联机] 主循环兜底路径检测到复苏信号，前往七天神像回血{Force}", __retryForce ? "（重试模式强制去神像）" : "");
+                            await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null, forceStatue: __retryForce);
                             throw new RetryException("联机：主循环检测到已倒下复苏，神像回血后按异常处理");
                         }
                         
@@ -674,7 +683,9 @@ public partial class PathExecutor
                             // 算本次吃药计划；ShouldEat 时把 __tpFastSyncId 置 null 抑制该传送点快速抢报（等吃完再严格上报）。
                             // 单机 / MultiplayerCoordinator==null 时不计算，plan 保持 Empty，__tpFastSyncId 逐字节不变（单机零回归）。
                             _pendingMedicineEatPlan = BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.MedicineEatPlan.Empty;
-                            if (MultiplayerCoordinator != null)
+                            // 线路重试模式 v2（§0）：重跑本段起点跳过按周期吃食物（已回神像满血，重跑再吃药多余且浪费时间）。
+                            // 非重跑路径 _rerunSuppressExtrasOnce 恒 false，吃药逻辑逐字节不变。
+                            if (MultiplayerCoordinator != null && !_rerunSuppressExtrasOnce)
                             {
                                 var __medCfg = MultiplayerCoordinator.EffectiveConfig;
                                 var __medCd = TaskContext.Instance().Config.MedicineEatCdConfig;
@@ -734,8 +745,10 @@ public partial class PathExecutor
                             // 按线路切角色（hoeing-multiplayer-per-route-switch-roles，R4.1/R10.3/R10.4）：
                             // 传送完成 → 先切角色 → 切角色成功后再走下方 WaitForAllPlayers 上报到达。
                             // PerRouteSwitchHook==null 或本线路无切换或已切过 → 整块短路，不换角色路径逐字节不变。
+                            // 线路重试模式 v2（§0）：重跑本段起点跳过按线路切角色（已切过 / 重跑无需重复换人）。
                             if (PerRouteSwitchHook is { RouteHasSwitch: true } __perRouteHook
-                                && !_perRouteSwitchDone)
+                                && !_perRouteSwitchDone
+                                && !_rerunSuppressExtrasOnce)
                             {
                                 _perRouteSwitchDone = true;   // 每线路一次性（实例级，R4.3）
                                 // 换角色期间抑制后台拾取输入（滚轮/按F），避免在配队筛选界面误滚动元素图标
@@ -760,6 +773,10 @@ public partial class PathExecutor
                                     BetterGenshinImpact.GameTask.AutoHoeing.Services.TemplatePickupService.SuppressPickupInput = false;
                                 }
                             }
+
+                            // 线路重试模式 v2（§0）：段起点两个多余动作（吃药 build + 切角色）已消费本标志，就地复位。
+                            // 放在切角色块之后、吃药执行块之前——吃药执行读的是已被 build 跳过（Empty）的 _pendingMedicineEatPlan，不再读本标志。
+                            _rerunSuppressExtrasOnce = false;
 
                             // 按周期吃食物执行（multiplayer-hoeing-auto-eat-food-by-period，执行时机=传送同步点）：
                             // 传送完成 → 若本次需吃药 → 打开食物页依次吃各到期格 → 仅当食物页成功打开才对每格写全局 CD 时间戳 →
@@ -1062,8 +1079,10 @@ public partial class PathExecutor
                                     // 避免无谓重置后又抛异常
                                     if (TryConsumeRevivalSignal())
                                     {
-                                        Logger.LogWarning("[联机] 战斗中曾触发复苏（已倒下色块检测），战斗结束后前往七天神像回血");
-                                        await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null);
+                                        // 线路重试模式 v2：RetrySegment 强制去神像（forceStatue）跳过嗑药分级，保证全员真正回神像满血
+                                        bool __retryForce = _pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment;
+                                        Logger.LogWarning("[联机] 战斗中曾触发复苏（已倒下色块检测），战斗结束后前往七天神像回血{Force}", __retryForce ? "（重试模式强制去神像）" : "");
+                                        await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null, forceStatue: __retryForce);
                                         throw new RetryException("联机：战斗中触发复苏，神像回血后跳到下一段汇合");
                                     }
 
@@ -1126,7 +1145,7 @@ public partial class PathExecutor
                                                     //   摩托检测写法一致（AutoFightTask：colorDiff<15 && avatar.IsActive(region)）。
                                                     //   不用 GetActiveAvatarIndex（要在多个框里认出哪个高亮，此场景常返回 -1 → 门控永假 → 从不下车）。
                                                     var __mavuikaActive = _combatScenes!.AvatarCount <= 1 || __mavuika.IsActive(__dismountRegion);
-                                                    if (__mavuikaActive && __mavuika.IsMotorcycle())
+                                                    if (__mavuikaActive)
                                                     {
                                                         Logger.LogInformation("[联机] 战后回点：检测到玛薇卡在摩托上，按 E 下车");
                                                         Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
@@ -1482,6 +1501,7 @@ public partial class PathExecutor
                         catch { }
                         SkipToNextSegment = false;   // 显式清掉，确保"重跑本段"而非"跳下一段"
                         _needReportNormalBeforeSync = true; // 重跑到本段同步点前上报 Normal，恢复正常同步语义
+                        _rerunSuppressExtrasOnce = true;    // 重跑本段起点：跳过按周期吃食物 + 按线路切角色（已回神像满血，多余）
                         ResetRecoveryStateForNewAttempt();
                         continue; // 继续 for-i：重跑本段（含段起点传送 + 正常同步汇合）
                     }
@@ -2474,7 +2494,7 @@ public partial class PathExecutor
         }
     }
     
-    private async Task TpStatueOfTheSeven(bool switchOnly = false, bool requireLoadingScreen = false)
+    private async Task TpStatueOfTheSeven(bool switchOnly = false, bool requireLoadingScreen = false, bool forceStatue = false)
     {
         // return-to-point-suspend-during-revival-teleport spec：
         // 进入神像传送即置位标志，使两条"战斗中回点"后台循环 return 终止本场回点循环，
@@ -2485,7 +2505,7 @@ public partial class PathExecutor
         AutoFightTask.IsTeleportingToStatue = true;
         try
         {
-            await TpStatueOfTheSevenCore(switchOnly, requireLoadingScreen);
+            await TpStatueOfTheSevenCore(switchOnly, requireLoadingScreen, forceStatue);
         }
         finally
         {
@@ -2493,10 +2513,52 @@ public partial class PathExecutor
         }
     }
 
-    private async Task TpStatueOfTheSevenCore(bool switchOnly = false, bool requireLoadingScreen = false)
+    private async Task TpStatueOfTheSevenCore(bool switchOnly = false, bool requireLoadingScreen = false, bool forceStatue = false)
     {
+        // 线路重试模式 v2（hoeing-multiplayer-route-retry-mode §0）：forceStatue=true 时跳过"嗑药分级恢复"
+        // （原逻辑第 1 次只嗑小道具就 return，走不到下方传送神像）→ 直接传送神像满血，保证"全员回神像重跑"落地。
+
+        // === 方案 B：有界轮询等强制复活结束、角色恢复可控（再开图传送）===
+        // 点复苏后角色被强制复活动画锁定约 5~10 秒，期间按 M 开不了大地图。
+        // 判据：能成功打开大地图 = 已可控。轮询按 M 试开图，成功即 ESC 关掉（让下方正常流程重新干净开图），
+        // 封顶 12 秒超时也继续（不卡死，由后续 CheckInBigMapUi 重试兜底）。仅 forceStatue（retry-mode 复苏）路径生效。
+        if (forceStatue)
+        {
+            var __waitStart = DateTime.UtcNow;
+            const int __maxWaitMs = 12000;
+            bool __controllable = false;
+            while ((DateTime.UtcNow - __waitStart).TotalMilliseconds < __maxWaitMs)
+            {
+                using (var __probe = CaptureToRectArea())
+                {
+                    if (Bv.IsInBigMapUi(__probe)) { __controllable = true; break; }
+                }
+                Simulation.SendInput.SimulateAction(GIActions.OpenMap);
+                await Delay(700, ct);
+                using (var __probe2 = CaptureToRectArea())
+                {
+                    if (Bv.IsInBigMapUi(__probe2)) { __controllable = true; break; }
+                }
+                // 未开出地图（仍在强制复活动画中）→ 关掉可能的半开状态，等一会再试
+                Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                await Delay(800, ct);
+            }
+            if (__controllable)
+            {
+                Logger.LogInformation("[联机][重试模式] 强制复活结束、角色已可控（大地图可打开），耗时约 {S}s，开始传送神像",
+                    (int)(DateTime.UtcNow - __waitStart).TotalSeconds);
+                // ESC 关掉大地图，让下方正常流程（复苏弹窗检查 + CheckInBigMapUi）从干净状态重新开图
+                Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                await Delay(500, ct);
+            }
+            else
+            {
+                Logger.LogWarning("[联机][重试模式] 等待强制复活结束超时（{Ms}ms），仍继续尝试传送神像（由开图重试兜底）", __maxWaitMs);
+            }
+        }
+
         // Logger.LogInformation("AutoEatCount111 {text}",PathingConditionConfig.AutoEatCount);
-        if (AutoEatRecoveryDecisions.ShouldEnterGadgetPhase(PartyConfig.AutoEatEnabled, PathingConditionConfig.AutoEatCount))
+        if (!forceStatue && AutoEatRecoveryDecisions.ShouldEnterGadgetPhase(PartyConfig.AutoEatEnabled, PathingConditionConfig.AutoEatCount))
         {
             if (DateTime.UtcNow > PathingConditionConfig.LastEatTime.AddSeconds(1.5))
             {
@@ -3331,8 +3393,9 @@ public partial class PathExecutor
                             // 注意：此处不修改 _inTrap 计数（不增不减），保持隐含语义；段入口段循环重置即可
                             if (TryConsumeRevivalSignal())
                             {
-                                Logger.LogWarning("[联机] 路上检测到复苏 + 位置不变（疑似复苏后卡住），跳过随机脱困，前往七天神像回血");
-                                await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null);
+                                bool __retryForce = _pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment;
+                                Logger.LogWarning("[联机] 路上检测到复苏 + 位置不变（疑似复苏后卡住），跳过随机脱困，前往七天神像回血{Force}", __retryForce ? "（重试模式强制去神像）" : "");
+                                await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null, forceStatue: __retryForce);
                                 throw new RetryException("联机：路上复苏 + 卡住，神像回血后跳到下一段汇合");
                             }
 
