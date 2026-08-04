@@ -127,12 +127,15 @@ internal class GoToSereniteaPotTask
             if (!sereniteaPotHomeIcon.IsExist())
             {
                 Logger.LogInformation("领取尘歌壶奖励:{text}", "住宅图标未找到，调整地图缩放至2。");
+                //移动鼠标到地图中心，尝试缩放地图
+                Simulation.SendInput.Mouse.MoveMouseTo(1, 1);
                 await Task.Delay(2000, ct);
                 await new Core.Script.Dependence.Genshin().SetBigMapZoomLevel(2.5-i*0.2);//尝试缩放地图
                 await Task.Delay(2000, ct);
             }
             else
             {
+                await Delay(100, ct);
                 sereniteaPotHomeIcon.Click();
                 await Delay(500, ct);
                 break;
