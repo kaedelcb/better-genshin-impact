@@ -4232,7 +4232,8 @@ public partial class PathExecutor
         var closeRa2 = imageRegion.Find(ElementAssets.Instance.PageCloseWhiteRo);
         var closeRa3 = imageRegion.Find(RecognitionAssets.Get("AutoSkip", "PageClose", imageRegion));
         var closeRa4 = imageRegion.Find(AutoFightAssets.Get(imageRegion).ConfirmRa);
-        var anyFound = cookRa.IsExist() || closeRa.IsExist() || closeRa2.IsExist() || closeRa3.IsExist() || closeRa4.IsExist();
+        var closeRa5 = imageRegion.Find(ElementRecognition.Get("PartyBtnChooseView", imageRegion));
+        var anyFound = cookRa.IsExist() || closeRa.IsExist() || closeRa2.IsExist() || closeRa3.IsExist() || closeRa4.IsExist() ||closeRa5.IsExist();
         if (anyFound)
         {
             // 排除大地图
