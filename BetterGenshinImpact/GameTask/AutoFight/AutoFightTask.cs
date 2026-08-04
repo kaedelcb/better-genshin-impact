@@ -2132,11 +2132,9 @@ public class AutoFightTask : ISoloTask
             }
             
             await EndBloodCheck(ct,combatScenes);
-
-            PathingConditionConfig.CombatScenesGoBackUp = combatScenes;
             Simulation.ReleaseAllKey(); 
-            
         }
+        PathingConditionConfig.CombatScenesGoBackUp = combatScenes;
     }
 
     private void LogScreenResolution()
