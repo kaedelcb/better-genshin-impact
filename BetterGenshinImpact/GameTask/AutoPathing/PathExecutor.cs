@@ -111,7 +111,7 @@ public partial class PathExecutor
     /// 首次调用惰性构建并缓存 RecognitionObject，避免每次回点重复读盘 / InitTemplate。
     /// 传入已截取的当前画面 region，直接在其上 Find（不重复截图）。
     /// </summary>
-    private static bool IsMavuikaOnMotorcycleByTemplate(ImageRegion region)
+    internal static bool IsMavuikaOnMotorcycleByTemplate(ImageRegion region)
     {
         if (_mwkMotorcycleRo == null)
         {
