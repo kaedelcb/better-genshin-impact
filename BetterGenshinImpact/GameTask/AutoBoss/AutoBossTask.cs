@@ -30,6 +30,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
 namespace BetterGenshinImpact.GameTask.AutoBoss;
@@ -308,7 +309,7 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
     private async Task<OriginalResinInfo> RecognizeOriginalResinInfoFromBigMap()
     {
         using var capture = CaptureToRectArea();
-        using var resinIconSearchRegion = capture.DeriveCrop(ScaleRect(1200, 25, 250, 50));
+        using var resinIconSearchRegion = capture.DeriveCrop(ScaleRect(1200, 25, 580, 50));
         var resinIconRegion = resinIconSearchRegion.Find(LoadRecognitionObject("OriginalResinTopIcon"));
         if (resinIconRegion.IsEmpty())
         {
@@ -546,7 +547,7 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
         }
 
         var openButtonLocator = page.Locator(LoadRecognitionObject("OpenResinSupplementPaneButton"))
-            .WithRoi(ScaleRect(1200, 25, 250, 50))
+            .WithRoi(ScaleRect(1200, 25, 580, 50))
             .WithRetryInterval(300);
 
         try
@@ -1363,6 +1364,7 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
 
         if (!await TryUseOriginalResinOnRewardPrompt(page))
         {
+            await CloseResinSupplementPrompt(page);
             await _returnMainUiTask.Start(_ct);
             return false;
         }
@@ -1458,6 +1460,32 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
 
             return false;
         }
+    }
+
+    /// <summary>
+    /// 关闭补充原粹树脂提示
+    /// </summary>
+    private async Task CloseResinSupplementPrompt(BvPage page)
+    {
+        var supplementRect = ScaleRect(850, 730, 250, 60);
+
+        for (var i = 0; i < 50; i++)
+        {
+            _ct.ThrowIfCancellationRequested();
+            var promptExists = page.Ocr(supplementRect).Any(region =>
+                region.Text.Contains("补充", StringComparison.Ordinal)
+                || region.Text.Contains("原粹", StringComparison.Ordinal)
+                || region.Text.Contains("树脂", StringComparison.Ordinal));
+            if (!promptExists)
+            {
+                return;
+            }
+
+            page.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+            await page.Wait(300);
+        }
+
+        throw new TimeoutException("关闭补充原粹树脂提示超时");
     }
 
     /// <summary>
