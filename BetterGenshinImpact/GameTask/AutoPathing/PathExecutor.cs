@@ -124,7 +124,7 @@ public partial class PathExecutor
                 RegionOfInterest = new Rect(1682, 972, 35, 42),
                 TemplateMatchMode = TemplateMatchModes.SqDiffNormed,
                 UseMask = true, // 绿底模板：抠掉 (0,255,0) 背景，只匹配白箭头本体
-                Threshold = 0.93, // isLowerBetter：等价原始 SqDiff 分 ≤ 0.07
+                Threshold = 0.95, // isLowerBetter：等价原始 SqDiff 分 ≤ 0.07
             }.InitTemplate();
         }
 
@@ -1167,12 +1167,14 @@ public partial class PathExecutor
                                             waypoint.Type =  WaypointType.Target.Code;
 
                                             // 玛薇卡摩托下车（恒开，无需配置）：
-                                            // 战后回点第一段 MoveTo 粗接近前，若当前出战为玛薇卡且在摩托上则按一下 E 下车，
-                                            // 避免骑摩托高速冲过战斗点 / 干扰后续小地图坐标识别。
+                                            // 战后回点全程持续检测摩托状态：第一次在 MoveTo 前检测（等派蒙稳定画面），
+                                            // 之后启动后台定时任务每 500ms 检测一次，覆盖 MoveTo、两段 MoveCloseTo、
+                                            // 等待广播的整个回点流程，直到 WaitAtFightPointAsync 完成后取消。
                                             // 三层门控保证零误触（队里有玛薇卡 + 当前出战是玛薇卡 + 摩托模板命中），
                                             // 三者缺一即跳过 → 非玛薇卡队伍 / 玛薇卡未出战 / 非摩托态一次都不按 E（不会误骑上车）。
                                             // 摩托判定用目标模板匹配（SqDiffNormed + 掩膜，见 IsMavuikaOnMotorcycleByTemplate）。
                                             // 整块 try-catch 兜底：检测/按键任何异常都不影响后续回点主流程（取消透传）。
+                                            CancellationTokenSource? _mavuikaDismountCts = null;
                                             try
                                             {
                                                 var __mavuika = _combatScenes?.SelectAvatar("玛薇卡");
@@ -1185,10 +1187,6 @@ public partial class PathExecutor
                                                         ElementAssets.Instance.PaimonMenuRo, ct, retryTimes: 10, delayMs: 200);
 
                                                     using var __dismountRegion = CaptureToRectArea();
-                                                    // 出战判定：
-                                                    // - 联机单角色（队伍只有1人）：右侧队伍栏只有一个头像，IsActive 靠编号框高亮对比判不出来，
-                                                    //   队里唯一角色就是玛薇卡时直接判定"已出战"。
-                                                    // - 多角色：用 IsActive（直接判玛薇卡自己的编号框是否高亮），与战斗内已验证可用的
                                                     var __mavuikaActive = _combatScenes!.AvatarCount <= 1 || __mavuika.IsActive(__dismountRegion);
                                                     if (__mavuikaActive && IsMavuikaOnMotorcycleByTemplate(__dismountRegion))
                                                     {
@@ -1196,6 +1194,34 @@ public partial class PathExecutor
                                                         Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
                                                         await Delay(100, ct);
                                                     }
+
+                                                    // 启动后台定时检测任务：每 500ms 检测一次摩托状态，覆盖整个回点流程
+                                                    _mavuikaDismountCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                                                    var __dismountCts = _mavuikaDismountCts; // 捕获局部变量供闭包使用
+                                                    var __mavuikaRef = __mavuika;
+                                                    _ = Task.Run(async () =>
+                                                    {
+                                                        while (!__dismountCts.IsCancellationRequested)
+                                                        {
+                                                            try
+                                                            {
+                                                                await Task.Delay(1000, __dismountCts.Token);
+                                                                using var __loopRegion = CaptureToRectArea();
+                                                                var __loopActive = _combatScenes!.AvatarCount <= 1 || __mavuikaRef.IsActive(__loopRegion);
+                                                                if (__loopActive && IsMavuikaOnMotorcycleByTemplate(__loopRegion))
+                                                                {
+                                                                    Logger.LogInformation("[联机] 回点中：检测到玛薇卡在摩托上，按 E 下车");
+                                                                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                                                    await Task.Delay(100, __dismountCts.Token);
+                                                                }
+                                                            }
+                                                            catch (OperationCanceledException) { break; }
+                                                            catch (Exception __innerEx)
+                                                            {
+                                                                Logger.LogWarning(__innerEx, "[联机] 回点中：摩托下车检测异常，跳过");
+                                                            }
+                                                        }
+                                                    }, __dismountCts.Token);
                                                 }
                                             }
                                             catch (OperationCanceledException) { throw; }
@@ -1367,6 +1393,8 @@ public partial class PathExecutor
                                                     collectPointWaitTask = ks.TryWaitForCollectPointAsync(collectPointSyncKey, timeoutMs: 5000, ct);
                                                 }
 
+                                                // 后台定时任务每 500ms 检测一次，覆盖整个回点流程，此处无需额外调用
+
                                                 await MoveCloseTo(waypoint, closeDistance: 2.0, tailDelayMs: 0, maxSteps: 5, escapeClimbOnReturn: true);
 
                                                 // 第一段走完，await 后台 wait task 看是否拿到广播 → 拿到则二段精接近聚物点。
@@ -1428,6 +1456,14 @@ public partial class PathExecutor
                                             // 始终执行（放弃移动也要 join 全队同步，由其内部兜底接管恢复）。
                                             Logger.LogInformation("[联机] 到达战斗点，进入聚物同步流程");
                                             await MultiplayerCoordinator.KazuhaCollectSync.WaitAtFightPointAsync(waypoint, prepTask, ct);
+
+                                            // 回点流程结束，取消后台定时检测任务
+                                            if (_mavuikaDismountCts != null)
+                                            {
+                                                _mavuikaDismountCts.Cancel();
+                                                _mavuikaDismountCts.Dispose();
+                                                _mavuikaDismountCts = null;
+                                            }
                                         }
                                     }
                                 }

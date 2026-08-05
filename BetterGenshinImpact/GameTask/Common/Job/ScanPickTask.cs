@@ -28,11 +28,11 @@ public class ScanPickTask
     private readonly RECT _realCaptureRect = TaskContext.Instance().SystemInfo.CaptureAreaRect;
 
 
-    public async Task Start(CancellationToken ct, int? seconds = null)
+    public async Task Start(CancellationToken ct, int? seconds = null, Func<Task>? onEachIteration = null)
     {
         try
         {
-            await DoOnce(ct, seconds);
+            await DoOnce(ct, seconds, onEachIteration);
         }
         catch (Exception e)
         {
@@ -45,7 +45,7 @@ public class ScanPickTask
         }
     }
 
-    public async Task DoOnce(CancellationToken ct, int? seconds = null)
+    public async Task DoOnce(CancellationToken ct, int? seconds = null, Func<Task>? onEachIteration = null)
     {
         var sec = seconds ?? TaskContext.Instance().Config.AutoFightConfig.PickDropsAfterFightSeconds;
         Stopwatch timeoutStopwatch = Stopwatch.StartNew();
@@ -56,6 +56,12 @@ public class ScanPickTask
 
         while (!ct.IsCancellationRequested && timeoutStopwatch.Elapsed < finishTime)
         {
+            // 每轮迭代前执行外部回调（如摩托下车检测）
+            if (onEachIteration != null)
+            {
+                await onEachIteration();
+            }
+
             var (hasItems, pickItems) = DetectPickableItems();
             // Logger.LogInformation("存在可拾取物品: {0}", hasItems);
             if (!hasItems)

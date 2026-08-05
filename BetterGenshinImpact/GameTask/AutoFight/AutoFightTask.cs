@@ -2085,36 +2085,72 @@ public class AutoFightTask : ISoloTask
             // 线路重试模式（hoeing-multiplayer-route-retry-mode spec）：复苏掐断战斗后，战斗未打完、人被传走，
             // 光柱拾取无意义 → 跳过。非 RetrySegment 场景恒 false，行为一字不变。
 
-            // 玛薇卡摩托下车检测：与 PathExecutor 战后回点逻辑一致。
-            // 战斗结束后若玛薇卡在摩托上，捡掉落前先按 E 下车，避免骑摩托干扰拾取/坐标识别。
-            // 门控：队里有玛薇卡 + 当前出战是玛薇卡 + 摩托模板命中（SqDiffNormed+掩膜），
+            // 玛薇卡摩托下车检测（持续）：拾取全程启动后台定时任务每 1000ms 检测一次摩托状态，
+            // 检测到就按 E 下车。门控：队里有玛薇卡 + 当前出战是玛薇卡 + 摩托模板命中（SqDiffNormed+掩膜），
             // 三者缺一即跳过。try-catch 兜底，异常不影响拾取主流程。
+            CancellationTokenSource? _pickDismountCts = null;
             try
             {
                 var __mavuika = combatScenes.SelectAvatar("玛薇卡");
                 if (__mavuika != null)
                 {
-                    // 画面稳定门控：等派蒙出现确认回到主界面后再截图检测
+                    // 第一次检测：拾取前先下车（等派蒙确认画面稳定）
                     await Bv.WaitUntilFound(
                         ElementAssets.Instance.PaimonMenuRo, ct, retryTimes: 10, delayMs: 200);
 
-                    using var __dismountRegion = CaptureToRectArea();
-                    var __mavuikaActive = combatScenes.AvatarCount <= 1 || __mavuika.IsActive(__dismountRegion);
-                    if (__mavuikaActive && BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.IsMavuikaOnMotorcycleByTemplate(__dismountRegion))
+                    using var __firstRegion = CaptureToRectArea();
+                    var __firstActive = combatScenes.AvatarCount <= 1 || __mavuika.IsActive(__firstRegion);
+                    if (__firstActive && BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.IsMavuikaOnMotorcycleByTemplate(__firstRegion))
                     {
-                        Logger.LogInformation("[联机] 战后拾取前：检测到玛薇卡在摩托上，按 E 下车");
+                        Logger.LogInformation("光柱拾取：检测到玛薇卡在摩托上，按 E 下车");
                         Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
                         await Delay(500, ct);
                     }
+
+                    // 启动后台定时检测任务：每 1000ms 检测一次摩托状态，覆盖整个拾取过程
+                    _pickDismountCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    var __pickCts = _pickDismountCts;
+                    var __mavuikaRef = __mavuika;
+                    _ = Task.Run(async () =>
+                    {
+                        while (!__pickCts.IsCancellationRequested)
+                        {
+                            try
+                            {
+                                await Task.Delay(1000, __pickCts.Token);
+                                using var __loopRegion = CaptureToRectArea();
+                                var __loopActive = combatScenes.AvatarCount <= 1 || __mavuikaRef.IsActive(__loopRegion);
+                                if (__loopActive && BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.IsMavuikaOnMotorcycleByTemplate(__loopRegion))
+                                {
+                                    Logger.LogInformation("[联机] 拾取中：检测到玛薇卡在摩托上，按 E 下车");
+                                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                    await Task.Delay(500, __pickCts.Token);
+                                }
+                            }
+                            catch (OperationCanceledException) { break; }
+                            catch (Exception innerEx)
+                            {
+                                Logger.LogWarning(innerEx, "[联机] 拾取中：摩托下车检测异常，跳过");
+                            }
+                        }
+                    }, __pickCts.Token);
                 }
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                Logger.LogWarning(ex, "[联机] 战后拾取前：玛薇卡摩托下车检测异常，跳过下车继续拾取");
+                Logger.LogWarning(ex, "[联机] 战后拾取：玛薇卡摩托下车检测异常，跳过下车继续拾取");
             }
 
             await new ScanPickTask().Start(ct, _taskParam.PickDropsAfterFightSeconds);
+
+            // 拾取结束，取消后台定时检测任务
+            if (_pickDismountCts != null)
+            {
+                _pickDismountCts.Cancel();
+                _pickDismountCts.Dispose();
+                _pickDismountCts = null;
+            }
         }
 
         if (_taskParam.EndBloodCheackEnabled)
