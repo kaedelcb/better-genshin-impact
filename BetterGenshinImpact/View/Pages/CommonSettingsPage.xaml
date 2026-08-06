@@ -1326,7 +1326,7 @@
                         <ui:TextBlock Grid.Row="1"
                                       Grid.Column="0"
                                       Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                      Text="【2-100】数字越小移动鼠标越快，如果移动地图时产生卡顿，请提高这个数值"
+                                      Text="【2-100】数字越小移动鼠标越快，另下方整体延时如果提供导致拖动慢，可减少这个数值"
                                       TextWrapping="Wrap" />
                         <ui:TextBox Grid.Row="0"
                                     Grid.RowSpan="2"
@@ -1354,7 +1354,7 @@
                         <ui:TextBlock Grid.Row="1"
                                       Grid.Column="0"
                                       Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                      Text="推荐0即自动适配，范围1~5，低配电脑可尝试调高"
+                                      Text="推荐0即自动适配，范围1~5，传送异常可尝试调高至2以上"
                                       TextWrapping="Wrap" />
                         <ui:TextBox Grid.Row="0"
                                     Grid.RowSpan="2"
