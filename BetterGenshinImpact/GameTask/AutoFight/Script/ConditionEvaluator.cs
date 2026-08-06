@@ -25,9 +25,26 @@ public class ConditionEvaluator
     };
 
     /// <summary>
-    /// 校验动作名能否作为条件表达式中的单个标识符解析：
+    /// 判断动作名是否会与条件语法产生歧义而【必须拒绝】：
+    /// 布尔字面量（true/false，不区分大小写）、纯数字（词法会解析为数字字面量，与"按 index 引用"混淆）、与内置条件函数同名。
+    /// 这三类名称在条件表达式中会被解析为布尔/数字字面量或函数调用，导致"按名引用"被静默误判，故禁止使用。
+    /// 含 +、空格、/ 等运算符/分隔符的描述性名称【不属于】歧义名：它们无法作为单个标识符被按名引用，
+    /// 但可正常用于日志与按 index 引用，即便误写入条件表达式也只会求值失败并记日志，不会静默误判，因此允许使用。
+    /// </summary>
+    public static bool IsAmbiguousActionName(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+        if (bool.TryParse(name, out _)) return true;                                        // true/false
+        if (FunctionNames.Contains(name)) return true;                                       // 与内置函数同名
+        if (name.All(c => char.IsDigit(c) || c == '.') && name.Any(char.IsDigit)) return true; // 纯数字字面量
+        return false;
+    }
+
+    /// <summary>
+    /// 校验动作名能否作为条件表达式中的单个标识符解析（即能否被 since/count/last-exec 按名引用）：
     /// 将动作名置于"全部动作名 + 内置函数名"的已知表内做词法解析，要求恰好解析为一个标识符。
     /// 拒绝布尔字面量（true/false，不区分大小写）、纯数字、含空白/逗号/运算符等无法作为动作标识符的名称，以及内置函数名。
+    /// 注意：本方法为"可否按名引用"的判定，比加载期校验更严；加载期是否拒绝以 <see cref="IsAmbiguousActionName"/> 为准。
     /// </summary>
     public static bool IsValidActionName(string name, IEnumerable<string> allActionNames)
     {

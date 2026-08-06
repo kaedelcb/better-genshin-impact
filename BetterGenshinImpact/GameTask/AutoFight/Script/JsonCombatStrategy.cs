@@ -48,8 +48,10 @@ public class JsonInfo
 public class JsonAction
 {
     /// <summary>
-    /// 动作名称（可选）：用于日志输出、按名称查询执行历史（since/count/last-exec）及条件词法的连字符合并；
-    /// 不允许与内置条件函数同名，不允许包含逗号或无法作为条件标识符解析的字符（解析策略时校验）
+    /// 动作名称（可选）：用于日志输出、按名称查询执行历史（since/count/last-exec）及条件词法的连字符合并。
+    /// 仅不允许为布尔字面量 true/false、纯数字，或与内置条件函数同名（这三类会与条件语法冲突，解析策略时校验）。
+    /// 允许含 +、空格、/ 等的描述性名称（如"蓝砚-开盾+回点"），但此类名称无法作为单个标识符被 since/count 等按名引用，
+    /// 仍可正常用于日志与按 index 引用。
     /// </summary>
     public string Name { get; set; } = string.Empty;
 

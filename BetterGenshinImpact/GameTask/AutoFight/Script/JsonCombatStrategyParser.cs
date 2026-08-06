@@ -80,19 +80,20 @@ public static class JsonCombatStrategyParser
 
     /// <summary>
     /// 校验动作名称合法性。
-    /// 动作名必须能作为条件表达式中的单个标识符解析（复用 <see cref="ConditionEvaluator.IsValidActionName"/>：
-    /// 不能是布尔字面量 true/false、纯数字，不能含空白、逗号、运算符等，也不能与内置条件函数同名）。
+    /// 仅拒绝会与条件语法产生歧义的名称（<see cref="ConditionEvaluator.IsAmbiguousActionName"/>：
+    /// 布尔字面量 true/false、纯数字、与内置条件函数同名）——这三类会在条件表达式中被解析为字面量或函数调用而静默误判。
+    /// 含 +、空格、/ 等的描述性名称（如"蓝砚-开盾+回点"）允许使用：它们只是无法作为单个标识符被 since/count 等按名引用，
+    /// 但可正常用于日志与按 index 引用，不会影响策略正确执行。
     /// 允许不同动作使用相同 index（since/count 等按 index 查询时取最近一次执行的事件记录）。
     /// </summary>
     private static void ValidateActions(List<JsonAction> actions)
     {
-        var actionNames = actions.Where(a => !string.IsNullOrEmpty(a.Name)).Select(a => a.Name).ToList();
         foreach (var action in actions)
         {
-            if (!string.IsNullOrEmpty(action.Name) && !ConditionEvaluator.IsValidActionName(action.Name, actionNames))
+            if (!string.IsNullOrEmpty(action.Name) && ConditionEvaluator.IsAmbiguousActionName(action.Name))
             {
-                Logger.LogError("JSON 战斗策略中动作名称无法作为条件标识符解析（不能是布尔字面量、纯数字，不能含空白、逗号、运算符等，也不能与内置条件函数同名）：{Name}", action.Name);
-                throw new InvalidOperationException($"JSON 战斗策略中动作名称无法作为条件标识符解析：{action.Name}");
+                Logger.LogError("JSON 战斗策略中动作名称与条件语法冲突（不能是布尔字面量 true/false、纯数字，也不能与内置条件函数同名）：{Name}", action.Name);
+                throw new InvalidOperationException($"JSON 战斗策略中动作名称与条件语法冲突：{action.Name}");
             }
         }
     }
