@@ -84,6 +84,10 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
     // 检测模式：false=只检测精英经验，true=检测所有经验。依附主开关。
     [ObservableProperty] private bool _expCapDetectAllExp;
 
+    // ===== 联机锄地守护自动重开（hoeing-multiplayer-guard-auto-restart, 房主设置同步成员）=====
+    [ObservableProperty] private bool _hoeingGuardMode = true;
+    [ObservableProperty] private string _guardUnexecutedRouteThreshold = "3";  // string 形态绑 ui:TextBox
+
     // ===== C 万叶聚物同步 =====
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(KazuhaParamsEnabled))]
@@ -249,6 +253,10 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         _enableExpCapStop = GetBool("enableExpCapStop", g.EnableExpCapStop);
         _expCapDetectAllExp = GetBool("expCapDetectAllExp", g.ExpCapDetectAllExp);
 
+        // 联机锄地守护自动重开（hoeing-multiplayer-guard-auto-restart）
+        _hoeingGuardMode = GetBool("hoeingGuardMode", g.HoeingGuardMode);
+        _guardUnexecutedRouteThreshold = GetInt("guardUnexecutedRouteThreshold", g.GuardUnexecutedRouteThreshold).ToString();
+
         _enableKazuhaSync = GetBool("enableKazuhaSync", g.EnableKazuhaSync);
         _kazuhaSyncWaitSeconds = GetInt("kazuhaSyncWaitSeconds", g.KazuhaSyncWaitSeconds).ToString();
         _kazuhaSyncTimeoutSeconds = GetInt("kazuhaSyncTimeoutSeconds", g.KazuhaSyncTimeoutSeconds).ToString();
@@ -352,6 +360,10 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         // 基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop）
         settings["enableExpCapStop"] = EnableExpCapStop;
         settings["expCapDetectAllExp"] = ExpCapDetectAllExp;
+
+        // 联机锄地守护自动重开（hoeing-multiplayer-guard-auto-restart）：阈值 TryParse 失败不写键，回退默认+ClampThreshold
+        settings["hoeingGuardMode"] = HoeingGuardMode;
+        if (int.TryParse(GuardUnexecutedRouteThreshold, out var gurt)) settings["guardUnexecutedRouteThreshold"] = gurt;
 
         settings["debugMode"] = DebugMode;
         settings["useFixedDebugRoutes"] = RouteModeDecisions.MapRouteModeToUseFixed(RouteModeSelection);

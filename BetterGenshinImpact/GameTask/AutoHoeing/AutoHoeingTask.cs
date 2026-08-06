@@ -87,6 +87,14 @@ public class AutoHoeingTask : ISoloTask
     // 其它停止路径（超时/被踢/掉房/正常跑完）不触发，保持原行为。
     private volatile bool _expCapStopTriggered;
 
+    // === 联机锄地守护自动重开（hoeing-multiplayer-guard-auto-restart）===
+    // 本次运行是否由守护重开产生（新实例置 true）。true 时结束后不再触发重开（次数上限 1，R3）。
+    private bool _isGuardRestartRun;
+    // 本次任务累计"计划应跑线路总数"与"已执行到的线路数"（跨组/跨多世界轮累加）。
+    // 未执行数 = _guardPlannedRouteCount − _guardExecutedRouteCount（HoeingGuardDecisions.ComputeUnexecutedCount）。
+    private int _guardPlannedRouteCount;
+    private int _guardExecutedRouteCount;
+
     // 本次任务开始时间（用于上限退出时输出总用时汇总）。在 Start() 入口设置。
     private DateTime _taskStartTime = DateTime.MinValue;
 
@@ -464,6 +472,10 @@ public class AutoHoeingTask : ISoloTask
             _config.EnableExpCapStop = false;
             _config.ExpCapDetectAllExp = false;
 
+            // === 守护模式重置（hoeing-multiplayer-guard-auto-restart）默认开启===
+            _config.HoeingGuardMode = true;
+            _config.GuardUnexecutedRouteThreshold = 3;
+
             // === 单人调试模式重置（hoeing-multiplayer-solo-debug-mode，纯本地）===
             _config.SoloDebugMode = false;
 
@@ -656,6 +668,53 @@ public class AutoHoeingTask : ISoloTask
                 {
                     Wpf.Ui.Violeta.Controls.Toast.Warning($"联机中断：{reason}");
                 });
+            }
+        }
+
+        // === 联机锄地守护自动重开（hoeing-multiplayer-guard-auto-restart R2/R3）===
+        // 放在 finally 之后：首次运行已完全收尾（连接/监测/CTS 已释放，异常已退世界回到自己世界）。
+        // 用 Start 的原始外部 ct（未被 RunTask 内替换污染的局部参数）判定手动停止；满足全部条件则新建实例重开一次。
+        var guardUnexecuted = Multiplayer.HoeingGuardDecisions.ComputeUnexecutedCount(
+            _guardPlannedRouteCount, _guardExecutedRouteCount);
+        var guardShouldRestart = Multiplayer.HoeingGuardDecisions.ShouldRestart(
+            guardMode: _config.HoeingGuardMode,
+            multiplayerEnabled: _config.MultiplayerEnabled,
+            stopReason: _stopReason,
+            unexecutedCount: guardUnexecuted,
+            threshold: Multiplayer.HoeingGuardDecisions.ClampThreshold(_config.GuardUnexecutedRouteThreshold),
+            userCancelled: ct.IsCancellationRequested,   // 原始外部令牌（Start 参数，非字段 _ct）
+            expCapStopTriggered: _expCapStopTriggered,
+            isGuardRestartRun: _isGuardRestartRun);
+
+        if (guardShouldRestart)
+        {
+            _logger.LogWarning(
+                "[联机][守护] 本次锄地未正常完成（原因: {Reason}，未执行线路数: {Unexec}），触发守护自动重开一次",
+                string.IsNullOrEmpty(_stopReason) ? "未执行数达阈值" : _stopReason, guardUnexecuted);
+            // 整块包 try/catch：构造/重开若抛异常不得逸出 Start，与首次运行"所有异常被 try/catch 消化、
+            // Start 正常返回"的既有契约一致。OCE（重开期间手动停止）与首次运行一样仅记日志。
+            try
+            {
+                try
+                {
+                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        Wpf.Ui.Violeta.Controls.Toast.Information("锄地守护模式：本次未跑完，正在自动重开一次"));
+                }
+                catch { /* toast 失败不影响重开 */ }
+
+                var restart = new AutoHoeingTask(_partyConfig, _settingsOverride, _groupName)
+                {
+                    _isGuardRestartRun = true
+                };
+                await restart.Start(ct);   // 复用原始外部 ct；重开的运行 isGuardRestartRun=true → 结束时不再重开（R3）
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("[联机][守护] 守护重开期间任务被取消");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[联机][守护] 守护重开执行异常（忽略，不影响本次任务收尾）");
             }
         }
     }
@@ -883,6 +942,9 @@ public class AutoHoeingTask : ISoloTask
                     // === 基于经验判断停止锄地上传（multiplayer-hoeing-exp-cap-stop）===
                     EnableExpCapStop = _config.EnableExpCapStop,
                     ExpCapDetectAllExp = _config.ExpCapDetectAllExp,
+                    // === 守护模式上传（hoeing-multiplayer-guard-auto-restart）===
+                    HoeingGuardMode = _config.HoeingGuardMode,
+                    GuardUnexecutedRouteThreshold = Multiplayer.HoeingGuardDecisions.ClampThreshold(_config.GuardUnexecutedRouteThreshold),
                     // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params spec §C1）===
                     // 上传源统一取房主当前配置组 _partyConfig（房主锄地实际生效实例，OQ-1）；
                     // _partyConfig 为 null 时退回全局 AutoFightConfig（AutoFight 类）或字段默认。
@@ -1010,7 +1072,7 @@ public class AutoHoeingTask : ISoloTask
             // 启动世界状态监测（需求 2）
             // 注入单人调试模式标志（纯本地，显式依赖）：为 true 时 WorldStateMonitor 跳过
             // connected-but-not-in-game 被踢出终止判定，供单人世界调试线路。hoeing-multiplayer-solo-debug-mode。
-            _worldStateMonitor = new WorldStateMonitor(client, _config.PlayerUid, _ct, _config.SoloDebugMode);
+            _worldStateMonitor = new WorldStateMonitor(client, _config.PlayerUid, _ct, _config.SoloDebugMode, _config.HoeingGuardMode);
             client.WorldStateMonitor = _worldStateMonitor;
             _worldStateMonitor.OnExitConfirmed += async (isHost, reason) =>
             {
@@ -1311,6 +1373,9 @@ public class AutoHoeingTask : ISoloTask
                         // === 基于经验判断停止锄地同步（multiplayer-hoeing-exp-cap-stop，成员回填房主下发值）===
                         _config.EnableExpCapStop = hostConfig.EnableExpCapStop;
                         _config.ExpCapDetectAllExp = hostConfig.ExpCapDetectAllExp;
+                        // === 守护模式同步（hoeing-multiplayer-guard-auto-restart，成员回填房主下发值）===
+                        _config.HoeingGuardMode = hostConfig.HoeingGuardMode;
+                        _config.GuardUnexecutedRouteThreshold = Multiplayer.HoeingGuardDecisions.ClampThreshold(hostConfig.GuardUnexecutedRouteThreshold);
 
                         // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params §C2）===
                         ApplyHostExecParams(hostConfig);
@@ -2305,6 +2370,9 @@ public class AutoHoeingTask : ISoloTask
                     // === 落后追赶同步（hoeing-lagging-catchup-host-synced-setting spec，多世界轮换块）===
                     _config.EnableLaggingCatchUp = hostConfig.EnableLaggingCatchUp;
                     _config.LagSegmentThreshold = Math.Clamp(hostConfig.LagSegmentThreshold, 1, 3);
+                    // === 守护模式同步（hoeing-multiplayer-guard-auto-restart，多世界轮换块，成员回填房主下发值）===
+                    _config.HoeingGuardMode = hostConfig.HoeingGuardMode;
+                    _config.GuardUnexecutedRouteThreshold = Multiplayer.HoeingGuardDecisions.ClampThreshold(hostConfig.GuardUnexecutedRouteThreshold);
 
                     // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params §C2，多世界轮换块，R6）===
                     ApplyHostExecParams(hostConfig);
@@ -3126,8 +3194,16 @@ public class AutoHoeingTask : ISoloTask
         var roundPrefix = MultiWorldRoundLogPrefix.Format(roundContext);
         _logger.LogInformation("[DEBUG] 开始遍历路线，共 {Count} 条，startIndex={Start}", groupRoutes.Count, startIndex);
 
+        // === 守护自动重开：累计本组计划应跑线路数（扣除 StartRouteIndex 调试前缀）===
+        // hoeing-multiplayer-guard-auto-restart：未执行数 = 计划数 − 已执行数。此处在 groupRoutes 最终确定
+        // （CD/关键词/房主列表/变体过滤完）且 startIndex 已算出后累加，跨组/跨多世界轮只增不减。
+        _guardPlannedRouteCount += Math.Max(0, groupRoutes.Count - startIndex);
+
         foreach (var route in groupRoutes.Skip(startIndex))
         {
+            // === 守护自动重开：循环走到即算"已执行到"（无论后续完成/跳过/未完整/异常）===
+            _guardExecutedRouteCount++;
+
             // === 中断重对齐检查（multiplayer-abort-and-realign spec）===
             if (_multiplayerCoordinator?.IsAbortRequested == true)
             {
@@ -4048,6 +4124,10 @@ public class AutoHoeingTask : ISoloTask
             // === 基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop）：配置组场景必须经此 override 才能传到运行时 EffectiveConfig ===
             _config.EnableExpCapStop = Get("enableExpCapStop", _config.EnableExpCapStop);
             _config.ExpCapDetectAllExp = Get("expCapDetectAllExp", _config.ExpCapDetectAllExp);
+            // === 守护模式（hoeing-multiplayer-guard-auto-restart）：配置组场景必须经此 override 才能传到运行时 EffectiveConfig ===
+            _config.HoeingGuardMode = Get("hoeingGuardMode", _config.HoeingGuardMode);
+            _config.GuardUnexecutedRouteThreshold = Multiplayer.HoeingGuardDecisions.ClampThreshold(
+                Get("guardUnexecutedRouteThreshold", _config.GuardUnexecutedRouteThreshold));
 
             // === 按周期吃食物（multiplayer-hoeing-auto-eat-food-by-period，纯本地）===
             _config.MedicineFoodSlot1 = Get("medicineFoodSlot1", _config.MedicineFoodSlot1);

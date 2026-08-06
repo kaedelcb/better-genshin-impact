@@ -503,6 +503,22 @@ public partial class AutoHoeingConfig : ObservableObject
     private int _lagSegmentThreshold = 1;
 
     /// <summary>
+    /// 联机锄地守护模式（房主设置，同步成员）。默认 true。
+    /// 开启后：本次联机锄地因异常（掉线/被踢/掉房/未执行数达阈值）未正常跑完时，自动完整重开一次
+    /// （等价手动重开，靠 CD 记录跳过已完成线路）。手动停止 / 经验上限正常停止 / 单机模式不触发。
+    /// 重开仅 1 次。hoeing-multiplayer-guard-auto-restart。
+    /// </summary>
+    [ObservableProperty]
+    private bool _hoeingGuardMode = true;
+
+    /// <summary>
+    /// 守护重开触发阈值：未执行线路数（=计划应跑总数−已执行数）≥ 此值即视为未跑完（房主设置，同步成员）。
+    /// 默认 3，下限 1。仅 HoeingGuardMode 为 true 时有意义。hoeing-multiplayer-guard-auto-restart。
+    /// </summary>
+    [ObservableProperty]
+    private int _guardUnexecutedRouteThreshold = 3;
+
+    /// <summary>
     /// 单人调试模式：纯本地调试开关，默认 false。
     /// 开启后联机锄地在单人世界下绕过 WorldStateMonitor 的"被踢出联机世界"终止判定
     /// （IsInMultiGame=false + SignalR 正常的 connected-but-not-in-game 累计与据其触发的 ConfirmExitAsync），

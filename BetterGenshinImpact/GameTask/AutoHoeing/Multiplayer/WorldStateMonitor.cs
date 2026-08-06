@@ -54,6 +54,13 @@ public class WorldStateMonitor : IAsyncDisposable
     /// <summary>自动组队阶段为 true，忽略 IsInMultiGame == false</summary>
     public volatile bool IsPartyPhase;
 
+    // === R5 队友掉线协同中止检测（hoeing-multiplayer-guard-auto-restart §10）===
+    // 仅 HoeingGuardMode 开启时启用（构造注入）。执行期房间人数低于基准 → 判定队友掉线 → 协同中止重开。
+    private readonly bool _peerDropGuardEnabled;
+    private int _peerBaselineCount = -1;   // 执行期基准人数（-1 = 未捕获）
+    private int _peerBelowStreak;          // 连续低于基准次数（去抖，达 PeerDropConfirmChecks 触发）
+    private const int PeerDropConfirmChecks = 2;
+
     // === 轮次切换抑制（需求 7）===
     private volatile bool _isRoundSwitching;
     private DateTime _roundSwitchStart;
@@ -106,11 +113,12 @@ public class WorldStateMonitor : IAsyncDisposable
     /// <summary>掉出房间且重试全部失败。</summary>
     public event Func<Task>? OnDroppedFromRoom;
 
-    public WorldStateMonitor(CoordinatorClient client, string playerUid, CancellationToken externalCt = default, bool soloDebugMode = false)
+    public WorldStateMonitor(CoordinatorClient client, string playerUid, CancellationToken externalCt = default, bool soloDebugMode = false, bool peerDropGuardEnabled = false)
     {
         _client = client;
         _playerUid = playerUid;
         _soloDebugMode = soloDebugMode;
+        _peerDropGuardEnabled = peerDropGuardEnabled;
         // EC-01: 使用 linked CTS，外部取消时后台 Task 也自动停止
         _cts = externalCt == default
             ? new CancellationTokenSource()
@@ -340,6 +348,53 @@ public class WorldStateMonitor : IAsyncDisposable
                 _logger.LogDebug("[WorldStateMonitor] 任务暂停中，跳过本轮检测");
             }
             return;
+        }
+
+        // === R5 队友掉线协同中止检测（hoeing-multiplayer-guard-auto-restart §10）===
+        // 与自身 IsInMultiGame 流程正交：只比房间人数、不截图。仅"干净执行阶段"生效，
+        // 抑制窗口（组队/轮换/换角色/吃药/传送/暂停）一律复位基准，等下个执行阶段重新捕获。
+        // 仅 HoeingGuardMode 开启才启用；关闭时整块跳过，历史行为（剩下人继续跑）逐字节不变。
+        if (_peerDropGuardEnabled)
+        {
+            bool inSuppressedWindow =
+                IsPartyPhase || _isRoundSwitching || _isRoleSwitching || _isEatingMedicine
+                || _isTeleportSuppressed
+                || BetterGenshinImpact.GameTask.RunnerContext.Instance.IsSuspend;
+
+            if (inSuppressedWindow)
+            {
+                // 合法人数波动窗口：复位基准与去抖计数
+                _peerBaselineCount = -1;
+                _peerBelowStreak = 0;
+            }
+            else
+            {
+                var currentCount = _client.CurrentRoomPlayerCount;
+                // 人数 <= 0 视为列表尚未就绪（滞后/断连瞬间），跳过本帧不误判
+                if (currentCount > 0)
+                {
+                    var (newBaseline, below) = HoeingGuardDecisions.UpdatePeerBaseline(_peerBaselineCount, currentCount);
+                    _peerBaselineCount = newBaseline;
+                    if (below)
+                    {
+                        _peerBelowStreak++;
+                        _logger.LogWarning("[WorldStateMonitor] 执行期房间人数 {Cur} 低于基准 {Base}（{Streak}/{Need}），疑似队友掉线",
+                            currentCount, newBaseline, _peerBelowStreak, PeerDropConfirmChecks);
+                        if (_peerBelowStreak >= PeerDropConfirmChecks)
+                        {
+                            _peerBelowStreak = 0;
+                            _logger.LogError("[WorldStateMonitor] 确认队友掉线（人数 {Cur} < 基准 {Base}），触发协同中止重开",
+                                currentCount, newBaseline);
+                            await ConfirmExitAsync("检测到队友掉线，协同中止重开");
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        _peerBelowStreak = 0;
+                    }
+                }
+            }
         }
 
         // 0. 传送抑制超时自动解除（RC-01: 使用局部变量快照）

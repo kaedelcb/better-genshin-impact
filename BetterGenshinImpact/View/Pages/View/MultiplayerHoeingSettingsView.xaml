@@ -303,6 +303,21 @@
                                                   Text="关：只看精英经验，精英达上限即判定(小怪经验不干扰)。开：精英+小怪任一掉经验都算有经验。"
                                                   TextWrapping="Wrap" />
                                 </StackPanel>
+                                <!--  联机锄地守护自动重开（hoeing-multiplayer-guard-auto-restart）  -->
+                                <ui:ToggleSwitch Margin="0,8,0,4"
+                                                 Content="锄地守护模式（未跑完自动重开一次）"
+                                                 IsChecked="{Binding HoeingGuardMode, Mode=TwoWay}" />
+                                <StackPanel Margin="12,0,0,0">
+                                    <ui:TextBlock Margin="0,0,0,2" Text="未执行线路触发数量（未执行≥此值则重开，最小1）" />
+                                    <ui:TextBox Width="70"
+                                                Margin="0,0,0,2"
+                                                HorizontalAlignment="Left"
+                                                PlaceholderText="默认3"
+                                                Text="{Binding GuardUnexecutedRouteThreshold, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    <ui:TextBlock Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                  Text="本次联机因异常（掉线/被踢/掉房）或未执行线路数达阈值而未跑完时，自动完整重开一次（靠CD跳过已完成线路）。手动停止/经验上限正常停止/单机不触发，重开仅1次。"
+                                                  TextWrapping="Wrap" />
+                                </StackPanel>
                             </StackPanel>
                         </ui:CardExpander>
 

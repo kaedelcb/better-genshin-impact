@@ -91,4 +91,10 @@ public class RoomConfig
     public bool EnableExpCapStop { get; set; } = false;
     /// <summary>经验上限检测模式：false=只检测精英经验，true=检测所有经验（房主设置同步成员）。默认 false。multiplayer-hoeing-exp-cap-stop</summary>
     public bool ExpCapDetectAllExp { get; set; } = false;
+
+    // === 联机锄地守护自动重开（hoeing-multiplayer-guard-auto-restart, 与服务端 RoomConfig 严格对称）===
+    /// <summary>联机锄地守护模式（房主设置同步成员）。默认 true。hoeing-multiplayer-guard-auto-restart</summary>
+    public bool HoeingGuardMode { get; set; } = true;
+    /// <summary>守护重开触发阈值：未执行线路数 ≥ 此值即重开。默认 3，下限 1。hoeing-multiplayer-guard-auto-restart</summary>
+    public int GuardUnexecutedRouteThreshold { get; set; } = 3;
 }
