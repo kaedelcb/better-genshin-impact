@@ -90,8 +90,14 @@ public class WorldStateMonitor : IAsyncDisposable
     public bool IsEatingMedicine => _isEatingMedicine;
 
     // === 心跳失败独立退出路径（EC-03）===
+    // 判定改用"真实墙钟窗口"而非"失败次数"：SignalR 重连结束瞬间，重连窗口内排队的多个
+    // InvokeAsync 会在同一时刻批量抛异常，若按次数累计会瞬间打满阈值导致误退（把"批量爆发"
+    // 误当成"连续 30 秒失败"）。改为记录首次失败时刻，用真实流逝时间判定，天然免疫批量爆发；
+    // 同时保留最小失败次数守护，避免单次偶发失败在窗口边界误触发。详见方案二分析。
     private int _consecutiveHeartbeatFailures;
-    private const int HeartbeatFailureExitThreshold = 6; // 6次 × 5秒 = 30秒
+    private DateTime _firstHeartbeatFailureTime;
+    private const int HeartbeatFailureExitWindowSeconds = 30; // 真实墙钟窗口：连续失败持续满 30s 才退出
+    private const int HeartbeatFailureMinCount = 2; // 最小失败次数守护，防单次偶发失败在窗口边界误触发
 
     // === 事件 ===
     /// <summary>确认退出世界，触发协调停止。参数 (isHost, reason)。</summary>
@@ -239,14 +245,26 @@ public class WorldStateMonitor : IAsyncDisposable
         _logger.LogDebug("[WorldStateMonitor] 吃药完成，已重置内部状态");
     }
 
-    /// <summary>心跳连续失败时由 CoordinatorClient 调用。</summary>
+    /// <summary>
+    /// 心跳失败时由 CoordinatorClient 调用。用真实墙钟窗口判定退出：
+    /// 仅当"连续失败持续时长 >= HeartbeatFailureExitWindowSeconds 且失败次数 >= HeartbeatFailureMinCount"
+    /// 时才触发退出。首次失败（count 从 0→1）记录起始时刻，成功一次即清零并重置计时。
+    /// 这样重连结束瞬间批量抛出的多个失败因 elapsed≈0 不会误触发，只有真实持续的网络故障才退出。
+    /// </summary>
     public void NotifyHeartbeatFailure()
     {
-        _consecutiveHeartbeatFailures++;
-        if (_consecutiveHeartbeatFailures >= HeartbeatFailureExitThreshold)
+        if (_consecutiveHeartbeatFailures == 0)
         {
-            _logger.LogError("[WorldStateMonitor] 心跳连续 {Count} 次失败（{Sec}s），触发退出",
-                _consecutiveHeartbeatFailures, _consecutiveHeartbeatFailures * 5);
+            _firstHeartbeatFailureTime = DateTime.UtcNow; // 记录首次失败时刻，作为墙钟窗口起点
+        }
+        _consecutiveHeartbeatFailures++;
+
+        var elapsed = (DateTime.UtcNow - _firstHeartbeatFailureTime).TotalSeconds;
+        if (elapsed >= HeartbeatFailureExitWindowSeconds
+            && _consecutiveHeartbeatFailures >= HeartbeatFailureMinCount)
+        {
+            _logger.LogError("[WorldStateMonitor] 心跳连续失败持续 {Sec:F0}s（{Count} 次），触发退出",
+                elapsed, _consecutiveHeartbeatFailures);
             _consecutiveHeartbeatFailures = 0;
             // 异步触发退出，不阻塞心跳回调
             _ = Task.Run(async () =>
@@ -257,7 +275,7 @@ public class WorldStateMonitor : IAsyncDisposable
         }
     }
 
-    /// <summary>心跳成功时重置失败计数。</summary>
+    /// <summary>心跳成功时重置失败计数（count 归 0 隐式使下次失败重新记录墙钟起点）。</summary>
     public void NotifyHeartbeatSuccess()
     {
         _consecutiveHeartbeatFailures = 0;
