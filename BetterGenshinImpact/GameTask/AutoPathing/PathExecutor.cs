@@ -199,6 +199,60 @@ public partial class PathExecutor
     private bool _rerunSuppressExtrasOnce = false;
 
     /// <summary>
+    /// 线路重试模式 v2（hoeing-multiplayer-route-retry-mode §0）：重跑本段时豁免"该次"落后追赶判定。
+    ///
+    /// 必要性：重跑是【主动回退重打】，进度低于继续前进的队友是预期且正确的，不是真正的落后。
+    /// 若不豁免，重跑刚传回段起点就会被落后追赶判定"落后≥阈值段"→ 抛 LaggingCatchUpSkipException 跳段，
+    /// 重跑成果被直接踹走（实测日志：我 4000000 落后大部队 5000000 → 跳下一段 → 整条路线被跳过）。
+    ///
+    /// 注意：不能复用 _needReportNormalBeforeSync 做守卫——它在落后追赶判定【之前】的
+    /// "上报 Normal"块里就已被消费复位，到判定时恒为 false，等于没有豁免（这正是实测 bug 的成因）。
+    /// 故用本独立标志：catch RetrySegment 分支置位，落后追赶判定处消费即复位。
+    /// 默认 false，非重跑路径永不置位 → 落后追赶逻辑逐字节不变。
+    /// </summary>
+    private bool _exemptNextLaggingCatchUpOnce = false;
+
+    /// <summary>
+    /// 线路重试模式 v2（hoeing-multiplayer-route-retry-mode §0）：本条线路是否命中重试模式白名单。
+    /// 由 RouteExecutionEngine 在 ExecuteRoute 构造 PathExecutor 后注入（房主同步的白名单，全员一致）。
+    /// 仅 true 时才启用"段出口屏障"（每段结尾全员同步碰头 + 汇总是否有人死过）。
+    /// false（含单机、非白名单线路）时屏障整块短路 → 对其他线路的速度和逻辑零影响。
+    /// </summary>
+    public bool RouteRetryModeEnabled { get; set; } = false;
+
+    /// <summary>
+    /// 线路重试模式 v2（§0）：本段是否有成员死过（自己复苏 或 收到队友复苏广播）。
+    /// 置位者：本机复苏消费点 / RouteExecutionEngine 收到队友广播后调 MarkSegmentDeathForRerun()。
+    /// 消费者：段出口屏障放行后读它决定"全员重跑本段"还是"全员放行"。
+    /// 复位：段推进（新段开始）与重跑启动时清零，避免跨段残留。
+    /// volatile：AnomalyDetector/SignalR 后台线程写、PathExecutor 主线程读。
+    /// </summary>
+    private volatile bool _segmentDeathForRerun = false;
+
+    /// <summary>
+    /// 线路重试模式 v2（§0）：本段已重跑过一次（"只重试一次"保证）。
+    /// 段出口屏障判定时：有人死过 &amp;&amp; 本段未重跑过 → 重跑；已重跑过 → 放行（不再无限重跑）。
+    /// 段推进时复位。
+    /// </summary>
+    private bool _segmentRerunDone = false;
+
+    /// <summary>
+    /// 线路重试模式 v2（§0）：复苏者回神像后不立即重跑，而是先到"段出口屏障"与队友碰头。
+    /// 复苏消费点在 retry-route 下置位并 break 出 waypoint 循环，直达段出口屏障。
+    /// 屏障放行后统一决策。非 retry-route 恒 false → 原"神像 + 抛 RetryException"流程逐字节不变。
+    /// </summary>
+    private bool _revivedGoToSegExitBarrier = false;
+
+    /// <summary>
+    /// 线路重试模式 v2（§0）：供 RouteExecutionEngine 在收到队友复苏广播时标记"本段有人死过"。
+    /// 仅 retry-route 生效（调用方已守卫）。线程安全（volatile 写）。
+    /// </summary>
+    public void MarkSegmentDeathForRerun()
+    {
+        _segmentDeathForRerun = true;
+    }
+
+    /// <summary>
     /// 联机模式专用：外部（AnomalyDetector）检测到联机已倒下界面时调用。
     /// 仅在联机模式下有效，单机模式忽略以保留原有行为。
     /// </summary>
@@ -480,6 +534,13 @@ public partial class PathExecutor
             // 防御性重置：新段开始时清空复苏信号位，避免跨段残留
             // （正常情况下消费点会清理，但显式重置确保语义清晰）
             MultiplayerRevivalGate.Reset(ref _multiplayerRevivalDetected);
+
+            // === 线路重试模式 v2（§0）：段级标志复位（新段开始）===
+            // 每段独立判定"本段有人死过 / 本段已重跑过"，避免跨段残留。
+            // 非 retry-route 这些标志恒 false，不参与任何逻辑。
+            _segmentDeathForRerun = false;
+            _segmentRerunDone = false;
+            _revivedGoToSegExitBarrier = false;
 
             // === 段级抢报缓存构建（fastsync-redesign-parameter-passing spec / OQ-1=c）===
             // 把 _syncPointMap 中属于本段的项投影到 wpIdx 索引，O(1) 查询。
@@ -922,7 +983,15 @@ public partial class PathExecutor
                                             // 仅此处（段起点传送点正常同步块=段边界）插入；集合点/异常点/强制点均不插入（BUG-E）。
                                             // 两项本地标志守卫：异常恢复未占用 SkipToNextSegment、本轮无待收尾跳段（关键问题 4）。
                                             // mySeg 用本地实时 ComputeProgress（不读缓存）。判定纯同步读内存、不引入不可取消阻塞。
-                                            if (!SkipToNextSegment && !_needReportNormalBeforeSync)
+                                            //
+                                            // 线路重试模式 v2（§0）：重跑本段时豁免"该次"判定并消费复位——重跑是主动回退重打，
+                                            // 进度低于继续前进的队友是预期的，不是真正落后；不豁免会被直接跳段踹走重跑成果。
+                                            if (_exemptNextLaggingCatchUpOnce)
+                                            {
+                                                _exemptNextLaggingCatchUpOnce = false;
+                                                Logger.LogInformation("[联机][重试模式] 重跑本段：豁免本次落后追赶判定（主动回退重打，非真正落后），syncId={SyncId}", tpSyncId);
+                                            }
+                                            else if (!SkipToNextSegment && !_needReportNormalBeforeSync)
                                             {
                                                 long mySeg = ComputeProgress(CurWaypoints.Item1, CurWaypoint.Item1);
                                                 if (MultiplayerCoordinator.TryGetLaggingCatchUpDecision(mySeg))
@@ -1121,8 +1190,31 @@ public partial class PathExecutor
                                     {
                                         // 线路重试模式 v2：RetrySegment 强制去神像（forceStatue）跳过嗑药分级，保证全员真正回神像满血
                                         bool __retryForce = _pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment;
+
+                                        // === 线路重试模式 v2（§0）：复苏者去神像前先上报 Reviving，让服务端把段出口屏障超时延到 300s，
+                                        // 避免健康队友在屏障等复苏者回神像（~15-20s）时被 60s 超时误放行造成脱节。===
+                                        if (__retryForce && RouteRetryModeEnabled && MultiplayerCoordinator != null)
+                                        {
+                                            _segmentDeathForRerun = true; // 本机复苏 → 本段有人死过
+                                            long __revProgress = ComputeProgress(CurWaypoints.Item1, 0);
+                                            try { await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Reviving, __revProgress); } catch { }
+                                        }
+
                                         Logger.LogWarning("[联机] 战斗中曾触发复苏（已倒下色块检测），战斗结束后前往七天神像回血{Force}", __retryForce ? "（重试模式强制去神像）" : "");
                                         await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null, forceStatue: __retryForce);
+
+                                        // === 线路重试模式 v2（§0）：回神像后不立即重跑，先到"段出口屏障"与队友碰头 ===
+                                        // 置"本段有人死过"标志 + 标记走屏障路径 → break 出 waypoint 循环直达段出口屏障。
+                                        // 屏障保证复苏者到齐前队友不放行 → 广播必然已送达 → 全员一起重跑（确定性）。
+                                        if (__retryForce && RouteRetryModeEnabled)
+                                        {
+                                            _segmentDeathForRerun = true;
+                                            _revivedGoToSegExitBarrier = true;
+                                            System.Threading.Interlocked.Exchange(ref _pendingRevivalEscalation, 0); // 消费掉，避免残留影响后续
+                                            Logger.LogWarning("[联机][重试模式v2] 复苏者已回神像满血 → 前往段出口屏障与队友碰头（不单独重跑）");
+                                            break; // 跳出 waypoint 循环 → 段出口屏障
+                                        }
+
                                         throw new RetryException("联机：战斗中触发复苏，神像回血后跳到下一段汇合");
                                     }
 
@@ -1494,6 +1586,63 @@ public partial class PathExecutor
                         _lastWaypoint = waypoint;
                     }
 
+                    // ============================================================================
+                    // === 段出口屏障（线路重试模式 v2 / hoeing-multiplayer-route-retry-mode §0）===
+                    // 目的：让"全员一起重打"成为确定性行为，而非依赖广播时序的概率行为。
+                    //
+                    // 原理：retry-route 的每段跑完后，所有成员（含已回神像的复苏者）都在这里报到等待。
+                    //   - 复苏者在"去神像之前"就已广播复苏（PlayerAnomalyNotify），且被计入屏障人数；
+                    //   - 健康队友必须等复苏者到齐才放行 → 放行时广播必然已送达 → 全员的
+                    //     _segmentDeathForRerun 状态一致 → 一起重跑或一起放行（消除"队友已跑掉"竞态）。
+                    //
+                    // 仅 RouteRetryModeEnabled（房主同步白名单命中）+ 联机时生效；
+                    // 其他线路/单机整块短路 → 对速度和逻辑零影响（用户明确要求）。
+                    // ============================================================================
+                    if (RouteRetryModeEnabled
+                        && MultiplayerCoordinator != null
+                        && !_segmentRerunDone)   // 本段已重跑过 → 不再进屏障（只重试一次，避免二次等待）
+                    {
+                        var __segIdxForBarrier = CurWaypoints.Item1;
+                        // syncId 命名空间必须与 BuildSyncPointMapManual 的 idNamespace 算法【逐字节一致】，
+                        // 否则变体线路（成员跑不同变体文件、FileName 不同）会各等在不同 syncId 上 → 屏障死等超时。
+                        // 规则：LogicalRouteId 非空用它；否则用 StripBaseNameAnyVariant(FileName) 归一化到统一基名。
+                        string __segExitNs = string.IsNullOrEmpty(task.LogicalRouteId)
+                            ? BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.RouteVariantNaming.StripBaseNameAnyVariant(task.FileName)
+                            : task.LogicalRouteId;
+                        var __segExitSyncId = $"{__segExitNs}_segexit_{__segIdxForBarrier}";
+                        // 屏障进度用"本段最后一个 waypoint"，保证语义单调（本段已跑完）
+                        long __segExitProgress = ComputeProgress(__segIdxForBarrier, Math.Max(0, waypoints.Count - 1));
+
+                        // 复苏者此前上报过 Reviving，放行前先恢复 Normal，避免污染后续全员判定
+                        if (_revivedGoToSegExitBarrier)
+                        {
+                            try { await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Normal); } catch { }
+                        }
+
+                        Logger.LogInformation("[联机][重试模式v2] 到达段出口屏障，等待全员碰头，syncId={SyncId}，本段有人死过={Died}",
+                            __segExitSyncId, _segmentDeathForRerun);
+                        await MultiplayerCoordinator.WaitForAllPlayers(__segExitSyncId, ct, __segExitProgress);
+
+                        // === 屏障放行后统一决策（此刻全员状态已对齐）===
+                        if (_segmentDeathForRerun)
+                        {
+                            _segmentRerunDone = true;             // 只重试一次
+                            _segmentDeathForRerun = false;        // 清标志，重跑期间重新累计
+                            _revivedGoToSegExitBarrier = false;
+                            _rerunSuppressExtrasOnce = true;      // 重跑段起点跳过吃药/换人（多余）
+                            _exemptNextLaggingCatchUpOnce = true; // 重跑是主动回退，豁免落后追赶（否则被踹走）
+                            _needReportNormalBeforeSync = true;   // 段起点同步前上报 Normal
+                            SkipToNextSegment = false;            // 确保"重跑本段"而非"跳下一段"
+                            Logger.LogWarning("[联机][重试模式v2] 段出口屏障：本段有成员死过 → 全员一起重跑本段（第 1 次，仅重试一次）");
+                            ResetRecoveryStateForNewAttempt();
+                            continue; // 继续 for-i：全员重跑本段（段起点传送 + 正常同步汇合）
+                        }
+
+                        _revivedGoToSegExitBarrier = false;
+                        Logger.LogInformation("[联机][重试模式v2] 段出口屏障：本段无人死亡{Done} → 全员放行，继续下一段",
+                            _segmentRerunDone ? "（或已重跑过）" : "");
+                    }
+
                     if (waypoints == waypointsList.Last())
                     {
                         SuccessEnd = true;
@@ -1583,6 +1732,7 @@ public partial class PathExecutor
                         SkipToNextSegment = false;   // 显式清掉，确保"重跑本段"而非"跳下一段"
                         _needReportNormalBeforeSync = true; // 重跑到本段同步点前上报 Normal，恢复正常同步语义
                         _rerunSuppressExtrasOnce = true;    // 重跑本段起点：跳过按周期吃食物 + 按线路切角色（已回神像满血，多余）
+                        _exemptNextLaggingCatchUpOnce = true; // 重跑本段起点：豁免落后追赶判定（主动回退重打，非真正落后）
                         ResetRecoveryStateForNewAttempt();
                         continue; // 继续 for-i：重跑本段（含段起点传送 + 正常同步汇合）
                     }
