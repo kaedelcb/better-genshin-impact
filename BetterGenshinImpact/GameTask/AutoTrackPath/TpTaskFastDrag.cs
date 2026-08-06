@@ -1018,58 +1018,99 @@ public class TpTaskFastDrag
     private async Task<bool> TryToOpenBigMapUi(int retryCount = 0)
     {
         // M 打开地图识别当前位置，中心点为当前位置
-        using var ra1 = CaptureToRectArea();
-        if (Bv.IsInBigMapUi(ra1))
+        using (var ra1 = CaptureToRectArea())
         {
-            return true;
-        }
-
-        Simulation.SendInput.SimulateAction(GIActions.OpenMap);
-        // Logger.LogWarning("尝试打开大地图界面，识别当前位置");
-        
-        // 加速识别模式：轮询等大地图 UI 出现，兜底 2500ms（≈旧逻辑 1000+500*3 上限）
-        // fast-drag-recognition-acceleration spec / step 1 boot delay optimization
-        if (_tpConfig.MapMoveStepDivisor && _tpConfig.FastDragRecognitionEnabled)
-        {
-            // await Delay(200, ct);
-            // await WaitMapStableOrTimeoutAsync(timeoutMs: 1300); 
-            //
-            // await WaitMapStableOrTimeoutAsync(200);
-            if (!await WaitForBigMapUiOrTimeoutAsync(ApplyExtraDelay(2000)))
-            {
-                Logger.LogWarning("等待大地图界面超时（2000ms），可能地图尚未打开");
-            }
-            using var ra2 = CaptureToRectArea();
-            if (ra2.Find(QuickTeleportAssets.Get(ra2).MapScaleButtonRo).IsExist())
+            if (Bv.IsInBigMapUi(ra1))
             {
                 return true;
             }
         }
-        else
-        {
-            await Delay(ApplyExtraDelay(500), ct);
-            if (!await WaitForBigMapUiOrTimeoutAsync(ApplyExtraDelay(2000)))
-            {
-                Logger.LogWarning("等待大地图界面超时（2000ms），可能地图尚未打开，继续按原逻辑读取缩放级别");
-            }
-        }
 
-        // 旧行为：固定 1000ms 后再 3 次 500ms 重试
-        for (int i = 0; i < 30; i++)
+        // 重按 M 机制（teleport-open-bigmap-repress-on-swallow）：
+        //   根因——传送落地后主界面判定(IsInMainUi)通过时，游戏往往还差一点渲染，此刻按 M 会被吞，
+        //   旧逻辑要空烧 2800ms 等待 + 1500ms 空轮询(不重按) ≈ 4.3s 才判失败，再靠上层回主界面兜底。
+        //
+        //   关键：M 是开关键，若第一次已生效再按一次会把正在打开的地图【关掉】，所以重按判据必须可靠。
+        //   把两件时间尺度完全不同的事拆成两个独立时间，避免"参数越大重按越慢"的错误耦合：
+        //     ① 被吞探测 swallowProbeMs（固定，不随参数缩放）：按 M 后只探测"是否离开主界面"。
+        //        —— 只要离开主界面（哪怕地图还没渲染出来、处于过渡态）→ 按键已生效 → 立即【提交】进入②，
+        //           绝不再按 M（地图渲染多慢都行）。
+        //        —— 若在 swallowProbeMs 内【一直赖在主界面】（派蒙菜单没消失）→ 判定被吞 → 重按。
+        //        它只需覆盖"主界面菜单消失"的延迟（快），不需要覆盖"地图完全渲染"（慢），所以短。
+        //     ② 渲染容忍 renderToleranceMs（随 MapZoomDistanceForce 缩放）：离开主界面后耐心等大地图出现，
+        //        轮询命中即返回（正常路径零额外延时）。慢机器调高"传送整体识别延时"在这里起作用，不拖慢①。
+        //
+        //   maxPress 次内仍未成功 → return false，交回 CheckInBigMapUi 既有兜底（回主界面 + 延时 + 再试一轮）。
+        const int maxPress = 3;
+        const int swallowProbeMs = 400;                              // 固定：主界面消失延迟上限（≠地图渲染时间）
+        int renderToleranceMs = ApplyExtraDelay(1500 + retryCount * 200); // 随参数缩放：地图渲染耐心
+        int pressCount = 0;
+
+        while (true)
         {
-            using var ra12 = CaptureToRectArea();
-            if (!Bv.IsInBigMapUi(ra12))
+            ct.ThrowIfCancellationRequested();
+
+            Simulation.SendInput.SimulateAction(GIActions.OpenMap);
+            pressCount++;
+
+            // ── 阶段①：被吞探测。轮询到"离开主界面"或"大地图出现"即结束；一直在主界面到超时 = 被吞。
+            bool leftMainUi = false;
+            long probeDeadline = Environment.TickCount + swallowProbeMs;
+            while (Environment.TickCount < probeDeadline)
             {
-                await Delay(50+retryCount*100, ct);
+                ct.ThrowIfCancellationRequested();
+                using var raP = CaptureToRectArea();
+                if (Bv.IsInBigMapUi(raP))
+                {
+                    return true; // 已经开好了
+                }
+                if (!Bv.IsInMainUi(raP))
+                {
+                    leftMainUi = true; // 主界面菜单已消失 → 按键生效，提交进入②
+                    break;
+                }
+                await Delay(10, ct);
             }
-            else
+
+            if (!leftMainUi)
             {
-                Logger.LogWarning("成功识别到大地图界面-1");
+                // 一直在主界面 → M 被吞
+                if (pressCount >= maxPress)
+                {
+                    Logger.LogWarning("按 M {PressCount} 次、每次探测 {ProbeMs}ms 仍在主界面，疑似按键持续被吞，交回上层兜底", pressCount, swallowProbeMs);
+                    return false;
+                }
+                // Logger.LogWarning("按 M 后 {ProbeMs}ms 仍在主界面（已按 {PressCount} 次），疑似落地渲染未就绪按键被吞，立即重按", swallowProbeMs, pressCount);
+                continue; // 立即重按
+            }
+
+            // ── 阶段②：已离开主界面（按键生效），提交耐心等待地图渲染，绝不重按（避免 M 把地图关掉）
+            if (await WaitForBigMapUiOrTimeoutAsync(renderToleranceMs))
+            {
                 return true;
             }
+
+            // 渲染容忍超时仍没进大地图，判断是"回落主界面"还是"仍卡过渡态"
+            using var raEnd = CaptureToRectArea();
+            if (Bv.IsInBigMapUi(raEnd))
+            {
+                return true;
+            }
+            if (Bv.IsInMainUi(raEnd))
+            {
+                // 离开主界面后又回落（罕见：地图没开成）→ 按需重按
+                if (pressCount >= maxPress)
+                {
+                    Logger.LogWarning("离开主界面后又回落主界面，已按 {PressCount} 次，交回上层兜底", pressCount);
+                    return false;
+                }
+                Logger.LogWarning("离开主界面后又回落主界面（已按 {PressCount} 次），重按打开地图", pressCount);
+                continue;
+            }
+            // 仍卡在过渡态：避免死等，交回上层兜底（低配机应调高"传送整体识别延时"放大渲染容忍）
+            Logger.LogWarning("按 M {PressCount} 次、等待渲染 {Ms}ms 后仍未进入大地图，交回上层兜底", pressCount, renderToleranceMs);
+            return false;
         }
-       
-        return false;
     }
 
     /// <summary>
