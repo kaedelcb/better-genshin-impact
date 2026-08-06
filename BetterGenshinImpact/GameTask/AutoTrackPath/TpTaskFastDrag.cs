@@ -551,6 +551,15 @@ public class TpTaskFastDrag
             
             TaskControl.Logger.LogInformation("传送点不在当前大地图范围内，重新调整地图位置-1（保持当前缩放，不强制归一到 2.0）");
 
+            // [诊断-定位循环] 打出本轮重进时的实测缩放 + 重试计数。keepCurrentZoom=true 会保留上一轮缩放，
+            // 若这里缩放持续偏离 4.4（如停在很放大档），则 do-while 的 Contains 与早停几何判据尺度不一致，
+            // 是 livelock 的直接诱因（验证假设3）。
+            using (var raLoop = CaptureToRectArea())
+            {
+                TaskControl.Logger.LogDebug("[诊断-定位循环] retryCount={RC} retryTimes={RT} 目标({X:0},{Y:0}) 进入本轮实测缩放={Z:0.00}",
+                    retryCount, retryTimes, x, y, GetBigMapZoomLevel(raLoop));
+            }
+
             // 改法 B：keepCurrentZoom=true，定位循环不强行把缩放归一到 2.0，保留拖动进入时的实际缩放。
             await MoveMapTo(x, y, mapName, 2, country, retryTimes, keepCurrentZoom: true);
             if (_tpConfig.MapMoveStepDivisor)
@@ -947,6 +956,13 @@ public class TpTaskFastDrag
         // 坐标不包含直接返回
         if (!bigMapInAllMapRect.Contains(x, y))
         {
+            // [诊断] 区分"范围判据(Contains)挂" vs "安全区判据(IsClickable)挂"：这里是 Contains 挂。
+            // 打出目标点与矩形，若目标点明显在矩形外→地图确实没拖到位；若擦边→矩形/缩放尺度问题。
+            double rectCX = bigMapInAllMapRect.X + bigMapInAllMapRect.Width / 2.0;
+            double rectCY = bigMapInAllMapRect.Y + bigMapInAllMapRect.Height / 2.0;
+            Logger.LogDebug("[诊断-范围判据] Contains=false 目标点({X:0},{Y:0}) 不在矩形内 rect=[X={RX:0} Y={RY:0} W={RW:0} H={RH:0}] 矩形中心=({CX:0},{CY:0}) 目标距矩心=({DX:0},{DY:0})",
+                x, y, bigMapInAllMapRect.X, bigMapInAllMapRect.Y, bigMapInAllMapRect.Width, bigMapInAllMapRect.Height,
+                rectCX, rectCY, x - rectCX, y - rectCY);
             return false;
         }
 
@@ -954,9 +970,13 @@ public class TpTaskFastDrag
         // 用五个精确 UI 危险区矩形替换旧的"左上 360×400 + 四周 115 圈"粗糙屏蔽。
         // 命中任一 UI 矩形 → 危险（继续 MoveMapTo 避让）；否则可点击（含边缘中段）。
         // 详见 .kiro/specs/teleport-drag-corner-ui-safezone-clamp/。
-        bool isClickable = TeleportClickSafeZone.IsClickable(clickX, clickY, _zoomOutMax1080PRatio);
-        Logger.LogDebug("[IsPointInBigMapWindow] 传送点({X:0},{Y:0}) 计算点击位置=({ClickX:0},{ClickY:0}) 安全区判定={IsClickable} ratio={Ratio:0.00}",
-            x, y, clickX, clickY, isClickable, _zoomOutMax1080PRatio);
+        bool withinScreen = TeleportClickSafeZone.IsWithinScreen(clickX, clickY, _zoomOutMax1080PRatio);
+        bool inDanger = TeleportClickSafeZone.IsInDangerZone(clickX, clickY, _zoomOutMax1080PRatio);
+        bool isClickable = withinScreen && !inDanger;
+        // [诊断] Contains 已通过，走到 IsClickable。拆开 withinScreen / inDanger 两个子判据，
+        // 明确到底是"越出屏幕"还是"落在 UI 危险矩形"导致不可点，便于对照早停几何判据。
+        Logger.LogDebug("[IsPointInBigMapWindow] 传送点({X:0},{Y:0}) 计算点击位置=({ClickX:0},{ClickY:0}) 安全区判定={IsClickable} (屏幕内={Within} 危险区={Danger}) ratio={Ratio:0.00}",
+            x, y, clickX, clickY, isClickable, withinScreen, inDanger, _zoomOutMax1080PRatio);
         return isClickable;
     }
 
@@ -1344,7 +1364,19 @@ public class TpTaskFastDrag
                     _tpConfig.MapMoveStepDivisor, x, y, mapCenterPoint.X, mapCenterPoint.Y,
                     _tpConfig.MapScaleFactor, currentZoomLevel, TeleportClickSafeZone.DefaultEarlyStopMargin))
             {
-                TaskControl.Logger.LogDebug("传送点已进入可点击安全区，提前结束拖动（第 {I} 次）", iteration + 1);
+                // [诊断] 早停用的是几何投影(mapCenterPoint + currentZoomLevel 变量)。
+                // 打出：①早停算出的 clickX/clickY（1080P 空间）②currentZoomLevel 变量值
+                // ③实测截图缩放（可能与变量值不一致→就是判据打架根因）。
+                // 与 do-while 的 [IsPointInBigMapWindow] 对照：若两者对同一目标点给出相反结论，
+                // 且实测缩放≠currentZoomLevel 变量，即坐实"早停几何 vs 模板 rect 尺度不一致"。
+                double __esClickX = 960 - _tpConfig.MapScaleFactor * (x - mapCenterPoint.X) / currentZoomLevel;
+                double __esClickY = 540 - _tpConfig.MapScaleFactor * (y - mapCenterPoint.Y) / currentZoomLevel;
+                double __esMeasuredZoom;
+                using (var raEs = CaptureToRectArea()) { __esMeasuredZoom = GetBigMapZoomLevel(raEs); }
+                TaskControl.Logger.LogDebug(
+                    "[诊断-早停] 提前结束拖动（第 {I} 次）目标({X:0},{Y:0}) 中心({CX:0},{CY:0}) 早停算点=({ClickX:0},{ClickY:0}) currentZoom变量={CZ:0.00} 实测缩放={MZ:0.00} 偏差={Off:0}",
+                    iteration + 1, x, y, mapCenterPoint.X, mapCenterPoint.Y, __esClickX, __esClickY,
+                    currentZoomLevel, __esMeasuredZoom, Math.Sqrt((x - mapCenterPoint.X) * (x - mapCenterPoint.X) + (y - mapCenterPoint.Y) * (y - mapCenterPoint.Y)));
                 break;
             }
 
@@ -1435,6 +1467,17 @@ public class TpTaskFastDrag
 
             double moveMouseLength = Math.Sqrt(moveMouseX * moveMouseX + moveMouseY * moveMouseY);
             int moveSteps = Math.Max((int)moveMouseLength / moveStepDivisor, 3); // 每次移动的步数最小为 3，避免除 0 错误
+
+            // [诊断-移动量] 拖动前：真实迭代号 iteration（区别于日志里绑 exceptionTimes 的"迭代"字段）、
+            // 当前缩放、到目标 offset、算出的鼠标位移(moveMouseX/Y)、期望像素位移长度、步数。
+            // 若 moveMouseX/Y 很小 → 拖动量本身就不够（放大过头/收工阈值问题）；
+            // 若 moveMouseX/Y 足够大但下一条识别 ratio≈0 → 拖动手势没生效（假设1）。
+            TaskControl.Logger.LogDebug(
+                "[诊断-移动量] iteration={It} 模式={Mode} 缩放={CZ:0.00} 中心=({CX:0},{CY:0}) offset=({OX:0},{OY:0}) moveMouse=({MX},{MY}) 期望像素长={Len:0} 步数={Steps} landing={Landing}",
+                iteration, dynamicRunway ? "动态跑道" : "经典", currentZoomLevel,
+                mapCenterPoint.X, mapCenterPoint.Y, xOffset, yOffset, moveMouseX, moveMouseY,
+                moveMouseLength, moveSteps,
+                landingOverride is { } lo2 ? $"({lo2.Item1:0},{lo2.Item2:0})" : "无");
 
             await MouseMoveMap(moveMouseX, moveMouseY, moveSteps, landingOverride);
 
@@ -1790,14 +1833,19 @@ public class TpTaskFastDrag
                                 using var esc = image2.Find(QuickTeleportAssets.Get(image2).MapCloseButtonWhiteRo);
                                 if (esc.IsExist())
                                 {
-                                    TaskControl.Logger.LogWarning("地图遮挡，重新调整");
+                                    // [诊断] 拖动中途采样点(500,500)/(600,500)像素与拖动前一致 + 有关闭按钮 → 判定地图被弹层遮挡。
+                                    TaskControl.Logger.LogWarning("地图遮挡，重新调整 [诊断] 采样点像素未变(拖动被弹层挡住) step={I}/{Steps}", i, steps);
                                     await Delay(1500, ct);
                                     Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
                                     await Delay(1500, ct);
                                 }
                                 else
                                 {
-                                    TaskControl.Logger.LogWarning("地图拖动异常，重新调整");
+                                    // [诊断] 采样点像素未变 + 无关闭按钮 → 拖动中途地图没动（假设1直接证据）。
+                                    // 打出采样点在第几步、以及两个采样点的 BGR 值，确认是"真没动"而非采样点恰好选在同色区。
+                                    TaskControl.Logger.LogWarning(
+                                        "地图拖动异常，重新调整 [诊断] 拖动中途采样点像素未变 step={I}/{Steps} p(500,500)前={A} 后={C} p(600,500)前={B} 后={D}",
+                                        i, steps, pos.ToString(), pos3.ToString(), pos2.ToString(), pos4.ToString());
                                 }
                                 
                                 break;
@@ -1824,6 +1872,15 @@ public class TpTaskFastDrag
                 {
                     __measured = Math.Abs(__realDy) / (double)Math.Abs(pixelDeltaY);
                 }
+                // [诊断-拖动位移] 核心验证假设1：拖动手势到底让鼠标物理移动了多少。
+                // __realDx/Dy = 拖动前后 GetCursorPos 物理像素差（真实发生的位移）；
+                // pixelDeltaX/Y = 意图位移。若 __real≈0 而 pixelDelta 不小 → 拖动根本没执行/被中断（地图不会动）；
+                // 若 __real 与 pixelDelta 量级相符 → 鼠标动了，但地图 ratio≈0 → 地图到了拖动边界/被锁。
+                TaskControl.Logger.LogDebug(
+                    "[诊断-拖动位移] 意图 pixelDelta=({PX},{PY}) 实测光标位移=({RX},{RY}) 放大比值={M:0.00} 采纳={Adopt}",
+                    pixelDeltaX, pixelDeltaY, __realDx, __realDy, __measured,
+                    (__measured >= 0.5 && __measured <= 3.0 && (Math.Abs(__realDx) + Math.Abs(__realDy)) > 20));
+
                 // 只在本次确实产生了有意义位移、且比值落在合理区间时校准（防中断/遮挡的异常样本污染）
                 if (__measured >= 0.5 && __measured <= 3.0 && (Math.Abs(__realDx) + Math.Abs(__realDy)) > 20)
                 {
@@ -2626,7 +2683,7 @@ public class TpTaskFastDrag
 
     internal async Task SwitchArea(string areaName)
     {
-        GameCaptureRegion.GameRegionClick((rect, scale) => (rect.Width - 160 * scale, rect.Height - 60 * scale));
+        GameCaptureRegion.GameRegionClick((rect, scale) => (rect.Width - 80 * scale, rect.Height - 62 * scale));
         
         // 加速识别模式：等地区菜单弹出（白色 X 关闭按钮出现），兜底 300ms 与旧 Delay 等值。
         // MapCloseButtonWhiteRo = 弹出层（含地区菜单）的白色 X 关闭按钮。

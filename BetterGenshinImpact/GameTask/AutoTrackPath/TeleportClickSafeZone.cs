@@ -36,7 +36,7 @@ public static class TeleportClickSafeZone
     {
         new DangerRect(0,    0,   400, 430),  // 左上：任务/派蒙栏
         new DangerRect(930,  0,   990, 100),  // 右上：树脂显示（延伸到 x=1920）
-        new DangerRect(1515, 959, 405, 121),  // 右下：菜单按键（延伸到 1920×1080）
+        new DangerRect(1515, 929, 405, 151),  // 右下：菜单按键（延伸到 1920×1080）
         new DangerRect(0,    960, 105, 120),  // 左下：设置/图例按键
         new DangerRect(1780, 350, 140, 375),  // 右中：图层按键（竖条）
         new DangerRect(0,    0,   1920, 20),  // 顶部：整宽 20px 顶边条
