@@ -53,27 +53,27 @@ public class TpTask
         }
     }
 
-    public async Task OpenBigMapUi(int retryCount = 3)
+    public async Task OpenBigMapUi(int retryCount = 3, string? mapName = null)
     {
         if (UseOfficial)
         {
-            await _official.OpenBigMapUi(retryCount);
+            await _official.OpenBigMapUi(retryCount, mapName);
         }
         else
         {
-            await _fastDrag.OpenBigMapUi(retryCount);
+            await _fastDrag.OpenBigMapUi(retryCount, mapName);
         }
     }
 
-    public async Task CheckInBigMapUi(int retryCount = 0)
+    public async Task CheckInBigMapUi(int retryCount = 0, string? mapName = null)
     {
         if (UseOfficial)
         {
-            await _official.CheckInBigMapUi();
+            await _official.CheckInBigMapUi(mapName);
         }
         else
         {
-            await _fastDrag.CheckInBigMapUi(retryCount);
+            await _fastDrag.CheckInBigMapUi(retryCount, mapName);
         }
     }
 

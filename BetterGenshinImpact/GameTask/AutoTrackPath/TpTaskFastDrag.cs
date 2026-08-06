@@ -89,7 +89,27 @@ public class TpTaskFastDrag
     /// </summary>
     private readonly int _zoomOutButtonY = TaskContext.Instance().Config.TpConfig.ZoomEndY + 24; //  y-coordinate for zoom-out button = _zoomEndY + 24
 
-    private const double DisplayTpPointZoomLevel = 4.4; // 传送点显示的时候的地图比例
+    private const double DisplayTpPointZoomLevel = 4.4; // 传送点显示的时候的地图比例（默认地图）
+    private const double MoonCanonDisplayTpPointZoomLevel = 3.0; // 霜月传送点仅在 ≤3.0 渲染
+    private const int MoonCanonExtraBigMapRenderMs = 4600; // 霜月大地图渲染更慢，额外等待（对齐公版打开超时 7000ms）
+
+    /// <summary>
+    /// 传送点显示/可点击的缩放上限：霜月地图为 3.0（传送点仅在 ≤3.0 渲染），其余地图为默认 4.4。
+    /// 对所有非霜月地图返回值与旧常量逐字节相同，保证既有地图零回归。
+    /// </summary>
+    private static double GetDisplayTpPointZoomLevel(string? mapName)
+        => string.Equals(mapName, MapTypes.MoonCanon.ToString(), StringComparison.Ordinal)
+            ? MoonCanonDisplayTpPointZoomLevel
+            : DisplayTpPointZoomLevel;
+
+    /// <summary>
+    /// 大地图打开后等待渲染的额外容忍时长：霜月地图 +4600ms（大图渲染慢，对齐公版 7000ms 打开超时），其余地图 0。
+    /// 仅影响霜月，其余地图零回归。
+    /// </summary>
+    private static int GetExtraBigMapRenderMs(string? mapName)
+        => string.Equals(mapName, MapTypes.MoonCanon.ToString(), StringComparison.Ordinal)
+            ? MoonCanonExtraBigMapRenderMs
+            : 0;
 
     /// <summary>
     /// 联机锄地传送过程中抑制 AnomalyDetector 自动点击复苏按钮。
@@ -285,7 +305,8 @@ public class TpTaskFastDrag
     ///释放所有按键，并打开大地图界面
     /// </summary>
     /// <param name="retryCount">重试次数</param>
-    public async Task OpenBigMapUi(int retryCount = 3)
+    /// <param name="mapName">目标地图名（用于霜月等大图延长渲染等待；null 走默认时长）</param>
+    public async Task OpenBigMapUi(int retryCount = 3, string? mapName = null)
     {
         for (var i = 0; i < retryCount; i++)
         {
@@ -294,7 +315,7 @@ public class TpTaskFastDrag
                 // 打开地图前释放所有按键
                 Simulation.ReleaseAllKey();
                 await Delay(20, ct);
-                await CheckInBigMapUi(i);
+                await CheckInBigMapUi(i, mapName);
                 return;
             }
             catch (Exception e) when (e is NormalEndException || e is TaskCanceledException)
@@ -332,8 +353,8 @@ public class TpTaskFastDrag
         // 详见 teleport-bigmap-position-region-constrained-match spec。
         _miniMapPriorGenshin = TryGetMiniMapPriorGenshin(mapName);
         _priorIsRegionCenter = false; // 缓存先验，用第一层标准半径100
-        // 1. 确认在地图界面
-        await OpenBigMapUi(1);
+        // 1. 确认在地图界面（传 mapName：霜月大图延长渲染等待）
+        await OpenBigMapUi(1, mapName);
         // 2. 传送前的计算准备
         // 获取离目标传送点最近的两个传送点，按距离排序
         var nTpPoints = GetNearestNTpPoints(tpX, tpY, mapName, 2);
@@ -361,10 +382,11 @@ public class TpTaskFastDrag
         //   仅对旧日之海：降档目标取 Math.Min(4.4, minZoomLevel)，保留步骤4的相邻点间距。
         //     - minZoomLevel=2.0 → Math.Min(4.4,2.0)=2.0：更放大、点更分散，且 2.0≤4.4 图标正常渲染、≥2.0 画面不暗。
         //     - minZoomLevel≥4.4（远距离点）→ Math.Min=4.4：与旧行为一致，远点本就无需额外分散。
-        //   非旧日之海：clickZoomLevel 恒 = DisplayTpPointZoomLevel(4.4)，所有下游降档逐字节不变、零回归。
+        //   非旧日之海：clickZoomLevel = GetDisplayTpPointZoomLevel(mapName)——普通地图仍 4.4（逐字节不变、零回归），
+        //   霜月地图 = 3.0（传送点仅在 ≤3.0 渲染，4.4 下点击落在不渲染的空位会失败）。
         double clickZoomLevel = mapName == "SeaOfBygoneEras"
             ? Math.Min(DisplayTpPointZoomLevel, minZoomLevel)
-            : DisplayTpPointZoomLevel;
+            : GetDisplayTpPointZoomLevel(mapName);
 
         // 特殊相邻传送点命中判定基准（决策 e）：用最近真实传送点坐标，独立于 force 的 (x,y)。仅取值，无 IO。
         double adjBaseX = nTpPoints[0].X;
@@ -408,11 +430,13 @@ public class TpTaskFastDrag
             /* 动态调整缩放逻辑：
                 1. 如果当前缩放大于显示传送点级别 -> 缩小
                 2. 如果小于配置的最小级别 -> 放大 */
-            if (zoomLevel > DisplayTpPointZoomLevel + _tpConfig.PrecisionThreshold)
+            // 显示档按地图区分：普通地图 4.4（逐字节不变），霜月 3.0（传送点仅在 ≤3.0 渲染）
+            var displayZoom = GetDisplayTpPointZoomLevel(mapName);
+            if (zoomLevel > displayZoom + _tpConfig.PrecisionThreshold)
             {
-                await AdjustMapZoomLevel(zoomLevel, DisplayTpPointZoomLevel);
-                zoomLevel = DisplayTpPointZoomLevel;
-                TaskControl.Logger.LogInformation("当前缩放等级过大，调整为 {zoomLevel:0.00}", DisplayTpPointZoomLevel);
+                await AdjustMapZoomLevel(zoomLevel, displayZoom);
+                zoomLevel = displayZoom;
+                TaskControl.Logger.LogInformation("当前缩放等级过大，调整为 {zoomLevel:0.00}", displayZoom);
                 bigMapInAllMapRect = GetBigMapRect(mapName);
             }
             else if (zoomLevel < _tpConfig.MinZoomLevel - _tpConfig.PrecisionThreshold)
@@ -998,14 +1022,14 @@ public class TpTaskFastDrag
         return (clickX, clickY);
     }
 
-    public async Task CheckInBigMapUi(int retryCount = 0)
+    public async Task CheckInBigMapUi(int retryCount = 0, string? mapName = null)
     {
         // 尝试打开地图失败后，先回到主界面后再次尝试打开地图
-        if (!await TryToOpenBigMapUi(retryCount))
+        if (!await TryToOpenBigMapUi(retryCount, mapName))
         {
             await new ReturnMainUiTask().Start(ct);
             await Delay(ApplyExtraDelay(500), ct);
-            if (!await TryToOpenBigMapUi(retryCount))
+            if (!await TryToOpenBigMapUi(retryCount, mapName))
             {
                 throw new RetryException("打开大地图失败，请检查按键绑定中「打开地图」按键设置是否和原神游戏中一致！");
             }
@@ -1015,7 +1039,7 @@ public class TpTaskFastDrag
     /// <summary>
     /// 尝试打开地图界面
     /// </summary>
-    private async Task<bool> TryToOpenBigMapUi(int retryCount = 0)
+    private async Task<bool> TryToOpenBigMapUi(int retryCount = 0, string? mapName = null)
     {
         // M 打开地图识别当前位置，中心点为当前位置
         using (var ra1 = CaptureToRectArea())
@@ -1043,7 +1067,7 @@ public class TpTaskFastDrag
         //   maxPress 次内仍未成功 → return false，交回 CheckInBigMapUi 既有兜底（回主界面 + 延时 + 再试一轮）。
         const int maxPress = 3;
         const int swallowProbeMs = 400;                              // 固定：主界面消失延迟上限（≠地图渲染时间）
-        int renderToleranceMs = ApplyExtraDelay(1500 + retryCount * 200); // 随参数缩放：地图渲染耐心
+        int renderToleranceMs = ApplyExtraDelay(1500 + retryCount * 200) + GetExtraBigMapRenderMs(mapName); // 随参数缩放：地图渲染耐心（霜月大图额外+4600ms）
         int pressCount = 0;
 
         while (true)
@@ -1271,11 +1295,12 @@ public class TpTaskFastDrag
         {
             if (_tpConfig.MapMoveStepDivisor)Simulation.SendInput.Mouse.LeftButtonUp();
             Logger.LogDebug("初始中心点识别失败，开启自救策略");
-            // 判断当前缩放是否离最佳识别缩放(4.4)较远，如果是，则先调整到最佳视角尝试
-            if ((_tpConfig.MapZoomEnabled ||_tpConfig.MapMoveStepDivisor) && Math.Abs(currentZoomLevel - DisplayTpPointZoomLevel) > 0.3) 
+            // 判断当前缩放是否离最佳识别缩放（普通地图 4.4 / 霜月 3.0）较远，如果是，则先调整到最佳视角尝试
+            var recognitionZoom = GetDisplayTpPointZoomLevel(mapName);
+            if ((_tpConfig.MapZoomEnabled ||_tpConfig.MapMoveStepDivisor) && Math.Abs(currentZoomLevel - recognitionZoom) > 0.3) 
             {
-                await AdjustMapZoomLevel(currentZoomLevel, DisplayTpPointZoomLevel);
-                currentZoomLevel = DisplayTpPointZoomLevel;
+                await AdjustMapZoomLevel(currentZoomLevel, recognitionZoom);
+                currentZoomLevel = recognitionZoom;
                 await Delay(300, ct);
 
                 try
@@ -1375,7 +1400,7 @@ public class TpTaskFastDrag
                     _tpConfig.PrecisionThreshold,
                     retryTimes,
                     _tpConfig.MapZoomInDistance,
-                    DisplayTpPointZoomLevel))
+                    GetDisplayTpPointZoomLevel(mapName)))
             {
                 double targetZoomLevel = currentZoomLevel * mouseDistance / (_tpConfig.MapMoveStepDivisor ? 600 : _tpConfig.MapZoomInDistance);
                 targetZoomLevel = Math.Max(targetZoomLevel, minZoomLevel);
@@ -2215,8 +2240,8 @@ public class TpTaskFastDrag
             {
                 using var raNow = CaptureToRectArea();
                 double zoomNow = GetBigMapZoomLevel(raNow);
-                // 复原到 4.4，不是 savedZoomLevel（1.9 下 GetBigMapRect 不稳定才触发拉 5.5）
-                double targetZoom = DisplayTpPointZoomLevel;
+                // 复原到传送点可点击档（普通地图 4.4 / 霜月 3.0），不是 savedZoomLevel（1.9 下 GetBigMapRect 不稳定才触发拉 5.5）
+                double targetZoom = GetDisplayTpPointZoomLevel(mapName);
                 if (Math.Abs(zoomNow - targetZoom) > _tpConfig.PrecisionThreshold)
                 {
                     // 复原前，按缩放比例修正 rect，使其对应 4.4 缩放

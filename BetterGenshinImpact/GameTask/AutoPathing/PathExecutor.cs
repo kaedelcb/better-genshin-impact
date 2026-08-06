@@ -4345,7 +4345,7 @@ public partial class PathExecutor
                 //大地图识别坐标
                 DateTime start = DateTime.UtcNow;
                 TpTask tpTask = new TpTask(ct);
-                await tpTask.OpenBigMapUi();
+                await tpTask.OpenBigMapUi(mapName: waypoint.MapName);
                 try
                 {
                     position =MapManager.GetMap(waypoint.MapName, waypoint.MapMatchMethod).ConvertGenshinMapCoordinatesToImageCoordinates(tpTask.GetPositionFromBigMap(waypoint.MapName));
