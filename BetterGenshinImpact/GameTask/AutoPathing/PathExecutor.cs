@@ -1287,7 +1287,7 @@ public partial class PathExecutor
                                                         await Delay(500, ct);
                                                     }
 
-                                                    // 启动后台定时检测任务：每 500ms 检测一次摩托状态，覆盖整个回点流程
+                                                    // 启动后台定时检测任务：每 1000ms 检测一次摩托状态，覆盖整个回点流程
                                                     _mavuikaDismountCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                                                     var __dismountCts = _mavuikaDismountCts; // 捕获局部变量供闭包使用
                                                     var __mavuikaRef = __mavuika;
@@ -1297,7 +1297,7 @@ public partial class PathExecutor
                                                         {
                                                             try
                                                             {
-                                                                await Task.Delay(1500, __dismountCts.Token);
+                                                                await Task.Delay(1000, __dismountCts.Token);
                                                                 using var __loopRegion = CaptureToRectArea();
                                                                 var __loopActive = _combatScenes!.AvatarCount <= 1 || __mavuikaRef.IsActive(__loopRegion);
                                                                 if (__loopActive && IsMavuikaOnMotorcycleByTemplate(__loopRegion))
@@ -1305,6 +1305,7 @@ public partial class PathExecutor
                                                                     Logger.LogInformation("[联机] 回点中：检测到玛薇卡在摩托上，按 E 下车");
                                                                     Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
                                                                     await Task.Delay(500, __dismountCts.Token);
+                                                                    break; // 下车成功，退出循环
                                                                 }
                                                             }
                                                             catch (OperationCanceledException) { break; }

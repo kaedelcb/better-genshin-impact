@@ -2117,7 +2117,7 @@ public class AutoFightTask : ISoloTask
                         {
                             try
                             {
-                                await Task.Delay(1500, __pickCts.Token);
+                                await Task.Delay(1000, __pickCts.Token);
                                 using var __loopRegion = CaptureToRectArea();
                                 var __loopActive = combatScenes.AvatarCount <= 1 || __mavuikaRef.IsActive(__loopRegion);
                                 if (__loopActive && BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.IsMavuikaOnMotorcycleByTemplate(__loopRegion))
@@ -2125,6 +2125,7 @@ public class AutoFightTask : ISoloTask
                                     Logger.LogInformation("[联机] 拾取中：检测到玛薇卡在摩托上，按 E 下车");
                                     Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
                                     await Task.Delay(500, __pickCts.Token);
+                                    break; // 下车成功，退出循环
                                 }
                             }
                             catch (OperationCanceledException) { break; }
