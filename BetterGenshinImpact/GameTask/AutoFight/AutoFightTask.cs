@@ -905,6 +905,15 @@ public class AutoFightTask : ISoloTask
                 Navigation.SetPrevPosition((float)__seed.X, (float)__seed.Y);
             }
 
+            // while (!cts2.Token.IsCancellationRequested)
+            // {
+            //     var __firstRegion = CaptureToRectArea();
+            //     var aa = BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.IsMavuikaOnMotorcycleByTemplate(__firstRegion);
+            //     Logger.LogError("[AutoFight] 摩托：{Elapsed}", aa);
+            //     await Task.Delay(100, cts2.Token);
+            // }
+            
+
             #region 基于战斗检测经验值开关万叶拾取功能同步任务
             
             if (_taskParam.ExpKazuhaPickup)
@@ -2125,6 +2134,7 @@ public class AutoFightTask : ISoloTask
                                     Logger.LogInformation("[联机] 拾取中：检测到玛薇卡在摩托上，按 E 下车");
                                     Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
                                     await Task.Delay(500, __pickCts.Token);
+                                    break; // 下车成功，退出循环
                                 }
                             }
                             catch (OperationCanceledException) { break; }

@@ -84,21 +84,13 @@ public partial class PathExecutor
                     {
                         if (avatar.Name == "玛薇卡")
                         {
-                            var pos = screen2.SrcMat.At<Vec3b>(978, 1692);
-                            var pos2 = screen2.SrcMat.At<Vec3b>(995, 1702);
-                            var pos3 = screen2.SrcMat.At<Vec3b>(1028, 1584);
-                            double colorDifference = Math.Sqrt(
-                                Math.Pow(pos.Item0 - pos2.Item0, 2) + // 蓝通道差值的平方
-                                Math.Pow(pos.Item1 - pos2.Item1, 2) + // 绿通道差值的平方
-                                Math.Pow(pos.Item2 - pos2.Item2, 2)   // 红通道差值的平方
-                            );
-                            if (colorDifference < 15)
+                            if (IsMavuikaOnMotorcycleByTemplate(screen2))
                             {
                                 st.HurryOnIn = true;
-                                if (Bv.GetMotionStatus(screen2) != MotionStatus.Fly || !(pos3.Item0 == 255 && pos3.Item1 == 255 && pos3.Item2 == 255)
-                                    || nextWaypoint?.Action != MoveModeEnum.Fly.Code|| waypoint?.Action != MoveModeEnum.Fly.Code)
+                                if (Bv.GetMotionStatus(screen2) != MotionStatus.Fly || !(screen2.SrcMat.At<Vec3b>(1028, 1584).Item0 == 255 && screen2.SrcMat.At<Vec3b>(1028, 1584).Item1 == 255 && screen2.SrcMat.At<Vec3b>(1028, 1584).Item2 == 255)
+                                    || nextWaypoint?.Action != MoveModeEnum.Fly.Code || waypoint?.Action != MoveModeEnum.Fly.Code)
                                 {
-                                    Logger.LogInformation("自动赶路：{t} 节点接近...-i {t2} {t3} {t4}",PartyConfig.TravelMode,nextAvatarIndexStop,waypoint?.MoveMode,Math.Round(colorDifference));
+                                    Logger.LogInformation("自动赶路：{t} 节点接近...-i {t2} {t3} {t4}", PartyConfig.TravelMode, nextAvatarIndexStop, waypoint?.MoveMode, "onMoto");
                                     
                                     using var screen3 = CaptureToRectArea(); 
                                     var isFlying = Bv.GetMotionStatus(screen3) == MotionStatus.Fly;
@@ -173,37 +165,21 @@ public partial class PathExecutor
                     // if(mwktiaoIn) Logger.LogWarning("444444");
                     if (avatar.Name == "玛薇卡") //玛薇卡冲坡判断
                     {
-                        var pos = screen2.SrcMat.At<Vec3b>(1012,1574);
-                        var pos2 = screen2.SrcMat.At<Vec3b>(1006, 1608);
-                        var pos3 = screen2.SrcMat.At<Vec3b>(1028, 1584);
-                        var colorDifference = Math.Sqrt(
-                            Math.Pow(pos.Item0 - pos2.Item0, 2) + // 蓝通道差值的平方
-                            Math.Pow(pos.Item1 - pos2.Item1, 2) + // 绿通道差值的平方
-                            Math.Pow(pos.Item2 - pos2.Item2, 2)   // 红通道差值的平方
-                        );
+                        var isOnMoto = IsMavuikaOnMotorcycleByTemplate(screen2);
                         
-                        if ((colorDifference < 15 && !st.IsFlyingMwk) || st.MwktiaoIn)
+                        if ((isOnMoto && !st.IsFlyingMwk) || st.MwktiaoIn)
                         {
-                            // 获取两个点的颜色值
-                            var pos44 = screen2.SrcMat.At<Vec3b>(978, 1692);
-                            var pos244 = screen2.SrcMat.At<Vec3b>(995, 1702);
-                            double colorDifference44 = Math.Sqrt(
-                                Math.Pow(pos44.Item0 - pos244.Item0, 2) + // 蓝通道差值的平方
-                                Math.Pow(pos44.Item1 - pos244.Item1, 2) + // 绿通道差值的平方
-                                Math.Pow(pos44.Item2 - pos244.Item2, 2)   // 红通道差值的平方
-                            );
-                            // Logger.LogWarning("玛薇卡技能颜色差值--------66:{ColorDifference}", Math.Round(colorDifference, 2));
                         
                 
                             
-                            if ((pos3.Item0 == 255 && pos3.Item1 == 255 && pos3.Item2 == 255)||colorDifference44 <15)
+                            if (screen2.SrcMat.At<Vec3b>(1028, 1584).Item0 == 255 && screen2.SrcMat.At<Vec3b>(1028, 1584).Item1 == 255 && screen2.SrcMat.At<Vec3b>(1028, 1584).Item2 == 255 || isOnMoto)
                             {
                                 st.MavikaFlyCount++;
                                 
                                 if (st.MavikaFlyCount > (st.MwktiaoIn?7:4) && avatar.IsActive(screen2))
                                 {
                                     if(nextWaypoint?.MoveMode != MoveModeEnum.Fly.Code && Bv.GetMotionStatus(screen2) == MotionStatus.Fly)Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
-                                    if(st.MwktiaoIn &&colorDifference44 <15)Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+                                    if (st.MwktiaoIn && isOnMoto) Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
                                     st.MavikaFlyCount = 0;
                                     st.MwktiaoIn = false;
                                     Logger.LogInformation("自动赶路：靠近节点切换 {t}...-h {t2}",nextAvatarIndexStop,waypoint?.MoveMode);
@@ -284,21 +260,13 @@ public partial class PathExecutor
 
                     if (avatar.Name == "玛薇卡") //连续点按E类型
                     {
-                        // 获取两个点的颜色值
-                        var pos = screen2.SrcMat.At<Vec3b>(978, 1692);
-                        var pos2 = screen2.SrcMat.At<Vec3b>(995, 1702);
-                        double colorDifference = Math.Sqrt(
-                            Math.Pow(pos.Item0 - pos2.Item0, 2) + // 蓝通道差值的平方
-                            Math.Pow(pos.Item1 - pos2.Item1, 2) + // 绿通道差值的平方
-                            Math.Pow(pos.Item2 - pos2.Item2, 2)   // 红通道差值的平方
-                        );
-                        // Logger.LogWarning("玛薇卡技能颜色差值--------66:{ColorDifference}", Math.Round(colorDifference, 2));
-                        
-                        if (colorDifference >15 || st.MwktiaoIn || colorDifference < 15)
+                        var isOnMoto = IsMavuikaOnMotorcycleByTemplate(screen2);
+
+                        if (!isOnMoto || st.MwktiaoIn || isOnMoto)
                         {
                             Task.Run(async () =>
                             {
-                                if (colorDifference > 15)
+                                if (!isOnMoto)
                                 {
                                     Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
                                     await Delay(200, ct);
@@ -309,8 +277,6 @@ public partial class PathExecutor
                                 }
                                 using var region3 = CaptureToRectArea();
 
-                                double colorDifference2 = 0;
-                                
                                 if (waypoint?.MoveMode == MoveModeEnum.Fly.Code && _MwkFly)
                                 {
                                     var pos33 = region3.SrcMat.At<Vec3b>(1028, 1584);
@@ -350,19 +316,9 @@ public partial class PathExecutor
                                 {
                                     // Logger.LogInformation("玛薇卡技能2222");
                                     st.IsFlyingMwk = false;
-                                    // 获取两个点的颜色值
-                                    var pos3 = region3.SrcMat.At<Vec3b>(978, 1692);
-                                    var pos4 = region3.SrcMat.At<Vec3b>(995, 1702);
-                                    colorDifference2 = Math.Sqrt(
-                                        Math.Pow(pos3.Item0 - pos4.Item0, 2) + // 蓝通道差值的平方
-                                        Math.Pow(pos3.Item1 - pos4.Item1, 2) + // 绿通道差值的平方
-                                        Math.Pow(pos3.Item2 - pos4.Item2, 2)   // 红通道差值的平方
-                                    );
                                 }
-                                
-                                // Logger.LogInformation("玛薇卡技能颜色差值-3:{ColorDifference} - {isFlyingMwk}", Math.Round(colorDifference2, 2),isFlyingMwk);
-                                
-                                if (colorDifference2 > 15 || st.IsFlyingMwk)// colorDifference2 < 15
+
+                                if (!IsMavuikaOnMotorcycleByTemplate(region3) || st.IsFlyingMwk)
                                 {
                                     st.ContinueHurryOn++;
                                     
@@ -563,15 +519,7 @@ public partial class PathExecutor
                         }
                         else
                         {
-                            // 获取两个点的颜色值
-                            var pos66 = screen2.SrcMat.At<Vec3b>(978, 1692);
-                            var pos266 = screen2.SrcMat.At<Vec3b>(995, 1702);
-                            double colorDifference66 = Math.Sqrt(
-                                Math.Pow(pos66.Item0 - pos266.Item0, 2) + // 蓝通道差值的平方
-                                Math.Pow(pos66.Item1 - pos266.Item1, 2) + // 绿通道差值的平方
-                                Math.Pow(pos66.Item2 - pos266.Item2, 2)   // 红通道差值的平方
-                            );
-                            if (colorDifference66 < 15 && (Bv.GetMotionStatus(screen2) == MotionStatus.Fly))
+                            if (IsMavuikaOnMotorcycleByTemplate(screen2) && (Bv.GetMotionStatus(screen2) == MotionStatus.Fly))
                             {
                                 Logger.LogInformation("自动赶路：飞行下落...");
                                 Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
