@@ -2134,7 +2134,7 @@ public class AutoFightTask : ISoloTask
                                     Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
                                     __lastDismountTime = DateTime.UtcNow;
 
-                                    // 启动异步任务在 1.1 秒后二次确认，不阻塞主循环
+                                    // 启动异步任务在 1.1 秒后做一次确认：下车成功则结束循环，不再自动下车
                                     var __confirmCts = __pickCts;
                                     var __confirmMavuika = __mavuikaRef;
                                     _ = Task.Run(async () =>
@@ -2144,10 +2144,17 @@ public class AutoFightTask : ISoloTask
                                             await Task.Delay(1100, __confirmCts.Token);
                                             using var __confirmRegion = CaptureToRectArea();
                                             var __confirmActive = combatScenes.AvatarCount <= 1 || __confirmMavuika.IsActive(__confirmRegion);
-                                            if (__confirmActive && BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.IsMavuikaOnMotorcycleByTemplate(__confirmRegion))
+                                            if (!__confirmActive || !BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.IsMavuikaOnMotorcycleByTemplate(__confirmRegion))
                                             {
-                                                Logger.LogInformation("[联机] 拾取中：1.1秒后确认仍在摩托上，退出循环");
-                                                __pickCts.Cancel(); // 取消自身循环
+                                                // 下车成功，取消循环，后续不再自动下车
+                                                Logger.LogInformation("[联机] 拾取中：下车成功，结束摩托下车检测");
+                                                __pickCts.Cancel();
+                                            }
+                                            else
+                                            {
+                                                Logger.LogInformation("[联机] 拾取中：1.1秒后仍在摩托上，再按一次 E 下车");
+                                                Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                                __lastDismountTime = DateTime.UtcNow;
                                             }
                                         }
                                         catch (OperationCanceledException) { }

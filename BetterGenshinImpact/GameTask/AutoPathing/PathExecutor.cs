@@ -1207,8 +1207,8 @@ public partial class PathExecutor
                                     
                                     Task.Run( () =>{
                                         var screen2 = CaptureToRectArea();
-                                        if (_lastWaypoint?.Action != MoveModeEnum.Fly.Code && (Bv.GetMotionStatus(screen2) == MotionStatus.Fly || 
-                                                screen2.SrcMat.At<Vec3b>(1028, 1584).Item0 == 255 && screen2.SrcMat.At<Vec3b>(1028, 1584).Item1 == 255 && screen2.SrcMat.At<Vec3b>(1028, 1584).Item2 == 255))
+                                        if ((_lastWaypoint?.Action != MoveModeEnum.Fly.Code && Bv.GetMotionStatus(screen2) == MotionStatus.Fly) || 
+                                                screen2.SrcMat.At<Vec3b>(1028, 1584).Item0 == 255 && screen2.SrcMat.At<Vec3b>(1028, 1584).Item1 == 255 && screen2.SrcMat.At<Vec3b>(1028, 1584).Item2 == 255)
                                         {
                                             Logger.LogWarning("战斗状态下落攻击");
                                             Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
@@ -1392,7 +1392,7 @@ public partial class PathExecutor
                                                                     Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
                                                                     __lastDismountTime = DateTime.UtcNow;
 
-                                                                    // 启动异步任务在 1.1 秒后二次确认，不阻塞主循环
+                                                                    // 启动异步任务在 1.1 秒后做一次确认：下车成功则结束循环，不再自动下车
                                                                     var __confirmCts = __dismountCts;
                                                                     var __confirmMavuika = __mavuikaRef;
                                                                     _ = Task.Run(async () =>
@@ -1402,10 +1402,17 @@ public partial class PathExecutor
                                                                             await Task.Delay(1100, __confirmCts.Token);
                                                                             using var __confirmRegion = CaptureToRectArea();
                                                                             var __confirmActive = _combatScenes!.AvatarCount <= 1 || __confirmMavuika.IsActive(__confirmRegion);
-                                                                            if (__confirmActive && IsMavuikaOnMotorcycleByTemplate(__confirmRegion))
+                                                                            if (!__confirmActive || !IsMavuikaOnMotorcycleByTemplate(__confirmRegion))
                                                                             {
-                                                                                Logger.LogInformation("[联机] 回点中：1.1秒后确认仍在摩托上，退出循环");
-                                                                                __dismountCts.Cancel(); // 取消自身循环
+                                                                                // 下车成功，取消循环，后续不再自动下车
+                                                                                Logger.LogInformation("[联机] 回点中：下车成功，结束摩托下车检测");
+                                                                                __dismountCts.Cancel();
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                Logger.LogInformation("[联机] 回点中：1.1秒后仍在摩托上，再按一次 E 下车");
+                                                                                Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                                                                __lastDismountTime = DateTime.UtcNow;
                                                                             }
                                                                         }
                                                                         catch (OperationCanceledException) { }
