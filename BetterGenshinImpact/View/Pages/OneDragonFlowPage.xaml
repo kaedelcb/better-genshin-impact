@@ -427,8 +427,8 @@
                                   ItemsSource="{Binding FilteredConfigList}"
                                   SelectedItem="{Binding SelectedConfig, Mode=TwoWay}"
                                   Text="{Binding SelectedConfigCache.Name, FallbackValue='未选择', TargetNullValue='未选择'}"
-                                  IsEditable="True"
-                                  IsReadOnly="True">
+                                  MaxDropDownHeight="400"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto">
                             <b:Interaction.Triggers>
                                 <b:EventTrigger EventName="SelectionChanged">
                                     <b:InvokeCommandAction Command="{Binding ConfigDropDownChangedCommand}"

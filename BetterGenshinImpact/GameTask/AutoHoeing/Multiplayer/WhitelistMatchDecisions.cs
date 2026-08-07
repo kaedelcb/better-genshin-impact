@@ -26,6 +26,9 @@ public static class WhitelistMatchDecisions
             return result;
         }
 
+        // 清理 OCR 可能引入的换行符/回车符/控制字符/空格（原神名字不能带空格）
+        display = display.Replace("\n", "").Replace("\r", "").Replace("\t", "").Replace(" ", "");
+
         var bracketIdx = display.IndexOfAny(new[] { '(', '（' });
         if (bracketIdx > 0)
         {
