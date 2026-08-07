@@ -124,7 +124,7 @@ public partial class PathExecutor
                 RegionOfInterest = new Rect(1682, 972, 35, 42),
                 TemplateMatchMode = TemplateMatchModes.SqDiffNormed,
                 UseMask = true, // 绿底模板：抠掉 (0,255,0) 背景，只匹配白箭头本体
-                Threshold = 0.95, // isLowerBetter：等价原始 SqDiff 分 ≤ 0.07
+                Threshold = 0.99, // isLowerBetter：等价原始 SqDiff 分 ≤ 0.07
             }.InitTemplate();
         }
 
@@ -1284,7 +1284,7 @@ public partial class PathExecutor
                                                     {
                                                         Logger.LogInformation("[联机] 战后回点：检测到玛薇卡在摩托上，按 E 下车");
                                                         Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
-                                                        await Delay(100, ct);
+                                                        await Delay(500, ct);
                                                     }
 
                                                     // 启动后台定时检测任务：每 500ms 检测一次摩托状态，覆盖整个回点流程
@@ -1297,14 +1297,14 @@ public partial class PathExecutor
                                                         {
                                                             try
                                                             {
-                                                                await Task.Delay(1000, __dismountCts.Token);
+                                                                await Task.Delay(1500, __dismountCts.Token);
                                                                 using var __loopRegion = CaptureToRectArea();
                                                                 var __loopActive = _combatScenes!.AvatarCount <= 1 || __mavuikaRef.IsActive(__loopRegion);
                                                                 if (__loopActive && IsMavuikaOnMotorcycleByTemplate(__loopRegion))
                                                                 {
                                                                     Logger.LogInformation("[联机] 回点中：检测到玛薇卡在摩托上，按 E 下车");
                                                                     Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
-                                                                    await Task.Delay(100, __dismountCts.Token);
+                                                                    await Task.Delay(500, __dismountCts.Token);
                                                                 }
                                                             }
                                                             catch (OperationCanceledException) { break; }

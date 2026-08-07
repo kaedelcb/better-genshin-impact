@@ -2117,7 +2117,7 @@ public class AutoFightTask : ISoloTask
                         {
                             try
                             {
-                                await Task.Delay(1000, __pickCts.Token);
+                                await Task.Delay(1500, __pickCts.Token);
                                 using var __loopRegion = CaptureToRectArea();
                                 var __loopActive = combatScenes.AvatarCount <= 1 || __mavuikaRef.IsActive(__loopRegion);
                                 if (__loopActive && BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.IsMavuikaOnMotorcycleByTemplate(__loopRegion))
