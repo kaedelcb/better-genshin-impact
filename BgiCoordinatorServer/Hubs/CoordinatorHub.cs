@@ -1806,6 +1806,24 @@ public class CoordinatorHub : Hub
         // 记录当前连接已到达
         _roomManager.RecordArrival(roomCode, syncId, Context.ConnectionId, 0);
 
+        // === 到达同步点时自动清理异常状态（multiplayer-mutual-wait-collective-skip fix）===
+        // 条件与 WillBroadcastHere 的清理逻辑完全对称：
+        //   异常玩家 + TargetProgress > 0 + syncProgress >= 0 + TargetProgress <= syncProgress
+        // 这样即使 CollectiveSkip 标记了异常，玩家到达目标同步点后也能自动恢复正常，
+        // 不会因为 IsAbnormal 残留而导致后续同步点判定异常（requiredPlayers 为空 → 不广播）。
+        // 只清理调用方自己（caller），不清理其他玩家（比 WillBroadcastHere 更保守）。
+        lock (room)
+        {
+            var caller = room.Players.FirstOrDefault(p => p.ConnectionId == Context.ConnectionId);
+            if (caller != null && caller.IsAbnormal && caller.TargetProgress > 0 && syncProgress >= 0 && caller.TargetProgress <= syncProgress)
+            {
+                _logger.LogInformation("[WaitForAllPlayers] 异常玩家 {Uid} 到达同步点 {SyncId}（progress={SP}），清除异常状态（Target={T}）",
+                    caller.PlayerUid, syncId, syncProgress, caller.TargetProgress);
+                caller.IsAbnormal = false;
+                caller.TargetProgress = -1;
+            }
+        }
+
         // fastsync-claim-short-circuit-premature-release-fix（OQ-1=a）：
         // 若该 syncId 本轮已广播过 AllArrived（说明已全员放行、ArrivalSet 已清空），
         // 则对晚到的本调用方单独补发 AllArrived 解锁——它错过了 Clients.Group 广播，
@@ -2007,8 +2025,8 @@ public class CoordinatorHub : Hub
 
         if (requiredPlayers.Count == 0)
         {
-            _logger.LogInformation("[ShouldBroadcast] 无需要等待的玩家，不广播");
-            return false;
+            _logger.LogInformation("[ShouldBroadcast] 无需要等待的玩家，全部放行");
+            return true;
         }
 
         var allArrived = requiredPlayers.All(p => arrivals.Contains(p.ConnectionId));
@@ -2040,7 +2058,7 @@ public class CoordinatorHub : Hub
             return true;
         }).ToList();
 
-        if (requiredPlayers.Count == 0) return false;
+        if (requiredPlayers.Count == 0) return true;
 
         return requiredPlayers.All(p => arrivals.Contains(p.ConnectionId));
     }
