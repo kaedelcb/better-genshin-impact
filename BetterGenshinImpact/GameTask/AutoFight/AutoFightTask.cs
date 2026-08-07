@@ -107,6 +107,11 @@ public class AutoFightTask : ISoloTask
     public static volatile bool IsTeleportingToStatue = false;
 
     /// <summary>
+    /// 玛薇卡摩托状态检测锁，防止多次并发执行导致异常
+    /// </summary>
+    private static readonly object _mavuikaMotorcycleCheckLock = new();
+
+    /// <summary>
     /// "战斗中回点移动进行中"引用计数（fight-return-to-point-seek-rotation-conflict-fix spec）。
     /// 唯一语义：当前有至少一个回点发起方正在执行移动/回点（count &gt; 0）。
     ///
@@ -905,6 +910,15 @@ public class AutoFightTask : ISoloTask
                 Navigation.SetPrevPosition((float)__seed.X, (float)__seed.Y);
             }
 
+            // while (!cts2.Token.IsCancellationRequested)
+            // {
+            //     var __firstRegion = CaptureToRectArea();
+            //     var aa = BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.IsMavuikaOnMotorcycleByTemplate(__firstRegion);
+            //     Logger.LogError("[AutoFight] 摩托：{Elapsed}", aa);
+            //     await Task.Delay(100, cts2.Token);
+            // }
+            
+
             #region 基于战斗检测经验值开关万叶拾取功能同步任务
             
             if (_taskParam.ExpKazuhaPickup)
@@ -1505,22 +1519,18 @@ public class AutoFightTask : ISoloTask
                         
                         //如果当前角色是玛薇卡，检测是否为摩托状态，如果是摩托状态且动作不是重击，则等待摩托状态结束，摩托状态结束后继续执行动作
                         Task.Run(() =>{
-                            if (_taskParam.MavuikaMotorcycleCheckEnabled && avatar?.Name == "玛薇卡" && !command.Args.Contains("重击"))
+                            lock (_mavuikaMotorcycleCheckLock)
                             {
-                                //摩托状态才执行
-                                using var region = CaptureToRectArea();
-                                var pos = region.SrcMat.At<Vec3b>(991, 1678);
-                                var pos2 = region.SrcMat.At<Vec3b>(991, 1728);
-                                double colorDifference = Math.Sqrt(
-                                    Math.Pow(pos.Item0 - pos2.Item0, 2) + // 蓝通道差值的平方
-                                    Math.Pow(pos.Item1 - pos2.Item1, 2) + // 绿通道差值的平方
-                                    Math.Pow(pos.Item2 - pos2.Item2, 2) // 红通道差值的平方
-                                );
-                                // Logger.LogInformation("玛薇卡蓄力颜色差值:{ColorDifference}", Math.Round(colorDifference, 2));
-                                if (colorDifference < 15 && avatar.IsActive(region)) // 这个数值是通过观察大量截图得来的，摩托状态下差值一般在10-15之间，非摩托状态一般在20以上
+                                if (_taskParam.MavuikaMotorcycleCheckEnabled && avatar?.Name == "玛薇卡" && !command.Args.Contains("重击"))
                                 {
-                                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
-                                    // Logger.LogWarning("检测到玛薇卡处于摩托状态，等待摩托状态结束");
+                                    //摩托状态才执行
+                                    using var region = CaptureToRectArea();
+                                    
+                                    if (PathExecutor.IsMavuikaOnMotorcycleByTemplate(region) && avatar.IsActive(region)) // 这个数值是通过观察大量截图得来的，摩托状态下差值一般在10-15之间，非摩托状态一般在20以上
+                                    {
+                                        Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                        // Logger.LogWarning("检测到玛薇卡处于摩托状态，等待摩托状态结束");
+                                    }
                                 }
                             }
                         });
@@ -2098,21 +2108,13 @@ public class AutoFightTask : ISoloTask
                     await Bv.WaitUntilFound(
                         ElementAssets.Instance.PaimonMenuRo, ct, retryTimes: 10, delayMs: 200);
 
-                    using var __firstRegion = CaptureToRectArea();
-                    var __firstActive = combatScenes.AvatarCount <= 1 || __mavuika.IsActive(__firstRegion);
-                    if (__firstActive && BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.IsMavuikaOnMotorcycleByTemplate(__firstRegion))
-                    {
-                        Logger.LogInformation("光柱拾取：检测到玛薇卡在摩托上，按 E 下车");
-                        Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
-                        await Delay(500, ct);
-                    }
-
                     // 启动后台定时检测任务：每 1000ms 检测一次摩托状态，覆盖整个拾取过程
                     _pickDismountCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     var __pickCts = _pickDismountCts;
                     var __mavuikaRef = __mavuika;
                     _ = Task.Run(async () =>
                     {
+                        var __lastDismountTime = DateTime.MinValue; // 上次按 E 下车的时间
                         while (!__pickCts.IsCancellationRequested)
                         {
                             try
@@ -2122,9 +2124,38 @@ public class AutoFightTask : ISoloTask
                                 var __loopActive = combatScenes.AvatarCount <= 1 || __mavuikaRef.IsActive(__loopRegion);
                                 if (__loopActive && BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.IsMavuikaOnMotorcycleByTemplate(__loopRegion))
                                 {
+                                    // 下车后 1.5 秒静默期：避免重复下车
+                                    if ((DateTime.UtcNow - __lastDismountTime).TotalMilliseconds < 1500)
+                                    {
+                                        continue;
+                                    }
+
                                     Logger.LogInformation("[联机] 拾取中：检测到玛薇卡在摩托上，按 E 下车");
                                     Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
-                                    await Task.Delay(500, __pickCts.Token);
+                                    __lastDismountTime = DateTime.UtcNow;
+
+                                    // 启动异步任务在 1.1 秒后二次确认，不阻塞主循环
+                                    var __confirmCts = __pickCts;
+                                    var __confirmMavuika = __mavuikaRef;
+                                    _ = Task.Run(async () =>
+                                    {
+                                        try
+                                        {
+                                            await Task.Delay(1100, __confirmCts.Token);
+                                            using var __confirmRegion = CaptureToRectArea();
+                                            var __confirmActive = combatScenes.AvatarCount <= 1 || __confirmMavuika.IsActive(__confirmRegion);
+                                            if (__confirmActive && BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.IsMavuikaOnMotorcycleByTemplate(__confirmRegion))
+                                            {
+                                                Logger.LogInformation("[联机] 拾取中：1.1秒后确认仍在摩托上，退出循环");
+                                                __pickCts.Cancel(); // 取消自身循环
+                                            }
+                                        }
+                                        catch (OperationCanceledException) { }
+                                        catch (Exception innerEx)
+                                        {
+                                            Logger.LogWarning(innerEx, "[联机] 拾取中：摩托下车二次确认异常");
+                                        }
+                                    }, __confirmCts.Token);
                                 }
                             }
                             catch (OperationCanceledException) { break; }

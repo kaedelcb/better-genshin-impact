@@ -77,6 +77,7 @@ public partial class PathExecutor
     // GameTask\AutoFight\Assets\1920x1080\mwk.png（随构建输出）。
     // 首次使用时惰性构建并缓存，避免每次回点重复读盘 / InitTemplate。
     private static RecognitionObject? _mwkMotorcycleRo;
+    private static RecognitionObject? _mwkMotorcycleRo2;
     private readonly ReturnMainUiTask _returnMainUiTask = new();
 
     // 玛薇卡飞行等待期间的脱离飞行检测参数（ms）
@@ -113,9 +114,10 @@ public partial class PathExecutor
     /// </summary>
     internal static bool IsMavuikaOnMotorcycleByTemplate(ImageRegion region)
     {
-        if (_mwkMotorcycleRo == null)
+        if (_mwkMotorcycleRo == null || _mwkMotorcycleRo2 == null)
         {
             var mat = GameTaskManager.LoadAssetImage("AutoFight", "mwk.png");
+            var mat2 = GameTaskManager.LoadAssetImage("AutoFight", "mwk2.png");
             _mwkMotorcycleRo = new RecognitionObject
             {
                 Name = "MwkMotorcycle",
@@ -124,12 +126,88 @@ public partial class PathExecutor
                 RegionOfInterest = new Rect(1682, 972, 35, 42),
                 TemplateMatchMode = TemplateMatchModes.SqDiffNormed,
                 UseMask = true, // 绿底模板：抠掉 (0,255,0) 背景，只匹配白箭头本体
-                Threshold = 0.95, // isLowerBetter：等价原始 SqDiff 分 ≤ 0.07
+                Threshold = 0.99, // isLowerBetter：等价原始 SqDiff 分 ≤ 0.07
+            }.InitTemplate();
+            _mwkMotorcycleRo2 = new RecognitionObject
+            {
+                Name = "MwkMotorcycle2",
+                RecognitionType = RecognitionTypes.TemplateMatch,
+                TemplateImageMat = mat2,
+                RegionOfInterest = new Rect(1662, 953, 76, 74),
+                TemplateMatchMode = TemplateMatchModes.SqDiffNormed,
+                UseMask = true, // 绿底模板：抠掉 (0,255,0) 背景，只匹配白箭头本体
+                Use3Channels = true,
+                Threshold = 0.99, // isLowerBetter：等价原始 SqDiff 分 ≤ 0.07
             }.InitTemplate();
         }
 
+        // 右图绿底：原逻辑不变
         using var result = region.Find(_mwkMotorcycleRo);
-        return result.IsExist();
+        if (result.IsExist())
+            return true;
+
+        // 左图金黄：先匹配图标形状，再判定底色是否金黄
+        using var result2 = region.Find(_mwkMotorcycleRo2);
+        if (result2.IsExist())
+        {
+            var isGoldBackground = IsGoldBackground(region);
+            // Logger.LogWarning("[MwkMotorcycle] result2 命中，金黄底色判定={IsGold}", isGoldBackground);
+            if (isGoldBackground)
+                return true;
+        }
+
+        // Logger.LogWarning("[MwkMotorcycle] 模板匹配结果：result={Result}, result2={Result2}", result.IsExist(), result2.IsExist());
+        return false;
+    }
+
+    /// <summary>
+    /// 判断摩托图标匹配区域底色是否为金黄系（左图）。
+    /// 金黄底 H ≈ 40~70（映射后 80~140），绿底 H ≈ 100~140（映射后 200~280）。
+    /// 跳过饱和度过低的像素（白/灰/黑，主要是白色箭头本体）。
+    /// </summary>
+    private static bool IsGoldBackground(ImageRegion region)
+    {
+        var roi = new Rect(
+            _mwkMotorcycleRo2!.RegionOfInterest.X,
+            _mwkMotorcycleRo2.RegionOfInterest.Y,
+            _mwkMotorcycleRo2.RegionOfInterest.Width,
+            _mwkMotorcycleRo2.RegionOfInterest.Height
+        ).ClampTo(region.SrcMat);
+
+        using var sub = new Mat(region.SrcMat, roi);
+        using var hsv = new Mat();
+        Cv2.CvtColor(sub, hsv, ColorConversionCodes.BGR2HSV);
+
+        double totalHue = 0;
+        int count = 0;
+        int cols = hsv.Cols;
+        int rows = hsv.Rows;
+
+        unsafe
+        {
+            for (int y = 0; y < rows; y++)
+            {
+                byte* ptr = (byte*)hsv.Ptr(y);
+                for (int x = 0; x < cols; x++)
+                {
+                    int idx = x * 3;
+                    int hue = ptr[idx];
+                    int saturation = ptr[idx + 1];
+
+                    if (saturation > 60)
+                    {
+                        totalHue += hue * 2.0; // OpenCV hue 0~180 → 映射到 0~360
+                        count++;
+                    }
+                }
+            }
+        }
+
+        if (count == 0)
+            return false;
+
+        double avgHue = totalHue / count;
+        return avgHue < 90; // < 90 → 金黄系
     }
     
     /// <summary>
@@ -1129,7 +1207,8 @@ public partial class PathExecutor
                                     
                                     Task.Run( () =>{
                                         var screen2 = CaptureToRectArea();
-                                        if (_lastWaypoint?.Action != MoveModeEnum.Fly.Code && Bv.GetMotionStatus(screen2) == MotionStatus.Fly)
+                                        if (_lastWaypoint?.Action != MoveModeEnum.Fly.Code && (Bv.GetMotionStatus(screen2) == MotionStatus.Fly || 
+                                                screen2.SrcMat.At<Vec3b>(1028, 1584).Item0 == 255 && screen2.SrcMat.At<Vec3b>(1028, 1584).Item1 == 255 && screen2.SrcMat.At<Vec3b>(1028, 1584).Item2 == 255))
                                         {
                                             Logger.LogWarning("战斗状态下落攻击");
                                             Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
@@ -1284,15 +1363,16 @@ public partial class PathExecutor
                                                     {
                                                         Logger.LogInformation("[联机] 战后回点：检测到玛薇卡在摩托上，按 E 下车");
                                                         Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
-                                                        await Delay(100, ct);
+                                                        await Delay(500, ct);
                                                     }
 
-                                                    // 启动后台定时检测任务：每 500ms 检测一次摩托状态，覆盖整个回点流程
+                                                    // 启动后台定时检测任务：每 1000ms 检测一次摩托状态，覆盖整个回点流程
                                                     _mavuikaDismountCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                                                     var __dismountCts = _mavuikaDismountCts; // 捕获局部变量供闭包使用
                                                     var __mavuikaRef = __mavuika;
                                                     _ = Task.Run(async () =>
                                                     {
+                                                        var __lastDismountTime = DateTime.MinValue; // 上次按 E 下车的时间
                                                         while (!__dismountCts.IsCancellationRequested)
                                                         {
                                                             try
@@ -1302,9 +1382,38 @@ public partial class PathExecutor
                                                                 var __loopActive = _combatScenes!.AvatarCount <= 1 || __mavuikaRef.IsActive(__loopRegion);
                                                                 if (__loopActive && IsMavuikaOnMotorcycleByTemplate(__loopRegion))
                                                                 {
+                                                                    // 下车后 1.5 秒静默期：避免重复下车
+                                                                    if ((DateTime.UtcNow - __lastDismountTime).TotalMilliseconds < 1500)
+                                                                    {
+                                                                        continue;
+                                                                    }
+
                                                                     Logger.LogInformation("[联机] 回点中：检测到玛薇卡在摩托上，按 E 下车");
                                                                     Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
-                                                                    await Task.Delay(100, __dismountCts.Token);
+                                                                    __lastDismountTime = DateTime.UtcNow;
+
+                                                                    // 启动异步任务在 1.1 秒后二次确认，不阻塞主循环
+                                                                    var __confirmCts = __dismountCts;
+                                                                    var __confirmMavuika = __mavuikaRef;
+                                                                    _ = Task.Run(async () =>
+                                                                    {
+                                                                        try
+                                                                        {
+                                                                            await Task.Delay(1100, __confirmCts.Token);
+                                                                            using var __confirmRegion = CaptureToRectArea();
+                                                                            var __confirmActive = _combatScenes!.AvatarCount <= 1 || __confirmMavuika.IsActive(__confirmRegion);
+                                                                            if (__confirmActive && IsMavuikaOnMotorcycleByTemplate(__confirmRegion))
+                                                                            {
+                                                                                Logger.LogInformation("[联机] 回点中：1.1秒后确认仍在摩托上，退出循环");
+                                                                                __dismountCts.Cancel(); // 取消自身循环
+                                                                            }
+                                                                        }
+                                                                        catch (OperationCanceledException) { }
+                                                                        catch (Exception __confirmEx)
+                                                                        {
+                                                                            Logger.LogWarning(__confirmEx, "[联机] 回点中：摩托下车二次确认异常");
+                                                                        }
+                                                                    }, __confirmCts.Token);
                                                                 }
                                                             }
                                                             catch (OperationCanceledException) { break; }
