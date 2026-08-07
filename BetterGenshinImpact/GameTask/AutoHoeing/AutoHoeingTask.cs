@@ -94,6 +94,14 @@ public class AutoHoeingTask : ISoloTask
     // 未执行数 = _guardPlannedRouteCount − _guardExecutedRouteCount（HoeingGuardDecisions.ComputeUnexecutedCount）。
     private int _guardPlannedRouteCount;
     private int _guardExecutedRouteCount;
+    // 本次运行是否到达过"正常完成点"（hoeing-guard-false-restart-on-normal-close 防线 B）。
+    // 仅在多世界"跑满全部轮次"一处置 true（由 RunMultiWorldAsync 的 allRoundsCompleted 严格把关）；
+    // 中途异常（取消/掉线/会话终止 break/本轮初始化失败 break）均不置位。
+    // 单世界路径刻意不置位——那条路径有多个"正常 return 但未跑完"的分支无法区分（见缺陷 2 注释），
+    // 其正常完成由防线 A（未执行线路数为 0）识别。
+    // 守护据此区分"正常收尾关房"与"房主掉线关房"——二者 _stopReason 文字相同，无法用文字判别。
+    // volatile：赋值发生在任务线程，读取发生在 Start 尾部守护块，保证可见性。
+    private volatile bool _completedNormally;
 
     // 本次任务开始时间（用于上限退出时输出总用时汇总）。在 Start() 入口设置。
     private DateTime _taskStartTime = DateTime.MinValue;
@@ -684,7 +692,8 @@ public class AutoHoeingTask : ISoloTask
             threshold: Multiplayer.HoeingGuardDecisions.ClampThreshold(_config.GuardUnexecutedRouteThreshold),
             userCancelled: ct.IsCancellationRequested,   // 原始外部令牌（Start 参数，非字段 _ct）
             expCapStopTriggered: _expCapStopTriggered,
-            isGuardRestartRun: _isGuardRestartRun);
+            isGuardRestartRun: _isGuardRestartRun,
+            completedNormally: _completedNormally);      // 防线 B（hoeing-guard-false-restart-on-normal-close）
 
         if (guardShouldRestart)
         {
@@ -1847,6 +1856,13 @@ public class AutoHoeingTask : ISoloTask
 
         await RunSingleWorldAsync(accountName, groupTags);
 
+        // 防线 B 不在此置位（hoeing-guard-false-restart-on-normal-close 缺陷 2）：
+        // RunSingleWorldAsync / ProcessRoutesByGroup 内有多条"正常 return 但并未跑完"的路径
+        // （成员等房主路线列表超时 90s、路线一致性校验失败、变体 schema 校验失败、
+        //  服务端不支持变体、线路同步协调 Abort、固定调试线路无文件……），
+        // 它们均不抛异常，方法照常返回，此处无法区分"跑完"与"中途放弃"，置位必然误发完工单。
+        // 单世界正常跑完时未执行线路数天然为 0，防线 A 已足够识别，无需完工单。
+
         // 联机模式任务结束：成员退回自己的世界
         if (_config.MultiplayerEnabled && _coordinatorClientRef != null)
         {
@@ -1923,12 +1939,17 @@ public class AutoHoeingTask : ISoloTask
             playerOrder.Select(p => p.PlayerUid));
 
         bool lastRoundAmIHost = false;
+        // 是否跑满全部轮次（hoeing-guard-false-restart-on-normal-close 防线 B）。
+        // 循环内任一 break（会话终止 / 本轮初始化失败）都置 false —— break 只跳出 for，
+        // 不跳出方法，若不区分则异常中止也会流到循环外的"完工单"处被误判为正常完成。
+        bool allRoundsCompleted = true;
         for (int round = 0; round < totalRounds; round++)
         {
             if (_sessionTerminated || _multiplayerCoordinator?.IsExitTriggered == true)
             {
                 _logger.LogWarning("[多世界] 会话已终止（sessionTerminated={ST}, exitTriggered={ET}），跳过剩余轮次",
                     _sessionTerminated, _multiplayerCoordinator?.IsExitTriggered);
+                allRoundsCompleted = false;   // 会话中途终止，未跑满，不发完工单
                 break;
             }
 
@@ -1987,6 +2008,7 @@ public class AutoHoeingTask : ISoloTask
                     // 尝试回到自己世界，避免卡在别人世界
                     try { await LeaveCurrentWorldAsync(amIHost, client); }
                     catch (Exception ex) { _logger.LogWarning(ex, "[多世界] 离开世界失败，忽略"); }
+                    allRoundsCompleted = false;   // 本轮初始化失败，未跑满，不发完工单
                     break;
                 }
                 _cdManager.Load(_dataDir, accountName);
@@ -2050,10 +2072,26 @@ public class AutoHoeingTask : ISoloTask
             }
         }
 
-        _logger.LogInformation("[多世界] 全部 {Total} 轮锄地完成", totalRounds);
+        // 防线 B：仅"跑满全部轮次"才声明正常完成（hoeing-guard-false-restart-on-normal-close）。
+        // break 只跳出 for 不跳出方法，故必须用 allRoundsCompleted 区分：
+        //   - 跑满 totalRounds 轮自然结束 → true  → 发完工单
+        //   - 会话终止 / 初始化失败 break → false → 不发（守护据未执行线路数正常判定重开）
+        //   - 取消异常（掉线触发）        → 直接跳出方法，连这里都到不了 → 不发
+        // 必须置于收尾 LeaveCurrentWorldAsync 之前——收尾会触发关房广播写入 _stopReason，
+        // 而本标志正是用来让守护无视该 _stopReason 的。
+        if (allRoundsCompleted)
+        {
+            _logger.LogInformation("[多世界] 全部 {Total} 轮锄地完成", totalRounds);
+            _completedNormally = true;
 
-        // 重开续跑：整场全部完成，清空本地进度，避免下一整场首启被旧进度污染误跳。
-        if (_isInitialHost) _multiWorldProgressStore.Clear();
+            // 重开续跑：整场全部完成，清空本地进度，避免下一整场首启被旧进度污染误跳。
+            if (_isInitialHost) _multiWorldProgressStore.Clear();
+        }
+        else
+        {
+            _logger.LogWarning("[多世界] 未跑满 {Total} 轮即中止，不标记正常完成（守护将按未执行线路数判定是否重开）",
+                totalRounds);
+        }
 
         // 任务结束：所有人退回自己的世界
         _logger.LogInformation("[多世界] 任务结束，退回自己的世界");
