@@ -407,7 +407,8 @@ public class RoomManager
 
     /// <summary>
     /// 记录成员达经验上限，当所有在线成员均处于达上限态且本轮未广播过时返回 true。
-    /// multiplayer-hoeing-exp-cap-stop。照搬 RecordRouteVerificationDone 的在线清理 + AllOnlineMembersReported。
+    /// multiplayer-hoeing-exp-cap-stop + exp-cap-prefinal-stop-by-two-noexp（提前停止）。
+    /// 广播条件：ExpCapArmed ∧ 全员 ∈ (ExpCapReachedSet ∪ TwoConsecutiveNoExpSet)。
     /// </summary>
     public bool RecordExpCapReached(string roomCode, string connectionId)
     {
@@ -426,10 +427,17 @@ public class RoomManager
                 .Select(p => p.ConnectionId)
                 .ToHashSet();
             room.ExpCapReachedSet.IntersectWith(onlineConnectionIds);
+            room.TwoConsecutiveNoExpSet.IntersectWith(onlineConnectionIds);
 
             // 团队 arming 门控（multiplayer-hoeing-exp-cap-stop R7.4）：全员上报 且 团队已 arming 才广播。
             // 收紧不放宽（P11）：未 arming 时即便全员上报也不广播，防"重启空线路误停"。
+            // exp-cap-prefinal-stop-by-two-noexp：提前停止——ExpCapReachedSet ∪ TwoConsecutiveNoExpSet 覆盖全员即可。
             if (room.ExpCapArmed && AllOnlineMembersReported(room, room.ExpCapReachedSet))
+            {
+                room.ExpCapBroadcasted = true;
+                return true;
+            }
+            if (room.ExpCapArmed && IsAllOnlineMembersInEitherSet(room, room.ExpCapReachedSet, room.TwoConsecutiveNoExpSet))
             {
                 room.ExpCapBroadcasted = true;
                 return true;
@@ -441,7 +449,7 @@ public class RoomManager
     /// <summary>
     /// 记录团队 arming（任意成员吃到经验，或连续 5 场无经验兜底触发）。置 ExpCapArmed=true 并重查广播条件：
     /// 若此前已全员上报但因未 arming 未广播（全员满级 + 全部走兜底自点亮场景），此刻补触发广播，返回 true。
-    /// 否则返回 false。multiplayer-hoeing-exp-cap-stop R7.3/R7.5。
+    /// 否则返回 false。multiplayer-hoeing-exp-cap-stop R7.3/R7.5 + exp-cap-prefinal-stop-by-two-noexp。
     /// </summary>
     public bool RecordExpArmed(string roomCode, string connectionId)
     {
@@ -460,8 +468,15 @@ public class RoomManager
                 .Select(p => p.ConnectionId)
                 .ToHashSet();
             room.ExpCapReachedSet.IntersectWith(onlineConnectionIds);
+            room.TwoConsecutiveNoExpSet.IntersectWith(onlineConnectionIds);
 
             if (AllOnlineMembersReported(room, room.ExpCapReachedSet))
+            {
+                room.ExpCapBroadcasted = true;
+                return true;
+            }
+            // exp-cap-prefinal-stop-by-two-noexp：arming 后重查提前停止条件
+            if (IsAllOnlineMembersInEitherSet(room, room.ExpCapReachedSet, room.TwoConsecutiveNoExpSet))
             {
                 room.ExpCapBroadcasted = true;
                 return true;
@@ -471,7 +486,8 @@ public class RoomManager
     }
 
     /// <summary>
-    /// 撤回成员达上限（又检测到经验）。仅在本轮未广播时从集合移除。multiplayer-hoeing-exp-cap-stop。
+    /// 撤回成员达上限（又检测到经验）。仅在本轮未广播时从集合移除。
+    /// multiplayer-hoeing-exp-cap-stop + exp-cap-prefinal-stop-by-two-noexp（同时清理预警集合）。
     /// </summary>
     public void RecordExpCapCleared(string roomCode, string connectionId)
     {
@@ -480,7 +496,69 @@ public class RoomManager
         {
             if (room.ExpCapBroadcasted) return; // 已广播，撤回无意义
             room.ExpCapReachedSet.Remove(connectionId);
+            room.TwoConsecutiveNoExpSet.Remove(connectionId);
         }
+    }
+
+    /// <summary>
+    /// 记录"连续2场无经验预警"上报（exp-cap-prefinal-stop-by-two-noexp）。
+    /// 幂等：重复上报直接加入集合。重查提前停止广播条件。
+    /// </summary>
+    public bool RecordTwoConsecutiveNoExp(string roomCode, string connectionId)
+    {
+        if (!_rooms.TryGetValue(roomCode, out var room))
+            return false;
+
+        lock (room)
+        {
+            if (room.ExpCapBroadcasted) return false;
+
+            room.TwoConsecutiveNoExpSet.Add(connectionId);
+
+            // 在线清理
+            var onlineConnectionIds = room.Players
+                .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
+                .Select(p => p.ConnectionId)
+                .ToHashSet();
+            room.TwoConsecutiveNoExpSet.IntersectWith(onlineConnectionIds);
+            room.ExpCapReachedSet.IntersectWith(onlineConnectionIds);
+
+            // exp-cap-prefinal-stop-by-two-noexp：arming ∧ 全员覆盖 → 广播
+            if (room.ExpCapArmed && IsAllOnlineMembersInEitherSet(room, room.ExpCapReachedSet, room.TwoConsecutiveNoExpSet))
+            {
+                room.ExpCapBroadcasted = true;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 撤回"连续2场无经验预警"（又检测到经验）。exp-cap-prefinal-stop-by-two-noexp。
+    /// </summary>
+    public void RecordTwoConsecutiveNoExpCleared(string roomCode, string connectionId)
+    {
+        if (!_rooms.TryGetValue(roomCode, out var room)) return;
+        lock (room)
+        {
+            if (room.ExpCapBroadcasted) return;
+            room.TwoConsecutiveNoExpSet.Remove(connectionId);
+        }
+    }
+
+    /// <summary>
+    /// 判断所有在线成员是否至少属于 setA 或 setB 之一。
+    /// exp-cap-prefinal-stop-by-two-noexp：提前停止的核心判断。
+    /// </summary>
+    private static bool IsAllOnlineMembersInEitherSet(Room room, HashSet<string> setA, HashSet<string> setB)
+    {
+        var onlinePlayers = room.Players
+            .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
+            .ToList();
+
+        if (onlinePlayers.Count == 0) return false;
+
+        return onlinePlayers.All(p => setA.Contains(p.ConnectionId) || setB.Contains(p.ConnectionId));
     }
 
     public (int OnlineCount, int ReportedCount) GetRouteVerificationStatus(string roomCode)

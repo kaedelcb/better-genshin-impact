@@ -787,6 +787,42 @@ public class CoordinatorClient : IAsyncDisposable
     }
 
     /// <summary>
+    /// 上报"连续2场无经验"预警信号（exp-cap-prefinal-stop-by-two-noexp）。
+    /// 失败静默忽略，旧服务端无此 Hub 方法 → HubException 被吞，行为退化为不提前终止。
+    /// </summary>
+    public async Task NotifyTwoConsecutiveNoExpAsync(CancellationToken ct = default)
+    {
+        if (_connection == null || !IsConnected) return;
+        try
+        {
+            await _connection.InvokeAsync("ReportTwoConsecutiveNoExp", ct);
+            _logger.LogInformation("[联机][经验上限] 已上报连续2场无经验预警");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[联机][经验上限] NotifyTwoConsecutiveNoExpAsync 失败（静默忽略）");
+        }
+    }
+
+    /// <summary>
+    /// 撤回"连续2场无经验"预警信号（又见经验，exp-cap-prefinal-stop-by-two-noexp）。
+    /// 失败静默忽略。
+    /// </summary>
+    public async Task NotifyTwoConsecutiveNoExpClearedAsync(CancellationToken ct = default)
+    {
+        if (_connection == null || !IsConnected) return;
+        try
+        {
+            await _connection.InvokeAsync("ReportTwoConsecutiveNoExpCleared", ct);
+            _logger.LogInformation("[联机][经验上限] 已撤回连续2场无经验预警");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[联机][经验上限] NotifyTwoConsecutiveNoExpClearedAsync 失败（静默忽略）");
+        }
+    }
+
+    /// <summary>
     /// 万叶玩家广播"开始执行聚物动作"。
     /// multiplayer-kazuha-collect-point-broadcast: 加 syncKey + 聚物点 (collectX, collectY) 三参。
     /// 调用方在朝向 / 位置识别失败时传 (NaN, NaN)，由 **客户端 + 服务端 + 其他客户端订阅** 三层 IsValid 守卫过滤。

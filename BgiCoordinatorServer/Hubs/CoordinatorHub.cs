@@ -719,6 +719,40 @@ public class CoordinatorHub : Hub
         }
     }
 
+    /// <summary>
+    /// 上报"连续2场无经验预警"（exp-cap-prefinal-stop-by-two-noexp）。
+    /// 客户端连续 2 场无经验时调用，服务端将 connectionId 加入 TwoConsecutiveNoExpSet。
+    /// 若 arming ∧ 全员 ∈ (ExpCapReachedSet ∪ TwoConsecutiveNoExpSet) → 广播 AllReachedExpCap。
+    /// 旧服务端无此方法 → 客户端 HubException 被静默吞掉 → 退化为 4-threshold 行为。
+    /// </summary>
+    public async Task ReportTwoConsecutiveNoExp()
+    {
+        var (_, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
+        if (roomCode == null) return;
+
+        _roomManager.UpdateHeartbeat(Context.ConnectionId);
+        var allReached = _roomManager.RecordTwoConsecutiveNoExp(roomCode, Context.ConnectionId);
+
+        if (allReached)
+        {
+            _logger.LogInformation("房间 {Code} 连续2场无经验预警触发全员覆盖，广播终止", roomCode);
+            await Clients.Group(roomCode).SendAsync("AllReachedExpCap");
+        }
+    }
+
+    /// <summary>
+    /// 撤回"连续2场无经验预警"（又见经验）。exp-cap-prefinal-stop-by-two-noexp。
+    /// </summary>
+    public Task ReportTwoConsecutiveNoExpCleared()
+    {
+        var (_, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
+        if (roomCode == null) return Task.CompletedTask;
+
+        _roomManager.UpdateHeartbeat(Context.ConnectionId);
+        _roomManager.RecordTwoConsecutiveNoExpCleared(roomCode, Context.ConnectionId);
+        return Task.CompletedTask;
+    }
+
     /// <summary>更新白名单（仅房主）</summary>
     public async Task UpdateWhitelist(List<string>? whitelist = null)
     {
@@ -1258,6 +1292,8 @@ public class CoordinatorHub : Hub
             room.ExpCapBroadcasted = false;
             // 团队 arming 门控每轮复位（multiplayer-hoeing-exp-cap-stop R7.6）
             room.ExpCapArmed = false;
+            // exp-cap-prefinal-stop-by-two-noexp: 新轮清空连续2场无经验预警集合
+            room.TwoConsecutiveNoExpSet.Clear();
 
             _logger.LogInformation("[ResetForNewWorldRound] 房间{RoomCode}进入第{Round}轮，等待点、异常状态、万叶候选已重置", roomCode, newRound);
         }

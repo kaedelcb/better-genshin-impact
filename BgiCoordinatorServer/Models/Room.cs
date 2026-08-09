@@ -63,6 +63,14 @@ public class Room
     /// </summary>
     public bool ExpCapArmed { get; set; } = false;
 
+    /// <summary>
+    /// 已上报"连续2场无经验预警"的 connectionId 集合（exp-cap-prefinal-stop-by-two-noexp）。
+    /// 与 ExpCapReachedSet 同构：可增可减（Report 加入 / Clear 移除）。
+    /// 广播条件：ExpCapArmed ∧ 全员 ∈ (ExpCapReachedSet ∪ TwoConsecutiveNoExpSet)。
+    /// ResetForNewWorldRound 清空。
+    /// </summary>
+    public HashSet<string> TwoConsecutiveNoExpSet { get; set; } = [];
+
     /// <summary>房主筛选后的最终路线文件名列表（按执行顺序）</summary>
     public List<string> HostRouteList { get; set; } = [];
 

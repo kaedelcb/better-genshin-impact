@@ -11,6 +11,9 @@ public enum ExpCapReportAction
 
     /// <summary>撤回上报（已上报→未上报翻转）。</summary>
     Clear,
+
+    /// <summary>上报"连续2场无经验"预警信号（4-threshold 上报的预备态，exp-cap-prefinal-stop-by-two-noexp）。</summary>
+    TwoConsecutiveReport,
 }
 
 /// <summary>
@@ -54,8 +57,28 @@ public static class ExpCapDecisions
     /// 覆盖"全队进房即满级、谁都吃不到经验、团队 arming 永远点不亮"的死锁。R7.2。</summary>
     public const int ConsecutiveNoExpUnconditionalThreshold = 6;
 
+    /// <summary>
+    /// "连续2场无经验"预警阈值（固定 2，不可配）。
+    /// 当队伍中已有人正式达上限（4-threshold）时，剩余成员只需连续2场无经验即视为满足停止条件。
+    /// exp-cap-prefinal-stop-by-two-noexp。</summary>
+    public const int TwoConsecutiveNoExpThreshold = 2;
+
     /// <summary>是否应"兜底自点亮团队 arming"：连续无经验计数达无条件阈值即为真。
     /// 纯函数，PBT 友好。R7.2。仅决定"是否发 arming 信号"，不影响 R3 上报/撤回。</summary>
     public static bool ShouldForceArm(int count)
         => count >= ConsecutiveNoExpUnconditionalThreshold;
+
+    /// <summary>
+    /// "连续2场无经验"预警信号的状态机（exp-cap-prefinal-stop-by-two-noexp）。
+    /// 与 NextReportAction 同构，但阈值为 TwoConsecutiveNoExpThreshold（2）。
+    /// 仅在"有人已正式达上限"的服务端收尾阶段生效，客户端本地上报/撤回不受限。
+    /// </summary>
+    public static ExpCapReportAction NextTwoConsecutiveReportAction(int count, bool hasExp, bool alreadyReported)
+    {
+        if (!alreadyReported && !hasExp && count >= TwoConsecutiveNoExpThreshold)
+            return ExpCapReportAction.TwoConsecutiveReport;
+        if (alreadyReported && hasExp)
+            return ExpCapReportAction.Clear;
+        return ExpCapReportAction.None;
+    }
 }

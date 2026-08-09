@@ -76,6 +76,8 @@ public class MultiplayerCoordinator : IAsyncDisposable
     private int _consecutiveNoExpCount;
     /// <summary>本机当前是否处于"已上报达上限"态（上报/撤回反复翻转，非一次性闩锁）。</summary>
     private bool _expCapReported;
+    /// <summary>本机当前是否处于"已上报连续2场无经验预警"态（exp-cap-prefinal-stop-by-two-noexp）。</summary>
+    private bool _twoConsecutiveReported;
     /// <summary>本轮世界本机是否已发送过团队 arming 信号（幂等门控，每轮至多一次）。multiplayer-hoeing-exp-cap-stop R7.1。</summary>
     private bool _expArmedSent;
 
@@ -264,6 +266,24 @@ public class MultiplayerCoordinator : IAsyncDisposable
                 break;
         }
 
+        // === 连续2场无经验预警信号（exp-cap-prefinal-stop-by-two-noexp）===
+        // 与 4-threshold 独立并行：count 达 2 时上报预警，有经验时撤回。
+        // 4-threshold 正式上报时自动取消预警（下一轮循环中 Clear 路径触发）。
+        var twoConsecutiveAction = ExpCapDecisions.NextTwoConsecutiveReportAction(
+            _consecutiveNoExpCount, hasExp, _twoConsecutiveReported);
+        if (twoConsecutiveAction == ExpCapReportAction.TwoConsecutiveReport)
+        {
+            _twoConsecutiveReported = true;
+            _logger.LogInformation("[联机][经验上限] 连续2场无经验预警，发送预警信号");
+            await _client.NotifyTwoConsecutiveNoExpAsync(ct);
+        }
+        else if (twoConsecutiveAction == ExpCapReportAction.Clear && _twoConsecutiveReported)
+        {
+            _twoConsecutiveReported = false;
+            _logger.LogInformation("[联机][经验上限] 又见经验，撤回2场预警信号");
+            await _client.NotifyTwoConsecutiveNoExpClearedAsync(ct);
+        }
+
         // 团队 arming（multiplayer-hoeing-exp-cap-stop R7）：吃到经验、或连续6场无经验兜底 → 发一次 arming（每轮幂等）。
         // 必须放在 switch（含 Clear 上报）之后：保证本机的 ExpCapCleared 先于 ExpArmed 送达服务端，
         // 从而 arming 到达时本机已从 ExpCapReachedSet 移除，不会触发误广播（design §14.3 竞态安全）。
@@ -314,6 +334,7 @@ public class MultiplayerCoordinator : IAsyncDisposable
         // 基于经验判断停止锄地：新轮次复位本机计数与上报态（multiplayer-hoeing-exp-cap-stop R6.1）
         _consecutiveNoExpCount = 0;
         _expCapReported = false;
+        _twoConsecutiveReported = false;
         // 团队 arming 幂等门控每轮复位（multiplayer-hoeing-exp-cap-stop R7.6）
         _expArmedSent = false;
 
