@@ -1900,7 +1900,7 @@ public class TpTaskFastDrag
                                 if (esc.IsExist())
                                 {
                                     // [诊断] 拖动中途采样点(500,500)/(600,500)像素与拖动前一致 + 有关闭按钮 → 判定地图被弹层遮挡。
-                                    TaskControl.Logger.LogWarning("地图遮挡，重新调整 [诊断] 采样点像素未变(拖动被弹层挡住) step={I}/{Steps}", i, steps);
+                                    // TaskControl.Logger.LogWarning("地图遮挡，重新调整 [诊断] 采样点像素未变(拖动被弹层挡住) step={I}/{Steps}", i, steps);
                                     await Delay(1500, ct);
                                     Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
                                     await Delay(1500, ct);
@@ -1909,9 +1909,9 @@ public class TpTaskFastDrag
                                 {
                                     // [诊断] 采样点像素未变 + 无关闭按钮 → 拖动中途地图没动（假设1直接证据）。
                                     // 打出采样点在第几步、以及两个采样点的 BGR 值，确认是"真没动"而非采样点恰好选在同色区。
-                                    TaskControl.Logger.LogWarning(
-                                        "地图拖动异常，重新调整 [诊断] 拖动中途采样点像素未变 step={I}/{Steps} p(500,500)前={A} 后={C} p(600,500)前={B} 后={D}",
-                                        i, steps, pos.ToString(), pos3.ToString(), pos2.ToString(), pos4.ToString());
+                                    // TaskControl.Logger.LogWarning(
+                                    //     "地图拖动异常，重新调整 [诊断] 拖动中途采样点像素未变 step={I}/{Steps} p(500,500)前={A} 后={C} p(600,500)前={B} 后={D}",
+                                    //     i, steps, pos.ToString(), pos3.ToString(), pos2.ToString(), pos4.ToString());
                                 }
                                 
                                 break;

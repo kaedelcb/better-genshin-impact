@@ -76,8 +76,9 @@ public partial class PathExecutor
     // —— 模板 mwk.png（绿底掩膜），ROI (1682,972,35,42)，阈值 0.7。模板文件位于
     // GameTask\AutoFight\Assets\1920x1080\mwk.png（随构建输出）。
     // 首次使用时惰性构建并缓存，避免每次回点重复读盘 / InitTemplate。
-    private static RecognitionObject? _mwkMotorcycleRo;
-    private static RecognitionObject? _mwkMotorcycleRo2;
+    private static RecognitionObject? _mwkMotorcycleRo;     // 另一种摩托图标（小ROI+掩码），命中直接true
+    private static RecognitionObject? _mwkMotorcycleRo2;    // 主图标形状匹配（大ROI+掩码）
+    private static RecognitionObject? _mwkMotorcycleRoGold; // 摩托金黄模板（无掩码）：验证颜色
     private readonly ReturnMainUiTask _returnMainUiTask = new();
 
     // 玛薇卡飞行等待期间的脱离飞行检测参数（ms）
@@ -114,102 +115,70 @@ public partial class PathExecutor
     /// </summary>
     internal static bool IsMavuikaOnMotorcycleByTemplate(ImageRegion region)
     {
-        if (_mwkMotorcycleRo == null || _mwkMotorcycleRo2 == null)
+        if (_mwkMotorcycleRo == null || _mwkMotorcycleRo2 == null || _mwkMotorcycleRoGold == null)
         {
-            var mat = GameTaskManager.LoadAssetImage("AutoFight", "mwk.png");
-            var mat2 = GameTaskManager.LoadAssetImage("AutoFight", "mwk2.png");
+            var matMwk = GameTaskManager.LoadAssetImage("AutoFight", "mwk.png");     // 另一种摩托图标
+            var matBai = GameTaskManager.LoadAssetImage("AutoFight", "mwkbai.png");   // 非摩托模板（白/绿背景）
+            var matJin = GameTaskManager.LoadAssetImage("AutoFight", "mwkjin.png");   // 摩托金黄模板
+
+            // 另一种摩托图标（小ROI+掩码）：命中直接判定为摩托
             _mwkMotorcycleRo = new RecognitionObject
             {
                 Name = "MwkMotorcycle",
                 RecognitionType = RecognitionTypes.TemplateMatch,
-                TemplateImageMat = mat,
+                TemplateImageMat = matMwk,
                 RegionOfInterest = new Rect(1682, 972, 35, 42),
                 TemplateMatchMode = TemplateMatchModes.SqDiffNormed,
-                UseMask = true, // 绿底模板：抠掉 (0,255,0) 背景，只匹配白箭头本体
-                Threshold = 0.99, // isLowerBetter：等价原始 SqDiff 分 ≤ 0.07
+                UseMask = true,
+                Threshold = 0.99,
             }.InitTemplate();
+
+            // 主图标形状匹配（大ROI+掩码）：命中后再用金黄模板验证颜色
             _mwkMotorcycleRo2 = new RecognitionObject
             {
                 Name = "MwkMotorcycle2",
                 RecognitionType = RecognitionTypes.TemplateMatch,
-                TemplateImageMat = mat2,
+                TemplateImageMat = matBai,
                 RegionOfInterest = new Rect(1662, 953, 76, 74),
                 TemplateMatchMode = TemplateMatchModes.SqDiffNormed,
-                UseMask = true, // 绿底模板：抠掉 (0,255,0) 背景，只匹配白箭头本体
+                UseMask = true,
                 Use3Channels = true,
-                Threshold = 0.99, // isLowerBetter：等价原始 SqDiff 分 ≤ 0.07
+                Threshold = 0.99,
+            }.InitTemplate();
+
+            // 摩托金黄模板（无掩码）：用 mwkjin.png 的完整颜色验证
+            _mwkMotorcycleRoGold = new RecognitionObject
+            {
+                Name = "MwkMotorcycleGold",
+                RecognitionType = RecognitionTypes.TemplateMatch,
+                TemplateImageMat = matJin,
+                RegionOfInterest = new Rect(1662, 953, 76, 74),
+                TemplateMatchMode = TemplateMatchModes.SqDiffNormed,
+                UseMask = true,
+                Use3Channels = true,
+                Threshold = 0.998,
             }.InitTemplate();
         }
 
-        // 右图绿底：原逻辑不变
+        // 1. 另一种摩托图标（小ROI）命中 → 直接判定为摩托
         using var result = region.Find(_mwkMotorcycleRo);
         if (result.IsExist())
             return true;
 
-        // 左图金黄：先匹配图标形状，再判定底色是否金黄
+        // 2. 主图标形状匹配（大ROI）→ 再用金黄模板验证颜色
         using var result2 = region.Find(_mwkMotorcycleRo2);
         if (result2.IsExist())
         {
-            var isGoldBackground = IsGoldBackground(region);
-            // Logger.LogWarning("[MwkMotorcycle] result2 命中，金黄底色判定={IsGold}", isGoldBackground);
-            if (isGoldBackground)
+            using var resultGold = region.Find(_mwkMotorcycleRoGold);
+            // Logger.LogWarning("[MwkMotorcycle] 形状匹配命中，金黄模板匹配 score={Score:F4} exist={Exist}",
+            //     resultGold.MatchScore ?? -1, resultGold.IsExist());
+            if (resultGold.IsExist())
                 return true;
         }
 
-        // Logger.LogWarning("[MwkMotorcycle] 模板匹配结果：result={Result}, result2={Result2}", result.IsExist(), result2.IsExist());
         return false;
     }
 
-    /// <summary>
-    /// 判断摩托图标匹配区域底色是否为金黄系（左图）。
-    /// 金黄底 H ≈ 40~70（映射后 80~140），绿底 H ≈ 100~140（映射后 200~280）。
-    /// 跳过饱和度过低的像素（白/灰/黑，主要是白色箭头本体）。
-    /// </summary>
-    private static bool IsGoldBackground(ImageRegion region)
-    {
-        var roi = new Rect(
-            _mwkMotorcycleRo2!.RegionOfInterest.X,
-            _mwkMotorcycleRo2.RegionOfInterest.Y,
-            _mwkMotorcycleRo2.RegionOfInterest.Width,
-            _mwkMotorcycleRo2.RegionOfInterest.Height
-        ).ClampTo(region.SrcMat);
-
-        using var sub = new Mat(region.SrcMat, roi);
-        using var hsv = new Mat();
-        Cv2.CvtColor(sub, hsv, ColorConversionCodes.BGR2HSV);
-
-        double totalHue = 0;
-        int count = 0;
-        int cols = hsv.Cols;
-        int rows = hsv.Rows;
-
-        unsafe
-        {
-            for (int y = 0; y < rows; y++)
-            {
-                byte* ptr = (byte*)hsv.Ptr(y);
-                for (int x = 0; x < cols; x++)
-                {
-                    int idx = x * 3;
-                    int hue = ptr[idx];
-                    int saturation = ptr[idx + 1];
-
-                    if (saturation > 60)
-                    {
-                        totalHue += hue * 2.0; // OpenCV hue 0~180 → 映射到 0~360
-                        count++;
-                    }
-                }
-            }
-        }
-
-        if (count == 0)
-            return false;
-
-        double avgHue = totalHue / count;
-        return avgHue < 90; // < 90 → 金黄系
-    }
-    
     /// <summary>
     /// 判断是否中止地图追踪的条件
     /// </summary>

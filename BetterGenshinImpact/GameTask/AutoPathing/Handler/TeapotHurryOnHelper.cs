@@ -47,6 +47,7 @@ public partial class PathExecutor
         public bool Mwktiao = true;
         public bool MwktiaoIn = false;
         public bool IsFlyingIn = false;
+        public DateTime LastElementalSkillTime = DateTime.MinValue;
     }
 
     /// <summary>
@@ -268,15 +269,26 @@ public partial class PathExecutor
                             {
                                 if (!isOnMoto)
                                 {
-                                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
-                                    await Delay(200, ct);
-                                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
-                                    await Delay(300, ct);
-                                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
-                                    await Delay(600, ct); 
+                                    if ((DateTime.UtcNow - st.LastElementalSkillTime).TotalMilliseconds > 500)
+                                    {
+                                        // Logger.LogError("222");
+                                        Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                        await Delay(200, ct);
+                                        Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                        await Delay(300, ct);
+                                        Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                        await Delay(100, ct);
+                                    }
                                 }
+                                var isOnMoto2 = await AutoFightSkill.AvatarSkillAsync(Logger, avatar, false, 2, ct);
+                                if (isOnMoto2)
+                                {
+                                    // Logger.LogError("222{t}",isOnMoto2);
+                                    st.LastElementalSkillTime = DateTime.UtcNow;
+                                }
+                                await Delay(480, ct);
+                                
                                 using var region3 = CaptureToRectArea();
-
                                 if (waypoint?.MoveMode == MoveModeEnum.Fly.Code && _MwkFly)
                                 {
                                     var pos33 = region3.SrcMat.At<Vec3b>(1028, 1584);
@@ -328,13 +340,14 @@ public partial class PathExecutor
                                     //     hurryOnLogo = true; 
                                     // }
                                     // else 
-                                     if (st.ContinueHurryOn > 0 && (waypoint.MoveMode != MoveModeEnum.Fly.Code && !st.IsFlyingMwk))//?????
+                                    var cd = !AutoFightSkill.AvatarSkillAsync(Logger, avatar, false, 1, ct).Result;
+                                     if (st.ContinueHurryOn > 0 && cd && (waypoint.MoveMode != MoveModeEnum.Fly.Code && !st.IsFlyingMwk))//?????
                                     {
                                         Logger.LogInformation("自动赶路：继续...");
                                         var isF = Bv.GetMotionStatus(region3) == MotionStatus.Fly;
                                         if (isF)
                                         {
-                                            Logger.LogInformation("自动赶路：测试普攻...");
+                                            Logger.LogInformation("自动赶路：普攻...");
                                             Simulation.SendInput.SimulateAction(GIActions.NormalAttack);  
                                         }
                                         st.HurryOnLogo = true;
