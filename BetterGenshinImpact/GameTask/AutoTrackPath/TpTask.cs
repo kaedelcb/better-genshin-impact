@@ -79,14 +79,23 @@ public class TpTask
 
     public async Task<(double, double)> Tp(double tpX, double tpY, string mapName = "Teyvat", bool force = false, bool requireLoadingScreen = false, string? fastSyncId = null)
     {
+        // 传送/加载期间游戏世界冻结、技能 CD 不流逝，但 CD 计算基于挂钟时间外推会把这段误算成流逝。
+        // 记录坐标传送耗时（打开大地图到返回主界面），传送成功后把队伍 CD 时间戳整体后推该时长，抵消误差。
+        // 在分发器层包一次即同时覆盖公版(_official)与茶包版(_fastDrag)，不重复补偿。
+        // 纯内存补偿，不新增任何截图/OCR/等待，不改传送逻辑；异常/超时不进入补偿（直接透传）。
+        var tpStart = DateTime.UtcNow;
+        (double, double) result;
         if (UseOfficial)
         {
-            return await _official.Tp(tpX, tpY, mapName, force);
+            result = await _official.Tp(tpX, tpY, mapName, force);
         }
         else
         {
-            return await _fastDrag.Tp(tpX, tpY, mapName, force, requireLoadingScreen, fastSyncId);
+            result = await _fastDrag.Tp(tpX, tpY, mapName, force, requireLoadingScreen, fastSyncId);
         }
+
+        RunnerContext.Instance.CompensateFrozenCd(DateTime.UtcNow - tpStart);
+        return result;
     }
 
     public async Task MoveMapTo(double x, double y, string mapName, double finalZoomLevel = 2, string? country = null, int retryTimes = 0, bool enableEarlyStop = true)

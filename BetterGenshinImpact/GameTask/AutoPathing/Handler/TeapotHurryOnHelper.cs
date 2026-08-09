@@ -269,7 +269,7 @@ public partial class PathExecutor
                             {
                                 if (!isOnMoto)
                                 {
-                                    if ((DateTime.UtcNow - st.LastElementalSkillTime).TotalMilliseconds > 500)
+                                    if ((DateTime.UtcNow - st.LastElementalSkillTime).TotalMilliseconds > 550)
                                     {
                                         // Logger.LogError("222");
                                         Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);

@@ -596,17 +596,6 @@ public class AutoFightTask : ISoloTask
         {
             Logger.LogInformation("自动战斗：继承地图追踪队伍Cd信息...");
             combatScenes = PathingConditionConfig.CombatScenesGoBackUp;
-            foreach (var probeAvatar in combatScenes.GetAvatars())
-            {
-                Logger.LogInformation(
-                    "[CD探针1] 角色={Name} Index={Index} ManualSkillCd={ManualCd} LastSkillTime={LastTime:HH:mm:ss.fff} CdSeconds={Cd} Ready={Ready}",
-                    probeAvatar.Name,
-                    probeAvatar.Index,
-                    probeAvatar.ManualSkillCd,
-                    probeAvatar.LastSkillTime.ToLocalTime(),
-                    Math.Round(probeAvatar.GetSkillCdSeconds(), 2),
-                    probeAvatar.IsSkillReady());
-            }
             // foreach (var avatar in combatScenes.GetAvatars())
             // {
             //     Logger.LogInformation("队伍角色 {Name} 当前剩余E技能CD：{Cd} 秒",
@@ -1090,17 +1079,6 @@ public class AutoFightTask : ISoloTask
                         if (guardianAvatar is not null && (lastFightName != command.Name || combatScenes.GetAvatars().Count <=2)) {
                             
                             image = CaptureToRectArea();
-                            
-                            Logger.LogInformation(
-                                "[CD探针2] guardianAvatar={Name} Index={Index} ManualSkillCd={ManualCd} LastSkillTime={LastTime:HH:mm:ss.fff} CdSeconds={Cd} Ready={Ready} lastFightName={LastFight} command={Command}",
-                                guardianAvatar.Name,
-                                guardianAvatar.Index,
-                                guardianAvatar.ManualSkillCd,
-                                guardianAvatar.LastSkillTime.ToLocalTime(),
-                                Math.Round(guardianAvatar.GetSkillCdSeconds(), 2),
-                                guardianAvatar.IsSkillReady(),
-                                lastFightName,
-                                command.Name);
                             
                             await AutoFightSkill.EnsureGuardianSkill(guardianAvatar,lastCommand,lastFightName,
                             _taskParam.GuardianAvatar,_taskParam.GuardianAvatarHold,5,cts2.Token,_taskParam.GuardianCombatSkip,_taskParam.BurstEnabled);

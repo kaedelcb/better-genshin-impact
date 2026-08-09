@@ -102,6 +102,17 @@ public class RunnerContext : Singleton<RunnerContext>
                     }
                     else
                     {
+                        // 重新识别成功后，按同名角色从旧队伍继承实时技能 CD 状态（LastSkillTime / OcrSkillCd）。
+                        // 游戏内 CD 实时流逝，传送/线路切换期间也在转；不继承会把仍在 CD 中的角色误判为"技能就绪"，
+                        // 导致盾奶等角色被无效切出空放技能（见联机锄地传送后盾奶误切人问题）。
+                        // 换队场景走的是 ClearCombatScenes()（oldCombatScenes 为 null），此时不继承，避免跨队错误继承 CD。
+                        if (oldCombatScenes != null)
+                        {
+                            foreach (var newAvatar in combatScenes.GetAvatars())
+                            {
+                                newAvatar.InheritCdStateFrom(oldCombatScenes.SelectAvatar(newAvatar.Name));
+                            }
+                        }
                         _combatScenes = combatScenes;
                         break;
                     }
@@ -147,6 +158,33 @@ public class RunnerContext : Singleton<RunnerContext>
     public void ClearCombatScenes()
     {
         _combatScenes = null;
+    }
+
+    /// <summary>
+    /// 补偿一段"游戏世界冻结时间"对当前缓存队伍 CD 的影响。
+    /// 传送/加载期间游戏暂停、技能 CD 不流逝，但 CD 计算基于挂钟时间外推，会把冻结时间误算成 CD 流逝。
+    /// 此方法把缓存队伍每个角色的 CD 时间戳整体后推 <paramref name="frozen"/>，抵消该误差。
+    /// 缓存为空（尚未识别队伍）时跳过——无 CD 可补，传送后重新识别会拿到新时间戳。
+    /// 纯内存操作、无 IO、无副作用，不影响未持有队伍缓存的调用方。
+    /// </summary>
+    /// <param name="frozen">游戏世界冻结的时长。</param>
+    public void CompensateFrozenCd(TimeSpan frozen)
+    {
+        if (frozen <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        var scenes = _combatScenes;
+        if (scenes == null)
+        {
+            return;
+        }
+
+        foreach (var avatar in scenes.GetAvatars())
+        {
+            avatar.ShiftCdBy(frozen);
+        }
     }
 
     /// <summary>
