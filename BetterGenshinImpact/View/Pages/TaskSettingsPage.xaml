@@ -13,6 +13,7 @@
       xmlns:vio="http://schemas.lepo.co/wpfui/2022/xaml/violeta"
       xmlns:emoji="clr-namespace:Emoji.Wpf;assembly=Emoji.Wpf"
       xmlns:sys="clr-namespace:System;assembly=mscorlib"
+    xmlns:autofightofficial="clr-namespace:BetterGenshinImpact.GameTask.AutoFightOfficial"
       Title="TaskSettingsPage"
       d:DataContext="{d:DesignInstance Type=pages:TaskSettingsPageViewModel}"
       d:DesignHeight="1300"
@@ -437,6 +438,200 @@
                 </Grid>
             </ui:CardExpander.Header>
             <StackPanel>
+                <!--  official-autofight-parallel-engine spec §5.1：公版/茶包引擎切换开关（全局作用域）  -->
+                <Grid Margin="16,16,16,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <ui:TextBlock FontTypography="Body" Text="使用公版自动战斗引擎" TextWrapping="Wrap" />
+                        <ui:TextBlock Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                      Text="开启后本页自动战斗、自动BOSS/秘境/幽境/地脉花/好感度、JS脚本战斗均走公版引擎；关闭走茶包版。联机锄地始终茶包版。"
+                                      TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ui:ToggleSwitch Grid.Column="1"
+                                     Margin="0,0,24,0"
+                                     IsChecked="{Binding Config.AutoFightConfig.UseOfficialAutoFight, Mode=TwoWay}" />
+                </Grid>
+
+                <!--  公版配置面板：仅 UseOfficialAutoFight==true 显示  -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Config.AutoFightConfig.UseOfficialAutoFight}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <!--  策略选择（复用同一策略文件列表）  -->
+                    <Grid Margin="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <ui:TextBlock FontTypography="Body" Text="选择战斗策略（公版）" TextWrapping="Wrap" />
+                            <ui:TextBlock Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="公版引擎使用的战斗策略" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="1"
+                                  Width="240"
+                                  Margin="0,0,24,0"
+                                  ItemsSource="{Binding AutoFightViewModel.CombatStrategyList}"
+                                  SelectedItem="{Binding Config.AutoFightOfficialConfig.StrategyName, Mode=TwoWay}" />
+                    </Grid>
+
+                    <!--  强制指定队伍  -->
+                    <Grid Margin="16,0,16,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <ui:TextBlock FontTypography="Body" Text="强制指定队伍角色" TextWrapping="Wrap" />
+                            <ui:TextBlock Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="英文逗号分割，留空自动识别" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <ui:TextBox Grid.Column="1"
+                                    Width="240"
+                                    Margin="0,0,24,0"
+                                    Text="{Binding Config.AutoFightOfficialConfig.TeamNames, Mode=TwoWay}" />
+                    </Grid>
+
+                    <!--  战斗超时  -->
+                    <Grid Margin="16,0,16,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBlock Grid.Column="0" FontTypography="Body" Text="自动战斗超时(秒)" TextWrapping="Wrap" />
+                        <ui:TextBox Grid.Column="1" Width="120" Margin="0,0,24,0"
+                                    Text="{Binding Config.AutoFightOfficialConfig.Timeout, Mode=TwoWay}" />
+                    </Grid>
+
+                    <!--  检测战斗结束  -->
+                    <Grid Margin="16,0,16,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBlock Grid.Column="0" FontTypography="Body" Text="检测战斗结束后停止" TextWrapping="Wrap" />
+                        <ui:ToggleSwitch Grid.Column="1" Margin="0,0,24,0"
+                                         IsChecked="{Binding Config.AutoFightOfficialConfig.FightFinishDetectEnabled, Mode=TwoWay}" />
+                    </Grid>
+
+                    <!--  战斗中持续索敌（公版独有）  -->
+                    <Grid Margin="16,0,16,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <ui:TextBlock FontTypography="Body" Text="战斗中持续索敌" TextWrapping="Wrap" />
+                            <ui:TextBlock Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="战斗过程中情况允许时持续尝试面朝敌人" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <ui:ToggleSwitch Grid.Column="1" Margin="0,0,24,0"
+                                         IsChecked="{Binding Config.AutoFightOfficialConfig.EnableCombatTargeting, Mode=TwoWay}" />
+                    </Grid>
+
+                    <!--  脱锁等待时间  -->
+                    <Grid Margin="16,0,16,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBlock Grid.Column="0" FontTypography="Body" Text="脱锁等待时间(秒)" TextWrapping="Wrap" />
+                        <ui:TextBox Grid.Column="1" Width="120" Margin="0,0,24,0"
+                                    Text="{Binding Config.AutoFightOfficialConfig.LockLostWaitTime, Mode=TwoWay}" />
+                    </Grid>
+
+                    <!--  索敌识别间隔  -->
+                    <Grid Margin="16,0,16,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBlock Grid.Column="0" FontTypography="Body" Text="索敌识别间隔(毫秒)" TextWrapping="Wrap" />
+                        <ui:TextBox Grid.Column="1" Width="120" Margin="0,0,24,0"
+                                    Text="{Binding Config.AutoFightOfficialConfig.TargetingDetectionInterval, Mode=TwoWay}" />
+                    </Grid>
+
+                    <!--  伤害数字识别模式  -->
+                    <Grid Margin="16,0,16,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBlock Grid.Column="0" FontTypography="Body" Text="伤害数字识别模式" TextWrapping="Wrap" />
+                        <ComboBox Grid.Column="1" Width="160" Margin="0,0,24,0"
+                                  SelectedValuePath="Tag"
+                                  SelectedValue="{Binding Config.AutoFightOfficialConfig.DamageNumberRecognitionMode, Mode=TwoWay}">
+                            <ComboBoxItem Content="禁用" Tag="{x:Static autofightofficial:DamageNumberRecognitionMode.Disabled}" />
+                            <ComboBoxItem Content="OCR识别" Tag="{x:Static autofightofficial:DamageNumberRecognitionMode.Ocr}" />
+                            <ComboBoxItem Content="颜色识别" Tag="{x:Static autofightofficial:DamageNumberRecognitionMode.Color}" />
+                        </ComboBox>
+                    </Grid>
+
+                    <!--  绘制识别结果  -->
+                    <Grid Margin="16,0,16,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBlock Grid.Column="0" FontTypography="Body" Text="绘制识别结果(遮罩窗口)" TextWrapping="Wrap" />
+                        <ui:ToggleSwitch Grid.Column="1" Margin="0,0,24,0"
+                                         IsChecked="{Binding Config.AutoFightOfficialConfig.DrawRecognitionResults, Mode=TwoWay}" />
+                    </Grid>
+
+                    <!--  战后拾取  -->
+                    <Grid Margin="16,0,16,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBlock Grid.Column="0" FontTypography="Body" Text="战斗结束后拾取掉落物" TextWrapping="Wrap" />
+                        <ui:ToggleSwitch Grid.Column="1" Margin="0,0,24,0"
+                                         IsChecked="{Binding Config.AutoFightOfficialConfig.PickDropsAfterFightEnabled, Mode=TwoWay}" />
+                    </Grid>
+
+                    <!--  万叶拾取  -->
+                    <Grid Margin="16,0,16,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBlock Grid.Column="0" FontTypography="Body" Text="万叶拾取材料" TextWrapping="Wrap" />
+                        <ui:ToggleSwitch Grid.Column="1" Margin="0,0,24,0"
+                                         IsChecked="{Binding Config.AutoFightOfficialConfig.KazuhaPickupEnabled, Mode=TwoWay}" />
+                    </Grid>
+
+                    <!--  游泳检测  -->
+                    <Grid Margin="16,0,16,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBlock Grid.Column="0" FontTypography="Body" Text="游泳检测(自动战斗过程中)" TextWrapping="Wrap" />
+                        <ui:ToggleSwitch Grid.Column="1" Margin="0,0,24,0"
+                                         IsChecked="{Binding Config.AutoFightOfficialConfig.SwimmingEnabled, Mode=TwoWay}" />
+                    </Grid>
+                </StackPanel>
+
+                <!--  茶包配置面板：仅 UseOfficialAutoFight==false 显示（包裹现有全部内容）  -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Visible" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Config.AutoFightConfig.UseOfficialAutoFight}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
                 <Grid Margin="16">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -2051,6 +2246,8 @@
                                      HorizontalAlignment="Right"
                                      IsChecked="{Binding Config.AutoFightConfig.SwimmingEnabled, Mode=TwoWay}" />
                 </Grid>
+                </StackPanel>
+                <!--  /茶包配置面板  -->
             </StackPanel>
         </ui:CardExpander>
 

@@ -2,6 +2,7 @@ using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoEat;
 using BetterGenshinImpact.GameTask.AutoFight;
+using BetterGenshinImpact.GameTask.AutoFightOfficial;
 using CommunityToolkit.Mvvm.ComponentModel;
 using System;
 using System.Collections.Generic;
@@ -172,6 +173,12 @@ public partial class PathingPartyConfig : ObservableObject, IJsonOnDeserialized
 
     [ObservableProperty]
     private AutoFightConfig _autoFightConfig = new();
+
+    /// <summary>
+    /// 公版自动战斗配置（official-autofight-parallel-engine spec，与茶包版 AutoFightConfig 并存，配置组作用域）
+    /// </summary>
+    [ObservableProperty]
+    private AutoFightOfficialConfig _autoFightOfficialConfig = new();
     
     [ObservableProperty]
     private int _distance = 45;

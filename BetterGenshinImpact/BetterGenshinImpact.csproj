@@ -138,6 +138,16 @@
 		<None Update="GameTask\AutoFight\Assets\combat_avatar.json">
 		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
+		<!-- 公版自动战斗平行引擎独立资源目录（official-autofight-parallel-engine spec） -->
+		<None Include="GameTask\AutoFightOfficial\Assets\1920x1080\**">
+		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Include="GameTask\AutoFightOfficial\Assets\combat_avatar.json">
+		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Include="GameTask\AutoFightOfficial\Assets\Recognition.json">
+		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
 <None Update="GameTask\OcrSwitchWeapon\Assets\weaponName.json">
 		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>

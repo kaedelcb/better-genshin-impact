@@ -12,6 +12,9 @@ using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.AutoTrackPath;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoFight.Assets;
+using OfficialAutoFightRouter = BetterGenshinImpact.GameTask.AutoFightOfficial.OfficialAutoFightRouter;
+using OfficialParamAdapter = BetterGenshinImpact.GameTask.AutoFightOfficial.OfficialParamAdapter;
+using OfficialFightTask = BetterGenshinImpact.GameTask.AutoFightOfficial.AutoFightTask;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
@@ -1230,6 +1233,13 @@ public class AutoLeyLineOutcropTask : ISoloTask
         taskParam.KazuhaPickupEnabled = false;
         taskParam.QinDoublePickUp = false;
         taskParam.OnlyPickEliteDropsMode = "DisableAutoPickupForNonElite";
+        // official-autofight-parallel-engine spec §4.3(E6)：全局开关路由（非联机）。
+        // 开关读全局 Config.AutoFightConfig（R3.6），公版专属字段取全局 AutoFightOfficialConfig。
+        if (OfficialAutoFightRouter.UseOfficial(TaskContext.Instance().Config.AutoFightConfig, false))
+        {
+            var officialParam = OfficialParamAdapter.FromTeapot(taskParam, TaskContext.Instance().Config.AutoFightOfficialConfig);
+            return new OfficialFightTask(officialParam).Start(ct);
+        }
         return new AutoFightTask(taskParam).Start(ct);
     }
 

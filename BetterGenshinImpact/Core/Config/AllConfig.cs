@@ -2,6 +2,7 @@ using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.AutoDomain;
 using BetterGenshinImpact.GameTask.AutoBoss;
 using BetterGenshinImpact.GameTask.AutoFight;
+using BetterGenshinImpact.GameTask.AutoFightOfficial;
 using BetterGenshinImpact.GameTask.AutoFishing;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation;
 using BetterGenshinImpact.GameTask.AutoPick;
@@ -197,6 +198,11 @@ public partial class AllConfig : ObservableObject
     public AutoFightConfig AutoFightConfig { get; set; } = new();
 
     /// <summary>
+    ///     公版自动战斗配置（official-autofight-parallel-engine spec，与茶包版 AutoFightConfig 并存，全局作用域）
+    /// </summary>
+    public AutoFightOfficialConfig AutoFightOfficialConfig { get; set; } = new();
+
+    /// <summary>
     ///     自动乐曲配置 - 千音雅集
     /// </summary>
     public AutoMusicGameConfig AutoMusicGameConfig { get; set; } = new();
@@ -364,6 +370,7 @@ public partial class AllConfig : ObservableObject
         HotKeyConfig.PropertyChanged += OnAnyPropertyChanged;
         AutoWoodConfig.PropertyChanged += OnAnyPropertyChanged;
         AutoFightConfig.PropertyChanged += OnAnyPropertyChanged;
+        AutoFightOfficialConfig.PropertyChanged += OnAnyPropertyChanged;
         AutoDomainConfig.PropertyChanged += OnAnyPropertyChanged;
         AutoBossConfig.PropertyChanged += OnAnyPropertyChanged;
         AutoStygianOnslaughtConfig.PropertyChanged += OnAnyPropertyChanged;

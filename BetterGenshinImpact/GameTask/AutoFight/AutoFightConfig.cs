@@ -10,6 +10,14 @@ namespace BetterGenshinImpact.GameTask.AutoFight;
 [Serializable]
 public partial class AutoFightConfig : ObservableObject
 {
+    /// <summary>
+    /// 使用公版自动战斗引擎（true）还是茶包版（false，默认）。
+    /// official-autofight-parallel-engine spec：全局 Config.AutoFightConfig 与每个配置组
+    /// PathingPartyConfig.AutoFightConfig 各自独立取值（每组可选）。
+    /// 联机锄地与一键宏无视此开关，恒茶包版。
+    /// </summary>
+    [ObservableProperty] private bool _useOfficialAutoFight = false;
+
     [ObservableProperty] private string _strategyName = "根据队伍自动选择";
     
     /// <summary>

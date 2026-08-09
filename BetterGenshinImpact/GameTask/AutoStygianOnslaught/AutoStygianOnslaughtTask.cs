@@ -10,6 +10,9 @@ using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoFight.Assets;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
+using OfficialAutoFightRouter = BetterGenshinImpact.GameTask.AutoFightOfficial.OfficialAutoFightRouter;
+using OfficialParamAdapter = BetterGenshinImpact.GameTask.AutoFightOfficial.OfficialParamAdapter;
+using OfficialJsonTask = BetterGenshinImpact.GameTask.AutoFightOfficial.AutoFightJsonTask;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
 using BetterGenshinImpact.GameTask.AutoTrackPath;
@@ -967,13 +970,23 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
                 AutoFightTask.FightStatusFlag = true;
 
                 // JSON 策略：委托给 AutoFightJsonTask（幽境结束检测仍由 domainEndTask 接管，故关闭其内部结束检测）
+                // official-autofight-parallel-engine spec §4.3(E5)：JSON 分支按全局开关路由（非联机）；
+                // 非 JSON 分支（下方 combatCommands 直驱）无公版对应，保持茶包版。
                 if (_jsonCombatStrategyPath != null)
                 {
                     var jsonParam = new AutoFightParam(_jsonCombatStrategyPath, TaskContext.Instance().Config.AutoFightConfig)
                     {
                         FightFinishDetectEnabled = false
                     };
-                    new AutoFightJsonTask(jsonParam).Start(cts.Token).Wait(cts.Token);
+                    if (OfficialAutoFightRouter.UseOfficial(TaskContext.Instance().Config.AutoFightConfig, false))
+                    {
+                        var officialParam = OfficialParamAdapter.FromTeapot(jsonParam, TaskContext.Instance().Config.AutoFightOfficialConfig);
+                        new OfficialJsonTask(officialParam).Start(cts.Token).Wait(cts.Token);
+                    }
+                    else
+                    {
+                        new AutoFightJsonTask(jsonParam).Start(cts.Token).Wait(cts.Token);
+                    }
                 }
                 else
                 {

@@ -22,6 +22,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoFight;
+using OfficialAutoFightRouter = BetterGenshinImpact.GameTask.AutoFightOfficial.OfficialAutoFightRouter;
+using OfficialParamAdapter = BetterGenshinImpact.GameTask.AutoFightOfficial.OfficialParamAdapter;
+using OfficialFightTask = BetterGenshinImpact.GameTask.AutoFightOfficial.AutoFightTask;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.AutoWood.Assets;
@@ -500,7 +503,15 @@ public class Dispatcher
             throw new ArgumentNullException(nameof(param), "战斗任务参数不能为空");  
         }  
   
-        CancellationToken cancellationToken = customCt ?? CancellationContext.Instance.Cts.Token;  
+        CancellationToken cancellationToken = customCt ?? CancellationContext.Instance.Cts.Token;
+        // official-autofight-parallel-engine spec §4.3(E2)：JS 脚本战斗按全局开关路由（非联机）。
+        // param 由 JS 层预构建为茶包类型，走公版时用适配器映射公版认识的字段。
+        if (OfficialAutoFightRouter.UseOfficial(TaskContext.Instance().Config.AutoFightConfig, false))
+        {
+            var officialParam = OfficialParamAdapter.FromTeapot(param, TaskContext.Instance().Config.AutoFightOfficialConfig);
+            await new OfficialFightTask(officialParam).Start(cancellationToken);
+            return;
+        }
         await new AutoFightTask(param).Start(cancellationToken);  
     }
     

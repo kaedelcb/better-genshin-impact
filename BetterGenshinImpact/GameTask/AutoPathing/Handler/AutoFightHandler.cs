@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Stfu.Linq;
 using ActionEnum = BetterGenshinImpact.GameTask.AutoPathing.Model.Enum.ActionEnum;
 using BetterGenshinImpact.Core.Script.Dependence;
+using AutoFightOfficialConfig = BetterGenshinImpact.GameTask.AutoFightOfficial.AutoFightOfficialConfig;
 
 namespace BetterGenshinImpact.GameTask.AutoPathing.Handler;
 
@@ -32,6 +33,23 @@ internal class AutoFightHandler : IActionHandler
     private async Task StartFight(CancellationToken ct, object? config = null , WaypointForTrack? waypointForTrack = null)
     {
         TaskControl.Logger.LogInformation("执行 {Text}", "自动战斗");
+
+        // official-autofight-parallel-engine spec §4.3(E1)：公版/茶包版路由。
+        // 联机锄地（MultiplayerFightTimeoutOverride.HasValue）恒走茶包版，无视开关（R3.3）。
+        // 非联机场景：配置组作用域读 PathingPartyConfig.AutoFightConfig，否则读全局 Config.AutoFightConfig。
+        var isMultiplayerHoeing = PathingConditionConfig.MultiplayerFightTimeoutOverride.HasValue;
+        var scopeTeapotConfig = (config is PathingPartyConfig { Enabled: true, AutoFightEnabled: true } routePartyConfig)
+            ? routePartyConfig.AutoFightConfig
+            : TaskContext.Instance().Config.AutoFightConfig;
+        if (BetterGenshinImpact.GameTask.AutoFightOfficial.OfficialAutoFightRouter.UseOfficial(scopeTeapotConfig, isMultiplayerHoeing))
+        {
+            var officialScopeConfig = (config is PathingPartyConfig { Enabled: true, AutoFightEnabled: true } officialPartyConfig)
+                ? officialPartyConfig.AutoFightOfficialConfig
+                : TaskContext.Instance().Config.AutoFightOfficialConfig;
+            await StartOfficialFight(ct, officialScopeConfig, waypointForTrack);
+            return;
+        }
+
         // 爷们要战斗
         AutoFightParam taskParams = null;
         if (config is PathingPartyConfig { Enabled: true, AutoFightEnabled: true } partyConfig)
@@ -181,6 +199,35 @@ internal class AutoFightHandler : IActionHandler
     {
         AutoFightParam autoFightParam = new AutoFightParam(GetFightStrategy(config), config);
         return autoFightParam;
+    }
+
+    /// <summary>
+    /// official-autofight-parallel-engine spec §4.3(E1)：以公版引擎执行地图追踪战斗。
+    /// 仅注入公版 param 认识的字段（策略路径 + waypoint 超时）；茶包专属注入（RewardEndDetection、
+    /// 怪物标签拾取调整、联机覆盖）不适用于公版——即"选公版即得公版行为"（已确认的降级 D1/点 A）。
+    /// </summary>
+    private async Task StartOfficialFight(CancellationToken ct, AutoFightOfficialConfig officialConfig, WaypointForTrack? waypointForTrack)
+    {
+        var (strategyPath, _) = BetterGenshinImpact.GameTask.AutoFightOfficial.AutoFightParam.ResolveStrategyPath(officialConfig.StrategyName);
+        if (!File.Exists(strategyPath) && !Directory.Exists(strategyPath))
+        {
+            throw new Exception("战斗策略文件不存在");
+        }
+
+        var officialParam = new BetterGenshinImpact.GameTask.AutoFightOfficial.AutoFightParam(strategyPath, officialConfig);
+
+        // waypoint 指定的战斗超时（数字）注入，与茶包路径等价（公版 param 有 Timeout 字段）
+        if (waypointForTrack?.Action == ActionEnum.Fight.Code
+            && !string.IsNullOrEmpty(waypointForTrack.ActionParams)
+            && int.TryParse(waypointForTrack.ActionParams, out var number))
+        {
+            _logger.LogInformation("地图追踪设置战斗超时时间为 {Timeout} 秒", number);
+            officialParam.Timeout = number;
+        }
+
+        var fightSoloTask = BetterGenshinImpact.GameTask.AutoFightOfficial.Factory.CombatTaskFactoryProvider
+            .GetFactory(officialParam.CombatStrategyPath).CreateTask(officialParam);
+        await fightSoloTask.Start(ct);
     }
 
     private string GetFightStrategy(AutoFightConfig config)

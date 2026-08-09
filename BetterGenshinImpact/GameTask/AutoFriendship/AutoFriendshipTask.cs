@@ -1,5 +1,8 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoFight;
+using OfficialAutoFightRouter = BetterGenshinImpact.GameTask.AutoFightOfficial.OfficialAutoFightRouter;
+using OfficialParamAdapter = BetterGenshinImpact.GameTask.AutoFightOfficial.OfficialParamAdapter;
+using OfficialFightTask = BetterGenshinImpact.GameTask.AutoFightOfficial.AutoFightTask;
 using BetterGenshinImpact.GameTask.AutoFriendship.Assets;
 using BetterGenshinImpact.GameTask.AutoFriendship.Model;
 using BetterGenshinImpact.GameTask.AutoPathing;
@@ -64,6 +67,21 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
     private const int GameRegionCacheSize = 3;
 
     public string Name => "好感任务自动完成";
+
+    /// <summary>
+    /// official-autofight-parallel-engine spec §4.3(E7)：按全局开关创建公版或茶包版战斗任务。
+    /// 全局开关读 Config.AutoFightConfig（R3.6，非联机）；公版专属字段取全局 AutoFightOfficialConfig。
+    /// AutoFriendship 自身维护的静态信号（如 AutoFightTask.FightEndTotoly）仍走茶包版语义，不受影响。
+    /// </summary>
+    private ISoloTask CreateFriendshipFightTask(AutoFightParam fightParam)
+    {
+        if (OfficialAutoFightRouter.UseOfficial(TaskContext.Instance().Config.AutoFightConfig, false))
+        {
+            var officialParam = OfficialParamAdapter.FromTeapot(fightParam, TaskContext.Instance().Config.AutoFightOfficialConfig);
+            return new OfficialFightTask(officialParam);
+        }
+        return new AutoFightTask(fightParam);
+    }
 
     /// <summary>
     /// 配置组传入的独立任务配置覆盖，为null时使用全局AutoFriendshipConfig
@@ -296,7 +314,7 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
                         fightParam = new AutoFightParam();
                     }
                 }
-                var fightTask = new AutoFightTask(fightParam);
+                var fightTask = CreateFriendshipFightTask(fightParam);
                 if(!cts.IsCancellationRequested)
                 {
                     try
@@ -333,7 +351,7 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
                     {
                         clearFightParam = new AutoFightParam();
                     }
-                    var fightTask = new AutoFightTask(clearFightParam);
+                    var fightTask = CreateFriendshipFightTask(clearFightParam);
                     // 使用 Task.Run 确保战斗任务在后台线程运行，不阻塞当前逻辑
                     var fightHandle = Task.Run(() => fightTask.Start(cts.Token), cts.Token);
 
@@ -828,7 +846,7 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
                         fightParam = new AutoFightParam();
                     }
                 }
-                var fightTask = new AutoFightTask(fightParam);
+                var fightTask = CreateFriendshipFightTask(fightParam);
                 if(!cts.IsCancellationRequested)await fightTask.Start(cts.Token);
                 return new BattleResult { Status = "success" };
             }
@@ -862,7 +880,7 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
                         fightParam = new AutoFightParam();
                     }
                 }
-                var fightTask = new AutoFightTask(fightParam);
+                var fightTask = CreateFriendshipFightTask(fightParam);
                 // 使用 Task.Run 确保战斗任务在后台线程运行，不阻塞当前逻辑
                 
                 Task? fightHandle = null;

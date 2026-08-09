@@ -8,6 +8,10 @@ using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
+using OfficialAutoFightRouter = BetterGenshinImpact.GameTask.AutoFightOfficial.OfficialAutoFightRouter;
+using OfficialParamAdapter = BetterGenshinImpact.GameTask.AutoFightOfficial.OfficialParamAdapter;
+using OfficialFightTask = BetterGenshinImpact.GameTask.AutoFightOfficial.AutoFightTask;
+using OfficialJsonTask = BetterGenshinImpact.GameTask.AutoFightOfficial.AutoFightJsonTask;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
@@ -915,7 +919,16 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
         var taskParam = BuildAutoFightParamForBoss();
         try
         {
-            await new AutoFightTask(taskParam).Start(_ct);
+            // official-autofight-parallel-engine spec §4.3(E3)：全局开关路由（非联机）
+            if (OfficialAutoFightRouter.UseOfficial(TaskContext.Instance().Config.AutoFightConfig, false))
+            {
+                var officialParam = OfficialParamAdapter.FromTeapot(taskParam, TaskContext.Instance().Config.AutoFightOfficialConfig);
+                await new OfficialFightTask(officialParam).Start(_ct);
+            }
+            else
+            {
+                await new AutoFightTask(taskParam).Start(_ct);
+            }
         }
         catch (NormalEndException e)
         {
@@ -935,7 +948,16 @@ public class AutoBossTask : ISoloTask<Dictionary<string, int>>
         var taskParam = BuildAutoFightParamForBoss();
         try
         {
-            await new AutoFightJsonTask(taskParam).Start(_ct);
+            // official-autofight-parallel-engine spec §4.3(E3)：全局开关路由（非联机）
+            if (OfficialAutoFightRouter.UseOfficial(TaskContext.Instance().Config.AutoFightConfig, false))
+            {
+                var officialParam = OfficialParamAdapter.FromTeapot(taskParam, TaskContext.Instance().Config.AutoFightOfficialConfig);
+                await new OfficialJsonTask(officialParam).Start(_ct);
+            }
+            else
+            {
+                await new AutoFightJsonTask(taskParam).Start(_ct);
+            }
         }
         catch (NormalEndException e)
         {
