@@ -26,7 +26,7 @@ using static BetterGenshinImpact.GameTask.Common.TaskControl;
 namespace BetterGenshinImpact.GameTask.AutoPathing;
 
 /// <summary>
-/// 角色技能加速赶路逻辑（玛薇卡、瓦雷莎、希诺宁、闲云、桑多涅、恰斯卡/伊法、流浪者）
+/// 角色技能加速赶路逻辑（玛薇卡、瓦雷莎、希诺宁、闲云、桑多涅、恰斯卡/伊法、流浪者、法尔伽、夜兰）
 /// </summary>
 public partial class PathExecutor
 {
@@ -79,6 +79,14 @@ public partial class PathExecutor
     private int _lastWaypointIndex = -1;
     private readonly List<int> _staminaHistory = new(50);
     private DateTime _lastSandroneSkillTime = DateTime.MinValue;
+    
+    // 法尔伽赶路状态字段
+    private DateTime? _falgaNextCheckTime = null;
+    
+    // 夜兰赶路状态字段
+    private DateTime _lastFlyStartTime = DateTime.MinValue;
+    private double _lastFlyDistance = 0;
+    private int _flyStillFrames = 0;
 
     /// <summary>
     /// 获取切人步行目标序号：排除赶路角色自身 + 黑名单，取序号最靠前的有效角色。
@@ -743,6 +751,152 @@ public partial class PathExecutor
                 }
 
                 break;
+
+            case "法尔伽":
+                {
+                    if (distance > PartyConfig.Distance
+                        && (waypoint?.MoveMode == MoveModeEnum.Run.Code || waypoint?.MoveMode == MoveModeEnum.Dash.Code))
+                    {
+                        await SwitchToHurryAvatarAsync(screen2, avatar, distance, num, ct);
+                        if (!avatar.IsActive(screen2)) return false;
+                        if (_falgaNextCheckTime.HasValue && DateTime.UtcNow < _falgaNextCheckTime.Value) return false;
+                        if ((DateTime.UtcNow - _lastSkillCheckTime).TotalSeconds < 0.5) return false;
+                        _lastSkillCheckTime = DateTime.UtcNow;
+                        var cd = await ReadEskillCdAsync("法尔伽");
+                        if (cd <= 0 && state.RotationStableCount >= 2)
+                        {
+                            Logger.LogInformation("雷霆大跳！");
+                            await TaskControl.SimulateHoldActionAsync(GIActions.ElementalSkill, 500, ct);
+                            ESkillCdTracker.Record("法尔伽", 8);
+                            _falgaNextCheckTime = DateTime.UtcNow.AddSeconds(2);
+                            return false;
+                        }
+                        return false;
+                    }
+                    break;
+                }
+
+            case "夜兰":
+            {
+                try
+                {
+                    // 1. 接近处理：距离小于接近距离且需要接近 → 退出赶路（点按跳跃）
+                    if (state.PendingApproach)
+                    {
+                        var shouldApproach = ShouldApproach(distance, nextDistance, waypoint, nextWaypoint, avatar.Name);
+
+                        if (shouldApproach)
+                        {
+                            Simulation.ReleaseAllKey();
+                            state.PendingApproach = false;
+                            if (state.FlyingState)
+                            {
+                                state.FlyingState = false;
+                                _lastLandingTime = DateTime.UtcNow;
+                                Logger.LogInformation("自动赶路：夜兰接近节点，退出赶路");
+                                Simulation.SendInput.SimulateAction(GIActions.Jump); // 第1种：点按跳跃
+                            }
+                            return false;
+                        }
+                    }
+
+                    // 赶路状态中
+                    if (state.FlyingState)
+                    {
+                        // 0.5秒节流，避免频繁OCR
+                        if ((DateTime.UtcNow - _lastSkillCheckTime).TotalSeconds < 0.5)
+                            return true;
+                        _lastSkillCheckTime = DateTime.UtcNow;
+
+                        // 2. 识别到CD（技能结束进入冷却）→ 退出赶路（不点按跳跃）
+                        // 进入飞行后1.5秒内不进行OCR识别退出，避免刚启动时OCR误判导致误退出
+                        if ((DateTime.UtcNow - _lastFlyStartTime).TotalSeconds >= 1.5)
+                        {
+                            var cd = await ReadEskillCdAsync("夜兰");
+                            if (cd > 0)
+                            {
+                                state.FlyingState = false;
+                                _lastLandingTime = DateTime.UtcNow;
+                                Logger.LogInformation("自动赶路：夜兰技能CD出现，赶路结束");
+                                return false;
+                            }
+                        }
+
+                        // 3. 超过5秒超时 → 退出赶路（点按跳跃）
+                        if ((DateTime.UtcNow - _lastFlyStartTime).TotalSeconds >= 5)
+                        {
+                            state.FlyingState = false;
+                            _lastLandingTime = DateTime.UtcNow;
+                            Logger.LogInformation("自动赶路：夜兰超时，退出赶路");
+                            Simulation.SendInput.SimulateAction(GIActions.Jump); // 第3种：点按跳跃
+                            return false;
+                        }
+
+                        // 4. 连续2帧distance变化不超过8（卡顿）→ 退出赶路（点按跳跃）
+                        if (Math.Abs(distance - _lastFlyDistance) <= 8)
+                        {
+                            _flyStillFrames++;
+                        }
+                        else
+                        {
+                            _flyStillFrames = 0;
+                        }
+                        _lastFlyDistance = distance;
+
+                        if (_flyStillFrames >= 2)
+                        {
+                            state.FlyingState = false;
+                            _lastLandingTime = DateTime.UtcNow;
+                            Logger.LogInformation("自动赶路：夜兰卡顿，退出赶路");
+                            Simulation.SendInput.SimulateAction(GIActions.Jump); // 第4种：点按跳跃
+                            return false;
+                        }
+
+                        return true;
+                    }
+
+                    // 2. 进入飞行：大于赶路距离且E技能CD识别无结果（可用）时长按E 300ms
+                    if (distance > PartyConfig.Distance
+                        && (waypoint?.MoveMode == MoveModeEnum.Run.Code || waypoint?.MoveMode == MoveModeEnum.Dash.Code))
+                    {
+                        await SwitchToHurryAvatarAsync(screen2, avatar, distance, num, ct);
+
+                        if (!avatar.IsActive(screen2))
+                        {
+                            return false;
+                        }
+
+                        // 0.5秒节流，避免频繁OCR
+                        if ((DateTime.UtcNow - _lastSkillCheckTime).TotalSeconds < 0.5)
+                            return false;
+                        _lastSkillCheckTime = DateTime.UtcNow;
+
+                        var cd = await ReadEskillCdAsync("夜兰");
+                        // 技能可用：OCR 无 CD，或技能槽位出现可用高亮色 #00DCFA（OCR 非唯一判断）
+                        var skillReady = cd <= 0 || secondESkillAvailable();
+                        if (skillReady && state.RotationStableCount >= 1
+                            && (DateTime.UtcNow - _lastLandingTime).TotalSeconds >= 2)
+                        {
+                            Logger.LogInformation("自动赶路：夜兰启动赶路");
+                            await TaskControl.SimulateHoldActionAsync(GIActions.ElementalSkill, 300, ct);
+                            state.FlyingState = true;
+                            _lastFlyStartTime = DateTime.UtcNow;
+                            _lastFlyDistance = distance;
+                            _flyStillFrames = 0;
+                            return true;
+                        }
+
+                        return false;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.LogError(e, $"[{avatar.Name}] 赶路逻辑异常");
+                    state.FlyingState = false;
+                    return false;
+                }
+                break;
+            }
         }
 
         if ((waypoint?.MoveMode == MoveModeEnum.Fly.Code && PartyConfig.TravelMode == "连续赶路"
@@ -975,6 +1129,54 @@ public partial class PathExecutor
         using var region = CaptureToRectArea();
         var pixel = region.SrcMat.At<Vec3b>(1028, 1584);
         return pixel.Item0 >= 250 && pixel.Item1 >= 250 && pixel.Item2 >= 250;
+    }
+
+    /// <summary>
+    /// 第二个E技能位是否可用：以技能槽位坐标 (1691,953)（1920×1080 基准）为中心的 11×11 区域内存在面积≥5 的 #00DCFA（RGB 0,220,250）连通域
+    /// </summary>
+    private bool secondESkillAvailable()
+    {
+        using var region = CaptureToRectArea();
+        // 参考 AutoFightAssets：以 1920 宽为基准，按实际捕获宽度缩放坐标（不超过1）
+        var scale = Math.Min(region.Width / 1920d, 1d);
+        // 技能槽位中心 (1691,953) → 11×11 区域左上角 (1686,948)
+        using var crop = region.DeriveCrop(
+            (int)(1686 * scale), (int)(948 * scale),
+            Math.Max(1, (int)(11 * scale)), Math.Max(1, (int)(11 * scale)));
+        // Threshold 内部先 BGR2RGB，Scalar 为 RGB 顺序：#00DCFA = R0,G220,B250
+        return HasColoredBlob(crop.SrcMat, new Scalar(0, 210, 240), new Scalar(15, 235, 255), 5);
+    }
+
+    /// <summary>
+    /// 指定起点坐标和尺寸的区域内是否存在面积 ≥ <paramref name="minArea"/> 的指定颜色连通域（便捷重载）。
+    /// <paramref name="lower"/>/<paramref name="upper"/> 为 RGB 顺序阈值（Threshold 内部先做 BGR2RGB）。
+    /// </summary>
+    private static bool HasColoredBlob(ImageRegion region, int x, int y, int w, int h, Scalar lower, Scalar upper, int minArea)
+    {
+        using var regionMat = region.DeriveCrop(x, y, w, h);
+        return HasColoredBlob(regionMat.SrcMat, lower, upper, minArea);
+    }
+
+    /// <summary>
+    /// 图像中是否存在面积 ≥ <paramref name="minArea"/> 的指定颜色连通域。
+    /// <paramref name="lower"/>/<paramref name="upper"/> 为 RGB 顺序阈值（Threshold 内部先做 BGR2RGB）。
+    /// </summary>
+    private static bool HasColoredBlob(Mat src, Scalar lower, Scalar upper, int minArea)
+    {
+        using var mask = OpenCvCommonHelper.Threshold(src, lower, upper);
+        using var labels = new Mat();
+        using var stats = new Mat();
+        using var centroids = new Mat();
+
+        var numLabels = Cv2.ConnectedComponentsWithStats(mask, labels, stats, centroids,
+            connectivity: PixelConnectivity.Connectivity4, ltype: MatType.CV_32S);
+
+        // 排除小于 minArea 的孤立噪点（CC_STAT_AREA = 4）
+        for (int i = 1; i < numLabels; i++)
+        {
+            if (stats.At<int>(i, 4) >= minArea) return true;
+        }
+        return false;
     }
 
     private async Task SafeLanding(CancellationToken ct)

@@ -185,7 +185,7 @@ public partial class PathingPartyConfig : ObservableObject, IJsonOnDeserialized
     
     // 公版/新版赶路角色列表（UseNewHurrySystem == true）
     [JsonIgnore]
-    public List<string> NewHurryOnAvatarList { get; } = ["","自动","玛薇卡","闲云","桑多涅","恰斯卡","流浪者","伊法","希诺宁"];
+    public List<string> NewHurryOnAvatarList { get; } = ["","自动","玛薇卡","闲云","桑多涅","恰斯卡","流浪者","伊法","希诺宁","法尔伽","夜兰"];
 
     // 茶包版赶路角色列表（UseNewHurrySystem == false）
     [JsonIgnore]
