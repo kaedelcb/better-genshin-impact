@@ -1325,6 +1325,8 @@ public partial class PathExecutor
                                                     // 确认已回到主界面、画面稳定后再截取用于 IsActive + 摩托模板匹配。
                                                     await Bv.WaitUntilFound(
                                                         ElementAssets.Instance.PaimonMenuRo, ct, retryTimes: 10, delayMs: 200);
+                                                    
+                                                    await Delay(500, ct);
 
                                                     using var __dismountRegion = CaptureToRectArea();
                                                     var __mavuikaActive = _combatScenes!.AvatarCount <= 1 || __mavuika.IsActive(__dismountRegion);
@@ -1970,6 +1972,7 @@ public partial class PathExecutor
             CurrentActiveInstance = previousInstance;
         }
     }
+    
     
     // 恢复状态集中收口（autoeat-count-overloaded-sentinel-fix spec）：
     // 取代原散落 4 处 if(AutoEatCount<3) AutoEatCount=0 补丁（457/904-908/1327/1334）。
@@ -3160,7 +3163,7 @@ public partial class PathExecutor
                 }
                 else
                 {
-                    nextAvatarIndexStop = _combatScenes.SelectAvatar(1).Name == _hurryOnAvatar ? "2" : "1"; 
+                    nextAvatarIndexStop = mainAvatarIndex.Index.ToString(); 
                 }
             }
             else
@@ -4490,7 +4493,7 @@ public partial class PathExecutor
      * 处理各种异常场景
      * 需要保证耗时不能太高
      */
-    private async Task ResolveAnomalies(ImageRegion? imageRegion = null)
+    public async Task ResolveAnomalies(ImageRegion? imageRegion = null)
     {
         if (imageRegion == null)
         {

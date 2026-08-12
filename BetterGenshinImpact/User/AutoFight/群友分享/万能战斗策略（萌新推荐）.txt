@@ -53,6 +53,8 @@
 
 玛薇卡 e
 
+奥黛塔 attack(0.01),keypress(e),wait(0.75),keypress(e)
+
 哥伦比娅 attack(0.1), check, keydown(e), wait(0.3), keyup(e), wait(0.1), check, wait(0.3)
 
 莉奈娅 attack(0.1), keypress(q), wait(0.1), ready, check, attack(0.4), keydown(E), wait(0.05), attack(0.82), keyup(E), wait(1), check
@@ -134,7 +136,7 @@
 夜兰 attack(0.5), keydown(VK_W), wait(0.05), keydown(VK_E), wait(0.4), keyup(VK_E), wait(0.1), keydown(VK_A), keyup(VK_W), wait(0.4), keydown(VK_S), keyup(VK_A), wait(0.4), keydown(VK_D), keyup(VK_S), wait(0.4), keydown(VK_W), keyup(VK_D), wait(0.3), keydown(VK_S), keyup(VK_W), wait(0.15), keyup(VK_S), keypress(e), attack(0.2), check, wait(0.3), keypress(Q), wait(0.1), keypress(Q), wait(0.1), keypress(q), wait(0.1), ready, check, wait(0.3)
 
 // 爆发
-玛薇卡 attack(0.08), check, wait(0.3), keydown(E), wait(0.4), attack(0.2), wait(0.01), keyup(E), click(middle), attack(0.08), check, wait(0.3), keypress(Q), wait(0.1), keypress(Q), wait(0.1), ready, check, wait(0.3), charge(3.8), keydown(space), wait(0.1), keyup(space), attack(0.2), wait(0.2), check, wait(0.3)
+// 玛薇卡 attack(0.08), check, wait(0.3), keydown(E), wait(0.4), attack(0.2), wait(0.01), keyup(E), click(middle), attack(0.08), check, wait(0.3), keypress(Q), wait(0.1), keypress(Q), wait(0.1), ready, check, wait(0.3), // // // // charge(3.8), keydown(space), wait(0.1), keyup(space), attack(0.2), wait(0.2), check, wait(0.3)
 
 
 // 收尾，长轴

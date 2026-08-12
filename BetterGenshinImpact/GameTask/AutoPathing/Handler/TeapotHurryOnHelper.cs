@@ -177,10 +177,20 @@ public partial class PathExecutor
                             {
                                 st.MavikaFlyCount++;
                                 
-                                if (st.MavikaFlyCount > (st.MwktiaoIn?7:4) && avatar.IsActive(screen2))
+                                if (st.MavikaFlyCount > (st.MwktiaoIn?6:4) && avatar.IsActive(screen2))
                                 {
-                                    if(nextWaypoint?.MoveMode != MoveModeEnum.Fly.Code && Bv.GetMotionStatus(screen2) == MotionStatus.Fly)Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
-                                    if (st.MwktiaoIn && isOnMoto) Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+                                    if (nextWaypoint?.MoveMode != MoveModeEnum.Fly.Code &&
+                                        Bv.GetMotionStatus(screen2) == MotionStatus.Fly && _lastWaypoint?.MoveMode != MoveModeEnum.Fly.Code )
+                                    {
+                                        Logger.LogWarning("测试:st.MavikaFlyCount1 {t}",st.MavikaFlyCount);
+                                        Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+                                    }
+
+                                    if (st.MwktiaoIn && isOnMoto)
+                                    {
+                                        Logger.LogWarning("测试:st.MavikaFlyCount2 {t}",st.MavikaFlyCount);
+                                        Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
+                                    }
                                     st.MavikaFlyCount = 0;
                                     st.MwktiaoIn = false;
                                     Logger.LogInformation("自动赶路：靠近节点切换 {t}...-h {t2}",nextAvatarIndexStop,waypoint?.MoveMode);
@@ -269,7 +279,7 @@ public partial class PathExecutor
                             {
                                 if (!isOnMoto)
                                 {
-                                    if ((DateTime.UtcNow - st.LastElementalSkillTime).TotalMilliseconds > 550)
+                                    if ((DateTime.UtcNow - st.LastElementalSkillTime).TotalMilliseconds > 550  && Bv.GetMotionStatus(screen2) != MotionStatus.Fly)
                                     {
                                         // Logger.LogError("222");
                                         Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
@@ -345,10 +355,12 @@ public partial class PathExecutor
                                     {
                                         Logger.LogInformation("自动赶路：继续...");
                                         var isF = Bv.GetMotionStatus(region3) == MotionStatus.Fly;
-                                        if (isF)
+                                        if (isF && (DateTime.UtcNow - st.LastElementalSkillTime).TotalMilliseconds > 1000 )
                                         {
                                             Logger.LogInformation("自动赶路：普攻...");
+                                            st.LastElementalSkillTime = DateTime.UtcNow;
                                             Simulation.SendInput.SimulateAction(GIActions.NormalAttack);  
+                                            
                                         }
                                         st.HurryOnLogo = true;
                                         st.ContinueHurryOn = 0;

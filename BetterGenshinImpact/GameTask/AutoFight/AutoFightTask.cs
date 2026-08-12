@@ -1144,12 +1144,31 @@ public class AutoFightTask : ISoloTask
                                         if (!skillSucceeded)
                                         {
                                             // 原有在条件不满足时的处理逻辑
-                                            avatarFirst.UseSkill(useSkillListWithH.Contains(useSkillListWithF), 1);
+                                            if (avatarFirst.Name == "奥黛塔")
+                                            {
+                                                Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                                Sleep(750, ct);
+                                                var useadt = useEq.Contains(avatarFirst.Index);
+                                                if (useadt)
+                                                {
+                                                    Simulation.SendInput.SimulateAction(GIActions.ElementalBurst);
+                                                    Sleep(2000, ct);
+                                                }
+                                                Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                                avatarFirst.LastSkillTime = DateTime.UtcNow;
+                                            }
+                                            else
+                                            {
+                                                avatarFirst.UseSkill(useSkillListWithH.Contains(useSkillListWithF), 1);
+                                            }
+                                            
                                             var useA = useSkillListWithA.ContainsKey(useSkillListWithF) && useSkillListWithA[useSkillListWithF] > 0;
                                             if (useA)
                                             {
                                                 Logger.LogInformation("自动EQ战斗：执行序号 {name} 角色首E技能后普攻 {time} ms", useSkillListWithF, useSkillListWithA[useSkillListWithF]);
                                                 avatarFirst.Attack(useSkillListWithA[useSkillListWithF]); 
+                                                
+                                               
                                             }
                                         }
                                     }
@@ -1204,6 +1223,17 @@ public class AutoFightTask : ISoloTask
                                             {
                                                 Logger.LogInformation("自动EQ战斗：使用序号 {name} 角色E技能 {cd}", num,avatarQ.GetSkillCdSeconds());
                                                 avatarQ.UseSkill(avatarQHold);
+                                                if (avatarQ.Name == "奥黛塔")
+                                                {
+                                                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                                    Sleep(700, ct);
+                                                    Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                                }
+                                                else if (avatarQ.Name == "阿罗夏")
+                                                {
+                                                    Sleep(600, ct);
+                                                    Simulation.SendInput.SimulateAction(GIActions.ElementalBurst);
+                                                }
                                                 if (useA)
                                                 {
                                                     if (!useAContainsKey)
@@ -1221,7 +1251,10 @@ public class AutoFightTask : ISoloTask
                                                     while (!await AutoFightSkill.AvatarSkillAsync(Logger, avatarQ,
                                                                false, 1, cts2.Token, imageAfterUseSkill) && retry > 0)
                                                     {
-                                                        Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                                        {
+                                                            Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
+                                                        }
+                                                        
                                                         Simulation.ReleaseAllKey();
 
                                                         // 防止在纳塔飞天或爬墙
@@ -2110,6 +2143,8 @@ public class AutoFightTask : ISoloTask
                     // 第一次检测：拾取前先下车（等派蒙确认画面稳定）
                     await Bv.WaitUntilFound(
                         ElementAssets.Instance.PaimonMenuRo, ct, retryTimes: 10, delayMs: 200);
+                    
+                    await Delay(500, ct);
 
                     // 启动后台定时检测任务：每 1000ms 检测一次摩托状态，覆盖整个拾取过程
                     _pickDismountCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -3012,6 +3047,7 @@ public class AutoFightTask : ISoloTask
                             // 复活药CD时 canRevive=false 但 needRevive=true，不应退出，等复活药CD好
                             if (!needRevive && needHeal)
                             {
+                                AutoFightTask.IsTpForRecover = false;
                                 Logger.LogInformation("自动吃药：吃药数量超额退出");
                                 _medicineState.ExitMedicineScope(shouldEnableReviveCheck: true);
                                 return;

@@ -22,7 +22,7 @@ public class AnomalyDetector
     private static readonly ILogger Logger = App.GetLogger<AnomalyDetector>();
 
     /// <summary>联机"已倒下"色块检测二次确认的等待间隔（毫秒）。</summary>
-    private const int MultiplayerDefeatedRecheckDelayMs = 400;
+    private const int MultiplayerDefeatedRecheckDelayMs = 1000;
 
     private RecognitionObject? _frozenRo;
     private RecognitionObject? _whiteFurinaRo;

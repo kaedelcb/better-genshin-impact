@@ -84,3 +84,70 @@
 ```
 dotnet build BetterGenshinImpact.sln -c Debug
 ```
+
+---
+
+# KIRO 经验记忆（从 KIRO 移植，永久规则）
+
+以下规则继承自本项目此前在 KIRO 中长期开发积累的经验记忆。完整原文存档在 `.agents/rules/`（12 份），历史任务档案索引在 `.agents/memory/kiro-task-index.md`（223 条任务记录），历史规格文档在 `.kiro/specs/`。KIRO 原档仍保留在 `C:\Users\Administrator\.kiro\`（两处冲突时以较新者为准，不确定就询问用户）。
+
+⚠️ **KIRO 原档是只读的**：`C:\Users\Administrator\.kiro\` 和工作区 `.kiro\` 是 KIRO 正在使用的活数据（用户仍会回去用 KIRO）。**禁止修改、移动、删除其中的任何文件**，读取时也只做只读操作。本环境的一切工作只在本环境的副本（`.agents\`）中进行；若 KIRO 更新了其规则/specs，本环境副本按需重新复制同步（原档始终只读）。
+
+## 1. 受保护路径（绝对禁止删除）★最高优先级
+
+`BetterGenshinImpact\bin\x64\Debug\net8.0-windows10.0.22621.0\User`（以及所有上层目录：`bin`、`bin\x64`、`bin\x64\Debug`、`bin\x64\Debug\net8.0-windows10.0.22621.0`、项目根目录）包含用户长期积累且**不在 git 跟踪**的运行时数据（截图、录像、KeyMouse 宏、运行时 config.json、自定义寻路 JSON、JS 脚本本地修改、调试数据、文档）。
+
+- 任何理由（清缓存、重置项目、清理临时文件）都**禁止**递归删除这些路径。
+- 确需删除时必须连续 3 次获得用户明确同意，模糊回答（"嗯"/"ok"/"继续"）不算数。
+- 清理编译缓存只允许删 `obj` 目录或单个 .pdb/.dll 文件；**禁止**对任何 `bin` 下目录使用 `Remove-Item -Recurse`。
+- 历史事故：2026-05-26 曾因 `Remove-Item -Recurse -Force obj bin` 永久删除了用户 10 年积累的数据。绝不允许重演。
+
+## 2. 输出语言
+
+面向用户的所有输出（回复、提问、总结、方案、表格、注释中给用户看的说明）一律简体中文；内部思考可用英文。
+
+## 3. 始终生效的核心纪律（详情见 `.agents/rules/` 对应文件）
+
+### 3.1 改动流程：三阶段自审（`pre-submit-review.md`）
+任何改动：需求分析（画影响半径三问 → 风险分级 → 改动点清单）→ 设计（边界/依赖/兼容性审视；首选"可选参数+安全默认值 / 新增分支 / 抽纯函数"，最后才考虑原地改语义；显式枚举不可破坏清单）→ 执行后三层验证（编译 0 error → 静态 grep 确认无辜调用方未变、旧符号零命中 → 行为层测试）。禁止：跳过分析直接动手、改完不查就提交、连续失败后继续"试修复"。
+
+### 3.2 诊断纪律（`debugging-reasoning-discipline.md`）
+diagnose-first 而非 fix-first；连续失败 2 次后禁止再改修复代码，只能做诊断动作（日志/标记/二分/打印中间状态）；先测最便宜的承重假设（"我改的代码真的在用户跑的程序里吗"）；用户报告"零变化"是诊断金矿；连续失败 3 次触发战略暂停；**绝不谎报成功**——无法亲眼确认的结果措辞只能是"请你确认"；归因顺序：我的假设 > 我的实现 > 环境 > 用户操作。
+
+### 3.3 防回归与设计原则（`regression-safe-change-discipline.md` + `software-design-principles.md`）
+改动落地前三问：改的符号被谁引用 / 哪些调用方该变、哪些必须不变 / 改法能否做到"目标变、无辜不变"。共享代码默认"加法、默认值、门控"，禁止为一个调用方改共享函数的无条件行为。先用 SRP/CQS/机制策略分离/依赖倒置/KISS 等公认原则审方案，不现攒规则。每个改动列出"必须逐字节不变"清单并有守护手段（PBT/单测/显式论证）。
+
+### 3.4 UI 布局（`ui-layout-debugging-discipline.md`）
+"多次修改后画面零变化"= 立即停止猜测（改动没生效或改错层级）；推理与现实矛盾时错的一定是自己的前提；上可见证据（涂色分层/打印 ActualWidth/唯一标记验证编译生效）；从外往内查容器链；记住 StackPanel 不拉伸子元素、Grid 默认拉伸、Stretch+显式 Width 会居中；换方案前撤干净上一版实验代码。
+
+### 3.5 任务执行与委派（`task-execution-discipline.md` + `parallel-task-execution.md` + `spec-quality-checklist.md`）
+- 任务拆解用 todo_write 跟踪（同时只允许一个 in_progress）；可并行批次要求：文件不相交、无数据依赖、prompt 自包含、验证隔离，否则串行；编译/测试/全局扫描必须串行。
+- 委派 subagent 的 prompt 必含：任务编号+参考文档路径、目标文件+行号+当前内容、改动前→改动后片段、明确"不要碰"清单、验证步骤。subagent 失败立即停止并报告，同一 prompt 失败 2 次先改 prompt。
+- 静默 catch 是禁忌（要带 LogWarning 和注释说明理由）。
+- 不夸大报告：编译过=如实说编译范围；测试没跑过不写"全部通过"。
+- 本项目 BGI 联机代码模式（决策纯函数、SignalR 先订阅后 invoke、多世界轮换防误终止双标志、AutoHoeingConfig 字段三处对称、协议字段新旧兼容）见 `bgi-implementation-patterns.md`；写 spec 时按 `spec-quality-checklist.md` 逐项过。
+
+### 3.6 测试项目阻塞隔离（`task-execution-discipline.md` §六）
+仓库测试项目经常被其他进行中任务的未实现类型阻塞编译。处理：先判定归属（grep 确认报错类型在生产代码零命中）→ 主项目 `dotnet build BetterGenshinImpact/BetterGenshinImpact.csproj -c Debug` 验证本任务生产代码 → 本任务测试文件用编译诊断验证 → **不擅自删他人测试文件** → 报告事实而不阻塞推进。
+
+## 4. 工具映射（KIRO 术语 → 本环境）
+
+| KIRO | 本环境 |
+|------|--------|
+| grepSearch | `grep` 工具 |
+| getDiagnostics | `pwsh` 运行 `dotnet build` 验证 |
+| readFile | `read` 工具 |
+| fsWrite / fsAppend | `write` / `edit` 工具（本环境 `write` 无 50 行 abort 限制，但大文件仍按意义单元分段写入并验证） |
+| strReplace | `edit` 工具 |
+| listDirectory | `glob` 工具 / `pwsh` Get-ChildItem |
+| subagent 委派 | `subagent` / `subagent_fork` 工具 |
+| 任务状态机 | `todo_write` 工具 |
+
+详见 `.agents/rules/README.md`。
+
+## 5. 历史经验导航（动手前先查）
+
+- 做过什么：`.agents/memory/kiro-task-index.md`（223 条任务：最后活动时间、任务数、执行状态、是否有 spec 档案）
+- 每项工作的完整设计文档：`.kiro/specs/<任务名>/`（requirements / design / tasks / bugfix）
+- 任务执行细节：`C:\Users\Administrator\.kiro\tasks\ada854181d8b03f7\<任务名>.meta.json`
+- 新任务开始前：先 grep 历史索引和 specs，看是否做过类似功能、当时的决策和踩坑记录，避免重蹈覆辙。
