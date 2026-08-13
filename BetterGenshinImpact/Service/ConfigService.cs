@@ -82,6 +82,7 @@ public class ConfigService : IConfigService
                 return new AllConfig();
             }
 
+            config.AutoPickConfig.MigrateLegacyConfig();
             Config = config;
             return config;
         }
