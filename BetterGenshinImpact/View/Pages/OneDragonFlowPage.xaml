@@ -1142,30 +1142,150 @@
                                 <ui:TextBlock Grid.Row="1"
                                               Grid.Column="1"
                                               Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                              Text="最高的等级"
-                                              HorizontalAlignment="Right"
+                                              Text="最高的星级"
                                               TextWrapping="Wrap" />
-                                <StackPanel 
-                                    Grid.Row="0"
-                                    Grid.Column="2"
-                                    Grid.RowSpan="2"
-                                    Margin="15,0,0,0"
-                                    Orientation="Horizontal" HorizontalAlignment="Right">
-                                    <ComboBox
-                                        Width="60"
-                                        Margin="0,0,13,0"
-                                        ItemsSource="{Binding  Source={x:Static pages:TaskSettingsPageViewModel.ArtifactSalvageStarList}}"
-                                        SelectedItem="{Binding Config.AutoArtifactSalvageConfig.MaxArtifactStar, Mode=TwoWay}">
-                                    </ComboBox>
-                                    <ui:ToggleSwitch
-                                        Margin="0,0,36,0"
-                                        IsChecked="{Binding Config.AutoDomainConfig.AutoArtifactSalvage, Mode=TwoWay}" />
-                                </StackPanel>
+                                
+                                <!-- 弹窗 -->
+                                <Popup Grid.Row="0" Grid.Column="0" x:Name="ResinPopup"
+                                       Placement="Center"
+                                       PlacementTarget="{Binding ElementName=ToggleButton}"
+                                       IsOpen="{Binding IsChecked, ElementName=ToggleButton}"
+                                       AllowsTransparency="True"
+                                       PopupAnimation="Fade"
+                                       HorizontalAlignment="Center"
+                                       Focusable="False" 
+                                       StaysOpen="False">
+                                    <Border CornerRadius="8"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Top"
+                                            Background="{DynamicResource  ApplicationBackgroundBrush}"
+                                            BorderBrush="{DynamicResource SystemAccentColorPrimaryBrush}"
+                                            BorderThickness="1"
+                                            Margin="0,0,0,0">
+                                    
+                                        <StackPanel Margin="12">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="*" />
+                                                </Grid.RowDefinitions>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <!-- 模式选择 -->
+                                                <ToggleButton Grid.Column="0"
+                                                        Margin="0,0,0,0"
+                                                        IsChecked="{Binding Config.AutoDomainConfig.SpecifyResinUse, Mode=TwoWay}"
+                                                        Content="模式切换" />
+                                                
+                                                <!-- 根据模SpecifyResinUse显示不同的文字 -->
+                                                <ui:TextBlock Grid.Column="1"
+                                                                Margin="12,0,0,0"
+                                                                FontSize="14"
+                                                                VerticalAlignment="Center"
+                                                                HorizontalAlignment="Right"
+                                                                Text="先用浓缩,后原粹,其余不用"
+                                                                Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                                TextWrapping="Wrap"
+                                                                Visibility="{Binding Config.AutoDomainConfig.SpecifyResinUse, Converter={StaticResource BooleanToVisibilityRevertConverter}}" />
+                                                <ui:TextBlock Grid.Column="1"
+                                                                Margin="5,0,0,0"
+                                                                FontSize="14"
+                                                                VerticalAlignment="Center"
+                                                                HorizontalAlignment="Right"
+                                                                Text="按下方配置数量使用树脂"
+                                                                Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                                TextWrapping="Wrap"
+                                                                Visibility="{Binding Config.AutoDomainConfig.SpecifyResinUse, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            </Grid>
+                                            
+                                            <StackPanel Margin="0,10,0,0" IsEnabled="{Binding Config.AutoDomainConfig.SpecifyResinUse}" Visibility="{Binding Config.AutoDomainConfig.SpecifyResinUse, Converter={StaticResource BooleanToVisibilityConverter}}">   
+                                                <!-- 细线 -->
+                                                <Separator Height="1"
+                                                           Margin="0,0,0,0"
+                                                           Background="Gray"/>
+                                                
+                                                <!-- 原粹树脂设置 -->
+                                                <StackPanel Orientation="Horizontal"
+                                                            Margin="0,10,0,12">
+                                                    <ui:TextBlock Text="原粹树脂刷取次数："
+                                                                  VerticalAlignment="Center"
+                                                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                                  Margin="0,0,8,0" />
+                                                    <ui:NumberBox Value="{Binding Config.AutoDomainConfig.OriginalResinUseCount, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                  Minimum="0"
+                                                                  SmallChange="1"
+                                                                  LargeChange="5"
+                                                                  ClearButtonEnabled="False"
+                                                                  SpinButtonPlacementMode="Inline"
+                                                                  Width="120"/>
+                                                </StackPanel>
+                                                
+                                                <!-- 浓缩树脂设置 -->
+                                                <StackPanel Orientation="Horizontal"
+                                                            Margin="0,0,0,12">
+                                                    <ui:TextBlock Text="浓缩树脂刷取次数："
+                                                                  VerticalAlignment="Center"
+                                                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                                  Margin="0,0,8,0" />
+                                                    <ui:NumberBox Value="{Binding Config.AutoDomainConfig.CondensedResinUseCount, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                  Minimum="0"
+                                                                  SmallChange="1"
+                                                                  LargeChange="5"
+                                                                  ClearButtonEnabled="False"
+                                                                  SpinButtonPlacementMode="Inline"
+                                                                  Width="120" />
+                                                </StackPanel>
 
-                        
+                                                <!-- 须臾树脂设置 -->
+                                                <StackPanel Orientation="Horizontal"
+                                                            Margin="0,0,0,12">
+                                                    <ui:TextBlock Text="须臾树脂刷取次数："
+                                                                  VerticalAlignment="Center"
+                                                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                                  Margin="0,0,8,0" />
+                                                    <ui:NumberBox Value="{Binding Config.AutoDomainConfig.TransientResinUseCount, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                  Minimum="0"
+                                                                  SmallChange="1"
+                                                                  LargeChange="5"
+                                                                  ClearButtonEnabled="False"
+                                                                  SpinButtonPlacementMode="Inline"
+                                                                  Width="120" />
+                                                </StackPanel>
+
+                                                <!-- 脆弱树脂设置 -->
+                                                <StackPanel Orientation="Horizontal"
+                                                            Margin="0,0,0,0">
+                                                    <ui:TextBlock Text="脆弱树脂刷取次数："
+                                                                  VerticalAlignment="Center"
+                                                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                                  Margin="0,0,8,0" />
+                                                    <ui:NumberBox Value="{Binding Config.AutoDomainConfig.FragileResinUseCount, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                  Minimum="0"
+                                                                  SmallChange="1"
+                                                                  LargeChange="5"
+                                                                  ClearButtonEnabled="False"
+                                                                  SpinButtonPlacementMode="Inline"
+                                                                  Width="120" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </Popup>
+                                
                             </Grid>
                         </ui:CardControl.Header>
-                        
+                        <StackPanel Orientation="Horizontal">
+                            <ComboBox
+                                Width="60"
+                                Margin="0,0,10,0"
+                                ItemsSource="{Binding  Source={x:Static pages:TaskSettingsPageViewModel.ArtifactSalvageStarList}}"
+                                SelectedItem="{Binding Config.AutoArtifactSalvageConfig.MaxArtifactStar, Mode=TwoWay}">
+                            </ComboBox>
+                            <ui:ToggleSwitch
+                                Margin="0,0,36,0"
+                                IsChecked="{Binding Config.AutoDomainConfig.AutoArtifactSalvage, Mode=TwoWay}" />
+                        </StackPanel>
                     </ui:CardControl>
 
                     <ui:CardControl Margin="0,0,0,4">
