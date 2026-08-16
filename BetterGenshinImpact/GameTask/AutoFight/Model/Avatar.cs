@@ -35,6 +35,7 @@ using Compunet.YoloSharp;
 using Compunet.YoloSharp.Data;
 using Microsoft.Extensions.DependencyInjection;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
+using BetterGenshinImpact.GameTask.Common.Job;
 
 namespace BetterGenshinImpact.GameTask.AutoFight.Model;
 
@@ -174,6 +175,7 @@ public class Avatar
         AutoFightTask.FightStatusFlag = false;
     }
 
+    private readonly ReturnMainUiTask _returnMainUiTask = new();
 
     /// <summary>
     /// 是否存在角色被击败
@@ -487,6 +489,8 @@ public class Avatar
 
             Sleep(240, Ct);
         }
+        
+        _returnMainUiTask.Start(Ct).Wait(2000,Ct);
         Logger.LogInformation("切换识别失败2:{Name} 索引:{Index}", Name,Index);
         return false;
     }
