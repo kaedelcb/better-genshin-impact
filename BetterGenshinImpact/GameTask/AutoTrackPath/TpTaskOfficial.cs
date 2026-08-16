@@ -40,6 +40,7 @@ namespace BetterGenshinImpact.GameTask.AutoTrackPath;
 /// 基线上游 commit: 9f82e8234（"合并公版新传送模式"，茶包创建时的基线）
 /// 已优选的公版提交：
 ///   494126996 - 修复TpTask小概率传送错误 (#3438)，2026-08-12
+///   4526a1ca8 - 修复传送期间误识别的场景，2026-08-14
 ///
 /// 下次优选公版时，先检查公版 commit 与基线 commit 的 diff，
 /// 将 diff 应用到 #region TeaBag Originals 区域（公版原始方法），
@@ -3409,9 +3410,8 @@ public class TpTaskOfficial
 
                 if (text.Length <= 1)
                 {
-                    // 图标模板已经能够证明这是一个地图候选项。OCR 仅用于名称匹配，
-                    // 识别失败时仍保留候选，让类型、高亮和唯一候选逻辑继续兜底。
-                    text = string.Empty;
+                    // 地图候选项必须同时识别到有效文字，避免仅凭图标、高亮或列表顺序误选传送点。
+                    continue;
                 }
 
                 var clickRect = new Rect(textRect.X, textRect.Y, Math.Min(textRect.Width, 220), textRect.Height).ClampTo(imageRegion.SrcMat);
