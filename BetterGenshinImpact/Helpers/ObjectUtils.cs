@@ -9,7 +9,7 @@ public class ObjectUtils
     [Obsolete("Obsolete")]
     public static byte[] Serialize(object obj)
     {
-        var ms = new MemoryStream();
+        using var ms = new MemoryStream();
         var formatter = new BinaryFormatter();
 #pragma warning disable SYSLIB0011
         formatter.Serialize(ms, obj);
@@ -22,7 +22,7 @@ public class ObjectUtils
     public static object Deserialize(byte[] bytes)
     {
         //利用传来的byte[]创建一个内存流
-        var ms = new MemoryStream(bytes)
+        using var ms = new MemoryStream(bytes)
         {
             Position = 0
         };
@@ -30,7 +30,6 @@ public class ObjectUtils
 #pragma warning disable SYSLIB0011
         var obj = formatter.Deserialize(ms); //把内存流反序列成对象
 #pragma warning restore SYSLIB0011
-        ms.Close();
         return obj;
     }
 }

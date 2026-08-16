@@ -1937,8 +1937,6 @@ public partial class PathExecutor
                     Simulation.SendInput.Keyboard.KeyUp(User32.VK.VK_W);
                     Simulation.SendInput.Mouse.RightButtonUp();
                     PathingConditionConfig.CombatScenesGoBackUp = null;
-                    GC.Collect();//释放内存
-                    GC.WaitForPendingFinalizers();//释放内存
                     
                     // using var ra = CaptureToRectArea();
                     // var pixelValue = ra.SrcMat.At<Vec3b>(32, 67);
@@ -3006,8 +3004,6 @@ public partial class PathExecutor
                 {
                     RunnerContext.Instance.isAutoFetchDispatch = false;
                     _lastGetExpeditionRewardsTime = DateTime.UtcNow; // 无论成功与否都更新时间
-                    GC.Collect();//释放内存
-                    GC.WaitForPendingFinalizers();//释放内存
                 }
             }
         }

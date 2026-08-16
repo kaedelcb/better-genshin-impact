@@ -2069,8 +2069,6 @@ public class AutoFightTask : ISoloTask
                                             }
                                             finally
                                             {
-                                                GC.Collect();//释放内存
-                                                GC.WaitForPendingFinalizers();//释放内存
                                                 Monitor.Exit(PickLock);
                                             }
                                         }

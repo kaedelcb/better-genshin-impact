@@ -271,8 +271,6 @@ public class Avatar
                     Simulation.SendInput.Mouse.RightButtonUp();
                     Simulation.ReleaseAllKey();
                     cts?.Cancel();
-                    GC.Collect();//释放内存
-                    GC.WaitForPendingFinalizers();//释放内存
                     MatchTemplateHelper.CleanupMemory();
                 }
                 
@@ -283,8 +281,6 @@ public class Avatar
                    return;
                 }
                 
-                GC.Collect();//释放内存
-                GC.WaitForPendingFinalizers();//释放内存
                 MatchTemplateHelper.CleanupMemory();
                 Logger.LogWarning("游泳检测：回到战斗地点失败");
             }

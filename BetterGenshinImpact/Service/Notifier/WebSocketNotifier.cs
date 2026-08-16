@@ -76,6 +76,7 @@ namespace BetterGenshinImpact.Service.Notifier
         {
             _webSocket.Dispose();
             _cts.Cancel();
+            _cts.Dispose();
         }
 
         public async Task SendNotificationAsync(BaseNotificationData notificationData)

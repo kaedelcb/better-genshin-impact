@@ -129,6 +129,7 @@ public class CameraOrientationCalculator : IDisposable
     {
         _rotationRemapDataX.Dispose();
         _rotationRemapDataY.Dispose();
+        _alphaMask1Remap.Dispose();
         _alphaMask2Remap.Dispose();
     }
 }

@@ -53,7 +53,7 @@ namespace BetterGenshinImpact.Helpers.Extensions
 
         public static BitmapImage ToBitmapImage(this Bitmap bitmap)
         {
-            var ms = new MemoryStream();
+            using var ms = new MemoryStream();
             bitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Bmp);
             var image = new BitmapImage();
             image.BeginInit();

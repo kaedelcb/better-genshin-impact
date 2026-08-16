@@ -605,6 +605,7 @@ public partial class MusicPageViewModel : ViewModel
             ref _refreshCancellationTokenSource,
             refreshCancellationTokenSource);
         previousRefresh?.Cancel();
+        previousRefresh?.Dispose();
         var cancellationToken = refreshCancellationTokenSource.Token;
 
         IsRefreshing = true;
@@ -687,6 +688,7 @@ public partial class MusicPageViewModel : ViewModel
             ref _coverLoadCancellationTokenSource,
             coverLoadCancellationTokenSource);
         previous?.Cancel();
+        previous?.Dispose();
         _ = LoadCoversAsync([.. MusicItems], coverLoadCancellationTokenSource);
     }
 

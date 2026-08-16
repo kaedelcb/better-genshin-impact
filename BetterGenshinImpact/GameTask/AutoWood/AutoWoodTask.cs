@@ -449,7 +449,7 @@ public partial class AutoWoodTask : ISoloTask
                 EnterGame(taskParam);
             }
 
-            GC.Collect();
+            // 任务结束，不再需要强制 GC，using 和 Dispose 已保证资源正常释放
         }
         catch (Exception ex)
         {

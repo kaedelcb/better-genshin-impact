@@ -133,7 +133,6 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             {
                 blackboard.Reset();
 
-                var prevManualGc = DateTime.MinValue;
                 while (!ct.IsCancellationRequested)
                 {
                     if (!SystemControl.IsGenshinImpactActiveByProcess())
@@ -159,12 +158,6 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                         _logger.LogInformation("钓鱼结束");
 
                         break;
-                    }
-
-                    if ((DateTime.Now - prevManualGc).TotalSeconds > 2)
-                    {
-                        GC.Collect();
-                        prevManualGc = DateTime.Now;
                     }
                 }
             }

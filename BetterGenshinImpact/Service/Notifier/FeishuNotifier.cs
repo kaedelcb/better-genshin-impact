@@ -152,7 +152,7 @@ public class FeishuNotifier : INotifier
     {
         string imageKey = string.Empty;
         MultipartFormDataContent multipartContent = new MultipartFormDataContent();
-        MemoryStream ms = new MemoryStream();
+        using MemoryStream ms = new MemoryStream();
         await image.SaveAsPngAsync(ms);
         ms.Seek(0, SeekOrigin.Begin);
         ByteArrayContent byteContent = new ByteArrayContent(ms.ToArray());
