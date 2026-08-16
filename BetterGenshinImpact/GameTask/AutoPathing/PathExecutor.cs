@@ -687,7 +687,7 @@ public partial class PathExecutor
                         {
                             bool __retryForce = _pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment;
                             Logger.LogWarning("[联机] 主循环兜底路径检测到复苏信号，前往七天神像回血{Force}", __retryForce ? "（重试模式强制去神像）" : "");
-                            await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null, forceStatue: __retryForce);
+                            await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: __retryForce);
                             throw new RetryException("联机：主循环检测到已倒下复苏，神像回血后按异常处理");
                         }
                         
@@ -1249,7 +1249,7 @@ public partial class PathExecutor
                                         }
 
                                         Logger.LogWarning("[联机] 战斗中曾触发复苏（已倒下色块检测），战斗结束后前往七天神像回血{Force}", __retryForce ? "（重试模式强制去神像）" : "");
-                                        await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null, forceStatue: __retryForce);
+                                        await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: __retryForce);
 
                                         // === 线路重试模式 v2（§0）：回神像后不立即重跑，先到"段出口屏障"与队友碰头 ===
                                         // 置"本段有人死过"标志 + 标记走屏障路径 → break 出 waypoint 循环直达段出口屏障。
@@ -2137,7 +2137,7 @@ public partial class PathExecutor
             Logger.LogInformation("复苏完成");
             await Delay(4000, ct);
             // 血量肯定不满，直接去七天神像回血
-            await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null);
+            await TpStatueOfTheSeven(requireLoadingScreen: true);
         }
 
         if (PartyConfig.SkipPartySwitch)
@@ -2247,7 +2247,7 @@ public partial class PathExecutor
 
             if (forceTp) // 强制传送模式
             {
-                await new TpTask(ct).TpToStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null); // fix typos
+                await new TpTask(ct).TpToStatueOfTheSeven(requireLoadingScreen: true); // fix typos
                 success = await new SwitchPartyTask().Start(partyName, ct);
             }
             else // 优先原地切换模式
@@ -2258,7 +2258,7 @@ public partial class PathExecutor
                 }
                 catch (PartySetupFailedException)
                 {
-                    await new TpTask(ct).TpToStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null);
+                    await new TpTask(ct).TpToStatueOfTheSeven(requireLoadingScreen: true);
                     success = await new SwitchPartyTask().Start(partyName, ct);
                 }
             }
@@ -2796,7 +2796,7 @@ public partial class PathExecutor
             
             // 联机模式：低血量去七天神像，由后续 RetryException 处理 Reviving 上报（带 targetProgress）
             // 这里不上报，避免覆盖 targetProgress 为 -1
-            await TpStatueOfTheSeven(switchOnly, requireLoadingScreen: MultiplayerCoordinator != null);
+            await TpStatueOfTheSeven(switchOnly, requireLoadingScreen: true);
             if (!AutoEatRecoveryDecisions.ShouldRetryRoute(PathingConditionConfig.AutoEatCount)) return;
             throw new RetryException("回血完成后重试路线-1");
         }
@@ -2806,7 +2806,7 @@ public partial class PathExecutor
             Logger.LogInformation("复苏完成-1");
             await Delay(4000, ct);
             // 联机模式：复苏后去七天神像，由后续 RetryException 处理 Reviving 上报
-            await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null);
+            await TpStatueOfTheSeven(requireLoadingScreen: true);
             if (!AutoEatRecoveryDecisions.ShouldRetryRoute(PathingConditionConfig.AutoEatCount)) return;
             throw new RetryException("回血完成后重试路线-2");
         }
@@ -3019,7 +3019,7 @@ public partial class PathExecutor
             var forceTp = waypoint.Action == ActionEnum.ForceTp.Code;
             TpTask tpTask = new TpTask(ct);
             await TryGetExpeditionRewardsDispatch(tpTask);
-            var (tpX, tpY) = await tpTask.Tp(waypoint.GameX, waypoint.GameY, waypoint.MapName, forceTp, requireLoadingScreen: MultiplayerCoordinator != null, fastSyncId: fastSyncId);
+            var (tpX, tpY) = await tpTask.Tp(waypoint.GameX, waypoint.GameY, waypoint.MapName, forceTp, requireLoadingScreen: true, fastSyncId: fastSyncId);
             var (tprX, tprY) = MapManager.GetMap(waypoint.MapName, waypoint.MapMatchMethod)
                 .ConvertGenshinMapCoordinatesToImageCoordinates(new Point2f((float)tpX, (float)tpY));
             Navigation.SetPrevPosition(tprX, tprY); // 通过上一个位置直接进行局部特征匹配
@@ -3192,7 +3192,7 @@ public partial class PathExecutor
             {
                 Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                 Logger.LogWarning("[联机] 走路中检测到复苏信号，跳过本段，前往七天神像回血");
-                await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null);
+                await TpStatueOfTheSeven(requireLoadingScreen: true);
                 throw new RetryException("联机：走路中复苏，神像回血后跳到下一段汇合");
             }
 
@@ -3711,7 +3711,7 @@ public partial class PathExecutor
                             {
                                 bool __retryForce = _pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment;
                                 Logger.LogWarning("[联机] 路上检测到复苏 + 位置不变（疑似复苏后卡住），跳过随机脱困，前往七天神像回血{Force}", __retryForce ? "（重试模式强制去神像）" : "");
-                                await TpStatueOfTheSeven(requireLoadingScreen: MultiplayerCoordinator != null, forceStatue: __retryForce);
+                                await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: __retryForce);
                                 throw new RetryException("联机：路上复苏 + 卡住，神像回血后跳到下一段汇合");
                             }
 

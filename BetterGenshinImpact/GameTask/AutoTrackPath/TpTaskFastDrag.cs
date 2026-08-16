@@ -836,7 +836,12 @@ public class TpTaskFastDrag
         bool suppressClickSet = false;
         try
         {
-            if (requireLoadingScreen)
+            // 复苏抑制（SuppressAutoRevivalClick）是联机专用副作用：抑制 AnomalyDetector 在传送中
+            // 自动点复苏按钮。单机传送开启过渡页校验（requireLoadingScreen=true，方案1b）时不得带入
+            // 此抑制——单机传送中遇到复苏界面应保持原有的自动点击行为，行为逐字节不变。
+            // 联机路径 requireLoadingScreen=true 且 CurrentMultiplayerCoordinator != null → 恒进，联机行为不变。
+            if (requireLoadingScreen
+                && BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.CurrentMultiplayerCoordinator != null)
             {
                 TpTask.SuppressAutoRevivalClick = true;
                 suppressClickSet = true;
@@ -848,12 +853,12 @@ public class TpTaskFastDrag
                 bool seen = await WaitForLoadingScreenAsync(timeoutMs: 6000, intervalMs: 200, fastSyncId: fastSyncId);
                 if (!seen)
                 {
-                    TaskControl.Logger.LogWarning("[联机] 未观察到传送过渡页，疑似传送被打断（点击传送后角色可能已倒地/被打断）");
+                    TaskControl.Logger.LogWarning("[传送] 未观察到传送过渡页，疑似传送被打断（点击传送后角色可能已倒地/被打断）");
                     throw new TeleportLoadingTimeoutException("阶段 1 在 6s 内未观察到传送过渡页");
                 }
                 else
                 {
-                    TaskControl.Logger.LogInformation("[联机] 观察到传送过渡页，继续等待传送完成");
+                    TaskControl.Logger.LogInformation("[传送] 观察到传送过渡页，继续等待传送完成");
                 }
             }
 
@@ -868,8 +873,13 @@ public class TpTaskFastDrag
                 // 阶段 2 复苏弹窗检测（仅联机路径，防御阶段 1 之后才出现弹窗的罕见场景）
                 if (requireLoadingScreen && Bv.IsInRevivePrompt(capture))
                 {
-                    TaskControl.Logger.LogWarning("[联机] 传送过程中检测到复苏弹窗（阶段 2），疑似传送失败 + 角色死亡");
-                    BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.SignalMultiplayerRevivalFromExternal();
+                    TaskControl.Logger.LogWarning("[传送] 传送过程中检测到复苏弹窗（阶段 2），疑似传送失败 + 角色死亡");
+                    // 只写联机复苏信号（单机无人消费该信号位，避免误入联机信号链路且不打 [联机] 日志）；
+                    // 抛超时让上层重试，单机联机一致。
+                    if (BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.CurrentMultiplayerCoordinator != null)
+                    {
+                        BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.SignalMultiplayerRevivalFromExternal();
+                    }
                     throw new TeleportLoadingTimeoutException("传送中检测到复苏弹窗，传送失败");
                 }
 
@@ -922,7 +932,7 @@ public class TpTaskFastDrag
                     RunnerContext.Instance.IsSuspend,
                     TaskControl.IsSuspendedByNetwork))
             {
-                TaskControl.Logger.LogInformation("[联机] 检测到暂停/网络断开，跳过传送过渡页守卫，回退原判据");
+                TaskControl.Logger.LogInformation("[传送] 检测到暂停/网络断开，跳过传送过渡页守卫，回退原判据");
                 return true;
             }
 
@@ -931,8 +941,13 @@ public class TpTaskFastDrag
             // 复苏弹窗优先于过渡页判定（在过渡页之前的瞬间，复苏弹窗已经显示）
             if (Bv.IsInRevivePrompt(capture))
             {
-                TaskControl.Logger.LogWarning("[联机] 传送过程中检测到复苏弹窗（阶段 1），疑似传送失败 + 角色死亡");
-                BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.SignalMultiplayerRevivalFromExternal();
+                TaskControl.Logger.LogWarning("[传送] 传送过程中检测到复苏弹窗（阶段 1），疑似传送失败 + 角色死亡");
+                // 只写联机复苏信号（单机无人消费该信号位，避免误入联机信号链路且不打 [联机] 日志）；
+                // 抛超时让上层重试，单机联机一致。
+                if (BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.CurrentMultiplayerCoordinator != null)
+                {
+                    BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.SignalMultiplayerRevivalFromExternal();
+                }
                 throw new TeleportLoadingTimeoutException("传送中检测到复苏弹窗，传送失败");
             }
 
@@ -2952,18 +2967,38 @@ public class TpTaskFastDrag
     /// <returns></returns>
     public double GetBigMapZoomLevel(ImageRegion region)
     {
-        //失败后重试2次
-        double s = 0;
-        for (int i = 0; i < 10; i++)
+        // 失败重试：原实现是死代码——底层 Bv.GetBigMapScale 在找不到缩放按钮时直接 throw，
+        // for 循环里 if(s>0) break 与「重试中」日志永远走不到，第一次就抛普通 Exception，
+        // 打断传送。现改为：捕获 throw 并重新截图重试（避免同一帧失败画面反复重试），
+        // 仍全部失败则返回显示档兜底值，绝不再向外裸抛普通 Exception 中断（复苏路径）。
+        //
+        // 兜底值语义（DisplayTpPointZoomLevel=4.4，普通地图显示档）：
+        //   - 普通地图：命中各调用点 if(zoomNow > display + threshold) 判据的反面 → 跳过本轮缩放微调，行为安全；
+        //   - 霜月/旧日之海：4.4 > 3.0 会触发一次「降到 ≤3.0」调整，而这两个地图的传送点本就仅 ≤3.0 渲染，
+        //     调整方向正确；
+        //   - 原实现失败时返回 6.0（最大缩小），那才是真正有害的（强制触发放大/认偏），本改动一并修正。
+        for (int i = 0; i < 3; i++)
         {
-            s = Bv.GetBigMapScale(region);
-            if( s > 0) break;
-             TaskControl.Logger.LogWarning("获取大地图缩放级别失败，重试中...（{Attempt}/2）", i + 1);
-             Thread.Sleep(100);
+            using var ra = CaptureToRectArea();
+            try
+            {
+                double s = Bv.GetBigMapScale(ra);
+                if (s > 0)
+                {
+                    // 1~6 的缩放等级
+                    return (-5 * s) + 6;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                TaskControl.Logger.LogWarning("获取大地图缩放级别失败（{Attempt}/3），重试中...", i + 1);
+                TaskControl.Logger.LogDebug(ex, "GetBigMapScale 失败详情（{Attempt}/3）", i + 1);
+            }
+            Thread.Sleep(100);
         }
-        
-        // 1~6 的缩放等级
-        return (-5 * s) + 6;
+
+        TaskControl.Logger.LogWarning("获取大地图缩放级别连续失败，返回显示档兜底值 {Zoom:0.00}，跳过本轮缩放微调", DisplayTpPointZoomLevel);
+        return DisplayTpPointZoomLevel;
     }
 
     /// <summary>

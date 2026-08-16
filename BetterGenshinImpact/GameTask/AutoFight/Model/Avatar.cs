@@ -347,7 +347,20 @@ public class Avatar
             try
             {
                 var tpTask = new TpTask(ct);
-                tpTask.TpToStatueOfTheSeven(requireLoadingScreen: BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.CurrentMultiplayerCoordinator != null).Wait(ct);
+                try
+                {
+                    tpTask.TpToStatueOfTheSeven(requireLoadingScreen: true).Wait(ct);
+                }
+                catch (Exception tpEx) when (tpEx is not OperationCanceledException)
+                {
+                    // 去神像传送安全网（teleport-single-failure-must-not-kill-task fix）：
+                    // 原 .Wait() 会把内部任意普通 Exception（如 GetBigMapScale 的「当前未处于大地图界面」）
+                    // 包成 AggregateException 冒到 Pathing；Pathing 只认 RetryException，不识别 → 直接杀掉整个寻路任务。
+                    // 这里捕获全部非取消异常，放弃本次去神像，抛回原 ex（RetryException），让上层按既定重试语义重跑，
+                    // 给药恢复链路一个「重试而非死亡」的机会。取消不拦截，保持调用方取消语义。
+                    Logger.LogWarning(tpEx, "去七天神像传送失败，放弃本次去神像，交回上层重试。原因：{Msg}", tpEx.Message);
+                    throw ex;
+                }
             }
             finally
             {
