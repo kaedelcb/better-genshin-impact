@@ -83,6 +83,7 @@ public class TpTask
         // 记录坐标传送耗时（打开大地图到返回主界面），传送成功后把队伍 CD 时间戳整体后推该时长，抵消误差。
         // 在分发器层包一次即同时覆盖公版(_official)与茶包版(_fastDrag)，不重复补偿。
         // 纯内存补偿，不新增任何截图/OCR/等待，不改传送逻辑；异常/超时不进入补偿（直接透传）。
+        // 仅单人世界补偿：联机（多人世界）传送/加载期间游戏世界不暂停、CD 正常流逝，不能把这段当冻结时间。
         var tpStart = DateTime.UtcNow;
         (double, double) result;
         if (UseOfficial)
@@ -94,7 +95,11 @@ public class TpTask
             result = await _fastDrag.Tp(tpX, tpY, mapName, force, requireLoadingScreen, fastSyncId);
         }
 
-        RunnerContext.Instance.CompensateFrozenCd(DateTime.UtcNow - tpStart);
+        // 联机锄地任务运行中（CurrentMultiplayerCoordinator != null）说明处于多人世界，CD 不冻结，跳过补偿。
+        if (BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.CurrentMultiplayerCoordinator == null)
+        {
+            RunnerContext.Instance.CompensateFrozenCd(DateTime.UtcNow - tpStart);
+        }
         return result;
     }
 

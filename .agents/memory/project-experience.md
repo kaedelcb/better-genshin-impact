@@ -33,3 +33,12 @@
   - 新增 `GetMavikaIconState()` 惰性缓存（跳飞/骑行/禁用冲刺三处共用）
   - 需补字段：`MwkJumpFlyDistance`（int, 75）、`MwkDisableSprintEnabled`（bool, false）、`MwkJumpFlySprintCount`（int, 0）
   - 注意：`ImageFeatureScorer` 依赖 `AutoFightOfficial.Model` 命名空间
+
+## 联机锄地血条高度阈值（AutoFightSeek）
+
+- [2026-08-16] 联机锄地中怪物血条高度上限判断 6→8 放宽（方案 B：只联机放宽，单机保持 6）
+  - **引擎路由**：联机锄地恒走茶包版——`OfficialAutoFightRouter.UseOfficial(config, isMultiplayerHoeing)` 联机返回 false；公版 `AutoFightOfficial` 不参与联机锄地
+  - **联机信号**：`PathingConditionConfig.MultiplayerFightTimeoutOverride.HasValue`（AutoHoeingTask 进入联机时设置、Start finally 清空）
+  - **同名文件**：`AutoFightSeek.cs` 有两份——`GameTask/AutoFight/`（茶包版，联机）vs `GameTask/AutoFightOfficial/`（公版），改联机行为别误改公版
+  - **共享函数分流模板**：`MoveForwardTask.MoveForwardAsync` 被单机+联机共用（4 处调用），改联机行为 = 加可选参数（默认=单机旧值 6）+ `AutoFightSeekDecisions.GetNearHeightThreshold(isMultiplayerHoeing)` 纯函数（联机 8/单机 6）+ 调用点传联机信号
+  - **未触碰**：公版副本保持 6；`AutoFightJsonTask`（单机 JS）不传参吃默认 6
