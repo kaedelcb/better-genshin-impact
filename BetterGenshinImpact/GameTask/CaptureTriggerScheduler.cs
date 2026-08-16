@@ -19,11 +19,14 @@ internal sealed class CaptureTriggerScheduler : IDisposable
     private readonly OverlayMetricsService? _metricsService;
     private readonly Func<IGameCapture?> _gameCaptureProvider;
     private readonly System.Timers.Timer _captureTimer = new();
+    private readonly object _captureLifecycleLocker = new();
     private List<ITaskTrigger>? _triggers;
     private static readonly object _captureLocker = new();
     private static readonly object _triggerListLocker = new();
     private int _frameIndex;
     private int _skipNextFrame;
+    private bool _acceptCaptureFrames;
+    private int _activeCaptureFrames;
     private DateTime _prevManualGc = DateTime.MinValue;
     private GameUiCategory PrevGameUiCategory = GameUiCategory.Unknown; // 上一个UI类别
     private DateTime PrevGameUiChangeTime = DateTime.Now; // 上一次UI变化时间
@@ -111,14 +114,27 @@ internal sealed class CaptureTriggerScheduler : IDisposable
 
     public void Stop()
     {
-        _captureTimer.Stop();
+        lock (_captureLifecycleLocker)
+        {
+            // 先禁止新帧进入，再等待已经进入的帧完整退出，避免截图资源被提前释放。
+            _acceptCaptureFrames = false;
+            _captureTimer.Stop();
+            while (_activeCaptureFrames > 0)
+            {
+                Monitor.Wait(_captureLifecycleLocker);
+            }
+        }
     }
 
     public void StartTimer()
     {
-        if (!_captureTimer.Enabled)
+        lock (_captureLifecycleLocker)
         {
-            _captureTimer.Start();
+            _acceptCaptureFrames = true;
+            if (!_captureTimer.Enabled)
+            {
+                _captureTimer.Start();
+            }
         }
     }
 
@@ -136,6 +152,35 @@ internal sealed class CaptureTriggerScheduler : IDisposable
     }
 
     public void ProcessCaptureFrame(object? sender, EventArgs e)
+    {
+        lock (_captureLifecycleLocker)
+        {
+            if (!_acceptCaptureFrames)
+            {
+                return;
+            }
+
+            _activeCaptureFrames++;
+        }
+
+        try
+        {
+            ProcessCaptureFrameCore(sender, e);
+        }
+        finally
+        {
+            lock (_captureLifecycleLocker)
+            {
+                _activeCaptureFrames--;
+                if (_activeCaptureFrames == 0)
+                {
+                    Monitor.PulseAll(_captureLifecycleLocker);
+                }
+            }
+        }
+    }
+
+    private void ProcessCaptureFrameCore(object? sender, EventArgs e)
     {
         var hasLock = false;
         var tickMetrics = new DispatcherTickMetrics();
