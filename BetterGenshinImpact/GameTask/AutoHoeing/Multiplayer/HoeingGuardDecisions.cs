@@ -21,6 +21,9 @@ public static class HoeingGuardDecisions
     ///
     /// 判定顺序（hoeing-guard-false-restart-on-normal-close）：
     ///   防线 B（治本）completedNormally == true  → 恒 false（任务已声明跑完）
+    ///   partyFailed == true                      → 只要 stopReason 非空即判未完成
+    ///     （组队失败时 _guardPlannedRouteCount 恒为 0，未执行线路数为 0 会触发防线 A
+    ///       误短路，故组队失败需显式豁免防线 A，hoeing-multiplayer-party-fail-restart）
     ///   防线 A（治标）unexecutedCount == 0       → 恒 false（一条线路都没落下，铁证）
     ///   否则回落原逻辑：stopReason 非空 ∨ 未执行数达阈值
     ///
@@ -29,12 +32,14 @@ public static class HoeingGuardDecisions
     /// 两道防线在房主中途掉线场景均不成立（仍有未执行线路 + 走不到完成点），
     /// 故 EB-3"真异常照常重开"不受影响。
     ///
-    /// completedNormally 默认 false：保证未显式传参的既有调用方行为与改动前一致。
+    /// completedNormally / partyFailed 默认 false：保证未显式传参的既有调用方行为与改动前一致。
     /// </summary>
     public static bool IsIncompleteRun(
-        string? stopReason, int unexecutedCount, int threshold, bool completedNormally = false)
+        string? stopReason, int unexecutedCount, int threshold,
+        bool completedNormally = false, bool partyFailed = false)
     {
         if (completedNormally) return false;    // 防线 B（治本）：任务已到达正常完成点
+        if (partyFailed) return !string.IsNullOrEmpty(stopReason); // 组队失败：豁免防线 A
         if (unexecutedCount == 0) return false; // 防线 A（治标）：计划线路全部执行完毕
         return !string.IsNullOrEmpty(stopReason) || unexecutedCount >= threshold;
     }
@@ -49,6 +54,10 @@ public static class HoeingGuardDecisions
     /// - isGuardRestartRun：本次是否已是守护重开产生的运行 → 不再重开（条件5，次数上限 1）
     /// - completedNormally：本次是否到达过正常完成点 → 不重开（防线 B，
     ///   hoeing-guard-false-restart-on-normal-close）。默认 false 保证既有调用方零变化。
+    /// - partyFailed：本次组队阶段是否失败 → 豁免防线 A 的"未执行数=0"短路（hoeing-multiplayer-party-fail-restart）。
+    ///   组队失败时尚未开锄，计划/已执行线路数均为 0，防线 A 会把组队失败误判为"全跑完了"，
+    ///   故由调用方在组队失败路径显式传 true，使"只要 stopReason 非空即重开"成立。
+    ///   默认 false 保证既有调用方零变化。
     /// </summary>
     public static bool ShouldRestart(
         bool guardMode,
@@ -59,14 +68,15 @@ public static class HoeingGuardDecisions
         bool userCancelled,
         bool expCapStopTriggered,
         bool isGuardRestartRun,
-        bool completedNormally = false)
+        bool completedNormally = false,
+        bool partyFailed = false)
     {
         if (!guardMode) return false;              // 条件1
         if (!multiplayerEnabled) return false;     // P1 单机零感知
         if (userCancelled) return false;           // 条件3 手动停止
         if (expCapStopTriggered) return false;     // 条件4 经验上限正常停止
         if (isGuardRestartRun) return false;       // 条件5 重开只一次
-        return IsIncompleteRun(stopReason, unexecutedCount, threshold, completedNormally); // 条件2
+        return IsIncompleteRun(stopReason, unexecutedCount, threshold, completedNormally, partyFailed); // 条件2
     }
 
     /// <summary>

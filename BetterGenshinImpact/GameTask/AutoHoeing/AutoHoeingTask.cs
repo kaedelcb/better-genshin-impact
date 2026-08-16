@@ -111,6 +111,12 @@ public class AutoHoeingTask : ISoloTask
     // 加入世界失败、等待组队超时、初始化异常）都会提前 return，标志保持 false。
     // RunTask 据此守卫：false 且非单人调试模式 → 不进入锄地，杜绝成员在自己世界单跑。
     private bool _multiplayerPartyReady;
+    // 本次运行组队阶段是否失败（hoeing-multiplayer-party-fail-restart）。
+    // 组队失败时尚未开锄，_guardPlannedRouteCount 恒为 0，未执行线路数为 0 会触发
+    // HoeingGuardDecisions 防线 A 短路（误判为"全跑完了"）。组队失败路径由 MarkPartyFailed
+    // 同时写入 _stopReason 并置本标志，Start 尾部守护块据此以 partyFailed 豁免防线 A，
+    // 使组队失败也能触发重开。volatile：赋值发生在任务线程，读取发生在 Start 尾部守护块。
+    private volatile bool _partyFailed;
 
     // hoeing-multiplayer-sync-execution-params §C2 通道 C：成员回填时暂存被覆盖的全局
     // PickDropsAfterFightSeconds 原值，finally（§C4）恢复，保证单机 ScanPickTask 零感知。
@@ -693,7 +699,8 @@ public class AutoHoeingTask : ISoloTask
             userCancelled: ct.IsCancellationRequested,   // 原始外部令牌（Start 参数，非字段 _ct）
             expCapStopTriggered: _expCapStopTriggered,
             isGuardRestartRun: _isGuardRestartRun,
-            completedNormally: _completedNormally);      // 防线 B（hoeing-guard-false-restart-on-normal-close）
+            completedNormally: _completedNormally,       // 防线 B（hoeing-guard-false-restart-on-normal-close）
+            partyFailed: _partyFailed);                  // 组队失败豁免防线 A（hoeing-multiplayer-party-fail-restart）
 
         if (guardShouldRestart)
         {
@@ -728,6 +735,19 @@ public class AutoHoeingTask : ISoloTask
         }
     }
 
+    /// <summary>
+    /// 标记组队阶段失败（hoeing-multiplayer-party-fail-restart）：
+    /// 写入 _stopReason（重开判定的异常输入）并置 _partyFailed。
+    /// 组队失败时 _guardPlannedRouteCount 恒为 0（尚未开锄），未执行线路数为 0 会触发
+    /// HoeingGuardDecisions 防线 A 短路；Start 尾部守护块以 _partyFailed 豁免该短路，
+    /// 使组队失败（只要有异常原因）也能触发守护重开，保证全队重新组队跑完。
+    /// </summary>
+    private void MarkPartyFailed(string reason)
+    {
+        _stopReason = reason;
+        _partyFailed = true;
+    }
+
     private async Task InitializeMultiplayerAsync()
     {
         // 进入即置 false；仅在成功走到方法末尾时置 true（见字段注释）。
@@ -742,6 +762,7 @@ public class AutoHoeingTask : ISoloTask
             if (!connected)
             {
                 _logger.LogWarning("[联机] 连接协调服务器失败，降级为单机模式");
+                MarkPartyFailed("连接协调服务器失败");
                 return;
             }
             _logger.LogInformation("[联机] 连接成功");
@@ -808,6 +829,7 @@ public class AutoHoeingTask : ISoloTask
                     if (roomCodeToJoin == null)
                     {
                         _logger.LogError("[联机] 等待超时（{T}s），未能加入任何可用房间，停止联机锄地", _config.PartyTimeoutSeconds);
+                        MarkPartyFailed("加入房间超时（随机模式）");
                         await client.DisposeAsync();
                         return;
                     }
@@ -838,6 +860,7 @@ public class AutoHoeingTask : ISoloTask
                     if (roomCodeToJoin == null)
                     {
                         _logger.LogError("[联机] 等待超时（{T}s），未找到房主 [{Host}] 的房间，停止联机锄地", _config.PartyTimeoutSeconds, targetHost);
+                        MarkPartyFailed("加入房间超时（指定房主）");
                         await client.DisposeAsync();
                         return;
                     }
@@ -873,6 +896,7 @@ public class AutoHoeingTask : ISoloTask
                 {
                     _logger.LogError("[联机] 无法加入房间 {Code}（{Reason}），停止联机锄地",
                         roomCodeToJoin, roomClosed ? "房间已关闭" : "重试耗尽");
+                    MarkPartyFailed("无法加入房间");
                     await client.DisposeAsync();
                     return;
                 }
@@ -897,6 +921,7 @@ public class AutoHoeingTask : ISoloTask
                 else
                 {
                     _logger.LogWarning("[联机] 创建房间失败，降级为单机模式");
+                    MarkPartyFailed("创建房间失败");
                     await client.DisposeAsync();
                     return;
                 }
@@ -1000,6 +1025,7 @@ public class AutoHoeingTask : ISoloTask
                 if (!uploadSuccess && _config.MultiWorldEnabled)
                 {
                     _logger.LogError("[联机] 多世界模式：房主配置上传失败，终止多世界模式");
+                    MarkPartyFailed("房主配置上传失败");
                     await client.DisposeAsync();
                     _multiplayerCoordinator = null;
                     return;
@@ -1173,6 +1199,7 @@ public class AutoHoeingTask : ISoloTask
                     // 初始化失败（未检测到主界面等）
                     _logger.LogError("[联机] 自动组队初始化失败，停止联机锄地");
                     _worldStateMonitor.IsPartyPhase = false;
+                    MarkPartyFailed("自动组队初始化失败");
                     await client.DisposeAsync();
                     _multiplayerCoordinator = null;
                     return;
@@ -1191,6 +1218,7 @@ public class AutoHoeingTask : ISoloTask
                     {
                         _logger.LogError("[联机] 组队超时，停止联机锄地");
                         _worldStateMonitor.IsPartyPhase = false;
+                        MarkPartyFailed("组队超时");
                         await client.DisposeAsync();
                         _multiplayerCoordinator = null;
                         return;
@@ -1270,6 +1298,7 @@ public class AutoHoeingTask : ISoloTask
                     // 成员拿不到房主 UID = 组队失败，不能在自己世界开锄，提前终止（_multiplayerPartyReady 保持 false）
                     _logger.LogError("[联机] 无法获取房主 UID，组队失败，停止联机锄地");
                     _worldStateMonitor.IsPartyPhase = false;
+                    MarkPartyFailed("无法获取房主 UID");
                     await client.DisposeAsync();
                     _multiplayerCoordinator = null;
                     return;
@@ -1314,6 +1343,7 @@ public class AutoHoeingTask : ISoloTask
                             {
                                 _logger.LogError("[联机] 等待房主就绪超时，停止联机锄地");
                                 _worldStateMonitor.IsPartyPhase = false;
+                                MarkPartyFailed("等待房主就绪超时");
                                 await client.DisposeAsync();
                                 _multiplayerCoordinator = null;
                                 return;
@@ -1413,6 +1443,7 @@ public class AutoHoeingTask : ISoloTask
                         {
                             _logger.LogError("[联机] 多世界模式：无法获取房主配置（重试3次后仍失败），终止多世界模式");
                             _worldStateMonitor.IsPartyPhase = false;
+                            MarkPartyFailed("无法获取房主配置");
                             await client.DisposeAsync();
                             _multiplayerCoordinator = null;
                             return;
@@ -1471,6 +1502,7 @@ public class AutoHoeingTask : ISoloTask
                             {
                                 _logger.LogWarning("[联机] 等待组队超时，退出房间，结束任务");
                                 _worldStateMonitor.IsPartyPhase = false;
+                                MarkPartyFailed("等待组队超时");
                                 _multiplayerCoordinator?.Degrade("组队超时");
                                 return;
                             }
@@ -1485,6 +1517,7 @@ public class AutoHoeingTask : ISoloTask
                     {
                         _logger.LogError("[联机] 加入房主世界失败，停止联机锄地");
                         _worldStateMonitor.IsPartyPhase = false;
+                        MarkPartyFailed("加入房主世界失败");
                         _multiplayerCoordinator?.Degrade("加入房主世界失败");
                         return;
                     }
@@ -1513,6 +1546,9 @@ public class AutoHoeingTask : ISoloTask
         {
             _logger.LogError(ex, "[联机] 初始化异常，降级为单机模式");
             if (_worldStateMonitor != null) _worldStateMonitor.IsPartyPhase = false;
+            // 手动停止（OperationCanceledException）不标记组队失败——Start 尾部 userCancelled 会兜底不重开。
+            if (ex is not OperationCanceledException)
+                MarkPartyFailed("初始化异常");
             _multiplayerCoordinator = null;
         }
     }
@@ -2188,6 +2224,7 @@ public class AutoHoeingTask : ISoloTask
                 if (newCode == null)
                 {
                     _logger.LogError("[多世界] 第 {Round} 轮创建房间失败（重试3次后仍失败），终止多世界模式", round + 1);
+                    MarkPartyFailed("创建房间失败");
                     return RoundSetupOutcome.Abort;
                 }
                 _config.CurrentRoomCode = newCode;
@@ -2235,6 +2272,7 @@ public class AutoHoeingTask : ISoloTask
                     
                     if (!uploadSuccess)
                     {
+                        MarkPartyFailed("上传配置失败");
                         _multiplayerCoordinator = null;
                         return RoundSetupOutcome.Abort;
                     }
@@ -2243,6 +2281,7 @@ public class AutoHoeingTask : ISoloTask
                 {
                     // 多世界模式下_firstHostConfig为null是严重错误，必须终止
                     _logger.LogError("[多世界] 第 {Round} 轮房主配置丢失（_firstHostConfig为null），这表明第1轮配置保存失败，终止多世界模式", round + 1);
+                    MarkPartyFailed("房主配置丢失");
                     _multiplayerCoordinator = null;
                     return RoundSetupOutcome.Abort;
                 }
@@ -2255,6 +2294,7 @@ public class AutoHoeingTask : ISoloTask
                 if (actualCount <= 0)
                 {
                     _logger.LogError("[多世界] 第 {Round} 轮等待成员超时", round + 1);
+                    MarkPartyFailed("等待成员超时");
                     return RoundSetupOutcome.Abort;
                 }
 
@@ -2280,6 +2320,7 @@ public class AutoHoeingTask : ISoloTask
                         // 组队守卫（方案A）：本轮未达全员就绪，不开锄，终止多世界。
                         // （事件反注册由下方 finally 统一处理，此处不重复 -=）
                         _logger.LogError("[多世界] 第 {Round} 轮等待所有成员就绪超时，未满员，终止本轮不开锄", round + 1);
+                        MarkPartyFailed("等待全员就绪超时");
                         return RoundSetupOutcome.Abort;
                     }
                 }
@@ -2327,6 +2368,7 @@ public class AutoHoeingTask : ISoloTask
                 if (newRoomCode == null)
                 {
                     _logger.LogError("[多世界] 等待超时，未找到新房主 [{Host}] 的房间，终止多世界模式", roundHostPlayer.PlayerName);
+                    MarkPartyFailed("未找到新房主房间");
                     _multiplayerCoordinator = null;
                     return RoundSetupOutcome.Abort;
                 }
@@ -2349,6 +2391,7 @@ public class AutoHoeingTask : ISoloTask
                         if (!await hostReadyTcs.Task)
                         {
                             _logger.LogError("[多世界] 等待房主就绪超时");
+                            MarkPartyFailed("等待房主就绪超时");
                             return RoundSetupOutcome.Abort;
                         }
                     }
@@ -2429,6 +2472,7 @@ public class AutoHoeingTask : ISoloTask
                 {
                     // 多世界模式下配置同步失败是严重错误，必须终止
                     _logger.LogError("[多世界] 第 {Round} 轮成员无法获取房主配置（重试3次后仍失败），终止多世界模式", round + 1);
+                    MarkPartyFailed("无法获取房主配置");
                     _multiplayerCoordinator = null;
                     return RoundSetupOutcome.Abort;
                 }
@@ -2441,6 +2485,7 @@ public class AutoHoeingTask : ISoloTask
                 if (!joinOk)
                 {
                     _logger.LogError("[多世界] 加入第 {Round} 轮房主世界失败", round + 1);
+                    MarkPartyFailed("加入房主世界失败");
                     return RoundSetupOutcome.Abort;
                 }
 
@@ -2476,6 +2521,7 @@ public class AutoHoeingTask : ISoloTask
                         // 组队守卫（方案A）：本轮未达全员就绪，成员不在自己/房主世界单跑，终止本轮。
                         // （finally 会 -= allJoinedHandler，此处不重复解绑）
                         _logger.LogError("[多世界] 等待全员就绪超时，未满员，终止本轮不开锄");
+                        MarkPartyFailed("等待全员就绪超时");
                         return RoundSetupOutcome.Abort;
                     }
                 }
@@ -2535,6 +2581,9 @@ public class AutoHoeingTask : ISoloTask
         catch (Exception ex)
         {
             _logger.LogError(ex, "[多世界] 第 {Round} 轮初始化异常", round + 1);
+            // 手动停止（OperationCanceledException）不标记组队失败——Start 尾部 userCancelled 会兜底不重开。
+            if (ex is not OperationCanceledException)
+                MarkPartyFailed("轮次初始化异常");
             _multiplayerCoordinator = null;
             // 初始化失败也要恢复 WorldStateMonitor 检测（需求 2）
             _worldStateMonitor?.EndRoundSwitch();
