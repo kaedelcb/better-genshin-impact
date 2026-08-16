@@ -295,7 +295,7 @@ public class Avatar
     /// </summary>
     public static bool SwimmingConfirm(Region region)
     {
-        using var regionMat = region.ToImageRegion().DeriveCrop(1819, 1028, 9, 7);
+        var regionMat = region.ToImageRegion().DeriveCrop(1819, 1028, 9, 7);
         using var mask = OpenCvCommonHelper.Threshold(regionMat.SrcMat, 
             new Scalar(242, 223, 39),new Scalar(255, 233, 44));// new Scalar(242, 223, 39),new Scalar(255, 233, 44));
         using var labels = new Mat();
