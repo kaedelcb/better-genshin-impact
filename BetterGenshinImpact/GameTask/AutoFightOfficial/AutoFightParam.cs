@@ -1,4 +1,4 @@
-using BetterGenshinImpact.Core.Config;
+﻿using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.Model;
 
 namespace BetterGenshinImpact.GameTask.AutoFightOfficial;
@@ -21,6 +21,14 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
         public string BeforeDetectDelay = "";
         public bool RotateFindEnemyEnabled = false;
         public bool SkipFightEndCheckWhenEnemyVisible = false;
+        public bool RotationMode = true;
+        public bool EndModel = true;
+        public int FightWaitNotEndTime = 0;
+        public bool PaimonEndModel = false;
+        public bool DoubleEndEnbled = false;
+        public int DoubleEndDelay = 750;
+        public double FastCheckDelay = 0.1;
+        public int GoDistance = 500;
     }
 
     public AutoFightParam(string path, AutoFightOfficialConfig autoFightConfig) : base(null, null)
@@ -38,6 +46,14 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
         FinishDetectConfig.CheckEndDelay = autoFightConfig.FinishDetectConfig.CheckEndDelay;
         FinishDetectConfig.BeforeDetectDelay = autoFightConfig.FinishDetectConfig.BeforeDetectDelay;
         FinishDetectConfig.RotateFindEnemyEnabled = autoFightConfig.FinishDetectConfig.RotateFindEnemyEnabled;
+        FinishDetectConfig.RotationMode = autoFightConfig.FinishDetectConfig.RotationMode;
+        FinishDetectConfig.EndModel = autoFightConfig.FinishDetectConfig.EndModel;
+        FinishDetectConfig.FightWaitNotEndTime = autoFightConfig.FinishDetectConfig.FightWaitNotEndTime;
+        FinishDetectConfig.PaimonEndModel = autoFightConfig.FinishDetectConfig.PaimonEndModel;
+        FinishDetectConfig.DoubleEndEnbled = autoFightConfig.FinishDetectConfig.DoubleEndEnbled;
+        FinishDetectConfig.DoubleEndDelay = autoFightConfig.FinishDetectConfig.DoubleEndDelay;
+        FinishDetectConfig.FastCheckDelay = autoFightConfig.FinishDetectConfig.FastCheckDelay;
+        FinishDetectConfig.GoDistance = autoFightConfig.FinishDetectConfig.GoDistance;
 
 
         KazuhaPartyName = autoFightConfig.KazuhaPartyName;
@@ -172,6 +188,14 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
         FinishDetectConfig.CheckEndDelay = autoFightConfig.FinishDetectConfig.CheckEndDelay;
         FinishDetectConfig.BeforeDetectDelay = autoFightConfig.FinishDetectConfig.BeforeDetectDelay;
         FinishDetectConfig.RotateFindEnemyEnabled = autoFightConfig.FinishDetectConfig.RotateFindEnemyEnabled;
+        FinishDetectConfig.RotationMode = autoFightConfig.FinishDetectConfig.RotationMode;
+        FinishDetectConfig.EndModel = autoFightConfig.FinishDetectConfig.EndModel;
+        FinishDetectConfig.FightWaitNotEndTime = autoFightConfig.FinishDetectConfig.FightWaitNotEndTime;
+        FinishDetectConfig.PaimonEndModel = autoFightConfig.FinishDetectConfig.PaimonEndModel;
+        FinishDetectConfig.DoubleEndEnbled = autoFightConfig.FinishDetectConfig.DoubleEndEnbled;
+        FinishDetectConfig.DoubleEndDelay = autoFightConfig.FinishDetectConfig.DoubleEndDelay;
+        FinishDetectConfig.FastCheckDelay = autoFightConfig.FinishDetectConfig.FastCheckDelay;
+        FinishDetectConfig.GoDistance = autoFightConfig.FinishDetectConfig.GoDistance;
         FinishDetectConfig.SkipFightEndCheckWhenEnemyVisible = autoFightConfig.FinishDetectConfig.SkipFightEndCheckWhenEnemyVisible;
 
         KazuhaPartyName = autoFightConfig.KazuhaPartyName;

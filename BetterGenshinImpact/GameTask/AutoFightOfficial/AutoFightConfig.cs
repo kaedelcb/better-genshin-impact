@@ -103,6 +103,54 @@ public partial class AutoFightOfficialConfig : ObservableObject
         private bool _checkBeforeBurst = false;
 
         /// <summary>
+        /// 旋转寻找敌人模式
+        /// </summary>
+        [ObservableProperty]
+        private bool _rotationMode = true;
+
+        /// <summary>
+        /// 检查结束方式（EndModel: 快速模式）
+        /// </summary>
+        [ObservableProperty]
+        private bool _endModel = true;
+
+        /// <summary>
+        /// 开战前等待时间（毫秒），确保引战；开战后这期间内不检测战斗结束。
+        /// </summary>
+        [ObservableProperty]
+        private int _fightWaitNotEndTime = 0;
+
+        /// <summary>
+        /// 派蒙结束检查模式：使用派蒙像素而非进度条颜色检测战斗结束
+        /// </summary>
+        [ObservableProperty]
+        private bool _paimonEndModel = false;
+
+        /// <summary>
+        /// 派蒙模式下的二次检查，防止误判
+        /// </summary>
+        [ObservableProperty]
+        private bool _doubleEndEnbled = false;
+
+        /// <summary>
+        /// 二次检查的延时，默认为750毫秒
+        /// </summary>
+        [ObservableProperty]
+        private int _doubleEndDelay = 750;
+
+        /// <summary>
+        /// 快速检查方式的延时，默认为0.1秒
+        /// </summary>
+        [ObservableProperty]
+        private double _fastCheckDelay = 0.1;
+
+        /// <summary>
+        /// GoDistance 寻敌移动距离
+        /// </summary>
+        [ObservableProperty]
+        private int _goDistance = 500;
+
+        /// <summary>
         /// 敌人可见时跳过战斗结束检查
         /// </summary>
         [ObservableProperty]
