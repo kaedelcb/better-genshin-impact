@@ -280,8 +280,35 @@ public partial class PathingPartyConfig : ObservableObject, IJsonOnDeserialized
     [ObservableProperty]
     private bool _mwkJumpFlyEnabled = true;
 
+    /// <summary>
+    /// 玛薇卡跳飞启用距离（米），必须大于 <see cref="Distance"/>，越界时自动使用 Distance+1 的值。
+    /// </summary>
+    [ObservableProperty]
+    private int _mwkJumpFlyDistance = 75;
+
+    partial void OnMwkJumpFlyDistanceChanged(int value)
+    {
+        if (value <= Distance)
+        {
+            MwkJumpFlyDistance = Distance + 1;
+        }
+    }
+
     [ObservableProperty]
     private double _mwkJumpFlyIntervalSeconds = 1.0;
+
+    /// <summary>
+    /// 玛薇卡在车上禁用冲刺。6命玛薇卡酌情勾选，节约夜魂值。
+    /// </summary>
+    [ObservableProperty]
+    private bool _mwkDisableSprintEnabled = false;
+
+    /// <summary>
+    /// 跳飞前额外冲刺次数。6命玛薇卡可选，每次上车后前若干次跳飞改为冲刺跳飞，速度更快，夜魂值消耗更高，推荐3次。
+    /// 0 表示不使用冲刺跳飞。
+    /// </summary>
+    [ObservableProperty]
+    private int _mwkJumpFlySprintCount = 0;
 
     [ObservableProperty]
     private double _approachStopDistance = 25;

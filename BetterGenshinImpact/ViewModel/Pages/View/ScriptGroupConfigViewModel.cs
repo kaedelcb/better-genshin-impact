@@ -67,7 +67,25 @@ public partial class ScriptGroupConfigViewModel : ObservableObject, IViewModel
         AutoFightViewModel = new AutoFightViewModel(config);
         ShellConfig = scriptGroupConfig.ShellConfig;
         EnableShellConfig = scriptGroupConfig.EnableShellConfig;
+        PathingConfig.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(PathingConfig.NewHurryOnAvatar) or nameof(PathingConfig.MwkJumpFlyEnabled))
+            {
+                OnPropertyChanged(nameof(IsHurryOnMwkOrAuto));
+                OnPropertyChanged(nameof(IsDisableSprintVisible));
+                OnPropertyChanged(nameof(IsJumpFlySprintCountVisible));
+            }
+        };
     }
+
+    // 公版赶路可见性属性：角色为玛薇卡/自动时相关控件可见
+    public bool IsHurryOnMwkOrAuto => PathingConfig.NewHurryOnAvatar is "" or "自动" or "玛薇卡";
+
+    // 玛薇卡在车上禁用冲刺：仅当角色为 自动/玛薇卡 时显示
+    public bool IsDisableSprintVisible => IsHurryOnMwkOrAuto;
+
+    // 跳飞前额外冲刺次数：仅当角色为 自动/玛薇卡 且启用跳飞时显示
+    public bool IsJumpFlySprintCountVisible => IsHurryOnMwkOrAuto && PathingConfig.MwkJumpFlyEnabled;
 
     [RelayCommand]
     private void OnStrategyDropDownOpened(string type)
