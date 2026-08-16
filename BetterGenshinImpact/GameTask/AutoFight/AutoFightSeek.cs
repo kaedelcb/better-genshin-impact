@@ -100,7 +100,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight
 
         private static DateTime  _lsatLogTime = DateTime.MinValue;
         
-        public static Task<bool?> MoveForwardAsync(Scalar scalarLower, Scalar scalarHigher, ILogger logger, CancellationToken ct,int distance = 1000)
+        public static Task<bool?> MoveForwardAsync(Scalar scalarLower, Scalar scalarHigher, ILogger logger, CancellationToken ct,int distance = 1000, int nearHeightThreshold = 6)
         {
             using var image2 = CaptureToRectArea();
             using Mat mask2 = OpenCvCommonHelper.Threshold(
@@ -157,7 +157,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                         if (firstPixel.X < 500 && firstPixel.Y < 800)
                         {
                             // 左上区域
-                            if (height <= 6)
+                            if (height <= nearHeightThreshold)
                             {
                                 // logger.LogInformation("敌人在左上，向前加向左移动");
                                 Task.Run(async () =>
@@ -173,7 +173,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                         else if (firstPixel.X > 1315 && firstPixel.Y < 800)
                         {
                             // 右上区域
-                            if (height <= 6)
+                            if (height <= nearHeightThreshold)
                             {
                                 // logger.LogInformation("敌人在右上，向前加向右移动");
                                 Task.Run(async () =>
@@ -189,7 +189,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                         else if (firstPixel.X < 500 && firstPixel.Y > 800)
                         {
                             // 左下区域
-                            if (height <= 6)
+                            if (height <= nearHeightThreshold)
                             {
                                 if (distance >= 1&&isDebug) logger.LogInformation("敌人在左下，向后加向左移动{distance}",distance);
                                 Task.Run(async () =>
@@ -205,7 +205,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                         else if (firstPixel.X > 1315 && firstPixel.Y > 800)
                         {
                             // 右下区域
-                            if (height <= 6)
+                            if (height <= nearHeightThreshold)
                             {
                                 if (distance >= 1&&isDebug) logger.LogInformation("敌人在右下，向后加向右移动{distance}",distance);
                                 Task.Run(async () =>
@@ -221,7 +221,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                         else if (firstPixel.Y < 800)
                         {
                             // 上方区域
-                            if (height <= 6)
+                            if (height <= nearHeightThreshold)
                             {
                                 if (distance >= 1&&isDebug) logger.LogInformation("敌人在上方，向前移动{distance}",distance);
                                 Task.Run(async () =>
@@ -237,7 +237,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                         else if (firstPixel.Y > 800)
                         {
                             // 下方区域
-                            if (height <= 6)
+                            if (height <= nearHeightThreshold)
                             {
                                 if (distance >= 1&&isDebug) logger.LogInformation("敌人在下方，向后移动{distance}",distance);
                                 Task.Run(async () =>
@@ -253,12 +253,12 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                         else
                         {
                             // 非上述区域且非中心区域，判断左右
-                            if (firstPixel.X < 920 && height > 6)
+                            if (firstPixel.X < 920 && height > nearHeightThreshold)
                             {
                                 Simulation.SendInput.SimulateAction(GIActions.MoveBackward);
                                 // logger.LogInformation("敌人在左侧，不移动");
                             }
-                            else if (firstPixel.X > 920 && height > 6)
+                            else if (firstPixel.X > 920 && height > nearHeightThreshold)
                             {
                                 Simulation.SendInput.SimulateAction(GIActions.MoveBackward);
                                 // logger.LogInformation("敌人在右侧，不移动");
@@ -267,7 +267,7 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                     }
                     else // 中心区域
                     {
-                        if (height > 6)
+                        if (height > nearHeightThreshold)
                         {
                             Simulation.SendInput.SimulateAction(GIActions.MoveBackward);
                             // logger.LogInformation("敌人在中心且高度大于6，不移动");
@@ -492,7 +492,8 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                                     () =>
                                     {
                                         MoveForwardTask.MoveForwardAsync(bloodLower, bloodLower, logger, ct,
-                                            distance);
+                                            distance,
+                                            AutoFightSeekDecisions.GetNearHeightThreshold(PathingConditionConfig.MultiplayerFightTimeoutOverride.HasValue));
                                     }, ct);
                                 AutoFightTask.LastEnemySeenAt = DateTime.UtcNow;
                                 return false;
@@ -634,7 +635,8 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                                     () =>
                                     {
                                         MoveForwardTask.MoveForwardAsync(bloodLower, bloodLower, logger, ct,
-                                            distance);
+                                            distance,
+                                            AutoFightSeekDecisions.GetNearHeightThreshold(PathingConditionConfig.MultiplayerFightTimeoutOverride.HasValue));
                                     }, ct);
                                 AutoFightTask.LastEnemySeenAt = DateTime.UtcNow;
                                 return false;

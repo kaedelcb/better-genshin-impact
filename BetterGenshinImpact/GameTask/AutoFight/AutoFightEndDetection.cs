@@ -1,4 +1,5 @@
 using BetterGenshinImpact.Core.Recognition;
+using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script.Dependence;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
@@ -232,7 +233,8 @@ public static class AutoFightEndDetection
                     {
                         Scalar bloodLower = new Scalar(255, 90, 90);
                         await MoveForwardTask.MoveForwardAsync(bloodLower, bloodLower, Logger, fightCt,
-                            goDistance);
+                            goDistance,
+                            AutoFightSeekDecisions.GetNearHeightThreshold(PathingConditionConfig.MultiplayerFightTimeoutOverride.HasValue));
                     }, ct);
                 }
                 catch (OperationCanceledException)

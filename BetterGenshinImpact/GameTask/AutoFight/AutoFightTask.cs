@@ -2583,7 +2583,8 @@ public class AutoFightTask : ISoloTask
                     {
                         Scalar bloodLower = new Scalar(255, 90, 90);
                         MoveForwardTask.MoveForwardAsync(bloodLower, bloodLower, TaskControl.Logger, _ct,
-                            _taskParam.FinishDetectConfig.GoDistance);
+                            _taskParam.FinishDetectConfig.GoDistance,
+                            AutoFightSeekDecisions.GetNearHeightThreshold(PathingConditionConfig.MultiplayerFightTimeoutOverride.HasValue));
                     }, _ct);
                 }
                 catch (Exception ex)

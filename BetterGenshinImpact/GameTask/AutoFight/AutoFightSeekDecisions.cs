@@ -108,4 +108,12 @@ public static class AutoFightSeekDecisions
     {
         return returnToPointInProgress;
     }
+
+    /// <summary>
+    /// 血条"足够近"高度阈值。MoveForwardAsync 以 height &gt; 该阈值判定"已足够近、停止靠近"。
+    /// 联机锄地下放宽到 8（血条 7~8 像素仍继续靠近），单机保持 6。
+    /// 纯函数：无外部依赖，便于 PBT。
+    /// </summary>
+    public static int GetNearHeightThreshold(bool isMultiplayerHoeing)
+        => isMultiplayerHoeing ? 8 : 6;
 }
