@@ -299,7 +299,7 @@ internal class GoToSereniteaPotTask
         }
         Logger.LogInformation("领取尘歌壶奖励:{text}", "寻找阿圆");
         CancellationTokenSource treeCts = new();
-        ct.Register(treeCts.Cancel);
+        await using var cancellationRegistration = ct.Register(treeCts.Cancel);
         // 中键回正视角
         Simulation.SendInput.Mouse.MiddleButtonClick();
         await Delay(900, ct);
