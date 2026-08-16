@@ -36,7 +36,14 @@ using static BetterGenshinImpact.GameTask.Common.TaskControl;
 namespace BetterGenshinImpact.GameTask.AutoTrackPath;
 
 /// <summary>
-/// 传送任务
+/// 公版传送实现。
+/// 基线上游 commit: 9f82e8234（"合并公版新传送模式"，茶包创建时的基线）
+/// 已优选的公版提交：
+///   494126996 - 修复TpTask小概率传送错误 (#3438)，2026-08-12
+///
+/// 下次优选公版时，先检查公版 commit 与基线 commit 的 diff，
+/// 将 diff 应用到 #region TeaBag Originals 区域（公版原始方法），
+/// #region TeaBag Extensions 区域（茶包新增方法）不动。
 /// </summary>
 public class TpTaskOfficial
 {
