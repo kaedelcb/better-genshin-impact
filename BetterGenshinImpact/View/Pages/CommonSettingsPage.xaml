@@ -1264,21 +1264,41 @@
                         <ui:TextBlock Grid.Row="0"
                                       Grid.Column="0"
                                       FontTypography="Body"
-                                      Text="传送操作速度基准间隔（毫秒）"
+                                      Text="传送操作间隔倍率"
                                       TextWrapping="Wrap" />
                         <ui:TextBlock Grid.Row="1"
                                       Grid.Column="0"
                                       Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                      Text="【2-100】数字越小操作越快，默认20"
+                                      Text="如果传送卡顿请调整倍率，倍率越大传送间隔越长，传送越稳定"
                                       TextWrapping="Wrap" />
-                        <ui:TextBox Grid.Row="0"
+                        <StackPanel Grid.Row="0"
                                     Grid.RowSpan="2"
                                     Grid.Column="1"
-                                    MinWidth="90"
                                     Margin="0,0,36,0"
-                                    VerticalContentAlignment="Center"
-                                    HorizontalContentAlignment="Center"
-                                    Text="{Binding Config.TpConfig.TeleportOperationDelayMilliseconds, Mode=TwoWay, ValidatesOnNotifyDataErrors=True}" />
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    Orientation="Horizontal">
+                            <Slider Width="180"
+                                    VerticalAlignment="Center"
+                                    IsSnapToTickEnabled="True"
+                                    Maximum="100"
+                                    Minimum="2"
+                                    TickFrequency="1"
+                                    Value="{Binding Config.TpConfig.TeleportOperationDelayMilliseconds, Mode=TwoWay}" />
+                            <TextBlock MinWidth="48"
+                                       Margin="12,0,0,0"
+                                       VerticalAlignment="Center"
+                                       FontFamily="Cascadia Mono, Consolas, Courier New, monospace"
+                                       FontSize="14"
+                                       Text="{Binding Config.TpConfig.TeleportOperationDelayPercentage, StringFormat={}{0}%}" />
+                            <TextBlock MinWidth="58"
+                                       Margin="6,0,0,0"
+                                       VerticalAlignment="Center"
+                                       FontFamily="Cascadia Mono, Consolas, Courier New, monospace"
+                                       FontSize="14"
+                                       Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                       Text="{Binding Config.TpConfig.TeleportOperationDelayMilliseconds, StringFormat={}({0} ms)}" />
+                        </StackPanel>
                     </Grid>
                     <Grid Margin="16">
                         <Grid.RowDefinitions>
