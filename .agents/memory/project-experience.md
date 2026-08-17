@@ -42,3 +42,9 @@
   - **同名文件**：`AutoFightSeek.cs` 有两份——`GameTask/AutoFight/`（茶包版，联机）vs `GameTask/AutoFightOfficial/`（公版），改联机行为别误改公版
   - **共享函数分流模板**：`MoveForwardTask.MoveForwardAsync` 被单机+联机共用（4 处调用），改联机行为 = 加可选参数（默认=单机旧值 6）+ `AutoFightSeekDecisions.GetNearHeightThreshold(isMultiplayerHoeing)` 纯函数（联机 8/单机 6）+ 调用点传联机信号
   - **未触碰**：公版副本保持 6；`AutoFightJsonTask`（单机 JS）不传参吃默认 6
+## 公版战斗 UI 与上游完全对齐（2026-08-17，commit 4a2710c19）
+
+- **教训**：对齐上游 UI 不能只对比"配置项数量"（13项都在 ≠ 一样）。LCB 两页公版"自动检测战斗结束"面板曾被自写风格实现，与上游**顺序/结构/文案/Visibility/控件类型**全面不同。必须逐行对比结构跟顺序。
+- **改动**：TaskSettingsPage.xaml 和 ScriptGroupConfigView.xaml 两个公版面板重构为与上游一致：配置顺序锁定（更快→敌人可见→阻断→派蒙→派蒙延时→旋转→Q前→尝试面敌→延时×2）；派蒙延时 TextBox→NumberBox(0.05~0.4)+Visibility；旋转寻敌单大Grid→拆四块各带Visibility；更快文案"触发"、旋转速度"360°"。
+- **go-to 文档**：两套 UI 独立的完整结构、配置项顺序、上游更新时的 diff 指南 → 全局规则 `.agents/rules/bgi-implementation-patterns.md` §7
+- **关键定位**：两套配置类独立（AutoFightOfficialConfig vs AutoFightConfig），UI 面板靠 `UseOfficialAutoFight` + DataTrigger 互斥显示

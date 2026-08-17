@@ -131,7 +131,7 @@ diagnose-first 而非 fix-first；连续失败 2 次后禁止再改修复代码�
 仓库测试项目经常被其他进行中任务的未实现类型阻塞编译。处理：先判定归属（grep 确认报错类型在生产代码零命中）→ 主项目 `dotnet build BetterGenshinImpact/BetterGenshinImpact.csproj -c Debug` 验证本任务生产代码 → 本任务测试文件用编译诊断验证 → **不擅自删他人测试文件** → 报告事实而不阻塞推进。
 
 ### 3.7 记忆沉淀（`memory-sedimentation-discipline.md`）
-每个非平凡任务收尾时必须做一次记忆回顾（不靠用户提醒）：本次有没有"项目特有、可复用、不沉淀就要重复付代价"的事实/模式？有 → 立即写入对应记忆文件（代码模式→`bgi-implementation-patterns.md`，任务经验→`project-experience.md`，新纪律→`.agents/rules/` + 本文件 §3 索引）；没有 → 必须说清为什么没有。该沉淀=项目特有事实/重复模式/高代价雷区；不沉淀=公认原则重复/任务特定细节/未验证推测。
+每个非平凡任务收尾时必须做一次记忆回顾（不靠用户提醒）：本次有没有"项目特有、可复用、不沉淀就要重复付代价"的事实/模式？有 → 立即写入对应记忆文件。**写入前必须 readFile 目标文件确认当前结构，而不是凭记忆盲写。**（代码模式→`bgi-implementation-patterns.md`，任务经验→`project-experience.md`，新纪律→`.agents/rules/` + 本文件 §3 索引）；没有 → 必须说清为什么没有。该沉淀=项目特有事实/重复模式/高代价雷区；不沉淀=公认原则重复/任务特定细节/未验证推测。
 
 ## 4. 工具映射（KIRO 术语 → 本环境）
 

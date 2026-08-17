@@ -157,6 +157,30 @@ public partial class AutoFightOfficialConfig : ObservableObject
         private bool _skipFightEndCheckWhenEnemyVisible = false;
 
         /// <summary>
+        /// 切人后再执行战斗结束检查（仅 JSON 策略生效）
+        /// </summary>
+        [ObservableProperty]
+        private bool _checkAfterSwitchAvatar = false;
+
+        /// <summary>
+        /// 开战后一段时间阻断战斗结束检查（秒），默认0表示不阻断
+        /// </summary>
+        [ObservableProperty]
+        private double _blockCheckBeforeBattleSeconds = 0;
+
+        /// <summary>
+        /// 派蒙辅助检测：按L后当派蒙头像可见时提前跳出战斗结束检测
+        /// </summary>
+        [ObservableProperty]
+        private bool _paimonEndCheckEnabled = true;
+
+        /// <summary>
+        /// 派蒙检测延时（秒），按L后等待该时间再检测派蒙头像
+        /// </summary>
+        [ObservableProperty]
+        private double _paimonEndCheckDelay = 0.1;
+
+        /// <summary>
         /// 与"敌人可见时跳过战斗结束检查"互斥：开启旋转寻找敌人时关闭跳过检查，
         /// 避免跳过分支不清零旋转计数导致战斗被误判结束。
         /// </summary>
