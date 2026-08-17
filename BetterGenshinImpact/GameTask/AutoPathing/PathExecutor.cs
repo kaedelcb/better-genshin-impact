@@ -284,6 +284,13 @@ public partial class PathExecutor
     private bool _segmentRerunDone = false;
 
     /// <summary>
+    /// 线路重试模式 v2（§0）：当前是否处于重跑模式（段重跑）。
+    /// 用于在 syncId 生成时加 _rerun 后缀，避免重跑时 syncId 与首次相同导致服务端"全员已到"误放行。
+    /// 段出口屏障触发重跑时置位，段推进时复位。
+    /// </summary>
+    private bool _isRerunningSegment = false;
+
+    /// <summary>
     /// 线路重试模式 v2（§0）：复苏者回神像后不立即重跑，而是先到"段出口屏障"与队友碰头。
     /// 复苏消费点在 retry-route 下置位并 break 出 waypoint 循环，直达段出口屏障。
     /// 屏障放行后统一决策。非 retry-route 恒 false → 原"神像 + 抛 RetryException"流程逐字节不变。
@@ -655,6 +662,13 @@ public partial class PathExecutor
                 {
                     ResetRecoveryStateForNewAttempt();
                     
+                    // 线路重试模式 v2（§0）：新段开始时复位重跑状态（段推进复位）
+                    if (i == 0)
+                    {
+                        _segmentRerunDone = false;
+                        _isRerunningSegment = false;
+                    }
+                    
                     await ResolveAnomalies(); // 异常场景处理
 
                     // 如果首个点是非TP点位，强制设置在这个点位附近优先做局部匹配
@@ -726,6 +740,9 @@ public partial class PathExecutor
                         if (MultiplayerCoordinator != null && _wpIdxToSyncIdCache != null)
                         {
                             _wpIdxToSyncIdCache.TryGetValue(CurWaypoint.Item1, out __fastSyncId);
+                            // 线路重试模式 v2（§0）：重跑时 syncId 加 _rerun 后缀，防服务端"全员已到"误放行
+                            if (__fastSyncId != null && _isRerunningSegment)
+                                __fastSyncId = __fastSyncId + "_rerun";
                         }
 
                         // === 段内"下一个还没抢报"的 syncPoint 反查（修复"非传送同步点不提前抢报"）===
@@ -742,14 +759,16 @@ public partial class PathExecutor
                             {
                                 if (__kv.Value == null) continue;
                                 if (__kv.Key < CurWaypoint.Item1) continue;
-                                if (MultiplayerCoordinator.IsFastReported(__kv.Value)) continue;
+                                // 线路重试模式 v2（§0）：重跑时 syncId 加 _rerun 后缀再查是否已抢报
+                                var __checkId = (_isRerunningSegment && __kv.Value != null) ? __kv.Value + "_rerun" : __kv.Value;
+                                if (MultiplayerCoordinator.IsFastReported(__checkId)) continue;
                                 // strict 门控（hoeing-strict-syncpoint-no-lookahead-preclaim spec）：
                                 // strict 同步点仅在该节点本身允许 look-ahead，前序节点跳过（继续向后找非 strict 候选，OQ-1 方案 a）。
-                                if (!FastSyncDecisions.IsLookAheadAllowedForCandidate(__kv.Value, __kv.Key, CurWaypoint.Item1)) continue;
+                                if (!FastSyncDecisions.IsLookAheadAllowedForCandidate(__checkId, __kv.Key, CurWaypoint.Item1)) continue;
                                 if (__kv.Key < __bestWpIdx)
                                 {
                                     __bestWpIdx = __kv.Key;
-                                    __bestSyncId = __kv.Value;
+                                    __bestSyncId = __checkId;
                                 }
                             }
                             if (__bestSyncId != null && __bestWpIdx < waypoints.Count)
@@ -1012,6 +1031,12 @@ public partial class PathExecutor
                                     var tpMapKey = CurWaypoints.Item1 * 10000 + CurWaypoint.Item1;
                                     if (_syncPointMap.TryGetValue(tpMapKey, out var tpSyncId) && tpSyncId != null)
                                     {
+                                        // 线路重试模式 v2（§0）：重跑时 syncId 后缀 _rerun，避免服务端"全员已到"误放行
+                                        if (_isRerunningSegment)
+                                        {
+                                            tpSyncId = tpSyncId + "_rerun";
+                                        }
+                                        
                                         var tpProgress = ComputeProgress(CurWaypoints.Item1, CurWaypoint.Item1);
                                         // 检查是否是异常等待点
                                         bool isAbnormalWaitingPoint = MultiplayerCoordinator.IsAbnormalWaitingAtPoint(tpSyncId);
@@ -1719,6 +1744,7 @@ public partial class PathExecutor
                             _rerunSuppressExtrasOnce = true;      // 重跑段起点跳过吃药/换人（多余）
                             _exemptNextLaggingCatchUpOnce = true; // 重跑是主动回退，豁免落后追赶（否则被踹走）
                             _needReportNormalBeforeSync = true;   // 段起点同步前上报 Normal
+                            _isRerunningSegment = true;           // 重跑期间 syncId 后缀 _rerun，防服务端"全员已到"误放行
                             SkipToNextSegment = false;            // 确保"重跑本段"而非"跳下一段"
                             Logger.LogWarning("[联机][重试模式v2] 段出口屏障：本段有成员死过 → 全员一起重跑本段（第 1 次，仅重试一次）");
                             ResetRecoveryStateForNewAttempt();

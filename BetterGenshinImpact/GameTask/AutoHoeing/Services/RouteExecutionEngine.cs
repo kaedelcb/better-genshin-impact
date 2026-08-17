@@ -137,10 +137,10 @@ public class RouteExecutionEngine
         // 仅 retry-route 才全员重跑（白名单房主同步，全员一致）
         if (!_currentRouteRetryModeEnabled) return;
 
-        Logger.LogWarning("[联机][重试模式v2] 收到队友复苏广播（uid={Uid}, routeIndex={Idx}）→ 标记本段有人死过，段出口屏障统一决策", playerUid, routeIndex);
-        // 线路重试模式 v2（§0）：标记"本段有人死过"，由段出口屏障放行后统一决策全员重跑。
-        // 不再让接收方单独触发 RetrySegment（那会各跑各的，非"全员一起"）。
-        executor.MarkSegmentDeathForRerun();
+        Logger.LogWarning("[联机][重试模式v2] 收到队友复苏广播（uid={Uid}, routeIndex={Idx}）→ 本机也前往神像回血", playerUid, routeIndex);
+        // 线路重试模式 v2（§0）：队友死亡时，本机（包括健康成员）也一起去神像回血，然后全员重跑。
+        // 统一调用 HandleRevivalTrigger，让健康队友也走 SignalMultiplayerRevival(RetrySegment) 路径。
+        HandleRevivalTrigger(executor, isBroadcastReceived: true);
     }
 
     /// <summary>
