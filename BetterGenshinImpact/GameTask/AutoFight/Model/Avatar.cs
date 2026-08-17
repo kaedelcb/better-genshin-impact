@@ -503,8 +503,8 @@ public class Avatar
             Sleep(240, Ct);
         }
         
-        _returnMainUiTask.Start(Ct).Wait(2000,Ct);
-        Logger.LogInformation("切换识别失败2:{Name} 索引:{Index}", Name,Index);
+        if (tryTimes > 8) _returnMainUiTask.Start(Ct).Wait(2000,Ct);
+        Logger.LogInformation("切换识别失败2:{Name} 索引:{Index} {tryTimes}", Name,Index,tryTimes);
         return false;
     }
     

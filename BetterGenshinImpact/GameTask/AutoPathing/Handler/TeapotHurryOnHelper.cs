@@ -291,7 +291,7 @@ public partial class PathExecutor
                                 }
                                 else
                                 {
-                                    
+                                    await Delay(20, ct);
                                 }
                                 
                                 await Delay(480, ct);

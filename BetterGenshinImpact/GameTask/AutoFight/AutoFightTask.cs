@@ -467,10 +467,41 @@ public class AutoFightTask : ISoloTask
         for (var attempt = 1; attempt <= maxRetries; attempt++)
         {
             ct.ThrowIfCancellationRequested();
+
+            // 措施B：仅在重试时检测飞行状态——飞行中角色名 OCR 识别不可靠，
+            // 等待落地后再进入识别，避免在飞行状态反复识别出"未知角色"而空耗重试次数。
+            // 注意：只在重试流程内做该检测，正常单次识别不检测飞行。
+            if (attempt > 1)
+            {
+                for (var wait = 0; wait < 8; wait++)
+                {
+                    using var flyCheck = CaptureToRectArea();
+                    if (Bv.GetMotionStatus(flyCheck) != MotionStatus.Fly)
+                    {
+                        break;
+                    }
+                    Thread.Sleep(500);
+                    ct.ThrowIfCancellationRequested();
+                }
+            }
+
             using var ra = CaptureToRectArea();
             var scenes = new CombatScenes().InitializeTeam(ra);
             if (scenes.CheckTeamInitialized())
             {
+                // 措施A：CheckTeamInitialized 只验证角色数量、不验证角色名是否有效。
+                // 识别出"未知角色"（数量够但名字为占位符）时视为未成功初始化，继续重试，
+                // 避免拿残缺队伍去匹配脚本导致后续切人失败。
+                if (scenes.Avatars.Any(a => a.Name == "未知角色"))
+                {
+                    TaskControl.Logger.LogWarning("识别到未知角色，进行队伍重识别（第{Attempt}次）", attempt);
+                    if (attempt < maxRetries)
+                    {
+                        Thread.Sleep(retryDelayMs);
+                        ct.ThrowIfCancellationRequested();
+                    }
+                    continue;
+                }
                 return scenes;
             }
 
@@ -1067,6 +1098,18 @@ public class AutoFightTask : ISoloTask
                             await Task.Delay(100, cts2.Token);
                             //Logger.LogWarning("二次检测等待2");
                             continue; 
+                        }
+
+                        // 超时兜底检查（前置）：确保战斗命令循环的任何 continue 路径
+                        // （盾奶位跳过 / CD 跳过 / i-- 回退重试）都无法绕过战斗超时退出，
+                        // 杜绝"空转数小时不停"的极端情况。语义与下方原有超时判定完全一致。
+                        if (timeoutStopwatch.Elapsed > fightTimeout || AutoFightSeek.RotationCount >= rotationLimit)
+                        {
+                            TaskControl.Logger.LogInformation(AutoFightSeek.RotationCount >= rotationLimit ? "旋转次数达到上限，战斗结束" : "战斗超时结束");
+                            fightEndFlag = true;
+                            timeOutFlag = true;
+                            FightEndTotoly = true;
+                            break;
                         }
                         
                         var command = combatCommands[i];
