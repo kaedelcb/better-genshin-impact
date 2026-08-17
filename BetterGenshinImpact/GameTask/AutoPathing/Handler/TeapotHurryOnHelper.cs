@@ -177,7 +177,7 @@ public partial class PathExecutor
                             {
                                 st.MavikaFlyCount++;
                                 
-                                if (st.MavikaFlyCount > (st.MwktiaoIn?6:4) && avatar.IsActive(screen2))
+                                if (st.MavikaFlyCount > (st.MwktiaoIn?15:4) && avatar.IsActive(screen2))
                                 {
                                     if (nextWaypoint?.MoveMode != MoveModeEnum.Fly.Code &&
                                         Bv.GetMotionStatus(screen2) == MotionStatus.Fly && _lastWaypoint?.MoveMode != MoveModeEnum.Fly.Code )
@@ -244,7 +244,8 @@ public partial class PathExecutor
                     distance >  (PartyConfig.Distance) && (hurryOnBool ?? false))
                 {
                     //判断是否在飞行状态
-                    if (Bv.GetMotionStatus(screen2) != MotionStatus.Fly)
+                    var notflying = Bv.GetMotionStatus(screen2) != MotionStatus.Fly;
+                    if (notflying)
                     {
                         await SwitchAvatar(avatar.Index.ToString());    
                     }
@@ -254,20 +255,10 @@ public partial class PathExecutor
                         waypoint.MoveMode = MoveModeEnum.Run.Code;
                         st.SprintMouseLogo = false;
                     }
-                    
-                    // if (waypoint.MoveMode != MoveModeEnum.Walk.Code)
 
-                    if(_mwkFlyJumpDistance>0&&distance < _mwkFlyJumpDistance)st.HurryOnLogo = false; 
+                    if(_mwkFlyJumpDistance>0 && distance < _mwkFlyJumpDistance)st.HurryOnLogo = false; 
               
-                    if(num%2 == 1)Logger.LogInformation("自动赶路：{t} 赶路...{t2}",avatar.Name,Math.Round(distance));
-                    // if (distance < _mwkFlyJumpDistance )
-                    // {
-                    //     var cc = Bv.GetMotionStatus(screen2) == MotionStatus.Fly;
-                    //     if(cc){}
-                    //     Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
-                    //     // Logger.LogWarning("自动赶路：玛薇卡跳飞结束");
-                    //     hurryOnLogo = false;
-                    // }
+                    if(num % 5 == 1)Logger.LogInformation("自动赶路：{t} 赶路...{t2}",avatar.Name,Math.Round(distance));
 
                     if (avatar.Name == "玛薇卡") //连续点按E类型
                     {
@@ -279,9 +270,8 @@ public partial class PathExecutor
                             {
                                 if (!isOnMoto)
                                 {
-                                    if ((DateTime.UtcNow - st.LastElementalSkillTime).TotalMilliseconds > 550  && Bv.GetMotionStatus(screen2) != MotionStatus.Fly)
+                                    if ((DateTime.UtcNow - st.LastElementalSkillTime).TotalMilliseconds > 600  && notflying)
                                     {
-                                        // Logger.LogError("222");
                                         Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
                                         await Delay(200, ct);
                                         Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
@@ -290,12 +280,20 @@ public partial class PathExecutor
                                         await Delay(100, ct);
                                     }
                                 }
-                                var isOnMoto2 = await AutoFightSkill.AvatarSkillAsync(Logger, avatar, false, 2, ct);
-                                if (isOnMoto2)
+
+                                if (notflying)
                                 {
-                                    // Logger.LogError("222{t}",isOnMoto2);
-                                    st.LastElementalSkillTime = DateTime.UtcNow;
+                                    var isOnMoto2 = await AutoFightSkill.AvatarSkillAsync(Logger, avatar, false, 2, ct);
+                                    if (isOnMoto2)
+                                    {
+                                        st.LastElementalSkillTime = DateTime.UtcNow;
+                                    }
                                 }
+                                else
+                                {
+                                    
+                                }
+                                
                                 await Delay(480, ct);
                                 
                                 using var region3 = CaptureToRectArea();
@@ -326,9 +324,7 @@ public partial class PathExecutor
                                         }
                                         else
                                         {
-                                            // Logger.LogInformation("自动赶路：222333y {t}",waypoint.ActionParams);
                                             waypoint.ActionParams = "1000";
-                                            // Logger.LogInformation("自动赶路：222333yy {t}",waypoint.ActionParams);
                                         }
                                         Simulation.SendInput.SimulateAction(GIActions.Jump);
                                         st.Aa = true;
@@ -336,7 +332,6 @@ public partial class PathExecutor
                                 }
                                 else
                                 {
-                                    // Logger.LogInformation("玛薇卡技能2222");
                                     st.IsFlyingMwk = false;
                                 }
 
@@ -344,12 +339,6 @@ public partial class PathExecutor
                                 {
                                     st.ContinueHurryOn++;
                                     
-                                    
-                                    //  if(waypoint.MoveMode != MoveModeEnum.Fly.Code)
-                                    // {
-                                    //     hurryOnLogo = true; 
-                                    // }
-                                    // else 
                                     var cd = !AutoFightSkill.AvatarSkillAsync(Logger, avatar, false, 1, ct).Result;
                                      if (st.ContinueHurryOn > 0 && cd && (waypoint.MoveMode != MoveModeEnum.Fly.Code && !st.IsFlyingMwk))//?????
                                     {
@@ -365,18 +354,14 @@ public partial class PathExecutor
                                         st.HurryOnLogo = true;
                                         st.ContinueHurryOn = 0;
                                     }
-                                    // hurryOnLogo = true;
                                     
                                     var isClimb = Bv.GetMotionStatus(region3) == MotionStatus.Climb;
                                     if (isClimb)
                                     {
-                                        // Logger.LogError("自动赶路：878567");
                                         Simulation.SendInput.SimulateAction(GIActions.Drop);
                                         await Delay(500, ct);
                                         Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
                                     }
-                                    
-                                    // Logger.LogInformation("自动赶路：{t} 继续...", distance);
 
                                     if (distance > 10)
                                     {
@@ -647,6 +632,6 @@ public partial class PathExecutor
                     }
                 }
 
-        return false;
+                return false;
     }
 }
