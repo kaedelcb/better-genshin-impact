@@ -45,7 +45,6 @@ internal class GoToSereniteaPotTask
     private readonly string ayuanHuoling2String;
     private readonly string ayuanBelieveString;
     private readonly string ayuanShopString;
-    private readonly string ayuanByeString;
     private string dongTianName;
     
     private  OneDragonFlowConfig? SelectedConfig;
@@ -62,7 +61,6 @@ internal class GoToSereniteaPotTask
         this.ayuanHuoling2String = stringLocalizer.WithCultureGet(cultureInfo, "<壶灵>");
         this.ayuanBelieveString = stringLocalizer.WithCultureGet(cultureInfo, "信任");
         this.ayuanShopString = stringLocalizer.WithCultureGet(cultureInfo, "洞天百宝");
-        this.ayuanByeString = stringLocalizer.WithCultureGet(cultureInfo, "再见");
     }
 
     public async Task Start(CancellationToken ct)
@@ -597,7 +595,6 @@ internal class GoToSereniteaPotTask
     // 处理最后收尾操作
     private async Task Finished(CancellationToken ct)
     {
-        var isMainUi = false;
         Logger.LogInformation("领取尘歌壶奖励:{text}", "退出到主页");
         // 识别page 关闭按钮。
         using var ra6 = CaptureToRectArea();
@@ -606,43 +603,14 @@ internal class GoToSereniteaPotTask
             await Delay(1000, ct);
         }
 
-        var quitOption = await _chooseTalkOptionTask.SingleSelectText(this.ayuanByeString, ct, skipTimes: 20);
-        if (quitOption != TalkOptionRes.FoundAndClick)
-        {
-            if (!Bv.IsInMainUi(CaptureToRectArea()))
-            {
-                Logger.LogError("领取尘歌壶奖励:{text}", "阿圆对话框退出出错-1。");
-                await Delay(5000, ct);
-                var quitOption2 = await _chooseTalkOptionTask.SingleSelectText(this.ayuanByeString, ct);
-                if (quitOption2 != TalkOptionRes.FoundAndClick)
-                {
-                    Logger.LogError("领取尘歌壶奖励:{text}", "阿圆对话框退出出错-2。");
-                    return;
-                }
-                Logger.LogError("领取尘歌壶奖励:{text}", "阿圆对话框退出出错-3。");
-                return;
-            }
-            else
-            {
-                isMainUi = true;
-            }
-        }
-
+        var isMainUi = await _chooseTalkOptionTask.ClickChatExitUntilMainUi(ct);
         if (!isMainUi)
         {
-            await Delay(300, ct);
-            await NewRetry.WaitForAction(() =>
-            {
-                var ra = CaptureToRectArea();
-                if (!Bv.IsInMainUi(ra))
-                {
-                    ra.Click();
-                    return false;
-                }
-                else
-                    return true;
-            }, ct);
+            Logger.LogError("领取尘歌壶奖励:{text}", "阿圆对话框退出出错。");
+            return;
         }
+
+        await Delay(500, ct);
 
         // TP回主世界
         var tp = new TpTask(ct);
