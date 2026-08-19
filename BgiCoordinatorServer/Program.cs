@@ -31,9 +31,14 @@ var app = builder.Build();
 
 app.UseCors();
 
+// 启用静态文件服务，用于控制房间网页端
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 // 映射 SignalR Hub
 app.MapHub<CoordinatorHub>("/hub");
 
-app.MapGet("/", () => Results.Ok(new { status = "BgiCoordinatorServer running", maxRooms, playerTimeoutSeconds }));
+// 健康检查移到 /health，避免与 UseDefaultFiles()（根路径服务 index.html）冲突
+app.MapGet("/health", () => Results.Ok(new { status = "BgiCoordinatorServer running", maxRooms, playerTimeoutSeconds }));
 
 app.Run();

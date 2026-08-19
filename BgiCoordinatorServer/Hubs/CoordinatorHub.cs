@@ -1069,6 +1069,33 @@ public class CoordinatorHub : Hub
         _logger.LogInformation("连接 {ConnId} 断开，房间={Room}",
             Context.ConnectionId, disconnectedRoomCode ?? "(无)");
 
+        // 清理控制房间成员（必须在移除 _connectionGroups 跟踪之前执行，否则找不到所属 Group）
+        try
+        {
+            // 从 `_connectionGroups` 中找出当前连接所属的所有 Group
+            if (_connectionGroups.TryGetValue(Context.ConnectionId, out var groups))
+            {
+                List<string> groupList;
+                lock (groups) { groupList = [.. groups]; }
+
+                foreach (var group in groupList)
+                {
+                    if (group.StartsWith("CTRL_"))
+                    {
+                        _roomManager.RemoveFromControlRoom(group, Context.ConnectionId);
+                        var players = _roomManager.GetControlRoomPlayers(group);
+                        _ = Clients.Group(group).SendAsync("ControlRoomPlayersUpdated", players);
+                        _logger.LogInformation("控制房间 {Group} 成员断线，已标记离线", group);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // 清理 group 跟踪表时发生异常，忽略
+            _logger.LogWarning(ex, "清理控制房间 Group 时发生异常");
+        }
+
         // 清理 group 跟踪表，避免静态字典内存泄漏
         _connectionGroups.TryRemove(Context.ConnectionId, out _);
 
@@ -2405,5 +2432,126 @@ public class CoordinatorHub : Hub
         }
 
         return syncPointId;
+    }
+
+    // =========================================================================
+    // 控制房间（multiplayer-hoeing-assistant）— 远程控制
+    // =========================================================================
+
+    /// <summary>
+    /// 加入控制房间。校验密码 + UID 白名单，成功后加入 CTRL_{roomCode} Group
+    /// </summary>
+    public async Task JoinControlRoom(string roomCode, string password, string playerUid, string playerName, List<string>? allowedUids = null)
+    {
+        try
+        {
+            var uidWhitelist = allowedUids ?? [];
+            if (!ControlRoomAuth.Authenticate(roomCode, password, playerUid, uidWhitelist))
+            {
+                await Clients.Caller.SendAsync("JoinRejected", "密码错误或UID不在白名单中");
+                return;
+            }
+
+            var group = $"CTRL_{roomCode}";
+            await Groups.AddToGroupAsync(Context.ConnectionId, group);
+            TrackGroup(group);
+            var isWebClient = playerUid.StartsWith("web_");
+            if (!isWebClient)
+            {
+                _roomManager.AddToControlRoom(group, Context.ConnectionId, playerUid, playerName);
+            }
+            _logger.LogInformation("玩家 {PlayerName}({PlayerUid}) 加入控制房间 {RoomCode} (Web={IsWeb})", playerName, playerUid, roomCode, isWebClient);
+
+            // 广播成员列表
+            var players = _roomManager.GetControlRoomPlayers(group);
+            await Clients.Group(group).SendAsync("ControlRoomPlayersUpdated", players);
+
+            // 下发该玩家在线的缓存命令
+            var pending = _roomManager.GetAndClearPendingCommands(playerUid);
+            foreach (var cmd in pending)
+            {
+                await Clients.Client(Context.ConnectionId).SendAsync("RemoteCommand", cmd);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "JoinControlRoom 失败");
+            await Clients.Caller.SendAsync("JoinRejected", "加入控制房间失败");
+        }
+    }
+
+    /// <summary>
+    /// 向控制房间成员转发远程命令。目标离线时缓存，上线后自动下发。
+    /// </summary>
+    public async Task SendRemoteCommand(RemoteCommand command)
+    {
+        try
+        {
+            var group = $"CTRL_{command.RoomCode}";
+            // WEB 控制端（UID 以 web_ 开头）不会被 AddToControlRoom 加入 _controlRooms，
+            // 但它们已通过 JoinControlRoom 的密码校验并加入了 CTRL_ group，应放行发送。
+            // PC 端助手（UID 为真实数字）走 _controlRooms 校验，行为不变。
+            var isWebSender = !string.IsNullOrEmpty(command.SenderUid) && command.SenderUid.StartsWith("web_");
+            if (!isWebSender && !_roomManager.IsInControlRoom(group, Context.ConnectionId))
+            {
+                _logger.LogWarning("玩家 {Sender} 不在控制房间中，拒绝发送命令", command.Sender);
+                return;
+            }
+
+            // 解析目标
+            var targets = _roomManager.ResolveTargets(command);
+            var deliveredTo = 0;
+            foreach (var connectionId in targets)
+            {
+                await Clients.Client(connectionId).SendAsync("RemoteCommand", command);
+                deliveredTo++;
+            }
+
+            // 缓存离线目标：仅当明确指定的目标不在线时缓存（"*" 全员时不缓存单品）
+            if (command.Target.Count > 0 && !(command.Target.Count == 1 && command.Target[0] == "*"))
+            {
+                var players = _roomManager.GetControlRoomPlayers(group);
+                foreach (var targetUid in command.Target)
+                {
+                    if (!_roomManager.IsPlayerOnline(group, targetUid))
+                    {
+                        _roomManager.CachePendingCommand(targetUid, command);
+                        _logger.LogInformation("命令 {Cmd} 目标 {Uid} 离线，已缓存", command.Cmd, targetUid);
+                    }
+                }
+            }
+
+            _logger.LogInformation("命令 {Cmd} 已从 {Sender} 转发到 {Count} 个目标", command.Cmd, command.Sender, deliveredTo);
+            await Clients.Caller.SendAsync("RemoteCommandAck", new
+            {
+                commandId = command.CommandId,
+                deliveredTo,
+                message = deliveredTo == 0 ? "没有在线目标" : ""
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SendRemoteCommand 失败");
+        }
+    }
+
+    /// <summary>
+    /// 成员上报自身 BGI 状态与可用配置列表，服务端更新后广播最新成员列表。
+    /// </summary>
+    public async Task ReportControlStatus(ControlStatus status)
+    {
+        try
+        {
+            var group = $"CTRL_{status.RoomCode}";
+            _roomManager.UpdateControlStatus(group, Context.ConnectionId, status);
+
+            // 广播给控制房间所有成员
+            var players = _roomManager.GetControlRoomPlayers(group);
+            await Clients.Group(group).SendAsync("ControlRoomPlayersUpdated", players);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ReportControlStatus 失败");
+        }
     }
 }

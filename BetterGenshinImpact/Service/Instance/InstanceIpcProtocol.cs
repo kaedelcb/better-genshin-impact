@@ -23,6 +23,13 @@ public static class InstanceOperations
     public const string WebViewList = "webview.list";
     public const string WebViewSend = "webview.send";
     public const string WebViewMessage = "webview.message";
+    public const string TaskStop = "task.stop";
+    public const string TaskStart = "task.start";
+    public const string TaskStatus = "task.status";
+    public const string ConfigList = "config.list";
+    public const string ExecuteHotkey = "action.execute_hotkey";
+    public const string CloseGame = "action.close_game";
+    public const string SetTaskEnabled = "config.set_task_enabled";
 }
 
 public sealed class InstanceIpcEnvelope

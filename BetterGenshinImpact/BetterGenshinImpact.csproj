@@ -116,7 +116,68 @@
 		<ProjectReference Include="..\Fischless.GameCapture\Fischless.GameCapture.csproj" />
 		<ProjectReference Include="..\Fischless.HotkeyCapture\Fischless.HotkeyCapture.csproj" />
 		<ProjectReference Include="..\Fischless.WindowsInput\Fischless.WindowsInput.csproj" />
+		<ProjectReference Include="..\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj">
+			<AdditionalProperties>Platform=AnyCPU</AdditionalProperties>
+			<ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+		</ProjectReference>
 	</ItemGroup>
+
+	<!-- 编译后复制助手全部输出到 BGI 输出目录下的 Tools\MultiplayerHoeingAssistant 子目录（用 $(Configuration) 兼容 Debug/Release） -->
+  <Target Name="CopyMultiplayerHoeingAssistant" AfterTargets="Build">
+    <Message Text="CopyMultiplayerHoeingAssistant: 复制助手全部输出到 $(OutDir)Tools\MultiplayerHoeingAssistant" Importance="high" />
+    <!-- 重新编译并部署助手（已实测可靠）：
+         1) 嵌套 <MSBuild Targets=Rebuild> 或单个 dotnet build 会因 MSBuild Server 的
+            内存增量缓存返回"已最新"而跳过真正 C# 重编，导致助手改动（版本号/功能/UI）
+            不进入 Tools\；
+         2) 方案：先 dotnet clean 彻底清空助手增量缓存，再 dotnet build 全量重建，
+            触发助手自身的 DeployAssistantToBgiTools（AfterTargets=Build）自动部署到 Tools\。
+         二者结合保证编译 BGI 时助手改动每次都真正编译并部署。 -->
+    <Exec Command="dotnet clean &quot;$(MSBuildProjectDirectory)\..\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj&quot; -c $(Configuration)"
+          WorkingDirectory="$(MSBuildProjectDirectory)" />
+    <Exec Command="dotnet build &quot;$(MSBuildProjectDirectory)\..\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj&quot; -c $(Configuration)"
+          WorkingDirectory="$(MSBuildProjectDirectory)" />
+    <!-- 清理 BGI 输出目录根的历史残留助手文件（早期 ProjectReference 默认复制留下的 exe/deps/runtimeconfig）。
+         现在一律只允许存在于 Tools\MultiplayerHoeingAssistant 子目录，
+         根目录的不属于本版本部署结构，删除以免与 Tools 副本混淆、防止手误运行错 exe。 -->
+    <ItemGroup>
+      <StaleAssistRoot Include="$(OutDir)MultiplayerHoeingAssistant.exe" />
+      <StaleAssistRoot Include="$(OutDir)MultiplayerHoeingAssistant.dll" />
+      <StaleAssistRoot Include="$(OutDir)MultiplayerHoeingAssistant.pdb" />
+      <StaleAssistRoot Include="$(OutDir)MultiplayerHoeingAssistant.deps.json" />
+      <StaleAssistRoot Include="$(OutDir)MultiplayerHoeingAssistant.runtimeconfig.json" />
+    </ItemGroup>
+    <Delete Files="@(StaleAssistRoot)" />
+    <!-- 排除 assistant-config.json：它是用户运行配置（存免责同意/密码/UID/快捷绑定），
+         绝不随构建覆盖到 Tools，否则每次构建都会把免责同意标记等配置复位。 -->
+    <ItemGroup>
+      <AssistOutput Include="$(MSBuildProjectDirectory)\..\MultiplayerHoeingAssistant\bin\$(Configuration)\net8.0-windows\**\*" Exclude="$(MSBuildProjectDirectory)\..\MultiplayerHoeingAssistant\bin\$(Configuration)\net8.0-windows\**\assistant-config.json" />
+    </ItemGroup>
+    <!-- 复制到 bin\Debug\...\Tools\（无 x64 平台目录） -->
+    <Copy SourceFiles="@(AssistOutput)"
+          DestinationFiles="@(AssistOutput->'$(OutDir)Tools\MultiplayerHoeingAssistant\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <!-- 复制到 bin\x64\Debug\...\Tools\（带 x64 平台目录，用户实际运行路径） -->
+    <Copy SourceFiles="@(AssistOutput)"
+          DestinationFiles="@(AssistOutput->'$(MSBuildProjectDirectory)\..\BetterGenshinImpact\bin\x64\$(Configuration)\net8.0-windows10.0.22621.0\Tools\MultiplayerHoeingAssistant\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+	<!-- 编译后复制 AutoHoeingUpdater 工具到 BGI 输出目录下的 Tools\AutoHoeingUpdater 子目录（含空目录结构） -->
+	<Target Name="CopyAutoHoeingUpdater" AfterTargets="Build">
+		<Message Text="CopyAutoHoeingUpdater: 复制 AutoHoeingUpdater 到 $(OutDir)Tools\AutoHoeingUpdater" Importance="high" />
+		<ItemGroup>
+			<UpdaterOutput Include="$(MSBuildProjectDirectory)\..\AutoHoeingUpdater\**\*" />
+			<UpdaterDirs Include="$(MSBuildProjectDirectory)\..\AutoHoeingUpdater\01首次使用注意备份" />
+			<UpdaterDirs Include="$(MSBuildProjectDirectory)\..\AutoHoeingUpdater\02未选择仅下载会清空所有路线" />
+			<UpdaterDirs Include="$(MSBuildProjectDirectory)\..\AutoHoeingUpdater\03参考队伍与设置（截图）" />
+			<UpdaterDirs Include="$(MSBuildProjectDirectory)\..\AutoHoeingUpdater\04配置组添加自动脚本即实现自动更新" />
+			<UpdaterDirs Include="$(MSBuildProjectDirectory)\..\AutoHoeingUpdater\05自动更新脚本（自己修改路径）" />
+		</ItemGroup>
+		<MakeDir Directories="@(UpdaterDirs->'$(OutDir)Tools\AutoHoeingUpdater\%(Filename)%(Extension)')" />
+		<Copy SourceFiles="@(UpdaterOutput)"
+		      DestinationFiles="@(UpdaterOutput->'$(OutDir)Tools\AutoHoeingUpdater\%(RecursiveDir)%(Filename)%(Extension)')"
+		      SkipUnchangedFiles="true" />
+	</Target>
 
 	<ItemGroup>
 		<None Update="GameTask\**\Recognition.json">

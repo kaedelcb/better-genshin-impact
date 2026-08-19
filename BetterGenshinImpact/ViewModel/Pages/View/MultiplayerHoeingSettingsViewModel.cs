@@ -111,6 +111,9 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
     // ===== 调试（hoeing-multiplayer-solo-debug-mode）：单人调试模式，纯本地 =====
     [ObservableProperty] private bool _soloDebugMode;
 
+    // ===== 调试：自动启动联机助手，纯本地 =====
+    [ObservableProperty] private bool _autoLaunchAssistant;
+
     // ===== 按周期吃食物（multiplayer-hoeing-auto-eat-food-by-period，纯本地）=====
     [ObservableProperty] private int _medicineFoodSlot1 = 1;
     [ObservableProperty] private int _medicineFoodSlot2 = 2;
@@ -276,6 +279,7 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
 
         // hoeing-multiplayer-solo-debug-mode：单人调试模式开关（纯本地，默认关）
         _soloDebugMode = GetBool("soloDebugMode", g.SoloDebugMode);
+        _autoLaunchAssistant = GetBool("autoLaunchAssistant", g.AutoLaunchAssistant);
 
         _joinModeSelection = GetStr("memberJoinMode", "byHostName") == "random" ? "随机加入现有房间" : "指定房主名称";
         _targetHostName = GetStr("targetHostName", g.TargetHostName);
@@ -348,6 +352,8 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         settings["multiWorldResumeEnabled"] = MultiWorldResumeEnabled;
         // hoeing-multiplayer-solo-debug-mode：单人调试模式开关（纯本地）
         settings["soloDebugMode"] = SoloDebugMode;
+        // 自动启动联机助手（纯本地）
+        settings["autoLaunchAssistant"] = AutoLaunchAssistant;
         if (int.TryParse(FightTimeoutSeconds, out var fts)) settings["fightTimeoutSeconds"] = fts;
 
         settings["fastSyncPointEnabled"] = FastSyncPointEnabled;

@@ -18,6 +18,11 @@ public class RoomManager
     private readonly int _maxRooms;
     private readonly ILogger<RoomManager>? _logger;
 
+    // 控制房间相关（multiplayer-hoeing-assistant）
+    private readonly ConcurrentDictionary<string, List<ControlRoomPlayer>> _controlRooms = new();
+    // 离线命令缓存：playerUid → 待执行的命令列表
+    private readonly ConcurrentDictionary<string, List<RemoteCommand>> _pendingCommands = new();
+
     public RoomManager(int maxRooms = 50, ILogger<RoomManager>? logger = null)
     {
         _maxRooms = maxRooms;
@@ -549,6 +554,9 @@ public class RoomManager
     /// <summary>
     /// 判断所有在线成员是否至少属于 setA 或 setB 之一。
     /// exp-cap-prefinal-stop-by-two-noexp：提前停止的核心判断。
+    /// 版本A（实时解锁）：2场无经验（setB）只有在团队已有人正式达4场上限（setA 非空）时才参与判定；
+    /// setA 为空时 setB 视为空集，退化为"全员必须都在 setA"（全员连续4场无经验才算上限）。
+    /// 这样避免"无人到4场、全员仅靠连续2场无经验就被提前停止"的误停。
     /// </summary>
     private static bool IsAllOnlineMembersInEitherSet(Room room, HashSet<string> setA, HashSet<string> setB)
     {
@@ -558,7 +566,10 @@ public class RoomManager
 
         if (onlinePlayers.Count == 0) return false;
 
-        return onlinePlayers.All(p => setA.Contains(p.ConnectionId) || setB.Contains(p.ConnectionId));
+        // 版本A门控：setA（已正式达上限/4场）非空才解锁 2场（setB）参与判定。
+        var effectiveB = setA.Count > 0 ? setB : [];
+
+        return onlinePlayers.All(p => setA.Contains(p.ConnectionId) || effectiveB.Contains(p.ConnectionId));
     }
 
     public (int OnlineCount, int ReportedCount) GetRouteVerificationStatus(string roomCode)
@@ -1015,4 +1026,147 @@ public class RoomManager
 
         _logger?.LogInformation("[ResetAbnormalStates] 房间 {RoomCode} 异常状态已重置", roomCode);
     }
-}
+
+    // === 控制房间相关方法（multiplayer-hoeing-assistant） ===
+
+    /// <summary>将玩家添加到控制房间</summary>
+    public void AddToControlRoom(string group, string connectionId, string playerUid, string playerName)
+    {
+        var players = _controlRooms.GetOrAdd(group, _ => []);
+        lock (players)
+        {
+            var existing = players.Find(p => p.PlayerUid == playerUid);
+            if (existing != null)
+            {
+                existing.ConnectionId = connectionId;
+                existing.Online = true;
+            }
+            else
+            {
+                players.Add(new ControlRoomPlayer
+                {
+                    ConnectionId = connectionId,
+                    PlayerUid = playerUid,
+                    PlayerName = playerName,
+                    Online = true,
+                    BgiStatus = "unknown"
+                });
+            }
+        }
+    }
+
+    /// <summary>获取控制房间的玩家列表</summary>
+    public List<ControlRoomPlayer> GetControlRoomPlayers(string group)
+    {
+        if (_controlRooms.TryGetValue(group, out var players))
+        {
+            lock (players) { return [.. players]; }
+        }
+        return [];
+    }
+
+    /// <summary>检查玩家是否在控制房间中</summary>
+    public bool IsInControlRoom(string group, string connectionId)
+    {
+        if (_controlRooms.TryGetValue(group, out var players))
+        {
+            lock (players) { return players.Any(p => p.ConnectionId == connectionId); }
+        }
+        return false;
+    }
+
+    /// <summary>解析远程命令的目标连接列表（"*"=全部在线，否则按 UID 匹配）</summary>
+    public List<string> ResolveTargets(RemoteCommand command)
+    {
+        var group = $"CTRL_{command.RoomCode}";
+        if (!_controlRooms.TryGetValue(group, out var players))
+            return [];
+
+        lock (players)
+        {
+            if (command.Target.Count == 1 && command.Target[0] == "*")
+                return players.Where(p => p.Online).Select(p => p.ConnectionId).ToList();
+
+            return players
+                .Where(p => p.Online && command.Target.Contains(p.PlayerUid))
+                .Select(p => p.ConnectionId)
+                .ToList();
+        }
+    }
+
+    /// <summary>从控制房间移除玩家（设为离线）</summary>
+    public void RemoveFromControlRoom(string group, string connectionId)
+    {
+        if (_controlRooms.TryGetValue(group, out var players))
+        {
+            lock (players)
+            {
+                var player = players.Find(p => p.ConnectionId == connectionId);
+                if (player != null)
+                {
+                    player.Online = false;
+                    player.ConnectionId = string.Empty;
+                    player.BgiStatus = "";
+                    player.TaskRunning = false;
+                    player.CurrentTaskName = null;
+                }
+            }
+        }
+    }
+
+    /// <summary>更新控制房间中玩家的状态</summary>
+    public void UpdateControlStatus(string group, string connectionId, ControlStatus status)
+    {
+        if (_controlRooms.TryGetValue(group, out var players))
+        {
+            lock (players)
+            {
+                var player = players.Find(p => p.ConnectionId == connectionId);
+                if (player != null)
+                {
+                    player.BgiStatus = status.BgiStatus;
+                    player.ConfigGroups = status.ConfigGroups;
+                    player.OneClickConfigs = status.OneClickConfigs;
+                    player.ConfigGroupTasks = status.ConfigGroupTasks;
+                    player.OneClickTasks = status.OneClickTasks;
+                    player.ConfigGroupTasksWithStatus = status.ConfigGroupTasksWithStatus;
+                    player.OneClickTasksWithStatus = status.OneClickTasksWithStatus;
+                    player.Hotkeys = status.Hotkeys;
+                    player.TaskRunning = status.TaskRunning;
+                    player.CurrentTaskName = status.CurrentTaskName;
+                    player.AutoHoeingRunning = status.AutoHoeingRunning;
+                    player.AutoHoeingProgress = status.AutoHoeingProgress;
+                    player.LastHeartbeat = DateTime.UtcNow;
+                }
+            }
+        }
+    }
+
+    /// <summary>缓存离线命令（目标 UID → 命令）</summary>
+    public void CachePendingCommand(string targetUid, RemoteCommand command)
+    {
+        var list = _pendingCommands.GetOrAdd(targetUid, _ => []);
+        lock (list) { list.Add(command); }
+    }
+
+    /// <summary>获取并清空某玩家的离线缓存命令</summary>
+    public List<RemoteCommand> GetAndClearPendingCommands(string targetUid)
+    {
+        if (_pendingCommands.TryRemove(targetUid, out var list))
+        {
+            lock (list) { return [.. list]; }
+        }
+        return [];
+    }
+
+    /// <summary>检查目标 UID 是否在线</summary>
+    public bool IsPlayerOnline(string group, string playerUid)
+    {
+        if (_controlRooms.TryGetValue(group, out var players))
+        {
+            lock (players) { return players.Any(p => p.PlayerUid == playerUid && p.Online); }
+        }
+        return false;
+    }
+
+    }

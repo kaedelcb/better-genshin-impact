@@ -559,6 +559,9 @@ public class AutoHoeingTask : ISoloTask
         }
         finally
         {
+            // 清除全局联机锄地进度信号
+            AutoHoeingProgress.Clear();
+
             // 通道 C 恢复（hoeing-multiplayer-sync-execution-params §C4）：还原成员回填时覆盖的
             // 全局 PickDropsAfterFightSeconds，保证单机 ScanPickTask 后续读到原值。无条件恢复（HasValue 守护）。
             if (_savedGlobalPickDropsAfterFightSeconds.HasValue)
@@ -1541,6 +1544,13 @@ public class AutoHoeingTask : ISoloTask
             // 只有走到这里（所有组队/加入/等待环节均未提前 return）才算组队成功，允许后续开锄。
             // 任何失败/降级/超时路径都在上方提前 return，本标志保持 false，RunTask 据此拦截开锄。
             _multiplayerPartyReady = true;
+
+            // 锄地房间信号：已成功加入联机锄地房间（IsInRoom=true）即视为"锄地中"，
+            // 立即同步全局进度载体，供 IPC task.status 读取。离开房间由 Start finally 的 Clear() 复位。
+            lock (AutoHoeingProgress.Sync)
+            {
+                AutoHoeingProgress.IsRunning = true;
+            }
         }
         catch (Exception ex)
         {
@@ -1550,6 +1560,39 @@ public class AutoHoeingTask : ISoloTask
             if (ex is not OperationCanceledException)
                 MarkPartyFailed("初始化异常");
             _multiplayerCoordinator = null;
+        }
+    }
+
+    /// <summary>
+    /// 尝试启动联机助手（MultiplayerHoeingAssistant.exe）。启动失败不抛异常，仅记日志。
+    /// </summary>
+    private void TryLaunchAssistant()
+    {
+        try
+        {
+            var assistantPath = Path.Combine(AppContext.BaseDirectory, @"Tools\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.exe");
+            if (File.Exists(assistantPath))
+            {
+                var process = new System.Diagnostics.Process
+                {
+                    StartInfo = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = assistantPath,
+                        Arguments = "--minimized",
+                        UseShellExecute = true
+                    }
+                };
+                process.Start();
+                _logger.LogInformation("[联机] 已自动启动联机助手（最小化）");
+            }
+            else
+            {
+                _logger.LogWarning("[联机] 联机助手不存在，无法自动启动: {Path}", assistantPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[联机] 自动启动联机助手失败");
         }
     }
 
@@ -1823,6 +1866,12 @@ public class AutoHoeingTask : ISoloTask
         // 联机模式初始化
         if (_config.MultiplayerEnabled)
         {
+            // 联机锄地第一时间：自动启动联机助手（如果配置了自动启动）
+            if (_config.AutoLaunchAssistant)
+            {
+                TryLaunchAssistant();
+            }
+
             // 联机模式下禁用自动领取派遣，避免打断锄地流程
             // （_partyConfig 为 null 时由 RouteExecutionEngine 在每条路线执行前处理）
             if (_partyConfig != null)
@@ -3446,6 +3495,18 @@ public class AutoHoeingTask : ISoloTask
                 (int)tsRouteEstimate.TotalHours, tsRouteEstimate.Minutes, tsRouteEstimate.Seconds,
                 (int)tsRoundRemain.TotalHours, tsRoundRemain.Minutes, tsRoundRemain.Seconds);
 
+            // 写入全局进度载体（供 IPC task.status 读取）
+            lock (AutoHoeingProgress.Sync)
+            {
+                AutoHoeingProgress.IsRunning = true;
+                AutoHoeingProgress.RoundPrefix = roundPrefix;
+                AutoHoeingProgress.CurrentRouteIndex = startIndex + count;
+                AutoHoeingProgress.TotalRoutes = groupRoutes.Count;
+                AutoHoeingProgress.RouteFileName = route.FileName;
+                AutoHoeingProgress.RouteEstimatedSeconds = route.AdjustedTime;
+                AutoHoeingProgress.RoundRemainingSeconds = remainingEstimatedTime;
+            }
+
             // 白芙切换
             if (_shouldSwitchFurina)
             {
@@ -4191,6 +4252,7 @@ public class AutoHoeingTask : ISoloTask
             _config.LagSegmentThreshold = Get("lagSegmentThreshold", _config.LagSegmentThreshold);
             // hoeing-multiplayer-solo-debug-mode：单人调试模式回读（纯本地，配置组场景必须经此 override 才能传到运行时 EffectiveConfig）
             _config.SoloDebugMode = Get("soloDebugMode", _config.SoloDebugMode);
+            _config.AutoLaunchAssistant = Get("autoLaunchAssistant", _config.AutoLaunchAssistant);
             NormalizeKazuhaTimeoutOrder(_config);
             _config.FightTimeoutSeconds = Get("fightTimeoutSeconds", _config.FightTimeoutSeconds);
             // === 集体卡死监测（multiplayer-mutual-wait-collective-skip §8.8 / OQ-1~OQ-5 默认值）===

@@ -532,6 +532,12 @@ public partial class AutoHoeingConfig : ObservableObject
     private bool _soloDebugMode = false;
 
     /// <summary>
+    /// 联机锄地启动后自动启动联机助手（MultiplayerHoeingAssistant.exe）。纯本地设置，不同步。
+    /// </summary>
+    [ObservableProperty]
+    private bool _autoLaunchAssistant = false;
+
+    /// <summary>
     /// 房间白名单，逗号分隔的玩家名称
     /// </summary>
     [ObservableProperty]

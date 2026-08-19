@@ -1283,7 +1283,10 @@ public partial class PathExecutor
                                         {
                                             _segmentDeathForRerun = true;
                                             _revivedGoToSegExitBarrier = true;
-                                            System.Threading.Interlocked.Exchange(ref _pendingRevivalEscalation, 0); // 消费掉，避免残留影响后续
+                                            System.Threading.Interlocked.Exchange(ref _pendingRevivalEscalation, 0); // 消费掉 escalation，避免残留影响后续
+                                            MultiplayerRevivalGate.Reset(ref _multiplayerRevivalDetected);          // 同清信号位：传送神像途中可能又收到新复苏广播写入信号位
+                                                                                                                  // （本分支 entry TryConsumeRevivalSignal 消费的是更早那个），残留会在重跑段起点被
+                                                                                                                  // 主循环兜底 TryConsumeRevivalSignal 误消费 → 打断"全员重跑本段"（hoeing-multiplayer-route-retry-mode）。
                                             Logger.LogWarning("[联机][重试模式v2] 复苏者已回神像满血 → 前往段出口屏障与队友碰头（不单独重跑）");
                                             break; // 跳出 waypoint 循环 → 段出口屏障
                                         }
@@ -1746,6 +1749,11 @@ public partial class PathExecutor
                             _needReportNormalBeforeSync = true;   // 段起点同步前上报 Normal
                             _isRerunningSegment = true;           // 重跑期间 syncId 后缀 _rerun，防服务端"全员已到"误放行
                             SkipToNextSegment = false;            // 确保"重跑本段"而非"跳下一段"
+                            // 清残留复苏信号（escalation + 信号位）：复苏广播可能在神像传送/屏障等待期间写入，
+                            // 若不清，重跑段第 0 个 waypoint 顶部 TryConsumeRevivalSignal 会立即命中 → 打断"全员重跑本段"
+                            // 改判跳段（hoeing-multiplayer-route-retry-mode 实测 bug）。Reset 幂等，不吞重跑期间新复苏信号。
+                            MultiplayerRevivalGate.Reset(ref _multiplayerRevivalDetected);
+                            System.Threading.Interlocked.Exchange(ref _pendingRevivalEscalation, 0);
                             Logger.LogWarning("[联机][重试模式v2] 段出口屏障：本段有成员死过 → 全员一起重跑本段（第 1 次，仅重试一次）");
                             ResetRecoveryStateForNewAttempt();
                             continue; // 继续 for-i：全员重跑本段（段起点传送 + 正常同步汇合）

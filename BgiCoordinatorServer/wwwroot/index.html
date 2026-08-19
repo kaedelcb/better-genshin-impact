@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>联机锄地 · 控制面板</title>
+    <link rel="stylesheet" href="control-room.css">
+</head>
+<body>
+    <!-- ========== 登录面板 ========== -->
+    <div id="loginPanel" class="card login-card">
+        <div class="logo">🌾</div>
+        <h1>联机锄地助手</h1>
+        <p class="subtitle">Web 控制端 · 远程指挥联机锄地</p>
+        <label class="field-label">房间码</label>
+        <input type="text" id="roomCode" placeholder="输入 6 位房间码" autocomplete="off">
+        <label class="field-label">密码</label>
+        <input type="password" id="password" placeholder="4 - 8 位密码" autocomplete="off">
+        <label class="field-label">昵称</label>
+        <input type="text" id="nickname" placeholder="例如：指挥员" autocomplete="off">
+        <div class="remember-row">
+            <label class="check-row">
+                <input type="checkbox" id="rememberMe" checked>
+                <span>记住登录（下次自动加入）</span>
+            </label>
+        </div>
+        <button class="btn btn-primary btn-lg" onclick="joinRoom()">进入控制房间</button>
+        <div id="loginError" class="error"></div>
+    </div>
+
+    <!-- ========== 主控制面板 ========== -->
+    <div id="controlPanel" class="container" style="display:none">
+        <!-- 顶部标题栏 -->
+        <div class="topbar">
+            <div class="brand">
+                <span class="logo-sm">🌾</span>
+                <span class="brand-title">联机锄地助手</span>
+            </div>
+            <div class="topbar-right">
+                <span id="roomInfo" class="room-info"></span>
+                <span id="connDot" class="dot dot-online"></span>
+                <button class="btn btn-ghost" onclick="openSettings()">⚙ 设置</button>
+            </div>
+        </div>
+
+        <!-- 一键快捷指令 -->
+        <div class="card quick-card">
+            <div class="quick-row" id="quickRow">
+                <button class="quick-btn" data-key="传奇">传奇</button>
+                <button class="quick-btn" data-key="次数盾">次数盾</button>
+                <button class="quick-btn" data-key="精英">精英</button>
+                <button class="quick-btn" data-key="小怪">小怪</button>
+                <button class="quick-btn" data-key="自定义">自定义</button>
+            </div>
+        </div>
+
+        <!-- 成员列表 -->
+        <div class="section-title">在线成员</div>
+        <div id="memberList" class="member-list"></div>
+
+        <!-- 命令日志 -->
+        <div class="section-title">命令日志</div>
+        <div id="logArea" class="log"></div>
+    </div>
+
+    <script src="signalr.min.js"></script>
+    <script src="control-room.js"></script>
+</body>
+</html>

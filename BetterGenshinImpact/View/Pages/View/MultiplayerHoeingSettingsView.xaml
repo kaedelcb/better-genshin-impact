@@ -664,6 +664,23 @@
                                       TextWrapping="Wrap" />
                     </StackPanel>
                 </ui:Card>
+                <!--  子卡片：自动启动联机助手（纯本地）  -->
+                <ui:Card Margin="0,8,0,0" Padding="12">
+                    <StackPanel>
+                        <ui:TextBlock Margin="0,0,0,8"
+                                      FontTypography="BodyStrong"
+                                      Text="自动启动联机助手" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <ui:ToggleSwitch Content="联机锄地启动后自动启动助手"
+                                             IsChecked="{Binding AutoLaunchAssistant, Mode=TwoWay}" />
+                            <Button Content="手动打开" Width="80" Height="28" Margin="12,0,0,0"
+                                    Click="OnManualLaunchAssistant" />
+                        </StackPanel>
+                        <ui:TextBlock Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                      Text="开启后，联机锄地开始时自动启动 MultiplayerHoeingAssistant.exe（位于 BGI 同目录下的 Tools\MultiplayerHoeingAssistant 文件夹内）。关闭后需手动启动助手。"
+                                      TextWrapping="Wrap" />
+                    </StackPanel>
+                </ui:Card>
             </StackPanel>
         </ui:CardExpander>
     </StackPanel>

@@ -1,0 +1,256 @@
+<UserControl x:Class="MultiplayerHoeingAssistant.Views.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:MultiplayerHoeingAssistant.ViewModels"
+             d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
+             d:DesignWidth="700"
+             mc:Ignorable="d">
+
+    <!-- 本页面复用 MainWindow.Resources 中定义的样式和颜色（GoldScrollViewer、QuestCard、GuildCheckBox、BtnGold、GoldText、White、Dim 等）。
+         作为 UserControl 放在 MainWindow 内部，可视树继承父级资源，不需额外引用。 -->
+
+    <!-- 自包含 ComboBox 样式（MainWindow 未定义，此处独立提供） -->
+    <!-- 注意：所有 StaticResource 在 UserControl.Resources 内部引用父级 Window 资源时
+         必须使用 DynamicResource，因为 StaticResource 在编译时解析，UserControl 的
+         资源字典无法向上查找父级 Window 的 Resources。 -->
+    <UserControl.Resources>
+        <!-- 鎏金下拉选择框（原神风格）：ToggleButton 控制开合，Popup 显示下拉项 -->
+        <Style x:Key="GoldComboBox" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="ToggleButton"
+                                          Focusable="False"
+                                          ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Background="Transparent" BorderThickness="0">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Bd"
+                                                Background="#2A1C1640"
+                                                BorderBrush="#B0D4AF37"
+                                                BorderThickness="1"
+                                                CornerRadius="7"
+                                                Padding="8,0,7,0">
+                                            <Grid TextElement.Foreground="#FFFFFF"
+                                                  TextElement.FontFamily="{DynamicResource ContentControlThemeFontFamily}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <ContentPresenter Grid.Column="0"
+                                                                  TextElement.Foreground="#FFFFFF"
+                                                                  Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                                  VerticalAlignment="Center"
+                                                                  HorizontalAlignment="Left"
+                                                                  IsHitTestVisible="False"/>
+                                                <Path Grid.Column="1"
+                                                      Data="M 0,0 L 4,4 L 8,0"
+                                                      Stroke="{DynamicResource Gold}"
+                                                      StrokeThickness="1.6"
+                                                      StrokeLineJoin="Round"
+                                                      VerticalAlignment="Center"
+                                                      Margin="8,0,0,0"/>
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="#3B2E1A40"/>
+                                                <Setter TargetName="Bd" Property="BorderBrush" Value="#F0E8C96D"/>
+                                            </Trigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="#38251040"/>
+                                            </Trigger>
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter TargetName="Bd" Property="Opacity" Value="0.3"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <Popup x:Name="PART_Popup"
+                                   AllowsTransparency="True"
+                                   Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   StaysOpen="False"
+                                   PopupAnimation="Fade">
+                                <Grid MinWidth="{TemplateBinding ActualWidth}" MaxHeight="220" Margin="0,4,0,0">
+                                    <Border Background="#232048"
+                                            BorderBrush="{DynamicResource GoldLine}"
+                                            BorderThickness="1"
+                                            CornerRadius="8"
+                                            Padding="2"
+                                            Effect="{DynamicResource CardShadow}">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                      Style="{DynamicResource GoldScrollViewer}">
+                                            <ItemsPresenter/>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Grid>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 鎏金下拉选项 -->
+        <Style x:Key="GoldComboItem" TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="Bd" Background="Transparent"
+                                CornerRadius="5" Padding="10,7"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#3DD4AF37"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#3B2E1A"/>
+                                <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Style="{DynamicResource GoldScrollViewer}">
+        <StackPanel Margin="0,0,0,24">
+
+            <!-- ========== 顶栏（返回按钮） ========== -->
+            <Grid Margin="0,0,0,16">
+                <Button Content="←  返回" Style="{DynamicResource BtnGhost}" Padding="12,5"
+                        HorizontalAlignment="Left" VerticalAlignment="Center"
+                        Command="{Binding CloseSettingsCommand}"/>
+            </Grid>
+
+            <!-- ========== 卡片：房间设置 ========== -->
+            <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,16">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="房间设置" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"/>
+                        <TextBlock Text="服务器地址、房间密码、玩家信息、UID、BGI 路径"
+                                   FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="打开房间设置" Style="{DynamicResource BtnGold}"
+                            Command="{Binding OpenRoomSettingsCommand}" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+
+            <!-- ========== 卡片：启动策略 ========== -->
+            <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="助手启动策略" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"
+                               Margin="0,0,0,14"/>
+
+                    <!-- ① 随 BGI 启动 -->
+                    <Border Background="#1E262660" CornerRadius="8" Padding="12,10" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox Grid.Column="0" IsChecked="{Binding AutoLaunchWithBgi, Mode=TwoWay}"
+                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Top" Margin="0,2,16,0" HorizontalAlignment="Left"/>
+                            <StackPanel Grid.Column="1" Margin="0,0,14,0">
+                                <TextBlock Text="随 BGI 启动" FontSize="13" FontWeight="Medium"
+                                           Foreground="{DynamicResource White}"/>
+                                <TextBlock Text="检测到 BGI 进程存在时自动启动助手"
+                                           FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <ComboBox Grid.Column="2" Width="150"
+                                      IsEnabled="{Binding AutoLaunchWithBgi}"
+                                      SelectedIndex="{Binding AutoLaunchWithBgiModeIndex}"
+                                      Style="{DynamicResource GoldComboBox}"
+                                      VerticalAlignment="Center">
+                                <ComboBoxItem Content="弹窗启动" Style="{DynamicResource GoldComboItem}"/>
+                                <ComboBoxItem Content="静默缩小到托盘" Style="{DynamicResource GoldComboItem}"/>
+                            </ComboBox>
+                        </Grid>
+                    </Border>
+
+                    <!-- ② 开机自启动 -->
+                    <Border Background="#1E262660" CornerRadius="8" Padding="12,10" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox Grid.Column="0" IsChecked="{Binding AutoLaunchOnBoot, Mode=TwoWay}"
+                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Top" Margin="0,2,16,0" HorizontalAlignment="Left"/>
+                            <StackPanel Grid.Column="1" Margin="0,0,14,0">
+                                <TextBlock Text="开机自启动" FontSize="13" FontWeight="Medium"
+                                           Foreground="{DynamicResource White}"/>
+                                <TextBlock Text="系统启动时自动启动助手"
+                                           FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <ComboBox Grid.Column="2" Width="150"
+                                      IsEnabled="{Binding AutoLaunchOnBoot}"
+                                      SelectedIndex="{Binding AutoLaunchOnBootModeIndex}"
+                                      Style="{DynamicResource GoldComboBox}"
+                                      VerticalAlignment="Center">
+                                <ComboBoxItem Content="弹窗启动" Style="{DynamicResource GoldComboItem}"/>
+                                <ComboBoxItem Content="静默缩小到托盘" Style="{DynamicResource GoldComboItem}"/>
+                            </ComboBox>
+                        </Grid>
+                    </Border>
+
+                    <!-- ③ 守护 BGI -->
+                    <Border Background="#1E262660" CornerRadius="8" Padding="12,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox Grid.Column="0" IsChecked="{Binding GuardBgi, Mode=TwoWay}"
+                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Top" Margin="0,2,16,0" HorizontalAlignment="Left"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="守护 BGI" FontSize="13" FontWeight="Medium"
+                                           Foreground="{DynamicResource White}"/>
+                                <TextBlock Text="助手运行时，BGI 异常退出则自动重启 BGI"
+                                           FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                </StackPanel>
+            </Border>
+
+            <!-- ========== 卡片：关于 ========== -->
+            <Border Style="{DynamicResource QuestCard}">
+                <StackPanel>
+                    <TextBlock Text="关于" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"
+                               Margin="0,0,0,6"/>
+                    <TextBlock Text="Nexus-BGI 联机助手 · 提瓦特生物灭绝计划"
+                               FontSize="12" Foreground="{DynamicResource Dim}"/>
+                    <TextBlock Text="配置保存于 assistant-config.json，修改后自动生效"
+                               FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"/>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

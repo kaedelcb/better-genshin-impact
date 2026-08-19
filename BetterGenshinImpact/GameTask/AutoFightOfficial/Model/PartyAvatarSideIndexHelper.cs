@@ -374,14 +374,19 @@ public class PartyAvatarSideIndexHelper
             return 1;
         }
 
+        var greyMat = imageRegion.CacheGreyMat;
+        if (greyMat.IsDisposed)
+        {
+            return -1;
+        }
+
         Mat[] mats = new Mat[rectArray.Length];
         try
         {
             int whiteCount = 0, notWhiteRectNum = 0;
-            var mat = imageRegion.CacheGreyMat;
             for (int i = 0; i < rectArray.Length; i++)
             {
-                var indexMat = new Mat(mat, rectArray[i]);
+                var indexMat = new Mat(greyMat, rectArray[i]);
                 mats[i] = indexMat;
                 if (IsWhiteRect(indexMat))
                 {

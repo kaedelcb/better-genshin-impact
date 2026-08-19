@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>0.1.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <ApplicationIcon>Assets\Images\logo.ico</ApplicationIcon>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.0" />
+    <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="1.1.0" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+  </ItemGroup>
+
+  <!-- 嵌入 HarmonyOS Sans SC 字体（免费商用，授权见 Assets/Fonts/HarmonyOS-LICENSE.txt）→ 圆润屏幕字体 -->
+  <ItemGroup>
+    <Resource Include="Assets\Fonts\HarmonyOS_Sans_SC_Regular.ttf" />
+    <Resource Include="Assets\Fonts\HarmonyOS_Sans_SC_Medium.ttf" />
+  </ItemGroup>
+
+  <!-- 嵌入品牌 Logo 和原神主题图片素材（派蒙 + 角色头像，来源 enka.network 公开素材） -->
+  <ItemGroup>
+    <Resource Include="Assets\Images\logo.png" />
+    <Resource Include="Assets\Images\paimon.png" />
+    <Resource Include="Assets\Images\Ayaka.png" />
+    <Resource Include="Assets\Images\Kazuha.png" />
+    <Resource Include="Assets\Images\Ganyu.png" />
+    <Resource Include="Assets\Images\Yoimiya.png" />
+    <Resource Include="Assets\Images\Shougun.png" />
+    <Resource Include="Assets\Images\Furina.png" />
+    <Resource Include="Assets\Images\Zhongli.png" />
+    <Resource Include="Assets\Images\Nahida.png" />
+  </ItemGroup>
+
+  <!-- 排除 assistant-config.json：不复制到输出目录，防止用户配置被编译覆盖 -->
+  <ItemGroup>
+    <None Update="assistant-config.json" CopyToOutputDirectory="Never" />
+  </ItemGroup>
+
+  <!-- 编译后自动部署到 BGI 输出目录下的 Tools\MultiplayerHoeingAssistant（含带 x64 平台目录的用户运行路径） -->
+  <Target Name="DeployAssistantToBgiTools" AfterTargets="Build">
+    <Message Text="DeployAssistantToBgiTools: 部署助手到 BGI Tools 目录" Importance="high" />
+    <ItemGroup>
+      <AssistOut Include="$(TargetDir)**\*" Exclude="$(TargetDir)**\assistant-config.json" />
+    </ItemGroup>
+    <!-- 复制到 bin\Debug\...\Tools\（无 x64 平台目录） -->
+    <Copy SourceFiles="@(AssistOut)"
+          DestinationFiles="@(AssistOut->'$(MSBuildProjectDirectory)\..\BetterGenshinImpact\bin\$(Configuration)\net8.0-windows10.0.22621.0\Tools\MultiplayerHoeingAssistant\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="false" />
+    <!-- 复制到 bin\x64\Debug\...\Tools\（带 x64 平台目录，用户实际运行路径） -->
+    <Copy SourceFiles="@(AssistOut)"
+          DestinationFiles="@(AssistOut->'$(MSBuildProjectDirectory)\..\BetterGenshinImpact\bin\x64\$(Configuration)\net8.0-windows10.0.22621.0\Tools\MultiplayerHoeingAssistant\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="false" />
+  </Target>
+
+</Project>

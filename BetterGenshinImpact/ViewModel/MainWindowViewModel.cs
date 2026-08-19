@@ -302,6 +302,98 @@ public partial class MainWindowViewModel : ObservableObject, IViewModel
         IsRedeemCodeInfoBarOpen = false;
     }
 
+    /// <summary>启动联机锄地助手（独立 exe，BGI 编译时已复制到输出目录）。</summary>
+    [RelayCommand]
+    private void OnLaunchAssistant()
+    {
+        try
+        {
+            var exe = System.IO.Path.Combine(AppContext.BaseDirectory, @"Tools\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.exe");
+            if (!System.IO.File.Exists(exe))
+            {
+                _logger.LogWarning("联机锄地助手 exe 不存在：{Exe}", exe);
+                return;
+            }
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "启动联机锄地助手失败");
+        }
+    }
+
+    /// <summary>
+    /// 随 BGI 启动联机锄地助手（场景 A：BGI 主程序启动时拉起助手）。
+    /// 读取助手 assistant-config.json，若 autoLaunchWithBgi=true 则启动助手；
+    /// autoLaunchWithBgiMinimized=true 时带 --minimized 静默启动（托盘），否则弹窗启动。
+    /// 助手已在运行则跳过（避免重复启动）。
+    /// </summary>
+    private void TryAutoLaunchAssistant()
+    {
+        try
+        {
+            var exe = System.IO.Path.Combine(AppContext.BaseDirectory, @"Tools\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.exe");
+            if (!System.IO.File.Exists(exe))
+            {
+                _logger.LogDebug("联机锄地助手 exe 不存在，跳过随 BGI 启动：{Exe}", exe);
+                return;
+            }
+
+            // 助手已在运行 → 不必重复启动
+            if (System.Diagnostics.Process.GetProcessesByName("MultiplayerHoeingAssistant").Length > 0)
+            {
+                return;
+            }
+
+            // 读取助手配置，判断是否开启"随 BGI 启动"以及启动方式
+            var configPath = System.IO.Path.Combine(
+                System.IO.Path.GetDirectoryName(exe) ?? string.Empty,
+                "assistant-config.json");
+            if (!System.IO.File.Exists(configPath))
+            {
+                _logger.LogDebug("助手配置不存在，跳过随 BGI 启动：{Path}", configPath);
+                return;
+            }
+
+            var json = System.IO.File.ReadAllText(configPath);
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Object)
+            {
+                return;
+            }
+
+            // 未开启"随 BGI 启动" → 不拉起
+            if (!root.TryGetProperty("autoLaunchWithBgi", out var autoWithBgi)
+                || autoWithBgi.ValueKind != System.Text.Json.JsonValueKind.True)
+            {
+                return;
+            }
+
+            // 默认静默启动；仅显式配置弹窗（false）时弹窗
+            var minimized = true;
+            if (root.TryGetProperty("autoLaunchWithBgiMinimized", out var minimizedEl)
+                && minimizedEl.ValueKind == System.Text.Json.JsonValueKind.False)
+            {
+                minimized = false;
+            }
+
+            var psi = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true };
+            if (minimized)
+            {
+                psi.Arguments = "--minimized";
+            }
+            System.Diagnostics.Process.Start(psi);
+            _logger.LogInformation("BGI 启动，自动拉起联机锄地助手（{Mode}）",
+                minimized ? "静默托盘" : "弹窗");
+        }
+        catch (Exception ex)
+        {
+            // 拉起助手失败不影响 BGI 主程序启动，仅记日志
+            _logger.LogWarning(ex, "随 BGI 启动拉起联机锄地助手失败");
+        }
+    }
+
     private async Task AutoDismissRedeemCodeCardAsync(CancellationToken ct)
     {
         try
@@ -347,6 +439,9 @@ public partial class MainWindowViewModel : ObservableObject, IViewModel
         {
             return;
         }
+
+        // 随 BGI 启动联机锄地助手：BGI 主程序启动时，若助手配置了 autoLaunchWithBgi 则自动拉起助手
+        TryAutoLaunchAssistant();
 
         // 自动处理目录配置
         await Patch1();

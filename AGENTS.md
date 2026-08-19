@@ -106,6 +106,19 @@ dotnet build BetterGenshinImpact.sln -c Debug
 
 面向用户的所有输出（回复、提问、总结、方案、表格、注释中给用户看的说明）一律简体中文；内部思考可用英文。
 
+## 2.5 用户截图读取路径（全局记忆 — 所有会话必须遵守）
+
+用户要求记住：**以后用户说"看这张图/看图"时，优先去这个目录找最新的 QQ 截图缓存，所有会话都生效。**
+
+- **QQ 截图缓存目录：** `C:\Users\Administrator\AppData\Local\Temp\`
+- **文件名规律：** `QQ_<毫秒时间戳>.png`（毫秒级 Unix 时间戳，**数字越大 = 截图越新**）
+- **读取方法：** `list_directory` 该目录，找文件名时间戳**最大**的 `QQ_*.png`（**排除 `_thumb.png` 缩略图**），这就是用户刚截的图；然后用 MCP 图片分析读取。
+- **验证通过：** 2026-08-19 用户截图后，用该方法成功读到最新 `QQ_1787129592988.png`。
+- **注意：**
+  - 用户 Ctrl+V 粘贴到 Kiro 聊天框的截图，**作为消息附件无法被 Agent 直接读取**——必须走上述 Temp 目录缓存文件。
+  - PowerShell 的 `Get-ChildItem` 可能被 PreToolUse 钩子误拦截，读这个目录优先用 `list_directory` 工具，不必走 shell。
+  - 桌面被 360 重定向到 `E:\360MoveData\Users\Administrator\Desktop`，若要从桌面找截图文件用此路径。
+
 ## 3. 始终生效的核心纪律（详情见 `.agents/rules/` 对应文件）
 
 ### 3.1 改动流程：三阶段自审（`pre-submit-review.md`）
@@ -150,7 +163,16 @@ diagnose-first 而非 fix-first；连续失败 2 次后禁止再改修复代码�
 
 ## 5. 历史经验导航（动手前先查）
 
-- 做过什么：`.agents/memory/kiro-task-index.md`（223 条任务：最后活动时间、任务数、执行状态、是否有 spec 档案）
-- 每项工作的完整设计文档：`.kiro/specs/<任务名>/`（requirements / design / tasks / bugfix）
+### 5.1 数据源索引
+- 任务索引：`.agents/memory/kiro-task-index.md`（223 条任务：最后活动时间、任务数、执行状态、是否有 spec 档案）
+- 项目经验沉淀：`.agents/memory/project-experience.md`（公版赶路优选、联机锄地血条阈值、公版战斗UI对齐、公版规范化状态、记忆沉淀覆盖缺口等）
+- 工程实现模式：`.agents/rules/bgi-implementation-patterns.md`（9 节：决策纯化/SignalR subscribe-before-action/多世界轮换防误终止/联机锄地引擎路由/传送异常兜底/requireLoadingScreen双重语义/两套战斗UI结构/传送系统生态位/联机同步机制生态位）
+- 完整设计文档：`.kiro/specs/<任务名>/`（requirements / design / tasks / bugfix）
 - 任务执行细节：`C:\Users\Administrator\.kiro\tasks\ada854181d8b03f7\<任务名>.meta.json`
-- 新任务开始前：先 grep 历史索引和 specs，看是否做过类似功能、当时的决策和踩坑记录，避免重蹈覆辙。
+
+### 5.2 自定义代理
+- 公版合并助手（`public-merge-assistant`）：将上游公版改动安全合并到当前分支，遵循三阶段自审与防回归纪律。配置在 `.kiro/agents/public-merge-assistant.json`
+- 项目知识检索（`project-knowledge-retriever`）：只读检索 BGI 项目历史经验、规则、spec、记忆档案与代码结构。配置在 `.kiro/agents/project-knowledge-retriever.json`
+
+### 5.3 使用建议
+新任务开始前，先调 `project-knowledge-retriever` 子代理检索相关经验，再 grep 历史索引和 specs，看是否做过类似功能、当时的决策和踩坑记录，避免重蹈覆辙。

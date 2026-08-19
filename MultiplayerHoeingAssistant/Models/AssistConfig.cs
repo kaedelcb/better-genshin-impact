@@ -1,0 +1,61 @@
+using System.Text.Json.Serialization;
+
+namespace MultiplayerHoeingAssistant.Models;
+
+public class AssistConfig
+{
+    [JsonPropertyName("serverUrl")]
+    public string ServerUrl { get; set; } = "http://localhost:5000";
+
+    [JsonPropertyName("controlRoomPassword")]
+    public string ControlRoomPassword { get; set; } = string.Empty;
+
+    [JsonPropertyName("teamUids")]
+    public List<string> TeamUids { get; set; } = [];
+
+    [JsonPropertyName("bgiPath")]
+    public string BgiPath { get; set; } = string.Empty;
+
+    [JsonPropertyName("playerName")]
+    public string PlayerName { get; set; } = string.Empty;
+
+    [JsonPropertyName("playerUid")]
+    public string PlayerUid { get; set; } = string.Empty;
+
+    /// <summary>用户是否已阅读并同意免责声明（首次启动弹出，同意后置 true，不再弹）</summary>
+    [JsonPropertyName("disclaimerAccepted")]
+    public bool DisclaimerAccepted { get; set; }
+
+    /// <summary>一键快捷命令绑定：命令名 → 配置组名/一条龙名</summary>
+    [JsonPropertyName("quickCommands")]
+    public Dictionary<string, string> QuickCommands { get; set; } = new()
+    {
+        ["一键传奇"] = "",
+        ["一键次数盾"] = "",
+        ["一键精英"] = "",
+        ["一键小怪"] = "",
+        ["一键自定义"] = ""
+    };
+
+    // ========== 启动策略（multiplayer-hoeing-assistant-settings）==========
+
+    /// <summary>① 随 BGI 启动：助手检测到 BGI 进程存在时自动启动</summary>
+    [JsonPropertyName("autoLaunchWithBgi")]
+    public bool AutoLaunchWithBgi { get; set; } = false;
+
+    /// <summary>① 随 BGI 启动时的启动方式：true=静默缩小到托盘，false=弹窗启动</summary>
+    [JsonPropertyName("autoLaunchWithBgiMinimized")]
+    public bool AutoLaunchWithBgiMinimized { get; set; } = true;
+
+    /// <summary>② 开机自启动：系统启动时助手自动启动</summary>
+    [JsonPropertyName("autoLaunchOnBoot")]
+    public bool AutoLaunchOnBoot { get; set; } = false;
+
+    /// <summary>② 开机自启动时的启动方式：true=静默缩小到托盘，false=弹窗启动</summary>
+    [JsonPropertyName("autoLaunchOnBootMinimized")]
+    public bool AutoLaunchOnBootMinimized { get; set; } = true;
+
+    /// <summary>③ 守护 BGI：助手运行时，BGI 异常退出则自动重启 BGI</summary>
+    [JsonPropertyName("guardBgi")]
+    public bool GuardBgi { get; set; } = false;
+}

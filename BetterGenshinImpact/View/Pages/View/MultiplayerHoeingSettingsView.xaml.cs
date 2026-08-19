@@ -1372,4 +1372,44 @@ public partial class MultiplayerHoeingSettingsView : UserControl
             _settings.Remove("variantPreferences");
         }
     }
+
+    /// <summary>
+    /// 手动打开联机助手
+    /// </summary>
+    private void OnManualLaunchAssistant(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            // 如果已有助手进程在运行，不弹窗，什么都不做
+            var existing = System.Diagnostics.Process.GetProcessesByName("MultiplayerHoeingAssistant");
+            if (existing.Length > 0)
+            {
+                return;
+            }
+
+            var assistantPath = System.IO.Path.Combine(AppContext.BaseDirectory, @"Tools\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.exe");
+            if (System.IO.File.Exists(assistantPath))
+            {
+                var process = new System.Diagnostics.Process
+                {
+                    StartInfo = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = assistantPath,
+                        UseShellExecute = true
+                    }
+                };
+                process.Start();
+                Toast.Success("已启动联机助手");
+            }
+            else
+            {
+                Toast.Warning("联机助手不存在，请先编译");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "手动启动联机助手失败");
+            Toast.Warning("启动联机助手失败");
+        }
+    }
 }

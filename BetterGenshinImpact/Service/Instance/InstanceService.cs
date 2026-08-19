@@ -100,7 +100,7 @@ public sealed class InstanceService : IHostedService, IAsyncDisposable
                 _lifetimeCancellationTokenSource.Token);
         }
 
-        _logger.LogInformation(
+        _logger.LogDebug(
             "实例 IPC v2 已启动：{InstanceType}，进程 {ProcessId}，Session {SessionId}，根管道 {PipeName}",
             Context.InstanceType,
             Context.ProcessId,

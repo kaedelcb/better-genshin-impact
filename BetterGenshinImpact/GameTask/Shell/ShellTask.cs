@@ -94,9 +94,6 @@ public class ShellTask(ShellTaskParam param) : ISoloTask
         using var cmd = new Process();
         cmd.StartInfo = BuildStartInfo(param);
         cmd.Start();
-        await cmd.StandardInput.WriteLineAsync(param.Command.AsMemory(), ct);
-        await cmd.StandardInput.FlushAsync(ct);
-        cmd.StandardInput.Close();
         if (!waitForExit)
         {
             return new ShellExecutionRecord(false, "", "");
@@ -125,11 +122,12 @@ public class ShellTask(ShellTaskParam param) : ISoloTask
         return new ProcessStartInfo
         {
             FileName = "cmd.exe",
-            Arguments = "/k @echo off",
+            Arguments = "/c @echo off & " + param.Command,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             CreateNoWindow = param.NoWindow,
-            UseShellExecute = false
+            UseShellExecute = false,
+            WorkingDirectory = AppContext.BaseDirectory
         };
     }
 

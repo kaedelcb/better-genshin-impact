@@ -1,12 +1,16 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
+using BetterGenshinImpact.GameTask.AutoHoeing;
 
 namespace BetterGenshinImpact.Service.Instance.MessageHandlers;
 
@@ -76,6 +80,13 @@ internal sealed class InstanceRequestHandler
                         request,
                         cancellationToken).ConfigureAwait(false),
                 InstanceOperations.WebViewMessage => HandleWebViewMessage(connection, request),
+                InstanceOperations.TaskStop => HandleTaskStop(connection, request),
+                InstanceOperations.TaskStart => await HandleTaskStart(connection, request),
+                InstanceOperations.TaskStatus => HandleTaskStatus(connection, request),
+                InstanceOperations.ConfigList => HandleConfigList(connection, request),
+                InstanceOperations.ExecuteHotkey => await HandleExecuteHotkey(connection, request),
+                InstanceOperations.CloseGame => HandleCloseGame(connection, request),
+                InstanceOperations.SetTaskEnabled => await HandleSetTaskEnabled(connection, request),
                 _ => InstanceIpcEnvelope.Failure(
                     request,
                     "unsupported_operation",
@@ -456,5 +467,472 @@ internal sealed class InstanceRequestHandler
 
         throw new InvalidOperationException(
             response.ErrorMessage ?? response.ErrorCode ?? "实例 IPC 请求失败。");
+    }
+
+    private InstanceIpcEnvelope HandleTaskStop(InstanceConnection connection, InstanceIpcEnvelope request)
+    {
+        try
+        {
+            var cancellationContext = BetterGenshinImpact.Core.Script.CancellationContext.Instance;
+            cancellationContext.Cancel();
+            return InstanceIpcEnvelope.Response(request, new { status = "stopped" });
+        }
+        catch (Exception ex)
+        {
+            return InstanceIpcEnvelope.Failure(request, "task_stop_failed", $"停止任务失败: {ex.Message}");
+        }
+    }
+
+    private async Task<InstanceIpcEnvelope> HandleTaskStart(InstanceConnection connection, InstanceIpcEnvelope request)
+    {
+        try
+        {
+            var groupName = request.Data?["groupName"]?.ToString();
+            var configName = request.Data?["configName"]?.ToString();
+            var startFromIndex = request.Data?["startFromIndex"]?.ToObject<int>() ?? 0;
+
+            // 通过全局服务容器获取 IScriptService
+            var scriptService = App.ServiceProvider.GetService<BetterGenshinImpact.Service.Interface.IScriptService>();
+            if (scriptService == null)
+                return InstanceIpcEnvelope.Failure(request, "service_unavailable", "脚本服务不可用");
+
+            // 先在主线程上停止当前任务
+            await Application.Current?.Dispatcher.InvokeAsync(async () =>
+                {
+                    var cancellationContext = BetterGenshinImpact.Core.Script.CancellationContext.Instance;
+                    cancellationContext.Cancel();
+                })!;
+
+            // 下发命令为最高优先级：等待旧任务真正释放任务锁（TaskSemaphore.CurrentCount 回到 1）再启动新任务。
+            // 不能用固定 sleep——旧任务清理可能 >1s，等不到就启动会撞"当前存在正在运行中的独立任务"。
+            // 这里是只读轮询 CurrentCount，不抢占锁，不会死锁；15s 为兜底超时，防旧任务卡死永久阻塞。
+            var taskStopDeadline = DateTime.UtcNow.AddSeconds(15);
+            while (DateTime.UtcNow < taskStopDeadline
+                   && BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0)
+            {
+                await Task.Delay(200);
+            }
+
+            // 启动配置组或一条龙
+            if (!string.IsNullOrEmpty(groupName))
+            {
+                // 通过主线程执行 ScriptService.RunMulti（含"从此处开始执行"处理）
+                await Application.Current!.Dispatcher.Invoke(async () =>
+                {
+                    try
+                    {
+                        // 读取配置组 JSON
+                        var groupPath = Path.Combine(AppContext.BaseDirectory, "User", "ScriptGroup", $"{groupName}.json");
+                        if (File.Exists(groupPath))
+                        {
+                            var json = await File.ReadAllTextAsync(groupPath);
+                            var group = BetterGenshinImpact.Core.Script.Group.ScriptGroup.FromJson(json);
+
+                            // 为 projects 手动设置 1-based Index（FromJson 读出的 Index 可能为 0 或无效），
+                            // 确保 SetTaskContextNextFlag 的 nst.Item2 == item.Index 匹配必能命中。
+                            for (var idx = 0; idx < (group.Projects?.Count ?? 0); idx++)
+                                group.Projects[idx].Index = idx + 1;
+
+                            // 处理"从此处开始执行"
+                            // startFromIndex 是 1-based 项目索引（ScriptGroupProject.Index），
+                            // 不是 projects 数组索引。需要用 item.Index 匹配查找。
+                            if (startFromIndex > 0)
+                            {
+                                var config = BetterGenshinImpact.GameTask.TaskContext.Instance().Config;
+                                var projects = group.Projects;
+                                var sel = projects?.FirstOrDefault(p => p.Index == startFromIndex);
+                                if (sel != null)
+                                {
+                                    config.NextScheduledTask =
+                                    [
+                                        (groupName, startFromIndex, sel.FolderName, sel.Name)
+                                    ];
+                                }
+                            }
+
+                            var projectsList = BetterGenshinImpact.ViewModel.Pages.ScriptControlViewModel.GetNextProjects(group);
+                            await scriptService.RunMulti(projectsList, groupName);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("HandleTaskStart: 配置组 {Group} 不存在", groupName);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "HandleTaskStart: IScriptService.RunMulti 失败");
+                    }
+                });
+            }
+            else if (!string.IsNullOrEmpty(configName))
+            {
+                // 启动一条龙
+                Application.Current!.Dispatcher.Invoke(() =>
+                {
+                    try
+                    {
+                        var vm = App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.OneDragonFlowViewModel>();
+                        if (vm != null)
+                        {
+                            var cfg = vm.ConfigList.FirstOrDefault(c => c.Name == configName);
+                            if (cfg != null)
+                            {
+                                vm.SelectedConfig = cfg;
+                                if (startFromIndex > 0)
+                                    cfg.NextTaskIndex = startFromIndex;
+                                _ = vm.OnOneKeyExecute();
+                            }
+                            else
+                            {
+                                _logger.LogWarning("HandleTaskStart: 一条龙配置 {Config} 不存在", configName);
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogWarning("HandleTaskStart: OneDragonFlowViewModel 不可用");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "HandleTaskStart: 启动一条龙失败");
+                    }
+                });
+            }
+
+            return InstanceIpcEnvelope.Response(request, new { status = "started", groupName, configName, startFromIndex });
+        }
+        catch (Exception ex)
+        {
+            return InstanceIpcEnvelope.Failure(request, "task_start_failed", $"启动任务失败: {ex.Message}");
+        }
+    }
+
+    private InstanceIpcEnvelope HandleTaskStatus(InstanceConnection connection, InstanceIpcEnvelope request)
+    {
+        try
+        {
+            var isCancelled = BetterGenshinImpact.Core.Script.CancellationContext.Instance.IsDisposed
+                || BetterGenshinImpact.Core.Script.CancellationContext.Instance.IsCancellationRequested;
+
+            var hoeing = AutoHoeingProgress.IsRunning;
+
+            // 从 RunnerContext 获取当前脚本项目信息
+            string? taskName = null;
+            string? groupName = null;
+            try
+            {
+                var ctx = BetterGenshinImpact.GameTask.RunnerContext.Instance;
+                if (ctx?.taskProgress != null)
+                {
+                    groupName = ctx.taskProgress.CurrentScriptGroupName;
+                    taskName = ctx.taskProgress.CurrentScriptGroupProjectInfo?.Name;
+                }
+                taskName ??= BetterGenshinImpact.GameTask.TaskContext.Instance()?.CurrentScriptProject?.Name;
+            }
+            catch
+            {
+                // 忽略
+            }
+
+            // 任务已取消时，taskName 可能有残留值，必须清空避免下游误报
+            if (isCancelled)
+            {
+                taskName = null;
+                groupName = null;
+            }
+
+            _logger.LogDebug("[IPC task.status] isCancelled={IsCancelled}, taskName={TaskName}, running={Running}, groupName={GroupName}",
+                isCancelled, taskName, !string.IsNullOrEmpty(taskName) && !isCancelled, groupName);
+
+            // 联机锄地进度
+            string? hoeingProgress = null;
+            lock (AutoHoeingProgress.Sync)
+            {
+                if (hoeing)
+                {
+                    var tsRoute = TimeSpan.FromSeconds(Math.Max(0, AutoHoeingProgress.RouteEstimatedSeconds));
+                    var tsRemain = TimeSpan.FromSeconds(Math.Max(0, AutoHoeingProgress.RoundRemainingSeconds));
+                    hoeingProgress = $"{AutoHoeingProgress.RoundPrefix}当前进度：开始第 {AutoHoeingProgress.CurrentRouteIndex}/{AutoHoeingProgress.TotalRoutes} 条线路: {AutoHoeingProgress.RouteFileName}，本线路预计用时 {(int)tsRoute.TotalHours}时{tsRoute.Minutes}分{tsRoute.Seconds}秒，本轮预计剩余 {(int)tsRemain.TotalHours}时{tsRemain.Minutes}分{tsRemain.Seconds}秒";
+                }
+            }
+
+            return InstanceIpcEnvelope.Response(request, new
+            {
+                running = !string.IsNullOrEmpty(taskName) && !isCancelled,
+                status = isCancelled ? "stopped" : "running",
+                taskName,
+                groupName,
+                autoHoeingRunning = hoeing,
+                autoHoeingProgress = hoeingProgress
+            });
+        }
+        catch (Exception ex)
+        {
+            return InstanceIpcEnvelope.Failure(request, "task_status_failed", $"查询任务状态失败: {ex.Message}");
+        }
+    }
+
+    private InstanceIpcEnvelope HandleConfigList(InstanceConnection connection, InstanceIpcEnvelope request)
+    {
+        try
+        {
+            var basePath = AppContext.BaseDirectory;
+            var scriptGroupPath = Path.Combine(basePath, "User", "ScriptGroup");
+            var oneDragonPath = Path.Combine(basePath, "User", "OneDragon");
+
+            // 读取配置组列表
+            var configGroupNames = new List<string>();
+            var configGroupTasks = new Dictionary<string, List<string>>();
+            var configGroupTasksWithStatus = new Dictionary<string, List<object>>();
+            if (Directory.Exists(scriptGroupPath))
+            {
+                foreach (var file in Directory.GetFiles(scriptGroupPath, "*.json"))
+                {
+                    var name = Path.GetFileNameWithoutExtension(file);
+                    if (name == null) continue;
+                    configGroupNames.Add(name);
+
+                    try
+                    {
+                        var json = File.ReadAllText(file);
+                        using var doc = System.Text.Json.JsonDocument.Parse(json);
+                        var root = doc.RootElement;
+                        var tasks = new List<string>();
+                        var tasksWithStatus = new List<object>();
+                        if (root.TryGetProperty("projects", out var projects))
+                        {
+                            foreach (var project in projects.EnumerateArray())
+                            {
+                                var pName = project.TryGetProperty("name", out var taskName)
+                                    ? taskName.GetString() ?? ""
+                                    : "";
+                                var pIndex = project.TryGetProperty("index", out var idx)
+                                    ? idx.GetInt32() : tasks.Count + 1;
+                                var pStatus = project.TryGetProperty("status", out var statusEl)
+                                    ? statusEl.GetString() ?? "Enabled" : "Enabled";
+                                tasks.Add(pName);
+                                tasksWithStatus.Add(new { name = pName, index = pIndex, status = pStatus });
+                            }
+                        }
+                        configGroupTasks[name] = tasks;
+                        configGroupTasksWithStatus[name] = tasksWithStatus;
+                    }
+                    catch
+                    {
+                        // 单个文件解析失败不影响其他
+                    }
+                }
+            }
+
+            // 读取一条龙列表
+            var oneClickConfigNames = new List<string>();
+            var oneClickTasks = new Dictionary<string, List<string>>();
+            var oneClickTasksWithStatus = new Dictionary<string, List<object>>();
+            if (Directory.Exists(oneDragonPath))
+            {
+                foreach (var file in Directory.GetFiles(oneDragonPath, "*.json"))
+                {
+                    var name = Path.GetFileNameWithoutExtension(file);
+                    if (name == null) continue;
+                    oneClickConfigNames.Add(name);
+
+                    try
+                    {
+                        var json = File.ReadAllText(file);
+                        using var doc = System.Text.Json.JsonDocument.Parse(json);
+                        var root = doc.RootElement;
+                        var tasks = new List<string>();
+                        var tasksWithStatus = new List<object>();
+                        if (root.TryGetProperty("taskEnabledList", out var taskList)
+                            || root.TryGetProperty("TaskEnabledList", out taskList))
+                        {
+                            foreach (var entry in taskList.EnumerateObject())
+                            {
+                                var taskEntry = entry.Value;
+                                var tIndex = int.TryParse(entry.Name, out var ti) ? ti : 0;
+                                var tName = taskEntry.TryGetProperty("Item2", out var taskName)
+                                    ? taskName.GetString() ?? $"任务{entry.Name}" : $"任务{entry.Name}";
+                                var tEnabled = taskEntry.TryGetProperty("Item1", out var enabledEl)
+                                    ? enabledEl.GetBoolean() : true;
+                                tasks.Add(tName);
+                                tasksWithStatus.Add(new { name = tName, index = tIndex, enabled = tEnabled });
+                            }
+                        }
+                        oneClickTasks[name] = tasks;
+                        oneClickTasksWithStatus[name] = tasksWithStatus;
+                    }
+                    catch
+                    {
+                        // 单个文件解析失败不影响其他
+                    }
+                }
+            }
+
+            // 读取快捷键列表（用栈遍历避免递归方法定义）
+            var hotkeys = new List<object>();
+            try
+            {
+                var hotkeyVm = App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.HotKeyPageViewModel>();
+                if (hotkeyVm != null)
+                {
+                    var stack = new Stack<BetterGenshinImpact.Model.HotKeySettingModel>();
+                    foreach (var m in hotkeyVm.HotKeySettingModels) stack.Push(m);
+                    while (stack.Count > 0)
+                    {
+                        var current = stack.Pop();
+                        if (!current.IsDirectory && !current.HotKey.IsEmpty)
+                        {
+                            hotkeys.Add(new { configName = current.ConfigPropertyName, functionName = current.FunctionName, hotkeyText = current.HotKey.ToString() });
+                        }
+                        if (current.Children != null)
+                            foreach (var child in current.Children) stack.Push(child);
+                    }
+                }
+            }
+            catch
+            {
+                // 快捷键读取失败不影响其他功能
+            }
+
+            return InstanceIpcEnvelope.Response(request, new
+            {
+                configGroups = configGroupNames,
+                configGroupTasks,
+                configGroupTasksWithStatus,
+                oneClickConfigs = oneClickConfigNames,
+                oneClickTasks,
+                oneClickTasksWithStatus,
+                hotkeys
+            });
+        }
+        catch (Exception ex)
+        {
+            return InstanceIpcEnvelope.Failure(request, "config_list_failed", $"读取配置列表失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>执行指定快捷键：通过 HotKeyPageViewModel 的 HotKeySettingModels 找到匹配模型并触发其 Action。</summary>
+    private async Task<InstanceIpcEnvelope> HandleExecuteHotkey(InstanceConnection connection, InstanceIpcEnvelope request)
+    {
+        try
+        {
+            var hotkeyConfigName = request.Data?["hotkeyConfigName"]?.ToString();
+            if (string.IsNullOrEmpty(hotkeyConfigName))
+                return InstanceIpcEnvelope.Failure(request, "invalid_param", "hotkeyConfigName 为空");
+
+            var hotkeyVm = App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.HotKeyPageViewModel>();
+            if (hotkeyVm == null)
+                return InstanceIpcEnvelope.Failure(request, "vm_unavailable", "快捷键服务不可用");
+
+            var model = FindModelByConfigName(hotkeyVm.HotKeySettingModels, hotkeyConfigName);
+            if (model == null || model.IsDirectory)
+                return InstanceIpcEnvelope.Failure(request, "not_found", $"快捷键 {hotkeyConfigName} 未找到");
+
+            var action = model.OnKeyPressAction ?? model.OnKeyDownAction ?? model.OnKeyUpAction;
+            if (action == null)
+                return InstanceIpcEnvelope.Failure(request, "no_action", $"快捷键 {hotkeyConfigName} 无执行回调");
+
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                action(null, new Fischless.HotkeyCapture.KeyPressedEventArgs(0, System.Windows.Forms.Keys.None));
+            });
+            return InstanceIpcEnvelope.Response(request, new { status = "executed", hotkeyConfigName });
+        }
+        catch (Exception ex)
+        {
+            return InstanceIpcEnvelope.Failure(request, "execute_failed", $"执行快捷键失败: {ex.Message}");
+        }
+    }
+
+    private static BetterGenshinImpact.Model.HotKeySettingModel? FindModelByConfigName(
+        System.Collections.ObjectModel.ObservableCollection<BetterGenshinImpact.Model.HotKeySettingModel> models,
+        string configName)
+    {
+        foreach (var m in models)
+        {
+            if (!m.IsDirectory && m.ConfigPropertyName == configName)
+                return m;
+            if (m.Children != null)
+            {
+                var child = FindModelByConfigName(m.Children, configName);
+                if (child != null)
+                    return child;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>关闭游戏：调用 BGI 已有的 SystemControl.CloseGame()。</summary>
+    private InstanceIpcEnvelope HandleCloseGame(InstanceConnection connection, InstanceIpcEnvelope request)
+    {
+        try
+        {
+            BetterGenshinImpact.GameTask.SystemControl.CloseGame();
+            return InstanceIpcEnvelope.Response(request, new { status = "closed" });
+        }
+        catch (Exception ex)
+        {
+            return InstanceIpcEnvelope.Failure(request, "close_failed", $"关闭游戏失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>设置任务启用状态：改 ScriptGroup.json（配置组）或 OneDragon 配置（一条龙）并写回。</summary>
+    private async Task<InstanceIpcEnvelope> HandleSetTaskEnabled(InstanceConnection connection, InstanceIpcEnvelope request)
+    {
+        try
+        {
+            var groupName = request.Data?["groupName"]?.ToString();
+            var configName = request.Data?["configName"]?.ToString();
+            var taskIndex = request.Data?["taskIndex"]?.ToObject<int>() ?? 0;
+            var enabled = request.Data?["enabled"]?.ToObject<bool>() ?? false;
+
+            if (!string.IsNullOrEmpty(groupName))
+            {
+                // 配置组：改 ScriptGroup.json 中对应项目的 status
+                var basePath = AppContext.BaseDirectory;
+                var groupPath = Path.Combine(basePath, "User", "ScriptGroup", $"{groupName}.json");
+                if (!File.Exists(groupPath))
+                    return InstanceIpcEnvelope.Failure(request, "not_found", $"配置组 {groupName} 不存在");
+
+                var json = await File.ReadAllTextAsync(groupPath);
+                var group = BetterGenshinImpact.Core.Script.Group.ScriptGroup.FromJson(json);
+                var project = group.Projects?.FirstOrDefault(p => p.Index == taskIndex);
+                if (project == null)
+                    return InstanceIpcEnvelope.Failure(request, "not_found", $"任务索引 {taskIndex} 未找到");
+
+                project.Status = enabled ? "Enabled" : "Disabled";
+                var newJson = group.ToJson();
+                await File.WriteAllTextAsync(groupPath, newJson);
+            }
+            else if (!string.IsNullOrEmpty(configName))
+            {
+                // 一条龙：改 OneDragon 配置的 TaskEnabledList
+                var basePath = AppContext.BaseDirectory;
+                var oneDragonPath = Path.Combine(basePath, "User", "OneDragon", $"{configName}.json");
+                if (!File.Exists(oneDragonPath))
+                    return InstanceIpcEnvelope.Failure(request, "not_found", $"一条龙配置 {configName} 不存在");
+
+                var json = await File.ReadAllTextAsync(oneDragonPath);
+                var config = Newtonsoft.Json.JsonConvert.DeserializeObject<BetterGenshinImpact.Core.Config.OneDragonFlowConfig>(json);
+                if (config == null)
+                    return InstanceIpcEnvelope.Failure(request, "parse_failed", "解析一条龙配置失败");
+
+                if (config.TaskEnabledList.ContainsKey(taskIndex))
+                    config.TaskEnabledList[taskIndex] = (enabled, config.TaskEnabledList[taskIndex].Item2);
+
+                var newJson = Newtonsoft.Json.JsonConvert.SerializeObject(config, Newtonsoft.Json.Formatting.Indented);
+                await File.WriteAllTextAsync(oneDragonPath, newJson);
+            }
+            else
+            {
+                return InstanceIpcEnvelope.Failure(request, "invalid_param", "groupName 和 configName 均为空");
+            }
+
+            return InstanceIpcEnvelope.Response(request, new { status = "saved", groupName, configName, taskIndex, enabled });
+        }
+        catch (Exception ex)
+        {
+            return InstanceIpcEnvelope.Failure(request, "save_failed", $"保存启用状态失败: {ex.Message}");
+        }
     }
 }

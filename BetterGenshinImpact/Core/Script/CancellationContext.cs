@@ -28,6 +28,8 @@ public class CancellationContext : Singleton<CancellationContext>
 
     private bool disposed;
 
+    public bool IsDisposed => disposed;
+
     public CancellationContext()
     {
         Cts = new CancellationTokenSource();
