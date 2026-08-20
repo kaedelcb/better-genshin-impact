@@ -566,7 +566,7 @@ public class TpTaskFastDrag
         var retryCount = 0;
         do
         {
-            if (IsPointInBigMapWindow(mapName, bigMapInAllMapRect, x, y)) break;
+            if (IsPointInBigMapWindow(mapName, bigMapInAllMapRect, x, y, country)) break;
             if (retryCount++ >= 5) // 防止死循环
             {
                 TaskControl.Logger.LogWarning("多次尝试未移动到目标传送点，传送失败");
@@ -748,7 +748,7 @@ public class TpTaskFastDrag
         // 不可点则回定位循环重拖（用可点档 4.4，把点拖回窗口中段），有限次后仍不可点则抛
         // 可重试异常走既有 RetryException 流程。正常路径（点本就在窗口内）首轮即通过，零额外开销。
         int clickGuardRetry = 0;
-        while (!IsPointInBigMapWindow(mapName, bigMapInAllMapRect, x, y))
+        while (!IsPointInBigMapWindow(mapName, bigMapInAllMapRect, x, y, country))
         {
             if (clickGuardRetry++ >= 3)
             {
@@ -990,7 +990,7 @@ public class TpTaskFastDrag
     /// <param name="x">传送点x坐标（原神坐标系）</param>
     /// <param name="y">传送点y坐标（原神坐标系）</param>
     /// <returns></returns>
-    private bool IsPointInBigMapWindow(string mapName, Rect bigMapInAllMapRect, double x, double y)
+    private bool IsPointInBigMapWindow(string mapName, Rect bigMapInAllMapRect, double x, double y, string? country = null)
     {
         // 坐标不包含直接返回
         if (!bigMapInAllMapRect.Contains(x, y))
@@ -1010,7 +1010,7 @@ public class TpTaskFastDrag
         // 命中任一 UI 矩形 → 危险（继续 MoveMapTo 避让）；否则可点击（含边缘中段）。
         // 详见 .kiro/specs/teleport-drag-corner-ui-safezone-clamp/。
         bool withinScreen = TeleportClickSafeZone.IsWithinScreen(clickX, clickY, _zoomOutMax1080PRatio);
-        bool inDanger = TeleportClickSafeZone.IsInDangerZone(clickX, clickY, _zoomOutMax1080PRatio);
+        bool inDanger = TeleportClickSafeZone.IsInDangerZone(clickX, clickY, _zoomOutMax1080PRatio, country);
         bool isClickable = withinScreen && !inDanger;
         // [诊断] Contains 已通过，走到 IsClickable。拆开 withinScreen / inDanger 两个子判据，
         // 明确到底是"越出屏幕"还是"落在 UI 危险矩形"导致不可点，便于对照早停几何判据。
@@ -1443,7 +1443,7 @@ public class TpTaskFastDrag
                 && iteration > 0
                 && TeleportClickSafeZone.ShouldEarlyStopClick(
                     _tpConfig.MapMoveStepDivisor, x, y, mapCenterPoint.X, mapCenterPoint.Y,
-                    _tpConfig.MapScaleFactor, currentZoomLevel, TeleportClickSafeZone.DefaultEarlyStopMargin))
+                    _tpConfig.MapScaleFactor, currentZoomLevel, TeleportClickSafeZone.DefaultEarlyStopMargin, country))
             {
                 // [诊断] 早停用的是几何投影(mapCenterPoint + currentZoomLevel 变量)。
                 // 打出：①早停算出的 clickX/clickY（1080P 空间）②currentZoomLevel 变量值

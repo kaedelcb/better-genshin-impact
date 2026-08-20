@@ -43,12 +43,22 @@ public static class TeleportClickSafeZone
     };
 
     /// <summary>
+    /// 至冬地图专属 UI 危险矩形（1080P 基准）。仅当目标传送点 country == "至冬" 时参与判定。
+    /// 至冬地图上这块区域（x=797, y=984, 宽310, 高96）存在不可点击的界面覆盖层，
+    /// 传送点落点在此会被误点，故单独屏蔽。判定时每维度 × ratio 适配分辨率。
+    /// </summary>
+    public static readonly DangerRect[] DangerRectsSnezhnaya =
+    {
+        new DangerRect(797, 984, 330, 96),  // 至冬：地图 UI 覆盖层不可点击区
+    };
+
+    /// <summary>
     /// 点击点是否落在任一 UI 危险矩形内。命中判定用半开区间 [x0, x0+w) × [y0, y0+h)。
     /// </summary>
     /// <param name="clickX">点击点 X（已 × ratio 的实际捕获区坐标）。</param>
     /// <param name="clickY">点击点 Y（已 × ratio 的实际捕获区坐标）。</param>
     /// <param name="ratio">1080P 到实际分辨率的缩放系数 _zoomOutMax1080PRatio。</param>
-    public static bool IsInDangerZone(double clickX, double clickY, double ratio)
+    public static bool IsInDangerZone(double clickX, double clickY, double ratio, string? country = null)
     {
         foreach (var r in DangerRects)
         {
@@ -58,6 +68,20 @@ public static class TeleportClickSafeZone
                 return true;
             }
         }
+
+        // 至冬地图专属危险矩形：仅当目标传送点 country == "至冬" 时额外检查
+        if (country == "至冬")
+        {
+            foreach (var r in DangerRectsSnezhnaya)
+            {
+                if (clickX >= r.X0 * ratio && clickX < (r.X0 + r.W) * ratio
+                    && clickY >= r.Y0 * ratio && clickY < (r.Y0 + r.H) * ratio)
+                {
+                    return true;
+                }
+            }
+        }
+
         return false;
     }
 
@@ -78,8 +102,8 @@ public static class TeleportClickSafeZone
     /// <summary>
     /// 点击点是否可安全点击：必须落在游戏窗口内，且不落在任何 UI 危险矩形内。
     /// </summary>
-    public static bool IsClickable(double clickX, double clickY, double ratio)
-        => IsWithinScreen(clickX, clickY, ratio) && !IsInDangerZone(clickX, clickY, ratio);
+    public static bool IsClickable(double clickX, double clickY, double ratio, string? country = null)
+        => IsWithinScreen(clickX, clickY, ratio) && !IsInDangerZone(clickX, clickY, ratio, country);
 
     // ===== 早停优化（teleport-drag-early-stop-when-clickable spec）=====
     // 快速拖动定位时，传送点一旦落在含 margin 的可点击安全区就提前 break 去点击，
@@ -108,7 +132,7 @@ public static class TeleportClickSafeZone
     /// <param name="clickY">推算点 Y（已 × ratio）。</param>
     /// <param name="ratio">1080P 到实际分辨率的缩放系数（早停传 1.0）。</param>
     /// <param name="margin">安全余量（1080P 基准像素）。</param>
-    public static bool IsInDangerZoneWithMargin(double clickX, double clickY, double ratio, double margin)
+    public static bool IsInDangerZoneWithMargin(double clickX, double clickY, double ratio, double margin, string? country = null)
     {
         // (2) 屏幕外缘内缩：贴屏幕四边 margin 内视为危险
         if (clickX < margin * ratio
@@ -128,14 +152,28 @@ public static class TeleportClickSafeZone
                 return true;
             }
         }
+
+        // (3) 至冬地图专属矩形各外扩 margin（仅当 country == "至冬"）
+        if (country == "至冬")
+        {
+            foreach (var r in DangerRectsSnezhnaya)
+            {
+                if (clickX >= (r.X0 - margin) * ratio && clickX < (r.X0 + r.W + margin) * ratio
+                    && clickY >= (r.Y0 - margin) * ratio && clickY < (r.Y0 + r.H + margin) * ratio)
+                {
+                    return true;
+                }
+            }
+        }
+
         return false;
     }
 
     /// <summary>
     /// 点击点是否"可安全点击"（含 margin 保守版）：不落在任何外扩危险矩形内、且不贴屏幕外缘。
     /// </summary>
-    public static bool IsSafelyClickable(double clickX, double clickY, double ratio, double margin)
-        => !IsInDangerZoneWithMargin(clickX, clickY, ratio, margin);
+    public static bool IsSafelyClickable(double clickX, double clickY, double ratio, double margin, string? country = null)
+        => !IsInDangerZoneWithMargin(clickX, clickY, ratio, margin, country);
 
     /// <summary>
     /// 快速拖动模式早停决策（纯函数，便于 PBT）。仅在快速拖动模式生效；
@@ -157,7 +195,7 @@ public static class TeleportClickSafeZone
     public static bool ShouldEarlyStopClick(
         bool mapMoveStepDivisor, double x, double y,
         double centerX, double centerY,
-        double mapScaleFactor, double currentZoomLevel, double margin)
+        double mapScaleFactor, double currentZoomLevel, double margin, string? country = null)
     {
         if (!mapMoveStepDivisor) return false;      // 经典模式：早停恒不触发，逐字节保留原逻辑
         if (currentZoomLevel <= 0) return false;    // 防除零安全兜底
@@ -166,6 +204,6 @@ public static class TeleportClickSafeZone
         double clickY = 540 - mapScaleFactor * (y - centerY) / currentZoomLevel;
 
         // 早停在 1080P 空间自洽判定，ratio = 1.0（五矩形本就 1080P 基准）
-        return IsSafelyClickable(clickX, clickY, 1.0, margin);
+        return IsSafelyClickable(clickX, clickY, 1.0, margin, country);
     }
 }
