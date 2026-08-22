@@ -160,6 +160,13 @@ jobs:
             ${{ runner.os }}-nuget-
       - name: 🛠️ Build application
         run: dotnet publish BetterGenshinImpact/BetterGenshinImpact.csproj -c Release -p:PublishProfile=FolderProfile -p:Version=${{ needs.validate.outputs.version }}
+      - name: 🛠️ Build MultiplayerHoeingAssistant
+        run: dotnet build MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj -c Release
+      - name: 📦 Copy MultiplayerHoeingAssistant to Tools
+        run: |
+            $toolsDir = ".\dist\BetterGI\Tools\MultiplayerHoeingAssistant"
+            New-Item -Path $toolsDir -ItemType Directory -Force
+            Copy-Item ".\MultiplayerHoeingAssistant\bin\Release\net8.0-windows\*" -Destination $toolsDir -Recurse -Exclude "assistant-config.json"
       - name: 🧹 Clear & Move Files
         run: |
             $sourceDir = ".\BetterGenshinImpact\bin\x64\Release\net8.0-windows10.0.22621.0\publish\win-x64"

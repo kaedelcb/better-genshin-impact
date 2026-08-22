@@ -493,7 +493,6 @@ internal sealed class InstanceRequestHandler
 
     private async Task<InstanceIpcEnvelope> HandleTaskStart(InstanceConnection connection, InstanceIpcEnvelope request)
     {
-        _logger.LogDebug("[探针 BGI] HandleTaskStart 被调用");
         try
         {
             // 标记配置组是否在 RunMulti 执行中被取消（F11 停止等），末尾据此返回 cancelled 状态
@@ -503,7 +502,6 @@ internal sealed class InstanceRequestHandler
             var startFromIndex = request.Data?["startFromIndex"]?.ToObject<int>() ?? 0;
             // 幂等保护：task.start 携带 generation 时，同一 generation 只执行一次
             var generation = request.Data?["generation"]?.ToObject<int>() ?? 0;
-            _logger.LogDebug("[探针 BGI] task.start: groupName={Group}, configName={Config}, startFromIndex={Index}, generation={Gen}", groupName ?? "null", configName ?? "null", startFromIndex, generation);
 
             // 幂等检查：同一 generation 已执行过则跳过（避免 OnAllReady 重复广播导致配置组重复启动）
             if (generation > 0 && generation <= _lastExecutedTaskGeneration)
@@ -541,17 +539,27 @@ internal sealed class InstanceRequestHandler
             // 启动配置组或一条龙
             if (!string.IsNullOrEmpty(groupName))
             {
-                // 通过主线程执行 ScriptService.RunMulti（含"从此处开始执行"处理）
-                await Application.Current!.Dispatcher.Invoke(async () =>
+                // 读取配置组 JSON（文件 I/O 在后台线程执行，不阻塞 UI 线程消息泵）
+                var groupPath = Path.Combine(AppContext.BaseDirectory, "User", "ScriptGroup", $"{groupName}.json");
+                string? groupJson = null;
+                if (File.Exists(groupPath))
                 {
-                    try
+                    groupJson = await File.ReadAllTextAsync(groupPath);
+                }
+                else
+                {
+                    _logger.LogWarning("HandleTaskStart: 配置组 {Group} 不存在", groupName);
+                }
+
+                if (groupJson != null)
+                {
+                    // 通过主线程执行 ScriptService.RunMulti（含"从此处开始执行"处理）
+                    // 使用 InvokeAsync 而非 Invoke，避免阻塞 UI 线程消息泵
+                    await Application.Current!.Dispatcher.InvokeAsync(async () =>
                     {
-                        // 读取配置组 JSON
-                        var groupPath = Path.Combine(AppContext.BaseDirectory, "User", "ScriptGroup", $"{groupName}.json");
-                        if (File.Exists(groupPath))
+                        try
                         {
-                            var json = await File.ReadAllTextAsync(groupPath);
-                            var group = BetterGenshinImpact.Core.Script.Group.ScriptGroup.FromJson(json);
+                            var group = BetterGenshinImpact.Core.Script.Group.ScriptGroup.FromJson(groupJson);
 
                             // 为 projects 手动设置 1-based Index（FromJson 读出的 Index 可能为 0 或无效），
                             // 确保 SetTaskContextNextFlag 的 nst.Item2 == item.Index 匹配必能命中。
@@ -594,34 +602,39 @@ internal sealed class InstanceRequestHandler
                                 configGroupCancelled = true;
                             }
                         }
-                        else
+                        catch (Exception ex)
                         {
-                            _logger.LogWarning("HandleTaskStart: 配置组 {Group} 不存在", groupName);
+                            _logger.LogError(ex, "HandleTaskStart: IScriptService.RunMulti 失败");
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "HandleTaskStart: IScriptService.RunMulti 失败");
-                    }
-                });
+                    }).Task;
+                }
             }
             else if (!string.IsNullOrEmpty(configName))
             {
                 // 启动一条龙
-                Application.Current!.Dispatcher.Invoke(() =>
+                // 使用 InvokeAsync 而非 Invoke（同步），避免阻塞 UI 线程消息泵导致全局键盘钩子回调延迟
+                await Application.Current!.Dispatcher.InvokeAsync(async () =>
                 {
                     try
                     {
                         var vm = App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.OneDragonFlowViewModel>();
                         if (vm != null)
                         {
+                            // 强制初始化：主动加载配置列表（在 BGI 初始状态时，OneDragonFlowViewModel 未初始化，ConfigList 为空）
+                            vm.InitConfigList();
                             var cfg = vm.ConfigList.FirstOrDefault(c => c.Name == configName);
                             if (cfg != null)
                             {
                                 vm.SelectedConfig = cfg;
+                                // 设置 startFromIndex 后先持久化到磁盘，再调用 OnOneKeyExecute。
+                                // OnOneKeyExecute 开头会调 InitConfigList() 重新从磁盘反序列化配置，
+                                // 如果不先持久化，之前设置的 cfg.NextTaskIndex 会因对象被替换而丢失。
                                 if (startFromIndex > 0)
+                                {
                                     cfg.NextTaskIndex = startFromIndex;
-                                _ = vm.OnOneKeyExecute();
+                                    vm.WriteConfig(cfg);
+                                }
+                                await vm.OnOneKeyExecute();
                             }
                             else
                             {
@@ -637,7 +650,7 @@ internal sealed class InstanceRequestHandler
                     {
                         _logger.LogError(ex, "HandleTaskStart: 启动一条龙失败");
                     }
-                });
+                }).Task;
             }
 
             if (configGroupCancelled)
@@ -691,9 +704,6 @@ internal sealed class InstanceRequestHandler
                 _recentTaskName = taskName;
                 _recentTaskNameTime = DateTime.UtcNow;
             }
-
-            _logger.LogDebug("[IPC task.status] isCancelled={IsCancelled}, taskName={TaskName}, running={Running}, groupName={GroupName}",
-                isCancelled, taskName, BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0, groupName);
 
             // 联机锄地进度
             string? hoeingProgress = null;
@@ -1003,7 +1013,24 @@ internal sealed class InstanceRequestHandler
                     config.TaskEnabledList[taskIndex] = (enabled, config.TaskEnabledList[taskIndex].Item2);
 
                 var newJson = Newtonsoft.Json.JsonConvert.SerializeObject(config, Newtonsoft.Json.Formatting.Indented);
-                await File.WriteAllTextAsync(oneDragonPath, newJson);
+                // 写文件时重试：一条龙正在运行时，JSON 文件可能被 BGI 进程锁定
+                // 最多重试 5 次，每次 500ms，超时后抛出异常
+                Exception? lastWriteEx = null;
+                for (int retry = 0; retry < 5; retry++)
+                {
+                    try
+                    {
+                        await File.WriteAllTextAsync(oneDragonPath, newJson);
+                        lastWriteEx = null;
+                        break;
+                    }
+                    catch (IOException ex)
+                    {
+                        lastWriteEx = ex;
+                        if (retry < 4) await Task.Delay(500);
+                    }
+                }
+                if (lastWriteEx != null) throw lastWriteEx;
             }
             else
             {
@@ -1020,7 +1047,6 @@ internal sealed class InstanceRequestHandler
 
     private async Task<InstanceIpcEnvelope> HandleTaskSuspend(InstanceConnection connection, InstanceIpcEnvelope request)
     {
-        _logger.LogDebug("[探针 BGI] HandleTaskSuspend 被调用");
         try
         {
             // 1. 读取当前任务上下文
@@ -1041,7 +1067,6 @@ internal sealed class InstanceRequestHandler
                 folderName = info.FolderName;
                 projectName = info.Name;
                 taskType = "group";
-                _logger.LogDebug("[探针 BGI] 配置组模式: groupName={Group}, taskIndex={Index}, projectName={Name}", groupName, taskIndex, projectName);
             }
             else if (progress?.CurrentScriptGroupName != null)
             {
@@ -1077,7 +1102,6 @@ internal sealed class InstanceRequestHandler
             // 2. 如果没有任务在运行，直接返回"无需保存"
             if (taskType == null)
             {
-                _logger.LogDebug("[探针 BGI] task.suspend: BGI 当前无任务运行，无需保存上下文");
                 _logger.LogInformation("[IPC task.suspend] BGI 当前无任务运行，无需保存上下文");
                 return InstanceIpcEnvelope.Response(request, new { status = "no_task" });
             }
@@ -1120,7 +1144,6 @@ internal sealed class InstanceRequestHandler
         }
         catch (Exception ex)
         {
-            _logger.LogDebug("[探针 BGI] task.suspend 异常: {Message}", ex.Message);
             _logger.LogError(ex, "[IPC task.suspend] 中断任务失败");
             return InstanceIpcEnvelope.Failure(request, "task_suspend_failed", $"中断任务失败: {ex.Message}");
         }

@@ -117,6 +117,21 @@ public class CancellationContext : Singleton<CancellationContext>
         }
     }
 
+    /// <summary>只取消令牌但不设置 WasCancelled，用于 IPC task.start 等场景。</summary>
+    public void CancelTokenOnly()
+    {
+        // 取消旧令牌（中断当前任务）
+        try
+        {
+            Cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        // 创建新令牌（让后续任务在新上下文中执行，不重置 WasCancelled）
+        Cts = new CancellationTokenSource();
+    }
+
     public void Clear()
     {
         Cts.Dispose();

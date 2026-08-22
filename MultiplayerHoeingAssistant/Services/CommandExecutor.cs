@@ -24,18 +24,18 @@ public class CommandExecutor
                 "stop" => await StopBgiAsync(),
                 "start_bgi" => await StartBgiAsync(),
                 "start_group" => await StartGroupAsync(
-                    command.Params?.GetValueOrDefault("groupName")?.ToString() ?? "",
-                    int.TryParse(command.Params?.GetValueOrDefault("startFromIndex")?.ToString(), out var idx) ? idx : 0),
+                    GetStringParam(command.Params, "groupName") ?? "",
+                    GetIntParam(command.Params, "startFromIndex") ?? 0),
                 "start_oneclick" => await StartOneClickAsync(
-                    command.Params?.GetValueOrDefault("configName")?.ToString() ?? "",
-                    int.TryParse(command.Params?.GetValueOrDefault("startFromIndex")?.ToString(), out var idx2) ? idx2 : 0),
+                    GetStringParam(command.Params, "configName") ?? "",
+                    GetIntParam(command.Params, "startFromIndex") ?? 0),
                 "hotkey_execute" => await ExecuteHotkeyAsync(
-                    command.Params?.GetValueOrDefault("hotkeyConfigName")?.ToString() ?? ""),
+                    GetStringParam(command.Params, "hotkeyConfigName") ?? ""),
                 "close_game" => await CloseGameAsync(),
                 "set_task_enabled" => await SetTaskEnabledAsync(
-                    command.Params?.GetValueOrDefault("groupName")?.ToString() ?? "",
-                    command.Params?.GetValueOrDefault("configName")?.ToString() ?? "",
-                    int.TryParse(command.Params?.GetValueOrDefault("taskIndex")?.ToString(), out var tidx) ? tidx : 0,
+                    GetStringParam(command.Params, "groupName") ?? "",
+                    GetStringParam(command.Params, "configName") ?? "",
+                    GetIntParam(command.Params, "taskIndex") ?? 0,
                     bool.TryParse(command.Params?.GetValueOrDefault("enabled")?.ToString(), out var en) && en),
                 _ => new CommandResult { Status = "failed", Message = $"未知命令: {command.Cmd}" }
             };
@@ -44,6 +44,36 @@ public class CommandExecutor
         {
             return new CommandResult { Status = "failed", Message = ex.Message };
         }
+    }
+
+    /// <summary>
+    /// 从 Params 字典安全取出字符串值。
+    /// SignalR 反序列化后 value 可能是 string 或 JsonElement，需分别处理。
+    /// </summary>
+    private static string? GetStringParam(Dictionary<string, object>? dict, string key)
+    {
+        if (dict == null || !dict.TryGetValue(key, out var val) || val == null) return null;
+        if (val is string s) return s;
+        if (val is System.Text.Json.JsonElement je)
+        {
+            return je.ValueKind == System.Text.Json.JsonValueKind.String ? je.GetString() : je.ToString();
+        }
+        return val.ToString();
+    }
+
+    /// <summary>
+    /// 从 Params 字典安全取出 int 值。处理 SignalR 反序列化后的 JsonElement（Number）。
+    /// </summary>
+    private static int? GetIntParam(Dictionary<string, object>? dict, string key)
+    {
+        if (dict == null || !dict.TryGetValue(key, out var val) || val == null) return null;
+        if (val is int i) return i;
+        if (val is long l) return (int)l;
+        if (val is System.Text.Json.JsonElement je)
+        {
+            return je.ValueKind == System.Text.Json.JsonValueKind.Number && je.TryGetInt32(out var n) ? n : null;
+        }
+        return int.TryParse(val.ToString(), out var parsed) ? parsed : null;
     }
 
     /// <summary>
@@ -83,19 +113,18 @@ public class CommandExecutor
     }
 
     /// <summary>
-    /// 启动配置组：先 IPC 发 task.start（含 startFromIndex），IPC 失败则杀进程重启
+    /// 启动配置组：通过 IPC 发 task.start（含 startFromIndex），IPC 失败则杀进程重启
+    /// 注意：不再预先发 task.stop，因为 HandleTaskStart 内部自己会 Cancel() 中断当前任务
+    /// + 轮询 TaskSemaphore 等锁释放。task.stop 的异步 Cancel() 延迟到 RunMulti
+    /// 执行期间触发会取消新配置组（wasCancelled=True）。
     /// </summary>
     private async Task<CommandResult> StartGroupAsync(string groupName, int startFromIndex)
     {
         try
         {
-            // 先停止当前任务
+            // 通过 IPC 发 task.start
             using var ipcClient = new IpcClient();
             await ipcClient.ConnectAsync(3000);
-            await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.stop" });
-            await Task.Delay(1000);
-
-            // 通过 IPC 发 task.start
             var payload = System.Text.Json.JsonSerializer.Serialize(new { groupName, startFromIndex });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
             if (response.Success)
@@ -134,19 +163,16 @@ public class CommandExecutor
     }
 
     /// <summary>
-    /// 启动一条龙：先 IPC 发 task.start（含 startFromIndex），IPC 失败则杀进程重启
+    /// 启动一条龙：通过 IPC 发 task.start（含 startFromIndex），IPC 失败则杀进程重启
+    /// 注意：不再预先发 task.stop（原因同 StartGroupAsync）。
     /// </summary>
     private async Task<CommandResult> StartOneClickAsync(string configName, int startFromIndex)
     {
         try
         {
-            // 先停止当前任务
+            // 通过 IPC 发 task.start（一条龙内联启动）
             using var ipcClient = new IpcClient();
             await ipcClient.ConnectAsync(3000);
-            await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.stop" });
-            await Task.Delay(1000);
-
-            // 通过 IPC 发 task.start（一条龙内联启动）
             var payload = System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
             if (response.Success)

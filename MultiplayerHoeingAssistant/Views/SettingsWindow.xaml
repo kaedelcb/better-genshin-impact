@@ -104,6 +104,21 @@
                 <Run Text="各成员填自己的预期，服务端取最小值判断。示例：都填 3，则 3 人上线就开锄。"/>
             </TextBlock>
 
+            <!-- 遥控器模式 -->
+            <CheckBox x:Name="ObserverModeCheckBox" IsChecked="False" Margin="0,12,0,0" Cursor="Hand">
+                <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#1D1D1F">
+                    <Run FontWeight="SemiBold" Text="遥控器模式（本机无 BGI，仅用于远程控制）"/>
+                    <LineBreak/>
+                    <Run FontSize="10" Foreground="#8E8E93" Text="启用后不检测 BGI 进程，不参与联机战斗，右上角显示蓝色「监控」标签。"/>
+                    <LineBreak/>
+                    <Run FontSize="10" Foreground="#8E8E93" Text="可向其他成员（含自己的执行端）下发配置组、停止、一条龙等命令。"/>
+                    <LineBreak/>
+                    <Run FontSize="10" Foreground="#8E8E93" Text="不占用房间成员名额，不在成员列表中显示。"/>
+                    <LineBreak/>
+                    <Run FontSize="10" Foreground="#8E8E93" Text="适合在主用户开一个遥控端，用于监控和控制房间内所有成员。"/>
+                </TextBlock>
+            </CheckBox>
+
             <TextBlock x:Name="ErrorText" FontSize="12" Foreground="#FF3B30" TextWrapping="Wrap" Margin="0,10,0,0"/>
 
             <!-- 按钮 -->

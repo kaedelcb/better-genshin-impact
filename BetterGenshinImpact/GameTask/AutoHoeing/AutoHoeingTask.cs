@@ -88,6 +88,14 @@ public class AutoHoeingTask : ISoloTask
     // 其它停止路径（超时/被踢/掉房/正常跑完）不触发，保持原行为。
     private volatile bool _expCapStopTriggered;
 
+    // 基于经验判断停止锄地：保存最后一轮（被中断时）的统计信息，供 Start.finally 补输出"本轮锄地结束统计"格式日志。
+    // 仅经验上限触发（_expCapStopTriggered）且确实进入过 ProcessRoutesByGroup（_expCapTotalRoutes > 0）时使用。
+    private string? _expCapRoundPrefix;         // 最后一轮的 roundPrefix
+    private int _expCapCompletedCount;           // 最后一轮的 completedCount
+    private int _expCapSkippedCount;             // 最后一轮的 skippedCount
+    private int _expCapTotalRoutes;              // 最后一轮的 groupRoutes.Count
+    private DateTime _expCapGroupStartTime;      // 最后一轮的 groupStartTime
+
     // === 联机锄地守护自动重开（hoeing-multiplayer-guard-auto-restart）===
     // 本次运行是否由守护重开产生（新实例置 true）。true 时结束后不再触发重开（次数上限 1，R3）。
     private bool _isGuardRestartRun;
@@ -680,6 +688,21 @@ public class AutoHoeingTask : ISoloTask
                                 "[联机][经验上限] 多世界模式: 启用（配置 {Count} 轮）",
                                 _config.MultiWorldCount);
                         }
+
+                        // 补输出被中断那轮的"本轮锄地结束统计"格式日志（含完成数/跳过数），
+                        // 与正常轮次的日志格式一致，方便用户了解最后一轮的执行情况。
+                        // 仅当确实进入过 ProcessRoutesByGroup 时（_expCapTotalRoutes > 0）才输出。
+                        if (_expCapTotalRoutes > 0)
+                        {
+                            var roundElapsed = DateTime.Now - _expCapGroupStartTime;
+                            var prefix = _expCapRoundPrefix ?? "";
+                            _logger.LogInformation(
+                                "{Prefix}本轮锄地结束统计（经验上限退出）：用时 {H}时{Min}分{S}秒，完成 {Done} 条 / 跳过 {Skip} 条（计划共 {Total} 条）",
+                                prefix,
+                                (int)roundElapsed.TotalHours, roundElapsed.Minutes, roundElapsed.Seconds,
+                                _expCapCompletedCount, _expCapSkippedCount, _expCapTotalRoutes);
+                        }
+
                         _logger.LogInformation(
                             "[联机][经验上限] ==========================================");
                     }
@@ -3803,6 +3826,14 @@ public class AutoHoeingTask : ISoloTask
                 roundPrefix,
                 (int)roundElapsed.TotalHours, roundElapsed.Minutes, roundElapsed.Seconds,
                 completedCount, skippedCount, groupRoutes.Count);
+
+            // 保存被中断这轮的统计信息，供经验上限退出时在 Start.finally 补输出"本轮锄地结束统计"格式日志。
+            // （该格式只在此 catch 块输出一次；Start.finally 的 [联机][经验上限] 汇总不含完成数/跳过数。）
+            _expCapRoundPrefix = roundPrefix;
+            _expCapCompletedCount = completedCount;
+            _expCapSkippedCount = skippedCount;
+            _expCapTotalRoutes = groupRoutes.Count;
+            _expCapGroupStartTime = groupStartTime;
             throw;
         }
         catch (Exception ex)

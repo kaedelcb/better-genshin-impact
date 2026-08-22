@@ -9,6 +9,7 @@ public class SignalRClient : IAsyncDisposable
     private string _roomCode = string.Empty;
     private string _playerUid = string.Empty;
     private string _playerName = string.Empty;
+    private bool _isRemote;
 
     // 持久的连接参数：Closed（自动重连耗尽）后自愈重连循环需要它们重建连接
     private string _serverUrl = string.Empty;
@@ -26,22 +27,25 @@ public class SignalRClient : IAsyncDisposable
     public event Action<bool>? OnConnectionStateChanged;
     /// <summary>全员就绪确认完成事件（各助手据此启动中断流程）。带 generation 参数，用于幂等保护。</summary>
     public event Action<int>? OnAllReadyConfirmed;
+    /// <summary>收到 AllReadyConfirm 事件（服务端要求确认就绪，确认阶段用）。</summary>
+    public event Action<int>? OnAllReadyConfirmReceived;
     /// <summary>日志回调（供外部输出探针日志）</summary>
     public Action<string>? OnLog { get; set; }
 
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
 
     public async Task ConnectAsync(string serverUrl, string roomCode, string password,
-        string playerUid, string playerName, List<string> teamUids)
+        string playerUid, string playerName, List<string> teamUids, bool isRemote = false)
     {
         _roomCode = roomCode;
         _playerUid = playerUid;
         _playerName = playerName;
+        _isRemote = isRemote;
         _serverUrl = serverUrl;
         _password = password;
         _teamUids = teamUids;
 
-        await EstablishAsync(serverUrl, roomCode, password, playerUid, playerName, teamUids);
+        await EstablishAsync(serverUrl, roomCode, password, playerUid, playerName, teamUids, isRemote);
     }
 
     /// <summary>
@@ -49,7 +53,7 @@ public class SignalRClient : IAsyncDisposable
     /// 每次调用都会新建 connection，因此事件处理器必须在这里重新注册到最新连接上。
     /// </summary>
     private async Task EstablishAsync(string serverUrl, string roomCode, string password,
-        string playerUid, string playerName, List<string> teamUids)
+        string playerUid, string playerName, List<string> teamUids, bool isRemote)
     {
         var connection = new HubConnectionBuilder()
             .WithUrl($"{serverUrl}/hub")
@@ -67,6 +71,10 @@ public class SignalRClient : IAsyncDisposable
             OnLog?.Invoke("[探针助手] SignalRClient 收到 AllReady 事件, generation=" + generation);
             OnAllReadyConfirmed?.Invoke(generation);
         });
+        connection.On<int>("AllReadyConfirm", generation =>
+        {
+            OnAllReadyConfirmReceived?.Invoke(generation);
+        });
 
         // 重连中（SignalR 内置自动重连尝试期间）
         connection.Reconnecting += _ =>
@@ -80,7 +88,7 @@ public class SignalRClient : IAsyncDisposable
         connection.Reconnected += async _ =>
         {
             System.Diagnostics.Debug.WriteLine("SignalR 已重连，重新加入控制房间");
-            await connection.InvokeAsync("JoinControlRoom", roomCode, password, playerUid, playerName, teamUids);
+            await connection.InvokeAsync("JoinControlRoom", roomCode, password, playerUid, playerName, teamUids, isRemote);
             OnConnectionStateChanged?.Invoke(true);
         };
 
@@ -104,7 +112,7 @@ public class SignalRClient : IAsyncDisposable
         };
 
         await connection.StartAsync();
-        await connection.InvokeAsync("JoinControlRoom", roomCode, password, playerUid, playerName, teamUids);
+        await connection.InvokeAsync("JoinControlRoom", roomCode, password, playerUid, playerName, teamUids, isRemote);
 
         // 必须在 StartAsync + JoinControlRoom 全部成功之后才把 _connection 指向新连接。
         // 若提前赋值、StartAsync 又失败，_connection 会指向"失败的新连接"，
@@ -147,7 +155,7 @@ public class SignalRClient : IAsyncDisposable
                     var teamUids = _teamUids;
 
                     await closedConnection.DisposeAsync();
-                    await EstablishAsync(serverUrl, roomCode, password, playerUid, playerName, teamUids);
+                    await EstablishAsync(serverUrl, roomCode, password, playerUid, playerName, teamUids, _isRemote);
 
                     OnConnectionStateChanged?.Invoke(true);
                     return; // 连上后退出循环
@@ -174,6 +182,19 @@ public class SignalRClient : IAsyncDisposable
         await _connection.InvokeAsync("SendRemoteCommand", command);
     }
 
+    public async Task ConfirmAllReadyAsync(int generation)
+    {
+        if (_connection == null) return;
+        try
+        {
+            await _connection.InvokeAsync("ConfirmAllReady", generation);
+        }
+        catch (Exception ex)
+        {
+            OnLog?.Invoke("[探针助手] ConfirmAllReady 调用失败: " + ex.Message);
+        }
+    }
+
     public async Task ReportControlStatusAsync(ControlStatus status)
     {
         if (_connection == null) return;
@@ -193,6 +214,20 @@ public class SignalRClient : IAsyncDisposable
         {
             OnLog?.Invoke($"[上线探针] ReportOnlineEventAsync 调用失败: {ex.Message}");
             throw;
+        }
+    }
+
+    /// <summary>清除指定成员的 OnlineHistory（已联机记录），由本人或房主调用。</summary>
+    public async Task ClearOnlineHistoryAsync(string targetUid)
+    {
+        if (_connection == null) return;
+        try
+        {
+            await _connection.InvokeAsync("ClearOnlineHistory", targetUid);
+        }
+        catch (Exception ex)
+        {
+            OnLog?.Invoke($"[清除记录] ClearOnlineHistoryAsync 调用失败: {ex.Message}");
         }
     }
 

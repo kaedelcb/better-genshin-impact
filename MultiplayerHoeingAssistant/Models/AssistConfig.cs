@@ -76,4 +76,8 @@ public class AssistConfig
     /// <summary>预期开锄人数（默认 4）。服务端取所有已上线成员的最小值作为就绪阈值。</summary>
     [JsonPropertyName("expectedHoeingPlayers")]
     public int ExpectedHoeingPlayers { get; set; } = 4;
+
+    /// <summary>遥控器模式：本机无 BGI 时启用，跳过 BGI 进程监控，所有操作通过远程命令发送给其他成员。</summary>
+    [JsonPropertyName("observerMode")]
+    public bool ObserverMode { get; set; } = false;
 }
