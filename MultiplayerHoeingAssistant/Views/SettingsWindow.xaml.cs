@@ -41,6 +41,7 @@ public partial class SettingsWindow : Window
         if (!string.IsNullOrEmpty(config.BgiPath))
             BgiPathBox.Text = config.BgiPath;
         ExpectedPlayersBox.Text = config.ExpectedHoeingPlayers.ToString();
+        ObserverModeCheckBox.IsChecked = config.ObserverMode;
     }
 
     /// <summary>
@@ -97,6 +98,7 @@ public partial class SettingsWindow : Window
             TeamUids = teamUids,
             BgiPath = bgiPath,
             // 保留其他字段（不因设置弹窗保存而重置）
+            ObserverMode = ObserverModeCheckBox.IsChecked == true,
             ExpectedHoeingPlayers = int.TryParse(ExpectedPlayersBox.Text.Trim(), out var ep) && ep >= 1 && ep <= 4 ? ep : 4,
             ScheduledOnlineTime = _configCopy?.ScheduledOnlineTime ?? "",
             OnlineHoeingGroupNames = _configCopy?.OnlineHoeingGroupNames ?? [],

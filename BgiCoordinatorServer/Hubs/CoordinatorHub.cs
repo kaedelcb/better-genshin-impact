@@ -1083,6 +1083,9 @@ public class CoordinatorHub : Hub
                     if (group.StartsWith("CTRL_"))
                     {
                         _roomManager.RemoveFromControlRoom(group, Context.ConnectionId);
+                        // 遥控端不入 _controlRooms，RemoveFromControlRoom 对其 no-op；
+                        // 需单独清理遥控端连接登记，防止 _remoteControlConnections 残留。
+                        _roomManager.RemoveRemoteConnection(group, Context.ConnectionId);
                         var players = _roomManager.GetControlRoomPlayers(group);
                         _ = Clients.Group(group).SendAsync("ControlRoomPlayersUpdated", players);
                         _logger.LogInformation("控制房间 {Group} 成员断线，已标记离线", group);
@@ -2441,7 +2444,7 @@ public class CoordinatorHub : Hub
     /// <summary>
     /// 加入控制房间。校验密码 + UID 白名单，成功后加入 CTRL_{roomCode} Group
     /// </summary>
-    public async Task JoinControlRoom(string roomCode, string password, string playerUid, string playerName, List<string>? allowedUids = null)
+    public async Task JoinControlRoom(string roomCode, string password, string playerUid, string playerName, List<string>? allowedUids = null, bool isRemote = false)
     {
         try
         {
@@ -2456,21 +2459,32 @@ public class CoordinatorHub : Hub
             await Groups.AddToGroupAsync(Context.ConnectionId, group);
             TrackGroup(group);
             var isWebClient = playerUid.StartsWith("web_");
-            if (!isWebClient)
+            // 遥控端（observerMode 标记，isRemote=true）与 WEB 端类似：不加入 _controlRooms 成员列表，
+            // 只加 SignalR Group 收广播。这样遥控端不建独立条目、不被 ResolveTargets 匹配（不接收命令）、
+            // 且同 UID 执行端的 ControlRoomPlayer 不被覆盖（解决"同 UID 双端互挤占"）。
+            if (!isWebClient && !isRemote)
             {
                 _roomManager.AddToControlRoom(group, Context.ConnectionId, playerUid, playerName);
             }
-            _logger.LogInformation("玩家 {PlayerName}({PlayerUid}) 加入控制房间 {RoomCode} (Web={IsWeb})", playerName, playerUid, roomCode, isWebClient);
+            if (isRemote)
+            {
+                _roomManager.RegisterRemoteConnection(group, Context.ConnectionId);
+            }
+            _logger.LogInformation("玩家 {PlayerName}({PlayerUid}) 加入控制房间 {RoomCode} (Web={IsWeb}, Remote={IsRemote})", playerName, playerUid, roomCode, isWebClient, isRemote);
 
             // 广播成员列表
             var players = _roomManager.GetControlRoomPlayers(group);
             await Clients.Group(group).SendAsync("ControlRoomPlayersUpdated", players);
 
-            // 下发该玩家在线的缓存命令
-            var pending = _roomManager.GetAndClearPendingCommands(playerUid);
-            foreach (var cmd in pending)
+            // 遥控端不接收命令（FR-3），故不下发离线缓存命令。WEB 端同样不入 _controlRooms，
+            // 但既有行为会下发缓存——保持 WEB 端不变，仅对遥控端跳过。
+            if (!isRemote)
             {
-                await Clients.Client(Context.ConnectionId).SendAsync("RemoteCommand", cmd);
+                var pending = _roomManager.GetAndClearPendingCommands(playerUid);
+                foreach (var cmd in pending)
+                {
+                    await Clients.Client(Context.ConnectionId).SendAsync("RemoteCommand", cmd);
+                }
             }
         }
         catch (Exception ex)
@@ -2491,8 +2505,10 @@ public class CoordinatorHub : Hub
             // WEB 控制端（UID 以 web_ 开头）不会被 AddToControlRoom 加入 _controlRooms，
             // 但它们已通过 JoinControlRoom 的密码校验并加入了 CTRL_ group，应放行发送。
             // PC 端助手（UID 为真实数字）走 _controlRooms 校验，行为不变。
+            // 遥控端（isRemote，不在 _controlRooms）用 RegisterRemoteConnection 登记，也放行发送。
             var isWebSender = !string.IsNullOrEmpty(command.SenderUid) && command.SenderUid.StartsWith("web_");
-            if (!isWebSender && !_roomManager.IsInControlRoom(group, Context.ConnectionId))
+            var isRemoteSender = _roomManager.IsRemoteConnection(group, Context.ConnectionId);
+            if (!isWebSender && !isRemoteSender && !_roomManager.IsInControlRoom(group, Context.ConnectionId))
             {
                 _logger.LogWarning("玩家 {Sender} 不在控制房间中，拒绝发送命令", command.Sender);
                 return;
@@ -2545,16 +2561,38 @@ public class CoordinatorHub : Hub
             var group = $"CTRL_{status.RoomCode}";
             // 只更新状态，不做就绪检查（就绪检查由 ReportOnlineEvent 端点统一处理）
             _roomManager.UpdateControlStatus(group, Context.ConnectionId, status);
-            Console.WriteLine("[探针服务端] ReportControlStatus: 已更新状态, group=" + group + " OnlineReady=" + status.OnlineReady);
 
             // 广播给控制房间所有成员
             var players = _roomManager.GetControlRoomPlayers(group);
             await Clients.Group(group).SendAsync("ControlRoomPlayersUpdated", players);
-            Console.WriteLine("[探针服务端] ReportControlStatus: 已广播 ControlRoomPlayersUpdated, group=" + group);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ReportControlStatus 失败");
+        }
+    }
+
+    /// <summary>清除指定成员的 OnlineHistory（已联机记录）。由本人或房主调用。</summary>
+    public async Task ClearOnlineHistory(string targetUid)
+    {
+        try
+        {
+            var group = _roomManager.GetControlRoomGroup(Context.ConnectionId);
+            if (string.IsNullOrEmpty(group))
+            {
+                return;
+            }
+
+            var roomCode = group.Replace("CTRL_", "");
+            _roomManager.ClearOnlineHistory(roomCode, targetUid);
+
+            // 广播更新给所有成员
+            var players = _roomManager.GetControlRoomPlayers(group);
+            await Clients.Group(group).SendAsync("ControlRoomPlayersUpdated", players);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ClearOnlineHistory 失败");
         }
     }
 
@@ -2566,11 +2604,9 @@ public class CoordinatorHub : Hub
             var group = _roomManager.GetControlRoomGroup(Context.ConnectionId);
             if (string.IsNullOrEmpty(group))
             {
-                Console.WriteLine("[探针服务端] ReportOnlineEvent: 找不到 group, connectionId=" + Context.ConnectionId);
                 return;
             }
 
-            Console.WriteLine("[探针服务端] ReportOnlineEvent: generation=" + generation + " group=" + group);
             _roomManager.ReportOnlineEvent(group, Context.ConnectionId, generation);
 
             // 广播玩家列表更新
@@ -2580,14 +2616,91 @@ public class CoordinatorHub : Hub
             // 检查是否可转换为 ready
             if (_roomManager.CheckAndTransition(group, out var readyGeneration))
             {
-                Console.WriteLine("[探针服务端] ReportOnlineEvent: 状态 ready, 广播 AllReady(" + readyGeneration + "), group=" + group);
-                await Clients.Group(group).SendAsync("AllReady", readyGeneration);
-                _roomManager.ConsumeOnlineReady(group, readyGeneration);
+                // 改为确认阶段：不再直接广播 AllReady，改为逐个发确认等全员 ack
+                var onlinePlayers = players
+                    .Where(p => p.Online && !p.OnlineEventConsumed && p.OnlineEventGeneration > 0)
+                    .Select(p => p.PlayerUid)
+                    .ToList();
+                _roomManager.BeginConfirming(group, readyGeneration, onlinePlayers);
+                _ = StartConfirmAsync(group, readyGeneration, onlinePlayers);
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ReportOnlineEvent 失败");
+        }
+    }
+
+    /// <summary>确认阶段主循环：发送 AllReadyConfirm → 等 ack → 超时重试 → 完成或耗尽。</summary>
+    private async Task StartConfirmAsync(string group, int generation, List<string> targetUids)
+    {
+        const int timeoutMs = 30_000;
+        const int maxAttempts = 3;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            var players = _roomManager.GetControlRoomPlayers(group);
+            var pendingUids = _roomManager.GetPendingConfirmUids(group, targetUids)
+                .Where(uid => players.Any(p => p.PlayerUid == uid && p.Online))
+                .ToList();
+            if (pendingUids.Count == 0) break;
+
+            foreach (var uid in pendingUids)
+            {
+                var connId = _roomManager.GetConnectionIdByUid(group, uid);
+                if (connId != null)
+                {
+                    await Clients.Client(connId).SendAsync("AllReadyConfirm", generation);
+                    _logger.LogInformation("确认阶段: 已向 {Uid} 发送 AllReadyConfirm(generation={Gen}), 第{Attempt}次", uid, generation, attempt);
+                }
+            }
+
+            var waitStart = DateTime.UtcNow;
+            while ((DateTime.UtcNow - waitStart).TotalMilliseconds < timeoutMs)
+            {
+                if (!_roomManager.IsStateConfirming(group))
+                {
+                    _logger.LogInformation("确认阶段被中断，generation={Gen}", generation);
+                    // 中断时消费已确认成员，避免下次重复触发
+                    var confirmedUids = targetUids.Where(uid =>
+                        _roomManager.GetConfirmedUids(group).Contains(uid)).ToList();
+                    if (confirmedUids.Count > 0)
+                        _roomManager.ConsumeOnlineReady(group, generation);
+                    return;
+                }
+                if (_roomManager.IsAllConfirmed(group, targetUids))
+                {
+                    _logger.LogInformation("全员确认完成, generation={Gen}", generation);
+                    _roomManager.ConsumeOnlineReady(group, generation);
+                    await Clients.Group(group).SendAsync("ControlRoomPlayersUpdated", _roomManager.GetControlRoomPlayers(group));
+                    return;
+                }
+                await Task.Delay(500);
+            }
+            _roomManager.IncrementConfirmAttempts(group);
+            _logger.LogWarning("确认阶段: 超时, 第{Attempt}次, generation={Gen}", attempt, generation);
+        }
+
+        _logger.LogError("重试耗尽, 放弃本轮次, generation={Gen}, 未确认成员={Uids}",
+            generation, string.Join(",", _roomManager.GetUnconfirmedUids(group, targetUids)));
+        _roomManager.MarkExhausted(group);
+        await Clients.Group(group).SendAsync("ControlRoomPlayersUpdated", _roomManager.GetControlRoomPlayers(group));
+    }
+
+    /// <summary>客户端确认收到 AllReadyConfirm。由客户端收到 AllReadyConfirm 事件后调用。</summary>
+    public async Task ConfirmAllReady(int generation)
+    {
+        try
+        {
+            var group = _roomManager.GetControlRoomGroup(Context.ConnectionId);
+            if (string.IsNullOrEmpty(group)) return;
+            var uid = _roomManager.GetUidByConnectionId(group, Context.ConnectionId);
+            if (string.IsNullOrEmpty(uid)) return;
+            _roomManager.RegisterConfirmAck(group, uid, generation);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ConfirmAllReady 失败");
         }
     }
 }

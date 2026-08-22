@@ -511,7 +511,7 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
                         <Grid Margin="0,0,0,7">
-                            <TextBlock Text="冒险日志23" FontSize="12" FontWeight="Medium" Foreground="{StaticResource GoldText}"/>
+                            <TextBlock Text="冒险日志" FontSize="12" FontWeight="Medium" Foreground="{StaticResource GoldText}"/>
                             <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="56,0,0,0"/>
                         </Grid>
                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Style="{StaticResource GoldScrollViewer}">
@@ -563,6 +563,14 @@
                                             <Setter Property="Background" Value="#1F6FD8CE"/>
                                             <Setter Property="BorderBrush" Value="#666FD8CE"/>
                                         </DataTrigger>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding IsConnected}" Value="True"/>
+                                                <Condition Binding="{Binding IsObserverMode}" Value="True"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Background" Value="#1F5B8DEF"/>
+                                            <Setter Property="BorderBrush" Value="#665B8DEF"/>
+                                        </MultiDataTrigger>
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
@@ -575,7 +583,14 @@
                                                 <DataTrigger Binding="{Binding IsConnected}" Value="True">
                                                     <Setter Property="Fill" Value="{StaticResource Anemo}"/>
                                                 </DataTrigger>
-                                            </Style.Triggers>
+                                                <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsConnected}" Value="True"/>
+                                                    <Condition Binding="{Binding IsObserverMode}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="Fill" Value="#5B8DEF"/>
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
                                         </Style>
                                     </Ellipse.Style>
                                 </Ellipse>
@@ -589,7 +604,15 @@
                                                     <Setter Property="Text" Value="在线"/>
                                                     <Setter Property="Foreground" Value="{StaticResource Anemo}"/>
                                                 </DataTrigger>
-                                            </Style.Triggers>
+                                                <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsConnected}" Value="True"/>
+                                                    <Condition Binding="{Binding IsObserverMode}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="Text" Value="监控"/>
+                                                <Setter Property="Foreground" Value="#5B8DEF"/>
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
@@ -665,6 +688,10 @@
                                                                             <Setter Property="Background" Value="#24D9A84E"/>
                                                                             <Setter Property="BorderBrush" Value="#40D9A84E"/>
                                                                         </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding BgiStatus}" Value="observer">
+                                                                            <Setter Property="Background" Value="#295B8DEF"/>
+                                                                            <Setter Property="BorderBrush" Value="#735B8DEF"/>
+                                                                        </DataTrigger>
                                                                         <DataTrigger Binding="{Binding TaskRunning}" Value="True">
                                                                             <Setter Property="Background" Value="#29C9A0E8"/>
                                                                             <Setter Property="BorderBrush" Value="#73C9A0E8"/>
@@ -686,6 +713,10 @@
                                                                             <DataTrigger Binding="{Binding BgiStatus}" Value="stopped">
                                                                                 <Setter Property="Text" Value="BGI 未运行"/>
                                                                                 <Setter Property="Foreground" Value="{StaticResource Geo}"/>
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding BgiStatus}" Value="observer">
+                                                                                <Setter Property="Text" Value="遥控器"/>
+                                                                                <Setter Property="Foreground" Value="#5B8DEF"/>
                                                                             </DataTrigger>
                                                                             <DataTrigger Binding="{Binding TaskRunning}" Value="True">
                                                                                 <Setter Property="Text" Value="{Binding CurrentTaskName}"/>
@@ -809,13 +840,14 @@
                                     </Grid>
                                     <Grid>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <Button Grid.Column="0" Content="传奇" Style="{StaticResource BtnGhost}" Command="{Binding QuickLegendCommand}" Padding="8,5" Margin="0,0,4,0"/>
-                                        <Button Grid.Column="1" Content="次数盾" Style="{StaticResource BtnGhost}" Command="{Binding QuickShieldCommand}" Padding="8,5" Margin="4,0"/>
-                                        <Button Grid.Column="2" Content="精英" Style="{StaticResource BtnGhost}" Command="{Binding QuickEliteCommand}" Padding="8,5" Margin="4,0"/>
-                                        <Button Grid.Column="3" Content="小怪" Style="{StaticResource BtnGhost}" Command="{Binding QuickMultiCommand}" Padding="8,5" Margin="4,0"/>
-                                        <Button Grid.Column="4" Content="自定义" Style="{StaticResource BtnGhost}" Command="{Binding QuickCustomCommand}" Padding="8,5" Margin="4,0,0,0"/>
+                                        <Button Grid.Column="0" Content="一键锄地" Style="{StaticResource BtnGhost}" Command="{Binding QuickHoeingCommand}" Padding="8,5" Margin="0,0,4,0"/>
+                                        <Button Grid.Column="1" Content="传奇" Style="{StaticResource BtnGhost}" Command="{Binding QuickLegendCommand}" Padding="8,5" Margin="4,0"/>
+                                        <Button Grid.Column="2" Content="次数盾" Style="{StaticResource BtnGhost}" Command="{Binding QuickShieldCommand}" Padding="8,5" Margin="4,0"/>
+                                        <Button Grid.Column="3" Content="精英" Style="{StaticResource BtnGhost}" Command="{Binding QuickEliteCommand}" Padding="8,5" Margin="4,0"/>
+                                        <Button Grid.Column="4" Content="小怪" Style="{StaticResource BtnGhost}" Command="{Binding QuickMultiCommand}" Padding="8,5" Margin="4,0"/>
+                                        <Button Grid.Column="5" Content="自定义" Style="{StaticResource BtnGhost}" Command="{Binding QuickCustomCommand}" Padding="8,5" Margin="4,0,0,0"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>

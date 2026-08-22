@@ -2,6 +2,7 @@
 using BetterGenshinImpact.Model;
 using System.Threading;
 using System.Collections.Generic;
+using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.Core.Script;
 
@@ -44,11 +45,14 @@ public class CancellationContext : Singleton<CancellationContext>
 
     public void Set()
     {
+        var prevWasCancelled = WasCancelled;
+        var prevManualStop = IsManualStop;
         Cts = new CancellationTokenSource();
         _externalCtsList.Clear();
         IsManualStop = false;
         WasCancelled = false;
         disposed = false;
+        try { BetterGenshinImpact.GameTask.Common.TaskControl.Logger.LogInformation("[CancelCtx][Set] 重置: prevWasCancelled={P} prevManualStop={M} -> 新Cts, WasCancelled=false", prevWasCancelled, prevManualStop); } catch { }
     }
 
     public CancellationToken Register(CancellationToken externalToken)
@@ -100,11 +104,13 @@ public class CancellationContext : Singleton<CancellationContext>
         {
             if (disposed)
             {
+                try { BetterGenshinImpact.GameTask.Common.TaskControl.Logger.LogInformation("[CancelCtx][Cancel] 跳过: 已 disposed"); } catch { }
                 return;
             }
 
             WasCancelled = true;
             cts = Cts;
+            try { BetterGenshinImpact.GameTask.Common.TaskControl.Logger.LogInformation("[CancelCtx][Cancel] 已取消: WasCancelled=true, Cts.IsCancellationRequested={R}", cts.IsCancellationRequested); } catch { }
         }
 
         try
@@ -117,8 +123,24 @@ public class CancellationContext : Singleton<CancellationContext>
         }
     }
 
+    /// <summary>只取消令牌但不设置 WasCancelled，用于 IPC task.start 等场景。</summary>
+    public void CancelTokenOnly()
+    {
+        // 取消旧令牌（中断当前任务）
+        try
+        {
+            Cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        // 创建新令牌（让后续任务在新上下文中执行，不重置 WasCancelled）
+        Cts = new CancellationTokenSource();
+    }
+
     public void Clear()
     {
+        var wasWasCancelled = WasCancelled;
         Cts.Dispose();
         foreach (var externalCts in _externalCtsList)
         {
@@ -136,6 +158,7 @@ public class CancellationContext : Singleton<CancellationContext>
 
             cts = Cts;
             disposed = true;
+            try { BetterGenshinImpact.GameTask.Common.TaskControl.Logger.LogInformation("[CancelCtx][Clear] 清理: disposed=true, WasCancelled={W}（保持不清）", wasWasCancelled); } catch { }
         }
 
         cts.Dispose();

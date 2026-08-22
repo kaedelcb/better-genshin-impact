@@ -24,6 +24,9 @@ public class RoomManager
     private readonly ConcurrentDictionary<string, List<ControlRoomPlayer>> _controlRooms = new();
     // 控制房间 AllReady 广播幂等标志（独立于锄地房间 Room 对象，因为控制房间可能没有对应的锄地房间）
     private readonly ConcurrentDictionary<string, bool> _controlRoomAllReadyBroadcasted = new();
+    // 遥控端连接登记（group → connectionId 集合）。遥控端不入 _controlRooms 成员列表，
+    // 只加 SignalR Group 收广播；登记到此集合供 SendRemoteCommand 发送方校验放行。
+    private readonly ConcurrentDictionary<string, HashSet<string>> _remoteControlConnections = new();
     // 离线命令缓存：playerUid → 待执行的命令列表
     private readonly ConcurrentDictionary<string, List<RemoteCommand>> _pendingCommands = new();
 
@@ -1059,6 +1062,30 @@ public class RoomManager
         }
     }
 
+    /// <summary>登记/更新遥控端连接（group 下可能多个遥控端，Set 去重）。</summary>
+    public void RegisterRemoteConnection(string group, string connectionId)
+    {
+        var set = _remoteControlConnections.GetOrAdd(group, _ => []);
+        set.Add(connectionId);
+    }
+
+    /// <summary>移除遥控端连接（组内最后一个连接移除后清理空组）。</summary>
+    public void RemoveRemoteConnection(string group, string connectionId)
+    {
+        if (_remoteControlConnections.TryGetValue(group, out var set))
+        {
+            set.Remove(connectionId);
+            if (set.Count == 0)
+                _remoteControlConnections.TryRemove(group, out _);
+        }
+    }
+
+    /// <summary>该连接是否遥控端（已加入 CTRL_ group、不在 _controlRooms 成员列表，且已登记为遥控端）。</summary>
+    public bool IsRemoteConnection(string group, string connectionId)
+    {
+        return _remoteControlConnections.TryGetValue(group, out var set) && set.Contains(connectionId);
+    }
+
     /// <summary>获取控制房间的玩家列表</summary>
     public List<ControlRoomPlayer> GetControlRoomPlayers(string group)
     {
@@ -1219,12 +1246,18 @@ public class RoomManager
     /// <summary>房间级状态（用于 ReportOnlineEvent 状态机）。</summary>
     public class RoomAllReadyState
     {
-        /// <summary>当前状态：idle / waiting / ready / consumed</summary>
+        /// <summary>当前状态：idle / waiting / ready / confirming / all_ready_confirmed / exhausted</summary>
         public string State { get; set; } = "idle";
         /// <summary>当前轮次的 generation</summary>
         public int CurrentGeneration { get; set; } = 0;
         /// <summary>上次消费的 generation</summary>
         public int LastConsumedGeneration { get; set; } = 0;
+        /// <summary>确认阶段：已确认的成员 UID 集合</summary>
+        public HashSet<string> ConfirmedUids { get; set; } = new();
+        /// <summary>确认阶段：已尝试发送确认消息的次数</summary>
+        public int ConfirmAttempts { get; set; } = 0;
+        /// <summary>确认阶段：目标成员 UID 快照</summary>
+        public List<string> PendingConfirmUids { get; set; } = new();
     }
 
     private readonly ConcurrentDictionary<string, RoomAllReadyState> _roomAllReadyStates = new();
@@ -1341,5 +1374,99 @@ public class RoomManager
             Console.WriteLine("[探针服务端] ConsumeOnlineReady: 找不到 group=" + group);
         }
         Console.WriteLine("[探针服务端] ===== ConsumeOnlineReady 结束, group=" + group + " =====");
+    }
+
+    /// <summary>清除指定玩家的 OnlineHistory（已联机记录）。由 ClearOnlineHistory Hub 端点调用。</summary>
+    public void ClearOnlineHistory(string roomCode, string playerUid)
+    {
+        if (_controlRooms.TryGetValue(roomCode, out var players))
+        {
+            lock (players)
+            {
+                var player = players.FirstOrDefault(p => p.PlayerUid == playerUid);
+                if (player != null)
+                {
+                    player.OnlineHistory.Clear();
+                    Console.WriteLine("[探针服务端] ClearOnlineHistory: 已清除玩家 " + playerUid + " 的 OnlineHistory");
+                }
+            }
+        }
+    }
+
+    public void BeginConfirming(string group, int generation, List<string> targetUids)
+    {
+        if (_roomAllReadyStates.TryGetValue(group, out var state))
+        {
+            state.State = "confirming";
+            state.CurrentGeneration = generation;
+            state.ConfirmedUids = new HashSet<string>();
+            state.PendingConfirmUids = targetUids;
+            state.ConfirmAttempts = 0;
+        }
+    }
+
+    public bool RegisterConfirmAck(string group, string uid, int generation)
+    {
+        if (!_roomAllReadyStates.TryGetValue(group, out var state)) return false;
+        if (state.State != "confirming") return false;
+        if (generation != state.CurrentGeneration) return false;
+        state.ConfirmedUids.Add(uid);
+        return state.ConfirmedUids.Count >= state.PendingConfirmUids.Count;
+    }
+
+    public void MarkExhausted(string group)
+    {
+        if (_roomAllReadyStates.TryGetValue(group, out var state))
+            state.State = "exhausted";
+    }
+
+    public bool IsStateConfirming(string group)
+    {
+        return _roomAllReadyStates.TryGetValue(group, out var state) && state.State == "confirming";
+    }
+
+    public List<string> GetPendingConfirmUids(string group, List<string> targetUids)
+    {
+        if (!_roomAllReadyStates.TryGetValue(group, out var state)) return targetUids;
+        return targetUids.Where(uid => !state.ConfirmedUids.Contains(uid)).ToList();
+    }
+
+    public bool IsAllConfirmed(string group, List<string> targetUids)
+    {
+        if (!_roomAllReadyStates.TryGetValue(group, out var state)) return false;
+        return state.ConfirmedUids.Count >= targetUids.Count;
+    }
+
+    public List<string> GetUnconfirmedUids(string group, List<string> targetUids)
+    {
+        if (!_roomAllReadyStates.TryGetValue(group, out var state)) return targetUids;
+        return targetUids.Where(uid => !state.ConfirmedUids.Contains(uid)).ToList();
+    }
+
+    public List<string> GetConfirmedUids(string group)
+    {
+        if (_roomAllReadyStates.TryGetValue(group, out var state))
+            return state.ConfirmedUids.ToList();
+        return new List<string>();
+    }
+
+    public void IncrementConfirmAttempts(string group)
+    {
+        if (_roomAllReadyStates.TryGetValue(group, out var state))
+            state.ConfirmAttempts++;
+    }
+
+    public string? GetConnectionIdByUid(string group, string uid)
+    {
+        if (_controlRooms.TryGetValue(group, out var players))
+            lock (players) { return players.FirstOrDefault(p => p.PlayerUid == uid)?.ConnectionId; }
+        return null;
+    }
+
+    public string? GetUidByConnectionId(string group, string connectionId)
+    {
+        if (_controlRooms.TryGetValue(group, out var players))
+            lock (players) { return players.FirstOrDefault(p => p.ConnectionId == connectionId)?.PlayerUid; }
+        return null;
     }
 }

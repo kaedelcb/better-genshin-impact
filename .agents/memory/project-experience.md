@@ -764,3 +764,151 @@ BGI 端 + 助手端都要重新部署（BGI 复制 BetterGI.dll，助手端编�
 - 定时上线 = PC 本地 `StartOnlineScheduler` 自增 `_localOnlineGeneration` → `MarkOnlineAsync` 已设 `_isOnlineReady=true` → `ReportOnlineEventAsync(localGen, true)`，天然无覆盖问题（所以用户观察"定时不这样"）。
 - **补充第三层根因（时序覆盖）**：即使第一、二层都修了，`ReportStatusAsync` 里 `status` 对象在**方法开头**构造（`OnlineReady = _isOnlineReady`，此时可能 false），边沿检测在**中后段**才设 `_isOnlineReady=true`。若不同步更新 `status`，末尾 `ReportControlStatusAsync(status)` 仍用构造时的 `OnlineReady=false` 上报 → 覆盖服务端刚由 `ReportOnlineEvent` 设的 `OnlineReady=true` → 上线状态闪 true 又闪 false（过一会下一个上报周期再设 true 变回来）。**修复：边沿检测设 `_isOnlineReady=true` 时，同时 `status.OnlineReady=true; status.OnlineMode="command";`**。
 - **教训**：异步方法内"局部状态对象在入口构造、逻辑中途改共享状态位、出口再上报该对象"——对象承载的是**入口快照**，中途改了共享字段 ≠ 对象字段更新。凡是"先构造 DTO 再中间改状态最后上报 DTO"的模式，都要在中途改状态的地方同步更新 DTO 对应字段，否则上报的是旧快照。
+## 遥控器模式实现（2026-08-22）
+
+### 背景
+主用户开了联机助手但没开 BGI，多用户开着 BGI 和游戏。主用户助手的 `BgiProcessMonitor` 检测不到本机 BGI 进程（跨会话不可见），显示"BGI 未运行"。用户希望主用户助手作为"遥控器"——能正常加入房间、看到所有成员状态、发命令控制其他成员，只是不参与战斗。
+
+### 关键发现
+1. **PC 端发远程命令不依赖本机 BGI**：`SendRemoteCommandAsync` → 服务端 `SendRemoteCommand` → 目标成员 `OnRemoteCommand`，链路中不涉及本机 IPC 或 BGI 进程检测。
+2. **`IsInControlRoom` 检查天然通过**：PC 端（真实 UID）走 `AddToControlRoom`，所以 `IsInControlRoom` 检查通过。WEB 端（`web_` 前缀）不走 `AddToControlRoom`，需要特殊放行（§19.9）。
+3. **`ExecuteLocalCommandAsync` 在 `_commandExecutor==null` 时只记日志不发命令**：这是必须修复的关键路径——遥控器模式下 `_commandExecutor==null`，需要改为走 `_signalRClient.SendRemoteCommandAsync` 发送远程命令。
+
+### 改动
+- **`AssistConfig`**：加 `ObserverMode` 属性（默认 `false`，JSON 名 `observerMode`）
+- **`SettingsWindow.xaml`**：加"遥控器模式"CheckBox 开关
+- **`SettingsWindow.xaml.cs`**：`BuildConfig` 保留 `ObserverMode` 字段
+- **`MainViewModel.InitializeAsync`**：遥控器模式跳过 BGI 监控创建（`_processMonitor` 和 `_commandExecutor` 保持 null）
+- **`MainViewModel.ReportStatusAsync`**：遥控器模式跳过 IPC 连接，上报 `BgiStatus="observer"`
+- **`MainViewModel.ExecuteLocalCommandAsync`**：`_commandExecutor==null && ObserverMode=true` 时走 `_signalRClient.SendRemoteCommandAsync` 发送远程命令
+- **`MainWindow.xaml`**：状态徽章加 `BgiStatus="observer"` 的 DataTrigger，显示蓝色"遥控器"标签
+
+### 关键教训
+- `SettingsWindow.BuildConfig` 中新增字段必须在 `return new AssistConfig { ... }` 中显式保留，否则设置弹窗保存后会丢失。
+- `ExecuteLocalCommandAsync` 在 `_commandExecutor==null` 时只记日志的行为是遥控器模式必须修复的路径。
+- 编译输出 vs 运行路径不一致：`dotnet build MultiplayerHoeingAssistant.csproj` 输出到 `bin\Debug\net8.0-windows\`，但用户从 `bin\x64\Debug\...\Tools\` 运行，需要手动复制或编译 BGI 主项目。
+
+### 关联文件
+- `MultiplayerHoeingAssistant/Models/AssistConfig.cs`
+- `MultiplayerHoeingAssistant/Views/SettingsWindow.xaml`
+- `MultiplayerHoeingAssistant/Views/SettingsWindow.xaml.cs`
+- `MultiplayerHoeingAssistant/ViewModels/MainViewModel.cs`
+- `MultiplayerHoeingAssistant/Views/MainWindow.xaml`
+- `.agents/rules/bgi-implementation-patterns.md` §25.6
+## 联机助手 AllReady 广播容错缺口（2026-08-22 排查）
+
+### 结论
+成员"短暂网络波动漏收 AllReady"没有直接容错，但有间接恢复机制，且有一个真实缺口。
+
+### AllReady 数据流
+BGI(NotifyOnlineTask, onlineGeneration) 经IPC 到 助手检测边沿，再经SignalR ReportOnlineEvent(generation)，再到服务端 RoomManager.CheckAndTransition（全员就绪判定），再广播 AllReady(generation)，最后客户端 OnAllReadyConfirmed 并触发 BGI task.start(generation)
+
+### 服务端状态机（RoomManager.CheckAndTransition）
+- 状态：idle 到 waiting 到 ready 到 consumed
+- 就绪判定：readyPlayers.Count 大于等于 threshold（threshold = 在线成员 ExpectedHoeingPlayers 最小值，保底1）
+- 广播 ID = readyPlayers.Min(OnlineEventGeneration)（最小 generation，保证每成员能匹配自身）
+- 广播后立刻 ConsumeOnlineReady 标 consumed，不重试重发
+
+### 关键容错机制（已具备）
+- 成员彻底断开重连：OnDisconnectedAsync 触发 RemoveFromControlRoom 重置 generation=0，重连后重新上报上线事件
+- 心跳超时（30分钟）：HeartbeatMonitor 重置 generation/consumed
+- 收到重复/旧 AllReady：客户端 _lastProcessedAllReadyGeneration 幂等 + BGI _lastExecutedTaskGeneration 幂等（双层）
+- BGI 幂等：task.start 带 generation，BGI 端判断 generation 不大于 _lastExecutedTaskGeneration 返回 already_executed
+
+### 真实缺口
+成员只是 SignalR 自愈重连成功（没掉线退出房间，没触发 OnDisconnectedAsync），初次 AllReady 会漏收，且没有自动恢复机制。
+- SignalR Reconnected 回调只重新 JoinControlRoom，不会重新上报上线事件，不会触发服务端重新广播
+- AllReady 不是 RemoteCommand，不走离线缓存通道，不会在上线后重放
+- 恢复只能靠下一次全新上线事件（命令上线/定时上线触发新的更大 generation）
+
+### 修复方向（未实施，供后续）
+1. SignalR Reconnected 回调里重新调用上报逻辑（复用命令/定时上线那套 ReportOnlineEventAsync），让服务端重走状态机 —— 最小改动
+2. 服务端 AllReady 补 ack 缺失重发（大改动）
+## Kiro HOOK 体系设计（2026-08-22）
+
+### 背景
+用户要求完善开发流程中的需求校验、各环节循环审核 BUG/风险、和执行容错。现有 HOOK 只有 5 个（pre-edit 被禁用），覆盖了改后审查、受保护路径、状态机纪律、记忆沉淀，但缺少需求/设计阶段审核、完成前需求校验、task 级循环审核。
+
+### 设计原则
+1. **单一职责**：每个 HOOK 文件只处理一个触发器/一个审核维度，职责清晰。不合并到同一个文件。
+2. **触发器 vs 时机匹配**：
+   - `UserPromptSubmit` → 需求/设计阶段审核（用户提交文档时触发，prompt 内置条件判断只对匹配阶段执行）
+   - `PreTaskExec` → task 开始前前置条件校验（委派前必读 + 影响半径排查）
+   - `PostTaskExec` → task 完成后循环审核（汇总改动、验收、需求对照）
+   - `Stop` → 完成前代码级需求校验（逐条对照需求文档，关键：绝不谎报成功）
+3. **agent action 为主**：所有审核类 HOOK 用 agent action（注入 prompt），不依赖 command action 的 STDIN/退出码，因为 agent action 更丰富、可执行 readFile/grep 等操作。
+4. **条件化注入**：UserPromptSubmit 每次发消息都触发，但 prompt 内置`先判断当前是否处于 XX 阶段`的条件检查，避免在日常对话中浪费 loop。
+
+### 最终 HOOK 体系（9 个文件，全部启用）
+
+| 文件 | 触发器 | 作用 | 用户需求对应 |
+|------|--------|------|-------------|
+| `req-phase-bug-risk-review` | UserPromptSubmit | 需求阶段 BUG/风险审核（需求完整性、可验证性、边界） | 需求阶段循环审核 |
+| `design-phase-bug-risk-review` | UserPromptSubmit | 设计阶段 BUG/风险审核（可落码性、兼容性、三处对称、PBT） | 设计阶段循环审核 |
+| `pre-edit-self-review` | PreToolUse | 动手前自审（影响半径三问、风险分级、不可破坏清单） | 执行阶段容错（改前） |
+| `post-edit-code-review` | PostToolUse | 改后三层验证 + 代码审查（编译/静态/行为+逻辑/并发/兼容性/规范） | 执行阶段循环审核（已有） |
+| `pre-task-prerequisite-check` | PreTaskExec | task 前前置条件校验（委派前必读+源文件确认+影响半径排查） | 执行阶段容错（task 前） |
+| `post-task-cycle-review` | PostTaskExec | task 完成后循环审核（task 验收+需求对照+代码审查+编译检查） | 执行阶段循环审核（task 级） |
+| `task-state-machine-guard` | PreTaskExec | 状态机纪律（三态严格使用、不能跳过 in_progress） | 执行阶段容错（已有） |
+| `pre-completion-requirements-validation` | Stop | 完成前代码级需求校验（逐条对照需求文档+证据+判定+绝不谎报成功） | 完成前需求校验（核心） |
+| `memory-sedimentation-review` | Stop | 收尾记忆沉淀回顾（强制沉淀可复用经验） | 已有 |
+| `protected-paths-guard` | PreToolUse | 受保护路径守卫（防删除 User 数据） | 已有 |
+
+### 关键设计决策
+- **两个 PreTaskExec HOOK**（task-state-machine-guard + pre-task-prerequisite-check）职责分离，不冲突。前者管状态机纪律，后者管前置条件校验。
+- **两个 Stop HOOK**（pre-completion-requirements-validation + memory-sedimentation-review）会叠加触发，但内容不同（需求校验 vs 记忆沉淀），不冲突且互补。
+- **pre-edit-self-review 从 disabled 启用**：之前被禁用是因为 PostToolUse 覆盖了改后审查，但改前"影响半径分析"仍价值独立，启用后每步改动前多一道防线。
+- **UserPromptSubmit 的条件判断**：两个 UserPromptSubmit HOOK 的 prompt 都内置 `先判断当前是否处于 XX 阶段`，避免在日常对话中浪费 agent loop。
+
+### 注意事项
+- 所有 HOOK 文件使用 UTF-8 无 BOM 编码，与既有文件一致。
+- 新 HOOK 在下次会话启动时自动加载，当前会话不受影响（除非重启 Kiro）。
+- 如果某个 HOOK 导致频繁不必要的 agent loop 注入（如 UserPromptSubmit 日常对话中被误触发），可在 prompt 中调整条件判断词，或加 `"enabled": false` 暂时禁用。
+## Kiro command HOOK 在 Windows 用 cmd.exe 执行（2026-08-22）重要踩坑
+
+### 现象
+Kiro 的 `command` 类型 hook action 在 Windows 上实际用 **cmd.exe** 执行（不是 PowerShell）。若 command 脚本里直接写 PowerShell 语法（`try {...} catch {...}`、`$input | ConvertFrom-Json`），会报错 `'try' 不是内部或外部命令`（exit 255），**导致该 hook 完全失效**——不阻断也不放行，直接报错。
+
+### 影响：两个 command hook 曾长期失效
+- `protected-paths-guard.json`（受保护路径安全守卫）——**从未真正阻断过任何删除操作**，是个空壳。修复前以为它有效，实际一次都没生效。
+- `design-methodology-rigor-review.json` 的硬阻断 command hook——同样失效。
+
+### 正确写法（cmd 兼容）
+外层必须是 cmd 能直接执行的命令，把真正的 PowerShell 逻辑放在 `powershell.exe -NoProfile -NonInteractive -Command "..."` 参数里：
+
+```json
+"command": "powershell.exe -NoProfile -NonInteractive -Command \"try { $j = [Console]::In.ReadToEnd() | ConvertFrom-Json; ...; exit 2 } catch { exit 0 }\""
+```
+
+### 从 stdin 读 Kiro 传的 JSON 的两种方式
+- **PreToolUse**：JSON 含 `tool_input.<参数名>`（如 execute_pwsh 的 `tool_input.command`）。用 `[Console]::In.ReadToEnd() | ConvertFrom-Json` 读（**不要用 `$input`**——在 cmd 管道下 `$input` 会被 cmd 展开/污染，不可靠）。
+- **UserPromptSubmit**：优先用环境变量 `%USER_PROMPT%`（PowerShell 内 `[Environment]::GetEnvironmentVariable('USER_PROMPT')`，避免 cmd 层 `%` 与 PowerShell `$` 双重展开坑）；标准事件 JSON 里字段路径 `$json.hook_event.user_prompt` 在 IDE 端文档未明确，不要依赖。
+
+### 阻断契约（Kiro 文档明确）
+- `exit 2` = 硬阻断（PreToolUse / UserPromptSubmit / PreTaskExec），stderr 回给 agent/LLM，用 `Write-Error` 输出阻断原因。
+- 其他非 0/2 exit code = 仅 warning，不阻断。
+- 用 `exit 0` 放行，`catch { exit 0 }` 兜底（守卫失败=放行，不误伤正常操作）。
+
+### 教训
+- 写 command 型 hook 前先确认执行器（本例是 cmd）。诊断方法：把脚本用 `cmd /c "..."` 跑一遍，看是否报 `'try' 不是内部或外部命令`。
+- 安全类 hook（受保护路径）必须实测其真的能阻断，不能假设生效——**空壳安全守卫比没有更危险**（让人误以为有保护）。
+- 验证方法：构造含触发关键词的命令执行 execute_pwsh 工具，若被拦截即证明生效（本次修复后用含 `Remove-Item` 的测试命令被真实拦截，即为活证据）。
+## 联机锄地上线上报"两条独立路径"（2026-08-22 分析确认）
+
+- **源 A：命令上线**（`MainViewModel.ReportStatusAsync` 内嵌探针，L359-428）：轮询 BGI 的 `task.status` 读 `onlineGeneration`，仅当 `gen > _lastOnlineGeneration` 时才 `ReportOnlineEventAsync`。`onlineGeneration` 只在 BGI 真执行过"联机锄地上线"任务时自增（`NotifyOnlineTask`）。→ BGI 没开/没执行该任务时永不触发。
+- **源 B：定时上线**（`StartOnlineScheduler`，L497-522）：助手本地定时器每 30 秒检查 `ScheduledOnlineTime`，到点 `_localOnlineGeneration++` 并 `ReportOnlineEventAsync`。**完全不依赖 BGI/IPC**。
+- **关键结论**：能否"人齐触发 AllReady"取决于触发源，不直接取决于 BGI 状态。4 种 BGI 状态（没开/打开未点启动/打开已启动空闲/执行其他任务）下，**定时上线都能上报**；命令上线只有 BGI 真执行"联机锄地上线"任务才行。
+- **兜底**：若 `BgiPath` 已配但 BGI 没开，收到 AllReady 后 `ExecuteSuspendAsync` 因 IPC 失败会走 `KillBgi + RestartBgi("--startGroups ...")` 拉起 BGI 直接开锄。
+- **真门槛**：服务端 `CheckAndTransition` 要求在线成员全部上报 `OnlineEventGeneration > 0` 才广播 AllReady（`readyPlayers.Count >= threshold`，threshold = 各成员 `ExpectedHoeingPlayers` 最小值）。一人没上报 → 永不触发。
+- **排障启示**：想让 4 种 BGI 状态都能触发开锄 → 依赖定时上线路径，不要依赖命令上线（BGI generation 自增不可控）。
+- **快捷命令 vs 人齐自动的执行差异**：快捷命令 = 房主下发 `RemoteCommand`（带 `key` 让队友查自己绑定）；人齐自动 = 服务端广播 AllReady，各成员读自己 `_config.OnlineHoeingGroupNames` 本地 IPC 执行。人齐路径从设计上就是"各自执行各自的绑定"，不存在快捷命令那种"房主下发自己绑定值"的问题。
+## 命令上线未触发齐人执行（2026-08-22）
+
+- **根因**：`MarkOnlineAsync`（命令上线/定时上线）只调了 `ReportStatusAsync`，缺少 `ReportOnlineEventAsync` 调用。服务端就绪检查（`CheckAndTransition`）**唯一入口**是 `ReportOnlineEvent` 端点，`ReportStatusAsync` 只更新 `ControlStatus` 字段，不触发就绪检查。
+- **三条路径的分岔**：
+  - BGI 执行"联机锄地上线"任务 → IPC 检测 `onlineGeneration` 递增 → 直接调 `ReportOnlineEventAsync` → ✅ 触发齐人
+  - 定时上线到点 → `MarkOnlineAsync` + 外部额外调 `ReportOnlineEventAsync` → ✅ 触发齐人（旧代码中这个额外调用已移到 `MarkOnlineAsync` 内部）
+  - 命令上线（`MarkOnlineAsync`）→ 只 `ReportStatusAsync` → ❌ 不触发齐人
+- **修复**：把 `ReportOnlineEventAsync` 移到 `MarkOnlineAsync` 内部（`MarkOnlineAsync` 末尾 + `ReportOnlineEventAsync`），同时移除定时上线路径中的重复调用。
+- **关键文件**：`MainViewModel.cs:475-483`（`MarkOnlineAsync` 方法）
+- **排查方向**：下次遇到"上线了但不触发齐人执行"，先检查 `ReportOnlineEventAsync` 是否被调用。

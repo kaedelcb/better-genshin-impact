@@ -38,6 +38,8 @@ public class MainViewModel : INotifyPropertyChanged
     private int _lastProcessedAllReadyGeneration;
     /// <summary>用户手动停止时设为 true，后台依次执行序列检查到此标志后跳过剩余配置组。</summary>
     private bool _isAllReadySequenceCancelled;
+    /// <summary>用户手动清除上线后置 true，抑制定时自动上线。手动设定定时上线时清除。</summary>
+    private bool _manuallyClearedOnline;
     private bool _wasAutoHoeingRunning;
 
     /// <summary>成员角色头像池（按加入顺序循环分配，file=资源名，ring=元素色描边）。</summary>
@@ -93,6 +95,7 @@ public class MainViewModel : INotifyPropertyChanged
     public RelayCommand ShowOnlineHistoryCommand => new(OnShowOnlineHistory);
     public RelayCommand ScheduledOnlineCommand => new(OnScheduledOnline);
     public RelayCommand ClearOnlineCommand => new(OnClearOnline);
+    public RelayCommand ClearOnlineHistoryCommand => new(OnClearOnlineHistory);
     public RelayCommand BindHoeingGroupCommand => new(OnBindHoeingGroup);
 
     // ===== 一键快捷命令（给所有在线成员下发执行绑定配置组/一条龙）=====
@@ -101,6 +104,8 @@ public class MainViewModel : INotifyPropertyChanged
     public RelayCommand QuickEliteCommand => new(_ => _ = ExecuteQuickCommandAsync("一键精英"));
     public RelayCommand QuickMultiCommand => new(_ => _ = ExecuteQuickCommandAsync("一键小怪"));
     public RelayCommand QuickCustomCommand => new(_ => _ = ExecuteQuickCommandAsync("一键自定义"));
+    /// <summary>一键锄地：向所有选中成员下发执行绑定的联机锄地配置组（按顺序执行）。</summary>
+    public RelayCommand QuickHoeingCommand => new(_ => _ = ExecuteQuickHoeingAsync());
 
     /// <summary>打开设置页面（切换右侧内容区为设置页）。</summary>
     public RelayCommand OpenSettingsCommand => new(_ => ToggleSettings());
@@ -158,26 +163,34 @@ public class MainViewModel : INotifyPropertyChanged
         // 启动定时上线定时器（设定过 scheduledOnlineTime 才会真正到点触发）
         StartOnlineScheduler();
 
-        // 初始化进程监控
-        // 守护 BGI（GuardBgi）：仅当开关开启时才启动 BGI 崩溃检测定时器。
-        // _processMonitor 始终创建（供 CommandExecutor 手动 stop/start 时杀进程/重启用），
-        // 但只有 GuardBgi=true 时才 Start()（开始每 5 秒检测 BGI 进程，崩溃即自动重启）。
-        if (!string.IsNullOrEmpty(_config.BgiPath))
+        // 遥控器模式：跳过 BGI 进程监控和命令执行器（本机无 BGI，所有操作通过远程命令）
+        if (_config.ObserverMode)
         {
-            _processMonitor = new BgiProcessMonitor(_config.BgiPath);
-            _processMonitor.OnBgiCrashed += () =>
+            AddLog("遥控器模式已启用，跳过 BGI 进程监控");
+        }
+        else
+        {
+            // 初始化进程监控
+            // 守护 BGI（GuardBgi）：仅当开关开启时才启动 BGI 崩溃检测定时器。
+            // _processMonitor 始终创建（供 CommandExecutor 手动 stop/start 时杀进程/重启用），
+            // 但只有 GuardBgi=true 时才 Start()（开始每 5 秒检测 BGI 进程，崩溃即自动重启）。
+            if (!string.IsNullOrEmpty(_config.BgiPath))
             {
-                AddLog("BGI 已崩溃，自动重启");
-                _processMonitor.RestartBgi();
-                AddLog("BGI 已自动重启");
-                _ = ReportStatusAsync();
-            };
-            // GuardBgi=true 才开启守护；false 时不启动崩溃检测（BGI 关闭不自动重启）。
-            if (_config.GuardBgi)
-            {
-                _processMonitor.Start();
+                _processMonitor = new BgiProcessMonitor(_config.BgiPath);
+                _processMonitor.OnBgiCrashed += () =>
+                {
+                    AddLog("BGI 已崩溃，自动重启");
+                    _processMonitor.RestartBgi();
+                    AddLog("BGI 已自动重启");
+                    _ = ReportStatusAsync();
+                };
+                // GuardBgi=true 才开启守护；false 时不启动崩溃检测（BGI 关闭不自动重启）。
+                if (_config.GuardBgi)
+                {
+                    _processMonitor.Start();
+                }
+                _commandExecutor = new CommandExecutor(_processMonitor, _config.BgiPath);
             }
-            _commandExecutor = new CommandExecutor(_processMonitor, _config.BgiPath);
         }
 
         // 连接 SignalR
@@ -199,7 +212,7 @@ public class MainViewModel : INotifyPropertyChanged
 
             await _signalRClient.ConnectAsync(
                 _config!.ServerUrl, RoomCode, _config.ControlRoomPassword,
-                _config.PlayerUid, _config.PlayerName, _config.TeamUids);
+                _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode);
 
             IsConnected = true;
             AddLog("已连接控制房间");
@@ -263,54 +276,62 @@ public class MainViewModel : INotifyPropertyChanged
         var currentTaskName = (string?)null;
         var bgiRunning = false;
 
-        try
+        // 遥控器模式：跳过 IPC 连接，直接上报 observer 状态
+        if (_config?.ObserverMode == true)
         {
-            using var ipcClient = new IpcClient();
-            await ipcClient.ConnectAsync(2000);
-            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "config.list" });
-            if (response.Success && !string.IsNullOrEmpty(response.Data))
-            {
-                var data = JsonSerializer.Deserialize<JsonElement>(response.Data);
-                if (data.TryGetProperty("configGroups", out var groups))
-                    configGroups = JsonSerializer.Deserialize<List<string>>(groups.GetRawText()) ?? [];
-                if (data.TryGetProperty("oneClickConfigs", out var oneClick))
-                    oneClickConfigs = JsonSerializer.Deserialize<List<string>>(oneClick.GetRawText()) ?? [];
-                if (data.TryGetProperty("configGroupTasks", out var gTasks) && gTasks.ValueKind == JsonValueKind.Object)
-                    configGroupTasks = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(gTasks.GetRawText()) ?? [];
-                if (data.TryGetProperty("oneClickTasks", out var oTasks) && oTasks.ValueKind == JsonValueKind.Object)
-                    oneClickTasks = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(oTasks.GetRawText()) ?? [];
-                if (data.TryGetProperty("configGroupTasksWithStatus", out var gTasksWs) && gTasksWs.ValueKind == JsonValueKind.Object)
-                    configGroupTasksWithStatus = JsonSerializer.Deserialize<Dictionary<string, List<object>>>(gTasksWs.GetRawText()) ?? [];
-                if (data.TryGetProperty("oneClickTasksWithStatus", out var oTasksWs) && oTasksWs.ValueKind == JsonValueKind.Object)
-                    oneClickTasksWithStatus = JsonSerializer.Deserialize<Dictionary<string, List<object>>>(oTasksWs.GetRawText()) ?? [];
-                if (data.TryGetProperty("hotkeys", out var hks) && hks.ValueKind == JsonValueKind.Array)
-                    hotkeys = JsonSerializer.Deserialize<List<object>>(hks.GetRawText()) ?? [];
-            }
-            else
-            {
-                AddLog($"IPC config.list 失败: {response.ErrorMessage ?? "无响应"}");
-            }
-
-            // 轮询 task.status 获取当前任务状态
-            var statusResp = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.status" });
-            if (statusResp.Success && !string.IsNullOrEmpty(statusResp.Data))
-            {
-                var sdata = JsonSerializer.Deserialize<JsonElement>(statusResp.Data);
-                if (sdata.TryGetProperty("running", out var running))
-                    bgiRunning = running.GetBoolean();
-                // 任务停止后（bgiRunning=false），taskName 可能仍有残留值，必须忽略避免状态停留
-                if (bgiRunning && sdata.TryGetProperty("taskName", out var tn) && tn.ValueKind == JsonValueKind.String)
-                    currentTaskName = tn.GetString();
-                if (sdata.TryGetProperty("autoHoeingRunning", out var hoeing))
-                    autoHoeingRunning = hoeing.GetBoolean();
-                if (autoHoeingRunning && sdata.TryGetProperty("autoHoeingProgress", out var progress)
-                    && progress.ValueKind == JsonValueKind.String)
-                    autoHoeingProgress = progress.GetString();
-            }
+            // 跳过 IPC 连接，不上报配置组/任务状态
         }
-        catch (Exception ex)
+        else
         {
-            AddLog($"IPC 不可用: {ex.Message}");
+            try
+            {
+                using var ipcClient = new IpcClient();
+                await ipcClient.ConnectAsync(2000);
+                var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "config.list" });
+                if (response.Success && !string.IsNullOrEmpty(response.Data))
+                {
+                    var data = JsonSerializer.Deserialize<JsonElement>(response.Data);
+                    if (data.TryGetProperty("configGroups", out var groups))
+                        configGroups = JsonSerializer.Deserialize<List<string>>(groups.GetRawText()) ?? [];
+                    if (data.TryGetProperty("oneClickConfigs", out var oneClick))
+                        oneClickConfigs = JsonSerializer.Deserialize<List<string>>(oneClick.GetRawText()) ?? [];
+                    if (data.TryGetProperty("configGroupTasks", out var gTasks) && gTasks.ValueKind == JsonValueKind.Object)
+                        configGroupTasks = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(gTasks.GetRawText()) ?? [];
+                    if (data.TryGetProperty("oneClickTasks", out var oTasks) && oTasks.ValueKind == JsonValueKind.Object)
+                        oneClickTasks = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(oTasks.GetRawText()) ?? [];
+                    if (data.TryGetProperty("configGroupTasksWithStatus", out var gTasksWs) && gTasksWs.ValueKind == JsonValueKind.Object)
+                        configGroupTasksWithStatus = JsonSerializer.Deserialize<Dictionary<string, List<object>>>(gTasksWs.GetRawText()) ?? [];
+                    if (data.TryGetProperty("oneClickTasksWithStatus", out var oTasksWs) && oTasksWs.ValueKind == JsonValueKind.Object)
+                        oneClickTasksWithStatus = JsonSerializer.Deserialize<Dictionary<string, List<object>>>(oTasksWs.GetRawText()) ?? [];
+                    if (data.TryGetProperty("hotkeys", out var hks) && hks.ValueKind == JsonValueKind.Array)
+                        hotkeys = JsonSerializer.Deserialize<List<object>>(hks.GetRawText()) ?? [];
+                }
+                else
+                {
+                    AddLog($"IPC config.list 失败: {response.ErrorMessage ?? "无响应"}");
+                }
+
+                // 轮询 task.status 获取当前任务状态
+                var statusResp = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.status" });
+                if (statusResp.Success && !string.IsNullOrEmpty(statusResp.Data))
+                {
+                    var sdata = JsonSerializer.Deserialize<JsonElement>(statusResp.Data);
+                    if (sdata.TryGetProperty("running", out var running))
+                        bgiRunning = running.GetBoolean();
+                    // 任务停止后（bgiRunning=false），taskName 可能仍有残留值，必须忽略避免状态停留
+                    if (bgiRunning && sdata.TryGetProperty("taskName", out var tn) && tn.ValueKind == JsonValueKind.String)
+                        currentTaskName = tn.GetString();
+                    if (sdata.TryGetProperty("autoHoeingRunning", out var hoeing))
+                        autoHoeingRunning = hoeing.GetBoolean();
+                    if (autoHoeingRunning && sdata.TryGetProperty("autoHoeingProgress", out var progress)
+                        && progress.ValueKind == JsonValueKind.String)
+                        autoHoeingProgress = progress.GetString();
+                }
+            }
+            catch (Exception ex)
+            {
+                AddLog($"IPC 不可用: {ex.Message}");
+            }
         }
 
         // 进度文本变化时写日志（仅自己看）
@@ -324,7 +345,7 @@ public class MainViewModel : INotifyPropertyChanged
         {
             PlayerUid = _config!.PlayerUid,
             PlayerName = _config.PlayerName,
-            BgiStatus = _processMonitor?.IsBgiRunning == true ? "running" : "stopped",
+            BgiStatus = _config?.ObserverMode == true ? "observer" : (_processMonitor?.IsBgiRunning == true ? "running" : "stopped"),
             ConfigGroups = configGroups,
             OneClickConfigs = oneClickConfigs,
             ConfigGroupTasks = configGroupTasks,
@@ -359,7 +380,6 @@ public class MainViewModel : INotifyPropertyChanged
                 if (sdata.TryGetProperty("onlineGeneration", out var ogEl) && ogEl.ValueKind == System.Text.Json.JsonValueKind.Number)
                 {
                     var gen = ogEl.GetInt32();
-                    AddLog($"[上线探针] onlineGeneration={gen}, _lastOnlineGeneration={_lastOnlineGeneration}, 是否触发={gen > _lastOnlineGeneration}");
                     if (gen > _lastOnlineGeneration)
                     {
                         _lastOnlineGeneration = gen;
@@ -370,16 +390,10 @@ public class MainViewModel : INotifyPropertyChanged
                         // 同步更新本地已构造的 status 对象，防止后续 ReportControlStatusAsync 用 OnlineReady=false 覆盖服务端
                         status.OnlineReady = true;
                         status.OnlineMode = "command";
-                        AddLog("[上线探针] 检测到新上线事件 (generation=" + gen + ")，标记命令上线，上报服务端");
                         // 上报服务端，由服务端状态机协调
                         if (_signalRClient != null)
                         {
                             await _signalRClient.ReportOnlineEventAsync(gen, true);
-                            AddLog("[上线探针] ReportOnlineEventAsync 已调用 (generation=" + gen + ")");
-                        }
-                        else
-                        {
-                            AddLog("[上线探针] _signalRClient 为空，无法上报");
                         }
                     }
                 }
@@ -450,7 +464,6 @@ public class MainViewModel : INotifyPropertyChanged
         // 这里捕获并仅记日志（断线状态已由 Closed 事件同步 IsConnected=false，右上角徽章变"离线"）。
         try
         {
-            AddLog($"[探针] 上报前 OnlineReady={_isOnlineReady}, OnlineMode={_onlineMode}");
             await _signalRClient.ReportControlStatusAsync(status);
         }
         catch (Exception ex)
@@ -474,6 +487,21 @@ public class MainViewModel : INotifyPropertyChanged
         {
             // 上报失败不影响上线状态标记
         }
+
+        // 上报上线事件，驱动服务端 AllReady（全员就绪）检查
+        if (_signalRClient != null)
+        {
+            _localOnlineGeneration++;
+            try
+            {
+                await _signalRClient.ReportOnlineEventAsync(_localOnlineGeneration, true);
+                AddLog($"已上报上线事件 generation={_localOnlineGeneration}，等待服务端全员就绪开锄");
+            }
+            catch (Exception ex)
+            {
+                AddLog($"上报上线事件失败: {ex.Message}");
+            }
+        }
     }
 
     /// <summary>启动定时上线定时器（每 30 秒检查一次）。
@@ -486,6 +514,9 @@ public class MainViewModel : INotifyPropertyChanged
             if (_config == null) return;
             if (string.IsNullOrEmpty(_config.ScheduledOnlineTime)) return;
 
+            // 用户手动清除上线后，抑制定时自动上线（除非重新设定定时上线清除标志）
+            if (_manuallyClearedOnline) return;
+
             var now = DateTime.Now;
             if (!TimeSpan.TryParse(_config.ScheduledOnlineTime, out var targetTime)) return;
 
@@ -495,22 +526,6 @@ public class MainViewModel : INotifyPropertyChanged
 
             await MarkOnlineAsync("scheduled");
             _lastScheduledFireDate = now.Date;                     // 标记今天已触发
-
-            // 关键：本地定时上线只标状态不会真正开锄。必须上报上线事件，驱动服务端
-            // AllReady（全员就绪）→ 助手 OnAllReadyConfirmed → 依次执行绑定的联机配置组。
-            if (_signalRClient != null)
-            {
-                _localOnlineGeneration++;
-                try
-                {
-                    await _signalRClient.ReportOnlineEventAsync(_localOnlineGeneration, true);
-                    AddLog($"[定时上线] 已上报上线事件 generation={_localOnlineGeneration}，等待服务端全员就绪开锄");
-                }
-                catch (Exception ex)
-                {
-                    AddLog($"[定时上线] 上报上线事件失败: {ex.Message}");
-                }
-            }
         }, null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
     }
 
@@ -611,7 +626,7 @@ public class MainViewModel : INotifyPropertyChanged
         {
             if (member.OnlineHistory == null || member.OnlineHistory.Count == 0)
             {
-                ShowOnlineHistoryDialog("上线记录", "暂无上线记录");
+                ShowOnlineHistoryDialog("上线记录", "暂无上线记录", member);
                 return;
             }
 
@@ -634,7 +649,7 @@ public class MainViewModel : INotifyPropertyChanged
                 var alt = member.OnlineHistory.Select(h => h.ToString()).ToList();
                 content = string.Join("\n", alt);
             }
-            ShowOnlineHistoryDialog("当天上线记录", content);
+            ShowOnlineHistoryDialog("当天上线记录", content, member);
         }
     }
 
@@ -651,7 +666,28 @@ public class MainViewModel : INotifyPropertyChanged
 
         if (isSelf)
         {
-            ApplyScheduledOnlineTime(time);
+            if (_config?.ObserverMode == true)
+            {
+                // 遥控器模式：发给执行端（同 UID 的另一端）
+                if (_signalRClient != null)
+                {
+                    var cmd = new RemoteCommand
+                    {
+                        Cmd = "set_scheduled_online_time",
+                        Sender = _config.PlayerName ?? "",
+                        SenderUid = _config.PlayerUid,
+                        Target = [_config.PlayerUid],
+                        CommandId = "local_" + DateTime.Now.Ticks,
+                        Params = new Dictionary<string, object> { { "scheduledOnlineTime", time } }
+                    };
+                    AddLog($"遥控器模式: 向执行端下发定时上线时间: {time}");
+                    _ = _signalRClient.SendRemoteCommandAsync(cmd);
+                }
+            }
+            else
+            {
+                ApplyScheduledOnlineTime(time);
+            }
         }
         else if (_signalRClient != null)
         {
@@ -670,7 +706,7 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>清除已上线状态（不清除定时闹钟）。点自己卡清自己；点别人卡远程下发清除。</summary>
-    private void OnClearOnline(object? parameter)
+    private async void OnClearOnline(object? parameter)
     {
         if (_config == null) return;
         var targetMember = parameter as MemberViewModel;
@@ -678,7 +714,28 @@ public class MainViewModel : INotifyPropertyChanged
 
         if (isSelf)
         {
-            ClearLocalOnline();
+            if (_config?.ObserverMode == true)
+            {
+                // 遥控器模式：发给执行端（同 UID 的另一端）
+                if (_signalRClient != null)
+                {
+                    var cmd = new RemoteCommand
+                    {
+                        Cmd = "clear_online",
+                        Sender = _config.PlayerName ?? "",
+                        SenderUid = _config.PlayerUid,
+                        Target = [_config.PlayerUid],
+                        CommandId = "local_" + DateTime.Now.Ticks,
+                        Params = new Dictionary<string, object>()
+                    };
+                    AddLog($"遥控器模式: 向执行端下发清除上线");
+                    _ = _signalRClient.SendRemoteCommandAsync(cmd);
+                }
+            }
+            else
+            {
+                await ClearLocalOnline();
+            }
         }
         else if (_signalRClient != null)
         {
@@ -697,10 +754,52 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>本地清除已上线状态：复位 _isOnlineReady / _onlineMode 并上报服务端。</summary>
-    private void ClearLocalOnline()
+    private async Task ClearLocalOnline()
     {
         _isOnlineReady = false;
         _onlineMode = "none";
+        _manuallyClearedOnline = true; // 手动清除后，抑制定时自动上线
+        // 关键：把 _lastOnlineGeneration 提升到当前 BGI 的 onlineGeneration 值，
+        // 这样 ReportStatusAsync 的边沿探测 (`gen > _lastOnlineGeneration`) 不再触发重复上线。
+        // 但真正的命令上线（BGI 新执行"联机锄地上线"，generation 递增）仍能触发（新值 > 当前值）。
+        // 读取失败时用一个很大的值兜底（保证本会话内不再被旧 generation 触发）。
+
+        // 遥控器模式：本机没有 BGI 进程，跳过 IPC 调用（避免死锁），直接设最大兜底值
+        if (_config?.ObserverMode == true)
+        {
+            _lastOnlineGeneration = int.MaxValue;
+        }
+        else
+        {
+            try
+            {
+                using var ipcClient = new IpcClient();
+                await ipcClient.ConnectAsync(2000);
+                var resp = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.status" });
+                if (resp.Success && !string.IsNullOrEmpty(resp.Data))
+                {
+                    var sdata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(resp.Data);
+                    if (sdata.TryGetProperty("onlineGeneration", out var og)
+                        && og.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    {
+                        _lastOnlineGeneration = og.GetInt32();
+                    }
+                    else
+                    {
+                        _lastOnlineGeneration = int.MaxValue;
+                    }
+                }
+                else
+                {
+                    _lastOnlineGeneration = int.MaxValue;
+                }
+            }
+            catch
+            {
+                _lastOnlineGeneration = int.MaxValue;
+            }
+        }
+
         var self = Members.FirstOrDefault(m => m.PlayerUid == _config?.PlayerUid);
         if (self != null)
         {
@@ -709,6 +808,38 @@ public class MainViewModel : INotifyPropertyChanged
         }
         AddLog("已清除上线状态");
         _ = ReportStatusAsync();
+    }
+
+    /// <summary>清除指定成员的已联机记录（OnlineHistory），清自己和清他人通用入口。</summary>
+    private async void OnClearOnlineHistory(object? parameter)
+    {
+        if (parameter is MemberViewModel member)
+        {
+            await ClearOnlineHistoryInternalAsync(member);
+        }
+    }
+
+    /// <summary>清除指定成员的 OnlineHistory，通过 SignalR 通知服务端清空并广播。</summary>
+    private async Task ClearOnlineHistoryInternalAsync(MemberViewModel member)
+    {
+        if (_signalRClient == null) return;
+        try
+        {
+            await _signalRClient.ClearOnlineHistoryAsync(member.PlayerUid);
+            AddLog($"已清除 {member.PlayerName} 的联机记录");
+
+            // 如果是清自己，重置本地状态以允许重新上线
+            if (_config != null && member.PlayerUid == _config.PlayerUid)
+            {
+                _lastScheduledFireDate = DateTime.MinValue;
+                _manuallyClearedOnline = false;
+                AddLog("已重置本地状态，可重新上线");
+            }
+        }
+        catch (Exception ex)
+        {
+            AddLog($"清除记录失败: {ex.Message}");
+        }
     }
 
     /// <summary>定时上线时间弹窗（深色鎏金主题，时/分 ListBox 选择）。
@@ -894,6 +1025,9 @@ public class MainViewModel : INotifyPropertyChanged
         _config!.ScheduledOnlineTime = time;
         _configManager?.Save(_config);
 
+        // 手动设定/清除定时上线 = 用户主动操作，清除"已手动清除上线"抑制标志，允许重新上线
+        _manuallyClearedOnline = false;
+
         // 定时上线语义 = 闹钟：设/清时间只更新闹钟显示，不改变当前上线状态。
         // 是否上线由 _isOnlineReady 决定（定时到点/命令上线才触发 MarkOnlineAsync 置 true）；
         // 清除上线请用"清除上线"按钮。
@@ -923,7 +1057,7 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>显示上线记录弹窗（深色鎏金主题，与绑定锄地配置组弹窗一致）。</summary>
-    private void ShowOnlineHistoryDialog(string title, string content)
+    private void ShowOnlineHistoryDialog(string title, string content, MemberViewModel? member)
     {
         var window = new Window
         {
@@ -951,6 +1085,8 @@ public class MainViewModel : INotifyPropertyChanged
         panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(12) });
         panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var titleLabel = new TextBlock
         {
@@ -961,6 +1097,7 @@ public class MainViewModel : INotifyPropertyChanged
             HorizontalAlignment = HorizontalAlignment.Center
         };
         Grid.SetRow(titleLabel, 0);
+        Grid.SetColumnSpan(titleLabel, 2);
         panel.Children.Add(titleLabel);
 
         var contentBox = new TextBox
@@ -978,7 +1115,41 @@ public class MainViewModel : INotifyPropertyChanged
             Padding = new Thickness(10, 8, 10, 8)
         };
         Grid.SetRow(contentBox, 2);
+        Grid.SetColumnSpan(contentBox, 2);
         panel.Children.Add(contentBox);
+
+        // 清除记录按钮（左侧）
+        if (member != null)
+        {
+            var clearBtn = new Button
+            {
+                Content = "清除记录",
+                Width = 80, Height = 30,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                FontWeight = FontWeights.SemiBold,
+                BorderThickness = new Thickness(0),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                Background = new System.Windows.Media.LinearGradientBrush
+                {
+                    StartPoint = new System.Windows.Point(0, 0),
+                    EndPoint = new System.Windows.Point(1, 1),
+                    GradientStops =
+                    {
+                        new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xE8, 0x6D, 0x6D), 0),
+                        new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0x37, 0x37), 1)
+                    }
+                },
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFF, 0xF0, 0xF0))
+            };
+            clearBtn.Click += (_, _) =>
+            {
+                window.Close();
+                _ = ClearOnlineHistoryInternalAsync(member);
+            };
+            Grid.SetRow(clearBtn, 3);
+            Grid.SetColumn(clearBtn, 0);
+            panel.Children.Add(clearBtn);
+        }
 
         var okBtn = new Button
         {
@@ -1002,7 +1173,7 @@ public class MainViewModel : INotifyPropertyChanged
         okBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16));
         okBtn.Click += (_, _) => window.Close();
         Grid.SetRow(okBtn, 3);
-        Grid.SetColumn(okBtn, 0);
+        Grid.SetColumn(okBtn, 1);
         panel.Children.Add(okBtn);
 
         window.Content = panel;
@@ -1022,23 +1193,34 @@ public class MainViewModel : INotifyPropertyChanged
         List<string> allGroups = [];
         if (isSelf)
         {
-            try
+            // 遥控器模式：从其他在线成员取配置组列表
+            if (_config?.ObserverMode == true)
             {
-                using var ipc = new IpcClient();
-                await ipc.ConnectAsync(2000);
-                var resp = await ipc.SendCommandAsync(new IpcRequest { OpCode = "config.list" });
-                if (resp.Success && !string.IsNullOrEmpty(resp.Data))
+                var target = Members.FirstOrDefault(m => m.PlayerUid == _config.PlayerUid && m.Online
+                    && (m.ConfigGroups?.Count > 0));
+                if (target != null)
+                    allGroups = (target.ConfigGroups ?? []).Where(g => !string.IsNullOrEmpty(g)).ToList();
+            }
+            else
+            {
+                try
                 {
-                    var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(resp.Data);
-                    if (data.TryGetProperty("configGroups", out var groups) && groups.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    using var ipc = new IpcClient();
+                    await ipc.ConnectAsync(2000);
+                    var resp = await ipc.SendCommandAsync(new IpcRequest { OpCode = "config.list" });
+                    if (resp.Success && !string.IsNullOrEmpty(resp.Data))
                     {
-                        foreach (var g in groups.EnumerateArray()) allGroups.Add(g.GetString() ?? "");
+                        var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(resp.Data);
+                        if (data.TryGetProperty("configGroups", out var groups) && groups.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            foreach (var g in groups.EnumerateArray()) allGroups.Add(g.GetString() ?? "");
+                        }
                     }
                 }
-            }
-            catch
-            {
-                // IPC 不可用时跳过
+                catch
+                {
+                    // IPC 不可用时跳过
+                }
             }
         }
         else if (targetMember != null)
@@ -1140,8 +1322,13 @@ public class MainViewModel : INotifyPropertyChanged
         };
         System.Windows.Controls.ScrollViewer.SetHorizontalScrollBarVisibility(selectedListBox, System.Windows.Controls.ScrollBarVisibility.Disabled);
         // 当前已选配置组列表（可修改的副本）。改别人时用对方的已选配置组（来自服务端同步），改自己用本机绑定。
+        // 遥控器模式：从执行端成员取已绑定的配置组（本机无 BGI，无本地配置）。
         var currentSelected = new System.Collections.ObjectModel.ObservableCollection<string>(
-            isSelf ? (_config.OnlineHoeingGroupNames ?? []) : (targetMember?.OnlineHoeingGroupNames ?? []));
+            isSelf
+                ? (_config?.ObserverMode == true
+                    ? (Members.FirstOrDefault(m => m.PlayerUid == _config.PlayerUid)?.OnlineHoeingGroupNames ?? [])
+                    : (_config.OnlineHoeingGroupNames ?? []))
+                : (targetMember?.OnlineHoeingGroupNames ?? []));
 
         // 先声明可选列表框（供 RefreshAvailableList 使用）
         var availableListBox = new System.Windows.Controls.ListBox
@@ -1436,13 +1623,38 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 if (isSelf)
                 {
-                    // 改自己：直接保存到本机配置
-                    _config.OnlineHoeingGroupNames = selected;
-                    _config.OnlineHoeingGroupIndex = 0;
-                    _configManager?.Save(_config);
-                    AddLog($"已绑定联机锄地配置组（按顺序执行）: {string.Join(" → ", selected)}");
-                    // 立即上报给服务端，让所有人可见
-                    _ = ReportStatusAsync();
+                    if (_config?.ObserverMode == true)
+                    {
+                        // 遥控器模式：通过 SignalR 下发命令给同 UID 的执行端
+                        if (_signalRClient != null)
+                        {
+                            var cmd = new RemoteCommand
+                            {
+                                Cmd = "bind_hoeing_group",
+                                Sender = _config?.PlayerName ?? "",
+                                SenderUid = _config?.PlayerUid ?? "",
+                                Target = [_config.PlayerUid],
+                                CommandId = "local_" + DateTime.Now.Ticks,
+                                Params = new Dictionary<string, object>
+                                {
+                                    { "groupNames", selected },
+                                    { "groupIndex", 0 }
+                                }
+                            };
+                            AddLog($"遥控器模式: 向执行端下发绑定联机锄地配置组（按顺序执行）: {string.Join(" → ", selected)}");
+                            await _signalRClient.SendRemoteCommandAsync(cmd);
+                        }
+                    }
+                    else
+                    {
+                        // 改自己：直接保存到本机配置
+                        _config.OnlineHoeingGroupNames = selected;
+                        _config.OnlineHoeingGroupIndex = 0;
+                        _configManager?.Save(_config);
+                        AddLog($"已绑定联机锄地配置组（按顺序执行）: {string.Join(" → ", selected)}");
+                        // 立即上报给服务端，让所有人可见
+                        _ = ReportStatusAsync();
+                    }
                 }
                 else if (targetMember != null && _signalRClient != null)
                 {
@@ -1552,7 +1764,6 @@ public class MainViewModel : INotifyPropertyChanged
                             Application.Current.Dispatcher.Invoke(() =>
                             {
                                 IsConnected = true;
-                                AddLog("刷新后已重新连接控制房间");
                             });
                             RefreshCompleted?.Invoke();
                             if (_statusTimer == null)
@@ -1584,9 +1795,6 @@ public class MainViewModel : INotifyPropertyChanged
         {
             Application.Current.Dispatcher.Invoke(() =>
             {
-                // [探针] 确认服务端广播回来的 OnlineReady 值
-                var self = players.FirstOrDefault(p => p.PlayerUid == _config?.PlayerUid);
-                if (self != null) AddLog($"[探针] 收到广播 self OnlineReady={self.OnlineReady}, OnlineMode={self.OnlineMode}");
                 var byUid = new Dictionary<string, ControlRoomPlayer>();
                 foreach (var p in players) byUid[p.PlayerUid] = p;
                 for (int i = Members.Count - 1; i >= 0; i--)
@@ -1646,131 +1854,24 @@ public class MainViewModel : INotifyPropertyChanged
             });
         };
 
-        client.OnAllReadyConfirmed += async (int generation) =>
+        client.OnAllReadyConfirmed += generation =>
         {
-            // 幂等保护：同一 generation 只处理一次（防止 async void 并发或重复广播）
+            _ = OnAllReadyConfirmedInternal(generation);
+        };
+
+        client.OnAllReadyConfirmReceived += async generation =>
+        {
             if (generation <= _lastProcessedAllReadyGeneration)
             {
-                AddLog("[探针] OnAllReadyConfirmed 忽略 (generation=" + generation + " <= " + _lastProcessedAllReadyGeneration + ")");
+                AddLog("[探针] OnAllReadyConfirmReceived 忽略 (generation=" + generation + " <= " + _lastProcessedAllReadyGeneration + ")");
                 return;
             }
-            _lastProcessedAllReadyGeneration = generation;
-            AddLog("[探针] OnAllReadyConfirmed 触发, generation=" + generation + "，开始执行中断流程");
-
-            // 获取绑定的联机配置组列表
-            var groupNames = _config?.OnlineHoeingGroupNames ?? [];
-            var groupIndex = _config?.OnlineHoeingGroupIndex ?? 0;
-            var groupName = (groupIndex >= 0 && groupIndex < groupNames.Count) ? groupNames[groupIndex] : null;
-            AddLog($"[探针] 绑定配置组: groupNames=[{string.Join(",", groupNames)}], groupIndex={groupIndex}, groupName={groupName ?? "null"}");
-
-            if (string.IsNullOrEmpty(groupName))
+            if (_signalRClient != null)
             {
-                AddLog("未绑定联机锄地配置组，无法启动联机锄地");
-                return;
+                await _signalRClient.ConfirmAllReadyAsync(generation);
+                AddLog("[探针] 已回复 AllReady 确认, generation=" + generation);
             }
-
-            // 检查 CommandExecutor 是否可用（依赖 BgiPath 配置）
-            if (_commandExecutor == null)
-            {
-                AddLog("[探针] CommandExecutor 不可用（BgiPath 未配置），无法通过 IPC 启动 BGI 配置组");
-                // 回退：直接启动 BGI（如果 BgiPath 已配置）
-                if (_processMonitor != null)
-                {
-                    AddLog("[探针] 尝试直接启动 BGI 带配置组参数...");
-                    _processMonitor.RestartBgi($"--startGroups \"{groupName}\"");
-                }
-                else
-                {
-                    AddLog("[探针] _processMonitor 也为 null，无法启动 BGI。请在设置页配置 BGI 路径");
-                }
-                _isOnlineReady = false;
-                _onlineMode = "none";
-                _ = ReportStatusAsync();
-                return;
-            }
-
-            // 先 task.suspend 中断当前任务
-            AddLog($"[探针] 开始发 task.suspend...");
-            var suspendResult = await _commandExecutor.ExecuteSuspendAsync(groupName);
-            AddLog($"[探针] task.suspend 结果: status={suspendResult.Status}, message={suspendResult.Message}");
-            if (suspendResult.Status != "success")
-            {
-                // task.suspend 失败，杀进程+重启带命令行参数，只启动第一个配置组
-                AddLog("task.suspend 失败，尝试杀进程重启...");
-                if (_processMonitor != null)
-                {
-                    _processMonitor.KillBgi();
-                    await Task.Delay(2000);
-                    _processMonitor.RestartBgi($"--startGroups \"{groupName}\"");
-                }
-                _isOnlineReady = false;
-                _onlineMode = "none";
-                AddLog("[探针] task.suspend 失败已杀进程，重置上线状态");
-                _ = ReportStatusAsync();
-                return;
-            }
-
-            // 依次执行所有绑定的配置组
-            // 使用后台任务，避免阻塞 OnAllReadyConfirmed 的 async void 生命周期
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    for (int i = 0; i < groupNames.Count; i++)
-                    {
-                        // 检查取消标志：用户手动停止后，剩余配置组不再执行
-                        if (_isAllReadySequenceCancelled)
-                        {
-                            AddLog("[探针] 依次执行序列已取消，停止剩余配置组");
-                            _isAllReadySequenceCancelled = false;
-                            break;
-                        }
-                        var currentGroup = groupNames[i];
-                        AddLog($"[探针] 依次执行: 第 {i + 1}/{groupNames.Count} 个配置组 \"{currentGroup}\"");
-                        var startCmd = new RemoteCommand
-                        {
-                            Cmd = "start_group",
-                            Params = new Dictionary<string, object> { { "groupName", currentGroup }, { "startFromIndex", 0 }, { "generation", generation } }
-                        };
-                        var startResult = await _commandExecutor.ExecuteAsync(startCmd);
-                        AddLog($"[探针] task.start \"{currentGroup}\" 结果: status={startResult.Status}, message={startResult.Message}");
-                        // cancelled = 配置组执行中被取消（如 F11 停止），应停止整个序列，不再执行后续配置组
-                        if (startResult.Status == "cancelled")
-                        {
-                            AddLog($"[探针] 配置组 \"{currentGroup}\" 执行中被取消，停止剩余配置组");
-                            _isAllReadySequenceCancelled = true;
-                            break;
-                        }
-                        if (startResult.Status != "success")
-                        {
-                            AddLog($"[探针] 启动配置组 \"{currentGroup}\" 失败，跳过");
-                            continue;
-                        }
-                        // task.start 在 BGI 端是同步等待：HandlerTaskStart 里 await Dispatcher.Invoke(async () =>
-                        // await scriptService.RunMulti(...))，即 task.start 返回 success 时该配置组已执行完毕。
-                        // 不能用 task.status 的 running 判断（RUNNER CONTEXT 留 taskName 会污染 running，恒 true 卡死）。
-                        // 所以这里不轮询，直接进入下一个配置组。F11 取消由 task.start 返回 cancelled 状态处理。
-                        AddLog($"[探针] 配置组 \"{currentGroup}\" 执行完毕（task.start 同步等待后返回）");
-                        if (_isAllReadySequenceCancelled)
-                        {
-                            AddLog("[探针] 检测到取消标志，停止剩余配置组");
-                            break;
-                        }
-                    }
-                    // 所有配置组执行完毕，上报状态
-                    _isOnlineReady = false;
-                    _onlineMode = "none";
-                    AddLog("[探针] 所有配置组已执行完毕，重置上线状态");
-                    _ = ReportStatusAsync();
-                }
-                catch (Exception ex)
-                {
-                    AddLog($"[探针] 依次执行配置组异常: {ex.Message}");
-                    _isOnlineReady = false;
-                    _onlineMode = "none";
-                    _ = ReportStatusAsync();
-                }
-            });
+            await OnAllReadyConfirmedInternal(generation);
         };
 
         client.OnRemoteCommand += async cmd =>
@@ -1843,7 +1944,7 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 if (_config != null)
                 {
-                    ClearLocalOnline();
+                    await ClearLocalOnline();
                     AddLog($"收到远程清除上线（来自 {cmd.Sender}）");
                     await SendAckAsync(cmd, "success", "已清除上线");
                 }
@@ -1854,7 +1955,58 @@ public class MainViewModel : INotifyPropertyChanged
                 return;
             }
 
-            AddLog($"收到远程命令: {cmd.Cmd} 来自 {cmd.Sender}");
+            // 快捷命令：若 Params 带 key，则用 key 查自己绑定的配置组/一条龙，替换传下来的值
+            // 这样每个队友执行的是自己绑定的配置，而不是房主绑定的。
+            if (cmd.Cmd is "start_group" or "start_oneclick"
+                && cmd.Params?.ContainsKey("key") == true
+                && _config != null)
+            {
+                var key = cmd.Params["key"]?.ToString();
+
+                // 特殊处理"一键锄地"：key="一键锄地" 时，遍历自己的 OnlineHoeingGroupNames 依次执行
+                if (key == "一键锄地")
+                {
+                    var groupNames = _config.OnlineHoeingGroupNames ?? [];
+                    if (groupNames.Count == 0)
+                    {
+                        AddLog("收到一键锄地，但未绑定联机锄地配置组，跳过");
+                        return;
+                    }
+                    AddLog($"收到一键锄地，开始执行本地绑定的 {groupNames.Count} 个配置组...");
+                    foreach (var groupName in groupNames)
+                    {
+                        if (_commandExecutor == null) break;
+                        var hoeingCmd = new RemoteCommand
+                        {
+                            Cmd = "start_group",
+                            Params = new Dictionary<string, object>
+                            {
+                                ["groupName"] = groupName,
+                                ["startFromIndex"] = 0
+                            }
+                        };
+                        var result = await _commandExecutor.ExecuteAsync(hoeingCmd);
+                        if (result.Status == "cancelled") break;
+                        AddLog($"  - 执行配置组「{groupName}」: {result.Status}");
+                    }
+                    AddLog("一键锄地执行完毕");
+                    return;
+                }
+
+                if (!string.IsNullOrEmpty(key) && _config.QuickCommands.TryGetValue(key, out var localBinding) && !string.IsNullOrEmpty(localBinding))
+                {
+                    var isOneClick = localBinding.StartsWith("ONEDRAGON:");
+                    var localValue = isOneClick ? localBinding["ONEDRAGON:".Length..] : localBinding["GROUP:".Length..];
+                    cmd.Params[isOneClick ? "configName" : "groupName"] = localValue;
+                    AddLog($"已替换为本地绑定: {key} → {(isOneClick ? "一条龙" : "配置组")}「{localValue}」");
+                }
+                else
+                {
+                    // 未绑定本地快捷命令，回退到房主传下来的值执行
+                    AddLog($"本地未绑定{key}，回退到房主传下来的值执行");
+                }
+            }
+
             if (_commandExecutor != null)
             {
                 var result = await _commandExecutor.ExecuteAsync(cmd);
@@ -2065,6 +2217,74 @@ public class MainViewModel : INotifyPropertyChanged
     /// </summary>
     private async Task<(List<string>? tasks, List<object>? tasksWithStatus)> GetLocalTaskListAsync(string configName, bool isOneClick)
     {
+        // 遥控器模式：从在线成员获取任务列表
+        if (_config?.ObserverMode == true)
+        {
+            // 重试循环：最多 5 次，每次等 1 秒，应对执行端数据尚未同步到遥控端的场景
+            for (int retry = 0; retry < 5; retry++)
+            {
+                var target = Members.FirstOrDefault(m => m.PlayerUid == _config.PlayerUid && m.Online
+                    && (m.ConfigGroups?.Count > 0 || m.OneClickConfigs?.Count > 0));
+                if (target == null)
+                {
+                    if (retry < 4) await Task.Delay(1000);
+                    continue;
+                }
+
+                // 从 MemberViewModel 的同步任务列表字段获取
+                if (isOneClick)
+                {
+                    // 一条龙：从 OneClickConfigs 和 OneClickTasksWithStatus 取
+                    if (target.OneClickConfigs?.Contains(configName) == true)
+                    {
+                        List<string>? tasks2 = null;
+                        List<object>? tasksWithStatus2 = null;
+                        if (target.OneClickTasksWithStatus.TryGetValue(configName, out var statusList))
+                        {
+                            tasksWithStatus2 = statusList;
+                            tasks2 = statusList
+                                .Select(s => s is System.Text.Json.JsonElement je
+                                    && je.TryGetProperty("name", out var n)
+                                    ? n.GetString() ?? "" : "")
+                                .Where(n => !string.IsNullOrEmpty(n))
+                                .ToList()!;
+                        }
+                        return (tasks2, tasksWithStatus2);
+                    }
+                }
+                else
+                {
+                    // 配置组：从 ConfigGroupTasksWithStatus 取
+                    if (target.ConfigGroups?.Contains(configName) == true)
+                    {
+                        List<string>? tasks2 = null;
+                        List<object>? tasksWithStatus2 = null;
+                        if (target.ConfigGroupTasksWithStatus.TryGetValue(configName, out var statusList))
+                        {
+                            tasksWithStatus2 = statusList;
+                            tasks2 = statusList
+                                .Select(s => s is System.Text.Json.JsonElement je
+                                    && je.TryGetProperty("name", out var n)
+                                    ? n.GetString() ?? "" : "")
+                                .Where(n => !string.IsNullOrEmpty(n))
+                                .ToList()!;
+                        }
+                        return (tasks2, tasksWithStatus2);
+                    }
+                }
+
+                // 配置组名存在但任务状态字典没有该配置名 → 说明数据还在路上，继续等
+                if (retry < 4 && target.ConfigGroups?.Contains(configName) != true
+                    && target.OneClickConfigs?.Contains(configName) != true)
+                {
+                    await Task.Delay(1000);
+                    continue;
+                }
+                break;
+            }
+            return (null, null);
+        }
+
         using var ipcClient = new IpcClient();
         await ipcClient.ConnectAsync(2000);
         var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "config.list" });
@@ -2096,7 +2316,6 @@ public class MainViewModel : INotifyPropertyChanged
 
     private async Task ExecuteLocalCommandAsync(string cmd, Dictionary<string, object>? param, List<string>? targetUids)
     {
-        AddLog($"执行本地命令: {cmd}");
         var remoteCmd = new RemoteCommand
         {
             Cmd = cmd,
@@ -2109,16 +2328,44 @@ public class MainViewModel : INotifyPropertyChanged
 
         if (_commandExecutor != null)
         {
+            // 有本地 BGI：走本地 IPC 执行（对自己或对别人，取决于 targetUids）
             var result = await _commandExecutor.ExecuteAsync(remoteCmd);
             AddLog($"命令结果: {result.Message}");
         }
+        else if (_config?.ObserverMode == true)
+        {
+            // 遥控器模式：无本地 BGI，直接通过 SignalR 发送远程命令给目标成员
+            if (_signalRClient != null)
+            {
+                AddLog($"遥控器模式: 通过 SignalR 发送 {cmd} 命令");
+                await _signalRClient.SendRemoteCommandAsync(remoteCmd);
+            }
+            else
+            {
+                AddLog("SignalR 未连接，无法发送命令");
+            }
+        }
     }
 
-    /// <summary>从本机 BGI 读配置组与一条龙名称列表（用于一键命令绑定选择）。</summary>
+    /// <summary>从本机 BGI 或在线成员读配置组与一条龙名称列表（用于一键命令绑定选择）。</summary>
     private async Task<(List<string> groups, List<string> oneClicks)> GetLocalConfigsAsync()
     {
         List<string> groups = [];
         List<string> oneClicks = [];
+
+        // 遥控器模式：从在线成员获取配置组/一条龙列表
+        if (_config?.ObserverMode == true)
+        {
+            var target = Members.FirstOrDefault(m => m.PlayerUid == _config.PlayerUid && m.Online
+                && (m.ConfigGroups?.Count > 0 || m.OneClickConfigs?.Count > 0));
+            if (target != null)
+            {
+                groups = target.ConfigGroups?.Where(g => !string.IsNullOrEmpty(g)).ToList() ?? [];
+                oneClicks = target.OneClickConfigs?.Where(o => !string.IsNullOrEmpty(o)).ToList() ?? [];
+            }
+            return (groups, oneClicks);
+        }
+
         try
         {
             using var ipcClient = new IpcClient();
@@ -2163,6 +2410,9 @@ public class MainViewModel : INotifyPropertyChanged
 
     /// <summary>当前配置（供 XAML 绑定启动策略开关/下拉选择）。</summary>
     public AssistConfig? Config => _config;
+
+    /// <summary>是否处于遥控器模式（ObserverMode=true）。供连接徽章 MultiDataTrigger 判断。</summary>
+    public bool IsObserverMode => _config?.ObserverMode == true;
 
     /// <summary>随 BGI 启动（开关，切换即保存 + 即时生效）</summary>
     public bool AutoLaunchWithBgi
@@ -2492,11 +2742,43 @@ public class MainViewModel : INotifyPropertyChanged
             Params = new Dictionary<string, object>
             {
                 [isOneClick ? "configName" : "groupName"] = value,
-                ["startFromIndex"] = 0
+                ["startFromIndex"] = 0,
+                ["key"] = key  // 新增：传入命令类型名，供队友查自己的绑定
             }
         };
         await _signalRClient.SendRemoteCommandAsync(remoteCmd);
         AddLog($"已向 {targets.Count} 个在线成员下发 {key}：执行{value}");
+    }
+
+    /// <summary>一键锄地：向所有选中成员下发执行他们各自绑定的联机锄地配置组。</summary>
+    private async Task ExecuteQuickHoeingAsync()
+    {
+        var targets = GetSelectedTargets();
+        if (targets.Count == 0)
+        {
+            AddLog("没有在线且被选中的成员可下发，请勾选要下发的在线成员");
+            return;
+        }
+
+        if (_signalRClient == null) return;
+        // 下发 start_group 命令，带 key="一键锄地" 但不带 groupName，
+        // 接收端收到后会用 key 检测到"一键锄地"，遍历自己的 OnlineHoeingGroupNames 执行。
+        var remoteCmd = new RemoteCommand
+        {
+            Cmd = "start_group",
+            Sender = _config!.PlayerName,
+            SenderUid = _config.PlayerUid,
+            Target = targets,
+            CommandId = "hoeing_" + DateTime.Now.Ticks,
+            Params = new Dictionary<string, object>
+            {
+                ["groupName"] = "",
+                ["startFromIndex"] = 0,
+                ["key"] = "一键锄地"
+            }
+        };
+        await _signalRClient.SendRemoteCommandAsync(remoteCmd);
+        AddLog($"已向 {targets.Count} 个在线成员下发一键锄地（各成员执行自己绑定的配置组）");
     }
 
     private List<string> GetSelectedTargets()
@@ -2932,11 +3214,130 @@ public class MainViewModel : INotifyPropertyChanged
                 CommandLogs.RemoveAt(CommandLogs.Count - 1);
             CommandLogsText = string.Join("\n", CommandLogs);
         });
+
+        // 同时写入文件：保存在助手程序所在目录的 assistant_runtime.log
+        try
+        {
+            var logDir = System.IO.Path.GetDirectoryName(Environment.ProcessPath) ?? ".";
+            var logPath = System.IO.Path.Combine(logDir, "assistant_runtime.log");
+            System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}\n");
+        }
+        catch
+        {
+            // 文件写入失败不应影响主流程
+        }
     }
 
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+
+    private async Task OnAllReadyConfirmedInternal(int generation)
+    {
+        // 幂等保护：同一 generation 只处理一次（防止 async void 并发或重复广播）
+        if (generation <= _lastProcessedAllReadyGeneration)
+        {
+            return;
+        }
+        _lastProcessedAllReadyGeneration = generation;
+
+        // 获取绑定的联机配置组列表
+        var groupNames = _config?.OnlineHoeingGroupNames ?? [];
+        var groupIndex = _config?.OnlineHoeingGroupIndex ?? 0;
+        var groupName = (groupIndex >= 0 && groupIndex < groupNames.Count) ? groupNames[groupIndex] : null;
+
+        if (string.IsNullOrEmpty(groupName))
+        {
+            AddLog("未绑定联机锄地配置组，无法启动联机锄地");
+            return;
+        }
+
+        // 检查 CommandExecutor 是否可用（依赖 BgiPath 配置）
+        if (_commandExecutor == null)
+        {
+            AddLog("CommandExecutor 不可用（BgiPath 未配置），无法通过 IPC 启动 BGI 配置组");
+            if (_processMonitor != null)
+            {
+                AddLog("尝试直接启动 BGI 带配置组参数...");
+                _processMonitor.RestartBgi($"--startGroups \"{groupName}\"");
+            }
+            else
+            {
+                AddLog("_processMonitor 也为 null，无法启动 BGI。请在设置页配置 BGI 路径");
+            }
+            _isOnlineReady = false;
+            _onlineMode = "none";
+            _ = ReportStatusAsync();
+            return;
+        }
+
+        // 先 task.suspend 中断当前任务
+        var suspendResult = await _commandExecutor.ExecuteSuspendAsync(groupName);
+        if (suspendResult.Status != "success")
+        {
+            AddLog("task.suspend 失败，尝试杀进程重启...");
+            if (_processMonitor != null)
+            {
+                _processMonitor.KillBgi();
+                await Task.Delay(2000);
+                _processMonitor.RestartBgi($"--startGroups \"{groupName}\"");
+            }
+            _isOnlineReady = false;
+            _onlineMode = "none";
+            _ = ReportStatusAsync();
+            return;
+        }
+
+        // 等待 BGI 内部的 CancellationContext 取消状态传播完毕，避免取消令牌残留影响后续 start_group
+        await Task.Delay(1500);
+
+        // 依次执行所有绑定的配置组
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                for (int i = 0; i < groupNames.Count; i++)
+                {
+                    if (_isAllReadySequenceCancelled)
+                    {
+                        _isAllReadySequenceCancelled = false;
+                        break;
+                    }
+                    var currentGroup = groupNames[i];
+                    var startCmd = new RemoteCommand
+                    {
+                        Cmd = "start_group",
+                        Params = new Dictionary<string, object> { { "groupName", currentGroup }, { "startFromIndex", 0 }, { "generation", generation } }
+                    };
+                    var startResult = await _commandExecutor.ExecuteAsync(startCmd);
+                    if (startResult.Status == "cancelled")
+                    {
+                        _isAllReadySequenceCancelled = true;
+                        break;
+                    }
+                    if (startResult.Status != "success")
+                    {
+                        AddLog($"启动配置组 \"{currentGroup}\" 失败，跳过");
+                        continue;
+                    }
+                    if (_isAllReadySequenceCancelled)
+                    {
+                        break;
+                    }
+                }
+                _isOnlineReady = false;
+                _onlineMode = "none";
+                _ = ReportStatusAsync();
+            }
+            catch (Exception ex)
+            {
+                AddLog($"依次执行配置组异常: {ex.Message}");
+                _isOnlineReady = false;
+                _onlineMode = "none";
+                _ = ReportStatusAsync();
+            }
+        });
     }
 }
 
