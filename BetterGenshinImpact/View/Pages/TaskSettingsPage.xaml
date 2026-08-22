@@ -3886,6 +3886,7 @@
                                 Minimum="0"
                                 SmallChange="1"
                                 LargeChange="5"
+                                ClearButtonEnabled="False"
                                 SpinButtonPlacementMode="Inline"
                                 Width="120" />
                         </StackPanel>
@@ -3901,6 +3902,7 @@
                                 Minimum="0"
                                 SmallChange="1"
                                 LargeChange="5"
+                                ClearButtonEnabled="False"
                                 SpinButtonPlacementMode="Inline"
                                 Width="120" />
                         </StackPanel>
@@ -3916,6 +3918,7 @@
                                 Minimum="0"
                                 SmallChange="1"
                                 LargeChange="5"
+                                ClearButtonEnabled="False"
                                 SpinButtonPlacementMode="Inline"
                                 Width="120" />
                         </StackPanel>
@@ -3931,6 +3934,7 @@
                                 Minimum="0"
                                 SmallChange="1"
                                 LargeChange="5"
+                                ClearButtonEnabled="False"
                                 SpinButtonPlacementMode="Inline"
                                 Width="120" />
                         </StackPanel>
