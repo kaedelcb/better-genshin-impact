@@ -25,6 +25,20 @@ public class MainViewModel : INotifyPropertyChanged
     private string _lastLoggedProgress = "";
     private Timer? _statusTimer;
     private Timer? _retryTimer;
+    private Timer? _onlineTimer;
+    private Timer? _resumeTimeoutTimer;
+    private bool _isOnlineReady;
+    private string _onlineMode = "none";
+    /// <summary>记录定时上线今天是否已触发过（按日期去重，设定新时间时重置）。</summary>
+    private DateTime _lastScheduledFireDate = DateTime.MinValue;
+    /// <summary>本地定时上线自增 generation（用于驱动服务端 AllReady 判定，代替 BGI 的 onlineGeneration）。</summary>
+    private int _localOnlineGeneration = 0;
+    // 边沿检测：记录上次处理过的 BGI 上线事件代序号与 AllReady 代序号，用于幂等保护
+    private int _lastOnlineGeneration = 0;
+    private int _lastProcessedAllReadyGeneration;
+    /// <summary>用户手动停止时设为 true，后台依次执行序列检查到此标志后跳过剩余配置组。</summary>
+    private bool _isAllReadySequenceCancelled;
+    private bool _wasAutoHoeingRunning;
 
     /// <summary>成员角色头像池（按加入顺序循环分配，file=资源名，ring=元素色描边）。</summary>
     private static readonly (string file, string ring)[] AvatarPool =
@@ -69,12 +83,17 @@ public class MainViewModel : INotifyPropertyChanged
     public event Action? RefreshCompleted;
 
     public RelayCommand StopCommand => new(OnStop);
+    public RelayCommand StartBgiCommand => new(OnStartBgi);
     public RelayCommand StartGroupCommand => new(OnStartGroup);
     public RelayCommand StartOneClickCommand => new(OnStartOneClick);
     public RelayCommand ExecuteHotkeyCommand => new(OnExecuteHotkey);
     public RelayCommand CloseGameCommand => new(OnCloseGame);
     public RelayCommand ExitCommand => new(_ => OnExit());
     public RelayCommand RefreshCommand => new(_ => _ = RefreshAsync());
+    public RelayCommand ShowOnlineHistoryCommand => new(OnShowOnlineHistory);
+    public RelayCommand ScheduledOnlineCommand => new(OnScheduledOnline);
+    public RelayCommand ClearOnlineCommand => new(OnClearOnline);
+    public RelayCommand BindHoeingGroupCommand => new(OnBindHoeingGroup);
 
     // ===== 一键快捷命令（给所有在线成员下发执行绑定配置组/一条龙）=====
     public RelayCommand QuickLegendCommand => new(_ => _ = ExecuteQuickCommandAsync("一键传奇"));
@@ -135,6 +154,9 @@ public class MainViewModel : INotifyPropertyChanged
 
         // 生成房间码
         RoomCode = AssistConfigManager.GenerateControlRoomCode(_config.TeamUids);
+
+        // 启动定时上线定时器（设定过 scheduledOnlineTime 才会真正到点触发）
+        StartOnlineScheduler();
 
         // 初始化进程监控
         // 守护 BGI（GuardBgi）：仅当开关开启时才启动 BGI 崩溃检测定时器。
@@ -313,20 +335,183 @@ public class MainViewModel : INotifyPropertyChanged
             TaskRunning = bgiRunning,
             CurrentTaskName = currentTaskName,
             AutoHoeingRunning = autoHoeingRunning,
-            AutoHoeingProgress = autoHoeingProgress
+            AutoHoeingProgress = autoHoeingProgress,
+            OnlineReady = _isOnlineReady,
+            OnlineMode = _onlineMode,
+            ScheduledOnlineTime = _config?.ScheduledOnlineTime ?? "",
+            OnlineHoeingGroupNames = _config?.OnlineHoeingGroupNames ?? [],
+            ExpectedHoeingPlayers = _config?.ExpectedHoeingPlayers ?? 4
         };
+
+        // 检测"联机锄地上线"任务已执行（通过 onlineGeneration 代序号边沿检测 + recentTaskName 降级）
+        // 优先读 onlineGeneration（新字段），比 _lastOnlineGeneration 大才触发（边沿检测）。
+        // 如果 onlineGeneration 不存在，降级到 recentTaskName 电平检测（旧 BGI 兼容）。
+        // 触发后上报服务端（ReportOnlineEvent），由服务端状态机做就绪判断，助手端不做本地状态决策。
+        try
+        {
+            using var recentTaskClient = new IpcClient();
+            await recentTaskClient.ConnectAsync(2000);
+            var statusResp = await recentTaskClient.SendCommandAsync(new IpcRequest { OpCode = "task.status" });
+            if (statusResp.Success && !string.IsNullOrEmpty(statusResp.Data))
+            {
+                var sdata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(statusResp.Data);
+                // 优先读 onlineGeneration（新字段，边沿检测）
+                if (sdata.TryGetProperty("onlineGeneration", out var ogEl) && ogEl.ValueKind == System.Text.Json.JsonValueKind.Number)
+                {
+                    var gen = ogEl.GetInt32();
+                    AddLog($"[上线探针] onlineGeneration={gen}, _lastOnlineGeneration={_lastOnlineGeneration}, 是否触发={gen > _lastOnlineGeneration}");
+                    if (gen > _lastOnlineGeneration)
+                    {
+                        _lastOnlineGeneration = gen;
+                        // 命令上线：BGI 报告 onlineGeneration 递增 → 标记已上线（命令模式），
+                        // 避免后续 ReportStatusAsync 继续上报 OnlineReady=false 覆盖服务端。
+                        _isOnlineReady = true;
+                        _onlineMode = "command";
+                        // 同步更新本地已构造的 status 对象，防止后续 ReportControlStatusAsync 用 OnlineReady=false 覆盖服务端
+                        status.OnlineReady = true;
+                        status.OnlineMode = "command";
+                        AddLog("[上线探针] 检测到新上线事件 (generation=" + gen + ")，标记命令上线，上报服务端");
+                        // 上报服务端，由服务端状态机协调
+                        if (_signalRClient != null)
+                        {
+                            await _signalRClient.ReportOnlineEventAsync(gen, true);
+                            AddLog("[上线探针] ReportOnlineEventAsync 已调用 (generation=" + gen + ")");
+                        }
+                        else
+                        {
+                            AddLog("[上线探针] _signalRClient 为空，无法上报");
+                        }
+                    }
+                }
+                // 降级：读 recentTaskName（旧 BGI 兼容）
+                else if (sdata.TryGetProperty("recentTaskName", out var rtn) && rtn.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    var recentTask = rtn.GetString();
+                    if (recentTask == "联机锄地上线" && !_isOnlineReady)
+                    {
+                        _ = MarkOnlineAsync("command");
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // IPC 不可用时不影响
+        }
+
+        // 检测联机锄地是否结束（autoHoeingRunning 从 true 变为 false）
+        // 通过 IPC 查询 BGI 是否有中断上下文，不使用 _config 引用
+        if (_wasAutoHoeingRunning && !autoHoeingRunning)
+        {
+            // 检查 BGI 是否有中断上下文
+            bool hasContext = false;
+            try
+            {
+                using var ctxCheckClient = new IpcClient();
+                await ctxCheckClient.ConnectAsync(2000);
+                var ctxResp = await ctxCheckClient.SendCommandAsync(new IpcRequest { OpCode = "task.status" });
+                if (ctxResp.Success && !string.IsNullOrEmpty(ctxResp.Data))
+                {
+                    var ctxData = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(ctxResp.Data);
+                    if (ctxData.TryGetProperty("hasSuspendedTaskContext", out var hsc))
+                    {
+                        hasContext = hsc.GetBoolean();
+                    }
+                }
+            }
+            catch
+            {
+                // IPC 不可用时跳过
+            }
+
+            if (hasContext)
+            {
+                // 联机锄地已结束，在助手房间内显示恢复提示（不弹窗）
+                AddLog("联机锄地已结束，10 秒后自动恢复原任务...");
+                // 启动恢复定时器（10 秒后自动恢复）
+                _resumeTimeoutTimer?.Dispose();
+                _resumeTimeoutTimer = new System.Threading.Timer(async _ =>
+                {
+                    if (_commandExecutor != null)
+                    {
+                        var result = await _commandExecutor.ExecuteResumeAsync();
+                        if (result.Status == "success")
+                        {
+                            AddLog("原任务已自动恢复");
+                        }
+                    }
+                }, null, TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(-1));
+            }
+            _wasAutoHoeingRunning = autoHoeingRunning;
+        }
 
         // 状态上报放 try-catch 内：连接断开时（如 ServerTimeout 后）InvokeAsync 会抛异常，
         // 若漏掉会作为未观察任务异常冒泡到全局 TaskScheduler.UnobservedTaskException → App 弹"未处理异常"框。
         // 这里捕获并仅记日志（断线状态已由 Closed 事件同步 IsConnected=false，右上角徽章变"离线"）。
         try
         {
+            AddLog($"[探针] 上报前 OnlineReady={_isOnlineReady}, OnlineMode={_onlineMode}");
             await _signalRClient.ReportControlStatusAsync(status);
         }
         catch (Exception ex)
         {
             AddLog($"状态上报失败（连接不可用）: {ex.Message}");
         }
+    }
+
+    /// <summary>标记已上线并上报服务端</summary>
+    private async Task MarkOnlineAsync(string mode)
+    {
+        _isOnlineReady = true;
+        _onlineMode = mode;
+        AddLog($"已上线（{mode}）");
+        // 立即上报服务端，让卡片实时更新（不等下一次 10 秒轮询）
+        try
+        {
+            await ReportStatusAsync();
+        }
+        catch
+        {
+            // 上报失败不影响上线状态标记
+        }
+    }
+
+    /// <summary>启动定时上线定时器（每 30 秒检查一次）。
+    /// 不依赖 _isOnlineReady（避免状态残留阻塞），改用按天去重防止重复触发。</summary>
+    private void StartOnlineScheduler()
+    {
+        _onlineTimer?.Dispose();
+        _onlineTimer = new Timer(async _ =>
+        {
+            if (_config == null) return;
+            if (string.IsNullOrEmpty(_config.ScheduledOnlineTime)) return;
+
+            var now = DateTime.Now;
+            if (!TimeSpan.TryParse(_config.ScheduledOnlineTime, out var targetTime)) return;
+
+            var target = now.Date.Add(targetTime);
+            if (now < target) return;                              // 还没到点
+            if (_lastScheduledFireDate == now.Date) return;        // 今天已触发过
+
+            await MarkOnlineAsync("scheduled");
+            _lastScheduledFireDate = now.Date;                     // 标记今天已触发
+
+            // 关键：本地定时上线只标状态不会真正开锄。必须上报上线事件，驱动服务端
+            // AllReady（全员就绪）→ 助手 OnAllReadyConfirmed → 依次执行绑定的联机配置组。
+            if (_signalRClient != null)
+            {
+                _localOnlineGeneration++;
+                try
+                {
+                    await _signalRClient.ReportOnlineEventAsync(_localOnlineGeneration, true);
+                    AddLog($"[定时上线] 已上报上线事件 generation={_localOnlineGeneration}，等待服务端全员就绪开锄");
+                }
+                catch (Exception ex)
+                {
+                    AddLog($"[定时上线] 上报上线事件失败: {ex.Message}");
+                }
+            }
+        }, null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
     }
 
     private async Task SendAckAsync(RemoteCommand originalCmd, string status, string message)
@@ -346,6 +531,8 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void OnStop(object? parameter)
     {
+        // 标记依次执行序列已取消（用户手动停止后，剩余配置组不再执行）
+        _isAllReadySequenceCancelled = true;
         if (parameter is MemberViewModel member)
         {
             _ = ExecuteLocalCommandAsync("stop", null, [member.PlayerUid]);
@@ -353,6 +540,37 @@ public class MainViewModel : INotifyPropertyChanged
         else
         {
             _ = ExecuteLocalCommandAsync("stop", null, null);
+        }
+    }
+
+    private void OnStartBgi(object? parameter)
+    {
+        // 点自己：本地启动本机 BGI；点别人：通过 SignalR 下发命令让目标启动其 BGI。
+        if (parameter is MemberViewModel member && member.PlayerUid != _config?.PlayerUid)
+        {
+            // 点别人的卡片：远程下发 start_bgi，由目标成员的助手本地执行启动。
+            if (_signalRClient != null)
+            {
+                var cmd = new RemoteCommand
+                {
+                    Cmd = "start_bgi",
+                    Sender = _config?.PlayerName ?? "",
+                    SenderUid = _config?.PlayerUid ?? "",
+                    Target = [member.PlayerUid],
+                    CommandId = "remote_" + DateTime.Now.Ticks
+                };
+                AddLog($"向 {member.PlayerName} 下发启动 BGI");
+                _ = _signalRClient.SendRemoteCommandAsync(cmd);
+            }
+            else
+            {
+                AddLog("SignalR 未连接，无法向下发启动 BGI 命令");
+            }
+        }
+        else
+        {
+            // 点自己卡片（或未指定）：本地启动本机 BGI。
+            _ = ExecuteLocalCommandAsync("start_bgi", null, null);
         }
     }
 
@@ -384,6 +602,876 @@ public class MainViewModel : INotifyPropertyChanged
                 _ = ExecuteLocalCommandAsync("close_game", null, [member.PlayerUid]);
             }
         }
+    }
+
+    /// <summary>显示该成员当天的上线消费记录（各自卡片只显示自己的）。</summary>
+    private void OnShowOnlineHistory(object? parameter)
+    {
+        if (parameter is MemberViewModel member)
+        {
+            if (member.OnlineHistory == null || member.OnlineHistory.Count == 0)
+            {
+                ShowOnlineHistoryDialog("上线记录", "暂无上线记录");
+                return;
+            }
+
+            // 格式化记录：上线方式 + 上线时间 + 消费时间
+            var lines = member.OnlineHistory
+                .OfType<System.Text.Json.JsonElement>()
+                .Select(h =>
+                {
+                    var mode = h.TryGetProperty("mode", out var m) ? m.GetString() ?? "unknown" : "unknown";
+                    var online = h.TryGetProperty("onlineTime", out var ot) ? ot.GetString() ?? "" : "";
+                    var consume = h.TryGetProperty("consumeTime", out var ct) ? ct.GetString() ?? "" : "";
+                    var modeText = mode == "scheduled" ? "定时" : mode == "command" ? "命令" : mode;
+                    return $"· {modeText} 上线 {online} → 联机 {consume}";
+                }).ToList();
+
+            var content = lines.Count > 0 ? string.Join("\n", lines) : "暂无上线记录";
+            // 若记录是匿名对象（非 JsonElement），兜底解析
+            if (content == "暂无上线记录" && member.OnlineHistory.Count > 0)
+            {
+                var alt = member.OnlineHistory.Select(h => h.ToString()).ToList();
+                content = string.Join("\n", alt);
+            }
+            ShowOnlineHistoryDialog("当天上线记录", content);
+        }
+    }
+
+    /// <summary>打开定时上线设置弹窗（设定 HH:mm，保存到本地配置并重启定时器、立即上报）。</summary>
+    private void OnScheduledOnline(object? parameter)
+    {
+        if (_config == null) return;
+        var targetMember = parameter as MemberViewModel;
+        var isSelf = targetMember == null || targetMember.PlayerUid == _config.PlayerUid;
+
+        // 弹窗选时间（self 和 remote 共享同一个弹窗）
+        var time = ShowScheduledOnlineTimeDialog(isSelf ? _config.ScheduledOnlineTime : "");
+        if (time == null) return; // 用户取消
+
+        if (isSelf)
+        {
+            ApplyScheduledOnlineTime(time);
+        }
+        else if (_signalRClient != null)
+        {
+            var cmd = new RemoteCommand
+            {
+                Cmd = "set_scheduled_online_time",
+                Sender = _config.PlayerName ?? "",
+                SenderUid = _config.PlayerUid,
+                Target = [targetMember!.PlayerUid],
+                CommandId = "local_" + DateTime.Now.Ticks,
+                Params = new Dictionary<string, object> { { "scheduledOnlineTime", time } }
+            };
+            AddLog($"向 {targetMember.PlayerName} 下发定时上线时间: {time}");
+            _ = _signalRClient.SendRemoteCommandAsync(cmd);
+        }
+    }
+
+    /// <summary>清除已上线状态（不清除定时闹钟）。点自己卡清自己；点别人卡远程下发清除。</summary>
+    private void OnClearOnline(object? parameter)
+    {
+        if (_config == null) return;
+        var targetMember = parameter as MemberViewModel;
+        var isSelf = targetMember == null || targetMember.PlayerUid == _config.PlayerUid;
+
+        if (isSelf)
+        {
+            ClearLocalOnline();
+        }
+        else if (_signalRClient != null)
+        {
+            var cmd = new RemoteCommand
+            {
+                Cmd = "clear_online",
+                Sender = _config.PlayerName ?? "",
+                SenderUid = _config.PlayerUid,
+                Target = [targetMember!.PlayerUid],
+                CommandId = "local_" + DateTime.Now.Ticks,
+                Params = new Dictionary<string, object>()
+            };
+            AddLog($"向 {targetMember.PlayerName} 下发清除上线");
+            _ = _signalRClient.SendRemoteCommandAsync(cmd);
+        }
+    }
+
+    /// <summary>本地清除已上线状态：复位 _isOnlineReady / _onlineMode 并上报服务端。</summary>
+    private void ClearLocalOnline()
+    {
+        _isOnlineReady = false;
+        _onlineMode = "none";
+        var self = Members.FirstOrDefault(m => m.PlayerUid == _config?.PlayerUid);
+        if (self != null)
+        {
+            self.OnlineReady = false;
+            self.OnlineMode = "none";
+        }
+        AddLog("已清除上线状态");
+        _ = ReportStatusAsync();
+    }
+
+    /// <summary>定时上线时间弹窗（深色鎏金主题，时/分 ListBox 选择）。
+    /// 返回值：null=用户取消，""=清除定时上线，"HH:mm"=设定时间。</summary>
+    private string? ShowScheduledOnlineTimeDialog(string currentTime)
+    {
+        // 解析当前已设定时间作初始选择（兼容 HH:mm 与单数 H:mm）
+        int initHour = -1, initMinute = 0;
+        if (TimeSpan.TryParse(currentTime, out var cur))
+        {
+            initHour = cur.Hours;
+            initMinute = cur.Minutes;
+        }
+
+        var window = new Window
+        {
+            Title = "定时上线",
+            Width = 340, Height = 350,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = Application.Current.MainWindow,
+            WindowStyle = WindowStyle.SingleBorderWindow,
+            ResizeMode = ResizeMode.NoResize,
+            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
+            Background = new System.Windows.Media.LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0.5, 0),
+                EndPoint = new System.Windows.Point(0.5, 1),
+                GradientStops =
+                {
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
+                }
+            }
+        };
+        var panel = new Grid { Margin = new Thickness(20) };
+        string? result = null; // 确定后回填选定的 "HH:mm"；取消保持 null
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // 0 标题
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(16) }); // 1 间距
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 2 时/分选择器（Star 限高，按 §21.5 防按钮被顶出）
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(14) }); // 3 间距
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // 4 提示文字
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(18) }); // 5 间距
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // 6 按钮（固定底部，永不溢出）
+
+        var titleLabel = new TextBlock
+        {
+            Text = "设定定时上线时间",
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        Grid.SetRow(titleLabel, 0);
+        panel.Children.Add(titleLabel);
+
+        // 时/分选择器：用两个并排 ListBox（复用 §21 深色 ListBox 样式，白字深底可读；ComboBox 白底弹层看不清，禁用）
+        var darkItem = CreateDarkListBoxItemStyle();
+        var hourBox = new System.Windows.Controls.ListBox
+        {
+            // 高度由外围 Grid 的 Star 行约束（§21.5），内部自动出现滚动条
+            Width = 72,
+            FontSize = 15,
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0xD4, 0xAF, 0x37)),
+            BorderThickness = new Thickness(1),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xCC, 0x26, 0x23, 0x4E)),
+            ItemContainerStyle = darkItem
+        };
+        for (var h = 0; h < 24; h++) hourBox.Items.Add(h.ToString("00"));
+        hourBox.SelectedIndex = initHour is >= 0 and < 24 ? initHour : DateTime.Now.Hour;
+
+        var minuteBox = new System.Windows.Controls.ListBox
+        {
+            // 高度由外围 Grid 的 Star 行约束（§21.5），内部自动出现滚动条
+            Width = 72,
+            FontSize = 15,
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0xD4, 0xAF, 0x37)),
+            BorderThickness = new Thickness(1),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xCC, 0x26, 0x23, 0x4E)),
+            ItemContainerStyle = darkItem
+        };
+        for (var m = 0; m < 60; m++) minuteBox.Items.Add(m.ToString("00"));
+        minuteBox.SelectedIndex = initMinute is >= 0 and < 60 ? initMinute : 0;
+
+        var colon = new TextBlock
+        {
+            Text = ":", FontSize = 20, FontWeight = FontWeights.Bold,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 8, 2)
+        };
+        var picker = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+        picker.Children.Add(hourBox);
+        picker.Children.Add(colon);
+        picker.Children.Add(minuteBox);
+        Grid.SetRow(picker, 2);
+        panel.Children.Add(picker);
+
+        var tip = new TextBlock
+        {
+            Text = "选择到点自动上线的时刻（时 : 分）",
+            FontSize = 11,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        Grid.SetRow(tip, 4);
+        panel.Children.Add(tip);
+
+        var btnPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 16, 0, 0)
+        };
+        btnPanel.Children.Add(new Button
+        {
+            Content = "取消",
+            Width = 80, Height = 30,
+            Margin = new Thickness(0, 0, 10, 0),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)),
+            Cursor = System.Windows.Input.Cursors.Hand
+        });
+        // 取消
+        ((Button)btnPanel.Children[^1]).Click += (_, _) => window.Close();
+
+        // 清除定时上线按钮（深色，危险操作）。点击后 result="" 表示清除。
+        btnPanel.Children.Add(new Button
+        {
+            Content = "清除定时",
+            Width = 88, Height = 30,
+            Margin = new Thickness(0, 0, 10, 0),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x8E, 0x6E, 0x6E)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0xD4, 0x6E, 0x6E)),
+            Cursor = System.Windows.Input.Cursors.Hand
+        });
+        ((Button)btnPanel.Children[^1]).Click += (_, _) => { result = ""; window.Close(); };
+
+        var okBtn = new Button
+        {
+            Content = "确定",
+            Width = 80, Height = 30,
+            FontWeight = FontWeights.SemiBold,
+            BorderThickness = new Thickness(0),
+            Cursor = System.Windows.Input.Cursors.Hand
+        };
+        okBtn.Background = new System.Windows.Media.LinearGradientBrush
+        {
+            StartPoint = new System.Windows.Point(0, 0),
+            EndPoint = new System.Windows.Point(1, 1),
+            GradientStops =
+            {
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xEF, 0xD6, 0x8A), 0),
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0xAF, 0x37), 1)
+            }
+        };
+        okBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16));
+        okBtn.Click += (_, _) =>
+        {
+            var hh = hourBox.SelectedIndex is >= 0 and < 24 ? hourBox.SelectedIndex : DateTime.Now.Hour;
+            var mm = minuteBox.SelectedIndex is >= 0 and < 60 ? minuteBox.SelectedIndex : 0;
+            result = $"{hh:00}:{mm:00}";
+            window.Close();
+        };
+        btnPanel.Children.Add(okBtn);
+
+        Grid.SetRow(btnPanel, 6);
+        panel.Children.Add(btnPanel);
+
+        window.Content = panel;
+        window.ShowDialog();
+        return result;
+    }
+
+    /// <summary>应用定时上线时间：写配置、保存、更新自身卡片、重启定时器并立即上报。
+    /// 设定新时间时重置按天去重标记，让新设定能正常触发。</summary>
+    private void ApplyScheduledOnlineTime(string time)
+    {
+        _config!.ScheduledOnlineTime = time;
+        _configManager?.Save(_config);
+
+        // 定时上线语义 = 闹钟：设/清时间只更新闹钟显示，不改变当前上线状态。
+        // 是否上线由 _isOnlineReady 决定（定时到点/命令上线才触发 MarkOnlineAsync 置 true）；
+        // 清除上线请用"清除上线"按钮。
+        var self = Members.FirstOrDefault(m => m.PlayerUid == _config.PlayerUid);
+        if (self != null)
+        {
+            self.ScheduledOnlineTime = time;
+        }
+
+        // 重置按天去重标记，让新设定的时间能正常触发
+        _lastScheduledFireDate = DateTime.MinValue;
+
+        // 若设定的时刻已过（now >= target），抑制今天的重复触发（避免"设定过去时间立即上线"导致状态瞬间残留），
+        // 下次在明天同一时刻触发。
+        if (!string.IsNullOrEmpty(time)
+            && TimeSpan.TryParse(time, out var tgt)
+            && DateTime.Now >= DateTime.Now.Date.Add(tgt))
+        {
+            _lastScheduledFireDate = DateTime.Now.Date;
+        }
+
+        // 重启定时器（StartOnlineScheduler 内部会 Dispose 旧的）
+        StartOnlineScheduler();
+
+        AddLog(string.IsNullOrEmpty(time) ? "已清除定时上线" : $"已设定定时上线: {time}");
+        _ = ReportStatusAsync();
+    }
+
+    /// <summary>显示上线记录弹窗（深色鎏金主题，与绑定锄地配置组弹窗一致）。</summary>
+    private void ShowOnlineHistoryDialog(string title, string content)
+    {
+        var window = new Window
+        {
+            Title = title,
+            Width = 460, Height = 360,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = Application.Current.MainWindow,
+            WindowStyle = WindowStyle.SingleBorderWindow,
+            ResizeMode = ResizeMode.NoResize,
+            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
+            Background = new System.Windows.Media.LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0.5, 0),
+                EndPoint = new System.Windows.Point(0.5, 1),
+                GradientStops =
+                {
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
+                }
+            }
+        };
+        var panel = new Grid { Margin = new Thickness(20) };
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(12) });
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var titleLabel = new TextBlock
+        {
+            Text = title,
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        Grid.SetRow(titleLabel, 0);
+        panel.Children.Add(titleLabel);
+
+        var contentBox = new TextBox
+        {
+            Text = content,
+            IsReadOnly = true,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0xD4, 0xAF, 0x37)),
+            BorderThickness = new Thickness(1),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xCC, 0x26, 0x23, 0x4E)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA)),
+            FontSize = 13,
+            Padding = new Thickness(10, 8, 10, 8)
+        };
+        Grid.SetRow(contentBox, 2);
+        panel.Children.Add(contentBox);
+
+        var okBtn = new Button
+        {
+            Content = "确定",
+            Width = 80, Height = 30,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            FontWeight = FontWeights.SemiBold,
+            BorderThickness = new Thickness(0),
+            Cursor = System.Windows.Input.Cursors.Hand
+        };
+        okBtn.Background = new System.Windows.Media.LinearGradientBrush
+        {
+            StartPoint = new System.Windows.Point(0, 0),
+            EndPoint = new System.Windows.Point(1, 1),
+            GradientStops =
+            {
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xEF, 0xD6, 0x8A), 0),
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0xAF, 0x37), 1)
+            }
+        };
+        okBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16));
+        okBtn.Click += (_, _) => window.Close();
+        Grid.SetRow(okBtn, 3);
+        Grid.SetColumn(okBtn, 0);
+        panel.Children.Add(okBtn);
+
+        window.Content = panel;
+        window.ShowDialog();
+    }
+
+    /// <summary>打开联机锄地配置组绑定弹窗（多选）。所有人可编辑。</summary>
+    private async void OnBindHoeingGroup(object? parameter)
+    {
+        if (_config == null) return;
+
+        // 判断目标：点自己的卡片还是别人的
+        var targetMember = parameter as MemberViewModel;
+        var isSelf = targetMember == null || targetMember.PlayerUid == _config.PlayerUid;
+
+        // 配置组列表来源：改自己 = 本机 BGI；改别人 = 对方的配置组（来自服务端该成员上报的 ConfigGroups）
+        List<string> allGroups = [];
+        if (isSelf)
+        {
+            try
+            {
+                using var ipc = new IpcClient();
+                await ipc.ConnectAsync(2000);
+                var resp = await ipc.SendCommandAsync(new IpcRequest { OpCode = "config.list" });
+                if (resp.Success && !string.IsNullOrEmpty(resp.Data))
+                {
+                    var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(resp.Data);
+                    if (data.TryGetProperty("configGroups", out var groups) && groups.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var g in groups.EnumerateArray()) allGroups.Add(g.GetString() ?? "");
+                    }
+                }
+            }
+            catch
+            {
+                // IPC 不可用时跳过
+            }
+        }
+        else if (targetMember != null)
+        {
+            allGroups = (targetMember.ConfigGroups ?? []).Where(g => !string.IsNullOrEmpty(g)).ToList();
+        }
+
+        if (allGroups.Count == 0)
+        {
+            MessageBox.Show(isSelf
+                ? "未获取到 BGI 配置组列表，请确认 BGI 已启动且配置组目录存在。"
+                : $"未获取到 {targetMember?.PlayerName ?? "对方"} 的配置组列表（可能对方尚未上报配置组）。",
+                "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        // 构建可排序的深色主题绑定弹窗
+        // 使用与主窗口一致的深色原神主题风格
+        var window = new System.Windows.Window
+        {
+            Title = "绑定联机锄地配置组",
+            Width = 420,
+            Height = 500,
+            WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
+            Owner = System.Windows.Application.Current?.MainWindow,
+            WindowStyle = System.Windows.WindowStyle.SingleBorderWindow,
+            ResizeMode = System.Windows.ResizeMode.NoResize,
+            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
+            Background = new System.Windows.Media.LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0.5, 0),
+                EndPoint = new System.Windows.Point(0.5, 1),
+                GradientStops =
+                {
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
+                }
+            }
+        };
+
+        // 颜色常量
+        var gold = System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D);
+        var goldDeep = System.Windows.Media.Color.FromRgb(0xC9, 0xA5, 0x3F);
+        var dim = System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0);
+        var white = System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA);
+        var cardBg = System.Windows.Media.Color.FromArgb(0xCC, 0x26, 0x23, 0x4E);
+        var cardEdge = System.Windows.Media.Color.FromArgb(0x47, 0xD4, 0xAF, 0x37);
+
+        var panel = new System.Windows.Controls.Grid { Margin = new System.Windows.Thickness(16) };
+        panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto }); // 标题
+        panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(10) }); // 间距
+        panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) }); // 已选列表
+        panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto }); // 间距
+        panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) }); // 可选列表
+        panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto }); // 按钮
+
+        // 标题
+        var titleLabel = new System.Windows.Controls.TextBlock
+        {
+            Text = "绑定联机锄地配置组",
+            FontSize = 15,
+            FontWeight = System.Windows.FontWeights.SemiBold,
+            Foreground = new System.Windows.Media.SolidColorBrush(gold),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            Margin = new System.Windows.Thickness(0, 0, 0, 0)
+        };
+        System.Windows.Controls.Grid.SetRow(titleLabel, 0);
+        panel.Children.Add(titleLabel);
+
+        // ========== 已选配置组列表（带排序） ==========
+        var selectedBorder = new System.Windows.Controls.Border
+        {
+            CornerRadius = new System.Windows.CornerRadius(8),
+            BorderThickness = new System.Windows.Thickness(1),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(cardEdge),
+            Background = new System.Windows.Media.SolidColorBrush(cardBg),
+            Padding = new System.Windows.Thickness(8)
+        };
+        System.Windows.Controls.Grid.SetRow(selectedBorder, 2);
+
+        var selectedInnerPanel = new System.Windows.Controls.StackPanel();
+
+        var selectedHeader = new System.Windows.Controls.TextBlock
+        {
+            Text = "已选配置组（拖动排序）",
+            FontSize = 11,
+            Foreground = new System.Windows.Media.SolidColorBrush(gold),
+            Margin = new System.Windows.Thickness(4, 2, 0, 6)
+        };
+        selectedInnerPanel.Children.Add(selectedHeader);
+
+        var selectedListBox = new System.Windows.Controls.ListBox
+        {
+            Height = 140,
+            BorderThickness = new System.Windows.Thickness(0),
+            Background = System.Windows.Media.Brushes.Transparent,
+            FontSize = 12
+        };
+        System.Windows.Controls.ScrollViewer.SetHorizontalScrollBarVisibility(selectedListBox, System.Windows.Controls.ScrollBarVisibility.Disabled);
+        // 当前已选配置组列表（可修改的副本）。改别人时用对方的已选配置组（来自服务端同步），改自己用本机绑定。
+        var currentSelected = new System.Collections.ObjectModel.ObservableCollection<string>(
+            isSelf ? (_config.OnlineHoeingGroupNames ?? []) : (targetMember?.OnlineHoeingGroupNames ?? []));
+
+        // 先声明可选列表框（供 RefreshAvailableList 使用）
+        var availableListBox = new System.Windows.Controls.ListBox
+        {
+            Height = 120,
+            BorderThickness = new System.Windows.Thickness(0),
+            Background = System.Windows.Media.Brushes.Transparent,
+            FontSize = 12
+        };
+        System.Windows.Controls.ScrollViewer.SetHorizontalScrollBarVisibility(availableListBox, System.Windows.Controls.ScrollBarVisibility.Disabled);
+
+        // 刷新可选列表（排除已选的）
+        System.Action RefreshAvailableList = null!;
+        RefreshAvailableList = () =>
+        {
+            availableListBox.Items.Clear();
+            foreach (var g in allGroups)
+            {
+                if (currentSelected.Contains(g)) continue;
+                var item = new System.Windows.Controls.ListBoxItem
+                {
+                    Content = g,
+                    Background = System.Windows.Media.Brushes.Transparent,
+                    BorderThickness = new System.Windows.Thickness(0),
+                    Foreground = new System.Windows.Media.SolidColorBrush(dim),
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                    Padding = new System.Windows.Thickness(8, 2, 8, 2)
+                };
+                availableListBox.Items.Add(item);
+            }
+        };
+
+        // 刷新已选列表
+        System.Action rebuildSelectedList = null!;
+        rebuildSelectedList = () =>
+        {
+            selectedListBox.Items.Clear();
+            for (int idx = 0; idx < currentSelected.Count; idx++)
+            {
+                var gName = currentSelected[idx];
+                var item = new System.Windows.Controls.ListBoxItem
+                {
+                    Background = System.Windows.Media.Brushes.Transparent,
+                    BorderThickness = new System.Windows.Thickness(0),
+                    Padding = new System.Windows.Thickness(4, 2, 4, 2),
+                    Focusable = false
+                };
+
+                var row = new System.Windows.Controls.Grid();
+                row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto }); // 序号
+                row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) }); // 名称
+                row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto }); // 上移
+                row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto }); // 下移
+                row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto }); // 删除
+
+                // 序号徽章（金色胶囊）
+                var badge = new System.Windows.Controls.Border
+                {
+                    CornerRadius = new System.Windows.CornerRadius(9),
+                    Background = new System.Windows.Media.SolidColorBrush(gold),
+                    Width = 22, Height = 22,
+                    VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                    Margin = new System.Windows.Thickness(0, 0, 6, 0)
+                };
+                var badgeText = new System.Windows.Controls.TextBlock
+                {
+                    Text = (idx + 1).ToString(),
+                    FontSize = 11,
+                    FontWeight = System.Windows.FontWeights.SemiBold,
+                    Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16)),
+                    HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                    VerticalAlignment = System.Windows.VerticalAlignment.Center
+                };
+                badge.Child = badgeText;
+                System.Windows.Controls.Grid.SetColumn(badge, 0);
+                row.Children.Add(badge);
+
+                // 配置组名称
+                var nameText = new System.Windows.Controls.TextBlock
+                {
+                    Text = gName,
+                    FontSize = 12,
+                    Foreground = new System.Windows.Media.SolidColorBrush(white),
+                    VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                    TextTrimming = System.Windows.TextTrimming.CharacterEllipsis,
+                    Margin = new System.Windows.Thickness(0, 0, 6, 0)
+                };
+                System.Windows.Controls.Grid.SetColumn(nameText, 1);
+                row.Children.Add(nameText);
+
+                // 上移按钮
+                var upBtn = new System.Windows.Controls.Button
+                {
+                    Content = "↑",
+                    Width = 24, Height = 24,
+                    FontSize = 12,
+                    FontWeight = System.Windows.FontWeights.Bold,
+                    Foreground = new System.Windows.Media.SolidColorBrush(dim),
+                    Background = System.Windows.Media.Brushes.Transparent,
+                    BorderThickness = new System.Windows.Thickness(0),
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                    ToolTip = "上移",
+                    IsEnabled = idx > 0,
+                    Margin = new System.Windows.Thickness(0, 0, 2, 0)
+                };
+                var capturedIdx = idx;
+                var capturedName = gName;
+                upBtn.Click += (_, _) =>
+                {
+                    var ci = currentSelected.IndexOf(capturedName);
+                    if (ci > 0)
+                    {
+                        currentSelected.Move(ci, ci - 1);
+                        rebuildSelectedList();
+                        // 同步从可选列表取消选中该配置组
+                        RefreshAvailableList();
+                    }
+                };
+                System.Windows.Controls.Grid.SetColumn(upBtn, 2);
+                row.Children.Add(upBtn);
+
+                // 下移按钮
+                var downBtn = new System.Windows.Controls.Button
+                {
+                    Content = "↓",
+                    Width = 24, Height = 24,
+                    FontSize = 12,
+                    FontWeight = System.Windows.FontWeights.Bold,
+                    Foreground = new System.Windows.Media.SolidColorBrush(dim),
+                    Background = System.Windows.Media.Brushes.Transparent,
+                    BorderThickness = new System.Windows.Thickness(0),
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                    ToolTip = "下移",
+                    IsEnabled = idx < currentSelected.Count - 1,
+                    Margin = new System.Windows.Thickness(0, 0, 2, 0)
+                };
+                downBtn.Click += (_, _) =>
+                {
+                    var ci = currentSelected.IndexOf(capturedName);
+                    if (ci < currentSelected.Count - 1)
+                    {
+                        currentSelected.Move(ci, ci + 1);
+                        rebuildSelectedList();
+                        RefreshAvailableList();
+                    }
+                };
+                System.Windows.Controls.Grid.SetColumn(downBtn, 3);
+                row.Children.Add(downBtn);
+
+                // 删除按钮
+                var delBtn = new System.Windows.Controls.Button
+                {
+                    Content = "✕",
+                    Width = 24, Height = 24,
+                    FontSize = 12,
+                    Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0x8A, 0x6F)),
+                    Background = System.Windows.Media.Brushes.Transparent,
+                    BorderThickness = new System.Windows.Thickness(0),
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                    ToolTip = "移除"
+                };
+                delBtn.Click += (_, _) =>
+                {
+                    currentSelected.Remove(capturedName);
+                    rebuildSelectedList();
+                    RefreshAvailableList();
+                };
+                System.Windows.Controls.Grid.SetColumn(delBtn, 4);
+                row.Children.Add(delBtn);
+
+                item.Content = row;
+                selectedListBox.Items.Add(item);
+            }
+        };
+
+        rebuildSelectedList();
+
+        selectedInnerPanel.Children.Add(selectedListBox);
+        selectedBorder.Child = selectedInnerPanel;
+        panel.Children.Add(selectedBorder);
+
+        // ========== 可选配置组列表 ==========
+        var availableBorder = new System.Windows.Controls.Border
+        {
+            CornerRadius = new System.Windows.CornerRadius(8),
+            BorderThickness = new System.Windows.Thickness(1),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
+            Padding = new System.Windows.Thickness(8)
+        };
+        System.Windows.Controls.Grid.SetRow(availableBorder, 4);
+
+        var availableInnerPanel = new System.Windows.Controls.StackPanel();
+
+        var availableHeader = new System.Windows.Controls.TextBlock
+        {
+            Text = "可选配置组（点击添加）",
+            FontSize = 11,
+            Foreground = new System.Windows.Media.SolidColorBrush(dim),
+            Margin = new System.Windows.Thickness(4, 2, 0, 6)
+        };
+        availableInnerPanel.Children.Add(availableHeader);
+
+        // 保留事件绑定到已声明的 availableListBox
+        // 点击可选列表项，添加到已选
+        availableListBox.PreviewMouseDown += (sender, e) =>
+        {
+            var item = (e.OriginalSource as System.Windows.FrameworkElement)?.DataContext as System.Windows.Controls.ListBoxItem;
+            if (item == null)
+            {
+                // 尝试从点击位置获取 ListBoxItem
+                var dep = e.OriginalSource as System.Windows.DependencyObject;
+                while (dep != null && !(dep is System.Windows.Controls.ListBoxItem))
+                    dep = System.Windows.Media.VisualTreeHelper.GetParent(dep);
+                if (dep is System.Windows.Controls.ListBoxItem li)
+                    item = li;
+            }
+            // 通过命中测试找 ListBoxItem
+            if (item == null)
+            {
+                var pos = e.GetPosition(availableListBox);
+                var hit = availableListBox.InputHitTest(pos) as System.Windows.DependencyObject;
+                while (hit != null && !(hit is System.Windows.Controls.ListBoxItem))
+                    hit = System.Windows.Media.VisualTreeHelper.GetParent(hit);
+                if (hit is System.Windows.Controls.ListBoxItem li2)
+                    item = li2;
+            }
+            if (item != null && item.Content is string gName && !string.IsNullOrEmpty(gName))
+            {
+                currentSelected.Add(gName);
+                rebuildSelectedList();
+                RefreshAvailableList();
+            }
+        };
+
+        RefreshAvailableList();
+
+        availableInnerPanel.Children.Add(availableListBox);
+        availableBorder.Child = availableInnerPanel;
+        panel.Children.Add(availableBorder);
+
+        // ========== 按钮栏 ==========
+        var btnPanel = new System.Windows.Controls.StackPanel
+        {
+            Orientation = System.Windows.Controls.Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new System.Windows.Thickness(0, 10, 0, 0)
+        };
+        System.Windows.Controls.Grid.SetRow(btnPanel, 5);
+
+        var cancelBtn = new System.Windows.Controls.Button
+        {
+            Content = "取消",
+            Width = 80,
+            Height = 30,
+            Margin = new System.Windows.Thickness(0, 0, 8, 0),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)),
+            BorderThickness = new System.Windows.Thickness(1),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0))
+        };
+        cancelBtn.Click += (_, _) => window.Close();
+
+        // 鎏金保存按钮
+        var saveBtn = new System.Windows.Controls.Button
+        {
+            Content = "保存",
+            Width = 80,
+            Height = 30,
+            Cursor = System.Windows.Input.Cursors.Hand,
+            FontWeight = System.Windows.FontWeights.SemiBold,
+            BorderThickness = new System.Windows.Thickness(0)
+        };
+        // 鎏金渐变背景
+        saveBtn.Background = new System.Windows.Media.LinearGradientBrush
+        {
+            StartPoint = new System.Windows.Point(0, 0),
+            EndPoint = new System.Windows.Point(1, 1),
+            GradientStops =
+            {
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xEF, 0xD6, 0x8A), 0),
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0xAF, 0x37), 1)
+            }
+        };
+        saveBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16));
+        saveBtn.Click += async (_, _) =>
+        {
+            var selected = currentSelected.ToList();
+
+            if (selected.Count > 0)
+            {
+                if (isSelf)
+                {
+                    // 改自己：直接保存到本机配置
+                    _config.OnlineHoeingGroupNames = selected;
+                    _config.OnlineHoeingGroupIndex = 0;
+                    _configManager?.Save(_config);
+                    AddLog($"已绑定联机锄地配置组（按顺序执行）: {string.Join(" → ", selected)}");
+                    // 立即上报给服务端，让所有人可见
+                    _ = ReportStatusAsync();
+                }
+                else if (targetMember != null && _signalRClient != null)
+                {
+                    // 改别人：通过 SignalR 下发命令，让对方保存到本机配置
+                    var cmd = new RemoteCommand
+                    {
+                        Cmd = "bind_hoeing_group",
+                        Sender = _config?.PlayerName ?? "",
+                        SenderUid = _config?.PlayerUid ?? "",
+                        Target = [targetMember.PlayerUid],
+                        CommandId = "local_" + DateTime.Now.Ticks,
+                        Params = new Dictionary<string, object>
+                        {
+                            { "groupNames", selected },
+                            { "groupIndex", 0 }
+                        }
+                    };
+                    AddLog($"向 {targetMember.PlayerName} 下发绑定联机锄地配置组（按顺序执行）: {string.Join(" → ", selected)}");
+                    await _signalRClient.SendRemoteCommandAsync(cmd);
+                }
+            }
+            window.Close();
+        };
+
+        btnPanel.Children.Add(cancelBtn);
+        btnPanel.Children.Add(saveBtn);
+        panel.Children.Add(btnPanel);
+        window.Content = panel;
+        window.ShowDialog();
     }
 
     /// <summary>完全退出助手软件（先弹确认框）。</summary>
@@ -489,10 +1577,16 @@ public class MainViewModel : INotifyPropertyChanged
     /// <summary>把 SignalR 的成员/命令/入房被拒事件接到 MainViewModel（在重建连接时复用同一组订阅逻辑）。</summary>
     private void WireSignalRClient(SignalRClient client)
     {
+        // 绑定日志回调（探针日志输出到助手界面）
+        client.OnLog = msg => Application.Current.Dispatcher.Invoke(() => AddLog(msg));
+
         client.OnPlayersUpdated += players =>
         {
             Application.Current.Dispatcher.Invoke(() =>
             {
+                // [探针] 确认服务端广播回来的 OnlineReady 值
+                var self = players.FirstOrDefault(p => p.PlayerUid == _config?.PlayerUid);
+                if (self != null) AddLog($"[探针] 收到广播 self OnlineReady={self.OnlineReady}, OnlineMode={self.OnlineMode}");
                 var byUid = new Dictionary<string, ControlRoomPlayer>();
                 foreach (var p in players) byUid[p.PlayerUid] = p;
                 for (int i = Members.Count - 1; i >= 0; i--)
@@ -511,6 +1605,11 @@ public class MainViewModel : INotifyPropertyChanged
                         m.Hotkeys = np.Hotkeys;
                         m.ConfigGroupTasksWithStatus = np.ConfigGroupTasksWithStatus;
                         m.OneClickTasksWithStatus = np.OneClickTasksWithStatus;
+                        m.OnlineReady = np.OnlineReady;
+                        m.OnlineMode = np.OnlineMode;
+                        m.ScheduledOnlineTime = np.ScheduledOnlineTime;
+                        m.OnlineHoeingGroupNames = np.OnlineHoeingGroupNames ?? [];
+                        m.OnlineHistory = np.OnlineHistory;
                         byUid.Remove(m.PlayerUid);
                     }
                     else
@@ -535,6 +1634,10 @@ public class MainViewModel : INotifyPropertyChanged
                         Hotkeys = np.Hotkeys,
                         ConfigGroupTasksWithStatus = np.ConfigGroupTasksWithStatus,
                         OneClickTasksWithStatus = np.OneClickTasksWithStatus,
+                        OnlineReady = np.OnlineReady,
+                        OnlineMode = np.OnlineMode,
+                        ScheduledOnlineTime = np.ScheduledOnlineTime,
+                        OnlineHistory = np.OnlineHistory,
                         AvatarPath = $"pack://application:,,,/Assets/Images/{file}.png",
                         AvatarRing = ring,
                         IsSelected = true
@@ -543,12 +1646,214 @@ public class MainViewModel : INotifyPropertyChanged
             });
         };
 
+        client.OnAllReadyConfirmed += async (int generation) =>
+        {
+            // 幂等保护：同一 generation 只处理一次（防止 async void 并发或重复广播）
+            if (generation <= _lastProcessedAllReadyGeneration)
+            {
+                AddLog("[探针] OnAllReadyConfirmed 忽略 (generation=" + generation + " <= " + _lastProcessedAllReadyGeneration + ")");
+                return;
+            }
+            _lastProcessedAllReadyGeneration = generation;
+            AddLog("[探针] OnAllReadyConfirmed 触发, generation=" + generation + "，开始执行中断流程");
+
+            // 获取绑定的联机配置组列表
+            var groupNames = _config?.OnlineHoeingGroupNames ?? [];
+            var groupIndex = _config?.OnlineHoeingGroupIndex ?? 0;
+            var groupName = (groupIndex >= 0 && groupIndex < groupNames.Count) ? groupNames[groupIndex] : null;
+            AddLog($"[探针] 绑定配置组: groupNames=[{string.Join(",", groupNames)}], groupIndex={groupIndex}, groupName={groupName ?? "null"}");
+
+            if (string.IsNullOrEmpty(groupName))
+            {
+                AddLog("未绑定联机锄地配置组，无法启动联机锄地");
+                return;
+            }
+
+            // 检查 CommandExecutor 是否可用（依赖 BgiPath 配置）
+            if (_commandExecutor == null)
+            {
+                AddLog("[探针] CommandExecutor 不可用（BgiPath 未配置），无法通过 IPC 启动 BGI 配置组");
+                // 回退：直接启动 BGI（如果 BgiPath 已配置）
+                if (_processMonitor != null)
+                {
+                    AddLog("[探针] 尝试直接启动 BGI 带配置组参数...");
+                    _processMonitor.RestartBgi($"--startGroups \"{groupName}\"");
+                }
+                else
+                {
+                    AddLog("[探针] _processMonitor 也为 null，无法启动 BGI。请在设置页配置 BGI 路径");
+                }
+                _isOnlineReady = false;
+                _onlineMode = "none";
+                _ = ReportStatusAsync();
+                return;
+            }
+
+            // 先 task.suspend 中断当前任务
+            AddLog($"[探针] 开始发 task.suspend...");
+            var suspendResult = await _commandExecutor.ExecuteSuspendAsync(groupName);
+            AddLog($"[探针] task.suspend 结果: status={suspendResult.Status}, message={suspendResult.Message}");
+            if (suspendResult.Status != "success")
+            {
+                // task.suspend 失败，杀进程+重启带命令行参数，只启动第一个配置组
+                AddLog("task.suspend 失败，尝试杀进程重启...");
+                if (_processMonitor != null)
+                {
+                    _processMonitor.KillBgi();
+                    await Task.Delay(2000);
+                    _processMonitor.RestartBgi($"--startGroups \"{groupName}\"");
+                }
+                _isOnlineReady = false;
+                _onlineMode = "none";
+                AddLog("[探针] task.suspend 失败已杀进程，重置上线状态");
+                _ = ReportStatusAsync();
+                return;
+            }
+
+            // 依次执行所有绑定的配置组
+            // 使用后台任务，避免阻塞 OnAllReadyConfirmed 的 async void 生命周期
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    for (int i = 0; i < groupNames.Count; i++)
+                    {
+                        // 检查取消标志：用户手动停止后，剩余配置组不再执行
+                        if (_isAllReadySequenceCancelled)
+                        {
+                            AddLog("[探针] 依次执行序列已取消，停止剩余配置组");
+                            _isAllReadySequenceCancelled = false;
+                            break;
+                        }
+                        var currentGroup = groupNames[i];
+                        AddLog($"[探针] 依次执行: 第 {i + 1}/{groupNames.Count} 个配置组 \"{currentGroup}\"");
+                        var startCmd = new RemoteCommand
+                        {
+                            Cmd = "start_group",
+                            Params = new Dictionary<string, object> { { "groupName", currentGroup }, { "startFromIndex", 0 }, { "generation", generation } }
+                        };
+                        var startResult = await _commandExecutor.ExecuteAsync(startCmd);
+                        AddLog($"[探针] task.start \"{currentGroup}\" 结果: status={startResult.Status}, message={startResult.Message}");
+                        // cancelled = 配置组执行中被取消（如 F11 停止），应停止整个序列，不再执行后续配置组
+                        if (startResult.Status == "cancelled")
+                        {
+                            AddLog($"[探针] 配置组 \"{currentGroup}\" 执行中被取消，停止剩余配置组");
+                            _isAllReadySequenceCancelled = true;
+                            break;
+                        }
+                        if (startResult.Status != "success")
+                        {
+                            AddLog($"[探针] 启动配置组 \"{currentGroup}\" 失败，跳过");
+                            continue;
+                        }
+                        // task.start 在 BGI 端是同步等待：HandlerTaskStart 里 await Dispatcher.Invoke(async () =>
+                        // await scriptService.RunMulti(...))，即 task.start 返回 success 时该配置组已执行完毕。
+                        // 不能用 task.status 的 running 判断（RUNNER CONTEXT 留 taskName 会污染 running，恒 true 卡死）。
+                        // 所以这里不轮询，直接进入下一个配置组。F11 取消由 task.start 返回 cancelled 状态处理。
+                        AddLog($"[探针] 配置组 \"{currentGroup}\" 执行完毕（task.start 同步等待后返回）");
+                        if (_isAllReadySequenceCancelled)
+                        {
+                            AddLog("[探针] 检测到取消标志，停止剩余配置组");
+                            break;
+                        }
+                    }
+                    // 所有配置组执行完毕，上报状态
+                    _isOnlineReady = false;
+                    _onlineMode = "none";
+                    AddLog("[探针] 所有配置组已执行完毕，重置上线状态");
+                    _ = ReportStatusAsync();
+                }
+                catch (Exception ex)
+                {
+                    AddLog($"[探针] 依次执行配置组异常: {ex.Message}");
+                    _isOnlineReady = false;
+                    _onlineMode = "none";
+                    _ = ReportStatusAsync();
+                }
+            });
+        };
+
         client.OnRemoteCommand += async cmd =>
         {
             if (cmd.Cmd == "ack")
             {
+                // 显示 ack 确认日志（不执行、不回 ack，阻断循环）
+                var msg = cmd.Params?.GetValueOrDefault("message")?.ToString() ?? "";
+                AddLog($"确认: {cmd.Sender} - {msg}");
                 return;
             }
+
+            // bind_hoeing_group 命令：直接在助手本地处理，不走 BGI IPC
+            if (cmd.Cmd == "bind_hoeing_group")
+            {
+                var groupNames = cmd.Params?.GetValueOrDefault("groupNames");
+                if (groupNames is System.Text.Json.JsonElement je && je.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    var names = je.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => !string.IsNullOrEmpty(s)).ToList();
+                    if (names.Count > 0 && _config != null)
+                    {
+                        _config.OnlineHoeingGroupNames = names;
+                        _config.OnlineHoeingGroupIndex = 0;
+                        _configManager?.Save(_config);
+                        AddLog($"收到绑定联机锄地配置组: {string.Join(", ", names)}（来自 {cmd.Sender}）");
+                        await ReportStatusAsync();
+                        await SendAckAsync(cmd, "success", $"已绑定: {string.Join(", ", names)}");
+                    }
+                    else
+                    {
+                        await SendAckAsync(cmd, "failed", "配置组列表为空或配置不可用");
+                    }
+                }
+                else
+                {
+                    await SendAckAsync(cmd, "failed", "解析配置组列表失败");
+                }
+                return;
+            }
+
+            // set_scheduled_online_time 命令：接收端保存定时上线时间到本地并重启定时器
+            if (cmd.Cmd == "set_scheduled_online_time")
+            {
+                // 注意：SignalR 反序列化 Dictionary<string,object> 的 value 是 JsonElement 而非 string，
+                // 必须兼容 JsonElement / string / null，否则 as string 得到 null → 被误判为"清除"。
+                object? tv = cmd.Params?.GetValueOrDefault("scheduledOnlineTime");
+                var timeStr = tv switch
+                {
+                    null => "",
+                    string s => s,
+                    System.Text.Json.JsonElement je when je.ValueKind == System.Text.Json.JsonValueKind.String => je.GetString() ?? "",
+                    _ => tv.ToString() ?? ""
+                };
+                if (_config != null)
+                {
+                    // 空串 = 清除定时上线；非空 = 设定
+                    ApplyScheduledOnlineTime(timeStr);
+                    AddLog($"收到远程定时上线时间:{(string.IsNullOrEmpty(timeStr) ? "（已清除）" : $" {timeStr}")}（来自 {cmd.Sender}）");
+                    await SendAckAsync(cmd, "success", string.IsNullOrEmpty(timeStr) ? "已清除定时上线" : $"已设定定时上线: {timeStr}");
+                }
+                else
+                {
+                    await SendAckAsync(cmd, "failed", "配置不可用");
+                }
+                return;
+            }
+
+            // clear_online 命令：清除该成员的已上线状态（定时触发或命令触发产生的；不清除定时闹钟）
+            if (cmd.Cmd == "clear_online")
+            {
+                if (_config != null)
+                {
+                    ClearLocalOnline();
+                    AddLog($"收到远程清除上线（来自 {cmd.Sender}）");
+                    await SendAckAsync(cmd, "success", "已清除上线");
+                }
+                else
+                {
+                    await SendAckAsync(cmd, "failed", "配置不可用");
+                }
+                return;
+            }
+
             AddLog($"收到远程命令: {cmd.Cmd} 来自 {cmd.Sender}");
             if (_commandExecutor != null)
             {
@@ -593,40 +1898,65 @@ public class MainViewModel : INotifyPropertyChanged
             Width = 440, Height = 400,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = Application.Current.MainWindow,
-            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xf5, 0xf5, 0xf7)),
             WindowStyle = WindowStyle.SingleBorderWindow,
-            ResizeMode = ResizeMode.NoResize
+            ResizeMode = ResizeMode.NoResize,
+            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
+            Background = new System.Windows.Media.LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0.5, 0),
+                EndPoint = new System.Windows.Point(0.5, 1),
+                GradientStops =
+                {
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
+                }
+            }
         };
         var stack = new StackPanel { Margin = new Thickness(20) };
         stack.Children.Add(new TextBlock
         {
             Text = "选择要执行的快捷键：",
             FontSize = 14, FontWeight = FontWeights.SemiBold,
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
             Margin = new Thickness(0, 0, 0, 10)
         });
         var listBox = new ListBox
         {
             Height = 250,
             ItemsSource = names,
-            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xd1, 0xd1, 0xd6)),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0xD4, 0xAF, 0x37)),
             BorderThickness = new Thickness(1),
-            Background = System.Windows.Media.Brushes.White,
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xCC, 0x26, 0x23, 0x4E)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA)),
             FontSize = 13,
-            ItemContainerStyle = CreateListBoxItemStyle()
+            ItemContainerStyle = CreateDarkListBoxItemStyle()
         };
         listBox.SelectedIndex = 0;
         stack.Children.Add(listBox);
 
         var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
         var cancelBtn = new Button { Content = "取消", Width = 90, Height = 32, Margin = new Thickness(0, 0, 10, 0),
-            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xe8, 0xe8, 0xed)),
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)),
-            BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)),
+            Cursor = System.Windows.Input.Cursors.Hand };
+        // 鎏金渐变执行按钮
         var okBtn = new Button { Content = "执行", Width = 90, Height = 32,
-            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x0a, 0x84, 0xff)),
-            Foreground = System.Windows.Media.Brushes.White, BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+            FontWeight = FontWeights.SemiBold,
+            BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+        okBtn.Background = new System.Windows.Media.LinearGradientBrush
+        {
+            StartPoint = new System.Windows.Point(0, 0),
+            EndPoint = new System.Windows.Point(1, 1),
+            GradientStops =
+            {
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xEF, 0xD6, 0x8A), 0),
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0xAF, 0x37), 1)
+            }
+        };
+        okBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16));
         btnPanel.Children.Add(cancelBtn);
         btnPanel.Children.Add(okBtn);
         stack.Children.Add(btnPanel);
@@ -829,7 +2159,7 @@ public class MainViewModel : INotifyPropertyChanged
             RoomCode = AssistConfigManager.GenerateControlRoomCode(_config.TeamUids);
             AddLog("房间配置已保存并生效");
         }
-    }
+        }
 
     /// <summary>当前配置（供 XAML 绑定启动策略开关/下拉选择）。</summary>
     public AssistConfig? Config => _config;
@@ -973,20 +2303,53 @@ public class MainViewModel : INotifyPropertyChanged
             Width = 460, Height = 420,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = Application.Current.MainWindow,
-            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xf5, 0xf5, 0xf7)),
+            WindowStyle = WindowStyle.SingleBorderWindow,
+            ResizeMode = ResizeMode.NoResize,
+            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
+            Background = new System.Windows.Media.LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0.5, 0),
+                EndPoint = new System.Windows.Point(0.5, 1),
+                GradientStops =
+                {
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
+                }
+            }
         };
         var panel = new StackPanel { Margin = new Thickness(16) };
         panel.Children.Add(new TextBlock
         {
             Text = $"为「{key}」选择要执行的配置组或一条龙：",
             FontSize = 14,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
             Margin = new Thickness(0, 0, 0, 12),
             TextWrapping = TextWrapping.Wrap
         });
-        var list = new ListBox { ItemsSource = names, Height = 260, FontSize = 13 };
+        var list = new ListBox
+        {
+            ItemsSource = names, Height = 260, FontSize = 13,
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0xD4, 0xAF, 0x37)),
+            BorderThickness = new Thickness(1),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xCC, 0x26, 0x23, 0x4E)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA)),
+            ItemContainerStyle = CreateDarkListBoxItemStyle()
+        };
         panel.Children.Add(list);
-        var okBtn = new Button { Content = "绑定", Width = 120, Margin = new Thickness(0, 12, 0, 0) };
-        var cancelBtn = new Button { Content = "取消", Width = 120, Margin = new Thickness(8, 12, 0, 0) };
+        var bindBtnBg = new System.Windows.Media.LinearGradientBrush
+        {
+            StartPoint = new System.Windows.Point(0, 0),
+            EndPoint = new System.Windows.Point(1, 1),
+            GradientStops =
+            {
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xEF, 0xD6, 0x8A), 0),
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0xAF, 0x37), 1)
+            }
+        };
+        var okBtn = new Button { Content = "绑定", Width = 120, Margin = new Thickness(0, 12, 8, 0), FontWeight = FontWeights.SemiBold, Background = bindBtnBg, Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16)), BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+        var cancelBtn = new Button { Content = "取消", Width = 120, Margin = new Thickness(8, 12, 0, 0), Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)), Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)), BorderThickness = new Thickness(1), BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)), Cursor = System.Windows.Input.Cursors.Hand };
         var btnRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         btnRow.Children.Add(okBtn);
         btnRow.Children.Add(cancelBtn);
@@ -1063,20 +2426,44 @@ public class MainViewModel : INotifyPropertyChanged
             Height = 190,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = Application.Current.MainWindow,
-            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xf5, 0xf5, 0xf7)),
-            ResizeMode = ResizeMode.NoResize
+            WindowStyle = WindowStyle.SingleBorderWindow,
+            ResizeMode = ResizeMode.NoResize,
+            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
+            Background = new System.Windows.Media.LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0.5, 0),
+                EndPoint = new System.Windows.Point(0.5, 1),
+                GradientStops =
+                {
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
+                }
+            }
         };
         var panel = new StackPanel { Margin = new Thickness(20) };
         panel.Children.Add(new TextBlock
         {
             Text = $"确认对 {onlineCount} 个在线成员下发「{key}」→ 本机{(isOneClick ? "一条龙" : "配置组")}「{value}」？",
             FontSize = 14,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
             TextWrapping = TextWrapping.Wrap
         });
         var btnRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 24, 0, 0) };
-        var cancelBtn = new Button { Content = "取消", Width = 90, Margin = new Thickness(0, 0, 8, 0) };
-        var modifyBtn = new Button { Content = "修改", Width = 90, Margin = new Thickness(0, 0, 8, 0) };
-        var confirmBtn = new Button { Content = "确认", Width = 90 };
+        var confirmBtnBg = new System.Windows.Media.LinearGradientBrush
+        {
+            StartPoint = new System.Windows.Point(0, 0),
+            EndPoint = new System.Windows.Point(1, 1),
+            GradientStops =
+            {
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xEF, 0xD6, 0x8A), 0),
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0xAF, 0x37), 1)
+            }
+        };
+        var cancelBtn = new Button { Content = "取消", Width = 90, Margin = new Thickness(0, 0, 8, 0), Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)), Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)), BorderThickness = new Thickness(1), BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)), Cursor = System.Windows.Input.Cursors.Hand };
+        var modifyBtn = new Button { Content = "修改", Width = 90, Margin = new Thickness(0, 0, 8, 0), Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)), Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)), BorderThickness = new Thickness(1), BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)), Cursor = System.Windows.Input.Cursors.Hand };
+        var confirmBtn = new Button { Content = "确认", Width = 90, FontWeight = FontWeights.SemiBold, Background = confirmBtnBg, Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16)), BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
         btnRow.Children.Add(cancelBtn);
         btnRow.Children.Add(modifyBtn);
         btnRow.Children.Add(confirmBtn);
@@ -1130,65 +2517,84 @@ public class MainViewModel : INotifyPropertyChanged
         var dialog = new Window
         {
             Title = $"选择{type}",
-            Width = 420, Height = 240,
+            Width = 420, Height = 360,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = Application.Current.MainWindow,
-            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xf5, 0xf5, 0xf7)),
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)),
             WindowStyle = WindowStyle.SingleBorderWindow,
-            ResizeMode = ResizeMode.NoResize
+            ResizeMode = ResizeMode.NoResize,
+            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
+            Background = new System.Windows.Media.LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0.5, 0),
+                EndPoint = new System.Windows.Point(0.5, 1),
+                GradientStops =
+                {
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
+                }
+            }
         };
-        var stack = new StackPanel { Margin = new Thickness(18) };
-        stack.Children.Add(new TextBlock 
-        { 
-            Text = $"请选择{type}配置:", 
-            FontSize = 14,
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)),
-            Margin = new Thickness(0, 0, 0, 12)
-        });
+        var panel = new Grid { Margin = new Thickness(18) };
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 标题
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(10) }); // 间距
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 列表（star，可滚动）
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(14) }); // 间距
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 按钮
 
-        var combo = new ComboBox
+        var titleLabel = new TextBlock
+        {
+            Text = $"请选择{type}配置:",
+            FontSize = 14,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D))
+        };
+        Grid.SetRow(titleLabel, 0);
+        panel.Children.Add(titleLabel);
+
+        var listBox = new ListBox
         {
             ItemsSource = configs,
             SelectedIndex = 0,
-            Background = System.Windows.Media.Brushes.White,
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)),
-            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xd1, 0xd1, 0xd6)),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0xD4, 0xAF, 0x37)),
             BorderThickness = new Thickness(1),
-            Height = 34,
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xCC, 0x26, 0x23, 0x4E)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA)),
             FontSize = 13,
-            Margin = new Thickness(0, 0, 0, 14)
+            MinHeight = 200,
+            ItemContainerStyle = CreateDarkListBoxItemStyle()
         };
-        // 下拉列表项样式：白色背景 + 深色文字，悬浮浅蓝，选中蓝底
-        var itemContainerStyle = new Style(typeof(ComboBoxItem));
-        itemContainerStyle.Setters.Add(new Setter(Control.BackgroundProperty, System.Windows.Media.Brushes.White));
-        itemContainerStyle.Setters.Add(new Setter(Control.ForegroundProperty, new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e))));
-        itemContainerStyle.Setters.Add(new Setter(FrameworkElement.MinHeightProperty, 30.0));
-        var hoverTrigger = new Trigger { Property = ComboBoxItem.IsMouseOverProperty, Value = true };
-        hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xe8, 0xf1, 0xff))));
-        itemContainerStyle.Triggers.Add(hoverTrigger);
-        var selTrigger = new Trigger { Property = ComboBoxItem.IsSelectedProperty, Value = true };
-        selTrigger.Setters.Add(new Setter(Control.BackgroundProperty, new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xd6, 0xe8, 0xff))));
-        selTrigger.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
-        itemContainerStyle.Triggers.Add(selTrigger);
-        combo.ItemContainerStyle = itemContainerStyle;
-        stack.Children.Add(combo);
+        Grid.SetRow(listBox, 2);
+        panel.Children.Add(listBox);
 
         var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var okBtn = new Button { Content = "确定", Width = 80, Height = 32, Margin = new Thickness(0, 0, 10, 0),
-            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x0a, 0x84, 0xff)),
-            Foreground = System.Windows.Media.Brushes.White, BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+            FontWeight = FontWeights.SemiBold, BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+        okBtn.Background = new System.Windows.Media.LinearGradientBrush
+        {
+            StartPoint = new System.Windows.Point(0, 0),
+            EndPoint = new System.Windows.Point(1, 1),
+            GradientStops =
+            {
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xEF, 0xD6, 0x8A), 0),
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0xAF, 0x37), 1)
+            }
+        };
+        okBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16));
         var cancelBtn = new Button { Content = "取消", Width = 80, Height = 32,
-            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xe9, 0xe9, 0xeb)),
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)),
-            BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)),
+            Cursor = System.Windows.Input.Cursors.Hand };
         btnPanel.Children.Add(okBtn);
         btnPanel.Children.Add(cancelBtn);
-        stack.Children.Add(btnPanel);
-        dialog.Content = stack;
+        Grid.SetRow(btnPanel, 4);
+        panel.Children.Add(btnPanel);
+        dialog.Content = panel;
 
         string? result = null;
-        okBtn.Click += (_, _) => { result = combo.SelectedItem?.ToString(); dialog.DialogResult = true; };
+        okBtn.Click += (_, _) => { result = listBox.SelectedItem?.ToString(); dialog.DialogResult = true; };
         cancelBtn.Click += (_, _) => dialog.DialogResult = false;
         return dialog.ShowDialog() == true ? result : null;
     }
@@ -1209,10 +2615,20 @@ public class MainViewModel : INotifyPropertyChanged
             Width = 460, Height = 520,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = Application.Current.MainWindow,
-            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xf5, 0xf5, 0xf7)),
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)),
             WindowStyle = WindowStyle.SingleBorderWindow,
-            ResizeMode = ResizeMode.NoResize
+            ResizeMode = ResizeMode.NoResize,
+            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
+            Background = new System.Windows.Media.LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0.5, 0),
+                EndPoint = new System.Windows.Point(0.5, 1),
+                GradientStops =
+                {
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
+                }
+            }
         };
 
         var stack = new StackPanel { Margin = new Thickness(20) };
@@ -1222,14 +2638,14 @@ public class MainViewModel : INotifyPropertyChanged
         {
             Text = $"「{configName}」共 {taskList.Count} 个任务",
             FontSize = 15, FontWeight = FontWeights.SemiBold,
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
             Margin = new Thickness(0, 0, 0, 4), TextWrapping = TextWrapping.Wrap
         });
         stack.Children.Add(new TextBlock
         {
             Text = "选择从哪个任务开始（勾选切换启用状态）",
             FontSize = 12,
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x8a, 0x8a, 0x8e)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
             Margin = new Thickness(0, 0, 0, 12)
         });
 
@@ -1237,12 +2653,12 @@ public class MainViewModel : INotifyPropertyChanged
         var listBox = new ListBox
         {
             Height = 300,
-            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xd1, 0xd1, 0xd6)),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0xD4, 0xAF, 0x37)),
             BorderThickness = new Thickness(1),
-            Background = System.Windows.Media.Brushes.White,
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xCC, 0x26, 0x23, 0x4E)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA)),
             FontSize = 13,
-            ItemContainerStyle = CreateListBoxItemStyle()
+            ItemContainerStyle = CreateDarkListBoxItemStyle()
         };
         for (var i = 0; i < options.Count; i++)
         {
@@ -1295,12 +2711,24 @@ public class MainViewModel : INotifyPropertyChanged
         // 按钮区
         var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
         var cancelBtn = new Button { Content = "取消", Width = 90, Height = 32, Margin = new Thickness(0, 0, 10, 0),
-            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xe8, 0xe8, 0xed)),
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)),
-            BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)),
+            Cursor = System.Windows.Input.Cursors.Hand };
         var okBtn = new Button { Content = "确定", Width = 90, Height = 32,
-            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x0a, 0x84, 0xff)),
-            Foreground = System.Windows.Media.Brushes.White, BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+            FontWeight = FontWeights.SemiBold, BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+        okBtn.Background = new System.Windows.Media.LinearGradientBrush
+        {
+            StartPoint = new System.Windows.Point(0, 0),
+            EndPoint = new System.Windows.Point(1, 1),
+            GradientStops =
+            {
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xEF, 0xD6, 0x8A), 0),
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0xAF, 0x37), 1)
+            }
+        };
+        okBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16));
         btnPanel.Children.Add(cancelBtn);
         btnPanel.Children.Add(okBtn);
         stack.Children.Add(btnPanel);
@@ -1370,38 +2798,63 @@ public class MainViewModel : INotifyPropertyChanged
         var dialog = new Window
         {
             Title = "从此处开始执行",
-            Width = 400, Height = 200,
+            Width = 400, Height = 210,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = Application.Current.MainWindow,
-            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xf5, 0xf5, 0xf7)),
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)),
             WindowStyle = WindowStyle.SingleBorderWindow,
-            ResizeMode = ResizeMode.NoResize
+            ResizeMode = ResizeMode.NoResize,
+            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
+            Background = new System.Windows.Media.LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0.5, 0),
+                EndPoint = new System.Windows.Point(0.5, 1),
+                GradientStops =
+                {
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
+                }
+            }
         };
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new TextBlock
         {
             Text = $"请选择从第几个任务开始执行（{configName}）:",
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)),
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
             Margin = new Thickness(0, 0, 0, 12), TextWrapping = TextWrapping.Wrap
         });
 
         var numBox = new TextBox { Text = "0", Height = 36,
-            Background = System.Windows.Media.Brushes.White,
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xCC, 0x26, 0x23, 0x4E)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA)),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0xD4, 0xAF, 0x37)),
+            BorderThickness = new Thickness(1),
             Margin = new Thickness(0, 0, 0, 12) };
         stack.Children.Add(new TextBlock { Text = "0 = 从头开始，1 = 从第2个任务开始", FontSize = 11,
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x8a, 0x8a, 0x8e)), Margin = new Thickness(0, 0, 0, 4) });
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)), Margin = new Thickness(0, 0, 0, 4) });
         stack.Children.Add(numBox);
 
         var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var okBtn = new Button { Content = "确定", Width = 80, Height = 30, Margin = new Thickness(0, 0, 8, 0),
-            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x0a, 0x84, 0xff)),
-            Foreground = System.Windows.Media.Brushes.White, BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+            FontWeight = FontWeights.SemiBold, BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+        okBtn.Background = new System.Windows.Media.LinearGradientBrush
+        {
+            StartPoint = new System.Windows.Point(0, 0),
+            EndPoint = new System.Windows.Point(1, 1),
+            GradientStops =
+            {
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xEF, 0xD6, 0x8A), 0),
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0xAF, 0x37), 1)
+            }
+        };
+        okBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16));
         var cancelBtn = new Button { Content = "取消", Width = 80, Height = 30,
-            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xe8, 0xe8, 0xed)),
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)),
-            BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)),
+            Cursor = System.Windows.Input.Cursors.Hand };
         btnPanel.Children.Add(okBtn);
         btnPanel.Children.Add(cancelBtn);
         stack.Children.Add(btnPanel);
@@ -1436,6 +2889,34 @@ public class MainViewModel : INotifyPropertyChanged
         var selTrigger = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };
         selTrigger.Setters.Add(new Setter(Control.BackgroundProperty, new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xd6, 0xe8, 0xff))));
         selTrigger.Setters.Add(new Setter(Control.ForegroundProperty, new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e))));
+        selTrigger.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
+        style.Triggers.Add(selTrigger);
+
+        return style;
+    }
+
+    /// <summary>
+    /// 创建深色 ListBox 行样式（深色主题弹窗用：浅色文字、半透明背景、悬浮亮紫、选中鎏金描边）。
+    /// </summary>
+    private static Style CreateDarkListBoxItemStyle()
+    {
+        var style = new Style(typeof(ListBoxItem));
+        style.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(0, 1, 0, 1)));
+        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(8, 6, 8, 6)));
+        style.Setters.Add(new Setter(FrameworkElement.CursorProperty, System.Windows.Input.Cursors.Hand));
+        style.Setters.Add(new Setter(Control.BorderBrushProperty, System.Windows.Media.Brushes.Transparent));
+        style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
+        style.Setters.Add(new Setter(Control.BackgroundProperty, System.Windows.Media.Brushes.Transparent));
+        style.Setters.Add(new Setter(Control.ForegroundProperty, new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA))));
+        style.Setters.Add(new Setter(FrameworkElement.FocusVisualStyleProperty, null));
+
+        var hoverTrigger = new Trigger { Property = ListBoxItem.IsMouseOverProperty, Value = true };
+        hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x35, 0x31, 0x5E))));
+        style.Triggers.Add(hoverTrigger);
+
+        var selTrigger = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };
+        selTrigger.Setters.Add(new Setter(Control.BackgroundProperty, new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x4A, 0x44, 0x7E))));
+        selTrigger.Setters.Add(new Setter(Control.ForegroundProperty, new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA))));
         selTrigger.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
         style.Triggers.Add(selTrigger);
 
@@ -1532,6 +3013,42 @@ public class MemberViewModel : INotifyPropertyChanged
     private bool _isSelected = true;
     public bool IsSelected { get => _isSelected; set { _isSelected = value; OnPropertyChanged(); } }
 
+    private bool _onlineReady;
+    public bool OnlineReady { get => _onlineReady; set { if (_onlineReady != value) { _onlineReady = value; OnPropertyChanged(); } } }
+
+    private string _onlineMode = "none";
+    public string OnlineMode { get => _onlineMode; set { if (_onlineMode != value) { _onlineMode = value; OnPropertyChanged(); } } }
+
+    private string _scheduledOnlineTime = "";
+    public string ScheduledOnlineTime { get => _scheduledOnlineTime; set { if (_scheduledOnlineTime != value) { _scheduledOnlineTime = value; OnPropertyChanged(); } } }
+
+    private List<string> _onlineHoeingGroupNames = [];
+    public List<string> OnlineHoeingGroupNames { get => _onlineHoeingGroupNames; set { if (!ReferenceEquals(_onlineHoeingGroupNames, value)) { _onlineHoeingGroupNames = value; OnPropertyChanged(); } } }
+
+    private List<object> _onlineHistory = [];
+    public List<object> OnlineHistory { get => _onlineHistory; set { if (!ReferenceEquals(_onlineHistory, value)) { _onlineHistory = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasOnlineToday)); } } }
+
+    /// <summary>今天是否有上线消费记录（用于"已联机"状态显示：上线过且已消费）。</summary>
+    public bool HasOnlineToday
+    {
+        get
+        {
+            if (_onlineHistory == null || _onlineHistory.Count == 0) return false;
+            var today = DateTime.Now.ToString("yyyy-MM-dd");
+            foreach (var h in _onlineHistory)
+            {
+                if (h is System.Text.Json.JsonElement je
+                    && je.TryGetProperty("date", out var d)
+                    && d.ValueKind == System.Text.Json.JsonValueKind.String
+                    && d.GetString() == today)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
     public string ConfigGroupsDisplay => ConfigGroups.Count > 0 ? string.Join(", ", ConfigGroups) : "无";
     public string OneClickConfigsDisplay => OneClickConfigs.Count > 0 ? string.Join(", ", OneClickConfigs) : "无";
 
@@ -1552,6 +3069,10 @@ public class MemberViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(OneClickConfigs));
         OnPropertyChanged(nameof(ConfigGroupsDisplay));
         OnPropertyChanged(nameof(OneClickConfigsDisplay));
+        OnPropertyChanged(nameof(OnlineReady));
+        OnPropertyChanged(nameof(OnlineMode));
+        OnPropertyChanged(nameof(ScheduledOnlineTime));
+        OnPropertyChanged(nameof(OnlineHoeingGroupNames));
     }
 }
 

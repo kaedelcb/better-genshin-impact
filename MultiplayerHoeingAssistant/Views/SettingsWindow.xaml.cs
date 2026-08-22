@@ -7,6 +7,8 @@ namespace MultiplayerHoeingAssistant.Views;
 
 public partial class SettingsWindow : Window
 {
+    private readonly AssistConfig _configCopy;
+
     /// <summary>
     /// 获取带版本号的窗口标题，与 MainWindow 共享。
     /// </summary>
@@ -20,6 +22,7 @@ public partial class SettingsWindow : Window
 
     private SettingsWindow(AssistConfig config)
     {
+        _configCopy = config;
         DpiAwarenessController.Initialize(this);
         InitializeComponent();
         Title = GetVersionedTitle("设置");
@@ -37,6 +40,7 @@ public partial class SettingsWindow : Window
             TeamUidsBox.Text = string.Join(",", config.TeamUids);
         if (!string.IsNullOrEmpty(config.BgiPath))
             BgiPathBox.Text = config.BgiPath;
+        ExpectedPlayersBox.Text = config.ExpectedHoeingPlayers.ToString();
     }
 
     /// <summary>
@@ -91,7 +95,19 @@ public partial class SettingsWindow : Window
             PlayerName = playerName,
             PlayerUid = playerUid,
             TeamUids = teamUids,
-            BgiPath = bgiPath
+            BgiPath = bgiPath,
+            // 保留其他字段（不因设置弹窗保存而重置）
+            ExpectedHoeingPlayers = int.TryParse(ExpectedPlayersBox.Text.Trim(), out var ep) && ep >= 1 && ep <= 4 ? ep : 4,
+            ScheduledOnlineTime = _configCopy?.ScheduledOnlineTime ?? "",
+            OnlineHoeingGroupNames = _configCopy?.OnlineHoeingGroupNames ?? [],
+            OnlineHoeingGroupIndex = _configCopy?.OnlineHoeingGroupIndex ?? 0,
+            DisclaimerAccepted = _configCopy?.DisclaimerAccepted ?? false,
+            QuickCommands = _configCopy?.QuickCommands ?? new(),
+            AutoLaunchWithBgi = _configCopy?.AutoLaunchWithBgi ?? false,
+            AutoLaunchWithBgiMinimized = _configCopy?.AutoLaunchWithBgiMinimized ?? true,
+            AutoLaunchOnBoot = _configCopy?.AutoLaunchOnBoot ?? false,
+            AutoLaunchOnBootMinimized = _configCopy?.AutoLaunchOnBootMinimized ?? true,
+            GuardBgi = _configCopy?.GuardBgi ?? false
         };
     }
 

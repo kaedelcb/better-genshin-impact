@@ -35,6 +35,7 @@
         <SolidColorBrush x:Key="Anemo" Color="#6FD8CE"/>
         <SolidColorBrush x:Key="Pyro" Color="#E88A6F"/>
         <SolidColorBrush x:Key="Geo" Color="#D9A84E"/>
+        <SolidColorBrush x:Key="Orange" Color="#E8A84E"/>
 
         <!-- 鎏金按钮渐变 -->
         <LinearGradientBrush x:Key="GoldBtnGrad" StartPoint="0,0" EndPoint="1,1">
@@ -500,7 +501,7 @@
                         </StackPanel>
                         <TextBlock Text="Nexus-BGI" FontSize="12" Foreground="{StaticResource Gold}" HorizontalAlignment="Center"
                                    FontFamily="Times New Roman" FontStyle="Italic"/>
-                        <TextBlock Text="向着星辰与深渊" FontSize="13" Foreground="{StaticResource Dim}" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                        <TextBlock Text="向着摩拉与狗粮" FontSize="13" Foreground="{StaticResource Dim}" HorizontalAlignment="Center" Margin="0,8,0,0"/>
                     </StackPanel>
 
                     <!-- 中部：冒险日志（占派蒙下方空白区） -->
@@ -510,7 +511,7 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
                         <Grid Margin="0,0,0,7">
-                            <TextBlock Text="冒险日志" FontSize="12" FontWeight="Medium" Foreground="{StaticResource GoldText}"/>
+                            <TextBlock Text="冒险日志23" FontSize="12" FontWeight="Medium" Foreground="{StaticResource GoldText}"/>
                             <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="56,0,0,0"/>
                         </Grid>
                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Style="{StaticResource GoldScrollViewer}">
@@ -679,8 +680,8 @@
                                                                         <Setter Property="Foreground" Value="{StaticResource Pyro}"/>
                                                                         <Style.Triggers>
                                                                             <DataTrigger Binding="{Binding Online}" Value="True">
-                                                                                <Setter Property="Text" Value="就绪"/>
-                                                                                <Setter Property="Foreground" Value="{StaticResource Dim}"/>
+                                                                                <Setter Property="Text" Value="BGI已启动: 空闲"/>
+                                                                                <Setter Property="Foreground" Value="{StaticResource Orange}"/>
                                                                             </DataTrigger>
                                                                             <DataTrigger Binding="{Binding BgiStatus}" Value="stopped">
                                                                                 <Setter Property="Text" Value="BGI 未运行"/>
@@ -699,17 +700,92 @@
                                                         </Grid>
 
                                                         <!-- 操作栏（文字按钮，融入卡片） -->
-                                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                            <Button Content="配置组" Style="{StaticResource TextAction}" Command="{Binding DataContext.StartGroupCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
-                                                            <TextBlock Text="|" FontSize="13" Foreground="{StaticResource Dim}" Margin="4,0"/>
-                                                            <Button Content="一条龙" Style="{StaticResource TextAction}" Command="{Binding DataContext.StartOneClickCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
-                                                            <TextBlock Text="|" FontSize="13" Foreground="{StaticResource Dim}" Margin="4,0"/>
-                                                            <Button Content="快捷键" Style="{StaticResource TextAction}" Command="{Binding DataContext.ExecuteHotkeyCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
-                                                            <TextBlock Text="|" FontSize="13" Foreground="{StaticResource Dim}" Margin="4,0"/>
-                                                            <Button Content="关闭游戏" Style="{StaticResource TextAction}" Command="{Binding DataContext.CloseGameCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
-                                                            <TextBlock Text="|" FontSize="13" Foreground="{StaticResource Dim}" Margin="4,0"/>
-                                                            <Button Content="停止" Style="{StaticResource TextAction}" Command="{Binding DataContext.StopCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
-                                                        </StackPanel>
+                                                        <Grid Margin="0,4,0,0">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel Orientation="Horizontal" Grid.Column="0">
+                                                                <Button Content="🔗 锄地" Style="{StaticResource TextAction}" 
+                                                                        Command="{Binding DataContext.BindHoeingGroupCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                        CommandParameter="{Binding}" Margin="0,0,2,0" FontSize="11" ToolTip="绑定联机锄地配置组（所有人可编辑）"/>
+                                                                <TextBlock Text="|" FontSize="13" Foreground="{StaticResource Dim}" Margin="4,0"/>
+                                                                <Button Content="配置组" Style="{StaticResource TextAction}" Command="{Binding DataContext.StartGroupCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                                                <TextBlock Text="|" FontSize="13" Foreground="{StaticResource Dim}" Margin="4,0"/>
+                                                                <Button Content="一条龙" Style="{StaticResource TextAction}" Command="{Binding DataContext.StartOneClickCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                                                <TextBlock Text="|" FontSize="13" Foreground="{StaticResource Dim}" Margin="4,0"/>
+                                                                <Button Content="快捷键" Style="{StaticResource TextAction}" Command="{Binding DataContext.ExecuteHotkeyCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                                                <TextBlock Text="|" FontSize="13" Foreground="{StaticResource Dim}" Margin="4,0"/>
+                                                                <Button Content="关闭游戏" Style="{StaticResource TextAction}" Command="{Binding DataContext.CloseGameCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                                                <TextBlock Text="|" FontSize="13" Foreground="{StaticResource Dim}" Margin="4,0"/>
+                                                                <Button Content="停止" Style="{StaticResource TextAction}" Command="{Binding DataContext.StopCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                                                <TextBlock Text="|" FontSize="13" Foreground="{StaticResource Dim}" Margin="4,0"/>
+                                                                <Button Content="启动BGI" Style="{StaticResource TextAction}" Foreground="{StaticResource Gold}" FontSize="12" ToolTip="点自己=启动本机 BGI；点别人=下发命令让对方启动 BGI" Command="{Binding DataContext.StartBgiCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                                            </StackPanel>
+                                                            <!-- 右列：记录按钮 + 定时上线 + 上线状态（与五个按键同一行，放右侧） -->
+                                                            <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
+                                                                <Border CornerRadius="7" Padding="8,2" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,4,0"
+                                                                        Background="#1F9C97C0" BorderBrush="#4D9C97C0">
+                                                                    <Button Content="记录" Style="{StaticResource TextAction}" 
+                                                                            Command="{Binding DataContext.ShowOnlineHistoryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                            CommandParameter="{Binding}" Padding="0" FontSize="10" FontWeight="Medium"/>
+                                                                </Border>
+                                                                <Border CornerRadius="7" Padding="8,2" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,4,0"
+                                                                        Background="#1F9C97C0" BorderBrush="#4D9C97C0">
+                                                                    <Button Style="{StaticResource TextAction}"
+                                                                            Command="{Binding DataContext.ScheduledOnlineCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                            CommandParameter="{Binding}" Padding="0" FontSize="10" FontWeight="Medium">
+                                                                        <Button.Content>
+                                                                            <!-- 显示该成员自己的定时上线时间（per-member），空/未设置时显示"定时上线" -->
+                                                                            <TextBlock FontSize="10" FontWeight="Medium">
+                                                                                <TextBlock.Style>
+                                                                                    <Style TargetType="TextBlock">
+                                                                                        <Setter Property="Text" Value="{Binding ScheduledOnlineTime, StringFormat='定时 {0}'}"/>
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding ScheduledOnlineTime}" Value="">
+                                                                                                <Setter Property="Text" Value="定时上线"/>
+                                                                                            </DataTrigger>
+                                                                                            <DataTrigger Binding="{Binding ScheduledOnlineTime}" Value="{x:Null}">
+                                                                                                <Setter Property="Text" Value="定时上线"/>
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </TextBlock.Style>
+                                                                            </TextBlock>
+                                                                        </Button.Content>
+                                                                    </Button>
+                                                                </Border>
+                                                                <!-- 清除上线：复位因定时/命令触发的已上线状态（不清除定时闹钟） -->
+                                                                <Border CornerRadius="7" Padding="8,2" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,4,0"
+                                                                        Background="#1F8E6E6E" BorderBrush="#4DD46E6E">
+                                                                    <Button Content="清除上线"
+                                                                            Style="{StaticResource TextAction}"
+                                                                            Command="{Binding DataContext.ClearOnlineCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                            CommandParameter="{Binding}" Padding="0" FontSize="10" FontWeight="Medium"/>
+                                                                </Border>
+                                                                <Border CornerRadius="7" Padding="8,2" BorderThickness="1" VerticalAlignment="Center"
+                                                                        Margin="0,0,8,0" Background="#1F9C97C0" BorderBrush="#4D9C97C0">
+                                                                    <TextBlock FontSize="10" FontWeight="Medium" VerticalAlignment="Center" LineHeight="14">
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock">
+                                                                                <Setter Property="Text" Value="未上线"/>
+                                                                                <Setter Property="Foreground" Value="{StaticResource Pyro}"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding OnlineReady}" Value="True">
+                                                                                        <Setter Property="Text" Value="已上线"/>
+                                                                                        <Setter Property="Foreground" Value="{StaticResource Anemo}"/>
+                                                                                    </DataTrigger>
+                                                                                    <DataTrigger Binding="{Binding HasOnlineToday}" Value="True">
+                                                                                        <Setter Property="Text" Value="已联机"/>
+                                                                                        <Setter Property="Foreground" Value="{StaticResource Dim}"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
+                                                                </Border>
+                                                            </StackPanel>
+                                                        </Grid>
 
                                                     </StackPanel>
                                                 </Grid>

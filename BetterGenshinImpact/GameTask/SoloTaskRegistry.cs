@@ -4,6 +4,7 @@ using BetterGenshinImpact.GameTask.AutoHoeing;
 using BetterGenshinImpact.GameTask.AutoSwitchRoles;
 using BetterGenshinImpact.GameTask.OcrSwitchWeapon;
 using BetterGenshinImpact.GameTask.Shell;
+using BetterGenshinImpact.GameTask.AutoOnline;
 using System.Collections.Generic;
 
 namespace BetterGenshinImpact.GameTask;
@@ -22,7 +23,8 @@ public static class SoloTaskRegistry
         "好感任务自动完成",
         "OCR切换武器",
         "配对界面切换角色",
-        "更新联机锄地线路"
+        "更新联机锄地线路",
+        "联机锄地上线"
     ];
 
     /// <summary>
@@ -41,6 +43,7 @@ public static class SoloTaskRegistry
             "更新联机锄地线路" => new ShellTask(ShellTaskParam.BuildFromConfig(
                 @"Tools\AutoHoeingUpdater\AutoHoeingUpdater.exe --silent --target ""%CD%"" --force-download",
                 new ShellConfig { Timeout = 120, NoWindow = true, Output = true })),
+            "联机锄地上线" => new NotifyOnlineTask(),
             _ => null
         };
     }

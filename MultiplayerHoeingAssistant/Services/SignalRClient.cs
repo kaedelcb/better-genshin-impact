@@ -24,6 +24,10 @@ public class SignalRClient : IAsyncDisposable
     public event Action<RemoteCommand>? OnRemoteCommand;
     public event Action<string>? OnJoinRejected;
     public event Action<bool>? OnConnectionStateChanged;
+    /// <summary>全员就绪确认完成事件（各助手据此启动中断流程）。带 generation 参数，用于幂等保护。</summary>
+    public event Action<int>? OnAllReadyConfirmed;
+    /// <summary>日志回调（供外部输出探针日志）</summary>
+    public Action<string>? OnLog { get; set; }
 
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
 
@@ -58,6 +62,11 @@ public class SignalRClient : IAsyncDisposable
             OnRemoteCommand?.Invoke(cmd));
         connection.On<string>("JoinRejected", reason =>
             OnJoinRejected?.Invoke(reason));
+        connection.On<int>("AllReady", generation =>
+        {
+            OnLog?.Invoke("[探针助手] SignalRClient 收到 AllReady 事件, generation=" + generation);
+            OnAllReadyConfirmed?.Invoke(generation);
+        });
 
         // 重连中（SignalR 内置自动重连尝试期间）
         connection.Reconnecting += _ =>
@@ -170,6 +179,21 @@ public class SignalRClient : IAsyncDisposable
         if (_connection == null) return;
         status.RoomCode = _roomCode;
         await _connection.InvokeAsync("ReportControlStatus", status);
+    }
+
+    /// <summary>上报上线事件（带 generation 代序号，供服务端状态机边沿检测）。</summary>
+    public async Task ReportOnlineEventAsync(int generation, bool isOnlineReady)
+    {
+        if (_connection == null) return;
+        try
+        {
+            await _connection.InvokeAsync("ReportOnlineEvent", generation, isOnlineReady);
+        }
+        catch (Exception ex)
+        {
+            OnLog?.Invoke($"[上线探针] ReportOnlineEventAsync 调用失败: {ex.Message}");
+            throw;
+        }
     }
 
     public async ValueTask DisposeAsync()

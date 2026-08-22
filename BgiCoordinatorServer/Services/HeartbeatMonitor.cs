@@ -137,6 +137,8 @@ public class HeartbeatMonitor : IHostedService, IDisposable
                     }
                 }
             }
+        // 5. 检查控制房间上线状态过期
+            CheckControlRoomTimeout();
         }
         catch (Exception ex)
         {
@@ -260,5 +262,52 @@ public class HeartbeatMonitor : IHostedService, IDisposable
     public void Dispose()
     {
         _timer?.Dispose();
+    }
+
+    /// <summary>检查控制房间上线状态过期（30 分钟超时），过期后自动重置上线状态。R-1 方案 C。</summary>
+    private void CheckControlRoomTimeout()
+    {
+        try
+        {
+            var cutoff = DateTime.UtcNow - TimeSpan.FromMinutes(30);
+            var groups = _roomManager.GetAllControlRoomGroups();
+            foreach (var group in groups)
+            {
+                var players = _roomManager.GetControlRoomPlayers(group);
+                foreach (var player in players)
+                {
+                    if (player.OnlineReady && player.OnlineReadyExpireTime < DateTime.UtcNow
+                        && player.OnlineReadyExpireTime != DateTime.MinValue)
+                    {
+                        _logger.LogWarning("控制房间 {Group} 成员 {PlayerName}({Uid}) 上线状态已过期（30分钟），自动重置",
+                            group, player.PlayerName, player.PlayerUid);
+                        // 标记上线状态过期
+                        player.OnlineReady = false;
+                        player.OnlineReadyExpireTime = DateTime.MinValue;
+                        // 同步重置上线事件代序号（边沿检测：过期后下次重新上线才算新事件)
+                        player.OnlineEventGeneration = 0;
+                        player.OnlineEventConsumed = true;
+                        player.OnlineEventTime = DateTime.MinValue;
+                    }
+
+                    // TaskRunning 超时自愈：任务运行态超过 TaskRunningTimeoutSec 未续期 → 复位为未运行（防崩溃/断电残留）
+                    if (TaskRunningExpiryDecisions.ShouldResetTaskRunning(
+                            player.TaskRunning,
+                            DateTime.UtcNow.Ticks,
+                            player.TaskRunningExpireTime.Ticks))
+                    {
+                        _logger.LogWarning("控制房间 {Group} 成员 {PlayerName}({Uid}) 任务运行态已超时，自动复位为未运行",
+                            group, player.PlayerName, player.PlayerUid);
+                        player.TaskRunning = false;
+                        player.CurrentTaskName = null;
+                        player.TaskRunningExpireTime = DateTime.MinValue;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "CheckControlRoomTimeout 扫描时发生异常");
+        }
     }
 }

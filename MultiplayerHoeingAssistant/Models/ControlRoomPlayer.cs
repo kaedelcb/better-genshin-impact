@@ -16,6 +16,18 @@ public class ControlRoomPlayer
     /// <summary>是否正在联机锄地（锄地房间中）。</summary>
     public bool AutoHoeingRunning { get; set; }
     public DateTime LastHeartbeat { get; set; }
+    /// <summary>是否已上线（标记了"已上线"但联机锄地尚未开始）。</summary>
+    public bool OnlineReady { get; set; } = false;
+    /// <summary>上线方式：scheduled / command / none。</summary>
+    public string OnlineMode { get; set; } = "none";
+    /// <summary>定时上线时间（HH:mm）。</summary>
+    public string ScheduledOnlineTime { get; set; } = "";
+    /// <summary>已绑定的联机锄地配置组名列表（顺序即执行顺序）。与服务端模型保持同步。</summary>
+    public List<string> OnlineHoeingGroupNames { get; set; } = [];
+    /// <summary>当天上线消费记录列表（只显示自己的）。与服务端模型保持同步。</summary>
+    public List<object> OnlineHistory { get; set; } = [];
+    /// <summary>预期开锄人数。与服务端模型保持同步。</summary>
+    public int ExpectedHoeingPlayers { get; set; } = 4;
     /// <summary>配置组名 → 任务列表（含 name/index/status，供状态显示与编辑）。与服务端模型保持同步。</summary>
     public Dictionary<string, List<object>> ConfigGroupTasksWithStatus { get; set; } = [];
     /// <summary>一条龙配置名 → 任务列表（含 name/index/enabled，供状态显示与编辑）。与服务端模型保持同步。</summary>

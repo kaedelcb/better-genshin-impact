@@ -10,6 +10,8 @@ public class RoomManager
     private const string CodeChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private const int CodeLength = 6;
     private const int MaxPlayers = 4;
+    /// <summary>任务运行态（TaskRunning）超时秒数：超过该时长未收到成员续期上报，服务端自动复位为未运行（超时自愈，防崩溃残留）。</summary>
+    internal const int TaskRunningTimeoutSec = 60;
 
     private readonly ConcurrentDictionary<string, Room> _rooms = new();
     // connectionId → roomCode 反向索引，加速查找
@@ -20,6 +22,8 @@ public class RoomManager
 
     // 控制房间相关（multiplayer-hoeing-assistant）
     private readonly ConcurrentDictionary<string, List<ControlRoomPlayer>> _controlRooms = new();
+    // 控制房间 AllReady 广播幂等标志（独立于锄地房间 Room 对象，因为控制房间可能没有对应的锄地房间）
+    private readonly ConcurrentDictionary<string, bool> _controlRoomAllReadyBroadcasted = new();
     // 离线命令缓存：playerUid → 待执行的命令列表
     private readonly ConcurrentDictionary<string, List<RemoteCommand>> _pendingCommands = new();
 
@@ -1109,6 +1113,12 @@ public class RoomManager
                     player.BgiStatus = "";
                     player.TaskRunning = false;
                     player.CurrentTaskName = null;
+                    // 断线时重置上线事件代序号：BGI 重启后 generation 从 1 重新开始，
+                    // 若保留旧值（如 2/3），新 generation(1) <= 旧值会被永久忽略，导致无法上线。
+                    player.OnlineEventGeneration = 0;
+                    player.OnlineEventConsumed = true;
+                    player.OnlineEventTime = DateTime.MinValue;
+                    player.OnlineReady = false;
                 }
             }
         }
@@ -1133,9 +1143,24 @@ public class RoomManager
                     player.OneClickTasksWithStatus = status.OneClickTasksWithStatus;
                     player.Hotkeys = status.Hotkeys;
                     player.TaskRunning = status.TaskRunning;
-                    player.CurrentTaskName = status.CurrentTaskName;
+                    player.CurrentTaskName = status.TaskRunning ? status.CurrentTaskName : null;
+                    // 任务运行态带过期时间（超时自愈）；TaskRunning=false 时复位
+                    if (status.TaskRunning)
+                        player.TaskRunningExpireTime = DateTime.UtcNow.AddSeconds(TaskRunningTimeoutSec);
+                    else
+                        player.TaskRunningExpireTime = DateTime.MinValue;
                     player.AutoHoeingRunning = status.AutoHoeingRunning;
                     player.AutoHoeingProgress = status.AutoHoeingProgress;
+                    player.OnlineReady = status.OnlineReady;
+                    player.OnlineMode = status.OnlineMode;
+                    player.ScheduledOnlineTime = status.ScheduledOnlineTime;
+                    player.OnlineHoeingGroupNames = status.OnlineHoeingGroupNames;
+                    player.ExpectedHoeingPlayers = status.ExpectedHoeingPlayers;
+                    if (status.OnlineReady)
+                    {
+                        // 设置上线状态过期时间（默认 30 分钟）
+                        player.OnlineReadyExpireTime = DateTime.UtcNow.AddMinutes(30);
+                    }
                     player.LastHeartbeat = DateTime.UtcNow;
                 }
             }
@@ -1169,4 +1194,152 @@ public class RoomManager
         return false;
     }
 
+    /// <summary>获取所有控制房间的 Group 名称列表</summary>
+    public List<string> GetAllControlRoomGroups()
+    {
+        return [.. _controlRooms.Keys];
     }
+
+    /// <summary>通过 connectionId 查找所属的控制房间 group 名。用于 ReportOnlineEvent 端点。</summary>
+    public string? GetControlRoomGroup(string connectionId)
+    {
+        // 控制房间的 group 名是 "CTRL_xxx"，从 _controlRooms 的 key 反查
+        // 通过 _controlRooms 中的玩家列表匹配 connectionId
+        foreach (var (group, players) in _controlRooms)
+        {
+            lock (players)
+            {
+                if (players.Any(p => p.ConnectionId == connectionId))
+                    return group;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>房间级状态（用于 ReportOnlineEvent 状态机）。</summary>
+    public class RoomAllReadyState
+    {
+        /// <summary>当前状态：idle / waiting / ready / consumed</summary>
+        public string State { get; set; } = "idle";
+        /// <summary>当前轮次的 generation</summary>
+        public int CurrentGeneration { get; set; } = 0;
+        /// <summary>上次消费的 generation</summary>
+        public int LastConsumedGeneration { get; set; } = 0;
+    }
+
+    private readonly ConcurrentDictionary<string, RoomAllReadyState> _roomAllReadyStates = new();
+
+    /// <summary>上报上线事件（带 generation 代序号）。由 ReportOnlineEvent 端点调用。</summary>
+    public void ReportOnlineEvent(string group, string connectionId, int generation)
+    {
+        if (_controlRooms.TryGetValue(group, out var players))
+        {
+            lock (players)
+            {
+                var player = players.FirstOrDefault(p => p.ConnectionId == connectionId);
+                if (player == null) return;
+                if (generation <= player.OnlineEventGeneration) return;  // 旧事件，忽略
+
+                // 更新玩家 generation
+                player.OnlineEventGeneration = generation;
+                player.OnlineEventConsumed = false;
+                player.OnlineEventTime = DateTime.UtcNow;
+                player.OnlineReady = true;  // 保留 UI 显示用
+                player.OnlineReadyExpireTime = DateTime.UtcNow.AddMinutes(30);
+            }
+
+            // 新 generation 上报 → 重置房间状态机到 idle，使 CheckAndTransition 可以再次触发
+            if (_roomAllReadyStates.TryGetValue(group, out var state))
+            {
+                state.State = "idle";
+            }
+        }
+    }
+
+    /// <summary>检查并转换状态机。返回 true 表示可通过 AllReady 广播，out generation 为当前轮次。</summary>
+    public bool CheckAndTransition(string group, out int generation)
+    {
+        generation = 0;
+        var state = _roomAllReadyStates.GetOrAdd(group, _ => new RoomAllReadyState());
+        // 状态机已就绪或已消费 → 不再重复触发，等待新事件
+        if (state.State != "idle" && state.State != "waiting")
+            return false;
+
+        var players = GetControlRoomPlayers(group);
+        var onlinePlayers = players.Where(p => p.Online).ToList();
+        if (onlinePlayers.Count == 0) return false;
+
+        // 就绪成员 = 有新上线事件（未消费）的成员
+        var readyPlayers = onlinePlayers.Where(p => !p.OnlineEventConsumed && p.OnlineEventGeneration > 0).ToList();
+        // 预期开锄人数 = 所有在线成员上报的 ExpectedHoeingPlayers 的最小值（下限保底 1，防止默认 0）
+        var threshold = onlinePlayers.Count > 0 ? onlinePlayers.Min(p => Math.Max(1, p.ExpectedHoeingPlayers)) : 1;
+        Console.WriteLine("[探针服务端] CheckAndTransition: group=" + group + " onlinePlayers=" + onlinePlayers.Count + " ready=" + readyPlayers.Count + " threshold=" + threshold + " state=" + state.State);
+
+        // 就绪人数未达预期 → 保持"已上线等待"，不广播 AllReady、不消费
+        if (readyPlayers.Count < threshold)
+        {
+            Console.WriteLine("[探针服务端] CheckAndTransition: 未达预期人数，等待，group=" + group);
+            return false;
+        }
+
+        // 找出就绪成员中当前轮次的最小 generation
+        var minGen = readyPlayers.Min(p => p.OnlineEventGeneration);
+        state.State = "ready";
+        state.CurrentGeneration = minGen;
+        generation = minGen;
+        Console.WriteLine("[探针服务端] CheckAndTransition: 就绪，generation=" + minGen + " 广播 AllReady, group=" + group);
+        return true;
+    }
+
+    /// <summary>消费上线状态（复位 OnlineReady + 记录历史 + 标记 generation 已消费）。在广播 AllReady 后调用。</summary>
+    public void ConsumeOnlineReady(string group, int generation)
+    {
+        Console.WriteLine("[探针服务端] ===== ConsumeOnlineReady 被调用, group=" + group + " generation=" + generation + " =====");
+        if (_controlRooms.TryGetValue(group, out var rawPlayers))
+        {
+            int consumed = 0;
+            var now = DateTime.UtcNow;
+            lock (rawPlayers)
+            {
+                foreach (var p in rawPlayers)
+                {
+                    if (p.OnlineEventGeneration == generation)
+                    {
+                        var localNow = TimeZoneInfo.ConvertTimeFromUtc(now, TimeZoneInfo.Local);
+                        var dateStr = localNow.Hour < 4
+                            ? localNow.AddDays(-1).ToString("yyyy-MM-dd")
+                            : localNow.ToString("yyyy-MM-dd");
+                        p.OnlineHistory.Add(new
+                        {
+                            mode = p.OnlineMode,
+                            onlineTime = TimeZoneInfo.ConvertTimeFromUtc(p.LastHeartbeat, TimeZoneInfo.Local).ToString("HH:mm"),
+                            consumeTime = localNow.ToString("HH:mm"),
+                            date = dateStr,
+                            timestamp = now
+                        });
+                        while (p.OnlineHistory.Count > 20)
+                            p.OnlineHistory.RemoveAt(0);
+                        // 标记已消费（边沿检测：允许下次新的 generation 再次触发）
+                        p.OnlineEventConsumed = true;
+                        p.OnlineReady = false;
+                        p.OnlineMode = "none";
+                        p.OnlineReadyExpireTime = DateTime.MinValue;
+                        consumed++;
+                    }
+                }
+            }
+            Console.WriteLine("[探针服务端] ConsumeOnlineReady: 消费了 " + consumed + " 个成员, group=" + group);
+            // 更新房间状态
+            if (_roomAllReadyStates.TryGetValue(group, out var state))
+            {
+                state.State = "consumed";
+                state.LastConsumedGeneration = generation;
+            }
+        }
+        else
+        {
+            Console.WriteLine("[探针服务端] ConsumeOnlineReady: 找不到 group=" + group);
+        }
+        Console.WriteLine("[探针服务端] ===== ConsumeOnlineReady 结束, group=" + group + " =====");
+    }
+}

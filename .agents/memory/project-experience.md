@@ -556,3 +556,211 @@ System.Threading.Interlocked.Exchange(ref _pendingRevivalEscalation, 0); // 清�
 - **可靠做法**：改助手代码后，**先 `dotnet build MultiplayerHoeingAssistant.csproj -c Debug` 单独重建并部署，再编译 BGI 主项目**。不要只依赖编译 BGI 触发助手重建。
 - **验证方法**：读 dll 版本号用 `(Get-Item -LiteralPath $f).VersionInfo.ProductVersion`。注意 execute_pwsh 的 PreToolUse 钩子会拦截含 `bin\...` 受保护路径的只读命令（即使只是读版本），可用 `$('bin')` 字符串拼接路径规避误拦（非删除操作，属安全读取）。
 - **进程锁坑（同日上午已记）**：助手 exe 运行时锁住 Tools\ 下 dll，编译复制会报 MSB3026 失败——部署前先结束运行中的 MultiplayerHoeingAssistant 进程。
+## AllConfig 持久化陷阱：新增字段不要加 [JsonIgnore]（2026-08-21）
+
+- **场景**：在 `AllConfig` 中新增 `SuspendedTaskContext` 字段时，我加了 `[JsonIgnore]`，导致该字段不会被 System.Text.Json 序列化到 `config.json` 中。BGI 崩溃后上下文丢失。
+- **根因**：`AllConfig` 使用 STJ 序列化，默认只序列化 `[ObservableProperty]` 生成的属性和没有 `[JsonIgnore]` 的普通属性。`[JsonIgnore]` 适用于运行时状态（如 `NextScriptGroupName`），不适用于需要持久化的字段。
+- **教训**：`AllConfig` 中新增**需要持久化**的字段时，**不要加 `[JsonIgnore]`**。如果确实需要运行时状态（不持久化），才加 `[JsonIgnore]` 并明确注释说明。
+- **修复**：已去掉 `SuspendedTaskContext` 的 `[JsonIgnore]`，使其被 STJ 序列化。
+- **关联纪律**：`regression-safe-change-discipline.md` 要求"新增配置持久化字段必须有旧 JSON 加载测试"。STJ 默认 `UnmappedMemberHandling.Skip`，旧 JSON 缺字段时安全降级为 null，不报错。
+## 联机锄地上线调度重构（generation + 状态机 + 幂等触发，2026-08-21）
+
+- **背景**：用完整 spec 流程重构联机锄地上线调度架构，从设计→实施→编译验证全流程
+- **核心改动**：
+  - BGI 端：`NotifyOnlineTask.cs` 自增 `CurrentGeneration`（`Interlocked.Increment`），`task.status` 附带 `onlineGeneration`，`task.start` 幂等保护
+  - 助手端：`SignalRClient.OnAllReady` 带 `int generation` 参数，`ReportOnlineEventAsync` 分开传参；`MainViewModel.ReportStatusAsync` 检测 `onlineGeneration > _lastOnlineGeneration` 触发上报；`OnAllReadyConfirmed(int generation)` 幂等保护 + 后台 `Task.Run` 循环依次执行所有配置组 + `_isAllReadySequenceCancelled` 取消标志
+  - 服务端：`RoomManager.cs` 新增 `RoomAllReadyState` 状态机（idle→waiting→ready→consumed），`ReportOnlineEvent` 端点，`CheckAndTransition` 聚合检查，`ConsumeOnlineReady` 接 generation 参数
+  - `HeartbeatMonitor.cs` 超时检测同步重置 generation
+- **关键教训**：
+  1. **`InvokeAsync` 必须分开传参**：`InvokeAsync("ReportOnlineEvent", generation, isOnlineReady)` 不是 `new { ... }` 匿名对象。SignalR 序列化会把匿名对象当作一个参数，导致服务端方法签名不匹配而收不到调用。
+  2. **F11 停止 BGI 是 BGI 快捷键，不经过助手端 `OnStop`**：`_isAllReadySequenceCancelled` 不会被设置，需要额外处理。
+  3. **三端独立编译验证**：BGI `dotnet build BetterGenshinImpact.csproj -c Debug`、助手端 `dotnet build MultiplayerHoeingAssistant.csproj -c Debug`、服务端 `dotnet build BgiCoordinatorServer.csproj -c Debug`，三端 0 error。
+  4. **编译验证通过后需部署三端**：服务端 `docker compose up -d --build` + BGI 复制 `BetterGI.dll` + 助手端关闭进程后复制到 Tools 目录。
+- **关联文件**：`NotifyOnlineTask.cs`、`InstanceRequestHandler.cs`、`SignalRClient.cs`、`MainViewModel.cs`、`ControlRoomPlayer.cs`、`RoomManager.cs`、`CoordinatorHub.cs`、`HeartbeatMonitor.cs`
+- **记忆沉淀**：模式已写入 `bgi-implementation-patterns.md` §20
+## 绑定配置组弹窗重新设计（可排序 + 深色主题，2026-08-21）
+
+- **背景**：用户需求两个改进——① 绑定弹窗需支持自定义执行顺序（当前按 BGI 固定顺序排列）；② 弹窗视觉需与主窗口深色原神主题一致，当前白底弹窗太突兀，已选列表不够清晰
+- **核心改动**：`MainViewModel.cs` 的 `OnBindHoeingGroup` 方法重构
+  - **双区布局**：上半部分 = 已选配置组列表（带序号 1/2/3...，每个有 ↑↓✕ 按钮调整顺序）；下半部分 = 可选列表（点击添加）
+  - **执行顺序 = 列表顺序**：`OnlineHoeingGroupNames` 的 List 索引顺序决定执行顺序，上下移动直接修改列表
+  - **深色主题**：背景渐变 `#141534→#221F4E`、金色边框包裹已选区、金色胶囊序号徽章、已选卡片半透明深紫底+鎏金文字、可选按钮深紫幽灵样式、鎏金主按钮+深紫幽灵取消按钮
+  - **保存逻辑不变**：选中后保存到 `_config.OnlineHoeingGroupNames`（`List<string>`，顺序即执行顺序），`OnlineHoeingGroupIndex = 0`
+- **关键模式**（助手端新弹窗可复用）：
+  1. **深色弹窗构建模板**：背景渐变 `LinearGradientBrush`、金色边框 `Border` + `Gold` 色板、半透明深紫卡片背景 `#CC26234E`、鎏金按钮 `GoldBtnGrad`、深紫幽灵按钮
+  2. **可排序多选列表**：已选列表（带序号 + 上下移动/删除）+ 可选列表（点击添加），`ListBox` 中 `ListBoxItem` 的 `Content` 为动态构建的 `StackPanel` 包含序号 + 文字 + 操作按钮
+- **编译验证**：`dotnet build MultiplayerHoeingAssistant.csproj -c Debug` 0 error 0 warning，自动部署到 Tools 目录
+- **关联文件**：`MultiplayerHoeingAssistant/ViewModels/MainViewModel.cs`（`OnBindHoeingGroup` 方法）
+## WPF 纯代码深色弹窗编译踩坑 + F11 取消序列修复（2026-08-21）
+
+### 编译踩坑（写 WPF 纯代码弹窗时注意）
+- **`Color.FromRgb` 只接受 3 参数（RGB），`Color.FromArgb` 才接受 4 参数（ARGB）**。半透明色（如 `#CC26234E`）必须用 `FromArgb(0xCC, 0x26, 0x23, 0x4E)`，不透明色用 `FromRgb`。混用报 `CS1501 方法没有采用 4 个参数的重载`。
+- **`Thickness(double, double)` 构造函数不存在**（.NET 8 WPF）。必须用 `Thickness(4)`（uniform）或 `Thickness(4, 2, 4, 2)`（四边）。报 `CS7036 未提供与 Thickness(left,top,right,bottom) 所需参数 right 对应的参数`。
+- **`ScrollViewer.HorizontalScrollBarVisibility` 是附加属性**：在 ListBox 上不能用属性初始化器 `ScrollViewer.HorizontalScrollBarVisibility = X`，必须用静态方法 `ScrollViewer.SetHorizontalScrollBarVisibility(listBox, ScrollBarVisibility.Disabled)`。否则报 `CS0120 对象引用对于非静态的字段/方法要求 + CS0117 ScrollViewer 未包含 ScrollBarVisibility 的定义`。
+- **局部变量在 lambda/闭包中先使用后声明会报 `CS0841`**：`RefreshAvailableList` 定义在 `rebuildSelectedList` 之后，但 `rebuildSelectedList` 的按钮回调调用了它。解决：把被闭包引用的变量（如 `availableListBox`、`RefreshAvailableList`）提前到使用它们的 lambda 之前声明。
+
+### F11 停止 BGI 后取消剩余配置组序列（修复模式）
+- **场景**：用户按 F11 停止 BGI 是 BGI 自身快捷键，不经过助手端 `OnStop`，所以 `_isAllReadySequenceCancelled` 不会被设置。BGI 恢复后后台循环会继续执行下一个配置组。
+- **修复**：在后台 `Task.Run` 循环的 while 轮询中，当 IPC 连接异常（BGI 被 kill/停止）时，自动设置 `_isAllReadySequenceCancelled = true` 并 `break`。外层 for 循环检查到取消标志后退出，剩余配置组不再执行。
+- **模式**：凡是"检测到外部进程意外中断"的场景，用 IPC 连接失败作为取消信号源，比依赖助手端命令更可靠。
+
+### 关联
+- 弹窗代码：`MultiplayerHoeingAssistant/ViewModels/MainViewModel.cs` `OnBindHoeingGroup`
+- 取消序列代码：`MainViewModel.cs` OnAllReadyConfirmed 后台循环的 while 轮询 catch 块
+## F11 停止 BGI 后取消序列的真正修复（2026-08-21）
+
+### 关键发现
+- **F11 停止 BGI 不会退出 BetterGI.exe 进程**。BGI 的 F11 是"启动/停止截图器与任务调度"的切换开关，调用 `HomePageViewModel.Stop()` → `CancellationContext.Instance.Cancel()`（设置 `IsCancellationRequested=true`）+ `TaskTriggerDispatcher.Stop()`（停止截图器/定时器）。**进程本身一直在运行，IPC 服务正常**。
+- 之前的"进程检测"方案（检测进程是否存在/StartTime 变化）完全无效，因为进程根本没退出。
+- **`CancellationContext.Cancel()` 只设 `IsCancellationRequested=true`，不设 `disposed`**。`Set()` 创建新 `Cts` 重置 `disposed=false`。所以在任务重新启动（`Set()` 调用）前，`isCancelled` 一直为 true。
+
+### 修复方案（两端）
+1. **BGI 端**（`InstanceRequestHandler.cs`）：`HandleTaskStatus` 响应中新增 `isCancelled` 字段
+2. **助手端**（`MainViewModel.cs` 后台 while 轮询）：每次 IPC 轮询成功时，检测 `isCancelled && !running`。如果成立，说明任务被 F11 手动取消，设 `_isAllReadySequenceCancelled = true` 并 break
+
+### 关联文件
+- `BetterGenshinImpact/Service/Instance/MessageHandlers/InstanceRequestHandler.cs`（新增 `isCancelled` 字段）
+- `MultiplayerHoeingAssistant/ViewModels/MainViewModel.cs`（后台循环检测 `isCancelled`）
+- `BetterGenshinImpact/Core/Script/CancellationContext.cs`（`Cancel()`/`Set()` 语义确认）
+
+### 部署
+**必须同时部署 BGI 端和助手端**。BGI 端新 `isCancelled` 字段是呼吸道助手端检测的基础，旧 BGI 无此字段时 `TryGetProperty` 返回 false，兼容旧版。
+### `isCancelled` 修复矫正（2026-08-21）
+- **初始方案错误**：用 `IsDisposed || IsCancellationRequested` 判断 `isCancelled`。任务正常结束后 `Clear()` Dispose 掉 Cts 使 `IsDisposed=true`，导致正常执行完的任务也被标记为已取消，误判助手端序列（ABC 只执行了 A）。
+- **正确方案**：用 `Cts.IsCancellationRequested`（与 `ScriptService.RunMulti` 循环中 break 检查同一状态），加 `ObjectDisposedException` 保护（Cts 被 Dispose 后视为未取消）。
+- **助手端检测**：边沿检测 `!wasCancelled && isCancelled && !running`，而非电平检测 `isCancelled && !running`。
+- **教训**：`IsDisposed` 不等于"已取消"，等于"任务生命周期已结束"。引用的 BGI 现有逻辑：`ScriptService.RunMulti` 循环中检查 `Cts.IsCancellationRequested`（line 309），不是 `IsDisposed || IsCancellationRequested`。
+### `_lastOnlineGeneration` 初始值 = 0 导致第一次上线不触发（2026-08-21）
+- **问题**：`NotifyOnlineTask.CurrentGeneration` 初始值为 0（`_nextGeneration = 1`，第一次 `Start()` 后 `CurrentGeneration = 1`），助手端 `_lastOnlineGeneration` 初始值为 0（int 默认值）。`gen > _lastOnlineGeneration` 边沿检测第一次永远不触发（`0 > 0` = false）。
+- **表现**：第一次打开助手，执行联机上线无反应；关闭助手再打开，`_lastOnlineGeneration` 重置为 0，但 BGI 的 `CurrentGeneration` 已经 > 0，所以能触发。
+- **修复**：`_lastOnlineGeneration = -1`
+- **教训**：边沿检测的初始值必须小于可能的第一个有效值。`CurrentGeneration` 从 1 开始，所以 `_lastOnlineGeneration` 初始应为 -1。
+### ❌ 上一条 `_lastOnlineGeneration=-1` 是错误结论（2026-08-22 探针验证修正）
+- **错误**：上一条建议 `_lastOnlineGeneration=-1`。实测发现这是错的。
+- **为什么错**：`NotifyOnlineTask.CurrentGeneration` 初始值为 **0**（不是 1！`_nextGeneration=1`，但 `CurrentGeneration` 字段初始是 0，只有第一次 `Start()` 后才变为 1）。所以从未执行上线时，`onlineGeneration=0`。
+- `_lastOnlineGeneration=-1` 时：`0 > -1` = true，会把"从未上线的 generation=0"误判为新上线事件，上报 `ReportOnlineEvent(0)` 给服务端。虽然服务端 `generation <= OnlineEventGeneration(0)` 会忽略 0，但会把 `OnlineEventGeneration` 逻辑搞乱，且用户看到停不下来的误报。
+- **正确结论**：`_lastOnlineGeneration = 0`（与 `CurrentGeneration` 初始 0 一致），这样 `0 > 0` = false，正常。真正执行上线后 `CurrentGeneration=1`，`1 > 0` = true 触发。**之前"第一次上线不触发"的真正根因不是初始值，而是别的问题（倾向是服务端未部署 ReportOnlineEvent 端点 / generation=0 上报干扰）。**
+- **教训**：`NotifyOnlineTask.CurrentGeneration` 初始不是 1 而是 0。边沿检测的"上一值"初始应等于当前值（0），而不是强行设成 -1。设成 -1 会引入 generation=0 的假触发。
+### ✅ 无法上线真正根因 = 服务端断线未重置 generation（2026-08-22 服务端日志证实）
+- **服务端日志决定性证据**：
+  - 第一次连接：`ReportOnlineEvent: generation=1 → CheckAndTransition: allHaveNewEvents=True state=idle → 广播 AllReady` ✔ 成功
+  - 第二次连接：`ReportOnlineEvent: generation=1 → CheckAndTransition: allHaveNewEvents=False state=consumed → 未就绪` ❌ 永久失败
+- **根因**：断线（`RemoveFromControlRoom`）时**没有重置** `OnlineEventGeneration`。BGI 重启后 `NotifyOnlineTask.CurrentGeneration` 从 1 重新开始，但服务端 `OnlineEventGeneration` 保留上次的较高值（2/3）。`ReportOnlineEvent` 里 `generation <= player.OnlineEventGeneration` → return（视为旧事件忽略）→ `OnlineEventConsumed` 保持 true → `allHaveNewEvents=False` → 永不广播 AllReady。
+- **"有时可以有时不行"的原因**：BGI 不重启时 generation 持续递增（1,2,3...）> 服务端旧值，能触发；BGI 重启后 generation 从 1 开始 <= 服务端旧高值，被永久忽略。
+- **修复**：`RoomManager.RemoveFromControlRoom`（断线）时重置 `OnlineEventGeneration=0, OnlineEventConsumed=true, OnlineEventTime=MinValue, OnlineReady=false`。
+- **验证时序**：断线重置后，用户重连执行上线 generation=1，`1 > 0` 触发，`OnlineEventConsumed=false`，`allHaveNewEvents=True`（单成员）→ 广播 AllReady。
+- **关联**：与 `requirements.md` Open Question 1（"BGI 重启后 generation 重置问题"）完全吻合，这是那个风险的落地案例。
+### F11 停止 BGI 无法被助手端检测的最终方案：持久 WaWasCancelled 标志（2026-08-22）
+
+#### 为什么之前的方案都不可靠（已验证推演）
+- F11（`BgiEnabledHotkey`）走 `CancellationContext.Cancel()`，**不设置 `IsManualStop`**（`ManualCancel()` 才设置）。
+- 关键坑：配置组执行结束时，无论正常还是取消，`TaskRunner.RunCurrentAsync` 的 finally 都会调 `CancellationContext.Clear()` Dispose 掉 Cts。导致后续读取 `Cts.IsCancellationRequested` 抛 `ObjectDisposedException` 或返回 false，`IsDisposed` 恒为 true。
+- 所以任何基于 `isCancelled`/`IsCancellationRequested`/`IsDisposed` 的检测都不可靠：正常执行完配置组后这些值也无法区分"正常结束"和"F11 取消"。
+
+#### 最终方案（三处改动）
+1. **`CancellationContext.cs`**：新增持久 `WasCancelled` 标志。`Cancel()`/`ManualCancel()` 设 true；`Set()`（任务启动）清 false；**`Clear()` 不清**（供取消后查询）。
+2. **`InstanceRequestHandler.cs`**：`task.status` 响应暴露 `wasCancelled = CancellationContext.Instance.WasCancelled`。
+3. **助手端 `MainViewModel.cs` while 轮询**：读 `wasCancelled` 字段，边沿检测 `!prevWasCancelled && curWasCancelled && !running` 时设 `_isAllReadySequenceCancelled=true` 并 break。
+
+#### 关键设计
+- `WasCancelled` 是**持久状态**（Clear 不清），F11 停止后即使 Cts 被 Dispose，助手端轮询到 `wasCancelled=true` 仍能稳定检测到。
+- 边沿检测（false→true）避免"当前周期开始就已是 cancelled"的误判。
+- `Set()`（启动新任务）清 false，保证每个配置组开始时标志干净。
+
+#### 部署
+BGI 端 + 助手端都要重新部署（BGI 复制 BetterGI.dll，助手端编译自动部署）。
+### ✅ 依次执行配置组只执行第一个的根因 = RunnerContext 残留 taskName（2026-08-22 用户 BGI 日志确诊）
+- **现象**：绑定 ABC，执行上线，只执行 A（第一个配置组）就停止，B/C 不执行。
+- **BGI 日志铁证**：`task.start "关直播"` 执行完"关直播"配置组后（02:21:54 执行结束），`task.status` **一直返回 `taskName="联机锄地上线", groupName="测试", running=True`**。这是上一个被 suspend 的"测试"配置组的**残留上下文**（"联机锄地上线"是"测试"配置组里的项目）。
+- **根因**：`task.suspend` 保存了旧配置组上下文（`RunnerContext.taskProgress` 指向"测试"配置组的"联机锄地上线"），`task.start "关直播"` 启动新配置组时**没有先清空 `RunnerContext.taskProgress`**。`HandleTaskStatus` 里 `running = !string.IsNullOrEmpty(taskName) && !isCancelled`，`taskName` 残留 → `running` 恒为 true → **助手端 while 轮询永远等不到 running=false，卡死，B/C 永不执行**。
+- **修复**：`InstanceRequestHandler.HandleTaskStart` 在 `RunMulti` 前加 `RunnerContext.Instance.Clear()`，清掉残留 taskName，确保助手端轮询 running 正常变 false。
+- **教训**：`task.status` 的 `running` 依赖 `taskName`（来自 `RunnerContext.taskProgress`），而 `taskProgress` 在 suspend/start 交互中可能残留旧配置组的值。**启动新任务前必须 Clear RunnerContext**。这是"依次执行配置组只执行第一个"的直接根因，与 F11 无关。
+- **部署**：BGI 端（复制 BetterGI.dll）+ 助手端都要重新部署。
+### ⚠️ 上一条 `RunnerContext.Clear()` 修复不完整（2026-08-22 第三轮 BGI 日志修正）
+- **上一条说 `RunnerContext.Clear()` 就够，是错的**。用户加了 `RunnerContext.Clear()` 后重测，`task.status` 的 `taskName` 仍是"联机锄地上线"、`groupName` 仍是"测试"。
+- **真相**：`HandleTaskStatus` 里 `taskName` 有**两个来源**：
+  1. `RunnerContext.Instance.taskProgress?.CurrentScriptGroupProjectInfo?.Name`
+  2. `taskName ??= TaskContext.Instance()?.CurrentScriptProject?.Name`（`??=` 补充！）
+- `RunnerContext.Clear()` 只清了来源 1（`taskProgress=null`），但 `TaskContext.CurrentScriptProject` 还有残留，`??=` 会把它补上 → `taskName` 仍非空 → running 恒 true。
+- **完整修复**：`HandleTaskStart` 启动 `RunMulti` 前必须**同时**：
+  - `RunnerContext.Instance.Clear()`（清 taskProgress）
+  - `TaskContext.Instance().CurrentScriptProject = null`（清 ??= 补充源）
+- **教训**：`task.status` 的 `taskName` 是两级回退取值（`RunnerContext.taskProgress` → `??=` → `TaskContext.CurrentScriptProject`）。清残留必须**两端都清**，只清一个会被 `??=` 补回去。这是"依次执行只跑第一个"的最终根因。
+### ⚠️ 上一条"清残留"是错误方向，真正方案是删 while 轮询（2026-08-22 BGI 日志确诊）
+- **关键发现**：BGI 日志显示 `task.start "关直播"` 返回 success 的时刻（02:30:54）与"关直播"执行结束的时刻（02:30:54）**完全一致**。因为 `HandleTaskStart` 是 `await Dispatcher.Invoke(async () => await RunMulti(...))`，**同步等待配置组执行完才返回**。
+- **所以助手端根本不需要 while 轮询 `running` 来判断配置组是否执行完**。`task.start` 返回 success 本身就意味着配置组执行完毕。
+- **"只执行第一个配置组"的真正根因**：助手端 while 轮询依赖 `task.status` 的 `running` 字段，但 `running` 被 suspend 残留的 `taskName`（如"联机锄地上线"）污染，恒为 true，导致 while 循环永远等不到 `running=false`，卡死在等待，永远不执行下一个配置组。
+- **修复**：删掉助手端后台 for 循环里的 while 轮询，`task.start` 返回 success 直接进入下一个配置组。`task.start` 同步等待 BGI 执行完配置组才返回，所以不需要轮询。
+- **教训**：`task.start` 是同步操作（等待配置组执行完才返回），不是异步 fire-and-forget。之前所有"清残留"方案都是错的——残留的影响是 `running` 恒 true，但既然不需要轮询 `running`，残留就不构成问题。**正确的方向不是清残留，而是删轮询。**
+- **部署**：只需要部署助手端（删 while 轮询）。BGI 端的"清残留"代码（`RunnerContext.Clear()` 和 `CurrentScriptProject=null`）保留，但不起关键作用。
+### ✅ F11 停止后继续执行后续配置组的最终修复：task.start 返回 cancelled 状态（2026-08-22 日志确诊）
+- **背景**：删掉 while 轮询后，ABC 能依次执行了（已验证）。但 F11 停止 A 后，`task.start A` 同步等待 `RunMulti` 因取消而提前返回 success，助手端不知情，继续执行 B/C。
+- **日志决定性证据**：F11 按下后 `[IPC task.status] isCancelled=True` 出现（之前一直是 False）。这正是 `CancellationContext.WasCancelled` 被 `Cancel()` 设为 true 的信号。但删轮询后无人检测它。
+- **修复（两端）**：
+  - **BGI 端 `InstanceRequestHandler.HandleTaskStart`**：`await scriptService.RunMulti(...)` 返回后，检查 `CancellationContext.Instance.WasCancelled`。若 true，标记局部变量 `configGroupCancelled`，方法末尾返回 `status="cancelled"`。
+  - **助手端 `MainViewModel` 后台循环**：收到 `startResult.Status == "cancelled"` 时，设 `_isAllReadySequenceCancelled=true` 并 break（停止整个序列），不再执行后续配置组。
+- **关键**：`WasCancelled` 在 `Set()`（RunMulti 内部任务启动时）清 false，`Cancel()`/`ManualCancel()` 设 true，`Clear()` 不清。所以：
+  - `task.start A` → RunMulti 内部 Set()（WasCancelled=false）→ 执行 A → 若 F11 → Cancel()（WasCancelled=true）→ RunMulti 取消结束 → 检查到 true → 返回 cancelled ✓
+  - 正常执行完 A → WasCancelled=false → 返回 success ✓
+- **部署**：BGI 端 + 助手端都要重新部署。
+- **这是 F11 停止问题从"清残留/轮询检测"方向最终收敛到"task.start 同步返回态"的正确方案。**
+### ⚠️ 断链：BGI 返回 cancelled 但助手端 CommandExecutor 吞掉（2026-08-22 决定性日志）
+- **决定性日志（用户提供）**：
+  - BGI 端：`[IPC task.start] RunMulti 完成, group="单机-精英-锄地", wasCancelled=True` + `[IPC task.start] 配置组 "单机-精英-锄地" 执行中被取消（WasCancelled=true）` —— **BGI 端 cancelled 返回逻辑已生效**。
+  - 但下一行：`HandleTaskStart 被调用 ... task.start: groupName="单机-小怪-锄地"` —— **助手端还是执行了下一个配置组**。
+- **根因**：`MultiplayerHoeingAssistant/Services/CommandExecutor.cs` 的 `StartGroupAsync`（OpCode="task.start"）：
+  ```csharp
+  if (response.Success)
+      return new CommandResult { Status = "success", ... };  // ← 固定返回 success，不读 BGI status
+  ```
+  只要 IPC `Success=true` 就固定 `"success"`，**BGI 返回的 `{"status":"cancelled"}` 被吞掉**，助手端后台循环收不到取消信号。
+- **修复**：`StartGroupAsync` 解析 `response.Data`（`IpcClient` 已把 envelope 的 `data` 字段存为 JSON 字符串，含 `status`），若 `status=="cancelled"` 返回 `CommandResult { Status="cancelled" }`。助手端后台循环已处理 `cancelled` → break。
+- **教训**：跨进程 IPC（BGI ↔ 助手端）的状态字段**必须在下层透传到底层 CommandExecutor 再返回给上层**，不能因为"IPC Success=true"就当成通用成功。协议字段断裂是这类 bug 的隐蔽根因。`IpcClient` 的 `Data` 是 envelope `data` 字段的 JSON 字符串，可直接 `JsonSerializer.Deserialize<JsonElement>(Data)` 取 `status`。
+## 助手进程运行中导致 build 部署期 MSB 错误（2026-08-22）
+
+- **场景**：改 `MultiplayerHoeingAssistant` 代码后执行 `dotnet build`，报 **34 个 MSB3021/MSB3027 错误**（"文件被 MultiplayerHoeingAssistant 进程锁定，超出重试计数"），无任何 CS 编译错误。
+- **根因**：助手 exe 仍在运行（PID 27740），锁定了 `BetterGenshinImpact\bin\x64\Debug\net8.0-windows10.0.22621.0\Tools\MultiplayerHoeingAssistant\` 下的所有 DLL 和 exe。csproj 的 post-build 复制步骤（第 58 行 MSB3026）无法覆盖被锁文件，重试 10 次后失败。
+- **诊断方法**：报错全是 MSB 前缀（MSB3021/MSB3027），**不是 CS 编译错误**。C# 编译本身成功了（只是部署复制失败）。检查 `bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.dll` 的 LastWriteTime 可以确认编译是否真的生了新 DLL。
+- **处理**：先让用户关闭助手进程（或手动复制新 exe），再重新编译部署。**不要误判为代码编译失败**。
+- **关联**：§29 部署机制已记录 MSB3026 警告问题，但**轮多次重试后升级为 MSB3021 错误**的情形更严重，后续应先确认是否有 CS 错误再下结论。
+
+## 弹窗 Height 光加不够，应按 §21.5 用 Star 行限高（2026-08-22）
+
+- **场景**：定时上线弹窗（时/分两个 ListBox + 标题 + 按钮）的"确定"按钮被挤出窗口，用户反复反馈"按钮被截一半看不到"。
+- **错误做法**：连续三次只加大 Height（250→320→350），每次都以为够了，但不同 DPI/字体下内容实际高度仍然超出，反复失败。
+- **§21.5 根治法**：弹窗根容器用 Grid 布局，列表行用 `RowDefinition(Star)` 自动限高出现滚动条，按钮行用 `RowDefinition(Auto)` 固定底部。**不依赖固定 Height 值**，在任何 DPI 下按钮都不会被顶出。
+- **教训**：布局类问题如果二次失败（"按钮被截"），说明加大 Height 是错误方向，应立即改用 Grid Star 行限高。不要在同一方向堆叠修复。
+## 远程配置命令"对方没反应"的排查：先看服务端日志（2026-08-22）
+
+- **场景**：给别人的卡片设定时上线时间（`set_scheduled_online_time`），对方 config 没变、不显示、不执行。
+- **排查**：第一看发送端助手日志是否有"向 XXX 下发..."；第二看**服务端日志**。服务端日志两条关键判据：
+  - `命令 {Cmd} 目标 {uid} 离线，已缓存` → 目标联机助手进程未连接 SignalR，命令被缓存，上线后自动补发（§16 离线缓存机制）
+  - `命令 {Cmd} 已从 {sender} 转发到 0 个目标` → 目标确实不在线，转发 0 个
+  - 如果目标在线正常收到，会显示 `转发到 1 个目标`
+- **根因不是"对方旧版"**：之前误以为是不认识新命令，实际是目标离线。旧版也走同样的 RemoteCommand 透传，只是不认识 Cmd 会走 fallback "未知命令"但仍能收到日志。**服务端 `转发到 0 个目标` 是离线判据，比猜"旧版"更准确**。
+- **处理**：等目标上线后，服务端缓存自动补发命令。无需手动重发。
+- **确认机制现状**：发送端有"已下发"乐观日志，但无"对方已保存生效"的确认提示。接收端的 `SendAckAsync(cmd, "success", ...)` 会回到发送端，但只作为 `Cmd="ack"` 打日志，没有任何 UI 弹窗/提示条。
+## 定时上线语义定稿 = "闹钟"，与上线状态解耦 + 新增"清除上线"（2026-08-22）
+
+联机锄地助手的"定时上线"最终定稿语义（用户拍板），实现时据此设计：
+
+- **定时上线 = 一个闹钟**：设置了 `ScheduledOnlineTime` 只是一个"到点自动上线"的预约。**不看当前是否已上线**，到点就 `MarkOnlineAsync("scheduled")` 触发上线。跟"命令上线"互不影响（命令上线是无条件上线；定时到点也上线，除非闹钟被清除）。
+- **定时时间显示在"定时上线"按键上**（设置了显示"定时 HH:mm"，未设置显示"定时上线"），**不显示在上线状态标签上**。上线状态标签只反映 `OnlineReady`：未上线 / 已上线 / 已联机。去掉原来 `OnlineMode=="scheduled"` 显示"定时 HH:mm"的 DataTrigger。
+- **新增"清除上线"按钮**（`clear_online` 命令 + `ClearLocalOnline()`）：复位因定时触发或命令触发产生的 **已上线状态**（`_isOnlineReady=false, _onlineMode="none"` + 上报服务端），**但不清除定时闹钟**（闹钟还在，到点又会触发上线）。点自己卡清自己；点别人卡发远程 `clear_online`。
+- **设置定时时间不改上线状态**：`ApplyScheduledOnlineTime` 现在只更新 `ScheduledOnlineTime` + 闹钟按钮文本，**不再**把 `_onlineMode` 改成 "scheduled"（避免"设个闹钟就把已命令上线的状态搞乱"）。
+
+**踩坑教训**：上线方式（定时/命令）如果设计成"同一状态位，谁后写谁覆盖"，会出现"定时覆盖命令上线 / 设置闹钟取消已上线"等混乱。**更清晰的设计 = 闹钟（预约机制）与上线状态（当前是否在线）解耦**：闹钟到点才触发上线，设置闹钟只是预约，上线状态由实际触发/清除决定。这避免了 §33/§36 里反复纠结的优先级问题。
+## 命令上线"状态立即变未上线"的双层根因（2026-08-22，服务端日志定位）
+
+场景：房间设 2 人齐（ExpectedHoeingPlayers=2），只 1 人命令上线（另一个人未上线），上线状态瞬间从"已上线"变"未上线"。
+
+**第一层根因（服务端）**：`RoomManager.CheckAndTransition` 原来条件是"所有在线连接（`p.Online==true`）都有新事件就广播 AllReady"——**不检查就绪人数是否达到预期开锄人数**。导致只有 1 人就绪也触发全员就绪消费。修复：改为 `readyPlayers.Count >= threshold` 才广播/消费，其中 `readyPlayers = 在线成员中 !OnlineEventConsumed && gen>0 的`，`threshold = 所有在线成员 ExpectedHoeingPlayers 的最小值(保底 1)`。这样"1 人就绪 < 预期 2"时保持"已上线等待"，不消费。
+
+**第二层根因（PC 端）**：即使服务端不消费，PC 端 `ReportStatusAsync` 检测到 BGI `onlineGeneration` 新事件（命令上线）时，只调 `ReportOnlineEventAsync(gen, _isOnlineReady)` **但没立即设 `_isOnlineReady=true`**，后续 `ReportStatusAsync` 末尾 `ReportControlStatus` 用 `_isOnlineReady=false` 上报 → 服务端 `UpdateControlStatus` 把 `OnlineReady` 覆盖成 false → 广播给所有成员 → 用户看到"已上线瞬间变未上线"。修复：检测到新 gen 时**立即 `_isOnlineReady=true; _onlineMode="command";`** 并 `ReportOnlineEventAsync(gen, true)`。
+
+**排查要点（务必记住）**：
+- 上线状态"闪现即消失"要分两层查：**①服务端是否 `CheckAndTransition` 通过并 `ConsumeOnlineReady` 消费**（看服务端日志 `广播 AllReady` vs `未达预期人数，等待`）；**②PC 端 `ReportStatusAsync` 后续上报是否用 `_isOnlineReady=false` 覆盖**（看服务端 `ReportControlStatus: OnlineReady=False` 是否在 `ReportOnlineEvent` 之后出现）。
+- 命令上线 = BGI 上报 `onlineGeneration` 递增 → PC 边沿检测 → 应**先标 `_isOnlineReady=true`** 再 `ReportOnlineEventAsync`（保证后续上报不覆盖）。
+- 定时上线 = PC 本地 `StartOnlineScheduler` 自增 `_localOnlineGeneration` → `MarkOnlineAsync` 已设 `_isOnlineReady=true` → `ReportOnlineEventAsync(localGen, true)`，天然无覆盖问题（所以用户观察"定时不这样"）。
+- **补充第三层根因（时序覆盖）**：即使第一、二层都修了，`ReportStatusAsync` 里 `status` 对象在**方法开头**构造（`OnlineReady = _isOnlineReady`，此时可能 false），边沿检测在**中后段**才设 `_isOnlineReady=true`。若不同步更新 `status`，末尾 `ReportControlStatusAsync(status)` 仍用构造时的 `OnlineReady=false` 上报 → 覆盖服务端刚由 `ReportOnlineEvent` 设的 `OnlineReady=true` → 上线状态闪 true 又闪 false（过一会下一个上报周期再设 true 变回来）。**修复：边沿检测设 `_isOnlineReady=true` 时，同时 `status.OnlineReady=true; status.OnlineMode="command";`**。
+- **教训**：异步方法内"局部状态对象在入口构造、逻辑中途改共享状态位、出口再上报该对象"——对象承载的是**入口快照**，中途改了共享字段 ≠ 对象字段更新。凡是"先构造 DTO 再中间改状态最后上报 DTO"的模式，都要在中途改状态的地方同步更新 DTO 对应字段，否则上报的是旧快照。

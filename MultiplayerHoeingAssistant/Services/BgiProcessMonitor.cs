@@ -13,11 +13,24 @@ public class BgiProcessMonitor : IDisposable
     public event Action? OnBgiCrashed;
     public event Action? OnBgiStarted;
 
-    public bool IsBgiRunning => Process.GetProcessesByName("BetterGI").Length > 0;
+    public bool IsBgiRunning => GetCurrentSessionBgiProcesses().Length > 0;
 
     public BgiProcessMonitor(string bgiPath)
     {
         _bgiPath = bgiPath;
+    }
+
+    /// <summary>
+    /// 获取「当前 Windows 会话」内的 BetterGI 进程。
+    /// 注意：必须按 SessionId 过滤，否则多用户会话下会把别桌面的 BetterGI 也算进来，
+    /// 导致"本会话 BGI 已被杀却仍显示已启动"，且 KillBgi 会误杀别会话的进程。
+    /// </summary>
+    internal static Process[] GetCurrentSessionBgiProcesses()
+    {
+        var currentSession = Process.GetCurrentProcess().SessionId;
+        return Process.GetProcessesByName("BetterGI")
+            .Where(p => p.SessionId == currentSession)
+            .ToArray();
     }
 
     public void Start()
@@ -39,7 +52,7 @@ public class BgiProcessMonitor : IDisposable
     {
         if (!_isRunning) return;
 
-        var running = Process.GetProcessesByName("BetterGI").Length > 0;
+        var running = GetCurrentSessionBgiProcesses().Length > 0;
         if (!running)
         {
             OnBgiCrashed?.Invoke();
@@ -68,7 +81,7 @@ public class BgiProcessMonitor : IDisposable
 
     public void KillBgi()
     {
-        foreach (var proc in Process.GetProcessesByName("BetterGI"))
+        foreach (var proc in GetCurrentSessionBgiProcesses())
         {
             try
             {

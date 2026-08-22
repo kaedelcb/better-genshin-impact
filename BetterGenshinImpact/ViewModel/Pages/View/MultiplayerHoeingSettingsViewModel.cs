@@ -149,6 +149,9 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
     // ===== F 线路设置 =====
     [ObservableProperty] private bool _debugMode;
 
+    /// <summary>自动更新线路：执行联机锄地前自动调用一次「更新联机锄地线路」（房主设置，同步给成员）。默认 true。hoeing-autoupdate-routes</summary>
+    [ObservableProperty] private bool _autoUpdateRoutes = true;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsBuiltinOnlineMode))]
     [NotifyPropertyChangedFor(nameof(ShowManualRoute))]
@@ -287,6 +290,7 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         _multiplayerUseFixedFightStrategy = GetBool("multiplayerUseFixedFightStrategy", g.MultiplayerUseFixedFightStrategy);
 
         _debugMode = GetBool("debugMode", g.DebugMode);
+        _autoUpdateRoutes = GetBool("autoUpdateRoutes", g.AutoUpdateRoutes);
         _routeModeSelection = RouteModeDecisions.MapUseFixedToRouteMode(GetBool("useFixedDebugRoutes", g.UseFixedDebugRoutes));
         _fixedDebugRoutePath = GetStr("fixedDebugRoutePath", g.FixedDebugRoutePath);
         _groupIndex = RouteModeDecisions.ResolveSelectedOrDefault(groupOptions, GetStr("groupIndex", groupDefault), groupDefault);
@@ -372,6 +376,7 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         if (int.TryParse(GuardUnexecutedRouteThreshold, out var gurt)) settings["guardUnexecutedRouteThreshold"] = gurt;
 
         settings["debugMode"] = DebugMode;
+        settings["autoUpdateRoutes"] = AutoUpdateRoutes;
         settings["useFixedDebugRoutes"] = RouteModeDecisions.MapRouteModeToUseFixed(RouteModeSelection);
         settings["fixedDebugRoutePath"] = FixedDebugRoutePath;
         settings["multiWorldEnabled"] = MultiWorldEnabled;

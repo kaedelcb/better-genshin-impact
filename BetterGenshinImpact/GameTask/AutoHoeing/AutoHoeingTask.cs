@@ -11,6 +11,7 @@ using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Exceptions;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.Model.Area;
+using BetterGenshinImpact.GameTask.Shell;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -489,6 +490,8 @@ public class AutoHoeingTask : ISoloTask
             // === 守护模式重置（hoeing-multiplayer-guard-auto-restart）默认开启===
             _config.HoeingGuardMode = true;
             _config.GuardUnexecutedRouteThreshold = 3;
+            // 自动更新线路默认开启
+            _config.AutoUpdateRoutes = true;
 
             // === 单人调试模式重置（hoeing-multiplayer-solo-debug-mode，纯本地）===
             _config.SoloDebugMode = false;
@@ -546,6 +549,12 @@ public class AutoHoeingTask : ISoloTask
             // 清空联机锄地队伍识别稳定性缓冲（每次任务启动重置一次）
             // 详见 .kiro/specs/combat-scenes-recognition-stability-buffer/design.md §2.3
             BetterGenshinImpact.GameTask.AutoFight.AutoFightTask.ResetRecognitionStabilityBuffer();
+
+            // 自动更新线路：如果启用了 AutoUpdateRoutes，在开始执行前先调用一次更新联机锄地线路
+            if (_config.MultiplayerEnabled && _config.AutoUpdateRoutes)
+            {
+                await RunAutoUpdateRoutesAsync();
+            }
 
             await RunTask();
         }
@@ -982,6 +991,8 @@ public class AutoHoeingTask : ISoloTask
                     // === 守护模式上传（hoeing-multiplayer-guard-auto-restart）===
                     HoeingGuardMode = _config.HoeingGuardMode,
                     GuardUnexecutedRouteThreshold = Multiplayer.HoeingGuardDecisions.ClampThreshold(_config.GuardUnexecutedRouteThreshold),
+                    // === 自动更新线路上传（hoeing-autoupdate-routes）===
+                    AutoUpdateRoutes = _config.AutoUpdateRoutes,
                     // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params spec §C1）===
                     // 上传源统一取房主当前配置组 _partyConfig（房主锄地实际生效实例，OQ-1）；
                     // _partyConfig 为 null 时退回全局 AutoFightConfig（AutoFight 类）或字段默认。
@@ -1418,6 +1429,8 @@ public class AutoHoeingTask : ISoloTask
                         // === 守护模式同步（hoeing-multiplayer-guard-auto-restart，成员回填房主下发值）===
                         _config.HoeingGuardMode = hostConfig.HoeingGuardMode;
                         _config.GuardUnexecutedRouteThreshold = Multiplayer.HoeingGuardDecisions.ClampThreshold(hostConfig.GuardUnexecutedRouteThreshold);
+                        // === 自动更新线路同步（hoeing-autoupdate-routes，成员回填房主下发值）===
+                        _config.AutoUpdateRoutes = hostConfig.AutoUpdateRoutes;
 
                         // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params §C2）===
                         ApplyHostExecParams(hostConfig);
@@ -2503,6 +2516,8 @@ public class AutoHoeingTask : ISoloTask
                     // === 守护模式同步（hoeing-multiplayer-guard-auto-restart，多世界轮换块，成员回填房主下发值）===
                     _config.HoeingGuardMode = hostConfig.HoeingGuardMode;
                     _config.GuardUnexecutedRouteThreshold = Multiplayer.HoeingGuardDecisions.ClampThreshold(hostConfig.GuardUnexecutedRouteThreshold);
+                    // === 自动更新线路同步（hoeing-autoupdate-routes，多世界轮换块，成员回填房主下发值）===
+                    _config.AutoUpdateRoutes = hostConfig.AutoUpdateRoutes;
 
                     // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params §C2，多世界轮换块，R6）===
                     ApplyHostExecParams(hostConfig);
@@ -3178,8 +3193,32 @@ public class AutoHoeingTask : ISoloTask
                         verifyCts.Token);
                     if (verified == false)
                     {
-                        _logger.LogError("[联机] 路线一致性验证失败，两端路线不一致，停止锄地");
-                        return;
+                        _logger.LogError("[联机] 路线一致性验证失败，两端路线不一致，尝试更新线路后重试...");
+                        await RunAutoUpdateRoutesAsync(waitMs: 5000);
+                        _logger.LogInformation("[联机] 线路已更新，重新进行路线一致性验证...");
+                        using var retryVerifyCts = CancellationTokenSource.CreateLinkedTokenSource(_ct);
+                        retryVerifyCts.CancelAfter(TimeSpan.FromSeconds(120));
+                        try
+                        {
+                            var retryVerified = await _consistencyChecker.VerifyRoutesAsync(
+                                _coordinatorClientRef,
+                                groupRoutes.Select(r => r.FullPath),
+                                retryVerifyCts.Token);
+                            if (retryVerified == false)
+                            {
+                                _logger.LogError("[联机] 重试后路线一致性验证仍失败，两端路线不一致，停止锄地");
+                                return;
+                            }
+                            else if (retryVerified == null)
+                                _logger.LogWarning("[联机] 重试后路线一致性验证超时，继续执行");
+                            else
+                                _logger.LogInformation("[联机] 重试后路线一致性验证通过");
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            if (_ct.IsCancellationRequested) throw;
+                            _logger.LogWarning("[联机] 重试后路线一致性验证超时，继续执行");
+                        }
                     }
                     else if (verified == null)
                         _logger.LogWarning("[联机] 路线一致性验证超时，继续执行");
@@ -3785,6 +3824,33 @@ public class AutoHoeingTask : ISoloTask
     /// 与 LoadRoutesBasedOnConfig 的三级优先级目录保持一致，并额外纳入整个 Assets 根目录
     /// （递归扫描所有内置线路子目录，不依赖 SelectedBuiltinRoute 当前值）。
     /// </summary>
+    /// <summary>
+    /// 执行"更新联机锄地线路"（AutoHoeingUpdater）。
+    /// 如果 waitMs > 0，则在更新完成后额外等待指定毫秒数（用于校验失败重试时等待更新落盘生效）。
+    /// 更新失败不影响调用方继续执行（仅记日志）。
+    /// </summary>
+    private async Task RunAutoUpdateRoutesAsync(int waitMs = 0)
+    {
+        _logger.LogInformation("[自动更新线路] 开始执行更新联机锄地线路...");
+        try
+        {
+            var updateTask = new ShellTask(ShellTaskParam.BuildFromConfig(
+                @"Tools\AutoHoeingUpdater\AutoHoeingUpdater.exe --silent --target ""%CD%"" --force-download",
+                new ShellConfig { Timeout = 120, NoWindow = true, Output = true }));
+            await updateTask.Start(_ct);
+            _logger.LogInformation("[自动更新线路] 更新完成");
+            if (waitMs > 0)
+            {
+                _logger.LogInformation("[自动更新线路] 等待 {WaitMs}ms 让更新落盘生效...", waitMs);
+                await Task.Delay(waitMs, _ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[自动更新线路] 更新失败（不影响后续任务继续执行）");
+        }
+    }
+
     public static List<string> ResolveAllHoeingRouteDirs(AutoHoeingConfig config)
     {
         var dirs = new List<string>();
@@ -4277,6 +4343,7 @@ public class AutoHoeingTask : ISoloTask
             _config.HoeingGuardMode = Get("hoeingGuardMode", _config.HoeingGuardMode);
             _config.GuardUnexecutedRouteThreshold = Multiplayer.HoeingGuardDecisions.ClampThreshold(
                 Get("guardUnexecutedRouteThreshold", _config.GuardUnexecutedRouteThreshold));
+            _config.AutoUpdateRoutes = Get("autoUpdateRoutes", _config.AutoUpdateRoutes);
 
             // === 按周期吃食物（multiplayer-hoeing-auto-eat-food-by-period，纯本地）===
             _config.MedicineFoodSlot1 = Get("medicineFoodSlot1", _config.MedicineFoodSlot1);

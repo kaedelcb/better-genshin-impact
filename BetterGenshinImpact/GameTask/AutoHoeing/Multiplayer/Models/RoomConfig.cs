@@ -8,6 +8,8 @@ public class RoomConfig
     public int StartRouteIndex { get; set; } = 0;
     /// <summary>线路关键词过滤（逗号分隔，全角/半角），文件名含任一关键词的线路跳过。默认空=不过滤。hoeing-route-keyword-filter，与服务端 RoomConfig 严格对称</summary>
     public string RouteFilterKeywords { get; set; } = "";
+    /// <summary>自动更新线路：执行联机锄地前自动调用一次「更新联机锄地线路」（AutoHoeingUpdater）。默认 true（房主设置，同步给成员）。hoeing-autoupdate-routes，与服务端 RoomConfig 严格对称</summary>
+    public bool AutoUpdateRoutes { get; set; } = true;
     /// <summary>线路重试模式关键词（逗号分隔，全角/半角），文件名含任一关键词的线路启用"任一成员复苏→全员回神像重跑本段"。默认空=不启用。hoeing-multiplayer-route-retry-mode §0，房主设置同步给成员，与服务端 RoomConfig 严格对称</summary>
     public string RouteRetryModeKeywords { get; set; } = "";
     public bool UseFixedDebugRoutes { get; set; } = false;

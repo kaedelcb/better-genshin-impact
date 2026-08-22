@@ -28,6 +28,9 @@ public class CancellationContext : Singleton<CancellationContext>
 
     private bool disposed;
 
+    /// <summary>最近一次任务是否被用户取消（F11 或取消热键）。任务开始时 Set() 清 false，取消时 Cancel()/ManualCancel() 设 true，Clear() 不清（供 task.status 查询）。</summary>
+    public bool WasCancelled { get; private set; }
+
     public bool IsDisposed => disposed;
 
     public CancellationContext()
@@ -35,6 +38,7 @@ public class CancellationContext : Singleton<CancellationContext>
         Cts = new CancellationTokenSource();
         _externalCtsList = new List<CancellationTokenSource>();
         IsManualStop = false;
+        WasCancelled = false;
         disposed = false;
     }
 
@@ -43,6 +47,7 @@ public class CancellationContext : Singleton<CancellationContext>
         Cts = new CancellationTokenSource();
         _externalCtsList.Clear();
         IsManualStop = false;
+        WasCancelled = false;
         disposed = false;
     }
 
@@ -68,6 +73,7 @@ public class CancellationContext : Singleton<CancellationContext>
             }
 
             IsManualStop = true;
+            WasCancelled = true;
             try
             {
                 Cts.Cancel();
@@ -97,6 +103,7 @@ public class CancellationContext : Singleton<CancellationContext>
                 return;
             }
 
+            WasCancelled = true;
             cts = Cts;
         }
 

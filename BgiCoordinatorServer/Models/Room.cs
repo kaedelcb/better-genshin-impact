@@ -62,6 +62,8 @@ public class Room
     /// ResetForNewWorldRound 复位 false。multiplayer-hoeing-exp-cap-stop R7.3。
     /// </summary>
     public bool ExpCapArmed { get; set; } = false;
+    /// <summary>控制房间是否已广播过 AllReady（幂等标志）。主机游戏确认后置 true，有人下线后复位 false。</summary>
+    public bool AllReadyBroadcasted { get; set; } = false;
 
     /// <summary>
     /// 已上报"连续2场无经验预警"的 connectionId 集合（exp-cap-prefinal-stop-by-two-noexp）。

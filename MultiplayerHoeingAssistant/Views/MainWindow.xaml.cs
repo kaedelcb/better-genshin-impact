@@ -288,9 +288,28 @@ public partial class MainWindow : Window
         bool isOneClick = type == "oneclick";
         var items = isOneClick ? member.OneClickConfigs : member.ConfigGroups;
         string label = isOneClick ? "一条龙" : "配置组";
-        var dlg = new System.Windows.Window { Title = $"{label}列表", Width = 480, Height = 420, WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner, Owner = this, Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xf5, 0xf5, 0xf7)), ResizeMode = System.Windows.ResizeMode.NoResize };
+        var dlg = new System.Windows.Window
+        {
+            Title = $"{label}列表", Width = 480, Height = 420,
+            WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
+            Owner = this,
+            WindowStyle = System.Windows.WindowStyle.SingleBorderWindow,
+            ResizeMode = System.Windows.ResizeMode.NoResize,
+            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
+            Background = new System.Windows.Media.LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0.5, 0),
+                EndPoint = new System.Windows.Point(0.5, 1),
+                GradientStops =
+                {
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
+                }
+            }
+        };
         var panel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(18) };
-        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = $"「{member.PlayerName}」共 {items.Count} 个{label}", FontSize = 14, Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)), Margin = new System.Windows.Thickness(0, 0, 0, 10) });
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = $"「{member.PlayerName}」共 {items.Count} 个{label}", FontSize = 14, FontWeight = System.Windows.FontWeights.SemiBold, Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)), Margin = new System.Windows.Thickness(0, 0, 0, 10) });
         var wrap2 = new System.Windows.Controls.WrapPanel();
         var pillStyle = (System.Windows.Style)FindResource(isOneClick ? "TagOneClickPill" : "TagGroupPill");
         foreach (var item in items)
@@ -300,13 +319,21 @@ public partial class MainWindow : Window
                 Content = item,
                 Style = pillStyle,
                 FontSize = 13,
-                Margin = new System.Windows.Thickness(0, 0, 6, 6)
+                Margin = new System.Windows.Thickness(0, 0, 6, 6),
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA)),
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
+                BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0))
             };
             btn2.Click += (_, _) => { dlg.Close(); if (isOneClick) _ = ViewModel.StartOneClickFromConfigAsync(member, item); else _ = ViewModel.StartGroupFromConfigAsync(member, item); };
             wrap2.Children.Add(btn2);
         }
         panel.Children.Add(new System.Windows.Controls.ScrollViewer { Content = wrap2, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto, MaxHeight = 300 });
-        var closeBtn = new System.Windows.Controls.Button { Content = "关闭", Width = 80, Height = 30, Margin = new System.Windows.Thickness(0, 12, 0, 0), HorizontalAlignment = System.Windows.HorizontalAlignment.Right, Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xe9, 0xe9, 0xeb)), Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1c, 0x1c, 0x1e)), BorderThickness = new System.Windows.Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+        var closeBtn = new System.Windows.Controls.Button { Content = "关闭", Width = 80, Height = 30, Margin = new System.Windows.Thickness(0, 12, 0, 0), HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)),
+            BorderThickness = new System.Windows.Thickness(1),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)),
+            Cursor = System.Windows.Input.Cursors.Hand };
         closeBtn.Click += (_, _) => dlg.Close();
         panel.Children.Add(closeBtn);
         dlg.Content = panel;

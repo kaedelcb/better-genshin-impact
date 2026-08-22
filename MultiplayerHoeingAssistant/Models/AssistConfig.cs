@@ -58,4 +58,22 @@ public class AssistConfig
     /// <summary>③ 守护 BGI：助手运行时，BGI 异常退出则自动重启 BGI</summary>
     [JsonPropertyName("guardBgi")]
     public bool GuardBgi { get; set; } = false;
+
+    // ========== 抢占式中断（multiplayer-hoeing-preempt-interrupt spec）==========
+
+    /// <summary>定时上线时间（HH:mm），空字符串表示未设置</summary>
+    [JsonPropertyName("scheduledOnlineTime")]
+    public string ScheduledOnlineTime { get; set; } = "";
+
+    /// <summary>联机锄地配置组名称列表（多个，如传奇/精英/小怪）</summary>
+    [JsonPropertyName("onlineHoeingGroupNames")]
+    public List<string> OnlineHoeingGroupNames { get; set; } = [];
+
+    /// <summary>当前使用的联机配置组索引（0 = 第一个）</summary>
+    [JsonPropertyName("onlineHoeingGroupIndex")]
+    public int OnlineHoeingGroupIndex { get; set; } = 0;
+
+    /// <summary>预期开锄人数（默认 4）。服务端取所有已上线成员的最小值作为就绪阈值。</summary>
+    [JsonPropertyName("expectedHoeingPlayers")]
+    public int ExpectedHoeingPlayers { get; set; } = 4;
 }

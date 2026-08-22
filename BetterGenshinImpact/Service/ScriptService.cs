@@ -535,48 +535,57 @@ public partial class ScriptService : IScriptService
     private async Task ExecuteProject(ScriptGroupProject project)
     {
         TaskContext.Instance().CurrentScriptProject = project;
-        if (project.Type == "Javascript")
+        try
         {
-            if (project.Project == null)
+            if (project.Type == "Javascript")
             {
-                throw new Exception("Project 为空");
-            }
+                if (project.Project == null)
+                {
+                    throw new Exception("Project 为空");
+                }
 
-            _logger.LogInformation("→ 开始执行JS脚本: {Name}", project.Name);
-            if (RunnerContext.Instance.IsPreExecution) _logger.LogInformation("此任务为优先执行任务！");
-            var hasSettingsBeforeRun = project.JsScriptSettingsObject != null;
-            try
+                _logger.LogInformation("→ 开始执行JS脚本: {Name}", project.Name);
+                if (RunnerContext.Instance.IsPreExecution) _logger.LogInformation("此任务为优先执行任务！");
+                var hasSettingsBeforeRun = project.JsScriptSettingsObject != null;
+                try
+                {
+                    await project.Run();
+                }
+                finally
+                {
+                    SaveScriptGroupAfterJsRun(project, hasSettingsBeforeRun);
+                }
+            }
+            else if (project.Type == "KeyMouse")
             {
+                _logger.LogInformation("→ 开始执行键鼠脚本: {Name}", project.Name);
+                if (RunnerContext.Instance.IsPreExecution) _logger.LogInformation("此任务为优先执行任务！");
                 await project.Run();
             }
-            finally
+            else if (project.Type == "Pathing")
             {
-                SaveScriptGroupAfterJsRun(project, hasSettingsBeforeRun);
+                _logger.LogInformation("→ 开始执行地图追踪任务: {Name}", project.Name);
+                if (RunnerContext.Instance.IsPreExecution) _logger.LogInformation("此任务为优先执行任务！");
+                await project.Run();
+            }
+            else if (project.Type == "Shell")
+            {
+                _logger.LogInformation("→ 开始执行shell: {Name}", project.Name);
+                if (RunnerContext.Instance.IsPreExecution) _logger.LogInformation("此任务为优先执行任务！");
+                await project.Run();
+            }
+            else if (project.Type == "SoloTask")
+            {
+                _logger.LogInformation("→ 开始执行独立任务: {Name}", project.Name);
+                if (RunnerContext.Instance.IsPreExecution) _logger.LogInformation("此任务为优先执行任务！");
+                await project.Run();
             }
         }
-        else if (project.Type == "KeyMouse")
+        finally
         {
-            _logger.LogInformation("→ 开始执行键鼠脚本: {Name}", project.Name);
-            if (RunnerContext.Instance.IsPreExecution) _logger.LogInformation("此任务为优先执行任务！");
-            await project.Run();
-        }
-        else if (project.Type == "Pathing")
-        {
-            _logger.LogInformation("→ 开始执行地图追踪任务: {Name}", project.Name);
-            if (RunnerContext.Instance.IsPreExecution) _logger.LogInformation("此任务为优先执行任务！");
-            await project.Run();
-        }
-        else if (project.Type == "Shell")
-        {
-            _logger.LogInformation("→ 开始执行shell: {Name}", project.Name);
-            if (RunnerContext.Instance.IsPreExecution) _logger.LogInformation("此任务为优先执行任务！");
-            await project.Run();
-        }
-        else if (project.Type == "SoloTask")
-        {
-            _logger.LogInformation("→ 开始执行独立任务: {Name}", project.Name);
-            if (RunnerContext.Instance.IsPreExecution) _logger.LogInformation("此任务为优先执行任务！");
-            await project.Run();
+            // 任务结束后清空 CurrentScriptProject，避免 HandleTaskStatus 的
+            // `taskName ??= TaskContext.CurrentScriptProject?.Name` 用残留值补 taskName → running 恒 true → 任务名残留。
+            TaskContext.Instance().CurrentScriptProject = null;
         }
     }
 

@@ -95,6 +95,15 @@
                 <Run Text="示例：E:\Program Files\BetterGI\BetterGI.exe。可点击「浏览」按钮选择。留空也可以。"/>
             </TextBlock>
 
+            <!-- 预期开锄人数 -->
+            <TextBlock Text="预期开锄人数（几人一起开车）" Style="{StaticResource Lbl}"/>
+            <TextBox x:Name="ExpectedPlayersBox" Style="{StaticResource Txt}" Text="4"/>
+            <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="#8E8E93" Margin="0,2,0,0">
+                <Run Text="填写 1-4。到达该人数即触发联机锄地，不再等其余人员。"/>
+                <LineBreak/>
+                <Run Text="各成员填自己的预期，服务端取最小值判断。示例：都填 3，则 3 人上线就开锄。"/>
+            </TextBlock>
+
             <TextBlock x:Name="ErrorText" FontSize="12" Foreground="#FF3B30" TextWrapping="Wrap" Margin="0,10,0,0"/>
 
             <!-- 按钮 -->

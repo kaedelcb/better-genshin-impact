@@ -339,8 +339,10 @@ public partial class MainWindowViewModel : ObservableObject, IViewModel
                 return;
             }
 
-            // 助手已在运行 → 不必重复启动
-            if (System.Diagnostics.Process.GetProcessesByName("MultiplayerHoeingAssistant").Length > 0)
+            // 助手已在运行（仅当前会话）→ 不必重复启动
+            var currentSession = System.Diagnostics.Process.GetCurrentProcess().SessionId;
+            if (System.Diagnostics.Process.GetProcessesByName("MultiplayerHoeingAssistant")
+                .Any(p => p.SessionId == currentSession))
             {
                 return;
             }

@@ -11,9 +11,15 @@ namespace MultiplayerHoeingAssistant;
 
 public partial class App : Application
 {
-    private static readonly Mutex _instanceMutex = new(true, "NexusBGI_InstanceMutex");
+    /// <summary>
+    /// 单例互斥体，按会话隔离：不同 Windows 用户会话的助手互不干扰。
+    /// 不加 SessionId 过滤时，多用户下会话 B 的助手会阻止会话 A 的助手启动。
+    /// </summary>
+    private static readonly Mutex _instanceMutex = new(true,
+        $"NexusBGI_InstanceMutex_Session{System.Diagnostics.Process.GetCurrentProcess().SessionId}");
     /// <summary>跨进程弹窗通知事件：第二个实例启动时触发，第一个实例收到后弹窗到前台。</summary>
-    private static readonly EventWaitHandle _showWindowEvent = new(false, EventResetMode.AutoReset, "NexusBGI_ShowWindowEvent");
+    private static readonly EventWaitHandle _showWindowEvent = new(false, EventResetMode.AutoReset,
+        $"NexusBGI_ShowWindowEvent_Session{System.Diagnostics.Process.GetCurrentProcess().SessionId}");
     private TaskbarIcon? _trayIcon;
     private bool _startMinimized;
     private MainWindow? _mainWindow;
@@ -184,11 +190,11 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// 检测 BGI 进程是否正在运行。
+    /// 检测 BGI 进程是否正在运行（仅统计当前 Windows 会话，避免多用户下误判别会话的 BGI）。
     /// </summary>
     private static bool IsBgiRunning()
     {
-        return System.Diagnostics.Process.GetProcessesByName("BetterGI").Length > 0;
+        return Services.BgiProcessMonitor.GetCurrentSessionBgiProcesses().Length > 0;
     }
 
     /// <summary>

@@ -394,14 +394,14 @@ public partial class MultiplayerHoeingSettingsView : UserControl
 
         var importFolderBtn = new System.Windows.Controls.Button
         {
-            Content = "从本地文件夹导入线路",
+            Content = "从本地导入线路",
             Margin = new Thickness(0, 8, 0, 4),
             HorizontalAlignment = HorizontalAlignment.Left
         };
 
         var openAssetsDirBtn = new System.Windows.Controls.Button
         {
-            Content = "打开内置线路目录",
+            Content = "内置目录",
             Margin = new Thickness(8, 8, 0, 4),
             HorizontalAlignment = HorizontalAlignment.Left
         };

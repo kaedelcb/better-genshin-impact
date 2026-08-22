@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
 using BetterGenshinImpact.GameTask.AutoHoeing;
+using BetterGenshinImpact.GameTask.AutoOnline;
 
 namespace BetterGenshinImpact.Service.Instance.MessageHandlers;
 
@@ -29,6 +30,11 @@ internal sealed class InstanceRequestHandler
     private readonly Action<WebViewMessage> _dispatchWebViewMessage;
     private readonly ILogger _logger;
     private readonly ConcurrentDictionary<Guid, InstanceIpcEnvelope> _activationResponses = new();
+    /// <summary>最近一次执行过的独立任务名（30 秒内保留，用于助手检测"联机锄地上线"等轻量任务）。</summary>
+    private string? _recentTaskName;
+    private DateTime _recentTaskNameTime = DateTime.MinValue;
+    /// <summary>最近一次执行过的 task.start 代序号（幂等保护：同一 generation 只执行一次）。</summary>
+    private int _lastExecutedTaskGeneration;
 
     internal InstanceRequestHandler(
         InstanceContext context,
@@ -87,6 +93,8 @@ internal sealed class InstanceRequestHandler
                 InstanceOperations.ExecuteHotkey => await HandleExecuteHotkey(connection, request),
                 InstanceOperations.CloseGame => HandleCloseGame(connection, request),
                 InstanceOperations.SetTaskEnabled => await HandleSetTaskEnabled(connection, request),
+                InstanceOperations.TaskSuspend => await HandleTaskSuspend(connection, request),
+                InstanceOperations.TaskResume => await HandleTaskResume(connection, request),
                 _ => InstanceIpcEnvelope.Failure(
                     request,
                     "unsupported_operation",
@@ -485,11 +493,28 @@ internal sealed class InstanceRequestHandler
 
     private async Task<InstanceIpcEnvelope> HandleTaskStart(InstanceConnection connection, InstanceIpcEnvelope request)
     {
+        _logger.LogDebug("[探针 BGI] HandleTaskStart 被调用");
         try
         {
+            // 标记配置组是否在 RunMulti 执行中被取消（F11 停止等），末尾据此返回 cancelled 状态
+            var configGroupCancelled = false;
             var groupName = request.Data?["groupName"]?.ToString();
             var configName = request.Data?["configName"]?.ToString();
             var startFromIndex = request.Data?["startFromIndex"]?.ToObject<int>() ?? 0;
+            // 幂等保护：task.start 携带 generation 时，同一 generation 只执行一次
+            var generation = request.Data?["generation"]?.ToObject<int>() ?? 0;
+            _logger.LogDebug("[探针 BGI] task.start: groupName={Group}, configName={Config}, startFromIndex={Index}, generation={Gen}", groupName ?? "null", configName ?? "null", startFromIndex, generation);
+
+            // 幂等检查：同一 generation 已执行过则跳过（避免 OnAllReady 重复广播导致配置组重复启动）
+            if (generation > 0 && generation <= _lastExecutedTaskGeneration)
+            {
+                _logger.LogInformation("[IPC task.start] generation={Gen} 已执行过，跳过重复执行", generation);
+                return InstanceIpcEnvelope.Response(request, new { status = "already_executed", generation });
+            }
+            if (generation > 0)
+            {
+                _lastExecutedTaskGeneration = generation;
+            }
 
             // 通过全局服务容器获取 IScriptService
             var scriptService = App.ServiceProvider.GetService<BetterGenshinImpact.Service.Interface.IScriptService>();
@@ -551,7 +576,23 @@ internal sealed class InstanceRequestHandler
                             }
 
                             var projectsList = BetterGenshinImpact.ViewModel.Pages.ScriptControlViewModel.GetNextProjects(group);
+                            // 启动新配置组前清空 RunnerContext 和 TaskContext.CurrentScriptProject 的残留，
+                            // 避免 task.status 读到上一个配置组/suspend 的残留 taskName（如"联机锄地上线"），
+                            // 导致助手端轮询 running 恒为 true、卡死在等待（只执行第一个配置组）。
+                            // 注意：仅 RunnerContext.Clear() 不够，taskName 还会通过 ??= 从 TaskContext.CurrentScriptProject 补残留。
+                            BetterGenshinImpact.GameTask.RunnerContext.Instance.Clear();
+                            BetterGenshinImpact.GameTask.TaskContext.Instance().CurrentScriptProject = null;
                             await scriptService.RunMulti(projectsList, groupName);
+                            // task.start 是同步等待 RunMulti 完成的。RunMulti 结束后检查 WasCancelled：
+                            // 若为 true（用户 F11 停止等取消了配置组），标记 configGroupCancelled，方法末尾返回 cancelled 状态，
+                            // 助手端据此停止后续配置组。否则返回 success，助手端继续执行下一个配置组。
+                            var runWasCancelled = BetterGenshinImpact.Core.Script.CancellationContext.Instance.WasCancelled;
+                            _logger.LogInformation("[IPC task.start] RunMulti 完成, group={Group}, wasCancelled={WasCancelled}", groupName, runWasCancelled);
+                            if (runWasCancelled)
+                            {
+                                _logger.LogInformation("[IPC task.start] 配置组 {Group} 执行中被取消（WasCancelled=true）", groupName);
+                                configGroupCancelled = true;
+                            }
                         }
                         else
                         {
@@ -599,6 +640,10 @@ internal sealed class InstanceRequestHandler
                 });
             }
 
+            if (configGroupCancelled)
+            {
+                return InstanceIpcEnvelope.Response(request, new { status = "cancelled", message = "配置组 " + groupName + " 执行中被取消", groupName, configName, startFromIndex });
+            }
             return InstanceIpcEnvelope.Response(request, new { status = "started", groupName, configName, startFromIndex });
         }
         catch (Exception ex)
@@ -611,8 +656,8 @@ internal sealed class InstanceRequestHandler
     {
         try
         {
-            var isCancelled = BetterGenshinImpact.Core.Script.CancellationContext.Instance.IsDisposed
-                || BetterGenshinImpact.Core.Script.CancellationContext.Instance.IsCancellationRequested;
+            var isCancelled = !BetterGenshinImpact.Core.Script.CancellationContext.Instance.IsDisposed
+                && BetterGenshinImpact.Core.Script.CancellationContext.Instance.IsCancellationRequested;
 
             var hoeing = AutoHoeingProgress.IsRunning;
 
@@ -640,9 +685,15 @@ internal sealed class InstanceRequestHandler
                 taskName = null;
                 groupName = null;
             }
+            else if (!string.IsNullOrEmpty(taskName))
+            {
+                // 记录最近执行过的任务名（用于"联机锄地上线"等轻量任务检测）
+                _recentTaskName = taskName;
+                _recentTaskNameTime = DateTime.UtcNow;
+            }
 
             _logger.LogDebug("[IPC task.status] isCancelled={IsCancelled}, taskName={TaskName}, running={Running}, groupName={GroupName}",
-                isCancelled, taskName, !string.IsNullOrEmpty(taskName) && !isCancelled, groupName);
+                isCancelled, taskName, BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0, groupName);
 
             // 联机锄地进度
             string? hoeingProgress = null;
@@ -656,14 +707,45 @@ internal sealed class InstanceRequestHandler
                 }
             }
 
+            // 检查 _recentTaskName 是否在 30 秒内
+            string? recentTaskName = null;
+            if (_recentTaskName != null && (DateTime.UtcNow - _recentTaskNameTime).TotalSeconds < 30)
+            {
+                recentTaskName = _recentTaskName;
+            }
+
+            // 检查"联机锄地上线"独立任务是否在 30 秒内触发过（更可靠，不依赖 taskName 字符串匹配）
+            if (recentTaskName == null
+                && BetterGenshinImpact.GameTask.AutoOnline.NotifyOnlineTask.LastTriggeredAt != DateTime.MinValue
+                && (DateTime.UtcNow - BetterGenshinImpact.GameTask.AutoOnline.NotifyOnlineTask.LastTriggeredAt).TotalSeconds < 30)
+            {
+                recentTaskName = "联机锄地上线";
+            }
+
+            // 检查是否有已保存的中断上下文
+            var hasSuspendedTaskContext = BetterGenshinImpact.GameTask.TaskContext.Instance()?.Config?.SuspendedTaskContext != null;
+
             return InstanceIpcEnvelope.Response(request, new
             {
-                running = !string.IsNullOrEmpty(taskName) && !isCancelled,
+                running = BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0,
+                // 说明：用单任务锁权威判断“是否有任务在跑”，不再依赖 taskName 是否残留。
+                // 任务运行期间 TaskRunner.RunCurrentAsync 持有锁（CurrentCount==0），结束释放（CurrentCount==1）。
+                // taskName 仅作展示名（ExecuteProject/P0 已清空残留）。防止任务正常结束后 running 恒 true → 任务名残留。
+                // 暴露 wasCancelled：最近一次任务是否被用户手动取消（F11 BgiEnabledHotkey 走
+                // CancellationContext.Cancel()，'取消当前脚本'热键走 ManualCancel()，两者都置 WasCancelled=true）。
+                // Set()（任务启动）清 false，Clear() 不清，所以 F11 停止后即使 Cts 被 Dispose，
+                // wasCancelled 仍是 true，助手端能稳定检测到"配置组被手动取消"，从而停止执行后续配置组。
+                wasCancelled = BetterGenshinImpact.Core.Script.CancellationContext.Instance.WasCancelled,
                 status = isCancelled ? "stopped" : "running",
                 taskName,
                 groupName,
                 autoHoeingRunning = hoeing,
-                autoHoeingProgress = hoeingProgress
+                autoHoeingProgress = hoeingProgress,
+                recentTaskName,
+                recentTaskNameTime = _recentTaskNameTime, // 仅当 recentTaskName != null 时有效；null 时忽略
+                onlineGeneration = NotifyOnlineTask.CurrentGeneration, // 新：上线事件代序号，无任务时返回 0
+                onlineTriggeredAt = NotifyOnlineTask.LastTriggeredAt, // 新：上线事件触发时间
+                hasSuspendedTaskContext
             });
         }
         catch (Exception ex)
@@ -933,6 +1015,226 @@ internal sealed class InstanceRequestHandler
         catch (Exception ex)
         {
             return InstanceIpcEnvelope.Failure(request, "save_failed", $"保存启用状态失败: {ex.Message}");
+        }
+    }
+
+    private async Task<InstanceIpcEnvelope> HandleTaskSuspend(InstanceConnection connection, InstanceIpcEnvelope request)
+    {
+        _logger.LogDebug("[探针 BGI] HandleTaskSuspend 被调用");
+        try
+        {
+            // 1. 读取当前任务上下文
+            string? taskType = null;
+            string? groupName = null;
+            int taskIndex = 0;
+            string? folderName = null;
+            string? projectName = null;
+
+            var ctx = BetterGenshinImpact.GameTask.RunnerContext.Instance;
+            var progress = ctx?.taskProgress;
+
+            if (progress?.CurrentScriptGroupProjectInfo != null)
+            {
+                var info = progress.CurrentScriptGroupProjectInfo;
+                groupName = progress.CurrentScriptGroupName;
+                taskIndex = info.Index;
+                folderName = info.FolderName;
+                projectName = info.Name;
+                taskType = "group";
+                _logger.LogDebug("[探针 BGI] 配置组模式: groupName={Group}, taskIndex={Index}, projectName={Name}", groupName, taskIndex, projectName);
+            }
+            else if (progress?.CurrentScriptGroupName != null)
+            {
+                // 有 groupName 但没有 projectInfo → 一条龙
+                groupName = progress.CurrentScriptGroupName;
+                // 一条龙中断时，从 OneDragonFlowViewModel 获取当前配置的 NextTaskIndex
+                try
+                {
+                    var oneDragonVm = App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.OneDragonFlowViewModel>();
+                    if (oneDragonVm?.SelectedConfig != null)
+                    {
+                        taskIndex = oneDragonVm.SelectedConfig.NextTaskIndex;
+                    }
+                }
+                catch
+                {
+                    // ViewModel 不可用时，默认从头开始
+                    taskIndex = 1;
+                }
+                taskType = "onedragon";
+            }
+            else
+            {
+                // 独立任务或 JS 脚本
+                var taskName = BetterGenshinImpact.GameTask.TaskContext.Instance()?.CurrentScriptProject?.Name;
+                if (!string.IsNullOrEmpty(taskName))
+                {
+                    projectName = taskName;
+                    taskType = "solo";
+                }
+            }
+
+            // 2. 如果没有任务在运行，直接返回"无需保存"
+            if (taskType == null)
+            {
+                _logger.LogDebug("[探针 BGI] task.suspend: BGI 当前无任务运行，无需保存上下文");
+                _logger.LogInformation("[IPC task.suspend] BGI 当前无任务运行，无需保存上下文");
+                return InstanceIpcEnvelope.Response(request, new { status = "no_task" });
+            }
+
+            // 3. 保存上下文到 AllConfig
+            var allConfig = BetterGenshinImpact.GameTask.TaskContext.Instance()?.Config;
+            if (allConfig != null)
+            {
+                allConfig.SuspendedTaskContext = new BetterGenshinImpact.Core.Config.SuspendedTaskContext
+                {
+                    TaskType = taskType,
+                    GroupName = groupName ?? "",
+                    TaskIndex = taskIndex,
+                    FolderName = folderName ?? "",
+                    ProjectName = projectName ?? ""
+                };
+                _logger.LogInformation("[IPC task.suspend] 已保存中断上下文: Type={TaskType}, Group={GroupName}, Index={TaskIndex}",
+                    taskType, groupName, taskIndex);
+            }
+
+            // 4. 停止当前任务
+            var cancellationContext = BetterGenshinImpact.Core.Script.CancellationContext.Instance;
+            cancellationContext.Cancel();
+
+            // 5. 等待 TaskSemaphore 释放（最多 5 秒）
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (DateTime.UtcNow < deadline
+                   && BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0)
+            {
+                await Task.Delay(200);
+            }
+
+            return InstanceIpcEnvelope.Response(request, new
+            {
+                status = "suspended",
+                taskType,
+                groupName,
+                taskIndex
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug("[探针 BGI] task.suspend 异常: {Message}", ex.Message);
+            _logger.LogError(ex, "[IPC task.suspend] 中断任务失败");
+            return InstanceIpcEnvelope.Failure(request, "task_suspend_failed", $"中断任务失败: {ex.Message}");
+        }
+    }
+
+    private async Task<InstanceIpcEnvelope> HandleTaskResume(InstanceConnection connection, InstanceIpcEnvelope request)
+    {
+        try
+        {
+            var allConfig = BetterGenshinImpact.GameTask.TaskContext.Instance()?.Config;
+            if (allConfig?.SuspendedTaskContext == null)
+            {
+                return InstanceIpcEnvelope.Failure(request, "no_context", "没有已保存的中断上下文");
+            }
+
+            var context = allConfig.SuspendedTaskContext;
+            _logger.LogInformation("[IPC task.resume] 开始恢复任务: Type={Type}, Group={Group}, Index={Index}",
+                context.TaskType, context.GroupName, context.TaskIndex);
+
+            var scriptService = App.ServiceProvider.GetService<BetterGenshinImpact.Service.Interface.IScriptService>();
+
+            switch (context.TaskType)
+            {
+                case "group":
+                    // 恢复配置组：写 NextScheduledTask 后调 RunMulti
+                    if (scriptService != null && !string.IsNullOrEmpty(context.GroupName))
+                    {
+                        var groupPath = System.IO.Path.Combine(AppContext.BaseDirectory, "User", "ScriptGroup", $"{context.GroupName}.json");
+                        if (System.IO.File.Exists(groupPath))
+                        {
+                            var json = await System.IO.File.ReadAllTextAsync(groupPath);
+                            var group = BetterGenshinImpact.Core.Script.Group.ScriptGroup.FromJson(json);
+                            for (var idx = 0; idx < (group.Projects?.Count ?? 0); idx++)
+                                group.Projects[idx].Index = idx + 1;
+
+                            if (context.TaskIndex > 0)
+                            {
+                                var projects = group.Projects;
+                                var sel = projects?.FirstOrDefault(p => p.Index == context.TaskIndex);
+                                if (sel != null)
+                                {
+                                    allConfig.NextScheduledTask =
+                                    [
+                                        (context.GroupName, context.TaskIndex, context.FolderName, context.ProjectName)
+                                    ];
+                                }
+                            }
+
+                            var projectsList = BetterGenshinImpact.ViewModel.Pages.ScriptControlViewModel.GetNextProjects(group);
+                            _ = Application.Current?.Dispatcher.Invoke(async () =>
+                            {
+                                await scriptService.RunMulti(projectsList, context.GroupName);
+                            });
+                        }
+                    }
+                    break;
+
+                case "onedragon":
+                    // 恢复一条龙：写 NextTaskIndex 后调 OnOneKeyExecute
+                    if (!string.IsNullOrEmpty(context.GroupName))
+                    {
+                        Application.Current?.Dispatcher.Invoke(() =>
+                        {
+                            var vm = App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.OneDragonFlowViewModel>();
+                            if (vm != null)
+                            {
+                                var cfg = vm.ConfigList.FirstOrDefault(c => c.Name == context.GroupName);
+                                if (cfg != null)
+                                {
+                                    vm.SelectedConfig = cfg;
+                                    if (context.TaskIndex > 0)
+                                        cfg.NextTaskIndex = context.TaskIndex;
+                                    _ = vm.OnOneKeyExecute();
+                                }
+                            }
+                        });
+                    }
+                    break;
+
+                case "solo":
+                    // 恢复独立任务/JS 脚本：直接启动
+                    if (!string.IsNullOrEmpty(context.ProjectName))
+                    {
+                        // 通过 SoloTaskRegistry 创建并执行
+                        var soloTask = BetterGenshinImpact.GameTask.SoloTaskRegistry.CreateTask(
+                            context.ProjectName, null, null, context.GroupName);
+                        if (soloTask != null)
+                        {
+                            _ = Task.Run(async () =>
+                            {
+                                try
+                                {
+                                    await soloTask.Start(System.Threading.CancellationToken.None);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogError(ex, "[IPC task.resume] 恢复独立任务失败: {TaskName}", context.ProjectName);
+                                }
+                            });
+                        }
+                    }
+                    break;
+            }
+
+            // 清除上下文（一次性消费）
+            allConfig.SuspendedTaskContext = null;
+            _logger.LogInformation("[IPC task.resume] 已清除中断上下文");
+
+            return InstanceIpcEnvelope.Response(request, new { status = "resumed" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[IPC task.resume] 恢复任务失败");
+            return InstanceIpcEnvelope.Failure(request, "task_resume_failed", $"恢复任务失败: {ex.Message}");
         }
     }
 }

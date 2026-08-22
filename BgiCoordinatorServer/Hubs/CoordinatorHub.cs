@@ -2543,15 +2543,51 @@ public class CoordinatorHub : Hub
         try
         {
             var group = $"CTRL_{status.RoomCode}";
+            // 只更新状态，不做就绪检查（就绪检查由 ReportOnlineEvent 端点统一处理）
             _roomManager.UpdateControlStatus(group, Context.ConnectionId, status);
+            Console.WriteLine("[探针服务端] ReportControlStatus: 已更新状态, group=" + group + " OnlineReady=" + status.OnlineReady);
 
             // 广播给控制房间所有成员
             var players = _roomManager.GetControlRoomPlayers(group);
             await Clients.Group(group).SendAsync("ControlRoomPlayersUpdated", players);
+            Console.WriteLine("[探针服务端] ReportControlStatus: 已广播 ControlRoomPlayersUpdated, group=" + group);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ReportControlStatus 失败");
+        }
+    }
+
+    /// <summary>上报上线事件（带 generation 代序号）。由 ReportOnlineEvent 端点统一处理就绪检查。</summary>
+    public async Task ReportOnlineEvent(int generation, bool isOnlineReady)
+    {
+        try
+        {
+            var group = _roomManager.GetControlRoomGroup(Context.ConnectionId);
+            if (string.IsNullOrEmpty(group))
+            {
+                Console.WriteLine("[探针服务端] ReportOnlineEvent: 找不到 group, connectionId=" + Context.ConnectionId);
+                return;
+            }
+
+            Console.WriteLine("[探针服务端] ReportOnlineEvent: generation=" + generation + " group=" + group);
+            _roomManager.ReportOnlineEvent(group, Context.ConnectionId, generation);
+
+            // 广播玩家列表更新
+            var players = _roomManager.GetControlRoomPlayers(group);
+            await Clients.Group(group).SendAsync("ControlRoomPlayersUpdated", players);
+
+            // 检查是否可转换为 ready
+            if (_roomManager.CheckAndTransition(group, out var readyGeneration))
+            {
+                Console.WriteLine("[探针服务端] ReportOnlineEvent: 状态 ready, 广播 AllReady(" + readyGeneration + "), group=" + group);
+                await Clients.Group(group).SendAsync("AllReady", readyGeneration);
+                _roomManager.ConsumeOnlineReady(group, readyGeneration);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ReportOnlineEvent 失败");
         }
     }
 }

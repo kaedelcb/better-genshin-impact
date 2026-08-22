@@ -30,6 +30,8 @@ public static class InstanceOperations
     public const string ExecuteHotkey = "action.execute_hotkey";
     public const string CloseGame = "action.close_game";
     public const string SetTaskEnabled = "config.set_task_enabled";
+    public const string TaskSuspend = "task.suspend";
+    public const string TaskResume = "task.resume";
 }
 
 public sealed class InstanceIpcEnvelope

@@ -546,6 +546,9 @@
                     <!--  内置线路按钮组占位（code-behind 填充），随 ShowManualRoute 显隐  -->
                     <ContentControl x:Name="BuiltinRouteHost" Visibility="{Binding ShowManualRoute}" />
                     <ui:ToggleSwitch Margin="0,8,0,0"
+                                     Content="自动更新线路（执行前先更新联机锄地线路）"
+                                     IsChecked="{Binding AutoUpdateRoutes, Mode=TwoWay}" />
+                    <ui:ToggleSwitch Margin="0,8,0,0"
                                      Content="调试模式（跳过路线一致性验证）"
                                      IsChecked="{Binding DebugMode, Mode=TwoWay}" />
                 </StackPanel>

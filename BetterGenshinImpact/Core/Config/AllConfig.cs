@@ -110,6 +110,9 @@ public partial class AllConfig : ObservableObject
     /// </summary>
     [ObservableProperty]
     private string _selectedOneDragonFlowPlanName = "默认计划表";
+
+    /// <summary>中断上下文：联机锄地中断时保存的当前任务状态，用于联机结束后恢复。持久化到 config.json。</summary>
+    public SuspendedTaskContext? SuspendedTaskContext { get; set; }
     
     // 计划表列表
     [ObservableProperty]
