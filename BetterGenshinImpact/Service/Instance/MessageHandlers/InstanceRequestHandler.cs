@@ -525,10 +525,8 @@ internal sealed class InstanceRequestHandler
             await Application.Current?.Dispatcher.InvokeAsync(async () =>
                 {
                     var cancellationContext = BetterGenshinImpact.Core.Script.CancellationContext.Instance;
-                    _logger.LogInformation("[IPC task.start] 配置组 {Group} 停止前: WasCancelled={W}, IsDisp={D}, CancelReq={R}", groupName, cancellationContext.WasCancelled, cancellationContext.IsDisposed, cancellationContext.IsCancellationRequested);
                     cancellationContext.Cancel();
                     cancellationContext.Set();
-                    _logger.LogInformation("[IPC task.start] 配置组 {Group} Cancel()+Set()后: WasCancelled={W}, IsDisp={D}, CancelReq={R}", groupName, cancellationContext.WasCancelled, cancellationContext.IsDisposed, cancellationContext.IsCancellationRequested);
                 })!;
 
             // 下发命令为最高优先级：等待旧任务真正释放任务锁（TaskSemaphore.CurrentCount 回到 1）再启动新任务。
@@ -563,7 +561,6 @@ internal sealed class InstanceRequestHandler
                     var completionSource = new TaskCompletionSource();
                     _ = Application.Current!.Dispatcher.InvokeAsync(async () =>
                     {
-                        _logger.LogInformation("[IPC task.start] 配置组 {Group} 的 Dispatcher 回调开始执行（RunMulti 即将开始）", groupName);
                         try
                         {
                             var group = BetterGenshinImpact.Core.Script.Group.ScriptGroup.FromJson(groupJson);
@@ -618,7 +615,6 @@ internal sealed class InstanceRequestHandler
                     });
                     // 等待 RunMulti 真正完成（Dispatcher.InvokeAsync(...).Task 只等待调度完成，不等待内部 await）
                     await completionSource.Task;
-                    _logger.LogInformation("[IPC task.start] 配置组 {Group} 的 RunMulti 已真正完成", groupName);
                 }
             }
             else if (!string.IsNullOrEmpty(configName))
@@ -667,10 +663,8 @@ internal sealed class InstanceRequestHandler
 
             if (configGroupCancelled)
             {
-                _logger.LogInformation("[IPC task.start] 配置组 {Group} 返回 cancelled 状态", groupName);
                 return InstanceIpcEnvelope.Response(request, new { status = "cancelled", message = "配置组 " + groupName + " 执行中被取消", groupName, configName, startFromIndex });
             }
-            _logger.LogInformation("[IPC task.start] 配置组 {Group} 返回 started 状态", groupName);
             return InstanceIpcEnvelope.Response(request, new { status = "started", groupName, configName, startFromIndex });
         }
         catch (Exception ex)
@@ -1196,12 +1190,13 @@ internal sealed class InstanceRequestHandler
                             if (context.TaskIndex > 0)
                             {
                                 var projects = group.Projects;
-                                var sel = projects?.FirstOrDefault(p => p.Index == context.TaskIndex);
+                                var resumeIndex = context.TaskIndex + 1; // projectIndex 是 0-based，Index = idx + 1 是 1-based
+                                var sel = projects?.FirstOrDefault(p => p.Index == resumeIndex);
                                 if (sel != null)
                                 {
                                     allConfig.NextScheduledTask =
                                     [
-                                        (context.GroupName, context.TaskIndex, context.FolderName, context.ProjectName)
+                                        (context.GroupName, resumeIndex, context.FolderName, context.ProjectName)
                                     ];
                                 }
                             }

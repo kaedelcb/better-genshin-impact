@@ -123,13 +123,13 @@ function joinRoom() {
     });
     connection.onreconnected(() => {
         setConn(true);
-        connection.invoke('JoinControlRoom', roomCode, password, 'web_' + playerName, playerName, []);
+        connection.invoke('JoinControlRoom', roomCode, password, 'web_' + playerName, playerName, [], false, '')
         log('已重连');
     });
     connection.onclose(() => setConn(false));
 
     connection.start()
-        .then(() => connection.invoke('JoinControlRoom', roomCode, password, 'web_' + playerName, playerName, []))
+        .then(() => connection.invoke('JoinControlRoom', roomCode, password, 'web_' + playerName, playerName, [], false, ''))
         .then(() => {
             document.getElementById('loginPanel').style.display = 'none';
             document.getElementById('controlPanel').style.display = 'block';

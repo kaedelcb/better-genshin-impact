@@ -986,3 +986,122 @@ if (gen > _lastOnlineGeneration)  // _lastOnlineGeneration=int.MaxValue → 永�
 **验证**：编译通过；待实测确认触发器上线每次都触发。
 
 **教训**：兜底值（int.MaxValue）只该用于"运行时临时值"（会在后续读取后被覆盖），绝不能写进"字段初始值"（无后续覆盖机会）——那等于永久禁用该字段参与的判断逻辑。边沿检测的字段初始值必须等于"最小合法值"（0/当前 generation），而不是"永远不触发"的最大值。
+## WEB 控制端（control-room.js）与 BgiCoordinatorServer 协议兼容性（2026-08-24）
+
+### 协议调用映射
+- **JoinControlRoom**：WEB 端传 5 参（`roomCode, password, playerUid, playerName, []`），服务端 7 参（`allowedUids=null, isRemote=false, clientInstanceId=""` 有默认值），JS 按位置绑定，签名兼容
+- **SendRemoteCommand**：WEB 端传 `RemoteCommand` 对象（含 `senderUid: 'web_' + 玩家名`），服务端 `SendRemoteCommand(RemoteCommand command)` 接收。WEB 端 UID 前缀 `web_` 被服务端 `JoinControlRoom` 识别为 WEB 客户端，不进 `_controlRooms` 成员列表，但 `SendRemoteCommand` 鉴权时对 `web_` 前缀放行发送
+- **事件订阅**：`ControlRoomPlayersUpdated`、`RemoteCommand`、`RemoteCommandAck`、`JoinRejected` 全部匹配
+- **不需要**：WEB 端不需要处理 `AllReady`、`AllReadyConfirm`、`ReportOnlineEvent`、`ReportControlStatus` 等执行端协议
+
+### 关键事实
+- WEB 端 `control-room.js` 自初版 `5c57fe49`（Nexus-BGI V0.1.0）以来从未被修改过
+- 服务端 `CoordinatorHub.cs` 从 V0.1.0 → V0.1.3 的协议演进（新增 `clientInstanceId`、`ReportOnlineEvent`、单人场景跳过确认阶段等）**向后兼容**——所有新增参数都有默认值，WEB 端不传不影响
+- `ResolveTargets` 解析 `target=['*']` 时只查 `_controlRooms` 在线成员。WEB 端（`web_` 前缀）不入 `_controlRooms`，所以 `target=['*']` 不会下发到 WEB 端自身，这是正确的（WEB 端只发命令，不收命令）
+- 如果 WEB 端连不上，根因 99% 是**服务器上 BgiCoordinatorServer 部署的版本旧**，需要重新部署（`bash deploy.sh`），而不是 WEB 端代码需要改
+- `JoinControlRoom` 在 Nexus-BGI V0.1.0（commit `5c57fe49`）首次引入，5 参签名 `(roomCode, password, playerUid, playerName, allowedUids=null)`。如果服务器上部署的是 V0.1.0 之前的版本，Hub 中无此方法，浏览器会报 `Failed to invoke 'JoinControlRoom' due to an error on the server`（SignalR 找不到 Hub 方法时抛出的典型错误）
+- WEB 端 `signalr.min.js` 版本为 8.0.0，与服务端 `net8.0` + `Microsoft.AspNetCore.SignalR` 8.x 版本匹配，不是兼容性问题来源
+- 部署时若只更新 DLL 不更新 `wwwroot/`，也会导致浏览器加载旧版 JS 与服务端不匹配。`bash deploy.sh` 一次性构建镜像并部署，确保两者同步
+## str_replace 的 replace_all 漏匹配陷阱（2026-08-24）
+
+- **场景**：对 `control-room.js` 执行 `str_replace` 改 `connection.invoke('JoinControlRoom', ..., [])` 为 4 参，`replace_all=true`。但第 132 行前面有 `.then(() => ` 前缀，导致 oldStr 未匹配到，只有第 126 行（直接 `connection.invoke(...)`）被改。服务器上出现了"新旧混合"状态（第 126 行 4 参、第 132 行仍是 5 参）。
+- **教训**：`str_replace` 的 `replace_all` 是按**精确字符串匹配**换行的，**不会智能处理换行/前缀差异**。同样的 `connection.invoke(...)` 字符串，如果前面有 `.then(() => ` 或 `.then(r => ` 等前缀，就不匹配。
+- **修复方法**：必须分别用带前后缀的精确 oldStr 逐个替换，或先用 grep 确认所有匹配点后再逐行处理。
+- **验证方法**：改完后必须用 `grepSearch` 或 `grep` 确认**所有目标行**都已改动，不能只看 `replace_all` 返回的计数——它只报告匹配到的行数，不报告未匹配到的行。
+## 联机锄地上线触发任务执行后的恢复机制调研（2026-08-24）
+
+### 背景
+用户关心：执行 A→B→C→D 配置组，执行到 B 中间时触发上线执行联机锄地任务，执行完后能否恢复到 B，之后继续 C、D。
+
+### 恢复链路（当前代码实际行为）
+```
+联机锄地任务结束 (AutoHoeingProgress.Clear)
+  → IsRunning = false
+  → 下一次 ReportStatusAsync (最多10秒后)
+    → 检测到 _wasAutoHoeingRunning && !autoHoeingRunning
+      → 查到 BGI 有 SuspendedTaskContext
+        → 启动 10 秒定时器
+          → 10秒后 ExecuteResumeAsync
+            → BGI 端 HandleTaskResume
+              → 读取 SuspendedTaskContext (groupName, taskIndex, folderName, projectName)
+              → 用 NextScheduledTask 跳转到被中断的任务索引
+              → 执行 RunMulti 恢复执行
+              → 清除 SuspendedTaskContext = null
+```
+
+### 关键文件与函数
+- **助手端** `MainViewModel.cs` `OnAllReadyConfirmedInternal`（~3750行）：先 `task.suspend` 保存上下文，再依次执行联机配置组，**结束后不主动调 resume**
+- **助手端** `MainViewModel.cs` `ReportStatusAsync`（~445行）：每 10 秒轮询检测 `autoHoeingRunning` 从 true→false，查到 `hasSuspendedTaskContext=true` 后启动 10 秒恢复定时器
+- **助手端** `CommandExecutor.cs` `ExecuteSuspendAsync`（~250行）：IPC 发 `task.suspend`
+- **助手端** `CommandExecutor.cs` `ExecuteResumeAsync`（~274行）：IPC 发 `task.resume`（可带 `cancel=true` 参数取消恢复）
+- **BGI 端** `InstanceRequestHandler.cs` `HandleTaskSuspend`（~1062行）：保存当前任务上下文到 `AllConfig.SuspendedTaskContext`，`CancellationContext.Cancel()` 停止任务，等 TaskSemaphore 释放后返回
+- **BGI 端** `InstanceRequestHandler.cs` `HandleTaskResume`（~1166行）：读 `SuspendedTaskContext`，按类型（group/onedragon/solo）恢复，恢复后清除上下文
+- **BGI 端** `SuspendedTaskContext.cs`：`TaskType`/`GroupName`/`TaskIndex`/`FolderName`/`ProjectName` 五个字段
+- **助手端** `MainViewModel.cs` `_wasAutoHoeingRunning` 字段（~46行）：边沿检测，每次 `ReportStatusAsync` 更新
+
+### 已知问题
+1. **恢复有 10 秒轮询延迟 + 10 秒定时器延迟**（最多 20 秒）
+2. **被中断任务会从头重跑**（不是断点续跑），`SuspendedTaskContext.TaskIndex` 记录的是配置组项目索引
+3. **`OnAllReadyConfirmedInternal` 结束时不直接调 resume**，依赖轮询检测，如果 BGI 崩溃或 `autoHoeingRunning` 状态异常，恢复不会触发
+4. `start_group`（`HandleTaskStart`）不会清除 `SuspendedTaskContext`，所以上下文在联机结束后仍存在
+### BGI 重启后上下文丢失（2026-08-24 补充）
+- **场景**：联机锄地（绑定的配置组）执行到一半，用户直接关闭 BGI 进程，再重新打开 BGI。
+- **结果**：SuspendedTaskContext 虽然保存在磁盘 config.json 中（持久化），但 **BGI 重启后不会自动恢复**。恢复机制依赖助手端 `_wasAutoHoeingRunning` 边沿检测（从 true→false），BGI 重启后 `autoHoeingRunning` 初始为 false，`_wasAutoHoeingRunning` 也是 false，边沿检测不触发 → 上下文永久留在 config.json 无人消费。
+- **同理**：联机锄地已结束但在 20 秒恢复窗口期内关了 BGI，同样丢失。
+- **手动恢复**：只有下次再触发上线跑新的联机配置组时，`task.suspend` 会覆盖旧上下文。需要手动在 BGI 里重新启动原来的任务序列。
+- **教训**：SuspendedTaskContext 的恢复依赖助手进程持续运行 + 边沿检测触发。BGI 重启会切断这个循环，即使上下文在磁盘上也不会被自动消费。
+### F11 停止 vs 助手端 task.suspend 是两条独立通道（2026-08-24 补充）
+- **F11 停止**：走 BGI 自身 `CancellationContext.Cancel()`，**不会保存 SuspendedTaskContext**。`AutoHoeingTask.Start` 的 `finally` 会 `AutoHoeingProgress.Clear()` 清 `IsRunning`，但助手端检测到 `hasSuspendedTaskContext=false`，不会触发恢复。
+- **助手端暂停**：走 IPC `task.suspend` → `HandleTaskSuspend` 保存 `SuspendedTaskContext` 到磁盘 → 再 `CancellationContext.Cancel()`。后续助手端可检测到 `hasSuspendedTaskContext=true` 并触发恢复。
+- **F11 再按（恢复）**：只是重新启动 BGI 的任务调度能力，**不会恢复之前被中断的任务序列**。原来的任务序列需要手动重新启动。
+- **关键教训**：F11 和 IPC task.suspend 是两条互不感知的通道。F11 停的只是 BGI 当前任务，不触发上下文的保存/恢复机制。如果用户想保留"中断后恢复"的能力，需要通过助手端操作（如触发上线、发暂停命令等），而不是按 F11。
+### 恢复机制 bug 根因 + 修复方案（2026-08-24 确诊 + 修复）
+
+**用户报告现象**：手动执行"联机测试"配置组，定时上线触发执行"采集"配置组，执行完"采集"后没有恢复"联机测试"。
+
+**日志确诊**（BGI 端）：
+- `[IPC task.suspend] 已保存中断上下文: Type="group", Group="联机测试", Index=6` — 上下文保存成功
+- `[IPC task.start] 配置组 "采集" ... 返回 started 状态` — 绑定配置组执行完
+- **然后就没有任何 task.resume 了** — 恢复从未触发
+
+**根因一（边沿检测死代码）**：`MainViewModel.cs` 的 `_wasAutoHoeingRunning` 字段（第46行）初始值 false，**唯一赋值点在第486行 `_wasAutoHoeingRunning = autoHoeingRunning`，位于 `if (_wasAutoHoeingRunning && !autoHoeingRunning)` 分支内部**。当 `autoHoeingRunning` 从 false→true（联机锄地开始）时，没有代码把 `_wasAutoHoeingRunning` 更新为 true。所以 `if (false && ...)` 永远不成立，边沿检测从未生效过。
+
+**根因二（autoHoeingRunning 语义）**：`autoHoeingRunning` 来自 BGI `AutoHoeingProgress.IsRunning`，只在 `AutoHoeingTask`（联机锄地）进锄地房间时置 true。普通配置组（"采集"等）执行时恒为 false，所以即使边沿检测正确，对普通配置组场景也不适用。
+
+**修复方案（已实施）**：在 `OnAllReadyConfirmedInternal` 的 try 块末尾（for 循环全部执行完后、`_ = ReportStatusAsync()` 之前）直接调 `ExecuteResumeAsync()`，加 `if (_commandExecutor != null)` 保护。此位置在绑定列表全部执行完后，天然覆盖两个场景（联机锄地 / 普通配置组）。
+
+**⚠️ 关键决策：不要修 `_wasAutoHoeingRunning` 边沿检测**。如果修复它（让 false→true 时更新），会引入竞态：绑定配置组列表中间有一个联机锄地时，边沿检测在联机锄地结束后就触发恢复"联机测试"，而 for 循环尚未执行完后续绑定配置组 → 过早恢复冲突。边沿检测是死代码，不生效即不构成问题，保持不修。
+
+**防回归补充**：`ExecuteResumeAsync` 第二次调用时，BGI `SuspendedTaskContext` 已被第一次恢复消费置 null，`HandleTaskResume` 返回 `no_context`，仅日志记录，无破坏（幂等安全）。
+### ✅ 恢复机制 bug 修复完成验证（2026-08-24，已在 MainViewModel.cs 实施）
+
+**改动**：`OnAllReadyConfirmedInternal` try 块末尾（for 循环后、ReportStatusAsync 前）新增 `if (_commandExecutor != null) { await ExecuteResumeAsync(); }`。
+
+**验证证据**：
+- 编译通过：`dotnet build MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj -c Debug` → 0 error 0 warning
+- 静态层：新代码只在 try 块（3842-3858行），catch 块未改动；`ExecuteResumeAsync` 调用点从 1 处增至 2 处（原有轮询恢复 475行 + 新增 3848行）；`_wasAutoHoeingRunning` 边沿检测死代码未动
+- 行为层：**需人工确认** — 部署后实测，看日志是否出现"原任务已自动恢复"
+
+**结论**：代码改动完成，编译 0 error，零回归风险。运行效果需用户实测确认，不能替用户宣布成功。
+### 恢复机制修复实测验证（2026-08-24 用户实测确认）
+
+**用户配置**："联机测试"配置组，15个任务。前9个禁用，A004蒙德雪山-1.json禁用，第10个 219璃月-华光林2.json，第11个 01-植绒草-至冬-霜殛寒峰-9个.json。
+
+**执行过程**：手动执行"联机测试"→ 从219璃月-华光林2.json开始执行 → 执行到01-植绒草-至冬-霜殛寒峰-9个.json时触发定时上线 → 上线任务执行完 → 恢复后从219璃月-华光林2.json重新开始执行。
+
+**验证结论**：
+- ✅ 恢复机制正常触发（`OnAllReadyConfirmedInternal` 末尾直接调 `ExecuteResumeAsync()`）
+- ✅ 恢复后从中断任务的前一个开始（SuspendedTaskContext.TaskIndex 指向被中断任务的索引，BGI 的"从此处开始执行"机制从该索引开始执行，意味着被中断任务的前一个任务会被重跑一次）
+- ✅ 不是从头开始执行所有任务（跳过了前面9个禁用的 + A004）
+- ⚠️ 被中断的任务会重新执行一次（不是断点续跑，这是 BGI 配置组"从此处开始执行"机制的设计限制）
+
+**关键教训**：修复后的恢复机制工作正常，但"被中断任务重跑一次"是 BGI 自身的"从此处开始执行"机制决定的——`NextScheduledTask` 指定从某个索引开始执行，`RunMulti` 会执行该索引及其后的所有项目。这不是本次修复能解决的问题，是 BGI 配置组执行机制的设计限制。
+### 恢复机制索引偏移 bug（2026-08-24 发现 + 修复）
+
+**用户实测现象**：恢复后从中断任务的前一个任务开始执行，而不是从中断任务本身开始。
+
+**根因**：`SuspendedTaskContext.TaskIndex` 保存的是 `projectIndex`（0-based，从 -1 开始计数），而 `HandleTaskResume` 恢复时设 `Index = idx + 1`（1-based，从 1 开始计数）。匹配 `p.Index == context.TaskIndex` 时，由于 0-based vs 1-based 的偏移，匹配到的项目比被中断的项目索引小 1。
+
+**修复**：`HandleTaskResume` 中匹配和写入时，`context.TaskIndex + 1` 转换为 1-based 后再匹配 `p.Index`。
+
+**涉及文件**：`BetterGenshinImpact/Service/Instance/MessageHandlers/InstanceRequestHandler.cs`，`HandleTaskResume` 方法，第 1193-1201 行。

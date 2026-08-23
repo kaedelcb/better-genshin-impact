@@ -37,11 +37,11 @@ public class MatchTemplateHelper
         try
         {
             GC.Collect();
-            _logger.LogDebug("内存清理流程执行完成");
+            Logger?.LogDebug("内存清理流程执行完成");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "内存清理流程执行失败");
+            Logger?.LogWarning(ex, "内存清理流程执行失败");
         }
     }
 

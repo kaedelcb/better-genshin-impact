@@ -37,8 +37,6 @@ public class MainViewModel : INotifyPropertyChanged
     // 边沿检测：记录上次处理过的 BGI 上线事件代序号与 AllReady 代序号，用于幂等保护
     private int _lastOnlineGeneration = 0;
     private int _lastProcessedAllReadyGeneration;
-    /// <summary>互斥锁：防止两轮 AllReady 并发执行 OnAllReadyConfirmedInternal（patterns §31）。</summary>
-    private int _isAllReadyProcessing;
     /// <summary>用户手动停止时设为 true，后台依次执行序列检查到此标志后跳过剩余配置组。</summary>
     private bool _isAllReadySequenceCancelled;
     /// <summary>用户手动清除上线后置 true，抑制定时自动上线。手动设定定时上线时清除。</summary>
@@ -403,9 +401,7 @@ public class MainViewModel : INotifyPropertyChanged
                     if (sdata.TryGetProperty("onlineGeneration", out var ogEl) && ogEl.ValueKind == System.Text.Json.JsonValueKind.Number)
                     {
                         var gen = ogEl.GetInt32();
-                        var triggerEdge = gen > _lastOnlineGeneration;
-                        AddLog($"[上线探针] onlineGeneration={gen}, _lastOnlineGeneration={_lastOnlineGeneration}, 是否触发={triggerEdge}");
-                        if (triggerEdge)
+                        if (gen > _lastOnlineGeneration)
                         {
                             _lastOnlineGeneration = gen;
                             // 命令上线：BGI 报告 onlineGeneration 递增 → 标记已上线（命令模式），
@@ -426,9 +422,7 @@ public class MainViewModel : INotifyPropertyChanged
                     else if (sdata.TryGetProperty("recentTaskName", out var rtn) && rtn.ValueKind == System.Text.Json.JsonValueKind.String)
                     {
                         var recentTask = rtn.GetString() ?? "";
-                        var triggerLevel = recentTask == "联机锄地上线" && !_isOnlineReady;
-                        AddLog($"[上线探针] recentTaskName={recentTask}, _isOnlineReady={_isOnlineReady}, 是否触发={triggerLevel}");
-                        if (triggerLevel)
+                        if (recentTask == "联机锄地上线" && !_isOnlineReady)
                         {
                             _ = MarkOnlineAsync("command");
                         }
@@ -3788,7 +3782,6 @@ public class MainViewModel : INotifyPropertyChanged
 
         // 先 task.suspend 中断当前任务
         var suspendResult = await _commandExecutor.ExecuteSuspendAsync(groupName);
-        AddLog($"[上线探针] OnAllReadyConfirmedInternal: generation={generation}, suspendResult.Status={suspendResult.Status}, _isOnlineReady={_isOnlineReady}");
         if (suspendResult.Status != "success")
         {
             AddLog("task.suspend 失败，尝试杀进程重启...");
@@ -3826,7 +3819,6 @@ public class MainViewModel : INotifyPropertyChanged
                         Params = new Dictionary<string, object> { { "groupName", currentGroup }, { "startFromIndex", 0 }, { "generation", generation } }
                     };
                     var startResult = await _commandExecutor.ExecuteAsync(startCmd);
-                    AddLog($"[上线探针] start_group 返回: group={currentGroup}, status={startResult.Status}, msg={startResult.Message}");
                     if (startResult.Status == "cancelled")
                     {
                         _isAllReadySequenceCancelled = true;
@@ -3845,7 +3837,25 @@ public class MainViewModel : INotifyPropertyChanged
                 _isOnlineReady = false;
                 _onlineMode = "none";
                 _isAllReadySequenceCancelled = false;
-                AddLog($"[上线探针] OnAllReadyConfirmedInternal 结束: _isOnlineReady=false, _onlineMode=none, _isAllReadySequenceCancelled=false, 将 ReportStatusAsync");
+
+                // 执行完所有绑定的配置组后，立即恢复原任务
+                // 直接调用 ExecuteResumeAsync，消除对 _wasAutoHoeingRunning 边沿检测的依赖
+                // 此位置在 for 循环全部执行完后，天然覆盖两个场景：
+                //   场景A: 绑定配置组是联机锄地（AutoHoeingTask）
+                //   场景B: 绑定配置组是普通配置组（如"采集"）
+                if (_commandExecutor != null)
+                {
+                    var resumeResult = await _commandExecutor.ExecuteResumeAsync();
+                    if (resumeResult.Status == "success")
+                    {
+                        AddLog("原任务已自动恢复");
+                    }
+                    else
+                    {
+                        AddLog($"恢复原任务失败: {resumeResult.Message}");
+                    }
+                }
+
                 _ = ReportStatusAsync();
             }
             catch (Exception ex)
@@ -3854,7 +3864,6 @@ public class MainViewModel : INotifyPropertyChanged
                 _isOnlineReady = false;
                 _onlineMode = "none";
                 _isAllReadySequenceCancelled = false;
-                AddLog($"[上线探针] OnAllReadyConfirmedInternal 异常结束: _isOnlineReady=false, _onlineMode=none, _isAllReadySequenceCancelled=false, 将 ReportStatusAsync");
                 _ = ReportStatusAsync();
             }
         });

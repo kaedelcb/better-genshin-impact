@@ -214,7 +214,7 @@ public class SignalRClient : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            OnLog?.Invoke($"[上线探针] ReportOnlineEventAsync 调用失败: {ex.Message}");
+            OnLog?.Invoke($"ReportOnlineEventAsync 调用失败: {ex.Message}");
             throw;
         }
     }
