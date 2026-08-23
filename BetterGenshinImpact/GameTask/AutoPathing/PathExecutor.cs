@@ -51,6 +51,8 @@ public partial class PathExecutor
     private readonly TrapEscaper _trapEscaper;
     private readonly BlessingOfTheWelkinMoonTask _blessingOfTheWelkinMoonTask = new();
     private AutoSkipTrigger? _autoSkipTrigger;
+    /// <summary>连续视角转动超时次数，达到 20 次后放弃本段，避免卡死在"不在主界面"的循环中</summary>
+    private int _consecutiveRotationTimeoutCount;
     public int SuccessFight = 0;
     //路径追踪完全走完所有路径结束的标识
     public bool SuccessEnd = false;
@@ -4514,10 +4516,26 @@ public partial class PathExecutor
         // Logger.LogError("旋转视角2");
         if (await _rotateTask.WaitUntilRotatedTo(targetOrientation, maxDiff))
         {
+            // 旋转成功，重置连续超时计数
+            _consecutiveRotationTimeoutCount = 0;
             return;
         }
         await ResolveAnomalies();
-        await _rotateTask.WaitUntilRotatedTo(targetOrientation, maxDiff);
+        if (await _rotateTask.WaitUntilRotatedTo(targetOrientation, maxDiff))
+        {
+            // 第二次旋转成功，重置连续超时计数
+            _consecutiveRotationTimeoutCount = 0;
+            return;
+        }
+
+        // 两次旋转都超时，累加连续超时计数
+        _consecutiveRotationTimeoutCount++;
+        Logger.LogWarning("连续{Count}次视角转动超时，放弃当前路径点", _consecutiveRotationTimeoutCount);
+        if (_consecutiveRotationTimeoutCount >= 20)
+        {
+            Logger.LogWarning("连续{Count}次视角转动超时，放弃当前路径点", _consecutiveRotationTimeoutCount);
+            throw new RetryException("连续20次视角转动超时，放弃当前路径点");
+        }
     }
 
     /**

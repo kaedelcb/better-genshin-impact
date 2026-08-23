@@ -20,6 +20,7 @@ public class MainViewModel : INotifyPropertyChanged
     private CommandExecutor? _commandExecutor;
     private AssistConfig? _config;
     private AssistConfigManager? _configManager;
+    private MemberConfigCacheManager? _cacheManager;
     private string _roomCode = "";
     private bool _isConnected;
     private string _lastLoggedProgress = "";
@@ -34,12 +35,14 @@ public class MainViewModel : INotifyPropertyChanged
     /// <summary>本地定时上线自增 generation（用于驱动服务端 AllReady 判定，代替 BGI 的 onlineGeneration）。</summary>
     private int _localOnlineGeneration = 0;
     // 边沿检测：记录上次处理过的 BGI 上线事件代序号与 AllReady 代序号，用于幂等保护
-    private int _lastOnlineGeneration = int.MaxValue;
+    private int _lastOnlineGeneration = 0;
     private int _lastProcessedAllReadyGeneration;
+    /// <summary>互斥锁：防止两轮 AllReady 并发执行 OnAllReadyConfirmedInternal（patterns §31）。</summary>
+    private int _isAllReadyProcessing;
     /// <summary>用户手动停止时设为 true，后台依次执行序列检查到此标志后跳过剩余配置组。</summary>
     private bool _isAllReadySequenceCancelled;
     /// <summary>用户手动清除上线后置 true，抑制定时自动上线。手动设定定时上线时清除。</summary>
-    private bool _manuallyClearedOnline;
+    private bool _manuallyClearedOnline = true;
     private bool _wasAutoHoeingRunning;
 
     /// <summary>成员角色头像池（按加入顺序循环分配，file=资源名，ring=元素色描边）。</summary>
@@ -97,6 +100,7 @@ public class MainViewModel : INotifyPropertyChanged
     public RelayCommand ClearOnlineCommand => new(OnClearOnline);
     public RelayCommand ClearOnlineHistoryCommand => new(OnClearOnlineHistory);
     public RelayCommand BindHoeingGroupCommand => new(OnBindHoeingGroup);
+    public RelayCommand ClearLogCommand => new(_ => ClearLog());
 
     /// <summary>切换执行/监控模式（点击连接徽章触发）</summary>
     public RelayCommand SwitchModeCommand => new(_ => _ = SwitchModeAsync());
@@ -123,6 +127,7 @@ public class MainViewModel : INotifyPropertyChanged
     {
         _configManager = new AssistConfigManager();
         _config = _configManager.Load();
+        _cacheManager = new MemberConfigCacheManager();
 
         // 配置加载完成后刷新设置页绑定（否则 UI 初次绑定时 _config 为 null，控件显示未选/未读状态）
         RefreshSetupBindings();
@@ -166,6 +171,13 @@ public class MainViewModel : INotifyPropertyChanged
         // 启动定时上线定时器（设定过 scheduledOnlineTime 才会真正到点触发）
         StartOnlineScheduler();
 
+        // 生成实例标识（UUID），用于服务端区分同 UID 的多个连接实例
+        if (string.IsNullOrEmpty(_config.ClientInstanceId))
+        {
+            _config.ClientInstanceId = Guid.NewGuid().ToString("N");
+            _configManager?.Save(_config);
+        }
+
         // 根据配置应用模式运行时（启动/跳过 BGI 进程监控）。与 SwitchModeAsync 共享同一逻辑。
         ApplyModeRuntime(_config.ObserverMode);
 
@@ -190,7 +202,7 @@ public class MainViewModel : INotifyPropertyChanged
 
             await _signalRClient.ConnectAsync(
                 _config!.ServerUrl, RoomCode, _config.ControlRoomPassword,
-                _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode);
+                _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId);
 
             IsConnected = true;
             AddLog("已连接控制房间");
@@ -214,7 +226,7 @@ public class MainViewModel : INotifyPropertyChanged
                     {
                         await _signalRClient!.ConnectAsync(
                             _config!.ServerUrl, RoomCode, _config.ControlRoomPassword,
-                            _config.PlayerUid, _config.PlayerName, _config.TeamUids);
+                            _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId);
                         Application.Current.Dispatcher.Invoke(() =>
                         {
                             IsConnected = true;
@@ -261,6 +273,10 @@ public class MainViewModel : INotifyPropertyChanged
         }
         else
         {
+            // 加载缓存，用于 IPC 失败时回退
+            var cache = _cacheManager?.Load();
+            bool hasCache = cache != null && (cache.ConfigGroups.Count > 0 || cache.OneClickConfigs.Count > 0);
+
             try
             {
                 using var ipcClient = new IpcClient();
@@ -283,10 +299,30 @@ public class MainViewModel : INotifyPropertyChanged
                         oneClickTasksWithStatus = JsonSerializer.Deserialize<Dictionary<string, List<object>>>(oTasksWs.GetRawText()) ?? [];
                     if (data.TryGetProperty("hotkeys", out var hks) && hks.ValueKind == JsonValueKind.Array)
                         hotkeys = JsonSerializer.Deserialize<List<object>>(hks.GetRawText()) ?? [];
+
+                    // IPC 成功 → 更新缓存（无论数据是否为空，都是 BGI 当前真实状态）
+                    _cacheManager?.Save(new MemberConfigCache
+                    {
+                        ConfigGroups = configGroups,
+                        OneClickConfigs = oneClickConfigs,
+                        ConfigGroupTasksWithStatus = configGroupTasksWithStatus,
+                        OneClickTasksWithStatus = oneClickTasksWithStatus,
+                        Hotkeys = hotkeys,
+                        LastUpdated = DateTime.UtcNow
+                    });
                 }
                 else
                 {
                     AddLog($"IPC config.list 失败: {response.ErrorMessage ?? "无响应"}");
+                    // IPC 失败（BGI 不可达）→ 回退到缓存
+                    if (hasCache)
+                    {
+                        configGroups = cache!.ConfigGroups;
+                        oneClickConfigs = cache!.OneClickConfigs;
+                        configGroupTasksWithStatus = cache!.ConfigGroupTasksWithStatus;
+                        oneClickTasksWithStatus = cache!.OneClickTasksWithStatus;
+                        hotkeys = cache!.Hotkeys;
+                    }
                 }
 
                 // 轮询 task.status 获取当前任务状态
@@ -309,6 +345,15 @@ public class MainViewModel : INotifyPropertyChanged
             catch (Exception ex)
             {
                 AddLog($"IPC 不可用: {ex.Message}");
+                // IPC 异常 → 回退到缓存
+                if (hasCache)
+                {
+                    configGroups = cache!.ConfigGroups;
+                    oneClickConfigs = cache!.OneClickConfigs;
+                    configGroupTasksWithStatus = cache!.ConfigGroupTasksWithStatus;
+                    oneClickTasksWithStatus = cache!.OneClickTasksWithStatus;
+                    hotkeys = cache!.Hotkeys;
+                }
             }
         }
 
@@ -354,36 +399,40 @@ public class MainViewModel : INotifyPropertyChanged
             if (statusResp.Success && !string.IsNullOrEmpty(statusResp.Data))
             {
                 var sdata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(statusResp.Data);
-                // 优先读 onlineGeneration（新字段，边沿检测）
-                if (sdata.TryGetProperty("onlineGeneration", out var ogEl) && ogEl.ValueKind == System.Text.Json.JsonValueKind.Number)
-                {
-                    var gen = ogEl.GetInt32();
-                    if (gen > _lastOnlineGeneration)
+                    // 优先读 onlineGeneration（新字段，边沿检测）
+                    if (sdata.TryGetProperty("onlineGeneration", out var ogEl) && ogEl.ValueKind == System.Text.Json.JsonValueKind.Number)
                     {
-                        _lastOnlineGeneration = gen;
-                        // 命令上线：BGI 报告 onlineGeneration 递增 → 标记已上线（命令模式），
-                        // 避免后续 ReportStatusAsync 继续上报 OnlineReady=false 覆盖服务端。
-                        _isOnlineReady = true;
-                        _onlineMode = "command";
-                        // 同步更新本地已构造的 status 对象，防止后续 ReportControlStatusAsync 用 OnlineReady=false 覆盖服务端
-                        status.OnlineReady = true;
-                        status.OnlineMode = "command";
-                        // 上报服务端，由服务端状态机协调
-                        if (_signalRClient != null)
+                        var gen = ogEl.GetInt32();
+                        var triggerEdge = gen > _lastOnlineGeneration;
+                        AddLog($"[上线探针] onlineGeneration={gen}, _lastOnlineGeneration={_lastOnlineGeneration}, 是否触发={triggerEdge}");
+                        if (triggerEdge)
                         {
-                            await _signalRClient.ReportOnlineEventAsync(gen, true);
+                            _lastOnlineGeneration = gen;
+                            // 命令上线：BGI 报告 onlineGeneration 递增 → 标记已上线（命令模式），
+                            // 避免后续 ReportStatusAsync 继续上报 OnlineReady=false 覆盖服务端。
+                            _isOnlineReady = true;
+                            _onlineMode = "command";
+                            // 同步更新本地已构造的 status 对象，防止后续 ReportControlStatusAsync 用 OnlineReady=false 覆盖服务端
+                            status.OnlineReady = true;
+                            status.OnlineMode = "command";
+                            // 上报服务端，由服务端状态机协调
+                            if (_signalRClient != null)
+                            {
+                                await _signalRClient.ReportOnlineEventAsync(gen, true);
+                            }
                         }
                     }
-                }
-                // 降级：读 recentTaskName（旧 BGI 兼容）
-                else if (sdata.TryGetProperty("recentTaskName", out var rtn) && rtn.ValueKind == System.Text.Json.JsonValueKind.String)
-                {
-                    var recentTask = rtn.GetString();
-                    if (recentTask == "联机锄地上线" && !_isOnlineReady)
+                    // 降级：读 recentTaskName（旧 BGI 兼容）
+                    else if (sdata.TryGetProperty("recentTaskName", out var rtn) && rtn.ValueKind == System.Text.Json.JsonValueKind.String)
                     {
-                        _ = MarkOnlineAsync("command");
+                        var recentTask = rtn.GetString() ?? "";
+                        var triggerLevel = recentTask == "联机锄地上线" && !_isOnlineReady;
+                        AddLog($"[上线探针] recentTaskName={recentTask}, _isOnlineReady={_isOnlineReady}, 是否触发={triggerLevel}");
+                        if (triggerLevel)
+                        {
+                            _ = MarkOnlineAsync("command");
+                        }
                     }
-                }
             }
         }
         catch
@@ -662,10 +711,31 @@ public class MainViewModel : INotifyPropertyChanged
         var isSelf = targetMember == null || targetMember.PlayerUid == _config.PlayerUid;
 
         // 弹窗选时间（self 和 remote 共享同一个弹窗）
-        var time = ShowScheduledOnlineTimeDialog(isSelf ? _config.ScheduledOnlineTime : "");
+        var (time, syncToAll) = ShowScheduledOnlineTimeDialog(isSelf ? _config.ScheduledOnlineTime : "");
         if (time == null) return; // 用户取消
 
-        if (isSelf)
+        if (syncToAll)
+        {
+            // 同步给所有成员：先更新本地 config 与卡片，再发给房间内所有在线成员（含遥控器模式的执行端）
+            ApplyScheduledOnlineTime(time);
+            if (_signalRClient != null)
+            {
+                var cmd = new RemoteCommand
+                {
+                    Cmd = "set_scheduled_online_time",
+                    Sender = _config.PlayerName ?? "",
+                    SenderUid = _config.PlayerUid,
+                    Target = ["*"],
+                    CommandId = "local_" + DateTime.Now.Ticks,
+                    Params = new Dictionary<string, object> { { "scheduledOnlineTime", time } }
+                };
+                AddLog(string.IsNullOrEmpty(time)
+                    ? "已清除所有成员的定时上线（同步给所有成员）"
+                    : $"已将定时上线时间 {time} 同步给所有成员");
+                _ = _signalRClient.SendRemoteCommandAsync(cmd);
+            }
+        }
+        else if (isSelf)
         {
             if (_config?.ObserverMode == true)
             {
@@ -708,12 +778,61 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>清除已上线状态（不清除定时闹钟）。点自己卡清自己；点别人卡远程下发清除。</summary>
+    /// <summary>清除已上线状态（不清除定时闹钟）。点自己卡清自己；点别人卡远程下发清除。
+    /// 弹窗确认：可勾选"同时清除所有成员已上线状态"（仅清 OnlineReady，保留上线记录 OnlineHistory）。</summary>
     private async void OnClearOnline(object? parameter)
     {
         if (_config == null) return;
         var targetMember = parameter as MemberViewModel;
         var isSelf = targetMember == null || targetMember.PlayerUid == _config.PlayerUid;
+
+        // 清除前弹窗确认，可选择是否同步清除所有成员已上线状态
+        var (confirmed, clearAll) = ShowClearOnlineConfirmDialog(isSelf);
+        if (!confirmed) return; // 用户取消
+
+        if (clearAll)
+        {
+            // 一键清除所有成员：先清本地（自己或遥控器执行端），再广播给所有成员
+            if (isSelf)
+            {
+                if (_config?.ObserverMode == true)
+                {
+                    if (_signalRClient != null)
+                    {
+                        var cmd = new RemoteCommand
+                        {
+                            Cmd = "clear_online",
+                            Sender = _config.PlayerName ?? "",
+                            SenderUid = _config.PlayerUid,
+                            Target = [_config.PlayerUid],
+                            CommandId = "local_" + DateTime.Now.Ticks,
+                            Params = new Dictionary<string, object>()
+                        };
+                        AddLog("遥控器模式: 向执行端下发清除上线");
+                        _ = _signalRClient.SendRemoteCommandAsync(cmd);
+                    }
+                }
+                else
+                {
+                    await ClearLocalOnline();
+                }
+            }
+            if (_signalRClient != null)
+            {
+                var cmd = new RemoteCommand
+                {
+                    Cmd = "clear_online",
+                    Sender = _config.PlayerName ?? "",
+                    SenderUid = _config.PlayerUid,
+                    Target = ["*"],
+                    CommandId = "local_" + DateTime.Now.Ticks,
+                    Params = new Dictionary<string, object>()
+                };
+                AddLog("已清除所有成员的已上线状态（同步给所有成员）");
+                _ = _signalRClient.SendRemoteCommandAsync(cmd);
+            }
+            return;
+        }
 
         if (isSelf)
         {
@@ -754,6 +873,128 @@ public class MainViewModel : INotifyPropertyChanged
             AddLog($"向 {targetMember.PlayerName} 下发清除上线");
             _ = _signalRClient.SendRemoteCommandAsync(cmd);
         }
+    }
+
+    /// <summary>清除上线确认弹窗（深色鎏金主题）。
+    /// 返回值：confirmed=是否确认，clearAll=是否同时清除所有成员已上线状态。</summary>
+    private (bool confirmed, bool clearAll) ShowClearOnlineConfirmDialog(bool isSelf)
+    {
+        bool confirmed = false, clearAll = false;
+        var window = new Window
+        {
+            Title = "清除上线",
+            Width = 300, Height = 180,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = Application.Current.MainWindow,
+            WindowStyle = WindowStyle.SingleBorderWindow,
+            ResizeMode = ResizeMode.NoResize,
+            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
+            Background = new System.Windows.Media.LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0.5, 0),
+                EndPoint = new System.Windows.Point(0.5, 1),
+                GradientStops =
+                {
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
+                }
+            }
+        };
+        var panel = new Grid { Margin = new Thickness(20) };
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 0 标题
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(16) }); // 1 间距
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 2 提示文字
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(12) }); // 3 间距
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 4 同步勾选框
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 5 弹性
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 6 按钮
+
+        var titleLabel = new TextBlock
+        {
+            Text = "确认清除上线",
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        Grid.SetRow(titleLabel, 0);
+        panel.Children.Add(titleLabel);
+
+        var tip = new TextBlock
+        {
+            Text = "确定要清除已上线状态吗？",
+            FontSize = 12,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap
+        };
+        Grid.SetRow(tip, 2);
+        panel.Children.Add(tip);
+
+        var syncCheckBox = new System.Windows.Controls.CheckBox
+        {
+            Content = "同时清除所有成员已上线状态",
+            FontSize = 12,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            IsChecked = false
+        };
+        syncCheckBox.Checked += (_, _) => clearAll = true;
+        syncCheckBox.Unchecked += (_, _) => clearAll = false;
+        Grid.SetRow(syncCheckBox, 4);
+        panel.Children.Add(syncCheckBox);
+
+        var btnPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        btnPanel.Children.Add(new Button
+        {
+            Content = "取消",
+            Width = 80, Height = 30,
+            Margin = new Thickness(0, 0, 10, 0),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)),
+            Cursor = System.Windows.Input.Cursors.Hand
+        });
+        ((Button)btnPanel.Children[^1]).Click += (_, _) => window.Close();
+
+        var okBtn = new Button
+        {
+            Content = "确定",
+            Width = 80, Height = 30,
+            FontWeight = FontWeights.SemiBold,
+            BorderThickness = new Thickness(0),
+            Cursor = System.Windows.Input.Cursors.Hand
+        };
+        okBtn.Background = new System.Windows.Media.LinearGradientBrush
+        {
+            StartPoint = new System.Windows.Point(0, 0),
+            EndPoint = new System.Windows.Point(1, 1),
+            GradientStops =
+            {
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xEF, 0xD6, 0x8A), 0),
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0xAF, 0x37), 1)
+            }
+        };
+        okBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16));
+        okBtn.Click += (_, _) =>
+        {
+            confirmed = true;
+            window.Close();
+        };
+        btnPanel.Children.Add(okBtn);
+
+        Grid.SetRow(btnPanel, 6);
+        panel.Children.Add(btnPanel);
+
+        window.Content = panel;
+        window.ShowDialog();
+        return (confirmed, clearAll);
     }
 
     /// <summary>本地清除已上线状态：复位 _isOnlineReady / _onlineMode 并上报服务端。</summary>
@@ -813,6 +1054,12 @@ public class MainViewModel : INotifyPropertyChanged
         _ = ReportStatusAsync();
     }
 
+    private void ClearLog()
+    {
+        CommandLogs.Clear();
+        CommandLogsText = "";
+    }
+
     /// <summary>清除指定成员的已联机记录（OnlineHistory），清自己和清他人通用入口。</summary>
     private async void OnClearOnlineHistory(object? parameter)
     {
@@ -825,7 +1072,11 @@ public class MainViewModel : INotifyPropertyChanged
     /// <summary>清除指定成员的 OnlineHistory，通过 SignalR 通知服务端清空并广播。</summary>
     private async Task ClearOnlineHistoryInternalAsync(MemberViewModel member)
     {
-        if (_signalRClient == null) return;
+        if (_signalRClient == null)
+        {
+            AddLog("清除记录失败：SignalR 未连接（_signalRClient == null）");
+            return;
+        }
         try
         {
             await _signalRClient.ClearOnlineHistoryAsync(member.PlayerUid);
@@ -846,8 +1097,8 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>定时上线时间弹窗（深色鎏金主题，时/分 ListBox 选择）。
-    /// 返回值：null=用户取消，""=清除定时上线，"HH:mm"=设定时间。</summary>
-    private string? ShowScheduledOnlineTimeDialog(string currentTime)
+    /// 返回值：time=null 用户取消，""=清除定时上线，"HH:mm"=设定时间；syncToAll=是否同步给所有成员。</summary>
+    private (string? time, bool syncToAll) ShowScheduledOnlineTimeDialog(string currentTime)
     {
         // 解析当前已设定时间作初始选择（兼容 HH:mm 与单数 H:mm）
         int initHour = -1, initMinute = 0;
@@ -860,7 +1111,7 @@ public class MainViewModel : INotifyPropertyChanged
         var window = new Window
         {
             Title = "定时上线",
-            Width = 340, Height = 350,
+            Width = 340, Height = 380,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = Application.Current.MainWindow,
             WindowStyle = WindowStyle.SingleBorderWindow,
@@ -880,12 +1131,13 @@ public class MainViewModel : INotifyPropertyChanged
         };
         var panel = new Grid { Margin = new Thickness(20) };
         string? result = null; // 确定后回填选定的 "HH:mm"；取消保持 null
+        bool syncToAll = false; // 勾选"同步给所有成员"
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // 0 标题
         panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(16) }); // 1 间距
         panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 2 时/分选择器（Star 限高，按 §21.5 防按钮被顶出）
         panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(14) }); // 3 间距
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // 4 提示文字
-        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(18) }); // 5 间距
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // 5 同步勾选框行
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // 6 按钮（固定底部，永不溢出）
 
         var titleLabel = new TextBlock
@@ -950,6 +1202,20 @@ public class MainViewModel : INotifyPropertyChanged
         };
         Grid.SetRow(tip, 4);
         panel.Children.Add(tip);
+
+        // 同步给所有成员勾选框
+        var syncCheckBox = new System.Windows.Controls.CheckBox
+        {
+            Content = "同步给所有成员",
+            FontSize = 12,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            IsChecked = false
+        };
+        syncCheckBox.Checked += (_, _) => syncToAll = true;
+        syncCheckBox.Unchecked += (_, _) => syncToAll = false;
+        Grid.SetRow(syncCheckBox, 5);
+        panel.Children.Add(syncCheckBox);
 
         var btnPanel = new StackPanel
         {
@@ -1018,7 +1284,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         window.Content = panel;
         window.ShowDialog();
-        return result;
+        return (result, syncToAll);
     }
 
     /// <summary>应用定时上线时间：写配置、保存、更新自身卡片、重启定时器并立即上报。
@@ -1738,7 +2004,7 @@ public class MainViewModel : INotifyPropertyChanged
                 };
                 await client.ConnectAsync(
                     _config.ServerUrl, RoomCode, _config.ControlRoomPassword,
-                    _config.PlayerUid, _config.PlayerName, _config.TeamUids);
+                    _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId);
                 _signalRClient = client;
                 IsConnected = true;
                 AddLog("刷新完成，已重新建立连接");
@@ -1764,7 +2030,7 @@ public class MainViewModel : INotifyPropertyChanged
                             WireSignalRClient(client);
                             await client.ConnectAsync(
                                 _config.ServerUrl, RoomCode, _config.ControlRoomPassword,
-                                _config.PlayerUid, _config.PlayerName, _config.TeamUids);
+                                _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId);
                             _signalRClient = client;
                             Application.Current.Dispatcher.Invoke(() =>
                             {
@@ -1830,8 +2096,13 @@ public class MainViewModel : INotifyPropertyChanged
                         Members.RemoveAt(i);
                     }
                 }
-                foreach (var np in byUid.Values)
+                // 新增成员按服务端广播的原始顺序（players）追加，确保显示顺序与加入顺序一致。
+                // 不能用 byUid.Values 遍历——Dictionary 的枚举顺序不保证与插入顺序一致，
+                // 首次连接 Members 为空时全体走这里，顺序会被打乱导致成员列表"反序"。
+                foreach (var p in players)
                 {
+                    if (!byUid.TryGetValue(p.PlayerUid, out var np)) continue;
+                    byUid.Remove(p.PlayerUid);
                     var (file, ring) = AvatarPool[Members.Count % AvatarPool.Length];
                     Members.Add(new MemberViewModel
                     {
@@ -2138,7 +2409,7 @@ public class MainViewModel : INotifyPropertyChanged
         if (parameter is MemberViewModel member)
         {
             // 打开选择配置组对话框
-            var groupName = ShowConfigSelectionDialog("配置组", member.ConfigGroups);
+            var groupName = ShowConfigSelectionDialog("配置组", member.ConfigGroups, member);
             if (string.IsNullOrEmpty(groupName)) return;
 
             // 从本机 BGI 读取该配置组的任务列表（联机场景 4 台配置通常一致）
@@ -2150,7 +2421,7 @@ public class MainViewModel : INotifyPropertyChanged
     {
         if (parameter is MemberViewModel member)
         {
-            var configName = ShowConfigSelectionDialog("一条龙", member.OneClickConfigs);
+            var configName = ShowConfigSelectionDialog("一条龙", member.OneClickConfigs, member);
             if (string.IsNullOrEmpty(configName)) return;
 
             _ = StartOneClickWithTaskListAsync(configName, member);
@@ -2911,6 +3182,13 @@ public class MainViewModel : INotifyPropertyChanged
         }
 
         if (_signalRClient == null) return;
+        // 一键锄地是全局危险操作（给所有选中成员下发执行锄地配置组），先弹确认，
+        // 说明确认后会发生什么，避免误触。
+        if (!ShowQuickHoeingConfirmDialog(targets.Count))
+        {
+            AddLog("已取消一键锄地下发");
+            return;
+        }
         // 下发 start_group 命令，带 key="一键锄地" 但不带 groupName，
         // 接收端收到后会用 key 检测到"一键锄地"，遍历自己的 OnlineHoeingGroupNames 执行。
         var remoteCmd = new RemoteCommand
@@ -2931,6 +3209,73 @@ public class MainViewModel : INotifyPropertyChanged
         AddLog($"已向 {targets.Count} 个在线成员下发一键锄地（各成员执行自己绑定的配置组）");
     }
 
+    /// <summary>一键锄地确认弹窗：说明确认后会发生什么，避免误触。</summary>
+    private bool ShowQuickHoeingConfirmDialog(int onlineCount)
+    {
+        var dialog = new Window
+        {
+            Title = "确认下发一键锄地",
+            Width = 440,
+            Height = 220,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = Application.Current.MainWindow,
+            WindowStyle = WindowStyle.SingleBorderWindow,
+            ResizeMode = ResizeMode.NoResize,
+            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
+            Background = new System.Windows.Media.LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0.5, 0),
+                EndPoint = new System.Windows.Point(0.5, 1),
+                GradientStops =
+                {
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
+                }
+            }
+        };
+        var panel = new StackPanel { Margin = new Thickness(20) };
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"确认对 {onlineCount} 个在线成员下发「一键锄地」？",
+            FontSize = 14,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
+            TextWrapping = TextWrapping.Wrap
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = "各成员将按照自己绑定的联机锄地配置组依次执行。",
+            FontSize = 13,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 8, 0, 0)
+        });
+        var btnRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 24, 0, 0) };
+        var confirmBtnBg = new System.Windows.Media.LinearGradientBrush
+        {
+            StartPoint = new System.Windows.Point(0, 0),
+            EndPoint = new System.Windows.Point(1, 1),
+            GradientStops =
+            {
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xEF, 0xD6, 0x8A), 0),
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0xAF, 0x37), 1)
+            }
+        };
+        var cancelBtn = new Button { Content = "取消", Width = 90, Margin = new Thickness(0, 0, 8, 0), Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)), Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)), BorderThickness = new Thickness(1), BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)), Cursor = System.Windows.Input.Cursors.Hand };
+        var confirmBtn = new Button { Content = "确认", Width = 90, FontWeight = FontWeights.SemiBold, Background = confirmBtnBg, Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16)), BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+        btnRow.Children.Add(cancelBtn);
+        btnRow.Children.Add(confirmBtn);
+        panel.Children.Add(btnRow);
+        dialog.Content = panel;
+
+        bool result = false;
+        confirmBtn.Click += (_, _) => { result = true; dialog.DialogResult = true; };
+        cancelBtn.Click += (_, _) => { result = false; dialog.DialogResult = true; };
+        if (dialog.ShowDialog() == true) return result;
+        return false;
+    }
+
     private List<string> GetSelectedTargets()
     {
         // 只收"在线且被选中"的成员；离线或未勾选的一律不下发。
@@ -2938,13 +3283,16 @@ public class MainViewModel : INotifyPropertyChanged
         return Members.Where(m => m.IsSelected && m.Online).Select(m => m.PlayerUid).ToList();
     }
 
-    private string? ShowConfigSelectionDialog(string type, List<string> configs)
+    private string? ShowConfigSelectionDialog(string type, List<string> configs, MemberViewModel? member = null)
     {
         if (configs.Count == 0)
         {
             MessageBox.Show($"该成员没有可用的{type}配置");
             return null;
         }
+
+        // 判断是否为缓存数据：BGI 未运行 或 离线
+        bool isCached = member != null && (member.BgiStatus != "running" || !member.Online);
 
         var dialog = new Window
         {
@@ -2968,11 +3316,12 @@ public class MainViewModel : INotifyPropertyChanged
             }
         };
         var panel = new Grid { Margin = new Thickness(18) };
-        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 标题
-        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(10) }); // 间距
-        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 列表（star，可滚动）
-        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(14) }); // 间距
-        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 按钮
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 0: 标题
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 1: 缓存提示
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(10) }); // 2: 间距
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 3: 列表
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(14) }); // 4: 间距
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 5: 按钮
 
         var titleLabel = new TextBlock
         {
@@ -2983,6 +3332,21 @@ public class MainViewModel : INotifyPropertyChanged
         };
         Grid.SetRow(titleLabel, 0);
         panel.Children.Add(titleLabel);
+
+        // 如果是缓存数据，添加提示行
+        if (isCached)
+        {
+            var cacheHint = new TextBlock
+            {
+                Text = "⚠ 该成员 BGI 未连接，以下为缓存配置，执行前请确认 BGI 已启动",
+                FontSize = 11,
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD9, 0xA8, 0x4E)),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 4)
+            };
+            Grid.SetRow(cacheHint, 1);
+            panel.Children.Add(cacheHint);
+        }
 
         var listBox = new ListBox
         {
@@ -2996,7 +3360,7 @@ public class MainViewModel : INotifyPropertyChanged
             MinHeight = 200,
             ItemContainerStyle = CreateDarkListBoxItemStyle()
         };
-        Grid.SetRow(listBox, 2);
+        Grid.SetRow(listBox, 3);
         panel.Children.Add(listBox);
 
         var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
@@ -3021,7 +3385,7 @@ public class MainViewModel : INotifyPropertyChanged
             Cursor = System.Windows.Input.Cursors.Hand };
         btnPanel.Children.Add(okBtn);
         btnPanel.Children.Add(cancelBtn);
-        Grid.SetRow(btnPanel, 4);
+        Grid.SetRow(btnPanel, 5);
         panel.Children.Add(btnPanel);
         dialog.Content = panel;
 
@@ -3424,6 +3788,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         // 先 task.suspend 中断当前任务
         var suspendResult = await _commandExecutor.ExecuteSuspendAsync(groupName);
+        AddLog($"[上线探针] OnAllReadyConfirmedInternal: generation={generation}, suspendResult.Status={suspendResult.Status}, _isOnlineReady={_isOnlineReady}");
         if (suspendResult.Status != "success")
         {
             AddLog("task.suspend 失败，尝试杀进程重启...");
@@ -3461,6 +3826,7 @@ public class MainViewModel : INotifyPropertyChanged
                         Params = new Dictionary<string, object> { { "groupName", currentGroup }, { "startFromIndex", 0 }, { "generation", generation } }
                     };
                     var startResult = await _commandExecutor.ExecuteAsync(startCmd);
+                    AddLog($"[上线探针] start_group 返回: group={currentGroup}, status={startResult.Status}, msg={startResult.Message}");
                     if (startResult.Status == "cancelled")
                     {
                         _isAllReadySequenceCancelled = true;
@@ -3478,6 +3844,8 @@ public class MainViewModel : INotifyPropertyChanged
                 }
                 _isOnlineReady = false;
                 _onlineMode = "none";
+                _isAllReadySequenceCancelled = false;
+                AddLog($"[上线探针] OnAllReadyConfirmedInternal 结束: _isOnlineReady=false, _onlineMode=none, _isAllReadySequenceCancelled=false, 将 ReportStatusAsync");
                 _ = ReportStatusAsync();
             }
             catch (Exception ex)
@@ -3485,6 +3853,8 @@ public class MainViewModel : INotifyPropertyChanged
                 AddLog($"依次执行配置组异常: {ex.Message}");
                 _isOnlineReady = false;
                 _onlineMode = "none";
+                _isAllReadySequenceCancelled = false;
+                AddLog($"[上线探针] OnAllReadyConfirmedInternal 异常结束: _isOnlineReady=false, _onlineMode=none, _isAllReadySequenceCancelled=false, 将 ReportStatusAsync");
                 _ = ReportStatusAsync();
             }
         });

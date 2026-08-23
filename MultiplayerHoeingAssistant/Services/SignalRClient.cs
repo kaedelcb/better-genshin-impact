@@ -10,6 +10,7 @@ public class SignalRClient : IAsyncDisposable
     private string _playerUid = string.Empty;
     private string _playerName = string.Empty;
     private bool _isRemote;
+    private string _clientInstanceId = "";
 
     // 持久的连接参数：Closed（自动重连耗尽）后自愈重连循环需要它们重建连接
     private string _serverUrl = string.Empty;
@@ -35,12 +36,13 @@ public class SignalRClient : IAsyncDisposable
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
 
     public async Task ConnectAsync(string serverUrl, string roomCode, string password,
-        string playerUid, string playerName, List<string> teamUids, bool isRemote = false)
+        string playerUid, string playerName, List<string> teamUids, bool isRemote = false, string clientInstanceId = "")
     {
         _roomCode = roomCode;
         _playerUid = playerUid;
         _playerName = playerName;
         _isRemote = isRemote;
+        _clientInstanceId = clientInstanceId ?? "";
         _serverUrl = serverUrl;
         _password = password;
         _teamUids = teamUids;
@@ -88,7 +90,7 @@ public class SignalRClient : IAsyncDisposable
         connection.Reconnected += async _ =>
         {
             System.Diagnostics.Debug.WriteLine("SignalR 已重连，重新加入控制房间");
-            await connection.InvokeAsync("JoinControlRoom", roomCode, password, playerUid, playerName, teamUids, isRemote);
+            await connection.InvokeAsync("JoinControlRoom", roomCode, password, playerUid, playerName, teamUids, isRemote, _clientInstanceId);
             OnConnectionStateChanged?.Invoke(true);
         };
 
@@ -112,7 +114,7 @@ public class SignalRClient : IAsyncDisposable
         };
 
         await connection.StartAsync();
-        await connection.InvokeAsync("JoinControlRoom", roomCode, password, playerUid, playerName, teamUids, isRemote);
+        await connection.InvokeAsync("JoinControlRoom", roomCode, password, playerUid, playerName, teamUids, isRemote, _clientInstanceId);
 
         // 必须在 StartAsync + JoinControlRoom 全部成功之后才把 _connection 指向新连接。
         // 若提前赋值、StartAsync 又失败，_connection 会指向"失败的新连接"，
@@ -220,7 +222,11 @@ public class SignalRClient : IAsyncDisposable
     /// <summary>清除指定成员的 OnlineHistory（已联机记录），由本人或房主调用。</summary>
     public async Task ClearOnlineHistoryAsync(string targetUid)
     {
-        if (_connection == null) return;
+        if (_connection == null)
+        {
+            OnLog?.Invoke("[清除记录] 清除失败: SignalR 未连接（_connection == null）");
+            return;
+        }
         try
         {
             await _connection.InvokeAsync("ClearOnlineHistory", targetUid);

@@ -19,6 +19,8 @@ public class ControlRoomPlayer
     public List<object> Hotkeys { get; set; } = [];
     /// <summary>一条龙配置名 → 该配置内任务名列表（供 WEB 端"从此处开始执行"选择起点）。</summary>
     public Dictionary<string, List<string>> OneClickTasks { get; set; } = [];
+    /// <summary>实例标识（UUID，同一台机器上同一个助手进程重启后不变）。用于区分同 UID 多个连接。</summary>
+    public string ClientInstanceId { get; set; } = "";
     /// <summary>是否正在执行任务（任意任务）。</summary>
     public bool TaskRunning { get; set; }
     /// <summary>当前正在执行的任务名称。</summary>

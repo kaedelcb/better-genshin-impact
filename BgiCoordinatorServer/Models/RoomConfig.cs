@@ -98,4 +98,7 @@ public class RoomConfig
     public bool HoeingGuardMode { get; set; } = true;
     /// <summary>守护重开触发阈值：未执行线路数 ≥ 此值即重开。默认 3，下限 1。hoeing-multiplayer-guard-auto-restart</summary>
     public int GuardUnexecutedRouteThreshold { get; set; } = 3;
+
+    /// <summary>房间白名单（逗号分隔的玩家名称），由第一任房主设置，同步给所有成员。用于踢人判定白名单统一。spec: sync-roomwhitelist-to-roomconfig</summary>
+    public string RoomWhitelist { get; set; } = "";
 }

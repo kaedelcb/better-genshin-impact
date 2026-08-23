@@ -1031,6 +1031,8 @@ public class AutoHoeingTask : ISoloTask
                     OnlyInTeleportRecover = _partyConfig?.OnlyInTeleportRecover ?? false,
                     SwimmingEnabled = _partyConfig?.AutoFightConfig?.SwimmingEnabled
                         ?? TaskContext.Instance().Config.AutoFightConfig.SwimmingEnabled,
+                    // === 房间白名单上传（spec: sync-roomwhitelist-to-roomconfig）===
+                    RoomWhitelist = _config.RoomWhitelist ?? "",
                 };
                 
                 // 房主上传配置，带重试机制（最多3次）
@@ -1454,6 +1456,7 @@ public class AutoHoeingTask : ISoloTask
                         _config.GuardUnexecutedRouteThreshold = Multiplayer.HoeingGuardDecisions.ClampThreshold(hostConfig.GuardUnexecutedRouteThreshold);
                         // === 自动更新线路同步（hoeing-autoupdate-routes，成员回填房主下发值）===
                         _config.AutoUpdateRoutes = hostConfig.AutoUpdateRoutes;
+                        _config.RoomWhitelist = hostConfig.RoomWhitelist ?? "";
 
                         // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params §C2）===
                         ApplyHostExecParams(hostConfig);
@@ -2374,7 +2377,7 @@ public class AutoHoeingTask : ISoloTask
                 await client.ReportHostReadyAsync();
 
                 var actualCount = await autoParty.WaitForMembersAsync(
-                    playerCount, whitelist, client, _config.PartyTimeoutSeconds, _ct);
+                    playerCount, multiWorldWhitelist.ToArray(), client, _config.PartyTimeoutSeconds, _ct);
 
                 if (actualCount <= 0)
                 {
@@ -2541,6 +2544,7 @@ public class AutoHoeingTask : ISoloTask
                     _config.GuardUnexecutedRouteThreshold = Multiplayer.HoeingGuardDecisions.ClampThreshold(hostConfig.GuardUnexecutedRouteThreshold);
                     // === 自动更新线路同步（hoeing-autoupdate-routes，多世界轮换块，成员回填房主下发值）===
                     _config.AutoUpdateRoutes = hostConfig.AutoUpdateRoutes;
+                        _config.RoomWhitelist = hostConfig.RoomWhitelist ?? "";
 
                     // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params §C2，多世界轮换块，R6）===
                     ApplyHostExecParams(hostConfig);

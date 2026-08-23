@@ -813,11 +813,8 @@ public class AutoPartyTask
             var reportedNames = client.CurrentPlayerList?
                 .Where(p => !string.IsNullOrEmpty(p?.PlayerName))
                 .Select(p => p.PlayerName) ?? Enumerable.Empty<string>();
-            var allowedNames = reportedNames
-                .Concat(whitelist ?? Array.Empty<string>())
-                .Where(n => !string.IsNullOrEmpty(n))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            var allowedNames = KickWhitelistDecisions.MergeAllowedNames(
+                reportedNames, whitelist);
 
             // FindMulti 定位所有踢出按钮（ROI 已在 §改动 3/4 治本消除污染，天然覆盖完整右半屏 1P~4P 行）。
             var kickRegions = ra.FindMulti(AutoFightAssets.Get(ra).KickBtnRa);

@@ -926,3 +926,63 @@ Kiro 的 `command` 类型 hook action 在 Windows 上实际用 **cmd.exe** 执�
 **若要加"单机场景中断后做完其他配置组自动续跑锄地" = 新增功能**，需在某个"配置组 RunMulti 结束后"的钩子检查 SuspendedTaskContext 并调用恢复逻辑；但注意与联机场景的**双重消费竞态**——`SuspendedTaskContext` 现在只有一个，需"一次性消费置 null、谁先拿到谁幂等"的保护。
 
 **下次看日志出现 "task.suspend 保存了上下文却没续跑" 时**：先确认是不是单机锄地场景（是→属正常现状，非 bug）；再看是否联机锄地结束边沿没触发助手端 resume。
+## WEB端助手连接排查（2026-08-23）
+
+- **"WEB端助手"= 浏览器打开远程部署的 BgiCoordinatorServer 控制面板（`http://www.autobgi.cn:8080/`），不是本机进程**。用户说"WEB端助手连不上服务器"时，指的是浏览器访问远程部署的服务，排查时**不要查本机进程/端口**（本机没有该服务），先确认远程服务器可达：根路径 `/` 200、`/health` 200、WebSocket `/hub` 能连。用户反复强调"WEB端"就是为了区分 PC 端（联机助手 MultiplayerHoeingAssistant / BGI 主程序）。
+- **`Failed to invoke 'JoinControlRoom' due to an error on the server` 报错的含义**：WEB 页面能打开、SignalR 也能建连，但 `JoinControlRoom` Hub 方法在服务端抛了异常逃逸 catch（或 catch 里 `SendAsync` 二次抛异常）。**首选排查动作是看服务器日志**（`docker logs` / 控制台 stdout）里的 `JoinControlRoom 失败: <具体异常>`，而不是改源码。`CoordinatorHub.JoinControlRoom` 已有 try-catch，正常会发 `JoinRejected` 事件而非让 invoke reject。
+- **重大陷阱**：此报错高度怀疑是**服务器上部署的 BgiCoordinatorServer 版本与当前源码不一致**（旧版本 `JoinControlRoom` 可能没有完整的异常保护 / 缺 `isRemote` 参数）。排查先确认"服务器跑的是不是当前这份源码"，再决定是否改代码、是否重新部署。
+- **WEB 前端连接链路**：`wwwroot/control-room.js` 用同源 `/hub`（`.withUrl('/hub')`），调用 `invoke('JoinControlRoom', roomCode, password, 'web_' + playerName, playerName, [])`（5 参数，`isRemote` 走默认 false）。`ControlRoomAuth.Authenticate` 允许空 UID 白名单（`allowedUids.Count > 0` 才校验），WEB 端传 `[]` 跳过白名单。
+## PC端成员列表顺序反转（2026-08-23）
+- **现象**：更新后 PC 端联机助手成员显示顺序与加入顺序相反（先加入的被排到下面）。
+- **根因**：`MultiplayerHoeingAssistant/ViewModels/MainViewModel.cs` 的 `OnPlayersUpdated` 事件处理器里，新增成员用 `foreach (var np in byUid.Values)` 追加到 `Members`。**`Dictionary.Values` 的枚举顺序在 .NET 中不保证与插入顺序一致**。首次连接 `Members` 为空时全体走此路径，顺序被打乱 → 成员列表"反序"。
+- **修复**：改为按服务端广播的原始顺序 `players` 遍历，只添加仍留在 `byUid` 中（即不在现有 `Members` 里）的成员，并用 `byUid.Remove(p.PlayerUid)` 确保每个 UID 只创建一次：
+  ```csharp
+  foreach (var p in players)
+  {
+      if (!byUid.TryGetValue(p.PlayerUid, out var np)) continue;
+      byUid.Remove(p.PlayerUid);
+      Members.Add(new MemberViewModel { ... });
+  }
+  ```
+- **教训**：依赖 `Dictionary.Values` 枚举顺序来保序 = 不可靠。需要保序时应遍历原始输入序列（`players`），或用有序结构（`List`/`SortedDictionary`）。
+- **编译注意**：改完 `MultiplayerHoeingAssistant` 编译时若助手进程在运行，会报 34 个 MSB3027/MSB3021（复制锁文件），非代码错误。C# 本身 0 error，需先关掉助手进程再部署。
+## 联机助手"上线记录"功能排查定位（2026-08-23）
+- **功能入口**：PC 助手成员卡片"记录"按钮 → `MainViewModel.OnShowOnlineHistory`（将 `member.OnlineHistory` 的 JsonElement 格式化成 `· 定时/命令 上线 HH:mm → 联机 HH:mm` 字符串，一次性快照弹窗 `ShowOnlineHistoryDialog`，弹窗关闭后不实时刷新）。
+- **记录数据源在服务端内存**：`BgiCoordinatorServer/Services/RoomManager.cs` 的 `_controlRooms[CTRL_xx]` 列表里每个 `ControlRoomPlayer.OnlineHistory`（`List<object>`，非持久化，服务端重启即丢）。广播 `ControlRoomPlayersUpdated` 时随整个玩家列表下发，客户端 `OnPlayersUpdated` 里 `m.OnlineHistory = np.OnlineHistory` 覆盖刷新。
+- **记录生成在服务端**：`RoomManager.ConsumeOnlineReady`（约 1337-1356 行），只在全员就绪消费时追加一条 `{ mode, onlineTime, consumeTime, date, timestamp }`。`onlineTime` 取 `LastHeartbeat`（心跳时间，非真正上线时刻），`consumeTime`/`date` 用 `TimeZoneInfo.ConvertTimeFromUtc(now, TimeZoneInfo.Local)`——**依赖服务端进程机器时区**，Docker 默认 UTC 则时间比北京慢 8 小时。`date` 有凌晨 4 点前归前一天的特殊规则。列表最多 20 条。
+- **清除链**：PC/Web 端点"清除记录" → 客户端 `SignalRClient.ClearOnlineHistoryAsync` → `Invoke("ClearOnlineHistory", targetUid)` → 服务端 `CoordinatorHub.ClearOnlineHistory` → `RoomManager.ClearOnlineHistory(roomCode, uid)`（仅 `player.OnlineHistory.Clear()` 内存清除）→ 广播 `ControlRoomPlayersUpdated`。清除重置的只是内存记录，接续的联机消费仍会再生成新记录。
+- **状态**：2026-08-23 仍在排查清除不生效的具体场景（用户报告），待答复澄清问题；时间非北京时间根因已确认在服务端 `TimeZoneInfo.Local`。
+## 启动时自动上线根因：_manuallyClearedOnline 初始值（2026-08-23）
+- **现象**：每次启动联机助手（执行模式），"已上线（scheduled）"日志出现在"已连接控制房间"之前，启动后自动显示已上线。
+- **根因**：`_manuallyClearedOnline` 是 `bool` 类型，C# 默认初始值为 `false`。`StartOnlineScheduler()` 在构造函数第 167 行就被调用，定时器立即触发（`TimeSpan.Zero` 首次延迟），检查到用户之前持久化的 `ScheduledOnlineTime` 已过当前时刻，且 `_manuallyClearedOnline == false` 不拦截 → 直接调用 `MarkOnlineAsync("scheduled")`。
+- **修复**：将 `_manuallyClearedOnline` 初始值改为 `true`，启动时默认"已手动清除"状态，抑制定时自动上线，直到用户手动设定定时后才允许上线。
+- **教训**：`_manuallyClearedOnline` 是启动时唯一的"抑制定时自动上线"闸门，初始值必须为 `true`（防止启动时自动上线），不能依赖用户手动清除后再设 true。下次有人改这段逻辑时必须注意初始值语义。
+## 确认阶段超时修复（单人跳过 + 多人断线重连）
+
+- [2026-08-23] 修复定时上线确认阶段超时问题（单人/多人场景）
+  - **问题场景**：单人定时上线或多人断线重连时，确认阶段（AllReadyConfirm/ConfirmAllReady）因消息发到旧 connectionId 丢失，30秒超时后开锄失败
+  - **根因**：
+    1. 单人场景下确认阶段多余——没有"有人没收到"的问题，但多了一个"你问我答"的失败窗口
+    2. 多人确认阶段重试时 `pendingUids` 过滤了 `Online=false` 的成员，断线重连成员被排除，不再重试
+  - **修复文件**：`BgiCoordinatorServer/Hubs/CoordinatorHub.cs`
+  - **改动1**（`ReportOnlineEvent`）：单人场景（`onlinePlayers.Count <= 1`）跳过确认阶段，直接广播 `AllReady`
+  - **改动2**（`StartConfirmAsync`）：重试时去掉 `.Online` 过滤，改为仅按成员存在性判断，让断线重连成员能被再次发送 `AllReadyConfirm`
+  - **关键约束**：不改协议字段、不改客户端代码、不改状态机、多人场景 `else` 分支逐字节不变
+### `_lastOnlineGeneration` 初始值锁死上线触发路径（2026-08-23 最终定位+修复）
+
+**现象**：触发器配置组执行"联机锄地上线"，稳定交替成功/失败（1成功2失败3成功4失败）。每次服务端都能广播 AllReady（gen 递增消费），但助手端偶发不真正执行。
+
+**根因**：`MultiplayerHoeingAssistant/ViewModels/MainViewModel.cs:38` 的 `_lastOnlineGeneration = int.MaxValue` 把 `ReportStatusAsync` 的正统边沿检测路径永久锁死：
+```csharp
+// ReportStatusAsync
+if (gen > _lastOnlineGeneration)  // _lastOnlineGeneration=int.MaxValue → 永远 false
+```
+边沿路径失效后，只能靠 `recentTaskName` 电平信号降级触发。电平信号受 `_isOnlineReady` 翻转竞争（MarkOnlineAsync 设 true / OnAllReadyConfirmedInternal 末尾 finally 设 false 时序不定）影响，产生精确交替失败。
+
+**为什么当初设 int.MaxValue**：commit 82a3e0a3（Nexus V0.1.1）为抑制"启动/清除上线/切换模式时残留 generation 误触发自动上线"，在 `ClearLocalOnline`/`ApplyModeRuntime` 的 IPC 读不到 generation 时用 `int.MaxValue` 兜底。但**初始字段也设成 int.MaxValue 是错的**：`ClearLocalOnline`/`ApplyModeRuntime` 的 int.MaxValue 会被下一次 ReportStatusAsync 读到实际 gen 后覆盖更新（临时兜底），而**字段初始值 int.MaxValue 永远不会被更新**（gen > int.MaxValue 恒 false 进不了更新分支）→ 永久锁死。
+
+**修复**：`MainViewModel.cs:38` 初始值 `int.MaxValue → 0`。`ClearLocalOnline`/`ApplyModeRuntime` 中的 `int.MaxValue`（临时兜底）**保留不动**。
+
+**验证**：编译通过；待实测确认触发器上线每次都触发。
+
+**教训**：兜底值（int.MaxValue）只该用于"运行时临时值"（会在后续读取后被覆盖），绝不能写进"字段初始值"（无后续覆盖机会）——那等于永久禁用该字段参与的判断逻辑。边沿检测的字段初始值必须等于"最小合法值"（0/当前 generation），而不是"永远不触发"的最大值。

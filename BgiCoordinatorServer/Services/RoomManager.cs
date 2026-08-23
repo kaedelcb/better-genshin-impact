@@ -1036,17 +1036,31 @@ public class RoomManager
 
     // === 控制房间相关方法（multiplayer-hoeing-assistant） ===
 
-    /// <summary>将玩家添加到控制房间</summary>
-    public void AddToControlRoom(string group, string connectionId, string playerUid, string playerName)
+    /// <summary>将玩家添加到控制房间。按 ConnectionId 匹配（同 UID 多连接各自独立条目），
+    /// 找不到时按 (PlayerUid, ClientInstanceId) 查找旧条目更新 ConnectionId（断线重连场景）。</summary>
+    public void AddToControlRoom(string group, string connectionId, string playerUid, string playerName, string clientInstanceId = "")
     {
         var players = _controlRooms.GetOrAdd(group, _ => []);
         lock (players)
         {
-            var existing = players.Find(p => p.PlayerUid == playerUid);
+            var existing = players.Find(p => p.ConnectionId == connectionId);
+            if (existing == null && !string.IsNullOrEmpty(clientInstanceId))
+            {
+                // 断线重连：按 (PlayerUid, ClientInstanceId) 查找旧条目，更新 ConnectionId
+                existing = players.Find(p => p.PlayerUid == playerUid && p.ClientInstanceId == clientInstanceId);
+                if (existing != null)
+                {
+                    existing.ConnectionId = connectionId;
+                    existing.Online = true;
+                    existing.PlayerName = playerName;
+                }
+            }
             if (existing != null)
             {
-                existing.ConnectionId = connectionId;
                 existing.Online = true;
+                existing.PlayerUid = playerUid;
+                existing.PlayerName = playerName;
+                existing.ClientInstanceId = clientInstanceId ?? "";
             }
             else
             {
@@ -1055,6 +1069,7 @@ public class RoomManager
                     ConnectionId = connectionId,
                     PlayerUid = playerUid,
                     PlayerName = playerName,
+                    ClientInstanceId = clientInstanceId ?? "",
                     Online = true,
                     BgiStatus = "unknown"
                 });
@@ -1338,14 +1353,14 @@ public class RoomManager
                 {
                     if (p.OnlineEventGeneration == generation)
                     {
-                        var localNow = TimeZoneInfo.ConvertTimeFromUtc(now, TimeZoneInfo.Local);
+                        var localNow = TimeZoneInfo.ConvertTimeFromUtc(now, TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai"));
                         var dateStr = localNow.Hour < 4
                             ? localNow.AddDays(-1).ToString("yyyy-MM-dd")
                             : localNow.ToString("yyyy-MM-dd");
                         p.OnlineHistory.Add(new
                         {
                             mode = p.OnlineMode,
-                            onlineTime = TimeZoneInfo.ConvertTimeFromUtc(p.LastHeartbeat, TimeZoneInfo.Local).ToString("HH:mm"),
+                            onlineTime = TimeZoneInfo.ConvertTimeFromUtc(p.LastHeartbeat, TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai")).ToString("HH:mm"),
                             consumeTime = localNow.ToString("HH:mm"),
                             date = dateStr,
                             timestamp = now

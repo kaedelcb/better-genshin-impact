@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Serilog.Core;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 using Logger = Serilog.Core.Logger;
+using Vanara.PInvoke;
 
 namespace BetterGenshinImpact.GameTask.AutoPathing;
 
@@ -122,6 +123,16 @@ public class CameraRotateTask(CancellationToken ct)
             {
                 // 超时只停止转动，不再朝固定方向甩视角（对齐公版行为，避免误甩到错误方向）
                 TaskControl.Logger.LogWarning("视角转动到目标角度超时，停止转动");
+
+                // 兜底：超时后尝试恢复主界面（多发几次 ESC + 等待界面关闭）
+                // 防止因弹窗/未关闭界面导致持续卡死
+                for (int i = 0; i < 3; i++)
+                {
+                    await Delay(300, ct);
+                    Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                    await Delay(500, ct);
+                }
+
                 break;
             }
 

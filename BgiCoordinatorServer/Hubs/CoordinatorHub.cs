@@ -2444,7 +2444,7 @@ public class CoordinatorHub : Hub
     /// <summary>
     /// 加入控制房间。校验密码 + UID 白名单，成功后加入 CTRL_{roomCode} Group
     /// </summary>
-    public async Task JoinControlRoom(string roomCode, string password, string playerUid, string playerName, List<string>? allowedUids = null, bool isRemote = false)
+    public async Task JoinControlRoom(string roomCode, string password, string playerUid, string playerName, List<string>? allowedUids = null, bool isRemote = false, string clientInstanceId = "")
     {
         try
         {
@@ -2464,7 +2464,7 @@ public class CoordinatorHub : Hub
             // 且同 UID 执行端的 ControlRoomPlayer 不被覆盖（解决"同 UID 双端互挤占"）。
             if (!isWebClient && !isRemote)
             {
-                _roomManager.AddToControlRoom(group, Context.ConnectionId, playerUid, playerName);
+                _roomManager.AddToControlRoom(group, Context.ConnectionId, playerUid, playerName, clientInstanceId);
             }
             if (isRemote)
             {
@@ -2624,13 +2624,27 @@ public class CoordinatorHub : Hub
             // 检查是否可转换为 ready
             if (_roomManager.CheckAndTransition(group, out var readyGeneration))
             {
-                // 改为确认阶段：不再直接广播 AllReady，改为逐个发确认等全员 ack
                 var onlinePlayers = players
                     .Where(p => p.Online && !p.OnlineEventConsumed && p.OnlineEventGeneration > 0)
                     .Select(p => p.PlayerUid)
                     .ToList();
-                _roomManager.BeginConfirming(group, readyGeneration, onlinePlayers);
-                _ = StartConfirmAsync(group, readyGeneration, onlinePlayers);
+
+                // 单人场景（≤1 人）：跳过确认阶段，直接广播 AllReady
+                // 确认阶段的设计目的是"等所有成员确认收到 AllReady"，
+                // 单人场景不存在"有人没收到"的问题，跳过可避免：
+                //   1. 断线重连后消息发到旧 connectionId 导致丢失
+                //   2. 30 秒超时等待，延迟开锄
+                if (onlinePlayers.Count <= 1)
+                {
+                    _roomManager.ConsumeOnlineReady(group, readyGeneration);
+                    await Clients.Group(group).SendAsync("AllReady", readyGeneration);
+                    await Clients.Group(group).SendAsync("ControlRoomPlayersUpdated", _roomManager.GetControlRoomPlayers(group));
+                }
+                else
+                {
+                    _roomManager.BeginConfirming(group, readyGeneration, onlinePlayers);
+                    _ = StartConfirmAsync(group, readyGeneration, onlinePlayers);
+                }
             }
         }
         catch (Exception ex)
@@ -2649,7 +2663,7 @@ public class CoordinatorHub : Hub
         {
             var players = _roomManager.GetControlRoomPlayers(group);
             var pendingUids = _roomManager.GetPendingConfirmUids(group, targetUids)
-                .Where(uid => players.Any(p => p.PlayerUid == uid && p.Online))
+                .Where(uid => players.Any(p => p.PlayerUid == uid))
                 .ToList();
             if (pendingUids.Count == 0) break;
 

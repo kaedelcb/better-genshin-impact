@@ -80,4 +80,8 @@ public class AssistConfig
     /// <summary>遥控器模式：本机无 BGI 时启用，跳过 BGI 进程监控，所有操作通过远程命令发送给其他成员。</summary>
     [JsonPropertyName("observerMode")]
     public bool ObserverMode { get; set; } = false;
+
+    /// <summary>实例标识（UUID，助手进程启动时自动生成）。用于服务端区分同 UID 的多个连接实例。</summary>
+    [JsonPropertyName("clientInstanceId")]
+    public string ClientInstanceId { get; set; } = "";
 }

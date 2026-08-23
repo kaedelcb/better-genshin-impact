@@ -1166,7 +1166,7 @@ public class AutoFightTask : ISoloTask
                                     break;
                                 }
                                 
-                                if (useSkillListWithF>0 && combatScenes.SelectAvatar(useSkillListWithF).IsSkillReady(true)) //自定义序号首位先放E，只执行一次
+                                if (useSkillListWithF>0 && combatScenes.SelectAvatar(useSkillListWithF).IsSkillReady()) //自定义序号首位先放E，只执行一次
                                 {
                                     if (_taskParam.FinishDetectConfig.RotationMode &&
                                         _taskParam.FinishDetectConfig.RotateFindEnemyEnabled &&
@@ -1415,7 +1415,7 @@ public class AutoFightTask : ISoloTask
                                                 FightEndTotoly  = true;
                                                 break;
                                             }
-                                            if (guardianAvatar.IsSkillReady(true))
+                                            if (guardianAvatar.IsSkillReady())
                                             {
                                                 break;
                                             }
@@ -1424,7 +1424,7 @@ public class AutoFightTask : ISoloTask
                                     if (_skipFlag) continue;
                                 }
                                 useEq.Clear(); 
-                                if (guardianAvatar.IsSkillReady(true) && !cts2.Token.IsCancellationRequested)
+                                if (guardianAvatar.IsSkillReady() && !cts2.Token.IsCancellationRequested)
                                 {
                                     if(i>0)i--;
                                     continue;

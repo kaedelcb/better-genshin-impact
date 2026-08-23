@@ -80,7 +80,7 @@ public static class WhitelistMatchDecisions
     /// 白名单匹配（纯版本）。空白名单放行所有；否则对 ocrText 与每个白名单条目都拆候选，
     /// 候选 × 候选笛卡尔积 FuzzyMatch，任一对命中返回 true。
     /// </summary>
-    public static bool IsInWhitelist(string ocrText, string[] whitelist, double threshold = 0.7)
+    public static bool IsInWhitelist(string ocrText, string[] whitelist, double threshold = 0.6)
     {
         if (whitelist == null || whitelist.Length == 0) return true;
 
