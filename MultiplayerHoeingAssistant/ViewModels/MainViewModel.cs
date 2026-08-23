@@ -34,7 +34,7 @@ public class MainViewModel : INotifyPropertyChanged
     /// <summary>本地定时上线自增 generation（用于驱动服务端 AllReady 判定，代替 BGI 的 onlineGeneration）。</summary>
     private int _localOnlineGeneration = 0;
     // 边沿检测：记录上次处理过的 BGI 上线事件代序号与 AllReady 代序号，用于幂等保护
-    private int _lastOnlineGeneration = 0;
+    private int _lastOnlineGeneration = int.MaxValue;
     private int _lastProcessedAllReadyGeneration;
     /// <summary>用户手动停止时设为 true，后台依次执行序列检查到此标志后跳过剩余配置组。</summary>
     private bool _isAllReadySequenceCancelled;
@@ -97,6 +97,9 @@ public class MainViewModel : INotifyPropertyChanged
     public RelayCommand ClearOnlineCommand => new(OnClearOnline);
     public RelayCommand ClearOnlineHistoryCommand => new(OnClearOnlineHistory);
     public RelayCommand BindHoeingGroupCommand => new(OnBindHoeingGroup);
+
+    /// <summary>切换执行/监控模式（点击连接徽章触发）</summary>
+    public RelayCommand SwitchModeCommand => new(_ => _ = SwitchModeAsync());
 
     // ===== 一键快捷命令（给所有在线成员下发执行绑定配置组/一条龙）=====
     public RelayCommand QuickLegendCommand => new(_ => _ = ExecuteQuickCommandAsync("一键传奇"));
@@ -163,35 +166,8 @@ public class MainViewModel : INotifyPropertyChanged
         // 启动定时上线定时器（设定过 scheduledOnlineTime 才会真正到点触发）
         StartOnlineScheduler();
 
-        // 遥控器模式：跳过 BGI 进程监控和命令执行器（本机无 BGI，所有操作通过远程命令）
-        if (_config.ObserverMode)
-        {
-            AddLog("遥控器模式已启用，跳过 BGI 进程监控");
-        }
-        else
-        {
-            // 初始化进程监控
-            // 守护 BGI（GuardBgi）：仅当开关开启时才启动 BGI 崩溃检测定时器。
-            // _processMonitor 始终创建（供 CommandExecutor 手动 stop/start 时杀进程/重启用），
-            // 但只有 GuardBgi=true 时才 Start()（开始每 5 秒检测 BGI 进程，崩溃即自动重启）。
-            if (!string.IsNullOrEmpty(_config.BgiPath))
-            {
-                _processMonitor = new BgiProcessMonitor(_config.BgiPath);
-                _processMonitor.OnBgiCrashed += () =>
-                {
-                    AddLog("BGI 已崩溃，自动重启");
-                    _processMonitor.RestartBgi();
-                    AddLog("BGI 已自动重启");
-                    _ = ReportStatusAsync();
-                };
-                // GuardBgi=true 才开启守护；false 时不启动崩溃检测（BGI 关闭不自动重启）。
-                if (_config.GuardBgi)
-                {
-                    _processMonitor.Start();
-                }
-                _commandExecutor = new CommandExecutor(_processMonitor, _config.BgiPath);
-            }
-        }
+        // 根据配置应用模式运行时（启动/跳过 BGI 进程监控）。与 SwitchModeAsync 共享同一逻辑。
+        ApplyModeRuntime(_config.ObserverMode);
 
         // 连接 SignalR
         await ConnectSignalRAsync();
@@ -208,6 +184,8 @@ public class MainViewModel : INotifyPropertyChanged
             _signalRClient.OnConnectionStateChanged += connected =>
             {
                 Application.Current.Dispatcher.Invoke(() => IsConnected = connected);
+                // 连接恢复后立即上报状态，无需等待 10 秒定时器
+                if (connected) _ = ReportStatusAsync();
             };
 
             await _signalRClient.ConnectAsync(
@@ -560,10 +538,9 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void OnStartBgi(object? parameter)
     {
-        // 点自己：本地启动本机 BGI；点别人：通过 SignalR 下发命令让目标启动其 BGI。
+        // 点别人：远程下发 start_bgi
         if (parameter is MemberViewModel member && member.PlayerUid != _config?.PlayerUid)
         {
-            // 点别人的卡片：远程下发 start_bgi，由目标成员的助手本地执行启动。
             if (_signalRClient != null)
             {
                 var cmd = new RemoteCommand
@@ -581,10 +558,34 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 AddLog("SignalR 未连接，无法向下发启动 BGI 命令");
             }
+            return;
+        }
+
+        // 点自己卡片（或未指定）：
+        if (_config?.ObserverMode == true)
+        {
+            // 监控模式：无本地 BGI，通过 SignalR 只发给与自己同 UID 的执行端
+            if (_signalRClient != null)
+            {
+                var cmd = new RemoteCommand
+                {
+                    Cmd = "start_bgi",
+                    Sender = _config.PlayerName ?? "",
+                    SenderUid = _config.PlayerUid,
+                    Target = [_config.PlayerUid],
+                    CommandId = "remote_" + DateTime.Now.Ticks
+                };
+                AddLog("监控模式: 向执行端下发启动 BGI");
+                _ = _signalRClient.SendRemoteCommandAsync(cmd);
+            }
+            else
+            {
+                AddLog("SignalR 未连接，无法下发启动 BGI 命令");
+            }
         }
         else
         {
-            // 点自己卡片（或未指定）：本地启动本机 BGI。
+            // 执行模式：本地启动本机 BGI
             _ = ExecuteLocalCommandAsync("start_bgi", null, null);
         }
     }
@@ -668,7 +669,9 @@ public class MainViewModel : INotifyPropertyChanged
         {
             if (_config?.ObserverMode == true)
             {
-                // 遥控器模式：发给执行端（同 UID 的另一端）
+                // 遥控器模式：先更新本地 config 与卡片，再发给执行端；
+                // 否则本地 _config.ScheduledOnlineTime 保持旧值，OnPlayersUpdated 会用旧值覆盖广播的新时间
+                ApplyScheduledOnlineTime(time);
                 if (_signalRClient != null)
                 {
                     var cmd = new RemoteCommand
@@ -1730,6 +1733,8 @@ public class MainViewModel : INotifyPropertyChanged
                 client.OnConnectionStateChanged += connected =>
                 {
                     Application.Current.Dispatcher.Invoke(() => IsConnected = connected);
+                    // 连接恢复后立即上报状态，无需等待 10 秒定时器
+                    if (connected) _ = ReportStatusAsync();
                 };
                 await client.ConnectAsync(
                     _config.ServerUrl, RoomCode, _config.ControlRoomPassword,
@@ -2385,6 +2390,151 @@ public class MainViewModel : INotifyPropertyChanged
             AddLog($"读取本机配置列表失败: {ex.Message}");
         }
         return (groups, oneClicks);
+    }
+
+    /// <summary>根据模式应用运行时边界（创建/销毁 BGI 进程监控和命令执行器）。</summary>
+    private void ApplyModeRuntime(bool observerMode)
+    {
+        if (observerMode)
+        {
+            _processMonitor?.Dispose();
+            _processMonitor = null;
+            _commandExecutor = null;
+            _isOnlineReady = false;
+            _onlineMode = "none";
+            // 复位上线代序号，避免切回执行模式后 onlineGeneration 边沿检测自动触发上线
+            _lastOnlineGeneration = int.MaxValue;
+            AddLog("遥控器模式已启用，跳过 BGI 进程监控");
+        }
+        else if (!string.IsNullOrEmpty(_config?.BgiPath))
+        {
+            _processMonitor = new BgiProcessMonitor(_config.BgiPath);
+            _processMonitor.OnBgiCrashed += () =>
+            {
+                AddLog("BGI 已崩溃，自动重启");
+                _processMonitor.RestartBgi();
+                AddLog("BGI 已自动重启");
+                _ = ReportStatusAsync();
+            };
+            if (_config.GuardBgi)
+            {
+                _processMonitor.Start();
+            }
+            _commandExecutor = new CommandExecutor(_processMonitor, _config.BgiPath);
+        }
+    }
+
+    /// <summary>切换执行/监控模式。点击右上角连接徽章触发。</summary>
+    private async Task SwitchModeAsync()
+    {
+        if (_config == null) return;
+        var targetObserver = !_config.ObserverMode;
+        var modeName = targetObserver ? "监控" : "执行";
+
+        if (!ShowModeSwitchConfirm(modeName)) return;
+
+        _config.ObserverMode = targetObserver;
+        _configManager?.Save(_config);
+        ApplyModeRuntime(targetObserver);
+        OnPropertyChanged(nameof(IsObserverMode));
+        AddLog($"已切换为{modeName}模式，正在重建连接...");
+        await RefreshAsync();
+    }
+
+    /// <summary>切换模式确认弹窗（深色鎏金主题）。</summary>
+    private bool ShowModeSwitchConfirm(string modeName)
+    {
+        var window = new Window
+        {
+            Title = "切换模式",
+            Width = 380, Height = 200,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = Application.Current.MainWindow,
+            WindowStyle = WindowStyle.SingleBorderWindow,
+            ResizeMode = ResizeMode.NoResize,
+            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
+            Background = new System.Windows.Media.LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0.5, 0),
+                EndPoint = new System.Windows.Point(0.5, 1),
+                GradientStops =
+                {
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
+                }
+            }
+        };
+        var panel = new Grid { Margin = new Thickness(20) };
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(12) });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var titleLabel = new TextBlock
+        {
+            Text = $"切换为{modeName}模式",
+            FontSize = 15, FontWeight = FontWeights.SemiBold,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        Grid.SetRow(titleLabel, 0);
+        panel.Children.Add(titleLabel);
+
+        var tip = new TextBlock
+        {
+            Text = modeName == "监控"
+                ? "切换为监控模式后，本机 BGI 进程将继续运行，但助手将不再监控 BGI 状态。是否继续切换？"
+                : "切换为执行模式后，助手将重新监控本机 BGI 状态并参与联机任务。是否继续切换？",
+            FontSize = 12,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
+            TextWrapping = TextWrapping.Wrap
+        };
+        Grid.SetRow(tip, 2);
+        panel.Children.Add(tip);
+
+        var btnPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        var cancelBtn = new Button
+        {
+            Content = "取消", Width = 80, Height = 30, Margin = new Thickness(0, 0, 10, 0),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)),
+            Cursor = System.Windows.Input.Cursors.Hand
+        };
+        var okBtn = new Button
+        {
+            Content = "确定切换", Width = 80, Height = 30,
+            FontWeight = FontWeights.SemiBold, BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand
+        };
+        okBtn.Background = new System.Windows.Media.LinearGradientBrush
+        {
+            StartPoint = new System.Windows.Point(0, 0),
+            EndPoint = new System.Windows.Point(1, 1),
+            GradientStops =
+            {
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xEF, 0xD6, 0x8A), 0),
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0xAF, 0x37), 1)
+            }
+        };
+        okBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16));
+        btnPanel.Children.Add(cancelBtn);
+        btnPanel.Children.Add(okBtn);
+        Grid.SetRow(btnPanel, 4);
+        panel.Children.Add(btnPanel);
+
+        window.Content = panel;
+        bool result = false;
+        okBtn.Click += (_, _) => { result = true; window.Close(); };
+        cancelBtn.Click += (_, _) => window.Close();
+        window.ShowDialog();
+        return result;
     }
 
     /// <summary>打开设置弹窗（复用首次配置向导 SettingsWindow）。</summary>

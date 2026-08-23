@@ -552,8 +552,19 @@
                         <Button Content="⟳" Style="{StaticResource TextAction}" FontSize="14" Margin="0,0,2,0" VerticalAlignment="Center"
                                 ToolTip="刷新助手所有状态" Command="{Binding RefreshCommand}"/>
                         <TextBlock Text="{Binding RoomCode, StringFormat='房间 {0}'}" FontSize="12" Foreground="{StaticResource Dim}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                        <!-- 连接徽章 -->
-                        <Border CornerRadius="7" Padding="9,3" VerticalAlignment="Center" BorderThickness="1">
+                        <!-- 连接徽章（点击切换执行/监控模式） -->
+                        <Button VerticalAlignment="Center" Cursor="Hand"
+                                ToolTip="点击切换执行/监控模式"
+                                Command="{Binding SwitchModeCommand}">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <ContentPresenter Content="{TemplateBinding Content}"
+                                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                                </ControlTemplate>
+                            </Button.Template>
+                            <Border CornerRadius="7" Padding="9,3" VerticalAlignment="Center" BorderThickness="1">
                             <Border.Style>
                                 <Style TargetType="Border">
                                     <Setter Property="Background" Value="#1FE88A6F"/>
@@ -617,7 +628,8 @@
                                     </TextBlock.Style>
                                 </TextBlock>
                             </StackPanel>
-                        </Border>
+                            </Border>
+                        </Button>
                         <Button Content="⚙ 设置" Style="{StaticResource BtnGold}" Margin="10,0,0,0" Command="{Binding OpenSettingsCommand}"/>
                         <Button Content="✕" Style="{StaticResource TextAction}" FontSize="16" Margin="6,0,0,0" VerticalAlignment="Center"
                                 ToolTip="完全退出 Nexus-BGI 联机助手" Command="{Binding ExitCommand}"/>

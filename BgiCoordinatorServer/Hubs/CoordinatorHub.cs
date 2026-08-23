@@ -2490,7 +2490,15 @@ public class CoordinatorHub : Hub
         catch (Exception ex)
         {
             _logger.LogError(ex, "JoinControlRoom 失败");
-            await Clients.Caller.SendAsync("JoinRejected", "加入控制房间失败");
+            try
+            {
+                // 把异常信息传给客户端，让用户能定位具体原因
+                await Clients.Caller.SendAsync("JoinRejected", $"加入控制房间失败: {ex.Message}");
+            }
+            catch
+            {
+                // 客户端可能已断开，忽略二次异常，避免 "Failed to invoke" 模糊错误
+            }
         }
     }
 
