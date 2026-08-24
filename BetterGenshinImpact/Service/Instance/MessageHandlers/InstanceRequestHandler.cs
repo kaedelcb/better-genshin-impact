@@ -524,14 +524,14 @@ internal sealed class InstanceRequestHandler
             if (scriptService == null)
                 return InstanceIpcEnvelope.Failure(request, "service_unavailable", "脚本服务不可用");
 
-            // 先在主线程上停止当前任务。Cancel() 后立即 Set() 重建 Cts 清 WasCancelled，
-            // 避免 Cts 取消标记残留到新配置组。RunMulti 内部也有 Set()，但在此之前
-            // 的 IsCancellationRequested 检查会因残留 Cts 取消而误判。
+            // 先在主线程上停止当前任务。CancelTokenOnly() 重建 Cts 但不清 WasCancelled，
+            // 保留 WasCancelled 供后续 HandleTaskResume 判断是否恢复旧任务。
+            // 如果用户 F11 停止过，WasCancelled=true，task.resume 不应恢复旧任务。
             await Application.Current?.Dispatcher.InvokeAsync(async () =>
                 {
                     var cancellationContext = BetterGenshinImpact.Core.Script.CancellationContext.Instance;
                     cancellationContext.Cancel();
-                    cancellationContext.Set();
+                    cancellationContext.CancelTokenOnly();
                 })!;
 
             // 下发命令为最高优先级：等待旧任务真正释放任务锁（TaskSemaphore.CurrentCount 回到 1）再启动新任务。
@@ -603,11 +603,10 @@ internal sealed class InstanceRequestHandler
                             // task.start 是同步等待 RunMulti 完成的。RunMulti 结束后检查 WasCancelled：
                             // 若为 true（用户 F11 停止等取消了配置组），标记 configGroupCancelled，方法末尾返回 cancelled 状态，
                             // 助手端据此停止后续配置组。否则返回 success，助手端继续执行下一个配置组。
-                            var runWasCancelled = BetterGenshinImpact.Core.Script.CancellationContext.Instance.WasCancelled;
-                            _logger.LogInformation("[IPC task.start] RunMulti 完成, group={Group}, wasCancelled={WasCancelled}", groupName, runWasCancelled);
+                            var cancellationCtx = BetterGenshinImpact.Core.Script.CancellationContext.Instance;
+                            var runWasCancelled = cancellationCtx.WasCancelled;
                             if (runWasCancelled)
                             {
-                                _logger.LogInformation("[IPC task.start] 配置组 {Group} 执行中被取消（WasCancelled=true）", groupName);
                                 configGroupCancelled = true;
                             }
                             completionSource.SetResult();
@@ -1141,6 +1140,17 @@ internal sealed class InstanceRequestHandler
                 return InstanceIpcEnvelope.Response(request, new { status = "no_task" });
             }
 
+            // 2.5 如果最近一次任务被用户取消（F11/取消热键），不保存上下文。
+            // 用户 F11 停止表达的是"不想继续"，不应在 task.resume 时又被拉起来。
+            // 场景：用户 F11 停止后 RunnerContext 仍有残留（CurrentScriptGroupName 等），
+            // 若不检查 WasCancelled，下一轮上线人齐的 task.suspend 会把残留任务当作"当前任务"保存。
+            var suspensionCancellationCtx = BetterGenshinImpact.Core.Script.CancellationContext.Instance;
+            if (suspensionCancellationCtx.WasCancelled)
+            {
+                _logger.LogInformation("[IPC task.suspend] 上一任务被用户取消（WasCancelled=true），不保存上下文");
+                return InstanceIpcEnvelope.Response(request, new { status = "cleared_not_saved" });
+            }
+
             // 3. 保存上下文到 AllConfig
             var allConfig = BetterGenshinImpact.GameTask.TaskContext.Instance()?.Config;
             if (allConfig != null)
@@ -1197,6 +1207,18 @@ internal sealed class InstanceRequestHandler
             }
 
             var context = allConfig.SuspendedTaskContext;
+
+            // 如果最近一次任务被用户取消（F11/取消热键），不恢复旧任务，只清除上下文。
+            // 用户 F11 停止表达的是"不想继续"，不应在 task.resume 时又被拉起来。
+            // 崩溃/强杀/死机后重启：SuspendedTaskContext 不持久化（AllConfig 上 [JsonIgnore]），已自动消失。
+            var cancellationCtx = BetterGenshinImpact.Core.Script.CancellationContext.Instance;
+            if (cancellationCtx.WasCancelled)
+            {
+                allConfig.SuspendedTaskContext = null;
+                _logger.LogInformation("[IPC task.resume] 上一任务被用户取消（WasCancelled=true），不恢复，清除上下文");
+                return InstanceIpcEnvelope.Response(request, new { status = "cleared_not_resumed" });
+            }
+
             _logger.LogInformation("[IPC task.resume] 开始恢复任务: Type={Type}, Group={Group}, Index={Index}",
                 context.TaskType, context.GroupName, context.TaskIndex);
 

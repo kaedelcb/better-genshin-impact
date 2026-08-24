@@ -253,7 +253,11 @@ public partial class HomePageViewModel : ViewModel
     {
         await DisableGenshinHdrIfNeededAsync();
 
+        // [DUPLAUNCH_PROBE] 探针：记录 FindGenshinImpactHandle 的检测结果
+        // 目的：确认远程一键锄地/上线人齐触发时，原神是否真的已运行（hWnd非零则已开）
         var hWnd = SystemControl.FindGenshinImpactHandle();
+        _logger.LogWarning("[DUPLAUNCH_PROBE][OnStartTriggerAsync] FindGenshinImpactHandle 返回 hWnd={HWnd}, IsInitialized={Init}, LinkedStartEnabled={Linked}",
+            hWnd, TaskContext.Instance().IsInitialized, Config.GenshinStartConfig.LinkedStartEnabled);
         if (hWnd == IntPtr.Zero)
         {
             if (Config.GenshinStartConfig.LinkedStartEnabled)
@@ -282,6 +286,7 @@ public partial class HomePageViewModel : ViewModel
             }
         }
 
+        _logger.LogWarning("[DUPLAUNCH_PROBE][OnStartTriggerAsync] 启动截图器 Start(hWnd={HWnd})", hWnd);
         Start(hWnd);
     }
 

@@ -2860,8 +2860,18 @@ public partial class ScriptControlViewModel : ViewModel
 
             RunnerContext.Instance.taskProgress = taskProgress;
             var sg = GetNextScriptGroups(scriptGroups);
+            var groupIndex = 0;
             foreach (var scriptGroup in sg)
             {
+                groupIndex++;
+
+                // [停止响应] 用户按 F11/取消热键后，CancellationContext 被取消，
+                // 此处检查取消信号，中断后续配置组的执行，防止"停了一个又执行下一个"。
+                if (CancellationContext.Instance.IsCancellationRequested)
+                {
+                    break;
+                }
+
                 if (taskProgress.Next != null)
                 {
                     if (scriptGroup.Name != taskProgress.Next.GroupName)
@@ -2875,23 +2885,28 @@ public partial class ScriptControlViewModel : ViewModel
                 await Task.Delay(2000);
             }
 
-            taskProgress.LoopCount++;
-            if (taskProgress is { Loop: true })
+            if (CancellationContext.Instance.IsCancellationRequested)
             {
-                taskProgress.LastScriptGroupName = null;
-                taskProgress.LastSuccessScriptGroupProjectInfo = null;
-                taskProgress.Next = null;
-                await StartGroups(scriptGroups, taskProgress);
             }
             else
             {
-                //只有最后一次成功才算
-                if (taskProgress.ConsecutiveFailureCount == 0)
+                taskProgress.LoopCount++;
+                if (taskProgress is { Loop: true })
                 {
-                    taskProgress.EndTime = DateTime.Now;
-                    TaskProgressManager.SaveTaskProgress(taskProgress);
+                    taskProgress.LastScriptGroupName = null;
+                    taskProgress.LastSuccessScriptGroupProjectInfo = null;
+                    taskProgress.Next = null;
+                    await StartGroups(scriptGroups, taskProgress);
                 }
-
+                else
+                {
+                    //只有最后一次成功才算
+                    if (taskProgress.ConsecutiveFailureCount == 0)
+                    {
+                        taskProgress.EndTime = DateTime.Now;
+                        TaskProgressManager.SaveTaskProgress(taskProgress);
+                    }
+                }
             }
         }
         catch (Exception e)

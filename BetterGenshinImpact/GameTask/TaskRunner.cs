@@ -152,6 +152,13 @@ public class TaskRunner
             UIDispatcherHelper.Invoke(() => { Toast.Warning("请先在启动页，启动截图器再使用本功能"); });
             throw new NormalEndException("请先在启动页，启动截图器再使用本功能");
         }
+
+        // [输入状态安全] 任务启动前释放所有残留按键。
+        // 助手触发命令时，游戏角色可能正在赶路/鼓舞（W/Shift/空格等长按），按键可能残留按下状态。
+        // 若不在新任务开始前释放，残留按键会导致新任务角色持续移动或行为异常。
+        // 与 End() 结尾的 ReleaseAllKey() 对称，保证任务以干净的输入状态进入。
+        Simulation.ReleaseAllKey();
+
         // 清空实时任务触发器
         TaskTriggerDispatcher.Instance().ClearTriggers();
         

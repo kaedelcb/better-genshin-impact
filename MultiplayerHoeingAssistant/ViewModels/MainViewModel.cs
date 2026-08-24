@@ -457,7 +457,11 @@ public class MainViewModel : INotifyPropertyChanged
             }
             catch (Exception ex)
             {
-                AddLog($"IPC 不可用: {ex.Message}");
+                // [IPC_PROBE] 探针：记录 IPC 失败时的管道名、当前会话、进程信息，用于诊断"全程不间断 IPC 不可用"的原因
+                var pipeName = new IpcClient().GetPipeName();
+                var sessionId = System.Diagnostics.Process.GetCurrentProcess().SessionId;
+                var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
+                AddLog($"IPC 不可用: {ex.Message} [IPC_PROBE] pipe={pipeName} session={sessionId} pid={pid} type={ex.GetType().Name}");
                 // IPC 异常 → 回退到缓存
                 if (hasCache)
                 {
@@ -2381,6 +2385,65 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// 应用完全退出时集中释放后台资源，避免进程残留（任务管理器里 MultiplayerHoeingAssistant.exe 反复存留）。
+    /// Application.Shutdown() 会同步触发 App.OnExit，再由 App 在此调用本方法：
+    /// 逐项断开 SignalR 连接、停止全部业务定时器、释放进程监控与命令执行器。
+    /// 仅新增清理逻辑，不改变进程退出前任何现有功能行为（对运行中状态零影响）。
+    /// </summary>
+    public void Shutdown()
+    {
+        // 断开 SignalR 连接（HubConnection 未 Dispose 会持有网络连接/心跳定时资源）
+        var signalR = _signalRClient;
+        _signalRClient = null;
+        if (signalR != null)
+        {
+            // OnExit 是同步回调，无法阻塞等待；以 fire-and-forget 异步断开。
+            // 内部已 try-catch 观察异常，避免退出路径产生未观察任务异常触发全局弹窗。
+            _ = ReleaseSignalRAsync(signalR);
+        }
+
+        // 停止全部业务定时器（状态上报 10s / 首次连接失败重试 10s / 定时上线 30s / 恢复原任务 10s）
+        _statusTimer?.Dispose();
+        _statusTimer = null;
+        _retryTimer?.Dispose();
+        _retryTimer = null;
+        _onlineTimer?.Dispose();
+        _onlineTimer = null;
+        _resumeTimeoutTimer?.Dispose();
+        _resumeTimeoutTimer = null;
+
+        // 释放进程监控（内部 5 秒守护 Timer）与命令执行器（依赖进程监控）
+        _processMonitor?.Dispose();
+        _processMonitor = null;
+        _commandExecutor = null;
+    }
+
+    /// <summary>后台异步断开 SignalR 连接；退出路径异常仅写日志，不影响进程退出。</summary>
+    private static async Task ReleaseSignalRAsync(SignalRClient client)
+    {
+        try
+        {
+            await client.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            // 退出路径：连接关闭失败不影响进程退出，仅记录到助手运行日志
+            try
+            {
+                var logDir = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Environment.ProcessPath) ?? ".", "log");
+                System.IO.Directory.CreateDirectory(logDir);
+                var logPath = System.IO.Path.Combine(logDir, $"assistant_runtime.{DateTime.Now:yyyy-MM-dd}.s{System.Diagnostics.Process.GetCurrentProcess().SessionId}.log");
+                System.IO.File.AppendAllText(logPath,
+                    $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [EXIT_CLEANUP] SignalR 断开失败: {ex.Message}\n");
+            }
+            catch
+            {
+                // 日志写入失败不影响退出
+            }
+        }
+    }
+
+    /// <summary>
     /// 刷新助手所有状态：断开并重建 SignalR 连接（重新加入控制房间，服务端会重新广播所有
     /// 玩家最新状态 → OnPlayersUpdated 刷新成员列表），等效于"重新加载页面"，用于界面异常时恢复。
     /// 刷新期间保留本机配置、本机命令执行器与连接参数（ServerUrl/房间码/密码/UID/队UID）。
@@ -2493,6 +2556,7 @@ public class MainViewModel : INotifyPropertyChanged
                         m.ConfigGroups = np.ConfigGroups;
                         m.OneClickConfigs = np.OneClickConfigs;
                         m.AutoHoeingRunning = np.AutoHoeingRunning;
+                        m.AutoHoeingProgress = np.AutoHoeingProgress;
                         m.TaskRunning = np.TaskRunning;
                         m.CurrentTaskName = np.CurrentTaskName;
                         m.CurrentTaskGroupName = np.CurrentTaskGroupName;
@@ -2530,6 +2594,7 @@ public class MainViewModel : INotifyPropertyChanged
                         ConfigGroups = np.ConfigGroups,
                         OneClickConfigs = np.OneClickConfigs,
                         AutoHoeingRunning = np.AutoHoeingRunning,
+                        AutoHoeingProgress = np.AutoHoeingProgress,
                         TaskRunning = np.TaskRunning,
                         CurrentTaskName = np.CurrentTaskName,
                         CurrentTaskGroupName = np.CurrentTaskGroupName,
@@ -2545,6 +2610,18 @@ public class MainViewModel : INotifyPropertyChanged
                         AvatarRing = ring,
                         IsSelected = true
                     });
+                }
+
+                // 监控端：检测执行端（同 UID 的成员）联机锄地进度变化，输出到冒险日志
+                if (_config?.ObserverMode == true)
+                {
+                    var execMember = Members.FirstOrDefault(m => m.PlayerUid == _config?.PlayerUid);
+                    if (execMember?.AutoHoeingProgress != null
+                        && execMember.AutoHoeingProgress != _lastLoggedProgress)
+                    {
+                        _lastLoggedProgress = execMember.AutoHoeingProgress;
+                        AddLog(execMember.AutoHoeingProgress);
+                    }
                 }
             });
         };
@@ -2707,7 +2784,8 @@ public class MainViewModel : INotifyPropertyChanged
                             Params = new Dictionary<string, object>
                             {
                                 ["groupName"] = groupName,
-                                ["startFromIndex"] = 0
+                                ["startFromIndex"] = 0,
+                                ["batchGroupNames"] = string.Join(",", groupNames)
                             }
                         };
                         var result = await _commandExecutor.ExecuteAsync(hoeingCmd);
@@ -3284,7 +3362,8 @@ public class MainViewModel : INotifyPropertyChanged
     /// <summary>是否处于遥控器模式（ObserverMode=true）。供连接徽章 MultiDataTrigger 判断。</summary>
     public bool IsObserverMode => _config?.ObserverMode == true;
 
-    /// <summary>随 BGI 启动（开关，切换即保存 + 即时生效）</summary>
+    /// <summary>随 BGI 启动（开关，切换即保存，不执行即时窗口动作）。
+    /// 生效时机：BGI 下次启动时由 BGI 主程序读取配置并拉起助手。</summary>
     public bool AutoLaunchWithBgi
     {
         get => _config?.AutoLaunchWithBgi ?? false;
@@ -3295,9 +3374,9 @@ public class MainViewModel : INotifyPropertyChanged
                 _config.AutoLaunchWithBgi = value;
                 SaveConfig();
                 OnPropertyChanged();
-                // 即时生效：切换立即启动/停止 BGI 监控
-                if (Application.Current is App app)
-                    app.SetAutoLaunchWithBgi(value);
+                // 注意：不再执行即时生效（不调 App.SetAutoLaunchWithBgi）。
+                // 用户明确要求：勾选开关只保存配置，不应立即隐藏/弹窗窗口。
+                // 生效时机由 BGI 侧 TryAutoLaunchAssistant 在下次 BGI 启动时完成。
             }
         }
     }
@@ -4451,11 +4530,12 @@ public class MainViewModel : INotifyPropertyChanged
             CommandLogsText = string.Join("\n", CommandLogs);
         });
 
-        // 同时写入文件：保存在助手程序所在目录的 assistant_runtime.log
+        // 同时写入文件：保存在助手程序目录 log/ 子目录，按日期 + Windows 会话 ID 分文件
         try
         {
-            var logDir = System.IO.Path.GetDirectoryName(Environment.ProcessPath) ?? ".";
-            var logPath = System.IO.Path.Combine(logDir, "assistant_runtime.log");
+            var logDir = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Environment.ProcessPath) ?? ".", "log");
+            System.IO.Directory.CreateDirectory(logDir);
+            var logPath = System.IO.Path.Combine(logDir, $"assistant_runtime.{DateTime.Now:yyyy-MM-dd}.s{System.Diagnostics.Process.GetCurrentProcess().SessionId}.log");
             System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}\n");
         }
         catch
@@ -4543,6 +4623,10 @@ public class MainViewModel : INotifyPropertyChanged
         {
             try
             {
+                // [架构级批次管理] 新的一批开始时重置回退标记，避免上一批次的 _hasRestartedThisBatch
+                // 状态残留导致后续批次的所有配置组被跳过（标记只应在同一批次内生效）。
+                _commandExecutor?.ResetBatch();
+
                 for (int i = 0; i < groupNames.Count; i++)
                 {
                     if (_isAllReadySequenceCancelled)
@@ -4562,13 +4646,19 @@ public class MainViewModel : INotifyPropertyChanged
                         {
                             { isOneClick ? "configName" : "groupName", currentGroup },
                             { "startFromIndex", 0 },
-                            { "generation", generation }
+                            { "generation", generation },
+                            { "batchGroupNames", string.Join(",", groupNames) }
                         }
                     };
                     var startResult = await _commandExecutor.ExecuteAsync(startCmd);
                     if (startResult.Status == "cancelled")
                     {
                         _isAllReadySequenceCancelled = true;
+                        AddLog("配置组被用户取消（F11），清除中断上下文");
+                        if (_commandExecutor != null)
+                        {
+                            await _commandExecutor.ExecuteResumeAsync(cancel: true);
+                        }
                         break;
                     }
                     if (startResult.Status != "success")
@@ -4583,14 +4673,15 @@ public class MainViewModel : INotifyPropertyChanged
                 }
                 _isOnlineReady = false;
                 _onlineMode = "none";
-                _isAllReadySequenceCancelled = false;
 
                 // 执行完所有绑定的配置组后，立即恢复原任务
                 // 直接调用 ExecuteResumeAsync，消除对 _wasAutoHoeingRunning 边沿检测的依赖
                 // 此位置在 for 循环全部执行完后，天然覆盖两个场景：
                 //   场景A: 绑定配置组是联机锄地（AutoHoeingTask）
                 //   场景B: 绑定配置组是普通配置组（如"采集"）
-                if (_commandExecutor != null)
+                // 注意：如果配置组已被用户取消（F11），已在 cancelled 分支中清除了中断上下文，
+                // 不需要再执行 ExecuteResumeAsync（否则会打"恢复原任务失败"的误导日志）
+                if (!_isAllReadySequenceCancelled && _commandExecutor != null)
                 {
                     var resumeResult = await _commandExecutor.ExecuteResumeAsync();
                     if (resumeResult.Status == "success")
@@ -4602,6 +4693,7 @@ public class MainViewModel : INotifyPropertyChanged
                         AddLog($"恢复原任务失败: {resumeResult.Message}");
                     }
                 }
+                _isAllReadySequenceCancelled = false;
 
                 _ = ReportStatusAsync();
             }
@@ -4649,6 +4741,9 @@ public class MemberViewModel : INotifyPropertyChanged
 
     private bool _autoHoeingRunning;
     public bool AutoHoeingRunning { get => _autoHoeingRunning; set { if (_autoHoeingRunning != value) { _autoHoeingRunning = value; OnPropertyChanged(); } } }
+
+    private string? _autoHoeingProgress;
+    public string? AutoHoeingProgress { get => _autoHoeingProgress; set { if (_autoHoeingProgress != value) { _autoHoeingProgress = value; OnPropertyChanged(); } } }
 
     private bool _taskRunning;
     public bool TaskRunning { get => _taskRunning; set { if (_taskRunning != value) { _taskRunning = value; OnPropertyChanged(); OnPropertyChanged(nameof(TaskDisplayText)); } } }

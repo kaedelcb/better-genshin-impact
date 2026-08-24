@@ -8,6 +8,14 @@ public class CommandExecutor
 {
     private readonly BgiProcessMonitor _monitor;
     private readonly string _bgiPath;
+    /// <summary>本批次是否已通过 RestartBgi 回退重启过 BGI（批次级状态，由上游批次循环管理生命周期）。</summary>
+    private bool _hasRestartedThisBatch;
+
+    /// <summary>重置批次状态。由上游批次循环（如 OnAllReadyConfirmedInternal）在新的一批开始时调用。</summary>
+    public void ResetBatch()
+    {
+        _hasRestartedThisBatch = false;
+    }
 
     public CommandExecutor(BgiProcessMonitor monitor, string bgiPath)
     {
@@ -15,32 +23,91 @@ public class CommandExecutor
         _bgiPath = bgiPath;
     }
 
-    public async Task<CommandResult> ExecuteAsync(RemoteCommand command)
+    /// <summary>
+    /// [DUPLAUNCH_PROBE] 探针辅助：追加一行到助手程序目录 assistant_runtime.log，方便定位远程触发路径。
+    /// </summary>
+    private static void ProbeLog(string message)
     {
         try
         {
-            return command.Cmd switch
+            // 日志写入助手程序目录下的 log/ 子目录，按日期 + Windows 会话 ID 分文件，避免多用户会话日志混杂、单文件无限增长
+            var logDir = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Environment.ProcessPath) ?? ".", "log");
+            System.IO.Directory.CreateDirectory(logDir);
+            var logPath = System.IO.Path.Combine(logDir, $"assistant_runtime.{DateTime.Now:yyyy-MM-dd}.s{System.Diagnostics.Process.GetCurrentProcess().SessionId}.log");
+            System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}\n");
+        }
+        catch
+        {
+            // 文件写入失败不影响主流程
+        }
+    }
+
+    /// <summary>
+    /// [A1 治本] RestartBgi 后等待 BGI IPC 管道就绪，避免调用方紧接着的 IPC 请求在 BGI 刚启动时
+    /// 连不上再次触发回退，或与命令行 --startGroups 路径并发启动原神。
+    /// 轮询：每 1s 尝试连接，最多 10 次，超时后静默返回（不影响主流程，BGI 端锁已兜底）。
+    /// </summary>
+    private static async Task WaitForBgiIpcReadyAsync()
+    {
+        for (var i = 0; i < 10; i++)
+        {
+            try
             {
-                "stop" => await StopBgiAsync(),
-                "start_bgi" => await StartBgiAsync(),
-                "start_group" => await StartGroupAsync(
-                    GetStringParam(command.Params, "groupName") ?? "",
-                    GetIntParam(command.Params, "startFromIndex") ?? 0,
-                    GetIntParam(command.Params, "generation") ?? 0),
-                "start_oneclick" => await StartOneClickAsync(
-                    GetStringParam(command.Params, "configName") ?? "",
-                    GetIntParam(command.Params, "startFromIndex") ?? 0,
-                    GetIntParam(command.Params, "generation") ?? 0),
-                "hotkey_execute" => await ExecuteHotkeyAsync(
-                    GetStringParam(command.Params, "hotkeyConfigName") ?? ""),
-                "close_game" => await CloseGameAsync(),
-                "set_task_enabled" => await SetTaskEnabledAsync(
-                    GetStringParam(command.Params, "groupName") ?? "",
-                    GetStringParam(command.Params, "configName") ?? "",
-                    GetIntParam(command.Params, "taskIndex") ?? 0,
-                    bool.TryParse(command.Params?.GetValueOrDefault("enabled")?.ToString(), out var en) && en),
-                _ => new CommandResult { Status = "failed", Message = $"未知命令: {command.Cmd}" }
-            };
+                using var probe = new IpcClient();
+                await probe.ConnectAsync(1000);
+                // 发送一个正常命令并等响应，避免"连上立刻断"触发 BGI AcceptLoop 崩溃
+                await probe.SendCommandAsync(new IpcRequest { OpCode = "config.list" });
+                ProbeLog("[WaitForBgiIpcReadyAsync] BGI IPC 已就绪");
+                return;
+            }
+            catch
+            {
+                // BGI 尚未就绪，继续等待
+            }
+            await Task.Delay(1000);
+        }
+        ProbeLog("[WaitForBgiIpcReadyAsync] BGI IPC 就绪等待超时（10s），继续执行");
+    }
+
+    public async Task<CommandResult> ExecuteAsync(RemoteCommand command)
+    {
+        // 注意：_hasRestartedThisBatch 不在入口重置，而是在 StartGroupAsync 的 IPC 成功路径中重置。
+        // 原因：一键锄地/上线循环的每个配置组都独立调用 ExecuteAsync，若在入口重置标记，
+        // 第二个配置组进来时标记已清为 false，仍会走 KillBgi+RestartBgi 回退杀掉正在启动原神的第一个 BGI。
+        try
+        {
+            switch (command.Cmd)
+            {
+                case "stop":
+                    _hasRestartedThisBatch = false; // 用户手动停止后，新的一批重新开始
+                    return await StopBgiAsync();
+                case "start_bgi":
+                    return await StartBgiAsync();
+                case "start_group":
+                    return await StartGroupAsync(
+                        GetStringParam(command.Params, "groupName") ?? "",
+                        GetIntParam(command.Params, "startFromIndex") ?? 0,
+                        GetIntParam(command.Params, "generation") ?? 0,
+                        ParseBatchGroupNames(command.Params));
+                case "start_oneclick":
+                    return await StartOneClickAsync(
+                        GetStringParam(command.Params, "configName") ?? "",
+                        GetIntParam(command.Params, "startFromIndex") ?? 0,
+                        GetIntParam(command.Params, "generation") ?? 0);
+                case "hotkey_execute":
+                    return await ExecuteHotkeyAsync(
+                        GetStringParam(command.Params, "hotkeyConfigName") ?? "");
+                case "close_game":
+                    return await CloseGameAsync();
+                case "set_task_enabled":
+                    return await SetTaskEnabledAsync(
+                        GetStringParam(command.Params, "groupName") ?? "",
+                        GetStringParam(command.Params, "configName") ?? "",
+                        GetIntParam(command.Params, "taskIndex") ?? 0,
+                        bool.TryParse(command.Params?.GetValueOrDefault("enabled")?.ToString(), out var en) && en);
+                default:
+                    return new CommandResult { Status = "failed", Message = $"未知命令: {command.Cmd}" };
+            }
         }
         catch (Exception ex)
         {
@@ -76,6 +143,19 @@ public class CommandExecutor
             return je.ValueKind == System.Text.Json.JsonValueKind.Number && je.TryGetInt32(out var n) ? n : null;
         }
         return int.TryParse(val.ToString(), out var parsed) ? parsed : null;
+    }
+
+    /// <summary>
+    /// 从 Params 字典解析 batchGroupNames（逗号分隔的配置组名列表）。
+    /// 由 MainViewModel 批次循环的第一个配置组传入，用于回退时一次性传给 --startGroups。
+    /// 无此字段或为空时返回 null，回退行为保持旧逻辑（只传当前组名）。
+    /// </summary>
+    private static List<string>? ParseBatchGroupNames(Dictionary<string, object>? dict)
+    {
+        var raw = GetStringParam(dict, "batchGroupNames");
+        if (string.IsNullOrEmpty(raw)) return null;
+        var list = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        return list.Count > 0 ? list : null;
     }
 
     /// <summary>
@@ -120,8 +200,47 @@ public class CommandExecutor
     /// + 轮询 TaskSemaphore 等锁释放。task.stop 的异步 Cancel() 延迟到 RunMulti
     /// 执行期间触发会取消新配置组（wasCancelled=True）。
     /// </summary>
-    private async Task<CommandResult> StartGroupAsync(string groupName, int startFromIndex, int generation = 0)
+    private async Task<CommandResult> StartGroupAsync(string groupName, int startFromIndex, int generation = 0, List<string>? batchGroupNames = null)
     {
+        // [DUPLAUNCH_PROBE] 探针：记录 start_group 命令触发路径（IPC 成功 vs 回退杀进程重启）
+        ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] start_group 收到 groupName={groupName} startFromIndex={startFromIndex} generation={generation}");
+
+        // 如果本批次已通过 RestartBgi 命令行重启过 BGI，说明 BGI 命令行已经在串行执行 --startGroups，
+        // 此时不应再发 IPC task.start。本批次所有剩余配置组全部跳过 IPC，等待命令行串行完成。
+        // 注意：不再检查 BGI 是否空闲——命令行路径（StartGroups）正在等待截图器/进游戏，后续会真正执行任务，
+        // 此时 task.status 返回的 running=false 不代表任务已结束。检查空闲并重置标记会导致双入口并发执行同一个配置组。
+        // 但有一个例外：如果 BGI 已经被用户手动停止（F11）或进程已退出，标记已过期，此时应重置标记让新批次走正常路径。
+        if (_hasRestartedThisBatch)
+        {
+            // 检查 BGI 进程是否真的还活着并且任务系统可用
+            // 如果 BGI 完全不可达（IPC 超时），说明进程已退出，重置标记并走正常路径
+            var bgiAlive = false;
+            try
+            {
+                using var probeClient = new IpcClient();
+                await probeClient.ConnectAsync(1000);
+                bgiAlive = true;
+            }
+            catch
+            {
+                // IPC 不可达，BGI 已退出
+            }
+
+            if (!bgiAlive)
+            {
+                // BGI 已退出，标记过期，重置并走正常 IPC 路径
+                ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] BGI 已退出，重置标记 groupName={groupName}");
+                _hasRestartedThisBatch = false;
+                // 不 return，继续走到下面的主 IPC 路径
+            }
+            else
+            {
+                ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] 本批次已重启过 BGI，跳过 IPC 等待命令行串行完成 groupName={groupName}");
+                await WaitForBgiIpcReadyAsync();
+                return new CommandResult { Status = "success", Message = $"配置组 {groupName} 已由 BGI 命令行串行执行" };
+            }
+        }
+
         try
         {
             // 通过 IPC 发 task.start
@@ -131,6 +250,9 @@ public class CommandExecutor
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
             if (response.Success)
             {
+                _hasRestartedThisBatch = false; // IPC 成功 = BGI 在线，后续不再需要回退标记
+                ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] IPC task.start 成功 groupName={groupName}");
+
                 // 解析 BGI 响应中的 status：cancelled = 配置组执行中被取消（如 F11）
                 // 必须透传，否则助手端收不到取消信号、会继续执行下一个配置组。
                 if (!string.IsNullOrEmpty(response.Data))
@@ -158,9 +280,25 @@ public class CommandExecutor
         }
 
         // 回退：杀进程 + 重启带 --startGroups
-        _monitor.KillBgi();
-        await Task.Delay(2000);
-        _monitor.RestartBgi($"--startGroups \"{groupName}\"");
+        // 如果本批次已通过 RestartBgi 重启过 BGI，后续配置组不再走 KillBgi+RestartBgi 回退，
+        // 而是强制等待 IPC 就绪后走 IPC 路径（避免杀掉正在启动原神的 BGI 进程）。
+        // 当前日志已证实：第2个配置组 IPC 再次失败会 KillBgi 并启动新 BGI 进程，
+        // 导致原神启动 BGI 被中断、BGI 不执行任务。
+        if (!_hasRestartedThisBatch)
+        {
+            // 如果 batchGroupNames 非空，一次性传全部配置组给 --startGroups，让 BGI 命令行串行执行
+            var groupArgs = batchGroupNames != null && batchGroupNames.Count > 0
+                ? string.Join(" ", batchGroupNames.Select(n => $"\"{n}\""))
+                : $"\"{groupName}\"";
+            ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] IPC 失败，回退杀进程重启 BGI with --startGroups {groupArgs}");
+            _monitor.KillBgi();
+            await Task.Delay(2000);
+            _monitor.RestartBgi($"--startGroups {groupArgs}");
+            _hasRestartedThisBatch = true;
+        }
+        // [A 治本] 等待 BGI IPC 就绪，避免调用方（一键锄地/上线循环）紧接着的 start_group
+        // 在 BGI 刚启动时连不上再次回退，或与命令行 --startGroups 路径并发启动原神。
+        await WaitForBgiIpcReadyAsync();
         return new CommandResult { Status = "success", Message = $"配置组 {groupName} 已通过重启启动" };
     }
 

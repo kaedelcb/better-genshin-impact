@@ -130,6 +130,9 @@ diagnose-first 而非 fix-first；连续失败 2 次后禁止再改修复代码�
 ### 3.3 防回归与设计原则（`regression-safe-change-discipline.md` + `software-design-principles.md`）
 改动落地前三问：改的符号被谁引用 / 哪些调用方该变、哪些必须不变 / 改法能否做到"目标变、无辜不变"。共享代码默认"加法、默认值、门控"，禁止为一个调用方改共享函数的无条件行为。先用 SRP/CQS/机制策略分离/依赖倒置/KISS 等公认原则审方案，不现攒规则。每个改动列出"必须逐字节不变"清单并有守护手段（PBT/单测/显式论证）。
 
+### 3.3.1 跨 bug 回归预防（`bug-cross-hopping-prevention.md`，治"来回修"）
+核心痛点：修 A 时动了共享代码 → B 修好了 → A 又回来，来来回回没完没了。根因是**每次只按症状堵出口，不问两个 bug 是否共享同一个根因**（`regression-safe-change-discipline.md` §八 trace-to-root）。三个拦截点：①需求/方案提交时做影响半径调研；②实施前 PreToolUse HOOK 强制 trace-to-root 三问（改的符号被谁引用 / 有没有其他已知 bug 共享这符号 / 无辜调用方会不会受波及）；③收尾时 PostToolUse HOOK 强制跨 bug 回归扫描。**额外硬阻断**：`trace-to-root-hardblock.json`（command 类型，exit 2）在触及已知高风险共享根因（`MoveForwardTask.MoveForwardAsync`、`TpTaskFastDrag.Tp`、`AutoHoeingConfig`、`HandleTaskStart` 等 15 个符号）时直接阻止工具执行，防止"走过场自审后照样修补"。HOOK 文件：`.kiro/hooks/trace-to-root-pretooluse.json`（agent 软约束）+ `trace-to-root-posttooluse.json`（PostToolUse 收尾校验）+ `trace-to-root-hardblock.json`（command 硬阻断）。
+
 ### 3.4 UI 布局（`ui-layout-debugging-discipline.md`）
 "多次修改后画面零变化"= 立即停止猜测（改动没生效或改错层级）；推理与现实矛盾时错的一定是自己的前提；上可见证据（涂色分层/打印 ActualWidth/唯一标记验证编译生效）；从外往内查容器链；记住 StackPanel 不拉伸子元素、Grid 默认拉伸、Stretch+显式 Width 会居中；换方案前撤干净上一版实验代码。
 

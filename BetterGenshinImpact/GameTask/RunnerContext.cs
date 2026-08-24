@@ -32,6 +32,13 @@ public class RunnerContext : Singleton<RunnerContext>
     /// 优先执行配置组
     /// </summary>
     public bool IsPreExecution { get; set; } = false;
+
+    /// <summary>
+    /// 联机锄地助手已接管锄地流程（AutoHoeingTask.TryLaunchAssistant 拉起助手成功时置 true）。
+    /// 一条龙 OnOneKeyExecute 检测到后停止执行后续配置组，避免与助手 IPC 双线启动同一批配置组
+    /// （"好感任务"/"关直播"等绑定在助手 OnAllReady 里的配置组，两条路径竞争会导致任务启动失败/被跳过）。
+    /// </summary>
+    public bool IsMultiplayerAssistantActivated { get; set; }
     /// <summary>
     /// 暂停实现
     /// </summary>

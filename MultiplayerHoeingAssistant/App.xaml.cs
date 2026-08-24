@@ -23,6 +23,7 @@ public partial class App : Application
     private TaskbarIcon? _trayIcon;
     private bool _startMinimized;
     private MainWindow? _mainWindow;
+    private MainViewModel? _mainViewModel;
     private AssistConfigManager? _configManager;
     private AssistConfig? _appConfig;
     private Timer? _bgiWatchTimer;
@@ -91,7 +92,8 @@ public partial class App : Application
         // 创建托盘图标
         CreateTrayIcon();
 
-        var viewModel = new MainViewModel();
+        _mainViewModel = new MainViewModel();
+        var viewModel = _mainViewModel;
         _mainWindow = new MainWindow(viewModel);
 
         if (_startMinimized)
@@ -204,11 +206,14 @@ public partial class App : Application
     private void ShowOrMinimizeWindow()
     {
         if (_mainWindow == null) return;
-        if (_appConfig?.AutoLaunchWithBgiMinimized == true)
+        var Minimized = _appConfig?.AutoLaunchWithBgiMinimized == true;
+        ProbeLog($"ShowOrMinimizeWindow enter minimized={Minimized} mainWinVisible={_mainWindow.IsVisible}");
+        if (Minimized)
         {
             // 静默启动：隐藏窗口到系统托盘
             _mainWindow.ShowInTaskbar = false;
             _mainWindow.Hide();
+            ProbeLog($"ShowOrMinimizeWindow -> 已执行 Hide（窗口藏到托盘）。IsVisible={_mainWindow.IsVisible}");
         }
         else
         {
@@ -217,6 +222,7 @@ public partial class App : Application
             _mainWindow.ShowInTaskbar = true;
             _mainWindow.WindowState = WindowState.Normal;
             _mainWindow.Activate();
+            ProbeLog("ShowOrMinimizeWindow -> 已执行 Show/Activate");
         }
     }
 
@@ -260,6 +266,7 @@ public partial class App : Application
     /// </summary>
     internal void SetAutoLaunchWithBgi(bool enabled)
     {
+        ProbeLog($"SetAutoLaunchWithBgi enabled={enabled} bgiRunning={IsBgiRunning()} minimized={_appConfig?.AutoLaunchWithBgiMinimized}");
         if (enabled)
         {
             if (IsBgiRunning())
@@ -279,10 +286,39 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// 诊断探针日志：写入助手 exe 目录下 log/assistant_runtime.<date>.s<session>.log。
+    /// 用于确认"随 BGI 启动"点击开关时窗口是否被 Hide/Show，定位闪退观感。
+    /// 写入失败不影响主流程。
+    /// </summary>
+    private static void ProbeLog(string message)
+    {
+        try
+        {
+            var logDir = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Environment.ProcessPath) ?? ".", "log");
+            System.IO.Directory.CreateDirectory(logDir);
+            var logPath = System.IO.Path.Combine(logDir, $"assistant_runtime.{DateTime.Now:yyyy-MM-dd}.s{System.Diagnostics.Process.GetCurrentProcess().SessionId}.log");
+            System.IO.File.AppendAllText(logPath,
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [AUTOLAUNCH_PROBE] {message}\n");
+        }
+        catch
+        {
+            // 文件写入失败不影响主流程
+        }
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         // 清理定时器
         StopBgiWatchTimer();
+
+        // 释放托盘图标（未 Dispose 时系统托盘会保留图标资源，可能导致进程无法完全退出）
+        _trayIcon?.Dispose();
+        _trayIcon = null;
+
+        // 释放 ViewModel 后台资源（SignalR 连接 / 业务定时器 / 进程监控），避免进程残留
+        _mainViewModel?.Shutdown();
+        _mainViewModel = null;
 
         // 重新检查开机自启动注册：如果用户关闭了开关，取消注册
         if (_appConfig != null && !_appConfig.AutoLaunchOnBoot)

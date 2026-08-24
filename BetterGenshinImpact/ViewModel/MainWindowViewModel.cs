@@ -348,9 +348,11 @@ public partial class MainWindowViewModel : ObservableObject, IViewModel
             }
 
             // 读取助手配置，判断是否开启"随 BGI 启动"以及启动方式
-            var configPath = System.IO.Path.Combine(
-                System.IO.Path.GetDirectoryName(exe) ?? string.Empty,
-                "assistant-config.json");
+            // 注意：助手把自己的一切配置（含 autoLaunchWithBgi 开关）保存到
+            // %APPDATA%\NexusBGI\assistant-config.json（AssistConfigManager 路径），
+            // 与本文件 Tools\MultiplayerHoeingAssistant\ 下的旧配置是两份独立文件。
+            // 必须先读 %APPDATA% 版本（用户设置里勾选的开关写在这里），读不到再回退到 exe 目录旧版本。
+            var configPath = GetAssistantConfigPath(exe, out var usedAppData);
             if (!System.IO.File.Exists(configPath))
             {
                 _logger.LogDebug("助手配置不存在，跳过随 BGI 启动：{Path}", configPath);
@@ -369,6 +371,8 @@ public partial class MainWindowViewModel : ObservableObject, IViewModel
             if (!root.TryGetProperty("autoLaunchWithBgi", out var autoWithBgi)
                 || autoWithBgi.ValueKind != System.Text.Json.JsonValueKind.True)
             {
+                if (usedAppData)
+                    _logger.LogDebug("助手配置未开启随 BGI 启动（{Path}）", configPath);
                 return;
             }
 
@@ -394,6 +398,33 @@ public partial class MainWindowViewModel : ObservableObject, IViewModel
             // 拉起助手失败不影响 BGI 主程序启动，仅记日志
             _logger.LogWarning(ex, "随 BGI 启动拉起联机锄地助手失败");
         }
+    }
+
+    /// <summary>
+    /// 解析助手配置文件的路径。
+    /// 优先返回助手实际保存配置的 %APPDATA%\NexusBGI\assistant-config.json
+    /// （与 MultiplayerHoeingAssistant/AssistConfigManager 的路径一致，用户在助手设置里勾选的开关写在这里）；
+    /// 若该文件不存在，回退到 exe 同目录下的旧版 assistant-config.json（兼容历史部署）。
+    /// </summary>
+    /// <param name="exe">助手 exe 完整路径（用于回退路径的目录定位）。</param>
+    /// <param name="usedAppData">true 表示命中的是 %APPDATA% 版本。</param>
+    private static string GetAssistantConfigPath(string exe, out bool usedAppData)
+    {
+        // 与助手 AssistConfigManager 完全一致：Environment.SpecialFolder.ApplicationData + "NexusBGI"
+        var appDataPath = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "NexusBGI",
+            "assistant-config.json");
+        if (System.IO.File.Exists(appDataPath))
+        {
+            usedAppData = true;
+            return appDataPath;
+        }
+
+        usedAppData = false;
+        return System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(exe) ?? string.Empty,
+            "assistant-config.json");
     }
 
     private async Task AutoDismissRedeemCodeCardAsync(CancellationToken ct)

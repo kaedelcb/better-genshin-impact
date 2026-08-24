@@ -2231,6 +2231,9 @@ public partial class OneDragonFlowViewModel : ViewModel
     {
         CancellationContext.Instance.Set();
 
+        // 每次一条龙开始时重置联机助手接管标志，避免上一次执行的残留影响本次流程
+        RunnerContext.Instance.IsMultiplayerAssistantActivated = false;
+
         if (!_continuousExecutionMark)
         {
             _lastUid = "";
@@ -2555,6 +2558,14 @@ public partial class OneDragonFlowViewModel : ViewModel
                     _logger.LogInformation("任务被取消，退出执行");
                     Notify.Event(NotificationEvent.DragonEnd).Success("一条龙和配置组任务结束");
                     return; // 后续的检查任务也不执行
+                }
+                // 联机锄地助手已接管锄地流程：跳过后续配置组（"好感任务"/"关直播"等），
+                // 避免一条龙与助手 IPC 双线启动同一批配置组导致竞争。
+                if (RunnerContext.Instance.IsMultiplayerAssistantActivated)
+                {
+                    _logger.LogInformation("联机助手已接管，跳过后续配置组任务");
+                    Notify.Event(NotificationEvent.DragonEnd).Success("一条龙和配置组任务结束（联机助手已接管）");
+                    break;
                 }
             }
         }

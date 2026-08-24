@@ -61,6 +61,24 @@ public class BgiProcessMonitor : IDisposable
 
     public void RestartBgi(string? args = null)
     {
+        // [DUPLAUNCH_PROBE] 探针：记录每次 BGI 被启动的时间、参数、调用堆栈
+        // 目的：确认远程一键锄地/上线人齐触发时，助手是否多次调用 RestartBgi 带 --startGroups
+        try
+        {
+            // 日志写入助手程序目录 log/ 子目录，按日期 + Windows 会话 ID 分文件
+            var logDir = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Environment.ProcessPath) ?? ".", "log");
+            System.IO.Directory.CreateDirectory(logDir);
+            var logPath = System.IO.Path.Combine(logDir, $"assistant_runtime.{DateTime.Now:yyyy-MM-dd}.s{System.Diagnostics.Process.GetCurrentProcess().SessionId}.log");
+            System.IO.File.AppendAllText(logPath,
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [DUPLAUNCH_PROBE][BgiProcessMonitor.RestartBgi] 启动 BGI args={args}\n");
+            System.IO.File.AppendAllText(logPath,
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [DUPLAUNCH_PROBE][BgiProcessMonitor.RestartBgi] 堆栈:\n{Environment.StackTrace}\n");
+        }
+        catch
+        {
+            // 文件写入失败不影响主流程
+        }
+
         try
         {
             var startInfo = new ProcessStartInfo

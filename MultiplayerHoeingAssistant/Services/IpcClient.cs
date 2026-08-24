@@ -17,6 +17,11 @@ public class IpcClient : IDisposable
         _pipeName = $"BetterGI.v2.user-{sid}.root";
     }
 
+    /// <summary>
+    /// [IPC_PROBE] 探针：暴露当前 IPC 管道名，供诊断日志使用
+    /// </summary>
+    public string GetPipeName() => _pipeName;
+
     public async Task ConnectAsync(int timeoutMs = 3000)
     {
         _pipeClient = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);

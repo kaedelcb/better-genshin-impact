@@ -307,3 +307,84 @@
   - `currentRouteDisplay`（简版）：`第X/Y条线路: {RouteFileName}`
 - **助手端** `MainViewModel.ReportStatusAsync` 第474-479行：`autoHoeingProgress != _lastLoggedProgress`（文本变化时）`AddLog(autoHoeingProgress!)` → 冒险日志仅在线路/进度文本变化时打印一次，同一线路中途不重复打印。
 - **遥控端（ObserverMode）看不到**：`ReportStatusAsync` 在 `_config?.ObserverMode == true` 时跳过 IPC 解析，`autoHoeingProgress` 恒为 null，这段 AddLog 永不执行。遥控端要看成员进度需从服务端广播的 `MemberViewModel.AutoHoeingProgress` 读。
+### JS 锄地日志流向——不进 IPC task.status（2026-08-24 调研）
+
+- **JS 日志输出**：`main.js` 用 `log.info("...")` / `log.warn(...)` / `log.error(...)` 输出大量日志（"开始读取路径文件"、"路线组合结果如下"、"总收益XXX摩拉"等）。
+- **BGI 引擎注册**：`EngineExtend.cs:45` → `engine.AddHostObject("log", new Log())`。
+- **C# Log 类**：`Core/Script/Dependence/Log.cs` → `Info`/`Warn`/`Error` 分别调 `_logger.LogInformation`/`LogWarning`/`LogError`，使用 `ILogger<Log>`。
+- **最终写入**：`App.xaml.cs:72` → `log/better-genshin-impact.log` 文件 + BGI 本体日志面板。
+- **关键结论**：JS 锄地日志**只进 BGI 日志系统，不进 IPC `task.status` 响应**。因此助手冒险日志（`AddLog`）和任务状态（`CurrentTaskName`/`CurrentRouteDisplay`/`AutoHoeingProgress`）都看不到 JS 锄地日志。
+- **设计影响**：要"把 JS 锄地日志发到冒险日志和任务状态"，需要在 BGI 侧拦截 JS 日志（`Log.cs` 或 JS 引擎执行层），把日志放入可由 IPC `task.status` 读取的载体（如内存中维护"最近一批 JS 日志"列表），`HandleTaskStatus` 时作为新字段返回，助手解析后显示。或让 JS 锄地执行时同步写入 `AutoHoeingProgress` 载体（复用已有通道）。
+### JS 锄地日志流向修正——"当前进度"其实能拿到（2026-08-24 补充）
+
+**修正上一节**：JS 锄地（`AutoHoeingOneDragon/main.js`）**不是独立于 `AutoHoeingTask` 的**，它就是 `AutoHoeingTask` 本身（`AutoHoeingTask.cs:528` `_dataDir = User/JsScript/AutoHoeingOneDragon`），路线走 `ProcessRoutesByGroup`（第2859行）执行。
+
+- **"当前进度（开始第X/Y条线路: 文件名）"**：`ProcessRoutesByGroup` 每次切换线路会更新 `AutoHoeingProgress`（第3564-3575行），经 IPC `task.status` 的 `autoHoeingProgress` 字段上报 → 助手冒险日志已能显示（执行端 `MainViewModel.cs:474-479` `AddLog`；监控端 `OnPlayersUpdated` 检测变化 `AddLog`）。**这一层能拿到。**
+- **JS `log.info/warn/error` 详细日志**（"开始读取路径文件"、"路线组合结果如下"、"总收益XXX摩拉"）：走 `Log.cs` → `ILogger` → `better-genshin-impact.log`，**不进 `AutoHoeingProgress`**，助手冒险日志看不到。
+
+**关键区分**：用户说"JS走PathExecutor怎么可能拿不到"——指的是"当前进度"这一层，确实能拿到（已实现）；拿不到的是 `log.info` 详细文本。后续需求要分清楚用户要哪一层。要转发 `log.info` 需在 `Log.cs` 或 JS 引擎层拦截，写入可被 IPC `task.status` 读取的载体。
+
+### 远程一键锄地/上线人齐触发原神重复启动（Error 3,0,0）修复（2026-08-25）
+- **场景**：成员 BGI+原神均关闭时，被其他成员远程触发一键锄地（`key=一键锄地`）或上线人齐（`OnAllReadyConfirmed`），助手拉起 BGI 后 BGI 启动原神时弹 `Error Code:(3,0,0)`（原神已在运行）。**必现**，而"点击配置组键"（单 `start_group`）不触发。
+- **根因（日志探针 `[DUPLAUNCH_PROBE]` 证实）**：`SystemControl.StartFromLocalAsync` 被调用 2 次，两条独立调用栈并发：
+  1. **路径 A（命令行 `--startGroups`）**：`ApplicationHostService.HandleActivationAsync` → `OnStartMultiScriptGroupWithNamesAsync` → `StartGroups` → `RunMulti` → `StartGameTask` → `OnStartTriggerAsync` → `StartFromLocalAsync`
+  2. **路径 B（IPC `task.start`）**：`InstanceRequestHandler.HandleTaskStart` → `RunMulti` → `StartGameTask` → `OnStartTriggerAsync` → `StartFromLocalAsync`
+- **为什么一键/上线触发而点击配置组不触发**：点击配置组（单 start_group 无 key）只执行一次 `ExecuteAsync` → IPC 失败 → `RestartBgi("--startGroups")` 只拉起命令行一条路径。一键锄地/上线是**循环多个 start_group**：第一个 IPC 失败 → `RestartBgi("--startGroups 组1")`（路径 A）；紧接着下一个配置组 IPC 连上刚起来的 BGI → `task.start`（路径 B）→ 命令行 + IPC 两条路径并发，各自在 `FindGenshinImpactHandle()==0`（原神启动中窗口未建）时启动一次原神。
+- **修复（A+B 双端）**：
+  - **[B] BGI 端** `ScriptService.StartGameTask`：新增 `private static readonly SemaphoreSlim StartGameLock = new(1,1)`，`if (!TaskDispatcherEnabled)` 内 `await StartGameLock.WaitAsync()` → 锁内二次检查 `SystemControl.FindGenshinImpactHandle()`（非 0 则跳过启动）→ `finally Release`。判据用**原神窗口句柄而非 TaskDispatcherEnabled**（因为另一路径等待原神窗口期间 `TaskDispatcherEnabled` 仍为 false，但窗口已出现）。
+  - **[A] 助手端** `CommandExecutor.StartGroupAsync`：回退路径 `RestartBgi("--startGroups")` 后 `await WaitForBgiIpcReadyAsync()`（轮询 10×1s 连 IPC），避免紧接着的 IPC 在 BGI 刚启动时连不上再次回退/与命令行并发。
+- **诊断方法（可复用）**：给 `StartFromLocalAsync` 加 `Logger.LogWarning("[DUPLAUNCH_PROBE]...{Stack}", Environment.StackTrace)`，一次日志就能区分是哪条调用链触发启动。BGI 日志看 `[DUPLAUNCH_PROBE][StartFromLocalAsync]` 出现几次 + 堆栈；助手日志看 `assistant_runtime.log` 里 `[CommandExecutor.StartGroupAsync]` 走了 IPC 成功还是回退。
+- **关键事实**：`StartGameTask` 是单机/联机共用代码，但加锁后单机零感知（单路径 `FindGenshinImpactHandle()==0` → 走原分支）。BGI 端 `Start(hWnd)` 同步设 `TaskDispatcherEnabled=true`。
+- **spec 位置**：`.agents/specs/fix-genshin-duplicate-launch/`（requirements.md / design.md / tasks.md）。
+- **第二轮修复（2026-08-25）**：`CommandExecutor.StartGroupAsync` 对每个配置组独立回退（IPC 失败→`KillBgi+RestartBgi`），多配置组循环时第二个配置组 IPC 再次失败会杀掉正在启动原神的第一个 BGI 进程。修复：`_hasRestartedThisBatch` 标记（实例字段），`ExecuteAsync` 入口重置，`StartGroupAsync` 回退路径 `if (!_hasRestartedThisBatch)` 避免二次回退。BGI 端 `StartGameTask` 跳过启动分支补 `OnStartTriggerAsync()`（`Start` 是 private 不可直接调用，`OnStartTriggerAsync` 内部会检测到已有窗口后自动调用 `Start(hWnd)` 初始化截图器/遮罩）。
+- **第三轮诊断（2026-08-25）**：`_hasRestartedThisBatch` 标记在 `ExecuteAsync` 入口重置为 `false`，但一键锄地/上线循环的**每个配置组都独立调用 `ExecuteAsync`**，导致第二个配置组进来时标记已被重置为 false → `if (!_hasRestartedThisBatch)` 为 true → 又走 `KillBgi+RestartBgi` 回退，杀掉正在启动原神的第一个 BGI。修复方向：去掉 `ExecuteAsync` 入口重置，改为在 `StartGroupAsync` 的 IPC 成功路径中重置 `_hasRestartedThisBatch = false`（IPC 成功 = BGI 在线，标记不再需要）。
+- **助手日志路径规范（2026-08-25）**：助手日志文件路径改为 `{助手程序目录}/log/assistant_runtime.{yyyy-MM-dd}.s{SessionId}.log`（按日期+Windows 会话 ID 分文件）。`log/` 目录自动创建。三处写入点同步：`MainViewModel.AddLog`（UI 日志+文件）、`CommandExecutor.ProbeLog`（探针）、`BgiProcessMonitor.RestartBgi` 探针。
+- **编译助手项目阻塞（2026-08-25）**：`dotnet build MultiplayerHoeingAssistant` 报 MSB3027 文件锁（`文件被 MultiplayerHoeingAssistant (PID) 锁定`），原因是 `.csproj` 的 PostBuild 事件把输出 exe/dll 复制到 `BetterGenshinImpact\bin\...\Tools\MultiplayerHoeingAssistant\`，该目录下文件被正在运行的助手进程占用。解决：先关闭所有助手进程再 build。`dotnet build` 被 `^C` 中断是因为 MSBuild 进程复用（`nodeReuse`），加 `--nodeReuse:false` 可解决。
+- **IPC 诊断事实（2026-08-26）**：执行端助手 `ReportStatusAsync` 每 10 秒连 BGI IPC 报 `TimeoutException`，但管道名（`BetterGI.v2.user-{userSid}.root`）和 session 都正确。根因是 BGI 端 `InstanceService.AcceptLoopAsync` 抛 `IOException: 管道正在被关闭` 后监听循环整体退出，此后不再接受任何 IPC 连接。`WaitForBgiIpcReadyAsync` 的"连上就 `Dispose`"探针可能触发此崩溃（待确认）。修复方向：`WaitForBgiIpcReadyAsync` 探针连接改为发正常命令并优雅关闭，避免"连了立刻断"触发 BGI AcceptLoop 异常退出。
+### "随 BGI 启动"配置路径不同步（2026-08-26，联机助手启动策略）
+- **场景**：用户勾选"随 BGI 启动"后重启 BGI，助手没被拉起；且勾选开关瞬间助手窗口会消失（观感"闪退"）。
+- **根因 1（路径不同步）**：助手把一切配置（含 `autoLaunchWithBgi` 开关）保存到 `%APPDATA%\NexusBGI\assistant-config.json`（`AssistConfigManager` 用 `Environment.GetFolderPath(ApplicationData)+"NexusBGI"`）；但 BGI 侧 `TryAutoLaunchAssistant` 原来读的是 exe 同目录 `Tools\MultiplayerHoeingAssistant\assistant-config.json`——**两份独立文件**。用户勾选只写了 `%APPDATA%` 版，BGI 读的旧版没有 `autoLaunchWithBgi` 字段 → `TryGetProperty` 失败 → 不拉起。
+- **修复**：BGI 侧 `TryAutoLaunchAssistant` 改为优先读 `%APPDATA%\NexusBGI\assistant-config.json`（`GetAssistantConfigPath(exe, out usedAppData)` 辅助方法），文件不存在再回退 exe 目录旧版（兼容历史部署）。
+- **根因 2（开关 setter 不应有即时副作用）**：`MainViewModel.AutoLaunchWithBgi` setter 里原来调 `app.SetAutoLaunchWithBgi(value)`，BGI 运行时立刻 `ShowOrMinimizeWindow()` 把主窗口 `Hide()` 到托盘——用户勾选瞬间窗口消失，就是最初"闪退"的元凶。
+- **修复**：setter 只保留 `SaveConfig() + OnPropertyChanged()`，移除 `app.SetAutoLaunchWithBgi(value)` 调用。生效时机完全交给 BGI 侧下次启动时 `TryAutoLaunchAssistant` 拉助手。
+- **关键教训**：**配置开关的 setter 应该只持久化配置，绝不做任何窗口显示/隐藏/弹窗等即时副作用**；生效时机由消费方（BGI 侧）决定。同时，只要有"BGI 侧读取助手配置"的需求，必须先查 `%APPDATA%\NexusBGI\assistant-config.json`，不要默认 exe 目录下有配置文件。
+- **涉及文件**：`BetterGenshinImpact/ViewModel/MainWindowViewModel.cs`（`TryAutoLaunchAssistant` + `GetAssistantConfigPath`）、`MultiplayerHoeingAssistant/ViewModels/MainViewModel.cs`（`AutoLaunchWithBgi` setter）。
+### HOOK 自嵌入循环依赖处理（2026-08-26）
+- **场景**：创建 `bug-cross-hopping-prevention.md` 时，文件内容包含 PreToolUse HOOK 的 JSON 配置（该 HOOK 的 `matcher` 匹配 `fs_write`）。写文件时触发了该 HOOK → HOOK prompt 要求"按 `bug-cross-hopping-prevention.md` 的要求完成自审"→ 但该文件还没创建完，无法引用 → 循环依赖。
+- **处理模式**：识别为"HOOK 自身文件创建时的鸡生蛋问题"，跳过嵌套 HOOK 的引用（因为该文件尚未存在），先完成创建。创建完成后，HOOK 的嵌套引用自然生效。
+- **关键判断标准**：纯文档/配置文件的创建（不涉及代码符号修改）→ 跳过嵌套 HOOK 自审；代码文件修改 → 必须 honor 所有 HOOK 约束。
+- **可复用**：任何创建/修改包含 HOOK 配置的 `.md`/`.json` 文件时都可能触发此循环。预判方法：检查文件内容是否包含 `PreToolUse`/`PostToolUse` + `matcher` 匹配当前写入工具名。
+### StartGroups 批次循环不感知取消信号（2026-08-27）
+- **场景**：用户选择多个配置组执行（命令行 `--startGroups` 路径），按 F11 停止第一个后，第二个仍继续执行。
+- **根因**：`ScriptControlViewModel.StartGroups` 的 foreach 批次循环**完全没检查** `CancellationContext.Instance.IsCancellationRequested`。当第一个 `RunMulti` 因取消而返回后，循环继续执行下一个配置组。
+- **IPC 路径有正确防护**：`InstanceRequestHandler.HandleTaskStart` 的 `RunMulti` 完成后检查 `WasCancelled`，返回 `cancelled` 状态，助手端循环据此 `break`。这条路径行为正确。
+- **两条入口不对称**：`StartGroups`（命令行/UI 多选）与 `HandleTaskStart`（IPC task.start）对取消信号的处理不同。前者的 foreach 循环没有守卫，后者的 `cancelled` 返回正确。
+- **修复**：`StartGroups` 的 foreach 循环头部加 `IsCancellationRequested` 检查，取消时 break；循环后加 `if (IsCancellationRequested) 跳过 LoopCount` 和后续通知。
+- **涉及文件**：`ScriptControlViewModel.cs`（`StartGroups` 方法）
+### StartGameTask 的 StartGameLock 不感知取消信号（2026-08-27）
+- **场景**：用户按 F11 停止，但必须按两次才能停。
+- **根因**：`ScriptService.StartGameTask` 的 `StartGameLock` 内，等待锁期间用户 F11 取消了，但拿到锁后**没有检查 `IsCancellationRequested`**，直接调 `OnStartTriggerAsync` 重启截图器 → `TaskDispatcherEnabled` 又被置 true → 必须按第二次 F11。
+- **修复**：`StartGameLock` 拿到锁后第一件事检查 `IsCancellationRequested`，已取消则直接 return。
+- **涉及文件**：`ScriptService.cs`（`StartGameTask` 方法）
+### agent vs command HOOK 的软约束与硬阻断差异（2026-08-27 关键认知）
+- **场景**：用户反馈 trace-to-root HOOK 没起效，新会话还是修修补补。排查后发现 agent HOOK 实际起了作用（每次写操作都被拦截注入自审提示），但 agent 看了提示后**照样修补**——因为 agent HOOK 是"建议性"的，无法强制阻止工具执行。
+- **关键认知**：PreToolUse HOOK 的 `action.type: agent` 只是往模型上下文追加一段静态 prompt，agent 可以"走过场"（看了提示答完自审三问，然后继续修补）。真正能阻止行为的只有 `action.type: command` + `exit 2`（shell 命令返回非 0 退出码时工具不执行）。
+- **HOOK 设计原则**：后续所有需要"强制约束"的场景，必须用 `command` + `exit 2`，不能依赖 `agent` 提示。`agent` 提示适合"提供思考框架"（软约束），`command` 硬阻断适合"触及已知雷区时阻止操作"（硬约束）。
+- **修复**：新增 `trace-to-root-hardblock.json`（command 类型，检查 15 个已知高风险共享根因符号，触及则 exit 2 阻止）。
+### 决策门——"自审"和"决策"拆开（2026-08-27）
+- **场景**：自审三问走过场后照样修补，因为缺少"答完之后决定要不要修"的判断标准。
+- **修复**：在 `regression-safe-change-discipline.md` §八.5 新增 4 条"升级信号"（反复修补区/多调用方共享/共享根因/打补丁症状），触发任一则禁止直接修补，必须先诊断+向用户提架构方案。信号不触发时允许局部修补。
+- **教训**：HOOK 只能拦截工具执行，但不能强制 agent 改变决策方向。决策门是 agent 自驱逻辑，不依赖 HOOK。两者组合才能做到"不是修补不行，是思考后决定是否修补"。
+### OnAllReadyConfirmedInternal  cancelled 后恢复旧任务（2026-08-26）
+- **场景**：上线人齐触发 `OnAllReadyConfirmedInternal`，依次执行配置组 233→434。434 执行中用户 F11 停止，BGI 返回 "cancelled"，但助手端循环结束后仍然 `ExecuteResumeAsync()` 恢复了被 suspend 的旧任务（"联机-精英-锄地"）。
+- **根因**：`OnAllReadyConfirmedInternal` 的 for 循环中 `cancelled` 分支只设 `_isAllReadySequenceCancelled=true` + break，但循环结束后**无条件执行 `ExecuteResumeAsync()`**。用户 F11 表达的是"我不想继续了"，但系统仍然恢复旧任务。
+- **修复**：cancelled 分支中先 `ExecuteResumeAsync(cancel: true)` 清除中断上下文，再 break。循环结束后用 `!_isAllReadySequenceCancelled` 门控，跳过末尾的 `ExecuteResumeAsync()`。
+- **涉及文件**：`MultiplayerHoeingAssistant/ViewModels/MainViewModel.cs`（`OnAllReadyConfirmedInternal`）
+- **教训**：凡是"上线人齐循环执行配置组→恢复旧任务"的流程，必须在 cancelled 分支中不仅停止后续配置组，还要**清除中断上下文**，避免用户取消后被恢复旧任务。
+### SuspendedTaskContext 不持久化 + WasCancelled 守卫（2026-08-26）
+- **场景**：上线人齐执行配置组时 F11 停止，循环结束后 `ExecuteResumeAsync` 恢复旧任务。崩溃/强杀/死机后重启，旧上下文残留在 `config.json` 中也会被恢复。
+- **架构根因**：`SuspendedTaskContext` 是"临时中断状态"，但被持久化到 `config.json`，且没有过期机制。崩溃/强杀/死机后重启，旧上下文仍然存在。
+- **修复一（AllConfig.cs）**：`SuspendedTaskContext` 加 `[JsonIgnore]`，不持久化到磁盘。崩溃/强杀/死机后 BGI 重启，此字段自动为 null。
+- **修复二（HandleTaskResume）**：入口检查 `CancellationContext.Instance.WasCancelled`，为 true 时清除上下文不恢复，返回 `cleared_not_resumed`。
+- **涉及文件**：`BetterGenshinImpact/Core/Config/AllConfig.cs`（`[JsonIgnore]`）、`BetterGenshinImpact/Service/Instance/MessageHandlers/InstanceRequestHandler.cs`（`HandleTaskResume` WasCancelled 检查）
+- **教训**：临时状态（中断上下文、会话标记等）不应持久化到磁盘——它们应该在进程退出时自动消失。持久化意味着"跨重启存活"，需要人工清除，否则崩溃/强杀路径必然残留。

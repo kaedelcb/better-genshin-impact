@@ -47,6 +47,12 @@ public class SystemControl
             cfg.GenshinStartArgs,
             InstanceBootstrap.Current.Context.InstanceType == BetterGiInstanceType.ChildSession);
 
+        // [DUPLAUNCH_PROBE] 探针日志：抓到"原神进程被实际启动"的每一次现场
+        // 目的：确认远程一键锄地/上线人齐触发时，原神是否被 BGI 二次拉起（Error 3,0,0 的根因）
+        Logger.LogWarning("[DUPLAUNCH_PROBE][StartFromLocalAsync] 即将启动原神进程! path={Path} arg={Arg} StartGameWithCmd={Cmd} IsInitialized={Init} LinkedStartEnabled={Linked}",
+            path, arg, cfg.StartGameWithCmd, TaskContext.Instance().IsInitialized, cfg.LinkedStartEnabled);
+        Logger.LogWarning("[DUPLAUNCH_PROBE][StartFromLocalAsync] 调用堆栈:\n{Stack}", Environment.StackTrace);
+
         if (cfg.StartGameWithCmd)
         {
             var psi = new ProcessStartInfo
