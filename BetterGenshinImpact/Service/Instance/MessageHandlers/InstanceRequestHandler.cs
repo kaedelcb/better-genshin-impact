@@ -1069,6 +1069,8 @@ internal sealed class InstanceRequestHandler
             int taskIndex = 0;
             string? folderName = null;
             string? projectName = null;
+            int oneDragonTaskIndex = 0;         // 一条龙条目索引（NextTaskIndex）
+            string? subTaskGroupName = null;    // 一条龙内当前执行的配置组名
 
             var ctx = BetterGenshinImpact.GameTask.RunnerContext.Instance;
             var progress = ctx?.taskProgress;
@@ -1084,22 +1086,36 @@ internal sealed class InstanceRequestHandler
             }
             else if (progress?.CurrentScriptGroupName != null)
             {
-                // 有 groupName 但没有 projectInfo → 一条龙
-                groupName = progress.CurrentScriptGroupName;
-                // 一条龙中断时，从 OneDragonFlowViewModel 获取当前配置的 NextTaskIndex
+                // 一条龙场景：progress.CurrentScriptGroupName 是当前执行的配置组名（OneDragonFlowViewModel 配置组分支设置了 taskProgress）
+                // 一条龙配置名 + 条目索引需要从 OneDragonFlowViewModel 取
                 try
                 {
                     var oneDragonVm = App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.OneDragonFlowViewModel>();
                     if (oneDragonVm?.SelectedConfig != null)
                     {
-                        taskIndex = oneDragonVm.SelectedConfig.NextTaskIndex;
+                        // 一条龙配置名（HandleTaskResume 用它从 ConfigList 找回配置）
+                        groupName = oneDragonVm.SelectedConfig.Name;
+                        // 一条龙条目索引（恢复时配置 Skip 到该条目）
+                        oneDragonTaskIndex = oneDragonVm.SelectedConfig.NextTaskIndex;
                     }
                 }
                 catch
                 {
-                    // ViewModel 不可用时，默认从头开始
-                    taskIndex = 1;
+                    // ViewModel 不可用时，退回用配置组名作 GroupName（降级为配置组恢复）
+                    groupName = progress.CurrentScriptGroupName;
+                    oneDragonTaskIndex = 0;
                 }
+
+                // 配置组级子任务信息：当前正在执行的配置组名 + 子任务索引
+                // （OneDragonFlowViewModel 配置组分支让 RunMulti 传了 taskProgress，所以 CurrentScriptGroupProjectInfo 已写入）
+                subTaskGroupName = progress.CurrentScriptGroupName;
+                if (progress.CurrentScriptGroupProjectInfo != null)
+                {
+                    taskIndex = progress.CurrentScriptGroupProjectInfo.Index; // 0-based projectIndex
+                    folderName = progress.CurrentScriptGroupProjectInfo.FolderName;
+                    projectName = progress.CurrentScriptGroupProjectInfo.Name;
+                }
+
                 taskType = "onedragon";
             }
             else
@@ -1130,7 +1146,9 @@ internal sealed class InstanceRequestHandler
                     GroupName = groupName ?? "",
                     TaskIndex = taskIndex,
                     FolderName = folderName ?? "",
-                    ProjectName = projectName ?? ""
+                    ProjectName = projectName ?? "",
+                    OneDragonTaskIndex = oneDragonTaskIndex,
+                    SubTaskGroupName = subTaskGroupName ?? ""
                 };
                 _logger.LogInformation("[IPC task.suspend] 已保存中断上下文: Type={TaskType}, Group={GroupName}, Index={TaskIndex}",
                     taskType, groupName, taskIndex);

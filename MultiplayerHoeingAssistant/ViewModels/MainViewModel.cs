@@ -121,6 +121,9 @@ public class MainViewModel : INotifyPropertyChanged
     /// <summary>关闭设置页面（返回成员列表主页）。</summary>
     public RelayCommand CloseSettingsCommand => new(_ => IsShowingSettings = false);
 
+    /// <summary>功能占位按钮（嘟嘟可/槲寄生），点击弹出提示。</summary>
+    public RelayCommand FeaturePlaceholderCommand => new(OnFeaturePlaceholder);
+
     public async Task InitializeAsync()
     {
         _configManager = new AssistConfigManager();
@@ -390,6 +393,7 @@ public class MainViewModel : INotifyPropertyChanged
             OnlineMode = _onlineMode,
             ScheduledOnlineTime = _config?.ScheduledOnlineTime ?? "",
             OnlineHoeingGroupNames = _config?.OnlineHoeingGroupNames ?? [],
+            QuickCommands = _config?.QuickCommands ?? new(),
             ExpectedHoeingPlayers = _config?.ExpectedHoeingPlayers ?? 4
         };
 
@@ -575,8 +579,42 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void OnStop(object? parameter)
     {
+        // 停止前弹窗确认，可选择是否发送给所有人执行（参考"清除上线"，见 ShowClearOnlineConfirmDialog）
+        var (confirmed, broadcastAll) = ShowStopStartConfirmDialog("确认停止 BGI", "确定要停止 BGI 吗？");
+        if (!confirmed) return; // 用户取消
+
         // 标记依次执行序列已取消（用户手动停止后，剩余配置组不再执行）
         _isAllReadySequenceCancelled = true;
+
+        if (broadcastAll)
+        {
+            // 缓存问题：不在线成员收不到广播命令，弹窗提醒（缓存数据可能过时）
+            if (!WarnOfflineMembers())
+            {
+                AddLog("没有在线成员，未发送停止命令");
+                return;
+            }
+            // 发送给所有人执行：广播 Target=[*]（含本机，各自通过 OnRemoteCommand 执行）
+            if (_signalRClient != null)
+            {
+                var cmd = new RemoteCommand
+                {
+                    Cmd = "stop",
+                    Sender = _config?.PlayerName ?? "",
+                    SenderUid = _config?.PlayerUid ?? "",
+                    Target = ["*"],
+                    CommandId = "remote_" + DateTime.Now.Ticks
+                };
+                AddLog("已发送停止 BGI 命令给所有成员");
+                _ = _signalRClient.SendRemoteCommandAsync(cmd);
+            }
+            else
+            {
+                AddLog("SignalR 未连接，无法发送停止命令给所有成员");
+            }
+            return;
+        }
+
         if (parameter is MemberViewModel member)
         {
             _ = ExecuteLocalCommandAsync("stop", null, [member.PlayerUid]);
@@ -587,8 +625,177 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>停止/启动 BGI 确认弹窗（深色鎏金主题，样式参考 ShowClearOnlineConfirmDialog）。
+    /// 返回值：confirmed=是否确认，broadcastAll=是否发送给所有人执行。</summary>
+    private (bool confirmed, bool broadcastAll) ShowStopStartConfirmDialog(string title, string message)
+    {
+        bool confirmed = false, broadcastAll = false;
+        var window = new Window
+        {
+            Title = title,
+            Width = 330, Height = 190,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = Application.Current.MainWindow,
+            WindowStyle = WindowStyle.SingleBorderWindow,
+            ResizeMode = ResizeMode.NoResize,
+            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
+            Background = new System.Windows.Media.LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0.5, 0),
+                EndPoint = new System.Windows.Point(0.5, 1),
+                GradientStops =
+                {
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
+                }
+            }
+        };
+        var panel = new Grid { Margin = new Thickness(20) };
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 0 标题
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(16) }); // 1 间距
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 2 提示文字
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(12) }); // 3 间距
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 4 同步勾选框
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 5 弹性
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 6 按钮
+
+        var titleLabel = new TextBlock
+        {
+            Text = title,
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        Grid.SetRow(titleLabel, 0);
+        panel.Children.Add(titleLabel);
+
+        var tip = new TextBlock
+        {
+            Text = message,
+            FontSize = 12,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap
+        };
+        Grid.SetRow(tip, 2);
+        panel.Children.Add(tip);
+
+        var syncCheckBox = new System.Windows.Controls.CheckBox
+        {
+            Content = "发送给所有人执行",
+            FontSize = 12,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            IsChecked = false
+        };
+        syncCheckBox.Checked += (_, _) => broadcastAll = true;
+        syncCheckBox.Unchecked += (_, _) => broadcastAll = false;
+        Grid.SetRow(syncCheckBox, 4);
+        panel.Children.Add(syncCheckBox);
+
+        var btnPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        btnPanel.Children.Add(new Button
+        {
+            Content = "取消",
+            Width = 80, Height = 30,
+            Margin = new Thickness(0, 0, 10, 0),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)),
+            Cursor = System.Windows.Input.Cursors.Hand
+        });
+        ((Button)btnPanel.Children[^1]).Click += (_, _) => window.Close();
+
+        var okBtn = new Button
+        {
+            Content = "确定",
+            Width = 80, Height = 30,
+            FontWeight = FontWeights.SemiBold,
+            BorderThickness = new Thickness(0),
+            Cursor = System.Windows.Input.Cursors.Hand
+        };
+        okBtn.Background = new System.Windows.Media.LinearGradientBrush
+        {
+            StartPoint = new System.Windows.Point(0, 0),
+            EndPoint = new System.Windows.Point(1, 1),
+            GradientStops =
+            {
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xEF, 0xD6, 0x8A), 0),
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0xAF, 0x37), 1)
+            }
+        };
+        okBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16));
+        okBtn.Click += (_, _) =>
+        {
+            confirmed = true;
+            window.Close();
+        };
+        btnPanel.Children.Add(okBtn);
+
+        Grid.SetRow(btnPanel, 6);
+        panel.Children.Add(btnPanel);
+
+        window.Content = panel;
+        window.ShowDialog();
+        return (confirmed, broadcastAll);
+    }
+
+    /// <summary>统计不在线成员并弹窗提醒（缓存问题：离线成员收不到命令，可能使用过时数据）。
+    /// 返回是否有在线成员可下发。</summary>
+    private bool WarnOfflineMembers()
+    {
+        var offline = Members.Where(m => !m.Online).Select(m => m.PlayerName).ToList();
+        if (offline.Count > 0)
+        {
+            var names = string.Join("、", offline);
+            MessageBox.Show($"有 {offline.Count} 个成员不在线，命令可能因使用缓存数据而无法生效：\n{names}\n（不在线成员收不到命令）",
+                "离线成员提醒", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        return Members.Any(m => m.Online);
+    }
+
     private void OnStartBgi(object? parameter)
     {
+        // 启动前弹窗确认，可选择是否发送给所有人执行（参考"清除上线"，见 ShowClearOnlineConfirmDialog）
+        var (confirmed, broadcastAll) = ShowStopStartConfirmDialog("确认启动 BGI", "确定要启动 BGI 吗？");
+        if (!confirmed) return; // 用户取消
+
+        if (broadcastAll)
+        {
+            // 缓存问题：不在线成员收不到广播命令，弹窗提醒（缓存数据可能过时）
+            if (!WarnOfflineMembers())
+            {
+                AddLog("没有在线成员，未发送启动命令");
+                return;
+            }
+            // 发送给所有人执行：广播 Target=[*]（含本机，各自通过 OnRemoteCommand 执行）
+            if (_signalRClient != null)
+            {
+                var cmd = new RemoteCommand
+                {
+                    Cmd = "start_bgi",
+                    Sender = _config?.PlayerName ?? "",
+                    SenderUid = _config?.PlayerUid ?? "",
+                    Target = ["*"],
+                    CommandId = "remote_" + DateTime.Now.Ticks
+                };
+                AddLog("已发送启动 BGI 命令给所有成员");
+                _ = _signalRClient.SendRemoteCommandAsync(cmd);
+            }
+            else
+            {
+                AddLog("SignalR 未连接，无法发送启动 BGI 命令给所有成员");
+            }
+            return;
+        }
+
         // 点别人：远程下发 start_bgi
         if (parameter is MemberViewModel member && member.PlayerUid != _config?.PlayerUid)
         {
@@ -669,6 +876,18 @@ public class MainViewModel : INotifyPropertyChanged
                 _ = ExecuteLocalCommandAsync("close_game", null, [member.PlayerUid]);
             }
         }
+    }
+
+    /// <summary>功能占位按钮（嘟嘟可/槲寄生），点击弹出提示。</summary>
+    private void OnFeaturePlaceholder(object? parameter)
+    {
+        var featureName = parameter as string switch
+        {
+            "dodoco" => "嘟嘟可（日志与监控系统）",
+            "sleeper" => "槲寄生（任务调度器）",
+            _ => "该功能"
+        };
+        MessageBox.Show($"{featureName}功能正在开发中，敬请期待！", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     /// <summary>显示该成员当天的上线消费记录（各自卡片只显示自己的）。</summary>
@@ -2092,6 +2311,7 @@ public class MainViewModel : INotifyPropertyChanged
                         m.OnlineMode = np.OnlineMode;
                         m.ScheduledOnlineTime = np.ScheduledOnlineTime;
                         m.OnlineHoeingGroupNames = np.OnlineHoeingGroupNames ?? [];
+                        m.QuickCommands = np.QuickCommands ?? new();
                         m.OnlineHistory = np.OnlineHistory;
                         byUid.Remove(m.PlayerUid);
                     }
@@ -2190,6 +2410,27 @@ public class MainViewModel : INotifyPropertyChanged
                 else
                 {
                     await SendAckAsync(cmd, "failed", "解析配置组列表失败");
+                }
+                return;
+            }
+
+            // set_quick_command 命令：接收端保存快捷指令绑定到本地并持久化
+            if (cmd.Cmd == "set_quick_command")
+            {
+                var key = cmd.Params?.GetValueOrDefault("key")?.ToString();
+                var value = cmd.Params?.GetValueOrDefault("value")?.ToString();
+                if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(value) && _config != null)
+                {
+                    _config.QuickCommands[key] = value;
+                    _configManager?.Save(_config);
+                    var isOneClick = value.StartsWith("ONEDRAGON:");
+                    var displayValue = isOneClick ? value["ONEDRAGON:".Length..] : value["GROUP:".Length..];
+                    AddLog($"收到绑定 {key}: {(isOneClick ? "一条龙" : "配置组")}「{displayValue}」（来自 {cmd.Sender}）");
+                    await SendAckAsync(cmd, "success", $"{key} 已绑定: {value}");
+                }
+                else
+                {
+                    await SendAckAsync(cmd, "failed", "参数不完整或配置不可用");
                 }
                 return;
             }
@@ -2960,7 +3201,7 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>配置一个一键按钮的绑定（弹窗选配置组或一条龙）。返回 true 表示绑定成功。</summary>
-    private async Task<bool> BindQuickCommandAsync(string key)
+    private async Task<bool> BindQuickCommandAsync(string key, MemberViewModel? targetMember = null)
     {
         if (_config == null || _configManager == null) return false;
         var (groups, oneClicks) = await GetLocalConfigsAsync();
@@ -3045,15 +3286,66 @@ public class MainViewModel : INotifyPropertyChanged
             var value = selected.StartsWith("[配置组] ") ? selected["[配置组] ".Length..]
                         : selected.StartsWith("[一条龙] ") ? selected["[一条龙] ".Length..] : selected;
             var isOneClick = selected.StartsWith("[一条龙] ");
-            _config.QuickCommands[key] = (isOneClick ? "ONEDRAGON:" : "GROUP:") + value;
-            _configManager.Save(_config);
-            AddLog($"{key} 已绑定: {value} ({(isOneClick ? "一条龙" : "配置组")})");
+            if (targetMember == null || targetMember.PlayerUid == _config?.PlayerUid)
+            {
+                // 绑自己：直接保存
+                var boundValue = (isOneClick ? "ONEDRAGON:" : "GROUP:") + value;
+                _config.QuickCommands[key] = boundValue;
+                _configManager.Save(_config);
+                // 同步更新弹窗中自己的 MemberViewModel.QuickCommands，让执行时能读到
+                var selfMember = Members.FirstOrDefault(m => m.PlayerUid == _config?.PlayerUid);
+                if (selfMember != null) selfMember.QuickCommands[key] = boundValue;
+                AddLog($"{key} 已绑定: {value} ({(isOneClick ? "一条龙" : "配置组")})");
+                // 遥控器模式：绑自己时也要推送给执行端（同 UID 的成员），否则执行端读不到新绑定
+                if (_config?.ObserverMode == true && _signalRClient != null)
+                {
+                    var cmd = new RemoteCommand
+                    {
+                        Cmd = "set_quick_command",
+                        Sender = _config?.PlayerName ?? "",
+                        SenderUid = _config?.PlayerUid ?? "",
+                        Target = [selfMember?.PlayerUid ?? _config?.PlayerUid ?? ""],
+                        CommandId = "quickcmd_" + DateTime.Now.Ticks,
+                        Params = new Dictionary<string, object>
+                        {
+                            { "key", key },
+                            { "value", boundValue },
+                            { "isOneClick", isOneClick }
+                        }
+                    };
+                    await _signalRClient.SendRemoteCommandAsync(cmd);
+                    AddLog($"遥控模式：已向执行端下发绑定 {key}：{value}");
+                }
+            }
+            else
+            {
+                // 绑别人：下发远程命令 + 同步更新本地成员 QuickCommands
+                var boundValue = (isOneClick ? "ONEDRAGON:" : "GROUP:") + value;
+                if (targetMember != null) targetMember.QuickCommands[key] = boundValue;
+                var cmd = new RemoteCommand
+                {
+                    Cmd = "set_quick_command",
+                    Sender = _config?.PlayerName ?? "",
+                    SenderUid = _config?.PlayerUid ?? "",
+                    Target = [targetMember.PlayerUid],
+                    CommandId = "quickcmd_" + DateTime.Now.Ticks,
+                    Params = new Dictionary<string, object>
+                    {
+                        { "key", key },
+                        { "value", (isOneClick ? "ONEDRAGON:" : "GROUP:") + value },
+                        { "isOneClick", isOneClick }
+                    }
+                };
+                AddLog($"向 {targetMember.PlayerName} 下发绑定 {key}：{(isOneClick ? "一条龙" : "配置组")}「{value}」");
+                if (_signalRClient != null)
+                    await _signalRClient.SendRemoteCommandAsync(cmd);
+            }
             return true;
         }
         return false;
     }
 
-    /// <summary>执行一键命令：未绑定则弹设置；已绑定则确认后下发；"修改"后直接返回（不再弹确认）。</summary>
+    /// <summary>执行一键命令：始终弹分成员列弹窗，可配置各成员绑定并执行。</summary>
     private async Task ExecuteQuickCommandAsync(string key)
     {
         if (_config == null || _configManager == null || _signalRClient == null)
@@ -3061,36 +3353,8 @@ public class MainViewModel : INotifyPropertyChanged
             MessageBox.Show("助手未初始化或未连接");
             return;
         }
-        if (!_config.QuickCommands.TryGetValue(key, out var binding) || string.IsNullOrEmpty(binding))
-        {
-            // 未绑定：弹设置绑定后直接返回，用户想执行再点一次
-            await BindQuickCommandAsync(key);
-            return;
-        }
-
-        while (true)
-        {
-            var isOneClick = binding.StartsWith("ONEDRAGON:");
-            var value = isOneClick ? binding["ONEDRAGON:".Length..] : binding["GROUP:".Length..];
-            var targets = GetSelectedTargets();
-            if (targets.Count == 0)
-            {
-                MessageBox.Show("没有在线且被选中的成员可下发，请勾选要下发的在线成员");
-                return;
-            }
-
-            var action = ShowQuickConfirmDialog(key, value, isOneClick, targets.Count);
-            if (action == "confirm")
-            {
-                await SendQuickStartAsync(key, isOneClick, value, targets);
-                return;
-            }
-            if (action == "cancel") return;
-
-            // action == "modify"：重新绑定后直接返回，不再弹确认
-            await BindQuickCommandAsync(key);
-            return;
-        }
+        // 始终弹分成员列弹窗，无论是否有绑定
+        await ShowQuickCommandBindForMembersDialog(key);
     }
 
     /// <summary>显示一键命令的确认弹窗（含"修改"按钮）。返回 confirm/cancel/modify。</summary>
@@ -3155,6 +3419,212 @@ public class MainViewModel : INotifyPropertyChanged
         return "cancel";
     }
 
+    /// <summary>快捷指令分成员绑定弹窗：显示所有在线成员，各自可绑定配置组/一条龙，底部"确认执行"完成下发。</summary>
+    private async Task ShowQuickCommandBindForMembersDialog(string key)
+    {
+        var onlineMembers = Members.Where(m => m.Online).ToList();
+        if (onlineMembers.Count == 0)
+        {
+            MessageBox.Show("没有在线成员可配置");
+            return;
+        }
+
+        var dialog = new Window
+        {
+            Title = $"为成员配置「{key}」",
+            Width = 800,
+            Height = 420,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = Application.Current.MainWindow,
+            WindowStyle = WindowStyle.SingleBorderWindow,
+            ResizeMode = ResizeMode.NoResize,
+            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
+            Background = new System.Windows.Media.LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0.5, 0),
+                EndPoint = new System.Windows.Point(0.5, 1),
+                GradientStops =
+                {
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
+                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
+                }
+            }
+        };
+        var panel = new Grid { Margin = new Thickness(16) };
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 0: 标题
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 1: 成员列
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 2: 按钮
+
+        // 标题
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"为每个在线成员配置「{key}」要执行的配置组或一条龙，点击成员名称旁的\"选择\"按钮进行绑定：",
+            FontSize = 13,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        // 成员列：用 Grid 动态分列
+        var memberGrid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        for (int i = 0; i < onlineMembers.Count; i++)
+        {
+            memberGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        }
+        Grid.SetRow(memberGrid, 1);
+        panel.Children.Add(memberGrid);
+
+        var bindingLabels = new Dictionary<string, TextBlock>();
+        for (int i = 0; i < onlineMembers.Count; i++)
+        {
+            var member = onlineMembers[i];
+            var colPanel = new StackPanel { Margin = new Thickness(4) };
+
+            // 成员名
+            colPanel.Children.Add(new TextBlock
+            {
+                Text = $"{member.PlayerName}",
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA)),
+                HorizontalAlignment = HorizontalAlignment.Center
+            });
+
+            // 当前绑定显示
+            var currentBinding = member.QuickCommands?.GetValueOrDefault(key) ?? "";
+            var bindingLabel = new TextBlock
+            {
+                Text = string.IsNullOrEmpty(currentBinding) ? "未绑定" : currentBinding,
+                FontSize = 11,
+                Foreground = new System.Windows.Media.SolidColorBrush(string.IsNullOrEmpty(currentBinding)
+                    ? System.Windows.Media.Color.FromRgb(0xD9, 0xA8, 0x4E)
+                    : System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 4, 0, 8),
+                TextWrapping = TextWrapping.Wrap
+            };
+            bindingLabels[member.PlayerUid] = bindingLabel;
+            colPanel.Children.Add(bindingLabel);
+
+            // 选择按钮
+            var selectBtn = new Button
+            {
+                Content = "选择绑定",
+                Width = 100,
+                Height = 28,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                FontSize = 12,
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)),
+                Cursor = System.Windows.Input.Cursors.Hand
+            };
+            var capturedMember = member;
+            selectBtn.Click += async (_, _) =>
+            {
+                await BindQuickCommandAsync(key, capturedMember);
+                // 刷新绑定显示
+                var newBinding = capturedMember.QuickCommands?.GetValueOrDefault(key) ?? "";
+                bindingLabels[capturedMember.PlayerUid].Text = string.IsNullOrEmpty(newBinding) ? "未绑定" : newBinding;
+                bindingLabels[capturedMember.PlayerUid].Foreground = new System.Windows.Media.SolidColorBrush(string.IsNullOrEmpty(newBinding)
+                    ? System.Windows.Media.Color.FromRgb(0xD9, 0xA8, 0x4E)
+                    : System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0));
+            };
+            colPanel.Children.Add(selectBtn);
+
+            Grid.SetColumn(colPanel, i);
+            memberGrid.Children.Add(colPanel);
+        }
+
+        // 按钮
+        var btnRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        Grid.SetRow(btnRow, 2);
+        var cancelBtn = new Button
+        {
+            Content = "取消", Width = 90, Margin = new Thickness(0, 0, 8, 0),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)),
+            Cursor = System.Windows.Input.Cursors.Hand
+        };
+        var executeBtn = new Button
+        {
+            Content = "确认执行", Width = 110, FontWeight = FontWeights.SemiBold,
+            Cursor = System.Windows.Input.Cursors.Hand, BorderThickness = new Thickness(0)
+        };
+        executeBtn.Background = new System.Windows.Media.LinearGradientBrush
+        {
+            StartPoint = new System.Windows.Point(0, 0),
+            EndPoint = new System.Windows.Point(1, 1),
+            GradientStops =
+            {
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xEF, 0xD6, 0x8A), 0),
+                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0xAF, 0x37), 1)
+            }
+        };
+        executeBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16));
+        btnRow.Children.Add(cancelBtn);
+        btnRow.Children.Add(executeBtn);
+        panel.Children.Add(btnRow);
+
+        dialog.Content = panel;
+
+        bool executed = false;
+        executeBtn.Click += async (_, _) =>
+        {
+            executed = true;
+            dialog.Close();
+            var targets = GetSelectedTargets();
+            if (targets.Count == 0)
+            {
+                MessageBox.Show("没有在线且被选中的成员可下发，请勾选要下发的在线成员");
+                return;
+            }
+            foreach (var member in onlineMembers.Where(m => m.IsSelected && m.Online))
+            {
+                var binding = member.QuickCommands?.GetValueOrDefault(key) ?? "";
+                if (string.IsNullOrEmpty(binding)) continue;
+                var isOneClick = binding.StartsWith("ONEDRAGON:");
+                var value = isOneClick ? binding["ONEDRAGON:".Length..] : binding["GROUP:".Length..];
+                if (member.PlayerUid == _config?.PlayerUid)
+                {
+                    if (_commandExecutor != null)
+                    {
+                        // 非遥控模式：本机直接执行
+                        var localCmd = new RemoteCommand
+                        {
+                            Cmd = isOneClick ? "start_oneclick" : "start_group",
+                            Params = new Dictionary<string, object>
+                            {
+                                [isOneClick ? "configName" : "groupName"] = value,
+                                ["startFromIndex"] = 0
+                            }
+                        };
+                        await _commandExecutor.ExecuteAsync(localCmd);
+                    }
+                    else if (_config?.ObserverMode == true)
+                    {
+                        // 遥控模式：本机无 BGI，通过 SignalR 发给执行端
+                        await SendQuickStartAsync(key, isOneClick, value, [member.PlayerUid]);
+                    }
+                }
+                else
+                {
+                    await SendQuickStartAsync(key, isOneClick, value, [member.PlayerUid]);
+                }
+            }
+        };
+        cancelBtn.Click += (_, _) => dialog.Close();
+
+        dialog.ShowDialog();
+        if (!executed) return;
+        AddLog($"分成员绑定执行完成");
+    }
+
     /// <summary>给选定的在线成员下发执行本机绑定的配置组/一条龙。</summary>
     private async Task SendQuickStartAsync(string key, bool isOneClick, string value, List<string> targets)
     {
@@ -3190,7 +3660,8 @@ public class MainViewModel : INotifyPropertyChanged
         if (_signalRClient == null) return;
         // 一键锄地是全局危险操作（给所有选中成员下发执行锄地配置组），先弹确认，
         // 说明确认后会发生什么，避免误触。
-        if (!ShowQuickHoeingConfirmDialog(targets.Count))
+        var targetMembers = Members.Where(m => m.IsSelected && m.Online).ToList();
+        if (!ShowQuickHoeingConfirmDialog(targetMembers))
         {
             AddLog("已取消一键锄地下发");
             return;
@@ -3215,14 +3686,14 @@ public class MainViewModel : INotifyPropertyChanged
         AddLog($"已向 {targets.Count} 个在线成员下发一键锄地（各成员执行自己绑定的配置组）");
     }
 
-    /// <summary>一键锄地确认弹窗：说明确认后会发生什么，避免误触。</summary>
-    private bool ShowQuickHoeingConfirmDialog(int onlineCount)
+    /// <summary>一键锄地确认弹窗：展示每个成员绑定的锄地任务列表，未绑定者标注提示。</summary>
+    private bool ShowQuickHoeingConfirmDialog(List<MemberViewModel> targets)
     {
         var dialog = new Window
         {
             Title = "确认下发一键锄地",
-            Width = 440,
-            Height = 220,
+            Width = 520,
+            Height = Math.Min(180 + targets.Count * 60, 420),
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = Application.Current.MainWindow,
             WindowStyle = WindowStyle.SingleBorderWindow,
@@ -3243,21 +3714,57 @@ public class MainViewModel : INotifyPropertyChanged
         var panel = new StackPanel { Margin = new Thickness(20) };
         panel.Children.Add(new TextBlock
         {
-            Text = $"确认对 {onlineCount} 个在线成员下发「一键锄地」？",
+            Text = $"确认对 {targets.Count} 个成员下发「一键锄地」？",
             FontSize = 14,
             FontWeight = FontWeights.SemiBold,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
-            TextWrapping = TextWrapping.Wrap
-        });
-        panel.Children.Add(new TextBlock
-        {
-            Text = "各成员将按照自己绑定的联机锄地配置组依次执行。",
-            FontSize = 13,
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xE6)),
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 8, 0, 0)
+            Margin = new Thickness(0, 0, 0, 12)
         });
-        var btnRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 24, 0, 0) };
+
+        // 成员列表
+        var memberPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var m in targets)
+        {
+            var hasBinding = m.OnlineHoeingGroupNames?.Count > 0;
+            var memberRow = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+            memberRow.Children.Add(new TextBlock
+            {
+                Text = $"👤 {m.PlayerName}（{m.DisplayUid}）",
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA))
+            });
+            memberRow.Children.Add(new TextBlock
+            {
+                Text = hasBinding
+                    ? $"📋 绑定任务：{string.Join(", ", m.OnlineHoeingGroupNames)}"
+                    : "⚠ 未绑定联机锄地配置组",
+                FontSize = 12,
+                Foreground = new System.Windows.Media.SolidColorBrush(hasBinding
+                    ? System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)
+                    : System.Windows.Media.Color.FromRgb(0xD9, 0xA8, 0x4E)),
+                Margin = new Thickness(16, 2, 0, 0),
+                TextWrapping = TextWrapping.Wrap
+            });
+            memberPanel.Children.Add(memberRow);
+        }
+        panel.Children.Add(memberPanel);
+
+        // 未绑定提示
+        if (targets.Any(m => m.OnlineHoeingGroupNames?.Count == 0))
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = "⚠ 未绑定成员的锄地任务将不会被下发执行。",
+                FontSize = 11,
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD9, 0xA8, 0x4E)),
+                Margin = new Thickness(0, 0, 0, 8),
+                TextWrapping = TextWrapping.Wrap
+            });
+        }
+
+        var btnRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
         var confirmBtnBg = new System.Windows.Media.LinearGradientBrush
         {
             StartPoint = new System.Windows.Point(0, 0),
@@ -3997,6 +4504,9 @@ public class MemberViewModel : INotifyPropertyChanged
 
     private List<string> _onlineHoeingGroupNames = [];
     public List<string> OnlineHoeingGroupNames { get => _onlineHoeingGroupNames; set { if (!ReferenceEquals(_onlineHoeingGroupNames, value)) { _onlineHoeingGroupNames = value; OnPropertyChanged(); } } }
+
+    private Dictionary<string, string> _quickCommands = new();
+    public Dictionary<string, string> QuickCommands { get => _quickCommands; set { if (!ReferenceEquals(_quickCommands, value)) { _quickCommands = value; OnPropertyChanged(); } } }
 
     private List<object> _onlineHistory = [];
     public List<object> OnlineHistory { get => _onlineHistory; set { if (!ReferenceEquals(_onlineHistory, value)) { _onlineHistory = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasOnlineToday)); } } }

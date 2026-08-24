@@ -261,3 +261,41 @@
   2. 每次写操作后必须用 `grep` 或行数统计验证文件完整性（`$lines.Count` 接近预期值，不是在 300-400 行被截断）。
   3. 如果文件之前有未 commit 的改动，先 `git stash` 再 `git checkout` 恢复，然后用 `git stash pop` 还原。
   4. `str_replace` 虽然也被 PreToolUse hook 拦截，但对比 PowerShell 批量操作，它不会误删范围外代码，更安全。
+### 被 AGENT 误删代码的审核恢复模式（2026-08-24）
+
+**场景**：本会话实现了 7 个文件约 14 个改动点（一条龙三层恢复、幂等修复、互斥锁、绑定支持一条龙等），随后被其他 AGENT 误删了 BGI 端的 3 个核心逻辑改动（`HandleTaskSuspend` onedragon 分支、`HandleTaskResume` onedragon 分支、`HandleTaskStart` 幂等修复）和助手端的 3 个改动（`_isAllReadyProcessing` 互斥锁、`OnAllReadyConfirmedInternal` 支持一条龙、`OnBindHoeingGroup` 绑定弹窗支持一条龙）。数据模型字段（`SuspendedTaskContext.OneDragonTaskIndex`/`SubTaskGroupName`、`AssistConfig.OnlineHoeingGroupTypes`）和 `CommandExecutor` generation 透传幸免。
+
+**审核方法**：逐条列出本次会话所有改动点，用 grep 确认每个关键符号是否存在。6 个被删、6 个幸存。
+
+**幸存清单**（grep 确认存在）：`SuspendedTaskContext.OneDragonTaskIndex`/`SubTaskGroupName` 字段、`OneDragonFlowViewModel` 配置组传 `taskProgress`、`HandleTaskResume` group 分支 `resumeIndex = TaskIndex + 1`、`AssistConfig.OnlineHoeingGroupTypes` 字段、`CommandExecutor` generation 透传、`OnAllReadyConfirmedInternal` 方法体（但回退到原始版本）。
+
+**被删清单**（grep 确认不存在）：`HandleTaskSuspend` onedragon 分支三层上下文保存、`HandleTaskResume` onedragon 分支三层恢复、`HandleTaskStart` 幂等修复（`_lastExecutedTask` 元组）、`MainViewModel._isAllReadyProcessing` 互斥锁、`OnAllReadyConfirmedInternal` 使用 `OnlineHoeingGroupTypes` 发 `start_oneclick`、`OnBindHoeingGroup` 绑定弹窗支持一条龙。
+
+**教训**：一个会话实现的核心逻辑改动，因其他 AGENT 的清理操作被回退。数据模型（字段/Schema）改动通常幸存（被配置文件引用），逻辑层（方法体/分支）容易被回退。恢复时应优先保障逻辑层，数据模型可以作为恢复锚点——从字段的 json 属性名反查逻辑层是否被删。
+### 快捷指令绑定后"执行无反应/重开不生效"根因（2026-08-24，快捷指令 spec）
+
+- 场景：传奇/次数盾等公共快捷指令，弹窗绑定配置组后点"确认执行"没反应，重新打开弹窗之前绑定的没生效。
+- 根因：`BindQuickCommandAsync` 保存绑定只写 `_config.QuickCommands[key]`（本机配置）或推送 `set_quick_command`，**没有同步更新 `MemberViewModel.QuickCommands` 属性**。而分成员列弹窗 `ShowQuickCommandBindForMembersDialog` 的"确认执行"循环读的是 `member.QuickCommands?.GetValueOrDefault(key)`（成员模型属性，来自服务端广播），绑定后该属性未更新 → `string.IsNullOrEmpty(binding)` 为 true → `continue` 跳过 → 不执行。重开弹窗读的仍是旧广播值 → 不生效。
+- 修复：`BindQuickCommandAsync` 保存成功后同步更新对应成员属性——
+  - 绑自己：`var selfMember = Members.FirstOrDefault(m => m.PlayerUid == _config?.PlayerUid); if (selfMember != null) selfMember.QuickCommands[key] = boundValue;`
+  - 绑别人：`targetMember.QuickCommands[key] = boundValue;`（本地弹窗立即反映，不依赖下次 `OnPlayersUpdated` 广播）
+- 教训：**涉及"绑定/配置 + 分成员弹窗 + 执行下发"的三段式交互时，绑定保存必须同时更新弹窗/执行要读的成员模型属性**，否则执行端读的是旧数据。UI 弹窗里读 `MemberViewModel.X`（来自服务端广播，刷新慢）而非本机 `_config.X` 是这类"改了不生效"的高频根因。
+### 遥控端快捷指令"确认执行"静默跳过（2026-08-24，与上一条同 spec）
+
+- 场景：遥控端（ObserverMode）打开快捷指令弹窗，选择绑定后点"确认执行"，没有反应。执行端正常。
+- 根因：`ShowQuickCommandBindForMembersDialog` 的 `executeBtn.Click` 中，对"本机成员"（`member.PlayerUid == _config?.PlayerUid`）的执行分支只做了 `if (_commandExecutor != null) { 本地IPC }`。但遥控端模式下 `ApplyModeRuntime` 已将 `_commandExecutor = null`（第2920行），导致该分支被跳过。且因为 `member.PlayerUid == _config?.PlayerUid` 为 true，也不走 `else { 远程下发 }` ——**什么都不执行，静默失败**。
+- 修复：在 `if (_commandExecutor != null)` 后加 `else if (_config?.ObserverMode == true)` 分支，遥控端对本机成员走 `SendQuickStartAsync(key, isOneClick, value, [member.PlayerUid])` 通过 SignalR 下发到执行端。
+- 教训：**凡涉及"本机直接执行"的分支（`if (_commandExecutor != null)`），都必须同步考虑遥控端模式下的兜底（`else if (ObserverMode)` 走 SignalR 下发）**。`_commandExecutor = null` 在遥控端是预期行为，但"预期"不等于"什么都不做"——执行端上 `_commandExecutor` 不为 null 的那台机器才会真正执行。`ApplyModeRuntime` 是唯一的分界点，改了它，所有依赖 `_commandExecutor != null` 的分支都需要同步检查遥控端路径。
+### 遥控端快捷指令"绑自己改绑不生效/执行旧值"三连坑（2026-08-24，快捷指令 spec 收尾）
+
+遥控端快捷指令经历了三轮修复，三次都是不同的坑，合成一条完整链路记录：
+
+1. **绑定后"执行无反应/重开不生效"**（见上一条）：`BindQuickCommandAsync` 保存绑定只写 `_config.QuickCommands`/推送 `set_quick_command`，没同步 `MemberViewModel.QuickCommands`。弹窗/执行读成员属性读不到新值 → 执行被 `continue` 跳过。
+2. **遥控端"确认执行"静默跳过**（见上一条）：`ShowQuickCommandBindForMembersDialog` 的"本机成员"分支只做 `if (_commandExecutor != null)` 本地 IPC；遥控端 `ApplyModeRuntime` 把它置 null → 跳过且不走 else 远程下发 → 什么都不做。
+3. **遥控端"绑自己"改绑，执行端执行旧值**（本次）：遥控端在"绑自己"分支（`targetMember.PlayerUid == _config?.PlayerUid`）只保存了**遥控端本机** `_config.QuickCommands[key]` 和 `selfMember.QuickCommands[key]`，**没有推送 `set_quick_command` 给执行端**。执行端收到 `SendQuickStartAsync` 下发的命令后查**自己本机** `QuickCommands[key]`，仍读到旧值 → 执行 A 而不是新绑的 C。
+   - 修复：`BindQuickCommandAsync`"绑自己"分支的 `AddLog` 后加 `if (_config?.ObserverMode == true && _signalRClient != null)` → 构造 `Cmd="set_quick_command"`、`Target=[selfMember?.PlayerUid ?? _config?.PlayerUid ?? ""]`、`Params={key,boundValue,isOneClick}` 推送给执行端。
+
+**完整教训**：遥控端模式（ObserverMode）下，`_config.QuickCommands`（遥控端本机配置）与执行端 BGI 上实际生效的 `QuickCommands` 是**两份独立数据**。遥控端一切"绑定/执行"都要想清楚：
+- 绑定必须既能更新遥控端本地显示（`MemberViewModel.QuickCommands`），又能通过 `set_quick_command` 推送到执行端（真正生效的那台）；
+- 执行必须通过 SignalR 下发（`_commandExecutor` 在遥控端恒为 null）；
+- 弹窗显示读 `MemberViewModel.QuickCommands`（来自服务端广播），执行读执行端本机配置——两处都要对得上，缺一处就是"改了不生效/执行旧值"。
