@@ -34,7 +34,8 @@ internal sealed class InstanceRequestHandler
     private string? _recentTaskName;
     private DateTime _recentTaskNameTime = DateTime.MinValue;
     /// <summary>最近一次执行过的 task.start 代序号（幂等保护：同一 generation 只执行一次）。</summary>
-    private int _lastExecutedTaskGeneration;
+    /// <summary>最近一次执行过的 task.start 代序号 + 配置组名（幂等保护：同一 generation + 同一配置组只执行一次）。</summary>
+    private (int generation, string? name) _lastExecutedTask = (0, null);
 
     internal InstanceRequestHandler(
         InstanceContext context,
@@ -503,15 +504,19 @@ internal sealed class InstanceRequestHandler
             // 幂等保护：task.start 携带 generation 时，同一 generation 只执行一次
             var generation = request.Data?["generation"]?.ToObject<int>() ?? 0;
 
-            // 幂等检查：同一 generation 已执行过则跳过（避免 OnAllReady 重复广播导致配置组重复启动）
-            if (generation > 0 && generation <= _lastExecutedTaskGeneration)
+            // 幂等检查：同一 generation + 同一配置组名已执行过则跳过（避免 OnAllReady 重复广播导致配置组重复启动）
+            // 注意：允许同一 generation 执行不同配置组（OnAllReady 依次执行多个配置组的场景）
+            var taskName = groupName ?? configName;
+            if (generation > 0
+                && generation == _lastExecutedTask.generation
+                && taskName == _lastExecutedTask.name)
             {
-                _logger.LogInformation("[IPC task.start] generation={Gen} 已执行过，跳过重复执行", generation);
+                _logger.LogInformation("[IPC task.start] generation={Gen} name={Name} 已执行过，跳过重复执行", generation, taskName);
                 return InstanceIpcEnvelope.Response(request, new { status = "already_executed", generation });
             }
             if (generation > 0)
             {
-                _lastExecutedTaskGeneration = generation;
+                _lastExecutedTask = (generation, taskName);
             }
 
             // 通过全局服务容器获取 IScriptService
@@ -1235,10 +1240,24 @@ internal sealed class InstanceRequestHandler
                     break;
 
                 case "onedragon":
-                    // 恢复一条龙：写 NextTaskIndex 后调 OnOneKeyExecute
+                    // 三层恢复：先设 NextScheduledTask（配置组级子任务起点），再设 NextTaskIndex（一条龙级），最后调 OnOneKeyExecute
                     if (!string.IsNullOrEmpty(context.GroupName))
                     {
-                        Application.Current?.Dispatcher.Invoke(() =>
+                        // 第一步：在 IPC 线程中写入 NextScheduledTask（配置组级子任务起点）
+                        // 必须在 OnOneKeyExecute 之前执行，因为 OnOneKeyExecute 内部 RunMulti 的
+                        // GetNextProjects → SetTaskContextNextFlag 会读 AllConfig.NextScheduledTask
+                        if (!string.IsNullOrEmpty(context.SubTaskGroupName) && context.TaskIndex > 0)
+                        {
+                            var resumeIndex = context.TaskIndex + 1; // 0-based projectIndex → 1-based Index
+                            allConfig.NextScheduledTask =
+                            [
+                                (context.SubTaskGroupName, resumeIndex, context.FolderName, context.ProjectName)
+                            ];
+                        }
+
+                        // 第二步：在 UI 线程中设置一条龙级恢复
+                        // 用 InvokeAsync 而非 Invoke，避免同步阻塞可能导致的 UI 线程死锁
+                        Application.Current?.Dispatcher.InvokeAsync(() =>
                         {
                             var vm = App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.OneDragonFlowViewModel>();
                             if (vm != null)
@@ -1247,9 +1266,14 @@ internal sealed class InstanceRequestHandler
                                 if (cfg != null)
                                 {
                                     vm.SelectedConfig = cfg;
-                                    if (context.TaskIndex > 0)
-                                        cfg.NextTaskIndex = context.TaskIndex;
+                                    // 设置一条龙条目索引，OnOneKeyExecute 内部会 Skip 到该条目
+                                    if (context.OneDragonTaskIndex > 0)
+                                        cfg.NextTaskIndex = context.OneDragonTaskIndex;
                                     _ = vm.OnOneKeyExecute();
+                                }
+                                else
+                                {
+                                    _logger.LogWarning("[IPC task.resume] 一条龙配置 {Config} 已不存在，跳过恢复", context.GroupName);
                                 }
                             }
                         });
