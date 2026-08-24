@@ -349,6 +349,6 @@ public partial class MainWindow : Window
         var version = System.Reflection.Assembly.GetExecutingAssembly()
             .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?
             .InformationalVersion;
-        return $"Nexus-BGI · {version ?? "0.0.0"}";
+        return $"Nexus BGI · {version ?? "0.0.0"}";
     }
 }

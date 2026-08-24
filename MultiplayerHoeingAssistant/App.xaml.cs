@@ -298,7 +298,7 @@ public partial class App : Application
         _trayIcon = new TaskbarIcon
         {
             Icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetExecutingAssembly().Location),
-            ToolTipText = "Nexus-BGI 联机助手",
+            ToolTipText = "Nexus BGI 联机助手",
             Visibility = Visibility.Visible
         };
 

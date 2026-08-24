@@ -2531,8 +2531,15 @@ public partial class OneDragonFlowViewModel : ViewModel
                                 : Path.Combine(_basePath, _scriptGroupPath, $"{task.Name}.json");
                             
                             var group = ScriptGroup.FromJson(await File.ReadAllTextAsync(filePath));
+
+                            // 创建 taskProgress 并设置 CurrentScriptGroupName，供 HandleTaskSuspend 读取
+                            // 也让 RunMulti 内部写入 CurrentScriptGroupProjectInfo（子任务进度）
+                            var taskProgress = new BetterGenshinImpact.GameTask.TaskProgress.TaskProgress();
+                            taskProgress.CurrentScriptGroupName = group.Name;
+                            RunnerContext.Instance.taskProgress = taskProgress;
+
                             IScriptService? scriptService = App.GetService<IScriptService>();
-                            await scriptService!.RunMulti(ScriptControlViewModel.GetNextProjects(group), group.Name);
+                            await scriptService!.RunMulti(ScriptControlViewModel.GetNextProjects(group), group.Name, taskProgress);
                             await Task.Delay(1000);
                         }
                     }

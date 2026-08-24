@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Linq;
 using BgiCoordinatorServer.Models;
 using Microsoft.Extensions.Logging;
@@ -1186,6 +1186,8 @@ public class RoomManager
                     player.Hotkeys = status.Hotkeys;
                     player.TaskRunning = status.TaskRunning;
                     player.CurrentTaskName = status.TaskRunning ? status.CurrentTaskName : null;
+                    player.CurrentTaskGroupName = status.TaskRunning ? status.CurrentTaskGroupName : null;
+                    player.CurrentRouteDisplay = status.CurrentRouteDisplay;
                     // 任务运行态带过期时间（超时自愈）；TaskRunning=false 时复位
                     if (status.TaskRunning)
                         player.TaskRunningExpireTime = DateTime.UtcNow.AddSeconds(TaskRunningTimeoutSec);
@@ -1197,6 +1199,7 @@ public class RoomManager
                     player.OnlineMode = status.OnlineMode;
                     player.ScheduledOnlineTime = status.ScheduledOnlineTime;
                     player.OnlineHoeingGroupNames = status.OnlineHoeingGroupNames;
+                    player.QuickCommands = status.QuickCommands ?? new();
                     player.ExpectedHoeingPlayers = status.ExpectedHoeingPlayers;
                     if (status.OnlineReady)
                     {

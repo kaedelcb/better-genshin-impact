@@ -126,15 +126,16 @@
   <Target Name="CopyMultiplayerHoeingAssistant" AfterTargets="Build">
     <Message Text="CopyMultiplayerHoeingAssistant: 复制助手全部输出到 $(OutDir)Tools\MultiplayerHoeingAssistant" Importance="high" />
     <!-- 重新编译并部署助手（已实测可靠）：
-         1) 嵌套 <MSBuild Targets=Rebuild> 或单个 dotnet build 会因 MSBuild Server 的
-            内存增量缓存返回"已最新"而跳过真正 C# 重编，导致助手改动（版本号/功能/UI）
-            不进入 Tools\；
-         2) 方案：先 dotnet clean 彻底清空助手增量缓存，再 dotnet build 全量重建，
-            触发助手自身的 DeployAssistantToBgiTools（AfterTargets=Build）自动部署到 Tools\。
-         二者结合保证编译 BGI 时助手改动每次都真正编译并部署。 -->
-    <Exec Command="dotnet clean &quot;$(MSBuildProjectDirectory)\..\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj&quot; -c $(Configuration)"
-          WorkingDirectory="$(MSBuildProjectDirectory)" />
-    <Exec Command="dotnet build &quot;$(MSBuildProjectDirectory)\..\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj&quot; -c $(Configuration)"
+         1) 此处不可用嵌套(MSBuild Targets=Rebuild)或单个 dotnet build，因其会受 MSBuild Server 的
+            内存增量缓存返回"已最新"而跳过真正C#重编，导致助手改动（版本号/功能/UI）不进入 Tools；
+         2) 原方案用 dotnet clean 和 dotnet build 虽能强制重编，但 dotnet clean 是外层 shell 独立进程，
+            与随后 dotnet build 之间会被 MSBuild Server 缓存判定绕过：clean 删掉了助手的
+            .runtimeconfig.json / .deps.json（它们在 build 序列中生成较晚），而内层 build 若被缓存判定为
+            已最新而跳过不重新生成，则 BGI 的 Copy 步骤复制这些 json 时找不到，反复报 MSB3030。
+         3) 根治：改用单个 dotnet build 加 no-incremental 参数（等效于 /t:Rebuild，同一 MSBuild
+            上下文内 Clean 与 Build 强绑定，Clean 删后 Build 必在同一流程重编），保证 json 始终
+            重新生成，且规避 MSBuild Server 增量缓存。 -->
+    <Exec Command="dotnet build &quot;$(MSBuildProjectDirectory)\..\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj&quot; -c $(Configuration) --no-incremental"
           WorkingDirectory="$(MSBuildProjectDirectory)" />
     <!-- 清理 BGI 输出目录根的历史残留助手文件（早期 ProjectReference 默认复制留下的 exe/deps/runtimeconfig）。
          现在一律只允许存在于 Tools\MultiplayerHoeingAssistant 子目录，

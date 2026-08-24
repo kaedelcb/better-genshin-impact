@@ -34,7 +34,8 @@ internal sealed class InstanceRequestHandler
     private string? _recentTaskName;
     private DateTime _recentTaskNameTime = DateTime.MinValue;
     /// <summary>最近一次执行过的 task.start 代序号（幂等保护：同一 generation 只执行一次）。</summary>
-    private int _lastExecutedTaskGeneration;
+    /// <summary>最近一次执行过的 task.start 代序号 + 配置组名（幂等保护：同一 generation + 同一配置组只执行一次）。</summary>
+    private (int generation, string? name) _lastExecutedTask = (0, null);
 
     internal InstanceRequestHandler(
         InstanceContext context,
@@ -503,15 +504,19 @@ internal sealed class InstanceRequestHandler
             // 幂等保护：task.start 携带 generation 时，同一 generation 只执行一次
             var generation = request.Data?["generation"]?.ToObject<int>() ?? 0;
 
-            // 幂等检查：同一 generation 已执行过则跳过（避免 OnAllReady 重复广播导致配置组重复启动）
-            if (generation > 0 && generation <= _lastExecutedTaskGeneration)
+            // 幂等检查：同一 generation + 同一配置组名已执行过则跳过（避免 OnAllReady 重复广播导致配置组重复启动）
+            // 注意：允许同一 generation 执行不同配置组（OnAllReady 依次执行多个配置组的场景）
+            var taskName = groupName ?? configName;
+            if (generation > 0
+                && generation == _lastExecutedTask.generation
+                && taskName == _lastExecutedTask.name)
             {
-                _logger.LogInformation("[IPC task.start] generation={Gen} 已执行过，跳过重复执行", generation);
+                _logger.LogInformation("[IPC task.start] generation={Gen} name={Name} 已执行过，跳过重复执行", generation, taskName);
                 return InstanceIpcEnvelope.Response(request, new { status = "already_executed", generation });
             }
             if (generation > 0)
             {
-                _lastExecutedTaskGeneration = generation;
+                _lastExecutedTask = (generation, taskName);
             }
 
             // 通过全局服务容器获取 IScriptService
@@ -715,6 +720,7 @@ internal sealed class InstanceRequestHandler
 
             // 联机锄地进度
             string? hoeingProgress = null;
+            string? currentRouteDisplay = null;
             lock (AutoHoeingProgress.Sync)
             {
                 if (hoeing)
@@ -722,6 +728,10 @@ internal sealed class InstanceRequestHandler
                     var tsRoute = TimeSpan.FromSeconds(Math.Max(0, AutoHoeingProgress.RouteEstimatedSeconds));
                     var tsRemain = TimeSpan.FromSeconds(Math.Max(0, AutoHoeingProgress.RoundRemainingSeconds));
                     hoeingProgress = $"{AutoHoeingProgress.RoundPrefix}当前进度：开始第 {AutoHoeingProgress.CurrentRouteIndex}/{AutoHoeingProgress.TotalRoutes} 条线路: {AutoHoeingProgress.RouteFileName}，本线路预计用时 {(int)tsRoute.TotalHours}时{tsRoute.Minutes}分{tsRoute.Seconds}秒，本轮预计剩余 {(int)tsRemain.TotalHours}时{tsRemain.Minutes}分{tsRemain.Seconds}秒";
+                    if (AutoHoeingProgress.TotalRoutes > 0)
+                    {
+                        currentRouteDisplay = $"第{AutoHoeingProgress.CurrentRouteIndex}/{AutoHoeingProgress.TotalRoutes}条线路: {AutoHoeingProgress.RouteFileName}";
+                    }
                 }
             }
 
@@ -759,6 +769,7 @@ internal sealed class InstanceRequestHandler
                 groupName,
                 autoHoeingRunning = hoeing,
                 autoHoeingProgress = hoeingProgress,
+                currentRouteDisplay,
                 recentTaskName,
                 recentTaskNameTime = _recentTaskNameTime, // 仅当 recentTaskName != null 时有效；null 时忽略
                 onlineGeneration = NotifyOnlineTask.CurrentGeneration, // 新：上线事件代序号，无任务时返回 0
@@ -1063,6 +1074,8 @@ internal sealed class InstanceRequestHandler
             int taskIndex = 0;
             string? folderName = null;
             string? projectName = null;
+            int oneDragonTaskIndex = 0;         // 一条龙条目索引（NextTaskIndex）
+            string? subTaskGroupName = null;    // 一条龙内当前执行的配置组名
 
             var ctx = BetterGenshinImpact.GameTask.RunnerContext.Instance;
             var progress = ctx?.taskProgress;
@@ -1078,22 +1091,36 @@ internal sealed class InstanceRequestHandler
             }
             else if (progress?.CurrentScriptGroupName != null)
             {
-                // 有 groupName 但没有 projectInfo → 一条龙
-                groupName = progress.CurrentScriptGroupName;
-                // 一条龙中断时，从 OneDragonFlowViewModel 获取当前配置的 NextTaskIndex
+                // 一条龙场景：progress.CurrentScriptGroupName 是当前执行的配置组名（OneDragonFlowViewModel 配置组分支设置了 taskProgress）
+                // 一条龙配置名 + 条目索引需要从 OneDragonFlowViewModel 取
                 try
                 {
                     var oneDragonVm = App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.OneDragonFlowViewModel>();
                     if (oneDragonVm?.SelectedConfig != null)
                     {
-                        taskIndex = oneDragonVm.SelectedConfig.NextTaskIndex;
+                        // 一条龙配置名（HandleTaskResume 用它从 ConfigList 找回配置）
+                        groupName = oneDragonVm.SelectedConfig.Name;
+                        // 一条龙条目索引（恢复时配置 Skip 到该条目）
+                        oneDragonTaskIndex = oneDragonVm.SelectedConfig.NextTaskIndex;
                     }
                 }
                 catch
                 {
-                    // ViewModel 不可用时，默认从头开始
-                    taskIndex = 1;
+                    // ViewModel 不可用时，退回用配置组名作 GroupName（降级为配置组恢复）
+                    groupName = progress.CurrentScriptGroupName;
+                    oneDragonTaskIndex = 0;
                 }
+
+                // 配置组级子任务信息：当前正在执行的配置组名 + 子任务索引
+                // （OneDragonFlowViewModel 配置组分支让 RunMulti 传了 taskProgress，所以 CurrentScriptGroupProjectInfo 已写入）
+                subTaskGroupName = progress.CurrentScriptGroupName;
+                if (progress.CurrentScriptGroupProjectInfo != null)
+                {
+                    taskIndex = progress.CurrentScriptGroupProjectInfo.Index; // 0-based projectIndex
+                    folderName = progress.CurrentScriptGroupProjectInfo.FolderName;
+                    projectName = progress.CurrentScriptGroupProjectInfo.Name;
+                }
+
                 taskType = "onedragon";
             }
             else
@@ -1124,7 +1151,9 @@ internal sealed class InstanceRequestHandler
                     GroupName = groupName ?? "",
                     TaskIndex = taskIndex,
                     FolderName = folderName ?? "",
-                    ProjectName = projectName ?? ""
+                    ProjectName = projectName ?? "",
+                    OneDragonTaskIndex = oneDragonTaskIndex,
+                    SubTaskGroupName = subTaskGroupName ?? ""
                 };
                 _logger.LogInformation("[IPC task.suspend] 已保存中断上下文: Type={TaskType}, Group={GroupName}, Index={TaskIndex}",
                     taskType, groupName, taskIndex);
@@ -1211,10 +1240,24 @@ internal sealed class InstanceRequestHandler
                     break;
 
                 case "onedragon":
-                    // 恢复一条龙：写 NextTaskIndex 后调 OnOneKeyExecute
+                    // 三层恢复：先设 NextScheduledTask（配置组级子任务起点），再设 NextTaskIndex（一条龙级），最后调 OnOneKeyExecute
                     if (!string.IsNullOrEmpty(context.GroupName))
                     {
-                        Application.Current?.Dispatcher.Invoke(() =>
+                        // 第一步：在 IPC 线程中写入 NextScheduledTask（配置组级子任务起点）
+                        // 必须在 OnOneKeyExecute 之前执行，因为 OnOneKeyExecute 内部 RunMulti 的
+                        // GetNextProjects → SetTaskContextNextFlag 会读 AllConfig.NextScheduledTask
+                        if (!string.IsNullOrEmpty(context.SubTaskGroupName) && context.TaskIndex > 0)
+                        {
+                            var resumeIndex = context.TaskIndex + 1; // 0-based projectIndex → 1-based Index
+                            allConfig.NextScheduledTask =
+                            [
+                                (context.SubTaskGroupName, resumeIndex, context.FolderName, context.ProjectName)
+                            ];
+                        }
+
+                        // 第二步：在 UI 线程中设置一条龙级恢复
+                        // 用 InvokeAsync 而非 Invoke，避免同步阻塞可能导致的 UI 线程死锁
+                        Application.Current?.Dispatcher.InvokeAsync(() =>
                         {
                             var vm = App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.OneDragonFlowViewModel>();
                             if (vm != null)
@@ -1223,9 +1266,14 @@ internal sealed class InstanceRequestHandler
                                 if (cfg != null)
                                 {
                                     vm.SelectedConfig = cfg;
-                                    if (context.TaskIndex > 0)
-                                        cfg.NextTaskIndex = context.TaskIndex;
+                                    // 设置一条龙条目索引，OnOneKeyExecute 内部会 Skip 到该条目
+                                    if (context.OneDragonTaskIndex > 0)
+                                        cfg.NextTaskIndex = context.OneDragonTaskIndex;
                                     _ = vm.OnOneKeyExecute();
+                                }
+                                else
+                                {
+                                    _logger.LogWarning("[IPC task.resume] 一条龙配置 {Config} 已不存在，跳过恢复", context.GroupName);
                                 }
                             }
                         });

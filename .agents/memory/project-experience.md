@@ -191,3 +191,119 @@
 
 ### 恢复机制修正链接（2026-08-24）
 - 联机锄地恢复机制（SuspendedTaskContext 的保存/恢复、F11 停止 vs IPC task.suspend 两条独立通道、边沿检测死代码修复、索引偏移修复）——详情见 `fix-multiplayer-rerun-sync-issue.md`。
+### 全局知识库文档管理（2026-08-24）
+- **背景**：用户要求把微软官方文档（SignalR/WPF/MVVM 等）下载到本地，形成跨会话可复用的知识库。
+- **方案**：方案 2（裁剪版）= 结论索引（`~/.kiro/steering/global-knowledge-index.md`）+ 官方文档全文（`~/.kiro/docs/`）。索引自动加载（`inclusion: always`），全文按需读取。
+- **存放位置**：
+  - 用户级 steering（全局，跨项目）：`~/.kiro/steering/global-knowledge-index.md`
+  - 官方文档全文（不自动加载）：`~/.kiro/docs/`
+- **已下载的 P0 文档**：SignalR .NET Client、SignalR 配置、SignalR Hubs
+- **后续会话**：新会话中 steering 文件自动加载，AI 能直接引用本地文档知识，不需要重新学习。
+- **其他**：`AGENTS.md` §3 索引已更新指向此知识库。
+### task.status 状态便签展示的数据能力边界（2026-08-24 调研）
+- 场景：用户想让"任务状态便签"不只显示任务名，还显示"一条龙/配置组 + 任务名 + 当前执行线路"。
+- 现状数据链路：BGI `HandleTaskStatus`（`Service/Instance/MessageHandlers/InstanceRequestHandler.cs:676`）→ IPC `task.status` → 助手 `MainViewModel.ReportStatusAsync` 轮询 → 服务端透传 → 遥控器/WEB 显示 `CurrentTaskName`。
+- 能拿到的：`groupName`（配置组名，来自 `RunnerContext.Instance.taskProgress.CurrentScriptGroupName`）、`taskName`（当前脚本项目名，`CurrentScriptGroupProjectInfo?.Name`）、`autoHoeingProgress`（联机锄地线路进度文本：第 X/Y 条线路 + 线路文件名 + 预计用时，见 `AutoHoeingProgress.cs`）。
+- **关键缺口**：`task.status` 返回的 `groupName` **无法区分这条龙还是配置组**（BGI 端执行时未记录来源目录标识，OneDragon 走 `User/OneDragon`、配置组走 `User/ScriptGroup`）。要显示"一条龙/配置组"前缀，需 BGI 端在执行入口记录来源标识并上报，或遥控器端用配置名去已上报的 `OneClickConfigs`/`ConfigGroups` 两个列表撞名匹配（后者低成本但重名有歧义）。
+- 游戏内遮罩 `MaskWindow` 的 `StatusList` 显示的是**固定功能开关状态**（拾取/剧情/邀约/钓鱼/传送，`MaskWindowViewModel.InitializeStatusList`），**不是当前任务名**，与"显示当前任务"是两套独立 UI，别混淆。
+- 结论：改动范围 = BGI 主项目 1-3 文件（task.status 加一条龙标识）+ 三端对称 Model（ControlStatus/ControlRoomPlayer 双份 + MainViewModel）+ 展示层，中低风险（全新增字段+兼容默认值，不破坏协议）。
+### 成员卡片状态标签的确切实现（2026-08-24 补充，接上一条）
+- **位置**：`MultiplayerHoeingAssistant/Views/MainWindow.xaml:747-762`，成员卡片顶部那个 `TextBlock`（配 `DataTrigger` 多个状态分支）。
+- **状态机**（WPF DataTrigger 优先级从下往上覆盖）：默认 `离线`(Pyro) → `Online=True` 显示 `BGI已启动: 空闲`(Orange) → `BgiStatus="stopped"` 显示 `BGI 未运行`(Geo) → `BgiStatus="observer"` 显示 `遥控器`(#5B8DEF) → `TaskRunning=True` 显示 `{Binding CurrentTaskName}`(Electro)。
+- **数据源**：`MemberViewModel`（`MainViewModel.cs:4136-4148`）的 `Online`/`BgiStatus`/`TaskRunning`/`CurrentTaskName`；`BgiStatus` 只表示"BGI 进程是否运行"（self 上报：observer/running/stopped，见 `MainViewModel.cs:477`），与"是否有任务在执行"（`TaskRunning`）是**两个独立标志**。
+- **注意**：`TaskRunning=True` 分支的 `CurrentTaskName` 是 `task.status` 的 `taskName`（当前脚本项目名），**不含一条龙/配置组前缀，也不含线路**。要扩展这两类信息，低成本方案 = 遥控器端用 `CurrentTaskName` 去 `MemberViewModel.ConfigGroups`/`OneClickConfigs` 撞名匹配；线路信息需先在 `ControlStatus`/`ControlRoomPlayer`(双份)/`MemberViewModel` 加 `AutoHoeingProgress` 字段（数据已在 `MainViewModel.ReportStatusAsync` 解析出 `autoHoeingProgress`，只是没下沉到 MemberViewModel）。
+### HandleTaskStart 幂等保护误拦多配置组修复（2026-08-24）
+
+**现象**：`OnAllReadyConfirmedInternal` 依次执行绑定的多个配置组（如"联机-传奇-锄地"→"联机-精英-锄地"），第一个正常执行，第二个被跳过，直接恢复原任务。
+
+**日志证据**：
+```
+[IPC task.start] RunMulti 完成, group="联机-传奇-锄地", wasCancelled=False
+[IPC task.start] generation=1 已执行过，跳过重复执行  ← 第二个被误拦
+[IPC task.resume] 开始恢复任务: Type="group", Group="单机-小怪-锄地", Index=1
+```
+
+**根因**：`HandleTaskStart` 的幂等保护用 `_lastExecutedTaskGeneration`（单个 int）只记录 generation，不记录配置组名。`OnAllReadyConfirmedInternal` 循环中所有配置组共享同一个 `generation`，第一个执行后 `_lastExecutedTaskGeneration = generation`，第二个检查 `generation <= _lastExecutedTaskGeneration` 成立 → 被跳过。
+
+**修复**：`_lastExecutedTaskGeneration` 改为 `(int generation, string? name) _lastExecutedTask` 元组，幂等检查改为同时匹配 `generation` 和 `groupName/configName`。同一 generation + 不同配置组名不拦截，同一 generation + 同一配置组名才拦截（防重复广播）。
+
+**涉及文件**：`BetterGenshinImpact/Service/Instance/MessageHandlers/InstanceRequestHandler.cs`（`HandleTaskStart` 第 506-520 行）
+
+**教训**：`OnAllReadyConfirmedInternal` 的循环共享 generation 是合法行为（同一轮 AllReady 启动多个配置组），幂等保护的粒度应该是 `(generation, 配置组名)` 而不是 `(generation)` 全局唯一。
+### 状态标签扩展实现完成（2026-08-24）
+- **需求**：成员卡片状态标签 \TaskRunning=True\ 时只显示子任务名，改为直接拼接 \groupName · taskName · 线路\（用户要求"有什么显示什么"，不做一条龙/配置组分类前缀）。
+- **关键纠偏**：\	ask.status\ 的 \	askName\ 是 \CurrentScriptGroupProjectInfo?.Name\（**子任务名**，如"每日委托"），不是配置组名！要拿配置组/一条龙名必须读 \groupName\（\CurrentScriptGroupName\，一行龙执行时 OneDragonFlowViewModel.cs:2539 显式设 Progress.CurrentScriptGroupName = group.Name）。独立任务时 groupName=null。
+- **方案 B（结构化单字段）**：BGI HandleTaskStatus 额外返回 currentRouteDisplay（第X/Y条线路：文件名，从 AutoHoeingProgress 静态类现成字段拼），遥控端单字段透传，不解析 autoHoeingProgress 中文文本（避免强耦合 BGI 文案）。
+- **改动链（已编译 0 error）**：5 处核心改动（BGI HandleTaskStatus + 双份 ControlStatus/RoomPlayer + MainViewModel 解析/透传/MemberViewModel 字段+TaskDisplayText + MainWindow.xaml 绑定）。
+- **注意**：改 ControlStatus/ControlRoomPlayer 必须双份（PC端+服务端）同步，否则 CS0117。TaskDisplayText 需在 TaskRunning/CurrentTaskGroupName/CurrentTaskName/CurrentRouteDisplay 的 setter 里触发 OnPropertyChanged。
+### 联机助手成员卡片操作弹窗+广播模式（2026-08-24）
+- 需求：给"停止BGI"/"启动BGI"按键加确认弹窗 + "发送给所有人执行"选项，参考"清除上线"的实现。
+- 模式：`ShowXxxConfirmDialog` 返回 `(confirmed, bool broadcastToAll)` tuple → broadcastToAll 时本机执行 + 构造 `RemoteCommand { Target = ["*"] }` 广播 → 不广播时按现有单发逻辑。
+- 关键：`Target=["*"]` 广播无人需要额外协议改动（服务端 `RoomManager.ResolveTargets` 已支持）；`stop`/`start_bgi` 远端执行在 `CommandExecutor.ExecuteAsync` 中已实现。
+- 风险：广播 `*` 包含发送者自己，需注意 §18 ack 循环防御（已在 `OnRemoteCommand` 入口拦 `Cmd=="ack"`）。
+- 参考文件：`MainViewModel.cs` 的 `ShowClearOnlineConfirmDialog` ~line 989, `OnClearOnline` ~line 920, `OnStop` ~line 670, `OnStartBgi` ~line 699。
+### 离线成员提醒模式（WarnOfflineMembers，2026-08-24）
+- 场景：广播命令（`Target=["*"]`）前，需检查是否有成员不在线——离线成员收不到命令，其缓存数据可能过时。
+- 模式：`WarnOfflineMembers()` 统计 `Members.Where(m => !m.Online).Select(m => m.PlayerName)`，弹出 MessageBox 列出离线成员名单 + 提醒"离线成员收不到命令"。返回 `Members.Any(m => m.Online)` 供调用方判断是否要继续广播（全离线则阻止）。
+- 关键：`MessageBox.Show` 是 `MultiplayerHoeingAssistant` 项目既有惯例（`OnCloseGame`、`ExecuteQuickCommandAsync` 都在用）。本项目无 ThemedMessageBox。
+- 参考文件：`MainViewModel.cs` 的 `WarnOfflineMembers` 方法，`OnStop`/`OnStartBgi` 的广播分支调用。
+### C# 字符串插值中中文引号导致的编译错误（2026-08-24）
+- 场景：写 `MainViewModel.ShowQuickCommandBindForMembersDialog` 弹窗标题时用了 `$"...成员名称旁的"选择"按钮..."`，两个中文双引号 `"选择"` 被 C# 编译器误认为字符串结束标记 → `CS1003 应输入 ","` 编译失败。
+- 根因：C# 只认 ASCII 双引号 `"` 作为字符串定界符。中文/全角引号 `"` `"` 在转义上**不会被 C# 视为字符串内容**——`$"..."` 内部的中文引号必须在代码里替换为转义 `\"选择\"` 或改用单引号/中文书名号，不能原样放全角引号。
+- 修复：`Text = $"..., 点击成员名称旁的\"选择\"按钮进行绑定："`（用 `\"` 转义）。
+- 教训：在 C# 字符串字面量（含字符串插值 `$"..."`）里给用户看的文案**不要直接用全角中文引号 `"` `"`**，会破坏字符串定界；要么转义 `\"`，要么换用「」中文书名号。交付前用 `dotnet build 0 error 0 fail` 验证可兜底这类书写问题。
+### 删除探针脚本误删文件教训（2026-08-24）
+- **场景**：用 PowerShell 行操作脚本删除 `[探针]` 日志行时，`$skipProbe=$true` 跳过逻辑没有精确匹配探针块结束，导致文件从 4038 行被截断到 339 行（`MainViewModel.cs`），以及从 1272 行截断到 753 行（`InstanceRequestHandler.cs`）。
+- **根因**：删除脚本使用"匹配注释行后跳过 N 行"的模糊逻辑，而不是精确匹配要删除的代码块。`$skipProbe=$true` 后没有在探针代码块末尾精确停止，而是一直跳过到文件末尾，导致大段代码丢失。
+- **恢复**：两次都用 `git checkout` 恢复原始文件（回到 git HEAD 版本），然后重新用 `str_replace` 逐个应用本次会话的改动。**关键风险**：`git checkout` 会丢失未 commit 的本地改动。
+- **纪律补充**：
+  1. **禁止**用 PowerShell 行操作脚本做"跳过 N 行"的删除。必须用 `str_replace` 精确匹配 oldStr/newStr，或至少用 `ReadAllText` + `.Replace(old, new)` 的精确字符串替换。
+  2. 每次写操作后必须用 `grep` 或行数统计验证文件完整性（`$lines.Count` 接近预期值，不是在 300-400 行被截断）。
+  3. 如果文件之前有未 commit 的改动，先 `git stash` 再 `git checkout` 恢复，然后用 `git stash pop` 还原。
+  4. `str_replace` 虽然也被 PreToolUse hook 拦截，但对比 PowerShell 批量操作，它不会误删范围外代码，更安全。
+### 被 AGENT 误删代码的审核恢复模式（2026-08-24）
+
+**场景**：本会话实现了 7 个文件约 14 个改动点（一条龙三层恢复、幂等修复、互斥锁、绑定支持一条龙等），随后被其他 AGENT 误删了 BGI 端的 3 个核心逻辑改动（`HandleTaskSuspend` onedragon 分支、`HandleTaskResume` onedragon 分支、`HandleTaskStart` 幂等修复）和助手端的 3 个改动（`_isAllReadyProcessing` 互斥锁、`OnAllReadyConfirmedInternal` 支持一条龙、`OnBindHoeingGroup` 绑定弹窗支持一条龙）。数据模型字段（`SuspendedTaskContext.OneDragonTaskIndex`/`SubTaskGroupName`、`AssistConfig.OnlineHoeingGroupTypes`）和 `CommandExecutor` generation 透传幸免。
+
+**审核方法**：逐条列出本次会话所有改动点，用 grep 确认每个关键符号是否存在。6 个被删、6 个幸存。
+
+**幸存清单**（grep 确认存在）：`SuspendedTaskContext.OneDragonTaskIndex`/`SubTaskGroupName` 字段、`OneDragonFlowViewModel` 配置组传 `taskProgress`、`HandleTaskResume` group 分支 `resumeIndex = TaskIndex + 1`、`AssistConfig.OnlineHoeingGroupTypes` 字段、`CommandExecutor` generation 透传、`OnAllReadyConfirmedInternal` 方法体（但回退到原始版本）。
+
+**被删清单**（grep 确认不存在）：`HandleTaskSuspend` onedragon 分支三层上下文保存、`HandleTaskResume` onedragon 分支三层恢复、`HandleTaskStart` 幂等修复（`_lastExecutedTask` 元组）、`MainViewModel._isAllReadyProcessing` 互斥锁、`OnAllReadyConfirmedInternal` 使用 `OnlineHoeingGroupTypes` 发 `start_oneclick`、`OnBindHoeingGroup` 绑定弹窗支持一条龙。
+
+**教训**：一个会话实现的核心逻辑改动，因其他 AGENT 的清理操作被回退。数据模型（字段/Schema）改动通常幸存（被配置文件引用），逻辑层（方法体/分支）容易被回退。恢复时应优先保障逻辑层，数据模型可以作为恢复锚点——从字段的 json 属性名反查逻辑层是否被删。
+### 快捷指令绑定后"执行无反应/重开不生效"根因（2026-08-24，快捷指令 spec）
+
+- 场景：传奇/次数盾等公共快捷指令，弹窗绑定配置组后点"确认执行"没反应，重新打开弹窗之前绑定的没生效。
+- 根因：`BindQuickCommandAsync` 保存绑定只写 `_config.QuickCommands[key]`（本机配置）或推送 `set_quick_command`，**没有同步更新 `MemberViewModel.QuickCommands` 属性**。而分成员列弹窗 `ShowQuickCommandBindForMembersDialog` 的"确认执行"循环读的是 `member.QuickCommands?.GetValueOrDefault(key)`（成员模型属性，来自服务端广播），绑定后该属性未更新 → `string.IsNullOrEmpty(binding)` 为 true → `continue` 跳过 → 不执行。重开弹窗读的仍是旧广播值 → 不生效。
+- 修复：`BindQuickCommandAsync` 保存成功后同步更新对应成员属性——
+  - 绑自己：`var selfMember = Members.FirstOrDefault(m => m.PlayerUid == _config?.PlayerUid); if (selfMember != null) selfMember.QuickCommands[key] = boundValue;`
+  - 绑别人：`targetMember.QuickCommands[key] = boundValue;`（本地弹窗立即反映，不依赖下次 `OnPlayersUpdated` 广播）
+- 教训：**涉及"绑定/配置 + 分成员弹窗 + 执行下发"的三段式交互时，绑定保存必须同时更新弹窗/执行要读的成员模型属性**，否则执行端读的是旧数据。UI 弹窗里读 `MemberViewModel.X`（来自服务端广播，刷新慢）而非本机 `_config.X` 是这类"改了不生效"的高频根因。
+### 遥控端快捷指令"确认执行"静默跳过（2026-08-24，与上一条同 spec）
+
+- 场景：遥控端（ObserverMode）打开快捷指令弹窗，选择绑定后点"确认执行"，没有反应。执行端正常。
+- 根因：`ShowQuickCommandBindForMembersDialog` 的 `executeBtn.Click` 中，对"本机成员"（`member.PlayerUid == _config?.PlayerUid`）的执行分支只做了 `if (_commandExecutor != null) { 本地IPC }`。但遥控端模式下 `ApplyModeRuntime` 已将 `_commandExecutor = null`（第2920行），导致该分支被跳过。且因为 `member.PlayerUid == _config?.PlayerUid` 为 true，也不走 `else { 远程下发 }` ——**什么都不执行，静默失败**。
+- 修复：在 `if (_commandExecutor != null)` 后加 `else if (_config?.ObserverMode == true)` 分支，遥控端对本机成员走 `SendQuickStartAsync(key, isOneClick, value, [member.PlayerUid])` 通过 SignalR 下发到执行端。
+- 教训：**凡涉及"本机直接执行"的分支（`if (_commandExecutor != null)`），都必须同步考虑遥控端模式下的兜底（`else if (ObserverMode)` 走 SignalR 下发）**。`_commandExecutor = null` 在遥控端是预期行为，但"预期"不等于"什么都不做"——执行端上 `_commandExecutor` 不为 null 的那台机器才会真正执行。`ApplyModeRuntime` 是唯一的分界点，改了它，所有依赖 `_commandExecutor != null` 的分支都需要同步检查遥控端路径。
+### 遥控端快捷指令"绑自己改绑不生效/执行旧值"三连坑（2026-08-24，快捷指令 spec 收尾）
+
+遥控端快捷指令经历了三轮修复，三次都是不同的坑，合成一条完整链路记录：
+
+1. **绑定后"执行无反应/重开不生效"**（见上一条）：`BindQuickCommandAsync` 保存绑定只写 `_config.QuickCommands`/推送 `set_quick_command`，没同步 `MemberViewModel.QuickCommands`。弹窗/执行读成员属性读不到新值 → 执行被 `continue` 跳过。
+2. **遥控端"确认执行"静默跳过**（见上一条）：`ShowQuickCommandBindForMembersDialog` 的"本机成员"分支只做 `if (_commandExecutor != null)` 本地 IPC；遥控端 `ApplyModeRuntime` 把它置 null → 跳过且不走 else 远程下发 → 什么都不做。
+3. **遥控端"绑自己"改绑，执行端执行旧值**（本次）：遥控端在"绑自己"分支（`targetMember.PlayerUid == _config?.PlayerUid`）只保存了**遥控端本机** `_config.QuickCommands[key]` 和 `selfMember.QuickCommands[key]`，**没有推送 `set_quick_command` 给执行端**。执行端收到 `SendQuickStartAsync` 下发的命令后查**自己本机** `QuickCommands[key]`，仍读到旧值 → 执行 A 而不是新绑的 C。
+   - 修复：`BindQuickCommandAsync`"绑自己"分支的 `AddLog` 后加 `if (_config?.ObserverMode == true && _signalRClient != null)` → 构造 `Cmd="set_quick_command"`、`Target=[selfMember?.PlayerUid ?? _config?.PlayerUid ?? ""]`、`Params={key,boundValue,isOneClick}` 推送给执行端。
+
+**完整教训**：遥控端模式（ObserverMode）下，`_config.QuickCommands`（遥控端本机配置）与执行端 BGI 上实际生效的 `QuickCommands` 是**两份独立数据**。遥控端一切"绑定/执行"都要想清楚：
+- 绑定必须既能更新遥控端本地显示（`MemberViewModel.QuickCommands`），又能通过 `set_quick_command` 推送到执行端（真正生效的那台）；
+- 执行必须通过 SignalR 下发（`_commandExecutor` 在遥控端恒为 null）；
+- 弹窗显示读 `MemberViewModel.QuickCommands`（来自服务端广播），执行读执行端本机配置——两处都要对得上，缺一处就是"改了不生效/执行旧值"。
+### 冒险日志 = AddLog 输出面板 + 联机锄地进度两个字段（2026-08-24）
+
+- **"冒险日志"是助手左侧面板**：`MainWindow.xaml` 标题 `TextBlock Text="冒险日志"` 那个日志列表。`MainViewModel.AddLog(message)`（第4444行）执行 `CommandLogs.Insert(0, "[HH:mm:ss] msg")` + `CommandLogsText = string.Join("\n", ...)` + 追加写 `assistant_runtime.log` 文件。**一切 `AddLog` 的输出都是"冒险日志"**。
+- **联机锄地进度有两个字段**（BGI `InstanceRequestHandler.cs:730/733` 生成）：
+  - `autoHoeingProgress`（长文本）：`{RoundPrefix}当前进度：开始第 X/Y 条线路: {RouteFileName}，本线路预计用时 X时X分X秒，本轮预计剩余 X时X分X秒`
+  - `currentRouteDisplay`（简版）：`第X/Y条线路: {RouteFileName}`
+- **助手端** `MainViewModel.ReportStatusAsync` 第474-479行：`autoHoeingProgress != _lastLoggedProgress`（文本变化时）`AddLog(autoHoeingProgress!)` → 冒险日志仅在线路/进度文本变化时打印一次，同一线路中途不重复打印。
+- **遥控端（ObserverMode）看不到**：`ReportStatusAsync` 在 `_config?.ObserverMode == true` 时跳过 IPC 解析，`autoHoeingProgress` 恒为 null，这段 AddLog 永不执行。遥控端要看成员进度需从服务端广播的 `MemberViewModel.AutoHoeingProgress` 读。

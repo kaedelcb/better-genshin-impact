@@ -15,7 +15,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Nexus-BGI（联机助手）--- 风险说明与免责声明"
+        <TextBlock Grid.Row="0" Text="Nexus BGI（联机助手）--- 风险说明与免责声明"
                    FontSize="20" FontWeight="Bold" Foreground="#4fc3f7" Margin="0,0,0,16"
                    TextWrapping="Wrap" TextAlignment="Center"/>
 
