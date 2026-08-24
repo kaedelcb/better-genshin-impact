@@ -191,3 +191,73 @@
 
 ### 恢复机制修正链接（2026-08-24）
 - 联机锄地恢复机制（SuspendedTaskContext 的保存/恢复、F11 停止 vs IPC task.suspend 两条独立通道、边沿检测死代码修复、索引偏移修复）——详情见 `fix-multiplayer-rerun-sync-issue.md`。
+### 全局知识库文档管理（2026-08-24）
+- **背景**：用户要求把微软官方文档（SignalR/WPF/MVVM 等）下载到本地，形成跨会话可复用的知识库。
+- **方案**：方案 2（裁剪版）= 结论索引（`~/.kiro/steering/global-knowledge-index.md`）+ 官方文档全文（`~/.kiro/docs/`）。索引自动加载（`inclusion: always`），全文按需读取。
+- **存放位置**：
+  - 用户级 steering（全局，跨项目）：`~/.kiro/steering/global-knowledge-index.md`
+  - 官方文档全文（不自动加载）：`~/.kiro/docs/`
+- **已下载的 P0 文档**：SignalR .NET Client、SignalR 配置、SignalR Hubs
+- **后续会话**：新会话中 steering 文件自动加载，AI 能直接引用本地文档知识，不需要重新学习。
+- **其他**：`AGENTS.md` §3 索引已更新指向此知识库。
+### task.status 状态便签展示的数据能力边界（2026-08-24 调研）
+- 场景：用户想让"任务状态便签"不只显示任务名，还显示"一条龙/配置组 + 任务名 + 当前执行线路"。
+- 现状数据链路：BGI `HandleTaskStatus`（`Service/Instance/MessageHandlers/InstanceRequestHandler.cs:676`）→ IPC `task.status` → 助手 `MainViewModel.ReportStatusAsync` 轮询 → 服务端透传 → 遥控器/WEB 显示 `CurrentTaskName`。
+- 能拿到的：`groupName`（配置组名，来自 `RunnerContext.Instance.taskProgress.CurrentScriptGroupName`）、`taskName`（当前脚本项目名，`CurrentScriptGroupProjectInfo?.Name`）、`autoHoeingProgress`（联机锄地线路进度文本：第 X/Y 条线路 + 线路文件名 + 预计用时，见 `AutoHoeingProgress.cs`）。
+- **关键缺口**：`task.status` 返回的 `groupName` **无法区分这条龙还是配置组**（BGI 端执行时未记录来源目录标识，OneDragon 走 `User/OneDragon`、配置组走 `User/ScriptGroup`）。要显示"一条龙/配置组"前缀，需 BGI 端在执行入口记录来源标识并上报，或遥控器端用配置名去已上报的 `OneClickConfigs`/`ConfigGroups` 两个列表撞名匹配（后者低成本但重名有歧义）。
+- 游戏内遮罩 `MaskWindow` 的 `StatusList` 显示的是**固定功能开关状态**（拾取/剧情/邀约/钓鱼/传送，`MaskWindowViewModel.InitializeStatusList`），**不是当前任务名**，与"显示当前任务"是两套独立 UI，别混淆。
+- 结论：改动范围 = BGI 主项目 1-3 文件（task.status 加一条龙标识）+ 三端对称 Model（ControlStatus/ControlRoomPlayer 双份 + MainViewModel）+ 展示层，中低风险（全新增字段+兼容默认值，不破坏协议）。
+### 成员卡片状态标签的确切实现（2026-08-24 补充，接上一条）
+- **位置**：`MultiplayerHoeingAssistant/Views/MainWindow.xaml:747-762`，成员卡片顶部那个 `TextBlock`（配 `DataTrigger` 多个状态分支）。
+- **状态机**（WPF DataTrigger 优先级从下往上覆盖）：默认 `离线`(Pyro) → `Online=True` 显示 `BGI已启动: 空闲`(Orange) → `BgiStatus="stopped"` 显示 `BGI 未运行`(Geo) → `BgiStatus="observer"` 显示 `遥控器`(#5B8DEF) → `TaskRunning=True` 显示 `{Binding CurrentTaskName}`(Electro)。
+- **数据源**：`MemberViewModel`（`MainViewModel.cs:4136-4148`）的 `Online`/`BgiStatus`/`TaskRunning`/`CurrentTaskName`；`BgiStatus` 只表示"BGI 进程是否运行"（self 上报：observer/running/stopped，见 `MainViewModel.cs:477`），与"是否有任务在执行"（`TaskRunning`）是**两个独立标志**。
+- **注意**：`TaskRunning=True` 分支的 `CurrentTaskName` 是 `task.status` 的 `taskName`（当前脚本项目名），**不含一条龙/配置组前缀，也不含线路**。要扩展这两类信息，低成本方案 = 遥控器端用 `CurrentTaskName` 去 `MemberViewModel.ConfigGroups`/`OneClickConfigs` 撞名匹配；线路信息需先在 `ControlStatus`/`ControlRoomPlayer`(双份)/`MemberViewModel` 加 `AutoHoeingProgress` 字段（数据已在 `MainViewModel.ReportStatusAsync` 解析出 `autoHoeingProgress`，只是没下沉到 MemberViewModel）。
+### HandleTaskStart 幂等保护误拦多配置组修复（2026-08-24）
+
+**现象**：`OnAllReadyConfirmedInternal` 依次执行绑定的多个配置组（如"联机-传奇-锄地"→"联机-精英-锄地"），第一个正常执行，第二个被跳过，直接恢复原任务。
+
+**日志证据**：
+```
+[IPC task.start] RunMulti 完成, group="联机-传奇-锄地", wasCancelled=False
+[IPC task.start] generation=1 已执行过，跳过重复执行  ← 第二个被误拦
+[IPC task.resume] 开始恢复任务: Type="group", Group="单机-小怪-锄地", Index=1
+```
+
+**根因**：`HandleTaskStart` 的幂等保护用 `_lastExecutedTaskGeneration`（单个 int）只记录 generation，不记录配置组名。`OnAllReadyConfirmedInternal` 循环中所有配置组共享同一个 `generation`，第一个执行后 `_lastExecutedTaskGeneration = generation`，第二个检查 `generation <= _lastExecutedTaskGeneration` 成立 → 被跳过。
+
+**修复**：`_lastExecutedTaskGeneration` 改为 `(int generation, string? name) _lastExecutedTask` 元组，幂等检查改为同时匹配 `generation` 和 `groupName/configName`。同一 generation + 不同配置组名不拦截，同一 generation + 同一配置组名才拦截（防重复广播）。
+
+**涉及文件**：`BetterGenshinImpact/Service/Instance/MessageHandlers/InstanceRequestHandler.cs`（`HandleTaskStart` 第 506-520 行）
+
+**教训**：`OnAllReadyConfirmedInternal` 的循环共享 generation 是合法行为（同一轮 AllReady 启动多个配置组），幂等保护的粒度应该是 `(generation, 配置组名)` 而不是 `(generation)` 全局唯一。
+### 状态标签扩展实现完成（2026-08-24）
+- **需求**：成员卡片状态标签 \TaskRunning=True\ 时只显示子任务名，改为直接拼接 \groupName · taskName · 线路\（用户要求"有什么显示什么"，不做一条龙/配置组分类前缀）。
+- **关键纠偏**：\	ask.status\ 的 \	askName\ 是 \CurrentScriptGroupProjectInfo?.Name\（**子任务名**，如"每日委托"），不是配置组名！要拿配置组/一条龙名必须读 \groupName\（\CurrentScriptGroupName\，一行龙执行时 OneDragonFlowViewModel.cs:2539 显式设 Progress.CurrentScriptGroupName = group.Name）。独立任务时 groupName=null。
+- **方案 B（结构化单字段）**：BGI HandleTaskStatus 额外返回 currentRouteDisplay（第X/Y条线路：文件名，从 AutoHoeingProgress 静态类现成字段拼），遥控端单字段透传，不解析 autoHoeingProgress 中文文本（避免强耦合 BGI 文案）。
+- **改动链（已编译 0 error）**：5 处核心改动（BGI HandleTaskStatus + 双份 ControlStatus/RoomPlayer + MainViewModel 解析/透传/MemberViewModel 字段+TaskDisplayText + MainWindow.xaml 绑定）。
+- **注意**：改 ControlStatus/ControlRoomPlayer 必须双份（PC端+服务端）同步，否则 CS0117。TaskDisplayText 需在 TaskRunning/CurrentTaskGroupName/CurrentTaskName/CurrentRouteDisplay 的 setter 里触发 OnPropertyChanged。
+### 联机助手成员卡片操作弹窗+广播模式（2026-08-24）
+- 需求：给"停止BGI"/"启动BGI"按键加确认弹窗 + "发送给所有人执行"选项，参考"清除上线"的实现。
+- 模式：`ShowXxxConfirmDialog` 返回 `(confirmed, bool broadcastToAll)` tuple → broadcastToAll 时本机执行 + 构造 `RemoteCommand { Target = ["*"] }` 广播 → 不广播时按现有单发逻辑。
+- 关键：`Target=["*"]` 广播无人需要额外协议改动（服务端 `RoomManager.ResolveTargets` 已支持）；`stop`/`start_bgi` 远端执行在 `CommandExecutor.ExecuteAsync` 中已实现。
+- 风险：广播 `*` 包含发送者自己，需注意 §18 ack 循环防御（已在 `OnRemoteCommand` 入口拦 `Cmd=="ack"`）。
+- 参考文件：`MainViewModel.cs` 的 `ShowClearOnlineConfirmDialog` ~line 989, `OnClearOnline` ~line 920, `OnStop` ~line 670, `OnStartBgi` ~line 699。
+### 离线成员提醒模式（WarnOfflineMembers，2026-08-24）
+- 场景：广播命令（`Target=["*"]`）前，需检查是否有成员不在线——离线成员收不到命令，其缓存数据可能过时。
+- 模式：`WarnOfflineMembers()` 统计 `Members.Where(m => !m.Online).Select(m => m.PlayerName)`，弹出 MessageBox 列出离线成员名单 + 提醒"离线成员收不到命令"。返回 `Members.Any(m => m.Online)` 供调用方判断是否要继续广播（全离线则阻止）。
+- 关键：`MessageBox.Show` 是 `MultiplayerHoeingAssistant` 项目既有惯例（`OnCloseGame`、`ExecuteQuickCommandAsync` 都在用）。本项目无 ThemedMessageBox。
+- 参考文件：`MainViewModel.cs` 的 `WarnOfflineMembers` 方法，`OnStop`/`OnStartBgi` 的广播分支调用。
+### C# 字符串插值中中文引号导致的编译错误（2026-08-24）
+- 场景：写 `MainViewModel.ShowQuickCommandBindForMembersDialog` 弹窗标题时用了 `$"...成员名称旁的"选择"按钮..."`，两个中文双引号 `"选择"` 被 C# 编译器误认为字符串结束标记 → `CS1003 应输入 ","` 编译失败。
+- 根因：C# 只认 ASCII 双引号 `"` 作为字符串定界符。中文/全角引号 `"` `"` 在转义上**不会被 C# 视为字符串内容**——`$"..."` 内部的中文引号必须在代码里替换为转义 `\"选择\"` 或改用单引号/中文书名号，不能原样放全角引号。
+- 修复：`Text = $"..., 点击成员名称旁的\"选择\"按钮进行绑定："`（用 `\"` 转义）。
+- 教训：在 C# 字符串字面量（含字符串插值 `$"..."`）里给用户看的文案**不要直接用全角中文引号 `"` `"`**，会破坏字符串定界；要么转义 `\"`，要么换用「」中文书名号。交付前用 `dotnet build 0 error 0 fail` 验证可兜底这类书写问题。
+### 删除探针脚本误删文件教训（2026-08-24）
+- **场景**：用 PowerShell 行操作脚本删除 `[探针]` 日志行时，`$skipProbe=$true` 跳过逻辑没有精确匹配探针块结束，导致文件从 4038 行被截断到 339 行（`MainViewModel.cs`），以及从 1272 行截断到 753 行（`InstanceRequestHandler.cs`）。
+- **根因**：删除脚本使用"匹配注释行后跳过 N 行"的模糊逻辑，而不是精确匹配要删除的代码块。`$skipProbe=$true` 后没有在探针代码块末尾精确停止，而是一直跳过到文件末尾，导致大段代码丢失。
+- **恢复**：两次都用 `git checkout` 恢复原始文件（回到 git HEAD 版本），然后重新用 `str_replace` 逐个应用本次会话的改动。**关键风险**：`git checkout` 会丢失未 commit 的本地改动。
+- **纪律补充**：
+  1. **禁止**用 PowerShell 行操作脚本做"跳过 N 行"的删除。必须用 `str_replace` 精确匹配 oldStr/newStr，或至少用 `ReadAllText` + `.Replace(old, new)` 的精确字符串替换。
+  2. 每次写操作后必须用 `grep` 或行数统计验证文件完整性（`$lines.Count` 接近预期值，不是在 300-400 行被截断）。
+  3. 如果文件之前有未 commit 的改动，先 `git stash` 再 `git checkout` 恢复，然后用 `git stash pop` 还原。
+  4. `str_replace` 虽然也被 PreToolUse hook 拦截，但对比 PowerShell 批量操作，它不会误删范围外代码，更安全。

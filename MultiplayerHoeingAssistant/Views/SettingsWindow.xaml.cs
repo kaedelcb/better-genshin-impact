@@ -17,7 +17,7 @@ public partial class SettingsWindow : Window
         var version = System.Reflection.Assembly.GetExecutingAssembly()
             .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?
             .InformationalVersion;
-        return $"Nexus-BGI · {version ?? "0.0.0"} - {suffix}";
+        return $"Nexus BGI · {version ?? "0.0.0"} - {suffix}";
     }
 
     private SettingsWindow(AssistConfig config)

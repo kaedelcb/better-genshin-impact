@@ -12,14 +12,11 @@ public class SignalRClient : IAsyncDisposable
     private bool _isRemote;
     private string _clientInstanceId = "";
 
-    // 持久的连接参数：Closed（自动重连耗尽）后自愈重连循环需要它们重建连接
+    // 持久的连接参数：供手动 RefreshAsync 重建连接使用
     private string _serverUrl = string.Empty;
     private string _password = string.Empty;
     private List<string> _teamUids = new();
 
-    // 自愈重连循环的状态：防止同一个 client 里并发跑多个重连循环
-    private readonly object _reconnectLock = new();
-    private bool _reconnectLoopRunning;
     private bool _disposed;
 
     public event Action<List<ControlRoomPlayer>>? OnPlayersUpdated;
@@ -89,27 +86,38 @@ public class SignalRClient : IAsyncDisposable
         // SignalR 内置自动重连成功
         connection.Reconnected += async _ =>
         {
-            System.Diagnostics.Debug.WriteLine("SignalR 已重连，重新加入控制房间");
-            await connection.InvokeAsync("JoinControlRoom", roomCode, password, playerUid, playerName, teamUids, isRemote, _clientInstanceId);
-            OnConnectionStateChanged?.Invoke(true);
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("SignalR 已重连，重新加入控制房间");
+                await connection.InvokeAsync("JoinControlRoom", roomCode, password, playerUid, playerName, teamUids, isRemote, _clientInstanceId);
+                OnConnectionStateChanged?.Invoke(true);
+            }
+            catch (Exception ex)
+            {
+                // Reconnected 是 async void lambda，异常若不在此捕获会冒泡到全局
+                // TaskScheduler.UnobservedTaskException → App.xaml.cs 弹"任务异常"框，非常粗暴。
+                // 重连成功后 JoinControlRoom 偶发失败（如房间已被服务端回收），仅记日志，等待下次重连。
+                System.Diagnostics.Debug.WriteLine($"SignalR 重连后加入房间失败: {ex.Message}");
+            }
         };
 
-        // 连接彻底断开（SignalR 内置自动重连已耗尽）。
-        // 注意 1：异常参数绝不能忽略——SignalR 在 ServerTimeout（30s 无心跳）等场景会把
+        // 连接断开。内置自动重连期间会走 Reconnecting/Reconnected，最终耗尽后才来到这里。
+        // 注意：异常参数绝不能忽略——SignalR 在 ServerTimeout（30s 无心跳）等场景会把
         //   TimeoutException 传到这里，不"观察"会作为未观察任务异常冒泡到全局
         //   TaskScheduler.UnobservedTaskException → App 弹"未处理异常"框，非常粗暴。
-        //   这里吞掉并转状态通知（IsConnected=false，徽章变"离线"）+ 记日志。
-        // 注意 2：内置自动重连只配了 4 个间隔，耗尽后就走这里；必须启动自愈循环持续重建连接，
-        //   否则就永久停在"离线"（除非手动重启助手）。
+        //   这里吞掉并转状态通知（IsConnected=false，徽章变"离线"）。
+        // 说明：重连完全依赖 SignalR 内置 WithAutomaticReconnect（0s/2s/10s/30s 四次尝试），
+        //   不再叠加自定义自愈循环。曾有过 ReconnectLoopAsync 自愈循环与内置重连并存，两者并发
+        //   导致竞态：自愈循环在内置重连刚恢复后 Dispose 掉新连接、且重建失败时旧连接已被销毁
+        //   → 彻底离线无法控制。故移除自愈循环，只保留内置重连；若内置重连耗尽（服务器长期不可用），
+        //   状态仍会置为离线，用户可手动刷新（RefreshAsync）或手动重连恢复。
         connection.Closed += exception =>
         {
             if (exception != null)
             {
                 System.Diagnostics.Debug.WriteLine($"SignalR 连接已关闭: {exception.Message}");
             }
-            var closed = connection;
             OnConnectionStateChanged?.Invoke(false);
-            _ = ReconnectLoopAsync(closed);
             return Task.CompletedTask;
         };
 
@@ -120,61 +128,6 @@ public class SignalRClient : IAsyncDisposable
         // 若提前赋值、StartAsync 又失败，_connection 会指向"失败的新连接"，
         // 导致自愈循环里 closedConnection != _connection 判断提前 return、放弃重连。
         _connection = connection;
-    }
-
-    /// <summary>
-    /// 自愈重连循环：内置自动重连耗尽（Closed）后，周期性地重建连接，直到连上为止。
-    /// 每次只允许一个循环在跑（同一时刻只重建一次连接，避免并发连接互相干扰）。
-    /// </summary>
-    private async Task ReconnectLoopAsync(HubConnection closedConnection)
-    {
-        // 只有在"这个 Closed 连接仍旧是当前连接"时才需要重连；
-        // 如果期间已有新的连接建立（如手动 ConnectAsync 成功），则放弃本次重建。
-        if (closedConnection != _connection) return;
-
-        lock (_reconnectLock)
-        {
-            if (_reconnectLoopRunning) return;
-            _reconnectLoopRunning = true;
-        }
-
-        try
-        {
-            // 重建的间隔不宜过短，避免在服务器持续不可用时期疯狂打请求
-            const int delayMs = 10_000;
-            while (!_disposed)
-            {
-                await Task.Delay(delayMs);
-                if (_disposed || !ReferenceEquals(closedConnection, _connection)) return;
-
-                try
-                {
-                    var serverUrl = _serverUrl;
-                    var roomCode = _roomCode;
-                    var password = _password;
-                    var playerUid = _playerUid;
-                    var playerName = _playerName;
-                    var teamUids = _teamUids;
-
-                    await closedConnection.DisposeAsync();
-                    await EstablishAsync(serverUrl, roomCode, password, playerUid, playerName, teamUids, _isRemote);
-
-                    OnConnectionStateChanged?.Invoke(true);
-                    return; // 连上后退出循环
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"SignalR 自愈重连失败，稍后重试: {ex.Message}");
-                }
-            }
-        }
-        finally
-        {
-            lock (_reconnectLock)
-            {
-                _reconnectLoopRunning = false;
-            }
-        }
     }
 
     public async Task SendRemoteCommandAsync(RemoteCommand command)

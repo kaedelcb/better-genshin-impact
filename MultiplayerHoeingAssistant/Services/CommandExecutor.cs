@@ -25,10 +25,12 @@ public class CommandExecutor
                 "start_bgi" => await StartBgiAsync(),
                 "start_group" => await StartGroupAsync(
                     GetStringParam(command.Params, "groupName") ?? "",
-                    GetIntParam(command.Params, "startFromIndex") ?? 0),
+                    GetIntParam(command.Params, "startFromIndex") ?? 0,
+                    GetIntParam(command.Params, "generation") ?? 0),
                 "start_oneclick" => await StartOneClickAsync(
                     GetStringParam(command.Params, "configName") ?? "",
-                    GetIntParam(command.Params, "startFromIndex") ?? 0),
+                    GetIntParam(command.Params, "startFromIndex") ?? 0,
+                    GetIntParam(command.Params, "generation") ?? 0),
                 "hotkey_execute" => await ExecuteHotkeyAsync(
                     GetStringParam(command.Params, "hotkeyConfigName") ?? ""),
                 "close_game" => await CloseGameAsync(),
@@ -118,14 +120,14 @@ public class CommandExecutor
     /// + 轮询 TaskSemaphore 等锁释放。task.stop 的异步 Cancel() 延迟到 RunMulti
     /// 执行期间触发会取消新配置组（wasCancelled=True）。
     /// </summary>
-    private async Task<CommandResult> StartGroupAsync(string groupName, int startFromIndex)
+    private async Task<CommandResult> StartGroupAsync(string groupName, int startFromIndex, int generation = 0)
     {
         try
         {
             // 通过 IPC 发 task.start
             using var ipcClient = new IpcClient();
             await ipcClient.ConnectAsync(3000);
-            var payload = System.Text.Json.JsonSerializer.Serialize(new { groupName, startFromIndex });
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { groupName, startFromIndex, generation });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
             if (response.Success)
             {
@@ -166,14 +168,14 @@ public class CommandExecutor
     /// 启动一条龙：通过 IPC 发 task.start（含 startFromIndex），IPC 失败则杀进程重启
     /// 注意：不再预先发 task.stop（原因同 StartGroupAsync）。
     /// </summary>
-    private async Task<CommandResult> StartOneClickAsync(string configName, int startFromIndex)
+    private async Task<CommandResult> StartOneClickAsync(string configName, int startFromIndex, int generation = 0)
     {
         try
         {
             // 通过 IPC 发 task.start（一条龙内联启动）
             using var ipcClient = new IpcClient();
             await ipcClient.ConnectAsync(3000);
-            var payload = System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex });
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
             if (response.Success)
                 return new CommandResult { Status = "success", Message = $"一条龙 {configName} 已启动" };

@@ -1,4 +1,4 @@
-namespace MultiplayerHoeingAssistant.Models;
+﻿namespace MultiplayerHoeingAssistant.Models;
 
 public class ControlRoomPlayer
 {
@@ -13,6 +13,10 @@ public class ControlRoomPlayer
     public bool TaskRunning { get; set; }
     /// <summary>当前正在执行的任务名称。</summary>
     public string? CurrentTaskName { get; set; }
+    /// <summary>当前正在执行的配置组/一条龙名称（groupName，独立任务时为 null）。</summary>
+    public string? CurrentTaskGroupName { get; set; }
+    /// <summary>当前联机锄地线路展示文本（如"第2条线路: 蒙德城"，非锄地为 null）。</summary>
+    public string? CurrentRouteDisplay { get; set; }
     /// <summary>是否正在联机锄地（锄地房间中）。</summary>
     public bool AutoHoeingRunning { get; set; }
     public DateTime LastHeartbeat { get; set; }
@@ -24,6 +28,8 @@ public class ControlRoomPlayer
     public string ScheduledOnlineTime { get; set; } = "";
     /// <summary>已绑定的联机锄地配置组名列表（顺序即执行顺序）。与服务端模型保持同步。</summary>
     public List<string> OnlineHoeingGroupNames { get; set; } = [];
+    /// <summary>一键快捷命令绑定：命令名 → 配置组名/一条龙名。与服务端模型保持同步。</summary>
+    public Dictionary<string, string> QuickCommands { get; set; } = new();
     /// <summary>当天上线消费记录列表（只显示自己的）。与服务端模型保持同步。</summary>
     public List<object> OnlineHistory { get; set; } = [];
     /// <summary>预期开锄人数。与服务端模型保持同步。</summary>

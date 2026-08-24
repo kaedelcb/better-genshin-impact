@@ -715,6 +715,7 @@ internal sealed class InstanceRequestHandler
 
             // 联机锄地进度
             string? hoeingProgress = null;
+            string? currentRouteDisplay = null;
             lock (AutoHoeingProgress.Sync)
             {
                 if (hoeing)
@@ -722,6 +723,10 @@ internal sealed class InstanceRequestHandler
                     var tsRoute = TimeSpan.FromSeconds(Math.Max(0, AutoHoeingProgress.RouteEstimatedSeconds));
                     var tsRemain = TimeSpan.FromSeconds(Math.Max(0, AutoHoeingProgress.RoundRemainingSeconds));
                     hoeingProgress = $"{AutoHoeingProgress.RoundPrefix}当前进度：开始第 {AutoHoeingProgress.CurrentRouteIndex}/{AutoHoeingProgress.TotalRoutes} 条线路: {AutoHoeingProgress.RouteFileName}，本线路预计用时 {(int)tsRoute.TotalHours}时{tsRoute.Minutes}分{tsRoute.Seconds}秒，本轮预计剩余 {(int)tsRemain.TotalHours}时{tsRemain.Minutes}分{tsRemain.Seconds}秒";
+                    if (AutoHoeingProgress.TotalRoutes > 0)
+                    {
+                        currentRouteDisplay = $"第{AutoHoeingProgress.CurrentRouteIndex}/{AutoHoeingProgress.TotalRoutes}条线路: {AutoHoeingProgress.RouteFileName}";
+                    }
                 }
             }
 
@@ -759,6 +764,7 @@ internal sealed class InstanceRequestHandler
                 groupName,
                 autoHoeingRunning = hoeing,
                 autoHoeingProgress = hoeingProgress,
+                currentRouteDisplay,
                 recentTaskName,
                 recentTaskNameTime = _recentTaskNameTime, // 仅当 recentTaskName != null 时有效；null 时忽略
                 onlineGeneration = NotifyOnlineTask.CurrentGeneration, // 新：上线事件代序号，无任务时返回 0

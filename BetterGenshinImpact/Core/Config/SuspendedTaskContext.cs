@@ -28,4 +28,12 @@ public class SuspendedTaskContext
     /// <summary>任务名</summary>
     [JsonPropertyName("projectName")]
     public string ProjectName { get; set; } = "";
+
+    /// <summary>一条龙场景：当前正在执行的一条龙任务条目索引（1-based，来自 NextTaskIndex）。group/solo 场景为 0。</summary>
+    [JsonPropertyName("oneDragonTaskIndex")]
+    public int OneDragonTaskIndex { get; set; }
+
+    /// <summary>一条龙场景：当前正在执行的配置组名（一条龙内嵌配置组）。非一条龙场景为空字符串。</summary>
+    [JsonPropertyName("subTaskGroupName")]
+    public string SubTaskGroupName { get; set; } = "";
 }

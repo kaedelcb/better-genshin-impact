@@ -69,6 +69,10 @@ public class AssistConfig
     [JsonPropertyName("onlineHoeingGroupNames")]
     public List<string> OnlineHoeingGroupNames { get; set; } = [];
 
+    /// <summary>联机锄地配置组类型列表（与 OnlineHoeingGroupNames 一一对应，每项为 "group" 或 "onedragon"）。</summary>
+    [JsonPropertyName("onlineHoeingGroupTypes")]
+    public List<string> OnlineHoeingGroupTypes { get; set; } = [];
+
     /// <summary>当前使用的联机配置组索引（0 = 第一个）</summary>
     [JsonPropertyName("onlineHoeingGroupIndex")]
     public int OnlineHoeingGroupIndex { get; set; } = 0;

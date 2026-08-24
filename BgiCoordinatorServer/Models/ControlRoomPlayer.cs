@@ -1,4 +1,4 @@
-namespace BgiCoordinatorServer.Models;
+﻿namespace BgiCoordinatorServer.Models;
 
 public class ControlRoomPlayer
 {
@@ -25,6 +25,10 @@ public class ControlRoomPlayer
     public bool TaskRunning { get; set; }
     /// <summary>当前正在执行的任务名称。</summary>
     public string? CurrentTaskName { get; set; }
+    /// <summary>当前正在执行的配置组/一条龙名称（groupName，独立任务时为 null）。</summary>
+    public string? CurrentTaskGroupName { get; set; }
+    /// <summary>当前联机锄地线路展示文本（如"第2条线路: 蒙德城"，非锄地为 null）。</summary>
+    public string? CurrentRouteDisplay { get; set; }
     /// <summary>是否正在联机锄地（锄地房间中）。</summary>
     public bool AutoHoeingRunning { get; set; }
     /// <summary>当前锄地进度文本。</summary>
@@ -38,6 +42,8 @@ public class ControlRoomPlayer
     public string ScheduledOnlineTime { get; set; } = "";
     /// <summary>已绑定的联机锄地配置组名列表（顺序即执行顺序）。</summary>
     public List<string> OnlineHoeingGroupNames { get; set; } = [];
+    /// <summary>一键快捷命令绑定：命令名 → 配置组名/一条龙名。与服务端模型保持同步。</summary>
+    public Dictionary<string, string> QuickCommands { get; set; } = new();
     /// <summary>任务运行态过期时间戳（UTC）。仅 TaskRunning=true 时有效；超时即复位为 false。默认 MinValue 表示未超时。</summary>
     public DateTime TaskRunningExpireTime { get; set; } = DateTime.MinValue;
     /// <summary>上线状态过期时间戳（UTC），默认 MinValue 表示未过期。</summary>

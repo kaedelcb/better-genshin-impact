@@ -262,6 +262,8 @@ public class MainViewModel : INotifyPropertyChanged
         var autoHoeingRunning = false;
         var autoHoeingProgress = (string?)null;
         var currentTaskName = (string?)null;
+        var currentTaskGroupName = (string?)null;
+        var currentRouteDisplay = (string?)null;
         var bgiRunning = false;
 
         // 遥控器模式：跳过 IPC 连接，直接上报 observer 状态
@@ -338,6 +340,11 @@ public class MainViewModel : INotifyPropertyChanged
                     if (autoHoeingRunning && sdata.TryGetProperty("autoHoeingProgress", out var progress)
                         && progress.ValueKind == JsonValueKind.String)
                         autoHoeingProgress = progress.GetString();
+                    // 读取配置组名与线路展示文本（新增字段，旧 BGI 无此字段时保持 null）
+                    if (bgiRunning && sdata.TryGetProperty("groupName", out var gn) && gn.ValueKind == JsonValueKind.String)
+                        currentTaskGroupName = gn.GetString();
+                    if (bgiRunning && sdata.TryGetProperty("currentRouteDisplay", out var rd) && rd.ValueKind == JsonValueKind.String)
+                        currentRouteDisplay = rd.GetString();
                 }
             }
             catch (Exception ex)
@@ -355,7 +362,6 @@ public class MainViewModel : INotifyPropertyChanged
             }
         }
 
-        // 进度文本变化时写日志（仅自己看）
         if (!string.IsNullOrEmpty(autoHoeingProgress) && autoHoeingProgress != _lastLoggedProgress)
         {
             _lastLoggedProgress = autoHoeingProgress;
@@ -376,6 +382,8 @@ public class MainViewModel : INotifyPropertyChanged
             Hotkeys = hotkeys,
             TaskRunning = bgiRunning,
             CurrentTaskName = currentTaskName,
+            CurrentTaskGroupName = currentTaskGroupName,
+            CurrentRouteDisplay = currentRouteDisplay,
             AutoHoeingRunning = autoHoeingRunning,
             AutoHoeingProgress = autoHoeingProgress,
             OnlineReady = _isOnlineReady,
@@ -2075,6 +2083,8 @@ public class MainViewModel : INotifyPropertyChanged
                         m.AutoHoeingRunning = np.AutoHoeingRunning;
                         m.TaskRunning = np.TaskRunning;
                         m.CurrentTaskName = np.CurrentTaskName;
+                        m.CurrentTaskGroupName = np.CurrentTaskGroupName;
+                        m.CurrentRouteDisplay = np.CurrentRouteDisplay;
                         m.Hotkeys = np.Hotkeys;
                         m.ConfigGroupTasksWithStatus = np.ConfigGroupTasksWithStatus;
                         m.OneClickTasksWithStatus = np.OneClickTasksWithStatus;
@@ -2109,6 +2119,8 @@ public class MainViewModel : INotifyPropertyChanged
                         AutoHoeingRunning = np.AutoHoeingRunning,
                         TaskRunning = np.TaskRunning,
                         CurrentTaskName = np.CurrentTaskName,
+                        CurrentTaskGroupName = np.CurrentTaskGroupName,
+                        CurrentRouteDisplay = np.CurrentRouteDisplay,
                         Hotkeys = np.Hotkeys,
                         ConfigGroupTasksWithStatus = np.ConfigGroupTasksWithStatus,
                         OneClickTasksWithStatus = np.OneClickTasksWithStatus,
@@ -3903,10 +3915,41 @@ public class MemberViewModel : INotifyPropertyChanged
     public bool AutoHoeingRunning { get => _autoHoeingRunning; set { if (_autoHoeingRunning != value) { _autoHoeingRunning = value; OnPropertyChanged(); } } }
 
     private bool _taskRunning;
-    public bool TaskRunning { get => _taskRunning; set { if (_taskRunning != value) { _taskRunning = value; OnPropertyChanged(); } } }
+    public bool TaskRunning { get => _taskRunning; set { if (_taskRunning != value) { _taskRunning = value; OnPropertyChanged(); OnPropertyChanged(nameof(TaskDisplayText)); } } }
 
     private string? _currentTaskName;
-    public string? CurrentTaskName { get => _currentTaskName; set { if (_currentTaskName != value) { _currentTaskName = value; OnPropertyChanged(); } } }
+    public string? CurrentTaskName { get => _currentTaskName; set { if (_currentTaskName != value) { _currentTaskName = value; OnPropertyChanged(); OnPropertyChanged(nameof(TaskDisplayText)); } } }
+    private string? _currentTaskGroupName;
+    public string? CurrentTaskGroupName
+    {
+        get => _currentTaskGroupName;
+        set
+        {
+            if (_currentTaskGroupName != value) { _currentTaskGroupName = value; OnPropertyChanged(); OnPropertyChanged(nameof(TaskDisplayText)); }
+        }
+    }
+    private string? _currentRouteDisplay;
+    public string? CurrentRouteDisplay
+    {
+        get => _currentRouteDisplay;
+        set
+        {
+            if (_currentRouteDisplay != value) { _currentRouteDisplay = value; OnPropertyChanged(); OnPropertyChanged(nameof(TaskDisplayText)); }
+        }
+    }
+    /// <summary>任务执行中时显示的完整文本：groupName · taskName · 线路（空段跳过）；联机锄地时当前线路非空则优先显示线路。</summary>
+    public string? TaskDisplayText
+    {
+        get
+        {
+            if (!TaskRunning) return null;
+            var parts = new List<string>();
+            if (!string.IsNullOrEmpty(CurrentTaskGroupName)) parts.Add(CurrentTaskGroupName);
+            if (!string.IsNullOrEmpty(CurrentTaskName) && string.IsNullOrEmpty(CurrentRouteDisplay)) parts.Add(CurrentTaskName);
+            if (!string.IsNullOrEmpty(CurrentRouteDisplay)) parts.Add(CurrentRouteDisplay);
+            return parts.Count > 0 ? string.Join(" · ", parts) : CurrentTaskName ?? "任务执行中";
+        }
+    }
     private List<string> _configGroups = [];
     public List<string> ConfigGroups
     {
