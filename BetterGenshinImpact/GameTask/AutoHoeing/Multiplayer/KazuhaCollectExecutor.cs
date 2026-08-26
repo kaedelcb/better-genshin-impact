@@ -175,8 +175,10 @@ public static class KazuhaCollectExecutor
 
             // 释放确认①：对齐原版单判（AutoFightTask.cs L1823）——
             // AvatarSkillAsync 返回 false = E 不在 CD = 没放出 → 重试三件套。
+            // 使用 ReleaseConfirmRetryCount 轮询检测：首帧即识别到冷却时立即返回，
+            // 不增加正常机器耗时；仅对识别较慢的机器扩大约 400ms 检测窗口。
             var releasedInCd = await AutoFightSkill.AvatarSkillAsync(
-                Logger, kazuha!, skills: false, retryCount: 1, ct: ct,
+                Logger, kazuha!, skills: false, retryCount: ReleaseConfirmRetryCount, ct: ct,
                 image: null, needLog: true, isResetCd: false);
             Logger.LogInformation("[聚物][诊断] 释放确认①: releasedInCd={InCd} → {Branch}",
                 releasedInCd, releasedInCd ? "已放出(E在CD)" : "未放出→重试三件套");
@@ -195,11 +197,10 @@ public static class KazuhaCollectExecutor
                 await SimulateMouseLeftClickLoopAsync(6, ct);
 
                 // 释放确认②（重试后）：联机降级上报路径，原样保留——
-                // 重试仍未放出（单判 AvatarSkillAsync 返回 false）→ return Outcome 联机广播 Skipped。
-                // 注意：此二次确认 + 失败上报是联机协同能力（原版自动战斗没有），逐字节保留，
-                //       仅把判据从自拼 ShouldRetryRelease 双判改回原版单判。
+                // 重试后仍未放出（AvatarSkillAsync 返回 false）→ return Outcome 联机广播 Skipped。
+                // 二次确认同样使用 ReleaseConfirmRetryCount 轮询，给识别慢的机器留足检测窗口。
                 var releasedInCd2 = await AutoFightSkill.AvatarSkillAsync(
-                    Logger, kazuha, skills: false, retryCount: 1, ct: ct,
+                    Logger, kazuha, skills: false, retryCount: ReleaseConfirmRetryCount, ct: ct,
                     image: null, needLog: true, isResetCd: false);
                 Logger.LogInformation("[聚物][诊断] 释放确认②(重试后): releasedInCd2={InCd} → {Branch}",
                     releasedInCd2, releasedInCd2 ? "已放出(E在CD)" : "仍未放出→Outcome(false, e_skill_not_released)");
@@ -268,6 +269,15 @@ public static class KazuhaCollectExecutor
     /// </summary>
     public const int PollIntervalMs = 100;
     public const int PollTimeoutMs = 1000;
+
+    /// <summary>
+    /// E 技能释放后的冷却检测重试次数。
+    /// 正常机器首帧即可识别到 cooldown（numLabels2 &gt; 2），立即返回；
+    /// 部分机器截图/渲染较慢，首帧未出现冷却白块，通过多次 100ms 间隔轮询扩大检测窗口，
+    /// 避免误判为"未释放"而进入不必要的重试三件套。
+    /// retryCount=5 对应最多 4 次 100ms 等待，即额外约 400ms 检测窗口。
+    /// </summary>
+    public const int ReleaseConfirmRetryCount = 5;
 
     /// <summary>
     /// 【纯函数】根据 OCR 读到的残留 CD 秒数与上限封顶，计算秒数等待的毫秒数。

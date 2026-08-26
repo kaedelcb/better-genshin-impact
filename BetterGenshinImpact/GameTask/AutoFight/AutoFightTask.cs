@@ -3673,7 +3673,7 @@ public class AutoFightTask : ISoloTask
                         AutoFightTask.EnterReturnToFightPoint();
                         try
                         {
-                            await pathExecutor.MoveCloseTo(fightWaypoint);
+                            await pathExecutor.MoveCloseTo(fightWaypoint, guardJumpOnReturn: true);
                         }
                         finally
                         {

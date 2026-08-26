@@ -4013,7 +4013,7 @@ public partial class PathExecutor
     /// 联机万叶聚物战后回点分支已经先用 MoveTo 粗接近至 < 4，故只需少量精接近步数即可，传 10（约 0.8 秒）即可。
     /// 单机 / 联机其它调用点不传新参数即保持原行为，单机零回归。
     /// </summary>
-    public async Task MoveCloseTo(WaypointForTrack waypoint, double closeDistance = 2.0, int? tailDelayMs = null, int maxSteps = 25, string? fastSyncId = null, WaypointForTrack? fastSyncWaypoint = null, bool escapeClimbOnReturn = false)
+    public async Task MoveCloseTo(WaypointForTrack waypoint, double closeDistance = 2.0, int? tailDelayMs = null, int maxSteps = 25, string? fastSyncId = null, WaypointForTrack? fastSyncWaypoint = null, bool escapeClimbOnReturn = false, bool guardJumpOnReturn = false)
     {
         ImageRegion screen;
         Point2f position;
@@ -4074,6 +4074,28 @@ public partial class PathExecutor
 
             position = await GetPosition(screen, waypoint);
             var distance = Navigation.GetDistance(waypoint, position);
+
+            // 坐标跳变护栏（hoeing-kazuha-return-movecloseto-jump-guard spec，C2）：
+            // 万叶回点近距离精接近时，战斗中偶尔小地图局部误匹配到远处位置。
+            // 若不拦截，该错误 position 会被下方 GetTargetOrientation 用于计算朝向，
+            // 导致角色朝错误方向越走越远。判定：识别坐标距战斗点(waypoint.X/Y,
+            // 小地图图像坐标系)超过 AutoHoeingConfig.KazuhaReturnAbnormalCoordThreshold
+            // 即视为异常远点，本小步不前向(continue)，交由下一帧重新识别。
+            // 默认 guardJumpOnReturn=false 时整段短路，单机/通用/聚物路径逐字节不变。
+            if (guardJumpOnReturn)
+            {
+                var __cfg = TaskContext.Instance().Config.AutoHoeingConfig;
+                var __jumpThreshold = __cfg.KazuhaReturnAbnormalCoordThreshold;
+                // 复用起动层已 PBT 覆盖的纯函数：数值合法且距战斗点 ≤ 阈值 才算可信。
+                if (!KazuhaCollectPositionGuardDecisions.IsRecognizedPositionTrustworthy(
+                        position, waypoint.X, waypoint.Y, __jumpThreshold))
+                {
+                    TaskControl.Logger.LogDebug(
+                        "[联机][万叶] MoveCloseTo 识别坐标距战斗点 {Dist:F1} > 阈值 {Thr:F1}，判异常远点，本小步跳过",
+                        distance, __jumpThreshold);
+                    continue;
+                }
+            }
 
             // === 路径同步点抢报（fastsync-redesign-parameter-passing spec / OQ-7=a）===
             // fastSyncId == null（单机/未启用）→ ShouldFastReportInPathing 短路返回 false

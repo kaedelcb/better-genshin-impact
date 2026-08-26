@@ -153,22 +153,42 @@ public class SignalRClient : IAsyncDisposable
     public async Task ReportControlStatusAsync(ControlStatus status)
     {
         if (_connection == null) return;
-        status.RoomCode = _roomCode;
-        await _connection.InvokeAsync("ReportControlStatus", status);
+        if (_connection.State != HubConnectionState.Connected)
+        {
+            return; // 连接未就绪时静默跳过，避免连接断开瞬间大量并发调用被取消产生"状态上报失败"日志风暴
+        }
+        try
+        {
+            status.RoomCode = _roomCode;
+            await _connection.InvokeAsync("ReportControlStatus", status);
+        }
+        catch (Exception ex)
+        {
+            // 连接断开时 InvokeAsync 会抛异常（TaskCanceledException / InvalidOperationException），
+            // 仅记一条日志不再 throw；调用方 ReportStatusAsync 已有 catch 兜底，但门控+不 throw 可避免日志风暴。
+            OnLog?.Invoke($"ReportControlStatusAsync 调用失败: {ex.Message}");
+        }
     }
 
     /// <summary>上报上线事件（带 generation 代序号，供服务端状态机边沿检测）。</summary>
     public async Task ReportOnlineEventAsync(int generation, bool isOnlineReady)
     {
         if (_connection == null) return;
+        if (_connection.State != HubConnectionState.Connected)
+        {
+            OnLog?.Invoke($"ReportOnlineEventAsync 跳过: 连接未就绪（State={_connection.State}）");
+            return;
+        }
         try
         {
             await _connection.InvokeAsync("ReportOnlineEvent", generation, isOnlineReady);
         }
         catch (Exception ex)
         {
+            // 连接断开时 InvokeAsync 会抛异常（TaskCanceledException / InvalidOperationException），
+            // 此处仅记日志不再 throw，避免上游调用方（如 ReportStatusAsync）连锁打印大量"状态上报失败"日志形成风暴。
+            // 断线状态已由 Closed 事件同步 IsConnected=false，调用方也可通过 IsConnected 自行判断。
             OnLog?.Invoke($"ReportOnlineEventAsync 调用失败: {ex.Message}");
-            throw;
         }
     }
 

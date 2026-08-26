@@ -388,3 +388,42 @@
 - **修复二（HandleTaskResume）**：入口检查 `CancellationContext.Instance.WasCancelled`，为 true 时清除上下文不恢复，返回 `cleared_not_resumed`。
 - **涉及文件**：`BetterGenshinImpact/Core/Config/AllConfig.cs`（`[JsonIgnore]`）、`BetterGenshinImpact/Service/Instance/MessageHandlers/InstanceRequestHandler.cs`（`HandleTaskResume` WasCancelled 检查）
 - **教训**：临时状态（中断上下文、会话标记等）不应持久化到磁盘——它们应该在进程退出时自动消失。持久化意味着"跨重启存活"，需要人工清除，否则崩溃/强杀路径必然残留。
+### SignalR 客户端 invoke 方法连接断开时的门控 + 不 throw（2026-08-26，日志风暴修复）
+- **场景**：联机锄地运行中（等待全员就绪阶段），用户/系统刷新连接（`RefreshAsync`）时日志涌现 ~70 条 `ReportOnlineEventAsync 调用失败`/`状态上报失败（连接不可用）: A task was canceled.`。现象本身是一次**成功刷新**（09:31:16 开始 → 09:31:31 刷新完成），但旧连接被 `DisposeAsync` 时所有正在进行的 `InvokeAsync` 被取消，每处捕获异常各打一条日志 → 叠加成风暴。
+- **根因**：`SignalRClient.ReportOnlineEventAsync`（`MultiplayerHoeingAssistant/Services/SignalRClient.cs`）在 `_connection.State != Connected` 时仍执行 `InvokeAsync`，且 catch 后 `throw;` 向上传播。上游 `ReportStatusAsync`（每 10 秒定时器 + 重连回调 + 各处 `_ = ReportStatusAsync()`）在断开瞬间有大量并发调用排队，每条异常各自打印错误 → 日志风暴。
+- **修复模式（可复用）**：所有 SignalR 客户端的 `InvokeAsync` 封装方法应遵守：
+  1. **入口门控**：`if (_connection == null) return; if (_connection.State != HubConnectionState.Connected) { OnLog($"跳过: 连接未就绪 State={...}"); return; }` —— 非 Connected 直接返回不发起调用。
+  2. **catch 内不 throw**：捕获异常仅 `OnLog` 记一条，删除 `throw;`。断线状态已由 `Closed` 事件同步 `IsConnected=false`，调用方不必靠异常感知断线。
+- **关键认知**：调用方 `MarkOnlineAsync`/`ReportStatusAsync` 现有的 `try-catch AddLog("...失败")` 可以保留作为防御性兜底，但真正的降噪要靠**方法内部入口门控 + 不 throw**，而不是靠调用方层层 catch。
+- **涉及文件**：`MultiplayerHoeingAssistant/Services/SignalRClient.cs`（`ReportOnlineEventAsync`）。
+- **无关知识**：`dotnet build MultiplayerHoeingAssistant` 报 MSB3027 文件锁（程序运行时 PostBuild 复制到 `BetterGenshinImpact\bin\...\Tools\MultiplayerHoeingAssistant\` 被锁）——已有 2026-08-25 记录，非代码错误。
+### SignalR 客户端 invoke 连接断开时的门控 + 不 throw（2026-08-26 审查复核，中性记录）
+- **背景**：`multiplayer-online-event-generation` spec 重构出的上线调度链路（generation 状态机 + 边沿检测 + 幂等保护）是**为根治"上线循环/卡死/并发"三个 bug 而生的核心守护**，勿改。`ReportOnlineEventAsync`/`ReportControlStatusAsync` 的"连接门控 + catch 内不 throw"降噪改动方向正确、可用。
+- **`isOnlineReady` 参数**：服务端 `ReportOnlineEvent(int generation, bool isOnlineReady)` 的 `isOnlineReady` **从 spec 设计之初（design.md §3.6 原生签名）就传入但方法体未消费**——是"设计预留、一直未启用"的参数，非"某次 bug 修的代码"，也不是必须清理的垃圾。**它是已稳定运行协议的一部分，无 bug 就不动**（改协议形状需两端同步 + 新旧兼容，属独立 spec 决策，未获授权不得擅动）。
+- **待用户确认项**（不替用户定）：① 是否删 `ReportOnlineEventAsync` 门控分支的 `OnLog("跳过")` 行（是否有意留探针由用户定）；② 两条旧记录（"门控降噪缺陷"措辞）已替换为本中性版。
+- **教训**：审查联机协议/状态机前，**必须先溯源 `.agents/specs/*` 的 requirements/design**，确认"看起来冗余/奇怪的代码"当初是为修哪个 bug、是 spec 明确设计，而非"顺手可清理"。只读终态代码下结论 → 易把守护代码当垃圾建议删 → "改了这坏了那"。
+
+### 第 2 层本地自测方法：起本地 BgiCoordinatorServer + 模拟多客户端（2026-08-26）
+- 用途：验证控制房间上线链路（JoinControlRoom → 状态上报 → ReportOnlineEvent → CheckAndTransition → AllReady → 两阶段确认）的确定性逻辑，**不需要真机**。
+- 步骤：`dotnet build BgiCoordinatorServer/BgiCoordinatorServer.csproj`（绕开 sln 因助手 exe 运行中锁 Tools 的 MSB3027 文件锁失败）→ 后台 `dotnet run --no-build`（监听 localhost:5000）→ 写独立测试客户端 `_sigtest/LocalSelfTest/`（新子目录项目，避免与已有 `_sigtest/Program.cs` 入口点冲突）连入并走链路。
+- **验证证据以服务端日志为准**（`[探针服务端] CheckAndTransition: ...` + `确认阶段: ...`），服务端状态机逐条正确：未达标等待 → 达标广播 AllReady → 两阶段确认已发送。实测通过。
+- **踩坑**：① 同 UID 重复跑同一房间，服务端 `_controlRooms` 会累积 `online=False` 历史离线条目（AddToControlRoom 按 ConnectionId 匹配，测试每次新连接→新条目旧条目不清理），玩家列表越积越多——测试/排查"收不到广播"时**先排除残留污染**，勿误判为通信 bug；② `.agents/specs` 里 PBT（StateMachine_AllNewEventsTriggerReady 等）**未落地成测试文件**（`Test/BgiCoordinatorServer.UnitTest` 是空壳，无 .cs），只有 spec 文档计划，无可直接跑的既有 PBT。
+### 方案B：真实 BGI 参与三方测试（IPC 链路验证，2026-08-26）
+- **能测**：真实 BGI 的 IPC 服务端（命名管道 `BetterGI.v2.user-{SID}.root`）可被助手侧 IPC 客户端连接并发 `task.status`，确认 BGI→助手链路通。实测 `success=True`，返回 `running=false / onlineGeneration=0 / hasSuspendedTaskContext=false`（BGI 无任务时基线）。
+- **关键事实**：`onlineGeneration`（`NotifyOnlineTask.CurrentGeneration`）只在 BGI 执行过"联机锄地上线"任务（SoloTask）后才 >0；无任务时为 0。测试中若想验证"上线链路"，需先让 BGI 跑一次该 SoloTask 或直接模拟 generation。
+- **不能测（需真机/原神窗口）**：联机锄地任务实际执行、task.suspend/resume 中断恢复流程（都要 BGI 真的在跑地图任务）、断线重连真实时序。
+- **启动真实 BGI 注意**：BGI 是 WPF 桌面主程序，`Start-Process -WorkingDirectory <bin目录>` 启动即初始化 IPC 服务端并弹主窗口；会正常读写 `bin\...\User\` 下配置（受保护路径，只读不删）。测试后 `CloseMainWindow()` 可优雅退出。`--no-genshin-test` 等自定义参数不被识别，**不要给 BGI 传非法命令行参数**（PowerShell 还会把 `--xxx` 当运算符报错，用 `Start-Process -ArgumentList` 传参）。
+- **助手侧 IPC 连接方式**（复刻 `MultiplayerHoeingAssistant/Services/IpcClient.cs`）：管道名=`ForCurrentUser` 的 SID；帧=[4字节length][1字节type=1][JSON]，请求体 `{version:2, requestId, operation, data}`；响应先读 4 字节 length，再读 length+1 字节（1 字节 type 头跳过）取 JSON，解析 `success/data`。测试脚本见 `_sigtest/ReadBgiStatus/`。
+### 万叶持续回点坐标"飘走"诊断结论（2026-08-26，任务级经验）
+- **现象**：联机万叶持续回点，用户报"小地图坐标飘到十万八千里"，精确接近超时。
+- **本质**：日志里两个相差巨大的数（`精确接近目标点位置(9670,5346)` vs `prePosition(13430,13886)`）是**同一地点两种坐标系**（世界坐标 vs 小地图图像坐标），不是真的飘走。syncKey 的 X/Y（图像坐标 13427/13884）与 prePosition 重合可证明。
+- **真正的问题**：持续回点循环**顶层**的 ReseedGuard（阈值 50）工作正常，但**进入 MoveCloseTo 循环体内部的每帧，识别失败 fallback 到 prePosition 时没有坐标信任判定**——fresh 但距战斗点 ≥ closeDistance 的 stale prePosition 导致 distance 恒不收敛 → 25 步"精确接近超时"。
+- **坐标体系事实**：`FightWaypoint`(WaypointForTrack) 的 `GameX/GameY`=世界坐标、`X/Y`=小地图图像坐标（构造时转换），prePosition 存最后一次 `Navigation.GetPosition` 的图像坐标。
+- **状态**：本次仅为诊断分析（未改代码），缺口待用户确认修复方向后动手。坐标系/保护盲区已沉淀进 bgi-implementation-patterns §20。
+
+### Hook 配置文件 JSON 引号踩坑（2026-08-26）
+- 场景：修改 `.kiro/hooks/*.json` 里 agent hook 的 `prompt` 中文内容。
+- 踩坑 1：中文句子里若用了 ASCII 直双引号（英文半角引号），会**提前终止 JSON 字符串**，导致 JSON 解析失败 → Kiro 无法加载该 hook。正确做法：中文引号一律用全角引号「」。
+- 踩坑 2：这些 hook 文件的 `prompt` 内换行是**字面反斜杠-n 转义序列**（非真实换行符），str_replace 匹配/替换时须用字面转义形式而不能用真实换行。
+- 验证：改完用 ReadAllText(文件, UTF8) + ConvertFrom-Json 校验（Get-Content 默认按 ANSI 读会中文乱码导致误判，必须显式 UTF-8 读取）。
+- 教训：改配置 JSON 时，注入的中文内容要避开半角 ASCII 引号；str_replace 返回成功 ≠ JSON 合法，仍需独立做 JSON 语法校验。
