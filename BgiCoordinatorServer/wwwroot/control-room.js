@@ -1,5 +1,5 @@
 // ========== 联机锄地 Web 控制端（苹果风） ==========
-let connection = null;
+let connection = null;        // 新 /control-hub：统一状态源、期望状态、远程命令
 let roomCode = '';
 let password = '';
 let playerName = '';
@@ -65,11 +65,14 @@ function makeCmd(cmd, params) {
         }
     }
 })();
-// ---------- 加入房间（无服务器地址输入，同源 /hub） ----------
+// ---------- 加入房间（无服务器地址输入，同源 /control-hub） ----------
 function joinRoom() {
     roomCode = document.getElementById('roomCode').value.trim();
     password = document.getElementById('password').value.trim();
     playerName = document.getElementById('nickname').value.trim() || '网页端';
+    const ownerUid = document.getElementById('ownerUid').value.trim();
+    // 若填写房主 UID，则 Web 控制端以房主身份连接新 Hub，可修改成员期望状态
+    const controlUid = ownerUid || ('web_' + playerName);
 
     if (!roomCode || !password) {
         showError('请输入房间码和密码');
@@ -84,16 +87,15 @@ function joinRoom() {
         clearCreds();
     }
 
+    // ========== 新 /control-hub：统一状态源 ==========
     connection = new signalR.HubConnectionBuilder()
-        .withUrl('/hub')   // 同源：WEB 由服务器自己运行
+        .withUrl('/control-hub')
         .withAutomaticReconnect([0, 2000, 10000, 30000])
         .build();
 
-    // 成员列表更新
     connection.on('ControlRoomPlayersUpdated', playersArr => {
         players = playersArr;
         renderMembers();
-        // 记录锄地进度日志（去重）
         playersArr.forEach(p => {
             const progress = p.autoHoeingProgress || '';
             if (progress && progress !== lastProgress[p.playerUid]) {
@@ -103,7 +105,17 @@ function joinRoom() {
         });
     });
 
-    // 收到其他成员投递的命令（WEB 不做执行，仅记录；ack 已由 PC 端助手处理）
+    connection.on('MemberDesiredStateUpdated', state => {
+        const p = players.find(x => x.playerUid === state.playerUid);
+        if (!p) return;
+        if (state.scheduledOnlineTime !== undefined) p.scheduledOnlineTime = state.scheduledOnlineTime;
+        if (state.onlineHoeingGroupNames !== undefined) p.onlineHoeingGroupNames = state.onlineHoeingGroupNames;
+        if (state.onlineHoeingGroupTypes !== undefined) p.onlineHoeingGroupTypes = state.onlineHoeingGroupTypes;
+        if (state.expectedHoeingPlayers !== undefined) p.expectedHoeingPlayers = state.expectedHoeingPlayers;
+        if (state.quickCommands !== undefined) p.quickCommands = state.quickCommands;
+        renderMembers();
+    });
+
     connection.on('RemoteCommand', cmd => {
         log(`收到命令: ${cmd.cmd} 来自 ${cmd.sender || '?'}`);
     });
@@ -114,27 +126,27 @@ function joinRoom() {
 
     connection.on('JoinRejected', reason => {
         showError(reason);
-        log('加入失败: ' + reason);
+        log('加入新房间失败: ' + reason);
     });
 
     connection.onreconnecting(() => {
         setConn(false);
-        log('连接断开，重连中...');
+        log('新连接断开，重连中...');
     });
     connection.onreconnected(() => {
         setConn(true);
-        connection.invoke('JoinControlRoom', roomCode, password, 'web_' + playerName, playerName, [], false, '')
-        log('已重连');
+        connection.invoke('JoinControlRoom', roomCode, password, controlUid, playerName, 'web_' + playerName);
+        log('新连接已重连');
     });
     connection.onclose(() => setConn(false));
 
     connection.start()
-        .then(() => connection.invoke('JoinControlRoom', roomCode, password, 'web_' + playerName, playerName, [], false, ''))
+        .then(() => connection.invoke('JoinControlRoom', roomCode, password, controlUid, playerName, 'web_' + playerName))
         .then(() => {
             document.getElementById('loginPanel').style.display = 'none';
             document.getElementById('controlPanel').style.display = 'block';
             document.getElementById('roomInfo').textContent = `房间 ${roomCode}`;
-            log(`已加入控制房间：${roomCode}（${playerName}）`);
+            log(`已加入新控制房间：${roomCode}（${playerName}）`);
         })
         .catch(err => {
             showError('连接失败: ' + err.message);
@@ -156,6 +168,8 @@ function renderMembers() {
     }
     list.innerHTML = '';
     players.forEach(p => {
+        // Web 控制端自身不显示在成员列表中
+        if ((p.clientInstanceId || '').startsWith('web_')) return;
         const card = document.createElement('div');
         card.className = 'member-card';
 
@@ -202,6 +216,7 @@ function renderMembers() {
                 <button class="action-btn primary" data-action="start-oneclick" data-uid="${uid}" data-name="${name}">一条龙</button>
                 <button class="action-btn primary" data-action="hotkey" data-uid="${uid}" data-name="${name}">快捷键</button>
                 <button class="action-btn primary" data-action="close-game" data-uid="${uid}" data-name="${name}">关闭游戏</button>
+                <button class="action-btn secondary" data-action="settings" data-uid="${uid}" data-name="${name}">设置</button>
             </div>
         `;
         list.appendChild(card);
@@ -275,6 +290,8 @@ document.getElementById('memberList').addEventListener('click', e => {
                 connection.invoke('SendRemoteCommand', cmd).catch(err => log('发送失败: ' + err.message));
                 log(`已对 ${memberName} 下发关闭游戏`);
             }
+        } else if (action === 'settings') {
+            showMemberSettingsModal(uid, memberName);
         }
         return;
     }
@@ -724,6 +741,58 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
         overlay.remove();
     });
     overlay.querySelector('#tskCancel').addEventListener('click', () => overlay.remove());
+}
+
+// ---------- 成员设置弹窗（修改期望状态） ----------
+function showMemberSettingsModal(uid, memberName) {
+    const member = players.find(p => p.playerUid === uid);
+    if (!member) return;
+
+    const currentGroups = (member.onlineHoeingGroupNames || []).join('\n');
+    const currentTypes = (member.onlineHoeingGroupTypes || []).join('\n');
+    const currentSchedule = member.scheduledOnlineTime || '';
+    const currentExpected = member.expectedHoeingPlayers || 4;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal">
+            <h3>设置 ${memberName}</h3>
+            <label class="field-label">定时上线时间（HH:mm，留空取消）</label>
+            <input type="text" id="setSchedule" value="${currentSchedule}" placeholder="例如 09:00">
+            <label class="field-label">联机锄地配置组（每行一个，顺序即执行顺序）</label>
+            <textarea id="setGroups" rows="4" placeholder="配置组 A\n配置组 B">${currentGroups}</textarea>
+            <label class="field-label">配置组类型（每行一个，group 或 onedragon）</label>
+            <textarea id="setTypes" rows="3" placeholder="group\nonedragon">${currentTypes}</textarea>
+            <label class="field-label">预期开锄人数</label>
+            <input type="number" id="setExpected" value="${currentExpected}" min="1" max="8">
+            <div class="btn-row">
+                <button class="btn btn-secondary" id="setCancel">取消</button>
+                <button class="btn btn-primary" id="setSave">保存</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#setSave').addEventListener('click', () => {
+        const schedule = overlay.querySelector('#setSchedule').value.trim();
+        const groups = overlay.querySelector('#setGroups').value.split('\n').map(s => s.trim()).filter(Boolean);
+        const types = overlay.querySelector('#setTypes').value.split('\n').map(s => s.trim()).filter(Boolean);
+        const expected = parseInt(overlay.querySelector('#setExpected').value, 10) || 4;
+
+        const state = {
+            playerUid: uid,
+            scheduledOnlineTime: schedule || null,
+            onlineHoeingGroupNames: groups.length > 0 ? groups : null,
+            onlineHoeingGroupTypes: types.length > 0 ? types : null,
+            expectedHoeingPlayers: expected,
+            quickCommands: null
+        };
+        connection.invoke('UpdateMemberDesiredState', uid, state)
+            .then(() => log(`已更新 ${memberName} 的期望状态`))
+            .catch(err => log('更新失败: ' + err.message));
+        overlay.remove();
+    });
+    overlay.querySelector('#setCancel').addEventListener('click', () => overlay.remove());
 }
 
 // ---------- 设置弹窗 ----------

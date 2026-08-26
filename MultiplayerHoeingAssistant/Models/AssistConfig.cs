@@ -88,4 +88,8 @@ public class AssistConfig
     /// <summary>实例标识（UUID，助手进程启动时自动生成）。用于服务端区分同 UID 的多个连接实例。</summary>
     [JsonPropertyName("clientInstanceId")]
     public string ClientInstanceId { get; set; } = "";
+
+    /// <summary>是否使用新的 /control-hub 架构（服务器端 SSOT）。默认 true。</summary>
+    [JsonPropertyName("useNewControlRoomHub")]
+    public bool UseNewControlRoomHub { get; set; } = true;
 }
