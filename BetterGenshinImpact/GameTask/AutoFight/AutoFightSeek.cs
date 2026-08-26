@@ -725,6 +725,11 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                 {
                     if (guardianAvatar.TrySwitch(14, false))
                     {
+                        if (guardianAvatar.Name == "阿罗夏")
+                        {
+                          Simulation.SendInput.SimulateAction(GIActions.ElementalBurst);  
+                        }
+                                                        
                         guardianAvatar.ManualSkillCd = -1;
                         if (await AvatarSkillAsync(TaskControl.Logger, guardianAvatar, false, 1, ct))
                         {
