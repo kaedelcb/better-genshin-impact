@@ -484,8 +484,9 @@ public class MainViewModel : INotifyPropertyChanged
                 m.QuickCommands = np.QuickCommands;
                 m.ConfigGroups = np.ConfigGroups;
                 m.OneClickConfigs = np.OneClickConfigs;
-                m.ConfigGroupTasksWithStatus = np.ConfigGroupTasksWithStatus.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
-                m.OneClickTasksWithStatus = np.OneClickTasksWithStatus.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
+                // 含状态任务列表当前用 object 反序列化，后续如需要可改为强类型 DTO。
+                m.ConfigGroupTasksWithStatus = np.ConfigGroupTasks.ToDictionary(kv => kv.Key, kv => kv.Value.Cast<object>().ToList());
+                m.OneClickTasksWithStatus = np.OneClickTasks.ToDictionary(kv => kv.Key, kv => kv.Value.Cast<object>().ToList());
                 m.Hotkeys = np.Hotkeys;
                 byUid.Remove(m.PlayerUid);
             }
@@ -519,8 +520,8 @@ public class MainViewModel : INotifyPropertyChanged
                 QuickCommands = np.QuickCommands,
                 ConfigGroups = np.ConfigGroups,
                 OneClickConfigs = np.OneClickConfigs,
-                ConfigGroupTasksWithStatus = np.ConfigGroupTasksWithStatus.ToDictionary(kv => kv.Key, kv => kv.Value.ToList()),
-                OneClickTasksWithStatus = np.OneClickTasksWithStatus.ToDictionary(kv => kv.Key, kv => kv.Value.ToList()),
+                ConfigGroupTasksWithStatus = np.ConfigGroupTasks.ToDictionary(kv => kv.Key, kv => kv.Value.Cast<object>().ToList()),
+                OneClickTasksWithStatus = np.OneClickTasks.ToDictionary(kv => kv.Key, kv => kv.Value.Cast<object>().ToList()),
                 Hotkeys = np.Hotkeys,
                 AvatarPath = $"pack://application:,,,/Assets/Images/{file}.png",
                 AvatarRing = ring,
@@ -795,8 +796,6 @@ public class MainViewModel : INotifyPropertyChanged
                     OneClickConfigs = status.OneClickConfigs,
                     ConfigGroupTasks = status.ConfigGroupTasks,
                     OneClickTasks = status.OneClickTasks,
-                    ConfigGroupTasksWithStatus = status.ConfigGroupTasksWithStatus,
-                    OneClickTasksWithStatus = status.OneClickTasksWithStatus,
                     Hotkeys = status.Hotkeys
                 });
             }

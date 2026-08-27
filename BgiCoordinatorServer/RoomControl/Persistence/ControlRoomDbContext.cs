@@ -48,7 +48,7 @@ public class ControlRoomDbContext : DbContext
         modelBuilder.Entity<ControlRoomMember>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.HasIndex(e => new { e.RoomCode, e.PlayerUid, e.ClientInstanceId }).IsUnique();
+            entity.HasIndex(e => new { e.RoomCode, e.PlayerUid }).IsUnique();
             entity.HasIndex(e => e.ConnectionId);
 
             entity.Property(e => e.ScheduledOnlineTime).HasMaxLength(8);
@@ -77,12 +77,6 @@ public class ControlRoomDbContext : DbContext
             entity.Property(e => e.OneClickTasks).HasConversion(
                 v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
                 v => System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<string>>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new());
-            entity.Property(e => e.ConfigGroupTasksWithStatus).HasConversion(
-                v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
-                v => System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<object>>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new());
-            entity.Property(e => e.OneClickTasksWithStatus).HasConversion(
-                v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
-                v => System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<object>>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new());
             entity.Property(e => e.Hotkeys).HasConversion(
                 v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
                 v => System.Text.Json.JsonSerializer.Deserialize<List<object>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new());

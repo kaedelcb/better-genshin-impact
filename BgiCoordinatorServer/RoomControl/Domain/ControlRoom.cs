@@ -47,7 +47,7 @@ public class ControlRoom
         if (!AllowedUids.Contains(playerUid) && AllowedUids.Count > 0)
             throw new InvalidOperationException($"UID {playerUid} 不在白名单中");
 
-        var existing = _members.FirstOrDefault(m => m.PlayerUid == playerUid && m.ClientInstanceId == clientInstanceId);
+        var existing = _members.FirstOrDefault(m => m.PlayerUid == playerUid);
         if (existing != null)
         {
             existing.MarkOnline(connectionId, clientInstanceId, playerName);
@@ -75,22 +75,15 @@ public class ControlRoom
     public ControlRoomMember? GetMemberByUid(string playerUid)
         => _members.FirstOrDefault(m => m.PlayerUid == playerUid);
 
-    public IReadOnlyList<ControlRoomMember> GetMembersByUid(string playerUid)
-        => _members.Where(m => m.PlayerUid == playerUid).ToList().AsReadOnly();
-
     public ControlRoomMember? GetMemberByConnectionId(string connectionId)
         => _members.FirstOrDefault(m => m.ConnectionId == connectionId);
 
     public void SetMemberDesiredState(string playerUid, MemberDesiredState state)
     {
-        var members = GetMembersByUid(playerUid);
-        if (members.Count == 0)
-            throw new InvalidOperationException($"成员 {playerUid} 不存在");
+        var member = GetMemberByUid(playerUid)
+            ?? throw new InvalidOperationException($"成员 {playerUid} 不存在");
 
-        foreach (var member in members)
-        {
-            member.UpdateDesiredState(state);
-        }
+        member.UpdateDesiredState(state);
         UpdateActivity();
     }
 

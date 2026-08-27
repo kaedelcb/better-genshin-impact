@@ -81,8 +81,6 @@ public class ControlRoomHub : Hub<IControlRoomClient>
             status.OneClickConfigs,
             status.ConfigGroupTasks,
             status.OneClickTasks,
-            status.ConfigGroupTasksWithStatus,
-            status.OneClickTasksWithStatus,
             status.Hotkeys), default);
 
         if (ok)
@@ -188,18 +186,15 @@ public class ControlRoomHub : Hub<IControlRoomClient>
         var targetConnIds = new List<string>();
         if (command.Target.Contains("*"))
         {
-            // 广播给所有在线实例（含发送者自己，保持旧行为：本机也通过 OnRemoteCommand 执行）
             targetConnIds.AddRange(onlineMembers.Select(m => m.ConnectionId).OfType<string>());
         }
         else
         {
             foreach (var uid in command.Target)
             {
-                // 发给目标 UID 的所有在线实例（同 UID 多实例如遥控端+执行端都会收到）
-                targetConnIds.AddRange(onlineMembers
-                    .Where(x => x.PlayerUid == uid)
-                    .Select(m => m.ConnectionId)
-                    .OfType<string>());
+                var m = onlineMembers.FirstOrDefault(x => x.PlayerUid == uid);
+                if (m?.ConnectionId != null)
+                    targetConnIds.Add(m.ConnectionId);
             }
         }
 
@@ -233,25 +228,8 @@ public class ControlRoomHub : Hub<IControlRoomClient>
         var room = await _controlRoomManager.GetAsync(roomCode);
         if (room == null) return;
 
-        var dtos = room.Members
-            .GroupBy(m => m.PlayerUid)
-            .Select(g => MemberDto.FromDomain(PickRepresentativeInstance(g)))
-            .ToList();
+        var dtos = room.Members.Select(MemberDto.FromDomain).ToList();
         await Clients.Group(GetGroupName(roomCode)).ControlRoomPlayersUpdated(dtos);
-    }
-
-    /// <summary>从同一 UID 的多个实例（如遥控端+执行端）中选出展示代表，优先取在线实例。</summary>
-    private static ControlRoomMember PickRepresentativeInstance(IGrouping<string, ControlRoomMember> group)
-    {
-        var members = group.ToList();
-        if (members.Count == 1) return members[0];
-
-        // 优先取在线且最近心跳的实例作为展示代表
-        return members
-                .Where(m => m.IsOnline)
-                .OrderByDescending(m => m.LastHeartbeatAt)
-                .FirstOrDefault()
-            ?? members.OrderByDescending(m => m.LastHeartbeatAt).First();
     }
 
     private static string GetGroupName(string roomCode) => $"CTRL_{roomCode}";

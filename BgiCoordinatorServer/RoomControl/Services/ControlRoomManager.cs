@@ -149,8 +149,6 @@ public class ControlRoomManager : IControlRoomManager
             state.OneClickConfigs,
             state.ConfigGroupTasks,
             state.OneClickTasks,
-            state.ConfigGroupTasksWithStatus,
-            state.OneClickTasksWithStatus,
             state.Hotkeys);
 
         await _repo.SaveAsync(room, evt, ct);

@@ -71,8 +71,6 @@ public sealed record MemberReportedStateUpdated(
     List<string>? OneClickConfigs,
     Dictionary<string, List<string>>? ConfigGroupTasks,
     Dictionary<string, List<string>>? OneClickTasks,
-    Dictionary<string, List<object>>? ConfigGroupTasksWithStatus,
-    Dictionary<string, List<object>>? OneClickTasksWithStatus,
     List<object>? Hotkeys
 ) : DomainEventBase(EventId, AggregateId, Version, Timestamp)
 {
