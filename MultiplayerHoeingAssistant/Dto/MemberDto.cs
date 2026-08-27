@@ -24,6 +24,8 @@ public class MemberDto
     public List<string> OneClickConfigs { get; set; } = [];
     public Dictionary<string, List<string>> ConfigGroupTasks { get; set; } = [];
     public Dictionary<string, List<string>> OneClickTasks { get; set; } = [];
+    public Dictionary<string, List<object>> ConfigGroupTasksWithStatus { get; set; } = [];
+    public Dictionary<string, List<object>> OneClickTasksWithStatus { get; set; } = [];
     public List<object> Hotkeys { get; set; } = [];
 }
 
@@ -50,5 +52,7 @@ public class ControlStatusDto
     public List<string>? OneClickConfigs { get; set; }
     public Dictionary<string, List<string>>? ConfigGroupTasks { get; set; }
     public Dictionary<string, List<string>>? OneClickTasks { get; set; }
+    public Dictionary<string, List<object>>? ConfigGroupTasksWithStatus { get; set; }
+    public Dictionary<string, List<object>>? OneClickTasksWithStatus { get; set; }
     public List<object>? Hotkeys { get; set; }
 }

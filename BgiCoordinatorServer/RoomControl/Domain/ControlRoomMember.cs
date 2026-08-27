@@ -34,6 +34,8 @@ public class ControlRoomMember
     public List<string> OneClickConfigs { get; private set; } = [];
     public Dictionary<string, List<string>> ConfigGroupTasks { get; private set; } = [];
     public Dictionary<string, List<string>> OneClickTasks { get; private set; } = [];
+    public Dictionary<string, List<object>> ConfigGroupTasksWithStatus { get; private set; } = [];
+    public Dictionary<string, List<object>> OneClickTasksWithStatus { get; private set; } = [];
     public List<object> Hotkeys { get; private set; } = [];
     public DateTime LastHeartbeatAt { get; private set; }
 
@@ -120,6 +122,8 @@ public class ControlRoomMember
         if (state.OneClickConfigs != null) OneClickConfigs = state.OneClickConfigs.ToList();
         if (state.ConfigGroupTasks != null) ConfigGroupTasks = state.ConfigGroupTasks.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
         if (state.OneClickTasks != null) OneClickTasks = state.OneClickTasks.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
+        if (state.ConfigGroupTasksWithStatus != null) ConfigGroupTasksWithStatus = state.ConfigGroupTasksWithStatus.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
+        if (state.OneClickTasksWithStatus != null) OneClickTasksWithStatus = state.OneClickTasksWithStatus.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
         if (state.Hotkeys != null) Hotkeys = state.Hotkeys.ToList();
         UpdateHeartbeat();
     }
@@ -205,5 +209,7 @@ public record MemberReportedState(
     List<string>? OneClickConfigs = null,
     Dictionary<string, List<string>>? ConfigGroupTasks = null,
     Dictionary<string, List<string>>? OneClickTasks = null,
+    Dictionary<string, List<object>>? ConfigGroupTasksWithStatus = null,
+    Dictionary<string, List<object>>? OneClickTasksWithStatus = null,
     List<object>? Hotkeys = null
 );

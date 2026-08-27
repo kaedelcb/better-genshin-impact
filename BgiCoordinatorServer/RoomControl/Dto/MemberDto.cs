@@ -26,6 +26,8 @@ public class MemberDto
     public List<string> OneClickConfigs { get; set; } = [];
     public Dictionary<string, List<string>> ConfigGroupTasks { get; set; } = [];
     public Dictionary<string, List<string>> OneClickTasks { get; set; } = [];
+    public Dictionary<string, List<object>> ConfigGroupTasksWithStatus { get; set; } = [];
+    public Dictionary<string, List<object>> OneClickTasksWithStatus { get; set; } = [];
     public List<object> Hotkeys { get; set; } = [];
 
     public static MemberDto FromDomain(ControlRoomMember member)
@@ -54,6 +56,8 @@ public class MemberDto
             OneClickConfigs = member.OneClickConfigs,
             ConfigGroupTasks = member.ConfigGroupTasks,
             OneClickTasks = member.OneClickTasks,
+            ConfigGroupTasksWithStatus = member.ConfigGroupTasksWithStatus,
+            OneClickTasksWithStatus = member.OneClickTasksWithStatus,
             Hotkeys = member.Hotkeys
         };
     }
@@ -82,5 +86,7 @@ public class ControlStatusDto
     public List<string>? OneClickConfigs { get; set; }
     public Dictionary<string, List<string>>? ConfigGroupTasks { get; set; }
     public Dictionary<string, List<string>>? OneClickTasks { get; set; }
+    public Dictionary<string, List<object>>? ConfigGroupTasksWithStatus { get; set; }
+    public Dictionary<string, List<object>>? OneClickTasksWithStatus { get; set; }
     public List<object>? Hotkeys { get; set; }
 }
