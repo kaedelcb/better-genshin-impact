@@ -83,4 +83,4 @@
 //三人的2P琴，快速放Q
 //琴 attack(0.01),keypress(q)
 //四人的琴，迟一点放Q
-琴 attack(0.01),e,check,wait(2),attack(0.01),check,wait(2),keypress(q)
+琴 wait(0.01),e,check,wait(2),wait(0.01),check,wait(2),keypress(q)
