@@ -1181,7 +1181,7 @@ public class AutoFightTask : ISoloTask
                                     Logger.LogInformation("自动EQ战斗：执行序号 {name} 首E技能 {cd}", useSkillListWithF,avatarFirst.GetSkillCdSeconds());
                                     
                                     // 先尝试切换角色，成功再单独 await 技能执行结果
-                                    if (avatarFirst.TrySwitch(15))
+                                    if (!FightEndTotoly && avatarFirst.TrySwitch(15))
                                     {
                                         var skillSucceeded = await AutoFightSkill.AvatarSkillAsync(Logger, avatarFirst, false, 1, cts2.Token);
                                         if (!skillSucceeded)
@@ -1197,6 +1197,7 @@ public class AutoFightTask : ISoloTask
                                                     Simulation.SendInput.SimulateAction(GIActions.ElementalBurst);
                                                     Sleep(2000, ct);
                                                 }
+                                                if(FightEndTotoly)break;
                                                 Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
                                                 avatarFirst.LastSkillTime = DateTime.UtcNow;
                                             }
@@ -2016,7 +2017,7 @@ public class AutoFightTask : ISoloTask
                             picker.UseSkill(true);
                             await Delay(50, ct);
                             Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
-                            if (!await AutoFightSkill.AvatarSkillAsync(Logger, picker, false, 1, ct))
+                            if (!await AutoFightSkill.AvatarSkillAsync(Logger, picker, false, 5, ct))
                             {
                                 Logger.LogWarning("万叶长E技能未成功释放，尝试再次释放");
                                 picker.TrySwitch(20);

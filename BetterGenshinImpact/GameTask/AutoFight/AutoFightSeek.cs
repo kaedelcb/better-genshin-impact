@@ -1007,8 +1007,8 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                     var skillAra = !skills
                         ? new Rect(image2.Width * 1800 / 1920, image2.Height * 817 / 1080,
                             image2.Width * 36 / 1920, image2.Height * 17 / 1080) //药物区域
-                        : new Rect(image2.Width * 928 / 1920, image2.Height * 1006 / 1080,
-                            image2.Width * 58 / 1920, image2.Height * 8 / 1080); //血条数字 986 1014
+                        : new Rect(image2.Width * 928 / 1920, image2.Height * 1003 / 1080,
+                            image2.Width * 58 / 1920, image2.Height * 15 / 1080); //血条数字 986 1014
         
                     using var mask2 = OpenCvCommonHelper.Threshold(
                         image2.DeriveCrop(skillAra).SrcMat,

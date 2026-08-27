@@ -7,6 +7,7 @@ using BetterGenshinImpact.GameTask.Model.Area;
 using Microsoft.Extensions.Logging;
 using Vanara.PInvoke;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
+using BetterGenshinImpact.GameTask.AutoTrackPath;
 
 namespace BetterGenshinImpact.GameTask.Common.Job;
 
@@ -14,26 +15,14 @@ public class EnterAndExitWonderlandJob
 {
     public async Task Start(CancellationToken ct)
     {
+        TpTaskFastDrag tpTaskFastDrag = new TpTaskFastDrag(ct);
+        
         Logger.LogInformation("进入千星奇域");
         SystemControl.FocusWindow(TaskContext.Instance().GameHandle);
 
-        // 等待千星奇域界面出现
-        await NewRetry.WaitForElementAppear(
-            ElementRecognition.Get("WonderlandClose"),
-            () => Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_F6),
-            ct,
-            10,
-            1000
-        );
+        await tpTaskFastDrag.OpenBigMapUi();
 
-        // 点击一个奇域并等待大厅按钮出现
-        await NewRetry.WaitForElementAppear(
-            ElementRecognition.Get("BtnBlackConfirm"),
-            () => GameCaptureRegion.GameRegion1080PPosClick(680, 310),
-            ct,
-            5,
-            800
-        );
+        await tpTaskFastDrag.SwitchArea("千星奇域");
         
         // // 点击大厅按钮并等待公共大厅按钮出现
         // await NewRetry.WaitForElementAppear(
@@ -85,7 +74,7 @@ public class EnterAndExitWonderlandJob
             () => { },
             ct,
             120,
-            1000
+            300
         );
 
         if (mainUiFound1)
@@ -105,7 +94,7 @@ public class EnterAndExitWonderlandJob
             () => Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE),
             ct,
             20,
-            800
+            300
         );
         
         // 点击返回提瓦特按钮并等待确认弹窗出现
@@ -118,7 +107,7 @@ public class EnterAndExitWonderlandJob
             },
             ct,
             5,
-            800
+            300
         );
         
         // 点击确认并等待确认弹窗消失
@@ -135,7 +124,7 @@ public class EnterAndExitWonderlandJob
             },
             ct,
             5,
-            1000
+            500
         );
         await Delay(1000, ct);
         
@@ -145,7 +134,7 @@ public class EnterAndExitWonderlandJob
             () => { },
             ct,
             120,
-            1000
+            500
         );
 
         if (mainUiFound2)

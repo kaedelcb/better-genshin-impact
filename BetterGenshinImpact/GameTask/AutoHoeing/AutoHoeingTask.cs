@@ -3512,13 +3512,17 @@ public class AutoHoeingTask : ISoloTask
             _coordinatorClientRef?.UpdateRouteProgress(currentRouteIndex, DateTime.UtcNow, route.AdjustedTime);
 
             _logger.LogInformation("[DEBUG] 进入路线循环，count={Count}，route={Name}", count + 1, route.FileName);
-            _ct.ThrowIfCancellationRequested();
-            // 联机协调停止检查（需求 2.2）
+            // 联机协调停止检查（需求 2.2）——必须置于 _ct.ThrowIfCancellationRequested() 之前：
+            // 经验上限/协调停止时 IsExitTriggered=true 且 _ct 已取消。若先抛取消异常，异常会从
+            // foreach 内直接跳出整个方法，跳过 foreach 之后的"本轮锄地结束统计"汇总日志（含完成/跳过数）。
+            // 先在此 break 让 foreach 正常结束，轮末统计 try 才能正常打印该轮汇总。仅在 IsExitTriggered
+            // 才命中；普通取消（IsExitTriggered=false）仍走下方 _ct.ThrowIfCancellationRequested()，行为不变。
             if (_multiplayerCoordinator?.IsExitTriggered == true)
             {
                 _logger.LogWarning("[联机] 协调停止已触发，退出路线循环");
                 break;
             }
+            _ct.ThrowIfCancellationRequested();
             count++;
 
             // 时间限制检查
@@ -3995,6 +3999,8 @@ public class AutoHoeingTask : ISoloTask
 
         for (int i = 0; i < files.Length; i++)
         {
+            // 从线路JSON的 info.description 解析真实"预计用时X秒"（无描述或解析失败时回退60秒）
+            var estimatedSeconds = ReadRouteEstimatedSeconds(files[i]);
             routes.Add(new RouteInfo
             {
                 FileName = Path.GetFileName(files[i]),
@@ -4003,12 +4009,43 @@ public class AutoHoeingTask : ISoloTask
                 Selected = true,
                 Available = true,
                 Group = _config.GroupIndex,
-                EstimatedTime = 60,
-                AdjustedTime = 60,
+                EstimatedTime = estimatedSeconds,
+                AdjustedTime = estimatedSeconds,
             });
         }
 
         return routes;
+    }
+
+    /// <summary>
+    /// 从线路 JSON 的 info.description 中解析"预计用时X秒"，供固定调试线路 / 内置线路预估时长使用。
+    /// 无 info.description 或解析失败时回退 fallback（默认60秒），保持与改造前一致的兜底行为。
+    /// </summary>
+    private static double ReadRouteEstimatedSeconds(string filePath, double fallback = 60)
+    {
+        try
+        {
+            if (!File.Exists(filePath)) return fallback;
+            var json = File.ReadAllText(filePath);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("info", out var infoEl)
+                || infoEl.ValueKind != JsonValueKind.Object
+                || !infoEl.TryGetProperty("description", out var descEl))
+            {
+                return fallback;
+            }
+            var desc = descEl.GetString();
+            if (string.IsNullOrEmpty(desc)) return fallback;
+            var (time, _) = RouteInfoLoader.ParseDescription(desc);
+            return time > 0 ? time : fallback;
+        }
+        catch (Exception ex)
+        {
+            // 单个线路描述解析失败不回滚整批加载，日志记录后回退默认时长即可（可恢复异常）
+            Logger.LogWarning("[固定调试线路] 解析线路 {File} 预计用时失败，回退 {Fallback}秒: {Msg}", filePath, fallback, ex.Message);
+            return fallback;
+        }
     }
 
     /// <summary>
