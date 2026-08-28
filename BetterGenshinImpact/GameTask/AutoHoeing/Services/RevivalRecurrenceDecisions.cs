@@ -17,14 +17,6 @@ public enum RevivalEscalationAction
     /// <summary>跳整路线 + 神像回血（防死循环）。</summary>
     SkipRoute = 2,
 
-    /// <summary>
-    /// 线路重试模式 v2（hoeing-multiplayer-route-retry-mode §0）：命中白名单 &amp;&amp; 本段第 1 次复苏时，
-    /// 由 RouteExecutionEngine 覆盖产生（自己复苏 或 收到队友复苏广播）。
-    /// 语义：立刻停止战斗（无视配额，ShouldAbortFightForRetryRevival 读本值）+ 跳过战后万叶/光柱拾取 +
-    /// 传送七天神像回血 + 按原 JSON 重跑本段（保留正常同步，同步点正常汇合）。第 2 次复苏 → SkipSegment（只重试一次）。
-    /// Decide() 永不返回本值——它只由 RouteExecutionEngine 显式覆盖写入。
-    /// </summary>
-    RetrySegment = 3,
 }
 
 /// <summary>

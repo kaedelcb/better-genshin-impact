@@ -1026,8 +1026,9 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                     // logger.LogInformation("药物状态：{Skill} 状态 {Text} ：{n}",
                     //      skills ? "结束状态" : "复活药", numLabels2 > 2 ? "冷却中" : "就绪", numLabels2);
         
-                    if (numLabels2 > 2)
+                    if (numLabels2 > 10)
                     {
+                        // logger.LogWarning("测试1：{t},{t2}",numLabels2,skills);
                         //识别到文字
                         if (skills)
                         {
@@ -1037,9 +1038,11 @@ namespace BetterGenshinImpact.GameTask.AutoFight
                         else
                         {
                             // Logger.LogWarning("测试2：{t},{t2}",numLabels2,skills);
-                            var replenishStringArea = image2.FindMulti(RecognitionObject.Ocr(skillAra));
-                            //如果replenishStringArea为空
-                            if (replenishStringArea.Count != 0) return Task.FromResult(true);
+                            var fg = MedicinalCdAsync(logger, true, 1, ct);
+                            if (fg.Result) return Task.FromResult(true);
+                            // var replenishStringArea = image2.FindMulti(RecognitionObject.Ocr(skillAra));
+                            // //如果replenishStringArea为空
+                            // if (replenishStringArea.Count != 0) return Task.FromResult(true);
                         }
                     }
         

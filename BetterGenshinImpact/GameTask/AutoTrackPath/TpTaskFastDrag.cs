@@ -1802,6 +1802,7 @@ public class TpTaskFastDrag
         // Logger.LogInformation("调整地图缩放等级：{zoomLevel:0.000} -> {targetZoomLevel:0.000}", zoomLevel, targetZoomLevel);
         int initialY = (int)(_tpConfig.ZoomStartY + (_tpConfig.ZoomEndY - _tpConfig.ZoomStartY) * (zoomLevel - 1) / 5d);
         int targetY = (int)(_tpConfig.ZoomStartY + (_tpConfig.ZoomEndY - _tpConfig.ZoomStartY) * (targetZoomLevel - 1) / 5d);
+        //当前缩放LOG显示
         await MouseClickAndMove(_tpConfig.ZoomButtonX+10, initialY, _tpConfig.ZoomButtonX+10, targetY);
         if (_tpConfig.MapMoveStepDivisor)
         {
@@ -2792,6 +2793,22 @@ public class TpTaskFastDrag
             },
         });
 
+        // var aa = 0.01;
+        // while (aa<500)
+        // {
+        //     await Delay(100, ct); 
+        //     using var ra2 = CaptureToRectArea();
+        //     var CC = QuickTeleportAssets.Get(ra2).lyRo;
+        //     // QuickTeleportAssets.Get(ra2).lyRo.Threshold = 1 - aa;
+        //     // CC.InitTemplate();
+        //     using var scaleRa2 = ra2.Find(CC);
+        //     if (scaleRa2.IsExist())
+        //     {
+        //         // scaleRa2.MoveTo(0,0);
+        //     }
+        //     aa=aa+0.01;
+        // }
+
         string minCountryLocalized = this.stringLocalizer.WithCultureGet(this.cultureInfo, areaName);
         Region? matchRect = list.OrderByDescending(r => r.Y).FirstOrDefault(r => r.Text.Contains(minCountryLocalized));
         if (matchRect == null)
@@ -2983,11 +3000,9 @@ public class TpTaskFastDrag
             try
             {
                 double s = Bv.GetBigMapScale(ra);
-                if (s > 0)
-                {
-                    // 1~6 的缩放等级
-                    return (-5 * s) + 6;
-                }
+                // GetBigMapScale 返回的是 0~1 的滑轨归一化位置，0 是合法边界值，对应最终缩放等级 6。
+                // 未识别时该方法会抛异常，由外层 catch 负责重试，因此这里不再用 s>0 判断成功。
+                return (-5 * s) + 6;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

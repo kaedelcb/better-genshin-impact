@@ -116,10 +116,10 @@
 		<ProjectReference Include="..\Fischless.GameCapture\Fischless.GameCapture.csproj" />
 		<ProjectReference Include="..\Fischless.HotkeyCapture\Fischless.HotkeyCapture.csproj" />
 		<ProjectReference Include="..\Fischless.WindowsInput\Fischless.WindowsInput.csproj" />
-		<ProjectReference Include="..\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj">
-			<AdditionalProperties>Platform=AnyCPU</AdditionalProperties>
-			<ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-		</ProjectReference>
+		<!-- 不再对 MultiplayerHoeingAssistant 建 ProjectReference：
+		     主项目对它没有任何编译期类型引用（ReferenceOutputAssembly=false 已证明），
+		     该引用唯一副作用是把助手 exe/dll/deps/runtimeconfig 复制进主输出根目录（发布产物根目录残留 MultiplayerHoeingAssistant.exe 的根源）。
+		     Tools\MultiplayerHoeingAssistant 的部署由下方 CopyMultiplayerHoeingAssistant target 独立负责，不受影响。 -->
 	</ItemGroup>
 
 	<!-- 编译后复制助手全部输出到 BGI 输出目录下的 Tools\MultiplayerHoeingAssistant 子目录（用 $(Configuration) 兼容 Debug/Release） -->

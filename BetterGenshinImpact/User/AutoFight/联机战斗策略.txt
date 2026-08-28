@@ -42,7 +42,7 @@
 希格雯 e(hold),wait(0.2),attack(0.21),keypress(q),wait(0.2),keypress(q),wait(0.2),check
 芭芭拉 keypress(q),keypress(e),attack(0.5),check,attack(0.5),check,attack(0.5),check,attack(0.5),check,wait(0.2),check
 珊瑚宫心海 keypress(q),keypress(e),attack(0.5),check,attack(0.5),check,attack(0.5),check,attack(0.5),check,wait(0.2),check
-闲云 keypress(e), wait(0.2),keypress(e), wait(0.2),keypress(e), wait(0.2), keypress(Q), attack(0.2), j, attack(0.2)
+
 
 
 // 主C
@@ -82,5 +82,6 @@
 万叶 wait(0.2),check,wait(0.2),check,wait(0.2),check,wait(0.2),check,wait(0.2),check,
 //三人的2P琴，快速放Q
 //琴 attack(0.01),keypress(q)
-//四人的琴，迟一点放Q
-琴 wait(0.01),e,check,wait(2),wait(0.01),check,wait(2),keypress(q)
+//四人的琴和闲云，在仆人队是工具人，迟一点放Q
+琴 wait(0.01),wait(0.2),wait(0.2),wait(0.2),wait(0.2),wait(0.2),wait(0.2),wait(0.2),wait(0.2),wait(0.2),wait(0.2),wait(0.2),wait(0.2),keypress(q)
+闲云 wait(0.01),wait(0.2),wait(0.2),wait(0.2),wait(0.2),wait(0.2),wait(0.2),wait(0.2),wait(0.2),wait(0.2),wait(0.2),wait(0.2),wait(0.2),keypress(q)

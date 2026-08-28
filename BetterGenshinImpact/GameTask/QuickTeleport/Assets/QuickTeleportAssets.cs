@@ -23,6 +23,7 @@ public sealed class QuickTeleportAssets
     public RecognitionObject MapChooseRo;
     public RecognitionObject MapUndergroundSwitchButtonRo;
     public RecognitionObject MapUndergroundToGroundButtonRo;
+    public RecognitionObject lyRo;
 
     public Rect MapChooseIconRoi { get; }
     public IReadOnlyList<RecognitionObject> MapChooseIconRoList { get; }
@@ -69,6 +70,7 @@ public sealed class QuickTeleportAssets
             UseMask = true,
             MaskColor = Color.FromArgb(0, 255, 0),
             DrawOnWindow = true,
+            Use3Channels = true, 
             Threshold = 0.9
         }.InitTemplate();
 
@@ -163,6 +165,19 @@ public sealed class QuickTeleportAssets
             MaskColor = Color.FromArgb(0, 255, 0),
             DrawOnWindow = true,
             Threshold = 0.85
+        }.InitTemplate();
+        
+        lyRo = new RecognitionObject
+        {
+            Name = "lyRo",
+            RecognitionType = RecognitionTypes.TemplateMatch,
+            TemplateImageMat = GameTaskManager.LoadAssetImage("QuickTeleport", "ly.png", captureSize.Width, captureSize.Height),
+            RegionOfInterest = new Rect(CaptureRect.Width * 2 / 3, 0, CaptureRect.Width / 3, CaptureRect.Height),
+            UseMask = true,
+            TemplateMatchMode = TemplateMatchModes.SqDiffNormed,
+            Use3Channels = true, 
+            DrawOnWindow = true,
+            Threshold = 0.8
         }.InitTemplate();
     }
 

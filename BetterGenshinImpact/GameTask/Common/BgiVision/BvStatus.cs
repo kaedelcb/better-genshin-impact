@@ -217,7 +217,8 @@ public static partial class Bv
 
     public static double GetBigMapScale(ImageRegion region)
     {
-        using var scaleRa = region.Find(RecognitionAssets.Get("QuickTeleport", "MapScaleButton", region));
+        using var scaleRa = region.Find(QuickTeleportAssets.Get(region).MapScaleButtonRo);
+        // using var scaleRa = region.Find(RecognitionAssets.Get("QuickTeleport", "MapScaleButton", region));
         if (scaleRa.IsEmpty())
         {
             throw new Exception("当前未处于大地图界面，不能使用GetBigMapScale方法");
@@ -226,9 +227,20 @@ public static partial class Bv
         // 原先这里的起止区间和config里写死的值差1
         var start = TaskContext.Instance().Config.TpConfig.ZoomStartY;
         var end = TaskContext.Instance().Config.TpConfig.ZoomEndY;
-        var cur = (scaleRa.Y + scaleRa.Height / 2.0) * TaskContext.Instance().SystemInfo.ZoomOutMax1080PRatio; // 转换到1080p坐标系,主要是小于1080p的情况
+        if (end <= start)
+        {
+            throw new InvalidOperationException($"大地图缩放区间配置无效：start={start}, end={end}");
+        }
 
-        return (end * 1.0 - cur) / (end - start);
+        var cur = (scaleRa.Y + scaleRa.Height / 2.0) * TaskContext.Instance().SystemInfo.ZoomOutMax1080PRatio; // 转换到1080p坐标系,主要是小于1080p的情况
+        var normalizedScale = (end - cur) / (end - start);
+        if (!double.IsFinite(normalizedScale))
+        {
+            throw new InvalidOperationException($"大地图缩放识别结果无效：start={start}, end={end}, current={cur}");
+        }
+
+        // 0 和 1 都是合法的边界值：滑块在最下方时 normalizedScale=0，对应最终缩放等级 6。
+        return Math.Clamp(normalizedScale, 0.0, 1.0);
     }
 
     public static MotionStatus GetMotionStatus(ImageRegion captureRa)
