@@ -1357,10 +1357,15 @@ public class CoordinatorClient : IAsyncDisposable
     /// <summary>
     /// 等待所有玩家到达指定同步点
     /// syncProgress：当前同步点的全局进度值（用于服务端判定异常玩家是否会经过此点）
+    /// 返回 true 仅表示与当前 syncId 匹配的 AllArrived 已被消费（严格等待完成）；
+    /// 未连接/未匹配返回 false；取消、超时、房间关闭和其它异常仍按原有语义抛出，
+    /// 由调用方（MultiplayerCoordinator.WaitForAllPlayers）统一映射为未确认完成。
+    /// 进程内 API 变化，不影响 subscribe-before-action / 匹配逻辑 / SignalR 协议。
     /// </summary>
-    public async Task WaitForAllPlayersAsync(string syncId, CancellationToken ct, long syncProgress = -1, bool wasFastReported = false)
+    public async Task<bool> WaitForAllPlayersAsync(string syncId, CancellationToken ct, long syncProgress = -1, bool wasFastReported = false)
     {
-        if (_connection == null || !IsConnected) return;
+        // 未连接：没有任何 AllArrived 匹配被消费，返回 false 表示未确认完成（不能误判为严格等待完成）。
+        if (_connection == null || !IsConnected) return false;
 
         // 使用与 SyncBarrier 相同的模式：先订阅事件，再发送动作，本地等待
         var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1401,7 +1406,7 @@ public class CoordinatorClient : IAsyncDisposable
                     _logger.LogInformation("[联机][FastSync] 已抢报且全员已到，立即放行: {SyncId}", syncId);
                 else
                     _logger.LogInformation("[联机] 同步点全员已到，立即放行: {SyncId}", syncId);
-                return;
+                return true; // 匹配 AllArrived 已被消费（服务端补发 / 全员已到）
             }
 
             if (wasFastReported)
@@ -1429,6 +1434,9 @@ public class CoordinatorClient : IAsyncDisposable
                 _logger.LogDebug("[联机] 等待中，重试上报到达: {SyncId}", syncId);
                 await _connection.SendAsync("WaitForAllPlayers", syncId, syncProgress);
             }
+
+            // while 循环退出即表示匹配 AllArrived 已被消费（严格等待完成）
+            return true;
         }
         catch (OperationCanceledException)
         {

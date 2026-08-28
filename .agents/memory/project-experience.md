@@ -448,3 +448,33 @@
 - 当用户明确说'执行直到开发完成'或等效表述时，AI 必须持续推进工作流，直到全部 task 完成、编译通过、验证通过，**不得在中间环节停下来等用户指示**。
 - 具体表现：写完文档后不展示链接等用户点，直接委派下一阶段 subagent；subagent 完成后不展示导航链接，直接进入下一阶段；任务全部完成后才给用户做最终总结。
 - 异常情况（编译失败、subagent 报错、需求不明确）才停下报告。
+- [2026-08-28] 联机锄地线路重跑场景：应以复苏成员广播的 `routeIndex` 作为权威值，所有成员都使用该广播索引加入本地待重跑集合；接收者自己的当前线路仅用于判断是否设置 `WantsSkipCurrentFight`，不能用来替代广播索引。
+
+### 大地图缩放归一化边界值（2026-08-28）
+- `Bv.GetBigMapScale` 返回的是缩放滑轨位置的归一化值 `[0,1]`，不是最终地图缩放等级；换算关系为 `zoom = -5 * normalizedScale + 6`，因此滑块在最下方得到 `0` 是合法值，对应缩放等级 `6`。
+- 茶包版 `TpTaskFastDrag.GetBigMapZoomLevel` 的失败判定不能使用 `s > 0`；模板未命中时 `Bv.GetBigMapScale` 会抛异常，应由外层重新截图重试。合法边界值 `s=0` 必须直接换算。
+- `Bv.GetBigMapScale` 计算层可对 `ZoomEndY <= ZoomStartY`、非有限结果和识别框越过滑轨范围做防御；范围钳制不应把合法的 0/1 边界当成失败。
+
+### Wallpaper Engine 崩溃排查：与 BGI 的关联判定（2026-08-29）
+- 场景：用户报告 Wallpaper Engine 崩溃（`ntdll.dll` Access Violation 读 `0x00000000EFB80100`），怀疑是 BGI 寻路时小地图异常引起。
+- **已确认事实（代码证据）**：
+  1. BGI 寻路小地图识别（`MaskedMiniMapRoughs`/OpenCV `Mat` 匹配）是**纯 BGI 进程内**内存操作，不可能让另一进程 `ntdll.dll` 访问冲突。
+  2. BGI **无任何跨进程注入/钩子/写内存**进其他进程的代码（grep `SetWindowsHookEx/CreateRemoteThread/WriteProcessMemory` 均无关）。grep 到的 `Inject*` 是测试字段注入与 ShellTask 参数注入，非 DLL 注入。
+  3. 历史记忆/specs 无任何 Wallpaper Engine 相关记录。
+- **推测（未验证）**：BGI 用 `Fischless.GameCapture` 的 `GraphicsCaptureSession` + 自建 D3D11 设备 + compute shader 做 HDR→SDR 转换（`GraphicsCapture.cs` `ProcessHdrTexture`），与 Wallpaper Engine 同 GPU 渲染 → 存在 GPU/驱动层资源竞争导致 WE 渲染线程拿失效句柄的间接路径。**但无跨进程直接因果，WE 的"crashed by another application"是自身检测的误报式提示**。
+- **排查方向（按成本低→高）**：① 单独开 WE 是否也崩（排除 BGI）；② 读 crash dump `.mdmp` 调用栈定位是否 WebView/渲染线程；③ 更新/回滚显卡驱动或切换 BGI 捕获模式（Graphics→BitBlt/DwmSharedSurface）；④ BGI 临时关 HDR 捕获。
+- 教训：第三方应用崩溃被怀疑 BGI 时，先 grep 确认 BGI 有无跨进程注入代码，再谈 GPU 层间接竞争，不替用户定性。
+### 传送"识别不到缩放/当前不在地图界面"排错：误报根源在打开地图环节（2026-08-29）
+- **现象**：传送频繁报"获取大地图缩放级别失败"→兜底 4.40→"当前不在地图界面"→重试 2 次才成功。
+- **根因（日志决定性证据）**：缩放识别失败是**下游症状**。真因是 `TryToOpenBigMapUi` 阶段②超时后，`raEnd` 单帧用宽松的 `Bv.IsInBigMapUi`（OR 双判据：`MapScaleButton` **或** `MapSettingsButton`，后者阈值默认 0.8 且无 ROI）判为 true → 误报"地图已开好"，实际地图在过渡态/根本没开 → 后续读缩放、`GetBigMapCenterPoint` 全在假地图上失败。
+- **判据不一致是关键坑**：`WaitForBigMapUiOrTimeoutAsync` 用严格的 `MapScaleButtonRo`（含 ROI `(30,440,40,200)`、阈值 0.9）会超时；而 `IsInBigMapUi` 用不同模板 + 宽松 OR + 无 ROI 却能误报 true。两套判据资源/阈值不一致。
+- **修法（保留中，用户确认效果可）**：`TryToOpenBigMapUi` 超时后的 `raEnd` 返回判据收紧为严格 `MapScaleButtonRo`（含 ROI），并加 `[尝试直通-诊断]` DEBUG 日志区分"仅 Settings 误报"。不直接改共享的 `IsInBigMapUi`（多处调用，防回归）。正常路径第一帧即通过，不降速。
+- **教训**：先看日志定"地图到底开没开"（有无 `当前不在地图界面`），再决定改缩放还是改打开。缩放识别失败 ≠ 模板参数问题；地图没开时降阈值/等按钮都无用。
+
+### 大地图缩放拖动在 2K/4K 偏移：SystemInfo 分辨率参数运行期过期（2026-08-29）
+- **现象**：`GetBigMapZoomLevel` → 拖动缩放按键，1080p 正常，2K/4K 偏（用户实测方向甚至相反），表现为"缩放拖动不生效/落点脱离滑块"。
+- **根因（2K 日志铁证）**：`SystemInfo.ScaleTo1080PRatio` / `GameScreenSize` 在 BetterGI **启动时一次性构建**（`TaskContext.cs` `SystemInfo = new SystemInfo(hWnd)`），`get-only`，**运行中切换游戏分辨率后过期**——2K 下日志仍显示 `ScaleTo1080PRatio=1.000`（应 1.333）。
+- **读取/写入不对称是脱节根源**：读取侧 `CaptureToRectArea→DeriveTo1080P` 用会刷新的 `CaptureRectArea.Width`（`TaskTriggerDispatcher` 会刷新 `CaptureAreaRect`）→ 跟随实时窗口；写入侧缩放拖动 `MouseClickAndMove→GameRegionMove` 用**过期的 `ScaleTo1080PRatio`** → 不跟随。2K 下滑块实际在 Y≈816 而写入点 612 → 抓不到滑块 → `scaleRa.Y` 恒 612、zoom 恒 6、拖动失效。
+- **修法（茶包版 fast-drag）**：`TpTaskFastDrag.MouseClickAndMove`（仅缩放拖动唯一调用点）改用 `SystemControl.GetCaptureRect(handle)` 实时读窗口 + `Width/1920` 实时比例算绝对屏幕坐标，替代过期的 `ScaleTo1080PRatio`。正常场景窗口未变时实时值==缓存值，逐字节不变零回归；中途切分辨率后跟随实时窗口。
+- **约束**：`MouseClickAndMove` 在 `TpTaskFastDrag` 只有一个调用点（`AdjustMapZoomLevel` 缩放拖动），公版 `TpTaskOfficial.MouseClickAndMove` 独立未动。不重建 `SystemInfo`（影响所有缓存 assets）、不改共享 `GameRegionMove`（影响所有点击/拖动）→ 均为高风险，避免。
+- **教训**：改"识别/写入坐标脱节"类 bug，先确认两路径的**分辨率比例来源是否一致**；遇"高分辨率才偏、1080p 正常 + 方向相反" → 高度怀疑 `SystemInfo` 运行期缓存过期，看日志里的 `ScaleTo1080PRatio` 是否与当前窗口一致，而非改模板参数。

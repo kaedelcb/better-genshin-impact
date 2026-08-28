@@ -12,7 +12,8 @@
       "roi": "rect(30 * s, 440 * s, 40 * s, 200 * s)",
       "useMask": true,
       "maskColor": "#00FF00",
-      "threshold": 0.9,
+      "TemplateMatchMode":"SqDiffNormed",
+      "threshold": 0.95,
       "draw": true
     },
     "MapCloseButton": {

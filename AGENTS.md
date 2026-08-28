@@ -1,4 +1,4 @@
-本项目使用了 WPF-UI、 CommunityToolkit.Mvvm、Microsoft.Xaml.Behaviors.Wpf 来实现 MVVM 架构。在编写代码的时候请注意：
+﻿本项目使用了 WPF-UI、 CommunityToolkit.Mvvm、Microsoft.Xaml.Behaviors.Wpf 来实现 MVVM 架构。在编写代码的时候请注意：
 
 ### 主要依赖框架
 #### UI 框架
@@ -137,39 +137,48 @@ diagnose-first 而非 fix-first；连续失败 2 次后禁止再改修复代码�
 "多次修改后画面零变化"= 立即停止猜测（改动没生效或改错层级）；推理与现实矛盾时错的一定是自己的前提；上可见证据（涂色分层/打印 ActualWidth/唯一标记验证编译生效）；从外往内查容器链；记住 StackPanel 不拉伸子元素、Grid 默认拉伸、Stretch+显式 Width 会居中；换方案前撤干净上一版实验代码。
 
 ### 3.5 任务执行与委派（`task-execution-discipline.md` + `parallel-task-execution.md` + `spec-quality-checklist.md`）
-- 任务拆解用 todo_write 跟踪（同时只允许一个 in_progress）；可并行批次要求：文件不相交、无数据依赖、prompt 自包含、验证隔离，否则串行；编译/测试/全局扫描必须串行。
+- 任务拆解用 todo_list 跟踪（同时只允许一个 in_progress）；可并行批次要求：文件不相交、无数据依赖、prompt 自包含、验证隔离，否则串行；编译/测试/全局扫描必须串行。
 - 委派 subagent 的 prompt 必含：任务编号+参考文档路径、目标文件+行号+当前内容、改动前→改动后片段、明确"不要碰"清单、验证步骤。subagent 失败立即停止并报告，同一 prompt 失败 2 次先改 prompt。
 - 静默 catch 是禁忌（要带 LogWarning 和注释说明理由）。
 - 不夸大报告：编译过=如实说编译范围；测试没跑过不写"全部通过"。
-- 本项目 BGI 联机代码模式（决策纯函数、SignalR 先订阅后 invoke、多世界轮换防误终止双标志、AutoHoeingConfig 字段三处对称、协议字段新旧兼容）见 `bgi-implementation-patterns.md`；写 spec 时按 `spec-quality-checklist.md` 逐项过。
+- 本项目 BGI 联机代码模式（决策纯函数、SignalR 先订阅后 invoke、多世界轮换防误终止双标志、AutoHoeingConfig 字段三处对称、协议字段新旧兼容）见 `bgi-implementation-patterns-v2.md`（新经验默认）与 `bgi-implementation-patterns.md`（旧，已冻结为历史存档）；写 spec 时按 `spec-quality-checklist.md` 逐项过。
 
 ### 3.6 测试项目阻塞隔离（`task-execution-discipline.md` §六）
 仓库测试项目经常被其他进行中任务的未实现类型阻塞编译。处理：先判定归属（grep 确认报错类型在生产代码零命中）→ 主项目 `dotnet build BetterGenshinImpact/BetterGenshinImpact.csproj -c Debug` 验证本任务生产代码 → 本任务测试文件用编译诊断验证 → **不擅自删他人测试文件** → 报告事实而不阻塞推进。
 
 ### 3.7 记忆沉淀（`memory-sedimentation-discipline.md`）
-每个非平凡任务收尾时必须做一次记忆回顾（不靠用户提醒）：本次有没有"项目特有、可复用、不沉淀就要重复付代价"的事实/模式？有 → 立即写入对应记忆文件。**写入前必须 readFile 目标文件确认当前结构，而不是凭记忆盲写。**（代码模式→`bgi-implementation-patterns.md`，任务经验→`project-experience.md`，新纪律→`.agents/rules/` + 本文件 §3 索引）；没有 → 必须说清为什么没有。该沉淀=项目特有事实/重复模式/高代价雷区；不沉淀=公认原则重复/任务特定细节/未验证推测。
+每个非平凡任务收尾时必须做一次记忆回顾（不靠用户提醒）：本次有没有"项目特有、可复用、不沉淀就要重复付代价"的事实/模式？有 → 立即写入对应记忆文件。**写入前必须 readFile 目标文件确认当前结构，而不是凭记忆盲写。**（代码模式→`bgi-implementation-patterns-v2.md`，任务经验→`project-experience.md`，新纪律→`.agents/rules/` + 本文件 §3 索引）；没有 → 必须说清为什么没有。该沉淀=项目特有事实/重复模式/高代价雷区；不沉淀=公认原则重复/任务特定细节/未验证推测。
 
-## 4. 工具映射（KIRO 术语 → 本环境）
+### 3.8 回合内连续执行（`round-continuity-discipline.md`，治"写一段就停"）
+写多章节文档 / 大文件 / 一组相关改动时，**必须在一个回合内连续发完全部工具调用**（`fs_write` 头部 + 多个 `fs_append` 各章节连续追加），不要"写一段→回一句→等下一轮"把交付物切碎。补充：`large-file-write-strategy.md` 的"分段写入"指分段**追加**（意义单元），不是分**回合**。
+**HOOK 自动响应（不减弱任何 HOOK 约束）**：每轮注入的 HOOK（统一质量审核/收尾校验）只是指令文本，不是回合终点，也不禁止模型在同一回合继续调工具。模型必须"**内部判断 + 直接继续**"：判断阶段放内部推理，判定"中途/可跳过"时**不输出任何用户可见文字**，直接在同一回合内继续发下一个工具调用；**禁止输出"我判断是中途、跳过 HOOK、继续执行"这类自我叙述**——一旦输出即截断本可连续的后续工具调用（回合终结器）。只有真正收尾或真正提交需求/设计时才需要输出文字。
 
-| KIRO | 本环境 |
-|------|--------|
-| grepSearch | `grep` 工具 |
-| getDiagnostics | `pwsh` 运行 `dotnet build` 验证 |
-| readFile | `read` 工具 |
-| fsWrite / fsAppend | `write` / `edit` 工具（本环境 `write` 无 50 行 abort 限制，但大文件仍按意义单元分段写入并验证） |
-| strReplace | `edit` 工具 |
-| listDirectory | `glob` 工具 / `pwsh` Get-ChildItem |
-| subagent 委派 | `subagent` / `subagent_fork` 工具 |
-| 任务状态机 | `todo_write` 工具 |
+## 4. 工具映射（操作意图 → 本环境真实工具名）
 
-详见 `.agents/rules/README.md`。
+> ⚠️ **最高优先级**：本环境实际暴露的工具名以 `.agents/rules/tool-availability.md` 的速查表为准。
+> 规则文档里写的 `fsWrite` / `fsAppend` / `strReplace` / `write` / `edit` / `read` / `grep` 都是历史/抽象别名，
+> 模型在工具列表里找不到时**不要停下清点**，直接改用下表"本环境真实工具名"，或用 `execute_pwsh` 兜底。
+
+| 操作意图 | 历史/别名（KIRO） | 本环境真实工具名 |
+|---------|------------------|-----------------|
+| 读文件 | readFile | `read_file` / `read_files` |
+| 创建/覆盖文件 | fsWrite / write | `fs_write` |
+| 追加文件 | fsAppend | `fs_append` |
+| 替换文本 | strReplace / edit | `str_replace` |
+| 搜索文件内容 | grepSearch / grep | `grep_search` |
+| 列目录 | listDirectory | `list_directory` |
+| 执行命令/编译/测试 | pwsh / bash（getDiagnostics） | `execute_pwsh` |
+| 委派子代理 | subagent | `invoke_sub_agent` |
+| 任务状态机 | todo_write | `todo_list` |
+
+完整速查表（含兜底列）见 `.agents/rules/tool-availability.md`；历史对照见 `.agents/rules/README.md`。
 
 ## 5. 历史经验导航（动手前先查）
 
 ### 5.1 数据源索引
 - 任务索引：`.agents/memory/kiro-task-index.md`（223 条任务：最后活动时间、任务数、执行状态、是否有 spec 档案）
 - 项目经验沉淀：`.agents/memory/project-experience.md`（公版赶路优选、联机锄地血条阈值、公版战斗UI对齐、公版规范化状态、记忆沉淀覆盖缺口等）
-- 工程实现模式：`.agents/rules/bgi-implementation-patterns.md`（9 节：决策纯化/SignalR subscribe-before-action/多世界轮换防误终止/联机锄地引擎路由/传送异常兜底/requireLoadingScreen双重语义/两套战斗UI结构/传送系统生态位/联机同步机制生态位）
+- 工程实现模式：`.agents/rules/bgi-implementation-patterns-v2.md`（新经验默认优先；历史既有模式见 `.agents/rules/bgi-implementation-patterns.md`，已冻结为历史存档）
 - 完整设计文档：`.kiro/specs/<任务名>/`（requirements / design / tasks / bugfix）
 - 任务执行细节：`C:\Users\Administrator\.kiro\tasks\ada854181d8b03f7\<任务名>.meta.json`
 

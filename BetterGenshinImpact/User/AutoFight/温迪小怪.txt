@@ -1,0 +1,6 @@
+
+温迪 keypress(Q),attack(0.01), keypress(Q),e, wait(0.1), ready, check, e, click(middle), attack(0.2), keypress(Q), wait(0.1), ready, attack(0.22), e, click(middle), dash(0.1), attack(0.3), keypress(Q),attack(0.3), keypress(Q), attack(0.3), keypress(Q), attack(0.3), keypress(Q), e, attack(0.5), click(middle), attack(0.2), dash(0.1), attack(0.3), keypress(Q), attack(0.3), keypress(Q), attack(0.3), keypress(Q), attack(0.3), keypress(Q)
+
+玛薇卡 keypress(e)
+
+芙宁娜 keypress(e)

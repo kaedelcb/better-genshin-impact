@@ -33,6 +33,8 @@ public class RouteExecutionEngine
     private volatile bool _running;
     private MultiplayerCoordinator? _coordinator;
     private WorldStateMonitor? _worldStateMonitor;
+    private volatile bool _currentRouteRetryModeEnabled;
+    private CoordinatorClient? _anomalySubscribedClient;
 
     // 当前正在执行的 PathExecutor 引用（联机模式下供 AnomalyDetector 信号传递使用）
     private PathExecutor? _activeExecutor;
@@ -45,23 +47,30 @@ public class RouteExecutionEngine
     // ExecuteRoute 入口 Reset 同时覆盖多世界轮换（design §2.6）。
     private readonly RevivalRecurrenceTracker _revivalTracker = new();
 
-    // 线路重试模式（hoeing-multiplayer-route-retry-mode spec）：ExecuteRoute 入口按线路名 + 白名单算一次，
-    // defeat 回调读它决定是否把 escalation 覆盖为 RetrySegment。多世界轮换每次 ExecuteRoute 重算。
-    private volatile bool _currentRouteRetryModeEnabled;
-
-    // 线路重试模式 v2（§0）：当前已订阅 PlayerAnomalyNotifyReceived 的 client，供 SetCoordinator 多次调用时取消旧订阅。
-    private CoordinatorClient? _anomalySubscribedClient;
+    // 线路级：本轮有哪些 route index 在战斗中触发复苏（轮末统一重跑）。
+    private readonly HashSet<int> _routeRerunMarkSet = new();
+    // 线路级：本轮已经重跑过的 route index（只重跑一次）。
+    private readonly HashSet<int> _routeRerunDoneSet = new();
 
     /// <summary>注入按线路切角色 Provider（hoeing-multiplayer-per-route-switch-roles）。null = 不启用。</summary>
     public void SetPerRouteSwitchProvider(PerRouteSwitchRolesProvider? provider) => _perRouteSwitchProvider = provider;
 
     public void SetCoordinator(MultiplayerCoordinator? coordinator)
     {
+        if (_anomalySubscribedClient != null)
+        {
+            _anomalySubscribedClient.PlayerAnomalyNotifyReceived -= OnTeammateRevivalBroadcast;
+            _anomalySubscribedClient = null;
+        }
+
         _coordinator = coordinator;
         
         // 设置异常检测器的复苏回调
         if (coordinator != null)
         {
+            _anomalySubscribedClient = coordinator.Client;
+            _anomalySubscribedClient.PlayerAnomalyNotifyReceived += OnTeammateRevivalBroadcast;
+
             _anomalyDetector.OnRevivalDetected = async () =>
             {
                 // 不在这里上报 Reviving，避免覆盖 targetProgress 为 -1。
@@ -74,103 +83,89 @@ public class RouteExecutionEngine
             // 让其在主循环抛 RetryException，进入"同步点前/后"统一异常处理流程。
             // 注意：这个回调只对联机的色块检测生效（IsMultiplayerDefeated），
             // 单机的模板匹配复苏走的是另一条 OnRevivalDetected 回调，不受影响。
-            //
-            // 线路重试模式 v2（§0）：自己复苏 → 本机 HandleRevivalTrigger（回神像重跑本段）
-            //                        + 若命中白名单则广播给队友（复用 PlayerAnomalyNotify 通道，让全员一起重跑）。
             _anomalyDetector.OnMultiplayerDefeatedDetected = () =>
             {
                 var executor = _activeExecutor;
                 if (executor == null) return;
+                if (!_currentRouteRetryModeEnabled) return;
 
-                bool retryModeRoute = HandleRevivalTrigger(executor, isBroadcastReceived: false);
-
-                // 线路重试模式 v2（EB-v2-1）：命中白名单线路时，广播给房间所有成员，触发全员回神像重跑。
-                // 复用 PlayerAnomalyNotify 通道（服务端仅转发 + 写死代码字典，无活跃副作用，见 design §0.4）。
-                if (retryModeRoute)
+                // === 传送后复苏保护短路（multiplayer-hoeing-post-teleport-revival-protection）===
+                // 命中保护窗口 → 仅本机处理，不进入 tracker / 路线标记 / 异常上报（requirements 2.3, 3.6）。
+                // 消费由 PathExecutor.catch(RetryException) 保护分支（Task 4.3）完成，此处只只读判定短路，
+                // 不做任何 CAS 消费，避免双重消费。未命中则完全走下方既有回调逻辑。
+                if (executor.IsPostTeleportRevivalProtectionHit())
                 {
-                    var c = _coordinator;
-                    if (c != null && c.Client.IsConnected)
-                    {
-                        var myUid = c.Client.MyPlayerUid;
-                        var routeIndex = executor.CurrentRouteIndex;
-                        // fire-and-forget 广播；失败静默（不阻塞复苏本地流程）
-                        _ = c.Client.ReportAnomalyAsync(myUid, routeIndex, false);
-                        Logger.LogWarning("[联机][重试模式v2] 本机复苏，已广播给队友触发全员回神像重跑，uid={Uid}, routeIndex={Idx}", myUid, routeIndex);
-                    }
+                    Logger.LogInformation("[联机] 传送后复苏保护命中，短路团队副作用，仅本机从当前段起点重跑");
+                    return;
+                }
+
+                HandleRevivalTrigger(executor);
+                var routeIndex = executor.CurrentRouteIndex;
+                if (RouteRerunDecisions.ShouldMarkRerun(routeIndex, _routeRerunMarkSet, _routeRerunDoneSet))
+                {
+                    _routeRerunMarkSet.Add(routeIndex);
+                    Logger.LogWarning("[联机][重试模式] 本线路有成员复苏，标记需重跑: routeIdx={Idx}", routeIndex);
+                }
+
+                var c = _coordinator;
+                if (c != null && c.Client.IsConnected)
+                {
+                    _ = c.Client.ReportAnomalyAsync(c.Client.MyPlayerUid, routeIndex, false);
                 }
             };
-
-            // 线路重试模式 v2（EB-v2-1）：订阅队友复苏广播。收到后（过滤自己 + retry-route + 有活动执行器）
-            // 本机同样 HandleRevivalTrigger（回神像重跑本段），实现"任一成员复苏 → 全员反应"。
-            // 先取消旧订阅（SetCoordinator 多世界轮换会多次调用），再订阅新 client。
-            if (_anomalySubscribedClient != null)
-                _anomalySubscribedClient.PlayerAnomalyNotifyReceived -= OnTeammateRevivalBroadcast;
-            coordinator.Client.PlayerAnomalyNotifyReceived += OnTeammateRevivalBroadcast;
-            _anomalySubscribedClient = coordinator.Client;
         }
         else
         {
             _anomalyDetector.OnRevivalDetected = null;
             _anomalyDetector.OnMultiplayerDefeatedDetected = null;
-            if (_anomalySubscribedClient != null)
-            {
-                _anomalySubscribedClient.PlayerAnomalyNotifyReceived -= OnTeammateRevivalBroadcast;
-                _anomalySubscribedClient = null;
-            }
+        }
+    }
+
+    // 广播中的 routeIndex 是复苏成员所在的权威线路；接收方当前线路仅用于决定是否跳过当前战斗。
+    private void OnTeammateRevivalBroadcast(string playerUid, int routeIndex, bool passedSyncPoint)
+    {
+        var c = _coordinator;
+        if (c != null && playerUid == c.Client.MyPlayerUid) return;
+        if (routeIndex < 0) return;
+
+        var executor = _activeExecutor;
+        if (executor == null) return;
+
+        if (RouteRerunDecisions.ShouldMarkRerun(routeIndex, _routeRerunMarkSet, _routeRerunDoneSet))
+        {
+            _routeRerunMarkSet.Add(routeIndex);
+            Logger.LogWarning(
+                "[联机][重试模式] 收到队友复苏广播，标记权威线路需重跑: playerUid={PlayerUid}, broadcastRouteIdx={BroadcastIdx}, currentRouteIdx={CurrentIdx}, passedSyncPoint={Passed}",
+                playerUid, routeIndex, executor.CurrentRouteIndex, passedSyncPoint);
+        }
+        else
+        {
+            Logger.LogInformation(
+                "[联机][重试模式] 收到队友复苏广播，线路已标记或已重跑: playerUid={PlayerUid}, broadcastRouteIdx={BroadcastIdx}, currentRouteIdx={CurrentIdx}, passedSyncPoint={Passed}",
+                playerUid, routeIndex, executor.CurrentRouteIndex, passedSyncPoint);
+        }
+
+        if (executor.CurrentRouteIndex == routeIndex)
+        {
+            executor.WantsSkipCurrentFight = true;
+            Logger.LogInformation(
+                "[联机][重试模式] 当前正在广播线路，跳过当前战斗: broadcastRouteIdx={BroadcastIdx}, currentRouteIdx={CurrentIdx}",
+                routeIndex, executor.CurrentRouteIndex);
         }
     }
 
     /// <summary>
-    /// 队友复苏广播接收（线路重试模式 v2 / EB-v2-1）。复用 PlayerAnomalyNotify 通道。
-    /// 过滤自己（服务端广播含发送方，客户端不自动过滤 Notify）；仅 retry-route + 有活动执行器时反应。
-    /// 反应 = 本机同样回神像重跑本段（与自己复苏同源）。不再二次广播（避免风暴）。
+    /// 复苏触发统一处理。保留 RevivalRecurrenceTracker 的原始升级决策，
+    /// 由 PathExecutor 按 Continue/SkipSegment/SkipRoute 原流程消费。
     /// </summary>
-    private void OnTeammateRevivalBroadcast(string playerUid, int routeIndex, bool passedSyncPoint)
-    {
-        var c = _coordinator;
-        if (c == null) return;
-        // 过滤自己：自己复苏走 OnMultiplayerDefeatedDetected，不重复反应
-        if (playerUid == c.Client.MyPlayerUid) return;
-
-        var executor = _activeExecutor;
-        if (executor == null) return;
-        // 仅 retry-route 才全员重跑（白名单房主同步，全员一致）
-        if (!_currentRouteRetryModeEnabled) return;
-
-        Logger.LogWarning("[联机][重试模式v2] 收到队友复苏广播（uid={Uid}, routeIndex={Idx}）→ 本机也前往神像回血", playerUid, routeIndex);
-        // 线路重试模式 v2（§0）：队友死亡时，本机（包括健康成员）也一起去神像回血，然后全员重跑。
-        // 统一调用 HandleRevivalTrigger，让健康队友也走 SignalMultiplayerRevival(RetrySegment) 路径。
-        HandleRevivalTrigger(executor, isBroadcastReceived: true);
-    }
-
-    /// <summary>
-    /// 复苏触发统一处理（线路重试模式 v2 / §0.1）。自己复苏与收到队友广播共用。
-    /// 本机 RevivalRecurrenceTracker.Track 计数 → retry-route 时按"只重试一次"覆盖动作：
-    ///   Count &lt;= 1 → RetrySegment（回神像重跑本段，正常同步）；Count &gt;= 2 → SkipSegment（跳段，原流程）。
-    /// 非 retry-route → 沿用 Track 的原决策动作（multi-revival-rapid-recurrence-fallback 行为不变）。
-    /// 通过 executor.SignalMultiplayerRevival(action) 透传到消费点 + catch 块。
-    /// </summary>
-    /// <returns>本线路是否为 retry-route（供调用方决定是否广播）。</returns>
-    private bool HandleRevivalTrigger(PathExecutor executor, bool isBroadcastReceived)
+    private void HandleRevivalTrigger(PathExecutor executor)
     {
         var action = _revivalTracker.Track(
             DateTime.UtcNow,
             _config.RapidRevivalWindowSeconds,
             _config.RapidRevivalThreshold,
             _config.RouteRevivalCap);
-
-        bool retryModeRoute = _currentRouteRetryModeEnabled;
-        if (retryModeRoute)
-        {
-            // 只重试一次（EB-v2-3）：本段第 1 次复苏（Count<=1）→ RetrySegment（回神像重跑本段）；
-            // 第 2 次及以后（Count>=2）→ SkipSegment（跳段，防死循环）。显式 override，不依赖 RRT rapid/cap 阈值。
-            action = _revivalTracker.Count <= 1
-                ? RevivalEscalationAction.RetrySegment
-                : RevivalEscalationAction.SkipSegment;
-            Logger.LogWarning("[联机][重试模式v2] {Src}触发，本段复苏计数={Count} → action={Action}",
-                isBroadcastReceived ? "队友广播" : "本机复苏", _revivalTracker.Count, action);
-        }
-        else if (action != RevivalEscalationAction.Continue)
+        if (action != RevivalEscalationAction.Continue)
         {
             Logger.LogWarning(
                 "[联机] 反复复苏触发升级：count={Count}, action={Action}, window={Win}s, rapid={Rapid}, cap={Cap}",
@@ -179,7 +174,23 @@ public class RouteExecutionEngine
         }
 
         executor.SignalMultiplayerRevival(action);
-        return retryModeRoute;
+    }
+
+    public HashSet<int> TakeRouteRerunMarkSet()
+    {
+        var result = new HashSet<int>(_routeRerunMarkSet);
+        _routeRerunMarkSet.Clear();
+        return result;
+    }
+
+    public bool IsRouteRerunDone(int routeIndex) => _routeRerunDoneSet.Contains(routeIndex);
+
+    public void MarkRouteRerunDone(int routeIndex) => _routeRerunDoneSet.Add(routeIndex);
+
+    public void ClearRerunRoundState()
+    {
+        _routeRerunMarkSet.Clear();
+        _routeRerunDoneSet.Clear();
     }
     public void SetWorldStateMonitor(WorldStateMonitor? monitor) => _worldStateMonitor = monitor;
 
@@ -208,17 +219,12 @@ public class RouteExecutionEngine
         var result = new RouteExecutionResult();
         _running = true;
         _anomalyDetector.ShouldSwitchFurina = false;
+        _currentRouteRetryModeEnabled = RouteRetryModeDecisions.IsRetryRoute(
+            System.IO.Path.GetFileNameWithoutExtension(route.FileName),
+            RouteRetryModeDecisions.ParseKeywords(_config.RouteRetryModeKeywords));
 
         // multi-revival-rapid-recurrence-fallback：每条路线开始时清空时间戳列表（OQ-4 = B 多世界轮换自动覆盖）
         _revivalTracker.Reset();
-
-        // 线路重试模式（hoeing-multiplayer-route-retry-mode spec）：按本线路文件名（去扩展名）+ 白名单关键词算一次，
-        // 缓存供 defeat 回调读取。多世界轮换每次进入 ExecuteRoute 重算。
-        var __retryKeywords = RouteRetryModeDecisions.ParseKeywords(_config.RouteRetryModeKeywords);
-        _currentRouteRetryModeEnabled = RouteRetryModeDecisions.IsRetryRoute(
-            System.IO.Path.GetFileNameWithoutExtension(route.FileName), __retryKeywords);
-        if (_currentRouteRetryModeEnabled)
-            Logger.LogInformation("[联机][重试模式] 本线路启用线路重试模式: {Name}", route.FileName);
 
         // 设置路线相关材料过滤
         if (_config.UseRouteRelatedMaterialsOnly)
@@ -247,11 +253,9 @@ public class RouteExecutionEngine
                 if (task != null)
                 {
                     var executor = new PathExecutor(ct);
+                    executor.WantsSkipCurrentFight = false;
                     executor.PartyConfig = _partyConfig;
                     executor.CurrentJsonRouteIndex = currentJsonRouteIndex;
-                    // 线路重试模式 v2（§0）：注入本线路是否命中重试白名单（房主同步，全员一致）。
-                    // 仅 true 时 PathExecutor 才启用"段出口屏障"；其他线路整块短路，零影响。
-                    executor.RouteRetryModeEnabled = _currentRouteRetryModeEnabled;
                     
                     // 联机模式：注入 MultiplayerCoordinator，并禁用自动领取派遣
                     if (_config.MultiplayerEnabled && _coordinator != null)

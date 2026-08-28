@@ -94,7 +94,7 @@ public class EnterAndExitWonderlandJob
             () => Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE),
             ct,
             20,
-            300
+            800
         );
         
         // 点击返回提瓦特按钮并等待确认弹窗出现

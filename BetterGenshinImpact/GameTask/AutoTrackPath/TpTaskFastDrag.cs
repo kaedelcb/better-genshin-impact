@@ -44,6 +44,7 @@ namespace BetterGenshinImpact.GameTask.AutoTrackPath;
 public class TpTaskFastDrag
 {
     private readonly QuickTeleportAssets _assets;
+    private readonly SwitchAreaRegionAssets _switchAreaRegionAssets;
     private readonly Rect _captureRect = TaskContext.Instance().SystemInfo.ScaleMax1080PCaptureRect;
     private readonly double _zoomOutMax1080PRatio = TaskContext.Instance().SystemInfo.ZoomOutMax1080PRatio;
     private readonly TpConfig _tpConfig = TaskContext.Instance().Config.TpConfig;
@@ -149,6 +150,7 @@ public class TpTaskFastDrag
     {
         this.ct = ct;
         _assets = QuickTeleportAssets.Get(_captureRect.Width, _captureRect.Height);
+        _switchAreaRegionAssets = SwitchAreaRegionAssets.Get(_captureRect.Width, _captureRect.Height);
         TpTaskParam param = new TpTaskParam();
         this.cultureInfo = param.GameCultureInfo;
         this.stringLocalizer = param.StringLocalizer;
@@ -1131,8 +1133,17 @@ public class TpTaskFastDrag
 
             // 渲染容忍超时仍没进大地图，判断是"回落主界面"还是"仍卡过渡态"
             using var raEnd = CaptureToRectArea();
-            if (Bv.IsInBigMapUi(raEnd))
+            // [诊断] 超时后分别用宽松(IsInBigMapUi, OR双判据)与严格(MapScaleButtonRo含ROI)判据探测，
+            // 定位"WaitForBigMapUiOrTimeoutAsync 超时但 IsInBigMapUi 误报 true"是否发生。
+            bool looseInBigMap = Bv.IsInBigMapUi(raEnd);
+            bool strictScaleButton = raEnd.Find(QuickTeleportAssets.Get(raEnd).MapScaleButtonRo).IsExist();
+            bool strictSettingsInterpreted = looseInBigMap && !strictScaleButton;
+            Logger.LogDebug(
+                "[尝试直通-诊断] 渲染超时后：宽松IsInBigMapUi={Loose} 严格ScaleButton={Strict} 仅Settings判为真={OnlySettings}",
+                looseInBigMap, strictScaleButton, strictSettingsInterpreted);
+            if (strictScaleButton)
             {
+                // 缩放按钮(含ROI)也被识别到 → 大地图真正可操作，返回 true（严格确认，防过渡态误报）
                 return true;
             }
             if (Bv.IsInMainUi(raEnd))
@@ -1727,16 +1738,29 @@ public class TpTaskFastDrag
     /// <param name="y2">鼠标移动后位置y</param>
     public async Task MouseClickAndMove(int x1, int y1, int x2, int y2)
     {
+        // 缩放滑轨拖动专用：用"实时读取游戏窗口"的比例放大 1080p 参数坐标，替代 GameRegionMove 内部
+        // 依赖的 SystemInfo.ScaleTo1080PRatio。后者在 BetterGI 启动时构建、不随窗口变化刷新，
+        // "运行中切换游戏分辨率/窗口大小"后会过期（曾实测 2K 下仍 =1.000），导致拖动落点脱离实际滑块。
+        // 正常场景（窗口未变）：实时比例 == ScaleTo1080PRatio，行为逐字节不变（防回归）。
+        var handle = TaskContext.Instance().GameHandle;
+        var realRect = SystemControl.GetCaptureRect(handle);       // 实时获取当前游戏窗口矩形（跟随中途切分辨率）
+        var realScale = Math.Max(1e-6, realRect.Width / 1920d);    // 实时 1080p→实际 比例
+        double sx1 = realRect.X + x1 * realScale;
+        double sy1 = realRect.Y + y1 * realScale;
+        double sx2 = realRect.X + x2 * realScale;
+        double sy2 = realRect.Y + y2 * realScale;
+
         // GlobalMethod.MoveMouseTo(x1, y1);
-        GameCaptureRegion.GameRegionMove((rect, scale) => (x1 * scale, y1 * scale));
+        DesktopRegion.DesktopRegionMove(sx1, sy1);
         await Delay(ApplyExtraDelay(50), ct);
         GlobalMethod.LeftButtonDown();
         await Delay(ApplyExtraDelay(50), ct);
         // GlobalMethod.MoveMouseTo(x2, y2);
-        GameCaptureRegion.GameRegionMove((rect, scale) => (x2 * scale, y2 * scale));
+        DesktopRegion.DesktopRegionMove(sx2, sy2);
         await Delay(ApplyExtraDelay(50), ct);
         GlobalMethod.LeftButtonUp();
         await Delay(ApplyExtraDelay(50), ct);
+        // 拖动结束后回到地图区域中心（与 GameRegionMove 移到中心的旧行为一致：X 复用 Width 是遗留，未改动）
         GameCaptureRegion.GameRegionMove((rect, scale) => (rect.Width / 2d, rect.Width / 2d));
     }
 
@@ -1802,6 +1826,12 @@ public class TpTaskFastDrag
         // Logger.LogInformation("调整地图缩放等级：{zoomLevel:0.000} -> {targetZoomLevel:0.000}", zoomLevel, targetZoomLevel);
         int initialY = (int)(_tpConfig.ZoomStartY + (_tpConfig.ZoomEndY - _tpConfig.ZoomStartY) * (zoomLevel - 1) / 5d);
         int targetY = (int)(_tpConfig.ZoomStartY + (_tpConfig.ZoomEndY - _tpConfig.ZoomStartY) * (targetZoomLevel - 1) / 5d);
+        // [缩放坐标诊断] 只读日志，不改任何计算。打印拖动起点/终点（1080p config 坐标）、缓存比例与实时比例，验证 2K/4K 缩放偏移修复是否生效。
+        var realRectNow = SystemControl.GetCaptureRect(TaskContext.Instance().GameHandle);
+        TaskControl.Logger.LogDebug(
+            "[缩放坐标诊断-写入] zoom={Zoom:0.00} target={Target:0.00} initialY={InitialY} targetY={TargetY} ZoomButtonX={BtnX} ZoomStartY={StartY} ZoomEndY={EndY} 缓存ScaleTo1080PRatio={CachedRatio:0.000} 实时Scale={RealRatio:0.000} 实时窗口={RealW}x{RealH}",
+            zoomLevel, targetZoomLevel, initialY, targetY, _tpConfig.ZoomButtonX, _tpConfig.ZoomStartY, _tpConfig.ZoomEndY, TaskContext.Instance().SystemInfo.ScaleTo1080PRatio, realRectNow.Width / 1920d, realRectNow.Width, realRectNow.Height);
+        //当前缩放LOG显示
         await MouseClickAndMove(_tpConfig.ZoomButtonX+10, initialY, _tpConfig.ZoomButtonX+10, targetY);
         if (_tpConfig.MapMoveStepDivisor)
         {
@@ -2762,6 +2792,19 @@ public class TpTaskFastDrag
         return false;
     }
 
+    /// <summary>
+    /// 地区菜单模板匹配优先：命中则返回模板命中区（Rect），未命中 / 阈值不过 / 模板缺失返回 null（OCR 兜底）。
+    /// switch-area-template-match spec：SwitchArea 用模板像素级定位替代 OCR，加快切换；失效静默回落 OCR。
+    /// </summary>
+    private Rect? TryMatchSwitchAreaTemplate(ImageRegion ra, string areaName)
+    {
+        // 模板不绑定格子（菜单 2×8 网格、每次显示 1~16 个地区、顺序可能乱）：
+        // 遍历 16 个菜单格子，用目标地区模板逐格匹配，取最高分且过阈值的命中格。
+        // 命中 → 返回该格矩形；模板缺失 / 未在菜单上出现 / 全不过阈值 → null → OCR 兜底。
+        // 与旧"整块右 1/3 搜索"相比，分隔到单格搜索让格内背景干净，CCoeffNormed 匹配度显著提升，避免掉进 OCR。
+        return _switchAreaRegionAssets.MatchInAllCells(ra, areaName);
+    }
+
     internal async Task SwitchArea(string areaName)
     {
         GameCaptureRegion.GameRegionClick((rect, scale) => (rect.Width - 80 * scale, rect.Height - 62 * scale));
@@ -2778,11 +2821,26 @@ public class TpTaskFastDrag
         }
         else
         {
-            await Delay(ApplyExtraDelay(300), ct);
+            await Delay(ApplyExtraDelay(250), ct);
         }
-
+        
+        await Delay(ApplyExtraDelay(50), ct);
+        
         using var ra = CaptureToRectArea();
-        var list = ra.FindMulti(new RecognitionObject
+        // —— 新增：地区模板匹配优先（switch-area-template-match spec）——
+        // 命中 → 用模板命中区点击；未命中 / 阈值不过 / 模板缺失 → 走现有 OCR 分支（逐字节保留）。
+        Rect? templateHit = TryMatchSwitchAreaTemplate(ra, areaName);
+        Region? matchRect;
+        if (templateHit.HasValue)
+        {
+            matchRect = ra.DeriveCrop(templateHit.Value);
+            TaskControl.Logger.LogInformation("切换区域（模板匹配）：{Country}", areaName);
+        }
+        else
+        {
+            // —— 现有 OCR 分支（逻辑逐字节保留）——
+            TaskControl.Logger.LogInformation("切换区域（OCR）：{Country}", areaName);
+            var list = ra.FindMulti(new RecognitionObject
         {
             RecognitionType = RecognitionTypes.Ocr,
             RegionOfInterest = new Rect(ra.Width * 2 / 3, 0, ra.Width / 3, ra.Height),
@@ -2792,8 +2850,11 @@ public class TpTaskFastDrag
             },
         });
 
+        
+
         string minCountryLocalized = this.stringLocalizer.WithCultureGet(this.cultureInfo, areaName);
-        Region? matchRect = list.OrderByDescending(r => r.Y).FirstOrDefault(r => r.Text.Contains(minCountryLocalized));
+        matchRect = list.OrderByDescending(r => r.Y).FirstOrDefault(r => r.Text.Contains(minCountryLocalized));
+        }
         if (matchRect == null)
         {
             Logger.LogWarning("切换区域失败：{Country}", areaName);
@@ -2838,6 +2899,43 @@ public class TpTaskFastDrag
         else
         {
             await Delay(ApplyExtraDelay(500), ct);
+        }
+    }
+
+    /// <summary>
+    /// 调试：自动连续轮询全部地区模板，每 100ms 一个；DrawOnWindow 画框；
+    /// 命中 → MoveTo 移动不点击；未命中 → 显示该地区置信度（得分）。
+    /// 仅供用户手动调用实跑（switch-area-template-match spec FR6），不影响 SwitchArea 生产逻辑。
+    /// </summary>
+    public async Task DebugPollSwitchAreaTemplates(CancellationToken ct)
+    {
+        await OpenBigMapUi(1);   // 打开大地图（地区菜单需先弹出才测）
+        foreach (var areaName in _switchAreaRegionAssets.AreaNames)
+        {
+            ct.ThrowIfCancellationRequested();
+            using var ra = CaptureToRectArea();
+            var ro = _switchAreaRegionAssets.Get(areaName);
+            if (ro == null)
+            {
+                TaskControl.Logger.LogWarning("[模板调试] {Area}：模板缺失", areaName);
+                continue;
+            }
+
+            ro.DrawOnWindow = true;   // 临时开画框
+            using var hit = ra.Find(ro);
+            if (hit.IsExist())
+            {
+                hit.MoveTo(hit.X, hit.Y);   // 移动到命中位置，不点击
+                TaskControl.Logger.LogInformation("[模板调试] {Area}：命中 得分={Score:0.00} 位置=({X},{Y})",
+                    areaName, hit.MatchScore ?? 0d, hit.X, hit.Y);
+            }
+            else
+            {
+                TaskControl.Logger.LogWarning("[模板调试] {Area}：未命中（当前阈值={Threshold:0.00}）——请降低阈值或重新截模板",
+                    areaName, ro.Threshold);
+            }
+            ro.DrawOnWindow = false;
+            await Delay(100, ct);   // 每 100ms 一个
         }
     }
 
@@ -2983,15 +3081,13 @@ public class TpTaskFastDrag
             try
             {
                 double s = Bv.GetBigMapScale(ra);
-                if (s > 0)
-                {
-                    // 1~6 的缩放等级
-                    return (-5 * s) + 6;
-                }
+                // GetBigMapScale 返回的是 0~1 的滑轨归一化位置，0 是合法边界值，对应最终缩放等级 6。
+                // 未识别时该方法会抛异常，由外层 catch 负责重试，因此这里不再用 s>0 判断成功。
+                return (-5 * s) + 6;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                TaskControl.Logger.LogWarning("获取大地图缩放级别失败（{Attempt}/3），重试中...", i + 1);
+                TaskControl.Logger.LogWarning("获取大地图缩放级别失败（{Attempt}/3），原因：{Msg}，重试中...", i + 1, ex.Message);
                 TaskControl.Logger.LogDebug(ex, "GetBigMapScale 失败详情（{Attempt}/3）", i + 1);
             }
             Thread.Sleep(100);

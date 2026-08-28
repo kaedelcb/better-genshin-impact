@@ -2104,9 +2104,20 @@ public partial class ScriptControlViewModel : ViewModel
     }
 
     [RelayCommand]
-    public async void OnDeleteScriptByFolder(ScriptGroupProject? item)
+    public void OnDeleteScriptByFolder(ScriptGroupProject? item)
     {
         if (item == null)
+        {
+            return;
+        }
+
+        // 弹窗确认后再批量移除（防止误删同文件夹下的所有关联配置）
+        var confirm = ThemedMessageBox.Question(
+            $"是否移除「{item.FolderName}」文件夹下的所有关联配置？",
+            "根据文件夹移除",
+            MessageBoxButton.YesNo,
+            System.Windows.MessageBoxResult.No);
+        if (confirm != System.Windows.MessageBoxResult.Yes)
         {
             return;
         }
@@ -2136,6 +2147,17 @@ public partial class ScriptControlViewModel : ViewModel
     public void OnDeleteScript(ScriptGroupProject? item)
     {
         if (item == null)
+        {
+            return;
+        }
+
+        // 弹窗确认后再移除（防止误删单个关联配置）
+        var confirm = ThemedMessageBox.Question(
+            $"是否移除「{item.Name}」的关联配置？",
+            "移除",
+            MessageBoxButton.YesNo,
+            System.Windows.MessageBoxResult.No);
+        if (confirm != System.Windows.MessageBoxResult.Yes)
         {
             return;
         }

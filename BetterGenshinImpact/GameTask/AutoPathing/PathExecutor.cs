@@ -63,6 +63,10 @@ public partial class PathExecutor
     /// <summary>联机模式：请求跳过当前路线（传递给 ProcessRoutesByGroup，需求 1）</summary>
     public volatile bool SkipRouteRequested;
 
+    /// <summary>联机模式：请求跳过当前战斗（hoeing-route-retry-round-end-refactor spec §Fix Implementation 2b）。
+    /// 仅在 retry-route 且本段第一次复苏时由 RouteExecutionEngine 写入，供 AutoFightTask 判断。 </summary>
+    public volatile bool WantsSkipCurrentFight;
+
     /// <summary>联机模式：跳过原因（先写 reason 再写标志位保证顺序）</summary>
     public string? SkipRouteReason;
     private PathingPartyConfig? _partyConfig;
@@ -240,72 +244,42 @@ public partial class PathExecutor
     private volatile int _pendingRevivalEscalation = 0;
 
     /// <summary>
-    /// 线路重试模式 v2（hoeing-multiplayer-route-retry-mode §0）：RetrySegment 重跑本段时置 true。
-    /// 使本段起点传送块跳过"按周期吃食物"和"按线路切角色"两个多余动作
-    /// （已回神像满血 + 复苏者战斗中途，重跑时再吃药/换人无意义且浪费时间）。
-    /// 段起点切角色块执行后消费即复位。默认 false，非重跑路径永不置位。保留正常同步不受影响。
-    /// </summary>
-    private bool _rerunSuppressExtrasOnce = false;
-
-    /// <summary>
-    /// 线路重试模式 v2（hoeing-multiplayer-route-retry-mode §0）：重跑本段时豁免"该次"落后追赶判定。
+    /// 传送后复苏保护状态（multiplayer-hoeing-post-teleport-revival-protection spec）。
+    /// 联机「明确传送同步点」（type == "teleport"）严格等待匹配 AllArrived 确认完成后，
+    /// 建立固定 10 秒、每段一次的本地复苏保护窗口：窗口内本机复苏回到当前段起点重跑，
+    /// 不进入团队 tracker/广播/升级/跳段流程。
     ///
-    /// 必要性：重跑是【主动回退重打】，进度低于继续前进的队友是预期且正确的，不是真正的落后。
-    /// 若不豁免，重跑刚传回段起点就会被落后追赶判定"落后≥阈值段"→ 抛 LaggingCatchUpSkipException 跳段，
-    /// 重跑成果被直接踹走（实测日志：我 4000000 落后大部队 5000000 → 跳下一段 → 整条路线被跳过）。
+    /// 状态机（状态属于当前 PathExecutor 实例，非协议/全局单例）：
+    ///   Inactive                      → _protectionSegmentId == -1
+    ///   Active(segmentId, syncId, completedAtUtc, consumed=false)
+    ///                                 → _protectionSegmentId >= 0 && _protectionConsumed == 0
+    ///   Consumed(segmentId)           → _protectionSegmentId >= 0 && _protectionConsumed == 1
     ///
-    /// 注意：不能复用 _needReportNormalBeforeSync 做守卫——它在落后追赶判定【之前】的
-    /// "上报 Normal"块里就已被消费复位，到判定时恒为 false，等于没有豁免（这正是实测 bug 的成因）。
-    /// 故用本独立标志：catch RetrySegment 分支置位，落后追赶判定处消费即复位。
-    /// 默认 false，非重跑路径永不置位 → 落后追赶逻辑逐字节不变。
+    /// 窗口起点 = 匹配 AllArrived 被严格等待消费并完成的时刻（_protectionCompletedAtUtc），
+    /// 不是 loading/FastSync 时刻。段切换/新路线/新轮次时由 Task 4.4 reset 回 Inactive。
+    ///
+    /// _protectionConsumed 用 int 而非 bool：Interlocked.CompareExchange 不支持 bool 重载，
+    /// 消费用 CAS（CompareExchange(0→1)）保证同段并发复苏至多一个赢家，禁止暴露普通 bool 读后写。
     /// </summary>
-    private bool _exemptNextLaggingCatchUpOnce = false;
+    private int _protectionSegmentId = -1;
+    private string? _protectionSyncPointId;
+    private DateTime _protectionCompletedAtUtc = DateTime.MinValue;
+    private volatile int _protectionConsumed = 0;
 
-    /// <summary>
-    /// 线路重试模式 v2（hoeing-multiplayer-route-retry-mode §0）：本条线路是否命中重试模式白名单。
-    /// 由 RouteExecutionEngine 在 ExecuteRoute 构造 PathExecutor 后注入（房主同步的白名单，全员一致）。
-    /// 仅 true 时才启用"段出口屏障"（每段结尾全员同步碰头 + 汇总是否有人死过）。
-    /// false（含单机、非白名单线路）时屏障整块短路 → 对其他线路的速度和逻辑零影响。
-    /// </summary>
-    public bool RouteRetryModeEnabled { get; set; } = false;
+    // === 传送后卡死保护重跑跳过段起点同步等待标志（multiplayer-hoeing-post-teleport-stuck-protection）===
+    // 卡死保护命中后置位，重跑到段起点传送同步点的"正常同步点"分支消费并复位；
+    // 仅本机重跑路径上跳过该次 WaitForAllPlayers（队友已前进），段内其他同步点照常。
+    // 默认 false；单机/普通路径恒 false，行为不变。
+    private bool _skipSegmentStartSyncWaitOnStuckRetry = false;
 
-    /// <summary>
-    /// 线路重试模式 v2（§0）：本段是否有成员死过（自己复苏 或 收到队友复苏广播）。
-    /// 置位者：本机复苏消费点 / RouteExecutionEngine 收到队友广播后调 MarkSegmentDeathForRerun()。
-    /// 消费者：段出口屏障放行后读它决定"全员重跑本段"还是"全员放行"。
-    /// 复位：段推进（新段开始）与重跑启动时清零，避免跨段残留。
-    /// volatile：AnomalyDetector/SignalR 后台线程写、PathExecutor 主线程读。
-    /// </summary>
-    private volatile bool _segmentDeathForRerun = false;
-
-    /// <summary>
-    /// 线路重试模式 v2（§0）：本段已重跑过一次（"只重试一次"保证）。
-    /// 段出口屏障判定时：有人死过 &amp;&amp; 本段未重跑过 → 重跑；已重跑过 → 放行（不再无限重跑）。
-    /// 段推进时复位。
-    /// </summary>
-    private bool _segmentRerunDone = false;
-
-    /// <summary>
-    /// 线路重试模式 v2（§0）：当前是否处于重跑模式（段重跑）。
-    /// 用于在 syncId 生成时加 _rerun 后缀，避免重跑时 syncId 与首次相同导致服务端"全员已到"误放行。
-    /// 段出口屏障触发重跑时置位，段推进时复位。
-    /// </summary>
-    private bool _isRerunningSegment = false;
-
-    /// <summary>
-    /// 线路重试模式 v2（§0）：复苏者回神像后不立即重跑，而是先到"段出口屏障"与队友碰头。
-    /// 复苏消费点在 retry-route 下置位并 break 出 waypoint 循环，直达段出口屏障。
-    /// 屏障放行后统一决策。非 retry-route 恒 false → 原"神像 + 抛 RetryException"流程逐字节不变。
-    /// </summary>
-    private bool _revivedGoToSegExitBarrier = false;
-
-    /// <summary>
-    /// 线路重试模式 v2（§0）：供 RouteExecutionEngine 在收到队友复苏广播时标记"本段有人死过"。
-    /// 仅 retry-route 生效（调用方已守卫）。线程安全（volatile 写）。
-    /// </summary>
-    public void MarkSegmentDeathForRerun()
+    // === 传送后卡死保护专用异常（multiplayer-hoeing-post-teleport-stuck-protection）===
+    // 用于把"卡死保护命中"从卡死脱困块抛到外层 catch(RetryException) 保护分支识别并重跑本段。
+    // 用专用异常而非普通 RetryException 的原因：普通 RetryException 会落入 _syncPointReached
+    // 跳段分流或 escalation 消费；本专用异常在 catch 块最前被 is 判别短路，避免误入跳段/升级。
+    // 继承 RetryException，使现有 catch(RetryException) 能捕获（与 LaggingCatchUpSkipException 同模式）。
+    internal sealed class PostTeleportStuckProtectionRetryException : RetryException
     {
-        _segmentDeathForRerun = true;
+        public PostTeleportStuckProtectionRetryException(string message) : base(message) { }
     }
 
     /// <summary>
@@ -316,18 +290,14 @@ public partial class PathExecutor
         => SignalMultiplayerRevival(BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.Continue);
 
     /// <summary>
-    /// 供 AutoFightTask 战斗主循环探测：当前是否"已收到复苏信号 且 待处理 escalation==RetrySegment"。
-    /// 仅探测不消费（不改信号位、不改 escalation）。用于让战斗循环在 RetrySegment 场景无视共享战斗配额、
-    /// 立即结束战斗，尽快进入重跑（hoeing-multiplayer-route-retry-mode spec, EB-4）。
+    /// 供 AutoFightTask 战斗主循环探测：当前是否应跳过本次战斗。
     /// CurrentActiveInstance==null（单机/无活动实例）时返回 false。
     /// </summary>
     public static bool ShouldAbortFightForRetryRevival()
     {
         var instance = CurrentActiveInstance;
         if (instance == null) return false;
-        // 两个字段都是 volatile int，普通读即可见。
-        return instance._multiplayerRevivalDetected == 1
-            && instance._pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment;
+        return instance.WantsSkipCurrentFight;
     }
 
     /// <summary>
@@ -362,6 +332,33 @@ public partial class PathExecutor
     private bool TryConsumeRevivalSignal()
     {
         return MultiplayerRevivalGate.TryConsume(ref _multiplayerRevivalDetected, MultiplayerCoordinator != null);
+    }
+
+    /// <summary>
+    /// 联机传送后复苏保护：只读判定当前是否命中保护窗口（不消费）。
+    ///
+    /// 由 RouteExecutionEngine.OnMultiplayerDefeatedDetected 在 tracker / 路线标记 /
+    /// 异常上报之前调用，命中则短路团队副作用（不 Track、不广播、不 ReportAnomalyAsync）。
+    /// 真正的 CAS 消费由 catch(RetryException) 保护分支（Task 4.3）完成，此处只读判定、
+    /// 不做任何状态变更，避免与消费点双重消费。
+    ///
+    /// 命中条件（与 catch 分支一致）：联机 + 当前段匹配 _protectionSegmentId + 未消费
+    ///   + 复苏时间在窗口内（_protectionCompletedAtUtc 起 10 秒内）。
+    /// 单机零感知：MultiplayerCoordinator == null 或 _protectionSegmentId == -1 时恒 false。
+    /// </summary>
+    public bool IsPostTeleportRevivalProtectionHit()
+    {
+        if (MultiplayerCoordinator == null) return false;
+        if (_protectionSegmentId != CurWaypoints.Item1) return false;
+        if (_protectionConsumed != 0) return false;
+        var revivalNow = System.DateTime.UtcNow;
+        return BetterGenshinImpact.GameTask.AutoHoeing.Services.PostTeleportRevivalProtectionDecisions.IsEligible(
+            isMultiplayerHoeing: true,
+            syncPointType: "teleport",
+            strictWaitCompleted: true,
+            completionTime: _protectionCompletedAtUtc,
+            revivalTime: revivalNow,
+            consumed: false);
     }
 
     /// <summary>
@@ -591,12 +588,22 @@ public partial class PathExecutor
             // （正常情况下消费点会清理，但显式重置确保语义清晰）
             MultiplayerRevivalGate.Reset(ref _multiplayerRevivalDetected);
 
-            // === 线路重试模式 v2（§0）：段级标志复位（新段开始）===
-            // 每段独立判定"本段有人死过 / 本段已重跑过"，避免跨段残留。
-            // 非 retry-route 这些标志恒 false，不参与任何逻辑。
-            _segmentDeathForRerun = false;
-            _segmentRerunDone = false;
-            _revivedGoToSegExitBarrier = false;
+            // === 传送后复苏保护状态 reset（multiplayer-hoeing-post-teleport-revival-protection）===
+            // 真正进入下一段时，清除上一段的完成时间与消费位，回到 Inactive。
+            // 关键：此 reset 只发生在"段循环顶部 = 进入新段"，绝不放进 ResetRecoveryStateForNewAttempt()
+            //（那是段内 retry / 保护回段起点的重试起点，同段重跑必须保持保护机会，见需求 2.6/2.7）。
+            // 联机上下文（MultiplayerCoordinator != null）才有意义；单机时这些字段恒为 Inactive，
+            // 此处重置是幂等安全操作，单机零感知。
+            _protectionSegmentId = -1;
+            _protectionSyncPointId = null;
+            _protectionCompletedAtUtc = DateTime.MinValue;
+            _protectionConsumed = 0;
+            // 新增：卡死保护重跑跳过段起点同步等待标志，进入新段时复位（防止跨段残留）
+            // 与 _protection* reset 同位置、同语义；真正进入下一段时复位，新段获得新的一次性保护机会。
+            // ResetRecoveryStateForNewAttempt() 不触碰 _protection* 与跳过标志（段内重跑保持机会）。
+            _skipSegmentStartSyncWaitOnStuckRetry = false;
+
+            // 线路重试模式 v2 段级标志已移除；统一在轮末执行重跑（hoeing-route-retry-round-end-refactor spec）。
 
             // === 段级抢报缓存构建（fastsync-redesign-parameter-passing spec / OQ-1=c）===
             // 把 _syncPointMap 中属于本段的项投影到 wpIdx 索引，O(1) 查询。
@@ -664,13 +671,6 @@ public partial class PathExecutor
                 {
                     ResetRecoveryStateForNewAttempt();
                     
-                    // 线路重试模式 v2（§0）：新段开始时复位重跑状态（段推进复位）
-                    if (i == 0)
-                    {
-                        _segmentRerunDone = false;
-                        _isRerunningSegment = false;
-                    }
-                    
                     await ResolveAnomalies(); // 异常场景处理
 
                     // 如果首个点是非TP点位，强制设置在这个点位附近优先做局部匹配
@@ -701,9 +701,8 @@ public partial class PathExecutor
                         // 此为兜底路径：战斗结束钩子和脱困入口未能消费时由这里兜底处理
                         if (TryConsumeRevivalSignal())
                         {
-                            bool __retryForce = _pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment;
-                            Logger.LogWarning("[联机] 主循环兜底路径检测到复苏信号，前往七天神像回血{Force}", __retryForce ? "（重试模式强制去神像）" : "");
-                            await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: __retryForce);
+                            Logger.LogWarning("[联机] 主循环兜底路径检测到复苏信号，前往七天神像回血");
+                            await TpStatueOfTheSeven(requireLoadingScreen: true);
                             throw new RetryException("联机：主循环检测到已倒下复苏，神像回血后按异常处理");
                         }
                         
@@ -742,9 +741,6 @@ public partial class PathExecutor
                         if (MultiplayerCoordinator != null && _wpIdxToSyncIdCache != null)
                         {
                             _wpIdxToSyncIdCache.TryGetValue(CurWaypoint.Item1, out __fastSyncId);
-                            // 线路重试模式 v2（§0）：重跑时 syncId 加 _rerun 后缀，防服务端"全员已到"误放行
-                            if (__fastSyncId != null && _isRerunningSegment)
-                                __fastSyncId = __fastSyncId + "_rerun";
                         }
 
                         // === 段内"下一个还没抢报"的 syncPoint 反查（修复"非传送同步点不提前抢报"）===
@@ -761,16 +757,14 @@ public partial class PathExecutor
                             {
                                 if (__kv.Value == null) continue;
                                 if (__kv.Key < CurWaypoint.Item1) continue;
-                                // 线路重试模式 v2（§0）：重跑时 syncId 加 _rerun 后缀再查是否已抢报
-                                var __checkId = (_isRerunningSegment && __kv.Value != null) ? __kv.Value + "_rerun" : __kv.Value;
-                                if (MultiplayerCoordinator.IsFastReported(__checkId)) continue;
+                                if (MultiplayerCoordinator.IsFastReported(__kv.Value)) continue;
                                 // strict 门控（hoeing-strict-syncpoint-no-lookahead-preclaim spec）：
                                 // strict 同步点仅在该节点本身允许 look-ahead，前序节点跳过（继续向后找非 strict 候选，OQ-1 方案 a）。
-                                if (!FastSyncDecisions.IsLookAheadAllowedForCandidate(__checkId, __kv.Key, CurWaypoint.Item1)) continue;
+                                if (!FastSyncDecisions.IsLookAheadAllowedForCandidate(__kv.Value, __kv.Key, CurWaypoint.Item1)) continue;
                                 if (__kv.Key < __bestWpIdx)
                                 {
                                     __bestWpIdx = __kv.Key;
-                                    __bestSyncId = __checkId;
+                                    __bestSyncId = __kv.Value;
                                 }
                             }
                             if (__bestSyncId != null && __bestWpIdx < waypoints.Count)
@@ -852,9 +846,7 @@ public partial class PathExecutor
                             // 算本次吃药计划；ShouldEat 时把 __tpFastSyncId 置 null 抑制该传送点快速抢报（等吃完再严格上报）。
                             // 单机 / MultiplayerCoordinator==null 时不计算，plan 保持 Empty，__tpFastSyncId 逐字节不变（单机零回归）。
                             _pendingMedicineEatPlan = BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.MedicineEatPlan.Empty;
-                            // 线路重试模式 v2（§0）：重跑本段起点跳过按周期吃食物（已回神像满血，重跑再吃药多余且浪费时间）。
-                            // 非重跑路径 _rerunSuppressExtrasOnce 恒 false，吃药逻辑逐字节不变。
-                            if (MultiplayerCoordinator != null && !_rerunSuppressExtrasOnce)
+                            if (MultiplayerCoordinator != null)
                             {
                                 var __medCfg = MultiplayerCoordinator.EffectiveConfig;
                                 var __medCd = TaskContext.Instance().Config.MedicineEatCdConfig;
@@ -916,8 +908,7 @@ public partial class PathExecutor
                             // PerRouteSwitchHook==null 或本线路无切换或已切过 → 整块短路，不换角色路径逐字节不变。
                             // 线路重试模式 v2（§0）：重跑本段起点跳过按线路切角色（已切过 / 重跑无需重复换人）。
                             if (PerRouteSwitchHook is { RouteHasSwitch: true } __perRouteHook
-                                && !_perRouteSwitchDone
-                                && !_rerunSuppressExtrasOnce)
+                                && !_perRouteSwitchDone)
                             {
                                 _perRouteSwitchDone = true;   // 每线路一次性（实例级，R4.3）
                                 // 换角色期间抑制后台拾取输入（滚轮/按F），避免在配队筛选界面误滚动元素图标
@@ -942,10 +933,6 @@ public partial class PathExecutor
                                     BetterGenshinImpact.GameTask.AutoHoeing.Services.TemplatePickupService.SuppressPickupInput = false;
                                 }
                             }
-
-                            // 线路重试模式 v2（§0）：段起点两个多余动作（吃药 build + 切角色）已消费本标志，就地复位。
-                            // 放在切角色块之后、吃药执行块之前——吃药执行读的是已被 build 跳过（Empty）的 _pendingMedicineEatPlan，不再读本标志。
-                            _rerunSuppressExtrasOnce = false;
 
                             // 按周期吃食物执行（multiplayer-hoeing-auto-eat-food-by-period，执行时机=传送同步点）：
                             // 传送完成 → 若本次需吃药 → 打开食物页依次吃各到期格 → 仅当食物页成功打开才对每格写全局 CD 时间戳 →
@@ -1023,7 +1010,7 @@ public partial class PathExecutor
                                     {
                                         var progress = ComputeProgress(CurWaypoints.Item1, CurWaypoint.Item1);
                                         Logger.LogInformation("[联机] 传送完成，检测到服务端指令的统一等待点 {SyncId}，强制等待", pendingPoint.SyncPointId);
-                                        await MultiplayerCoordinator.WaitForAllPlayers(pendingPoint.SyncPointId, ct, progress);
+                                        _ = await MultiplayerCoordinator.WaitForAllPlayers(pendingPoint.SyncPointId, ct, progress);
                                         Logger.LogInformation("[联机] 服务端指令等待点同步完成，继续前进，syncId={SyncId}", pendingPoint.SyncPointId);
                                         MultiplayerCoordinator.ClearPendingWaitPoint();
                                     }
@@ -1033,12 +1020,6 @@ public partial class PathExecutor
                                     var tpMapKey = CurWaypoints.Item1 * 10000 + CurWaypoint.Item1;
                                     if (_syncPointMap.TryGetValue(tpMapKey, out var tpSyncId) && tpSyncId != null)
                                     {
-                                        // 线路重试模式 v2（§0）：重跑时 syncId 后缀 _rerun，避免服务端"全员已到"误放行
-                                        if (_isRerunningSegment)
-                                        {
-                                            tpSyncId = tpSyncId + "_rerun";
-                                        }
-                                        
                                         var tpProgress = ComputeProgress(CurWaypoints.Item1, CurWaypoint.Item1);
                                         // 检查是否是异常等待点
                                         bool isAbnormalWaitingPoint = MultiplayerCoordinator.IsAbnormalWaitingAtPoint(tpSyncId);
@@ -1047,25 +1028,32 @@ public partial class PathExecutor
                                         if (isAbnormalWaitingPoint)
                                         {
                                             Logger.LogInformation("[联机] 传送完成，进入异常等待点 {SyncId}，强制等待，进度={P}", tpSyncId, tpProgress);
-                                            await MultiplayerCoordinator.WaitForAllPlayers(tpSyncId, ct, tpProgress);
+                                            _ = await MultiplayerCoordinator.WaitForAllPlayers(tpSyncId, ct, tpProgress);
                                             Logger.LogInformation("[联机] 异常等待点同步完成，继续前进，syncId={SyncId}", tpSyncId);
                                         }
                                         // 正常同步点：统一等待（传送必等待默认启用）
                                         else
                                         {
+                                            // === 卡死保护重跑：跳过段起点同步等待（multiplayer-hoeing-post-teleport-stuck-protection）===
+                                            // 卡死保护命中后重跑本段，本机再次走到段起点传送同步点；队友已前进到更远同步点，
+                                            // 本机重跑不该再死等该传送点。仅跳过本次等待，消费即复位；段内其他同步点照常。
+                                            // 不调用 WaitForAllPlayers，因此不会 _protectionConsumed=0 重置保护窗口（机会已消费，
+                                            // 重跑期间 _protectionSegmentId 仍匹配、_protectionConsumed==1，不会再次获得保护，符合需求 2.7 一次性）。
+                                            // 不进入落后追赶判定（避免本机重跑因落后触发 LaggingCatchUpSkipException 跳段）。
+                                            if (_skipSegmentStartSyncWaitOnStuckRetry)
+                                            {
+                                                _skipSegmentStartSyncWaitOnStuckRetry = false;   // 消费即复位
+                                                Logger.LogInformation("[联机] 卡死保护重跑：跳过段起点传送同步点 {SyncId} 的 WaitForAllPlayers（队友已前进），直接继续", tpSyncId);
+                                                // 不 WaitForAllPlayers、不落后追赶判定、不建立/重置保护窗口，直接继续跑本段
+                                            }
+                                            else
+                                            {
                                             // === 落后追赶判定（hoeing-multiplayer-lagging-member-catchup spec / 关键问题 1 + BUG-C/D/E）===
                                             // 仅此处（段起点传送点正常同步块=段边界）插入；集合点/异常点/强制点均不插入（BUG-E）。
                                             // 两项本地标志守卫：异常恢复未占用 SkipToNextSegment、本轮无待收尾跳段（关键问题 4）。
                                             // mySeg 用本地实时 ComputeProgress（不读缓存）。判定纯同步读内存、不引入不可取消阻塞。
                                             //
-                                            // 线路重试模式 v2（§0）：重跑本段时豁免"该次"判定并消费复位——重跑是主动回退重打，
-                                            // 进度低于继续前进的队友是预期的，不是真正落后；不豁免会被直接跳段踹走重跑成果。
-                                            if (_exemptNextLaggingCatchUpOnce)
-                                            {
-                                                _exemptNextLaggingCatchUpOnce = false;
-                                                Logger.LogInformation("[联机][重试模式] 重跑本段：豁免本次落后追赶判定（主动回退重打，非真正落后），syncId={SyncId}", tpSyncId);
-                                            }
-                                            else if (!SkipToNextSegment && !_needReportNormalBeforeSync)
+                                            if (!SkipToNextSegment && !_needReportNormalBeforeSync)
                                             {
                                                 long mySeg = ComputeProgress(CurWaypoints.Item1, CurWaypoint.Item1);
                                                 if (MultiplayerCoordinator.TryGetLaggingCatchUpDecision(mySeg))
@@ -1080,8 +1068,24 @@ public partial class PathExecutor
                                             }
 
                                             Logger.LogInformation("[联机] 传送完成，等待所有玩家同步，syncId={SyncId}, 进度={P}", tpSyncId, tpProgress);
-                                            await MultiplayerCoordinator.WaitForAllPlayers(tpSyncId, ct, tpProgress);
-                                            Logger.LogInformation("[联机] 传送同步完成，继续前进，syncId={SyncId}", tpSyncId);
+                                            var waitCompleted = await MultiplayerCoordinator.WaitForAllPlayers(tpSyncId, ct, tpProgress);
+                                            if (waitCompleted)
+                                            {
+                                                // 仅当确认匹配 AllArrived 被严格等待消费后记录完成时间并建立窗口。
+                                                // 窗口起点 = 严格等待完成时刻（不是 loading/FastSync 时刻）。
+                                                // 此块位于 waypoint.Type == WaypointType.Teleport.Code 分支内（明确传送同步点）。
+                                                _protectionSegmentId = CurWaypoints.Item1;
+                                                _protectionSyncPointId = tpSyncId;
+                                                _protectionCompletedAtUtc = DateTime.UtcNow;
+                                                _protectionConsumed = 0;
+                                                Logger.LogInformation("[联机] 传送同步完成，建立传送后复苏保护窗口，syncId={SyncId}, segmentId={Segment}, completionTime={CompletionTime:O}",
+                                                    tpSyncId, _protectionSegmentId, _protectionCompletedAtUtc);
+                                            }
+                                            else
+                                            {
+                                                Logger.LogInformation("[联机] 传送同步完成（未确认匹配 AllArrived，不建立保护窗口），继续前进，syncId={SyncId}", tpSyncId);
+                                            }
+                                            }
                                         }
                                     }
                                 }
@@ -1160,7 +1164,7 @@ public partial class PathExecutor
                             {
                                 var progress = ComputeProgress(CurWaypoints.Item1, CurWaypoint.Item1);
                                 Logger.LogInformation("[联机] 到达集合点，等待所有玩家，syncId={SyncId}, 进度={Progress}", __fastSyncId, progress);
-                                await MultiplayerCoordinator.WaitForAllPlayers(__fastSyncId, ct, progress);
+                                _ = await MultiplayerCoordinator.WaitForAllPlayers(__fastSyncId, ct, progress);
                                 Logger.LogInformation("[联机] 集合完成，继续前进，syncId={SyncId}", __fastSyncId);
                             }
 
@@ -1263,36 +1267,12 @@ public partial class PathExecutor
                                     // 避免无谓重置后又抛异常
                                     if (TryConsumeRevivalSignal())
                                     {
-                                        // 线路重试模式 v2：RetrySegment 强制去神像（forceStatue）跳过嗑药分级，保证全员真正回神像满血
-                                        bool __retryForce = _pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment;
-
-                                        // === 线路重试模式 v2（§0）：复苏者去神像前先上报 Reviving，让服务端把段出口屏障超时延到 300s，
-                                        // 避免健康队友在屏障等复苏者回神像（~15-20s）时被 60s 超时误放行造成脱节。===
-                                        if (__retryForce && RouteRetryModeEnabled && MultiplayerCoordinator != null)
-                                        {
-                                            _segmentDeathForRerun = true; // 本机复苏 → 本段有人死过
-                                            long __revProgress = ComputeProgress(CurWaypoints.Item1, 0);
-                                            try { await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Reviving, __revProgress); } catch { }
-                                        }
-
-                                        Logger.LogWarning("[联机] 战斗中曾触发复苏（已倒下色块检测），战斗结束后前往七天神像回血{Force}", __retryForce ? "（重试模式强制去神像）" : "");
-                                        await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: __retryForce);
+                                        Logger.LogWarning("[联机] 战斗中曾触发复苏（已倒下色块检测），战斗结束后前往七天神像回血");
+                                        await TpStatueOfTheSeven(requireLoadingScreen: true);
 
                                         // === 线路重试模式 v2（§0）：回神像后不立即重跑，先到"段出口屏障"与队友碰头 ===
                                         // 置"本段有人死过"标志 + 标记走屏障路径 → break 出 waypoint 循环直达段出口屏障。
                                         // 屏障保证复苏者到齐前队友不放行 → 广播必然已送达 → 全员一起重跑（确定性）。
-                                        if (__retryForce && RouteRetryModeEnabled)
-                                        {
-                                            _segmentDeathForRerun = true;
-                                            _revivedGoToSegExitBarrier = true;
-                                            System.Threading.Interlocked.Exchange(ref _pendingRevivalEscalation, 0); // 消费掉 escalation，避免残留影响后续
-                                            MultiplayerRevivalGate.Reset(ref _multiplayerRevivalDetected);          // 同清信号位：传送神像途中可能又收到新复苏广播写入信号位
-                                                                                                                  // （本分支 entry TryConsumeRevivalSignal 消费的是更早那个），残留会在重跑段起点被
-                                                                                                                  // 主循环兜底 TryConsumeRevivalSignal 误消费 → 打断"全员重跑本段"（hoeing-multiplayer-route-retry-mode）。
-                                            Logger.LogWarning("[联机][重试模式v2] 复苏者已回神像满血 → 前往段出口屏障与队友碰头（不单独重跑）");
-                                            break; // 跳出 waypoint 循环 → 段出口屏障
-                                        }
-
                                         throw new RetryException("联机：战斗中触发复苏，神像回血后跳到下一段汇合");
                                     }
 
@@ -1704,68 +1684,6 @@ public partial class PathExecutor
                     }
 
                     // ============================================================================
-                    // === 段出口屏障（线路重试模式 v2 / hoeing-multiplayer-route-retry-mode §0）===
-                    // 目的：让"全员一起重打"成为确定性行为，而非依赖广播时序的概率行为。
-                    //
-                    // 原理：retry-route 的每段跑完后，所有成员（含已回神像的复苏者）都在这里报到等待。
-                    //   - 复苏者在"去神像之前"就已广播复苏（PlayerAnomalyNotify），且被计入屏障人数；
-                    //   - 健康队友必须等复苏者到齐才放行 → 放行时广播必然已送达 → 全员的
-                    //     _segmentDeathForRerun 状态一致 → 一起重跑或一起放行（消除"队友已跑掉"竞态）。
-                    //
-                    // 仅 RouteRetryModeEnabled（房主同步白名单命中）+ 联机时生效；
-                    // 其他线路/单机整块短路 → 对速度和逻辑零影响（用户明确要求）。
-                    // ============================================================================
-                    if (RouteRetryModeEnabled
-                        && MultiplayerCoordinator != null
-                        && !_segmentRerunDone)   // 本段已重跑过 → 不再进屏障（只重试一次，避免二次等待）
-                    {
-                        var __segIdxForBarrier = CurWaypoints.Item1;
-                        // syncId 命名空间必须与 BuildSyncPointMapManual 的 idNamespace 算法【逐字节一致】，
-                        // 否则变体线路（成员跑不同变体文件、FileName 不同）会各等在不同 syncId 上 → 屏障死等超时。
-                        // 规则：LogicalRouteId 非空用它；否则用 StripBaseNameAnyVariant(FileName) 归一化到统一基名。
-                        string __segExitNs = string.IsNullOrEmpty(task.LogicalRouteId)
-                            ? BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.RouteVariantNaming.StripBaseNameAnyVariant(task.FileName)
-                            : task.LogicalRouteId;
-                        var __segExitSyncId = $"{__segExitNs}_segexit_{__segIdxForBarrier}";
-                        // 屏障进度用"本段最后一个 waypoint"，保证语义单调（本段已跑完）
-                        long __segExitProgress = ComputeProgress(__segIdxForBarrier, Math.Max(0, waypoints.Count - 1));
-
-                        // 复苏者此前上报过 Reviving，放行前先恢复 Normal，避免污染后续全员判定
-                        if (_revivedGoToSegExitBarrier)
-                        {
-                            try { await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Normal); } catch { }
-                        }
-
-                        Logger.LogInformation("[联机][重试模式v2] 到达段出口屏障，等待全员碰头，syncId={SyncId}，本段有人死过={Died}",
-                            __segExitSyncId, _segmentDeathForRerun);
-                        await MultiplayerCoordinator.WaitForAllPlayers(__segExitSyncId, ct, __segExitProgress);
-
-                        // === 屏障放行后统一决策（此刻全员状态已对齐）===
-                        if (_segmentDeathForRerun)
-                        {
-                            _segmentRerunDone = true;             // 只重试一次
-                            _segmentDeathForRerun = false;        // 清标志，重跑期间重新累计
-                            _revivedGoToSegExitBarrier = false;
-                            _rerunSuppressExtrasOnce = true;      // 重跑段起点跳过吃药/换人（多余）
-                            _exemptNextLaggingCatchUpOnce = true; // 重跑是主动回退，豁免落后追赶（否则被踹走）
-                            _needReportNormalBeforeSync = true;   // 段起点同步前上报 Normal
-                            _isRerunningSegment = true;           // 重跑期间 syncId 后缀 _rerun，防服务端"全员已到"误放行
-                            SkipToNextSegment = false;            // 确保"重跑本段"而非"跳下一段"
-                            // 清残留复苏信号（escalation + 信号位）：复苏广播可能在神像传送/屏障等待期间写入，
-                            // 若不清，重跑段第 0 个 waypoint 顶部 TryConsumeRevivalSignal 会立即命中 → 打断"全员重跑本段"
-                            // 改判跳段（hoeing-multiplayer-route-retry-mode 实测 bug）。Reset 幂等，不吞重跑期间新复苏信号。
-                            MultiplayerRevivalGate.Reset(ref _multiplayerRevivalDetected);
-                            System.Threading.Interlocked.Exchange(ref _pendingRevivalEscalation, 0);
-                            Logger.LogWarning("[联机][重试模式v2] 段出口屏障：本段有成员死过 → 全员一起重跑本段（第 1 次，仅重试一次）");
-                            ResetRecoveryStateForNewAttempt();
-                            continue; // 继续 for-i：全员重跑本段（段起点传送 + 正常同步汇合）
-                        }
-
-                        _revivedGoToSegExitBarrier = false;
-                        Logger.LogInformation("[联机][重试模式v2] 段出口屏障：本段无人死亡{Done} → 全员放行，继续下一段",
-                            _segmentRerunDone ? "（或已重跑过）" : "");
-                    }
-
                     if (waypoints == waypointsList.Last())
                     {
                         SuccessEnd = true;
@@ -1813,6 +1731,49 @@ public partial class PathExecutor
                         break; // 出 for-i 重试循环，外层段循环下一段顶部消费 SkipToNextSegment 传送到下一段
                     }
 
+                    // === 传送后卡死保护分支（multiplayer-hoeing-post-teleport-stuck-protection）===
+                    // 必须在 escalation 消费 / _syncPointReached 分流 / Reviving 上报之前短路。
+                    // 卡死保护命中已由卡死脱困块 CAS 消费共享机会并抛本专用异常；此处只需识别并重跑本段。
+                    // 不 _inTrap++、不 _faceToMark、不 escalation、不 Reviving、不 tracker、不跳段。
+                    if (retryException is PostTeleportStuckProtectionRetryException)
+                    {
+                        Logger.LogInformation("[联机] 传送后卡死保护重跑当前段，segmentId={Segment}, 原因: {Msg}",
+                            CurWaypoints.Item1, retryException.Message);
+                        StartSkipOtherOperations();
+                        ResetRecoveryStateForNewAttempt();
+                        continue; // 回到 for-i 重试循环，重跑本段起点（不是跳到下一传送点）
+                    }
+
+                    // === 传送后复苏保护分支（multiplayer-hoeing-post-teleport-revival-protection）===
+                    // 必须在 escalation 消费 / _syncPointReached 分流 / Reviving 上报之前短路。
+                    // 命中条件：当前段有 Active 保护窗口（_protectionSegmentId 匹配当前段）+ 未消费
+                    //           + 复苏时间在窗口内（_protectionCompletedAtUtc 起 10 秒内）。
+                    // 命中行为：原子消费机会（CAS），仅本机从当前段传送起点重跑，不 escalation、不 Reviving、
+                    //          不 tracker、不跳段。命中直接 continue 回到 for-i 重试循环重跑本段起点，
+                    //          不推进 _syncPointReached 分流，也不设置 SkipToNextSegment。
+                    if (MultiplayerCoordinator != null
+                        && _protectionSegmentId == CurWaypoints.Item1
+                        && _protectionConsumed == 0)
+                    {
+                        var revivalNow = DateTime.UtcNow;
+                        bool hit = BetterGenshinImpact.GameTask.AutoHoeing.Services.PostTeleportRevivalProtectionDecisions.IsEligible(
+                            isMultiplayerHoeing: true,
+                            syncPointType: "teleport",
+                            strictWaitCompleted: true,
+                            completionTime: _protectionCompletedAtUtc,
+                            revivalTime: revivalNow,
+                            consumed: _protectionConsumed == 1);
+                        if (hit && BetterGenshinImpact.GameTask.AutoHoeing.Services.PostTeleportRevivalProtectionDecisions.TryConsume(ref _protectionConsumed))
+                        {
+                            // 保护命中：从当前段起点重跑，不推进到下一段
+                            Logger.LogInformation("[联机] 传送后复苏保护命中，从当前段起点重跑，segmentId={Segment}, 原因: {Msg}",
+                                CurWaypoints.Item1, retryException.Message);
+                            StartSkipOtherOperations();
+                            ResetRecoveryStateForNewAttempt();
+                            continue; // 回到 for-i 重试循环，重跑本段起点（不是跳到下一传送点）
+                        }
+                    }
+
                     // 计算目标进度：跳到下一段开头的传送点
                     // 当前段索引 = CurWaypoints.Item1，下一段 = CurWaypoints.Item1 + 1，传送点是该段的 waypoint 0
                     var nextSegmentIdx = CurWaypoints.Item1 + 1;
@@ -1834,31 +1795,6 @@ public partial class PathExecutor
                     // SkipRoute / SkipSegment 都需要先上报 Reviving + targetProgress 保留信号链路语义。
                     var escalation = (BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction)
                         System.Threading.Interlocked.Exchange(ref _pendingRevivalEscalation, 0);
-
-                    // === 线路重试模式 v2（hoeing-multiplayer-route-retry-mode spec §0）：最高优先，先于 SkipRoute/SkipSegment ===
-                    // 全员回神像重跑本段：消费点已 TpStatueOfTheSeven 回血，这里上报 Reviving（本段开头进度）+ 重跑本段，
-                    // 保留正常同步（同步点正常汇合）。不同于普通 Continue 的 _syncPointReached 分流——retry-mode 无论
-                    // 同步点是否到达都强制"重跑本段"（不跳下一段），因为战斗点带 sync_point_id 时 _syncPointReached 可能为 true。
-                    // 不调 StartSkipOtherOperations()：按原 JSON 完整重跑本段（全员从段起点一起重新拉怪 + 战斗，用户要求"直接按原来的 JSON 执行"）。
-                    if (escalation == BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment
-                        && MultiplayerCoordinator != null)
-                    {
-                        long retryProgress = ComputeProgress(CurWaypoints.Item1, 0); // 本段开头，让服务端在本段同步点继续等本玩家
-                        Logger.LogWarning("[联机][重试模式] RetrySegment：回神像后重跑本段（正常同步），上报 Reviving 本段开头进度={P}，原因: {Msg}",
-                            retryProgress, retryException.Message);
-                        try
-                        {
-                            await MultiplayerCoordinator.ReportFightingStatusAsync(false);
-                            await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Reviving, retryProgress);
-                        }
-                        catch { }
-                        SkipToNextSegment = false;   // 显式清掉，确保"重跑本段"而非"跳下一段"
-                        _needReportNormalBeforeSync = true; // 重跑到本段同步点前上报 Normal，恢复正常同步语义
-                        _rerunSuppressExtrasOnce = true;    // 重跑本段起点：跳过按周期吃食物 + 按线路切角色（已回神像满血，多余）
-                        _exemptNextLaggingCatchUpOnce = true; // 重跑本段起点：豁免落后追赶判定（主动回退重打，非真正落后）
-                        ResetRecoveryStateForNewAttempt();
-                        continue; // 继续 for-i：重跑本段（含段起点传送 + 正常同步汇合）
-                    }
 
                     if (escalation == BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.SkipRoute
                         && MultiplayerCoordinator != null)
@@ -3745,9 +3681,8 @@ public partial class PathExecutor
                             // 注意：此处不修改 _inTrap 计数（不增不减），保持隐含语义；段入口段循环重置即可
                             if (TryConsumeRevivalSignal())
                             {
-                                bool __retryForce = _pendingRevivalEscalation == (int)BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction.RetrySegment;
-                                Logger.LogWarning("[联机] 路上检测到复苏 + 位置不变（疑似复苏后卡住），跳过随机脱困，前往七天神像回血{Force}", __retryForce ? "（重试模式强制去神像）" : "");
-                                await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: __retryForce);
+                                Logger.LogWarning("[联机] 路上检测到复苏 + 位置不变（疑似复苏后卡住），跳过随机脱困，前往七天神像回血");
+                                await TpStatueOfTheSeven(requireLoadingScreen: true);
                                 throw new RetryException("联机：路上复苏 + 卡住，神像回血后跳到下一段汇合");
                             }
 
@@ -3761,7 +3696,39 @@ public partial class PathExecutor
                             {
                                 throw new RetryException("此路线出现3次卡死，重试一次路线或放弃此路线！");
                             }
-                            
+
+                            // === 传送后卡死保护（multiplayer-hoeing-post-teleport-stuck-protection）===
+                            // 必须在 _faceToMark 向上节点试探之前短路。命中条件复用 _protection* 共享状态：
+                            //   联机门控 + 首次卡死 + Active 保护窗口（段匹配）+ 共享机会未消费 + triggerType=stuck 20s 窗口内
+                            // 命中后原子消费共享机会（TryConsume CAS），置 _skipSegmentStartSyncWaitOnStuckRetry=true
+                            // （重跑跳过段起点同步等待），抛 PostTeleportStuckProtectionRetryException。
+                            // 此分支不 _inTrap++、不置 _faceToMark、不进入随机脱困、不进入团队 tracker/广播/升级/跳段。
+                            if (MultiplayerCoordinator != null
+                                && _lastWaypoint is not null
+                                && _inTrap == 0
+                                && !_faceToMark
+                                && _protectionSegmentId == CurWaypoints.Item1
+                                && _protectionConsumed == 0)
+                            {
+                                var stuckNow = DateTime.UtcNow;
+                                bool hit = BetterGenshinImpact.GameTask.AutoHoeing.Services.PostTeleportRevivalProtectionDecisions.IsEligible(
+                                    triggerType: "stuck",
+                                    isMultiplayerHoeing: true,
+                                    syncPointType: "teleport",
+                                    strictWaitCompleted: true,
+                                    completionTime: _protectionCompletedAtUtc,
+                                    triggerTime: stuckNow,
+                                    consumed: _protectionConsumed == 1);
+                                if (hit && BetterGenshinImpact.GameTask.AutoHoeing.Services.PostTeleportRevivalProtectionDecisions.TryConsume(ref _protectionConsumed))
+                                {
+                                    Logger.LogInformation("[联机] 传送后卡死保护命中，从当前段起点重跑，segmentId={Segment}, 原因: 传送后首次卡死",
+                                        CurWaypoints.Item1);
+                                    _skipSegmentStartSyncWaitOnStuckRetry = true;   // 重跑跳过段起点同步等待（Task 5 定义此字段）
+                                    throw new PostTeleportStuckProtectionRetryException(
+                                        "[联机] 传送后首次卡死，卡死保护命中，从当前段起点重跑");
+                                }
+                            }
+
                             Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                             Simulation.SendInput.SimulateAction(GIActions.Drop);
                             await Delay(1000, ct);

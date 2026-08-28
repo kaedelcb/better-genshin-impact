@@ -454,7 +454,14 @@ public class MultiplayerCoordinator : IAsyncDisposable
 
     // === 等待所有玩家 ===
 
-    public async Task WaitForAllPlayers(string syncId, CancellationToken ct, long syncProgress = -1)
+    /// <summary>
+    /// 严格等待所有玩家到达指定同步点（multiplayer-hoeing-post-teleport-revival-protection）。
+    /// 返回 <see langword="true"/> 仅表示与当前 <paramref name="syncId"/> 匹配的 AllArrived
+    /// 已被 <see cref="CoordinatorClient.WaitForAllPlayersAsync"/> 严格等待消费（严格等待完成）；
+    /// 返回 <see langword="false"/> 表示未确认完成（取消、超时、房间关闭、断线、未连接或其它异常）。
+    /// 调用方只能据此决定是否建立传送后保护窗口，不得把"吞异常后的正常返回"误认成确认完成。
+    /// </summary>
+    public async Task<bool> WaitForAllPlayers(string syncId, CancellationToken ct, long syncProgress = -1)
     {
         // fastsync-claim-short-circuit-premature-release-fix（OQ-1=a）：
         // 删除「自己已抢报过即短路放行」分支。抢报方真正到达同步点后，照常走严格
@@ -465,11 +472,14 @@ public class MultiplayerCoordinator : IAsyncDisposable
         bool wasFastReported = _fastReportedSyncIds.ContainsKey(syncId);
         try
         {
-            await _client.WaitForAllPlayersAsync(syncId, ct, syncProgress, wasFastReported);
+            // CoordinatorClient 正常返回即表示匹配 AllArrived 已被消费（未连接/未匹配时返回 false），
+            // 故此处正常返回可安全映射为 true。取消/超时/关房/断线异常由 catch 统一映射为 false。
+            return await _client.WaitForAllPlayersAsync(syncId, ct, syncProgress, wasFastReported);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "[联机] 等待所有玩家失败: {SyncId}", syncId);
+            return false;
         }
     }
 

@@ -3193,7 +3193,7 @@ public class AutoHoeingTask : ISoloTask
             try
             {
                 _logger.LogInformation("[联机] 等待所有玩家完成路线同步...");
-                await _multiplayerCoordinator.WaitForAllPlayers("route_sync_done", _ct);
+                _ = await _multiplayerCoordinator.WaitForAllPlayers("route_sync_done", _ct);
                 _logger.LogInformation("[联机] 所有玩家路线同步完成，开始验证");
             }
             catch (OperationCanceledException)
@@ -3850,6 +3850,69 @@ public class AutoHoeingTask : ISoloTask
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "{Prefix}输出本轮锄地汇总日志时异常（忽略）", roundPrefix);
+        }
+
+        // === 线路重试模式轮末统一重跑（hoeing-route-retry-round-end-refactor）===
+        if (_executionEngine != null && _config.MultiplayerEnabled && _multiplayerCoordinator != null)
+        {
+            var executionEngine = _executionEngine;
+            try
+            {
+                var rerunSet = executionEngine.TakeRouteRerunMarkSet();
+                var rerunSucceeded = false;
+                if (rerunSet.Count > 0)
+                {
+                    _logger.LogInformation("[联机][重试模式] 本轮结束，检测到 {N} 条需重跑线路，开始轮末统一重跑", rerunSet.Count);
+                    foreach (var routeIdx in rerunSet)
+                    {
+                        if (executionEngine.IsRouteRerunDone(routeIdx))
+                            continue;
+
+                        var rerunRoute = groupRoutes.ElementAtOrDefault(routeIdx);
+                        if (rerunRoute == null)
+                        {
+                            _logger.LogWarning("[联机][重试模式] 轮末重跑线路索引 {Idx} 无效，跳过", routeIdx);
+                            continue;
+                        }
+
+                        try
+                        {
+                            await executionEngine.ExecuteRoute(rerunRoute, _ct, routeIdx);
+                            executionEngine.MarkRouteRerunDone(routeIdx);
+                            rerunSucceeded = true;
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "[联机][重试模式] 轮末重跑线路 {Idx} 异常，继续处理其他标记线路", routeIdx);
+                        }
+                    }
+
+                    // 只有至少一条线路实际重跑成功，才去七天神像收尾。
+                    if (rerunSucceeded)
+                    {
+                        try
+                        {
+                            await new TpTask(_ct).TpToStatueOfTheSeven();
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "[联机][重试模式] 轮末收尾去神像失败，继续后续流程");
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                executionEngine.ClearRerunRoundState();
+            }
         }
     }
 
