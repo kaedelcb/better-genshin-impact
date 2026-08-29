@@ -1,6 +1,8 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
@@ -60,6 +62,11 @@ public class WorldStateMonitor : IAsyncDisposable
     private int _peerBaselineCount = -1;   // 执行期基准人数（-1 = 未捕获）
     private int _peerBelowStreak;          // 连续低于基准次数（去抖，达 PeerDropConfirmChecks 触发）
     private const int PeerDropConfirmChecks = 2;
+
+    // === 视觉失明检测（锄地必须全员）===
+    private bool _visualMismatchInProgress;   // 是否正处于"视觉<协调器"持续观察中
+    private DateTime _visualMismatchStart;    // 首次观察到不一致的时刻（墙钟起点）
+    private const double VisualMismatchExitWindowSeconds = 30; // 持续观察墙钟窗口（秒）
 
     // === 轮次切换抑制（需求 7）===
     private volatile bool _isRoundSwitching;
@@ -363,8 +370,14 @@ public class WorldStateMonitor : IAsyncDisposable
 
             if (inSuppressedWindow)
             {
-                // 合法人数波动窗口：复位基准与去抖计数
-                _peerBaselineCount = -1;
+                // 合法人数波动窗口：分两类处理（guard-multiplayer-peerdrop-visual-blind 边界1）
+                // - 组队阶段 / 轮换切换：房间语义重置（人未齐/房间重建），复位基准，等下阶段重新捕获。
+                // - 传送 / 换角色 / 吃药 / 暂停：房间未变，协调器人数不该变 → 保留基准，
+                //   使抑制窗口后协调器人数下降（真掉线）能被 R5 感知（修复"人数降了客户端不知道"）。
+                if (IsPartyPhase || _isRoundSwitching)
+                {
+                    _peerBaselineCount = -1;
+                }
                 _peerBelowStreak = 0;
             }
             else
@@ -378,13 +391,24 @@ public class WorldStateMonitor : IAsyncDisposable
                     if (below)
                     {
                         _peerBelowStreak++;
-                        _logger.LogWarning("[WorldStateMonitor] 执行期房间人数 {Cur} 低于基准 {Base}（{Streak}/{Need}），疑似队友掉线",
-                            currentCount, newBaseline, _peerBelowStreak, PeerDropConfirmChecks);
+                        // 增强可观测性：打印当前在线成员 UID+名字 和 自己 UID，便于定位具体掉线者
+                        var onlineMembers = _client.CurrentPlayerList?
+                            .Select(p => $"{p.PlayerUid}({p.PlayerName})")
+                            .ToList() ?? new List<string>();
+                        var onlineDisplay = string.Join(", ", onlineMembers);
+                        var myUid = _client.PlayerUid;
+                        _logger.LogWarning("[WorldStateMonitor] 执行期房间人数 {Cur} 低于基准 {Base}（{Streak}/{Need}），疑似队友掉线 | 当前在线=[{Online}] | 自己={Self}",
+                            currentCount, newBaseline, _peerBelowStreak, PeerDropConfirmChecks,
+                            onlineDisplay, myUid);
                         if (_peerBelowStreak >= PeerDropConfirmChecks)
                         {
                             _peerBelowStreak = 0;
-                            _logger.LogError("[WorldStateMonitor] 确认队友掉线（人数 {Cur} < 基准 {Base}），触发协同中止重开",
-                                currentCount, newBaseline);
+                            var confirmedOnlineMembers = _client.CurrentPlayerList?
+                                .Select(p => $"{p.PlayerUid}({p.PlayerName})")
+                                .ToList() ?? new List<string>();
+                            _logger.LogError("[WorldStateMonitor] 确认队友掉线（人数 {Cur} < 基准 {Base}），触发协同中止重开 | 当前在线=[{Online}] | 自己={Self}",
+                                currentCount, newBaseline,
+                                string.Join(", ", confirmedOnlineMembers), _client.PlayerUid);
                             await ConfirmExitAsync("检测到队友掉线，协同中止重开");
                             return;
                         }
@@ -392,6 +416,50 @@ public class WorldStateMonitor : IAsyncDisposable
                     else
                     {
                         _peerBelowStreak = 0;
+                    }
+
+                    // === 视觉失明检测（锄地必须全员）===
+                    // 视觉真实人数（P 模板）< 协调器花名册人数且持续墙钟 30s → 判定有人退世界/掉线
+                    // 未被协调器感知（CurrentRoomPlayerCount 只跟踪房间花名册，不跟踪"是否在世界"）。
+                    // 真实墙钟 + 最小帧数防抖，免疫战斗中瞬间漏识别（复用 EC-03 免疫批量爆发模式）。
+                    int visualCount;
+                    try
+                    {
+                        using var region = CaptureToRectArea();
+                        var visualStatus = PartyAvatarSideIndexHelper.DetectedMultiGameStatus(
+                            region, applyAuthoritativeCrossValidation: false);
+                        visualCount = visualStatus.PlayerCount;
+                    }
+                    catch
+                    {
+                        visualCount = 0; // 截图失败视为识别不到，不触发失明
+                    }
+
+                    var coordCount = _client.CurrentRoomPlayerCount;
+                    var mismatch = visualCount < coordCount;
+                    if (mismatch)
+                    {
+                        if (!_visualMismatchInProgress)
+                        {
+                            _visualMismatchInProgress = true;
+                            _visualMismatchStart = DateTime.UtcNow;
+                        }
+                        var mismatchElapsed = (DateTime.UtcNow - _visualMismatchStart).TotalSeconds;
+                        if (HoeingGuardDecisions.ShouldTriggerVisualMismatchExit(
+                                _peerDropGuardEnabled, inSuppressedWindow,
+                                visualCount, coordCount, mismatchElapsed, VisualMismatchExitWindowSeconds))
+                        {
+                            _visualMismatchInProgress = false;
+                            _logger.LogError(
+                                "[WorldStateMonitor] 视觉真实人数 {VC} 持续低于协调器花名册 {CC} 满 {Win}s，判定成员退世界/掉线失明，触发协同中止重开",
+                                visualCount, coordCount, mismatchElapsed);
+                            await ConfirmExitAsync("检测到成员退出世界（视觉人数持续低于协调器），协同中止重开");
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        _visualMismatchInProgress = false; // 视觉一致/回升，重置观察
                     }
                 }
             }

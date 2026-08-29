@@ -1,4 +1,4 @@
-﻿本项目使用了 WPF-UI、 CommunityToolkit.Mvvm、Microsoft.Xaml.Behaviors.Wpf 来实现 MVVM 架构。在编写代码的时候请注意：
+本项目使用了 WPF-UI、 CommunityToolkit.Mvvm、Microsoft.Xaml.Behaviors.Wpf 来实现 MVVM 架构。在编写代码的时候请注意：
 
 ### 主要依赖框架
 #### UI 框架
@@ -155,23 +155,23 @@ diagnose-first 而非 fix-first；连续失败 2 次后禁止再改修复代码�
 
 ## 4. 工具映射（操作意图 → 本环境真实工具名）
 
-> ⚠️ **最高优先级**：本环境实际暴露的工具名以 `.agents/rules/tool-availability.md` 的速查表为准。
-> 规则文档里写的 `fsWrite` / `fsAppend` / `strReplace` / `write` / `edit` / `read` / `grep` 都是历史/抽象别名，
-> 模型在工具列表里找不到时**不要停下清点**，直接改用下表"本环境真实工具名"，或用 `execute_pwsh` 兜底。
+> ⚠️ **最高优先级（工具异常处理纪律）**：工具报错/不存在时怎么救，见 `.agents/rules/tool-availability.md`（异常处理流程 + 真实工具清单 + execute_pwsh 可靠写法）。
+> 关键事实：**本环境没有 `fs_write` / `fs_append` / `str_replace` / `edit` 等任何专用文件编辑工具**，写文件/改文件只能靠 `execute_pwsh`（PowerShell）。
+> 规则文档里这些名字都是历史/抽象别名。模型在工具列表里找不到时**不要停下清点**——按"操作意图"找等价工具：读→read_file / 搜→grep_search / 执行→execute_pwsh；写文件直接用 execute_pwsh 兜底。
 
-| 操作意图 | 历史/别名（KIRO） | 本环境真实工具名 |
-|---------|------------------|-----------------|
+| 操作意图 | 历史/别名（KIRO） | 本环境真实做法 |
+|---------|------------------|----------------|
 | 读文件 | readFile | `read_file` / `read_files` |
-| 创建/覆盖文件 | fsWrite / write | `fs_write` |
-| 追加文件 | fsAppend | `fs_append` |
-| 替换文本 | strReplace / edit | `str_replace` |
+| 创建/覆盖文件 | fsWrite / write | **无专用工具 → execute_pwsh**（WriteAllLines） |
+| 追加文件 | fsAppend | **无专用工具 → execute_pwsh**（Add-Content） |
+| 替换文本 | strReplace / edit | **无专用工具 → execute_pwsh**（ReadAllText+Replace+WriteAllText） |
 | 搜索文件内容 | grepSearch / grep | `grep_search` |
 | 列目录 | listDirectory | `list_directory` |
 | 执行命令/编译/测试 | pwsh / bash（getDiagnostics） | `execute_pwsh` |
 | 委派子代理 | subagent | `invoke_sub_agent` |
 | 任务状态机 | todo_write | `todo_list` |
 
-完整速查表（含兜底列）见 `.agents/rules/tool-availability.md`；历史对照见 `.agents/rules/README.md`。
+**工具异常处理纪律 + execute_pwsh 可靠写法见 `.agents/rules/tool-availability.md`**（所有会话注入）。
 
 ## 5. 历史经验导航（动手前先查）
 

@@ -97,4 +97,30 @@ public static class HoeingGuardDecisions
         if (currentCount < baseline) return (baseline, true);
         return (baseline, false);
     }
+
+    /// <summary>
+    /// 是否应触发"视觉 vs 协调器失明"协同中止（hoeing 锄地必须全员）。
+    /// 纯函数无副作用。输入本帧视觉真实人数与协调器花名册人数，
+    /// 当视觉人数 &lt; 协调器人数且持续墙钟窗口 continuousSeconds 才返回 true。
+    /// 语义：
+    /// - peerDropGuardEnabled（门控）：单机/守护关闭 → false 零感知。
+    /// - inSuppressedWindow：组队/轮换/换角色/吃药/传送/暂停 → false。
+    /// - visualCount &lt;= 0：视觉识别不到（加载/传送瞬态）→ false 不误判。
+    /// - visualCount &gt;= coordinatorCount：视觉够人 / 协调器没有更少 → 无失明 false。
+    /// - 仅当 视觉&lt;协调器 且 continuousSeconds &gt;= windowSeconds 才 true。
+    /// </summary>
+    public static bool ShouldTriggerVisualMismatchExit(
+        bool peerDropGuardEnabled,
+        bool inSuppressedWindow,
+        int visualCount,
+        int coordinatorCount,
+        double continuousSeconds,
+        double windowSeconds = 30.0)
+    {
+        if (!peerDropGuardEnabled) return false;    // 门控：单机/守护关零感知
+        if (inSuppressedWindow) return false;       // 抑制窗口
+        if (visualCount <= 0) return false;         // 视觉识别不到，不判定
+        if (visualCount >= coordinatorCount) return false; // 无失明
+        return continuousSeconds >= windowSeconds;  // 持续满墙钟窗口
+    }
 }

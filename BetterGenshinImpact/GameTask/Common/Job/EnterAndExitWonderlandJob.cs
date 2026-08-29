@@ -63,8 +63,8 @@ public class EnterAndExitWonderlandJob
                 });
             },
             ct,
-            5,
-            1000
+            20,
+            300
         );
         await Delay(1000, ct);
 

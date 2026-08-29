@@ -71,8 +71,15 @@ public class CoordinatorClient : IAsyncDisposable
     public event Action<bool>? HostReadyChanged;
     public event Action<List<string>>? HostRouteListReady;
     public event Action<string, int, bool>? PlayerAnomalyNotifyReceived; // playerUid, routeIndex, passedSyncPoint
+    public event Action<string, int, int>? PlayerAnomalyNotifyFightPointReceived; // playerUid, routeIndex, fightPointId
     public event Action<string>? PlayerAnomalyRecoveredReceived; // playerUid
     public event Action<int>? StartRouteReceived; // targetRouteIndex
+
+    // === 成员状态广播接收（guard-multiplayer-peerdrop-visual-blind 方案A）===
+    // 服务端 HeartbeatMonitor 掉线删除时广播 MemberStatusChanged(uid,"Offline",long.MaxValue)。
+    // 载荷：playerUid, status, targetProgress。仅当 status=="Offline" 时表示真掉线（服务端已过宽限期+心跳判死）。
+    // 服务端异常上报 hub 方法不回环广播本事件，故收到 Offline 只来自真实掉线删除。
+    public event Action<string, string, long>? MemberStatusChangedReceived;
 
     // === 版本一致性校验事件（hoeing-multiplayer-version-compatibility-check）===
     /// <summary>
@@ -249,6 +256,15 @@ public class CoordinatorClient : IAsyncDisposable
                     PlayerAnomalyNotifyReceived?.Invoke(playerUid, routeIndex, passedSyncPoint);
                 });
 
+            // === 新机制：带战斗点异常通知（hoeing-route-retry-round-end-refactor v3）
+            _connection.On<string, int, int>("PlayerAnomalyNotifyFightPoint",
+                (playerUid, routeIndex, fightPointId) =>
+                {
+                    if (playerUid == _playerUid) return; // 过滤自己
+                    _logger.LogInformation("[联机] 收到异常通知(带战斗点): 玩家={PlayerUid}, 路线={RouteIndex}, 战斗点={FightPointId}",
+                        playerUid, routeIndex, fightPointId);
+                    PlayerAnomalyNotifyFightPointReceived?.Invoke(playerUid, routeIndex, fightPointId);
+                });
             // === 新机制：异常恢复通知 ===
             _connection.On<string>("PlayerAnomalyRecovered",
                 (playerUid) =>
@@ -256,6 +272,15 @@ public class CoordinatorClient : IAsyncDisposable
                     if (playerUid == _playerUid) return;
                     _logger.LogInformation("[联机] 收到恢复通知: 玩家={PlayerUid}", playerUid);
                     PlayerAnomalyRecoveredReceived?.Invoke(playerUid);
+                });
+
+            // === 成员状态广播接收（guard-multiplayer-peerdrop-visual-blind 方案A）===
+            _connection.On<string, string, long>("MemberStatusChanged",
+                (playerUid, status, targetProgress) =>
+                {
+                    if (playerUid == _playerUid) return; // 过滤自己上报的回环
+                    _logger.LogInformation("[联机] 收到成员状态广播: 玩家={PlayerUid}, 状态={Status}", playerUid, status);
+                    MemberStatusChangedReceived?.Invoke(playerUid, status, targetProgress);
                 });
 
             // === 新机制：开始路线指令 ===
@@ -1247,6 +1272,25 @@ public class CoordinatorClient : IAsyncDisposable
     }
 
     /// <summary>
+    /// <summary>
+    /// 上报"复苏者附带战斗点"的异常通知（hoeing-route-retry-round-end-refactor v3）。
+    /// 调用服务端 PlayerAnomalyNotifyFightPoint（纯透传），供其他成员做战斗点级跳过。
+    /// </summary>
+    public async Task ReportAnomalyWithFightPointAsync(string playerUid, int routeIndex, int fightPointId)
+    {
+        if (_connection == null || !IsConnected) return;
+        try
+        {
+            await _connection.InvokeAsync("PlayerAnomalyNotifyFightPoint", playerUid, routeIndex, fightPointId);
+            _logger.LogInformation("[联机] 发送异常通知(带战斗点): 玩家={PlayerUid}, 路线={RouteIndex}, 战斗点={FightPointId}",
+                playerUid, routeIndex, fightPointId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ReportAnomalyWithFightPointAsync 失败（静默忽略）");
+        }
+    }
+
     /// 上报异常恢复通知（新机制）
     /// </summary>
     public async Task ReportRecoveredAsync(string playerUid)

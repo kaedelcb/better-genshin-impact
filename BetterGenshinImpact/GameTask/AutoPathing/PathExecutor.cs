@@ -41,6 +41,7 @@ using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Models;
+using BetterGenshinImpact.GameTask.AutoHoeing.Services;
 using BetterGenshinImpact.GameTask.Common.Job;
 
 namespace BetterGenshinImpact.GameTask.AutoPathing;
@@ -66,6 +67,13 @@ public partial class PathExecutor
     /// <summary>联机模式：请求跳过当前战斗（hoeing-route-retry-round-end-refactor spec §Fix Implementation 2b）。
     /// 仅在 retry-route 且本段第一次复苏时由 RouteExecutionEngine 写入，供 AutoFightTask 判断。 </summary>
     public volatile bool WantsSkipCurrentFight;
+
+    /// <summary>
+    /// 联机 retry-route 复苏广播的"待跳过战斗点"编号（segIdx*10000+wpIdx），-1 = 无。
+    /// 收到同伴复苏广播（未命中当前战斗点）时记录；走到匹配战斗点时消费后复位（仍 -1）。
+    /// 仅联机 retry-route 场景非 -1；单机 / 非 retry-route 恒 -1，逐字节零感知。
+    /// </summary>
+    public volatile int SkipRevivalFightPointId = -1;
 
     /// <summary>联机模式：跳过原因（先写 reason 再写标志位保证顺序）</summary>
     public string? SkipRouteReason;
@@ -1174,6 +1182,20 @@ public partial class PathExecutor
                             {
                                 if (waypoint.Action == ActionEnum.Fight.Code)
                                 {
+                                    // === 联机 v3：同伴复苏战斗点级跳过（hoeing-multiplayer-route-retry-mode §9 改动 B）===
+                                    // 收到同伴复苏广播且当前走到复苏战斗点时，直接跳过本战斗点（不进战斗、不战后拾取）。
+                                    // 仅联机 retry-route 场景非 -1；单机 MultiplayerCoordinator == null 短路，逐字节零感知。
+                                    if (MultiplayerCoordinator != null && SkipRevivalFightPointId != -1)
+                                    {
+                                        var curFp = CurWaypoints.Item1 * 10000 + CurWaypoint.Item1;
+                                        if (FightPointSkipDecisions.IsMatch(SkipRevivalFightPointId, curFp))
+                                        {
+                                            Logger.LogWarning("[联机][重试模式] 跳过复苏战斗点: fp={Fp}", curFp);
+                                            SkipRevivalFightPointId = -1;      // 消费一次
+                                            continue;                           // 不进战斗，跳过本战斗点及战后动作，走向下一 waypoint
+                                        }
+                                    }
+
                                     // === 基于经验判断停止锄地：战斗节点起点创建经验检测器（multiplayer-hoeing-exp-cap-stop）===
                                     // 创建前先释放上一节点残留实例（重试/异常路径泄漏兜底），保证至多一个存活。
                                     // 检测窗口覆盖：战斗 + 战后回点 + 万叶聚物/拾取，直到 _lastWaypoint 赋值处消费。
@@ -1811,6 +1833,8 @@ public partial class PathExecutor
                         SkipRouteRequested = true;
                         SkipToNextSegment = false; // 显式清掉，确保走"跳整路线"语义
                         _needReportNormalBeforeSync = true;
+                        // 反复复苏跳整路线前先去七天神像回血（与 :1271 复苏路径一致）
+                        await TpStatueOfTheSeven(requireLoadingScreen: true);
                         break;
                     }
 
@@ -1827,6 +1851,8 @@ public partial class PathExecutor
                         catch { }
                         SkipToNextSegment = true;
                         _needReportNormalBeforeSync = true;
+                        // 反复复苏跳段前先去七天神像回血（与 :1271 复苏路径一致）
+                        await TpStatueOfTheSeven(requireLoadingScreen: true);
                         break;
                     }
 

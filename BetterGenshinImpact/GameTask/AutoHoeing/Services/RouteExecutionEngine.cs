@@ -60,6 +60,7 @@ public class RouteExecutionEngine
         if (_anomalySubscribedClient != null)
         {
             _anomalySubscribedClient.PlayerAnomalyNotifyReceived -= OnTeammateRevivalBroadcast;
+            _anomalySubscribedClient.PlayerAnomalyNotifyFightPointReceived -= OnTeammateRevivalFightPointBroadcast;
             _anomalySubscribedClient = null;
         }
 
@@ -70,6 +71,7 @@ public class RouteExecutionEngine
         {
             _anomalySubscribedClient = coordinator.Client;
             _anomalySubscribedClient.PlayerAnomalyNotifyReceived += OnTeammateRevivalBroadcast;
+            _anomalySubscribedClient.PlayerAnomalyNotifyFightPointReceived += OnTeammateRevivalFightPointBroadcast;
 
             _anomalyDetector.OnRevivalDetected = async () =>
             {
@@ -100,7 +102,10 @@ public class RouteExecutionEngine
                 }
 
                 HandleRevivalTrigger(executor);
-                var routeIndex = executor.CurrentRouteIndex;
+                // 标记/上报必须用"线路在组内的索引"（CurrentJsonRouteIndex），而非"当前段在路线内的索引"
+                // （CurrentRouteIndex）。误用段索引会导致：从第 N 条线路开始时，段0=0 被错记成线路0，
+                // 轮末重跑取 groupRoutes[0] 重跑第一条线路，而非真正发生复苏的线路（重跑错误线路 bugfix）。
+                var routeIndex = executor.CurrentJsonRouteIndex;
                 if (RouteRerunDecisions.ShouldMarkRerun(routeIndex, _routeRerunMarkSet, _routeRerunDoneSet))
                 {
                     _routeRerunMarkSet.Add(routeIndex);
@@ -110,7 +115,11 @@ public class RouteExecutionEngine
                 var c = _coordinator;
                 if (c != null && c.Client.IsConnected)
                 {
-                    _ = c.Client.ReportAnomalyAsync(c.Client.MyPlayerUid, routeIndex, false);
+                    // v3（同伴战斗点级跳过）：附带复苏者正在战斗的战斗点（segIdx*10000+wpIdx），
+                    // 供其他成员做战斗点级跳过（不是 v2 的集体回神像重跑）。
+                    // 既有 3 参 ReportAnomalyAsync 保留作 fallback（老客户端走线路级）。
+                    var fightPointId = executor.CurWaypoints.Item1 * 10000 + executor.CurWaypoint.Item1;
+                    _ = c.Client.ReportAnomalyWithFightPointAsync(c.Client.MyPlayerUid, routeIndex, fightPointId);
                 }
             };
         }
@@ -136,22 +145,69 @@ public class RouteExecutionEngine
             _routeRerunMarkSet.Add(routeIndex);
             Logger.LogWarning(
                 "[联机][重试模式] 收到队友复苏广播，标记权威线路需重跑: playerUid={PlayerUid}, broadcastRouteIdx={BroadcastIdx}, currentRouteIdx={CurrentIdx}, passedSyncPoint={Passed}",
-                playerUid, routeIndex, executor.CurrentRouteIndex, passedSyncPoint);
+                playerUid, routeIndex, executor.CurrentJsonRouteIndex, passedSyncPoint);
         }
         else
         {
             Logger.LogInformation(
                 "[联机][重试模式] 收到队友复苏广播，线路已标记或已重跑: playerUid={PlayerUid}, broadcastRouteIdx={BroadcastIdx}, currentRouteIdx={CurrentIdx}, passedSyncPoint={Passed}",
-                playerUid, routeIndex, executor.CurrentRouteIndex, passedSyncPoint);
+                playerUid, routeIndex, executor.CurrentJsonRouteIndex, passedSyncPoint);
         }
 
-        if (executor.CurrentRouteIndex == routeIndex)
+        if (executor.CurrentJsonRouteIndex == routeIndex)
         {
             executor.WantsSkipCurrentFight = true;
             Logger.LogInformation(
                 "[联机][重试模式] 当前正在广播线路，跳过当前战斗: broadcastRouteIdx={BroadcastIdx}, currentRouteIdx={CurrentIdx}",
-                routeIndex, executor.CurrentRouteIndex);
+                routeIndex, executor.CurrentJsonRouteIndex);
         }
+    }
+
+    // === 联机 v3：同伴复苏广播（带战斗点）三态处理 ===
+    // 复苏成员通过 ReportAnomalyWithFightPointAsync 广播其正在战斗的战斗点（segIdx*10000+wpIdx）。
+    // 本成员收到后，按 design.md §9.3 三态处理：
+    //   情况1（自己正处在该战斗点/正在打）→ 掐断当前战斗（只停当下，不去神像、不跳段）。
+    //   情况3（自己尚未到达该战斗点）→ 记录待跳过点，走到该点时 continue 跳过。
+    //   情况2（已越过该点）→ 段范围校验忽略，不置任何标志。
+    // 复苏者本人路径（v2 OnTeammateRevivalBroadcast）逐字节不变，作为 fallback 通道。
+    private void OnTeammateRevivalFightPointBroadcast(string playerUid, int routeIndex, int fightPointId)
+    {
+        var c = _coordinator;
+        if (c != null && playerUid == c.Client.MyPlayerUid) return;   // 过滤自己
+        if (routeIndex < 0 || fightPointId < 0) return;
+
+        var executor = _activeExecutor;
+        if (executor == null) return;
+
+        // 照常标记权威线路需重跑（与既有 OnTeammateRevivalBroadcast 行为一致）。
+        if (RouteRerunDecisions.ShouldMarkRerun(routeIndex, _routeRerunMarkSet, _routeRerunDoneSet))
+        {
+            _routeRerunMarkSet.Add(routeIndex);
+            Logger.LogWarning(
+                "[联机][重试模式] 收到队友复苏广播(带战斗点)，标记权威线路需重跑: playerUid={PlayerUid}, broadcastRouteIdx={BroadcastIdx}, currentRouteIdx={CurrentIdx}",
+                playerUid, routeIndex, executor.CurrentJsonRouteIndex);
+        }
+
+        if (executor.CurrentJsonRouteIndex != routeIndex) return;      // 不是本线路，忽略（情况2隐含：本线路才处理）
+
+        var selfFp = executor.CurWaypoints.Item1 * 10000 + executor.CurWaypoint.Item1;   // 自己当前所处点
+        if (selfFp == fightPointId)
+        {
+            // 情况1：自己正处在复苏战斗点（正在打/即将进入）→ 掐断战斗（只停当下）
+            executor.WantsSkipCurrentFight = true;
+            Logger.LogInformation(
+                "[联机][重试模式] 当前正处在复苏战斗点，掐断当前战斗: broadcastRouteIdx={BroadcastIdx}, selfFp={SelfFp}",
+                routeIndex, selfFp);
+        }
+        else if (FightPointSkipDecisions.ShouldRecordPendingSkip(fightPointId, executor.CurWaypoints.Item1))
+        {
+            // 情况3：自己尚未到达复苏战斗点（或已在别处）→ 记录待跳过点，走到时才消费
+            executor.SkipRevivalFightPointId = fightPointId;
+            Logger.LogInformation(
+                "[联机][重试模式] 记录待跳过复苏战斗点: broadcastRouteIdx={BroadcastIdx}, fightPointId={Fp}, selfFp={SelfFp}",
+                routeIndex, fightPointId, selfFp);
+        }
+        // 情况2：已越过该点（段范围校验在 ShouldRecordPendingSkip 内处理）→ 忽略
     }
 
     /// <summary>
@@ -254,6 +310,7 @@ public class RouteExecutionEngine
                 {
                     var executor = new PathExecutor(ct);
                     executor.WantsSkipCurrentFight = false;
+                    executor.SkipRevivalFightPointId = -1;   // v3：每条线路入口复位待跳过战斗点
                     executor.PartyConfig = _partyConfig;
                     executor.CurrentJsonRouteIndex = currentJsonRouteIndex;
                     

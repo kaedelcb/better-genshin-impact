@@ -19,7 +19,7 @@ public static class PostTeleportRevivalProtectionDecisions
     /// <summary>
     /// 传送后卡死保护窗口时长（秒）。触发类型 <c>"stuck"</c> 使用该窗口，其余（含 <c>"revival"</c>）使用 <see cref="WindowSeconds"/>。
     /// </summary>
-    public const double StuckWindowSeconds = 20;
+    public const double StuckWindowSeconds = 30;
 
     /// <summary>
     /// 按触发类型取传送后保护窗口时长（秒）。<c>"stuck"</c> 返回 <see cref="StuckWindowSeconds"/>（20），

@@ -1002,9 +1002,9 @@ public class CoordinatorHub : Hub
                 // === 成员断线：进宽限期，不删人、不广播 PlayerListUpdated 缩水 ===
                 lock (disconnectedRoom)
                 {
-                    disconnectedRoom.GracePendingMembers[Context.ConnectionId] = DateTime.UtcNow.AddSeconds(15);
+                    disconnectedRoom.GracePendingMembers[Context.ConnectionId] = DateTime.UtcNow.AddSeconds(30);
                 }
-                _logger.LogInformation("[OnDisconnectedAsync] 成员 {ConnId} 进入宽限期(15s)，房间 {Code} 人数保持 {N}",
+                _logger.LogInformation("[OnDisconnectedAsync] 成员 {ConnId} 进入宽限期(30s)，房间 {Code} 人数保持 {N}",
                     Context.ConnectionId, disconnectedRoomCode, disconnectedRoom.Players.Count);
 
                 // SignalR 会自动从 Group 移除断线连接，room.Players 不删
@@ -1617,6 +1617,24 @@ public class CoordinatorHub : Hub
     }
 
     /// <summary>
+    /// <summary>
+    /// 接收"复苏者附带战斗点"的异常通知并广播（hoeing-route-retry-round-end-refactor v3）。
+    /// 纯透传：不解析 fightPointId、不进 AbnormalPlayerInfos（区别于既有 PlayerAnomalyNotify）。
+    /// 供客户端做"只跳过复苏那一个战斗点"（requirements.md §9 EB-v3-1 / design.md §9.1）。
+    /// </summary>
+    public async Task PlayerAnomalyNotifyFightPoint(string playerUid, int routeIndex, int fightPointId)
+    {
+        var (room, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
+        if (room == null || roomCode == null) return;
+
+        _logger.LogInformation(
+            "[PlayerAnomalyNotifyFightPoint] 房间={RoomCode}, 玩家={PlayerUid}, 线路={RouteIndex}, 战斗点={FightPointId}",
+            roomCode, playerUid, routeIndex, fightPointId);
+
+        // 纯透传广播（发送方也会收到，客户端会过滤自己）
+        await Clients.Group(roomCode).SendAsync("PlayerAnomalyNotifyFightPoint", playerUid, routeIndex, fightPointId);
+    }
+
     /// 接收玩家异常恢复通知并广播给房间内其他玩家（multiplayer-abnormal-sync-server spec）
     /// Validates: Requirements REQ-2.1, REQ-2.2, REQ-3.4
     /// </summary>

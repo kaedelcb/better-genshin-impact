@@ -1308,6 +1308,9 @@ public class TpTaskFastDrag
         }
         double maxZoomLevel = _tpConfig.MaxZoomLevel;
         int exceptionTimes = 0;
+        // 拖动未真实发生（MouseMoveMap 采样点检测命中）的连续次数账：仅在拖动生效后清零。
+        // 与 exceptionTimes（中心点跳变账）、brightnessLowStreak（亮度账）职责独立。
+        var dragNoMoveCount = 0;
         // 亮度过低"连续"轮数：只在亮度恢复正常时清零（连续性中断即重置），
         // 切区域重识别成功不清此账——否则暗图恒能识别会让它永远 ≤1，"地图亮度过低，重新传送"升级永不触发。
         // 与 exceptionTimes（中心点跳变账）职责独立，二者不再互相清零。
@@ -1571,7 +1574,25 @@ public class TpTaskFastDrag
                 moveMouseLength, moveSteps,
                 landingOverride is { } lo2 ? $"({lo2.Item1:0},{lo2.Item2:0})" : "无");
 
-            await MouseMoveMap(moveMouseX, moveMouseY, moveSteps, landingOverride);
+            bool dragMovedMap = await MouseMoveMap(moveMouseX, moveMouseY, moveSteps, landingOverride);
+
+            // 拖动未真实发生（MouseMoveMap 采样点检测到地图没动，已 break 中断并返回 false）：
+            // 不要当作"已拖动"去预测/盲走（否则 ratio≈0 误判 → 反方向乱拖）。重新拖动本段。
+            // 但用计数兜底防死循环：连续多次都拖不动（如地图已到边缘/被弹层反复挡）则放弃本轮拖动，
+            // 交给上层重试传送（与"多次尝试未移动到目标"语义一致）。
+            if (!dragMovedMap)
+            {
+                if (++dragNoMoveCount > 3)
+                {
+                    if (_tpConfig.MapMoveStepDivisor) Simulation.SendInput.Mouse.LeftButtonUp();
+                    throw new Exception("多次拖动地图未生效，无法移动地图，重新传送");
+                }
+                // MouseMoveMap 在 MapMoveStepDivisor 模式下内部不负责 LeftButtonUp（由调用方释放）；
+                // 采样点命中 break 时鼠标仍处于按下态。continue 重拖前必须先松开，否则下一次 LeftButtonDown 叠加、按钮一直按着。
+                if (_tpConfig.MapMoveStepDivisor) Simulation.SendInput.Mouse.LeftButtonUp();
+                TaskControl.Logger.LogWarning("拖动未真实发生，重新拖动本段（第 {Count} 次）", dragNoMoveCount);
+                continue;
+            }
 
             // 动态跑道：拖动越快（小 StepInterval）画面渲染越可能滞后，若立刻识别会读到中间态坐标、
             // 距离虚高导致多拖一轮。拖后先等地图像素稳定再识别（通常几十 ms 即返回，远比多拖一整轮便宜），
@@ -1629,6 +1650,8 @@ public class TpTaskFastDrag
 
                 mapCenterPoint = newCenterPoint;
                 exceptionTimes = 0;
+                // 本次拖动被确认生效（识别坐标与预测一致），清零拖动未生效账
+                dragNoMoveCount = 0;
             }
             catch (MapPositionNotRecognizedException)
             {
@@ -1842,13 +1865,24 @@ public class TpTaskFastDrag
         }
     }
 
-    private async Task MouseMoveMap(int pixelDeltaX, int pixelDeltaY, int steps = 10, (double, double)? landingOverride = null)
+    /// <summary>
+    /// 拖动地图。总位移 = (pixelDeltaX, pixelDeltaY)，steps 步缓动完成。
+    /// 快速拖动/动态跑道模式下（MapMoveStepDivisor=true）拖动中途检测采样点 (500,500)/(600,500)：
+    /// 若像素与拖动前一致且意图位移显著，说明这次拖动地图根本没动（被弹层挡住 / 拖到边界 / 手势未生效），
+    /// 返回 false 交由上层"重新拖动本段"而不是当作已拖动去预测（否则 ratio≈0 误判 → 盲走乱拖）。
+    /// 非快速拖动模式恒返回 true（保持旧行为，路径逐字节不变）。
+    /// </summary>
+    /// <returns>true=本次拖动生效（可信）；false=检测到拖动中途地图没动（应重拖本段）。</returns>
+    private async Task<bool> MouseMoveMap(int pixelDeltaX, int pixelDeltaY, int steps = 10, (double, double)? landingOverride = null)
     {
         double dpi = TaskContext.Instance().DpiScale;
         int[] stepX = GenerateSteps((int)(pixelDeltaX / dpi), steps);
         int[] stepY = GenerateSteps((int)(pixelDeltaY / dpi), steps);
         //检查标记
         var isMark = true;
+        // 是否检测到"拖动中途地图没动"：命中采样点未变 + 意图位移显著 时置 true，
+        // 方法末尾返回 !__noMoveDetected 通知上层"应重拖本段"。仅 MapMoveStepDivisor 分支有意义。
+        bool __noMoveDetected = false;
 
         if (_tpConfig.MapMoveStepDivisor)
         {
@@ -1945,7 +1979,7 @@ public class TpTaskFastDrag
                                 if (esc.IsExist())
                                 {
                                     // [诊断] 拖动中途采样点(500,500)/(600,500)像素与拖动前一致 + 有关闭按钮 → 判定地图被弹层遮挡。
-                                    // TaskControl.Logger.LogWarning("地图遮挡，重新调整 [诊断] 采样点像素未变(拖动被弹层挡住) step={I}/{Steps}", i, steps);
+                                    TaskControl.Logger.LogWarning("地图遮挡，重新调整 [诊断] 采样点像素未变(拖动被弹层挡住) step={I}/{Steps}", i, steps);
                                     await Delay(1500, ct);
                                     Simulation.SendInput.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
                                     await Delay(1500, ct);
@@ -1953,13 +1987,20 @@ public class TpTaskFastDrag
                                 else
                                 {
                                     // [诊断] 采样点像素未变 + 无关闭按钮 → 拖动中途地图没动（假设1直接证据）。
-                                    // 打出采样点在第几步、以及两个采样点的 BGR 值，确认是"真没动"而非采样点恰好选在同色区。
-                                    // TaskControl.Logger.LogWarning(
-                                    //     "地图拖动异常，重新调整 [诊断] 拖动中途采样点像素未变 step={I}/{Steps} p(500,500)前={A} 后={C} p(600,500)前={B} 后={D}",
-                                    //     i, steps, pos.ToString(), pos3.ToString(), pos2.ToString(), pos4.ToString());
+                                    // 但仅当意图位移足够大时才算"应该动却未动"：位移很小（已接近到位）时采样点不变是
+                                    // 正常的，不应误判为重拖。60px 约等于一步缓动，小于此值说明基本到位、无需重拖。
+                                    bool intentSignificant = Math.Abs(pixelDeltaX) + Math.Abs(pixelDeltaY) >= 60;
+                                    if (intentSignificant)
+                                    {
+                                        // 恢复 ec5ed76b4 注释掉的诊断：证明"拖动未真实发生"确实被命中（而非采样点恰在同色区）。
+                                        TaskControl.Logger.LogWarning(
+                                            "地图拖动异常，重新调整 [诊断] 拖动中途采样点像素未变 step={I}/{Steps} p(500,500)前={A} 后={C} p(600,500)前={B} 后={D}",
+                                            i, steps, pos.ToString(), pos3.ToString(), pos2.ToString(), pos4.ToString());
+                                        // 标记本次拖动未生效，跳出分步循环（让调用方 LeftButtonUp），方法末尾返回 false 通知上层重拖本段
+                                        __noMoveDetected = true;
+                                        break;
+                                    }
                                 }
-                                
-                                break;
                             }
                             isMark = false;
                         }
@@ -2013,6 +2054,11 @@ public class TpTaskFastDrag
         }
 
         if (!_tpConfig.MapMoveStepDivisor)Simulation.SendInput.Mouse.LeftButtonUp();
+
+        // 返回本次拖动是否生效：MapMoveStepDivisor 模式检测到"地图没动"则返回 false（通知上层重拖本段），
+        // 否则返回 true。非 MapMoveStepDivisor 模式恒 true（保持旧行为）。
+        // LeftButtonUp 在 MapMoveStepDivisor 模式下由调用方 MoveMapTo 负责（break/异常/循环尾），此处不重复。
+        return !__noMoveDetected;
     }
 
     /// <summary>
@@ -2289,23 +2335,42 @@ public class TpTaskFastDrag
                 double targetZoom = GetDisplayTpPointZoomLevel(mapName);
                 if (Math.Abs(zoomNow - targetZoom) > _tpConfig.PrecisionThreshold)
                 {
-                    // 复原前，按缩放比例修正 rect，使其对应 4.4 缩放
-                    if (rect != default && Math.Abs(zoomNow - 5.5) < 0.5)
-                    {
-                        double scale = targetZoom / 5.5;
-                        double cx = rect.X + rect.Width / 2.0;
-                        double cy = rect.Y + rect.Height / 2.0;
-                        rect = new Rect(
-                            (int)(cx - rect.Width * scale / 2.0),
-                            (int)(cy - rect.Height * scale / 2.0),
-                            (int)(rect.Width * scale),
-                            (int)(rect.Height * scale));
-                        TaskControl.Logger.LogInformation("修正 rect 按缩放比例 {Scale:0.00}（{From:0.0}→{To:0.0}）：{Rect}",
-                            scale, zoomNow, targetZoom, rect);
-                    }
+                    // 先把本次按 5.5 识别到的 rect 记录下来（用于复原后与【重识别 rect】对比 + 重识别失败时的兜底）
+                    var rectOn55 = rect;
 
                     AdjustMapZoomLevel(zoomNow, targetZoom).GetAwaiter().GetResult();
                     TaskControl.Logger.LogInformation("识别完成：缩放复原到 {Z:0.0}（传送点可点击档）", targetZoom);
+
+                    // 🔴 关键修复：复原到目标缩放后，以当前真实缩放【重新识别一次 rect】，取代原来
+                    //   "按 targetZoom/5.5 比例缩放修正 rect" 的几何猜算。
+                    //   比例修正在跨缩放(5.5→4.4)时存在屏幕中心/边界锚点误差，会传导成点击坐标偏移
+                    //   （点偏 → ClickTpPoint 误报"传送点未激活或不存在"）。
+                    //   复原后画面已稳定在目标缩放，重新识别一次是确定性的，误差最小。
+                    //   仅自救分支多此一次识别（~100-200ms），正常传送路径（zoomChangedForRecover=false）
+                    //   不走这里、零开销、零速度影响。
+                    //   重识别失败 → 用回 5.5 时的 rect 作为兜底（退化到比例修正的旧行为，不抛）。
+                    try
+                    {
+                        using var raRedo = CaptureToRectArea();
+                        using var mapScaleButtonRedo = raRedo.Find(QuickTeleportAssets.Get(raRedo).MapScaleButtonRo);
+                        if (mapScaleButtonRedo.IsExist())
+                        {
+                            rect = MapManager.GetMap(mapName, _mapMatchingMethod).GetBigMapRect(raRedo.CacheGreyMat);
+                            TaskControl.Logger.LogInformation(
+                                "[自救后重识别 rect] 5.5识别={Rect55} 复原{From:0.0}→{To:0.0} 重识别={Rect}", 
+                                rectOn55, zoomNow, targetZoom, rect);
+                        }
+                        else
+                        {
+                            rect = rectOn55; // 不在大地图界面，保留 5.5 的 rect 兜底
+                            TaskControl.Logger.LogWarning("[自救后重识别 rect] 复原后不在大地图界面，保留 5.5 识别 rect：{Rect}", rectOn55);
+                        }
+                    }
+                    catch (Exception exRe)
+                    {
+                        rect = rectOn55; // 重识别失败，用 5.5 的 rect 兜底（等同旧比例修正，安全性不降）
+                        TaskControl.Logger.LogWarning("[自救后重识别 rect] 重识别失败，保留 5.5 识别 rect：{Msg}", exRe.Message);
+                    }
                 }
             }
             catch (Exception ex)

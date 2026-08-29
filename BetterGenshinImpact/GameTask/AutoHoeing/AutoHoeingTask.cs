@@ -1212,6 +1212,32 @@ public class AutoHoeingTask : ISoloTask
                 catch { }
             };
 
+            // === 成员掉线广播 → 仅执行阶段协同中止重开（guard-multiplayer-peerdrop-visual-blind 方案A）===
+            // 服务端 HeartbeatMonitor 掉线删除时广播 MemberStatusChanged(uid,"Offline")。
+            // 仅"执行阶段"收到且非自己才触发；组队阶段靠"等全员超时结束"既有机制、轮换窗口尊重 IsRoundSwitching 抑制。
+            // 幂等：_stopReason==null 检查，防与视觉失明检测重复触发。
+            client.MemberStatusChangedReceived += (playerUid, status, targetProgress) =>
+            {
+                if (!string.Equals(status, "Offline", System.StringComparison.Ordinal)) return; // 只看掉线
+                if (_stopReason != null) return; // 幂等：已触发过协同中止
+                bool inExecutionPhase = _worldStateMonitor != null
+                    && !_worldStateMonitor.IsPartyPhase
+                    && !_worldStateMonitor.IsRoundSwitching
+                    && !_worldStateMonitor.IsRoleSwitching
+                    && !_worldStateMonitor.IsEatingMedicine;
+                if (!inExecutionPhase) return; // 仅执行阶段；组队/轮换/换角色/吃药窗口不额外中止
+                _logger.LogWarning("[联机] 收到成员 Offline 广播: 玩家={PlayerUid}，执行阶段触发协同中止重开", playerUid);
+                _stopReason = "检测到成员离线（服务端广播），协同中止重开";
+                _sessionTerminated = true;
+                try { _linkedStopCts?.Cancel(); }
+                catch (ObjectDisposedException) { }
+                catch { }
+                // P1 兜底：与 AllReachedExpCap 双层模式对齐（coordinator 级 TriggerCoordinatedStop）。
+                // 房主收到 Offline 主动 CloseRoomAsync 广播 RoomClosed，给"漏收 Offline 的在线端"第二通道强制停止。
+                // TriggerCoordinatedStop 幂等（IsExitTriggered/Cancel 重复无害）；fire-and-forget 与 OnAllReachedExpCap 一致。
+                _ = _multiplayerCoordinator!.TriggerCoordinatedStop(_multiplayerCoordinator.IsHost, "检测到成员离线（服务端广播），协同中止重开");
+            };
+
             _worldStateMonitor.Start();
             _logger.LogInformation("[联机] 路线一致性验证将在路线筛选后执行");
 

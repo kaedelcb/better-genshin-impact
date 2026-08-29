@@ -478,3 +478,95 @@
 - **修法（茶包版 fast-drag）**：`TpTaskFastDrag.MouseClickAndMove`（仅缩放拖动唯一调用点）改用 `SystemControl.GetCaptureRect(handle)` 实时读窗口 + `Width/1920` 实时比例算绝对屏幕坐标，替代过期的 `ScaleTo1080PRatio`。正常场景窗口未变时实时值==缓存值，逐字节不变零回归；中途切分辨率后跟随实时窗口。
 - **约束**：`MouseClickAndMove` 在 `TpTaskFastDrag` 只有一个调用点（`AdjustMapZoomLevel` 缩放拖动），公版 `TpTaskOfficial.MouseClickAndMove` 独立未动。不重建 `SystemInfo`（影响所有缓存 assets）、不改共享 `GameRegionMove`（影响所有点击/拖动）→ 均为高风险，避免。
 - **教训**：改"识别/写入坐标脱节"类 bug，先确认两路径的**分辨率比例来源是否一致**；遇"高分辨率才偏、1080p 正常 + 方向相反" → 高度怀疑 `SystemInfo` 运行期缓存过期，看日志里的 `ScaleTo1080PRatio` 是否与当前窗口一致，而非改模板参数。
+### 成员掉线容错重连机制——CurrentRoomPlayerCount 不会"一断就减"（2026-08-30 调研）
+- **场景**：用户问 WorldStateMonitor 那条"执行期房间人数 {Cur} 低于基准"日志里 `{Cur}` 读的是哪，并担心"成员一断线这个数值就减少导致误中止"。
+- **数据源确认**：`{Cur}` = `_client.CurrentRoomPlayerCount`（CoordinatorClient.cs:119），由服务端 SignalR `PlayerListUpdated` 广播刷新（`list.Count`），是**服务器权威房间人数**，与本地截图/模板视觉识别（`DetectedMultiGameStatus`）是两套独立东西。链路：服务端 `room.Players` → 广播 → `CurrentRoomPlayerCount = list.Count`。
+- **关键架构事实（不会一断就减）**：服务端对成员断线有**15 秒宽限期**（`CoordinatorHub.OnDisconnectedAsync` → `GracePendingMembers[connId] = now+15s`），**不删人、不广播缩水 PlayerListUpdated**，人数保持不变。宽限期内同 playerUid/playerName 重连 → `RoomManager` 复用同一 PlayerInfo、只换 ConnectionId、清宽限期标记、同步替换 ArrivalSets/FightDoneSets 里的旧 connId。
+- **两层兜底**：① 客户端 `CoordinatorClient.ConnectAsync` 配 `WithAutomaticReconnect`（0s/2s/10s/30s）自动重连；② 服务端心跳判定 `LastHeartbeat < 2分钟`（CoordinatorHub.cs:1116）。只有**心跳超时 + 宽限期满仍未重连**，`HeartbeatMonitor` 才真正 `Players.Remove` 并广播缩水 PlayerListUpdated（HeartbeatMonitor.cs:113-135）。
+- **三层防误中止结论**：短断线（15s 重连窗口）→ 人数不变 → 守卫不触发；真掉线 → 广播缩水 → 守卫看到下降还要**连续 2 次去抖**才触发协同中止。所以"一断就减导致误中止"被三层共同拦住。
+- **文件位置**：`BgiCoordinatorServer/Hubs/CoordinatorHub.cs`（OnDisconnectedAsync 宽限期、心跳 2min 判定）、`BgiCoordinatorServer/Services/HeartbeatMonitor.cs`（宽限期满清理）、`BgiCoordinatorServer/Services/RoomManager.cs`（宽限期内重连复用）、`BgiCoordinatorServer/Models/Room.cs`（GracePendingMembers 字段）、`CoordinatorClient.cs`（CurrentRoomPlayerCount + 自动重连）。
+### 联机重连机制三道防线全景图 + 已知设计矛盾（2026-08-30 架构评审）
+- **场景**：用户要求评审现有联机重连机制架构，问"容错是否足够、是否合理"。本次评审把整套机制梳理成全景图，并识别出两个设计矛盾点。
+- **三道防线（掉线方自己，防自己误退出）**：
+  1. **心跳失败墙钟窗口**（`WorldStateMonitor.NotifyHeartbeatFailure`）：30s 真实墙钟 + ≥2 次失败 → `ConfirmExitAsync("心跳连续失败超过阈值")`。**关键设计**：用真实墙钟替代次数累计，免疫"SignalR 重连结束瞬间批量爆发"（重连窗口内排队的多个 InvokeAsync 同一时刻批量抛异常，按次数累计会瞬间打满阈值）。这是踩过坑后的针对性修复，详见 `WorldStateMonitor.cs:100-108` 注释。
+  2. **恢复窗口**（`WorldStateMonitor._recoveryWindowStart`）：检测到异常后 30s 恢复窗口，允许瞬态干扰自愈。
+  3. **重连抑制**（需求 3.6）：`_client.IsReconnecting` 时延长 `_recoveryWindowStart`（`:604-610`），避免重连过程中触发误退出。`:713-718` 还在重连中跳过加入尝试，防与 OnConnectionClosed 竞态。
+- **三道防线（没掉线方，防误判队友掉线）**：
+  1. **掉线守卫去抖**：当前人数 < 基准 → 连续 2 次确认才触发协同中止（`PeerDropConfirmChecks = 2`）。
+  2. **抑制窗口**：组队/轮换/换角色/吃药/传送/暂停 6 类窗口一律复位 `_peerBaselineCount = -1`，等下个执行阶段重新捕获基准。
+  3. **15s 宽限期内人数不变** → 守卫不触发（服务端 OnDisconnectedAsync 不删人、不广播缩水）。
+- **分层时间尺度（已文档化）**：`联机锄地使用教程.md:120-127` 明确写"5 秒心跳 / 30 秒超时 / 30 秒恢复窗口"——这套设计是有意为之、文档化的。
+- **已知 bug 记录**：`WaitForAllPlayersBugConditionTest:147-212` 记录了"Bug Condition 3：心跳延迟导致 AllOnlineMembersReported 误判在线人数"——团队已知心跳判定边界问题，用 2 分钟宽窗口（`LastHeartbeat < 2分钟`，`RoomManager.cs` 多处）替代 30s 判死来缓解。注意：30s 判死（RemoveDeadPlayers）和 2min 在线判定（AllOnlineMembersReported 等）是**两套不同语义**，容易混淆。
+- **设计矛盾点 1（中风险）：宽限期 15s < 重连末档 30s**：框架重连序列 0/2/10/30，10s 档一失败就要等 30s 档。15s 宽限期在 10s 档失败后立即到期 → 掉线方被踢，靠重新 JoinRoom 加回，造成「先减后加」人数抖动。缓解：客户端有三道防线消化扰动；但**没掉线方**的掉线守卫（2 次去抖）在抖动窗口内可能累够 2 次而误中止。**建议**：宽限期 15s → 30s（`CoordinatorHub.OnDisconnectedAsync` 的 `AddSeconds(15)` → `AddSeconds(30)`），改动 1 行零回归风险。
+- **设计矛盾点 2（低风险）：双重重连逻辑并存**：`WithAutomaticReconnect`（无限循环）+ `OnConnectionClosed`（8 次手动兜底，2 轮 × 4 次 ≈ 64s）。**实际情况**：因为 `WithAutomaticReconnect` 数组非 null，框架永不放弃 → `Closed` 事件只在 Stop 时触发 → `OnConnectionClosed` 近乎死代码。两套并存让"到底谁在重连"不可预测，但功能无害（框架自动重连正常工作）。**建议**：先 grep 运行日志确认 `OnConnectionClosed` 是否真的死代码（看 "CoordinatorClient 连接断开，开始指数退避重连" 日志是否打印过），再决定删/留。
+- **整体评审结论**：架构合理性良好（7.5/10），分层时间尺度合理、恢复窗口+重连抑制是对已知问题的针对性修复、EC-03 墙钟窗口是正确的容错设计、去中心化协同中止容错性强、有文档化设计意图+历史 bug 记录支撑。不足是宽限期略短于重连末档 + 双重重连逻辑让可观测性差。
+- **文件位置**：`BetterGenshinImpact/GameTask/AutoHoeing/Multiplayer/CoordinatorClient.cs`（重连双逻辑）、`BetterGenshinImpact/GameTask/AutoHoeing/Multiplayer/WorldStateMonitor.cs`（三道掉线方防线 + EC-03 墙钟）、`BgiCoordinatorServer/Hubs/CoordinatorHub.cs`（宽限期 OnDisconnectedAsync）、`BgiCoordinatorServer/Services/HeartbeatMonitor.cs`（30s 判死 + 10s 扫描）、`BgiCoordinatorServer/Services/RoomManager.cs`（2min 在线判定 + 宽限期复用）、`联机锄地使用教程.md:120-127`（设计意图文档化）、`WaitForAllPlayersBugConditionTest:147-212`（已知 bug 记录）。
+### 守护重开链路是本地判定、零 SignalR 协议（2026-08-30 架构评审补充）
+- **场景**：用户问"协同中止重开"后，掉线方收不到服务器指令时，本地怎么判定重开。本次把"重开链路"梳理清楚，与之前"三道防线全景图"（中止侧）互补。
+- **关键架构事实（重开零服务器依赖）**：重开链路完全走本地，spec design.md:391 明确写"零新增 SignalR 协议"。链路：
+  ```
+  WorldStateMonitor.ConfirmExitAsync(reason)
+    → OnExitConfirmed.Invoke(isHost, reason)        // AutoHoeingTask.cs:1151
+       ├─ _stopReason = reason
+       ├─ _linkedStopCts.Cancel()
+       └─ MultiplayerCoordinator.TriggerCoordinatedStop(isHost, reason)
+  → Start() finally 块（AutoHoeingTask.cs:727-731）
+     → HoeingGuardDecisions.ShouldRestart(...)     // 纯函数本地判定
+     → 满足 6 个条件 → new AutoHoeingTask() { _isGuardRestartRun = true }
+     → await restart.Start(ct)                      // 本地新建实例重开
+  ```
+- **`ShouldRestart` 6 个本地条件（全部内存值，不查服务器）**：
+  1. `guardMode == true`（守护开关）
+  2. `multiplayerEnabled == true`（单机零感知）
+  3. `!userCancelled`（手动停止不重开）
+  4. `!expCapStopTriggered`（经验上限正常停止不重开）
+  5. `!isGuardRestartRun`（重开只一次，次数上限 1）
+  6. `IsIncompleteRun(...)`（`stopReason` 非空 或 未执行数 ≥ 阈值）
+- **掉线方怎么重开**：它自己 `WorldStateMonitor` 的"心跳失败墙钟"（30s + 2 次，EC-03）或"掉出房间且重试失败"事件触发 `ConfirmExitAsync("心跳连续失败超过阈值")` → `_stopReason` 非空 → 本地 `ShouldRestart` → 本地重开。**不需要收到服务器广播**（掉线方本来就收不到）。
+- **没掉线方怎么重开**：服务端心跳超时 + 宽限期满删人 → 广播缩水 PlayerListUpdated → 在线方 `CurrentRoomPlayerCount` 下降 → 掉线守卫去抖 2 次确认 → `ConfirmExitAsync("检测到队友掉线，协同中止重开")` → `_stopReason` 非空 → 本地 `ShouldRestart` → 本地重开。中止阶段依赖服务器广播（RoomClosed 给其他在线方），但**重开阶段不依赖**（只看本地 `_stopReason`）。
+- **"中止"vs"重开"依赖矩阵**：
+  | 阶段 | 依赖服务器？ | 掉线方能参与？ |
+  |------|------------|--------------|
+  | 中止（协同停止） | 是（RoomClosed 广播给其他在线方） | 不能（已断线），但它自己会因心跳失败独立退出 |
+  | 重开 | **否**（本地 `ShouldRestart` 纯函数） | **能**（本地判定，不需要收广播） |
+- **潜在风险（设计假设）**：当前是"去中心化、各端独立重开"。假设每台机器独立重开后重新组队/加入房间，最终"重新凑齐"。但掉线方重开时机滞后（30s 心跳墙钟 + 0/2/10/30s 重连循环），在线方可能已重开新一轮——可能导致"在线方跑第二轮、掉线方还在重连"的不一致状态。`ShouldRestart` 的 `isGuardRestartRun` 保证只重开一次，若重开后又掉线不会再重开。
+- **文件位置**：`BetterGenshinImpact/GameTask/AutoHoeing/Multiplayer/HoeingGuardDecisions.cs`（`ShouldRestart` 纯函数 6 条件）、`BetterGenshinImpact/GameTask/AutoHoeing/AutoHoeingTask.cs:1151`（`OnExitConfirmed` 回调处理器）、`BetterGenshinImpact/GameTask/AutoHoeing/AutoHoeingTask.cs:727-731`（Start finally 块守护重开判定）、`.kiro/specs/hoeing-multiplayer-guard-auto-restart/design.md:391-395`（"零新增 SignalR 协议"设计意图）、`requirements.md:R2.4/R2.5`（重开语义：新建实例 + 磁盘 CD 记录跳过已完成线路）。
+- **教训**：评审联机容错架构时，要分清"中止"和"重开"两条链路——中止依赖服务器广播（去中心化协同停止），重开不依赖（本地纯函数判定）。掉线方"收不到服务器指令"不是 bug，是设计——它根本不需要服务器指令就能本地重开。排查"重开不生效"时，应查本地 `_stopReason` 和 `ShouldRestart` 的 6 个条件，而不是查服务器广播是否到达。
+### 退世界 ≠ 掉线：协调器花名册人数（CurrentRoomPlayerCount）对"退世界"失明（2026-08-30 根因诊断）
+- **场景**：用户日志显示"视觉人数=3 与协调器权威人数=4 不一致"持续了整 7 分钟（12:10~12:17）从未收敛，本地视觉识别到有人走了（P 图标只剩 3 个），但系统一直按 4 人继续锄地、掉线守卫也不触发。用户问"滞后窗口多久，为什么继续执行了几分钟"。
+- **根因（关键架构事实）**：`CurrentRoomPlayerCount = CurrentPlayerList.Count`（协调器房间花名册人数），它只反映"谁连着 SignalR/在房间花名册里"，**不反映"谁真的进了房主世界"**。而"退世界"（`AutoPartyTask.LeaveWorldAsync`，纯游戏内 UI 操作点确认弹窗返回单机）**不会**把玩家从协调器房间花名册移除 → `CurrentRoomPlayerCount` 保持 4 永不降。
+- **两条集合是独立的**：`RoomManager.WorldJoinedSet`（已加入世界集合，用 `RecordWorldJoined` 加入 / `ResetWorldJoinedSet` 多世界轮换时清空）与房间花名册 `CurrentPlayerList` 是两套独立集合。`WorldJoinedSet` 只用于 `AllWorldJoined` 同步，**没有接进 `CurrentRoomPlayerCount` 或掉线守卫**。没有任何"退世界就从 WorldJoinedSet 移除"的机制。
+- **为什么掉线守卫和交叉校验都失明**：两者都读 `_client.CurrentRoomPlayerCount`（花名册人数=4）。退世界的人还在花名册 → 协调器以为人还在 → 掉线守卫（R5，`UpdatePeerBaseline`）永远看到 4 不触发；交叉校验（`MultiGamePlayerCountCrossValidator`）也用它把正确的视觉 3 覆盖成 4 → 一直按满员锄地直到整局结束。
+- **滞后窗口量化**：
+  - **真掉线/断连**（服务端判死）：约 **15~40s**（心跳超时 30s + 扫描 10s + 宽限期 15s，看是否触发 OnDisconnectedAsync）。
+  - **退世界**（`LeaveWorldAsync`）：**系统永不感知，滞后 = 整局结束**。因为退世界不脱离花名册。
+- **这是 software-design-principles.md 已记录反模式的真实爆雷实例**："用协调器人数校正视觉人数"本是为防视觉漏识别，却因协调器滞后/不跟踪"是否在世界"，在退世界场景**用滞后的花名册人数覆盖了正确的即时视觉值**。
+- **区别盲区（易踩坑）**：修这个问题时注意——退世界（游戏内 UI 返回单机，`LeaveWorldAsync`）vs 掉线（SignalR 断开，服务端判死）。两者对协调器花名册的影响完全不同：退世界不脱离名册、掉线判死才脱离名册。视觉识别（P 模板）能即时看到真实世界人数（P 图标数量），协调器花名册只能看到"连没连"。
+- **修复方向（待用户确认）**：A. 服务端给"退世界"建通知（`LeaveWorldAsync` 后客户端调服务端移除方法，`CurrentRoomPlayerCount` 即时降 1，最彻底）；B. 掉线守卫改用视觉人数参与判定（视觉持续看到 3 触发，但需去抖防战斗中漏识别）；C. 协调器花名册增加"未加入世界"标记，真实世界人数=`WorldJoinedSet`。
+- **文件位置**：`BetterGenshinImpact/GameTask/AutoHoeing/Services/AutoPartyTask.cs`（`LeaveWorldAsync` 纯游戏内 UI 操作，不调服务端移除）、`BgiCoordinatorServer/Models/Room.cs:95`（`WorldJoinedSet` 独立集合）、`BgiCoordinatorServer/Services/RoomManager.cs:597-615`（`RecordWorldJoined`/`ResetWorldJoinedSet`，无移除）、`BetterGenshinImpact/GameTask/AutoFight/Model/PartyAvatarSideIndexHelper.cs` 与 `MultiGamePlayerCountCrossValidator.cs`（交叉校验用花名册人数覆盖视觉）、`BetterGenshinImpact/GameTask/AutoHoeing/Multiplayer/WorldStateMonitor.cs`（掉线守卫读 `CurrentRoomPlayerCount`）。
+### 掉线守卫基准捕获失效：协调器人数已降却不触发（2026-08-30，与退世界失明无关的独立 bug）
+- **场景**：用户 LOG 显示"服务端已踢 2 人，协调器 CurrentRoomPlayerCount 已从 4→3→2（14:10:23 变 3、14:12:06 变 2），但日志所有者（成员模式，刷房主世界）完全不知道有异常，继续正常锄地整段（14:10~14:13），掉线守卫一条日志都没打"。
+- **铁证（LOG）**：`[人数校验] 视觉人数=3 与协调器权威人数=2 不一致` 反复出现（14:12:06/14:12:29/14:12:53/14:13:35），说明协调器人数已更新到 2、机器也收到了，但**没有 `[WorldStateMonitor] 执行期房间人数...` 掉线守卫日志**。同时视觉一直误报 3（视觉>协调器）。
+- **根因（掉线守卫 R5 基准捕获失效）**：R5 块只在"干净执行帧"捕获 `_peerBaselineCount`；但成员模式**绝大部分时间处于抑制窗口**（传送抑制期 / 战斗 / 同步点等待 / 传送失败重试），见 LOG 大量 `[WorldStateMonitor] 进入传送抑制期`/`传送抑制期中`/`传送失败重试刷新传送抑制计时`。抑制窗口会把 `_peerBaselineCount` 复位成 -1，干净帧太少时重新捕获"当前人数"当基准 → `below`（当前<基准）**永不成立** → 掉线守卫不触发，即使协调器人数已降到 2。
+- **本次视觉失明检测（ShouldTriggerVisualMismatchExit）对此场景零作用**：它条件是 `视觉人数 < 协调器人数`；此场景是"视觉=3 > 协调器=2"（视觉误报多），方向相反 → 返回 false。视觉失明检测只解决"退世界失明"（视觉<协调器），不解决"协调器已降但掉线守卫因基准复位失效"。
+- **区别两个根因（易混淆）**：
+  - **退世界失明**：协调器不知道人退世界，`CurrentRoomPlayerCount` 停留（视觉<协调器）。本次视觉失明检测解决这个。
+  - **协调器更新但守卫不触发**：`CurrentRoomPlayerCount` 已降（协调器对），但 R5 基准因抑制窗口反复复位 → 掉线守卫不触发 + 视觉误报 > 协调器。**本次没解决，独立 bug**。
+- **待排查方向（未实施）**：① R5 基准捕获在成员模式 + 高频抑制窗口下失效，需要让"人数下降"在抑制窗口也能被感知（但仍需防误判）；② 视觉识别在"别人世界"误报 3（P 图标计数不准，把当前出战角色也算进去），需要在别人世界模式下校准视觉计数。
+- **文件位置**：`BetterGenshinImpact/GameTask/AutoHoeing/Multiplayer/WorldStateMonitor.cs`（R5 掉线守卫块，`_peerBaselineCount` 抑制窗口复位 + 干净帧捕获；`inSuppressedWindow` 含传送/战斗/等待）、`PartyAvatarSideIndexHelper.DetectedMultiGameStatus`（视觉 P 图标计数）、`MultiGamePlayerCountCrossValidator.Resolve`（交叉校验：视觉 3 + 协调器 2 → 覆盖成 2，但 R5 仍因基准复位不触发）。
+### 掉线感知三信号互补 + 抑制窗口基准保留（2026-08-30，guard-multiplayer-peerdrop-visual-blind spec 完整实现）
+- **场景**：联机锄地"锄地必须全员，不允许不齐人"。完整实现了掉线/退世界感知闭环，沉淀三个互补信号 + 一个关键修复模式。
+- **三信号互补（各管各的场景，互不重复）**：
+  1. **服务端 Offline 广播**（方案A，新增）：`CoordinatorClient` 新增订阅 `_connection.On<string,string,long>("MemberStatusChanged", ...)`（此前无接收端）+ 事件 `MemberStatusChangedReceived`；`AutoHoeingTask` 订阅，仅执行阶段（`!_worldStateMonitor.IsPartyPhase && !IsRoundSwitching && !IsRoleSwitching && !IsEatingMedicine`）收到 `status=="Offline"` 且非自己 → 设 `_stopReason` + `_sessionTerminated` + Cancel。服务端 `HeartbeatMonitor.cs:83/133` 已广播（宽限期满+心跳判死后），客户端仅需接。组队阶段靠"等全员超时结束"既有机制、轮换窗口尊重 `IsRoundSwitching`。
+  2. **视觉失明检测**（改动2）：视觉真实人数 < 协调器花名册人数持续 30s 墙钟 → 退世界失明（协调器不知道人退世界）。纯函数 `ShouldTriggerVisualMismatchExit` + PBT。
+  3. **R5 协调器人数下降**（边界1修复）：抑制窗口**分两类**——组队/轮换复位 `_peerBaselineCount=-1`（人未齐/房间重建，语义重置）；传送/换角色/吃药/暂停**保留基准**（房间未变，协调器人数不该变，若降=真掉线需被感知）。修复"协调器人数已降但 R5 因基准复位不触发"。
+- **幂等**：三个信号都用 `_stopReason == null` 检查，同一次掉线最多触发一次 `ConfirmExitAsync`（走既有 `OnExitConfirmed` → `_stopReason` → `ShouldRestart` 重开链路，`isGuardRestartRun` 保证重开只一次）。
+- **关键模式（可复用）**：联机掉线感知 = 服务端明确广播（Offline）+ 视觉旁路（失明）+ 协调器对比（人数下降），三者互补而非重复；抑制窗口要区分"语义重置类"（组队/轮换，复位基准）与"人数不该变类"（传送/换角色/吃药/暂停，保留基准）。
+- **文件位置**：`CoordinatorClient.cs`（订阅+事件）、`AutoHoeingTask.cs:1216-1231`（Offline 处理器）、`WorldStateMonitor.cs`（视觉失明检测 + R5 抑制窗口分两类）、`HoeingGuardDecisions.cs`（`ShouldTriggerVisualMismatchExit` 纯函数）、`HoeingGuardVisualMismatchTests.cs`（PBT 6 个）。
+- **补充（P1，2026-08-30）**：联机异常广播的**双层处理模式**——收到异常广播（Offline/AllReachedExpCap/CollectiveSkipDegraded）时，**task 级**设 `_stopReason` + `_sessionTerminated` + `_linkedStopCts.Cancel()`（本端停止），**coordinator 级** `_ = _multiplayerCoordinator!.TriggerCoordinatedStop(IsHost, reason)`（房主主动 `CloseRoomAsync` 广播 RoomClosed，给"漏收主广播的在线端"第二通道强制停止）。`AllReachedExpCap` 是双层（`MultiplayerCoordinator.OnAllReachedExpCap` 单独调 TriggerCoordinatedStop），**新增 Offline 处理器也必须双层**，否则缺"房主关房"兜底。`TriggerCoordinatedStop` 幂等（`IsExitTriggered`/Cancel 重复无害，内部 try/catch 吞 ObjectDisposedException），fire-and-forget `_ =` 与既有模式一致。文件位置：`AutoHoeingTask.cs` Offline 处理器末尾。
+### PBT 属性构造三坑（2026-08-30，FightPointSkipDecisionsTest 调试）
+- 写 FsCheck PBT 属性最容易构造错误导致"生产代码正确但测试红"，三处都是属性构造问题而非生产逻辑问题：
+  1. **用 `int` 撒任意值会把域外无效输入也算进去**：Encode(segIdx, wpIdx) 里 wpIdx=-1 产生编码 -1，而 -1 语义是"无待跳过点"（`IsMatch` 明确返回 false）。属性 `IsMatch(Encode(a,b), Encode(a,b))` 对任意 int 撒输入时被 `(0,-1)` 伪杀。修复：往返属性改用 `NonNegativeInt` 收敛域，把负编码（-1 无效值）单独用一条属性守卫（`IsMatch(-1,x)==false`），别混进主属性。
+  2. **"同段/未来段"构造方向反了**：想验证 `ShouldRecordPendingSkip(fp, curSeg)` 在同段/未来段为 true，却构造 `curSeg = fpSeg + offset`（curSeg 恒 ≥ fpSeg），导致 fp 是"已越过"→ 生产正确返回 false、测试断言 true 失败。正确构造：`fpSeg = curSeg + offset`（保证 fp 段 ≥ 当前段）。
+  3. **C# 负数取模为负**：`wp % 10000` 当 wp 为负得到负值，可能产生伪碰撞。归一化到非负：`((x % 10000) + 10000) % 10000`。
+- **纪律**：写 PBT 前先想清楚"我要验证的语义域是什么、哪些输入是不合法/哨兵值"，用 `NonNegativeInt`/`Gen.Choose` 等约束生成器限定合法域；负号/哨兵（-1）单独用边界属性守护。不要用裸 `int` 撒全空间然后断言"全真"。
