@@ -577,3 +577,16 @@
   1. **.cs 源文件一律用 `str_replace` 工具（字节安全，不碰编码）**，不要用 PowerShell `ReadAllText/WriteAllText` 覆盖写。
   2. 若必须用 PowerShell 读写 .cs，必须显式 `New-Object System.Text.UTF8Encoding($false)` 且**保留 BOM**（`ReadAllText` 时用 UTF8 感知）；读前先 `ReadAllBytes` 前 4 字节确认编码。
   3. 写后必须用 `git diff` 或读字节校验：若看到 `错误 CS`/乱码/中文被截断（如 `/缃戠粶`），立即 `git restore` 回滚，别在残缺文件上继续。
+### 优选公版「微信 Clawbot 通知渠道」遇 2 个冲突及解法（2026-08-31，commit 9bf03dfb）
+- **场景**：`git cherry-pick d24023e7`（公版「feat: 新增微信 Clawbot 通知渠道（扫码登录 + 独立 REST 推送） #3542」，10 文件 +1785/-24）到 `main-OldTeaBag-B143`。用户认为"通知这块没怎么改过"，但产生 2 个冲突，根因不是用户改了通知逻辑，而是**该公版提交本身重构了通知底层模型**（NotifierManager 引入租约 Lease 模型 + WebSocketNotifier 改共享令牌源），触碰了旧模型与当前分支的交点。
+- **冲突预演技巧（不 DIFF 全代码）**：老式 `git merge-tree <base=commit^> <ours=HEAD> <theirs=commit>`（注意是 `commit^` 作三方 base，不是 `--write-tree` 新格式——新格式会把整个祖先链一起合并产生海量假冲突）。逐文件判断"我方是否改过"用 `git diff --quiet base HEAD -- <file>`（exit 1=改过，0=未改）+ `git cat-file -e HEAD:<file>`（确认我方是否有该文件）。真正冲突点可用 grep 冲突标记 `<<<<<<<` 结合上下文定位到具体文件。
+- **结果**：8/10 文件无冲突（新增 WechatClawbot* 干净加入 + NotificationConfig/NotifierManager/SettingsPage 自动合并），仅 2 个真实冲突：
+  1. `NotificationService.TestNotifierAsync`：我方旧 `GetNotifier<T>().SendAsync` vs 公版 `_notifierManager.SendTestAsync<T>()`（配合新租约模型）。取公版（因 NotifierManager.GetTestAsync 本次已带进来）。
+  2. `WebSocketNotifier.Dispose`：我方 `_cts.Cancel()/_cts.Dispose()` vs 公版只 `_webSocket.Dispose()`（因 NotificationService 已有共享 `_webSocketCts`，StopAsync 统一 cancel，Dispose 再 cancel 会污染重建后实例）。取公版（删掉 _cts 两行，字段和构造仍保留，ConnectAsync/SendAsync 仍用 _cts.Token）。
+- **教训**：优选公版遇冲突时，先判断该提交是"纯新增"还是"顺带重构成底层模型"——后者冲突点是**公共底座两边的差异**，不是用户自定义改动，不能直接 `git checkout --theirs` 全文件覆盖（会丢我方的 NotificationConfig +56 行等）。应 cherry-pick + 手动解方法级小冲突，取哪边看**谁与新模型自洽**、且要保证 Derived 依赖（NotifierManager 新方法、共享令牌源）真的同时带进来。编译 `dotnet build BetterGenshinImpact/BetterGenshinImpact.csproj` 0 error 验证。
+
+### 优选公版「钓鱼流程细化+Handoff」用整体覆盖，遇 CRLF 假冲突（2026-08-31, commit 549f92df）
+- **场景**：优选公版 `2d618223`「feat: 钓鱼流程细化和优化、支持任务收尾/交班 Handoff #3561」（CsTrees 1.0.3→1.0.4，引入 Handoff/Try/Finally/Selector 等新 API；重命名 ThrowRod→LiftRod、FishBite→CheckFishBite，新增 Cast、RaiseHook）。本地钓鱼生产代码**从没改过**。
+- **方法（复用 bgi-upstream-pick-workflow 纯公版覆盖模式）**：先 `git diff -w HEAD <公版父提交faf84401> -- AutoFishing/` 做预对比 → **0 差异**（本地=未优选公版，纯行尾差异）。于是**不 cherry-pick**（会因 CRLF/LF 报 5 处假冲突），直接 `git checkout 2d618223 -- <5个生产文件+3个测试文件>` 整体覆盖成品；csproj 因本地有大量定制**不能整体覆盖**，只单行升 CsTrees 1.0.4。`git diff 2d618223 <本地commit> -- 涉及文件` 校验全部对齐；`dotnet build BetterGenshinImpact.csproj` 0 error。
+- **遗留旧类名在注释里**：AutoFishingTask.cs 保留一大段 `/* ... */` 注释掉的旧实现（`new ThrowRod`/`new FishBite`），grep 旧类名会命中这些**注释里的假阳性**，别误判为漏改（不是活代码）。
+- **预存事实（雷区）**：本地 `Test/.../AutoFishingTests/` 目录**缺 `FakeInputSimulator.cs`、`FakeDrawContent.cs`**（`git ls-tree HEAD` 无此二文件，公版父提交有），但 `BehavioursTests.*` 引用了它们 → **本地测试项目本就编译不过**（预存残缺，与本次优选无关）。动钓鱼测试前先认清这一点，别误以为是自己的改动破坏的。

@@ -98,3 +98,11 @@ fix: 优选公版<提交描述>(优选公版)
 | `AutoFightOfficial/`（公版战斗，整目录） | `AutoFight/`（独立目录） | 纯公版 | **整文件覆盖** | — |
 | `TeapotHurryOnHelper.cs`（茶包赶路） | 独立文件 | 茶包自身，公版是 `SkillBoostHelper.cs` | 公用 `SkillBoostHelper.cs` 走覆盖 | — |
 | `SkillBoostHelper.cs` | 若茶包赶路逻辑在此文件内（未彻底分目录） | 可能混入 | 先确认是否可分目录再定 | 若茶包代码在内部 → region-diff |
+### ⚠️ 纯公版文件的"精准 hunk"vs"整文件覆盖"取舍（2026-09-01 沉淀）
+
+整文件覆盖**只适用于"本地文件对齐到目标 commit 上游的干净状态"**。若本地纯公版文件已通过多次优选叠加了多个后续提交（如 `TpTaskOfficial.cs` 基线 debc23cc + 后续 #3520 等），这时**目标不是 `origin-lcb/main` 最新**，而是**用户指定的那一条提交 X**：
+
+- **直接覆盖到 `origin-lcb/main` 会误带入 X 之后的无关提交**。实例：优选 `bffa5875`「点击候选列表后额外等待」时，`bffa5875` 之后还有一个 `8abea980`「无等待截图场景加入等待」，特征不同、用户没要求。若盲目 `git show origin-lcb/main:TpTask.cs` 整文件覆盖，会把 `8abea980` 一起拉进来。
+- **正确做法**：`git log <我的基线..origin-lcb/main> -- <文件>` 先列出目标提交之后还有哪些该文件的上游提交；确认用户只要其中一条时，**对该提交做精准 hunk 应用**（用 str_replace 逐 hunk 改 8 处），而不是整文件覆盖。
+
+判断口诀：**本地文件等于"目标提交"的父代状态 → 精准 hunk；本地上游状态与目标 commit 完全一致（无中间叠加）→ 整文件覆盖。** 精准 hunk 后仍要做 `git diff` 与上游该 commit 的 `git show` 逐 hunk 对账核对（10 INSERT/11 DELETE 等应完全一致）+ 编译 + grep 旧符号零命中。
