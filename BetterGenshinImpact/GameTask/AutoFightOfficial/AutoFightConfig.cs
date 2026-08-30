@@ -172,13 +172,13 @@ public partial class AutoFightOfficialConfig : ObservableObject
         /// 派蒙辅助检测：按L后当派蒙头像可见时提前跳出战斗结束检测
         /// </summary>
         [ObservableProperty]
-        private bool _paimonEndCheckEnabled = true;
+        private bool _paimonEndCheckEnabled = false;
 
         /// <summary>
         /// 派蒙检测延时（秒），按L后等待该时间再检测派蒙头像
         /// </summary>
         [ObservableProperty]
-        private double _paimonEndCheckDelay = 0.1;
+        private double _paimonEndCheckDelay = 0.2;
 
         /// <summary>
         /// 与"敌人可见时跳过战斗结束检查"互斥：开启旋转寻找敌人时关闭跳过检查，

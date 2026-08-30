@@ -15,6 +15,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 using BetterGenshinImpact.GameTask.Common.Job;
+using BetterGenshinImpact.GameTask.Common.BgiVision;
 using OpenCvSharp;
 using BetterGenshinImpact.Helpers;
 using Vanara;
@@ -936,13 +937,10 @@ public class AutoFightTask : ISoloTask
                 _skipCheckCounter = 0;
             }
 
-            // 初始派蒙像素预检（快速过滤误触发）
+            // 复用 Bv 模板匹配检测派蒙头像是否可见（替代脆弱的单点像素判断）
             using var captureToRectArea = CaptureToRectArea();
-            var pixelValue = captureToRectArea.SrcMat.At<Vec3b>(32, 67);
-            var paiMon = Math.Abs(pixelValue[0] - 143) <= 10 &&
-                         Math.Abs(pixelValue[1] - 196) <= 10 &&
-                         Math.Abs(pixelValue[2] - 233) <= 10;
-            if (!paiMon)
+            var paimonVisible = Bv.IsInMainUi(captureToRectArea);
+            if (!paimonVisible)
             {
                 return false;
             }
@@ -979,11 +977,8 @@ public class AutoFightTask : ISoloTask
                 if (i == 1)
                 {
                     using var captureToRectArea2 = CaptureToRectArea();
-                    var pixelValue22 = captureToRectArea2.SrcMat.At<Vec3b>(32, 67);
-                    var paiMon22 = Math.Abs(pixelValue22[0] - 143) <= 10 &&
-                                   Math.Abs(pixelValue22[1] - 196) <= 10 &&
-                                   Math.Abs(pixelValue22[2] - 233) <= 10;
-                    if (!paiMon22)
+                    // 复用 Bv 模板匹配检测派蒙头像是否可见
+                    if (!Bv.IsInMainUi(captureToRectArea2))
                     {
                         return false;
                     }
@@ -1002,10 +997,8 @@ public class AutoFightTask : ISoloTask
                 var paiMon2 = false;
                 if ((_finishDetectConfig.EndModel && _finishDetectConfig.RotateFindEnemyEnabled) || _finishDetectConfig.PaimonEndModel)
                 {
-                    pixelValue2 = ra.SrcMat.At<Vec3b>(32, 67); // 派蒙
-                    paiMon2 = Math.Abs(pixelValue2[0] - 143) <= 10 &&
-                              Math.Abs(pixelValue2[1] - 196) <= 10 &&
-                              Math.Abs(pixelValue2[2] - 233) <= 10;
+                    // 复用 Bv 模板匹配检测派蒙头像是否可见
+                    paiMon2 = Bv.IsInMainUi(ra);
                 }
                 else
                 {
