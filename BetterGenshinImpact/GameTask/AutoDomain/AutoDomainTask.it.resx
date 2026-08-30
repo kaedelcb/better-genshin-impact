@@ -141,4 +141,28 @@
   <data name="限时全部开放" xml:space="preserve">
     <value>Accesso.*completo.*a.*tempo.*limitato</value>
   </data>
+  <data name="单人挑战" xml:space="preserve">
+    <value>SinglePlayer</value>
+  </data>
+  <data name="开始挑战" xml:space="preserve">
+    <value>StartChallenge</value>
+  </data>
+  <data name="是否仍要.*挑战.*秘境" xml:space="preserve">
+    <value>ancora.*[Dd]ominio</value>
+  </data>
+  <data name="使用" xml:space="preserve">
+    <value>Usa</value>
+  </data>
+  <data name="浓缩树脂" xml:space="preserve">
+    <value>Resina condensata</value>
+  </data>
+  <data name="原粹树脂" xml:space="preserve">
+    <value>Resina originale</value>
+  </data>
+  <data name="须臾树脂" xml:space="preserve">
+    <value>Resina effimera</value>
+  </data>
+  <data name="脆弱树脂" xml:space="preserve">
+    <value>Resina fragile</value>
+  </data>
 </root>
