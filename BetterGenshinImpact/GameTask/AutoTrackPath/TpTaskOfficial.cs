@@ -36,7 +36,12 @@ using static BetterGenshinImpact.GameTask.Common.TaskControl;
 namespace BetterGenshinImpact.GameTask.AutoTrackPath;
 
 /// <summary>
-/// 传送任务
+/// 公版传送实现（纯公版代码）。
+/// 基线上游 commit：debc23cc（fix: 提升传送点定位与点击稳定性 #3488），2026-08-31 整文件覆盖优选。
+/// 茶包版（快速拖动传送）在独立文件 TpTaskFastDrag.cs，本文件不包含茶包代码。
+///
+/// 下次优选公版：本文件是纯公版 → 整文件覆盖成目标上游 commit + 最小共存接入（改名/去重/删死方法），
+/// 不要逐方法 region-diff 适配。详见 .agents/rules/bgi-upstream-pick-workflow.md §第一步。
 /// </summary>
 public class TpTaskOfficial
 {
