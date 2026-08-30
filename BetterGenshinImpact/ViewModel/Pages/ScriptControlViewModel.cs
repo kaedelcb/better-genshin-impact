@@ -1841,7 +1841,7 @@ public partial class ScriptControlViewModel : ViewModel
     public static void ShowEditWindow(ScriptGroupProject project)
     {
         var viewModel = new ScriptGroupProjectEditorViewModel(project);
-        var editor = new ScriptGroupProjectEditor(project)
+        var editor = new ScriptGroupProjectEditor(viewModel)
         {
             DataContext = viewModel
         };
