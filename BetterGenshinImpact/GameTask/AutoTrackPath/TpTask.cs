@@ -243,30 +243,6 @@ public class TpTask
         }
     }
 
-    public async Task Tp(string name)
-    {
-        if (UseOfficial)
-        {
-            await _official.Tp(name);
-        }
-        else
-        {
-            await _fastDrag.Tp(name);
-        }
-    }
-
-    public async Task TpByF1(string name)
-    {
-        if (UseOfficial)
-        {
-            await _official.TpByF1(name);
-        }
-        else
-        {
-            await _fastDrag.TpByF1(name);
-        }
-    }
-
     public async Task ClickTpPoint(ImageRegion imageRegion)
     {
         if (UseOfficial)
