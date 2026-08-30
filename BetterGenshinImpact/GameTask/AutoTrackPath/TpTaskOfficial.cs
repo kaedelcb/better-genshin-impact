@@ -61,9 +61,9 @@ public class TpTaskOfficial
 
     private const double DefaultDisplayTpPointZoomLevel = 4.4; // 传送点显示时的默认地图比例
     private const double MoonCanonDisplayTpPointZoomLevel = 3.0;
-    private const int DefaultBigMapOpenTimeoutMs = 2400;
-    private const int MoonCanonBigMapOpenTimeoutMs = 7000;
-    private const int UiRecognitionPollIntervalMs = 40;
+    private const int DefaultBigMapOpenTimeoutMs = 5000;
+    private const int MoonCanonBigMapOpenTimeoutMs = 8000;
+    private const int UiRecognitionPollIntervalMs = 60;
     private const int BigMapOpenCheckIntervalMs = UiRecognitionPollIntervalMs;
     private const double TeleportMaxZoomLevel = 6.0;
     private const double TeleportFinalZoomDistanceFactor = 36d;
@@ -865,6 +865,7 @@ public class TpTaskOfficial
                     out failureReason))
             {
                 clickCapture.ClickTo(clickX, clickY);
+                Logger.LogInformation("点击[{Name}]", GetTeleportPointDisplayName(target.TargetTp));
                 return;
             }
 
@@ -1152,6 +1153,7 @@ public class TpTaskOfficial
         if (!await TryToOpenBigMapUi(mapName))
         {
             await new ReturnMainUiTask().Start(ct);
+            await Delay(500, ct);
             if (!await TryToOpenBigMapUi(mapName))
             {
                 throw new RetryException("打开大地图失败，请检查按键绑定中「打开地图」按键设置是否和原神游戏中一致！");
@@ -2855,7 +2857,7 @@ public class TpTaskOfficial
         }
 
         var success = failureReason.Length == 0;
-        Logger.LogInformation(
+        Logger.LogDebug(
             "大地图绝对坐标匹配#{Attempt}：{Target}，预期点={ExpectedCount}，识别图标={ObservedCount}，有效锚点={MatchedCount}，理论点击({RawX:0.0},{RawY:0.0})，校正点击({ClickX:0.0},{ClickY:0.0})，偏移({OffsetX:0.0},{OffsetY:0.0})，校正量={TargetCorrection:0.0}，缩放({ScaleX:0.000},{ScaleY:0.000})，残差={Error:0.0}，不确定度={Uncertainty:0.0}/{AllowedUncertainty:0.0}，耗时={TotalElapsedMs}ms（投影{ProjectionElapsedMs}ms，模板识别{RecognitionElapsedMs}ms，全局配准={AlignmentElapsedMs}ms），结果={Result}",
             attempt,
             GetTeleportTargetLogText(target),
