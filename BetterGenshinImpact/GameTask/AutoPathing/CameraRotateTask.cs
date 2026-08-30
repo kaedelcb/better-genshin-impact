@@ -90,7 +90,7 @@ public class CameraRotateTask(CancellationToken ct)
         int count = 0;
         while (!ct.IsCancellationRequested)
         {
-            var screen = CaptureToRectArea();
+            using var screen = CaptureToRectArea();
             // null = 本轮未真实测量到角度（_zLock 抢锁失败 或 RotateToApproach 抢 _rLock 失败/异常返回 null）
             float? measuredDiff = null;
             if (Monitor.TryEnter(_zLock))

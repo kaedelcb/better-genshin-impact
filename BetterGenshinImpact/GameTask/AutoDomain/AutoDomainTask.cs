@@ -181,7 +181,7 @@ public class AutoDomainTask : ISoloTask<Dictionary<string, int>>
     
     private static RecognitionObject GetConfirmRa(params string[] targetText)
     {
-        var screenArea = CaptureToRectArea();
+        using var screenArea = CaptureToRectArea();
         return RecognitionObject.OcrMatch(
             (int)(screenArea.Width * 0.5),
             (int)(screenArea.Height * 0.5),
@@ -976,7 +976,8 @@ public class AutoDomainTask : ISoloTask<Dictionary<string, int>>
             {
                 while (!_ct.IsCancellationRequested)
                 {
-                    if (Bv.CurrentAvatarIsLowHp(CaptureToRectArea()))
+                    using var capture = CaptureToRectArea();
+                    if (Bv.CurrentAvatarIsLowHp(capture))
                     {
                         // 模拟按键 "Z"
                         Simulation.SendInput.SimulateAction(GIActions.QuickUseGadget);
@@ -1042,7 +1043,8 @@ public class AutoDomainTask : ISoloTask<Dictionary<string, int>>
             var backwardsAndForwardsCount = 0;
             while (!_ct.IsCancellationRequested)
             {
-                var treeRect = DetectTree(CaptureToRectArea());
+                using var capture = CaptureToRectArea();
+                var treeRect = DetectTree(capture);
                 if (treeRect != default)
                 {
                     var treeMiddleX = treeRect.X + treeRect.Width / 2;

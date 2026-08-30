@@ -103,8 +103,9 @@ namespace BetterGenshinImpact.GameTask.AutoFight
         public static Task<bool?> MoveForwardAsync(Scalar scalarLower, Scalar scalarHigher, ILogger logger, CancellationToken ct,int distance = 1000, int nearHeightThreshold = 6)
         {
             using var image2 = CaptureToRectArea();
+            using var imageCrop = image2.DeriveCrop(0, 0, image2.Width * 1570 / 1920, image2.Height * 970 / 1080);
             using Mat mask2 = OpenCvCommonHelper.Threshold(
-                image2.DeriveCrop(0, 0, image2.Width * 1570 / 1920, image2.Height * 970 / 1080).SrcMat,
+                imageCrop.SrcMat,
                 scalarLower,
                 scalarHigher
             );

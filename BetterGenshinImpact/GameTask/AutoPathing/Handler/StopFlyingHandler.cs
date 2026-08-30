@@ -30,7 +30,7 @@ public class StopFlyingHandler : IActionHandler
         int i;
         for (i = 0; i < 50; i++)
         {
-            var screen = CaptureToRectArea();
+            using var screen = CaptureToRectArea();
             var isFlying = Bv.GetMotionStatus(screen) == MotionStatus.Fly;
             if (isFlying)
             {

@@ -421,6 +421,7 @@ public class AutoFightJsonTask : ISoloTask
                                         await Delay(200, _ct);
                                         // 重新执行整个动作
                                         await ExecuteAction(combatScenes, action);
+                                        imageAfterAction.Dispose();
                                         imageAfterAction = CaptureToRectArea();
                                         await Task.Delay(30, _ct);
                                         retry--;

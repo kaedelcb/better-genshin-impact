@@ -87,7 +87,7 @@ public class NavigationInstance
         {
             try
             {
-                var colorMat = new Mat(imageRegion.SrcMat, MapAssets.Get(imageRegion).MimiMapRect);
+                using var colorMat = new Mat(imageRegion.SrcMat, MapAssets.Get(imageRegion).MimiMapRect);
                 var captureTime = DateTime.UtcNow;
                 // [小地图诊断] 记录进入时的锚点（局部匹配的搜索中心）
                 var diagPrevX = _prevX;
@@ -194,7 +194,7 @@ public class NavigationInstance
     /// <returns>当前位置坐标</returns>
     public Point2f GetPositionStable(ImageRegion imageRegion, string mapName, string mapMatchMethod)
     {
-        var colorMat = new Mat(imageRegion.SrcMat, MapAssets.Get(imageRegion).MimiMapRect);
+        using var colorMat = new Mat(imageRegion.SrcMat, MapAssets.Get(imageRegion).MimiMapRect);
         var captureTime = DateTime.UtcNow;
         var diagPrevX = _prevX;
         var diagPrevY = _prevY;

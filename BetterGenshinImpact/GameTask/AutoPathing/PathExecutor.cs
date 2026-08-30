@@ -2126,7 +2126,7 @@ public partial class PathExecutor
 
     private async Task<bool> SwitchPartyBefore(PathingTask task)
     {
-        var ra = CaptureToRectArea();
+        using var ra = CaptureToRectArea();
 
         // 切换队伍前判断是否全队死亡 // 可能队伍切换失败导致的死亡
         if (Bv.ClickIfInReviveModal(ra))
@@ -2978,9 +2978,9 @@ public partial class PathExecutor
             TaskContext.Instance().Config.OtherConfig.AutoFetchDispatchAdventurersGuildCountry;
         if (!RunnerContext.Instance.isAutoFetchDispatch && adventurersGuildCountry != "无" && !string.IsNullOrEmpty(adventurersGuildCountry))
         {
-            var ra1 = CaptureToRectArea();
+            using var ra1 = CaptureToRectArea();
             var textRect = new Rect(60, 20, 160, 260);
-            var textMat = new Mat(ra1.SrcMat, textRect);
+            using var textMat = new Mat(ra1.SrcMat, textRect);
             string text = OcrFactory.Paddle.Ocr(textMat);
             if (text.Contains("探索派遣奖励"))
             {
@@ -3038,8 +3038,11 @@ public partial class PathExecutor
 
     public async Task FaceTo(WaypointForTrack waypoint)
     {
-        var screen = CaptureToRectArea();
-        var position = await GetPosition(screen, waypoint);
+        Point2f position;
+        using (var screen = CaptureToRectArea())
+        {
+            position = await GetPosition(screen, waypoint);
+        }
 
         // 零坐标防呆（Requirement 4）：开启且本帧 (0,0)（识别失败）时，用上一帧有效坐标算朝向，
         // 避免把 (0,0) 当真实坐标算出"从地图原点指向目标"的错误朝向。默认关闭 = 现状行为。
@@ -4008,7 +4011,6 @@ public partial class PathExecutor
     /// </summary>
     public async Task MoveCloseTo(WaypointForTrack waypoint, double closeDistance = 2.0, int? tailDelayMs = null, int maxSteps = 25, string? fastSyncId = null, WaypointForTrack? fastSyncWaypoint = null, bool escapeClimbOnReturn = false, bool guardJumpOnReturn = false)
     {
-        ImageRegion screen;
         Point2f position;
         int targetOrientation;
         bool fastReported = false;  // 抢报一次性短路 bool（fastsync-redesign-parameter-passing spec）
@@ -4051,7 +4053,7 @@ public partial class PathExecutor
                 break;
             }
 
-            screen = CaptureToRectArea();
+            using var screen = CaptureToRectArea();
 
             EndJudgment(screen);
 
@@ -4161,7 +4163,7 @@ public partial class PathExecutor
         {
             Simulation.SendInput.Mouse.MiddleButtonClick();
             await Delay(300, ct);
-            var screen = CaptureToRectArea();
+            using var screen = CaptureToRectArea();
             var position = await GetPosition(screen, waypoint);
             var targetOrientation = Navigation.GetTargetOrientation(waypoint, position);
             // Logger.LogError("67858677");
@@ -4559,10 +4561,8 @@ public partial class PathExecutor
      */
     public async Task ResolveAnomalies(ImageRegion? imageRegion = null)
     {
-        if (imageRegion == null)
-        {
-            imageRegion = CaptureToRectArea();
-        }
+        using var ownedImageRegion = imageRegion == null ? CaptureToRectArea() : null;
+        imageRegion ??= ownedImageRegion!;
 
         // 一些异常界面处理
         var cookRa = imageRegion.Find(RecognitionAssets.Get("AutoSkip", "Cook", imageRegion));
@@ -4598,7 +4598,7 @@ public partial class PathExecutor
 
     private async Task AutoSkip()
     {
-        var ra = CaptureToRectArea();
+        using var ra = CaptureToRectArea();
         var disabledUiButtonRa = ra.Find(RecognitionAssets.Get("AutoSkip", "DisabledUiButton", ra));
         if (disabledUiButtonRa.IsExist())
         {
@@ -4617,11 +4617,12 @@ public partial class PathExecutor
             int noDisabledUiButtonTimes = 0;
             while (true)
             {
-                ra = CaptureToRectArea();
-                disabledUiButtonRa = ra.Find(RecognitionAssets.Get("AutoSkip", "DisabledUiButton", ra));
+                using var captureContent = new CaptureContent(CaptureToRectArea());
+                var currentCapture = captureContent.CaptureRectArea;
+                disabledUiButtonRa = currentCapture.Find(RecognitionAssets.Get("AutoSkip", "DisabledUiButton", currentCapture));
                 if (disabledUiButtonRa.IsExist())
                 {
-                    _autoSkipTrigger.OnCapture(new CaptureContent(ra));
+                    _autoSkipTrigger.OnCapture(captureContent);
                     noDisabledUiButtonTimes = 0;
                 }
                 else

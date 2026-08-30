@@ -182,7 +182,8 @@ public class Genshin
         // 强制使用公版传送（TpTaskOfficial），绕开 UseOfficialTeleport 开关，
         // 与 SetBigMapZoomLevel 保持一致，避免缩放读取/设置走不同实现。
         TpTaskOfficial tpTask = new(CancellationContext.Instance.Cts.Token);
-        return tpTask.GetBigMapZoomLevel(CaptureToRectArea());
+        using var capture = CaptureToRectArea();
+        return tpTask.GetBigMapZoomLevel(capture);
     }
 
     /// <summary>
@@ -250,7 +251,7 @@ public class Genshin
 
     public float GetCameraOrientation()
     {
-        var imageRegion = CaptureToRectArea();
+        using var imageRegion = CaptureToRectArea();
         return CameraOrientation.Compute(imageRegion.SrcMat);
     }
 
@@ -268,7 +269,7 @@ public class Genshin
     
     public Point2f? GetPositionFromMapWithMatchingMethod(string mapName, string matchingMethod, int cacheTimeMs = 900)
     {
-        var imageRegion = CaptureToRectArea();
+        using var imageRegion = CaptureToRectArea();
         if (!Bv.IsInMainUi(imageRegion))
         {
             throw new InvalidOperationException("不在主界面，无法识别小地图坐标");
@@ -287,7 +288,7 @@ public class Genshin
     /// <returns>包含X和Y坐标的Point2f结构体</returns>
     public Point2f? GetPositionFromMap(string mapName, float x, float y)
     {
-        var imageRegion = CaptureToRectArea();
+        using var imageRegion = CaptureToRectArea();
         if (!Bv.IsInMainUi(imageRegion))
         {
             throw new InvalidOperationException("不在主界面，无法识别小地图坐标");

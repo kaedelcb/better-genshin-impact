@@ -419,7 +419,8 @@ public class NotificationService : IHostedService, IDisposable
         {
             try
             {
-                testData.Screenshot = TaskControl.CaptureToRectArea().CacheImage;
+                using var capture = TaskControl.CaptureToRectArea();
+                testData.Screenshot = capture.CacheImage.Clone();
             }
             catch (Exception ex)
             {
@@ -475,8 +476,9 @@ public class NotificationService : IHostedService, IDisposable
             var mat = TaskControl.CaptureGameImageNoRetry(TaskTriggerDispatcher.GlobalGameCapture);
             if (mat != null)
             {
-                var imageRegion = new ImageRegion(mat, 0, 0);
-                notificationData.Screenshot = imageRegion.CacheImage;
+                using var imageRegion = new ImageRegion(mat, 0, 0);
+                var screenshot = imageRegion.CacheImage.Clone();
+                notificationData.Screenshot = screenshot;
             }
         }
         catch (Exception ex)
