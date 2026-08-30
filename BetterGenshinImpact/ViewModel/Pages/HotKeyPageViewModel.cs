@@ -732,7 +732,7 @@ public partial class HotKeyPageViewModel : ObservableObject, IViewModel
             Config.HotKeyConfig.RecBigMapPosHotkeyType,
             (_, _) =>
             {
-                var p = new TpTask(CancellationToken.None).GetPositionFromBigMap(MapTypes.Teyvat.ToString());
+                var p = new TpTask(CancellationToken.None).GetPositionFromBigMap(MapTypes.MoonCanon.ToString());
                 _logger.LogInformation("大地图位置：{Position}", p);
             }
         ));
@@ -820,8 +820,17 @@ public partial class HotKeyPageViewModel : ObservableObject, IViewModel
                 Config.HotKeyConfig.Test1HotkeyType,
                 (_, _) =>
                 {
-                    Task.Run(async () => { await new AutoArtifactSalvageTask(new AutoArtifactSalvageTaskParam(star: 4, null, null, null, null)).Start(new CancellationToken()); });
-
+                    Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await new TpTask(CancellationToken.None).Tp(7001.6416, -569.6846, nameof(MapTypes.Teyvat));
+                        }
+                        catch (System.Exception e)
+                        {
+                            _logger.LogError(e.Message);
+                        }
+                    });
                 }
             ));
             debugDirectory.Children.Add(new HotKeySettingModel(
