@@ -570,3 +570,10 @@
   2. **"同段/未来段"构造方向反了**：想验证 `ShouldRecordPendingSkip(fp, curSeg)` 在同段/未来段为 true，却构造 `curSeg = fpSeg + offset`（curSeg 恒 ≥ fpSeg），导致 fp 是"已越过"→ 生产正确返回 false、测试断言 true 失败。正确构造：`fpSeg = curSeg + offset`（保证 fp 段 ≥ 当前段）。
   3. **C# 负数取模为负**：`wp % 10000` 当 wp 为负得到负值，可能产生伪碰撞。归一化到非负：`((x % 10000) + 10000) % 10000`。
 - **纪律**：写 PBT 前先想清楚"我要验证的语义域是什么、哪些输入是不合法/哨兵值"，用 `NonNegativeInt`/`Gen.Choose` 等约束生成器限定合法域；负号/哨兵（-1）单独用边界属性守护。不要用裸 `int` 撒全空间然后断言"全真"。
+### UTF-8 带 BOM 的 .cs 文件禁用 PowerShell 编码覆盖写（2026-08-31，优选公版派蒙检测）
+- **场景**：把公版「派蒙检测改用 bv #3529」移植到 `AutoFightOfficial/AutoFightTask.cs`（UTF-8 带 BOM），我先后用 `[System.IO.File]::ReadAllText(路径)` + `WriteAllText` 且编码用了 `Encoding.Default`(GBK)，导致整个文件**所有中文注释/字符串全部乱码**，且替换因行内空白不匹配错位插入、损坏代码结构。靠 `git restore` 恢复后用字节安全的 `str_replace` 工具逐块重做才成功。
+- **根因**：`AutoFightOfficial/*.cs` 是 **UTF-8 带 BOM**（文件头字节 239,187,191）。用 PowerShell `Encoding.Default`(GBK) 读写再写回 = 把 UTF-8 字节被当 GBK 重编码，中文全毁。且 PowerShell here-string 精确替换对行内空白/全角注释敏感，易 fake-match。
+- **纪律**：
+  1. **.cs 源文件一律用 `str_replace` 工具（字节安全，不碰编码）**，不要用 PowerShell `ReadAllText/WriteAllText` 覆盖写。
+  2. 若必须用 PowerShell 读写 .cs，必须显式 `New-Object System.Text.UTF8Encoding($false)` 且**保留 BOM**（`ReadAllText` 时用 UTF8 感知）；读前先 `ReadAllBytes` 前 4 字节确认编码。
+  3. 写后必须用 `git diff` 或读字节校验：若看到 `错误 CS`/乱码/中文被截断（如 `/缃戠粶`），立即 `git restore` 回滚，别在残缺文件上继续。
