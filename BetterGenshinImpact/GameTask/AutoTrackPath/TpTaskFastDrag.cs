@@ -1996,9 +1996,14 @@ public class TpTaskFastDrag
                                         TaskControl.Logger.LogWarning(
                                             "地图拖动异常，重新调整 [诊断] 拖动中途采样点像素未变 step={I}/{Steps} p(500,500)前={A} 后={C} p(600,500)前={B} 后={D}",
                                             i, steps, pos.ToString(), pos3.ToString(), pos2.ToString(), pos4.ToString());
-                                        // 标记本次拖动未生效，跳出分步循环（让调用方 LeftButtonUp），方法末尾返回 false 通知上层重拖本段
-                                        __noMoveDetected = true;
-                                        break;
+                                        // 鼠标移动间隔 ≤6 时拖动本身很快，"像素未变→重拖本段"无必要，不触发重拖（检测仍记录日志）。
+                                        // 间隔 >6 时保留原行为：标记本次拖动未生效，跳出分步循环（让调用方 LeftButtonUp），
+                                        // 方法末尾返回 false 通知上层重拖本段。
+                                        if (_tpConfig.StepIntervalMilliseconds > 6)
+                                        {
+                                            __noMoveDetected = true;
+                                            break;
+                                        }
                                     }
                                 }
                             }
