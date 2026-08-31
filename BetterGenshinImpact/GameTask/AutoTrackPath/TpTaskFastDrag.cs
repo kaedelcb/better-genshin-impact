@@ -352,6 +352,8 @@ public class TpTaskFastDrag
         // 详见 teleport-bigmap-position-region-constrained-match spec。
         _miniMapPriorGenshin = TryGetMiniMapPriorGenshin(mapName);
         _priorIsRegionCenter = false; // 缓存先验，用第一层标准半径100
+
+        #region 步骤1-2：确认地图界面 + 传送前计算准备
         // 1. 确认在地图界面（传 mapName：霜月大图延长渲染等待）
         await OpenBigMapUi(1, mapName);
         // 2. 传送前的计算准备
@@ -406,7 +408,9 @@ public class TpTaskFastDrag
         {
             Logger.LogWarning("等待大地图界面超时（2000ms），可能地图尚未打开，继续按原逻辑读取缩放级别");
         }
+        #endregion
 
+        #region 步骤3：调整初始缩放等级
         Rect bigMapInAllMapRect;
         // 3. 调整初始缩放等级，避免识别中心点失败
         using var ra3 = CaptureToRectArea();
@@ -450,7 +454,9 @@ public class TpTaskFastDrag
             TaskControl.Logger.LogWarning(ex, "白名单判定异常，按通用流程处理");
             skipStep4DueToSpecial = false;
         }
+        #endregion
 
+        #region 步骤4：相近传送点强制缩放定位
         // 4. zoomLevel不满足条件，强制进行一次 MoveMapTo，避免传送点相近导致误点
         if (!skipStep4DueToSpecial && zoomLevel > minZoomLevel)
         {
@@ -467,7 +473,9 @@ public class TpTaskFastDrag
             }
             await WaitMapStableOrTimeoutAsync(ApplyExtraDelay(500)); // fast-drag-recognition-acceleration spec
         }
+        #endregion
         
+        #region 步骤5：定位传送点到可点击窗口（含点击前缩放回调）
         // 5. 判断传送点是否在当前界面，若否则移动地图
         // await WaitMapStableOrTimeoutAsync(1000,20,5); // fast-drag-recognition-acceleration spec
 
@@ -626,7 +634,9 @@ public class TpTaskFastDrag
                 bigMapInAllMapRect = GetBigMapRect(mapName);
             }
         }
+        #endregion
 
+        #region 步骤6：计算并点击传送点
         // 6. 计算传送点位置并点击
         // 点击前硬校验（teleport-click-outside-game-window-misclick-fix）：
         // step5.6b 降档（更放大）可能把 step5 do-while 判为可点的边缘点推出游戏窗口。
@@ -664,7 +674,9 @@ public class TpTaskFastDrag
         }
 
         ra4.ClickTo((int)clickX, (int)clickY-12);
+        #endregion
 
+        #region 步骤7-8：触发快速传送 + 等待完成
         // 7. 触发一次快速传送功能
         // 加速 + 容错：popup 探测立即点 + IsLoadingScreen 终判 + 失败重点最多 3 次
         // 已进入传送加载页 → 直接返回，跳过 ClickTpPoint（避免重复点击）
@@ -682,6 +694,7 @@ public class TpTaskFastDrag
         // 保存本次传送的目标坐标，供下次传送的第二层先验使用
         _lastTpTargetGenshin = new Point2f((float)x, (float)y);
         return (x, y);
+        #endregion
     }
 
     /// <summary>
@@ -1147,6 +1160,7 @@ public class TpTaskFastDrag
     /// <param name="enableEarlyStop">是否启用早停机制（几何早停和容差早停）。默认为 true 保持向后兼容，设为 false 时将精确拖动到目标点正中心</param>
     public async Task MoveMapTo(double x, double y, string mapName, double finalZoomLevel = 2, string? country = null, int retryTimes = 0, bool enableEarlyStop = true, bool keepCurrentZoom = false)
     {
+        #region 阶段1：初始中心识别与自救
         // 参数初始化
         using var ra1 = CaptureToRectArea();
         double currentZoomLevel = GetBigMapZoomLevel(ra1);
@@ -1242,6 +1256,9 @@ public class TpTaskFastDrag
             }
         }
 
+        #endregion
+
+        #region 阶段2：清除先验 + 缩小地图
         // 清除第一层先验（半径100会锁死起点），保留第二层（半径500跟随拖动）
         _miniMapPriorGenshin = null;
         _priorIsRegionCenter = false;
@@ -1264,7 +1281,9 @@ public class TpTaskFastDrag
             mouseDistance *= currentZoomLevel / nextZoomLevel;
             currentZoomLevel = nextZoomLevel;
         }
+        #endregion
 
+        #region 阶段3：拖动主循环
         // 开始移动并放大地图
         for (var iteration = 0; iteration < _tpConfig.MaxIterations; iteration++)
         {
@@ -1596,6 +1615,7 @@ public class TpTaskFastDrag
             mouseDistance = Math.Sqrt(totalMoveMouseX * totalMoveMouseX + totalMoveMouseY * totalMoveMouseY);
             Simulation.SendInput.Mouse.LeftButtonUp();
         }
+        #endregion
     }
 
     /// <summary>
@@ -1812,15 +1832,6 @@ public class TpTaskFastDrag
                 {
                     __measured = Math.Abs(__realDy) / (double)Math.Abs(pixelDeltaY);
                 }
-                // [诊断-拖动位移] 核心验证假设1：拖动手势到底让鼠标物理移动了多少。
-                // __realDx/Dy = 拖动前后 GetCursorPos 物理像素差（真实发生的位移）；
-                // pixelDeltaX/Y = 意图位移。若 __real≈0 而 pixelDelta 不小 → 拖动根本没执行/被中断（地图不会动）；
-                // 若 __real 与 pixelDelta 量级相符 → 鼠标动了，但地图 ratio≈0 → 地图到了拖动边界/被锁。
-                TaskControl.Logger.LogDebug(
-                    "[诊断-拖动位移] 意图 pixelDelta=({PX},{PY}) 实测光标位移=({RX},{RY}) 放大比值={M:0.00} 采纳={Adopt}",
-                    pixelDeltaX, pixelDeltaY, __realDx, __realDy, __measured,
-                    (__measured >= 0.5 && __measured <= 3.0 && (Math.Abs(__realDx) + Math.Abs(__realDy)) > 20));
-
                 // 只在本次确实产生了有意义位移、且比值落在合理区间时校准（防中断/遮挡的异常样本污染）
                 if (__measured >= 0.5 && __measured <= 3.0 && (Math.Abs(__realDx) + Math.Abs(__realDy)) > 20)
                 {
