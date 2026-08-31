@@ -17,8 +17,8 @@ namespace BetterGenshinImpact.GameTask.AutoTrackPath;
 /// 由 MatchInAllCells 遍历 16 格、每格 clone 目标模板并覆盖 RegionOfInterest 后小区域匹配，规避整块右 1/3
 /// 背景稀释导致匹配度过低掉进 OCR 的问题。
 ///
-/// Get(areaName) 仍返回预构建的模板识别对象（含整块右 1/3 ROI），供调试方法 DebugPollSwitchAreaTemplates
-/// 走原匹配路径查看命中/得分；生产路径不再使用该固定 ROI。
+/// Get(areaName) 返回预构建的模板识别对象（含整块右 1/3 ROI），供逐格轮询匹配前的模板对象使用；
+/// MatchInAllCells 生产路径按需覆盖 ROI 做逐格匹配。
 ///
 /// 模板文件缺失 / 加载失败 → 该地区跳过（Get 返回 null），走 OCR 兜底，不抛异常（requirements E1/E2）。
 /// 遵循 QuickTeleportAssets 的 CaptureAssetsCache 按分辨率缓存模式。

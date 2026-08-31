@@ -11,7 +11,7 @@ namespace BetterGenshinImpact.GameTask.AutoTrackPath;
 public static class SwitchAreaTemplateMatchDecisions
 {
     /// <summary>
-    /// 模板是否命中（得分 &gt;= 阈值）。阈值默认 0.8，用户用 DebugPollSwitchAreaTemplates 实测后可能调整。
+    /// 模板是否命中（得分 &gt;= 阈值）。阈值默认 0.8。
     /// </summary>
     public static bool IsHit(double score, double threshold = 0.8)
         => score >= threshold;

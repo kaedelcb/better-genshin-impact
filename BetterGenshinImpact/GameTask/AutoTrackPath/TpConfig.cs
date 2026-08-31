@@ -161,12 +161,6 @@ public partial class TpConfig : ObservableValidator
     [Range(100, 2000)]
     private int _maxMouseMove = 300; // 单次移动最大距离
     
-    [ObservableProperty]
-    private bool _mapMoveStepDivisor = true; // 快速拖动（默认开启）
-
-    [ObservableProperty]
-    private bool _fastDragRecognitionEnabled = true; // 快速拖动模式下：自适应等地图稳定再识别（默认开启）
-
     partial void OnMaxMouseMoveChanged(int value)
     {
         if (value is < 100 or > 2000)

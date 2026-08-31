@@ -184,7 +184,7 @@ public static class TeleportClickSafeZone
     ///   clickY = 540 - mapScaleFactor * (y - centerY) / currentZoomLevel
     /// 符号方向由真机集成验证最终确认（详见 spec design.md §Overview / §二次守门）。
     /// </summary>
-    /// <param name="mapMoveStepDivisor">是否快速拖动模式（_tpConfig.MapMoveStepDivisor）。</param>
+    /// <param name="mapMoveStepDivisor">是否快速拖动模式（茶包快速拖动恒传 true）。</param>
     /// <param name="x">传送点原神世界 X 坐标。</param>
     /// <param name="y">传送点原神世界 Y 坐标。</param>
     /// <param name="centerX">当轮 mapCenterPoint.X（屏幕正中心对应世界坐标）。</param>

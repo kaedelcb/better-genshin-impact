@@ -4,7 +4,7 @@ namespace BetterGenshinImpact.GameTask.AutoTrackPath;
 
 /// <summary>
 /// 传送快速拖动“边缘感知动态跑道截断”纯计算。
-/// 仅在 Dynamic_Runway_Mode（MapMoveStepDivisor==true &amp;&amp; MapZoomDistanceForce==0）由 MoveMapTo 调用。
+/// 仅在 Dynamic_Runway_Mode（快速拖动 && MapZoomDistanceForce==0）由 MoveMapTo 调用。
 /// 详见 .kiro/specs/teleport-drag-edge-aware-runway-clamp/。
 /// </summary>
 public static class TeleportDragRunway
