@@ -590,3 +590,7 @@
 - **方法（复用 bgi-upstream-pick-workflow 纯公版覆盖模式）**：先 `git diff -w HEAD <公版父提交faf84401> -- AutoFishing/` 做预对比 → **0 差异**（本地=未优选公版，纯行尾差异）。于是**不 cherry-pick**（会因 CRLF/LF 报 5 处假冲突），直接 `git checkout 2d618223 -- <5个生产文件+3个测试文件>` 整体覆盖成品；csproj 因本地有大量定制**不能整体覆盖**，只单行升 CsTrees 1.0.4。`git diff 2d618223 <本地commit> -- 涉及文件` 校验全部对齐；`dotnet build BetterGenshinImpact.csproj` 0 error。
 - **遗留旧类名在注释里**：AutoFishingTask.cs 保留一大段 `/* ... */` 注释掉的旧实现（`new ThrowRod`/`new FishBite`），grep 旧类名会命中这些**注释里的假阳性**，别误判为漏改（不是活代码）。
 - **预存事实（雷区）**：本地 `Test/.../AutoFishingTests/` 目录**缺 `FakeInputSimulator.cs`、`FakeDrawContent.cs`**（`git ls-tree HEAD` 无此二文件，公版父提交有），但 `BehavioursTests.*` 引用了它们 → **本地测试项目本就编译不过**（预存残缺，与本次优选无关）。动钓鱼测试前先认清这一点，别误以为是自己的改动破坏的。
+### 公版优选 i18n 资源需补 it.resx（2026-08-31，commit bf0b4424 适配）
+- 场景：优选公版「localize hardcoded OCR strings in AutoDomainTask and CheckRewardsTask(#3404)」时，公版只改了 en/fr/zh-Hant 三套 resx，但 LCB 分支的 `AutoDomainTask.*.resx`/`CheckRewardsTask.*.resx` **已存在 it.resx**。
+- 经验：从公版优选 i18n 相关改动时，**不能只照搬公版 diff**——要额外检查 LCB 已存在但公版未动的语言资源（尤其 it.resx），补齐对应条目，否则非 zh/en/fr 语种会回退异常。
+- 另：本提交在 `PressUseResin(List<Region>...)` 用静态方法 `ResolveResinNamePattern/ResolveUseButtonPattern` 做 OCR 匹配本地化，只本地化匹配串不改 `resinName` 本身（`GetResinNum` 分支仍依赖中文字面量），对跨任务共享调用（AutoLeyLineOutcropTask/AutoStygianOnslaughtTask）向后兼容。
