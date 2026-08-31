@@ -73,3 +73,45 @@ AGENTS.md
 CodeMaid.config
 Settings.XamlStyler
 BetterGenshinImpact.sln.DotSettings
+
+# ===== 用户自定义：构建日志/临时文件/调试产物（2026-08-31，不入库）=====
+# 构建日志（根目录 _build* / temp_origin* 等）
+_build*.log
+_build*.err
+_build_tmp/
+_buildcheck_tmp/
+_build_async.*
+_build_bgi*.log
+_build_final*.log
+_build_final*.err
+_build_full*.log
+_build_paimon_check.log
+_build_server*.log
+_build_server*.err
+_build_tmp.log
+_build_verify.*
+_build_x64.*
+# 调试/探针产物
+_deb_bgi_log*.txt
+_rel_bgi_log*.txt
+_rel_build_log.txt
+_review_build.log
+_route_retry_round_end*_build*.log
+_assist_build.log
+_sigtest/
+_deb_*.txt
+build-bgi-probe.log
+# 临时 origin 备份/对比文件
+temp_origin_*.xaml
+temp_origin_*.cs
+temp_*.txt
+temp_screenshot.jpg
+numstat.txt
+test-tool-write.txt
+Test/stuck_test_out.txt
+Test/trx_tmp/
+# 其他 IDE/脚本/图片杂项
+.vscode/
+.dsh-vision-router/
+QQ*.jpg
+QQ*.png
