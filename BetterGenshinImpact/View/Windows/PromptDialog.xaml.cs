@@ -1,5 +1,4 @@
 using BetterGenshinImpact.Helpers.Ui;
-using BetterGenshinImpact.View.Behavior;
 using System;
 using System.Windows;
 using System.Windows.Controls;
@@ -25,8 +24,6 @@ public class PromptDialogConfig
     /// 左下角按钮的点击事件
     /// </summary>
     public RoutedEventHandler? LeftButtonClick { get; set; }
-
-    public bool DisableAutoTranslate { get; set; } = false;
 }
 
 public partial class PromptDialog
@@ -39,11 +36,6 @@ public partial class PromptDialog
         MyTitleBar.Title = title;
         TxtQuestion.Text = question;
         _config = config ?? new PromptDialogConfig();
-
-        if (_config.DisableAutoTranslate)
-        {
-            AutoTranslateInterceptor.SetEnableAutoTranslate(this, false);
-        }
 
         DynamicContent.Content = uiElement;
         if (DynamicContent.Content is TextBox textBox && defaultValue != null)

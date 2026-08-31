@@ -8,6 +8,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:pages="clr-namespace:BetterGenshinImpact.ViewModel.Pages"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:i18n="clr-namespace:BetterGenshinImpact.Service.I18n"
              d:DataContext="{d:DesignInstance Type=pages:ScriptControlViewModel}"
              d:DesignHeight="850"
              d:DesignWidth="800"
@@ -65,7 +66,7 @@
                         BorderThickness="0,0,0,1">
                     <ui:TextBlock Margin="4,4,8,4"
                                   FontTypography="BodyStrong"
-                                  Text="配置组"
+                                  Text="{i18n:T 配置组}"
                                   TextAlignment="Center" />
                 </Border>
                 <ui:ListView Grid.Row="1"
@@ -94,19 +95,19 @@
                     </ui:ListView.ItemTemplate>
                     <ui:ListView.ContextMenu>
                         <ContextMenu>
-                            <MenuItem Command="{Binding AddScriptGroupCommand}" Header="新增组" />
+                            <MenuItem Command="{Binding AddScriptGroupCommand}" Header="{i18n:T 新增组}" />
                             <MenuItem Command="{Binding DeleteScriptGroupCommand}"
                                       CommandParameter="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}, Path=PlacementTarget.SelectedItem}"
-                                      Header="删除组" />
+                                      Header="{i18n:T 删除组}" />
                             <MenuItem Command="{Binding RenameScriptGroupCommand}"
                                       CommandParameter="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}, Path=PlacementTarget.SelectedItem}"
-                                      Header="重命名" />
+                                      Header="{i18n:T 重命名}" />
                             <MenuItem Command="{Binding CopyScriptGroupCommand}"
                                       CommandParameter="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}, Path=PlacementTarget.SelectedItem}"
-                                      Header="复制组" />
+                                      Header="{i18n:T 复制组}" />
                             <MenuItem Command="{Binding AddScriptGroupNextFlagCommand}"
                                       CommandParameter="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}, Path=PlacementTarget.SelectedItem}"
-                                      Header="连续任务从此开始执行" />
+                                      Header="{i18n:T 连续任务从此开始执行}" />
                         </ContextMenu>
                     </ui:ListView.ContextMenu>
                 </ui:ListView>

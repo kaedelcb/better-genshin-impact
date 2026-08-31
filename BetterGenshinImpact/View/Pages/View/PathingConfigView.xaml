@@ -8,7 +8,7 @@
                  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                  xmlns:sdl="http://schemas.sdl.com/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-                 xmlns:behavior="clr-namespace:BetterGenshinImpact.View.Behavior"
+                 xmlns:i18n="clr-namespace:BetterGenshinImpact.Service.I18n"
                  xmlns:view="clr-namespace:BetterGenshinImpact.ViewModel.Pages.View"
                  Width="1000"
                  Height="500"
@@ -18,7 +18,6 @@
                  d:DesignHeight="1000"
                  d:DesignWidth="500"
                  ExtendsContentIntoTitleBar="True"
-                 behavior:AutoTranslateInterceptor.EnableAutoTranslate="True"
                  WindowBackdropType="Auto"
                  mc:Ignorable="d">
 
@@ -40,7 +39,7 @@
                     <ui:TextBlock Margin="0,0,0,8"
                                   FontSize="16"
                                   FontTypography="BodyStrong"
-                                  Text="地图追踪设置（相关配置优先级从高到低,UI样式还有问题未解决）" />
+                                  Text="{i18n:T '地图追踪设置（相关配置优先级从高到低,UI样式还有问题未解决）'}" />
 
                 </StackPanel>
 
@@ -49,7 +48,7 @@
 
                         <ui:TextBlock Margin="0,0,0,8"
                                       FontTypography="BodyStrong"
-                                      Text="队伍切换设置（路径中存在符合条件的动作、采集物的情况下，自动切换至对应队伍）" />
+                                      Text="{i18n:T 队伍切换设置（路径中存在符合条件的动作、采集物的情况下，自动切换至对应队伍）}" />
                         <!--  使用ItemsControl来动态显示筛选条件  -->
                         <ItemsControl dd:DragDrop.IsDragSource="True"
                                       dd:DragDrop.IsDropTarget="True"
@@ -101,7 +100,7 @@
                                         <ui:TextBlock Margin="10,0"
                                                       VerticalAlignment="Center"
                                                       Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}">
-                                            则切换到队伍
+                                            <Run Text="{i18n:T 则切换到队伍}" />
                                         </ui:TextBlock>
 
 
@@ -114,7 +113,7 @@
                                         <Button
                                             Command="{Binding DataContext.RemovePartyConditionConfigCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                             CommandParameter="{Binding}"
-                                            Content="删除" />
+                                            Content="{i18n:T 删除}" />
                                     </WrapPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -123,7 +122,7 @@
                         <!--  添加条件按钮  -->
                         <Button HorizontalAlignment="Left"
                                 Command="{Binding AddPartyConditionConfigCommand}"
-                                Content="+ 添加条件" />
+                                Content="{i18n:T + 添加条件}" />
                     </StackPanel>
                 </ui:Card>
 
@@ -132,7 +131,7 @@
 
                         <ui:TextBlock Margin="0,0,0,8"
                                       FontTypography="BodyStrong"
-                                      Text="角色设置（存在多个符合条件的角色情况下，优先使用游戏内编队编号更小的）" />
+                                      Text="{i18n:T 角色设置（存在多个符合条件的角色情况下，优先使用游戏内编队编号更小的）}" />
                         <!--  使用ItemsControl来动态显示筛选条件  -->
                         <ItemsControl dd:DragDrop.IsDragSource="True"
                                       dd:DragDrop.IsDropTarget="True"
@@ -178,7 +177,7 @@
                                         <ui:TextBlock Margin="10,0"
                                                       VerticalAlignment="Center"
                                                       Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}">
-                                            则角色执行
+                                            <Run Text="{i18n:T 则角色执行}" />
                                         </ui:TextBlock>
 
                                         <!--  结果  -->
@@ -192,7 +191,7 @@
                                         <Button
                                             Command="{Binding DataContext.RemoveAvatarConditionConfigCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                             CommandParameter="{Binding}"
-                                            Content="删除" />
+                                            Content="{i18n:T 删除}" />
                                     </WrapPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -201,7 +200,7 @@
                         <!--  添加条件按钮  -->
                         <Button HorizontalAlignment="Left"
                                 Command="{Binding AddAvatarConditionConfigCommand}"
-                                Content="+ 添加条件" />
+                                Content="{i18n:T + 添加条件}" />
                     </StackPanel>
                 </ui:Card>
 
@@ -218,12 +217,12 @@
                             <ui:TextBlock Grid.Row="0"
                                           Grid.Column="0"
                                           FontTypography="Body"
-                                          Text="使用小道具的间隔时间（毫秒）"
+                                          Text="{i18n:T 使用小道具的间隔时间（毫秒）}"
                                           TextWrapping="Wrap" />
                             <ui:TextBlock Grid.Row="1"
                                           Grid.Column="0"
                                           Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                          Text="在移动期间自动使用小道具，填0为不使用"
+                                          Text="{i18n:T 在移动期间自动使用小道具，填0为不使用}"
                                           TextWrapping="Wrap" />
                         </Grid>
                     </ui:CardControl.Header>
@@ -249,12 +248,12 @@
                             <ui:TextBlock Grid.Row="0"
                                           Grid.Column="0"
                                           FontTypography="Body"
-                                          Text="地图追踪自动吃药（请佩戴便携营养袋）"
+                                          Text="{i18n:T 地图追踪自动吃药（请佩戴便携营养袋）}"
                                           TextWrapping="Wrap" />
                             <ui:TextBlock Grid.Row="1"
                                           Grid.Column="0"
                                           Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                          Text="非实时，触发地图追踪红血和复活检测后尝试吃药恢复"
+                                          Text="{i18n:T 非实时，触发地图追踪红血和复活检测后尝试吃药恢复}"
                                           TextWrapping="Wrap" />
                         </Grid>
                     </ui:CardControl.Header>
@@ -272,7 +271,7 @@
                         <ui:TextBlock Margin="0,2,36,0"
                                       HorizontalAlignment="Center"
                                       FontSize="9"
-                                      Text="红血仅切角色" />
+                                      Text="{i18n:T 红血仅切角色}" />
                     </StackPanel>
                     
                 </ui:CardControl>
@@ -291,12 +290,12 @@
                             <ui:TextBlock Grid.Row="0"
                                           Grid.Column="0"
                                           FontTypography="Body"
-                                          Text="低血量回复时机"
+                                          Text="{i18n:T 低血量回复时机}"
                                           TextWrapping="Wrap" />
                             <ui:TextBlock Grid.Row="1"
                                           Grid.Column="0"
                                           Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                          Text="选择低血量时的回复策略：任何路径点/只在传送点/不回复"
+                                          Text="{i18n:T 选择低血量时的回复策略：任何路径点/只在传送点/不回复}"
                                           TextWrapping="Wrap" />
                         </Grid>
                     </ui:CardControl.Header>
@@ -314,38 +313,38 @@
                     <StackPanel>
                         <ui:TextBlock Margin="0,0,0,8"
                                       FontTypography="BodyStrong"
-                                      Text="小地图匹配调参（纯本地调试，实时生效）" />
+                                      Text="{i18n:T 小地图匹配调参（纯本地调试，实时生效）}" />
                         <ui:TextBlock Margin="0,0,0,8"
                                       Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                      Text="默认值等于改代码前行为。置信度非法(不在0~1)整组回落默认；阈值/超时/节流非法各自回落默认。"
+                                      Text="{i18n:T 默认值等于改代码前行为。置信度非法(不在0~1)整组回落默认；阈值/超时/节流非法各自回落默认。}"
                                       TextWrapping="Wrap" />
 
                         <!--  置信度阈值 rank0/1/2（Requirement 1）  -->
                         <WrapPanel Margin="0,0,0,8">
-                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="置信度 rank0" />
+                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{i18n:T 置信度 rank0}" />
                             <ui:TextBox MinWidth="80" Margin="0,0,16,0"
                                         Text="{Binding Config.MiniMapMatchTuningConfig.Rank0ConfidenceThreshold, Mode=TwoWay}" />
-                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="rank1" />
+                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{i18n:T rank1}" />
                             <ui:TextBox MinWidth="80" Margin="0,0,16,0"
                                         Text="{Binding Config.MiniMapMatchTuningConfig.Rank1ConfidenceThreshold, Mode=TwoWay}" />
-                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="rank2" />
+                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{i18n:T rank2}" />
                             <ui:TextBox MinWidth="80"
                                         Text="{Binding Config.MiniMapMatchTuningConfig.Rank2ConfidenceThreshold, Mode=TwoWay}" />
                         </WrapPanel>
 
                         <!--  全局回退阈值（Requirement 2）/ 锁超时（Requirement 3）  -->
                         <WrapPanel Margin="0,0,0,8">
-                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="全局回退连续失败阈值" />
+                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{i18n:T 全局回退连续失败阈值}" />
                             <ui:TextBox MinWidth="80" Margin="0,0,16,0"
                                         Text="{Binding Config.MiniMapMatchTuningConfig.GlobalMatchFallbackThreshold, Mode=TwoWay}" />
-                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="GetPosition锁超时(ms)" />
+                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{i18n:T GetPosition锁超时(ms)}" />
                             <ui:TextBox MinWidth="80"
                                         Text="{Binding Config.MiniMapMatchTuningConfig.GetPositionLockTimeoutMs, Mode=TwoWay}" />
                         </WrapPanel>
 
                         <!--  全局回退跳变保护：全局命中坐标距锚点超此值判误匹配丢弃，0=关闭  -->
                         <WrapPanel Margin="0,0,0,8">
-                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="全局回退跳变保护阈值(像素,0=关)" />
+                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{i18n:T '全局回退跳变保护阈值(像素,0=关)'}" />
                             <ui:TextBox MinWidth="80"
                                         Text="{Binding Config.MiniMapMatchTuningConfig.GlobalMatchJumpGuardThreshold, Mode=TwoWay}" />
                         </WrapPanel>
@@ -354,18 +353,18 @@
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <ui:ToggleSwitch Margin="0,0,8,0"
                                              IsChecked="{Binding Config.MiniMapMatchTuningConfig.ZeroCoordGuardEnabled, Mode=TwoWay}" />
-                            <ui:TextBlock VerticalAlignment="Center" Text="零坐标防呆（(0,0)失败帧沿用上一帧朝向）" />
+                            <ui:TextBlock VerticalAlignment="Center" Text="{i18n:T '零坐标防呆（(0,0)失败帧沿用上一帧朝向）'}" />
                         </StackPanel>
 
                         <!--  诊断开关（Requirement 5）  -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <ui:ToggleSwitch Margin="0,0,8,0"
                                              IsChecked="{Binding Config.MiniMapMatchTuningConfig.DiagnosticsEnabled, Mode=TwoWay}" />
-                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,16,0" Text="诊断总开关" />
+                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,16,0" Text="{i18n:T 诊断总开关}" />
                             <ui:ToggleSwitch Margin="0,0,8,0"
                                              IsChecked="{Binding Config.MiniMapMatchTuningConfig.DumpFailedFrame, Mode=TwoWay}" />
-                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,16,0" Text="失败帧存图" />
-                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="存图节流(ms)" />
+                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,16,0" Text="{i18n:T 失败帧存图}" />
+                            <ui:TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="{i18n:T 存图节流(ms)}" />
                             <ui:TextBox MinWidth="80"
                                         Text="{Binding Config.MiniMapMatchTuningConfig.DumpThrottleMs, Mode=TwoWay}" />
                         </StackPanel>
@@ -374,7 +373,7 @@
             </StackPanel>
         </ScrollViewer>
 
-        <ui:TitleBar Name="MyTitleBar" Grid.Row="0" Title="地图追踪设置">
+        <ui:TitleBar Name="MyTitleBar" Grid.Row="0" Title="{i18n:T 地图追踪设置}">
             <ui:TitleBar.Icon>
                 <ui:ImageIcon Source="pack://application:,,,/Resources/Images/logo.png" />
             </ui:TitleBar.Icon>

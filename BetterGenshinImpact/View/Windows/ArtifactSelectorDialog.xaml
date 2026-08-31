@@ -4,8 +4,8 @@
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-                 xmlns:behavior="clr-namespace:BetterGenshinImpact.View.Behavior"
-                 Title="选择构建版本"
+                 xmlns:i18n="clr-namespace:BetterGenshinImpact.Service.I18n"
+                 Title="{i18n:T 选择构建版本}"
                  Width="460"
                  Height="300"
                  MinWidth="400"
@@ -13,7 +13,6 @@
                  ui:Design.Background="{DynamicResource ApplicationBackgroundBrush}"
                  ui:Design.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                  ExtendsContentIntoTitleBar="True"
-                 behavior:AutoTranslateInterceptor.EnableAutoTranslate="True"
                  FontFamily="{DynamicResource TextThemeFontFamily}"
                  ResizeMode="NoResize"
                  WindowBackdropType="Auto"
@@ -30,7 +29,7 @@
 
         <!-- 标题栏 -->
         <ui:TitleBar Grid.Row="0"
-                     Title="选择构建版本"
+                     Title="{i18n:T 选择构建版本}"
                      ShowMaximize="False"
                      ShowMinimize="False">
             <ui:TitleBar.Icon>
@@ -42,7 +41,7 @@
         <ui:TextBlock Grid.Row="1"
                       Margin="24,8,24,8"
                       FontSize="14"
-                      Text="请选择要更新的构建版本："
+                      Text="{i18n:T 请选择要更新的构建版本：}"
                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
         <!-- 构建版本列表 -->

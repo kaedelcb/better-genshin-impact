@@ -91,8 +91,7 @@
 		<PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
 		<PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
 		<PackageReference Include="Serilog.Sinks.RichTextBoxEx.Wpf" Version="1.1.0.1" />
-<!--		<PackageReference Include="supabase-csharp" Version="0.16.2" />-->
-		<!-- 不要加回 System.Drawing.Common：UseWindowsForms=true 已由框架提供 System.Drawing.dll(含 Pen 等)，
+<!-- 不要加回 System.Drawing.Common：UseWindowsForms=true 已由框架提供 System.Drawing.dll(含 Pen 等)，
 		     再引入此 NuGet 包会与框架程序集重复定义 System.Drawing.Pen，导致 IDE 报 CS0104 "不明确的引用"。 -->
 		<PackageReference Include="System.IO.Hashing" Version="9.0.4" />
 		<PackageReference Include="Vanara.PInvoke.CoreAudio" Version="4.1.3" />

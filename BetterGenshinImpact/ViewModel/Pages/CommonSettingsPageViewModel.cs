@@ -29,6 +29,7 @@ using BetterGenshinImpact.Helpers.Http;
 using BetterGenshinImpact.Model;
 using BetterGenshinImpact.Platform.Wine;
 using BetterGenshinImpact.Service;
+using BetterGenshinImpact.Service.I18n;
 using BetterGenshinImpact.Service.Interface;
 using BetterGenshinImpact.Service.Notification;
 using BetterGenshinImpact.View;
@@ -192,8 +193,7 @@ public partial class CommonSettingsPageViewModel : ViewModel
             File.Move(tmp, path);
         }
 
-        var translator = App.GetService<ITranslationService>() ?? throw new NullReferenceException();
-        translator.Reload();
+        I18nService.Instance.ChangeLanguage(cultureName);
     }
 
     public string SelectedCountry
