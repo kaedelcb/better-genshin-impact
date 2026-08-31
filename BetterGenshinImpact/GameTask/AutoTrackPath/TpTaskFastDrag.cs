@@ -144,7 +144,7 @@ public class TpTaskFastDrag
     // OnLoadingScreenDetected 事件已删除（fastsync-redesign-parameter-passing spec OQ-2）：
     // 改为通过 Tp/TpOnce/WaitForTeleportCompletion/WaitForLoadingScreenAsync 调用栈
     // 透传 string? fastSyncId 参数，IsLoadingScreen 命中时直接调
-    // PathExecutor.CurrentMultiplayerCoordinator.WaitForAllPlayers 抢报。
+    // PathExecutor.CurrentMultiplayerCoordinator.FastReportAsync 抢报。
 
     public TpTaskFastDrag(CancellationToken ct)
     {
@@ -741,7 +741,6 @@ public class TpTaskFastDrag
 
             // === 阶段 2（保持原行为 + 增加复苏弹窗检测）===
 
-            // === 阶段 2（保持原行为 + 增加复苏弹窗检测）===
             await Delay(delayMs, ct);
             for (var i = 0; i < maxAttempts; i++)
             {
@@ -793,7 +792,7 @@ public class TpTaskFastDrag
     /// .kiro/specs/multiplayer-tp-loading-screen-suspend-skip/。
     ///
     /// fastSyncId（fastsync-redesign-parameter-passing spec）：联机模式下传递抢报 syncId，
-    /// IsLoadingScreen 命中后直接调 PathExecutor.CurrentMultiplayerCoordinator.WaitForAllPlayers
+    /// IsLoadingScreen 命中后直接调 PathExecutor.CurrentMultiplayerCoordinator.FastReportAsync
     /// 抢报。null 时该路径完全短路（单机调用方零感知）。
     /// </summary>
     private async Task<bool> WaitForLoadingScreenAsync(int timeoutMs, int intervalMs, string? fastSyncId = null)
@@ -1154,7 +1153,7 @@ public class TpTaskFastDrag
     /// <param name="x">目标x坐标</param>
     /// <param name="y">目标y坐标</param>
     /// <param name="mapName">地图名称</param>
-    /// <param name="finalZoomLevel">到达目标点的最小缩放等级，只在 MapZoomEnabled 为 True 生效</param>
+    /// <param name="finalZoomLevel">到达目标点的最小缩放等级（茶包快速拖动模式下无条件生效；keepCurrentZoom=true 时仅作放大下限）</param>
     /// <param name="country">传送地图国家</param>
     /// <param name="retryTimes">重试次数</param>
     /// <param name="enableEarlyStop">是否启用早停机制（几何早停和容差早停）。默认为 true 保持向后兼容，设为 false 时将精确拖动到目标点正中心</param>
@@ -1685,7 +1684,6 @@ public class TpTaskFastDrag
     /// 快速拖动/动态跑道模式下拖动中途检测采样点 (500,500)/(600,500)：
     /// 若像素与拖动前一致且意图位移显著，说明这次拖动地图根本没动（被弹层挡住 / 拖到边界 / 手势未生效），
     /// 返回 false 交由上层"重新拖动本段"而不是当作已拖动去预测（否则 ratio≈0 误判 → 盲走乱拖）。
-    /// 非快速拖动模式恒返回 true（保持旧行为，路径逐字节不变）。
     /// </summary>
     /// <returns>true=本次拖动生效（可信）；false=检测到拖动中途地图没动（应重拖本段）。</returns>
     private async Task<bool> MouseMoveMap(int pixelDeltaX, int pixelDeltaY, int steps = 10, (double, double)? landingOverride = null)
