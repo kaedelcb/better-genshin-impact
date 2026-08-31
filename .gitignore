@@ -64,3 +64,12 @@ BgiCoordinatorServer/docker-compose.override.yml
 
 # Claude
 .claude/*
+
+# ===== 用户自定义：取消跟踪 IDE/大模型/AI 助手无关文件（2026-08-31）=====
+# Kiro/AI 助手工作区文件（本地 Kiro 用，不进 git）
+AGENTS.md
+.agents/
+# IDE 插件/工具链配置（本地开发用）
+CodeMaid.config
+Settings.XamlStyler
+BetterGenshinImpact.sln.DotSettings
