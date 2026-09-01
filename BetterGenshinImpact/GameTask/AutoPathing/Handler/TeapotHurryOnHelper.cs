@@ -180,7 +180,7 @@ public partial class PathExecutor
                                 if (st.MavikaFlyCount > (st.MwktiaoIn?15:4) && avatar.IsActive(screen2))
                                 {
                                     if (nextWaypoint?.MoveMode != MoveModeEnum.Fly.Code &&
-                                        Bv.GetMotionStatus(screen2) == MotionStatus.Fly && _lastWaypoint?.MoveMode != MoveModeEnum.Fly.Code )
+                                        Bv.GetMotionStatus(screen2) == MotionStatus.Fly && _lastWaypoint?.MoveMode != MoveModeEnum.Fly.Code && waypoint?.ActionParams is null)
                                     {
                                         Logger.LogWarning("测试:st.MavikaFlyCount1 {t}",st.MavikaFlyCount);
                                         Simulation.SendInput.SimulateAction(GIActions.NormalAttack);
