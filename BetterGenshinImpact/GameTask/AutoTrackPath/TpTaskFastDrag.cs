@@ -937,7 +937,7 @@ public class TpTaskFastDrag
         // M 打开地图识别当前位置，中心点为当前位置
         using (var ra1 = CaptureToRectArea())
         {
-            if (Bv.IsInBigMapUi(ra1))
+            if (IsInBigMapUiViaAssets(ra1))
             {
                 return true;
             }
@@ -977,7 +977,7 @@ public class TpTaskFastDrag
             {
                 ct.ThrowIfCancellationRequested();
                 using var raP = CaptureToRectArea();
-                if (Bv.IsInBigMapUi(raP))
+                if (IsInBigMapUiViaAssets(raP))
                 {
                     return true; // 已经开好了
                 }
@@ -1011,7 +1011,7 @@ public class TpTaskFastDrag
             using var raEnd = CaptureToRectArea();
             // [诊断] 超时后分别用宽松(IsInBigMapUi, OR双判据)与严格(MapScaleButtonRo含ROI)判据探测，
             // 定位"WaitForBigMapUiOrTimeoutAsync 超时但 IsInBigMapUi 误报 true"是否发生。
-            bool looseInBigMap = Bv.IsInBigMapUi(raEnd);
+            bool looseInBigMap = IsInBigMapUiViaAssets(raEnd);
             bool strictScaleButton = raEnd.Find(TpTaskFastDragAssets.Get(raEnd).MapScaleButtonRo).IsExist();
             bool strictSettingsInterpreted = looseInBigMap && !strictScaleButton;
             Logger.LogDebug(
@@ -2797,7 +2797,7 @@ public class TpTaskFastDrag
     public async Task ClickTpPoint(ImageRegion imageRegion)
     {
         // 1.判断是否在地图界面
-        if (!Bv.IsInBigMapUi(imageRegion)) throw new RetryException("不在地图界面");
+        if (!IsInBigMapUiViaAssets(imageRegion)) throw new RetryException("不在地图界面");
 
         // 2. 判断是否已经点出传送按钮
         var hasTeleportButton = CheckTeleportButton(imageRegion);
@@ -2950,6 +2950,18 @@ public class TpTaskFastDrag
     {
         using var ra = region.Find(_assets.MapUndergroundSwitchButtonRo);
         return ra.IsExist();
+    }
+
+    /// <summary>
+    /// 用快速传送自持资产（TpTaskFastDragAssets.MapScaleButtonRo，FastDrag 资源）判断是否在大地图界面。
+    /// 快速传送完全使用自己的资源，不依赖共享公版 Bv.IsInBigMapUi（其内部用公版 MapScaleButton key）。
+    /// </summary>
+    /// <param name="region">当前截图。</param>
+    /// <returns>FastDrag 的缩放滑轨按钮存在则 true（在大地图界面）。</returns>
+    private bool IsInBigMapUiViaAssets(ImageRegion region)
+    {
+        using var scaleRa = region.Find(_assets.MapScaleButtonRo);
+        return scaleRa.IsExist();
     }
 
     /// <summary>
