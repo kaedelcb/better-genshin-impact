@@ -39,9 +39,9 @@ public sealed class TpTaskFastDragAssets
         // —— 茶包自持的 4 个按钮模板（配置与茶包版 QuickTeleportAssets 逐字节一致） ——
         MapScaleButtonRo = new RecognitionObject
         {
-            Name = "MapScaleButton",
+            Name = "MapScaleButtonFastDrag",
             RecognitionType = RecognitionTypes.TemplateMatch,
-            TemplateImageMat = GameTaskManager.LoadAssetImage("QuickTeleport", "MapScaleButton.png", captureSize.Width, captureSize.Height),
+            TemplateImageMat = GameTaskManager.LoadAssetImage("QuickTeleport", "MapScaleButtonFastDrag.png", captureSize.Width, captureSize.Height),
             RegionOfInterest = new Rect((int)(30 * scale),
                 (int)(440 * scale),
                 (int)(40 * scale),
@@ -80,9 +80,9 @@ public sealed class TpTaskFastDragAssets
 
         MapUndergroundToGroundButtonRo = new RecognitionObject
         {
-            Name = "MapUndergroundToGroundButton",
+            Name = "MapUndergroundToGroundButtonFastDrag",
             RecognitionType = RecognitionTypes.TemplateMatch,
-            TemplateImageMat = GameTaskManager.LoadAssetImage("QuickTeleport", "MapUndergroundToGroundButton.png", captureSize.Width, captureSize.Height),
+            TemplateImageMat = GameTaskManager.LoadAssetImage("QuickTeleport", "MapUndergroundToGroundButtonFastDrag.png", captureSize.Width, captureSize.Height),
             RegionOfInterest = new Rect(captureRect.Width - (int)(120 * scale),
                 (int)(250 * scale),
                 (int)(90 * scale),
@@ -92,6 +92,25 @@ public sealed class TpTaskFastDragAssets
             MaskColor = Color.FromArgb(0, 255, 0),
             DrawOnWindow = true,
             Threshold = 0.85
+        }.InitTemplate();
+
+        // 地下图层检测按钮（方案 A）：快速传送用自己改名的 FastDrag 资源 + 茶包参数检测"当前是否在地下"，
+        // 不依赖共享公版 MapUndergroundSwitchButton（恢复公版后快速传送探测失效）。
+        // 参数与茶包版 QuickTeleportAssets.MapUndergroundSwitchButtonRo 一致（Use3Channels+UseMask+绿掩码+Threshold=0.8）。
+        MapUndergroundSwitchButtonRo = new RecognitionObject
+        {
+            Name = "MapUndergroundSwitchButtonFastDrag",
+            RecognitionType = RecognitionTypes.TemplateMatch,
+            TemplateImageMat = GameTaskManager.LoadAssetImage("QuickTeleport", "MapUndergroundSwitchButtonFastDrag.png", captureSize.Width, captureSize.Height),
+            RegionOfInterest = new Rect(captureRect.Width - (int)(120 * scale),
+                (int)(250 * scale),
+                (int)(90 * scale),
+                (int)(570 * scale)),
+            Use3Channels = true,
+            UseMask = true,
+            MaskColor = Color.FromArgb(0, 255, 0),
+            DrawOnWindow = true,
+            Threshold = 0.8
         }.InitTemplate();
     }
 
@@ -106,6 +125,9 @@ public sealed class TpTaskFastDragAssets
 
     /// <summary>地下切回地上图层按钮。茶包自持加载。</summary>
     public RecognitionObject MapUndergroundToGroundButtonRo { get; }
+
+    /// <summary>大地图地下图层开关（检测是否在地下）。茶包自持加载，避免共享公版 MapUndergroundSwitchButton（teleport-dual-engine-asset-separation spec / 方案 A）。</summary>
+    public RecognitionObject MapUndergroundSwitchButtonRo { get; }
 
     /// <summary>传送点选择图标的 ROI 区域。复用自 <see cref="QuickTeleportAssets.MapChooseIconRoi"/>（公版也有）。</summary>
     public Rect MapChooseIconRoi => _publicAssets.MapChooseIconRoi;

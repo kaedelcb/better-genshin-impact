@@ -217,8 +217,9 @@ public static partial class Bv
 
     public static double GetBigMapScale(ImageRegion region)
     {
-        using var scaleRa = region.Find(QuickTeleportAssets.Get(region).MapScaleButtonRo);
-        // using var scaleRa = region.Find(RecognitionAssets.Get("QuickTeleport", "MapScaleButton", region));
+        using var scaleRa = region.Find(RecognitionAssets.Get("QuickTeleport", "MapScaleButton", region));
+        // 用公版 RecognitionAssets key 加载 MapScaleButton（公版资源）；tea 扩展 QuickTeleportAssets.MapScaleButtonRo 已移除（teleport-dual-engine-asset-separation spec）。
+        // using var scaleRa = region.Find(...);
         if (scaleRa.IsEmpty())
         {
             throw new Exception("当前未处于大地图界面，不能使用GetBigMapScale方法");

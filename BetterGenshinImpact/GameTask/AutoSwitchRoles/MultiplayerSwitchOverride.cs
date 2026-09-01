@@ -15,7 +15,7 @@ public sealed class MultiplayerSwitchOverride
 
     /// <summary>
     /// R6/R7：配队页「已打开」判定委托。返回 true=右上角 MapCloseButton 存在=配队页已打开。
-    /// 由执行层注入为基于 QuickTeleportAssets.Instance.MapCloseButtonRo 的检测。
+    /// 由执行层注入为基于 RecognitionAssets.Get("QuickTeleport","MapCloseButton") 的检测。
     /// 探测时复用同一委托做「点击候选后 MapCloseButton 是否消失」判定。
     /// 联机必注入；防御性 null 检查时按「配队页未打开」处理，触发重试。
     /// </summary>

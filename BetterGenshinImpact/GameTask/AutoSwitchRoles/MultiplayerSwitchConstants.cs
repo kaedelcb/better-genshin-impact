@@ -3,7 +3,7 @@ namespace BetterGenshinImpact.GameTask.AutoSwitchRoles;
 /// <summary>
 /// 联机切角色已确定的运行时常量。候选坐标 = 单机 4 候选（OQ-5 确认相同），
 /// 探测等待/重试为 OQ-5 确定值。无任何待填占位。
-/// 配队页打开判定不在此（直接复用 QuickTeleportAssets.Instance.MapCloseButtonRo，OQ-4）。
+/// 配队页打开判定不在此（直接复用 RecognitionAssets.Get("QuickTeleport","MapCloseButton")，OQ-4）。
 /// </summary>
 public static class MultiplayerSwitchConstants
 {

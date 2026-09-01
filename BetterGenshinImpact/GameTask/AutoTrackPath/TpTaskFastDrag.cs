@@ -2142,7 +2142,7 @@ public class TpTaskFastDrag
                         if (!layerSwitchedOnce)
                         {
                             using var raUnder = CaptureToRectArea();
-                            if (Bv.BigMapIsUnderground(raUnder))
+                            if (IsBigMapUndergroundViaAssets(raUnder))
                             {
                                 TaskControl.Logger.LogInformation("识别大地图位置失败：检测到地下图层，切换到地上");
                                 using var raSwitch = CaptureToRectArea();
@@ -2639,7 +2639,7 @@ public class TpTaskFastDrag
     {
         // 可能是地下地图，切换到地上地图
         using var ra2 = CaptureToRectArea();
-        if (Bv.BigMapIsUnderground(ra2))
+        if (IsBigMapUndergroundViaAssets(ra2))
         {
             using var ra3 = CaptureToRectArea();
             ra3.Find(_assets.MapUndergroundToGroundButtonRo, rg => rg.Click());
@@ -2921,8 +2921,10 @@ public class TpTaskFastDrag
             using var ra = CaptureToRectArea();
             try
             {
-                double s = Bv.GetBigMapScale(ra);
-                // GetBigMapScale 返回的是 0~1 的滑轨归一化位置，0 是合法边界值，对应最终缩放等级 6。
+                double s = GetBigMapScaleViaFastDragAssets(ra);
+                // 用快速传送自持 TpTaskFastDragAssets.MapScaleButtonRo（FastDrag 资源）读取归一化缩放。
+                // 方案 X：不改共享 BvStatus；快速传送缩放检测自包含（teleport-dual-engine-asset-separation spec）。
+                // 返回 0~1 滑轨归一化位置，0 是合法边界值，对应最终缩放等级 6。
                 // 未识别时该方法会抛异常，由外层 catch 负责重试，因此这里不再用 s>0 判断成功。
                 return (-5 * s) + 6;
             }
@@ -2936,6 +2938,51 @@ public class TpTaskFastDrag
 
         TaskControl.Logger.LogWarning("获取大地图缩放级别连续失败，返回显示档兜底值 {Zoom:0.00}，跳过本轮缩放微调", DisplayTpPointZoomLevel);
         return DisplayTpPointZoomLevel;
+    }
+
+    /// <summary>
+    /// 用快速传送自持资产（TpTaskFastDragAssets.MapUndergroundSwitchButtonRo，FastDrag 资源）检测是否处于地下图层。
+    /// 方案 A：不改共享 BvStatus.BigMapIsUnderground（公版用公版 key/图）；快速传送探测自包含，避免恢复公版后失效。
+    /// </summary>
+    /// <param name="region">当前截图。</param>
+    /// <returns>FastDrag 的地下图层开关按钮存在则 true（当前在地下）。</returns>
+    private bool IsBigMapUndergroundViaAssets(ImageRegion region)
+    {
+        using var ra = region.Find(_assets.MapUndergroundSwitchButtonRo);
+        return ra.IsExist();
+    }
+
+    /// <summary>
+    /// 用快速传送自持资产（TpTaskFastDragAssets.MapScaleButtonRo，FastDrag 资源）计算大地图缩放滑轨归一化位置。
+    /// 方案 X：不改共享 BvStatus；快速传送缩放检测自包含（teleport-dual-engine-asset-separation spec）。
+    /// 公式与 Bv.GetBigMapScale 逐字节等价；唯一差异是识别滑块用的 RecognitionObject 换成 _assets.MapScaleButtonRo（FastDrag）。
+    /// </summary>
+    /// <param name="region">当前截图。</param>
+    /// <returns>0~1 的滑轨归一化位置（未识别时抛异常，由调用方 GetBigMapZoomLevel 的重试循环捕获）。</returns>
+    private double GetBigMapScaleViaFastDragAssets(ImageRegion region)
+    {
+        using var scaleRa = region.Find(_assets.MapScaleButtonRo);  // TpTaskFastDragAssets，已改为 FastDrag
+        if (scaleRa.IsEmpty())
+        {
+            throw new Exception("当前未处于大地图界面，不能使用GetBigMapScale方法");
+        }
+
+        var start = TaskContext.Instance().Config.TpConfig.ZoomStartY;
+        var end = TaskContext.Instance().Config.TpConfig.ZoomEndY;
+        if (end <= start)
+        {
+            throw new InvalidOperationException($"大地图缩放区间配置无效：start={start}, end={end}");
+        }
+
+        var cur = (scaleRa.Y + scaleRa.Height / 2.0) * _zoomOutMax1080PRatio;  // 与 Bv.GetBigMapScale 同公式（转换到1080p坐标系）
+        var normalizedScale = (end - cur) / (end - start);
+        if (!double.IsFinite(normalizedScale))
+        {
+            throw new InvalidOperationException($"大地图缩放识别结果无效：start={start}, end={end}, current={cur}");
+        }
+
+        // 0 和 1 都是合法的边界值：滑块在最下方时 normalizedScale=0，对应最终缩放等级 6。
+        return Math.Clamp(normalizedScale, 0.0, 1.0);
     }
 
     /// <summary>

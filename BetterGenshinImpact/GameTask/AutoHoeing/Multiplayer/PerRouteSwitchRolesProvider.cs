@@ -5,10 +5,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.GameTask.AutoHoeing.Models;
 using BetterGenshinImpact.GameTask.AutoHoeing.Services;
 using BetterGenshinImpact.GameTask.AutoSwitchRoles;
-using BetterGenshinImpact.GameTask.QuickTeleport.Assets;
 using Microsoft.Extensions.Logging;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 
@@ -105,7 +105,7 @@ public sealed class PerRouteSwitchRolesProvider
             IsPairingPageOpen = () =>
             {
                 using var capture = CaptureToRectArea();
-                using var ra = capture.Find(QuickTeleportAssets.Get(capture).MapCloseButtonRo);
+                using var ra = capture.Find(RecognitionAssets.Get("QuickTeleport", "MapCloseButton", capture));
                 return ra.IsExist();
             },
         };
