@@ -150,7 +150,7 @@ public class TpTaskFastDrag
     public TpTaskFastDrag(CancellationToken ct)
     {
         this.ct = ct;
-        _fastDragConfig = new TpTaskFastDragConfig(_tpConfig);
+        _fastDragConfig = TaskContext.Instance().Config.TpTaskFastDragConfig;
         _assets = TpTaskFastDragAssets.Get(_captureRect.Width, _captureRect.Height);
         _switchAreaRegionAssets = SwitchAreaRegionAssets.Get(_captureRect.Width, _captureRect.Height);
         TpTaskParam param = new TpTaskParam();

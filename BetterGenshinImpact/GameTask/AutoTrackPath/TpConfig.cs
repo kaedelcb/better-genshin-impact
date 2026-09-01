@@ -84,11 +84,6 @@ public partial class TpConfig : ObservableValidator
     private double _maxZoomLevel = 5.0; // 最大缩放等级
 
     [ObservableProperty]
-    [NotifyDataErrorInfo] 
-    [Range(1.0, 6.0)]
-    private double _minZoomLevel = 2.0; // 最小缩放等级
-
-    [ObservableProperty]
     private double _reviveStatueOfTheSevenPointX = 2296.4; // 七天神像点位X坐标
 
     [ObservableProperty]
@@ -139,13 +134,6 @@ public partial class TpConfig : ObservableValidator
     [property: JsonIgnore]
     private int _zoomEndY = 612; // y-coordinate for zoom end
 
-    /// <summary>
-    /// 缩放比例按钮的 x 坐标
-    /// </summary>
-    [ObservableProperty]
-    [property: JsonIgnore]
-    private int _zoomButtonX = 47; // x-coordinate for zoom button
-
     [ObservableProperty]
     [NotifyDataErrorInfo] 
     [Range(50, 500)]
@@ -175,9 +163,4 @@ public partial class TpConfig : ObservableValidator
     [ObservableProperty]
     [property: JsonIgnore]
     private double _precisionThreshold = 0.05;
-    
-    [ObservableProperty]
-    [NotifyDataErrorInfo] 
-    [Range(0, 5, ErrorMessage = "移动参数：0~5")]
-    private double _mapZoomDistanceForce = 0;  // 回血间隔
 }

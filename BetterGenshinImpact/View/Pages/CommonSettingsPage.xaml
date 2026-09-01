@@ -1587,7 +1587,7 @@
                                     MaxWidth="100"
                                     Margin="0,0,38,0"
                                     HorizontalContentAlignment="Center"
-                                    Text="{Binding Config.TpConfig.MapZoomDistanceForce, Mode=TwoWay, ValidatesOnNotifyDataErrors=True}" />
+                                    Text="{Binding Config.TpTaskFastDragConfig.MapZoomDistanceForce, Mode=TwoWay, ValidatesOnNotifyDataErrors=True}" />
                     </Grid>
                 </StackPanel>
                 

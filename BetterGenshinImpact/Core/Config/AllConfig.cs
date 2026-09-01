@@ -345,6 +345,11 @@ public partial class AllConfig : ObservableObject
     public TpConfig TpConfig { get; set; } = new();
 
     /// <summary>
+    /// 茶包快速拖动传送（TpTaskFastDrag）专属配置（不自持前从共享 TpConfig 拆分出来）。
+    /// </summary>
+    public TpTaskFastDragConfig TpTaskFastDragConfig { get; set; } = new();
+
+    /// <summary>
     /// 开发者配置
     /// </summary>
     public DevConfig DevConfig { get; set; } = new();
