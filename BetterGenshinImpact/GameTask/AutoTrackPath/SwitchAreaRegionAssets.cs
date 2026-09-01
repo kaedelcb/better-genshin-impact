@@ -53,7 +53,7 @@ internal sealed class SwitchAreaRegionAssets
         ["纳塔"] = "switch\\nata.png",
         ["挪德卡莱"] = "switch\\nuodekalai.png",
         ["至冬"] = "switch\\zhidong.png",
-        ["层岩巨渊"] = "cengyanjuyuan.png",
+        ["层岩巨渊"] = "switch\\cengyanjuyuan.png",
         ["渊下宫"] = "switch\\yuanxiagong.png",
         ["旧日之海"] = "switch\\jiurizhihai.png",
         ["远古圣山"] = "switch\\yuangushanshan.png",
