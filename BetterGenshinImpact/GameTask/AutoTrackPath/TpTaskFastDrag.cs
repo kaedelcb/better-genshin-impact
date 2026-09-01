@@ -43,11 +43,12 @@ namespace BetterGenshinImpact.GameTask.AutoTrackPath;
 /// </summary>
 public class TpTaskFastDrag
 {
-    private readonly QuickTeleportAssets _assets;
+    private readonly TpTaskFastDragAssets _assets;
     private readonly SwitchAreaRegionAssets _switchAreaRegionAssets;
     private readonly Rect _captureRect = TaskContext.Instance().SystemInfo.ScaleMax1080PCaptureRect;
     private readonly double _zoomOutMax1080PRatio = TaskContext.Instance().SystemInfo.ZoomOutMax1080PRatio;
     private readonly TpConfig _tpConfig = TaskContext.Instance().Config.TpConfig;
+    private readonly TpTaskFastDragConfig _fastDragConfig;
     private readonly string _mapMatchingMethod = TaskContext.Instance().Config.PathingConditionConfig.MapMatchingMethod;
     private readonly BlessingOfTheWelkinMoonTask _blessingOfTheWelkinMoonTask = new();
 
@@ -149,7 +150,8 @@ public class TpTaskFastDrag
     public TpTaskFastDrag(CancellationToken ct)
     {
         this.ct = ct;
-        _assets = QuickTeleportAssets.Get(_captureRect.Width, _captureRect.Height);
+        _fastDragConfig = new TpTaskFastDragConfig(_tpConfig);
+        _assets = TpTaskFastDragAssets.Get(_captureRect.Width, _captureRect.Height);
         _switchAreaRegionAssets = SwitchAreaRegionAssets.Get(_captureRect.Width, _captureRect.Height);
         TpTaskParam param = new TpTaskParam();
         this.cultureInfo = param.GameCultureInfo;
@@ -163,14 +165,14 @@ public class TpTaskFastDrag
         _screenHeight = gameScreenBounds.Height > SystemControl.GetGameScreenRect(TaskContext.Instance().GameHandle).Height 
             ? (SystemControl.GetGameScreenRect(TaskContext.Instance().GameHandle).Height <= 1080 ? 3 : 2) 
             : 2.3;
-        _extraDelayFactor = _tpConfig.MapZoomDistanceForce > 0 ? 1.0 + _tpConfig.MapZoomDistanceForce * 0.2 : 1.0;
+        _extraDelayFactor = _fastDragConfig.MapZoomDistanceForce > 0 ? 1.0 + _fastDragConfig.MapZoomDistanceForce * 0.2 : 1.0;
         
         // 快速拖动 + MapZoomDistanceForce==0 → 动态跑道模式（边缘感知截断）；>0 → 动态跑道 + 额外延时；关 → 经典。
         TaskControl.Logger.LogDebug("屏幕宽高：{gameScreenBounds} 游戏分辨率：{GetGameScreenRect} 传送参数：{screenHeight} 拖动模式={Mode} 额外延时系数={Factor}",
             gameScreenBounds.Size,
             SystemControl.GetGameScreenRect(TaskContext.Instance().GameHandle).Size,
             _screenHeight,
-            (_tpConfig.MapZoomDistanceForce == 0) ? "动态跑道" : "动态跑道+额外延时",
+            (_fastDragConfig.MapZoomDistanceForce == 0) ? "动态跑道" : "动态跑道+额外延时",
             _extraDelayFactor);
     }
 
@@ -427,11 +429,11 @@ public class TpTaskFastDrag
             TaskControl.Logger.LogInformation("当前缩放等级过大，调整为 {zoomLevel:0.00}", displayZoom);
             bigMapInAllMapRect = GetBigMapRect(mapName);
         }
-        else if (zoomLevel < _tpConfig.MinZoomLevel - _tpConfig.PrecisionThreshold)
+        else if (zoomLevel < _fastDragConfig.MinZoomLevel - _tpConfig.PrecisionThreshold)
         {
-            await AdjustMapZoomLevel(zoomLevel, _tpConfig.MinZoomLevel);
-            zoomLevel = _tpConfig.MinZoomLevel;
-            TaskControl.Logger.LogInformation("当前缩放等级过小，调整为 {zoomLevel:0.00}", _tpConfig.MinZoomLevel);
+            await AdjustMapZoomLevel(zoomLevel, _fastDragConfig.MinZoomLevel);
+            zoomLevel = _fastDragConfig.MinZoomLevel;
+            TaskControl.Logger.LogInformation("当前缩放等级过小，调整为 {zoomLevel:0.00}", _fastDragConfig.MinZoomLevel);
             bigMapInAllMapRect = GetBigMapRect(mapName);
         }
 
@@ -806,7 +808,7 @@ public class TpTaskFastDrag
             // 暂停 / 网络断开早退：避免墙钟超时误判（cancel 优先级更高，已在上一行处理）
             if (TeleportLoadingPhaseSuspendGuard.ShouldSkip(
                     RunnerContext.Instance.IsSuspend,
-                    TaskControl.IsSuspendedByNetwork))
+                    TpTeleportSuspendDetector.IsSuspendedByNetwork))
             {
                 TaskControl.Logger.LogInformation("[传送] 检测到暂停/网络断开，跳过传送过渡页守卫，回退原判据");
                 return true;
@@ -1010,7 +1012,7 @@ public class TpTaskFastDrag
             // [诊断] 超时后分别用宽松(IsInBigMapUi, OR双判据)与严格(MapScaleButtonRo含ROI)判据探测，
             // 定位"WaitForBigMapUiOrTimeoutAsync 超时但 IsInBigMapUi 误报 true"是否发生。
             bool looseInBigMap = Bv.IsInBigMapUi(raEnd);
-            bool strictScaleButton = raEnd.Find(QuickTeleportAssets.Get(raEnd).MapScaleButtonRo).IsExist();
+            bool strictScaleButton = raEnd.Find(TpTaskFastDragAssets.Get(raEnd).MapScaleButtonRo).IsExist();
             bool strictSettingsInterpreted = looseInBigMap && !strictScaleButton;
             Logger.LogDebug(
                 "[尝试直通-诊断] 渲染超时后：宽松IsInBigMapUi={Loose} 严格ScaleButton={Strict} 仅Settings判为真={OnlySettings}",
@@ -1055,7 +1057,7 @@ public class TpTaskFastDrag
             try
             {
                 using var ra = CaptureToRectArea();
-                if (ra.Find(QuickTeleportAssets.Get(ra).MapScaleButtonRo).IsExist())
+                if (ra.Find(TpTaskFastDragAssets.Get(ra).MapScaleButtonRo).IsExist())
                 {
                     await Delay(10, ct);
                     return true;
@@ -1174,12 +1176,12 @@ public class TpTaskFastDrag
         }
         else
         {
-            // 旧日之海地图上用户配置优先于 2.0 下限：取 Math.Max(finalZoomLevel, _tpConfig.MinZoomLevel)
+            // 旧日之海地图上用户配置优先于 2.0 下限：取 Math.Max(finalZoomLevel, _fastDragConfig.MinZoomLevel)
             // 确保用户配置（如 3.0）不被钳制后的 finalZoomLevel（2.0）压低。
             // 非旧日之海地图保持原有 Math.Min 行为不变。
             minZoomLevel = mapName == "SeaOfBygoneEras"
-                ? Math.Max(finalZoomLevel, _tpConfig.MinZoomLevel)
-                : Math.Min(finalZoomLevel, _tpConfig.MinZoomLevel);
+                ? Math.Max(finalZoomLevel, _fastDragConfig.MinZoomLevel)
+                : Math.Min(finalZoomLevel, _fastDragConfig.MinZoomLevel);
         }
         double maxZoomLevel = _tpConfig.MaxZoomLevel;
         int exceptionTimes = 0;
@@ -1523,15 +1525,50 @@ public class TpTaskFastDrag
             }
             catch (MapPositionNotRecognizedException)
             {
-                if (++exceptionTimes > 1)
-                {
-                    Simulation.SendInput.Mouse.LeftButtonUp();
-                    throw new Exception("多次中心点识别失败或异常，惯性推算失效，重新传送");
-                }
-
+                exceptionTimes++;
                 Simulation.SendInput.Mouse.LeftButtonUp();
-                Logger.LogDebug("进入盲走推算 (跳过次数: {times})", exceptionTimes);
-                mapCenterPoint = predictedPoint;
+
+                // 独立地图 / 非提瓦特：保持旧逻辑（第 2 次抛重传），零回归（bugfix BC-3 / CC5）。
+                // 处理完 mapCenterPoint 后自然 fall-through 到 catch 后的清先验/亮度检测/重算 offset，不在 catch 内 return/continue。
+                if (!AutoTrackPositionRecoveryDecisions.IsRecoveryApplicable(mapName == MapTypes.Teyvat.ToString()))
+                {
+                    if (exceptionTimes > 1)
+                    {
+                        throw new Exception("多次中心点识别失败或异常，惯性推算失效，重新传送");
+                    }
+
+                    Logger.LogDebug("进入盲走推算 (跳过次数: {times})", exceptionTimes);
+                    mapCenterPoint = predictedPoint;
+                }
+                else
+                {
+                    // 提瓦特连续大图：分级补救（bugfix BC-1 / design 组件2）。
+                    // 第 1 级盲走（现状）→ 第 2 级拉大缩放再识别 → 第 3 级切地区 → 兜底抛重传。
+                    switch (AutoTrackPositionRecoveryDecisions.Decide(exceptionTimes, currentZoomLevel))
+                    {
+                        case CenterRecoveryAction.BlindWalk:
+                            Logger.LogDebug("进入盲走推算 (跳过次数: {times})", exceptionTimes);
+                            mapCenterPoint = predictedPoint;
+                            break;
+
+                        case CenterRecoveryAction.ZoomInThenRecog:
+                            await AdjustMapZoomLevel(currentZoomLevel, AutoTrackPositionRecoveryDecisions.RecoverStableZoom);
+                            currentZoomLevel = AutoTrackPositionRecoveryDecisions.RecoverStableZoom; // 同步局部变量，后续 offset 用新缩放
+                            TryRecoverRecenter(mapName, x, y, ref mapCenterPoint, ref xOffset, ref yOffset,
+                                ref totalMoveMouseX, ref totalMoveMouseY, ref mouseDistance, ref exceptionTimes, currentZoomLevel);
+                            break;
+
+                        case CenterRecoveryAction.SwitchAreaThenRecog:
+                            await SwitchRecentlyCountryMap(x, y, country); // 切地区，内部逻辑零改动（CC4）
+                            TryRecoverRecenter(mapName, x, y, ref mapCenterPoint, ref xOffset, ref yOffset,
+                                ref totalMoveMouseX, ref totalMoveMouseY, ref mouseDistance, ref exceptionTimes, currentZoomLevel);
+                            break;
+
+                        case CenterRecoveryAction.ThrowRetry:
+                        default:
+                            throw new Exception("多次中心点识别失败或异常，惯性推算失效，重新传送");
+                    }
+                }
             }
 
             // 清掉拖动滑动窗口先验前，把最终中心点保存到 _lastDragCenterGenshin
@@ -1618,6 +1655,35 @@ public class TpTaskFastDrag
     }
 
     /// <summary>
+    /// 补救动作（拉缩放或切地区）后，重新识别中心点并重算 offset/mouseDistance。
+    /// 识别成功 → 清零 exceptionTimes；失败 → 静默不更新坐标，交由下一轮循环继续计数，
+    /// 最终达第 4 级触发 ThrowRetry 兜底（teleport-drag-center-recognition-escalating-recovery spec）。
+    /// 与"亮度过低→切图重识别"分支（同方法下方）逻辑一致，但不改动该分支（CC6）。
+    ///
+    /// 此处 catch 静默是设计上的有意妥协：识别失败为可恢复异常，交由分级计账在下一轮继续累加后上抛处理，
+    /// 不是无条件吞掉错误——故不在此处重新抛出，而是让异常计数持续增长直至触发 ThrowRetry。
+    /// </summary>
+    private void TryRecoverRecenter(string mapName, double x, double y,
+        ref Point2f mapCenterPoint, ref double xOffset, ref double yOffset,
+        ref double totalMoveMouseX, ref double totalMoveMouseY, ref double mouseDistance,
+        ref int exceptionTimes, double zoom)
+    {
+        try
+        {
+            mapCenterPoint = GetPositionFromBigMap(mapName, usePrior: false); // 甩掉旧先验，重新识别
+            (xOffset, yOffset) = (x - mapCenterPoint.X, y - mapCenterPoint.Y);
+            totalMoveMouseX = _tpConfig.MapScaleFactor * Math.Abs(xOffset) / zoom;
+            totalMoveMouseY = _tpConfig.MapScaleFactor * Math.Abs(yOffset) / zoom;
+            mouseDistance = Math.Sqrt(totalMoveMouseX * totalMoveMouseX + totalMoveMouseY * totalMoveMouseY);
+            exceptionTimes = 0; // 识别成功，清零失败账（与主路径约定一致）
+        }
+        catch (MapPositionNotRecognizedException)
+        {
+            // 补救后仍识别失败：不更新坐标，交由下一轮循环拖动后识别兜底（分级晋级直到 ThrowRetry）。
+        }
+    }
+
+    /// <summary>
     /// 点击并移动鼠标
     /// </summary>
     /// <param name="x1">鼠标初始位置x</param>
@@ -1673,9 +1739,9 @@ public class TpTaskFastDrag
         var realRectNow = SystemControl.GetCaptureRect(TaskContext.Instance().GameHandle);
         TaskControl.Logger.LogDebug(
             "[缩放坐标诊断-写入] zoom={Zoom:0.00} target={Target:0.00} initialY={InitialY} targetY={TargetY} ZoomButtonX={BtnX} ZoomStartY={StartY} ZoomEndY={EndY} 缓存ScaleTo1080PRatio={CachedRatio:0.000} 实时Scale={RealRatio:0.000} 实时窗口={RealW}x{RealH}",
-            zoomLevel, targetZoomLevel, initialY, targetY, _tpConfig.ZoomButtonX, _tpConfig.ZoomStartY, _tpConfig.ZoomEndY, TaskContext.Instance().SystemInfo.ScaleTo1080PRatio, realRectNow.Width / 1920d, realRectNow.Width, realRectNow.Height);
+            zoomLevel, targetZoomLevel, initialY, targetY, _fastDragConfig.ZoomButtonX, _tpConfig.ZoomStartY, _tpConfig.ZoomEndY, TaskContext.Instance().SystemInfo.ScaleTo1080PRatio, realRectNow.Width / 1920d, realRectNow.Width, realRectNow.Height);
         //当前缩放LOG显示
-        await MouseClickAndMove(_tpConfig.ZoomButtonX+10, initialY, _tpConfig.ZoomButtonX+10, targetY);
+        await MouseClickAndMove(_fastDragConfig.ZoomButtonX+10, initialY, _fastDragConfig.ZoomButtonX+10, targetY);
         await Delay(ApplyExtraDelay(50), ct);
     }
 
@@ -1777,7 +1843,7 @@ public class TpTaskFastDrag
                             var pos4 = image2.SrcMat.At<Vec3b>(600,500);
                             if (pos3 == pos && pos4 == pos2)
                             {
-                                using var esc = image2.Find(QuickTeleportAssets.Get(image2).MapCloseButtonWhiteRo);
+                                using var esc = image2.Find(TpTaskFastDragAssets.Get(image2).MapCloseButtonWhiteRo);
                                 if (esc.IsExist())
                                 {
                                     // [诊断] 拖动中途采样点(500,500)/(600,500)像素与拖动前一致 + 有关闭按钮 → 判定地图被弹层遮挡。
@@ -1867,7 +1933,7 @@ public class TpTaskFastDrag
                 using var ra = CaptureToRectArea();
                 var p1 = ra.SrcMat.At<Vec3b>(860, 500);
                 var p2 = ra.SrcMat.At<Vec3b>(860, 540);
-                if (ra.Find(QuickTeleportAssets.Get(ra).MapScaleButtonRo).IsExist() && prev1.HasValue && p1 == prev1.Value && p2 == prev2!.Value)
+                if (ra.Find(TpTaskFastDragAssets.Get(ra).MapScaleButtonRo).IsExist() && prev1.HasValue && p1 == prev1.Value && p2 == prev2!.Value)
                 {
                     if (++hits >= stableHits)
                     {
@@ -2048,7 +2114,7 @@ public class TpTaskFastDrag
                 try
                 {  
                     using var ra2 = CaptureToRectArea();
-                    using var mapScaleButtonRa2 = ra2.Find(QuickTeleportAssets.Get(ra2).MapScaleButtonRo);
+                    using var mapScaleButtonRa2 = ra2.Find(TpTaskFastDragAssets.Get(ra2).MapScaleButtonRo);
                     if (mapScaleButtonRa2.IsExist())
                     {
                         rect = MapManager.GetMap(mapName, _mapMatchingMethod).GetBigMapRect(ra.CacheGreyMat);
@@ -2136,7 +2202,7 @@ public class TpTaskFastDrag
                     try
                     {
                         using var raRedo = CaptureToRectArea();
-                        using var mapScaleButtonRedo = raRedo.Find(QuickTeleportAssets.Get(raRedo).MapScaleButtonRo);
+                        using var mapScaleButtonRedo = raRedo.Find(TpTaskFastDragAssets.Get(raRedo).MapScaleButtonRo);
                         if (mapScaleButtonRedo.IsExist())
                         {
                             rect = MapManager.GetMap(mapName, _mapMatchingMethod).GetBigMapRect(raRedo.CacheGreyMat);
@@ -2203,7 +2269,7 @@ public class TpTaskFastDrag
         //     // 小地图先验识别失败不影响传送主流程（可恢复）：记录后退回缓存兜底
         //     Logger.LogDebug(ex, "[大地图定位] 小地图先验识别异常，退回缓存坐标");
         // }
-        var (px, py) = Navigation.GetTpPriorPosition();  // 读传送先验专用缓存，不受 WarmUp 影响
+        var (px, py) = TpMapPositionPrior.GetTpPriorPosition();  // 读传送先验专用缓存，不受 WarmUp 影响
         if (px > 0 && py > 0)
         {
             var g = MapManager.GetMap(mapName, _mapMatchingMethod).ConvertImageCoordinatesToGenshinMapCoordinates(new Point2f(px, py));
@@ -2242,7 +2308,7 @@ public class TpTaskFastDrag
             Point2f r256;
             try
             {
-                r256 = teyvat.GetBigMapPositionInRange(greyBigMapMat, c1, layer1Range);
+                r256 = TpMapRegionMatch.GetBigMapPositionInRange(teyvat, greyBigMapMat, c1, layer1Range);
             }
             catch (Exception ex)
             {
@@ -2273,7 +2339,7 @@ public class TpTaskFastDrag
             Point2f r256;
             try
             {
-                r256 = teyvat.GetBigMapPositionInRange(greyBigMapMat, c2, BigMapPriorMatchDecisions.Layer2RangeGenshin);
+                r256 = TpMapRegionMatch.GetBigMapPositionInRange(teyvat, greyBigMapMat, c2, BigMapPriorMatchDecisions.Layer2RangeGenshin);
             }
             catch (Exception ex)
             {
@@ -2327,7 +2393,7 @@ public class TpTaskFastDrag
         Point2f r256 = default;
         try
         {
-            r256 = teyvat.GetBigMapPositionInRange(greyBigMapMat, dragCenter, radiusGenshin);
+            r256 = TpMapRegionMatch.GetBigMapPositionInRange(teyvat, greyBigMapMat, dragCenter, radiusGenshin);
         }
         catch (Exception ex)
         {
@@ -2375,7 +2441,7 @@ public class TpTaskFastDrag
         {
             // 判断是否在地图界面
             using var ra = CaptureToRectArea();
-            using var mapScaleButtonRa = ra.Find(QuickTeleportAssets.Get(ra).MapScaleButtonRo);
+            using var mapScaleButtonRa = ra.Find(TpTaskFastDragAssets.Get(ra).MapScaleButtonRo);
             if (mapScaleButtonRa.IsExist())
             {
                 inMapUi = true;
@@ -2655,7 +2721,7 @@ public class TpTaskFastDrag
         await Delay(ApplyExtraDelay(100), ct);
         var systemInfo = TaskContext.Instance().SystemInfo;
         var captureRect = systemInfo.ScaleMax1080PCaptureRect;
-        await WaitForElementOrTimeoutAsync(QuickTeleportAssets.Get(captureRect.Width, captureRect.Height).MapCloseButtonWhiteRo, timeoutMs:ApplyExtraDelay(1000));
+        await WaitForElementOrTimeoutAsync(TpTaskFastDragAssets.Get(captureRect.Width, captureRect.Height).MapCloseButtonWhiteRo, timeoutMs:ApplyExtraDelay(1000));
         
         await Delay(ApplyExtraDelay(50), ct);
         
