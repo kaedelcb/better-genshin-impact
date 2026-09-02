@@ -1,4 +1,4 @@
-﻿using BetterGenshinImpact.Core.Script;
+using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 
 using BetterGenshinImpact.View;
@@ -15,6 +15,7 @@ using BetterGenshinImpact.Service;
 using BetterGenshinImpact.Service.Notification;
 using BetterGenshinImpact.Service.Notification.Model.Enum;
 using BetterGenshinImpact.ViewModel;
+using BetterGenshinImpact.GameTask.AutoPathing;
 
 namespace BetterGenshinImpact.GameTask;
 
@@ -158,6 +159,11 @@ public class TaskRunner
         // 若不在新任务开始前释放，残留按键会导致新任务角色持续移动或行为异常。
         // 与 End() 结尾的 ReleaseAllKey() 对称，保证任务以干净的输入状态进入。
         Simulation.ReleaseAllKey();
+
+        // [传送先验 fresh] 任务启动 = 新的位置上下文：标记小地图先验为新鲜首启，
+        // 下一次快速传送 TpOnce 将主动小地图识别锚定，避免跨任务陈旧先验误跳过切换地区
+        // （teleport-fastdrag-prior-fresh-acquisition spec）。
+        Navigation.MarkTpPriorFresh();
 
         // 清空实时任务触发器
         TaskTriggerDispatcher.Instance().ClearTriggers();
