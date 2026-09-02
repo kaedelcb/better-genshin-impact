@@ -270,7 +270,7 @@ public class RouteExecutionEngine
     /// 执行单条路线，并发启动所有子任务
     /// </summary>
     public async Task<RouteExecutionResult> ExecuteRoute(
-        RouteInfo route, CancellationToken ct, int currentJsonRouteIndex = 0)
+        RouteInfo route, CancellationToken ct, int currentJsonRouteIndex = 0, string? rerunSyncIdSuffix = null)
     {
         var result = new RouteExecutionResult();
         _running = true;
@@ -313,6 +313,9 @@ public class RouteExecutionEngine
                     executor.SkipRevivalFightPointId = -1;   // v3：每条线路入口复位待跳过战斗点
                     executor.PartyConfig = _partyConfig;
                     executor.CurrentJsonRouteIndex = currentJsonRouteIndex;
+                    // 轮末统一重跑：透传同步点 ID 隔离后缀（multiplayer-hoeing-rerun-sync-isolation）。
+                    // null（首次执行）时 executor 不追加后缀，syncId 与历史行为逐字节一致。
+                    executor.RerunSyncIdSuffix = rerunSyncIdSuffix;
                     
                     // 联机模式：注入 MultiplayerCoordinator，并禁用自动领取派遣
                     if (_config.MultiplayerEnabled && _coordinator != null)

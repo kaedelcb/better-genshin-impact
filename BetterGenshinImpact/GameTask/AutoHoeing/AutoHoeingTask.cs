@@ -3888,7 +3888,38 @@ public class AutoHoeingTask : ISoloTask
                 var rerunSucceeded = false;
                 if (rerunSet.Count > 0)
                 {
-                    _logger.LogInformation("[联机][重试模式] 本轮结束，检测到 {N} 条需重跑线路，开始轮末统一重跑", rerunSet.Count);
+                    // === 轮末重跑同步点隔离 + 全员屏障（multiplayer-hoeing-rerun-sync-isolation）===
+                    // 缺陷背景（2026-09-02 实测）：轮末重跑直接复用首次跑线的 syncId，服务端对已广播过
+                    // AllArrived 的 syncId 会幂等补发放行（BroadcastedSyncIds 仅在多世界轮换时清理），
+                    // 重跑的传送点/集合点等待在 46ms/39ms 内被"全员已到"误放行 → 各端各自为政、
+                    // 复苏成员独自跑线、健康成员提前去神像收尾。修复两点：
+                    //   1) 屏障：各端轮末收尾耗时不同，先在 round_rerun_{N} 集合全员，再统一开始重跑；
+                    //   2) 后缀：重跑期间所有 syncId 追加 _rerun_r{N}（PathExecutor 同步点映射构建收口处
+                    //      统一追加），服务端/客户端快报集合均视为全新同步点，强制真实等待。
+                    var rerunRound = roundContext?.Round1Based ?? GetCurrentWorldRound();
+                    var rerunSyncIdSuffix = $"_rerun_r{rerunRound}";
+                    _logger.LogInformation(
+                        "[联机][重试模式] 本轮结束，检测到 {N} 条需重跑线路，开始轮末统一重跑（轮次={Round}，同步点后缀={Suffix}）",
+                        rerunSet.Count, rerunRound, rerunSyncIdSuffix);
+
+                    // 轮末重跑全员屏障：预期人数=房间全员，超时 120s 放行（与 SyncRoundEndAsync 同策略）。
+                    // 未标记重跑的成员不进屏障（各自为政模型不变）；超时放行保证标记成员不被永久阻塞。
+                    try
+                    {
+                        var rerunBarrierId = $"round_rerun_{rerunRound}";
+                        _logger.LogInformation("[联机][重试模式] 轮末重跑屏障开始等待全员: {SyncId}", rerunBarrierId);
+                        var rerunBarrier = new SyncBarrier(_multiplayerCoordinator.Client, 120);
+                        var barrierOk = await rerunBarrier.WaitAsync(rerunBarrierId, _ct);
+                        _logger.LogInformation(
+                            "[联机][重试模式] 轮末重跑屏障完成: {SyncId}，结果={Result}（true=全员到达，false=超时放行）",
+                            rerunBarrierId, barrierOk);
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "[联机][重试模式] 轮末重跑屏障异常，放行继续重跑");
+                    }
+
                     foreach (var routeIdx in rerunSet)
                     {
                         if (executionEngine.IsRouteRerunDone(routeIdx))
@@ -3903,7 +3934,7 @@ public class AutoHoeingTask : ISoloTask
 
                         try
                         {
-                            await executionEngine.ExecuteRoute(rerunRoute, _ct, routeIdx);
+                            await executionEngine.ExecuteRoute(rerunRoute, _ct, routeIdx, rerunSyncIdSuffix);
                             executionEngine.MarkRouteRerunDone(routeIdx);
                             rerunSucceeded = true;
                         }

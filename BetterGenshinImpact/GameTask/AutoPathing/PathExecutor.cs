@@ -69,6 +69,16 @@ public partial class PathExecutor
     public volatile bool WantsSkipCurrentFight;
 
     /// <summary>
+    /// 轮末统一重跑的同步点 ID 隔离后缀（multiplayer-hoeing-rerun-sync-isolation，如 "_rerun_r3"）。
+    /// 非 空 时，本路线执行期间所有同步点 ID（集合点/传送点/显式点，含快报反查）都会追加该后缀：
+    /// 服务端对"已广播过 AllArrived 的 syncId"会幂等补发放行（BroadcastedSyncIds 仅在多世界轮换时清理，
+    /// 同一轮内首次跑线广播过的 ID 会一直残留），同名路线轮末重跑若复用原 ID，等待会在几十毫秒内被
+    /// "全员已到"误放行（2026-09-02 实测 tp 46ms / fight 39ms），导致重跑各自为政。
+    /// 首次执行该值为 null/空 → 不追加，syncId 逐字节不变（首次路径零回归）。
+    /// </summary>
+    public string? RerunSyncIdSuffix;
+
+    /// <summary>
     /// 联机 retry-route 复苏广播的"待跳过战斗点"编号（segIdx*10000+wpIdx），-1 = 无。
     /// 收到同伴复苏广播（未命中当前战斗点）时记录；走到匹配战斗点时消费后复位（仍 -1）。
     /// 仅联机 retry-route 场景非 -1；单机 / 非 retry-route 恒 -1，逐字节零感知。
@@ -578,6 +588,22 @@ public partial class PathExecutor
             else
             {
                 BuildSyncPointMapAuto(task, waypointsList);     // 现有 SyncPointResolver 逻辑（R4 零回归）
+            }
+
+            // === 轮末统一重跑：同步点 ID 隔离（multiplayer-hoeing-rerun-sync-isolation）===
+            // 在映射构建后统一收口追加后缀：下游所有消费方（段级抢报缓存 _wpIdxToSyncIdCache、
+            // 传送点/集合点 WaitForAllPlayers、快报反查 IsFastReported、异常等待点比对）全部读自此映射，
+            // 单点改写即全链路隔离。后缀为空（首次执行）时不进此分支，syncId 逐字节不变。
+            if (!string.IsNullOrEmpty(RerunSyncIdSuffix) && _syncPointMap.Count > 0)
+            {
+                var __suffixedMap = new Dictionary<int, string?>(_syncPointMap.Count);
+                foreach (var __kv in _syncPointMap)
+                {
+                    __suffixedMap[__kv.Key] = __kv.Value == null ? null : __kv.Value + RerunSyncIdSuffix;
+                }
+                _syncPointMap = __suffixedMap;
+                Logger.LogInformation("[联机] 轮末重跑：{Count} 个同步点 ID 已追加后缀{Suffix}，与服务端已广播集合隔离，强制真实等待",
+                    _syncPointMap.Count, RerunSyncIdSuffix);
             }
         }
 
