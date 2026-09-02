@@ -405,7 +405,7 @@ public class TpTaskFastDrag
             // teleport-fastdrag-prior-skip-area-switch spec（BC-1）：
             // 首次尝试 + 第一层先验存在 → 玩家大概率已在目标图（先验由传送落地
             // PathExecutor.HandleTeleportWaypoint / 寻路小地图识别播种），跳过切区菜单直接识别定位；
-            // 由第一层受限匹配（TpMapRegionMatch，ResolveBigMapPositionLayered line 2303-2334）实际验证；
+            // 由第一层受限匹配（TpMapRegionMatch，见 ResolveBigMapPositionLayered 首层）实际验证；
             // 验证失败走 MoveMapTo 初始识别失败 → ForceJumpToTargetArea → SwitchArea 兜底补切（BC-2）。
             Logger.LogInformation("快速传送：第一层先验命中，跳过切换地区，直接识别定位（{Map}）", mapName);
         }
