@@ -71,6 +71,10 @@ public class TpTaskFastDrag
     // 上一次传送的目标坐标（原神坐标），用于第二层先验。
     // 必须 static：PathExecutor 每次传送都 new TpTask，实例字段无法跨传送保留。
     private static Point2f? _lastTpTargetGenshin = null;
+
+    // 上次传送成功落地地图名（对标公版 TpTaskOfficial.s_lastSuccessfulTeleportMapName，纯内存不持久化）。
+    // 任务结束 finally 清空（teleport-fastdrag-skip-last-successful-map spec，OQ-1/BC-4）。
+    private static string? _lastSuccessfulTeleportMapName;
     private bool _priorIsRegionCenter = false;   // 标记当前第一层先验是否为"区域中心点"（切换区域后），是则用 RegionCenterRangeGenshin(200) 而非 Layer1RangeGenshin(100)
 
     // 拖动滑动窗口先验（teleport 拖动循环专用）：中心=predictedPoint，半径=预测移动距离*2，跟随拖动前移。
@@ -400,14 +404,12 @@ public class TpTaskFastDrag
             // 计算传送点位置离哪张地图切换后的中心点最近，切换到该地图（CC1：逐字节不变）
             await SwitchRecentlyCountryMap(x, y, country);
         }
-        else if (FastDragAreaSwitchSkipDecisions.ShouldSkipAreaSwitch(retryTimes, _miniMapPriorGenshin is not null))
+        else if (FastDragAreaSwitchSkipDecisions.ShouldSkipAreaSwitch(retryTimes, _lastSuccessfulTeleportMapName, mapName))
         {
-            // teleport-fastdrag-prior-skip-area-switch spec（BC-1）：
-            // 首次尝试 + 第一层先验存在 → 玩家大概率已在目标图（先验由传送落地
-            // PathExecutor.HandleTeleportWaypoint / 寻路小地图识别播种），跳过切区菜单直接识别定位；
-            // 由第一层受限匹配（TpMapRegionMatch，见 ResolveBigMapPositionLayered 首层）实际验证；
-            // 验证失败走 MoveMapTo 初始识别失败 → ForceJumpToTargetArea → SwitchArea 兜底补切（BC-2）。
-            Logger.LogInformation("快速传送：第一层先验命中，跳过切换地区，直接识别定位（{Map}）", mapName);
+            // teleport-fastdrag-skip-last-successful-map spec（BC-2）：
+            // 首次尝试 + 上次传送成功落地同一非提瓦特图 → 玩家大概率仍在目标图，跳过切区菜单直接识别定位；
+            // 识别失败走 MoveMapTo 初始识别失败 → ForceJumpToTargetArea → SwitchArea 兜底补切（既有自救链，BC-6）。
+            Logger.LogInformation("快速传送：上次成功落地同图（{Map}），跳过切换地区，直接识别定位", mapName);
         }
         else
         {
@@ -704,6 +706,8 @@ public class TpTaskFastDrag
         await WaitForTeleportCompletion(50, 1200, requireLoadingScreen, fastSyncId);
         // 保存本次传送的目标坐标，供下次传送的第二层先验使用
         _lastTpTargetGenshin = new Point2f((float)x, (float)y);
+        // 记录本次传送成功落地地图（含 Teyvat 也记录；跳过判据内排除 Teyvat，OQ-2）
+        _lastSuccessfulTeleportMapName = mapName;
         return (x, y);
         #endregion
     }
@@ -1156,6 +1160,12 @@ public class TpTaskFastDrag
 
         throw new InvalidOperationException("传送失败");
     }
+
+    /// <summary>
+    /// 任务结束 finally 调用：清空"上次成功传送地图名"。
+    /// 跨任务自动保守（首传走切区，BC-1）；非法关闭进程态自然消亡（不持久化，BC-4）。
+    /// </summary>
+    internal static void ResetLastSuccessfulTeleportMap() => _lastSuccessfulTeleportMapName = null;
 
     /// <summary>
     /// 移动地图到指定传送点位置
