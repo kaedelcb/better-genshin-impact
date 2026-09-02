@@ -18,10 +18,4 @@ public static class TpMapPositionPrior
     /// 转发自 <see cref="Navigation.GetTpPriorPosition"/>。
     /// </summary>
     public static (float X, float Y) GetTpPriorPosition() => Navigation.GetTpPriorPosition();
-
-    /// <summary>
-    /// 消费传送先验 fresh 首启标志（转发共享 Navigation，茶包自包含，不直接引用共享扩展成员）。
-    /// 任务启动后首次快速传送 TpOnce 调用，驱动主动小地图识别锚定。
-    /// </summary>
-    public static bool ConsumeTpPriorFresh() => Navigation.ConsumeTpPriorFresh();
 }

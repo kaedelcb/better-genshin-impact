@@ -25,10 +25,6 @@ public class NavigationInstance
     private float _tpPriorX = -1;
     private float _tpPriorY = -1;
 
-    // 任务启动 fresh 首启标志：任务启动时置 true，快速传送 TpOnce 消费后置 false（初次即清除）。
-    // A13 开关式纯增量新增：默认 false（行为不变），仅 TaskRunner 任务启动时标记触发主动锚定。
-    private bool _tpPriorFresh;
-
     // 全局回退阈值：每次读配置单例并校验兜底（<1 回落默认 2 + 告警）。UI 实时生效（Requirement 2）。
     private static int GlobalMatchFallbackThreshold
     {
@@ -82,24 +78,6 @@ public class NavigationInstance
     /// 获取传送先验专用缓存坐标（不受 Reset 影响）
     /// </summary>
     public (float X, float Y) GetTpPriorPosition() => (_tpPriorX, _tpPriorY);
-
-    /// <summary>
-    /// 标记传送先验为"新鲜首启"：任务边界处由 TaskRunner 调用。
-    /// 下一次快速传送 TpOnce 将主动小地图识别锚定，避免跨任务陈旧先验误跳过切换地区
-    /// （teleport-fastdrag-prior-fresh-acquisition spec）。
-    /// </summary>
-    public void MarkTpPriorFresh() => _tpPriorFresh = true;
-
-    /// <summary>
-    /// 读取并消费新鲜首启标志（读后置 false）。
-    /// 同任务内第二次调用返回 false → TpOnce 走非 fresh 缓存路径，保持现状。
-    /// </summary>
-    public bool ConsumeTpPriorFresh()
-    {
-        var fresh = _tpPriorFresh;
-        _tpPriorFresh = false;
-        return fresh;
-    }
 
     private static readonly object GetPositionLock = new object(); 
     public Point2f GetPosition(ImageRegion imageRegion, string mapName, string mapMatchMethod)

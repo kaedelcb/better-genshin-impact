@@ -352,10 +352,7 @@ public class TpTaskFastDrag
     {
         // 分层先验：打开大地图【之前】采集小地图当前坐标作第一层先验（原神坐标）。
         // 详见 teleport-bigmap-position-region-constrained-match spec。
-        // 任务启动首启（fresh）时 TryGetMiniMapPriorGenshin 走主动识别锚定（验证玩家在目标图）；
-        // 非 fresh（同任务内）走缓存（现状）。fresh 只消费一次，同任务内第二个 TpOnce 走非 fresh。
-        var isFresh = TpMapPositionPrior.ConsumeTpPriorFresh();
-        _miniMapPriorGenshin = TryGetMiniMapPriorGenshin(mapName, isFresh);
+        _miniMapPriorGenshin = TryGetMiniMapPriorGenshin(mapName);
         _priorIsRegionCenter = false; // 缓存先验，用第一层标准半径100
 
         #region 步骤1-2：确认地图界面 + 传送前计算准备
@@ -2259,42 +2256,28 @@ public class TpTaskFastDrag
     }
 
     /// <summary>
-    /// 打开大地图前采集第一层小地图先验（原神坐标）：
-    /// 主界面下截一帧小地图识别当前坐标；失败退回 NavigationInstance 缓存坐标；都无效返回 null。
-    /// <para>
-    /// fresh（任务启动首启）时：跨任务缓存不可信（可能来自上个任务的地图），
-    /// 故只用主动识别结果，失败不退回缓存而是返回 null → 由调用方走 SwitchArea 兜底（BC-1/OQ-4）。
-    /// 非 fresh（同任务内）时：保持现状——直接读缓存兜底（BC-3）。
-    /// </para>
-    /// 详见 .agents/specs/teleport-fastdrag-prior-fresh-acquisition/design.md §组件4。
+    /// 打开大地图前采集第一层小地图先验（原神坐标）：主界面下截一帧小地图识别当前坐标；
+    /// 失败退回 NavigationInstance 缓存坐标；都无效返回 null。
+    /// 详见 .kiro/specs/teleport-bigmap-position-region-constrained-match/design.md §组件4。
     /// </summary>
-    private Point2f? TryGetMiniMapPriorGenshin(string mapName, bool isFresh)
+    private Point2f? TryGetMiniMapPriorGenshin(string mapName)
     {
-        if (isFresh)
-        {
-            // fresh 首启：跨任务缓存不可信，只认主动小地图识别（目标图模板验证玩家是否在目标图）。
-            // 识别失败不影响主流程（可恢复）：返回 null → 走 SwitchArea 兜底，不再回读陈旧缓存。
-            try
-            {
-                using var ra = CaptureToRectArea();
-                var colorMat = new Mat(ra.SrcMat, MapAssets.Get(ra).MimiMapRect);
-                var p = MapManager.GetMap(mapName, _mapMatchingMethod).GetMiniMapPosition(colorMat);
-                if (!p.IsEmpty())
-                {
-                    var g = MapManager.GetMap(mapName, _mapMatchingMethod).ConvertImageCoordinatesToGenshinMapCoordinates(p);
-                    if (g is Point2f gp)
-                    {
-                        return gp;
-                    }
-                }
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                Logger.LogDebug(ex, "[大地图定位] fresh 主动小地图先验识别异常，按无先验处理（走切换地区兜底）");
-            }
-            return null;
-        }
-
+        // try
+        // {
+        //     // using var ra = CaptureToRectArea();
+        //     // var colorMat = new Mat(ra.SrcMat, MapAssets.Instance.MimiMapRect);
+        //     // var p = MapManager.GetMap(mapName, _mapMatchingMethod).GetMiniMapPosition(colorMat);
+        //     // if (!p.IsEmpty())
+        //     // {
+        //     //     var g = MapManager.GetMap(mapName, _mapMatchingMethod).ConvertImageCoordinatesToGenshinMapCoordinates(p);
+        //     //     if (g is Point2f gp) return gp;
+        //     // }
+        // }
+        // catch (Exception ex)
+        // {
+        //     // 小地图先验识别失败不影响传送主流程（可恢复）：记录后退回缓存兜底
+        //     Logger.LogDebug(ex, "[大地图定位] 小地图先验识别异常，退回缓存坐标");
+        // }
         var (px, py) = TpMapPositionPrior.GetTpPriorPosition();  // 读传送先验专用缓存，不受 WarmUp 影响
         if (px > 0 && py > 0)
         {

@@ -1,4 +1,4 @@
-using BetterGenshinImpact.GameTask.AutoPathing.Model;
+﻿using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.Model.Area;
 using OpenCvSharp;
 using System;
@@ -40,10 +40,6 @@ public class Navigation
     public static (float X, float Y) GetPrevPosition() => _instance.GetPrevPosition();
 
     public static (float X, float Y) GetTpPriorPosition() => _instance.GetTpPriorPosition();
-
-    public static void MarkTpPriorFresh() => _instance.MarkTpPriorFresh();
-
-    public static bool ConsumeTpPriorFresh() => _instance.ConsumeTpPriorFresh();
 
     public static Point2f GetPosition(ImageRegion imageRegion, string mapName, string mapMatchMethod)
     {
