@@ -236,18 +236,6 @@ public class TpTask
         }
     }
 
-    public async Task ClickTpPoint(ImageRegion imageRegion)
-    {
-        if (UseOfficial)
-        {
-            await _official.ClickTpPoint(imageRegion);
-        }
-        else
-        {
-            await _fastDrag.ClickTpPoint(imageRegion);
-        }
-    }
-
     public double GetBigMapZoomLevel(ImageRegion region)
     {
         if (UseOfficial)
