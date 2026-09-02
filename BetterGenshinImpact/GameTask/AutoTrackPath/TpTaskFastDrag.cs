@@ -397,12 +397,21 @@ public class TpTaskFastDrag
 
         if (mapName == MapTypes.Teyvat.ToString())
         {
-            // 计算传送点位置离哪张地图切换后的中心点最近，切换到该地图
+            // 计算传送点位置离哪张地图切换后的中心点最近，切换到该地图（CC1：逐字节不变）
             await SwitchRecentlyCountryMap(x, y, country);
+        }
+        else if (FastDragAreaSwitchSkipDecisions.ShouldSkipAreaSwitch(retryTimes, _miniMapPriorGenshin is not null))
+        {
+            // teleport-fastdrag-prior-skip-area-switch spec（BC-1）：
+            // 首次尝试 + 第一层先验存在 → 玩家大概率已在目标图（先验由传送落地
+            // PathExecutor.HandleTeleportWaypoint / 寻路小地图识别播种），跳过切区菜单直接识别定位；
+            // 由第一层受限匹配（TpMapRegionMatch，ResolveBigMapPositionLayered line 2303-2334）实际验证；
+            // 验证失败走 MoveMapTo 初始识别失败 → ForceJumpToTargetArea → SwitchArea 兜底补切（BC-2）。
+            Logger.LogInformation("快速传送：第一层先验命中，跳过切换地区，直接识别定位（{Map}）", mapName);
         }
         else
         {
-            // 直接切换地区
+            // 直接切换地区（CC2：重试轮 retryTimes>=1 保留现状无条件切区）
             await SwitchArea(MapTypesExtensions.ParseFromName(mapName).GetDescription());
         }
 
