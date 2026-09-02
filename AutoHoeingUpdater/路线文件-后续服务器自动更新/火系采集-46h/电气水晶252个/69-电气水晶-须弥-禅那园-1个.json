@@ -1,0 +1,94 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1784832504988,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "69-电气水晶-须弥-禅那园-1个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 3129.0469,
+      "y": -1082.0186
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3099.8711,
+      "y": -1064.3213
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2982.0332,
+      "y": -1045.0605
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2927.9258,
+      "y": -1042.1123
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 2914.3066,
+      "y": -1037.1699
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2917.4219,
+      "y": -1031.7579
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2919.0547,
+      "y": -1029.6952
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2918.918,
+      "y": -1025.9736
+    }
+  ]
+}

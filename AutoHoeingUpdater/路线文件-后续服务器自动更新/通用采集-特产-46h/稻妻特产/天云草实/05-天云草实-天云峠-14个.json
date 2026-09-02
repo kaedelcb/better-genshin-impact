@@ -1,0 +1,175 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/KRdingsan",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.42.3",
+    "description": "性价比路线，要求队伍：必须带小草神",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782237160497,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "05-天云草实-天云峠-14个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -4472.34,
+      "y": -4577.45
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4452.5664,
+      "y": -4575.0771
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4450.9902,
+      "y": -4578.5918
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4449.2187,
+      "y": -4581.0518
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4441.4258,
+      "y": -4566.7012
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4438.7344,
+      "y": -4566.1621
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4422.4219,
+      "y": -4583.2529
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4420.4531,
+      "y": -4585.3369
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4405.582,
+      "y": -4601.4941
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4403.0156,
+      "y": -4602.793
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4373.1855,
+      "y": -4590.5273
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4370.582,
+      "y": -4587.5195
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4396.375,
+      "y": -4578.9502
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4398.498,
+      "y": -4574.7148
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4400.1289,
+      "y": -4572.2988
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4372.7051,
+      "y": -4541.6162
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4371.0879,
+      "y": -4539.1699
+    }
+  ]
+}

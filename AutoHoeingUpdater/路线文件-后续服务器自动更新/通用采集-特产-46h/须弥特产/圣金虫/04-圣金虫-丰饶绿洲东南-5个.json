@@ -1,0 +1,157 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Limint",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1778609121435,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "04-圣金虫-丰饶绿洲东南-5个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4451.4140625,
+      "y": -2462.09765625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4467.490234375,
+      "y": -2484.865234375
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 4476.306640625,
+      "y": -2498.4140625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4491.3974609375,
+      "y": -2523.6123046875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4492.484375,
+      "y": -2526.468666555351
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4574.640625,
+      "y": -2507.2189168892965
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4578.435546875,
+      "y": -2505.8681640625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4607.0380859375,
+      "y": -2534.349609375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4609.837890625,
+      "y": -2535.861328125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4639.18359375,
+      "y": -2569.43359375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4641.2421875,
+      "y": -2571.070208194189
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4651.7431640625,
+      "y": -2585.0458984375
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 4658.5263671875,
+      "y": -2610.58984375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4657.564453125,
+      "y": -2614.3349609375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4656.7822265625,
+      "y": -2618.2919921875
+    }
+  ]
+}

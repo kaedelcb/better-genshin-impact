@@ -1,0 +1,85 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785414128667,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "12-蒲公英-清泉镇-1个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -871.1289,
+      "y": 1992.7622
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -931.5156,
+      "y": 1975.4458
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -959.5293,
+      "y": 1975.7456
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -967.252,
+      "y": 1975.4146
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -980.5059,
+      "y": 1943.4932
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -960.3359,
+      "y": 1930.0122
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -957.7148,
+      "y": 1927.7407
+    }
+  ]
+}

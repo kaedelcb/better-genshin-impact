@@ -1,0 +1,184 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/aqing11520",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "非常建议：班尼特+盾位。原因：班尼特元素战技冷却快，并且电气水晶具有攻击性。18",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785073103351,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "15-电气水晶-蒙德-风龙废墟东-3个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -86.877,
+      "y": 2784.7612
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 47.8984,
+      "y": 2760.1143
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 83.3398,
+      "y": 2744.1431
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 85.4375,
+      "y": 2742.875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 84.5137,
+      "y": 2739.9863
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -86.877,
+      "y": 2784.7612
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -128.8477,
+      "y": 2779.2192
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -158.4297,
+      "y": 2785.207
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -168.4648,
+      "y": 2777.0195
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -169.7598,
+      "y": 2775.8408
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -171.8594,
+      "y": 2775.875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -86.8594,
+      "y": 2784.6875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -77.8379,
+      "y": 2842.8252
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -79.7109,
+      "y": 2850.5615
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -93.1055,
+      "y": 2923.6841
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -98.8105,
+      "y": 2938.7402
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -99.4219,
+      "y": 2940.6348
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -100.9844,
+      "y": 2942.3105
+    }
+  ]
+}

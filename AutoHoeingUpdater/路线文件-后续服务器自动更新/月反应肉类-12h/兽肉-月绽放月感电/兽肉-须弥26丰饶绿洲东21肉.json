@@ -1,0 +1,157 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1774115687986,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "兽肉-须弥26丰饶绿洲东21肉",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4450.865234375,
+      "y": -2461.82421875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4408.20703125,
+      "y": -2479.58544921875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4365.548828125,
+      "y": -2497.3466796875
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);万叶 e(hold),attack(0.2);wait(2)",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4349.478515625,
+      "y": -2486.60546875
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4353.0498046875,
+      "y": -2485.427734375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4345.470703125,
+      "y": -2488.685546875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4339.728515625,
+      "y": -2489.5615234375
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";万叶 e(hold),attack(0.2);伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4255.25,
+      "y": -2461.624894412791
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4250.87890625,
+      "y": -2463.0458984375
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 attack(0.5),e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4255,
+      "y": -2438.749773741696
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4248.75,
+      "y": -2437.7804882637083
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4263.6171875,
+      "y": -2378.0205078125
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4278.708984375,
+      "y": -2352.162109375
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5),wait(4),attack(1);万叶 e(hold),attack(0.2);伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4260.07421875,
+      "y": -2331.9931640625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4261.625,
+      "y": -2336.8755731877045
+    }
+  ]
+}

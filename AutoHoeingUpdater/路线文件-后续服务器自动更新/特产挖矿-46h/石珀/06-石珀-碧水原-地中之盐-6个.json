@@ -1,0 +1,204 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "地中之岩的石珀",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1788108885490,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "06-石珀-碧水原-地中之盐-6个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -321.55,
+      "y": 1473.31
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -314.2793,
+      "y": 1471.8828
+    },
+    {
+      "action": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -260.5625,
+      "y": 1435.5608
+    },
+    {
+      "action": "stop_flying",
+      "id": 4,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -190.75,
+      "y": 1380.9376
+    },
+    {
+      "action": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -206.0937,
+      "y": 1388.9066
+    },
+    {
+      "action": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -212.125,
+      "y": 1393.7189
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "target",
+      "x": -216.5469,
+      "y": 1386.7812
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.2)",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "target",
+      "x": -216.5469,
+      "y": 1386.7812
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -220.6328,
+      "y": 1386.2104
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -219.502,
+      "y": 1383.5469
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.2)",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -219.502,
+      "y": 1383.5469
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "target",
+      "x": -233.5078,
+      "y": 1404.3564
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.2)",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "target",
+      "x": -233.5078,
+      "y": 1404.3564
+    },
+    {
+      "action": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -233.7246,
+      "y": 1396.9355
+    },
+    {
+      "action": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -264.9687,
+      "y": 1379.5312
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -275.0273,
+      "y": 1400.3887
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -275.1816,
+      "y": 1405.625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.2)",
+      "id": 18,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -275.1816,
+      "y": 1405.625
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -281.3242,
+      "y": 1403.4189
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.2)",
+      "id": 20,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -281.3242,
+      "y": 1403.4189
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -276.3477,
+      "y": 1399.4697
+    }
+  ]
+}

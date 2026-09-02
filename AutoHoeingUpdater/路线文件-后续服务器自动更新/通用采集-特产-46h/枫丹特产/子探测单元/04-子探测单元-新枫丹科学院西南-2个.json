@@ -1,0 +1,111 @@
+{
+  "info": {
+    "authors": [
+      {
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "略",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1778429663299,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "04-子探测单元-新枫丹科学院西南-2个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4506.3359375,
+      "y": 4709.0849609375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4462.08203125,
+      "y": 4646.2841796875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4437.478515625,
+      "y": 4571.166015625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4429.75390625,
+      "y": 4545.41650390625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4428.625,
+      "y": 4542.5341796875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4395.421875,
+      "y": 4558.853515625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4342.2236328125,
+      "y": 4578.6728515625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4282.6083984375,
+      "y": 4589.884765625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4265.748046875,
+      "y": 4587.76513671875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4261.478515625,
+      "y": 4587.50732421875
+    }
+  ]
+}

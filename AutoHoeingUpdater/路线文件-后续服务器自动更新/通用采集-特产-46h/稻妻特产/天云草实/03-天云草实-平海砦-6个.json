@@ -1,0 +1,85 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/cx05121",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782235156832,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "03-天云草实-平海砦-6个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -4444.2109,
+      "y": -4288.1729
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -4464.9355,
+      "y": -4301.0449
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.1)",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4464.1777,
+      "y": -4300.377
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4439.166,
+      "y": -4290.7979
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4437.4004,
+      "y": -4291.75
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4421.6055,
+      "y": -4295.2637
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4418.8184,
+      "y": -4295.8437
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "info": {
+    "authors": [
+      {
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1778509634726,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "01-子探测单元-黎翡区神像-4个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4545.48,
+      "y": 4225.639999999999
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4540.609375,
+      "y": 4211.6328125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4549.6474609375,
+      "y": 4214.556640625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4559.0380859375,
+      "y": 4196.76416015625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4570.51171875,
+      "y": 4210.23779296875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4571.87890625,
+      "y": 4211.798828125
+    }
+  ]
+}

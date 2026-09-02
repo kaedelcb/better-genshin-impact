@@ -1,0 +1,218 @@
+{
+  "info": {
+    "authors": [
+      {
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1786297346362,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "02-子探测单元-芒索斯山脉东麓-8个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4935.1,
+      "y": 4183.36
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4948.4775,
+      "y": 4205.0967
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4941.4141,
+      "y": 4207.4629
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4905.4902,
+      "y": 4235.4434
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "1000",
+      "id": 5,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 4873.7461,
+      "y": 4267.832
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4867.4775,
+      "y": 4274.8926
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4864.0146,
+      "y": 4275.9482
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4877.8408,
+      "y": 4354.9609
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4868.4326,
+      "y": 4382.6299
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4985.9785,
+      "y": 4464.7539
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5087.2354,
+      "y": 4547.022
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5128.4238,
+      "y": 4573.3096
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5141.1279,
+      "y": 4591.5093
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5136.207,
+      "y": 4591.5513
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5142.2783,
+      "y": 4596.3726
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5121.4951,
+      "y": 4619.4009
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5113.6387,
+      "y": 4646.3423
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5119.4697,
+      "y": 4651.7212
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5127.3145,
+      "y": 4663.6211
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5132.1318,
+      "y": 4669.9858
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 5133.1719,
+      "y": 4666.5264
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 22,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 5134.1738,
+      "y": 4664.9355
+    }
+  ]
+}

@@ -1,0 +1,617 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785077003120,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "76-电气水晶-枫丹-千年珍珠骏麟-23个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4845.8555,
+      "y": 4807.7544
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4815.7783,
+      "y": 4782.1689
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 3,
+      "move_mode": "climb",
+      "type": "path",
+      "x": 4807.6055,
+      "y": 4777.5591
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4808.8418,
+      "y": 4775.6821
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 4800.7656,
+      "y": 4786.019
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e),wait(4);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4791.375,
+      "y": 4790.4217
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4788.8711,
+      "y": 4788.9775
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4786.6553,
+      "y": 4787.5981
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4795.4961,
+      "y": 4791.9565
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4798.4951,
+      "y": 4793.1963
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4793.6709,
+      "y": 4808.709
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4793.3359,
+      "y": 4809.7334
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4792.4219,
+      "y": 4813.186
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e),wait(7.5);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4802.8584,
+      "y": 4813.479
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4804.252,
+      "y": 4813.6738
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4807.7051,
+      "y": 4815.0659
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 17,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4765.0137,
+      "y": 4825.5859
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4765.5938,
+      "y": 4827.5467
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e),wait(11);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 19,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4753.7344,
+      "y": 4818.8673
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4753.5625,
+      "y": 4822.3046
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 21,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4743.2275,
+      "y": 4826.6011
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 22,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4744.2813,
+      "y": 4829.1795
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e),wait(7.6);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 23,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4735.9453,
+      "y": 4822.8204
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 24,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4736.2031,
+      "y": 4826.6012
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 25,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 4725.9434,
+      "y": 4824.1606
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 26,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4713.0938,
+      "y": 4825.438
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 27,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4710.3701,
+      "y": 4826.5806
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 28,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4732.3008,
+      "y": 4829.4238
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e),wait(4);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 29,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4728.7266,
+      "y": 4838.4607
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 30,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4726.4063,
+      "y": 4837.3439
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 31,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4751.4141,
+      "y": 4844.7344
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 32,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4759.4063,
+      "y": 4841.3831
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 33,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4760.9277,
+      "y": 4840.3423
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 34,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4764.1328,
+      "y": 4838.8906
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e),wait(6.5);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 35,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4771.0605,
+      "y": 4854.0703
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 36,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4772.2031,
+      "y": 4855.5195
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 37,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4785.2959,
+      "y": 4841.2505
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 38,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4803.084,
+      "y": 4836.1924
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 39,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4803.6328,
+      "y": 4838.3252
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 40,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4803.2344,
+      "y": 4841.2106
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 41,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4753.3047,
+      "y": 4803.0561
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 42,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4746.5566,
+      "y": 4798.1323
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 43,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4746.4492,
+      "y": 4795.2129
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 44,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4742.5137,
+      "y": 4794.2271
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 45,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4728.4727,
+      "y": 4805.0078
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 46,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4705.6055,
+      "y": 4773.1938
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 47,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4678.9277,
+      "y": 4791.5376
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 48,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4678.5391,
+      "y": 4787.844
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 49,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4684.2041,
+      "y": 4766.1421
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 50,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4688.0957,
+      "y": 4764.562
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 51,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4688.8115,
+      "y": 4769.5601
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 52,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4681.6357,
+      "y": 4773.0977
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 53,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4681.5762,
+      "y": 4768.3516
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 54,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4695.3359,
+      "y": 4773.1895
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 55,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4734.7539,
+      "y": 4764.3945
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 56,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4759.8789,
+      "y": 4748.5869
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 57,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4756.6797,
+      "y": 4748.8398
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 58,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4775.0586,
+      "y": 4759.3867
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e),wait(2.5);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 59,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4776.2236,
+      "y": 4752.0845
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 60,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4770.1074,
+      "y": 4755.9385
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 61,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4780.875,
+      "y": 4751.9751
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 62,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4780.8926,
+      "y": 4768.5225
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 63,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4783.6289,
+      "y": 4769.2363
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 64,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4783.6289,
+      "y": 4769.2363
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 65,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4780.3252,
+      "y": 4766.9243
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 66,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4784.6094,
+      "y": 4767.583
+    }
+  ]
+}

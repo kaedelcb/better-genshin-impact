@@ -1,0 +1,103 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1774115764686,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "兽肉-须弥29丰饶绿洲9肉",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4796.2724609375,
+      "y": -2577.8388671875
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 4801.6318359375,
+      "y": -2560.42578125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4810.8447265625,
+      "y": -2538.7177734375
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 4820.375,
+      "y": -2510.26171875
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4848.4521484375,
+      "y": -2436.12890625
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4864.8125,
+      "y": -2429.6873189933576
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5),wait(3),attack(1);万叶 e(hold),attack(0.2);伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4865.3125,
+      "y": -2436.3105541785826
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4866.624835427296,
+      "y": -2436.875553326983
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4862.124913795251,
+      "y": -2435.2500663992378
+    }
+  ]
+}

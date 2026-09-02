@@ -1,0 +1,148 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/PanZic",
+        "name": "不瘦五十斤不改名"
+      }
+    ],
+    "bgi_version": "0.64.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1788119157751,
+    "map_match_method": "SIFT",
+    "map_name": "Teyvat",
+    "name": "09-冰醋栗-至冬-霜精的村落-12个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 6115.3643,
+      "y": 9033.4443
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6131.79,
+      "y": 9003.7559
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6190.5078,
+      "y": 8949.2637
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6207.335,
+      "y": 8914.1465
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6241.2939,
+      "y": 8884.4766
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6282.7832,
+      "y": 8905.4268
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6341.5078,
+      "y": 8926.7344
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6351.4639,
+      "y": 8938.8877
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6389.9004,
+      "y": 8982.5762
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 6392.6055,
+      "y": 8981.5693
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 6395.5508,
+      "y": 8981.0684
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 6391.5127,
+      "y": 8981.9873
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6379.3389,
+      "y": 9004.7813
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 6377.6865,
+      "y": 9008.2705
+    }
+  ]
+}

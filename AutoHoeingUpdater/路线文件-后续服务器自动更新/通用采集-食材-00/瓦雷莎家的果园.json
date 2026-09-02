@@ -1,0 +1,130 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/ddaodan",
+        "name": "ddaodan"
+      }
+    ],
+    "bgi_version": "0.43.5",
+    "description": "红果果菇 6",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782758230352,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "瓦雷莎家的果园-采蘑菇的小女孩",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "force_tp",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 10260.78,
+      "y": -2538.63
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 10228.0469,
+      "y": -2514.2578
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 10223.5576,
+      "y": -2515.0869
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 10191.6406,
+      "y": -2502.5566
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 10192.5771,
+      "y": -2506.3027
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 10192.5977,
+      "y": -2510.0967
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 10182.5215,
+      "y": -2508.3027
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 10178.5859,
+      "y": -2508.501
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 10176.165,
+      "y": -2517.875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 10173.5664,
+      "y": -2516.6768
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 10162.665,
+      "y": -2519.1943
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 10159.626,
+      "y": -2519.043
+    }
+  ]
+}

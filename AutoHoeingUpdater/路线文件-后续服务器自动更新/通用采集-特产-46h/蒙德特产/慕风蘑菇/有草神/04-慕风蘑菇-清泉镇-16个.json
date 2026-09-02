@@ -1,0 +1,355 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/physligl",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1783791290453,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "04-慕风蘑菇-清泉镇-16个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -873.5,
+      "y": 1992.9785
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -878.2461,
+      "y": 1968.1694
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -867.8926,
+      "y": 1958.5288
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -862.7598,
+      "y": 1955.1563
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -863.3555,
+      "y": 1951.0469
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -864.0391,
+      "y": 1947.9414
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -862.3516,
+      "y": 1941.9355
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -864.4082,
+      "y": 1939.1533
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -866.6797,
+      "y": 1926.6758
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -867.0508,
+      "y": 1918.0322
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -867.4453,
+      "y": 1912.7793
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -867.4375,
+      "y": 1908.7642
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -861.5645,
+      "y": 1901.6865
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -856.3047,
+      "y": 1890.9287
+    },
+    {
+      "action": "combat_script",
+      "action_params": "dash",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -858.6152,
+      "y": 1880.0664
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -860.4102,
+      "y": 1888.6064
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -862.543,
+      "y": 1885.3901
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -862.4297,
+      "y": 1880.7378
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -861.793,
+      "y": 1874.166
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -861.9785,
+      "y": 1871.7964
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -912.6426,
+      "y": 1883.7119
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 22,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -931.6719,
+      "y": 1903.29
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 23,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -937.0898,
+      "y": 1904.8394
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 24,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -941.9863,
+      "y": 1908.5122
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 25,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -945.4512,
+      "y": 1931.5625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 26,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -944.4238,
+      "y": 1938.5469
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 27,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -930.2461,
+      "y": 1934.3247
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(2)",
+      "id": 28,
+      "move_mode": "dash",
+      "type": "orientation",
+      "x": -930.2461,
+      "y": 1934.3247
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 29,
+      "move_mode": "dash",
+      "type": "orientation",
+      "x": -930.2461,
+      "y": 1934.3247
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 30,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -933.627,
+      "y": 1970.7407
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 31,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -934.0996,
+      "y": 1965.9941
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 32,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -937.4727,
+      "y": 1966.6768
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 33,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -941.1699,
+      "y": 1968.8403
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 34,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -944.7695,
+      "y": 1969.627
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 35,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -950.3398,
+      "y": 1966.9756
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 36,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -950.6699,
+      "y": 1965.1709
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 37,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -956.8906,
+      "y": 1954.0996
+    }
+  ]
+}

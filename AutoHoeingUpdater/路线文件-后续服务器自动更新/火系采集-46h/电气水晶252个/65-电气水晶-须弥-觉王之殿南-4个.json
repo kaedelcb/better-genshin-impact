@@ -1,0 +1,176 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1784829487548,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "65-电气水晶-须弥-觉王之殿南-4个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 3589.4668,
+      "y": -790.5527
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3572.0537,
+      "y": -818.0898
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3559.2969,
+      "y": -858.4531
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3545.7109,
+      "y": -878.7888
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3548.042,
+      "y": -879.9687
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3550.1465,
+      "y": -880.0879
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3574.7578,
+      "y": -909.0386
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3578.3672,
+      "y": -913.1643
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3577.1582,
+      "y": -912.5049
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3574.3691,
+      "y": -911.7773
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 3589.4668,
+      "y": -790.5527
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3545.8477,
+      "y": -722.8154
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3540.0391,
+      "y": -722.6407
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3538.6016,
+      "y": -722.5703
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3519.2422,
+      "y": -709.5787
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 3509.7207,
+      "y": -700.0176
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3509.2285,
+      "y": -699.4512
+    }
+  ]
+}

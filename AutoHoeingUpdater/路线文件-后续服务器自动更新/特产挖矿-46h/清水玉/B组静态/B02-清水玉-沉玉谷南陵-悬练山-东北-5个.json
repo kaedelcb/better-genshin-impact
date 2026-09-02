@@ -1,0 +1,104 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/MisakaAldrich",
+        "name": "起个名字好难的喵"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1776109404429,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "B02-清水玉-沉玉谷南陵-悬练山-东北-5个",
+    "tags": [
+      "大剑"
+    ],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 1692.7800000000007,
+      "y": 1391.1900000000005
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1722.9130859375,
+      "y": 1384.6962890625
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 1723.1953125,
+      "y": 1383.017578125
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 1720.919921875,
+      "y": 1371.8916015625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1738.421875,
+      "y": 1318.0732421875
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 1722.5556640625,
+      "y": 1261.06494140625
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 1727.693359375,
+      "y": 1260.7568359375
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 1731.1591796875,
+      "y": 1261.2314453125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 1731.1591796875,
+      "y": 1261.2314453125
+    }
+  ]
+}

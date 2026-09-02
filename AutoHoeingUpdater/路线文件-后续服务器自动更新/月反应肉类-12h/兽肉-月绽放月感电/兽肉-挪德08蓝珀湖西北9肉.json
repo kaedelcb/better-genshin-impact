@@ -1,0 +1,82 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/zaodonganqi",
+        "name": "躁动的氨气"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1773755509763,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "兽肉-挪德08蓝珀湖西北9肉",
+    "tags": [
+      "菈乌玛"
+    ],
+    "type": "collect",
+    "version": "1.1"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 9248.2324,
+      "y": 2350.2634
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9298.51171875,
+      "y": 2366.052734375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(5)",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9338.421875,
+      "y": 2295.27197265625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(2)",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9350.3359375,
+      "y": 2299.712890625
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";万叶 e(hold),attack(0.2);哥伦比娅 e,wait(0.15),keypress(e);wait(2)",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9346.7744140625,
+      "y": 2298.96875
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9343.6875,
+      "y": 2296.6260407882
+    }
+  ]
+}

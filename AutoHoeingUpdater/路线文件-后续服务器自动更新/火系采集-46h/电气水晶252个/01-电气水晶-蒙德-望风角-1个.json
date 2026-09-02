@@ -1,0 +1,85 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/aqing11520",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "非常建议：班尼特+盾位。原因：班尼特元素战技冷却快，并且电气水晶具有攻击性。此路线总共115个左右，电气水晶48小时刷新。",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785072285183,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "01-电气水晶-蒙德-望风角-1个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -1629.28,
+      "y": 2834.42
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1687.625,
+      "y": 2839.1265
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1759.125,
+      "y": 2892.7451
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -1752.5078,
+      "y": 2908.5639
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1751.1211,
+      "y": 2904.6045
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1751.7344,
+      "y": 2902.375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1752.0781,
+      "y": 2899.969
+    }
+  ]
+}

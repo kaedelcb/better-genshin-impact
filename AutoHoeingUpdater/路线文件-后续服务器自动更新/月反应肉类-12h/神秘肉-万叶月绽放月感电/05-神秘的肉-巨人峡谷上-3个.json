@@ -1,0 +1,89 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "Sabersunny"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1773298931735,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "05-神秘的肉-巨人峡谷上-3个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "force_tp",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4957.404296875,
+      "y": -695.181640625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "w(0.5),attack(0.2),wait(1),s(1),dash,wait(0.7),keypress(f),wait(0.2),keypress(f),wait(5.5)",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 3069,
+      "y": -673.0144805314794
+    },
+    {
+      "action": "force_tp",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 5200.22265625,
+      "y": -1340.001953125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 5186.9716796875,
+      "y": -1316.78369140625
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5178.2783203125,
+      "y": -1296.96630859375
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5187.216796875,
+      "y": -1287.3134765625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5180.9375,
+      "y": -1284.0939913421917
+    }
+  ]
+}

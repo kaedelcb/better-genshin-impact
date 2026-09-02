@@ -1,0 +1,212 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1784661451911,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "49-电气水晶-稻妻-踏鞴沙南小岛-5个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -3154.9277,
+      "y": -3889.1953
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "4000",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -3132.9453,
+      "y": -3992.4102
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3112.2812,
+      "y": -4086.3643
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(f),wait(0.1),keypress(f)",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "target",
+      "x": -3111.8926,
+      "y": -4099.3076
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3112.3711,
+      "y": -4091.5068
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keydown(W),wait(0.05),keypress(T),wait(0.05),keypress(T),wait(0.5),keypress(T),wait(0.05),keypress(T),wait(0.5),keypress(T),wait(0.05),keypress(T),wait(0.5),keypress(T),wait(0.05),keypress(T),wait(0.5),keypress(T),wait(0.05),keypress(T),wait(0.5),keypress(T),wait(0.05),keypress(T),wait(0.5),keypress(T),wait(0.05),keypress(T),wait(0.5),keypress(T),wait(0.05),keypress(T),wait(0.5),keypress(T),wait(0.05),keypress(T),wait(0.5),keypress(T),wait(0.05),keypress(T),wait(0.5),keypress(T),wait(0.05),keypress(T),wait(0.5),keypress(T),wait(0.05),keypress(T),wait(0.5),keypress(T),wait(0.05),keypress(T),wait(0.5),keypress(T),wait(0.05),keypress(T),keyup(w)",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": -2963.082,
+      "y": -4127.8848
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 7,
+      "locked": false,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -2958.2266,
+      "y": -4130.4395
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2958.2266,
+      "y": -4130.4395
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2955.8906,
+      "y": -4131.7266
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2953.625,
+      "y": -4133.4482
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e),wait(0.1),keypress(e),wait(0.1),keypress(e),wait(11);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2949.0156,
+      "y": -4150.8596
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2945.8535,
+      "y": -4148.8848
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2941.0234,
+      "y": -4143.8986
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2944.8301,
+      "y": -4145.6816
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -2948.3145,
+      "y": -4142.5059
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e),wait(9.5);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2953.2988,
+      "y": -4144.4531
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2955.5352,
+      "y": -4143.5801
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2960.1016,
+      "y": -4140.5723
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 19,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2966.4414,
+      "y": -4136.3232
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2966.5195,
+      "y": -4133.9209
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2968.3359,
+      "y": -4132.0664
+    }
+  ]
+}

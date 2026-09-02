@@ -1,0 +1,229 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1786388594032,
+    "map_match_method": "SIFT",
+    "map_name": "MoonCanon",
+    "name": "02-凝月泪滴-霜月伊比尼伯龙之眼东-12个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -2547.3496,
+      "y": -1450.8975
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "run",
+      "type": "path",
+      "x": -2571.4414,
+      "y": -1441.1099
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "run",
+      "type": "path",
+      "x": -2618.2686,
+      "y": -1446.8618
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "run",
+      "type": "path",
+      "x": -2639.5732,
+      "y": -1448.9185
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.1)",
+      "id": 5,
+      "move_mode": "run",
+      "type": "path",
+      "x": -2665.5,
+      "y": -1446.167
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2670.6396,
+      "y": -1445.8003
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2681.417,
+      "y": -1457.5776
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2685.5713,
+      "y": -1460.4077
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "run",
+      "type": "path",
+      "x": -2673.3877,
+      "y": -1442.1909
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2712.7275,
+      "y": -1329.2402
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "run",
+      "type": "path",
+      "x": -2734.1865,
+      "y": -1306.5132
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2739.8447,
+      "y": -1303.627
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2742.998,
+      "y": -1303.9634
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2749.7021,
+      "y": -1301.9199
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2753.1475,
+      "y": -1300.6577
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "run",
+      "type": "path",
+      "x": -2772.9346,
+      "y": -1303.3271
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2775.8838,
+      "y": -1303.4863
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "run",
+      "type": "path",
+      "x": -2826.418,
+      "y": -1326.4521
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2828.418,
+      "y": -1327.5234
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2826.3848,
+      "y": -1330.0405
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2818.3711,
+      "y": -1340.855
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 22,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2836.2559,
+      "y": -1362.4072
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 23,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2837.6748,
+      "y": -1365.0322
+    }
+  ]
+}

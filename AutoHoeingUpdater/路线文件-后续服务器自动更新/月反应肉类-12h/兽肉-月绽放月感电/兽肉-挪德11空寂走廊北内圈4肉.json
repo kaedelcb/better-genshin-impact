@@ -1,0 +1,87 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1786037573623,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "兽肉-挪德11空寂走廊北内圈4肉",
+    "tags": [
+      "菈乌玛"
+    ],
+    "type": "collect",
+    "version": "1.1"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 9191.6807,
+      "y": 2852.1047
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9175.6367,
+      "y": 2839.6299
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9149.1504,
+      "y": 2849.4316
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9111.9854,
+      "y": 2850.0845
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9071.4922,
+      "y": 2830.1878
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(5);",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9092.2012,
+      "y": 2781.6982
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";万叶 e(hold),attack(0.2);哥伦比娅 e,wait(0.15),keypress(e);wait(2),a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 9093.0938,
+      "y": 2778.031
+    }
+  ]
+}

@@ -1,0 +1,148 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Limint",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1778606574759,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "16-圣金虫-铄石之丘-3个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 5713.16015625,
+      "y": -2852.4130859375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5718.6181640625,
+      "y": -2823.4794921875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5743.822265625,
+      "y": -2774.2060546875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5932.5703125,
+      "y": -2654.994140625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5934.876953125,
+      "y": -2652.4912109375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5917.6142578125,
+      "y": -2650.1259765625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5897.2001953125,
+      "y": -2614.11328125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5886.490234375,
+      "y": -2583.7265625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5885.046875,
+      "y": -2580.17578125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5881.4150390625,
+      "y": -2549.455078125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(t)",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5876.96875,
+      "y": -2515.416015625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5874.0068359375,
+      "y": -2498.916015625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5878.234375,
+      "y": -2479.65625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5878.033203125,
+      "y": -2475.0078125
+    }
+  ]
+}

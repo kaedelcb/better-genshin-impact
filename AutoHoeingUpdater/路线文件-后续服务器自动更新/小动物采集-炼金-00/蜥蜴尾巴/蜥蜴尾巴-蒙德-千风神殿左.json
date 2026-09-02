@@ -1,0 +1,210 @@
+{
+  "info": {
+    "authors": [
+      {
+        "name": "秋枫夜扰"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "description": "伟大的蜥蜴尾巴！神圣的精油！！",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1788116970769,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "蜥蜴尾巴-蒙德-千风神殿左",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "dash",
+      "type": "teleport",
+      "x": -1505.9,
+      "y": 2296.21
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1359.2402,
+      "y": 2319.6309
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1301.0645,
+      "y": 2327.7881
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1304.09,
+      "y": 2349.72
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1286.1,
+      "y": 2394.6
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -1294.18,
+      "y": 2412.17
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "run",
+      "type": "path",
+      "x": -1301.53,
+      "y": 2420.13
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1302.25,
+      "y": 2432.75
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1284.11,
+      "y": 2448.87
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1283.7,
+      "y": 2472.87
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1277.61,
+      "y": 2482.93
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1227.86,
+      "y": 2486.56
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1202.77,
+      "y": 2484.17
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1182.12,
+      "y": 2461.06
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1188.68,
+      "y": 2495.03
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1202.79,
+      "y": 2535.71
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1159.67,
+      "y": 2511.53
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1143.27,
+      "y": 2518.44
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -1134.7,
+      "y": 2496.11
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1137.95,
+      "y": 2490.58
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1112.21,
+      "y": 2465.37
+    }
+  ]
+}

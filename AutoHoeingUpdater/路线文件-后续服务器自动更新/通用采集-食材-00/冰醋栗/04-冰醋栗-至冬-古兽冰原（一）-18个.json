@@ -1,0 +1,213 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.64.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1788284618621,
+    "map_match_method": "SIFT",
+    "map_name": "Teyvat",
+    "name": "04-冰醋栗-至冬-古兽冰原（一）-18个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 7466.1875,
+      "y": 7962.0205
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 7463.5488,
+      "y": 7986.9673
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 7462.2354,
+      "y": 7991.0073
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 7494.4463,
+      "y": 7953.4575
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 7496.2383,
+      "y": 7950.3994
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 7497.541,
+      "y": 7946.2119
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 7466.1875,
+      "y": 7962.0205
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 7497.7627,
+      "y": 7984.6963
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 7502.7314,
+      "y": 7986.5059
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 7504.4863,
+      "y": 8024.5801
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 7505.5391,
+      "y": 8027.0444
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 7511.7266,
+      "y": 8027.906
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 7516.6787,
+      "y": 8028.6548
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keydown(w),wait(0.3),keydown(LSHIFT),wait(10),keyup(LSHIFT)",
+      "id": 14,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "orientation",
+      "x": 7771.5156,
+      "y": 8071.734
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 7771.5156,
+      "y": 8071.734
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 7775.6992,
+      "y": 8067.8062
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 7778.748,
+      "y": 8065.4795
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 7780.2275,
+      "y": 8004.2764
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 7780.458,
+      "y": 8000.7495
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 7888.1641,
+      "y": 8102.874
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 7891.3193,
+      "y": 8106.1055
+    }
+  ]
+}

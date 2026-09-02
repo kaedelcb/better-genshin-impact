@@ -1,0 +1,166 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "芝麻糊"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1760543843975,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "B轻策庄03-13竹笋+2蛋+1金鱼草【高效】",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 839.97,
+      "y": 1532.46
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 832.21,
+      "y": 1525.24
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 847.44,
+      "y": 1560.93
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 852.59,
+      "y": 1581.21
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 842.97,
+      "y": 1584.88
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 852.83,
+      "y": 1628.45
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 847.53,
+      "y": 1632.23
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 841.27,
+      "y": 1664.29
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 834.89,
+      "y": 1676.02
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 826.19,
+      "y": 1689.25
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 829.39,
+      "y": 1697.64
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 820.92,
+      "y": 1719.59
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 834.08,
+      "y": 1739.21
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 854.2,
+      "y": 1745.46
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 857.74,
+      "y": 1760.62
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 865.17,
+      "y": 1759.18
+    }
+  ]
+}

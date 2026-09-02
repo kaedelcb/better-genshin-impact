@@ -1,0 +1,395 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "Sabersunny"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1775053250513,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "09-神秘的肉-亡者峡廊-36个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "force_tp",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4957.404296875,
+      "y": -695.181640625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "w(0.5),attack(0.2),wait(1),s(1),dash,wait(0.7),keypress(f),wait(0.2),keypress(f),wait(5.5)",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 3069,
+      "y": -673.0144805314794
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "teleport",
+      "x": 4768.28955078125,
+      "y": -983.6669921875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4773.1005859375,
+      "y": -997.556640625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "moveby(0,700),wait(0.5),keypress(t),wait(0.1),keypress(t),wait(2),keypress(t),wait(0.1),keypress(t),wait(0.1),keypress(t),wait(0.1),keypress(t),wait(0.1),keypress(t),wait(0.1),keypress(t),",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 4781.8193359375,
+      "y": -1049.140625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "climb",
+      "type": "path",
+      "x": 4776.09765625,
+      "y": -1057.125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "climb",
+      "type": "path",
+      "x": 4757.5966796875,
+      "y": -1058.97265625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "dash,keydown(w),wait(1.5),j,wait(1.1),j",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4761.365234375,
+      "y": -1065.9609375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 4767.8125,
+      "y": -1074.4367759734268
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4776.32421875,
+      "y": -1072.216796875
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4789.65625,
+      "y": -1097.189453125
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5),wait(5.5),attack(0.5);万叶 attack(0.08),e(hold),attack(0.2);伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4799.25,
+      "y": -1078.3793441594426
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4795.78125,
+      "y": -1081.6244569800692
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4731.84375,
+      "y": -1093.009765625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4645.36328125,
+      "y": -1089.5859375
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 4611.6083984375,
+      "y": -1083.4697265625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4581.6494140625,
+      "y": -1096.125
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 4552.2431640625,
+      "y": -1105.44921875
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 19,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4539.625,
+      "y": -1096.6240044634615
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 20,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4532.40625,
+      "y": -1088.484375
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 21,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4516.7265625,
+      "y": -1076.798828125
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5),wait(4.5),attack(0.5);万叶 attack(0.08),e(hold),attack(0.2);伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 22,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4536.4375,
+      "y": -1081.5638273820514
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 23,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4535.6748046875,
+      "y": -1078.6982421875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 24,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4528.37394215419,
+      "y": -1076.4997919621492
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 25,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4520.6875,
+      "y": -1086.6874245805648
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 26,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 4505.3369140625,
+      "y": -1102.83935546875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 27,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 4507.7177734375,
+      "y": -1137.02734375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.2);哥伦比娅 attack(0.5);",
+      "id": 28,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 4485.6875,
+      "y": -1144.0639028014866
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 wait(5.5),attack(0.5);万叶 attack(0.08),e(hold),attack(0.2);伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 29,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4471.849609375,
+      "y": -1130.775390625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 30,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4473.419921875,
+      "y": -1129.1630859375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 31,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4439.619140625,
+      "y": -1111.39453125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(t),wait(0.2),keypress(t)",
+      "id": 32,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 4412.76953125,
+      "y": -1090.9921875
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 33,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4409.437492163204,
+      "y": -1058.9708747756158
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5),wait(5.5),attack(0.5);万叶 attack(0.08),e(hold),attack(0.2);伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 34,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4399.4296875,
+      "y": -1041.505859375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 35,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4411.0537109375,
+      "y": -1042.4013671875
+    },
+    {
+      "action": "log_output",
+      "action_params": "等8秒,让少女e结束",
+      "id": 36,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4409.49609375,
+      "y": -1047.49609375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(8)",
+      "id": 37,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4409.49609375,
+      "y": -1047.49609375
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5),wait(4.5),attack(0.5);万叶 attack(0.08),e(hold),attack(0.2);伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 38,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4375.3125,
+      "y": -1080.1245022317307
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 39,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4376.6875,
+      "y": -1079.0007541943487
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";万叶 attack(0.08),e(hold),attack(0.2);伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 40,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4349.8134765625,
+      "y": -1067.240234375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 41,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4351.2119140625,
+      "y": -1067.50390625
+    }
+  ]
+}

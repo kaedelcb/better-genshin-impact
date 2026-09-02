@@ -1,0 +1,46 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/zaodonganqi",
+        "name": "躁动的氨气"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1775057859303,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "兽肉-挪德05苔骨荒原东6肉",
+    "tags": [
+      "菈乌玛"
+    ],
+    "type": "collect",
+    "version": "1.4"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 9222.5312,
+      "y": 1899.25
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(4);万叶 e(hold),attack(0.2);哥伦比娅 e,wait(0.15),keypress(e);wait(2),a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 9213.82421875,
+      "y": 1899.150390625
+    }
+  ]
+}

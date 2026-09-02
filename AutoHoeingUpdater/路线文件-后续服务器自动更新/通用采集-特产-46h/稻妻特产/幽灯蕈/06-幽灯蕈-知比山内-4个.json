@@ -1,0 +1,128 @@
+{
+  "info": {
+    "authors": [
+      {
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1778264011738,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "06-幽灯蕈-知比山内-4个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -2556.3499999999985,
+      "y": -6007.450000000001
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2552.9453125,
+      "y": -6000.03125
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "3500",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -2548.884765625,
+      "y": -5987.810546875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2544.404296875,
+      "y": -5965.166015625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2539.83203125,
+      "y": -5962.8154296875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2543.333984375,
+      "y": -5959.158203125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2544.759765625,
+      "y": -5957.791015625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2565.25390625,
+      "y": -5961.8916015625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2571.828125,
+      "y": -5970.7529296875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2572.330078125,
+      "y": -5966.2099609375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2582.79296875,
+      "y": -5967.0859375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "dash",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2585.67578125,
+      "y": -5965.9765625
+    }
+  ]
+}

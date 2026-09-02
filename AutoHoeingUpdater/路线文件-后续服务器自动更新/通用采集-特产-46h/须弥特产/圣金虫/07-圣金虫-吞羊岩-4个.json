@@ -1,0 +1,139 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Limint",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1778945743364,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "07-圣金虫-吞羊岩-4个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4796.3271484375,
+      "y": -3185.2373046875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4795.353515625,
+      "y": -3168.87109375
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 4818.810546875,
+      "y": -3167.96484375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4821.591796875,
+      "y": -3172.4951171875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4824.2939453125,
+      "y": -3173.8046875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4762.6865234375,
+      "y": -3115.541015625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4760.673828125,
+      "y": -3112.24609375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4791.3369140625,
+      "y": -3131.123046875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4844.2919921875,
+      "y": -3109.8251953125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4848.1796875,
+      "y": -3109.21114611162
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4883.9775390625,
+      "y": -3106.4814453125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.3)",
+      "id": 12,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 4888.8447265625,
+      "y": -3107.775390625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4891.5576171875,
+      "y": -3108.755859375
+    }
+  ]
+}

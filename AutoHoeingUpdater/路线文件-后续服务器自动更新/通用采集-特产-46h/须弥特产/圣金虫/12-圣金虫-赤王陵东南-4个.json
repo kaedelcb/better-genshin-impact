@@ -1,0 +1,257 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Limint",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1778600284420,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "12-圣金虫-赤王陵东南-4个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 5384.01953125,
+      "y": -2456.80859375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(1)",
+      "id": 2,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5383.283203125,
+      "y": -2496.85546875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5383.283203125,
+      "y": -2496.85546875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5408.7353515625,
+      "y": -2523.017578125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5399.373046875,
+      "y": -2559.3046875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5367.97265625,
+      "y": -2595.6611328125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5335.478515625,
+      "y": -2597.7421875
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5307.150390625,
+      "y": -2598.314453125
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5298.2236328125,
+      "y": -2635.40234375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 5292.568359375,
+      "y": -2659.095703125
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5282.498046875,
+      "y": -2690.482421875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5277.9404296875,
+      "y": -2690.0166015625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5274.982421875,
+      "y": -2689.267578125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5286.6611328125,
+      "y": -2644.18359375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5286.736328125,
+      "y": -2625.4599609375
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5290.1240234375,
+      "y": -2591.89453125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5297.30859375,
+      "y": -2579.75
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5299.373046875,
+      "y": -2576.197265625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5296.84765625,
+      "y": -2558.8173828125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5285.95703125,
+      "y": -2542.328125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5284.671875,
+      "y": -2540.015625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 22,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5281.5126953125,
+      "y": -2533.41796875
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 23,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5298.904296875,
+      "y": -2506.9375
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 24,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5314.5771484375,
+      "y": -2481.01953125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 25,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5316.533203125,
+      "y": -2478.03125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 26,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5318.052734375,
+      "y": -2474.9873046875
+    }
+  ]
+}

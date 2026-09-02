@@ -1,0 +1,98 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Tooltingsu",
+        "name": "Tool_tingsu"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.63.1",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1788190246097,
+    "map_match_method": "SIFT",
+    "map_name": "Teyvat",
+    "name": "01-霜仙花-永凝冻土下方-5个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 7467.7295,
+      "y": 8914.292
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 7362.5801,
+      "y": 8945.21
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 7343.1201,
+      "y": 8944.2871
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 7339.0127,
+      "y": 8943.4678
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 7329.9707,
+      "y": 8938.0449
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 7325.3291,
+      "y": 8935.9736
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 7327.2793,
+      "y": 8939.6191
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 7330.335,
+      "y": 8944.8047
+    }
+  ]
+}

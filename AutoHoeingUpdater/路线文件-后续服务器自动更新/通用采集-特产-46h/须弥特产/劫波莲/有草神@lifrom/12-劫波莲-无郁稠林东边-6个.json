@@ -1,0 +1,153 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/pkjsjq",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1786736740505,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "12-劫波莲-无郁稠林东边-6个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 2415.5,
+      "y": 351.6
+    },
+    {
+      "action": "",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 2271.625,
+      "y": 334.5117
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2236.3281,
+      "y": 312.4434
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 2213.4414,
+      "y": 297.4478
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2193.1172,
+      "y": 288.7964
+    },
+    {
+      "action": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2165.4844,
+      "y": 306.375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 2160.2363,
+      "y": 305.3184
+    },
+    {
+      "action": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2144.7695,
+      "y": 287.5859
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2166.4785,
+      "y": 234.4658
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 2155.5898,
+      "y": 227.9565
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2164.8594,
+      "y": 194.1011
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2185.1367,
+      "y": 174.4146
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 2209.8115,
+      "y": 148.27
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 2221.2949,
+      "y": 110.7319
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 2221.2949,
+      "y": 110.7319
+    }
+  ]
+}

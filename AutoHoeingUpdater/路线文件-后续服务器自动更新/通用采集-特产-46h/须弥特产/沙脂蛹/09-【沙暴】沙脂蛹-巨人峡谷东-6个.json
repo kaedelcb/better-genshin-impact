@@ -1,0 +1,195 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782416712885,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "09-【沙暴】沙脂蛹-巨人峡谷东-6个",
+    "tags": [
+      "沙暴"
+    ],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4957.4043,
+      "y": -695.1816
+    },
+    {
+      "action": "log_output",
+      "action_params": "切换[沙暴]状态",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 3069,
+      "y": -673.0145
+    },
+    {
+      "action": "combat_script",
+      "action_params": "w(0.5),attack(0.2),wait(1),s(1),dash,wait(0.7),keypress(f),wait(0.2),keypress(f),wait(5.5)",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 3069,
+      "y": -673.0145
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 5200.0781,
+      "y": -1338.8633
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5098.4785,
+      "y": -1336.7734
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 5076.7969,
+      "y": -1340.8574
+    },
+    {
+      "action": "combat_script",
+      "action_params": "moveby(0,-1000),keypress(T),wait(0.1),keypress(T),wait(0.1),keypress(T)",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5040.3857,
+      "y": -1348.5166
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 5018.376,
+      "y": -1340.0459
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5015.2588,
+      "y": -1339.0586
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5015.6035,
+      "y": -1346.9287
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5016.2109,
+      "y": -1351.043
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5020.5264,
+      "y": -1348.3096
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5022.6348,
+      "y": -1346.1143
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5024.4795,
+      "y": -1344.002
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 5014.9297,
+      "y": -1337.5586
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4993.5264,
+      "y": -1309.2256
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4992.0273,
+      "y": -1307.3984
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4990.1289,
+      "y": -1308.0508
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4987.2285,
+      "y": -1307.5859
+    }
+  ]
+}

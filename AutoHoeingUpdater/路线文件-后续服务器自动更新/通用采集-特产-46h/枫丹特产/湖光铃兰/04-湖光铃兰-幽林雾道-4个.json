@@ -1,0 +1,93 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1787234874576,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "04-湖光铃兰-幽林雾道-4个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 3367.03,
+      "y": 3294.09
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3332.4307,
+      "y": 3299.334
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3329.0127,
+      "y": 3300.2617
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3325.1504,
+      "y": 3312.9932
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3323.3975,
+      "y": 3315.4756
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3321.9365,
+      "y": 3319.2324
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3320.2119,
+      "y": 3284.7041
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3319.6143,
+      "y": 3280.8848
+    }
+  ]
+}

@@ -1,0 +1,166 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1774036295841,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "兽肉-须弥13城西北13肉",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 3100.380859375,
+      "y": -356.185546875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3103.6982421875,
+      "y": -292.5615234375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3101.9189453125,
+      "y": -283.0498046875
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3125.7314453125,
+      "y": -281.3359375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3131.41015625,
+      "y": -282.595703125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3138.68359375,
+      "y": -283.923828125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(2)",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3135,
+      "y": -287.875
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3132.9599609375,
+      "y": -291.03125
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3141.5625,
+      "y": -246.84390838081345
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3143.123046875,
+      "y": -241.880859375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3127.3232421875,
+      "y": -236.537109375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3125.2861328125,
+      "y": -229.7392578125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3130.3056640625,
+      "y": -226.9990234375
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e);哥伦比娅 attack(1.5);万叶 e(hold),attack(0.2);wait(2)",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3133.880859375,
+      "y": -222.421875
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3136.78125,
+      "y": -217.90648380024868
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3137.298828125,
+      "y": -221.890625
+    }
+  ]
+}

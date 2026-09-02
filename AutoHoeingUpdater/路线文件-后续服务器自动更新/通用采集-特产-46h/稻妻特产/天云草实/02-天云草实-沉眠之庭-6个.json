@@ -1,0 +1,93 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/cx05121",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782233909134,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "02-天云草实-沉眠之庭-6个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -4184.74,
+      "y": -4244.77
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "run",
+      "type": "path",
+      "x": -4200.9316,
+      "y": -4246.9717
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -4208.875,
+      "y": -4255.6973
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4214.6758,
+      "y": -4269.1211
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4216.8047,
+      "y": -4272.1309
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4218.2227,
+      "y": -4273.6309
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4217.4707,
+      "y": -4268.6924
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4217.5117,
+      "y": -4266.7363
+    }
+  ]
+}

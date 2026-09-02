@@ -1,0 +1,148 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Limint",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1778610880527,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "17-圣金虫-千柱的花园-5个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 5661.6240234375,
+      "y": -1823.8994140625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5659.18359375,
+      "y": -1829.744140625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5681.84375,
+      "y": -1840.4990234375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5685.2109375,
+      "y": -1842.148333194189
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5665.15625,
+      "y": -1850.126953125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(t)",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5634.435546875,
+      "y": -1863.515625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5635.517578125,
+      "y": -1876.6455078125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5630.76953125,
+      "y": -1876.5869140625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5626.5654296875,
+      "y": -1878.9765625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5630.525390625,
+      "y": -1856.14453125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5635.0009765625,
+      "y": -1855.03125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5637.33203125,
+      "y": -1850.6533203125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5650.9375,
+      "y": -1869.87890625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5643.5283203125,
+      "y": -1915.568359375
+    }
+  ]
+}

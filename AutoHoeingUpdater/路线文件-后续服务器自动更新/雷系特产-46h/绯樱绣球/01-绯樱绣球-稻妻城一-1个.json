@@ -1,0 +1,85 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/this-Fish",
+        "name": "蜜柑魚"
+      }
+    ],
+    "bgi_version": "0.52.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782502844704,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "01-绯樱绣球-稻妻城一-1个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -4401.1836,
+      "y": -3051.1445
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4415.6172,
+      "y": -3076.6855
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4436.1777,
+      "y": -3101.8535
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4442.207,
+      "y": -3098.498
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4459.1992,
+      "y": -3084.5293
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 attack(0.3);瓦雷莎 attack(0.3); ;",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4500.6602,
+      "y": -3082.8027
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4503.9766,
+      "y": -3082.8906
+    }
+  ]
+}

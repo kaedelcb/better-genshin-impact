@@ -1,0 +1,202 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782326165326,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "05-慕风蘑菇-晨曦酒庄-7个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -576.8164,
+      "y": 1856.1538
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -556.6875,
+      "y": 1769.5467
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -535.627,
+      "y": 1742.0723
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -514.2246,
+      "y": 1720.6104
+    },
+    {
+      "action": "combat_script",
+      "action_params": "dash",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -507.2285,
+      "y": 1721.1836
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -508.5625,
+      "y": 1726.8711
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -499.8535,
+      "y": 1737.8218
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -464.6035,
+      "y": 1707.4658
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -462.2734,
+      "y": 1699.9956
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -462.1094,
+      "y": 1697.0488
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -461.5312,
+      "y": 1694.2002
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "run",
+      "type": "path",
+      "x": -454.2207,
+      "y": 1698.1895
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -381.8066,
+      "y": 1677.7944
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -376.7578,
+      "y": 1683.6323
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -385.0937,
+      "y": 1690.0117
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -387.8242,
+      "y": 1695.3428
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -394.6523,
+      "y": 1696.3555
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -394.6523,
+      "y": 1696.3555
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(2)",
+      "id": 19,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": -394.6523,
+      "y": 1696.3555
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": -394.6523,
+      "y": 1696.3555
+    }
+  ]
+}

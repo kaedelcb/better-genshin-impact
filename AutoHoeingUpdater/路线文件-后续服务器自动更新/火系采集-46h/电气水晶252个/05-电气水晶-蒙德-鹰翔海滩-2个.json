@@ -1,0 +1,94 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/aqing11520",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "非常建议：班尼特+盾位。原因：班尼特元素战技冷却快，并且电气水晶具有攻击性。此路线总共115个左右，电气水晶48小时刷新。",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1784647571107,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "05-电气水晶-蒙德-鹰翔海滩-2个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -1536.73,
+      "y": 1978.66
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -1553.0078,
+      "y": 1961.5122
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1583.9375,
+      "y": 1883.8379
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1564.0723,
+      "y": 1848.8086
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1555.2949,
+      "y": 1845.6055
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1553.7617,
+      "y": 1848.2012
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1552.0957,
+      "y": 1850.7949
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1548.9238,
+      "y": 1854.6299
+    }
+  ]
+}

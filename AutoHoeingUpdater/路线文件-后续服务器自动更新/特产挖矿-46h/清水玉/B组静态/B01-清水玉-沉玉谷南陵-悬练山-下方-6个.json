@@ -1,0 +1,118 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/MisakaAldrich",
+        "name": "起个名字好难的喵"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1776015455026,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "B01-清水玉-沉玉谷南陵-悬练山-下方-6个",
+    "tags": [
+      "大剑"
+    ],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 1904.619999999999,
+      "y": 1197.8400000000001
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "3000",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 1935.494140625,
+      "y": 1192.2109375
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 1972.98046875,
+      "y": 1187.6103515625
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 1987.298828125,
+      "y": 1198.94140625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2016.5654296875,
+      "y": 1195.51806640625
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 2019.443359375,
+      "y": 1198.57861328125
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 2027.056640625,
+      "y": 1196.2490234375
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 2029.0166015625,
+      "y": 1190.88232421875
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 9,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 2032.8544921875,
+      "y": 1192.666015625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "orientation",
+      "x": 2032.8544921875,
+      "y": 1192.666015625
+    }
+  ]
+}

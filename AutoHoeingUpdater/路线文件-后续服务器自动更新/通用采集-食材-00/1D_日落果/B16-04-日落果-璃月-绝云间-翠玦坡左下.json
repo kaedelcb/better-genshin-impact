@@ -1,0 +1,102 @@
+﻿{
+  "info": {
+    "authors": [
+      {
+        "name": "白白喵"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1758365437638,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "B16-04-日落果-璃月-绝云间-翠玦坡左下",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 837.79,
+      "y": 235.4365
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.1)",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 847.8574,
+      "y": 230.647
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 848.9453,
+      "y": 228.8359
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 884.5205,
+      "y": 188.4346
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 889.1025,
+      "y": 186.2959
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "run",
+      "type": "path",
+      "x": 886.3887,
+      "y": 127.2446
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 882.0557,
+      "y": 124.9355
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 877.8008,
+      "y": 122.3057
+    },
+    {
+      "action": "combat_script",
+      "action_params": "枫原万叶 wait(0.2),e(hold),attack,wait(2)",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 875.0537,
+      "y": 115.7549
+    }
+  ]
+}

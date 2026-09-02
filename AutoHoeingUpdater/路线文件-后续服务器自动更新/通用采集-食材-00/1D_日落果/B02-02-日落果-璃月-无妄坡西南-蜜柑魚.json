@@ -1,0 +1,201 @@
+﻿{
+  "info": {
+    "authors": [
+      {
+        "name": "白白喵"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1760448576745,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "B02-02-日落果-璃月-无妄坡西南-蜜柑魚",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 252.4560546875,
+      "y": 1283.2333984375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 490.0674,
+      "y": 1435.3926
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 492.748046875,
+      "y": 1437.1875
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 461.833,
+      "y": 1394.6914
+    },
+    {
+      "action": "combat_script",
+      "action_params": "枫原万叶 wait(0.1),e(hold),attack,wait(2)",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 454.126,
+      "y": 1362.082
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "run",
+      "type": "path",
+      "x": 472.0625,
+      "y": 1328.9546
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 476.7559,
+      "y": 1330.5322
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "run",
+      "type": "path",
+      "x": 496.5391,
+      "y": 1315.3184
+    },
+    {
+      "action": "combat_script",
+      "action_params": "j,wait(0.5),j,wait(0.5),j",
+      "id": 9,
+      "move_mode": "run",
+      "type": "path",
+      "x": 556.9668,
+      "y": 1331.5664
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "run",
+      "type": "path",
+      "x": 538.1885,
+      "y": 1346.7363
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 11,
+      "move_mode": "run",
+      "type": "path",
+      "x": 565.0469,
+      "y": 1352.8584
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.1)",
+      "id": 12,
+      "move_mode": "run",
+      "type": "path",
+      "x": 591.499,
+      "y": 1374.8901
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 597.541,
+      "y": 1369.3584
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "run",
+      "type": "path",
+      "x": 625.6562,
+      "y": 1367.0195
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "run",
+      "type": "path",
+      "x": 640.6758,
+      "y": 1364.8359
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "run",
+      "type": "path",
+      "x": 653.9014,
+      "y": 1363.7061
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "run",
+      "type": "path",
+      "x": 664.1826,
+      "y": 1388.9829
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 641.0107,
+      "y": 1385.8901
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "run",
+      "type": "path",
+      "x": 632.708,
+      "y": 1416.1221
+    },
+    {
+      "action": "combat_script",
+      "action_params": "枫原万叶 wait(0.1),e(hold),attack,wait(2)",
+      "id": 20,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 640.8418,
+      "y": 1430.2129
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/zaodonganqi",
+        "name": "躁动的氨气"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1775054622919,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "兽肉-挪德01苔古荒原南12肉",
+    "tags": [
+      "菈乌玛"
+    ],
+    "type": "collect",
+    "version": "1.3"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 9370.3994,
+      "y": 1865.4717
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9367.3818359375,
+      "y": 1840.71533203125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 9369.373046875,
+      "y": 1832.8046875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9422.373046875,
+      "y": 1768.6552734375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(2)",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9431.34375,
+      "y": 1769.53759765625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.5);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e);moveby(0,2200)",
+      "id": 6,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 9429.562562694364,
+      "y": 1777.0317922604445
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";万叶 e(hold),attack(0.2),wait(1);",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9431.125013562127,
+      "y": 1770.4373035198096
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.2)",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9434.87516274551,
+      "y": 1772.0939811531662
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9430.4678548997,
+      "y": 1767.2179987522104
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.2)",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9426.0068359375,
+      "y": 1768.6796875
+    }
+  ]
+}

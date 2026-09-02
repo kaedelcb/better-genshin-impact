@@ -1,0 +1,103 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782399466960,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "12-嘟嘟莲-明冠峡-3个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -436.752,
+      "y": 2581.522
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -462.2129,
+      "y": 2572.3286
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "1500",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -479.4121,
+      "y": 2568.1704
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -529.2344,
+      "y": 2585.4023
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -531.9336,
+      "y": 2586.8179
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -541.75,
+      "y": 2595.812
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -543.6445,
+      "y": 2598.1377
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -552.4375,
+      "y": 2680.0591
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -552.3008,
+      "y": 2684.2178
+    }
+  ]
+}

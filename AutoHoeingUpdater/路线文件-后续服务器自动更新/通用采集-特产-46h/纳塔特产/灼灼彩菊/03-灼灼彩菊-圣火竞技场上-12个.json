@@ -1,0 +1,255 @@
+{
+  "info": {
+    "authors": [
+      {
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1780410185763,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "03-灼灼彩菊-圣火竞技场上-12个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 8978.32,
+      "y": -1872.34
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8953.4521,
+      "y": -1853.2979
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keydown(w),wait(0.3),dash,wait(0.4),dash,wait(1),dash,wait(0.4),keyup(w)",
+      "id": 3,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 8927.3896,
+      "y": -1841.9785
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8927.3896,
+      "y": -1841.9785
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 8908.459,
+      "y": -1823.5674
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8908.0352,
+      "y": -1821.5254
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8907.623,
+      "y": -1819.542
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8899.6387,
+      "y": -1822.2432
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8896.9609,
+      "y": -1823.7754
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8930.2422,
+      "y": -1784.0684
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8930.9854,
+      "y": -1786.9375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8942.4521,
+      "y": -1783.9736
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8944.4482,
+      "y": -1783.9482
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8967.1797,
+      "y": -1761.6562
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9003.9092,
+      "y": -1777.0918
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9004.916,
+      "y": -1777.3838
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9005.9395,
+      "y": -1782.8789
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9006.209,
+      "y": -1784.2539
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9008.4951,
+      "y": -1782.4287
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9010.3418,
+      "y": -1781.5186
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9030.0371,
+      "y": -1810.166
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 22,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 9036.5127,
+      "y": -1815.4687
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 23,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9053.0762,
+      "y": -1808.4336
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 24,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9054.9775,
+      "y": -1807.7988
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 25,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9071.2998,
+      "y": -1802.5371
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 26,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9073.3438,
+      "y": -1802.7744
+    }
+  ]
+}

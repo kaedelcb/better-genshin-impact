@@ -1,0 +1,98 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/MisakaAldrich",
+        "name": "起个名字好难的喵"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1781984364476,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "01-鬼兜虫-稻妻城山洞-6个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -4494.1,
+      "y": -3216.63
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "1500",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -4532.05,
+      "y": -3203.45
+    },
+    {
+      "action": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4532.8965,
+      "y": -3223.1582
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -4530.2676,
+      "y": -3232.1445
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4530.9395,
+      "y": -3265.7266
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4579.998,
+      "y": -3301.6211
+    },
+    {
+      "action": "nahida_collect",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "target",
+      "x": -4604.54,
+      "y": -3307.36
+    },
+    {
+      "action": "nahida_collect",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "target",
+      "x": -4607.15,
+      "y": -3333.19
+    },
+    {
+      "action": "nahida_collect",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "target",
+      "x": -4608.68,
+      "y": -3352.08
+    }
+  ]
+}

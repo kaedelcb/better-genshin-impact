@@ -1,0 +1,67 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1778351154392,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "08-琉璃百合-悬练山-1个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 1905.470703125,
+      "y": 1197.994140625
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "3000",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 1884.8828125,
+      "y": 1203.9072096134569
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1834.0859375,
+      "y": 1219.369140625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 1829.6884765625,
+      "y": 1217.51171875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 1827.673828125,
+      "y": 1215.12939453125
+    }
+  ]
+}

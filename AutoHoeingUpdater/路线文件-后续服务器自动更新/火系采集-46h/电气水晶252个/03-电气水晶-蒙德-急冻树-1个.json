@@ -1,0 +1,67 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/aqing11520",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "非常建议：班尼特+盾位。原因：班尼特元素战技冷却快，并且电气水晶具有攻击性。此路线总共115个左右，电气水晶48小时刷新。",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1784482700617,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "03-电气水晶-蒙德-急冻树-1个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -1638.46,
+      "y": 2153.84
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1664.25,
+      "y": 2110.039
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1642.0781,
+      "y": 2075.6563
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1644.3984,
+      "y": 2074.6351
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1646.2891,
+      "y": 2075.8288
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+﻿{
+  "info": {
+    "author": "Tool_tingsu",
+    "authors": [
+      {
+        "links": "https://github.com/Tooltingsu",
+        "name": "Tool_tingsu"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1756301746373,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "C02-03-日落果-须弥-无郁稠林-16个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 2220.14,
+      "y": -431.17
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2187.67,
+      "y": -426.61
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2174.36,
+      "y": -414.98
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.8)",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2169.77,
+      "y": -406.86
+    }
+  ]
+}

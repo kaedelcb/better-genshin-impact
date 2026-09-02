@@ -1,0 +1,337 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/aqing11520",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "非常建议：班尼特+盾位。原因：班尼特元素战技冷却快，并且电气水晶具有攻击性。此路线总共115个左右，电气水晶48小时刷新。",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1784999829450,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "06-电气水晶-蒙德-达达乌帕谷-8个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -1868.5273,
+      "y": 1328.958
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1857.9883,
+      "y": 1315.2822
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -1848.5078,
+      "y": 1297.4746
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1841.375,
+      "y": 1290.0518
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1720.2187,
+      "y": 1204.4775
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1689.2109,
+      "y": 1188.8584
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -1680.0703,
+      "y": 1191.5586
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1635.1836,
+      "y": 1195.8018
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1577.5586,
+      "y": 1247.0679
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1581.9219,
+      "y": 1244.5635
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1584.5,
+      "y": 1244.6407
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1587.5352,
+      "y": 1249.709
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e),wait(7.3);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1599.2969,
+      "y": 1256.2778
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1601.9458,
+      "y": 1258.2188
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1586.1172,
+      "y": 1263.6406
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1592.9941,
+      "y": 1276.7422
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1595.9043,
+      "y": 1276.9116
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1592.6855,
+      "y": 1282.9229
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1615.5957,
+      "y": 1328.0332
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1633.4883,
+      "y": 1343.7285
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -1641.6758,
+      "y": 1374.1235
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 22,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1648.5371,
+      "y": 1420.8823
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 23,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1648.7285,
+      "y": 1423.5459
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.1)",
+      "id": 24,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1686.3906,
+      "y": 1405.1235
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 25,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1687.7715,
+      "y": 1401.4492
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 26,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1686.3418,
+      "y": 1398.3154
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 27,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1680.6992,
+      "y": 1399.9868
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 28,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1677.9785,
+      "y": 1400.7197
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 29,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1708.5527,
+      "y": 1453.873
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 30,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1722.9531,
+      "y": 1472.6074
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 31,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1724.7598,
+      "y": 1474.3638
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 32,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1726.6504,
+      "y": 1477.9248
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 33,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1738.2129,
+      "y": 1495.6455
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 34,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1738.7773,
+      "y": 1497.2529
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 35,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1740.7012,
+      "y": 1500.4951
+    }
+  ]
+}

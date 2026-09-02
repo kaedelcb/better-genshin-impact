@@ -1,0 +1,58 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785403799851,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "09-蒲公英-南风之狮的庙宇-1个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -1434.2246,
+      "y": 1659.625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1446.0566,
+      "y": 1672.8628
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1453.5312,
+      "y": 1679.3986
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1457.1836,
+      "y": 1682.3867
+    }
+  ]
+}

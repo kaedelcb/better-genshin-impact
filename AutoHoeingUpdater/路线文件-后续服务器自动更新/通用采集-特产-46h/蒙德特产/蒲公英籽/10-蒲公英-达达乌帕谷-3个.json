@@ -1,0 +1,122 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785411571680,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "10-蒲公英-达达乌帕谷-3个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -1869.9023,
+      "y": 1327.3945
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1760.5078,
+      "y": 1374.5195
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(1)",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1710.7539,
+      "y": 1389.0742
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -1690.4687,
+      "y": 1385.0596
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1675.4141,
+      "y": 1370.1836
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1673.5879,
+      "y": 1367.6055
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1688.2266,
+      "y": 1457.5605
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1691.6797,
+      "y": 1550.6768
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";琴 wait(3);万叶 wait(3); ;",
+      "id": 9,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1693.7578,
+      "y": 1555.3442
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1693.7578,
+      "y": 1555.3442
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1695.5449,
+      "y": 1557.876
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Tooltingsu",
+        "name": "Tool_tingsu"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1775589171463,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "09-夜泊石-孤云阁-2个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -963.0976999999984,
+      "y": -288.6260000000002
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -918.1953125,
+      "y": -276.189453125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -867.755859375,
+      "y": -302.1240234375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -830.16015625,
+      "y": -418.9072265625
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "target",
+      "x": -825.09765625,
+      "y": -445.3359375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -815.916015625,
+      "y": -462.908203125
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "target",
+      "x": -814.39453125,
+      "y": -451.607421875
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -814.39453125,
+      "y": -451.607421875
+    }
+  ]
+}

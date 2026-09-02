@@ -1,0 +1,73 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/MisakaAldrich",
+        "name": "起个名字好难的喵"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1776016629741,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "B05-清水玉-沉玉谷南陵-赤璋城垣-七天神像-3个",
+    "tags": [
+      "大剑"
+    ],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 2323.88,
+      "y": 1604.99
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2306.8994140625,
+      "y": 1631.61474609375
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 2326.73828125,
+      "y": 1673.85302734375
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2320.8369140625,
+      "y": 1675.34716796875
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2321.72265625,
+      "y": 1672.626953125
+    }
+  ]
+}

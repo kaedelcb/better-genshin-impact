@@ -1,0 +1,94 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1773334870455,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "12-神秘的肉-千鹤沙地-9个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "dash",
+      "type": "teleport",
+      "x": 4276.3125,
+      "y": -523.9853515625
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 4291.28515625,
+      "y": -519.65234375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4337.388671875,
+      "y": -463.958984375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4412.6748046875,
+      "y": -377.46484375
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 4439.15625,
+      "y": -358.94921875
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 4446.03125,
+      "y": -362.62537709717435
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);万叶 attack(0.08),e(hold),attack(0.2);伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2),a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4452.8828125,
+      "y": -366.193359375
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);万叶 attack(0.08),e(hold),attack(0.2),wait(1);a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4463.79296875,
+      "y": -365.857421875
+    }
+  ]
+}

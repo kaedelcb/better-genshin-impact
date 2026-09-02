@@ -1,0 +1,58 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782065333432,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "10-鬼兜虫-稻妻城西沙滩1",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -4222.2266,
+      "y": -3004.2734
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.3)",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4252.6562,
+      "y": -3084.3721
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4260.2383,
+      "y": -3100.1855
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -4260.9258,
+      "y": -3106.1572
+    }
+  ]
+}

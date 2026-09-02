@@ -1,0 +1,93 @@
+﻿{
+  "info": {
+    "authors": [
+      {
+        "name": "白白喵"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1758365212919,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "B09-01-日落果-璃月-璃月港北B",
+    "tags": [],
+    "type": "collect",
+    "version": "2.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 26.2607,
+      "y": -111.9795
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 16.7803,
+      "y": -117.1553
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3.4775,
+      "y": -118.5806
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4.1699,
+      "y": -122.1455
+    },
+    {
+      "action": "combat_script",
+      "action_params": "枫原万叶 wait(0.2),e(hold),attack,wait(2)",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -7.5234,
+      "y": -140.4858
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -8.2012,
+      "y": -144.6841
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "run",
+      "type": "path",
+      "x": -40.375,
+      "y": -123.25
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -41.4746,
+      "y": -115.2461
+    }
+  ]
+}

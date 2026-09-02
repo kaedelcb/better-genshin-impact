@@ -1,0 +1,292 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785953089634,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "01-蝴蝶-蒙德-晨曦酒庄神像-9个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -576.7871,
+      "y": 1856.7158
+    },
+    {
+      "action": "set_time",
+      "action_params": "12:00",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "orientation",
+      "x": -553.2461,
+      "y": 1857.1792
+    },
+    {
+      "action": "set_time",
+      "action_params": "20:00",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "orientation",
+      "x": -553.2461,
+      "y": 1857.1792
+    },
+    {
+      "action": "log_output",
+      "action_params": "等待30s,随机出现蝴蝶",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "orientation",
+      "x": -553.2461,
+      "y": 1857.1792
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(30)",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "orientation",
+      "x": -553.2461,
+      "y": 1857.1792
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -553.2461,
+      "y": 1857.1792
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -536.6484,
+      "y": 1850.8047
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -559.4551,
+      "y": 1862.127
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -561.5156,
+      "y": 1869.9038
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -566.6348,
+      "y": 1875.8472
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "teleport",
+      "x": -569.8457,
+      "y": 1883.1138
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -575.4844,
+      "y": 1898.0952
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -587.2812,
+      "y": 1884.8751
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -628.2988,
+      "y": 1849.9219
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -657.9336,
+      "y": 1831.8711
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -663.8359,
+      "y": 1834.2285
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -576.7871,
+      "y": 1856.7158
+    },
+    {
+      "action": "log_output",
+      "action_params": "跑第二遍等待30s,随机出现蝴蝶",
+      "id": 18,
+      "move_mode": "dash",
+      "type": "orientation",
+      "x": -553.2461,
+      "y": 1857.1792
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(30)",
+      "id": 19,
+      "move_mode": "dash",
+      "type": "orientation",
+      "x": -553.2461,
+      "y": 1857.1792
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 20,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -553.2461,
+      "y": 1857.1792
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 21,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -536.6484,
+      "y": 1850.8047
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 22,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -559.4551,
+      "y": 1862.127
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 23,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -561.5156,
+      "y": 1869.9038
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 24,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -566.6348,
+      "y": 1875.8472
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 25,
+      "move_mode": "dash",
+      "type": "teleport",
+      "x": -569.8457,
+      "y": 1883.1138
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 26,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -575.4844,
+      "y": 1898.0952
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 27,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -587.2812,
+      "y": 1884.8751
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 28,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -628.2988,
+      "y": 1849.9219
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 29,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -657.9336,
+      "y": 1831.8711
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.5),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 30,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -663.8359,
+      "y": 1834.2285
+    }
+  ]
+}

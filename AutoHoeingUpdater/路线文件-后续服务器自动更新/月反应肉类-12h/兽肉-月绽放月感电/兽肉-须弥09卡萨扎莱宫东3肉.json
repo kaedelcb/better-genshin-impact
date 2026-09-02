@@ -1,0 +1,80 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Strix-nivicolum",
+        "name": "灰林鸮"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "大牛",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1774036247198,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "兽肉-须弥09卡萨扎莱宫东3肉",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 2483.1309,
+      "y": 6.400899999999638
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2467.3779296875,
+      "y": 5.68994140625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2439.294921875,
+      "y": 24.24560546875
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2459.8751880830914,
+      "y": 66.87508853231702
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2454.1253291454086,
+      "y": 64.49920320914407
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2462.884765625,
+      "y": 66.71875
+    }
+  ]
+}

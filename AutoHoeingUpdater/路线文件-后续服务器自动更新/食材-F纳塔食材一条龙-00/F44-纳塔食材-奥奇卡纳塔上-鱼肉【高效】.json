@@ -1,0 +1,158 @@
+﻿{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "芝麻糊"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1762686750596,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "F44-纳塔食材-奥奇卡纳塔上-鱼肉",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 10018.9853515625,
+      "y": -337.8251953125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 10009.859375,
+      "y": -335.2236328125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9998.63671875,
+      "y": -332.96923828125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9988.5966796875,
+      "y": -339.982421875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9972.8671875,
+      "y": -345.9609375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9961.1240234375,
+      "y": -348.9287109375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9950.8486328125,
+      "y": -347.978515625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9950.1708984375,
+      "y": -348.8671875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9948.78125,
+      "y": -347.40625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9950.46875,
+      "y": -346.84375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9949.375,
+      "y": -349.25
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9949.53125,
+      "y": -347.28125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9949.6875,
+      "y": -345.3125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9951.78125,
+      "y": -346.625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.2)",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9953.1875,
+      "y": -348.25
+    }
+  ]
+}

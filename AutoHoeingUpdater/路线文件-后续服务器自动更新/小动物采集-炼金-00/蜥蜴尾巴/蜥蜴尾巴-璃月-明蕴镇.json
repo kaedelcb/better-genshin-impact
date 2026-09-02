@@ -1,0 +1,66 @@
+{
+  "info": {
+    "authors": [
+      {
+        "name": "ran"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1788286981762,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "蜥蜴尾巴-璃月-明蕴镇",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -416.11,
+      "y": 729.1
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -406.9082,
+      "y": 713.7578
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -394.17,
+      "y": 684.67
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -416.42,
+      "y": 675.82
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -417.76,
+      "y": 682.8
+    }
+  ]
+}

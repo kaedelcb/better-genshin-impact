@@ -1,0 +1,166 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1774117228701,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "兽肉-须弥44铁穆山南12肉",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 6166.763671875,
+      "y": -1.736328125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6167.3271484375,
+      "y": 14.26953125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 6180.134765625,
+      "y": 29.1318359375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(x),",
+      "id": 4,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 6193.775390625,
+      "y": 40.806640625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6215.171875,
+      "y": 63.546875
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6208.359375,
+      "y": 146.64306640625
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 wait(2),attack(1);万叶 e(hold),attack(0.2);伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2),a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6191.10546875,
+      "y": 149.83642578125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 6195.34375,
+      "y": 148.53158184551285
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6207.357421875,
+      "y": 112.255859375
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "1000",
+      "id": 10,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 6188.435546875,
+      "y": 89.46435546875
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6186.455078125,
+      "y": 65.79736328125
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6181.90625,
+      "y": 50.78233603986064
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6166.1396484375,
+      "y": 44.38525390625
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5),wait(2),attack(0.5);万叶 e(hold),attack(0.2);哥伦比娅 attack(0.5),wait(1);伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6151.5,
+      "y": 55.65653659385225
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 6158.208984375,
+      "y": 52.705078125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 6153.96875,
+      "y": 58.71844832226088
+    }
+  ]
+}

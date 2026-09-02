@@ -1,0 +1,229 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785397234138,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "01-蒲公英-蒙德城门口-9个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -875.377,
+      "y": 2277.7217
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -888.2012,
+      "y": 2317.3569
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -905.7461,
+      "y": 2340.4165
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -902.832,
+      "y": 2368.6807
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -902.7051,
+      "y": 2373.979
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -932.9922,
+      "y": 2338.9951
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -969.125,
+      "y": 2322.1548
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -972.7441,
+      "y": 2320.4102
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -981.6309,
+      "y": 2270.0684
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -976.6602,
+      "y": 2252.2617
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";琴 wait(3.1);万叶 wait(3.1); ;",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -975.2793,
+      "y": 2248.4419
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -973.8906,
+      "y": 2242.6328
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";琴 wait(2.5);万叶 wait(2.5); ;",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -972.3125,
+      "y": 2237.7759
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -980.4082,
+      "y": 2236.5479
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";琴 wait(2.3);万叶 wait(2.3); ;",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -984.2812,
+      "y": 2235.3164
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -975.7578,
+      "y": 2229.624
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -973.4883,
+      "y": 2227.4985
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -950.9395,
+      "y": 2196.3755
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";琴 wait(3);万叶 wait(3); ;",
+      "id": 19,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -948.9805,
+      "y": 2194.1323
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -943.5273,
+      "y": 2194.8804
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";琴 wait(2.3);万叶 wait(2.3); ;",
+      "id": 21,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -939.6895,
+      "y": 2196.3975
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 22,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -943.4727,
+      "y": 2183.5923
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 23,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -944.1172,
+      "y": 2180.686
+    }
+  ]
+}

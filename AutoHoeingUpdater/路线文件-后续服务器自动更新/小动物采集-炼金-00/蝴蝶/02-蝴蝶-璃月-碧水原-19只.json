@@ -1,0 +1,458 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1787501571224,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "02-蝴蝶-璃月-碧水原-19只",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 1273.126,
+      "y": 1561.7642
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1239.5781,
+      "y": 1482.5859
+    },
+    {
+      "action": "set_time",
+      "action_params": "12:00",
+      "id": 3,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1219.8008,
+      "y": 1453.5654
+    },
+    {
+      "action": "set_time",
+      "action_params": "20:00",
+      "id": 4,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "orientation",
+      "x": 1219.8008,
+      "y": 1453.5654
+    },
+    {
+      "action": "log_output",
+      "action_params": "等待30s,随机出现蝴蝶",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1219.8008,
+      "y": 1453.5654
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(30)",
+      "id": 6,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1169.365,
+      "y": 1437.0128
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1178.9629,
+      "y": 1445.0439
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1168.292,
+      "y": 1428.8105
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1159.9189,
+      "y": 1428.7813
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1149.0166,
+      "y": 1430.2998
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1151.3125,
+      "y": 1437.2129
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1145.9922,
+      "y": 1439.7186
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1152.8965,
+      "y": 1446.1689
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1151.9404,
+      "y": 1453.7734
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1143.4995,
+      "y": 1448.6169
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1134.6289,
+      "y": 1440.8926
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 17,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1133.1367,
+      "y": 1432.5361
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 18,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1125.5391,
+      "y": 1442.501
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 19,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1118.8389,
+      "y": 1442.4951
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 20,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1113.6895,
+      "y": 1440.6943
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 21,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1118.3975,
+      "y": 1438.7988
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 22,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1114.2773,
+      "y": 1433.1797
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 23,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1113.4531,
+      "y": 1427.9336
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 24,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1105.873,
+      "y": 1423.4492
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 25,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1101.0361,
+      "y": 1436.9277
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 26,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1103.8047,
+      "y": 1441.3926
+    },
+    {
+      "action": "log_output",
+      "action_params": "跑第二遍等待20s,随机出现蝴蝶",
+      "id": 27,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1169.365,
+      "y": 1437.0128
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(20)",
+      "id": 28,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1169.365,
+      "y": 1437.0128
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 29,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1178.9629,
+      "y": 1445.0439
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 30,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1168.292,
+      "y": 1428.8105
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 31,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1159.9189,
+      "y": 1428.7813
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 32,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1149.0166,
+      "y": 1430.2998
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 33,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1151.3125,
+      "y": 1437.2129
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 34,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1145.9922,
+      "y": 1439.7186
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 35,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1152.8965,
+      "y": 1446.1689
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 36,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1151.9404,
+      "y": 1453.7734
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 37,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1143.4995,
+      "y": 1448.6169
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 38,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1134.6289,
+      "y": 1440.8926
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 39,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1133.1367,
+      "y": 1432.5361
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 40,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1125.5391,
+      "y": 1442.501
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 41,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1118.8389,
+      "y": 1442.4951
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 42,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1113.6895,
+      "y": 1440.6943
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 43,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1118.3975,
+      "y": 1438.7988
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 44,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1114.2773,
+      "y": 1433.1797
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 45,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1113.4531,
+      "y": 1427.9336
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 46,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1105.873,
+      "y": 1423.4492
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 47,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1101.0361,
+      "y": 1436.9277
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 48,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1103.8047,
+      "y": 1441.3926
+    }
+  ]
+}

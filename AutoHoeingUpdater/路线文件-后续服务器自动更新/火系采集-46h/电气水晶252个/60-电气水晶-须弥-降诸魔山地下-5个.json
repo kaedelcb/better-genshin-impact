@@ -1,0 +1,247 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785060922560,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "60-电气水晶-须弥-降诸魔山地下-5个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 2285.7217,
+      "y": -1601.1924
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 2297.6221,
+      "y": -1610.8535
+    },
+    {
+      "action": "",
+      "action_params": "wait(0.4),j,wait(1.4),j",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 2296.6191,
+      "y": -1643.2021
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2294.5254,
+      "y": -1666.8145
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 2290.4512,
+      "y": -1688.1504
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(T),wait(0.1),keypress(T)",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 2280.3242,
+      "y": -1718.4814
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 2280.3242,
+      "y": -1718.4814
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(T),wait(0.1),keypress(T),wait(2),keypress(T),wait(0.1),keypress(T),",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 2229.2822,
+      "y": -1743.126
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 2229.2822,
+      "y": -1743.126
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(T),wait(0.1),keypress(T),wait(2.2),keypress(T),wait(0.1),keypress(T),wait(2.4),keypress(T),wait(0.1),keypress(T),",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 2124.0586,
+      "y": -1713.8115
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2093.583,
+      "y": -1699.9785
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2073.6689,
+      "y": -1672.001
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.5)",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2088.9736,
+      "y": -1660.7617
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2087.2655,
+      "y": -1661.8516
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2085.8311,
+      "y": -1662.6416
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2082.5537,
+      "y": -1610.6885
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 17,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2080.4763,
+      "y": -1608.484
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2077.8119,
+      "y": -1608.7419
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2081.2461,
+      "y": -1606.7793
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 20,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2079.5029,
+      "y": -1595.5693
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2076.6309,
+      "y": -1594.5869
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 22,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2105.7207,
+      "y": -1585.542
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 23,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2106.3301,
+      "y": -1582.4023
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 24,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2117.6895,
+      "y": -1568.5518
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 25,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2116.9648,
+      "y": -1566.4229
+    }
+  ]
+}

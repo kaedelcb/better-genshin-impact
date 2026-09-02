@@ -1,0 +1,87 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "country": "须弥",
+    "description": "需要纳西妲",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1786302594971,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "10-赤念果-丰饶绿洲南侧-3个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4811.8174,
+      "y": -2734.3408
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4776.2852,
+      "y": -2675.2656
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 3,
+      "locked": false,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 4739.9492,
+      "y": -2638.0498
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4739.9492,
+      "y": -2638.0498
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4735.8652,
+      "y": -2649.418
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4736.75,
+      "y": -2650.958
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 4738.5566,
+      "y": -2655.5361
+    }
+  ]
+}

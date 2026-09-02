@@ -1,0 +1,101 @@
+{
+  "info": {
+    "authors": [
+      {
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1786121694037,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "05-幽灯蕈-知比山外-3个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -2556.34,
+      "y": -6007.46
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2566.9648,
+      "y": -6005.9453
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "2000",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -2635.2656,
+      "y": -5989.4932
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2638.9883,
+      "y": -5990.4385
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -2637.0762,
+      "y": -5987.1094
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2644.6289,
+      "y": -5989.0273
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -2650.0703,
+      "y": -5991.8115
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2646.9609,
+      "y": -5987.2549
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2645.7617,
+      "y": -5985.5244
+    }
+  ]
+}

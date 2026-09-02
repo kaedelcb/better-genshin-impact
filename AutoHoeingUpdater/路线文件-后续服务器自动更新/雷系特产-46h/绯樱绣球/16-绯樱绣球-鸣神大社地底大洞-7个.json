@@ -1,0 +1,229 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/this-Fish",
+        "name": "蜜柑魚"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1788289133885,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "16-绯樱绣球-鸣神大社地底大洞-7个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -4366.5547,
+      "y": -2515.4424
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4389.7676,
+      "y": -2503.3799
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "8000",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -4393.3242,
+      "y": -2534.3623
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(f),wait(0.1),keypress(f)",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4412.875,
+      "y": -2524.6642
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -4415.5078,
+      "y": -2528.501
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4424.6602,
+      "y": -2536.8281
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4422.1309,
+      "y": -2541.1221
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -4421.7695,
+      "y": -2551.1299
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4417.7852,
+      "y": -2550.8906
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4415.2617,
+      "y": -2551.9668
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4410.1465,
+      "y": -2564.7764
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -4416.873,
+      "y": -2562.5068
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4420.4277,
+      "y": -2561.458
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4391.4023,
+      "y": -2569.2793
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 keydown(VK_LBUTTON),wait(0.3),keyup(VK_LBUTTON);瓦雷莎 attack(0.3); ;",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4373.8828,
+      "y": -2566.3203
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4372.4609,
+      "y": -2564.709
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(f),wait(0.1),keypress(f)",
+      "id": 17,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4390.875,
+      "y": -2552.8515
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4373.4746,
+      "y": -2524.4219
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4371.7187,
+      "y": -2522.1035
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4384.7695,
+      "y": -2515.2949
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4390.7773,
+      "y": -2512.625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 22,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4392.2656,
+      "y": -2520.5254
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 23,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4392.8516,
+      "y": -2522.8896
+    }
+  ]
+}

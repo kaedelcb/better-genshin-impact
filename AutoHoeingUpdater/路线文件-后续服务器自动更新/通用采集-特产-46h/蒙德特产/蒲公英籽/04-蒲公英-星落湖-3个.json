@@ -1,0 +1,94 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785397266848,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "04-蒲公英-星落湖-3个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -1325.7207,
+      "y": 2565.1963
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1301.9551,
+      "y": 2522.02
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1282.1055,
+      "y": 2497.8247
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";琴 wait(3.5);万叶 wait(3.5); ;",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1279.5742,
+      "y": 2495.9263
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1282.377,
+      "y": 2495.3057
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";琴 wait(1.5);万叶 wait(1.5); ;",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1285.3594,
+      "y": 2495.5796
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1268.9648,
+      "y": 2486.6289
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1265.7129,
+      "y": 2484.4131
+    }
+  ]
+}

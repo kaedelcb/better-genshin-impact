@@ -1,0 +1,103 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/taotao568685",
+        "name": "白白喵"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "琉璃袋脚本没有配队限制，纯爬山飞行摘取，请不要带释放生存技能会位移的角色（如希诺宁等）",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1786284204583,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "19-琉璃袋-灵矩关右-2个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 1043.1641,
+      "y": -558.0444
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1036.8047,
+      "y": -561.4971
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 988.2617,
+      "y": -590.5117
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 968.6084,
+      "y": -574.3203
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 960.6758,
+      "y": -564.9551
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "climb",
+      "type": "path",
+      "x": 957.6982,
+      "y": -561.2368
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 954.3633,
+      "y": -564.8809
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(1)",
+      "id": 8,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 946.7852,
+      "y": -573.7256
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(5.5)",
+      "id": 9,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 956.9639,
+      "y": -573.2266
+    }
+  ]
+}

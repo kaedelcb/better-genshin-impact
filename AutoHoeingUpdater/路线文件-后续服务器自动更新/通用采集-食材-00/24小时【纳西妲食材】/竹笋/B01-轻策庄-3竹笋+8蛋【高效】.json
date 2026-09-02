@@ -1,0 +1,265 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "灰林鸮"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1788098872221,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "B01-轻策庄-3竹笋+8蛋【高效】",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "dash",
+      "type": "teleport",
+      "x": 547.67,
+      "y": 1766.78
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 543.2432,
+      "y": 1763.1553
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 529.25,
+      "y": 1768.1235
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 526.1973,
+      "y": 1768.2256
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 508.2529,
+      "y": 1772.2725
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 502.0186,
+      "y": 1763.1187
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 503.7178,
+      "y": 1758.7534
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 506.0576,
+      "y": 1754.1221
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 514.0059,
+      "y": 1743.0947
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 511.9893,
+      "y": 1737.2188
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 514.3135,
+      "y": 1733.8696
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.2)",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 522.877,
+      "y": 1732.5156
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 547.71,
+      "y": 1766.8
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "fly",
+      "type": "target",
+      "x": 579.37,
+      "y": 1845.16
+    },
+    {
+      "action": "combat_script",
+      "action_params": "纳西妲 e",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 580.0098,
+      "y": 1843.2461
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 547.73,
+      "y": 1766.84
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 556.5029,
+      "y": 1754.0459
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 587.25,
+      "y": 1726.91
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 608.04,
+      "y": 1709.43
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 608.5986,
+      "y": 1707.458
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 632.3184,
+      "y": 1723.0684
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 22,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 645.15,
+      "y": 1726.73
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.2)",
+      "id": 23,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 645.15,
+      "y": 1726.73
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 24,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 645.15,
+      "y": 1726.73
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 25,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 647.25,
+      "y": 1722.25
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 26,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 662.42,
+      "y": 1713.72
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 27,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 669.34,
+      "y": 1718.91
+    }
+  ]
+}

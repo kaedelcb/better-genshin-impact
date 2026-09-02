@@ -1,0 +1,67 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785412738438,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "11-蒲公英-誓言岬-2个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -2001.8965,
+      "y": 1439.0723
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2030.416,
+      "y": 1455.6563
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";琴 wait(1);万叶 wait(1); ;",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2033.2344,
+      "y": 1457.0288
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2022.7773,
+      "y": 1465.3984
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2019.8437,
+      "y": 1468.2393
+    }
+  ]
+}

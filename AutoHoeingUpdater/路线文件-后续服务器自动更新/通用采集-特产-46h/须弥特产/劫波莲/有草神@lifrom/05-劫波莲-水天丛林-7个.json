@@ -1,0 +1,132 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/pkjsjq",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.52.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1786120899639,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "05-劫波莲-水天丛林-7个",
+    "tags": [],
+    "type": "collect",
+    "version": "2.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 3436,
+      "y": -1469.97
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 3381.7285,
+      "y": -1447.3994
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4),j,wait(1.6),keypress(t),wait(0.1),keypress(T),wait(0.1),keypress(T),wait(0.1),keypress(T),j",
+      "id": 3,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 3355.8906,
+      "y": -1437.0723
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.3)",
+      "id": 4,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 3329.9219,
+      "y": -1477.7736
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 3326.6563,
+      "y": -1482.8447
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 3345.3906,
+      "y": -1504.7591
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "locked": false,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 3341.6113,
+      "y": -1510.96
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3341.6113,
+      "y": -1510.96
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 3340.5225,
+      "y": -1500.6895
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 3327.4043,
+      "y": -1494.9814
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3310.5928,
+      "y": -1482.8164
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "climb",
+      "type": "target",
+      "x": 3316.2637,
+      "y": -1477.6328
+    }
+  ]
+}

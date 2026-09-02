@@ -1,0 +1,94 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Limint",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1778515430079,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "03-圣金虫-活力之家-2个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4076.86328125,
+      "y": -2168.169921875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4031.91796875,
+      "y": -2221.873046875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3950.1064453125,
+      "y": -2289.62109375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.3)",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3942.45703125,
+      "y": -2291.6953125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "dash",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3929.3720703125,
+      "y": -2287.8115234375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3932.765625,
+      "y": -2292.197265625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3955.9853515625,
+      "y": -2292.8583984375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3958.970703125,
+      "y": -2294.822265625
+    }
+  ]
+}

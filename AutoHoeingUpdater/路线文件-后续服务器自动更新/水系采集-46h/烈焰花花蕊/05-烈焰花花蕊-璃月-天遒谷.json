@@ -1,0 +1,48 @@
+{
+  "info": {
+    "authors": [
+      {
+        "name": "ran"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1788100611468,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "05-烈焰花花蕊-璃月-天遒谷",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "run",
+      "type": "teleport",
+      "x": 1153.26,
+      "y": 142.82
+    },
+    {
+      "action": "hydro_collect",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1123.9004,
+      "y": 185.2734
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 1120.7754,
+      "y": 188.5635
+    }
+  ]
+}

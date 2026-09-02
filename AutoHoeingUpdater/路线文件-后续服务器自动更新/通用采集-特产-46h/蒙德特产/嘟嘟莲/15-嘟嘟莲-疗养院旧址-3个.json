@@ -1,0 +1,103 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782400965373,
+    "map_match_method": "SIFT",
+    "map_name": "Teyvat",
+    "name": "15-嘟嘟莲-疗养院旧址-3个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -529.125,
+      "y": 3876.0654
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -573.8613,
+      "y": 3913.3213
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.35),j,wait(7.6),attack(0.3)",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -588.1992,
+      "y": 3921.2324
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -624.5469,
+      "y": 3919.0728
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -627.7461,
+      "y": 3918.688
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -619.4434,
+      "y": 3926.3379
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -617.6992,
+      "y": 3928.6289
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -621.5137,
+      "y": 3930.1973
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -623.8516,
+      "y": 3931.5776
+    }
+  ]
+}

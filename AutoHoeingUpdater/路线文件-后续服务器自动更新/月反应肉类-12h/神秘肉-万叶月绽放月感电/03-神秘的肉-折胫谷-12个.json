@@ -1,0 +1,134 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "Sabersunny"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1774722800414,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "03-神秘的肉-折胫谷-12个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "force_tp",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4957.404296875,
+      "y": -695.181640625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "w(0.5),attack(0.2),wait(1),s(1),dash,wait(0.7),keypress(f),wait(0.2),keypress(f),wait(5.5)",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 3069,
+      "y": -673.0144805314794
+    },
+    {
+      "action": "force_tp",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 5693.2431640625,
+      "y": -710.79248046875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5690.853515625,
+      "y": -714.1103515625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5699.771484375,
+      "y": -733.380859375
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";万叶 attack(0.01),e,wait(0.4);哥伦比娅 attack(0.8);",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5694.986328125,
+      "y": -735.177734375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5688.9599609375,
+      "y": -738.3720703125
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5686.90234375,
+      "y": -739.349609375
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5675.6044921875,
+      "y": -739.494140625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(4)",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5672.6142578125,
+      "y": -733.0458984375
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);万叶 attack(0.08),e(hold),attack(0.2);伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5679.46875,
+      "y": -735.728515625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5679.46875,
+      "y": -735.728515625
+    }
+  ]
+}

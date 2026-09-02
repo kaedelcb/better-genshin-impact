@@ -1,0 +1,109 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/cx05121",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782233100460,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "01-天云草实-越石村-6个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -3891.63,
+      "y": -4389.97
+    },
+    {
+      "action": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3869.51,
+      "y": -4390.38
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3840.5547,
+      "y": -4397.001
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3837.8828,
+      "y": -4397.583
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3836.4668,
+      "y": -4400.7285
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3839.043,
+      "y": -4401.4863
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3841.3477,
+      "y": -4402.7471
+    },
+    {
+      "action": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -3891.55,
+      "y": -4389.93
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3887.1445,
+      "y": -4357.3887
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -3893.3008,
+      "y": -4341.7217
+    }
+  ]
+}

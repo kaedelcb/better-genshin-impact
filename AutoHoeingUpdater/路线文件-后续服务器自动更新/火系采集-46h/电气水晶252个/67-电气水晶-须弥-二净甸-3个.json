@@ -1,0 +1,159 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785075656191,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "67-电气水晶-须弥-二净甸-3个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 3252.2871,
+      "y": -599.0762
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3264.833,
+      "y": -604.2227
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(T),wait(0.1),keypress(T)",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 3287.7402,
+      "y": -628.2979
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3287.7402,
+      "y": -628.2979
+    },
+    {
+      "action": "",
+      "action_params": "wait(0.5);迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e),wait(4.5); ;",
+      "id": 5,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 3288.5029,
+      "y": -638.7383
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e),wait(3.5);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3323.5684,
+      "y": -672.5508
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3325.374,
+      "y": -673.8486
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3329.2773,
+      "y": -676.4844
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3341.6465,
+      "y": -684.7402
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3341.9238,
+      "y": -686.6113
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 attack(0.1),keypress(e),wait(0.1),keypress(e);迪卢克 attack(0.05),keypress(e);可莉 attack(0.05),charge(0.25);杜林 attack(0.05),keypress(e),wait(0.35),keypress(e);烟绯 attack(0.05),keypress(e);嘉明 attack(0.05),keypress(e),attack(0.3);班尼特 attack(0.05),keydown(E),wait(0.55),keyup(E); ;",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3351.7627,
+      "y": -681.4687
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3350.9727,
+      "y": -683.6885
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3349.7734,
+      "y": -686.2887
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 3252.2871,
+      "y": -599.0762
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 3252.2871,
+      "y": -599.0762
+    }
+  ]
+}

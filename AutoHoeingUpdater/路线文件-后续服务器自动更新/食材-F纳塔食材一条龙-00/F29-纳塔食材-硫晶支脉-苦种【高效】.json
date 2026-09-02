@@ -1,0 +1,144 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/PanZic",
+        "name": "芝麻糊"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1761807700455,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "F29-纳塔食材-硫晶支脉-苦种",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "dash",
+      "type": "teleport",
+      "x": 8258.41,
+      "y": -1744.65
+    },
+    {
+      "action": "",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 8261.42,
+      "y": -1746.67
+    },
+    {
+      "action": "stop_flying",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 8285.82,
+      "y": -1757.35
+    },
+    {
+      "action": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 8292.56,
+      "y": -1763.97
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "teleport",
+      "x": 8258.6201171875,
+      "y": -1744.390625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8230.6943359375,
+      "y": -1691.3203125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8229.8359375,
+      "y": -1686.05908203125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8228.5693359375,
+      "y": -1675.7490234375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8230.486328125,
+      "y": -1665.55322265625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "climb",
+      "type": "path",
+      "x": 8225.7587890625,
+      "y": -1645.158203125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.2)",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 8232.6240234375,
+      "y": -1643.25390625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8231.986328125,
+      "y": -1639.2490234375
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "fly",
+      "type": "target",
+      "x": 8240.8017578125,
+      "y": -1621.56640625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.2)",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8239.919921875,
+      "y": -1623.0380859375
+    }
+  ]
+}

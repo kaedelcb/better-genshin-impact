@@ -1,0 +1,94 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "芝麻糊"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1760808310184,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "F15-纳塔食材-圣火竞技场-鸟蛋",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "dash",
+      "type": "teleport",
+      "x": 8978.337890625,
+      "y": -1872.32177734375
+    },
+    {
+      "action": "combat_script",
+      "action_params": " keydown(w),wait(2),keyup(w)",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8956.1142578125,
+      "y": -1855.2099609375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8940.875,
+      "y": -1848
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8934.1181640625,
+      "y": -1840.302734375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 8930.896484375,
+      "y": -1838.1494140625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8913.09375,
+      "y": -1832.26953125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 8901.423828125,
+      "y": -1830.55078125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(f),wait(0.2),keypress(f),wait(0.2),keypress(f)",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 8897.7734375,
+      "y": -1829.9990234375
+    }
+  ]
+}

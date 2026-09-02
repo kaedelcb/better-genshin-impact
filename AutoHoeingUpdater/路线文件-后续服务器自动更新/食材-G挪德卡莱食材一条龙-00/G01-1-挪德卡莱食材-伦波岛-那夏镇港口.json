@@ -1,0 +1,206 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "芝麻糊"
+      },
+      {
+        "links": "https://github.com/MisDandan23",
+        "name": "MissDan"
+      }
+    ],
+    "bgi_version": "0.52.0",
+    "description": "3个甜甜花；2个薄荷；3个树莓；9个夏槲果；",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1786290291056,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "G01-1-挪德卡莱食材-伦波岛-那夏镇港口",
+    "tags": [],
+    "type": "collect",
+    "version": "3.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 9367.1475,
+      "y": 1435.6475
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9287.8506,
+      "y": 1435.9702
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9267.5088,
+      "y": 1448.3418
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9267.7588,
+      "y": 1448.1279
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9265.1299,
+      "y": 1450.4331
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 9282.5557,
+      "y": 1457.4141
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9299.3389,
+      "y": 1468.2173
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9318.6475,
+      "y": 1495.627
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9320.5391,
+      "y": 1498.1561
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.2)",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9313.0498,
+      "y": 1512.123
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9310.6494,
+      "y": 1514.6318
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 9314.5762,
+      "y": 1516.6123
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.2)",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9320.0039,
+      "y": 1515.4219
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9323.0557,
+      "y": 1514.3779
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.2)",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9341.8057,
+      "y": 1545.1411
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9342.7822,
+      "y": 1548.7676
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9297.3652,
+      "y": 1542.5283
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9293.9199,
+      "y": 1541.334
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9285.5342,
+      "y": 1523.9473
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9284.2588,
+      "y": 1521.1777
+    }
+  ]
+}

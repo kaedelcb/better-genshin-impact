@@ -1,0 +1,189 @@
+{
+  "info": {
+    "authors": [
+      {
+        "name": "爱凑热闹"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1775309500173,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "03-石珀-珉林-华池岩岫东侧-5个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 1114.8623046875,
+      "y": 1189.0244140625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1045.396484375,
+      "y": 1184.27587890625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1017.341796875,
+      "y": 1162.16015625
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 4,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 1016.6103515625,
+      "y": 1167.1162109375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.2)",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 1016.6103515625,
+      "y": 1167.1162109375
+    },
+    {
+      "action": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 957.27734375,
+      "y": 1185.978515625
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 7,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 957.74609375,
+      "y": 1190.052734375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.2)",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 957.74609375,
+      "y": 1190.052734375
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 9,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 940.7744140625,
+      "y": 1200.466796875
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.2)",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 940.7744140625,
+      "y": 1200.466796875
+    },
+    {
+      "action": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 1114.90625,
+      "y": 1189.0938031011392
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1105.947265625,
+      "y": 1210.400390625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1081.8818359375,
+      "y": 1247.0419921875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1062.3505859375,
+      "y": 1277.81787109375
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 15,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 1063.88671875,
+      "y": 1277.4990234375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.2)",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 1063.88671875,
+      "y": 1277.4990234375
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 17,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 1064.9912109375,
+      "y": 1278.775390625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.2),wait(0.4)",
+      "id": 18,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 1064.9912109375,
+      "y": 1278.775390625
+    }
+  ]
+}

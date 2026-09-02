@@ -1,0 +1,202 @@
+﻿{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "芝麻糊"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1762620168146,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "F36-纳塔食材-安饶之野-鱼肉",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 9522.6357421875,
+      "y": -2215.7314453125
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 9527.0908203125,
+      "y": -2224.875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9535.6767578125,
+      "y": -2244.841796875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9537.1298828125,
+      "y": -2248.7763671875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9540.4765625,
+      "y": -2268.3720703125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9540.5,
+      "y": -2285.0537109375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9536.390625,
+      "y": -2296.9111328125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9533.857421875,
+      "y": -2303.541015625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9532.6220703125,
+      "y": -2305.4091796875
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.1),keypress(t)",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9531.4541015625,
+      "y": -2307.0546875
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(f),w(0.2),",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9530.2451171875,
+      "y": -2318.2119140625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(f),w(0.2),",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9529.0361328125,
+      "y": -2329.369140625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(f),w(0.2),",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9527.08056640625,
+      "y": -2321.1220703125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(f),w(0.2)",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9525.125,
+      "y": -2312.875
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(f),w(0.2),",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9535,
+      "y": -2320.75
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(f),w(0.2),",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9517.25,
+      "y": -2322.75
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(f),w(0.2),",
+      "id": 17,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9521.576171875,
+      "y": -2313.369140625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(f),w(0.2),",
+      "id": 18,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9525.1630859375,
+      "y": -2325.2470703125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(f),w(0.2),",
+      "id": 19,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9528.75,
+      "y": -2337.125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(f),w(0.2),",
+      "id": 20,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9519,
+      "y": -2328.125
+    }
+  ]
+}

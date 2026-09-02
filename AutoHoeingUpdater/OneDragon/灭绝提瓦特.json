@@ -1,0 +1,168 @@
+{
+  "EverySelectedValueListConverter": "1/2/3/4/5/6/7",
+  "TaskEnabledList": {
+    "1": {
+      "Item1": true,
+      "Item2": "CD采集新-特产炼金"
+    },
+    "30": {
+      "Item1": true,
+      "Item2": "CD采集-神秘兽肉"
+    },
+    "18": {
+      "Item1": true,
+      "Item2": "CD采集新-食材"
+    },
+    "4": {
+      "Item1": true,
+      "Item2": "CD采集新-挖矿"
+    },
+    "5": {
+      "Item1": true,
+      "Item2": "CD采集-额外狗粮"
+    },
+    "3": {
+      "Item1": true,
+      "Item2": "CD采集新-食材蒙德一条龙"
+    },
+    "6": {
+      "Item1": true,
+      "Item2": "CD采集新-食材璃月一条龙"
+    },
+    "7": {
+      "Item1": true,
+      "Item2": "CD采集新-食材稻妻一条龙"
+    },
+    "8": {
+      "Item1": true,
+      "Item2": "CD采集新-食材须弥一条龙"
+    },
+    "9": {
+      "Item1": true,
+      "Item2": "CD采集新-食材枫丹一条龙"
+    },
+    "10": {
+      "Item1": true,
+      "Item2": "CD采集新-食材纳塔一条龙"
+    },
+    "11": {
+      "Item1": true,
+      "Item2": "CD采集新-食材挪德卡莱一条龙"
+    },
+    "62": {
+      "Item1": true,
+      "Item2": "CD采集新-食材"
+    },
+    "2": {
+      "Item1": true,
+      "Item2": "砍树"
+    }
+  },
+  "GenshinUid": "",
+  "AccountBinding": false,
+  "Version": 1,
+  "Name": "灭绝提瓦特",
+  "IndexId": 3,
+  "NextConfiguration": false,
+  "NextTaskIndex": 0,
+  "Period": "每日",
+  "PeriodList": {
+    "每日": true,
+    "周一": false,
+    "周二": false,
+    "周三": false,
+    "周四": false,
+    "周五": false,
+    "周六": false,
+    "周日": false
+  },
+  "ScheduleName": "默认计划表",
+  "CustomDomainList": [],
+  "CraftingBenchCountry": "枫丹",
+  "AdventurersGuildCountry": "枫丹",
+  "PartyName": "好感",
+  "DomainName": "",
+  "WeeklyDomainEnabled": false,
+  "AutoBossName": "",
+  "AutoBossStrategyName": "根据队伍自动选择",
+  "AutoBossTeamName": "",
+  "AutoBossSpecifyRunCount": false,
+  "AutoBossRunCount": 1,
+  "AutoBossUseTransientResin": false,
+  "AutoBossUseFragileResin": false,
+  "AutoBossReviveRetryCount": 3,
+  "AutoBossReturnToStatueAfterEachRound": false,
+  "AutoBossRewardRecognitionEnabled": false,
+  "AutoBossTimeout": 240,
+  "DailyRewardPartyName": "好感",
+  "MinResinToKeep": 0,
+  "SundayEverySelectedValue": "0",
+  "SereniteaPotTpType": "地图传送",
+  "SecretTreasureObjects": [
+    "星期一",
+    "须臾树脂",
+    "大英雄的经验"
+  ],
+  "ResinCount": {
+    "浓缩树脂": 0,
+    "原粹树脂": 0,
+    "须臾树脂": 0,
+    "脆弱树脂": 0
+  },
+  "SpecifyResinUse": false,
+  "AccountBindingCode": "",
+  "LeyLineOneDragonMode": false,
+  "LeyLineRunMonday": true,
+  "LeyLineRunTuesday": true,
+  "LeyLineRunWednesday": true,
+  "LeyLineRunThursday": true,
+  "LeyLineRunFriday": true,
+  "LeyLineRunSaturday": true,
+  "LeyLineRunSunday": true,
+  "LeyLineMondayType": "",
+  "LeyLineMondayCountry": "",
+  "LeyLineTuesdayType": "",
+  "LeyLineTuesdayCountry": "",
+  "LeyLineWednesdayType": "",
+  "LeyLineWednesdayCountry": "",
+  "LeyLineThursdayType": "",
+  "LeyLineThursdayCountry": "",
+  "LeyLineFridayType": "",
+  "LeyLineFridayCountry": "",
+  "LeyLineSaturdayType": "",
+  "LeyLineSaturdayCountry": "",
+  "LeyLineSundayType": "",
+  "LeyLineSundayCountry": "",
+  "LeyLineRunCount": 0,
+  "LeyLineResinExhaustionMode": false,
+  "LeyLineOpenModeCountMin": false,
+  "IsCraftingResinExpanded": true,
+  "IsAutoDomainExpanded": true,
+  "IsAutoLeyLineExpanded": true,
+  "IsClaimRewardsExpanded": true,
+  "IsSereniteaPotExpanded": true,
+  "IsCompletionActionExpanded": true,
+  "IsBindUidExpanded": true,
+  "MondayPartyName": "",
+  "MondayDomainName": "",
+  "MondaySelectedValue": "",
+  "TuesdayPartyName": "",
+  "TuesdayDomainName": "",
+  "TuesdaySelectedValue": "",
+  "WednesdayPartyName": "",
+  "WednesdayDomainName": "",
+  "WednesdaySelectedValue": "",
+  "ThursdayPartyName": "",
+  "ThursdayDomainName": "",
+  "ThursdaySelectedValue": "",
+  "FridayPartyName": "",
+  "FridayDomainName": "",
+  "FridaySelectedValue": "",
+  "SaturdayPartyName": "",
+  "SaturdayDomainName": "",
+  "SaturdaySelectedValue": "",
+  "SundayPartyName": "",
+  "SundayDomainName": "",
+  "SundayDaySelectedValue": "",
+  "CompletionAction": ""
+}

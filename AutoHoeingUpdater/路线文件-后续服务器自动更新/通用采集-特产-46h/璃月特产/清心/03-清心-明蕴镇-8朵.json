@@ -1,0 +1,220 @@
+﻿{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/taotao568685",
+        "name": "白白喵"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "时间:2分40秒; 对角色没有任何要求，带双风更好",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1772639595405,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "03-清心-明蕴镇-8朵",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -255.03,
+      "y": 630.07
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -265.4,
+      "y": 630.28
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -318.77,
+      "y": 620.74
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -325.68,
+      "y": 617.5
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -324.03,
+      "y": 620.91
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -325.6,
+      "y": 617.21
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -419.13,
+      "y": 454.63
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -417.9,
+      "y": 455.92
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -419.27,
+      "y": 456.86
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -419.6,
+      "y": 454.47
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -255.01,
+      "y": 630.09
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -253.62,
+      "y": 621.87
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -246.59,
+      "y": 595.84
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -243.31,
+      "y": 597.69
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "climb",
+      "type": "target",
+      "x": -239.44,
+      "y": 595.81
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -255.03,
+      "y": 630.1
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -253.2,
+      "y": 629.73
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -112.89,
+      "y": 560.3
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -112.35,
+      "y": 558.82
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -111.35,
+      "y": 557.05
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -95.5,
+      "y": 542.01
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 22,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -94.69,
+      "y": 541
+    }
+  ]
+}

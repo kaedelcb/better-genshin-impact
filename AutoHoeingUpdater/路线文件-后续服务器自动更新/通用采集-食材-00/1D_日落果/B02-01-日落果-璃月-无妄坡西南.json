@@ -1,0 +1,111 @@
+﻿{
+  "info": {
+    "authors": [
+      {
+        "name": "白白喵"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1758365071068,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "B02-01-日落果-璃月-无妄坡西南",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 490.0703,
+      "y": 1435.3892
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "run",
+      "type": "path",
+      "x": 474.5703,
+      "y": 1467.6182
+    },
+    {
+      "action": "combat_script",
+      "action_params": "j,wait(0.5),j,wait(0.5),j",
+      "id": 3,
+      "move_mode": "run",
+      "type": "path",
+      "x": 476.3809,
+      "y": 1516.5322
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "run",
+      "type": "path",
+      "x": 469.7939,
+      "y": 1544.6133
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 474.5078,
+      "y": 1551.1191
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 465.9375,
+      "y": 1552.9673
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 476.3232,
+      "y": 1549.9639
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "run",
+      "type": "path",
+      "x": 490.4053,
+      "y": 1564.8911
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "run",
+      "type": "path",
+      "x": 509.7695,
+      "y": 1554.7402
+    },
+    {
+      "action": "combat_script",
+      "action_params": "枫原万叶 wait(0.1),e(hold),attack,wait(2)",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 502.5469,
+      "y": 1566.3545
+    }
+  ]
+}

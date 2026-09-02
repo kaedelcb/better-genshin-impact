@@ -1,0 +1,84 @@
+﻿{
+  "info": {
+    "authors": [
+      {
+        "name": "白白喵"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1758365431948,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "B16-01-日落果-璃月-绝云间-翠玦坡左下",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 1433.7012,
+      "y": 837.3882
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 1432.0205,
+      "y": 830.9658
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "7000",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 1337.1162,
+      "y": 708.5312
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 1338.7441,
+      "y": 698.2773
+    },
+    {
+      "action": "combat_script",
+      "action_params": "枫原万叶 wait(0.2),e(hold),attack,wait(2)",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 1340.0381,
+      "y": 695.8711
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 1318.2412,
+      "y": 689.0801
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.5)",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 1315.9824,
+      "y": 684.5981
+    }
+  ]
+}

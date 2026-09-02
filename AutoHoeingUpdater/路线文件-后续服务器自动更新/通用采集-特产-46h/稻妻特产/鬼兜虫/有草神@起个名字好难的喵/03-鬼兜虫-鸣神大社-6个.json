@@ -1,0 +1,214 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/MisakaAldrich",
+        "name": "起个名字好难的喵"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782060348785,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "03-鬼兜虫-鸣神大社-6个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -4375.65,
+      "y": -2498.17
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4396.5469,
+      "y": -2503.0935
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -4413.709,
+      "y": -2508.2031
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -4438.207,
+      "y": -2492.2793
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -4429.2148,
+      "y": -2472.0762
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -4434.1875,
+      "y": -2470.4951
+    },
+    {
+      "action": "stop_flying",
+      "id": 7,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -4444.5449,
+      "y": -2474.3799
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -4445.832,
+      "y": -2478.8887
+    },
+    {
+      "action": "stop_flying",
+      "id": 9,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -4469.7891,
+      "y": -2555.2109
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4468.1055,
+      "y": -2556.9814
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4466.1465,
+      "y": -2557.0791
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -4473.3516,
+      "y": -2514.0215
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -4472.8887,
+      "y": -2509.9814
+    },
+    {
+      "action": "stop_flying",
+      "id": 14,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -4519.5664,
+      "y": -2521.5518
+    },
+    {
+      "action": "nahida_collect",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4519.5664,
+      "y": -2521.5518
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(F),wait(0.1),keypress(f),wait(0.3),keypress(T)",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4511.7285,
+      "y": -2513.7744
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(T),wait(0.1),keypress(T)",
+      "id": 17,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -4495.5273,
+      "y": -2505.5352
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -4480.9687,
+      "y": -2497.9004
+    },
+    {
+      "action": "",
+      "id": 19,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4475.4766,
+      "y": -2495.2598
+    },
+    {
+      "action": "",
+      "id": 20,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4459.7187,
+      "y": -2476.2285
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 21,
+      "locked": false,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -4461.3398,
+      "y": -2459.9805
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 22,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4461.3398,
+      "y": -2459.9805
+    }
+  ]
+}

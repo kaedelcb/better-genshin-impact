@@ -1,0 +1,67 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1774037053148,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "兽肉-须弥41神的棋盘4肉",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 5411.2578125,
+      "y": -1462.6640625
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 5440.091796875,
+      "y": -1472.451171875
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e);哥伦比娅 attack(2);万叶 e(hold),attack(0.2);wait(1)",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5449.033203125,
+      "y": -1482.9609375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5450.21875,
+      "y": -1488.0313932969257
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5452.5,
+      "y": -1482.718433238373
+    }
+  ]
+}

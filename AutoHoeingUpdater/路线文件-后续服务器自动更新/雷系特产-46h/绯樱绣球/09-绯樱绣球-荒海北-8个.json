@@ -1,0 +1,230 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/MisakaAldrich",
+        "name": "起个名字好难的喵"
+      }
+    ],
+    "bgi_version": "0.52.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782578904334,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "09-绯樱绣球-荒海北-8个",
+    "tags": [
+      "久岐忍"
+    ],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -4217.63,
+      "y": -2397.2
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "2000",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -4214.4883,
+      "y": -2341.4668
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 keydown(VK_LBUTTON),wait(0.3),keyup(VK_LBUTTON);瓦雷莎 attack(0.3); ;",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4218.6621,
+      "y": -2344.2422
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4220.4238,
+      "y": -2345.9414
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4232.0195,
+      "y": -2354.0469
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 keydown(VK_LBUTTON),wait(0.3),keyup(VK_LBUTTON);瓦雷莎 attack(0.3); ;",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4238.0801,
+      "y": -2347.2402
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4240.4375,
+      "y": -2343.9766
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4240.8086,
+      "y": -2331.6074
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 keydown(VK_LBUTTON),wait(0.3),keyup(VK_LBUTTON);瓦雷莎 attack(0.3); ;",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4249.6211,
+      "y": -2311.7773
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4251.248,
+      "y": -2309.1514
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4278.4902,
+      "y": -2321.1641
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 keydown(VK_LBUTTON),wait(0.3),keyup(VK_LBUTTON);瓦雷莎 attack(0.3); ;",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4283.7695,
+      "y": -2339.4873
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4284.1934,
+      "y": -2341.6709
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 keydown(VK_LBUTTON),wait(0.3),keyup(VK_LBUTTON);瓦雷莎 attack(0.3); ;",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4335.9141,
+      "y": -2341.4463
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4337.8984,
+      "y": -2341.2461
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4343.4297,
+      "y": -2321.9258
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 keydown(VK_LBUTTON),wait(0.3),keyup(VK_LBUTTON);瓦雷莎 attack(0.3); ;",
+      "id": 17,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4291.6934,
+      "y": -2285.2607
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4290.252,
+      "y": -2282.1797
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 keydown(VK_LBUTTON),wait(0.3),keyup(VK_LBUTTON);瓦雷莎 attack(0.3); ;",
+      "id": 19,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4278.7656,
+      "y": -2266.6875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4277.8789,
+      "y": -2264.5049
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4296.2266,
+      "y": -2248.0059
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 keydown(VK_LBUTTON),wait(0.3),keyup(VK_LBUTTON);瓦雷莎 attack(0.3); ;",
+      "id": 22,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4284.666,
+      "y": -2240.1768
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 23,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4281.8437,
+      "y": -2239.0937
+    }
+  ]
+}

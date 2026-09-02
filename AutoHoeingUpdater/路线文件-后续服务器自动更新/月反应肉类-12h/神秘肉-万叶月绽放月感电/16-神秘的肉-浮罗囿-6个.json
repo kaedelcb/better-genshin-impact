@@ -1,0 +1,129 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "Saber"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1773301905267,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "16-神秘的肉-浮罗囿-6个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "force_tp",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 6344.35698479307,
+      "y": 744.4974424278898
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 2,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 6314.1630859375,
+      "y": 716.423828125
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 3,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "orientation",
+      "x": 6334.2890625,
+      "y": 680.32470703125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6334.2890625,
+      "y": 680.32470703125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6354.025390625,
+      "y": 697.62646484375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6361.19921875,
+      "y": 726.07470703125
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6374.4853515625,
+      "y": 746.72216796875
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5),wait(4),attack(0.5);万叶 attack(0.08),e(hold),attack(0.2);伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 8,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6386.03125,
+      "y": 761.4384765625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6386.03125,
+      "y": 761.4384765625
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6433.45703125,
+      "y": 765.23974609375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 6436.1796875,
+      "y": 760.337890625
+    }
+  ]
+}

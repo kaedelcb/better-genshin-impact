@@ -1,0 +1,81 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Strix-nivicolum",
+        "name": "灰林鸮"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "大牛",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1773552866576,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "兽肉-须弥14禅那园北3肉",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 3253.1054999999997,
+      "y": -591.0059000000001
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3234.076171875,
+      "y": -617.68359375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(t),wait(0.1),keypress(t),wait(0.1),keypress(t)",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 3220.0703125,
+      "y": -648.900390625
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),attack(1);wait(2)",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 3175.84375,
+      "y": -691.8427734375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 5,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3169.248046875,
+      "y": -695.5244140625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3173.7494357507276,
+      "y": -697.5
+    }
+  ]
+}

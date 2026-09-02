@@ -1,0 +1,177 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/this-Fish",
+        "name": "蜜柑魚"
+      }
+    ],
+    "bgi_version": "0.52.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782588600803,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "13-绯樱绣球-镇守之森二-5个",
+    "tags": [
+      "丽莎"
+    ],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -4429.1172,
+      "y": -2801.0537
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4430.707,
+      "y": -2785.0137
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 keydown(VK_LBUTTON),wait(0.3),keyup(VK_LBUTTON);瓦雷莎 attack(0.3); ;",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4432.5898,
+      "y": -2761.4414
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4430.3789,
+      "y": -2760.249
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4415.7324,
+      "y": -2787.4414
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 keydown(VK_LBUTTON),wait(0.3),keyup(VK_LBUTTON);瓦雷莎 attack(0.3); ;",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4403.8535,
+      "y": -2793.7139
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4402.6172,
+      "y": -2795.3486
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 keydown(VK_LBUTTON),wait(0.3),keyup(VK_LBUTTON);瓦雷莎 attack(0.3); ;",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4378.5684,
+      "y": -2850.4238
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -4375.209,
+      "y": -2856.9336
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4331.4492,
+      "y": -2835.0059
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(F),wait(0.1),keypress(f)",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4323.1543,
+      "y": -2819.6494
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -4316.6504,
+      "y": -2809.9492
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -4313.6602,
+      "y": -2820.3867
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4293.459,
+      "y": -2812.3926
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4304.6699,
+      "y": -2784.7695
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 keydown(VK_LBUTTON),wait(0.3),keyup(VK_LBUTTON);瓦雷莎 attack(0.3); ;",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4304.6816,
+      "y": -2760.6797
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4304.5625,
+      "y": -2758.0273
+    }
+  ]
+}

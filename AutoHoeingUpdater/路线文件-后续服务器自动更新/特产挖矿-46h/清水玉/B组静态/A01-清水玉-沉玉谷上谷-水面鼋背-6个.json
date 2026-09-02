@@ -1,0 +1,289 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/MisakaAldrich",
+        "name": "起个名字好难的喵"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1787683283555,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "A01-清水玉-沉玉谷上谷-水面鼋背-6个",
+    "tags": [
+      "大剑"
+    ],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 2145.61,
+      "y": 2412.93
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2166.8574,
+      "y": 2465.3877
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 2190.5947,
+      "y": 2495.1621
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2200.873,
+      "y": 2510.7402
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2228.2861,
+      "y": 2586.1777
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(T),wait(0.2),keypress(T),wait(0.2),keypress(T),click(middle),wait(1)",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 2239.7441,
+      "y": 2617.1162
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.2)",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 2230.709,
+      "y": 2663.2915
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4),j,wait(1)",
+      "id": 8,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 2230.709,
+      "y": 2663.2915
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 2229.3555,
+      "y": 2663.2026
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2229.3555,
+      "y": 2663.2026
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2227.252,
+      "y": 2661.5605
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2227.5977,
+      "y": 2657.1108
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2230.7363,
+      "y": 2658.5889
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2231.959,
+      "y": 2663.8145
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2207.0957,
+      "y": 2638.7715
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 2198.6592,
+      "y": 2647.9897
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2198.2266,
+      "y": 2646.3223
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2200.0156,
+      "y": 2645.4687
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2203.8027,
+      "y": 2647.957
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2199.4697,
+      "y": 2649.3013
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2197.6113,
+      "y": 2655.2979
+    },
+    {
+      "action": "combat_script",
+      "action_params": "moveby(0,-1600),wait(0.5),keypress(T),wait(0.2),keypress(T),wait(0.2),keypress(T),click(middle),wait(1)",
+      "id": 22,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 2191.3408,
+      "y": 2686.1392
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keydown(VK_SPACE),wait(1),keyup(VK_SPACE),",
+      "id": 23,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 2187.3564,
+      "y": 2701.2886
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4),j,wait(1)",
+      "id": 24,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 2187.3564,
+      "y": 2701.2886
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 25,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2186.5078,
+      "y": 2701.1431
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 26,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2182.9336,
+      "y": 2701.5464
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 27,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2181.0332,
+      "y": 2698.123
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 28,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2186.0225,
+      "y": 2697.814
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(1)",
+      "id": 29,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 2186.0225,
+      "y": 2697.814
+    }
+  ]
+}

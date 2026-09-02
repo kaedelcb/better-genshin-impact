@@ -1,0 +1,84 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/this-Fish",
+        "name": "蜜柑魚"
+      }
+    ],
+    "bgi_version": "0.52.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782503719722,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "04-绯樱绣球-白狐之野一-2个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -4231.96,
+      "y": -3001.52
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4221.7617,
+      "y": -2989.1494
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 attack(0.3);瓦雷莎 attack(0.3); ;",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4148.043,
+      "y": -2957.0791
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4145.8242,
+      "y": -2955.0527
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4174.9121,
+      "y": -2938.585
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 attack(0.3);瓦雷莎 attack(0.3); ;",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4218.1953,
+      "y": -2913.293
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4220.5234,
+      "y": -2911.8301
+    }
+  ]
+}

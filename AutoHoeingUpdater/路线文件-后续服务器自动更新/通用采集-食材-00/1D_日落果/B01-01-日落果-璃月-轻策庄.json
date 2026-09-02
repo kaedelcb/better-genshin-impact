@@ -1,0 +1,93 @@
+﻿{
+  "info": {
+    "authors": [
+      {
+        "name": "白白喵"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1758365025098,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "B01-01-日落果-璃月-轻策庄",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 801.9014,
+      "y": 1796.4126
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 815.5078,
+      "y": 1791.7949
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 809.7119,
+      "y": 1799.7666
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "run",
+      "type": "path",
+      "x": 806.5098,
+      "y": 1856.6084
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 827.6895,
+      "y": 1872.5391
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "run",
+      "type": "path",
+      "x": 839.0654,
+      "y": 1893.3716
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 852.1084,
+      "y": 1903.2261
+    },
+    {
+      "action": "combat_script",
+      "action_params": "j,wait(0.5),j,wait(0.5),j",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 853.2773,
+      "y": 1895.6797
+    }
+  ]
+}

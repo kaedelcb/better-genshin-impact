@@ -1,0 +1,102 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Flower-MUYi",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "description": "鸣草_九条阵屋_3个 的初始点类型修改为“传送”",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1786735691351,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "03-鸣草-九条阵屋-3个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -3393.11,
+      "y": -3556.02
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3388.4492,
+      "y": -3535.7637
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -3391.9453,
+      "y": -3518.6562
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3409.873,
+      "y": -3448.8652
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3410.7812,
+      "y": -3444.8564
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3405.2168,
+      "y": -3444.4062
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3400.6094,
+      "y": -3444.0605
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3401.4453,
+      "y": -3450.0781
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3402.207,
+      "y": -3455.1328
+    }
+  ]
+}

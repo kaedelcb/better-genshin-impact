@@ -1,0 +1,166 @@
+﻿{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/taotao568685",
+        "name": "白白喵"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "历时: 1分58秒; 无角色要求，如果带双风配队+安柏或者柯莱飞起来会更平稳",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1772641305554,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "11-清心-灵矩关右-7朵",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 828.2399999999998,
+      "y": -583.3700000000008
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 823.017578125,
+      "y": -587.3203125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 815.7373046875,
+      "y": -598.052734375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 811.3525390625,
+      "y": -600.7470703125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 840.03515625,
+      "y": -625.3671875
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 970.607421875,
+      "y": -707.173828125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 986.4228515625,
+      "y": -715
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 986.955078125,
+      "y": -720.4091796875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 972.8115234375,
+      "y": -730.8203125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 974.0791015625,
+      "y": -786.884765625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 970.8857421875,
+      "y": -786.65625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 969.009765625,
+      "y": -786.63671875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 978.7000000000007,
+      "y": -353.5699999999997
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 983.8799999999992,
+      "y": -356.1900000000005
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 989.4300000000003,
+      "y": -358.75
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 992.8199999999997,
+      "y": -360.7099999999991
+    }
+  ]
+}

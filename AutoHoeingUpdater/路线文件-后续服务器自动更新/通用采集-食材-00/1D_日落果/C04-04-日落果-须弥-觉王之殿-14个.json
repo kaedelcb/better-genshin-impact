@@ -1,0 +1,104 @@
+﻿{
+  "info": {
+    "author": "Tool_tingsu",
+    "authors": [
+      {
+        "links": "https://github.com/Tooltingsu",
+        "name": "Tool_tingsu"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1756302113446,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "C04-04-日落果-须弥-觉王之殿-14个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 3067.82,
+      "y": -713.73
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3064.73,
+      "y": -687.01
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3046.79,
+      "y": -654.84
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 3022.25,
+      "y": -610.64
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 3003.82,
+      "y": -574.87
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3010.79,
+      "y": -535.59
+    },
+    {
+      "action": "combat_script",
+      "action_params": "j",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 3007.38,
+      "y": -515.84
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 3007.55,
+      "y": -508.74
+    },
+    {
+      "action": "combat_script",
+      "action_params": "j,wait(0.8)",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 3005.07,
+      "y": -513.33
+    }
+  ]
+}

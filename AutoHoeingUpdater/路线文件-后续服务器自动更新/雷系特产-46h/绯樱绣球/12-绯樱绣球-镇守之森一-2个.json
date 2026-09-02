@@ -1,0 +1,87 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/MisakaAldrich",
+        "name": "起个名字好难的喵"
+      }
+    ],
+    "bgi_version": "0.52.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782670534196,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "12-绯樱绣球-镇守之森一-2个",
+    "tags": [
+      "丽莎"
+    ],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -4430.18,
+      "y": -2799.47
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4470.2539,
+      "y": -2803.5479
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 keydown(VK_LBUTTON),wait(0.3),keyup(VK_LBUTTON);瓦雷莎 attack(0.3); ;",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4463.6914,
+      "y": -2813.3467
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4462.3242,
+      "y": -2814.8184
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4500.8477,
+      "y": -2797.2344
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";丽莎 attack(0.3);八重神子 keydown(VK_LBUTTON),wait(0.3),keyup(VK_LBUTTON);瓦雷莎 attack(0.3); ;",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -4520.8496,
+      "y": -2781.7852
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -4522.8867,
+      "y": -2779.6807
+    }
+  ]
+}

@@ -1,0 +1,220 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/taotao568685",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "琉璃袋脚本没有配队限制，纯爬山飞行摘取，请不要带释放生存技能会位移的角色（如希诺宁等）",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1786282800721,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "14-琉璃袋-明蕴镇神像-8个",
+    "tags": [],
+    "type": "collect",
+    "version": "2.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -254.7734,
+      "y": 630.3818
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(2)",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -272.5273,
+      "y": 618.8857
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4),j,wait(1.5),j,wait(2),attack(1)",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "target",
+      "x": -275.2988,
+      "y": 590.2842
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -294.7715,
+      "y": 589.7612
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -307.9492,
+      "y": 587.7842
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -310.0117,
+      "y": 592.0059
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -310.0469,
+      "y": 596.1559
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4),j,wait(1.3),j,wait(2)",
+      "id": 8,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -335.5977,
+      "y": 582.0088
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -335.8613,
+      "y": 587.1641
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -310.2793,
+      "y": 589.8994
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -298.5449,
+      "y": 568.7324
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -294.6328,
+      "y": 558.5586
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -291.3047,
+      "y": 565.3271
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -289.7852,
+      "y": 569.9688
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -240.9766,
+      "y": 577.5254
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -210.791,
+      "y": 577.8569
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -208.1406,
+      "y": 577.0557
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -205.3828,
+      "y": 579.8008
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "climb",
+      "type": "path",
+      "x": -196.8203,
+      "y": 578.0283
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -179.0039,
+      "y": 565.833
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(1)",
+      "id": 21,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -169.9629,
+      "y": 574.4404
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(2)",
+      "id": 22,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -166.1094,
+      "y": 576.5283
+    }
+  ]
+}

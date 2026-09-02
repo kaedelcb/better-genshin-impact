@@ -1,0 +1,114 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/MisakaAldrich",
+        "name": "起个名字好难的喵"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1774113559509,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "兽肉-须弥45甘露花海12肉",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 5789.9067,
+      "y": 797.7440999999999
+    },
+    {
+      "action": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5798.591796875,
+      "y": 793.96728515625
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "3000",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 5844.5078125,
+      "y": 802.40869140625
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5854.783203125,
+      "y": 801.94580078125
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5871.43359375,
+      "y": 807.08935546875
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5888.625,
+      "y": 784.1250678774913
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5);",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5898.3984375,
+      "y": 807.27880859375
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5),wait(4),attack(1);万叶 e(hold),attack(0.2);伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2),a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5886.06640625,
+      "y": 797.439453125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5890.061442032615,
+      "y": 800.6888501178391
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5881.1875,
+      "y": 795.937145870731
+    }
+  ]
+}

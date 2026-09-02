@@ -1,0 +1,159 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/ddaodan",
+        "name": "ddaodan"
+      }
+    ],
+    "bgi_version": "0.47.2",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1786992588639,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "02-悼灵花-精石铜城-5个",
+    "tags": [
+      "悼灵花"
+    ],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 6324.14,
+      "y": 821.75
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6328.625,
+      "y": 848.8134
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6339.9688,
+      "y": 867.383
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6322.4375,
+      "y": 920.827
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6351.3125,
+      "y": 935.4372
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6385.666,
+      "y": 961.2793
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6416.5,
+      "y": 988.36
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6453.25,
+      "y": 1009.08
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 6477.01,
+      "y": 1060.74
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 6512.35,
+      "y": 1074.92
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 6521.32,
+      "y": 1089.43
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 6526.87,
+      "y": 1087.22
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 6533.23,
+      "y": 1107.29
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 6519.32,
+      "y": 1127.33
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 6530.45,
+      "y": 1133.5
+    }
+  ]
+}

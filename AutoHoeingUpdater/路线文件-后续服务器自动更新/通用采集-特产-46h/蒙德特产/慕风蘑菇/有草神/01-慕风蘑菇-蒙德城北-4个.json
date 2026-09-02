@@ -1,0 +1,76 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/physligl",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1783798958462,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "01-慕风蘑菇-蒙德城北-4个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -747.34,
+      "y": 2260.17
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -855.3691,
+      "y": 2340.791
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -856.166,
+      "y": 2348.1445
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -845.8691,
+      "y": 2348.5166
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -820.6016,
+      "y": 2317.1408
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -811.9492,
+      "y": 2303.9238
+    }
+  ]
+}

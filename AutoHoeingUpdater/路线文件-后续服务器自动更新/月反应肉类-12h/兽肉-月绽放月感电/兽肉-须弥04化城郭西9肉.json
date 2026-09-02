@@ -1,0 +1,116 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Strix-nivicolum",
+        "name": "灰林鸮"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1773552663855,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "兽肉-须弥04化城郭西9肉",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 2701.858400000001,
+      "y": -761.5591000000004
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2734.380859375,
+      "y": -785.880859375
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2739.099609375,
+      "y": -813.958984375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.2)",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2740.500258614249,
+      "y": -807.156427064634
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.2)",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2736.625250777455,
+      "y": -811.0006639923813
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2734.499976489613,
+      "y": -815.6869909391753
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2734.4736328125,
+      "y": -838.361328125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2760.759765625,
+      "y": -847.998046875
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 2757.537109375,
+      "y": -869.1640625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2754.6252546958513,
+      "y": -873.1870130722546
+    }
+  ]
+}

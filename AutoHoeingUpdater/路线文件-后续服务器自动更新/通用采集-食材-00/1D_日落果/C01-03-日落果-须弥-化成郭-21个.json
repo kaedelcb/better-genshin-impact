@@ -1,0 +1,104 @@
+﻿{
+  "info": {
+    "author": "Tool_tingsu",
+    "authors": [
+      {
+        "links": "https://github.com/Tooltingsu",
+        "name": "Tool_tingsu"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1756301632998,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "C01-03-日落果-须弥-化成郭-21个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 2701.47,
+      "y": -761.85
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2717.58,
+      "y": -749.83
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2731.62,
+      "y": -739.4
+    },
+    {
+      "action": "combat_script",
+      "action_params": "j",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2737.57,
+      "y": -739.56
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2744.15,
+      "y": -738.52
+    },
+    {
+      "action": "combat_script",
+      "action_params": "j",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2739.87,
+      "y": -741.29
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2778.46,
+      "y": -755.08
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2792.56,
+      "y": -751.97
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.8)",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2794.21,
+      "y": -759.43
+    }
+  ]
+}

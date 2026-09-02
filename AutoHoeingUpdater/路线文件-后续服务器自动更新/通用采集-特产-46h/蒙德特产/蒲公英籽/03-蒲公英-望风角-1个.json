@@ -1,0 +1,76 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785354891046,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "03-蒲公英-望风角-1个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -1628.793,
+      "y": 2833.2217
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1614.4922,
+      "y": 2873.7582
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.3)",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -1620.5781,
+      "y": 2884.4937
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1652.7656,
+      "y": 2930.9604
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1702.9414,
+      "y": 2987.2188
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1705.418,
+      "y": 2990.5293
+    }
+  ]
+}

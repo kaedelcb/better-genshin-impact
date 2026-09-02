@@ -1,0 +1,308 @@
+{
+  "info": {
+    "authors": [
+      {
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1786636459791,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "02-幽灯蕈-茂知祭场-13个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -2836.83,
+      "y": -6287.49
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2807.5156,
+      "y": -6348.4863
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2799.6699,
+      "y": -6359.0859
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -2798.1484,
+      "y": -6364.877
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2793.0117,
+      "y": -6377.498
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2790.0508,
+      "y": -6373.5195
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2788.1641,
+      "y": -6371.6621
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2784.1191,
+      "y": -6368.2305
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2774.1758,
+      "y": -6342.7998
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2771.3281,
+      "y": -6342.0254
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2767.3223,
+      "y": -6340.9531
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2773.6484,
+      "y": -6333.4697
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2770.0195,
+      "y": -6333.1055
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2769.0488,
+      "y": -6332.6328
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2766.2266,
+      "y": -6329.5312
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2752.3867,
+      "y": -6355.2354
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2748.0605,
+      "y": -6390.1289
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -2746.375,
+      "y": -6406.3751
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2728.7422,
+      "y": -6397.1045
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2723.6367,
+      "y": -6380.668
+    },
+    {
+      "action": "combat_script",
+      "action_params": "dash,keypress(x)",
+      "id": 21,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2732.5391,
+      "y": -6367.7893
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 22,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2727.8594,
+      "y": -6366.9541
+    },
+    {
+      "action": "combat_script",
+      "action_params": "dash,keypress(x)",
+      "id": 23,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2731.7656,
+      "y": -6364.4376
+    },
+    {
+      "action": "combat_script",
+      "action_params": "dash,keypress(x)",
+      "id": 24,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2709.0137,
+      "y": -6326.0254
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 25,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2716.8047,
+      "y": -6327.9961
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 26,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -2718.3711,
+      "y": -6329.4668
+    },
+    {
+      "action": "combat_script",
+      "action_params": "dash,keypress(x),wait(0.1),keypress(x)",
+      "id": 27,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2680.3691,
+      "y": -6355.4805
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 28,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2681.1543,
+      "y": -6351.8496
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 29,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2667.8379,
+      "y": -6325.9551
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 30,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2670.9023,
+      "y": -6322.377
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 31,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -2669.1758,
+      "y": -6318.9141
+    },
+    {
+      "action": "combat_script",
+      "action_params": "dash",
+      "id": 32,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -2664.8125,
+      "y": -6330.3945
+    }
+  ]
+}

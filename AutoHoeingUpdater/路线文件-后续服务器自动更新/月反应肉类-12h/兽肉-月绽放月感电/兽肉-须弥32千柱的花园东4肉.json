@@ -1,0 +1,58 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1773851538222,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "兽肉-须弥32千柱的花园东4肉",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 5660.541015625,
+      "y": -1823.64453125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5618.4775390625,
+      "y": -1863.8701171875
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(3)",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5561.728515625,
+      "y": -1925.701171875
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5557.9375,
+      "y": -1927.812379328905
+    }
+  ]
+}

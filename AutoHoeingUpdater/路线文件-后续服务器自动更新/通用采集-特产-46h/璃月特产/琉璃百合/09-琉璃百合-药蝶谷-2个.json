@@ -1,0 +1,95 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1778351960966,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "09-琉璃百合-药蝶谷-2个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 1690.056640625,
+      "y": 1652.0234375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1687.533203125,
+      "y": 1665.54833984375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "moveby(0,-2000),wait(0.4),keypress(t),wait(0.2),keypress(t),wait(0.2),keypress(t)",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 1657.359375,
+      "y": 1663.630859375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keydown(w),attack(0.5)",
+      "id": 4,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 1603.24609375,
+      "y": 1626.77978515625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 1603.24609375,
+      "y": 1626.77978515625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1601.6630859375,
+      "y": 1606.7353515625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1626.19140625,
+      "y": 1588.33935546875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 1625.3935546875,
+      "y": 1585.15234375
+    }
+  ]
+}

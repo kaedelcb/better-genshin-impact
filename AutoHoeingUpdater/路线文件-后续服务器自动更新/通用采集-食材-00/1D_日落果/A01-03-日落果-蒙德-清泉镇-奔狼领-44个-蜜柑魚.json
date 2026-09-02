@@ -1,0 +1,92 @@
+﻿{
+  "info": {
+    "authors": [
+      {
+        "name": "白白喵"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1765177799758,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "A01-03-日落果-蒙德-清泉镇-奔狼领-44个-蜜柑魚",
+    "tags": [],
+    "type": "collect",
+    "version": "4.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "run",
+      "type": "teleport",
+      "x": -521.5145999999986,
+      "y": 2181.2641999999996
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "run",
+      "type": "path",
+      "x": -517.09375,
+      "y": 2164.9375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "run",
+      "type": "path",
+      "x": -539.4939999999988,
+      "y": 2139
+    },
+    {
+      "action": "",
+      "id": 4,
+      "move_mode": "run",
+      "type": "path",
+      "x": -532.2523000000001,
+      "y": 2120.25
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "climb",
+      "type": "path",
+      "x": -532.3662000000004,
+      "y": 2108.1965
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -532.84375,
+      "y": 2109.674072265625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -529.23046875,
+      "y": 2108.1748046875
+    },
+    {
+      "action": "combat_script",
+      "action_params": "枫原万叶 wait(0.2),e(hold),attack,wait(2)",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -520.2181999999993,
+      "y": 2099.2188000000006
+    }
+  ]
+}

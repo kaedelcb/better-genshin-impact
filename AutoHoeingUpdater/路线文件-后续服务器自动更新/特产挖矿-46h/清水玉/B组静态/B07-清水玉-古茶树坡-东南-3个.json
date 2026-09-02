@@ -1,0 +1,99 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/MisakaAldrich",
+        "name": "起个名字好难的喵"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1776109514366,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "B07-清水玉-古茶树坡-东南-3个",
+    "tags": [
+      "大剑"
+    ],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 1691.35,
+      "y": 1829.29
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1675.216796875,
+      "y": 1799.4775390625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.2)",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1637.330078125,
+      "y": 1757.28564453125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1628.986328125,
+      "y": 1758.6787109375
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 1630.4248046875,
+      "y": 1759.34326171875
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 1629.6494140625,
+      "y": 1762.17724609375
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 1632.462890625,
+      "y": 1761.46728515625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 1632.462890625,
+      "y": 1761.46728515625
+    }
+  ]
+}

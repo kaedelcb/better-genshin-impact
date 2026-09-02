@@ -1,0 +1,156 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/PanZic",
+        "name": "芝麻糊"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1760855905454,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "F25-纳塔食材-回声之子-苦种",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "dash",
+      "type": "teleport",
+      "x": 7633.84,
+      "y": -1646.65
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(f),j,wait(0.2),j,keypress(f)",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 7632.654296875,
+      "y": -1635.25732421875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 7597.876953125,
+      "y": -1639.115234375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 7593.021484375,
+      "y": -1645.9130859375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 7593.46875,
+      "y": -1647.66259765625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 7591.759765625,
+      "y": -1648.72265625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 7589.5458984375,
+      "y": -1674.3818359375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 7592.34765625,
+      "y": -1678.8818359375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 7593.671875,
+      "y": -1683.7451171875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 7597.767578125,
+      "y": -1677.90771484375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 7602.544921875,
+      "y": -1676.29638671875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 7610.693359375,
+      "y": -1675.291015625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "jump",
+      "type": "target",
+      "x": 7613.21875,
+      "y": -1679.5556640625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 7619.318359375,
+      "y": -1675.7060546875
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.2)",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 7618.2421875,
+      "y": -1663.0205078125
+    }
+  ]
+}

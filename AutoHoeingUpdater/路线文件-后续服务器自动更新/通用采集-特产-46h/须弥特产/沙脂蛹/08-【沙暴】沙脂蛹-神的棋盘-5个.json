@@ -1,0 +1,186 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782415446884,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "08-【沙暴】沙脂蛹-神的棋盘-5个",
+    "tags": [
+      "沙暴"
+    ],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4957.4043,
+      "y": -695.1816
+    },
+    {
+      "action": "log_output",
+      "action_params": "切换[沙暴]状态",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 3069,
+      "y": -673.0145
+    },
+    {
+      "action": "combat_script",
+      "action_params": "w(0.5),attack(0.2),wait(1),s(1),dash,wait(0.7),keypress(f),wait(0.2),keypress(f),wait(5.5)",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 3069,
+      "y": -673.0145
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 5485.7197,
+      "y": -1239.7012
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 5496.1182,
+      "y": -1235.6836
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5519.3662,
+      "y": -1240.6738
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 5528.374,
+      "y": -1244.3301
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5558.7012,
+      "y": -1255.7383
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(T),wait(0.1),keypress(T),wait(0.1),keypress(T)",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5586.5195,
+      "y": -1252.5225
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 5632.8691,
+      "y": -1296.9404
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5629.2588,
+      "y": -1298.5098
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5626.0986,
+      "y": -1301.0215
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5627.1914,
+      "y": -1342.9795
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5628.3164,
+      "y": -1345.5488
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 keypress(E),wait(0.1),keypress(E);钟离 a(0.1),e(hold);茜特菈莉 keypress(E),wait(0.1),keypress(E);莱依拉 keypress(E),wait(0.1),keypress(E);伊涅芙 keypress(E),wait(0.1),keypress(E);尼可 keypress(E),wait(0.1),keypress(E); ;",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5667.8945,
+      "y": -1314.9336
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5670.1553,
+      "y": -1312.9854
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5667.1797,
+      "y": -1310.5283
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5664.6748,
+      "y": -1308.5518
+    }
+  ]
+}

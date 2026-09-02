@@ -1,0 +1,109 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/zaodonganqi",
+        "name": "躁动的氨气"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1775057841993,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "兽肉-挪德04星砂滩东山洞6肉",
+    "tags": [
+      "菈乌玛"
+    ],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 9354.556640625,
+      "y": 2107.9716796875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9380.2626953125,
+      "y": 2110.140625
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "1500",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 9425.5126953125,
+      "y": 2134.24609375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9419.375062694364,
+      "y": 2133.9996016045716
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keydown(w),wait(0.3),dash,wait(0.4),dash,wait(1),dash,wait(0.4),keyup(w)",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 9390.312899676568,
+      "y": 2136.750796790857
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9390.312899676568,
+      "y": 2136.750796790857
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9380.8115234375,
+      "y": 2152.89501953125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(8)",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9348.9091796875,
+      "y": 2162.576171875
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";万叶 e(hold),attack(0.2);哥伦比娅 e,wait(0.15),keypress(e);wait(2),a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9355.1875,
+      "y": 2159.8126517175424
+    }
+  ]
+}

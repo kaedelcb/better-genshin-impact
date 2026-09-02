@@ -1,0 +1,144 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/MisakaAldrich",
+        "name": "起个名字好难的喵"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782065009158,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "07-鬼兜虫-踏鞴砂(东北侧)-3个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -3236.72,
+      "y": -3533.44
+    },
+    {
+      "action": "",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3233.32,
+      "y": -3567.1
+    },
+    {
+      "action": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3211.56,
+      "y": -3596.86
+    },
+    {
+      "action": "stop_flying",
+      "id": 4,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -3199.29,
+      "y": -3619.33
+    },
+    {
+      "action": "nahida_collect",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -3200.87,
+      "y": -3618.48
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -3290.3281,
+      "y": -3653.4961
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3260.7832,
+      "y": -3654.4893
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -3254.0547,
+      "y": -3659.8145
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3249.1562,
+      "y": -3660.1953
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -3290.3281,
+      "y": -3653.4961
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3292.9668,
+      "y": -3636.4766
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -3299.5098,
+      "y": -3628.5264
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3290.7031,
+      "y": -3628.2734
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -3293.0234,
+      "y": -3625.4385
+    }
+  ]
+}

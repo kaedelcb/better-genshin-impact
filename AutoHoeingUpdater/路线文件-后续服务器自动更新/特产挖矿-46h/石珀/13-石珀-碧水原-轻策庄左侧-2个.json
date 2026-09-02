@@ -1,0 +1,79 @@
+{
+  "info": {
+    "authors": [
+      {
+        "name": "爱凑热闹"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1775319102207,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "13-石珀-碧水原-轻策庄左侧-2个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 799.57,
+      "y": 1790.76
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 783.611328125,
+      "y": 1783.904296875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "climb",
+      "type": "path",
+      "x": 778.5966796875,
+      "y": 1783.09033203125
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 774.619140625,
+      "y": 1785.07958984375
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 5,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 772.9423828125,
+      "y": 1786.34765625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 772.9423828125,
+      "y": 1786.34765625
+    }
+  ]
+}

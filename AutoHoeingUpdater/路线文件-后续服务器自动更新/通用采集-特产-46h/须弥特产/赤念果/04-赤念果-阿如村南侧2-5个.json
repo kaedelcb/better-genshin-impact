@@ -1,0 +1,155 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Traveler07",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1788291800535,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "04-赤念果-阿如村南侧2-5个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4077.3,
+      "y": -2164.66
+    },
+    {
+      "action": "nahida_collect",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4156.9463,
+      "y": -2219.0547
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 4163.001,
+      "y": -2212.0605
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4193.5967,
+      "y": -2206.9629
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4208.0566,
+      "y": -2218.6279
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 4216.1406,
+      "y": -2232.2949
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 4220.8643,
+      "y": -2237.2539
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4238.4082,
+      "y": -2269.8838
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4224.8184,
+      "y": -2304.083
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(1)",
+      "id": 10,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 4206.9355,
+      "y": -2316.2246
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 4197.9688,
+      "y": -2310.9932
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4172.0625,
+      "y": -2305.791
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4167.3066,
+      "y": -2275.9258
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 4157.3203,
+      "y": -2277.3564
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4113.7695,
+      "y": -2273.7754
+    }
+  ]
+}

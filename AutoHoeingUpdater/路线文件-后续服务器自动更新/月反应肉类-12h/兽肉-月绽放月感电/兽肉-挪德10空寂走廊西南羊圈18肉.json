@@ -1,0 +1,135 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Strix-nivicolum",
+        "name": "灰林鸮"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1773554792419,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "兽肉-挪德10空寂走廊西南羊圈18肉",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 8945.9609,
+      "y": 2498.9071999999996
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8952.0625,
+      "y": 2513.017578125
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8928.634765625,
+      "y": 2545.4580078125
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E),wait(4.5);wait(2)",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8920.499717875364,
+      "y": 2546.624734403047
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8921.8125,
+      "y": 2545.875105587209
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8919.927734375,
+      "y": 2550.52978515625
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8908.000258614251,
+      "y": 2553.5626327984755
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8913.6025390625,
+      "y": 2552.4765625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8907.843612856079,
+      "y": 2556.28128319962
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8920.843930246296,
+      "y": 2544.749081477208
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);wait(2)",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8910.031222571215,
+      "y": 2541.405962269968
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 8909.724609375,
+      "y": 2535.6884765625
+    }
+  ]
+}

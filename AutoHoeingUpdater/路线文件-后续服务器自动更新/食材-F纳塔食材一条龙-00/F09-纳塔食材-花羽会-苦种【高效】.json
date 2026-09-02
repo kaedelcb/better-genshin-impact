@@ -1,0 +1,112 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "芝麻糊"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1761587997524,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "F09-纳塔食材-花羽会-苦种",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 9543.8359375,
+      "y": -1113.728515625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9556.0205078125,
+      "y": -1109.04052734375
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 3,
+      "locked": false,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 9667.8212890625,
+      "y": -1112.54296875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9676.92578125,
+      "y": -1110.1103515625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9694.5859375,
+      "y": -1108.91455078125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9708.052734375,
+      "y": -1103.81201171875
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "1300",
+      "id": 7,
+      "locked": false,
+      "move_mode": "fly",
+      "type": "target",
+      "x": 9733.310546875,
+      "y": -1109.83740234375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 9721.482421875,
+      "y": -1125.7216796875
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.2)",
+      "id": 9,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 9753.435546875,
+      "y": -1131.333984375
+    }
+  ]
+}

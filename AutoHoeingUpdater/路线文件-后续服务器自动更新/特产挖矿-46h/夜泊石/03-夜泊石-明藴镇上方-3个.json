@@ -1,0 +1,161 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Tooltingsu",
+        "name": "Tool_tingsu"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1788113332546,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "03-夜泊石-明藴镇上方-3个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -188.2598,
+      "y": 972.7314
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -213.4824,
+      "y": 983.0342
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -221,
+      "y": 985.4951
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -242.9551,
+      "y": 1012.3198
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -250.3437,
+      "y": 1005.6851
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -242.9297,
+      "y": 992.5059
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -224.5977,
+      "y": 974.3076
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -234.9336,
+      "y": 966.9111
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "target",
+      "x": -246.0937,
+      "y": 965.8013
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -242.9687,
+      "y": 968.5313
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -244.4844,
+      "y": 971.3047
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -242.6621,
+      "y": 972.2256
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -244.2461,
+      "y": 975.0005
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -244.2461,
+      "y": 975.0005
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -244.2461,
+      "y": 975.0005
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/MisakaAldrich",
+        "name": "起个名字好难的喵"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1776109499861,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "B06-清水玉-沉玉谷南陵-南侧-1个",
+    "tags": [
+      "大剑"
+    ],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 2209.96,
+      "y": 1250.2
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2185.1923828125,
+      "y": 1239.7998046875
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2183.7021484375,
+      "y": 1252.4892578125
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 4,
+      "move_mode": "climb",
+      "type": "orientation",
+      "x": 2183.1328125,
+      "y": 1253.294921875
+    }
+  ]
+}

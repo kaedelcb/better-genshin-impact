@@ -1,0 +1,149 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785417195072,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "14-蒲公英-苍风高地神像-3个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -575.9941,
+      "y": 1857.998
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -545.8457,
+      "y": 1867.4932
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -447.748,
+      "y": 1927.7383
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -444.5332,
+      "y": 1930.2158
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -430.252,
+      "y": 1951.522
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -416.2695,
+      "y": 1984.1738
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -381.0527,
+      "y": 2054.5049
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -382.4316,
+      "y": 2057.2432
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -384.5898,
+      "y": 2060.626
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -392.7637,
+      "y": 2032.4507
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -393.7187,
+      "y": 1978.144
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 12,
+      "locked": false,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -388.9199,
+      "y": 1968.04
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -388.9199,
+      "y": 1968.04
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -387.4902,
+      "y": 1963.7051
+    }
+  ]
+}

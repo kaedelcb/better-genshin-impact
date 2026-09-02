@@ -1,0 +1,94 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Limint",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1778608087021,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "18-圣金虫-饱饮之丘-2个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 5045.2275390625,
+      "y": -1794.904296875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5233.69140625,
+      "y": -1907.015625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5259.0498046875,
+      "y": -1906.291015625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(t),wait(3)",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5297.126953125,
+      "y": -1908.330078125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 5304.1279296875,
+      "y": -1908.919921875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 5307.171875,
+      "y": -1912.6173543892965
+    },
+    {
+      "action": "combat_script",
+      "action_params": "dash",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5309.6171875,
+      "y": -1917.4140625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "dash",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5306.7373046875,
+      "y": -1896.015625
+    }
+  ]
+}

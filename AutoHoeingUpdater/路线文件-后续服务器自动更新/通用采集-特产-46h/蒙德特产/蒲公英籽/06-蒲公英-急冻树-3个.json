@@ -1,0 +1,103 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785400438910,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "06-蒲公英-急冻树-3个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -1641.207,
+      "y": 2160.8438
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1680.3145,
+      "y": 2120.4009
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -1713.4785,
+      "y": 2095.9429
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1722.748,
+      "y": 2093.8213
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";琴 wait(2.9);万叶 wait(2.9); ;",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1726.7305,
+      "y": 2093.8643
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1730.5078,
+      "y": 2094.3906
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";琴 wait(2);万叶 wait(2); ;",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1732.5527,
+      "y": 2094.9624
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1728.668,
+      "y": 2083.106
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1727.2793,
+      "y": 2079.3477
+    }
+  ]
+}

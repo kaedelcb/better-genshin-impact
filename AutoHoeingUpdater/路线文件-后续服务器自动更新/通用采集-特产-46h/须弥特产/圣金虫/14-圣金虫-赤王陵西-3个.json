@@ -1,0 +1,167 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Limint",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1778610472743,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "14-圣金虫-赤王陵西-3个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 5646.044921875,
+      "y": -2449.095703125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5661.1162109375,
+      "y": -2436.5732421875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5683.72265625,
+      "y": -2431.873046875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5743.3515625,
+      "y": -2427.017578125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 5759.939453125,
+      "y": -2411.580078125
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 6,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5787.1884765625,
+      "y": -2376.5234375
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5787.1884765625,
+      "y": -2376.5234375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5773.4072265625,
+      "y": -2366.857421875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5744.455078125,
+      "y": -2369.3701171875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5740.7265625,
+      "y": -2369.7187917223237
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5722.845703125,
+      "y": -2350.5068359375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5721.1328125,
+      "y": -2347.189453125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5729.296875,
+      "y": -2314.84765625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5743.345703125,
+      "y": -2272.390625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5746.451171875,
+      "y": -2262.2158203125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5747.310546875,
+      "y": -2259.1796875
+    }
+  ]
+}

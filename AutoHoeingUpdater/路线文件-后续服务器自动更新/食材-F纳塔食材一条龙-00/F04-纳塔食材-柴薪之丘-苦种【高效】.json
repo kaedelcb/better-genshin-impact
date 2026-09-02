@@ -1,0 +1,179 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "芝麻糊"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1761918742970,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "F04-纳塔食材-柴薪之丘-苦种",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "teleport",
+      "x": 9033.642578125,
+      "y": -1372.826171875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8983.37890625,
+      "y": -1341.46533203125
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 8988.240234375,
+      "y": -1297.59814453125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8970.5888671875,
+      "y": -1263.54296875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8951.63671875,
+      "y": -1260.90087890625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "locked": true,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8938.18,
+      "y": -1269.15
+    },
+    {
+      "action": "",
+      "id": 7,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8947.52,
+      "y": -1265.46
+    },
+    {
+      "action": "",
+      "id": 8,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8951.56,
+      "y": -1264.99
+    },
+    {
+      "action": "",
+      "id": 9,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8969.11,
+      "y": -1248.73
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 8976.73046875,
+      "y": -1243.23681640625
+    },
+    {
+      "action": "",
+      "id": 11,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8972.38,
+      "y": -1242.51
+    },
+    {
+      "action": "",
+      "id": 12,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8922.27,
+      "y": -1241.11
+    },
+    {
+      "action": "",
+      "id": 13,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8919.16,
+      "y": -1241.5
+    },
+    {
+      "action": "",
+      "id": 14,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8905.81,
+      "y": -1229.93
+    },
+    {
+      "action": "",
+      "id": 15,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8890.14,
+      "y": -1245.94
+    },
+    {
+      "action": "",
+      "id": 16,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 8883.34,
+      "y": -1245.78
+    },
+    {
+      "action": "",
+      "id": 17,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 8881.58,
+      "y": -1248.27
+    }
+  ]
+}

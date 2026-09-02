@@ -1,0 +1,141 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1782414028214,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "06-【沙暴】沙脂蛹-折胫谷-5个",
+    "tags": [
+      "沙暴"
+    ],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4957.4043,
+      "y": -695.1816
+    },
+    {
+      "action": "log_output",
+      "action_params": "切换[沙暴]状态",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 3069,
+      "y": -673.0145
+    },
+    {
+      "action": "combat_script",
+      "action_params": "w(0.5),attack(0.2),wait(1),s(1),dash,wait(0.7),keypress(f),wait(0.2),keypress(f),wait(5.5)",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 3069,
+      "y": -673.0145
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 5686.5068,
+      "y": -705.749
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5655.168,
+      "y": -697.4316
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 5646.502,
+      "y": -700.0488
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5635.7422,
+      "y": -686.0459
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5606.2783,
+      "y": -699.7051
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5603.7725,
+      "y": -700.6387
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5598.3076,
+      "y": -692.8262
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 5596.3623,
+      "y": -689.2559
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5593.4023,
+      "y": -715.9707
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keydown(w),dash,wait(1.3),keyup(w);迪希雅 keypress(E),wait(0.1),keypress(E),wait(0.2);钟离 a(0.1),e(hold),wait(0.2);茜特菈莉 keypress(E),wait(0.1),keypress(E),wait(0.2);莱依拉 keypress(E),wait(0.1),keypress(E),wait(0.2);伊涅芙 keypress(E),wait(0.1),keypress(E),wait(0.2);尼可 keypress(E),wait(0.1),keypress(E),wait(0.2);a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x)",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5524.9375,
+      "y": -2604.5007
+    }
+  ]
+}

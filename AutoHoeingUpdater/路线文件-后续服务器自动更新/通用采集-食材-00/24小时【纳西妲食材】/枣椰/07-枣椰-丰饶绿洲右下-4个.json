@@ -1,0 +1,86 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "约1分钟2秒/4个",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1788286854736,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "07-枣椰-丰饶绿洲右下-4个",
+    "tags": [],
+    "type": "collect",
+    "version": "2.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 4391.9551,
+      "y": -2725.6484
+    },
+    {
+      "action": "combat_script",
+      "action_params": "moveby(0,-500),wait(0.5),keypress(T),wait(0.1),keypress(T),",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 4424.1191,
+      "y": -2734.9883
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(T),wait(0.1),keypress(T),",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 4438.3584,
+      "y": -2715.8613
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4596.4307,
+      "y": -2636.3838
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 keypress(E),wait(0.1),keypress(E);",
+      "id": 5,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 4607.2627,
+      "y": -2640.4199
+    },
+    {
+      "action": "nahida_collect",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 4607.2627,
+      "y": -2640.4199
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";迪希雅 keypress(E),wait(0.1),keypress(E);",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "orientation",
+      "x": 4607.2627,
+      "y": -2640.4199
+    }
+  ]
+}

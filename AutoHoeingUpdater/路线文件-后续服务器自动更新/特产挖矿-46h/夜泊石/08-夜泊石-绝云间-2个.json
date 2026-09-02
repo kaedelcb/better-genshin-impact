@@ -1,0 +1,154 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Tooltingsu",
+        "name": "Tool_tingsu"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1775586018714,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "08-夜泊石-绝云间-2个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 730.499,
+      "y": 1062.4609
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 683.3740234375,
+      "y": 994.298828125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 693.421875,
+      "y": 980.1767578125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 700.00390625,
+      "y": 981.560546875
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 5,
+      "locked": false,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 700.8818359375,
+      "y": 976.58447265625
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 700.8818359375,
+      "y": 976.58447265625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 898.1016,
+      "y": 583.8018
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 888.64453125,
+      "y": 628.5107421875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 878.8125,
+      "y": 697.115234375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "jump",
+      "type": "path",
+      "x": 885.7802734375,
+      "y": 708.185546875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 868.0166015625,
+      "y": 724.0283203125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 840.7177734375,
+      "y": 746.7255859375
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 13,
+      "locked": false,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 836.3037109375,
+      "y": 736.326171875
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 836.3037109375,
+      "y": 736.326171875
+    }
+  ]
+}

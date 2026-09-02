@@ -1,0 +1,85 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785403322794,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "08-蒲公英-苍风高地-2个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -1132.6406,
+      "y": 1597.7603
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1180.3457,
+      "y": 1647.6592
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -1205.0703,
+      "y": 1668.5928
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -1272.8652,
+      "y": 1705.2412
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";琴 wait(2.6);万叶 wait(2.6); ;",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1275.8984,
+      "y": 1705.9531
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1278.252,
+      "y": 1705.7451
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -1282.3086,
+      "y": 1706.4688
+    }
+  ]
+}

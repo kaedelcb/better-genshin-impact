@@ -1,0 +1,175 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1783798595439,
+    "map_match_method": "SIFT",
+    "map_name": "Teyvat",
+    "name": "06-慕风蘑菇-风息山-4个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -154.8359,
+      "y": 3085.3096
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -150.834,
+      "y": 3078.998
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -135.6406,
+      "y": 3068.5405
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(t),wait(0.15),keypress(t),",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": -108.7031,
+      "y": 3047.3022
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": -126.8848,
+      "y": 3114.1665
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keydown(VK_SPACE),wait(4),keyup(VK_SPACE),wait(0.1),dash,wait(0.35),keydown(VK_LSHIFT),wait(1),keyup(VK_LSHIFT),keypress(t),wait(0.15),keypress(t),",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": -126.8848,
+      "y": 3114.1665
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "climb",
+      "type": "orientation",
+      "x": -128.8047,
+      "y": 3107.9375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keydown(w),j,wait(0.8),keyup(w),wait(2)",
+      "id": 8,
+      "move_mode": "climb",
+      "type": "orientation",
+      "x": -128.8047,
+      "y": 3107.9375
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keydown(q),wait(0.8),keyup(q),attack(0.3)",
+      "id": 9,
+      "move_mode": "run",
+      "type": "path",
+      "x": -107.3594,
+      "y": 3078.2246
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -109.1191,
+      "y": 3076.2026
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -116.1992,
+      "y": 3069.6694
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(t),wait(0.15),keypress(t),",
+      "id": 12,
+      "move_mode": "dash",
+      "type": "orientation",
+      "x": -135.3574,
+      "y": 3048.7129
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keydown(q),wait(0.8),keyup(q),attack(0.3)",
+      "id": 13,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -140.916,
+      "y": 3047.1763
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -135.9141,
+      "y": 3047.9053
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -139.1348,
+      "y": 3048.2983
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -142.8984,
+      "y": 3049.5
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -140.7266,
+      "y": 3049.3315
+    }
+  ]
+}

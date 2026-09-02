@@ -1,0 +1,271 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "https://github.com/Flower-MUYi",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1786027283228,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "02-鸣草-踏鞴砂2号线-10个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -3288.18,
+      "y": -3652.57
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3292.125,
+      "y": -3638.9893
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": -3302.5059,
+      "y": -3630.9775
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3277.5547,
+      "y": -3629.8193
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3273.6094,
+      "y": -3629.9697
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3269.877,
+      "y": -3640.1143
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3269.25,
+      "y": -3643.0264
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3248.0469,
+      "y": -3650.1143
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3245.0742,
+      "y": -3659.8965
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3244.3164,
+      "y": -3662.8096
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3231.6953,
+      "y": -3673.6738
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3229.3008,
+      "y": -3675.0039
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3221.9473,
+      "y": -3667.8379
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3219.3281,
+      "y": -3664.7939
+    },
+    {
+      "action": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3203.9062,
+      "y": -3668.3224
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3184.8281,
+      "y": -3661.625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3181.0078,
+      "y": -3660.3359
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3188.1719,
+      "y": -3656.1562
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 19,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3188.7949,
+      "y": -3654.5967
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "jump",
+      "type": "path",
+      "x": -3177.8516,
+      "y": -3653.8799
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3163.7539,
+      "y": -3654.4326
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 22,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3161.2949,
+      "y": -3654.1855
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 23,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3130.8477,
+      "y": -3633.4941
+    },
+    {
+      "action": "",
+      "id": 24,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3112.8125,
+      "y": -3646.493
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 25,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3095.7305,
+      "y": -3669.2441
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 26,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3095.2656,
+      "y": -3672.8721
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 27,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -3077.1094,
+      "y": -3685.4639
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 28,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -3074.248,
+      "y": -3686.5176
+    }
+  ]
+}

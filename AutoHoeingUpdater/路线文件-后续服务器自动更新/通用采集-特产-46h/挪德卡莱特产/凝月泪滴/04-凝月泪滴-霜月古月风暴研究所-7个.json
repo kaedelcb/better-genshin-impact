@@ -1,0 +1,112 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1786390165390,
+    "map_match_method": "SIFT",
+    "map_name": "MoonCanon",
+    "name": "04-凝月泪滴-霜月古月风暴研究所-7个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -547.0459,
+      "y": -915.0332
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "run",
+      "type": "path",
+      "x": -527.2051,
+      "y": -900.4102
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -524.1055,
+      "y": -898.1484
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -517.8633,
+      "y": -889.2499
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -516.2695,
+      "y": -887.0584
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x)",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -532.4727,
+      "y": -885.5311
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -528.5547,
+      "y": -886.9926
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "run",
+      "type": "path",
+      "x": -511.2402,
+      "y": -872.5435
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.1)",
+      "id": 9,
+      "move_mode": "run",
+      "type": "path",
+      "x": -472.7324,
+      "y": -831.4292
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -467.8086,
+      "y": -827.1372
+    }
+  ]
+}

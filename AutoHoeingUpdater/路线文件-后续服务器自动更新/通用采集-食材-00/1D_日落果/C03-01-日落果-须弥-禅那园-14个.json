@@ -1,0 +1,77 @@
+﻿{
+  "info": {
+    "author": "Tool_tingsu",
+    "authors": [
+      {
+        "links": "https://github.com/Tooltingsu",
+        "name": "Tool_tingsu"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1756301972295,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "C03-01-日落果-须弥-禅那园-14个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 2794.4,
+      "y": -1216.29
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2813.21,
+      "y": -1211.99
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "2500",
+      "id": 3,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 2958,
+      "y": -1230.57
+    },
+    {
+      "action": "combat_script",
+      "action_params": "j",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2956.02,
+      "y": -1237.61
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 2955.26,
+      "y": -1231.78
+    },
+    {
+      "action": "combat_script",
+      "action_params": "j,wait(0.8)",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "target",
+      "x": 2953.8,
+      "y": -1236.98
+    }
+  ]
+}

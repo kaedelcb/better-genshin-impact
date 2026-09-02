@@ -1,0 +1,102 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1788108010252,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "02-石珀-珉林-奥藏山下-2个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 1604.45,
+      "y": 1039.67
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "4000",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 1644.9434,
+      "y": 1037.8501
+    },
+    {
+      "action": "combat_script",
+      "action_params": "wait(0.4)",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 1656.125,
+      "y": 1074.4999
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 1640.04,
+      "y": 1102.5889
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.2)",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 1640.04,
+      "y": 1102.5889
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 1651.0801,
+      "y": 1107.9736
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.2)",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 1651.0801,
+      "y": 1107.9736
+    },
+    {
+      "action": "mining",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 1618.9004,
+      "y": 1092.9756
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.2),wait(0.4)",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 1618.9004,
+      "y": 1092.9756
+    }
+  ]
+}

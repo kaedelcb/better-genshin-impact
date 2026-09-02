@@ -1,0 +1,125 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "Sabersunny"
+      },
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1773302545598,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "04-神秘的肉-神之棋盘-6个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "force_tp",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 5423.85009765625,
+      "y": -1466.615234375
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 5427.3046875,
+      "y": -1457.0390625
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5443.5703125,
+      "y": -1443.53515625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 5456.685546875,
+      "y": -1434.8740234375
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5479.3876953125,
+      "y": -1419.103515625
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5491.92578125,
+      "y": -1412.044921875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5491.92578125,
+      "y": -1412.044921875
+    },
+    {
+      "action": "up_down_grab_leaf",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 5526.154296875,
+      "y": -1401.3193359375
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 5541.390625,
+      "y": -1406.384765625
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";哥伦比娅 attack(0.5),wait(4),attack(0.5);万叶 attack(0.08),e(hold),attack(0.2);伊涅芙 e,wait(0.15),keypress(e);哥伦比娅 e,wait(0.15),keypress(e);菈乌玛 w(0.05),keydown(E),wait(0.7),keyup(E);久岐忍 e,wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(0.15),keypress(e),wait(1);wait(2)",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5548.92578125,
+      "y": -1410.998046875
+    },
+    {
+      "action": "combat_script",
+      "action_params": "a(0.4),keypress(x),w(0.4),keypress(x),d(0.7),keypress(x),s(0.7),keypress(x),a(0.9),keypress(x),w(1.2),keypress(x),d(1.5),keypress(x),s(1.5),keypress(x),a(1),keypress(x),",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 5548.92578125,
+      "y": -1410.998046875
+    }
+  ]
+}

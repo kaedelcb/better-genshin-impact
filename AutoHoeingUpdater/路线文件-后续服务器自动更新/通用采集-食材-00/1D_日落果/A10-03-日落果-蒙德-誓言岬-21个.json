@@ -1,0 +1,102 @@
+﻿{
+  "info": {
+    "authors": [
+      {
+        "name": "白白喵"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1758364384642,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "A10-03-日落果-蒙德-誓言岬-21个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "run",
+      "type": "teleport",
+      "x": -1999.0205,
+      "y": 1434.9502
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "run",
+      "type": "path",
+      "x": -2026.3057,
+      "y": 1425.9575
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "run",
+      "type": "path",
+      "x": -2042.1719,
+      "y": 1426.0171
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "run",
+      "type": "path",
+      "x": -2077.3604,
+      "y": 1421.9541
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "run",
+      "type": "path",
+      "x": -2110.2197,
+      "y": 1443.3691
+    },
+    {
+      "action": "combat_script",
+      "action_params": "万叶 e(hold),attack,wait(3.0)",
+      "id": 6,
+      "move_mode": "run",
+      "type": "target",
+      "x": -2116.5508,
+      "y": 1441.8359
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "run",
+      "type": "path",
+      "x": -2095.749,
+      "y": 1413.7729
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "run",
+      "type": "path",
+      "x": -2035.8555,
+      "y": 1350.9946
+    },
+    {
+      "action": "combat_script",
+      "action_params": "万叶 e(hold),attack,wait(3.0)",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "target",
+      "x": -2032.6191,
+      "y": 1349.2695
+    }
+  ]
+}

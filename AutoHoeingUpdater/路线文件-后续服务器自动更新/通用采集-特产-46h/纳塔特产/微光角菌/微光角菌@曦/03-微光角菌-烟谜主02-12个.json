@@ -1,0 +1,233 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.42.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1787231224529,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "03-微光角菌-烟谜主02-12个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "force_tp",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 9690.91,
+      "y": -1623.69
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9700.7051,
+      "y": -1622.9463
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9704.2314,
+      "y": -1622.4219
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9703.6709,
+      "y": -1615.1416
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9703.2656,
+      "y": -1611.2568
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9703.2529,
+      "y": -1607.3555
+    },
+    {
+      "action": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9715.4252,
+      "y": -1609.8544
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "2000",
+      "id": 8,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 9731.9061,
+      "y": -1617.9362
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9739.5615,
+      "y": -1600.6328
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9740.7197,
+      "y": -1597.7988
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9761.8721,
+      "y": -1614.5625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9763.8105,
+      "y": -1616.8721
+    },
+    {
+      "action": "force_tp",
+      "id": 13,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 9691.05,
+      "y": -1623.35
+    },
+    {
+      "action": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9679.74,
+      "y": -1621.45
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9675.4102,
+      "y": -1618.0508
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9672.8984,
+      "y": -1617.167
+    },
+    {
+      "action": "force_tp",
+      "id": 17,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 9690.63,
+      "y": -1623.46
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 18,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9669.3535,
+      "y": -1710.5068
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "2000",
+      "id": 19,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 9650.2207,
+      "y": -1713.4229
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 20,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9675.1484,
+      "y": -1705.5605
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 21,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9678.0781,
+      "y": -1704.4941
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 22,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 9677.6074,
+      "y": -1696.498
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 23,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9673.7666,
+      "y": -1696.5156
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 24,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 9671.3457,
+      "y": -1696.3154
+    }
+  ]
+}

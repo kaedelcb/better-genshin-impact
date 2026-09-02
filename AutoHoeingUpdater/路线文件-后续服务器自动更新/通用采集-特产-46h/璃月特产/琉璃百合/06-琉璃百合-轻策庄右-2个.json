@@ -1,0 +1,83 @@
+{
+  "info": {
+    "authors": [
+      {
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1778352470686,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "06-琉璃百合-轻策庄右-2个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 547.75,
+      "y": 1766.7999999999993
+    },
+    {
+      "action": "stop_flying",
+      "action_params": "1000",
+      "id": 2,
+      "move_mode": "fly",
+      "type": "path",
+      "x": 568.7041015625,
+      "y": 1767.546875
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 560.3076171875,
+      "y": 1765.2470703125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 558.2685546875,
+      "y": 1765.3125
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 621.005859375,
+      "y": 1756.291015625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 638.0263671875,
+      "y": 1760.37744140625
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": 641.0517578125,
+      "y": 1760.947265625
+    }
+  ]
+}

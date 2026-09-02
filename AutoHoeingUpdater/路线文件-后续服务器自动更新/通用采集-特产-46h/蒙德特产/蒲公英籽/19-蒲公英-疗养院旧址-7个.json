@@ -1,0 +1,166 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1785434488873,
+    "map_match_method": "SIFT",
+    "map_name": "Teyvat",
+    "name": "19-蒲公英-疗养院旧址-7个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.0"
+  },
+  "positions": [
+    {
+      "action": "",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": -529.832,
+      "y": 3876.2207
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -529.291,
+      "y": 3882.3486
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";琴 wait(2);万叶 wait(2); ;",
+      "id": 3,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -529.7969,
+      "y": 3885.5986
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -535.3223,
+      "y": 3885.333
+    },
+    {
+      "action": "combat_script",
+      "action_params": ";琴 wait(1.8);万叶 wait(1.8); ;",
+      "id": 5,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -538.1074,
+      "y": 3885.0771
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -551.5469,
+      "y": 3878.0083
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -554.1582,
+      "y": 3876.9424
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -511.2441,
+      "y": 3852.0864
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -508.5371,
+      "y": 3849.4673
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -479.4902,
+      "y": 3865.6528
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -475.8223,
+      "y": 3868.7993
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 12,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -473.3301,
+      "y": 3871.8599
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 13,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -474.5586,
+      "y": 3815.0791
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 14,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -474.6406,
+      "y": 3812.1147
+    },
+    {
+      "action": "anemo_collect",
+      "action_params": "",
+      "id": 15,
+      "move_mode": "dash",
+      "type": "path",
+      "x": -446.6387,
+      "y": 3789.7778
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 16,
+      "move_mode": "walk",
+      "type": "path",
+      "x": -443.8867,
+      "y": 3787.8413
+    }
+  ]
+}

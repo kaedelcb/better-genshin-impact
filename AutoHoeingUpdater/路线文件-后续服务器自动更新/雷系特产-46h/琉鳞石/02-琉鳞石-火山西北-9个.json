@@ -1,0 +1,139 @@
+{
+  "info": {
+    "authors": [
+      {
+        "links": "",
+        "name": "汐"
+      }
+    ],
+    "bgi_version": "0.45.0",
+    "description": "需要战斗，请配置好战斗策略\n1.1 调整可能卡住的点位",
+    "enable_monster_loot_split": false,
+    "last_modified_time": 1788101363529,
+    "map_match_method": "",
+    "map_name": "Teyvat",
+    "name": "02-琉鳞石-火山西北-9个",
+    "tags": [],
+    "type": "collect",
+    "version": "1.1"
+  },
+  "positions": [
+    {
+      "action": "force_tp",
+      "action_params": "",
+      "id": 1,
+      "move_mode": "walk",
+      "type": "teleport",
+      "x": 10925.68,
+      "y": -2363.59
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 2,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 10922.6914,
+      "y": -2434.1621
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 3,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 10932.4992,
+      "y": -2432.1867
+    },
+    {
+      "action": "combat_script",
+      "action_params": "keypress(t),wait(0.2),keypress(t),click(middle),moveby(1200,0),wait(0.5),keypress(T),moveby(1200,0),wait(0.5),keypress(T),moveby(1200,0),wait(0.5),keypress(T),moveby(1200,0),wait(0.5),keypress(T),moveby(1200,0),wait(0.5),keypress(T)",
+      "id": 4,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 10945.2809,
+      "y": -2423.5304
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 5,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 10903.6641,
+      "y": -2457.5449
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 6,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 10843.7988,
+      "y": -2509.7266
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 7,
+      "move_mode": "dash",
+      "type": "path",
+      "x": 10833.0332,
+      "y": -2525.4492
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 8,
+      "move_mode": "climb",
+      "type": "target",
+      "x": 10829.1211,
+      "y": -2529.8164
+    },
+    {
+      "action": "combat_script",
+      "action_params": "w(0.7),attack(1.8),",
+      "id": 9,
+      "move_mode": "walk",
+      "type": "orientation",
+      "x": 10827.7178,
+      "y": -2533.7109
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 10,
+      "move_mode": "climb",
+      "type": "path",
+      "x": 10822.085,
+      "y": -2530.6963
+    },
+    {
+      "action": "",
+      "action_params": "",
+      "id": 11,
+      "move_mode": "dash",
+      "type": "target",
+      "x": 10860.7656,
+      "y": -2524.8486
+    },
+    {
+      "action": "combat_script",
+      "action_params": "w(0.7),attack(1.8)",
+      "id": 12,
+      "move_mode": "climb",
+      "type": "orientation",
+      "x": 10861.3486,
+      "y": -2521.1348
+    },
+    {
+      "action": "combat_script",
+      "action_params": "attack(0.3),wait(1)",
+      "id": 13,
+      "move_mode": "climb",
+      "type": "target",
+      "x": 10859.5628,
+      "y": -2518.3127
+    }
+  ]
+}
