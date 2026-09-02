@@ -1,5 +1,7 @@
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
+using BetterGenshinImpact.Core.Recognition.OpenCv.FeatureMatch;
+using BetterGenshinImpact.Core.Recognition.OpenCv.Model;
 using BetterGenshinImpact.Core.Script.Dependence;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
@@ -2450,6 +2452,70 @@ public class TpTaskFastDrag
         return full256;
     }
 
+    /// <summary>
+    /// 非提瓦特"先按先验坐标在该图找一次"（不切块）：把先验原神坐标转本图图像坐标，
+    /// 从本图主层特征点里筛出先验附近（半径内）的特征子集做 SIFT 匹配，近似"先验局部优先"。
+    /// 只读 scene 特征（TrainKeyPoints/TrainDescriptors），不改任何共享状态 → 公版零影响。
+    /// 失败/特征不足/先验越界 → 返回 default，由调用方降级全图（旧行为）。
+    /// </summary>
+    private Point2f TryBigMapPriorLocalMatch(SceneBaseMap scene, Mat greyBigMapMat, Point2f priorGenshin)
+    {
+        try
+        {
+            var layer = scene.Layers[0];
+            if (layer.TrainKeyPoints.Length == 0 || layer.TrainDescriptors.Empty())
+            {
+                return default;
+            }
+
+            // 先验原神坐标 → 本图图像坐标；越界（跨任务陈旧/垃圾坐标）→ 返回空走全图
+            var centerImg = scene.ConvertGenshinMapCoordinatesToImageCoordinates(priorGenshin);
+            if (float.IsNaN(centerImg.X) || float.IsNaN(centerImg.Y)
+                || centerImg.X < 0 || centerImg.Y < 0
+                || centerImg.X > scene.MapSize.Width || centerImg.Y > scene.MapSize.Height)
+            {
+                return default;
+            }
+
+            // 筛选半径（图像坐标）：先验通常=上次落点≈当前大地图中心附近；半径取屏幕内常见视场（约 300~500 原神距离）
+            double rImg = BigMapPriorMatchDecisions.Layer2RangeGenshin * scene.MapImageBlockWidthScale;
+
+            // 按坐标筛出先验附近的特征点索引（KeyPoint 自带坐标，无需切块）
+            var idx = new List<int>();
+            for (int i = 0; i < layer.TrainKeyPoints.Length; i++)
+            {
+                var kp = layer.TrainKeyPoints[i].Pt;
+                if (Math.Abs(kp.X - centerImg.X) <= rImg && Math.Abs(kp.Y - centerImg.Y) <= rImg)
+                {
+                    idx.Add(i);
+                }
+            }
+            if (idx.Count < 7)
+            {
+                Logger.LogDebug("[大地图定位] 非提瓦特先验附近特征不足({N})，降级全图", idx.Count);
+                return default;
+            }
+
+            // 组装特征子集 + 对应描述子行
+            var subKps = new KeyPoint[idx.Count];
+            using var subDesc = new Mat(idx.Count, layer.TrainDescriptors.Cols, MatType.CV_32FC1);
+            for (int j = 0; j < idx.Count; j++)
+            {
+                subKps[j] = layer.TrainKeyPoints[idx[j]];
+                layer.TrainDescriptors.Row(idx[j]).CopyTo(subDesc.Row(j));
+            }
+
+            Logger.LogDebug("[大地图定位] 非提瓦特先验局部匹配: map={Map} 先验=({PX:0},{PY:0}) 半径={R:0} 特征数={N}",
+                scene.Type, priorGenshin.X, priorGenshin.Y, rImg, idx.Count);
+            return scene.SiftMatcher.Match(subKps, subDesc, greyBigMapMat);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogDebug(ex, "[大地图定位] 非提瓦特先验局部匹配异常，降级全图: {Msg}", ex.Message);
+            return default;
+        }
+    }
+
     public Point2f GetBigMapCenterPoint(string mapName, bool usePrior = true)
     {
         Point2f p = new Point2f();
@@ -2492,6 +2558,20 @@ public class TpTaskFastDrag
                         && usePrior)
                     {
                         p = ResolveBigMapPositionLayered(sceneBase, ra.CacheGreyMat);
+                    }
+                    // 非提瓦特 + 至少一层先验 + usePrior → 先按先验坐标在该图找一次（不切块，直接筛坐标附近特征子集匹配），
+                    // 找不到再降级全图。只读 scene 特征，不改任何共享状态 → 公版零影响。
+                    else if (mapName != MapTypes.Teyvat.ToString()
+                        && scene is SceneBaseMap sceneNonTeyvat
+                        && (_miniMapPriorGenshin is Point2f mpNonTeyvat || _targetPriorGenshin is Point2f tpNonTeyvat)
+                        && usePrior)
+                    {
+                        var prior = _miniMapPriorGenshin ?? _targetPriorGenshin;
+                        p = TryBigMapPriorLocalMatch(sceneNonTeyvat, ra.CacheGreyMat, prior!.Value);
+                        if (p.IsEmpty())
+                        {
+                            p = sceneNonTeyvat.GetBigMapPosition(ra.CacheGreyMat); // 先验附近没找到 → 全图兜底（旧行为）
+                        }
                     }
                     else
                     {
