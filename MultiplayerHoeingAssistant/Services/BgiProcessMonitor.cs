@@ -9,6 +9,8 @@ public class BgiProcessMonitor : IDisposable
     private readonly string _bgiPath;
     private Timer? _checkTimer;
     private bool _isRunning;
+    /// <summary>边沿检测标记：上一次轮询时 BGI 是否在运行（P1-E）。</summary>
+    private bool _wasRunning;
 
     public event Action? OnBgiCrashed;
     public event Action? OnBgiStarted;
@@ -53,8 +55,18 @@ public class BgiProcessMonitor : IDisposable
         if (!_isRunning) return;
 
         var running = GetCurrentSessionBgiProcesses().Length > 0;
-        if (!running)
+        if (running)
         {
+            // 进程（重）出现后重新武装边沿检测
+            _wasRunning = true;
+            return;
+        }
+        // [P1-E 止血] 仅在"运行 → 消失"跳变时触发一次崩溃事件；
+        // 触发后进入"等待重启"状态（_wasRunning=false），进程重新出现前不再重复触发，
+        // 避免 BGI 启动慢（>5s）时每 5s 轮询重复 RestartBgi 导致双开/多开 BGI。
+        if (_wasRunning)
+        {
+            _wasRunning = false;
             OnBgiCrashed?.Invoke();
         }
     }

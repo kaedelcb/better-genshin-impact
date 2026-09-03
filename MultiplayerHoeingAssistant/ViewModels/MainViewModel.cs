@@ -41,6 +41,8 @@ public class MainViewModel : INotifyPropertyChanged
     private bool _isAllReadySequenceCancelled;
     /// <summary>互斥锁：防止两轮 AllReady 并发执行 OnAllReadyConfirmedInternal（patterns §31）。</summary>
     private int _isAllReadyProcessing;
+    /// <summary>重入守卫：防止 BGI 崩溃事件并发触发多次 RestartBgi 导致双开（P1-E 双保险）。</summary>
+    private int _isBgiRestarting;
     /// <summary>用户手动清除上线后置 true，抑制定时自动上线。手动设定定时上线时清除。</summary>
     private bool _manuallyClearedOnline = true;
     private bool _wasAutoHoeingRunning;
@@ -523,6 +525,13 @@ public class MainViewModel : INotifyPropertyChanged
                     if (sdata.TryGetProperty("onlineGeneration", out var ogEl) && ogEl.ValueKind == System.Text.Json.JsonValueKind.Number)
                     {
                         var gen = ogEl.GetInt32();
+                        // [P0-B 止血] 成功读到真实 onlineGeneration 但比本地记录小（或本地是 int.MaxValue 兜底值），
+                        // 说明 BGI 曾重启导致进程内代序号归零（或此前 IPC 读失败用了兜底值），
+                        // 先把 _lastOnlineGeneration 同步为当前真实值再比较，避免边沿检测永久静音。
+                        if (gen < _lastOnlineGeneration)
+                        {
+                            _lastOnlineGeneration = gen;
+                        }
                         if (gen > _lastOnlineGeneration)
                         {
                             _lastOnlineGeneration = gen;
@@ -595,6 +604,12 @@ public class MainViewModel : INotifyPropertyChanged
                         if (result.Status == "success")
                         {
                             AddLog("原任务已自动恢复");
+                        }
+                        else
+                        {
+                            // [P2-H 止血] resume 返回 no_context/失败：SuspendedTaskContext 不持久化，
+                            // BGI 曾被重启（如 suspend 失败后 KillBgi 回退）则上下文必丢失，必须明确提示用户手动恢复
+                            AddLog($"原任务自动恢复失败: {result.Message}；原任务上下文已丢失（BGI 曾被重启），请手动在 BGI 中重新启动调度器/一条龙");
                         }
                     }
                 }, null, TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(-1));
@@ -3207,12 +3222,32 @@ public class MainViewModel : INotifyPropertyChanged
         else if (!string.IsNullOrEmpty(_config?.BgiPath))
         {
             _processMonitor = new BgiProcessMonitor(_config.BgiPath);
+            _processMonitor.OnBgiStarted += () =>
+            {
+                // [P0-B 止血] BGI（重）启动后其进程内 onlineGeneration 归零（从 1 重新开始），
+                // 本地边沿检测基线同步复位为 0，避免 _lastOnlineGeneration 残留历史大值
+                // 导致重启后的上线事件被边沿检测永久静音。覆盖所有 RestartBgi 路径。
+                _lastOnlineGeneration = 0;
+            };
             _processMonitor.OnBgiCrashed += () =>
             {
-                AddLog("BGI 已崩溃，自动重启");
-                _processMonitor.RestartBgi();
-                AddLog("BGI 已自动重启");
-                _ = ReportStatusAsync();
+                // [P1-E 止血] 重入守卫双保险：BgiProcessMonitor 已做"运行→消失"边沿检测，
+                // 这里再用 Interlocked 防止崩溃事件并发触发多次 RestartBgi 导致双开 BGI。
+                if (Interlocked.CompareExchange(ref _isBgiRestarting, 1, 0) != 0)
+                {
+                    return;
+                }
+                try
+                {
+                    AddLog("BGI 已崩溃，自动重启");
+                    _processMonitor.RestartBgi();
+                    AddLog("BGI 已自动重启");
+                    _ = ReportStatusAsync();
+                }
+                finally
+                {
+                    _isBgiRestarting = 0;
+                }
             };
             if (_config.GuardBgi)
             {
@@ -4616,7 +4651,41 @@ public class MainViewModel : INotifyPropertyChanged
         }
 
         // 等待 BGI 内部的 CancellationContext 取消状态传播完毕，避免取消令牌残留影响后续 start_group
-        await Task.Delay(1500);
+        // [P1-C 止血] 固定 1500ms 盲等改为轮询 IPC task.status（200ms 间隔、上限 6s）：
+        // 确认 BGI 无任务在运行（或中断上下文已就位 hasSuspendedTaskContext=true）后再进入批次 task.start。
+        // 超时仅记警告日志后继续，保持原有容错语义。每次轮询用独立短生命周期 IpcClient。
+        var bgiSettled = false;
+        for (var waitRound = 0; waitRound < 30; waitRound++)
+        {
+            try
+            {
+                using var waitClient = new IpcClient();
+                await waitClient.ConnectAsync(1000);
+                var waitResp = await waitClient.SendCommandAsync(new IpcRequest { OpCode = "task.status" });
+                if (waitResp.Success && !string.IsNullOrEmpty(waitResp.Data))
+                {
+                    var wdata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(waitResp.Data);
+                    var stillRunning = wdata.TryGetProperty("running", out var rEl)
+                        && rEl.ValueKind == System.Text.Json.JsonValueKind.True;
+                    var hasCtx = wdata.TryGetProperty("hasSuspendedTaskContext", out var hEl)
+                        && hEl.ValueKind == System.Text.Json.JsonValueKind.True;
+                    if (!stillRunning || hasCtx)
+                    {
+                        bgiSettled = true;
+                        break;
+                    }
+                }
+            }
+            catch
+            {
+                // IPC 暂不可达（BGI 忙/重启中），继续等待下一轮
+            }
+            await Task.Delay(200);
+        }
+        if (!bgiSettled)
+        {
+            AddLog("[上线探针] 等待 BGI 任务停止超时（6s），按容错策略继续执行批次 task.start");
+        }
 
         // 依次执行所有绑定的配置组
         _ = Task.Run(async () =>
@@ -4691,6 +4760,9 @@ public class MainViewModel : INotifyPropertyChanged
                     else
                     {
                         AddLog($"恢复原任务失败: {resumeResult.Message}");
+                        // [P2-H 止血] resume 返回 no_context/失败：SuspendedTaskContext 不持久化，
+                        // BGI 曾被重启（如 suspend 失败后 KillBgi 回退）则上下文必丢失，必须明确提示用户手动恢复
+                        AddLog("原任务上下文已丢失（BGI 曾被重启），请手动在 BGI 中重新启动调度器/一条龙");
                     }
                 }
                 _isAllReadySequenceCancelled = false;

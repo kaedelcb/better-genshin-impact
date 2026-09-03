@@ -1253,9 +1253,17 @@ internal sealed class InstanceRequestHandler
                             }
 
                             var projectsList = BetterGenshinImpact.ViewModel.Pages.ScriptControlViewModel.GetNextProjects(group);
-                            _ = Application.Current?.Dispatcher.Invoke(async () =>
+                            // 用 InvokeAsync 而非 Invoke，避免同步阻塞 IPC 处理线程（与下方 onedragon 分支姿势一致）
+                            Application.Current?.Dispatcher.InvokeAsync(async () =>
                             {
-                                await scriptService.RunMulti(projectsList, context.GroupName);
+                                try
+                                {
+                                    await scriptService.RunMulti(projectsList, context.GroupName);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogError(ex, "[IPC task.resume] 恢复配置组任务失败: {GroupName}", context.GroupName);
+                                }
                             });
                         }
                     }

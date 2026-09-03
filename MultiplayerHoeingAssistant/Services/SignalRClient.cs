@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.SignalR.Client;
 using MultiplayerHoeingAssistant.Models;
 
+using Timer = System.Threading.Timer;
+
 namespace MultiplayerHoeingAssistant.Services;
 
 public class SignalRClient : IAsyncDisposable
@@ -18,6 +20,11 @@ public class SignalRClient : IAsyncDisposable
     private List<string> _teamUids = new();
 
     private bool _disposed;
+
+    // [P1-F 止血] 自愈定时器：仅在内置重连耗尽（Closed）后启动，每 30s 对同一连接 StartAsync。
+    // 同一时刻只允许一条自愈定时器；_selfHealRunning 防止定时器回调重入（StartAsync 超 30s 时）。
+    private Timer? _selfHealTimer;
+    private int _selfHealRunning;
 
     public event Action<List<ControlRoomPlayer>>? OnPlayersUpdated;
     public event Action<RemoteCommand>? OnRemoteCommand;
@@ -106,11 +113,10 @@ public class SignalRClient : IAsyncDisposable
         //   TimeoutException 传到这里，不"观察"会作为未观察任务异常冒泡到全局
         //   TaskScheduler.UnobservedTaskException → App 弹"未处理异常"框，非常粗暴。
         //   这里吞掉并转状态通知（IsConnected=false，徽章变"离线"）。
-        // 说明：重连完全依赖 SignalR 内置 WithAutomaticReconnect（0s/2s/10s/30s 四次尝试），
-        //   不再叠加自定义自愈循环。曾有过 ReconnectLoopAsync 自愈循环与内置重连并存，两者并发
-        //   导致竞态：自愈循环在内置重连刚恢复后 Dispose 掉新连接、且重建失败时旧连接已被销毁
-        //   → 彻底离线无法控制。故移除自愈循环，只保留内置重连；若内置重连耗尽（服务器长期不可用），
-        //   状态仍会置为离线，用户可手动刷新（RefreshAsync）或手动重连恢复。
+        // 血泪教训：自愈绝不能与内置重连并存——曾有过 ReconnectLoopAsync 自愈循环与内置重连并发，
+        //   两者竞态：自愈循环在内置重连刚恢复后 Dispose 掉新连接、且重建失败时旧连接已被销毁
+        //   → 彻底离线无法控制。因此自愈只允许在 Closed（内置重连 0s/2s/10s/30s 四次尝试耗尽）之后
+        //   启动，且始终对同一连接 StartAsync，绝不 Dispose/重建连接。
         connection.Closed += exception =>
         {
             if (exception != null)
@@ -118,6 +124,9 @@ public class SignalRClient : IAsyncDisposable
                 System.Diagnostics.Debug.WriteLine($"SignalR 连接已关闭: {exception.Message}");
             }
             OnConnectionStateChanged?.Invoke(false);
+            // [P1-F 止血] 内置重连已耗尽，启动低频自愈：每 30s 对同一连接 StartAsync，
+            // 成功后停止自愈并重新入房。避免"网络抖动 >42s 或服务器重启后助手永久离线"。
+            StartSelfHeal(connection, roomCode, password, playerUid, playerName, teamUids, isRemote);
             return Task.CompletedTask;
         };
 
@@ -128,6 +137,66 @@ public class SignalRClient : IAsyncDisposable
         // 若提前赋值、StartAsync 又失败，_connection 会指向"失败的新连接"，
         // 导致自愈循环里 closedConnection != _connection 判断提前 return、放弃重连。
         _connection = connection;
+    }
+
+    /// <summary>
+    /// [P1-F 止血] Closed（内置重连耗尽）后启动自愈定时器：每 30s 对同一 HubConnection 调 StartAsync。
+    /// 成功后停止定时器、触发 OnConnectionStateChanged(true) 并重新 JoinControlRoom（入房失败仅记日志）。
+    /// 严禁在内置重连进行期间启动（历史竞态教训，见 Closed 注册处注释）；Closed 即代表内置重连已耗尽，此刻启动安全。
+    /// 所有异常在回调内捕获，不得冒泡到 TaskScheduler.UnobservedTaskException。
+    /// </summary>
+    private void StartSelfHeal(HubConnection closedConnection, string roomCode, string password,
+        string playerUid, string playerName, List<string> teamUids, bool isRemote)
+    {
+        if (_disposed) return;
+        // 同一时刻只允许一条自愈定时器（如对旧连接的残留），先停掉再建
+        StopSelfHeal();
+        _selfHealTimer = new Timer(async _ =>
+        {
+            if (Interlocked.CompareExchange(ref _selfHealRunning, 1, 0) != 0) return;
+            try
+            {
+                if (_disposed) return;
+                // 连接已被替换（如用户手动 RefreshAsync 重建了新连接）或已恢复，放弃自愈
+                if (!ReferenceEquals(closedConnection, _connection)
+                    || closedConnection.State == HubConnectionState.Connected)
+                {
+                    StopSelfHeal();
+                    return;
+                }
+                OnLog?.Invoke("[自愈] SignalR 内置重连已耗尽，尝试重新连接...");
+                await closedConnection.StartAsync();
+                // 重连成功：停止自愈，恢复在线状态，并重新加入控制房间（复用 Reconnected 的入房逻辑）
+                StopSelfHeal();
+                OnConnectionStateChanged?.Invoke(true);
+                try
+                {
+                    await closedConnection.InvokeAsync("JoinControlRoom", roomCode, password, playerUid, playerName, teamUids, isRemote, _clientInstanceId);
+                    OnLog?.Invoke("[自愈] SignalR 重连成功，已重新加入控制房间");
+                }
+                catch (Exception ex)
+                {
+                    // 入房失败（如房间已被服务端回收）仅记日志，连接本身已恢复
+                    OnLog?.Invoke($"[自愈] SignalR 重连成功但加入房间失败: {ex.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                // 重连失败（服务器仍不可达等），仅记日志，等下一个 30s 周期
+                OnLog?.Invoke($"[自愈] SignalR 重连失败: {ex.Message}");
+            }
+            finally
+            {
+                _selfHealRunning = 0;
+            }
+        }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+    }
+
+    /// <summary>停止并释放自愈定时器（幂等）。</summary>
+    private void StopSelfHeal()
+    {
+        var timer = Interlocked.Exchange(ref _selfHealTimer, null);
+        timer?.Dispose();
     }
 
     public async Task SendRemoteCommandAsync(RemoteCommand command)
@@ -213,6 +282,8 @@ public class SignalRClient : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
+        // 连接对象 Dispose 时一并停掉自愈定时器，避免对已释放连接 StartAsync
+        StopSelfHeal();
         if (_connection != null)
         {
             await _connection.DisposeAsync();

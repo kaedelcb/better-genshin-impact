@@ -2721,8 +2721,12 @@ public class CoordinatorHub : Hub
             _logger.LogWarning("确认阶段: 超时, 第{Attempt}次, generation={Gen}", attempt, generation);
         }
 
-        _logger.LogError("重试耗尽, 放弃本轮次, generation={Gen}, 未确认成员={Uids}",
-            generation, string.Join(",", _roomManager.GetUnconfirmedUids(group, targetUids)));
+        // 确认超时耗尽：整轮放弃开锄——宁可不锄/漏锄，也不能缺人开锄（用户明确取舍，推翻 P2-G 降级开锄方案）。
+        // MarkExhausted 状态记录保留；日志明确标注未确认成员，便于排查是谁的客户端卡住。
+        var unconfirmedUids = _roomManager.GetUnconfirmedUids(group, targetUids);
+        _logger.LogWarning("确认超时，本轮放弃开锄（缺人不开锄）, generation={Gen}, 未确认成员={Uids}",
+            generation, string.Join(",", unconfirmedUids));
+        Console.WriteLine("[探针服务端] 确认超时，本轮放弃开锄（缺人不开锄）, group=" + group + " generation=" + generation + " 未确认成员=" + string.Join(",", unconfirmedUids));
         _roomManager.MarkExhausted(group);
         await Clients.Group(group).SendAsync("ControlRoomPlayersUpdated", _roomManager.GetControlRoomPlayers(group));
     }

@@ -343,29 +343,49 @@ public sealed class InstanceService : IHostedService, IAsyncDisposable
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                server ??= InstancePipeFactory.CreateServer(
-                    Context.RootPipeName,
-                    firstPipeInstance: false);
                 try
                 {
+                    server ??= InstancePipeFactory.CreateServer(
+                        Context.RootPipeName,
+                        firstPipeInstance: false);
                     await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
+
+                    var connection = new InstanceConnection(server, this, _logger);
+                    server = null;
+                    connection.Start(cancellationToken);
+                    _ = ObserveAcceptedConnectionAsync(connection);
                 }
                 catch (OperationCanceledException)
                 {
+                    // listener 被显式停止（CancellationToken 触发），退出监听循环
                     break;
                 }
-
-                var connection = new InstanceConnection(server, this, _logger);
-                server = null;
-                connection.Start(cancellationToken);
-                _ = ObserveAcceptedConnectionAsync(connection);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            if (!cancellationToken.IsCancellationRequested)
-            {
-                _logger.LogError(exception, "根实例命名管道监听异常终止");
+                catch (ObjectDisposedException)
+                {
+                    // listener 被 Dispose 停止，退出监听循环
+                    break;
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    // 单次连接 accept/处理失败（如客户端"连上即断"探针）仅记日志后继续监听，
+                    // 不再整体退出监听循环；加短退避避免异常风暴打满日志
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    _logger.LogWarning(exception, "根实例命名管道接受连接失败，继续监听");
+                    // 失败的服务端管道实例不可复用，丢弃后下一轮重建
+                    server?.Dispose();
+                    server = null;
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromMilliseconds(300), cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                }
             }
         }
         finally
