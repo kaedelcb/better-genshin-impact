@@ -41,8 +41,6 @@ public static class OfficialParamAdapter
         param.QinDoublePickUp = teapot.QinDoublePickUp;
 
         // ── 两版共有的结束检测子字段：从茶包 FinishDetectConfig 覆盖 ──
-        param.FinishDetectConfig.BattleEndProgressBarColor = teapot.FinishDetectConfig.BattleEndProgressBarColor;
-        param.FinishDetectConfig.BattleEndProgressBarColorTolerance = teapot.FinishDetectConfig.BattleEndProgressBarColorTolerance;
         param.FinishDetectConfig.FastCheckEnabled = teapot.FinishDetectConfig.FastCheckEnabled;
         param.FinishDetectConfig.FastCheckParams = teapot.FinishDetectConfig.FastCheckParams;
         param.FinishDetectConfig.CheckEndDelay = teapot.FinishDetectConfig.CheckEndDelay;

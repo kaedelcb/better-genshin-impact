@@ -200,17 +200,10 @@ public class AutoFightTask : ISoloTask
             FastCheckEnabled = finishDetectConfig.FastCheckEnabled;
             ParseCheckTimeString(finishDetectConfig.FastCheckParams, out CheckTime, CheckNames);
             ParseFastCheckEndDelayString(finishDetectConfig.CheckEndDelay, out DelayTime, DelayTimes);
-            BattleEndProgressBarColor =
-                ParseStringToTuple(finishDetectConfig.BattleEndProgressBarColor, (95, 235, 255));
-            BattleEndProgressBarColorTolerance =
-                ParseSingleOrCommaSeparated(finishDetectConfig.BattleEndProgressBarColorTolerance, (6, 6, 6));
             DetectDelayTime = (int)((double.TryParse(finishDetectConfig.BeforeDetectDelay, out var result) ? result : 0.45) * 1000);
             FastCheckDelay = (int)Math.Round(finishDetectConfig.FastCheckDelay * 1000);
             RotateFindEnemyEnabled = finishDetectConfig.RotateFindEnemyEnabled;
         }
-
-        public (int, int, int) BattleEndProgressBarColor { get; }
-        public (int, int, int) BattleEndProgressBarColorTolerance { get; }
 
         public static void ParseCheckTimeString(
             string input,
@@ -287,39 +280,6 @@ public class AutoFightTask : ISoloTask
                 }
                 // 其他格式，跳过不处理
             }
-        }
-
-
-        static bool IsSingleNumber(string input, out int result)
-        {
-            return int.TryParse(input, out result);
-        }
-
-        static (int, int, int) ParseSingleOrCommaSeparated(string input, (int, int, int) defaultValue)
-        {
-            // 如果是单个数字
-            if (IsSingleNumber(input, out var singleNumber))
-            {
-                return (singleNumber, singleNumber, singleNumber);
-            }
-
-            return ParseStringToTuple(input, defaultValue);
-        }
-
-        static (int, int, int) ParseStringToTuple(string input, (int, int, int) defaultValue)
-        {
-            // 尝试按逗号分割字符串
-            var parts = input.Split(',');
-            if (parts.Length == 3 &&
-                int.TryParse(parts[0], out var num1) &&
-                int.TryParse(parts[1], out var num2) &&
-                int.TryParse(parts[2], out var num3))
-            {
-                return (num1, num2, num3);
-            }
-
-            // 如果解析失败，返回默认值
-            return defaultValue;
         }
     }
 
@@ -2296,14 +2256,6 @@ public class AutoFightTask : ISoloTask
         AssertUtils.CheckGameResolution("自动战斗");
     }
 
-    static bool AreDifferencesWithinBounds((int, int, int) a, (int, int, int) b, (int, int, int) c)
-    {
-        // 计算每个位置的差值绝对值并进行比较
-        return Math.Abs(a.Item1 - b.Item1) < c.Item1 &&
-               Math.Abs(a.Item2 - b.Item2) < c.Item2 &&
-               Math.Abs(a.Item3 - b.Item3) < c.Item3;
-    }
-    
     private volatile bool _totolyFlag = false;
     
     private volatile int _totolyEndCount = 0;

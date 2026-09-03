@@ -92,18 +92,11 @@ public class AutoFightJsonTask : ISoloTask
         public bool RotateFindEnemyEnabled = false;
         public bool SkipFightEndCheckWhenEnemyVisible = false;
 
-        public (int, int, int) BattleEndProgressBarColor { get; }
-        public (int, int, int) BattleEndProgressBarColorTolerance { get; }
-
         public TaskFightFinishDetectConfig(AutoFightParam.FightFinishDetectConfig finishDetectConfig)
         {
             FastCheckEnabled = finishDetectConfig.FastCheckEnabled;
             ParseCheckTimeString(finishDetectConfig.FastCheckParams, out CheckTime, CheckNames);
             ParseFastCheckEndDelayString(finishDetectConfig.CheckEndDelay, out DelayTime, DelayTimes);
-            BattleEndProgressBarColor =
-                ParseStringToTuple(finishDetectConfig.BattleEndProgressBarColor, (95, 235, 255));
-            BattleEndProgressBarColorTolerance =
-                ParseSingleOrCommaSeparated(finishDetectConfig.BattleEndProgressBarColorTolerance, (6, 6, 6));
             DetectDelayTime =
                 (int)((double.TryParse(finishDetectConfig.BeforeDetectDelay, out var result) ? result : 0.45) * 1000);
             RotateFindEnemyEnabled = finishDetectConfig.RotateFindEnemyEnabled;
@@ -179,35 +172,6 @@ public class AutoFightJsonTask : ISoloTask
                     }
                 }
             }
-        }
-
-        static bool IsSingleNumber(string input, out int result)
-        {
-            return int.TryParse(input, out result);
-        }
-
-        static (int, int, int) ParseSingleOrCommaSeparated(string input, (int, int, int) defaultValue)
-        {
-            if (IsSingleNumber(input, out var singleNumber))
-            {
-                return (singleNumber, singleNumber, singleNumber);
-            }
-
-            return ParseStringToTuple(input, defaultValue);
-        }
-
-        static (int, int, int) ParseStringToTuple(string input, (int, int, int) defaultValue)
-        {
-            var parts = input.Split(',');
-            if (parts.Length == 3 &&
-                int.TryParse(parts[0], out var num1) &&
-                int.TryParse(parts[1], out var num2) &&
-                int.TryParse(parts[2], out var num3))
-            {
-                return (num1, num2, num3);
-            }
-
-            return defaultValue;
         }
     }
 
