@@ -115,3 +115,4 @@ Test/trx_tmp/
 .dsh-vision-router/
 QQ*.jpg
 QQ*.png
+node_modules
