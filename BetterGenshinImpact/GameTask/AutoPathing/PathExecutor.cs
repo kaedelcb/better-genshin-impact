@@ -432,7 +432,7 @@ public partial class PathExecutor
     /// 外部（非 PathExecutor 内部代码）通过此方法写复苏信号位。
     /// 等价于 AnomalyDetector → OnMultiplayerDefeatedDetected → SignalMultiplayerRevival 的语义路径。
     ///
-    /// 用法：仅由 TpTask.WaitForTeleportCompletion 在传送中检测到复苏弹窗时调用。
+    /// 用法：仅由 TpTaskFastDrag.WaitForTeleportCompletion 在传送中检测到复苏弹窗时调用。
     /// 当 CurrentActiveInstance == null（无活动 PathExecutor 实例）时，LogWarning 跳过、
     /// 不抛异常、不阻断主流程。
     ///
@@ -445,7 +445,7 @@ public partial class PathExecutor
         {
             // 不直接引用 TaskControl.Logger 静态字段（测试环境下其静态初始化依赖 App._host 会触发 NRE），
             // 改用 Debug.WriteLine 作为兜底诊断，生产/测试环境都安全。
-            // 实际应用中此分支不应被触发：TpTask 总是在 PathExecutor.Pathing 调用栈内调用本方法。
+            // 实际应用中此分支不应被触发：TpTaskFastDrag 总是在 PathExecutor.Pathing 调用栈内调用本方法。
             System.Diagnostics.Debug.WriteLine("[联机] SignalMultiplayerRevivalFromExternal 未找到活动 PathExecutor 实例，跳过信号位写入");
             return;
         }
