@@ -1,0 +1,4 @@
+# 强制 deploy.sh 始终以 LF 存储与检出。
+# 该脚本在 Windows 上编辑过会产生 CRLF，上传到 Linux 执行时报 $'\r': command not found。
+# 这里用 eol=lf 使其不受 core.autocrlf=true 影响，无论本地 checkout 还是服务器 clone 都输出 LF。
+BgiCoordinatorServer/deploy.sh text eol=lf
