@@ -752,8 +752,8 @@ public class TpTaskFastDrag
     ///
     /// 暂停 / 网络断开兜底：循环顶部检测 IsSuspend || IsSuspendedByNetwork 任一为 true 时
     /// 早退 return true，让阶段 2 接管。原因：墙钟 deadline 在暂停期间继续累积，
-    /// 不早退会导致解除暂停后立即超时误抛异常（网络断开检测在公版本机化为恒 false，见
-    /// TpTeleportSuspendDetector 类注释）。
+    /// 不早退会导致解除暂停后立即超时误抛异常（公版无网络挂起概念，该信号内联后恒 false，
+    /// 实际仅依据用户主动暂停 RunnerContext.IsSuspend，语义与内联前一致）。
     ///
     /// fastSyncId：预留的调用栈透传参数（茶包联机抢报用）；公版调用方恒传 null，路径完全短路。
     /// </summary>
@@ -764,10 +764,11 @@ public class TpTaskFastDrag
         {
             ct.ThrowIfCancellationRequested();
 
-            // 暂停 / 网络断开早退：避免墙钟超时误判（cancel 优先级更高，已在上一行处理）
-            if (TeleportLoadingPhaseSuspendGuard.ShouldSkip(
-                    RunnerContext.Instance.IsSuspend,
-                    TpTeleportSuspendDetector.IsSuspendedByNetwork))
+            // 暂停 / 网络断开早退：避免墙钟超时误判（cancel 优先级更高，已在上一行处理）。
+            // 内联 TeleportLoadingPhaseSuspendGuard.ShouldSkip + TpTeleportSuspendDetector（一函数一文件碎片，
+            // 见 refactor-feature-inventory §G4：单行判门/单点引用，直接并进唯一调用方）。公版无网络挂起概念，
+            // TpTeleportSuspendDetector 恒 false，故内联后仅判断用户主动暂停 RunnerContext.IsSuspend，语义不变。
+            if (RunnerContext.Instance.IsSuspend)
             {
                 TaskControl.Logger.LogInformation("[传送] 检测到暂停/网络断开，跳过传送过渡页守卫，回退原判据");
                 return true;
@@ -1220,11 +1221,11 @@ public class TpTaskFastDrag
         // 开始移动并放大地图
         for (var iteration = 0; iteration < _tpConfig.MaxIterations; iteration++)
         {
-            // 放大决策抽为纯函数 TeleportZoomDecisions.ShouldZoomInThisIteration（便于 PBT）。
+            // 放大决策为纯函数 TeleportDecisions.ShouldZoomInThisIteration（便于 PBT；同域决策合并入 TeleportDecisions，见 refactor-feature-inventory §G4）。
             // 修复：快速拖动模式下 mouseDistance 已进入收工区间(<收工阈值) 且 缩放已在传送点可见档时
             // 不再触发对定位无意义的放大；缩放仍大于显示档(普通点不渲染)时即使到位也继续放大，避免点空。
             // 详见 .kiro/specs/teleport-fastmode-drag-redundant-zoom-before-click-fix/。
-            if (TeleportZoomDecisions.ShouldZoomInThisIteration(
+            if (TeleportDecisions.ShouldZoomInThisIteration(
                     true,
                     _tpConfig.MapZoomEnabled,
                     mouseDistance,
@@ -1345,7 +1346,7 @@ public class TpTaskFastDrag
                 // 首次未校准（=0）时用 max(1, dpi/2) 作初值（dpi2→1.0、dpi2.5→1.25，贴合实测）。
                 double dpiForInit = TaskContext.Instance().DpiScale;
                 double amplify = _dragMoveAmplifyRatio > 0 ? _dragMoveAmplifyRatio : Math.Max(1.0, dpiForInit / 2.0);
-                double t = TeleportDragRunway.ComputeRunwayScale(
+                double t = TeleportDecisions.ComputeRunwayScale(
                     landingRelX, landingRelY, rawMoveX * amplify, rawMoveY * amplify,
                     monW, monH, 50);
 
@@ -2194,7 +2195,9 @@ public class TpTaskFastDrag
         //     // 小地图先验识别失败不影响传送主流程（可恢复）：记录后退回缓存兜底
         //     Logger.LogDebug(ex, "[大地图定位] 小地图先验识别异常，退回缓存坐标");
         // }
-        var (px, py) = TpMapPositionPrior.GetTpPriorPosition();  // 读传送先验专用缓存，不受 WarmUp 影响
+        // 内联 TpMapPositionPrior（一函数一文件纯转发，见 refactor-feature-inventory §G4）：
+        // 直接读共享 Navigation 的传送先验专用缓存（不受 WarmUp 影响），语义逐字节不变。
+        var (px, py) = Navigation.GetTpPriorPosition();
         if (px > 0 && py > 0)
         {
             var g = MapManager.GetMap(mapName, _mapMatchingMethod).ConvertImageCoordinatesToGenshinMapCoordinates(new Point2f(px, py));
