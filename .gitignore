@@ -69,6 +69,8 @@ BgiCoordinatorServer/docker-compose.override.yml
 # Kiro/AI 助手工作区文件（本地 Kiro 用，不进 git）
 AGENTS.md
 .agents/
+.kiro/
+.knowledge-backups/
 # IDE 插件/工具链配置（本地开发用）
 CodeMaid.config
 Settings.XamlStyler
@@ -116,3 +118,9 @@ Test/trx_tmp/
 QQ*.jpg
 QQ*.png
 node_modules
+
+# 散落构建日志/临时脚本（根目录）
+build_final.txt
+build_teabag.txt
+*_build.log
+.temp_i18n_transform.ps1
