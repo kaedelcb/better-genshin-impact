@@ -1,4 +1,8 @@
-# 强制 deploy.sh 始终以 LF 存储与检出。
-# 该脚本在 Windows 上编辑过会产生 CRLF，上传到 Linux 执行时报 $'\r': command not found。
-# 这里用 eol=lf 使其不受 core.autocrlf=true 影响，无论本地 checkout 还是服务器 clone 都输出 LF。
-BgiCoordinatorServer/deploy.sh text eol=lf
+# LF 敏感文件强制以 LF 存储与检出（不受 core.autocrlf=true 影响）。
+# Windows 上编辑会产生 CRLF，上传到 Linux 执行/构建时报：
+#   - shell 脚本: $'\r': command not found / syntax error: unexpected end of file
+#   - Dockerfile / docker-compose.yml: 解析或构建失败
+# 这里统一声明 eol=lf，无论本地 checkout 还是服务器 clone 都输出 LF。
+BgiCoordinatorServer/deploy.sh          text eol=lf
+BgiCoordinatorServer/Dockerfile         text eol=lf
+BgiCoordinatorServer/docker-compose.yml text eol=lf
