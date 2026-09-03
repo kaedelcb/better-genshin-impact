@@ -1335,6 +1335,9 @@ public partial class PathExecutor
                                     }
 
                                     if(!string.IsNullOrEmpty(PartyConfig.MainAvatarIndex)) PartyConfig.MainAvatarIndex = PathingConditionConfig.InitialMainAvatarIndex;
+                                    // fix-kazuha-collect-layer1-dead-code：清空前把战斗快照副本交给聚物协调器，
+                                    // 修活三层取队第 1 层（零识别兜底）。共享字段清空时机不变，单机/非联机路径零感知。
+                                    MultiplayerCoordinator?.KazuhaCollectSync?.CaptureCombatSnapshot(PathingConditionConfig.CombatScenesGoBackUp);
                                     PathingConditionConfig.CombatScenesGoBackUp = null;
                                     ResetRecoveryStateForNewAttempt();
 
@@ -1363,6 +1366,11 @@ public partial class PathExecutor
                                         {
                                             Logger.LogInformation("[联机] 战斗完成，走回战斗点集合");
                                             waypoint.Type =  WaypointType.Target.Code;
+
+                                            // kazuha-collect-synckey-rerun-isolation：把本轮重跑后缀同步给协调器，
+                                            // 保证万叶侧广播 syncKey 与下方成员侧等待 syncKey 携带相同 _rerun_r{N} 后缀。
+                                            // 覆盖 __coordTrusted==false 的路径（该路径跳过下方赋值但仍会进 WaitAtFightPointAsync）。
+                                            MultiplayerCoordinator.KazuhaCollectSync.RerunSyncIdSuffix = RerunSyncIdSuffix;
 
                                             // 玛薇卡摩托下车（恒开，无需配置）：
                                             // 战后回点全程持续检测摩托状态：第一次在 MoveTo 前检测（等派蒙稳定画面），
@@ -1621,9 +1629,11 @@ public partial class PathExecutor
                                             if (__coordTrusted)
                                             {
                                                 var ks = MultiplayerCoordinator.KazuhaCollectSync;
+                                                // kazuha-collect-synckey-rerun-isolation：与协调器侧同源追加 RerunSyncIdSuffix，
+                                                // 重跑期间不与上一轮缓存的聚物点匹配（旧缓存 key 无后缀 → 自然失配）。
                                                 var collectPointSyncKey = waypoint == null
-                                                    ? $"{MultiplayerCoordinator.CurrentRouteIndex}:0:0"
-                                                    : $"{MultiplayerCoordinator.CurrentRouteIndex}:{waypoint.X.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}:{waypoint.Y.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}";
+                                                    ? KazuhaSyncKeyBuilder.BuildSyncKey(MultiplayerCoordinator.CurrentRouteIndex, 0, 0, RerunSyncIdSuffix)
+                                                    : KazuhaSyncKeyBuilder.BuildSyncKey(MultiplayerCoordinator.CurrentRouteIndex, waypoint.X, waypoint.Y, RerunSyncIdSuffix);
                                                 Task<bool>? collectPointWaitTask = null;
                                                 if (ks != null && !ks.IsCurrentPlayerKazuha)
                                                 {

@@ -436,7 +436,9 @@ public partial class AutoHoeingConfig : ObservableObject
     private int _kazuhaSyncTimeoutSeconds = 5;
 
     /// <summary>
-    /// 万叶玩家等待 E 技 CD 的最长上限秒数（超时直接尝试释放，由 OCR + 视觉双判决定成败），范围 [3, 10]，默认 5。需保证小于 KazuhaSyncTimeoutSeconds
+    /// 万叶玩家等待 E 技 CD 的盲等上限秒数（OCR 读到的残留秒数按此封顶后进行盲等），范围 [3, 10]，默认 5。需保证小于 KazuhaSyncTimeoutSeconds。
+    /// 盲等后接视觉就绪轮询：OCR 明确指示残留超过本上限时，轮询覆盖剩余残留（就绪即提前退出，总等待硬顶 12s）；
+    /// OCR 读不到秒数时轮询仅 1s，超时直接尝试释放。
     /// </summary>
     [ObservableProperty]
     private int _kazuhaWaitSkillCdSeconds = 5;

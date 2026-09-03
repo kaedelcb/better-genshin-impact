@@ -54,6 +54,13 @@ public sealed class KazuhaCollectSyncCoordinator : IDisposable
     private DateTime _lastCollectPointTimeUtc;
     private readonly Action<string, string, double, double> _onKazuhaCollectStartedCache;
 
+    // fix-kazuha-collect-layer1-dead-code: PathExecutor 在清空 PathingConditionConfig.CombatScenesGoBackUp
+    // 之前捕获的战斗快照副本（CaptureCombatSnapshot 写入，每场战斗结束覆盖一次）。
+    // 背景缺陷：三层取队第 1 层原设计直读 CombatScenesGoBackUp，但 PathExecutor 战后清空（:1338）
+    // 发生在聚物分支（:1362）之前 → 第 1 层永不命中，兜底路径每次都要现场强制重识别（干站数秒）。
+    // 改为优先读此副本；共享字段的清空时机不变，AutoFightTask:584 / PathExecutor:1296 等既有消费方零影响。
+    private CombatScenes? _capturedCombatSnapshot;
+
     public KazuhaCollectSyncCoordinator(
         CoordinatorClient client,
         AutoHoeingConfig config,
@@ -277,9 +284,11 @@ public sealed class KazuhaCollectSyncCoordinator : IDisposable
         // 对象引用，每个客户端从 JSON 反序列化的 Waypoint 实例引用不同，hashcode 必然不一致 → syncKey 跨客户端不一致。
         // X/Y 是 double 类型，不同客户端反序列化结果应完全相同（IEEE754 二进制位字符串化）。
         // 用 InvariantCulture 保证不同 locale 下浮点格式一致（如 "1.5" vs "1,5"）。
+        // kazuha-collect-synckey-rerun-isolation：轮末重跑期间追加 RerunSyncIdSuffix（如 "_rerun_r3"），
+        // 防止命中上一轮残留的 _lastCollectPoint 缓存导致跳过缓冲早退；后缀由 PathExecutor 同源同步。
         var syncKey = fightPointWaypoint == null
-            ? $"{_client.CurrentRouteIndex}:0:0"
-            : $"{_client.CurrentRouteIndex}:{fightPointWaypoint.X.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}:{fightPointWaypoint.Y.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}";
+            ? KazuhaSyncKeyBuilder.BuildSyncKey(_client.CurrentRouteIndex, 0, 0, RerunSyncIdSuffix)
+            : KazuhaSyncKeyBuilder.BuildSyncKey(_client.CurrentRouteIndex, fightPointWaypoint.X, fightPointWaypoint.Y, RerunSyncIdSuffix);
 
         // kazuha-player-auto-detection: 删除原"房主侧 kazuha_offline 预检"块。
         // 新机制下房主无法预知谁是 Kazuha（要等客户端声明）；若全员都没声明则 _kazuhaPlayerUid == null
@@ -366,9 +375,11 @@ public sealed class KazuhaCollectSyncCoordinator : IDisposable
             combatScenes = null;
 
             // ---- 第 1 层：复用战斗阶段稳定快照（最治本，零识别零抖动）----
-            // 只读 CombatScenesGoBackUp（PathExecutor.cs:754 写入含万叶的稳定快照；复苏/神像传送/流程结束清空）。
+            // fix-kazuha-collect-layer1-dead-code：优先读 PathExecutor 清空前捕获的副本
+            // （_capturedCombatSnapshot，每场战斗结束写入）；原直读 CombatScenesGoBackUp 因
+            // PathExecutor.cs:1338 清空先于聚物分支而永不命中，保留为次级回读以兼容未捕获的旧流程。
             // 只看万叶在不在，不校验队伍其他角色（Open Question Q9）。本 spec 对该字段只读不写（Preservation 3.3）。
-            var snapshot = PathingConditionConfig.CombatScenesGoBackUp;
+            var snapshot = _capturedCombatSnapshot ?? PathingConditionConfig.CombatScenesGoBackUp;
             bool snapshotHasKazuha = snapshot != null && snapshot.SelectAvatar("枫原万叶") != null;
             if (KazuhaCollectRecognitionDecisions.ShouldUseCombatSnapshot(snapshotHasKazuha))
             {
@@ -576,6 +587,26 @@ public sealed class KazuhaCollectSyncCoordinator : IDisposable
     {
         CurrentState = KazuhaCollectState.Idle;
     }
+
+    /// <summary>
+    /// 捕获上一场战斗的稳定快照副本（fix-kazuha-collect-layer1-dead-code）。
+    /// 由 PathExecutor 在清空 PathingConditionConfig.CombatScenesGoBackUp 之前调用；
+    /// 传入 null 表示上一场无可用快照（识别失败等），三层取队第 1 层自然不命中、走原重试路径。
+    /// 不在 ResetForNextCycle 中清空：捕获发生在战斗结束、消费发生在随后的 WaitAtFightPointAsync，
+    /// 时序上 Reset 先于消费，清空会误删本场快照。
+    /// </summary>
+    public void CaptureCombatSnapshot(CombatScenes? snapshot)
+    {
+        _capturedCombatSnapshot = snapshot;
+    }
+
+    /// <summary>
+    /// 轮末统一重跑的 syncKey 隔离后缀（multiplayer-hoeing-rerun-sync-isolation 对齐方案，如 "_rerun_r3"）。
+    /// 由 PathExecutor 在进战后聚物分支时同步本字段（与 PathExecutor.RerunSyncIdSuffix 同源），
+    /// 保证万叶侧广播的 syncKey 与成员侧等待的 syncKey 携带相同后缀。
+    /// 首次跑线为 null/空 → syncKey 逐字节不变（零回归）。
+    /// </summary>
+    public string? RerunSyncIdSuffix { get; set; }
 
     /// <summary>
     /// 把 Notify*Async 改成 fire-and-forget 时使用的兜底 helper：

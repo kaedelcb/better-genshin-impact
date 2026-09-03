@@ -271,6 +271,12 @@ public static class KazuhaCollectExecutor
     public const int PollTimeoutMs = 1000;
 
     /// <summary>
+    /// 残留 CD 总等待硬顶（kazuha-collect-residual-cd-tail-poll-fix）：万叶长 E CD 为 9s，留 3s 余量取 12s。
+    /// 仅用于"OCR 明确指示残留超过盲等上限"时尾段视觉轮询的封顶，防 OCR 读出巨大值死等。
+    /// </summary>
+    public const int HardCeilingMs = 12000;
+
+    /// <summary>
     /// E 技能释放后的冷却检测重试次数。
     /// 正常机器首帧即可识别到 cooldown（numLabels2 &gt; 2），立即返回；
     /// 部分机器截图/渲染较慢，首帧未出现冷却白块，通过多次 100ms 间隔轮询扩大检测窗口，
@@ -296,6 +302,26 @@ public static class KazuhaCollectExecutor
     }
 
     /// <summary>
+    /// 【纯函数】尾段视觉就绪轮询的超时上限（kazuha-collect-residual-cd-tail-poll-fix）。
+    /// 背景缺陷：盲等被封顶 capSeconds（默认 5s）截断后，旧代码只轮询 1s 就兜底放 E，
+    /// 而万叶长 E CD 为 9s，残留 6~9s 时 E 仍在 CD → 空放，且释放确认看到"E 在 CD"误判"已放出"（假成功）。
+    /// 语义：ocrSeconds &lt;= 0（OCR 无效）→ 返回 PollTimeoutMs(1s)，与旧行为逐字节一致；
+    /// OCR 有效且指示残留超过已盲等部分 → 轮询覆盖剩余残留（每次视觉判定就绪即提前退出，不超等），
+    /// 总等待硬顶 <see cref="HardCeilingMs"/>，防 OCR 巨大值死等。
+    /// </summary>
+    /// <param name="ocrSeconds">OCR 读到的剩余 CD 秒数</param>
+    /// <param name="cappedWaitMs">已执行的盲等毫秒数（ComputeOcrWaitMs 的返回值）</param>
+    public static int ComputeVisualPollTimeoutMs(double ocrSeconds, int cappedWaitMs)
+    {
+        if (ocrSeconds <= 0) return PollTimeoutMs;
+        var remainingMs = (int)Math.Ceiling(ocrSeconds * 1000) - cappedWaitMs;
+        if (remainingMs <= 0) return PollTimeoutMs;
+        var budgetMs = HardCeilingMs - cappedWaitMs;
+        if (budgetMs < PollTimeoutMs) budgetMs = PollTimeoutMs;
+        return Math.Min(remainingMs, budgetMs);
+    }
+
+    /// <summary>
     /// 【纯函数】视觉就绪轮询的停止判定：视觉就绪 或 已达超时上限 → 停止。
     /// </summary>
     /// <param name="visualReady">最近一次 AvatarSkillAsync 是否返回就绪（false=就绪 → 传入 true）</param>
@@ -309,11 +335,12 @@ public static class KazuhaCollectExecutor
     /// <summary>
     /// 残留 CD 等待环节（替代基于时间戳的 Avatar.WaitSkillCd）：
     /// 1) OCR 读 E 图标剩余秒数 → 等 ComputeOcrWaitMs 决定的时长（封顶 capSeconds）；
-    /// 2) 读不到秒数 → 跳过秒数等待直接进轮询（不当作无 CD）；
-    /// 3) 视觉就绪轮询：PollIntervalMs 间隔、PollTimeoutMs 上限，任一次 AvatarSkillAsync 返回 false（就绪）即停；
-    /// 4) 1s 超时仍未就绪 → 直接放行（兜底）+ LogWarning。
+    /// 2) 读不到秒数 → 跳过秒数等待直接进轮询（不当作无 CD），轮询上限 1s（旧行为不变）；
+    /// 3) 视觉就绪轮询：PollIntervalMs 间隔；上限由 ComputeVisualPollTimeoutMs 决定——
+    ///    OCR 指示残留超过盲等部分时覆盖剩余残留（就绪即提前退出），否则 1s；
+    /// 4) 轮询超时仍未就绪 → 直接放行（兜底）+ LogWarning。
     /// 取消透传：所有 Delay / AvatarSkillAsync 接收 ct，取消时抛 OperationCanceledException 向上传播。
-    /// kazuha-collect-residual-cd-empty-cast-fix 改动 2。
+    /// kazuha-collect-residual-cd-empty-cast-fix 改动 2；kazuha-collect-residual-cd-tail-poll-fix 改动 1。
     /// </summary>
     private static async Task WaitForSkillReadyAsync(Avatar kazuha, int capSeconds, CancellationToken ct)
     {
@@ -333,7 +360,8 @@ public static class KazuhaCollectExecutor
             await Delay(ocrWaitMs, ct);
         }
 
-        // 3) 视觉就绪轮询（100ms 间隔 / 1s 上限）
+        // 3) 视觉就绪轮询（100ms 间隔；OCR 指示残留未走完时覆盖剩余残留，否则 1s 上限）
+        var pollTimeoutMs = ComputeVisualPollTimeoutMs(ocrSeconds, ocrWaitMs);
         var sw = System.Diagnostics.Stopwatch.StartNew();
         while (true)
         {
@@ -343,16 +371,17 @@ public static class KazuhaCollectExecutor
             var visualReady = !inCd; // AvatarSkillAsync 返回 false = 就绪
             var elapsedMs = (int)sw.ElapsedMilliseconds;
 
-            if (ShouldStopPolling(visualReady, elapsedMs, PollTimeoutMs))
+            if (ShouldStopPolling(visualReady, elapsedMs, pollTimeoutMs))
             {
                 if (!visualReady)
                 {
-                    // 4) 1s 超时兜底放行（OQ2 已定：直接放 E + LogWarning）
-                    Logger.LogWarning("[聚物][等CD] 视觉就绪轮询 {Timeout}ms 超时仍未就绪，兜底放 E（残留 CD 几乎已走完，空放概率极低）", PollTimeoutMs);
+                    // 4) 超时兜底放行：仅当 OCR 无效或视觉判定持续异常时才可能走到这里
+                    Logger.LogWarning("[聚物][等CD] 视觉就绪轮询 {Timeout}ms 超时仍未就绪，兜底放 E（OCR 残留={Ocr}s，已盲等 {WaitMs}ms）",
+                        pollTimeoutMs, Math.Round(ocrSeconds, 2), ocrWaitMs);
                 }
                 else
                 {
-                    Logger.LogInformation("[聚物][等CD] 视觉就绪（轮询 {Elapsed}ms）→ 放行", elapsedMs);
+                    Logger.LogInformation("[聚物][等CD] 视觉就绪（轮询 {Elapsed}ms / 上限 {Timeout}ms）→ 放行", elapsedMs, pollTimeoutMs);
                 }
                 break;
             }
