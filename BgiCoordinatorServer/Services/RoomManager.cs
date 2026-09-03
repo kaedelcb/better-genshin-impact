@@ -1329,7 +1329,14 @@ public class RoomManager
         // 就绪人数未达预期 → 保持"已上线等待"，不广播 AllReady、不消费
         if (readyPlayers.Count < threshold)
         {
-            Console.WriteLine("[探针服务端] CheckAndTransition: 未达预期人数，等待，group=" + group);
+            // [S5 止血] 可观测性日志：说明在等谁（在线但未就绪的成员），不改任何行为/状态机
+            var waitingPlayers = onlinePlayers.Except(readyPlayers).ToList();
+            var waitingDesc = waitingPlayers.Count > 0
+                ? string.Join(", ", waitingPlayers.Select(p => p.PlayerName + "(" + p.PlayerUid + ")"))
+                : "（无在线未就绪成员）";
+            _logger?.LogInformation("[联机锄地] 房间 {Group} 就绪人数不足：{Ready}/{Threshold}，等待成员：{Waiting}",
+                group, readyPlayers.Count, threshold, waitingDesc);
+            Console.WriteLine("[探针服务端] CheckAndTransition: 未达预期人数，等待 ready=" + readyPlayers.Count + "/" + threshold + " 等待成员=" + waitingDesc + ", group=" + group);
             return false;
         }
 

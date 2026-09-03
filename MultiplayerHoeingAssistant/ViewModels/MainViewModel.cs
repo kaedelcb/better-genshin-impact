@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Windows;
@@ -32,8 +33,12 @@ public class MainViewModel : INotifyPropertyChanged
     private string _onlineMode = "none";
     /// <summary>记录定时上线今天是否已触发过（按日期去重，设定新时间时重置）。</summary>
     private DateTime _lastScheduledFireDate = DateTime.MinValue;
-    /// <summary>本地定时上线自增 generation（用于驱动服务端 AllReady 判定，代替 BGI 的 onlineGeneration）。</summary>
+    /// <summary>本地定时上线自增 generation（用于驱动服务端 AllReady 判定，代替 BGI 的 onlineGeneration）。
+    /// 持久化到 NexusBGI/assistant-online-generation.txt，重启后不复位（S3，复刻 BGI 侧 NotifyOnlineTask 模式：
+    /// 服务端按 generation 边沿检测，丢弃 ≤ 历史值的事件，重启归零会被永久丢弃）。</summary>
     private int _localOnlineGeneration = 0;
+    /// <summary>generation 自增/写盘锁：定时器线程与 UI 线程可能并发进入 MarkOnlineAsync（复刻 NotifyOnlineTask._genLock）。</summary>
+    private readonly object _genLock = new();
     // 边沿检测：记录上次处理过的 BGI 上线事件代序号与 AllReady 代序号，用于幂等保护
     private int _lastOnlineGeneration = 0;
     private int _lastProcessedAllReadyGeneration;
@@ -275,6 +280,16 @@ public class MainViewModel : INotifyPropertyChanged
 
         // 生成房间码
         RoomCode = AssistConfigManager.GenerateControlRoomCode(_config.TeamUids);
+
+        // S3：generation 持久化恢复——服务端按代序号边沿检测（丢弃 ≤ 历史值），重启归零会导致上线事件被永久丢弃。
+        _localOnlineGeneration = LoadPersistedLocalGeneration();
+
+        // S1：重启后按"是否已配置定时上线时间"初始化武装状态——配置了时间则解除手动清除抑制，否则重启后定时器永久静默 return。
+        // _manuallyClearedOnline 不持久化：本会话内手动清除上线（ClearLocalOnline）后仍抑制到重新设定为止（语义不变）。
+        if (!string.IsNullOrEmpty(_config.ScheduledOnlineTime))
+        {
+            _manuallyClearedOnline = false;
+        }
 
         // 启动定时上线定时器（设定过 scheduledOnlineTime 才会真正到点触发）
         StartOnlineScheduler();
@@ -630,8 +645,9 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>标记已上线并上报服务端</summary>
-    private async Task MarkOnlineAsync(string mode)
+    /// <summary>标记已上线并上报服务端。返回 false 表示上线事件未送达服务端（无客户端/未连接），
+    /// 定时器路径据此不标记当天已触发、下跳 30 秒自动重试（S2）；非定时路径调用方可忽略返回值。</summary>
+    private async Task<bool> MarkOnlineAsync(string mode)
     {
         _isOnlineReady = true;
         _onlineMode = mode;
@@ -647,18 +663,71 @@ public class MainViewModel : INotifyPropertyChanged
         }
 
         // 上报上线事件，驱动服务端 AllReady（全员就绪）检查
-        if (_signalRClient != null)
+        if (_signalRClient == null)
         {
-            _localOnlineGeneration++;
-            try
+            return false;
+        }
+        // S2：上报前检查连接状态——未连接时 ReportOnlineEventAsync 会静默丢弃事件，
+        // 这里不增 generation、不打"已上报"，返回 false 让定时器路径下跳 30 秒自动重试。
+        if (!_signalRClient.IsConnected)
+        {
+            AddLog(mode == "scheduled"
+                ? "已到定时上线时间，但服务器未连接，将在 30 秒后重试"
+                : "上线事件未上报：服务器未连接");
+            return false;
+        }
+
+        int gen;
+        lock (_genLock)
+        {
+            gen = ++_localOnlineGeneration;
+        }
+        // S3：自增后立即写盘，保证重启后单调递增。写盘失败仅记日志，不影响本次上线事件。
+        PersistLocalGeneration(gen);
+        try
+        {
+            await _signalRClient.ReportOnlineEventAsync(gen, true);
+            AddLog($"已上报上线事件 generation={gen}，等待服务端全员就绪开锄");
+        }
+        catch (Exception ex)
+        {
+            AddLog($"上报上线事件失败: {ex.Message}");
+        }
+        return true;
+    }
+
+    /// <summary>本地 generation 持久化文件路径（与 assistant-config.json 同目录，%APPDATA%/NexusBGI）。</summary>
+    private static string LocalGenerationFilePath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NexusBGI", "assistant-online-generation.txt");
+
+    /// <summary>启动时读取持久化 generation。文件不存在/解析失败则从 0 开始（单机/未联机用户无感知）。</summary>
+    private int LoadPersistedLocalGeneration()
+    {
+        try
+        {
+            var path = LocalGenerationFilePath;
+            if (File.Exists(path) && int.TryParse(File.ReadAllText(path).Trim(), out var saved) && saved >= 0)
             {
-                await _signalRClient.ReportOnlineEventAsync(_localOnlineGeneration, true);
-                AddLog($"已上报上线事件 generation={_localOnlineGeneration}，等待服务端全员就绪开锄");
+                return saved;
             }
-            catch (Exception ex)
-            {
-                AddLog($"上报上线事件失败: {ex.Message}");
-            }
+        }
+        catch (Exception ex)
+        {
+            AddLog($"[定时上线] 读取 assistant-online-generation.txt 失败，generation 从 0 开始: {ex.Message}");
+        }
+        return 0;
+    }
+
+    /// <summary>自增后写盘。失败仅记日志，不影响本次上线事件。</summary>
+    private void PersistLocalGeneration(int generation)
+    {
+        try
+        {
+            File.WriteAllText(LocalGenerationFilePath, generation.ToString());
+        }
+        catch (Exception ex)
+        {
+            AddLog($"[定时上线] 写入 assistant-online-generation.txt 失败，本次 generation 未持久化: {ex.Message}");
         }
     }
 
@@ -669,21 +738,34 @@ public class MainViewModel : INotifyPropertyChanged
         _onlineTimer?.Dispose();
         _onlineTimer = new Timer(async _ =>
         {
-            if (_config == null) return;
-            if (string.IsNullOrEmpty(_config.ScheduledOnlineTime)) return;
+            // S4：async void 回调整体兜底——未处理异常会杀进程，这里捕获后仅记日志。
+            try
+            {
+                if (_config == null) return;
+                if (string.IsNullOrEmpty(_config.ScheduledOnlineTime)) return;
 
-            // 用户手动清除上线后，抑制定时自动上线（除非重新设定定时上线清除标志）
-            if (_manuallyClearedOnline) return;
+                // 用户手动清除上线后，抑制定时自动上线（除非重新设定定时上线清除标志）。
+                // 静默 return：不每 30 秒刷日志（S1）。
+                if (_manuallyClearedOnline) return;
 
-            var now = DateTime.Now;
-            if (!TimeSpan.TryParse(_config.ScheduledOnlineTime, out var targetTime)) return;
+                var now = DateTime.Now;
+                if (!TimeSpan.TryParse(_config.ScheduledOnlineTime, out var targetTime)) return;
 
-            var target = now.Date.Add(targetTime);
-            if (now < target) return;                              // 还没到点
-            if (_lastScheduledFireDate == now.Date) return;        // 今天已触发过
+                var target = now.Date.Add(targetTime);
+                if (now < target) return;                              // 还没到点
+                if (_lastScheduledFireDate == now.Date) return;        // 今天已触发过
 
-            await MarkOnlineAsync("scheduled");
-            _lastScheduledFireDate = now.Date;                     // 标记今天已触发
+                // S4：先置触发标记防 30 秒重入双触发；S2：上报失败（断线）时回滚，下跳 30 秒自动重试。
+                _lastScheduledFireDate = now.Date;
+                if (!await MarkOnlineAsync("scheduled"))
+                {
+                    _lastScheduledFireDate = DateTime.MinValue;
+                }
+            }
+            catch (Exception ex)
+            {
+                AddLog($"定时上线检查异常: {ex.Message}");
+            }
         }, null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
     }
 
