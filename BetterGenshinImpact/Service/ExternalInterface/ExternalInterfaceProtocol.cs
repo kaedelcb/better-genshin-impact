@@ -19,6 +19,7 @@ internal static class ExternalInterfaceOperations
     // 控制面（写操作，参与幂等窗口）
     public const string TaskStart = "ext.task.start";
     public const string TaskStop = "ext.task.stop";
+    public const string TaskCancel = "ext.task.cancel";
     public const string TaskSuspend = "ext.task.suspend";
     public const string TaskResume = "ext.task.resume";
     public const string ConfigSetTaskEnabled = "ext.config.setTaskEnabled";
@@ -42,7 +43,7 @@ internal static class ExternalInterfaceOperations
 
     /// <summary>写操作集合：重复投递必须去重；查询/握手/订阅类天然幂等，不进窗口。</summary>
     public static bool IsWriteOperation(string operation) => operation is
-        TaskStart or TaskStop or TaskSuspend or TaskResume
+        TaskStart or TaskStop or TaskCancel or TaskSuspend or TaskResume
         or ConfigSetTaskEnabled or ConfigPullGroup or ConfigOpenRemoteEditor
         or ConfigRemoteEditorResult or ConfigApplyGroup
         or ActionExecuteHotkey or ActionCloseGame;
@@ -134,6 +135,8 @@ internal static class ExternalInterfaceProtocol
                 ["event.hoeingProgress"] = true,
                 // 切片4：订阅可携带 lastKnownRevision，服务端从近因环形缓冲补发缺失事件（§4.6 模块一版）
                 ["event.replay"] = true,
+                // 切片7：队列式任务编排（ext.task.start 入队拿 taskHandle + 生命周期事件 + ext.task.cancel）
+                ["task.queue"] = true,
                 ["idempotency.window"] = true,
             },
         };

@@ -848,6 +848,14 @@ internal sealed class InstanceRequestHandler
             // 检查是否有已保存的中断上下文
             var hasSuspendedTaskContext = BetterGenshinImpact.GameTask.TaskContext.Instance()?.Config?.SuspendedTaskContext != null;
 
+            // [切片7] 协调器字段（纯增量，老客户端忽略未知字段）：
+            // IsCreated 守卫——从未使用过协调器（单机/纯 v2）时不为查询而创建单例，零感知。
+            var coordinatorCreated = BgiTaskCoordinator.IsCreated;
+            var queueDepth = coordinatorCreated ? BgiTaskCoordinator.Instance.QueueDepth : 0;
+            var currentTaskHandle = coordinatorCreated
+                ? BgiTaskCoordinator.Instance.CurrentTaskHandle?.ToString("N")
+                : null;
+
             return InstanceIpcEnvelope.Response(request, new
             {
                 running = BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0,
@@ -869,7 +877,11 @@ internal sealed class InstanceRequestHandler
                 recentTaskNameTime = _recentTaskNameTime, // 仅当 recentTaskName != null 时有效；null 时忽略
                 onlineGeneration = NotifyOnlineTask.CurrentGeneration, // 新：上线事件代序号，无任务时返回 0
                 onlineTriggeredAt = NotifyOnlineTask.LastTriggeredAt, // 新：上线事件触发时间
-                hasSuspendedTaskContext
+                hasSuspendedTaskContext,
+                // [切片7] 任务协调层扩展（spec §4.4，纯增量字段）
+                slotOccupied = BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0, // 与 running 同义但语义显式
+                queueDepth,        // 协调器在队任务数（未协商 task.queue 的老客户端不受影响）
+                currentTaskHandle  // 在跑任务的 handle（协调器派发时登记，手动任务为 null）
             });
         }
         catch (Exception ex)
