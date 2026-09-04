@@ -394,7 +394,14 @@ internal sealed class BgiTaskCoordinator : IDisposable
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "[task.queue] pump 循环异常退出");
+            // pump 意外死亡（理论不可达：执行段有逐项 try/catch；此处为最后防线）。
+            // 必须置空 _pumpTask，否则 EnsurePumpStartedNoLock 永不重启、队列静默瘫痪。
+            // 不原地重启（防崩溃循环），下一次 Submit 时自动拉起并 drain 残留通道项。
+            _logger.LogError(exception, "[task.queue] pump 循环异常退出，等待下一次提交时自动重启");
+            lock (_pumpLock)
+            {
+                _pumpTask = null;
+            }
         }
     }
 

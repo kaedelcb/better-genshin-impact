@@ -472,8 +472,16 @@ public class CommandExecutor
                 return new CommandResult { Status = "success", Message = $"{desc} 已执行过（generation={generation}，幂等跳过）" };
             }
 
+            if (string.IsNullOrEmpty(submit.TaskHandle))
+            {
+                // 畸形响应（queued/adopted 但无句柄）：无法路由终态事件，按通道瞬态失败落 v2 路径，
+                // 避免 null 句柄穿透 WaitForHandleAsync（ArgumentNullException 不在下方 catch 过滤器内）
+                ProbeLog($"[CommandExecutor][切片7] ext.task.start 响应缺少 taskHandle（status={submit.Status}），落回 v2 路径 {desc}");
+                return null;
+            }
+
             ProbeLog($"[CommandExecutor][切片7] ext.task.start 已入队 {desc} status={submit.Status} taskHandle={submit.TaskHandle} queuePosition={submit.QueuePosition}");
-            var terminal = await waiter.WaitForHandleAsync(submit.TaskHandle!, TaskTerminalWaitTimeout);
+            var terminal = await waiter.WaitForHandleAsync(submit.TaskHandle, TaskTerminalWaitTimeout);
             if (terminal == null)
             {
                 return new CommandResult { Status = "failed", Message = $"{desc} 等待执行结果超时（{TaskTerminalWaitTimeout.TotalHours}h 兜底），taskHandle={submit.TaskHandle}" };
