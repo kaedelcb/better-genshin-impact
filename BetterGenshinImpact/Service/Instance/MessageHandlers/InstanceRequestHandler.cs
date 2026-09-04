@@ -1651,7 +1651,14 @@ internal sealed class InstanceRequestHandler
         var snapshot = RemoteEditSession.SnapshotAndConsumeIfDone();
         return snapshot.State switch
         {
-            "editing" => InstanceIpcEnvelope.Response(request, new { state = "editing" }),
+            // editing 响应携带会话归属（targetUid/groupName）：助手在开窗响应丢失后的探测接管时核对，
+            // 避免接管到上一轮遗留的别的配置组僵尸窗（[实机修复] 2026-09-05）
+            "editing" => InstanceIpcEnvelope.Response(request, new
+            {
+                state = "editing",
+                targetUid = snapshot.TargetUid,
+                groupName = snapshot.GroupName
+            }),
             "saved" => InstanceIpcEnvelope.Response(request, new
             {
                 state = "saved",

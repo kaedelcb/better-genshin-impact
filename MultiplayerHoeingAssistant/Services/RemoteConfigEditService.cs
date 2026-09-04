@@ -82,10 +82,12 @@ public class RemoteConfigEditService
             return;
         }
 
-        // [实机修复] 跟踪本机 BGI 会话生命周期：窗口打开后流程提前退出时必须在 finally 通知 BGI 中止，
+        // [实机修复] 跟踪本机 BGI 会话生命周期：发出过开窗请求后流程提前退出时必须在 finally 通知 BGI 中止，
         // 否则 RemoteEditSession 以 editing 尸体占坑最长 15 分钟，期间一切新远程编辑都被拒（"时好时坏"根因）。
-        var editorOpened = false;
         var sessionConsumed = false;
+        // [实机修复 2026-09-05] 只要发出过开窗请求，提前退出就必须补 abort——
+        // 响应丢失≠窗口没开（BGI 可能已执行），不 abort 会留孤儿窗
+        var openAttempted = false;
 
         try
         {
@@ -116,11 +118,36 @@ public class RemoteConfigEditService
             // 2. 本机 BGI 弹远程编辑窗口
             var (openResp, openErr) = await SendIpcAsync("config.open_remote_editor",
                 JsonSerializer.Serialize(new { targetName, targetUid, groupName, packageJson }));
+            openAttempted = true;
             if (openResp == null)
             {
-                _report($"远程编辑需要本机 BGI 运行中（IPC 连接失败：{openErr}）");
-                return;
+                // [实机修复 2026-09-05] 响应整体丢失（ext 超时 + v2 兜底也失败）≠ 窗口没开：
+                // BGI 可能已执行开窗但响应没回来。探测一次会话状态——editing = 窗口实开，
+                // 接管该会话继续编辑流程，避免孤儿窗占坑 15 分钟（用户看到的"第一次修改无效/无回传"）。
+                var (probeResp, _) = await SendIpcAsync("config.remote_editor_result", null);
+                var probeState = probeResp is { Success: true } ? GetDataString(probeResp.Data, "state") : null;
+                // 归属核对（防劫持上一轮遗留的别的配置组僵尸窗）：editing 响应带 targetUid/groupName
+                var probeTarget = probeResp is { Success: true } ? GetDataString(probeResp.Data, "targetUid") : null;
+                var probeGroup = probeResp is { Success: true } ? GetDataString(probeResp.Data, "groupName") : null;
+                if (probeState == "editing"
+                    && probeTarget == targetUid && probeGroup == groupName)
+                {
+                    _report($"本机 BGI 的开窗响应丢失，但探测到编辑窗口已打开，已接管该会话（{targetName} 的「{groupName}」），等待保存（最长 10 分钟）...");
+                }
+                else if (probeState == "editing")
+                {
+                    // 僵尸窗归属不符：不接管，return 后 finally 的 abort 会把它清掉
+                    _report($"本机 BGI 残留着另一个远程编辑会话（{probeTarget} 的「{probeGroup}」），已清理，请重新发起");
+                    return;
+                }
+                else
+                {
+                    _report($"远程编辑需要本机 BGI 运行中（IPC 连接失败：{openErr}）");
+                    return;
+                }
             }
+            else
+            {
             if (!openResp.Success)
             {
                 _report($"本机 BGI 打开远程编辑窗口失败：{openResp.ErrorMessage ?? "未知原因"}");
@@ -137,8 +164,8 @@ public class RemoteConfigEditService
                 _report($"本机 BGI 返回了未知的编辑状态：{openState ?? "（无 state 字段）"}，流程终止");
                 return;
             }
-            editorOpened = true;
             _report($"已在本机 BGI 打开远程编辑窗口（{targetName} 的「{groupName}」），等待保存（最长 10 分钟）...");
+            }
 
             // 3. 每 2s 轮询编辑结果
             var deadline = DateTime.UtcNow + EditorPollMaxDuration;
@@ -240,7 +267,9 @@ public class RemoteConfigEditService
         {
             // 窗口打开后流程提前退出（轮询中断/超时/异常）→ 通知本机 BGI 中止会话并强制关窗。
             // best-effort：失败由 BGI 侧 15 分钟僵尸回收兜底；saved/cancelled/idle 已消费的会话无需清理。
-            if (editorOpened && !sessionConsumed)
+            // [实机修复 2026-09-05] 条件从 editorOpened 放宽到 openAttempted：
+            // 开窗响应丢失时窗口可能实开（BGI 已执行），abort 是幂等的，无会话时为 no-op。
+            if (openAttempted && !sessionConsumed)
             {
                 try
                 {

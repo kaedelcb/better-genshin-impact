@@ -235,7 +235,9 @@ internal static class RemoteEditSession
                 _state,
                 _scriptGroupConfigJson,
                 _soloTaskName,
-                _soloTaskSettingsJson);
+                _soloTaskSettingsJson,
+                _targetUid,
+                _groupName);
 
             if (_state is "saved" or "cancelled")
             {
@@ -273,9 +275,11 @@ internal static class RemoteEditSession
     }
 }
 
-/// <summary>config.remote_editor_result 的一次性快照。</summary>
+/// <summary>config.remote_editor_result 的一次性快照。[2026-09-05] 追加 TargetUid/GroupName：助手探测接管时核对归属，防劫持别的僵尸窗。</summary>
 internal sealed record RemoteEditSessionSnapshot(
     string State,
     string? ScriptGroupConfigJson,
     string? SoloTaskName,
-    string? SoloTaskSettingsJson);
+    string? SoloTaskSettingsJson,
+    string? TargetUid,
+    string? GroupName);

@@ -872,7 +872,7 @@ public sealed class BgiExternalClient : IDisposable
 
                 if (envelope.Operation == ExternalOperations.Response
                     && !string.IsNullOrEmpty(envelope.RequestId)
-                    && _pendingRequests.TryGetValue(envelope.RequestId, out var completionSource))
+                    && _pendingRequests.TryGetValue(NormalizeRequestId(envelope.RequestId), out var completionSource))
                 {
                     completionSource.TrySetResult(ToResponse(envelope)!);
                 }
@@ -983,6 +983,16 @@ public sealed class BgiExternalClient : IDisposable
 
         _pendingRequests.Clear();
     }
+
+    /// <summary>
+    /// requestId 归一化（[实机修复] 2026-09-05 根因修复）：
+    /// 本 SDK 生成 requestId 用 Guid.ToString("N")（无连字符），而 BGI 侧信封 RequestId 是 Guid 类型——
+    /// Newtonsoft 反序列化时把 "N" 解析为 Guid，响应回显时按默认 "D" 格式（带连字符）序列化，
+    /// 直接字符串比较永不匹配 → 响应被静默丢弃、所有 ext 命令 5s 超时（事件推送无需关联故不受影响）。
+    /// 统一按 Guid 解析回 "N" 格式再匹配；非 Guid 原样返回（前向兼容）。
+    /// </summary>
+    private static string NormalizeRequestId(string requestId)
+        => Guid.TryParse(requestId, out var guid) ? guid.ToString("N") : requestId;
 
     private void DisposePipe()
     {

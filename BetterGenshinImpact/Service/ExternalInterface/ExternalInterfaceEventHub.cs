@@ -64,16 +64,24 @@ internal sealed class ExternalInterfaceEventHub
         InstanceConnection connection,
         IReadOnlyList<string> events)
     {
-        var subscriber = _subscribers.GetOrAdd(
-            sessionId,
-            _ => new EventSubscriber(sessionId, connection));
-        subscriber.AddEvents(events);
+        var isNewSession = !_subscribers.TryGetValue(sessionId, out var subscriber);
+        if (isNewSession)
+        {
+            subscriber = _subscribers.GetOrAdd(sessionId, _ => new EventSubscriber(sessionId, connection));
+        }
+
+        var changed = subscriber.AddEvents(events);
         _observer.Start();
-        _logger.LogDebug(
-            "ext.event 订阅：session={SessionId} events=[{Events}]（当前订阅会话数 {Count}）",
-            sessionId,
-            string.Join(",", events.Count == 0 ? ExternalInterfaceEventNames.All : events),
-            _subscribers.Count);
+        // 降噪：只在"新会话"或"订阅集实际变化"时打日志——
+        // 客户端订阅确认丢失时的幂等重试不再逐次刷屏（2026-09-05 实机反馈）
+        if (isNewSession || changed)
+        {
+            _logger.LogDebug(
+                "ext.event 订阅：session={SessionId} events=[{Events}]（当前订阅会话数 {Count}）",
+                sessionId,
+                string.Join(",", events.Count == 0 ? ExternalInterfaceEventNames.All : events),
+                _subscribers.Count);
+        }
     }
 
     /// <summary>退订。events 为空表示退订全部（会话级注销）。</summary>
@@ -253,22 +261,35 @@ internal sealed class ExternalInterfaceEventHub
 
         public InstanceConnection Connection { get; }
 
-        /// <summary>空列表 = 订阅全部已知事件。</summary>
-        public void AddEvents(IReadOnlyList<string> events)
+        /// <summary>空列表 = 订阅全部已知事件。返回 true = 订阅集实际发生变化（供调用方降噪日志）。</summary>
+        public bool AddEvents(IReadOnlyList<string> events)
         {
             lock (_lock)
             {
                 if (events.Count == 0)
                 {
+                    if (_subscribeAll)
+                    {
+                        return false; // 已是"订阅全部"，重复订阅无变化
+                    }
+
                     _subscribeAll = true;
                     _events.Clear();
-                    return;
+                    return true;
                 }
 
+                if (_subscribeAll)
+                {
+                    return false; // 已是"订阅全部"，追加具体事件无变化
+                }
+
+                var added = false;
                 foreach (var name in events)
                 {
-                    _events.Add(name);
+                    added |= _events.Add(name);
                 }
+
+                return added;
             }
         }
 
