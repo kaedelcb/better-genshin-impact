@@ -4329,15 +4329,34 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>配置一个一键按钮的绑定（弹窗选配置组或一条龙）。返回 true 表示绑定成功。</summary>
+    /// <summary>配置一个一键按钮的绑定（弹窗选配置组或一条龙）。返回 true 表示绑定成功。
+    /// 绑别人时列表取该成员上报的配置缓存（targetMember.ConfigGroups/OneClickConfigs），
+    /// 不用本机列表——各成员的 BGI 配置清单不同，绑错名字对方执行时找不到配置。</summary>
     private async Task<bool> BindQuickCommandAsync(string key, MemberViewModel? targetMember = null)
     {
         if (_config == null || _configManager == null) return false;
-        var (groups, oneClicks) = await GetLocalConfigsAsync();
-        if (groups.Count == 0 && oneClicks.Count == 0)
+        List<string> groups;
+        List<string> oneClicks;
+        var bindingOther = targetMember != null && targetMember.PlayerUid != _config.PlayerUid;
+        if (bindingOther)
         {
-            MessageBox.Show("无法读取本机 BGI 的配置组/一条龙列表，请确认 BGI 已启动且已同步脚本");
-            return false;
+            // 绑别人：用对方周期上报的配置清单（可能是缓存，BGI 未连时为空或过期）
+            groups = (targetMember!.ConfigGroups ?? []).Where(g => !string.IsNullOrEmpty(g)).ToList();
+            oneClicks = (targetMember.OneClickConfigs ?? []).Where(o => !string.IsNullOrEmpty(o)).ToList();
+            if (groups.Count == 0 && oneClicks.Count == 0)
+            {
+                MessageBox.Show($"未获取到 {targetMember.PlayerName} 的配置组/一条龙列表（对方 BGI 未连接或未上报）");
+                return false;
+            }
+        }
+        else
+        {
+            (groups, oneClicks) = await GetLocalConfigsAsync();
+            if (groups.Count == 0 && oneClicks.Count == 0)
+            {
+                MessageBox.Show("无法读取本机 BGI 的配置组/一条龙列表，请确认 BGI 已启动且已同步脚本");
+                return false;
+            }
         }
 
         var names = new List<string>();
@@ -4368,7 +4387,9 @@ public class MainViewModel : INotifyPropertyChanged
         var panel = new StackPanel { Margin = new Thickness(16) };
         panel.Children.Add(new TextBlock
         {
-            Text = $"为「{key}」选择要执行的配置组或一条龙：",
+            Text = bindingOther
+                ? $"为 {targetMember!.PlayerName} 的「{key}」选择要执行的配置组或一条龙（列表来自对方上报）："
+                : $"为「{key}」选择要执行的配置组或一条龙：",
             FontSize = 14,
             FontWeight = FontWeights.SemiBold,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),

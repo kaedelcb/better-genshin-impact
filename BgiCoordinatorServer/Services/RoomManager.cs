@@ -1401,10 +1401,11 @@ public class RoomManager
         Console.WriteLine("[探针服务端] ===== ConsumeOnlineReady 结束, group=" + group + " =====");
     }
 
-    /// <summary>清除指定玩家的 OnlineHistory（已联机记录）。由 ClearOnlineHistory Hub 端点调用。</summary>
-    public void ClearOnlineHistory(string roomCode, string playerUid)
+    /// <summary>清除指定玩家的 OnlineHistory（已联机记录）。由 ClearOnlineHistory Hub 端点调用。
+    /// group 参数必须是 _controlRooms 的键（"CTRL_xxx" 组名），不是裸 roomCode。</summary>
+    public void ClearOnlineHistory(string group, string playerUid)
     {
-        if (_controlRooms.TryGetValue(roomCode, out var players))
+        if (_controlRooms.TryGetValue(group, out var players))
         {
             lock (players)
             {
@@ -1414,7 +1415,15 @@ public class RoomManager
                     player.OnlineHistory.Clear();
                     Console.WriteLine("[探针服务端] ClearOnlineHistory: 已清除玩家 " + playerUid + " 的 OnlineHistory");
                 }
+                else
+                {
+                    Console.WriteLine("[探针服务端] ClearOnlineHistory: 找不到玩家 uid=" + playerUid + ", group=" + group);
+                }
             }
+        }
+        else
+        {
+            Console.WriteLine("[探针服务端] ClearOnlineHistory: 找不到 group=" + group);
         }
     }
 

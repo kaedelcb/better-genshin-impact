@@ -166,8 +166,9 @@ public sealed partial class RoomOperations
                 return;
             }
 
-            var roomCode = group.Replace("CTRL_", "");
-            _roomManager.ClearOnlineHistory(roomCode, targetUid);
+            // 注意：_controlRooms 的键是组名（"CTRL_xxx"），必须原样传入，不能剥前缀
+            // （历史 bug：剥成裸 roomCode 导致 TryGetValue 永远落空，清除静默无效）
+            _roomManager.ClearOnlineHistory(group, targetUid);
 
             // 广播更新给所有成员
             var players = _roomManager.GetControlRoomPlayers(group);
