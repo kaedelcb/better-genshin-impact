@@ -435,6 +435,12 @@ public sealed class BgiExternalClient : IDisposable
         {
             // 通道瞬态不可用：静默，下一次事件/跳号会再触发
         }
+        catch (Exception)
+        {
+            // 兜底吸收：本方法常以 fire-and-forget 调用（revision 跳号 / 事件触发刷新），
+            // 任何逃逸异常都会冒泡到 TaskScheduler.UnobservedTaskException 弹全局异常框
+            // （App.xaml.cs:85），必须就地吞掉；下一次事件/跳号会再触发重试
+        }
         finally
         {
             Interlocked.Exchange(ref _snapshotPullInFlight, 0);
