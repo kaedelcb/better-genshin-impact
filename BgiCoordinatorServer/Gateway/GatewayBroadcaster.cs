@@ -41,7 +41,11 @@ public sealed class GatewayBroadcaster
     /// <summary>向房间/控制组双发：旧名 → /hub 组，evt → /gateway 组。</summary>
     public async Task BroadcastGroupAsync(string group, string legacyEventName, object? evtPayload, params object?[] legacyArgs)
     {
-        await _legacyHub.Clients.Group(group).SendAsync(legacyEventName, legacyArgs);
+        // 注意：必须用 SendCoreAsync 传参数数组——IClientProxy.SendAsync 只有逐参重载
+        // （arg1..arg10），传 object?[] 会被绑成 arg1=数组本身，导致客户端收到双层嵌套
+        // arguments[0]=[原参数数组]，反序列化静默失败、事件处理器不触发（实机回归 2026-09-04 踩中：
+        // 成员列表全空）。SendCoreAsync 才是"参数已是数组"的正确入口。
+        await _legacyHub.Clients.Group(group).SendCoreAsync(legacyEventName, legacyArgs);
         await SendEvtSafeAsync(_gatewayHub.Clients.Group(group), group, legacyEventName, evtPayload);
     }
 
@@ -53,7 +57,7 @@ public sealed class GatewayBroadcaster
             await SendEvtSafeAsync(_gatewayHub.Clients.Client(ctx.ConnectionId), null, legacyEventName, evtPayload);
             return;
         }
-        await _legacyHub.Clients.Client(ctx.ConnectionId).SendAsync(legacyEventName, legacyArgs);
+        await _legacyHub.Clients.Client(ctx.ConnectionId).SendCoreAsync(legacyEventName, legacyArgs);
     }
 
     /// <summary>向指定连接定向发送：按该连接的协议登记只发一份（旧名或 evt）。</summary>
@@ -74,7 +78,7 @@ public sealed class GatewayBroadcaster
             }
             return;
         }
-        await _legacyHub.Clients.Client(connectionId).SendAsync(legacyEventName, legacyArgs);
+        await _legacyHub.Clients.Client(connectionId).SendCoreAsync(legacyEventName, legacyArgs);
     }
 
     /// <summary>组管理：按连接协议来源落到对应 Hub（与 Hub.Groups.AddToGroupAsync 等价）。</summary>
