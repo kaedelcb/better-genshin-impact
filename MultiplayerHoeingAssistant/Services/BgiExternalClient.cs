@@ -14,6 +14,21 @@ public enum BgiExternalLinkState
     Ready,
 }
 
+/// <summary>
+/// [切片4] SDK 连接状态机（《通信方案》§3.2 会话层状态机的客户端半边）：
+/// Connecting（建立/重试连接）→ Handshaking（ext.hello 协商中）→ Ready（通道可用）
+/// → Degraded（曾就绪后断开 / 握手失败降级 / 对端老 BGI，可能恢复）→ Closed（Dispose 终态）。
+/// 初始值 Degraded（尚未连接 = 不可用）；跨会话等不可恢复错误也落 Degraded（由调用方退避后重建 client 再探测）。
+/// </summary>
+public enum BgiExternalConnectionState
+{
+    Connecting,
+    Handshaking,
+    Ready,
+    Degraded,
+    Closed,
+}
+
 /// <summary>ext.event 事件名常量（与 BGI 侧 ExternalInterfaceEventNames 对齐）。</summary>
 public static class BgiExternalEventNames
 {
@@ -89,6 +104,30 @@ public sealed class BgiExternalClient : IDisposable
     private bool _disposed;
 
     public BgiExternalLinkState State { get; private set; } = BgiExternalLinkState.Down;
+
+    /// <summary>[切片4] 连接状态机（只读）；变更经 <see cref="ConnectionStateChanged"/> 广播。</summary>
+    public BgiExternalConnectionState ConnectionState { get; private set; } = BgiExternalConnectionState.Degraded;
+
+    /// <summary>连接状态机变更通知（在 SDK 管理/读线程触发，Handler 异常不影响连接管理）。</summary>
+    public event Action<BgiExternalConnectionState>? ConnectionStateChanged;
+
+    private void SetConnectionState(BgiExternalConnectionState next)
+    {
+        if (ConnectionState == next)
+        {
+            return;
+        }
+
+        ConnectionState = next;
+        try
+        {
+            ConnectionStateChanged?.Invoke(next);
+        }
+        catch
+        {
+            // 状态通知异常不杀死连接管理循环
+        }
+    }
 
     public string? BgiVersion { get; private set; }
 
@@ -245,6 +284,7 @@ public sealed class BgiExternalClient : IDisposable
 
         _disposed = true;
         _lifetimeCts.Cancel();
+        SetConnectionState(BgiExternalConnectionState.Closed);
         try
         {
             _pipe?.Dispose();
@@ -289,6 +329,7 @@ public sealed class BgiExternalClient : IDisposable
 
             try
             {
+                SetConnectionState(BgiExternalConnectionState.Connecting);
                 if (await TryEstablishOnceAsync(cancellationToken).ConfigureAwait(false))
                 {
                     delay = TimeSpan.Zero;
@@ -342,6 +383,7 @@ public sealed class BgiExternalClient : IDisposable
         }
 
         _pipe = pipe;
+        SetConnectionState(BgiExternalConnectionState.Handshaking);
 
         BgiExternalResponse hello;
         try
@@ -389,6 +431,7 @@ public sealed class BgiExternalClient : IDisposable
                 State = BgiExternalLinkState.Down;
             }
 
+            SetConnectionState(BgiExternalConnectionState.Degraded);
             return false;
         }
 
@@ -429,6 +472,7 @@ public sealed class BgiExternalClient : IDisposable
                         DisposePipe();
                         _unrecoverable = true;
                         State = BgiExternalLinkState.Down;
+                        SetConnectionState(BgiExternalConnectionState.Degraded);
                         return false;
                     }
                 }
@@ -438,11 +482,13 @@ public sealed class BgiExternalClient : IDisposable
                 // 握手数据解析失败按不可用处理
                 DisposePipe();
                 State = BgiExternalLinkState.Down;
+                SetConnectionState(BgiExternalConnectionState.Degraded);
                 return false;
             }
         }
 
         State = BgiExternalLinkState.Ready;
+        SetConnectionState(BgiExternalConnectionState.Ready);
         _readerLoop = Task.Run(() => ReaderLoopAsync(pipe, _lifetimeCts.Token), CancellationToken.None);
 
         // 重连后恢复订阅（订阅挂在会话上，新连接需要重新声明）
@@ -511,6 +557,7 @@ public sealed class BgiExternalClient : IDisposable
             if (!_disposed)
             {
                 State = BgiExternalLinkState.Down;
+                SetConnectionState(BgiExternalConnectionState.Degraded);
                 FailPendingRequests(new IOException("ext 连接已断开"));
                 lock (_subscribeLock)
                 {
