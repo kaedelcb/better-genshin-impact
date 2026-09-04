@@ -1,0 +1,44 @@
+<Window x:Class="MultiplayerHoeingAssistant.Views.RemoteConfigGroupSelectWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="远程编辑配置组"
+        Width="420" Height="380"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#1a1a2e"
+        Foreground="#e0e0e0">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" x:Name="TitleText" Text="远程编辑配置组"
+                   FontSize="18" FontWeight="Bold" Foreground="#4fc3f7" Margin="0,0,0,12"/>
+
+        <TextBlock Grid.Row="1" x:Name="HintText" Text="请选择要远程编辑的配置组："
+                   Foreground="#90caf9" Margin="0,0,0,8" TextWrapping="Wrap"/>
+
+        <ListBox Grid.Row="2" x:Name="GroupList"
+                 Background="#263238" Foreground="White"
+                 BorderBrush="#37474f" FontSize="13"
+                 Margin="0,0,0,12" MouseDoubleClick="GroupList_MouseDoubleClick"/>
+
+        <TextBlock Grid.Row="3" x:Name="ErrorText" Text=""
+                   Foreground="#ef5350" FontSize="12" Margin="0,0,0,8" TextWrapping="Wrap"/>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="确定" x:Name="OkButton" Width="100" Height="36" Margin="0,0,12,0"
+                    Background="#42a5f5" Foreground="White" BorderThickness="0" Click="OkButton_Click"/>
+            <Button Content="取消" x:Name="CancelButton" Width="100" Height="36"
+                    Background="#546e7a" Foreground="White" BorderThickness="0" Click="CancelButton_Click"/>
+        </StackPanel>
+
+        <TextBlock Grid.Row="5" Text="选定后将拉取对方配置并在本机 BGI 中打开编辑窗口，保存后回传对方生效。"
+                   Foreground="#78909c" FontSize="11" Margin="0,12,0,0" TextWrapping="Wrap"/>
+    </Grid>
+</Window>

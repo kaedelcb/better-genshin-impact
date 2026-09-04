@@ -721,7 +721,14 @@
                                                                 <Rectangle.StrokeThickness>1.5</Rectangle.StrokeThickness>
                                                             </Rectangle>
                                                             <StackPanel VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding PlayerName}" FontSize="15" FontWeight="Medium" Foreground="{StaticResource White}"/>
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock Text="{Binding PlayerName}" FontSize="15" FontWeight="Medium" Foreground="{StaticResource White}" VerticalAlignment="Center"/>
+                                                                    <Button Content="⚙" Style="{StaticResource TextAction}" FontSize="12" Padding="2,0" Margin="6,0,0,0"
+                                                                            VerticalAlignment="Center" ToolTip="远程编辑该成员的配置组"
+                                                                            IsEnabled="{Binding CanRemoteEdit}"
+                                                                            Command="{Binding DataContext.RemoteConfigEditCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                </StackPanel>
                                                                 <TextBlock Text="{Binding DisplayUid, StringFormat='UID {0}'}" FontSize="10" Foreground="{StaticResource Dim}" Margin="0,1,0,0"/>
                                                             </StackPanel>
                                                         </StackPanel>

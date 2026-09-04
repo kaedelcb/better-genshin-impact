@@ -60,11 +60,16 @@ public partial class ScriptGroupConfigViewModel : ObservableObject, IViewModel
         new KeyValuePair<RecoverTiming, string>(RecoverTiming.OnlyTeleport, "只在传送点"),
         new KeyValuePair<RecoverTiming, string>(RecoverTiming.Never, "不回复"),
     };
-    public ScriptGroupConfigViewModel(AllConfig config, ScriptGroupConfig scriptGroupConfig)
+    public ScriptGroupConfigViewModel(
+        AllConfig config,
+        ScriptGroupConfig scriptGroupConfig,
+        IEnumerable<string>? strategyOverride = null,
+        IEnumerable<string>? combatStrategyOverride = null)
     {
         ScriptGroupConfig = scriptGroupConfig;
         PathingConfig = scriptGroupConfig.PathingConfig;
-        AutoFightViewModel = new AutoFightViewModel(config);
+        // strategyOverride / combatStrategyOverride：远程配置组编辑时注入对方机器的策略清单（默认 null = 本机扫盘，旧行为）
+        AutoFightViewModel = new AutoFightViewModel(config, strategyOverride, combatStrategyOverride);
         ShellConfig = scriptGroupConfig.ShellConfig;
         EnableShellConfig = scriptGroupConfig.EnableShellConfig;
         PathingConfig.PropertyChanged += (_, e) =>

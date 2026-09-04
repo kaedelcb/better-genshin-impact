@@ -39,6 +39,10 @@ public partial class MultiplayerHoeingSettingsView : UserControl
     private readonly Dictionary<string, object?> _settings;
     private readonly AutoHoeingConfig _globalCfg;
 
+    // 远程配置组编辑模式（remote-config-group-edit §4.1）：true 时禁用一切本机磁盘扫描/全局镜像写入
+    private readonly bool _remoteMode;
+    private readonly IReadOnlyList<string>? _remoteStrategyFiles;
+
     private readonly List<SoloTaskSettingItem> _settingItems;
     private readonly Dictionary<string, FrameworkElement> _soloControls = new();
 
@@ -60,11 +64,19 @@ public partial class MultiplayerHoeingSettingsView : UserControl
 
     public MultiplayerHoeingSettingsViewModel ViewModel { get; }
 
-    public MultiplayerHoeingSettingsView(ScriptGroupProject item, MultiplayerHoeingSettingsViewModel viewModel)
+    public MultiplayerHoeingSettingsView(
+        ScriptGroupProject item,
+        MultiplayerHoeingSettingsViewModel viewModel,
+        bool remoteMode = false,
+        AutoHoeingConfig? globalCfgOverride = null,
+        IReadOnlyList<string>? remoteStrategyFiles = null)
     {
         _item = item;
         _settings = item.SoloTaskSettingsObject!;
-        _globalCfg = TaskContext.Instance().Config.AutoHoeingConfig;
+        _remoteMode = remoteMode;
+        _remoteStrategyFiles = remoteStrategyFiles;
+        // 远程模式用注入的对方 AutoHoeingConfig；本地模式维持旧行为取全局配置
+        _globalCfg = globalCfgOverride ?? TaskContext.Instance().Config.AutoHoeingConfig;
         DataContext = ViewModel = viewModel;
         InitializeComponent();   // 占位 ContentControl 此后才就绪
 
@@ -73,10 +85,23 @@ public partial class MultiplayerHoeingSettingsView : UserControl
         InitPreSwitchRowsBuffer();   // 从 _settings 读取还原换武器两行（无则默认空白）
         BuildPreSwitchWeaponRows();  // 构建固定2行开锄前换武器 UI
         InitVariantPrefBuffer();   // 迁现状 variantPrefBuffer 预填
-        BuildBuiltinRouteHost();   // 迁 RebuildBuiltinButtons + import/openDir 事件
-        BuildMemberRouteRolesHost(); // 成员侧「按线路切角色」配置列表（仅成员可见区，code-behind 填充）
-        HookVariantPanel();        // VariantExpander.Expanded += BuildVariantPanelContent; _refreshVariantPanel = ...
-        HookFightStrategyButton(); // "打开联机战斗策略文件" → MultiplayerFightStrategyFileHelper.OpenForEdit()
+
+        if (_remoteMode)
+        {
+            // 远程编辑模式：三块磁盘扫描区域替换为占位提示，不扫本机线路目录
+            BuiltinRouteHost.Content = CreateRemoteModePlaceholder();
+            MemberRouteRolesHost.Content = CreateRemoteModePlaceholder();
+            VariantPanelHost.Content = CreateRemoteModePlaceholder();
+            OpenFightStrategyButton.IsEnabled = false;   // "打开联机战斗策略文件"指向本机文件，远程模式禁用
+        }
+        else
+        {
+            BuildBuiltinRouteHost();   // 迁 RebuildBuiltinButtons + import/openDir 事件
+            BuildMemberRouteRolesHost(); // 成员侧「按线路切角色」配置列表（仅成员可见区，code-behind 填充）
+            HookVariantPanel();        // VariantExpander.Expanded += BuildVariantPanelContent; _refreshVariantPanel = ...
+            HookFightStrategyButton(); // "打开联机战斗策略文件" → MultiplayerFightStrategyFileHelper.OpenForEdit()
+        }
+
         HookDocButtons();          // 变体卡 Header 的"使用教程"/"制作规则" → OpenDoc
         HookFightStrategyCombo();  // E 卡片复刻战斗策略下拉（绑配置组 AutoFightConfig.StrategyName）
         HookMedicineEatButton();    // 按周期吃食物设置按钮 → 弹窗
@@ -84,6 +109,15 @@ public partial class MultiplayerHoeingSettingsView : UserControl
 
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;   // 衔接 UpdateButtonStates
     }
+
+    // 远程编辑模式占位提示（替换磁盘扫描区域）
+    private static TextBlock CreateRemoteModePlaceholder() => new()
+    {
+        Text = "远程编辑模式：路线相关设置请在对方本机修改",
+        Foreground = SystemColors.GrayTextBrush,
+        Margin = new Thickness(8),
+        TextWrapping = TextWrapping.Wrap
+    };
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -348,7 +382,8 @@ public partial class MultiplayerHoeingSettingsView : UserControl
     // ===== 变体偏好缓冲预填（迁现状）：先全局 gcfg.VariantPreferences，再用 settings 覆盖 =====
     private void InitVariantPrefBuffer()
     {
-        var gcfg = TaskContext.Instance().Config.AutoHoeingConfig;
+        // _globalCfg 本地模式即 TaskContext 全局配置；远程模式为注入的对方配置
+        var gcfg = _globalCfg;
         if (gcfg.VariantPreferences != null)
         {
             foreach (var (k, v) in gcfg.VariantPreferences)
@@ -829,18 +864,26 @@ public partial class MultiplayerHoeingSettingsView : UserControl
         => _item.GroupInfo?.Config?.PathingConfig?.AutoFightConfig;
 
     // E 卡片战斗策略下拉：复刻配置组选项（User\AutoFight 下 *.txt + "根据队伍自动选择"），初值取配置组 StrategyName
+    // 远程编辑模式：选项源换注入的对方策略清单，不扫本机磁盘
     private void HookFightStrategyCombo()
     {
         try
         {
-            var folder = Global.Absolute(@"User\AutoFight");
-            Directory.CreateDirectory(folder);
             var list = new List<string> { "根据队伍自动选择" };
-            foreach (var f in Directory.GetFiles(folder, "*.txt", SearchOption.AllDirectories))
+            if (_remoteStrategyFiles != null)
             {
-                var name = f.Replace(folder, "").Replace(".txt", "");
-                if (name.StartsWith('\\')) name = name[1..];
-                if (!string.IsNullOrWhiteSpace(name)) list.Add(name);
+                list.AddRange(_remoteStrategyFiles);
+            }
+            else
+            {
+                var folder = Global.Absolute(@"User\AutoFight");
+                Directory.CreateDirectory(folder);
+                foreach (var f in Directory.GetFiles(folder, "*.txt", SearchOption.AllDirectories))
+                {
+                    var name = f.Replace(folder, "").Replace(".txt", "");
+                    if (name.StartsWith('\\')) name = name[1..];
+                    if (!string.IsNullOrWhiteSpace(name)) list.Add(name);
+                }
             }
             FightStrategyCombo.ItemsSource = list;
 
@@ -1126,7 +1169,7 @@ public partial class MultiplayerHoeingSettingsView : UserControl
     {
         try
         {
-            var globalCfg = TaskContext.Instance().Config.AutoHoeingConfig;
+            var globalCfg = _globalCfg;
             var dirs = BetterGenshinImpact.GameTask.AutoHoeing.AutoHoeingTask
                 .ResolveAllHoeingRouteDirs(globalCfg);
             // 按"总文件夹"分组：每个总文件夹 → 其下存在的变体子文件夹集合（A→B→C→D）
@@ -1363,9 +1406,13 @@ public partial class MultiplayerHoeingSettingsView : UserControl
         if (_variantPrefBuffer.Count > 0)
         {
             _settings["variantPreferences"] = new Dictionary<string, string>(_variantPrefBuffer, StringComparer.Ordinal);
-            var gcfg = TaskContext.Instance().Config.AutoHoeingConfig;
-            foreach (var (k, v) in _variantPrefBuffer)
-                gcfg.SetVariantPreference(k, v);   // 镜像到全局兜底
+            // 远程编辑模式跳过全局镜像（不污染本机全局配置）
+            if (!_remoteMode)
+            {
+                var gcfg = TaskContext.Instance().Config.AutoHoeingConfig;
+                foreach (var (k, v) in _variantPrefBuffer)
+                    gcfg.SetVariantPreference(k, v);   // 镜像到全局兜底
+            }
         }
         else
         {

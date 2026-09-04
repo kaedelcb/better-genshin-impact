@@ -1,4 +1,4 @@
-﻿using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.Common.Element.Assets;
@@ -6,9 +6,11 @@ using BetterGenshinImpact.Model;
 using BetterGenshinImpact.Service.Interface;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using Wpf.Ui;
 
 namespace BetterGenshinImpact.ViewModel.Pages.View;
@@ -17,18 +19,40 @@ public partial class AutoFightViewModel : ObservableObject, IViewModel
 {
     public AllConfig Config { get; set; }
 
-    public AutoFightViewModel()
+    /// <summary>
+    /// 远程编辑模式（remote-config-group-edit §4.2）：非 null 时跳过 LoadCustomScript 磁盘扫描，
+    /// 直接使用注入的（对方机器的）策略清单；下拉刷新也不再回扫本机磁盘。
+    /// </summary>
+    private readonly IEnumerable<string>? _strategyOverride;
+    private readonly IEnumerable<string>? _combatStrategyOverride;
+
+    public AutoFightViewModel(
+        IEnumerable<string>? strategyOverride = null,
+        IEnumerable<string>? combatStrategyOverride = null)
     {
         Config = TaskContext.Instance().Config;
-        _strategyList = LoadCustomScript(Global.Absolute(@"User\AutoGeniusInvokation"));
-        _combatStrategyList = ["根据队伍自动选择", .. LoadCustomScript(Global.Absolute(@"User\AutoFight"))];
+        _strategyOverride = strategyOverride;
+        _combatStrategyOverride = combatStrategyOverride;
+        _strategyList = strategyOverride?.ToArray()
+                        ?? LoadCustomScript(Global.Absolute(@"User\AutoGeniusInvokation"));
+        _combatStrategyList = combatStrategyOverride is null
+            ? ["根据队伍自动选择", .. LoadCustomScript(Global.Absolute(@"User\AutoFight"))]
+            : ["根据队伍自动选择", .. combatStrategyOverride];
     }
 
-    public AutoFightViewModel(AllConfig config)
+    public AutoFightViewModel(
+        AllConfig config,
+        IEnumerable<string>? strategyOverride = null,
+        IEnumerable<string>? combatStrategyOverride = null)
     {
         Config = config;
-        _strategyList = LoadCustomScript(Global.Absolute(@"User\AutoGeniusInvokation"));
-        _combatStrategyList = ["根据队伍自动选择", .. LoadCustomScript(Global.Absolute(@"User\AutoFight"))];
+        _strategyOverride = strategyOverride;
+        _combatStrategyOverride = combatStrategyOverride;
+        _strategyList = strategyOverride?.ToArray()
+                        ?? LoadCustomScript(Global.Absolute(@"User\AutoGeniusInvokation"));
+        _combatStrategyList = combatStrategyOverride is null
+            ? ["根据队伍自动选择", .. LoadCustomScript(Global.Absolute(@"User\AutoFight"))]
+            : ["根据队伍自动选择", .. combatStrategyOverride];
     }
 
     [ObservableProperty]
@@ -86,6 +110,12 @@ public partial class AutoFightViewModel : ObservableObject, IViewModel
     [RelayCommand]
     public void OnStrategyDropDownOpened(string type)
     {
+        // 远程编辑模式：策略清单来自对方机器，不回扫本机磁盘
+        if (_strategyOverride != null || _combatStrategyOverride != null)
+        {
+            return;
+        }
+
         switch (type)
         {
             case "Combat":

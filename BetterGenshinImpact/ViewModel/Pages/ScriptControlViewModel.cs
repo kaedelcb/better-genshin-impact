@@ -2303,6 +2303,37 @@ public partial class ScriptControlViewModel : ViewModel
         }
     }
 
+    /// <summary>公开包装：供远程配置组编辑（config.apply_group）合并后原子写盘，行为与内部 WriteScriptGroup 完全一致。</summary>
+    public void WriteScriptGroupToDisk(ScriptGroup scriptGroup) => WriteScriptGroup(scriptGroup);
+
+    /// <summary>
+    /// 会报告成败的写盘方法（供远程配置组编辑 config.apply_group 使用）：
+    /// 与 WriteScriptGroup 相同的落盘路径（按 group.Name 拼文件名 + WriteToFileAtomically 原子写），
+    /// 但失败时通过返回值与 out error 告知调用方，而不是只弹 snackbar 静默吞掉异常。
+    /// 不影响 WriteScriptGroup 的既有行为。
+    /// </summary>
+    public bool TryWriteScriptGroupToDisk(ScriptGroup scriptGroup, out string? error)
+    {
+        error = null;
+        try
+        {
+            if (!Directory.Exists(ScriptGroupPath))
+            {
+                Directory.CreateDirectory(ScriptGroupPath);
+            }
+
+            var file = Path.Combine(ScriptGroupPath, $"{scriptGroup.Name}.json");
+            scriptGroup.WriteToFileAtomically(file);
+            return true;
+        }
+        catch (Exception e)
+        {
+            _logger.LogDebug(e, "保存配置组配置时失败");
+            error = e.Message;
+            return false;
+        }
+    }
+
     private static void SetTaskContextNextFlag(ScriptGroup group)
     {
         var nst = TaskContext.Instance().Config.NextScheduledTask.Find(item => item.Item1 == group.Name);
@@ -2318,6 +2349,9 @@ public partial class ScriptControlViewModel : ViewModel
             }
         }
     }
+
+    /// <summary>公开包装：供远程配置组编辑（config.apply_group）写盘后刷新内存，行为与内部 ReadScriptGroup 完全一致。</summary>
+    public void ReloadScriptGroups() => ReadScriptGroup();
 
     private void ReadScriptGroup()
     {

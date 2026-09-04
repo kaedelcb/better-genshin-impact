@@ -22,6 +22,8 @@ public class MainViewModel : INotifyPropertyChanged
     private AssistConfig? _config;
     private AssistConfigManager? _configManager;
     private MemberConfigCacheManager? _cacheManager;
+    /// <summary>远程配置组编辑会话状态机（契约见 Docs/远程配置组编辑-实施方案.md §5）。</summary>
+    private RemoteConfigEditService? _remoteConfigEditService;
     private string _roomCode = "";
     private bool _isConnected;
     private string _lastLoggedProgress = "";
@@ -107,6 +109,8 @@ public class MainViewModel : INotifyPropertyChanged
     public RelayCommand ClearOnlineCommand => new(OnClearOnline);
     public RelayCommand ClearOnlineHistoryCommand => new(OnClearOnlineHistory);
     public RelayCommand BindHoeingGroupCommand => new(OnBindHoeingGroup);
+    /// <summary>远程编辑成员配置组（成员卡片昵称右侧 ⚙ 按钮）。</summary>
+    public RelayCommand RemoteConfigEditCommand => new(OnRemoteConfigEdit);
     public RelayCommand ClearLogCommand => new(_ => ClearLog());
 
     /// <summary>切换执行/监控模式（点击连接徽章触发）</summary>
@@ -782,6 +786,204 @@ public class MainViewModel : INotifyPropertyChanged
             Params = new Dictionary<string, object> { { "status", status }, { "message", message } }
         };
         await _signalRClient.SendRemoteCommandAsync(ack);
+    }
+
+    // ===== 远程配置组编辑（契约见 Docs/远程配置组编辑-实施方案.md §1/§2/§5）=====
+
+    /// <summary>
+    /// 远程编辑成员配置组：弹配置组选择窗 → 交给 RemoteConfigEditService 走完整流程。
+    /// 在 UI 线程执行（RelayCommand 回调）。
+    /// </summary>
+    private void OnRemoteConfigEdit(object? parameter)
+    {
+        if (parameter is not MemberViewModel member) return;
+        if (string.IsNullOrEmpty(member.PlayerUid)) return;
+        if (member.PlayerUid == _config?.PlayerUid)
+        {
+            AddLog("不能远程编辑自己的配置组（请在本机直接修改）");
+            return;
+        }
+        if (!member.Online)
+        {
+            AddLog($"成员 {member.PlayerName} 不在线，无法远程编辑其配置组");
+            return;
+        }
+        if (_signalRClient == null || !_signalRClient.IsConnected)
+        {
+            AddLog("SignalR 未连接，无法发起远程编辑");
+            return;
+        }
+        var groups = member.ConfigGroups ?? [];
+        if (groups.Count == 0)
+        {
+            AddLog($"成员 {member.PlayerName} 没有可用的配置组（可能状态尚未同步）");
+            return;
+        }
+
+        var groupName = RemoteConfigGroupSelectWindow.ShowSelectDialog(groups, member.PlayerName, Application.Current.MainWindow);
+        if (string.IsNullOrEmpty(groupName)) return; // 用户取消
+
+        _remoteConfigEditService ??= new RemoteConfigEditService(
+            sendAsync: async rc =>
+            {
+                var client = _signalRClient;
+                if (client == null || !client.IsConnected) return false;
+                await client.SendRemoteCommandAsync(rc);
+                return true;
+            },
+            getSelfUid: () => _config?.PlayerUid ?? "",
+            getSelfName: () => _config?.PlayerName ?? "",
+            report: AddLog);
+        _ = _remoteConfigEditService.RunAsync(member.PlayerUid, member.PlayerName, groupName);
+    }
+
+    /// <summary>
+    /// 处理 remote_config.pull：对方请求拉取本机某个配置组。
+    /// IPC config.pull_group → 回 remote_config.data（Target=[对方 UID]，CommandId 原样，Params 全 string）。
+    /// </summary>
+    private async Task HandleRemoteConfigPullAsync(RemoteCommand cmd)
+    {
+        var groupName = GetRemoteParam(cmd.Params, "groupName") ?? "";
+        var ok = "false";
+        string? error = null;
+        string? packageJson = null;
+
+        try
+        {
+            using var ipc = new IpcClient();
+            await ipc.ConnectAsync(3000);
+            var resp = await ipc.SendCommandAsync(new IpcRequest
+            {
+                OpCode = "config.pull_group",
+                Payload = JsonSerializer.Serialize(new { groupName })
+            });
+            if (resp.Success && !string.IsNullOrEmpty(resp.Data))
+            {
+                using var doc = JsonDocument.Parse(resp.Data);
+                if (doc.RootElement.TryGetProperty("ok", out var okEl) && okEl.ValueKind == JsonValueKind.True
+                    && doc.RootElement.TryGetProperty("package", out var pkgEl) && pkgEl.ValueKind == JsonValueKind.Object)
+                {
+                    ok = "true";
+                    packageJson = pkgEl.GetRawText();
+                }
+                else if (doc.RootElement.TryGetProperty("error", out var errEl) && errEl.ValueKind == JsonValueKind.String)
+                {
+                    error = errEl.GetString() ?? "未知错误";
+                }
+                else
+                {
+                    error = "BGI 返回数据格式不完整";
+                }
+            }
+            else
+            {
+                error = resp.ErrorMessage ?? "BGI 未返回数据";
+            }
+        }
+        catch (Exception ex)
+        {
+            error = $"本机 BGI IPC 不可用: {ex.Message}";
+        }
+
+        AddLog(ok == "true"
+            ? $"已将配置组「{groupName}」的配置发送给 {cmd.Sender}"
+            : $"远程拉取配置组「{groupName}」失败（来自 {cmd.Sender}）: {error}");
+
+        if (_signalRClient == null) return;
+        var replyParams = ok == "true"
+            ? new Dictionary<string, object> { ["ok"] = "true", ["packageJson"] = packageJson! }
+            : new Dictionary<string, object> { ["ok"] = "false", ["error"] = error ?? "未知错误" };
+        var reply = new RemoteCommand
+        {
+            Cmd = "remote_config.data",
+            Sender = _config?.PlayerName ?? "",
+            SenderUid = _config?.PlayerUid ?? "",
+            Target = [cmd.SenderUid],
+            CommandId = cmd.CommandId,
+            Params = replyParams
+        };
+        await _signalRClient.SendRemoteCommandAsync(reply);
+    }
+
+    /// <summary>
+    /// 处理 remote_config.push：对方回传编辑后的配置。
+    /// IPC config.apply_group → 回 remote_config.push_result（ok/message 全 string）。
+    /// </summary>
+    private async Task HandleRemoteConfigPushAsync(RemoteCommand cmd)
+    {
+        var groupName = GetRemoteParam(cmd.Params, "groupName") ?? "";
+
+        // 组装 IPC payload：可选字段仅在有值时携带
+        var payloadDict = new Dictionary<string, string>
+        {
+            ["groupName"] = groupName,
+            ["baseMd5"] = GetRemoteParam(cmd.Params, "baseMd5") ?? ""
+        };
+        foreach (var key in new[] { "scriptGroupConfigJson", "soloTaskName", "soloTaskSettingsJson" })
+        {
+            var v = GetRemoteParam(cmd.Params, key);
+            if (!string.IsNullOrEmpty(v)) payloadDict[key] = v;
+        }
+
+        var ok = "false";
+        string message;
+        try
+        {
+            using var ipc = new IpcClient();
+            await ipc.ConnectAsync(3000);
+            var resp = await ipc.SendCommandAsync(new IpcRequest
+            {
+                OpCode = "config.apply_group",
+                Payload = JsonSerializer.Serialize(payloadDict)
+            });
+            if (resp.Success && !string.IsNullOrEmpty(resp.Data))
+            {
+                using var doc = JsonDocument.Parse(resp.Data);
+                ok = doc.RootElement.TryGetProperty("ok", out var okEl) && okEl.ValueKind == JsonValueKind.True
+                    ? "true" : "false";
+                message = doc.RootElement.TryGetProperty("message", out var msgEl) && msgEl.ValueKind == JsonValueKind.String
+                    ? msgEl.GetString() ?? "" : "";
+            }
+            else
+            {
+                message = resp.ErrorMessage ?? "BGI 未返回结果";
+            }
+        }
+        catch (Exception ex)
+        {
+            message = $"本机 BGI IPC 不可用: {ex.Message}";
+        }
+
+        AddLog(ok == "true"
+            ? $"收到 {cmd.Sender} 远程修改的配置组「{groupName}」，已应用。{message}"
+            : $"收到 {cmd.Sender} 远程修改的配置组「{groupName}」，应用失败：{message}");
+
+        if (_signalRClient == null) return;
+        var reply = new RemoteCommand
+        {
+            Cmd = "remote_config.push_result",
+            Sender = _config?.PlayerName ?? "",
+            SenderUid = _config?.PlayerUid ?? "",
+            Target = [cmd.SenderUid],
+            CommandId = cmd.CommandId,
+            Params = new Dictionary<string, object> { ["ok"] = ok, ["message"] = message }
+        };
+        await _signalRClient.SendRemoteCommandAsync(reply);
+    }
+
+    /// <summary>
+    /// 从 RemoteCommand.Params 安全取出字符串值。
+    /// SignalR 反序列化后 value 可能是 string 或 JsonElement，需分别处理（同 CommandExecutor.GetStringParam）。
+    /// </summary>
+    private static string? GetRemoteParam(Dictionary<string, object>? dict, string key)
+    {
+        if (dict == null || !dict.TryGetValue(key, out var val) || val == null) return null;
+        if (val is string s) return s;
+        if (val is JsonElement je)
+        {
+            return je.ValueKind == JsonValueKind.String ? je.GetString() : je.ToString();
+        }
+        return val.ToString();
     }
 
     private void OnStop(object? parameter)
@@ -2686,6 +2888,7 @@ public class MainViewModel : INotifyPropertyChanged
                     {
                         PlayerUid = np.PlayerUid,
                         PlayerName = np.PlayerName,
+                        IsSelf = np.PlayerUid == _config?.PlayerUid,
                         Online = np.Online,
                         BgiStatus = np.BgiStatus,
                         ConfigGroups = np.ConfigGroups,
@@ -2748,6 +2951,32 @@ public class MainViewModel : INotifyPropertyChanged
                 // 显示 ack 确认日志（不执行、不回 ack，阻断循环）
                 var msg = cmd.Params?.GetValueOrDefault("message")?.ToString() ?? "";
                 AddLog($"确认: {cmd.Sender} - {msg}");
+                return;
+            }
+
+            // ===== 远程配置组编辑（契约见 Docs/远程配置组编辑-实施方案.md §1）：4 个新 Cmd =====
+            // remote_config.data / remote_config.push_result：转给远程编辑会话状态机（不刷日志，结果由流程方法统一报）
+            if (cmd.Cmd is "remote_config.data" or "remote_config.push_result")
+            {
+                if (_remoteConfigEditService == null || !_remoteConfigEditService.TryComplete(cmd.CommandId, cmd))
+                {
+                    // 超时后迟到/重复回复/无进行中会话：记一行日志便于排查（不影响主流程）
+                    AddLog($"收到迟到或无法关联的远程配置回复（{cmd.Cmd}，CommandId={cmd.CommandId}，来自 {cmd.Sender}），已忽略");
+                }
+                return;
+            }
+
+            // remote_config.pull：对方请求拉取本机某个配置组 → IPC config.pull_group → 回 remote_config.data
+            if (cmd.Cmd == "remote_config.pull")
+            {
+                await HandleRemoteConfigPullAsync(cmd);
+                return;
+            }
+
+            // remote_config.push：对方回传编辑后的配置 → IPC config.apply_group → 回 remote_config.push_result
+            if (cmd.Cmd == "remote_config.push")
+            {
+                await HandleRemoteConfigPushAsync(cmd);
                 return;
             }
 
@@ -4888,7 +5117,13 @@ public class MemberViewModel : INotifyPropertyChanged
     public string PlayerName { get => _playerName; set { if (_playerName != value) { _playerName = value; OnPropertyChanged(); } } }
 
     private bool _online;
-    public bool Online { get => _online; set { if (_online != value) { _online = value; OnPropertyChanged(); } } }
+    public bool Online { get => _online; set { if (_online != value) { _online = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanRemoteEdit)); } } }
+
+    /// <summary>是否为本机自己（由 MainViewModel 创建时按 UID 比较设置），用于禁用对自己的远程编辑。</summary>
+    public bool IsSelf { get; set; }
+
+    /// <summary>是否可对其发起远程配置组编辑（UID 非空 && 在线 && 非自己）。</summary>
+    public bool CanRemoteEdit => !IsSelf && Online && !string.IsNullOrEmpty(PlayerUid);
 
     private string _bgiStatus = "unknown";
     public string BgiStatus { get => _bgiStatus; set { if (_bgiStatus != value) { _bgiStatus = value; OnPropertyChanged(); } } }
@@ -5020,6 +5255,7 @@ public class MemberViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(OnlineMode));
         OnPropertyChanged(nameof(ScheduledOnlineTime));
         OnPropertyChanged(nameof(OnlineHoeingGroupNames));
+        OnPropertyChanged(nameof(CanRemoteEdit));
     }
 }
 

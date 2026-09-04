@@ -32,6 +32,11 @@ public static class InstanceOperations
     public const string SetTaskEnabled = "config.set_task_enabled";
     public const string TaskSuspend = "task.suspend";
     public const string TaskResume = "task.resume";
+    // 远程配置组编辑（remote-config-group-edit 契约 §2）
+    public const string ConfigPullGroup = "config.pull_group";
+    public const string ConfigOpenRemoteEditor = "config.open_remote_editor";
+    public const string ConfigRemoteEditorResult = "config.remote_editor_result";
+    public const string ConfigApplyGroup = "config.apply_group";
 }
 
 public sealed class InstanceIpcEnvelope

@@ -203,7 +203,15 @@ public class SignalRClient : IAsyncDisposable
     {
         if (_connection == null) return;
         command.RoomCode = _roomCode;
-        await _connection.InvokeAsync("SendRemoteCommand", command);
+        try
+        {
+            await _connection.InvokeAsync("SendRemoteCommand", command);
+        }
+        catch (Exception ex)
+        {
+            // 发送瞬间断连等异常仅记日志不 throw：调用方多在 async void 事件处理器里，上抛会导致进程崩溃
+            OnLog?.Invoke($"[探针助手] SendRemoteCommand({command.Cmd}) 调用失败: " + ex.Message);
+        }
     }
 
     public async Task ConfirmAllReadyAsync(int generation)

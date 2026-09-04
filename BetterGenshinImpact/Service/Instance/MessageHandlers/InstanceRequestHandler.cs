@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -96,6 +97,11 @@ internal sealed class InstanceRequestHandler
                 InstanceOperations.SetTaskEnabled => await HandleSetTaskEnabled(connection, request),
                 InstanceOperations.TaskSuspend => await HandleTaskSuspend(connection, request),
                 InstanceOperations.TaskResume => await HandleTaskResume(connection, request),
+                // 远程配置组编辑（remote-config-group-edit 契约 §2）
+                InstanceOperations.ConfigPullGroup => HandleConfigPullGroup(connection, request),
+                InstanceOperations.ConfigOpenRemoteEditor => HandleConfigOpenRemoteEditor(connection, request),
+                InstanceOperations.ConfigRemoteEditorResult => HandleConfigRemoteEditorResult(connection, request),
+                InstanceOperations.ConfigApplyGroup => await HandleConfigApplyGroup(connection, request),
                 _ => InstanceIpcEnvelope.Failure(
                     request,
                     "unsupported_operation",
@@ -1345,6 +1351,389 @@ internal sealed class InstanceRequestHandler
         {
             _logger.LogError(ex, "[IPC task.resume] 恢复任务失败");
             return InstanceIpcEnvelope.Failure(request, "task_resume_failed", $"恢复任务失败: {ex.Message}");
+        }
+    }
+
+    // ===== 远程配置组编辑（remote-config-group-edit 契约 §2）=====
+
+    /// <summary>config.pull_group：读取指定配置组文件原文 + 全局 AutoHoeingConfig + 策略文件清单 + 版本 + 运行状态 + MD5。</summary>
+    private InstanceIpcEnvelope HandleConfigPullGroup(InstanceConnection connection, InstanceIpcEnvelope request)
+    {
+        try
+        {
+            var groupName = request.Data?["groupName"]?.ToString();
+            if (string.IsNullOrEmpty(groupName))
+            {
+                return InstanceIpcEnvelope.Response(request, new { ok = false, error = "groupName 为空" });
+            }
+
+            var groupPath = Path.Combine(AppContext.BaseDirectory, "User", "ScriptGroup", $"{groupName}.json");
+            if (!File.Exists(groupPath))
+            {
+                return InstanceIpcEnvelope.Response(request, new { ok = false, error = $"配置组 {groupName} 不存在" });
+            }
+
+            var fileBytes = File.ReadAllBytes(groupPath);
+            var scriptGroupJson = Encoding.UTF8.GetString(fileBytes);
+            var fileMd5 = Convert.ToHexString(System.Security.Cryptography.MD5.HashData(fileBytes)).ToLowerInvariant();
+
+            // AutoHoeingConfig 随 AllConfig 走 System.Text.Json（ConfigService.JsonOptions）序列化
+            var autoHoeingConfigJson = System.Text.Json.JsonSerializer.Serialize(
+                BetterGenshinImpact.GameTask.TaskContext.Instance().Config.AutoHoeingConfig,
+                BetterGenshinImpact.Service.ConfigService.JsonOptions);
+
+            // 策略清单过滤规则与 AutoFightViewModel.LoadCustomScript 一致（*.txt + *.json，去扩展名相对路径）
+            var autoFightFiles = ListStrategyFiles(Path.Combine(AppContext.BaseDirectory, "User", "AutoFight"));
+            var autoGeniusFiles = ListStrategyFiles(Path.Combine(AppContext.BaseDirectory, "User", "AutoGeniusInvokation"));
+
+            var groupRunning = IsGroupRunning(groupName);
+
+            return InstanceIpcEnvelope.Response(request, new
+            {
+                ok = true,
+                package = new
+                {
+                    groupName,
+                    scriptGroupJson,
+                    autoHoeingConfigJson,
+                    autoFightStrategyFiles = autoFightFiles,
+                    autoGeniusFiles,
+                    bgiVersion = BetterGenshinImpact.Core.Config.Global.Version,
+                    groupRunning,
+                    fileMd5
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            return InstanceIpcEnvelope.Failure(request, "pull_group_failed", $"拉取配置组失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>与 AutoFightViewModel.LoadCustomScript 相同的过滤规则（只读，不创建目录）。</summary>
+    private static List<string> ListStrategyFiles(string folder)
+    {
+        var list = new List<string>();
+        if (!Directory.Exists(folder))
+        {
+            return list;
+        }
+
+        foreach (var file in Directory.GetFiles(folder, "*.*", SearchOption.AllDirectories))
+        {
+            var extLower = Path.GetExtension(file).ToLowerInvariant();
+            if (extLower != ".txt" && extLower != ".json")
+            {
+                continue;
+            }
+
+            var relativePath = Path.GetRelativePath(folder, file);
+            var strategyName = Path.ChangeExtension(relativePath, null);
+            if (strategyName.StartsWith('\\') || strategyName.StartsWith('/'))
+            {
+                strategyName = strategyName[1..];
+            }
+
+            if (!string.IsNullOrWhiteSpace(strategyName))
+            {
+                list.Add(strategyName);
+            }
+        }
+
+        return list;
+    }
+
+    /// <summary>任务运行状态判断：TaskSemaphore.CurrentCount==0 且 RunnerContext 组名匹配（同 HandleTaskStatus 口径）。</summary>
+    private static bool IsGroupRunning(string groupName)
+    {
+        try
+        {
+            if (BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount != 0)
+            {
+                return false;
+            }
+
+            var ctx = BetterGenshinImpact.GameTask.RunnerContext.Instance;
+            return ctx?.taskProgress?.CurrentScriptGroupName == groupName;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>config.open_remote_editor：Dispatcher 上弹 RemoteConfigEditWindow，单会话拒绝第二个。立即返回。</summary>
+    private InstanceIpcEnvelope HandleConfigOpenRemoteEditor(InstanceConnection connection, InstanceIpcEnvelope request)
+    {
+        try
+        {
+            var targetName = request.Data?["targetName"]?.ToString() ?? "";
+            var targetUid = request.Data?["targetUid"]?.ToString() ?? "";
+            var groupName = request.Data?["groupName"]?.ToString() ?? "";
+            var packageJson = request.Data?["packageJson"]?.ToString() ?? "";
+
+            if (string.IsNullOrEmpty(groupName) || string.IsNullOrEmpty(packageJson))
+            {
+                return InstanceIpcEnvelope.Response(request, new { state = "rejected", error = "groupName/packageJson 为空" });
+            }
+
+            if (!RemoteEditSession.TryBegin(targetName, targetUid, groupName, packageJson))
+            {
+                return InstanceIpcEnvelope.Response(request, new { state = "rejected", error = "已有进行中的远程编辑会话" });
+            }
+
+            try
+            {
+                // 同步 Invoke：窗口创建/解析失败可立即回滚会话并告知助手
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    var window = new BetterGenshinImpact.View.Windows.RemoteConfigEditWindow(
+                        targetName, targetUid, groupName, packageJson);
+                    window.Show();
+                });
+            }
+            catch (Exception ex)
+            {
+                RemoteEditSession.AbortToIdle();
+                _logger.LogWarning(ex, "[IPC config.open_remote_editor] 弹出远程编辑窗口失败");
+                return InstanceIpcEnvelope.Response(request, new { state = "rejected", error = $"弹出编辑窗口失败: {ex.GetBaseException().Message}" });
+            }
+
+            return InstanceIpcEnvelope.Response(request, new { state = "editing" });
+        }
+        catch (Exception ex)
+        {
+            return InstanceIpcEnvelope.Failure(request, "open_editor_failed", $"打开远程编辑器失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>config.remote_editor_result：助手轮询编辑结果；saved/cancelled 读取后会话关闭回 idle。</summary>
+    private InstanceIpcEnvelope HandleConfigRemoteEditorResult(InstanceConnection connection, InstanceIpcEnvelope request)
+    {
+        var snapshot = RemoteEditSession.SnapshotAndConsumeIfDone();
+        return snapshot.State switch
+        {
+            "editing" => InstanceIpcEnvelope.Response(request, new { state = "editing" }),
+            "saved" => InstanceIpcEnvelope.Response(request, new
+            {
+                state = "saved",
+                scriptGroupConfigJson = snapshot.ScriptGroupConfigJson,
+                soloTaskName = snapshot.SoloTaskName,
+                soloTaskSettingsJson = snapshot.SoloTaskSettingsJson
+            }),
+            "cancelled" => InstanceIpcEnvelope.Response(request, new { state = "cancelled" }),
+            _ => InstanceIpcEnvelope.Response(request, new { state = "idle" })
+        };
+    }
+
+    /// <summary>config.apply_group：合并远程编辑结果 → 原子写盘 → 刷新内存（全部在 Dispatcher 上执行）。</summary>
+    private async Task<InstanceIpcEnvelope> HandleConfigApplyGroup(InstanceConnection connection, InstanceIpcEnvelope request)
+    {
+        try
+        {
+            var groupName = request.Data?["groupName"]?.ToString();
+            var baseMd5 = request.Data?["baseMd5"]?.ToString();
+            var scriptGroupConfigJson = request.Data?["scriptGroupConfigJson"]?.ToString();
+            var soloTaskName = request.Data?["soloTaskName"]?.ToString();
+            var soloTaskSettingsJson = request.Data?["soloTaskSettingsJson"]?.ToString();
+
+            if (string.IsNullOrEmpty(groupName))
+            {
+                return InstanceIpcEnvelope.Response(request, new { ok = false, message = "groupName 为空", md5Changed = false, groupRunning = false });
+            }
+
+            if (string.IsNullOrEmpty(scriptGroupConfigJson) && string.IsNullOrEmpty(soloTaskSettingsJson))
+            {
+                return InstanceIpcEnvelope.Response(request, new { ok = false, message = "无可应用内容（scriptGroupConfigJson 与 soloTaskSettingsJson 均为空）", md5Changed = false, groupRunning = false });
+            }
+
+            return await Application.Current.Dispatcher.InvokeAsync(() =>
+                ApplyRemoteGroup(request, groupName, baseMd5, scriptGroupConfigJson, soloTaskName, soloTaskSettingsJson));
+        }
+        catch (Exception ex)
+        {
+            return InstanceIpcEnvelope.Failure(request, "apply_group_failed", $"应用远程配置失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>apply_group 的 UI 线程主体：合并而非整文件覆盖，写盘后刷新 ScriptControlViewModel / OneDragonFlowViewModel 内存。</summary>
+    private InstanceIpcEnvelope ApplyRemoteGroup(
+        InstanceIpcEnvelope request,
+        string groupName,
+        string? baseMd5,
+        string? scriptGroupConfigJson,
+        string? soloTaskName,
+        string? soloTaskSettingsJson)
+    {
+        var groupPath = Path.Combine(AppContext.BaseDirectory, "User", "ScriptGroup", $"{groupName}.json");
+
+        // 乐观并发提示：比较当前文件 MD5 与 pull 时的 baseMd5
+        var md5Changed = false;
+        if (File.Exists(groupPath) && !string.IsNullOrEmpty(baseMd5))
+        {
+            var currentMd5 = Convert.ToHexString(
+                    System.Security.Cryptography.MD5.HashData(File.ReadAllBytes(groupPath)))
+                .ToLowerInvariant();
+            md5Changed = !string.Equals(currentMd5, baseMd5, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // 1. 从 ScriptControlViewModel.ScriptGroups 找组（兜底从文件 FromJson）
+        var scVm = App.GetService<BetterGenshinImpact.ViewModel.Pages.ScriptControlViewModel>();
+        BetterGenshinImpact.Core.Script.Group.ScriptGroup? group = null;
+        var loadedFromFile = false;
+        try
+        {
+            group = scVm?.ScriptGroups?.FirstOrDefault(g => g.Name == groupName);
+        }
+        catch
+        {
+            // ScriptGroups 未加载等异常时回退文件加载
+        }
+
+        if (group == null)
+        {
+            if (!File.Exists(groupPath))
+            {
+                return InstanceIpcEnvelope.Response(request, new { ok = false, message = $"配置组 {groupName} 不存在", md5Changed, groupRunning = false });
+            }
+
+            group = BetterGenshinImpact.Core.Script.Group.ScriptGroup.FromJson(File.ReadAllText(groupPath));
+            loadedFromFile = true;
+        }
+
+        // 2. 组级设置：反序列化 ScriptGroupConfig 替换 group.Config
+        if (!string.IsNullOrEmpty(scriptGroupConfigJson))
+        {
+            var cfg = System.Text.Json.JsonSerializer.Deserialize<BetterGenshinImpact.Core.Script.Group.ScriptGroupConfig>(
+                          scriptGroupConfigJson,
+                          BetterGenshinImpact.Service.ConfigService.JsonOptions)
+                      ?? throw new InvalidOperationException("scriptGroupConfigJson 反序列化失败");
+            group.Config = cfg;
+        }
+
+        // 3. 锄地一条龙：SoloTaskSettingsObject 整体替换 + JsonElement→CLR 归一化（参考 ScriptGroup.NormalizeSoloTaskSettings）
+        if (!string.IsNullOrEmpty(soloTaskSettingsJson))
+        {
+            if (string.IsNullOrEmpty(soloTaskName))
+            {
+                return InstanceIpcEnvelope.Response(request, new { ok = false, message = "缺少 soloTaskName", md5Changed, groupRunning = false });
+            }
+
+            var project = group.Projects?.FirstOrDefault(p => p.Name == soloTaskName);
+            if (project == null)
+            {
+                return InstanceIpcEnvelope.Response(request, new { ok = false, message = $"组内未找到任务 {soloTaskName}", md5Changed, groupRunning = false });
+            }
+
+            var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object?>>(
+                           soloTaskSettingsJson,
+                           BetterGenshinImpact.Service.ConfigService.JsonOptions)
+                       ?? new Dictionary<string, object?>();
+            NormalizeSettingsDictionary(dict);
+            project.SoloTaskSettingsObject = dict;
+        }
+
+        // 4. 原子写盘（WriteToFileAtomically）。
+        // 内存组（来自 ScriptGroups，组名与文件名一致）走 TryWriteScriptGroupToDisk 以拿到成败；
+        // 兜底从文件加载的组不走它——它按 group.Name（文件内 name）拼文件名，与请求 groupName（实际文件名）
+        // 不一致时会写错文件，故直接按请求 groupName 拼出的实际路径写。
+        string? writeError = null;
+        if (!loadedFromFile && scVm != null)
+        {
+            if (!scVm.TryWriteScriptGroupToDisk(group, out writeError))
+            {
+                _logger.LogWarning("[IPC config.apply_group] 写盘失败（VM 路径）: {Error}", writeError);
+                return InstanceIpcEnvelope.Response(request, new
+                {
+                    ok = false,
+                    message = $"配置组 {groupName} 写盘失败: {writeError}",
+                    md5Changed,
+                    groupRunning = IsGroupRunning(groupName)
+                });
+            }
+        }
+        else
+        {
+            try
+            {
+                group.WriteToFileAtomically(groupPath);
+            }
+            catch (Exception writeEx)
+            {
+                _logger.LogWarning(writeEx, "[IPC config.apply_group] 写盘失败（文件路径）: {Path}", groupPath);
+                return InstanceIpcEnvelope.Response(request, new
+                {
+                    ok = false,
+                    message = $"配置组 {groupName} 写盘失败: {writeEx.Message}",
+                    md5Changed,
+                    groupRunning = IsGroupRunning(groupName)
+                });
+            }
+        }
+
+        // 5. 刷新内存，防止旧内存覆盖新文件
+        try
+        {
+            scVm?.ReloadScriptGroups();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[IPC config.apply_group] 刷新 ScriptControlViewModel 失败");
+        }
+
+        try
+        {
+            var oneDragonVm = App.GetService<BetterGenshinImpact.ViewModel.Pages.OneDragonFlowViewModel>();
+            oneDragonVm?.ReadScriptGroup();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[IPC config.apply_group] 刷新 OneDragonFlowViewModel 失败");
+        }
+
+        var groupRunning = IsGroupRunning(groupName);
+
+        // 6. message 组装（契约 §1.4：覆盖期间变化 / 正在运行提示）
+        var parts = new List<string> { "远程配置已应用" };
+        if (md5Changed)
+        {
+            parts.Add("对方配置在编辑期间有变化，已按远程版本覆盖");
+        }
+        if (groupRunning)
+        {
+            parts.Add("该组正在运行，下次启动生效");
+        }
+        var message = string.Join("；", parts);
+
+        return InstanceIpcEnvelope.Response(request, new { ok = true, message, md5Changed, groupRunning });
+    }
+
+    /// <summary>SoloTaskSettingsObject 的 JsonElement→CLR 归一化（与 ScriptGroup.NormalizeSoloTaskSettings 同逻辑）。</summary>
+    private static void NormalizeSettingsDictionary(Dictionary<string, object?> dict)
+    {
+        try
+        {
+            var keys = new List<string>(dict.Keys);
+            foreach (var key in keys)
+            {
+                if (dict[key] is System.Text.Json.JsonElement element)
+                {
+                    dict[key] = element.ValueKind switch
+                    {
+                        System.Text.Json.JsonValueKind.True => true,
+                        System.Text.Json.JsonValueKind.False => false,
+                        // UI 的 NumberBox.Value 为 double?，统一转 double（同 ScriptGroup.ConvertJsonNumber）
+                        System.Text.Json.JsonValueKind.Number => element.GetDouble(),
+                        System.Text.Json.JsonValueKind.String => element.GetString(),
+                        System.Text.Json.JsonValueKind.Null => null,
+                        _ => element // Array/Object 保留为 JsonElement
+                    };
+                }
+            }
+        }
+        catch
+        {
+            // 规范化失败不影响使用，保留原始值
         }
     }
 }
