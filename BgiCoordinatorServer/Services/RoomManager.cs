@@ -1289,7 +1289,22 @@ public class RoomManager
             {
                 var player = players.FirstOrDefault(p => p.ConnectionId == connectionId);
                 if (player == null) return;
-                if (generation <= player.OnlineEventGeneration) return;  // 旧事件，忽略
+                if (generation <= player.OnlineEventGeneration)
+                {
+                    // 同轮旧事件（未消费且非过期）→ 忽略。
+                    // [实机修复] 自愈放行：上一轮已消费，或槽位事件已过期（>10 分钟，确认阶段最长 90s，
+                    // 超时耗尽轮次不会消费槽位）时，接受更小的 gen 作为新一轮意图——
+                    // 双来源计数器竞争（BGI 侧冲高、助手本地计数落后）曾把定时上线事件当旧事件静默丢弃，
+                    // 表现为"两个助手都上线了但就是不开锄"。客户端已有计数器对齐兜底，此处兜底槽位残留。
+                    var stale = player.OnlineEventConsumed
+                        || (DateTime.UtcNow - player.OnlineEventTime) > TimeSpan.FromMinutes(10);
+                    if (!stale)
+                    {
+                        Console.WriteLine($"[探针服务端] ReportOnlineEvent: 忽略旧事件 gen={generation} <= 槽位 {player.OnlineEventGeneration}（未消费）, uid={player.PlayerUid}");
+                        return;
+                    }
+                    Console.WriteLine($"[探针服务端] ReportOnlineEvent: 接受较小 gen={generation}（槽位 {player.OnlineEventGeneration} 已消费/过期）作为新一轮, uid={player.PlayerUid}");
+                }
 
                 // 更新玩家 generation
                 player.OnlineEventGeneration = generation;
@@ -1299,8 +1314,12 @@ public class RoomManager
                 player.OnlineReadyExpireTime = DateTime.UtcNow.AddMinutes(30);
             }
 
-            // 新 generation 上报 → 重置房间状态机到 idle，使 CheckAndTransition 可以再次触发
-            if (_roomAllReadyStates.TryGetValue(group, out var state))
+            // 新 generation 上报 → 重置房间状态机到 idle，使 CheckAndTransition 可以再次触发。
+            // [实机修复] 确认中（confirming）的轮次不打断：打断会产生两个 StartConfirmAsync 并行，
+            // 旧轮超时耗尽会把新轮的 confirming 状态一并踩掉（实机出现过 gen15/gen16 两轮交错互杀）。
+            // 新事件保持 armed（未消费），由 StartConfirmAsync 成功收尾后的补评估接续。
+            if (_roomAllReadyStates.TryGetValue(group, out var state)
+                && state.State != "confirming")
             {
                 state.State = "idle";
             }
@@ -1452,6 +1471,13 @@ public class RoomManager
     {
         if (_roomAllReadyStates.TryGetValue(group, out var state))
             state.State = "exhausted";
+    }
+
+    /// <summary>确认轮成功收尾：状态机回 idle，允许后续补评估/新事件开新一轮。</summary>
+    public void MarkRoundCompleted(string group)
+    {
+        if (_roomAllReadyStates.TryGetValue(group, out var state))
+            state.State = "idle";
     }
 
     public bool IsStateConfirming(string group)

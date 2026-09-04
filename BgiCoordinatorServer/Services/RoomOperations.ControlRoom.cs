@@ -197,36 +197,42 @@ public sealed partial class RoomOperations
             var players = _roomManager.GetControlRoomPlayers(group);
             await _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated", new { players }, players);
 
-            // 检查是否可转换为 ready
-            if (_roomManager.CheckAndTransition(group, out var readyGeneration))
-            {
-                var onlinePlayers = players
-                    .Where(p => p.Online && !p.OnlineEventConsumed && p.OnlineEventGeneration > 0)
-                    .Select(p => p.PlayerUid)
-                    .ToList();
-
-                // 单人场景（≤1 人）：跳过确认阶段，直接广播 AllReady
-                // 确认阶段的设计目的是"等所有成员确认收到 AllReady"，
-                // 单人场景不存在"有人没收到"的问题，跳过可避免：
-                //   1. 断线重连后消息发到旧 connectionId 导致丢失
-                //   2. 30 秒超时等待，延迟开锄
-                if (onlinePlayers.Count <= 1)
-                {
-                    _roomManager.ConsumeOnlineReady(group, readyGeneration);
-                    await _broadcaster.BroadcastGroupAsync(group, "AllReady", new { generation = readyGeneration }, readyGeneration);
-                    var refreshed = _roomManager.GetControlRoomPlayers(group);
-                    await _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated", new { players = refreshed }, refreshed);
-                }
-                else
-                {
-                    _roomManager.BeginConfirming(group, readyGeneration, onlinePlayers);
-                    _ = StartConfirmAsync(group, readyGeneration, onlinePlayers);
-                }
-            }
+            // 检查是否可转换为 ready（凑齐则开一轮：单人直接 AllReady，多人进确认阶段）
+            await TryStartRoundAsync(group);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ReportOnlineEvent 失败");
+        }
+    }
+
+    /// <summary>就绪检查并在凑齐时开一轮（广播 AllReady 或进入确认阶段）。
+    /// 由 ReportOnlineEventAsync 与 StartConfirmAsync 成功收尾后的补评估共用。</summary>
+    private async Task TryStartRoundAsync(string group)
+    {
+        if (!_roomManager.CheckAndTransition(group, out var readyGeneration)) return;
+
+        var onlinePlayers = _roomManager.GetControlRoomPlayers(group)
+            .Where(p => p.Online && !p.OnlineEventConsumed && p.OnlineEventGeneration > 0)
+            .Select(p => p.PlayerUid)
+            .ToList();
+
+        // 单人场景（≤1 人）：跳过确认阶段，直接广播 AllReady
+        // 确认阶段的设计目的是"等所有成员确认收到 AllReady"，
+        // 单人场景不存在"有人没收到"的问题，跳过可避免：
+        //   1. 断线重连后消息发到旧 connectionId 导致丢失
+        //   2. 30 秒超时等待，延迟开锄
+        if (onlinePlayers.Count <= 1)
+        {
+            _roomManager.ConsumeOnlineReady(group, readyGeneration);
+            await _broadcaster.BroadcastGroupAsync(group, "AllReady", new { generation = readyGeneration }, readyGeneration);
+            var refreshed = _roomManager.GetControlRoomPlayers(group);
+            await _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated", new { players = refreshed }, refreshed);
+        }
+        else
+        {
+            _roomManager.BeginConfirming(group, readyGeneration, onlinePlayers);
+            _ = StartConfirmAsync(group, readyGeneration, onlinePlayers);
         }
     }
 
@@ -271,8 +277,12 @@ public sealed partial class RoomOperations
                 {
                     _logger.LogInformation("全员确认完成, generation={Gen}", generation);
                     _roomManager.ConsumeOnlineReady(group, generation);
+                    // 状态机复位 idle（否则会残留 confirming 僵尸态，后续轮次被 CheckAndTransition 永久挡住）
+                    _roomManager.MarkRoundCompleted(group);
                     var confirmed = _roomManager.GetControlRoomPlayers(group);
                     await _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated", new { players = confirmed }, confirmed);
+                    // 补评估：确认窗口期间新 armed 的成员（迟到上报/30s 重试）在此接续新一轮
+                    await TryStartRoundAsync(group);
                     return;
                 }
                 await Task.Delay(500);

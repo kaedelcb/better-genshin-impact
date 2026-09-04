@@ -549,6 +549,18 @@ public class MainViewModel : INotifyPropertyChanged
         if (gen > _lastOnlineGeneration)
         {
             _lastOnlineGeneration = gen;
+            // [双来源对齐] BGI 计数器与助手本地计数器（定时上线用）共用服务端同一槽位，
+            // 服务端只收 gen>历史值。BGI 侧冲高后（标记任务重跑），本地定时路径的更小 gen
+            // 会被服务端当旧事件静默丢弃 → 永不开锄。这里把本地计数器向上对齐并写盘，
+            // 保证后续定时上报严格大于服务端槽位。
+            lock (_genLock)
+            {
+                if (gen > _localOnlineGeneration)
+                {
+                    _localOnlineGeneration = gen;
+                    PersistLocalGeneration(gen);
+                }
+            }
             // [实机修复] 本轮已上线时的重复边沿只同步基线、不再上报：
             // 游戏启动阶段被反复关停/BGI 重启会让"联机锄地上线"标记任务反复重跑、generation 反复 +1，
             // 不去重则每重跑一次就再触发一轮 上线→已联机——且"清除定时/清除记录"都压不住
@@ -561,6 +573,9 @@ public class MainViewModel : INotifyPropertyChanged
             // 与轮询路径一致：标记已上线（命令模式）并上报服务端，由服务端状态机协调
             _isOnlineReady = true;
             _onlineMode = "command";
+            // 新一轮上线意图：清掉 AllReady 执行守卫的旧轮次残留，
+            // 避免历史高 gen 压住本轮（守卫只应防同一轮重复执行，不应跨轮压制新轮）
+            _lastProcessedAllReadyGeneration = 0;
             if (_signalRClient != null)
             {
                 _ = _signalRClient.ReportOnlineEventAsync(gen, true);
@@ -1013,6 +1028,16 @@ public class MainViewModel : INotifyPropertyChanged
                         if (gen > _lastOnlineGeneration)
                         {
                             _lastOnlineGeneration = gen;
+                            // [双来源对齐] 与 ApplyOnlineGenerationEdge 同款：本地定时计数器向上对齐 BGI 侧，
+                            // 防止服务端槽位被 BGI 冲高后本地更小 gen 被当旧事件静默丢弃
+                            lock (_genLock)
+                            {
+                                if (gen > _localOnlineGeneration)
+                                {
+                                    _localOnlineGeneration = gen;
+                                    PersistLocalGeneration(gen);
+                                }
+                            }
                             // [实机修复] 与 ApplyOnlineGenerationEdge 同款守卫：本轮已上线时
                             // 标记任务重跑（游戏反复关停重拉）只同步基线，不重复标记/上报，
                             // 避免反复触发 上线→已联机。
@@ -1026,6 +1051,8 @@ public class MainViewModel : INotifyPropertyChanged
                             // 避免后续 ReportStatusAsync 继续上报 OnlineReady=false 覆盖服务端。
                             _isOnlineReady = true;
                             _onlineMode = "command";
+                            // 新一轮上线意图：清掉 AllReady 执行守卫的旧轮次残留（同上）
+                            _lastProcessedAllReadyGeneration = 0;
                             // 同步更新本地已构造的 status 对象，防止后续 ReportControlStatusAsync 用 OnlineReady=false 覆盖服务端
                             status.OnlineReady = true;
                             status.OnlineMode = "command";
@@ -1162,6 +1189,9 @@ public class MainViewModel : INotifyPropertyChanged
         {
             gen = ++_localOnlineGeneration;
         }
+        // 新一轮上线意图：清掉 AllReady 执行守卫的旧轮次残留
+        // （守卫只应防同一轮重复执行；历史高 gen 不应跨轮压制本轮）
+        _lastProcessedAllReadyGeneration = 0;
         // S3：自增后立即写盘，保证重启后单调递增。写盘失败仅记日志，不影响本次上线事件。
         PersistLocalGeneration(gen);
         try
@@ -3407,13 +3437,18 @@ public class MainViewModel : INotifyPropertyChanged
 
         client.OnAllReadyConfirmReceived += async generation =>
         {
-            if (generation <= _lastProcessedAllReadyGeneration)
-            {
-                return;
-            }
+            // [实机修复] 确认回执永远先回：服务端在等 ack，不回会 30s×3 超时后整轮放弃开锄。
+            // 服务端 RegisterConfirmAck 已按"当前轮次 generation + confirming 状态"校验，过期 ack 安全丢弃。
+            // 历史 bug：先查 _lastProcessedAllReadyGeneration 守卫再回执，守卫被旧轮次冲高后
+            // 确认被静默丢弃 → 服务端永远等不到 ack → 不开锄。
             if (_signalRClient != null)
             {
                 await _signalRClient.ConfirmAllReadyAsync(generation);
+            }
+            // 是否真正执行仍受 generation 守卫（OnAllReadyConfirmedInternal 内部还有二次守卫+互斥锁）
+            if (generation <= _lastProcessedAllReadyGeneration)
+            {
+                return;
             }
             await OnAllReadyConfirmedInternal(generation);
         };
