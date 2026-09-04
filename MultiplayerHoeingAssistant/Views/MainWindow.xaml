@@ -1,7 +1,8 @@
-﻿<Window x:Class="MultiplayerHoeingAssistant.Views.MainWindow"
+<Window x:Class="MultiplayerHoeingAssistant.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:MultiplayerHoeingAssistant.Views"
+        xmlns:vm="clr-namespace:MultiplayerHoeingAssistant.ViewModels"
         Title="Nexus BGI"
         Width="980" Height="860"
         MinWidth="860" MinHeight="720"
@@ -21,6 +22,7 @@
     </Window.Background>
 
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <!-- ========== 原神夜空色板 ========== -->
         <SolidColorBrush x:Key="Card" Color="#CC26234E"/>
         <SolidColorBrush x:Key="CardEdge" Color="#47D4AF37"/>
@@ -654,7 +656,7 @@
                                     <Style TargetType="Button" BasedOn="{StaticResource TextAction}">
                                         <Setter Property="Foreground" Value="{StaticResource GoldText}"/>
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsShowingSettings}" Value="False">
+                                            <DataTrigger Binding="{Binding CurrentPage}" Value="{x:Static vm:AppPage.Home}">
                                                 <Setter Property="Foreground" Value="{StaticResource White}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
@@ -662,8 +664,25 @@
                                 </Button.Style>
                             </Button>
                             <TextBlock Text="|" FontSize="13" Foreground="{StaticResource Dim}" Margin="4,0" VerticalAlignment="Center"/>
-                            <Button Content="嘟嘟可" Foreground="{StaticResource GoldText}" Style="{StaticResource TextAction}" FontSize="12" Margin="0,0,0,0" VerticalAlignment="Center"
-                                    ToolTip="日志与监控系统" Command="{Binding FeaturePlaceholderCommand}" CommandParameter="dodoco"/>
+                            <!-- 嘟嘟可：日志与监控系统；HasUnreadAlerts 时右上角红点 -->
+                            <Grid Margin="0,0,0,0" VerticalAlignment="Center">
+                                <Button Content="嘟嘟可" FontSize="12" VerticalAlignment="Center"
+                                        ToolTip="日志与监控系统" Command="{Binding ShowDodocoCommand}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource TextAction}">
+                                            <Setter Property="Foreground" Value="{StaticResource GoldText}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding CurrentPage}" Value="{x:Static vm:AppPage.Dodoco}">
+                                                    <Setter Property="Foreground" Value="{StaticResource White}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <Ellipse Width="7" Height="7" Fill="{StaticResource Pyro}" HorizontalAlignment="Right"
+                                         VerticalAlignment="Top" Margin="0,-4,-6,0" IsHitTestVisible="False"
+                                         Visibility="{Binding Dodoco.HasUnreadAlerts, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}"/>
+                            </Grid>
                             <TextBlock Text="|" FontSize="13" Foreground="{StaticResource Dim}" Margin="4,0" VerticalAlignment="Center"/>
                             <Button Content="槲寄生" Foreground="{StaticResource GoldText}" Style="{StaticResource TextAction}" FontSize="12" Margin="0,0,0,0" VerticalAlignment="Center"
                                     ToolTip="任务调度器" Command="{Binding FeaturePlaceholderCommand}" CommandParameter="sleeper"/>
@@ -677,7 +696,7 @@
                     </Grid>
                 </Grid>
 
-                <!-- 内容区（成员列表 / 设置页面，通过 IsShowingSettings 切换） -->
+                <!-- 内容区（成员列表 / 设置页面 / 嘟嘟可，通过 CurrentPage 三态切换） -->
                 <Grid Grid.Row="1">
                     <!-- 成员列表主页（默认显示） -->
                     <Grid>
@@ -685,7 +704,10 @@
                             <Style TargetType="Grid">
                                 <Setter Property="Visibility" Value="Visible"/>
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsShowingSettings}" Value="True">
+                                    <DataTrigger Binding="{Binding CurrentPage}" Value="{x:Static vm:AppPage.Settings}">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentPage}" Value="{x:Static vm:AppPage.Dodoco}">
                                         <Setter Property="Visibility" Value="Collapsed"/>
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -913,19 +935,35 @@
                             </Border>
                         </Grid>
 
-                        <!-- 设置页面（IsShowingSettings=true 时显示） -->
+                        <!-- 设置页面（CurrentPage==Settings 时显示） -->
                         <views:SettingsPage>
                             <views:SettingsPage.Style>
                                 <Style TargetType="views:SettingsPage">
                                     <Setter Property="Visibility" Value="Collapsed"/>
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsShowingSettings}" Value="True">
+                                        <DataTrigger Binding="{Binding CurrentPage}" Value="{x:Static vm:AppPage.Settings}">
                                             <Setter Property="Visibility" Value="Visible"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
                             </views:SettingsPage.Style>
                         </views:SettingsPage>
+
+                        <!-- 嘟嘟可页面（CurrentPage==Dodoco 时显示；DataContext 用 MainWindow 持有的 DodocoViewModel。
+                             注意：本元素的 Style 触发器解析于自身 DataContext（已被改为 DodocoViewModel），
+                             所以 CurrentPage 必须显式从 Window 的 DataContext 取） -->
+                        <views:DodocoPage DataContext="{Binding Dodoco, RelativeSource={RelativeSource AncestorType=Window}}">
+                            <views:DodocoPage.Style>
+                                <Style TargetType="views:DodocoPage">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataContext.CurrentPage, RelativeSource={RelativeSource AncestorType=Window}}" Value="{x:Static vm:AppPage.Dodoco}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </views:DodocoPage.Style>
+                        </views:DodocoPage>
                     </Grid>
             </Grid>
         </Grid>

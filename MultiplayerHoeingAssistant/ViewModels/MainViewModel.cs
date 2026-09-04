@@ -83,12 +83,25 @@ public class MainViewModel : INotifyPropertyChanged
         set { _isConnected = value; OnPropertyChanged(); }
     }
 
-    private bool _isShowingSettings;
-    /// <summary>是否正在显示设置页面（true=设置页，false=成员列表主页）</summary>
+    private AppPage _currentPage;
+    /// <summary>当前内容区页面（三态导航：Home=成员列表主页 / Settings=设置页 / Dodoco=嘟嘟可日志监控）。</summary>
+    public AppPage CurrentPage
+    {
+        get => _currentPage;
+        set
+        {
+            if (_currentPage == value) return;
+            _currentPage = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsShowingSettings));
+        }
+    }
+
+    /// <summary>是否正在显示设置页面（兼容旧二态写法；读=CurrentPage==Settings，写=true→Settings / false→Home）</summary>
     public bool IsShowingSettings
     {
-        get => _isShowingSettings;
-        set { _isShowingSettings = value; OnPropertyChanged(); }
+        get => _currentPage == AppPage.Settings;
+        set => CurrentPage = value ? AppPage.Settings : AppPage.Home;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -128,18 +141,20 @@ public class MainViewModel : INotifyPropertyChanged
     /// <summary>打开设置页面（切换右侧内容区为设置页）。</summary>
     public RelayCommand OpenSettingsCommand => new(_ => ToggleSettings());
 
-    /// <summary>显示功能占位提示（嘟嘟可/槲寄生 等规划中的功能，点击后弹出"敬请期待"提示窗）。</summary>
+    /// <summary>显示功能占位提示（槲寄生 等规划中的功能，点击后弹出"敬请期待"提示窗）。</summary>
     public RelayCommand FeaturePlaceholderCommand => new(ShowFeaturePlaceholder);
+
+    /// <summary>打开嘟嘟可页面（日志与监控系统，切换右侧内容区为 DodocoPage）。</summary>
+    public RelayCommand ShowDodocoCommand => new(_ => CurrentPage = AppPage.Dodoco);
 
     /// <summary>
     /// 显示规划中功能的占位提示弹窗（深色原神美术风格）。
-    /// parameter 为功能标识字符串："dodoco"=日志监控系统（嘟嘟可），"sleeper"=调度器（槲寄生）。
+    /// parameter 为功能标识字符串："sleeper"=调度器（槲寄生）。（"dodoco" 已落地为真实页面，死分支已删）
     /// </summary>
     private void ShowFeaturePlaceholder(object? parameter)
     {
         var (name, desc, glyph) = parameter?.ToString() switch
         {
-            "dodoco" => ("嘟嘟可 · 日志与监控", "日志系统与监控面板正在规划中\n未来可在此查看实时日志与系统监控指标", "📋"),
             "sleeper" => ("槲寄生 · 调度器", "任务调度器正在规划中\n未来可在此编排定时任务与调度策略", "⏳"),
             _ => ("功能规划中", "该功能正在规划中，敬请期待", "✨")
         };
@@ -639,6 +654,8 @@ public class MainViewModel : INotifyPropertyChanged
         // 状态上报放 try-catch 内：连接断开时（如 ServerTimeout 后）InvokeAsync 会抛异常，
         // 若漏掉会作为未观察任务异常冒泡到全局 TaskScheduler.UnobservedTaskException → App 弹"未处理异常"框。
         // 这里捕获并仅记日志（断线状态已由 Closed 事件同步 IsConnected=false，右上角徽章变"离线"）。
+        // 嘟嘟可卡死心跳检测用：缓存最近一次本地任务状态快照（10s 状态轮询产物，不新起 IPC）。
+        LatestLocalStatus = status;
         try
         {
             await _signalRClient.ReportControlStatusAsync(status);
@@ -3707,6 +3724,18 @@ public class MainViewModel : INotifyPropertyChanged
 
     /// <summary>是否处于遥控器模式（ObserverMode=true）。供连接徽章 MultiDataTrigger 判断。</summary>
     public bool IsObserverMode => _config?.ObserverMode == true;
+
+    /// <summary>最近一次本地任务状态快照（10s 状态轮询的 task.status 产物）。
+    /// 嘟嘟可卡死心跳检测用：只读缓存，不新起 IPC 轮询。</summary>
+    public ControlStatus? LatestLocalStatus { get; private set; }
+
+    /// <summary>最近一次联机上线代序号（onlineGeneration 边沿检测的最近已处理值）。
+    /// 嘟嘟可批次统计用做批次键；int.MaxValue 为"未知"兜底值，调用方应视为拿不到。</summary>
+    public int? CurrentOnlineGeneration =>
+        _lastOnlineGeneration is > 0 and < int.MaxValue ? _lastOnlineGeneration : null;
+
+    /// <summary>SignalR 客户端出口（可能为 null，懒解析即可）。嘟嘟可 P5 截图汇聚用。</summary>
+    internal SignalRClient? SignalR => _signalRClient;
 
     /// <summary>随 BGI 启动（开关，切换即保存，不执行即时窗口动作）。
     /// 生效时机：BGI 下次启动时由 BGI 主程序读取配置并拉起助手。</summary>

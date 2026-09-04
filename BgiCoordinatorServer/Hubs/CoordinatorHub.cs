@@ -2598,6 +2598,68 @@ public class CoordinatorHub : Hub
         }
     }
 
+    // 成员截图汇聚限流表（嘟嘟可 P5）："CTRL_{roomCode}:{uid}" → 最近一次转发时间（UTC）
+    private static readonly ConcurrentDictionary<string, DateTime> ScreenshotRateLimit = new();
+
+    /// <summary>
+    /// 成员截图汇聚（嘟嘟可 P5 / 远程成员巡检墙）：成员端助手每 10s 上报一帧 JPEG 缩略图（base64），
+    /// 服务端校验连接确实在对应 CTRL_ 控制房间后纯转发给房间内所有成员（不做服务端存储）。
+    /// 限流：同 uid 10 秒内只转发一帧，超出丢弃。
+    /// </summary>
+    public async Task ReportMemberScreenshot(string roomCode, string uid, string jpegBase64, int width, int height, DateTime capturedAt)
+    {
+        try
+        {
+            var group = $"CTRL_{roomCode}";
+            // 校验与 SendRemoteCommand 同款：PC 端在 _controlRooms 里；遥控端登记连接也放行（可只读观看）
+            if (!_roomManager.IsInControlRoom(group, Context.ConnectionId)
+                && !_roomManager.IsRemoteConnection(group, Context.ConnectionId))
+            {
+                _logger.LogWarning("连接不在控制房间 {RoomCode} 中，拒绝转发成员截图（uid={Uid}）", roomCode, uid);
+                return;
+            }
+
+            // 负载上限（审查中危5）：base64 超 512KB（≈384KB JPEG，远超 480px 缩略图正常体积 ~30KB）直接丢弃，
+            // 防止异常/恶意端用大图打爆房间广播带宽
+            const int MaxJpegBase64Length = 512 * 1024;
+            if (string.IsNullOrEmpty(jpegBase64) || jpegBase64.Length > MaxJpegBase64Length)
+            {
+                _logger.LogWarning("成员截图负载超限或为空（uid={Uid}, {Len} 字符），丢弃", uid, jpegBase64?.Length ?? 0);
+                return;
+            }
+
+            // 简单限流：同 uid 10 秒内只转发一帧（截图流量大，防止异常端打爆房间广播）
+            // 注：TryGetValue + 写回不是原子操作，并发下同 uid 可能偶尔放过多一帧——
+            // 限流只是防滥用兜底而非精确配额，可接受，不为它引入锁。
+            var key = $"{group}:{uid}";
+            var now = DateTime.UtcNow;
+            if (ScreenshotRateLimit.TryGetValue(key, out var last) && now - last < TimeSpan.FromSeconds(10))
+                return;
+            ScreenshotRateLimit[key] = now;
+            // 顺带清理过期键（房间/uid 规模小，概率性清理即可，防长期运行字典膨胀）
+            if (ScreenshotRateLimit.Count > 200)
+            {
+                foreach (var kv in ScreenshotRateLimit)
+                    if (now - kv.Value > TimeSpan.FromHours(1))
+                        ScreenshotRateLimit.TryRemove(kv.Key, out _);
+            }
+
+            // 纯转发（发送者自己也在 Group 内会收到自己的帧，客户端按 uid 自行忽略即可）
+            await Clients.Group(group).SendAsync("MemberScreenshot", new
+            {
+                uid,
+                jpegBase64,
+                width,
+                height,
+                capturedAt
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ReportMemberScreenshot 失败");
+        }
+    }
+
     /// <summary>清除指定成员的 OnlineHistory（已联机记录）。由本人或房主调用。</summary>
     public async Task ClearOnlineHistory(string targetUid)
     {

@@ -366,6 +366,19 @@ public partial class App : Application
         }
     }
 
+    /// <summary>托盘气泡通知（嘟嘟可异常告警用）。托盘图标不可用时静默忽略。</summary>
+    internal void ShowTrayBalloon(string title, string message)
+    {
+        try
+        {
+            _trayIcon?.ShowBalloonTip(title, message, BalloonIcon.Warning);
+        }
+        catch
+        {
+            // 气泡显示失败不影响主流程
+        }
+    }
+
     /// <summary>
     /// 启动后台线程监听跨进程弹窗事件。
     /// 当用户再次点击"打开助手"时，第二个进程触发 EventWaitHandle，

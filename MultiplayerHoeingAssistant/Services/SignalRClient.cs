@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using MultiplayerHoeingAssistant.Models;
 
@@ -21,6 +22,10 @@ public class SignalRClient : IAsyncDisposable
 
     private bool _disposed;
 
+    /// <summary>服务端不支持 ReportMemberScreenshot（旧服务端首次 HubException 后标记，停止重试；
+    /// 新连接建立时重置，升级服务端后自动恢复）。volatile：Timer 线程读、Hub 调用线程写。</summary>
+    private volatile bool _screenshotUnsupported;
+
     // [P1-F 止血] 自愈定时器：仅在内置重连耗尽（Closed）后启动，每 30s 对同一连接 StartAsync。
     // 同一时刻只允许一条自愈定时器；_selfHealRunning 防止定时器回调重入（StartAsync 超 30s 时）。
     private Timer? _selfHealTimer;
@@ -30,6 +35,8 @@ public class SignalRClient : IAsyncDisposable
     public event Action<RemoteCommand>? OnRemoteCommand;
     public event Action<string>? OnJoinRejected;
     public event Action<bool>? OnConnectionStateChanged;
+    /// <summary>收到成员桌面截图帧（嘟嘟可 P5 远程巡检墙；服务端纯转发）。</summary>
+    public event Action<MemberScreenshotFrame>? OnMemberScreenshot;
     /// <summary>全员就绪确认完成事件（各助手据此启动中断流程）。带 generation 参数，用于幂等保护。</summary>
     public event Action<int>? OnAllReadyConfirmed;
     /// <summary>收到 AllReadyConfirm 事件（服务端要求确认就绪，确认阶段用）。</summary>
@@ -50,6 +57,7 @@ public class SignalRClient : IAsyncDisposable
         _serverUrl = serverUrl;
         _password = password;
         _teamUids = teamUids;
+        _screenshotUnsupported = false; // 新连接重置（可能换上了支持截图汇聚的新服务端）
 
         await EstablishAsync(serverUrl, roomCode, password, playerUid, playerName, teamUids, isRemote);
     }
@@ -81,6 +89,8 @@ public class SignalRClient : IAsyncDisposable
         {
             OnAllReadyConfirmReceived?.Invoke(generation);
         });
+        connection.On<MemberScreenshotFrame>("MemberScreenshot", frame =>
+            OnMemberScreenshot?.Invoke(frame));
 
         // 重连中（SignalR 内置自动重连尝试期间）
         connection.Reconnecting += _ =>
@@ -284,6 +294,30 @@ public class SignalRClient : IAsyncDisposable
         catch (Exception ex)
         {
             OnLog?.Invoke($"[清除记录] ClearOnlineHistoryAsync 调用失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>上报本机桌面截图帧（嘟嘟可 P5 远程巡检墙）。未连接/未入房时静默跳过；
+    /// 旧服务端无此 Hub 方法时首次 HubException 后停重试（不每 10 秒刷失败日志）。</summary>
+    public async Task ReportMemberScreenshotAsync(string jpegBase64, int width, int height, DateTime capturedAt)
+    {
+        if (_screenshotUnsupported) return;
+        if (_connection == null) return;
+        if (_connection.State != HubConnectionState.Connected) return;
+        try
+        {
+            await _connection.InvokeAsync("ReportMemberScreenshot", _roomCode, _playerUid, jpegBase64, width, height, capturedAt);
+        }
+        catch (HubException ex)
+        {
+            // HubException = 服务端明确拒绝（旧服务端没有该方法）——标记后不再重试，新连接时重置
+            _screenshotUnsupported = true;
+            OnLog?.Invoke($"ReportMemberScreenshot 被服务端拒绝（疑似旧服务端不支持截图汇聚），本次连接内停止上报: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            // 上报失败（断线等）仅记日志，截图汇聚是尽力而为的辅助通道
+            OnLog?.Invoke($"ReportMemberScreenshotAsync 调用失败: {ex.Message}");
         }
     }
 

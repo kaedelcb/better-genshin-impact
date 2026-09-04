@@ -9,6 +9,10 @@ public partial class MainWindow : Window
 {
     public MainViewModel ViewModel { get; }
 
+    /// <summary>嘟嘟可（日志与监控系统）ViewModel。手动组装（参照 App.xaml.cs 风格），
+    /// 构造时即启动日志 tail/异常监控后台服务，告警红点不依赖页面打开。</summary>
+    public DodocoViewModel Dodoco { get; }
+
     // 标签区折叠：标签按钮全部由代码动态生成到普通 WrapPanel（Tag="group"/"oneclick"）中，
     // "更多"按钮作为流式布局的普通子元素紧跟第 maxLines 行末尾（不单独占一行、不增加高度）。
     // _tagFoldBusy：ApplyTagFold 执行期间（含 UpdateLayout）忽略 SizeChanged，防重入；
@@ -28,6 +32,7 @@ public partial class MainWindow : Window
         DpiAwarenessController.Initialize(this);
         TagLog($"[app start] {System.DateTime.Now:HH:mm:ss.fff}");
         ViewModel = viewModel;
+        Dodoco = new DodocoViewModel(viewModel);
         DataContext = ViewModel;
         InitializeComponent();
         // 动态设置标题：Nexus-BGI · 版本号
