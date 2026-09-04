@@ -28,6 +28,9 @@ public sealed partial class GatewayDispatcher
         RegisterAllHandlers();
     }
 
+    /// <summary>已注册的全部消息名（command ∪ query），供路由完备性测试核对（internal，测试专用）。</summary>
+    internal IEnumerable<string> RegisteredNames => _commands.Keys.Concat(_queries.Keys);
+
     /// <summary>Dispatch 入口：command 类消息（写操作/事件上报）。</summary>
     public Task<GatewayEnvelope> DispatchAsync(GatewayHandlerContext ctx, GatewayEnvelope envelope)
         => RouteAsync(ctx, envelope, isQuery: false);

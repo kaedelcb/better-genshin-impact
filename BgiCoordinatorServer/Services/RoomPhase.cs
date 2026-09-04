@@ -104,7 +104,10 @@ public sealed class RoomPhaseObserver
     /// <summary>显式标记一个 Phase（用于无法从标志位推导的瞬态：RoundTransition、CloseRoom 的 Ended）。</summary>
     public void Mark(string roomCode, RoomPhase phase, string trigger) => Publish(roomCode, phase, trigger);
 
-    /// <summary>房间销毁时清除观测记录（防字典泄漏）。</summary>
+    /// <summary>房间销毁时清除观测记录（防字典泄漏）。
+    /// 已知缺口：RoomManager 内部三条隐式删房路径（同 UID 建房淘汰、LeaveRoom 空房、心跳清理空房）
+    /// 不经过 DeleteRoom 调用点，观测条目会残留（每房几十字节，仅日志去抖用途，重启即清）——
+    /// 货冻结期不改 RoomManager 删房路径，切片 3 RoomActor 化时统一收口。</summary>
     public void Forget(string roomCode) => _lastPhaseByRoom.TryRemove(roomCode, out _);
 
     private void Publish(string roomCode, RoomPhase phase, string trigger)

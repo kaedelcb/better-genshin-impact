@@ -50,13 +50,7 @@ public sealed class GatewayBroadcaster
     {
         if (ctx.IsV3)
         {
-            var newName = MapEventName(legacyEventName);
-            if (newName != null)
-            {
-                await _gatewayHub.Clients.Client(ctx.ConnectionId).SendAsync(
-                    GatewayProtocol.Callbacks.Event,
-                    GatewayEnvelope.Event(newName, evtPayload, null));
-            }
+            await SendEvtSafeAsync(_gatewayHub.Clients.Client(ctx.ConnectionId), null, legacyEventName, evtPayload);
             return;
         }
         await _legacyHub.Clients.Client(ctx.ConnectionId).SendAsync(legacyEventName, legacyArgs);

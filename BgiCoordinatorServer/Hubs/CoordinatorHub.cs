@@ -290,7 +290,6 @@ public class CoordinatorHub : Hub
         => _ops.PlayerAnomalyNotifyAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), playerUid, routeIndex, passedSyncPoint);
 
     /// <summary>
-    /// <summary>
     /// 接收"复苏者附带战斗点"的异常通知并广播（hoeing-route-retry-round-end-refactor v3）。
     /// 纯透传：不解析 fightPointId、不进 AbnormalPlayerInfos（区别于既有 PlayerAnomalyNotify）。
     /// 供客户端做"只跳过复苏那一个战斗点"（requirements.md §9 EB-v3-1 / design.md §9.1）。

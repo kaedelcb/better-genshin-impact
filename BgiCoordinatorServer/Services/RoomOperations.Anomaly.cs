@@ -342,7 +342,7 @@ public sealed partial class RoomOperations
 
         // 广播给房间内所有玩家（需求 REQ-2.2）
         // 注：旧事件名为 "PlayerAnomalyRecovered"（区别于 ClearAbnormalStatus 的 "AbnormalPlayerRecovered"），
-        // LegacyEventMap 未收录该旧名，evt 一侧会记警告并跳过双发（行为与搬迁前一致，见 F6 迁移报告）。
+        // 已收录 LegacyEventMap → anomaly.playerRecovered（80fa07ef 补录），evt 一侧正常双发。
         await _broadcaster.BroadcastGroupAsync(roomCode, "PlayerAnomalyRecovered", new { playerUid }, playerUid);
     }
 

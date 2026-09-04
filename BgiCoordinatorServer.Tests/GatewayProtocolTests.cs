@@ -72,4 +72,18 @@ public class GatewayProtocolTests
             Assert.True(shape.IsMatch(newName), $"{legacy} 映射值 \"{newName}\" 不符合 \"<域>.<动作>\" 形态");
         }
     }
+
+    /// <summary>路由完备性：LegacyMethodMap 的每个消息名值都已注册进 Dispatcher 路由表（防未来漏注册）。</summary>
+    [Fact]
+    public void LegacyMethodMap_ValuesAllRegistered_InDispatcherRoutingTable()
+    {
+        var harness = new GatewayTestHarness();
+        var registered = new HashSet<string>(harness.Dispatcher.RegisteredNames, StringComparer.Ordinal);
+        var unregistered = GatewayProtocol.LegacyMethodMap.Values
+            .Distinct(StringComparer.Ordinal)
+            .Where(n => !registered.Contains(n))
+            .ToList();
+        Assert.True(unregistered.Count == 0,
+            $"以下消息名未注册进 Dispatcher 路由表: [{string.Join(", ", unregistered)}]");
+    }
 }
