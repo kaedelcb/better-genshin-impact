@@ -64,6 +64,24 @@ internal sealed class InstanceRequestHandler
     {
         try
         {
+            // [跨会话守卫] 命名管道按用户 SID 隔离，同 SID 多 Windows 会话时其他会话的
+            // 助手/脚本也能连上本实例的管道。控制类与查询类操作只允许同一 Windows 会话
+            // 的客户端（连接建立时已通过 GetNamedPipeClientProcessId + ProcessIdToSessionId
+            // 捕获 ClientSessionId）；捕获失败（null）时 fail-closed，与助手端 Unknown 降级语义一致。
+            if (IsSessionGuardedOperation(request.Operation)
+                && !IsTrustedSessionClient(connection))
+            {
+                _logger.LogWarning(
+                    "拒绝跨会话实例 IPC 请求：op={Operation} clientSession={ClientSession} serverSession={ServerSession}",
+                    request.Operation,
+                    connection.ClientSessionId,
+                    _context.WindowsSessionId);
+                return InstanceIpcEnvelope.Failure(
+                    request,
+                    "cross_session_rejected",
+                    $"跨会话请求被拒绝（clientSession={connection.ClientSessionId?.ToString() ?? "unknown"}，serverSession={_context.WindowsSessionId}）");
+            }
+
             return request.Operation switch
             {
                 InstanceOperations.Ping => InstanceIpcEnvelope.Response(
@@ -125,6 +143,30 @@ internal sealed class InstanceRequestHandler
                 exception.GetBaseException().Message);
         }
     }
+
+    /// <summary>
+    /// 跨会话守卫拦截的操作集合：控制类指令（任务/热键/关游戏/配置下发）+ 状态查询。
+    /// 实例间内部通信（connection.open / activation.dispatch / webview.* / relativeMouse.*）不在此列。
+    /// </summary>
+    private static bool IsSessionGuardedOperation(string operation) => operation is
+        InstanceOperations.TaskStart
+        or InstanceOperations.TaskStop
+        or InstanceOperations.TaskSuspend
+        or InstanceOperations.TaskResume
+        or InstanceOperations.ExecuteHotkey
+        or InstanceOperations.CloseGame
+        or InstanceOperations.SetTaskEnabled
+        or InstanceOperations.ConfigApplyGroup
+        or InstanceOperations.ConfigOpenRemoteEditor
+        or InstanceOperations.ConfigPullGroup
+        or InstanceOperations.TaskStatus
+        or InstanceOperations.ConfigList
+        or InstanceOperations.Ping;
+
+    /// <summary>客户端 SessionId 已捕获且与本实例一致才可信；null（P/Invoke 失败）视为不可信，fail-closed。</summary>
+    private bool IsTrustedSessionClient(InstanceConnection connection) =>
+        connection.ClientSessionId is { } clientSessionId
+        && clientSessionId == _context.WindowsSessionId;
 
     /// <summary>
     /// 激活消息按 RequestId 去重，避免管道重试导致主窗口被重复激活。
@@ -529,6 +571,14 @@ internal sealed class InstanceRequestHandler
             var scriptService = App.ServiceProvider.GetService<BetterGenshinImpact.Service.Interface.IScriptService>();
             if (scriptService == null)
                 return InstanceIpcEnvelope.Failure(request, "service_unavailable", "脚本服务不可用");
+
+            // [先问再杀] 有任务在跑时直接无损拒绝，绝不做 Cancel——
+            // 旧逻辑无条件 Cancel 再等待，跨会话注入的 task.start 会杀死正在执行的任务。
+            if (BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0)
+            {
+                _logger.LogWarning("[IPC task.start] 拒绝启动：当前存在正在运行中的独立任务");
+                return InstanceIpcEnvelope.Failure(request, "task_already_running", "当前存在正在运行中的独立任务，请不要重复执行任务！");
+            }
 
             // 先在主线程上停止当前任务。CancelTokenOnly() 重建 Cts 但不清 WasCancelled，
             // 保留 WasCancelled 供后续 HandleTaskResume 判断是否恢复旧任务。

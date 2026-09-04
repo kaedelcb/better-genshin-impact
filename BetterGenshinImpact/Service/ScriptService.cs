@@ -137,7 +137,13 @@ public partial class ScriptService : IScriptService
         groupName ??= "默认";
 
         // 启动等待之前先进行取消操作的初始化，便于在任务开始前终止任务.
-        CancellationContext.Instance.Set();
+        // 仅在上下文已释放（上一个任务已结束）时重建：无条件 Set() 会在抢锁失败路径上
+        // 提前清掉 WasCancelled（旧任务被注入的 task.start 取消后，这里二次伤害导致误报 started）。
+        // 上下文存活时说明有任务在跑，保持原状；拿锁成功后 RunCurrentAsync 内部仍会 Set()。
+        if (CancellationContext.Instance.IsDisposed)
+        {
+            CancellationContext.Instance.Set();
+        }
 
         var list = ReloadScriptProjects(projectList);
         
