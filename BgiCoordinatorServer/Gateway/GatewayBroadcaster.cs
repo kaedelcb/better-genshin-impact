@@ -66,6 +66,12 @@ public sealed class GatewayBroadcaster
             {
                 await SendEvtSafeAsync(_gatewayHub.Clients.Client(connectionId), null, legacyEventName, evtPayload);
             }
+            else
+            {
+                // 与 SendEvtSafeAsync 同一纪律：无映射必须留痕，不得静默丢弃
+                _logger.LogWarning("[Gateway] 定向发送：旧事件 {LegacyEvent} 无 evt 映射，v3 连接 {ConnId} 未收到（已跳过）",
+                    legacyEventName, connectionId);
+            }
             return;
         }
         await _legacyHub.Clients.Client(connectionId).SendAsync(legacyEventName, legacyArgs);
