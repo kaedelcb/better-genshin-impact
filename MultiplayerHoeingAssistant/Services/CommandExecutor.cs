@@ -277,6 +277,16 @@ public class CommandExecutor
             if (blocked != null) return blocked;
             var payload = System.Text.Json.JsonSerializer.Serialize(new { groupName, startFromIndex, generation });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
+            // [无损拒绝适配 b5386005] task_already_running = BGI 明确应答的业务拒绝（非传输失败），
+            // 多半是 suspend 后旧任务退场慢（任务锁未释放）。等 1s 重发，最多 6 次
+            // （与 suspend 5s 等锁 + 助手 P1-C 6s 轮询的总容忍对齐）。
+            // 幂等安全：BGI 侧 generation 幂等登记已移到拒绝检查之后，被拒请求不会污染去重状态。
+            for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
+            {
+                ProbeLog($"[CommandExecutor] task.start 被无损拒绝（任务运行中），1s 后重试（{retry + 1}/6）groupName={groupName}");
+                await Task.Delay(1000);
+                response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
+            }
             if (response.Success)
             {
                 _hasRestartedThisBatch = false; // IPC 成功 = BGI 在线，后续不再需要回退标记
@@ -302,6 +312,11 @@ public class CommandExecutor
                 }
                 return new CommandResult { Status = "success", Message = $"配置组 {groupName} 已启动" };
             }
+
+            // [无损拒绝适配 b5386005] BGI 明确应答但拒绝启动：直接失败返回，绝不进杀进程回退——
+            // 杀进程会把 BGI 正在运行的任务一起杀死，恰恰违背无损拒绝的初衷。
+            // 只有传输层异常（catch）才走 KillBgi+RestartBgi 回退。
+            return new CommandResult { Status = "failed", Message = $"BGI 拒绝启动配置组「{groupName}」（{response.ErrorCode ?? "unknown"}）：{response.ErrorMessage ?? "无详情"}。按无损拒绝语义未杀进程，请稍后重试或先停止当前任务" };
         }
         catch
         {
@@ -347,8 +362,18 @@ public class CommandExecutor
             if (blocked != null) return blocked;
             var payload = System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
+            // [无损拒绝适配 b5386005] 同 StartGroupAsync：业务拒绝（任务运行中）等锁重试，最多 6 次
+            for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
+            {
+                ProbeLog($"[CommandExecutor] task.start 被无损拒绝（任务运行中），1s 后重试（{retry + 1}/6）configName={configName}");
+                await Task.Delay(1000);
+                response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
+            }
             if (response.Success)
                 return new CommandResult { Status = "success", Message = $"一条龙 {configName} 已启动" };
+
+            // [无损拒绝适配 b5386005] 业务拒绝不杀进程，直接失败返回（只有 catch 传输异常才进回退）
+            return new CommandResult { Status = "failed", Message = $"BGI 拒绝启动一条龙「{configName}」（{response.ErrorCode ?? "unknown"}）：{response.ErrorMessage ?? "无详情"}。按无损拒绝语义未杀进程，请稍后重试或先停止当前任务" };
         }
         catch
         {

@@ -119,10 +119,14 @@ internal sealed class ExternalInterfaceSession
 
     private InstanceIpcEnvelope HandleHello(InstanceIpcEnvelope request)
     {
+        // windowsSessionId/processId 报 BGI 进程自身的端点信息（与 ping 响应的 InstanceEndpoint 语义一致）。
+        // 切片1审查修复：原先误传 _connection.ClientSessionId/ClientProcessId（对端助手进程的），
+        // 助手 SDK 拿它与自己比对恒等 → 跨会话自检形同虚设（幸有 BGI 侧接收端守卫 fail-closed 兜底）。
+        // 修正后助手侧自检真正生效，与服务端守卫形成双保险。
         var data = ExternalInterfaceProtocol.BuildHelloData(
             SessionId,
-            _connection.ClientSessionId,
-            _connection.ClientProcessId);
+            System.Diagnostics.Process.GetCurrentProcess().SessionId,
+            Environment.ProcessId);
         return InstanceIpcEnvelope.Response(request, data);
     }
 

@@ -573,10 +573,6 @@ internal sealed class InstanceRequestHandler
                 _logger.LogInformation("[IPC task.start] generation={Gen} name={Name} 已执行过，跳过重复执行", generation, taskName);
                 return InstanceIpcEnvelope.Response(request, new { status = "already_executed", generation });
             }
-            if (generation > 0)
-            {
-                _lastExecutedTask = (generation, taskName);
-            }
 
             // 通过全局服务容器获取 IScriptService
             var scriptService = App.ServiceProvider.GetService<BetterGenshinImpact.Service.Interface.IScriptService>();
@@ -589,6 +585,14 @@ internal sealed class InstanceRequestHandler
             {
                 _logger.LogWarning("[IPC task.start] 拒绝启动：当前存在正在运行中的独立任务");
                 return InstanceIpcEnvelope.Failure(request, "task_already_running", "当前存在正在运行中的独立任务，请不要重复执行任务！");
+            }
+
+            // 幂等登记移到这里（切片1审查修复）：只有通过"无损拒绝"检查、真正进入启动流程才登记。
+            // 原先登记在拒绝检查之前——被拒绝的请求也会污染 _lastExecutedTask，
+            // 客户端按 task_already_running 重试时会被幂等检查吞掉（返回 already_executed 但任务从未启动）。
+            if (generation > 0)
+            {
+                _lastExecutedTask = (generation, taskName);
             }
 
             // 先在主线程上停止当前任务。CancelTokenOnly() 重建 Cts 但不清 WasCancelled，

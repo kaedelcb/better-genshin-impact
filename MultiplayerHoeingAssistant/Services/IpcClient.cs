@@ -186,6 +186,9 @@ public class IpcClient : IDisposable
         string? errorMessage = null;
         if (root.TryGetProperty("errorMessage", out var err))
             errorMessage = err.GetString();
+        string? errorCode = null;
+        if (root.TryGetProperty("errorCode", out var code))
+            errorCode = code.GetString();
         string? dataJson = null;
         if (root.TryGetProperty("data", out var dataEl) && dataEl.ValueKind == System.Text.Json.JsonValueKind.Object)
             dataJson = dataEl.GetRawText();
@@ -194,7 +197,8 @@ public class IpcClient : IDisposable
         {
             Success = success,
             Data = dataJson,
-            ErrorMessage = errorMessage
+            ErrorMessage = errorMessage,
+            ErrorCode = errorCode
         };
     }
 
