@@ -486,13 +486,32 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     // ========== P5 远程巡检墙：共享本机桌面截图 ==========
 
     /// <summary>共享我的桌面截图（持久化到 dodoco_settings.json）。
-    /// 开启后每 10 秒把一帧 480px 低清 JPEG 上报到房间，供成员远程查看。</summary>
+    /// 开启后每 10 秒把一帧 JPEG（宽度见 ShareScreenshotWidthIndex）上报到房间，供成员远程查看。</summary>
     public bool ShareDesktopScreenshot
     {
         get => _settingsService.Current.ShareDesktopScreenshot;
         set
         {
             _settingsService.Update(s => s.ShareDesktopScreenshot = value);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>共享截图宽度选项（像素），下标即 ShareScreenshotWidthIndex。</summary>
+    public static readonly int[] ShareScreenshotWidthOptions = { 480, 960, 1280, 1920 };
+
+    /// <summary>共享画质下拉索引：0=480 1=960 2=1280 3=1920（持久化；默认 1280，下一拍上报生效）。</summary>
+    public int ShareScreenshotWidthIndex
+    {
+        get
+        {
+            var i = Array.IndexOf(ShareScreenshotWidthOptions, _settingsService.Current.ShareScreenshotWidth);
+            return i < 0 ? 2 : i;
+        }
+        set
+        {
+            if (value < 0 || value >= ShareScreenshotWidthOptions.Length) return;
+            _settingsService.Update(s => s.ShareScreenshotWidth = ShareScreenshotWidthOptions[value]);
             OnPropertyChanged();
         }
     }

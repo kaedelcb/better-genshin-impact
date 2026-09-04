@@ -4,7 +4,8 @@ namespace MultiplayerHoeingAssistant.Services;
 
 /// <summary>
 /// 成员截图汇聚（嘟嘟可 P5 远程巡检墙）：
-/// 1) 上报——开启"共享我的桌面截图"且已连房时，每 10 秒截一帧 480px JPEG 上报给房间；
+/// 1) 上报——开启"共享我的桌面截图"且已连房时，每 10 秒截一帧 JPEG 上报给房间
+///    （宽度走统一设置 ShareScreenshotWidth，默认 1280，质量 75）；
 /// 2) 接收——懒订阅 SignalRClient.OnMemberScreenshot（客户端实例懒解析，实例更换时自动换绑），
 ///    收到帧后触发 FrameReceived（线程不保证是 UI 线程，订阅方自行切回 UI）。
 /// 尽力而为通道：截图/上报失败只记 Debug 日志，不影响主流程。
@@ -12,6 +13,8 @@ namespace MultiplayerHoeingAssistant.Services;
 public sealed class MemberScreenshotRelayService : IDisposable
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
+    /// <summary>共享帧 JPEG 质量（75：清晰度够读屏上文字，单帧 1280px 约 100~180KB，10s 一帧带宽可忽略）。</summary>
+    private const long ShareJpegQuality = 75L;
 
     private readonly ScreenshotService _screenshotService;
     private readonly DodocoSettingsService _settingsService;
@@ -43,13 +46,14 @@ public sealed class MemberScreenshotRelayService : IDisposable
             EnsureHooked();
 
             var client = _clientProvider();
-            if (!_settingsService.Current.ShareDesktopScreenshot) return;
+            var cfg = _settingsService.Current;
+            if (!cfg.ShareDesktopScreenshot) return;
             if (client?.IsConnected != true) return;
             if (Interlocked.Exchange(ref _capturing, 1) != 0) return;
             try
             {
                 // CopyFromScreen 可能耗时，Timer 回调本身就是线程池线程，直接在这里截
-                var jpeg = _screenshotService.CaptureJpeg(480, 60, out var w, out var h);
+                var jpeg = _screenshotService.CaptureJpeg(cfg.ShareScreenshotWidth, ShareJpegQuality, out var w, out var h);
                 if (jpeg == null || jpeg.Length == 0) return;
                 _ = client.ReportMemberScreenshotAsync(Convert.ToBase64String(jpeg), w, h, DateTime.Now);
             }

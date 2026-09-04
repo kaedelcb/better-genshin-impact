@@ -17,8 +17,10 @@ public class DodocoSettings
     [JsonPropertyName("thumbnailWidth")] public int ThumbnailWidth { get; set; } = 1280;
     /// <summary>全部静音：异常监控/卡死心跳只记录不红点/不响铃/不弹托盘。</summary>
     [JsonPropertyName("muteAll")] public bool MuteAll { get; set; }
-    /// <summary>共享我的桌面截图：开启后每 10 秒把一帧 480px JPEG 上报到房间，供成员远程查看。默认关。</summary>
+    /// <summary>共享我的桌面截图：开启后每 10 秒把一帧 JPEG（宽度见 ShareScreenshotWidth）上报到房间，供成员远程查看。默认关。</summary>
     [JsonPropertyName("shareDesktopScreenshot")] public bool ShareDesktopScreenshot { get; set; }
+    /// <summary>共享截图宽度（像素，高度等比缩放，JPEG 质量 ~75）：480/960/1280/1920 之一。默认 1280（480 在 1080p 屏上字完全看不清，仅作省流量兜底）。</summary>
+    [JsonPropertyName("shareScreenshotWidth")] public int ShareScreenshotWidth { get; set; } = 1280;
     /// <summary>共享我的实时日志：开启后允许房间成员订阅本机 BGI 实时日志（观众驱动，500ms 合批）。
     /// 默认开——联机小队就是用来互相盯的；在意的人可手动关。</summary>
     [JsonPropertyName("shareRealtimeLog")] public bool ShareRealtimeLog { get; set; } = true;
@@ -65,6 +67,7 @@ public sealed class DodocoSettingsService
                     ThumbnailWidth = _settings.ThumbnailWidth,
                     MuteAll = _settings.MuteAll,
                     ShareDesktopScreenshot = _settings.ShareDesktopScreenshot,
+                    ShareScreenshotWidth = _settings.ShareScreenshotWidth,
                     ShareRealtimeLog = _settings.ShareRealtimeLog,
                     ShareLogInfoOnly = _settings.ShareLogInfoOnly,
                     ShareLogFiles = _settings.ShareLogFiles
@@ -124,6 +127,7 @@ public sealed class DodocoSettingsService
         if (_settings.StallThresholdMinutes < 1) _settings.StallThresholdMinutes = 3;
         if (_settings.ScreenshotIntervalSeconds is not (1 or 3 or 5 or 10)) _settings.ScreenshotIntervalSeconds = 3;
         if (_settings.ThumbnailWidth is < 320 or > 3840) _settings.ThumbnailWidth = 1280;
+        if (_settings.ShareScreenshotWidth is not (480 or 960 or 1280 or 1920)) _settings.ShareScreenshotWidth = 1280;
     }
 
     private void SaveLocked()

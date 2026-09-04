@@ -15,7 +15,7 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 /// 截图/编码在后台线程执行，BitmapImage 创建回 UI 线程。
 /// P5：画面源下拉支持远程成员（需对方开启"共享我的桌面截图"），每 uid 缓存最近 3 帧；
 /// 选中远程成员时本机自动刷新暂停，选回本机恢复。
-/// 隐私：本机截图仅本地显示；远程帧来自成员自愿共享的 480px 低清 JPEG。
+/// 隐私：本机截图仅本地显示；远程帧来自成员自愿共享的 JPEG 压缩画面（宽度由共享方设置，默认 1280）。
 /// </summary>
 public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
 {
@@ -230,7 +230,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>隐私提示（固定文案）。</summary>
-    public string PrivacyNote => "本机截图仅本地显示；远程帧为成员自愿共享的低清画面";
+    public string PrivacyNote => "本机截图仅本地显示；远程帧为成员自愿共享的压缩画面（画质由共享方设置）";
 
     private string _statusText = "";
     public string StatusText { get => _statusText; set => SetProperty(ref _statusText, value); }

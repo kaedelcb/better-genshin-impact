@@ -68,7 +68,7 @@
                     Orientation="Horizontal">
             <ui:Button x:Name="SaveButton"
                        Margin="0,0,8,0"
-                       Appearance="Accent"
+                       Appearance="Primary"
                        Content="保存并回传"
                        IsEnabled="False"
                        Click="SaveButton_Click" />

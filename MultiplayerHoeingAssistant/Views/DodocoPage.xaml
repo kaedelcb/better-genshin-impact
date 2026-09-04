@@ -1209,8 +1209,17 @@
                         <Button Content="清空历史" Style="{DynamicResource BtnGhost}" Padding="10,4"
                                 Command="{Binding Monitor.ClearHistoryCommand}" Margin="0,0,12,0"/>
                         <CheckBox Content="共享我的桌面截图" IsChecked="{Binding ShareDesktopScreenshot, Mode=TwoWay}"
-                                  Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,12,0"
-                                  ToolTip="开启后每 10 秒把一帧 480px 低清 JPEG 上传到房间，供成员远程查看（需已连房）"/>
+                                  Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,6,0"
+                                  ToolTip="开启后每 10 秒把一帧 JPEG 上传到房间，供成员远程查看（需已连房）"/>
+                        <ComboBox Width="92" SelectedIndex="{Binding ShareScreenshotWidthIndex}"
+                                  Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
+                                  VerticalAlignment="Center" Margin="0,0,12,0"
+                                  ToolTip="共享画质（上传截图宽度，高度等比）：越大越清晰、越费带宽；1280 可看清屏上文字">
+                            <ComboBoxItem Content="480px" Style="{DynamicResource GoldComboItem}"/>
+                            <ComboBoxItem Content="960px" Style="{DynamicResource GoldComboItem}"/>
+                            <ComboBoxItem Content="1280px" Style="{DynamicResource GoldComboItem}"/>
+                            <ComboBoxItem Content="1920px" Style="{DynamicResource GoldComboItem}"/>
+                        </ComboBox>
                         <TextBlock Text="{Binding Monitor.PrivacyNote}" FontSize="10" Foreground="{DynamicResource Dim}"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
