@@ -233,6 +233,7 @@ public static class GatewayProtocol
             ["UnifiedWaitPoint"] = "anomaly.unifiedWaitPoint",
             ["AllPlayersArrived"] = "anomaly.allPlayersArrived",
             ["AbnormalPlayerRecovered"] = "anomaly.playerRecovered",
+            ["PlayerAnomalyRecovered"] = "anomaly.playerRecovered",
             ["PlayerAnomalyNotify"] = "anomaly.playerNotified",
             ["PlayerAnomalyNotifyFightPoint"] = "anomaly.fightPointNotified",
             ["MemberStatusChanged"] = "room.memberStatusChanged",
