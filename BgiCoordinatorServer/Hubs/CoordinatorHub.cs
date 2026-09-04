@@ -421,24 +421,7 @@ public class CoordinatorHub : Hub
 
     /// <summary>查询指定成员的路线进度（需求 6）</summary>
     public Task<MemberProgress?> GetMemberProgress(string playerUid)
-    {
-        var (room, _) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (room == null) return Task.FromResult<MemberProgress?>(null);
-
-        lock (room)
-        {
-            var player = room.Players.FirstOrDefault(p => p.PlayerUid == playerUid);
-            if (player == null || player.CurrentRouteIndex < 0)
-                return Task.FromResult<MemberProgress?>(null);
-
-            return Task.FromResult<MemberProgress?>(new MemberProgress
-            {
-                RouteIndex = player.CurrentRouteIndex,
-                RouteStartTime = player.RouteStartTime,
-                RouteEstimatedSeconds = player.RouteEstimatedSeconds
-            });
-        }
-    }
+        => _ops.GetMemberProgressAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), playerUid);
 
 
 
@@ -656,64 +639,28 @@ public class CoordinatorHub : Hub
     }
 
     /// <summary>更新白名单（仅房主）</summary>
-    public async Task UpdateWhitelist(List<string>? whitelist = null)
-    {
-        var (room, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (room == null || roomCode == null) return;
-
-        if (room.HostConnectionId != Context.ConnectionId)
-        {
-            _logger.LogWarning("[UpdateWhitelist] 连接 {ConnId} 不是房主，忽略", Context.ConnectionId);
-            return;
-        }
-
-        _roomManager.UpdateWhitelist(roomCode, whitelist ?? []);
-        _logger.LogInformation("[UpdateWhitelist] 房间 {Code} 白名单已更新", roomCode);
-    }
+    public Task UpdateWhitelist(List<string>? whitelist = null)
+        => _ops.UpdateWhitelistAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), whitelist);
 
     /// <summary>获取在线房间列表</summary>
     public Task<List<RoomSummary>> GetOnlineRooms()
-    {
-        return Task.FromResult(_roomManager.GetOnlineRooms());
-    }
+        => _ops.GetOnlineRoomsAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>房主上传锄地配置</summary>
     public Task SetRoomConfig(RoomConfig config)
-    {
-        var (room, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (room != null && room.HostConnectionId == Context.ConnectionId)
-        {
-            room.HostConfig = config;
-            _logger.LogInformation("房间 {Code} 房主配置已更新", roomCode);
-        }
-        return Task.CompletedTask;
-    }
+        => _ops.SetRoomConfigAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), config);
 
     /// <summary>成员拉取房主锄地配置</summary>
     public Task<RoomConfig?> GetRoomConfig()
-    {
-        var (room, _) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        return Task.FromResult(room?.HostConfig);
-    }
+        => _ops.GetRoomConfigAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>房主上报已进入等待状态</summary>
-    public async Task ReportHostReady()
-    {
-        var (room, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (room != null && roomCode != null && room.HostConnectionId == Context.ConnectionId)
-        {
-            room.HostReady = true;
-            _logger.LogInformation("房间 {Code} 房主已就绪", roomCode);
-            await Clients.Group(roomCode).SendAsync("HostReadyChanged", true);
-        }
-    }
+    public Task ReportHostReady()
+        => _ops.ReportHostReadyAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>查询房主是否就绪</summary>
     public Task<bool> IsHostReady()
-    {
-        var (room, _) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        return Task.FromResult(room?.HostReady ?? false);
-    }
+        => _ops.IsHostReadyAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>
     /// 房主调用此方法把房间标记为已开锄（spec lock-room-after-start §2）。
@@ -735,37 +682,15 @@ public class CoordinatorHub : Hub
 
     /// <summary>返回本房间权威轮换序列（UID 列表）。未生成 / 房间不存在 → 空列表。</summary>
     public Task<List<string>> GetRoundHostOrder()
-    {
-        var (room, _) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (room == null) return Task.FromResult(new List<string>());
-        lock (room) { return Task.FromResult(new List<string>(room.RoundHostOrder)); }
-    }
+        => _ops.GetRoundHostOrderAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>房主上传最终路线列表，并广播通知成员</summary>
-    public async Task SetHostRouteList(List<string> routeNames)
-    {
-        var (room, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (room != null && room.HostConnectionId == Context.ConnectionId)
-        {
-            // lock(room)：与 GetHostRouteListStatus 读侧互斥，保证 (HostRouteList, HostRouteListUploaded)
-            // 两字段的写入对读侧表现为单一原子快照（multiplayer-member-skip-round-stuck-roundend-sync-fix）。
-            lock (room)
-            {
-                room.HostRouteList = routeNames;
-                room.HostRouteListUploaded = true;
-            }
-            _logger.LogInformation("房间 {Code} 房主路线列表已上传，共 {Count} 条", roomCode, routeNames.Count);
-            // 广播通知成员路线列表已就绪
-            await Clients.Group(roomCode).SendAsync("HostRouteListReady", routeNames);
-        }
-    }
+    public Task SetHostRouteList(List<string> routeNames)
+        => _ops.SetHostRouteListAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), routeNames);
 
     /// <summary>成员拉取房主路线列表</summary>
     public Task<List<string>> GetHostRouteList()
-    {
-        var (room, _) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        return Task.FromResult(room?.HostRouteList ?? []);
-    }
+        => _ops.GetHostRouteListAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>
     /// 查询房主是否已上传过路线列表（含上传空列表）。
@@ -773,10 +698,7 @@ public class CoordinatorHub : Hub
     /// "房主从未上传"（false → 继续等待）与"房主上传了空列表"（true + 列表空 → 优雅跳过本轮）。
     /// </summary>
     public Task<bool> IsHostRouteListUploaded()
-    {
-        var (room, _) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        return Task.FromResult(room?.HostRouteListUploaded ?? false);
-    }
+        => _ops.IsHostRouteListUploadedAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>
     /// 原子返回房主路线列表状态：(Uploaded, RouteNames) 同一时刻快照。
@@ -787,21 +709,7 @@ public class CoordinatorHub : Hub
     /// 来自同一时刻、且返回后不被房主并发改动。
     /// </summary>
     public Task<HostRouteListStatus> GetHostRouteListStatus()
-    {
-        var (room, _) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (room == null)
-        {
-            return Task.FromResult(new HostRouteListStatus { Uploaded = false, RouteNames = [] });
-        }
-        lock (room)
-        {
-            return Task.FromResult(new HostRouteListStatus
-            {
-                Uploaded = room.HostRouteListUploaded,
-                RouteNames = room.HostRouteList != null ? new List<string>(room.HostRouteList) : [],
-            });
-        }
-    }
+        => _ops.GetHostRouteListStatusAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>上报已加入世界，全员加入时广播 AllWorldJoined</summary>
     public async Task ReportWorldJoined()
@@ -821,11 +729,7 @@ public class CoordinatorHub : Hub
 
     /// <summary>获取已加入世界的人数</summary>
     public Task<int> GetWorldJoinedCount()
-    {
-        var (_, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (roomCode == null) return Task.FromResult(0);
-        return Task.FromResult(_roomManager.GetWorldJoinedCount(roomCode));
-    }
+        => _ops.GetWorldJoinedCountAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>重置已加入世界的记录（多世界模式新轮次开始时调用）</summary>
     public Task ResetWorldJoined()
