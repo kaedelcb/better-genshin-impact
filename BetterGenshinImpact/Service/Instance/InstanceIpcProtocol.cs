@@ -37,6 +37,8 @@ public static class InstanceOperations
     public const string ConfigOpenRemoteEditor = "config.open_remote_editor";
     public const string ConfigRemoteEditorResult = "config.remote_editor_result";
     public const string ConfigApplyGroup = "config.apply_group";
+    // 助手主动中止远程编辑会话（流程提前退出时清理尸体/关闭遗留窗口，幂等）
+    public const string ConfigAbortRemoteEditor = "config.abort_remote_editor";
 }
 
 public sealed class InstanceIpcEnvelope
