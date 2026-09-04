@@ -47,6 +47,8 @@ public partial class RemoteConfigEditWindow : FluentWindow
     private bool _dirtyGroup;
     private bool _dirtySolo;
     private bool _completed;
+    // 设置弹窗重入守卫：双击/连点会弹出第二个基于旧快照的同名弹窗，在其上点保存会覆盖第一次的修改
+    private bool _settingsDialogOpen;
 
     public RemoteConfigEditWindow(string targetName, string targetUid, string groupName, string packageJson)
     {
@@ -149,6 +151,9 @@ public partial class RemoteConfigEditWindow : FluentWindow
     /// <summary>组级设置：复用 ScriptGroupConfigView，直接编辑内存态 remoteGroup.Config（契约 §3.1）。</summary>
     private void OpenGroupSettingsButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_settingsDialogOpen) return;   // 防连点重入（同步 ShowDialog 也可能积压第二次点击）
+        _settingsDialogOpen = true;
+        OpenGroupSettingsButton.IsEnabled = false;
         try
         {
             // AutoFightViewModel 注入对方策略清单（genius → strategyOverride，autofight → combatStrategyOverride）
@@ -183,15 +188,19 @@ public partial class RemoteConfigEditWindow : FluentWindow
             _logger.LogWarning(ex, "[远程配置编辑] 打开组级设置失败");
             ThemedMessageBox.Error($"打开组级设置失败：{ex.Message}", "远程配置编辑", MessageBoxButton.OK);
         }
+        finally
+        {
+            _settingsDialogOpen = false;
+            OpenGroupSettingsButton.IsEnabled = true;
+        }
     }
 
     /// <summary>锄地一条龙设置：复用 MultiplayerHoeingSettingsView 远程模式（契约 §3.2）。</summary>
     private async void OpenHoeingSettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_soloProject == null)
-        {
-            return;
-        }
+        if (_soloProject == null || _settingsDialogOpen) return;   // 防连点重入：第二弹窗是旧快照，其保存会覆盖第一次修改
+        _settingsDialogOpen = true;
+        OpenHoeingSettingsButton.IsEnabled = false;
 
         try
         {
@@ -249,11 +258,18 @@ public partial class RemoteConfigEditWindow : FluentWindow
             // 战斗策略下拉写回的是组级 AutoFightConfig.StrategyName，组配置一并标记 dirty
             _dirtyGroup = true;
             SaveButton.IsEnabled = true;
+            // 明确两段式语义：弹窗"保存"只是暂存内存，必须点主窗口「保存并回传」才会发给对方
+            Wpf.Ui.Violeta.Controls.Toast.Success("已暂存修改——需点击本窗口「保存并回传」才会发送给对方");
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "[远程配置编辑] 打开锄地一条龙设置失败");
             ThemedMessageBox.Error($"打开锄地一条龙设置失败：{ex.Message}", "远程配置编辑", MessageBoxButton.OK);
+        }
+        finally
+        {
+            _settingsDialogOpen = false;
+            OpenHoeingSettingsButton.IsEnabled = true;
         }
     }
 
