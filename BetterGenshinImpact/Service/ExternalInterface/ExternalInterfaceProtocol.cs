@@ -118,6 +118,8 @@ internal static class ExternalInterfaceProtocol
                 ["event.push"] = true,
                 ["event.taskProgress"] = true,
                 ["event.hoeingProgress"] = true,
+                // 切片4：订阅可携带 lastKnownRevision，服务端从近因环形缓冲补发缺失事件（§4.6 模块一版）
+                ["event.replay"] = true,
                 ["idempotency.window"] = true,
             },
         };

@@ -14,11 +14,15 @@ namespace BetterGenshinImpact.Service.ExternalInterface;
 /// <summary>
 /// ext.event 事件中心（进程级单例）。
 /// 职责：订阅表（按会话隔离）、事件扇出（复用 InstanceConnection.WriteJsonAsync 写锁串行化）、
-/// stateRevision 版本号、观察器生命周期（第一个订阅者启动、最后一个退订停止——A1 单机零感知）。
+/// stateRevision 版本号、近因环形缓冲（断线续传补发，切片4）、
+/// 观察器生命周期（第一个订阅者启动、最后一个退订停止——A1 单机零感知）。
 /// 推送 fire-and-forget：绝不在任务/管道线程上挂起等待 I/O（§3.8-6）。
 /// </summary>
 internal sealed class ExternalInterfaceEventHub
 {
+    /// <summary>近因事件环形缓冲容量（《通信方案》§4.6 有界事件日志在模块一通道的对应实现）。</summary>
+    public const int RecentEventCapacity = 500;
+
     private static readonly ExternalInterfaceEventHub SharedInstance = new();
 
     /// <summary>
@@ -31,6 +35,14 @@ internal sealed class ExternalInterfaceEventHub
     private readonly ExternalInterfaceEventObserver _observer = new();
     private readonly ILogger _logger;
     private long _stateRevision;
+
+    /// <summary>
+    /// 近因事件环形缓冲（有界 500 条）：断线重连恢复订阅时按 lastKnownRevision 补发缺失事件。
+    /// 只在 Publish 时入队（观察器仅在存在订阅者时运行，suspend/resumed 挂载点写入量可忽略），
+    /// 独立小锁只做入队/出队/快照拷贝，不与扇出写路径交叉，不引入新锁竞争。
+    /// </summary>
+    private readonly object _recentLock = new();
+    private readonly Queue<BufferedEvent> _recentEvents = new();
 
     private ExternalInterfaceEventHub()
     {
@@ -94,13 +106,21 @@ internal sealed class ExternalInterfaceEventHub
         }
     }
 
-    /// <summary>发布事件：revision 单调 +1，扇出到所有匹配订阅者。</summary>
+    /// <summary>发布事件：revision 单调 +1，入近因缓冲，扇出到所有匹配订阅者。</summary>
     public void Publish(string eventName, object? payload)
     {
         var revision = Interlocked.Increment(ref _stateRevision);
-        var envelope = InstanceIpcEnvelope.Request(
-            ExternalInterfaceOperations.EventPush,
-            ExternalInterfaceProtocol.BuildEventData(eventName, revision, payload));
+        var eventData = ExternalInterfaceProtocol.BuildEventData(eventName, revision, payload);
+        var envelope = InstanceIpcEnvelope.Request(ExternalInterfaceOperations.EventPush, eventData);
+
+        lock (_recentLock)
+        {
+            _recentEvents.Enqueue(new BufferedEvent(revision, eventName, eventData));
+            while (_recentEvents.Count > RecentEventCapacity)
+            {
+                _recentEvents.Dequeue();
+            }
+        }
 
         foreach (var (sessionId, subscriber) in _subscribers)
         {
@@ -127,6 +147,56 @@ internal sealed class ExternalInterfaceEventHub
     public void PublishTaskResumed(string taskType, string? groupName)
         => Publish(ExternalInterfaceEventNames.TaskResumed, new { taskType, groupName });
 
+    /// <summary>
+    /// 断线续传：取 lastKnownRevision 之后的缓冲事件（按订阅兴趣过滤）。
+    /// 返回 resyncRequired=true 表示缺口超出缓冲（或缓冲为空但确有缺失/版本号回退），
+    /// 客户端应主动拉 ext.task.status 快照校准（LSP 文档同步模型，§4.6 模块一对应实现）。
+    /// 调用时序约定：注册订阅者之前调用并推送，缺口窗口由客户端跳号检测+快照兜底。
+    /// </summary>
+    public (List<JObject> ReplayEvents, bool ResyncRequired) GetReplayEvents(
+        long lastKnownRevision,
+        Func<string, bool> isInterested)
+    {
+        lock (_recentLock)
+        {
+            var current = CurrentRevision;
+            if (lastKnownRevision < 0 || lastKnownRevision > current)
+            {
+                // 版本号回退（BGI 重启后 revision 归零）或非法值：无法续传，走快照校准
+                return ([], true);
+            }
+
+            if (lastKnownRevision == current)
+            {
+                return ([], false); // 无缺失
+            }
+
+            if (_recentEvents.Count == 0)
+            {
+                // 有缺失但缓冲为空（如无订阅者期间发布的事件未入队前的边界），走快照校准
+                return ([], true);
+            }
+
+            var oldest = _recentEvents.Peek().Revision;
+            if (oldest > lastKnownRevision + 1)
+            {
+                // 缺口最老部分已出缓冲，补发无法保证完整 → 快照校准
+                return ([], true);
+            }
+
+            var replay = new List<JObject>();
+            foreach (var buffered in _recentEvents)
+            {
+                if (buffered.Revision > lastKnownRevision && isInterested(buffered.Name))
+                {
+                    replay.Add(buffered.Data);
+                }
+            }
+
+            return (replay, false);
+        }
+    }
+
     private async Task PushToSubscriberAsync(
         EventSubscriber subscriber,
         InstanceIpcEnvelope envelope)
@@ -146,6 +216,9 @@ internal sealed class ExternalInterfaceEventHub
             RemoveSession(subscriber.SessionId);
         }
     }
+
+    /// <summary>近因缓冲条目：revision + 事件名（订阅过滤用）+ 完整事件帧 data（补发直接复用）。</summary>
+    private sealed record BufferedEvent(long Revision, string Name, JObject Data);
 
     private sealed class EventSubscriber
     {

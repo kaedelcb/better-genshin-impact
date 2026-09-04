@@ -67,7 +67,8 @@ internal sealed class ExternalInterfaceSession
                 case ExternalInterfaceOperations.Hello:
                     return HandleHello(request);
                 case ExternalInterfaceOperations.EventSubscribe:
-                    return ExternalInterfaceEventPlane.HandleSubscribe(this, request);
+                    return await ExternalInterfaceEventPlane.HandleSubscribeAsync(this, request, cancellationToken)
+                        .ConfigureAwait(false);
                 case ExternalInterfaceOperations.EventUnsubscribe:
                     return ExternalInterfaceEventPlane.HandleUnsubscribe(this, request);
             }
@@ -173,18 +174,41 @@ internal sealed class ExternalInterfaceSession
 /// <summary>
 /// 事件平面：订阅/退订。订阅表挂在 ExternalInterfaceEventHub（进程级单例），
 /// 事件推送只在存在订阅者时运行观察器（A1：单机零感知）。
+/// 切片4：订阅可携带 data.lastKnownRevision（断线重连恢复）——服务端从近因环形缓冲
+/// 补发缺失事件（可续），或告知 resyncRequired 由客户端拉 ext.task.status 快照校准（不可续）。
 /// </summary>
 internal static class ExternalInterfaceEventPlane
 {
-    public static InstanceIpcEnvelope HandleSubscribe(
+    public static async Task<InstanceIpcEnvelope> HandleSubscribeAsync(
         ExternalInterfaceSession session,
-        InstanceIpcEnvelope request)
+        InstanceIpcEnvelope request,
+        CancellationToken cancellationToken)
     {
         var events = ParseEventList(request);
-        ExternalInterfaceEventHub.Instance.Subscribe(
-            session.SessionId,
-            session.Connection,
-            events);
+        var hub = ExternalInterfaceEventHub.Instance;
+
+        // 断线续传（§4.6 模块一对应实现）：先取缓冲快照并补发，再注册订阅者——
+        // 与实时推送零交叠（不重）；补发快照到注册之间的新事件由客户端跳号检测 + 基线快照兜底（不丢）。
+        var replayCount = 0;
+        var resyncRequired = false;
+        if (request.Data?["lastKnownRevision"] is { Type: JTokenType.Integer } lastKnownToken)
+        {
+            var lastKnown = lastKnownToken.ToObject<long>();
+            bool Interested(string name) => events.Count == 0 || events.Contains(name, StringComparer.Ordinal);
+            var (replayEvents, resync) = hub.GetReplayEvents(lastKnown, Interested);
+            resyncRequired = resync;
+            foreach (var eventData in replayEvents)
+            {
+                await session.Connection
+                    .WriteJsonAsync(
+                        InstanceIpcEnvelope.Request(ExternalInterfaceOperations.EventPush, eventData),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                replayCount++;
+            }
+        }
+
+        hub.Subscribe(session.SessionId, session.Connection, events);
         return InstanceIpcEnvelope.Response(
             request,
             new
@@ -192,6 +216,9 @@ internal static class ExternalInterfaceEventPlane
                 subscribed = events.Count == 0
                     ? ExternalInterfaceEventNames.All
                     : events.ToArray(),
+                currentRevision = hub.CurrentRevision,
+                replayed = replayCount,
+                resyncRequired,
             });
     }
 
