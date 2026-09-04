@@ -1175,6 +1175,15 @@ internal sealed class InstanceRequestHandler
     {
         try
         {
+            // 0. [实机修复 2026-09-05] 新一轮挂起先清旧上下文：
+            // 原实现只在"保存新上下文"时覆盖，no_task / cleared_not_saved 路径会让旧上下文残留——
+            // 昨天的挂起任务可能在今天锄地结束后的 task.resume 被错误复活。
+            var allConfigEntry = BetterGenshinImpact.GameTask.TaskContext.Instance()?.Config;
+            if (allConfigEntry != null)
+            {
+                allConfigEntry.SuspendedTaskContext = null;
+            }
+
             // 1. 读取当前任务上下文
             string? taskType = null;
             string? groupName = null;
@@ -1183,6 +1192,7 @@ internal sealed class InstanceRequestHandler
             string? projectName = null;
             int oneDragonTaskIndex = 0;         // 一条龙条目索引（NextTaskIndex）
             string? subTaskGroupName = null;    // 一条龙内当前执行的配置组名
+            string? soloSettingsJson = null;    // solo 场景：独立任务的组级设置快照（恢复时保真）
 
             var ctx = BetterGenshinImpact.GameTask.RunnerContext.Instance;
             var progress = ctx?.taskProgress;
@@ -1233,11 +1243,29 @@ internal sealed class InstanceRequestHandler
             else
             {
                 // 独立任务或 JS 脚本
-                var taskName = BetterGenshinImpact.GameTask.TaskContext.Instance()?.CurrentScriptProject?.Name;
+                var currentProject = BetterGenshinImpact.GameTask.TaskContext.Instance()?.CurrentScriptProject;
+                var taskName = currentProject?.Name;
                 if (!string.IsNullOrEmpty(taskName))
                 {
                     projectName = taskName;
                     taskType = "solo";
+                    // [实机修复 2026-09-05] solo 保真：IPC 启动的组任务不带 taskProgress（进度字段从未写入），
+                    // 上面两个分支识别不到组关联会降级到这里。但 CurrentScriptProject 自身携带
+                    // GroupInfo（组）与 SoloTaskSettingsObject（组级独立任务设置，含联机开关）——
+                    // 不捕获的话，恢复时只能用全局默认配置重建（联机模式默认开），任务被"调包"。
+                    groupName = currentProject!.GroupInfo?.Name;
+                    if (currentProject.SoloTaskSettingsObject != null)
+                    {
+                        try
+                        {
+                            soloSettingsJson = Newtonsoft.Json.JsonConvert.SerializeObject(
+                                currentProject.SoloTaskSettingsObject);
+                        }
+                        catch
+                        {
+                            // 序列化失败则不带快照（恢复时退化为全局配置，同旧行为）
+                        }
+                    }
                 }
             }
 
@@ -1271,7 +1299,8 @@ internal sealed class InstanceRequestHandler
                     FolderName = folderName ?? "",
                     ProjectName = projectName ?? "",
                     OneDragonTaskIndex = oneDragonTaskIndex,
-                    SubTaskGroupName = subTaskGroupName ?? ""
+                    SubTaskGroupName = subTaskGroupName ?? "",
+                    SoloSettingsJson = soloSettingsJson ?? ""
                 };
                 _logger.LogInformation("[IPC task.suspend] 已保存中断上下文: Type={TaskType}, Group={GroupName}, Index={TaskIndex}",
                     taskType, groupName, taskIndex);
@@ -1425,16 +1454,38 @@ internal sealed class InstanceRequestHandler
                     // 恢复独立任务/JS 脚本：直接启动
                     if (!string.IsNullOrEmpty(context.ProjectName))
                     {
-                        // 通过 SoloTaskRegistry 创建并执行
+                        // [实机修复 2026-09-05] 恢复保真：用挂起时捕获的组级设置快照重建（含联机开关等
+                        // 组级覆盖），不再退化为全局默认配置（联机模式默认开 = 恢复出来的任务被"调包"）；
+                        // GroupName 也来自挂起时捕获的 GroupInfo（IPC 启动的组任务无 taskProgress，
+                        // 组关联只能从 CurrentScriptProject 找回）。
+                        Dictionary<string, object?>? soloSettings = null;
+                        if (!string.IsNullOrEmpty(context.SoloSettingsJson))
+                        {
+                            try
+                            {
+                                soloSettings = Newtonsoft.Json.JsonConvert
+                                    .DeserializeObject<Dictionary<string, object?>>(context.SoloSettingsJson);
+                            }
+                            catch
+                            {
+                                // 快照损坏退化为全局配置（同旧行为）
+                            }
+                        }
+
                         var soloTask = BetterGenshinImpact.GameTask.SoloTaskRegistry.CreateTask(
-                            context.ProjectName, null, null, context.GroupName);
+                            context.ProjectName, null, soloSettings, context.GroupName);
                         if (soloTask != null)
                         {
+                            // [实机修复 2026-09-05] 改走 TaskRunner.RunSoloTaskAsync：持任务槽位信号量 +
+                            // CancellationContext 接管 + End() 清理 + slotReleased 事件。
+                            // 原先裸 Task.Run(soloTask.Start(CancellationToken.None)) 在槽位之外运行——
+                            // task.status 看不到它、task.stop/F11 管不到它、新任务还能叠加撞入。
                             _ = Task.Run(async () =>
                             {
                                 try
                                 {
-                                    await soloTask.Start(System.Threading.CancellationToken.None);
+                                    await new BetterGenshinImpact.GameTask.TaskRunner()
+                                        .RunSoloTaskAsync(soloTask);
                                 }
                                 catch (Exception ex)
                                 {

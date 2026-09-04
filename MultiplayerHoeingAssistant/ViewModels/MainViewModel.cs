@@ -33,8 +33,12 @@ public class MainViewModel : INotifyPropertyChanged
     private Timer? _resumeTimeoutTimer;
     private bool _isOnlineReady;
     private string _onlineMode = "none";
-    /// <summary>记录定时上线今天是否已触发过（按日期去重，设定新时间时重置）。</summary>
+    /// <summary>记录定时上线今天是否已触发过（按日期去重，设定新时间时重置）。
+    /// [实机修复 2026-09-05] 持久化到 assistant-online-fired-date.txt：重启不再失忆（原实现重启即复位，
+    /// 1:00 的定时 1:30 打开助手会被"补触发"上线——非用户意图）。</summary>
     private DateTime _lastScheduledFireDate = DateTime.MinValue;
+    /// <summary>定时上线补触发宽限窗：到点后超过此时长才看到 = 当时人不在/没开机，跳过今日不再补上线。</summary>
+    private static readonly TimeSpan ScheduledFireGrace = TimeSpan.FromMinutes(15);
     /// <summary>本地定时上线自增 generation（用于驱动服务端 AllReady 判定，代替 BGI 的 onlineGeneration）。
     /// 持久化到 NexusBGI/assistant-online-generation.txt，重启后不复位（S3，复刻 BGI 侧 NotifyOnlineTask 模式：
     /// 服务端按 generation 边沿检测，丢弃 ≤ 历史值的事件，重启归零会被永久丢弃）。</summary>
@@ -348,6 +352,10 @@ public class MainViewModel : INotifyPropertyChanged
 
         // S3：generation 持久化恢复——服务端按代序号边沿检测（丢弃 ≤ 历史值），重启归零会导致上线事件被永久丢弃。
         _localOnlineGeneration = LoadPersistedLocalGeneration();
+
+        // [实机修复 2026-09-05] 定时上线"已触发日期"持久化恢复：重启不失忆，
+        // 到点已过且超出宽限窗的场景（如设 1:00、1:30 才打开助手）不再被补触发上线。
+        _lastScheduledFireDate = LoadPersistedScheduledFireDate();
 
         // S1：重启后按"是否已配置定时上线时间"初始化武装状态——配置了时间则解除手动清除抑制，否则重启后定时器永久静默 return。
         // _manuallyClearedOnline 不持久化：本会话内手动清除上线（ClearLocalOnline）后仍抑制到重新设定为止（语义不变）。
@@ -1241,6 +1249,58 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>[实机修复 2026-09-05] 定时上线"已触发日期"持久化文件（与 assistant-config.json 同目录）。</summary>
+    private static string ScheduledFireDateFilePath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NexusBGI", "assistant-online-fired-date.txt");
+
+    /// <summary>启动时读取已触发日期。文件不存在/解析失败 = 未触发过。</summary>
+    private DateTime LoadPersistedScheduledFireDate()
+    {
+        try
+        {
+            var path = ScheduledFireDateFilePath;
+            if (File.Exists(path)
+                && DateTime.TryParse(File.ReadAllText(path).Trim(), out var saved))
+            {
+                return saved.Date;
+            }
+        }
+        catch (Exception ex)
+        {
+            AddLog($"[定时上线] 读取 assistant-online-fired-date.txt 失败，按未触发处理: {ex.Message}");
+        }
+        return DateTime.MinValue;
+    }
+
+    /// <summary>触发/过期跳过后写盘。失败仅记日志。</summary>
+    private void PersistScheduledFireDate(DateTime date)
+    {
+        try
+        {
+            File.WriteAllText(ScheduledFireDateFilePath, date.ToString("yyyy-MM-dd"));
+        }
+        catch (Exception ex)
+        {
+            AddLog($"[定时上线] 写入 assistant-online-fired-date.txt 失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>回滚（上报失败需重试）或重新设定时间时清除持久化标记。</summary>
+    private void ClearPersistedScheduledFireDate()
+    {
+        try
+        {
+            if (File.Exists(ScheduledFireDateFilePath))
+            {
+                File.Delete(ScheduledFireDateFilePath);
+            }
+        }
+        catch
+        {
+            // 清理失败仅影响极端边界（重启后少触发一次），可忽略
+        }
+    }
+
     /// <summary>启动定时上线定时器（每 30 秒检查一次）。
     /// 不依赖 _isOnlineReady（避免状态残留阻塞），改用按天去重防止重复触发。</summary>
     private void StartOnlineScheduler()
@@ -1263,13 +1323,25 @@ public class MainViewModel : INotifyPropertyChanged
 
                 var target = now.Date.Add(targetTime);
                 if (now < target) return;                              // 还没到点
-                if (_lastScheduledFireDate == now.Date) return;        // 今天已触发过
+                if (_lastScheduledFireDate == now.Date) return;        // 今天已触发过（或已判定过期跳过）
 
-                // S4：先置触发标记防 30 秒重入双触发；S2：上报失败（断线）时回滚，下跳 30 秒自动重试。
+                // [实机修复 2026-09-05] 补触发宽限窗：到点后超过 15 分钟才看到 = 当时人不在/没开机，
+                // "补上线"非用户意图（实机病例：设 1:00，1:30 打开助手被直接上线）。过期即消费今日额度。
+                if (now - target > ScheduledFireGrace)
+                {
+                    _lastScheduledFireDate = now.Date;
+                    PersistScheduledFireDate(now.Date);
+                    AddLog($"已过定时上线时间 {_config.ScheduledOnlineTime} 超过 {(int)ScheduledFireGrace.TotalMinutes} 分钟，今日自动上线已跳过（需要上线请手动操作）");
+                    return;
+                }
+
+                // S4：先置触发标记防 30 秒重入双触发；S2：上报失败（断线）时回滚，下跳 30 秒自动重试（仍在宽限窗内才重试）。
                 _lastScheduledFireDate = now.Date;
+                PersistScheduledFireDate(now.Date);
                 if (!await MarkOnlineAsync("scheduled"))
                 {
                     _lastScheduledFireDate = DateTime.MinValue;
+                    ClearPersistedScheduledFireDate();
                 }
             }
             catch (Exception ex)
@@ -2425,14 +2497,16 @@ public class MainViewModel : INotifyPropertyChanged
 
         // 重置按天去重标记，让新设定的时间能正常触发
         _lastScheduledFireDate = DateTime.MinValue;
+        ClearPersistedScheduledFireDate();
 
         // 若设定的时刻已过（now >= target），抑制今天的重复触发（避免"设定过去时间立即上线"导致状态瞬间残留），
-        // 下次在明天同一时刻触发。
+        // 下次在明天同一时刻触发。[实机修复 2026-09-05] 该抑制一并持久化，重启后仍有效。
         if (!string.IsNullOrEmpty(time)
             && TimeSpan.TryParse(time, out var tgt)
             && DateTime.Now >= DateTime.Now.Date.Add(tgt))
         {
             _lastScheduledFireDate = DateTime.Now.Date;
+            PersistScheduledFireDate(DateTime.Now.Date);
         }
 
         // 重启定时器（StartOnlineScheduler 内部会 Dispose 旧的）

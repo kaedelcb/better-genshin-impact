@@ -36,4 +36,9 @@ public class SuspendedTaskContext
     /// <summary>一条龙场景：当前正在执行的配置组名（一条龙内嵌配置组）。非一条龙场景为空字符串。</summary>
     [JsonPropertyName("subTaskGroupName")]
     public string SubTaskGroupName { get; set; } = "";
+
+    /// <summary>solo 场景：组内独立任务的设置快照（Newtonsoft 序列化的 SoloTaskSettingsObject，含联机开关等组级覆盖）。
+    /// 空 = 无快照（恢复时退化为全局默认配置，同旧行为）。仅在挂起/恢复间传递，随 AllConfig 不持久化。</summary>
+    [JsonPropertyName("soloSettingsJson")]
+    public string SoloSettingsJson { get; set; } = "";
 }
