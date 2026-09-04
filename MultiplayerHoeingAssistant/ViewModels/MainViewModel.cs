@@ -549,6 +549,15 @@ public class MainViewModel : INotifyPropertyChanged
         if (gen > _lastOnlineGeneration)
         {
             _lastOnlineGeneration = gen;
+            // [实机修复] 本轮已上线时的重复边沿只同步基线、不再上报：
+            // 游戏启动阶段被反复关停/BGI 重启会让"联机锄地上线"标记任务反复重跑、generation 反复 +1，
+            // 不去重则每重跑一次就再触发一轮 上线→已联机——且"清除定时/清除记录"都压不住
+            // （前者只管定时器路径，后者只清展示数据，都管不到进行中任务流的重跑）。
+            if (_isOnlineReady)
+            {
+                AddLog($"检测到上线标记重复执行（generation={gen}），本轮已上线，跳过重复上报");
+                return;
+            }
             // 与轮询路径一致：标记已上线（命令模式）并上报服务端，由服务端状态机协调
             _isOnlineReady = true;
             _onlineMode = "command";
@@ -1004,6 +1013,15 @@ public class MainViewModel : INotifyPropertyChanged
                         if (gen > _lastOnlineGeneration)
                         {
                             _lastOnlineGeneration = gen;
+                            // [实机修复] 与 ApplyOnlineGenerationEdge 同款守卫：本轮已上线时
+                            // 标记任务重跑（游戏反复关停重拉）只同步基线，不重复标记/上报，
+                            // 避免反复触发 上线→已联机。
+                            if (_isOnlineReady)
+                            {
+                                AddLog($"检测到上线标记重复执行（generation={gen}），本轮已上线，跳过重复上报");
+                            }
+                            else
+                            {
                             // 命令上线：BGI 报告 onlineGeneration 递增 → 标记已上线（命令模式），
                             // 避免后续 ReportStatusAsync 继续上报 OnlineReady=false 覆盖服务端。
                             _isOnlineReady = true;
@@ -1015,6 +1033,7 @@ public class MainViewModel : INotifyPropertyChanged
                             if (_signalRClient != null)
                             {
                                 await _signalRClient.ReportOnlineEventAsync(gen, true);
+                            }
                             }
                         }
                     }
