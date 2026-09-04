@@ -82,6 +82,11 @@ public class RemoteConfigEditService
             return;
         }
 
+        // [实机修复] 跟踪本机 BGI 会话生命周期：窗口打开后流程提前退出时必须在 finally 通知 BGI 中止，
+        // 否则 RemoteEditSession 以 editing 尸体占坑最长 15 分钟，期间一切新远程编辑都被拒（"时好时坏"根因）。
+        var editorOpened = false;
+        var sessionConsumed = false;
+
         try
         {
             // 1. 发送 remote_config.pull，等待 remote_config.data
@@ -132,6 +137,7 @@ public class RemoteConfigEditService
                 _report($"本机 BGI 返回了未知的编辑状态：{openState ?? "（无 state 字段）"}，流程终止");
                 return;
             }
+            editorOpened = true;
             _report($"已在本机 BGI 打开远程编辑窗口（{targetName} 的「{groupName}」），等待保存（最长 10 分钟）...");
 
             // 3. 每 2s 轮询编辑结果
@@ -175,13 +181,16 @@ public class RemoteConfigEditService
                     case "editing":
                         continue;
                     case "cancelled":
+                        sessionConsumed = true; // cancelled 读取即消费，BGI 侧会话已回 idle
                         _report("远程编辑已取消");
                         return;
                     case "idle":
+                        sessionConsumed = true; // BGI 侧已无会话（被回收/中止），无需再清理
                         _report("远程编辑会话已结束（无结果）");
                         return;
                     case "saved":
                         saved = true;
+                        sessionConsumed = true; // saved 读取即消费，BGI 侧会话已回 idle
                         break;
                     default:
                         continue; // 未知状态，继续轮询
@@ -229,6 +238,22 @@ public class RemoteConfigEditService
         }
         finally
         {
+            // 窗口打开后流程提前退出（轮询中断/超时/异常）→ 通知本机 BGI 中止会话并强制关窗。
+            // best-effort：失败由 BGI 侧 15 分钟僵尸回收兜底；saved/cancelled/idle 已消费的会话无需清理。
+            if (editorOpened && !sessionConsumed)
+            {
+                try
+                {
+                    var (abortResp, _) = await SendIpcAsync("config.abort_remote_editor", null);
+                    _report(abortResp is { Success: true }
+                        ? "已通知本机 BGI 关闭遗留的远程编辑会话"
+                        : "通知本机 BGI 关闭远程编辑会话失败（BGI 将在 15 分钟后自动回收）");
+                }
+                catch
+                {
+                    // best-effort，BGI 侧僵尸回收兜底
+                }
+            }
             Interlocked.Exchange(ref _sessionActive, 0);
         }
     }

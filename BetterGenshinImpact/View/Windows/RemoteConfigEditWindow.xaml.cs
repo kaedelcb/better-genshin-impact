@@ -286,6 +286,13 @@ public partial class RemoteConfigEditWindow : FluentWindow
         Close();   // 未保存确认与 cancelled 标记统一在 OnWindowClosing 处理
     }
 
+    /// <summary>助手主动中止会话（config.abort_remote_editor）时的强制关闭：跳过未保存确认与 cancelled 标记（会话已被复位，再标 cancelled 会留尸体占坑）。</summary>
+    internal void ForceCloseFromAbort()
+    {
+        _completed = true;
+        Close();
+    }
+
     private void OnWindowClosing(object? sender, CancelEventArgs e)
     {
         if (_completed)
