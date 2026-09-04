@@ -44,6 +44,10 @@ public class MainViewModel : INotifyPropertyChanged
     // 边沿检测：记录上次处理过的 BGI 上线事件代序号与 AllReady 代序号，用于幂等保护
     private int _lastOnlineGeneration = 0;
     private int _lastProcessedAllReadyGeneration;
+    /// <summary>[切片1] ext.event 事件通道客户端（BgiExternalClient SDK）；null = 尚未建立/已降级。</summary>
+    private BgiExternalClient? _externalClient;
+    /// <summary>[切片1] 事件通道探测退避：Legacy（老 BGI）或暂时连不上时，到此时间点之前不再探测。</summary>
+    private DateTime _externalNextProbeUtc = DateTime.MinValue;
     /// <summary>用户手动停止时设为 true，后台依次执行序列检查到此标志后跳过剩余配置组。</summary>
     private bool _isAllReadySequenceCancelled;
     /// <summary>互斥锁：防止两轮 AllReady 并发执行 OnAllReadyConfirmedInternal（patterns §31）。</summary>
@@ -432,6 +436,103 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// [切片1] 确保 ext.event 事件通道接管"联机锄地上线"检测。
+    /// 返回 true = 事件通道活跃（online.triggered 由推送驱动），本轮跳过 v2 轮询；
+    /// false = 降级走原有轮询路径。老 BGI（ext.hello 不支持）→ Legacy 静默降级、1 分钟后再探测，全程无报错。
+    /// 在状态轮询 Timer 线程调用；事件回调跑在 SDK 读线程，两者都是线程池后台线程（同级）。
+    /// </summary>
+    private async Task<bool> TryEstablishExternalOnlineChannelAsync()
+    {
+        if (_config?.ObserverMode == true)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (_externalClient == null)
+            {
+                if (DateTime.UtcNow < _externalNextProbeUtc)
+                {
+                    return false;
+                }
+
+                var client = new BgiExternalClient();
+                var state = await client.StartAsync();
+                if (state == BgiExternalLinkState.Ready)
+                {
+                    client.EventReceived += OnBgiExternalEvent;
+                    _externalClient = client;
+                }
+                else
+                {
+                    // Legacy（老 BGI）或暂时连不上：退避后由下一轮轮询再探测，本轮走 v2 轮询
+                    client.Dispose();
+                    _externalNextProbeUtc = DateTime.UtcNow.AddMinutes(1);
+                    return false;
+                }
+            }
+
+            // 连接内断线重连后订阅会失效（订阅挂在 BGI 侧会话上），补订
+            if (_externalClient is { State: BgiExternalLinkState.Ready } readyClient
+                && !readyClient.IsEventChannelActive)
+            {
+                await readyClient.SubscribeAsync([BgiExternalEventNames.OnlineTriggered]);
+            }
+
+            return _externalClient.IsEventChannelActive;
+        }
+        catch
+        {
+            // 事件通道故障不阻塞主流程：本轮降级 v2 轮询，下轮再试
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// [切片1] ext.event 事件回调（SDK 读线程）。当前只消费 online.triggered，
+    /// 语义与 ReportStatusAsync 的 onlineGeneration 轮询边沿检测完全一致（含 P0-B 基线同步）。
+    /// </summary>
+    private void OnBgiExternalEvent(BgiExternalEvent evt)
+    {
+        try
+        {
+            if (evt.Name != BgiExternalEventNames.OnlineTriggered)
+            {
+                return;
+            }
+
+            if (!evt.Payload.TryGetProperty("generation", out var genEl)
+                || !genEl.TryGetInt32(out var gen))
+            {
+                return;
+            }
+
+            // [P0-B 止血] 同款基线同步：BGI 重启后进程内代序号归零，先对齐再比较，避免边沿检测永久静音
+            if (gen < _lastOnlineGeneration)
+            {
+                _lastOnlineGeneration = gen;
+            }
+
+            if (gen > _lastOnlineGeneration)
+            {
+                _lastOnlineGeneration = gen;
+                // 与轮询路径一致：标记已上线（命令模式）并上报服务端，由服务端状态机协调
+                _isOnlineReady = true;
+                _onlineMode = "command";
+                if (_signalRClient != null)
+                {
+                    _ = _signalRClient.ReportOnlineEventAsync(gen, true);
+                }
+            }
+        }
+        catch
+        {
+            // 事件处理失败不影响读循环与主流程
+        }
+    }
+
     private async Task ReportStatusAsync()
     {
         if (_signalRClient == null) return;
@@ -611,6 +712,9 @@ public class MainViewModel : INotifyPropertyChanged
         // 优先读 onlineGeneration（新字段），比 _lastOnlineGeneration 大才触发（边沿检测）。
         // 如果 onlineGeneration 不存在，降级到 recentTaskName 电平检测（旧 BGI 兼容）。
         // 触发后上报服务端（ReportOnlineEvent），由服务端状态机做就绪判断，助手端不做本地状态决策。
+        // [切片1] ext 事件通道可用时 online.triggered 由事件驱动（A5：秒级到达 vs 10s 轮询），跳过本段 v2 轮询；
+        // 通道不可用（老 BGI/未连接）时 TryEstablishExternalOnlineChannelAsync 返回 false，走原有轮询路径，行为逐字节不变
+        if (!await TryEstablishExternalOnlineChannelAsync())
         try
         {
             using var recentTaskClient = new IpcClient();
@@ -2806,6 +2910,10 @@ public class MainViewModel : INotifyPropertyChanged
         _processMonitor?.Dispose();
         _processMonitor = null;
         _commandExecutor = null;
+
+        // [切片1] 释放 ext.event 事件通道（命名管道 + 内部重连循环）
+        _externalClient?.Dispose();
+        _externalClient = null;
     }
 
     /// <summary>后台异步断开 SignalR 连接；退出路径异常仅写日志，不影响进程退出。</summary>
