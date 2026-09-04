@@ -151,10 +151,7 @@ public class CoordinatorHub : Hub
     /// kazuha-player-auto-detection: 替换为运行时声明协议 DeclareKazuhaCapability，由各客户端各自识别本地联机队伍是否含万叶并主动声明。
     /// </summary>
     public Task SetKazuhaPlayer(int index = 0)
-    {
-        _logger.LogWarning("[SetKazuhaPlayer] 调用方使用了已废弃的 Hub 方法（kazuha-player-auto-detection 已替换为 DeclareKazuhaCapability），index={Index}", index);
-        return Task.CompletedTask;
-    }
+        => _ops.SetKazuhaPlayerAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), index);
 
     /// <summary>
     /// 客户端声明本地联机队伍含万叶（kazuha-player-auto-detection）。
@@ -162,47 +159,8 @@ public class CoordinatorHub : Hub
     /// 选举：第一个声明者自动成为 KazuhaConnectionId，触发 KazuhaPlayerUpdated(playerUid) 广播。
     /// 后续声明者仅入候选列表，断线时按列表顺序顶替。
     /// </summary>
-    public async Task DeclareKazuhaCapability()
-    {
-        var (room, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (room == null || roomCode == null) return;
-
-        bool shouldBroadcast = false;
-        string broadcastUid = "";
-        lock (room)
-        {
-            var player = room.Players.FirstOrDefault(p => p.ConnectionId == Context.ConnectionId);
-            if (player == null) return;
-
-            // 幂等检查：同一 ConnectionId 重复声明直接 return
-            if (room.KazuhaCandidates.Any(c => c.ConnectionId == Context.ConnectionId))
-            {
-                _logger.LogDebug("[DeclareKazuhaCapability] 重复声明，忽略 connId={ConnId}", Context.ConnectionId);
-                return;
-            }
-
-            room.KazuhaCandidates.Add(new KazuhaCandidate
-            {
-                ConnectionId = Context.ConnectionId,
-                PlayerUid = player.PlayerUid
-            });
-
-            // 第一个声明者自动成为当前 Kazuha
-            if (room.KazuhaCollect.KazuhaConnectionId == null)
-            {
-                room.KazuhaCollect.KazuhaConnectionId = Context.ConnectionId;
-                broadcastUid = player.PlayerUid;
-                shouldBroadcast = true;
-            }
-        }
-
-        if (shouldBroadcast)
-        {
-            _logger.LogInformation("[DeclareKazuhaCapability] 房间 {Code} 选出第一位 Kazuha: {Uid}",
-                roomCode, broadcastUid);
-            await Clients.Group(roomCode).SendAsync("KazuhaPlayerUpdated", broadcastUid);
-        }
-    }
+    public Task DeclareKazuhaCapability()
+        => _ops.DeclareKazuhaCapabilityAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     // ====== 万叶聚物同步（multiplayer-kazuha-collect-sync）======
 
@@ -215,91 +173,25 @@ public class CoordinatorHub : Hub
     /// 抛 HubException → 客户端 try/catch 静默 → 走退化路径（不上报聚物点）。
     /// 部署顺序：先服务端、后客户端，最大化平滑过渡。
     /// </summary>
-    public async Task NotifyKazuhaCollectStarted(string syncKey, double collectX, double collectY)
-    {
-        var (room, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (room == null || roomCode == null) return;
-
-        // 鉴权：必须是当前周期的万叶玩家
-        lock (room)
-        {
-            if (room.KazuhaCollect.KazuhaConnectionId != Context.ConnectionId)
-            {
-                _logger.LogWarning("[KazuhaCollect] NotifyKazuhaCollectStarted 鉴权失败：调用方 {ConnId} 不是万叶 {KazuhaId}",
-                    Context.ConnectionId, room.KazuhaCollect.KazuhaConnectionId);
-                return;
-            }
-        }
-
-        // IsValid: NaN / Inf / (0, 0) 全部判无效（与 KazuhaCollectPointDecisions.IsValid 同语义）
-        bool collectPointValid = !double.IsNaN(collectX) && !double.IsNaN(collectY)
-                              && !double.IsInfinity(collectX) && !double.IsInfinity(collectY)
-                              && !(collectX == 0.0 && collectY == 0.0);
-
-        var playerUid = "";
-        lock (room)
-        {
-            playerUid = room.Players.FirstOrDefault(p => p.ConnectionId == Context.ConnectionId)?.PlayerUid ?? "";
-        }
-
-        // hoeing-kazuha-collect-drop-terminal-signal: 删 CurrentSyncKey fallback 与 CurrentCollectPoint 写入
-        // （这两个字段随终态状态机一并删除）。syncKey 由万叶客户端直接传入，恒非空（design.md Property 2 守住）。
-        _logger.LogInformation(
-            "[KazuhaCollect] 房间 {Code} 万叶 {Uid} 开始聚物 syncKey={Key} collectPoint=({X},{Y}) valid={Valid}",
-            roomCode, playerUid, syncKey, collectX, collectY, collectPointValid);
-
-        // 始终广播 4-参（无效坐标用 NaN 透传给客户端，客户端 IsValid 守卫会过滤）
-        await Clients.Group(roomCode).SendAsync(
-            "KazuhaCollectStarted", playerUid, syncKey ?? "", collectX, collectY);
-    }
+    public Task NotifyKazuhaCollectStarted(string syncKey, double collectX, double collectY)
+        => _ops.NotifyKazuhaCollectStartedAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), syncKey, collectX, collectY);
 
     /// <summary>上报路线验证完成，全员完成时广播 RouteVerificationAllDone</summary>
     public Task ReportRouteVerificationDone()
         => _ops.ReportRouteVerificationDoneAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>上报本机达经验上限，全员达上限时广播 AllReachedExpCap。multiplayer-hoeing-exp-cap-stop</summary>
-    public async Task ReportExpCapReached()
-    {
-        var (_, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (roomCode == null) return;
-
-        _roomManager.UpdateHeartbeat(Context.ConnectionId);
-        var allReached = _roomManager.RecordExpCapReached(roomCode, Context.ConnectionId);
-
-        if (allReached)
-        {
-            _logger.LogInformation("房间 {Code} 全员达经验上限，广播终止", roomCode);
-            await Clients.Group(roomCode).SendAsync("AllReachedExpCap");
-        }
-    }
+    public Task ReportExpCapReached()
+        => _ops.ReportExpCapReachedAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>撤回本机达经验上限（又见经验）。multiplayer-hoeing-exp-cap-stop</summary>
     public Task ReportExpCapCleared()
-    {
-        var (_, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (roomCode == null) return Task.CompletedTask;
-
-        _roomManager.UpdateHeartbeat(Context.ConnectionId);
-        _roomManager.RecordExpCapCleared(roomCode, Context.ConnectionId);
-        return Task.CompletedTask;
-    }
+        => _ops.ReportExpCapClearedAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>成员上报团队 arming（本机吃到经验，或连续 5 场无经验兜底）。置 ExpCapArmed=true；
     /// 若 arming 后已满足全员上报（全员满级兜底场景）则补广播 AllReachedExpCap。multiplayer-hoeing-exp-cap-stop R7</summary>
-    public async Task ReportExpArmed()
-    {
-        var (_, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (roomCode == null) return;
-
-        _roomManager.UpdateHeartbeat(Context.ConnectionId);
-        var allReached = _roomManager.RecordExpArmed(roomCode, Context.ConnectionId);
-
-        if (allReached)
-        {
-            _logger.LogInformation("房间 {Code} 团队 arming 后全员达经验上限，广播终止", roomCode);
-            await Clients.Group(roomCode).SendAsync("AllReachedExpCap");
-        }
-    }
+    public Task ReportExpArmed()
+        => _ops.ReportExpArmedAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>
     /// 上报"连续2场无经验预警"（exp-cap-prefinal-stop-by-two-noexp）。
@@ -307,33 +199,14 @@ public class CoordinatorHub : Hub
     /// 若 arming ∧ 全员 ∈ (ExpCapReachedSet ∪ TwoConsecutiveNoExpSet) → 广播 AllReachedExpCap。
     /// 旧服务端无此方法 → 客户端 HubException 被静默吞掉 → 退化为 4-threshold 行为。
     /// </summary>
-    public async Task ReportTwoConsecutiveNoExp()
-    {
-        var (_, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (roomCode == null) return;
-
-        _roomManager.UpdateHeartbeat(Context.ConnectionId);
-        var allReached = _roomManager.RecordTwoConsecutiveNoExp(roomCode, Context.ConnectionId);
-
-        if (allReached)
-        {
-            _logger.LogInformation("房间 {Code} 连续2场无经验预警触发全员覆盖，广播终止", roomCode);
-            await Clients.Group(roomCode).SendAsync("AllReachedExpCap");
-        }
-    }
+    public Task ReportTwoConsecutiveNoExp()
+        => _ops.ReportTwoConsecutiveNoExpAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>
     /// 撤回"连续2场无经验预警"（又见经验）。exp-cap-prefinal-stop-by-two-noexp。
     /// </summary>
     public Task ReportTwoConsecutiveNoExpCleared()
-    {
-        var (_, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (roomCode == null) return Task.CompletedTask;
-
-        _roomManager.UpdateHeartbeat(Context.ConnectionId);
-        _roomManager.RecordTwoConsecutiveNoExpCleared(roomCode, Context.ConnectionId);
-        return Task.CompletedTask;
-    }
+        => _ops.ReportTwoConsecutiveNoExpClearedAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>更新白名单（仅房主）</summary>
     public Task UpdateWhitelist(List<string>? whitelist = null)
@@ -409,20 +282,8 @@ public class CoordinatorHub : Hub
         => _ops.GetHostRouteListStatusAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>上报已加入世界，全员加入时广播 AllWorldJoined</summary>
-    public async Task ReportWorldJoined()
-    {
-        var (_, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (roomCode == null) return;
-
-        var allJoined = _roomManager.RecordWorldJoined(roomCode, Context.ConnectionId);
-        _logger.LogInformation("连接 {ConnId} 上报已加入世界，房间 {Code}，全员: {All}",
-            Context.ConnectionId, roomCode, allJoined);
-
-        if (allJoined)
-        {
-            await Clients.Group(roomCode).SendAsync("AllWorldJoined");
-        }
-    }
+    public Task ReportWorldJoined()
+        => _ops.ReportWorldJoinedAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>获取已加入世界的人数</summary>
     public Task<int> GetWorldJoinedCount()
@@ -430,15 +291,7 @@ public class CoordinatorHub : Hub
 
     /// <summary>重置已加入世界的记录（多世界模式新轮次开始时调用）</summary>
     public Task ResetWorldJoined()
-    {
-        var (room, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (room != null && roomCode != null && room.HostConnectionId == Context.ConnectionId)
-        {
-            _roomManager.ResetWorldJoinedSet(roomCode);
-            _logger.LogInformation("[ResetWorldJoined] 房间 {Code} WorldJoinedSet 已重置", roomCode);
-        }
-        return Task.CompletedTask;
-    }
+        => _ops.ResetWorldJoinedAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
 
 
@@ -703,73 +556,7 @@ public class CoordinatorHub : Hub
     /// 多轮世界新轮次开始时调用，清理所有等待点状态和异常状态
     /// </summary>
     public Task ResetForNewWorldRound(int newRound)
-    {
-        var (room, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (room == null) return Task.CompletedTask;
-        
-        lock (room)
-        {
-            room.CurrentWorldRound = newRound;
-            room.WaitPoints.Clear(); // 清理所有等待点
-            
-            // 清理异常玩家状态（multiplayer-abnormal-wait-coordination 需求 8.5）
-            room.AbnormalPlayerStates.Clear();
-            room.CurrentUnifiedWaitPoint = null;
-            room.WaitPointArrivals.Clear();
-            
-            // 清理玩家异常状态标记
-            foreach (var player in room.Players)
-            {
-                player.IsAbnormal = false;
-                player.WaitPointId = null;
-                // multiplayer-sync-skip-by-progress §3.9 / OQ-1：
-                // 同步重置进度字段，避免上一轮残留 CurrentProgress 污染新一轮第一个同步点的豁免判定
-                player.TargetProgress = -1;
-                player.CurrentProgress = -1;
-            }
-            
-            // 清理联机锄地异常同步状态（multiplayer-abnormal-sync-server 需求 REQ-6.1）
-            room.AbnormalPlayerInfos.Clear();
-
-            // 清理万叶聚物候选 + 状态（kazuha-player-auto-detection: 多世界轮换重置）
-            room.KazuhaCandidates.Clear();
-            room.KazuhaCollect.KazuhaConnectionId = null;
-
-            // === 集体卡死监测字段重置（multiplayer-mutual-wait-collective-skip §3.10 / §8.4 改动 4）===
-            room.ConsecutiveCollectiveSkipCount = 0;
-            room.LastArrivalSetsSnapshot = null;
-
-            // === 房主路线列表上传标志重置（multiplayer-host-empty-route-member-wait-timeout-fix）===
-            // 新一轮房主重新筛选并上传路线列表，避免沿用上一轮的"已上传"状态导致成员误判
-            room.HostRouteList = [];
-            room.HostRouteListUploaded = false;
-            room.ObservationStartTime = default;
-            room.CollectiveSkipTimer?.Dispose();
-            room.CollectiveSkipTimer = null;
-
-            // fastsync-claim-short-circuit-premature-release-fix（OQ-3=c→落地清理）：
-            // syncId 不含轮次标识，同名路线跨轮复用。不清理则上一轮已广播的 syncId 残留，
-            // 本轮第一个到达者一调 WaitForAllPlayers 即被补发 AllArrived → 跨轮误放。
-            room.BroadcastedSyncIds.Clear();
-
-            // multiplayer-shared-fight-end-quorum-sync: 多世界轮换清空战斗参与者集合，避免陈旧分母
-            room.FightParticipantSets.Clear();
-            room.FightDoneSets.Clear();
-            room.FightDoneBroadcasted.Clear();
-
-            // multiplayer-hoeing-exp-cap-stop: 多世界轮换清空经验上限集合与广播标志
-            room.ExpCapReachedSet.Clear();
-            room.ExpCapBroadcasted = false;
-            // 团队 arming 门控每轮复位（multiplayer-hoeing-exp-cap-stop R7.6）
-            room.ExpCapArmed = false;
-            // exp-cap-prefinal-stop-by-two-noexp: 新轮清空连续2场无经验预警集合
-            room.TwoConsecutiveNoExpSet.Clear();
-
-            _logger.LogInformation("[ResetForNewWorldRound] 房间{RoomCode}进入第{Round}轮，等待点、异常状态、万叶候选已重置", roomCode, newRound);
-        }
-        
-        return Task.CompletedTask;
-    }
+        => _ops.ResetForNewWorldRoundAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), newRound);
 
     // === 等待点验证与计算方法（multiplayer-abnormal-wait-coordination 需求 2、7）===
 
