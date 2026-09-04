@@ -314,6 +314,12 @@ public partial class App : Application
 
         ConsoleHelper.WriteLine("BetterGI 应用程序正在关闭...");
 
+        // [切片7] 任务协调器在队项 CTS 进程退出前 Dispose（防句柄泄漏）；IsCreated 守卫避免为关机而创建实例
+        if (Service.ExternalInterface.BgiTaskCoordinator.IsCreated)
+        {
+            Service.ExternalInterface.BgiTaskCoordinator.Instance.Dispose();
+        }
+
         TempManager.CleanUp();
 
         await _host.StopAsync();

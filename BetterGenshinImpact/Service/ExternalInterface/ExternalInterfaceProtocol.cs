@@ -59,6 +59,15 @@ internal static class ExternalInterfaceEventNames
     public const string TaskSuspended = "task.suspended";
     public const string TaskResumed = "task.resumed";
 
+    // [切片7] 任务协调器生命周期事件（《BGI任务协调层设计方案》§4.3）。
+    // 注意：TaskStarted 与观察器（边沿检测）同名共存——协调器发布的 payload 带 taskHandle，
+    // 按句柄路由的订阅方天然忽略无 handle 的旧事件，两者不互扰。
+    public const string TaskQueued = "task.queued";
+    public const string TaskCompleted = "task.completed";
+    public const string TaskFailed = "task.failed";
+    public const string TaskQueueCancelled = "task.queueCancelled";
+    public const string TaskSlotReleased = "task.slotReleased";
+
     public static readonly string[] All =
     [
         TaskStarted,
@@ -68,6 +77,11 @@ internal static class ExternalInterfaceEventNames
         OnlineTriggered,
         TaskSuspended,
         TaskResumed,
+        TaskQueued,
+        TaskCompleted,
+        TaskFailed,
+        TaskQueueCancelled,
+        TaskSlotReleased,
     ];
 
     private static readonly HashSet<string> KnownNames = new(All, StringComparer.Ordinal);

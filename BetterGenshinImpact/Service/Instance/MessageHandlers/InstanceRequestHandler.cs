@@ -35,9 +35,8 @@ internal sealed class InstanceRequestHandler
     /// <summary>最近一次执行过的独立任务名（30 秒内保留，用于助手检测"联机锄地上线"等轻量任务）。</summary>
     private string? _recentTaskName;
     private DateTime _recentTaskNameTime = DateTime.MinValue;
-    /// <summary>最近一次执行过的 task.start 代序号（幂等保护：同一 generation 只执行一次）。</summary>
-    /// <summary>最近一次执行过的 task.start 代序号 + 配置组名（幂等保护：同一 generation + 同一配置组只执行一次）。</summary>
-    private (int generation, string? name) _lastExecutedTask = (0, null);
+    // [切片7] _lastExecutedTask（task.start generation+name 幂等去重）已迁入 BgiTaskCoordinator
+    // （进程级单例，v2 handler 查询/登记改走协调器，检查与登记的位置、时机、语义逐字等价）。
 
     internal InstanceRequestHandler(
         InstanceContext context,
@@ -565,10 +564,12 @@ internal sealed class InstanceRequestHandler
 
             // 幂等检查：同一 generation + 同一配置组名已执行过则跳过（避免 OnAllReady 重复广播导致配置组重复启动）
             // 注意：允许同一 generation 执行不同配置组（OnAllReady 依次执行多个配置组的场景）
+            // [切片7] 去重状态查询 BgiTaskCoordinator（_lastExecutedTask 迁入，单一事实源）
+            var lastExecuted = BgiTaskCoordinator.Instance.LastExecutedTask;
             var taskName = groupName ?? configName;
             if (generation > 0
-                && generation == _lastExecutedTask.generation
-                && taskName == _lastExecutedTask.name)
+                && generation == lastExecuted.Generation
+                && taskName == lastExecuted.Name)
             {
                 _logger.LogInformation("[IPC task.start] generation={Gen} name={Name} 已执行过，跳过重复执行", generation, taskName);
                 return InstanceIpcEnvelope.Response(request, new { status = "already_executed", generation });
@@ -592,7 +593,7 @@ internal sealed class InstanceRequestHandler
             // 客户端按 task_already_running 重试时会被幂等检查吞掉（返回 already_executed 但任务从未启动）。
             if (generation > 0)
             {
-                _lastExecutedTask = (generation, taskName);
+                BgiTaskCoordinator.Instance.RegisterExecuted(generation, taskName);
             }
 
             // [切片7] 执行段已抽为 ExecuteTaskStartCoreAsync：v2 handler 与 BgiTaskCoordinator
