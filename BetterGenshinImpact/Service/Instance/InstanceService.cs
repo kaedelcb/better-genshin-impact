@@ -339,6 +339,9 @@ public sealed class InstanceService : IHostedService, IAsyncDisposable
         CancellationToken cancellationToken)
     {
         NamedPipeServerStream? server = firstServer;
+        // 连续失败计数（切片0尾巴，§3.9）：单次 accept 失败按 1s/2s/5s/10s/20s 阶梯退避、封顶 30s；
+        // 成功接受连接即重置（"连上立刻断"探针的失败发生在连接处理阶段，不影响本计数）
+        var consecutiveFailures = 0;
         try
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -352,6 +355,7 @@ public sealed class InstanceService : IHostedService, IAsyncDisposable
 
                     var connection = new InstanceConnection(server, this, _logger);
                     server = null;
+                    consecutiveFailures = 0;
                     connection.Start(cancellationToken);
                     _ = ObserveAcceptedConnectionAsync(connection);
                 }
@@ -368,18 +372,28 @@ public sealed class InstanceService : IHostedService, IAsyncDisposable
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
                 {
                     // 单次连接 accept/处理失败（如客户端"连上即断"探针）仅记日志后继续监听，
-                    // 不再整体退出监听循环；加短退避避免异常风暴打满日志
+                    // 不再整体退出监听循环；阶梯退避避免异常风暴打满日志
                     if (cancellationToken.IsCancellationRequested)
                     {
                         break;
                     }
-                    _logger.LogWarning(exception, "根实例命名管道接受连接失败，继续监听");
+                    consecutiveFailures++;
+                    var backoff = consecutiveFailures switch
+                    {
+                        <= 1 => TimeSpan.FromSeconds(1),
+                        2 => TimeSpan.FromSeconds(2),
+                        3 => TimeSpan.FromSeconds(5),
+                        4 => TimeSpan.FromSeconds(10),
+                        5 => TimeSpan.FromSeconds(20),
+                        _ => TimeSpan.FromSeconds(30),
+                    };
+                    _logger.LogWarning(exception, "根实例命名管道接受连接失败（连续第 {Count} 次），{Delay}s 后继续监听", consecutiveFailures, backoff.TotalSeconds);
                     // 失败的服务端管道实例不可复用，丢弃后下一轮重建
                     server?.Dispose();
                     server = null;
                     try
                     {
-                        await Task.Delay(TimeSpan.FromMilliseconds(300), cancellationToken).ConfigureAwait(false);
+                        await Task.Delay(backoff, cancellationToken).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
                     {
