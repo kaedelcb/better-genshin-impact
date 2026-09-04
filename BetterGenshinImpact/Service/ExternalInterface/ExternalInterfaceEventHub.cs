@@ -148,6 +148,23 @@ internal sealed class ExternalInterfaceEventHub
         => Publish(ExternalInterfaceEventNames.TaskResumed, new { taskType, groupName });
 
     /// <summary>
+    /// [切片7] 槽位释放全局信号：唯一挂载点 = TaskRunner.RunCurrentAsync 的 TaskSemaphore.Release() 之后一行。
+    /// 无 handle（手动任务结束也发，助手 settle 判定统一靠它）。
+    /// 挂载在任务引擎 finally 路径上，发布异常绝不外抛影响引擎收尾。
+    /// </summary>
+    public void PublishTaskSlotReleased()
+    {
+        try
+        {
+            Publish(ExternalInterfaceEventNames.TaskSlotReleased, new { });
+        }
+        catch
+        {
+            // 事件发布失败不影响任务引擎 finally（只读 fire-and-forget）
+        }
+    }
+
+    /// <summary>
     /// 断线续传：取 lastKnownRevision 之后的缓冲事件（按订阅兴趣过滤）。
     /// 返回 resyncRequired=true 表示缺口超出缓冲（或缓冲为空但确有缺失/版本号回退），
     /// 客户端应主动拉 ext.task.status 快照校准（LSP 文档同步模型，§4.6 模块一对应实现）。

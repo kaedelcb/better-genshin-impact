@@ -114,6 +114,9 @@ public class TaskRunner
             if (hasLock)
             {
                 TaskSemaphore.Release();
+                // [切片7·唯一挂载点] 槽位释放全局信号：只读 fire-and-forget，零订阅者零扇出，单机零感知。
+                // 协调器/助手 settle 判定统一靠它；手动任务结束同样触发（spec §4.3 有意设计）。
+                BetterGenshinImpact.Service.ExternalInterface.ExternalInterfaceEventHub.Instance.PublishTaskSlotReleased();
             }
         }
     }
