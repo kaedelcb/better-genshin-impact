@@ -171,7 +171,7 @@ internal sealed class InstanceRequestHandler
     /// <summary>
     /// 激活消息按 RequestId 去重，避免管道重试导致主窗口被重复激活。
     /// </summary>
-    private InstanceIpcEnvelope HandleActivationDispatch(
+    internal InstanceIpcEnvelope HandleActivationDispatch(
         InstanceConnection connection,
         InstanceIpcEnvelope request)
     {
@@ -199,7 +199,7 @@ internal sealed class InstanceRequestHandler
     /// 校验子实例身份和启动记录后，将当前连接登记为有效子连接。
     /// v2 不再校验父实例 ID 或启动记录，而是使用根管道客户端的真实 PID 和 Session。
     /// </summary>
-    private async Task<InstanceIpcEnvelope> HandleConnectionOpenAsync(
+    internal async Task<InstanceIpcEnvelope> HandleConnectionOpenAsync(
         InstanceConnection connection,
         InstanceIpcEnvelope request,
         CancellationToken cancellationToken)
@@ -371,7 +371,7 @@ internal sealed class InstanceRequestHandler
             BetterGiInstanceType.ChildSession);
     }
 
-    private InstanceIpcEnvelope HandleWebViewList(
+    internal InstanceIpcEnvelope HandleWebViewList(
         InstanceConnection connection,
         InstanceIpcEnvelope request)
     {
@@ -393,7 +393,7 @@ internal sealed class InstanceRequestHandler
             new WebViewListResponse { Endpoints = endpoints });
     }
 
-    private async Task<InstanceIpcEnvelope> HandleWebViewSendAsync(
+    internal async Task<InstanceIpcEnvelope> HandleWebViewSendAsync(
         InstanceConnection connection,
         InstanceIpcEnvelope request,
         CancellationToken cancellationToken)
@@ -437,7 +437,7 @@ internal sealed class InstanceRequestHandler
         return InstanceIpcEnvelope.Response(request);
     }
 
-    private InstanceIpcEnvelope HandleWebViewMessage(
+    internal InstanceIpcEnvelope HandleWebViewMessage(
         InstanceConnection connection,
         InstanceIpcEnvelope request)
     {
@@ -526,7 +526,7 @@ internal sealed class InstanceRequestHandler
             response.ErrorMessage ?? response.ErrorCode ?? "实例 IPC 请求失败。");
     }
 
-    private InstanceIpcEnvelope HandleTaskStop(InstanceConnection connection, InstanceIpcEnvelope request)
+    internal InstanceIpcEnvelope HandleTaskStop(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
         {
@@ -540,7 +540,7 @@ internal sealed class InstanceRequestHandler
         }
     }
 
-    private async Task<InstanceIpcEnvelope> HandleTaskStart(InstanceConnection connection, InstanceIpcEnvelope request)
+    internal async Task<InstanceIpcEnvelope> HandleTaskStart(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
         {
@@ -733,7 +733,7 @@ internal sealed class InstanceRequestHandler
         }
     }
 
-    private InstanceIpcEnvelope HandleTaskStatus(InstanceConnection connection, InstanceIpcEnvelope request)
+    internal InstanceIpcEnvelope HandleTaskStatus(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
         {
@@ -838,7 +838,7 @@ internal sealed class InstanceRequestHandler
         }
     }
 
-    private InstanceIpcEnvelope HandleConfigList(InstanceConnection connection, InstanceIpcEnvelope request)
+    internal InstanceIpcEnvelope HandleConfigList(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
         {
@@ -978,7 +978,7 @@ internal sealed class InstanceRequestHandler
     }
 
     /// <summary>执行指定快捷键：通过 HotKeyPageViewModel 的 HotKeySettingModels 找到匹配模型并触发其 Action。</summary>
-    private async Task<InstanceIpcEnvelope> HandleExecuteHotkey(InstanceConnection connection, InstanceIpcEnvelope request)
+    internal async Task<InstanceIpcEnvelope> HandleExecuteHotkey(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
         {
@@ -1029,7 +1029,7 @@ internal sealed class InstanceRequestHandler
     }
 
     /// <summary>关闭游戏：调用 BGI 已有的 SystemControl.CloseGame()。</summary>
-    private InstanceIpcEnvelope HandleCloseGame(InstanceConnection connection, InstanceIpcEnvelope request)
+    internal InstanceIpcEnvelope HandleCloseGame(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
         {
@@ -1043,7 +1043,7 @@ internal sealed class InstanceRequestHandler
     }
 
     /// <summary>设置任务启用状态：改 ScriptGroup.json（配置组）或 OneDragon 配置（一条龙）并写回。</summary>
-    private async Task<InstanceIpcEnvelope> HandleSetTaskEnabled(InstanceConnection connection, InstanceIpcEnvelope request)
+    internal async Task<InstanceIpcEnvelope> HandleSetTaskEnabled(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
         {
@@ -1119,7 +1119,7 @@ internal sealed class InstanceRequestHandler
         }
     }
 
-    private async Task<InstanceIpcEnvelope> HandleTaskSuspend(InstanceConnection connection, InstanceIpcEnvelope request)
+    internal async Task<InstanceIpcEnvelope> HandleTaskSuspend(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
         {
@@ -1252,7 +1252,7 @@ internal sealed class InstanceRequestHandler
         }
     }
 
-    private async Task<InstanceIpcEnvelope> HandleTaskResume(InstanceConnection connection, InstanceIpcEnvelope request)
+    internal async Task<InstanceIpcEnvelope> HandleTaskResume(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
         {
@@ -1407,7 +1407,7 @@ internal sealed class InstanceRequestHandler
     // ===== 远程配置组编辑（remote-config-group-edit 契约 §2）=====
 
     /// <summary>config.pull_group：读取指定配置组文件原文 + 全局 AutoHoeingConfig + 策略文件清单 + 版本 + 运行状态 + MD5。</summary>
-    private InstanceIpcEnvelope HandleConfigPullGroup(InstanceConnection connection, InstanceIpcEnvelope request)
+    internal InstanceIpcEnvelope HandleConfigPullGroup(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
         {
@@ -1513,7 +1513,7 @@ internal sealed class InstanceRequestHandler
     }
 
     /// <summary>config.open_remote_editor：Dispatcher 上弹 RemoteConfigEditWindow，单会话拒绝第二个。立即返回。</summary>
-    private InstanceIpcEnvelope HandleConfigOpenRemoteEditor(InstanceConnection connection, InstanceIpcEnvelope request)
+    internal InstanceIpcEnvelope HandleConfigOpenRemoteEditor(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
         {
@@ -1558,7 +1558,7 @@ internal sealed class InstanceRequestHandler
     }
 
     /// <summary>config.remote_editor_result：助手轮询编辑结果；saved/cancelled 读取后会话关闭回 idle。</summary>
-    private InstanceIpcEnvelope HandleConfigRemoteEditorResult(InstanceConnection connection, InstanceIpcEnvelope request)
+    internal InstanceIpcEnvelope HandleConfigRemoteEditorResult(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         var snapshot = RemoteEditSession.SnapshotAndConsumeIfDone();
         return snapshot.State switch
@@ -1577,7 +1577,7 @@ internal sealed class InstanceRequestHandler
     }
 
     /// <summary>config.apply_group：合并远程编辑结果 → 原子写盘 → 刷新内存（全部在 Dispatcher 上执行）。</summary>
-    private async Task<InstanceIpcEnvelope> HandleConfigApplyGroup(InstanceConnection connection, InstanceIpcEnvelope request)
+    internal async Task<InstanceIpcEnvelope> HandleConfigApplyGroup(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
         {
