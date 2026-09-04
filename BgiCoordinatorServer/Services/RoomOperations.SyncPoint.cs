@@ -12,8 +12,10 @@ namespace BgiCoordinatorServer.Services;
 /// 仅做 ctx 参数化与双发改造，业务逻辑不变。
 /// 集体卡死 Timer 回调由 Hub 实例改为本服务方法（singleton，与原捕获 transient Hub 实例语义等价：
 /// 原 Hub 被 Timer rooting，行为一致）。
-/// 未迁移族（OnDisconnectedAsync/MemberStatusChanged/ReportMemberProgress）仍引用其中部分辅助，
-/// 故这些辅助为 internal，供旧 Hub 经 _ops 调用（单一事实源）。
+/// 未迁移族（OnDisconnectedAsync）仍引用其中部分辅助（AllOnlineMembersReportedStatic/
+/// EvaluateCollectiveStuckPiggybackAsync），故这些辅助为 internal，供旧 Hub 经 _ops 调用（单一事实源）。
+/// MemberStatusChanged/ReportMemberProgress 已于 F6 迁入 RoomOperations.Anomaly.cs，
+/// 与本文件辅助同属一个 partial 类，直接调用（不再经 _ops）。
 /// </summary>
 public sealed partial class RoomOperations
 {
