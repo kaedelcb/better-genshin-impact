@@ -9,6 +9,11 @@ public class Room
     /// 加入校验以此为参照（version-compatibility-check）。空串=房主旧客户端未上报。</summary>
     public string HostBaselineVersion { get; set; } = "";
 
+    /// <summary>房间协议锁定（《通信方案》§4.7）：legacy=旧协议房间，v3=网关协议房间。
+    /// 建房时按房主客户端协议锁定，JoinRoom 校验同协议——同一房间不允许新旧协议混用。
+    /// 传输层元数据，不参与任何业务计数/状态机。</summary>
+    public string Protocol { get; set; } = "legacy";
+
     public List<PlayerInfo> Players { get; set; } = [];
     public DateTime CreatedAt { get; set; }
 

@@ -1,3 +1,4 @@
+using BgiCoordinatorServer.Gateway;
 using BgiCoordinatorServer.Models;
 using BgiCoordinatorServer.Services;
 using Microsoft.AspNetCore.SignalR;
@@ -11,6 +12,7 @@ public class CoordinatorHub : Hub
     private readonly RoomManager _roomManager;
     private readonly ILogger<CoordinatorHub> _logger;
     private readonly IHubContext<CoordinatorHub> _hubContext;
+    private readonly RoomOperations _ops;
 
     // 每个房间的路线上报缓存：roomCode → (connectionId → routes)
     private static readonly ConcurrentDictionary<string, ConcurrentDictionary<string, List<RouteHash>>>
@@ -29,11 +31,12 @@ public class CoordinatorHub : Hub
     // 避免上一个房间关闭/广播时串扰到已切换到新房间的连接）。
     private static readonly ConcurrentDictionary<string, HashSet<string>> _connectionGroups = new();
 
-    public CoordinatorHub(RoomManager roomManager, ILogger<CoordinatorHub> logger, IHubContext<CoordinatorHub> hubContext)
+    public CoordinatorHub(RoomManager roomManager, ILogger<CoordinatorHub> logger, IHubContext<CoordinatorHub> hubContext, RoomOperations ops)
     {
         _roomManager = roomManager;
         _logger = logger;
         _hubContext = hubContext;
+        _ops = ops;
     }
 
     /// <summary>
@@ -86,104 +89,22 @@ public class CoordinatorHub : Hub
     /// <summary>创建房间，返回房间码</summary>
     public async Task<string> CreateRoom(string playerName = "", List<string>? whitelist = null, string playerUid = "", int expectedPlayerCount = 4, string reportedVersion = "")
     {
-        _logger.LogInformation("CreateRoom 收到参数: playerName={Name}, playerUid={Uid}, expectedPlayerCount={Count}, whitelist={WL}",
-            playerName, playerUid, expectedPlayerCount, whitelist != null ? string.Join(",", whitelist) : "null");
-        // 多世界轮次切换：先离开所有旧 Group，避免旧房间广播串扰
-        await LeaveAllGroupsAsync();
-        // version-compatibility-check 改动 5：透传房主上报版本作为房间基准版本
-        var code = _roomManager.CreateRoom(Context.ConnectionId, playerName, whitelist, playerUid, expectedPlayerCount, reportedVersion);
-        await Groups.AddToGroupAsync(Context.ConnectionId, code);
-        TrackGroup(code);
-        _logger.LogInformation("连接 {ConnId}({Name}) 创建房间 {Code}", Context.ConnectionId, playerName, code);
-
-        var room = _roomManager.GetRoom(code)!;
-        await Clients.Group(code).SendAsync("PlayerListUpdated", room.Players);
+        var (code, _) = await _ops.CreateRoomAsync(GatewayHandlerContext.Legacy(Context.ConnectionId),
+            playerName, whitelist, playerUid, expectedPlayerCount, reportedVersion);
         return code;
     }
 
     /// <summary>加入房间，广播 PlayerListUpdated</summary>
     public async Task<bool> JoinRoom(string roomCode, string playerName = "", string playerUid = "", string reportedVersion = "")
     {
-        var playerId = Context.ConnectionId;
-
-        // === 版本一致性校验（就地，入房之前）version-compatibility-check R1.1/R6.1 改动 7/14 ===
-        // 基准 = 房间内第一个非通配玩家版本（ResolveBaselineVersion），而非固定取房主版本：
-        // 否则开发者通配版本当房主时，房主通配 → 全员放行，校验失效（Property 7）。
-        var room0 = _roomManager.GetRoom(roomCode);
-        if (room0 != null)
-        {
-            List<string> existingVersions;
-            lock (room0)
-            {
-                existingVersions = room0.Players.Select(p => p.ReportedVersion).ToList();
-            }
-            if (!VersionCompatibilityDecisions.CanJoin(reportedVersion, existingVersions))
-            {
-                var baseline = VersionCompatibilityDecisions.ResolveBaselineVersion(existingVersions) ?? "";
-                var checkResult = BuildVersionCheckResult(reportedVersion, baseline);
-                _logger.LogWarning("连接 {ConnId} 版本校验不兼容，阻断加入房间 {Code}：member={Member} baseline={Baseline}",
-                    Context.ConnectionId, roomCode, reportedVersion, baseline);
-                // 向该加入者单独回传 Check_Result（向后兼容：旧客户端不订阅此事件即忽略，不影响 bool 返回语义 U4.1）
-                await Clients.Caller.SendAsync("VersionCheckRejected", checkResult);
-                return false; // 硬阻断（R5.1），不调用 RoomManager.JoinRoom，成员不入房
-            }
-        }
-
-        var (success, error) = _roomManager.JoinRoom(roomCode, Context.ConnectionId, playerId, playerName, playerUid, reportedVersion);
-
-        if (!success)
-        {
-            _logger.LogWarning("连接 {ConnId} 加入房间 {Code} 失败：{Error}",
-                Context.ConnectionId, roomCode, error);
-            return false;
-        }
-
-        // 多世界轮次切换：先离开所有旧 Group，避免旧房间广播串扰
-        await LeaveAllGroupsAsync(excludeGroup: roomCode);
-        await Groups.AddToGroupAsync(Context.ConnectionId, roomCode);
-        TrackGroup(roomCode);
-        _logger.LogInformation("连接 {ConnId} 加入房间 {Code}", Context.ConnectionId, roomCode);
-
-        var room = _roomManager.GetRoom(roomCode)!;
-        await Clients.Group(roomCode).SendAsync("PlayerListUpdated", room.Players);
-        return true;
-    }
-
-    /// <summary>
-    /// 构造版本校验失败的 Check_Result（version-compatibility-check 改动 7 / R5.2–R5.6）。
-    /// 含双方版本号、双方是否通配标记、统一版本引导文案。
-    /// </summary>
-    private static Models.VersionCheckResult BuildVersionCheckResult(string memberVersion, string baselineVersion)
-    {
-        return new Models.VersionCheckResult
-        {
-            Compatible = false,
-            MemberVersion = memberVersion ?? "",
-            BaselineVersion = baselineVersion ?? "",
-            MemberIsWildcard = VersionCompatibilityDecisions.IsWildcard(memberVersion),
-            BaselineIsWildcard = VersionCompatibilityDecisions.IsWildcard(baselineVersion),
-            // R5.6 引导：请将房内所有玩家更新到完全相同的版本后重试
-            Hint = "版本不一致，已阻止加入。请将房内所有玩家更新到完全相同的版本后重试。"
-        };
+        var (success, _, _) = await _ops.JoinRoomAsync(GatewayHandlerContext.Legacy(Context.ConnectionId),
+            roomCode, playerName, playerUid, reportedVersion);
+        return success;
     }
 
     /// <summary>离开房间，广播 PlayerListUpdated</summary>
-    public async Task LeaveRoom()
-    {
-        var (room, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        var affectedCodes = _roomManager.LeaveRoom(Context.ConnectionId);
-
-        foreach (var code in affectedCodes)
-        {
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, code);
-            UntrackGroup(code);
-            var updatedRoom = _roomManager.GetRoom(code);
-            var players = updatedRoom?.Players ?? [];
-            await Clients.Group(code).SendAsync("PlayerListUpdated", players);
-        }
-
-        _logger.LogInformation("连接 {ConnId} 离开房间", Context.ConnectionId);
-    }
+    public Task LeaveRoom()
+        => _ops.LeaveRoomAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>上报路线清单，所有成员上报后对比 MD5，广播差异或验证通过</summary>
     public async Task ReportRouteList(List<RouteHash> routes)
@@ -522,28 +443,8 @@ public class CoordinatorHub : Hub
 
 
     /// <summary>关闭房间（仅房主可操作）</summary>
-    public async Task CloseRoom()
-    {
-        var (room, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (room == null || roomCode == null)
-        {
-            _logger.LogWarning("[CloseRoom] 连接 {ConnId} 未在任何房间中", Context.ConnectionId);
-            return;
-        }
-
-        if (room.HostConnectionId != Context.ConnectionId)
-        {
-            _logger.LogWarning("[CloseRoom] 连接 {ConnId} 不是房主，无法关闭房间 {Code}", Context.ConnectionId, roomCode);
-            return;
-        }
-
-        _logger.LogInformation("[CloseRoom] 房主 {ConnId} 关闭房间 {Code}", Context.ConnectionId, roomCode);
-        await Clients.Group(roomCode).SendAsync("RoomClosed", "房主已关闭房间");
-        // 删除整个房间，防止玩家重连后重新加入已关闭的房间
-        _roomManager.DeleteRoom(roomCode);
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomCode);
-        UntrackGroup(roomCode);
-    }
+    public Task CloseRoom()
+        => _ops.CloseRoomAsync(GatewayHandlerContext.Legacy(Context.ConnectionId));
 
     /// <summary>
     /// （已废弃，保留空实现）旧客户端调用此方法时仅记 deprecated 警告，不影响协议兼容。
@@ -821,7 +722,8 @@ public class CoordinatorHub : Hub
     /// 幂等：重复调用直接 return（room.IsStarted 一旦 true 在房间销毁前不复位）。
     /// 非房主调用：LogWarning + return，不抛异常、不修改状态。
     /// </summary>
-    public Task MarkRoomStarted() => MarkRoomStartedCore(null);
+    public Task MarkRoomStarted()
+        => _ops.MarkRoomStartedAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), null);
 
     /// <summary>
     /// 房主重开续跑：上报已完成房主 UID 集合，服务端据此裁剪权威轮换序列。
@@ -829,50 +731,7 @@ public class CoordinatorHub : Hub
     /// hoeing-multiworld-host-restart-resume-round Req 1.1 / 6.1。
     /// </summary>
     public Task MarkRoomStartedWithProgress(List<string> completedHostUids)
-        => MarkRoomStartedCore(completedHostUids);
-
-    private Task MarkRoomStartedCore(List<string>? completedHostUids)
-    {
-        var (room, roomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        if (room == null || roomCode == null)
-        {
-            _logger.LogWarning("[MarkRoomStarted] 连接 {ConnId} 未在任何房间中，忽略", Context.ConnectionId);
-            return Task.CompletedTask;
-        }
-        if (room.HostConnectionId != Context.ConnectionId)
-        {
-            _logger.LogWarning("[MarkRoomStarted] 连接 {ConnId} 不是房主，忽略（房间 {Code}）",
-                Context.ConnectionId, roomCode);
-            return Task.CompletedTask;
-        }
-        if (room.IsStarted)
-        {
-            _logger.LogDebug("[MarkRoomStarted] 房间 {Code} 已经 IsStarted=true，幂等返回", roomCode);
-            return Task.CompletedTask;
-        }
-        room.IsStarted = true;
-        _logger.LogInformation("[MarkRoomStarted] 房间 {Code} 已锁定，IsStarted=true", roomCode);
-
-        // multiplayer-server-authoritative-round-order：首轮锁房时全员已在房间
-        // （客户端 MarkRoomStarted 在 AllWorldJoined 之后），此刻 Players 是全集，
-        // 生成权威轮换序列（首项=首任房主，其余 UID 升序）。整场只生成一次（幂等）。
-        // hoeing-multiworld-host-restart-resume-round：completedHostUids 非空时排除已完成房主世界（裁剪）。
-        lock (room)
-        {
-            if (room.RoundHostOrder.Count == 0)
-            {
-                var hostUid = room.Players.Count > 0 ? room.Players[0].PlayerUid : "";
-                IReadOnlySet<string>? exclude =
-                    (completedHostUids != null && completedHostUids.Count > 0)
-                        ? new HashSet<string>(completedHostUids)
-                        : null;
-                room.RoundHostOrder = RoundHostOrderDecisions.Build(room.Players, hostUid, exclude);
-                _logger.LogInformation("[RoundOrder] 房间 {Code} 生成权威轮换序列（排除 {N} 已完成）：{Order}",
-                    roomCode, exclude?.Count ?? 0, string.Join(" -> ", room.RoundHostOrder));
-            }
-        }
-        return Task.CompletedTask;
-    }
+        => _ops.MarkRoomStartedAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), completedHostUids);
 
     /// <summary>返回本房间权威轮换序列（UID 列表）。未生成 / 房间不存在 → 空列表。</summary>
     public Task<List<string>> GetRoundHostOrder()

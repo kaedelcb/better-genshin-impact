@@ -13,16 +13,18 @@ public sealed partial class GatewayDispatcher
 {
     private readonly GatewaySessionTracker _tracker;
     private readonly ILogger<GatewayDispatcher> _logger;
+    private readonly RoomOperations _ops;
 
     private readonly Dictionary<string, Func<GatewayEnvelope, GatewayHandlerContext, Task<object?>>>
         _commands = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Func<GatewayEnvelope, GatewayHandlerContext, Task<object?>>>
         _queries = new(StringComparer.Ordinal);
 
-    public GatewayDispatcher(GatewaySessionTracker tracker, ILogger<GatewayDispatcher> logger)
+    public GatewayDispatcher(GatewaySessionTracker tracker, ILogger<GatewayDispatcher> logger, RoomOperations ops)
     {
         _tracker = tracker;
         _logger = logger;
+        _ops = ops;
         RegisterAllHandlers();
     }
 
