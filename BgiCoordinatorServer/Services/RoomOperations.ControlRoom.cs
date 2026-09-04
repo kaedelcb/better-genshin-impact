@@ -10,8 +10,8 @@ namespace BgiCoordinatorServer.Services;
 /// 仅做 ctx 参数化与双发改造，业务逻辑不变。
 /// 控制房间 Group 名为 "CTRL_{roomCode}"，与锄地房间不同命名空间——
 /// RoomPhase 观测（只针对锄地房间）本族一律不加。
-/// 注：IsInControlRoomOrRemote 本族方法暂未使用（为后续日志族迁移备好），
-/// 旧 Hub 中的同名副本仍被尚未迁移的日志族方法引用，暂时保留。
+/// 注：IsInControlRoomOrRemote 本族方法暂未使用（日志族 RoomOperations.MemberLog.cs 使用本 ctx 版），
+/// 旧 Hub 中的同名副本已随日志族迁移删除。
 /// </summary>
 public sealed partial class RoomOperations
 {
