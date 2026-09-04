@@ -63,6 +63,19 @@ public sealed class BgiExternalEvent
     public JsonElement Payload { get; init; }
 }
 
+/// <summary>[切片4] 一次 ext.task.status 快照（SDK 自动拉取：订阅基线 / revision 跳号 / 断线恢复校准）。</summary>
+public sealed class BgiExternalStatusSnapshot
+{
+    /// <summary>快照 data 的原始 JSON 文本（字段与 v2 task.status 一致，另有 stateRevision）。</summary>
+    public required string DataJson { get; init; }
+
+    /// <summary>快照携带的 stateRevision；revision ≤ 此值的事件已被快照覆盖，SDK 不再分派。</summary>
+    public required long StateRevision { get; init; }
+
+    /// <summary>触发原因（subscribe-baseline / revision-gap / event:xxx / resync-required），供日志与测试。</summary>
+    public required string Reason { get; init; }
+}
+
 /// <summary>ext.* 请求响应（信封 response 的投影）。</summary>
 public sealed class BgiExternalResponse
 {
@@ -102,6 +115,28 @@ public sealed class BgiExternalClient : IDisposable
     private List<string> _subscribedEvents = new();
     private bool _subscriptionActive;
     private bool _disposed;
+
+    // ===== [切片4] revision 同源闭环状态（LSP 文档同步模型）=====
+    // _maxDispatchedRevision：已分派给事件处理方的最大事件 revision；
+    // _snapshotFloorRevision：已被快照覆盖的 revision 下界（≤ 它的事件不再分派）；
+    // 恢复订阅时把两者较大者作为 lastKnownRevision 上报服务端续传。
+    // 单管道帧流严格有序，会同源快照一起保证事件不丢不重（重复只在快照边界，处理方幂等吸收）。
+    private readonly object _revisionLock = new();
+    private long _maxDispatchedRevision;
+    private long _snapshotFloorRevision;
+    private DateTime _lastSnapshotPullUtc = DateTime.MinValue;
+    private int _snapshotPullInFlight;
+
+    private static readonly TimeSpan SnapshotPullThrottle = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>[切片4] 最近一次 ext.task.status 快照的 data JSON（事件驱动刷新；null = 尚未取得）。</summary>
+    public string? LatestStatusSnapshotJson { get; private set; }
+
+    /// <summary>[切片4] 最近快照的 stateRevision。</summary>
+    public long LatestStatusRevision { get; private set; }
+
+    /// <summary>[切片4] 快照更新通知（在 SDK 读线程/线程池触发；处理方须幂等、不得阻塞）。</summary>
+    public event Action<BgiExternalStatusSnapshot>? StatusSnapshotUpdated;
 
     public BgiExternalLinkState State { get; private set; } = BgiExternalLinkState.Down;
 
@@ -214,14 +249,33 @@ public sealed class BgiExternalClient : IDisposable
         }
     }
 
-    /// <summary>订阅事件。空列表 = 全部已知事件。成功后 IsEventChannelActive 变为 true；重连自动恢复订阅。</summary>
+    /// <summary>
+    /// 订阅事件。空列表 = 全部已知事件。成功后 IsEventChannelActive 变为 true；重连自动恢复订阅。
+    /// [切片4] 服务端声明 event.replay 能力时携带 lastKnownRevision 续传（服务端补发缺失事件）；
+    /// 订阅成功后自动拉一次 ext.task.status 基线快照（resyncRequired / 跳号 / 窗口期事件统一由快照校准兜底）。
+    /// </summary>
     public async Task SubscribeAsync(
         IReadOnlyList<string> events,
         CancellationToken cancellationToken = default)
     {
+        long? lastKnown = null;
+        if (HasCapability(ExternalOperations.CapabilityEventReplay))
+        {
+            lock (_revisionLock)
+            {
+                var known = Math.Max(_maxDispatchedRevision, _snapshotFloorRevision);
+                if (known > 0)
+                {
+                    lastKnown = known;
+                }
+            }
+        }
+
         var response = await SendCommandAsync(
                 ExternalOperations.EventSubscribe,
-                new { events },
+                lastKnown is { } knownRevision
+                    ? new { events, lastKnownRevision = knownRevision }
+                    : new { events },
                 CommandTimeout,
                 cancellationToken)
             .ConfigureAwait(false);
@@ -238,6 +292,9 @@ public sealed class BgiExternalClient : IDisposable
                 : events.ToList();
             _subscriptionActive = true;
         }
+
+        // 基线快照：首订初始化状态、重连恢复校准（含 resyncRequired）统一走这里
+        await RefreshStatusSnapshotAsync("subscribe-baseline", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UnsubscribeAsync(
@@ -272,6 +329,115 @@ public sealed class BgiExternalClient : IDisposable
                     }
                 }
             }
+        }
+    }
+
+    /// <summary>v2 操作名 → ext.* 操作名映射（切片4 迁移期：调用点优先走 ext 长连接，失败回退 v2 短连接）。</summary>
+    public static bool TryMapToExtOperation(string v2OpCode, out string extOperation)
+    {
+        extOperation = v2OpCode switch
+        {
+            "task.status" => ExternalOperations.TaskStatus,
+            "config.list" => ExternalOperations.ConfigList,
+            "config.pull_group" => ExternalOperations.ConfigPullGroup,
+            "config.apply_group" => ExternalOperations.ConfigApplyGroup,
+            "config.open_remote_editor" => ExternalOperations.ConfigOpenRemoteEditor,
+            "config.remote_editor_result" => ExternalOperations.ConfigRemoteEditorResult,
+            _ => string.Empty,
+        };
+        return extOperation.Length > 0;
+    }
+
+    /// <summary>能力查询（DAP 规则：缺省即不支持）。</summary>
+    public bool HasCapability(string name)
+        => Capabilities is not null
+           && Capabilities.TryGetValue(name, out var supported)
+           && supported;
+
+    /// <summary>
+    /// [切片4] 拉取一次 ext.task.status 快照并更新 LatestStatusSnapshot* / 触发 StatusSnapshotUpdated。
+    /// 节流 300ms + 在飞去重；通道非 Ready 或失败时静默返回（下一次事件/跳号会再触发）。
+    /// </summary>
+    public async Task RefreshStatusSnapshotAsync(string reason, CancellationToken cancellationToken = default)
+    {
+        if (State != BgiExternalLinkState.Ready)
+        {
+            return;
+        }
+
+        if (Interlocked.Exchange(ref _snapshotPullInFlight, 1) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var sinceLast = DateTime.UtcNow - _lastSnapshotPullUtc;
+            if (sinceLast < SnapshotPullThrottle)
+            {
+                await Task.Delay(SnapshotPullThrottle - sinceLast, cancellationToken).ConfigureAwait(false);
+            }
+
+            var response = await SendCommandAsync(
+                    ExternalOperations.TaskStatus, null, CommandTimeout, cancellationToken)
+                .ConfigureAwait(false);
+            if (!response.Success || response.Data is null)
+            {
+                return;
+            }
+
+            long revision = 0;
+            try
+            {
+                using var doc = JsonDocument.Parse(response.Data);
+                if (doc.RootElement.TryGetProperty("stateRevision", out var revEl)
+                    && revEl.ValueKind == JsonValueKind.Number)
+                {
+                    revision = revEl.GetInt64();
+                }
+            }
+            catch (JsonException)
+            {
+                // stateRevision 缺失按 0 处理（不影响快照内容使用）
+            }
+
+            _lastSnapshotPullUtc = DateTime.UtcNow;
+            LatestStatusSnapshotJson = response.Data;
+            LatestStatusRevision = revision;
+            if (revision > 0)
+            {
+                lock (_revisionLock)
+                {
+                    // 快照覆盖线单调前进：晚到的旧快照不回退覆盖线
+                    _snapshotFloorRevision = Math.Max(_snapshotFloorRevision, revision);
+                }
+            }
+
+            try
+            {
+                StatusSnapshotUpdated?.Invoke(new BgiExternalStatusSnapshot
+                {
+                    DataJson = response.Data,
+                    StateRevision = revision,
+                    Reason = reason,
+                });
+            }
+            catch
+            {
+                // 快照通知异常不影响 SDK 主流程
+            }
+        }
+        catch (Exception exception) when (exception is InvalidOperationException
+                                          or IOException
+                                          or TimeoutException
+                                          or OperationCanceledException
+                                          or JsonException)
+        {
+            // 通道瞬态不可用：静默，下一次事件/跳号会再触发
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _snapshotPullInFlight, 0);
         }
     }
 
@@ -445,6 +611,20 @@ public sealed class BgiExternalClient : IDisposable
                 if (root.TryGetProperty("sessionId", out var sidEl)
                     && sidEl.ValueKind == JsonValueKind.String)
                 {
+                    // [切片4] 服务端会话变更 = BGI 进程已重启 → stateRevision 计数随进程归零，
+                    // 本地 revision 追踪必须复位，否则旧高水位会把新事件流全部判成"重复"而永久跳过
+                    if (SessionId is not null && sidEl.GetString() != SessionId)
+                    {
+                        lock (_revisionLock)
+                        {
+                            _maxDispatchedRevision = 0;
+                            _snapshotFloorRevision = 0;
+                        }
+
+                        LatestStatusSnapshotJson = null;
+                        LatestStatusRevision = 0;
+                    }
+
                     SessionId = sidEl.GetString();
                 }
 
@@ -588,6 +768,35 @@ public sealed class BgiExternalClient : IDisposable
                     && revEl.ValueKind == JsonValueKind.Number)
                 {
                     revision = revEl.GetInt64();
+                }
+
+                // [切片4] revision 同源闭环：
+                // - rev ≤ 快照覆盖线：状态已含在快照里 → 跳过分派（不重）；
+                // - rev ≤ 已分派最大值：补发/乱序重复 → 跳过（单管道有序流，防御性）；
+                // - rev > 已知最大 + 1：跳号（断线窗口漏帧）→ 自动拉快照补齐（LSP 文档同步模型）。
+                if (revision > 0)
+                {
+                    var gapDetected = false;
+                    lock (_revisionLock)
+                    {
+                        if (revision <= _snapshotFloorRevision || revision <= _maxDispatchedRevision)
+                        {
+                            return;
+                        }
+
+                        var knownBase = Math.Max(_maxDispatchedRevision, _snapshotFloorRevision);
+                        if (knownBase > 0 && revision > knownBase + 1)
+                        {
+                            gapDetected = true;
+                        }
+
+                        _maxDispatchedRevision = revision;
+                    }
+
+                    if (gapDetected)
+                    {
+                        _ = RefreshStatusSnapshotAsync("revision-gap");
+                    }
                 }
 
                 JsonElement payload = default;
@@ -789,10 +998,17 @@ public sealed class BgiExternalClient : IDisposable
     private static class ExternalOperations
     {
         public const string Hello = "ext.hello";
+        public const string TaskStatus = "ext.task.status";
+        public const string ConfigList = "ext.config.list";
+        public const string ConfigPullGroup = "ext.config.pullGroup";
+        public const string ConfigApplyGroup = "ext.config.applyGroup";
+        public const string ConfigOpenRemoteEditor = "ext.config.openRemoteEditor";
+        public const string ConfigRemoteEditorResult = "ext.config.remoteEditorResult";
         public const string EventSubscribe = "ext.event.subscribe";
         public const string EventUnsubscribe = "ext.event.unsubscribe";
         public const string EventPush = "ext.event";
         public const string Response = "response";
         public const string CapabilityEventPush = "event.push";
+        public const string CapabilityEventReplay = "event.replay";
     }
 }
