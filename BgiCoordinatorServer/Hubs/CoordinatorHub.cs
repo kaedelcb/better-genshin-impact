@@ -2,74 +2,21 @@ using BgiCoordinatorServer.Gateway;
 using BgiCoordinatorServer.Models;
 using BgiCoordinatorServer.Services;
 using Microsoft.AspNetCore.SignalR;
-using System.Collections.Concurrent;
 
 namespace BgiCoordinatorServer.Hubs;
 
+/// <summary>
+/// 旧协调 Hub（/hub）。迁移期双轨（《通信方案》§4.7）：65 个公开方法全部瘦身为
+/// 3-5 行转发器，业务逻辑在 RoomOperations 共享路径（GatewayHub 路由同用）。
+/// 方法签名、返回语义、事件名逐字节不变，旧客户端零感知。
+/// </summary>
 public class CoordinatorHub : Hub
 {
-    private readonly RoomManager _roomManager;
-    private readonly ILogger<CoordinatorHub> _logger;
-    private readonly IHubContext<CoordinatorHub> _hubContext;
     private readonly RoomOperations _ops;
 
-    // 每个连接当前所属的 SignalR Group 列表（用于轮换房间时清理旧 Group 订阅，
-    // 避免上一个房间关闭/广播时串扰到已切换到新房间的连接）。
-    private static readonly ConcurrentDictionary<string, HashSet<string>> _connectionGroups = new();
-
-    public CoordinatorHub(RoomManager roomManager, ILogger<CoordinatorHub> logger, IHubContext<CoordinatorHub> hubContext, RoomOperations ops)
+    public CoordinatorHub(RoomOperations ops)
     {
-        _roomManager = roomManager;
-        _logger = logger;
-        _hubContext = hubContext;
         _ops = ops;
-    }
-
-    /// <summary>
-    /// 把当前连接从所有旧 Group 中移除，确保后续广播不会串扰到这个连接。
-    /// 多世界轮次切换时，玩家会从旧房间切到新房间，必须先离开旧 Group。
-    /// </summary>
-    private async Task LeaveAllGroupsAsync(string? excludeGroup = null)
-    {
-        if (!_connectionGroups.TryGetValue(Context.ConnectionId, out var groups))
-            return;
-        // 拷贝避免迭代时被并发修改
-        string[] toRemove;
-        lock (groups)
-        {
-            toRemove = groups.Where(g => g != excludeGroup).ToArray();
-        }
-        foreach (var g in toRemove)
-        {
-            try
-            {
-                await Groups.RemoveFromGroupAsync(Context.ConnectionId, g);
-                lock (groups) { groups.Remove(g); }
-                _logger.LogInformation("[GroupCleanup] 连接 {ConnId} 从旧 Group {Group} 移除",
-                    Context.ConnectionId, g);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "[GroupCleanup] 连接 {ConnId} 离开 Group {Group} 失败（忽略）",
-                    Context.ConnectionId, g);
-            }
-        }
-    }
-
-    /// <summary>记录某连接已加入指定 Group，供 LeaveAllGroupsAsync 后续清理使用。</summary>
-    private void TrackGroup(string groupName)
-    {
-        var set = _connectionGroups.GetOrAdd(Context.ConnectionId, _ => new HashSet<string>());
-        lock (set) { set.Add(groupName); }
-    }
-
-    /// <summary>记录某连接已离开指定 Group。</summary>
-    private void UntrackGroup(string groupName)
-    {
-        if (_connectionGroups.TryGetValue(Context.ConnectionId, out var set))
-        {
-            lock (set) { set.Remove(groupName); }
-        }
     }
 
     /// <summary>创建房间，返回房间码</summary>
@@ -296,136 +243,9 @@ public class CoordinatorHub : Hub
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        // 获取断线玩家所在的房间信息
-        var (disconnectedRoom, disconnectedRoomCode) = _roomManager.GetRoomByConnectionId(Context.ConnectionId);
-        var wasHost = disconnectedRoom?.HostConnectionId == Context.ConnectionId;
-
-        if (disconnectedRoom != null && disconnectedRoomCode != null)
-        {
-            if (wasHost)
-            {
-                // === 房主断线：保持现有逻辑（广播 RoomClosed + 删房）===
-                _logger.LogWarning("[OnDisconnectedAsync] 房主断线，广播 RoomClosed: 房间={RoomCode}", disconnectedRoomCode);
-                await Clients.Group(disconnectedRoomCode).SendAsync("RoomClosed", "房主已断开连接");
-                _roomManager.LeaveRoom(Context.ConnectionId);
-                _roomManager.DeleteRoom(disconnectedRoomCode);
-            }
-            else
-            {
-                // === 成员断线：进宽限期，不删人、不广播 PlayerListUpdated 缩水 ===
-                lock (disconnectedRoom)
-                {
-                    disconnectedRoom.GracePendingMembers[Context.ConnectionId] = DateTime.UtcNow.AddSeconds(30);
-                }
-                _logger.LogInformation("[OnDisconnectedAsync] 成员 {ConnId} 进入宽限期(30s)，房间 {Code} 人数保持 {N}",
-                    Context.ConnectionId, disconnectedRoomCode, disconnectedRoom.Players.Count);
-
-                // SignalR 会自动从 Group 移除断线连接，room.Players 不删
-
-                // 重新评估所有未完成的同步点（断线的人不应阻塞同步点）
-                List<string> satisfiedSyncIds;
-                lock (disconnectedRoom)
-                {
-                    satisfiedSyncIds = disconnectedRoom.ArrivalSets
-                        .Where(kvp => RoomOperations.AllOnlineMembersReportedStatic(disconnectedRoom, kvp.Value))
-                        .Select(kvp => kvp.Key)
-                        .ToList();
-                }
-
-                // 广播满足条件的同步点（在 lock 外执行 await）
-                foreach (var syncId in satisfiedSyncIds)
-                {
-                    _logger.LogInformation("[OnDisconnectedAsync] 玩家断线后重新评估：同步点 {SyncId} 条件满足，广播 AllArrived，房间={RoomCode}",
-                        syncId, disconnectedRoomCode);
-                    await Clients.Group(disconnectedRoomCode).SendAsync("AllArrived", syncId);
-                    _roomManager.ClearArrivalSet(disconnectedRoomCode, syncId);
-                    lock (disconnectedRoom) { disconnectedRoom.BroadcastedSyncIds.Add(syncId); }
-                }
-
-                // === 集体卡死监测 piggyback（multiplayer-mutual-wait-collective-skip §8.4 改动 5）===
-                await _ops.EvaluateCollectiveStuckPiggybackAsync(disconnectedRoom, disconnectedRoomCode);
-
-                // 万叶聚物同步：候选切换 + 兜底（kazuha-player-auto-detection requirements 5.5 / Property 10）
-                bool shouldBroadcastSwitch = false;
-                string switchedToUid = "";
-                lock (disconnectedRoom)
-                {
-                    disconnectedRoom.KazuhaCandidates.RemoveAll(c => c.ConnectionId == Context.ConnectionId);
-
-                    if (disconnectedRoom.KazuhaCollect.KazuhaConnectionId == Context.ConnectionId)
-                    {
-                        var onlineCandidate = disconnectedRoom.KazuhaCandidates.FirstOrDefault(c =>
-                            disconnectedRoom.Players.Any(p => p.ConnectionId == c.ConnectionId
-                                && DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)));
-
-                        if (onlineCandidate != null)
-                        {
-                            disconnectedRoom.KazuhaCollect.KazuhaConnectionId = onlineCandidate.ConnectionId;
-                            switchedToUid = onlineCandidate.PlayerUid;
-                            shouldBroadcastSwitch = true;
-                        }
-                        else
-                        {
-                            disconnectedRoom.KazuhaCollect.KazuhaConnectionId = null;
-                        }
-                    }
-                }
-                if (shouldBroadcastSwitch)
-                {
-                    _logger.LogInformation("[OnDisconnectedAsync] 万叶玩家断线，切换到下一候选 {Uid}，房间={RoomCode}",
-                        switchedToUid, disconnectedRoomCode);
-                    await Clients.Group(disconnectedRoomCode).SendAsync("KazuhaPlayerUpdated", switchedToUid);
-                }
-            }
-        }
-
-        _logger.LogInformation("连接 {ConnId} 断开，房间={Room}",
-            Context.ConnectionId, disconnectedRoomCode ?? "(无)");
-
-        // 清理控制房间成员（必须在移除 _connectionGroups 跟踪之前执行，否则找不到所属 Group）
-        try
-        {
-            // 从 `_connectionGroups` 中找出当前连接所属的所有 Group
-            if (_connectionGroups.TryGetValue(Context.ConnectionId, out var groups))
-            {
-                List<string> groupList;
-                lock (groups) { groupList = [.. groups]; }
-
-                foreach (var group in groupList)
-                {
-                    if (group.StartsWith("CTRL_"))
-                    {
-                        _roomManager.RemoveFromControlRoom(group, Context.ConnectionId);
-                        // 遥控端不入 _controlRooms，RemoveFromControlRoom 对其 no-op；
-                        // 需单独清理遥控端连接登记，防止 _remoteControlConnections 残留。
-                        _roomManager.RemoveRemoteConnection(group, Context.ConnectionId);
-                        var players = _roomManager.GetControlRoomPlayers(group);
-                        _ = Clients.Group(group).SendAsync("ControlRoomPlayersUpdated", players);
-                        _logger.LogInformation("控制房间 {Group} 成员断线，已标记离线", group);
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            // 清理 group 跟踪表时发生异常，忽略
-            _logger.LogWarning(ex, "清理控制房间 Group 时发生异常");
-        }
-
-        // 清理 group 跟踪表，避免静态字典内存泄漏
-        _connectionGroups.TryRemove(Context.ConnectionId, out _);
-
-        // 日志订阅清理（房间实时日志汇聚）：断线连接从所有订阅中移除，并通知各目标成员最新订阅数
-        try
-        {
-            foreach (var (group, targetUid, count) in _roomManager.RemoveLogSubscriberEverywhere(Context.ConnectionId))
-                await _ops.NotifyLogSubscriberCountAsync(group, targetUid, count);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "清理日志订阅时发生异常");
-        }
-
+        // 断线清理与 GatewayHub 共用同一实现（RoomOperations.HandleDisconnectAsync）：
+        // 宽限期/房主关房/同步点重评估/万叶顶替/控制房间清理/日志订阅清理
+        await _ops.HandleDisconnectAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), exception);
         await base.OnDisconnectedAsync(exception);
     }
 

@@ -12,10 +12,9 @@ namespace BgiCoordinatorServer.Services;
 /// 仅做 ctx 参数化与双发改造，业务逻辑不变。
 /// 集体卡死 Timer 回调由 Hub 实例改为本服务方法（singleton，与原捕获 transient Hub 实例语义等价：
 /// 原 Hub 被 Timer rooting，行为一致）。
-/// 未迁移族（OnDisconnectedAsync）仍引用其中部分辅助（AllOnlineMembersReportedStatic/
-/// EvaluateCollectiveStuckPiggybackAsync），故这些辅助为 internal，供旧 Hub 经 _ops 调用（单一事实源）。
 /// MemberStatusChanged/ReportMemberProgress 已于 F6 迁入 RoomOperations.Anomaly.cs，
-/// 与本文件辅助同属一个 partial 类，直接调用（不再经 _ops）。
+/// OnDisconnectedAsync 已于 F9 迁入 RoomOperations.Disconnect.cs，
+/// 全部调用方与本文件辅助同属一个 partial 类，直接调用（不再经 _ops）。
 /// </summary>
 public sealed partial class RoomOperations
 {
@@ -415,7 +414,7 @@ public sealed partial class RoomOperations
     /// 静态版本的 AllOnlineMembersReported，用于 OnDisconnectedAsync 中的重新评估。
     /// 必须在 lock(room) 内调用。排除宽限期中的成员（断线的人不应阻塞同步点）。
     /// </summary>
-    internal static bool AllOnlineMembersReportedStatic(Room room, HashSet<string> reported)
+    private static bool AllOnlineMembersReportedStatic(Room room, HashSet<string> reported)
     {
         var onlinePlayers = room.Players
             .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
@@ -525,7 +524,7 @@ public sealed partial class RoomOperations
     /// 实际触发协同跳段的决策由 Timer 到期后调用 EvaluateCollectiveStuckTimerCallbackAsync 完成（OQ-2 C 双层判定）。
     /// 注意：本方法 await 任何调用必须在 lock 外（design §8.4 改动 2）。
     /// </summary>
-    internal Task EvaluateCollectiveStuckPiggybackAsync(Room room, string roomCode)
+    private Task EvaluateCollectiveStuckPiggybackAsync(Room room, string roomCode)
     {
         if (room.HostConfig?.EnableMutualWaitCollectiveSkip != true) return Task.CompletedTask;
 

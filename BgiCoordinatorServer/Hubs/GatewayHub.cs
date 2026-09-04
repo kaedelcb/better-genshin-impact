@@ -1,4 +1,5 @@
 using BgiCoordinatorServer.Gateway;
+using BgiCoordinatorServer.Services;
 using Microsoft.AspNetCore.SignalR;
 
 namespace BgiCoordinatorServer.Hubs;
@@ -13,12 +14,14 @@ public class GatewayHub : Hub
 {
     private readonly GatewayDispatcher _dispatcher;
     private readonly GatewaySessionTracker _tracker;
+    private readonly RoomOperations _ops;
     private readonly ILogger<GatewayHub> _logger;
 
-    public GatewayHub(GatewayDispatcher dispatcher, GatewaySessionTracker tracker, ILogger<GatewayHub> logger)
+    public GatewayHub(GatewayDispatcher dispatcher, GatewaySessionTracker tracker, RoomOperations ops, ILogger<GatewayHub> logger)
     {
         _dispatcher = dispatcher;
         _tracker = tracker;
+        _ops = ops;
         _logger = logger;
     }
 
@@ -30,13 +33,13 @@ public class GatewayHub : Hub
     public Task<GatewayEnvelope> Query(GatewayEnvelope envelope)
         => _dispatcher.QueryAsync(GatewayHandlerContext.V3(Context.ConnectionId), envelope);
 
-    public override Task OnDisconnectedAsync(Exception? exception)
+    public override async Task OnDisconnectedAsync(Exception? exception)
     {
         _tracker.Remove(Context.ConnectionId);
         _logger.LogInformation("[Gateway] 连接 {ConnId} 断开（{Error}）",
             Context.ConnectionId, exception?.Message ?? "正常");
-        // 房间域断线清理（宽限期/房主断线关房等）在兼容层迁移收尾时与旧 Hub 共用同一实现；
-        // 当前无 v3 客户端上线，仅清理会话登记。
-        return base.OnDisconnectedAsync(exception);
+        // 房间域断线清理与旧 Hub 共用同一实现（宽限期/房主关房/同步点重评估/万叶顶替等）
+        await _ops.HandleDisconnectAsync(GatewayHandlerContext.V3(Context.ConnectionId), exception);
+        await base.OnDisconnectedAsync(exception);
     }
 }

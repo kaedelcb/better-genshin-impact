@@ -204,7 +204,7 @@ public sealed partial class RoomOperations
 
     /// <summary>把最新订阅数转发给目标成员在房间里的连接（目标端据此启停上报）。
     /// public：旧 Hub 的 OnDisconnectedAsync 断线清理也要调用。</summary>
-    public async Task NotifyLogSubscriberCountAsync(string group, string targetUid, int count)
+    private async Task NotifyLogSubscriberCountAsync(string group, string targetUid, int count)
     {
         var targetConn = _roomManager.GetConnectionIdByUid(group, targetUid);
         if (string.IsNullOrEmpty(targetConn)) return; // 目标不在线：订阅留着，上线后由观看端重订阅流程兜底
