@@ -639,6 +639,13 @@
                                 </StackPanel>
                                 </Border>
                             </Button>
+                            <!-- 跨会话警告徽章：IPC 管道指向其他会话的 BGI（或无法确认会话归属）时显示 -->
+                            <Border CornerRadius="7" Padding="9,3" VerticalAlignment="Center" Margin="6,0,0,0"
+                                    Background="#1FE8A86F" BorderBrush="#66E8A86F" BorderThickness="1"
+                                    Visibility="{Binding IsIpcSessionUntrusted, Converter={StaticResource BoolToVis}}"
+                                    ToolTip="命名管道指向了其他 Windows 会话的 BGI 实例（或无法确认会话归属），其任务状态已忽略、控制指令已阻断。请检查是否存在多会话多开">
+                                <TextBlock Text="⚠ 跨会话" FontSize="10" FontWeight="Medium" Foreground="#E8A86F" VerticalAlignment="Center"/>
+                            </Border>
                         </StackPanel>
                         <!-- Row 0 Col 1：设置 + 退出 -->
                         <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">

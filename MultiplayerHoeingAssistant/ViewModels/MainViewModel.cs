@@ -83,6 +83,40 @@ public class MainViewModel : INotifyPropertyChanged
         set { _isConnected = value; OnPropertyChanged(); }
     }
 
+    private bool _isIpcSessionUntrusted;
+    /// <summary>
+    /// IPC 管道是否不可信：命名管道指向了其他 Windows 会话的 BGI 实例，或无法确认对端会话归属。
+    /// 为 true 时状态轮询忽略管道返回的 task.status、控制指令被阻断，标题栏显示"跨会话"警告徽章。
+    /// </summary>
+    public bool IsIpcSessionUntrusted
+    {
+        get => _isIpcSessionUntrusted;
+        private set { if (_isIpcSessionUntrusted == value) return; _isIpcSessionUntrusted = value; OnPropertyChanged(); }
+    }
+
+    /// <summary>
+    /// 根据本轮 IPC 握手结果更新 <see cref="IsIpcSessionUntrusted"/>，并做边沿检测：
+    /// 仅在可信状态发生变化时打日志，避免 10 秒轮询刷屏。
+    /// </summary>
+    private void UpdateIpcSessionTrust(IpcClient ipcClient)
+    {
+        var untrusted = !ipcClient.IsSessionTrusted;
+        if (untrusted == IsIpcSessionUntrusted) return;
+        IsIpcSessionUntrusted = untrusted;
+
+        if (untrusted)
+        {
+            var localSid = System.Diagnostics.Process.GetCurrentProcess().SessionId;
+            AddLog(ipcClient.SessionCheck == IpcSessionCheck.CrossSession
+                ? $"[IPC] 警告：命名管道指向了其他 Windows 会话的 BGI 实例（对端 Session={ipcClient.RemoteSessionId?.ToString() ?? "?"} PID={ipcClient.RemoteProcessId?.ToString() ?? "?"}，本会话 Session={localSid}），其任务状态已忽略、控制指令已阻断。请检查是否存在多会话多开"
+                : "[IPC] 警告：无法确认管道对端 BGI 所属会话（Ping 握手未通过），按不可信处理：任务状态已忽略、控制指令已阻断");
+        }
+        else
+        {
+            AddLog("[IPC] 管道对端已确认为本会话的 BGI 实例，任务状态恢复采信");
+        }
+    }
+
     private AppPage _currentPage;
     /// <summary>当前内容区页面（三态导航：Home=成员列表主页 / Settings=设置页 / Dodoco=嘟嘟可日志监控）。</summary>
     public AppPage CurrentPage
@@ -409,11 +443,14 @@ public class MainViewModel : INotifyPropertyChanged
         var currentTaskGroupName = (string?)null;
         var currentRouteDisplay = (string?)null;
         var bgiRunning = false;
+        // 本轮 IPC 会话校验结果：不可信（跨会话/无法确认）时不采信管道返回的任何任务状态
+        var ipcSessionTrusted = true;
 
         // 遥控器模式：跳过 IPC 连接，直接上报 observer 状态
         if (_config?.ObserverMode == true)
         {
             // 跳过 IPC 连接，不上报配置组/任务状态
+            IsIpcSessionUntrusted = false; // 遥控器模式不连本机管道，清除可能残留的跨会话警告
         }
         else
         {
@@ -425,6 +462,26 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 using var ipcClient = new IpcClient();
                 await ipcClient.ConnectAsync(2000);
+
+                // 会话校验：多用户多开时命名管道按用户 SID 共享，可能被其他会话先启动的 Primary BGI 独占，
+                // 此时管道返回的 config.list / task.status 都是"别人会话的 BGI"的数据，一律不采信
+                ipcSessionTrusted = ipcClient.IsSessionTrusted;
+                UpdateIpcSessionTrust(ipcClient);
+
+                if (!ipcSessionTrusted)
+                {
+                    // 不可信 → 配置回退缓存（与 IPC 失败路径一致），任务状态保持默认值（bgiRunning=false 等）
+                    if (hasCache)
+                    {
+                        configGroups = cache!.ConfigGroups;
+                        oneClickConfigs = cache!.OneClickConfigs;
+                        configGroupTasksWithStatus = cache!.ConfigGroupTasksWithStatus;
+                        oneClickTasksWithStatus = cache!.OneClickTasksWithStatus;
+                        hotkeys = cache!.Hotkeys;
+                    }
+                }
+                else
+                {
                 var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "config.list" });
                 if (response.Success && !string.IsNullOrEmpty(response.Data))
                 {
@@ -490,6 +547,7 @@ public class MainViewModel : INotifyPropertyChanged
                     if (bgiRunning && sdata.TryGetProperty("currentRouteDisplay", out var rd) && rd.ValueKind == JsonValueKind.String)
                         currentRouteDisplay = rd.GetString();
                 }
+                } // end else（IPC 会话可信）
             }
             catch (Exception ex)
             {
@@ -551,6 +609,9 @@ public class MainViewModel : INotifyPropertyChanged
         {
             using var recentTaskClient = new IpcClient();
             await recentTaskClient.ConnectAsync(2000);
+            // 跨会话/无法确认时跳过：不能把其他会话 BGI 的 onlineGeneration / recentTaskName 误报为"我上线了"
+            if (recentTaskClient.IsSessionTrusted)
+            {
             var statusResp = await recentTaskClient.SendCommandAsync(new IpcRequest { OpCode = "task.status" });
             if (statusResp.Success && !string.IsNullOrEmpty(statusResp.Data))
             {
@@ -593,6 +654,7 @@ public class MainViewModel : INotifyPropertyChanged
                         }
                     }
             }
+            } // end if（IPC 会话可信才探测上线事件）
         }
         catch
         {
@@ -601,7 +663,13 @@ public class MainViewModel : INotifyPropertyChanged
 
         // 检测联机锄地是否结束（autoHoeingRunning 从 true 变为 false）
         // 通过 IPC 查询 BGI 是否有中断上下文，不使用 _config 引用
-        if (_wasAutoHoeingRunning && !autoHoeingRunning)
+        // IPC 会话不可信时跳过：autoHoeingRunning 此时恒为默认值 false，
+        // 若之前同会话锄地中突变为跨会话，边沿条件会误触发"锄地结束"并启动恢复定时器，必须压住
+        if (!ipcSessionTrusted)
+        {
+            _wasAutoHoeingRunning = false;
+        }
+        else if (_wasAutoHoeingRunning && !autoHoeingRunning)
         {
             // 检查 BGI 是否有中断上下文
             bool hasContext = false;

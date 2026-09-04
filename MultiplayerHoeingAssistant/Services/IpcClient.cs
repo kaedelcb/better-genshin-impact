@@ -6,10 +6,40 @@ using MultiplayerHoeingAssistant.Models;
 
 namespace MultiplayerHoeingAssistant.Services;
 
+/// <summary>
+/// IPC 会话校验状态：连接后对端 BGI 所属 Windows 会话与本进程会话的比对结果。
+/// 背景：多用户多开场景下命名管道按用户 SID 命名（BetterGI.v2.user-{SID}.root），
+/// 第一个启动的 BGI（Primary）独占管道，其他会话的助手会连到 Primary 所在会话的 BGI，
+/// 其 task.status / 控制指令都指向"别人会话的 BGI"，不可信。
+/// </summary>
+public enum IpcSessionCheck
+{
+    /// <summary>尚未校验（未成功建立连接）。</summary>
+    NotChecked,
+    /// <summary>对端 BGI 与本进程同一会话，状态与控制指令可信。</summary>
+    SameSession,
+    /// <summary>对端 BGI 在其他 Windows 会话，其状态与控制指令不可信。</summary>
+    CrossSession,
+    /// <summary>无法确认（Ping 失败或响应缺少会话字段），按不可信处理（不静默放行）。</summary>
+    Unknown
+}
+
 public class IpcClient : IDisposable
 {
     private NamedPipeClientStream? _pipeClient;
     private readonly string _pipeName;
+
+    /// <summary>连接握手后的会话校验结果（详见 <see cref="IpcSessionCheck"/>）。</summary>
+    public IpcSessionCheck SessionCheck { get; private set; } = IpcSessionCheck.NotChecked;
+
+    /// <summary>对端 BGI 所在的 Windows 会话 ID（Ping 响应；未确认时为 null）。</summary>
+    public int? RemoteSessionId { get; private set; }
+
+    /// <summary>对端 BGI 的进程 ID（Ping 响应；未确认时为 null）。</summary>
+    public int? RemoteProcessId { get; private set; }
+
+    /// <summary>管道是否可信：仅同一会话可信；跨会话或无法确认均不可信。</summary>
+    public bool IsSessionTrusted => SessionCheck == IpcSessionCheck.SameSession;
 
     public IpcClient()
     {
@@ -40,6 +70,58 @@ public class IpcClient : IDisposable
             _pipeClient?.Dispose();
             _pipeClient = null;
             throw;
+        }
+
+        // 连接成功后先做会话校验握手（Ping），确认对端 BGI 与本进程同一会话。
+        // 注意：握手失败只置 Unknown，不抛异常——不改变 ConnectAsync 原有的成功/失败语义，
+        // 是否采信该连接由调用方根据 SessionCheck 决定。
+        await VerifyRemoteSessionAsync();
+    }
+
+    /// <summary>
+    /// 会话校验握手：发送 ping，解析对端 BGI 返回的端点信息（windowsSessionId/processId），
+    /// 与本进程会话比对。Ping 是 v2 协议固有操作，响应 data 为 InstanceEndpoint
+    /// （BGI 侧 Newtonsoft camelCase 序列化，windowsSessionId 为非空 int 必然存在）；
+    /// 因此 Unknown 只会在管道本身异常时出现，此时按不可信处理（不静默放行）。
+    /// </summary>
+    private async Task VerifyRemoteSessionAsync()
+    {
+        try
+        {
+            var response = await SendCommandAsync(new IpcRequest { OpCode = "ping" });
+            if (response.Success && !string.IsNullOrEmpty(response.Data))
+            {
+                var data = JsonSerializer.Deserialize<JsonElement>(response.Data);
+                if (data.TryGetProperty("windowsSessionId", out var sidEl)
+                    && sidEl.ValueKind == JsonValueKind.Number
+                    && sidEl.TryGetInt32(out var remoteSid))
+                {
+                    RemoteSessionId = remoteSid;
+                    if (data.TryGetProperty("processId", out var pidEl)
+                        && pidEl.ValueKind == JsonValueKind.Number
+                        && pidEl.TryGetInt32(out var remotePid))
+                    {
+                        RemoteProcessId = remotePid;
+                    }
+
+                    var localSid = System.Diagnostics.Process.GetCurrentProcess().SessionId;
+                    SessionCheck = remoteSid == localSid
+                        ? IpcSessionCheck.SameSession
+                        : IpcSessionCheck.CrossSession;
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[IPC] 会话校验: 对端 Session={remoteSid} PID={RemoteProcessId?.ToString() ?? "?"}，本进程 Session={localSid} → {SessionCheck}");
+                    return;
+                }
+            }
+
+            SessionCheck = IpcSessionCheck.Unknown;
+            System.Diagnostics.Debug.WriteLine(
+                $"[IPC] 会话校验无法确认: Ping 未返回 windowsSessionId（Success={response.Success} Error={response.ErrorMessage ?? "无"}）");
+        }
+        catch (Exception ex)
+        {
+            SessionCheck = IpcSessionCheck.Unknown;
+            System.Diagnostics.Debug.WriteLine($"[IPC] 会话校验握手失败: {ex.Message}");
         }
     }
 

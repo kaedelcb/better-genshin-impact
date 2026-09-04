@@ -43,6 +43,23 @@ public class CommandExecutor
     }
 
     /// <summary>
+    /// 控制指令会话守卫：多用户多开时命名管道可能指向其他会话的 Primary BGI，
+    /// 此时 task.start/stop/suspend 等控制指令会操控"别人会话的 BGI"，必须阻断。
+    /// 返回非 null 表示已阻断——调用方应直接返回该结果，不要进入 IPC 失败回退
+    /// （回退会 KillBgi+RestartBgi，可能误杀本会话正在跑任务的 BGI）。
+    /// </summary>
+    private static CommandResult? CheckCrossSessionBlock(IpcClient ipcClient, string commandDesc)
+    {
+        if (ipcClient.IsSessionTrusted) return null;
+        var localSid = System.Diagnostics.Process.GetCurrentProcess().SessionId;
+        var detail = ipcClient.SessionCheck == IpcSessionCheck.CrossSession
+            ? $"管道指向其他会话的 BGI（对端 Session={ipcClient.RemoteSessionId?.ToString() ?? "?"} PID={ipcClient.RemoteProcessId?.ToString() ?? "?"}，本会话 Session={localSid}）"
+            : "无法确认管道对端 BGI 所属会话（Ping 握手未通过）";
+        ProbeLog($"[CommandExecutor] 控制指令已阻断（{commandDesc}）：{detail}");
+        return new CommandResult { Status = "failed", Message = $"IPC 会话校验未通过，{commandDesc} 已阻断：{detail}。请检查是否存在多会话多开" };
+    }
+
+    /// <summary>
     /// [A1 治本] RestartBgi 后等待 BGI IPC 管道就绪，避免调用方紧接着的 IPC 请求在 BGI 刚启动时
     /// 连不上再次触发回退，或与命令行 --startGroups 路径并发启动原神。
     /// 轮询：每 1s 尝试连接，最多 10 次，超时后静默返回（不影响主流程，BGI 端锁已兜底）。
@@ -168,12 +185,21 @@ public class CommandExecutor
         {
             using var ipcClient = new IpcClient();
             await ipcClient.ConnectAsync(3000);
-            await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.stop" });
-            await Task.Delay(3000);
-            var currentSession = System.Diagnostics.Process.GetCurrentProcess().SessionId;
-            if (System.Diagnostics.Process.GetProcessesByName("BetterGI")
-                .All(p => p.SessionId != currentSession))
-                return new CommandResult { Status = "success", Message = "BGI 已优雅停止" };
+            // 会话守卫：管道指向其他会话的 BGI 时 task.stop 会停掉别人会话的任务，
+            // 跳过 IPC 阶段直接走阶段2（KillBgi 只杀本会话进程，语义仍然正确）
+            if (ipcClient.IsSessionTrusted)
+            {
+                await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.stop" });
+                await Task.Delay(3000);
+                var currentSession = System.Diagnostics.Process.GetCurrentProcess().SessionId;
+                if (System.Diagnostics.Process.GetProcessesByName("BetterGI")
+                    .All(p => p.SessionId != currentSession))
+                    return new CommandResult { Status = "success", Message = "BGI 已优雅停止" };
+            }
+            else
+            {
+                ProbeLog($"[CommandExecutor] StopBgiAsync 跳过 IPC 优雅停止：{ipcClient.SessionCheck}（对端 Session={ipcClient.RemoteSessionId?.ToString() ?? "?"}），直接杀本会话进程");
+            }
         }
         catch
         {
@@ -246,6 +272,9 @@ public class CommandExecutor
             // 通过 IPC 发 task.start
             using var ipcClient = new IpcClient();
             await ipcClient.ConnectAsync(3000);
+            // 会话守卫：阻断时直接失败返回，不进入下方的杀进程回退（避免误杀本会话正在跑任务的 BGI）
+            var blocked = CheckCrossSessionBlock(ipcClient, $"task.start 配置组「{groupName}」");
+            if (blocked != null) return blocked;
             var payload = System.Text.Json.JsonSerializer.Serialize(new { groupName, startFromIndex, generation });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
             if (response.Success)
@@ -313,6 +342,9 @@ public class CommandExecutor
             // 通过 IPC 发 task.start（一条龙内联启动）
             using var ipcClient = new IpcClient();
             await ipcClient.ConnectAsync(3000);
+            // 会话守卫：阻断时直接失败返回，不进入下方的杀进程回退
+            var blocked = CheckCrossSessionBlock(ipcClient, $"task.start 一条龙「{configName}」");
+            if (blocked != null) return blocked;
             var payload = System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
             if (response.Success)
@@ -337,6 +369,8 @@ public class CommandExecutor
         {
             using var ipcClient = new IpcClient();
             await ipcClient.ConnectAsync(3000);
+            var blocked = CheckCrossSessionBlock(ipcClient, $"快捷键「{hotkeyConfigName}」");
+            if (blocked != null) return blocked;
             var payload = System.Text.Json.JsonSerializer.Serialize(new { hotkeyConfigName });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "action.execute_hotkey", Payload = payload });
             if (response.Success)
@@ -356,6 +390,8 @@ public class CommandExecutor
         {
             using var ipcClient = new IpcClient();
             await ipcClient.ConnectAsync(3000);
+            var blocked = CheckCrossSessionBlock(ipcClient, "关闭游戏");
+            if (blocked != null) return blocked;
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "action.close_game" });
             if (response.Success)
                 return new CommandResult { Status = "success", Message = "关闭游戏指令已下发" };
@@ -374,6 +410,8 @@ public class CommandExecutor
         {
             using var ipcClient = new IpcClient();
             await ipcClient.ConnectAsync(3000);
+            var blocked = CheckCrossSessionBlock(ipcClient, $"设置任务启用状态（group={groupName} config={configName} index={taskIndex}）");
+            if (blocked != null) return blocked;
             var payload = System.Text.Json.JsonSerializer.Serialize(new { groupName, configName, taskIndex, enabled });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "config.set_task_enabled", Payload = payload });
             if (response.Success)
@@ -393,6 +431,8 @@ public class CommandExecutor
         {
             using var ipcClient = new IpcClient();
             await ipcClient.ConnectAsync(3000);
+            var blocked = CheckCrossSessionBlock(ipcClient, "task.suspend");
+            if (blocked != null) return blocked;
 
             // 发 task.suspend
             var payload = System.Text.Json.JsonSerializer.Serialize(new { });
@@ -417,6 +457,8 @@ public class CommandExecutor
         {
             using var ipcClient = new IpcClient();
             await ipcClient.ConnectAsync(3000);
+            var blocked = CheckCrossSessionBlock(ipcClient, cancel ? "task.resume(cancel)" : "task.resume");
+            if (blocked != null) return blocked;
 
             if (cancel)
             {
