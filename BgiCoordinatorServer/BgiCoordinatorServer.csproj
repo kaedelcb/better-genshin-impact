@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="BgiCoordinatorServer.UnitTest" />
+    <InternalsVisibleTo Include="BgiCoordinatorServer.Tests" />
   </ItemGroup>
 
   <ItemGroup>
