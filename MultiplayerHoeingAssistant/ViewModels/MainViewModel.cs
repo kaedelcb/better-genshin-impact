@@ -2554,10 +2554,9 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 try
                 {
-                    using var ipc = new IpcClient();
-                    await ipc.ConnectAsync(2000);
-                    var resp = await ipc.SendCommandAsync(new IpcRequest { OpCode = "config.list" });
-                    if (resp.Success && !string.IsNullOrEmpty(resp.Data))
+                    // [切片4] ext 通道优先，v2 短连接兜底
+                    var resp = await SendBgiIpcPreferredAsync("config.list", null);
+                    if (resp is { Success: true } && !string.IsNullOrEmpty(resp.Data))
                     {
                         var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(resp.Data);
                         if (data.TryGetProperty("configGroups", out var groups) && groups.ValueKind == System.Text.Json.JsonValueKind.Array)
@@ -3878,10 +3877,9 @@ public class MainViewModel : INotifyPropertyChanged
             return (null, null);
         }
 
-        using var ipcClient = new IpcClient();
-        await ipcClient.ConnectAsync(2000);
-        var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "config.list" });
-        if (!response.Success || string.IsNullOrEmpty(response.Data))
+        // [切片4] ext 通道优先，v2 短连接兜底（传输失败返回 null，与原"返回 (null, null)"语义一致）
+        var response = await SendBgiIpcPreferredAsync("config.list", null);
+        if (response is not { Success: true } || string.IsNullOrEmpty(response.Data))
             return (null, null);
 
         var data = JsonSerializer.Deserialize<JsonElement>(response.Data);
@@ -3961,10 +3959,9 @@ public class MainViewModel : INotifyPropertyChanged
 
         try
         {
-            using var ipcClient = new IpcClient();
-            await ipcClient.ConnectAsync(2000);
-            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "config.list" });
-            if (response.Success && !string.IsNullOrEmpty(response.Data))
+            // [切片4] ext 通道优先，v2 短连接兜底
+            var response = await SendBgiIpcPreferredAsync("config.list", null);
+            if (response is { Success: true } && !string.IsNullOrEmpty(response.Data))
             {
                 var data = JsonSerializer.Deserialize<JsonElement>(response.Data);
                 if (data.TryGetProperty("configGroups", out var g) && g.ValueKind == JsonValueKind.Array)
