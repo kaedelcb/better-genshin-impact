@@ -48,6 +48,8 @@ public class MainViewModel : INotifyPropertyChanged
     private BgiExternalClient? _externalClient;
     /// <summary>[切片1] 事件通道探测退避：Legacy（老 BGI）或暂时连不上时，到此时间点之前不再探测。</summary>
     private DateTime _externalNextProbeUtc = DateTime.MinValue;
+    /// <summary>[切片4] 事件驱动维护的 ext.task.status 快照（SDK 基线/跳号/事件触发刷新产物）；null = 尚未取得。</summary>
+    private string? _latestExtStatusJson;
     /// <summary>用户手动停止时设为 true，后台依次执行序列检查到此标志后跳过剩余配置组。</summary>
     private bool _isAllReadySequenceCancelled;
     /// <summary>互斥锁：防止两轮 AllReady 并发执行 OnAllReadyConfirmedInternal（patterns §31）。</summary>
@@ -437,12 +439,14 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// [切片1] 确保 ext.event 事件通道接管"联机锄地上线"检测。
-    /// 返回 true = 事件通道活跃（online.triggered 由推送驱动），本轮跳过 v2 轮询；
-    /// false = 降级走原有轮询路径。老 BGI（ext.hello 不支持）→ Legacy 静默降级、1 分钟后再探测，全程无报错。
+    /// [切片1/4] 确保 ext.* 通道接管 BGI 状态同步：切片1 只订阅 online.triggered；
+    /// 切片4 起订阅全部已知事件——task.status 轮询改为"事件触发 SDK 快照刷新 + 快照缓存"驱动，
+    /// 通道不可用时所有读取点回退 v2 IpcClient 轮询（兜底路径逐字节保留）。
+    /// 返回 true = 事件通道活跃（Ready 且订阅已恢复）；false = 降级走原有 v2 轮询路径。
+    /// 老 BGI（ext.hello 不支持）→ Legacy 静默降级、1 分钟后再探测，全程无报错。
     /// 在状态轮询 Timer 线程调用；事件回调跑在 SDK 读线程，两者都是线程池后台线程（同级）。
     /// </summary>
-    private async Task<bool> TryEstablishExternalOnlineChannelAsync()
+    private async Task<bool> TryEstablishExternalChannelAsync()
     {
         if (_config?.ObserverMode == true)
         {
@@ -463,6 +467,8 @@ public class MainViewModel : INotifyPropertyChanged
                 if (state == BgiExternalLinkState.Ready)
                 {
                     client.EventReceived += OnBgiExternalEvent;
+                    client.StatusSnapshotUpdated += OnBgiStatusSnapshotUpdated;
+                    client.ConnectionStateChanged += OnBgiExternalConnectionStateChanged;
                     _externalClient = client;
                 }
                 else
@@ -474,11 +480,12 @@ public class MainViewModel : INotifyPropertyChanged
                 }
             }
 
-            // 连接内断线重连后订阅会失效（订阅挂在 BGI 侧会话上），补订
+            // 连接内断线重连后订阅会失效（订阅挂在 BGI 侧会话上），补订；
+            // SDK 恢复订阅时自动携带 lastKnownRevision 续传缺失事件并拉基线快照校准
             if (_externalClient is { State: BgiExternalLinkState.Ready } readyClient
                 && !readyClient.IsEventChannelActive)
             {
-                await readyClient.SubscribeAsync([BgiExternalEventNames.OnlineTriggered]);
+                await readyClient.SubscribeAsync([]);
             }
 
             return _externalClient.IsEventChannelActive;
@@ -490,47 +497,191 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>[切片4] ext 连接状态机变更日志（验收②：Degraded→重连→Ready 全流程可观测）。</summary>
+    private void OnBgiExternalConnectionStateChanged(BgiExternalConnectionState state)
+    {
+        try
+        {
+            AddLog($"[ext] BGI 外部接口通道状态 → {state}");
+        }
+        catch
+        {
+            // 日志失败不影响连接管理
+        }
+    }
+
     /// <summary>
-    /// [切片1] ext.event 事件回调（SDK 读线程）。当前只消费 online.triggered，
-    /// 语义与 ReportStatusAsync 的 onlineGeneration 轮询边沿检测完全一致（含 P0-B 基线同步）。
+    /// [切片4] SDK 快照更新通知：缓存最新 ext.task.status 快照（ReportStatusAsync 直接取用，
+    /// 不再周期轮询 task.status），并做 onlineGeneration 边沿检测——与 v2 轮询路径的 P0-B
+    /// 基线同步语义逐条一致（快照校准场景补报断线窗口内错过的上线事件）。
+    /// </summary>
+    private void OnBgiStatusSnapshotUpdated(BgiExternalStatusSnapshot snapshot)
+    {
+        try
+        {
+            _latestExtStatusJson = snapshot.DataJson;
+
+            using var doc = System.Text.Json.JsonDocument.Parse(snapshot.DataJson);
+            if (!doc.RootElement.TryGetProperty("onlineGeneration", out var ogEl)
+                || ogEl.ValueKind != System.Text.Json.JsonValueKind.Number
+                || !ogEl.TryGetInt32(out var gen))
+            {
+                return;
+            }
+
+            ApplyOnlineGenerationEdge(gen);
+        }
+        catch
+        {
+            // 快照解析失败不影响主流程
+        }
+    }
+
+    /// <summary>[P0-B/切片4] onlineGeneration 边沿检测（事件帧与快照共用）：BGI 重启归零先对齐基线，再比较触发。</summary>
+    private void ApplyOnlineGenerationEdge(int gen)
+    {
+        // [P0-B 止血] 同款基线同步：BGI 重启后进程内代序号归零，先对齐再比较，避免边沿检测永久静音
+        if (gen < _lastOnlineGeneration)
+        {
+            _lastOnlineGeneration = gen;
+        }
+
+        if (gen > _lastOnlineGeneration)
+        {
+            _lastOnlineGeneration = gen;
+            // 与轮询路径一致：标记已上线（命令模式）并上报服务端，由服务端状态机协调
+            _isOnlineReady = true;
+            _onlineMode = "command";
+            if (_signalRClient != null)
+            {
+                _ = _signalRClient.ReportOnlineEventAsync(gen, true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// [切片1/4] ext.event 事件回调（SDK 读线程）。online.triggered 直接消费（语义与 v2 轮询
+    /// 边沿检测一致）；切片4 起 task.*/hoeing.* 事件触发 SDK 快照刷新（事件驱动替代 10s
+    /// task.status 轮询），快照由 OnBgiStatusSnapshotUpdated 应用。
     /// </summary>
     private void OnBgiExternalEvent(BgiExternalEvent evt)
     {
         try
         {
-            if (evt.Name != BgiExternalEventNames.OnlineTriggered)
+            if (evt.Name == BgiExternalEventNames.OnlineTriggered)
             {
-                return;
-            }
-
-            if (!evt.Payload.TryGetProperty("generation", out var genEl)
-                || !genEl.TryGetInt32(out var gen))
-            {
-                return;
-            }
-
-            // [P0-B 止血] 同款基线同步：BGI 重启后进程内代序号归零，先对齐再比较，避免边沿检测永久静音
-            if (gen < _lastOnlineGeneration)
-            {
-                _lastOnlineGeneration = gen;
-            }
-
-            if (gen > _lastOnlineGeneration)
-            {
-                _lastOnlineGeneration = gen;
-                // 与轮询路径一致：标记已上线（命令模式）并上报服务端，由服务端状态机协调
-                _isOnlineReady = true;
-                _onlineMode = "command";
-                if (_signalRClient != null)
+                if (!evt.Payload.TryGetProperty("generation", out var genEl)
+                    || !genEl.TryGetInt32(out var gen))
                 {
-                    _ = _signalRClient.ReportOnlineEventAsync(gen, true);
+                    return;
                 }
+
+                ApplyOnlineGenerationEdge(gen);
+                return;
+            }
+
+            // 任务/锄地状态事件：触发一次快照刷新（SDK 内部 300ms 节流 + 在飞去重）
+            if (evt.Name is BgiExternalEventNames.TaskStarted
+                or BgiExternalEventNames.TaskStopped
+                or BgiExternalEventNames.TaskProgress
+                or BgiExternalEventNames.HoeingProgress
+                or BgiExternalEventNames.TaskSuspended
+                or BgiExternalEventNames.TaskResumed)
+            {
+                _ = _externalClient?.RefreshStatusSnapshotAsync($"event:{evt.Name}");
             }
         }
         catch
         {
             // 事件处理失败不影响读循环与主流程
         }
+    }
+
+    /// <summary>[切片4] ext 通道可信状态同步：SDK 的 ext.hello 已校验同会话（跨会话在 SDK 侧被拒），Ready 即可信。</summary>
+    private void UpdateExtSessionTrust()
+    {
+        if (!IsIpcSessionUntrusted) return;
+        IsIpcSessionUntrusted = false;
+        AddLog("[IPC] 管道对端已确认为本会话的 BGI 实例（ext.hello 校验），任务状态恢复采信");
+    }
+
+    /// <summary>config.list 解析结果（v2 轮询与 ext 长连接两条路径共用，字段语义逐条对齐）。</summary>
+    private sealed record ConfigListPollResult(
+        List<string> ConfigGroups,
+        List<string> OneClickConfigs,
+        Dictionary<string, List<string>> ConfigGroupTasks,
+        Dictionary<string, List<string>> OneClickTasks,
+        Dictionary<string, List<object>> ConfigGroupTasksWithStatus,
+        Dictionary<string, List<object>> OneClickTasksWithStatus,
+        List<object> Hotkeys);
+
+    private static ConfigListPollResult ParseConfigListData(JsonElement data)
+    {
+        var configGroups = new List<string>();
+        var oneClickConfigs = new List<string>();
+        var configGroupTasks = new Dictionary<string, List<string>>();
+        var oneClickTasks = new Dictionary<string, List<string>>();
+        var configGroupTasksWithStatus = new Dictionary<string, List<object>>();
+        var oneClickTasksWithStatus = new Dictionary<string, List<object>>();
+        var hotkeys = new List<object>();
+
+        if (data.TryGetProperty("configGroups", out var groups))
+            configGroups = JsonSerializer.Deserialize<List<string>>(groups.GetRawText()) ?? [];
+        if (data.TryGetProperty("oneClickConfigs", out var oneClick))
+            oneClickConfigs = JsonSerializer.Deserialize<List<string>>(oneClick.GetRawText()) ?? [];
+        if (data.TryGetProperty("configGroupTasks", out var gTasks) && gTasks.ValueKind == JsonValueKind.Object)
+            configGroupTasks = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(gTasks.GetRawText()) ?? [];
+        if (data.TryGetProperty("oneClickTasks", out var oTasks) && oTasks.ValueKind == JsonValueKind.Object)
+            oneClickTasks = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(oTasks.GetRawText()) ?? [];
+        if (data.TryGetProperty("configGroupTasksWithStatus", out var gTasksWs) && gTasksWs.ValueKind == JsonValueKind.Object)
+            configGroupTasksWithStatus = JsonSerializer.Deserialize<Dictionary<string, List<object>>>(gTasksWs.GetRawText()) ?? [];
+        if (data.TryGetProperty("oneClickTasksWithStatus", out var oTasksWs) && oTasksWs.ValueKind == JsonValueKind.Object)
+            oneClickTasksWithStatus = JsonSerializer.Deserialize<Dictionary<string, List<object>>>(oTasksWs.GetRawText()) ?? [];
+        if (data.TryGetProperty("hotkeys", out var hks) && hks.ValueKind == JsonValueKind.Array)
+            hotkeys = JsonSerializer.Deserialize<List<object>>(hks.GetRawText()) ?? [];
+
+        return new ConfigListPollResult(
+            configGroups, oneClickConfigs, configGroupTasks, oneClickTasks,
+            configGroupTasksWithStatus, oneClickTasksWithStatus, hotkeys);
+    }
+
+    /// <summary>task.status 解析结果（v2 轮询与 ext 事件驱动快照共用，字段语义逐条对齐）。</summary>
+    private sealed record TaskStatusPollResult(
+        bool BgiRunning,
+        string? CurrentTaskName,
+        string? CurrentTaskGroupName,
+        string? CurrentRouteDisplay,
+        bool AutoHoeingRunning,
+        string? AutoHoeingProgress);
+
+    private static TaskStatusPollResult ParseTaskStatusData(JsonElement sdata)
+    {
+        var bgiRunning = false;
+        string? currentTaskName = null;
+        string? currentTaskGroupName = null;
+        string? currentRouteDisplay = null;
+        var autoHoeingRunning = false;
+        string? autoHoeingProgress = null;
+
+        if (sdata.TryGetProperty("running", out var running))
+            bgiRunning = running.GetBoolean();
+        // 任务停止后（bgiRunning=false），taskName 可能仍有残留值，必须忽略避免状态停留
+        if (bgiRunning && sdata.TryGetProperty("taskName", out var tn) && tn.ValueKind == JsonValueKind.String)
+            currentTaskName = tn.GetString();
+        if (sdata.TryGetProperty("autoHoeingRunning", out var hoeing))
+            autoHoeingRunning = hoeing.GetBoolean();
+        if (autoHoeingRunning && sdata.TryGetProperty("autoHoeingProgress", out var progress)
+            && progress.ValueKind == JsonValueKind.String)
+            autoHoeingProgress = progress.GetString();
+        // 读取配置组名与线路展示文本（新增字段，旧 BGI 无此字段时保持 null）
+        if (bgiRunning && sdata.TryGetProperty("groupName", out var gn) && gn.ValueKind == JsonValueKind.String)
+            currentTaskGroupName = gn.GetString();
+        if (bgiRunning && sdata.TryGetProperty("currentRouteDisplay", out var rd) && rd.ValueKind == JsonValueKind.String)
+            currentRouteDisplay = rd.GetString();
+
+        return new TaskStatusPollResult(
+            bgiRunning, currentTaskName, currentTaskGroupName,
+            currentRouteDisplay, autoHoeingRunning, autoHoeingProgress);
     }
 
     private async Task ReportStatusAsync()
@@ -565,6 +716,91 @@ public class MainViewModel : INotifyPropertyChanged
             var cache = _cacheManager?.Load();
             bool hasCache = cache != null && (cache.ConfigGroups.Count > 0 || cache.OneClickConfigs.Count > 0);
 
+            // [切片4] ext 通道活跃：task.status 不再周期轮询——由事件驱动 SDK 快照刷新维护
+            // （订阅基线 / 事件触发 / revision 跳号自动校准），config.list 走 ext 长连接（不再每轮新建管道）；
+            // 通道不可用（老 BGI/未连接/刚断线）→ 原 v2 轮询路径（兜底，逐字节保留）
+            if (await TryEstablishExternalChannelAsync())
+            {
+                // SDK 的 ext.hello 已完成同会话校验（跨会话在 SDK 侧即被拒绝），通道 Ready 即可信
+                ipcSessionTrusted = true;
+                UpdateExtSessionTrust();
+
+                IpcResponse? extConfigResponse = null;
+                try
+                {
+                    if (BgiExternalClient.TryMapToExtOperation("config.list", out var extListOp))
+                    {
+                        var extResp = await _externalClient!.SendCommandAsync(extListOp);
+                        extConfigResponse = new IpcResponse
+                        {
+                            Success = extResp.Success,
+                            Data = extResp.Data,
+                            ErrorMessage = extResp.ErrorMessage,
+                            ErrorCode = extResp.ErrorCode,
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AddLog($"[ext] config.list 通道异常: {ex.Message}（本轮回退缓存）");
+                }
+
+                if (extConfigResponse is { Success: true, Data: { } extCfgData })
+                {
+                    var parsed = ParseConfigListData(JsonSerializer.Deserialize<JsonElement>(extCfgData));
+                    configGroups = parsed.ConfigGroups;
+                    oneClickConfigs = parsed.OneClickConfigs;
+                    configGroupTasks = parsed.ConfigGroupTasks;
+                    oneClickTasks = parsed.OneClickTasks;
+                    configGroupTasksWithStatus = parsed.ConfigGroupTasksWithStatus;
+                    oneClickTasksWithStatus = parsed.OneClickTasksWithStatus;
+                    hotkeys = parsed.Hotkeys;
+
+                    // 成功 → 更新缓存（无论数据是否为空，都是 BGI 当前真实状态）
+                    _cacheManager?.Save(new MemberConfigCache
+                    {
+                        ConfigGroups = configGroups,
+                        OneClickConfigs = oneClickConfigs,
+                        ConfigGroupTasksWithStatus = configGroupTasksWithStatus,
+                        OneClickTasksWithStatus = oneClickTasksWithStatus,
+                        Hotkeys = hotkeys,
+                        LastUpdated = DateTime.UtcNow
+                    });
+                }
+                else
+                {
+                    AddLog($"ext config.list 失败: {extConfigResponse?.ErrorMessage ?? "无响应"}");
+                    if (hasCache)
+                    {
+                        configGroups = cache!.ConfigGroups;
+                        oneClickConfigs = cache!.OneClickConfigs;
+                        configGroupTasksWithStatus = cache!.ConfigGroupTasksWithStatus;
+                        oneClickTasksWithStatus = cache!.OneClickTasksWithStatus;
+                        hotkeys = cache!.Hotkeys;
+                    }
+                }
+
+                // 任务状态：事件驱动快照缓存（字段解析与 v2 task.status 轮询同款）
+                if (_latestExtStatusJson is { } extStatusJson)
+                {
+                    try
+                    {
+                        var parsedStatus = ParseTaskStatusData(JsonSerializer.Deserialize<JsonElement>(extStatusJson));
+                        bgiRunning = parsedStatus.BgiRunning;
+                        currentTaskName = parsedStatus.CurrentTaskName;
+                        currentTaskGroupName = parsedStatus.CurrentTaskGroupName;
+                        currentRouteDisplay = parsedStatus.CurrentRouteDisplay;
+                        autoHoeingRunning = parsedStatus.AutoHoeingRunning;
+                        autoHoeingProgress = parsedStatus.AutoHoeingProgress;
+                    }
+                    catch
+                    {
+                        // 快照解析失败：本轮任务状态保持默认值，下一轮事件刷新会自愈
+                    }
+                }
+            }
+            else
+            {
             try
             {
                 using var ipcClient = new IpcClient();
@@ -592,21 +828,14 @@ public class MainViewModel : INotifyPropertyChanged
                 var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "config.list" });
                 if (response.Success && !string.IsNullOrEmpty(response.Data))
                 {
-                    var data = JsonSerializer.Deserialize<JsonElement>(response.Data);
-                    if (data.TryGetProperty("configGroups", out var groups))
-                        configGroups = JsonSerializer.Deserialize<List<string>>(groups.GetRawText()) ?? [];
-                    if (data.TryGetProperty("oneClickConfigs", out var oneClick))
-                        oneClickConfigs = JsonSerializer.Deserialize<List<string>>(oneClick.GetRawText()) ?? [];
-                    if (data.TryGetProperty("configGroupTasks", out var gTasks) && gTasks.ValueKind == JsonValueKind.Object)
-                        configGroupTasks = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(gTasks.GetRawText()) ?? [];
-                    if (data.TryGetProperty("oneClickTasks", out var oTasks) && oTasks.ValueKind == JsonValueKind.Object)
-                        oneClickTasks = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(oTasks.GetRawText()) ?? [];
-                    if (data.TryGetProperty("configGroupTasksWithStatus", out var gTasksWs) && gTasksWs.ValueKind == JsonValueKind.Object)
-                        configGroupTasksWithStatus = JsonSerializer.Deserialize<Dictionary<string, List<object>>>(gTasksWs.GetRawText()) ?? [];
-                    if (data.TryGetProperty("oneClickTasksWithStatus", out var oTasksWs) && oTasksWs.ValueKind == JsonValueKind.Object)
-                        oneClickTasksWithStatus = JsonSerializer.Deserialize<Dictionary<string, List<object>>>(oTasksWs.GetRawText()) ?? [];
-                    if (data.TryGetProperty("hotkeys", out var hks) && hks.ValueKind == JsonValueKind.Array)
-                        hotkeys = JsonSerializer.Deserialize<List<object>>(hks.GetRawText()) ?? [];
+                    var parsed = ParseConfigListData(JsonSerializer.Deserialize<JsonElement>(response.Data));
+                    configGroups = parsed.ConfigGroups;
+                    oneClickConfigs = parsed.OneClickConfigs;
+                    configGroupTasks = parsed.ConfigGroupTasks;
+                    oneClickTasks = parsed.OneClickTasks;
+                    configGroupTasksWithStatus = parsed.ConfigGroupTasksWithStatus;
+                    oneClickTasksWithStatus = parsed.OneClickTasksWithStatus;
+                    hotkeys = parsed.Hotkeys;
 
                     // IPC 成功 → 更新缓存（无论数据是否为空，都是 BGI 当前真实状态）
                     _cacheManager?.Save(new MemberConfigCache
@@ -637,22 +866,13 @@ public class MainViewModel : INotifyPropertyChanged
                 var statusResp = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.status" });
                 if (statusResp.Success && !string.IsNullOrEmpty(statusResp.Data))
                 {
-                    var sdata = JsonSerializer.Deserialize<JsonElement>(statusResp.Data);
-                    if (sdata.TryGetProperty("running", out var running))
-                        bgiRunning = running.GetBoolean();
-                    // 任务停止后（bgiRunning=false），taskName 可能仍有残留值，必须忽略避免状态停留
-                    if (bgiRunning && sdata.TryGetProperty("taskName", out var tn) && tn.ValueKind == JsonValueKind.String)
-                        currentTaskName = tn.GetString();
-                    if (sdata.TryGetProperty("autoHoeingRunning", out var hoeing))
-                        autoHoeingRunning = hoeing.GetBoolean();
-                    if (autoHoeingRunning && sdata.TryGetProperty("autoHoeingProgress", out var progress)
-                        && progress.ValueKind == JsonValueKind.String)
-                        autoHoeingProgress = progress.GetString();
-                    // 读取配置组名与线路展示文本（新增字段，旧 BGI 无此字段时保持 null）
-                    if (bgiRunning && sdata.TryGetProperty("groupName", out var gn) && gn.ValueKind == JsonValueKind.String)
-                        currentTaskGroupName = gn.GetString();
-                    if (bgiRunning && sdata.TryGetProperty("currentRouteDisplay", out var rd) && rd.ValueKind == JsonValueKind.String)
-                        currentRouteDisplay = rd.GetString();
+                    var parsedStatus = ParseTaskStatusData(JsonSerializer.Deserialize<JsonElement>(statusResp.Data));
+                    bgiRunning = parsedStatus.BgiRunning;
+                    currentTaskName = parsedStatus.CurrentTaskName;
+                    currentTaskGroupName = parsedStatus.CurrentTaskGroupName;
+                    currentRouteDisplay = parsedStatus.CurrentRouteDisplay;
+                    autoHoeingRunning = parsedStatus.AutoHoeingRunning;
+                    autoHoeingProgress = parsedStatus.AutoHoeingProgress;
                 }
                 } // end else（IPC 会话可信）
             }
@@ -673,6 +893,7 @@ public class MainViewModel : INotifyPropertyChanged
                     hotkeys = cache!.Hotkeys;
                 }
             }
+            } // end else（v2 兜底轮询路径）
         }
 
         // 进度文本变化时写日志（仅自己看）
@@ -713,8 +934,8 @@ public class MainViewModel : INotifyPropertyChanged
         // 如果 onlineGeneration 不存在，降级到 recentTaskName 电平检测（旧 BGI 兼容）。
         // 触发后上报服务端（ReportOnlineEvent），由服务端状态机做就绪判断，助手端不做本地状态决策。
         // [切片1] ext 事件通道可用时 online.triggered 由事件驱动（A5：秒级到达 vs 10s 轮询），跳过本段 v2 轮询；
-        // 通道不可用（老 BGI/未连接）时 TryEstablishExternalOnlineChannelAsync 返回 false，走原有轮询路径，行为逐字节不变
-        if (!await TryEstablishExternalOnlineChannelAsync())
+        // 通道不可用（老 BGI/未连接）时 TryEstablishExternalChannelAsync 返回 false，走原有轮询路径，行为逐字节不变
+        if (!await TryEstablishExternalChannelAsync())
         try
         {
             using var recentTaskClient = new IpcClient();
