@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
 using BetterGenshinImpact.GameTask.AutoHoeing;
 using BetterGenshinImpact.GameTask.AutoOnline;
+using BetterGenshinImpact.Service.ExternalInterface;
 
 namespace BetterGenshinImpact.Service.Instance.MessageHandlers;
 
@@ -82,6 +83,14 @@ internal sealed class InstanceRequestHandler
                     $"跨会话请求被拒绝（clientSession={connection.ClientSessionId?.ToString() ?? "unknown"}，serverSession={_context.WindowsSessionId}）");
             }
 
+            // [切片1·挂载点①] ext.* 统一分发到模块一 ExternalInterfaceSession（v2 的 22 个操作走原 switch，逐字节不变）
+            if (request.Operation.StartsWith(ExternalInterfaceOperations.Prefix, StringComparison.Ordinal))
+            {
+                return await ExternalInterfaceSession.GetOrCreate(connection)
+                    .RouteAsync(this, request, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             return request.Operation switch
             {
                 InstanceOperations.Ping => InstanceIpcEnvelope.Response(
@@ -148,7 +157,9 @@ internal sealed class InstanceRequestHandler
     /// 跨会话守卫拦截的操作集合：控制类指令（任务/热键/关游戏/配置下发）+ 状态查询。
     /// 实例间内部通信（connection.open / activation.dispatch / webview.* / relativeMouse.*）不在此列。
     /// </summary>
-    private static bool IsSessionGuardedOperation(string operation) => operation is
+    private static bool IsSessionGuardedOperation(string operation) =>
+        operation.StartsWith(ExternalInterfaceOperations.Prefix, StringComparison.Ordinal)
+        || operation is
         InstanceOperations.TaskStart
         or InstanceOperations.TaskStop
         or InstanceOperations.TaskSuspend
@@ -1237,6 +1248,9 @@ internal sealed class InstanceRequestHandler
                 await Task.Delay(200);
             }
 
+            // [切片1·挂载点③] 通知 ext.event 订阅者（无订阅者时 Publish 内部为空转）
+            ExternalInterfaceEventHub.Instance.PublishTaskSuspended(taskType, groupName, taskIndex);
+
             return InstanceIpcEnvelope.Response(request, new
             {
                 status = "suspended",
@@ -1394,6 +1408,9 @@ internal sealed class InstanceRequestHandler
             // 清除上下文（一次性消费）
             allConfig.SuspendedTaskContext = null;
             _logger.LogInformation("[IPC task.resume] 已清除中断上下文");
+
+            // [切片1·挂载点③] 通知 ext.event 订阅者（无订阅者时 Publish 内部为空转）
+            ExternalInterfaceEventHub.Instance.PublishTaskResumed(context.TaskType, context.GroupName);
 
             return InstanceIpcEnvelope.Response(request, new { status = "resumed" });
         }

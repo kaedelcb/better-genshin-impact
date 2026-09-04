@@ -123,6 +123,8 @@ public partial class App : Application
                 services.AddSingleton(InstanceBootstrap.Current);
                 services.AddSingleton<InstanceService>();
                 services.AddHostedService(sp => sp.GetRequiredService<InstanceService>());
+                // [切片1·挂载点②] 模块一事件中心：工厂返回进程级单例，DI 注入与模块内静态访问同一对象
+                services.AddSingleton(_ => Service.ExternalInterface.ExternalInterfaceEventHub.Instance);
                 // App Host
                 services.AddHostedService<ApplicationHostService>();
                 // Page resolver service
