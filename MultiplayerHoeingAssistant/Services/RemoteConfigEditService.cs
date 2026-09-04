@@ -34,17 +34,21 @@ public class RemoteConfigEditService
     private readonly Func<string> _getSelfName;
     /// <summary>进度/结果上报（MainViewModel.AddLog，线程安全）。</summary>
     private readonly Action<string> _report;
+    /// <summary>[切片4] 取当前 ext 通道客户端（MainViewModel._externalClient）；Ready 时本机 IPC 走 ext.* 长连接。</summary>
+    private readonly Func<BgiExternalClient?>? _getExternalClient;
 
     public RemoteConfigEditService(
         Func<RemoteCommand, Task<bool>> sendAsync,
         Func<string> getSelfUid,
         Func<string> getSelfName,
-        Action<string> report)
+        Action<string> report,
+        Func<BgiExternalClient?>? getExternalClient = null)
     {
         _sendAsync = sendAsync;
         _getSelfUid = getSelfUid;
         _getSelfName = getSelfName;
         _report = report;
+        _getExternalClient = getExternalClient;
     }
 
     /// <summary>
@@ -263,9 +267,35 @@ public class RemoteConfigEditService
         }
     }
 
-    /// <summary>独立短连接发一次 IPC（参考 CommandExecutor 里 IpcClient 的 using 用法）。</summary>
-    private static async Task<(IpcResponse? response, string? error)> SendIpcAsync(string opCode, string? payload)
+    /// <summary>
+    /// 发一次本机 IPC（[切片4] ext 通道优先：Ready 且有 ext 映射时走 BgiExternalClient 长连接，
+    /// 否则回退 v2 IpcClient 独立短连接——参考 CommandExecutor 里 IpcClient 的 using 用法）。
+    /// </summary>
+    private async Task<(IpcResponse? response, string? error)> SendIpcAsync(string opCode, string? payload)
     {
+        var ext = _getExternalClient?.Invoke();
+        if (ext is { State: BgiExternalLinkState.Ready }
+            && BgiExternalClient.TryMapToExtOperation(opCode, out var extOp))
+        {
+            try
+            {
+                var extResp = await ext.SendCommandAsync(
+                    extOp,
+                    payload is null ? null : JsonSerializer.Deserialize<JsonElement>(payload));
+                return (new IpcResponse
+                {
+                    Success = extResp.Success,
+                    Data = extResp.Data,
+                    ErrorMessage = extResp.ErrorMessage,
+                    ErrorCode = extResp.ErrorCode,
+                }, null);
+            }
+            catch
+            {
+                // ext 通道瞬态失败 → 落回 v2 短连接
+            }
+        }
+
         try
         {
             using var ipc = new IpcClient();

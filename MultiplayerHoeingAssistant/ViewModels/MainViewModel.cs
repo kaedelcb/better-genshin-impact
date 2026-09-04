@@ -1290,7 +1290,9 @@ public class MainViewModel : INotifyPropertyChanged
             },
             getSelfUid: () => _config?.PlayerUid ?? "",
             getSelfName: () => _config?.PlayerName ?? "",
-            report: AddLog);
+            report: AddLog,
+            // [切片4] 本机 IPC（open_remote_editor/remote_editor_result）ext 通道优先，v2 兜底
+            getExternalClient: () => _externalClient);
         _ = _remoteConfigEditService.RunAsync(member.PlayerUid, member.PlayerName, groupName);
     }
 
@@ -1307,14 +1309,9 @@ public class MainViewModel : INotifyPropertyChanged
 
         try
         {
-            using var ipc = new IpcClient();
-            await ipc.ConnectAsync(3000);
-            var resp = await ipc.SendCommandAsync(new IpcRequest
-            {
-                OpCode = "config.pull_group",
-                Payload = JsonSerializer.Serialize(new { groupName })
-            });
-            if (resp.Success && !string.IsNullOrEmpty(resp.Data))
+            // [切片4] ext.config.pullGroup 优先（长连接），v2 config.pull_group 短连接兜底
+            var resp = await SendBgiIpcPreferredAsync("config.pull_group", JsonSerializer.Serialize(new { groupName }), 3000);
+            if (resp is { Success: true } && !string.IsNullOrEmpty(resp.Data))
             {
                 using var doc = JsonDocument.Parse(resp.Data);
                 if (doc.RootElement.TryGetProperty("ok", out var okEl) && okEl.ValueKind == JsonValueKind.True
@@ -1334,7 +1331,7 @@ public class MainViewModel : INotifyPropertyChanged
             }
             else
             {
-                error = resp.ErrorMessage ?? "BGI 未返回数据";
+                error = resp?.ErrorMessage ?? "BGI 未返回数据";
             }
         }
         catch (Exception ex)
@@ -1386,14 +1383,9 @@ public class MainViewModel : INotifyPropertyChanged
         string message;
         try
         {
-            using var ipc = new IpcClient();
-            await ipc.ConnectAsync(3000);
-            var resp = await ipc.SendCommandAsync(new IpcRequest
-            {
-                OpCode = "config.apply_group",
-                Payload = JsonSerializer.Serialize(payloadDict)
-            });
-            if (resp.Success && !string.IsNullOrEmpty(resp.Data))
+            // [切片4] ext.config.applyGroup 优先（长连接），v2 config.apply_group 短连接兜底
+            var resp = await SendBgiIpcPreferredAsync("config.apply_group", JsonSerializer.Serialize(payloadDict), 3000);
+            if (resp is { Success: true } && !string.IsNullOrEmpty(resp.Data))
             {
                 using var doc = JsonDocument.Parse(resp.Data);
                 ok = doc.RootElement.TryGetProperty("ok", out var okEl) && okEl.ValueKind == JsonValueKind.True
@@ -1403,7 +1395,7 @@ public class MainViewModel : INotifyPropertyChanged
             }
             else
             {
-                message = resp.ErrorMessage ?? "BGI 未返回结果";
+                message = resp?.ErrorMessage ?? "BGI 未返回结果";
             }
         }
         catch (Exception ex)
