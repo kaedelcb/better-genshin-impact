@@ -108,6 +108,59 @@ public class MemberScreenshotFrame
     public DateTime CapturedAt { get; set; }
 }
 
+/// <summary>成员实时日志批（房间日志汇聚，SignalR MemberLogBatch 事件的负载）。
+/// 与 MemberScreenshotFrame 同款模式：服务端纯转发不存储，发送者也会收到（客户端按 uid 自滤）。</summary>
+public class MemberLogBatch
+{
+    public string Uid { get; set; } = "";
+    public string SenderName { get; set; } = "";
+    public List<string> Lines { get; set; } = [];
+    /// <summary>发送端开启了省流（仅 INF+），观看端状态栏据此提示。旧服务端负载无此字段时默认 false。</summary>
+    public bool InfoOnly { get; set; }
+    /// <summary>服务端转发时刻（UTC），行内时间解析失败时的兜底。</summary>
+    public DateTime ServerTime { get; set; }
+}
+
+/// <summary>远程成员日志文件列表项（远程成员完整日志下载：目标端上报 → 服务端透传广播）。
+/// 与服务端 BgiCoordinatorServer.Models.MemberLogFileDescriptor 对应。</summary>
+public class MemberLogFileDescriptor
+{
+    public string Name { get; set; } = "";
+    public long Size { get; set; }
+    public DateTime LastWrite { get; set; }
+
+    public string SizeText => Size switch
+    {
+        < 1024 => $"{Size} B",
+        < 1024 * 1024 => $"{Size / 1024.0:F1} KB",
+        _ => $"{Size / 1024.0 / 1024.0:F2} MB"
+    };
+
+    public string DateText => LastWrite.ToString("yyyy-MM-dd HH:mm");
+    public override string ToString() => Name;
+}
+
+/// <summary>远程成员日志文件列表应答（SignalR MemberLogFileList 事件负载，观众端按 RequestId 认领）。</summary>
+public class MemberLogFileList
+{
+    public string Uid { get; set; } = "";
+    public string RequestId { get; set; } = "";
+    public List<MemberLogFileDescriptor> Files { get; set; } = [];
+}
+
+/// <summary>远程成员日志文件分块（SignalR MemberLogFileChunk 事件负载，gzip+base64 上行）。
+/// TotalChunks=0 且 Done=true 是"对方正忙/拒绝/文件超限"标记块。</summary>
+public class MemberLogFileChunk
+{
+    public string Uid { get; set; } = "";
+    public string RequestId { get; set; } = "";
+    public int Seq { get; set; }
+    public int TotalChunks { get; set; }
+    public string ChunkBase64 { get; set; } = "";
+    public string FileName { get; set; } = "";
+    public bool Done { get; set; }
+}
+
 /// <summary>日志文件列表项（日志浏览 Tab）。Group 用于界面分组（BGI 日志 / 助手日志）。</summary>
 public class LogFileItem
 {
@@ -137,6 +190,15 @@ public class LogLineItem
 {
     public long Offset { get; set; }
     public string Text { get; set; } = "";
+}
+
+/// <summary>远程成员下拉项（日志浏览 Tab·远程日志下载的成员选择）。</summary>
+public class RemoteMemberOption
+{
+    public string Uid { get; }
+    public string Name { get; }
+    public RemoteMemberOption(string uid, string name) { Uid = uid; Name = name; }
+    public override string ToString() => Name;
 }
 
 /// <summary>搜索结果项（按行内关键字/正则命中）。</summary>

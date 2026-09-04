@@ -302,6 +302,12 @@
                 <!-- 工具栏 -->
                 <Border Grid.Row="0" Style="{DynamicResource QuestCard}" Padding="10,8" Margin="0,0,0,8">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="来源" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <ComboBox Width="130" ItemsSource="{Binding LogSources}" SelectedItem="{Binding SelectedSource}"
+                                  DisplayMemberPath="Label"
+                                  Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
+                                  VerticalAlignment="Center" Margin="0,0,12,0"
+                                  ToolTip="日志来源：本机或房间成员。远程成员日志经协调服务器转发，约有 0.5–1 秒延迟；成员掉线后缓存流仍可回看"/>
                         <TextBlock Text="级别" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="0,0,6,0"/>
                         <CheckBox Content="DBG" IsChecked="{Binding ShowDbg}" Style="{DynamicResource GuildCheckBox}" Margin="0,0,6,0" VerticalAlignment="Center"/>
                         <CheckBox Content="INF" IsChecked="{Binding ShowInf}" Style="{DynamicResource GuildCheckBox}" Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -310,16 +316,26 @@
                         <TextBlock Text="实例" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="0,0,6,0"/>
                         <ComboBox Width="170" ItemsSource="{Binding Instances}" SelectedItem="{Binding SelectedInstance}"
                                   Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
-                                  VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                  VerticalAlignment="Center" Margin="0,0,12,0"
+                                  ToolTip="实例筛选仅对本机来源生效"/>
                         <CheckBox Content="自动滚动" IsChecked="{Binding AutoFollow, Mode=TwoWay}"
                                   Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,12,0"
                                   ToolTip="跟尾显示最新日志；上翻列表时自动暂停，滚回底部恢复"/>
                         <Button Content="{Binding PauseButtonText}" Style="{DynamicResource BtnGhost}" Padding="10,4"
                                 Command="{Binding TogglePauseCommand}" Margin="0,0,6,0"/>
                         <Button Content="清空视图" Style="{DynamicResource BtnGhost}" Padding="10,4"
-                                Command="{Binding ClearViewCommand}" Margin="0,0,6,0" ToolTip="只清界面显示，不影响日志文件"/>
+                                Command="{Binding ClearViewCommand}" Margin="0,0,6,0" ToolTip="只清当前来源的界面缓冲，不影响日志文件和其它来源"/>
                         <Button Content="重探测日志" Style="{DynamicResource BtnGhost}" Padding="10,4"
                                 Command="{Binding RefreshTargetCommand}" ToolTip="重新定位 BGI 日志目录与文件（刚改完 BGI 路径时用）"/>
+                        <CheckBox Content="共享我的日志" IsChecked="{Binding ShareRealtimeLog, Mode=TwoWay}"
+                                  Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                  ToolTip="允许房间成员订阅你的实时日志（观众驱动：没人看时零流量；成员选中你才开始上报）"/>
+                        <CheckBox Content="省流(仅INF+)" IsChecked="{Binding ShareLogInfoOnly, Mode=TwoWay}"
+                                  Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,0,0"
+                                  ToolTip="他人订阅你的日志时不转发 Debug 级，只发 INF/WRN/ERR"/>
+                        <CheckBox Content="共享日志文件" IsChecked="{Binding ShareLogFiles, Mode=TwoWay}"
+                                  Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,0,0"
+                                  ToolTip="允许房间成员请求你的日志文件列表并下载完整日志（gzip 分块传输）。注意：完整日志可能包含本机路径等环境信息"/>
                     </StackPanel>
                 </Border>
 
@@ -363,8 +379,12 @@
                 </Border>
 
                 <!-- 状态栏 -->
-                <TextBlock Grid.Row="2" Text="{Binding StatusText}" FontSize="11"
-                           Foreground="{DynamicResource Dim}" Margin="4,6,0,0"/>
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="4,6,0,0">
+                    <TextBlock Text="{Binding StatusText}" FontSize="11"
+                               Foreground="{DynamicResource Dim}"/>
+                    <TextBlock Text="{Binding LogWatcherText}" FontSize="11"
+                               Foreground="{DynamicResource Water}" Margin="12,0,0,0"/>
+                </StackPanel>
             </Grid>
 
             <!-- ======== Tab2 日志浏览 ======== -->
@@ -384,12 +404,13 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- 左：文件列表 -->
+                <!-- 左：文件列表 + 远程成员日志下载 -->
                 <Border Grid.Column="0" Style="{DynamicResource QuestCard}" Margin="0,0,8,0" Padding="10,8">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <Grid Grid.Row="0" Margin="0,0,0,8">
                             <TextBlock Text="日志文件" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource White}"
@@ -432,6 +453,62 @@
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
+
+                        <!-- 远程成员日志下载：选成员 → 获取列表 → 选中文件下载（gzip 分块，30s 无新块超时） -->
+                        <StackPanel Grid.Row="2" Margin="0,8,0,0">
+                            <Border BorderBrush="{DynamicResource Dim}" BorderThickness="0,1,0,0" Margin="0,0,0,6"/>
+                            <TextBlock Text="远程成员日志" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Gold}" Margin="0,0,0,4"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <ComboBox Grid.Column="0" ItemsSource="{Binding Browser.RemoteMembers}"
+                                          SelectedItem="{Binding Browser.SelectedRemoteMember}"
+                                          Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
+                                          ToolTip="选择在线成员（自己除外）"/>
+                                <Button Grid.Column="1" Content="获取列表" Style="{DynamicResource BtnGhost}"
+                                        Padding="8,3" FontSize="11" Margin="6,0,0,0"
+                                        Command="{Binding Browser.FetchRemoteFilesCommand}"
+                                        ToolTip="向选中成员请求日志文件列表（需对方开启「共享日志文件」）"/>
+                            </Grid>
+                            <ListBox ItemsSource="{Binding Browser.RemoteFiles}"
+                                     SelectedItem="{Binding Browser.SelectedRemoteFile}"
+                                     Background="Transparent" BorderThickness="0" MaxHeight="140" Margin="0,4,0,0">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,2">
+                                            <TextBlock Text="{Binding Name}" FontSize="11" Foreground="{DynamicResource White}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock FontSize="10" Foreground="{DynamicResource Dim}">
+                                                <TextBlock.Text>
+                                                    <MultiBinding StringFormat="{}{0} · {1}">
+                                                        <Binding Path="DateText"/>
+                                                        <Binding Path="SizeText"/>
+                                                    </MultiBinding>
+                                                </TextBlock.Text>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <Grid Margin="0,4,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Column="0" Content="下载" Style="{DynamicResource BtnGhost}"
+                                        Padding="10,3" FontSize="11"
+                                        Command="{Binding Browser.DownloadRemoteFileCommand}"
+                                        ToolTip="下载选中的远程日志到本机 log\remote_downloads\，完成后自动在上方列表打开"/>
+                                <ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Height="4" Margin="8,0,0,0"
+                                             VerticalAlignment="Center"
+                                             Value="{Binding Browser.DownloadProgress}"/>
+                            </Grid>
+                            <TextBlock Text="{Binding Browser.RemoteStatus}" FontSize="10" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource Dim}" Margin="0,3,0,0"/>
+                        </StackPanel>
                     </Grid>
                 </Border>
 

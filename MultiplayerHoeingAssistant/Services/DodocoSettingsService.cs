@@ -19,6 +19,14 @@ public class DodocoSettings
     [JsonPropertyName("muteAll")] public bool MuteAll { get; set; }
     /// <summary>共享我的桌面截图：开启后每 10 秒把一帧 480px JPEG 上报到房间，供成员远程查看。默认关。</summary>
     [JsonPropertyName("shareDesktopScreenshot")] public bool ShareDesktopScreenshot { get; set; }
+    /// <summary>共享我的实时日志：开启后允许房间成员订阅本机 BGI 实时日志（观众驱动，500ms 合批）。
+    /// 默认开——联机小队就是用来互相盯的；在意的人可手动关。</summary>
+    [JsonPropertyName("shareRealtimeLog")] public bool ShareRealtimeLog { get; set; } = true;
+    /// <summary>省流模式：被订阅时只转发 INF/WRN/ERR，丢弃 DBG。默认 false（全级别，含 DBG）。</summary>
+    [JsonPropertyName("shareLogInfoOnly")] public bool ShareLogInfoOnly { get; set; }
+    /// <summary>共享我的完整日志文件：开启后允许房间成员请求本机日志文件列表并下载（gzip 分块传输）。
+    /// 默认开——注意完整日志可能包含本机路径等环境信息，在意的人可手动关。</summary>
+    [JsonPropertyName("shareLogFiles")] public bool ShareLogFiles { get; set; } = true;
 }
 
 /// <summary>
@@ -56,7 +64,10 @@ public sealed class DodocoSettingsService
                     ScreenshotAutoRefresh = _settings.ScreenshotAutoRefresh,
                     ThumbnailWidth = _settings.ThumbnailWidth,
                     MuteAll = _settings.MuteAll,
-                    ShareDesktopScreenshot = _settings.ShareDesktopScreenshot
+                    ShareDesktopScreenshot = _settings.ShareDesktopScreenshot,
+                    ShareRealtimeLog = _settings.ShareRealtimeLog,
+                    ShareLogInfoOnly = _settings.ShareLogInfoOnly,
+                    ShareLogFiles = _settings.ShareLogFiles
                 };
         }
     }

@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.IO.Compression;
 using System.Windows;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
@@ -19,13 +21,15 @@ public sealed class LogBrowserViewModel : ViewModelBase
     private const int MaxLoadedLines = 6000;
 
     private readonly LogFileBrowser _browser;
+    private readonly MainViewModel _mainVm;
     /// <summary>并发守卫/过期令牌：每次加载自增，后台任务回贴时校验，丢弃过期结果。</summary>
     private int _loadTicket;
     private CancellationTokenSource? _searchCts;
 
-    public LogBrowserViewModel(LogFileBrowser browser)
+    public LogBrowserViewModel(LogFileBrowser browser, MainViewModel mainVm)
     {
         _browser = browser;
+        _mainVm = mainVm;
     }
 
     // ========== 文件列表 ==========
@@ -407,6 +411,354 @@ public sealed class LogBrowserViewModel : ViewModelBase
                 { IsLoading = false; ViewStatus = $"搜索失败: {ex.Message}"; });
             }
         }, ct);
+    }
+
+    // ========== 远程成员日志下载 ==========
+    // 协议：RequestMemberLogFiles → MemberLogFileList（按 requestId 认领）；
+    //       RequestMemberLogDownload → MemberLogFileChunk（gzip+base64 分块，seq 重组）；
+    //       totalChunks=0 且 done=true 是"对方正忙/拒绝/文件超限"标记块。
+    // 重组/解压/落盘全部后台线程，进度经 Dispatcher（SignalR 回调本身就在非 UI 线程，先切回 UI 更新状态）。
+
+    /// <summary>列表请求/块超时（秒）：超时提示失败并清理半成品。</summary>
+    private const int RemoteTimeoutSeconds = 30;
+
+    private SignalRClient? _hooked;
+    /// <summary>待认领的文件列表请求 Id（null=无在途请求）。</summary>
+    private string? _pendingListRequestId;
+    private DateTime _listRequestedAtUtc;
+    /// <summary>在途下载（null=空闲；同时间只允许一个）。</summary>
+    private RemoteDownloadState? _download;
+    /// <summary>超时巡检（列表请求与下载共用，1s 节拍）。</summary>
+    private DispatcherTimer? _remoteTimeoutTimer;
+
+    /// <summary>远程成员下拉项（在线成员，排除自己；由 DodocoViewModel 在成员变化时驱动刷新）。</summary>
+    public ObservableCollection<RemoteMemberOption> RemoteMembers { get; } = new();
+
+    private RemoteMemberOption? _selectedRemoteMember;
+    public RemoteMemberOption? SelectedRemoteMember
+    {
+        get => _selectedRemoteMember;
+        set => SetProperty(ref _selectedRemoteMember, value);
+    }
+
+    /// <summary>选中成员的远程文件列表（点"获取文件列表"后填充）。</summary>
+    public ObservableCollection<MemberLogFileDescriptor> RemoteFiles { get; } = new();
+
+    private MemberLogFileDescriptor? _selectedRemoteFile;
+    public MemberLogFileDescriptor? SelectedRemoteFile
+    {
+        get => _selectedRemoteFile;
+        set => SetProperty(ref _selectedRemoteFile, value);
+    }
+
+    private string _remoteStatus = "";
+    /// <summary>远程区状态行（请求/下载进度与结果提示）。</summary>
+    public string RemoteStatus { get => _remoteStatus; set => SetProperty(ref _remoteStatus, value); }
+
+    private double _downloadProgress;
+    /// <summary>下载进度 0..1（ProgressBar Maximum=1）。</summary>
+    public double DownloadProgress { get => _downloadProgress; set => SetProperty(ref _downloadProgress, value); }
+
+    /// <summary>旧服务端不支持远程日志下载（UI 标注"需新版服务端"用；成员刷新时一并刷新绑定）。</summary>
+    public bool RemoteDownloadUnsupported => _mainVm.SignalR?.LogFileUnsupported == true;
+
+    /// <summary>重建远程成员下拉（在线且非自己；保留原选中）。UI 线程调用。</summary>
+    public void RefreshRemoteMembers()
+    {
+        var keep = SelectedRemoteMember?.Uid;
+        RemoteMembers.Clear();
+        foreach (var m in _mainVm.Members)
+        {
+            if (!m.Online || m.IsSelf) continue;
+            RemoteMembers.Add(new RemoteMemberOption(m.PlayerUid, m.PlayerName));
+        }
+        SelectedRemoteMember = RemoteMembers.FirstOrDefault(o => o.Uid == keep);
+        // 成员刷新顺带刷新"需新版服务端"标注与状态行
+        OnPropertyChanged(nameof(RemoteDownloadUnsupported));
+        if (RemoteDownloadUnsupported && string.IsNullOrEmpty(RemoteStatus))
+            RemoteStatus = "当前服务端不支持远程日志下载（需新版服务端）";
+    }
+
+    /// <summary>SignalR 懒绑定（SignalRClient 实例可能晚于本 VM 创建/被重连替换；由 DodocoViewModel 200ms 节拍驱动）。</summary>
+    public void EnsureSignalRHooked()
+    {
+        var client = _mainVm.SignalR;
+        if (ReferenceEquals(client, _hooked)) return;
+        if (_hooked != null)
+        {
+            _hooked.OnMemberLogFileList -= HandleFileList;
+            _hooked.OnMemberLogFileChunk -= HandleFileChunk;
+        }
+        _hooked = client;
+        if (_hooked != null)
+        {
+            _hooked.OnMemberLogFileList += HandleFileList;
+            _hooked.OnMemberLogFileChunk += HandleFileChunk;
+        }
+    }
+
+    /// <summary>获取选中成员的远程文件列表。</summary>
+    public RelayCommand FetchRemoteFilesCommand => new(_ =>
+    {
+        var member = SelectedRemoteMember;
+        var client = _mainVm.SignalR;
+        if (member == null) { RemoteStatus = "请先选择成员"; return; }
+        if (client?.IsConnected != true) { RemoteStatus = "未连接到房间"; return; }
+        _pendingListRequestId = Guid.NewGuid().ToString("N");
+        _listRequestedAtUtc = DateTime.UtcNow;
+        RemoteFiles.Clear();
+        RemoteStatus = $"正在向 {member.Name} 请求文件列表…";
+        EnsureTimeoutTimer();
+        _ = client.RequestMemberLogFilesAsync(member.Uid, _pendingListRequestId);
+    });
+
+    /// <summary>下载选中的远程文件（重名覆盖需确认；同时间只允许一个下载）。</summary>
+    public RelayCommand DownloadRemoteFileCommand => new(_ =>
+    {
+        var member = SelectedRemoteMember;
+        var file = SelectedRemoteFile;
+        var client = _mainVm.SignalR;
+        if (member == null || file == null) { RemoteStatus = "请先获取文件列表并选择文件"; return; }
+        if (client?.IsConnected != true) { RemoteStatus = "未连接到房间"; return; }
+        if (_download != null) { RemoteStatus = "已有下载进行中，请等待完成"; return; }
+        // 本地复检文件名白名单（与服务端/目标端同款）：列表数据也是跨端来的，落盘前不信任
+        if (!MemberLogShareService.FileNameRegex.IsMatch(file.Name))
+        {
+            RemoteStatus = $"文件名不合白名单，拒绝下载: {file.Name}";
+            return;
+        }
+
+        // 落盘目标：<助手目录>\log\remote_downloads\{成员名}\{文件名}
+        var dir = Path.Combine(LogFileBrowser.AssistantLogDir, "remote_downloads", SanitizeDirName(member.Name));
+        string targetPath;
+        try
+        {
+            Directory.CreateDirectory(dir);
+            targetPath = Path.Combine(dir, file.Name);
+        }
+        catch (Exception ex)
+        {
+            RemoteStatus = $"创建下载目录失败: {ex.Message}";
+            return;
+        }
+        // 重复下载同文件：覆盖确认（本工程无 ThemedMessageBox，沿用项目现有 MessageBox 用法）
+        if (File.Exists(targetPath)
+            && MessageBox.Show($"已存在 {file.Name}，覆盖下载？", "远程日志下载",
+                   MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        {
+            RemoteStatus = "已取消（保留已有文件）";
+            return;
+        }
+
+        var requestId = Guid.NewGuid().ToString("N");
+        _download = new RemoteDownloadState
+        {
+            RequestId = requestId,
+            FileName = file.Name,
+            MemberName = member.Name,
+            TargetPath = targetPath,
+            LastProgressAtUtc = DateTime.UtcNow
+        };
+        DownloadProgress = 0;
+        RemoteStatus = $"正在请求下载 {file.Name}…";
+        EnsureTimeoutTimer();
+        _ = client.RequestMemberLogDownloadAsync(member.Uid, requestId, file.Name);
+    });
+
+    /// <summary>文件列表应答（SignalR 线程）：先在本线程判 requestId 归属，非本 VM 请求直接丢，不切 UI。</summary>
+    private void HandleFileList(MemberLogFileList list)
+    {
+        // 回调线程预过滤（string 引用读写原子；UI 线程内再复核一次防竞态）
+        if (list.RequestId != _pendingListRequestId) return;
+        Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            if (list.RequestId != _pendingListRequestId) return; // 非本次请求（别的观众/过期应答）
+            _pendingListRequestId = null;
+            RemoteFiles.Clear();
+            foreach (var f in list.Files) RemoteFiles.Add(f);
+            RemoteStatus = list.Files.Count == 0
+                ? "对方没有可分享的日志文件（或对方关闭了「共享日志文件」）"
+                : $"共 {list.Files.Count} 个文件，选中后点「下载」";
+            StopTimeoutTimerIfIdle();
+        });
+    }
+
+    /// <summary>文件分块（SignalR 线程）：先在本线程判 requestId 归属，非本次下载直接丢，不切 UI；
+    /// 认领后切 UI 重组，解码后的字节进缓冲，完成后后台落盘。</summary>
+    private void HandleFileChunk(MemberLogFileChunk chunk)
+    {
+        // 回调线程预过滤：服务端已按 requestId 单播，这里是双保险（本地引用读原子，过期引用顶多误判放行一次，
+        // UI 线程内会再复核）
+        if (_download == null || chunk.RequestId != _download.RequestId) return;
+        Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            var dl = _download;
+            if (dl == null || chunk.RequestId != dl.RequestId) return; // 非本次下载
+            dl.LastProgressAtUtc = DateTime.UtcNow;
+
+            // 忙/拒绝/失败标记块（协议：done=true, totalChunks=0）
+            if (chunk.TotalChunks == 0)
+            {
+                FailDownload("对方正忙、拒绝共享或文件超过 200MB 上限");
+                return;
+            }
+
+            // 首块初始化缓冲；totalChunks 不一致视为异常批直接失败
+            if (dl.Chunks == null)
+            {
+                dl.Chunks = new byte[chunk.TotalChunks][];
+                dl.TotalChunks = chunk.TotalChunks;
+            }
+            else if (dl.TotalChunks != chunk.TotalChunks)
+            {
+                FailDownload("块总数前后不一致，下载中止");
+                return;
+            }
+            if (chunk.Seq < 0 || chunk.Seq >= dl.TotalChunks) return; // 越界块丢弃
+
+            if (dl.Chunks[chunk.Seq] == null)
+            {
+                try { dl.Chunks[chunk.Seq] = Convert.FromBase64String(chunk.ChunkBase64); }
+                catch { FailDownload("块解码失败，下载中止"); return; }
+                dl.Received++;
+                dl.ReceivedBytes += dl.Chunks[chunk.Seq]!.Length;
+                DownloadProgress = (double)dl.Received / dl.TotalChunks;
+                RemoteStatus = $"正在下载 {dl.FileName}：{dl.Received}/{dl.TotalChunks} 块 · {dl.ReceivedBytes / 1024.0:F0} KB";
+            }
+
+            if (chunk.Done)
+            {
+                if (dl.Received == dl.TotalChunks) FinishDownload(dl);
+                else FailDownload($"块不完整（{dl.Received}/{dl.TotalChunks}），下载失败");
+            }
+        });
+    }
+
+    /// <summary>全部块到齐：后台拼接 → gzip 解压 → 落盘，完成后刷新列表并直接打开。</summary>
+    private void FinishDownload(RemoteDownloadState dl)
+    {
+        _download = null; // 先清在途标记（落盘期间允许发起新下载）
+        StopTimeoutTimerIfIdle();
+        RemoteStatus = $"下载完成，正在解压落盘 {dl.FileName}…";
+        Task.Run(() =>
+        {
+            try
+            {
+                var totalLen = dl.Chunks!.Sum(c => c?.Length ?? 0);
+                var compressed = new byte[totalLen];
+                var pos = 0;
+                foreach (var c in dl.Chunks!)
+                {
+                    if (c == null) throw new InvalidDataException("存在缺失块");
+                    Buffer.BlockCopy(c, 0, compressed, pos, c.Length);
+                    pos += c.Length;
+                }
+                using var input = new MemoryStream(compressed);
+                using var gz = new GZipStream(input, CompressionMode.Decompress);
+                using var output = new FileStream(dl.TargetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                gz.CopyTo(output);
+                output.Flush();
+
+                Application.Current.Dispatcher.BeginInvoke(() =>
+                {
+                    RemoteStatus = $"已下载到 {dl.TargetPath}";
+                    DownloadProgress = 1;
+                    // 落盘后刷新日志浏览列表（remote_downloads 已纳入枚举），并直接打开下载的文件
+                    RefreshFiles();
+                    var item = Files.FirstOrDefault(f => f.FullPath == dl.TargetPath);
+                    if (item != null) SelectedFile = item; // setter 触发 LoadInitial，直接可看
+                });
+            }
+            catch (Exception ex)
+            {
+                // 半成品清理
+                try { if (File.Exists(dl.TargetPath)) File.Delete(dl.TargetPath); } catch { }
+                Application.Current.Dispatcher.BeginInvoke(() =>
+                    RemoteStatus = $"落盘失败: {ex.Message}");
+            }
+        });
+    }
+
+    /// <summary>下载失败：提示并清理在途状态（半成品文件只在落盘阶段才创建，这里无需删文件）。</summary>
+    private void FailDownload(string reason)
+    {
+        _download = null;
+        StopTimeoutTimerIfIdle();
+        DownloadProgress = 0;
+        RemoteStatus = $"下载失败：{reason}";
+    }
+
+    /// <summary>超时巡检（1s）：列表请求 30s 无应答 / 下载 30s 无新块 → 失败清理。</summary>
+    private void EnsureTimeoutTimer()
+    {
+        if (_remoteTimeoutTimer != null) { _remoteTimeoutTimer.Start(); return; }
+        _remoteTimeoutTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _remoteTimeoutTimer.Tick += (_, _) =>
+        {
+            var now = DateTime.UtcNow;
+            if (_pendingListRequestId != null
+                && now - _listRequestedAtUtc > TimeSpan.FromSeconds(RemoteTimeoutSeconds))
+            {
+                _pendingListRequestId = null;
+                RemoteStatus = "请求超时（对方可能不在线、关闭了共享或为旧版助手）";
+            }
+            if (_download != null
+                && now - _download.LastProgressAtUtc > TimeSpan.FromSeconds(RemoteTimeoutSeconds))
+            {
+                FailDownload("超过 30 秒未收到新块（对方可能已断线）");
+            }
+            StopTimeoutTimerIfIdle();
+        };
+        _remoteTimeoutTimer.Start();
+    }
+
+    private void StopTimeoutTimerIfIdle()
+    {
+        if (_pendingListRequestId == null && _download == null)
+            _remoteTimeoutTimer?.Stop();
+    }
+
+    /// <summary>成员名转安全目录名（路径非法字符替换为下划线）。</summary>
+    private static string SanitizeDirName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var chars = name.ToCharArray();
+        for (var i = 0; i < chars.Length; i++)
+            if (Array.IndexOf(invalid, chars[i]) >= 0) chars[i] = '_';
+        var s = new string(chars).Trim();
+        if (string.IsNullOrEmpty(s)) return "成员";
+        // 特判：纯点号序列（"." / ".." / "..."）在 Windows 上有相对路径语义，替换为下划线
+        if (s.All(c => c == '.')) return "_";
+        return s;
+    }
+
+    /// <summary>在途下载状态（UI 线程独占访问，无需锁）。</summary>
+    private sealed class RemoteDownloadState
+    {
+        public string RequestId { get; set; } = "";
+        public string FileName { get; set; } = "";
+        public string MemberName { get; set; } = "";
+        public string TargetPath { get; set; } = "";
+        public int TotalChunks { get; set; }
+        public int Received { get; set; }
+        public long ReceivedBytes { get; set; }
+        public byte[]?[]? Chunks { get; set; }
+        public DateTime LastProgressAtUtc { get; set; }
+    }
+
+    /// <summary>解绑 SignalR 事件并停超时巡检（DodocoViewModel.Dispose 时调用；在途下载随之放弃）。</summary>
+    public void Dispose()
+    {
+        _remoteTimeoutTimer?.Stop();
+        _remoteTimeoutTimer = null;
+        _download = null;
+        _pendingListRequestId = null;
+        if (_hooked != null)
+        {
+            _hooked.OnMemberLogFileList -= HandleFileList;
+            _hooked.OnMemberLogFileChunk -= HandleFileChunk;
+            _hooked = null;
+        }
     }
 
     // ========== 导出 ==========

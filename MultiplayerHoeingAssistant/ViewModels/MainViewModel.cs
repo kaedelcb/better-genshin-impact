@@ -143,6 +143,12 @@ public class MainViewModel : INotifyPropertyChanged
     /// <summary>刷新（重新加载页面）完成后触发，供 MainWindow 重建标签区 / 刷新成员卡片 UI。</summary>
     public event Action? RefreshCompleted;
 
+    /// <summary>
+    /// 成员在线状态在 OnPlayersUpdated 原地更新（不触发 CollectionChanged）后触发一次，
+    /// 供 DodocoViewModel 重新评估日志订阅（成员离线退订 / 上线重订）。始终在 UI 线程触发。
+    /// </summary>
+    public event Action? MemberOnlineChanged;
+
     public RelayCommand StopCommand => new(OnStop);
     public RelayCommand StartBgiCommand => new(OnStartBgi);
     public RelayCommand StartGroupCommand => new(OnStartGroup);
@@ -3008,6 +3014,10 @@ public class MainViewModel : INotifyPropertyChanged
                         AddLog(execMember.AutoHoeingProgress);
                     }
                 }
+
+                // 成员 Online 状态是原地更新（不触发 CollectionChanged），这里统一通知一次，
+                // 让 DodocoViewModel 重新评估日志订阅（离线退订 / 上线重订）。
+                MemberOnlineChanged?.Invoke();
             });
         };
 

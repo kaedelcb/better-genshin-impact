@@ -13,7 +13,8 @@ namespace MultiplayerHoeingAssistant.Services;
 /// </summary>
 public sealed class LogFileBrowser
 {
-    private static readonly Regex BgiLogFileNameRegex = new(
+    /// <summary>BGI 日志文件名形态（共享给 MemberLogShareService 枚举可下载文件用）。</summary>
+    public static readonly Regex BgiLogFileNameRegex = new(
         @"^better-genshin-impact(\d{8})?(_\d{3})*\.log$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
@@ -63,6 +64,22 @@ public sealed class LogFileBrowser
                 result.Add(new LogFileItem
                 {
                     Name = fi.Name, FullPath = fi.FullName, Group = "助手日志",
+                    LastWriteTime = fi.LastWriteTime, Length = fi.Length
+                });
+            }
+        }
+        // 第三分组：远程下载的成员日志（remote_downloads\{成员名}\*.log），名字带成员目录前缀区分来源
+        var downloadsDir = Path.Combine(assistDir, "remote_downloads");
+        if (Directory.Exists(downloadsDir))
+        {
+            foreach (var f in Directory.EnumerateFiles(downloadsDir, "*.log", SearchOption.AllDirectories))
+            {
+                var fi = new FileInfo(f);
+                var memberDir = Path.GetFileName(Path.GetDirectoryName(f) ?? "");
+                result.Add(new LogFileItem
+                {
+                    Name = string.IsNullOrEmpty(memberDir) ? fi.Name : $"{memberDir}/{fi.Name}",
+                    FullPath = fi.FullName, Group = "已下载的成员日志",
                     LastWriteTime = fi.LastWriteTime, Length = fi.Length
                 });
             }

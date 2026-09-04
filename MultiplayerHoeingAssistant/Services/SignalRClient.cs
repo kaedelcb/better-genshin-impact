@@ -25,6 +25,14 @@ public class SignalRClient : IAsyncDisposable
     /// <summary>服务端不支持 ReportMemberScreenshot（旧服务端首次 HubException 后标记，停止重试；
     /// 新连接建立时重置，升级服务端后自动恢复）。volatile：Timer 线程读、Hub 调用线程写。</summary>
     private volatile bool _screenshotUnsupported;
+    /// <summary>同 _screenshotUnsupported：旧服务端无 ReportMemberLogBatch 时停重试（房间实时日志汇聚）。</summary>
+    private volatile bool _logUnsupported;
+    /// <summary>同模式：旧服务端无 SubscribeMemberLog/UnsubscribeMemberLog 时停重试（日志按需订阅）。
+    /// 观看端据此给远程来源项标注"（需新版服务端）"。</summary>
+    private volatile bool _logSubscribeUnsupported;
+    /// <summary>同模式：旧服务端无 RequestMemberLogFiles 等日志下载方法时停重试（远程日志下载）。
+    /// 下载端 UI 据此标注"需新版服务端"。</summary>
+    private volatile bool _logFileUnsupported;
 
     // [P1-F 止血] 自愈定时器：仅在内置重连耗尽（Closed）后启动，每 30s 对同一连接 StartAsync。
     // 同一时刻只允许一条自愈定时器；_selfHealRunning 防止定时器回调重入（StartAsync 超 30s 时）。
@@ -37,6 +45,22 @@ public class SignalRClient : IAsyncDisposable
     public event Action<bool>? OnConnectionStateChanged;
     /// <summary>收到成员桌面截图帧（嘟嘟可 P5 远程巡检墙；服务端纯转发）。</summary>
     public event Action<MemberScreenshotFrame>? OnMemberScreenshot;
+    /// <summary>收到成员实时日志批（房间日志汇聚；服务端纯转发，含自己的批需按 uid 自滤）。</summary>
+    public event Action<MemberLogBatch>? OnMemberLogBatch;
+    /// <summary>我的日志订阅数变化（观众驱动上报：0→停发，&gt;0→开始发）。服务端在订阅/退订/订阅者断线时推送。</summary>
+    public event Action<int>? OnMemberLogSubscribersChanged;
+    /// <summary>有成员请求我的日志文件列表（远程日志下载·被下载端）。参数：requesterUid, requestId。</summary>
+    public event Action<string, string>? OnMemberLogFilesRequested;
+    /// <summary>收到成员日志文件列表应答（远程日志下载·下载端，按 RequestId 认领）。</summary>
+    public event Action<MemberLogFileList>? OnMemberLogFileList;
+    /// <summary>有成员请求下载我的某个日志文件（被下载端）。参数：requesterUid, requestId, fileName。</summary>
+    public event Action<string, string, string>? OnMemberLogDownloadRequested;
+    /// <summary>收到成员日志文件分块（下载端，按 RequestId 认领重组）。</summary>
+    public event Action<MemberLogFileChunk>? OnMemberLogFileChunk;
+    /// <summary>旧服务端不支持日志订阅（HubException 后置位，新连接重置）。观看端 UI 标注用。</summary>
+    public bool LogSubscribeUnsupported => _logSubscribeUnsupported;
+    /// <summary>旧服务端不支持远程日志下载（HubException 后置位，新连接重置）。下载端 UI 标注用。</summary>
+    public bool LogFileUnsupported => _logFileUnsupported;
     /// <summary>全员就绪确认完成事件（各助手据此启动中断流程）。带 generation 参数，用于幂等保护。</summary>
     public event Action<int>? OnAllReadyConfirmed;
     /// <summary>收到 AllReadyConfirm 事件（服务端要求确认就绪，确认阶段用）。</summary>
@@ -58,6 +82,9 @@ public class SignalRClient : IAsyncDisposable
         _password = password;
         _teamUids = teamUids;
         _screenshotUnsupported = false; // 新连接重置（可能换上了支持截图汇聚的新服务端）
+        _logUnsupported = false;        // 同上：日志汇聚能力标记
+        _logSubscribeUnsupported = false; // 同上：日志订阅能力标记
+        _logFileUnsupported = false;    // 同上：远程日志下载能力标记
 
         await EstablishAsync(serverUrl, roomCode, password, playerUid, playerName, teamUids, isRemote);
     }
@@ -91,6 +118,18 @@ public class SignalRClient : IAsyncDisposable
         });
         connection.On<MemberScreenshotFrame>("MemberScreenshot", frame =>
             OnMemberScreenshot?.Invoke(frame));
+        connection.On<MemberLogBatch>("MemberLogBatch", batch =>
+            OnMemberLogBatch?.Invoke(batch));
+        connection.On<int>("MemberLogSubscribersChanged", count =>
+            OnMemberLogSubscribersChanged?.Invoke(count));
+        connection.On<string, string>("MemberLogFilesRequested", (requesterUid, requestId) =>
+            OnMemberLogFilesRequested?.Invoke(requesterUid, requestId));
+        connection.On<MemberLogFileList>("MemberLogFileList", list =>
+            OnMemberLogFileList?.Invoke(list));
+        connection.On<string, string, string>("MemberLogDownloadRequested", (requesterUid, requestId, fileName) =>
+            OnMemberLogDownloadRequested?.Invoke(requesterUid, requestId, fileName));
+        connection.On<MemberLogFileChunk>("MemberLogFileChunk", chunk =>
+            OnMemberLogFileChunk?.Invoke(chunk));
 
         // 重连中（SignalR 内置自动重连尝试期间）
         connection.Reconnecting += _ =>
@@ -318,6 +357,151 @@ public class SignalRClient : IAsyncDisposable
         {
             // 上报失败（断线等）仅记日志，截图汇聚是尽力而为的辅助通道
             OnLog?.Invoke($"ReportMemberScreenshotAsync 调用失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>上报本机实时日志批（房间日志汇聚）。未连接/未入房时静默跳过；
+    /// 旧服务端无此 Hub 方法时首次 HubException 后停重试（同 _screenshotUnsupported 模式）。
+    /// infoOnly：发送端开启了省流（仅 INF+），随批带给观看端做状态提示。</summary>
+    public async Task ReportMemberLogBatchAsync(List<string> lines, bool infoOnly)
+    {
+        if (_logUnsupported) return;
+        if (_connection == null) return;
+        if (_connection.State != HubConnectionState.Connected) return;
+        if (lines.Count == 0) return;
+        try
+        {
+            await _connection.InvokeAsync("ReportMemberLogBatch", _roomCode, _playerUid, _playerName, lines, infoOnly);
+        }
+        catch (HubException ex)
+        {
+            _logUnsupported = true;
+            OnLog?.Invoke($"ReportMemberLogBatch 被服务端拒绝（疑似旧服务端不支持日志汇聚），本次连接内停止上报: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            // 尽力而为通道：断线等失败仅记日志
+            OnLog?.Invoke($"ReportMemberLogBatchAsync 调用失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>订阅某成员的实时日志流（观众驱动）。未连接静默跳过；旧服务端 HubException 后停重试。</summary>
+    public async Task SubscribeMemberLogAsync(string targetUid)
+    {
+        if (_logSubscribeUnsupported) return;
+        if (_connection == null || _connection.State != HubConnectionState.Connected) return;
+        try
+        {
+            await _connection.InvokeAsync("SubscribeMemberLog", _roomCode, targetUid);
+        }
+        catch (HubException ex)
+        {
+            _logSubscribeUnsupported = true;
+            OnLog?.Invoke($"SubscribeMemberLog 被服务端拒绝（疑似旧服务端不支持按需订阅），本次连接内停止尝试: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            OnLog?.Invoke($"SubscribeMemberLogAsync 调用失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>退订某成员的实时日志流。未连接/旧服务端静默跳过（服务端断线清理兜底）。</summary>
+    public async Task UnsubscribeMemberLogAsync(string targetUid)
+    {
+        if (_logSubscribeUnsupported) return;
+        if (_connection == null || _connection.State != HubConnectionState.Connected) return;
+        try
+        {
+            await _connection.InvokeAsync("UnsubscribeMemberLog", _roomCode, targetUid);
+        }
+        catch (HubException)
+        {
+            _logSubscribeUnsupported = true; // 不需要再尝试退订
+        }
+        catch (Exception ex)
+        {
+            OnLog?.Invoke($"UnsubscribeMemberLogAsync 调用失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>请求目标成员的日志文件列表（远程日志下载·观众端）。requestId 由调用方生成（Guid.N），应答按它认领。
+    /// 旧服务端无此 Hub 方法时首次 HubException 后停重试（同 _screenshotUnsupported 模式）。</summary>
+    public async Task RequestMemberLogFilesAsync(string targetUid, string requestId)
+    {
+        if (_logFileUnsupported) return;
+        if (_connection == null || _connection.State != HubConnectionState.Connected) return;
+        try
+        {
+            await _connection.InvokeAsync("RequestMemberLogFiles", _roomCode, targetUid, requestId);
+        }
+        catch (HubException ex)
+        {
+            _logFileUnsupported = true;
+            OnLog?.Invoke($"RequestMemberLogFiles 被服务端拒绝（疑似旧服务端不支持远程日志下载），本次连接内停止尝试: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            OnLog?.Invoke($"RequestMemberLogFilesAsync 调用失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>应答日志文件列表（被下载端）。未连接静默跳过。</summary>
+    public async Task ReportMemberLogFilesAsync(string requestId, List<MemberLogFileDescriptor> files)
+    {
+        if (_logFileUnsupported) return;
+        if (_connection == null || _connection.State != HubConnectionState.Connected) return;
+        try
+        {
+            await _connection.InvokeAsync("ReportMemberLogFiles", _roomCode, _playerUid, requestId, files);
+        }
+        catch (HubException)
+        {
+            _logFileUnsupported = true;
+        }
+        catch (Exception ex)
+        {
+            OnLog?.Invoke($"ReportMemberLogFilesAsync 调用失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>请求下载目标成员的某个日志文件（观众端）。fileName 白名单由服务端与目标端双重校验。</summary>
+    public async Task RequestMemberLogDownloadAsync(string targetUid, string requestId, string fileName)
+    {
+        if (_logFileUnsupported) return;
+        if (_connection == null || _connection.State != HubConnectionState.Connected) return;
+        try
+        {
+            await _connection.InvokeAsync("RequestMemberLogDownload", _roomCode, targetUid, requestId, fileName);
+        }
+        catch (HubException ex)
+        {
+            _logFileUnsupported = true;
+            OnLog?.Invoke($"RequestMemberLogDownload 被服务端拒绝（疑似旧服务端不支持远程日志下载），本次连接内停止尝试: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            OnLog?.Invoke($"RequestMemberLogDownloadAsync 调用失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>分块上行日志文件（被下载端，gzip+base64）。未连接静默跳过（观众端超时兜底）。</summary>
+    public async Task ReportMemberLogChunkAsync(string requestId, int seq, int totalChunks,
+        string chunkBase64, string fileName, bool done)
+    {
+        if (_logFileUnsupported) return;
+        if (_connection == null || _connection.State != HubConnectionState.Connected) return;
+        try
+        {
+            await _connection.InvokeAsync("ReportMemberLogChunk",
+                _roomCode, _playerUid, requestId, seq, totalChunks, chunkBase64, fileName, done);
+        }
+        catch (HubException)
+        {
+            _logFileUnsupported = true;
+        }
+        catch (Exception ex)
+        {
+            OnLog?.Invoke($"ReportMemberLogChunkAsync 调用失败: {ex.Message}");
         }
     }
 

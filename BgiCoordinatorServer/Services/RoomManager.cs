@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Linq;
 using BgiCoordinatorServer.Models;
 using Microsoft.Extensions.Logging;
@@ -1493,5 +1493,83 @@ public class RoomManager
         if (_controlRooms.TryGetValue(group, out var players))
             lock (players) { return players.FirstOrDefault(p => p.ConnectionId == connectionId)?.PlayerUid; }
         return null;
+    }
+
+    // ========== 房间实时日志汇聚：观众驱动订阅表 ==========
+    // "CTRL_{roomCode}:{targetUid}" → 订阅者 connectionId 集合。Hub 方法可并发，集合一律 lock 访问。
+    // 目标端只需要"有没有人在看"：订阅数变化由 Hub 转发 MemberLogSubscribersChanged(count)。
+
+    /// <summary>单个目标成员的订阅者上限（防御异常端刷订阅导致集合膨胀）。</summary>
+    private const int MaxLogSubscribersPerTarget = 20;
+
+    private readonly ConcurrentDictionary<string, HashSet<string>> _logSubscriptions = new();
+
+    private static string LogSubKey(string group, string targetUid) => $"{group}:{targetUid}";
+
+    /// <summary>订阅某成员的日志流。返回订阅后总数；-1=已达上限未订阅成功。幂等（重复订阅不重复计数）。</summary>
+    public int SubscribeMemberLog(string group, string targetUid, string subscriberConnectionId)
+    {
+        var key = LogSubKey(group, targetUid);
+        // retry 循环：拿到的 set 可能正被并发退订删 key（空集移除），
+        // 若继续往孤儿 set 里 Add 会导致订阅者不可见。lock 内验证 set 仍是字典当前值，否则重拿。
+        while (true)
+        {
+            var set = _logSubscriptions.GetOrAdd(key, _ => []);
+            lock (set)
+            {
+                if (!_logSubscriptions.TryGetValue(key, out var cur) || !ReferenceEquals(cur, set))
+                    continue; // 已被并发移除，重拿当前 set
+                if (!set.Add(subscriberConnectionId)) return set.Count; // 幂等
+                if (set.Count > MaxLogSubscribersPerTarget)
+                {
+                    set.Remove(subscriberConnectionId);
+                    return -1;
+                }
+                return set.Count;
+            }
+        }
+    }
+
+    /// <summary>退订某成员的日志流。返回退订后总数；key 空集时移除。未订阅过返回 null（无需通知）。</summary>
+    public int? UnsubscribeMemberLog(string group, string targetUid, string subscriberConnectionId)
+    {
+        var key = LogSubKey(group, targetUid);
+        if (!_logSubscriptions.TryGetValue(key, out var set)) return null;
+        lock (set)
+        {
+            if (!set.Remove(subscriberConnectionId)) return null;
+            var count = set.Count;
+            // 引用相等重载：只移除"还是这个 set"的键值对，避免误删并发重建的新 set
+            if (count == 0) _logSubscriptions.TryRemove(new KeyValuePair<string, HashSet<string>>(key, set));
+            return count;
+        }
+    }
+
+    /// <summary>连接断开清理：把该连接从所有订阅中移除。
+    /// 返回受影响的 (group, targetUid, 剩余订阅数) 列表，供 Hub 逐个通知目标成员。</summary>
+    public List<(string Group, string TargetUid, int Count)> RemoveLogSubscriberEverywhere(string connectionId)
+    {
+        var changed = new List<(string, string, int)>();
+        foreach (var (key, set) in _logSubscriptions)
+        {
+            lock (set)
+            {
+                if (!set.Remove(connectionId)) continue;
+                var count = set.Count;
+                // 引用相等重载：只移除"还是这个 set"的键值对，避免误删并发重建的新 set
+                if (count == 0) _logSubscriptions.TryRemove(new KeyValuePair<string, HashSet<string>>(key, set));
+                // key 形如 "CTRL_xxx:uid"，uid 为纯数字、group 不含冒号，Split 安全
+                var parts = key.Split(':', 2);
+                changed.Add((parts[0], parts.Length > 1 ? parts[1] : "", count));
+            }
+        }
+        return changed;
+    }
+
+    /// <summary>查询某目标当前订阅数（调试用/测试用）。</summary>
+    public int GetLogSubscriberCount(string group, string targetUid)
+    {
+        if (!_logSubscriptions.TryGetValue(LogSubKey(group, targetUid), out var set)) return 0;
+        lock (set) { return set.Count; }
     }
 }

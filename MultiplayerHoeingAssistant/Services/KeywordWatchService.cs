@@ -35,9 +35,10 @@ public sealed class KeywordWatchService : IDisposable
 
     private WatchConfig _config = new();
     private readonly Dictionary<string, Regex?> _regexCache = new(); // 规则 Id → 编译后的正则（null=非法）
-    /// <summary>限流窗口：规则 Id → 窗口内命中时间戳列表。</summary>
+    /// <summary>限流窗口：分桶键（规则 Id|来源桶）→ 窗口内命中时间戳列表。
+    /// 中危3：远程成员行（SourceFile 形如 "远程:玩家名"）与本机分桶，远程风暴不挤压本机告警配额。</summary>
     private readonly Dictionary<string, List<DateTime>> _hitWindows = new();
-    /// <summary>合并计数目标：规则 Id → 窗口内最近一条记录（超出限流时 RepeatCount++）。
+    /// <summary>合并计数目标：分桶键（规则 Id|来源桶）→ 窗口内最近一条记录（超出限流时 RepeatCount++）。
     /// 注意（审查中危6）：RepeatCount 的递增是运行期内存行为，仅供界面显示 ×N；
     /// JSONL 落盘保留记录首次落盘时的值，之后窗口内的合并不回写文件（重启后看到的是首次计数）。</summary>
     private readonly Dictionary<string, ExceptionRecord> _mergeTargets = new();
@@ -166,6 +167,11 @@ public sealed class KeywordWatchService : IDisposable
         }
     }
 
+    /// <summary>喂入远程成员日志行（房间实时日志汇聚）。与本机 tail 路径隔离：本机行只走 EntryReceived，
+    /// 远程行只走这里，不会重复。entry.SourceFile 形如 "远程:玩家名"，命中记录的 Instance/SourceFile
+    /// 可直接区分是哪台机器触发。</summary>
+    public void FeedRemoteEntry(LogEntry entry) => OnEntry(entry);
+
     private void OnEntry(LogEntry entry)
     {
         List<(ExceptionRecord record, bool alert)>? added = null;
@@ -177,20 +183,25 @@ public sealed class KeywordWatchService : IDisposable
             _recentLines.Enqueue(FormatLine(entry));
             while (_recentLines.Count > ContextAfterLines) _recentLines.Dequeue();
 
+            // 中危3：限流/合并按"规则 + 来源"分桶——远程成员（SourceFile="远程:玩家名"）各自一桶，
+            // 本机共用空桶；远程日志风暴不再挤占本机的窗口配额与合并目标
+            var srcBucket = entry.SourceFile.StartsWith("远程:") ? entry.SourceFile : "";
+
             foreach (var rule in _config.Rules)
             {
                 if (!rule.Enabled) continue;
                 if (!LogLevels.AtLeast(entry.Level, rule.MinLevel)) continue;
                 if (!IsMatch(rule, entry)) continue;
 
+                var bucketKey = rule.Id + "|" + srcBucket;
                 var now = DateTime.Now;
                 // 限流：窗口内超上限则合并计数，不产生新记录
-                if (!_hitWindows.TryGetValue(rule.Id, out var hits))
-                    _hitWindows[rule.Id] = hits = [];
+                if (!_hitWindows.TryGetValue(bucketKey, out var hits))
+                    _hitWindows[bucketKey] = hits = [];
                 hits.RemoveAll(t => now - t > RateWindow);
                 if (hits.Count >= RateLimitPerWindow)
                 {
-                    if (_mergeTargets.TryGetValue(rule.Id, out var target))
+                    if (_mergeTargets.TryGetValue(bucketKey, out var target))
                     {
                         target.RepeatCount++;
                         (merged ??= []).Add(target);
@@ -211,7 +222,7 @@ public sealed class KeywordWatchService : IDisposable
                     FileOffset = entry.FileOffset,
                     SourceFile = entry.SourceFile
                 };
-                _mergeTargets[rule.Id] = record;
+                _mergeTargets[bucketKey] = record;
                 _pendingRecords.Add(new PendingRecord
                 {
                     Record = record,
