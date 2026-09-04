@@ -597,6 +597,49 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// [切片4] ext 优先的 BGI IPC 发送（查询/轻操作迁移点共用）：ext 通道 Ready 且操作有 ext 映射时
+    /// 走 BgiExternalClient 长连接；否则（老 BGI/未连接/无映射/通道瞬态失败）回退 v2 IpcClient 短连接。
+    /// 返回 null = 两条路径都不可用（调用方按原有容错语义处理）。v2 旧路径代码保留不删（老 BGI 降级用）。
+    /// </summary>
+    private async Task<IpcResponse?> SendBgiIpcPreferredAsync(string v2OpCode, string? payloadJson, int connectTimeoutMs = 2000)
+    {
+        var ext = _externalClient;
+        if (ext is { State: BgiExternalLinkState.Ready }
+            && BgiExternalClient.TryMapToExtOperation(v2OpCode, out var extOp))
+        {
+            try
+            {
+                var extResp = await ext.SendCommandAsync(
+                    extOp,
+                    payloadJson is null ? null : JsonSerializer.Deserialize<JsonElement>(payloadJson),
+                    TimeSpan.FromMilliseconds(Math.Max(connectTimeoutMs, 2000)));
+                return new IpcResponse
+                {
+                    Success = extResp.Success,
+                    Data = extResp.Data,
+                    ErrorMessage = extResp.ErrorMessage,
+                    ErrorCode = extResp.ErrorCode,
+                };
+            }
+            catch
+            {
+                // ext 通道瞬态失败 → 落回 v2 短连接
+            }
+        }
+
+        try
+        {
+            using var ipc = new IpcClient();
+            await ipc.ConnectAsync(connectTimeoutMs);
+            return await ipc.SendCommandAsync(new IpcRequest { OpCode = v2OpCode, Payload = payloadJson });
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>[切片4] ext 通道可信状态同步：SDK 的 ext.hello 已校验同会话（跨会话在 SDK 侧被拒），Ready 即可信。</summary>
     private void UpdateExtSessionTrust()
     {
@@ -1002,14 +1045,12 @@ public class MainViewModel : INotifyPropertyChanged
         }
         else if (_wasAutoHoeingRunning && !autoHoeingRunning)
         {
-            // 检查 BGI 是否有中断上下文
+            // 检查 BGI 是否有中断上下文（[切片4] ext 通道优先，v2 短连接兜底）
             bool hasContext = false;
             try
             {
-                using var ctxCheckClient = new IpcClient();
-                await ctxCheckClient.ConnectAsync(2000);
-                var ctxResp = await ctxCheckClient.SendCommandAsync(new IpcRequest { OpCode = "task.status" });
-                if (ctxResp.Success && !string.IsNullOrEmpty(ctxResp.Data))
+                var ctxResp = await SendBgiIpcPreferredAsync("task.status", null);
+                if (ctxResp is { Success: true } && !string.IsNullOrEmpty(ctxResp.Data))
                 {
                     var ctxData = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(ctxResp.Data);
                     if (ctxData.TryGetProperty("hasSuspendedTaskContext", out var hsc))
@@ -2051,10 +2092,9 @@ public class MainViewModel : INotifyPropertyChanged
         {
             try
             {
-                using var ipcClient = new IpcClient();
-                await ipcClient.ConnectAsync(2000);
-                var resp = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.status" });
-                if (resp.Success && !string.IsNullOrEmpty(resp.Data))
+                // [切片4] ext 通道优先，v2 短连接兜底
+                var resp = await SendBgiIpcPreferredAsync("task.status", null);
+                if (resp is { Success: true } && !string.IsNullOrEmpty(resp.Data))
                 {
                     var sdata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(resp.Data);
                     if (sdata.TryGetProperty("onlineGeneration", out var og)
@@ -5400,16 +5440,15 @@ public class MainViewModel : INotifyPropertyChanged
         // 等待 BGI 内部的 CancellationContext 取消状态传播完毕，避免取消令牌残留影响后续 start_group
         // [P1-C 止血] 固定 1500ms 盲等改为轮询 IPC task.status（200ms 间隔、上限 6s）：
         // 确认 BGI 无任务在运行（或中断上下文已就位 hasSuspendedTaskContext=true）后再进入批次 task.start。
-        // 超时仅记警告日志后继续，保持原有容错语义。每次轮询用独立短生命周期 IpcClient。
+        // 超时仅记警告日志后继续，保持原有容错语义。
+        // [切片4] 传输层 ext 通道优先（长连接复用，无每轮新建管道开销），v2 独立短连接兜底。
         var bgiSettled = false;
         for (var waitRound = 0; waitRound < 30; waitRound++)
         {
             try
             {
-                using var waitClient = new IpcClient();
-                await waitClient.ConnectAsync(1000);
-                var waitResp = await waitClient.SendCommandAsync(new IpcRequest { OpCode = "task.status" });
-                if (waitResp.Success && !string.IsNullOrEmpty(waitResp.Data))
+                var waitResp = await SendBgiIpcPreferredAsync("task.status", null, 1000);
+                if (waitResp is { Success: true } && !string.IsNullOrEmpty(waitResp.Data))
                 {
                     var wdata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(waitResp.Data);
                     var stillRunning = wdata.TryGetProperty("running", out var rEl)
