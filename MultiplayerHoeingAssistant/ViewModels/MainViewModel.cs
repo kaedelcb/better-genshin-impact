@@ -4108,7 +4108,7 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 _processMonitor.Start();
             }
-            _commandExecutor = new CommandExecutor(_processMonitor, _config.BgiPath);
+            _commandExecutor = new CommandExecutor(_processMonitor, _config.BgiPath, () => _externalClient);
         }
     }
 
@@ -5543,31 +5543,73 @@ public class MainViewModel : INotifyPropertyChanged
         // 确认 BGI 无任务在运行（或中断上下文已就位 hasSuspendedTaskContext=true）后再进入批次 task.start。
         // 超时仅记警告日志后继续，保持原有容错语义。
         // [切片4] 传输层 ext 通道优先（长连接复用，无每轮新建管道开销），v2 独立短连接兜底。
+        // [切片7] settle 判定事件化（capability task.queue）：先订阅 slotReleased 等待（先订阅后动作），
+        // 再一次快照探测（已落定则直接通过，覆盖"suspend 时本就无任务在跑、不会发 slotReleased"的场景）；
+        // 未落定则等事件（6s 上限），超时/通道不可用落回下方 200ms×30 轮询兜底（现状逻辑逐字节保留）。
         var bgiSettled = false;
-        for (var waitRound = 0; waitRound < 30; waitRound++)
+        var extForSettle = _externalClient;
+        if (extForSettle is { State: BgiExternalLinkState.Ready }
+            && extForSettle.HasCapability(BgiExternalClient.CapabilityTaskQueue))
         {
+            var slotWait = extForSettle.WaitSlotReleasedAsync(TimeSpan.FromSeconds(6));
             try
             {
-                var waitResp = await SendBgiIpcPreferredAsync("task.status", null, 1000);
-                if (waitResp is { Success: true } && !string.IsNullOrEmpty(waitResp.Data))
+                var probe = await SendBgiIpcPreferredAsync("task.status", null, 1000);
+                if (probe is { Success: true } && !string.IsNullOrEmpty(probe.Data))
                 {
-                    var wdata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(waitResp.Data);
-                    var stillRunning = wdata.TryGetProperty("running", out var rEl)
-                        && rEl.ValueKind == System.Text.Json.JsonValueKind.True;
-                    var hasCtx = wdata.TryGetProperty("hasSuspendedTaskContext", out var hEl)
-                        && hEl.ValueKind == System.Text.Json.JsonValueKind.True;
-                    if (!stillRunning || hasCtx)
+                    var pdata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(probe.Data);
+                    var stillRunning = pdata.TryGetProperty("running", out var prEl)
+                        && prEl.ValueKind == System.Text.Json.JsonValueKind.True;
+                    var hasCtxNow = pdata.TryGetProperty("hasSuspendedTaskContext", out var phEl)
+                        && phEl.ValueKind == System.Text.Json.JsonValueKind.True;
+                    if (!stillRunning || hasCtxNow)
                     {
                         bgiSettled = true;
-                        break;
+                    }
+                }
+
+                if (!bgiSettled)
+                {
+                    bgiSettled = await slotWait;
+                    if (bgiSettled)
+                    {
+                        AddLog("[上线探针] 收到 task.slotReleased 事件，BGI 任务槽位已释放");
                     }
                 }
             }
             catch
             {
-                // IPC 暂不可达（BGI 忙/重启中），继续等待下一轮
+                // 通道瞬态失败，落轮询兜底
             }
-            await Task.Delay(200);
+        }
+
+        if (!bgiSettled)
+        {
+            for (var waitRound = 0; waitRound < 30; waitRound++)
+            {
+                try
+                {
+                    var waitResp = await SendBgiIpcPreferredAsync("task.status", null, 1000);
+                    if (waitResp is { Success: true } && !string.IsNullOrEmpty(waitResp.Data))
+                    {
+                        var wdata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(waitResp.Data);
+                        var stillRunning = wdata.TryGetProperty("running", out var rEl)
+                            && rEl.ValueKind == System.Text.Json.JsonValueKind.True;
+                        var hasCtx = wdata.TryGetProperty("hasSuspendedTaskContext", out var hEl)
+                            && hEl.ValueKind == System.Text.Json.JsonValueKind.True;
+                        if (!stillRunning || hasCtx)
+                        {
+                            bgiSettled = true;
+                            break;
+                        }
+                    }
+                }
+                catch
+                {
+                    // IPC 暂不可达（BGI 忙/重启中），继续等待下一轮
+                }
+                await Task.Delay(200);
+            }
         }
         if (!bgiSettled)
         {

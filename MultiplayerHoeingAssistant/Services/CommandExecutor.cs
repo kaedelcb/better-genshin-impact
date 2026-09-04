@@ -8,6 +8,10 @@ public class CommandExecutor
 {
     private readonly BgiProcessMonitor _monitor;
     private readonly string _bgiPath;
+    /// <summary>[切片7] ext 通道客户端提供器（MainViewModel 注入 () => _externalClient）；null = 无 ext 通道，全部走 v2 旧路径。</summary>
+    private readonly Func<BgiExternalClient?>? _externalClientProvider;
+    /// <summary>[切片7] 队列式任务终态事件等待的兜底超时（事件经 SDK 断线续传不丢，超时仅为防永久挂起）。</summary>
+    private static readonly TimeSpan TaskTerminalWaitTimeout = TimeSpan.FromHours(24);
     /// <summary>本批次是否已通过 RestartBgi 回退重启过 BGI（批次级状态，由上游批次循环管理生命周期）。</summary>
     private bool _hasRestartedThisBatch;
 
@@ -17,10 +21,11 @@ public class CommandExecutor
         _hasRestartedThisBatch = false;
     }
 
-    public CommandExecutor(BgiProcessMonitor monitor, string bgiPath)
+    public CommandExecutor(BgiProcessMonitor monitor, string bgiPath, Func<BgiExternalClient?>? externalClientProvider = null)
     {
         _monitor = monitor;
         _bgiPath = bgiPath;
+        _externalClientProvider = externalClientProvider;
     }
 
     /// <summary>
@@ -189,7 +194,29 @@ public class CommandExecutor
             // 跳过 IPC 阶段直接走阶段2（KillBgi 只杀本会话进程，语义仍然正确）
             if (ipcClient.IsSessionTrusted)
             {
-                await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.stop" });
+                // [切片7] ext 通道活跃且能力命中时走 ext.task.stop {clearQueue:true}（"停止"含"别再继续"语义，
+                // 清空在队项）；通道瞬态失败落回 v2 task.stop。两阶段骨架（3s 等待 + 进程检查 + 杀进程回退）逐字节保留。
+                var stopSent = false;
+                var ext = _externalClientProvider?.Invoke();
+                if (ext is { State: BgiExternalLinkState.Ready }
+                    && ext.HasCapability(BgiExternalClient.CapabilityTaskQueue))
+                {
+                    try
+                    {
+                        var extStop = await ext.StopTaskAsync(clearQueue: true);
+                        stopSent = extStop.Success;
+                    }
+                    catch
+                    {
+                        // 通道瞬态失败，落回 v2 task.stop
+                    }
+                }
+
+                if (!stopSent)
+                {
+                    await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.stop" });
+                }
+
                 await Task.Delay(3000);
                 var currentSession = System.Diagnostics.Process.GetCurrentProcess().SessionId;
                 if (System.Diagnostics.Process.GetProcessesByName("BetterGI")
@@ -265,6 +292,21 @@ public class CommandExecutor
                 await WaitForBgiIpcReadyAsync();
                 return new CommandResult { Status = "success", Message = $"配置组 {groupName} 已由 BGI 命令行串行执行" };
             }
+        }
+
+        // [切片7] ext 任务队列通道（capability task.queue）：入队即返回 + 事件驱动等终态，
+        // 全程无 task_already_running 撞锁、无 1s×6 重试噪音；通道不可用走下方 v2 路径（逐字节保留）。
+        var extClient = _externalClientProvider?.Invoke();
+        if (extClient is { State: BgiExternalLinkState.Ready }
+            && extClient.HasCapability(BgiExternalClient.CapabilityTaskQueue))
+        {
+            var queueResult = await TryStartViaQueueAsync(extClient, groupName, null, startFromIndex, generation);
+            if (queueResult != null)
+            {
+                _hasRestartedThisBatch = false; // ext 通道成功 = BGI 在线，后续不再需要回退标记
+                return queueResult;
+            }
+            // null = 通道瞬态失败，落回 v2 路径
         }
 
         try
@@ -352,6 +394,19 @@ public class CommandExecutor
     /// </summary>
     private async Task<CommandResult> StartOneClickAsync(string configName, int startFromIndex, int generation = 0)
     {
+        // [切片7] ext 任务队列通道（同 StartGroupAsync）；通道不可用走下方 v2 路径（逐字节保留）。
+        var extClient = _externalClientProvider?.Invoke();
+        if (extClient is { State: BgiExternalLinkState.Ready }
+            && extClient.HasCapability(BgiExternalClient.CapabilityTaskQueue))
+        {
+            var queueResult = await TryStartViaQueueAsync(extClient, null, configName, startFromIndex, generation);
+            if (queueResult != null)
+            {
+                return queueResult;
+            }
+            // null = 通道瞬态失败，落回 v2 路径
+        }
+
         try
         {
             // 通过 IPC 发 task.start（一条龙内联启动）
@@ -385,6 +440,64 @@ public class CommandExecutor
         await Task.Delay(2000);
         _monitor.RestartBgi($"--startOneDragon \"{configName}\"");
         return new CommandResult { Status = "success", Message = $"一条龙 {configName} 已通过重启启动" };
+    }
+
+    /// <summary>
+    /// [切片7] 经 ext 任务队列通道提交启动：先创建终态事件等待器（先订阅后动作，红线7），
+    /// 再 Submit 入队拿 taskHandle，最后等 task.completed/failed/queueCancelled 事件。
+    /// 返回 null = 通道瞬态失败（调用方落 v2 路径，1s×6 重试锤子与杀进程回退逐字节保留）；
+    /// 明确业务拒绝（queue_full 等）直接失败返回，绝不进杀进程回退（与 b5386005 无损拒绝语义一致）。
+    /// 返回时机与 v2 一致：任务真正执行完（或被取消）后才返回，批次循环语义不变。
+    /// </summary>
+    private async Task<CommandResult?> TryStartViaQueueAsync(
+        BgiExternalClient ext, string? groupName, string? configName, int startFromIndex, int generation)
+    {
+        var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
+        try
+        {
+            // 等待器先于 Submit 创建：adopted 场景下既有任务可能在我们 Submit 前就完成，
+            // 其终态事件先入等待器缓冲，按句柄匹配时不丢
+            using var waiter = ext.CreateTaskTerminalWaiter();
+            var submit = await ext.SubmitTaskStartAsync(groupName, configName, startFromIndex, generation);
+            if (!submit.Success)
+            {
+                ProbeLog($"[CommandExecutor][切片7] ext.task.start 被队列拒绝 {desc} errorCode={submit.ErrorCode}");
+                return new CommandResult { Status = "failed", Message = $"BGI 任务队列拒绝启动{desc}（{submit.ErrorCode ?? "unknown"}）：{submit.ErrorMessage ?? "无详情"}。请稍后重试或先取消排队任务" };
+            }
+
+            if (submit.Status == "already_executed")
+            {
+                // 与 v2 路径一致：幂等命中按成功处理（同 generation+name 已执行过）
+                ProbeLog($"[CommandExecutor][切片7] ext.task.start 幂等命中 already_executed {desc} generation={generation}");
+                return new CommandResult { Status = "success", Message = $"{desc} 已执行过（generation={generation}，幂等跳过）" };
+            }
+
+            ProbeLog($"[CommandExecutor][切片7] ext.task.start 已入队 {desc} status={submit.Status} taskHandle={submit.TaskHandle} queuePosition={submit.QueuePosition}");
+            var terminal = await waiter.WaitForHandleAsync(submit.TaskHandle!, TaskTerminalWaitTimeout);
+            if (terminal == null)
+            {
+                return new CommandResult { Status = "failed", Message = $"{desc} 等待执行结果超时（{TaskTerminalWaitTimeout.TotalHours}h 兜底），taskHandle={submit.TaskHandle}" };
+            }
+
+            return terminal.Kind switch
+            {
+                BgiTaskTerminalKind.Completed when terminal.Cancelled =>
+                    new CommandResult { Status = "cancelled", Message = $"{desc} 执行中被取消" },
+                BgiTaskTerminalKind.Completed =>
+                    new CommandResult { Status = "success", Message = $"{desc} 已启动并执行完成（队列通道）" },
+                BgiTaskTerminalKind.QueueCancelled =>
+                    new CommandResult { Status = "cancelled", Message = $"{desc} 排队中被取消" },
+                _ => new CommandResult { Status = "failed", Message = $"{desc} 执行失败（{terminal.ErrorCode ?? "unknown"}）：{terminal.ErrorMessage ?? "无详情"}" },
+            };
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.IO.IOException
+                                   or TimeoutException or OperationCanceledException
+                                   or System.Text.Json.JsonException)
+        {
+            // 通道瞬态失败（断线/超时/握手失效）→ null 让调用方落 v2 路径
+            ProbeLog($"[CommandExecutor][切片7] 任务队列通道瞬态失败，落回 v2 路径 {desc}: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>执行快捷键：IPC 发 action.execute_hotkey</summary>

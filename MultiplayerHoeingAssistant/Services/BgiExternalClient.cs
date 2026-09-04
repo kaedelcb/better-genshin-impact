@@ -40,6 +40,13 @@ public static class BgiExternalEventNames
     public const string TaskSuspended = "task.suspended";
     public const string TaskResumed = "task.resumed";
 
+    // [切片7] 任务协调器生命周期事件（《BGI任务协调层设计方案》§4.3）
+    public const string TaskQueued = "task.queued";
+    public const string TaskCompleted = "task.completed";
+    public const string TaskFailed = "task.failed";
+    public const string TaskQueueCancelled = "task.queueCancelled";
+    public const string TaskSlotReleased = "task.slotReleased";
+
     public static readonly string[] All =
     [
         TaskStarted,
@@ -49,7 +56,53 @@ public static class BgiExternalEventNames
         OnlineTriggered,
         TaskSuspended,
         TaskResumed,
+        TaskQueued,
+        TaskCompleted,
+        TaskFailed,
+        TaskQueueCancelled,
+        TaskSlotReleased,
     ];
+}
+
+/// <summary>[切片7] ext.task.start 队列式提交的响应投影。</summary>
+public sealed class BgiTaskSubmitResult
+{
+    public bool Success { get; init; }
+
+    /// <summary>queued / adopted / already_executed。</summary>
+    public string? Status { get; init; }
+
+    /// <summary>服务端任务句柄（queued/adopted 时有效），事件路由键。</summary>
+    public string? TaskHandle { get; init; }
+
+    public int QueuePosition { get; init; }
+
+    public string? ErrorCode { get; init; }
+
+    public string? ErrorMessage { get; init; }
+}
+
+/// <summary>[切片7] 任务终态事件种类。</summary>
+public enum BgiTaskTerminalKind
+{
+    Completed,
+    Failed,
+    QueueCancelled,
+}
+
+/// <summary>[切片7] 一条任务终态事件（task.completed/failed/queueCancelled，按 taskHandle 路由）。</summary>
+public sealed class BgiTaskTerminalEvent
+{
+    public required BgiTaskTerminalKind Kind { get; init; }
+
+    public required string TaskHandle { get; init; }
+
+    /// <summary>task.completed 专用：执行中被取消（F11 等）。</summary>
+    public bool Cancelled { get; init; }
+
+    public string? ErrorCode { get; init; }
+
+    public string? ErrorMessage { get; init; }
 }
 
 /// <summary>一条 ext.event 事件帧（服务端主动推送，Notification 语义）。</summary>
@@ -353,6 +406,102 @@ public sealed class BgiExternalClient : IDisposable
         => Capabilities is not null
            && Capabilities.TryGetValue(name, out var supported)
            && supported;
+
+    /// <summary>[切片7] 能力位：BGI 支持队列式任务编排（ext.task.start 入队 + 生命周期事件 + ext.task.cancel）。</summary>
+    public const string CapabilityTaskQueue = "task.queue";
+
+    /// <summary>[切片7] ext.task.stop：ext 通道默认 clearQueue=true（"停止"含"别再继续"语义，清空在队项并逐项发 task.queueCancelled）。</summary>
+    public Task<BgiExternalResponse> StopTaskAsync(bool clearQueue = true, CancellationToken cancellationToken = default)
+        => SendCommandAsync(ExternalOperations.TaskStop, new { clearQueue }, CommandTimeout, cancellationToken);
+
+    /// <summary>
+    /// [切片7] 队列式提交 task.start：入队拿 taskHandle 立即返回（BGI 侧串行派发）。
+    /// 执行结果不走响应，走 task.completed/failed 事件（配合 CreateTaskTerminalWaiter 先订阅后动作）。
+    /// 通道未就绪抛 InvalidOperationException（调用方降级 v2 路径）。
+    /// </summary>
+    public async Task<BgiTaskSubmitResult> SubmitTaskStartAsync(
+        string? groupName,
+        string? configName,
+        int startFromIndex,
+        int generation,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await SendCommandAsync(
+                ExternalOperations.TaskStart,
+                new { groupName, configName, startFromIndex, generation },
+                CommandTimeout,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!response.Success || response.Data is null)
+        {
+            return new BgiTaskSubmitResult
+            {
+                Success = false,
+                ErrorCode = response.ErrorCode,
+                ErrorMessage = response.ErrorMessage,
+            };
+        }
+
+        using var doc = JsonDocument.Parse(response.Data);
+        var root = doc.RootElement;
+        return new BgiTaskSubmitResult
+        {
+            Success = true,
+            Status = root.TryGetProperty("status", out var stEl) && stEl.ValueKind == JsonValueKind.String
+                ? stEl.GetString()
+                : null,
+            TaskHandle = root.TryGetProperty("taskHandle", out var thEl) && thEl.ValueKind == JsonValueKind.String
+                ? thEl.GetString()
+                : null,
+            QueuePosition = root.TryGetProperty("queuePosition", out var qpEl) && qpEl.ValueKind == JsonValueKind.Number
+                ? qpEl.GetInt32()
+                : 0,
+        };
+    }
+
+    /// <summary>
+    /// [切片7] 创建任务终态事件等待器：创建即订阅（先订阅后动作，红线7），之后按 taskHandle 等待。
+    /// 断线重连后 SDK 恢复订阅 + lastKnownRevision 补发，事件经 EventReceived 分派，等待不丢。
+    /// 用毕 Dispose 退订。
+    /// </summary>
+    public BgiTaskTerminalWaiter CreateTaskTerminalWaiter() => new(this);
+
+    /// <summary>
+    /// [切片7] 等一次 task.slotReleased 事件（P1-C settle 判定事件化：槽位真正释放才继续，
+    /// 替代"轮询 running 翻转后立即 start 撞清理窗口"）。true = 槽位已释放；false = 超时（调用方走轮询兜底）。
+    /// 先订阅后动作：订阅在本方法返回前的同步段完成。
+    /// </summary>
+    public Task<bool> WaitSlotReleasedAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+    {
+        var completionSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void Handler(BgiExternalEvent evt)
+        {
+            if (evt.Name == BgiExternalEventNames.TaskSlotReleased)
+            {
+                completionSource.TrySetResult(true);
+            }
+        }
+
+        EventReceived += Handler;
+        return AwaitCoreAsync();
+
+        async Task<bool> AwaitCoreAsync()
+        {
+            try
+            {
+                return await completionSource.Task.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                return false;
+            }
+            finally
+            {
+                EventReceived -= Handler;
+            }
+        }
+    }
 
     /// <summary>
     /// [切片4] 拉取一次 ext.task.status 快照并更新 LatestStatusSnapshot* / 触发 StatusSnapshotUpdated。
@@ -1004,6 +1153,9 @@ public sealed class BgiExternalClient : IDisposable
     private static class ExternalOperations
     {
         public const string Hello = "ext.hello";
+        public const string TaskStart = "ext.task.start";
+        public const string TaskStop = "ext.task.stop";
+        public const string TaskCancel = "ext.task.cancel";
         public const string TaskStatus = "ext.task.status";
         public const string ConfigList = "ext.config.list";
         public const string ConfigPullGroup = "ext.config.pullGroup";
@@ -1016,5 +1168,137 @@ public sealed class BgiExternalClient : IDisposable
         public const string Response = "response";
         public const string CapabilityEventPush = "event.push";
         public const string CapabilityEventReplay = "event.replay";
+    }
+}
+
+/// <summary>
+/// [切片7] 任务终态事件等待器：创建即订阅 SDK 事件流（先订阅后动作），按 taskHandle 路由
+/// task.completed/failed/queueCancelled；句柄未知前先到的终态事件入缓冲，WaitForHandleAsync 时匹配。
+/// 用毕 Dispose 退订（finally 语义由调用方 using 保证）。
+/// </summary>
+public sealed class BgiTaskTerminalWaiter : IDisposable
+{
+    private const int MaxBufferedEvents = 64;
+
+    private readonly BgiExternalClient _client;
+    private readonly object _lock = new();
+    private readonly List<BgiTaskTerminalEvent> _buffered = new();
+    private readonly Dictionary<string, TaskCompletionSource<BgiTaskTerminalEvent>> _waiters = new();
+
+    internal BgiTaskTerminalWaiter(BgiExternalClient client)
+    {
+        _client = client;
+        _client.EventReceived += OnEvent;
+    }
+
+    /// <summary>等待指定句柄的终态事件。返回 null = 超时（调用方按兜底语义处理）。</summary>
+    public async Task<BgiTaskTerminalEvent?> WaitForHandleAsync(
+        string taskHandle,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        var completionSource = new TaskCompletionSource<BgiTaskTerminalEvent>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_lock)
+        {
+            var hit = _buffered.FindIndex(e => e.TaskHandle == taskHandle);
+            if (hit >= 0)
+            {
+                var buffered = _buffered[hit];
+                _buffered.RemoveAt(hit);
+                return buffered;
+            }
+
+            _waiters[taskHandle] = completionSource;
+        }
+
+        try
+        {
+            return await completionSource.Task.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            return null;
+        }
+        finally
+        {
+            lock (_lock)
+            {
+                _waiters.Remove(taskHandle);
+            }
+        }
+    }
+
+    private void OnEvent(BgiExternalEvent evt)
+    {
+        var kind = evt.Name switch
+        {
+            BgiExternalEventNames.TaskCompleted => BgiTaskTerminalKind.Completed,
+            BgiExternalEventNames.TaskFailed => BgiTaskTerminalKind.Failed,
+            BgiExternalEventNames.TaskQueueCancelled => BgiTaskTerminalKind.QueueCancelled,
+            _ => (BgiTaskTerminalKind?)null,
+        };
+        if (kind is null)
+        {
+            return;
+        }
+
+        if (!evt.Payload.TryGetProperty("taskHandle", out var handleEl)
+            || handleEl.ValueKind != JsonValueKind.String
+            || handleEl.GetString() is not { } handle)
+        {
+            return;
+        }
+
+        var terminal = new BgiTaskTerminalEvent
+        {
+            Kind = kind.Value,
+            TaskHandle = handle,
+            Cancelled = evt.Payload.TryGetProperty("cancelled", out var cEl)
+                        && cEl.ValueKind == JsonValueKind.True,
+            ErrorCode = evt.Payload.TryGetProperty("errorCode", out var ecEl)
+                        && ecEl.ValueKind == JsonValueKind.String
+                ? ecEl.GetString()
+                : null,
+            ErrorMessage = evt.Payload.TryGetProperty("message", out var msgEl)
+                           && msgEl.ValueKind == JsonValueKind.String
+                ? msgEl.GetString()
+                : null,
+        };
+
+        TaskCompletionSource<BgiTaskTerminalEvent>? waiter = null;
+        lock (_lock)
+        {
+            if (_waiters.Remove(handle, out waiter))
+            {
+                // 命中等待者（TCS 为 RunContinuationsAsynchronously，锁内 Set 安全）
+            }
+            else
+            {
+                // 句柄未知（Submit 还没返回）：入缓冲，WaitForHandleAsync 时匹配
+                _buffered.Add(terminal);
+                if (_buffered.Count > MaxBufferedEvents)
+                {
+                    _buffered.RemoveAt(0);
+                }
+            }
+        }
+
+        waiter?.TrySetResult(terminal);
+    }
+
+    public void Dispose()
+    {
+        _client.EventReceived -= OnEvent;
+        lock (_lock)
+        {
+            foreach (var waiter in _waiters.Values)
+            {
+                waiter.TrySetCanceled();
+            }
+
+            _waiters.Clear();
+            _buffered.Clear();
+        }
     }
 }
