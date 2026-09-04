@@ -1550,7 +1550,13 @@ internal sealed class InstanceRequestHandler
 
             if (!RemoteEditSession.TryBegin(targetName, targetUid, groupName, packageJson))
             {
-                return InstanceIpcEnvelope.Response(request, new { state = "rejected", error = "已有进行中的远程编辑会话" });
+                // 同目标同组的重复开单（ext 通道已执行但响应丢失→v2 兜底重发/用户连点/重试）：
+                // 现有会话就是这次请求创建的，采用它并回报 editing，避免误报"会话被占用"
+                if (RemoteEditSession.IsSameInFlightSession(targetUid, groupName))
+                {
+                    return InstanceIpcEnvelope.Response(request, new { state = "editing", adopted = true });
+                }
+                return InstanceIpcEnvelope.Response(request, new { state = "rejected", error = "已有进行中的远程编辑会话（请先完成或关闭当前编辑窗口）" });
             }
 
             try

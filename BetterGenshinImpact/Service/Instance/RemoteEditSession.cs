@@ -23,6 +23,10 @@ internal static class RemoteEditSession
     /// <summary>最近一次状态变更时间（TryBegin / MarkSaved / MarkCancelled 时刷新），用于僵尸会话回收。</summary>
     private static DateTime _lastActivityUtc = DateTime.MinValue;
 
+    // 当前会话目标（editing 期间有效）：用于识别"同目标同组的重复开单"（ext+v2 双发/用户连点/网络重试）
+    private static string? _targetUid;
+    private static string? _groupName;
+
     // 保存结果（saved 状态下供 config.remote_editor_result 读取）
     private static string? _scriptGroupConfigJson;
     private static string? _soloTaskName;
@@ -56,9 +60,27 @@ internal static class RemoteEditSession
             _scriptGroupConfigJson = null;
             _soloTaskName = null;
             _soloTaskSettingsJson = null;
+            _targetUid = targetUid;
+            _groupName = groupName;
             _state = "editing";
             _lastActivityUtc = DateTime.UtcNow;
             return true;
+        }
+    }
+
+    /// <summary>
+    /// 是否存在与 (targetUid, groupName) 相同的进行中（editing）会话。
+    /// 用于把"同一次编辑的重复开单"（ext 通道执行成功但响应丢失后 v2 兜底重发、用户连点、网络重试）
+    /// 识别为幂等命中而非冲突——调用方应对此返回 editing 而非"已有进行中的会话"。
+    /// </summary>
+    public static bool IsSameInFlightSession(string targetUid, string groupName)
+    {
+        lock (Sync)
+        {
+            ExpireStaleLocked();
+            return _state == "editing"
+                && string.Equals(_targetUid, targetUid, StringComparison.Ordinal)
+                && string.Equals(_groupName, groupName, StringComparison.Ordinal);
         }
     }
 
@@ -147,6 +169,8 @@ internal static class RemoteEditSession
     {
         _state = "idle";
         _lastActivityUtc = DateTime.MinValue;
+        _targetUid = null;
+        _groupName = null;
         _scriptGroupConfigJson = null;
         _soloTaskName = null;
         _soloTaskSettingsJson = null;

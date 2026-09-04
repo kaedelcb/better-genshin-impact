@@ -3899,34 +3899,71 @@ public class MainViewModel : INotifyPropertyChanged
 
     private async Task ExecuteLocalCommandAsync(string cmd, Dictionary<string, object>? param, List<string>? targetUids)
     {
-        var remoteCmd = new RemoteCommand
+        var selfUid = _config?.PlayerUid ?? "";
+        var targets = (targetUids ?? GetSelectedTargets())
+            .Where(t => !string.IsNullOrEmpty(t)).Distinct().ToList();
+
+        RemoteCommand NewCmd(List<string> target) => new()
         {
             Cmd = cmd,
             Sender = _config?.PlayerName ?? "",
-            SenderUid = _config?.PlayerUid ?? "",
-            Target = targetUids ?? GetSelectedTargets(),
-            CommandId = "local_" + DateTime.Now.Ticks,
+            SenderUid = selfUid,
+            Target = target,
+            CommandId = "local_" + Guid.NewGuid().ToString("N"),
             Params = param
         };
 
-        if (_commandExecutor != null)
+        if (_commandExecutor == null)
         {
-            // 有本地 BGI：走本地 IPC 执行（对自己或对别人，取决于 targetUids）
-            var result = await _commandExecutor.ExecuteAsync(remoteCmd);
+            // 遥控器模式：无本地 BGI，全部目标（含同 UID 的执行端）都走 SignalR
+            if (_config?.ObserverMode == true)
+            {
+                if (targets.Count == 0)
+                {
+                    AddLog("没有在线且被选中的成员，未发送命令");
+                    return;
+                }
+                if (_signalRClient != null)
+                {
+                    AddLog($"遥控器模式: 通过 SignalR 发送 {cmd} 命令");
+                    await _signalRClient.SendRemoteCommandAsync(NewCmd(targets));
+                }
+                else
+                {
+                    AddLog("SignalR 未连接，无法发送命令");
+                }
+            }
+            return;
+        }
+
+        // 执行模式：按目标分流——自己走本地 IPC，别人走 SignalR 定向下发。
+        // （历史 bug：以前不管点谁的卡片都在本机执行，"给别人启动任务"从未真正生效）
+        var selfTargeted = targets.Count == 0 || targets.Contains(selfUid);
+        var remoteTargets = targets.Where(t => t != selfUid).ToList();
+
+        if (selfTargeted)
+        {
+            // 有本地 BGI：走本地 IPC 执行
+            var result = await _commandExecutor.ExecuteAsync(NewCmd([selfUid]));
             AddLog($"命令结果: {result.Message}");
         }
-        else if (_config?.ObserverMode == true)
+        if (remoteTargets.Count > 0)
         {
-            // 遥控器模式：无本地 BGI，直接通过 SignalR 发送远程命令给目标成员
             if (_signalRClient != null)
             {
-                AddLog($"遥控器模式: 通过 SignalR 发送 {cmd} 命令");
-                await _signalRClient.SendRemoteCommandAsync(remoteCmd);
+                var names = string.Join("、",
+                    remoteTargets.Select(u => Members.FirstOrDefault(m => m.PlayerUid == u)?.PlayerName ?? u));
+                AddLog($"已向 {names} 远程下发 {cmd} 命令");
+                await _signalRClient.SendRemoteCommandAsync(NewCmd(remoteTargets));
             }
             else
             {
-                AddLog("SignalR 未连接，无法发送命令");
+                AddLog("SignalR 未连接，无法向远程成员下发命令");
             }
+        }
+        if (!selfTargeted && remoteTargets.Count == 0)
+        {
+            AddLog("没有有效目标，命令未执行");
         }
     }
 
