@@ -129,6 +129,7 @@ internal sealed class InstanceRequestHandler
                 InstanceOperations.ConfigOpenRemoteEditor => HandleConfigOpenRemoteEditor(connection, request),
                 InstanceOperations.ConfigRemoteEditorResult => HandleConfigRemoteEditorResult(connection, request),
                 InstanceOperations.ConfigApplyGroup => await HandleConfigApplyGroup(connection, request),
+                InstanceOperations.ConfigAbortRemoteEditor => HandleConfigAbortRemoteEditor(connection, request),
                 _ => InstanceIpcEnvelope.Failure(
                     request,
                     "unsupported_operation",
@@ -170,6 +171,7 @@ internal sealed class InstanceRequestHandler
         or InstanceOperations.ConfigApplyGroup
         or InstanceOperations.ConfigOpenRemoteEditor
         or InstanceOperations.ConfigPullGroup
+        or InstanceOperations.ConfigAbortRemoteEditor
         or InstanceOperations.TaskStatus
         or InstanceOperations.ConfigList
         or InstanceOperations.Ping;
@@ -555,8 +557,6 @@ internal sealed class InstanceRequestHandler
     {
         try
         {
-            // 标记配置组是否在 RunMulti 执行中被取消（F11 停止等），末尾据此返回 cancelled 状态
-            var configGroupCancelled = false;
             var groupName = request.Data?["groupName"]?.ToString();
             var configName = request.Data?["configName"]?.ToString();
             var startFromIndex = request.Data?["startFromIndex"]?.ToObject<int>() ?? 0;
@@ -594,6 +594,39 @@ internal sealed class InstanceRequestHandler
             {
                 _lastExecutedTask = (generation, taskName);
             }
+
+            // [切片7] 执行段已抽为 ExecuteTaskStartCoreAsync：v2 handler 与 BgiTaskCoordinator
+            // 共用单一事实源，行为逐字节等价。返回 true = 配置组在 RunMulti 执行中被取消（F11 停止等）。
+            var configGroupCancelled = await ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex);
+
+            if (configGroupCancelled)
+            {
+                return InstanceIpcEnvelope.Response(request, new { status = "cancelled", message = "配置组 " + groupName + " 执行中被取消", groupName, configName, startFromIndex });
+            }
+            return InstanceIpcEnvelope.Response(request, new { status = "started", groupName, configName, startFromIndex });
+        }
+        catch (Exception ex)
+        {
+            return InstanceIpcEnvelope.Failure(request, "task_start_failed", $"启动任务失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// [切片7] task.start 执行段（从 HandleTaskStart 原样抽出，v2 handler 与 BgiTaskCoordinator
+    /// pump 共用的单一事实源，行为逐字节等价）：先在主线程 Cancel()+CancelTokenOnly() 中断当前任务，
+    /// 只读轮询等任务锁释放（200ms/15s 兜底），再走 Dispatcher.InvokeAsync 启动配置组（RunMulti）或
+    /// 一条龙（OnOneKeyExecute）并同步等执行完。
+    /// 返回 true = 配置组在 RunMulti 执行中被取消（F11 停止等），调用方据此返回 cancelled 状态。
+    /// 前置条件（幂等检查、无损拒绝、幂等登记、scriptService 非空）由调用方负责。
+    /// </summary>
+    internal async Task<bool> ExecuteTaskStartCoreAsync(
+        BetterGenshinImpact.Service.Interface.IScriptService scriptService,
+        string? groupName,
+        string? configName,
+        int startFromIndex)
+    {
+        // 标记配置组是否在 RunMulti 执行中被取消（F11 停止等），末尾据此返回 cancelled 状态
+        var configGroupCancelled = false;
 
             // 先在主线程上停止当前任务。CancelTokenOnly() 重建 Cts 但不清 WasCancelled，
             // 保留 WasCancelled 供后续 HandleTaskResume 判断是否恢复旧任务。
@@ -736,16 +769,7 @@ internal sealed class InstanceRequestHandler
                 }).Task;
             }
 
-            if (configGroupCancelled)
-            {
-                return InstanceIpcEnvelope.Response(request, new { status = "cancelled", message = "配置组 " + groupName + " 执行中被取消", groupName, configName, startFromIndex });
-            }
-            return InstanceIpcEnvelope.Response(request, new { status = "started", groupName, configName, startFromIndex });
-        }
-        catch (Exception ex)
-        {
-            return InstanceIpcEnvelope.Failure(request, "task_start_failed", $"启动任务失败: {ex.Message}");
-        }
+            return configGroupCancelled;
     }
 
     internal InstanceIpcEnvelope HandleTaskStatus(InstanceConnection connection, InstanceIpcEnvelope request)
@@ -1556,7 +1580,15 @@ internal sealed class InstanceRequestHandler
                 {
                     return InstanceIpcEnvelope.Response(request, new { state = "editing", adopted = true });
                 }
-                return InstanceIpcEnvelope.Response(request, new { state = "rejected", error = "已有进行中的远程编辑会话（请先完成或关闭当前编辑窗口）" });
+                // 拒绝必须带占用详情（哪个会话、什么状态、占了多久），否则助手/用户只能盲猜；
+                // saved/cancelled 尸体已在 TryBegin 内回收放行，走到这里的一定是真实 editing 占用。
+                var occ = RemoteEditSession.GetOccupyingInfo();
+                return InstanceIpcEnvelope.Response(request, new
+                {
+                    state = "rejected",
+                    error = $"已有进行中的远程编辑会话（正在编辑 {occ.TargetUid} 的「{occ.GroupName}」，已持续 {(int)occ.AgeSeconds} 秒；请先完成/关闭该编辑窗口，或由助手发送 config.abort_remote_editor 强制中止）",
+                    occupying = new { state = occ.State, targetUid = occ.TargetUid, groupName = occ.GroupName, ageSeconds = occ.AgeSeconds }
+                });
             }
 
             try
@@ -1567,6 +1599,8 @@ internal sealed class InstanceRequestHandler
                     var window = new BetterGenshinImpact.View.Windows.RemoteConfigEditWindow(
                         targetName, targetUid, groupName, packageJson);
                     window.Show();
+                    // 登记窗口引用：助手主动中止（config.abort_remote_editor）时强制关窗用
+                    RemoteEditSession.RegisterWindow(window);
                 });
             }
             catch (Exception ex)
@@ -1581,6 +1615,20 @@ internal sealed class InstanceRequestHandler
         catch (Exception ex)
         {
             return InstanceIpcEnvelope.Failure(request, "open_editor_failed", $"打开远程编辑器失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>config.abort_remote_editor：助手主动中止当前远程编辑会话（含强制关窗），幂等——idle 时返回 aborted=false 不报错。</summary>
+    internal InstanceIpcEnvelope HandleConfigAbortRemoteEditor(InstanceConnection connection, InstanceIpcEnvelope request)
+    {
+        try
+        {
+            var aborted = RemoteEditSession.AbortActiveSession("助手请求中止（config.abort_remote_editor）");
+            return InstanceIpcEnvelope.Response(request, new { state = "idle", aborted });
+        }
+        catch (Exception ex)
+        {
+            return InstanceIpcEnvelope.Failure(request, "abort_editor_failed", $"中止远程编辑会话失败: {ex.Message}");
         }
     }
 
