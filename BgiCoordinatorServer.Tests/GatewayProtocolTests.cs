@@ -19,7 +19,7 @@ public class GatewayProtocolTests
         "HostRouteListReady", "PlayerAnomalyNotify", "PlayerAnomalyNotifyFightPoint",
         "PlayerAnomalyRecovered", "MemberStatusChanged", "StartRoute", "RequestSkipToProgress",
         "CollectiveSkipDegraded", "ControlRoomPlayersUpdated", "RemoteCommand", "JoinRejected",
-        "AllReady", "AllReadyConfirm", "MemberScreenshot", "MemberLogBatch",
+        "AllReady", "AllReadyConfirm", "MemberScreenshot", "MemberScreenshotRequested", "MemberLogBatch",
         "MemberLogSubscribersChanged", "MemberLogFilesRequested", "MemberLogFileList",
         "MemberLogDownloadRequested", "MemberLogFileChunk", "RemoteCommandAck",
         "AbnormalPlayerRecovered", "UnifiedWaitPoint", "AllPlayersArrived", "RouteEnforceSync",
@@ -38,7 +38,7 @@ public class GatewayProtocolTests
 
         var mapKeys = GatewayProtocol.LegacyMethodMap.Keys.ToHashSet(StringComparer.Ordinal);
 
-        Assert.Equal(65, GatewayProtocol.LegacyMethodMap.Count);
+        Assert.Equal(67, GatewayProtocol.LegacyMethodMap.Count);
 
         var missing = hubMethods.Except(mapKeys).ToList();
         var extra = mapKeys.Except(hubMethods).ToList();

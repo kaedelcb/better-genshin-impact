@@ -9,20 +9,17 @@ namespace MultiplayerHoeingAssistant.Services;
 
 /// <summary>
 /// 诊断包一键导出服务（嘟嘟可 P4 / §5-C）。
-/// 选一个时间点（默认当前），打包 zip：
-/// - bgi_log_slice_{文件名}.log：BGI 日志中目标时间前后 10 分钟的切片（按行头时间戳过滤，
+/// 选一个时间范围（开始~结束，默认最近 10 分钟），打包 zip：
+/// - bgi_log_slice_{文件名}.log：BGI 日志中该范围内的切片（按行头时间戳过滤，
 ///   行头只有 HH:mm:ss，日期按日志文件名/修改时间拼；多行事件整块保留）；
-/// - assistant_runtime.{当天}.s*.log 全天文件（小，直接全放）；
-/// - dodoco_exceptions.{当天}.jsonl / dodoco_stats.{当天}.jsonl；
+/// - assistant_runtime.{范围内每天}.s*.log 全天文件（小，直接全放）；
+/// - dodoco_exceptions.{范围内每天}.jsonl / dodoco_stats.{范围内每天}.jsonl；
 /// - members_snapshot.json：当前成员状态快照；
 /// - README.txt：包内容与生成时间说明。
 /// 所有源文件均共享读（FileShare.ReadWrite|Delete），正在写入的当天文件也能打包。
 /// </summary>
 public sealed class DiagnosticPackageService
 {
-    /// <summary>日志切片的时间窗口（目标时间前后）。</summary>
-    private static readonly TimeSpan SliceWindow = TimeSpan.FromMinutes(10);
-
     // 行头正则（与 BgiLogTailService 同源，同步自 LogParse.cs:22-24；切片只需时间组）
     private static readonly Regex HeaderRegex = new(
         @"^\[(?<time>\d{2}:\d{2}:\d{2}\.\d+)\] \[[^\]]+\]",
@@ -43,13 +40,11 @@ public sealed class DiagnosticPackageService
         _membersSnapshotProvider = membersSnapshotProvider;
     }
 
-    /// <summary>生成诊断包 zip。调用方放后台线程；返回打包内容摘要（README 同款，供界面提示）。</summary>
-    public string Export(DateTime targetTime, string destZipPath)
+    /// <summary>生成诊断包 zip。调用方放后台线程；windowStart/windowEnd 为日志切片时间范围（调用方已处理跨零点）；
+    /// 返回打包内容摘要（README 同款，供界面提示）。</summary>
+    public string Export(DateTime windowStart, DateTime windowEnd, string destZipPath)
     {
-        var windowStart = targetTime - SliceWindow;
-        var windowEnd = targetTime + SliceWindow;
         var summary = new List<string>();
-        var date = targetTime.Date;
 
         using (var zipStream = new FileStream(destZipPath, FileMode.Create, FileAccess.Write, FileShare.None))
         using (var zip = new ZipArchive(zipStream, ZipArchiveMode.Create))
@@ -79,23 +74,25 @@ public sealed class DiagnosticPackageService
                 summary.Add("BGI 日志目录不可用（未配置 BGI 路径或目录不存在），未含 BGI 切片");
             }
 
-            // 2) 助手日志（当天全天，直接全放）
+            // 2) 助手日志 + 3) 异常库与统计：范围内每一天的当天文件（小，直接全放）
             var assistDir = LogFileBrowser.AssistantLogDir;
             if (Directory.Exists(assistDir))
             {
-                foreach (var file in Directory.EnumerateFiles(assistDir, $"assistant_runtime.{date:yyyy-MM-dd}.s*.log"))
+                for (var date = windowStart.Date; date <= windowEnd.Date; date = date.AddDays(1))
                 {
-                    AddFileEntry(zip, file, $"assistant_log_{Path.GetFileName(file)}");
-                    summary.Add($"助手日志 {Path.GetFileName(file)}");
-                }
-                // 3) 异常库与统计（当天）
-                foreach (var extra in new[] { $"dodoco_exceptions.{date:yyyy-MM-dd}.jsonl", $"dodoco_stats.{date:yyyy-MM-dd}.jsonl" })
-                {
-                    var path = Path.Combine(assistDir, extra);
-                    if (File.Exists(path))
+                    foreach (var file in Directory.EnumerateFiles(assistDir, $"assistant_runtime.{date:yyyy-MM-dd}.s*.log"))
                     {
-                        AddFileEntry(zip, path, extra);
-                        summary.Add(extra);
+                        AddFileEntry(zip, file, $"assistant_log_{Path.GetFileName(file)}");
+                        summary.Add($"助手日志 {Path.GetFileName(file)}");
+                    }
+                    foreach (var extra in new[] { $"dodoco_exceptions.{date:yyyy-MM-dd}.jsonl", $"dodoco_stats.{date:yyyy-MM-dd}.jsonl" })
+                    {
+                        var path = Path.Combine(assistDir, extra);
+                        if (File.Exists(path))
+                        {
+                            AddFileEntry(zip, path, extra);
+                            summary.Add(extra);
+                        }
                     }
                 }
             }
@@ -113,21 +110,96 @@ public sealed class DiagnosticPackageService
                 summary.Add($"成员状态快照失败: {ex.Message}");
             }
 
-            // 5) README
+            // 5) 按异常点组织：范围内每条异常记录一个子目录
+            //    exceptions/NNN_HHmmss_规则名/record.json（含前后各 5 行日志上下文）+ 匹配到的事发快照帧
+            try
+            {
+                var records = LoadExceptionRecordsInRange(windowStart, windowEnd);
+                var idx = 0;
+                foreach (var r in records.OrderBy(r => r.Time).Take(MaxExceptionDirs))
+                {
+                    idx++;
+                    var folder = $"exceptions/{idx:000}_{r.Time:HHmmss}_{SanitizeEntryName(r.RuleName)}";
+                    WriteTextEntry(zip, $"{folder}/record.json",
+                        JsonSerializer.Serialize(r, new JsonSerializerOptions
+                        {
+                            WriteIndented = true,
+                            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                        }));
+                    var dir = IncidentSnapshotService.FindIncidentDir(r.Time, r.RuleName);
+                    var frames = 0;
+                    if (dir != null)
+                    {
+                        foreach (var f in Directory.EnumerateFiles(dir, "frame_*.jpg"))
+                        {
+                            AddFileEntry(zip, f, $"{folder}/{Path.GetFileName(f)}");
+                            frames++;
+                        }
+                    }
+                    summary.Add($"异常点 {r.Time:MM-dd HH:mm:ss}「{r.RuleName}」"
+                        + (frames > 0 ? $"（含事发截图 {frames} 帧）" : "（无快照）"));
+                }
+                if (records.Count > MaxExceptionDirs)
+                    summary.Add($"异常点过多，仅打包前 {MaxExceptionDirs} 条（共 {records.Count} 条）");
+            }
+            catch (Exception ex)
+            {
+                summary.Add($"异常点明细打包失败: {ex.Message}");
+            }
+
+            // 6) README
             var readme = new StringBuilder();
             readme.AppendLine("嘟嘟可诊断包");
             readme.AppendLine($"生成时间: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-            readme.AppendLine($"目标时间点: {targetTime:yyyy-MM-dd HH:mm:ss}（前后各 {(int)SliceWindow.TotalMinutes} 分钟切片）");
+            readme.AppendLine($"时间范围: {windowStart:yyyy-MM-dd HH:mm:ss} ~ {windowEnd:yyyy-MM-dd HH:mm:ss}");
             readme.AppendLine();
             readme.AppendLine("包内容:");
             foreach (var s in summary) readme.AppendLine($"  - {s}");
             readme.AppendLine();
             readme.AppendLine("说明: BGI 日志切片按行头时间戳过滤（行头只有时分秒，日期按日志文件名拼）。");
+            readme.AppendLine("exceptions/ 下每个子目录是一个异常点：record.json 含触发日志原文与前后各 5 行上下文，");
+            readme.AppendLine("若该规则开了“存快照”则同目录还有事发前后 3 秒的游戏截图（frame_-03 ~ frame_+03）。");
             readme.AppendLine("排查联机问题时把本 zip 发给队友/开发者即可，替代手工翻两个日志目录。");
             WriteTextEntry(zip, "README.txt", readme.ToString());
         }
 
         return string.Join('\n', summary);
+    }
+
+    /// <summary>异常点明细的打包上限（防规则风暴时 zip 爆炸）。</summary>
+    private const int MaxExceptionDirs = 100;
+
+    /// <summary>读范围内每一天的异常库 JSONL，返回时间落在 [windowStart, windowEnd] 的记录。</summary>
+    private static List<ExceptionRecord> LoadExceptionRecordsInRange(DateTime windowStart, DateTime windowEnd)
+    {
+        var result = new List<ExceptionRecord>();
+        var assistDir = LogFileBrowser.AssistantLogDir;
+        if (!Directory.Exists(assistDir)) return result;
+        for (var date = windowStart.Date; date <= windowEnd.Date; date = date.AddDays(1))
+        {
+            var path = Path.Combine(assistDir, $"dodoco_exceptions.{date:yyyy-MM-dd}.jsonl");
+            if (!File.Exists(path)) continue;
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+            string? line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                if (line.Length == 0) continue;
+                ExceptionRecord? r;
+                try { r = JsonSerializer.Deserialize<ExceptionRecord>(line); }
+                catch { continue; } // 单行损坏不拖垮整包
+                if (r != null && r.Time >= windowStart && r.Time <= windowEnd)
+                    result.Add(r);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>zip 条目名清洗（路径非法字符转下划线）。</summary>
+    private static string SanitizeEntryName(string name)
+    {
+        foreach (var c in Path.GetInvalidFileNameChars()) name = name.Replace(c, '_');
+        return name.Replace('/', '_').Replace('\\', '_');
     }
 
     /// <summary>从日志文件中切出时间窗口内的行（多行事件整块保留：命中窗口的头行连同其后续非头行）。</summary>

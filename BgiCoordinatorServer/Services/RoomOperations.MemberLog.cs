@@ -12,6 +12,8 @@ namespace BgiCoordinatorServer.Services;
 /// 及 NotifyLogSubscriberCount/RegisterLogTransferRequest/PassRateLimit 私有辅助
 /// 与 ScreenshotRateLimit/LogRateLimit/LogFileNameRegex/LogChunkRateLimit/LogBusyRateLimit/
 /// LogTransferRequests/LogTransferRequestTtl 静态表和相关常量）。
+/// 截图按需取图（P5 改 pull 后新增）：RequestMemberScreenshot（观众请求）/
+/// ReportMemberScreenshotEx（目标带 requestId 应答，按映射单播回请求方）。
 /// 截图方法同属 CTRL_ 控制房间命名空间、无独立成族价值，按约定一并放本文件。
 /// 仅做 ctx 参数化与双发改造，业务逻辑不变。
 /// 控制房间 Group 名为 "CTRL_{roomCode}"，与锄地房间不同命名空间——
@@ -22,10 +24,14 @@ public sealed partial class RoomOperations
     // 成员截图汇聚限流表（嘟嘟可 P5）："CTRL_{roomCode}:{uid}" → 最近一次转发时间（UTC）
     private static readonly ConcurrentDictionary<string, DateTime> ScreenshotRateLimit = new();
 
+    /// <summary>截图按需请求限流表："CTRL_{roomCode}:{requesterUid}" → 窗口计数（防观看端连点请求）。</summary>
+    private static readonly ConcurrentDictionary<string, (DateTime WindowStart, int Count)> ScreenshotRequestRateLimit = new();
+
     /// <summary>
-    /// 成员截图汇聚（嘟嘟可 P5 / 远程成员巡检墙）：成员端助手每 10s 上报一帧 JPEG 缩略图（base64），
+    /// 成员截图汇聚（旧版广播路径，保留给未升级助手）：成员端助手每 10s 上报一帧 JPEG 缩略图（base64），
     /// 服务端校验连接确实在对应 CTRL_ 控制房间后纯转发给房间内所有成员（不做服务端存储）。
     /// 限流：同 uid 10 秒内只转发一帧，超出丢弃。
+    /// 新版为按需取图：见 RequestMemberScreenshotAsync / ReportMemberScreenshotExAsync。
     /// </summary>
     public async Task ReportMemberScreenshotAsync(GatewayHandlerContext ctx, string roomCode, string uid, string jpegBase64, int width, int height, DateTime capturedAt)
     {
@@ -79,6 +85,82 @@ public sealed partial class RoomOperations
         catch (Exception ex)
         {
             _logger.LogError(ex, "ReportMemberScreenshot 失败");
+        }
+    }
+
+    /// <summary>
+    /// 截图按需取图·观众请求（嘟嘟可 P5 pull 模式）：观众端请求目标成员的一帧桌面截图 →
+    /// 登记 requestId→请求方映射（复用按需传输请求映射表）→ 单播目标端 MemberScreenshotRequested(requesterUid, requestId)。
+    /// 目标不在线时静默丢弃（观看端超时兜底提示）。限流：同请求方每秒最多 1 次（防连点刷目标端截图）。
+    /// </summary>
+    public async Task RequestMemberScreenshotAsync(GatewayHandlerContext ctx, string roomCode, string targetUid, string requestId)
+    {
+        try
+        {
+            var group = $"CTRL_{roomCode}";
+            if (!IsInControlRoomOrRemote(ctx, group))
+            {
+                _logger.LogWarning("连接不在控制房间 {RoomCode} 中，拒绝截图请求（target={Uid}）", roomCode, targetUid);
+                return;
+            }
+            if (string.IsNullOrEmpty(requestId) || requestId.Length > MaxRequestIdLength) return;
+
+            var requesterUid = _roomManager.GetUidByConnectionId(group, ctx.ConnectionId) ?? ctx.ConnectionId;
+            if (!PassRateLimit(ScreenshotRequestRateLimit, $"{group}:{requesterUid}", 1)) return;
+
+            var targetConn = _roomManager.GetConnectionIdByUid(group, targetUid);
+            if (string.IsNullOrEmpty(targetConn)) return; // 目标不在线
+            // 登记 requestId → 请求方连接，应答按映射单播回来
+            RegisterLogTransferRequest(requestId, ctx.ConnectionId);
+            await _broadcaster.SendToConnectionAsync(targetConn, "MemberScreenshotRequested", new { requesterUid, requestId }, requesterUid, requestId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "RequestMemberScreenshot 失败");
+        }
+    }
+
+    /// <summary>
+    /// 截图按需取图·目标应答：目标端带 requestId 上报一帧 → 按映射<b>单播</b>请求方（转发后即删映射）。
+    /// 映射不存在（过期/伪造）直接丢弃；一次性映射本身就是节流，不走 ScreenshotRateLimit 的 10s 广播限流。
+    /// 负载上限与广播路径同款（512KB base64）。
+    /// </summary>
+    public async Task ReportMemberScreenshotExAsync(GatewayHandlerContext ctx, string roomCode, string uid,
+        string jpegBase64, int width, int height, DateTime capturedAt, string requestId)
+    {
+        try
+        {
+            var group = $"CTRL_{roomCode}";
+            if (!IsInControlRoomOrRemote(ctx, group))
+            {
+                _logger.LogWarning("连接不在控制房间 {RoomCode} 中，拒绝转发截图应答（uid={Uid}）", roomCode, uid);
+                return;
+            }
+            if (string.IsNullOrEmpty(requestId) || requestId.Length > MaxRequestIdLength) return;
+
+            const int MaxJpegBase64Length = 512 * 1024;
+            if (string.IsNullOrEmpty(jpegBase64) || jpegBase64.Length > MaxJpegBase64Length)
+            {
+                _logger.LogWarning("成员截图应答负载超限或为空（uid={Uid}, {Len} 字符），丢弃", uid, jpegBase64?.Length ?? 0);
+                return;
+            }
+
+            // 认领并删除映射（一次性应答）；无映射 = 过期或伪造，丢弃
+            if (!LogTransferRequests.TryRemove(requestId, out var req)) return;
+
+            var payload = new
+            {
+                uid,
+                jpegBase64,
+                width,
+                height,
+                capturedAt
+            };
+            await _broadcaster.SendToConnectionAsync(req.RequesterConnectionId, "MemberScreenshot", payload, payload);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ReportMemberScreenshotEx 失败");
         }
     }
 
@@ -231,10 +313,11 @@ public sealed partial class RoomOperations
     private static readonly ConcurrentDictionary<string, (DateTime WindowStart, int Count)> LogBusyRateLimit = new();
 
     /// <summary>
-    /// 日志传输请求映射：requestId → (请求方 connectionId, 创建时间 UTC)。
-    /// RequestMemberLogFiles / RequestMemberLogDownload 时建立；对应应答（列表 / done=true 块）转发后删除；
-    /// 兜底：插入新映射时顺带清理 10 分钟前的过期项（如下载中途双方断线，无 done 块可触发删除）。
-    /// 转发方式：应答一律按映射<b>单播</b>请求方，不广播（块数据量大，广播会让无关成员白收流量）。
+    /// 按需传输请求映射：requestId → (请求方 connectionId, 创建时间 UTC)。
+    /// 日志族（RequestMemberLogFiles / RequestMemberLogDownload）与截图按需取图（RequestMemberScreenshot）共用：
+    /// 请求时建立；对应应答（列表 / done=true 块 / 截图帧）转发后删除；
+    /// 兜底：插入新映射时顺带清理 10 分钟前的过期项（如中途双方断线，无应答可触发删除）。
+    /// 转发方式：应答一律按映射<b>单播</b>请求方，不广播（块/图像数据量大，广播会让无关成员白收流量）。
     /// </summary>
     private static readonly ConcurrentDictionary<string, (string RequesterConnectionId, DateTime CreatedAtUtc)>
         LogTransferRequests = new();

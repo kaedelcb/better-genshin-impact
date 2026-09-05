@@ -1,7 +1,7 @@
 namespace BgiCoordinatorServer.Gateway;
 
-/// <summary>路由表注册：日志三件套 + 截图汇聚族（log.* 7 条 + screenshot.report，与旧方法一一对应）。
-/// MemberScreenshot/MemberLogBatch/MemberLogSubscribersChanged/MemberLogFilesRequested/
+/// <summary>路由表注册：日志三件套 + 截图汇聚族（log.* 7 条 + screenshot.* 3 条，与旧方法一一对应）。
+/// MemberScreenshot/MemberScreenshotRequested/MemberLogBatch/MemberLogSubscribersChanged/MemberLogFilesRequested/
 /// MemberLogFileList/MemberLogDownloadRequested/MemberLogFileChunk 走事件（evt 双发），响应一律 ack。</summary>
 public sealed partial class GatewayDispatcher
 {
@@ -86,6 +86,28 @@ public sealed partial class GatewayDispatcher
                 GetInt(env, "width"),
                 GetInt(env, "height"),
                 GetDateTime(env, "capturedAt"));
+            return new { ack = true };
+        };
+
+        _commands[GatewayProtocol.Names.ScreenshotRequest] = async (env, ctx) =>
+        {
+            await _ops.RequestMemberScreenshotAsync(ctx,
+                GetString(env, "roomCode"),
+                GetString(env, "targetUid"),
+                GetString(env, "requestId"));
+            return new { ack = true };
+        };
+
+        _commands[GatewayProtocol.Names.ScreenshotReportEx] = async (env, ctx) =>
+        {
+            await _ops.ReportMemberScreenshotExAsync(ctx,
+                GetString(env, "roomCode"),
+                GetString(env, "uid"),
+                GetString(env, "jpegBase64"),
+                GetInt(env, "width"),
+                GetInt(env, "height"),
+                GetDateTime(env, "capturedAt"),
+                GetString(env, "requestId"));
             return new { ack = true };
         };
     }

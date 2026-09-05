@@ -5,6 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:MultiplayerHoeingAssistant.ViewModels"
              xmlns:helpers="clr-namespace:MultiplayerHoeingAssistant.Helpers"
+             xmlns:views="clr-namespace:MultiplayerHoeingAssistant.Views"
              d:DataContext="{d:DesignInstance Type=vm:DodocoViewModel}"
              d:DesignWidth="900"
              mc:Ignorable="d">
@@ -15,8 +16,136 @@
 
     <UserControl.Resources>
         <helpers:LevelToBrushConverter x:Key="LevelBrush"/>
-        <helpers:PctToPixelsMultiConverter x:Key="PctToPx"/>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- 隐式鎏金滚动条：页面内所有 ScrollBar（含 TextBox/RichTextBox/ListBox 模板内部的）
+             统一为细窄鎏金款。模板与 MainWindow 的 GoldVScrollBar/GoldHScrollBar 完全一致（已验证无残角），
+             仅靠 Orientation 触发器切换竖/横模板 -->
+        <Style TargetType="ScrollBar">
+            <Setter Property="Width" Value="4"/>
+            <Setter Property="Margin" Value="1,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid>
+                            <Track x:Name="PART_Track" IsDirectionReversed="True" Width="{TemplateBinding Width}">
+                                <Track.Thumb>
+                                    <Thumb HorizontalAlignment="Stretch">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Border x:Name="ThumbBorder"
+                                                        CornerRadius="3"
+                                                        Background="#50D4AF37"
+                                                        BorderThickness="0"
+                                                        HorizontalAlignment="Stretch"
+                                                        SnapsToDevicePixels="True">
+                                                    <Border.Effect>
+                                                        <DropShadowEffect BlurRadius="6" ShadowDepth="0" Opacity="0.3" Color="#D4AF37"/>
+                                                    </Border.Effect>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="ThumbBorder" Property="Background" Value="#B0D4AF37"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsDragging" Value="True">
+                                                        <Setter TargetName="ThumbBorder" Property="Background" Value="#E0D4AF37"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="Orientation" Value="Horizontal">
+                    <Setter Property="Height" Value="4"/>
+                    <Setter Property="Margin" Value="0,1"/>
+                    <Setter Property="Width" Value="NaN"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ScrollBar">
+                                <Grid>
+                                    <Track x:Name="PART_Track" Orientation="Horizontal" Height="{TemplateBinding Height}">
+                                        <Track.Thumb>
+                                            <Thumb VerticalAlignment="Stretch">
+                                                <Thumb.Template>
+                                                    <ControlTemplate TargetType="Thumb">
+                                                        <Border x:Name="ThumbBorder"
+                                                                CornerRadius="3"
+                                                                Background="#50D4AF37"
+                                                                BorderThickness="0"
+                                                                VerticalAlignment="Stretch"
+                                                                SnapsToDevicePixels="True">
+                                                            <Border.Effect>
+                                                                <DropShadowEffect BlurRadius="6" ShadowDepth="0" Opacity="0.3" Color="#D4AF37"/>
+                                                            </Border.Effect>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="ThumbBorder" Property="Background" Value="#B0D4AF37"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsDragging" Value="True">
+                                                                <Setter TargetName="ThumbBorder" Property="Background" Value="#E0D4AF37"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Thumb.Template>
+                                            </Thumb>
+                                        </Track.Thumb>
+                                    </Track>
+                                </Grid>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- 隐式鎏金 ScrollViewer：覆盖 WPF 默认模板（默认模板右下角有个 SystemColors.ControlBrush 的
+             浅色 Rectangle 角落块，配透明细滚动条时会露出来=白色方块；此模板无角落块）。
+             作用于页面内所有未显式指定样式的 ScrollViewer（含 ListBox/TextBox/RichTextBox 模板内部）。 -->
+        <Style TargetType="ScrollViewer">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollViewer">
+                        <Grid Background="{TemplateBinding Background}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                                    Grid.Row="0" Grid.Column="0"
+                                                    CanContentScroll="{TemplateBinding CanContentScroll}"
+                                                    Content="{TemplateBinding Content}"
+                                                    ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                    Margin="{TemplateBinding Padding}"/>
+                            <ScrollBar x:Name="PART_VerticalScrollBar"
+                                       Grid.Row="0" Grid.Column="1"
+                                       Value="{TemplateBinding VerticalOffset}"
+                                       Minimum="0" Maximum="{TemplateBinding ScrollableHeight}"
+                                       ViewportSize="{TemplateBinding ViewportHeight}"
+                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+                            <ScrollBar x:Name="PART_HorizontalScrollBar"
+                                       Grid.Row="1" Grid.Column="0"
+                                       Orientation="Horizontal"
+                                       Value="{TemplateBinding HorizontalOffset}"
+                                       Minimum="0" Maximum="{TemplateBinding ScrollableWidth}"
+                                       ViewportSize="{TemplateBinding ViewportWidth}"
+                                       Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <!-- 鎏金下拉选择框（与 SettingsPage 同款，独立提供） -->
         <Style x:Key="GoldComboBox" TargetType="ComboBox">
@@ -151,43 +280,6 @@
                 <!-- 选中态由各按钮内联 Style 的 DataTrigger（SelectedTabIndex == 各自序号）叠加金色 -->
             </Style.Triggers>
         </Style>
-
-        <!-- 日志行容器（实时列表：无选中态，纯净文本流） -->
-        <Style x:Key="LogLineItem" TargetType="ListBoxItem">
-            <Setter Property="Padding" Value="2,1"/>
-            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ListBoxItem">
-                        <Border Background="Transparent" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- 浏览行容器（可选中，选中鎏金描边） -->
-        <Style x:Key="BrowseLineItem" TargetType="ListBoxItem">
-            <Setter Property="Padding" Value="2,1"/>
-            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="Bd" Background="Transparent" Padding="{TemplateBinding Padding}"
-                                BorderThickness="1" BorderBrush="Transparent" CornerRadius="3">
-                            <ContentPresenter/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#3B2E1A"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource GoldLine}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -319,8 +411,11 @@
                                   VerticalAlignment="Center" Margin="0,0,12,0"
                                   ToolTip="实例筛选仅对本机来源生效"/>
                         <CheckBox Content="自动滚动" IsChecked="{Binding AutoFollow, Mode=TwoWay}"
-                                  Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,12,0"
+                                  Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,8,0"
                                   ToolTip="跟尾显示最新日志；上翻列表时自动暂停，滚回底部恢复"/>
+                        <Button Content="⇩ 最新" Style="{DynamicResource BtnGold}" Padding="8,4"
+                                Click="ScrollToLatest_Click" Margin="0,0,12,0" VerticalAlignment="Center"
+                                ToolTip="回到最新日志并恢复自动跟尾"/>
                         <Button Content="{Binding PauseButtonText}" Style="{DynamicResource BtnGhost}" Padding="10,4"
                                 Command="{Binding TogglePauseCommand}" Margin="0,0,6,0"/>
                         <Button Content="清空视图" Style="{DynamicResource BtnGhost}" Padding="10,4"
@@ -339,43 +434,38 @@
                     </StackPanel>
                 </Border>
 
-                <!-- 日志流 -->
+                <!-- 日志流（只读 RichTextBox：像文本编辑器一样跨行拖选/复制；行由代码后置按级别上色渲染） -->
                 <Border Grid.Row="1" Style="{DynamicResource QuestCard}" Padding="8,6" Margin="0">
-                    <ListBox x:Name="RealtimeList" ItemsSource="{Binding VisibleEntries}"
-                             Background="Transparent" BorderThickness="0"
-                             ItemContainerStyle="{StaticResource LogLineItem}"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                             VirtualizingStackPanel.IsVirtualizing="True"
-                             VirtualizingStackPanel.VirtualizationMode="Recycling"
-                             ScrollViewer.ScrollChanged="RealtimeList_ScrollChanged">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="86"/>
-                                        <ColumnDefinition Width="38"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{Binding Time, StringFormat={}{0:HH:mm:ss.fff}}"
-                                               FontSize="11" Foreground="{DynamicResource Dim}"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding Level}" FontSize="11" FontWeight="SemiBold"
-                                               Foreground="{Binding Level, Converter={StaticResource LevelBrush}}"/>
-                                    <TextBlock Grid.Column="2" FontSize="11" Foreground="{DynamicResource Water}" Margin="0,0,6,0"
-                                               Text="{Binding Instance, TargetNullValue=未知, StringFormat='[{0}]'}"/>
-                                    <TextBlock Grid.Column="3" FontSize="11" TextWrapping="Wrap"
-                                               Foreground="{Binding Level, Converter={StaticResource LevelBrush}}">
-                                        <TextBlock.Text>
-                                            <MultiBinding StringFormat="{}{0}  {1}">
-                                                <Binding Path="Source"/>
-                                                <Binding Path="Message"/>
-                                            </MultiBinding>
-                                        </TextBlock.Text>
-                                    </TextBlock>
-                                </Grid>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                    <Grid>
+                        <RichTextBox x:Name="RealtimeLog" IsReadOnly="True" IsUndoEnabled="False"
+                                     IsInactiveSelectionHighlightEnabled="True"
+                                     Background="Transparent" BorderThickness="0" Padding="0"
+                                     FontSize="11" Foreground="{DynamicResource White}"
+                                     CaretBrush="Transparent" FocusVisualStyle="{x:Null}"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <RichTextBox.Resources>
+                                <Style TargetType="Paragraph">
+                                    <Setter Property="Margin" Value="0"/>
+                                </Style>
+                            </RichTextBox.Resources>
+                        </RichTextBox>
+                        <!-- 空态/中间态提示：本机 BGI 未运行、成员离线、对方 BGI 未运行、等待上报等 -->
+                        <TextBlock Text="{Binding EmptyHintText}" FontSize="12" Foreground="{DynamicResource Dim}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
+                                   TextAlignment="Center" MaxWidth="460" IsHitTestVisible="False">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding EmptyHintText}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
                 </Border>
 
                 <!-- 状态栏 -->
@@ -422,9 +512,11 @@
                                         Command="{Binding Browser.OpenLogFolderCommand}" ToolTip="打开日志目录"/>
                             </StackPanel>
                         </Grid>
-                        <ListBox Grid.Row="1" ItemsSource="{Binding Browser.Files}"
-                                 SelectedItem="{Binding Browser.SelectedFile}"
-                                 Background="Transparent" BorderThickness="0">
+                        <Grid Grid.Row="1">
+                            <ListBox ItemsSource="{Binding Browser.FilesView}"
+                                     SelectedItem="{Binding Browser.SelectedFile}"
+                                     Background="Transparent" BorderThickness="0"
+                                     ToolTip="默认已选中最新文件；本机两组在上，远程下载的在最下">
                             <ListBox.GroupStyle>
                                 <GroupStyle>
                                     <GroupStyle.HeaderTemplate>
@@ -452,7 +544,22 @@
                                     </StackPanel>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
-                        </ListBox>
+                            </ListBox>
+                            <!-- 文件列表空态：一台机器都没配好时给出指引 -->
+                            <TextBlock Text="{Binding Browser.FileListHintText}" FontSize="11" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource Dim}" Margin="4" IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Browser.FileListHintText}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
 
                         <!-- 远程成员日志下载：选成员 → 获取列表 → 选中文件下载（gzip 分块，30s 无新块超时） -->
                         <StackPanel Grid.Row="2" Margin="0,8,0,0">
@@ -517,52 +624,129 @@
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <!-- 工具栏：跳转 / 搜索 / 导出 -->
-                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
-                            <TextBlock Text="行号" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
-                            <TextBox Width="70" Style="{StaticResource GoldInput}" Margin="4,0"
-                                     Text="{Binding Browser.JumpLineText, UpdateSourceTrigger=PropertyChanged}"/>
-                            <Button Content="跳转" Style="{DynamicResource BtnGhost}" Padding="10,4"
-                                    Command="{Binding Browser.JumpToLineCommand}" Margin="0,0,12,0"/>
-                            <TextBlock Text="搜索" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
-                            <TextBox Width="180" Style="{StaticResource GoldInput}" Margin="4,0"
-                                     Text="{Binding Browser.SearchText, UpdateSourceTrigger=PropertyChanged}"/>
-                            <CheckBox Content="正则" IsChecked="{Binding Browser.IsRegex}"
-                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <Button Content="搜索" Style="{DynamicResource BtnGhost}" Padding="10,4"
-                                    Command="{Binding Browser.SearchCommand}" Margin="0,0,12,0"/>
+                        <!-- 工具栏行1：时间范围搜索 / 关键字搜索 -->
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6" VerticalAlignment="Center">
+                            <TextBlock Text="时间范围" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
+                            <views:TimeOfDayPicker x:Name="StartTimePicker" Margin="6,0,2,0"
+                                                   Value="{Binding Browser.StartTimeText, Mode=TwoWay}"
+                                                   VerticalAlignment="Center"
+                                                   ToolTip="开始时间（点击弹出选择，点「完成」直接搜索）"/>
+                            <TextBlock Text="至" FontSize="11" Foreground="{DynamicResource Dim}"
+                                       VerticalAlignment="Center" Margin="2,0"/>
+                            <views:TimeOfDayPicker x:Name="EndTimePicker" Margin="2,0,4,0"
+                                                   Value="{Binding Browser.EndTimeText, Mode=TwoWay}"
+                                                   VerticalAlignment="Center"
+                                                   ToolTip="结束时间（点击弹出选择，点「完成」直接搜索）"/>
+                            <Button Content="按时间搜索" Style="{DynamicResource BtnGold}" Padding="10,4" Margin="2,0,14,0"
+                                    Command="{Binding Browser.SearchTimeRangeCommand}"
+                                    ToolTip="收集行头时间落在「开始~结束」区间内的日志行，结果列在下方，点击跳转"/>
+                            <TextBlock Text="关键字" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
+                            <TextBox Width="130" Style="{StaticResource GoldInput}" Margin="4,0"
+                                     Text="{Binding Browser.SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="在当前文件中搜索关键字，结果列在下方，命中词高亮显示，点击可跳转"/>
+                            <CheckBox Content="正则表达式" IsChecked="{Binding Browser.IsRegex}"
+                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,6,0"
+                                      ToolTip="不勾选=普通关键字匹配（忽略大小写）；勾选=按正则表达式匹配（如 超时|失败）"/>
+                            <Button Content="按关键字搜索" Style="{DynamicResource BtnGhost}" Padding="10,4"
+                                    Command="{Binding Browser.SearchCommand}"/>
+                        </StackPanel>
+
+                        <!-- 工具栏行2：导出 + 使用提示 -->
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
                             <Button Content="导出原样" Style="{DynamicResource BtnGhost}" Padding="10,4"
                                     Command="{Binding Browser.ExportRawCommand}" Margin="0,0,6,0"
                                     ToolTip="复制整个日志文件（共享读，正在写入的当天文件也可导出）"/>
                             <Button Content="导出筛选" Style="{DynamicResource BtnGhost}" Padding="10,4"
-                                    Command="{Binding Browser.ExportFilteredCommand}"
+                                    Command="{Binding Browser.ExportFilteredCommand}" Margin="0,0,12,0"
                                     ToolTip="有搜索结果时导出命中行，否则导出当前视图；支持 .log / .csv"/>
+                            <TextBlock Text="整文件一次加载 · 自由滚动不分块 · 拖选多行后 Ctrl+C 复制 · 点搜索结果精确定位"
+                                       FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
                         </StackPanel>
 
-                        <!-- 内容行 -->
-                        <ListBox Grid.Row="1" x:Name="BrowserList" ItemsSource="{Binding Browser.Lines}"
-                                 SelectedItem="{Binding Browser.SelectedLine}"
-                                 Background="Transparent" BorderThickness="0"
-                                 ItemContainerStyle="{StaticResource BrowseLineItem}"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                 VirtualizingStackPanel.IsVirtualizing="True"
-                                 VirtualizingStackPanel.VirtualizationMode="Recycling"
-                                 ScrollViewer.ScrollChanged="BrowserList_ScrollChanged">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Text}" FontSize="11" TextWrapping="Wrap"
-                                               Foreground="{DynamicResource White}"/>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
+                        <!-- 内容区（虚拟化 ListBox：整文件全量在内存，像记事本一样自由滚动不分块加载；
+                             行号+级别上色；搜索关键字鎏金高亮；Extended 多选 + Ctrl+C 复制；不换行保持行语义） -->
+                        <Grid Grid.Row="2">
+                            <ListBox x:Name="BrowserList" ItemsSource="{Binding Browser.Lines}"
+                                     SelectionMode="Extended"
+                                     Background="Transparent" BorderThickness="0" Padding="0"
+                                     FontSize="11" Foreground="{DynamicResource White}"
+                                     FontFamily="Consolas, HarmonyOS Sans SC, Microsoft YaHei"
+                                     VirtualizingStackPanel.IsVirtualizing="True"
+                                     VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     PreviewKeyDown="BrowserList_PreviewKeyDown">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Padding" Value="4,0"/>
+                                        <Setter Property="Margin" Value="0"/>
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <Border x:Name="Bd" Background="Transparent"
+                                                            Padding="{TemplateBinding Padding}"
+                                                            SnapsToDevicePixels="True">
+                                                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsSelected" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#40D4AF37"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#1AD4AF37"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="52"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding LineNumber}"
+                                                       TextAlignment="Right" Margin="0,0,8,0"
+                                                       Foreground="{DynamicResource Dim}"/>
+                                            <views:HighlightTextBlock Grid.Column="1"
+                                                                      SourceText="{Binding Text, Mode=OneWay}"
+                                                                      HighlightPattern="{Binding DataContext.Browser.HighlightPattern, RelativeSource={RelativeSource AncestorType=ListBox}, Mode=OneWay}"
+                                                                      IsRegexHighlight="{Binding DataContext.Browser.HighlightIsRegex, RelativeSource={RelativeSource AncestorType=ListBox}, Mode=OneWay}"
+                                                                      Foreground="{Binding Level, Converter={StaticResource LevelBrush}}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <!-- 查看区空态提示 -->
+                            <TextBlock Text="{Binding Browser.ViewerHintText}" FontSize="12" Foreground="{DynamicResource Dim}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
+                                       TextAlignment="Center" MaxWidth="420" IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Browser.ViewerHintText}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
 
                         <!-- 状态栏 -->
-                        <Grid Grid.Row="2" Margin="0,6,0,0">
+                        <Grid Grid.Row="3" Margin="0,6,0,0">
                             <TextBlock Text="{Binding Browser.ViewStatus}" FontSize="11" Foreground="{DynamicResource Dim}"
                                        VerticalAlignment="Center"/>
                             <TextBlock Text="加载中…" FontSize="11" Foreground="{DynamicResource Gold}"
@@ -580,11 +764,13 @@
                             </TextBlock>
                         </Grid>
 
-                        <!-- 搜索结果 -->
-                        <ListBox Grid.Row="3" ItemsSource="{Binding Browser.SearchResults}"
+                        <!-- 搜索结果（显示行头时间而非行号；命中关键字鎏金高亮；点中行跳转；Ctrl+C 复制命中行原文） -->
+                        <ListBox Grid.Row="4" ItemsSource="{Binding Browser.SearchResults}"
                                  SelectedItem="{Binding Browser.SelectedResult}"
+                                 SelectionMode="Extended"
                                  MaxHeight="130" Background="#1E262660" BorderThickness="1" BorderBrush="#40D4AF37"
-                                 Margin="0,6,0,0" Padding="4" FontSize="11" Foreground="{DynamicResource White}">
+                                 Margin="0,6,0,0" Padding="4" FontSize="11" Foreground="{DynamicResource White}"
+                                 PreviewKeyDown="SearchResults_PreviewKeyDown">
                             <ListBox.Style>
                                 <Style TargetType="ListBox">
                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -598,14 +784,11 @@
                             </ListBox.Style>
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
-                                    <TextBlock FontSize="11" Foreground="{DynamicResource White}" TextWrapping="Wrap">
-                                        <TextBlock.Text>
-                                            <MultiBinding StringFormat="{}行 {0}: {1}">
-                                                <Binding Path="LineNumber"/>
-                                                <Binding Path="Preview"/>
-                                            </MultiBinding>
-                                        </TextBlock.Text>
-                                    </TextBlock>
+                                    <views:HighlightTextBlock FontSize="11" Foreground="{DynamicResource White}"
+                                                              TextWrapping="Wrap"
+                                                              SourceText="{Binding DisplayText, Mode=OneWay}"
+                                                              HighlightPattern="{Binding DataContext.Browser.HighlightPattern, RelativeSource={RelativeSource AncestorType=ListBox}, Mode=OneWay}"
+                                                              IsRegexHighlight="{Binding DataContext.Browser.HighlightIsRegex, RelativeSource={RelativeSource AncestorType=ListBox}, Mode=OneWay}"/>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
@@ -641,9 +824,17 @@
                         <Grid Grid.Row="0" Margin="0,0,0,8">
                             <TextBlock Text="监控规则" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource White}"
                                        VerticalAlignment="Center"/>
-                            <CheckBox Content="全部静音" IsChecked="{Binding MuteAll, Mode=TwoWay}"
-                                      Style="{DynamicResource GuildCheckBox}" HorizontalAlignment="Right"
-                                      ToolTip="静音后命中规则只记录，不红点/不响铃/不弹托盘"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <CheckBox Content="事发录像" IsChecked="{Binding IncidentSnapshotEnabled, Mode=TwoWay}"
+                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,4,0"
+                                          ToolTip="开启后本机 BGI 运行期间后台每秒截一帧（10 秒环形缓冲，纯本地不上传）；命中标了「存快照」的规则时保存前后 3 秒画面+触发日志到 log/incidents/"/>
+                                <Button Content="📂" Style="{DynamicResource TextAction}" FontSize="12" Margin="0,0,8,0"
+                                        VerticalAlignment="Center" Command="{Binding Watch.OpenIncidentDirCommand}"
+                                        ToolTip="打开事发快照目录（log/incidents/）"/>
+                                <CheckBox Content="全部静音" IsChecked="{Binding MuteAll, Mode=TwoWay}"
+                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center"
+                                          ToolTip="静音后命中规则只记录，不红点/不响铃/不弹托盘"/>
+                            </StackPanel>
                         </Grid>
 
                         <ListBox Grid.Row="1" ItemsSource="{Binding Watch.Rules}" Background="Transparent"
@@ -657,9 +848,9 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <CheckBox Grid.Column="0" IsChecked="{Binding Enabled, Mode=TwoWay}"
+                                            <CheckBox Grid.Column="0" Content="启用" IsChecked="{Binding Enabled, Mode=TwoWay}"
                                                       Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,8,0"
-                                                      ToolTip="启用/停用该规则"/>
+                                                      FontSize="10" ToolTip="启用/停用该规则（停用的规则不参与匹配，历史记录保留）"/>
                                             <StackPanel Grid.Column="1">
                                                 <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="Medium"
                                                            Foreground="{DynamicResource White}"/>
@@ -669,8 +860,12 @@
                                             </StackPanel>
                                             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                                                 <CheckBox Content="告警" IsChecked="{Binding Alert, Mode=TwoWay}"
-                                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center"
-                                                          ToolTip="命中后红点 + 托盘气泡 + 提示音"/>
+                                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" FontSize="10"
+                                                          ToolTip="命中后红点 + 托盘气泡 + 提示音；关闭则只记录到下方异常列表，不出声"/>
+                                                <CheckBox Content="快照" IsChecked="{Binding Snapshot, Mode=TwoWay}"
+                                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" FontSize="10"
+                                                          Margin="6,0,0,0"
+                                                          ToolTip="命中时保存事发快照（前后 3 秒桌面画面 + 触发日志到 log/incidents/，需开启「事发录像」总开关）"/>
                                                 <Button Content="✕" Style="{DynamicResource TextAction}" FontSize="12" Margin="6,0,0,0"
                                                         Command="{Binding DataContext.Watch.DeleteRuleCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding}" ToolTip="删除规则"/>
@@ -683,30 +878,40 @@
 
                         <!-- 新规则表单 -->
                         <StackPanel Grid.Row="2" Margin="0,8,0,0">
-                            <TextBlock Text="新增规则" FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,0,0,4"/>
+                            <TextBlock Text="新增规则" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Gold}" Margin="0,0,0,2"/>
+                            <TextBlock Text="规则 = 帮你盯日志：日志里出现「匹配内容」（且级别达到最低级别）就记到右侧异常记录，勾选命中告警则同时红点+响铃"
+                                       FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                            <TextBlock Text="① 规则名称（可选，留空则自动用匹配内容命名）" FontSize="10"
+                                       Foreground="{DynamicResource Dim}" Margin="0,0,0,2"/>
+                            <TextBox Style="{StaticResource GoldInput}" Margin="0,0,0,6"
+                                     Text="{Binding Watch.NewRuleName, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBlock Text="② 匹配内容（要盯住的文字，如：超时、领取失败；留空 = 只看级别）" FontSize="10"
+                                       Foreground="{DynamicResource Dim}" Margin="0,0,0,2"/>
                             <TextBox Style="{StaticResource GoldInput}" Margin="0,0,0,4"
-                                     Text="{Binding Watch.NewRuleName, UpdateSourceTrigger=PropertyChanged}">
-                                <TextBox.ToolTip>规则名称（可空，默认用匹配内容）</TextBox.ToolTip>
-                            </TextBox>
-                            <TextBox Style="{StaticResource GoldInput}" Margin="0,0,0,4"
-                                     Text="{Binding Watch.NewRulePattern, UpdateSourceTrigger=PropertyChanged}">
-                                <TextBox.ToolTip>匹配内容：关键字或正则（留空 + 最低级别 ERR = 级别兜底规则）</TextBox.ToolTip>
-                            </TextBox>
+                                     Text="{Binding Watch.NewRulePattern, UpdateSourceTrigger=PropertyChanged}"/>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6" VerticalAlignment="Center">
-                                <CheckBox Content="正则" IsChecked="{Binding Watch.NewRuleIsRegex}"
-                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <CheckBox Content="正则表达式" IsChecked="{Binding Watch.NewRuleIsRegex}"
+                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,10,0"
+                                          ToolTip="不勾选=上面的匹配内容按普通关键字匹配（忽略大小写）；勾选=按正则表达式匹配"/>
                                 <TextBlock Text="最低级别" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
                                 <ComboBox Width="80" Margin="4,0,10,0" Style="{StaticResource GoldComboBox}"
                                           ItemContainerStyle="{StaticResource GoldComboItem}"
-                                          SelectedIndex="{Binding Watch.NewRuleMinLevelIndex}">
+                                          SelectedIndex="{Binding Watch.NewRuleMinLevelIndex}"
+                                          ToolTip="只有达到该级别的日志才参与匹配（匹配内容留空 + 最低级别 ERR = 任何错误都告警的兜底规则）">
                                     <ComboBoxItem Content="DBG" Style="{DynamicResource GoldComboItem}"/>
                                     <ComboBoxItem Content="INF" Style="{DynamicResource GoldComboItem}"/>
                                     <ComboBoxItem Content="WRN" Style="{DynamicResource GoldComboItem}"/>
                                     <ComboBoxItem Content="ERR" Style="{DynamicResource GoldComboItem}"/>
                                 </ComboBox>
-                                <CheckBox Content="告警" IsChecked="{Binding Watch.NewRuleAlert}"
-                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center"/>
+                                <CheckBox Content="命中告警" IsChecked="{Binding Watch.NewRuleAlert}"
+                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center"
+                                          ToolTip="勾选：命中后红点 + 托盘气泡 + 提示音；不勾选：只记录到异常列表"/>
+                                <CheckBox Content="存快照" IsChecked="{Binding Watch.NewRuleSnapshot}"
+                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="10,0,0,0"
+                                          ToolTip="勾选：命中时保存前后 3 秒桌面画面 + 触发日志（需开启「事发录像」总开关）"/>
                             </StackPanel>
+                            <TextBlock Text="示例：匹配内容填「超时」+ 最低级别 INF = 日志出现超时就记录；匹配内容留空 + 最低级别 ERR = 所有错误都记录"
+                                       FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,0,0,6"/>
                             <Grid>
                                 <Button Content="+ 添加规则" Style="{DynamicResource BtnGold}" Padding="12,5"
                                         HorizontalAlignment="Left" Command="{Binding Watch.AddRuleCommand}"/>
@@ -727,21 +932,25 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <Grid Grid.Row="0" Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
                             <TextBlock Text="异常记录" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource White}"
                                        VerticalAlignment="Center"/>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                 <ComboBox Width="130" ItemsSource="{Binding Watch.RuleFilterItems}"
                                           SelectedItem="{Binding Watch.SelectedRuleFilter}"
                                           Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
-                                          Margin="0,0,6,0"/>
+                                          Margin="0,0,6,0" ToolTip="按命中的规则筛选异常记录"/>
                                 <ComboBox Width="90" ItemsSource="{Binding Watch.LevelFilterItems}"
                                           SelectedItem="{Binding Watch.SelectedLevelFilter}"
                                           Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
-                                          Margin="0,0,6,0"/>
+                                          Margin="0,0,6,0" ToolTip="按日志级别筛选异常记录"/>
                                 <ComboBox Width="110" ItemsSource="{Binding Watch.DateFilterItems}"
                                           SelectedItem="{Binding Watch.SelectedDateFilter}"
                                           Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
-                                          Margin="0,0,6,0"/>
+                                          Margin="0,0,6,0" ToolTip="按日期筛选异常记录"/>
                                 <Button Content="⟳" Style="{DynamicResource TextAction}" FontSize="13"
                                         Command="{Binding Watch.RefreshRecordsCommand}" ToolTip="重新加载异常库"/>
                             </StackPanel>
@@ -749,18 +958,39 @@
 
                         <!-- 诊断包导出（§5-C：排查联机问题时一键打包发给队友） -->
                         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
-                            <TextBlock Text="诊断时间点" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
-                            <TextBox Width="110" Style="{StaticResource GoldInput}" Margin="6,0" Padding="6,3"
-                                     Text="{Binding DiagnosticTimeText, UpdateSourceTrigger=LostFocus}"
-                                     ToolTip="HH:mm 表示今天该时刻，留空=当前时间；打包该时刻前后 10 分钟的 BGI 日志切片 + 助手日志 + 异常库 + 统计 + 成员快照"/>
+                            <TextBlock Text="诊断时间范围" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
+                            <views:TimeOfDayPicker x:Name="DiagStartPicker" Margin="6,0,2,0"
+                                                   Value="{Binding DiagnosticStartText, Mode=TwoWay}"
+                                                   VerticalAlignment="Center"
+                                                   ToolTip="范围开始（点击弹出选择；HH:mm:ss 表示今天该时刻）"/>
+                            <TextBlock Text="~" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
+                            <views:TimeOfDayPicker x:Name="DiagEndPicker" Margin="2,0,4,0"
+                                                   Value="{Binding DiagnosticEndText, Mode=TwoWay}"
+                                                   VerticalAlignment="Center"
+                                                   ToolTip="范围结束（点击弹出选择；结束早于开始视为跨零点）"/>
+                            <Button Content="现在" Style="{DynamicResource BtnGhost}" Padding="8,4" Margin="0,0,6,0"
+                                    Command="{Binding SetDiagTimeNowCommand}" ToolTip="结束=当前时间，开始=10 分钟前"/>
+                            <Button Content="全天" Style="{DynamicResource BtnGhost}" Padding="8,4" Margin="0,0,6,0"
+                                    Command="{Binding SetDiagTimeAllDayCommand}" ToolTip="范围=今天 00:00:00 ~ 23:59:59（当天全部日志）"/>
                             <Button Content="📦 导出诊断包" Style="{DynamicResource BtnGhost}" Padding="10,4"
-                                    Command="{Binding ExportDiagnosticCommand}"/>
+                                    Command="{Binding ExportDiagnosticCommand}"
+                                    ToolTip="打包该时间范围内的 BGI 日志切片 + 助手日志 + 异常库 + 统计 + 成员快照"/>
                             <TextBlock Text="{Binding DiagStatus}" FontSize="10" Foreground="{DynamicResource Dim}"
                                        VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap"/>
                         </StackPanel>
 
                         <ListBox Grid.Row="2" ItemsSource="{Binding Watch.FilteredRecords}" Background="Transparent"
                                  BorderThickness="0">
+                            <ListBox.GroupStyle>
+                                <GroupStyle>
+                                    <GroupStyle.HeaderTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource GoldText}" Margin="2,8,0,2"/>
+                                        </DataTemplate>
+                                    </GroupStyle.HeaderTemplate>
+                                </GroupStyle>
+                            </ListBox.GroupStyle>
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Button HorizontalContentAlignment="Stretch" Background="Transparent"
@@ -784,12 +1014,20 @@
                                         </Button.Template>
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding Time, StringFormat={}{0:MM-dd HH:mm:ss}}" FontSize="10"
+                                                <TextBlock Text="{Binding Time, StringFormat={}{0:HH:mm:ss}}" FontSize="10"
                                                            Foreground="{DynamicResource Dim}" Margin="0,0,8,0"/>
                                                 <TextBlock Text="{Binding Level}" FontSize="10" FontWeight="SemiBold"
                                                            Foreground="{Binding Level, Converter={StaticResource LevelBrush}}" Margin="0,0,8,0"/>
                                                 <TextBlock Text="{Binding DisplayTitle}" FontSize="12" FontWeight="Medium"
                                                            Foreground="{DynamicResource GoldText}"/>
+                                                <Button Content="📷 快照" FontSize="10" Padding="6,1" Margin="10,0,0,0"
+                                                        VerticalAlignment="Center" Background="Transparent"
+                                                        BorderBrush="{DynamicResource GoldLine}" BorderThickness="1"
+                                                        Foreground="{DynamicResource Dim}" Cursor="Hand"
+                                                        Visibility="{Binding HasIncidentSnapshot, Converter={StaticResource BoolToVis}}"
+                                                        Command="{Binding DataContext.Watch.OpenRecordIncidentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        ToolTip="打开该异常的事发快照目录（前后 3 秒游戏截图 + 触发日志；仅实际录到事发录像的记录显示此按钮）"/>
                                             </StackPanel>
                                             <TextBlock Text="{Binding Message}" FontSize="10" Foreground="{DynamicResource Dim}"
                                                        TextTrimming="CharacterEllipsis" Margin="0,2,0,0" MaxWidth="520"/>
@@ -911,255 +1149,87 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- 下半：当前批次 + 历史批次 -->
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <!-- 当前批次（实时更新） -->
-                            <Border Grid.Column="0" Style="{DynamicResource QuestCard}" Margin="0,0,6,0">
-                                <StackPanel>
-                                    <Grid Margin="0,0,0,9">
-                                        <TextBlock Text="本次批次" Style="{DynamicResource SectionTitle}"/>
-                                        <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="72,0,0,0"/>
-                                    </Grid>
-                                    <TextBlock Text="{Binding Stats.CurrentBatchTitle}" FontSize="12" FontWeight="Medium"
-                                               Foreground="{DynamicResource GoldText}"/>
-                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                        <TextBlock Text="{Binding Stats.CurrentElapsedText}" FontSize="11"
-                                                   Foreground="{DynamicResource White}"/>
-                                        <TextBlock Text="{Binding Stats.CurrentInterruptedText}" FontSize="11"
-                                                   Foreground="{DynamicResource Pyro}" Margin="10,0,0,0"/>
-                                    </StackPanel>
-                                    <TextBlock Text="{Binding Stats.CurrentRouteText}" FontSize="11"
-                                               Foreground="{DynamicResource Water}" Margin="0,3,0,0"/>
-                                    <TextBlock Text="{Binding Stats.CurrentEstimateText}" FontSize="11"
-                                               Foreground="{DynamicResource Dim}" Margin="0,3,0,0"/>
-                                    <ItemsControl ItemsSource="{Binding Stats.CurrentGroups}" Margin="0,8,0,0">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Border Background="#1E262660" CornerRadius="6" Padding="8,5" Margin="0,0,0,5">
-                                                    <Grid>
-                                                        <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{DynamicResource White}"
-                                                                   VerticalAlignment="Center"/>
-                                                        <TextBlock HorizontalAlignment="Right" FontSize="11"
-                                                                   Text="{Binding DurationText}">
-                                                            <TextBlock.Style>
-                                                                <Style TargetType="TextBlock">
-                                                                    <Setter Property="Foreground" Value="{DynamicResource Dim}"/>
-                                                                    <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding IsRunning}" Value="True">
-                                                                            <Setter Property="Foreground" Value="{DynamicResource Anemo}"/>
-                                                                        </DataTrigger>
-                                                                    </Style.Triggers>
-                                                                </Style>
-                                                            </TextBlock.Style>
-                                                        </TextBlock>
-                                                    </Grid>
-                                                </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </Border>
-
-                            <!-- 历史批次（JSONL 按天倒序，展开看明细） -->
-                            <Border Grid.Column="1" Style="{DynamicResource QuestCard}" Margin="6,0,0,0">
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="*"/>
-                                    </Grid.RowDefinitions>
-                                    <Grid Grid.Row="0" Margin="0,0,0,9">
-                                        <TextBlock Text="历史批次" Style="{DynamicResource SectionTitle}"/>
-                                        <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="72,0,0,0"/>
-                                        <Button Content="⟳" Style="{DynamicResource TextAction}" FontSize="13"
-                                                HorizontalAlignment="Right" Command="{Binding Stats.RefreshHistoryCommand}"
-                                                ToolTip="重新加载历史批次（log/dodoco_stats.*.jsonl）"/>
-                                    </Grid>
-                                    <ListBox Grid.Row="1" ItemsSource="{Binding Stats.HistoryBatches}"
-                                             SelectedItem="{Binding Stats.SelectedHistoryBatch, Mode=TwoWay}"
-                                             Background="Transparent" BorderThickness="0" MinHeight="200">
-                                        <ListBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <Expander Margin="0,0,0,6" Background="#1E262660">
-                                                    <Expander.Header>
-                                                        <StackPanel>
-                                                            <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="Medium"
-                                                                       Foreground="{DynamicResource GoldText}"/>
-                                                            <TextBlock Text="{Binding Summary}" FontSize="10"
-                                                                       Foreground="{DynamicResource Dim}"/>
-                                                        </StackPanel>
-                                                    </Expander.Header>
-                                                    <StackPanel Margin="8,4,4,4">
-                                                        <TextBlock Text="各组时长" FontSize="11" FontWeight="SemiBold"
-                                                                   Foreground="{DynamicResource White}"/>
-                                                        <ItemsControl ItemsSource="{Binding GroupDetails}" Margin="8,2,0,4">
-                                                            <ItemsControl.ItemTemplate>
-                                                                <DataTemplate>
-                                                                    <TextBlock Text="{Binding}" FontSize="10" Foreground="{DynamicResource Dim}"/>
-                                                                </DataTemplate>
-                                                            </ItemsControl.ItemTemplate>
-                                                        </ItemsControl>
-                                                        <TextBlock Text="路线耗时 TOP5" FontSize="11" FontWeight="SemiBold"
-                                                                   Foreground="{DynamicResource White}"/>
-                                                        <ItemsControl ItemsSource="{Binding TopRoutes}" Margin="8,2,0,4">
-                                                            <ItemsControl.ItemTemplate>
-                                                                <DataTemplate>
-                                                                    <TextBlock Text="{Binding}" FontSize="10" Foreground="{DynamicResource Dim}"/>
-                                                                </DataTemplate>
-                                                            </ItemsControl.ItemTemplate>
-                                                        </ItemsControl>
-                                                        <ItemsControl ItemsSource="{Binding SessionDetails}" Margin="0,2,0,2">
-                                                            <ItemsControl.ItemTemplate>
-                                                                <DataTemplate>
-                                                                    <TextBlock Text="{Binding}" FontSize="10" Foreground="{DynamicResource Water}"/>
-                                                                </DataTemplate>
-                                                            </ItemsControl.ItemTemplate>
-                                                        </ItemsControl>
-                                                        <TextBlock Text="{Binding EstimateText}" FontSize="10"
-                                                                   Foreground="{DynamicResource Dim}"/>
-                                                    </StackPanel>
-                                                </Expander>
-                                            </DataTemplate>
-                                        </ListBox.ItemTemplate>
-                                    </ListBox>
-                                </Grid>
-                            </Border>
-                        </Grid>
-
-                        <!-- P5-D 收益效率 -->
+                        <!-- 每日运行日报（按天解析 BGI 日志：各配置组运行时长 + 与前一有数据日对比 + 联机轮次明细） -->
                         <Border Style="{DynamicResource QuestCard}" Margin="0,12,0,0">
                             <StackPanel>
                                 <Grid Margin="0,0,0,9">
-                                    <TextBlock Text="收益效率" Style="{DynamicResource SectionTitle}"/>
-                                    <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="72,0,0,0"/>
-                                    <TextBlock Text="摩拉为路线选择时的预估值，非实际拾取量" FontSize="10"
-                                               Foreground="{DynamicResource Dim}" HorizontalAlignment="Right"
-                                               VerticalAlignment="Center"/>
-                                </Grid>
-                                <TextBlock Text="{Binding Stats.CurrentProfitText}" FontSize="12" FontWeight="Medium"
-                                           Foreground="{DynamicResource GoldText}"/>
-                                <ItemsControl ItemsSource="{Binding Stats.DailyProfits}" Margin="0,8,0,0">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid Margin="0,0,0,6">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="48"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{Binding DateText}" FontSize="11"
-                                                           Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
-                                                <Grid Grid.Column="1" Height="14" x:Name="ProfitLane"
-                                                      Background="#1E262660" VerticalAlignment="Center" Margin="0,0,10,0">
-                                                    <Border HorizontalAlignment="Left" CornerRadius="2"
-                                                            Background="{DynamicResource Gold}">
-                                                        <Border.Width>
-                                                            <MultiBinding Converter="{StaticResource PctToPx}">
-                                                                <Binding Path="ActualWidth" ElementName="ProfitLane"/>
-                                                                <Binding Path="BarPct"/>
-                                                            </MultiBinding>
-                                                        </Border.Width>
-                                                    </Border>
-                                                </Grid>
-                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding TotalMoraText}" FontSize="11"
-                                                               Foreground="{DynamicResource GoldText}"/>
-                                                    <TextBlock Text="{Binding DurationText, StringFormat=' · {0}'}" FontSize="10"
-                                                               Foreground="{DynamicResource Dim}" Margin="8,0,0,0"/>
-                                                    <TextBlock Text="{Binding MoraPerHourText, StringFormat=' · {0}'}" FontSize="10"
-                                                               Foreground="{DynamicResource Water}"/>
-                                                </StackPanel>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- P5-F 事件时间线（甘特） -->
-                        <Expander Margin="0,12,0,0" IsExpanded="False" Background="#1E262660">
-                            <Expander.Header>
-                                <TextBlock Text="事件时间线（甘特）" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{DynamicResource GoldText}"/>
-                            </Expander.Header>
-                            <StackPanel Margin="0,8,0,4">
-                                <Grid Margin="0,0,0,6">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding Stats.GanttTitle}" FontSize="12" FontWeight="Medium"
-                                                   Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
-                                        <TextBlock Text="{Binding Stats.GanttAxisText}" FontSize="10"
-                                                   Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                                    <TextBlock Text="每日运行日报" Style="{DynamicResource SectionTitle}"/>
+                                    <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="96,0,0,0"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                        <ComboBox Width="140" ItemsSource="{Binding Stats.DailyReport.DateItems}"
+                                                  SelectedItem="{Binding Stats.DailyReport.SelectedDateItem}"
+                                                  Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
+                                                  Margin="0,0,6,0" ToolTip="选择要查看的日期（来自 BGI 按天日志文件，保留期内可回看）"/>
+                                        <Button Content="📋 复制报告" Style="{DynamicResource BtnGhost}" Padding="10,4"
+                                                Margin="0,0,6,0" Command="{Binding Stats.DailyReport.CopyReportCommand}"
+                                                ToolTip="把当前报告（含联机轮次明细）复制到剪贴板"/>
+                                        <Button Content="⟳" Style="{DynamicResource TextAction}" FontSize="13"
+                                                Command="{Binding Stats.DailyReport.RefreshCommand}" ToolTip="重新解析所选日期的日志"/>
                                     </StackPanel>
-                                    <Button Content="⌂ 当前批次" Style="{DynamicResource TextAction}" FontSize="11"
-                                            HorizontalAlignment="Right" Command="{Binding Stats.ShowCurrentGanttCommand}"
-                                            ToolTip="时间线切回当前进行中的批次（选中历史批次后可点此切回）"/>
                                 </Grid>
-                                <ItemsControl ItemsSource="{Binding Stats.GanttBars}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <Canvas Height="24" Background="#1E262660" ClipToBounds="True"/>
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemContainerStyle>
-                                        <Style TargetType="ContentPresenter">
-                                            <Setter Property="Canvas.Left">
-                                                <Setter.Value>
-                                                    <MultiBinding Converter="{StaticResource PctToPx}">
-                                                        <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Canvas}"/>
-                                                        <Binding Path="LeftPct"/>
-                                                    </MultiBinding>
-                                                </Setter.Value>
-                                            </Setter>
-                                            <Setter Property="Width">
-                                                <Setter.Value>
-                                                    <MultiBinding Converter="{StaticResource PctToPx}">
-                                                        <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Canvas}"/>
-                                                        <Binding Path="WidthPct"/>
-                                                    </MultiBinding>
-                                                </Setter.Value>
-                                            </Setter>
-                                        </Style>
-                                    </ItemsControl.ItemContainerStyle>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Stats.DailyReport.ReportTitle}" FontSize="12" FontWeight="Medium"
+                                               Foreground="{DynamicResource GoldText}"/>
+                                    <TextBlock Text="{Binding Stats.DailyReport.CompareBaseText}" FontSize="10"
+                                               Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                                    <TextBlock Text="{Binding Stats.DailyReport.CopyStatusText}" FontSize="10"
+                                               Foreground="{DynamicResource Anemo}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding Stats.DailyReport.EmptyText}" FontSize="11"
+                                           Foreground="{DynamicResource Dim}" Margin="0,6,0,0"/>
+                                <ItemsControl ItemsSource="{Binding Stats.DailyReport.Groups}" Margin="0,6,0,0">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border Height="16" Margin="0,4,0,4" CornerRadius="3" ToolTip="{Binding ToolTip}">
-                                                <Border.Style>
-                                                    <Style TargetType="Border">
-                                                        <Setter Property="Background" Value="{DynamicResource Water}"/>
-                                                        <Setter Property="BorderBrush" Value="Transparent"/>
-                                                        <Setter Property="BorderThickness" Value="0"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsGroup}" Value="True">
-                                                                <Setter Property="Background" Value="{DynamicResource Gold}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Interrupted}" Value="True">
-                                                                <Setter Property="BorderBrush" Value="{DynamicResource Pyro}"/>
-                                                                <Setter Property="BorderThickness" Value="2"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Border.Style>
-                                                <TextBlock Text="{Binding Name}" FontSize="9" Foreground="#FF1E2230"
-                                                           VerticalAlignment="Center" Margin="4,0" IsHitTestVisible="False"
-                                                           TextTrimming="CharacterEllipsis"/>
+                                            <Border Background="#1E262660" CornerRadius="6" Padding="8,5" Margin="0,0,0,5">
+                                                <StackPanel>
+                                                    <Grid>
+                                                        <TextBlock Text="{Binding LineText}" FontSize="12"
+                                                                   Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{Binding MergedNote}" FontSize="10" HorizontalAlignment="Right"
+                                                                   Foreground="{DynamicResource Water}" VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                    <Expander Margin="0,2,0,0"
+                                                              Visibility="{Binding HasRounds, Converter={StaticResource BoolToVis}}">
+                                                        <Expander.Header>
+                                                            <TextBlock Text="联机轮次明细" FontSize="10" Foreground="{DynamicResource Dim}"/>
+                                                        </Expander.Header>
+                                                        <ItemsControl ItemsSource="{Binding Rounds}" Margin="8,2,0,2">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <TextBlock Text="{Binding}" FontSize="10" TextWrapping="Wrap"
+                                                                               Foreground="{DynamicResource Dim}"/>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </Expander>
+                                                </StackPanel>
                                             </Border>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                                    <TextBlock Text="■" FontSize="10" Foreground="{DynamicResource Gold}"/>
-                                    <TextBlock Text="配置组" FontSize="10" Foreground="{DynamicResource Dim}" Margin="4,0,12,0"/>
-                                    <TextBlock Text="■" FontSize="10" Foreground="{DynamicResource Water}"/>
-                                    <TextBlock Text="路线" FontSize="10" Foreground="{DynamicResource Dim}" Margin="4,0,12,0"/>
-                                    <TextBlock Text="红框 = 中断路线 · 点上方历史批次可切换时间线源" FontSize="10"
-                                               Foreground="{DynamicResource Dim}"/>
+                                <TextBlock Text="{Binding Stats.DailyReport.TotalText}" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource GoldText}" Margin="0,4,0,0"/>
+
+                                <!-- BGI 全天任务总览：当天全部运行单元（一条龙/配置组/独立任务），顶层时间互斥 -->
+                                <StackPanel Margin="0,12,0,0"
+                                            Visibility="{Binding Stats.DailyReport.HasOverview, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="BGI 全天任务总览" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource GoldText}"/>
+                                        <TextBlock Text="{Binding Stats.DailyReport.OverviewTotalText}" FontSize="10"
+                                                   Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                    </StackPanel>
+                                    <ItemsControl ItemsSource="{Binding Stats.DailyReport.OverviewRows}" Margin="0,4,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" FontSize="11" TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource White}"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                 </StackPanel>
                             </StackPanel>
-                        </Expander>
+                        </Border>
 
                     </StackPanel>
                 </ScrollViewer>
@@ -1207,14 +1277,20 @@
                             <ComboBoxItem Content="10 秒" Style="{DynamicResource GoldComboItem}"/>
                         </ComboBox>
                         <Button Content="清空历史" Style="{DynamicResource BtnGhost}" Padding="10,4"
-                                Command="{Binding Monitor.ClearHistoryCommand}" Margin="0,0,12,0"/>
+                                Command="{Binding Monitor.ClearHistoryCommand}" Margin="0,0,6,0"/>
+                        <Button Content="🔍 放大" Style="{DynamicResource BtnGhost}" Padding="10,4"
+                                Click="MonitorZoom_Click" Margin="0,0,6,0"
+                                ToolTip="放大查看当前画面（滚轮缩放，也可直接点击大图）"/>
+                        <Button Content="⬇ 下载" Style="{DynamicResource BtnGhost}" Padding="10,4"
+                                Command="{Binding Monitor.SaveFrameCommand}" Margin="0,0,12,0"
+                                ToolTip="把当前大图的 JPEG 原帧保存到本机（远程画面为对方共享的压缩图）"/>
                         <CheckBox Content="共享我的桌面截图" IsChecked="{Binding ShareDesktopScreenshot, Mode=TwoWay}"
                                   Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,6,0"
-                                  ToolTip="开启后每 10 秒把一帧 JPEG 上传到房间，供成员远程查看（需已连房）"/>
+                                  ToolTip="允许队友点选查看我的桌面：仅在被请求时截一帧发给对方（需已连房；不勾选则任何请求都会被忽略）"/>
                         <ComboBox Width="92" SelectedIndex="{Binding ShareScreenshotWidthIndex}"
                                   Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
                                   VerticalAlignment="Center" Margin="0,0,12,0"
-                                  ToolTip="共享画质（上传截图宽度，高度等比）：越大越清晰、越费带宽；1280 可看清屏上文字">
+                                  ToolTip="共享画质（被请求时上传的截图宽度，高度等比）：越大越清晰、越费带宽；1280 可看清屏上文字">
                             <ComboBoxItem Content="480px" Style="{DynamicResource GoldComboItem}"/>
                             <ComboBoxItem Content="960px" Style="{DynamicResource GoldComboItem}"/>
                             <ComboBoxItem Content="1280px" Style="{DynamicResource GoldComboItem}"/>
@@ -1229,7 +1305,9 @@
                 <Border Grid.Row="1" Style="{DynamicResource QuestCard}" Padding="8" Margin="0,0,0,8">
                     <Grid>
                         <Image Source="{Binding Monitor.CurrentImage}" Stretch="Uniform"
-                               HorizontalAlignment="Center" VerticalAlignment="Center">
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Cursor="Hand" ToolTip="点击放大查看"
+                               MouseLeftButtonUp="MonitorImage_Click">
                             <Image.Style>
                                 <Style TargetType="Image">
                                     <Setter Property="Visibility" Value="Collapsed"/>

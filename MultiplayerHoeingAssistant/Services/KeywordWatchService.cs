@@ -97,10 +97,11 @@ public sealed class KeywordWatchService : IDisposable
     private static WatchRule CloneRule(WatchRule r) => new()
     {
         Id = r.Id, Name = r.Name, Pattern = r.Pattern, IsRegex = r.IsRegex,
-        MinLevel = r.MinLevel, Enabled = r.Enabled, Alert = r.Alert, Note = r.Note
+        MinLevel = r.MinLevel, Enabled = r.Enabled, Alert = r.Alert, Snapshot = r.Snapshot, Note = r.Note
     };
 
-    /// <summary>加载规则；文件不存在时写入内置预置规则（开箱即用，语料见设计文档 §2.2）。</summary>
+    /// <summary>加载规则；文件不存在时写入内置预置规则（开箱即用，语料见设计文档 §2.2）。
+    /// 无论新旧文件都补录内置卡死规则（一次性种子：用户删除后不再补回）。</summary>
     private void Load()
     {
         lock (_lock)
@@ -112,13 +113,25 @@ public sealed class KeywordWatchService : IDisposable
                     var json = File.ReadAllText(_configPath);
                     _config = JsonSerializer.Deserialize<WatchConfig>(json,
                         new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new WatchConfig();
+                    SeedBuiltinStallRuleLocked();
                     return;
                 }
             }
             catch { /* 配置损坏则回落到预置规则 */ }
             _config = new WatchConfig { Rules = DefaultRules() };
+            SeedBuiltinStallRuleLocked();
             SaveLocked();
         }
+    }
+
+    /// <summary>补录内置卡死规则（一次性种子：BuiltinStallSeeded 置位后不再补，用户删除/停用都保留其选择）。</summary>
+    private void SeedBuiltinStallRuleLocked()
+    {
+        if (_config.BuiltinStallSeeded) return;
+        _config.BuiltinStallSeeded = true;
+        if (_config.Rules.All(r => r.Id != BuiltinStallRuleId))
+            _config.Rules.Add(BuiltinStallRule());
+        SaveLocked();
     }
 
     /// <summary>内置预置规则（设计文档 F3）。</summary>
@@ -133,18 +146,18 @@ public sealed class KeywordWatchService : IDisposable
         new WatchRule
         {
             Name = "路线执行出错", Pattern = @"执行路线 .* 出错", IsRegex = true,
-            MinLevel = LogLevels.Dbg, Enabled = true, Alert = true,
+            MinLevel = LogLevels.Dbg, Enabled = true, Alert = true, Snapshot = true,
             Note = "AutoHoeingTask 路线失败（无堆栈，靠上下文定位）"
         },
         new WatchRule
         {
             Name = "锄地任务被取消", Pattern = "锄地一条龙任务被取消", IsRegex = false,
-            MinLevel = LogLevels.Dbg, Enabled = true, Alert = true, Note = ""
+            MinLevel = LogLevels.Dbg, Enabled = true, Alert = true, Snapshot = true, Note = ""
         },
         new WatchRule
         {
             Name = "联机锄地退出", Pattern = @"\[联机\] ===== 联机锄地退出", IsRegex = true,
-            MinLevel = LogLevels.Dbg, Enabled = true, Alert = true, Note = ""
+            MinLevel = LogLevels.Dbg, Enabled = true, Alert = true, Snapshot = true, Note = ""
         },
         new WatchRule
         {
@@ -165,6 +178,36 @@ public sealed class KeywordWatchService : IDisposable
         {
             System.Diagnostics.Debug.WriteLine($"[KeywordWatchService] 规则保存失败: {ex.Message}");
         }
+    }
+
+    /// <summary>内置规则 Id：卡死心跳（非日志匹配，由 HoeingStatsViewModel 卡死检测经 RecordExternal 注入）。</summary>
+    public const string BuiltinStallRuleId = "builtin-stall";
+
+    /// <summary>内置规则定义：疑似卡死（内置检测）。Pattern "(?!)" 是永不匹配正则——
+    /// 该规则不参与日志匹配，只作为卡死记录的开关载体（启用/告警/存快照均可在规则列表控制）。</summary>
+    private static WatchRule BuiltinStallRule() => new()
+    {
+        Id = BuiltinStallRuleId,
+        Name = "疑似卡死（内置检测）", Pattern = "(?!)", IsRegex = true,
+        MinLevel = LogLevels.Dbg, Enabled = true, Alert = true, Snapshot = true,
+        Note = "内置：任务运行中但日志超时无新行时注入（卡死心跳），不靠日志匹配；删除后不再自动补回"
+    };
+
+    /// <summary>
+    /// 外部注入一条异常记录（非日志匹配的内置检测用，如卡死心跳）：
+    /// 规则被停用则忽略；否则落盘 JSONL + 触发 RecordAdded（异常列表/告警/事发快照全走现成通道）。
+    /// 告警与否取决于规则 Alert 与全局静音（与日志命中同语义）。后台线程调用。
+    /// </summary>
+    public void RecordExternal(ExceptionRecord record)
+    {
+        WatchRule? rule;
+        lock (_lock)
+        {
+            rule = _config.Rules.FirstOrDefault(r => r.Id == record.RuleId);
+            if (rule is { Enabled: false }) return;
+            WriteRecordLocked(record);
+        }
+        RecordAdded?.Invoke(record, rule?.Alert == true && !IsMuted());
     }
 
     /// <summary>喂入远程成员日志行（房间实时日志汇聚）。与本机 tail 路径隔离：本机行只走 EntryReceived，
@@ -220,7 +263,8 @@ public sealed class KeywordWatchService : IDisposable
                     Message = FormatLine(entry),
                     ContextBefore = _recentLines.Take(_recentLines.Count - 1).ToList(),
                     FileOffset = entry.FileOffset,
-                    SourceFile = entry.SourceFile
+                    SourceFile = entry.SourceFile,
+                    MatchedLine = FindMatchedLine(rule, entry)
                 };
                 _mergeTargets[bucketKey] = record;
                 _pendingRecords.Add(new PendingRecord
@@ -287,6 +331,55 @@ public sealed class KeywordWatchService : IDisposable
         if (!rule.IsRegex)
             return text.Contains(rule.Pattern, StringComparison.OrdinalIgnoreCase);
 
+        var regex = GetCachedRegex(rule);
+        if (regex == null) return false;
+        try
+        {
+            return regex.IsMatch(text);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>定位命中行：一条事件=行头+多行正文，FileOffset 只指行头；
+    /// 找到正文中真正命中规则的那一行原文（供跳转精确定位）。命中的是来源/行头或级别兜底规则时返回 null（回退行头行）。</summary>
+    private string? FindMatchedLine(WatchRule rule, LogEntry entry)
+    {
+        if (string.IsNullOrWhiteSpace(rule.Pattern)) return null;
+        Regex? regex = null;
+        if (rule.IsRegex)
+        {
+            regex = GetCachedRegex(rule);
+            if (regex == null) return null;
+        }
+        // 候选行：正文各行 + 异常段各行（来源 Source 在行头上，命中它时返回 null=定位行头）
+        foreach (var line in EntryBodyLines(entry))
+        {
+            try
+            {
+                var hit = regex != null
+                    ? regex.IsMatch(line)
+                    : line.Contains(rule.Pattern, StringComparison.OrdinalIgnoreCase);
+                if (hit) return line.TrimEnd();
+            }
+            catch (RegexMatchTimeoutException) { /* 本行超时当不命中，继续下一行 */ }
+        }
+        return null;
+    }
+
+    private static IEnumerable<string> EntryBodyLines(LogEntry entry)
+    {
+        foreach (var l in entry.Message.Split('\n')) yield return l;
+        if (entry.Exception != null)
+            foreach (var l in entry.Exception.Split('\n')) yield return l;
+    }
+
+    /// <summary>规则正则缓存（非法正则缓存 null=永不匹配；缓存由规则 Id 索引，规则编辑后 Id 不变但 Pattern 变，
+    /// 靠 SaveRules 时清缓存——见 SaveRulesLocked）。</summary>
+    private Regex? GetCachedRegex(WatchRule rule)
+    {
         if (!_regexCache.TryGetValue(rule.Id, out var regex))
         {
             try
@@ -300,15 +393,7 @@ public sealed class KeywordWatchService : IDisposable
             }
             _regexCache[rule.Id] = regex;
         }
-        if (regex == null) return false;
-        try
-        {
-            return regex.IsMatch(text);
-        }
-        catch (RegexMatchTimeoutException)
-        {
-            return false;
-        }
+        return regex;
     }
 
     /// <summary>格式化事件为原文行（上下文用：头行 + 正文首行截断）。</summary>

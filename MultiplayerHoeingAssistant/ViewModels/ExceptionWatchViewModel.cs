@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
@@ -27,6 +28,10 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
         _service.RecordAdded += OnRecordAdded;
         _service.RecordMerged += OnRecordMerged;
 
+        // 异常记录按天分组显示（组头=日期，组内时间倒序与集合顺序一致）
+        var view = System.Windows.Data.CollectionViewSource.GetDefaultView(FilteredRecords);
+        view.GroupDescriptions.Add(new System.Windows.Data.PropertyGroupDescription(nameof(ExceptionRecord.DayGroup)));
+
         ReloadHistory();
     }
 
@@ -51,6 +56,10 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
     private bool _newRuleAlert = true;
     public bool NewRuleAlert { get => _newRuleAlert; set => SetProperty(ref _newRuleAlert, value); }
 
+    private bool _newRuleSnapshot;
+    /// <summary>新规则是否命中存快照（默认关，防误开宽规则涨磁盘）。</summary>
+    public bool NewRuleSnapshot { get => _newRuleSnapshot; set => SetProperty(ref _newRuleSnapshot, value); }
+
     private string _ruleStatus = "";
     public string RuleStatus { get => _ruleStatus; set => SetProperty(ref _ruleStatus, value); }
 
@@ -73,6 +82,7 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
             IsRegex = NewRuleIsRegex,
             MinLevel = LogLevels.All[Math.Clamp(NewRuleMinLevelIndex, 0, 3)],
             Alert = NewRuleAlert,
+            Snapshot = NewRuleSnapshot,
             Enabled = true
         };
         Rules.Add(new WatchRuleItem(rule, PersistRules));
@@ -104,6 +114,18 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
     /// <summary>筛选后的可见记录。</summary>
     public ObservableCollection<ExceptionRecord> FilteredRecords { get; } = new();
 
+    /// <summary>诊断时间范围联动筛选（null=不过滤）；由 DodocoViewModel 在诊断范围变更时推入。</summary>
+    private DateTime? _timeRangeStart;
+    private DateTime? _timeRangeEnd;
+
+    /// <summary>设置诊断时间范围联动筛选（两个都 null=清除）。范围=全天时调用方传 null。</summary>
+    public void SetTimeRangeFilter(DateTime? start, DateTime? end)
+    {
+        _timeRangeStart = start;
+        _timeRangeEnd = end;
+        RebuildFiltered();
+    }
+
     public ObservableCollection<string> RuleFilterItems { get; } = new() { "全部规则" };
     private string _selectedRuleFilter = "全部规则";
     public string SelectedRuleFilter
@@ -131,6 +153,27 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
     private string _recordStatus = "";
     public string RecordStatus { get => _recordStatus; set => SetProperty(ref _recordStatus, value); }
 
+    /// <summary>打开某条异常记录对应的事发快照目录（规则名+时刻 ±5 秒匹配 incidents 目录；无匹配给提示）。</summary>
+    public RelayCommand OpenRecordIncidentCommand => new(p =>
+    {
+        if (p is not ExceptionRecord record) return;
+        var dir = IncidentSnapshotService.FindIncidentDir(record.Time, record.RuleName);
+        if (dir == null)
+        {
+            RecordStatus = "未找到该记录的事发快照目录（规则未开快照、触发时零帧或已被自动清理）";
+            return;
+        }
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            { FileName = "explorer.exe", Arguments = $"\"{dir}\"", UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            RecordStatus = $"打开快照目录失败: {ex.Message}";
+        }
+    });
+
     /// <summary>点击记录 → 跳转到日志浏览 Tab 对应文件位置。</summary>
     public RelayCommand OpenRecordCommand => new(p =>
     {
@@ -139,6 +182,22 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
 
     /// <summary>重新从 JSONL 异常库加载历史记录。</summary>
     public RelayCommand RefreshRecordsCommand => new(_ => ReloadHistory());
+
+    /// <summary>打开事发快照目录（log/incidents/，事发录像功能落盘点；复用"打开日志目录"思路）。</summary>
+    public RelayCommand OpenIncidentDirCommand => new(_ =>
+    {
+        try
+        {
+            var dir = IncidentSnapshotService.IncidentRootDir;
+            Directory.CreateDirectory(dir);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            { FileName = "explorer.exe", Arguments = $"\"{dir}\"", UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            RecordStatus = $"打开快照目录失败: {ex.Message}";
+        }
+    });
 
     private void ReloadHistory()
     {
@@ -168,6 +227,18 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
             if (!DateFilterItems.Contains(date)) DateFilterItems.Insert(1, date);
             if (!RuleFilterItems.Contains(record.RuleName)) RuleFilterItems.Add(record.RuleName);
             RebuildFiltered();
+
+            // 快照目录是后台异步落盘的（前段立即写、约 4.5 秒后封盘），记录首渲染时目录可能还没建出来，
+            // HasIncidentSnapshot 会求得 false；对开了存快照的规则的记录延迟重渲染一次（替换集合项触发绑定重求值，
+            // 同 OnRecordMerged 的思路），让「📷 快照」按钮在封盘后自动出现。
+            if (Rules.Any(r => r.ToModel().Id == record.RuleId && r.Snapshot))
+            {
+                _ = Task.Delay(6000).ContinueWith(_ => Application.Current.Dispatcher.BeginInvoke(() =>
+                {
+                    var idx = FilteredRecords.IndexOf(record);
+                    if (idx >= 0) FilteredRecords[idx] = record;
+                }), TaskContinuationOptions.OnlyOnRanToCompletion);
+            }
         });
     }
 
@@ -190,10 +261,14 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
             if (SelectedRuleFilter != "全部规则" && r.RuleName != SelectedRuleFilter) continue;
             if (SelectedLevelFilter != "全部级别" && r.Level != SelectedLevelFilter) continue;
             if (SelectedDateFilter != "全部日期" && r.Time.ToString("yyyy-MM-dd") != SelectedDateFilter) continue;
+            // 诊断时间范围联动（全天=不过滤，由调用方转成 null）
+            if (_timeRangeStart is { } ts && r.Time < ts) continue;
+            if (_timeRangeEnd is { } te && r.Time > te) continue;
             FilteredRecords.Add(r);
             count++;
         }
-        RecordStatus = $"共 {_allRecords.Count} 条记录，筛选后 {count} 条";
+        RecordStatus = $"共 {_allRecords.Count} 条记录，筛选后 {count} 条"
+            + (_timeRangeStart != null || _timeRangeEnd != null ? " · 已按诊断时间范围过滤" : "");
     }
 
     private void RebuildRuleFilterItems()
@@ -236,6 +311,8 @@ public sealed class WatchRuleItem : ViewModelBase
     public bool IsRegex { get => _model.IsRegex; set { _model.IsRegex = value; OnPropertyChanged(); _onChanged(); } }
     public bool Enabled { get => _model.Enabled; set { _model.Enabled = value; OnPropertyChanged(); _onChanged(); } }
     public bool Alert { get => _model.Alert; set { _model.Alert = value; OnPropertyChanged(); _onChanged(); } }
+    /// <summary>命中时保存事发快照（前后 3 秒桌面帧 + 触发日志到 log/incidents/，需总开关开启）。</summary>
+    public bool Snapshot { get => _model.Snapshot; set { _model.Snapshot = value; OnPropertyChanged(); _onChanged(); } }
     public string MinLevel { get => _model.MinLevel; set { _model.MinLevel = value; OnPropertyChanged(); _onChanged(); } }
     public string Note { get => _model.Note; set { _model.Note = value; OnPropertyChanged(); _onChanged(); } }
 

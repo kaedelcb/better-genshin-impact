@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.IO.Compression;
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using MultiplayerHoeingAssistant.Models;
@@ -11,15 +12,13 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 
 /// <summary>
 /// 日志浏览 Tab 的 ViewModel（P2 / F2）。
-/// 文件列表（BGI 日志 / 助手日志分组）+ 分块查看（滚动到边界按需加载相邻块）
-/// + 关键字/正则搜索跳转 + 导出（原样复制 / 筛选结果 .log/.csv）。
-/// 所有磁盘操作放后台线程，结果经 Dispatcher 回 UI。
+/// 文件列表（本机 BGI / 本机助手 / 已下载成员三分组）+ 整文件全量视图（「记事本式」：一次读入内存，
+/// 虚拟化 ListBox 承载，自由滚动不分块加载）+ 按时间范围搜索（自动定位到起始时间点）
+/// + 关键字/正则搜索（结果点击精确跳转行）+ 导出（原样复制 / 筛选结果 .log/.csv）。
+/// 磁盘读取放后台线程，结果经 Dispatcher 回 UI；搜索/定位全部在内存行列表上完成。
 /// </summary>
 public sealed class LogBrowserViewModel : ViewModelBase
 {
-    /// <summary>查看区最多加载行数（超出后从另一端裁剪，保持内存可控）。</summary>
-    private const int MaxLoadedLines = 6000;
-
     private readonly LogFileBrowser _browser;
     private readonly MainViewModel _mainVm;
     /// <summary>并发守卫/过期令牌：每次加载自增，后台任务回贴时校验，丢弃过期结果。</summary>
@@ -30,11 +29,21 @@ public sealed class LogBrowserViewModel : ViewModelBase
     {
         _browser = browser;
         _mainVm = mainVm;
+        // 分组视图：本机 BGI / 本机助手 / 已下载成员 三组分组头显示（顺序由 EnumerateFiles 排序保证）
+        FilesView = (ListCollectionView)CollectionViewSource.GetDefaultView(Files);
+        FilesView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(LogFileItem.Group)));
     }
 
     // ========== 文件列表 ==========
 
     public ObservableCollection<LogFileItem> Files { get; } = new();
+
+    /// <summary>带分组头的文件列表视图（XAML 绑定此属性而非 Files）。</summary>
+    public ListCollectionView FilesView { get; }
+
+    private string _fileListHintText = "";
+    /// <summary>文件列表为空时的提示（空串=不显示）。</summary>
+    public string FileListHintText { get => _fileListHintText; set => SetProperty(ref _fileListHintText, value); }
 
     private LogFileItem? _selectedFile;
     public LogFileItem? SelectedFile
@@ -44,6 +53,7 @@ public sealed class LogBrowserViewModel : ViewModelBase
         {
             if (SetProperty(ref _selectedFile, value) && value != null)
                 LoadInitial(value);
+            NotifyViewerHint();
         }
     }
 
@@ -56,35 +66,37 @@ public sealed class LogBrowserViewModel : ViewModelBase
         var files = _browser.EnumerateFiles();
         Files.Clear();
         foreach (var f in files) Files.Add(f);
+        FileListHintText = Files.Count == 0
+            ? "未发现本机日志文件：请先在主页「设置」中配置 BGI 路径；也可以在下方下载远程成员的日志。"
+            : "";
         if (selectedPath != null)
         {
             var again = Files.FirstOrDefault(f => f.FullPath == selectedPath);
             if (again != null) SelectedFile = again;
         }
-        // 实例数后台扫描（大文件耗时，不阻塞列表显示）
+        // 无选中时默认打开最新文件（本机 BGI 日志在最上面），进来即有内容可看
+        if (SelectedFile == null && Files.Count > 0)
+            SelectedFile = Files[0];
+        // 实例数后台扫描（大文件耗时，不阻塞列表显示；结果一次性回贴，避免逐文件
+        // BeginInvoke + 集合替换把 Dispatcher 队列淹没——文件多时这是打开页面"卡死"的来源之一）
         var snapshot = Files.ToList();
         Task.Run(() =>
         {
+            var counts = new List<(LogFileItem Item, int Count)>(snapshot.Count);
             foreach (var f in snapshot)
             {
-                try
-                {
-                    var count = _browser.CountInstances(f.FullPath);
-                    Application.Current.Dispatcher.BeginInvoke(() =>
-                    {
-                        f.InstanceCount = count;
-                        var idx = Files.IndexOf(f);
-                        if (idx >= 0)
-                        {
-                            var keep = SelectedFile?.FullPath;
-                            Files[idx] = f; // 触发列表刷新
-                            if (keep != null && SelectedFile?.FullPath != keep)
-                                SelectedFile = Files.FirstOrDefault(x => x.FullPath == keep);
-                        }
-                    });
-                }
+                try { counts.Add((f, _browser.CountInstances(f.FullPath))); }
                 catch { /* 单文件统计失败（占用/删除）不影响其它 */ }
             }
+            Application.Current.Dispatcher.BeginInvoke(() =>
+            {
+                // 逐项 INPC 就地刷新（LogFileItem.InstanceCount 自带变更通知，不再整项替换）
+                foreach (var (item, count) in counts)
+                {
+                    var idx = Files.IndexOf(item);
+                    if (idx >= 0) Files[idx].InstanceCount = count;
+                }
+            });
         });
     }
 
@@ -103,26 +115,29 @@ public sealed class LogBrowserViewModel : ViewModelBase
         catch { /* 打开失败静默 */ }
     });
 
-    // ========== 查看区（分块加载） ==========
+    // ========== 查看区（整文件全量视图） ==========
 
-    /// <summary>查看区行（带文件偏移）。</summary>
-    public ObservableCollection<LogLineItem> Lines { get; } = new();
+    private IReadOnlyList<LogLineItem> _lines = Array.Empty<LogLineItem>();
+    /// <summary>查看区全部行（整文件一次加载，虚拟化 ListBox 承载）。整体替换 + 一次 PropertyChanged：
+    /// 十几万行逐项 Add 到 ObservableCollection 会触发同量级 CollectionChanged 把 UI 线程淹没。</summary>
+    public IReadOnlyList<LogLineItem> Lines { get => _lines; private set => SetProperty(ref _lines, value); }
 
-    private long _viewStart;
-    private long _viewEnd;
-    private bool _reachedStart;
-    private bool _reachedEnd;
+    /// <summary>当前 Lines 所属文件路径（点搜索结果/异常记录跳转时已在内存的文件不重读磁盘）。</summary>
+    private string? _loadedPath;
 
-    private LogLineItem? _selectedLine;
-    /// <summary>当前选中行（搜索/跳转高亮）。</summary>
-    public LogLineItem? SelectedLine
+    /// <summary>请求视图滚动定位：null=滚到末尾看最新（初次加载/刷新）；否则=滚动+选中+居中该行（Lines 下标）。UI 线程触发。</summary>
+    public event Action<int?>? NavigateRequested;
+
+    private string _viewerHintText = "← 在左侧选择日志文件开始浏览；远程成员日志在左下角请求下载";
+    /// <summary>查看区空态提示（空串=不显示）。</summary>
+    public string ViewerHintText { get => _viewerHintText; set => SetProperty(ref _viewerHintText, value); }
+
+    private void NotifyViewerHint()
     {
-        get => _selectedLine;
-        set => SetProperty(ref _selectedLine, value);
+        ViewerHintText = _selectedFile == null
+            ? "← 在左侧选择日志文件开始浏览；远程成员日志在左下角请求下载"
+            : Lines.Count == 0 && !IsLoading ? "该文件暂无日志内容" : "";
     }
-
-    /// <summary>请求视图把选中行滚动到可见（跳转/搜索后触发）。</summary>
-    public event Action? ScrollToSelectionRequested;
 
     private string _viewStatus = "请选择左侧日志文件";
     public string ViewStatus { get => _viewStatus; set => SetProperty(ref _viewStatus, value); }
@@ -130,25 +145,27 @@ public sealed class LogBrowserViewModel : ViewModelBase
     private bool _isLoading;
     public bool IsLoading { get => _isLoading; set => SetProperty(ref _isLoading, value); }
 
-    /// <summary>选中文件：从文件尾加载最近一块（排障场景先看最新）。</summary>
+    /// <summary>选中文件：后台整文件读入内存，完成后滚到末尾（排障场景先看最新）。</summary>
     private void LoadInitial(LogFileItem file)
     {
         var ticket = ++_loadTicket;
         IsLoading = true;
         ViewStatus = $"正在加载 {file.Name} …";
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         Task.Run(() =>
         {
             try
             {
-                var chunk = _browser.ReadChunkBackward(file.FullPath, new FileInfo(file.FullPath).Length);
+                var load = _browser.ReadAllLines(file.FullPath);
                 Application.Current.Dispatcher.BeginInvoke(() =>
                 {
                     if (ticket != _loadTicket) return;
-                    ApplyChunk(chunk, replace: true, prepend: false);
-                    _reachedEnd = true;
-                    ViewStatus = $"{file.Name} · {file.SizeText} · 已加载 {Lines.Count} 行（最新块）";
+                    ApplyFullLoad(file, load);
                     IsLoading = false;
-                    ScrollToSelectionRequested?.Invoke();
+                    // 慢加载诊断：整载耗时 >800ms 时写运行日志（排查"打开页面卡死"类问题用）
+                    if (sw.ElapsedMilliseconds > 800)
+                        _mainVm.AddLog($"[诊断] 日志浏览整载 {file.Name}（{file.SizeText}）耗时 {sw.ElapsedMilliseconds}ms，{load.Lines.Count} 行");
+                    NavigateRequested?.Invoke(null);
                 });
             }
             catch (Exception ex)
@@ -158,144 +175,120 @@ public sealed class LogBrowserViewModel : ViewModelBase
                     if (ticket != _loadTicket) return;
                     ViewStatus = $"读取失败: {ex.Message}";
                     IsLoading = false;
+                    NotifyViewerHint();
                 });
             }
         });
     }
 
-    /// <summary>滚动接近顶部时加载上一块。</summary>
-    public void LoadOlder()
+    /// <summary>整载结果上屏：整体替换 Lines（一次 PropertyChanged），状态行标注截断。</summary>
+    private void ApplyFullLoad(LogFileItem file, FullLogLoad load)
     {
-        if (_selectedFile == null || _reachedStart || IsLoading) return;
-        var file = _selectedFile;
-        var ticket = ++_loadTicket;
-        IsLoading = true;
-        Task.Run(() =>
-        {
-            try
-            {
-                var chunk = _browser.ReadChunkBackward(file.FullPath, _viewStart);
-                Application.Current.Dispatcher.BeginInvoke(() =>
-                {
-                    if (ticket != _loadTicket) { IsLoading = false; return; }
-                    ApplyChunk(chunk, replace: false, prepend: true);
-                    IsLoading = false;
-                });
-            }
-            catch { Application.Current.Dispatcher.BeginInvoke(() => IsLoading = false); }
-        });
+        Lines = load.Lines;
+        _loadedPath = file.FullPath;
+        ViewStatus = load.Truncated
+            ? $"{file.Name} · {file.SizeText} 超过 64MB 上限，仅加载尾部 {load.Lines.Count:N0} 行"
+            : $"{file.Name} · {file.SizeText} · 共 {load.Lines.Count:N0} 行";
+        NotifyViewerHint();
     }
 
-    /// <summary>滚动接近底部时加载下一块（历史文件翻到尾部时）。</summary>
-    public void LoadNewer()
-    {
-        if (_selectedFile == null || _reachedEnd || IsLoading) return;
-        var file = _selectedFile;
-        var ticket = ++_loadTicket;
-        IsLoading = true;
-        Task.Run(() =>
-        {
-            try
-            {
-                var chunk = _browser.ReadChunkForward(file.FullPath, _viewEnd);
-                Application.Current.Dispatcher.BeginInvoke(() =>
-                {
-                    if (ticket != _loadTicket) { IsLoading = false; return; }
-                    ApplyChunk(chunk, replace: false, prepend: false);
-                    IsLoading = false;
-                });
-            }
-            catch { Application.Current.Dispatcher.BeginInvoke(() => IsLoading = false); }
-        });
-    }
+    // ========== 时间范围搜索 ==========
 
-    /// <summary>应用一块内容：replace=整页替换；prepend=true 前插 / false 追加；超容量从另一端裁剪。</summary>
-    private void ApplyChunk(LogChunk chunk, bool replace, bool prepend)
-    {
-        if (replace)
-        {
-            Lines.Clear();
-            foreach (var l in chunk.Lines) Lines.Add(l);
-            _viewStart = chunk.StartOffset;
-            _viewEnd = chunk.EndOffset;
-            _reachedStart = chunk.ReachedStart;
-            _reachedEnd = chunk.ReachedEnd;
-            return;
-        }
+    private string _startTimeText = "00:00:00";
+    /// <summary>时间范围搜索·开始时间（HH:mm:ss，由时间选择器填写）。</summary>
+    public string StartTimeText { get => _startTimeText; set => SetProperty(ref _startTimeText, value); }
 
-        if (chunk.Lines.Count == 0)
-        {
-            if (prepend) _reachedStart = true; else _reachedEnd = true;
-            return;
-        }
+    private string _endTimeText = "23:59:59";
+    /// <summary>时间范围搜索·结束时间（HH:mm:ss，由时间选择器填写）。</summary>
+    public string EndTimeText { get => _endTimeText; set => SetProperty(ref _endTimeText, value); }
 
-        if (prepend)
-        {
-            for (var i = chunk.Lines.Count - 1; i >= 0; i--) Lines.Insert(0, chunk.Lines[i]);
-            _viewStart = chunk.StartOffset;
-            _reachedStart = chunk.ReachedStart;
-            // 裁剪尾部
-            while (Lines.Count > MaxLoadedLines)
-            {
-                Lines.RemoveAt(Lines.Count - 1);
-                _reachedEnd = false;
-            }
-            _viewEnd = Lines.Count > 0 ? EndOffsetOf(Lines.Count - 1) : _viewStart;
-        }
-        else
-        {
-            foreach (var l in chunk.Lines) Lines.Add(l);
-            _viewEnd = chunk.EndOffset;
-            _reachedEnd = chunk.ReachedEnd;
-            while (Lines.Count > MaxLoadedLines)
-            {
-                Lines.RemoveAt(0);
-                _reachedStart = false;
-            }
-            _viewStart = Lines.Count > 0 ? Lines[0].Offset : _viewEnd;
-        }
-    }
+    /// <summary>按时间范围搜索：收集行头时间落在 [开始, 结束] 内的日志行，点击结果跳转到对应位置。</summary>
+    public RelayCommand SearchTimeRangeCommand => new(_ => StartTimeRangeSearch());
 
-    /// <summary>第 index 行的结束偏移（下一行起始或 _viewEnd）。</summary>
-    private long EndOffsetOf(int index) =>
-        index + 1 < Lines.Count ? Lines[index + 1].Offset : _viewEnd;
-
-    // ========== 跳转 ==========
-
-    private string _jumpLineText = "";
-    /// <summary>跳转目标行号（从 1 起）。</summary>
-    public string JumpLineText { get => _jumpLineText; set => SetProperty(ref _jumpLineText, value); }
-
-    public RelayCommand JumpToLineCommand => new(_ =>
+    private void StartTimeRangeSearch()
     {
         if (_selectedFile == null) return;
-        if (!long.TryParse(JumpLineText, out var lineNo) || lineNo < 1) return;
-        var file = _selectedFile;
-        var ticket = ++_loadTicket;
+        if (!TryParseTimeOfDay(StartTimeText, out var start) || !TryParseTimeOfDay(EndTimeText, out var end))
+        {
+            ViewStatus = "时间格式无效（HH:mm:ss）";
+            return;
+        }
+        if (end < start)
+        {
+            ViewStatus = "结束时间早于开始时间，请调整";
+            return;
+        }
+        var lines = Lines;
+        if (lines.Count == 0) { ViewStatus = "当前文件暂无内容可搜索"; return; }
+        // 时间搜索结果不做关键字高亮（清空高亮词，点击结果只做跳转）
+        HighlightPattern = "";
+        HighlightIsRegex = false;
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var ct = _searchCts.Token;
         IsLoading = true;
-        ViewStatus = $"正在定位到第 {lineNo} 行…";
+        ViewStatus = $"正在搜索 {start:hh\\:mm\\:ss} ~ {end:hh\\:mm\\:ss} 的日志…";
         Task.Run(() =>
         {
             try
             {
-                var offset = _browser.FindLineOffset(file.FullPath, lineNo);
+                // 内存扫描（行列表已整载）：无行头时间的续行归属上一条日志的时间
+                var results = new List<SearchResultItem>();
+                var haveTime = false;
+                var current = TimeSpan.Zero;
+                var firstIndex = -1; // 第一条时间 ≥ start 的行下标（搜索完视图直接定位到起始时间点）
+                for (var i = 0; i < lines.Count; i++)
+                {
+                    if ((i & 0x3FFF) == 0) ct.ThrowIfCancellationRequested();
+                    var text = lines[i].Text;
+                    if (LogLineTime.TryGetTimeOfDay(text, out var t)) { current = t; haveTime = true; }
+                    if (!haveTime) continue;
+                    if (firstIndex < 0 && current >= start) firstIndex = i;
+                    if (current < start || current > end) continue;
+                    var preview = text.Length > 160 ? text[..160] + "…" : text;
+                    results.Add(new SearchResultItem
+                    { LineNumber = lines[i].LineNumber, Offset = lines[i].Offset, Preview = preview, FullText = text });
+                    if (results.Count >= LogFileBrowser.MaxSearchResults) break;
+                }
                 Application.Current.Dispatcher.BeginInvoke(() =>
                 {
+                    SearchResults.Clear();
+                    foreach (var r in results) SearchResults.Add(r);
+                    ViewStatus = results.Count >= LogFileBrowser.MaxSearchResults
+                        ? $"时间范围内超过 {LogFileBrowser.MaxSearchResults} 条，仅显示前 {LogFileBrowser.MaxSearchResults} 条，点击可跳转"
+                        : $"时间范围内共 {results.Count} 条，点击可跳转";
                     IsLoading = false;
-                    if (offset < 0) { ViewStatus = $"行号 {lineNo} 超出文件范围"; return; }
-                    JumpTo(file.FullPath, offset);
+                    // 搜「3点~4点」就把上方视图直接定位到 3 点整开始处，不让用户自己翻
+                    if (firstIndex >= 0) NavigateRequested?.Invoke(firstIndex);
                 });
+            }
+            catch (OperationCanceledException)
+            {
+                Application.Current.Dispatcher.BeginInvoke(() => IsLoading = false);
             }
             catch (Exception ex)
             {
                 Application.Current.Dispatcher.BeginInvoke(() =>
-                { IsLoading = false; ViewStatus = $"跳转失败: {ex.Message}"; });
+                { IsLoading = false; ViewStatus = $"时间搜索失败: {ex.Message}"; });
             }
-        });
-    });
+        }, ct);
+    }
 
-    /// <summary>定位到指定文件的指定偏移（异常记录/搜索结果跳转共用入口）。</summary>
-    public void JumpTo(string filePath, long offset)
+    /// <summary>解析时间输入："HH:mm" / "HH:mm:ss[.fff]"；含空格的完整日期时间取最后一段。须在当天 0–24 点内。</summary>
+    internal static bool TryParseTimeOfDay(string text, out TimeSpan result)
+    {
+        result = default;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        var token = text.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? "";
+        if (!TimeSpan.TryParse(token, System.Globalization.CultureInfo.InvariantCulture, out result)) return false;
+        if (result < TimeSpan.Zero || result >= TimeSpan.FromDays(1)) { result = default; return false; }
+        return true;
+    }
+
+    /// <summary>定位到指定文件的指定偏移（异常记录/搜索结果/时间定位共用入口）。
+    /// matchedLine 非空时从事件行头向后找该原文行精确定位（BGI 一条事件=行头+多行正文，偏移只指到行头）。
+    /// 文件已在内存时直接二分定位（点搜索结果高频路径不重读磁盘）；否则后台整载后定位。</summary>
+    public void JumpTo(string filePath, long offset, string? matchedLine = null)
     {
         // 确保文件在列表中并被选中
         var item = Files.FirstOrDefault(f => f.FullPath == filePath);
@@ -306,38 +299,39 @@ public sealed class LogBrowserViewModel : ViewModelBase
             item = new LogFileItem
             {
                 Name = fi.Name, FullPath = fi.FullName,
-                Group = fi.Name.StartsWith("better-genshin-impact") ? "BGI 日志" : "助手日志",
+                Group = fi.Name.StartsWith("better-genshin-impact") ? "本机 · BGI 日志" : "本机 · 助手日志",
                 LastWriteTime = fi.LastWriteTime, Length = fi.Length
             };
             Files.Add(item);
         }
-        if (SelectedFile?.FullPath != filePath) _selectedFile = item; // 不走 setter，避免触发 LoadInitial
-        OnPropertyChanged(nameof(SelectedFile));
+        if (SelectedFile?.FullPath != filePath)
+        {
+            _selectedFile = item; // 不走 setter，避免触发 LoadInitial（下面按需自己加载）
+            OnPropertyChanged(nameof(SelectedFile));
+        }
+        NotifyViewerHint();
+
+        // 已在内存中的文件：行内直接定位，不重读磁盘
+        if (_loadedPath == filePath && Lines.Count > 0)
+        {
+            NavigateToOffset(item.Name, offset, matchedLine);
+            return;
+        }
 
         var ticket = ++_loadTicket;
         IsLoading = true;
+        ViewStatus = $"正在加载 {item.Name} …";
         Task.Run(() =>
         {
             try
             {
-                // 以目标偏移为中心加载一块（向前退半块，让目标行处于视图中间）
-                var from = Math.Max(0, offset - LogFileBrowser.ChunkBytes / 2);
-                var chunk = _browser.ReadChunkForward(filePath, from);
+                var load = _browser.ReadAllLines(filePath);
                 Application.Current.Dispatcher.BeginInvoke(() =>
                 {
                     if (ticket != _loadTicket) { IsLoading = false; return; }
-                    ApplyChunk(chunk, replace: true, prepend: false);
+                    ApplyFullLoad(item, load);
                     IsLoading = false;
-                    ViewStatus = $"{item.Name} · 已定位到偏移 {offset}";
-                    // 选中目标行（不大于 offset 的最后一行）
-                    LogLineItem? target = null;
-                    foreach (var l in Lines)
-                    {
-                        if (l.Offset <= offset) target = l;
-                        else break;
-                    }
-                    SelectedLine = target;
-                    ScrollToSelectionRequested?.Invoke();
+                    NavigateToOffset(item.Name, offset, matchedLine);
                 });
             }
             catch (Exception ex)
@@ -348,6 +342,38 @@ public sealed class LogBrowserViewModel : ViewModelBase
         });
     }
 
+    /// <summary>按字节偏移定位：Offset 升序二分，取最后一个 Offset ≤ offset 的行，滚动+选中+居中。
+    /// matchedLine 非空时，从该行（事件行头）向后扫描正文行（遇下一个行头/超 200 行止），
+    /// 找到原文含 matchedLine 的行精确命中——异常记录的关键词往往在正文行而非行头。</summary>
+    private void NavigateToOffset(string fileName, long offset, string? matchedLine = null)
+    {
+        var lines = Lines;
+        if (lines.Count == 0) return;
+        int lo = 0, hi = lines.Count - 1, target = 0;
+        while (lo <= hi)
+        {
+            var mid = lo + (hi - lo) / 2;
+            if (lines[mid].Offset <= offset) { target = mid; lo = mid + 1; }
+            else hi = mid - 1;
+        }
+        if (!string.IsNullOrEmpty(matchedLine))
+        {
+            var needle = matchedLine.Trim();
+            for (var i = target; i < lines.Count && i <= target + 200; i++)
+            {
+                // 越过下一个行头=出了本条事件，停止（防止误中后面无关日志的同文本行）
+                if (i > target && LogLineTime.TryGetTimeOfDay(lines[i].Text, out _)) break;
+                if (lines[i].Text.Contains(needle, StringComparison.Ordinal))
+                {
+                    target = i;
+                    break;
+                }
+            }
+        }
+        ViewStatus = $"{fileName} · 已定位到第 {lines[target].LineNumber}/{lines.Count} 行";
+        NavigateRequested?.Invoke(target);
+    }
+
     // ========== 搜索 ==========
 
     private string _searchText = "";
@@ -356,6 +382,14 @@ public sealed class LogBrowserViewModel : ViewModelBase
     private bool _isRegex;
     /// <summary>搜索模式：false=关键字（不区分大小写），true=正则。</summary>
     public bool IsRegex { get => _isRegex; set => SetProperty(ref _isRegex, value); }
+
+    private string _highlightPattern = "";
+    /// <summary>搜索结果高亮词（关键字搜索时=搜索词；时间范围搜索时为空）。</summary>
+    public string HighlightPattern { get => _highlightPattern; set => SetProperty(ref _highlightPattern, value); }
+
+    private bool _highlightIsRegex;
+    /// <summary>高亮词是否按正则解释（跟随搜索时的模式）。</summary>
+    public bool HighlightIsRegex { get => _highlightIsRegex; set => SetProperty(ref _highlightIsRegex, value); }
 
     public ObservableCollection<SearchResultItem> SearchResults { get; } = new();
 
@@ -381,19 +415,43 @@ public sealed class LogBrowserViewModel : ViewModelBase
             try { _ = new System.Text.RegularExpressions.Regex(SearchText); }
             catch (Exception ex) { ViewStatus = $"正则无效: {ex.Message}"; return; }
         }
+        var lines = Lines;
+        if (lines.Count == 0) { ViewStatus = "当前文件暂无内容可搜索"; return; }
         _searchCts?.Cancel();
         _searchCts = new CancellationTokenSource();
         var ct = _searchCts.Token;
-        var file = _selectedFile;
         var pattern = SearchText;
         var isRegex = IsRegex;
+        // 结果列表与查看区的高亮词跟随本次搜索（正则模式按正则高亮，否则按纯文本关键字高亮；
+        // 查看区每行 HighlightTextBlock 绑定此属性，变更即自动重绘可见行）
+        HighlightPattern = pattern;
+        HighlightIsRegex = isRegex;
         IsLoading = true;
         ViewStatus = $"正在搜索 \"{pattern}\" …";
         Task.Run(() =>
         {
             try
             {
-                var results = _browser.Search(file.FullPath, pattern, isRegex, ct);
+                // 内存扫描（行列表已整载，不碰磁盘）；大文件正则耗时仍在后台线程
+                var regex = isRegex
+                    ? new System.Text.RegularExpressions.Regex(pattern,
+                        System.Text.RegularExpressions.RegexOptions.Compiled
+                        | System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                    : null;
+                var results = new List<SearchResultItem>();
+                for (var i = 0; i < lines.Count; i++)
+                {
+                    if ((i & 0x3FFF) == 0) ct.ThrowIfCancellationRequested();
+                    var text = lines[i].Text;
+                    var hit = regex != null
+                        ? regex.IsMatch(text)
+                        : text.Contains(pattern, StringComparison.OrdinalIgnoreCase);
+                    if (!hit) continue;
+                    var preview = text.Length > 160 ? text[..160] + "…" : text;
+                    results.Add(new SearchResultItem
+                    { LineNumber = lines[i].LineNumber, Offset = lines[i].Offset, Preview = preview, FullText = text });
+                    if (results.Count >= LogFileBrowser.MaxSearchResults) break;
+                }
                 Application.Current.Dispatcher.BeginInvoke(() =>
                 {
                     SearchResults.Clear();
@@ -404,7 +462,10 @@ public sealed class LogBrowserViewModel : ViewModelBase
                     IsLoading = false;
                 });
             }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException)
+            {
+                Application.Current.Dispatcher.BeginInvoke(() => IsLoading = false);
+            }
             catch (Exception ex)
             {
                 Application.Current.Dispatcher.BeginInvoke(() =>

@@ -1,6 +1,34 @@
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace MultiplayerHoeingAssistant.Models;
+
+/// <summary>日志行头时间戳提取（BGI 日志行头 [HH:mm:ss.fff]；助手日志行头 [yyyy-MM-dd HH:mm:ss.fff]）。</summary>
+public static class LogLineTime
+{
+    /// <summary>行头正则：可选日期段 + 时分秒（毫秒可选）。与 DiagnosticPackageService.HeaderRegex 同源扩展。</summary>
+    public static readonly Regex HeaderRegex = new(
+        @"^\[(?:(?<date>\d{4}-\d{2}-\d{2}) )?(?<time>\d{2}:\d{2}:\d{2})(?:\.\d+)?\]",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>提取行头时间（time-of-day）；无行头时间（堆栈续行等）返回 false。</summary>
+    public static bool TryGetTimeOfDay(string line, out TimeSpan timeOfDay)
+    {
+        timeOfDay = default;
+        var m = HeaderRegex.Match(line);
+        return m.Success && TimeSpan.TryParseExact(m.Groups["time"].Value, @"hh\:mm\:ss",
+            System.Globalization.CultureInfo.InvariantCulture, out timeOfDay);
+    }
+
+    /// <summary>提取显示用时间文本（助手日志带 MM-dd 日期前缀；无行头返回空串）。</summary>
+    public static string DisplayText(string line)
+    {
+        var m = HeaderRegex.Match(line);
+        if (!m.Success) return "";
+        var date = m.Groups["date"].Success ? m.Groups["date"].Value[5..] + " " : "";
+        return date + m.Groups["time"].Value;
+    }
+}
 
 /// <summary>
 /// 结构化日志条目（嘟嘟可日志系统核心模型）。
@@ -63,6 +91,8 @@ public class WatchRule
     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
     /// <summary>是否告警：true=命中后红点+托盘气泡+提示音；false=只记录。</summary>
     [JsonPropertyName("alert")] public bool Alert { get; set; }
+    /// <summary>命中时保存事发快照（本地录像环前后各 3 秒帧 + 触发日志，落 log/incidents/）。默认 false。</summary>
+    [JsonPropertyName("snapshot")] public bool Snapshot { get; set; }
     [JsonPropertyName("note")] public string Note { get; set; } = "";
 }
 
@@ -71,6 +101,8 @@ public class WatchConfig
 {
     [JsonPropertyName("muteAll")] public bool MuteAll { get; set; }
     [JsonPropertyName("rules")] public List<WatchRule> Rules { get; set; } = [];
+    /// <summary>内置规则"疑似卡死（内置检测）"是否已补录过（防用户删除后每次启动又回来）。</summary>
+    [JsonPropertyName("builtinStallSeeded")] public bool BuiltinStallSeeded { get; set; }
 }
 
 /// <summary>
@@ -90,14 +122,25 @@ public class ExceptionRecord
     [JsonPropertyName("contextAfter")] public List<string> ContextAfter { get; set; } = [];
     [JsonPropertyName("fileOffset")] public long FileOffset { get; set; }
     [JsonPropertyName("sourceFile")] public string SourceFile { get; set; } = "";
+    /// <summary>命中规则的那个原始行文本（BGI 一条事件=行头+多行正文，FileOffset 只指到行头；
+    /// 跳转定位用它精确定位到正文里的命中行。旧记录无此字段 → 回退到行头行）。</summary>
+    [JsonPropertyName("matchedLine")] public string? MatchedLine { get; set; }
     /// <summary>防风暴合并计数：同规则 60 秒内超上限的命中合并到此计数（仅内存更新，JSONL 保留首次写入值）。</summary>
     [JsonPropertyName("repeatCount")] public int RepeatCount { get; set; } = 1;
 
     /// <summary>界面显示用：含合并计数的标题。</summary>
     [JsonIgnore] public string DisplayTitle => RepeatCount > 1 ? $"[{RuleName}] ×{RepeatCount}" : $"[{RuleName}]";
+
+    /// <summary>界面分组用：按天分组头（异常记录列表 GroupDescriptions）。</summary>
+    [JsonIgnore] public string DayGroup => Time.ToString("yyyy-MM-dd dddd");
+
+    /// <summary>界面用：该记录是否已有事发快照目录（查 log/incidents/ 实际落盘；规则未开存快照/零帧事件被清理后均为 false，
+    /// 快照按钮据此显隐——只有真录到事发录像的记录才给入口）。</summary>
+    [JsonIgnore] public bool HasIncidentSnapshot =>
+        Services.IncidentSnapshotService.FindIncidentDir(Time, RuleName) != null;
 }
 
-/// <summary>成员截图帧（P5-B 远程巡检墙，SignalR MemberScreenshot 事件的负载）。
+/// <summary>成员截图帧（P5 远程成员画面·按需取图，SignalR MemberScreenshot 事件的负载）。
 /// 属性名与服务端匿名负载 camelCase 对应（SignalR JSON 反序列化不区分大小写）。</summary>
 public class MemberScreenshotFrame
 {
@@ -162,16 +205,30 @@ public class MemberLogFileChunk
 }
 
 /// <summary>日志文件列表项（日志浏览 Tab）。Group 用于界面分组（BGI 日志 / 助手日志）。</summary>
-public class LogFileItem
+public class LogFileItem : System.ComponentModel.INotifyPropertyChanged
 {
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
     public string Name { get; set; } = "";
     public string FullPath { get; set; } = "";
-    /// <summary>分组名："BGI 日志" / "助手日志"。</summary>
+    /// <summary>分组名："本机 · BGI 日志" / "本机 · 助手日志" / "已下载的成员日志"。</summary>
     public string Group { get; set; } = "";
     public DateTime LastWriteTime { get; set; }
     public long Length { get; set; }
-    /// <summary>实例数（后台扫描统计，未扫描完为 null，界面显示"…"）。</summary>
-    public int? InstanceCount { get; set; }
+
+    private int? _instanceCount;
+    /// <summary>实例数（后台扫描统计，未扫描完为 null，界面显示"…"）。INPC：扫描完成就地刷新，不整项替换。</summary>
+    public int? InstanceCount
+    {
+        get => _instanceCount;
+        set
+        {
+            if (_instanceCount == value) return;
+            _instanceCount = value;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(InstanceCount)));
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(InstanceCountText)));
+        }
+    }
 
     public string SizeText => Length switch
     {
@@ -185,11 +242,24 @@ public class LogFileItem
     public override string ToString() => Name;
 }
 
-/// <summary>日志浏览查看区的一行（带文件字节偏移，供跳转定位）。</summary>
+/// <summary>日志浏览查看区的一行（带行号与文件字节偏移，供跳转定位）。</summary>
 public class LogLineItem
 {
+    /// <summary>行号（从 1 起）。</summary>
+    public int LineNumber { get; set; }
     public long Offset { get; set; }
     public string Text { get; set; } = "";
+    /// <summary>行级别 DBG/INF/WRN/ERR（无行头级别的行延续上一行级别；文件头无级别行为空串）。加载时解析，界面按级别上色。</summary>
+    public string Level { get; set; } = "";
+}
+
+/// <summary>整文件加载结果（日志浏览「记事本式」全量视图）。</summary>
+public sealed class FullLogLoad
+{
+    public List<LogLineItem> Lines { get; set; } = [];
+    /// <summary>true=文件超过内存上限，只加载了尾部一段（Lines[0].Offset &gt; 0）。</summary>
+    public bool Truncated { get; set; }
+    public long FileLength { get; set; }
 }
 
 /// <summary>远程成员下拉项（日志浏览 Tab·远程日志下载的成员选择）。</summary>
@@ -209,5 +279,9 @@ public class SearchResultItem
     public string Preview { get; set; } = "";
     /// <summary>完整行原文（筛选导出用，Preview 可能被截断）。</summary>
     public string FullText { get; set; } = "";
-    public override string ToString() => $"行 {LineNumber}: {Preview}";
+    /// <summary>行头时间（界面显示用；无行头时间的行显示为空）。</summary>
+    public string TimeText => LogLineTime.DisplayText(FullText);
+    /// <summary>列表显示文本（时间 + 预览，高亮控件绑此属性）。</summary>
+    public string DisplayText => string.IsNullOrEmpty(TimeText) ? Preview : $"{TimeText}  {Preview}";
+    public override string ToString() => $"{TimeText} {Preview}";
 }

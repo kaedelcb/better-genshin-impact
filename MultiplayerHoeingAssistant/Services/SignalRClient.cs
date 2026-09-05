@@ -33,6 +33,9 @@ public class SignalRClient : IAsyncDisposable
     /// <summary>同模式：旧服务端无 RequestMemberLogFiles 等日志下载方法时停重试（远程日志下载）。
     /// 下载端 UI 据此标注"需新版服务端"。</summary>
     private volatile bool _logFileUnsupported;
+    /// <summary>同模式：旧服务端无 RequestMemberScreenshot 时停重试（截图按需取图·观看端）。
+    /// 观看端据此提示"需新版服务端"。</summary>
+    private volatile bool _screenshotRequestUnsupported;
 
     // [P1-F 止血] 自愈定时器：仅在内置重连耗尽（Closed）后启动，每 30s 对同一连接 StartAsync。
     // 同一时刻只允许一条自愈定时器；_selfHealRunning 防止定时器回调重入（StartAsync 超 30s 时）。
@@ -43,8 +46,10 @@ public class SignalRClient : IAsyncDisposable
     public event Action<RemoteCommand>? OnRemoteCommand;
     public event Action<string>? OnJoinRejected;
     public event Action<bool>? OnConnectionStateChanged;
-    /// <summary>收到成员桌面截图帧（嘟嘟可 P5 远程巡检墙；服务端纯转发）。</summary>
+    /// <summary>收到成员桌面截图帧（嘟嘟可 P5；广播帧或按需应答帧，均按 uid 认领）。</summary>
     public event Action<MemberScreenshotFrame>? OnMemberScreenshot;
+    /// <summary>有成员请求我的一帧桌面截图（截图按需取图·被查看端）。参数：requesterUid, requestId。</summary>
+    public event Action<string, string>? OnMemberScreenshotRequested;
     /// <summary>收到成员实时日志批（房间日志汇聚；服务端纯转发，含自己的批需按 uid 自滤）。</summary>
     public event Action<MemberLogBatch>? OnMemberLogBatch;
     /// <summary>我的日志订阅数变化（观众驱动上报：0→停发，&gt;0→开始发）。服务端在订阅/退订/订阅者断线时推送。</summary>
@@ -61,6 +66,8 @@ public class SignalRClient : IAsyncDisposable
     public bool LogSubscribeUnsupported => _logSubscribeUnsupported;
     /// <summary>旧服务端不支持远程日志下载（HubException 后置位，新连接重置）。下载端 UI 标注用。</summary>
     public bool LogFileUnsupported => _logFileUnsupported;
+    /// <summary>旧服务端不支持截图按需取图（HubException 后置位，新连接重置）。观看端 UI 标注用。</summary>
+    public bool ScreenshotRequestUnsupported => _screenshotRequestUnsupported;
     /// <summary>全员就绪确认完成事件（各助手据此启动中断流程）。带 generation 参数，用于幂等保护。</summary>
     public event Action<int>? OnAllReadyConfirmed;
     /// <summary>收到 AllReadyConfirm 事件（服务端要求确认就绪，确认阶段用）。</summary>
@@ -82,6 +89,7 @@ public class SignalRClient : IAsyncDisposable
         _password = password;
         _teamUids = teamUids;
         _screenshotUnsupported = false; // 新连接重置（可能换上了支持截图汇聚的新服务端）
+        _screenshotRequestUnsupported = false; // 同上：截图按需取图能力标记
         _logUnsupported = false;        // 同上：日志汇聚能力标记
         _logSubscribeUnsupported = false; // 同上：日志订阅能力标记
         _logFileUnsupported = false;    // 同上：远程日志下载能力标记
@@ -118,6 +126,8 @@ public class SignalRClient : IAsyncDisposable
         });
         connection.On<MemberScreenshotFrame>("MemberScreenshot", frame =>
             OnMemberScreenshot?.Invoke(frame));
+        connection.On<string, string>("MemberScreenshotRequested", (requesterUid, requestId) =>
+            OnMemberScreenshotRequested?.Invoke(requesterUid, requestId));
         connection.On<MemberLogBatch>("MemberLogBatch", batch =>
             OnMemberLogBatch?.Invoke(batch));
         connection.On<int>("MemberLogSubscribersChanged", count =>
@@ -336,8 +346,8 @@ public class SignalRClient : IAsyncDisposable
         }
     }
 
-    /// <summary>上报本机桌面截图帧（嘟嘟可 P5 远程巡检墙）。未连接/未入房时静默跳过；
-    /// 旧服务端无此 Hub 方法时首次 HubException 后停重试（不每 10 秒刷失败日志）。</summary>
+    /// <summary>上报本机桌面截图帧（旧版广播路径，保留兼容；新代码按需取图请用 ReportMemberScreenshotExAsync）。
+    /// 未连接/未入房时静默跳过；旧服务端无此 Hub 方法时首次 HubException 后停重试（不反复刷失败日志）。</summary>
     public async Task ReportMemberScreenshotAsync(string jpegBase64, int width, int height, DateTime capturedAt)
     {
         if (_screenshotUnsupported) return;
@@ -357,6 +367,50 @@ public class SignalRClient : IAsyncDisposable
         {
             // 上报失败（断线等）仅记日志，截图汇聚是尽力而为的辅助通道
             OnLog?.Invoke($"ReportMemberScreenshotAsync 调用失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>请求目标成员的一帧桌面截图（截图按需取图·观看端）。未连接/未入房时静默跳过；
+    /// 旧服务端无此 Hub 方法时首次 HubException 后停重试（同 _screenshotUnsupported 模式）。</summary>
+    public async Task RequestMemberScreenshotAsync(string targetUid, string requestId)
+    {
+        if (_screenshotRequestUnsupported) return;
+        if (_connection == null) return;
+        if (_connection.State != HubConnectionState.Connected) return;
+        try
+        {
+            await _connection.InvokeAsync("RequestMemberScreenshot", _roomCode, targetUid, requestId);
+        }
+        catch (HubException ex)
+        {
+            _screenshotRequestUnsupported = true;
+            OnLog?.Invoke($"RequestMemberScreenshot 被服务端拒绝（疑似旧服务端不支持按需取图），本次连接内停止请求: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            OnLog?.Invoke($"RequestMemberScreenshotAsync 调用失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>应答成员的截图请求，带 requestId 上报一帧（截图按需取图·被查看端），服务端按映射单播回请求方。
+    /// 未连接/未入房时静默跳过；旧服务端无此 Hub 方法时首次 HubException 后停重试（复用 _screenshotRequestUnsupported 标记）。</summary>
+    public async Task ReportMemberScreenshotExAsync(string jpegBase64, int width, int height, DateTime capturedAt, string requestId)
+    {
+        if (_screenshotRequestUnsupported) return;
+        if (_connection == null) return;
+        if (_connection.State != HubConnectionState.Connected) return;
+        try
+        {
+            await _connection.InvokeAsync("ReportMemberScreenshotEx", _roomCode, _playerUid, jpegBase64, width, height, capturedAt, requestId);
+        }
+        catch (HubException ex)
+        {
+            _screenshotRequestUnsupported = true;
+            OnLog?.Invoke($"ReportMemberScreenshotEx 被服务端拒绝（疑似旧服务端不支持按需取图），本次连接内停止应答: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            OnLog?.Invoke($"ReportMemberScreenshotExAsync 调用失败: {ex.Message}");
         }
     }
 

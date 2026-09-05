@@ -74,6 +74,9 @@ public class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<MemberViewModel> Members { get; } = new();
     public ObservableCollection<string> CommandLogs { get; } = new();
 
+    /// <summary>本机 BGI 进程是否在运行（嘟嘟可中间态提示用；进程监控未启动时视为未运行）。</summary>
+    public bool IsBgiRunning => _processMonitor?.IsBgiRunning == true;
+
     private string _commandLogsText = "";
     public string CommandLogsText
     {
@@ -5517,7 +5520,7 @@ public class MainViewModel : INotifyPropertyChanged
         return style;
     }
 
-    private void AddLog(string message)
+    internal void AddLog(string message)
     {
         Application.Current.Dispatcher.Invoke(() =>
         {

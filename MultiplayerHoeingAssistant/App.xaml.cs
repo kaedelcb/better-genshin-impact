@@ -48,6 +48,9 @@ public partial class App : Application
         // 启动后台线程监听跨进程弹窗事件（第二个实例触发时，把本窗口弹窗到前台）
         StartShowWindowEventListener();
 
+        // UI 挂起看门狗：界面卡死 10 秒自动写 hang_*.dmp 到 exe 目录 log/（排查"卡死但日志无异常"）
+        HangWatchdog.Start();
+
         // 检测命令行参数
         _startMinimized = e.Args.Contains("--minimized");
 

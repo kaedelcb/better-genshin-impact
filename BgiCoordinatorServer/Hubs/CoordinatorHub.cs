@@ -386,13 +386,28 @@ public class CoordinatorHub : Hub
         => _ops.ReportControlStatusAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), status);
 
     /// <summary>
-    /// 成员截图汇聚（嘟嘟可 P5 / 远程成员巡检墙）：成员端助手每 10s 上报一帧 JPEG 缩略图（base64），
+    /// 成员截图汇聚（旧版广播路径，保留给未升级助手）：成员端助手每 10s 上报一帧 JPEG 缩略图（base64），
     /// 服务端校验连接确实在对应 CTRL_ 控制房间后纯转发给房间内所有成员（不做服务端存储）。
     /// 限流：同 uid 10 秒内只转发一帧，超出丢弃。
     /// </summary>
     public Task ReportMemberScreenshot(string roomCode, string uid, string jpegBase64, int width, int height, DateTime capturedAt)
         => _ops.ReportMemberScreenshotAsync(GatewayHandlerContext.Legacy(Context.ConnectionId),
             roomCode, uid, jpegBase64, width, height, capturedAt);
+
+    /// <summary>
+    /// 截图按需取图·观众请求（嘟嘟可 P5 pull 模式）：观众端请求目标成员的一帧桌面截图，
+    /// 服务端登记 requestId→请求方映射后单播目标端 MemberScreenshotRequested。
+    /// </summary>
+    public Task RequestMemberScreenshot(string roomCode, string targetUid, string requestId)
+        => _ops.RequestMemberScreenshotAsync(GatewayHandlerContext.Legacy(Context.ConnectionId),
+            roomCode, targetUid, requestId);
+
+    /// <summary>
+    /// 截图按需取图·目标应答：目标端带 requestId 上报一帧，服务端按映射单播回请求方（不广播）。
+    /// </summary>
+    public Task ReportMemberScreenshotEx(string roomCode, string uid, string jpegBase64, int width, int height, DateTime capturedAt, string requestId)
+        => _ops.ReportMemberScreenshotExAsync(GatewayHandlerContext.Legacy(Context.ConnectionId),
+            roomCode, uid, jpegBase64, width, height, capturedAt, requestId);
 
     /// <summary>
     /// 房间实时日志汇聚：成员端助手每 500ms 合批上报本机 BGI 实时日志行（已渲染为文本行），

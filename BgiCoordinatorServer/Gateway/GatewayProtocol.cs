@@ -115,6 +115,8 @@ public static class GatewayProtocol
         public const string LogReportChunk = "log.reportChunk";
 
         public const string ScreenshotReport = "screenshot.report";
+        public const string ScreenshotRequest = "screenshot.request";
+        public const string ScreenshotReportEx = "screenshot.reportEx";
     }
 
     /// <summary>
@@ -203,6 +205,8 @@ public static class GatewayProtocol
             ["ReportMemberLogChunk"] = Names.LogReportChunk,
             // 截图汇聚
             ["ReportMemberScreenshot"] = Names.ScreenshotReport,
+            ["RequestMemberScreenshot"] = Names.ScreenshotRequest,
+            ["ReportMemberScreenshotEx"] = Names.ScreenshotReportEx,
         };
 
     /// <summary>
@@ -250,6 +254,7 @@ public static class GatewayProtocol
             ["AllReadyConfirm"] = "control.allReadyConfirm",
             // 日志三件套 + 截图
             ["MemberScreenshot"] = "screenshot.member",
+            ["MemberScreenshotRequested"] = "screenshot.requested",
             ["MemberLogBatch"] = "log.batch",
             ["MemberLogSubscribersChanged"] = "log.subscribersChanged",
             ["MemberLogFilesRequested"] = "log.filesRequested",

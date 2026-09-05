@@ -1,0 +1,51 @@
+<Window x:Class="MultiplayerHoeingAssistant.Views.ImageZoomWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="画面放大查看" Width="1100" Height="720"
+        WindowStartupLocation="CenterOwner"
+        Background="#FF14161F" Foreground="#FFE8E2D0"
+        FontFamily="pack://application:,,,/Assets/Fonts/#HarmonyOS Sans SC, Segoe UI, Microsoft YaHei">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 顶栏：帧信息 + 缩放提示 + 操作按钮 -->
+        <Border Grid.Row="0" Background="#FF1E2230" Padding="10,6"
+                BorderBrush="#40D4AF37" BorderThickness="0,0,0,1">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="InfoText" FontSize="12" VerticalAlignment="Center"/>
+                    <TextBlock Text="滚轮缩放 · 双击切换 适应窗口/100%" FontSize="10" Foreground="#FF9A937F"
+                               Margin="16,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <TextBlock x:Name="ZoomText" FontSize="11" Foreground="#FF9A937F"
+                               VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <Button Content="适应窗口" Padding="10,3" FontSize="11" Margin="0,0,6,0"
+                            Background="#FF2A2E3D" Foreground="#FFE8E2D0" BorderBrush="#40D4AF37"
+                            Click="Fit_Click"/>
+                    <Button Content="100%" Padding="10,3" FontSize="11" Margin="0,0,6,0"
+                            Background="#FF2A2E3D" Foreground="#FFE8E2D0" BorderBrush="#40D4AF37"
+                            Click="ActualSize_Click"/>
+                    <Button x:Name="SaveButton" Content="⬇ 保存图片" Padding="10,3" FontSize="11"
+                            Background="#FF2A2E3D" Foreground="#FFE8E2D0" BorderBrush="#40D4AF37"
+                            Click="Save_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 图像区：ScrollViewer + LayoutTransform 缩放 -->
+        <ScrollViewer Grid.Row="1" x:Name="Scroller"
+                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                      Background="#FF0E1018">
+            <Border x:Name="ImageHost" HorizontalAlignment="Left" VerticalAlignment="Top">
+                <Border.LayoutTransform>
+                    <ScaleTransform x:Name="ZoomScale"/>
+                </Border.LayoutTransform>
+                <Image x:Name="FullImage" Stretch="None" RenderOptions.BitmapScalingMode="HighQuality"/>
+            </Border>
+        </ScrollViewer>
+    </Grid>
+</Window>
