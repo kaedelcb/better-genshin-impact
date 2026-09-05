@@ -324,6 +324,31 @@ public class RoomManager
         lock (room)
         {
             room.ArrivalSets.Remove(syncPointId);
+            room.ArrivalSetProgress.Remove(syncPointId);
+        }
+    }
+
+    /// <summary>
+    /// 从指定同步点的到达集合中移除单个连接（collective-stuck-orphan-arrivalset fix）。
+    /// 用于 WaitForAllPlayers 对晚到/孤立落后调用方单独补发 AllArrived 后清理其到达记录，
+    /// 避免"已放行但集合仍挂着该连接"的孤儿记录喂饱集体卡死判定（C1 计数虚高、C3 永不变）。
+    /// 集合清空后连同 dict key 与 ArrivalSetProgress 一并删除。
+    /// </summary>
+    public void RemoveArrival(string roomCode, string syncPointId, string connectionId)
+    {
+        if (!_rooms.TryGetValue(roomCode, out var room))
+            return;
+
+        lock (room)
+        {
+            if (!room.ArrivalSets.TryGetValue(syncPointId, out var arrivals))
+                return;
+            arrivals.Remove(connectionId);
+            if (arrivals.Count == 0)
+            {
+                room.ArrivalSets.Remove(syncPointId);
+                room.ArrivalSetProgress.Remove(syncPointId);
+            }
         }
     }
 

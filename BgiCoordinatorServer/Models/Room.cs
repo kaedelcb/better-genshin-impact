@@ -24,6 +24,17 @@ public class Room
     public Dictionary<string, HashSet<string>> ArrivalSets { get; set; } = [];
 
     /// <summary>
+    /// syncPointId → 该同步点的全局进度快照（collective-stuck-orphan-arrivalset fix）。
+    /// 由 WaitForAllPlayers 在 syncProgress>=0 时写入（覆盖式，同 syncId 后到的刷新）。
+    /// 用途：CollectSatisfiedSyncsLocked / IsCollectiveStuckLocked 判定该集合是否可放行时，
+    /// 优先取此处存储的进度，而非"已到达成员 CurrentProgress 归约 max"——后者对孤儿集合
+    /// （成员已全部走过此点、CurrentProgress 已涨过 syncProgress）会得出偏大的 sp，
+    /// 导致"CurrentProgress>sp 已穿过豁免"永不成立、集合永远无法自愈，喂饱集体卡死误判。
+    /// 值为 -1 或未收录时回退到旧的成员归约逻辑。
+    /// </summary>
+    public Dictionary<string, long> ArrivalSetProgress { get; set; } = [];
+
+    /// <summary>
     /// 本轮已广播过 AllArrived 的 syncId 集合（fastsync-claim-short-circuit-premature-release-fix / OQ-1=a）。
     /// 每次广播 AllArrived 并 ClearArrivalSet 时加入；当某玩家调 WaitForAllPlayers(syncId) 而该 syncId
     /// 已在此集合中，说明该 syncId 本轮确已全员放行过，对该调用方单独补发 AllArrived 解锁

@@ -2217,7 +2217,10 @@ public class AutoHoeingTask : ISoloTask
                 // 清理本轮的 coordinator，下一轮重新建
                 if (_multiplayerCoordinator != null)
                 {
-                    _multiplayerCoordinator.OnDegraded -= _ => { };
+                    // 必须真 Dispose：coordinator 挂在常驻 CoordinatorClient 上的事件订阅
+                    // （RequestSkipToProgress / CollectiveSkipDegraded / AllReachedExpCap）不解除会逐轮叠加，
+                    // 第 N 轮同一广播触发 N 次处理（日志 ×N、重复触发协调停止/CloseRoomAsync）。
+                    await _multiplayerCoordinator.DisposeAsync();
                     _multiplayerCoordinator = null;
                 }
                 _executionEngine?.SetCoordinator(null);

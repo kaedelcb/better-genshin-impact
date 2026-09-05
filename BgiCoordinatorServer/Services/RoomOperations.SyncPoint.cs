@@ -95,7 +95,7 @@ public sealed partial class RoomOperations
         _logger.LogDebug("[WaitForAllPlayers] 房间={RoomCode}, 同步点={SyncId}, 进度={Progress}, 连接={ConnId}",
             roomCode, syncId, syncProgress, ctx.ConnectionId);
 
-        // 更新当前玩家的进度
+        // 更新当前玩家的进度 + 记录该同步点的全局进度快照
         if (syncProgress >= 0)
         {
             lock (room)
@@ -105,6 +105,9 @@ public sealed partial class RoomOperations
                 {
                     caller.CurrentProgress = syncProgress;
                 }
+                // collective-stuck-orphan-arrivalset fix：存该 syncId 的真实全局进度，
+                // 供放行/卡死判定使用，避免孤儿集合被成员归约 sp 卡死（见 Room.ArrivalSetProgress 注释）
+                room.ArrivalSetProgress[syncId] = syncProgress;
             }
         }
 
@@ -156,6 +159,9 @@ public sealed partial class RoomOperations
             _logger.LogInformation("[WaitForAllPlayers] 该同步点本轮已放行，补发 AllArrived 给晚到调用方: 房间={RoomCode}, 同步点={SyncId}, 连接={ConnId}",
                 roomCode, syncId, ctx.ConnectionId);
             await _broadcaster.SendToCallerAsync(ctx, "AllArrived", new { syncPointId = syncId }, syncId);
+            // collective-stuck-orphan-arrivalset fix：补发即放行，清掉刚才 RecordArrival 写入的到达记录，
+            // 避免在已广播过的 syncId 上留下孤儿集合（该点本轮不会再全量广播，残留永不消）
+            _roomManager.RemoveArrival(roomCode, syncId, ctx.ConnectionId);
             // 补发后仍继续走全量重评估（幂等：不改 BroadcastedSyncIds 状态），
             // 保证其他历史 syncId 的放行不被跳过。
         }
@@ -165,10 +171,13 @@ public sealed partial class RoomOperations
             // 但 caller 已严格落后所有其他在线玩家，它们不会再以此 syncId 到达 → ArrivalSet 永不齐。
             // 直接对 caller 补发 AllArrived（等价"你落后了，别等了，放你走"），避免死等满 120s。
             // 严格小于(<)防误放：进度相等的正常碰头玩家不会触发本分支（ShouldReleaseLaggingCaller 返回 false）。
-            // 仅对 caller 补发，不改 BroadcastedSyncIds、不动其他玩家、不清 ArrivalSet（幂等、不影响后续到齐路径）。
+            // 仅对 caller 补发，不改 BroadcastedSyncIds、不动其他玩家。
+            // collective-stuck-orphan-arrivalset fix：补发后清掉 caller 的到达记录——
+            // 集合内只剩 caller 一人且其他玩家不会再到达，残留即孤儿，会虚增集体卡死判定的 C1 计数。
             _logger.LogInformation("[WaitForAllPlayers] caller 为孤立落后者，补发 AllArrived 放行: 房间={RoomCode}, 同步点={SyncId}, 进度={Progress}, 连接={ConnId}",
                 roomCode, syncId, syncProgress, ctx.ConnectionId);
             await _broadcaster.SendToCallerAsync(ctx, "AllArrived", new { syncPointId = syncId }, syncId);
+            _roomManager.RemoveArrival(roomCode, syncId, ctx.ConnectionId);
         }
 
         // 全量重评估：当前 syncId 与所有历史 ArrivalSets 一并判定
@@ -279,7 +288,8 @@ public sealed partial class RoomOperations
     /// 在 lock(room) 内枚举 room.ArrivalSets，收集所有满足 ShouldBroadcastAllArrived=true 的 (syncId, syncProgress) 对。
     /// syncProgress 推断规则（与 MemberStatusChanged 现有推断保持一致）：
     ///   syncId == "route_sync_done" → -1（全局同步点，按"等所有"处理）
-    ///   其他 → 已到达玩家中 CurrentProgress 的最大值（>=-1）
+    ///   其他 → 优先取 ArrivalSetProgress 存储的真实全局进度；未收录时回退为
+    ///          已到达玩家中 CurrentProgress 的最大值（>=-1）
     /// 调用方负责在 lock 外执行 SendAsync + ClearArrivalSet（避免 await 持锁）。
     /// </summary>
     internal List<(string syncId, long progress)> CollectSatisfiedSyncsLocked(Room room)
@@ -292,11 +302,15 @@ public sealed partial class RoomOperations
             long sp = -1;
             if (sid != "route_sync_done")
             {
-                sp = room.Players
-                    .Where(p => arrivals.Contains(p.ConnectionId))
-                    .Select(p => p.CurrentProgress)
-                    .DefaultIfEmpty(-1)
-                    .Max();
+                // collective-stuck-orphan-arrivalset fix：优先用存储的真实进度
+                if (!room.ArrivalSetProgress.TryGetValue(sid, out sp))
+                {
+                    sp = room.Players
+                        .Where(p => arrivals.Contains(p.ConnectionId))
+                        .Select(p => p.CurrentProgress)
+                        .DefaultIfEmpty(-1)
+                        .Max();
+                }
             }
             if (ShouldBroadcastAllArrived(room, sid, arrivals, sp))
             {
@@ -484,11 +498,16 @@ public sealed partial class RoomOperations
             long sp = -1;
             if (sid != "route_sync_done")
             {
-                sp = onlinePlayers
-                    .Where(p => kv.Value.Contains(p.ConnectionId))
-                    .Select(p => p.CurrentProgress)
-                    .DefaultIfEmpty(-1)
-                    .Max();
+                // collective-stuck-orphan-arrivalset fix：优先用存储的真实进度，
+                // 孤儿集合（成员已走过此点）因此可被"CurrentProgress>sp 已穿过豁免"满足，不再误判卡死
+                if (!room.ArrivalSetProgress.TryGetValue(sid, out sp))
+                {
+                    sp = onlinePlayers
+                        .Where(p => kv.Value.Contains(p.ConnectionId))
+                        .Select(p => p.CurrentProgress)
+                        .DefaultIfEmpty(-1)
+                        .Max();
+                }
             }
             // 复用静态版本：无日志噪声、性能更优
             if (ShouldBroadcastAllArrived(room, kv.Value, sp)) return false;
@@ -621,7 +640,19 @@ public sealed partial class RoomOperations
                 satisfiedSyncs = CollectSatisfiedSyncsLocked(room);
 
                 // 5) 计数器递增 + 降级判断
-                room.ConsecutiveCollectiveSkipCount += 1;
+                // collective-stuck-orphan-arrivalset fix：仅当本次判定确实产生了动作
+                // （标记了落后玩家，或有可放行的同步点）才计入连续跳段。
+                // 既无落后者也无可放行同步点的"空触发"只是症状快照残留（如孤儿 ArrivalSet），
+                // 不代表真实跳段发生，若照常 +1 会把熔断计数喂满 → 误广播 CollectiveSkipDegraded 全员停止。
+                // 真实死锁仍有客户端 60s 等待超时 + 连续超时上报路径兜底，不依赖此计数。
+                if (laggingPlayerConnIds.Count > 0 || satisfiedSyncs.Count > 0)
+                {
+                    room.ConsecutiveCollectiveSkipCount += 1;
+                }
+                else
+                {
+                    _logger.LogInformation("[CollectiveSkip] 判定命中但无有效跳段动作（无落后者且无可放行同步点），不计入连续跳段计数，房间={RoomCode}", roomCode);
+                }
                 var maxConsec = Math.Max(1, room.HostConfig.MaxConsecutiveCollectiveSkips);
                 if (room.ConsecutiveCollectiveSkipCount >= maxConsec)
                 {
