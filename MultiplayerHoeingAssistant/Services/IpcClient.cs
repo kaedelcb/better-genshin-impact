@@ -125,7 +125,36 @@ public class IpcClient : IDisposable
         }
     }
 
+    /// <summary>单条命令的读写总超时（与 BGI 侧 InstanceService.RequestTimeout=5s 对齐）。
+    /// 历史上读响应无超时：BGI 卡顿（游戏高负载）时 ReadAsync 无限阻塞，状态轮询一轮挂死一轮，
+    /// 叠加出多条管道连接并引发上报日志风暴。</summary>
+    private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(5);
+
     public async Task<IpcResponse> SendCommandAsync(IpcRequest request)
+    {
+        if (_pipeClient == null || !_pipeClient.IsConnected)
+            throw new InvalidOperationException("命名管道未连接");
+
+        var coreTask = SendCommandCoreAsync(request);
+        try
+        {
+            return await coreTask.WaitAsync(CommandTimeout);
+        }
+        catch (TimeoutException)
+        {
+            // 超时后管道帧边界已不可信（迟到的响应会被下一条命令误读成自己的响应），
+            // 直接断开，后续调用按"命名管道未连接"失败，由调用方回退缓存/下轮重连。
+            // 断开会让被遗弃的 coreTask 以 ObjectDisposed/IOException 失败，必须观察掉，
+            // 否则冒泡到 TaskScheduler.UnobservedTaskException → App 弹"未处理异常"框
+            _ = coreTask.ContinueWith(t => _ = t.Exception,
+                TaskContinuationOptions.OnlyOnFaulted);
+            _pipeClient?.Dispose();
+            _pipeClient = null;
+            throw new TimeoutException($"BGI 命名管道命令（{request.OpCode}）响应超时（{CommandTimeout.TotalSeconds:0}s），BGI 可能忙或无响应");
+        }
+    }
+
+    private async Task<IpcResponse> SendCommandCoreAsync(IpcRequest request)
     {
         if (_pipeClient == null || !_pipeClient.IsConnected)
             throw new InvalidOperationException("命名管道未连接");

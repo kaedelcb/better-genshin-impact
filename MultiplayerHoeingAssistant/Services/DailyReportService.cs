@@ -54,13 +54,46 @@ public sealed class DailyReportService
         @"配置单 ""(?<name>.+?)"" 绑定UID .*?一条龙和配置组任务结束",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    /// <summary>独立任务统一包络（TaskRunner.RunCurrentAsync）：→ "任务启动！" / → "任务结束"。不含任务名。</summary>
+    /// <summary>独立任务统一包络（TaskRunner.RunCurrentAsync）：→ "任务启动！" / → "任务结束"。不含任务名。
+    /// 注意：此包络不是独立任务专属——ScriptService.RunMulti 跑整个配置组时也套同一包络
+    /// （且"配置组加载完成"先于包络输出，包络恒落在配置组单元内部），OneDragonFlowViewModel
+    /// 的 UID 验证/兑换码检查等小包装也会产生。配置组内的外壳包络由 ParseOverviewFile
+    /// 标记为 shellEnvelopes，闭合时一律丢弃壳层、子单元上移——组内真正的独立任务
+    /// 由 ProjectStartRegex/ProjectEndRegex 配对成独立子单元，不靠外壳命名。</summary>
     private static readonly Regex SoloStartRegex = new(
         @"→ ""任务启动！""", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex SoloEndRegex = new(
         @"→ ""任务结束""", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    /// <summary>独立任务命名规则：包络内第一条命中的特征行决定任务名（顺序即优先级）。</summary>
+    /// <summary>配置组内项目任务开始（ScriptService.ExecuteProject，模板改动时需同步）：
+    /// → 开始执行JS脚本: "X" / → 开始执行键鼠脚本: "X" / → 开始执行地图追踪任务: "X" /
+    /// → 开始执行shell: "X" / → 开始执行独立任务: "X"。Kind 显示名对齐 ScriptGroupProjectExtensions.TypeDescriptions。</summary>
+    private static readonly Regex ProjectStartRegex = new(
+        @"→ 开始执行(?<kind>JS脚本|键鼠脚本|地图追踪任务|shell|独立任务): ""(?<name>.+?)""",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>配置组内项目任务结束：→ 脚本执行结束: "X"[, 耗时: M分S秒]（ScriptService 带耗时后缀；
+    /// RouteExecutionEngine 独立任务版锄地逐线路补打同款但无后缀——其开始行无 "→ " 前缀不会开单元，此处按名找不到即忽略）。</summary>
+    private static readonly Regex ProjectEndRegex = new(
+        @"→ 脚本执行结束: ""(?<name>.+?)""",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>项目任务 Kind 集合（ProjectEndRegex 按名配对时只在这几类里找，避免误闭合同名配置组/一条龙）。</summary>
+    private static readonly HashSet<string> ProjectKinds = new()
+    {
+        "JS脚本", "键鼠脚本", "地图追踪", "Shell", "独立任务"
+    };
+
+    /// <summary>项目任务日志 Kind 文本 → 总览显示 Kind（对齐 ScriptGroupProjectExtensions.TypeDescriptions）。</summary>
+    private static string ProjectKindDisplay(string logKind) => logKind switch
+    {
+        "地图追踪任务" => "地图追踪",
+        "shell" => "Shell",
+        var k => k,
+    };
+
+    /// <summary>独立任务页直启独立任务的命名规则：包络内第一条命中的特征行决定任务名（顺序即优先级）。
+    /// 组内独立任务不走这里（由 ProjectStartRegex 直接带名建单元）。</summary>
     private static readonly (Regex Rx, Func<Match, string> Name)[] SoloNameRules =
     {
         (new Regex(@"锄地一条龙任务启动 \[配置组: ""(?<n>.+?)""\]", RegexOptions.Compiled),
@@ -272,6 +305,14 @@ public sealed class DailyReportService
         var stack = new List<OverviewUnit>(); // 打开中的单元（栈底最外层）
         TimeSpan lastTime = default;
         var anyTime = false;
+        // TaskRunner 包络单元全集（含外壳）：SoloEndRegex 只闭合包络，
+        // 不碰项目级"独立任务"子单元（由 ProjectEndRegex 按名配对）。
+        var soloEnvelopes = new HashSet<OverviewUnit>();
+        // RunMulti 外壳包络单元：ScriptService.RunMulti 用 TaskRunner 跑整个配置组，
+        // 其 "任务启动！/任务结束" 包络出现在配置组单元内部（"配置组加载完成"先于包络输出）。
+        // 外壳不是真正的任务单元（组内独立任务由项目级开始/结束行单独成单元），
+        // 闭合时一律丢弃壳层、子单元上移，避免配置组被误标为"独立任务 · 未知独立任务"。
+        var shellEnvelopes = new HashSet<OverviewUnit>();
 
         // 闭合 stack[idx] 及其内层全部单元（内层按 idx 之后的顺序先闭合，统一用 endTime 收尾）
         void CloseFrom(int idx, TimeSpan endTime, string? fallbackName, bool unclosed)
@@ -282,6 +323,13 @@ public sealed class DailyReportService
                 stack.RemoveAt(i);
                 u.Duration = endTime - u.Start;
                 if (u.Duration < TimeSpan.Zero) u.Duration += TimeSpan.FromDays(1); // 跨午夜兜底
+                // RunMulti 外壳：不进树，子单元（组内项目任务）直接挂到外层
+                if (shellEnvelopes.Contains(u))
+                {
+                    if (stack.Count > 0) stack[^1].Children.AddRange(u.Children);
+                    else overview.TopUnits.AddRange(u.Children);
+                    continue;
+                }
                 // 兜底名：目标单元用调用方给的（如结束行回填的配置单名），内层按类型默认
                 if (string.IsNullOrEmpty(u.Name))
                     u.Name = i == idx && fallbackName != null
@@ -338,13 +386,39 @@ public sealed class DailyReportService
             }
             if (SoloStartRegex.IsMatch(line))
             {
-                stack.Add(new OverviewUnit { Kind = "独立任务", Name = "", Start = t });
+                var unit = new OverviewUnit { Kind = "独立任务", Name = "", Start = t };
+                soloEnvelopes.Add(unit);
+                // 包络出现在配置组单元内部 = RunMulti 跑整组的外壳（非真实任务），标记后闭合时丢弃。
+                if (stack.Count > 0 && stack[^1].Kind == "配置组")
+                    shellEnvelopes.Add(unit);
+                stack.Add(unit);
                 continue;
             }
             if (SoloEndRegex.IsMatch(line))
             {
-                var idx = stack.FindLastIndex(u => u.Kind == "独立任务");
+                var idx = stack.FindLastIndex(u => soloEnvelopes.Contains(u));
                 if (idx >= 0) CloseFrom(idx, t, "未知独立任务", unclosed: false);
+                continue;
+            }
+
+            // 配置组内项目任务（地图追踪/JS脚本/键鼠脚本/Shell/独立任务）：开始/结束按名配对
+            var mp = ProjectStartRegex.Match(line);
+            if (mp.Success)
+            {
+                stack.Add(new OverviewUnit
+                {
+                    Kind = ProjectKindDisplay(mp.Groups["kind"].Value),
+                    Name = mp.Groups["name"].Value,
+                    Start = t
+                });
+                continue;
+            }
+            var mpe = ProjectEndRegex.Match(line);
+            if (mpe.Success)
+            {
+                var name = mpe.Groups["name"].Value;
+                var idx = stack.FindLastIndex(u => u.Name == name && ProjectKinds.Contains(u.Kind));
+                if (idx >= 0) CloseFrom(idx, t, null, unclosed: false);
                 continue;
             }
 

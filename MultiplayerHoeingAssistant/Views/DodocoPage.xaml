@@ -1218,12 +1218,25 @@
                                                    Foreground="{DynamicResource GoldText}"/>
                                         <TextBlock Text="{Binding Stats.DailyReport.OverviewTotalText}" FontSize="10"
                                                    Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                        <Button Content="{Binding Stats.DailyReport.OverviewExpandAllText}"
+                                                Style="{DynamicResource BtnGhost}" Padding="8,1" FontSize="10"
+                                                VerticalAlignment="Center" Margin="12,0,0,0"
+                                                Command="{Binding Stats.DailyReport.ToggleAllOverviewRowsCommand}"
+                                                ToolTip="展开/收起全部配置组的子任务列表"/>
                                     </StackPanel>
                                     <ItemsControl ItemsSource="{Binding Stats.DailyReport.OverviewRows}" Margin="0,4,0,0">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <TextBlock Text="{Binding}" FontSize="11" TextWrapping="Wrap"
-                                                           Foreground="{DynamicResource White}"/>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Button Content="{Binding Glyph}" Style="{DynamicResource BtnGhost}"
+                                                            Padding="4,0" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center"
+                                                            Visibility="{Binding IsExpandable, Converter={StaticResource BoolToVis}}"
+                                                            Command="{Binding DataContext.Stats.DailyReport.ToggleOverviewRowCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip="展开/折叠子任务"/>
+                                                    <TextBlock Text="{Binding Text}" FontSize="11" TextWrapping="Wrap"
+                                                               Foreground="{DynamicResource White}"/>
+                                                </StackPanel>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>

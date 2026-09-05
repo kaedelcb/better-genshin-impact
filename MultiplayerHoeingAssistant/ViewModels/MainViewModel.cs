@@ -60,6 +60,10 @@ public class MainViewModel : INotifyPropertyChanged
     private int _isAllReadyProcessing;
     /// <summary>重入守卫：防止 BGI 崩溃事件并发触发多次 RestartBgi 导致双开（P1-E 双保险）。</summary>
     private int _isBgiRestarting;
+    /// <summary>重入守卫：ReportStatusAsync 触发源众多（10s 定时器、连接恢复、ext 事件等约 20 处），
+    /// 且单轮可能卡在 IPC 读上超过 10s；不设防会并发叠加 → 同一秒多条"ReportControlStatusAsync 调用失败"
+    /// 日志风暴 + 每轮各持一条命名管道连接。状态是快照语义，跳过本轮由下一轮补齐即可。</summary>
+    private int _reportStatusRunning;
     /// <summary>用户手动清除上线后置 true，抑制定时自动上线。手动设定定时上线时清除。</summary>
     private bool _manuallyClearedOnline = true;
     private bool _wasAutoHoeingRunning;
@@ -764,7 +768,24 @@ public class MainViewModel : INotifyPropertyChanged
 
     private async Task ReportStatusAsync()
     {
-        if (_signalRClient == null) return;
+        // 防重入：多源并发触发时只跑一轮（详见 _reportStatusRunning 注释）
+        if (Interlocked.CompareExchange(ref _reportStatusRunning, 1, 0) != 0) return;
+        try
+        {
+            await ReportStatusCoreAsync();
+        }
+        finally
+        {
+            _reportStatusRunning = 0;
+        }
+    }
+
+    private async Task ReportStatusCoreAsync()
+    {
+        // 快照到局部变量：RefreshAsync 会把 _signalRClient 置 null 并 Dispose，
+        // 裸用字段会在方法中途踩 NullReferenceException（"状态上报失败: Object reference not set..."）
+        var signalRClient = _signalRClient;
+        if (signalRClient == null) return;
 
         List<string> configGroups = [];
         List<string> oneClickConfigs = [];
@@ -1068,10 +1089,7 @@ public class MainViewModel : INotifyPropertyChanged
                             status.OnlineReady = true;
                             status.OnlineMode = "command";
                             // 上报服务端，由服务端状态机协调
-                            if (_signalRClient != null)
-                            {
-                                await _signalRClient.ReportOnlineEventAsync(gen, true);
-                            }
+                            await signalRClient.ReportOnlineEventAsync(gen, true);
                             }
                         }
                     }
@@ -1155,7 +1173,7 @@ public class MainViewModel : INotifyPropertyChanged
         LatestLocalStatus = status;
         try
         {
-            await _signalRClient.ReportControlStatusAsync(status);
+            await signalRClient.ReportControlStatusAsync(status);
         }
         catch (Exception ex)
         {

@@ -75,8 +75,17 @@ public sealed class DailyReportViewModel : ViewModelBase, IDisposable
 
     // ========== 全天任务总览（与日报同一日期选择） ==========
 
-    /// <summary>总览行（扁平化文本：顶层编号行 + 全角空格缩进的子单元行）。</summary>
-    public ObservableCollection<string> OverviewRows { get; } = new();
+    /// <summary>总览可见行（顶层编号行 + 缩进子单元行；配置组的子任务默认折叠，点 ▶ 展开）。</summary>
+    public ObservableCollection<OverviewRowView> OverviewRows { get; } = new();
+
+    /// <summary>复制报告用的完整总览行（无视折叠状态，全量展开）。</summary>
+    private readonly List<string> _overviewCopyRows = new();
+
+    /// <summary>总览树根节点（当前选中日）。</summary>
+    private List<OverviewNode> _overviewRoots = new();
+
+    /// <summary>用户展开过的配置组节点键（选中"今天"时 30 秒自动重建，按键保留展开状态）。</summary>
+    private readonly HashSet<string> _expandedOverviewKeys = new();
 
     private string _overviewTotalText = "";
     /// <summary>当天 BGI 总运行时长（顶层单元互斥求和）。</summary>
@@ -86,6 +95,41 @@ public sealed class DailyReportViewModel : ViewModelBase, IDisposable
     public bool HasOverview { get => _hasOverview; set => SetProperty(ref _hasOverview, value); }
 
     public RelayCommand RefreshCommand { get; }
+
+    /// <summary>展开/折叠配置组的子任务列表（总览行 ▶/▼ 按钮）。</summary>
+    public RelayCommand ToggleOverviewRowCommand => new(p =>
+    {
+        if (p is not OverviewRowView { Node: { IsExpandable: true } node }) return;
+        node.IsExpanded = !node.IsExpanded;
+        if (node.IsExpanded) _expandedOverviewKeys.Add(node.Key);
+        else _expandedOverviewKeys.Remove(node.Key);
+        RebuildOverviewRows();
+    });
+
+    private string _overviewExpandAllText = "一键展开全部";
+    /// <summary>一键展开/收起按钮文本（尚有折叠的配置组时=展开全部，全部已展开=收起全部）。</summary>
+    public string OverviewExpandAllText { get => _overviewExpandAllText; set => SetProperty(ref _overviewExpandAllText, value); }
+
+    /// <summary>一键展开全部配置组子任务；全部已展开时变为收起全部。</summary>
+    public RelayCommand ToggleAllOverviewRowsCommand => new(_ =>
+    {
+        var expand = _overviewRoots.SelectMany(FlattenNode).Any(n => n.IsExpandable && !n.IsExpanded);
+        foreach (var n in _overviewRoots.SelectMany(FlattenNode).Where(n => n.IsExpandable))
+        {
+            n.IsExpanded = expand;
+            if (expand) _expandedOverviewKeys.Add(n.Key);
+            else _expandedOverviewKeys.Remove(n.Key);
+        }
+        RebuildOverviewRows();
+    });
+
+    /// <summary>深度优先展平节点树（含自身）。</summary>
+    private static IEnumerable<OverviewNode> FlattenNode(OverviewNode node)
+    {
+        yield return node;
+        foreach (var c in node.Children)
+            foreach (var d in FlattenNode(c)) yield return d;
+    }
 
     // ========== 复制报告 ==========
 
@@ -131,7 +175,7 @@ public sealed class DailyReportViewModel : ViewModelBase, IDisposable
         {
             sb.AppendLine();
             sb.AppendLine($"BGI 全天任务总览（{OverviewTotalText}）");
-            foreach (var r in OverviewRows) sb.AppendLine(r);
+            foreach (var r in _overviewCopyRows) sb.AppendLine(r);
         }
 
         try
@@ -247,8 +291,9 @@ public sealed class DailyReportViewModel : ViewModelBase, IDisposable
                 TotalText = $"【合计--{FormatHms(report.TotalDuration)}】";
             }
 
-            // ---- 全天任务总览（顶层单元互斥计时，子层仅展示） ----
-            OverviewRows.Clear();
+            // ---- 全天任务总览（顶层单元互斥计时，子层仅展示；配置组子任务默认折叠） ----
+            _overviewRoots.Clear();
+            _overviewCopyRows.Clear();
             if (overview == null || overview.TopUnits.Count == 0)
             {
                 HasOverview = false;
@@ -261,20 +306,64 @@ public sealed class DailyReportViewModel : ViewModelBase, IDisposable
                 for (var i = 0; i < overview.TopUnits.Count; i++)
                 {
                     var u = overview.TopUnits[i];
-                    OverviewRows.Add($"{i}.【{UnitName(u)}--{FormatHms(u.Duration)}{UnclosedNote(u)}】");
-                    AppendChildren(u, 1);
+                    var header = $"{i}.【{UnitName(u)}--{FormatHms(u.Duration)}{UnclosedNote(u)}】";
+                    _overviewRoots.Add(BuildOverviewNode(u, header));
+                    _overviewCopyRows.Add(header);
+                    AppendOverviewCopyRows(u, 1);
                 }
             }
+            RebuildOverviewRows();
         });
     }
 
-    /// <summary>子单元行（递归扁平化，全角空格缩进 + ├ 前缀）。</summary>
-    private void AppendChildren(OverviewUnit unit, int depth)
+    /// <summary>构建总览节点树；子单元行文本不含缩进（扁平化时按深度补全角空格）。
+    /// 配置组的展开状态按节点键（Kind|Name|Start）跨自动刷新保留。</summary>
+    private OverviewNode BuildOverviewNode(OverviewUnit unit, string header)
+    {
+        var node = new OverviewNode
+        {
+            Kind = unit.Kind,
+            Key = $"{unit.Kind}|{unit.Name}|{unit.Start}",
+            HeaderText = header,
+            Children = unit.Children.OrderBy(c => c.Start)
+                .Select(c => BuildOverviewNode(c, $"├ {UnitName(c)}--{FormatHms(c.Duration)}{UnclosedNote(c)}"))
+                .ToList()
+        };
+        node.IsExpanded = _expandedOverviewKeys.Contains(node.Key);
+        return node;
+    }
+
+    /// <summary>把节点树按折叠状态扁平化为可见行（配置组折叠时子任务整支隐藏）。</summary>
+    private void RebuildOverviewRows()
+    {
+        OverviewRows.Clear();
+        foreach (var root in _overviewRoots) AppendVisibleRow(root, 0);
+        OverviewExpandAllText = _overviewRoots.SelectMany(FlattenNode).Any(n => n is { IsExpandable: true, IsExpanded: false })
+            ? "一键展开全部" : "一键收起全部";
+    }
+
+    private void AppendVisibleRow(OverviewNode node, int depth)
+    {
+        var collapsedNote = node is { IsExpandable: true, IsExpanded: false }
+            ? $"（{node.Children.Count} 项子任务，点击 ▶ 展开）" : "";
+        OverviewRows.Add(new OverviewRowView
+        {
+            Text = $"{new string('　', depth)}{node.HeaderText}{collapsedNote}",
+            Glyph = node.IsExpandable ? (node.IsExpanded ? "▼" : "▶") : "",
+            IsExpandable = node.IsExpandable,
+            Node = node
+        });
+        if (!node.IsExpandable || node.IsExpanded)
+            foreach (var c in node.Children) AppendVisibleRow(c, depth + 1);
+    }
+
+    /// <summary>复制报告用：子单元全量行（递归，全角空格缩进 + ├ 前缀），无视折叠状态。</summary>
+    private void AppendOverviewCopyRows(OverviewUnit unit, int depth)
     {
         foreach (var c in unit.Children.OrderBy(c => c.Start))
         {
-            OverviewRows.Add($"{new string('　', depth)}├ {UnitName(c)}--{FormatHms(c.Duration)}{UnclosedNote(c)}");
-            AppendChildren(c, depth + 1);
+            _overviewCopyRows.Add($"{new string('　', depth)}├ {UnitName(c)}--{FormatHms(c.Duration)}{UnclosedNote(c)}");
+            AppendOverviewCopyRows(c, depth + 1);
         }
     }
 
@@ -323,4 +412,40 @@ public sealed class DailyReportGroupView
     public List<string> Rounds { get; set; } = new();
 
     public bool HasRounds => Rounds.Count > 0;
+}
+
+/// <summary>全天任务总览的内部节点（树形；配置组有子单元时可折叠，默认折叠）。</summary>
+internal sealed class OverviewNode
+{
+    /// <summary>单元类型（OverviewUnit.Kind；只有 "配置组" 可折叠）。</summary>
+    public string Kind { get; init; } = "";
+
+    /// <summary>展开状态保留键：Kind|Name|Start（自动刷新重建树时用）。</summary>
+    public string Key { get; init; } = "";
+
+    /// <summary>行文本（不含缩进、不含折叠提示）。</summary>
+    public string HeaderText { get; init; } = "";
+
+    public List<OverviewNode> Children { get; init; } = new();
+
+    public bool IsExpanded { get; set; }
+
+    /// <summary>仅配置组可折叠（一个组可能挂几十个地图追踪/脚本子任务）。</summary>
+    public bool IsExpandable => Kind == "配置组" && Children.Count > 0;
+}
+
+/// <summary>全天任务总览的一行（配置组行左侧带 ▶/▼ 折叠按钮）。</summary>
+public sealed class OverviewRowView
+{
+    /// <summary>整行文本（含缩进；折叠的配置组行尾带"N 项子任务"提示）。</summary>
+    public string Text { get; init; } = "";
+
+    /// <summary>折叠按钮字形：▶ 已折叠 / ▼ 已展开；不可展开为空串。</summary>
+    public string Glyph { get; init; } = "";
+
+    /// <summary>是否显示折叠按钮。</summary>
+    public bool IsExpandable { get; init; }
+
+    /// <summary>内部节点引用（ToggleOverviewRowCommand 翻转展开状态用）。</summary>
+    internal OverviewNode? Node { get; init; }
 }

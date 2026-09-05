@@ -52,10 +52,11 @@ public sealed class DayOverview
     public TimeSpan TotalDuration { get; set; }
 }
 
-/// <summary>总览里的一个运行单元（可嵌套：一条龙配置单 → 配置组 → 组内独立任务）。</summary>
+/// <summary>总览里的一个运行单元（可嵌套：一条龙配置单 → 配置组 → 组内项目任务 / 独立任务）。</summary>
 public sealed class OverviewUnit
 {
-    /// <summary>单元类型：一条龙 / 配置组 / 独立任务。</summary>
+    /// <summary>单元类型：一条龙 / 配置组 / 独立任务（独立任务页直启或组内 SoloTask 项目）/
+    /// 地图追踪 / JS脚本 / 键鼠脚本 / Shell（后四者为配置组内项目任务，对齐 ScriptGroupProjectExtensions.TypeDescriptions）。</summary>
     public string Kind { get; set; } = "";
 
     /// <summary>单元名（配置单名/组名/任务名；独立任务无特征行时为"未知独立任务"）。</summary>
