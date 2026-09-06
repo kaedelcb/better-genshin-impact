@@ -237,6 +237,16 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         }
     }
 
+    // ========== 监控模式（本机向共享设置禁用驱动） ==========
+
+    /// <summary>监控模式（透传 MainViewModel.IsObserverMode，供 XAML 显隐提示）。
+    /// 监控端 isRemote=true 不入服务端成员表：按 UID 路由的截图/实时日志/日志文件请求永远到不了本端，
+    /// 因此 Share* 系列共享开关在本端无效，UI 置灰。</summary>
+    public bool IsObserverMode => _mainVm.IsObserverMode;
+
+    /// <summary>执行模式（IsObserverMode 的反向，供 IsEnabled 绑定；正向属性免引入反向转换器）。</summary>
+    public bool IsExecutorMode => !_mainVm.IsObserverMode;
+
     private List<LogEntry> BufferFor(string key)
     {
         if (!_buffers.TryGetValue(key, out var buf))
@@ -938,10 +948,15 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void OnMemberOnlineChanged() => RebuildLogSources();
 
-    /// <summary>主 VM 属性变化：离开/回到嘟嘟可页面时重估日志订阅。</summary>
+    /// <summary>主 VM 属性变化：离开/回到嘟嘟可页面时重估日志订阅；监控模式切换时转发给 XAML 禁用绑定。</summary>
     private void OnMainVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainViewModel.CurrentPage)) EvaluateSubscription();
+        if (e.PropertyName == nameof(MainViewModel.IsObserverMode))
+        {
+            OnPropertyChanged(nameof(IsObserverMode));
+            OnPropertyChanged(nameof(IsExecutorMode));
+        }
     }
 
     /// <summary>日志批接收（SignalR/Timer 线程回调）：切 UI 线程入缓冲。</summary>

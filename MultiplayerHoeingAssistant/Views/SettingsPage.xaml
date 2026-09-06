@@ -16,6 +16,8 @@
          必须使用 DynamicResource，因为 StaticResource 在编译时解析，UserControl 的
          资源字典无法向上查找父级 Window 的 Resources。 -->
     <UserControl.Resources>
+        <!-- 本 UserControl 的 StaticResource 无法向上找到 MainWindow 资源，转换器需自带（同 DodocoPage） -->
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <!-- 鎏金下拉选择框（原神风格）：ToggleButton 控制开合，Popup 显示下拉项 -->
         <Style x:Key="GoldComboBox" TargetType="ComboBox">
             <Setter Property="Foreground" Value="#FFFFFF"/>
@@ -218,8 +220,9 @@
                         </Grid>
                     </Border>
 
-                    <!-- ③ 守护 BGI -->
-                    <Border Background="#1E262660" CornerRadius="8" Padding="12,10">
+                    <!-- ③ 守护 BGI（监控模式下隐藏：本机不创建 BGI 进程监控器） -->
+                    <Border Background="#1E262660" CornerRadius="8" Padding="12,10"
+                            Visibility="{Binding IsExecutorMode, Converter={StaticResource BoolToVis}}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>

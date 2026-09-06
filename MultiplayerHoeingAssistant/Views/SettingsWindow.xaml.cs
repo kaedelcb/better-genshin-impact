@@ -42,6 +42,19 @@ public partial class SettingsWindow : Window
             BgiPathBox.Text = config.BgiPath;
         ExpectedPlayersBox.Text = config.ExpectedHoeingPlayers.ToString();
         ObserverModeCheckBox.IsChecked = config.ObserverMode;
+        // 监控模式（遥控器）不入房间成员表，本机填的预期开锄人数不参与服务端取 min → 整段隐藏，并随勾选状态联动
+        UpdateExpectedPlayersVisibility(!config.ObserverMode);
+        ObserverModeCheckBox.Checked += (_, _) => UpdateExpectedPlayersVisibility(false);
+        ObserverModeCheckBox.Unchecked += (_, _) => UpdateExpectedPlayersVisibility(true);
+    }
+
+    /// <summary>预期开锄人数整段（标签+输入框+说明）显隐：遥控器模式下隐藏。</summary>
+    private void UpdateExpectedPlayersVisibility(bool visible)
+    {
+        var v = visible ? Visibility.Visible : Visibility.Collapsed;
+        ExpectedPlayersLabel.Visibility = v;
+        ExpectedPlayersBox.Visibility = v;
+        ExpectedPlayersHint.Visibility = v;
     }
 
     /// <summary>

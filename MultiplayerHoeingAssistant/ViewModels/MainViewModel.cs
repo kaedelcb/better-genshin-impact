@@ -360,6 +360,7 @@ public class MainViewModel : INotifyPropertyChanged
             }
             _config = newConfig;
             _configManager.Save(_config);
+            NotifyModeBindings(); // 首启设置弹窗可能改了遥控器模式，同步刷新模式显隐绑定
         }
 
         // 生成房间码
@@ -1349,6 +1350,9 @@ public class MainViewModel : INotifyPropertyChanged
             try
             {
                 if (_config == null) return;
+                // 监控模式：本机不占成员名额也不参与上线（服务端成员表无本端条目，上报是 no-op），
+                // 跳过避免本地误打"已上线(scheduled)"日志误导；给执行端设定时上线走弹窗远程下发，不经本定时器
+                if (_config.ObserverMode) return;
                 if (string.IsNullOrEmpty(_config.ScheduledOnlineTime)) return;
 
                 // 用户手动清除上线后，抑制定时自动上线（除非重新设定定时上线清除标志）。
@@ -4305,6 +4309,7 @@ public class MainViewModel : INotifyPropertyChanged
         _configManager?.Save(_config);
         ApplyModeRuntime(targetObserver);
         OnPropertyChanged(nameof(IsObserverMode));
+        OnPropertyChanged(nameof(IsExecutorMode));
         AddLog($"已切换为{modeName}模式，正在重建连接...");
         await RefreshAsync();
     }
@@ -4432,6 +4437,9 @@ public class MainViewModel : INotifyPropertyChanged
     /// <summary>是否处于遥控器模式（ObserverMode=true）。供连接徽章 MultiDataTrigger 判断。</summary>
     public bool IsObserverMode => _config?.ObserverMode == true;
 
+    /// <summary>执行模式（IsObserverMode 的反向，供 IsEnabled 绑定；正向属性免引入反向转换器）。</summary>
+    public bool IsExecutorMode => !IsObserverMode;
+
     /// <summary>最近一次本地任务状态快照（10s 状态轮询的 task.status 产物）。
     /// 嘟嘟可卡死心跳检测用：只读缓存，不新起 IPC 轮询。</summary>
     public ControlStatus? LatestLocalStatus { get; private set; }
@@ -4548,6 +4556,16 @@ public class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(GuardBgi));
         OnPropertyChanged(nameof(AutoLaunchWithBgiModeIndex));
         OnPropertyChanged(nameof(AutoLaunchOnBootModeIndex));
+        // 模式派生属性同样依赖 _config，初次绑定发生在配置加载前，必须一并刷新
+        // （缺这两条曾导致：监控模式下按 IsExecutorMode 隐藏设置的绑定永远停在初值 Visible）
+        NotifyModeBindings();
+    }
+
+    /// <summary>模式派生属性通知：_config 加载/替换后调用，驱动依赖 ObserverMode 的 UI 显隐。</summary>
+    private void NotifyModeBindings()
+    {
+        OnPropertyChanged(nameof(IsObserverMode));
+        OnPropertyChanged(nameof(IsExecutorMode));
     }
 
     private void OpenSettings()
@@ -4558,6 +4576,7 @@ public class MainViewModel : INotifyPropertyChanged
         {
             _config = newConfig;
             _configManager.Save(_config);
+            NotifyModeBindings(); // 可能在弹窗里改了遥控器模式 → 刷新依赖 ObserverMode 的 UI 显隐
             RoomCode = AssistConfigManager.GenerateControlRoomCode(_config.TeamUids);
             AddLog("配置已保存并生效");
         }

@@ -423,14 +423,20 @@
                         <Button Content="重探测日志" Style="{DynamicResource BtnGhost}" Padding="10,4"
                                 Command="{Binding RefreshTargetCommand}" ToolTip="重新定位 BGI 日志目录与文件（刚改完 BGI 路径时用）"/>
                         <CheckBox Content="共享我的日志" IsChecked="{Binding ShareRealtimeLog, Mode=TwoWay}"
+                                  Visibility="{Binding IsExecutorMode, Converter={StaticResource BoolToVis}}"
                                   Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="12,0,0,0"
                                   ToolTip="允许房间成员订阅你的实时日志（观众驱动：没人看时零流量；成员选中你才开始上报）"/>
                         <CheckBox Content="省流(仅INF+)" IsChecked="{Binding ShareLogInfoOnly, Mode=TwoWay}"
+                                  Visibility="{Binding IsExecutorMode, Converter={StaticResource BoolToVis}}"
                                   Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,0,0"
                                   ToolTip="他人订阅你的日志时不转发 Debug 级，只发 INF/WRN/ERR"/>
                         <CheckBox Content="共享日志文件" IsChecked="{Binding ShareLogFiles, Mode=TwoWay}"
+                                  Visibility="{Binding IsExecutorMode, Converter={StaticResource BoolToVis}}"
                                   Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,0,0"
                                   ToolTip="允许房间成员请求你的日志文件列表并下载完整日志（gzip 分块传输）。注意：完整日志可能包含本机路径等环境信息"/>
+                        <TextBlock Text="监控模式：本机无日志/截图可共享，共享设置已隐藏" FontSize="10" Foreground="{DynamicResource Dim}"
+                                   VerticalAlignment="Center" Margin="12,0,0,0"
+                                   Visibility="{Binding IsObserverMode, Converter={StaticResource BoolToVis}}"/>
                     </StackPanel>
                 </Border>
 
@@ -1300,9 +1306,11 @@
                                 Command="{Binding Monitor.SaveFrameCommand}" Margin="0,0,12,0"
                                 ToolTip="把当前大图的 JPEG 原帧保存到本机（远程画面为对方共享的压缩图）"/>
                         <CheckBox Content="共享我的桌面截图" IsChecked="{Binding ShareDesktopScreenshot, Mode=TwoWay}"
+                                  Visibility="{Binding IsExecutorMode, Converter={StaticResource BoolToVis}}"
                                   Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,6,0"
                                   ToolTip="允许队友点选查看我的桌面：仅在被请求时截一帧发给对方（需已连房；不勾选则任何请求都会被忽略）"/>
                         <ComboBox Width="92" SelectedIndex="{Binding ShareScreenshotWidthIndex}"
+                                  Visibility="{Binding IsExecutorMode, Converter={StaticResource BoolToVis}}"
                                   Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
                                   VerticalAlignment="Center" Margin="0,0,12,0"
                                   ToolTip="共享画质（被请求时上传的截图宽度，高度等比）：越大越清晰、越费带宽；1280 可看清屏上文字">
