@@ -72,7 +72,7 @@ public sealed partial class RoomOperations
             }
             if (isRemote)
             {
-                _roomManager.RegisterRemoteConnection(group, ctx.ConnectionId);
+                _roomManager.RegisterRemoteConnection(group, ctx.ConnectionId, playerUid);
             }
             _logger.LogInformation("玩家 {PlayerName}({PlayerUid}) 加入控制房间 {RoomCode} (Web={IsWeb}, Remote={IsRemote})", playerName, playerUid, roomCode, isWebClient, isRemote);
 
@@ -127,6 +127,22 @@ public sealed partial class RoomOperations
 
             // 解析目标
             var targets = _roomManager.ResolveTargets(command);
+
+            // [监控模式修复] 远程配置编辑的回复命令（remote_config.data / push_result）额外投递给
+            // 目标 UID 的遥控端连接：监控端不入 _controlRooms、ResolveTargets 匹配不到，回复会被误判
+            // "目标离线"进缓存，导致监控端发起远程编辑永远等不到回包（切回执行模式冲刷缓存才恢复）。
+            // 回复命令按 CommandId 关联、只有发起方的等待会话会消费，同 UID 执行端收到只会忽略，双投安全。
+            // 执行类命令维持 FR-3 不变：遥控端一律不接收。
+            var isRemoteConfigReply = command.Cmd is "remote_config.data" or "remote_config.push_result";
+            if (isRemoteConfigReply)
+            {
+                var remoteTargets = _roomManager.GetRemoteConnectionIdsByUids(group, command.Target);
+                if (remoteTargets.Count > 0)
+                {
+                    targets = targets.Union(remoteTargets).ToList();
+                }
+            }
+
             var deliveredTo = 0;
             foreach (var connectionId in targets)
             {
@@ -134,8 +150,10 @@ public sealed partial class RoomOperations
                 deliveredTo++;
             }
 
-            // 缓存离线目标：仅当明确指定的目标不在线时缓存（"*" 全员时不缓存单品）
-            if (command.Target.Count > 0 && !(command.Target.Count == 1 && command.Target[0] == "*"))
+            // 缓存离线目标：仅当明确指定的目标不在线时缓存（"*" 全员时不缓存单品）。
+            // 回复类命令只对实时等待中的会话有意义，发起方 20s 超时后缓存冲刷出来的只是迟到噪音，不缓存。
+            if (!isRemoteConfigReply
+                && command.Target.Count > 0 && !(command.Target.Count == 1 && command.Target[0] == "*"))
             {
                 var players = _roomManager.GetControlRoomPlayers(group);
                 foreach (var targetUid in command.Target)

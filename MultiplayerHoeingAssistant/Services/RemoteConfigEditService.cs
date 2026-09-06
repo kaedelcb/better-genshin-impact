@@ -36,19 +36,23 @@ public class RemoteConfigEditService
     private readonly Action<string> _report;
     /// <summary>[切片4] 取当前 ext 通道客户端（MainViewModel._externalClient）；Ready 时本机 IPC 走 ext.* 长连接。</summary>
     private readonly Func<BgiExternalClient?>? _getExternalClient;
+    /// <summary>本机 BGI 未运行时自动拉起并等待 IPC 就绪（MainViewModel 注入）；返回 true 表示可重试 IPC。</summary>
+    private readonly Func<Task<bool>>? _ensureBgiReadyAsync;
 
     public RemoteConfigEditService(
         Func<RemoteCommand, Task<bool>> sendAsync,
         Func<string> getSelfUid,
         Func<string> getSelfName,
         Action<string> report,
-        Func<BgiExternalClient?>? getExternalClient = null)
+        Func<BgiExternalClient?>? getExternalClient = null,
+        Func<Task<bool>>? ensureBgiReadyAsync = null)
     {
         _sendAsync = sendAsync;
         _getSelfUid = getSelfUid;
         _getSelfName = getSelfName;
         _report = report;
         _getExternalClient = getExternalClient;
+        _ensureBgiReadyAsync = ensureBgiReadyAsync;
     }
 
     /// <summary>
@@ -115,56 +119,74 @@ public class RemoteConfigEditService
             }
             var baseMd5 = ExtractFileMd5(packageJson);
 
-            // 2. 本机 BGI 弹远程编辑窗口
-            var (openResp, openErr) = await SendIpcAsync("config.open_remote_editor",
-                JsonSerializer.Serialize(new { targetName, targetUid, groupName, packageJson }));
-            openAttempted = true;
-            if (openResp == null)
+            // 2. 本机 BGI 弹远程编辑窗口（BGI 未运行时先自动拉起一次再重试）
+            var openPayload = JsonSerializer.Serialize(new { targetName, targetUid, groupName, packageJson });
+            var bgiStartTried = false;
+            while (true)
             {
-                // [实机修复 2026-09-05] 响应整体丢失（ext 超时 + v2 兜底也失败）≠ 窗口没开：
-                // BGI 可能已执行开窗但响应没回来。探测一次会话状态——editing = 窗口实开，
-                // 接管该会话继续编辑流程，避免孤儿窗占坑 15 分钟（用户看到的"第一次修改无效/无回传"）。
-                var (probeResp, _) = await SendIpcAsync("config.remote_editor_result", null);
-                var probeState = probeResp is { Success: true } ? GetDataString(probeResp.Data, "state") : null;
-                // 归属核对（防劫持上一轮遗留的别的配置组僵尸窗）：editing 响应带 targetUid/groupName
-                var probeTarget = probeResp is { Success: true } ? GetDataString(probeResp.Data, "targetUid") : null;
-                var probeGroup = probeResp is { Success: true } ? GetDataString(probeResp.Data, "groupName") : null;
-                if (probeState == "editing"
-                    && probeTarget == targetUid && probeGroup == groupName)
+                var (openResp, openErr) = await SendIpcAsync("config.open_remote_editor", openPayload);
+                openAttempted = true;
+                if (openResp == null)
                 {
-                    _report($"本机 BGI 的开窗响应丢失，但探测到编辑窗口已打开，已接管该会话（{targetName} 的「{groupName}」），等待保存（最长 10 分钟）...");
-                }
-                else if (probeState == "editing")
-                {
-                    // 僵尸窗归属不符：不接管，return 后 finally 的 abort 会把它清掉
-                    _report($"本机 BGI 残留着另一个远程编辑会话（{probeTarget} 的「{probeGroup}」），已清理，请重新发起");
+                    // [实机修复 2026-09-05] 响应整体丢失（ext 超时 + v2 兜底也失败）≠ 窗口没开：
+                    // BGI 可能已执行开窗但响应没回来。探测一次会话状态——editing = 窗口实开，
+                    // 接管该会话继续编辑流程，避免孤儿窗占坑 15 分钟（用户看到的"第一次修改无效/无回传"）。
+                    var (probeResp, _) = await SendIpcAsync("config.remote_editor_result", null);
+                    if (probeResp == null)
+                    {
+                        // 连探测都连不上 = 本机 BGI 未运行/未就绪：自动拉起 BGI 后重试一次开窗
+                        if (!bgiStartTried && _ensureBgiReadyAsync != null)
+                        {
+                            bgiStartTried = true;
+                            _report("本机 BGI 未运行，正在自动启动 BGI 并等待其就绪（最长约 90 秒）...");
+                            if (await _ensureBgiReadyAsync())
+                            {
+                                continue;
+                            }
+                            _report("自动启动 BGI 失败或等待就绪超时");
+                        }
+                        _report($"远程编辑需要本机 BGI 运行中（IPC 连接失败：{openErr}）");
+                        return;
+                    }
+                    // 归属核对（防劫持上一轮遗留的别的配置组僵尸窗）：editing 响应带 targetUid/groupName
+                    var probeState = probeResp.Success ? GetDataString(probeResp.Data, "state") : null;
+                    var probeTarget = probeResp.Success ? GetDataString(probeResp.Data, "targetUid") : null;
+                    var probeGroup = probeResp.Success ? GetDataString(probeResp.Data, "groupName") : null;
+                    if (probeState == "editing"
+                        && probeTarget == targetUid && probeGroup == groupName)
+                    {
+                        _report($"本机 BGI 的开窗响应丢失，但探测到编辑窗口已打开，已接管该会话（{targetName} 的「{groupName}」），等待保存（最长 10 分钟）...");
+                        break;
+                    }
+                    if (probeState == "editing")
+                    {
+                        // 僵尸窗归属不符：不接管，return 后 finally 的 abort 会把它清掉
+                        _report($"本机 BGI 残留着另一个远程编辑会话（{probeTarget} 的「{probeGroup}」），已清理，请重新发起");
+                        return;
+                    }
+                    // BGI 在运行且探测到无 editing 会话：开窗执行了但响应丢失且未成功，按失败处理
+                    _report($"本机 BGI 打开远程编辑窗口失败（开窗响应丢失，当前会话状态：{probeState ?? "未知"}）");
                     return;
                 }
-                else
+
+                if (!openResp.Success)
                 {
-                    _report($"远程编辑需要本机 BGI 运行中（IPC 连接失败：{openErr}）");
+                    _report($"本机 BGI 打开远程编辑窗口失败：{openResp.ErrorMessage ?? "未知原因"}");
                     return;
                 }
-            }
-            else
-            {
-            if (!openResp.Success)
-            {
-                _report($"本机 BGI 打开远程编辑窗口失败：{openResp.ErrorMessage ?? "未知原因"}");
-                return;
-            }
-            var openState = GetDataString(openResp.Data, "state");
-            if (openState == "rejected")
-            {
-                _report($"本机 BGI 拒绝了远程编辑：{GetDataString(openResp.Data, "error") ?? "已有进行中的远程编辑会话"}");
-                return;
-            }
-            if (openState != "editing")
-            {
-                _report($"本机 BGI 返回了未知的编辑状态：{openState ?? "（无 state 字段）"}，流程终止");
-                return;
-            }
-            _report($"已在本机 BGI 打开远程编辑窗口（{targetName} 的「{groupName}」），等待保存（最长 10 分钟）...");
+                var openState = GetDataString(openResp.Data, "state");
+                if (openState == "rejected")
+                {
+                    _report($"本机 BGI 拒绝了远程编辑：{GetDataString(openResp.Data, "error") ?? "已有进行中的远程编辑会话"}");
+                    return;
+                }
+                if (openState != "editing")
+                {
+                    _report($"本机 BGI 返回了未知的编辑状态：{openState ?? "（无 state 字段）"}，流程终止");
+                    return;
+                }
+                _report($"已在本机 BGI 打开远程编辑窗口（{targetName} 的「{groupName}」），等待保存（最长 10 分钟）...");
+                break;
             }
 
             // 3. 每 2s 轮询编辑结果

@@ -1454,8 +1454,68 @@ public class MainViewModel : INotifyPropertyChanged
             getSelfName: () => _config?.PlayerName ?? "",
             report: AddLog,
             // [切片4] 本机 IPC（open_remote_editor/remote_editor_result）ext 通道优先，v2 兜底
-            getExternalClient: () => _externalClient);
+            getExternalClient: () => _externalClient,
+            // BGI 未运行时自动拉起本机 BGI 并等待 IPC 就绪（监控/执行模式通用）
+            ensureBgiReadyAsync: EnsureLocalBgiReadyAsync);
         _ = _remoteConfigEditService.RunAsync(member.PlayerUid, member.PlayerName, groupName);
+    }
+
+    /// <summary>
+    /// 确保本机 BGI 可用（远程编辑开窗前置）：BGI 未运行时按配置路径自动拉起，
+    /// 并轮询等待 IPC 管道就绪（最长 90 秒，BGI 冷启动可能较慢）。返回 true = IPC 已可连接。
+    /// 监控模式下无 _processMonitor/_commandExecutor，直接按配置的 BgiPath 启动，不依赖模式。
+    /// </summary>
+    private async Task<bool> EnsureLocalBgiReadyAsync()
+    {
+        try
+        {
+            if (BgiProcessMonitor.GetCurrentSessionBgiProcesses().Length == 0)
+            {
+                var bgiPath = _config?.BgiPath;
+                if (string.IsNullOrEmpty(bgiPath) || !File.Exists(bgiPath))
+                {
+                    AddLog("无法自动启动 BGI：未配置 BGI 路径或文件不存在（请先在设置中配置 BGI 路径）");
+                    return false;
+                }
+                if (_processMonitor != null)
+                {
+                    // 执行模式：走标准启动路径（含启动探针日志与 OnBgiStarted 事件）
+                    _processMonitor.RestartBgi();
+                }
+                else
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = bgiPath,
+                        UseShellExecute = true
+                    });
+                }
+                AddLog("已自动启动 BGI，等待其就绪...");
+            }
+
+            // 轮询等待 IPC 就绪（进程可能刚拉起，管道尚未监听）
+            var deadline = DateTime.UtcNow.AddSeconds(90);
+            while (DateTime.UtcNow < deadline)
+            {
+                try
+                {
+                    using var ipc = new IpcClient();
+                    await ipc.ConnectAsync(3000);
+                    return true;
+                }
+                catch
+                {
+                    await Task.Delay(2000);
+                }
+            }
+            AddLog("等待本机 BGI IPC 就绪超时（90 秒）");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            AddLog($"自动启动 BGI 失败: {ex.Message}");
+            return false;
+        }
     }
 
     /// <summary>

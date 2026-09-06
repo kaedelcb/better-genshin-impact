@@ -32,9 +32,10 @@ public class RoomManager
     private readonly ConcurrentDictionary<string, long> _controlRoomRevisions = new();
     // 控制房间 AllReady 广播幂等标志（独立于锄地房间 Room 对象，因为控制房间可能没有对应的锄地房间）
     private readonly ConcurrentDictionary<string, bool> _controlRoomAllReadyBroadcasted = new();
-    // 遥控端连接登记（group → connectionId 集合）。遥控端不入 _controlRooms 成员列表，
-    // 只加 SignalR Group 收广播；登记到此集合供 SendRemoteCommand 发送方校验放行。
-    private readonly ConcurrentDictionary<string, HashSet<string>> _remoteControlConnections = new();
+    // 遥控端连接登记（group → connectionId → playerUid）。遥控端不入 _controlRooms 成员列表，
+    // 只加 SignalR Group 收广播；登记到此集合供 SendRemoteCommand 发送方校验放行，
+    // 以及远程配置编辑的回复命令（remote_config.data / push_result）按 UID 定向回投。
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string>> _remoteControlConnections = new();
     // 离线命令缓存：playerUid → 待执行的命令列表
     private readonly ConcurrentDictionary<string, List<RemoteCommand>> _pendingCommands = new();
 
@@ -1110,20 +1111,20 @@ public class RoomManager
         }
     }
 
-    /// <summary>登记/更新遥控端连接（group 下可能多个遥控端，Set 去重）。</summary>
-    public void RegisterRemoteConnection(string group, string connectionId)
+    /// <summary>登记/更新遥控端连接（group 下可能多个遥控端，connectionId → playerUid）。</summary>
+    public void RegisterRemoteConnection(string group, string connectionId, string playerUid)
     {
-        var set = _remoteControlConnections.GetOrAdd(group, _ => []);
-        set.Add(connectionId);
+        var dict = _remoteControlConnections.GetOrAdd(group, _ => []);
+        dict[connectionId] = playerUid;
     }
 
     /// <summary>移除遥控端连接（组内最后一个连接移除后清理空组）。</summary>
     public void RemoveRemoteConnection(string group, string connectionId)
     {
-        if (_remoteControlConnections.TryGetValue(group, out var set))
+        if (_remoteControlConnections.TryGetValue(group, out var dict))
         {
-            set.Remove(connectionId);
-            if (set.Count == 0)
+            dict.TryRemove(connectionId, out _);
+            if (dict.IsEmpty)
                 _remoteControlConnections.TryRemove(group, out _);
         }
     }
@@ -1131,7 +1132,19 @@ public class RoomManager
     /// <summary>该连接是否遥控端（已加入 CTRL_ group、不在 _controlRooms 成员列表，且已登记为遥控端）。</summary>
     public bool IsRemoteConnection(string group, string connectionId)
     {
-        return _remoteControlConnections.TryGetValue(group, out var set) && set.Contains(connectionId);
+        return _remoteControlConnections.TryGetValue(group, out var dict) && dict.ContainsKey(connectionId);
+    }
+
+    /// <summary>
+    /// 按目标 UID 集合找出匹配的遥控端连接（监控模式助手）。
+    /// 用于远程配置编辑的回复命令定向回投：监控端不入 _controlRooms、ResolveTargets 匹配不到，
+    /// 但它可能是回复的真正等待方（FR-3 的"遥控端不接收命令"只针对执行类命令，回复类命令必须送达）。
+    /// </summary>
+    public List<string> GetRemoteConnectionIdsByUids(string group, IReadOnlyCollection<string> targetUids)
+    {
+        if (!_remoteControlConnections.TryGetValue(group, out var dict) || targetUids.Count == 0)
+            return [];
+        return dict.Where(kv => targetUids.Contains(kv.Value)).Select(kv => kv.Key).ToList();
     }
 
     /// <summary>获取控制房间的玩家列表</summary>
