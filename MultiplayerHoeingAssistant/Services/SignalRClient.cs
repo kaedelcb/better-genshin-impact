@@ -95,7 +95,8 @@ public class SignalRClient : IAsyncDisposable
     public bool IsConnected => _gateway?.IsConnected == true;
 
     public async Task ConnectAsync(string serverUrl, string roomCode, string password,
-        string playerUid, string playerName, List<string> teamUids, bool isRemote = false, string clientInstanceId = "")
+        string playerUid, string playerName, List<string> teamUids, bool isRemote = false, string clientInstanceId = "",
+        bool bypassSystemProxy = false)
     {
         _roomCode = roomCode;
         _playerUid = playerUid;
@@ -111,7 +112,7 @@ public class SignalRClient : IAsyncDisposable
         _logSubscribeUnsupported = false; // 同上：日志订阅能力标记
         _logFileUnsupported = false;    // 同上：远程日志下载能力标记
 
-        await EstablishAsync(serverUrl, roomCode, password, playerUid, playerName, teamUids, isRemote);
+        await EstablishAsync(serverUrl, roomCode, password, playerUid, playerName, teamUids, isRemote, bypassSystemProxy);
     }
 
     /// <summary>
@@ -120,7 +121,7 @@ public class SignalRClient : IAsyncDisposable
     /// 每次调用都会新建 gateway 实例，因此事件处理器必须在这里重新注册到最新实例上。
     /// </summary>
     private async Task EstablishAsync(string serverUrl, string roomCode, string password,
-        string playerUid, string playerName, List<string> teamUids, bool isRemote)
+        string playerUid, string playerName, List<string> teamUids, bool isRemote, bool bypassSystemProxy)
     {
         // URL 归一化（《通信方案》§4.8，切片 8 同款咽喉姿势）：配置只填基地址，SDK 内部拼 /gateway。
         // 旧配置带 /hub 尾巴的剥掉并告警一次（按原始配置值去重，防 10s 重试循环刷屏）。
@@ -194,7 +195,7 @@ public class SignalRClient : IAsyncDisposable
         try
         {
             // 连接 + session.hello 握手（DAP 时序：握手完成前服务端拒绝其它消息）
-            await gateway.ConnectAsync(baseUrl);
+            await gateway.ConnectAsync(baseUrl, bypassSystemProxy);
             await JoinControlRoomAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote);
         }
         catch

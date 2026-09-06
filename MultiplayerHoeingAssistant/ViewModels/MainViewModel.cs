@@ -416,7 +416,8 @@ public class MainViewModel : INotifyPropertyChanged
 
             await _signalRClient.ConnectAsync(
                 _config!.ServerUrl, RoomCode, _config.ControlRoomPassword,
-                _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId);
+                _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId,
+                _config.BypassSystemProxy);
 
             IsConnected = true;
             AddLog("已连接控制房间");
@@ -442,7 +443,8 @@ public class MainViewModel : INotifyPropertyChanged
                     {
                         await _signalRClient!.ConnectAsync(
                             _config!.ServerUrl, RoomCode, _config.ControlRoomPassword,
-                            _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId);
+                            _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId,
+                            _config.BypassSystemProxy);
                         Application.Current.Dispatcher.Invoke(() =>
                         {
                             IsConnected = true;
@@ -3783,7 +3785,8 @@ public class MainViewModel : INotifyPropertyChanged
                 };
                 await pendingClient.ConnectAsync(
                     _config.ServerUrl, RoomCode, _config.ControlRoomPassword,
-                    _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId);
+                    _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId,
+                    _config.BypassSystemProxy);
                 _signalRClient = pendingClient;
                 pendingClient = null; // 所有权已移交 _signalRClient
                 IsConnected = true;
@@ -3823,7 +3826,8 @@ public class MainViewModel : INotifyPropertyChanged
                             };
                             await client.ConnectAsync(
                                 _config.ServerUrl, RoomCode, _config.ControlRoomPassword,
-                                _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId);
+                                _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId,
+                                _config.BypassSystemProxy);
                             if (_signalRClient != null)
                             {
                                 // 本次 StartAsync 在途期间（最长 ~100s）用户又点了刷新并已重建成功——

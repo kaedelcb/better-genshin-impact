@@ -1,3 +1,5 @@
+using System.Net.Http;
+
 using Microsoft.AspNetCore.SignalR.Client;
 
 namespace MultiplayerHoeingAssistant.Services.Gateway;
@@ -64,8 +66,15 @@ public sealed class MhaGatewayClient : IAsyncDisposable
     /// <summary>
     /// 建立连接并完成 session.hello 握手。任何失败（传输异常或 error 响应）原样上抛，
     /// 由调用方计为连接失败（SignalRClient.ConnectAsync 的旧语义：异常冒泡给 MainViewModel 重试定时器）。
+    /// bypassSystemProxy=true 时显式禁用代理直连服务器（血泪：系统代理被加速器劫持后，.NET 进程级缓存
+    /// 代理配置、运行中不感知代理软件崩溃，会一直往失效的本地代理口撞"目标计算机积极拒绝"，
+    /// 只有重启进程才恢复——显式禁用后新建连接立即生效，无需重启助手）。
+    /// 注意必须同时处理两条路径（源码实读 release/8.0 确认）：HttpConnectionOptions.Proxy=null
+    /// 不会禁用系统代理（HttpConnection.CreateHttpClient 只在 Proxy 非 null 时覆盖 HttpClientHandler；
+    /// WebSocketsTransport 同理），所以 HTTP 协商走 HttpMessageHandlerFactory 置 UseProxy=false，
+    /// WebSocket 走 WebSocketConfiguration 置 Options.Proxy=null。
     /// </summary>
-    public async Task ConnectAsync(string baseUrl, CancellationToken ct = default)
+    public async Task ConnectAsync(string baseUrl, bool bypassSystemProxy = false, CancellationToken ct = default)
     {
         // 重建前必须释放旧实例（避免双连接并发收发）
         if (_connection != null)
@@ -74,7 +83,22 @@ public sealed class MhaGatewayClient : IAsyncDisposable
         }
 
         _connection = new HubConnectionBuilder()
-            .WithUrl(BuildGatewayUrl(baseUrl))
+            .WithUrl(BuildGatewayUrl(baseUrl), options =>
+            {
+                if (bypassSystemProxy)
+                {
+                    options.HttpMessageHandlerFactory = handler =>
+                    {
+                        if (handler is HttpClientHandler httpHandler)
+                        {
+                            httpHandler.Proxy = null;
+                            httpHandler.UseProxy = false;
+                        }
+                        return handler;
+                    };
+                    options.WebSocketConfiguration = socketOptions => socketOptions.Proxy = null;
+                }
+            })
             .WithAutomaticReconnect(new[] {
                 TimeSpan.Zero,
                 TimeSpan.FromSeconds(2),

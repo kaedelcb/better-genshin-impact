@@ -42,6 +42,7 @@ public partial class SettingsWindow : Window
             BgiPathBox.Text = config.BgiPath;
         ExpectedPlayersBox.Text = config.ExpectedHoeingPlayers.ToString();
         ObserverModeCheckBox.IsChecked = config.ObserverMode;
+        BypassSystemProxyCheckBox.IsChecked = config.BypassSystemProxy;
         // 监控模式（遥控器）不入房间成员表，本机填的预期开锄人数不参与服务端取 min → 整段隐藏，并随勾选状态联动
         UpdateExpectedPlayersVisibility(!config.ObserverMode);
         ObserverModeCheckBox.Checked += (_, _) => UpdateExpectedPlayersVisibility(false);
@@ -112,6 +113,7 @@ public partial class SettingsWindow : Window
             BgiPath = bgiPath,
             // 保留其他字段（不因设置弹窗保存而重置）
             ObserverMode = ObserverModeCheckBox.IsChecked == true,
+            BypassSystemProxy = BypassSystemProxyCheckBox.IsChecked == true,
             ExpectedHoeingPlayers = int.TryParse(ExpectedPlayersBox.Text.Trim(), out var ep) && ep >= 1 && ep <= 4 ? ep : 4,
             ScheduledOnlineTime = _configCopy?.ScheduledOnlineTime ?? "",
             OnlineHoeingGroupNames = _configCopy?.OnlineHoeingGroupNames ?? [],

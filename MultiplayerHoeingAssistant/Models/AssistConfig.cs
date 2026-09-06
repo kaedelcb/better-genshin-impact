@@ -85,6 +85,12 @@ public class AssistConfig
     [JsonPropertyName("observerMode")]
     public bool ObserverMode { get; set; } = false;
 
+    /// <summary>绕过系统代理直连服务器。本机开加速器/代理时勾选：.NET 的系统代理配置是进程级缓存，
+    /// 代理软件（如 okz/加速器）挂掉后运行中的进程不会感知，会一直往失效的代理口撞（"目标计算机积极拒绝"），
+    /// 勾选后新建连接显式禁用代理，不受系统代理状态影响。</summary>
+    [JsonPropertyName("bypassSystemProxy")]
+    public bool BypassSystemProxy { get; set; } = false;
+
     /// <summary>实例标识（UUID，助手进程启动时自动生成）。用于服务端区分同 UID 的多个连接实例。</summary>
     [JsonPropertyName("clientInstanceId")]
     public string ClientInstanceId { get; set; } = "";
