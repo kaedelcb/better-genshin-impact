@@ -28,8 +28,6 @@ public class TaskRunner
 
     // private readonly DispatcherTimerOperationEnum _timerOperation = DispatcherTimerOperationEnum.None;
 
-    private readonly string _name = string.Empty;
-
     public TaskRunner()
     {
     }
@@ -46,7 +44,7 @@ public class TaskRunner
     /// <param name="resetCancellationContext">任务开始时是否重建 CancellationContext。</param>
     /// <param name="clearCancellationContextOnLockFailure">获取信号量锁失败时是否清理 CancellationContext。</param>
     /// <returns></returns>
-    public async Task RunCurrentAsync(Func<Task> action, bool resetCancellationContext = true, bool clearCancellationContextOnLockFailure = false)
+    public async Task RunCurrentAsync(Func<Task> action, bool resetCancellationContext = true, bool clearCancellationContextOnLockFailure = false, string? soloTaskName = null)
     {
         // 加锁
         var hasLock = await TaskSemaphore.WaitAsync(0);
@@ -59,9 +57,16 @@ public class TaskRunner
             }
             return;
         }
+        // 独立任务身份：拿锁成功后立即写入，保证 ext 观察器 200ms 边沿（task.started）与
+        // task.status 查询都能读到任务名；finally 中随任务结束清空。
+        // 配置组/一条龙等路径不传 soloTaskName（默认 null），行为不变。
+        RunnerContext.Instance.SoloTaskName = soloTaskName;
+        // [ext事件直挂] task.started 逐次必达：观察器 200ms 边沿会漏掉连续条目的快速切换，
+        // 由引擎直接发布（理由详见 ExternalInterfaceEventHub.PublishTaskStarted 注释）
+        BetterGenshinImpact.Service.ExternalInterface.ExternalInterfaceEventHub.Instance.PublishTaskStarted(soloTaskName);
         try
         {
-            _logger.LogInformation("→ {Text}", _name + "任务启动！");
+            _logger.LogInformation("→ {Text}", string.IsNullOrEmpty(soloTaskName) ? "任务启动！" : soloTaskName + "，任务启动！");
             
             // 初始化
             Init();
@@ -100,14 +105,28 @@ public class TaskRunner
         }
         finally
         {
+            // 任务是否被取消需在 CancellationContext.Clear() 之前捕获（Clear 后 IsDisposed=true 不可读）
+            var wasCancelled = false;
+            try
+            {
+                var cancellationContext = CancellationContext.Instance;
+                wasCancelled = !cancellationContext.IsDisposed && cancellationContext.WasCancelled;
+            }
+            catch
+            {
+                // 读取失败按未取消处理，不影响收尾
+            }
+
             End();
-            _logger.LogInformation("→ {Text}", _name + "任务结束");
+            _logger.LogInformation("→ {Text}", string.IsNullOrEmpty(soloTaskName) ? "任务结束" : soloTaskName + "，任务结束");
 
             // [传送标记] 任务结束 = 位置上下文结束：清空快速传送"上次成功传送地图"标记，
             // 下一次任务首传走切区（保守），避免跨任务陈旧标记误跳过（teleport-fastdrag-skip-last-successful-map spec）。
             TpTaskFastDrag.ResetLastSuccessfulTeleportMap();
 
             CancellationContext.Instance.Clear();
+            // 独立任务身份随任务结束清空（Clear() 不动此字段，避免 :72 启动处 Clear() 误清刚写入的名字）
+            RunnerContext.Instance.SoloTaskName = null;
             RunnerContext.Instance.Clear();
 
             // 释放锁
@@ -117,6 +136,8 @@ public class TaskRunner
                 // [切片7·唯一挂载点] 槽位释放全局信号：只读 fire-and-forget，零订阅者零扇出，单机零感知。
                 // 协调器/助手 settle 判定统一靠它；手动任务结束同样触发（spec §4.3 有意设计）。
                 BetterGenshinImpact.Service.ExternalInterface.ExternalInterfaceEventHub.Instance.PublishTaskSlotReleased();
+                // [ext事件直挂] task.stopped 逐次必达（与 task.started 同款理由，见 PublishTaskStarted 注释）
+                BetterGenshinImpact.Service.ExternalInterface.ExternalInterfaceEventHub.Instance.PublishTaskStopped(wasCancelled);
             }
         }
     }
@@ -126,9 +147,9 @@ public class TaskRunner
         Task.Run(() => RunCurrentAsync(action));
     }
 
-    public async Task RunThreadAsync(Func<Task> action)
+    public async Task RunThreadAsync(Func<Task> action, string? soloTaskName = null)
     {
-        await Task.Run(() => RunCurrentAsync(action));
+        await Task.Run(() => RunCurrentAsync(action, soloTaskName: soloTaskName));
     }
 
     public async Task RunSoloTaskAsync(ISoloTask soloTask)
@@ -150,7 +171,8 @@ public class TaskRunner
         await Task.Run(() => RunCurrentAsync(
             async () => await soloTask.Start(CancellationContext.Instance.Cts.Token),
             resetCancellationContext: false,
-            clearCancellationContextOnLockFailure: true));
+            clearCancellationContextOnLockFailure: true,
+            soloTaskName: soloTask.Name));
     }
 
     public void Init()

@@ -192,6 +192,12 @@ internal sealed class ExternalInterfaceEventObserver
         try
         {
             var ctx = BetterGenshinImpact.GameTask.RunnerContext.Instance;
+            // 独立任务/一条龙默认条目优先：RunCurrentAsync 拿锁时写入；
+            // taskProgress 在配置组跑完后残留旧项目名，不能让它盖住当前独立任务名
+            if (!string.IsNullOrEmpty(ctx?.SoloTaskName))
+            {
+                return (ctx!.SoloTaskName, null);
+            }
             if (ctx?.taskProgress != null)
             {
                 return (

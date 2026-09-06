@@ -788,7 +788,14 @@ internal sealed class InstanceRequestHandler
             try
             {
                 var ctx = BetterGenshinImpact.GameTask.RunnerContext.Instance;
-                if (ctx?.taskProgress != null)
+                if (!string.IsNullOrEmpty(ctx?.SoloTaskName))
+                {
+                    // 独立任务/一条龙默认条目：RunCurrentAsync 拿锁时写入，身份以此为准。
+                    // 必须优先于 taskProgress——后者在配置组跑完后残留旧项目名（RunMulti 只写不清），
+                    // 一条龙混合执行（先配置组后默认条目）时残留会盖住当前条目名。
+                    taskName = ctx!.SoloTaskName;
+                }
+                else if (ctx?.taskProgress != null)
                 {
                     groupName = ctx.taskProgress.CurrentScriptGroupName;
                     taskName = ctx.taskProgress.CurrentScriptGroupProjectInfo?.Name;

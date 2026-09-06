@@ -173,6 +173,38 @@ internal sealed class ExternalInterfaceEventHub
     }
 
     /// <summary>
+    /// [实机修复 2026-09-06] task.started/task.stopped 引擎直挂点：唯一挂载点 = TaskRunner.RunCurrentAsync
+    /// 拿锁成功处 / finally 收尾处。观察器 200ms 轮询边沿会漏掉"上一条目放锁→下一条目立刻拿锁"的连续切换
+    /// （实测间隔 3ms），一条龙内除首个条目外的任务开始事件全丢、订阅端状态快照永不刷新（任务名永远上报不出）；
+    /// 引擎直挂后逐次必达。观察器边沿检测保留不动：AutoTrackPathTask/AutoTrackTask 等不经 RunCurrentAsync 的
+    /// 拿锁路径仍靠它兜底；重复事件对订阅端幂等（SDK 快照刷新有 300ms 节流 + 在飞去重）。
+    /// </summary>
+    public void PublishTaskStarted(string? taskName)
+    {
+        try
+        {
+            Publish(ExternalInterfaceEventNames.TaskStarted, new { taskName, groupName = (string?)null });
+        }
+        catch
+        {
+            // 事件发布失败不影响任务引擎（只读 fire-and-forget）
+        }
+    }
+
+    /// <summary>见 PublishTaskStarted 注释。wasCancelled 由调用方在 CancellationContext.Clear() 之前捕获传入。</summary>
+    public void PublishTaskStopped(bool wasCancelled)
+    {
+        try
+        {
+            Publish(ExternalInterfaceEventNames.TaskStopped, new { wasCancelled });
+        }
+        catch
+        {
+            // 事件发布失败不影响任务引擎 finally（只读 fire-and-forget）
+        }
+    }
+
+    /// <summary>
     /// 断线续传：取 lastKnownRevision 之后的缓冲事件（按订阅兴趣过滤）。
     /// 返回 resyncRequired=true 表示缺口超出缓冲（或缓冲为空但确有缺失/版本号回退），
     /// 客户端应主动拉 ext.task.status 快照校准（LSP 文档同步模型，§4.6 模块一对应实现）。

@@ -54,16 +54,17 @@ public sealed class DailyReportService
         @"配置单 ""(?<name>.+?)"" 绑定UID .*?一条龙和配置组任务结束",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    /// <summary>独立任务统一包络（TaskRunner.RunCurrentAsync）：→ "任务启动！" / → "任务结束"。不含任务名。
+    /// <summary>独立任务统一包络（TaskRunner.RunCurrentAsync）：→ "任务启动！" / → "任务结束"（旧格式，不含任务名）；
+    /// 新版 BGI 的 RunSoloTaskAsync 直启独立任务带名：→ "自动秘境，任务启动！" / → "自动秘境，任务结束"（name 组捕获）。
     /// 注意：此包络不是独立任务专属——ScriptService.RunMulti 跑整个配置组时也套同一包络
     /// （且"配置组加载完成"先于包络输出，包络恒落在配置组单元内部），OneDragonFlowViewModel
     /// 的 UID 验证/兑换码检查等小包装也会产生。配置组内的外壳包络由 ParseOverviewFile
     /// 标记为 shellEnvelopes，闭合时一律丢弃壳层、子单元上移——组内真正的独立任务
     /// 由 ProjectStartRegex/ProjectEndRegex 配对成独立子单元，不靠外壳命名。</summary>
     private static readonly Regex SoloStartRegex = new(
-        @"→ ""任务启动！""", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        @"→ ""(?:(?<name>.+?)，)?任务启动！""", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex SoloEndRegex = new(
-        @"→ ""任务结束""", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        @"→ ""(?:(?<name>.+?)，)?任务结束""", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>配置组内项目任务开始（ScriptService.ExecuteProject，模板改动时需同步）：
     /// → 开始执行JS脚本: "X" / → 开始执行键鼠脚本: "X" / → 开始执行地图追踪任务: "X" /
@@ -384,9 +385,17 @@ public sealed class DailyReportService
                 if (idx >= 0) CloseFrom(idx, t, null, unclosed: false);
                 continue;
             }
-            if (SoloStartRegex.IsMatch(line))
+            var mss = SoloStartRegex.Match(line);
+            if (mss.Success)
             {
-                var unit = new OverviewUnit { Kind = "独立任务", Name = "", Start = t };
+                // 新版 BGI 包络自带任务名（→ "自动秘境，任务启动！"），直接命名；
+                // 旧格式（→ "任务启动！"）name 组不命中，留空由 SoloNameRules 特征行兜底。
+                var unit = new OverviewUnit
+                {
+                    Kind = "独立任务",
+                    Name = mss.Groups["name"].Success ? mss.Groups["name"].Value : "",
+                    Start = t
+                };
                 soloEnvelopes.Add(unit);
                 // 包络出现在配置组单元内部 = RunMulti 跑整组的外壳（非真实任务），标记后闭合时丢弃。
                 if (stack.Count > 0 && stack[^1].Kind == "配置组")

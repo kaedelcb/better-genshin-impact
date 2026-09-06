@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,7 +22,13 @@ public class RunnerContext : Singleton<RunnerContext>
     public bool IsContinuousRunGroup { get; set; }
     
     public TaskProgress.TaskProgress? taskProgress  { get; set; }
-    
+
+    /// <summary>
+    /// 当前独立任务名：仅 TaskRunner.RunSoloTaskAsync 直启路径写入（RunCurrentAsync 拿锁后写入、finally 清空），
+    /// 供 task.status / ext 事件兜底识别独立任务。配置组/一条龙路径不写此字段，身份仍走 taskProgress / CurrentScriptProject。
+    /// </summary>
+    public string? SoloTaskName { get; set; }
+
     /// <summary>
     /// 暂停逻辑
     /// </summary>
@@ -224,6 +230,7 @@ public class RunnerContext : Singleton<RunnerContext>
         SuspendableDictionary.Clear();
         AutoPickTriggerStopCount = 0;
         taskProgress = null;
+        SoloTaskName = null;
         IsPreExecution = false;
     }
 

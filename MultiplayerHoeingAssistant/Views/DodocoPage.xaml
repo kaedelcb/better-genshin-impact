@@ -1134,8 +1134,10 @@
                                                             </TextBlock>
                                                         </Border>
                                                     </StackPanel>
-                                                    <TextBlock Text="{Binding CurrentTaskGroupName, StringFormat='配置组: {0}', TargetNullValue=配置组: -}"
+                                                    <TextBlock Text="{Binding CurrentTaskName, StringFormat='任务: {0}', TargetNullValue=任务: -}"
                                                                FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,4,0,0"/>
+                                                    <TextBlock Text="{Binding CurrentTaskGroupName, StringFormat='配置组: {0}', TargetNullValue=配置组: -}"
+                                                               FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"/>
                                                     <TextBlock Text="{Binding CurrentRouteDisplay, StringFormat='路线: {0}', TargetNullValue=路线: -}"
                                                                FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"/>
                                                     <TextBlock Text="{Binding AutoHoeingProgress}"

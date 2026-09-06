@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using BetterGenshinImpact.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -2504,11 +2504,13 @@ public partial class OneDragonFlowViewModel : ViewModel
                 if (ScriptGroupsDefault.Any(defaultSg => defaultSg.Name == task.Name && defaultSg.Name != "自动秘境") || (!custoModel && task.Name == "自动秘境"))
                 {
                     _logger.LogInformation($"一条龙任务执行: {finishOneTaskcount++}/{enabledoneTaskCount}");
+                    // 默认条目（自动秘境/首领讨伐等）直接 new Task().Start()，不经 ScriptService；
+                    // 传入条目名作为 soloTaskName，让 task.status/包络日志携带任务身份（联机助手可识别）
                     await new TaskRunner().RunThreadAsync(async () =>
                     {
                         await task.Action();
                         await Task.Delay(1000);
-                    });
+                    }, soloTaskName: task.Name);
                 }
                 else
                 {
