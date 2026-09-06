@@ -4,11 +4,13 @@ using MultiplayerHoeingAssistant.Models;
 namespace MultiplayerHoeingAssistant.Services;
 
 /// <summary>
-/// 上线锄地「完成后动作」远程互改通道（模式复刻 RemoteConfigEditService，服务器零改动）：
+/// 上线锄地「完成后动作」远程互改通道（模式复刻 RemoteConfigEditService）：
 /// 发起方发 task_policy.pull → 等 task_policy.data（拉取对方上线锄地持久化配置 policy/specifiedType/specifiedName）；
 /// 编辑后发 task_policy.push → 等 task_policy.push_result（对方应用：落 AssistConfig 并保存）。
 /// 等待回复用 ConcurrentDictionary 按 CommandId 关联，由 MainViewModel.OnRemoteCommand 调 TryComplete 喂入。
 /// Params 值一律 string（取值兼容 string/JsonElement，用 GetStringParam 写法）。
+/// 服务端对回复命令（task_policy.data/push_result、schedule_list.data）按 UID 双投遥控端连接
+/// （同 remote_config 回复的监控模式修复），同 UID 双实例下非发起实例收到副本会 TryComplete 失败、静默忽略。
 /// </summary>
 public class TaskPolicySyncService
 {
