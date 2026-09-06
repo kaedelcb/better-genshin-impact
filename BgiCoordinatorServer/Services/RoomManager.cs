@@ -1539,18 +1539,24 @@ public class RoomManager
     }
 
     /// <summary>清除指定玩家的 OnlineHistory（已联机记录）。由 ClearOnlineHistory Hub 端点调用。
-    /// group 参数必须是 _controlRooms 的键（"CTRL_xxx" 组名），不是裸 roomCode。</summary>
+    /// group 参数必须是 _controlRooms 的键（"CTRL_xxx" 组名），不是裸 roomCode。
+    /// 注意必须清所有同 UID 条目：同 UID 可能残留多条（换 ClientInstanceId/旧客户端重连产生的
+    /// 离线幽灵条目），上线事件按 ConnectionId 只记在活连接条目上，若只清 FirstOrDefault（列表
+    /// 靠前的往往是幽灵），活条目的历史会随全量广播带回客户端，表现为"清除记录无效"。</summary>
     public void ClearOnlineHistory(string group, string playerUid)
     {
         if (_controlRooms.TryGetValue(group, out var players))
         {
             lock (players)
             {
-                var player = players.FirstOrDefault(p => p.PlayerUid == playerUid);
-                if (player != null)
+                var matched = players.Where(p => p.PlayerUid == playerUid).ToList();
+                foreach (var player in matched)
                 {
                     player.OnlineHistory.Clear();
-                    Console.WriteLine("[探针服务端] ClearOnlineHistory: 已清除玩家 " + playerUid + " 的 OnlineHistory");
+                }
+                if (matched.Count > 0)
+                {
+                    Console.WriteLine("[探针服务端] ClearOnlineHistory: 已清除玩家 " + playerUid + " 的 OnlineHistory（匹配条目 " + matched.Count + " 条）, group=" + group);
                 }
                 else
                 {
