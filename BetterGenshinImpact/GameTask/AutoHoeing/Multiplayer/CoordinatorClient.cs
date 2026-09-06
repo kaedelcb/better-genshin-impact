@@ -6,8 +6,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Gateway;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Models;
-using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
@@ -16,22 +16,33 @@ namespace BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
 /// SignalR 客户端：负责与服务端通信。
 /// 简化版：移除旧协调机制（MemberStatus、RouteSkipped、WaitPointReport、AbortAndRealign、RouteEnforceSync），
 /// 保留基础连接、心跳、进度查询、异常通知等新机制所需功能。
+///
+/// 切片 8（BGI 侧 v3 迁移）：通信全部改走新协议（/gateway + evt 信封），由
+/// <see cref="BgiGatewayClient"/> 承载传输（session.hello 握手、Dispatch/Query 两入口、evt 单订阅分发）。
+/// 本类公开面（23 个事件 / 全部方法签名 / 属性 / 断线自愈语义）与迁移前逐字等价，
+/// 变化只在"线上消息形状"：65 个旧 Hub 方法 → 网关消息名（映射表见 GatewayProtocol 与服务器
+/// GatewayProtocol.LegacyMethodMap/LegacyEventMap）。
 /// </summary>
 public class CoordinatorClient : IAsyncDisposable
 {
     private readonly ILogger<CoordinatorClient> _logger = App.GetLogger<CoordinatorClient>();
-    private HubConnection? _connection;
+    private BgiGatewayClient? _gateway;
     private Timer? _heartbeatTimer;
 
     // === 测试种子（[InternalsVisibleTo("BetterGenshinImpact.UnitTest")]）===
-    // 抽出 NotifyKazuhaCollectStartedAsync 内的 InvokeAsync 动作，让 PBT 可注入 fake 代理断言
+    // 抽出 NotifyKazuhaCollectStartedAsync 内的发送动作，让 PBT 可注入 fake 代理断言
     // "客户端 IsValid 守卫不让 NaN/Inf/(0,0) 进入 SignalR 序列化路径"。
-    // 仅作用于 NotifyKazuhaCollectStartedAsync；其他 Notify*Async 仍直接调 _connection.InvokeAsync 不变。
+    // 仅作用于 NotifyKazuhaCollectStartedAsync；其他 Notify*Async 仍直接调网关原语不变。
     // 详见 spec kazuha-collect-point-nan-signalr-serialization-fix。
+    //
+    // 切片 8 说明：种子签名保持旧线形（Hub 方法名 + 逐参数组）不变，默认实现负责把
+    // ("NotifyKazuhaCollectStarted", [syncKey, collectX, collectY]) 翻译成 v3 信封
+    // kazuha.notifyCollectStarted 再经网关发出——历史教训沿用：SignalR 扩展方法没有
+    // (string, object?[], CancellationToken) 重载，逐参展开必须走正确的多参入口。
     internal Func<string, object?[], Task> _invokeHubAsync;
 
-    // 测试种子：单元测试可强制 IsConnected==true，绕开真正的 HubConnection。
-    // 仅在测试中赋值；生产路径下保持 null → IsConnected fallback 到 _connection.State。
+    // 测试种子：单元测试可强制 IsConnected==true，绕开真实的网关连接。
+    // 仅在测试中赋值；生产路径下保持 null → IsConnected fallback 到网关连接状态。
     internal bool? _testIsConnectedOverride;
 
     // 保存房间信息用于重连
@@ -125,7 +136,7 @@ public class CoordinatorClient : IAsyncDisposable
     public int CurrentRoomPlayerCount { get; set; }
     public string HostPlayerUid { get; set; } = string.Empty;
     public bool IsHost => _playerUid == HostPlayerUid;
-    public bool IsConnected => _testIsConnectedOverride ?? (_connection?.State == HubConnectionState.Connected);
+    public bool IsConnected => _testIsConnectedOverride ?? (_gateway?.IsConnected ?? false);
     public bool IsInRoom => _isInRoom;
     public bool IsReconnecting => _isReconnecting;
 
@@ -151,188 +162,46 @@ public class CoordinatorClient : IAsyncDisposable
 
     public CoordinatorClient()
     {
-        // 默认实现：把 args (object?[]) 透传到 SignalR Client 的多参入口 InvokeCoreAsync。
-        //
-        // 关键：不能用 _connection.InvokeAsync(method, args, ct) —— HubConnection 的扩展方法没有
-        // (string, object?[], CancellationToken) 这个重载；最近的匹配是 (string, object? arg1, ct)，
-        // 重载解析会把整个数组当作"单个 object 参数"发到服务端，导致服务端方法签名不匹配 → 静默无响应
-        // → 非万叶 peer 收不到 KazuhaCollectStarted 广播。
-        //
-        // InvokeCoreAsync(string methodName, Type returnType, object?[] args, ct) 是真正的多参入口，
-        // 等价于 InvokeAsync(method, a1, a2, a3, ct) 的内部展开。
+        // 默认实现：把旧线形 (Hub 方法名, args) 翻译成 v3 信封，经网关联机发出。
+        // 当前仅 NotifyKazuhaCollectStarted 一路使用本种子（见字段注释）。
         _invokeHubAsync = (method, args) =>
-            _connection!.InvokeCoreAsync(method, typeof(object), args, CancellationToken.None);
+        {
+            if (method == "NotifyKazuhaCollectStarted")
+            {
+                return _gateway!.InvokeCommandAsync(GatewayProtocol.Names.KazuhaNotifyCollectStarted, new
+                {
+                    syncKey = (string)args[0]!,
+                    collectX = (double)args[1]!,
+                    collectY = (double)args[2]!,
+                });
+            }
+            throw new NotSupportedException($"_invokeHubAsync 不支持的方法: {method}");
+        };
     }
+
+    /// <summary>
+    /// 测试种子：单测需要在没有真实连接的情况下驱动发送路径时，先取网关实例再注入
+    /// BgiGatewayClient._testSendOverride/_testInvokeOverride（沿用既有测试种子模式）。
+    /// </summary>
+    internal BgiGatewayClient GetOrCreateGatewayForTest() => _gateway ??= new BgiGatewayClient();
 
     public async Task<bool> ConnectAsync(string serverUrl, CancellationToken ct)
     {
         var maskedUrl = MaskServerUrl(serverUrl);
         try
         {
-            _connection = new HubConnectionBuilder()
-                .WithUrl(serverUrl)
-                .WithAutomaticReconnect(new[] {
-                    TimeSpan.Zero,
-                    TimeSpan.FromSeconds(2),
-                    TimeSpan.FromSeconds(10),
-                    TimeSpan.FromSeconds(30)
-                })
-                .Build();
+            _gateway = new BgiGatewayClient();
+            _gateway.EnvelopeReceived += DispatchEvt;
+            _gateway.Reconnected += OnReconnected;
+            _gateway.Reconnecting += OnReconnecting;
+            _gateway.Closed += OnConnectionClosed;
 
-            _connection.On<List<PlayerInfo>>("PlayerListUpdated",
-                list =>
-                {
-                    CurrentRoomPlayerCount = list.Count;
-                    if (list.Count > 0)
-                        HostPlayerUid = list[0].PlayerUid;
-                    CurrentPlayerList = new List<PlayerInfo>(list);
-                    UpdatePlayerNameCache(list);
-                    PlayerListUpdated?.Invoke(list);
-                });
-
-            _connection.On<string>("AllArrived",
-                syncPointId => AllArrived?.Invoke(syncPointId));
-
-            _connection.On<string>("AllFightDone",
-                syncPointId => AllFightDone?.Invoke(syncPointId));
-
-            _connection.On<List<string>>("RouteDiffReceived",
-                diff => RouteDiffReceived?.Invoke(diff));
-
-            _connection.On("RouteVerificationPassed",
-                () => RouteVerificationPassed?.Invoke());
-
-            // === 路线变体一致性校验订阅（route-variant-sync-by-logical-id spec）===
-            _connection.On("RouteVariantConsistencyPassed",
-                () => RouteVariantConsistencyPassed?.Invoke());
-
-            _connection.On<string, Dictionary<string, Models.RouteVariantSchemaItem>>(
-                "RouteVariantConsistencyFailed",
-                (logicalId, playerItems) => RouteVariantConsistencyFailed?.Invoke(logicalId, playerItems));
-
-            _connection.On<string>("RoomClosed",
-                reason => RoomClosed?.Invoke(reason));
-
-            // === 版本一致性校验：服务端硬阻断回传 Check_Result（version-compatibility-check 改动 12）===
-            _connection.On<Models.VersionCheckResult>("VersionCheckRejected",
-                result =>
-                {
-                    _logger.LogWarning("[联机][版本校验] 加入被阻断：member={Member} baseline={Baseline} hint={Hint}",
-                        result.MemberVersion, result.BaselineVersion, result.Hint);
-                    VersionCheckRejected?.Invoke(result);
-                });
-
-            _connection.On("RouteVerificationAllDone",
-                () => RouteVerificationAllDone?.Invoke());
-
-            // === 基于经验判断停止锄地：全员达上限广播（multiplayer-hoeing-exp-cap-stop）===
-            _connection.On("AllReachedExpCap",
-                () => AllReachedExpCap?.Invoke());
-
-            _connection.On<string>("KazuhaPlayerUpdated",
-                playerUid => KazuhaPlayerUpdated?.Invoke(playerUid));
-
-            // === 万叶聚物同步事件订阅 ===
-            _connection.On<string, string, double, double>("KazuhaCollectStarted",
-                (playerUid, syncKey, collectX, collectY) =>
-                    KazuhaCollectStarted?.Invoke(playerUid, syncKey, collectX, collectY));
-
-            _connection.On("AllWorldJoined",
-                () => AllWorldJoined?.Invoke());
-
-            _connection.On<bool>("HostReadyChanged",
-                ready => HostReadyChanged?.Invoke(ready));
-
-            _connection.On<List<string>>("HostRouteListReady",
-                routeNames => HostRouteListReady?.Invoke(routeNames));
-
-            // === 新机制：异常通知 ===
-            _connection.On<string, int, bool>("PlayerAnomalyNotify",
-                (playerUid, routeIndex, passedSyncPoint) =>
-                {
-                    if (playerUid == _playerUid) return; // 过滤自己
-                    _logger.LogInformation("[联机] 收到异常通知: 玩家={PlayerUid}, 路线={RouteIndex}, 已过同步点={Passed}",
-                        playerUid, routeIndex, passedSyncPoint);
-                    PlayerAnomalyNotifyReceived?.Invoke(playerUid, routeIndex, passedSyncPoint);
-                });
-
-            // === 新机制：带战斗点异常通知（hoeing-route-retry-round-end-refactor v3）
-            _connection.On<string, int, int>("PlayerAnomalyNotifyFightPoint",
-                (playerUid, routeIndex, fightPointId) =>
-                {
-                    if (playerUid == _playerUid) return; // 过滤自己
-                    _logger.LogInformation("[联机] 收到异常通知(带战斗点): 玩家={PlayerUid}, 路线={RouteIndex}, 战斗点={FightPointId}",
-                        playerUid, routeIndex, fightPointId);
-                    PlayerAnomalyNotifyFightPointReceived?.Invoke(playerUid, routeIndex, fightPointId);
-                });
-            // === 新机制：异常恢复通知 ===
-            _connection.On<string>("PlayerAnomalyRecovered",
-                (playerUid) =>
-                {
-                    if (playerUid == _playerUid) return;
-                    _logger.LogInformation("[联机] 收到恢复通知: 玩家={PlayerUid}", playerUid);
-                    PlayerAnomalyRecoveredReceived?.Invoke(playerUid);
-                });
-
-            // === 成员状态广播接收（guard-multiplayer-peerdrop-visual-blind 方案A）===
-            _connection.On<string, string, long>("MemberStatusChanged",
-                (playerUid, status, targetProgress) =>
-                {
-                    if (playerUid == _playerUid) return; // 过滤自己上报的回环
-                    _logger.LogInformation("[联机] 收到成员状态广播: 玩家={PlayerUid}, 状态={Status}", playerUid, status);
-                    MemberStatusChangedReceived?.Invoke(playerUid, status, targetProgress);
-                });
-
-            // === 新机制：开始路线指令 ===
-            _connection.On<int>("StartRoute",
-                (targetRouteIndex) =>
-                {
-                    _logger.LogInformation("[联机] 收到开始路线指令: 目标路线={TargetRoute}", targetRouteIndex);
-                    StartRouteReceived?.Invoke(targetRouteIndex);
-                });
-
-            // === 集体卡死跳段事件订阅（multiplayer-mutual-wait-collective-skip §8.5）===
-            _connection.On<long>("RequestSkipToProgress",
-                (target) =>
-                {
-                    _logger.LogWarning("[联机] 收到 RequestSkipToProgress: target={Target}", target);
-                    RequestSkipToProgressReceived?.Invoke(target);
-                });
-
-            _connection.On<string>("CollectiveSkipDegraded",
-                (reason) =>
-                {
-                    _logger.LogError("[联机] 收到 CollectiveSkipDegraded: reason={Reason}", reason);
-                    CollectiveSkipDegradedReceived?.Invoke(reason);
-                });
-
-            _connection.Reconnected += async (newConnectionId) =>
+            // URL 归一化（旧配置带 /hub 剥掉并告警）与 session.hello 握手在 SDK 内完成
+            var connected = await _gateway.ConnectAsync(serverUrl, ct);
+            if (!connected)
             {
-                _logger.LogInformation("[联机] SignalR 重连成功，重新加入房间: {Code}", _currentRoomCode);
-                if (!string.IsNullOrEmpty(_currentRoomCode))
-                {
-                    try
-                    {
-                        await _connection.InvokeAsync("JoinRoom", _currentRoomCode, _playerName ?? "", _playerUid ?? "", BetterGenshinImpact.Core.Config.Global.Version ?? "");
-                        _logger.LogInformation("[联机] 重连后重新加入房间成功");
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "[联机] 重连后重新加入房间失败");
-                    }
-                }
-            };
-
-            _connection.Reconnecting += (error) =>
-            {
-                _logger.LogWarning(error, "[联机] SignalR 连接断开，正在自动重连...");
-                _worldStateMonitor?.NotifyHeartbeatSuccess(); // 重置失败计数
-                return Task.CompletedTask;
-            };
-
-            _connection.Closed += OnConnectionClosed;
-
-            await _connection.StartAsync(ct);
+                return false;
+            }
             _logger.LogInformation("CoordinatorClient 已连接到 {Url}", maskedUrl);
 
             // 启动心跳定时器，每 5 秒发送一次
@@ -351,6 +220,232 @@ public class CoordinatorClient : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// evt 信封分发（切片 8）：服务器广播的单一 evt 回调按 Name 路由到原有 23 个事件处理器，
+    /// 处理逻辑（含"过滤自己"守卫与日志文案）与迁移前的逐事件 On 订阅逐字等价。
+    /// payload 键缺失/畸形时不应用（对齐旧 On&lt;T&gt; 反序列化失败不触发的语义）。
+    /// 未知事件名忽略（前向兼容：服务器可能发来本客户端未订阅的锄地房间事件）。
+    /// </summary>
+    private void DispatchEvt(GatewayEnvelope env)
+    {
+        try
+        {
+            switch (env.Name)
+            {
+                case GatewayProtocol.Events.RoomPlayerListChanged:
+                {
+                    var list = env.Get<List<PlayerInfo>>("players");
+                    if (list == null) break;
+                    CurrentRoomPlayerCount = list.Count;
+                    if (list.Count > 0)
+                        HostPlayerUid = list[0].PlayerUid;
+                    CurrentPlayerList = new List<PlayerInfo>(list);
+                    UpdatePlayerNameCache(list);
+                    PlayerListUpdated?.Invoke(list);
+                    break;
+                }
+
+                case GatewayProtocol.Events.SyncAllArrived:
+                    AllArrived?.Invoke(env.GetString("syncPointId"));
+                    break;
+
+                case GatewayProtocol.Events.FightAllDone:
+                    AllFightDone?.Invoke(env.GetString("syncPointId"));
+                    break;
+
+                case GatewayProtocol.Events.RouteDiffReceived:
+                {
+                    var diff = env.Get<List<string>>("diffFiles");
+                    if (diff == null) break;
+                    RouteDiffReceived?.Invoke(diff);
+                    break;
+                }
+
+                case GatewayProtocol.Events.RouteVerificationPassed:
+                    RouteVerificationPassed?.Invoke();
+                    break;
+
+                // === 路线变体一致性校验（route-variant-sync-by-logical-id spec）===
+                case GatewayProtocol.Events.RouteVariantConsistencyPassed:
+                    RouteVariantConsistencyPassed?.Invoke();
+                    break;
+
+                case GatewayProtocol.Events.RouteVariantConsistencyFailed:
+                {
+                    var logicalId = env.GetString("logicalId");
+                    var playerItems = env.Get<Dictionary<string, Models.RouteVariantSchemaItem>>("playerItems");
+                    if (playerItems == null) break;
+                    RouteVariantConsistencyFailed?.Invoke(logicalId, playerItems);
+                    break;
+                }
+
+                case GatewayProtocol.Events.RoomClosed:
+                    RoomClosed?.Invoke(env.GetString("reason"));
+                    break;
+
+                // === 版本一致性校验：服务端硬阻断回传 Check_Result（version-compatibility-check 改动 12）===
+                case GatewayProtocol.Events.RoomVersionCheckRejected:
+                {
+                    var result = env.DeserializePayload<Models.VersionCheckResult>();
+                    if (result == null) break;
+                    _logger.LogWarning("[联机][版本校验] 加入被阻断：member={Member} baseline={Baseline} hint={Hint}",
+                        result.MemberVersion, result.BaselineVersion, result.Hint);
+                    VersionCheckRejected?.Invoke(result);
+                    break;
+                }
+
+                case GatewayProtocol.Events.RouteVerificationAllDone:
+                    RouteVerificationAllDone?.Invoke();
+                    break;
+
+                // === 基于经验判断停止锄地：全员达上限广播（multiplayer-hoeing-exp-cap-stop）===
+                case GatewayProtocol.Events.ExpAllCapReached:
+                    AllReachedExpCap?.Invoke();
+                    break;
+
+                case GatewayProtocol.Events.KazuhaPlayerUpdated:
+                    KazuhaPlayerUpdated?.Invoke(env.GetString("playerUid"));
+                    break;
+
+                // === 万叶聚物同步事件 ===
+                case GatewayProtocol.Events.KazuhaCollectStarted:
+                    KazuhaCollectStarted?.Invoke(
+                        env.GetString("playerUid"),
+                        env.GetString("syncKey"),
+                        env.GetDouble("collectX"),
+                        env.GetDouble("collectY"));
+                    break;
+
+                case GatewayProtocol.Events.WorldAllJoined:
+                    AllWorldJoined?.Invoke();
+                    break;
+
+                case GatewayProtocol.Events.RoomHostReadyChanged:
+                    HostReadyChanged?.Invoke(env.GetBool("ready"));
+                    break;
+
+                case GatewayProtocol.Events.RoomHostRouteListReady:
+                {
+                    var routeNames = env.Get<List<string>>("routeNames");
+                    if (routeNames == null) break;
+                    HostRouteListReady?.Invoke(routeNames);
+                    break;
+                }
+
+                // === 新机制：异常通知 ===
+                case GatewayProtocol.Events.AnomalyPlayerNotified:
+                {
+                    var playerUid = env.GetString("playerUid");
+                    var routeIndex = env.GetInt("routeIndex");
+                    var passedSyncPoint = env.GetBool("passedSyncPoint");
+                    if (playerUid == _playerUid) break; // 过滤自己
+                    _logger.LogInformation("[联机] 收到异常通知: 玩家={PlayerUid}, 路线={RouteIndex}, 已过同步点={Passed}",
+                        playerUid, routeIndex, passedSyncPoint);
+                    PlayerAnomalyNotifyReceived?.Invoke(playerUid, routeIndex, passedSyncPoint);
+                    break;
+                }
+
+                // === 新机制：带战斗点异常通知（hoeing-route-retry-round-end-refactor v3）===
+                case GatewayProtocol.Events.AnomalyFightPointNotified:
+                {
+                    var playerUid = env.GetString("playerUid");
+                    var routeIndex = env.GetInt("routeIndex");
+                    var fightPointId = env.GetInt("fightPointId");
+                    if (playerUid == _playerUid) break; // 过滤自己
+                    _logger.LogInformation("[联机] 收到异常通知(带战斗点): 玩家={PlayerUid}, 路线={RouteIndex}, 战斗点={FightPointId}",
+                        playerUid, routeIndex, fightPointId);
+                    PlayerAnomalyNotifyFightPointReceived?.Invoke(playerUid, routeIndex, fightPointId);
+                    break;
+                }
+
+                // === 新机制：异常恢复通知 ===
+                // （服务器两旧事件名 PlayerAnomalyRecovered/AbnormalPlayerRecovered 映射到同一 evt 名，天然兼容）
+                case GatewayProtocol.Events.AnomalyPlayerRecovered:
+                {
+                    var playerUid = env.GetString("playerUid");
+                    if (playerUid == _playerUid) break;
+                    _logger.LogInformation("[联机] 收到恢复通知: 玩家={PlayerUid}", playerUid);
+                    PlayerAnomalyRecoveredReceived?.Invoke(playerUid);
+                    break;
+                }
+
+                // === 成员状态广播接收（guard-multiplayer-peerdrop-visual-blind 方案A）===
+                case GatewayProtocol.Events.RoomMemberStatusChanged:
+                {
+                    var playerUid = env.GetString("playerUid");
+                    var status = env.GetString("status");
+                    var targetProgress = env.GetLong("targetProgress");
+                    if (playerUid == _playerUid) break; // 过滤自己上报的回环
+                    _logger.LogInformation("[联机] 收到成员状态广播: 玩家={PlayerUid}, 状态={Status}", playerUid, status);
+                    MemberStatusChangedReceived?.Invoke(playerUid, status, targetProgress);
+                    break;
+                }
+
+                // === 新机制：开始路线指令 ===
+                case GatewayProtocol.Events.RoomStartRoute:
+                {
+                    var targetRouteIndex = env.GetInt("routeIndex");
+                    _logger.LogInformation("[联机] 收到开始路线指令: 目标路线={TargetRoute}", targetRouteIndex);
+                    StartRouteReceived?.Invoke(targetRouteIndex);
+                    break;
+                }
+
+                // === 集体卡死跳段事件（multiplayer-mutual-wait-collective-skip §8.5）===
+                case GatewayProtocol.Events.SyncRequestSkipToProgress:
+                {
+                    var target = env.GetLong("targetProgress");
+                    _logger.LogWarning("[联机] 收到 RequestSkipToProgress: target={Target}", target);
+                    RequestSkipToProgressReceived?.Invoke(target);
+                    break;
+                }
+
+                case GatewayProtocol.Events.SyncCollectiveSkipDegraded:
+                {
+                    var reason = env.GetString("reason");
+                    _logger.LogError("[联机] 收到 CollectiveSkipDegraded: reason={Reason}", reason);
+                    CollectiveSkipDegradedReceived?.Invoke(reason);
+                    break;
+                }
+
+                default:
+                    _logger.LogDebug("[联机] 收到未知 evt 事件（忽略）: {Name}", env.Name);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[联机] evt 事件处理失败（已吞掉）: {Name}", env.Name);
+        }
+    }
+
+    /// <summary>SignalR 内置自动重连成功（同一连接，新 connectionId）。</summary>
+    private async Task OnReconnected(string? newConnectionId)
+    {
+        _logger.LogInformation("[联机] SignalR 重连成功，重新加入房间: {Code}", _currentRoomCode);
+        if (!string.IsNullOrEmpty(_currentRoomCode))
+        {
+            try
+            {
+                // v3：断线后服务端会话登记已清除，必须先重新 hello 再 join（DAP 时序）
+                if (_gateway != null)
+                    await _gateway.HelloAsync();
+                await JoinRoomAsync(_currentRoomCode, _playerName ?? "", _playerUid ?? "");
+                _logger.LogInformation("[联机] 重连后重新加入房间成功");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[联机] 重连后重新加入房间失败");
+            }
+        }
+    }
+
+    private Task OnReconnecting(Exception? error)
+    {
+        _logger.LogWarning(error, "[联机] SignalR 连接断开，正在自动重连...");
+        _worldStateMonitor?.NotifyHeartbeatSuccess(); // 重置失败计数
+        return Task.CompletedTask;
+    }
+
     private async Task OnConnectionClosed(Exception? ex)
     {
         if (_isReconnecting)
@@ -363,7 +458,7 @@ public class CoordinatorClient : IAsyncDisposable
         _isInRoom = false;
         _logger.LogWarning(ex, "CoordinatorClient 连接断开，开始指数退避重连...");
 
-        if (_connection == null)
+        if (_gateway == null)
         {
             _isReconnecting = false;
             return;
@@ -387,7 +482,9 @@ public class CoordinatorClient : IAsyncDisposable
 
                 try
                 {
-                    await _connection.StartAsync();
+                    await _gateway.ReconnectStartAsync();
+                    // v3：重连成功后必须先重新 hello（DAP 时序），hello 失败计入该次重连失败
+                    await _gateway.HelloAsync();
                     reconnected = true;
                     _logger.LogInformation("CoordinatorClient 重连成功（第{Round}轮，第{Attempt}次）", round, attempt + 1);
 
@@ -451,17 +548,17 @@ public class CoordinatorClient : IAsyncDisposable
     public string GetPlayerDisplayName(string playerUid)
     {
         if (string.IsNullOrEmpty(playerUid)) return "未知玩家";
-        
+
         if (_playerNameCache.TryGetValue(playerUid, out var name) && !string.IsNullOrEmpty(name))
             return name;
-        
+
         var player = CurrentPlayerList.FirstOrDefault(p => p.PlayerUid == playerUid);
         if (player != null && !string.IsNullOrEmpty(player.PlayerName))
         {
             _playerNameCache[playerUid] = player.PlayerName;
             return player.PlayerName;
         }
-        
+
         if (playerUid.Length > 6)
             return $"{playerUid[..3]}***{playerUid[^3..]}";
         return playerUid;
@@ -469,11 +566,11 @@ public class CoordinatorClient : IAsyncDisposable
 
     public async Task<List<RoomSummary>> GetOnlineRoomsAsync()
     {
-        if (_connection == null) return new List<RoomSummary>();
+        if (_gateway == null) return new List<RoomSummary>();
         try
         {
-            var result = await _connection.InvokeAsync<List<RoomSummary>>("GetOnlineRooms");
-            return result ?? new List<RoomSummary>();
+            var resp = await _gateway.QueryAsync(GatewayProtocol.Names.RoomListOnline, null);
+            return resp.Get<List<RoomSummary>>("rooms") ?? new List<RoomSummary>();
         }
         catch (Exception ex)
         {
@@ -484,11 +581,18 @@ public class CoordinatorClient : IAsyncDisposable
 
     public async Task<bool> JoinRoomAsync(string roomCode, string playerName, string? playerUid = null)
     {
-        if (_connection == null) return false;
+        if (_gateway == null) return false;
         try
         {
             // version-compatibility-check R2.1：上报完整 Global.Version（含构建元数据，不截断）
-            var result = await _connection.InvokeAsync<bool>("JoinRoom", roomCode, playerName, playerUid, BetterGenshinImpact.Core.Config.Global.Version ?? "");
+            var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomJoin, new
+            {
+                roomCode,
+                playerName,
+                playerUid = playerUid ?? "",
+                reportedVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
+            }, roomCode);
+            var result = resp.GetBool("success");
             _currentRoomCode = roomCode;
             _playerName = playerName;
             _playerUid = playerUid;
@@ -506,10 +610,10 @@ public class CoordinatorClient : IAsyncDisposable
 
     public async Task LeaveRoomAsync()
     {
-        if (_connection == null) return;
+        if (_gateway == null) return;
         try
         {
-            await _connection.InvokeAsync("LeaveRoom");
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomLeave, null);
             _isInRoom = false;
             _logger.LogInformation("LeaveRoomAsync 完成");
         }
@@ -521,13 +625,13 @@ public class CoordinatorClient : IAsyncDisposable
 
     public async Task CloseRoomAsync()
     {
-        if (_connection == null) return;
+        if (_gateway == null) return;
         try
         {
             // 标记本地正在主动关闭房间，使后续到达的 RoomClosed 广播能识别为"自触发"
             // （本节点是房主，多世界轮次切换时主动关房，应避免 RoomClosed 取消主任务流程）
             _selfClosingRoom = true;
-            await _connection.InvokeAsync("CloseRoom");
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomClose, null);
             _isInRoom = false;
         }
         catch (Exception ex)
@@ -552,10 +656,10 @@ public class CoordinatorClient : IAsyncDisposable
 
     public async Task ResetWorldJoinedAsync()
     {
-        if (_connection == null) return;
+        if (_gateway == null) return;
         try
         {
-            await _connection.InvokeAsync("ResetWorldJoined");
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.WorldResetJoined, null);
         }
         catch (Exception ex)
         {
@@ -568,10 +672,10 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task ResetForNewWorldRoundAsync(int newRound)
     {
-        if (_connection == null) return;
+        if (_gateway == null) return;
         try
         {
-            await _connection.InvokeAsync("ResetForNewWorldRound", newRound);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.WorldResetForNewRound, new { newRound });
             _logger.LogInformation("[联机] 发送多轮世界重置请求: Round {Round}", newRound);
         }
         catch (Exception ex)
@@ -582,17 +686,21 @@ public class CoordinatorClient : IAsyncDisposable
 
     public async Task SendHeartbeatAsync()
     {
-        if (_connection == null) return;
+        if (_gateway == null) return;
         try
         {
             if (_currentRouteIndex >= 0)
             {
-                await _connection.InvokeAsync("HeartbeatWithProgress",
-                    _currentRouteIndex, _routeStartTime, _routeEstimatedSeconds);
+                await _gateway.InvokeCommandAsync(GatewayProtocol.Names.SessionHeartbeat, new
+                {
+                    routeIndex = _currentRouteIndex,
+                    routeStartTime = _routeStartTime,
+                    routeEstimatedSeconds = _routeEstimatedSeconds,
+                });
             }
             else
             {
-                await _connection.InvokeAsync("Heartbeat");
+                await _gateway.InvokeCommandAsync(GatewayProtocol.Names.SessionHeartbeat, null);
             }
             _worldStateMonitor?.NotifyHeartbeatSuccess();
         }
@@ -608,10 +716,12 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task<MemberProgress?> GetMemberProgressAsync(string playerUid)
     {
-        if (_connection == null || !IsConnected) return null;
+        if (_gateway == null || !IsConnected) return null;
         try
         {
-            return await _connection.InvokeAsync<MemberProgress?>("GetMemberProgress", playerUid);
+            var resp = await _gateway.QueryAsync(GatewayProtocol.Names.RoomGetState,
+                new { section = GatewayProtocol.StateSections.MemberProgress, playerUid });
+            return resp.Get<MemberProgress>("value");
         }
         catch (Exception ex)
         {
@@ -635,16 +745,18 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task<Dictionary<string, int>?> QueryRouteProgressAsync(CancellationToken ct)
     {
-        if (_connection == null || !IsConnected) return null;
+        if (_gateway == null || !IsConnected) return null;
         try
         {
-            // 服务器只有 GetMemberProgress(playerUid)，需要遍历所有玩家查询
+            // 服务器只有按成员查询（room.getState section=memberProgress），需要遍历所有玩家查询
             var result = new Dictionary<string, int>();
             foreach (var player in CurrentPlayerList)
             {
                 try
                 {
-                    var progress = await _connection.InvokeAsync<MemberProgress?>("GetMemberProgress", player.PlayerUid, ct);
+                    var resp = await _gateway.QueryAsync(GatewayProtocol.Names.RoomGetState,
+                        new { section = GatewayProtocol.StateSections.MemberProgress, playerUid = player.PlayerUid }, null, ct);
+                    var progress = resp.Get<MemberProgress>("value");
                     if (progress != null)
                     {
                         result[player.PlayerUid] = progress.RouteIndex;
@@ -682,19 +794,27 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task<string?> CreateRoomAsync(string playerName, List<string>? whitelist, string playerUid, int expectedPlayerCount)
     {
-        if (_connection == null) return null;
+        if (_gateway == null) return null;
         try
         {
-            var result = await _connection.InvokeAsync<string?>("CreateRoom",
-                playerName, whitelist ?? new List<string>(), playerUid, expectedPlayerCount, BetterGenshinImpact.Core.Config.Global.Version ?? "");
+            var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomCreate, new
+            {
+                playerName,
+                whitelist = whitelist ?? new List<string>(),
+                playerUid,
+                expectedPlayerCount,
+                reportedVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
+            });
+            var result = resp.GetString("roomCode");
             _playerName = playerName;
             _playerUid = playerUid;
-            _isInRoom = result != null;
-            if (result != null)
+            _isInRoom = !string.IsNullOrEmpty(result);
+            if (!string.IsNullOrEmpty(result))
             {
                 _currentRoomCode = result;
+                return result;
             }
-            return result;
+            return null;
         }
         catch (Exception ex)
         {
@@ -711,10 +831,10 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task DeclareKazuhaCapabilityAsync()
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("DeclareKazuhaCapability");
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.KazuhaDeclareCapability, null);
             _logger.LogInformation("[联机][聚物] 已声明万叶候选身份");
         }
         catch (Exception ex)
@@ -729,10 +849,10 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task NotifyFightParticipantAsync(string syncKey, CancellationToken ct = default)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("ReportFightParticipant", syncKey, ct);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.FightReportParticipant, new { syncKey }, null, ct);
         }
         catch (Exception ex)
         {
@@ -746,10 +866,11 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task NotifyFightDoneAsync(string syncKey, CancellationToken ct = default)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("ReportFightDone", syncKey, ct);
+            // 注意 payload 键名是 syncPointId（与服务器网关路由对齐），值为本局 syncKey
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.FightReportDone, new { syncPointId = syncKey }, null, ct);
         }
         catch (Exception ex)
         {
@@ -763,10 +884,11 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task NotifyExpCapReachedAsync(CancellationToken ct = default)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("ReportExpCapReached", ct);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ExpReportFightResult,
+                new { kind = GatewayProtocol.ExpKinds.CapReached }, null, ct);
             _logger.LogInformation("[联机][经验上限] 已上报本机达经验上限");
         }
         catch (Exception ex)
@@ -780,10 +902,11 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task NotifyExpCapClearedAsync(CancellationToken ct = default)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("ReportExpCapCleared", ct);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ExpReportFightResult,
+                new { kind = GatewayProtocol.ExpKinds.CapCleared }, null, ct);
             _logger.LogInformation("[联机][经验上限] 已撤回本机达经验上限");
         }
         catch (Exception ex)
@@ -799,10 +922,11 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task NotifyExpArmedAsync(CancellationToken ct = default)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("ReportExpArmed", ct);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ExpReportFightResult,
+                new { kind = GatewayProtocol.ExpKinds.Armed }, null, ct);
             _logger.LogInformation("[联机][经验上限] 已上报团队 arming");
         }
         catch (Exception ex)
@@ -817,10 +941,11 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task NotifyTwoConsecutiveNoExpAsync(CancellationToken ct = default)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("ReportTwoConsecutiveNoExp", ct);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ExpReportFightResult,
+                new { kind = GatewayProtocol.ExpKinds.TwoNoExp }, null, ct);
             _logger.LogInformation("[联机][经验上限] 已上报连续2场无经验预警");
         }
         catch (Exception ex)
@@ -835,10 +960,11 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task NotifyTwoConsecutiveNoExpClearedAsync(CancellationToken ct = default)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("ReportTwoConsecutiveNoExpCleared", ct);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ExpReportFightResult,
+                new { kind = GatewayProtocol.ExpKinds.TwoNoExpCleared }, null, ct);
             _logger.LogInformation("[联机][经验上限] 已撤回连续2场无经验预警");
         }
         catch (Exception ex)
@@ -855,16 +981,15 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task NotifyKazuhaCollectStartedAsync(string syncKey, double collectX, double collectY)
     {
-        // 注：单 IsConnected 守卫即可——_connection==null 时 _connection?.State 是 null，
-        // 与 HubConnectionState.Connected 不等 → IsConnected 为 false → 守卫触发。
-        // 与其他 Notify*Async 方法的 (_connection == null || !IsConnected) 写法功能等价；
-        // 这里写成单条便于测试可控（_testIsConnectedOverride=true 时绕过 _connection 真实状态）。
+        // 注：单 IsConnected 守卫即可——网关不存在或未连接时 IsConnected 均为 false → 守卫触发。
+        // 与其他 Notify*Async 方法的 (_gateway == null || !IsConnected) 写法功能等价；
+        // 这里写成单条便于测试可控（_testIsConnectedOverride=true 时绕过网关真实状态）。
         if (!IsConnected) return;
 
         // 客户端 IsValid 守卫：拦截 NaN / ±Infinity / (0,0)，避免 System.Text.Json 在序列化
-        // InvocationMessage 时抛 ArgumentException 损坏 SignalR 管线
+        // 线上消息时抛 ArgumentException 损坏 SignalR 管线
         // （详见 spec kazuha-collect-point-nan-signalr-serialization-fix）。
-        // 与服务端 CoordinatorHub.NotifyKazuhaCollectStarted 内的 IsValid + KazuhaCollectSyncCoordinator
+        // 与服务端 NotifyKazuhaCollectStarted 内的 IsValid + KazuhaCollectSyncCoordinator
         // 构造函数订阅的 IsValid 一起构成 defense-in-depth 三层过滤。
         if (!KazuhaCollectPointDecisions.IsValid(collectX, collectY))
         {
@@ -888,10 +1013,10 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task SetRoomConfigAsync(Models.RoomConfig config)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("SetRoomConfig", config);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomSetConfig, new { config });
             _logger.LogInformation("[联机] 上传房间配置成功");
         }
         catch (Exception ex)
@@ -906,11 +1031,11 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task<Models.RoomConfig?> GetRoomConfigAsync()
     {
-        if (_connection == null || !IsConnected) return null;
+        if (_gateway == null || !IsConnected) return null;
         try
         {
-            var result = await _connection.InvokeAsync<Models.RoomConfig?>("GetRoomConfig");
-            return result;
+            var resp = await _gateway.QueryAsync(GatewayProtocol.Names.RoomGetConfig, null);
+            return resp.Get<Models.RoomConfig>("config");
         }
         catch (Exception ex)
         {
@@ -924,10 +1049,10 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task ReportHostReadyAsync()
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("ReportHostReady");
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomReportHostReady, null);
             _logger.LogInformation("[联机] 上报房主就绪");
         }
         catch (Exception ex)
@@ -938,16 +1063,16 @@ public class CoordinatorClient : IAsyncDisposable
 
     /// <summary>
     /// 上报本玩家所有计划路线的变体 schema 摘要（route-variant-sync-by-logical-id spec / R6 / R8）。
-    /// 旧服务端不识别此方法时抛 HubException，调用方（MultiplayerCoordinator.VerifyRouteVariantSchemaAsync）
+    /// 服务端返回错误时抛 GatewayErrorException，调用方（MultiplayerCoordinator.VerifyRouteVariantSchemaAsync）
     /// 按 R8.6 / R8.7 分流。不静默 catch，让 caller 决定 fallback / 显式报错。
     /// </summary>
     public async Task ReportRouteVariantSchemaAsync(
         List<Models.RouteVariantSchemaItem> items, CancellationToken ct = default)
     {
-        if (_connection == null || !IsConnected)
+        if (_gateway == null || !IsConnected)
             throw new InvalidOperationException("CoordinatorClient 未连接");
 
-        await _connection.InvokeAsync("ReportRouteVariantSchema", items, ct);
+        await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RouteReportVariantSchema, new { items }, null, ct);
         _logger.LogInformation("[变体校验] 已上报 {Count} 条 schema（含非空 LogicalRouteId {NonEmpty} 条）",
             items?.Count ?? 0, items?.Count(i => !string.IsNullOrEmpty(i.LogicalRouteId)) ?? 0);
     }
@@ -959,27 +1084,27 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task MarkRoomStartedAsync(IReadOnlySet<string>? completedHostUids = null)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
             if (completedHostUids != null && completedHostUids.Count > 0)
             {
-                await _connection.InvokeAsync("MarkRoomStartedWithProgress", completedHostUids.ToList());
+                await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomMarkStarted,
+                    new { completedHostUids = completedHostUids.ToList() });
                 _logger.LogInformation("[联机] MarkRoomStartedAsync 完成（上报 {N} 已完成房主，房间已锁定）",
                     completedHostUids.Count);
             }
             else
             {
-                await _connection.InvokeAsync("MarkRoomStarted");
+                await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomMarkStarted, null);
                 _logger.LogInformation("[联机] MarkRoomStartedAsync 完成（房间已锁定）");
             }
         }
         catch (Exception ex)
         {
-            // 旧服务端不支持 MarkRoomStartedWithProgress（或 MarkRoomStarted）→ HubException
-            // 静默降级：等价上报空集合 → 服务端生成全量序列（现状），不影响主任务。
+            // 上报失败静默降级：等价上报空集合 → 服务端生成全量序列（现状），不影响主任务。
             // 与 ReportHostReadyAsync / DeclareKazuhaCapabilityAsync 静默兜底模式一致。
-            _logger.LogWarning(ex, "MarkRoomStartedAsync 失败（静默忽略，旧服务端兼容；降级为全量序列）");
+            _logger.LogWarning(ex, "MarkRoomStartedAsync 失败（静默忽略，降级为全量序列）");
         }
     }
 
@@ -988,10 +1113,10 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task ReportWorldJoinedAsync()
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("ReportWorldJoined");
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.WorldReportJoined, null);
             _logger.LogInformation("[联机] 上报已加入世界");
         }
         catch (Exception ex)
@@ -1023,14 +1148,19 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task<bool> EnsureInRoomAsync(CancellationToken ct = default)
     {
-        if (_connection == null || !IsConnected) return false;
+        if (_gateway == null || !IsConnected) return false;
         if (_isInRoom && AmIInRoomRoster()) return true;
         if (string.IsNullOrEmpty(_currentRoomCode)) return false;
         try
         {
-            var ok = await _connection.InvokeAsync<bool>("JoinRoom",
-                _currentRoomCode, _playerName ?? "", _playerUid ?? "",
-                BetterGenshinImpact.Core.Config.Global.Version ?? "");
+            var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomJoin, new
+            {
+                roomCode = _currentRoomCode,
+                playerName = _playerName ?? "",
+                playerUid = _playerUid ?? "",
+                reportedVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
+            }, _currentRoomCode);
+            var ok = resp.GetBool("success");
             _isInRoom = ok;
             if (ok)
             {
@@ -1055,11 +1185,12 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task<bool> IsHostReadyAsync()
     {
-        if (_connection == null || !IsConnected) return false;
+        if (_gateway == null || !IsConnected) return false;
         try
         {
-            var result = await _connection.InvokeAsync<bool>("IsHostReady");
-            return result;
+            var resp = await _gateway.QueryAsync(GatewayProtocol.Names.RoomGetState,
+                new { section = GatewayProtocol.StateSections.HostReady });
+            return resp.GetBool("value");
         }
         catch (Exception ex)
         {
@@ -1090,10 +1221,10 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task SetHostRouteListAsync(List<string> routeNames)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("SetHostRouteList", routeNames);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomSetHostRouteList, new { routeNames });
             _logger.LogInformation("[联机] 上传房主路线列表: {Count} 条", routeNames.Count);
         }
         catch (Exception ex)
@@ -1107,11 +1238,12 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task<List<string>> GetHostRouteListAsync()
     {
-        if (_connection == null || !IsConnected) return new List<string>();
+        if (_gateway == null || !IsConnected) return new List<string>();
         try
         {
-            var result = await _connection.InvokeAsync<List<string>>("GetHostRouteList");
-            return result ?? new List<string>();
+            var resp = await _gateway.QueryAsync(GatewayProtocol.Names.RoomGetState,
+                new { section = GatewayProtocol.StateSections.HostRouteList });
+            return resp.Get<List<string>>("value") ?? new List<string>();
         }
         catch (Exception ex)
         {
@@ -1124,19 +1256,21 @@ public class CoordinatorClient : IAsyncDisposable
     /// 查询房主是否已上传过路线列表（含上传空列表的情况）。
     /// multiplayer-host-empty-route-member-wait-timeout-fix：成员收到空列表时据此区分
     /// "房主从未上传"（false → 继续等待）与"房主上传了空列表（CD全过滤）"（true → 优雅跳过本轮）。
-    /// 连接异常或旧服务端不支持此方法时返回 false（安全降级：成员落回原 90s 等待路径，不会误跳过）。
+    /// 连接异常时返回 false（安全降级：成员落回原 90s 等待路径，不会误跳过）。
     /// </summary>
     public async Task<bool> IsHostRouteListUploadedAsync()
     {
-        if (_connection == null || !IsConnected) return false;
+        if (_gateway == null || !IsConnected) return false;
         try
         {
-            return await _connection.InvokeAsync<bool>("IsHostRouteListUploaded");
+            var resp = await _gateway.QueryAsync(GatewayProtocol.Names.RoomGetState,
+                new { section = GatewayProtocol.StateSections.HostRouteListUploaded });
+            return resp.GetBool("value");
         }
         catch (Exception ex)
         {
-            // 旧服务端不支持此方法 → HubException；降级为 false（保守，宁可多等不可误跳）
-            _logger.LogWarning(ex, "IsHostRouteListUploadedAsync 失败（旧服务端兼容，降级为 false）");
+            // 查询失败 → 降级为 false（保守，宁可多等不可误跳）
+            _logger.LogWarning(ex, "IsHostRouteListUploadedAsync 失败（降级为 false）");
             return false;
         }
     }
@@ -1144,19 +1278,21 @@ public class CoordinatorClient : IAsyncDisposable
     /// <summary>
     /// 原子获取房主路线列表状态 (Uploaded, RouteNames)，取代 GetHostRouteList + IsHostRouteListUploaded
     /// 两次独立查询，消除 TOCTOU 竞态（multiplayer-member-skip-round-stuck-roundend-sync-fix）。
-    /// 旧服务端无此方法 → HubException → 降级返回 (false, 空)，调用方落回"继续等待房主推送"保守路径（宁等勿误判为空）。
+    /// 查询失败 → 降级返回 (false, 空)，调用方落回"继续等待房主推送"保守路径（宁等勿误判为空）。
     /// </summary>
     public async Task<(bool Uploaded, List<string> RouteNames)> GetHostRouteListStatusAsync()
     {
-        if (_connection == null || !IsConnected) return (false, new List<string>());
+        if (_gateway == null || !IsConnected) return (false, new List<string>());
         try
         {
-            var s = await _connection.InvokeAsync<HostRouteListStatusDto>("GetHostRouteListStatus");
+            var resp = await _gateway.QueryAsync(GatewayProtocol.Names.RoomGetState,
+                new { section = GatewayProtocol.StateSections.HostRouteListStatus });
+            var s = resp.Get<HostRouteListStatusDto>("value");
             return (s?.Uploaded ?? false, s?.RouteNames ?? new List<string>());
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "GetHostRouteListStatusAsync 失败（旧服务端兼容，降级为 (false, 空)）");
+            _logger.LogWarning(ex, "GetHostRouteListStatusAsync 失败（降级为 (false, 空)）");
             return (false, new List<string>());
         }
     }
@@ -1164,19 +1300,20 @@ public class CoordinatorClient : IAsyncDisposable
     /// <summary>
     /// 查询服务端权威轮换序列（UID 列表，第 i 项 = 第 i 轮房主 UID）。
     /// 由首任房主 MarkRoomStarted 时生成，整场只生成一次，保证各客户端轮换序列完全一致。
-    /// 旧服务端无此方法 → HubException → 返回 null，由调用方降级本地 CurrentPlayerList 快照。
+    /// 查询失败 → 返回 null，由调用方降级本地 CurrentPlayerList 快照。
     /// multiplayer-server-authoritative-round-order。
     /// </summary>
     public async Task<List<string>?> GetRoundHostOrderAsync()
     {
-        if (_connection == null || !IsConnected) return null;
+        if (_gateway == null || !IsConnected) return null;
         try
         {
-            return await _connection.InvokeAsync<List<string>>("GetRoundHostOrder");
+            var resp = await _gateway.QueryAsync(GatewayProtocol.Names.RoomGetRoundHostOrder, null);
+            return resp.Get<List<string>>("order");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "[联机] GetRoundHostOrderAsync 失败（旧服务端/异常），降级本地快照");
+            _logger.LogWarning(ex, "[联机] GetRoundHostOrderAsync 失败（异常），降级本地快照");
             return null;
         }
     }
@@ -1186,10 +1323,11 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task SendMemberProgressAsync(int routeIndex)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("ReportMemberProgress", PlayerUid ?? "", routeIndex);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.AnomalyReportMemberProgress,
+                new { playerUid = PlayerUid ?? "", routeIndex });
             _logger.LogDebug("[联机] 发送成员进度: 路线 {Index}", routeIndex);
         }
         catch (Exception ex)
@@ -1203,10 +1341,10 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task ReportRouteListAsync(List<Models.RouteHash> hashes)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("ReportRouteList", hashes);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RouteReportList, new { routes = hashes });
             _logger.LogInformation("[联机] 上报路线列表: {Count} 条", hashes.Count);
         }
         catch (Exception ex)
@@ -1216,14 +1354,25 @@ public class CoordinatorClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// 重新加入当前房间
+    /// 重新加入当前房间。
+    /// 切片 8 修复（owner 已确认）：旧实现调用的 "RejoinRoom" Hub 方法在服务端从未存在
+    /// （CoordinatorHub 无此方法、网关 LegacyMethodMap 未收录），调用必抛 HubException →
+    /// 静默返回 false，本方法自上线起从未成功过。现按 owner 决策映射到 room.join——
+    /// 服务端对同名/同 UID 重连幂等（与 Reconnected 回调 / EnsureInRoomAsync 同一路径），死路就此打通。
     /// </summary>
     public async Task<bool> RejoinCurrentRoomAsync()
     {
-        if (_connection == null || string.IsNullOrEmpty(_currentRoomCode) || string.IsNullOrEmpty(_playerName)) return false;
+        if (_gateway == null || string.IsNullOrEmpty(_currentRoomCode) || string.IsNullOrEmpty(_playerName)) return false;
         try
         {
-            var result = await _connection.InvokeAsync<bool>("RejoinRoom", _currentRoomCode, _playerName);
+            var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomJoin, new
+            {
+                roomCode = _currentRoomCode,
+                playerName = _playerName,
+                playerUid = _playerUid ?? "",
+                reportedVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
+            }, _currentRoomCode);
+            var result = resp.GetBool("success");
             _isInRoom = result;
             return result;
         }
@@ -1239,13 +1388,13 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task ReportArrivalAsync(string syncPointId, int expectedCount = 0)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
             if (expectedCount > 0)
-                await _connection.InvokeAsync("ReportArrivalWithExpectedCount", syncPointId, expectedCount);
+                await _gateway.InvokeCommandAsync(GatewayProtocol.Names.SyncReportArrival, new { syncPointId, expectedCount });
             else
-                await _connection.InvokeAsync("ReportArrival", syncPointId);
+                await _gateway.InvokeCommandAsync(GatewayProtocol.Names.SyncReportArrival, new { syncPointId });
         }
         catch (Exception ex)
         {
@@ -1258,10 +1407,11 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task ReportAnomalyAsync(string playerUid, int routeIndex, bool passedSyncPoint)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("PlayerAnomalyNotify", playerUid, routeIndex, passedSyncPoint);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.AnomalyNotify,
+                new { playerUid, routeIndex, passedSyncPoint });
             _logger.LogInformation("[联机] 发送异常通知: 玩家={PlayerUid}, 路线={RouteIndex}, 已过同步点={Passed}",
                 playerUid, routeIndex, passedSyncPoint);
         }
@@ -1278,10 +1428,11 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task ReportAnomalyWithFightPointAsync(string playerUid, int routeIndex, int fightPointId)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("PlayerAnomalyNotifyFightPoint", playerUid, routeIndex, fightPointId);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.AnomalyNotifyFightPoint,
+                new { playerUid, routeIndex, fightPointId });
             _logger.LogInformation("[联机] 发送异常通知(带战斗点): 玩家={PlayerUid}, 路线={RouteIndex}, 战斗点={FightPointId}",
                 playerUid, routeIndex, fightPointId);
         }
@@ -1295,10 +1446,10 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task ReportRecoveredAsync(string playerUid)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("PlayerAnomalyRecovered", playerUid);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.AnomalyRecovered, new { playerUid });
             _logger.LogInformation("[联机] 发送恢复通知: 玩家={PlayerUid}", playerUid);
         }
         catch (Exception ex)
@@ -1313,10 +1464,11 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task ReportMemberStatusAsync(MemberStatus status, long targetProgress = -1)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("MemberStatusChanged", PlayerUid ?? "", status.ToString(), targetProgress);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.AnomalyMemberStatusChanged,
+                new { playerUid = PlayerUid ?? "", status = status.ToString(), targetProgress });
             _logger.LogDebug("[联机] 上报成员状态: {Status}, 目标进度={Target}", status, targetProgress);
         }
         catch (Exception ex)
@@ -1330,10 +1482,11 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task ReportRouteSkippedAsync(int routeIndex)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("RouteSkipped", PlayerUid ?? "", routeIndex);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.AnomalyRouteSkipped,
+                new { playerUid = PlayerUid ?? "", routeIndex });
             _logger.LogInformation("[联机] 上报路线跳过: {Index}", routeIndex);
         }
         catch (Exception ex)
@@ -1347,10 +1500,11 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task ReportWaitPointAsync(string syncPointId)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("WaitPointReached", PlayerUid ?? "", syncPointId);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.AnomalyWaitPointReached,
+                new { playerUid = PlayerUid ?? "", syncPointId });
             _logger.LogDebug("[联机] 上报等待点: {SyncPointId}", syncPointId);
         }
         catch (Exception ex)
@@ -1364,10 +1518,11 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task ReportFightingStatusAsync(bool isFighting)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("FightingStatusChanged", PlayerUid ?? "", isFighting);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.AnomalyFightingStatusChanged,
+                new { playerUid = PlayerUid ?? "", isFighting });
             _logger.LogDebug("[联机] 上报战斗状态: {IsFighting}", isFighting);
         }
         catch (Exception ex)
@@ -1377,19 +1532,20 @@ public class CoordinatorClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// 抢报专用：仅向服务端 SendAsync("WaitForAllPlayers", ...)，**不订阅 AllArrived 不等待**，
+    /// 抢报专用：仅向服务端 fire-and-forget 发送 sync.waitForAllPlayers，**不订阅 AllArrived 不等待**，
     /// 立即返回让调用方继续走（fastsync-redesign-parameter-passing spec）。
     ///
-    /// 服务端 Hub.WaitForAllPlayers 会执行 RecordArrival + 全量评估 + 必要时广播 AllArrived 给
+    /// 服务端网关路由会执行 RecordArrival + 全量评估 + 必要时广播 AllArrived 给
     /// 已经在等的对方——抢报方自己不阻塞，由后续的严格 WaitForAllPlayers 路径再次上报
     /// 走完整等待逻辑（idempotent）。
     /// </summary>
     public async Task FireAndForgetArrivalAsync(string syncId, long syncProgress = -1)
     {
-        if (_connection == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected) return;
         try
         {
-            await _connection.SendAsync("WaitForAllPlayers", syncId, syncProgress);
+            await _gateway.SendCommandFireAndForgetAsync(GatewayProtocol.Names.SyncWaitForAllPlayers,
+                new { syncId, syncProgress });
             _logger.LogDebug("[联机] 抢报到达（fire-and-forget）: {SyncId}, 进度={Progress}", syncId, syncProgress);
         }
         catch (Exception ex)
@@ -1409,7 +1565,7 @@ public class CoordinatorClient : IAsyncDisposable
     public async Task<bool> WaitForAllPlayersAsync(string syncId, CancellationToken ct, long syncProgress = -1, bool wasFastReported = false)
     {
         // 未连接：没有任何 AllArrived 匹配被消费，返回 false 表示未确认完成（不能误判为严格等待完成）。
-        if (_connection == null || !IsConnected) return false;
+        if (_gateway == null || !IsConnected) return false;
 
         // 使用与 SyncBarrier 相同的模式：先订阅事件，再发送动作，本地等待
         var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1431,7 +1587,8 @@ public class CoordinatorClient : IAsyncDisposable
         try
         {
             // 首次上报到达
-            await _connection.SendAsync("WaitForAllPlayers", syncId, syncProgress);
+            await _gateway.SendCommandFireAndForgetAsync(GatewayProtocol.Names.SyncWaitForAllPlayers,
+                new { syncId, syncProgress });
             _logger.LogDebug("[联机] 请求等待所有玩家: {SyncId}, 进度={Progress}", syncId, syncProgress);
 
             // 本地等待 AllArrived 事件（受 CT 控制，可被用户取消）
@@ -1440,7 +1597,7 @@ public class CoordinatorClient : IAsyncDisposable
 
             // fastsync-claim-short-circuit-premature-release-fix（OQ-4=a / 方案 B）：
             // 短探测窗口区分"全员已到 / 服务端补发命中 → 立即放行"与"全员未到 → 进入等待"。
-            // 200ms 内收到 AllArrived（含服务端 Clients.Caller 补发）即视为立即放行。
+            // 200ms 内收到 AllArrived（含服务端定向补发）即视为立即放行。
             // wasFastReported 仅决定日志文案前缀，不影响放行逻辑。
             const int replayProbeMs = 200;
             var probe = await Task.WhenAny(tcs.Task, Task.Delay(replayProbeMs, linkedCts.Token));
@@ -1476,7 +1633,8 @@ public class CoordinatorClient : IAsyncDisposable
                 }
                 // 5 秒到了还没收到 AllArrived → 重试上报
                 _logger.LogDebug("[联机] 等待中，重试上报到达: {SyncId}", syncId);
-                await _connection.SendAsync("WaitForAllPlayers", syncId, syncProgress);
+                await _gateway.SendCommandFireAndForgetAsync(GatewayProtocol.Names.SyncWaitForAllPlayers,
+                    new { syncId, syncProgress });
             }
 
             // while 循环退出即表示匹配 AllArrived 已被消费（严格等待完成）
@@ -1501,14 +1659,14 @@ public class CoordinatorClient : IAsyncDisposable
 
     public async Task DisconnectAsync()
     {
-        if (_connection == null) return;
+        if (_gateway == null) return;
         try
         {
             _heartbeatTimer?.Dispose();
             _heartbeatTimer = null;
             _isInRoom = false;
-            _connection.Closed -= OnConnectionClosed;
-            await _connection.StopAsync();
+            _gateway.Closed -= OnConnectionClosed;
+            await _gateway.StopAsync();
             _logger.LogInformation("CoordinatorClient 已断开连接");
         }
         catch (Exception ex)
@@ -1521,11 +1679,11 @@ public class CoordinatorClient : IAsyncDisposable
     {
         _heartbeatTimer?.Dispose();
         _heartbeatTimer = null;
-        if (_connection != null)
+        if (_gateway != null)
         {
-            _connection.Closed -= OnConnectionClosed;
-            await _connection.DisposeAsync();
-            _connection = null;
+            _gateway.Closed -= OnConnectionClosed;
+            await _gateway.DisposeAsync();
+            _gateway = null;
         }
     }
 }
