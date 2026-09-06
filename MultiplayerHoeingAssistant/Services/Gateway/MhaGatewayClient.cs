@@ -38,6 +38,9 @@ public sealed class MhaGatewayClient : IAsyncDisposable
 
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
 
+    /// <summary>底层连接状态（只读，诊断日志用；连接未建立/已释放时为 null）。</summary>
+    public HubConnectionState? ConnectionState => _connection?.State;
+
     /// <summary>
     /// URL 归一化（《通信方案》§4.8）：配置只填服务器基地址（如 http://xxx:8080），
     /// SDK 内部拼 /gateway。旧配置带 /hub（或 /hub/，大小写不敏感）的剥掉并置 strippedLegacyHub=true，

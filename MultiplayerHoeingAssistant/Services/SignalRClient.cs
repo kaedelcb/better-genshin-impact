@@ -422,7 +422,7 @@ public class SignalRClient : IAsyncDisposable
         if (_gateway == null) return;
         if (!_gateway.IsConnected)
         {
-            OnLog?.Invoke("ReportOnlineEventAsync 跳过: 连接未就绪");
+            OnLog?.Invoke($"ReportOnlineEventAsync 跳过: 连接未就绪（State={_gateway.ConnectionState?.ToString() ?? "null"}）");
             return;
         }
         try
