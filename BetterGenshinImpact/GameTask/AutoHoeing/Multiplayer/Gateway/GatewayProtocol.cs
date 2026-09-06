@@ -35,6 +35,13 @@ public static class GatewayProtocol
         public const string Query = "Query";
     }
 
+    /// <summary>响应 error.code（镜像服务器 GatewayProtocol.ErrorCodes，本切片实际用到的子集）。</summary>
+    public static class ErrorCodes
+    {
+        /// <summary>未知消息名——v3 下"服务端无此功能"的表现形式（对齐旧协议 HubException "does not exist"）。</summary>
+        public const string UnsupportedOperation = "unsupported_operation";
+    }
+
     /// <summary>客户端 → 服务端消息名（§9.2 按族，本切片实际用到的子集）。</summary>
     public static class Names
     {

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Gateway;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Models;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
@@ -1064,8 +1065,11 @@ public class CoordinatorClient : IAsyncDisposable
 
     /// <summary>
     /// 上报本玩家所有计划路线的变体 schema 摘要（route-variant-sync-by-logical-id spec / R6 / R8）。
-    /// 服务端返回错误时抛 GatewayErrorException，调用方（MultiplayerCoordinator.VerifyRouteVariantSchemaAsync）
+    /// 服务端返回错误时抛异常，调用方（MultiplayerCoordinator.VerifyRouteVariantSchemaAsync）
     /// 按 R8.6 / R8.7 分流。不静默 catch，让 caller 决定 fallback / 显式报错。
+    /// v3 下"服务端不识别该方法"表现为 unsupported_operation 错误包，此处翻译回
+    /// HubException（message 含 "does not exist"），保证调用方的
+    /// catch (HubException) when (IsMethodNotFoundException) 过滤器逐字等价命中。
     /// </summary>
     public async Task ReportRouteVariantSchemaAsync(
         List<Models.RouteVariantSchemaItem> items, CancellationToken ct = default)
@@ -1073,7 +1077,15 @@ public class CoordinatorClient : IAsyncDisposable
         if (_gateway == null || !IsConnected)
             throw new InvalidOperationException("CoordinatorClient 未连接");
 
-        await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RouteReportVariantSchema, new { items }, null, ct);
+        try
+        {
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RouteReportVariantSchema, new { items }, null, ct);
+        }
+        catch (GatewayErrorException ex) when (ex.Code == GatewayProtocol.ErrorCodes.UnsupportedOperation)
+        {
+            throw new HubException(
+                $"Method 'ReportRouteVariantSchema' does not exist (gateway: {ex.Message})", ex);
+        }
         _logger.LogInformation("[变体校验] 已上报 {Count} 条 schema（含非空 LogicalRouteId {NonEmpty} 条）",
             items?.Count ?? 0, items?.Count(i => !string.IsNullOrEmpty(i.LogicalRouteId)) ?? 0);
     }
