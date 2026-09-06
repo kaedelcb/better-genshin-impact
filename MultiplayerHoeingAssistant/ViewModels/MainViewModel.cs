@@ -1678,32 +1678,6 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// [计划表接入] 处理 schedule_list.pull：对方请求拉取本机 BGI 计划表名清单。
-    /// 回 schedule_list.data（Params 全 string）：ok / names（JSON 数组字符串）。
-    /// 遥控器模式不应答（本机无 BGI，等同 UID 的执行端应答，避免空清单抢先完成等待）。
-    /// </summary>
-    private async Task HandleScheduleListPullAsync(RemoteCommand cmd)
-    {
-        if (_config?.ObserverMode == true) return;
-        if (_signalRClient == null) return;
-        var names = await GetLocalScheduleNamesAsync();
-        var reply = new RemoteCommand
-        {
-            Cmd = "schedule_list.data",
-            Sender = _config?.PlayerName ?? "",
-            SenderUid = _config?.PlayerUid ?? "",
-            Target = [cmd.SenderUid],
-            CommandId = cmd.CommandId,
-            Params = new Dictionary<string, object>
-            {
-                ["ok"] = "true",
-                ["names"] = JsonSerializer.Serialize(names)
-            }
-        };
-        await _signalRClient.SendRemoteCommandAsync(reply);
-    }
-
-    /// <summary>
     /// 处理 task_policy.push：对方回传编辑后的上线锄地「完成后动作」配置。
     /// policy/specifiedType/specifiedName 存在时落 AssistConfig 并保存（持久化，重启保留）。
     /// 回 task_policy.push_result（ok/message 全 string）。
@@ -1718,7 +1692,7 @@ public class MainViewModel : INotifyPropertyChanged
         {
             _config.OnlineHoeingCompletionPolicy = policy;
             var specifiedType = GetRemoteParam(cmd.Params, "specifiedType");
-            if (specifiedType is "group" or "onedragon" or "schedule")
+            if (specifiedType is "group" or "onedragon")
                 _config.OnlineHoeingSpecifiedTaskType = specifiedType;
             var specifiedName = GetRemoteParam(cmd.Params, "specifiedName");
             if (specifiedName != null)
@@ -2840,7 +2814,6 @@ public class MainViewModel : INotifyPropertyChanged
         // 配置组列表来源：改自己 = 本机 BGI；改别人 = 对方的配置组（来自服务端该成员上报的 ConfigGroups）
         List<string> allGroups = [];
         List<string> allOneClicks = [];
-        List<string> allSchedules = [];
         if (isSelf)
         {
             // 遥控器模式：从其他在线成员取配置组列表
@@ -2871,11 +2844,6 @@ public class MainViewModel : INotifyPropertyChanged
                         {
                             foreach (var oc in oneClicks.EnumerateArray()) allOneClicks.Add(oc.GetString() ?? "");
                         }
-                        // [计划表接入] config.list 新增的 schedules 字段（旧版 BGI 无此字段即为空）
-                        if (data.TryGetProperty("schedules", out var schedules) && schedules.ValueKind == System.Text.Json.JsonValueKind.Array)
-                        {
-                            foreach (var sc in schedules.EnumerateArray()) allSchedules.Add(sc.GetString() ?? "");
-                        }
                     }
                 }
                 catch
@@ -2888,13 +2856,6 @@ public class MainViewModel : INotifyPropertyChanged
         {
             allGroups = (targetMember.ConfigGroups ?? []).Where(g => !string.IsNullOrEmpty(g)).ToList();
             allOneClicks = (targetMember.OneClickConfigs ?? []).Where(o => !string.IsNullOrEmpty(o)).ToList();
-        }
-
-        // [计划表接入] 计划表候选：改自己（执行模式）上面已随 config.list 取到；
-        // 遥控器模式改自己 / 改别人时按需向对方拉取（服务端状态模型定型零改动，计划表清单不走状态广播）
-        if (allSchedules.Count == 0 && (isSelf ? _config?.ObserverMode == true : targetMember?.Online == true))
-        {
-            allSchedules = await GetScheduleNamesForMemberAsync(isSelf ? null : targetMember);
         }
 
         // 判断获取的配置组/一条龙列表是否来自缓存（BGI 未运行或离线时，配置来自之前上报的缓存）
@@ -2916,11 +2877,11 @@ public class MainViewModel : INotifyPropertyChanged
             }
         }
 
-        if (allGroups.Count == 0 && allOneClicks.Count == 0 && allSchedules.Count == 0)
+        if (allGroups.Count == 0 && allOneClicks.Count == 0)
         {
             MessageBox.Show(isSelf
-                ? "未获取到 BGI 配置组、一条龙或计划表列表，请确认 BGI 已启动且配置组/一条龙目录存在。"
-                : $"未获取到 {targetMember?.PlayerName ?? "对方"} 的配置组、一条龙或计划表列表（可能对方尚未上报配置组）。",
+                ? "未获取到 BGI 配置组或一条龙列表，请确认 BGI 已启动且配置组/一条龙目录存在。"
+                : $"未获取到 {targetMember?.PlayerName ?? "对方"} 的配置组或一条龙列表（可能对方尚未上报配置组）。",
                 "提示", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -3108,21 +3069,6 @@ public class MainViewModel : INotifyPropertyChanged
                 };
                 availableListBox.Items.Add(item);
             }
-            // 计划表（前缀 [计划表]，绑定后全员就绪触发上线锄地时执行连续一条龙）
-            foreach (var sc in allSchedules)
-            {
-                if (currentSelected.Contains("[计划表]" + sc)) continue;
-                var item = new System.Windows.Controls.ListBoxItem
-                {
-                    Content = "[计划表]" + sc,
-                    Background = System.Windows.Media.Brushes.Transparent,
-                    BorderThickness = new System.Windows.Thickness(0),
-                    Foreground = new System.Windows.Media.SolidColorBrush(dim),
-                    Cursor = System.Windows.Input.Cursors.Hand,
-                    Padding = new System.Windows.Thickness(8, 2, 8, 2)
-                };
-                availableListBox.Items.Add(item);
-            }
         };
 
         // 刷新已选列表
@@ -3299,7 +3245,7 @@ public class MainViewModel : INotifyPropertyChanged
         // 添加任务说明
         var taskDesc = new System.Windows.Controls.TextBlock
         {
-            Text = "[配置] = 上线任务（定时上线后自动执行）  [一条龙] = 一键锄地（手动触发）  [计划表] = 连续一条龙（按计划表依次执行配置单）",
+            Text = "[配置] = 上线任务（定时上线后自动执行）  [一条龙] = 一键锄地（手动触发）",
             FontSize = 10,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
             TextWrapping = System.Windows.TextWrapping.Wrap,
@@ -3347,7 +3293,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         // ========== 完成后动作（上线锄地打断的原任务如何处置；全员就绪触发上线锄地固定打断，此处只配完成后动作）==========
         var completionPanel = new CompletionActionPanel(
-            initPolicy, initSpecifiedType, initSpecifiedName, allGroups, allOneClicks, allSchedules,
+            initPolicy, initSpecifiedType, initSpecifiedName, allGroups, allOneClicks,
             isSelf
                 ? "全员就绪触发上线锄地必定打断当前任务（固定行为）。此处配置锄地完成后如何处置被中断的原任务；配置持久化保存，重启保留。"
                 : $"全员就绪触发上线锄地必定打断当前任务（固定行为）。此处配置 {targetMember?.PlayerName ?? "对方"} 锄地完成后如何处置被中断的原任务；保存后落到对方本机配置并持久化。");
@@ -3413,11 +3359,6 @@ public class MainViewModel : INotifyPropertyChanged
                     names.Add(item.Substring(5));
                     types.Add("onedragon");
                 }
-                else if (item.StartsWith("[计划表]"))
-                {
-                    names.Add(item.Substring(5));
-                    types.Add("schedule");
-                }
                 else if (item.StartsWith("[配置]"))
                 {
                     names.Add(item.Substring(4));
@@ -3444,7 +3385,7 @@ public class MainViewModel : INotifyPropertyChanged
             var completionDesc = completionPolicy switch
             {
                 TaskConflictPolicy.Stop => "执行动作-停止",
-                TaskConflictPolicy.RunSpecified => $"执行动作-执行指定任务（{(completionType == "onedragon" ? "一条龙" : completionType == "schedule" ? "连续一条龙" : "配置组")}「{completionName}」）",
+                TaskConflictPolicy.RunSpecified => $"执行动作-执行指定任务（{(completionType == "onedragon" ? "一条龙" : "配置组")}「{completionName}」）",
                 _ => "恢复任务"
             };
 
@@ -3586,31 +3527,29 @@ public class MainViewModel : INotifyPropertyChanged
     /// <summary>
     /// 「完成后动作」两层选项 UI 块（上线锄地绑定弹窗用，代码构建深色风格）：
     /// 第一层「恢复任务（默认）｜执行动作」；选「执行动作」展开第二层「停止｜执行指定任务」；
-    /// 指定任务 = 类型（配置组/一条龙/连续一条龙）+ 名称（候选来自对应范围的配置清单，可手动输入；执行时校验存在性）。
+    /// 指定任务 = 类型（配置组/一条龙）+ 名称（候选来自对应范围的配置清单，可手动输入；执行时校验存在性）。
     /// 映射：恢复任务=Resume、执行动作+停止=Stop、执行动作+执行指定任务=RunSpecified。
     /// </summary>
     private sealed class CompletionActionPanel
     {
         private readonly ComboBox _layer1Combo;    // 0=恢复任务 1=执行动作
         private readonly ComboBox _layer2Combo;    // 0=停止 1=执行指定任务
-        private readonly ComboBox _typeCombo;      // 0=配置组 1=一条龙 2=连续一条龙（计划表）
+        private readonly ComboBox _typeCombo;      // 0=配置组 1=一条龙
         private readonly ComboBox _nameCombo;      // IsEditable，候选随类型切换
         private readonly StackPanel _layer2Panel;
         private readonly StackPanel _specifiedPanel;
         private readonly StackPanel _root;
         private readonly List<string> _groups;
         private readonly List<string> _oneClicks;
-        private readonly List<string> _schedules;
         private bool _initializing = true;
 
         public UIElement Root => _root;
 
         public CompletionActionPanel(TaskConflictPolicy policy, string specifiedType, string specifiedName,
-            List<string> groups, List<string> oneClicks, List<string> schedules, string description)
+            List<string> groups, List<string> oneClicks, string description)
         {
             _groups = groups;
             _oneClicks = oneClicks;
-            _schedules = schedules;
             var gold = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D));
             var dim = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0));
 
@@ -3657,11 +3596,10 @@ public class MainViewModel : INotifyPropertyChanged
             var specifiedRow = new Grid();
             specifiedRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             specifiedRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            _typeCombo = NewDarkCombo(110);
+            _typeCombo = NewDarkCombo(96);
             _typeCombo.Margin = new Thickness(0, 0, 8, 0);
             _typeCombo.Items.Add("配置组");
             _typeCombo.Items.Add("一条龙");
-            _typeCombo.Items.Add("连续一条龙");
             Grid.SetColumn(_typeCombo, 0);
             specifiedRow.Children.Add(_typeCombo);
             _nameCombo = NewDarkCombo();
@@ -3681,7 +3619,7 @@ public class MainViewModel : INotifyPropertyChanged
             // 初始值
             _layer1Combo.SelectedIndex = policy == TaskConflictPolicy.Resume ? 0 : 1;
             _layer2Combo.SelectedIndex = policy == TaskConflictPolicy.RunSpecified ? 1 : 0;
-            _typeCombo.SelectedIndex = specifiedType == "onedragon" ? 1 : specifiedType == "schedule" ? 2 : 0;
+            _typeCombo.SelectedIndex = specifiedType == "onedragon" ? 1 : 0;
             RefreshNameCandidates();
             _nameCombo.Text = specifiedName;
             _layer2Panel.Visibility = _layer1Combo.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
@@ -3710,9 +3648,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         private void RefreshNameCandidates()
         {
-            var candidates = _typeCombo.SelectedIndex == 1 ? _oneClicks
-                : _typeCombo.SelectedIndex == 2 ? _schedules
-                : _groups;
+            var candidates = _typeCombo.SelectedIndex == 1 ? _oneClicks : _groups;
             _nameCombo.Items.Clear();
             foreach (var name in candidates)
                 _nameCombo.Items.Add(name);
@@ -3723,9 +3659,8 @@ public class MainViewModel : INotifyPropertyChanged
             ? TaskConflictPolicy.Resume
             : _layer2Combo.SelectedIndex == 1 ? TaskConflictPolicy.RunSpecified : TaskConflictPolicy.Stop;
 
-        /// <summary>指定任务类型："group"=配置组，"onedragon"=一条龙，"schedule"=连续一条龙（计划表）。</summary>
-        public string SpecifiedType => _typeCombo.SelectedIndex == 1 ? "onedragon"
-            : _typeCombo.SelectedIndex == 2 ? "schedule" : "group";
+        /// <summary>指定任务类型："group"=配置组，"onedragon"=一条龙。</summary>
+        public string SpecifiedType => _typeCombo.SelectedIndex == 1 ? "onedragon" : "group";
 
         /// <summary>指定任务名称（手动输入或候选选择）。</summary>
         public string SpecifiedName => _nameCombo.Text.Trim();
@@ -4123,8 +4058,7 @@ public class MainViewModel : INotifyPropertyChanged
 
             // ===== 任务策略远程互改（task_policy.*，模式复刻 remote_config.*，服务器零改动）=====
             // task_policy.data / task_policy.push_result：转给策略同步会话状态机（按 CommandId 关联 TCS）
-            // [计划表接入] schedule_list.data 同走该状态机（PullScheduleNamesAsync 与 task_policy.pull 共用按 CommandId 关联）
-            if (cmd.Cmd is "task_policy.data" or "task_policy.push_result" or "schedule_list.data")
+            if (cmd.Cmd is "task_policy.data" or "task_policy.push_result")
             {
                 if (_taskPolicySync == null || !_taskPolicySync.TryComplete(cmd.CommandId, cmd))
                 {
@@ -4137,13 +4071,6 @@ public class MainViewModel : INotifyPropertyChanged
             if (cmd.Cmd == "task_policy.pull")
             {
                 await HandleTaskPolicyPullAsync(cmd);
-                return;
-            }
-
-            // [计划表接入] schedule_list.pull：对方请求拉取本机 BGI 计划表名清单 → 回 schedule_list.data
-            if (cmd.Cmd == "schedule_list.pull")
-            {
-                await HandleScheduleListPullAsync(cmd);
                 return;
             }
 
@@ -4202,8 +4129,9 @@ public class MainViewModel : INotifyPropertyChanged
                 {
                     _config.QuickCommands[key] = value;
                     _configManager?.Save(_config);
-                    var (bindKind, displayValue) = ParseQuickBinding(value);
-                    AddLog($"收到绑定 {key}: {(bindKind == "onedragon" ? "一条龙" : bindKind == "schedule" ? "连续一条龙" : "配置组")}「{displayValue}」（来自 {cmd.Sender}）");
+                    var isOneClick = value.StartsWith("ONEDRAGON:");
+                    var displayValue = isOneClick ? value["ONEDRAGON:".Length..] : value["GROUP:".Length..];
+                    AddLog($"收到绑定 {key}: {(isOneClick ? "一条龙" : "配置组")}「{displayValue}」（来自 {cmd.Sender}）");
                     await SendAckAsync(cmd, "success", $"{key} 已绑定: {value}");
                 }
                 else
@@ -4256,9 +4184,9 @@ public class MainViewModel : INotifyPropertyChanged
                 return;
             }
 
-            // 快捷命令：若 Params 带 key，则用 key 查自己绑定的配置组/一条龙/计划表，替换传下来的值
+            // 快捷命令：若 Params 带 key，则用 key 查自己绑定的配置组/一条龙，替换传下来的值
             // 这样每个队友执行的是自己绑定的配置，而不是房主绑定的。
-            if (cmd.Cmd is "start_group" or "start_oneclick" or "start_schedule"
+            if (cmd.Cmd is "start_group" or "start_oneclick"
                 && cmd.Params?.ContainsKey("key") == true
                 && _config != null)
             {
@@ -4273,37 +4201,28 @@ public class MainViewModel : INotifyPropertyChanged
                         AddLog("收到一键锄地，但未绑定联机锄地配置组，跳过");
                         return;
                     }
-                    AddLog($"收到一键锄地，开始执行本地绑定的 {groupNames.Count} 个任务...");
+                    AddLog($"收到一键锄地，开始执行本地绑定的 {groupNames.Count} 个配置组...");
                     // [批次标记] 每次新的一键锄地下发都是新批次：循环开始前重置回退标记，
                     // 避免上一批次 KillBgi+RestartBgi 回退残留的 _hasRestartedThisBatch
                     // 导致本批次所有配置组被误判为"同批次后续组"而跳过 IPC（BGI 侧命令行串行早已结束/被 F11 停止）。
                     // 循环内部不重置：多配置组共用一次回退重启的保护仍有效。
                     _commandExecutor?.ResetBatch();
-                    for (var bi = 0; bi < groupNames.Count; bi++)
+                    foreach (var groupName in groupNames)
                     {
                         if (_commandExecutor == null) break;
-                        var boundName = groupNames[bi];
-                        // [计划表接入] 与 OnAllReadyConfirmedInternal 批次循环同款类型三态（缺类型记录按 group 兼容旧数据）
-                        var boundType = (_config.OnlineHoeingGroupTypes?.Count > bi)
-                            ? _config.OnlineHoeingGroupTypes[bi]
-                            : "group";
-                        var boundCmd = boundType == "schedule" ? "start_schedule"
-                            : boundType == "onedragon" ? "start_oneclick" : "start_group";
-                        var boundParamName = boundType == "schedule" ? "scheduleName"
-                            : boundType == "onedragon" ? "configName" : "groupName";
                         var hoeingCmd = new RemoteCommand
                         {
-                            Cmd = boundCmd,
+                            Cmd = "start_group",
                             Params = new Dictionary<string, object>
                             {
-                                [boundParamName] = boundName,
+                                ["groupName"] = groupName,
                                 ["startFromIndex"] = 0,
                                 ["batchGroupNames"] = string.Join(",", groupNames)
                             }
                         };
                         var result = await _commandExecutor.ExecuteAsync(hoeingCmd);
                         if (result.Status == "cancelled") break;
-                        AddLog($"  - 执行{(boundType == "schedule" ? "连续一条龙" : boundType == "onedragon" ? "一条龙" : "配置组")}「{boundName}」: {result.Status}");
+                        AddLog($"  - 执行配置组「{groupName}」: {result.Status}");
                     }
                     AddLog("一键锄地执行完毕");
                     return;
@@ -4311,25 +4230,10 @@ public class MainViewModel : INotifyPropertyChanged
 
                 if (!string.IsNullOrEmpty(key) && _config.QuickCommands.TryGetValue(key, out var localBinding) && !string.IsNullOrEmpty(localBinding))
                 {
-                    // [计划表接入] 类型三态归一化：本地绑定类型与下发方绑定类型可能不同，
-                    // 必须整体替换 Cmd 与名称参数（否则类型错配时参数名对不上、执行落空）
-                    var (localKind, localValue) = ParseQuickBinding(localBinding);
-                    cmd.Cmd = localKind switch
-                    {
-                        "onedragon" => "start_oneclick",
-                        "schedule" => "start_schedule",
-                        _ => "start_group"
-                    };
-                    cmd.Params.Remove("groupName");
-                    cmd.Params.Remove("configName");
-                    cmd.Params.Remove("scheduleName");
-                    cmd.Params[localKind switch
-                    {
-                        "onedragon" => "configName",
-                        "schedule" => "scheduleName",
-                        _ => "groupName"
-                    }] = localValue;
-                    AddLog($"已替换为本地绑定: {key} → {(localKind == "onedragon" ? "一条龙" : localKind == "schedule" ? "连续一条龙" : "配置组")}「{localValue}」");
+                    var isOneClick = localBinding.StartsWith("ONEDRAGON:");
+                    var localValue = isOneClick ? localBinding["ONEDRAGON:".Length..] : localBinding["GROUP:".Length..];
+                    cmd.Params[isOneClick ? "configName" : "groupName"] = localValue;
+                    AddLog($"已替换为本地绑定: {key} → {(isOneClick ? "一条龙" : "配置组")}「{localValue}」");
                 }
                 else
                 {
@@ -4340,9 +4244,9 @@ public class MainViewModel : INotifyPropertyChanged
 
             if (_commandExecutor != null)
             {
-                // [批次标记] 每次新的远程 start_group/start_oneclick/start_schedule 下发都是新批次：重置回退标记，
+                // [批次标记] 每次新的远程 start_group/start_oneclick 下发都是新批次：重置回退标记，
                 // 避免上一批次回退残留的 _hasRestartedThisBatch 把本次启动吞掉（静默不执行）。
-                if (cmd.Cmd is "start_group" or "start_oneclick" or "start_schedule")
+                if (cmd.Cmd is "start_group" or "start_oneclick")
                 {
                     _commandExecutor.ResetBatch();
                 }
@@ -4478,28 +4382,12 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    private async void OnStartOneClick(object? parameter)
+    private void OnStartOneClick(object? parameter)
     {
         if (parameter is MemberViewModel member)
         {
-            // [计划表接入] 选择列表除一条龙外附带计划表候选（[计划表] 前缀）。
-            // 计划表候选：自己（执行模式）读本机 config.list；遥控器模式/别人按需向对方拉取。
-            var schedules = await GetScheduleNamesForMemberAsync(member);
-            var configs = (member.OneClickConfigs ?? []).Where(o => !string.IsNullOrEmpty(o)).ToList();
-            configs.AddRange(schedules.Select(s => "[计划表] " + s));
-            var configName = ShowConfigSelectionDialog("一条龙", configs, member);
+            var configName = ShowConfigSelectionDialog("一条龙", member.OneClickConfigs, member);
             if (string.IsNullOrEmpty(configName)) return;
-
-            // 选中计划表 = 让目标 BGI 执行连续一条龙（无"从此处开始执行"概念，直接下发）
-            if (configName.StartsWith("[计划表] "))
-            {
-                var scheduleName = configName["[计划表] ".Length..];
-                AddLog($"向 {member.PlayerName} 下发连续一条龙「{scheduleName}」");
-                _ = ExecuteLocalCommandAsync("start_schedule",
-                    new Dictionary<string, object> { { "scheduleName", scheduleName } },
-                    [member.PlayerUid]);
-                return;
-            }
 
             _ = StartOneClickWithTaskListAsync(configName, member);
         }
@@ -4714,7 +4602,7 @@ public class MainViewModel : INotifyPropertyChanged
         {
             // 有本地 BGI：走本地 IPC 执行
             // [批次标记] 每次新的本地下发都是新批次：重置回退标记（同 OnRemoteCommand 接收端）
-            if (cmd is "start_group" or "start_oneclick" or "start_schedule")
+            if (cmd is "start_group" or "start_oneclick")
             {
                 _commandExecutor.ResetBatch();
             }
@@ -4742,13 +4630,12 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>从本机 BGI 或在线成员读配置组与一条龙名称列表（用于一键命令绑定选择）。</summary>
-    private async Task<(List<string> groups, List<string> oneClicks, List<string> schedules)> GetLocalConfigsAsync()
+    private async Task<(List<string> groups, List<string> oneClicks)> GetLocalConfigsAsync()
     {
         List<string> groups = [];
         List<string> oneClicks = [];
-        List<string> schedules = [];
 
-        // 遥控器模式：从在线成员获取配置组/一条龙列表（计划表清单不走状态广播，按需拉取）
+        // 遥控器模式：从在线成员获取配置组/一条龙列表
         if (_config?.ObserverMode == true)
         {
             var target = Members.FirstOrDefault(m => m.PlayerUid == _config.PlayerUid && m.Online
@@ -4757,9 +4644,8 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 groups = target.ConfigGroups?.Where(g => !string.IsNullOrEmpty(g)).ToList() ?? [];
                 oneClicks = target.OneClickConfigs?.Where(o => !string.IsNullOrEmpty(o)).ToList() ?? [];
-                schedules = await PullScheduleNamesFromMemberAsync(_config.PlayerUid) ?? [];
             }
-            return (groups, oneClicks, schedules);
+            return (groups, oneClicks);
         }
 
         try
@@ -4773,78 +4659,13 @@ public class MainViewModel : INotifyPropertyChanged
                     groups = JsonSerializer.Deserialize<List<string>>(g.GetRawText()) ?? [];
                 if (data.TryGetProperty("oneClickConfigs", out var oc) && oc.ValueKind == JsonValueKind.Array)
                     oneClicks = JsonSerializer.Deserialize<List<string>>(oc.GetRawText()) ?? [];
-                // [计划表接入] config.list 新增的 schedules 字段（旧版 BGI 无此字段，解析不到即空列表）
-                if (data.TryGetProperty("schedules", out var sc) && sc.ValueKind == JsonValueKind.Array)
-                    schedules = JsonSerializer.Deserialize<List<string>>(sc.GetRawText()) ?? [];
             }
         }
         catch (Exception ex)
         {
             AddLog($"读取本机配置列表失败: {ex.Message}");
         }
-        return (groups, oneClicks, schedules);
-    }
-
-    /// <summary>
-    /// [计划表接入] 从本机 BGI 枚举计划表名清单（config.list 的 schedules 字段，ext 优先/v2 兜底）。
-    /// BGI 未启动或旧版 BGI 无该字段时返回空列表。
-    /// </summary>
-    private async Task<List<string>> GetLocalScheduleNamesAsync()
-    {
-        try
-        {
-            var response = await SendBgiIpcPreferredAsync("config.list", null);
-            if (response is { Success: true } && !string.IsNullOrEmpty(response.Data))
-            {
-                var data = JsonSerializer.Deserialize<JsonElement>(response.Data);
-                if (data.TryGetProperty("schedules", out var sc) && sc.ValueKind == JsonValueKind.Array)
-                    return JsonSerializer.Deserialize<List<string>>(sc.GetRawText()) ?? [];
-            }
-        }
-        catch
-        {
-            // IPC 不可用时返回空列表
-        }
-        return [];
-    }
-
-    /// <summary>
-    /// [计划表接入] 按需拉取指定成员（UID）的计划表名清单（schedule_list.pull，复用 TaskPolicySyncService 通道）。
-    /// 返回 null = 拉取失败/超时/对方离线。服务端状态模型定型零改动，计划表清单不走状态广播。
-    /// </summary>
-    private async Task<List<string>?> PullScheduleNamesFromMemberAsync(string? targetUid)
-    {
-        if (string.IsNullOrEmpty(targetUid) || _signalRClient is not { IsConnected: true }) return null;
-        return await GetTaskPolicySync().PullScheduleNamesAsync(targetUid);
-    }
-
-    /// <summary>
-    /// [计划表接入] 取某个弹窗目标成员的计划表候选清单：
-    /// 自己（执行模式）= 本机 BGI config.list；遥控器模式自己 / 别人 = 对方在线时按需拉取，拉不到返回空列表。
-    /// </summary>
-    private async Task<List<string>> GetScheduleNamesForMemberAsync(MemberViewModel? targetMember)
-    {
-        var isSelf = targetMember == null || targetMember.PlayerUid == _config?.PlayerUid;
-        if (isSelf && _config?.ObserverMode != true)
-        {
-            return await GetLocalScheduleNamesAsync();
-        }
-        if (isSelf || targetMember?.Online == true)
-        {
-            // 遥控器模式：拉同 UID 的执行端；改别人：拉对方
-            var names = await PullScheduleNamesFromMemberAsync(isSelf ? _config?.PlayerUid : targetMember?.PlayerUid);
-            if (names != null) return names;
-        }
-        return [];
-    }
-
-    /// <summary>[计划表接入] 解析快捷指令绑定值（"GROUP:"/"ONEDRAGON:"/"SCHEDULE:" 前缀；无前缀为旧数据，按配置组处理）。</summary>
-    private static (string Kind, string Value) ParseQuickBinding(string binding)
-    {
-        if (binding.StartsWith("ONEDRAGON:")) return ("onedragon", binding["ONEDRAGON:".Length..]);
-        if (binding.StartsWith("SCHEDULE:")) return ("schedule", binding["SCHEDULE:".Length..]);
-        if (binding.StartsWith("GROUP:")) return ("group", binding["GROUP:".Length..]);
-        return ("group", binding);
+        return (groups, oneClicks);
     }
 
     /// <summary>根据模式应用运行时边界（创建/销毁 BGI 进程监控和命令执行器）。</summary>
@@ -5226,35 +5047,32 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>配置一个一键按钮的绑定（弹窗选配置组、一条龙或计划表）。返回 true 表示绑定成功。
-    /// 绑别人时列表取该成员上报的配置缓存（targetMember.ConfigGroups/OneClickConfigs）+ 按需拉取的计划表清单，
+    /// <summary>配置一个一键按钮的绑定（弹窗选配置组或一条龙）。返回 true 表示绑定成功。
+    /// 绑别人时列表取该成员上报的配置缓存（targetMember.ConfigGroups/OneClickConfigs），
     /// 不用本机列表——各成员的 BGI 配置清单不同，绑错名字对方执行时找不到配置。</summary>
     private async Task<bool> BindQuickCommandAsync(string key, MemberViewModel? targetMember = null)
     {
         if (_config == null || _configManager == null) return false;
         List<string> groups;
         List<string> oneClicks;
-        List<string> schedules;
         var bindingOther = targetMember != null && targetMember.PlayerUid != _config.PlayerUid;
         if (bindingOther)
         {
             // 绑别人：用对方周期上报的配置清单（可能是缓存，BGI 未连时为空或过期）
             groups = (targetMember!.ConfigGroups ?? []).Where(g => !string.IsNullOrEmpty(g)).ToList();
             oneClicks = (targetMember.OneClickConfigs ?? []).Where(o => !string.IsNullOrEmpty(o)).ToList();
-            // [计划表接入] 计划表清单不走状态广播（服务端模型定型零改动），对方在线时按需拉取
-            schedules = await GetScheduleNamesForMemberAsync(targetMember);
-            if (groups.Count == 0 && oneClicks.Count == 0 && schedules.Count == 0)
+            if (groups.Count == 0 && oneClicks.Count == 0)
             {
-                MessageBox.Show($"未获取到 {targetMember.PlayerName} 的配置组/一条龙/计划表列表（对方 BGI 未连接或未上报）");
+                MessageBox.Show($"未获取到 {targetMember.PlayerName} 的配置组/一条龙列表（对方 BGI 未连接或未上报）");
                 return false;
             }
         }
         else
         {
-            (groups, oneClicks, schedules) = await GetLocalConfigsAsync();
-            if (groups.Count == 0 && oneClicks.Count == 0 && schedules.Count == 0)
+            (groups, oneClicks) = await GetLocalConfigsAsync();
+            if (groups.Count == 0 && oneClicks.Count == 0)
             {
-                MessageBox.Show("无法读取本机 BGI 的配置组/一条龙/计划表列表，请确认 BGI 已启动且已同步脚本");
+                MessageBox.Show("无法读取本机 BGI 的配置组/一条龙列表，请确认 BGI 已启动且已同步脚本");
                 return false;
             }
         }
@@ -5262,7 +5080,6 @@ public class MainViewModel : INotifyPropertyChanged
         var names = new List<string>();
         names.AddRange(groups.Select(g => "[配置组] " + g));
         names.AddRange(oneClicks.Select(o => "[一条龙] " + o));
-        names.AddRange(schedules.Select(s => "[计划表] " + s));
 
         var dialog = new Window
         {
@@ -5333,26 +5150,17 @@ public class MainViewModel : INotifyPropertyChanged
 
         if (dialog.ShowDialog() == true && !string.IsNullOrEmpty(selected))
         {
-            // 去掉"[配置组] "/"[一条龙] "/"[计划表] "前缀
+            // 去掉"[配置组] "/"[一条龙] "前缀
             var value = selected.StartsWith("[配置组] ") ? selected["[配置组] ".Length..]
-                        : selected.StartsWith("[一条龙] ") ? selected["[一条龙] ".Length..]
-                        : selected.StartsWith("[计划表] ") ? selected["[计划表] ".Length..] : selected;
-            // [计划表接入] 类型三态：group / onedragon / schedule（绑定值前缀 GROUP:/ONEDRAGON:/SCHEDULE:）
-            var bindKind = selected.StartsWith("[一条龙] ") ? "onedragon"
-                : selected.StartsWith("[计划表] ") ? "schedule" : "group";
-            var bindKindDesc = bindKind == "onedragon" ? "一条龙" : bindKind == "schedule" ? "连续一条龙" : "配置组";
-            var boundValue = bindKind switch
-            {
-                "onedragon" => "ONEDRAGON:",
-                "schedule" => "SCHEDULE:",
-                _ => "GROUP:"
-            } + value;
+                        : selected.StartsWith("[一条龙] ") ? selected["[一条龙] ".Length..] : selected;
+            var isOneClick = selected.StartsWith("[一条龙] ");
             if (targetMember == null || targetMember.PlayerUid == _config?.PlayerUid)
             {
                 // 绑自己：直接保存
+                var boundValue = (isOneClick ? "ONEDRAGON:" : "GROUP:") + value;
                 _config.QuickCommands[key] = boundValue;
                 _configManager.Save(_config);
-                AddLog($"{key} 已绑定: {value} ({bindKindDesc})");
+                AddLog($"{key} 已绑定: {value} ({(isOneClick ? "一条龙" : "配置组")})");
                 // 同步更新 MemberViewModel 的 QuickCommands，使弹窗能立即反映绑定状态
                 if (targetMember != null)
                 {
@@ -5373,7 +5181,7 @@ public class MainViewModel : INotifyPropertyChanged
                         {
                             { "key", key },
                             { "value", boundValue },
-                            { "isOneClick", bindKind == "onedragon" }
+                            { "isOneClick", isOneClick }
                         }
                     };
                     await _signalRClient.SendRemoteCommandAsync(cmd);
@@ -5393,11 +5201,11 @@ public class MainViewModel : INotifyPropertyChanged
                     Params = new Dictionary<string, object>
                     {
                         { "key", key },
-                        { "value", boundValue },
-                        { "isOneClick", bindKind == "onedragon" }
+                        { "value", (isOneClick ? "ONEDRAGON:" : "GROUP:") + value },
+                        { "isOneClick", isOneClick }
                     }
                 };
-                AddLog($"向 {targetMember.PlayerName} 下发绑定 {key}：{bindKindDesc}「{value}」");
+                AddLog($"向 {targetMember.PlayerName} 下发绑定 {key}：{(isOneClick ? "一条龙" : "配置组")}「{value}」");
                 if (_signalRClient != null)
                     await _signalRClient.SendRemoteCommandAsync(cmd);
             }
@@ -5656,20 +5464,8 @@ public class MainViewModel : INotifyPropertyChanged
                     ? (_config?.QuickCommands?.GetValueOrDefault(key) ?? "")
                     : (member.QuickCommands?.GetValueOrDefault(key) ?? "");
                 if (string.IsNullOrEmpty(binding)) continue;
-                // [计划表接入] 类型三态：GROUP:/ONEDRAGON:/SCHEDULE:（无前缀旧数据按配置组处理）
-                var (bindKind, value) = ParseQuickBinding(binding);
-                var startCmd = bindKind switch
-                {
-                    "onedragon" => "start_oneclick",
-                    "schedule" => "start_schedule",
-                    _ => "start_group"
-                };
-                var startParamName = bindKind switch
-                {
-                    "onedragon" => "configName",
-                    "schedule" => "scheduleName",
-                    _ => "groupName"
-                };
+                var isOneClick = binding.StartsWith("ONEDRAGON:");
+                var value = isOneClick ? binding["ONEDRAGON:".Length..] : binding["GROUP:".Length..];
                 if (member.PlayerUid == _config?.PlayerUid)
                 {
                     if (_commandExecutor != null)
@@ -5678,10 +5474,10 @@ public class MainViewModel : INotifyPropertyChanged
                         _commandExecutor.ResetBatch();
                         var localCmd = new RemoteCommand
                         {
-                            Cmd = startCmd,
+                            Cmd = isOneClick ? "start_oneclick" : "start_group",
                             Params = new Dictionary<string, object>
                             {
-                                [startParamName] = value,
+                                [isOneClick ? "configName" : "groupName"] = value,
                                 ["startFromIndex"] = 0
                             }
                         };
@@ -5690,12 +5486,12 @@ public class MainViewModel : INotifyPropertyChanged
                     else
                     {
                         // 遥控器模式：无本地 BGI，发给同 UID 的执行端
-                        await SendQuickStartAsync(key, bindKind, value, [member.PlayerUid]);
+                        await SendQuickStartAsync(key, isOneClick, value, [member.PlayerUid]);
                     }
                 }
                 else
                 {
-                    await SendQuickStartAsync(key, bindKind, value, [member.PlayerUid]);
+                    await SendQuickStartAsync(key, isOneClick, value, [member.PlayerUid]);
                 }
             }
         };
@@ -5706,30 +5502,20 @@ public class MainViewModel : INotifyPropertyChanged
         AddLog($"分成员绑定执行完成");
     }
 
-    /// <summary>给选定的在线成员下发执行本机绑定的配置组/一条龙/计划表（kind: group/onedragon/schedule）。</summary>
-    private async Task SendQuickStartAsync(string key, string bindKind, string value, List<string> targets)
+    /// <summary>给选定的在线成员下发执行本机绑定的配置组/一条龙。</summary>
+    private async Task SendQuickStartAsync(string key, bool isOneClick, string value, List<string> targets)
     {
         if (_signalRClient == null) return;
         var remoteCmd = new RemoteCommand
         {
-            Cmd = bindKind switch
-            {
-                "onedragon" => "start_oneclick",
-                "schedule" => "start_schedule",
-                _ => "start_group"
-            },
+            Cmd = isOneClick ? "start_oneclick" : "start_group",
             Sender = _config!.PlayerName,
             SenderUid = _config.PlayerUid,
             Target = targets,
             CommandId = key + "_" + DateTime.Now.Ticks,
             Params = new Dictionary<string, object>
             {
-                [bindKind switch
-                {
-                    "onedragon" => "configName",
-                    "schedule" => "scheduleName",
-                    _ => "groupName"
-                }] = value,
+                [isOneClick ? "configName" : "groupName"] = value,
                 ["startFromIndex"] = 0,
                 ["key"] = key  // 新增：传入命令类型名，供队友查自己的绑定
             }
@@ -6446,15 +6232,13 @@ public class MainViewModel : INotifyPropertyChanged
                     var groupType = (_config?.OnlineHoeingGroupTypes?.Count > i)
                         ? _config.OnlineHoeingGroupTypes[i]
                         : "group";
-                    // [计划表接入] 类型三态：group=配置组 / onedragon=一条龙 / schedule=计划表（连续一条龙）
                     var isOneClick = groupType == "onedragon";
-                    var isSchedule = groupType == "schedule";
                     var startCmd = new RemoteCommand
                     {
-                        Cmd = isSchedule ? "start_schedule" : isOneClick ? "start_oneclick" : "start_group",
+                        Cmd = isOneClick ? "start_oneclick" : "start_group",
                         Params = new Dictionary<string, object>
                         {
-                            { isSchedule ? "scheduleName" : isOneClick ? "configName" : "groupName", currentGroup },
+                            { isOneClick ? "configName" : "groupName", currentGroup },
                             { "startFromIndex", 0 },
                             { "generation", generation },
                             { "batchGroupNames", string.Join(",", groupNames) }
@@ -6473,7 +6257,7 @@ public class MainViewModel : INotifyPropertyChanged
                     }
                     if (startResult.Status != "success")
                     {
-                        AddLog($"启动任务 \"{currentGroup}\" 失败，跳过");
+                        AddLog($"启动配置组 \"{currentGroup}\" 失败，跳过");
                         continue;
                     }
                     if (_isAllReadySequenceCancelled)

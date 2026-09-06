@@ -558,8 +558,6 @@ internal sealed class InstanceRequestHandler
         {
             var groupName = request.Data?["groupName"]?.ToString();
             var configName = request.Data?["configName"]?.ToString();
-            // [计划表接入] 可选计划表名：指定时启动连续一条龙（与 groupName/configName 互斥）
-            var scheduleName = request.Data?["scheduleName"]?.ToString();
             var startFromIndex = request.Data?["startFromIndex"]?.ToObject<int>() ?? 0;
             // 幂等保护：task.start 携带 generation 时，同一 generation 只执行一次
             var generation = request.Data?["generation"]?.ToObject<int>() ?? 0;
@@ -568,7 +566,7 @@ internal sealed class InstanceRequestHandler
             // 注意：允许同一 generation 执行不同配置组（OnAllReady 依次执行多个配置组的场景）
             // [切片7] 去重状态查询 BgiTaskCoordinator（_lastExecutedTask 迁入，单一事实源）
             var lastExecuted = BgiTaskCoordinator.Instance.LastExecutedTask;
-            var taskName = groupName ?? configName ?? scheduleName;
+            var taskName = groupName ?? configName;
             if (generation > 0
                 && generation == lastExecuted.Generation
                 && taskName == lastExecuted.Name)
@@ -600,13 +598,13 @@ internal sealed class InstanceRequestHandler
 
             // [切片7] 执行段已抽为 ExecuteTaskStartCoreAsync：v2 handler 与 BgiTaskCoordinator
             // 共用单一事实源，行为逐字节等价。返回 true = 配置组在 RunMulti 执行中被取消（F11 停止等）。
-            var configGroupCancelled = await ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, scheduleName);
+            var configGroupCancelled = await ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex);
 
             if (configGroupCancelled)
             {
                 return InstanceIpcEnvelope.Response(request, new { status = "cancelled", message = "配置组 " + groupName + " 执行中被取消", groupName, configName, startFromIndex });
             }
-            return InstanceIpcEnvelope.Response(request, new { status = "started", groupName, configName, startFromIndex, scheduleName });
+            return InstanceIpcEnvelope.Response(request, new { status = "started", groupName, configName, startFromIndex });
         }
         catch (Exception ex)
         {
@@ -626,8 +624,7 @@ internal sealed class InstanceRequestHandler
         BetterGenshinImpact.Service.Interface.IScriptService scriptService,
         string? groupName,
         string? configName,
-        int startFromIndex,
-        string? scheduleName = null)
+        int startFromIndex)
     {
         // 标记配置组是否在 RunMulti 执行中被取消（F11 停止等），末尾据此返回 cancelled 状态
         var configGroupCancelled = false;
@@ -769,40 +766,6 @@ internal sealed class InstanceRequestHandler
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "HandleTaskStart: 启动一条龙失败");
-                    }
-                }).Task;
-            }
-            else if (!string.IsNullOrEmpty(scheduleName))
-            {
-                // [计划表接入] 启动连续一条龙：复用命令行 startContinuousOneDragon 的既有路径
-                // （切 SelectedOneDragonFlowPlanName → RefreshFilteredConfigList → OnOneKeyContinuousExecutionOneKey），
-                // 不自造调度。同步等待执行完（与配置组/一条龙分支一致，调用方按批次串行依赖此语义）。
-                await Application.Current!.Dispatcher.InvokeAsync(async () =>
-                {
-                    try
-                    {
-                        var vm = App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.OneDragonFlowViewModel>();
-                        if (vm != null)
-                        {
-                            // 强制初始化：加载配置列表并同步 ScheduleList（含 OneDragon 配置单里未登记的计划表名）
-                            vm.InitConfigList();
-                            if (!vm.Config.ScheduleList.Contains(scheduleName))
-                            {
-                                _logger.LogWarning("HandleTaskStart: 计划表 {Schedule} 不存在", scheduleName);
-                                return;
-                            }
-                            vm.Config.SelectedOneDragonFlowPlanName = scheduleName;
-                            vm.RefreshFilteredConfigList();
-                            await vm.OnOneKeyContinuousExecutionOneKey();
-                        }
-                        else
-                        {
-                            _logger.LogWarning("HandleTaskStart: OneDragonFlowViewModel 不可用");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "HandleTaskStart: 启动连续一条龙失败");
                     }
                 }).Task;
             }
@@ -990,8 +953,6 @@ internal sealed class InstanceRequestHandler
             var oneClickConfigNames = new List<string>();
             var oneClickTasks = new Dictionary<string, List<string>>();
             var oneClickTasksWithStatus = new Dictionary<string, List<object>>();
-            // [计划表接入] 计划表名集合：AllConfig.ScheduleList 为准，合并配置单里出现但未登记的 ScheduleName
-            var scheduleNameSet = new HashSet<string>();
             if (Directory.Exists(oneDragonPath))
             {
                 foreach (var file in Directory.GetFiles(oneDragonPath, "*.json"))
@@ -1005,14 +966,6 @@ internal sealed class InstanceRequestHandler
                         var json = File.ReadAllText(file);
                         using var doc = System.Text.Json.JsonDocument.Parse(json);
                         var root = doc.RootElement;
-                        // 收集该配置单所属计划表名（Newtonsoft 序列化为 PascalCase，兼容 camelCase）
-                        var scheduleOfConfig = root.TryGetProperty("ScheduleName", out var snEl)
-                            || root.TryGetProperty("scheduleName", out snEl)
-                            ? snEl.GetString() : null;
-                        if (!string.IsNullOrWhiteSpace(scheduleOfConfig))
-                        {
-                            scheduleNameSet.Add(scheduleOfConfig);
-                        }
                         var tasks = new List<string>();
                         var tasksWithStatus = new List<object>();
                         if (root.TryGetProperty("taskEnabledList", out var taskList)
@@ -1066,27 +1019,6 @@ internal sealed class InstanceRequestHandler
                 // 快捷键读取失败不影响其他功能
             }
 
-            // [计划表接入] 合并 AllConfig.ScheduleList（计划表管理界面登记的权威清单）进集合
-            try
-            {
-                var scheduleList = BetterGenshinImpact.GameTask.TaskContext.Instance().Config.ScheduleList;
-                if (scheduleList != null)
-                {
-                    foreach (var s in scheduleList)
-                    {
-                        if (!string.IsNullOrWhiteSpace(s))
-                        {
-                            scheduleNameSet.Add(s);
-                        }
-                    }
-                }
-            }
-            catch
-            {
-                // 全局配置读取失败时仅使用配置单里收集到的计划表名
-            }
-            var scheduleNames = scheduleNameSet.OrderBy(x => x).ToList();
-
             return InstanceIpcEnvelope.Response(request, new
             {
                 configGroups = configGroupNames,
@@ -1095,7 +1027,6 @@ internal sealed class InstanceRequestHandler
                 oneClickConfigs = oneClickConfigNames,
                 oneClickTasks,
                 oneClickTasksWithStatus,
-                schedules = scheduleNames,
                 hotkeys
             });
         }

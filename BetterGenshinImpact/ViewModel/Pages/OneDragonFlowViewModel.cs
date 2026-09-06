@@ -1963,7 +1963,7 @@ public partial class OneDragonFlowViewModel : ViewModel
     private bool _finishMark = false;
     private bool _nextModel =false;
     [RelayCommand]
-    internal async Task OnOneKeyContinuousExecutionOneKey()
+    private async Task OnOneKeyContinuousExecutionOneKey()
     {
         await ScriptService.StartGameTask();
         

@@ -26,7 +26,7 @@ public class AssistConfig
     [JsonPropertyName("disclaimerAccepted")]
     public bool DisclaimerAccepted { get; set; }
 
-    /// <summary>一键快捷命令绑定：命令名 → 带类型前缀的目标名（"GROUP:配置组" / "ONEDRAGON:一条龙" / "SCHEDULE:计划表（连续一条龙）"）</summary>
+    /// <summary>一键快捷命令绑定：命令名 → 配置组名/一条龙名</summary>
     [JsonPropertyName("quickCommands")]
     public Dictionary<string, string> QuickCommands { get; set; } = new()
     {
@@ -69,7 +69,7 @@ public class AssistConfig
     [JsonPropertyName("onlineHoeingGroupNames")]
     public List<string> OnlineHoeingGroupNames { get; set; } = [];
 
-    /// <summary>联机锄地配置组类型列表（与 OnlineHoeingGroupNames 一一对应，每项为 "group"、"onedragon" 或 "schedule"（计划表/连续一条龙））。</summary>
+    /// <summary>联机锄地配置组类型列表（与 OnlineHoeingGroupNames 一一对应，每项为 "group" 或 "onedragon"）。</summary>
     [JsonPropertyName("onlineHoeingGroupTypes")]
     public List<string> OnlineHoeingGroupTypes { get; set; } = [];
 
@@ -96,7 +96,7 @@ public class AssistConfig
     [JsonPropertyName("onlineHoeingCompletionPolicy")]
     public string OnlineHoeingCompletionPolicy { get; set; } = "resume";
 
-    /// <summary>上线锄地指定任务类型（"group"=配置组 / "onedragon"=一条龙 / "schedule"=连续一条龙计划表），仅 "runSpecified" 使用。</summary>
+    /// <summary>上线锄地指定任务类型（"group"=配置组 / "onedragon"=一条龙），仅 "runSpecified" 使用。</summary>
     [JsonPropertyName("onlineHoeingSpecifiedTaskType")]
     public string OnlineHoeingSpecifiedTaskType { get; set; } = "group";
 

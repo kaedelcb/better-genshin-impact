@@ -25,7 +25,7 @@ public class TaskConflictPolicySettings
     /// <summary>冲突策略（默认 Stop，与按键任务策略默认值一致）。</summary>
     public TaskConflictPolicy Policy { get; set; } = TaskConflictPolicy.Stop;
 
-    /// <summary>指定任务类型："group"=配置组，"onedragon"=一条龙，"schedule"=连续一条龙（计划表）。仅 RunSpecified 策略使用。</summary>
+    /// <summary>指定任务类型："group"=配置组，"onedragon"=一条龙。仅 RunSpecified 策略使用。</summary>
     public string SpecifiedTaskType { get; set; } = "group";
 
     /// <summary>指定任务名称。仅 RunSpecified 策略使用；执行时校验存在性，不存在则日志报错退化为停止。</summary>
