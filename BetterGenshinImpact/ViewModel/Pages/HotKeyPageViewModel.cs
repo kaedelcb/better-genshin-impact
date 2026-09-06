@@ -337,7 +337,12 @@ public partial class HotKeyPageViewModel : ObservableObject, IViewModel
             nameof(Config.HotKeyConfig.BgiEnabledHotkey),
             Config.HotKeyConfig.BgiEnabledHotkey,
             Config.HotKeyConfig.BgiEnabledHotkeyType,
-            (_, _) => { WeakReferenceMessenger.Default.Send(new PropertyChangedMessage<object>(this, "SwitchTriggerStatus", "", "")); }
+            (_, _) =>
+            {
+                // 与 CancelTaskHotkey 对齐的可见日志：用于区分"快捷键没注册上"与"按下了但没停止"
+                _logger.LogInformation("检测到您配置的启动停止快捷键{Key}按下，切换 BetterGI 触发状态", Config.HotKeyConfig.BgiEnabledHotkey);
+                WeakReferenceMessenger.Default.Send(new PropertyChangedMessage<object>(this, "SwitchTriggerStatus", "", ""));
+            }
         );
         HotKeySettingModels.Add(bgiEnabledHotKeySettingModel);
 

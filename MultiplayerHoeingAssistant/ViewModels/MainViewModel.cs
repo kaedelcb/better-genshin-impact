@@ -3854,6 +3854,11 @@ public class MainViewModel : INotifyPropertyChanged
                         return;
                     }
                     AddLog($"收到一键锄地，开始执行本地绑定的 {groupNames.Count} 个配置组...");
+                    // [批次标记] 每次新的一键锄地下发都是新批次：循环开始前重置回退标记，
+                    // 避免上一批次 KillBgi+RestartBgi 回退残留的 _hasRestartedThisBatch
+                    // 导致本批次所有配置组被误判为"同批次后续组"而跳过 IPC（BGI 侧命令行串行早已结束/被 F11 停止）。
+                    // 循环内部不重置：多配置组共用一次回退重启的保护仍有效。
+                    _commandExecutor?.ResetBatch();
                     foreach (var groupName in groupNames)
                     {
                         if (_commandExecutor == null) break;
@@ -3891,6 +3896,12 @@ public class MainViewModel : INotifyPropertyChanged
 
             if (_commandExecutor != null)
             {
+                // [批次标记] 每次新的远程 start_group/start_oneclick 下发都是新批次：重置回退标记，
+                // 避免上一批次回退残留的 _hasRestartedThisBatch 把本次启动吞掉（静默不执行）。
+                if (cmd.Cmd is "start_group" or "start_oneclick")
+                {
+                    _commandExecutor.ResetBatch();
+                }
                 var result = await _commandExecutor.ExecuteAsync(cmd);
                 await SendAckAsync(cmd, result.Status, result.Message);
             }
@@ -4242,6 +4253,11 @@ public class MainViewModel : INotifyPropertyChanged
         if (selfTargeted)
         {
             // 有本地 BGI：走本地 IPC 执行
+            // [批次标记] 每次新的本地下发都是新批次：重置回退标记（同 OnRemoteCommand 接收端）
+            if (cmd is "start_group" or "start_oneclick")
+            {
+                _commandExecutor.ResetBatch();
+            }
             var result = await _commandExecutor.ExecuteAsync(NewCmd([selfUid]));
             AddLog($"命令结果: {result.Message}");
         }
@@ -5065,6 +5081,8 @@ public class MainViewModel : INotifyPropertyChanged
                 {
                     if (_commandExecutor != null)
                     {
+                        // [批次标记] 每次新的弹窗确认下发都是新批次：重置回退标记（同 OnRemoteCommand 接收端）
+                        _commandExecutor.ResetBatch();
                         var localCmd = new RemoteCommand
                         {
                             Cmd = isOneClick ? "start_oneclick" : "start_group",

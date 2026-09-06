@@ -15,7 +15,9 @@ public class CommandExecutor
     /// <summary>本批次是否已通过 RestartBgi 回退重启过 BGI（批次级状态，由上游批次循环管理生命周期）。</summary>
     private bool _hasRestartedThisBatch;
 
-    /// <summary>重置批次状态。由上游批次循环（如 OnAllReadyConfirmedInternal）在新的一批开始时调用。</summary>
+    /// <summary>重置批次状态。由上游在新的一批开始时调用：批次循环（如 OnAllReadyConfirmedInternal）、
+    /// 以及每次新的用户下发边界（OnRemoteCommand 接收端 / ExecuteLocalCommandAsync 本机执行 / 快捷指令弹窗本机执行）。
+    /// 注意：批次循环内部（多配置组依次执行）不得调用，否则会破坏"同批次只回退重启一次"的保护。</summary>
     public void ResetBatch()
     {
         _hasRestartedThisBatch = false;
