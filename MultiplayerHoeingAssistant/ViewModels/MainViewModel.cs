@@ -4101,10 +4101,8 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 if (_remoteConfigEditService == null || !_remoteConfigEditService.TryComplete(cmd.CommandId, cmd))
                 {
-                    // 超时后迟到/重复回复/同 UID 双实例下非发起实例收到的双投副本：属正常竞态，
-                    // 不刷用户可见日志，仅留 Debug 输出便于排查（不影响主流程）
-                    System.Diagnostics.Debug.WriteLine(
-                        $"[RemoteCommand] 迟到或无法关联的远程配置回复（{cmd.Cmd}，CommandId={cmd.CommandId}，来自 {cmd.Sender}），已忽略");
+                    // 超时后迟到/重复回复/无进行中会话：记一行日志便于排查（不影响主流程）
+                    AddLog($"收到迟到或无法关联的远程配置回复（{cmd.Cmd}，CommandId={cmd.CommandId}，来自 {cmd.Sender}），已忽略");
                 }
                 return;
             }
@@ -4123,17 +4121,14 @@ public class MainViewModel : INotifyPropertyChanged
                 return;
             }
 
-            // ===== 任务策略远程互改（task_policy.*，模式复刻 remote_config.*）=====
+            // ===== 任务策略远程互改（task_policy.*，模式复刻 remote_config.*，服务器零改动）=====
             // task_policy.data / task_policy.push_result：转给策略同步会话状态机（按 CommandId 关联 TCS）
             // [计划表接入] schedule_list.data 同走该状态机（PullScheduleNamesAsync 与 task_policy.pull 共用按 CommandId 关联）
             if (cmd.Cmd is "task_policy.data" or "task_policy.push_result" or "schedule_list.data")
             {
                 if (_taskPolicySync == null || !_taskPolicySync.TryComplete(cmd.CommandId, cmd))
                 {
-                    // 超时后迟到/重复回复/同 UID 双实例下非发起实例收到的双投副本：属正常竞态，
-                    // 不刷用户可见日志，仅留 Debug 输出便于排查
-                    System.Diagnostics.Debug.WriteLine(
-                        $"[RemoteCommand] 迟到或无法关联的任务策略回复（{cmd.Cmd}，CommandId={cmd.CommandId}，来自 {cmd.Sender}），已忽略");
+                    AddLog($"收到迟到或无法关联的任务策略回复（{cmd.Cmd}，CommandId={cmd.CommandId}，来自 {cmd.Sender}），已忽略");
                 }
                 return;
             }

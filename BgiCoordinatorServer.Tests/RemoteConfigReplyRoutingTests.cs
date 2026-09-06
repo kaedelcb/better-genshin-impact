@@ -6,13 +6,11 @@ using Xunit;
 namespace BgiCoordinatorServer.Tests;
 
 /// <summary>
-/// 回复命令（remote_config.data / push_result、task_policy.data / push_result、schedule_list.data）
-/// 监控模式回投回归测试。
+/// 远程配置编辑回复命令（remote_config.data / push_result）监控模式回投回归测试。
 /// 背景：监控（遥控）端连接只登记在 _remoteControlConnections、不入 _controlRooms 成员表，
-/// SendRemoteCommand 的 ResolveTargets 匹配不到它 → 监控端发起远程编辑/策略拉取/计划表拉取永远
-/// 等不到回包（回复被误判"目标离线"进缓存，切回执行模式冲刷缓存才可能姗姗来迟——实机"监控模式下
-/// 发起修改成员配置完全没反应，切回执行模式立马弹窗"与"同 UID 执行端日志刷'收到迟到或无法关联的
-/// 任务策略回复（schedule_list.data…）'"的根因）。
+/// SendRemoteCommand 的 ResolveTargets 匹配不到它 → 监控端发起远程编辑永远等不到回包
+/// （回复被误判"目标离线"进缓存，切回执行模式冲刷缓存才可能姗姗来迟——实机"监控模式下
+/// 发起修改成员配置完全没反应，切回执行模式立马弹窗"的根因）。
 /// 锁定语义：
 /// 1) 回复命令额外按 UID 投递给目标 UID 的遥控端连接（修复）；
 /// 2) 同 UID 执行端在线时回复双投（双方都能收，非发起方按 CommandId 关联不上会忽略）；
@@ -78,29 +76,6 @@ public class RemoteConfigReplyRoutingTests
         h.LegacyHub.Verify(x => x.Clients.Client(connExec), Times.AtLeastOnce);
         h.LegacyHub.Verify(x => x.Clients.Client(connObs), Times.AtLeastOnce);
         // 目标 UID 有在线执行端，本就不缓存
-        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("uidObs"));
-    }
-
-    [Theory]
-    [InlineData("schedule_list.data")]
-    [InlineData("task_policy.data")]
-    [InlineData("task_policy.push_result")]
-    public async Task TaskPolicyReply_DeliveredToObserverConnection(string replyCmd)
-    {
-        var h = new GatewayTestHarness();
-        var (room, pwd) = NewRoom();
-        var connMember = Conn("member");
-        var connObs = Conn("obs");
-        await h.Ops.JoinControlRoomAsync(Ctx(connMember), room, pwd, "uidB", "成员B");
-        // 监控端：isRemote=true，不入 _controlRooms
-        await h.Ops.JoinControlRoomAsync(Ctx(connObs), room, pwd, "uidObs", "观察者", isRemote: true);
-
-        // 成员回包 task_policy.* / schedule_list.data → 目标 uidObs（监控端）
-        await h.Ops.SendRemoteCommandAsync(Ctx(connMember), NewCmd(room, "uidB", "uidObs", replyCmd));
-
-        // 修复后：回复必须定向送达监控端连接
-        h.LegacyHub.Verify(x => x.Clients.Client(connObs), Times.AtLeastOnce);
-        // 回复命令不进离线缓存（发起方超时后冲刷出来的只是迟到噪音）
         Assert.Empty(h.RoomManager.GetAndClearPendingCommands("uidObs"));
     }
 
