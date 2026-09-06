@@ -137,6 +137,10 @@ public class CommandExecutor
                         GetStringParam(command.Params, "configName") ?? "",
                         GetIntParam(command.Params, "startFromIndex") ?? 0,
                         GetIntParam(command.Params, "generation") ?? 0);
+                case "start_schedule":
+                    return await StartScheduleAsync(
+                        GetStringParam(command.Params, "scheduleName") ?? "",
+                        GetIntParam(command.Params, "generation") ?? 0);
                 case "hotkey_execute":
                     return await ExecuteHotkeyWithKeyPolicyAsync(
                         GetStringParam(command.Params, "hotkeyConfigName") ?? "");
@@ -476,6 +480,31 @@ public class CommandExecutor
         await Task.Delay(2000);
         _monitor.RestartBgi($"--startOneDragon \"{configName}\"");
         return new CommandResult { Status = "success", Message = $"一条龙 {configName} 已通过重启启动" };
+    }
+
+    /// <summary>
+    /// [计划表接入] 启动连续一条龙：通过 v2 IPC 发 task.start {scheduleName, generation}。
+    /// 与 StartOneClickAsync 的差异：
+    /// 1. 只走 v2 短连接——BGI 侧 scheduleName 参数仅在 v2 HandleTaskStart 实现（最小扩展），
+    ///    ext 任务队列通道不认识 scheduleName，走 ext 会被静默忽略，故本路径强制 v2（抢占闭环本就强制 v2）。
+    /// 2. 无 KillBgi+RestartBgi 回退——计划表为茶包版扩展，IPC 不通时直接失败报错，避免误杀进程；
+    ///    响应里带 scheduleName 回显才算被 BGI 识别（旧版 BGI 无此扩展会把 scheduleName 吞掉、空跑返回 started，
+    ///    必须靠回显检测并明确报错）。
+    /// </summary>
+    private async Task<CommandResult> StartScheduleAsync(string scheduleName, int generation = 0)
+    {
+        if (string.IsNullOrEmpty(scheduleName))
+        {
+            return new CommandResult { Status = "failed", Message = "start_schedule 缺少 scheduleName 参数" };
+        }
+
+        // [任务策略] 按键门控（同 StartOneClickAsync，固定行为：忙时 suspend 抢占 + 执行完停止）
+        if (await ShouldPreemptKeyPressAsync($"连续一条龙「{scheduleName}」"))
+        {
+            return await StartWithPreemptionAsync(FixedKeyPolicy, null, null, 0, generation, scheduleName);
+        }
+
+        return await StartViaV2IpcNoKillAsync(null, null, 0, generation, scheduleName);
     }
 
     /// <summary>
@@ -981,9 +1010,12 @@ public class CommandExecutor
     /// 绝不走 KillBgi 回退（按键路径不杀进程）。
     /// </summary>
     private async Task<CommandResult> StartWithPreemptionAsync(
-        TaskConflictPolicySettings policy, string? groupName, string? configName, int startFromIndex, int generation)
+        TaskConflictPolicySettings policy, string? groupName, string? configName, int startFromIndex, int generation,
+        string? scheduleName = null)
     {
-        var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
+        var desc = groupName != null ? $"配置组「{groupName}」"
+            : scheduleName != null ? $"连续一条龙「{scheduleName}」"
+            : $"一条龙「{configName}」";
         Log($"[任务冲突策略] 本机任务运行中，按键启动 {desc} 按策略（{policy.PolicyDisplayName}）抢占：先中断当前任务");
 
         // 1. suspend（跨会话守卫阻断/失败 → 直接失败返回，不杀进程）
@@ -998,7 +1030,7 @@ public class CommandExecutor
         await WaitTaskSlotSettledAsync("[任务冲突策略]", _log);
 
         // 3. v2 IPC task.start（抢占路径强制 v2，跳过 ext 队列；传输失败不杀进程）
-        var startResult = await StartViaV2IpcNoKillAsync(groupName, configName, startFromIndex, generation);
+        var startResult = await StartViaV2IpcNoKillAsync(groupName, configName, startFromIndex, generation, scheduleName);
 
         // 4. 策略收尾（F11 取消永远压过配置策略）
         await ApplyPolicyTeardownAsync(policy, desc, startResult.Status == "cancelled");
@@ -1010,16 +1042,21 @@ public class CommandExecutor
     /// [任务冲突策略] v2 IPC task.start（无杀进程回退版）：抢占闭环与指定任务启动共用。
     /// 保留 1s×6 task_already_running 无损拒绝重试；业务拒绝/传输异常均直接失败返回，绝不 KillBgi。
     /// </summary>
-    private async Task<CommandResult> StartViaV2IpcNoKillAsync(string? groupName, string? configName, int startFromIndex, int generation)
+    private async Task<CommandResult> StartViaV2IpcNoKillAsync(string? groupName, string? configName, int startFromIndex, int generation,
+        string? scheduleName = null)
     {
-        var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
+        var desc = groupName != null ? $"配置组「{groupName}」"
+            : scheduleName != null ? $"连续一条龙「{scheduleName}」"
+            : $"一条龙「{configName}」";
         try
         {
             using var ipcClient = new IpcClient();
             await ipcClient.ConnectAsync(3000);
             var blocked = CheckCrossSessionBlock(ipcClient, $"task.start {desc}");
             if (blocked != null) return blocked;
-            var payload = groupName != null
+            var payload = scheduleName != null
+                ? System.Text.Json.JsonSerializer.Serialize(new { scheduleName, generation })
+                : groupName != null
                 ? System.Text.Json.JsonSerializer.Serialize(new { groupName, startFromIndex, generation })
                 : System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
@@ -1043,11 +1080,29 @@ public class CommandExecutor
                         {
                             return new CommandResult { Status = "cancelled", Message = $"{desc} 执行中被取消" };
                         }
+                        // 幂等命中（同 generation+name 已执行过）：BGI 已执行过该批次，按成功处理（无 scheduleName 回显属正常）
+                        if (bgiStatus == "already_executed")
+                        {
+                            return new CommandResult { Status = "success", Message = $"{desc} 已执行过（幂等跳过）" };
+                        }
+                        // [计划表接入] 旧版 BGI 不支持 scheduleName 参数：会静默吞掉并空跑返回 started，
+                        // 必须校验响应里的 scheduleName 回显，缺失即明确报错（避免"看似成功实则没执行"）
+                        if (scheduleName != null
+                            && (!respData.TryGetProperty("scheduleName", out var snEl)
+                                || snEl.GetString() != scheduleName))
+                        {
+                            return new CommandResult { Status = "failed", Message = $"BGI 未识别计划表参数（可能为旧版本 BGI，请升级），连续一条龙「{scheduleName}」未启动" };
+                        }
                     }
                     catch
                     {
                         // Data 解析失败不影响，默认走 success 分支
                     }
+                }
+                else if (scheduleName != null)
+                {
+                    // 成功但无 Data（旧版 BGI 无回显）：同上按未支持处理
+                    return new CommandResult { Status = "failed", Message = $"BGI 未识别计划表参数（可能为旧版本 BGI，请升级），连续一条龙「{scheduleName}」未启动" };
                 }
                 return new CommandResult { Status = "success", Message = $"{desc} 已启动" };
             }
@@ -1128,7 +1183,8 @@ public class CommandExecutor
     private async Task StartSpecifiedTaskAsync(TaskConflictPolicySettings policy, Action<string>? log)
     {
         var isOneDragon = policy.SpecifiedTaskType == "onedragon";
-        var typeDesc = isOneDragon ? "一条龙" : "配置组";
+        var isSchedule = policy.SpecifiedTaskType == "schedule";
+        var typeDesc = isSchedule ? "连续一条龙" : isOneDragon ? "一条龙" : "配置组";
         var name = policy.SpecifiedTaskName;
 
         // 执行时校验存在性（设置里是自由文本输入，可能填错或 BGI 侧已删除）
@@ -1138,7 +1194,7 @@ public class CommandExecutor
             if (listResp is { Success: true } && !string.IsNullOrEmpty(listResp.Data))
             {
                 var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(listResp.Data);
-                var listKey = isOneDragon ? "oneClickConfigs" : "configGroups";
+                var listKey = isSchedule ? "schedules" : isOneDragon ? "oneClickConfigs" : "configGroups";
                 var exists = data.TryGetProperty(listKey, out var arr)
                     && arr.ValueKind == System.Text.Json.JsonValueKind.Array
                     && arr.EnumerateArray().Any(e => e.ValueKind == System.Text.Json.JsonValueKind.String && e.GetString() == name);
@@ -1161,7 +1217,9 @@ public class CommandExecutor
         }
 
         log?.Invoke($"[任务冲突策略] 按策略启动指定{typeDesc}「{name}」");
-        var startResult = await StartViaV2IpcNoKillAsync(isOneDragon ? null : name, isOneDragon ? name : null, 0, 0);
+        var startResult = isSchedule
+            ? await StartViaV2IpcNoKillAsync(null, null, 0, 0, name)
+            : await StartViaV2IpcNoKillAsync(isOneDragon ? null : name, isOneDragon ? name : null, 0, 0);
         log?.Invoke($"[任务冲突策略] 指定{typeDesc}「{name}」: {startResult.Message}");
     }
 }

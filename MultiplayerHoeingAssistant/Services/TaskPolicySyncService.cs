@@ -73,6 +73,30 @@ public class TaskPolicySyncService
     }
 
     /// <summary>
+    /// [计划表接入] 拉取对方 BGI 的计划表名清单（schedule_list.pull → schedule_list.data，
+    /// Params.names 为 JSON 数组字符串；模式复用 task_policy.pull 的按 CommandId 关联等待，服务器零改动）。
+    /// 返回 null = 超时/发送失败/对方应答失败；否则为对方回传的计划表名列表（可能为空）。
+    /// 服务端状态模型定型（ControlStatus 无计划表字段且不允许改服务端），成员间计划表清单只能按需拉取。
+    /// </summary>
+    public async Task<List<string>?> PullScheduleNamesAsync(string targetUid)
+    {
+        var pull = NewCommand("schedule_list.pull", targetUid, new Dictionary<string, object>());
+        var (reply, sent) = await SendAndWaitReplyAsync(pull, PullTimeout);
+        if (!sent || reply == null) return null;
+        if (GetStringParam(reply.Params, "ok") != "true") return null;
+        var namesJson = GetStringParam(reply.Params, "names");
+        if (string.IsNullOrEmpty(namesJson)) return [];
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<List<string>>(namesJson) ?? [];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// 回传编辑后的任务策略配置给对方应用。返回 null = 超时/发送失败；
     /// 否则为对方应用结果（ok/message）。
     /// </summary>
