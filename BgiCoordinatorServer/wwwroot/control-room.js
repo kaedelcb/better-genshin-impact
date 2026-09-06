@@ -1,4 +1,9 @@
 // ========== 联机锄地 Web 控制端（苹果风） ==========
+// v3 网关协议（《通信方案》§4.2/§4.4）：信封走同源 /gateway 的 Dispatch/Query 两入口，
+// 服务端回调统一为 evt；session.hello 握手先行（重连后 connectionId 变更，必须重新 hello 再入房）。
+const PROTOCOL_VERSION = 3;
+const WEB_CLIENT_VERSION = '1.0.0';  // 仅诊断用途（服务端握手日志记录），服务端不校验
+
 let connection = null;
 let roomCode = '';
 let password = '';
@@ -53,6 +58,58 @@ function makeCmd(cmd, params) {
     };
 }
 
+// ---------- v3 网关信封（《通信方案》§4.2，线形 camelCase） ----------
+// requestId 仅排查用途（响应关联由 SignalR invoke 天然完成）；
+// crypto.randomUUID 仅在安全上下文可用（http 非 localhost 时缺失），兜底时间戳+随机数
+function newRequestId() {
+    return crypto.randomUUID
+        ? crypto.randomUUID().replaceAll('-', '')
+        : 'web' + Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+function makeEnvelope(type, name, payload) {
+    return {
+        protocolVersion: PROTOCOL_VERSION,
+        type,
+        name,
+        requestId: newRequestId(),
+        payload,
+        sentAtUtc: new Date().toISOString()
+    };
+}
+// invoke 响应带 payload.error 即失败（handshake_required/bad_request 等），抛错落入既有 catch 提示路径
+function checkGatewayError(resp) {
+    const err = resp && resp.payload && resp.payload.error;
+    if (err) throw new Error(err.message || err.code || '网关错误');
+}
+// session.hello 握手（§4.4 DAP 时序：连接后第一条消息必须是 hello，否则一律 handshake_required）
+async function sayHello() {
+    const resp = await connection.invoke('Query', makeEnvelope('query', 'session.hello', {
+        clientKind: 'web',
+        clientVersion: WEB_CLIENT_VERSION,
+        protocolVersion: PROTOCOL_VERSION,
+        capabilities: []
+    }));
+    checkGatewayError(resp);
+}
+// control.joinRoom（旧 JoinControlRoom；payload 键名按服务器路由实读：旧参数 teamUids 的键名是 allowedUids，值恒 []）
+async function joinControlRoom() {
+    const resp = await connection.invoke('Dispatch', makeEnvelope('command', 'control.joinRoom', {
+        roomCode,
+        password,
+        playerUid: 'web_' + playerName,
+        playerName,
+        allowedUids: [],
+        isRemote: false,
+        clientInstanceId: ''
+    }));
+    checkGatewayError(resp);
+}
+// control.sendCommand（旧 SendRemoteCommand；cmd 本体由 makeCmd 生成，逐字不动）
+function sendRemoteCommand(cmd) {
+    return connection.invoke('Dispatch', makeEnvelope('command', 'control.sendCommand', { command: cmd }))
+        .then(checkGatewayError);
+}
+
 // ---------- 记住登录：页面加载时回填 ----------
 (function restoreForm() {
     const c = loadCreds();
@@ -65,7 +122,7 @@ function makeCmd(cmd, params) {
         }
     }
 })();
-// ---------- 加入房间（无服务器地址输入，同源 /hub） ----------
+// ---------- 加入房间（无服务器地址输入，同源 /gateway） ----------
 function joinRoom() {
     roomCode = document.getElementById('roomCode').value.trim();
     password = document.getElementById('password').value.trim();
@@ -85,57 +142,38 @@ function joinRoom() {
     }
 
     connection = new signalR.HubConnectionBuilder()
-        .withUrl('/hub')   // 同源：WEB 由服务器自己运行
+        .withUrl('/gateway')   // 同源：WEB 由服务器自己运行；v3 网关入口
         .withAutomaticReconnect([0, 2000, 10000, 30000])
         .build();
 
-    // 成员列表更新（全量/增量两形态）
-    connection.on('ControlRoomPlayersUpdated', update => {
-        // 防御：payload 为空或非对象时直接忽略
-        if (!update || typeof update !== 'object') return;
-        if (update.full) {
-            players = update.players || [];
-        } else {
-            // 增量：changed 按 uid 原地替换/末尾追加，removed 按 uid 过滤；
-            // 不在 changed/removed 中的成员保持不变。
-            if (!Array.isArray(players)) players = [];
-            const byUid = new Map(players.map(p => [p.playerUid, p]));
-            (update.changed || []).forEach(p => {
-                if (byUid.has(p.playerUid)) {
-                    const idx = players.findIndex(x => x.playerUid === p.playerUid);
-                    players[idx] = p;
-                } else {
-                    byUid.set(p.playerUid, p);
-                    players.push(p);
-                }
-            });
-            (update.removed || []).forEach(uid => {
-                players = players.filter(p => p.playerUid !== uid);
-            });
-        }
-        renderMembers();
-        // 记录锄地进度日志（去重）
-        players.forEach(p => {
-            const progress = p.autoHoeingProgress || '';
-            if (progress && progress !== lastProgress[p.playerUid]) {
-                lastProgress[p.playerUid] = progress;
-                log(progress);
+    // evt 单订阅：服务端广播统一回调（§4.2），按 name 分发；未知 name 静默忽略
+    connection.on('evt', env => {
+        if (!env || typeof env !== 'object') return;
+        const payload = env.payload;
+        switch (env.name) {
+            // 成员列表更新（payload 即全量/增量两态本体）
+            case 'control.playersUpdated':
+                onPlayersUpdated(payload);
+                break;
+            // 收到其他成员投递的命令（WEB 不做执行，仅记录；ack 已由 PC 端助手处理）
+            case 'control.remoteCommand': {
+                const cmd = payload && payload.command;
+                if (cmd) log(`收到命令: ${cmd.cmd} 来自 ${cmd.sender || '?'}`);
+                break;
             }
-        });
-    });
-
-    // 收到其他成员投递的命令（WEB 不做执行，仅记录；ack 已由 PC 端助手处理）
-    connection.on('RemoteCommand', cmd => {
-        log(`收到命令: ${cmd.cmd} 来自 ${cmd.sender || '?'}`);
-    });
-
-    connection.on('RemoteCommandAck', ack => {
-        log(`送达 ${ack.deliveredTo} 个目标`);
-    });
-
-    connection.on('JoinRejected', reason => {
-        showError(reason);
-        log('加入失败: ' + reason);
+            // payload 即 ack 本体 { commandId, deliveredTo, message }
+            case 'control.remoteCommandAck': {
+                const ack = payload || {};
+                log(`送达 ${ack.deliveredTo} 个目标`);
+                break;
+            }
+            case 'control.joinRejected': {
+                const reason = (payload && payload.reason) || '加入被拒绝';
+                showError(reason);
+                log('加入失败: ' + reason);
+                break;
+            }
+        }
     });
 
     connection.onreconnecting(() => {
@@ -144,13 +182,15 @@ function joinRoom() {
     });
     connection.onreconnected(() => {
         setConn(true);
-        connection.invoke('JoinControlRoom', roomCode, password, 'web_' + playerName, playerName, [], false, '')
+        // v3：重连后 connectionId 变更，服务端视为未握手，必须先重新 hello 再入房
+        sayHello().then(joinControlRoom).catch(err => log('重连后重新入房失败: ' + err.message));
         log('已重连');
     });
     connection.onclose(() => setConn(false));
 
     connection.start()
-        .then(() => connection.invoke('JoinControlRoom', roomCode, password, 'web_' + playerName, playerName, [], false, ''))
+        .then(() => sayHello())
+        .then(() => joinControlRoom())
         .then(() => {
             document.getElementById('loginPanel').style.display = 'none';
             document.getElementById('controlPanel').style.display = 'block';
@@ -166,6 +206,41 @@ function joinRoom() {
 function setConn(online) {
     const dot = document.getElementById('connDot');
     dot.className = 'dot ' + (online ? 'dot-online' : 'dot-offline');
+}
+
+// ---------- 成员列表更新（全量/增量两形态，两态合并逻辑自旧 ControlRoomPlayersUpdated 原样保留） ----------
+function onPlayersUpdated(update) {
+    // 防御：payload 为空或非对象时直接忽略
+    if (!update || typeof update !== 'object') return;
+    if (update.full) {
+        players = update.players || [];
+    } else {
+        // 增量：changed 按 uid 原地替换/末尾追加，removed 按 uid 过滤；
+        // 不在 changed/removed 中的成员保持不变。
+        if (!Array.isArray(players)) players = [];
+        const byUid = new Map(players.map(p => [p.playerUid, p]));
+        (update.changed || []).forEach(p => {
+            if (byUid.has(p.playerUid)) {
+                const idx = players.findIndex(x => x.playerUid === p.playerUid);
+                players[idx] = p;
+            } else {
+                byUid.set(p.playerUid, p);
+                players.push(p);
+            }
+        });
+        (update.removed || []).forEach(uid => {
+            players = players.filter(p => p.playerUid !== uid);
+        });
+    }
+    renderMembers();
+    // 记录锄地进度日志（去重）
+    players.forEach(p => {
+        const progress = p.autoHoeingProgress || '';
+        if (progress && progress !== lastProgress[p.playerUid]) {
+            lastProgress[p.playerUid] = progress;
+            log(progress);
+        }
+    });
 }
 
 // ---------- 渲染成员列表 ----------
@@ -281,7 +356,7 @@ document.getElementById('memberList').addEventListener('click', e => {
         if (action === 'stop') {
             const cmd = makeCmd('stop');
             cmd.target = [uid];
-            connection.invoke('SendRemoteCommand', cmd).catch(err => log('发送失败: ' + err.message));
+            sendRemoteCommand(cmd).catch(err => log('发送失败: ' + err.message));
             log(`已对 ${memberName} 下发停止`);
         } else if (action === 'start-group') {
             showMemberConfigSelect(uid, memberName, 'group');
@@ -293,7 +368,7 @@ document.getElementById('memberList').addEventListener('click', e => {
             if (confirm(`确定要关闭 ${memberName} 的游戏吗？`)) {
                 const cmd = makeCmd('close_game');
                 cmd.target = [uid];
-                connection.invoke('SendRemoteCommand', cmd).catch(err => log('发送失败: ' + err.message));
+                sendRemoteCommand(cmd).catch(err => log('发送失败: ' + err.message));
                 log(`已对 ${memberName} 下发关闭游戏`);
             }
         }
@@ -606,7 +681,7 @@ function showHotkeySelect(uid, memberName) {
         if (selected) {
             const cmd = makeCmd('hotkey_execute', { hotkeyConfigName: selected });
             cmd.target = [uid];
-            connection.invoke('SendRemoteCommand', cmd).catch(err => log('发送失败: ' + err.message));
+            sendRemoteCommand(cmd).catch(err => log('发送失败: ' + err.message));
             log(`已对 ${memberName} 下发快捷键: ${selected}`);
         }
         overlay.remove();
@@ -728,7 +803,7 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
                 enabled: en
             });
             changeCmd.target = targets;
-            connection.invoke('SendRemoteCommand', changeCmd).catch(err => log('启用状态变更失败: ' + err.message));
+            sendRemoteCommand(changeCmd).catch(err => log('启用状态变更失败: ' + err.message));
         }
         if (Object.keys(changes).length > 0) {
             log(`已对 ${memberName} 更新 ${Object.keys(changes).length} 个任务的启用状态`);
@@ -740,7 +815,7 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
             startFromIndex: selectedIndex
         });
         cmd.target = targets;
-        connection.invoke('SendRemoteCommand', cmd).catch(err => log('发送失败: ' + err.message));
+        sendRemoteCommand(cmd).catch(err => log('发送失败: ' + err.message));
         log(`已对 ${memberName} 下发 ${label}：${configName}（从第 ${selectedIndex} 个任务开始）`);
         overlay.remove();
     });
