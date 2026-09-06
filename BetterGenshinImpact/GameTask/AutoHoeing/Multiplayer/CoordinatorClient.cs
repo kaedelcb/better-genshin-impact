@@ -225,8 +225,9 @@ public class CoordinatorClient : IAsyncDisposable
     /// 处理逻辑（含"过滤自己"守卫与日志文案）与迁移前的逐事件 On 订阅逐字等价。
     /// payload 键缺失/畸形时不应用（对齐旧 On&lt;T&gt; 反序列化失败不触发的语义）。
     /// 未知事件名忽略（前向兼容：服务器可能发来本客户端未订阅的锄地房间事件）。
+    /// internal：供单测直驱分发逻辑（映射表机器化核对），生产路径仅由 BgiGatewayClient evt 回调调用。
     /// </summary>
-    private void DispatchEvt(GatewayEnvelope env)
+    internal void DispatchEvt(GatewayEnvelope env)
     {
         try
         {
