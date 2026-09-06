@@ -221,7 +221,7 @@ public sealed partial class RoomOperations
                         LogRateLimit.TryRemove(kv.Key, out _);
             }
 
-            // 纯转发（发送者自己也在 Group 内会收到自己的批，客户端按 uid 自滤）
+            // 只发订阅者（带宽优化：不再全组广播，无关成员零流量）
             var payload = new
             {
                 uid,
@@ -230,7 +230,9 @@ public sealed partial class RoomOperations
                 infoOnly,
                 serverTime = now
             };
-            await _broadcaster.BroadcastGroupAsync(group, "MemberLogBatch", payload, payload);
+            var subs = _roomManager.GetLogSubscriberConnections(group, uid);
+            if (subs.Count > 0)
+                await _broadcaster.SendToConnectionsAsync(subs, "MemberLogBatch", payload, payload);
         }
         catch (Exception ex)
         {

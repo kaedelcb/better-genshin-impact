@@ -12,9 +12,39 @@ namespace BgiCoordinatorServer.Services;
 /// RoomPhase 观测（只针对锄地房间）本族一律不加。
 /// 注：IsInControlRoomOrRemote 本族方法暂未使用（日志族 RoomOperations.MemberLog.cs 使用本 ctx 版），
 /// 旧 Hub 中的同名副本已随日志族迁移删除。
+/// 带宽优化（2026-09）：ControlRoomPlayersUpdated 广播统一收口到 BroadcastControlRoomPlayersAsync
+/// （全量/增量两态 payload，无变化零发送），各调用点不再直接 BroadcastGroupAsync。
 /// </summary>
 public sealed partial class RoomOperations
 {
+    /// <summary>
+    /// 控制房间成员列表广播的统一出口（带宽优化，替代各调用点直接全量广播）。
+    /// forceFull=true 或本组尚无快照（首次广播）→ 发 Full=true 全量并刷新快照为基线；
+    /// forceFull=false → 快照哈希比对发 Full=false 增量；changed/removed 都空则<b>不发送</b>
+    /// （成员周期性状态上报不再产生 N² 放大的全量广播，主优化点）。
+    /// internal：HeartbeatMonitor 兜底扫描（同程序集）也走本出口。
+    /// </summary>
+    internal async Task BroadcastControlRoomPlayersAsync(string group, bool forceFull)
+    {
+        var players = _roomManager.GetControlRoomPlayers(group);
+        var revision = _roomManager.NextControlRoomRevision(group);
+        if (forceFull || !_roomManager.HasControlRoomSnapshot(group))
+        {
+            var fullUpdate = new ControlRoomPlayersUpdate { Full = true, Revision = revision, Players = players };
+            // evt payload 与 legacy 参数同为单个 update 对象（新旧客户端同步升级，payload 形状允许变更）
+            await _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated", fullUpdate, fullUpdate);
+            // 全量下发后刷新快照为基线，后续增量以本次为准（out 丢弃，仅借 ComputeControlRoomDelta 刷快照）
+            _roomManager.ComputeControlRoomDelta(group, players, out _, out _);
+            return;
+        }
+
+        _roomManager.ComputeControlRoomDelta(group, players, out var changed, out var removed);
+        // 无变化零发送：revision 已消耗（允许跳号），快照已刷新
+        if (changed.Count == 0 && removed.Count == 0) return;
+        var deltaUpdate = new ControlRoomPlayersUpdate { Full = false, Revision = revision, Changed = changed, Removed = removed };
+        await _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated", deltaUpdate, deltaUpdate);
+    }
+
     /// <summary>
     /// 加入控制房间。校验密码 + UID 白名单，成功后加入 CTRL_{roomCode} Group
     /// </summary>
@@ -46,9 +76,8 @@ public sealed partial class RoomOperations
             }
             _logger.LogInformation("玩家 {PlayerName}({PlayerUid}) 加入控制房间 {RoomCode} (Web={IsWeb}, Remote={IsRemote})", playerName, playerUid, roomCode, isWebClient, isRemote);
 
-            // 广播成员列表
-            var players = _roomManager.GetControlRoomPlayers(group);
-            await _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated", new { players }, players);
+            // 广播成员列表（成员加入：全量）
+            await BroadcastControlRoomPlayersAsync(group, forceFull: true);
 
             // 遥控端不接收命令（FR-3），故不下发离线缓存命令。WEB 端同样不入 _controlRooms，
             // 但既有行为会下发缓存——保持 WEB 端不变，仅对遥控端跳过。
@@ -145,9 +174,8 @@ public sealed partial class RoomOperations
             // 只更新状态，不做就绪检查（就绪检查由 ReportOnlineEvent 端点统一处理）
             _roomManager.UpdateControlStatus(group, ctx.ConnectionId, status);
 
-            // 广播给控制房间所有成员
-            var players = _roomManager.GetControlRoomPlayers(group);
-            await _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated", new { players }, players);
+            // 广播给控制房间所有成员（状态上报：增量比对，无变化零发送——主优化点）
+            await BroadcastControlRoomPlayersAsync(group, forceFull: false);
         }
         catch (Exception ex)
         {
@@ -170,9 +198,8 @@ public sealed partial class RoomOperations
             // （历史 bug：剥成裸 roomCode 导致 TryGetValue 永远落空，清除静默无效）
             _roomManager.ClearOnlineHistory(group, targetUid);
 
-            // 广播更新给所有成员
-            var players = _roomManager.GetControlRoomPlayers(group);
-            await _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated", new { players }, players);
+            // 广播更新给所有成员（OnlineHistory 变更：全量）
+            await BroadcastControlRoomPlayersAsync(group, forceFull: true);
         }
         catch (Exception ex)
         {
@@ -193,9 +220,8 @@ public sealed partial class RoomOperations
 
             _roomManager.ReportOnlineEvent(group, ctx.ConnectionId, generation);
 
-            // 广播玩家列表更新
-            var players = _roomManager.GetControlRoomPlayers(group);
-            await _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated", new { players }, players);
+            // 广播玩家列表更新（上线事件：全量）
+            await BroadcastControlRoomPlayersAsync(group, forceFull: true);
 
             // 检查是否可转换为 ready（凑齐则开一轮：单人直接 AllReady，多人进确认阶段）
             await TryStartRoundAsync(group);
@@ -226,8 +252,8 @@ public sealed partial class RoomOperations
         {
             _roomManager.ConsumeOnlineReady(group, readyGeneration);
             await _broadcaster.BroadcastGroupAsync(group, "AllReady", new { generation = readyGeneration }, readyGeneration);
-            var refreshed = _roomManager.GetControlRoomPlayers(group);
-            await _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated", new { players = refreshed }, refreshed);
+            // 消费后成员字段已变（OnlineReady 复位等）：全量广播最新列表
+            await BroadcastControlRoomPlayersAsync(group, forceFull: true);
         }
         else
         {
@@ -279,8 +305,8 @@ public sealed partial class RoomOperations
                     _roomManager.ConsumeOnlineReady(group, generation);
                     // 状态机复位 idle（否则会残留 confirming 僵尸态，后续轮次被 CheckAndTransition 永久挡住）
                     _roomManager.MarkRoundCompleted(group);
-                    var confirmed = _roomManager.GetControlRoomPlayers(group);
-                    await _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated", new { players = confirmed }, confirmed);
+                    // 确认完成：成员字段已变（OnlineReady 复位等），全量广播最新列表
+                    await BroadcastControlRoomPlayersAsync(group, forceFull: true);
                     // 补评估：确认窗口期间新 armed 的成员（迟到上报/30s 重试）在此接续新一轮
                     await TryStartRoundAsync(group);
                     return;
@@ -298,8 +324,8 @@ public sealed partial class RoomOperations
             generation, string.Join(",", unconfirmedUids));
         Console.WriteLine("[探针服务端] 确认超时，本轮放弃开锄（缺人不开锄）, group=" + group + " generation=" + generation + " 未确认成员=" + string.Join(",", unconfirmedUids));
         _roomManager.MarkExhausted(group);
-        var exhausted = _roomManager.GetControlRoomPlayers(group);
-        await _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated", new { players = exhausted }, exhausted);
+        // 超时耗尽：成员字段已复位，全量广播最新列表
+        await BroadcastControlRoomPlayersAsync(group, forceFull: true);
     }
 
     /// <summary>客户端确认收到 AllReadyConfirm。由客户端收到 AllReadyConfirm 事件后调用。</summary>

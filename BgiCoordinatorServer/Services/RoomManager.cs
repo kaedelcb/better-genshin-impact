@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using BgiCoordinatorServer.Models;
 using Microsoft.Extensions.Logging;
 
@@ -22,6 +24,12 @@ public class RoomManager
 
     // 控制房间相关（multiplayer-hoeing-assistant）
     private readonly ConcurrentDictionary<string, List<ControlRoomPlayer>> _controlRooms = new();
+    // 控制房间广播快照（带宽优化）：group → (uid → 上次广播时该成员的规范化 JSON 串)。
+    // 用于 ControlRoomPlayersUpdated 增量比对：序列化串不变即视为无变化，不再全量广播（N² 放大止血）。
+    // 快照随房间存在即可（maxRooms=50 上限，量小），不做复杂回收；组内成员快照随 removed 同步剔除。
+    private readonly ConcurrentDictionary<string, Dictionary<string, string>> _controlRoomBroadcastSnapshots = new();
+    // 控制房间广播序号（group → 已用最大 revision，NextControlRoomRevision CAS 递增，从 1 开始）
+    private readonly ConcurrentDictionary<string, long> _controlRoomRevisions = new();
     // 控制房间 AllReady 广播幂等标志（独立于锄地房间 Room 对象，因为控制房间可能没有对应的锄地房间）
     private readonly ConcurrentDictionary<string, bool> _controlRoomAllReadyBroadcasted = new();
     // 遥控端连接登记（group → connectionId 集合）。遥控端不入 _controlRooms 成员列表，
@@ -1136,6 +1144,78 @@ public class RoomManager
         return [];
     }
 
+    // ====== 控制房间广播快照与增量计算（带宽优化：ControlRoomPlayersUpdated 去重/增量）======
+
+    /// <summary>快照规范化序列化选项：camelCase，与线上 SignalR JSON 命名一致（剔除字段按 camelCase 名匹配）。</summary>
+    private static readonly JsonSerializerOptions ControlRoomSnapshotJsonOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>取该组下一个广播 revision（CAS 递增，从 1 开始；无变化不广播时允许跳号）。</summary>
+    public long NextControlRoomRevision(string group)
+    {
+        while (true)
+        {
+            var current = _controlRoomRevisions.GetOrAdd(group, 0L);
+            var next = current + 1;
+            if (_controlRoomRevisions.TryUpdate(group, next, current))
+                return next;
+        }
+    }
+
+    /// <summary>该组是否已有广播快照（无快照 = 首次广播，必须发全量建立基线）。</summary>
+    public bool HasControlRoomSnapshot(string group)
+        => _controlRoomBroadcastSnapshots.ContainsKey(group);
+
+    /// <summary>
+    /// 计算控制房间成员列表相对上次广播的增量，并同步刷新快照为本次结果。
+    /// changed 装的是<b>原 player 对象</b>（不是规范化副本——payload 要带 LastHeartbeat 等新鲜字段给客户端）。
+    /// removed 为快照中有而当前列表没有的 uid（剔除后同步从快照删除）。
+    /// </summary>
+    public void ComputeControlRoomDelta(string group, List<ControlRoomPlayer> players,
+        out List<ControlRoomPlayer> changed, out List<string> removed)
+    {
+        changed = [];
+        removed = [];
+        var snapshot = _controlRoomBroadcastSnapshots.GetOrAdd(group, _ => new Dictionary<string, string>());
+        // per-group 字典非线程安全，lock 保护（比对+刷新必须原子，否则并发广播会丢增量/发重复）
+        lock (snapshot)
+        {
+            var currentUids = new HashSet<string>();
+            foreach (var player in players)
+            {
+                currentUids.Add(player.PlayerUid);
+                var normalized = NormalizeControlRoomPlayer(player);
+                if (!snapshot.TryGetValue(player.PlayerUid, out var prev) || prev != normalized)
+                {
+                    changed.Add(player);
+                    snapshot[player.PlayerUid] = normalized;
+                }
+            }
+            foreach (var uid in snapshot.Keys.ToList())
+            {
+                if (!currentUids.Contains(uid))
+                {
+                    removed.Add(uid);
+                    snapshot.Remove(uid);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 成员的规范化序列化串：剔除 lastHeartbeat/taskRunningExpireTime/onlineReadyExpireTime
+    /// 三个每次上报必被服务端刷新的易变字段，避免心跳/过期时间戳滚动造成假变更。
+    /// 注意：绝不改原对象的字段（GetControlRoomPlayers 返回浅拷贝列表，元素是共享引用）。
+    /// </summary>
+    private static string NormalizeControlRoomPlayer(ControlRoomPlayer player)
+    {
+        if (JsonSerializer.SerializeToNode(player, ControlRoomSnapshotJsonOptions) is not JsonObject obj)
+            return string.Empty;
+        obj.Remove("lastHeartbeat");
+        obj.Remove("taskRunningExpireTime");
+        obj.Remove("onlineReadyExpireTime");
+        return obj.ToJsonString();
+    }
+
     /// <summary>检查玩家是否在控制房间中</summary>
     public bool IsInControlRoom(string group, string connectionId)
     {
@@ -1631,5 +1711,12 @@ public class RoomManager
     {
         if (!_logSubscriptions.TryGetValue(LogSubKey(group, targetUid), out var set)) return 0;
         lock (set) { return set.Count; }
+    }
+
+    /// <summary>取某目标成员的订阅者 connectionId 快照副本（MemberLogBatch 只发订阅者用，带宽优化）。</summary>
+    public IReadOnlyCollection<string> GetLogSubscriberConnections(string group, string targetUid)
+    {
+        if (!_logSubscriptions.TryGetValue(LogSubKey(group, targetUid), out var set)) return [];
+        lock (set) { return set.ToList(); }
     }
 }

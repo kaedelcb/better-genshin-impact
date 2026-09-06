@@ -89,12 +89,33 @@ function joinRoom() {
         .withAutomaticReconnect([0, 2000, 10000, 30000])
         .build();
 
-    // 成员列表更新
-    connection.on('ControlRoomPlayersUpdated', playersArr => {
-        players = playersArr;
+    // 成员列表更新（全量/增量两形态）
+    connection.on('ControlRoomPlayersUpdated', update => {
+        // 防御：payload 为空或非对象时直接忽略
+        if (!update || typeof update !== 'object') return;
+        if (update.full) {
+            players = update.players || [];
+        } else {
+            // 增量：changed 按 uid 原地替换/末尾追加，removed 按 uid 过滤；
+            // 不在 changed/removed 中的成员保持不变。
+            if (!Array.isArray(players)) players = [];
+            const byUid = new Map(players.map(p => [p.playerUid, p]));
+            (update.changed || []).forEach(p => {
+                if (byUid.has(p.playerUid)) {
+                    const idx = players.findIndex(x => x.playerUid === p.playerUid);
+                    players[idx] = p;
+                } else {
+                    byUid.set(p.playerUid, p);
+                    players.push(p);
+                }
+            });
+            (update.removed || []).forEach(uid => {
+                players = players.filter(p => p.playerUid !== uid);
+            });
+        }
         renderMembers();
         // 记录锄地进度日志（去重）
-        playersArr.forEach(p => {
+        players.forEach(p => {
             const progress = p.autoHoeingProgress || '';
             if (progress && progress !== lastProgress[p.playerUid]) {
                 lastProgress[p.playerUid] = progress;

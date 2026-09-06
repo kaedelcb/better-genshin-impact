@@ -42,7 +42,7 @@ public class SignalRClient : IAsyncDisposable
     private Timer? _selfHealTimer;
     private int _selfHealRunning;
 
-    public event Action<List<ControlRoomPlayer>>? OnPlayersUpdated;
+    public event Action<ControlRoomPlayersUpdate>? OnPlayersUpdated;
     public event Action<RemoteCommand>? OnRemoteCommand;
     public event Action<string>? OnJoinRejected;
     public event Action<bool>? OnConnectionStateChanged;
@@ -109,8 +109,8 @@ public class SignalRClient : IAsyncDisposable
             .WithAutomaticReconnect(new[] { TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30) })
             .Build();
 
-        connection.On<List<ControlRoomPlayer>>("ControlRoomPlayersUpdated", players =>
-            OnPlayersUpdated?.Invoke(players));
+        connection.On<ControlRoomPlayersUpdate>("ControlRoomPlayersUpdated", update =>
+            OnPlayersUpdated?.Invoke(update));
         connection.On<RemoteCommand>("RemoteCommand", cmd =>
             OnRemoteCommand?.Invoke(cmd));
         connection.On<string>("JoinRejected", reason =>

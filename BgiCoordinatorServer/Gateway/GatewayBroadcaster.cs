@@ -81,6 +81,27 @@ public sealed class GatewayBroadcaster
         await _legacyHub.Clients.Client(connectionId).SendCoreAsync(legacyEventName, legacyArgs);
     }
 
+    /// <summary>
+    /// 向一组指定连接定向发送（带宽优化：MemberLogBatch 只发订阅者，不再全组广播）。
+    /// 按协议登记把连接分成 legacy / v3 两组，各发一份。空集合直接返回。
+    /// legacy 一侧必须用 SendCoreAsync 传参数数组（勿用 SendAsync 传 object?[]——见 BroadcastGroupAsync 头注踩坑记录）。
+    /// </summary>
+    public async Task SendToConnectionsAsync(IReadOnlyCollection<string> connectionIds, string legacyEventName, object? evtPayload, params object?[] legacyArgs)
+    {
+        if (connectionIds.Count == 0) return;
+        var legacyList = new List<string>();
+        var v3List = new List<string>();
+        foreach (var connectionId in connectionIds)
+        {
+            if (_sessions.IsV3(connectionId)) v3List.Add(connectionId);
+            else legacyList.Add(connectionId);
+        }
+        if (legacyList.Count > 0)
+            await _legacyHub.Clients.Clients(legacyList).SendCoreAsync(legacyEventName, legacyArgs);
+        if (v3List.Count > 0)
+            await SendEvtSafeAsync(_gatewayHub.Clients.Clients(v3List), null, legacyEventName, evtPayload);
+    }
+
     /// <summary>组管理：按连接协议来源落到对应 Hub（与 Hub.Groups.AddToGroupAsync 等价）。</summary>
     public Task AddToGroupAsync(GatewayHandlerContext ctx, string group)
         => ctx.IsV3

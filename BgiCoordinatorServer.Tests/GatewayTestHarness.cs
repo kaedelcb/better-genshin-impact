@@ -23,6 +23,9 @@ internal sealed class GatewayTestHarness
     public Mock<IClientProxy> GatewayGroupProxy { get; } = new();
     public Mock<ISingleClientProxy> LegacyClientProxy { get; } = new();
     public Mock<ISingleClientProxy> GatewayClientProxy { get; } = new();
+    /// <summary>多连接定向发送（Clients.Clients(list)，MemberLogBatch 只发订阅者路径用）。</summary>
+    public Mock<IClientProxy> LegacyMultiClientProxy { get; } = new();
+    public Mock<IClientProxy> GatewayMultiClientProxy { get; } = new();
     public Mock<IGroupManager> LegacyGroups { get; } = new();
     public Mock<IGroupManager> GatewayGroups { get; } = new();
     public RoomOperations Ops { get; }
@@ -34,8 +37,10 @@ internal sealed class GatewayTestHarness
 
         LegacyHub.Setup(h => h.Clients.Group(It.IsAny<string>())).Returns(LegacyGroupProxy.Object);
         LegacyHub.Setup(h => h.Clients.Client(It.IsAny<string>())).Returns(LegacyClientProxy.Object);
+        LegacyHub.Setup(h => h.Clients.Clients(It.IsAny<IReadOnlyList<string>>())).Returns(LegacyMultiClientProxy.Object);
         GatewayHub.Setup(h => h.Clients.Group(It.IsAny<string>())).Returns(GatewayGroupProxy.Object);
         GatewayHub.Setup(h => h.Clients.Client(It.IsAny<string>())).Returns(GatewayClientProxy.Object);
+        GatewayHub.Setup(h => h.Clients.Clients(It.IsAny<IReadOnlyList<string>>())).Returns(GatewayMultiClientProxy.Object);
         LegacyHub.Setup(h => h.Groups).Returns(LegacyGroups.Object);
         GatewayHub.Setup(h => h.Groups).Returns(GatewayGroups.Object);
 
@@ -43,6 +48,8 @@ internal sealed class GatewayTestHarness
         SetupSendCompleted(GatewayGroupProxy);
         SetupSendCompleted(LegacyClientProxy);
         SetupSendCompleted(GatewayClientProxy);
+        SetupSendCompleted(LegacyMultiClientProxy);
+        SetupSendCompleted(GatewayMultiClientProxy);
         foreach (var groups in new[] { LegacyGroups, GatewayGroups })
         {
             groups.Setup(g => g.AddToGroupAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))

@@ -1,4 +1,5 @@
 using BgiCoordinatorServer.Gateway;
+using BgiCoordinatorServer.Models;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -36,18 +37,24 @@ public class LegacyBroadcastShapeTests
         => args.Length == 1 && args[0] is GatewayEnvelope e && e.Name == name;
 
     [Fact]
-    public async Task BroadcastGroup_LegacySide_SingleListArg_NotDoubleWrapped()
+    public async Task BroadcastGroup_LegacySide_SingleUpdateArg_NotDoubleWrapped()
     {
         var h = new GatewayTestHarness();
         var b = NewBroadcaster(h);
-        var players = new List<string> { "u1", "u2" };
+        // 带宽优化后 ControlRoomPlayersUpdated 改为单参数对象（evt 与 legacy 同为 update 本体）
+        var update = new ControlRoomPlayersUpdate
+        {
+            Full = true,
+            Revision = 1,
+            Players = [new ControlRoomPlayer { PlayerUid = "u1" }],
+        };
 
-        await b.BroadcastGroupAsync("CTRL_X", "ControlRoomPlayersUpdated", new { players }, players);
+        await b.BroadcastGroupAsync("CTRL_X", "ControlRoomPlayersUpdated", update, update);
 
-        // 旧协议一侧：arguments 必须恰好 1 个元素且就是 players 本体（不能是 object?[] 嵌套）
+        // 旧协议一侧：arguments 必须恰好 1 个元素且就是 update 本体（不能是 object?[] 嵌套）
         h.LegacyGroupProxy.Verify(p => p.SendCoreAsync(
             "ControlRoomPlayersUpdated",
-            It.Is<object?[]>(args => IsSingleArg(args, players)),
+            It.Is<object?[]>(args => IsSingleArg(args, update)),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 

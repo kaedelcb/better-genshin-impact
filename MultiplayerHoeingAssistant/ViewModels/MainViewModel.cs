@@ -3492,51 +3492,38 @@ public class MainViewModel : INotifyPropertyChanged
         // 绑定日志回调（探针日志输出到助手界面）
         client.OnLog = msg => Application.Current.Dispatcher.Invoke(() => AddLog(msg));
 
-        client.OnPlayersUpdated += players =>
+        client.OnPlayersUpdated += update =>
         {
             Application.Current.Dispatcher.Invoke(() =>
             {
-                var byUid = new Dictionary<string, ControlRoomPlayer>();
-                foreach (var p in players) byUid[p.PlayerUid] = p;
-                for (int i = Members.Count - 1; i >= 0; i--)
+                // 单成员合并/新增：已存在按 uid 原地逐字段更新，不存在则轮换头像新增到末尾。
+                void UpsertMember(ControlRoomPlayer np)
                 {
-                    var m = Members[i];
-                    if (byUid.TryGetValue(m.PlayerUid, out var np))
+                    var existing = Members.FirstOrDefault(m => m.PlayerUid == np.PlayerUid);
+                    if (existing != null)
                     {
-                        m.PlayerName = np.PlayerName;
-                        m.Online = np.Online;
-                        m.BgiStatus = np.BgiStatus;
-                        m.ConfigGroups = np.ConfigGroups;
-                        m.OneClickConfigs = np.OneClickConfigs;
-                        m.AutoHoeingRunning = np.AutoHoeingRunning;
-                        m.AutoHoeingProgress = np.AutoHoeingProgress;
-                        m.TaskRunning = np.TaskRunning;
-                        m.CurrentTaskName = np.CurrentTaskName;
-                        m.CurrentTaskGroupName = np.CurrentTaskGroupName;
-                        m.CurrentRouteDisplay = np.CurrentRouteDisplay;
-                        m.Hotkeys = np.Hotkeys;
-                        m.ConfigGroupTasksWithStatus = np.ConfigGroupTasksWithStatus;
-                        m.OneClickTasksWithStatus = np.OneClickTasksWithStatus;
-                        m.OnlineReady = np.OnlineReady;
-                        m.OnlineMode = np.OnlineMode;
-                        m.ScheduledOnlineTime = np.ScheduledOnlineTime;
-                        m.OnlineHoeingGroupNames = np.OnlineHoeingGroupNames ?? [];
-                        m.QuickCommands = np.QuickCommands ?? new();
-                        m.OnlineHistory = np.OnlineHistory;
-                        byUid.Remove(m.PlayerUid);
+                        existing.PlayerName = np.PlayerName;
+                        existing.Online = np.Online;
+                        existing.BgiStatus = np.BgiStatus;
+                        existing.ConfigGroups = np.ConfigGroups;
+                        existing.OneClickConfigs = np.OneClickConfigs;
+                        existing.AutoHoeingRunning = np.AutoHoeingRunning;
+                        existing.AutoHoeingProgress = np.AutoHoeingProgress;
+                        existing.TaskRunning = np.TaskRunning;
+                        existing.CurrentTaskName = np.CurrentTaskName;
+                        existing.CurrentTaskGroupName = np.CurrentTaskGroupName;
+                        existing.CurrentRouteDisplay = np.CurrentRouteDisplay;
+                        existing.Hotkeys = np.Hotkeys;
+                        existing.ConfigGroupTasksWithStatus = np.ConfigGroupTasksWithStatus;
+                        existing.OneClickTasksWithStatus = np.OneClickTasksWithStatus;
+                        existing.OnlineReady = np.OnlineReady;
+                        existing.OnlineMode = np.OnlineMode;
+                        existing.ScheduledOnlineTime = np.ScheduledOnlineTime;
+                        existing.OnlineHoeingGroupNames = np.OnlineHoeingGroupNames ?? [];
+                        existing.QuickCommands = np.QuickCommands ?? new();
+                        existing.OnlineHistory = np.OnlineHistory;
+                        return;
                     }
-                    else
-                    {
-                        Members.RemoveAt(i);
-                    }
-                }
-                // 新增成员按服务端广播的原始顺序（players）追加，确保显示顺序与加入顺序一致。
-                // 不能用 byUid.Values 遍历——Dictionary 的枚举顺序不保证与插入顺序一致，
-                // 首次连接 Members 为空时全体走这里，顺序会被打乱导致成员列表"反序"。
-                foreach (var p in players)
-                {
-                    if (!byUid.TryGetValue(p.PlayerUid, out var np)) continue;
-                    byUid.Remove(p.PlayerUid);
                     var (file, ring) = AvatarPool[Members.Count % AvatarPool.Length];
                     Members.Add(new MemberViewModel
                     {
@@ -3564,6 +3551,45 @@ public class MainViewModel : INotifyPropertyChanged
                         AvatarRing = ring,
                         IsSelected = true
                     });
+                }
+
+                if (update.Full)
+                {
+                    // 全量：不在服务端列表中的成员移除；其余按服务端广播顺序 upsert
+                    // （已存在成员原地更新保持显示位置，新成员按服务端顺序追加到末尾，
+                    //  确保显示顺序与加入顺序一致）。
+                    var keep = new HashSet<string>((update.Players ?? []).Select(p => p.PlayerUid));
+                    for (int i = Members.Count - 1; i >= 0; i--)
+                    {
+                        if (!keep.Contains(Members[i].PlayerUid))
+                        {
+                            Members.RemoveAt(i);
+                        }
+                    }
+                    foreach (var p in update.Players ?? [])
+                    {
+                        UpsertMember(p);
+                    }
+                }
+                else
+                {
+                    // 增量：changed 逐个 upsert，removed 按 uid 移除；
+                    // 不在 changed/removed 中的成员保持不变，不做全量 reconcile。
+                    foreach (var p in update.Changed ?? [])
+                    {
+                        UpsertMember(p);
+                    }
+                    if (update.Removed is { Count: > 0 })
+                    {
+                        var removedSet = new HashSet<string>(update.Removed);
+                        for (int i = Members.Count - 1; i >= 0; i--)
+                        {
+                            if (removedSet.Contains(Members[i].PlayerUid))
+                            {
+                                Members.RemoveAt(i);
+                            }
+                        }
+                    }
                 }
 
                 // 监控端：检测执行端（同 UID 的成员）联机锄地进度变化，输出到冒险日志

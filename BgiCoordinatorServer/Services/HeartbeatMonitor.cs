@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using BgiCoordinatorServer.Gateway;
 using BgiCoordinatorServer.Models;
 
@@ -8,6 +9,7 @@ public class HeartbeatMonitor : IHostedService, IDisposable
     private readonly RoomManager _roomManager;
     private readonly GatewayBroadcaster _broadcaster;
     private readonly RoomPhaseObserver _phaseObserver;
+    private readonly RoomOperations _roomOperations;
     private readonly ILogger<HeartbeatMonitor> _logger;
     private Timer? _timer;
 
@@ -15,16 +17,22 @@ public class HeartbeatMonitor : IHostedService, IDisposable
     private static readonly TimeSpan PlayerTimeout = TimeSpan.FromSeconds(30);
     /// <summary>重对齐超时时间（30秒）</summary>
     private static readonly TimeSpan RealignTimeout = TimeSpan.FromSeconds(30);
+    /// <summary>控制房间增量广播兜底的节流间隔（每组 60s 最多比对一次）。</summary>
+    private static readonly TimeSpan ControlRoomSweepInterval = TimeSpan.FromSeconds(60);
+    /// <summary>控制房间兜底扫描节流表：group → 上次扫描时间（UTC）。</summary>
+    private readonly ConcurrentDictionary<string, DateTime> _controlRoomSweepAt = new();
 
     public HeartbeatMonitor(
         RoomManager roomManager,
         GatewayBroadcaster broadcaster,
         RoomPhaseObserver phaseObserver,
+        RoomOperations roomOperations,
         ILogger<HeartbeatMonitor> logger)
     {
         _roomManager = roomManager;
         _broadcaster = broadcaster;
         _phaseObserver = phaseObserver;
+        _roomOperations = roomOperations;
         _logger = logger;
     }
 
@@ -145,6 +153,10 @@ public class HeartbeatMonitor : IHostedService, IDisposable
             }
         // 5. 检查控制房间上线状态过期
             CheckControlRoomTimeout();
+
+            // 6. 控制房间增量广播兜底：CheckControlRoomTimeout 直接改成员字段（上线过期复位/任务运行态超时复位）
+            // 但自身不广播；哈希去重后这些变更不再靠其他成员上报的全量广播搭车下发，必须由这里补兜底。
+            SweepControlRoomBroadcasts();
         }
         catch (Exception ex)
         {
@@ -269,6 +281,52 @@ public class HeartbeatMonitor : IHostedService, IDisposable
     public void Dispose()
     {
         _timer?.Dispose();
+    }
+
+    /// <summary>
+    /// 控制房间增量广播兜底（带宽优化配套）：每个 CTRL_ 组 60s 节流做一次增量比对，
+    /// 有变化才发（无变化零发送，不产生额外流量）。承载 CheckControlRoomTimeout 等
+    /// "服务端直接改成员字段但不广播"路径的变更下发。
+    /// </summary>
+    private void SweepControlRoomBroadcasts()
+    {
+        try
+        {
+            var now = DateTime.UtcNow;
+            var groups = _roomManager.GetAllControlRoomGroups();
+            foreach (var group in groups)
+            {
+                // 60s 节流：避免 10s 扫描节奏下反复比对（比对本身有序列化开销）
+                if (_controlRoomSweepAt.TryGetValue(group, out var last) && now - last < ControlRoomSweepInterval)
+                    continue;
+                _controlRoomSweepAt[group] = now;
+                _ = SweepGroupSafeAsync(group);
+            }
+            // 顺带清理已消失房间的节流键（房间规模小，概率性清理即可）
+            if (_controlRoomSweepAt.Count > 100)
+            {
+                var alive = new HashSet<string>(groups);
+                foreach (var key in _controlRoomSweepAt.Keys)
+                    if (!alive.Contains(key)) _controlRoomSweepAt.TryRemove(key, out _);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "控制房间增量广播兜底扫描时发生异常");
+        }
+    }
+
+    /// <summary>单组兜底广播的安全包装：Timer 回调 fire-and-forget，异常就地吞掉记日志，绝不影响扫描循环。</summary>
+    private async Task SweepGroupSafeAsync(string group)
+    {
+        try
+        {
+            await _roomOperations.BroadcastControlRoomPlayersAsync(group, forceFull: false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "控制房间 {Group} 增量广播兜底失败（已吞掉）", group);
+        }
     }
 
     /// <summary>检查控制房间上线状态过期（30 分钟超时），过期后自动重置上线状态。R-1 方案 C。</summary>

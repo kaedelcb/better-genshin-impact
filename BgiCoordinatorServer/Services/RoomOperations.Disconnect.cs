@@ -122,9 +122,8 @@ public sealed partial class RoomOperations
                         // 遥控端不入 _controlRooms，RemoveFromControlRoom 对其 no-op；
                         // 需单独清理遥控端连接登记，防止 _remoteControlConnections 残留。
                         _roomManager.RemoveRemoteConnection(group, ctx.ConnectionId);
-                        var players = _roomManager.GetControlRoomPlayers(group);
-                        _ = _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated",
-                            new { players }, players);
+                        // 断线标记离线后全量广播最新成员列表（统一出口，payload 形状与增量路径一致）
+                        _ = BroadcastControlRoomPlayersAsync(group, forceFull: true);
                         _logger.LogInformation("控制房间 {Group} 成员断线，已标记离线", group);
                     }
                 }
