@@ -1313,7 +1313,20 @@ public class RoomManager
                     }
                     player.LastHeartbeat = DateTime.UtcNow;
                 }
+                else
+                {
+                    // "幽灵"上报：客户端重连后未重新入房（旧 ConnectionId 找不到成员）。
+                    // 此前静默丢弃且响应仍返回 ack，客户端无从感知自己已掉出房间
+                    // （历史 bug：助手徽章离线但两端零日志）。记警告便于排查。
+                    _logger?.LogWarning(
+                        "[UpdateControlStatus] 控制房间 {Group} 找不到 ConnectionId={ConnectionId} 的成员，状态上报被丢弃（该成员可能重连后未重新入房）",
+                        group, connectionId);
+                }
             }
+        }
+        else
+        {
+            _logger?.LogWarning("[UpdateControlStatus] 控制房间 {Group} 不存在，状态上报被丢弃", group);
         }
     }
 

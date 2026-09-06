@@ -11,6 +11,9 @@ namespace MultiplayerHoeingAssistant.Services;
 /// 迁移依据：服务器 GatewayProtocol.LegacyMethodMap/LegacyEventMap（control.* 6 + log.* 7 + screenshot.* 3
 /// 方法、13 事件全覆盖）；血泪语义（P1-F 断线自愈、断线门控不 throw、_clientInstanceId、
 /// ControlRoomPlayersUpdated 全量/增量两态）逐条保留，见各方法注释。
+/// 2026-09-06 新增第四条恢复机制：入房重试（StartRejoinRetry）——内置重连（Reconnecting 窗口内）
+/// 与 P1-F 自愈（Closed 后）都以传输层状态为介入条件，重连成功后 hello/入房失败时两者都不会
+/// 再介入（传输层已 Connected），业务层必须自己兜底重试入房，否则永久"徽章离线 + 零日志"。
 /// </summary>
 public class SignalRClient : IAsyncDisposable
 {
@@ -50,6 +53,11 @@ public class SignalRClient : IAsyncDisposable
     // 同一时刻只允许一条自愈定时器；_selfHealRunning 防止定时器回调重入（StartAsync 超 30s 时）。
     private Timer? _selfHealTimer;
     private int _selfHealRunning;
+
+    // [入房重试] 传输层已 Connected 但 hello/入房失败时的业务层兜底定时器（每 10s 重试入房）。
+    // 此场景下内置重连与自愈都不会再介入，没有它会永久卡在"徽章离线 + 状态上报被服务端静默丢弃"。
+    private Timer? _rejoinTimer;
+    private int _rejoinRunning;
 
     public event Action<ControlRoomPlayersUpdate>? OnPlayersUpdated;
     public event Action<RemoteCommand>? OnRemoteCommand;
@@ -128,9 +136,13 @@ public class SignalRClient : IAsyncDisposable
         gateway.EnvelopeReceived += DispatchEvt;
 
         // 重连中（SignalR 内置自动重连尝试期间）
-        gateway.Reconnecting += _ =>
+        gateway.Reconnecting += error =>
         {
-            System.Diagnostics.Debug.WriteLine("SignalR 重连中...");
+            // 必须落 OnLog：此前只有 Debug.WriteLine，断线时 UI/文件零痕迹，
+            // 出现"徽章离线但日志无任何提示"的不可排查状态
+            OnLog?.Invoke(error != null
+                ? $"[连接] SignalR 连接断开，正在自动重连: {error.Message}"
+                : "[连接] SignalR 连接断开，正在自动重连...");
             OnConnectionStateChanged?.Invoke(false);
             return Task.CompletedTask;
         };
@@ -140,19 +152,21 @@ public class SignalRClient : IAsyncDisposable
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine("SignalR 已重连，重新加入控制房间");
-                // v3 必需：重连后 connectionId 变更，服务端会话跟踪视为未握手，
-                // 不重新 hello 会被 handshake_required 拒绝（DAP 时序）
-                await gateway.HelloAsync();
-                await JoinControlRoomAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote);
+                OnLog?.Invoke("[连接] SignalR 已重连，重新加入控制房间");
+                await ResumeAfterReconnectAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote);
                 OnConnectionStateChanged?.Invoke(true);
             }
             catch (Exception ex)
             {
                 // Reconnected 是 async void lambda，异常若不在此捕获会冒泡到全局
                 // TaskScheduler.UnobservedTaskException → App.xaml.cs 弹"任务异常"框，非常粗暴。
-                // 重连成功后 JoinControlRoom 偶发失败（如房间已被服务端回收），仅记日志，等待下次重连。
-                System.Diagnostics.Debug.WriteLine($"SignalR 重连后加入房间失败: {ex.Message}");
+                // 重连成功后 hello/入房偶发失败（如房间已被服务端回收）：此时传输层已 Connected，
+                // 内置重连与 P1-F 自愈都不会再介入；若仅 Debug.WriteLine 吞掉（历史 bug），
+                // 会永久卡在"徽章离线 + 零日志"，且状态上报在服务端按旧 ConnectionId 找不到人
+                // 被静默丢弃。必须记日志、显式置离线，并启动入房重试兜底。
+                OnLog?.Invoke($"[连接] SignalR 重连成功但重新加入控制房间失败: {ex.Message}（10 秒后重试入房）");
+                OnConnectionStateChanged?.Invoke(false);
+                StartRejoinRetry(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote);
             }
         };
 
@@ -160,17 +174,16 @@ public class SignalRClient : IAsyncDisposable
         // 注意：异常参数绝不能忽略——SignalR 在 ServerTimeout（30s 无心跳）等场景会把
         //   TimeoutException 传到这里，不"观察"会作为未观察任务异常冒泡到全局
         //   TaskScheduler.UnobservedTaskException → App 弹"未处理异常"框，非常粗暴。
-        //   这里吞掉并转状态通知（IsConnected=false，徽章变"离线"）。
+        //   这里读取 exception.Message 记日志并转状态通知（IsConnected=false，徽章变"离线"）。
         // 血泪教训：自愈绝不能与内置重连并存——曾有过 ReconnectLoopAsync 自愈循环与内置重连并发，
         //   两者竞态：自愈循环在内置重连刚恢复后 Dispose 掉新连接、且重建失败时旧连接已被销毁
         //   → 彻底离线无法控制。因此自愈只允许在 Closed（内置重连 0s/2s/10s/30s 四次尝试耗尽）之后
         //   启动，且始终对同一连接 StartAsync，绝不 Dispose/重建连接。
         gateway.Closed += exception =>
         {
-            if (exception != null)
-            {
-                System.Diagnostics.Debug.WriteLine($"SignalR 连接已关闭: {exception.Message}");
-            }
+            OnLog?.Invoke(exception != null
+                ? $"[连接] SignalR 连接已关闭: {exception.Message}（自动重连已耗尽，将每 30 秒尝试自愈）"
+                : "[连接] SignalR 连接已关闭（自动重连已耗尽，将每 30 秒尝试自愈）");
             OnConnectionStateChanged?.Invoke(false);
             // [P1-F 止血] 内置重连已耗尽，启动低频自愈：每 30s 对同一连接 StartAsync，
             // 成功后停止自愈并重新入房。避免"网络抖动 >42s 或服务器重启后助手永久离线"。
@@ -308,7 +321,8 @@ public class SignalRClient : IAsyncDisposable
 
     /// <summary>
     /// [P1-F 止血] Closed（内置重连耗尽）后启动自愈定时器：每 30s 对同一连接调 StartAsync。
-    /// 成功后停止定时器、触发 OnConnectionStateChanged(true) 并重新 hello + 加入控制房间（入房失败仅记日志）。
+    /// 成功后停止定时器、重新 hello + 加入控制房间，全部成功才触发 OnConnectionStateChanged(true)；
+    /// 入房失败转 StartRejoinRetry 兜底（否则徽章假在线、状态上报被服务端静默丢弃）。
     /// 严禁在内置重连进行期间启动（历史竞态教训，见 Closed 注册处注释）；Closed 即代表内置重连已耗尽，此刻启动安全。
     /// 所有异常在回调内捕获，不得冒泡到 TaskScheduler.UnobservedTaskException。
     /// </summary>
@@ -333,20 +347,21 @@ public class SignalRClient : IAsyncDisposable
                 }
                 OnLog?.Invoke("[自愈] SignalR 内置重连已耗尽，尝试重新连接...");
                 await closedGateway.ReconnectStartAsync();
-                // 重连成功：停止自愈，恢复在线状态，并重新加入控制房间（复用 Reconnected 的入房逻辑）
+                // 重连成功：停止自愈，重新 hello + 加入控制房间，全部成功才恢复在线状态
                 StopSelfHeal();
-                OnConnectionStateChanged?.Invoke(true);
                 try
                 {
-                    // v3 必需：新 connectionId 需重新 hello（同 Reconnected 处注释）
-                    await closedGateway.HelloAsync();
-                    await JoinControlRoomAsync(closedGateway, roomCode, password, playerUid, playerName, teamUids, isRemote);
+                    await ResumeAfterReconnectAsync(closedGateway, roomCode, password, playerUid, playerName, teamUids, isRemote);
                     OnLog?.Invoke("[自愈] SignalR 重连成功，已重新加入控制房间");
+                    OnConnectionStateChanged?.Invoke(true);
                 }
                 catch (Exception ex)
                 {
-                    // 入房失败（如房间已被服务端回收）仅记日志，连接本身已恢复
-                    OnLog?.Invoke($"[自愈] SignalR 重连成功但加入房间失败: {ex.Message}");
+                    // 入房失败（如房间已被服务端回收）：传输层已恢复但业务层未入房，
+                    // 显式置离线并启动入房重试兜底（否则徽章假在线、状态上报被服务端静默丢弃）
+                    OnLog?.Invoke($"[自愈] SignalR 重连成功但加入房间失败: {ex.Message}（10 秒后重试入房）");
+                    OnConnectionStateChanged?.Invoke(false);
+                    StartRejoinRetry(closedGateway, roomCode, password, playerUid, playerName, teamUids, isRemote);
                 }
             }
             catch (Exception ex)
@@ -365,6 +380,72 @@ public class SignalRClient : IAsyncDisposable
     private void StopSelfHeal()
     {
         var timer = Interlocked.Exchange(ref _selfHealTimer, null);
+        timer?.Dispose();
+    }
+
+    /// <summary>
+    /// 重连/自愈成功后的业务恢复：重新 hello + 加入控制房间。
+    /// v3 必需：重连后 connectionId 变更，服务端会话跟踪视为未握手，
+    /// 不重新 hello 会被 handshake_required 拒绝（DAP 时序）。失败原样上抛，由调用方兜底。
+    /// </summary>
+    private async Task ResumeAfterReconnectAsync(MhaGatewayClient gateway, string roomCode, string password,
+        string playerUid, string playerName, List<string> teamUids, bool isRemote)
+    {
+        await gateway.HelloAsync();
+        await JoinControlRoomAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote);
+    }
+
+    /// <summary>
+    /// [入房重试] 传输层已 Connected 但 hello/入房失败时的业务层兜底：每 10s 重试 hello + 入房，
+    /// 成功后停止并恢复在线状态。连接被替换或传输层再次断开时立即放弃——
+    /// 恢复职责交回内置重连（Reconnecting）/自愈（Closed），避免两路并发恢复。
+    /// 所有异常在回调内捕获，不得冒泡到 TaskScheduler.UnobservedTaskException。
+    /// </summary>
+    private void StartRejoinRetry(MhaGatewayClient gateway, string roomCode, string password,
+        string playerUid, string playerName, List<string> teamUids, bool isRemote)
+    {
+        if (_disposed) return;
+        // 同一时刻只允许一条入房重试定时器，先停掉再建
+        StopRejoinRetry();
+        _rejoinTimer = new Timer(async _ =>
+        {
+            if (Interlocked.CompareExchange(ref _rejoinRunning, 1, 0) != 0) return;
+            try
+            {
+                if (_disposed) return;
+                // 连接已被替换（手动 RefreshAsync / 新一轮 EstablishAsync）：旧连接的入房重试无意义
+                if (!ReferenceEquals(gateway, _gateway))
+                {
+                    StopRejoinRetry();
+                    return;
+                }
+                // 传输层又断了：停止入房重试，恢复职责交回内置重连/自愈机制
+                if (!gateway.IsConnected)
+                {
+                    StopRejoinRetry();
+                    return;
+                }
+                await ResumeAfterReconnectAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote);
+                StopRejoinRetry();
+                OnLog?.Invoke("[连接] 重新加入控制房间成功，已恢复在线");
+                OnConnectionStateChanged?.Invoke(true);
+            }
+            catch (Exception ex)
+            {
+                // 入房仍失败（房间仍不存在等），仅记日志，等下一个 10s 周期
+                OnLog?.Invoke($"[连接] 重新加入控制房间失败: {ex.Message}（10 秒后重试）");
+            }
+            finally
+            {
+                _rejoinRunning = 0;
+            }
+        }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+    }
+
+    /// <summary>停止并释放入房重试定时器（幂等）。</summary>
+    private void StopRejoinRetry()
+    {
+        var timer = Interlocked.Exchange(ref _rejoinTimer, null);
         timer?.Dispose();
     }
 
@@ -682,8 +763,9 @@ public class SignalRClient : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
-        // 连接对象 Dispose 时一并停掉自愈定时器，避免对已释放连接 StartAsync
+        // 连接对象 Dispose 时一并停掉自愈/入房重试定时器，避免对已释放连接 StartAsync/入房
         StopSelfHeal();
+        StopRejoinRetry();
         var gateway = _gateway;
         _gateway = null;
         if (gateway != null)
