@@ -1,14 +1,20 @@
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.AspNetCore.SignalR.Client;
 using MultiplayerHoeingAssistant.Models;
+using MultiplayerHoeingAssistant.Services.Gateway;
 
 using Timer = System.Threading.Timer;
 
 namespace MultiplayerHoeingAssistant.Services;
 
+/// <summary>
+/// 控制房间 SignalR 客户端（切片 9 已换芯：/hub 旧协议 → /gateway v3 信封，
+/// 传输层委托 <see cref="MhaGatewayClient"/>，公开面零变化）。
+/// 迁移依据：服务器 GatewayProtocol.LegacyMethodMap/LegacyEventMap（control.* 6 + log.* 7 + screenshot.* 3
+/// 方法、13 事件全覆盖）；血泪语义（P1-F 断线自愈、断线门控不 throw、_clientInstanceId、
+/// ControlRoomPlayersUpdated 全量/增量两态）逐条保留，见各方法注释。
+/// </summary>
 public class SignalRClient : IAsyncDisposable
 {
-    private HubConnection? _connection;
+    private MhaGatewayClient? _gateway;
     private string _roomCode = string.Empty;
     private string _playerUid = string.Empty;
     private string _playerName = string.Empty;
@@ -22,18 +28,21 @@ public class SignalRClient : IAsyncDisposable
 
     private bool _disposed;
 
-    /// <summary>服务端不支持 ReportMemberScreenshot（旧服务端首次 HubException 后标记，停止重试；
-    /// 新连接建立时重置，升级服务端后自动恢复）。volatile：Timer 线程读、Hub 调用线程写。</summary>
+    /// <summary>URL 归一化告警去重（按原始配置值）：10s 重试循环场景防告警刷屏。</summary>
+    private string? _lastUrlWarned;
+
+    /// <summary>服务端不支持 screenshot.report（首次 GatewayErrorException 后标记，停止重试；
+    /// 新连接建立时重置，升级服务端后自动恢复）。volatile：Timer 线程读、调用线程写。</summary>
     private volatile bool _screenshotUnsupported;
-    /// <summary>同 _screenshotUnsupported：旧服务端无 ReportMemberLogBatch 时停重试（房间实时日志汇聚）。</summary>
+    /// <summary>同 _screenshotUnsupported：服务端无 log.reportBatch 时停重试（房间实时日志汇聚）。</summary>
     private volatile bool _logUnsupported;
-    /// <summary>同模式：旧服务端无 SubscribeMemberLog/UnsubscribeMemberLog 时停重试（日志按需订阅）。
+    /// <summary>同模式：服务端无 log.subscribe/log.unsubscribe 时停重试（日志按需订阅）。
     /// 观看端据此给远程来源项标注"（需新版服务端）"。</summary>
     private volatile bool _logSubscribeUnsupported;
-    /// <summary>同模式：旧服务端无 RequestMemberLogFiles 等日志下载方法时停重试（远程日志下载）。
+    /// <summary>同模式：服务端无 log.requestFiles 等日志下载方法时停重试（远程日志下载）。
     /// 下载端 UI 据此标注"需新版服务端"。</summary>
     private volatile bool _logFileUnsupported;
-    /// <summary>同模式：旧服务端无 RequestMemberScreenshot 时停重试（截图按需取图·观看端）。
+    /// <summary>同模式：服务端无 screenshot.request 时停重试（截图按需取图·观看端）。
     /// 观看端据此提示"需新版服务端"。</summary>
     private volatile bool _screenshotRequestUnsupported;
 
@@ -62,11 +71,11 @@ public class SignalRClient : IAsyncDisposable
     public event Action<string, string, string>? OnMemberLogDownloadRequested;
     /// <summary>收到成员日志文件分块（下载端，按 RequestId 认领重组）。</summary>
     public event Action<MemberLogFileChunk>? OnMemberLogFileChunk;
-    /// <summary>旧服务端不支持日志订阅（HubException 后置位，新连接重置）。观看端 UI 标注用。</summary>
+    /// <summary>旧服务端不支持日志订阅（error 响应后置位，新连接重置）。观看端 UI 标注用。</summary>
     public bool LogSubscribeUnsupported => _logSubscribeUnsupported;
-    /// <summary>旧服务端不支持远程日志下载（HubException 后置位，新连接重置）。下载端 UI 标注用。</summary>
+    /// <summary>旧服务端不支持远程日志下载（error 响应后置位，新连接重置）。下载端 UI 标注用。</summary>
     public bool LogFileUnsupported => _logFileUnsupported;
-    /// <summary>旧服务端不支持截图按需取图（HubException 后置位，新连接重置）。观看端 UI 标注用。</summary>
+    /// <summary>旧服务端不支持截图按需取图（error 响应后置位，新连接重置）。观看端 UI 标注用。</summary>
     public bool ScreenshotRequestUnsupported => _screenshotRequestUnsupported;
     /// <summary>全员就绪确认完成事件（各助手据此启动中断流程）。带 generation 参数，用于幂等保护。</summary>
     public event Action<int>? OnAllReadyConfirmed;
@@ -75,7 +84,7 @@ public class SignalRClient : IAsyncDisposable
     /// <summary>日志回调（供外部输出探针日志）</summary>
     public Action<string>? OnLog { get; set; }
 
-    public bool IsConnected => _connection?.State == HubConnectionState.Connected;
+    public bool IsConnected => _gateway?.IsConnected == true;
 
     public async Task ConnectAsync(string serverUrl, string roomCode, string password,
         string playerUid, string playerName, List<string> teamUids, bool isRemote = false, string clientInstanceId = "")
@@ -98,51 +107,28 @@ public class SignalRClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// 建立一条完整的 SignalR 连接：创建 HubConnection、注册事件、StartAsync、加入控制房间。
-    /// 每次调用都会新建 connection，因此事件处理器必须在这里重新注册到最新连接上。
+    /// 建立一条完整的网关连接：创建 MhaGatewayClient、注册事件分发与生命周期回调、
+    /// StartAsync + session.hello、加入控制房间。
+    /// 每次调用都会新建 gateway 实例，因此事件处理器必须在这里重新注册到最新实例上。
     /// </summary>
     private async Task EstablishAsync(string serverUrl, string roomCode, string password,
         string playerUid, string playerName, List<string> teamUids, bool isRemote)
     {
-        var connection = new HubConnectionBuilder()
-            .WithUrl($"{serverUrl}/hub")
-            .WithAutomaticReconnect(new[] { TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30) })
-            .Build();
+        // URL 归一化（《通信方案》§4.8，切片 8 同款咽喉姿势）：配置只填基地址，SDK 内部拼 /gateway。
+        // 旧配置带 /hub 尾巴的剥掉并告警一次（按原始配置值去重，防 10s 重试循环刷屏）。
+        var baseUrl = MhaGatewayClient.NormalizeBaseUrl(serverUrl, out var stripped);
+        if (stripped && !string.Equals(_lastUrlWarned, serverUrl, StringComparison.Ordinal))
+        {
+            _lastUrlWarned = serverUrl;
+            OnLog?.Invoke("[连接] 配置的服务器地址带旧格式 /hub 尾巴，已自动归一化为基地址（新协议固定走 /gateway）");
+        }
 
-        connection.On<ControlRoomPlayersUpdate>("ControlRoomPlayersUpdated", update =>
-            OnPlayersUpdated?.Invoke(update));
-        connection.On<RemoteCommand>("RemoteCommand", cmd =>
-            OnRemoteCommand?.Invoke(cmd));
-        connection.On<string>("JoinRejected", reason =>
-            OnJoinRejected?.Invoke(reason));
-        connection.On<int>("AllReady", generation =>
-        {
-            OnLog?.Invoke("[探针助手] SignalRClient 收到 AllReady 事件, generation=" + generation);
-            OnAllReadyConfirmed?.Invoke(generation);
-        });
-        connection.On<int>("AllReadyConfirm", generation =>
-        {
-            OnAllReadyConfirmReceived?.Invoke(generation);
-        });
-        connection.On<MemberScreenshotFrame>("MemberScreenshot", frame =>
-            OnMemberScreenshot?.Invoke(frame));
-        connection.On<string, string>("MemberScreenshotRequested", (requesterUid, requestId) =>
-            OnMemberScreenshotRequested?.Invoke(requesterUid, requestId));
-        connection.On<MemberLogBatch>("MemberLogBatch", batch =>
-            OnMemberLogBatch?.Invoke(batch));
-        connection.On<int>("MemberLogSubscribersChanged", count =>
-            OnMemberLogSubscribersChanged?.Invoke(count));
-        connection.On<string, string>("MemberLogFilesRequested", (requesterUid, requestId) =>
-            OnMemberLogFilesRequested?.Invoke(requesterUid, requestId));
-        connection.On<MemberLogFileList>("MemberLogFileList", list =>
-            OnMemberLogFileList?.Invoke(list));
-        connection.On<string, string, string>("MemberLogDownloadRequested", (requesterUid, requestId, fileName) =>
-            OnMemberLogDownloadRequested?.Invoke(requesterUid, requestId, fileName));
-        connection.On<MemberLogFileChunk>("MemberLogFileChunk", chunk =>
-            OnMemberLogFileChunk?.Invoke(chunk));
+        var gateway = new MhaGatewayClient();
+
+        gateway.EnvelopeReceived += DispatchEvt;
 
         // 重连中（SignalR 内置自动重连尝试期间）
-        connection.Reconnecting += _ =>
+        gateway.Reconnecting += _ =>
         {
             System.Diagnostics.Debug.WriteLine("SignalR 重连中...");
             OnConnectionStateChanged?.Invoke(false);
@@ -150,12 +136,15 @@ public class SignalRClient : IAsyncDisposable
         };
 
         // SignalR 内置自动重连成功
-        connection.Reconnected += async _ =>
+        gateway.Reconnected += async _ =>
         {
             try
             {
                 System.Diagnostics.Debug.WriteLine("SignalR 已重连，重新加入控制房间");
-                await connection.InvokeAsync("JoinControlRoom", roomCode, password, playerUid, playerName, teamUids, isRemote, _clientInstanceId);
+                // v3 必需：重连后 connectionId 变更，服务端会话跟踪视为未握手，
+                // 不重新 hello 会被 handshake_required 拒绝（DAP 时序）
+                await gateway.HelloAsync();
+                await JoinControlRoomAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote);
                 OnConnectionStateChanged?.Invoke(true);
             }
             catch (Exception ex)
@@ -176,7 +165,7 @@ public class SignalRClient : IAsyncDisposable
         //   两者竞态：自愈循环在内置重连刚恢复后 Dispose 掉新连接、且重建失败时旧连接已被销毁
         //   → 彻底离线无法控制。因此自愈只允许在 Closed（内置重连 0s/2s/10s/30s 四次尝试耗尽）之后
         //   启动，且始终对同一连接 StartAsync，绝不 Dispose/重建连接。
-        connection.Closed += exception =>
+        gateway.Closed += exception =>
         {
             if (exception != null)
             {
@@ -185,26 +174,145 @@ public class SignalRClient : IAsyncDisposable
             OnConnectionStateChanged?.Invoke(false);
             // [P1-F 止血] 内置重连已耗尽，启动低频自愈：每 30s 对同一连接 StartAsync，
             // 成功后停止自愈并重新入房。避免"网络抖动 >42s 或服务器重启后助手永久离线"。
-            StartSelfHeal(connection, roomCode, password, playerUid, playerName, teamUids, isRemote);
+            StartSelfHeal(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote);
             return Task.CompletedTask;
         };
 
-        await connection.StartAsync();
-        await connection.InvokeAsync("JoinControlRoom", roomCode, password, playerUid, playerName, teamUids, isRemote, _clientInstanceId);
+        try
+        {
+            // 连接 + session.hello 握手（DAP 时序：握手完成前服务端拒绝其它消息）
+            await gateway.ConnectAsync(baseUrl);
+            await JoinControlRoomAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote);
+        }
+        catch
+        {
+            // 首连失败：释放半成品实例，异常原样冒泡给 MainViewModel（记日志 + 10s 重试定时器）
+            await gateway.DisposeAsync();
+            throw;
+        }
 
-        // 必须在 StartAsync + JoinControlRoom 全部成功之后才把 _connection 指向新连接。
-        // 若提前赋值、StartAsync 又失败，_connection 会指向"失败的新连接"，
-        // 导致自愈循环里 closedConnection != _connection 判断提前 return、放弃重连。
-        _connection = connection;
+        // 必须在 StartAsync + hello + JoinControlRoom 全部成功之后才把 _gateway 指向新实例。
+        // 若提前赋值、StartAsync 又失败，_gateway 会指向"失败的新实例"，
+        // 导致自愈循环里 closedGateway != _gateway 判断提前 return、放弃重连。
+        var old = _gateway;
+        _gateway = gateway;
+        // 旧实例（上次失败/掉线残留）在新实例就位后释放，避免双连接并发收发
+        if (old != null)
+        {
+            await old.DisposeAsync();
+        }
+    }
+
+    /// <summary>加入控制房间（v3：control.joinRoom）。三处调用点：首连 EstablishAsync、
+    /// 内置重连 Reconnected、P1-F 自愈成功后；每处调用前均已先完成 session.hello。
+    /// clientInstanceId 语义保留（多实例/重连去重）。JoinRejected 走 evt 事件不走响应，与旧协议一致。</summary>
+    private Task JoinControlRoomAsync(MhaGatewayClient gateway, string roomCode, string password,
+        string playerUid, string playerName, List<string> teamUids, bool isRemote)
+        => gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlJoinRoom, new
+        {
+            roomCode,
+            password,
+            playerUid,
+            playerName,
+            allowedUids = teamUids, // 服务器路由键名是 allowedUids（GatewayDispatcher.ControlRoom.cs）
+            isRemote,
+            clientInstanceId = _clientInstanceId
+        });
+
+    /// <summary>
+    /// evt 信封 → 13 个 C# 事件分发（迁移自旧 13 个 connection.On 订阅，
+    /// 映射依据 = 服务器 GatewayProtocol.LegacyEventMap + RoomOperations 广播点实读的 evt payload 形状）。
+    /// 未知名静默忽略（与旧协议"未订阅的事件名天然忽略"等价）；解析异常就地捕获，绝不外抛回流 SignalR 管线。
+    /// </summary>
+    private void DispatchEvt(GatewayEnvelope env)
+    {
+        try
+        {
+            switch (env.Name)
+            {
+                case GatewayProtocol.Events.ControlPlayersUpdated:
+                {
+                    // payload 即 ControlRoomPlayersUpdate 本体（全量/增量两态，da5df45d 带宽优化）；
+                    // 两态合并逻辑在 MainViewModel，原样保留不动
+                    var update = env.DeserializePayload<ControlRoomPlayersUpdate>();
+                    if (update != null) OnPlayersUpdated?.Invoke(update);
+                    break;
+                }
+                case GatewayProtocol.Events.ControlRemoteCommand:
+                {
+                    var cmd = env.Get<RemoteCommand>("command");
+                    if (cmd != null) OnRemoteCommand?.Invoke(cmd);
+                    break;
+                }
+                case GatewayProtocol.Events.ControlJoinRejected:
+                    OnJoinRejected?.Invoke(env.GetString("reason"));
+                    break;
+                case GatewayProtocol.Events.ControlAllReady:
+                {
+                    var generation = env.GetInt("generation");
+                    OnLog?.Invoke("[探针助手] SignalRClient 收到 AllReady 事件, generation=" + generation);
+                    OnAllReadyConfirmed?.Invoke(generation);
+                    break;
+                }
+                case GatewayProtocol.Events.ControlAllReadyConfirm:
+                    OnAllReadyConfirmReceived?.Invoke(env.GetInt("generation"));
+                    break;
+                case GatewayProtocol.Events.ScreenshotMember:
+                {
+                    // payload 即帧本体 {uid,jpegBase64,width,height,capturedAt}
+                    var frame = env.DeserializePayload<MemberScreenshotFrame>();
+                    if (frame != null) OnMemberScreenshot?.Invoke(frame);
+                    break;
+                }
+                case GatewayProtocol.Events.ScreenshotRequested:
+                    OnMemberScreenshotRequested?.Invoke(env.GetString("requesterUid"), env.GetString("requestId"));
+                    break;
+                case GatewayProtocol.Events.LogBatch:
+                {
+                    // payload 即批本体 {uid,senderName,lines,infoOnly,serverTime}
+                    var batch = env.DeserializePayload<MemberLogBatch>();
+                    if (batch != null) OnMemberLogBatch?.Invoke(batch);
+                    break;
+                }
+                case GatewayProtocol.Events.LogSubscribersChanged:
+                    OnMemberLogSubscribersChanged?.Invoke(env.GetInt("count"));
+                    break;
+                case GatewayProtocol.Events.LogFilesRequested:
+                    OnMemberLogFilesRequested?.Invoke(env.GetString("requesterUid"), env.GetString("requestId"));
+                    break;
+                case GatewayProtocol.Events.LogFileList:
+                {
+                    // payload 即应答本体 {uid,requestId,files}
+                    var list = env.DeserializePayload<MemberLogFileList>();
+                    if (list != null) OnMemberLogFileList?.Invoke(list);
+                    break;
+                }
+                case GatewayProtocol.Events.LogDownloadRequested:
+                    OnMemberLogDownloadRequested?.Invoke(env.GetString("requesterUid"), env.GetString("requestId"), env.GetString("fileName"));
+                    break;
+                case GatewayProtocol.Events.LogFileChunk:
+                {
+                    // payload 即块本体 {uid,requestId,seq,totalChunks,chunkBase64,fileName,done}
+                    var chunk = env.DeserializePayload<MemberLogFileChunk>();
+                    if (chunk != null) OnMemberLogFileChunk?.Invoke(chunk);
+                    break;
+                }
+                // default：未知名静默忽略（双发期服务器只向 v3 连接发 evt，无旧名混入）
+            }
+        }
+        catch (Exception ex)
+        {
+            OnLog?.Invoke($"[探针助手] evt 事件分发失败（已吞掉）: {env.Name}: {ex.Message}");
+        }
     }
 
     /// <summary>
-    /// [P1-F 止血] Closed（内置重连耗尽）后启动自愈定时器：每 30s 对同一 HubConnection 调 StartAsync。
-    /// 成功后停止定时器、触发 OnConnectionStateChanged(true) 并重新 JoinControlRoom（入房失败仅记日志）。
+    /// [P1-F 止血] Closed（内置重连耗尽）后启动自愈定时器：每 30s 对同一连接调 StartAsync。
+    /// 成功后停止定时器、触发 OnConnectionStateChanged(true) 并重新 hello + 加入控制房间（入房失败仅记日志）。
     /// 严禁在内置重连进行期间启动（历史竞态教训，见 Closed 注册处注释）；Closed 即代表内置重连已耗尽，此刻启动安全。
     /// 所有异常在回调内捕获，不得冒泡到 TaskScheduler.UnobservedTaskException。
     /// </summary>
-    private void StartSelfHeal(HubConnection closedConnection, string roomCode, string password,
+    private void StartSelfHeal(MhaGatewayClient closedGateway, string roomCode, string password,
         string playerUid, string playerName, List<string> teamUids, bool isRemote)
     {
         if (_disposed) return;
@@ -217,20 +325,22 @@ public class SignalRClient : IAsyncDisposable
             {
                 if (_disposed) return;
                 // 连接已被替换（如用户手动 RefreshAsync 重建了新连接）或已恢复，放弃自愈
-                if (!ReferenceEquals(closedConnection, _connection)
-                    || closedConnection.State == HubConnectionState.Connected)
+                if (!ReferenceEquals(closedGateway, _gateway)
+                    || closedGateway.IsConnected)
                 {
                     StopSelfHeal();
                     return;
                 }
                 OnLog?.Invoke("[自愈] SignalR 内置重连已耗尽，尝试重新连接...");
-                await closedConnection.StartAsync();
+                await closedGateway.ReconnectStartAsync();
                 // 重连成功：停止自愈，恢复在线状态，并重新加入控制房间（复用 Reconnected 的入房逻辑）
                 StopSelfHeal();
                 OnConnectionStateChanged?.Invoke(true);
                 try
                 {
-                    await closedConnection.InvokeAsync("JoinControlRoom", roomCode, password, playerUid, playerName, teamUids, isRemote, _clientInstanceId);
+                    // v3 必需：新 connectionId 需重新 hello（同 Reconnected 处注释）
+                    await closedGateway.HelloAsync();
+                    await JoinControlRoomAsync(closedGateway, roomCode, password, playerUid, playerName, teamUids, isRemote);
                     OnLog?.Invoke("[自愈] SignalR 重连成功，已重新加入控制房间");
                 }
                 catch (Exception ex)
@@ -260,11 +370,11 @@ public class SignalRClient : IAsyncDisposable
 
     public async Task SendRemoteCommandAsync(RemoteCommand command)
     {
-        if (_connection == null) return;
+        if (_gateway == null) return;
         command.RoomCode = _roomCode;
         try
         {
-            await _connection.InvokeAsync("SendRemoteCommand", command);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlSendCommand, new { command });
         }
         catch (Exception ex)
         {
@@ -275,10 +385,10 @@ public class SignalRClient : IAsyncDisposable
 
     public async Task ConfirmAllReadyAsync(int generation)
     {
-        if (_connection == null) return;
+        if (_gateway == null) return;
         try
         {
-            await _connection.InvokeAsync("ConfirmAllReady", generation);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlConfirmAllReady, new { generation });
         }
         catch (Exception ex)
         {
@@ -288,15 +398,15 @@ public class SignalRClient : IAsyncDisposable
 
     public async Task ReportControlStatusAsync(ControlStatus status)
     {
-        if (_connection == null) return;
-        if (_connection.State != HubConnectionState.Connected)
+        if (_gateway == null) return;
+        if (!_gateway.IsConnected)
         {
             return; // 连接未就绪时静默跳过，避免连接断开瞬间大量并发调用被取消产生"状态上报失败"日志风暴
         }
         try
         {
             status.RoomCode = _roomCode;
-            await _connection.InvokeAsync("ReportControlStatus", status);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlReportStatus, new { status });
         }
         catch (Exception ex)
         {
@@ -309,15 +419,15 @@ public class SignalRClient : IAsyncDisposable
     /// <summary>上报上线事件（带 generation 代序号，供服务端状态机边沿检测）。</summary>
     public async Task ReportOnlineEventAsync(int generation, bool isOnlineReady)
     {
-        if (_connection == null) return;
-        if (_connection.State != HubConnectionState.Connected)
+        if (_gateway == null) return;
+        if (!_gateway.IsConnected)
         {
-            OnLog?.Invoke($"ReportOnlineEventAsync 跳过: 连接未就绪（State={_connection.State}）");
+            OnLog?.Invoke("ReportOnlineEventAsync 跳过: 连接未就绪");
             return;
         }
         try
         {
-            await _connection.InvokeAsync("ReportOnlineEvent", generation, isOnlineReady);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlReportOnlineEvent, new { generation, isOnlineReady });
         }
         catch (Exception ex)
         {
@@ -331,14 +441,14 @@ public class SignalRClient : IAsyncDisposable
     /// <summary>清除指定成员的 OnlineHistory（已联机记录），由本人或房主调用。</summary>
     public async Task ClearOnlineHistoryAsync(string targetUid)
     {
-        if (_connection == null)
+        if (_gateway == null)
         {
             OnLog?.Invoke("[清除记录] 清除失败: SignalR 未连接（_connection == null）");
             return;
         }
         try
         {
-            await _connection.InvokeAsync("ClearOnlineHistory", targetUid);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlClearOnlineHistory, new { targetUid });
         }
         catch (Exception ex)
         {
@@ -347,19 +457,21 @@ public class SignalRClient : IAsyncDisposable
     }
 
     /// <summary>上报本机桌面截图帧（旧版广播路径，保留兼容；新代码按需取图请用 ReportMemberScreenshotExAsync）。
-    /// 未连接/未入房时静默跳过；旧服务端无此 Hub 方法时首次 HubException 后停重试（不反复刷失败日志）。</summary>
+    /// 未连接/未入房时静默跳过；服务端无此消息名时首次 GatewayErrorException 后停重试（不反复刷失败日志）。</summary>
     public async Task ReportMemberScreenshotAsync(string jpegBase64, int width, int height, DateTime capturedAt)
     {
         if (_screenshotUnsupported) return;
-        if (_connection == null) return;
-        if (_connection.State != HubConnectionState.Connected) return;
+        if (_gateway == null) return;
+        if (!_gateway.IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("ReportMemberScreenshot", _roomCode, _playerUid, jpegBase64, width, height, capturedAt);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ScreenshotReport,
+                new { roomCode = _roomCode, uid = _playerUid, jpegBase64, width, height, capturedAt });
         }
-        catch (HubException ex)
+        catch (GatewayErrorException ex)
         {
-            // HubException = 服务端明确拒绝（旧服务端没有该方法）——标记后不再重试，新连接时重置
+            // GatewayErrorException = 服务端明确拒绝（无此消息名/参数错误）——标记后不再重试，新连接时重置
+            // （对齐旧协议 catch (HubException) 语义位置）
             _screenshotUnsupported = true;
             OnLog?.Invoke($"ReportMemberScreenshot 被服务端拒绝（疑似旧服务端不支持截图汇聚），本次连接内停止上报: {ex.Message}");
         }
@@ -371,17 +483,18 @@ public class SignalRClient : IAsyncDisposable
     }
 
     /// <summary>请求目标成员的一帧桌面截图（截图按需取图·观看端）。未连接/未入房时静默跳过；
-    /// 旧服务端无此 Hub 方法时首次 HubException 后停重试（同 _screenshotUnsupported 模式）。</summary>
+    /// 服务端无此消息名时首次 GatewayErrorException 后停重试（同 _screenshotUnsupported 模式）。</summary>
     public async Task RequestMemberScreenshotAsync(string targetUid, string requestId)
     {
         if (_screenshotRequestUnsupported) return;
-        if (_connection == null) return;
-        if (_connection.State != HubConnectionState.Connected) return;
+        if (_gateway == null) return;
+        if (!_gateway.IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("RequestMemberScreenshot", _roomCode, targetUid, requestId);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ScreenshotRequest,
+                new { roomCode = _roomCode, targetUid, requestId });
         }
-        catch (HubException ex)
+        catch (GatewayErrorException ex)
         {
             _screenshotRequestUnsupported = true;
             OnLog?.Invoke($"RequestMemberScreenshot 被服务端拒绝（疑似旧服务端不支持按需取图），本次连接内停止请求: {ex.Message}");
@@ -393,17 +506,18 @@ public class SignalRClient : IAsyncDisposable
     }
 
     /// <summary>应答成员的截图请求，带 requestId 上报一帧（截图按需取图·被查看端），服务端按映射单播回请求方。
-    /// 未连接/未入房时静默跳过；旧服务端无此 Hub 方法时首次 HubException 后停重试（复用 _screenshotRequestUnsupported 标记）。</summary>
+    /// 未连接/未入房时静默跳过；服务端无此消息名时首次 GatewayErrorException 后停重试（复用 _screenshotRequestUnsupported 标记）。</summary>
     public async Task ReportMemberScreenshotExAsync(string jpegBase64, int width, int height, DateTime capturedAt, string requestId)
     {
         if (_screenshotRequestUnsupported) return;
-        if (_connection == null) return;
-        if (_connection.State != HubConnectionState.Connected) return;
+        if (_gateway == null) return;
+        if (!_gateway.IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("ReportMemberScreenshotEx", _roomCode, _playerUid, jpegBase64, width, height, capturedAt, requestId);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ScreenshotReportEx,
+                new { roomCode = _roomCode, uid = _playerUid, jpegBase64, width, height, capturedAt, requestId });
         }
-        catch (HubException ex)
+        catch (GatewayErrorException ex)
         {
             _screenshotRequestUnsupported = true;
             OnLog?.Invoke($"ReportMemberScreenshotEx 被服务端拒绝（疑似旧服务端不支持按需取图），本次连接内停止应答: {ex.Message}");
@@ -415,19 +529,20 @@ public class SignalRClient : IAsyncDisposable
     }
 
     /// <summary>上报本机实时日志批（房间日志汇聚）。未连接/未入房时静默跳过；
-    /// 旧服务端无此 Hub 方法时首次 HubException 后停重试（同 _screenshotUnsupported 模式）。
+    /// 服务端无此消息名时首次 GatewayErrorException 后停重试（同 _screenshotUnsupported 模式）。
     /// infoOnly：发送端开启了省流（仅 INF+），随批带给观看端做状态提示。</summary>
     public async Task ReportMemberLogBatchAsync(List<string> lines, bool infoOnly)
     {
         if (_logUnsupported) return;
-        if (_connection == null) return;
-        if (_connection.State != HubConnectionState.Connected) return;
+        if (_gateway == null) return;
+        if (!_gateway.IsConnected) return;
         if (lines.Count == 0) return;
         try
         {
-            await _connection.InvokeAsync("ReportMemberLogBatch", _roomCode, _playerUid, _playerName, lines, infoOnly);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.LogReportBatch,
+                new { roomCode = _roomCode, uid = _playerUid, senderName = _playerName, lines, infoOnly });
         }
-        catch (HubException ex)
+        catch (GatewayErrorException ex)
         {
             _logUnsupported = true;
             OnLog?.Invoke($"ReportMemberLogBatch 被服务端拒绝（疑似旧服务端不支持日志汇聚），本次连接内停止上报: {ex.Message}");
@@ -439,16 +554,17 @@ public class SignalRClient : IAsyncDisposable
         }
     }
 
-    /// <summary>订阅某成员的实时日志流（观众驱动）。未连接静默跳过；旧服务端 HubException 后停重试。</summary>
+    /// <summary>订阅某成员的实时日志流（观众驱动）。未连接静默跳过；服务端拒绝后停重试。</summary>
     public async Task SubscribeMemberLogAsync(string targetUid)
     {
         if (_logSubscribeUnsupported) return;
-        if (_connection == null || _connection.State != HubConnectionState.Connected) return;
+        if (_gateway == null || !_gateway.IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("SubscribeMemberLog", _roomCode, targetUid);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.LogSubscribe,
+                new { roomCode = _roomCode, targetUid });
         }
-        catch (HubException ex)
+        catch (GatewayErrorException ex)
         {
             _logSubscribeUnsupported = true;
             OnLog?.Invoke($"SubscribeMemberLog 被服务端拒绝（疑似旧服务端不支持按需订阅），本次连接内停止尝试: {ex.Message}");
@@ -459,16 +575,17 @@ public class SignalRClient : IAsyncDisposable
         }
     }
 
-    /// <summary>退订某成员的实时日志流。未连接/旧服务端静默跳过（服务端断线清理兜底）。</summary>
+    /// <summary>退订某成员的实时日志流。未连接/服务端不支持时静默跳过（服务端断线清理兜底）。</summary>
     public async Task UnsubscribeMemberLogAsync(string targetUid)
     {
         if (_logSubscribeUnsupported) return;
-        if (_connection == null || _connection.State != HubConnectionState.Connected) return;
+        if (_gateway == null || !_gateway.IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("UnsubscribeMemberLog", _roomCode, targetUid);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.LogUnsubscribe,
+                new { roomCode = _roomCode, targetUid });
         }
-        catch (HubException)
+        catch (GatewayErrorException)
         {
             _logSubscribeUnsupported = true; // 不需要再尝试退订
         }
@@ -479,16 +596,17 @@ public class SignalRClient : IAsyncDisposable
     }
 
     /// <summary>请求目标成员的日志文件列表（远程日志下载·观众端）。requestId 由调用方生成（Guid.N），应答按它认领。
-    /// 旧服务端无此 Hub 方法时首次 HubException 后停重试（同 _screenshotUnsupported 模式）。</summary>
+    /// 服务端无此消息名时首次 GatewayErrorException 后停重试（同 _screenshotUnsupported 模式）。</summary>
     public async Task RequestMemberLogFilesAsync(string targetUid, string requestId)
     {
         if (_logFileUnsupported) return;
-        if (_connection == null || _connection.State != HubConnectionState.Connected) return;
+        if (_gateway == null || !_gateway.IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("RequestMemberLogFiles", _roomCode, targetUid, requestId);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.LogRequestFiles,
+                new { roomCode = _roomCode, targetUid, requestId });
         }
-        catch (HubException ex)
+        catch (GatewayErrorException ex)
         {
             _logFileUnsupported = true;
             OnLog?.Invoke($"RequestMemberLogFiles 被服务端拒绝（疑似旧服务端不支持远程日志下载），本次连接内停止尝试: {ex.Message}");
@@ -503,12 +621,13 @@ public class SignalRClient : IAsyncDisposable
     public async Task ReportMemberLogFilesAsync(string requestId, List<MemberLogFileDescriptor> files)
     {
         if (_logFileUnsupported) return;
-        if (_connection == null || _connection.State != HubConnectionState.Connected) return;
+        if (_gateway == null || !_gateway.IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("ReportMemberLogFiles", _roomCode, _playerUid, requestId, files);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.LogReportFiles,
+                new { roomCode = _roomCode, uid = _playerUid, requestId, files });
         }
-        catch (HubException)
+        catch (GatewayErrorException)
         {
             _logFileUnsupported = true;
         }
@@ -522,12 +641,13 @@ public class SignalRClient : IAsyncDisposable
     public async Task RequestMemberLogDownloadAsync(string targetUid, string requestId, string fileName)
     {
         if (_logFileUnsupported) return;
-        if (_connection == null || _connection.State != HubConnectionState.Connected) return;
+        if (_gateway == null || !_gateway.IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("RequestMemberLogDownload", _roomCode, targetUid, requestId, fileName);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.LogRequestDownload,
+                new { roomCode = _roomCode, targetUid, requestId, fileName });
         }
-        catch (HubException ex)
+        catch (GatewayErrorException ex)
         {
             _logFileUnsupported = true;
             OnLog?.Invoke($"RequestMemberLogDownload 被服务端拒绝（疑似旧服务端不支持远程日志下载），本次连接内停止尝试: {ex.Message}");
@@ -543,13 +663,13 @@ public class SignalRClient : IAsyncDisposable
         string chunkBase64, string fileName, bool done)
     {
         if (_logFileUnsupported) return;
-        if (_connection == null || _connection.State != HubConnectionState.Connected) return;
+        if (_gateway == null || !_gateway.IsConnected) return;
         try
         {
-            await _connection.InvokeAsync("ReportMemberLogChunk",
-                _roomCode, _playerUid, requestId, seq, totalChunks, chunkBase64, fileName, done);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.LogReportChunk,
+                new { roomCode = _roomCode, uid = _playerUid, requestId, seq, totalChunks, chunkBase64, fileName, done });
         }
-        catch (HubException)
+        catch (GatewayErrorException)
         {
             _logFileUnsupported = true;
         }
@@ -564,10 +684,11 @@ public class SignalRClient : IAsyncDisposable
         _disposed = true;
         // 连接对象 Dispose 时一并停掉自愈定时器，避免对已释放连接 StartAsync
         StopSelfHeal();
-        if (_connection != null)
+        var gateway = _gateway;
+        _gateway = null;
+        if (gateway != null)
         {
-            await _connection.DisposeAsync();
-            _connection = null;
+            await gateway.DisposeAsync();
         }
     }
 }
