@@ -15,7 +15,10 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 /// 离开 Tab 自动停止自动刷新定时器（由 DodocoViewModel 的 Tab 切换驱动 OnTabDeactivated）。
 /// 截图/编码在后台线程执行，BitmapImage 创建回 UI 线程。
 /// P5 pull 模式：选中远程成员（或选中后点「📷 刷新」）→ 经 relay 向对方请求一帧 → 对方开了
-/// 「共享我的桌面截图」就当场截一帧单播回来；每 uid 缓存最近 3 帧；选中远程时本机自动刷新暂停，选回本机恢复。
+/// 「共享我的桌面截图」就当场截一帧单播回来；选中远程时本机自动刷新暂停，选回本机恢复。
+/// 监控模式（ObserverMode）特例："本机"画面源不截本机监控会话桌面（那里没有游戏），
+/// 改为经 relay 向同 UID 的执行端按需取图（服务端 _controlRooms 里同 UID 只有执行端条目，请求会路由到执行端）。
+/// 历史帧按画面源分桶（本机 / 每个成员 uid 各保留最近 10 帧），底部缩略图条只显示当前选中画面源的历史。
 /// 隐私：本机截图仅本地显示；远程帧来自成员自愿共享、按需应答的 JPEG 压缩画面（宽度由共享方设置，默认 1280）。
 /// </summary>
 public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
@@ -41,11 +44,12 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     /// <summary>等待应答的请求目标 uid（收到该 uid 的帧或发起新请求时清空；超时提示用）。</summary>
     private string? _pendingRequestUid;
 
-    /// <summary>远程帧缓存：uid → 最近 3 帧（新帧在末尾）。</summary>
-    private readonly Dictionary<string, List<RemoteFrame>> _remoteFrames = new();
+    /// <summary>历史帧分桶：画面源 Key（LocalKey 或成员 uid）→ 最近 10 帧（新帧在末尾）。
+    /// 底部缩略图条 Frames 只是当前选中画面源对应桶的视图。</summary>
+    private readonly Dictionary<string, List<FrameThumb>> _history = new();
 
-    /// <summary>远程帧缓存总帧数（内存遥测用；跨线程只读计数，容忍竞态）。</summary>
-    internal int RemoteFrameCount => _remoteFrames.Values.Sum(l => l.Count);
+    /// <summary>历史帧缓存总帧数（内存遥测用；跨线程只读计数，容忍竞态）。</summary>
+    internal int RemoteFrameCount => _history.Values.Sum(l => l.Count);
 
     public ScreenshotViewModel(ScreenshotService service, DodocoSettingsService settings, MainViewModel mainVm,
         MemberScreenshotRelayService relay)
@@ -165,8 +169,30 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         }
     }
 
-    /// <summary>当前是否选中本机画面。</summary>
+    /// <summary>当前是否选中本机画面源（下拉首项）。</summary>
     private bool IsLocalSelected => SelectedMonitor == null || SelectedMonitor.Key == LocalKey;
+
+    /// <summary>本机直截：选中"本机"且非监控模式。监控模式下本机没有游戏画面，
+    /// "本机"画面源改走按需取图（目标是同 UID 的执行端）。</summary>
+    private bool IsLocalCapture => IsLocalSelected && !_mainVm.IsObserverMode;
+
+    /// <summary>当前画面源走"按需取图"时的目标 uid；本机直截时为 null。</summary>
+    private string? PullTargetUid => IsLocalCapture ? null
+        : IsLocalSelected ? _mainVm.Config?.PlayerUid : SelectedMonitor?.Key;
+
+    /// <summary>当前画面源的历史桶 Key：本机直截为 local，按需取图为目标 uid。</summary>
+    private string CurrentSourceKey => PullTargetUid ?? LocalKey;
+
+    /// <summary>取（或建）指定画面源的历史桶。</summary>
+    private List<FrameThumb> GetHistory(string key)
+    {
+        if (!_history.TryGetValue(key, out var list))
+        {
+            list = new List<FrameThumb>(ScreenshotService.HistoryCapacity);
+            _history[key] = list;
+        }
+        return list;
+    }
 
     private void OnMembersChanged(object? sender, NotifyCollectionChangedEventArgs e) => RebuildMonitorOptions();
 
@@ -178,7 +204,9 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         try
         {
             MonitorOptions.Clear();
-            MonitorOptions.Add(new MonitorOption(LocalKey, "主屏（本机）"));
+            // 监控模式下"本机"实为同 UID 执行端的画面（经房间按需取图），标签如实标注
+            MonitorOptions.Add(new MonitorOption(LocalKey,
+                _mainVm.IsObserverMode ? "执行端画面（本机 UID）" : "主屏（本机）"));
             foreach (var m in _mainVm.Members)
             {
                 if (m.IsSelf || string.IsNullOrEmpty(m.PlayerUid)) continue;
@@ -197,86 +225,98 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         ApplyTimerState();
     }
 
-    /// <summary>按当前选中画面源刷新大图区。</summary>
+    /// <summary>按当前选中画面源刷新大图区与历史缩略图条（历史条只显示该画面源的历史帧）。</summary>
     private void RefreshViewForSelection()
     {
-        if (IsLocalSelected)
+        RebuildFramesView();
+        var label = SelectedMonitor?.Label ?? "主屏（本机）";
+        if (_history.TryGetValue(CurrentSourceKey, out var list) && list.Count > 0)
         {
-            if (Frames.Count > 0)
+            var f = list[^1].Frame;
+            CurrentImage = ToImage(f.JpegBytes);
+            SetCurrentFrame(f.JpegBytes, f.Time);
+            HasFrame = true;
+            if (IsLocalCapture)
             {
-                var f = Frames[^1].Frame;
-                CurrentImage = ToImage(f.JpegBytes);
-                SetCurrentFrame(f.JpegBytes, f.Time);
                 CurrentFrameInfo = $"{f.Time:HH:mm:ss} · {f.Width}×{f.Height}";
-                HasFrame = true;
             }
             else
             {
-                CurrentImage = null;
-                SetCurrentFrame(null, null);
-                HasFrame = false;
-                CurrentFrameInfo = "尚未截图";
+                CurrentFrameInfo = $"远程成员画面（按需取图，点「📷 刷新」取新帧） · {f.Time:HH:mm:ss}";
+                // 缓存帧陈旧 → 自动请求一帧新的
+                if (DateTime.Now - f.Time > RemoteFrameStaleAfter) RequestRemoteFrame();
             }
             return;
         }
 
-        var uid = SelectedMonitor!.Key;
-        if (_remoteFrames.TryGetValue(uid, out var list) && list.Count > 0)
+        CurrentImage = null;
+        SetCurrentFrame(null, null);
+        HasFrame = false;
+        if (IsLocalCapture)
         {
-            var f = list[^1];
-            CurrentImage = ToImage(f.JpegBytes);
-            SetCurrentFrame(f.JpegBytes, f.CapturedAt);
-            CurrentFrameInfo = $"远程成员画面（按需取图，点「📷 刷新」取新帧） · {f.CapturedAt:HH:mm:ss}";
-            HasFrame = true;
-            // 缓存帧陈旧 → 自动请求一帧新的
-            if (DateTime.Now - f.CapturedAt > RemoteFrameStaleAfter) RequestRemoteFrame();
+            CurrentFrameInfo = "尚未截图";
+            return;
         }
-        else
+
+        // 按需取图源（远程成员，或监控模式下的同 UID 执行端）：
+        // 中间态明示：成员离线 / 对方 BGI 未运行 / 等待首帧，避免用户面对空白画面分不清是哪种情况
+        if (PullTargetUid is not { Length: > 0 })
         {
-            CurrentImage = null;
-            SetCurrentFrame(null, null);
-            HasFrame = false;
-            // 中间态明示：成员离线 / 对方 BGI 未运行 / 等待首帧，避免用户面对空白画面分不清是哪种情况
-            var m = _mainVm.Members.FirstOrDefault(x => x.PlayerUid == SelectedMonitor.Key);
-            CurrentFrameInfo = m switch
-            {
-                null => $"{SelectedMonitor.Label} 已退出房间，暂无画面",
-                { Online: false } => $"{SelectedMonitor.Label} 已离线，暂无画面",
-                { BgiStatus: "stopped" } => $"{SelectedMonitor.Label} 的助手在线，但其 BGI 未运行（桌面共享仍在对方助手上，需对方开启「共享我的桌面截图」）",
-                _ => $"等待 {SelectedMonitor.Label} 的首帧画面（需对方开启「共享我的桌面截图」）…"
-            };
-            // 成员在线 → 自动请求首帧（离线/退房不请求，无意义）
-            if (m is { Online: true }) RequestRemoteFrame();
+            CurrentFrameInfo = "未配置本机 UID，无法向执行端取图";
+            return;
         }
+        var m = _mainVm.Members.FirstOrDefault(x => x.PlayerUid == PullTargetUid);
+        CurrentFrameInfo = m switch
+        {
+            null => $"{label} 已退出房间，暂无画面",
+            { Online: false } => $"{label} 已离线，暂无画面",
+            { BgiStatus: "stopped" } => $"{label} 的助手在线，但其 BGI 未运行（桌面共享仍在对方助手上，需对方开启「共享我的桌面截图」）",
+            _ => $"等待 {label} 的首帧画面（需对方开启「共享我的桌面截图」）…"
+        };
+        // 成员在线 → 自动请求首帧（离线/退房不请求，无意义）
+        if (m is { Online: true }) RequestRemoteFrame();
     }
 
-    /// <summary>观看端：向当前选中的远程成员请求一帧桌面截图；5 秒无应答给超时提示。</summary>
+    /// <summary>把底部历史缩略图条重建为当前画面源的历史桶内容。</summary>
+    private void RebuildFramesView()
+    {
+        Frames.Clear();
+        if (_history.TryGetValue(CurrentSourceKey, out var list))
+            foreach (var t in list) Frames.Add(t);
+        // 清空选中（直接写字段避免 setter 触发大图切换）
+        _selectedThumb = null;
+        OnPropertyChanged(nameof(SelectedThumb));
+    }
+
+    /// <summary>观看端：向当前画面源请求一帧桌面截图（远程成员，或监控模式下的同 UID 执行端）；
+    /// 5 秒无应答给超时提示。</summary>
     private void RequestRemoteFrame()
     {
-        if (IsLocalSelected) return;
+        var uid = PullTargetUid;
+        if (string.IsNullOrEmpty(uid)) return; // 本机直截（或监控模式未配 UID）不走这里
         if (_mainVm.SignalR?.IsConnected != true)
         {
             StatusText = "未连接房间，无法请求远程画面";
             return;
         }
-        var uid = SelectedMonitor!.Key;
-        var label = SelectedMonitor.Label;
+        var label = SelectedMonitor?.Label ?? uid;
         _pendingRequestUid = uid;
         StatusText = $"已请求 {label} 的桌面画面…";
         _ = _relay.RequestFrameAsync(uid);
-        // 超时提示：5 秒后仍是这个等待中的请求且用户还在看该成员 → 对方未响应（离线/旧版/未开共享）
+        // 超时提示：5 秒后仍是这个等待中的请求且用户还在看该画面源 → 对方未响应（离线/旧版/未开共享）
         Task.Delay(5000).ContinueWith(_ =>
         {
             if (_pendingRequestUid != uid) return; // 期间已收到帧或发起了新请求
             Application.Current?.Dispatcher.BeginInvoke(() =>
             {
-                if (_pendingRequestUid == uid && !IsLocalSelected && SelectedMonitor?.Key == uid)
+                if (_pendingRequestUid == uid && PullTargetUid == uid)
                     StatusText = $"{label} 未响应：对方可能离线、助手版本过旧或未开启「共享我的桌面截图」";
             });
         }, TaskScheduler.Default);
     }
 
-    /// <summary>收到一帧远程成员截图（须在 UI 线程调用，由 DodocoViewModel Dispatcher 过来）。</summary>
+    /// <summary>收到一帧远程成员截图（须在 UI 线程调用，由 DodocoViewModel Dispatcher 过来）。
+    /// 帧入该成员的历史桶；正在看该画面源时同步上大屏和历史缩略图条。</summary>
     internal void OnRemoteFrame(MemberScreenshotFrame frame)
     {
         if (string.IsNullOrEmpty(frame.Uid) || string.IsNullOrEmpty(frame.JpegBase64)) return;
@@ -285,22 +325,22 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         try { bytes = Convert.FromBase64String(frame.JpegBase64); }
         catch { return; }
 
-        if (!_remoteFrames.TryGetValue(frame.Uid, out var list))
-        {
-            list = new List<RemoteFrame>(3);
-            _remoteFrames[frame.Uid] = list;
-        }
-        list.Add(new RemoteFrame(bytes, frame.CapturedAt.ToLocalTime(), frame.Width, frame.Height));
-        while (list.Count > 3) list.RemoveAt(0);
+        var localTime = frame.CapturedAt.ToLocalTime();
+        var thumb = new FrameThumb(
+            new ScreenFrame { Time = localTime, JpegBytes = bytes, Width = frame.Width, Height = frame.Height },
+            ToImage(bytes, 160));
+        var list = GetHistory(frame.Uid);
+        list.Add(thumb);
+        while (list.Count > ScreenshotService.HistoryCapacity) list.RemoveAt(0);
 
-        // 正在看这个成员 → 直接上大屏
-        if (!IsLocalSelected && SelectedMonitor!.Key == frame.Uid)
-        {
-            CurrentImage = ToImage(bytes);
-            SetCurrentFrame(bytes, frame.CapturedAt.ToLocalTime());
-            CurrentFrameInfo = $"远程成员画面（按需取图，点「📷 刷新」取新帧） · {frame.CapturedAt.ToLocalTime():HH:mm:ss}";
-            HasFrame = true;
-        }
+        // 正在看这个画面源 → 直接上大屏，历史条同步追加
+        if (PullTargetUid != frame.Uid) return;
+        Frames.Add(thumb);
+        while (Frames.Count > ScreenshotService.HistoryCapacity) Frames.RemoveAt(0);
+        CurrentImage = ToImage(bytes);
+        SetCurrentFrame(bytes, localTime);
+        CurrentFrameInfo = $"远程成员画面（按需取图，点「📷 刷新」取新帧） · {localTime:HH:mm:ss}";
+        HasFrame = true;
     }
 
     // ========== 刷新控制 ==========
@@ -347,10 +387,14 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     private string _statusText = "";
     public string StatusText { get => _statusText; set => SetProperty(ref _statusText, value); }
 
+    /// <summary>清空当前画面源的历史帧（本机桶连带清空 ScreenshotService 的环形缓冲）。</summary>
     public RelayCommand ClearHistoryCommand => new(_ =>
     {
-        _service.ClearHistory();
+        if (CurrentSourceKey == LocalKey) _service.ClearHistory();
+        _history.Remove(CurrentSourceKey);
         Frames.Clear();
+        _selectedThumb = null;
+        OnPropertyChanged(nameof(SelectedThumb));
         CurrentImage = null;
         SetCurrentFrame(null, null);
         HasFrame = false;
@@ -374,7 +418,8 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
 
     private void ApplyTimerState()
     {
-        // 选中远程成员时本机自动刷新无意义，暂停；选回本机恢复
+        // 选中远程成员时自动刷新暂停（避免持续向他人索图）；选中"本机"时恢复——
+        // 监控模式下"本机"=同 UID 执行端按需取图，同样允许自动刷新（服务端限流 1 次/秒，间隔最小 1 秒）
         if (AutoRefresh && _tabActive && IsLocalSelected)
         {
             _autoTimer.Interval = TimeSpan.FromSeconds(CurrentIntervalSeconds);
@@ -387,12 +432,13 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>截一帧（后台线程截图+编码，UI 线程建图）。重入守卫：上一帧未完不叠加。
-    /// 选中远程成员时改为向对方按需请求一帧（"点一下发一张图"）。</summary>
+    /// 选中按需取图画面源（远程成员，或监控模式下"本机"=同 UID 执行端）时改为向对方请求一帧（"点一下发一张图"）。</summary>
     private async Task CaptureAsync()
     {
         if (_isCapturing) return;
-        if (!IsLocalSelected)
+        if (!IsLocalCapture)
         {
+            // 远程成员（或监控模式下的同 UID 执行端）：向对方按需请求一帧（"点一下发一张图"）
             RequestRemoteFrame();
             return;
         }
@@ -407,6 +453,9 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
                 return;
             }
             var thumb = new FrameThumb(frame, ToImage(frame.JpegBytes, 160));
+            var list = GetHistory(LocalKey);
+            list.Add(thumb);
+            while (list.Count > ScreenshotService.HistoryCapacity) list.RemoveAt(0);
             Frames.Add(thumb);
             while (Frames.Count > ScreenshotService.HistoryCapacity) Frames.RemoveAt(0);
             SelectedThumb = thumb; // setter 里会刷新大图（含帧字节同步）
@@ -472,21 +521,4 @@ public sealed class MonitorOption
     /// <summary>"local" 或成员 UID。</summary>
     public string Key { get; }
     public string Label { get; }
-}
-
-/// <summary>远程成员截图帧（已解码字节）。</summary>
-public sealed class RemoteFrame
-{
-    public RemoteFrame(byte[] jpegBytes, DateTime capturedAt, int width, int height)
-    {
-        JpegBytes = jpegBytes;
-        CapturedAt = capturedAt;
-        Width = width;
-        Height = height;
-    }
-
-    public byte[] JpegBytes { get; }
-    public DateTime CapturedAt { get; }
-    public int Width { get; }
-    public int Height { get; }
 }
