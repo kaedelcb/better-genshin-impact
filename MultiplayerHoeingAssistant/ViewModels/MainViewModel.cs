@@ -24,6 +24,8 @@ public class MainViewModel : INotifyPropertyChanged
     private MemberConfigCacheManager? _cacheManager;
     /// <summary>远程配置组编辑会话状态机（契约见 Docs/远程配置组编辑-实施方案.md §5）。</summary>
     private RemoteConfigEditService? _remoteConfigEditService;
+    /// <summary>任务策略远程互改通道（task_policy.pull/push，按 CommandId 关联 TCS；仅上线锄地完成后动作三项）。</summary>
+    private TaskPolicySyncService? _taskPolicySync;
     private string _roomCode = "";
     private bool _isConnected;
     private string _lastLoggedProgress = "";
@@ -1159,24 +1161,16 @@ public class MainViewModel : INotifyPropertyChanged
             if (hasContext)
             {
                 // 联机锄地已结束，在助手房间内显示恢复提示（不弹窗）
-                AddLog("联机锄地已结束，10 秒后自动恢复原任务...");
-                // 启动恢复定时器（10 秒后自动恢复）
+                var policyAtEdge = SnapshotOnlineHoeingPolicy();
+                AddLog($"联机锄地已结束，10 秒后按任务冲突策略（{policyAtEdge.PolicyDisplayName}）处置被中断的原任务...");
+                // 启动恢复定时器（10 秒后按策略收尾：恢复 / 清上下文停止 / 清上下文并启动指定任务）
                 _resumeTimeoutTimer?.Dispose();
                 _resumeTimeoutTimer = new System.Threading.Timer(async _ =>
                 {
                     if (_commandExecutor != null)
                     {
-                        var result = await _commandExecutor.ExecuteResumeAsync();
-                        if (result.Status == "success")
-                        {
-                            AddLog("原任务已自动恢复");
-                        }
-                        else
-                        {
-                            // [P2-H 止血] resume 返回 no_context/失败：SuspendedTaskContext 不持久化，
-                            // BGI 曾被重启（如 suspend 失败后 KillBgi 回退）则上下文必丢失，必须明确提示用户手动恢复
-                            AddLog($"原任务自动恢复失败: {result.Message}；原任务上下文已丢失（BGI 曾被重启），请手动在 BGI 中重新启动调度器/一条龙");
-                        }
+                        // [任务冲突策略] 第二个恢复触发器（10s 轮询边沿检测）：与批次内收尾走同一策略闭环
+                        await _commandExecutor.ApplyPolicyTeardownAsync(SnapshotOnlineHoeingPolicy(), "联机锄地", userCancelled: false, AddLog);
                     }
                 }, null, TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(-1));
             }
@@ -1655,6 +1649,73 @@ public class MainViewModel : INotifyPropertyChanged
             return je.ValueKind == JsonValueKind.String ? je.GetString() : je.ToString();
         }
         return val.ToString();
+    }
+
+    /// <summary>
+    /// 处理 task_policy.pull：对方请求拉取本机上线锄地「完成后动作」配置。
+    /// 回 task_policy.data（Params 全 string）：policy/specifiedType/specifiedName。
+    /// </summary>
+    private async Task HandleTaskPolicyPullAsync(RemoteCommand cmd)
+    {
+        if (_signalRClient == null) return;
+        var replyParams = new Dictionary<string, object>
+        {
+            ["ok"] = "true",
+            ["policy"] = _config?.OnlineHoeingCompletionPolicy ?? "resume",
+            ["specifiedType"] = _config?.OnlineHoeingSpecifiedTaskType ?? "group",
+            ["specifiedName"] = _config?.OnlineHoeingSpecifiedTaskName ?? ""
+        };
+        var reply = new RemoteCommand
+        {
+            Cmd = "task_policy.data",
+            Sender = _config?.PlayerName ?? "",
+            SenderUid = _config?.PlayerUid ?? "",
+            Target = [cmd.SenderUid],
+            CommandId = cmd.CommandId,
+            Params = replyParams
+        };
+        await _signalRClient.SendRemoteCommandAsync(reply);
+    }
+
+    /// <summary>
+    /// 处理 task_policy.push：对方回传编辑后的上线锄地「完成后动作」配置。
+    /// policy/specifiedType/specifiedName 存在时落 AssistConfig 并保存（持久化，重启保留）。
+    /// 回 task_policy.push_result（ok/message 全 string）。
+    /// </summary>
+    private async Task HandleTaskPolicyPushAsync(RemoteCommand cmd)
+    {
+        var applied = new List<string>();
+
+        // 上线锄地「完成后动作」（持久化）
+        var policy = GetRemoteParam(cmd.Params, "policy");
+        if (policy is "resume" or "stop" or "runSpecified" && _config != null)
+        {
+            _config.OnlineHoeingCompletionPolicy = policy;
+            var specifiedType = GetRemoteParam(cmd.Params, "specifiedType");
+            if (specifiedType is "group" or "onedragon")
+                _config.OnlineHoeingSpecifiedTaskType = specifiedType;
+            var specifiedName = GetRemoteParam(cmd.Params, "specifiedName");
+            if (specifiedName != null)
+                _config.OnlineHoeingSpecifiedTaskName = specifiedName;
+            _configManager?.Save(_config);
+            applied.Add("上线锄地完成后动作（已持久化）");
+        }
+
+        var ok = applied.Count > 0;
+        var message = ok ? $"已应用: {string.Join("、", applied)}" : "无可应用字段（参数为空或非法）";
+        AddLog($"收到 {cmd.Sender} 远程修改任务策略：{message}");
+
+        if (_signalRClient == null) return;
+        var reply = new RemoteCommand
+        {
+            Cmd = "task_policy.push_result",
+            Sender = _config?.PlayerName ?? "",
+            SenderUid = _config?.PlayerUid ?? "",
+            Target = [cmd.SenderUid],
+            CommandId = cmd.CommandId,
+            Params = new Dictionary<string, object> { ["ok"] = ok ? "true" : "false", ["message"] = message }
+        };
+        await _signalRClient.SendRemoteCommandAsync(reply);
     }
 
     private void OnStop(object? parameter)
@@ -2825,13 +2886,40 @@ public class MainViewModel : INotifyPropertyChanged
             return;
         }
 
+        // [任务策略] 「完成后动作」初始值：改自己=读本机持久化配置；改别人=先定向拉取对方当前配置（超时则显示默认值）
+        var initPolicy = PolicyFromString(_config?.OnlineHoeingCompletionPolicy);
+        var initSpecifiedType = _config?.OnlineHoeingSpecifiedTaskType ?? "group";
+        var initSpecifiedName = _config?.OnlineHoeingSpecifiedTaskName ?? "";
+        if (!isSelf && targetMember != null)
+        {
+            if (targetMember.Online && _signalRClient is { IsConnected: true })
+            {
+                AddLog($"正在拉取 {targetMember.PlayerName} 的上线锄地「完成后动作」配置...");
+                var pulled = await GetTaskPolicySync().PullAsync(targetMember.PlayerUid);
+                if (pulled != null)
+                {
+                    initPolicy = PolicyFromString(pulled.GetValueOrDefault("policy"));
+                    initSpecifiedType = pulled.GetValueOrDefault("specifiedType") ?? "group";
+                    initSpecifiedName = pulled.GetValueOrDefault("specifiedName") ?? "";
+                }
+                else
+                {
+                    AddLog($"拉取 {targetMember.PlayerName} 的策略配置超时/失败，弹窗显示默认值；保存将覆盖对方配置");
+                }
+            }
+            else
+            {
+                AddLog($"{targetMember.PlayerName} 不在线或连接不可用，「完成后动作」显示默认值；保存将覆盖对方配置");
+            }
+        }
+
         // 构建可排序的深色主题绑定弹窗
         // 使用与主窗口一致的深色原神主题风格
         var window = new System.Windows.Window
         {
             Title = "绑定联机锄地配置组",
-            Width = 420,
-            Height = 500,
+            Width = 460,
+            Height = 720,
             WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
             Owner = System.Windows.Application.Current?.MainWindow,
             WindowStyle = System.Windows.WindowStyle.SingleBorderWindow,
@@ -2865,6 +2953,8 @@ public class MainViewModel : INotifyPropertyChanged
         panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) }); // 已选列表
         panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto }); // 间距
         panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) }); // 可选列表
+        panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto }); // 完成后动作
+        panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(10) }); // 间距
         panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto }); // 按钮
 
         // 标题
@@ -3201,6 +3291,15 @@ public class MainViewModel : INotifyPropertyChanged
         availableBorder.Child = availableInnerPanel;
         panel.Children.Add(availableBorder);
 
+        // ========== 完成后动作（上线锄地打断的原任务如何处置；全员就绪触发上线锄地固定打断，此处只配完成后动作）==========
+        var completionPanel = new CompletionActionPanel(
+            initPolicy, initSpecifiedType, initSpecifiedName, allGroups, allOneClicks,
+            isSelf
+                ? "全员就绪触发上线锄地必定打断当前任务（固定行为）。此处配置锄地完成后如何处置被中断的原任务；配置持久化保存，重启保留。"
+                : $"全员就绪触发上线锄地必定打断当前任务（固定行为）。此处配置 {targetMember?.PlayerName ?? "对方"} 锄地完成后如何处置被中断的原任务；保存后落到对方本机配置并持久化。");
+        System.Windows.Controls.Grid.SetRow(completionPanel.Root, 6);
+        panel.Children.Add(completionPanel.Root);
+
         // ========== 按钮栏 ==========
         var btnPanel = new System.Windows.Controls.StackPanel
         {
@@ -3208,7 +3307,7 @@ public class MainViewModel : INotifyPropertyChanged
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
             Margin = new System.Windows.Thickness(0, 10, 0, 0)
         };
-        System.Windows.Controls.Grid.SetRow(btnPanel, 6);
+        System.Windows.Controls.Grid.SetRow(btnPanel, 8);
 
         var cancelBtn = new System.Windows.Controls.Button
         {
@@ -3273,6 +3372,23 @@ public class MainViewModel : INotifyPropertyChanged
                 }
             }
 
+            // 「完成后动作」取值（恢复任务=Resume / 执行动作+停止=Stop / 执行动作+执行指定任务=RunSpecified）
+            var completionPolicy = completionPanel.Policy;
+            var completionType = completionPanel.SpecifiedType;
+            var completionName = completionPanel.SpecifiedName;
+            if (completionPolicy == TaskConflictPolicy.RunSpecified && string.IsNullOrEmpty(completionName))
+            {
+                MessageBox.Show("已选择「执行动作 → 执行指定任务」，但未填写指定任务名称。\n请填写或改选其他完成后动作。",
+                    "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                return; // 不关闭弹窗，让用户补填
+            }
+            var completionDesc = completionPolicy switch
+            {
+                TaskConflictPolicy.Stop => "执行动作-停止",
+                TaskConflictPolicy.RunSpecified => $"执行动作-执行指定任务（{(completionType == "onedragon" ? "一条龙" : "配置组")}「{completionName}」）",
+                _ => "恢复任务"
+            };
+
             if (names.Count > 0)
             {
                 if (isSelf)
@@ -3333,6 +3449,46 @@ public class MainViewModel : INotifyPropertyChanged
                     await _signalRClient.SendRemoteCommandAsync(cmd);
                 }
             }
+
+            // 「完成后动作」持久化/回传（与配置组名单解耦：不改名单只改动作也能保存）
+            if (isSelf && _config?.ObserverMode != true)
+            {
+                // 改自己（执行模式）：落到本机 AssistConfig 并保存，重启保留
+                if (_config != null)
+                {
+                    _config.OnlineHoeingCompletionPolicy = PolicyToString(completionPolicy);
+                    _config.OnlineHoeingSpecifiedTaskType = completionType;
+                    _config.OnlineHoeingSpecifiedTaskName = completionName;
+                    _configManager?.Save(_config);
+                    AddLog($"已保存上线锄地「完成后动作」: {completionDesc}");
+                }
+            }
+            else
+            {
+                // 改别人 / 遥控器模式改自己：task_policy.push 回传，对方落 AssistConfig 并保存
+                var pushUid = isSelf ? _config?.PlayerUid : targetMember?.PlayerUid;
+                var pushName = isSelf ? "执行端" : targetMember?.PlayerName ?? "对方";
+                if (!string.IsNullOrEmpty(pushUid) && _signalRClient is { IsConnected: true })
+                {
+                    AddLog($"正在向 {pushName} 回传上线锄地「完成后动作」: {completionDesc}");
+                    var pushResult = await GetTaskPolicySync().PushAsync(pushUid, new Dictionary<string, object>
+                    {
+                        ["policy"] = PolicyToString(completionPolicy),
+                        ["specifiedType"] = completionType,
+                        ["specifiedName"] = completionName
+                    });
+                    AddLog(pushResult switch
+                    {
+                        null => $"回传 {pushName} 的「完成后动作」超时（对方可能已离线），修改可能未生效",
+                        { ok: true } r => $"对方已应用「完成后动作」: {r.message}",
+                        { } r => $"对方应用「完成后动作」失败：{r.message}"
+                    });
+                }
+                else
+                {
+                    AddLog("SignalR 未连接或目标不可用，「完成后动作」未回传");
+                }
+            }
             window.Close();
         };
 
@@ -3341,6 +3497,173 @@ public class MainViewModel : INotifyPropertyChanged
         panel.Children.Add(btnPanel);
         window.Content = panel;
         window.ShowDialog();
+    }
+
+    /// <summary>
+    /// 代码构建弹窗共用的深色下拉框。优先应用 App.xaml 应用级资源中的 GoldComboBox/GoldComboItem
+    /// 暗色金样式（含下拉弹出层配色，见 App.xaml）；应用未初始化等极端情况下找不到资源时，
+    /// 退化为手工配色的深色框（下拉弹出层为系统默认样式，仅兜底）。
+    /// </summary>
+    private static ComboBox NewDarkCombo(double width = 0)
+    {
+        var combo = new ComboBox
+        {
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x26, 0x23, 0x4E)),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA)),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0xD4, 0xAF, 0x37)),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            Padding = new Thickness(6, 3, 6, 3),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        if (Application.Current?.TryFindResource("GoldComboBox") is Style comboStyle)
+            combo.Style = comboStyle;
+        if (Application.Current?.TryFindResource("GoldComboItem") is Style itemStyle)
+            combo.ItemContainerStyle = itemStyle;
+        if (width > 0) combo.Width = width;
+        return combo;
+    }
+
+    /// <summary>
+    /// 「完成后动作」两层选项 UI 块（上线锄地绑定弹窗用，代码构建深色风格）：
+    /// 第一层「恢复任务（默认）｜执行动作」；选「执行动作」展开第二层「停止｜执行指定任务」；
+    /// 指定任务 = 类型（配置组/一条龙）+ 名称（候选来自对应范围的配置清单，可手动输入；执行时校验存在性）。
+    /// 映射：恢复任务=Resume、执行动作+停止=Stop、执行动作+执行指定任务=RunSpecified。
+    /// </summary>
+    private sealed class CompletionActionPanel
+    {
+        private readonly ComboBox _layer1Combo;    // 0=恢复任务 1=执行动作
+        private readonly ComboBox _layer2Combo;    // 0=停止 1=执行指定任务
+        private readonly ComboBox _typeCombo;      // 0=配置组 1=一条龙
+        private readonly ComboBox _nameCombo;      // IsEditable，候选随类型切换
+        private readonly StackPanel _layer2Panel;
+        private readonly StackPanel _specifiedPanel;
+        private readonly StackPanel _root;
+        private readonly List<string> _groups;
+        private readonly List<string> _oneClicks;
+        private bool _initializing = true;
+
+        public UIElement Root => _root;
+
+        public CompletionActionPanel(TaskConflictPolicy policy, string specifiedType, string specifiedName,
+            List<string> groups, List<string> oneClicks, string description)
+        {
+            _groups = groups;
+            _oneClicks = oneClicks;
+            var gold = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D));
+            var dim = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0));
+
+            _root = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
+            var border = new Border
+            {
+                CornerRadius = new CornerRadius(8),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0xD4, 0xAF, 0x37)),
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xCC, 0x26, 0x23, 0x4E)),
+                Padding = new Thickness(10, 8, 10, 10)
+            };
+            _root.Children.Add(border);
+            var inner = new StackPanel();
+            border.Child = inner;
+
+            inner.Children.Add(new TextBlock
+            {
+                Text = "完成后动作",
+                FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = gold
+            });
+            inner.Children.Add(new TextBlock
+            {
+                Text = description,
+                FontSize = 10, Foreground = dim, TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 2, 0, 8)
+            });
+
+            // 第一层：恢复任务（默认）｜执行动作
+            _layer1Combo = NewDarkCombo();
+            _layer1Combo.Items.Add("恢复任务");
+            _layer1Combo.Items.Add("执行动作");
+            inner.Children.Add(_layer1Combo);
+
+            // 第二层（选「执行动作」时显示）：停止｜执行指定任务
+            _layer2Panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+            _layer2Combo = NewDarkCombo();
+            _layer2Combo.Items.Add("停止");
+            _layer2Combo.Items.Add("执行指定任务");
+            _layer2Panel.Children.Add(_layer2Combo);
+
+            // 指定任务行（选「执行指定任务」时显示）：类型 + 名称（可手动输入）
+            _specifiedPanel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+            var specifiedRow = new Grid();
+            specifiedRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            specifiedRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            _typeCombo = NewDarkCombo(96);
+            _typeCombo.Margin = new Thickness(0, 0, 8, 0);
+            _typeCombo.Items.Add("配置组");
+            _typeCombo.Items.Add("一条龙");
+            Grid.SetColumn(_typeCombo, 0);
+            specifiedRow.Children.Add(_typeCombo);
+            _nameCombo = NewDarkCombo();
+            _nameCombo.IsEditable = true; // BGI 未启动时允许手动输入；执行时校验存在性，不存在退化为停止
+            Grid.SetColumn(_nameCombo, 1);
+            specifiedRow.Children.Add(_nameCombo);
+            _specifiedPanel.Children.Add(specifiedRow);
+            _specifiedPanel.Children.Add(new TextBlock
+            {
+                Text = "候选来自该成员的 BGI 配置清单；未获取到时可直接手动输入。执行时校验存在性，不存在退化为停止并打日志。",
+                FontSize = 10, Foreground = dim, TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0)
+            });
+            _layer2Panel.Children.Add(_specifiedPanel);
+            inner.Children.Add(_layer2Panel);
+
+            // 初始值
+            _layer1Combo.SelectedIndex = policy == TaskConflictPolicy.Resume ? 0 : 1;
+            _layer2Combo.SelectedIndex = policy == TaskConflictPolicy.RunSpecified ? 1 : 0;
+            _typeCombo.SelectedIndex = specifiedType == "onedragon" ? 1 : 0;
+            RefreshNameCandidates();
+            _nameCombo.Text = specifiedName;
+            _layer2Panel.Visibility = _layer1Combo.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+            _specifiedPanel.Visibility = _layer2Combo.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+
+            _layer1Combo.SelectionChanged += (_, _) =>
+            {
+                if (_initializing) return;
+                _layer2Panel.Visibility = _layer1Combo.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+            };
+            _layer2Combo.SelectionChanged += (_, _) =>
+            {
+                if (_initializing) return;
+                _specifiedPanel.Visibility = _layer2Combo.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+            };
+            _typeCombo.SelectionChanged += (_, _) =>
+            {
+                if (_initializing) return;
+                var current = _nameCombo.Text;
+                RefreshNameCandidates();
+                // 类型切换后名称候选随之切换；原名称不在新候选中时保留文本（允许手动输入的名字跨类型保留由用户决定）
+                _nameCombo.Text = current;
+            };
+            _initializing = false;
+        }
+
+        private void RefreshNameCandidates()
+        {
+            var candidates = _typeCombo.SelectedIndex == 1 ? _oneClicks : _groups;
+            _nameCombo.Items.Clear();
+            foreach (var name in candidates)
+                _nameCombo.Items.Add(name);
+        }
+
+        /// <summary>当前选择的策略（恢复任务=Resume / 执行动作+停止=Stop / 执行动作+执行指定任务=RunSpecified）。</summary>
+        public TaskConflictPolicy Policy => _layer1Combo.SelectedIndex != 1
+            ? TaskConflictPolicy.Resume
+            : _layer2Combo.SelectedIndex == 1 ? TaskConflictPolicy.RunSpecified : TaskConflictPolicy.Stop;
+
+        /// <summary>指定任务类型："group"=配置组，"onedragon"=一条龙。</summary>
+        public string SpecifiedType => _typeCombo.SelectedIndex == 1 ? "onedragon" : "group";
+
+        /// <summary>指定任务名称（手动输入或候选选择）。</summary>
+        public string SpecifiedName => _nameCombo.Text.Trim();
     }
 
     /// <summary>完全退出助手软件（先弹确认框）。</summary>
@@ -3730,6 +4053,31 @@ public class MainViewModel : INotifyPropertyChanged
             if (cmd.Cmd == "remote_config.push")
             {
                 await HandleRemoteConfigPushAsync(cmd);
+                return;
+            }
+
+            // ===== 任务策略远程互改（task_policy.*，模式复刻 remote_config.*，服务器零改动）=====
+            // task_policy.data / task_policy.push_result：转给策略同步会话状态机（按 CommandId 关联 TCS）
+            if (cmd.Cmd is "task_policy.data" or "task_policy.push_result")
+            {
+                if (_taskPolicySync == null || !_taskPolicySync.TryComplete(cmd.CommandId, cmd))
+                {
+                    AddLog($"收到迟到或无法关联的任务策略回复（{cmd.Cmd}，CommandId={cmd.CommandId}，来自 {cmd.Sender}），已忽略");
+                }
+                return;
+            }
+
+            // task_policy.pull：对方请求拉取本机上线锄地「完成后动作」配置 → 回 task_policy.data
+            if (cmd.Cmd == "task_policy.pull")
+            {
+                await HandleTaskPolicyPullAsync(cmd);
+                return;
+            }
+
+            // task_policy.push：对方回传编辑后的上线锄地「完成后动作」→ 应用并落盘 → 回 task_policy.push_result
+            if (cmd.Cmd == "task_policy.push")
+            {
+                await HandleTaskPolicyPushAsync(cmd);
                 return;
             }
 
@@ -4368,7 +4716,8 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 _processMonitor.Start();
             }
-            _commandExecutor = new CommandExecutor(_processMonitor, _config.BgiPath, () => _externalClient);
+            _commandExecutor = new CommandExecutor(_processMonitor, _config.BgiPath, () => _externalClient,
+                AddLog);
         }
     }
 
@@ -4615,6 +4964,45 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    // ===== 上线锄地「完成后动作」（持久化：AssistConfig.onlineHoeingCompletion*；绑定弹窗配置）=====
+
+    /// <summary>策略枚举 ↔ 持久化字符串映射（"resume"/"stop"/"runSpecified"）。</summary>
+    private static string PolicyToString(TaskConflictPolicy policy) => policy switch
+    {
+        TaskConflictPolicy.Stop => "stop",
+        TaskConflictPolicy.RunSpecified => "runSpecified",
+        _ => "resume"
+    };
+
+    private static TaskConflictPolicy PolicyFromString(string? value) => value switch
+    {
+        "stop" => TaskConflictPolicy.Stop,
+        "runSpecified" => TaskConflictPolicy.RunSpecified,
+        _ => TaskConflictPolicy.Resume
+    };
+
+    /// <summary>[任务策略] 上线锄地完成后动作快照（持久化字段 → 不可变快照，传给 CommandExecutor 收尾用；
+    /// 批次末尾与 10s resume 定时器两处共用）。</summary>
+    private TaskConflictPolicySettings SnapshotOnlineHoeingPolicy() => new()
+    {
+        Policy = PolicyFromString(_config?.OnlineHoeingCompletionPolicy),
+        SpecifiedTaskType = _config?.OnlineHoeingSpecifiedTaskType ?? "group",
+        SpecifiedTaskName = _config?.OnlineHoeingSpecifiedTaskName ?? ""
+    };
+
+    /// <summary>任务策略远程互改通道（惰性构造，与 RemoteConfigEditService 同模式）。</summary>
+    private TaskPolicySyncService GetTaskPolicySync()
+        => _taskPolicySync ??= new TaskPolicySyncService(
+            sendAsync: async rc =>
+            {
+                var client = _signalRClient;
+                if (client == null || !client.IsConnected) return false;
+                await client.SendRemoteCommandAsync(rc);
+                return true;
+            },
+            getSelfUid: () => _config?.PlayerUid ?? "",
+            getSelfName: () => _config?.PlayerName ?? "");
+
     private void SaveConfig()
     {
         _configManager?.Save(_config!);
@@ -4632,6 +5020,7 @@ public class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(GuardBgi));
         OnPropertyChanged(nameof(AutoLaunchWithBgiModeIndex));
         OnPropertyChanged(nameof(AutoLaunchOnBootModeIndex));
+        // （上线锄地「完成后动作」已移至绑定弹窗、按键策略移至按键设置弹窗，均为代码构建弹窗，不走设置页绑定刷新）
         // 模式派生属性同样依赖 _config，初次绑定发生在配置加载前，必须一并刷新
         // （缺这两条曾导致：监控模式下按 IsExecutorMode 隐藏设置的绑定永远停在初值 Visible）
         NotifyModeBindings();
@@ -5819,79 +6208,9 @@ public class MainViewModel : INotifyPropertyChanged
         // [P1-C 止血] 固定 1500ms 盲等改为轮询 IPC task.status（200ms 间隔、上限 6s）：
         // 确认 BGI 无任务在运行（或中断上下文已就位 hasSuspendedTaskContext=true）后再进入批次 task.start。
         // 超时仅记警告日志后继续，保持原有容错语义。
-        // [切片4] 传输层 ext 通道优先（长连接复用，无每轮新建管道开销），v2 独立短连接兜底。
-        // [切片7] settle 判定事件化（capability task.queue）：先订阅 slotReleased 等待（先订阅后动作），
-        // 再一次快照探测（已落定则直接通过，覆盖"suspend 时本就无任务在跑、不会发 slotReleased"的场景）；
-        // 未落定则等事件（6s 上限），超时/通道不可用落回下方 200ms×30 轮询兜底（现状逻辑逐字节保留）。
-        var bgiSettled = false;
-        var extForSettle = _externalClient;
-        if (extForSettle is { State: BgiExternalLinkState.Ready }
-            && extForSettle.HasCapability(BgiExternalClient.CapabilityTaskQueue))
-        {
-            var slotWait = extForSettle.WaitSlotReleasedAsync(TimeSpan.FromSeconds(6));
-            try
-            {
-                var probe = await SendBgiIpcPreferredAsync("task.status", null, 1000);
-                if (probe is { Success: true } && !string.IsNullOrEmpty(probe.Data))
-                {
-                    var pdata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(probe.Data);
-                    var stillRunning = pdata.TryGetProperty("running", out var prEl)
-                        && prEl.ValueKind == System.Text.Json.JsonValueKind.True;
-                    var hasCtxNow = pdata.TryGetProperty("hasSuspendedTaskContext", out var phEl)
-                        && phEl.ValueKind == System.Text.Json.JsonValueKind.True;
-                    if (!stillRunning || hasCtxNow)
-                    {
-                        bgiSettled = true;
-                    }
-                }
-
-                if (!bgiSettled)
-                {
-                    bgiSettled = await slotWait;
-                    if (bgiSettled)
-                    {
-                        AddLog("[上线探针] 收到 task.slotReleased 事件，BGI 任务槽位已释放");
-                    }
-                }
-            }
-            catch
-            {
-                // 通道瞬态失败，落轮询兜底
-            }
-        }
-
-        if (!bgiSettled)
-        {
-            for (var waitRound = 0; waitRound < 30; waitRound++)
-            {
-                try
-                {
-                    var waitResp = await SendBgiIpcPreferredAsync("task.status", null, 1000);
-                    if (waitResp is { Success: true } && !string.IsNullOrEmpty(waitResp.Data))
-                    {
-                        var wdata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(waitResp.Data);
-                        var stillRunning = wdata.TryGetProperty("running", out var rEl)
-                            && rEl.ValueKind == System.Text.Json.JsonValueKind.True;
-                        var hasCtx = wdata.TryGetProperty("hasSuspendedTaskContext", out var hEl)
-                            && hEl.ValueKind == System.Text.Json.JsonValueKind.True;
-                        if (!stillRunning || hasCtx)
-                        {
-                            bgiSettled = true;
-                            break;
-                        }
-                    }
-                }
-                catch
-                {
-                    // IPC 暂不可达（BGI 忙/重启中），继续等待下一轮
-                }
-                await Task.Delay(200);
-            }
-        }
-        if (!bgiSettled)
-        {
-            AddLog("[上线探针] 等待 BGI 任务停止超时（6s），按容错策略继续执行批次 task.start");
-        }
+        // [切片4/切片7] settle 判定已抽为 CommandExecutor.WaitTaskSlotSettledAsync 共享方法
+        // （ext slotReleased 事件 + 快照探测 + 200ms×30 轮询兜底），按键抢占路径复用同一实现。
+        await _commandExecutor.WaitTaskSlotSettledAsync("[上线探针]", AddLog);
 
         // 依次执行所有绑定的配置组
         _ = Task.Run(async () =>
@@ -5929,10 +6248,10 @@ public class MainViewModel : INotifyPropertyChanged
                     if (startResult.Status == "cancelled")
                     {
                         _isAllReadySequenceCancelled = true;
-                        AddLog("配置组被用户取消（F11），清除中断上下文");
                         if (_commandExecutor != null)
                         {
-                            await _commandExecutor.ExecuteResumeAsync(cancel: true);
+                            // 用户 F11 取消永远压过配置策略：清上下文，不恢复、不启动指定任务
+                            await _commandExecutor.ApplyPolicyTeardownAsync(SnapshotOnlineHoeingPolicy(), "联机锄地配置组", userCancelled: true, AddLog);
                         }
                         break;
                     }
@@ -5949,27 +6268,16 @@ public class MainViewModel : INotifyPropertyChanged
                 _isOnlineReady = false;
                 _onlineMode = "none";
 
-                // 执行完所有绑定的配置组后，立即恢复原任务
-                // 直接调用 ExecuteResumeAsync，消除对 _wasAutoHoeingRunning 边沿检测的依赖
+                // 执行完所有绑定的配置组后，按"上线锄地策略"处置被中断的原任务
+                // （恢复 / 不恢复直接停止 / 不恢复并执行指定任务，收尾逻辑共享 CommandExecutor.ApplyPolicyTeardownAsync）。
                 // 此位置在 for 循环全部执行完后，天然覆盖两个场景：
                 //   场景A: 绑定配置组是联机锄地（AutoHoeingTask）
                 //   场景B: 绑定配置组是普通配置组（如"采集"）
-                // 注意：如果配置组已被用户取消（F11），已在 cancelled 分支中清除了中断上下文，
-                // 不需要再执行 ExecuteResumeAsync（否则会打"恢复原任务失败"的误导日志）
+                // 注意：如果配置组已被用户取消（F11），已在 cancelled 分支中按"取消优先"清除中断上下文，
+                // 不需要再执行策略收尾（否则会打误导日志/误启动指定任务）
                 if (!_isAllReadySequenceCancelled && _commandExecutor != null)
                 {
-                    var resumeResult = await _commandExecutor.ExecuteResumeAsync();
-                    if (resumeResult.Status == "success")
-                    {
-                        AddLog("原任务已自动恢复");
-                    }
-                    else
-                    {
-                        AddLog($"恢复原任务失败: {resumeResult.Message}");
-                        // [P2-H 止血] resume 返回 no_context/失败：SuspendedTaskContext 不持久化，
-                        // BGI 曾被重启（如 suspend 失败后 KillBgi 回退）则上下文必丢失，必须明确提示用户手动恢复
-                        AddLog("原任务上下文已丢失（BGI 曾被重启），请手动在 BGI 中重新启动调度器/一条龙");
-                    }
+                    await _commandExecutor.ApplyPolicyTeardownAsync(SnapshotOnlineHoeingPolicy(), "联机锄地", userCancelled: false, AddLog);
                 }
                 _isAllReadySequenceCancelled = false;
 

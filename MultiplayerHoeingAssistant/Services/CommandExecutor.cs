@@ -10,8 +10,18 @@ public class CommandExecutor
     private readonly string _bgiPath;
     /// <summary>[切片7] ext 通道客户端提供器（MainViewModel 注入 () => _externalClient）；null = 无 ext 通道，全部走 v2 旧路径。</summary>
     private readonly Func<BgiExternalClient?>? _externalClientProvider;
+    /// <summary>[任务冲突策略] 用户可见日志出口（MainViewModel 注入 AddLog）；null 时只写 ProbeLog 文件日志。</summary>
+    private readonly Action<string>? _log;
     /// <summary>[切片7] 队列式任务终态事件等待的兜底超时（事件经 SDK 断线续传不丢，超时仅为防永久挂起）。</summary>
     private static readonly TimeSpan TaskTerminalWaitTimeout = TimeSpan.FromHours(24);
+    /// <summary>[任务策略] 快捷键启动任务后等待其结束的轮询间隔。</summary>
+    private static readonly TimeSpan TaskPollInterval = TimeSpan.FromSeconds(5);
+    /// <summary>[任务策略] 快捷键下发后等待 task.status 变 running 的检测窗口（热键可能不启动任务，超时按"未启动"直接收尾）。</summary>
+    private static readonly TimeSpan HotkeyTaskDetectTimeout = TimeSpan.FromSeconds(15);
+    /// <summary>[任务策略] 快捷键启动了新任务时，等待其结束的上限（防永久挂起）。</summary>
+    private static readonly TimeSpan HotkeyTaskRunTimeout = TimeSpan.FromHours(4);
+    /// <summary>[任务策略] 6 键固定收尾策略：执行完停止（清除中断上下文，不恢复）。无 UI、无配置项。</summary>
+    private static readonly TaskConflictPolicySettings FixedKeyPolicy = new();
     /// <summary>本批次是否已通过 RestartBgi 回退重启过 BGI（批次级状态，由上游批次循环管理生命周期）。</summary>
     private bool _hasRestartedThisBatch;
 
@@ -23,11 +33,20 @@ public class CommandExecutor
         _hasRestartedThisBatch = false;
     }
 
-    public CommandExecutor(BgiProcessMonitor monitor, string bgiPath, Func<BgiExternalClient?>? externalClientProvider = null)
+    public CommandExecutor(BgiProcessMonitor monitor, string bgiPath, Func<BgiExternalClient?>? externalClientProvider = null,
+        Action<string>? logger = null)
     {
         _monitor = monitor;
         _bgiPath = bgiPath;
         _externalClientProvider = externalClientProvider;
+        _log = logger;
+    }
+
+    /// <summary>[任务冲突策略] 用户可见日志 + 文件日志双写。</summary>
+    private void Log(string message)
+    {
+        _log?.Invoke(message);
+        ProbeLog(message);
     }
 
     /// <summary>
@@ -104,9 +123,9 @@ public class CommandExecutor
             {
                 case "stop":
                     _hasRestartedThisBatch = false; // 用户手动停止后，新的一批重新开始
-                    return await StopBgiAsync();
+                    return await StopWithKeyPolicyAsync();
                 case "start_bgi":
-                    return await StartBgiAsync();
+                    return await StartBgiWithKeyPolicyAsync();
                 case "start_group":
                     return await StartGroupAsync(
                         GetStringParam(command.Params, "groupName") ?? "",
@@ -119,10 +138,10 @@ public class CommandExecutor
                         GetIntParam(command.Params, "startFromIndex") ?? 0,
                         GetIntParam(command.Params, "generation") ?? 0);
                 case "hotkey_execute":
-                    return await ExecuteHotkeyAsync(
+                    return await ExecuteHotkeyWithKeyPolicyAsync(
                         GetStringParam(command.Params, "hotkeyConfigName") ?? "");
                 case "close_game":
-                    return await CloseGameAsync();
+                    return await CloseGameWithKeyPolicyAsync();
                 case "set_task_enabled":
                     return await SetTaskEnabledAsync(
                         GetStringParam(command.Params, "groupName") ?? "",
@@ -296,6 +315,14 @@ public class CommandExecutor
             }
         }
 
+        // [任务策略] 按键门控（固定行为：立即执行 + 执行完停止，无配置项）。
+        // 本机忙且无既有中断上下文时 suspend 抢占（强制 v2，跳过下方 ext 队列通道——队列语义与抢占冲突）；
+        // 已有中断上下文（上线锄地批次进行中）不二次抢占，走原有无损拒绝；空闲直接走下方原路径。
+        if (await ShouldPreemptKeyPressAsync($"配置组「{groupName}」"))
+        {
+            return await StartWithPreemptionAsync(FixedKeyPolicy, groupName, null, startFromIndex, generation);
+        }
+
         // [切片7] ext 任务队列通道（capability task.queue）：入队即返回 + 事件驱动等终态，
         // 全程无 task_already_running 撞锁、无 1s×6 重试噪音；通道不可用走下方 v2 路径（逐字节保留）。
         var extClient = _externalClientProvider?.Invoke();
@@ -396,6 +423,13 @@ public class CommandExecutor
     /// </summary>
     private async Task<CommandResult> StartOneClickAsync(string configName, int startFromIndex, int generation = 0)
     {
+        // [任务策略] 按键门控（同 StartGroupAsync，固定行为：立即执行 + 执行完停止）：
+        // 本机忙且无既有中断上下文时 suspend 抢占强制 v2；已有中断上下文走无损拒绝；空闲走原路径。
+        if (await ShouldPreemptKeyPressAsync($"一条龙「{configName}」"))
+        {
+            return await StartWithPreemptionAsync(FixedKeyPolicy, null, configName, startFromIndex, generation);
+        }
+
         // [切片7] ext 任务队列通道（同 StartGroupAsync）；通道不可用走下方 v2 路径（逐字节保留）。
         var extClient = _externalClientProvider?.Invoke();
         if (extClient is { State: BgiExternalLinkState.Ready }
@@ -626,5 +660,508 @@ public class CommandExecutor
         {
             return new CommandResult { Status = "failed", Message = $"IPC task.resume 失败: {ex.Message}" };
         }
+    }
+
+    // ==================== [任务冲突策略] 共享原语与抢占闭环 ====================
+
+    /// <summary>
+    /// [切片4 复刻] ext 优先的 BGI IPC 发送（与 MainViewModel.SendBgiIpcPreferredAsync 同语义）：
+    /// ext 通道 Ready 且操作有 ext 映射时走长连接；否则回退 v2 IpcClient 短连接。
+    /// 返回 null = 两条路径都不可用（调用方按容错语义处理）。
+    /// </summary>
+    private async Task<IpcResponse?> SendIpcPreferredAsync(string v2OpCode, string? payloadJson, int connectTimeoutMs = 2000)
+    {
+        var ext = _externalClientProvider?.Invoke();
+        if (ext is { State: BgiExternalLinkState.Ready }
+            && BgiExternalClient.TryMapToExtOperation(v2OpCode, out var extOp))
+        {
+            try
+            {
+                var extResp = await ext.SendCommandAsync(
+                    extOp,
+                    payloadJson is null ? null : System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(payloadJson),
+                    TimeSpan.FromMilliseconds(Math.Max(connectTimeoutMs, 2000)));
+                return new IpcResponse
+                {
+                    Success = extResp.Success,
+                    Data = extResp.Data,
+                    ErrorMessage = extResp.ErrorMessage,
+                    ErrorCode = extResp.ErrorCode,
+                };
+            }
+            catch
+            {
+                // ext 通道瞬态失败 → 落回 v2 短连接
+            }
+        }
+
+        try
+        {
+            using var ipc = new IpcClient();
+            await ipc.ConnectAsync(connectTimeoutMs);
+            return await ipc.SendCommandAsync(new IpcRequest { OpCode = v2OpCode, Payload = payloadJson });
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>[任务冲突策略] 查询 BGI 任务状态（running / hasSuspendedTaskContext）。查询失败返回 null（按现状容错）。</summary>
+    private async Task<(bool Running, bool HasContext)?> QueryTaskStatusAsync(int connectTimeoutMs = 1500)
+    {
+        var resp = await SendIpcPreferredAsync("task.status", null, connectTimeoutMs);
+        if (resp is not { Success: true } || string.IsNullOrEmpty(resp.Data)) return null;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(resp.Data);
+            var running = data.TryGetProperty("running", out var rEl)
+                && rEl.ValueKind == System.Text.Json.JsonValueKind.True;
+            var hasCtx = data.TryGetProperty("hasSuspendedTaskContext", out var hEl)
+                && hEl.ValueKind == System.Text.Json.JsonValueKind.True;
+            return (running, hasCtx);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// [P1-C/切片7 共享] 等待 BGI 任务槽位释放（settle）：suspend 之后、task.start 之前调用。
+    /// 先订阅 slotReleased 事件等待（先订阅后动作），再一次快照探测（已落定则直接通过，
+    /// 覆盖"suspend 时本就无任务在跑、不会发 slotReleased"的场景）；未落定则等事件（6s 上限），
+    /// 超时/通道不可用落回 200ms×30 轮询 task.status 兜底。超时仅记日志容错，返回是否已落定。
+    /// 供上线锄地（OnAllReadyConfirmedInternal）与按键抢占两条路径复用。
+    /// </summary>
+    public async Task<bool> WaitTaskSlotSettledAsync(string logTag, Action<string>? log = null)
+    {
+        log ??= _log;
+        var bgiSettled = false;
+        var extForSettle = _externalClientProvider?.Invoke();
+        if (extForSettle is { State: BgiExternalLinkState.Ready }
+            && extForSettle.HasCapability(BgiExternalClient.CapabilityTaskQueue))
+        {
+            var slotWait = extForSettle.WaitSlotReleasedAsync(TimeSpan.FromSeconds(6));
+            try
+            {
+                var probe = await SendIpcPreferredAsync("task.status", null, 1000);
+                if (probe is { Success: true } && !string.IsNullOrEmpty(probe.Data))
+                {
+                    var pdata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(probe.Data);
+                    var stillRunning = pdata.TryGetProperty("running", out var prEl)
+                        && prEl.ValueKind == System.Text.Json.JsonValueKind.True;
+                    var hasCtxNow = pdata.TryGetProperty("hasSuspendedTaskContext", out var phEl)
+                        && phEl.ValueKind == System.Text.Json.JsonValueKind.True;
+                    if (!stillRunning || hasCtxNow)
+                    {
+                        bgiSettled = true;
+                    }
+                }
+
+                if (!bgiSettled)
+                {
+                    bgiSettled = await slotWait;
+                    if (bgiSettled)
+                    {
+                        log?.Invoke($"{logTag} 收到 task.slotReleased 事件，BGI 任务槽位已释放");
+                    }
+                }
+            }
+            catch
+            {
+                // 通道瞬态失败，落轮询兜底
+            }
+        }
+
+        if (!bgiSettled)
+        {
+            for (var waitRound = 0; waitRound < 30; waitRound++)
+            {
+                try
+                {
+                    var waitResp = await SendIpcPreferredAsync("task.status", null, 1000);
+                    if (waitResp is { Success: true } && !string.IsNullOrEmpty(waitResp.Data))
+                    {
+                        var wdata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(waitResp.Data);
+                        var stillRunning = wdata.TryGetProperty("running", out var rEl)
+                            && rEl.ValueKind == System.Text.Json.JsonValueKind.True;
+                        var hasCtx = wdata.TryGetProperty("hasSuspendedTaskContext", out var hEl)
+                            && hEl.ValueKind == System.Text.Json.JsonValueKind.True;
+                        if (!stillRunning || hasCtx)
+                        {
+                            bgiSettled = true;
+                            break;
+                        }
+                    }
+                }
+                catch
+                {
+                    // IPC 暂不可达（BGI 忙/重启中），继续等待下一轮
+                }
+                await Task.Delay(200);
+            }
+        }
+        if (!bgiSettled)
+        {
+            log?.Invoke($"{logTag} 等待 BGI 任务停止超时（6s），按容错策略继续执行 task.start");
+        }
+        return bgiSettled;
+    }
+
+    /// <summary>
+    /// [任务冲突策略] 按键抢占入口判定：本机忙且无既有中断上下文时才抢占。
+    /// 返回 true 表示应走抢占闭环（suspend → settle → v2 task.start → 策略收尾）。
+    /// 空闲（running=false）：不抢占，走原有路径；已有中断上下文（上线锄地批次进行中）：
+    /// 不抢占（再 suspend 会用锄地任务覆盖原任务上下文），走原有无损拒绝路径。
+    /// </summary>
+    private async Task<bool> ShouldPreemptKeyPressAsync(string desc)
+    {
+        var status = await QueryTaskStatusAsync();
+        if (status is not { Running: true }) return false; // 空闲或状态未知：不抢占
+        if (status.Value.HasContext)
+        {
+            Log($"[任务策略] 检测到 BGI 已有中断上下文（上线锄地批次进行中？），按键启动 {desc} 不抢占，走原有无损拒绝路径");
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// [任务策略] 停止键闭环（固定行为：立即执行 + 执行完停止，无配置项）。
+    /// 本机忙：suspend 即停止（绝不杀进程），再清上下文（不恢复）。
+    /// 上线锄地批次进行中（已有中断上下文）：不二次抢占，走无损拒绝。
+    /// 空闲或状态未知：保持原"停止 BGI"语义（IPC task.stop → 杀进程兜底）。
+    /// </summary>
+    private async Task<CommandResult> StopWithKeyPolicyAsync()
+    {
+        var status = await QueryTaskStatusAsync();
+        if (status is { Running: true, HasContext: true })
+        {
+            Log("[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中），停止键不二次抢占，走无损拒绝");
+            return new CommandResult { Status = "failed", Message = "停止未执行：联机锄地批次进行中（已有中断上下文），按无损拒绝语义不打断，请等批次结束后再试" };
+        }
+        if (status is not { Running: true })
+        {
+            return await StopBgiAsync(); // 空闲/状态未知：原语义
+        }
+
+        Log("[任务策略] 本机任务运行中，停止键以 task.suspend 中断当前任务（固定行为：执行完停止，不恢复）");
+        var suspendResult = await ExecuteSuspendAsync("停止键");
+        if (suspendResult.Status != "success")
+        {
+            Log($"[任务策略] task.suspend 失败/被阻断：{suspendResult.Message}；按键路径不回退杀进程，直接失败");
+            return new CommandResult { Status = "failed", Message = $"停止失败：{suspendResult.Message}（按键路径绝不杀进程，请稍后重试）" };
+        }
+        await ApplyPolicyTeardownAsync(FixedKeyPolicy, "停止键中断的原任务", userCancelled: false);
+        return new CommandResult { Status = "success", Message = "当前任务已中断（suspend），中断上下文已清除（固定行为：执行完停止）" };
+    }
+
+    /// <summary>
+    /// [任务策略] 启动BGI 键闭环：BGI 未运行时纯启动；
+    /// BGI 已在跑任务时无实际动作、记日志即可，不做抢占；BGI 空闲时保持原启动行为。
+    /// </summary>
+    private async Task<CommandResult> StartBgiWithKeyPolicyAsync()
+    {
+        if (!_monitor.IsBgiRunning)
+        {
+            return await StartBgiAsync(); // BGI 未运行：纯启动
+        }
+        var status = await QueryTaskStatusAsync();
+        if (status is { Running: true })
+        {
+            Log("[任务策略] BGI 已在运行任务，启动BGI 键无实际动作（不做抢占）");
+            return new CommandResult { Status = "success", Message = "BGI 已在运行任务，启动BGI 键无实际动作" };
+        }
+        return await StartBgiAsync(); // BGI 空闲：保持原行为（BGI 侧单实例锁兜底）
+    }
+
+    /// <summary>
+    /// [任务策略] 关闭游戏键闭环（固定行为：立即执行 + 执行完停止，无配置项）。
+    /// 本机忙：suspend → settle → 关游戏 → 清上下文不恢复（游戏已关导致的收尾失败只打日志，绝不杀进程）。
+    /// 上线锄地批次进行中（已有中断上下文）：不二次抢占，走无损拒绝。空闲：直接关游戏（原语义）。
+    /// </summary>
+    private async Task<CommandResult> CloseGameWithKeyPolicyAsync()
+    {
+        var status = await QueryTaskStatusAsync();
+        if (status is { Running: true, HasContext: true })
+        {
+            Log("[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中），关闭游戏键不二次抢占，走无损拒绝");
+            return new CommandResult { Status = "failed", Message = "关闭游戏未执行：联机锄地批次进行中（已有中断上下文），按无损拒绝语义不打断，请等批次结束后再试" };
+        }
+        if (status is not { Running: true })
+        {
+            return await CloseGameAsync(); // 空闲/状态未知：原语义
+        }
+
+        Log("[任务策略] 本机任务运行中，关闭游戏键先中断当前任务（固定行为：执行完停止，不恢复）");
+        var suspendResult = await ExecuteSuspendAsync("关闭游戏键");
+        if (suspendResult.Status != "success")
+        {
+            Log($"[任务策略] task.suspend 失败/被阻断：{suspendResult.Message}；按键路径不回退杀进程，直接失败");
+            return new CommandResult { Status = "failed", Message = $"关闭游戏失败：{suspendResult.Message}（按键路径绝不杀进程，请稍后重试）" };
+        }
+        await WaitTaskSlotSettledAsync("[任务策略]", _log);
+        var closeResult = await CloseGameAsync();
+        // 收尾失败（游戏已关导致清上下文失败）只打日志，不杀进程（ApplyPolicyTeardownAsync 内部已逐条容错）
+        await ApplyPolicyTeardownAsync(FixedKeyPolicy, "关闭游戏", userCancelled: false);
+        return closeResult;
+    }
+
+    /// <summary>
+    /// [任务策略] 快捷键键闭环（固定行为：立即执行 + 执行完停止，无配置项）。
+    /// 本机忙：suspend → settle → 发热键 → 15s 检测窗：热键未启动新任务则直接清上下文收尾；
+    /// 启动了则等其结束后清上下文收尾。上线锄地批次进行中（已有中断上下文）：不二次抢占，走无损拒绝。
+    /// 空闲：直接发热键（原语义）。
+    /// </summary>
+    private async Task<CommandResult> ExecuteHotkeyWithKeyPolicyAsync(string hotkeyConfigName)
+    {
+        var desc = $"快捷键「{hotkeyConfigName}」";
+
+        var status = await QueryTaskStatusAsync();
+        if (status is { Running: true, HasContext: true })
+        {
+            Log($"[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中），{desc} 不二次抢占，走无损拒绝");
+            return new CommandResult { Status = "failed", Message = $"{desc} 未执行：联机锄地批次进行中（已有中断上下文），按无损拒绝语义不打断，请等批次结束后再试" };
+        }
+        if (status is not { Running: true })
+        {
+            return await ExecuteHotkeyAsync(hotkeyConfigName); // 空闲/状态未知：原语义（无被中断任务，无收尾）
+        }
+
+        Log($"[任务策略] 本机任务运行中，{desc} 先中断当前任务（固定行为：执行完停止，不恢复）");
+        var suspendResult = await ExecuteSuspendAsync(desc);
+        if (suspendResult.Status != "success")
+        {
+            Log($"[任务策略] task.suspend 失败/被阻断：{suspendResult.Message}；按键路径不回退杀进程，直接失败");
+            return new CommandResult { Status = "failed", Message = $"抢占中断失败：{suspendResult.Message}（按键路径绝不杀进程，请稍后重试或先手动停止当前任务）" };
+        }
+        await WaitTaskSlotSettledAsync("[任务策略]", _log);
+        var execResult = await ExecuteHotkeyAsync(hotkeyConfigName);
+        if (execResult.Status != "success")
+        {
+            // 热键下发失败：原任务已被中断，仍按固定行为清上下文收尾
+            await ApplyPolicyTeardownAsync(FixedKeyPolicy, desc, userCancelled: false);
+            return execResult;
+        }
+
+        // 热键可能不启动任务：15s 内 task.status 未变 running 则直接清上下文收尾
+        var started = false;
+        var detectDeadline = DateTime.UtcNow + HotkeyTaskDetectTimeout;
+        while (DateTime.UtcNow < detectDeadline)
+        {
+            var probe = await QueryTaskStatusAsync();
+            if (probe is { Running: true }) { started = true; break; }
+            await Task.Delay(1000);
+        }
+        if (!started)
+        {
+            Log($"[任务策略] {desc} 下发后 {HotkeyTaskDetectTimeout.TotalSeconds}s 内未启动新任务，直接清上下文收尾（固定行为：执行完停止）");
+            await ApplyPolicyTeardownAsync(FixedKeyPolicy, desc, userCancelled: false);
+            return execResult;
+        }
+
+        Log($"[任务策略] {desc} 已启动新任务，等待其结束后清上下文收尾（上限 {HotkeyTaskRunTimeout.TotalHours}h，5s 轮询）...");
+        var runDeadline = DateTime.UtcNow + HotkeyTaskRunTimeout;
+        while (DateTime.UtcNow < runDeadline)
+        {
+            var probe = await QueryTaskStatusAsync();
+            if (probe is { Running: false }) break;
+            // 查询失败（BGI 忙/重启中）：按容错继续等下一轮
+            await Task.Delay(TaskPollInterval);
+        }
+        await ApplyPolicyTeardownAsync(FixedKeyPolicy, desc, userCancelled: false);
+        return execResult;
+    }
+
+    /// <summary>
+    /// [任务冲突策略] 按键抢占闭环：suspend → settle → v2 task.start（强制跳过 ext 队列通道，
+    /// 队列语义与抢占冲突）→ 同步等执行完 → 按策略收尾（resume / resume(cancel:true) /
+    /// resume(cancel:true)+启动指定任务）。suspend 失败或被跨会话守卫阻断时直接失败返回，
+    /// 绝不走 KillBgi 回退（按键路径不杀进程）。
+    /// </summary>
+    private async Task<CommandResult> StartWithPreemptionAsync(
+        TaskConflictPolicySettings policy, string? groupName, string? configName, int startFromIndex, int generation)
+    {
+        var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
+        Log($"[任务冲突策略] 本机任务运行中，按键启动 {desc} 按策略（{policy.PolicyDisplayName}）抢占：先中断当前任务");
+
+        // 1. suspend（跨会话守卫阻断/失败 → 直接失败返回，不杀进程）
+        var suspendResult = await ExecuteSuspendAsync(desc);
+        if (suspendResult.Status != "success")
+        {
+            Log($"[任务冲突策略] task.suspend 失败/被阻断：{suspendResult.Message}；按键路径不回退杀进程，直接失败");
+            return new CommandResult { Status = "failed", Message = $"抢占中断失败：{suspendResult.Message}（按键路径绝不杀进程，请稍后重试或先手动停止当前任务）" };
+        }
+
+        // 2. settle 等待（与上线锄地共用同一方法）
+        await WaitTaskSlotSettledAsync("[任务冲突策略]", _log);
+
+        // 3. v2 IPC task.start（抢占路径强制 v2，跳过 ext 队列；传输失败不杀进程）
+        var startResult = await StartViaV2IpcNoKillAsync(groupName, configName, startFromIndex, generation);
+
+        // 4. 策略收尾（F11 取消永远压过配置策略）
+        await ApplyPolicyTeardownAsync(policy, desc, startResult.Status == "cancelled");
+
+        return startResult;
+    }
+
+    /// <summary>
+    /// [任务冲突策略] v2 IPC task.start（无杀进程回退版）：抢占闭环与指定任务启动共用。
+    /// 保留 1s×6 task_already_running 无损拒绝重试；业务拒绝/传输异常均直接失败返回，绝不 KillBgi。
+    /// </summary>
+    private async Task<CommandResult> StartViaV2IpcNoKillAsync(string? groupName, string? configName, int startFromIndex, int generation)
+    {
+        var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
+        try
+        {
+            using var ipcClient = new IpcClient();
+            await ipcClient.ConnectAsync(3000);
+            var blocked = CheckCrossSessionBlock(ipcClient, $"task.start {desc}");
+            if (blocked != null) return blocked;
+            var payload = groupName != null
+                ? System.Text.Json.JsonSerializer.Serialize(new { groupName, startFromIndex, generation })
+                : System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation });
+            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
+            for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
+            {
+                ProbeLog($"[CommandExecutor] task.start 被无损拒绝（任务运行中），1s 后重试（{retry + 1}/6）{desc}");
+                await Task.Delay(1000);
+                response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
+            }
+            if (response.Success)
+            {
+                _hasRestartedThisBatch = false; // IPC 成功 = BGI 在线，后续不再需要回退标记
+                // 透传 cancelled（BGI 侧用户 F11 取消），与 StartGroupAsync 一致
+                if (!string.IsNullOrEmpty(response.Data))
+                {
+                    try
+                    {
+                        var respData = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data);
+                        var bgiStatus = respData.TryGetProperty("status", out var st) ? st.GetString() : null;
+                        if (bgiStatus == "cancelled")
+                        {
+                            return new CommandResult { Status = "cancelled", Message = $"{desc} 执行中被取消" };
+                        }
+                    }
+                    catch
+                    {
+                        // Data 解析失败不影响，默认走 success 分支
+                    }
+                }
+                return new CommandResult { Status = "success", Message = $"{desc} 已启动" };
+            }
+            return new CommandResult { Status = "failed", Message = $"BGI 拒绝启动{desc}（{response.ErrorCode ?? "unknown"}）：{response.ErrorMessage ?? "无详情"}。按无损拒绝语义未杀进程" };
+        }
+        catch (Exception ex)
+        {
+            // 抢占/指定任务路径绝不杀进程：传输失败直接失败返回
+            return new CommandResult { Status = "failed", Message = $"IPC task.start {desc} 失败: {ex.Message}（按键路径绝不杀进程）" };
+        }
+    }
+
+    /// <summary>
+    /// [任务冲突策略] 策略收尾：新任务执行完后按策略处置被中断的原任务。
+    /// userCancelled=true（用户 F11 取消新任务）永远压过配置策略：清上下文，不恢复、不启动指定任务。
+    /// Resume：BGI 侧无中断上下文时（用户刚 F11 导致 suspend 未保存 / BGI 曾重启）自动退化为停止并日志说明。
+    /// RunSpecified：resume(cancel:true) 后校验并启动指定配置组/一条龙；名称为空或不存在则日志报错退化为停止。
+    /// 供按键抢占闭环（CommandExecutor 内部）与上线锄地两条恢复触发路径（MainViewModel）复用。
+    /// </summary>
+    public async Task ApplyPolicyTeardownAsync(TaskConflictPolicySettings policy, string executedDesc, bool userCancelled, Action<string>? log = null)
+    {
+        log ??= _log;
+
+        if (userCancelled)
+        {
+            log?.Invoke($"[任务冲突策略] {executedDesc}被用户取消（F11），优先于配置策略：清除中断上下文，不执行后续动作");
+            await ExecuteResumeAsync(cancel: true);
+            return;
+        }
+
+        switch (policy.Policy)
+        {
+            case TaskConflictPolicy.Resume:
+            {
+                // WasCancelled/丢上下文守卫：BGI 侧用户刚 F11 时 suspend 不保存上下文（BGI 既有行为），
+                // 或 BGI 曾被重启导致内存上下文丢失，此时"恢复"必然失败，退化为停止
+                var status = await QueryTaskStatusAsync();
+                if (status is { HasContext: false })
+                {
+                    log?.Invoke("[任务冲突策略] BGI 侧无中断上下文（任务可能刚被 F11 取消，或 BGI 曾重启导致内存上下文丢失），「恢复」策略退化为停止");
+                    return;
+                }
+                var resumeResult = await ExecuteResumeAsync();
+                if (resumeResult.Status == "success")
+                {
+                    log?.Invoke("[任务冲突策略] 原任务已按策略恢复");
+                }
+                else
+                {
+                    log?.Invoke($"[任务冲突策略] 恢复原任务失败: {resumeResult.Message}；恢复上下文只存内存，BGI 被重启则无法恢复，请手动在 BGI 中重新启动调度器/一条龙");
+                }
+                break;
+            }
+            case TaskConflictPolicy.Stop:
+            {
+                await ExecuteResumeAsync(cancel: true);
+                log?.Invoke("[任务冲突策略] 已按策略清除中断上下文，不恢复原任务（执行完停止）");
+                break;
+            }
+            case TaskConflictPolicy.RunSpecified:
+            {
+                await ExecuteResumeAsync(cancel: true);
+                if (string.IsNullOrWhiteSpace(policy.SpecifiedTaskName))
+                {
+                    log?.Invoke("[任务冲突策略] 策略为「不恢复并执行指定任务」但未配置指定任务名称，退化为停止");
+                    return;
+                }
+                await StartSpecifiedTaskAsync(policy, log);
+                break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// [任务冲突策略] RunSpecified 收尾：校验指定配置组/一条龙存在后 v2 task.start 启动。
+    /// 名称不存在（或 config.list 查询失败）则日志报错退化为停止；启动失败不杀进程。
+    /// </summary>
+    private async Task StartSpecifiedTaskAsync(TaskConflictPolicySettings policy, Action<string>? log)
+    {
+        var isOneDragon = policy.SpecifiedTaskType == "onedragon";
+        var typeDesc = isOneDragon ? "一条龙" : "配置组";
+        var name = policy.SpecifiedTaskName;
+
+        // 执行时校验存在性（设置里是自由文本输入，可能填错或 BGI 侧已删除）
+        try
+        {
+            var listResp = await SendIpcPreferredAsync("config.list", null, 3000);
+            if (listResp is { Success: true } && !string.IsNullOrEmpty(listResp.Data))
+            {
+                var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(listResp.Data);
+                var listKey = isOneDragon ? "oneClickConfigs" : "configGroups";
+                var exists = data.TryGetProperty(listKey, out var arr)
+                    && arr.ValueKind == System.Text.Json.JsonValueKind.Array
+                    && arr.EnumerateArray().Any(e => e.ValueKind == System.Text.Json.JsonValueKind.String && e.GetString() == name);
+                if (!exists)
+                {
+                    log?.Invoke($"[任务冲突策略] 指定{typeDesc}「{name}」在 BGI 中不存在，退化为停止（请在设置页检查指定任务配置）");
+                    return;
+                }
+            }
+            else
+            {
+                log?.Invoke($"[任务冲突策略] 无法读取 BGI 配置列表，无法校验指定{typeDesc}「{name}」，退化为停止");
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            log?.Invoke($"[任务冲突策略] 校验指定任务失败: {ex.Message}，退化为停止");
+            return;
+        }
+
+        log?.Invoke($"[任务冲突策略] 按策略启动指定{typeDesc}「{name}」");
+        var startResult = await StartViaV2IpcNoKillAsync(isOneDragon ? null : name, isOneDragon ? name : null, 0, 0);
+        log?.Invoke($"[任务冲突策略] 指定{typeDesc}「{name}」: {startResult.Message}");
     }
 }

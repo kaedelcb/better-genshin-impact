@@ -88,4 +88,22 @@ public class AssistConfig
     /// <summary>实例标识（UUID，助手进程启动时自动生成）。用于服务端区分同 UID 的多个连接实例。</summary>
     [JsonPropertyName("clientInstanceId")]
     public string ClientInstanceId { get; set; } = "";
+
+    // ========== 上线锄地「完成后动作」（持久化；绑定弹窗配置，全员就绪触发上线锄地固定打断当前任务）==========
+
+    /// <summary>上线锄地完成后动作："resume"=恢复任务（默认）/ "stop"=执行动作-停止 / "runSpecified"=执行动作-执行指定任务。
+    /// 作用于全员就绪上线锄地打断的原任务；批次末尾与 10s resume 定时器两处都按此配置走。</summary>
+    [JsonPropertyName("onlineHoeingCompletionPolicy")]
+    public string OnlineHoeingCompletionPolicy { get; set; } = "resume";
+
+    /// <summary>上线锄地指定任务类型（"group"=配置组 / "onedragon"=一条龙），仅 "runSpecified" 使用。</summary>
+    [JsonPropertyName("onlineHoeingSpecifiedTaskType")]
+    public string OnlineHoeingSpecifiedTaskType { get; set; } = "group";
+
+    /// <summary>上线锄地指定任务名称，仅 "runSpecified" 使用；执行时校验存在性，不存在则日志报错退化为停止。</summary>
+    [JsonPropertyName("onlineHoeingSpecifiedTaskName")]
+    public string OnlineHoeingSpecifiedTaskName { get; set; } = "";
+
+    // 注意：成员卡片 6 个按键（配置组/一条龙/快捷键/停止/启动BGI/关闭游戏）的策略为固定行为：
+    // 本机忙时一律「立即执行 + 执行完停止」（suspend 抢占 → 执行键动作 → 清上下文不恢复），无 UI、无配置项、不持久化。
 }
