@@ -128,8 +128,29 @@ public class ExceptionRecord
     /// <summary>防风暴合并计数：同规则 60 秒内超上限的命中合并到此计数（仅内存更新，JSONL 保留首次写入值）。</summary>
     [JsonPropertyName("repeatCount")] public int RepeatCount { get; set; } = 1;
 
+    /// <summary>命中时所处的锄地配置组（KeywordWatchService 从日志流跟踪"锄地一条龙任务启动 [配置组: X]"得出；
+    /// 未跟踪到/非锄地时段为 null。旧记录无此字段 → null）。</summary>
+    [JsonPropertyName("taskGroup")] public string? TaskGroup { get; set; }
+    /// <summary>命中时正在执行的路线/脚本名（跟踪"开始执行地图追踪任务/JS脚本/路线: X"得出；未跟踪到为 null）。</summary>
+    [JsonPropertyName("routeName")] public string? RouteName { get; set; }
+
     /// <summary>界面显示用：含合并计数的标题。</summary>
     [JsonIgnore] public string DisplayTitle => RepeatCount > 1 ? $"[{RuleName}] ×{RepeatCount}" : $"[{RuleName}]";
+
+    /// <summary>界面显示用：任务上下文一行（配置组 · 路线；均无则空串）。</summary>
+    [JsonIgnore] public string TaskContextDisplay => (TaskGroup, RouteName) switch
+    {
+        (null, null) => "",
+        ({ } g, null) => $"配置组: {g}",
+        (null, { } r) => $"路线: {r}",
+        ({ } g, { } r) => $"配置组: {g} · 路线: {r}"
+    };
+
+    /// <summary>界面用：是否有任务上下文（控制记录条目上路线行的显隐）。</summary>
+    [JsonIgnore] public bool HasTaskContext => TaskGroup != null || RouteName != null;
+
+    /// <summary>界面用：是否有路线名（控制「复制路线」按钮显隐）。</summary>
+    [JsonIgnore] public bool HasRoute => RouteName != null;
 
     /// <summary>界面分组用：按天分组头（异常记录列表 GroupDescriptions）。</summary>
     [JsonIgnore] public string DayGroup => Time.ToString("yyyy-MM-dd dddd");

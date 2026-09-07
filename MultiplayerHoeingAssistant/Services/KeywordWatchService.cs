@@ -12,6 +12,8 @@ namespace MultiplayerHoeingAssistant.Services;
 ///   （助手 exe 目录 log/dodoco_exceptions.{yyyy-MM-dd}.jsonl），重启不丢；
 /// - 防风暴：同一规则 60 秒最多记 5 条，超出合并计数（RepeatCount ×N）；
 /// - 命中 Alert=true 的规则触发 AlertRaised 事件（红点/托盘/提示音由 UI 层处理）。
+/// - 顺带从日志流被动跟踪"当前配置组/当前路线"（锄地启动/路线开始/取消/退出日志），
+///   命中记录时快照进 ExceptionRecord.TaskGroup/RouteName（列表显示 + JSONL/trigger.json/诊断包导出自动带上）。
 ///
 /// 规则持久化到 %APPDATA%/NexusBGI/dodoco_watch_rules.json（跟随 AssistConfigManager 的配置目录约定）。
 /// 所有匹配在日志后台线程执行；事件在后台线程触发，UI 层自行 Dispatcher。
@@ -46,6 +48,10 @@ public sealed class KeywordWatchService : IDisposable
     private readonly List<PendingRecord> _pendingRecords = [];
     /// <summary>最近 5 条事件原文（命中时作为前文上下文）。</summary>
     private readonly Queue<string> _recentLines = new();
+    /// <summary>任务上下文跟踪：来源桶（同限流分桶：本机=""，远程成员="远程:玩家名"）→ 当前配置组/路线。
+    /// 从日志流被动跟踪（"锄地一条龙任务启动 [配置组: X]"、"开始执行地图追踪任务/JS脚本/路线: X"），
+    /// 命中记录时快照进 ExceptionRecord.TaskGroup/RouteName，供列表显示与导出定位事发线路。</summary>
+    private readonly Dictionary<string, (string? Group, string? Route)> _taskContexts = new();
     private readonly Timer _flushTimer;
 
     /// <summary>新异常记录产生（含被限流合并前的首条）。后台线程触发。参数：记录、是否需要告警。</summary>
@@ -100,7 +106,7 @@ public sealed class KeywordWatchService : IDisposable
         MinLevel = r.MinLevel, Enabled = r.Enabled, Alert = r.Alert, Snapshot = r.Snapshot, Note = r.Note
     };
 
-    /// <summary>加载规则；文件不存在时写入内置预置规则（开箱即用，语料见设计文档 §2.2）。
+    /// <summary>加载规则；文件不存在/损坏时从空规则起步（不再预置规则，由用户自行添加）。
     /// 无论新旧文件都补录内置卡死规则（一次性种子：用户删除后不再补回）。</summary>
     private void Load()
     {
@@ -117,8 +123,8 @@ public sealed class KeywordWatchService : IDisposable
                     return;
                 }
             }
-            catch { /* 配置损坏则回落到预置规则 */ }
-            _config = new WatchConfig { Rules = DefaultRules() };
+            catch { /* 配置损坏则按空规则重建 */ }
+            _config = new WatchConfig();
             SeedBuiltinStallRuleLocked();
             SaveLocked();
         }
@@ -133,39 +139,6 @@ public sealed class KeywordWatchService : IDisposable
             _config.Rules.Add(BuiltinStallRule());
         SaveLocked();
     }
-
-    /// <summary>内置预置规则（设计文档 F3）。</summary>
-    private static List<WatchRule> DefaultRules() =>
-    [
-        new WatchRule
-        {
-            Name = "通用错误宽匹配", Pattern = "出错|异常|失败|错误", IsRegex = true,
-            MinLevel = LogLevels.Dbg, Enabled = true, Alert = false,
-            Note = "宽匹配，默认只记不告警，避免打扰"
-        },
-        new WatchRule
-        {
-            Name = "路线执行出错", Pattern = @"执行路线 .* 出错", IsRegex = true,
-            MinLevel = LogLevels.Dbg, Enabled = true, Alert = true, Snapshot = true,
-            Note = "AutoHoeingTask 路线失败（无堆栈，靠上下文定位）"
-        },
-        new WatchRule
-        {
-            Name = "锄地任务被取消", Pattern = "锄地一条龙任务被取消", IsRegex = false,
-            MinLevel = LogLevels.Dbg, Enabled = true, Alert = true, Snapshot = true, Note = ""
-        },
-        new WatchRule
-        {
-            Name = "联机锄地退出", Pattern = @"\[联机\] ===== 联机锄地退出", IsRegex = true,
-            MinLevel = LogLevels.Dbg, Enabled = true, Alert = true, Snapshot = true, Note = ""
-        },
-        new WatchRule
-        {
-            Name = "ERR 级别兜底", Pattern = "", IsRegex = false,
-            MinLevel = LogLevels.Err, Enabled = true, Alert = false,
-            Note = "任何 Error 级日志自动入异常库（Pattern 为空 = 仅按级别匹配）"
-        },
-    ];
 
     private void SaveLocked()
     {
@@ -205,6 +178,13 @@ public sealed class KeywordWatchService : IDisposable
         {
             rule = _config.Rules.FirstOrDefault(r => r.Id == record.RuleId);
             if (rule is { Enabled: false }) return;
+            // 内置检测注入（如卡死心跳）没有日志行可关联，补跟踪到的本机任务上下文（空桶=本机）
+            if (record.TaskGroup == null && record.RouteName == null
+                && _taskContexts.TryGetValue("", out var ctx))
+            {
+                record.TaskGroup = ctx.Group;
+                record.RouteName = ctx.Route;
+            }
             WriteRecordLocked(record);
         }
         RecordAdded?.Invoke(record, rule?.Alert == true && !IsMuted());
@@ -229,6 +209,8 @@ public sealed class KeywordWatchService : IDisposable
             // 中危3：限流/合并按"规则 + 来源"分桶——远程成员（SourceFile="远程:玩家名"）各自一桶，
             // 本机共用空桶；远程日志风暴不再挤占本机的窗口配额与合并目标
             var srcBucket = entry.SourceFile.StartsWith("远程:") ? entry.SourceFile : "";
+            // 当前任务上下文快照（规则匹配前取：本条事件若是"任务取消/联机退出"，其记录仍带上退出前所在路线）
+            _taskContexts.TryGetValue(srcBucket, out var taskCtx);
 
             foreach (var rule in _config.Rules)
             {
@@ -264,7 +246,9 @@ public sealed class KeywordWatchService : IDisposable
                     ContextBefore = _recentLines.Take(_recentLines.Count - 1).ToList(),
                     FileOffset = entry.FileOffset,
                     SourceFile = entry.SourceFile,
-                    MatchedLine = FindMatchedLine(rule, entry)
+                    MatchedLine = FindMatchedLine(rule, entry),
+                    TaskGroup = taskCtx.Group,
+                    RouteName = taskCtx.Route
                 };
                 _mergeTargets[bucketKey] = record;
                 _pendingRecords.Add(new PendingRecord
@@ -295,6 +279,9 @@ public sealed class KeywordWatchService : IDisposable
                 _pendingRecords.Remove(p);
                 WriteRecordLocked(p.Record);
             }
+
+            // 任务上下文跟踪放最后更新（本条事件先参与规则匹配，再改变上下文）
+            TrackTaskContext(entry, srcBucket);
         }
 
         // 事件在锁外触发，防订阅者重入死锁
@@ -304,6 +291,63 @@ public sealed class KeywordWatchService : IDisposable
         if (merged != null)
             foreach (var record in merged)
                 RecordMerged?.Invoke(record);
+    }
+
+    /// <summary>
+    /// 任务上下文跟踪（锁内调用，在本条事件参与完规则匹配后再更新——
+    /// 这样"锄地一条龙任务被取消/联机锄地退出"这类记录仍能带上取消/退出前所在的配置组与路线）。
+    /// 语料（BGI 侧出处见设计文档 §2.2）：
+    ///   配置组：锄地一条龙任务启动 [配置组: "X"]，数据目录: ...（Serilog 字符串属性带引号渲染）
+    ///   路线："→ 开始执行地图追踪任务: \"X\"" / "→ 开始执行JS脚本: \"X\""（配置组任务流，ScriptService）
+    ///        / "开始执行路线: \"X\"" / "开始执行地图追踪任务: \"X\""（独立任务版，RouteExecutionEngine）
+    /// </summary>
+    private void TrackTaskContext(LogEntry entry, string srcBucket)
+    {
+        var msg = entry.Message;
+        if (msg.Contains("锄地一条龙任务启动"))
+        {
+            // 新任务启动：记配置组并清掉上一任务残留的路线
+            _taskContexts[srcBucket] = (ExtractGroupName(msg), null);
+        }
+        else if (msg.Contains("开始执行地图追踪任务") || msg.Contains("开始执行JS脚本") || msg.Contains("开始执行路线"))
+        {
+            var route = ExtractRouteName(msg);
+            if (route == null) return;
+            _taskContexts.TryGetValue(srcBucket, out var ctx);
+            _taskContexts[srcBucket] = (ctx.Group, route);
+        }
+        else if (msg.Contains("锄地一条龙任务被取消") || msg.Contains("联机锄地退出"))
+        {
+            _taskContexts.Remove(srcBucket);
+        }
+    }
+
+    /// <summary>路线开始行判定正则：取"开始执行…: "冒号后的引号段（无引号则取到行尾/句读）。
+    /// 非贪婪 + 结尾断言保证引号内名称完整（与 BGI LogParse.cs:125,138 的判定口径一致，此处只需提取名字）。</summary>
+    private static readonly Regex RouteStartRegex = new(
+        @"开始执行(?:地图追踪任务|JS脚本|路线):\s*""?(?<name>[^""\r\n，]+?)""?\s*(?:\r?\n|$|，)",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>提取路线/脚本名（未匹配到返回 null）。</summary>
+    private static string? ExtractRouteName(string msg)
+    {
+        var m = RouteStartRegex.Match(msg);
+        if (!m.Success) return null;
+        var name = m.Groups["name"].Value.Trim();
+        return name.Length > 0 ? name : null;
+    }
+
+    /// <summary>提取配置组名："[配置组:" 到 "]" 之间，去掉 Serilog 字符串引号（无配置组段返回 null）。</summary>
+    private static string? ExtractGroupName(string msg)
+    {
+        const string start = "[配置组:";
+        var i = msg.IndexOf(start, StringComparison.Ordinal);
+        if (i < 0) return null;
+        i += start.Length;
+        var j = msg.IndexOf(']', i);
+        if (j < 0) return null;
+        var v = msg[i..j].Trim().Trim('"');
+        return v.Length > 0 ? v : null;
     }
 
     /// <summary>超时冲刷：后文上下文未收齐的记录先落盘。</summary>
@@ -422,32 +466,81 @@ public sealed class KeywordWatchService : IDisposable
         }
     }
 
-    /// <summary>读取历史异常记录（全部 JSONL 文件，按时间倒序；容错：坏行跳过）。</summary>
-    public List<ExceptionRecord> LoadHistoryRecords()
+    /// <summary>列出异常库已有记录的日期（仅从文件名 dodoco_exceptions.yyyy-MM-dd.jsonl 解析，不读内容），倒序。
+    /// 供界面建日期筛选项——未选中的日期不预加载（历史量大时全量读会卡）。</summary>
+    public List<string> ListRecordDates()
     {
-        var result = new List<ExceptionRecord>();
+        const string prefix = "dodoco_exceptions.";
+        const string suffix = ".jsonl";
+        var result = new List<string>();
         try
         {
             var dir = LogFileBrowser.AssistantLogDir;
             if (!Directory.Exists(dir)) return result;
-            foreach (var file in Directory.EnumerateFiles(dir, "dodoco_exceptions.*.jsonl")
-                         .OrderByDescending(f => f))
+            foreach (var file in Directory.EnumerateFiles(dir, "dodoco_exceptions.*.jsonl"))
             {
-                foreach (var line in File.ReadLines(file))
-                {
-                    if (string.IsNullOrWhiteSpace(line)) continue;
-                    try
-                    {
-                        var r = JsonSerializer.Deserialize<ExceptionRecord>(line,
-                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                        if (r != null) result.Add(r);
-                    }
-                    catch { /* 单行损坏不丢整文件 */ }
-                }
+                var name = Path.GetFileName(file);
+                if (name.Length <= prefix.Length + suffix.Length) continue;
+                var date = name[prefix.Length..^suffix.Length];
+                if (DateTime.TryParseExact(date, "yyyy-MM-dd",
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.None, out _))
+                    result.Add(date);
             }
         }
         catch { /* 目录读取失败返回空 */ }
+        return result.OrderByDescending(d => d).ToList();
+    }
+
+    /// <summary>读取指定日期（yyyy-MM-dd）的异常记录（单文件，容错：坏行跳过），时间倒序。</summary>
+    public List<ExceptionRecord> LoadRecordsOfDay(string date)
+    {
+        var result = new List<ExceptionRecord>();
+        try
+        {
+            var path = Path.Combine(LogFileBrowser.AssistantLogDir, $"dodoco_exceptions.{date}.jsonl");
+            if (!File.Exists(path)) return result;
+            foreach (var line in File.ReadLines(path))
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                try
+                {
+                    var r = JsonSerializer.Deserialize<ExceptionRecord>(line,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (r != null) result.Add(r);
+                }
+                catch { /* 单行损坏不丢整文件 */ }
+            }
+        }
+        catch { /* 文件读取失败返回空 */ }
         return result.OrderByDescending(r => r.Time).ToList();
+    }
+
+    /// <summary>删除异常库记录文件：date=null 删全部日期；否则只删指定日期（yyyy-MM-dd）。返回删除的文件数。
+    /// 注意：删除当天文件后，尚在等后文上下文的在途记录（≤15 秒窗口）落盘时会重建当天文件，属可接受边角。</summary>
+    public int DeleteRecords(string? date)
+    {
+        try
+        {
+            var dir = LogFileBrowser.AssistantLogDir;
+            if (!Directory.Exists(dir)) return 0;
+            IEnumerable<string> files = date == null
+                ? Directory.EnumerateFiles(dir, "dodoco_exceptions.*.jsonl")
+                : [Path.Combine(dir, $"dodoco_exceptions.{date}.jsonl")];
+            var n = 0;
+            foreach (var f in files)
+            {
+                if (!File.Exists(f)) continue;
+                File.Delete(f);
+                n++;
+            }
+            return n;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[KeywordWatchService] 异常库删除失败: {ex.Message}");
+            return 0;
+        }
     }
 
     public void Dispose()

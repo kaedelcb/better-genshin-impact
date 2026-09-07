@@ -144,10 +144,21 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
 
     public ObservableCollection<string> DateFilterItems { get; } = new() { "全部日期" };
     private string _selectedDateFilter = "全部日期";
+    /// <summary>已加载进内存的日期（yyyy-MM-dd）；未选择的日期不预加载（历史量大时全量读盘+渲染会卡）。</summary>
+    private readonly HashSet<string> _loadedDates = new();
+    /// <summary>异常库磁盘上已有记录的日期（文件名解析），与内存记录日期合并出日期筛选项。</summary>
+    private List<string> _fileDates = new();
     public string SelectedDateFilter
     {
         get => _selectedDateFilter;
-        set { if (SetProperty(ref _selectedDateFilter, value)) RebuildFiltered(); }
+        set
+        {
+            if (SetProperty(ref _selectedDateFilter, value))
+            {
+                EnsureDateLoaded(value);
+                RebuildFiltered();
+            }
+        }
     }
 
     private string _recordStatus = "";
@@ -184,8 +195,53 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
         if (p is ExceptionRecord record) _shell.JumpToRecord(record);
     });
 
-    /// <summary>重新从 JSONL 异常库加载历史记录。</summary>
-    public RelayCommand RefreshRecordsCommand => new(_ => ReloadHistory());
+    /// <summary>刷新：重新读盘当前筛选范围的日期（实时新增的内存记录按 RecordKey 去重保留，RepeatCount 以内存为准）。</summary>
+    public RelayCommand RefreshRecordsCommand => new(_ =>
+    {
+        if (SelectedDateFilter == "全部日期")
+            _loadedDates.Clear();
+        else
+            _loadedDates.Remove(SelectedDateFilter);
+        EnsureDateLoaded(SelectedDateFilter);
+    });
+
+    /// <summary>清空异常记录：范围跟随当前日期筛选（"全部日期"=清空全部；具体日期=只清当天）。
+    /// 删除落盘 JSONL 文件并同步剔除内存记录。</summary>
+    public RelayCommand ClearRecordsCommand => new(_ =>
+    {
+        var all = SelectedDateFilter == "全部日期";
+        var scope = all ? "全部日期的" : $" {SelectedDateFilter} 当天的";
+        if (MessageBox.Show($"确定删除{scope}异常记录吗？\n落盘的异常库文件将被删除，不可恢复。",
+                "清空异常记录", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+        var deleted = _service.DeleteRecords(all ? null : SelectedDateFilter);
+        _allRecords.RemoveAll(r => all || r.Time.ToString("yyyy-MM-dd") == SelectedDateFilter);
+        if (all)
+        {
+            _loadedDates.Clear();
+            _loadedDates.Add(DateTime.Now.ToString("yyyy-MM-dd"));
+        }
+        _fileDates = _service.ListRecordDates(); // 删后从磁盘重列日期清单
+        RebuildDateFilterItems();
+        RebuildRuleFilterItems();
+        RebuildFiltered();
+        RecordStatus = $"已删除{scope}异常记录（{deleted} 个文件）";
+    });
+
+    /// <summary>复制命中时所在的路线名到剪贴板（仅路线名本身，不含配置组）。</summary>
+    public RelayCommand CopyRouteCommand => new(p =>
+    {
+        if (p is not ExceptionRecord { RouteName: { } route }) return;
+        try
+        {
+            Clipboard.SetText(route);
+            RecordStatus = $"已复制路线名: {route}";
+        }
+        catch (Exception ex)
+        {
+            RecordStatus = $"复制失败: {ex.Message}";
+        }
+    });
 
     /// <summary>打开事发快照目录（log/incidents/，事发录像功能落盘点；复用"打开日志目录"思路）。</summary>
     public RelayCommand OpenIncidentDirCommand => new(_ =>
@@ -203,23 +259,70 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
         }
     });
 
+    /// <summary>初始加载：后台列日期清单（不读内容）+ 只读当天的记录，默认筛选当天。
+    /// 历史日期不预加载——之前全量加载所有 JSONL 是卡顿根源。</summary>
     private void ReloadHistory()
     {
         IsLoadingHistory = true;
         Task.Run(() =>
         {
-            var records = _service.LoadHistoryRecords();
+            var dates = _service.ListRecordDates();
+            var today = DateTime.Now.ToString("yyyy-MM-dd");
+            var records = _service.LoadRecordsOfDay(today);
             Application.Current.Dispatcher.BeginInvoke(() =>
             {
                 _allRecords.Clear();
                 _allRecords.AddRange(records);
+                _loadedDates.Clear();
+                _loadedDates.Add(today);
+                _fileDates = dates;
                 RebuildDateFilterItems();
+                // 默认显示当天（即使当天暂无记录，筛选项里也固定有今天）
+                SelectedDateFilter = DateFilterItems.Contains(today) ? today : "全部日期";
                 RebuildRuleFilterItems();
                 RebuildFiltered();
                 IsLoadingHistory = false;
             });
         });
     }
+
+    /// <summary>选中了未加载的日期时后台补加载（"全部日期"=补加载所有未载日期）。
+    /// 加载期间 IsLoadingHistory=true，界面显示加载动画。</summary>
+    private void EnsureDateLoaded(string dateFilter)
+    {
+        List<string> toLoad = dateFilter == "全部日期"
+            ? DateFilterItems.Where(d => d != "全部日期" && !_loadedDates.Contains(d)).ToList()
+            : _loadedDates.Contains(dateFilter) ? [] : [dateFilter];
+        if (toLoad.Count == 0) return;
+        foreach (var d in toLoad) _loadedDates.Add(d); // 先标记，防重复触发
+        IsLoadingHistory = true;
+        Task.Run(() =>
+        {
+            var records = toLoad.SelectMany(d => _service.LoadRecordsOfDay(d)).ToList();
+            Application.Current.Dispatcher.BeginInvoke(() =>
+            {
+                MergeRecords(records);
+                IsLoadingHistory = false;
+                RebuildRuleFilterItems();
+                RebuildFiltered();
+            });
+        });
+    }
+
+    /// <summary>合并读盘结果进内存列表并按时间倒序重排（去重：实时新增的记录已在内存，
+    /// 且 RepeatCount 可能已合并增长，保留内存版）。</summary>
+    private void MergeRecords(List<ExceptionRecord> loaded)
+    {
+        var keys = new HashSet<string>(_allRecords.Select(RecordKey));
+        foreach (var r in loaded)
+            if (keys.Add(RecordKey(r)))
+                _allRecords.Add(r);
+        _allRecords.Sort((a, b) => b.Time.CompareTo(a.Time));
+    }
+
+    /// <summary>记录去重键（时间|规则|文件偏移|命中行；不含 RepeatCount——合并计数仅内存更新，落盘保留首次值）。</summary>
+    private static string RecordKey(ExceptionRecord r) =>
+        $"{r.Time.Ticks}|{r.RuleId}|{r.FileOffset}|{r.MatchedLine}";
 
     private void OnRecordAdded(ExceptionRecord record, bool alert)
     {
@@ -230,6 +333,7 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
             if (_allRecords.Count > MaxRecordsInMemory)
                 _allRecords.RemoveRange(MaxRecordsInMemory, _allRecords.Count - MaxRecordsInMemory);
             var date = record.Time.ToString("yyyy-MM-dd");
+            _loadedDates.Add(date); // 实时新增视为已加载（落盘可能滞后 ≤15 秒，重复读盘也靠 RecordKey 去重兜底）
             if (!DateFilterItems.Contains(date)) DateFilterItems.Insert(1, date);
             if (!RuleFilterItems.Contains(record.RuleName)) RuleFilterItems.Add(record.RuleName);
             RebuildFiltered();
@@ -287,14 +391,19 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
         SelectedRuleFilter = RuleFilterItems.Contains(keep) ? keep : "全部规则";
     }
 
+    /// <summary>日期筛选项 = 磁盘已有记录的日期 ∪ 内存记录日期 ∪ 今天（今天固定存在，保证默认能选中当天）。</summary>
     private void RebuildDateFilterItems()
     {
         var keep = SelectedDateFilter;
+        var today = DateTime.Now.ToString("yyyy-MM-dd");
         DateFilterItems.Clear();
         DateFilterItems.Add("全部日期");
-        foreach (var d in _allRecords.Select(r => r.Time.ToString("yyyy-MM-dd")).Distinct().OrderByDescending(d => d))
+        foreach (var d in _fileDates
+                     .Concat(_allRecords.Select(r => r.Time.ToString("yyyy-MM-dd")))
+                     .Append(today)
+                     .Distinct().OrderByDescending(d => d))
             DateFilterItems.Add(d);
-        SelectedDateFilter = DateFilterItems.Contains(keep) ? keep : "全部日期";
+        SelectedDateFilter = DateFilterItems.Contains(keep) ? keep : today;
     }
 }
 

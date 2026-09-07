@@ -984,6 +984,9 @@
                                           Margin="0,0,6,0" ToolTip="按日期筛选异常记录"/>
                                 <Button Content="⟳" Style="{DynamicResource TextAction}" FontSize="13"
                                         Command="{Binding Watch.RefreshRecordsCommand}" ToolTip="重新加载异常库"/>
+                                <Button Content="🗑" Style="{DynamicResource TextAction}" FontSize="13" Margin="4,0,0,0"
+                                        Command="{Binding Watch.ClearRecordsCommand}"
+                                        ToolTip="清空异常记录（范围=当前日期筛选：「全部日期」清空全部，选中某天只清当天；删除落盘文件，不可恢复）"/>
                             </StackPanel>
                         </Grid>
 
@@ -1059,6 +1062,22 @@
                                                         Command="{Binding DataContext.Watch.OpenRecordIncidentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding}"
                                                         ToolTip="打开该异常的事发快照目录（前后 3 秒游戏截图 + 触发日志；仅实际录到事发录像的记录显示此按钮）"/>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0"
+                                                        Visibility="{Binding HasTaskContext, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="{Binding TaskContextDisplay}" FontSize="10"
+                                                           Foreground="{DynamicResource Gold}"
+                                                           TextTrimming="CharacterEllipsis" MaxWidth="460"
+                                                           VerticalAlignment="Center"
+                                                           ToolTip="命中时所处的配置组与路线（从日志流跟踪得出）"/>
+                                                <Button Content="复制" FontSize="10" Padding="6,1" Margin="6,0,0,0"
+                                                        VerticalAlignment="Center" Background="Transparent"
+                                                        BorderBrush="{DynamicResource GoldLine}" BorderThickness="1"
+                                                        Foreground="{DynamicResource Dim}" Cursor="Hand"
+                                                        Visibility="{Binding HasRoute, Converter={StaticResource BoolToVis}}"
+                                                        Command="{Binding DataContext.Watch.CopyRouteCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        ToolTip="复制路线名称（仅路线名）"/>
                                             </StackPanel>
                                             <TextBlock Text="{Binding Message}" FontSize="10" Foreground="{DynamicResource Dim}"
                                                        TextTrimming="CharacterEllipsis" Margin="0,2,0,0" MaxWidth="520"/>

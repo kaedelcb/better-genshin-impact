@@ -12,8 +12,9 @@ namespace MultiplayerHoeingAssistant.Services;
 /// 命中标记了"存快照"（WatchRule.Snapshot）的监控规则时：
 ///   1) 立即把触发时刻前 3 秒的帧落盘（前段先落，防封盘前进程退出丢现场）；
 ///   2) 继续采集触发后 3 帧（每秒一张），齐后写 trigger.json 封盘。
-/// 落盘结构：助手 exe 目录 log/incidents/yyyyMMdd_HHmmss_规则名/ 下 frame_-03.jpg…frame_+03.jpg + trigger.json
-/// （trigger.json = ExceptionRecord 序列化，自带前后各 5 行日志上下文，由 KeywordWatchService 写好）。
+/// 落盘结构：助手 exe 目录 log/incidents/yyyy-MM-dd/yyyyMMdd_HHmmss_规则名/ 下 frame_-03.jpg…frame_+03.jpg + trigger.json
+/// （按日期分层，避免所有日期的快照混在一层；trigger.json = ExceptionRecord 序列化，自带前后各 5 行日志上下文
+/// 与命中时的配置组/路线，由 KeywordWatchService 写好）。
 ///
 /// 防刷：同规则 30 秒冷却（卡死持续刷日志时不连拍）；事件目录只留最近 50 个，超出自动删最旧。
 /// 远程成员命中（SourceFile 形如 "远程:玩家名"）不触发——截本机屏幕对他机没意义。
@@ -275,7 +276,8 @@ public sealed class IncidentSnapshotService : IDisposable
 
     private static string BuildIncidentDir(DateTime time, string ruleName)
     {
-        return Path.Combine(IncidentRootDir, $"{time:yyyyMMdd_HHmmss}_{SanitizeRuleName(ruleName)}");
+        // 按日期分层：incidents/yyyy-MM-dd/yyyyMMdd_HHmmss_规则名/
+        return Path.Combine(IncidentRootDir, $"{time:yyyy-MM-dd}", $"{time:yyyyMMdd_HHmmss}_{SanitizeRuleName(ruleName)}");
     }
 
     /// <summary>目录名规则名段落的清洗（与建目录同一算法，查找匹配靠它保持一致）。</summary>
@@ -288,37 +290,81 @@ public sealed class IncidentSnapshotService : IDisposable
     }
 
     /// <summary>查找某条异常记录对应的事发事件目录：按"目录名前缀时刻与记录时间差 ≤5 秒 + 规则名段落一致"匹配。
-    /// 找不到（规则未开快照/触发时零帧/已被数量清理）返回 null。</summary>
+    /// 找不到（规则未开快照/触发时零帧/已被数量清理）返回 null。
+    /// 新布局 incidents/yyyy-MM-dd/时刻_规则名（±5 秒匹配可能跨零点，前后各多看一天）；
+    /// 旧布局（平铺在 incidents/ 根下）兼容查找。</summary>
     public static string? FindIncidentDir(DateTime recordTime, string ruleName)
     {
         try
         {
             if (!Directory.Exists(IncidentRootDir)) return null;
             var safe = SanitizeRuleName(ruleName);
-            foreach (var dir in Directory.EnumerateDirectories(IncidentRootDir))
+            for (var d = -1; d <= 1; d++)
             {
-                var name = Path.GetFileName(dir);
-                if (name.Length < 17) continue;
-                if (!DateTime.TryParseExact(name[..15], "yyyyMMdd_HHmmss",
-                        System.Globalization.CultureInfo.InvariantCulture,
-                        System.Globalization.DateTimeStyles.None, out var t)) continue;
-                if (Math.Abs((t - recordTime).TotalSeconds) > 5) continue;
-                if (name[16..] == safe) return dir;
+                var dateDir = Path.Combine(IncidentRootDir, recordTime.Date.AddDays(d).ToString("yyyy-MM-dd"));
+                var hit = FindIncidentInDir(dateDir, recordTime, safe);
+                if (hit != null) return hit;
             }
+            // 旧平铺布局兼容
+            return FindIncidentInDir(IncidentRootDir, recordTime, safe);
         }
         catch { /* 目录枚举失败按未找到处理 */ }
         return null;
     }
 
-    /// <summary>目录名带时间戳前缀，字典序=时间序；只留最近 MaxIncidentDirs 个。</summary>
+    /// <summary>在指定目录的直接子目录里找匹配的事件目录。</summary>
+    private static string? FindIncidentInDir(string dir, DateTime recordTime, string safeRuleName)
+    {
+        if (!Directory.Exists(dir)) return null;
+        foreach (var sub in Directory.EnumerateDirectories(dir))
+        {
+            var name = Path.GetFileName(sub);
+            if (name.Length < 17) continue;
+            if (!DateTime.TryParseExact(name[..15], "yyyyMMdd_HHmmss",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out var t)) continue;
+            if (Math.Abs((t - recordTime).TotalSeconds) > 5) continue;
+            if (name[16..] == safeRuleName) return sub;
+        }
+        return null;
+    }
+
+    /// <summary>目录名是否为事件目录（yyyyMMdd_HHmmss_ 前缀）。</summary>
+    private static bool IsIncidentDirName(string name)
+    {
+        return name.Length >= 17 && name[15] == '_'
+            && DateTime.TryParseExact(name[..15], "yyyyMMdd_HHmmss",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out _);
+    }
+
+    /// <summary>目录名是否为日期分层目录（yyyy-MM-dd）。</summary>
+    private static bool IsDateDirName(string name)
+    {
+        return DateTime.TryParseExact(name, "yyyy-MM-dd",
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out _);
+    }
+
+    /// <summary>事件目录名带时间戳前缀，字典序=时间序；新（日期分层）旧（平铺）布局一起参与清点，只留最近 MaxIncidentDirs 个；
+    /// 顺手删掉清空后的日期目录。</summary>
     private static void PruneOldIncidents()
     {
         try
         {
             if (!Directory.Exists(IncidentRootDir)) return;
-            var dirs = Directory.GetDirectories(IncidentRootDir).OrderByDescending(d => d).ToList();
+            var roots = Directory.GetDirectories(IncidentRootDir);
+            var dirs = roots.Where(d => IsIncidentDirName(Path.GetFileName(d))) // 旧平铺
+                .Concat(roots.Where(d => IsDateDirName(Path.GetFileName(d)))
+                    .SelectMany(Directory.GetDirectories)) // 新：日期分层下的事件目录
+                .OrderByDescending(d => Path.GetFileName(d))
+                .ToList();
             foreach (var old in dirs.Skip(MaxIncidentDirs))
                 Directory.Delete(old, true);
+            // 清空后的日期目录不留空壳
+            foreach (var dateDir in roots.Where(d => IsDateDirName(Path.GetFileName(d))))
+                if (Directory.Exists(dateDir) && !Directory.EnumerateFileSystemEntries(dateDir).Any())
+                    Directory.Delete(dateDir);
         }
         catch (Exception ex)
         {
