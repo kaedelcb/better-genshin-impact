@@ -157,6 +157,29 @@ public sealed class MistletoeViewModel : ViewModelBase
         SelectedStep = SelectedStep == vm ? null : vm;
     });
 
+    // ---- 分支一键展开/收起（递归整棵树；运行态不持久化） ----
+
+    private bool _allBranchesExpanded;
+    public string AllBranchesToggleText => _allBranchesExpanded ? "⤡ 收起全部分支" : "⤢ 展开全部分支";
+
+    public RelayCommand ToggleAllBranchesCommand => new(_ =>
+    {
+        _allBranchesExpanded = !_allBranchesExpanded;
+        SetBranchesExpandedRecursive(RootChain, _allBranchesExpanded);
+        OnPropertyChanged(nameof(AllBranchesToggleText));
+    });
+
+    private static void SetBranchesExpandedRecursive(StepChainViewModel chain, bool expanded)
+    {
+        foreach (var step in chain.Steps)
+        {
+            step.BranchesExpanded = expanded;
+            SetBranchesExpandedRecursive(step.TrueChain, expanded);
+            SetBranchesExpandedRecursive(step.FalseChain, expanded);
+            SetBranchesExpandedRecursive(step.FireChain, expanded);
+        }
+    }
+
     public RelayCommand RemoveStepCommand => new(p =>
     {
         if (p is not StartupStepViewModel vm) return;
@@ -578,6 +601,30 @@ public sealed class StartupStepViewModel : ViewModelBase
         get => _isSelected;
         set => SetProperty(ref _isSelected, value);
     }
+
+    // ---- 分支区折叠（仅条件节点有意义；运行态不持久化，默认折叠） ----
+
+    private bool _branchesExpanded;
+    /// <summary>是/否分支区域是否展开（默认折叠，保持主流程一眼看到底）。</summary>
+    public bool BranchesExpanded
+    {
+        get => _branchesExpanded;
+        set
+        {
+            if (SetProperty(ref _branchesExpanded, value))
+            {
+                OnPropertyChanged(nameof(BranchAreaVisible));
+                OnPropertyChanged(nameof(BranchToggleText));
+            }
+        }
+    }
+
+    /// <summary>分支区域可见性绑定用（条件节点 + 已展开才显示）。</summary>
+    public bool BranchAreaVisible => IsCondition && BranchesExpanded;
+
+    public string BranchToggleText => BranchesExpanded ? "▾ 分支" : "▸ 分支";
+
+    public RelayCommand ToggleBranchesCommand => new(_ => BranchesExpanded = !BranchesExpanded);
 
     // ---- 通用字段 ----
 

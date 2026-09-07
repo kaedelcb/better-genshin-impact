@@ -345,8 +345,21 @@
                                            Margin="0,2,0,0" TextTrimming="CharacterEllipsis" MaxWidth="330"/>
                             </StackPanel>
 
-                            <!-- 操作区：启用 / 上移 / 下移 / 删除 -->
+                            <!-- 操作区：分支折叠（仅条件节点）/ 启用 / 上移 / 下移 / 删除 -->
                             <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="{Binding BranchToggleText}"
+                                        Command="{Binding ToggleBranchesCommand}" ToolTip="展开/收起 是·否 分支">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource NodeAction}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsCondition}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
                                 <CheckBox IsChecked="{Binding Enabled, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"
                                           ToolTip="启用/禁用该节点" Margin="0,0,2,0"/>
                                 <Button Content="↑" Style="{StaticResource NodeAction}"
@@ -707,18 +720,9 @@
                     </StackPanel>
                 </Border>
 
-                <!-- ===== 条件分支区：是（左列）/ 否（右列）两条子链，横向并排 ===== -->
-                <Grid Margin="18,0,0,0">
-                    <Grid.Style>
-                        <Style TargetType="Grid">
-                            <Setter Property="Visibility" Value="Collapsed"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsCondition}" Value="True">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Grid.Style>
+                <!-- ===== 条件分支区：是（左列）/ 否（右列）两条子链，横向并排；默认折叠，节点卡「▸ 分支」展开 ===== -->
+                <Grid Margin="18,0,0,0"
+                      Visibility="{Binding BranchAreaVisible, Converter={StaticResource BoolToVis}}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
@@ -1022,10 +1026,13 @@
                                 <Grid Margin="0,0,0,6">
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <TextBlock Text="启动流程" Style="{DynamicResource SectionTitle}"/>
-                                        <TextBlock Text="从上到下依次执行；条件节点分出「是/否」两条支路，支路跑完回到主流程。拖动 ⠿ 调整顺序（可跨支路拖动），点击卡片展开参数"
+                                        <TextBlock Text="从上到下依次执行；条件节点分出「是/否」两条支路（默认折叠，点卡片「▸ 分支」展开），支路跑完回到主流程。拖动 ⠿ 调整顺序（可跨支路拖动），点击卡片展开参数"
                                                    FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="10,0,0,0"
                                                    TextWrapping="Wrap" MaxWidth="520"/>
                                     </StackPanel>
+                                    <Button Content="{Binding AllBranchesToggleText}" Style="{DynamicResource BtnGhost}"
+                                            Padding="10,3" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                            Command="{Binding ToggleAllBranchesCommand}" ToolTip="一键展开/收起所有条件节点的分支区域"/>
                                 </Grid>
 
                                 <!-- 主流程链（DataContext 切到 RootChain，与分支子链写法统一） -->
