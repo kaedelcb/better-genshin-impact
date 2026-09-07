@@ -18,9 +18,13 @@ public partial class ConfirmStepWindow : Window
     private bool? _choice;
     private bool _timedOut;
 
-    private ConfirmStepWindow(StartupStep step)
+    private ConfirmStepWindow(StartupStep step, Window? owner)
     {
         InitializeComponent();
+        Owner = owner;
+        WindowStartupLocation = owner == null
+            ? WindowStartupLocation.CenterScreen
+            : WindowStartupLocation.CenterOwner;
         _timeoutGoTrue = step.ConfirmTimeoutGoTrue;
 
         MessageText.Text = string.IsNullOrWhiteSpace(step.ConfirmMessage)
@@ -36,12 +40,16 @@ public partial class ConfirmStepWindow : Window
         if (_remaining > 0)
         {
             UpdateCountdownText();
-            _timer.Start();
+            // 计时器必须等窗口真正显示后才启动：若在构造函数里 Start，一旦 ShowDialog 因 Owner 等问题
+            // 抛异常，计时器仍会继续跑，到点在"从未作为对话框显示"的窗口上设 DialogResult 会再炸一次
+            // （2026-09-08 多用户会话托盘启动场景的实机复盘）
+            Loaded += (_, _) => _timer.Start();
         }
         else
         {
             CountdownText.Text = "不限时，请手动选择「是」或「否」。";
         }
+        Closed += (_, _) => _timer.Stop();
     }
 
     /// <summary>分支预览文本：逐行列出节点（图标+显示名），最多 6 行，超出折叠计数。</summary>
@@ -57,6 +65,7 @@ public partial class ConfirmStepWindow : Window
 
     private void OnTick(object? sender, EventArgs e)
     {
+        if (!IsVisible) { _timer.Stop(); return; } // 兜底：窗口未显示/已关闭时不再倒计时
         _remaining--;
         if (_remaining <= 0)
         {
@@ -80,8 +89,11 @@ public partial class ConfirmStepWindow : Window
     /// </summary>
     public static (bool passed, string desc) ShowConfirm(StartupStep step, Window? owner = null)
     {
-        var dialog = new ConfirmStepWindow(step)
-        { Owner = owner ?? Application.Current?.MainWindow };
+        // 托盘/静默启动的助手中主窗口从未显示，不能当 Owner
+        // （WPF 抛"无法将 Owner 属性设置为之前未显示的 Window"）——此时无 Owner 居中屏幕显示
+        var o = owner ?? Application.Current?.MainWindow;
+        if (o is not { IsLoaded: true, IsVisible: true }) o = null;
+        var dialog = new ConfirmStepWindow(step, o);
         dialog.ShowDialog();
 
         var choice = dialog._choice ?? dialog._timeoutGoTrue;
