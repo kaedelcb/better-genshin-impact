@@ -909,9 +909,9 @@
                         </Border>
 
                         <!-- ===== 卡片：定时中的触发器（有挂载时才显示；运行态不持久化） ===== -->
-                        <Border Margin="0,0,0,14">
-                            <Border.Style>
-                                <Style TargetType="Border" BasedOn="{StaticResource QuestCard}">
+                        <Grid Margin="0,0,0,14">
+                            <Grid.Style>
+                                <Style TargetType="Grid">
                                     <Setter Property="Visibility" Value="Collapsed"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding HasArmedTimers}" Value="True">
@@ -919,7 +919,8 @@
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
-                            </Border.Style>
+                            </Grid.Style>
+                        <Border Style="{DynamicResource QuestCard}">
                             <StackPanel>
                                 <Grid Margin="0,0,0,8">
                                     <TextBlock Text="定时中的触发器" Style="{DynamicResource SectionTitle}"/>
@@ -947,6 +948,7 @@
                                            FontSize="10" Foreground="{DynamicResource Dim}" Margin="0,6,0,0"/>
                             </StackPanel>
                         </Border>
+                        </Grid>
 
                         <!-- ===== 卡片：启动流程（树形分支流程图编辑器） ===== -->
                         <Border Style="{DynamicResource QuestCard}">
