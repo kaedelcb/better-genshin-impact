@@ -3937,6 +3937,11 @@ public class MainViewModel : INotifyPropertyChanged
                         OnlineReady = np.OnlineReady,
                         OnlineMode = np.OnlineMode,
                         ScheduledOnlineTime = np.ScheduledOnlineTime,
+                        // 新建分支必须与上方更新分支字段对齐：增量广播下状态不变的成员不会再被下发，
+                        // 这里漏掉的字段（曾漏 OnlineHoeingGroupNames/QuickCommands）会永远停在默认值，
+                        // 表现为"绑定弹窗看不到别人的已选配置组"（服务端数据是真的，本端 Add 路径丢了）。
+                        OnlineHoeingGroupNames = np.OnlineHoeingGroupNames ?? [],
+                        QuickCommands = np.QuickCommands ?? new(),
                         OnlineHistory = np.OnlineHistory,
                         AvatarPath = $"pack://application:,,,/Assets/Images/{file}.png",
                         AvatarRing = ring,
