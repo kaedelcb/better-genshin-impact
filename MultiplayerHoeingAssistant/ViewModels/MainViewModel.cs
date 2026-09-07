@@ -6177,8 +6177,24 @@ public class MainViewModel : INotifyPropertyChanged
             AddLog("CommandExecutor 不可用（BgiPath 未配置），无法通过 IPC 启动 BGI 配置组");
             if (_processMonitor != null)
             {
-                AddLog("尝试直接启动 BGI 带配置组参数...");
-                _processMonitor.RestartBgi($"--startGroups \"{groupName}\"");
+                // 命令行 --startGroups 支持多个配置组（BGI 侧 OnStartMultiScriptGroupWithNamesAsync 串行执行），
+                // 必须一次性带上全部绑定组，否则冷启动只执行第一个组就停。
+                // 一条龙配置无法用 --startGroups 启动，跳过并提示。
+                var cliGroups = new List<string>();
+                for (int i = 0; i < groupNames.Count; i++)
+                {
+                    var t = (_config?.OnlineHoeingGroupTypes?.Count > i) ? _config.OnlineHoeingGroupTypes[i] : "group";
+                    if (t == "onedragon")
+                        AddLog($"绑定的一条龙「{groupNames[i]}」无法通过命令行启动，已跳过（请配置 BGI 路径以启用 IPC）");
+                    else
+                        cliGroups.Add(groupNames[i]);
+                }
+                if (cliGroups.Count > 0)
+                {
+                    var groupArgs = string.Join(" ", cliGroups.Select(n => $"\"{n}\""));
+                    AddLog($"尝试直接启动 BGI 带配置组参数: {groupArgs}");
+                    _processMonitor.RestartBgi($"--startGroups {groupArgs}");
+                }
             }
             else
             {
@@ -6194,18 +6210,13 @@ public class MainViewModel : INotifyPropertyChanged
         var suspendResult = await _commandExecutor.ExecuteSuspendAsync(groupName);
         if (suspendResult.Status != "success")
         {
-            _isAllReadyProcessing = 0;
-            AddLog("task.suspend 失败，尝试杀进程重启...");
-            if (_processMonitor != null)
-            {
-                _processMonitor.KillBgi();
-                await Task.Delay(2000);
-                _processMonitor.RestartBgi($"--startGroups \"{groupName}\"");
-            }
-            _isOnlineReady = false;
-            _onlineMode = "none";
-            _ = ReportStatusAsync();
-            return;
+            // suspend 失败（典型场景：BGI 未运行，IPC 连接超时）。
+            // 不要在此 KillBgi + RestartBgi 单组并 return —— 那样冷启动只执行第一个绑定组就停，
+            // 其余绑定组永远不会执行（本 bug 根因）。直接落入下方批次循环：首个 start_group 的
+            // IPC 传输失败会在 CommandExecutor.StartGroupAsync 内触发批次回退
+            // （KillBgi + RestartBgi --startGroups 全部绑定组），由 BGI 命令行串行执行；
+            // 若 BGI 实际在运行而 suspend 仅业务失败，也不会误杀进程。
+            AddLog($"task.suspend 未成功（{suspendResult.Message}），继续走批次启动流程（IPC 不通时由批次回退统一重启 BGI 并串行执行全部绑定组）");
         }
 
         // 等待 BGI 内部的 CancellationContext 取消状态传播完毕，避免取消令牌残留影响后续 start_group
