@@ -182,6 +182,9 @@ public class SignalRClient : IAsyncDisposable
         //   启动，且始终对同一连接 StartAsync，绝不 Dispose/重建连接。
         gateway.Closed += exception =>
         {
+            // 手动刷新/重建连接时 DisposeAsync 会先置 _disposed 再 Dispose 连接，
+            // Dispose 触发的 Closed 不是真实断连：不打"自动重连已耗尽"误导日志、不转离线状态
+            if (_disposed) return Task.CompletedTask;
             OnLog?.Invoke(exception != null
                 ? $"[连接] SignalR 连接已关闭: {exception.Message}（自动重连已耗尽，将每 30 秒尝试自愈）"
                 : "[连接] SignalR 连接已关闭（自动重连已耗尽，将每 30 秒尝试自愈）");

@@ -26,6 +26,9 @@ public sealed partial class RoomOperations
     /// </summary>
     internal async Task BroadcastControlRoomPlayersAsync(string group, bool forceFull)
     {
+        // 广播前先剪同 UID 离线幽灵条目：存量幽灵（修复前残留）随任意一次广播自愈，
+        // 避免离线条目在按 UID 键控的全量/增量广播中覆盖在线状态导致客户端"假离线"
+        _roomManager.PruneOfflineControlRoomGhosts(group);
         var players = _roomManager.GetControlRoomPlayers(group);
         var revision = _roomManager.NextControlRoomRevision(group);
         if (forceFull || !_roomManager.HasControlRoomSnapshot(group))

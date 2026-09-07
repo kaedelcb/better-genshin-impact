@@ -1098,6 +1098,11 @@ public class RoomManager
             }
             else
             {
+                // 追加新条目前清理同 UID 的离线幽灵条目（换 ClientInstanceId/旧客户端重连残留，
+                // 或 ClientInstanceId 被清空导致实例匹配失败）：残留的离线条目会在广播中覆盖
+                // 在线条目的状态（客户端按 UID 合并、后者覆盖前者），表现为"假离线"。
+                // 仅剪离线条目：同 UID 双开双在线场景不受影响。
+                players.RemoveAll(p => p.PlayerUid == playerUid && !p.Online);
                 players.Add(new ControlRoomPlayer
                 {
                     ConnectionId = connectionId,
@@ -1155,6 +1160,26 @@ public class RoomManager
             lock (players) { return [.. players]; }
         }
         return [];
+    }
+
+    /// <summary>清理同 UID 的离线幽灵条目：当某 UID 已存在在线条目时，移除其所有离线重复条目。
+    /// 幽灵条目来自换 ClientInstanceId/旧客户端重连（AddToControlRoom 匹配失败时追加），残留会让
+    /// 离线条目在广播（全量+增量快照均按 UID 键控）中覆盖在线状态，客户端表现为"假离线"。
+    /// 条目"只标离线不物理删除"的设计是为保留离线成员的缓存配置；此处仅在该 UID 已有在线条目
+    /// （缓存配置由在线条目携带）时剪除离线重复，不违背该设计。全离线成员的条目保持不动。</summary>
+    public void PruneOfflineControlRoomGhosts(string group)
+    {
+        if (_controlRooms.TryGetValue(group, out var players))
+        {
+            lock (players)
+            {
+                var onlineUids = new HashSet<string>(players.Where(p => p.Online).Select(p => p.PlayerUid));
+                if (onlineUids.Count > 0)
+                {
+                    players.RemoveAll(p => !p.Online && onlineUids.Contains(p.PlayerUid));
+                }
+            }
+        }
     }
 
     // ====== 控制房间广播快照与增量计算（带宽优化：ControlRoomPlayersUpdated 去重/增量）======
