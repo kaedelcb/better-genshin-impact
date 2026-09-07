@@ -13,6 +13,10 @@ public partial class MainWindow : Window
     /// 构造时即启动日志 tail/异常监控后台服务，告警红点不依赖页面打开。</summary>
     public DodocoViewModel Dodoco { get; }
 
+    /// <summary>槲寄生（调度器）ViewModel。手动组装（同 Dodoco）；
+    /// 启动中心「助手启动后自动执行流程」挂在 MainViewModel.Initialized 事件上。</summary>
+    public MistletoeViewModel Mistletoe { get; }
+
     // 标签区折叠：标签按钮全部由代码动态生成到普通 WrapPanel（Tag="group"/"oneclick"）中，
     // "更多"按钮作为流式布局的普通子元素紧跟第 maxLines 行末尾（不单独占一行、不增加高度）。
     // _tagFoldBusy：ApplyTagFold 执行期间（含 UpdateLayout）忽略 SizeChanged，防重入；
@@ -33,6 +37,9 @@ public partial class MainWindow : Window
         TagLog($"[app start] {System.DateTime.Now:HH:mm:ss.fff}");
         ViewModel = viewModel;
         Dodoco = new DodocoViewModel(viewModel);
+        Mistletoe = new MistletoeViewModel(viewModel);
+        // 槲寄生启动中心：初始化全部完成后按配置自动执行启动流程
+        viewModel.Initialized += Mistletoe.OnAppInitialized;
         DataContext = ViewModel;
         InitializeComponent();
         // 动态设置标题：Nexus-BGI · 版本号

@@ -691,8 +691,19 @@
                                          Visibility="{Binding Dodoco.HasUnreadAlerts, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}"/>
                             </Grid>
                             <TextBlock Text="|" FontSize="13" Foreground="{StaticResource Dim}" Margin="4,0" VerticalAlignment="Center"/>
-                            <Button Content="槲寄生" Foreground="{StaticResource GoldText}" Style="{StaticResource TextAction}" FontSize="12" Margin="0,0,0,0" VerticalAlignment="Center"
-                                    ToolTip="任务调度器" Command="{Binding FeaturePlaceholderCommand}" CommandParameter="sleeper"/>
+                            <Button Content="槲寄生" FontSize="12" Margin="0,0,0,0" VerticalAlignment="Center"
+                                    ToolTip="槲寄生 · 调度器（启动中心 / 任务中心 / 执行策略 / 三方接入）" Command="{Binding ShowMistletoeCommand}">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource TextAction}">
+                                        <Setter Property="Foreground" Value="{StaticResource GoldText}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CurrentPage}" Value="{x:Static vm:AppPage.Mistletoe}">
+                                                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                         </StackPanel>
                         <!-- Row 1 Col 1：房间号 + 刷新按钮（在设置+退出正下方） -->
                         <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="0,3,0,0">
@@ -715,6 +726,9 @@
                                         <Setter Property="Visibility" Value="Collapsed"/>
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding CurrentPage}" Value="{x:Static vm:AppPage.Dodoco}">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CurrentPage}" Value="{x:Static vm:AppPage.Mistletoe}">
                                         <Setter Property="Visibility" Value="Collapsed"/>
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -971,6 +985,21 @@
                                 </Style>
                             </views:DodocoPage.Style>
                         </views:DodocoPage>
+
+                        <!-- 槲寄生页面（CurrentPage==Mistletoe 时显示；DataContext 用 MainWindow 持有的 MistletoeViewModel，
+                             CurrentPage 同样必须显式从 Window 的 DataContext 取，原因同上方 DodocoPage 注释） -->
+                        <views:MistletoePage DataContext="{Binding Mistletoe, RelativeSource={RelativeSource AncestorType=Window}}">
+                            <views:MistletoePage.Style>
+                                <Style TargetType="views:MistletoePage">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataContext.CurrentPage, RelativeSource={RelativeSource AncestorType=Window}}" Value="{x:Static vm:AppPage.Mistletoe}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </views:MistletoePage.Style>
+                        </views:MistletoePage>
                     </Grid>
             </Grid>
         </Grid>

@@ -1,0 +1,953 @@
+<UserControl x:Class="MultiplayerHoeingAssistant.Views.MistletoePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:MultiplayerHoeingAssistant.ViewModels"
+             d:DataContext="{d:DesignInstance Type=vm:MistletoeViewModel}"
+             d:DesignWidth="700"
+             mc:Ignorable="d">
+
+    <!-- 复用 MainWindow.Resources 的样式与颜色；UserControl.Resources 内部引用父级资源必须用 DynamicResource -->
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- 鎏金下拉选择框（与 SettingsPage 同款） -->
+        <Style x:Key="GoldComboBox" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="ToggleButton" Focusable="False" ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Background="Transparent" BorderThickness="0">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Bd" Background="#2A1C1640" BorderBrush="#B0D4AF37"
+                                                BorderThickness="1" CornerRadius="7" Padding="8,0,7,0">
+                                            <Grid TextElement.Foreground="#FFFFFF">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <ContentPresenter Grid.Column="0" TextElement.Foreground="#FFFFFF"
+                                                                  Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                                  VerticalAlignment="Center" HorizontalAlignment="Left" IsHitTestVisible="False"/>
+                                                <Path Grid.Column="1" Data="M 0,0 L 4,4 L 8,0" Stroke="{DynamicResource Gold}"
+                                                      StrokeThickness="1.6" StrokeLineJoin="Round" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="#3B2E1A40"/>
+                                                <Setter TargetName="Bd" Property="BorderBrush" Value="#F0E8C96D"/>
+                                            </Trigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="#38251040"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <Popup x:Name="PART_Popup" AllowsTransparency="True" Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}" StaysOpen="False" PopupAnimation="Fade">
+                                <Grid MinWidth="{TemplateBinding ActualWidth}" MaxHeight="220" Margin="0,4,0,0">
+                                    <Border Background="#232048" BorderBrush="{DynamicResource GoldLine}" BorderThickness="1"
+                                            CornerRadius="8" Padding="2" Effect="{DynamicResource CardShadow}">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto" Style="{DynamicResource GoldScrollViewer}">
+                                            <ItemsPresenter/>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Grid>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="GoldComboItem" TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="5" Padding="10,7" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#3DD4AF37"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 鎏金输入框（与 DodocoPage 同款） -->
+        <Style x:Key="GoldInput" TargetType="TextBox">
+            <Setter Property="Background" Value="#2A1C1640"/>
+            <Setter Property="Foreground" Value="{DynamicResource White}"/>
+            <Setter Property="BorderBrush" Value="#80D4AF37"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource Gold}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="7" Padding="{TemplateBinding Padding}">
+                            <ScrollViewer x:Name="PART_ContentHost"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Tab 按钮（文字型，选中金色高亮，与 DodocoPage 同款） -->
+        <Style x:Key="MistletoeTabButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource Dim}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent" BorderThickness="0,0,0,2"
+                                BorderBrush="Transparent" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource White}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 编辑器字段标签 -->
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{DynamicResource Dim}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Width" Value="72"/>
+        </Style>
+
+        <!-- 编辑器字段行（默认折叠，由各类型的 DataTrigger 展开） -->
+        <Style x:Key="FieldGroup" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Setter Property="Margin" Value="0,4,0,0"/>
+        </Style>
+
+        <!-- 节点卡 -->
+        <Style x:Key="NodeCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Card}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource CardEdge}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="12,9"/>
+            <Setter Property="Effect" Value="{DynamicResource CardShadow}"/>
+        </Style>
+
+        <!-- 节点操作小按钮 -->
+        <Style x:Key="NodeAction" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource Dim}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="4,1"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource White}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 「＋ 添加节点」弹层内容（主链与分支子链共用：条件组 + 动作组）。
+             宿主的 ItemsControl DataContext 是 StepChainViewModel，命令直接绑链上的 AddStepCommand。 -->
+        <DataTemplate x:Key="AddNodePopupContent">
+            <Border Background="#232048" BorderBrush="{DynamicResource GoldLine}" BorderThickness="1"
+                    CornerRadius="10" Padding="12" Effect="{DynamicResource CardShadow}" Margin="0,0,0,6">
+                <StackPanel>
+                    <TextBlock Text="条件判断" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Gold}" Margin="0,0,0,4"/>
+                    <ItemsControl ItemsSource="{Binding ConditionKinds}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                        CommandParameter="{Binding Key}" HorizontalContentAlignment="Left">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource NodeAction}">
+                                            <Setter Property="Padding" Value="8,4"/>
+                                        </Style>
+                                    </Button.Style>
+                                    <StackPanel>
+                                        <TextBlock FontSize="12" Foreground="{DynamicResource White}">
+                                            <Run Text="◇ "/><Run Text="{Binding DisplayName}"/>
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding Description}" FontSize="10" Foreground="{DynamicResource Dim}"/>
+                                    </StackPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border Height="1" Background="#40D4AF37" Margin="0,6"/>
+                    <TextBlock Text="动作" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Anemo}" Margin="0,0,0,4"/>
+                    <ItemsControl ItemsSource="{Binding ActionKinds}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                        CommandParameter="{Binding Key}" HorizontalContentAlignment="Left">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource NodeAction}">
+                                            <Setter Property="Padding" Value="8,4"/>
+                                        </Style>
+                                    </Button.Style>
+                                    <StackPanel>
+                                        <TextBlock FontSize="12" Foreground="{DynamicResource White}">
+                                            <Run Text="▶ "/><Run Text="{Binding DisplayName}"/>
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding Description}" FontSize="10" Foreground="{DynamicResource Dim}"/>
+                                    </StackPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- 一条链的「＋ 添加节点」按钮 + 弹层（DataContext=StepChainViewModel） -->
+        <DataTemplate x:Key="ChainAddButton">
+            <Grid HorizontalAlignment="Center" Margin="0,2,0,0">
+                <Button x:Name="AddNodeBtn" Content="＋" Style="{DynamicResource BtnGhost}" Padding="12,2" FontSize="13"
+                        ToolTip="在此链末尾添加节点" Command="{Binding OpenAddPopupCommand}"/>
+                <Popup IsOpen="{Binding IsAddPopupOpen, Mode=TwoWay}" StaysOpen="False"
+                       Placement="Top" PlacementTarget="{Binding ElementName=AddNodeBtn}"
+                       AllowsTransparency="True" PopupAnimation="Fade">
+                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource AddNodePopupContent}"/>
+                </Popup>
+            </Grid>
+        </DataTemplate>
+
+        <!-- ============ 节点卡递归模板（主链与分支子链共用，条件节点内嵌自身实现递归） ============ -->
+        <DataTemplate DataType="{x:Type vm:StartupStepViewModel}">
+            <StackPanel Margin="0,0,0,2">
+                <!-- 节点卡 -->
+                <Border MinWidth="300"
+                        AllowDrop="True"
+                        DragOver="NodeCard_DragOver" Drop="NodeCard_Drop"
+                        MouseLeftButtonDown="NodeCard_Click">
+                    <Border.Style>
+                        <Style TargetType="Border" BasedOn="{StaticResource NodeCard}">
+                            <Style.Triggers>
+                                <!-- 禁用节点半透明显示 -->
+                                <DataTrigger Binding="{Binding Enabled}" Value="False">
+                                    <Setter Property="Opacity" Value="0.45"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- 拖拽手柄 -->
+                            <Border Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0"
+                                    Cursor="SizeAll" ToolTip="按住拖动调整顺序（可跨分支拖动）"
+                                    PreviewMouseLeftButtonDown="DragHandle_MouseLeftButtonDown"
+                                    PreviewMouseMove="DragHandle_MouseMove">
+                                <TextBlock Text="⠿" FontSize="14" Foreground="{DynamicResource Dim}"/>
+                            </Border>
+
+                            <!-- 类型图标（条件=金 ◇ / 动作=青 ▶） -->
+                            <Border Grid.Column="1" Width="26" Height="26" CornerRadius="7"
+                                    VerticalAlignment="Center" Margin="0,0,9,0">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#336FD8CE"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCondition}" Value="True">
+                                                <Setter Property="Background" Value="#40E8C96D"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="{Binding Icon}" FontSize="12" VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{DynamicResource Anemo}"/>
+                                            <Setter Property="HorizontalAlignment" Value="Center"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsCondition}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource Gold}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Border>
+
+                            <!-- 名称 + 摘要 -->
+                            <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="Medium"
+                                               Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                                    <Border CornerRadius="5" Padding="6,1" Margin="8,0,0,0"
+                                            Background="#299C97C0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding TypeName}" FontSize="9" Foreground="{DynamicResource Dim}"/>
+                                    </Border>
+                                    <!-- 条件节点分支提示 -->
+                                    <Border CornerRadius="5" Padding="6,1" Margin="6,0,0,0"
+                                            Background="#40E8C96D" VerticalAlignment="Center">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsCondition}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock Text="是→左列 / 否→右列" FontSize="9" Foreground="{DynamicResource GoldText}"/>
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Text="{Binding Summary}" FontSize="10.5" Foreground="{DynamicResource Dim}"
+                                           Margin="0,2,0,0" TextTrimming="CharacterEllipsis" MaxWidth="330"/>
+                            </StackPanel>
+
+                            <!-- 操作区：启用 / 上移 / 下移 / 删除 -->
+                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                <CheckBox IsChecked="{Binding Enabled, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"
+                                          ToolTip="启用/禁用该节点" Margin="0,0,2,0"/>
+                                <Button Content="↑" Style="{StaticResource NodeAction}"
+                                        Command="{Binding DataContext.MoveUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}" ToolTip="上移"/>
+                                <Button Content="↓" Style="{StaticResource NodeAction}"
+                                        Command="{Binding DataContext.MoveDownCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}" ToolTip="下移"/>
+                                <Button Content="✕" Style="{StaticResource NodeAction}"
+                                        Command="{Binding DataContext.RemoveStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}" ToolTip="删除该节点（条件节点会连同分支一起删除）"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- ===== 内联参数编辑器（点击卡片展开） ===== -->
+                        <Border Margin="0,8,0,0" Padding="10,8" CornerRadius="7"
+                                Background="#1E12102E" BorderThickness="1,0,0,0" BorderBrush="#40D4AF37">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel>
+                                <!-- 通用：自定义名称 -->
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="节点名称" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" MinWidth="220"
+                                             ToolTip="留空则显示类型默认名"/>
+                                </StackPanel>
+
+                                <!-- timeRange -->
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="timeRange">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="时间区间" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding TimeStart, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" Width="64" Padding="6,2" HorizontalContentAlignment="Center"/>
+                                    <TextBlock Text="~" FontSize="12" Foreground="{DynamicResource Dim}" Margin="8,0" VerticalAlignment="Center"/>
+                                    <TextBox Text="{Binding TimeEnd, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" Width="64" Padding="6,2" HorizontalContentAlignment="Center"/>
+                                    <TextBlock Text="HH:mm，起点大于终点表示跨零点" FontSize="10" Foreground="{DynamicResource Dim}"
+                                               VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                </StackPanel>
+
+                                <!-- weekday -->
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="weekday">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="星期" Style="{StaticResource FieldLabel}"/>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                        <CheckBox IsChecked="{Binding W1, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
+                                        <TextBlock Text="一" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                        <CheckBox IsChecked="{Binding W2, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
+                                        <TextBlock Text="二" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                        <CheckBox IsChecked="{Binding W3, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
+                                        <TextBlock Text="三" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                        <CheckBox IsChecked="{Binding W4, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
+                                        <TextBlock Text="四" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                        <CheckBox IsChecked="{Binding W5, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
+                                        <TextBlock Text="五" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                        <CheckBox IsChecked="{Binding W6, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
+                                        <TextBlock Text="六" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <CheckBox IsChecked="{Binding W7, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
+                                        <TextBlock Text="日" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- bgiRunning / gameRunning：期望状态 -->
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="bgiRunning">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Kind}" Value="gameRunning">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="「是」条件" Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox Width="170" Style="{StaticResource GoldComboBox}"
+                                              SelectedIndex="{Binding ExpectRunningIndex, Mode=TwoWay}">
+                                        <ComboBoxItem Content="正在运行时走「是」" Style="{StaticResource GoldComboItem}"/>
+                                        <ComboBoxItem Content="未运行时走「是」" Style="{StaticResource GoldComboItem}"/>
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <!-- processRunning -->
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="processRunning">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="进程名" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding ProcessName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" Width="150" ToolTip="可带或不带 .exe"/>
+                                    <ComboBox Width="160" Margin="10,0,0,0" Style="{StaticResource GoldComboBox}"
+                                              SelectedIndex="{Binding ExpectRunningIndex, Mode=TwoWay}">
+                                        <ComboBoxItem Content="存在时走「是」" Style="{StaticResource GoldComboItem}"/>
+                                        <ComboBoxItem Content="不存在时走「是」" Style="{StaticResource GoldComboItem}"/>
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <!-- startGame / startProgram：路径 + 参数 -->
+                                <StackPanel>
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="startGame">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Kind}" Value="startProgram">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="程序路径" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Text="{Binding Path, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource GoldInput}" Width="260"/>
+                                        <Button Content="浏览…" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="8,0,0,0"
+                                                Click="BrowsePath_Click" Tag="{Binding}"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                        <TextBlock Text="启动参数" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Text="{Binding Arguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource GoldInput}" Width="260" ToolTip="可留空"/>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- runCmd -->
+                                <StackPanel>
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="runCmd">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="CMD 命令" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Text="{Binding Arguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource GoldInput}" Width="330"
+                                                 ToolTip="以 cmd /c 隐藏窗口执行，不等待结果"/>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- wait -->
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="wait">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="等待秒数" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding WaitSecondsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" Width="64" Padding="6,2" HorizontalContentAlignment="Center"/>
+                                </StackPanel>
+
+                                <!-- startGroup / startOneClick（旧版遗留节点，仍可读任务名） -->
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="startGroup">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Kind}" Value="startOneClick">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="任务名" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding TaskName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" Width="220"/>
+                                    <TextBlock Text="旧版节点，建议改用「进入任务中心执行」" FontSize="10" Foreground="{DynamicResource Dim}"
+                                               VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                </StackPanel>
+
+                                <!-- enterTaskCenter / endFlow：无参数提示 -->
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="enterTaskCenter">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="走到此节点即交接给任务中心执行任务序列（任务中心规划中，当前交接为空转并记日志）。通常放在主流程末尾。"
+                                               FontSize="10.5" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" MaxWidth="380"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="endFlow">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="执行到此节点立即终止整条启动流程（含外层链）。常用于「否」分支：环境不满足时直接放弃本次启动。"
+                                               FontSize="10.5" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" MaxWidth="380"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- ===== 条件分支区：是（左列）/ 否（右列）两条子链，横向并排 ===== -->
+                <Grid Margin="18,0,0,0">
+                    <Grid.Style>
+                        <Style TargetType="Grid">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsCondition}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Grid.Style>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 「是」子链 -->
+                    <Border Grid.Column="0" Margin="0,0,6,0" Padding="8,6"
+                            BorderBrush="#556FD8CE" BorderThickness="0,0,0,0" CornerRadius="8"
+                            Background="#0F6FD8CE"
+                            DataContext="{Binding TrueChain}"
+                            AllowDrop="True" DragOver="Chain_DragOver" Drop="Chain_Drop">
+                        <StackPanel>
+                            <Border CornerRadius="5" Padding="8,1" Background="#336FD8CE" HorizontalAlignment="Left" Margin="0,0,0,4">
+                                <TextBlock Text="✓ 是" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource Anemo}"/>
+                            </Border>
+                            <ItemsControl ItemsSource="{Binding Steps}"/>
+                            <!-- 空分支提示 -->
+                            <TextBlock Text="（空：直接回到主流程）" FontSize="9.5" Foreground="{DynamicResource Dim}"
+                                       Margin="2,0,0,2">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasSteps}" Value="False">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ChainAddButton}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 「否」子链 -->
+                    <Border Grid.Column="1" Margin="6,0,0,0" Padding="8,6"
+                            CornerRadius="8" Background="#14E88A6F"
+                            DataContext="{Binding FalseChain}"
+                            AllowDrop="True" DragOver="Chain_DragOver" Drop="Chain_Drop">
+                        <StackPanel>
+                            <Border CornerRadius="5" Padding="8,1" Background="#40E88A6F" HorizontalAlignment="Left" Margin="0,0,0,4">
+                                <TextBlock Text="✗ 否" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource Pyro}"/>
+                            </Border>
+                            <ItemsControl ItemsSource="{Binding Steps}"/>
+                            <TextBlock Text="（空：直接回到主流程）" FontSize="9.5" Foreground="{DynamicResource Dim}"
+                                       Margin="2,0,0,2">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasSteps}" Value="False">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ChainAddButton}"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- 向下箭头（回到父链的流程连接线） -->
+                <TextBlock Text="▼" FontSize="9" Foreground="{DynamicResource GoldLine}"
+                           HorizontalAlignment="Center" Margin="0,1"/>
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ========== 顶栏：返回 + 标题 + 子页 Tab ========== -->
+        <Grid Grid.Row="0" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="←  返回" Style="{DynamicResource BtnGhost}" Padding="12,5"
+                        Command="{Binding BackCommand}"/>
+                <TextBlock Text="槲寄生 · 调度器" FontSize="15" FontWeight="SemiBold"
+                           Foreground="{DynamicResource GoldText}" Margin="16,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button Content="启动中心" Command="{Binding SelectTabCommand}" CommandParameter="0">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="0">
+                                    <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <!-- 双端差异：任务中心/执行策略/三方接入仅执行端可见（监控端整排隐藏，见总计划 §1） -->
+                <Button Content="任务中心" Command="{Binding SelectTabCommand}" CommandParameter="1"
+                        Visibility="{Binding DataContext.IsExecutorMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="1">
+                                    <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Content="执行策略" Command="{Binding SelectTabCommand}" CommandParameter="2"
+                        Visibility="{Binding DataContext.IsExecutorMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="2">
+                                    <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Content="三方接入" Command="{Binding SelectTabCommand}" CommandParameter="3"
+                        Visibility="{Binding DataContext.IsExecutorMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="3">
+                                    <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- ========== 内容区 ========== -->
+        <Grid Grid.Row="1">
+
+            <!-- ======== Tab 0：启动中心 ======== -->
+            <Grid>
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedTabIndex}" Value="0">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                              Style="{DynamicResource GoldScrollViewer}">
+                    <StackPanel Margin="0,0,0,24">
+
+                        <!-- ===== 卡片：总控 ===== -->
+                        <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,14">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,10">
+                                    <TextBlock Text="启动总控" Style="{DynamicResource SectionTitle}"/>
+                                    <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="68,0,0,0"/>
+                                </Grid>
+
+                                <!-- 监控端提示横幅 -->
+                                <Border Background="#295B8DEF" BorderBrush="#735B8DEF" BorderThickness="1" CornerRadius="7"
+                                        Padding="10,6" Margin="0,0,0,10"
+                                        Visibility="{Binding DataContext.IsObserverMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock FontSize="11" Foreground="#9FC2F5" TextWrapping="Wrap"
+                                               Text="当前为监控端：启动中心编排的是本机动作；「启动/关闭 BGI」节点本机无 BGI 时会跳过并记入冒险日志。任务中心/执行策略/三方接入仅执行端可用。"/>
+                                </Border>
+
+                                <!-- 行 1：自动执行开关 + 延迟 + 执行按钮 -->
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <CheckBox IsChecked="{Binding FlowEnabled, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
+                                        <TextBlock Text="助手启动后自动执行启动流程" FontSize="13" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="延迟" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="18,0,6,0"/>
+                                        <TextBox Text="{Binding DelaySecondsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource GoldInput}" Width="52" Padding="6,2" HorizontalContentAlignment="Center"/>
+                                        <TextBlock Text="秒" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="{DynamicResource Dim}"
+                                                   VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                        <Button Content="▶ 立即执行" Style="{DynamicResource BtnGold}" Padding="14,5"
+                                                Command="{Binding RunNowCommand}" IsEnabled="{Binding IsNotRunning}"
+                                                ToolTip="手动执行一遍启动流程（用于调试）"/>
+                                        <Button Content="✕ 取消" Style="{DynamicResource BtnGhost}" Padding="10,5" Margin="6,0,0,0"
+                                                Command="{Binding CancelRunCommand}" IsEnabled="{Binding IsRunning}"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- 行 2：开机自启动（复用设置页参数，双向实时同步） -->
+                                <StackPanel Orientation="Horizontal">
+                                    <CheckBox IsChecked="{Binding AutoLaunchOnBoot, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
+                                    <TextBlock Text="助手随系统开机自启动" FontSize="13" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                                    <ComboBox Width="140" Margin="12,0,0,0" VerticalAlignment="Center"
+                                              Style="{StaticResource GoldComboBox}"
+                                              SelectedIndex="{Binding AutoLaunchOnBootModeIndex, Mode=TwoWay}"
+                                              IsEnabled="{Binding AutoLaunchOnBoot}">
+                                        <ComboBoxItem Content="弹窗启动" Style="{StaticResource GoldComboItem}"/>
+                                        <ComboBoxItem Content="静默缩小到托盘" Style="{StaticResource GoldComboItem}"/>
+                                    </ComboBox>
+                                    <TextBlock Text="（与「设置 → 启动策略」是同一个开关，两边实时同步）" FontSize="10" Foreground="{DynamicResource Dim}"
+                                               VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ===== 卡片：启动流程（树形分支流程图编辑器） ===== -->
+                        <Border Style="{DynamicResource QuestCard}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,6">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="启动流程" Style="{DynamicResource SectionTitle}"/>
+                                        <TextBlock Text="从上到下依次执行；条件节点分出「是/否」两条支路，支路跑完回到主流程。拖动 ⠿ 调整顺序（可跨支路拖动），点击卡片展开参数"
+                                                   FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="10,0,0,0"
+                                                   TextWrapping="Wrap" MaxWidth="520"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- 主流程链（DataContext 切到 RootChain，与分支子链写法统一） -->
+                                <StackPanel DataContext="{Binding RootChain}"
+                                            AllowDrop="True" DragOver="Chain_DragOver" Drop="Chain_Drop">
+                                    <ItemsControl ItemsSource="{Binding Steps}" HorizontalContentAlignment="Stretch">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+
+                                    <!-- 空流程提示 -->
+                                    <TextBlock Text="还没有节点。点击下方「＋」把启动前要判断的条件、要做的动作一个个排进来；通常以「进入任务中心执行」收尾。"
+                                               FontSize="11" Foreground="{DynamicResource Dim}" TextWrapping="Wrap"
+                                               HorizontalAlignment="Center" Margin="0,10">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasSteps}" Value="False">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+
+                                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ChainAddButton}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- ======== Tab 1：任务中心（规划中） ======== -->
+            <Grid>
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedTabIndex}" Value="1">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
+                <Border Style="{DynamicResource QuestCard}" VerticalAlignment="Top" Margin="0,20,0,0" Padding="24,20">
+                    <StackPanel>
+                        <TextBlock Text="⏳  任务中心 · 任务总序列指挥所" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"/>
+                        <Border CornerRadius="5" Padding="8,2" Background="#299C97C0" HorizontalAlignment="Left" Margin="0,8,0,10">
+                            <TextBlock Text="规划中" FontSize="10" Foreground="{DynamicResource Dim}"/>
+                        </Border>
+                        <TextBlock FontSize="12" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" LineHeight="20"
+                                   Text="构想：编排 BGI 的任务总序列——做什么任务、什么顺序、什么循环策略。沿用启动中心的树形分支节点交互，节点换成配置组/一条龙/JS 脚本。启动中心负责环境准备，跑完经「进入任务中心执行」节点交接到这里。不取代 BGI 原生调度器，只做指挥；循环靠任务生命周期事件（切片 7 已铺好）链式推进。详见仓库根目录《槲寄生调度器总计划》§3。"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- ======== Tab 2：执行策略（规划中） ======== -->
+            <Grid>
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedTabIndex}" Value="2">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
+                <Border Style="{DynamicResource QuestCard}" VerticalAlignment="Top" Margin="0,20,0,0" Padding="24,20">
+                    <StackPanel>
+                        <TextBlock Text="⏳  执行策略" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"/>
+                        <Border CornerRadius="5" Padding="8,2" Background="#299C97C0" HorizontalAlignment="Left" Margin="0,8,0,10">
+                            <TextBlock Text="规划中" FontSize="10" Foreground="{DynamicResource Dim}"/>
+                        </Border>
+                        <TextBlock FontSize="12" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" LineHeight="20"
+                                   Text="构想：执行过程的自动策略判断——「当 X 发生 → 做 Y」规则表。输入感知来自嘟嘟可（日志关键词、异常事件）与任务终态事件；动作包括重试（封顶次数）、跳过、停止全部、执行指定任务、托盘通知。远期把现有「上线锄地完成后动作」「守护 BGI」等硬编码策略收编成规则。详见《槲寄生调度器总计划》§4。"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- ======== Tab 3：三方接入（规划中） ======== -->
+            <Grid>
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedTabIndex}" Value="3">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
+                <Border Style="{DynamicResource QuestCard}" VerticalAlignment="Top" Margin="0,20,0,0" Padding="24,20">
+                    <StackPanel>
+                        <TextBlock Text="⏳  三方接入" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"/>
+                        <Border CornerRadius="5" Padding="8,2" Background="#299C97C0" HorizontalAlignment="Left" Margin="0,8,0,10">
+                            <TextBlock Text="规划中" FontSize="10" Foreground="{DynamicResource Dim}"/>
+                        </Border>
+                        <TextBlock FontSize="12" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" LineHeight="20"
+                                   Text="构想：ABGI、莫酱工具、第三方工具箱等外部软件统一在此管理——每个软件一张接入卡（路径、参数、健康检测、联动动作）。接入后的软件可直接成为启动中心/任务中心的可选节点。详见《槲寄生调度器总计划》§5。"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

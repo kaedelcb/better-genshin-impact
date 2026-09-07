@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace MultiplayerHoeingAssistant.ViewModels;
 
-/// <summary>主窗口内容区页面枚举（三态导航：主页 / 设置 / 嘟嘟可）。</summary>
+/// <summary>主窗口内容区页面枚举（四态导航：主页 / 设置 / 嘟嘟可 / 槲寄生）。</summary>
 public enum AppPage
 {
     /// <summary>成员列表主页（耕地机）。</summary>
@@ -11,7 +11,9 @@ public enum AppPage
     /// <summary>设置页。</summary>
     Settings,
     /// <summary>嘟嘟可 · 日志与监控系统。</summary>
-    Dodoco
+    Dodoco,
+    /// <summary>槲寄生 · 调度器。</summary>
+    Mistletoe
 }
 
 /// <summary>

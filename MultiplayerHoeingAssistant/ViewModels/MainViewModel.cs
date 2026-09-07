@@ -208,113 +208,16 @@ public class MainViewModel : INotifyPropertyChanged
     /// <summary>打开设置页面（切换右侧内容区为设置页）。</summary>
     public RelayCommand OpenSettingsCommand => new(_ => ToggleSettings());
 
-    /// <summary>显示功能占位提示（槲寄生 等规划中的功能，点击后弹出"敬请期待"提示窗）。</summary>
-    public RelayCommand FeaturePlaceholderCommand => new(ShowFeaturePlaceholder);
-
     /// <summary>打开嘟嘟可页面（日志与监控系统，切换右侧内容区为 DodocoPage）。</summary>
     public RelayCommand ShowDodocoCommand => new(_ => CurrentPage = AppPage.Dodoco);
 
+    /// <summary>打开槲寄生页面（调度器，切换右侧内容区为 MistletoePage）。</summary>
+    public RelayCommand ShowMistletoeCommand => new(_ => CurrentPage = AppPage.Mistletoe);
+
     /// <summary>
-    /// 显示规划中功能的占位提示弹窗（深色原神美术风格）。
-    /// parameter 为功能标识字符串："sleeper"=调度器（槲寄生）。（"dodoco" 已落地为真实页面，死分支已删）
+    /// InitializeAsync 全部完成后触发（SignalR 首连已发起）。供槲寄生启动中心做"助手启动后自动执行流程"的挂点。
     /// </summary>
-    private void ShowFeaturePlaceholder(object? parameter)
-    {
-        var (name, desc, glyph) = parameter?.ToString() switch
-        {
-            "sleeper" => ("槲寄生 · 调度器", "任务调度器正在规划中\n未来可在此编排定时任务与调度策略", "⏳"),
-            _ => ("功能规划中", "该功能正在规划中，敬请期待", "✨")
-        };
-
-        var dialog = new System.Windows.Window
-        {
-            Title = name,
-            Width = 380, Height = 260,
-            WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
-            Owner = System.Windows.Application.Current?.MainWindow,
-            WindowStyle = System.Windows.WindowStyle.SingleBorderWindow,
-            ResizeMode = System.Windows.ResizeMode.NoResize,
-            FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
-            Background = new System.Windows.Media.LinearGradientBrush
-            {
-                StartPoint = new System.Windows.Point(0.5, 0),
-                EndPoint = new System.Windows.Point(0.5, 1),
-                GradientStops =
-                {
-                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x14, 0x15, 0x34), 0),
-                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x22, 0x1F, 0x4E), 0.6),
-                    new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x43), 1)
-                }
-            }
-        };
-
-        var panel = new System.Windows.Controls.StackPanel
-        {
-            Margin = new System.Windows.Thickness(24),
-            VerticalAlignment = System.Windows.VerticalAlignment.Center
-        };
-
-        // 功能图标占位
-        panel.Children.Add(new System.Windows.Controls.TextBlock
-        {
-            Text = glyph,
-            FontSize = 34,
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA)),
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-            Margin = new System.Windows.Thickness(0, 0, 0, 10)
-        });
-
-        // 功能名称
-        panel.Children.Add(new System.Windows.Controls.TextBlock
-        {
-            Text = name,
-            FontSize = 17,
-            FontWeight = System.Windows.FontWeights.SemiBold,
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-            Margin = new System.Windows.Thickness(0, 0, 0, 8)
-        });
-
-        // 功能描述
-        panel.Children.Add(new System.Windows.Controls.TextBlock
-        {
-            Text = desc,
-            FontSize = 12,
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
-            TextAlignment = System.Windows.TextAlignment.Center,
-            TextWrapping = System.Windows.TextWrapping.Wrap,
-            LineHeight = 20,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-            Margin = new System.Windows.Thickness(0, 0, 0, 18)
-        });
-
-        // 了解按钮（鎏金）
-        var okBtn = new System.Windows.Controls.Button
-        {
-            Content = "了解了",
-            Width = 96, Height = 32,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-            FontWeight = System.Windows.FontWeights.SemiBold,
-            BorderThickness = new System.Windows.Thickness(0),
-            Cursor = System.Windows.Input.Cursors.Hand
-        };
-        okBtn.Background = new System.Windows.Media.LinearGradientBrush
-        {
-            StartPoint = new System.Windows.Point(0, 0),
-            EndPoint = new System.Windows.Point(1, 1),
-            GradientStops =
-            {
-                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xEF, 0xD6, 0x8A), 0),
-                new System.Windows.Media.GradientStop(System.Windows.Media.Color.FromRgb(0xD4, 0xAF, 0x37), 1)
-            }
-        };
-        okBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16));
-        okBtn.Click += (_, _) => dialog.Close();
-        panel.Children.Add(okBtn);
-
-        dialog.Content = panel;
-        dialog.ShowDialog();
-    }
+    public event Action? Initialized;
 
     /// <summary>打开房间设置弹窗（复用 SettingsWindow）。</summary>
     public RelayCommand OpenRoomSettingsCommand => new(_ => OpenRoomSettings());
@@ -397,6 +300,9 @@ public class MainViewModel : INotifyPropertyChanged
 
         // 连接 SignalR
         await ConnectSignalRAsync();
+
+        // 槲寄生启动中心挂点：初始化全部完成后广播（自动执行启动流程监听此事件）
+        Initialized?.Invoke();
     }
 
     private async Task ConnectSignalRAsync()
@@ -4636,6 +4542,50 @@ public class MainViewModel : INotifyPropertyChanged
         {
             AddLog("没有有效目标，命令未执行");
         }
+    }
+
+    /// <summary>
+    /// [槲寄生·启动中心] 本机 BGI 命令执行入口（仅供 StartupFlowRunner 注入使用）。
+    /// 与 ExecuteLocalCommandAsync 的区别：不选目标、不广播 SignalR，只对本机 BGI；
+    /// "kill_bgi" 是启动中心私有 cmd（强杀本会话 BGI 进程），其余透传 CommandExecutor。
+    /// 监控端无本地 BGI：直接返回失败结果，由调用方记日志按节点策略处理。
+    /// </summary>
+    internal async Task<CommandResult> ExecuteLocalBgiCommandAsync(string cmd, Dictionary<string, object>? param)
+    {
+        if (_config?.ObserverMode == true)
+        {
+            return new CommandResult { Status = "failed", Message = "监控端无本地 BGI，该节点已跳过" };
+        }
+
+        if (cmd == "kill_bgi")
+        {
+            if (_processMonitor == null)
+                return new CommandResult { Status = "failed", Message = "未配置 BGI 路径，无法关闭 BGI" };
+            _processMonitor.KillBgi();
+            return new CommandResult { Status = "success", Message = "已强制结束当前会话的 BGI 进程" };
+        }
+
+        if (_commandExecutor == null)
+        {
+            return new CommandResult { Status = "failed", Message = "未配置 BGI 路径，无法执行 BGI 命令" };
+        }
+
+        // [批次标记] 启动流程里的任务启动是新的下发边界，与 ExecuteLocalCommandAsync 同纪律
+        if (cmd is "start_group" or "start_oneclick")
+        {
+            _commandExecutor.ResetBatch();
+        }
+
+        var selfUid = _config?.PlayerUid ?? "";
+        return await _commandExecutor.ExecuteAsync(new RemoteCommand
+        {
+            Cmd = cmd,
+            Sender = _config?.PlayerName ?? "",
+            SenderUid = selfUid,
+            Target = [selfUid],
+            CommandId = "startup_" + Guid.NewGuid().ToString("N"),
+            Params = param
+        });
     }
 
     /// <summary>从本机 BGI 或在线成员读配置组与一条龙名称列表（用于一键命令绑定选择）。</summary>
