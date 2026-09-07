@@ -516,6 +516,39 @@
                                     </StackPanel>
                                 </StackPanel>
 
+                                <!-- manualConfirm：提示内容 + 超时 -->
+                                <StackPanel>
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="manualConfirm">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="提示内容" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Text="{Binding ConfirmMessage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource GoldInput}" Width="300"
+                                                 ToolTip="弹窗里显示的确认问题，留空则显示节点名"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                        <TextBlock Text="超时" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Text="{Binding ConfirmTimeoutSecondsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource GoldInput}" Width="56" Padding="6,2" HorizontalContentAlignment="Center"
+                                                 ToolTip="0 = 不限时，等人手动选择"/>
+                                        <TextBlock Text="秒后" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                        <ComboBox Width="130" Margin="10,0,0,0" Style="{StaticResource GoldComboBox}"
+                                                  SelectedIndex="{Binding TimeoutGoTrueIndex, Mode=TwoWay}">
+                                            <ComboBoxItem Content="自动走「是」" Style="{StaticResource GoldComboItem}"/>
+                                            <ComboBoxItem Content="自动走「否」" Style="{StaticResource GoldComboItem}"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <TextBlock Text="弹窗会同时列出「是 / 否」两条分支的后续动作供判断；超时或直接关窗未选都按上面设置的默认走向。"
+                                               FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" MaxWidth="420" Margin="0,6,0,0"/>
+                                </StackPanel>
+
                                 <!-- killProgram：进程名 -->
                                 <StackPanel Orientation="Horizontal">
                                     <StackPanel.Style>

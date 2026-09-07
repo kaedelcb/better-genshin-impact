@@ -88,6 +88,18 @@ public class StartupStep
     [JsonPropertyName("weekdays")]
     public List<int> Weekdays { get; set; } = [];
 
+    /// <summary>弹窗提示内容（manualConfirm 用；空时显示节点名）。</summary>
+    [JsonPropertyName("confirmMessage")]
+    public string ConfirmMessage { get; set; } = "";
+
+    /// <summary>超时秒数（manualConfirm 用；0=不限时等人点）。</summary>
+    [JsonPropertyName("confirmTimeoutSeconds")]
+    public int ConfirmTimeoutSeconds { get; set; } = 60;
+
+    /// <summary>超时后自动走的分支（manualConfirm 用）：true=走「是」，false=走「否」。</summary>
+    [JsonPropertyName("confirmTimeoutGoTrue")]
+    public bool ConfirmTimeoutGoTrue { get; set; } = false;
+
     // ===== 动作参数 =====
 
     /// <summary>程序路径（startGame/startProgram 用）。</summary>
@@ -131,6 +143,8 @@ public static class StartupStepKinds
     public const string BgiRunning = "bgiRunning";
     public const string GameRunning = "gameRunning";
     public const string ProcessRunning = "processRunning";
+    /// <summary>人工确认：弹窗由人点「是/否」决定走哪条分支；可设超时，超时自动走预设分支。</summary>
+    public const string ManualConfirm = "manualConfirm";
 
     // ---- 动作 ----
     public const string StartBgi = "startBgi";
@@ -162,6 +176,7 @@ public static class StartupStepKinds
         new(BgiRunning, "condition", "BGI 进程状态", "◇", "按当前会话的 BGI 是否正在运行分两支"),
         new(GameRunning, "condition", "游戏进程状态", "◇", "按当前会话的原神是否正在运行分两支"),
         new(ProcessRunning, "condition", "指定进程状态", "◇", "按任意进程名是否存在分两支（可用来等第三方工具）"),
+        new(ManualConfirm, "condition", "人工确认", "◇", "弹窗由人点「是/否」决定走哪条分支，弹窗列出两条分支的后续动作；可设超时自动走向"),
         // 动作
         new(StartBgi, "action", "启动 BGI", "▶", "启动本机 BGI（复用成员卡片「启动BGI」同款逻辑）"),
         new(StopBgi, "action", "关闭 BGI", "▶", "强制结束当前会话的 BGI 进程"),
@@ -193,6 +208,10 @@ public static class StartupStepKinds
                 break;
             case ProcessRunning:
                 step.ProcessName = "notepad";
+                break;
+            case ManualConfirm:
+                step.ConfirmTimeoutSeconds = 60;
+                step.ConfirmTimeoutGoTrue = false;
                 break;
             case KillProgram:
                 step.ProcessName = "";

@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Threading;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
+using MultiplayerHoeingAssistant.Views;
 
 namespace MultiplayerHoeingAssistant.ViewModels;
 
@@ -33,7 +34,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         _mainVm = mainVm;
         _store = new StartupFlowStore();
         _config = _store.Load();
-        _runner = new StartupFlowRunner(mainVm.ExecuteLocalBgiCommandAsync, EnterTaskCenterAsync, ArmTimer, mainVm.AddLog);
+        _runner = new StartupFlowRunner(mainVm.ExecuteLocalBgiCommandAsync, EnterTaskCenterAsync, ArmTimer, ConfirmHandlerAsync, mainVm.AddLog);
         RootChain = new StepChainViewModel(_config.Steps, this, parentCondition: null, branchName: "主流程");
         ArmedTimers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasArmedTimers));
 
@@ -314,6 +315,18 @@ public sealed class MistletoeViewModel : ViewModelBase
     {
         _mainVm.AddLog("[槲寄生] 任务中心尚未落地（规划中），本次交接为空转——后续节点照常继续");
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 「人工确认」节点的弹窗实现（Runner 注入的委托）。回 UI 线程弹模态窗，
+    /// 返回 (走向, 判断依据)。弹窗期间流程挂起等待；用户取消整个流程需先关掉弹窗。
+    /// </summary>
+    private async Task<(bool passed, string desc)> ConfirmHandlerAsync(StartupStep step, CancellationToken ct)
+    {
+        var result = await Application.Current.Dispatcher.InvokeAsync(
+            () => ConfirmStepWindow.ShowConfirm(step, Application.Current.MainWindow));
+        ct.ThrowIfCancellationRequested();
+        return result;
     }
 
     // ================= 定时触发器（武装中的定时器列表） =================
@@ -625,6 +638,31 @@ public sealed class StartupStepViewModel : ViewModelBase
         set { Model.RepeatDaily = value; Changed(); }
     }
 
+    /// <summary>弹窗提示内容（manualConfirm 用）。</summary>
+    public string ConfirmMessage
+    {
+        get => Model.ConfirmMessage;
+        set { Model.ConfirmMessage = value; Changed(); }
+    }
+
+    /// <summary>超时秒数文本（manualConfirm 用；0=不限时）。</summary>
+    public string ConfirmTimeoutSecondsText
+    {
+        get => Model.ConfirmTimeoutSeconds.ToString();
+        set
+        {
+            Model.ConfirmTimeoutSeconds = int.TryParse(value, out var n) ? Math.Clamp(n, 0, 86400) : 60;
+            Changed();
+        }
+    }
+
+    /// <summary>超时走向下标（manualConfirm 用）：0=超时走「是」，1=超时走「否」。</summary>
+    public int TimeoutGoTrueIndex
+    {
+        get => Model.ConfirmTimeoutGoTrue ? 0 : 1;
+        set { Model.ConfirmTimeoutGoTrue = value == 0; Changed(); }
+    }
+
     /// <summary>[旧版遗留] startGroup/startOneClick 节点的任务名（目录已移除，旧配置仍可编辑执行）。</summary>
     public string TaskName
     {
@@ -645,6 +683,9 @@ public sealed class StartupStepViewModel : ViewModelBase
         StartupStepKinds.BgiRunning => Model.ExpectRunning ? "BGI 正在运行 → 是" : "BGI 未运行 → 是",
         StartupStepKinds.GameRunning => Model.ExpectRunning ? "游戏正在运行 → 是" : "游戏未运行 → 是",
         StartupStepKinds.ProcessRunning => $"{Model.ProcessName} {(Model.ExpectRunning ? "存在" : "不存在")} → 是",
+        StartupStepKinds.ManualConfirm =>
+            $"{(string.IsNullOrWhiteSpace(Model.ConfirmMessage) ? "（未填提示内容）" : Model.ConfirmMessage)}" +
+            $"{(Model.ConfirmTimeoutSeconds > 0 ? $"；{Model.ConfirmTimeoutSeconds} 秒超时走「{(Model.ConfirmTimeoutGoTrue ? "是" : "否")}」" : "；不限时")}",
         StartupStepKinds.StartBgi => "启动本机 BGI",
         StartupStepKinds.StopBgi => "强制结束本会话 BGI 进程",
         StartupStepKinds.StartGame or StartupStepKinds.StartProgram =>

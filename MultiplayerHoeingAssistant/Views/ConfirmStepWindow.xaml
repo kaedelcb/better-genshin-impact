@@ -1,0 +1,58 @@
+<Window x:Class="MultiplayerHoeingAssistant.Views.ConfirmStepWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="槲寄生 · 人工确认"
+        Width="480" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Topmost="True"
+        Background="#1a1a2e"
+        Foreground="#e0e0e0">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="启动流程 · 人工确认"
+                   FontSize="16" FontWeight="Bold" Foreground="#d4af37" Margin="0,0,0,10"/>
+
+        <TextBlock Grid.Row="1" x:Name="MessageText"
+                   Foreground="#e0e0e0" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+        <!-- 两条分支的后续动作预览，供人判断 -->
+        <Grid Grid.Row="2" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Background="#0F6FD8CE" BorderBrush="#556FD8CE" BorderThickness="1"
+                    CornerRadius="7" Padding="10,8" Margin="0,0,6,0">
+                <StackPanel>
+                    <TextBlock Text="✓ 选「是」将执行" FontSize="11" FontWeight="SemiBold" Foreground="#6fd8ce" Margin="0,0,0,4"/>
+                    <TextBlock x:Name="TruePreview" FontSize="11" Foreground="#cfd8dc" TextWrapping="Wrap" LineHeight="17"/>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="1" Background="#14E88A6F" BorderBrush="#55E88A6F" BorderThickness="1"
+                    CornerRadius="7" Padding="10,8" Margin="6,0,0,0">
+                <StackPanel>
+                    <TextBlock Text="✗ 选「否」将执行" FontSize="11" FontWeight="SemiBold" Foreground="#e88a6f" Margin="0,0,0,4"/>
+                    <TextBlock x:Name="FalsePreview" FontSize="11" Foreground="#cfd8dc" TextWrapping="Wrap" LineHeight="17"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <TextBlock Grid.Row="3" x:Name="CountdownText" Text=""
+                   Foreground="#ffb74d" FontSize="12" Margin="0,0,0,10" TextWrapping="Wrap"/>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="✓ 是" x:Name="YesButton" Width="110" Height="36" Margin="0,0,12,0"
+                    Background="#26a69a" Foreground="White" BorderThickness="0" Click="YesButton_Click"/>
+            <Button Content="✗ 否" x:Name="NoButton" Width="110" Height="36"
+                    Background="#ef5350" Foreground="White" BorderThickness="0" Click="NoButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

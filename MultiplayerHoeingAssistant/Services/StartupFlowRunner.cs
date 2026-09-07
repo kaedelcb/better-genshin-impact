@@ -23,6 +23,8 @@ public sealed class StartupFlowRunner
     private readonly Func<Task> _enterTaskCenter;
     /// <summary>定时触发器挂载入口（由宿主 VM 注入：负责登记定时状态、到点执行 FireSteps、取消）。</summary>
     private readonly Action<StartupStep> _armTimer;
+    /// <summary>人工确认弹窗入口（由宿主 VM 注入：UI 线程弹窗，返回 (是/否, 判断依据描述)）。</summary>
+    private readonly Func<StartupStep, CancellationToken, Task<(bool passed, string desc)>> _confirmHandler;
     private readonly Action<string> _log;
 
     /// <summary>游戏进程名（国服 Yuanshen / 国际服 GenshinImpact），与 ScreenshotService 口径一致。</summary>
@@ -32,11 +34,13 @@ public sealed class StartupFlowRunner
         Func<string, Dictionary<string, object>?, Task<CommandResult>> bgiExecutor,
         Func<Task> enterTaskCenter,
         Action<StartupStep> armTimer,
+        Func<StartupStep, CancellationToken, Task<(bool passed, string desc)>> confirmHandler,
         Action<string> log)
     {
         _bgiExecutor = bgiExecutor;
         _enterTaskCenter = enterTaskCenter;
         _armTimer = armTimer;
+        _confirmHandler = confirmHandler;
         _log = log;
     }
 
@@ -85,7 +89,10 @@ public sealed class StartupFlowRunner
 
             if (step.NodeType == "condition")
             {
-                var (passed, desc) = EvaluateCondition(step);
+                // 人工确认是异步交互（UI 弹窗），其余条件是同步求值
+                var (passed, desc) = step.Kind == StartupStepKinds.ManualConfirm
+                    ? await _confirmHandler(step, ct)
+                    : EvaluateCondition(step);
                 _log($"[槲寄生] {indent}条件「{display}」：{desc} → {(passed ? "是" : "否")}");
                 var branch = passed ? step.TrueSteps : step.FalseSteps;
                 if (branch.Count == 0)
