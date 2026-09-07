@@ -565,7 +565,12 @@ public class TpTaskFastDrag
             }
 
             // 改法 B：keepCurrentZoom=true，定位循环不强行把缩放归一到 2.0，保留拖动进入时的实际缩放。
-            await MoveMapTo(x, y, mapName, 2, country, retryTimes, keepCurrentZoom: true);
+            // trueScaleOverride：由本轮 GetBigMapRect 可视矩形换算实测比例尺（1080P 像素/原神单位），
+            // 供 MoveMapTo 收工阈值与上方 IsPointInBigMapWindow 用同一把尺子（模型尺 MapScaleFactor/zoom
+            // 与真实比例在部分缩放档偏差可达 ~30%，曾致贴边目标被误判"够近不用拖"→ 零拖动 livelock）。
+            // keepCurrentZoom=true 保证本次 MoveMapTo 期间缩放不变，实测尺全程有效；缩放若变则内部自动回退模型尺。
+            double? trueScale = bigMapInAllMapRect.Height > 0 ? 1080.0 / bigMapInAllMapRect.Height : null;
+            await MoveMapTo(x, y, mapName, 2, country, retryTimes, keepCurrentZoom: true, trueScaleOverride: trueScale);
             // 加速：等像素稳定（远比连续两次模板匹配 GetBigMapRect 快），稳定后再单次 GetBigMapRect
             // fast-drag-recognition-acceleration spec / design.md §4.2（feedback adjustment）
             await WaitMapStableOrTimeoutAsync(ApplyExtraDelay(1000));
@@ -1180,12 +1185,19 @@ public class TpTaskFastDrag
     /// <param name="country">传送地图国家</param>
     /// <param name="retryTimes">重试次数</param>
     /// <param name="enableEarlyStop">是否启用早停机制（几何早停和容差早停）。默认为 true 保持向后兼容，设为 false 时将精确拖动到目标点正中心</param>
-    public async Task MoveMapTo(double x, double y, string mapName, double finalZoomLevel = 2, string? country = null, int retryTimes = 0, bool enableEarlyStop = true, bool keepCurrentZoom = false)
+    /// <param name="trueScaleOverride">实测"1080P 像素/原神单位"比例（由调用方 GetBigMapRect 可视矩形换算：1080/rect.Height）。
+    /// 仅用于收工阈值判据，使其与外层 IsPointInBigMapWindow 用同一把尺子；拖动量等其他逻辑仍用模型尺
+    /// （MapScaleFactor/zoom，拖动循环逐轮重识别自校正，对绝对精度不敏感）。null → 全部走模型尺（旧行为）。</param>
+    public async Task MoveMapTo(double x, double y, string mapName, double finalZoomLevel = 2, string? country = null, int retryTimes = 0, bool enableEarlyStop = true, bool keepCurrentZoom = false, double? trueScaleOverride = null)
     {
         #region 阶段1：初始中心识别与自救
         // 参数初始化
         using var ra1 = CaptureToRectArea();
         double currentZoomLevel = GetBigMapZoomLevel(ra1);
+        // trueScaleOverride 配对锚点：实测尺由调用方按"进入 MoveMapTo 前那一刻"的 GetBigMapRect 矩形换算，
+        // 本方法内任何缩放操作（阶段1自救调缩放 / 阶段2缩小 / 循环内放大）都会使它失配——
+        // 故在进入时记录缩放，EarlyStopDistance 检测到缩放偏离即回退模型尺（见阶段3）。
+        double entryZoomLevel = currentZoomLevel;
         // 改法 B（keepCurrentZoom=true）：定位循环里不再把缩放强行归一到 finalZoomLevel(2.0)，
         // 而是保持拖动进入时的实际缩放（把放大下限设为当前缩放本身）。这样纹理少的地图（如沙漠）
         // 不会被强行放大到 2.0 导致 GetBigMapRect 认偏、点空。点击前 >4.4 的上限仍由步骤 5.6b 兜底。
@@ -1306,6 +1318,22 @@ public class TpTaskFastDrag
         #endregion
 
         #region 阶段3：拖动主循环
+        // 收工判据用尺（刻度不一致根修）：外层 IsPointInBigMapWindow 用 GetBigMapRect 可视矩形判定"可点击"，
+        // 而 mouseDistance 用模型尺 MapScaleFactor/zoom——两把尺刻度可能不一致（实测：缩放 3.85 时模型尺
+        // 2.3/3.85≈0.60，矩形实测 1080/1250≈0.86，偏差 31%），导致"400px 收工线"实际覆盖到屏幕外一条窄带
+        // （真实 540~670px 贴边目标被误判"够近不用拖"→ 零拖动 livelock，渊下宫蛇心之地实测复现）。
+        // 调用方传入 trueScaleOverride（矩形实测尺）时，收工距离改用它计算，与外层判定天然同尺、矛盾消除。
+        // 实测尺只在缩放与进入时（entryZoomLevel，见阶段1 锚点注释）一致期间有效：缩放一变即失配，回退模型尺。
+        double EarlyStopDistance()
+        {
+            if (trueScaleOverride is { } trueScale
+                && Math.Abs(currentZoomLevel - entryZoomLevel) <= _tpConfig.PrecisionThreshold)
+            {
+                return Math.Sqrt(xOffset * xOffset + yOffset * yOffset) * trueScale;
+            }
+            return mouseDistance;
+        }
+
         // 开始移动并放大地图
         for (var iteration = 0; iteration < _tpConfig.MaxIterations; iteration++)
         {
@@ -1375,8 +1403,17 @@ public class TpTaskFastDrag
                 break;
             }
 
-            // 非常接近目标点，不再进一步调整
-            if (enableEarlyStop && mouseDistance < (retryTimes == 0 ? 400 : 300))
+            // 非常接近目标点，不再进一步调整。
+            // iteration > 0 前置条件（与上方 ShouldEarlyStopClick 早停门控同理，关键）：
+            // MoveMapTo 仅在外层 do-while 的 IsPointInBigMapWindow 刚判定"不可点击"后才被调用，
+            // 若 iteration==0（尚未拖动任何一次）就因收工阈值退出，等于零拖动直接返回，
+            // 外层重进后识别结果不变 → 反复重入、地图纹丝不动，livelock 直至"多次尝试未移动到目标传送点"。
+            // 强制至少真实拖动一次后再允许收工，方向正确即可逐轮收敛。
+            // 对步骤 4/5.7/步骤6 等其他调用方：iteration==0 时最多多拖一次小幅归中拖动，无副作用。
+            // 收工距离用 EarlyStopDistance()：调用方传入矩形实测尺时与外层"可点击"判定同尺，
+            // 消除"模型尺判够近、矩形尺判在屏幕外"的矛盾窄带（渊下宫蛇心之地实测：目标在顶边外 3px，
+            // 真实距离 543px，模型尺只量出 376px < 400 收工线 → 连续 5 轮零拖动误报传送失败）。
+            if (enableEarlyStop && iteration > 0 && EarlyStopDistance() < (retryTimes == 0 ? 400 : 300))
             {
                 TaskControl.Logger.LogDebug("移动 {I} 次鼠标后，已经接近目标点，不再移动地图。", iteration + 1);
                 break;
