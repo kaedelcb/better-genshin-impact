@@ -684,6 +684,13 @@ public sealed class StartupStepViewModel : ViewModelBase
         set { Model.RepeatDaily = value; Changed(); }
     }
 
+    /// <summary>启动前先关闭 BGI（startBgi 用，让参数生效）。</summary>
+    public bool KillBeforeStart
+    {
+        get => Model.KillBeforeStart;
+        set { Model.KillBeforeStart = value; Changed(); }
+    }
+
     /// <summary>弹窗提示内容（manualConfirm 用）。</summary>
     public string ConfirmMessage
     {
@@ -732,7 +739,8 @@ public sealed class StartupStepViewModel : ViewModelBase
         StartupStepKinds.ManualConfirm =>
             $"{(string.IsNullOrWhiteSpace(Model.ConfirmMessage) ? "（未填提示内容）" : Model.ConfirmMessage)}" +
             $"{(Model.ConfirmTimeoutSeconds > 0 ? $"；{Model.ConfirmTimeoutSeconds} 秒超时走「{(Model.ConfirmTimeoutGoTrue ? "是" : "否")}」" : "；不限时")}",
-        StartupStepKinds.StartBgi => string.IsNullOrWhiteSpace(Model.Arguments) ? "启动本机 BGI" : $"启动本机 BGI（参数：{Model.Arguments}）",
+        StartupStepKinds.StartBgi => (string.IsNullOrWhiteSpace(Model.Arguments) ? "启动本机 BGI" : $"启动本机 BGI（参数：{Model.Arguments}）")
+            + (Model.KillBeforeStart ? "，先关闭再启动" : ""),
         StartupStepKinds.StopBgi => "强制结束本会话 BGI 进程",
         StartupStepKinds.StartGame or StartupStepKinds.StartProgram =>
             string.IsNullOrWhiteSpace(Model.Path) ? "（未填写程序路径）" : Model.Path,

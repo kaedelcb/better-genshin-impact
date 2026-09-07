@@ -180,6 +180,15 @@ public sealed class StartupFlowRunner
             {
                 case StartupStepKinds.StartBgi:
                 {
+                    // 先关闭再启动：BGI 已在运行时 start_bgi 走不抢占策略（参数不会生效），
+                    // 勾选后先强杀本会话 BGI 再带参数启动
+                    if (step.KillBeforeStart && BgiProcessMonitor.GetCurrentSessionBgiProcesses().Length > 0)
+                    {
+                        var kr = await _bgiExecutor("kill_bgi", null);
+                        _log($"[槲寄生] {indent}启动前先关闭 BGI：{kr.Message}");
+                        // 等进程退出，避免紧接着启动撞上未退净的旧进程
+                        await Task.Delay(2000, ct);
+                    }
                     var p = string.IsNullOrWhiteSpace(step.Arguments)
                         ? null
                         : new Dictionary<string, object> { ["args"] = step.Arguments };

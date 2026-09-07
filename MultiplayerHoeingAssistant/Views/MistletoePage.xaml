@@ -505,6 +505,21 @@
                                              Style="{StaticResource GoldInput}" Width="280"
                                              ToolTip="传给 BetterGI.exe 的命令行参数，可留空（例如 --startGroups &quot;组名&quot;）"/>
                                 </StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="startBgi">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <CheckBox IsChecked="{Binding KillBeforeStart, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
+                                    <TextBlock Text="启动前先关闭 BGI" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="（已在运行的 BGI 不会因新参数自动重启——不抢占策略；勾选后先强制关闭本会话 BGI 再带参数启动，让参数生效）"
+                                               FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="8,0,0,0" TextWrapping="Wrap" MaxWidth="360"/>
+                                </StackPanel>
 
                                 <!-- startGame / startProgram：路径 + 参数 -->
                                 <StackPanel>

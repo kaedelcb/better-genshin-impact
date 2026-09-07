@@ -122,6 +122,11 @@ public class StartupStep
     [JsonPropertyName("repeatDaily")]
     public bool RepeatDaily { get; set; } = false;
 
+    /// <summary>启动前先关闭 BGI（startBgi 用）：已在运行的 BGI 不会因新参数自动重启（不抢占策略），
+    /// 勾选后先强杀本会话 BGI 再带参数启动，让参数生效。</summary>
+    [JsonPropertyName("killBeforeStart")]
+    public bool KillBeforeStart { get; set; } = false;
+
     /// <summary>[旧版遗留] BGI 任务名（startGroup/startOneClick 用）。
     /// 2026-09-08 起这两个类型已从节点目录移除（启动中心不再直接配 BGI 任务，由「进入任务中心执行」节点接管），
     /// 字段与 Runner 分支保留仅为兼容旧配置。</summary>
