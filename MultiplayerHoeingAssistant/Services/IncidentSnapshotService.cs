@@ -59,6 +59,8 @@ public sealed class IncidentSnapshotService : IDisposable
     private bool _disposed;
     /// <summary>诊断日志节流：录像跳过/截图失败原因每 60 秒最多写一行（assistant_runtime 日志，防刷屏）。</summary>
     private DateTime _lastDiagLog = DateTime.MinValue;
+    /// <summary>上一拍的 BGI 进程检测结果（null=尚未检测）。"录像暂停/恢复"日志边沿触发用：仅状态跳变时报一行，稳态静默（监控/观察模式本机无 BGI 是常态，周期报是纯噪音）。</summary>
+    private bool? _lastBgiRunning;
 
     /// <summary>节流写诊断行（默认 60 秒一行；事发录像排障专用，正常时零噪音）。</summary>
     private void DiagLogThrottled(string message)
@@ -139,10 +141,23 @@ public sealed class IncidentSnapshotService : IDisposable
             }
             else if (!_bgiRunningProvider())
             {
-                DiagLogThrottled("录像暂停：总开关已开但未检测到本机 BGI 进程（IsBgiRunning=false）");
+                // 边沿触发：仅在"运行 → 未检测到"跳变时报一行，稳态静默。
+                // 文案如实描述检测来源：当前 Windows 会话的 BetterGI 进程枚举（非 MainViewModel.IsBgiRunning）。
+                if (_lastBgiRunning != false)
+                {
+                    _lastBgiRunning = false;
+                    RuntimeLog.WriteLine("[IncidentSnapshot] 录像暂停：总开关已开但未检测到本机 BGI 进程（当前会话无 BetterGI 进程）");
+                }
             }
             else if (Interlocked.Exchange(ref _capturing, 1) == 0)
             {
+                // 恢复边沿：上一拍未检测到、本拍检测到 → 报一行恢复（放在本分支内避免包裹截图体重排缩进；
+                // 若上一帧截图尚未完成则顺延到下一拍补报，最多晚一秒，不会重复）
+                if (_lastBgiRunning == false)
+                {
+                    RuntimeLog.WriteLine("[IncidentSnapshot] 录像恢复：检测到本机 BGI 进程");
+                }
+                _lastBgiRunning = true;
                 try
                 {
                     // 优先截游戏画面（游戏可能在副屏，主屏桌面没用）；找不到游戏窗口/最小化时回退主屏全屏
