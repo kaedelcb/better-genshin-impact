@@ -243,7 +243,8 @@
         <DataTemplate x:Key="ChainAddButton">
             <Grid HorizontalAlignment="Center" Margin="0,2,0,0">
                 <Button x:Name="AddNodeBtn" Content="＋" Style="{DynamicResource BtnGhost}" Padding="12,2" FontSize="13"
-                        ToolTip="在此链末尾添加节点" Command="{Binding OpenAddPopupCommand}"/>
+                        ToolTip="在此链末尾添加节点（链以「结束流程」收尾时不可再添加）" Command="{Binding OpenAddPopupCommand}"
+                        IsEnabled="{Binding HasNoEndFlow}"/>
                 <Popup IsOpen="{Binding IsAddPopupOpen, Mode=TwoWay}" StaysOpen="False"
                        Placement="Top" PlacementTarget="{Binding ElementName=AddNodeBtn}"
                        AllowsTransparency="True" PopupAnimation="Fade">
@@ -488,6 +489,23 @@
                                     </ComboBox>
                                 </StackPanel>
 
+                                <!-- startBgi：启动参数 -->
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="startBgi">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="启动参数" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding Arguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" Width="280"
+                                             ToolTip="传给 BetterGI.exe 的命令行参数，可留空（例如 --startGroups &quot;组名&quot;）"/>
+                                </StackPanel>
+
                                 <!-- startGame / startProgram：路径 + 参数 -->
                                 <StackPanel>
                                     <StackPanel.Style>
@@ -666,7 +684,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </StackPanel.Style>
-                                    <TextBlock Text="执行到此节点立即终止整条启动流程（含外层链）。常用于「否」分支：环境不满足时直接放弃本次启动。"
+                                    <TextBlock Text="执行到此节点立即终止整条启动流程（含外层链）。它必须是所在链的最后一个节点：之后不能再添加节点，也不能把别的节点拖到它后面。常用于「否」分支：环境不满足时直接放弃本次启动。"
                                                FontSize="10.5" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" MaxWidth="380"/>
                                 </StackPanel>
                             </StackPanel>

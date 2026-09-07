@@ -125,7 +125,7 @@ public class CommandExecutor
                     _hasRestartedThisBatch = false; // 用户手动停止后，新的一批重新开始
                     return await StopWithKeyPolicyAsync();
                 case "start_bgi":
-                    return await StartBgiWithKeyPolicyAsync();
+                    return await StartBgiWithKeyPolicyAsync(GetStringParam(command.Params, "args"));
                 case "start_group":
                     return await StartGroupAsync(
                         GetStringParam(command.Params, "groupName") ?? "",
@@ -262,10 +262,11 @@ public class CommandExecutor
     /// <summary>
     /// 启动 BGI：直接调用进程监控启动 BGI 进程。
     /// </summary>
-    private Task<CommandResult> StartBgiAsync()
+    private Task<CommandResult> StartBgiAsync(string? args = null)
     {
-        _monitor.RestartBgi();
-        return Task.FromResult(new CommandResult { Status = "success", Message = "BGI 已启动" });
+        _monitor.RestartBgi(args);
+        var msg = string.IsNullOrWhiteSpace(args) ? "BGI 已启动" : $"BGI 已启动（参数：{args}）";
+        return Task.FromResult(new CommandResult { Status = "success", Message = msg });
     }
 
     /// <summary>
@@ -861,11 +862,11 @@ public class CommandExecutor
     /// [任务策略] 启动BGI 键闭环：BGI 未运行时纯启动；
     /// BGI 已在跑任务时无实际动作、记日志即可，不做抢占；BGI 空闲时保持原启动行为。
     /// </summary>
-    private async Task<CommandResult> StartBgiWithKeyPolicyAsync()
+    private async Task<CommandResult> StartBgiWithKeyPolicyAsync(string? args = null)
     {
         if (!_monitor.IsBgiRunning)
         {
-            return await StartBgiAsync(); // BGI 未运行：纯启动
+            return await StartBgiAsync(args); // BGI 未运行：纯启动
         }
         var status = await QueryTaskStatusAsync();
         if (status is { Running: true })
@@ -873,7 +874,7 @@ public class CommandExecutor
             Log("[任务策略] BGI 已在运行任务，启动BGI 键无实际动作（不做抢占）");
             return new CommandResult { Status = "success", Message = "BGI 已在运行任务，启动BGI 键无实际动作" };
         }
-        return await StartBgiAsync(); // BGI 空闲：保持原行为（BGI 侧单实例锁兜底）
+        return await StartBgiAsync(args); // BGI 空闲：保持原行为（BGI 侧单实例锁兜底）
     }
 
     /// <summary>

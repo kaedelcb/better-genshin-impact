@@ -181,6 +181,12 @@ public sealed class MistletoeViewModel : ViewModelBase
         var idx = chain.Steps.IndexOf(vm);
         var target = idx + delta;
         if (idx < 0 || target < 0 || target >= chain.Steps.Count) return;
+        // 「结束流程」必须保持在链尾：它自己不能上移，其他节点也不能下移越过它
+        if (vm.Kind == StartupStepKinds.EndFlow || chain.Steps[target].Kind == StartupStepKinds.EndFlow)
+        {
+            _mainVm.AddLog("[槲寄生] 「结束流程」必须是链的最后一个节点，不能这样移动");
+            return;
+        }
         chain.Steps.Move(idx, target);
         chain.ModelList.RemoveAt(idx);
         chain.ModelList.Insert(target, vm.Model);
@@ -207,12 +213,33 @@ public sealed class MistletoeViewModel : ViewModelBase
         var oldIndex = sourceChain.Steps.IndexOf(dragged);
         if (oldIndex < 0) return;
 
-        // 同链内移动且原位置在插入点之前：删除后插入点前移一位
-        if (ReferenceEquals(sourceChain, targetChain) && oldIndex < insertIndex) insertIndex--;
-        insertIndex = Math.Clamp(insertIndex, 0, targetChain.Steps.Count);
-
+        // 先从原链移除，再按「结束流程必须在链尾」规则换算目标位置
         sourceChain.Steps.RemoveAt(oldIndex);
         sourceChain.ModelList.RemoveAt(oldIndex);
+
+        if (dragged.Kind == StartupStepKinds.EndFlow)
+        {
+            // 结束流程只能落在目标链尾部
+            insertIndex = targetChain.Steps.Count;
+        }
+        else
+        {
+            // 同链内移动且原位置在插入点之前：删除后插入点前移一位
+            if (ReferenceEquals(sourceChain, targetChain) && oldIndex < insertIndex) insertIndex--;
+            insertIndex = Math.Clamp(insertIndex, 0, targetChain.Steps.Count);
+            // 目标链已有结束流程：普通节点不能插到它后面（它后面的节点永远不会执行）
+            var endIdx = -1;
+            for (var i = 0; i < targetChain.Steps.Count; i++)
+            {
+                if (targetChain.Steps[i].Kind == StartupStepKinds.EndFlow) { endIdx = i; break; }
+            }
+            if (endIdx >= 0 && insertIndex > endIdx)
+            {
+                insertIndex = endIdx;
+                _mainVm.AddLog($"[槲寄生] 「{targetChain.BranchName}」以「结束流程」收尾，节点已自动放到它前面");
+            }
+        }
+
         targetChain.Steps.Insert(insertIndex, dragged);
         targetChain.ModelList.Insert(insertIndex, dragged.Model);
         dragged.OwnerChain = targetChain;
@@ -443,6 +470,13 @@ public sealed class StepChainViewModel : ViewModelBase
         BranchName = branchName;
         Steps = new ObservableCollection<StartupStepViewModel>(
             modelList.Select(s => new StartupStepViewModel(s, owner, this)));
+        // 增删移动后联动刷新：空链提示（HasSteps）、结束流程链尾约束（HasEndFlow/HasNoEndFlow）
+        Steps.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasSteps));
+            OnPropertyChanged(nameof(HasEndFlow));
+            OnPropertyChanged(nameof(HasNoEndFlow));
+        };
     }
 
     /// <summary>对应的模型列表（与 Steps 一一同步）。</summary>
@@ -457,6 +491,12 @@ public sealed class StepChainViewModel : ViewModelBase
     public string BranchName { get; }
 
     public bool HasSteps => Steps.Count > 0;
+
+    /// <summary>链中已有「结束流程」节点（它必须是链尾终点：之后不能再加任何节点，也不能拖节点到它后面）。</summary>
+    public bool HasEndFlow => Steps.Any(s => s.Kind == StartupStepKinds.EndFlow);
+
+    /// <summary>「＋ 添加节点」按钮可用性绑定用（HasEndFlow 的反相，WPF 无内置反转转换器）。</summary>
+    public bool HasNoEndFlow => !HasEndFlow;
 
     // ---- 「＋ 添加节点」弹层（每条链各一份状态；目录转发宿主的，主链/分支链写法统一） ----
 
@@ -476,6 +516,12 @@ public sealed class StepChainViewModel : ViewModelBase
     {
         if (p is not string kind) return;
         IsAddPopupOpen = false;
+        // 「结束流程」是链尾终点：链里已有它时不能再添加任何节点（新节点永远追加在尾，必然落在它后面成为死节点）
+        if (HasEndFlow)
+        {
+            _owner.Log($"[槲寄生] 「{BranchName}」已有「结束流程」节点，它是终点，之后不能再添加节点");
+            return;
+        }
         var model = StartupStepKinds.Create(kind);
         var vm = new StartupStepViewModel(model, _owner, this);
         ModelList.Add(model);
@@ -686,7 +732,7 @@ public sealed class StartupStepViewModel : ViewModelBase
         StartupStepKinds.ManualConfirm =>
             $"{(string.IsNullOrWhiteSpace(Model.ConfirmMessage) ? "（未填提示内容）" : Model.ConfirmMessage)}" +
             $"{(Model.ConfirmTimeoutSeconds > 0 ? $"；{Model.ConfirmTimeoutSeconds} 秒超时走「{(Model.ConfirmTimeoutGoTrue ? "是" : "否")}」" : "；不限时")}",
-        StartupStepKinds.StartBgi => "启动本机 BGI",
+        StartupStepKinds.StartBgi => string.IsNullOrWhiteSpace(Model.Arguments) ? "启动本机 BGI" : $"启动本机 BGI（参数：{Model.Arguments}）",
         StartupStepKinds.StopBgi => "强制结束本会话 BGI 进程",
         StartupStepKinds.StartGame or StartupStepKinds.StartProgram =>
             string.IsNullOrWhiteSpace(Model.Path) ? "（未填写程序路径）" : Model.Path,

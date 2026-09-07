@@ -178,7 +178,7 @@ public static class StartupStepKinds
         new(ProcessRunning, "condition", "指定进程状态", "◇", "按任意进程名是否存在分两支（可用来等第三方工具）"),
         new(ManualConfirm, "condition", "人工确认", "◇", "弹窗由人点「是/否」决定走哪条分支，弹窗列出两条分支的后续动作；可设超时自动走向"),
         // 动作
-        new(StartBgi, "action", "启动 BGI", "▶", "启动本机 BGI（复用成员卡片「启动BGI」同款逻辑）"),
+        new(StartBgi, "action", "启动 BGI", "▶", "启动本机 BGI（可带命令行参数，复用成员卡片「启动BGI」同款逻辑）"),
         new(StopBgi, "action", "关闭 BGI", "▶", "强制结束当前会话的 BGI 进程"),
         new(StartGame, "action", "启动游戏", "▶", "按路径启动原神（Yuanshen.exe / GenshinImpact.exe）"),
         new(StartProgram, "action", "启动第三方程序", "▶", "按路径启动任意程序，可带参数"),

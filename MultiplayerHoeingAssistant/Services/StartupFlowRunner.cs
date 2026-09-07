@@ -180,7 +180,10 @@ public sealed class StartupFlowRunner
             {
                 case StartupStepKinds.StartBgi:
                 {
-                    var r = await _bgiExecutor("start_bgi", null);
+                    var p = string.IsNullOrWhiteSpace(step.Arguments)
+                        ? null
+                        : new Dictionary<string, object> { ["args"] = step.Arguments };
+                    var r = await _bgiExecutor("start_bgi", p);
                     _log($"[槲寄生] {indent}启动 BGI：{r.Message}");
                     return r.Status == "success";
                 }
