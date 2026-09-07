@@ -188,6 +188,8 @@
         <DataTemplate x:Key="AddNodePopupContent">
             <Border Background="#232048" BorderBrush="{DynamicResource GoldLine}" BorderThickness="1"
                     CornerRadius="10" Padding="12" Effect="{DynamicResource CardShadow}" Margin="0,0,0,6">
+                <!-- 节点目录较长：限高 + 内滚动，避免在分支列等空间受限位置弹层下方被截断 -->
+                <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto" Style="{DynamicResource GoldScrollViewer}">
                 <StackPanel>
                     <TextBlock Text="条件判断" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Gold}" Margin="0,0,0,4"/>
                     <ItemsControl ItemsSource="{Binding ConditionKinds}">
@@ -233,6 +235,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
+                </ScrollViewer>
             </Border>
         </DataTemplate>
 
@@ -511,6 +514,22 @@
                                         <TextBox Text="{Binding Arguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                  Style="{StaticResource GoldInput}" Width="260" ToolTip="可留空"/>
                                     </StackPanel>
+                                </StackPanel>
+
+                                <!-- killProgram：进程名 -->
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="killProgram">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="进程名" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding ProcessName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" Width="180" ToolTip="可带或不带 .exe；仅结束当前会话的同名进程"/>
                                 </StackPanel>
 
                                 <!-- runCmd -->

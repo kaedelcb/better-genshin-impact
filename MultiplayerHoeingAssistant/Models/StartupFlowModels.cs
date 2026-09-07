@@ -125,6 +125,7 @@ public static class StartupStepKinds
     public const string StopBgi = "stopBgi";
     public const string StartGame = "startGame";
     public const string StartProgram = "startProgram";
+    public const string KillProgram = "killProgram";
     public const string RunCmd = "runCmd";
     public const string Wait = "wait";
     /// <summary>进入任务中心执行：流程走到此节点，把控制权交给任务中心的任务序列（任务中心落地前为占位，记日志）。</summary>
@@ -152,6 +153,7 @@ public static class StartupStepKinds
         new(StopBgi, "action", "关闭 BGI", "▶", "强制结束当前会话的 BGI 进程"),
         new(StartGame, "action", "启动游戏", "▶", "按路径启动原神（Yuanshen.exe / GenshinImpact.exe）"),
         new(StartProgram, "action", "启动第三方程序", "▶", "按路径启动任意程序，可带参数"),
+        new(KillProgram, "action", "关闭程序", "▶", "按进程名强制结束当前会话的指定程序（如第三方工具）"),
         new(RunCmd, "action", "执行 CMD 命令", "▶", "以 cmd /c 隐藏窗口执行一条命令，不等待结果"),
         new(Wait, "action", "等待", "▶", "流程内延时 N 秒（等程序就绪时常用）"),
         new(EnterTaskCenter, "action", "进入任务中心执行", "➤", "环境准备完毕，交接给任务中心执行任务序列（任务中心规划中，当前为占位节点）"),
@@ -176,6 +178,9 @@ public static class StartupStepKinds
                 break;
             case ProcessRunning:
                 step.ProcessName = "notepad";
+                break;
+            case KillProgram:
+                step.ProcessName = "";
                 break;
             case RunCmd:
                 step.Arguments = "echo hello";

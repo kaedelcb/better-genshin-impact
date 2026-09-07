@@ -218,6 +218,10 @@ public sealed class StartupFlowRunner
                 {
                     return StartProcess(step, display, indent);
                 }
+                case StartupStepKinds.KillProgram:
+                {
+                    return KillProcess(step, display, indent);
+                }
                 case StartupStepKinds.RunCmd:
                 {
                     if (string.IsNullOrWhiteSpace(step.Arguments))
@@ -286,6 +290,54 @@ public sealed class StartupFlowRunner
         Process.Start(psi);
         _log($"[槲寄生] {indent}已启动程序：{step.Path}{(string.IsNullOrWhiteSpace(step.Arguments) ? "" : $"（参数 {step.Arguments}）")}");
         return true;
+    }
+
+    /// <summary>按进程名强制结束当前会话的指定程序（与条件检测同口径：仅当前 Windows 会话，不碰其他用户/会话的同名进程）。</summary>
+    private bool KillProcess(StartupStep step, string display, string indent)
+    {
+        if (string.IsNullOrWhiteSpace(step.ProcessName))
+        {
+            _log($"[槲寄生] {indent}节点「{display}」未填写进程名，跳过");
+            return false;
+        }
+        var name = step.ProcessName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+            ? step.ProcessName[..^4]
+            : step.ProcessName;
+        var session = Process.GetCurrentProcess().SessionId;
+        Process[] targets;
+        try
+        {
+            targets = Process.GetProcessesByName(name).Where(p => p.SessionId == session).ToArray();
+        }
+        catch (Exception ex)
+        {
+            _log($"[槲寄生] {indent}枚举进程 {name} 失败：{ex.Message}");
+            return false;
+        }
+        if (targets.Length == 0)
+        {
+            _log($"[槲寄生] {indent}进程 {name} 当前会话中不存在，无需关闭");
+            return true;
+        }
+        var killed = 0;
+        foreach (var p in targets)
+        {
+            try
+            {
+                p.Kill();
+                killed++;
+            }
+            catch (Exception ex)
+            {
+                _log($"[槲寄生] {indent}结束进程 {name}（PID {p.Id}）失败：{ex.Message}");
+            }
+            finally
+            {
+                p.Dispose();
+            }
+        }
+        _log($"[槲寄生] {indent}已结束进程 {name} ×{killed}/{targets.Length}");
+        return killed == targets.Length;
     }
 
     // ================= 进程检测（全部按当前 Windows 会话过滤） =================

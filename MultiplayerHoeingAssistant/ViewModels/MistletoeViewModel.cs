@@ -552,6 +552,7 @@ public sealed class StartupStepViewModel : ViewModelBase
         StartupStepKinds.StartGame or StartupStepKinds.StartProgram =>
             string.IsNullOrWhiteSpace(Model.Path) ? "（未填写程序路径）" : Model.Path,
         StartupStepKinds.RunCmd => string.IsNullOrWhiteSpace(Model.Arguments) ? "（未填写命令）" : Model.Arguments,
+        StartupStepKinds.KillProgram => string.IsNullOrWhiteSpace(Model.ProcessName) ? "（未填写进程名）" : $"结束进程 {Model.ProcessName}",
         StartupStepKinds.Wait => $"等待 {Model.WaitSeconds} 秒",
         StartupStepKinds.EnterTaskCenter => "交接给任务中心执行任务序列",
         StartupStepKinds.EndFlow => "立即终止整条启动流程",
