@@ -509,8 +509,15 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <Grid Grid.Row="0" Margin="0,0,0,8">
-                            <TextBlock Text="日志文件" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource White}"
-                                       VerticalAlignment="Center"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="日志文件" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource White}"
+                                           VerticalAlignment="Center"/>
+                                <ComboBox Width="112" Margin="8,0,0,0" FontSize="11" VerticalAlignment="Center"
+                                          ItemsSource="{Binding Browser.DateFilterItems}"
+                                          SelectedItem="{Binding Browser.SelectedDateFilter}"
+                                          Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
+                                          ToolTip="按日期筛选文件列表（按文件最后修改日期；不影响远程日志下载）"/>
+                            </StackPanel>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                 <Button Content="⟳" Style="{DynamicResource TextAction}" FontSize="13"
                                         Command="{Binding Browser.RefreshFilesCommand}" ToolTip="刷新文件列表"/>
@@ -671,7 +678,7 @@
                             <Button Content="导出筛选" Style="{DynamicResource BtnGhost}" Padding="10,4"
                                     Command="{Binding Browser.ExportFilteredCommand}" Margin="0,0,12,0"
                                     ToolTip="有搜索结果时导出命中行，否则导出当前视图；支持 .log / .csv"/>
-                            <TextBlock Text="整文件一次加载 · 自由滚动不分块 · 拖选多行后 Ctrl+C 复制 · 点搜索结果精确定位"
+                            <TextBlock Text="整文件一次加载 · 自由滚动不分块 · 单击选行，Ctrl/Shift 点选多行后 Ctrl+C 复制 · 点搜索结果精确定位"
                                        FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
                         </StackPanel>
 
@@ -749,6 +756,24 @@
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
+                            <!-- 加载动画：大文件整载/搜索期间显示（磁盘读取在后台线程，动画告知用户正在加载而非卡死） -->
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,4,0,0"
+                                        IsHitTestVisible="False">
+                                <ProgressBar Width="140" Height="4" IsIndeterminate="True"
+                                             Foreground="{DynamicResource Gold}"/>
+                                <TextBlock Text="正在加载…" FontSize="11" Foreground="{DynamicResource Gold}"
+                                           HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Browser.IsLoading}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                            </StackPanel>
                         </Grid>
 
                         <!-- 状态栏 -->
@@ -1042,6 +1067,25 @@
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
+
+                        <!-- 加载动画：异常库历史加载期间显示（JSONL 读取在后台线程，动画告知用户正在加载而非卡死） -->
+                        <StackPanel Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,4,0,0"
+                                    IsHitTestVisible="False">
+                            <ProgressBar Width="140" Height="4" IsIndeterminate="True"
+                                         Foreground="{DynamicResource Gold}"/>
+                            <TextBlock Text="正在加载异常记录…" FontSize="11" Foreground="{DynamicResource Gold}"
+                                       HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Watch.IsLoadingHistory}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                        </StackPanel>
 
                         <TextBlock Grid.Row="3" Text="{Binding Watch.RecordStatus}" FontSize="11"
                                    Foreground="{DynamicResource Dim}" Margin="0,6,0,0"

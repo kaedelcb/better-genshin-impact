@@ -32,6 +32,8 @@ public sealed class LogBrowserViewModel : ViewModelBase
         // 分组视图：本机 BGI / 本机助手 / 已下载成员 三组分组头显示（顺序由 EnumerateFiles 排序保证）
         FilesView = (ListCollectionView)CollectionViewSource.GetDefaultView(Files);
         FilesView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(LogFileItem.Group)));
+        // 按日期筛选（下拉在「日志文件」标题旁）：只过滤显示，不动 Files 集合本身
+        FilesView.Filter = obj => obj is LogFileItem f && MatchesDateFilter(f);
     }
 
     // ========== 文件列表 ==========
@@ -44,6 +46,40 @@ public sealed class LogBrowserViewModel : ViewModelBase
     private string _fileListHintText = "";
     /// <summary>文件列表为空时的提示（空串=不显示）。</summary>
     public string FileListHintText { get => _fileListHintText; set => SetProperty(ref _fileListHintText, value); }
+
+    // ========== 按日期筛选（文件列表） ==========
+
+    /// <summary>日期筛选项（"全部日期" + 文件最后修改日期去重倒序）。RefreshFiles 时重建。</summary>
+    public ObservableCollection<string> DateFilterItems { get; } = new() { "全部日期" };
+
+    private string _selectedDateFilter = "全部日期";
+    /// <summary>文件列表按日期筛选（按文件最后修改日期）。切换时被筛掉的选中文件改选为筛选结果的第一个。</summary>
+    public string SelectedDateFilter
+    {
+        get => _selectedDateFilter;
+        set
+        {
+            if (!SetProperty(ref _selectedDateFilter, value)) return;
+            FilesView.Refresh();
+            if (_selectedFile == null || !MatchesDateFilter(_selectedFile))
+                SelectedFile = FilesView.Cast<LogFileItem>().FirstOrDefault();
+        }
+    }
+
+    private bool MatchesDateFilter(LogFileItem f) =>
+        SelectedDateFilter == "全部日期" || f.LastWriteTime.ToString("yyyy-MM-dd") == SelectedDateFilter;
+
+    /// <summary>按当前文件集合重建日期下拉（保留原选中，失效回退"全部日期"）。</summary>
+    private void RebuildDateFilterItems()
+    {
+        var keep = SelectedDateFilter;
+        DateFilterItems.Clear();
+        DateFilterItems.Add("全部日期");
+        foreach (var d in Files.Select(f => f.LastWriteTime.ToString("yyyy-MM-dd")).Distinct().OrderByDescending(d => d))
+            DateFilterItems.Add(d);
+        // 赋值触发 Filter 刷新；keep 失效时回退"全部日期"（不会隐藏任何文件，安全）
+        SelectedDateFilter = DateFilterItems.Contains(keep) ? keep : "全部日期";
+    }
 
     private LogFileItem? _selectedFile;
     public LogFileItem? SelectedFile
@@ -69,14 +105,16 @@ public sealed class LogBrowserViewModel : ViewModelBase
         FileListHintText = Files.Count == 0
             ? "未发现本机日志文件：请先在主页「设置」中配置 BGI 路径；也可以在下方下载远程成员的日志。"
             : "";
+        RebuildDateFilterItems();
         if (selectedPath != null)
         {
             var again = Files.FirstOrDefault(f => f.FullPath == selectedPath);
-            if (again != null) SelectedFile = again;
+            if (again != null && MatchesDateFilter(again)) SelectedFile = again;
+            else _selectedFile = null; // 文件消失或被日期筛选滤掉：交给下方默认选择重新挑一个
         }
-        // 无选中时默认打开最新文件（本机 BGI 日志在最上面），进来即有内容可看
+        // 无选中时默认打开最新文件（本机 BGI 日志在最上面；有日期筛选时取筛选结果的第一个），进来即有内容可看
         if (SelectedFile == null && Files.Count > 0)
-            SelectedFile = Files[0];
+            SelectedFile = FilesView.Cast<LogFileItem>().FirstOrDefault() ?? Files[0];
         // 实例数后台扫描（大文件耗时，不阻塞列表显示；结果一次性回贴，避免逐文件
         // BeginInvoke + 集合替换把 Dispatcher 队列淹没——文件多时这是打开页面"卡死"的来源之一）
         var snapshot = Files.ToList();
@@ -304,6 +342,8 @@ public sealed class LogBrowserViewModel : ViewModelBase
             };
             Files.Add(item);
         }
+        // 日期筛选可能把目标文件滤掉：跳转前先把筛选复位（"全部日期"不隐藏任何文件，复位安全）
+        if (!MatchesDateFilter(item)) SelectedDateFilter = "全部日期";
         if (SelectedFile?.FullPath != filePath)
         {
             _selectedFile = item; // 不走 setter，避免触发 LoadInitial（下面按需自己加载）

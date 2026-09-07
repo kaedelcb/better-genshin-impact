@@ -153,6 +153,10 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
     private string _recordStatus = "";
     public string RecordStatus { get => _recordStatus; set => SetProperty(ref _recordStatus, value); }
 
+    private bool _isLoadingHistory;
+    /// <summary>异常库历史加载中（大 JSONL 读取在后台线程，期间界面显示加载动画，避免"卡住"观感）。</summary>
+    public bool IsLoadingHistory { get => _isLoadingHistory; set => SetProperty(ref _isLoadingHistory, value); }
+
     /// <summary>打开某条异常记录对应的事发快照目录（规则名+时刻 ±5 秒匹配 incidents 目录；无匹配给提示）。</summary>
     public RelayCommand OpenRecordIncidentCommand => new(p =>
     {
@@ -201,6 +205,7 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
 
     private void ReloadHistory()
     {
+        IsLoadingHistory = true;
         Task.Run(() =>
         {
             var records = _service.LoadHistoryRecords();
@@ -211,6 +216,7 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
                 RebuildDateFilterItems();
                 RebuildRuleFilterItems();
                 RebuildFiltered();
+                IsLoadingHistory = false;
             });
         });
     }
