@@ -21,6 +21,8 @@ public sealed class StartupFlowRunner
     private readonly Func<string, Dictionary<string, object>?, Task<CommandResult>> _bgiExecutor;
     /// <summary>进入任务中心交接（null 或占位实现=任务中心未落地）。</summary>
     private readonly Func<Task> _enterTaskCenter;
+    /// <summary>定时触发器挂载入口（由宿主 VM 注入：负责登记定时状态、到点执行 FireSteps、取消）。</summary>
+    private readonly Action<StartupStep> _armTimer;
     private readonly Action<string> _log;
 
     /// <summary>游戏进程名（国服 Yuanshen / 国际服 GenshinImpact），与 ScreenshotService 口径一致。</summary>
@@ -29,10 +31,12 @@ public sealed class StartupFlowRunner
     public StartupFlowRunner(
         Func<string, Dictionary<string, object>?, Task<CommandResult>> bgiExecutor,
         Func<Task> enterTaskCenter,
+        Action<StartupStep> armTimer,
         Action<string> log)
     {
         _bgiExecutor = bgiExecutor;
         _enterTaskCenter = enterTaskCenter;
+        _armTimer = armTimer;
         _log = log;
     }
 
@@ -189,6 +193,21 @@ public sealed class StartupFlowRunner
                 {
                     _log($"[槲寄生] {indent}「{display}」：终止启动流程");
                     throw new FlowEndException();
+                }
+                case StartupStepKinds.TimerTrigger:
+                {
+                    if (!TimeOnly.TryParse(step.TriggerTime, out _))
+                    {
+                        _log($"[槲寄生] {indent}定时触发器「{display}」时间格式无效（{step.TriggerTime}），跳过");
+                        return false;
+                    }
+                    if (step.FireSteps.Count == 0)
+                    {
+                        _log($"[槲寄生] {indent}定时触发器「{display}」的「到点执行」链为空，不挂载");
+                        return false;
+                    }
+                    _armTimer(step);
+                    return true;
                 }
                 // 旧版遗留节点（目录已移除，旧配置仍可执行）
                 case StartupStepKinds.StartGroup:

@@ -33,8 +33,9 @@ public sealed class MistletoeViewModel : ViewModelBase
         _mainVm = mainVm;
         _store = new StartupFlowStore();
         _config = _store.Load();
-        _runner = new StartupFlowRunner(mainVm.ExecuteLocalBgiCommandAsync, EnterTaskCenterAsync, mainVm.AddLog);
+        _runner = new StartupFlowRunner(mainVm.ExecuteLocalBgiCommandAsync, EnterTaskCenterAsync, ArmTimer, mainVm.AddLog);
         RootChain = new StepChainViewModel(_config.Steps, this, parentCondition: null, branchName: "主流程");
+        ArmedTimers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasArmedTimers));
 
         _saveDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _saveDebounce.Tick += (_, _) =>
@@ -315,6 +316,84 @@ public sealed class MistletoeViewModel : ViewModelBase
         return Task.CompletedTask;
     }
 
+    // ================= 定时触发器（武装中的定时器列表） =================
+
+    /// <summary>当前定时中的触发器（运行态，不持久化；助手重启后需流程重跑才会重新挂载）。</summary>
+    public ObservableCollection<ArmedTimerViewModel> ArmedTimers { get; } = [];
+
+    public bool HasArmedTimers => ArmedTimers.Count > 0;
+
+    /// <summary>定时触发器节点执行到此：校验参数后挂载定时器（Runner 注入的委托）。</summary>
+    private void ArmTimer(StartupStep step)
+    {
+        if (!TimeOnly.TryParse(step.TriggerTime, out var t))
+        {
+            _mainVm.AddLog($"[槲寄生] 定时触发器时间格式无效（{step.TriggerTime}），未挂载");
+            return;
+        }
+        var fireAt = NextOccurrence(t);
+        var timer = new ArmedTimerViewModel(step, fireAt, this);
+        RunOnUi(() => ArmedTimers.Add(timer));
+        _mainVm.AddLog($"[槲寄生] 定时触发器「{StartupFlowRunner.DisplayName(step, 0)}」已挂载：{fireAt:MM-dd HH:mm} 触发「到点执行」链（{step.FireSteps.Count} 个节点{(step.RepeatDaily ? "，每天重复" : "" )}）");
+        _ = RunTimerAsync(timer);
+    }
+
+    /// <summary>今天的该时刻未到则今天，否则明天。</summary>
+    private static DateTime NextOccurrence(TimeOnly t)
+    {
+        var now = DateTime.Now;
+        var at = now.Date + t.ToTimeSpan();
+        return at > now ? at : at.AddDays(1);
+    }
+
+    private async Task RunTimerAsync(ArmedTimerViewModel timer)
+    {
+        try
+        {
+            var delay = timer.NextFireAt - DateTime.Now;
+            if (delay > TimeSpan.Zero)
+                await Task.Delay(delay, timer.Cts.Token);
+
+            RunOnUi(() => ArmedTimers.Remove(timer));
+            var step = timer.Step;
+            _mainVm.AddLog($"[槲寄生] 定时触发器「{StartupFlowRunner.DisplayName(step, 0)}」到点（{DateTime.Now:HH:mm}），开始执行「到点执行」链");
+            await _runner.RunAsync(step.FireSteps.ToList(), timer.Cts.Token);
+
+            // 每天重复：本轮跑完后重新挂载到明天的同一时刻（取消语义不走到这里）
+            if (step.RepeatDaily && TimeOnly.TryParse(step.TriggerTime, out var t))
+            {
+                var fireAt = NextOccurrence(t);
+                timer.Reset(fireAt);
+                RunOnUi(() => ArmedTimers.Add(timer));
+                _mainVm.AddLog($"[槲寄生] 定时触发器「{StartupFlowRunner.DisplayName(step, 0)}」已按「每天重复」重新挂载：{fireAt:MM-dd HH:mm}");
+                _ = RunTimerAsync(timer);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            _mainVm.AddLog($"[槲寄生] 定时触发器「{timer.Title}」已取消");
+        }
+        catch (Exception ex)
+        {
+            _mainVm.AddLog($"[槲寄生] 定时触发器「{timer.Title}」执行异常：{ex.Message}");
+        }
+    }
+
+    /// <summary>取消一个定时中的触发器（页面「取消」按钮）。</summary>
+    internal void CancelTimer(ArmedTimerViewModel timer)
+    {
+        RunOnUi(() => ArmedTimers.Remove(timer));
+        timer.Cts.Cancel();
+    }
+
+    /// <summary>ObservableCollection 的增删必须回 UI 线程（定时器回调可能在线程池线程上）。</summary>
+    private static void RunOnUi(Action action)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.CheckAccess()) action();
+        else dispatcher.Invoke(action);
+    }
+
     // ================= 保存 =================
 
     /// <summary>防抖保存（节点参数逐键编辑时走这里）。</summary>
@@ -410,6 +489,7 @@ public sealed class StartupStepViewModel : ViewModelBase
         OwnerChain = ownerChain;
         TrueChain = new StepChainViewModel(model.TrueSteps, owner, this, $"「{DisplayName}」的是分支");
         FalseChain = new StepChainViewModel(model.FalseSteps, owner, this, $"「{DisplayName}」的否分支");
+        FireChain = new StepChainViewModel(model.FireSteps, owner, this, $"「{DisplayName}」的到点执行链");
     }
 
     public StartupStep Model { get; }
@@ -423,8 +503,12 @@ public sealed class StartupStepViewModel : ViewModelBase
     /// <summary>条件不成立（否）子链。</summary>
     public StepChainViewModel FalseChain { get; }
 
+    /// <summary>定时触发器的「到点执行」子链（仅 timerTrigger 使用；环检测与跨链拖拽与分支链同机制）。</summary>
+    public StepChainViewModel FireChain { get; }
+
     public string Kind => Model.Kind;
     public bool IsCondition => Model.NodeType == "condition";
+    public bool IsTimerTrigger => Model.Kind == StartupStepKinds.TimerTrigger;
     public string Icon => StartupStepKinds.Find(Model.Kind)?.Icon ?? "▶";
     public string TypeName => StartupStepKinds.Find(Model.Kind)?.DisplayName ?? Model.Kind;
 
@@ -527,6 +611,20 @@ public sealed class StartupStepViewModel : ViewModelBase
         }
     }
 
+    /// <summary>触发时间 HH:mm（timerTrigger 用）。</summary>
+    public string TriggerTime
+    {
+        get => Model.TriggerTime;
+        set { Model.TriggerTime = value; Changed(); }
+    }
+
+    /// <summary>每天重复触发（timerTrigger 用）。</summary>
+    public bool RepeatDaily
+    {
+        get => Model.RepeatDaily;
+        set { Model.RepeatDaily = value; Changed(); }
+    }
+
     /// <summary>[旧版遗留] startGroup/startOneClick 节点的任务名（目录已移除，旧配置仍可编辑执行）。</summary>
     public string TaskName
     {
@@ -554,6 +652,8 @@ public sealed class StartupStepViewModel : ViewModelBase
         StartupStepKinds.RunCmd => string.IsNullOrWhiteSpace(Model.Arguments) ? "（未填写命令）" : Model.Arguments,
         StartupStepKinds.KillProgram => string.IsNullOrWhiteSpace(Model.ProcessName) ? "（未填写进程名）" : $"结束进程 {Model.ProcessName}",
         StartupStepKinds.Wait => $"等待 {Model.WaitSeconds} 秒",
+        StartupStepKinds.TimerTrigger =>
+            $"{Model.TriggerTime} 触发「到点执行」链（{Model.FireSteps.Count} 个节点{(Model.RepeatDaily ? "，每天重复" : "")}）",
         StartupStepKinds.EnterTaskCenter => "交接给任务中心执行任务序列",
         StartupStepKinds.EndFlow => "立即终止整条启动流程",
         StartupStepKinds.StartGroup => string.IsNullOrWhiteSpace(Model.TaskName) ? "（旧版节点 · 未填写配置组名）" : $"（旧版节点）配置组「{Model.TaskName}」",
@@ -566,5 +666,55 @@ public sealed class StartupStepViewModel : ViewModelBase
         if (extraProperty != null) OnPropertyChanged(extraProperty);
         OnPropertyChanged(nameof(Summary));
         _owner.RequestSave();
+    }
+}
+
+/// <summary>
+/// 一个已挂载（定时中）的定时触发器的视图模型：页面「定时中的触发器」卡片的行项。
+/// 运行态对象，不持久化——助手重启后定时器全部消失，需启动流程重跑才会重新挂载（在冒险日志有说明）。
+/// </summary>
+public sealed class ArmedTimerViewModel : ViewModelBase
+{
+    private readonly MistletoeViewModel _owner;
+
+    public ArmedTimerViewModel(StartupStep step, DateTime nextFireAt, MistletoeViewModel owner)
+    {
+        Step = step;
+        _owner = owner;
+        NextFireAt = nextFireAt;
+    }
+
+    /// <summary>对应的定时触发器节点模型（到点时执行其 FireSteps）。</summary>
+    public StartupStep Step { get; }
+
+    /// <summary>取消令牌（取消按钮 / 流程无关，独立取消这个定时器）。</summary>
+    public CancellationTokenSource Cts { get; private set; } = new();
+
+    private DateTime _nextFireAt;
+    public DateTime NextFireAt
+    {
+        get => _nextFireAt;
+        private set
+        {
+            if (SetProperty(ref _nextFireAt, value))
+                OnPropertyChanged(nameof(StatusLine));
+        }
+    }
+
+    /// <summary>节点显示名（日志与列表用）。</summary>
+    public string Title => StartupFlowRunner.DisplayName(Step, 0);
+
+    /// <summary>状态行：⏰ 节点名 — MM-dd HH:mm 触发（每天重复）。</summary>
+    public string StatusLine =>
+        $"{Title} — {NextFireAt:MM-dd HH:mm} 触发「到点执行」链（{Step.FireSteps.Count} 个节点{(Step.RepeatDaily ? "，每天重复" : "")}）";
+
+    public RelayCommand CancelCommand => new(_ => _owner.CancelTimer(this));
+
+    /// <summary>每天重复时复用同一行项重新挂载（换发新 CTS，更新下次触发时间）。</summary>
+    public void Reset(DateTime nextFireAt)
+    {
+        Cts.Dispose();
+        Cts = new CancellationTokenSource();
+        NextFireAt = nextFireAt;
     }
 }

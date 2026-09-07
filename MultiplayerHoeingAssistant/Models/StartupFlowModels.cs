@@ -62,6 +62,10 @@ public class StartupStep
     [JsonPropertyName("falseSteps")]
     public List<StartupStep> FalseSteps { get; set; } = [];
 
+    /// <summary>到点执行的子链（timerTrigger 用；流程跑到该节点时挂载定时器，到点执行此链）。</summary>
+    [JsonPropertyName("fireSteps")]
+    public List<StartupStep> FireSteps { get; set; } = [];
+
     // ===== 条件判断参数 =====
 
     /// <summary>期望进程处于运行状态（bgiRunning/gameRunning/processRunning 用）：true=正在运行才通过，false=未运行才通过。</summary>
@@ -98,6 +102,14 @@ public class StartupStep
     [JsonPropertyName("waitSeconds")]
     public int WaitSeconds { get; set; } = 10;
 
+    /// <summary>触发时间 HH:mm（timerTrigger 用；今天的该时刻已过则顺延到明天）。</summary>
+    [JsonPropertyName("triggerTime")]
+    public string TriggerTime { get; set; } = "08:00";
+
+    /// <summary>是否每天重复触发（timerTrigger 用；false=只触发一次）。</summary>
+    [JsonPropertyName("repeatDaily")]
+    public bool RepeatDaily { get; set; } = false;
+
     /// <summary>[旧版遗留] BGI 任务名（startGroup/startOneClick 用）。
     /// 2026-09-08 起这两个类型已从节点目录移除（启动中心不再直接配 BGI 任务，由「进入任务中心执行」节点接管），
     /// 字段与 Runner 分支保留仅为兼容旧配置。</summary>
@@ -132,6 +144,8 @@ public static class StartupStepKinds
     public const string EnterTaskCenter = "enterTaskCenter";
     /// <summary>结束流程：立即终止整条启动流程（含所有外层链）。</summary>
     public const string EndFlow = "endFlow";
+    /// <summary>定时触发器：流程跑到此节点时挂载定时器，到指定时间执行 FireSteps 子链；定时中页面显示状态、可取消。</summary>
+    public const string TimerTrigger = "timerTrigger";
 
     // ---- 旧版遗留（不在目录中，Runner 保留执行分支兼容旧配置） ----
     public const string StartGroup = "startGroup";
@@ -157,6 +171,7 @@ public static class StartupStepKinds
         new(RunCmd, "action", "执行 CMD 命令", "▶", "以 cmd /c 隐藏窗口执行一条命令，不等待结果"),
         new(Wait, "action", "等待", "▶", "流程内延时 N 秒（等程序就绪时常用）"),
         new(EnterTaskCenter, "action", "进入任务中心执行", "➤", "环境准备完毕，交接给任务中心执行任务序列（任务中心规划中，当前为占位节点）"),
+        new(TimerTrigger, "action", "定时触发器", "⏰", "挂载定时器，到指定时间执行「到点执行」子链；定时中显示状态、可随时取消"),
         new(EndFlow, "action", "结束流程", "■", "立即终止整条启动流程（常用于「否」分支收尾）"),
     ];
 
@@ -187,6 +202,9 @@ public static class StartupStepKinds
                 break;
             case Wait:
                 step.WaitSeconds = 10;
+                break;
+            case TimerTrigger:
+                step.TriggerTime = "08:00";
                 break;
         }
         return step;
