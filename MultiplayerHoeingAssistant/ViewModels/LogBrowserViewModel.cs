@@ -69,7 +69,10 @@ public sealed class LogBrowserViewModel : ViewModelBase
     private bool MatchesDateFilter(LogFileItem f) =>
         SelectedDateFilter == "全部日期" || f.LastWriteTime.ToString("yyyy-MM-dd") == SelectedDateFilter;
 
-    /// <summary>按当前文件集合重建日期下拉（保留原选中，失效回退"全部日期"）。</summary>
+    /// <summary>首次重建日期下拉时默认选中"今天"（当天无文件则留"全部日期"）；之后刷新保留用户选择。</summary>
+    private bool _dateFilterInitialized;
+
+    /// <summary>按当前文件集合重建日期下拉（首次默认今天；之后保留原选中，失效回退"全部日期"）。</summary>
     private void RebuildDateFilterItems()
     {
         var keep = SelectedDateFilter;
@@ -78,6 +81,13 @@ public sealed class LogBrowserViewModel : ViewModelBase
         foreach (var d in Files.Select(f => f.LastWriteTime.ToString("yyyy-MM-dd")).Distinct().OrderByDescending(d => d))
             DateFilterItems.Add(d);
         // 赋值触发 Filter 刷新；keep 失效时回退"全部日期"（不会隐藏任何文件，安全）
+        if (!_dateFilterInitialized)
+        {
+            _dateFilterInitialized = true;
+            var today = DateTime.Now.ToString("yyyy-MM-dd");
+            SelectedDateFilter = DateFilterItems.Contains(today) ? today : "全部日期";
+            return;
+        }
         SelectedDateFilter = DateFilterItems.Contains(keep) ? keep : "全部日期";
     }
 

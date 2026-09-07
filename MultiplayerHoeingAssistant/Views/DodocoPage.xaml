@@ -516,7 +516,7 @@
                                           ItemsSource="{Binding Browser.DateFilterItems}"
                                           SelectedItem="{Binding Browser.SelectedDateFilter}"
                                           Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
-                                          ToolTip="按日期筛选文件列表（按文件最后修改日期；不影响远程日志下载）"/>
+                                          ToolTip="按日期筛选文件列表（默认当天；按文件最后修改日期，不影响远程日志下载）"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                 <Button Content="⟳" Style="{DynamicResource TextAction}" FontSize="13"
