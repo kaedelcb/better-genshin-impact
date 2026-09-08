@@ -743,6 +743,13 @@ internal sealed class InstanceRequestHandler
                             if (cfg != null)
                             {
                                 vm.SelectedConfig = cfg;
+                                // 同步界面选中配置名：OnOneKeyExecute→InitConfigList 会按
+                                // SelectedOneDragonFlowConfigName 重选 SelectedConfig（对象被替换），
+                                // 不同步时远程下发的 configName ≠ 界面当前选中会跑错配置。
+                                // 命令行冷启动 --startOneDragon 走 OneDragonFlowViewModel 自身的
+                                // OnConfigDropDownChanged（内部已同步该字段），不受影响。
+                                if (BetterGenshinImpact.GameTask.TaskContext.Instance().Config.SelectedOneDragonFlowConfigName != configName)
+                                    BetterGenshinImpact.GameTask.TaskContext.Instance().Config.SelectedOneDragonFlowConfigName = configName;
                                 // 设置 startFromIndex 后先持久化到磁盘，再调用 OnOneKeyExecute。
                                 // OnOneKeyExecute 开头会调 InitConfigList() 重新从磁盘反序列化配置，
                                 // 如果不先持久化，之前设置的 cfg.NextTaskIndex 会因对象被替换而丢失。

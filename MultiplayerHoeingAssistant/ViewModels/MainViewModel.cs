@@ -5913,7 +5913,11 @@ public class MainViewModel : INotifyPropertyChanged
             cancelBtn.IsEnabled = false;
 
             if (listBox.SelectedItem is TaskListItemViewModel sel)
-                result = sel.Index;
+                // 一条龙传真实任务键（TaskEnabledList 键）：BGI 端按真实键比对 NextTaskIndex，
+                // 位置序号在键有空洞/乱序时必不命中（打 warning 后从头开始）。
+                // TaskKey<=0（"从头开始"项/无真实键）回退位置序号，与 0e2a0828 的回退纪律一致。
+                // 配置组分支保持传位置序号不变（BGI 端有按位置重排兜底）。
+                result = isOneClick && sel.TaskKey > 0 ? sel.TaskKey : sel.Index;
             confirmed = true;
 
             // 收集启用状态变更并下发

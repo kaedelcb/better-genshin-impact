@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using MultiplayerHoeingAssistant.Models;
 
 namespace MultiplayerHoeingAssistant.Services;
@@ -27,6 +28,26 @@ public class CommandExecutor
     private static readonly TaskConflictPolicySettings FixedKeyPolicy = new();
     /// <summary>本批次是否已通过 RestartBgi 回退重启过 BGI（批次级状态，由上游批次循环管理生命周期）。</summary>
     private bool _hasRestartedThisBatch;
+
+    /// <summary>[弹窗竞态守卫] 在途 config.set_task_enabled 写入计数。
+    /// 背景：OnRemoteCommand 是 Action 事件 async void 并发分发，弹窗下发的多条 set_task_enabled
+    /// 与紧随的 start_group/start_oneclick 会并发执行，启动动作可能读到旧启用状态。
+    /// 纪律：SetTaskEnabledAsync 进入时 ++、finally --；StartGroupAsync/StartOneClickAsync 在
+    /// suspend/启动动作之前先等计数归零（窄化顺序守卫，只约束 set→start 的相对顺序）。
+    /// 绝不做全量串行化——task.start 会阻塞到组执行完（数小时），stop 必须能随时打断。</summary>
+    private int _inflightConfigWrites;
+
+    /// <summary>[弹窗竞态守卫] 等待在途 set_task_enabled 落盘：200ms 轮询，上限 10s。
+    /// 超时记日志继续（不阻塞启动）——防 set 路径卡死（IPC 挂起等）拖累启动。</summary>
+    private async Task WaitConfigWritesDrainedAsync(string desc)
+    {
+        if (Volatile.Read(ref _inflightConfigWrites) <= 0) return;
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (Volatile.Read(ref _inflightConfigWrites) > 0 && DateTime.UtcNow < deadline)
+            await Task.Delay(200);
+        if (Volatile.Read(ref _inflightConfigWrites) > 0)
+            Log($"[弹窗竞态守卫] {desc} 等待 set_task_enabled 落盘超时（10s），仍有 {Volatile.Read(ref _inflightConfigWrites)} 条在途，继续启动");
+    }
 
     /// <summary>重置批次状态。由上游在新的一批开始时调用：批次循环（如 OnAllReadyConfirmedInternal）、
     /// 以及每次新的用户下发边界（OnRemoteCommand 接收端 / ExecuteLocalCommandAsync 本机执行 / 快捷指令弹窗本机执行）。
@@ -283,6 +304,9 @@ public class CommandExecutor
     /// </summary>
     private async Task<CommandResult> StartGroupAsync(string groupName, int startFromIndex, int generation = 0, List<string>? batchGroupNames = null)
     {
+        // [弹窗竞态守卫] 先等弹窗下发的 set_task_enabled 全部落盘，再 suspend/启动，防读到旧启用状态
+        await WaitConfigWritesDrainedAsync($"start_group「{groupName}」");
+
         // [DUPLAUNCH_PROBE] 探针：记录 start_group 命令触发路径（IPC 成功 vs 回退杀进程重启）
         ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] start_group 收到 groupName={groupName} startFromIndex={startFromIndex} generation={generation}");
 
@@ -436,6 +460,9 @@ public class CommandExecutor
     {
         // [任务策略] 按键门控（同 StartGroupAsync，固定行为：立即执行 + 执行完停止）：
         // 本机忙且无既有中断上下文时 suspend 抢占强制 v2；已有中断上下文走无损拒绝；空闲走原路径。
+        // [弹窗竞态守卫] 同 StartGroupAsync：先等 set_task_enabled 落盘，再 suspend/启动
+        await WaitConfigWritesDrainedAsync($"start_oneclick「{configName}」");
+
         if (await ShouldPreemptKeyPressAsync($"一条龙「{configName}」"))
         {
             return await StartWithPreemptionAsync(FixedKeyPolicy, null, configName, startFromIndex, generation);
@@ -602,6 +629,8 @@ public class CommandExecutor
     /// <summary>设置任务启用状态：IPC 发 config.set_task_enabled</summary>
     private async Task<CommandResult> SetTaskEnabledAsync(string groupName, string configName, int taskIndex, bool enabled)
     {
+        // [弹窗竞态守卫] 计入在途配置写入，启动命令会等计数归零再执行（见 WaitConfigWritesDrainedAsync）
+        Interlocked.Increment(ref _inflightConfigWrites);
         try
         {
             using var ipcClient = new IpcClient();
@@ -617,6 +646,10 @@ public class CommandExecutor
         catch (Exception ex)
         {
             return new CommandResult { Status = "failed", Message = $"IPC 设置启用状态失败: {ex.Message}" };
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _inflightConfigWrites);
         }
     }
 

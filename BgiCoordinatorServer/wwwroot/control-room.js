@@ -703,8 +703,13 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
             const enabled = statusInfo
                 ? (isOneClick ? (statusInfo.enabled !== false) : (statusInfo.status !== 'Disabled'))
                 : true;
+            // 真实任务键：仅一条龙采信 config.list 条目自带的 index（TaskEnabledList 键，BGI 端按键比对起点）；
+            // 配置组保持位置序号（BGI 端两个消费端都先把 Index 按位置重排为 1..N 再匹配，只认位置）。
+            // 对齐 WPF 端 MainViewModel.ShowStartFromDialog 的三元分支纪律。
+            const taskKey = isOneClick && statusInfo && typeof statusInfo.index === 'number' && statusInfo.index > 0
+                ? statusInfo.index : i + 1;
             options.push({
-                index: i + 1,
+                index: taskKey,
                 text: `${i + 1}. ${t}`,
                 sub: '',
                 isTask: true,
@@ -768,7 +773,12 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
         });
     });
 
-    overlay.querySelector('#tskOk').addEventListener('click', () => {
+    overlay.querySelector('#tskOk').addEventListener('click', async () => {
+        // await 期间禁用按钮防重入；用户点取消关窗后 continuation 不得再发 start
+        const okBtn = overlay.querySelector('#tskOk');
+        const cancelBtn = overlay.querySelector('#tskCancel');
+        okBtn.disabled = true;
+        cancelBtn.disabled = true;
         // 先发启用状态变更
         const changes = {};
         // 用 Set 去重（同一索引可能多次 change）
@@ -780,22 +790,21 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
             }
         }
         // 也检查所有当前 checkbox 状态，与原始态对比
+        // 注意 data-index 是真实任务键（可能 ≠ 位置序号），原始态按 options 里记录的 enabled 取
         overlay.querySelectorAll('.task-checkbox').forEach(cb => {
             const idx = parseInt(cb.dataset.index);
             if (!seen.has(idx)) {
-                if (tasksWithStatus && Array.isArray(tasksWithStatus) && idx - 1 < tasksWithStatus.length) {
-                    const original = isOneClick
-                        ? tasksWithStatus[idx - 1]?.enabled !== false
-                        : tasksWithStatus[idx - 1]?.status !== 'Disabled';
-                    if (cb.checked !== original) {
-                        seen.add(idx);
-                        changes[idx] = cb.checked;
-                    }
+                const opt = options.find(o => o.isTask && o.index === idx);
+                if (opt && cb.checked !== opt.enabled) {
+                    seen.add(idx);
+                    changes[idx] = cb.checked;
                 }
             }
         });
 
-        // 逐个下发启用状态变更
+        // 逐个下发启用状态变更；await 全部完成后再发 start——
+        // fire-and-forget 会让 start 抢在 set_task_enabled 写盘前读旧状态（竞态）
+        const savePromises = [];
         for (const [taskIdx, en] of Object.entries(changes)) {
             const changeCmd = makeCmd('set_task_enabled', {
                 [isOneClick ? 'configName' : 'groupName']: configName,
@@ -803,13 +812,16 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
                 enabled: en
             });
             changeCmd.target = targets;
-            sendRemoteCommand(changeCmd).catch(err => log('启用状态变更失败: ' + err.message));
+            savePromises.push(sendRemoteCommand(changeCmd).catch(err => log('启用状态变更失败: ' + err.message)));
         }
-        if (Object.keys(changes).length > 0) {
-            log(`已对 ${memberName} 更新 ${Object.keys(changes).length} 个任务的启用状态`);
+        if (savePromises.length > 0) {
+            await Promise.all(savePromises);
+            log(`已对 ${memberName} 更新 ${savePromises.length} 个任务的启用状态`);
         }
+        // await 期间用户可能已点取消关窗（按钮禁用只是防重入，窗口仍可能被 Esc/后续改动移除）
+        if (!overlay.isConnected) return;
 
-        // 发启动命令
+        // 发启动命令（startFromIndex 传真实任务键，BGI 端一条龙按 TaskEnabledList 键比对）
         const cmd = makeCmd(isOneClick ? 'start_oneclick' : 'start_group', {
             [isOneClick ? 'configName' : 'groupName']: configName,
             startFromIndex: selectedIndex
