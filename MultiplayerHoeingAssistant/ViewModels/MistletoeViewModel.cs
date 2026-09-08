@@ -377,6 +377,21 @@ public sealed class MistletoeViewModel : ViewModelBase
 
     // ================= 执行路径可视化（节点运行态） =================
 
+    private bool _hasAnyRunState;
+    /// <summary>当前有任何节点带运行态标记（控制「清除路径显示」按钮显隐）。</summary>
+    public bool HasAnyRunState
+    {
+        get => _hasAnyRunState;
+        private set => SetProperty(ref _hasAnyRunState, value);
+    }
+
+    /// <summary>手动清除本次执行留下的路径显示（节点状态徽标、分支灰显全部复位）。</summary>
+    public RelayCommand ClearRunStateDisplayCommand => new(_ =>
+    {
+        ResetRunStates();
+        _mainVm.AddLog("[槲寄生] 已清除执行路径显示");
+    });
+
     /// <summary>
     /// Runner 的节点状态回报入口（可能在线程池线程上）：定位对应节点 VM 并更新运行态。
     /// 条件节点出结果时联动：走过的分支自动展开（可在总控关掉）、没走的分支灰显。
@@ -389,6 +404,7 @@ public sealed class MistletoeViewModel : ViewModelBase
             if (vm == null) return; // 节点在 VM 树里找不到（理论上不该发生），只丢可视化不影响执行
             vm.RunState = state;
             vm.RunStateNote = note ?? "";
+            HasAnyRunState = true;
             if (state == NodeRunState.CondTrue || state == NodeRunState.CondFalse)
             {
                 var tookTrue = state == NodeRunState.CondTrue;
@@ -417,6 +433,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     private void ResetRunStates()
     {
         ResetRunStatesRecursive(RootChain);
+        HasAnyRunState = false;
     }
 
     private static void ResetRunStatesRecursive(StepChainViewModel chain)

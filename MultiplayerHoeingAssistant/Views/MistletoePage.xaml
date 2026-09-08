@@ -1172,6 +1172,11 @@
                                                   ToolTip="执行时自动展开实际走到的分支，没走的分支灰显"/>
                                         <TextBlock Text="执行时展开走过的分支" FontSize="11" Foreground="{DynamicResource Dim}"
                                                    VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                        <Button Content="⟲ 清除路径显示" Style="{DynamicResource BtnGhost}"
+                                                Padding="10,3" FontSize="11" Margin="0,0,6,0"
+                                                Command="{Binding ClearRunStateDisplayCommand}"
+                                                Visibility="{Binding HasAnyRunState, Converter={StaticResource BoolToVis}}"
+                                                ToolTip="把本次执行留下的状态徽标、卡片描边和分支灰显全部复位"/>
                                         <Button Content="{Binding AllBranchesToggleText}" Style="{DynamicResource BtnGhost}"
                                                 Padding="10,3" FontSize="11"
                                                 Command="{Binding ToggleAllBranchesCommand}" ToolTip="一键展开/收起所有条件节点的分支区域"/>
