@@ -5892,13 +5892,18 @@ public class MainViewModel : INotifyPropertyChanged
         for (var i = 0; i < options.Count; i++)
         {
             var isFirst = i == 0;
-            // 获取启用状态
+            // 获取启用状态与真实任务键（config.list 条目自带 index：配置组=项目 Index，一条龙=TaskEnabledList 键）
             var enabled = true;
+            var taskKey = i; // 回退：位置序号
             if (!isFirst && tasksWithStatus != null && i - 1 < tasksWithStatus.Count)
             {
                 var statusInfo = tasksWithStatus[i - 1];
                 if (statusInfo is System.Text.Json.JsonElement je)
                 {
+                    // 仅采信 >0 的 index：老配置组文件可能持久化了全 0 的 index，
+                    // 采信 0 反而连 BGI 端"重排后按位置匹配"的兜底都配不上
+                    if (je.TryGetProperty("index", out var idxEl) && idxEl.TryGetInt32(out var realKey) && realKey > 0)
+                        taskKey = realKey;
                     if (isOneClick)
                         enabled = je.TryGetProperty("enabled", out var enEl) ? enEl.GetBoolean() : true;
                     else
@@ -5908,6 +5913,7 @@ public class MainViewModel : INotifyPropertyChanged
             listBox.Items.Add(new TaskListItemViewModel
             {
                 Index = i,
+                TaskKey = taskKey,
                 Text = isFirst ? options[i] : $"{i}. {options[i]}",
                 SubText = isFirst ? "第一个任务" : "",
                 IsTask = !isFirst,
@@ -5966,8 +5972,13 @@ public class MainViewModel : INotifyPropertyChanged
 
         int result = 0;
         bool confirmed = false;
-        okBtn.Click += (_, _) =>
+        okBtn.Click += async (_, _) =>
         {
+            // 保存期间禁用按钮：防止 await 未完成时用户重复点击确定/取消，
+            // 导致重复下发或取消后 continuation 在已关闭窗口上设 DialogResult 抛异常
+            okBtn.IsEnabled = false;
+            cancelBtn.IsEnabled = false;
+
             if (listBox.SelectedItem is TaskListItemViewModel sel)
                 result = sel.Index;
             confirmed = true;
@@ -5992,13 +6003,18 @@ public class MainViewModel : INotifyPropertyChanged
                     }
                     if (item.IsEnabled != originalEnabled)
                     {
-                        changes[item.Index] = item.IsEnabled;
+                        // 用真实任务键（TaskKey）下发，不用位置序号——一条龙删过/重排过任务后两者会错位
+                        changes[item.TaskKey] = item.IsEnabled;
                     }
                 }
             }
 
             if (changes.Count > 0)
             {
+                // 等所有保存完成再关弹窗：调用方在弹窗返回后立即发 start_group/start_oneclick，
+                // fire-and-forget 会让 task.start 抢在 set_task_enabled 写盘前读旧状态（竞态）。
+                // 本地 IPC 结果在 ExecuteLocalCommandAsync 内逐条打日志；远程由接收端 ack 回日志。
+                var saveTasks = new List<Task>();
                 foreach (var kv in changes)
                 {
                     var param = new Dictionary<string, object>
@@ -6007,12 +6023,22 @@ public class MainViewModel : INotifyPropertyChanged
                         { "taskIndex", kv.Key },
                         { "enabled", kv.Value }
                     };
-                    _ = ExecuteLocalCommandAsync("set_task_enabled", param, targetUids);
+                    saveTasks.Add(ExecuteLocalCommandAsync("set_task_enabled", param, targetUids));
                 }
-                AddLog($"已更新 {changes.Count} 个任务的启用状态");
+                try
+                {
+                    await Task.WhenAll(saveTasks);
+                    AddLog($"已更新 {changes.Count} 个任务的启用状态");
+                }
+                catch (Exception ex)
+                {
+                    AddLog($"保存任务启用状态异常: {ex.Message}");
+                }
             }
 
-            dialog.DialogResult = true;
+            // 窗口可能已被用户用 X 关闭（await 期间），只在窗口仍在显示时设置 DialogResult
+            if (dialog.IsLoaded)
+                dialog.DialogResult = true;
         };
         cancelBtn.Click += (_, _) => { dialog.DialogResult = false; };
         dialog.ShowDialog();
@@ -6542,6 +6568,14 @@ public class RelayCommand : System.Windows.Input.ICommand
 public class TaskListItemViewModel
 {
     public int Index { get; set; }
+
+    /// <summary>
+    /// 真实任务键：配置组 = ScriptGroupProject.Index（文件持久化值），一条龙 = TaskEnabledList 的键。
+    /// 取自 config.list 返回条目的 index 字段；无效（≤0）或缺失时回退为位置序号 Index。
+    /// set_task_enabled 下发必须用它而不是位置序号——一条龙删除/重排后键有空洞，位置序号会错位或静默落空。
+    /// </summary>
+    public int TaskKey { get; set; }
+
     public string Text { get; set; } = "";
     public string SubText { get; set; } = "";
     public bool IsTask { get; set; }

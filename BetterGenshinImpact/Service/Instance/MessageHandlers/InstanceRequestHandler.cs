@@ -1121,6 +1121,10 @@ internal sealed class InstanceRequestHandler
 
                 var json = await File.ReadAllTextAsync(groupPath);
                 var group = BetterGenshinImpact.Core.Script.Group.ScriptGroup.FromJson(json);
+                // 与 HandleTaskStart 同款兜底：FromJson 读出的 Index 可能为 0 或无效（老文件），
+                // 先按位置重排为 1-based 再匹配，同时把修正后的 Index 随写盘固化回文件。
+                for (var idx = 0; idx < (group.Projects?.Count ?? 0); idx++)
+                    group.Projects[idx].Index = idx + 1;
                 var project = group.Projects?.FirstOrDefault(p => p.Index == taskIndex);
                 if (project == null)
                     return InstanceIpcEnvelope.Failure(request, "not_found", $"任务索引 {taskIndex} 未找到");
@@ -1142,8 +1146,11 @@ internal sealed class InstanceRequestHandler
                 if (config == null)
                     return InstanceIpcEnvelope.Failure(request, "parse_failed", "解析一条龙配置失败");
 
-                if (config.TaskEnabledList.ContainsKey(taskIndex))
-                    config.TaskEnabledList[taskIndex] = (enabled, config.TaskEnabledList[taskIndex].Item2);
+                // 键缺失必须显式失败：原实现静默跳过却返回 success，调用方无从察觉保存未生效
+                if (!config.TaskEnabledList.ContainsKey(taskIndex))
+                    return InstanceIpcEnvelope.Failure(request, "not_found",
+                        $"一条龙任务索引 {taskIndex} 未找到（现有键: {string.Join(",", config.TaskEnabledList.Keys.OrderBy(k => k))}）");
+                config.TaskEnabledList[taskIndex] = (enabled, config.TaskEnabledList[taskIndex].Item2);
 
                 var newJson = Newtonsoft.Json.JsonConvert.SerializeObject(config, Newtonsoft.Json.Formatting.Indented);
                 // 写文件时重试：一条龙正在运行时，JSON 文件可能被 BGI 进程锁定
@@ -1168,6 +1175,33 @@ internal sealed class InstanceRequestHandler
             else
             {
                 return InstanceIpcEnvelope.Failure(request, "invalid_param", "groupName 和 configName 均为空");
+            }
+
+            // 写盘成功后刷新 BGI 内存态，让调度器/一条龙页面的勾选立即反映变更。
+            // 任务运行中跳过（运行循环会逐条读 SelectedConfig.TaskEnabledList，中途换对象有风险；
+            // 文件已保存，下次启动/进页面自然生效）。fire-and-forget，不阻塞 IPC 响应。
+            if (BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount > 0)
+            {
+                _ = Application.Current?.Dispatcher.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        if (!string.IsNullOrEmpty(groupName))
+                        {
+                            App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.ScriptControlViewModel>()
+                                ?.ReloadScriptGroups();
+                        }
+                        else
+                        {
+                            App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.OneDragonFlowViewModel>()
+                                ?.InitConfigList();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "set_task_enabled 后刷新内存态失败（文件已保存）");
+                    }
+                });
             }
 
             return InstanceIpcEnvelope.Response(request, new { status = "saved", groupName, configName, taskIndex, enabled });
