@@ -18,6 +18,8 @@ public class CommandExecutor
     private readonly Func<bool>? _isBatchInFlight;
     /// <summary>[切片7] 队列式任务终态事件等待的兜底超时（事件经 SDK 断线续传不丢，超时仅为防永久挂起）。</summary>
     private static readonly TimeSpan TaskTerminalWaitTimeout = TimeSpan.FromHours(24);
+    /// <summary>[终态可拉取] 终态事件等待切片长度：每切片超时即拉一次 ext.task.queueStatus 校准（安全网轮询）。</summary>
+    private static readonly TimeSpan TerminalStatusPollInterval = TimeSpan.FromSeconds(5);
     /// <summary>[任务策略] 快捷键启动任务后等待其结束的轮询间隔。</summary>
     private static readonly TimeSpan TaskPollInterval = TimeSpan.FromSeconds(5);
     /// <summary>[任务策略] 快捷键下发后等待 task.status 变 running 的检测窗口（热键可能不启动任务，超时按"未启动"直接收尾）。</summary>
@@ -558,22 +560,68 @@ public class CommandExecutor
             }
 
             ProbeLog($"[CommandExecutor][切片7] ext.task.start 已入队 {desc} status={submit.Status} taskHandle={submit.TaskHandle} queuePosition={submit.QueuePosition}");
-            var terminal = await waiter.WaitForHandleAsync(submit.TaskHandle, TaskTerminalWaitTimeout);
-            if (terminal == null)
+
+            // [终态可拉取 2026-09-09] 事件是快速路径、轮询是安全网：终态事件单帧丢失
+            // （推送乱序被 revision 过滤误吞等，实机确诊）曾让批次循环在此永久挂起、
+            // 后续配置组全部被吞。每 5s 切片等待，切片超时主动拉 queueStatus 校准；
+            // 事件先达则立即返回（常态零轮询开销），事件丢失时 5s 内自愈。
+            var waitStartedUtc = DateTime.UtcNow;
+            while (DateTime.UtcNow - waitStartedUtc < TaskTerminalWaitTimeout)
             {
-                return new CommandResult { Status = "failed", Message = $"{desc} 等待执行结果超时（{TaskTerminalWaitTimeout.TotalHours}h 兜底），taskHandle={submit.TaskHandle}" };
+                var terminal = await waiter.WaitForHandleAsync(submit.TaskHandle, TerminalStatusPollInterval);
+                if (terminal != null)
+                {
+                    return terminal.Kind switch
+                    {
+                        BgiTaskTerminalKind.Completed when terminal.Cancelled =>
+                            new CommandResult { Status = "cancelled", Message = $"{desc} 执行中被取消" },
+                        BgiTaskTerminalKind.Completed =>
+                            new CommandResult { Status = "success", Message = $"{desc} 已启动并执行完成（队列通道）" },
+                        BgiTaskTerminalKind.QueueCancelled =>
+                            new CommandResult { Status = "cancelled", Message = $"{desc} 排队中被取消" },
+                        _ => new CommandResult { Status = "failed", Message = $"{desc} 执行失败（{terminal.ErrorCode ?? "unknown"}）：{terminal.ErrorMessage ?? "无详情"}" },
+                    };
+                }
+
+                // 安全网轮询：终态事件 5s 未到达，拉取队列项生命周期校准。
+                // null = 通道瞬态失败/对端老 BGI 无此操作 → 下一切片再试（不误判）。
+                BgiTaskQueueStatus? queueStatus = null;
+                try
+                {
+                    queueStatus = await ext.QueryTaskQueueStatusAsync(submit.TaskHandle);
+                }
+                catch (Exception pollEx) when (pollEx is InvalidOperationException or System.IO.IOException
+                                               or TimeoutException or OperationCanceledException
+                                               or System.Text.Json.JsonException)
+                {
+                    // 通道瞬态失败：下一切片再试
+                }
+
+                switch (queueStatus?.Status)
+                {
+                    case "completed":
+                        ProbeLog($"[CommandExecutor][切片7] 终态事件未到达，安全网轮询命中 {desc} queueStatus=completed cancelled={queueStatus.Cancelled} taskHandle={submit.TaskHandle}（事件帧丢失已自愈）");
+                        return queueStatus.Cancelled
+                            ? new CommandResult { Status = "cancelled", Message = $"{desc} 执行中被取消" }
+                            : new CommandResult { Status = "success", Message = $"{desc} 已启动并执行完成（队列通道，轮询校准）" };
+                    case "queueCancelled":
+                        ProbeLog($"[CommandExecutor][切片7] 终态事件未到达，安全网轮询命中 {desc} queueStatus=queueCancelled taskHandle={submit.TaskHandle}（事件帧丢失已自愈）");
+                        return new CommandResult { Status = "cancelled", Message = $"{desc} 排队中被取消" };
+                    case "failed":
+                        ProbeLog($"[CommandExecutor][切片7] 终态事件未到达，安全网轮询命中 {desc} queueStatus=failed taskHandle={submit.TaskHandle}（事件帧丢失已自愈）");
+                        return new CommandResult { Status = "failed", Message = $"{desc} 执行失败（{queueStatus.ErrorCode ?? "unknown"}）：{queueStatus.ErrorMessage ?? "无详情"}" };
+                    case "not_found":
+                        // 句柄在 BGI 侧不存在：BGI 已重启（任务随进程终止）或句柄从未存在。
+                        // 按失败返回让批次循环继续后续组（各组独立提交，新 BGI 上可正常执行）。
+                        ProbeLog($"[CommandExecutor][切片7] 安全网轮询 {desc} queueStatus=not_found taskHandle={submit.TaskHandle}（BGI 可能已重启，任务随进程终止）");
+                        return new CommandResult { Status = "failed", Message = $"{desc} 任务句柄在 BGI 侧不存在（BGI 可能已重启，任务随进程终止），taskHandle={submit.TaskHandle}" };
+                    default:
+                        // pending/running/null：任务未终结或状态未知，继续下一切片
+                        break;
+                }
             }
 
-            return terminal.Kind switch
-            {
-                BgiTaskTerminalKind.Completed when terminal.Cancelled =>
-                    new CommandResult { Status = "cancelled", Message = $"{desc} 执行中被取消" },
-                BgiTaskTerminalKind.Completed =>
-                    new CommandResult { Status = "success", Message = $"{desc} 已启动并执行完成（队列通道）" },
-                BgiTaskTerminalKind.QueueCancelled =>
-                    new CommandResult { Status = "cancelled", Message = $"{desc} 排队中被取消" },
-                _ => new CommandResult { Status = "failed", Message = $"{desc} 执行失败（{terminal.ErrorCode ?? "unknown"}）：{terminal.ErrorMessage ?? "无详情"}" },
-            };
+            return new CommandResult { Status = "failed", Message = $"{desc} 等待执行结果超时（{TaskTerminalWaitTimeout.TotalHours}h 兜底），taskHandle={submit.TaskHandle}" };
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.IO.IOException
                                    or TimeoutException or OperationCanceledException

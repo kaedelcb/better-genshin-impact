@@ -79,6 +79,18 @@ internal sealed class BgiTaskCoordinator : IDisposable
 
     public readonly record struct SubmitResult(SubmitStatus Status, Guid TaskHandle, int QueuePosition);
 
+    /// <summary>
+    /// [终态可拉取 2026-09-09] 队列项生命周期查询结果。Status 取值：
+    /// pending（在队等派发）/ running（在跑）/ completed（执行完，Cancelled 区分 F11）/
+    /// failed（ErrorCode+Message）/ queueCancelled（排队期被取消）/ not_found（句柄未知——
+    /// 对调用方意味着 BGI 已重启、任务随进程终止，或句柄从未存在）。
+    /// </summary>
+    public readonly record struct QueueItemStatusResult(
+        string Status, bool Cancelled, string? ErrorCode, string? Message);
+
+    /// <summary>[终态可拉取] 终态登记表条目。</summary>
+    private sealed record TerminalRecord(string Status, bool Cancelled, string? ErrorCode, string? Message);
+
     private sealed class PendingTask
     {
         public required Guid TaskHandle { get; init; }
@@ -132,6 +144,20 @@ internal sealed class BgiTaskCoordinator : IDisposable
 
     /// <summary>最近一次执行完成的 task.start 代序号+名（从 InstanceRequestHandler._lastExecutedTask 迁入，单一事实源）。</summary>
     private (int Generation, string? Name) _lastExecutedTask = (0, null);
+
+    /// <summary>[终态可拉取] 终态登记表容量（有界防泄漏；32 远超一个批次的组数，够安全网轮询窗口使用）。</summary>
+    private const int TerminalRegistryCapacity = 32;
+
+    /// <summary>
+    /// [终态可拉取] 队列项终态登记表：事件推送（task.completed/failed/queueCancelled）只是快速路径，
+    /// 单帧事件丢失时助手端按 taskHandle 拉取本表校准（实机确诊：completed 帧丢失会让批次循环永久挂起）。
+    /// 每项终态唯一（取消/执行路径互斥），覆盖写安全。
+    /// </summary>
+    private readonly ConcurrentDictionary<Guid, TerminalRecord> _terminals = new();
+
+    /// <summary>终态登记顺序（容量淘汰用），与 _terminals 写入一起由 _terminalsLock 串行。</summary>
+    private readonly Queue<Guid> _terminalOrder = new();
+    private readonly object _terminalsLock = new();
 
     /// <summary>
     /// 测试友好构造：槽位判定/事件发布/等锁节奏全部可注入。
@@ -199,6 +225,48 @@ internal sealed class BgiTaskCoordinator : IDisposable
         {
             _lastExecutedTask = (generation, name);
         }
+    }
+
+    /// <summary>[终态可拉取] 登记队列项终态（每个终态发布点调用，与事件发布同源同事）。</summary>
+    private void RecordTerminal(Guid taskHandle, string status, bool cancelled = false, string? errorCode = null, string? message = null)
+    {
+        _terminals[taskHandle] = new TerminalRecord(status, cancelled, errorCode, message);
+        lock (_terminalsLock)
+        {
+            _terminalOrder.Enqueue(taskHandle);
+            while (_terminalOrder.Count > TerminalRegistryCapacity)
+            {
+                _terminals.TryRemove(_terminalOrder.Dequeue(), out _);
+            }
+        }
+    }
+
+    /// <summary>
+    /// [终态可拉取] 按句柄查询队列项生命周期（ext.task.queueStatus 的唯一事实源）。
+    /// 终态优先于在跑/在队判定：completed 发布与 _current 清理之间存在微秒级窗口，
+    /// 此时两项同时命中，终态是权威答案。
+    /// </summary>
+    public QueueItemStatusResult QueryItemStatus(Guid taskHandle)
+    {
+        if (_terminals.TryGetValue(taskHandle, out var terminal))
+        {
+            return new QueueItemStatusResult(terminal.Status, terminal.Cancelled, terminal.ErrorCode, terminal.Message);
+        }
+
+        lock (_submitLock)
+        {
+            if (_current is { } current && current.TaskHandle == taskHandle)
+            {
+                return new QueueItemStatusResult("running", false, null, null);
+            }
+        }
+
+        if (_pending.ContainsKey(taskHandle))
+        {
+            return new QueueItemStatusResult("pending", false, null, null);
+        }
+
+        return new QueueItemStatusResult("not_found", false, null, null);
     }
 
     /// <summary>
@@ -319,6 +387,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
 
         if (queued.TryMarkTerminalEventPublished())
         {
+            RecordTerminal(taskHandle, "queueCancelled");
             PublishSafe(ExternalInterfaceEventNames.TaskQueueCancelled, new { taskHandle = taskHandle.ToString("N") });
         }
 
@@ -345,6 +414,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
         {
             if (item.TryMarkTerminalEventPublished())
             {
+                RecordTerminal(item.TaskHandle, "queueCancelled");
                 PublishSafe(ExternalInterfaceEventNames.TaskQueueCancelled, new { taskHandle = item.TaskHandle.ToString("N") });
             }
 
@@ -412,6 +482,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
         {
             if (item.TryMarkTerminalEventPublished())
             {
+                RecordTerminal(item.TaskHandle, "queueCancelled");
                 PublishSafe(ExternalInterfaceEventNames.TaskQueueCancelled, new { taskHandle = item.TaskHandle.ToString("N") });
             }
 
@@ -426,11 +497,13 @@ internal sealed class BgiTaskCoordinator : IDisposable
             {
                 if (item.TryMarkTerminalEventPublished())
                 {
+                    RecordTerminal(item.TaskHandle, "queueCancelled");
                     PublishSafe(ExternalInterfaceEventNames.TaskQueueCancelled, new { taskHandle = item.TaskHandle.ToString("N") });
                 }
             }
             else if (item.TryMarkTerminalEventPublished())
             {
+                RecordTerminal(item.TaskHandle, "failed", errorCode: "task_busy", message: "等待任务槽位释放超时（15s），旧任务可能卡死");
                 PublishSafe(ExternalInterfaceEventNames.TaskFailed, new
                 {
                     taskHandle = item.TaskHandle.ToString("N"),
@@ -461,6 +534,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
         {
             if (item.TryMarkTerminalEventPublished())
             {
+                RecordTerminal(item.TaskHandle, "queueCancelled");
                 PublishSafe(ExternalInterfaceEventNames.TaskQueueCancelled, new { taskHandle = item.TaskHandle.ToString("N") });
             }
 
@@ -486,6 +560,8 @@ internal sealed class BgiTaskCoordinator : IDisposable
 
             var cancelled = await item.Submission.Executor(item.Cts.Token).ConfigureAwait(false);
             var durationMs = (long)(DateTime.UtcNow - startedAt).TotalMilliseconds;
+            // 终态登记先于事件发布：事件是快速路径可能丢失，登记表是安全网轮询的权威来源
+            RecordTerminal(item.TaskHandle, "completed", cancelled: cancelled);
             PublishSafe(ExternalInterfaceEventNames.TaskCompleted, new
             {
                 taskHandle = item.TaskHandle.ToString("N"),
@@ -499,6 +575,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
             _logger.LogError(exception, "[task.queue] 任务执行失败 taskHandle={Handle}", item.TaskHandle);
             if (item.TryMarkTerminalEventPublished())
             {
+                RecordTerminal(item.TaskHandle, "failed", errorCode: "task_start_failed", message: exception.GetBaseException().Message);
                 PublishSafe(ExternalInterfaceEventNames.TaskFailed, new
                 {
                     taskHandle = item.TaskHandle.ToString("N"),

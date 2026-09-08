@@ -248,4 +248,64 @@ public class BgiTaskCoordinatorTests
         Thread.Sleep(200);
         Assert.Empty(h.ExecutedOrder);
     }
+
+    // ===== [终态可拉取 2026-09-09] QueryItemStatus：事件推送之外的生命周期拉取安全网 =====
+
+    [Fact]
+    public void QueryItemStatus_Lifecycle_PendingThenCompleted()
+    {
+        using var h = new Harness(slotFree: false);
+        var submitted = h.Submit("组A", generation: 0);
+
+        // 在队 → pending
+        Assert.Equal("pending", h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status);
+
+        // 槽位释放 → 执行完 → completed（终态在事件发布之外可独立拉取）
+        h.SlotFree = true;
+        Assert.True(Harness.WaitFor(() =>
+            h.Events.Any(e => e.Name == ExternalInterfaceEventNames.TaskCompleted)));
+        var terminal = h.Coordinator.QueryItemStatus(submitted.TaskHandle);
+        Assert.Equal("completed", terminal.Status);
+        Assert.False(terminal.Cancelled);
+    }
+
+    [Fact]
+    public void QueryItemStatus_CancelledWhileQueued_ReturnsQueueCancelled()
+    {
+        using var h = new Harness(slotFree: false);
+        var submitted = h.Submit("组A", generation: 0);
+        h.Coordinator.CancelByHandle(submitted.TaskHandle);
+
+        Assert.Equal("queueCancelled", h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status);
+    }
+
+    [Fact]
+    public void QueryItemStatus_SlotWaitTimeout_ReturnsFailedBusy()
+    {
+        using var h = new Harness(slotFree: false, slotWaitTimeout: TimeSpan.FromMilliseconds(300));
+        var submitted = h.Submit("组A", generation: 0);
+
+        Assert.True(Harness.WaitFor(() =>
+            h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status == "failed"));
+        Assert.Equal("task_busy", h.Coordinator.QueryItemStatus(submitted.TaskHandle).ErrorCode);
+    }
+
+    [Fact]
+    public void QueryItemStatus_UnknownHandle_ReturnsNotFound()
+    {
+        using var h = new Harness(slotFree: true);
+        Assert.Equal("not_found", h.Coordinator.QueryItemStatus(Guid.NewGuid()).Status);
+    }
+
+    [Fact]
+    public void QueryItemStatus_CompletedWithCancellation_CancelledFlagPreserved()
+    {
+        using var h = new Harness(slotFree: true);
+        var submitted = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(
+            0, "组A", null, 0, _ => Task.FromResult(true))); // 执行中被取消（F11 语义）
+
+        Assert.True(Harness.WaitFor(() =>
+            h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status == "completed"));
+        Assert.True(h.Coordinator.QueryItemStatus(submitted.TaskHandle).Cancelled);
+    }
 }

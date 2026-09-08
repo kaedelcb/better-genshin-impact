@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Service.Instance;
 using Microsoft.Extensions.Logging;
@@ -13,10 +14,11 @@ namespace BetterGenshinImpact.Service.ExternalInterface;
 
 /// <summary>
 /// ext.event 事件中心（进程级单例）。
-/// 职责：订阅表（按会话隔离）、事件扇出（复用 InstanceConnection.WriteJsonAsync 写锁串行化）、
+/// 职责：订阅表（按会话隔离）、事件扇出（每订阅者专属有序写入循环 → InstanceConnection.WriteJsonAsync）、
 /// stateRevision 版本号、近因环形缓冲（断线续传补发，切片4）、
 /// 观察器生命周期（第一个订阅者启动、最后一个退订停止——A1 单机零感知）。
-/// 推送 fire-and-forget：绝不在任务/管道线程上挂起等待 I/O（§3.8-6）。
+/// Publish 全程无 I/O：revision 递增 + 缓冲/发件箱入队在 _publishLock 内完成（线序 = revision 序），
+/// 绝不在任务/管道线程上挂起等待 I/O（§3.8-6）。
 /// </summary>
 internal sealed class ExternalInterfaceEventHub
 {
@@ -38,11 +40,19 @@ internal sealed class ExternalInterfaceEventHub
 
     /// <summary>
     /// 近因事件环形缓冲（有界 500 条）：断线重连恢复订阅时按 lastKnownRevision 补发缺失事件。
-    /// 只在 Publish 时入队（观察器仅在存在订阅者时运行，suspend/resumed 挂载点写入量可忽略），
-    /// 独立小锁只做入队/出队/快照拷贝，不与扇出写路径交叉，不引入新锁竞争。
+    /// 只在 Publish 时入队（观察器仅在存在订阅者时运行，suspend/resumed 挂载点写入量可忽略）。
     /// </summary>
-    private readonly object _recentLock = new();
     private readonly Queue<BufferedEvent> _recentEvents = new();
+
+    /// <summary>
+    /// [有序推送 2026-09-09] 发布临界区锁：revision 递增 + 近因缓冲入队 + 各订阅者发件箱入队
+    /// 在同一把锁内完成，保证每个连接的线上帧序严格等于 revision 序。
+    /// 原实现每条 Publish 起一个 fire-and-forget 任务抢连接写锁，帧可能乱序上线——
+    /// 客户端 revision 过滤会把乱序到达的 task.completed 终态事件当"重复帧"静默丢弃，
+    /// 等待方永久挂起（实机确诊：批次跑完第一个组后停摆）。锁内只做内存操作，无 I/O 等待。
+    /// （原独立 _recentLock 已并入本锁，GetReplayEvents 同样走它。）
+    /// </summary>
+    private readonly object _publishLock = new();
 
     private ExternalInterfaceEventHub()
     {
@@ -68,6 +78,13 @@ internal sealed class ExternalInterfaceEventHub
         if (isNewSession)
         {
             subscriber = _subscribers.GetOrAdd(sessionId, _ => new EventSubscriber(sessionId, connection));
+        }
+
+        // [有序推送] 订阅者专属写入循环只在首次创建时拉起（GetOrAdd 竞态下也可能拿到既有实例，
+        // TryStartWriter 的内部联锁保证全进程只启动一次）
+        if (subscriber!.TryStartWriter())
+        {
+            _ = Task.Run(() => SubscriberWriterLoopAsync(subscriber));
         }
 
         var changed = subscriber.AddEvents(events);
@@ -103,8 +120,10 @@ internal sealed class ExternalInterfaceEventHub
     /// <summary>连接断开/写失败时注销会话订阅，防止向死连接累积推送（A5/A9）。</summary>
     public void RemoveSession(Guid sessionId)
     {
-        if (_subscribers.TryRemove(sessionId, out _))
+        if (_subscribers.TryRemove(sessionId, out var subscriber))
         {
+            // 关闭发件箱：写入循环排空（或写失败）后自行退出
+            subscriber.CompleteOutbox();
             _logger.LogDebug("ext.event 订阅已注销：session={SessionId}", sessionId);
         }
 
@@ -114,37 +133,41 @@ internal sealed class ExternalInterfaceEventHub
         }
     }
 
-    /// <summary>发布事件：revision 单调 +1，入近因缓冲，扇出到所有匹配订阅者。</summary>
+    /// <summary>
+    /// 发布事件：revision 递增 + 入近因缓冲 + 扇出入队各订阅者发件箱，全程在 _publishLock 内完成——
+    /// 每个连接的线上帧序 = revision 序（有序推送），客户端 revision 过滤不再需要容忍乱序帧。
+    /// 锁内只做内存操作（JObject 构造 + 入队），I/O 由订阅者专属写入循环异步排空。
+    /// </summary>
     public void Publish(string eventName, object? payload)
     {
-        var revision = Interlocked.Increment(ref _stateRevision);
-        var eventData = ExternalInterfaceProtocol.BuildEventData(eventName, revision, payload);
-        var envelope = InstanceIpcEnvelope.Request(ExternalInterfaceOperations.EventPush, eventData);
-
-        lock (_recentLock)
+        lock (_publishLock)
         {
+            var revision = ++_stateRevision;
+            var eventData = ExternalInterfaceProtocol.BuildEventData(eventName, revision, payload);
+            var envelope = InstanceIpcEnvelope.Request(ExternalInterfaceOperations.EventPush, eventData);
+
             _recentEvents.Enqueue(new BufferedEvent(revision, eventName, eventData));
             while (_recentEvents.Count > RecentEventCapacity)
             {
                 _recentEvents.Dequeue();
             }
-        }
 
-        foreach (var (sessionId, subscriber) in _subscribers)
-        {
-            if (!subscriber.IsSubscribedTo(eventName))
+            foreach (var (sessionId, subscriber) in _subscribers)
             {
-                continue;
-            }
+                if (!subscriber.IsSubscribedTo(eventName))
+                {
+                    continue;
+                }
 
-            // 连接已死 → 注销并跳过（探针"连上立刻断"等场景不留残留）
-            if (subscriber.Connection.Completion.IsCompleted)
-            {
-                RemoveSession(sessionId);
-                continue;
-            }
+                // 连接已死 → 注销并跳过（探针"连上立刻断"等场景不留残留）
+                if (subscriber.Connection.Completion.IsCompleted)
+                {
+                    RemoveSession(sessionId);
+                    continue;
+                }
 
-            _ = PushToSubscriberAsync(subscriber, envelope);
+                subscriber.TryEnqueue(envelope);
+            }
         }
     }
 
@@ -214,7 +237,7 @@ internal sealed class ExternalInterfaceEventHub
         long lastKnownRevision,
         Func<string, bool> isInterested)
     {
-        lock (_recentLock)
+        lock (_publishLock)
         {
             var current = CurrentRevision;
             if (lastKnownRevision < 0 || lastKnownRevision > current)
@@ -254,15 +277,21 @@ internal sealed class ExternalInterfaceEventHub
         }
     }
 
-    private async Task PushToSubscriberAsync(
-        EventSubscriber subscriber,
-        InstanceIpcEnvelope envelope)
+    /// <summary>
+    /// [有序推送 2026-09-09] 订阅者专属写入循环：单消费者按发件箱顺序逐帧写连接，
+    /// 线上帧序严格等于 Publish 入队序（= revision 序）。写失败 → 注销会话（与原
+    /// fire-and-forget PushToSubscriberAsync 的失败语义一致）；发件箱关闭（RemoveSession）后排空退出。
+    /// </summary>
+    private async Task SubscriberWriterLoopAsync(EventSubscriber subscriber)
     {
         try
         {
-            await subscriber.Connection
-                .WriteJsonAsync(envelope, CancellationToken.None)
-                .ConfigureAwait(false);
+            await foreach (var envelope in subscriber.Outbox.ReadAllAsync().ConfigureAwait(false))
+            {
+                await subscriber.Connection
+                    .WriteJsonAsync(envelope, CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
         }
         catch (Exception exception) when (exception is IOException
                                           or ObjectDisposedException
@@ -270,6 +299,12 @@ internal sealed class ExternalInterfaceEventHub
                                           or InvalidOperationException)
         {
             _logger.LogDebug(exception, "ext.event 推送失败，注销订阅会话 {SessionId}", subscriber.SessionId);
+            RemoveSession(subscriber.SessionId);
+        }
+        catch (Exception exception)
+        {
+            // 非预期异常：绝不逃逸为未观测异常，注销会话让客户端重连重建订阅
+            _logger.LogWarning(exception, "ext.event 订阅者写入循环异常退出：session={SessionId}", subscriber.SessionId);
             RemoveSession(subscriber.SessionId);
         }
     }
@@ -283,6 +318,14 @@ internal sealed class ExternalInterfaceEventHub
         private readonly HashSet<string> _events = new(StringComparer.Ordinal);
         private bool _subscribeAll;
 
+        /// <summary>[有序推送] 待发事件帧发件箱（无界：帧小、速率低、连接本地可信）；
+        /// 单消费者写入循环按入队序写连接，保证线序 = revision 序。</summary>
+        private readonly Channel<InstanceIpcEnvelope> _outbox = Channel.CreateUnbounded<InstanceIpcEnvelope>(
+            new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
+
+        /// <summary>写入循环启动一次性门（GetOrAdd 竞态/重复订阅时防多重启动）。</summary>
+        private int _writerStarted;
+
         public EventSubscriber(Guid sessionId, InstanceConnection connection)
         {
             SessionId = sessionId;
@@ -292,6 +335,17 @@ internal sealed class ExternalInterfaceEventHub
         public Guid SessionId { get; }
 
         public InstanceConnection Connection { get; }
+
+        public ChannelReader<InstanceIpcEnvelope> Outbox => _outbox.Reader;
+
+        /// <summary>写入循环只启动一次。返回 true = 本次调用负责启动。</summary>
+        public bool TryStartWriter() => Interlocked.CompareExchange(ref _writerStarted, 1, 0) == 0;
+
+        /// <summary>入队待发帧（Publish 持锁调用，入队序即 revision 序）。false = 发件箱已关闭（会话注销中）。</summary>
+        public bool TryEnqueue(InstanceIpcEnvelope envelope) => _outbox.Writer.TryWrite(envelope);
+
+        /// <summary>关闭发件箱：写入循环排空后退出（RemoveSession 时调用）。</summary>
+        public void CompleteOutbox() => _outbox.Writer.TryComplete();
 
         /// <summary>空列表 = 订阅全部已知事件。返回 true = 订阅集实际发生变化（供调用方降噪日志）。</summary>
         public bool AddEvents(IReadOnlyList<string> events)

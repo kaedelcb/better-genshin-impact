@@ -1,3 +1,4 @@
+using System;
 using BetterGenshinImpact.Service.Instance;
 using BetterGenshinImpact.Service.Instance.MessageHandlers;
 
@@ -35,9 +36,36 @@ internal static class ExternalInterfaceQueryPlane
                 response = handler.HandleConfigList(connection, request);
                 return true;
 
+            case ExternalInterfaceOperations.TaskQueueStatus:
+                response = HandleTaskQueueStatus(request);
+                return true;
+
             default:
                 response = null!;
                 return false;
         }
+    }
+
+    /// <summary>
+    /// [终态可拉取 2026-09-09] ext.task.queueStatus：按 taskHandle 返回队列项生命周期。
+    /// 事件推送（task.completed 等）只是快速路径——单帧事件丢失时，等待方用本查询做安全网校准，
+    /// 不再把批次进度押在"一帧必达"上。
+    /// </summary>
+    private static InstanceIpcEnvelope HandleTaskQueueStatus(InstanceIpcEnvelope request)
+    {
+        var handleRaw = request.Data?["taskHandle"]?.ToString();
+        if (!Guid.TryParse(handleRaw, out var handle))
+        {
+            return InstanceIpcEnvelope.Failure(request, "invalid_request", "taskHandle 缺失或格式错误");
+        }
+
+        var status = BgiTaskCoordinator.Instance.QueryItemStatus(handle);
+        return InstanceIpcEnvelope.Response(request, new
+        {
+            status = status.Status,
+            cancelled = status.Cancelled,
+            errorCode = status.ErrorCode,
+            message = status.Message,
+        });
     }
 }

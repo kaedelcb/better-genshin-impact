@@ -3,6 +3,7 @@ using System.IO;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
+using MultiplayerHoeingAssistant.Helpers;
 
 namespace MultiplayerHoeingAssistant.Services;
 
@@ -76,6 +77,19 @@ public sealed class BgiTaskSubmitResult
     public string? TaskHandle { get; init; }
 
     public int QueuePosition { get; init; }
+
+    public string? ErrorCode { get; init; }
+
+    public string? ErrorMessage { get; init; }
+}
+
+/// <summary>[终态可拉取] ext.task.queueStatus 响应投影：pending/running/completed/failed/queueCancelled/not_found。</summary>
+public sealed class BgiTaskQueueStatus
+{
+    public string? Status { get; init; }
+
+    /// <summary>completed 专用：执行中被取消（F11 等）。</summary>
+    public bool Cancelled { get; init; }
 
     public string? ErrorCode { get; init; }
 
@@ -457,6 +471,43 @@ public sealed class BgiExternalClient : IDisposable
             QueuePosition = root.TryGetProperty("queuePosition", out var qpEl) && qpEl.ValueKind == JsonValueKind.Number
                 ? qpEl.GetInt32()
                 : 0,
+        };
+    }
+
+    /// <summary>
+    /// [终态可拉取 2026-09-09] 按句柄拉取队列项生命周期（ext.task.queueStatus）——
+    /// 终态事件的安全网校准：事件帧丢失/被吞时由轮询兜底，不再把批次进度押在"一帧必达"上。
+    /// 返回 null = 通道瞬态失败或对端老 BGI 无此操作（调用方继续等事件，不误判）。
+    /// </summary>
+    public async Task<BgiTaskQueueStatus?> QueryTaskQueueStatusAsync(
+        string taskHandle,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await SendCommandAsync(
+                ExternalOperations.TaskQueueStatus,
+                new { taskHandle },
+                CommandTimeout,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (!response.Success || response.Data is null)
+        {
+            return null;
+        }
+
+        using var doc = JsonDocument.Parse(response.Data);
+        var root = doc.RootElement;
+        return new BgiTaskQueueStatus
+        {
+            Status = root.TryGetProperty("status", out var stEl) && stEl.ValueKind == JsonValueKind.String
+                ? stEl.GetString()
+                : null,
+            Cancelled = root.TryGetProperty("cancelled", out var cEl) && cEl.ValueKind == JsonValueKind.True,
+            ErrorCode = root.TryGetProperty("errorCode", out var ecEl) && ecEl.ValueKind == JsonValueKind.String
+                ? ecEl.GetString()
+                : null,
+            ErrorMessage = root.TryGetProperty("message", out var msgEl) && msgEl.ValueKind == JsonValueKind.String
+                ? msgEl.GetString()
+                : null,
         };
     }
 
@@ -929,23 +980,41 @@ public sealed class BgiExternalClient : IDisposable
                 // - rev ≤ 快照覆盖线：状态已含在快照里 → 跳过分派（不重）；
                 // - rev ≤ 已分派最大值：补发/乱序重复 → 跳过（单管道有序流，防御性）；
                 // - rev > 已知最大 + 1：跳号（断线窗口漏帧）→ 自动拉快照补齐（LSP 文档同步模型）。
+                // [终态免误吞 2026-09-09] 终态事件（task.completed/failed/queueCancelled）是"事实"而非
+                // "状态"：快照覆盖线只覆盖状态，覆盖不了"某任务已终结"这件事。终态按 taskHandle 路由、
+                // 等待器幂等消费（先到先得），迟到/乱序/补发的终态帧必须送达——被覆盖线吞掉会让
+                // 批次循环永久挂起（实机确诊：批次跑完第一个组后停摆，BGI 侧其实已发布 completed）。
                 if (revision > 0)
                 {
+                    var isTerminalEvent = name is BgiExternalEventNames.TaskCompleted
+                        or BgiExternalEventNames.TaskFailed
+                        or BgiExternalEventNames.TaskQueueCancelled;
                     var gapDetected = false;
                     lock (_revisionLock)
                     {
                         if (revision <= _snapshotFloorRevision || revision <= _maxDispatchedRevision)
                         {
-                            return;
-                        }
+                            if (!isTerminalEvent)
+                            {
+                                // [可观测性] 静默丢弃是此类故障最难查的形态，必须留痕
+                                RuntimeLog.WriteLine(
+                                    $"[ext] 事件被 revision 过滤丢弃：{name} rev={revision} floor={_snapshotFloorRevision} maxDispatched={_maxDispatchedRevision}");
+                                return;
+                            }
 
-                        var knownBase = Math.Max(_maxDispatchedRevision, _snapshotFloorRevision);
-                        if (knownBase > 0 && revision > knownBase + 1)
+                            RuntimeLog.WriteLine(
+                                $"[ext] 终态事件迟到/乱序仍送达（按句柄路由幂等消费）：{name} rev={revision} floor={_snapshotFloorRevision} maxDispatched={_maxDispatchedRevision}");
+                        }
+                        else
                         {
-                            gapDetected = true;
-                        }
+                            var knownBase = Math.Max(_maxDispatchedRevision, _snapshotFloorRevision);
+                            if (knownBase > 0 && revision > knownBase + 1)
+                            {
+                                gapDetected = true;
+                            }
 
-                        _maxDispatchedRevision = revision;
+                            _maxDispatchedRevision = revision;
+                        }
                     }
 
                     if (gapDetected)
@@ -1167,6 +1236,7 @@ public sealed class BgiExternalClient : IDisposable
         public const string TaskStop = "ext.task.stop";
         public const string TaskCancel = "ext.task.cancel";
         public const string TaskStatus = "ext.task.status";
+        public const string TaskQueueStatus = "ext.task.queueStatus";
         public const string ConfigList = "ext.config.list";
         public const string ConfigPullGroup = "ext.config.pullGroup";
         public const string ConfigApplyGroup = "ext.config.applyGroup";

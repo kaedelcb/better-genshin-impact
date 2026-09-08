@@ -34,6 +34,11 @@ internal static class ExternalInterfaceOperations
     public const string TaskStatus = "ext.task.status";
     public const string ConfigList = "ext.config.list";
 
+    /// <summary>[终态可拉取 2026-09-09] 队列项生命周期查询：按 taskHandle 拉取
+    /// pending/running/completed/failed/queueCancelled/not_found。
+    /// 事件推送只是快速路径，终态必须可拉取校验——单帧事件丢失不再让等待方永久挂起。</summary>
+    public const string TaskQueueStatus = "ext.task.queueStatus";
+
     // 事件面
     public const string EventSubscribe = "ext.event.subscribe";
     public const string EventUnsubscribe = "ext.event.unsubscribe";
@@ -137,6 +142,8 @@ internal static class ExternalInterfaceProtocol
                 ["event.replay"] = true,
                 // 切片7：队列式任务编排（ext.task.start 入队拿 taskHandle + 生命周期事件 + ext.task.cancel）
                 ["task.queue"] = true,
+                // 终态可拉取：ext.task.queueStatus 按句柄查询队列项生命周期（事件丢失时的校准安全网）
+                ["task.queueStatus"] = true,
                 ["idempotency.window"] = true,
             },
         };
