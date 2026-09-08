@@ -853,7 +853,17 @@ internal sealed class InstanceRequestHandler
             }
 
             // 检查是否有已保存的中断上下文
-            var hasSuspendedTaskContext = BetterGenshinImpact.GameTask.TaskContext.Instance()?.Config?.SuspendedTaskContext != null;
+            var suspendedCtx = BetterGenshinImpact.GameTask.TaskContext.Instance()?.Config?.SuspendedTaskContext;
+            var hasSuspendedTaskContext = suspendedCtx != null;
+            // [协议加法] 中断上下文身份（纯增量可选字段，旧助手忽略新字段，无兼容风险）：
+            // 助手端用它做最后一道防线——若被中断的是「联机锄地上线」信号任务本身，恢复会重复触发上线，退化为停止。
+            string? suspendedTaskType = suspendedCtx?.TaskType;
+            string? suspendedTaskName = suspendedCtx?.TaskType switch
+            {
+                "group" or "onedragon" => suspendedCtx.GroupName,
+                "solo" => !string.IsNullOrEmpty(suspendedCtx.ProjectName) ? suspendedCtx.ProjectName : suspendedCtx.GroupName,
+                _ => null
+            };
 
             // [切片7] 协调器字段（纯增量，老客户端忽略未知字段）：
             // IsCreated 守卫——从未使用过协调器（单机/纯 v2）时不为查询而创建单例，零感知。
@@ -885,6 +895,8 @@ internal sealed class InstanceRequestHandler
                 onlineGeneration = NotifyOnlineTask.CurrentGeneration, // 新：上线事件代序号，无任务时返回 0
                 onlineTriggeredAt = NotifyOnlineTask.LastTriggeredAt, // 新：上线事件触发时间
                 hasSuspendedTaskContext,
+                suspendedTaskType,
+                suspendedTaskName,
                 // [切片7] 任务协调层扩展（spec §4.4，纯增量字段）
                 slotOccupied = BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0, // 与 running 同义但语义显式
                 queueDepth,        // 协调器在队任务数（未协商 task.queue 的老客户端不受影响）
@@ -1212,6 +1224,15 @@ internal sealed class InstanceRequestHandler
         }
     }
 
+    /// <summary>
+    /// 判定"当前在跑的项目"是否为「联机锄地上线」信号任务（见 HandleTaskSuspend 步骤 2.6）。
+    /// 按项目内容识别：任务注册名（<see cref="NotifyOnlineTask.TaskName"/>）+ 独立任务项目恒为空的 FolderName
+    /// （<c>ScriptGroupProject.BuildSoloTaskProject</c> 构造时 FolderName=""），不按组名——用户可以把组叫任何名字。
+    /// JS/Pathing/KeyMouse 项目的 FolderName 均非空，不会误判；Shell 项目 FolderName 虽为空但 Name 是命令串，也不会撞名。
+    /// </summary>
+    internal static bool IsOnlineSignalTask(string? projectName, string? folderName)
+        => projectName == NotifyOnlineTask.TaskName && string.IsNullOrEmpty(folderName);
+
     internal async Task<InstanceIpcEnvelope> HandleTaskSuspend(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
@@ -1234,6 +1255,7 @@ internal sealed class InstanceRequestHandler
             int oneDragonTaskIndex = 0;         // 一条龙条目索引（NextTaskIndex）
             string? subTaskGroupName = null;    // 一条龙内当前执行的配置组名
             string? soloSettingsJson = null;    // solo 场景：独立任务的组级设置快照（恢复时保真）
+            bool isOnlineSignalTask = false;    // 当前在跑的项目是否为「联机锄地上线」信号任务
 
             var ctx = BetterGenshinImpact.GameTask.RunnerContext.Instance;
             var progress = ctx?.taskProgress;
@@ -1246,6 +1268,11 @@ internal sealed class InstanceRequestHandler
                 folderName = info.FolderName;
                 projectName = info.Name;
                 taskType = "group";
+                // 时序窗口：solo 任务脚本 0.01s 执行完毕后，ExecuteProject 的 finally 已清空
+                // CurrentScriptProject，但 RunMulti 不会在项目结束时清理 CurrentScriptGroupProjectInfo
+                // （只标 TaskEnd=true，等下一项目覆盖）。suspend 在"信号任务已自结、组包装未结束"的
+                // 几百毫秒窗口内到达时，info 仍指向该信号任务——按 info 判定正好覆盖该窗口。
+                isOnlineSignalTask = IsOnlineSignalTask(info.Name, info.FolderName);
             }
             else if (progress?.CurrentScriptGroupName != null)
             {
@@ -1290,6 +1317,9 @@ internal sealed class InstanceRequestHandler
                 {
                     projectName = taskName;
                     taskType = "solo";
+                    // 独立任务直跑：按任务类型 + 注册名识别信号任务（不按任何组名）
+                    isOnlineSignalTask = currentProject is { Type: "SoloTask" }
+                                         && taskName == NotifyOnlineTask.TaskName;
                     // [实机修复 2026-09-05] solo 保真：IPC 启动的组任务不带 taskProgress（进度字段从未写入），
                     // 上面两个分支识别不到组关联会降级到这里。但 CurrentScriptProject 自身携带
                     // GroupInfo（组）与 SoloTaskSettingsObject（组级独立任务设置，含联机开关）——
@@ -1328,9 +1358,20 @@ internal sealed class InstanceRequestHandler
                 return InstanceIpcEnvelope.Response(request, new { status = "cleared_not_saved" });
             }
 
+            // 2.6 [实机修复 2026-09-08] 「联机锄地上线」是信号不是工作：本轮 AllReady 正是它触发的，
+            // 上线意图已经兑现；恢复执行一个信号只会再发一次上线 → gen+1 → 新一轮 AllReady → 无限循环。
+            // 因此被中断的当前项目是信号任务时，不保存中断上下文（旧上下文已在步骤 0 清除），
+            // 后续助手 ApplyPolicyTeardownAsync 的 Resume 分支查 hasSuspendedTaskContext=false，
+            // 走既有"无中断上下文，恢复策略退化为停止"分支。任务本身仍正常中断（步骤 4/5 不变）。
+            // 覆盖形态：独立任务直跑（Type=="SoloTask"）、配置组唯一项目是该任务、
+            // 组内多项目但当前在跑的是该任务（恢复会从头/从当前索引重跑信号，同样循环，故也不保存）。
             // 3. 保存上下文到 AllConfig
             var allConfig = BetterGenshinImpact.GameTask.TaskContext.Instance()?.Config;
-            if (allConfig != null)
+            if (isOnlineSignalTask)
+            {
+                _logger.LogInformation("[IPC task.suspend] 被中断的是联机锄地上线信号任务，其意图已兑现，不保存中断上下文（避免恢复后重复触发上线）");
+            }
+            else if (allConfig != null)
             {
                 allConfig.SuspendedTaskContext = new BetterGenshinImpact.Core.Config.SuspendedTaskContext
                 {

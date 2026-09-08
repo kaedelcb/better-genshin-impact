@@ -33,49 +33,46 @@ public class MainViewModel : INotifyPropertyChanged
     private Timer? _retryTimer;
     private Timer? _onlineTimer;
     private Timer? _resumeTimeoutTimer;
-    private bool _isOnlineReady;
-    private string _onlineMode = "none";
+    /// <summary>[P1] 上线意图生命周期状态机（Idle/Armed/Executing）：收编原散落本类 12 处直接赋值点的
+    /// _isOnlineReady/_onlineMode/_localOnlineGeneration/_genLock/_lastOnlineGeneration/
+    /// _lastProcessedAllReadyGeneration/_lastReportedOnlineGen/_lastOnlineEventReportedAtUtc/
+    /// _pendingOnlineReportGen/_onlineBaselineInitialized/_manuallyClearedOnline 与 generation 持久化的全部读写。
+    /// 事故背景：异常路径漏改残留状态曾劫持后续行为（幻影上线循环、幻影开锄）。网络 IO 留在本类。</summary>
+    private readonly OnlineIntentLifecycle _intentLifecycle;
     /// <summary>记录定时上线今天是否已触发过（按日期去重，设定新时间时重置）。
     /// [实机修复 2026-09-05] 持久化到 assistant-online-fired-date.txt：重启不再失忆（原实现重启即复位，
     /// 1:00 的定时 1:30 打开助手会被"补触发"上线——非用户意图）。</summary>
     private DateTime _lastScheduledFireDate = DateTime.MinValue;
     /// <summary>定时上线补触发宽限窗：到点后超过此时长才看到 = 当时人不在/没开机，跳过今日不再补上线。</summary>
     private static readonly TimeSpan ScheduledFireGrace = TimeSpan.FromMinutes(15);
-    /// <summary>本地定时上线自增 generation（用于驱动服务端 AllReady 判定，代替 BGI 的 onlineGeneration）。
-    /// 持久化到 NexusBGI/assistant-online-generation.txt，重启后不复位（S3，复刻 BGI 侧 NotifyOnlineTask 模式：
-    /// 服务端按 generation 边沿检测，丢弃 ≤ 历史值的事件，重启归零会被永久丢弃）。</summary>
-    private int _localOnlineGeneration = 0;
-    /// <summary>generation 自增/写盘锁：定时器线程与 UI 线程可能并发进入 MarkOnlineAsync（复刻 NotifyOnlineTask._genLock）。</summary>
-    private readonly object _genLock = new();
-    // 边沿检测：记录上次处理过的 BGI 上线事件代序号与 AllReady 代序号，用于幂等保护
-    private int _lastOnlineGeneration = 0;
-    private int _lastProcessedAllReadyGeneration;
-    /// <summary>[B157] 最近一次成功送达服务端的上线事件 generation（0=本会话未成功上报过）。重连补报与 AllReadyAbort 判定用。</summary>
-    private int _lastReportedOnlineGen;
-    /// <summary>[B157] 最近一次上线事件成功送达时间（UTC）。命令路径 60s 防抖用：挡住任务流重跑风暴，
-    /// 但不像旧 _isOnlineReady 守卫那样永久闩锁（永久闩锁是"偶发执行了不上线"的根因）。</summary>
-    private DateTime _lastOnlineEventReportedAtUtc = DateTime.MinValue;
-    /// <summary>[B157] 上报失败/通道未就绪时挂起的待补报 generation（0=无挂起）。由 10s 状态轮询与重连钩子补报。</summary>
-    private int _pendingOnlineReportGen;
-    /// <summary>[B157] 本会话是否已读过 onlineGeneration 字段。首见边沿需过 onlineTriggeredAt 新鲜度校验，
-    /// 否则 BGI 持久化的历史 gen（几小时前跑过任务）会在助手启动/通道重建时幻影触发上线。</summary>
-    private bool _onlineBaselineInitialized;
-    /// <summary>[B157] 首见边沿新鲜度窗：触发时间距现在超过此时长 = 历史残留，只同步基线不自动上线。</summary>
-    private static readonly TimeSpan OnlineEdgeFreshnessWindow = TimeSpan.FromMinutes(2);
-    /// <summary>[B157] 命令上线重复边沿防抖窗：上线事件成功送达后此时长内的新边沿视为任务流重跑风暴，只同步基线不上报。</summary>
-    private static readonly TimeSpan OnlineReportDebounce = TimeSpan.FromSeconds(60);
+    // [P1] 本地 generation（_localOnlineGeneration/_genLock）、边沿基线（_lastOnlineGeneration）、
+    // AllReady 守卫（_lastProcessedAllReadyGeneration）、上报跟踪（_lastReportedOnlineGen/
+    // _lastOnlineEventReportedAtUtc/_pendingOnlineReportGen/_onlineBaselineInitialized/
+    // OnlineEdgeFreshnessWindow/OnlineReportDebounce）已全部收编进 OnlineIntentLifecycle。
     /// <summary>[切片1] ext.event 事件通道客户端（BgiExternalClient SDK）；null = 尚未建立/已降级。</summary>
     private BgiExternalClient? _externalClient;
     /// <summary>[切片1] 事件通道探测退避：Legacy（老 BGI）或暂时连不上时，到此时间点之前不再探测。</summary>
     private DateTime _externalNextProbeUtc = DateTime.MinValue;
     /// <summary>[切片4] 事件驱动维护的 ext.task.status 快照（SDK 基线/跳号/事件触发刷新产物）；null = 尚未取得。</summary>
     private string? _latestExtStatusJson;
-    /// <summary>用户手动停止时设为 true，后台依次执行序列检查到此标志后跳过剩余配置组。</summary>
-    private bool _isAllReadySequenceCancelled;
+    /// <summary>[P1b] 当前 AllReady 批次句柄（收编原 fire-and-forget 批次与共享 bool _isAllReadySequenceCancelled：
+    /// 外部"用户手动停止"改为取消当前批次 CTS；新一轮 AllReady 到达先取消旧批次再启动）。</summary>
+    private OnlineHoeingBatch? _activeBatch;
+    /// <summary>[P1b] _activeBatch 读写锁（批次在后台线程完结，新一轮判定在 SignalR 回调线程）。</summary>
+    private readonly object _batchGate = new();
+    /// <summary>[P1b] 策略收尾恰好一次守卫：已完成收尾的最高批次 generation（单调不减，代序号比对）。
+    /// 新一轮 AllReady 不重置——重置会让旧轮次的 10s 恢复定时器在新一轮里重跑收尾。</summary>
+    private int _teardownDoneGeneration;
+    /// <summary>[P1b] _teardownDoneGeneration 读写锁。</summary>
+    private readonly object _teardownGate = new();
+    /// <summary>[P1b] 最近一次策略收尾实际执行时间（UTC）：10s 恢复定时器的无批次键直接路径据此去重——
+    /// 批次末尾收尾与 autoHoeingRunning 边沿几乎同时命中时，30s 内的迟到边沿直接跳过；
+    /// 超过 30s 判定为无关手动会话，正常执行。读写均须在 _teardownGate 下。</summary>
+    private DateTime _lastTeardownUtc = DateTime.MinValue;
     /// <summary>互斥锁：防止两轮 AllReady 并发执行 OnAllReadyConfirmedInternal（patterns §31）。</summary>
     private int _isAllReadyProcessing;
-    /// <summary>重入守卫：防止 BGI 崩溃事件并发触发多次 RestartBgi 导致双开（P1-E 双保险）。</summary>
-    private int _isBgiRestarting;
+    // [P2 仲裁] 原 _isBgiRestarting 重入守卫已删除：崩溃重启收编进 BgiProcessMonitor 仲裁器，
+    // SemaphoreSlim 串行化全部杀/启操作，守卫语义重复且 async 等待期间长占位会挡住合法重启。
     /// <summary>重入守卫：ReportStatusAsync 触发源众多（10s 定时器、连接恢复、ext 事件等约 20 处），
     /// 且单轮可能卡在 IPC 读上超过 10s；不设防会并发叠加 → 同一秒多条"ReportControlStatusAsync 调用失败"
     /// 日志风暴 + 每轮各持一条命名管道连接。状态是快照语义，跳过本轮由下一轮补齐即可。</summary>
@@ -88,8 +85,7 @@ public class MainViewModel : INotifyPropertyChanged
     /// 成功多条，只有最后一条被 _signalRClient 收留，其余成幽灵连接占用服务端组。两个重试定时器
     /// （首次连接/刷新后重建）互不同时存活，共用此守卫。</summary>
     private int _retryRunning;
-    /// <summary>用户手动清除上线后置 true，抑制定时自动上线。手动设定定时上线时清除。</summary>
-    private bool _manuallyClearedOnline = true;
+    /// <summary>[P1] 手动清除上线抑制标志已收编进 OnlineIntentLifecycle.ManuallyClearedOnline。</summary>
     private bool _wasAutoHoeingRunning;
 
     /// <summary>成员角色头像池（按加入顺序循环分配，file=资源名，ring=元素色描边）。</summary>
@@ -239,6 +235,13 @@ public class MainViewModel : INotifyPropertyChanged
     /// <summary>关闭设置页面（返回成员列表主页）。</summary>
     public RelayCommand CloseSettingsCommand => new(_ => IsShowingSettings = false);
 
+    /// <summary>[P1] 显式构造函数：创建上线意图状态机（构造内恢复持久化的本地 generation）。
+    /// 不能用字段内联初始化——C# 字段初始化器不能引用实例方法 AddLog（CS0236）。</summary>
+    public MainViewModel()
+    {
+        _intentLifecycle = new OnlineIntentLifecycle(AddLog);
+    }
+
     public async Task InitializeAsync()
     {
         _configManager = new AssistConfigManager();
@@ -285,18 +288,17 @@ public class MainViewModel : INotifyPropertyChanged
         // 生成房间码
         RoomCode = AssistConfigManager.GenerateControlRoomCode(_config.TeamUids);
 
-        // S3：generation 持久化恢复——服务端按代序号边沿检测（丢弃 ≤ 历史值），重启归零会导致上线事件被永久丢弃。
-        _localOnlineGeneration = LoadPersistedLocalGeneration();
+        // S3：generation 持久化恢复已收编进 OnlineIntentLifecycle 构造函数（语义不变：重启不复位）。
 
         // [实机修复 2026-09-05] 定时上线"已触发日期"持久化恢复：重启不失忆，
         // 到点已过且超出宽限窗的场景（如设 1:00、1:30 才打开助手）不再被补触发上线。
         _lastScheduledFireDate = LoadPersistedScheduledFireDate();
 
         // S1：重启后按"是否已配置定时上线时间"初始化武装状态——配置了时间则解除手动清除抑制，否则重启后定时器永久静默 return。
-        // _manuallyClearedOnline 不持久化：本会话内手动清除上线（ClearLocalOnline）后仍抑制到重新设定为止（语义不变）。
+        // 抑制标志不持久化：本会话内手动清除上线（ClearLocalOnline）后仍抑制到重新设定为止（语义不变）。
         if (!string.IsNullOrEmpty(_config.ScheduledOnlineTime))
         {
-            _manuallyClearedOnline = false;
+            _intentLifecycle.NoteScheduledOnlineConfigured();
         }
 
         // 启动定时上线定时器（设定过 scheduledOnlineTime 才会真正到点触发）
@@ -495,9 +497,8 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 triggeredAt = taVal.Kind == DateTimeKind.Utc ? taVal : taVal.ToUniversalTime();
             }
-            var firstSight = !_onlineBaselineInitialized;
-            _onlineBaselineInitialized = true;
-            ApplyOnlineGenerationEdge(gen, triggeredAt, firstSight);
+            // [P1] 首见判定/新鲜度校验/基线同步/双来源对齐/防抖全部收编进状态机
+            ApplyOnlineGenerationEdge(gen, triggeredAt);
         }
         catch
         {
@@ -505,85 +506,35 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>[P0-B/切片4] onlineGeneration 边沿检测（事件帧与快照共用）：BGI 重启归零先对齐基线，再比较触发。
-    /// [B157] isFirstSight（本会话首次读到该字段）时做 onlineTriggeredAt 新鲜度校验：
-    /// 历史残留 gen（BGI 很久前跑过任务且 gen 已持久化）只同步基线、不自动上线（幻影上线修复）。
-    /// [B157] 新边沿不再被 _isOnlineReady 永久拦截（旧守卫一次上报失败/服务端放弃轮次就永久吞掉
-    /// 后续所有命令上线，是"偶发执行了不上线"的根因）；重跑风暴改由 60s 防抖窗 + 服务端槽位
-    /// 去重/参与者集合消费兜底，防抖窗随服务端 AllReadyAbort 复位 _isOnlineReady 而提前解除。</summary>
-    private void ApplyOnlineGenerationEdge(int gen, DateTime? triggeredAtUtc = null, bool isFirstSight = false)
+    /// <summary>[P1] onlineGeneration 边沿入口（事件帧/快照/v2 轮询共用）：状态判定全部收口到
+    /// OnlineIntentLifecycle.ApplyEdge（BGI 重启归零下行对齐、双来源对齐写盘、2 分钟新鲜度窗、60s 防抖）；
+    /// 意图被接受（Accepted）时由本类完成 SignalR 上报（网络 IO 不进状态机）。</summary>
+    private void ApplyOnlineGenerationEdge(int gen, DateTime? triggeredAtUtc = null)
     {
-        // [P0-B 止血] 同款基线同步：BGI 重启后进程内代序号归零，先对齐再比较，避免边沿检测永久静音
-        if (gen < _lastOnlineGeneration)
+        if (_intentLifecycle.ApplyEdge(gen, triggeredAtUtc, out var genToReport) == OnlineEdgeResult.Accepted)
         {
-            _lastOnlineGeneration = gen;
-        }
-
-        if (gen > _lastOnlineGeneration)
-        {
-            _lastOnlineGeneration = gen;
-            // [双来源对齐] BGI 计数器与助手本地计数器（定时上线用）共用服务端同一槽位，
-            // 服务端只收 gen>历史值。BGI 侧冲高后（标记任务重跑），本地定时路径的更小 gen
-            // 会被服务端当旧事件静默丢弃 → 永不开锄。这里把本地计数器向上对齐并写盘，
-            // 保证后续定时上报严格大于服务端槽位。
-            lock (_genLock)
-            {
-                if (gen > _localOnlineGeneration)
-                {
-                    _localOnlineGeneration = gen;
-                    PersistLocalGeneration(gen);
-                }
-            }
-            // [B157] 首见边沿新鲜度校验：助手启动/ext 通道重建后首次读到 gen>0 可能是历史触发残留；
-            // 触发时间超出新鲜窗（或旧 BGI 无 onlineTriggeredAt 字段）时只建基线，不幻影上线。
-            if (isFirstSight)
-            {
-                var fresh = triggeredAtUtc.HasValue
-                    && (DateTime.UtcNow - triggeredAtUtc.Value) < OnlineEdgeFreshnessWindow;
-                if (!fresh)
-                {
-                    AddLog($"检测到历史上线标记（generation={gen}），非本次会话的新鲜触发，仅同步基线不自动上线");
-                    return;
-                }
-            }
-            // [B157] 60s 防抖（替代旧 _isOnlineReady 永久守卫）：上线事件刚成功送达且本地仍处"已上线"，
-            // 短时间内的新边沿视为任务流重跑风暴（游戏反复关停重拉标记任务），只同步基线。
-            // 上报失败不会布防（_lastOnlineEventReportedAtUtc 只在送达后更新），用户重跑即刻重试。
-            if (_isOnlineReady && (DateTime.UtcNow - _lastOnlineEventReportedAtUtc) < OnlineReportDebounce)
-            {
-                AddLog($"检测到上线标记重复执行（generation={gen}），60 秒内已上报，跳过重复上报");
-                return;
-            }
-            // 与轮询路径一致：标记已上线（命令模式）并上报服务端，由服务端状态机协调
-            _isOnlineReady = true;
-            _onlineMode = "command";
-            // 新一轮上线意图：清掉 AllReady 执行守卫的旧轮次残留，
-            // 避免历史高 gen 压住本轮（守卫只应防同一轮重复执行，不应跨轮压制新轮）
-            _lastProcessedAllReadyGeneration = 0;
-            _ = ReportOnlineEventTrackedAsync(gen);
+            _ = ReportOnlineEventTrackedAsync(genToReport);
         }
     }
 
-    /// <summary>[B157] 上报上线事件并跟踪结果：送达则记录 _lastReportedOnlineGen/送达时间（防抖与重连补报基准）；
-    /// 未送达（无客户端/未连接/调用失败）则挂起 _pendingOnlineReportGen，由 10s 轮询与重连钩子自动补报。
+    /// <summary>[B157] 上报上线事件并跟踪结果：送达则记入状态机送达台账（防抖与重连补报基准）；
+    /// 未送达（无客户端/未连接/调用失败）则挂起待补报，由 10s 轮询与重连钩子自动补报。
     /// 替代旧的 fire-and-forget 静默丢弃（那是"偶发执行了不上线"的直接根因）。</summary>
     private async Task<bool> ReportOnlineEventTrackedAsync(int gen)
     {
         if (_signalRClient == null)
         {
-            _pendingOnlineReportGen = Math.Max(_pendingOnlineReportGen, gen);
+            _intentLifecycle.NoteReportPending(gen);
             return false;
         }
         var ok = await _signalRClient.ReportOnlineEventAsync(gen, true);
         if (ok)
         {
-            _lastReportedOnlineGen = Math.Max(_lastReportedOnlineGen, gen);
-            _lastOnlineEventReportedAtUtc = DateTime.UtcNow;
-            if (_pendingOnlineReportGen <= gen) _pendingOnlineReportGen = 0;
+            _intentLifecycle.NoteReportDelivered(gen);
         }
         else
         {
-            _pendingOnlineReportGen = Math.Max(_pendingOnlineReportGen, gen);
+            _intentLifecycle.NoteReportPending(gen);
             AddLog($"上线事件（generation={gen}）未送达服务端，已挂起，连接恢复后每 10 秒自动补报");
         }
         return ok;
@@ -596,13 +547,10 @@ public class MainViewModel : INotifyPropertyChanged
     private async Task ReReportOnlineIntentIfNeededAsync()
     {
         if (_signalRClient?.IsConnected != true) return;
-        var gen = Math.Max(_pendingOnlineReportGen, _isOnlineReady ? _lastReportedOnlineGen : 0);
-        if (gen <= 0) return;
+        if (!_intentLifecycle.TryGetReReportGen(out var gen)) return;
         if (await _signalRClient.ReportOnlineEventAsync(gen, true))
         {
-            _pendingOnlineReportGen = 0;
-            _lastReportedOnlineGen = Math.Max(_lastReportedOnlineGen, gen);
-            _lastOnlineEventReportedAtUtc = DateTime.UtcNow;
+            _intentLifecycle.NoteReReportDelivered(gen);
             AddLog($"已向服务端补报上线意图（generation={gen}）");
         }
     }
@@ -798,7 +746,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         // [B157] 上线事件上报失败的待补报重试（每 10s 一跳）：旧实现 fire-and-forget 静默丢弃后
         // 客户端已自认"已上线"，不再重试——偶发断线即永久不上线。服务端按 gen 边沿去重，重试安全。
-        if (_pendingOnlineReportGen > 0)
+        if (_intentLifecycle.PendingOnlineReportGen > 0)
         {
             _ = ReReportOnlineIntentIfNeededAsync();
         }
@@ -1036,8 +984,8 @@ public class MainViewModel : INotifyPropertyChanged
             CurrentRouteDisplay = currentRouteDisplay,
             AutoHoeingRunning = autoHoeingRunning,
             AutoHoeingProgress = autoHoeingProgress,
-            OnlineReady = _isOnlineReady,
-            OnlineMode = _onlineMode,
+            OnlineReady = _intentLifecycle.IsOnlineReady,
+            OnlineMode = _intentLifecycle.OnlineMode,
             ScheduledOnlineTime = _config?.ScheduledOnlineTime ?? "",
             OnlineHoeingGroupNames = _config?.OnlineHoeingGroupNames ?? [],
             QuickCommands = _config?.QuickCommands ?? new(),
@@ -1045,7 +993,7 @@ public class MainViewModel : INotifyPropertyChanged
         };
 
         // 检测"联机锄地上线"任务已执行（通过 onlineGeneration 代序号边沿检测 + recentTaskName 降级）
-        // 优先读 onlineGeneration（新字段），比 _lastOnlineGeneration 大才触发（边沿检测）。
+        // 优先读 onlineGeneration（新字段），比状态机内边沿基线大才触发（边沿检测）。
         // 如果 onlineGeneration 不存在，降级到 recentTaskName 电平检测（旧 BGI 兼容）。
         // 触发后上报服务端（ReportOnlineEvent），由服务端状态机做就绪判断，助手端不做本地状态决策。
         // [切片1] ext 事件通道可用时 online.triggered 由事件驱动（A5：秒级到达 vs 10s 轮询），跳过本段 v2 轮询；
@@ -1074,19 +1022,17 @@ public class MainViewModel : INotifyPropertyChanged
                         {
                             triggeredAt = taVal.Kind == DateTimeKind.Utc ? taVal : taVal.ToUniversalTime();
                         }
-                        var firstSight = !_onlineBaselineInitialized;
-                        _onlineBaselineInitialized = true;
-                        // 边沿检测/基线同步/双来源对齐/防抖/上报全部收口到共享方法（与快照路径同款语义）
-                        ApplyOnlineGenerationEdge(gen, triggeredAt, firstSight);
+                        // [P1] 首见判定收编进状态机；边沿检测/基线同步/双来源对齐/防抖/上报全部收口到共享方法（与快照路径同款语义）
+                        ApplyOnlineGenerationEdge(gen, triggeredAt);
                         // 同步本地已构造的 status 对象，防止后续 ReportControlStatusAsync 用旧值覆盖服务端
-                        status.OnlineReady = _isOnlineReady;
-                        status.OnlineMode = _onlineMode;
+                        status.OnlineReady = _intentLifecycle.IsOnlineReady;
+                        status.OnlineMode = _intentLifecycle.OnlineMode;
                     }
                     // 降级：读 recentTaskName（旧 BGI 兼容）
                     else if (sdata.TryGetProperty("recentTaskName", out var rtn) && rtn.ValueKind == System.Text.Json.JsonValueKind.String)
                     {
                         var recentTask = rtn.GetString() ?? "";
-                        if (recentTask == "联机锄地上线" && !_isOnlineReady)
+                        if (recentTask == "联机锄地上线" && !_intentLifecycle.IsOnlineReady)
                         {
                             _ = MarkOnlineAsync("command");
                         }
@@ -1133,6 +1079,10 @@ public class MainViewModel : INotifyPropertyChanged
                 // 联机锄地已结束，在助手房间内显示恢复提示（不弹窗）
                 var policyAtEdge = SnapshotOnlineHoeingPolicy();
                 AddLog($"联机锄地已结束，10 秒后按任务冲突策略（{policyAtEdge.PolicyDisplayName}）处置被中断的原任务...");
+                // [P1b] 捕获边沿时刻的批次句柄：本定时器与批次末尾收尾可能同时命中同一轮，
+                // 必须走同一"恰好一次"守卫（RunSpecified 策略双执行会重复启动指定任务）
+                OnlineHoeingBatch? batchAtEdge;
+                lock (_batchGate) { batchAtEdge = _activeBatch; }
                 // 启动恢复定时器（10 秒后按策略收尾：恢复 / 清上下文停止 / 清上下文并启动指定任务）
                 _resumeTimeoutTimer?.Dispose();
                 _resumeTimeoutTimer = new System.Threading.Timer(async _ =>
@@ -1140,7 +1090,27 @@ public class MainViewModel : INotifyPropertyChanged
                     if (_commandExecutor != null)
                     {
                         // [任务冲突策略] 第二个恢复触发器（10s 轮询边沿检测）：与批次内收尾走同一策略闭环
-                        await _commandExecutor.ApplyPolicyTeardownAsync(SnapshotOnlineHoeingPolicy(), "联机锄地", userCancelled: false, AddLog);
+                        if (batchAtEdge != null)
+                        {
+                            await ApplyPolicyTeardownOnceAsync(batchAtEdge, "联机锄地", userCancelled: false);
+                        }
+                        else
+                        {
+                            // 非 AllReady 批次的锄地（如手动启动）：无批次键可比对——若 30s 内刚实际执行过
+                            // 策略收尾（批次末尾收尾与本边沿几乎同时的双执行场景），跳过迟到边沿；
+                            // 超过 30s 判定为无关手动会话，保持原行为直接收尾
+                            bool recentlyDone;
+                            lock (_teardownGate) { recentlyDone = (DateTime.UtcNow - _lastTeardownUtc) < TimeSpan.FromSeconds(30); }
+                            if (recentlyDone)
+                            {
+                                AddLog("刚完成策略收尾，跳过迟到边沿");
+                            }
+                            else
+                            {
+                                await _commandExecutor.ApplyPolicyTeardownAsync(SnapshotOnlineHoeingPolicy(), "联机锄地", userCancelled: false, AddLog);
+                                lock (_teardownGate) { _lastTeardownUtc = DateTime.UtcNow; }
+                            }
+                        }
                     }
                 }, null, TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(-1));
             }
@@ -1163,11 +1133,29 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>标记已上线并上报服务端。返回 false 表示上线事件未送达服务端（无客户端/未连接），
-    /// 定时器路径据此不标记当天已触发、下跳 30 秒自动重试（S2）；非定时路径调用方可忽略返回值。</summary>
+    /// 定时器路径据此不标记当天已触发、下跳 30 秒自动重试（S2）；非定时路径调用方可忽略返回值。
+    /// [P1] 连接就绪判定留在本方法（依赖 SignalRClient）；gen 自增+写盘+清零守卫+置 Armed 收口进状态机。</summary>
     private async Task<bool> MarkOnlineAsync(string mode)
     {
-        _isOnlineReady = true;
-        _onlineMode = mode;
+        // 上报上线事件，驱动服务端 AllReady（全员就绪）检查
+        if (_signalRClient == null)
+        {
+            return false;
+        }
+        // S2：上报前检查连接状态——未连接时 ReportOnlineEventAsync 会静默丢弃事件，
+        // 这里不增 generation、不置 Armed，返回 false 让定时器路径下跳 30 秒自动重试。
+        // （旧实现先置 _isOnlineReady=true 再判连接，未连接时残留"本地已上线但服务端不知道"
+        // 的幻影状态，recentTaskName 降级路径因此被 !IsOnlineReady 挡住永不重试——事故根因之一。）
+        if (!_signalRClient.IsConnected)
+        {
+            AddLog(mode == "scheduled"
+                ? "已到定时上线时间，但服务器未连接，将在 30 秒后重试"
+                : "上线事件未上报：服务器未连接");
+            return false;
+        }
+
+        // [P1] 状态跃迁（置 Armed）、gen 自增+写盘、清零 AllReady 执行守卫，全部在状态机内完成
+        var gen = _intentLifecycle.RaiseLocalIntent(mode);
         AddLog($"已上线（{mode}）");
         // 立即上报服务端，让卡片实时更新（不等下一次 10 秒轮询）
         try
@@ -1179,31 +1167,6 @@ public class MainViewModel : INotifyPropertyChanged
             // 上报失败不影响上线状态标记
         }
 
-        // 上报上线事件，驱动服务端 AllReady（全员就绪）检查
-        if (_signalRClient == null)
-        {
-            return false;
-        }
-        // S2：上报前检查连接状态——未连接时 ReportOnlineEventAsync 会静默丢弃事件，
-        // 这里不增 generation、不打"已上报"，返回 false 让定时器路径下跳 30 秒自动重试。
-        if (!_signalRClient.IsConnected)
-        {
-            AddLog(mode == "scheduled"
-                ? "已到定时上线时间，但服务器未连接，将在 30 秒后重试"
-                : "上线事件未上报：服务器未连接");
-            return false;
-        }
-
-        int gen;
-        lock (_genLock)
-        {
-            gen = ++_localOnlineGeneration;
-        }
-        // 新一轮上线意图：清掉 AllReady 执行守卫的旧轮次残留
-        // （守卫只应防同一轮重复执行；历史高 gen 不应跨轮压制本轮）
-        _lastProcessedAllReadyGeneration = 0;
-        // S3：自增后立即写盘，保证重启后单调递增。写盘失败仅记日志，不影响本次上线事件。
-        PersistLocalGeneration(gen);
         try
         {
             // [B157] 走跟踪上报：送达记入防抖基准/重连补报基准；未送达挂起待补报（10s 轮询重试）
@@ -1219,40 +1182,8 @@ public class MainViewModel : INotifyPropertyChanged
         return true;
     }
 
-    /// <summary>本地 generation 持久化文件路径（与 assistant-config.json 同目录，%APPDATA%/NexusBGI）。</summary>
-    private static string LocalGenerationFilePath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NexusBGI", "assistant-online-generation.txt");
-
-    /// <summary>启动时读取持久化 generation。文件不存在/解析失败则从 0 开始（单机/未联机用户无感知）。</summary>
-    private int LoadPersistedLocalGeneration()
-    {
-        try
-        {
-            var path = LocalGenerationFilePath;
-            if (File.Exists(path) && int.TryParse(File.ReadAllText(path).Trim(), out var saved) && saved >= 0)
-            {
-                return saved;
-            }
-        }
-        catch (Exception ex)
-        {
-            AddLog($"[定时上线] 读取 assistant-online-generation.txt 失败，generation 从 0 开始: {ex.Message}");
-        }
-        return 0;
-    }
-
-    /// <summary>自增后写盘。失败仅记日志，不影响本次上线事件。</summary>
-    private void PersistLocalGeneration(int generation)
-    {
-        try
-        {
-            File.WriteAllText(LocalGenerationFilePath, generation.ToString());
-        }
-        catch (Exception ex)
-        {
-            AddLog($"[定时上线] 写入 assistant-online-generation.txt 失败，本次 generation 未持久化: {ex.Message}");
-        }
-    }
+    // [P1] 本地 generation 持久化（LocalGenerationFilePath/LoadPersistedLocalGeneration/PersistLocalGeneration）
+    // 已随状态机搬入 OnlineIntentLifecycle。
 
     /// <summary>[实机修复 2026-09-05] 定时上线"已触发日期"持久化文件（与 assistant-config.json 同目录）。</summary>
     private static string ScheduledFireDateFilePath => Path.Combine(
@@ -1307,7 +1238,7 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>启动定时上线定时器（每 30 秒检查一次）。
-    /// 不依赖 _isOnlineReady（避免状态残留阻塞），改用按天去重防止重复触发。</summary>
+    /// 不依赖上线状态（避免状态残留阻塞），改用按天去重防止重复触发。</summary>
     private void StartOnlineScheduler()
     {
         _onlineTimer?.Dispose();
@@ -1324,7 +1255,7 @@ public class MainViewModel : INotifyPropertyChanged
 
                 // 用户手动清除上线后，抑制定时自动上线（除非重新设定定时上线清除标志）。
                 // 静默 return：不每 30 秒刷日志（S1）。
-                if (_manuallyClearedOnline) return;
+                if (_intentLifecycle.ManuallyClearedOnline) return;
 
                 var now = DateTime.Now;
                 if (!TimeSpan.TryParse(_config.ScheduledOnlineTime, out var targetTime)) return;
@@ -1697,8 +1628,9 @@ public class MainViewModel : INotifyPropertyChanged
         var (confirmed, broadcastAll) = ShowStopStartConfirmDialog("确认停止 BGI", "确定要停止 BGI 吗？");
         if (!confirmed) return; // 用户取消
 
-        // 标记依次执行序列已取消（用户手动停止后，剩余配置组不再执行）
-        _isAllReadySequenceCancelled = true;
+        // [P1b] 用户手动停止 = 取消当前 AllReady 批次（原共享 bool _isAllReadySequenceCancelled 已并入批次 CTS），
+        // 后台依次执行序列在下一次迭代检查点退出，剩余配置组不再执行
+        lock (_batchGate) { _activeBatch?.Cancel(); }
 
         if (broadcastAll)
         {
@@ -2320,22 +2252,21 @@ public class MainViewModel : INotifyPropertyChanged
         return (confirmed, clearAll);
     }
 
-    /// <summary>本地清除已上线状态：复位 _isOnlineReady / _onlineMode 并上报服务端。</summary>
+    /// <summary>本地清除已上线状态：状态机复位为 Idle 并封口边沿基线，然后上报服务端。
+    /// [P1] 状态部分（含 int.MaxValue 封口语义）收编进 OnlineIntentLifecycle；BGI 实际 gen 的 IPC 读取留在本类。</summary>
     private async Task ClearLocalOnline()
     {
-        _isOnlineReady = false;
-        _onlineMode = "none";
-        _pendingOnlineReportGen = 0; // [B157] 手动清除后不再补报已撤销的上线意图
-        _manuallyClearedOnline = true; // 手动清除后，抑制定时自动上线
-        // 关键：把 _lastOnlineGeneration 提升到当前 BGI 的 onlineGeneration 值，
-        // 这样 ReportStatusAsync 的边沿探测 (`gen > _lastOnlineGeneration`) 不再触发重复上线。
+        // 立即部分：Idle、清挂起补报（不再补报已撤销的上线意图）、置手动清除抑制
+        _intentLifecycle.OnManualCleared();
+        // 关键：把边沿基线提升到当前 BGI 的 onlineGeneration 值，
+        // 这样 ReportStatusAsync 的边沿探测（gen > 基线）不再触发重复上线。
         // 但真正的命令上线（BGI 新执行"联机锄地上线"，generation 递增）仍能触发（新值 > 当前值）。
         // 读取失败时用一个很大的值兜底（保证本会话内不再被旧 generation 触发）。
 
         // 遥控器模式：本机没有 BGI 进程，跳过 IPC 调用（避免死锁），直接设最大兜底值
         if (_config?.ObserverMode == true)
         {
-            _lastOnlineGeneration = int.MaxValue;
+            _intentLifecycle.SealBaselineAfterManualClear(int.MaxValue);
         }
         else
         {
@@ -2349,21 +2280,22 @@ public class MainViewModel : INotifyPropertyChanged
                     if (sdata.TryGetProperty("onlineGeneration", out var og)
                         && og.ValueKind == System.Text.Json.JsonValueKind.Number)
                     {
-                        _lastOnlineGeneration = og.GetInt32();
+                        // 按 BGI 实际 gen 封口：BGI 后续新触发（gen 递增）仍可解除封口上线
+                        _intentLifecycle.SealBaselineAfterManualClear(og.GetInt32());
                     }
                     else
                     {
-                        _lastOnlineGeneration = int.MaxValue;
+                        _intentLifecycle.SealBaselineAfterManualClear(int.MaxValue);
                     }
                 }
                 else
                 {
-                    _lastOnlineGeneration = int.MaxValue;
+                    _intentLifecycle.SealBaselineAfterManualClear(int.MaxValue);
                 }
             }
             catch
             {
-                _lastOnlineGeneration = int.MaxValue;
+                _intentLifecycle.SealBaselineAfterManualClear(int.MaxValue);
             }
         }
 
@@ -2409,7 +2341,7 @@ public class MainViewModel : INotifyPropertyChanged
             if (_config != null && member.PlayerUid == _config.PlayerUid)
             {
                 _lastScheduledFireDate = DateTime.MinValue;
-                _manuallyClearedOnline = false;
+                _intentLifecycle.NoteOnlineHistoryCleared(); // [P1] 解除手动清除抑制
                 AddLog("已重置本地状态，可重新上线");
             }
         }
@@ -2620,10 +2552,10 @@ public class MainViewModel : INotifyPropertyChanged
         _configManager?.Save(_config);
 
         // 手动设定/清除定时上线 = 用户主动操作，清除"已手动清除上线"抑制标志，允许重新上线
-        _manuallyClearedOnline = false;
+        _intentLifecycle.NoteScheduledOnlineConfigured();
 
         // 定时上线语义 = 闹钟：设/清时间只更新闹钟显示，不改变当前上线状态。
-        // 是否上线由 _isOnlineReady 决定（定时到点/命令上线才触发 MarkOnlineAsync 置 true）；
+        // 是否上线由状态机 IsOnlineReady 决定（定时到点/命令上线才触发 MarkOnlineAsync 置 Armed）；
         // 清除上线请用"清除上线"按钮。
         var self = Members.FirstOrDefault(m => m.PlayerUid == _config.PlayerUid);
         if (self != null)
@@ -3991,14 +3923,14 @@ public class MainViewModel : INotifyPropertyChanged
         {
             // [实机修复] 确认回执永远先回：服务端在等 ack，不回会 30s×3 超时后整轮放弃开锄。
             // 服务端 RegisterConfirmAck 已按"当前轮次 generation + confirming 状态"校验，过期 ack 安全丢弃。
-            // 历史 bug：先查 _lastProcessedAllReadyGeneration 守卫再回执，守卫被旧轮次冲高后
+            // 历史 bug：先查 AllReady 执行守卫再回执，守卫被旧轮次冲高后
             // 确认被静默丢弃 → 服务端永远等不到 ack → 不开锄。
             if (_signalRClient != null)
             {
                 await _signalRClient.ConfirmAllReadyAsync(generation);
             }
             // 是否真正执行仍受 generation 守卫（OnAllReadyConfirmedInternal 内部还有二次守卫+互斥锁）
-            if (generation <= _lastProcessedAllReadyGeneration)
+            if (generation <= _intentLifecycle.LastProcessedAllReadyGeneration)
             {
                 return;
             }
@@ -4010,10 +3942,8 @@ public class MainViewModel : INotifyPropertyChanged
             // [B157] 服务端确认超时放弃本轮（缺人不开锄）：仅当本端是本轮参与者才复位本地"已上线"。
             // 旧实现服务端耗尽后无任何通知，_isOnlineReady 永久残留，后续命令上线全被客户端守卫吞掉。
             if (!targetUids.Contains(_config?.PlayerUid)) return;
-            if (!_isOnlineReady) return;
-            _isOnlineReady = false;
-            _onlineMode = "none";
-            _pendingOnlineReportGen = 0;
+            // [P1] 复位+清挂起补报收口进状态机；本就不在上线状态时无需处理
+            if (!_intentLifecycle.OnAllReadyAborted()) return;
             AddLog($"本轮联机开锄未凑齐确认（generation={generation}），服务端已放弃本轮；可重新执行\"联机锄地上线\"");
             _ = ReportStatusAsync();
         };
@@ -4644,8 +4574,12 @@ public class MainViewModel : INotifyPropertyChanged
         {
             if (_processMonitor == null)
                 return new CommandResult { Status = "failed", Message = "未配置 BGI 路径，无法关闭 BGI" };
-            _processMonitor.KillBgi();
-            return new CommandResult { Status = "success", Message = "已强制结束当前会话的 BGI 进程" };
+            // [P2 仲裁] 收编到仲裁器：信号量串行 + 有意杀死抑制（防守护把本次强杀误判为崩溃再拉起）
+            // + 等进程真正退净；杀不掉（提权）时如实返回失败
+            var killed = await _processMonitor.KillBgiControlledAsync("启动中心 kill_bgi 节点");
+            return killed
+                ? new CommandResult { Status = "success", Message = "已强制结束当前会话的 BGI 进程" }
+                : new CommandResult { Status = "failed", Message = "无法终止现有 BGI 进程（可能提权运行），请手动关闭 BGI 后重试" };
         }
 
         if (_commandExecutor == null)
@@ -4718,49 +4652,49 @@ public class MainViewModel : INotifyPropertyChanged
             _processMonitor?.Dispose();
             _processMonitor = null;
             _commandExecutor = null;
-            _isOnlineReady = false;
-            _onlineMode = "none";
-            _pendingOnlineReportGen = 0; // [B157] 切模式后不再补报旧的上线意图
-            // 复位上线代序号，避免切回执行模式后 onlineGeneration 边沿检测自动触发上线
-            _lastOnlineGeneration = int.MaxValue;
+            // [P1] 复位上线状态/清挂起补报/基线封口 int.MaxValue（避免切回执行模式后边沿检测自动触发上线），
+            // 全部收口进状态机
+            _intentLifecycle.OnModeSwitched();
             AddLog("遥控器模式已启用，跳过 BGI 进程监控");
         }
         else if (!string.IsNullOrEmpty(_config?.BgiPath))
         {
-            _processMonitor = new BgiProcessMonitor(_config.BgiPath);
-            _processMonitor.OnBgiStarted += () =>
+            _processMonitor = new BgiProcessMonitor(_config.BgiPath, AddLog);
+            // [P1] 原 OnBgiStarted 处理器（`_lastOnlineGeneration = 0`）已整体删除、不再订阅：
+            // BGI 重启后进程内 onlineGeneration 归零，状态机 ApplyEdge 的下行对齐（gen < 基线 → 基线降为 gen）
+            // 天然处理归零场景；而主动清零基线是幻影上线放大器——BGI 持久化/重启瞬间的高 gen 残留
+            // 会在基线被清零后被当成"新边沿"触发幻影上线。
+            _processMonitor.OnBgiCrashed += async () =>
             {
-                // [P0-B 止血] BGI（重）启动后其进程内 onlineGeneration 归零（从 1 重新开始），
-                // 本地边沿检测基线同步复位为 0，避免 _lastOnlineGeneration 残留历史大值
-                // 导致重启后的上线事件被边沿检测永久静音。覆盖所有 RestartBgi 路径。
-                _lastOnlineGeneration = 0;
-            };
-            _processMonitor.OnBgiCrashed += () =>
-            {
-                // [P1-E 止血] 重入守卫双保险：BgiProcessMonitor 已做"运行→消失"边沿检测，
-                // 这里再用 Interlocked 防止崩溃事件并发触发多次 RestartBgi 导致双开 BGI。
-                if (Interlocked.CompareExchange(ref _isBgiRestarting, 1, 0) != 0)
-                {
-                    return;
-                }
+                // [P2 仲裁] 崩溃重启收编到仲裁器：原 Interlocked 重入守卫（_isBgiRestarting）已删除——
+                // 仲裁器 SemaphoreSlim 已串行化全部杀/启操作（含回退重启与 kill_bgi），双守卫语义重复，
+                // 且 async 等待（杀+等退净最长十余秒）期间 Interlocked 长时间占位会挡住合法重启。
+                // async void 事件处理器必须 try/catch 兜底，异常不能逃逸出事件回调。
                 try
                 {
                     AddLog("BGI 已崩溃，自动重启");
-                    _processMonitor.RestartBgi();
+                    var restarted = await _processMonitor.RestartBgiControlledAsync(null, "崩溃守护");
+                    if (!restarted)
+                    {
+                        AddLog("崩溃自动重启失败：无法终止残留 BGI 进程（可能提权运行），请手动关闭 BGI 后重试");
+                        return;
+                    }
                     AddLog("BGI 已自动重启");
                     _ = ReportStatusAsync();
                 }
-                finally
+                catch (Exception ex)
                 {
-                    _isBgiRestarting = 0;
+                    AddLog($"崩溃自动重启异常: {ex.Message}");
                 }
             };
             if (_config.GuardBgi)
             {
                 _processMonitor.Start();
             }
+            // [P3 对账] isBatchInFlight：供 CommandExecutor 区分"批次在跑的中断上下文"（无损拒绝保护）
+            // 与"孤儿残留上下文"（对账清除），判定以 _activeBatch 存活为准
             _commandExecutor = new CommandExecutor(_processMonitor, _config.BgiPath, () => _externalClient,
-                AddLog);
+                AddLog, () => { lock (_batchGate) { return _activeBatch?.IsAlive == true; } });
         }
     }
 
@@ -4912,10 +4846,9 @@ public class MainViewModel : INotifyPropertyChanged
     /// 嘟嘟可卡死心跳检测用：只读缓存，不新起 IPC 轮询。</summary>
     public ControlStatus? LatestLocalStatus { get; private set; }
 
-    /// <summary>最近一次联机上线代序号（onlineGeneration 边沿检测的最近已处理值）。
+    /// <summary>最近一次联机上线代序号（onlineGeneration 边沿检测的最近已处理值，[P1] 转发状态机快照）。
     /// 嘟嘟可批次统计用做批次键；int.MaxValue 为"未知"兜底值，调用方应视为拿不到。</summary>
-    public int? CurrentOnlineGeneration =>
-        _lastOnlineGeneration is > 0 and < int.MaxValue ? _lastOnlineGeneration : null;
+    public int? CurrentOnlineGeneration => _intentLifecycle.CurrentOnlineGeneration;
 
     /// <summary>SignalR 客户端出口（可能为 null，懒解析即可）。嘟嘟可 P5 截图汇聚用。</summary>
     internal SignalRClient? SignalR => _signalRClient;
@@ -6207,6 +6140,28 @@ public class MainViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 
+    /// <summary>
+    /// [P1b] 策略收尾恰好一次守卫：批次正常末尾 / 批次内 F11 取消分支 / 10s 恢复定时器三个入口互斥，
+    /// 同一轮上线锄地（按批次 generation 代序号比对）只执行一次——恢复定时器由 autoHoeingRunning
+    /// 边沿触发，与批次末尾收尾可能同时命中，RunSpecified 策略双执行会重复启动指定任务（实机事故）。
+    /// 守卫单调不减、新一轮 AllReady 不重置（重置会让旧轮次迟到的恢复定时器在新一轮里重跑收尾）；
+    /// generation ≤ 0 的异常批次不进门，保持原行为直接执行。
+    /// </summary>
+    private async Task ApplyPolicyTeardownOnceAsync(OnlineHoeingBatch batch, string executedDesc, bool userCancelled)
+    {
+        lock (_teardownGate)
+        {
+            if (batch.Generation > 0 && _teardownDoneGeneration >= batch.Generation) return;
+            if (batch.Generation > _teardownDoneGeneration) _teardownDoneGeneration = batch.Generation;
+        }
+        if (_commandExecutor != null)
+        {
+            await _commandExecutor.ApplyPolicyTeardownAsync(SnapshotOnlineHoeingPolicy(), executedDesc, userCancelled, AddLog);
+            // 记录实际执行时间：10s 恢复定时器的无批次键直接路径据此跳过 30s 内的迟到边沿
+            lock (_teardownGate) { _lastTeardownUtc = DateTime.UtcNow; }
+        }
+    }
+
     private async Task OnAllReadyConfirmedInternal(int generation)
     {
         // 互斥锁：防止两轮 AllReady 并发执行 OnAllReadyConfirmedInternal（patterns §31）
@@ -6215,13 +6170,36 @@ public class MainViewModel : INotifyPropertyChanged
             AddLog("[上线探针] OnAllReadyConfirmedInternal 已在执行中，跳过");
             return;
         }
-        // 幂等保护：同一 generation 只处理一次（防止 async void 并发或重复广播）
-        if (generation <= _lastProcessedAllReadyGeneration)
+        // [P1] 幂等保护收口进状态机：同一 generation 只处理一次（防止 async void 并发或重复广播）；
+        // 通过后状态 Armed → Executing
+        if (!_intentLifecycle.TryBeginAllReady(generation))
         {
             _isAllReadyProcessing = 0;
             return;
         }
-        _lastProcessedAllReadyGeneration = generation;
+
+        // [P1b] 新一轮到达而上一轮批次仍存活：先取消旧批次（CTS.Cancel + 短超时等退出）再启动新批次，
+        // 杜绝两轮 AllReady 批次并发交错（原 fire-and-forget 无句柄可寻，旧批次不可取消）
+        OnlineHoeingBatch? previous;
+        lock (_batchGate) { previous = _activeBatch; }
+        if (previous is { IsAlive: true })
+        {
+            AddLog($"新一轮 AllReady（generation={generation}）到达，取消上一轮未完成批次（generation={previous.Generation}）");
+            previous.Cancel();
+            if (previous.RunTask != null)
+            {
+                try
+                {
+                    await previous.RunTask.WaitAsync(TimeSpan.FromSeconds(3));
+                }
+                catch
+                {
+                    // 超时/取消/异常均继续：旧批次残余会在下一次迭代检查点读到令牌后自行退出
+                }
+            }
+        }
+        var batch = new OnlineHoeingBatch(generation);
+        lock (_batchGate) { _activeBatch = batch; }
 
         // 获取绑定的联机配置组列表
         var groupNames = _config?.OnlineHoeingGroupNames ?? [];
@@ -6232,6 +6210,8 @@ public class MainViewModel : INotifyPropertyChanged
         {
             _isAllReadyProcessing = 0;
             AddLog("未绑定联机锄地配置组，无法启动联机锄地");
+            // [P1b] 早退也要复位状态机（Executing → Idle），否则生命周期卡在 Executing 永不回收
+            _intentLifecycle.OnBatchFinished(generation, "未绑定联机锄地配置组");
             return;
         }
 
@@ -6265,8 +6245,8 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 AddLog("_processMonitor 也为 null，无法启动 BGI。请在设置页配置 BGI 路径");
             }
-            _isOnlineReady = false;
-            _onlineMode = "none";
+            // [P1b] 批次未启动的统一复位出口（Executing → Idle）
+            _intentLifecycle.OnBatchFinished(generation, $"CommandExecutor 不可用，AllReady 批次未启动（generation={generation}）");
             _ = ReportStatusAsync();
             return;
         }
@@ -6292,8 +6272,8 @@ public class MainViewModel : INotifyPropertyChanged
         // （ext slotReleased 事件 + 快照探测 + 200ms×30 轮询兜底），按键抢占路径复用同一实现。
         await _commandExecutor.WaitTaskSlotSettledAsync("[上线探针]", AddLog);
 
-        // 依次执行所有绑定的配置组
-        _ = Task.Run(async () =>
+        // [P1b] 依次执行所有绑定的配置组（批次有主句柄：取消语义走 batch.Cts，原共享 bool 已废弃）
+        batch.RunTask = Task.Run(async () =>
         {
             try
             {
@@ -6303,9 +6283,9 @@ public class MainViewModel : INotifyPropertyChanged
 
                 for (int i = 0; i < groupNames.Count; i++)
                 {
-                    if (_isAllReadySequenceCancelled)
+                    // 取消检查点：外部"用户手动停止"（OnStop）或新一轮 AllReady 顶替都会置令牌
+                    if (batch.IsCancellationRequested)
                     {
-                        _isAllReadySequenceCancelled = false;
                         break;
                     }
                     var currentGroup = groupNames[i];
@@ -6327,12 +6307,18 @@ public class MainViewModel : INotifyPropertyChanged
                     var startResult = await _commandExecutor.ExecuteAsync(startCmd);
                     if (startResult.Status == "cancelled")
                     {
-                        _isAllReadySequenceCancelled = true;
-                        if (_commandExecutor != null)
+                        // 区分取消来源：令牌已被外部置位（新一轮 AllReady 顶替 / OnStop 手动停止），
+                        // 说明取消不是用户 F11——跳过 userCancelled:true 收尾直接退出，
+                        // 否则会把新轮刚建立的中断上下文清掉
+                        if (batch.IsCancellationRequested)
                         {
-                            // 用户 F11 取消永远压过配置策略：清上下文，不恢复、不启动指定任务
-                            await _commandExecutor.ApplyPolicyTeardownAsync(SnapshotOnlineHoeingPolicy(), "联机锄地配置组", userCancelled: true, AddLog);
+                            AddLog("批次被新轮/手动停止取消，跳过 F11 收尾");
+                            break;
                         }
+                        batch.Cancel(); // 用户 F11 取消：记入批次令牌，阻止批次末尾再走策略收尾
+                        // 用户 F11 取消永远压过配置策略：清上下文，不恢复、不启动指定任务
+                        // [P1b] 走恰好一次守卫：10s 恢复定时器若同时命中则跳过
+                        await ApplyPolicyTeardownOnceAsync(batch, "联机锄地配置组", userCancelled: true);
                         break;
                     }
                     if (startResult.Status != "success")
@@ -6340,13 +6326,13 @@ public class MainViewModel : INotifyPropertyChanged
                         AddLog($"启动配置组 \"{currentGroup}\" 失败，跳过");
                         continue;
                     }
-                    if (_isAllReadySequenceCancelled)
+                    if (batch.IsCancellationRequested)
                     {
                         break;
                     }
                 }
-                _isOnlineReady = false;
-                _onlineMode = "none";
+                // [P1b] 批次正常结束的统一复位出口（Executing → Idle）
+                _intentLifecycle.OnBatchFinished(batch.Generation, $"AllReady 批次执行完毕（generation={generation}）");
 
                 // 执行完所有绑定的配置组后，按"上线锄地策略"处置被中断的原任务
                 // （恢复 / 不恢复直接停止 / 不恢复并执行指定任务，收尾逻辑共享 CommandExecutor.ApplyPolicyTeardownAsync）。
@@ -6355,26 +6341,32 @@ public class MainViewModel : INotifyPropertyChanged
                 //   场景B: 绑定配置组是普通配置组（如"采集"）
                 // 注意：如果配置组已被用户取消（F11），已在 cancelled 分支中按"取消优先"清除中断上下文，
                 // 不需要再执行策略收尾（否则会打误导日志/误启动指定任务）
-                if (!_isAllReadySequenceCancelled && _commandExecutor != null)
+                // [P1b] 走恰好一次守卫：与 10s 恢复定时器互斥（同一代序号只收尾一次）
+                if (!batch.IsCancellationRequested)
                 {
-                    await _commandExecutor.ApplyPolicyTeardownAsync(SnapshotOnlineHoeingPolicy(), "联机锄地", userCancelled: false, AddLog);
+                    await ApplyPolicyTeardownOnceAsync(batch, "联机锄地", userCancelled: false);
                 }
-                _isAllReadySequenceCancelled = false;
 
                 _ = ReportStatusAsync();
             }
             catch (Exception ex)
             {
                 AddLog($"依次执行配置组异常: {ex.Message}");
-                _isOnlineReady = false;
-                _onlineMode = "none";
-                _isAllReadySequenceCancelled = false;
+                // [P1b] 批次异常的统一复位出口（Executing → Idle）
+                _intentLifecycle.OnBatchFinished(batch.Generation, $"AllReady 批次异常（generation={generation}）");
                 _ = ReportStatusAsync();
+            }
+            finally
+            {
+                // [P1b] 批次完结后句柄归 null（仅当仍指向本批次）：否则已完结批次残留，
+                // 后续手动锄地结束的边沿捕获到旧批次，守卫因 _teardownDoneGeneration 已越代而
+                // 直接 return，手动会话的策略收尾被静默吞掉（RunSpecified 下指定任务不启动）
+                lock (_batchGate) { if (ReferenceEquals(_activeBatch, batch)) _activeBatch = null; }
             }
         });
         // 注意：互斥锁只覆盖启动窗口（suspend+settle+发起批次），Task.Run 启动后即释放是刻意的——
         // 后台序列可能横跨整个锄地会话，锁全程持有会挡住后续合法轮次；并发第二轮的穿透风险由
-        // 服务端"参与者集合消费"（B157，不再残留武装事件幻影触发）兜底。
+        // 服务端"参与者集合消费"（B157，不再残留武装事件幻影触发）+ [P1b] 批次句柄顶替取消兜底。
         _isAllReadyProcessing = 0;
     }
 }

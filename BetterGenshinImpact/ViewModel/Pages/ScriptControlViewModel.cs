@@ -2890,6 +2890,19 @@ public partial class ScriptControlViewModel : ViewModel
 
         if (scriptGroups.Count > 0)
         {
+            // 命令行已显式给出完整组列表，应完整执行；先清掉残留的"从此配置组开始执行"标记，
+            // 避免 GetNextScriptGroups 把排在标记组之前的组丢弃。
+            // 残留来源是运行中实例内存里的标记（上次"从此配置组开始执行"未消费，
+            // 运行中收到第二实例转发 --startGroups 时仍生效）；NextScriptGroupName 标 [JsonIgnore]
+            // 不落盘，无需也无法落盘清理。
+            foreach (var group in scriptGroups)
+            {
+                group.NextFlag = false;
+            }
+            if (!string.IsNullOrEmpty(TaskContext.Instance().Config.NextScriptGroupName))
+            {
+                TaskContext.Instance().Config.NextScriptGroupName = string.Empty;
+            }
             await StartGroups(scriptGroups);
         }
         else

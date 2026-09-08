@@ -92,6 +92,13 @@ public partial class HotKeySettingModel : ObservableObject
 
     private static readonly TimeSpan RegisterRetryDelay = TimeSpan.FromSeconds(2);
 
+    /// <summary>快速重试耗尽后的慢速重试轮数上限与间隔。覆盖"外部锄地助手 Kill 旧进程后立刻拉起新进程、
+    /// 旧实例迟迟未退出仍占用全局热键"的长尾场景，30s 一轮共约 10 分钟窗口。
+    /// 慢速重试期间快捷键配置保持原样，绝不清空（清空会经 PropertyChanged 写盘导致 F11 等永久丢失）。</summary>
+    private const int MaxLongRegisterRetries = 20;
+
+    private static readonly TimeSpan LongRegisterRetryDelay = TimeSpan.FromSeconds(30);
+
     /// <summary>重试代序号：新的注册/注销动作会使挂起的重试失效，避免用户改过快捷键后旧重试误注册。</summary>
     private int _registerRetryGeneration;
 
@@ -193,13 +200,29 @@ public partial class HotKeySettingModel : ObservableObject
                 "快捷键注册失败：{FunctionName} [{HotKey}]（第 {Attempt} 次）", FunctionName, HotKey, attempt + 1);
             if (attempt < MaxRegisterRetries && !HotKey.IsEmpty)
             {
-                ScheduleRegisterRetry(attempt + 1);
+                ScheduleRegisterRetry(attempt + 1, RegisterRetryDelay);
+            }
+            else if (attempt < MaxRegisterRetries + MaxLongRegisterRetries && !HotKey.IsEmpty)
+            {
+                // 快速重试耗尽：转入慢速重试，覆盖旧进程被 Kill 后迟迟未退出仍占用热键的长尾场景。
+                // 绝不能在此清空 HotKey——该赋值会经 PropertyChanged 把配置写成空串并持久化，
+                // 导致用户快捷键（如 F11）永久丢失
+                if (attempt == MaxRegisterRetries)
+                {
+                    App.GetLogger<HotKeySettingModel>().LogWarning(
+                        "快捷键 {FunctionName} [{HotKey}] 快速重试仍失败（可能被尚未退出的旧 BGI 实例占用），" +
+                        "将转为每 {Seconds} 秒继续尝试注册，快捷键配置保持不变",
+                        FunctionName, HotKey, (int)LongRegisterRetryDelay.TotalSeconds);
+                }
+                ScheduleRegisterRetry(attempt + 1, LongRegisterRetryDelay);
             }
             else
             {
-                // 重试耗尽仍失败：保持原有行为（清空快捷键，界面上可见反馈）
-                Debug.WriteLine(e);
-                HotKey = HotKey.None;
+                // 慢速重试也耗尽：保留用户配置不写盘，仅记录可见错误日志。
+                // 占用方退出后重启 BGI，或重新设置一次该快捷键即可恢复
+                App.GetLogger<HotKeySettingModel>().LogError(e,
+                    "快捷键注册最终失败：{FunctionName} [{HotKey}] 仍被占用。已保留快捷键配置，本次启动该快捷键不可用",
+                    FunctionName, HotKey);
             }
         }
     }
@@ -207,7 +230,7 @@ public partial class HotKeySettingModel : ObservableObject
     /// <summary>
     /// 延迟后在 UI 线程重试注册（HotkeyHook 内部创建 NativeWindow，必须在带消息泵的 UI 线程上注册）。
     /// </summary>
-    private void ScheduleRegisterRetry(int nextAttempt)
+    private void ScheduleRegisterRetry(int nextAttempt, TimeSpan delay)
     {
         var generation = Interlocked.Increment(ref _registerRetryGeneration);
         var expectedHotKey = HotKey;
@@ -215,7 +238,7 @@ public partial class HotKeySettingModel : ObservableObject
         {
             try
             {
-                await Task.Delay(RegisterRetryDelay);
+                await Task.Delay(delay);
                 // 期间用户改了/清了快捷键，或又有新的注册/注销动作：放弃本次重试
                 if (generation != _registerRetryGeneration || HotKey != expectedHotKey || HotKey.IsEmpty)
                 {

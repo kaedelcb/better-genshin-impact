@@ -1417,6 +1417,23 @@ public class RoomManager
         return null;
     }
 
+    /// <summary>
+    /// 通过 connectionId 查找所属的控制房间 group 名，含遥控端回退：
+    /// 先查 _controlRooms 玩家条目，落空再查 _remoteControlConnections 登记。
+    /// 仅供 ClearOnlineHistory 这类"监控端也应允许操作"的端点使用；
+    /// ReportOnlineEvent/ConfirmAllReady 等只认正式成员的端点仍用 GetControlRoomGroup。
+    /// </summary>
+    public string? GetControlRoomGroupOrRemote(string connectionId)
+    {
+        var group = GetControlRoomGroup(connectionId);
+        if (group != null) return group;
+        foreach (var (g, dict) in _remoteControlConnections)
+        {
+            if (dict.ContainsKey(connectionId)) return g;
+        }
+        return null;
+    }
+
     /// <summary>房间级状态（用于 ReportOnlineEvent 状态机）。</summary>
     public class RoomAllReadyState
     {

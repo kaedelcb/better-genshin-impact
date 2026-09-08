@@ -171,6 +171,30 @@ public partial class HomePageViewModel : ViewModel, IDisposable
         {
             _ = OnStartTriggerAsync();
         }
+        else if (commandLineOptions.Action == CommandLineAction.StartGroups)
+        {
+            // 冷启动的 --startGroups 已由 ApplicationHostService 直接处理
+            // （OnLoaded 传入的是 CommandLineOptions.Instance 单例），
+            // 这里只处理第二实例经命名管道转发过来的参数，避免冷启动时重复执行。
+            if (ReferenceEquals(commandLineOptions, CommandLineOptions.Instance))
+            {
+                return;
+            }
+
+            // 与冷启动入口同一解析结果：CommandLineOptions.Parse 已按
+            // startOneDragon > --startGroups > --TaskProgress > start 的优先级判定 Action，
+            // 互斥的单一动作，不存在 Start 与 startGroups 同时生效的情况。
+            _logger.LogInformation(
+                "收到转发的 --startGroups 参数，调度组列表：{GroupNames}",
+                string.Join(", ", commandLineOptions.GroupNames));
+
+            if (commandLineOptions.GroupNames.Length > 0)
+            {
+                // 启动调度器（与冷启动入口一致，fire-and-forget 调用）
+                var scheduler = App.GetService<ScriptControlViewModel>();
+                _ = scheduler?.OnStartMultiScriptGroupWithNamesAsync(commandLineOptions.GroupNames);
+            }
+        }
 
         // TODO: 多实例独立任务选择面板入口预留。
         // 后续在此判断可用子实例，并由选择面板决定 task.* 请求的目标实例。

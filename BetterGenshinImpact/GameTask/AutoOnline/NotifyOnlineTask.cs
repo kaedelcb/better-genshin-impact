@@ -19,7 +19,10 @@ namespace BetterGenshinImpact.GameTask.AutoOnline;
 /// </summary>
 public class NotifyOnlineTask : ISoloTask
 {
-    public string Name => "联机锄地上线";
+    /// <summary>任务注册名（SoloTaskRegistry 注册名）。挂起/恢复链路用它识别"信号任务"，单一事实来源。</summary>
+    public const string TaskName = "联机锄地上线";
+
+    public string Name => TaskName;
 
     private static int _nextGeneration = LoadPersistedGeneration();
     private static readonly object _genLock = new();

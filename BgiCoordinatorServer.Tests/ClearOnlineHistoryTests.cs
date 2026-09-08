@@ -99,6 +99,64 @@ public class ClearOnlineHistoryTests
         Assert.Equal(0, HistoryCount(h, room, "uidB"));
     }
 
+    /// <summary>
+    /// 监控模式（isRemote=true）调用方清除成员联机记录。
+    /// 背景：监控端不入 _controlRooms（只登记 _remoteControlConnections），
+    /// GetControlRoomGroup 反查必落空导致清除静默无效——本用例锁定遥控端回退修复。
+    /// </summary>
+    [Fact]
+    public async Task ClearOnlineHistory_RemoteMonitorCaller_ClearsAndBroadcasts()
+    {
+        var h = new GatewayTestHarness();
+        var (room, pwd) = NewRoom();
+        var connMonitor = Conn("monitor");
+        var connB = Conn("b");
+        // 监控端先入房（isRemote=true：不加 _controlRooms 成员列表，只登记遥控连接）
+        await h.Ops.JoinControlRoomAsync(Ctx(connMonitor), room, pwd, "uidM", "监控端", isRemote: true);
+        await h.Ops.JoinControlRoomAsync(Ctx(connB), room, pwd, "uidB", "成员B");
+        SeedHistory(h, room, connB);
+        Assert.Equal(1, HistoryCount(h, room, "uidB"));
+
+        var updates = CaptureUpdates(h);
+        await h.Ops.ClearOnlineHistoryAsync(Ctx(connMonitor), "uidB");
+
+        Assert.Equal(0, HistoryCount(h, room, "uidB"));
+        var last = updates[^1];
+        Assert.True(last.Full);
+        var b = Assert.Single(last.Players!, p => p.PlayerUid == "uidB");
+        Assert.Empty(b.OnlineHistory);
+    }
+
+    /// <summary>
+    /// 失败分支：未入房的陌生连接调 control.clearOnlineHistory 必须返回 error.code=bad_request，
+    /// 而不是假 ack——否则客户端在清除未生效时仍提示"已清除"。
+    /// </summary>
+    [Fact]
+    public async Task ClearOnlineHistory_CallerNotInRoom_ReturnsBadRequest()
+    {
+        var h = new GatewayTestHarness();
+        var (room, pwd) = NewRoom();
+        var connB = Conn("b");
+        await h.Ops.JoinControlRoomAsync(Ctx(connB), room, pwd, "uidB", "成员B");
+        SeedHistory(h, room, connB);
+        Assert.Equal(1, HistoryCount(h, room, "uidB"));
+
+        // 陌生连接（从未 JoinControlRoom，监控端反查也落空）走网关分发器调清除
+        var stranger = Conn("stranger");
+        var helloResp = await h.Dispatcher.DispatchAsync(Ctx(stranger), GatewayTestHarness.HelloEnvelope());
+        Assert.Null(GatewayTestHarness.ErrorCode(helloResp));
+        var resp = await h.Dispatcher.DispatchAsync(Ctx(stranger), new GatewayEnvelope
+        {
+            Type = GatewayProtocol.MessageTypes.Command,
+            Name = GatewayProtocol.Names.ControlClearOnlineHistory,
+            Payload = GatewayEnvelope.ToPayload(new { targetUid = "uidB" }),
+        });
+
+        Assert.Equal(GatewayProtocol.ErrorCodes.BadRequest, GatewayTestHarness.ErrorCode(resp));
+        // 历史必须原样保留（清除未执行）
+        Assert.Equal(1, HistoryCount(h, room, "uidB"));
+    }
+
     [Fact]
     public async Task ClearOnlineHistory_DuplicateUidEntries_ClearsAll()
     {

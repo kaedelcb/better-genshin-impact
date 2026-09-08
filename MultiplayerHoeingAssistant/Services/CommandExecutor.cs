@@ -12,6 +12,9 @@ public class CommandExecutor
     private readonly Func<BgiExternalClient?>? _externalClientProvider;
     /// <summary>[任务冲突策略] 用户可见日志出口（MainViewModel 注入 AddLog）；null 时只写 ProbeLog 文件日志。</summary>
     private readonly Action<string>? _log;
+    /// <summary>[P3 对账] 本机是否确有上线锄地批次在跑（MainViewModel 注入 _activeBatch?.IsAlive 判定）；
+    /// null = 未注入（保守视为无批次在跑，残留上下文按孤儿对账清除）。</summary>
+    private readonly Func<bool>? _isBatchInFlight;
     /// <summary>[切片7] 队列式任务终态事件等待的兜底超时（事件经 SDK 断线续传不丢，超时仅为防永久挂起）。</summary>
     private static readonly TimeSpan TaskTerminalWaitTimeout = TimeSpan.FromHours(24);
     /// <summary>[任务策略] 快捷键启动任务后等待其结束的轮询间隔。</summary>
@@ -34,12 +37,13 @@ public class CommandExecutor
     }
 
     public CommandExecutor(BgiProcessMonitor monitor, string bgiPath, Func<BgiExternalClient?>? externalClientProvider = null,
-        Action<string>? logger = null)
+        Action<string>? logger = null, Func<bool>? isBatchInFlight = null)
     {
         _monitor = monitor;
         _bgiPath = bgiPath;
         _externalClientProvider = externalClientProvider;
         _log = logger;
+        _isBatchInFlight = isBatchInFlight;
     }
 
     /// <summary>[任务冲突策略] 用户可见日志 + 文件日志双写。</summary>
@@ -254,9 +258,11 @@ public class CommandExecutor
             // IPC 不可用，进入阶段2
         }
 
-        // 阶段2：杀进程
-        _monitor.KillBgi();
-        return new CommandResult { Status = "success", Message = "BGI 已强制停止" };
+        // 阶段2：杀进程（走仲裁器：有意杀死对崩溃守护豁免 + 等进程退净，防止守护误判崩溃把 BGI 拉回来）
+        var killed = await _monitor.KillBgiControlledAsync("stop 命令强制停止");
+        return killed
+            ? new CommandResult { Status = "success", Message = "BGI 已强制停止" }
+            : new CommandResult { Status = "failed", Message = "无法终止现有 BGI 进程（可能提权运行），请手动关闭 BGI 后重试" };
     }
 
     /// <summary>
@@ -407,10 +413,14 @@ public class CommandExecutor
                 ? string.Join(" ", batchGroupNames.Select(n => $"\"{n}\""))
                 : $"\"{groupName}\"";
             ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] IPC 失败，回退杀进程重启 BGI with --startGroups {groupArgs}");
-            _monitor.KillBgi();
-            await Task.Delay(2000);
-            _monitor.RestartBgi($"--startGroups {groupArgs}");
-            _hasRestartedThisBatch = true;
+            // [P2 仲裁] 杀/启收编到仲裁器：信号量串行 + 有意杀死抑制（防守护误判崩溃再拉无参实例）
+            // + 等进程真正退净后才拉起；杀不掉（提权）时返回 false，不假成功
+            if (!await _monitor.RestartBgiControlledAsync($"--startGroups {groupArgs}", "IPC回退"))
+            {
+                Log($"[进程仲裁] 配置组「{groupName}」回退重启失败：无法终止现有 BGI 进程（可能提权运行），请手动关闭 BGI 后重试");
+                return new CommandResult { Status = "failed", Message = $"配置组 {groupName} 启动失败：无法终止现有 BGI 进程（可能提权运行），请手动关闭 BGI 后重试" };
+            }
+            _hasRestartedThisBatch = true; // 只在仲裁器确认杀净+拉起后置位，失败不算"本批次已重启"
         }
         // [A 治本] 等待 BGI IPC 就绪，避免调用方（一键锄地/上线循环）紧接着的 start_group
         // 在 BGI 刚启动时连不上再次回退，或与命令行 --startGroups 路径并发启动原神。
@@ -473,9 +483,12 @@ public class CommandExecutor
         }
 
         // 回退：杀进程 + 重启带 --startOneDragon
-        _monitor.KillBgi();
-        await Task.Delay(2000);
-        _monitor.RestartBgi($"--startOneDragon \"{configName}\"");
+        // [P2 仲裁] 同 StartGroupAsync：收编到仲裁器（串行 + 抑制 + 等退净），杀不掉不假成功
+        if (!await _monitor.RestartBgiControlledAsync($"--startOneDragon \"{configName}\"", "IPC回退"))
+        {
+            Log($"[进程仲裁] 一条龙「{configName}」回退重启失败：无法终止现有 BGI 进程（可能提权运行），请手动关闭 BGI 后重试");
+            return new CommandResult { Status = "failed", Message = $"一条龙 {configName} 启动失败：无法终止现有 BGI 进程（可能提权运行），请手动关闭 BGI 后重试" };
+        }
         return new CommandResult { Status = "success", Message = $"一条龙 {configName} 已通过重启启动" };
     }
 
@@ -708,8 +721,8 @@ public class CommandExecutor
         }
     }
 
-    /// <summary>[任务冲突策略] 查询 BGI 任务状态（running / hasSuspendedTaskContext）。查询失败返回 null（按现状容错）。</summary>
-    private async Task<(bool Running, bool HasContext)?> QueryTaskStatusAsync(int connectTimeoutMs = 1500)
+    /// <summary>[任务冲突策略] 查询 BGI 任务状态（running / hasSuspendedTaskContext / 中断上下文身份）。查询失败返回 null（按现状容错）。</summary>
+    private async Task<(bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)?> QueryTaskStatusAsync(int connectTimeoutMs = 1500)
     {
         var resp = await SendIpcPreferredAsync("task.status", null, connectTimeoutMs);
         if (resp is not { Success: true } || string.IsNullOrEmpty(resp.Data)) return null;
@@ -720,12 +733,49 @@ public class CommandExecutor
                 && rEl.ValueKind == System.Text.Json.JsonValueKind.True;
             var hasCtx = data.TryGetProperty("hasSuspendedTaskContext", out var hEl)
                 && hEl.ValueKind == System.Text.Json.JsonValueKind.True;
-            return (running, hasCtx);
+            // [协议加法] 中断上下文身份（BGI 新增可选字段，旧版 BGI 无此字段时为 null，判定自动失效退化为原行为）
+            string? suspendedType = data.TryGetProperty("suspendedTaskType", out var stEl)
+                && stEl.ValueKind == System.Text.Json.JsonValueKind.String ? stEl.GetString() : null;
+            string? suspendedName = data.TryGetProperty("suspendedTaskName", out var snEl)
+                && snEl.ValueKind == System.Text.Json.JsonValueKind.String ? snEl.GetString() : null;
+            return (running, hasCtx, suspendedType, suspendedName);
         }
         catch
         {
             return null;
         }
+    }
+
+    /// <summary>「联机锄地上线」信号任务名（与 BGI 端 NotifyOnlineTask.TaskName 保持一致；助手独立进程无法引用 BGI 程序集，用常量对齐）。</summary>
+    private const string OnlineSignalTaskName = "联机锄地上线";
+
+    /// <summary>
+    /// [兜底] 中断上下文身份是否为「联机锄地上线」信号任务：type=solo 且任务名匹配，或 type=group 且组名匹配。
+    /// 这里按名匹配可以——这只是最后一道防线（主修复在 BGI 端：suspend 时根本不保存信号任务上下文）。
+    /// </summary>
+    private static bool IsOnlineSignalContext((bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)? status)
+        => status is { HasContext: true } s
+           && s.SuspendedName == OnlineSignalTaskName
+           && (s.SuspendedType == "solo" || s.SuspendedType == "group");
+
+    /// <summary>
+    /// [P3 对账] 孤儿中断上下文清理：BGI 侧 SuspendedTaskContext 只有 resume 一条清理路径，
+    /// 批次被新轮打断/收尾 IPC 失败时会永久残留，把后续按键启动永久卡死在无损拒绝分支。
+    /// 本方法在 task.status 查询后调用：Running=false && HasContext=true（任务已结束但上下文未消费）
+    /// 且本机无批次在跑 → 发 task.resume(cancel:true) 清孤儿上下文并记对账日志，返回对账后状态。
+    /// 本机确有批次在跑时 Running=false+HasContext=true 是批次的正常间隙态（suspend 后等下一组），不动。
+    /// </summary>
+    private async Task<(bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)?> ReconcileOrphanedContextAsync(
+        (bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)? status, string caller)
+    {
+        if (status is { Running: false, HasContext: true }
+            && _isBatchInFlight?.Invoke() != true)
+        {
+            Log($"[P3 对账] {caller}：检测到残留中断上下文（任务已结束但上下文未消费）且本机无批次在跑，按孤儿对账发 task.resume(cancel:true) 清除");
+            await ExecuteResumeAsync(cancel: true);
+            return (false, false, null, null); // 对账后视为空闲无上下文（清除失败由后续路径按现状容错）
+        }
+        return status;
     }
 
     /// <summary>
@@ -813,17 +863,28 @@ public class CommandExecutor
     /// <summary>
     /// [任务冲突策略] 按键抢占入口判定：本机忙且无既有中断上下文时才抢占。
     /// 返回 true 表示应走抢占闭环（suspend → settle → v2 task.start → 策略收尾）。
-    /// 空闲（running=false）：不抢占，走原有路径；已有中断上下文（上线锄地批次进行中）：
-    /// 不抢占（再 suspend 会用锄地任务覆盖原任务上下文），走原有无损拒绝路径。
+    /// 空闲（running=false）：不抢占，走原有路径；已有中断上下文且本机确有批次在跑：
+    /// 不抢占（再 suspend 会用锄地任务覆盖原任务上下文），走原有无损拒绝路径；
+    /// 有中断上下文但本机无批次在跑：[P3 对账] 判孤儿，清上下文后照常抢占。
     /// </summary>
     private async Task<bool> ShouldPreemptKeyPressAsync(string desc)
     {
         var status = await QueryTaskStatusAsync();
+        // [P3 对账] 判定前先清孤儿上下文（任务已结束但上下文未消费），避免残留把抢占判定永久卡死
+        status = await ReconcileOrphanedContextAsync(status, $"按键抢占判定（{desc}）");
         if (status is not { Running: true }) return false; // 空闲或状态未知：不抢占
         if (status.Value.HasContext)
         {
-            Log($"[任务策略] 检测到 BGI 已有中断上下文（上线锄地批次进行中？），按键启动 {desc} 不抢占，走原有无损拒绝路径");
-            return false;
+            // [P3 对账] 本机确有批次在跑才保持无损拒绝（保护进行中批次）；
+            // 无批次在跑 = 孤儿残留，清上下文后按 running && !hasContext 走正常抢占闭环
+            if (_isBatchInFlight?.Invoke() == true)
+            {
+                Log($"[任务策略] 检测到 BGI 已有中断上下文（上线锄地批次进行中？），按键启动 {desc} 不抢占，走原有无损拒绝路径");
+                return false;
+            }
+            Log($"[P3 对账] {desc}：检测到残留中断上下文但本机无批次在跑，按孤儿对账清除后继续抢占闭环");
+            await ExecuteResumeAsync(cancel: true);
+            return true;
         }
         return true;
     }
@@ -920,10 +981,20 @@ public class CommandExecutor
         var desc = $"快捷键「{hotkeyConfigName}」";
 
         var status = await QueryTaskStatusAsync();
+        // [P3 对账] 开头先清孤儿上下文（任务已结束但上下文未消费），避免残留把热键永久卡在无损拒绝
+        status = await ReconcileOrphanedContextAsync(status, desc);
         if (status is { Running: true, HasContext: true })
         {
-            Log($"[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中），{desc} 不二次抢占，走无损拒绝");
-            return new CommandResult { Status = "failed", Message = $"{desc} 未执行：联机锄地批次进行中（已有中断上下文），按无损拒绝语义不打断，请等批次结束后再试" };
+            // [P3 对账] 本机确有批次在跑才保持无损拒绝（保护进行中批次）；
+            // 无批次在跑 = 孤儿残留，清上下文后视为 running && !hasContext，走下方正常抢占闭环
+            if (_isBatchInFlight?.Invoke() == true)
+            {
+                Log($"[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中），{desc} 不二次抢占，走无损拒绝");
+                return new CommandResult { Status = "failed", Message = $"{desc} 未执行：联机锄地批次进行中（已有中断上下文），按无损拒绝语义不打断，请等批次结束后再试" };
+            }
+            Log($"[P3 对账] {desc}：检测到残留中断上下文但本机无批次在跑，按孤儿对账清除后继续");
+            await ExecuteResumeAsync(cancel: true);
+            status = (true, false, null, null);
         }
         if (status is not { Running: true })
         {
@@ -1089,6 +1160,14 @@ public class CommandExecutor
                 if (status is { HasContext: false })
                 {
                     log?.Invoke("[任务冲突策略] BGI 侧无中断上下文（任务可能刚被 F11 取消，或 BGI 曾重启导致内存上下文丢失），「恢复」策略退化为停止");
+                    return;
+                }
+                // [兜底 2026-09-08] 被中断的是「联机锄地上线」信号任务本身：恢复会重复触发上线（无限循环），
+                // 退化为停止并清上下文。主修复在 BGI 端（suspend 不保存信号任务上下文），这里按名匹配只做最后一道防线。
+                if (IsOnlineSignalContext(status))
+                {
+                    log?.Invoke("[任务冲突策略] 被中断的是上线触发任务本身，恢复会重复触发上线，退化为停止（清除中断上下文）");
+                    await ExecuteResumeAsync(cancel: true);
                     return;
                 }
                 var resumeResult = await ExecuteResumeAsync();

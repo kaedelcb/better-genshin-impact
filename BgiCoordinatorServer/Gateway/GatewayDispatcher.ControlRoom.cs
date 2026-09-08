@@ -58,8 +58,12 @@ public sealed partial class GatewayDispatcher
 
         _commands[GatewayProtocol.Names.ControlClearOnlineHistory] = async (env, ctx) =>
         {
-            await _ops.ClearOnlineHistoryAsync(ctx, GetString(env, "targetUid"));
-            return new { ack = true };
+            var cleared = await _ops.ClearOnlineHistoryAsync(ctx, GetString(env, "targetUid"));
+            // 失败不再假 ack：调用方不在任何控制房间（或执行异常）时返回错误，
+            // 避免客户端在清除未生效时仍提示"已清除"
+            return cleared
+                ? new { ack = true }
+                : new { error = new { code = GatewayProtocol.ErrorCodes.BadRequest, message = "调用方不在控制房间中，清除未执行" } };
         };
     }
 }

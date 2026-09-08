@@ -7,19 +7,33 @@ namespace MultiplayerHoeingAssistant.Services;
 public class BgiProcessMonitor : IDisposable
 {
     private readonly string _bgiPath;
+    /// <summary>[P2 仲裁] 用户可见日志出口（MainViewModel 注入 AddLog）；null 时静默（仅 Debug.WriteLine）。</summary>
+    private readonly Action<string>? _log;
     private Timer? _checkTimer;
     private bool _isRunning;
     /// <summary>边沿检测标记：上一次轮询时 BGI 是否在运行（P1-E）。</summary>
     private bool _wasRunning;
+    /// <summary>[P2 仲裁] 杀/启操作串行化信号量：回退重启/崩溃守护/kill_bgi 节点三个并发写入者全部经此收编，
+    /// 杜绝"有意杀进程的 2s 真空被守护误判崩溃、再拉一个实例抢单实例管道"的双实例事故。</summary>
+    private readonly SemaphoreSlim _processGate = new(1, 1);
+    /// <summary>[P2 仲裁] 有意杀死抑制窗口（UTC）：仲裁器杀/启进行中（含 spawn 真空余量）时，
+    /// CheckBgiStatus 跳过"运行→消失"崩溃判定，避免把有意杀死误判为崩溃。</summary>
+    private DateTime _intentionalKillUntilUtc = DateTime.MinValue;
+    /// <summary>[P2 仲裁] 上次崩溃自动重启时间（UTC）：30s 冷却，防快速震荡循环（反复崩→反复拉）。</summary>
+    private DateTime _lastCrashRestartUtc = DateTime.MinValue;
+    /// <summary>[P2 仲裁] 崩溃自动重启冷却时长。</summary>
+    private static readonly TimeSpan CrashRestartCooldown = TimeSpan.FromSeconds(30);
 
     public event Action? OnBgiCrashed;
     public event Action? OnBgiStarted;
 
     public bool IsBgiRunning => GetCurrentSessionBgiProcesses().Length > 0;
 
-    public BgiProcessMonitor(string bgiPath)
+    /// <param name="log">[P2 仲裁] 可选日志回调（MainViewModel.AddLog），仲裁器关键决策打可见日志。</param>
+    public BgiProcessMonitor(string bgiPath, Action<string>? log = null)
     {
         _bgiPath = bgiPath;
+        _log = log;
     }
 
     /// <summary>
@@ -65,12 +79,27 @@ public class BgiProcessMonitor : IDisposable
             _wasRunning = true;
             return;
         }
+        // [P2 仲裁] 有意杀死抑制窗口内（仲裁器杀/启进行中或启动后 spawn 真空余量期），
+        // "运行→消失"是预期行为，跳过崩溃判定（否则守护会把回退重启的 2s 真空误判为崩溃，
+        // 再拉一个无参实例与带参实例抢单实例管道，败方参数被静默丢弃）
+        if (DateTime.UtcNow < _intentionalKillUntilUtc)
+        {
+            return;
+        }
         // [P1-E 止血] 仅在"运行 → 消失"跳变时触发一次崩溃事件；
         // 触发后进入"等待重启"状态（_wasRunning=false），进程重新出现前不再重复触发，
         // 避免 BGI 启动慢（>5s）时每 5s 轮询重复 RestartBgi 导致双开/多开 BGI。
         if (_wasRunning)
         {
             _wasRunning = false;
+            // [P2 仲裁] 崩溃重启冷却：距上次崩溃重启 <30s 跳过并记日志，防"崩溃→拉起→又崩"快速震荡循环
+            var sinceLast = DateTime.UtcNow - _lastCrashRestartUtc;
+            if (sinceLast < CrashRestartCooldown)
+            {
+                _log?.Invoke($"[崩溃守护] 距上次崩溃处理仅 {sinceLast.TotalSeconds:F0}s（<{CrashRestartCooldown.TotalSeconds:F0}s 冷却），跳过本次自动重启");
+                return;
+            }
+            _lastCrashRestartUtc = DateTime.UtcNow;
             OnBgiCrashed?.Invoke();
         }
     }
@@ -124,13 +153,95 @@ public class BgiProcessMonitor : IDisposable
             }
             catch (Exception ex)
             {
+                // 提权运行的 BGI 会抛 AccessDenied，此处吞掉后进程仍存活——
+                // 调用方必须经 WaitUntilNoBgiProcessAsync 确认真退净（见受控方法），不能默认杀成功
                 System.Diagnostics.Debug.WriteLine($"终止 BGI 进程失败: {ex.Message}");
             }
         }
     }
 
+    /// <summary>
+    /// [P2 仲裁] 受控重启（杀 + 带参拉起）：SemaphoreSlim 串行化全部杀/启操作（单一写入者）。
+    /// 流程：进入即置有意杀死抑制（守护轮询窗口内跳过崩溃判定）→ KillBgi → 200ms 轮询等进程
+    /// 真正退出（上限 10s）→ 仍有本会话 BGI 残留（提权杀不掉，AccessDenied 已被 KillBgi 吞掉）：
+    /// 打可见日志并返回 false，不启动新实例（起了也会被 BGI 单实例转发丢弃参数，假成功更坏）；
+    /// 退净则 RestartBgi(args)，启动后留 2s 抑制余量覆盖新进程 spawn 真空。
+    /// </summary>
+    /// <returns>true = 已杀净并完成拉起；false = 旧进程杀不掉，未启动新实例。</returns>
+    public async Task<bool> RestartBgiControlledAsync(string? args, string reason)
+    {
+        await _processGate.WaitAsync();
+        try
+        {
+            // 抑制窗口覆盖整个杀+等退出过程（最坏 10s），启动成功后再收窄为 2s 余量
+            _intentionalKillUntilUtc = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+            _log?.Invoke($"[进程仲裁] 受控重启开始（{reason}），args={args ?? "(无)"}");
+            KillBgi();
+            if (!await WaitUntilNoBgiProcessAsync(TimeSpan.FromSeconds(10)))
+            {
+                // 进程还活着：收窄抑制窗口，不该继续抑制崩溃判定 15s
+                _intentionalKillUntilUtc = DateTime.UtcNow;
+                _log?.Invoke($"[进程仲裁] 受控重启中止（{reason}）：10s 内 BGI 进程未退净（可能提权运行杀不掉），不启动新实例以避免双实例抢单实例管道");
+                return false;
+            }
+            // 有意杀死 ≠ 崩溃：卸除边沿武装，防止抑制窗口结束后守护把本次杀死补判为崩溃
+            _wasRunning = false;
+            RestartBgi(args);
+            // 启动后留 2s 抑制余量：覆盖新进程 spawn 到可被枚举到的真空期
+            _intentionalKillUntilUtc = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+            return true;
+        }
+        finally
+        {
+            _processGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// [P2 仲裁] 受控终止（只杀不启）：与 RestartBgiControlledAsync 同一信号量串行 + 有意杀死抑制 + 等退出。
+    /// 杀净后卸除边沿武装（_wasRunning=false），守护不会把有意杀死误判为崩溃再拉起。
+    /// </summary>
+    /// <returns>true = 已杀净；false = 10s 内仍有本会话 BGI 进程残留（提权杀不掉）。</returns>
+    public async Task<bool> KillBgiControlledAsync(string reason)
+    {
+        await _processGate.WaitAsync();
+        try
+        {
+            _intentionalKillUntilUtc = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+            _log?.Invoke($"[进程仲裁] 受控终止开始（{reason}）");
+            KillBgi();
+            if (!await WaitUntilNoBgiProcessAsync(TimeSpan.FromSeconds(10)))
+            {
+                // 进程还活着：收窄抑制窗口，不该继续抑制崩溃判定 15s
+                _intentionalKillUntilUtc = DateTime.UtcNow;
+                _log?.Invoke($"[进程仲裁] 受控终止失败（{reason}）：10s 内 BGI 进程未退净（可能提权运行杀不掉）");
+                return false;
+            }
+            _wasRunning = false; // 有意杀死 ≠ 崩溃：卸除边沿武装，守护不拉起
+            _log?.Invoke($"[进程仲裁] 受控终止完成（{reason}）");
+            return true;
+        }
+        finally
+        {
+            _processGate.Release();
+        }
+    }
+
+    /// <summary>[P2 仲裁] 轮询等本会话 BGI 进程退净（200ms 间隔）。返回 true = 已退净。</summary>
+    private static async Task<bool> WaitUntilNoBgiProcessAsync(TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (GetCurrentSessionBgiProcesses().Length == 0) return true;
+            await Task.Delay(200);
+        }
+        return GetCurrentSessionBgiProcesses().Length == 0;
+    }
+
     public void Dispose()
     {
         Stop();
+        _processGate.Dispose();
     }
 }

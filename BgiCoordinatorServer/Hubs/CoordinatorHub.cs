@@ -463,9 +463,10 @@ public class CoordinatorHub : Hub
         => _ops.ReportMemberLogChunkAsync(GatewayHandlerContext.Legacy(Context.ConnectionId),
             roomCode, uid, requestId, seq, totalChunks, chunkBase64, fileName, done);
 
-    /// <summary>清除指定成员的 OnlineHistory（已联机记录）。由本人或房主调用。</summary>
-    public Task ClearOnlineHistory(string targetUid)
-        => _ops.ClearOnlineHistoryAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), targetUid);
+    /// <summary>清除指定成员的 OnlineHistory（已联机记录）。由本人或房主调用。
+    /// 返回值保持 Task（旧客户端契约不变）：ops 的 bool 结果仅网关 ack 使用，此处丢弃。</summary>
+    public async Task ClearOnlineHistory(string targetUid)
+        => await _ops.ClearOnlineHistoryAsync(GatewayHandlerContext.Legacy(Context.ConnectionId), targetUid);
 
     /// <summary>上报上线事件（带 generation 代序号）。由 ReportOnlineEvent 端点统一处理就绪检查。</summary>
     public Task ReportOnlineEvent(int generation, bool isOnlineReady)

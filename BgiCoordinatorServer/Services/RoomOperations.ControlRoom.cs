@@ -204,15 +204,24 @@ public sealed partial class RoomOperations
         }
     }
 
-    /// <summary>清除指定成员的 OnlineHistory（已联机记录）。由本人或房主调用。</summary>
-    public async Task ClearOnlineHistoryAsync(GatewayHandlerContext ctx, string targetUid)
+    /// <summary>
+    /// 清除指定成员的 OnlineHistory（已联机记录）。由本人或房主调用。
+    /// 返回是否已执行清除；false 表示找不到调用方所在组（不再静默失败）。
+    /// </summary>
+    public async Task<bool> ClearOnlineHistoryAsync(GatewayHandlerContext ctx, string targetUid)
     {
         try
         {
-            var group = _roomManager.GetControlRoomGroup(ctx.ConnectionId);
+            // 监控端（isRemote）不入 _controlRooms，GetControlRoomGroup 反查必落空，
+            // 故用带回退的反查（先例：a95a68e6 给 SendRemoteCommand 补 IsRemoteConnection 放行）。
+            // WEB 端（web_ 前缀）不登记 _remoteControlConnections，本回退对其无效。
+            // 注意：本回退仅限本端点——ReportOnlineEvent/ConfirmAllReady 仍只认正式成员，勿复用。
+            var group = _roomManager.GetControlRoomGroupOrRemote(ctx.ConnectionId);
             if (string.IsNullOrEmpty(group))
             {
-                return;
+                _logger.LogWarning("ClearOnlineHistory 失败: 找不到调用方连接 {ConnectionId} 所在控制房间组, targetUid={TargetUid}",
+                    ctx.ConnectionId, targetUid);
+                return false;
             }
 
             // 注意：_controlRooms 的键是组名（"CTRL_xxx"），必须原样传入，不能剥前缀
@@ -221,10 +230,12 @@ public sealed partial class RoomOperations
 
             // 广播更新给所有成员（OnlineHistory 变更：全量）
             await BroadcastControlRoomPlayersAsync(group, forceFull: true);
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ClearOnlineHistory 失败");
+            return false;
         }
     }
 
