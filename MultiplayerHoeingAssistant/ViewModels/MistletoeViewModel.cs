@@ -23,6 +23,7 @@ public sealed class MistletoeViewModel : ViewModelBase
 {
     private readonly MainViewModel _mainVm;
     private readonly StartupFlowStore _store;
+    private readonly StartupFlowSchemeStore _schemeStore;
     private readonly StartupFlowRunner _runner;
     private StartupFlowConfig _config;
     private CancellationTokenSource? _runCts;
@@ -33,9 +34,12 @@ public sealed class MistletoeViewModel : ViewModelBase
     {
         _mainVm = mainVm;
         _store = new StartupFlowStore();
+        _schemeStore = new StartupFlowSchemeStore();
         _config = _store.Load();
         _runner = new StartupFlowRunner(mainVm.ExecuteLocalBgiCommandAsync, EnterTaskCenterAsync, ArmTimer, ConfirmHandlerAsync, mainVm.AddLog);
+        _runner.NodeStateSink = OnNodeStateReported;
         RootChain = new StepChainViewModel(_config.Steps, this, parentCondition: null, branchName: "主流程");
+        foreach (var s in _schemeStore.Load()) Schemes.Add(new SchemeItemViewModel(s));
         ArmedTimers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasArmedTimers));
 
         _saveDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
@@ -121,6 +125,19 @@ public sealed class MistletoeViewModel : ViewModelBase
     {
         get => _mainVm.AutoLaunchOnBootModeIndex;
         set => _mainVm.AutoLaunchOnBootModeIndex = value;
+    }
+
+    /// <summary>执行时自动展开实际走到的分支（持久化在启动流程配置里）。</summary>
+    public bool AutoExpandTakenBranch
+    {
+        get => _config.AutoExpandBranch;
+        set
+        {
+            if (_config.AutoExpandBranch == value) return;
+            _config.AutoExpandBranch = value;
+            OnPropertyChanged();
+            SaveNow();
+        }
     }
 
     // ================= 节点链（树形分支） =================
@@ -326,6 +343,7 @@ public sealed class MistletoeViewModel : ViewModelBase
             }
 
             StatusText = $"正在执行（{reason}触发）…";
+            ResetRunStates();
             await _runner.RunAsync(_config.Steps.ToList(), ct);
             StatusText = $"上次执行完成（{DateTime.Now:HH:mm:ss}，{reason}触发）";
         }
@@ -357,8 +375,64 @@ public sealed class MistletoeViewModel : ViewModelBase
         _ = RunFlowAsync(Math.Max(0, _config.DelaySeconds), "自动");
     }
 
+    // ================= 执行路径可视化（节点运行态） =================
+
     /// <summary>
-    /// 「进入任务中心执行」节点的交接实现。任务中心（总计划 §3）落地前为占位：
+    /// Runner 的节点状态回报入口（可能在线程池线程上）：定位对应节点 VM 并更新运行态。
+    /// 条件节点出结果时联动：走过的分支自动展开（可在总控关掉）、没走的分支灰显。
+    /// </summary>
+    private void OnNodeStateReported(StartupStep step, NodeRunState state, string? note)
+    {
+        RunOnUi(() =>
+        {
+            var vm = FindStepVm(RootChain, step);
+            if (vm == null) return; // 节点在 VM 树里找不到（理论上不该发生），只丢可视化不影响执行
+            vm.RunState = state;
+            vm.RunStateNote = note ?? "";
+            if (state == NodeRunState.CondTrue || state == NodeRunState.CondFalse)
+            {
+                var tookTrue = state == NodeRunState.CondTrue;
+                vm.TrueChain.BranchDimmed = !tookTrue;
+                vm.FalseChain.BranchDimmed = tookTrue;
+                if (AutoExpandTakenBranch) vm.BranchesExpanded = true;
+            }
+        });
+    }
+
+    /// <summary>按模型引用在 VM 树里递归定位节点（树很小，直接走查）。</summary>
+    private static StartupStepViewModel? FindStepVm(StepChainViewModel chain, StartupStep model)
+    {
+        foreach (var vm in chain.Steps)
+        {
+            if (ReferenceEquals(vm.Model, model)) return vm;
+            var hit = FindStepVm(vm.TrueChain, model)
+                      ?? FindStepVm(vm.FalseChain, model)
+                      ?? FindStepVm(vm.FireChain, model);
+            if (hit != null) return hit;
+        }
+        return null;
+    }
+
+    /// <summary>每次执行前重置整棵树的运行态（节点状态 + 分支灰显），让本次路径从零画起。</summary>
+    private void ResetRunStates()
+    {
+        ResetRunStatesRecursive(RootChain);
+    }
+
+    private static void ResetRunStatesRecursive(StepChainViewModel chain)
+    {
+        chain.BranchDimmed = false;
+        foreach (var step in chain.Steps)
+        {
+            step.RunState = NodeRunState.None;
+            step.RunStateNote = "";
+            ResetRunStatesRecursive(step.TrueChain);
+            ResetRunStatesRecursive(step.FalseChain);
+            ResetRunStatesRecursive(step.FireChain);
+        }
+    }
+
+    /// <summary>「进入任务中心执行」节点的交接实现。任务中心（总计划 §3）落地前为占位：
     /// 记日志并返回，流程继续后续节点。落地后在此驱动任务序列。
     /// </summary>
     private Task EnterTaskCenterAsync()
@@ -420,7 +494,9 @@ public sealed class MistletoeViewModel : ViewModelBase
             RunOnUi(() => ArmedTimers.Remove(timer));
             var step = timer.Step;
             _mainVm.AddLog($"[槲寄生] 定时触发器「{StartupFlowRunner.DisplayName(step, 0)}」到点（{DateTime.Now:HH:mm}），开始执行「到点执行」链");
+            OnNodeStateReported(step, NodeRunState.Running, null);
             await _runner.RunAsync(step.FireSteps.ToList(), timer.Cts.Token);
+            OnNodeStateReported(step, NodeRunState.Success, $"已于 {DateTime.Now:HH:mm} 触发");
 
             // 每天重复：本轮跑完后重新挂载到明天的同一时刻（取消语义不走到这里）
             if (step.RepeatDaily && TimeOnly.TryParse(step.TriggerTime, out var t))
@@ -455,6 +531,141 @@ public sealed class MistletoeViewModel : ViewModelBase
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher == null || dispatcher.CheckAccess()) action();
         else dispatcher.Invoke(action);
+    }
+
+    // ================= 方案管理（命名保存 / 恢复整份启动设置） =================
+
+    /// <summary>恢复前自动备份的固定方案名（每次恢复前覆盖刷新，防手滑）。</summary>
+    private const string AutoBackupSchemeName = "恢复前自动备份";
+
+    /// <summary>已保存的方案列表（按保存时间倒序展示）。</summary>
+    public ObservableCollection<SchemeItemViewModel> Schemes { get; } = [];
+
+    private string _schemeNameText = "";
+    /// <summary>「保存方案」的名称输入。</summary>
+    public string SchemeNameText
+    {
+        get => _schemeNameText;
+        set => SetProperty(ref _schemeNameText, value);
+    }
+
+    private SchemeItemViewModel? _selectedScheme;
+    /// <summary>方案下拉框当前选中的方案。</summary>
+    public SchemeItemViewModel? SelectedScheme
+    {
+        get => _selectedScheme;
+        set
+        {
+            if (SetProperty(ref _selectedScheme, value))
+                OnPropertyChanged(nameof(HasSelectedScheme));
+        }
+    }
+
+    public bool HasSelectedScheme => SelectedScheme != null;
+
+    public RelayCommand SaveSchemeCommand => new(_ =>
+    {
+        var name = SchemeNameText.Trim();
+        if (string.IsNullOrEmpty(name))
+        {
+            _mainVm.AddLog("[槲寄生] 请先给方案起个名字再保存");
+            return;
+        }
+        var existing = Schemes.FirstOrDefault(s => s.Scheme.Name == name);
+        if (existing != null)
+        {
+            // 同名覆盖更新
+            existing.Scheme.SavedAt = DateTime.Now;
+            existing.Scheme.Config = StartupFlowSchemeStore.Clone(_config);
+            existing.RefreshDisplay();
+            _mainVm.AddLog($"[槲寄生] 已覆盖更新方案「{name}」（{existing.Scheme.Config.Steps.Count} 个主流程节点）");
+        }
+        else
+        {
+            var scheme = new StartupFlowScheme
+            {
+                Name = name,
+                SavedAt = DateTime.Now,
+                Config = StartupFlowSchemeStore.Clone(_config),
+            };
+            Schemes.Insert(0, new SchemeItemViewModel(scheme));
+            _mainVm.AddLog($"[槲寄生] 已保存方案「{name}」（{scheme.Config.Steps.Count} 个主流程节点）");
+        }
+        PersistSchemes();
+        SchemeNameText = "";
+    });
+
+    public RelayCommand RestoreSchemeCommand => new(_ =>
+    {
+        var item = SelectedScheme;
+        if (item == null) return;
+        if (IsRunning)
+        {
+            _mainVm.AddLog("[槲寄生] 流程正在执行中，请先取消或等执行完再恢复方案");
+            return;
+        }
+
+        // 恢复前自动备份当前配置（覆盖同名，始终只留最新一份）
+        var backup = Schemes.FirstOrDefault(s => s.Scheme.Name == AutoBackupSchemeName);
+        if (backup != null)
+        {
+            backup.Scheme.SavedAt = DateTime.Now;
+            backup.Scheme.Config = StartupFlowSchemeStore.Clone(_config);
+            backup.RefreshDisplay();
+        }
+        else
+        {
+            backup = new SchemeItemViewModel(new StartupFlowScheme
+            {
+                Name = AutoBackupSchemeName,
+                SavedAt = DateTime.Now,
+                Config = StartupFlowSchemeStore.Clone(_config),
+            });
+            Schemes.Add(backup);
+        }
+
+        ApplyConfig(StartupFlowSchemeStore.Clone(item.Scheme.Config));
+        PersistSchemes();
+        _mainVm.AddLog($"[槲寄生] 已恢复方案「{item.Scheme.Name}」（保存于 {item.Scheme.SavedAt:MM-dd HH:mm}）；恢复前的配置已自动备份为「{AutoBackupSchemeName}」");
+    });
+
+    public RelayCommand DeleteSchemeCommand => new(_ =>
+    {
+        var item = SelectedScheme;
+        if (item == null) return;
+        Schemes.Remove(item);
+        SelectedScheme = null;
+        PersistSchemes();
+        _mainVm.AddLog($"[槲寄生] 已删除方案「{item.Scheme.Name}」");
+    });
+
+    private void PersistSchemes()
+    {
+        _schemeStore.SaveAll(Schemes.Select(s => s.Scheme).ToList());
+    }
+
+    /// <summary>
+    /// 用一份配置原位替换当前配置（清空再填充 _config.Steps，不换引用——
+    /// RootChain.ModelList 持有的正是这个列表），并重建 VM 树、立即落盘。
+    /// </summary>
+    private void ApplyConfig(StartupFlowConfig config)
+    {
+        SelectedStep = null;
+        _config.Enabled = config.Enabled;
+        _config.DelaySeconds = config.DelaySeconds;
+        _config.AutoExpandBranch = config.AutoExpandBranch;
+        _config.Steps.Clear();
+        _config.Steps.AddRange(config.Steps);
+
+        RootChain.Steps.Clear();
+        foreach (var model in _config.Steps)
+            RootChain.Steps.Add(new StartupStepViewModel(model, this, RootChain));
+
+        OnPropertyChanged(nameof(FlowEnabled));
+        OnPropertyChanged(nameof(DelaySecondsText));
+        OnPropertyChanged(nameof(AutoExpandTakenBranch));
+        OnPropertyChanged(nameof(HasSteps));
+        SaveNow();
     }
 
     // ================= 保存 =================
@@ -520,6 +731,16 @@ public sealed class StepChainViewModel : ViewModelBase
 
     /// <summary>「＋ 添加节点」按钮可用性绑定用（HasEndFlow 的反相，WPF 无内置反转转换器）。</summary>
     public bool HasNoEndFlow => !HasEndFlow;
+
+    // ---- 执行路径可视化：未走到的分支整链灰显（运行态不持久化） ----
+
+    private bool _branchDimmed;
+    /// <summary>本链所属的条件判断走了另一条分支 → 整链灰显（一眼看出"这条路没走"）。</summary>
+    public bool BranchDimmed
+    {
+        get => _branchDimmed;
+        set => SetProperty(ref _branchDimmed, value);
+    }
 
     // ---- 「＋ 添加节点」弹层（每条链各一份状态；目录转发宿主的，主链/分支链写法统一） ----
 
@@ -625,6 +846,51 @@ public sealed class StartupStepViewModel : ViewModelBase
     public string BranchToggleText => BranchesExpanded ? "▾ 分支" : "▸ 分支";
 
     public RelayCommand ToggleBranchesCommand => new(_ => BranchesExpanded = !BranchesExpanded);
+
+    // ---- 执行路径可视化：节点运行态（运行态不持久化，每次执行前由宿主重置） ----
+
+    private NodeRunState _runState = NodeRunState.None;
+    /// <summary>本次执行中该节点的运行态（驱动卡片边框色与状态徽标）。</summary>
+    public NodeRunState RunState
+    {
+        get => _runState;
+        set
+        {
+            if (SetProperty(ref _runState, value))
+            {
+                OnPropertyChanged(nameof(HasRunState));
+                OnPropertyChanged(nameof(RunStateBadgeText));
+            }
+        }
+    }
+
+    private string _runStateNote = "";
+    /// <summary>运行态附注（条件节点的判断依据，如「当前 10:32，区间 08:00~12:00」）。</summary>
+    public string RunStateNote
+    {
+        get => _runStateNote;
+        set
+        {
+            if (SetProperty(ref _runStateNote, value))
+                OnPropertyChanged(nameof(HasRunStateNote));
+        }
+    }
+
+    public bool HasRunState => RunState != NodeRunState.None;
+
+    public bool HasRunStateNote => !string.IsNullOrWhiteSpace(RunStateNote);
+
+    /// <summary>卡片上的状态徽标文字。</summary>
+    public string RunStateBadgeText => RunState switch
+    {
+        NodeRunState.Running => "执行中…",
+        NodeRunState.Success => "✓ 完成",
+        NodeRunState.Failed => "✗ 失败",
+        NodeRunState.Skipped => "已跳过",
+        NodeRunState.CondTrue => "→ 是",
+        NodeRunState.CondFalse => "→ 否",
+        _ => "",
+    };
 
     // ---- 通用字段 ----
 
@@ -809,6 +1075,36 @@ public sealed class StartupStepViewModel : ViewModelBase
         OnPropertyChanged(nameof(Summary));
         _owner.RequestSave();
     }
+}
+
+/// <summary>
+/// 一个已保存方案的列表项视图模型：包一层为了下拉框展示行（名称+保存时间）。
+/// 重写 ToString 是因为鎏金下拉框的选中框直接显示 SelectionBoxItem 的文本。
+/// </summary>
+public sealed class SchemeItemViewModel : ViewModelBase
+{
+    public SchemeItemViewModel(StartupFlowScheme scheme)
+    {
+        Scheme = scheme;
+    }
+
+    /// <summary>对应的方案模型。</summary>
+    public StartupFlowScheme Scheme { get; }
+
+    private string _displayLine = "";
+    /// <summary>下拉行文本：方案名（MM-dd HH:mm）。</summary>
+    public string DisplayLine
+    {
+        get => string.IsNullOrEmpty(_displayLine) ? BuildDisplayLine() : _displayLine;
+        private set => SetProperty(ref _displayLine, value);
+    }
+
+    /// <summary>覆盖更新方案后刷新展示行。</summary>
+    public void RefreshDisplay() => DisplayLine = BuildDisplayLine();
+
+    private string BuildDisplayLine() => $"{Scheme.Name}（{Scheme.SavedAt:MM-dd HH:mm}）";
+
+    public override string ToString() => DisplayLine;
 }
 
 /// <summary>

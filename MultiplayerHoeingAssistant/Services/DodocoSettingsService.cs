@@ -30,9 +30,17 @@ public class DodocoSettings
     /// <summary>共享我的完整日志文件：开启后允许房间成员请求本机日志文件列表并下载（gzip 分块传输）。
     /// 默认开——注意完整日志可能包含本机路径等环境信息，在意的人可手动关。</summary>
     [JsonPropertyName("shareLogFiles")] public bool ShareLogFiles { get; set; } = true;
-    /// <summary>事发录像总开关：开启后本机 BGI 运行期间后台每秒截一帧进 10 秒环形缓冲；
-    /// 命中标了"存快照"的监控规则时保存前后 3 秒帧 + 触发日志到 log/incidents/。默认关。</summary>
+    /// <summary>事发录像总开关：开启后本机 BGI 运行期间后台按设定间隔截帧进环形缓冲；
+    /// 命中标了"存快照"的监控规则时保存事发前后帧 + 触发日志到 log/incidents/。默认关。</summary>
     [JsonPropertyName("incidentSnapshotEnabled")] public bool IncidentSnapshotEnabled { get; set; }
+    /// <summary>事发录像·环形缓冲时长（秒）：5~60，默认 10。缓冲时长决定"事发前"最多能回溯多久。</summary>
+    [JsonPropertyName("incidentBufferSeconds")] public int IncidentBufferSeconds { get; set; } = 10;
+    /// <summary>事发录像·截图间隔（秒）：0.5~5，默认 1。间隔越小缓冲帧越多、磁盘/CPU 开销越大。</summary>
+    [JsonPropertyName("incidentCaptureIntervalSeconds")] public double IncidentCaptureIntervalSeconds { get; set; } = 1;
+    /// <summary>事发录像·保存事发前秒数：1~20，默认 3（实际可存上限受环形缓冲时长限制）。</summary>
+    [JsonPropertyName("incidentPreSeconds")] public int IncidentPreSeconds { get; set; } = 3;
+    /// <summary>事发录像·保存事发后秒数：1~20，默认 3（触发后继续补采该时长的帧再封盘）。</summary>
+    [JsonPropertyName("incidentPostSeconds")] public int IncidentPostSeconds { get; set; } = 3;
 }
 
 /// <summary>
@@ -75,7 +83,11 @@ public sealed class DodocoSettingsService
                     ShareRealtimeLog = _settings.ShareRealtimeLog,
                     ShareLogInfoOnly = _settings.ShareLogInfoOnly,
                     ShareLogFiles = _settings.ShareLogFiles,
-                    IncidentSnapshotEnabled = _settings.IncidentSnapshotEnabled
+                    IncidentSnapshotEnabled = _settings.IncidentSnapshotEnabled,
+                    IncidentBufferSeconds = _settings.IncidentBufferSeconds,
+                    IncidentCaptureIntervalSeconds = _settings.IncidentCaptureIntervalSeconds,
+                    IncidentPreSeconds = _settings.IncidentPreSeconds,
+                    IncidentPostSeconds = _settings.IncidentPostSeconds
                 };
         }
     }
@@ -133,6 +145,11 @@ public sealed class DodocoSettingsService
         if (_settings.ScreenshotIntervalSeconds is not (1 or 3 or 5 or 10)) _settings.ScreenshotIntervalSeconds = 3;
         if (_settings.ThumbnailWidth is < 320 or > 3840) _settings.ThumbnailWidth = 1280;
         if (_settings.ShareScreenshotWidth is not (480 or 960 or 1280 or 1920)) _settings.ShareScreenshotWidth = 1280;
+        if (_settings.IncidentBufferSeconds is < 5 or > 60) _settings.IncidentBufferSeconds = 10;
+        if (double.IsNaN(_settings.IncidentCaptureIntervalSeconds) ||
+            _settings.IncidentCaptureIntervalSeconds is < 0.5 or > 5) _settings.IncidentCaptureIntervalSeconds = 1;
+        if (_settings.IncidentPreSeconds is < 1 or > 20) _settings.IncidentPreSeconds = 3;
+        if (_settings.IncidentPostSeconds is < 1 or > 20) _settings.IncidentPostSeconds = 3;
     }
 
     private void SaveLocked()

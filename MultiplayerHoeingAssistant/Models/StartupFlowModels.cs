@@ -3,6 +3,28 @@ using System.Text.Json.Serialization;
 namespace MultiplayerHoeingAssistant.Models;
 
 /// <summary>
+/// 启动流程节点的运行态（执行路径可视化用，纯运行态不持久化）。
+/// 每次执行前重置为 None；执行中由 StartupFlowRunner 逐节点回报。
+/// </summary>
+public enum NodeRunState
+{
+    /// <summary>本次执行尚未走到。</summary>
+    None,
+    /// <summary>正在执行。</summary>
+    Running,
+    /// <summary>动作执行成功。</summary>
+    Success,
+    /// <summary>动作执行失败（流程继续后续节点）。</summary>
+    Failed,
+    /// <summary>节点已禁用，被跳过。</summary>
+    Skipped,
+    /// <summary>条件判断成立，走「是」分支。</summary>
+    CondTrue,
+    /// <summary>条件判断不成立，走「否」分支。</summary>
+    CondFalse,
+}
+
+/// <summary>
 /// 槲寄生 · 启动中心——启动流程配置（助手启动后 → 进入任务中心前的环境准备动作链）。
 /// 持久化到 %APPDATA%/NexusBGI/startup-flow.json（按 Windows 用户隔离，不走 SignalR 同步）。
 /// 序列化风格与 AssistConfig 一致（System.Text.Json + camelCase）。
@@ -20,6 +42,29 @@ public class StartupFlowConfig
     /// <summary>主流程节点链（顺序即执行顺序；条件节点内嵌是/否子链）。</summary>
     [JsonPropertyName("steps")]
     public List<StartupStep> Steps { get; set; } = [];
+
+    /// <summary>执行时自动展开实际走到的分支（默认开；未走到的分支保持折叠并灰显）。</summary>
+    [JsonPropertyName("autoExpandBranch")]
+    public bool AutoExpandBranch { get; set; } = true;
+}
+
+/// <summary>
+/// 槲寄生 · 启动中心——已保存的方案快照（命名保存整份启动流程配置，改坏了可一键恢复）。
+/// 列表持久化到 %APPDATA%/NexusBGI/startup-flow-schemes.json（与主配置同目录，按 Windows 用户隔离）。
+/// </summary>
+public class StartupFlowScheme
+{
+    /// <summary>方案名（用户命名；同名保存视为覆盖更新）。</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    /// <summary>保存时间（本机时间，列表展示用）。</summary>
+    [JsonPropertyName("savedAt")]
+    public DateTime SavedAt { get; set; } = DateTime.Now;
+
+    /// <summary>完整配置快照（深拷贝，与当前配置互不影响）。</summary>
+    [JsonPropertyName("config")]
+    public StartupFlowConfig Config { get; set; } = new();
 }
 
 /// <summary>

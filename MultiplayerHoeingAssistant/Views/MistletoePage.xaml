@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:MultiplayerHoeingAssistant.ViewModels"
+             xmlns:models="clr-namespace:MultiplayerHoeingAssistant.Models"
              d:DataContext="{d:DesignInstance Type=vm:MistletoeViewModel}"
              d:DesignWidth="700"
              mc:Ignorable="d">
@@ -268,6 +269,23 @@
                                 <DataTrigger Binding="{Binding Enabled}" Value="False">
                                     <Setter Property="Opacity" Value="0.45"/>
                                 </DataTrigger>
+                                <!-- 执行路径：卡片描边按运行态变色（金=执行中 / 青=成功·走是 / 橙红=走否 / 红=失败） -->
+                                <DataTrigger Binding="{Binding RunState}" Value="{x:Static models:NodeRunState.Running}">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Gold}"/>
+                                    <Setter Property="BorderThickness" Value="1.5"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding RunState}" Value="{x:Static models:NodeRunState.Success}">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Anemo}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding RunState}" Value="{x:Static models:NodeRunState.CondTrue}">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Anemo}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding RunState}" Value="{x:Static models:NodeRunState.CondFalse}">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Pyro}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding RunState}" Value="{x:Static models:NodeRunState.Failed}">
+                                    <Setter Property="BorderBrush" Value="#EF5350"/>
+                                </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </Border.Style>
@@ -340,9 +358,81 @@
                                         </Border.Style>
                                         <TextBlock Text="是→左列 / 否→右列" FontSize="9" Foreground="{DynamicResource GoldText}"/>
                                     </Border>
+                                    <!-- 运行状态徽标（执行路径可视化）：颜色随状态变，执行中带呼吸闪烁 -->
+                                    <Border CornerRadius="5" Padding="6,1" Margin="6,0,0,0" VerticalAlignment="Center">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Setter Property="Background" Value="#336FD8CE"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasRunState}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding RunState}" Value="{x:Static models:NodeRunState.Running}">
+                                                        <Setter Property="Background" Value="#40E8C96D"/>
+                                                        <DataTrigger.EnterActions>
+                                                            <BeginStoryboard Name="RunPulse">
+                                                                <Storyboard>
+                                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1" To="0.4"
+                                                                                     Duration="0:0:0.7" AutoReverse="True" RepeatBehavior="Forever"/>
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </DataTrigger.EnterActions>
+                                                        <DataTrigger.ExitActions>
+                                                            <StopStoryboard BeginStoryboardName="RunPulse"/>
+                                                        </DataTrigger.ExitActions>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding RunState}" Value="{x:Static models:NodeRunState.Failed}">
+                                                        <Setter Property="Background" Value="#40EF5350"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding RunState}" Value="{x:Static models:NodeRunState.CondFalse}">
+                                                        <Setter Property="Background" Value="#40E88A6F"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding RunState}" Value="{x:Static models:NodeRunState.Skipped}">
+                                                        <Setter Property="Background" Value="#299C97C0"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock Text="{Binding RunStateBadgeText}" FontSize="9">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource Anemo}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding RunState}" Value="{x:Static models:NodeRunState.Running}">
+                                                            <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding RunState}" Value="{x:Static models:NodeRunState.Failed}">
+                                                            <Setter Property="Foreground" Value="#EF5350"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding RunState}" Value="{x:Static models:NodeRunState.CondFalse}">
+                                                            <Setter Property="Foreground" Value="{DynamicResource Pyro}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding RunState}" Value="{x:Static models:NodeRunState.Skipped}">
+                                                            <Setter Property="Foreground" Value="{DynamicResource Dim}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Border>
                                 </StackPanel>
                                 <TextBlock Text="{Binding Summary}" FontSize="10.5" Foreground="{DynamicResource Dim}"
                                            Margin="0,2,0,0" TextTrimming="CharacterEllipsis" MaxWidth="330"/>
+                                <!-- 运行态附注行（条件判断依据等，有内容才显示） -->
+                                <TextBlock Text="{Binding RunStateNote}" FontSize="10" Foreground="{DynamicResource GoldText}"
+                                           Margin="0,2,0,0" TextTrimming="CharacterEllipsis" MaxWidth="330">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasRunStateNote}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                             </StackPanel>
 
                             <!-- 操作区：分支折叠（仅条件节点）/ 启用 / 上移 / 下移 / 删除 -->
@@ -734,6 +824,16 @@
                             Background="#0F6FD8CE"
                             DataContext="{Binding TrueChain}"
                             AllowDrop="True" DragOver="Chain_DragOver" Drop="Chain_Drop">
+                        <!-- 执行路径：本次没走这条分支 → 整链灰显 -->
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding BranchDimmed}" Value="True">
+                                        <Setter Property="Opacity" Value="0.35"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
                         <StackPanel>
                             <Border CornerRadius="5" Padding="8,1" Background="#336FD8CE" HorizontalAlignment="Left" Margin="0,0,0,4">
                                 <TextBlock Text="✓ 是" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource Anemo}"/>
@@ -762,6 +862,16 @@
                             CornerRadius="8" Background="#14E88A6F"
                             DataContext="{Binding FalseChain}"
                             AllowDrop="True" DragOver="Chain_DragOver" Drop="Chain_Drop">
+                        <!-- 执行路径：本次没走这条分支 → 整链灰显 -->
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding BranchDimmed}" Value="True">
+                                        <Setter Property="Opacity" Value="0.35"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
                         <StackPanel>
                             <Border CornerRadius="5" Padding="8,1" Background="#40E88A6F" HorizontalAlignment="Left" Margin="0,0,0,4">
                                 <TextBlock Text="✗ 否" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource Pyro}"/>
@@ -975,6 +1085,33 @@
                                     <TextBlock Text="（与「设置 → 启动策略」是同一个开关，两边实时同步）" FontSize="10" Foreground="{DynamicResource Dim}"
                                                VerticalAlignment="Center" Margin="10,0,0,0"/>
                                 </StackPanel>
+
+                                <!-- 行 3：方案管理（命名保存整份启动设置，改坏了可一键恢复；恢复前自动备份当前配置） -->
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                    <TextBlock Text="方案" FontSize="13" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                                    <TextBox Text="{Binding SchemeNameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" Width="130" Margin="10,0,0,0"
+                                             ToolTip="给当前设置起个名字"/>
+                                    <Button Content="💾 保存方案" Style="{DynamicResource BtnGold}" Padding="12,4" Margin="8,0,0,0"
+                                            Command="{Binding SaveSchemeCommand}"
+                                            ToolTip="把当前整个启动设置（开关、延迟、全部节点与分支）存为一份方案；同名覆盖"/>
+                                    <ComboBox Width="190" Margin="16,0,0,0" VerticalAlignment="Center"
+                                              Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
+                                              ItemsSource="{Binding Schemes}" SelectedItem="{Binding SelectedScheme, Mode=TwoWay}"
+                                              ToolTip="选择一份已保存的方案">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding DisplayLine}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <Button Content="↩ 恢复" Style="{DynamicResource BtnGhost}" Padding="10,4" Margin="8,0,0,0"
+                                            Command="{Binding RestoreSchemeCommand}" IsEnabled="{Binding HasSelectedScheme}"
+                                            ToolTip="恢复选中的方案（恢复前会把当前配置自动备份为「恢复前自动备份」）"/>
+                                    <Button Content="✕ 删除" Style="{DynamicResource BtnGhost}" Padding="10,4" Margin="6,0,0,0"
+                                            Command="{Binding DeleteSchemeCommand}" IsEnabled="{Binding HasSelectedScheme}"
+                                            ToolTip="删除选中的方案（不影响当前正在使用的配置）"/>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
 
@@ -1030,9 +1167,15 @@
                                                    FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="10,0,0,0"
                                                    TextWrapping="Wrap" MaxWidth="520"/>
                                     </StackPanel>
-                                    <Button Content="{Binding AllBranchesToggleText}" Style="{DynamicResource BtnGhost}"
-                                            Padding="10,3" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                            Command="{Binding ToggleAllBranchesCommand}" ToolTip="一键展开/收起所有条件节点的分支区域"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                        <CheckBox IsChecked="{Binding AutoExpandTakenBranch, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"
+                                                  ToolTip="执行时自动展开实际走到的分支，没走的分支灰显"/>
+                                        <TextBlock Text="执行时展开走过的分支" FontSize="11" Foreground="{DynamicResource Dim}"
+                                                   VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                        <Button Content="{Binding AllBranchesToggleText}" Style="{DynamicResource BtnGhost}"
+                                                Padding="10,3" FontSize="11"
+                                                Command="{Binding ToggleAllBranchesCommand}" ToolTip="一键展开/收起所有条件节点的分支区域"/>
+                                    </StackPanel>
                                 </Grid>
 
                                 <!-- 主流程链（DataContext 切到 RootChain，与分支子链写法统一） -->

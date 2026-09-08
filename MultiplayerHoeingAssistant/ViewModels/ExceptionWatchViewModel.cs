@@ -338,12 +338,12 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
             if (!RuleFilterItems.Contains(record.RuleName)) RuleFilterItems.Add(record.RuleName);
             RebuildFiltered();
 
-            // 快照目录是后台异步落盘的（前段立即写、约 4.5 秒后封盘），记录首渲染时目录可能还没建出来，
+            // 快照目录是后台异步落盘的（前段立即写、后段补采完才封盘），记录首渲染时目录可能还没建出来，
             // HasIncidentSnapshot 会求得 false；对开了存快照的规则的记录延迟重渲染一次（替换集合项触发绑定重求值，
-            // 同 OnRecordMerged 的思路），让「📷 快照」按钮在封盘后自动出现。
+            // 同 OnRecordMerged 的思路），让「📷 快照」按钮在封盘后自动出现。延迟时长跟随事发后秒数设置。
             if (Rules.Any(r => r.ToModel().Id == record.RuleId && r.Snapshot))
             {
-                _ = Task.Delay(6000).ContinueWith(_ => Application.Current.Dispatcher.BeginInvoke(() =>
+                _ = Task.Delay(_shell.IncidentSnapshotFinalizeDelayMs()).ContinueWith(_ => Application.Current.Dispatcher.BeginInvoke(() =>
                 {
                     var idx = FilteredRecords.IndexOf(record);
                     if (idx >= 0) FilteredRecords[idx] = record;
@@ -426,7 +426,7 @@ public sealed class WatchRuleItem : ViewModelBase
     public bool IsRegex { get => _model.IsRegex; set { _model.IsRegex = value; OnPropertyChanged(); _onChanged(); } }
     public bool Enabled { get => _model.Enabled; set { _model.Enabled = value; OnPropertyChanged(); _onChanged(); } }
     public bool Alert { get => _model.Alert; set { _model.Alert = value; OnPropertyChanged(); _onChanged(); } }
-    /// <summary>命中时保存事发快照（前后 3 秒桌面帧 + 触发日志到 log/incidents/，需总开关开启）。</summary>
+    /// <summary>命中时保存事发快照（事发前后桌面帧 + 触发日志到 log/incidents/，需总开关开启；前后秒数见事发录像设置）。</summary>
     public bool Snapshot { get => _model.Snapshot; set { _model.Snapshot = value; OnPropertyChanged(); _onChanged(); } }
     public string MinLevel { get => _model.MinLevel; set { _model.MinLevel = value; OnPropertyChanged(); _onChanged(); } }
     public string Note { get => _model.Note; set { _model.Note = value; OnPropertyChanged(); _onChanged(); } }

@@ -27,6 +27,12 @@ public sealed class StartupFlowRunner
     private readonly Func<StartupStep, CancellationToken, Task<(bool passed, string desc)>> _confirmHandler;
     private readonly Action<string> _log;
 
+    /// <summary>
+    /// 节点运行态回报（可选，由宿主 VM 设置）：每个节点 执行前→Running、执行后→终态，
+    /// 条件节点回报 CondTrue/CondFalse 并附判断依据。执行路径可视化的数据来源。
+    /// </summary>
+    public Action<StartupStep, NodeRunState, string?>? NodeStateSink { get; set; }
+
     /// <summary>游戏进程名（国服 Yuanshen / 国际服 GenshinImpact），与 ScreenshotService 口径一致。</summary>
     private static readonly string[] GameProcessNames = ["Yuanshen", "GenshinImpact"];
 
@@ -84,16 +90,19 @@ public sealed class StartupFlowRunner
             if (!step.Enabled)
             {
                 _log($"[槲寄生] {indent}节点「{display}」已禁用，跳过");
+                Report(step, NodeRunState.Skipped, "已禁用");
                 continue;
             }
 
             if (step.NodeType == "condition")
             {
+                Report(step, NodeRunState.Running);
                 // 人工确认是异步交互（UI 弹窗），其余条件是同步求值
                 var (passed, desc) = step.Kind == StartupStepKinds.ManualConfirm
                     ? await _confirmHandler(step, ct)
                     : EvaluateCondition(step);
                 _log($"[槲寄生] {indent}条件「{display}」：{desc} → {(passed ? "是" : "否")}");
+                Report(step, passed ? NodeRunState.CondTrue : NodeRunState.CondFalse, desc);
                 var branch = passed ? step.TrueSteps : step.FalseSteps;
                 if (branch.Count == 0)
                 {
@@ -107,13 +116,32 @@ public sealed class StartupFlowRunner
             }
 
             // 动作节点
+            Report(step, NodeRunState.Running);
             var ok = await ExecuteActionAsync(step, display, indent, ct);
             if (!ok)
             {
                 // 动作失败统一记日志后继续后续节点（启动期动作失败不应阻塞整链，
                 // 需要严格守门时用条件节点包一层分支）
                 _log($"[槲寄生] {indent}节点「{display}」执行未成功，继续后续节点");
+                Report(step, NodeRunState.Failed);
             }
+            else
+            {
+                Report(step, NodeRunState.Success);
+            }
+        }
+    }
+
+    /// <summary>向宿主回报节点运行态（未设置接收方时为空操作）。</summary>
+    private void Report(StartupStep step, NodeRunState state, string? note = null)
+    {
+        try
+        {
+            NodeStateSink?.Invoke(step, state, note);
+        }
+        catch
+        {
+            // 可视化回报绝不影响流程执行
         }
     }
 
@@ -211,6 +239,7 @@ public sealed class StartupFlowRunner
                 case StartupStepKinds.EndFlow:
                 {
                     _log($"[槲寄生] {indent}「{display}」：终止启动流程");
+                    Report(step, NodeRunState.Success, "已终止整条流程");
                     throw new FlowEndException();
                 }
                 case StartupStepKinds.TimerTrigger:

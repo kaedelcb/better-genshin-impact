@@ -158,7 +158,7 @@ public sealed class DiagnosticPackageService
             readme.AppendLine();
             readme.AppendLine("说明: BGI 日志切片按行头时间戳过滤（行头只有时分秒，日期按日志文件名拼）。");
             readme.AppendLine("exceptions/ 下每个子目录是一个异常点：record.json 含触发日志原文与前后各 5 行上下文，");
-            readme.AppendLine("若该规则开了“存快照”则同目录还有事发前后 3 秒的游戏截图（frame_-03 ~ frame_+03）。");
+            readme.AppendLine("若该规则开了“存快照”则同目录还有事发前后的游戏截图（frame_-XX.X ~ frame_+XX.X，秒数见事发录像设置）。");
             readme.AppendLine("排查联机问题时把本 zip 发给队友/开发者即可，替代手工翻两个日志目录。");
             WriteTextEntry(zip, "README.txt", readme.ToString());
         }

@@ -13,7 +13,8 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 /// <summary>
 /// 日志浏览 Tab 的 ViewModel（P2 / F2）。
 /// 文件列表（本机 BGI / 本机助手 / 已下载成员三分组）+ 整文件全量视图（「记事本式」：一次读入内存，
-/// 虚拟化 ListBox 承载，自由滚动不分块加载）+ 按时间范围搜索（自动定位到起始时间点）
+/// 虚拟化 ListBox 承载，自由滚动不分块加载）+ 按级别多选筛选（错误/警告/信息/Debug 四勾选框，ERR/WRN/INF/DBG）
+/// + 按时间范围搜索（自动定位到起始时间点）
 /// + 关键字/正则搜索（结果点击精确跳转行）+ 导出（原样复制 / 筛选结果 .log/.csv）。
 /// 磁盘读取放后台线程，结果经 Dispatcher 回 UI；搜索/定位全部在内存行列表上完成。
 /// </summary>
@@ -166,12 +167,18 @@ public sealed class LogBrowserViewModel : ViewModelBase
     // ========== 查看区（整文件全量视图） ==========
 
     private IReadOnlyList<LogLineItem> _lines = Array.Empty<LogLineItem>();
-    /// <summary>查看区全部行（整文件一次加载，虚拟化 ListBox 承载）。整体替换 + 一次 PropertyChanged：
-    /// 十几万行逐项 Add 到 ObservableCollection 会触发同量级 CollectionChanged 把 UI 线程淹没。</summary>
+    /// <summary>查看区当前显示行（=_allLines 经级别筛选后的视图；筛选为「全部级别」时就是 _allLines 本身）。
+    /// 整体替换 + 一次 PropertyChanged：十几万行逐项 Add 到 ObservableCollection 会触发同量级 CollectionChanged 把 UI 线程淹没。
+    /// 搜索/定位/「导出筛选·当前视图」都基于本列表，即筛选后只在筛出的级别行里进行。</summary>
     public IReadOnlyList<LogLineItem> Lines { get => _lines; private set => SetProperty(ref _lines, value); }
+
+    /// <summary>整文件全量行（磁盘加载结果原样保留；Lines 是它经级别筛选后的显示视图）。</summary>
+    private IReadOnlyList<LogLineItem> _allLines = Array.Empty<LogLineItem>();
 
     /// <summary>当前 Lines 所属文件路径（点搜索结果/异常记录跳转时已在内存的文件不重读磁盘）。</summary>
     private string? _loadedPath;
+    /// <summary>整载时是否被 64MB 上限截断（状态行文案用；级别筛选切换时状态行要重建）。</summary>
+    private bool _loadedTruncated;
 
     /// <summary>请求视图滚动定位：null=滚到末尾看最新（初次加载/刷新）；否则=滚动+选中+居中该行（Lines 下标）。UI 线程触发。</summary>
     public event Action<int?>? NavigateRequested;
@@ -184,7 +191,82 @@ public sealed class LogBrowserViewModel : ViewModelBase
     {
         ViewerHintText = _selectedFile == null
             ? "← 在左侧选择日志文件开始浏览；远程成员日志在左下角请求下载"
-            : Lines.Count == 0 && !IsLoading ? "该文件暂无日志内容" : "";
+            : Lines.Count == 0 && !IsLoading
+                ? (IsLevelFilterActive && _allLines.Count > 0
+                    ? "当前文件没有符合级别筛选的日志行"
+                    : "该文件暂无日志内容")
+                : "";
+    }
+
+    // ========== 按级别筛选（查看区，多选） ==========
+    // 四个级别各自一个开关，默认全选；取消勾选即在查看区隐藏该级别。
+    // 加载时续行已继承所属事件的级别，堆栈/正文不会被单独滤掉；无级别/未知级别按信息档处理。
+
+    private bool _showError = true;
+    /// <summary>查看区显示错误（ERR）级日志。</summary>
+    public bool ShowError { get => _showError; set => OnLevelFilterChanged(ref _showError, value); }
+
+    private bool _showWarning = true;
+    /// <summary>查看区显示警告（WRN）级日志。</summary>
+    public bool ShowWarning { get => _showWarning; set => OnLevelFilterChanged(ref _showWarning, value); }
+
+    private bool _showInfo = true;
+    /// <summary>查看区显示信息（INF）级日志。</summary>
+    public bool ShowInfo { get => _showInfo; set => OnLevelFilterChanged(ref _showInfo, value); }
+
+    private bool _showDebug = true;
+    /// <summary>查看区显示 Debug（DBG）级日志。</summary>
+    public bool ShowDebug { get => _showDebug; set => OnLevelFilterChanged(ref _showDebug, value); }
+
+    /// <summary>四个级别开关共用的 setter 逻辑：值变化才重建显示列表与状态行。</summary>
+    private void OnLevelFilterChanged(ref bool field, bool value, [System.Runtime.CompilerServices.CallerMemberName] string name = "")
+    {
+        if (!SetProperty(ref field, value, name)) return;
+        ApplyLevelFilter();
+        UpdateViewStatus();
+    }
+
+    /// <summary>是否有级别被关掉（false=全选=不过滤）。</summary>
+    private bool IsLevelFilterActive => !(ShowError && ShowWarning && ShowInfo && ShowDebug);
+
+    /// <summary>行级别是否通过当前筛选（INF 与无级别/未知级别同行，与 LogLevels.Rank 未知按 INF 一致）。</summary>
+    private bool PassesLevelFilter(string level) => level switch
+    {
+        LogLevels.Err => ShowError,
+        LogLevels.Wrn => ShowWarning,
+        LogLevels.Dbg => ShowDebug,
+        _ => ShowInfo
+    };
+
+    /// <summary>按当前级别筛选重建查看区显示列表（纯内存过滤，大文件也是毫秒级，直接在 UI 线程做）。</summary>
+    private void ApplyLevelFilter()
+    {
+        Lines = IsLevelFilterActive ? _allLines.Where(l => PassesLevelFilter(l.Level)).ToList() : _allLines;
+        NotifyViewerHint();
+    }
+
+    /// <summary>复位为全选（跳转目标被滤掉时调用）；逐个走 setter 会多次重建显示列表，这里直接改字段后统一刷新。</summary>
+    private void ResetLevelFilter()
+    {
+        _showError = _showWarning = _showInfo = _showDebug = true;
+        OnPropertyChanged(nameof(ShowError));
+        OnPropertyChanged(nameof(ShowWarning));
+        OnPropertyChanged(nameof(ShowInfo));
+        OnPropertyChanged(nameof(ShowDebug));
+        ApplyLevelFilter();
+        UpdateViewStatus();
+    }
+
+    /// <summary>状态行：文件信息 + 行数；级别筛选生效时追加筛选后行数。</summary>
+    private void UpdateViewStatus()
+    {
+        var file = _selectedFile;
+        // 选中文件与内存中的加载结果不一致（新文件加载失败等）时不覆盖现有状态行，避免拿旧数据配新文件名
+        if (file == null || _loadedPath == null || _loadedPath != file.FullPath) return;
+        ViewStatus = (_loadedTruncated
+            ? $"{file.Name} · {file.SizeText} 超过 64MB 上限，仅加载尾部 {_allLines.Count:N0} 行"
+            : $"{file.Name} · {file.SizeText} · 共 {_allLines.Count:N0} 行")
+            + (IsLevelFilterActive ? $" · 级别筛选后 {Lines.Count:N0} 行" : "");
     }
 
     private string _viewStatus = "请选择左侧日志文件";
@@ -229,15 +311,14 @@ public sealed class LogBrowserViewModel : ViewModelBase
         });
     }
 
-    /// <summary>整载结果上屏：整体替换 Lines（一次 PropertyChanged），状态行标注截断。</summary>
+    /// <summary>整载结果上屏：留存全量行后按当前级别筛选出显示列表（一次 PropertyChanged），状态行标注截断/筛选。</summary>
     private void ApplyFullLoad(LogFileItem file, FullLogLoad load)
     {
-        Lines = load.Lines;
+        _allLines = load.Lines;
         _loadedPath = file.FullPath;
-        ViewStatus = load.Truncated
-            ? $"{file.Name} · {file.SizeText} 超过 64MB 上限，仅加载尾部 {load.Lines.Count:N0} 行"
-            : $"{file.Name} · {file.SizeText} · 共 {load.Lines.Count:N0} 行";
-        NotifyViewerHint();
+        _loadedTruncated = load.Truncated;
+        ApplyLevelFilter();
+        UpdateViewStatus();
     }
 
     // ========== 时间范围搜索 ==========
@@ -361,9 +442,10 @@ public sealed class LogBrowserViewModel : ViewModelBase
         }
         NotifyViewerHint();
 
-        // 已在内存中的文件：行内直接定位，不重读磁盘
-        if (_loadedPath == filePath && Lines.Count > 0)
+        // 已在内存中的文件：行内直接定位，不重读磁盘（注意按全量行判空：级别筛选可能把显示列表滤成空）
+        if (_loadedPath == filePath && _allLines.Count > 0)
         {
+            EnsureTargetVisible(offset);
             NavigateToOffset(item.Name, offset, matchedLine);
             return;
         }
@@ -381,6 +463,7 @@ public sealed class LogBrowserViewModel : ViewModelBase
                     if (ticket != _loadTicket) { IsLoading = false; return; }
                     ApplyFullLoad(item, load);
                     IsLoading = false;
+                    EnsureTargetVisible(offset);
                     NavigateToOffset(item.Name, offset, matchedLine);
                 });
             }
@@ -390,6 +473,23 @@ public sealed class LogBrowserViewModel : ViewModelBase
                 { IsLoading = false; ViewStatus = $"定位失败: {ex.Message}"; });
             }
         });
+    }
+
+    /// <summary>级别筛选可能把跳转目标行滤掉：目标偏移不在当前显示视图时复位为全选（与日期筛选复位同理）。
+    /// 搜索结果点击的目标行必在筛选视图内（二分精确命中即返回），不会触发复位丢失筛选上下文。</summary>
+    private void EnsureTargetVisible(long offset)
+    {
+        if (!IsLevelFilterActive) return;
+        var lines = Lines;
+        int lo = 0, hi = lines.Count - 1;
+        while (lo <= hi)
+        {
+            var mid = lo + (hi - lo) / 2;
+            if (lines[mid].Offset == offset) return; // 目标行在当前筛选视图内，保持筛选
+            if (lines[mid].Offset < offset) lo = mid + 1;
+            else hi = mid - 1;
+        }
+        ResetLevelFilter();
     }
 
     /// <summary>按字节偏移定位：Offset 升序二分，取最后一个 Offset ≤ offset 的行，滚动+选中+居中。

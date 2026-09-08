@@ -35,7 +35,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     private readonly LogFileBrowser _logBrowser;
     private readonly DodocoSettingsService _settingsService;
     private readonly ScreenshotService _screenshotService;
-    /// <summary>事发录像（异常监控联动：命中"存快照"规则时保存前后 3 秒桌面帧 + 触发日志，纯本地）。</summary>
+    /// <summary>事发录像（异常监控联动：命中"存快照"规则时保存事发前后桌面帧 + 触发日志，纯本地）。</summary>
     private readonly IncidentSnapshotService _incidentService;
     private readonly DiagnosticPackageService _diagService;
     private readonly MemberScreenshotRelayService _screenshotRelay;
@@ -76,7 +76,8 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
             _screenshotService,
             () => _settingsService.Current.IncidentSnapshotEnabled,
             () => BgiProcessMonitor.GetCurrentSessionBgiProcesses().Length > 0,
-            ruleId => _watchService.GetRules().FirstOrDefault(r => r.Id == ruleId));
+            ruleId => _watchService.GetRules().FirstOrDefault(r => r.Id == ruleId),
+            () => _settingsService.Current);
         _watchService.RecordAdded += (record, _) => _incidentService.NotifyTrigger(record);
         _diagService = new DiagnosticPackageService(
             () => BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath),
@@ -532,8 +533,8 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>事发录像总开关（持久化到 dodoco_settings.json，默认关）。
-    /// 开启后本机 BGI 运行期间后台每秒截一帧进 10 秒环形缓冲；命中标了「存快照」的规则时
-    /// 保存前后 3 秒帧 + 触发日志到 log/incidents/（纯本地，不上传）。</summary>
+    /// 开启后本机 BGI 运行期间后台按设定间隔截帧进环形缓冲；命中标了「存快照」的规则时
+    /// 保存事发前后帧 + 触发日志到 log/incidents/（纯本地，不上传）。参数见事发录像设置弹窗。</summary>
     public bool IncidentSnapshotEnabled
     {
         get => _settingsService.Current.IncidentSnapshotEnabled;
@@ -543,6 +544,30 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
             OnPropertyChanged();
         }
     }
+
+    /// <summary>快照封盘预期耗时（事发后秒数 + 补采宽限 + 1 秒富余，毫秒），
+    /// 异常列表「📷 快照」按钮延迟重渲染用（封盘是后台异步的，首渲染时目录可能还没建出来）。</summary>
+    internal int IncidentSnapshotFinalizeDelayMs()
+    {
+        var s = _settingsService.Current;
+        return (int)((s.IncidentPostSeconds + s.IncidentCaptureIntervalSeconds * 1.5 + 1) * 1000);
+    }
+
+    /// <summary>打开事发录像设置弹窗（监控规则行 ⚙）：缓存时长 / 截图间隔 / 保存事发前后秒数。</summary>
+    public RelayCommand OpenIncidentSettingsCommand => new(_ =>
+    {
+        var result = Views.IncidentSettingsWindow.ShowEdit(_settingsService.Current);
+        if (result is { } r)
+        {
+            _settingsService.Update(s =>
+            {
+                s.IncidentBufferSeconds = r.BufferSeconds;
+                s.IncidentCaptureIntervalSeconds = r.IntervalSeconds;
+                s.IncidentPreSeconds = r.PreSeconds;
+                s.IncidentPostSeconds = r.PostSeconds;
+            });
+        }
+    });
 
     public RelayCommand ClearUnreadCommand => new(_ => HasUnreadAlerts = false);
 

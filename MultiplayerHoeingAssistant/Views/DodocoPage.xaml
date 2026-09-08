@@ -670,14 +670,27 @@
                                     Command="{Binding Browser.SearchCommand}"/>
                         </StackPanel>
 
-                        <!-- 工具栏行2：导出 + 使用提示 -->
+                        <!-- 工具栏行2：级别筛选（多选） + 导出 + 使用提示 -->
                         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
+                            <TextBlock Text="级别" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
+                            <CheckBox Content="错误" IsChecked="{Binding Browser.ShowError}"
+                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,0,0"
+                                      ToolTip="显示错误（ERR）级日志；取消勾选即隐藏。筛选后搜索与「导出筛选」都只在显示的行内进行"/>
+                            <CheckBox Content="警告" IsChecked="{Binding Browser.ShowWarning}"
+                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,0,0"
+                                      ToolTip="显示警告（WRN）级日志"/>
+                            <CheckBox Content="信息" IsChecked="{Binding Browser.ShowInfo}"
+                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,0,0"
+                                      ToolTip="显示信息（INF）级日志（无级别的文件头续行也归入此档）"/>
+                            <CheckBox Content="Debug" IsChecked="{Binding Browser.ShowDebug}"
+                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,12,0"
+                                      ToolTip="显示 Debug（DBG）级日志；多行堆栈跟随所属事件级别，不会被单独滤掉"/>
                             <Button Content="导出原样" Style="{DynamicResource BtnGhost}" Padding="10,4"
                                     Command="{Binding Browser.ExportRawCommand}" Margin="0,0,6,0"
                                     ToolTip="复制整个日志文件（共享读，正在写入的当天文件也可导出）"/>
                             <Button Content="导出筛选" Style="{DynamicResource BtnGhost}" Padding="10,4"
                                     Command="{Binding Browser.ExportFilteredCommand}" Margin="0,0,12,0"
-                                    ToolTip="有搜索结果时导出命中行，否则导出当前视图；支持 .log / .csv"/>
+                                    ToolTip="有搜索结果时导出命中行，否则导出当前视图（含级别筛选）；支持 .log / .csv"/>
                             <TextBlock Text="整文件一次加载 · 自由滚动不分块 · 单击选行，Ctrl/Shift 点选多行后 Ctrl+C 复制 · 点搜索结果精确定位"
                                        FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -858,10 +871,13 @@
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                 <CheckBox Content="事发录像" IsChecked="{Binding IncidentSnapshotEnabled, Mode=TwoWay}"
                                           Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,4,0"
-                                          ToolTip="开启后本机 BGI 运行期间后台每秒截一帧（10 秒环形缓冲，纯本地不上传）；命中标了「存快照」的规则时保存前后 3 秒画面+触发日志到 log/incidents/"/>
-                                <Button Content="📂" Style="{DynamicResource TextAction}" FontSize="12" Margin="0,0,8,0"
+                                          ToolTip="开启后本机 BGI 运行期间后台按设定间隔截帧进环形缓冲（纯本地不上传）；命中标了「存快照」的规则时保存事发前后画面+触发日志到 log/incidents/（间隔/缓存/前后秒数见 ⚙ 设置）"/>
+                                <Button Content="📂" Style="{DynamicResource TextAction}" FontSize="12" Margin="0,0,2,0"
                                         VerticalAlignment="Center" Command="{Binding Watch.OpenIncidentDirCommand}"
                                         ToolTip="打开事发快照目录（log/incidents/）"/>
+                                <Button Content="⚙" Style="{DynamicResource TextAction}" FontSize="12" Margin="0,0,8,0"
+                                        VerticalAlignment="Center" Command="{Binding OpenIncidentSettingsCommand}"
+                                        ToolTip="事发录像设置：缓存时长 / 截图间隔 / 保存事发前后秒数"/>
                                 <CheckBox Content="全部静音" IsChecked="{Binding MuteAll, Mode=TwoWay}"
                                           Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center"
                                           ToolTip="静音后命中规则只记录，不红点/不响铃/不弹托盘"/>
@@ -896,7 +912,7 @@
                                                 <CheckBox Content="快照" IsChecked="{Binding Snapshot, Mode=TwoWay}"
                                                           Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" FontSize="10"
                                                           Margin="6,0,0,0"
-                                                          ToolTip="命中时保存事发快照（前后 3 秒桌面画面 + 触发日志到 log/incidents/，需开启「事发录像」总开关）"/>
+                                                          ToolTip="命中时保存事发快照（事发前后画面 + 触发日志到 log/incidents/，需开启「事发录像」总开关；前后秒数见 ⚙ 设置）"/>
                                                 <Button Content="✕" Style="{DynamicResource TextAction}" FontSize="12" Margin="6,0,0,0"
                                                         Command="{Binding DataContext.Watch.DeleteRuleCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding}" ToolTip="删除规则"/>
@@ -939,7 +955,7 @@
                                           ToolTip="勾选：命中后红点 + 托盘气泡 + 提示音；不勾选：只记录到异常列表"/>
                                 <CheckBox Content="存快照" IsChecked="{Binding Watch.NewRuleSnapshot}"
                                           Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="10,0,0,0"
-                                          ToolTip="勾选：命中时保存前后 3 秒桌面画面 + 触发日志（需开启「事发录像」总开关）"/>
+                                          ToolTip="勾选：命中时保存事发前后画面 + 触发日志（需开启「事发录像」总开关；前后秒数见 ⚙ 设置）"/>
                             </StackPanel>
                             <TextBlock Text="示例：匹配内容填「超时」+ 最低级别 INF = 日志出现超时就记录；匹配内容留空 + 最低级别 ERR = 所有错误都记录"
                                        FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,0,0,6"/>
@@ -1061,7 +1077,7 @@
                                                         Visibility="{Binding HasIncidentSnapshot, Converter={StaticResource BoolToVis}}"
                                                         Command="{Binding DataContext.Watch.OpenRecordIncidentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding}"
-                                                        ToolTip="打开该异常的事发快照目录（前后 3 秒游戏截图 + 触发日志；仅实际录到事发录像的记录显示此按钮）"/>
+                                                        ToolTip="打开该异常的事发快照目录（事发前后游戏截图 + 触发日志；仅实际录到事发录像的记录显示此按钮）"/>
                                             </StackPanel>
                                             <StackPanel Orientation="Horizontal" Margin="0,2,0,0"
                                                         Visibility="{Binding HasTaskContext, Converter={StaticResource BoolToVis}}">
