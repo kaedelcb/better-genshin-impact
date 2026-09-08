@@ -1,6 +1,8 @@
 using BetterGenshinImpact.Core.Recognition;
+using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.Model.Assets;
+using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using System;
 using System.Collections.Generic;
@@ -136,11 +138,13 @@ internal sealed class SwitchAreaRegionAssets
                 Threshold = 0.8
             }.InitTemplate();
         }
-        catch
+        catch (Exception ex)
         {
             // 模板缺失 / 加载失败（FileNotFoundException / 分辨率异常等）→ 该地区跳过，走 OCR 兜底。
             // 可恢复异常（地区模板是可选加速，缺失不影响正确性），失败处理在调用层（Get 返回 null → OCR），
             // 不向上抛，保证 SwitchArea 生产路径不被模板缺失中断（requirements E1/E2 / FR2）。
+            // 诊断：原实现完全静默，模板缺失与"模板在但未过阈值"在日志里无法区分，补 DEBUG 日志。
+            TaskControl.Logger.LogDebug("[诊断-切换区域] 地区模板加载失败 {Area} ({File}): {Msg}", areaName, templateFile, ex.Message);
             return null;
         }
     }
@@ -203,7 +207,11 @@ internal sealed class SwitchAreaRegionAssets
 
         using var hit = ra.Find(templateRo);
         double score = hit.MatchScore ?? 0d;
-        if (hit.IsExist() && SwitchAreaTemplateMatchDecisions.IsHit(score, templateRo.Threshold))
+        bool matched = hit.IsExist() && SwitchAreaTemplateMatchDecisions.IsHit(score, templateRo.Threshold);
+        // 诊断：记录每层模板的得分与阈值判定，区分"模板未过阈值"与"菜单未弹出/未渲染"
+        TaskControl.Logger.LogDebug("[诊断-切换区域] 模板匹配 {Name}: 存在={Exist} 得分={Score:F3} 阈值={Threshold} 命中={Matched}",
+            templateRo.Name, hit.IsExist(), score, templateRo.Threshold, matched);
+        if (matched)
         {
             return new Rect(hit.X, hit.Y, hit.Width, hit.Height);
         }

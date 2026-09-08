@@ -79,6 +79,11 @@ public class TpTaskFastDrag
     private static string? _lastSuccessfulTeleportMapName;
     private bool _priorIsRegionCenter = false;   // 标记当前第一层先验是否为"区域中心点"（切换区域后），是则用 RegionCenterRangeGenshin(200) 而非 Layer1RangeGenshin(100)
 
+    // 当前传送尝试的重试轮次（0=首次），TpOnce 入口写入。
+    // 仅用于"重试轮在 UI 渲染敏感点追加延时 + 诊断日志"，首传路径保持原速度零开销。
+    // 外部调用方（脚本 API / 拖动恢复路径）不经 TpOnce 入口，恒为 0 → 行为不变。
+    private int _tpRetryTimes = 0;
+
     // 拖动滑动窗口先验（teleport 拖动循环专用）：中心=predictedPoint，半径=预测移动距离*2，跟随拖动前移。
     // 非 null 时 GetBigMapCenterPoint 优先走此动态先验；匹配失败降级全图。与三层先验字段互斥使用。
     private Point2f? _dragPriorCenterGenshin = null;
@@ -360,6 +365,7 @@ public class TpTaskFastDrag
         // 详见 teleport-bigmap-position-region-constrained-match spec。
         _miniMapPriorGenshin = TryGetMiniMapPriorGenshin(mapName);
         _priorIsRegionCenter = false; // 缓存先验，用第一层标准半径100
+        _tpRetryTimes = retryTimes;   // 重试轮标识：>0 时 SwitchArea 等 UI 渲染敏感点追加延时
 
         #region 步骤1-2：确认地图界面 + 传送前计算准备
         // 1. 确认在地图界面（传 mapName：霜月大图延长渲染等待）
@@ -2811,7 +2817,8 @@ public class TpTaskFastDrag
                 return false;
             }
         }
-        
+
+        double currentViewDistance = minDistance; // 诊断用：进入地区循环前的"当前视图中心→目标"距离
         string minCountry = "当前位置";
         foreach (var (country, position) in MapLazyAssets.Get().CountryPositions)
         {
@@ -2822,13 +2829,15 @@ public class TpTaskFastDrag
                 minCountry = country;
             }
         }
-        
+
         if (minCountry != "当前位置")
         {
             if (forceCountry != null)
             {
                 minCountry = forceCountry;
             }
+            TaskControl.Logger.LogDebug("[诊断-切换区域] 切区决策：目标=({X:F0},{Y:F0}) 当前视图距离={CurDis:F0} 最近地区={Country}(中心距离={CountryDis:F0}) 强制地区={Force} 重试轮={Retry}",
+                x, y, currentViewDistance, minCountry, minDistance, forceCountry ?? "无", _tpRetryTimes);
             await SwitchArea(minCountry);
             return true;
         }
@@ -2857,40 +2866,66 @@ public class TpTaskFastDrag
         // MapCloseButtonWhiteRo = 弹出层（含地区菜单）的白色 X 关闭按钮。
         // fast-drag-recognition-acceleration spec / SwitchArea menu popup optimization
         await Delay(ApplyExtraDelay(100), ct);
+        // 异常重试轮（_tpRetryTimes>0）：菜单弹出动画可能未完成，点击后先多等一拍（首传零开销，速度不变）
+        if (_tpRetryTimes > 0)
+        {
+            await Delay(ApplyExtraDelay(400), ct);
+        }
         var systemInfo = TaskContext.Instance().SystemInfo;
         var captureRect = systemInfo.ScaleMax1080PCaptureRect;
-        await WaitForElementOrTimeoutAsync(TpTaskFastDragAssets.Get(captureRect.Width, captureRect.Height).MapCloseButtonWhiteRo, timeoutMs:ApplyExtraDelay(1000));
-        
+        var menuPopupSw = Stopwatch.StartNew();
+        bool menuPopupDetected = await WaitForElementOrTimeoutAsync(TpTaskFastDragAssets.Get(captureRect.Width, captureRect.Height).MapCloseButtonWhiteRo, timeoutMs:ApplyExtraDelay(1000));
+        // 诊断：旧逻辑丢弃该等待的返回值，菜单未弹出时会无声落入 OCR 并误报"切换区域失败"
+        TaskControl.Logger.LogDebug("[诊断-切换区域] 区域={Area} 重试轮={Retry} 菜单弹出检测={Detected} 耗时={Ms}ms",
+            areaName, _tpRetryTimes, menuPopupDetected, menuPopupSw.ElapsedMilliseconds);
+
         await Delay(ApplyExtraDelay(50), ct);
-        
-        using var ra = CaptureToRectArea();
-        // —— 新增：地区模板匹配优先（switch-area-template-match spec）——
-        // 命中 → 用模板命中区点击；未命中 / 阈值不过 / 模板缺失 → 走现有 OCR 分支（逐字节保留）。
-        Rect? templateHit = TryMatchSwitchAreaTemplate(ra, areaName);
-        Region? matchRect;
-        if (templateHit.HasValue)
+        // 异常重试轮：白色 X 出现≠地区格子内容渲染完成，再等多一拍（首传零开销）
+        if (_tpRetryTimes > 0)
         {
-            matchRect = ra.DeriveCrop(templateHit.Value);
-            TaskControl.Logger.LogInformation("切换区域（模板匹配）：{Country}", areaName);
+            await Delay(ApplyExtraDelay(500), ct);
         }
-        else
+
+        // 识别：首传单发（保持原速度）；重试轮允许第二遍，第二遍前再留 500ms 渲染时间。
+        // matchRect 的 Region.Click 只走坐标转换链，不依赖截图 Mat，跨 using 作用域点击安全。
+        Region? matchRect = null;
+        int recognizePasses = _tpRetryTimes > 0 ? 2 : 1;
+        for (int pass = 1; pass <= recognizePasses && matchRect == null; pass++)
         {
-            // —— 现有 OCR 分支（逻辑逐字节保留）——
-            TaskControl.Logger.LogInformation("切换区域（OCR）：{Country}", areaName);
-            var list = ra.FindMulti(new RecognitionObject
-        {
-            RecognitionType = RecognitionTypes.Ocr,
-            RegionOfInterest = new Rect(ra.Width * 2 / 3, 0, ra.Width / 3, ra.Height),
-            ReplaceDictionary = new Dictionary<string, string[]>
+            if (pass > 1)
             {
-                ["渊下宫"] = ["渊下宮"],
-            },
-        });
+                TaskControl.Logger.LogDebug("[诊断-切换区域] 区域={Area} 第{Pass}遍识别前补等渲染500ms", areaName, pass);
+                await Delay(ApplyExtraDelay(500), ct);
+            }
+            using var ra = CaptureToRectArea();
+            // —— 地区模板匹配优先（switch-area-template-match spec）——
+            // 命中 → 用模板命中区点击；未命中 / 阈值不过 / 模板缺失 → 走 OCR 分支。
+            Rect? templateHit = TryMatchSwitchAreaTemplate(ra, areaName);
+            if (templateHit.HasValue)
+            {
+                matchRect = ra.DeriveCrop(templateHit.Value);
+                TaskControl.Logger.LogInformation("切换区域（模板匹配）：{Country}", areaName);
+            }
+            else
+            {
+                // —— 现有 OCR 分支（逻辑逐字节保留）——
+                TaskControl.Logger.LogInformation("切换区域（OCR）：{Country}", areaName);
+                var list = ra.FindMulti(new RecognitionObject
+                {
+                    RecognitionType = RecognitionTypes.Ocr,
+                    RegionOfInterest = new Rect(ra.Width * 2 / 3, 0, ra.Width / 3, ra.Height),
+                    ReplaceDictionary = new Dictionary<string, string[]>
+                    {
+                        ["渊下宫"] = ["渊下宮"],
+                    },
+                });
 
-        
-
-        string minCountryLocalized = this.stringLocalizer.WithCultureGet(this.cultureInfo, areaName);
-        matchRect = list.OrderByDescending(r => r.Y).FirstOrDefault(r => r.Text.Contains(minCountryLocalized));
+                string minCountryLocalized = this.stringLocalizer.WithCultureGet(this.cultureInfo, areaName);
+                matchRect = list.OrderByDescending(r => r.Y).FirstOrDefault(r => r.Text.Contains(minCountryLocalized));
+                // 诊断：记录 OCR 实际候选——区分"菜单未弹出/格子未渲染（候选为空或是地图文字）"与"地区名被误读"
+                TaskControl.Logger.LogDebug("[诊断-切换区域] 区域={Area} 第{Pass}遍 OCR候选=[{Candidates}] 目标本地化={Localized} 命中={Hit}",
+                    areaName, pass, list.Count == 0 ? "无" : string.Join(" / ", list.Select(r => r.Text)), minCountryLocalized, matchRect != null);
+            }
         }
         if (matchRect == null)
         {
@@ -2929,6 +2964,11 @@ public class TpTaskFastDrag
         // 加速识别模式：等地图视区像素稳定即继续，兜底 500ms（与旧 Delay 等值）
         // fast-drag-recognition-acceleration spec / SwitchArea tail wait optimization
         await Delay(ApplyExtraDelay(100), ct);
+        // 异常重试轮：切区后大地图整体重渲染，多等一拍再进入后续识别（首传零开销）
+        if (_tpRetryTimes > 0)
+        {
+            await Delay(ApplyExtraDelay(500), ct);
+        }
         await WaitMapStableOrTimeoutAsync(timeoutMs: ApplyExtraDelay(500));
     }
 
