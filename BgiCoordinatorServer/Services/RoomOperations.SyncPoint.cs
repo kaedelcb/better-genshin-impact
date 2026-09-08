@@ -32,6 +32,11 @@ public sealed partial class RoomOperations
         {
             _logger.LogInformation("房间 {Code} 同步点 {SyncId} 全员到达", roomCode, syncPointId);
             await _broadcaster.BroadcastGroupAsync(roomCode, "AllArrived", new { syncPointId }, syncPointId);
+            lock (room)
+            {
+                room.BroadcastedSyncIds.Add(syncPointId);
+                ResetConsecutiveCollectiveSkipCount(room, "normal-arrival-all-arrived");
+            }
         }
 
         // === 集体卡死监测 piggyback（multiplayer-mutual-wait-collective-skip §8.4 改动 1）===
@@ -60,6 +65,11 @@ public sealed partial class RoomOperations
             _logger.LogInformation("房间 {Code} 同步点 {SyncId} 到达人数达到预期 {Expected}，触发 AllArrived",
                 roomCode, syncPointId, expectedCount);
             await _broadcaster.BroadcastGroupAsync(roomCode, "AllArrived", new { syncPointId }, syncPointId);
+            lock (room)
+            {
+                room.BroadcastedSyncIds.Add(syncPointId);
+                ResetConsecutiveCollectiveSkipCount(room, "normal-arrival-expected-count-all-arrived");
+            }
         }
 
         // === 集体卡死监测 piggyback（multiplayer-mutual-wait-collective-skip §8.4 改动 1）===
@@ -196,7 +206,11 @@ public sealed partial class RoomOperations
                 roomCode, sid, sp);
             await _broadcaster.BroadcastGroupAsync(roomCode, "AllArrived", new { syncPointId = sid }, sid);
             _roomManager.ClearArrivalSet(roomCode, sid);
-            lock (room) { room.BroadcastedSyncIds.Add(sid); }   // fastsync-claim-short-circuit-premature-release-fix: 记录本轮已广播，供晚到抢报方补发
+            lock (room)
+            {
+                room.BroadcastedSyncIds.Add(sid);
+                ResetConsecutiveCollectiveSkipCount(room, "normal-sync-all-arrived");
+            }
         }
 
         // 保留：caller 是异常玩家、刚汇合到 syncProgress 的"恢复"清理（与现状一致）
@@ -647,7 +661,24 @@ public sealed partial class RoomOperations
                 // 真实死锁仍有客户端 60s 等待超时 + 连续超时上报路径兜底，不依赖此计数。
                 if (laggingPlayerConnIds.Count > 0 || satisfiedSyncs.Count > 0)
                 {
-                    room.ConsecutiveCollectiveSkipCount += 1;
+                    // 连续计数改为“同一房主连续触发”：房主变化时重置；同 target 重复回调不重复 +1。
+                    if (!string.Equals(room.HostConnectionId, room.ConsecutiveCollectiveSkipHostConnectionId, StringComparison.Ordinal))
+                    {
+                        room.ConsecutiveCollectiveSkipCount = 0;
+                        room.ConsecutiveCollectiveSkipHostConnectionId = room.HostConnectionId;
+                        room.LastCollectiveSkipTargetProgress = -1;
+                    }
+
+                    if (room.LastCollectiveSkipTargetProgress != targetProgress)
+                    {
+                        room.ConsecutiveCollectiveSkipCount += 1;
+                        room.LastCollectiveSkipTargetProgress = targetProgress;
+                    }
+                    else
+                    {
+                        _logger.LogInformation("[CollectiveSkip] 同 target={Target} 的集体跳段已计入连续计数，防重复 +1，房间={RoomCode}",
+                            targetProgress, roomCode);
+                    }
                 }
                 else
                 {
@@ -701,6 +732,7 @@ public sealed partial class RoomOperations
                     room.ConsecutiveCollectiveSkipCount);
                 await _broadcaster.BroadcastGroupAsync(roomCode, "CollectiveSkipDegraded",
                     new { reason = "ConsecutiveCollectiveSkipExceeded" }, "ConsecutiveCollectiveSkipExceeded");
+                lock (room) { ResetConsecutiveCollectiveSkipCount(room, "collective-degraded"); }
             }
         }
         catch (Exception ex)
@@ -708,5 +740,27 @@ public sealed partial class RoomOperations
             // 广播失败不应让 Timer 回调崩溃；记录日志并放弃本次广播
             _logger.LogError(ex, "[CollectiveSkip] Timer 回调 lock 外广播失败，房间={RoomCode}", roomCode);
         }
+    }
+
+    /// <summary>
+    /// 清零同一房主连续集体跳段计数。必须在 lock(room) 内调用。
+    /// 容错：房间/房主为空、房主变化、重复清零均不抛异常，保证主流程不受影响。
+    /// </summary>
+    private void ResetConsecutiveCollectiveSkipCount(Room room, string reason)
+    {
+        if (room == null) return;
+        if (room.ConsecutiveCollectiveSkipCount == 0 && string.IsNullOrEmpty(room.ConsecutiveCollectiveSkipHostConnectionId)) return;
+
+        var currentHost = room.HostConnectionId;
+        if (!string.IsNullOrEmpty(room.ConsecutiveCollectiveSkipHostConnectionId)
+            && !string.Equals(currentHost, room.ConsecutiveCollectiveSkipHostConnectionId, StringComparison.Ordinal))
+        {
+            _logger.LogInformation("[CollectiveSkip] 房主变化，清零连续集体跳段计数：房间={RoomCode}, 旧房主={OldHost}, 新房主={NewHost}, 原因={Reason}",
+                room.Code, room.ConsecutiveCollectiveSkipHostConnectionId, currentHost, reason);
+        }
+
+        room.ConsecutiveCollectiveSkipCount = 0;
+        room.ConsecutiveCollectiveSkipHostConnectionId = "";
+        room.LastCollectiveSkipTargetProgress = -1;
     }
 }

@@ -236,11 +236,23 @@ public class Room
     public System.Threading.Timer? CollectiveSkipTimer { get; set; }
 
     /// <summary>
-    /// 连续触发协同跳段计数器；每次成功触发 EvaluateCollectiveStuckTimerCallbackAsync + 广播后 +1。
+    /// 连续触发协同跳段计数器；按当前房主统计，每次成功触发 EvaluateCollectiveStuckTimerCallbackAsync + 广播后 +1。
     /// 达到 MaxConsecutiveCollectiveSkips 触发降级（OQ-5 A）。
-    /// 多世界轮换 ResetForNewWorldRound 内归 0。
+    /// 多世界轮换 ResetForNewWorldRound 内归 0；房主变化、正常放行、单点跳段/异常状态重置时清零。
     /// </summary>
     public int ConsecutiveCollectiveSkipCount { get; set; } = 0;
+
+    /// <summary>
+    /// ConsecutiveCollectiveSkipCount 所属房主连接；房主变化后清零并重新计数。
+    /// 仅服务端运行时状态，不进入 RoomConfig / 网络协议。
+    /// </summary>
+    public string ConsecutiveCollectiveSkipHostConnectionId { get; set; } = "";
+
+    /// <summary>
+    /// 上一次集体跳段目标进度，用于防同目标重复计数。
+    /// 仅服务端运行时状态，不进入 RoomConfig / 网络协议。
+    /// </summary>
+    public long LastCollectiveSkipTargetProgress { get; set; } = -1;
 }
 
 /// <summary>

@@ -82,6 +82,8 @@ public sealed partial class RoomOperations
 
             // === 集体卡死监测字段重置（multiplayer-mutual-wait-collective-skip §3.10 / §8.4 改动 4）===
             room.ConsecutiveCollectiveSkipCount = 0;
+            room.ConsecutiveCollectiveSkipHostConnectionId = "";
+            room.LastCollectiveSkipTargetProgress = -1;
             room.LastArrivalSetsSnapshot = null;
             // 同步点进度快照一并清（collective-stuck-orphan-arrivalset fix）：
             // 轮换后 CurrentProgress 复位为 -1，残留进度快照会让跨轮同名 syncId 的旧集合判定失真

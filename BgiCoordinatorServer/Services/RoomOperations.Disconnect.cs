@@ -61,7 +61,11 @@ public sealed partial class RoomOperations
                     await _broadcaster.BroadcastGroupAsync(disconnectedRoomCode, "AllArrived",
                         new { syncPointId = syncId }, syncId);
                     _roomManager.ClearArrivalSet(disconnectedRoomCode, syncId);
-                    lock (disconnectedRoom) { disconnectedRoom.BroadcastedSyncIds.Add(syncId); }
+                    lock (disconnectedRoom)
+                    {
+                        disconnectedRoom.BroadcastedSyncIds.Add(syncId);
+                        ResetConsecutiveCollectiveSkipCount(disconnectedRoom, "disconnect-normal-sync-all-arrived");
+                    }
                 }
 
                 // === 集体卡死监测 piggyback（multiplayer-mutual-wait-collective-skip §8.4 改动 5）===

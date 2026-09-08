@@ -431,7 +431,11 @@ public sealed partial class RoomOperations
                 syncId, roomCode, progress);
             await _broadcaster.BroadcastGroupAsync(roomCode, "AllArrived", new { syncPointId = syncId }, syncId);
             _roomManager.ClearArrivalSet(roomCode, syncId);
-            lock (room) { room.BroadcastedSyncIds.Add(syncId); }   // fastsync-claim-short-circuit-premature-release-fix: 记录本轮已广播，供晚到抢报方补发
+            lock (room)
+            {
+                room.BroadcastedSyncIds.Add(syncId);
+                ResetConsecutiveCollectiveSkipCount(room, "member-status-normal-sync-all-arrived");
+            }
         }
 
         // === 集体卡死监测 piggyback（multiplayer-mutual-wait-collective-skip §8.4 改动 1）===
@@ -487,7 +491,11 @@ public sealed partial class RoomOperations
                 sid, roomCode, sp);
             await _broadcaster.BroadcastGroupAsync(roomCode, "AllArrived", new { syncPointId = sid }, sid);
             _roomManager.ClearArrivalSet(roomCode, sid);
-            lock (room) { room.BroadcastedSyncIds.Add(sid); }   // fastsync-claim-short-circuit-premature-release-fix: 记录本轮已广播，供晚到抢报方补发
+            lock (room)
+            {
+                room.BroadcastedSyncIds.Add(sid);
+                ResetConsecutiveCollectiveSkipCount(room, "progress-update-normal-sync-all-arrived");
+            }
         }
 
         // === hoeing-multiplayer-lagging-member-catchup（改动 8）：刷新 CurrentProgress 后广播玩家列表 ===
