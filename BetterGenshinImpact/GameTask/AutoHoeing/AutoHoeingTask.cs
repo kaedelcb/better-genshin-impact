@@ -3751,7 +3751,14 @@ public class AutoHoeingTask : ISoloTask
                         // 检查连续跳过是否达到上限
                         if (consecutiveSkipCount >= _config.MaxConsecutiveSkips)
                         {
-                            _logger.LogError("[联机] 连续跳过达到上限（{Max}次），触发退出", _config.MaxConsecutiveSkips);
+                            _logger.LogError("[联机] 连续跳过达到上限（{Max}次），触发会话级异常退出", _config.MaxConsecutiveSkips);
+                            // 连续跳过达上限 = 会话级异常退出，不再把这次误收尾成正常完成。
+                            // 先补本地异常终止标记，再保留原有房主/成员散场分叉。
+                            _stopReason = "连续跳过路线达到上限";
+                            _sessionTerminated = true;
+                            try { _linkedStopCts?.Cancel(); }
+                            catch (ObjectDisposedException) { }
+                            catch { }
                             if (_multiplayerCoordinator.IsHost)
                             {
                                 try { await _coordinatorClientRef.CloseRoomAsync(); } catch (Exception ex2)
