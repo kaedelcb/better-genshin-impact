@@ -27,6 +27,7 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
 
         _service.RecordAdded += OnRecordAdded;
         _service.RecordMerged += OnRecordMerged;
+        _service.RulesExternallyChanged += OnRulesExternallyChanged;
 
         // 异常记录按天分组显示（组头=日期，组内时间倒序与集合顺序一致）
         var view = System.Windows.Data.CollectionViewSource.GetDefaultView(FilteredRecords);
@@ -105,6 +106,18 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
     private void PersistRules()
     {
         _service.SaveRules(Rules.Select(r => r.ToModel()).ToList());
+    }
+
+    /// <summary>同机对端改了共享规则文件（KeywordWatchService watcher 后台线程触发）：
+    /// 切 UI 线程整体重建规则列表绑定（与构造时同样的填充方式），不反向 PersistRules 防回环。</summary>
+    private void OnRulesExternallyChanged()
+    {
+        Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            Rules.Clear();
+            foreach (var r in _service.GetRules()) Rules.Add(new WatchRuleItem(r, PersistRules));
+            RebuildRuleFilterItems();
+        });
     }
 
     // ========== 异常记录列表 ==========
@@ -206,9 +219,16 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
     });
 
     /// <summary>清空异常记录：范围跟随当前日期筛选（"全部日期"=清空全部；具体日期=只清当天）。
-    /// 删除落盘 JSONL 文件并同步剔除内存记录。</summary>
+    /// 删除落盘 JSONL 文件并同步剔除内存记录。
+    /// 监控端仅当同机执行端在场时可删（共享库，删的就是执行端的文件， KeywordWatchService.CanManageExceptionStore）；
+    /// 无执行端时提前拦截只给提示，不动内存列表，避免 UI 与磁盘状态不一致。</summary>
     public RelayCommand ClearRecordsCommand => new(_ =>
     {
+        if (!_service.CanManageExceptionStore)
+        {
+            RecordStatus = "监控模式：未检测到同机执行端，异常库不可清理";
+            return;
+        }
         var all = SelectedDateFilter == "全部日期";
         var scope = all ? "全部日期的" : $" {SelectedDateFilter} 当天的";
         if (MessageBox.Show($"确定删除{scope}异常记录吗？\n落盘的异常库文件将被删除，不可恢复。",

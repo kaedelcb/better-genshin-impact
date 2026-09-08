@@ -37,6 +37,8 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     private readonly ScreenshotService _screenshotService;
     /// <summary>事发录像（异常监控联动：命中"存快照"规则时保存事发前后桌面帧 + 触发日志，纯本地）。</summary>
     private readonly IncidentSnapshotService _incidentService;
+    /// <summary>同机双端同步（执行端信标 + 共享规则文件，不走服务器）。</summary>
+    private readonly LocalPeerSyncService _peerSync;
     private readonly DiagnosticPackageService _diagService;
     private readonly MemberScreenshotRelayService _screenshotRelay;
     private readonly MemberLogRelayService _logRelay;
@@ -63,8 +65,16 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         // BGI 日志目录提供者：运行中配置变更也能在下次轮询生效
         _tailService = new BgiLogTailService(() =>
             BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath));
+        // 同机双端同步：执行端信标（shared/executor_beacon.json）+ 共享规则文件（shared/watch_rules.json）。
+        // 运行期切模式由 observerModeProvider 动态生效：切成执行 → 开始写信标+镜像规则；切成监控 → 停写并删信标
+        _peerSync = new LocalPeerSyncService(
+            observerModeProvider: () => _mainVm.IsObserverMode,
+            uidProvider: () => _mainVm.Config?.PlayerUid);
+        // 监控模式零落盘：异常库/录像由同机执行端写；规则经 peerSync 走共享文件双端同步
         _watchService = new KeywordWatchService(_tailService,
-            muteProvider: () => _settingsService.Current.MuteAll);
+            muteProvider: () => _settingsService.Current.MuteAll,
+            observerModeProvider: () => _mainVm.IsObserverMode,
+            peerSync: _peerSync);
         _statsService = new HoeingStatsService(_tailService, () => _mainVm.CurrentOnlineGeneration);
         _logBrowser = new LogFileBrowser(() =>
             BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath));
@@ -77,7 +87,8 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
             () => _settingsService.Current.IncidentSnapshotEnabled,
             () => BgiProcessMonitor.GetCurrentSessionBgiProcesses().Length > 0,
             ruleId => _watchService.GetRules().FirstOrDefault(r => r.Id == ruleId),
-            () => _settingsService.Current);
+            () => _settingsService.Current,
+            observerModeProvider: () => _mainVm.IsObserverMode);
         _watchService.RecordAdded += (record, _) => _incidentService.NotifyTrigger(record);
         _diagService = new DiagnosticPackageService(
             () => BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath),
@@ -1019,6 +1030,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         _incidentService.Dispose();
         _statsService.Dispose();
         _watchService.Dispose();
+        _peerSync.Dispose();
         _tailService.Dispose();
     }
 }

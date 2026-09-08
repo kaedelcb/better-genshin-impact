@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using MultiplayerHoeingAssistant.Helpers;
 using MultiplayerHoeingAssistant.Models;
 
 namespace MultiplayerHoeingAssistant.Services;
@@ -34,6 +35,18 @@ public sealed class KeywordWatchService : IDisposable
     private readonly object _lock = new();
     /// <summary>全部静音判定（P4 起统一走 DodocoSettingsService；未注入时回落到本文件内的 muteAll 字段）。</summary>
     private readonly Func<bool>? _muteProvider;
+    /// <summary>监控模式判定（true=监控端：异常库/录像零落盘，规则改走同机共享文件）；null=旧行为恒执行端。</summary>
+    private readonly Func<bool>? _observerModeProvider;
+    /// <summary>同机双端同步（执行端信标 + 共享规则文件）；null=不做同机同步（旧行为）。</summary>
+    private readonly LocalPeerSyncService? _peerSync;
+    /// <summary>共享规则文件监听（双端都挂；监控端仅在有活信标时有意义，挂着无妨）。</summary>
+    private readonly FileSystemWatcher? _sharedWatcher;
+    /// <summary>共享文件变更去抖（一次原子写会引发多个 watcher 事件，500ms 合帧处理一次）。</summary>
+    private readonly Timer? _sharedDebounce;
+    /// <summary>共享文件变更去抖时长。</summary>
+    private static readonly TimeSpan SharedDebounceDelay = TimeSpan.FromMilliseconds(500);
+    /// <summary>规则序列化统一选项（保存与"内容是否变化"比较必须用同一份，否则自己镜像写的回环挡不住）。</summary>
+    private static readonly JsonSerializerOptions IndentedOptions = new() { WriteIndented = true };
 
     private WatchConfig _config = new();
     private readonly Dictionary<string, Regex?> _regexCache = new(); // 规则 Id → 编译后的正则（null=非法）
@@ -59,10 +72,17 @@ public sealed class KeywordWatchService : IDisposable
     /// <summary>已有记录被合并计数（RepeatCount 增加），供 UI 刷新该条目。后台线程触发。</summary>
     public event Action<ExceptionRecord>? RecordMerged;
 
-    public KeywordWatchService(BgiLogTailService tail, Func<bool>? muteProvider = null)
+    /// <summary>共享规则文件外部变更（同机对端保存触发；与当前规则序列化一致的回环已抵消）。
+    /// 后台线程触发，UI 层自行 Dispatcher。</summary>
+    public event Action? RulesExternallyChanged;
+
+    public KeywordWatchService(BgiLogTailService tail, Func<bool>? muteProvider = null,
+        Func<bool>? observerModeProvider = null, LocalPeerSyncService? peerSync = null)
     {
         _tail = tail;
         _muteProvider = muteProvider;
+        _observerModeProvider = observerModeProvider;
+        _peerSync = peerSync;
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         var dir = Path.Combine(appData, "NexusBGI");
         Directory.CreateDirectory(dir);
@@ -71,7 +91,42 @@ public sealed class KeywordWatchService : IDisposable
         Load();
         _tail.EntryReceived += OnEntry;
         _flushTimer = new Timer(FlushTimeoutRecords, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+
+        // 共享规则文件监听：非监控端（接收监控端改动）与监控端（接收执行端改动）都挂；
+        // 原子写走"tmp + 覆盖移动"，触发的是 Created/Renamed 而非 Changed，三类事件都订阅
+        if (_peerSync != null)
+        {
+            try
+            {
+                Directory.CreateDirectory(LocalPeerSyncService.SharedDir);
+                _sharedDebounce = new Timer(ApplySharedRules, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                _sharedWatcher = new FileSystemWatcher(LocalPeerSyncService.SharedDir,
+                    Path.GetFileName(LocalPeerSyncService.SharedRulesPath))
+                {
+                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.CreationTime
+                };
+                // 先订阅再启用：EnableRaisingEvents 置前会在订阅前就开始派事件（竞态边角）
+                _sharedWatcher.Changed += OnSharedRulesChanged;
+                _sharedWatcher.Created += OnSharedRulesChanged;
+                _sharedWatcher.Renamed += OnSharedRulesChanged;
+                _sharedWatcher.EnableRaisingEvents = true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[KeywordWatchService] 共享规则监听挂载失败: {ex.Message}");
+            }
+        }
     }
+
+    /// <summary>当前是否监控模式（未注入 provider 时恒 false=旧行为）。</summary>
+    private bool IsObserver() => _observerModeProvider?.Invoke() == true;
+
+    /// <summary>有效规则路径：监控端且本机有活执行端时读共享 watch_rules.json（同机同步），
+    /// 否则读本机 %APPDATA% 主副本（旧行为）。</summary>
+    private string EffectiveConfigPath =>
+        IsObserver() && _peerSync?.IsLocalExecutorAlive() == true
+            ? LocalPeerSyncService.SharedRulesPath
+            : _configPath;
 
     /// <summary>当前规则列表（UI 绑定用副本；修改后调 SaveRules 持久化）。</summary>
     public List<WatchRule> GetRules()
@@ -107,19 +162,33 @@ public sealed class KeywordWatchService : IDisposable
     };
 
     /// <summary>加载规则；文件不存在/损坏时从空规则起步（不再预置规则，由用户自行添加）。
-    /// 无论新旧文件都补录内置卡死规则（一次性种子：用户删除后不再补回）。</summary>
+    /// 监控端且本机有活执行端时改读共享 watch_rules.json；共享文件尚不存在时回退读本机主副本作为初始值
+    /// （避免监控端规则被空共享文件清空）。无论新旧文件都补录内置卡死规则（一次性种子：用户删除后不再补回）。</summary>
     private void Load()
     {
         lock (_lock)
         {
+            var path = EffectiveConfigPath;
+            var usedShared = !string.Equals(path, _configPath, StringComparison.OrdinalIgnoreCase);
             try
             {
-                if (File.Exists(_configPath))
+                if (File.Exists(path))
+                {
+                    var json = File.ReadAllText(path);
+                    _config = JsonSerializer.Deserialize<WatchConfig>(json,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new WatchConfig();
+                    SeedBuiltinStallRuleLocked();
+                    return;
+                }
+                // 共享路径但文件还没建出来（执行端存活但尚未保存过规则）：回退读本机主副本，
+                // 且不在此写盘（SaveLocked 在监控+活信标下会写共享，启动期不该抢建共享文件）；
+                // 种子补录与主路径保持一致，但用无写盘版本
+                if (usedShared && File.Exists(_configPath))
                 {
                     var json = File.ReadAllText(_configPath);
                     _config = JsonSerializer.Deserialize<WatchConfig>(json,
                         new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new WatchConfig();
-                    SeedBuiltinStallRuleLocked();
+                    SeedBuiltinStallRuleCoreLocked();
                     return;
                 }
             }
@@ -130,26 +199,115 @@ public sealed class KeywordWatchService : IDisposable
         }
     }
 
-    /// <summary>补录内置卡死规则（一次性种子：BuiltinStallSeeded 置位后不再补，用户删除/停用都保留其选择）。</summary>
+    /// <summary>补录内置卡死规则（一次性种子：BuiltinStallSeeded 置位后不再补，用户删除/停用都保留其选择）。
+    /// 发生补录时顺带持久化；监控端 Load 回退分支等不写盘场景改用 <see cref="SeedBuiltinStallRuleCoreLocked"/>。</summary>
     private void SeedBuiltinStallRuleLocked()
     {
-        if (_config.BuiltinStallSeeded) return;
-        _config.BuiltinStallSeeded = true;
-        if (_config.Rules.All(r => r.Id != BuiltinStallRuleId))
-            _config.Rules.Add(BuiltinStallRule());
+        if (!SeedBuiltinStallRuleCoreLocked()) return;
         SaveLocked();
     }
 
+    /// <summary>补录内置卡死规则的核心（不写盘；返回是否发生了补录）。</summary>
+    private bool SeedBuiltinStallRuleCoreLocked()
+    {
+        if (_config.BuiltinStallSeeded) return false;
+        _config.BuiltinStallSeeded = true;
+        if (_config.Rules.All(r => r.Id != BuiltinStallRuleId))
+            _config.Rules.Add(BuiltinStallRule());
+        return true;
+    }
+
+    /// <summary>持久化规则（锁内调用）。
+    /// 执行端：照常写 %APPDATA% 主副本，并原子镜像到共享 watch_rules.json（供同机监控端同步）；
+    /// 监控端且有活执行端信标：只原子写共享文件（同机同步出口），不动本机主副本（防覆盖执行端配置）；
+    /// 监控端但无活信标（本机没有执行端）：回落旧行为写主副本。</summary>
     private void SaveLocked()
     {
+        var json = JsonSerializer.Serialize(_config, IndentedOptions);
+        if (IsObserver() && _peerSync?.IsLocalExecutorAlive() == true)
+        {
+            // 监控端唯一持久化出口，失败不能静默：除 Debug 外补运行日志留痕（WriteFileAtomic 内部已容错不抛）
+            if (!LocalPeerSyncService.WriteFileAtomic(LocalPeerSyncService.SharedRulesPath, json))
+                RuntimeLog.WriteLine("[KeywordWatchService] 监控端规则共享写失败: shared/watch_rules.json（规则未同步到执行端）");
+            return;
+        }
         try
         {
-            File.WriteAllText(_configPath,
-                JsonSerializer.Serialize(_config, new JsonSerializerOptions { WriteIndented = true }));
+            File.WriteAllText(_configPath, json);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[KeywordWatchService] 规则保存失败: {ex.Message}");
+        }
+        // 执行端镜像到共享文件（WriteFileAtomic 内部已容错）
+        if (_peerSync != null)
+            LocalPeerSyncService.WriteFileAtomic(LocalPeerSyncService.SharedRulesPath, json);
+    }
+
+    /// <summary>共享规则文件变更（FileSystemWatcher 线程）：去抖合帧，500ms 内多次事件只处理一次。</summary>
+    private void OnSharedRulesChanged(object sender, FileSystemEventArgs e)
+    {
+        try { _sharedDebounce?.Change(SharedDebounceDelay, Timeout.InfiniteTimeSpan); }
+        catch { /* 去抖定时器已释放等边角忽略 */ }
+    }
+
+    /// <summary>应用共享规则文件的外部变更（去抖定时器回调，后台线程）：
+    /// 与当前规则序列化一致（自己镜像写触发的回环）直接忽略；不同才锁内替换规则、清正则缓存并触发
+    /// RulesExternallyChanged；执行端额外把新内容写回 %APPDATA% 主副本（执行端主副本权威）。</summary>
+    private void ApplySharedRules(object? state)
+    {
+        try
+        {
+            var path = LocalPeerSyncService.SharedRulesPath;
+            string? json = null;
+            // 对端原子写替换瞬间文件可能被占用/暂缺，读失败延迟重试两次再放弃
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                try
+                {
+                    if (File.Exists(path)) json = File.ReadAllText(path);
+                    break;
+                }
+                catch (IOException)
+                {
+                    if (attempt < 2) Thread.Sleep(200);
+                }
+            }
+            if (json == null) return;
+
+            var changed = false;
+            lock (_lock)
+            {
+                var cfg = JsonSerializer.Deserialize<WatchConfig>(json,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (cfg == null) return;
+                // 防回环比较只认规则段：muteAll/builtinStallSeeded 是各端本地字段（不同步），
+                // 先对齐为本端值，再比较"对齐后的对端内容"与"本端内容"两份本地序列化
+                // （同选项同字段序，字符串比较可靠）——规则没变就不会触发，本地字段漂移不再造成假变更
+                cfg.MuteAll = _config.MuteAll;
+                cfg.BuiltinStallSeeded = _config.BuiltinStallSeeded;
+                if (string.Equals(JsonSerializer.Serialize(cfg, IndentedOptions),
+                        JsonSerializer.Serialize(_config, IndentedOptions), StringComparison.Ordinal))
+                    return;
+                _config.Rules = cfg.Rules;
+                _regexCache.Clear();
+                changed = true;
+                // 执行端主副本权威：对端（监控端）的变更同时写回 %APPDATA%（不再镜像共享——内容已在对端写的共享文件里）
+                if (!IsObserver())
+                {
+                    try { File.WriteAllText(_configPath, JsonSerializer.Serialize(_config, IndentedOptions)); }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[KeywordWatchService] 外部规则回写主副本失败: {ex.Message}");
+                    }
+                }
+            }
+            // 事件在锁外触发，防订阅者重入死锁（与 RecordAdded 同模式）
+            if (changed) RulesExternallyChanged?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[KeywordWatchService] 共享规则应用失败: {ex.Message}");
         }
     }
 
@@ -449,9 +607,10 @@ public sealed class KeywordWatchService : IDisposable
         return string.IsNullOrEmpty(firstLine) ? head : $"{head} → {firstLine}";
     }
 
-    /// <summary>追加写 JSONL 异常库（当天文件）。</summary>
+    /// <summary>追加写 JSONL 异常库（当天文件）。监控端零落盘：跳过（异常库由同机执行端写，监控端读共享目录即可）。</summary>
     private void WriteRecordLocked(ExceptionRecord record)
     {
+        if (IsObserver()) return;
         try
         {
             var dir = LogFileBrowser.AssistantLogDir;
@@ -516,10 +675,17 @@ public sealed class KeywordWatchService : IDisposable
         return result.OrderByDescending(r => r.Time).ToList();
     }
 
+    /// <summary>本端是否可管理异常库（删除落盘 JSONL）：执行端恒可；监控端仅当同机执行端在场时可——
+    /// 异常库在 exe 目录共享 log/ 下，双端写的是同一批文件，删掉的就是执行端的库。</summary>
+    public bool CanManageExceptionStore =>
+        !IsObserver() || _peerSync?.IsLocalExecutorAlive() == true;
+
     /// <summary>删除异常库记录文件：date=null 删全部日期；否则只删指定日期（yyyy-MM-dd）。返回删除的文件数。
-    /// 注意：删除当天文件后，尚在等后文上下文的在途记录（≤15 秒窗口）落盘时会重建当天文件，属可接受边角。</summary>
+    /// 注意：删除当天文件后，尚在等后文上下文的在途记录（≤15 秒窗口）落盘时会重建当天文件，属可接受边角。
+    /// 监控端仅同机执行端在场时可删（共享库）；无执行端时只读。</summary>
     public int DeleteRecords(string? date)
     {
+        if (!CanManageExceptionStore) return 0;
         try
         {
             var dir = LogFileBrowser.AssistantLogDir;
@@ -547,6 +713,8 @@ public sealed class KeywordWatchService : IDisposable
     {
         _tail.EntryReceived -= OnEntry;
         _flushTimer.Dispose();
+        _sharedWatcher?.Dispose();
+        _sharedDebounce?.Dispose();
         lock (_lock)
         {
             foreach (var p in _pendingRecords) WriteRecordLocked(p.Record);

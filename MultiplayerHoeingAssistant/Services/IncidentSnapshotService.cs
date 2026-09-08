@@ -48,6 +48,8 @@ public sealed class IncidentSnapshotService : IDisposable
     private readonly Func<string, WatchRule?> _ruleProvider;
     /// <summary>录像参数提供者（间隔/缓冲时长/前后保存秒数；每拍动态读取，改设置即生效）。</summary>
     private readonly Func<DodocoSettings> _settingsProvider;
+    /// <summary>监控模式判定（true=监控端：不截帧、不触发落盘——事发录像由同机执行端负责）；null=旧行为恒执行端。</summary>
+    private readonly Func<bool>? _observerModeProvider;
     private readonly Timer _timer;
     /// <summary>当前 Timer 实际节拍（设置里的截图间隔变更时在下一拍 Change 跟进）。</summary>
     private TimeSpan _appliedInterval;
@@ -81,16 +83,21 @@ public sealed class IncidentSnapshotService : IDisposable
         Func<bool> enabledProvider,
         Func<bool> bgiRunningProvider,
         Func<string, WatchRule?> ruleProvider,
-        Func<DodocoSettings> settingsProvider)
+        Func<DodocoSettings> settingsProvider,
+        Func<bool>? observerModeProvider = null)
     {
         _screenshot = screenshot;
         _enabledProvider = enabledProvider;
         _bgiRunningProvider = bgiRunningProvider;
         _ruleProvider = ruleProvider;
         _settingsProvider = settingsProvider;
+        _observerModeProvider = observerModeProvider;
         _appliedInterval = GetInterval();
         _timer = new Timer(Tick, null, _appliedInterval, _appliedInterval);
     }
+
+    /// <summary>当前是否监控模式（未注入 provider 时恒 false=旧行为）。</summary>
+    private bool IsObserver() => _observerModeProvider?.Invoke() == true;
 
     /// <summary>当前设置的截图间隔（钳到 0.5~5 秒；NaN/∞ 等手改 JSON 的非法值回落默认 1 秒——
     /// Math.Clamp 不拦 NaN，TimeSpan.FromSeconds(NaN) 会直接抛）。</summary>
@@ -114,6 +121,7 @@ public sealed class IncidentSnapshotService : IDisposable
         try
         {
             if (_disposed) return;
+            if (IsObserver()) return; // 监控端零落盘：不建目录、不写 trigger.json（事发录像由同机执行端负责）
             if (record.SourceFile.StartsWith("远程:")) return; // 远程成员命中不截本机屏
             if (!_enabledProvider()) return;
             if (_ruleProvider(record.RuleId)?.Snapshot != true) return;
@@ -167,10 +175,10 @@ public sealed class IncidentSnapshotService : IDisposable
                 _timer.Change(desired, desired);
             }
             (DateTime Time, byte[] Jpeg)? frame = null;
-            // 总开关关 / BGI 没在跑 → 不录（BGI 进程检查有成本，本就无法触发时别白截）
-            if (!_enabledProvider())
+            // 监控模式 / 总开关关 / BGI 没在跑 → 不录（BGI 进程检查有成本，本就无法触发时别白截）
+            if (IsObserver() || !_enabledProvider())
             {
-                // 总开关关着：完全静默（用户主动关的功能不该有日志）
+                // 监控端（录像归同机执行端）或总开关关着：完全静默（用户主动关的功能不该有日志）
             }
             else if (!_bgiRunningProvider())
             {
