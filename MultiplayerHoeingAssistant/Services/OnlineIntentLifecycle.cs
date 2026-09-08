@@ -118,6 +118,17 @@ public sealed class OnlineIntentLifecycle
         get { lock (_gate) { return _pendingOnlineReportGen; } }
     }
 
+    /// <summary>[冷却倒计时] 60s 防抖窗剩余时间（供 UI 倒计时显示）：以 _lastOnlineEventReportedAtUtc 为基准，
+    /// 窗口外/本会话从未成功上报（DateTime.MinValue 基准）返回 TimeSpan.Zero。加锁读取，与防抖判定同源。</summary>
+    public TimeSpan GetDebounceRemaining()
+    {
+        lock (_gate)
+        {
+            var remaining = OnlineReportDebounce - (DateTime.UtcNow - _lastOnlineEventReportedAtUtc);
+            return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
+        }
+    }
+
     /// <summary>最近一次联机上线代序号（onlineGeneration 边沿检测的最近已处理值，原 _lastOnlineGeneration 读点）。
     /// 嘟嘟可批次统计用做批次键；0/int.MaxValue 为"未知"兜底值，返回 null，调用方应视为拿不到。</summary>
     public int? CurrentOnlineGeneration

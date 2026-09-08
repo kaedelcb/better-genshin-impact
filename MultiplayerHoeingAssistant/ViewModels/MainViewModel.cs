@@ -33,6 +33,9 @@ public class MainViewModel : INotifyPropertyChanged
     private Timer? _retryTimer;
     private Timer? _onlineTimer;
     private Timer? _resumeTimeoutTimer;
+    /// <summary>[冷却倒计时] 防抖拦截提示的 1s 节拍计时器（DispatcherTimer，与项目其他 VM 展示刷新同款）：
+    /// 仅防抖冷却窗口内运行，窗口结束自动停表清空文本；null = 未点亮过/已停。</summary>
+    private System.Windows.Threading.DispatcherTimer? _debounceCountdownTimer;
     /// <summary>[P1] 上线意图生命周期状态机（Idle/Armed/Executing）：收编原散落本类 12 处直接赋值点的
     /// _isOnlineReady/_onlineMode/_localOnlineGeneration/_genLock/_lastOnlineGeneration/
     /// _lastProcessedAllReadyGeneration/_lastReportedOnlineGen/_lastOnlineEventReportedAtUtc/
@@ -118,6 +121,15 @@ public class MainViewModel : INotifyPropertyChanged
     {
         get => _isConnected;
         set { _isConnected = value; OnPropertyChanged(); }
+    }
+
+    private string _onlineDebounceCountdownText = "";
+    /// <summary>[冷却倒计时] 命令上线 60s 防抖拦截提示文本（如"重复触发冷却 42s"）：
+    /// 空串 = 不显示（XAML 侧绑空串隐藏）。仅发生 Debounced 拦截后点亮，窗口结束自动清空。</summary>
+    public string OnlineDebounceCountdownText
+    {
+        get => _onlineDebounceCountdownText;
+        set { if (_onlineDebounceCountdownText == value) return; _onlineDebounceCountdownText = value; OnPropertyChanged(); }
     }
 
     private bool _isIpcSessionUntrusted;
@@ -511,9 +523,68 @@ public class MainViewModel : INotifyPropertyChanged
     /// 意图被接受（Accepted）时由本类完成 SignalR 上报（网络 IO 不进状态机）。</summary>
     private void ApplyOnlineGenerationEdge(int gen, DateTime? triggeredAtUtc = null)
     {
-        if (_intentLifecycle.ApplyEdge(gen, triggeredAtUtc, out var genToReport) == OnlineEdgeResult.Accepted)
+        var edgeResult = _intentLifecycle.ApplyEdge(gen, triggeredAtUtc, out var genToReport);
+        if (edgeResult == OnlineEdgeResult.Accepted)
         {
             _ = ReportOnlineEventTrackedAsync(genToReport);
+        }
+        else if (edgeResult == OnlineEdgeResult.Debounced)
+        {
+            // [冷却倒计时] 防抖拦截只记日志时用户完全无感知（反复触发看不到冷却），点亮 UI 倒计时
+            LightUpOnlineDebounceCountdown();
+        }
+    }
+
+    /// <summary>[冷却倒计时] 防抖拦截后点亮（或重置）倒计时：冷却基准是状态机的 _lastOnlineEventReportedAtUtc，
+    /// 口径为"只在发生拦截后显示"（窗口内无拦截不打扰）。调用方可能在后台线程（状态轮询/ext 事件），
+    /// DispatcherTimer 必须在 UI 线程操作，故走 BeginInvoke。</summary>
+    private void LightUpOnlineDebounceCountdown()
+    {
+        Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            _debounceCountdownTimer ??= new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _debounceCountdownTimer.Tick -= OnDebounceCountdownTick;
+            _debounceCountdownTimer.Tick += OnDebounceCountdownTick;
+            RefreshOnlineDebounceCountdown();
+            _debounceCountdownTimer.Start();
+        });
+    }
+
+    private void OnDebounceCountdownTick(object? sender, EventArgs e) => RefreshOnlineDebounceCountdown();
+
+    /// <summary>[冷却倒计时] 刷新剩余秒数（UI 线程）：窗口内显示"重复触发冷却 Ns"（向上取整），
+    /// 窗口结束自动清空文本并停表。</summary>
+    private void RefreshOnlineDebounceCountdown()
+    {
+        var remaining = _intentLifecycle.GetDebounceRemaining();
+        if (remaining <= TimeSpan.Zero)
+        {
+            OnlineDebounceCountdownText = "";
+            _debounceCountdownTimer?.Stop();
+        }
+        else
+        {
+            OnlineDebounceCountdownText = $"重复触发冷却 {(int)Math.Ceiling(remaining.TotalSeconds)}s";
+        }
+    }
+
+    /// <summary>[冷却倒计时] 停掉倒计时并清空文本（Shutdown/切遥控器模式时调用，防泄漏与残留显示）。
+    /// DispatcherTimer 只能在其 Dispatcher 线程操作，调用方可能不在 UI 线程，做 CheckAccess 守卫。</summary>
+    private void StopOnlineDebounceCountdown()
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.CheckAccess())
+        {
+            _debounceCountdownTimer?.Stop();
+            OnlineDebounceCountdownText = "";
+        }
+        else
+        {
+            dispatcher.BeginInvoke(() =>
+            {
+                _debounceCountdownTimer?.Stop();
+                OnlineDebounceCountdownText = "";
+            });
         }
     }
 
@@ -3601,7 +3672,7 @@ public class MainViewModel : INotifyPropertyChanged
             _ = ReleaseSignalRAsync(signalR);
         }
 
-        // 停止全部业务定时器（状态上报 10s / 首次连接失败重试 10s / 定时上线 30s / 恢复原任务 10s）
+        // 停止全部业务定时器（状态上报 10s / 首次连接失败重试 10s / 定时上线 30s / 恢复原任务 10s / [冷却倒计时] 防抖倒计时 1s）
         _statusTimer?.Dispose();
         _statusTimer = null;
         _retryTimer?.Dispose();
@@ -3610,6 +3681,8 @@ public class MainViewModel : INotifyPropertyChanged
         _onlineTimer = null;
         _resumeTimeoutTimer?.Dispose();
         _resumeTimeoutTimer = null;
+        StopOnlineDebounceCountdown();
+        _debounceCountdownTimer = null;
 
         // 释放进程监控（内部 5 秒守护 Timer）与命令执行器（依赖进程监控）
         _processMonitor?.Dispose();
@@ -4655,6 +4728,8 @@ public class MainViewModel : INotifyPropertyChanged
             // [P1] 复位上线状态/清挂起补报/基线封口 int.MaxValue（避免切回执行模式后边沿检测自动触发上线），
             // 全部收口进状态机
             _intentLifecycle.OnModeSwitched();
+            // [冷却倒计时] 切遥控器模式后不再跑边沿检测，停掉残留倒计时显示
+            StopOnlineDebounceCountdown();
             AddLog("遥控器模式已启用，跳过 BGI 进程监控");
         }
         else if (!string.IsNullOrEmpty(_config?.BgiPath))
