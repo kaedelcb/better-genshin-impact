@@ -39,6 +39,10 @@ public class BgiProcessMonitor : IDisposable
     {
         if (_isRunning) return;
         _isRunning = true;
+        // 守护启动即视为已武装：若此时 BGI 未运行，首轮轮询会触发一次崩溃事件将其拉起。
+        // 否则 _wasRunning 初值为 false，必须先手动开过一次 BGI 才能形成"运行→消失"边沿，
+        // 导致"先开助手、BGI 未运行"场景下守护永远不生效。
+        _wasRunning = true;
         _checkTimer = new Timer(CheckBgiStatus, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
     }
 
