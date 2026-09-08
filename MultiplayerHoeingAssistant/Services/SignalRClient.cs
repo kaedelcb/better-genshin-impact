@@ -89,6 +89,9 @@ public class SignalRClient : IAsyncDisposable
     public event Action<int>? OnAllReadyConfirmed;
     /// <summary>收到 AllReadyConfirm 事件（服务端要求确认就绪，确认阶段用）。</summary>
     public event Action<int>? OnAllReadyConfirmReceived;
+    /// <summary>确认超时耗尽、服务端放弃本轮开锄（缺人不开锄）。参数：generation + 本轮参与者 uid 列表。
+    /// 客户端据此复位本地"已上线"标记（否则 _isOnlineReady 永久残留吞掉后续上线意图）。</summary>
+    public event Action<int, List<string>>? OnAllReadyAbort;
     /// <summary>日志回调（供外部输出探针日志）</summary>
     public Action<string>? OnLog { get; set; }
 
@@ -273,6 +276,10 @@ public class SignalRClient : IAsyncDisposable
                 }
                 case GatewayProtocol.Events.ControlAllReadyConfirm:
                     OnAllReadyConfirmReceived?.Invoke(env.GetInt("generation"));
+                    break;
+                case GatewayProtocol.Events.ControlAllReadyAbort:
+                    OnAllReadyAbort?.Invoke(env.GetInt("generation"),
+                        env.Get<List<string>>("targetUids") ?? []);
                     break;
                 case GatewayProtocol.Events.ScreenshotMember:
                 {
@@ -501,18 +508,21 @@ public class SignalRClient : IAsyncDisposable
         }
     }
 
-    /// <summary>上报上线事件（带 generation 代序号，供服务端状态机边沿检测）。</summary>
-    public async Task ReportOnlineEventAsync(int generation, bool isOnlineReady)
+    /// <summary>上报上线事件（带 generation 代序号，供服务端状态机边沿检测）。
+    /// 返回 false = 事件未送达服务端（网关未就绪/未连接/调用失败），调用方据此挂起待补报——
+    /// 此前静默丢弃是"命令上线偶发不上线"的根因之一（失败后客户端已自认已上线，不再重试）。</summary>
+    public async Task<bool> ReportOnlineEventAsync(int generation, bool isOnlineReady)
     {
-        if (_gateway == null) return;
+        if (_gateway == null) return false;
         if (!_gateway.IsConnected)
         {
             OnLog?.Invoke($"ReportOnlineEventAsync 跳过: 连接未就绪（State={_gateway.ConnectionState?.ToString() ?? "null"}）");
-            return;
+            return false;
         }
         try
         {
             await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlReportOnlineEvent, new { generation, isOnlineReady });
+            return true;
         }
         catch (Exception ex)
         {
@@ -520,6 +530,7 @@ public class SignalRClient : IAsyncDisposable
             // 此处仅记日志不再 throw，避免上游调用方（如 ReportStatusAsync）连锁打印大量"状态上报失败"日志形成风暴。
             // 断线状态已由 Closed 事件同步 IsConnected=false，调用方也可通过 IsConnected 自行判断。
             OnLog?.Invoke($"ReportOnlineEventAsync 调用失败: {ex.Message}");
+            return false;
         }
     }
 

@@ -1497,8 +1497,10 @@ public class RoomManager
 
         // 就绪成员 = 有新上线事件（未消费）的成员
         var readyPlayers = onlinePlayers.Where(p => !p.OnlineEventConsumed && p.OnlineEventGeneration > 0).ToList();
-        // 预期开锄人数 = 所有在线成员上报的 ExpectedHoeingPlayers 的最小值（下限保底 1，防止默认 0）
+        // 预期开锄人数 = 所有在线成员上报的 ExpectedHoeingPlayers 的最小值（下限保底 1，防止默认 0），
+        // 并按当前在线人数封顶：默认 4 人的配置在 2 人房里会导致 ready 永远凑不齐、永远不上线。
         var threshold = onlinePlayers.Count > 0 ? onlinePlayers.Min(p => Math.Max(1, p.ExpectedHoeingPlayers)) : 1;
+        threshold = Math.Min(threshold, onlinePlayers.Count);
         Console.WriteLine("[探针服务端] CheckAndTransition: group=" + group + " onlinePlayers=" + onlinePlayers.Count + " ready=" + readyPlayers.Count + " threshold=" + threshold + " state=" + state.State);
 
         // 就绪人数未达预期 → 保持"已上线等待"，不广播 AllReady、不消费
@@ -1524,8 +1526,11 @@ public class RoomManager
         return true;
     }
 
-    /// <summary>消费上线状态（复位 OnlineReady + 记录历史 + 标记 generation 已消费）。在广播 AllReady 后调用。</summary>
-    public void ConsumeOnlineReady(string group, int generation)
+    /// <summary>消费上线状态（复位 OnlineReady + 记录历史 + 标记 generation 已消费）。在广播 AllReady 后调用。
+    /// participantUids 为本轮参与者 UID 快照：按 UID 集合消费（而非 OnlineEventGeneration == minGen），
+    /// 修复"只消费 minGen 成员、高 gen 成员事件残留武装"——残留事件会被后续补评估/新事件当成新轮次
+    /// 幻影触发，把本轮没触发上线的成员卷入下一轮。传 null 时退化为旧的按 generation 等值消费（兼容）。</summary>
+    public void ConsumeOnlineReady(string group, int generation, IReadOnlyCollection<string>? participantUids = null)
     {
         Console.WriteLine("[探针服务端] ===== ConsumeOnlineReady 被调用, group=" + group + " generation=" + generation + " =====");
         if (_controlRooms.TryGetValue(group, out var rawPlayers))
@@ -1536,7 +1541,10 @@ public class RoomManager
             {
                 foreach (var p in rawPlayers)
                 {
-                    if (p.OnlineEventGeneration == generation)
+                    var inRound = participantUids == null
+                        ? p.OnlineEventGeneration == generation
+                        : !p.OnlineEventConsumed && p.OnlineEventGeneration > 0 && participantUids.Contains(p.PlayerUid);
+                    if (inRound)
                     {
                         var localNow = TimeZoneInfo.ConvertTimeFromUtc(now, TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai"));
                         var dateStr = localNow.Hour < 4
@@ -1574,6 +1582,32 @@ public class RoomManager
             Console.WriteLine("[探针服务端] ConsumeOnlineReady: 找不到 group=" + group);
         }
         Console.WriteLine("[探针服务端] ===== ConsumeOnlineReady 结束, group=" + group + " =====");
+    }
+
+    /// <summary>解除指定成员的武装上线事件（不记 OnlineHistory）。用于确认超时耗尽（MarkExhausted）收尾：
+    /// 本轮放弃开锄时把参与者的武装事件一并清掉，避免残留事件在后续任意新上报时被 CheckAndTransition
+    /// 当成"已就绪"幻影触发新一轮。与 ConsumeOnlineReady 的区别：不记"已联机记录"（本轮并未开锄）。</summary>
+    public void DisarmOnlineEvents(string group, IReadOnlyCollection<string> uids)
+    {
+        if (_controlRooms.TryGetValue(group, out var players))
+        {
+            int disarmed = 0;
+            lock (players)
+            {
+                foreach (var p in players)
+                {
+                    if (!p.OnlineEventConsumed && p.OnlineEventGeneration > 0 && uids.Contains(p.PlayerUid))
+                    {
+                        p.OnlineEventConsumed = true;
+                        p.OnlineReady = false;
+                        p.OnlineMode = "none";
+                        p.OnlineReadyExpireTime = DateTime.MinValue;
+                        disarmed++;
+                    }
+                }
+            }
+            Console.WriteLine("[探针服务端] DisarmOnlineEvents: 解除武装 " + disarmed + " 个成员, group=" + group);
+        }
     }
 
     /// <summary>清除指定玩家的 OnlineHistory（已联机记录）。由 ClearOnlineHistory Hub 端点调用。

@@ -271,8 +271,16 @@ public sealed partial class RoomOperations
         //   2. 30 秒超时等待，延迟开锄
         if (onlinePlayers.Count <= 1)
         {
-            _roomManager.ConsumeOnlineReady(group, readyGeneration);
-            await _broadcaster.BroadcastGroupAsync(group, "AllReady", new { generation = readyGeneration }, readyGeneration);
+            _roomManager.ConsumeOnlineReady(group, readyGeneration, onlinePlayers);
+            // 定向只发给本轮就绪成员：全组广播会让房间里未上线的成员也收到 AllReady 并自动开锄
+            foreach (var uid in onlinePlayers)
+            {
+                var connId = _roomManager.GetConnectionIdByUid(group, uid);
+                if (!string.IsNullOrEmpty(connId))
+                {
+                    await _broadcaster.SendToConnectionAsync(connId, "AllReady", new { generation = readyGeneration }, readyGeneration);
+                }
+            }
             // 消费后成员字段已变（OnlineReady 复位等）：全量广播最新列表
             await BroadcastControlRoomPlayersAsync(group, forceFull: true);
         }
@@ -300,10 +308,15 @@ public sealed partial class RoomOperations
             foreach (var uid in pendingUids)
             {
                 var connId = _roomManager.GetConnectionIdByUid(group, uid);
-                if (connId != null)
+                if (!string.IsNullOrEmpty(connId))
                 {
                     await _broadcaster.SendToConnectionAsync(connId, "AllReadyConfirm", new { generation }, generation);
                     _logger.LogInformation("确认阶段: 已向 {Uid} 发送 AllReadyConfirm(generation={Gen}), 第{Attempt}次", uid, generation, attempt);
+                }
+                else
+                {
+                    // 断线成员 ConnectionId=""：此前 null 检查放行导致向空连接静默发送、无日志
+                    _logger.LogWarning("确认阶段: 成员 {Uid} 无有效连接（可能断线未归），跳过本次发送", uid);
                 }
             }
 
@@ -317,13 +330,13 @@ public sealed partial class RoomOperations
                     var confirmedUids = targetUids.Where(uid =>
                         _roomManager.GetConfirmedUids(group).Contains(uid)).ToList();
                     if (confirmedUids.Count > 0)
-                        _roomManager.ConsumeOnlineReady(group, generation);
+                        _roomManager.ConsumeOnlineReady(group, generation, confirmedUids);
                     return;
                 }
                 if (_roomManager.IsAllConfirmed(group, targetUids))
                 {
                     _logger.LogInformation("全员确认完成, generation={Gen}", generation);
-                    _roomManager.ConsumeOnlineReady(group, generation);
+                    _roomManager.ConsumeOnlineReady(group, generation, targetUids);
                     // 状态机复位 idle（否则会残留 confirming 僵尸态，后续轮次被 CheckAndTransition 永久挡住）
                     _roomManager.MarkRoundCompleted(group);
                     // 确认完成：成员字段已变（OnlineReady 复位等），全量广播最新列表
@@ -345,6 +358,11 @@ public sealed partial class RoomOperations
             generation, string.Join(",", unconfirmedUids));
         Console.WriteLine("[探针服务端] 确认超时，本轮放弃开锄（缺人不开锄）, group=" + group + " generation=" + generation + " 未确认成员=" + string.Join(",", unconfirmedUids));
         _roomManager.MarkExhausted(group);
+        // 耗尽收尾：解除本轮参与者的武装事件（不记联机记录），避免残留事件被后续任意新上报幻影触发新一轮；
+        // 并显式广播 AllReadyAbort 让客户端复位本地"已上线"标记——否则客户端 _isOnlineReady 永久残留，
+        // 后续命令上线全被客户端守卫吞掉，表现为"执行了上线但再也没反应"。
+        _roomManager.DisarmOnlineEvents(group, targetUids);
+        await _broadcaster.BroadcastGroupAsync(group, "AllReadyAbort", new { generation, unconfirmedUids }, generation);
         // 超时耗尽：成员字段已复位，全量广播最新列表
         await BroadcastControlRoomPlayersAsync(group, forceFull: true);
     }

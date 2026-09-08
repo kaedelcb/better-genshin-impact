@@ -252,6 +252,7 @@ public static class GatewayProtocol
             ["JoinRejected"] = "control.joinRejected",
             ["AllReady"] = "control.allReady",
             ["AllReadyConfirm"] = "control.allReadyConfirm",
+            ["AllReadyAbort"] = "control.allReadyAbort",
             // 日志三件套 + 截图
             ["MemberScreenshot"] = "screenshot.member",
             ["MemberScreenshotRequested"] = "screenshot.requested",

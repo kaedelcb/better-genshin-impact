@@ -19,7 +19,7 @@ public class GatewayProtocolTests
         "HostRouteListReady", "PlayerAnomalyNotify", "PlayerAnomalyNotifyFightPoint",
         "PlayerAnomalyRecovered", "MemberStatusChanged", "StartRoute", "RequestSkipToProgress",
         "CollectiveSkipDegraded", "ControlRoomPlayersUpdated", "RemoteCommand", "JoinRejected",
-        "AllReady", "AllReadyConfirm", "MemberScreenshot", "MemberScreenshotRequested", "MemberLogBatch",
+        "AllReady", "AllReadyConfirm", "AllReadyAbort", "MemberScreenshot", "MemberScreenshotRequested", "MemberLogBatch",
         "MemberLogSubscribersChanged", "MemberLogFilesRequested", "MemberLogFileList",
         "MemberLogDownloadRequested", "MemberLogFileChunk", "RemoteCommandAck",
         "AbnormalPlayerRecovered", "UnifiedWaitPoint", "AllPlayersArrived", "RouteEnforceSync",

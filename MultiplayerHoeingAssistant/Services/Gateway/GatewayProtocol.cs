@@ -76,6 +76,7 @@ public static class GatewayProtocol
         public const string ControlJoinRejected = "control.joinRejected";           // ← JoinRejected
         public const string ControlAllReady = "control.allReady";                   // ← AllReady
         public const string ControlAllReadyConfirm = "control.allReadyConfirm";     // ← AllReadyConfirm
+        public const string ControlAllReadyAbort = "control.allReadyAbort";         // ← AllReadyAbort
 
         public const string ScreenshotMember = "screenshot.member";                 // ← MemberScreenshot
         public const string ScreenshotRequested = "screenshot.requested";           // ← MemberScreenshotRequested
