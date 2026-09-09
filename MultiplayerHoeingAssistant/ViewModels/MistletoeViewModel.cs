@@ -36,7 +36,8 @@ public sealed class MistletoeViewModel : ViewModelBase
         _store = new StartupFlowStore();
         _schemeStore = new StartupFlowSchemeStore();
         _config = _store.Load();
-        _runner = new StartupFlowRunner(mainVm.ExecuteLocalBgiCommandAsync, EnterTaskCenterAsync, ArmTimer, ConfirmHandlerAsync, mainVm.AddLog);
+        _runner = new StartupFlowRunner(mainVm.ExecuteLocalBgiCommandAsync, EnterTaskCenterAsync, ArmTimer, ConfirmHandlerAsync, mainVm.AddLog,
+            () => mainVm.LatestLocalStatus);
         _runner.NodeStateSink = OnNodeStateReported;
         RootChain = new StepChainViewModel(_config.Steps, this, parentCondition: null, branchName: "主流程");
         foreach (var s in _schemeStore.Load()) Schemes.Add(new SchemeItemViewModel(s));
@@ -1115,7 +1116,7 @@ public sealed class StartupStepViewModel : ViewModelBase
         set { Model.ConfirmTimeoutGoTrue = value == 0; Changed(); }
     }
 
-    /// <summary>[旧版遗留] startGroup/startOneClick 节点的任务名（目录已移除，旧配置仍可编辑执行）。</summary>
+    /// <summary>任务名文本：bgiTaskName 条件的匹配文本；[旧版遗留] startGroup/startOneClick 节点的任务名（目录已移除，旧配置仍可编辑执行）。</summary>
     public string TaskName
     {
         get => Model.TaskName;
@@ -1135,6 +1136,8 @@ public sealed class StartupStepViewModel : ViewModelBase
         StartupStepKinds.BgiRunning => Model.ExpectRunning ? "BGI 正在运行 → 是" : "BGI 未运行 → 是",
         StartupStepKinds.GameRunning => Model.ExpectRunning ? "游戏正在运行 → 是" : "游戏未运行 → 是",
         StartupStepKinds.ProcessRunning => $"{Model.ProcessName} {(Model.ExpectRunning ? "存在" : "不存在")} → 是",
+        StartupStepKinds.BgiTaskRunning => Model.ExpectRunning ? "BGI 有任务在跑 → 是" : "BGI 空闲 → 是",
+        StartupStepKinds.BgiTaskName => string.IsNullOrWhiteSpace(Model.TaskName) ? "（未填写任务名）" : $"当前任务名包含「{Model.TaskName}」→ 是",
         StartupStepKinds.ManualConfirm =>
             $"{(string.IsNullOrWhiteSpace(Model.ConfirmMessage) ? "（未填提示内容）" : Model.ConfirmMessage)}" +
             $"{(Model.ConfirmTimeoutSeconds > 0 ? $"；{Model.ConfirmTimeoutSeconds} 秒超时走「{(Model.ConfirmTimeoutGoTrue ? "是" : "否")}」" : "；不限时")}",

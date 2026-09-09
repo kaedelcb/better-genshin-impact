@@ -113,7 +113,7 @@ public class StartupStep
 
     // ===== 条件判断参数 =====
 
-    /// <summary>期望进程处于运行状态（bgiRunning/gameRunning/processRunning 用）：true=正在运行才通过，false=未运行才通过。</summary>
+    /// <summary>期望处于运行状态（bgiRunning/gameRunning/processRunning/bgiTaskRunning 用）：true=正在运行（在跑任务）才通过，false=未运行（空闲）才通过。</summary>
     [JsonPropertyName("expectRunning")]
     public bool ExpectRunning { get; set; } = true;
 
@@ -174,7 +174,7 @@ public class StartupStep
 
     /// <summary>[旧版遗留] BGI 任务名（startGroup/startOneClick 用）。
     /// 2026-09-08 起这两个类型已从节点目录移除（启动中心不再直接配 BGI 任务，由「进入任务中心执行」节点接管），
-    /// 字段与 Runner 分支保留仅为兼容旧配置。</summary>
+    /// 字段与 Runner 分支保留仅为兼容旧配置。bgiTaskName 条件节点复用此字段存匹配文本。</summary>
     [JsonPropertyName("taskName")]
     public string TaskName { get; set; } = "";
 }
@@ -193,6 +193,10 @@ public static class StartupStepKinds
     public const string BgiRunning = "bgiRunning";
     public const string GameRunning = "gameRunning";
     public const string ProcessRunning = "processRunning";
+    /// <summary>BGI 任务状态：按 BGI 当前是否有任务在执行分两支（读 10s 状态快照，任务级判断，区别于进程级的 bgiRunning）。</summary>
+    public const string BgiTaskRunning = "bgiTaskRunning";
+    /// <summary>BGI 当前任务名：当前任务名/配置组名包含指定文本走「是」分支（读同一份状态快照）。</summary>
+    public const string BgiTaskName = "bgiTaskName";
     /// <summary>人工确认：弹窗由人点「是/否」决定走哪条分支；可设超时，超时自动走预设分支。</summary>
     public const string ManualConfirm = "manualConfirm";
 
@@ -226,6 +230,8 @@ public static class StartupStepKinds
         new(BgiRunning, "condition", "BGI 进程状态", "◇", "按当前会话的 BGI 是否正在运行分两支"),
         new(GameRunning, "condition", "游戏进程状态", "◇", "按当前会话的原神是否正在运行分两支"),
         new(ProcessRunning, "condition", "指定进程状态", "◇", "按任意进程名是否存在分两支（可用来等第三方工具）"),
+        new(BgiTaskRunning, "condition", "BGI 任务状态", "◇", "按 BGI 当前是否有任务在执行分两支（读任务状态快照，区别于「BGI 进程状态」只查进程）"),
+        new(BgiTaskName, "condition", "BGI 当前任务名", "◇", "BGI 当前任务名/配置组名包含指定文本走「是」分支（读任务状态快照）"),
         new(ManualConfirm, "condition", "人工确认", "◇", "弹窗由人点「是/否」决定走哪条分支，弹窗列出两条分支的后续动作；可设超时自动走向"),
         // 动作
         new(StartBgi, "action", "启动 BGI", "▶", "启动本机 BGI（可带命令行参数，复用成员卡片「启动BGI」同款逻辑）"),

@@ -571,6 +571,42 @@
                                     </ComboBox>
                                 </StackPanel>
 
+                                <!-- bgiTaskRunning：期望任务状态 -->
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="bgiTaskRunning">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="「是」条件" Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox Width="190" Style="{StaticResource GoldComboBox}"
+                                              SelectedIndex="{Binding ExpectRunningIndex, Mode=TwoWay}">
+                                        <ComboBoxItem Content="有任务在跑时走「是」" Style="{StaticResource GoldComboItem}"/>
+                                        <ComboBoxItem Content="空闲（无任务）时走「是」" Style="{StaticResource GoldComboItem}"/>
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <!-- bgiTaskName：任务名匹配文本 -->
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="bgiTaskName">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="匹配文本" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding TaskName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" Width="200"
+                                             ToolTip="当前任务名或配置组名包含该文本即走「是」（不区分大小写；BGI 未在跑任务时一律走「否」）"/>
+                                </StackPanel>
+
                                 <!-- processRunning -->
                                 <StackPanel Orientation="Horizontal">
                                     <StackPanel.Style>
@@ -1249,7 +1285,7 @@
                                 <TextBlock Text="{Binding BgiTaskStatusText}" FontSize="10" Foreground="{DynamicResource Dim}"/>
                             </Border>
                             <TextBlock FontSize="12" Foreground="{DynamicResource Dim}" TextWrapping="Wrap">
-                                <Run Text="当前任务："/><Run Text="{Binding BgiCurrentTaskDisplay}"/>
+                                <Run Text="当前任务："/><Run Text="{Binding BgiCurrentTaskDisplay, Mode=OneWay}"/>
                             </TextBlock>
                         </StackPanel>
                     </Border>

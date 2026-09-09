@@ -25,6 +25,8 @@ public sealed class StartupFlowRunner
     private readonly Action<StartupStep> _armTimer;
     /// <summary>人工确认弹窗入口（由宿主 VM 注入：UI 线程弹窗，返回 (是/否, 判断依据描述)）。</summary>
     private readonly Func<StartupStep, CancellationToken, Task<(bool passed, string desc)>> _confirmHandler;
+    /// <summary>BGI 任务状态快照提供方（bgiTaskRunning/bgiTaskName 条件用；由宿主注入，读 MainViewModel 的 10s 状态缓存，不新起 IPC）。</summary>
+    private readonly Func<ControlStatus?> _statusProvider;
     private readonly Action<string> _log;
 
     /// <summary>
@@ -41,13 +43,15 @@ public sealed class StartupFlowRunner
         Func<Task> enterTaskCenter,
         Action<StartupStep> armTimer,
         Func<StartupStep, CancellationToken, Task<(bool passed, string desc)>> confirmHandler,
-        Action<string> log)
+        Action<string> log,
+        Func<ControlStatus?> statusProvider)
     {
         _bgiExecutor = bgiExecutor;
         _enterTaskCenter = enterTaskCenter;
         _armTimer = armTimer;
         _confirmHandler = confirmHandler;
         _log = log;
+        _statusProvider = statusProvider;
     }
 
     /// <summary>「结束流程」节点抛出的内部控制流异常（逐层展开到顶层捕获，终止整条流程）。</summary>
@@ -100,7 +104,7 @@ public sealed class StartupFlowRunner
                 // 人工确认是异步交互（UI 弹窗），其余条件是同步求值
                 var (passed, desc) = step.Kind == StartupStepKinds.ManualConfirm
                     ? await _confirmHandler(step, ct)
-                    : EvaluateCondition(step);
+                    : EvaluateCondition(step, _statusProvider());
                 _log($"[槲寄生] {indent}条件「{display}」：{desc} → {(passed ? "是" : "否")}");
                 Report(step, passed ? NodeRunState.CondTrue : NodeRunState.CondFalse, desc);
                 var branch = passed ? step.TrueSteps : step.FalseSteps;
@@ -154,8 +158,9 @@ public sealed class StartupFlowRunner
 
     // ================= 条件求值 =================
 
-    /// <summary>求值条件节点，返回 (是否通过, 人类可读的判断依据)。</summary>
-    public static (bool passed, string desc) EvaluateCondition(StartupStep step)
+    /// <summary>求值条件节点，返回 (是否通过, 人类可读的判断依据)。
+    /// status 为 BGI 任务状态快照（bgiTaskRunning/bgiTaskName 用），null=无快照（视为未在跑任务，依据中留痕）。</summary>
+    public static (bool passed, string desc) EvaluateCondition(StartupStep step, ControlStatus? status = null)
     {
         switch (step.Kind)
         {
@@ -192,6 +197,26 @@ public sealed class StartupFlowRunner
                     return (false, "未填写进程名");
                 var running = IsProcessRunning(step.ProcessName);
                 return (running == step.ExpectRunning, $"进程 {step.ProcessName} {(running ? "存在" : "不存在")}，期望 {(step.ExpectRunning ? "存在" : "不存在")}");
+            }
+            case StartupStepKinds.BgiTaskRunning:
+            {
+                // 判断口径用快照 TaskRunning（权威：BGI 侧任务信号量），不用任务名非空——任务停止后任务名有残留窗口
+                var running = status?.TaskRunning ?? false;
+                var actual = status == null ? "无状态快照，视为未在跑任务" : running ? "有任务在执行" : "空闲";
+                return (running == step.ExpectRunning, $"BGI {actual}，期望 {(step.ExpectRunning ? "在跑任务" : "空闲")}");
+            }
+            case StartupStepKinds.BgiTaskName:
+            {
+                if (string.IsNullOrWhiteSpace(step.TaskName))
+                    return (false, "未填写任务名");
+                if (status == null || !status.TaskRunning)
+                    return (false, $"BGI 未在跑任务{(status == null ? "（无状态快照）" : "")}，无法匹配「{step.TaskName}」");
+                var hit = (status.CurrentTaskName?.Contains(step.TaskName, StringComparison.OrdinalIgnoreCase) ?? false)
+                       || (status.CurrentTaskGroupName?.Contains(step.TaskName, StringComparison.OrdinalIgnoreCase) ?? false);
+                var current = status.CurrentTaskGroupName is { Length: > 0 } g
+                    ? status.CurrentTaskName is { Length: > 0 } n ? $"{g} · {n}" : g
+                    : status.CurrentTaskName ?? "（未上报任务名）";
+                return (hit, $"当前任务「{current}」{(hit ? "包含" : "不包含")}「{step.TaskName}」");
             }
             default:
                 return (false, $"未知条件类型 {step.Kind}（按不满足处理）");
