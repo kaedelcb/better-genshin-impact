@@ -89,6 +89,10 @@ public class RouteExecutionEngine
             {
                 var executor = _activeExecutor;
                 if (executor == null) return;
+
+                // 本机复苏信号与“线路重试模式”无关，必须始终交给 PathExecutor，
+                // 否则主循环不会抛 RetryException，死亡后的寻路会继续使用旧坐标。
+                executor.SignalMultiplayerRevival();
                 if (!_currentRouteRetryModeEnabled) return;
 
                 // === 传送后复苏保护短路（multiplayer-hoeing-post-teleport-revival-protection）===

@@ -326,6 +326,12 @@ public partial class PathExecutor
     public void SignalMultiplayerRevival(BetterGenshinImpact.GameTask.AutoHoeing.Services.RevivalEscalationAction action)
     {
         if (MultiplayerCoordinator == null) return;
+        // 复苏后死亡前的小地图锚点和路径兜底坐标均不再可信。
+        Navigation.Reset();
+        prePosition = default;
+        _prePositionUpdateTime = DateTime.MinValue;
+        _prePositionMapKey = string.Empty;
+        Logger.LogInformation("[联机] 复苏信号已清除小地图导航缓存和prePosition");
         // 写 escalation：用 Interlocked.Exchange 保证写入对所有线程立即可见
         System.Threading.Interlocked.Exchange(ref _pendingRevivalEscalation, (int)action);
         // 写信号位：与 TryConsumeRevivalSignal 的 CAS 配对
@@ -3371,7 +3377,8 @@ public partial class PathExecutor
                         await Delay(1000, ct);
                         using var screen23 = CaptureToRectArea();
                         (position, additionalTimeInMs) = await GetPositionAndTime(screen23, waypoint,isPoint);
-                    if (position is not  { X: 0, Y: 0 })
+                    distance = Navigation.GetDistance(waypoint, position);
+                    if (position is not { X: 0, Y: 0 } && distance <= 500)
                     {
                         prePosition = position;
                         _prePositionUpdateTime = DateTime.UtcNow;
@@ -3389,7 +3396,8 @@ public partial class PathExecutor
                         Logger.LogWarning("重新识别位置异常，停止移动，距离3：{distance} - {x} - {y}", distance,position.X, position.Y);
                         using var screen233 = CaptureToRectArea();
                         (position, additionalTimeInMs) = await GetPositionAndTime(screen233, waypoint,isPoint);
-                        if (position is not  { X: 0, Y: 0 })
+                        distance = Navigation.GetDistance(waypoint, position);
+                        if (position is not { X: 0, Y: 0 } && distance <= 500)
                         {
                             prePosition = position;
                             _prePositionUpdateTime = DateTime.UtcNow;
@@ -4550,7 +4558,7 @@ public partial class PathExecutor
         }
         else
         {
-            if (position is not { X: 0, Y: 0 })
+            if (position is not { X: 0, Y: 0 } && distance <= 500)
             {
                 prePosition = position;
                 _prePositionUpdateTime = DateTime.UtcNow;
