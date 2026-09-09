@@ -224,4 +224,57 @@ public class MatchTemplateHelperTests
         Assert.False(MatsAreEqual(mat, before),
             "Cv2.Rectangle should mutate the Mat in-place.");
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Task 7.1 — for-member-name-template-fallback hardening (FR-4.4 / P-8)
+    // 模板大于源图 / 大于识别区域 → 不抛异常、返回空。
+    // 依赖 MatchTemplateHelper.FindMatches 首部防护：
+    //   srcMat.Width < template.Width || srcMat.Height < template.Height → return 空
+    // 通过 InternalsVisibleTo("BetterGenshinImpact.UnitTest") 直接调用 internal 方法。
+    // EXPECTED: PASS（防护已内建在生产代码）。零生产代码改动。
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static Mat CreateGray(int width, int height)
+        => new Mat(height, width, MatType.CV_8UC1, new Scalar(128));
+
+    [Fact]
+    public void FindBestMatch_TemplateLargerThanSource_ReturnsNull_NoThrow()
+    {
+        // 源图 420×50 灰度（模拟放人弹窗名字 ROI），模板 600×80 比源还大
+        using var srcSmall = CreateGray(420, 50);
+        using var templateBig = CreateGray(600, 80);
+
+        // 不抛异常
+        var best = MatchTemplateHelper.FindBestMatch(
+            srcSmall, templateBig, TemplateMatchModes.CCoeffNormed, null, 0.8);
+
+        // 返回空（null = 无兜底命中，不触发走错识别分支）
+        Assert.Null(best);
+    }
+
+    [Fact]
+    public void FindMatches_TemplateLargerThanSource_ReturnsEmpty_NoThrow()
+    {
+        using var srcSmall = CreateGray(420, 50);
+        using var templateBig = CreateGray(600, 80);
+
+        // 不抛异常，返回空列表
+        var matches = MatchTemplateHelper.FindMatches(
+            srcSmall, templateBig, TemplateMatchModes.CCoeffNormed, null, 0.8, 8);
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void FindMatches_TemplateLargerThanSourceInOneDimension_ReturnsEmpty_NoThrow()
+    {
+        // 仅宽度超（500 > 420），高度不超（40 <= 50）——防护按任一维度短路
+        using var srcSmall = CreateGray(420, 50);
+        using var templateWider = CreateGray(500, 40);
+
+        var matches = MatchTemplateHelper.FindMatches(
+            srcSmall, templateWider, TemplateMatchModes.CCoeffNormed, null, 0.8, 8);
+
+        Assert.Empty(matches);
+    }
 }
