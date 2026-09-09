@@ -183,16 +183,21 @@
         <Style x:Key="GuildCheckBox" TargetType="CheckBox">
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="Foreground" Value="{StaticResource White}"/>
+            <Setter Property="FontSize" Value="11"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="CheckBox">
-                        <Grid Width="20" Height="20">
-                            <Border x:Name="Outer" CornerRadius="10" BorderThickness="1.5" BorderBrush="{StaticResource Dim}" Background="#332E2660" SnapsToDevicePixels="True"/>
-                            <Border x:Name="Inner" CornerRadius="10" Background="{StaticResource GoldBtnGrad}" Opacity="0" SnapsToDevicePixels="True">
-                                <Path Data="M 4,10.5 L 8.5,14.5 L 16,6.5" Stroke="#3A2F16" StrokeThickness="2.2"
-                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
-                            </Border>
-                        </Grid>
+                        <StackPanel Orientation="Horizontal">
+                            <Grid Width="20" Height="20">
+                                <Border x:Name="Outer" CornerRadius="10" BorderThickness="1.5" BorderBrush="{StaticResource Dim}" Background="#332E2660" SnapsToDevicePixels="True"/>
+                                <Border x:Name="Inner" CornerRadius="10" Background="{StaticResource GoldBtnGrad}" Opacity="0" SnapsToDevicePixels="True">
+                                    <Path Data="M 4,10.5 L 8.5,14.5 L 16,6.5" Stroke="#3A2F16" StrokeThickness="2.2"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                                </Border>
+                            </Grid>
+                            <ContentPresenter Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="Outer" Property="BorderBrush" Value="{StaticResource Gold}"/>

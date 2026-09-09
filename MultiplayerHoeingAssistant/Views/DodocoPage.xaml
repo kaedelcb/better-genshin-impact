@@ -643,54 +643,62 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <!-- 工具栏行1：时间范围搜索 / 关键字搜索（WrapPanel：窄窗口自动折行） -->
+                        <!-- 工具栏行1：时间范围搜索 / 关键字搜索（WrapPanel 内按功能分组包裹，折行时整组一起换行，标签不与输入框分离） -->
                         <WrapPanel Grid.Row="0" Margin="0,0,0,6" VerticalAlignment="Center">
-                            <TextBlock Text="时间范围" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
-                            <views:TimeOfDayPicker x:Name="StartTimePicker" Margin="6,0,2,0"
-                                                   Value="{Binding Browser.StartTimeText, Mode=TwoWay}"
-                                                   VerticalAlignment="Center"
-                                                   ToolTip="开始时间（点击弹出选择，点「完成」直接搜索）"/>
-                            <TextBlock Text="至" FontSize="11" Foreground="{DynamicResource Dim}"
-                                       VerticalAlignment="Center" Margin="2,0"/>
-                            <views:TimeOfDayPicker x:Name="EndTimePicker" Margin="2,0,4,0"
-                                                   Value="{Binding Browser.EndTimeText, Mode=TwoWay}"
-                                                   VerticalAlignment="Center"
-                                                   ToolTip="结束时间（点击弹出选择，点「完成」直接搜索）"/>
-                            <Button Content="按时间搜索" Style="{DynamicResource BtnGold}" Padding="10,4" Margin="2,0,14,0"
-                                    Command="{Binding Browser.SearchTimeRangeCommand}"
-                                    ToolTip="收集行头时间落在「开始~结束」区间内的日志行，结果列在下方，点击跳转"/>
-                            <TextBlock Text="关键字" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
-                            <TextBox Width="130" Style="{StaticResource GoldInput}" Margin="4,0"
-                                     Text="{Binding Browser.SearchText, UpdateSourceTrigger=PropertyChanged}"
-                                     ToolTip="在当前文件中搜索关键字，结果列在下方，命中词高亮显示，点击可跳转"/>
-                            <CheckBox Content="正则表达式" IsChecked="{Binding Browser.IsRegex}"
-                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,6,0"
-                                      ToolTip="不勾选=普通关键字匹配（忽略大小写）；勾选=按正则表达式匹配（如 超时|失败）"/>
-                            <Button Content="按关键字搜索" Style="{DynamicResource BtnGhost}" Padding="10,4"
-                                    Command="{Binding Browser.SearchCommand}"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,14,0">
+                                <TextBlock Text="时间范围" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
+                                <views:TimeOfDayPicker x:Name="StartTimePicker" Margin="6,0,2,0"
+                                                       Value="{Binding Browser.StartTimeText, Mode=TwoWay}"
+                                                       VerticalAlignment="Center"
+                                                       ToolTip="开始时间（点击弹出选择，点「完成」直接搜索）"/>
+                                <TextBlock Text="至" FontSize="11" Foreground="{DynamicResource Dim}"
+                                           VerticalAlignment="Center" Margin="2,0"/>
+                                <views:TimeOfDayPicker x:Name="EndTimePicker" Margin="2,0,4,0"
+                                                       Value="{Binding Browser.EndTimeText, Mode=TwoWay}"
+                                                       VerticalAlignment="Center"
+                                                       ToolTip="结束时间（点击弹出选择，点「完成」直接搜索）"/>
+                                <Button Content="按时间搜索" Style="{DynamicResource BtnGold}" Padding="10,4" Margin="2,0,0,0"
+                                        Command="{Binding Browser.SearchTimeRangeCommand}"
+                                        ToolTip="收集行头时间落在「开始~结束」区间内的日志行，结果列在下方，点击跳转"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="关键字" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
+                                <TextBox Width="130" Style="{StaticResource GoldInput}" Margin="4,0"
+                                         Text="{Binding Browser.SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="在当前文件中搜索关键字，结果列在下方，命中词高亮显示，点击可跳转"/>
+                                <CheckBox Content="正则表达式" IsChecked="{Binding Browser.IsRegex}"
+                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,6,0"
+                                          ToolTip="不勾选=普通关键字匹配（忽略大小写）；勾选=按正则表达式匹配（如 超时|失败）"/>
+                                <Button Content="按关键字搜索" Style="{DynamicResource BtnGhost}" Padding="10,4"
+                                        Command="{Binding Browser.SearchCommand}"/>
+                            </StackPanel>
                         </WrapPanel>
 
-                        <!-- 工具栏行2：级别筛选（多选） + 导出 + 使用提示（WrapPanel：窄窗口自动折行） -->
+                        <!-- 工具栏行2：级别筛选（多选） + 导出 + 使用提示（WrapPanel 分组包裹：级别组/导出组各自整组折行） -->
                         <WrapPanel Grid.Row="1" Margin="0,0,0,8" VerticalAlignment="Center">
-                            <TextBlock Text="级别" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
-                            <CheckBox Content="错误" IsChecked="{Binding Browser.ShowError}"
-                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,0,0"
-                                      ToolTip="显示错误（ERR）级日志；取消勾选即隐藏。筛选后搜索与「导出筛选」都只在显示的行内进行"/>
-                            <CheckBox Content="警告" IsChecked="{Binding Browser.ShowWarning}"
-                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,0,0"
-                                      ToolTip="显示警告（WRN）级日志"/>
-                            <CheckBox Content="信息" IsChecked="{Binding Browser.ShowInfo}"
-                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,0,0"
-                                      ToolTip="显示信息（INF）级日志（无级别的文件头续行也归入此档）"/>
-                            <CheckBox Content="Debug" IsChecked="{Binding Browser.ShowDebug}"
-                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,12,0"
-                                      ToolTip="显示 Debug（DBG）级日志；多行堆栈跟随所属事件级别，不会被单独滤掉"/>
-                            <Button Content="导出原样" Style="{DynamicResource BtnGhost}" Padding="10,4"
-                                    Command="{Binding Browser.ExportRawCommand}" Margin="0,0,6,0"
-                                    ToolTip="复制整个日志文件（共享读，正在写入的当天文件也可导出）"/>
-                            <Button Content="导出筛选" Style="{DynamicResource BtnGhost}" Padding="10,4"
-                                    Command="{Binding Browser.ExportFilteredCommand}" Margin="0,0,12,0"
-                                    ToolTip="有搜索结果时导出命中行，否则导出当前视图（含级别筛选）；支持 .log / .csv"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                                <TextBlock Text="级别" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
+                                <CheckBox Content="错误" IsChecked="{Binding Browser.ShowError}"
+                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,0,0"
+                                          ToolTip="显示错误（ERR）级日志；取消勾选即隐藏。筛选后搜索与「导出筛选」都只在显示的行内进行"/>
+                                <CheckBox Content="警告" IsChecked="{Binding Browser.ShowWarning}"
+                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,0,0"
+                                          ToolTip="显示警告（WRN）级日志"/>
+                                <CheckBox Content="信息" IsChecked="{Binding Browser.ShowInfo}"
+                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,0,0"
+                                          ToolTip="显示信息（INF）级日志（无级别的文件头续行也归入此档）"/>
+                                <CheckBox Content="Debug" IsChecked="{Binding Browser.ShowDebug}"
+                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,0,0"
+                                          ToolTip="显示 Debug（DBG）级日志；多行堆栈跟随所属事件级别，不会被单独滤掉"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                                <Button Content="导出原样" Style="{DynamicResource BtnGhost}" Padding="10,4"
+                                        Command="{Binding Browser.ExportRawCommand}" Margin="0,0,6,0"
+                                        ToolTip="复制整个日志文件（共享读，正在写入的当天文件也可导出）"/>
+                                <Button Content="导出筛选" Style="{DynamicResource BtnGhost}" Padding="10,4"
+                                        Command="{Binding Browser.ExportFilteredCommand}"
+                                        ToolTip="有搜索结果时导出命中行，否则导出当前视图（含级别筛选）；支持 .log / .csv"/>
+                            </StackPanel>
                             <TextBlock Text="整文件一次加载 · 自由滚动不分块 · 单击选行，Ctrl/Shift 点选多行后 Ctrl+C 复制 · 点搜索结果精确定位"
                                        FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
                         </WrapPanel>
@@ -982,14 +990,10 @@
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-                        <Grid Grid.Row="0" Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
+                        <WrapPanel Grid.Row="0" Margin="0,0,0,8">
                             <TextBlock Text="异常记录" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource White}"
-                                       VerticalAlignment="Center"/>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <ComboBox Width="130" ItemsSource="{Binding Watch.RuleFilterItems}"
                                           SelectedItem="{Binding Watch.SelectedRuleFilter}"
                                           Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
@@ -1008,10 +1012,10 @@
                                         Command="{Binding Watch.ClearRecordsCommand}"
                                         ToolTip="清空异常记录（范围=当前日期筛选：「全部日期」清空全部，选中某天只清当天；删除落盘文件，不可恢复）"/>
                             </StackPanel>
-                        </Grid>
+                        </WrapPanel>
 
-                        <!-- 诊断包导出（§5-C：排查联机问题时一键打包发给队友） -->
-                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
+                        <!-- 诊断包导出（§5-C：排查联机问题时一键打包发给队友；WrapPanel：窄窗口自动折行不裁切） -->
+                        <WrapPanel Grid.Row="1" Margin="0,0,0,8">
                             <TextBlock Text="诊断时间范围" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
                             <views:TimeOfDayPicker x:Name="DiagStartPicker" Margin="6,0,2,0"
                                                    Value="{Binding DiagnosticStartText, Mode=TwoWay}"
@@ -1031,7 +1035,7 @@
                                     ToolTip="打包该时间范围内的 BGI 日志切片 + 助手日志 + 异常库 + 统计 + 成员快照"/>
                             <TextBlock Text="{Binding DiagStatus}" FontSize="10" Foreground="{DynamicResource Dim}"
                                        VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap"/>
-                        </StackPanel>
+                        </WrapPanel>
 
                         <ListBox Grid.Row="2" ItemsSource="{Binding Watch.FilteredRecords}" Background="Transparent"
                                  BorderThickness="0">
@@ -1155,9 +1159,13 @@
                         Background="#3D8E3A3A" BorderBrush="{DynamicResource Pyro}" BorderThickness="1"
                         Visibility="{Binding Stats.SuspectedStall, Converter={StaticResource BoolToVis}}">
                     <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
                         <TextBlock Text="{Binding Stats.StallBannerText}" FontSize="12" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource Pyro}" VerticalAlignment="Center"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                   Foreground="{DynamicResource Pyro}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
                             <TextBlock Text="判定阈值(分钟)" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
                             <TextBox Width="44" Style="{StaticResource GoldInput}" Margin="6,0,0,0" Padding="6,2"
                                      Text="{Binding Stats.StallThresholdMinutes, UpdateSourceTrigger=LostFocus}"
@@ -1362,7 +1370,7 @@
                 <Border Grid.Row="0" Style="{DynamicResource QuestCard}" Padding="10,8" Margin="0,0,0,8">
                     <WrapPanel>
                         <TextBlock Text="画面源" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <ComboBox Width="150" ItemsSource="{Binding Monitor.MonitorOptions}" SelectedItem="{Binding Monitor.SelectedMonitor}"
+                        <ComboBox Width="180" ItemsSource="{Binding Monitor.MonitorOptions}" SelectedItem="{Binding Monitor.SelectedMonitor}"
                                   DisplayMemberPath="Label"
                                   Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
                                   VerticalAlignment="Center" Margin="0,0,12,0"

@@ -170,10 +170,11 @@
             <Setter Property="Padding" Value="4,1"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter Property="Foreground" Value="{DynamicResource White}"/>
@@ -188,7 +189,8 @@
              宿主的 ItemsControl DataContext 是 StepChainViewModel，命令直接绑链上的 AddStepCommand。 -->
         <DataTemplate x:Key="AddNodePopupContent">
             <Border Background="#232048" BorderBrush="{DynamicResource GoldLine}" BorderThickness="1"
-                    CornerRadius="10" Padding="12" Effect="{DynamicResource CardShadow}" Margin="0,0,0,6">
+                    CornerRadius="10" Padding="12" Effect="{DynamicResource CardShadow}" Margin="0,0,0,6"
+                    MaxWidth="420">
                 <!-- 节点目录较长：限高 + 内滚动，避免在分支列等空间受限位置弹层下方被截断 -->
                 <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto" Style="{DynamicResource GoldScrollViewer}">
                 <StackPanel>
@@ -207,7 +209,7 @@
                                         <TextBlock FontSize="12" Foreground="{DynamicResource White}">
                                             <Run Text="◇ "/><Run Text="{Binding DisplayName}"/>
                                         </TextBlock>
-                                        <TextBlock Text="{Binding Description}" FontSize="10" Foreground="{DynamicResource Dim}"/>
+                                        <TextBlock Text="{Binding Description}" FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </Button>
                             </DataTemplate>
@@ -229,7 +231,7 @@
                                         <TextBlock FontSize="12" Foreground="{DynamicResource White}">
                                             <Run Text="▶ "/><Run Text="{Binding DisplayName}"/>
                                         </TextBlock>
-                                        <TextBlock Text="{Binding Description}" FontSize="10" Foreground="{DynamicResource Dim}"/>
+                                        <TextBlock Text="{Binding Description}" FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </Button>
                             </DataTemplate>
