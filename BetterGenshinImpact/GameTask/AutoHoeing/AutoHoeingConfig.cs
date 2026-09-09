@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using System;
 using System.Collections.Generic;
+using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
 
 namespace BetterGenshinImpact.GameTask.AutoHoeing;
 
@@ -569,6 +570,20 @@ public partial class AutoHoeingConfig : ObservableObject
     /// </summary>
     [ObservableProperty]
     private int _partyTimeoutAction = 0;
+
+    /// <summary>
+    /// 模板匹配兜底目录（联机锄地组队阶段 OCR 判非白名单时兜底复核）。空串 → 用默认 GameTask/AutoHoeing/Match。
+    /// 纯客户端本地参数，不同步 RoomConfig / 不进 SignalR。
+    /// </summary>
+    [ObservableProperty]
+    private string _memberNameTemplateMatchDir = "";
+
+    /// <summary>
+    /// 模板匹配兜底阈值（RecognitionObject.Threshold），范围 [0.6, 0.9]，默认 0.8。
+    /// 由 AutoPartyTask 内聚的 ClampTemplateThreshold 收敛。
+    /// </summary>
+    [ObservableProperty]
+    private double _memberNameTemplateMatchThreshold = 0.8;
 
     // ========== 第五部分：联机角色配置（配置组专用） ==========
 

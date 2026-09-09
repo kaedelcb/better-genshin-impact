@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,6 +10,7 @@ using System.Windows;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
+using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
 using BetterGenshinImpact.GameTask.AutoFight.Assets;
@@ -54,6 +56,154 @@ public class AutoPartyTask
     private const double PlayerNameH = 40;
     // 已知 2P~4P 名字起点 Y（1080P）
     private static readonly double[] PlayerNameY1080P = [307, 429, 555];
+
+    // ===== 模板匹配兜底（member-name-template-fallback）：全部内聚在本文件 =====
+    private const double TemplateMatchDefaultThreshold = 0.8;
+    private const double TemplateMatchMinThreshold = 0.6;
+    private const double TemplateMatchMaxThreshold = 0.9;
+    private const string TemplateMatchDefaultRelativeDir = "GameTask/AutoHoeing/Match";
+
+    // 模板缓存：线程安全懒加载（双检锁），只扫一次目录。字段初始化器不能引用实例成员（_logger/配置），
+    // 故不在声明处初始，而是用 _tplCache + 双检锁在方法里惰性加载。
+    private readonly object _tplLock = new();
+    private IReadOnlyList<RecognitionObject>? _tplCache;
+
+    /// <summary>实际模板目录：配置非空用配置，否则用默认 GameTask/AutoHoeing/Match。</summary>
+    private string ResolveTemplateDir()
+    {
+        var cfg = TaskContext.Instance().Config.AutoHoeingConfig.MemberNameTemplateMatchDir;
+        return string.IsNullOrWhiteSpace(cfg) ? Global.Absolute(TemplateMatchDefaultRelativeDir) : cfg!;
+    }
+
+    /// <summary>兜底阈值：配置 >0 用配置，否则默认 0.8；再收敛到 [0.6, 0.9]（NaN→默认）。</summary>
+    private double ResolveTemplateThreshold()
+    {
+        var cfg = TaskContext.Instance().Config.AutoHoeingConfig.MemberNameTemplateMatchThreshold;
+        var t = cfg > 0 ? cfg : TemplateMatchDefaultThreshold;
+        return ClampTemplateThreshold(t);
+    }
+
+    private static double ClampTemplateThreshold(double t)
+    {
+        if (double.IsNaN(t)) return TemplateMatchDefaultThreshold;
+        return Math.Clamp(t, TemplateMatchMinThreshold, TemplateMatchMaxThreshold);
+    }
+
+    /// <summary>
+    /// 是否启用模板匹配兜底：当且仅当白名单未命中（matchedByWhitelist == false）。
+    /// 与 ocrName 是否空串/空引用无关（OQ-e 拍板：OCR 空串也兜底）。
+    /// </summary>
+    private static bool ShouldFallback(string? ocrName, bool matchedByWhitelist) => !matchedByWhitelist;
+
+    private static bool IsImageExt(string? ext)
+        => !string.IsNullOrEmpty(ext)
+           && (ext.Equals(".png", StringComparison.OrdinalIgnoreCase)
+               || ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+               || ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+               || ext.Equals(".bmp", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>扫描目录加载模板：灰度读图，RecognitionObject.TemplateMatch + InitTemplate + 阈值。整体异常→LogWarning+空。</summary>
+    private IReadOnlyList<RecognitionObject> LoadTemplates()
+    {
+        var dir = ResolveTemplateDir();
+        if (!Directory.Exists(dir))
+        {
+            _logger.LogDebug("[模板兜底] 目录不存在，兜底整体不可用: {Dir}", dir);
+            return Array.Empty<RecognitionObject>();
+        }
+
+        var items = new List<RecognitionObject>();
+        try
+        {
+            var files = Directory
+                .EnumerateFiles(dir, "*", SearchOption.TopDirectoryOnly)
+                .Where(f => IsImageExt(Path.GetExtension(f)))
+                .ToList();
+            foreach (var file in files)
+            {
+                try
+                {
+                    using var src = Cv2.ImRead(file, ImreadModes.Grayscale);
+                    if (src.Empty())
+                    {
+                        _logger.LogWarning("[模板兜底] 模板无法解码，跳过: {File}", Path.GetFileName(file));
+                        continue;
+                    }
+                    var ro = RecognitionObject.TemplateMatch(src);
+                    ro.Threshold = ResolveTemplateThreshold();
+                    ro.Name = Path.GetFileName(file);
+                    ro.InitTemplate();
+                    items.Add(ro);
+                }
+                catch (Exception ex)
+                {
+                    // 单个模板损坏/IO 异常：跳过并留痕，不阻断其余模板（4.1 / P-7）
+                    _logger.LogWarning(ex, "[模板兜底] 加载模板异常，跳过: {File}", Path.GetFileName(file));
+                }
+            }
+            _logger.LogInformation("[模板兜底] 已加载 {Count} 个兜底模板（目录: {Dir}）", items.Count, dir);
+        }
+        catch (Exception ex)
+        {
+            // 目录扫描整体异常：视为不可用，退化现状（4.3）
+            _logger.LogWarning(ex, "[模板兜底] 扫描目录异常，兜底整体不可用: {Dir}", dir);
+            return Array.Empty<RecognitionObject>();
+        }
+        return items;
+    }
+
+    /// <summary>线程安全懒加载模板列表（双检锁），只扫一次目录。</summary>
+    private IReadOnlyList<RecognitionObject> Templates
+    {
+        get
+        {
+            if (_tplCache == null)
+            {
+                lock (_tplLock)
+                {
+                    if (_tplCache == null) _tplCache = LoadTemplates();
+                }
+            }
+            return _tplCache;
+        }
+    }
+
+    /// <summary>
+    /// 对名字 ROI 执行模板匹配兜底。任一模板命中 → true 并输出命中模板文件名。
+    /// 模板大于 ROI 由 MatchTemplateHelper.FindMatches 首部防护天然返回 null（不抛异常，P-8），不新增 try/catch 防御。
+    /// 匹配过程意外异常 → 捕获 + LogWarning + 视为未命中，不阻断（4.2 / P-7）。
+    /// </summary>
+    private bool TemplateMatchTryMatch(Mat? nameRoi, out string? matchedFile)
+    {
+        matchedFile = null;
+        if (nameRoi == null || nameRoi.Empty()) return false;
+
+        var tpls = Templates;
+        if (tpls.Count == 0) return false;
+
+        var threshold = ResolveTemplateThreshold();
+        foreach (var ro in tpls)
+        {
+            if (ro.TemplateImageGreyMat == null) continue;
+            try
+            {
+                var best = MatchTemplateHelper.FindBestMatch(
+                    nameRoi, ro.TemplateImageGreyMat,
+                    TemplateMatchModes.CCoeffNormed, null, threshold);
+                if (best != null)
+                {
+                    matchedFile = ro.Name ?? "?";
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                // 单模板匹配异常：跳过该模板继续，视为未命中（4.2 / P-7）
+                _logger.LogWarning(ex, "[模板兜底] 模板匹配异常，视为未命中: {File}", ro.Name);
+            }
+        }
+        return false;
+    }
 
     /// <summary>
     /// UID 脱敏：保留前 3 位和后 3 位，中间用 *** 代替（用于日志输出）
@@ -284,17 +434,31 @@ public class AutoPartyTask
                         var shouldAccept = true;
                         if (whitelist != null && whitelist.Length > 0)
                         {
-                            var applicantName = OcrApplicantName();
-                            if (!string.IsNullOrEmpty(applicantName))
+                            // 单帧同时取 OCR 文本与弹窗 ROI，供白名单未命中时对同一 ROI 做模板匹配兜底
+                            var (applicantName, applicantRoi) = CaptureApplicantRoi();
+                            using (applicantRoi)
                             {
-                                shouldAccept = IsInWhitelist(applicantName, whitelist);
-                                _logger.LogInformation("[自动组队-房主] OCR 识别申请者: {Name}，白名单匹配: {Match}",
-                                    applicantName, shouldAccept);
-                            }
-                            else
-                            {
-                                _logger.LogWarning("[自动组队-房主] OCR 识别失败，跳过本次申请");
-                                shouldAccept = false;
+                                if (!string.IsNullOrEmpty(applicantName))
+                                {
+                                    shouldAccept = IsInWhitelist(applicantName, whitelist);
+                                    _logger.LogInformation("[自动组队-房主] OCR 识别申请者: {Name}，白名单匹配: {Match}",
+                                        applicantName, shouldAccept);
+                                }
+                                else
+                                {
+                                    _logger.LogWarning("[自动组队-房主] OCR 识别失败，尝试模板匹配兜底复核");
+                                    shouldAccept = false;
+                                }
+
+                                // 白名单/OCR 未命中：对同一弹窗 ROI 做模板匹配兜底（OQ-e：空串也兜底）
+                                if (!shouldAccept
+                                    && ShouldFallback(applicantName, false)
+                                    && TemplateMatchTryMatch(applicantRoi, out var matchedTemplate))
+                                {
+                                    shouldAccept = true;
+                                    _logger.LogInformation("[自动组队-房主] 模板匹配兜底命中 [{Matched}]，接受申请者 [OCR={Raw}]",
+                                        matchedTemplate, applicantName);
+                                }
                             }
                         }
 
@@ -587,16 +751,30 @@ public class AutoPartyTask
                 var shouldAccept = true;
                 if (whitelist != null && whitelist.Length > 0)
                 {
-                    var applicantName = OcrApplicantName();
-                    if (!string.IsNullOrEmpty(applicantName))
+                    // 单帧同时取 OCR 文本与弹窗 ROI，供白名单未命中时对同一 ROI 做模板匹配兜底
+                    var (applicantName, applicantRoi) = CaptureApplicantRoi();
+                    using (applicantRoi)
                     {
-                        shouldAccept = IsInWhitelist(applicantName, whitelist);
-                        _logger.LogInformation("[自动组队] OCR 识别申请者: {Name}，白名单匹配: {Match}", applicantName, shouldAccept);
-                    }
-                    else
-                    {
-                        _logger.LogWarning("[自动组队] OCR 识别失败，跳过本次申请");
-                        shouldAccept = false;
+                        if (!string.IsNullOrEmpty(applicantName))
+                        {
+                            shouldAccept = IsInWhitelist(applicantName, whitelist);
+                            _logger.LogInformation("[自动组队] OCR 识别申请者: {Name}，白名单匹配: {Match}", applicantName, shouldAccept);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("[自动组队] OCR 识别失败，尝试模板匹配兜底复核");
+                            shouldAccept = false;
+                        }
+
+                        // 白名单/OCR 未命中：对同一弹窗 ROI 做模板匹配兜底（OQ-e：空串也兜底）
+                        if (!shouldAccept
+                            && ShouldFallback(applicantName, false)
+                            && TemplateMatchTryMatch(applicantRoi, out var matchedTemplate))
+                        {
+                            shouldAccept = true;
+                            _logger.LogInformation("[自动组队] 模板匹配兜底命中 [{Matched}]，接受申请者 [OCR={Raw}]",
+                                matchedTemplate, applicantName);
+                        }
                     }
                 }
                 if (shouldAccept)
@@ -753,13 +931,17 @@ public class AutoPartyTask
         }
     }
 
-    /// <summary>OCR 识别申请弹窗中的玩家名称（1080P 区域: x=702, y=512, w=400, h=50）</summary>
-    private string OcrApplicantName()
+    /// <summary>
+    /// 截一帧并抠出申请弹窗玩家名 ROI（1080P 区域同 <see cref="OcrApplicantName"/>：x=682,y=512,w=420,h=50，
+    /// x 向左偏移 10px 避免首字被截断；按 ScaleTo1080PRatio 缩放 + 越界裁剪）。
+    /// 输出 text（OCR 玩家名，空串=识别失败/无文本）与 roi（灰度转化前的原图 ROI Mat，调用方负责 using）。
+    /// 单帧同时产出 text 与 roi，供弹窗块"白名单未命中时对同一 ROI 做模板匹配兜底"复用，避免重复截图。
+    /// </summary>
+    private (string Text, Mat? Roi) CaptureApplicantRoi()
     {
         try
         {
             using var ra = CaptureToRectArea();
-            // 按 1080P 比例裁剪名称区域，x 向左偏移 10px 避免首字被截断
             var scale = TaskContext.Instance().SystemInfo.ScaleTo1080PRatio;
             var x = (int)(682 * scale);
             var y = (int)(512 * scale);
@@ -769,17 +951,17 @@ public class AutoPartyTask
             // 边界检查
             if (x + w > ra.SrcMat.Width) w = ra.SrcMat.Width - x;
             if (y + h > ra.SrcMat.Height) h = ra.SrcMat.Height - y;
-            if (w <= 0 || h <= 0) return "";
+            if (w <= 0 || h <= 0) return ("", null);
 
-            using var roi = new OpenCvSharp.Mat(ra.SrcMat, new OpenCvSharp.Rect(x, y, w, h));
+            var roi = new OpenCvSharp.Mat(ra.SrcMat, new OpenCvSharp.Rect(x, y, w, h));
             var text = OcrFactory.Paddle.Ocr(roi);
             _logger.LogInformation("[自动组队] OCR 原始结果: {Text}", text);
-            return text?.Trim() ?? "";
+            return (text?.Trim() ?? "", roi);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "[自动组队] OCR 识别异常");
-            return "";
+            return ("", null);
         }
     }
 
@@ -879,9 +1061,10 @@ public class AutoPartyTask
                 if (nameW <= 0 || nameH <= 0) continue;
 
                 string playerName;
+                // 抠出当前行玩家名 ROI，供 OCR 与模板匹配兜底复用（同一帧、坐标不变 P-5）
+                using var nameRoi = new OpenCvSharp.Mat(ra.SrcMat, new OpenCvSharp.Rect(nameX, nameY, nameW, nameH));
                 try
                 {
-                    using var nameRoi = new OpenCvSharp.Mat(ra.SrcMat, new OpenCvSharp.Rect(nameX, nameY, nameW, nameH));
                     playerName = (OcrFactory.Paddle.Ocr(nameRoi) ?? "").Trim();
                 }
                 catch (Exception ex)
@@ -892,7 +1075,15 @@ public class AutoPartyTask
 
                 if (string.IsNullOrEmpty(playerName))
                 {
-                    _logger.LogDebug("[踢陌生人] OCR 玩家名为空，跳过此行（可能渲染未稳定）");
+                    // 空串帧：先模板匹配兜底，命中→保留该帧（不累计丢配）；未命中→维持现状跳过
+                    if (ShouldFallback(playerName, false) && TemplateMatchTryMatch(nameRoi, out var m1))
+                    {
+                        _logger.LogInformation("[踢陌生人] 模板匹配兜底命中 [{Matched}]，保留空串帧玩家", m1);
+                    }
+                    else
+                    {
+                        _logger.LogDebug("[踢陌生人] OCR 玩家名为空，跳过此行（可能渲染未稳定）");
+                    }
                     continue;
                 }
 
@@ -903,6 +1094,14 @@ public class AutoPartyTask
 
                 // 复用现有白名单匹配（70% 容错，支持括号备注）——踢不踢的唯一判据
                 var isAllowed = IsInWhitelist(playerName, allowedNames);
+                // 白名单未命中：对同一玩家名 ROI 做模板匹配兜底（命中→保留并清零连续不匹配计数）
+                if (!isAllowed
+                    && ShouldFallback(playerName, false)
+                    && TemplateMatchTryMatch(nameRoi, out var m2))
+                {
+                    isAllowed = true;
+                    _logger.LogInformation("[踢陌生人] 模板匹配兜底命中 [{Matched}]，保留玩家 [{Raw}]", m2, playerName);
+                }
                 var misses = StrangerKickDecisions.NextConsecutiveMiss(
                     consecutiveMissByIdentity.GetValueOrDefault(identityKey), isAllowed);
                 consecutiveMissByIdentity[identityKey] = misses;
