@@ -1223,72 +1223,71 @@
                                                Text="当前为监控端：仅编排本机动作，无 BGI 的节点自动跳过；任务中心等功能仅执行端可用。"/>
                                 </Border>
 
-                                <!-- 行 1：自动执行开关 + 延迟 + 执行按钮 -->
-                                <Grid Margin="0,0,0,8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <!-- 行 1：自动执行开关 + 延迟 + 执行按钮（WrapPanel 分组：窄窗口按组折行，「延迟 N 秒」组内不截断） -->
+                                <WrapPanel Margin="0,0,0,8">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
                                         <CheckBox IsChecked="{Binding FlowEnabled, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
-                                        <TextBlock Text="助手启动后自动执行启动流程" FontSize="13" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
-                                        <TextBlock Text="延迟" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="18,0,6,0"/>
+                                        <TextBlock Text="启动后自动执行流程" FontSize="13" Foreground="{DynamicResource White}" VerticalAlignment="Center"
+                                                   ToolTip="助手启动后延迟 N 秒自动执行下方启动流程"/>
+                                        <TextBlock Text="延迟" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="14,0,6,0"/>
                                         <TextBox Text="{Binding DelaySecondsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                 Style="{StaticResource GoldInput}" Width="52" Padding="6,2" HorizontalContentAlignment="Center"/>
+                                                 Style="{StaticResource GoldInput}" Width="44" Padding="6,2" HorizontalContentAlignment="Center"/>
                                         <TextBlock Text="秒" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="6,0,0,0"/>
                                     </StackPanel>
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="{DynamicResource Dim}"
-                                                   VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                        <Button Content="▶ 立即执行" Style="{DynamicResource BtnGold}" Padding="14,5"
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                                        <Button Content="▶ 立即执行" Style="{DynamicResource BtnGold}" Padding="12,4"
                                                 Command="{Binding RunNowCommand}" IsEnabled="{Binding IsNotRunning}"
                                                 ToolTip="手动执行一遍启动流程（用于调试）"/>
-                                        <Button Content="✕ 取消" Style="{DynamicResource BtnGhost}" Padding="10,5" Margin="6,0,0,0"
+                                        <Button Content="✕ 取消" Style="{DynamicResource BtnGhost}" Padding="10,4" Margin="6,0,0,0"
                                                 Command="{Binding CancelRunCommand}" IsEnabled="{Binding IsRunning}"/>
                                     </StackPanel>
-                                </Grid>
+                                    <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="{DynamicResource Dim}"
+                                               VerticalAlignment="Center"/>
+                                </WrapPanel>
 
-                                <!-- 行 2：开机自启动（复用设置页参数，双向实时同步） -->
-                                <StackPanel Orientation="Horizontal">
-                                    <CheckBox IsChecked="{Binding AutoLaunchOnBoot, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
-                                    <TextBlock Text="助手随系统开机自启动" FontSize="13" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
-                                    <ComboBox Width="140" Margin="12,0,0,0" VerticalAlignment="Center"
-                                              Style="{StaticResource GoldComboBox}"
-                                              SelectedIndex="{Binding AutoLaunchOnBootModeIndex, Mode=TwoWay}"
-                                              IsEnabled="{Binding AutoLaunchOnBoot}">
-                                        <ComboBoxItem Content="弹窗启动" Style="{StaticResource GoldComboItem}"/>
-                                        <ComboBoxItem Content="静默缩小到托盘" Style="{StaticResource GoldComboItem}"/>
-                                    </ComboBox>
-                                    <TextBlock Text="（与「设置 → 启动策略」是同一个开关，两边实时同步）" FontSize="10" Foreground="{DynamicResource Dim}"
-                                               VerticalAlignment="Center" Margin="10,0,0,0"/>
-                                </StackPanel>
-
-                                <!-- 行 3：方案管理（命名保存整份启动设置，改坏了可一键恢复；恢复前自动备份当前配置） -->
-                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                    <TextBlock Text="方案" FontSize="13" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
-                                    <TextBox Text="{Binding SchemeNameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                             Style="{StaticResource GoldInput}" Width="130" Margin="10,0,0,0"
-                                             ToolTip="给当前设置起个名字"/>
-                                    <Button Content="💾 保存方案" Style="{DynamicResource BtnGold}" Padding="12,4" Margin="8,0,0,0"
-                                            Command="{Binding SaveSchemeCommand}"
-                                            ToolTip="把当前整个启动设置（开关、延迟、全部节点与分支）存为一份方案；同名覆盖"/>
-                                    <ComboBox Width="190" Margin="16,0,0,0" VerticalAlignment="Center"
-                                              Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
-                                              ItemsSource="{Binding Schemes}" SelectedItem="{Binding SelectedScheme, Mode=TwoWay}"
-                                              ToolTip="选择一份已保存的方案">
-                                        <ComboBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding DisplayLine}"/>
-                                            </DataTemplate>
-                                        </ComboBox.ItemTemplate>
-                                    </ComboBox>
-                                    <Button Content="↩ 恢复" Style="{DynamicResource BtnGhost}" Padding="10,4" Margin="8,0,0,0"
-                                            Command="{Binding RestoreSchemeCommand}" IsEnabled="{Binding HasSelectedScheme}"
-                                            ToolTip="恢复选中的方案（恢复前会把当前配置自动备份为「恢复前自动备份」）"/>
-                                    <Button Content="✕ 删除" Style="{DynamicResource BtnGhost}" Padding="10,4" Margin="6,0,0,0"
-                                            Command="{Binding DeleteSchemeCommand}" IsEnabled="{Binding HasSelectedScheme}"
-                                            ToolTip="删除选中的方案（不影响当前正在使用的配置）"/>
-                                </StackPanel>
+                                <!-- 行 2：开机自启动 + 方案管理（单一 WrapPanel 流式排布：窗口宽时并入一行，窄时按组折行；
+                                     方案管理=命名保存整份启动设置，改坏了可一键恢复；恢复前自动备份当前配置） -->
+                                <WrapPanel>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                                        <CheckBox IsChecked="{Binding AutoLaunchOnBoot, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
+                                        <TextBlock Text="开机自启动" FontSize="12" Foreground="{DynamicResource White}" VerticalAlignment="Center"
+                                                   ToolTip="助手随系统开机自启动；与「设置 → 启动策略」是同一个开关，两边实时同步"/>
+                                        <ComboBox Width="112" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11"
+                                                  Style="{StaticResource GoldComboBox}"
+                                                  SelectedIndex="{Binding AutoLaunchOnBootModeIndex, Mode=TwoWay}"
+                                                  IsEnabled="{Binding AutoLaunchOnBoot}"
+                                                  ToolTip="开机启动方式（与「设置 → 启动策略」实时同步）">
+                                            <ComboBoxItem Content="弹窗启动" Style="{StaticResource GoldComboItem}"/>
+                                            <ComboBoxItem Content="静默缩小到托盘" Style="{StaticResource GoldComboItem}"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="方案" FontSize="12" Foreground="{DynamicResource White}" VerticalAlignment="Center"
+                                                   ToolTip="把当前整个启动设置（开关、延迟、全部节点与分支）存为一份命名方案，改坏了可一键恢复"/>
+                                        <TextBox Text="{Binding SchemeNameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource GoldInput}" Width="64" Margin="6,0,0,0"
+                                                 ToolTip="给当前设置起个名字"/>
+                                        <Button Content="💾 保存" Style="{DynamicResource BtnGold}" Padding="8,3" FontSize="11" Margin="6,0,0,0"
+                                                Command="{Binding SaveSchemeCommand}"
+                                                ToolTip="把当前整个启动设置（开关、延迟、全部节点与分支）存为一份方案；同名覆盖"/>
+                                        <ComboBox Width="120" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11"
+                                                  Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
+                                                  ItemsSource="{Binding Schemes}" SelectedItem="{Binding SelectedScheme, Mode=TwoWay}"
+                                                  ToolTip="选择一份已保存的方案">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding DisplayLine}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <Button Content="↩ 恢复" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="6,0,0,0"
+                                                Command="{Binding RestoreSchemeCommand}" IsEnabled="{Binding HasSelectedScheme}"
+                                                ToolTip="恢复选中的方案（恢复前会把当前配置自动备份为「恢复前自动备份」）"/>
+                                        <Button Content="✕ 删除" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="4,0,0,0"
+                                                Command="{Binding DeleteSchemeCommand}" IsEnabled="{Binding HasSelectedScheme}"
+                                                ToolTip="删除选中的方案（不影响当前正在使用的配置）"/>
+                                    </StackPanel>
+                                </WrapPanel>
                             </StackPanel>
                         </Border>
 

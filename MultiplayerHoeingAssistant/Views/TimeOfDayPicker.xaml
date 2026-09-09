@@ -13,14 +13,14 @@
             <ToggleButton.Template>
                 <ControlTemplate TargetType="ToggleButton">
                     <Border x:Name="Bd" Background="#2A1C1640" BorderBrush="#80D4AF37"
-                            BorderThickness="1" CornerRadius="7" Padding="10,4" SnapsToDevicePixels="True">
+                            BorderThickness="1" CornerRadius="7" Padding="5,2" SnapsToDevicePixels="True">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock x:Name="ValueText" FontSize="12" FontWeight="Medium"
+                            <TextBlock x:Name="ValueText" FontSize="10" FontWeight="Medium"
                                        Text="{Binding Value, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                        Foreground="#FFFFFF" VerticalAlignment="Center"
                                        FontFamily="Consolas"/>
-                            <TextBlock Text="▾" FontSize="10" Foreground="#D4AF37"
-                                       VerticalAlignment="Center" Margin="6,1,0,0"/>
+                            <TextBlock Text="▾" FontSize="8" Foreground="#D4AF37"
+                                       VerticalAlignment="Center" Margin="4,1,0,0"/>
                         </StackPanel>
                     </Border>
                     <ControlTemplate.Triggers>
