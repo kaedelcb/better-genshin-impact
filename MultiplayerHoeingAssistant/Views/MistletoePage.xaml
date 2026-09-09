@@ -5,6 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:MultiplayerHoeingAssistant.ViewModels"
              xmlns:models="clr-namespace:MultiplayerHoeingAssistant.Models"
+             xmlns:views="clr-namespace:MultiplayerHoeingAssistant.Views"
              d:DataContext="{d:DesignInstance Type=vm:MistletoeViewModel}"
              d:DesignWidth="700"
              mc:Ignorable="d">
@@ -358,7 +359,7 @@
                                                 </Style.Triggers>
                                             </Style>
                                         </Border.Style>
-                                        <TextBlock Text="是→左列 / 否→右列" FontSize="9" Foreground="{DynamicResource GoldText}"/>
+                                        <TextBlock Text="是·否 分支（宽时左右 / 窄时上下）" FontSize="9" Foreground="{DynamicResource GoldText}"/>
                                     </Border>
                                     <!-- 运行状态徽标（执行路径可视化）：颜色随状态变，执行中带呼吸闪烁 -->
                                     <Border CornerRadius="5" Padding="6,1" Margin="6,0,0,0" VerticalAlignment="Center">
@@ -420,10 +421,10 @@
                                     </Border>
                                 </StackPanel>
                                 <TextBlock Text="{Binding Summary}" FontSize="10.5" Foreground="{DynamicResource Dim}"
-                                           Margin="0,2,0,0" TextTrimming="CharacterEllipsis" MaxWidth="330"/>
+                                           Margin="0,2,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding Summary}"/>
                                 <!-- 运行态附注行（条件判断依据等，有内容才显示） -->
                                 <TextBlock Text="{Binding RunStateNote}" FontSize="10" Foreground="{DynamicResource GoldText}"
-                                           Margin="0,2,0,0" TextTrimming="CharacterEllipsis" MaxWidth="330">
+                                           Margin="0,2,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding RunStateNote}">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="Visibility" Value="Collapsed"/>
@@ -983,16 +984,13 @@
                     </StackPanel>
                 </Border>
 
-                <!-- ===== 条件分支区：是（左列）/ 否（右列）两条子链，横向并排；默认折叠，节点卡「▸ 分支」展开 ===== -->
-                <Grid Margin="18,0,0,0"
+                <!-- ===== 条件分支区：是 / 否 两条子链，AdaptiveBranchPanel 自适应排布：
+                     宽度够时左右并排（是左否右），嵌套太深或窗口太窄放不下时自动改上下堆叠（是上否下），右列不再被裁 ===== -->
+                <views:AdaptiveBranchPanel Margin="18,0,0,0" Gap="12"
                       Visibility="{Binding BranchAreaVisible, Converter={StaticResource BoolToVis}}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
 
                     <!-- 「是」子链 -->
-                    <Border Grid.Column="0" Margin="0,0,6,0" Padding="8,6"
+                    <Border Padding="8,6"
                             BorderBrush="#556FD8CE" BorderThickness="0,0,0,0" CornerRadius="8"
                             Background="#0F6FD8CE"
                             DataContext="{Binding TrueChain}"
@@ -1031,7 +1029,7 @@
                     </Border>
 
                     <!-- 「否」子链 -->
-                    <Border Grid.Column="1" Margin="6,0,0,0" Padding="8,6"
+                    <Border Padding="8,6"
                             CornerRadius="8" Background="#14E88A6F"
                             DataContext="{Binding FalseChain}"
                             AllowDrop="True" DragOver="Chain_DragOver" Drop="Chain_Drop">
@@ -1066,7 +1064,7 @@
                             <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ChainAddButton}"/>
                         </StackPanel>
                     </Border>
-                </Grid>
+                </views:AdaptiveBranchPanel>
 
                 <!-- ===== 定时触发器/电子狗的「触发执行」子链（单链，与分支子链同一套交互） ===== -->
                 <Grid Margin="18,0,0,0">
