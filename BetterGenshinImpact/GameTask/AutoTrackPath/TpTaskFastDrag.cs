@@ -84,6 +84,10 @@ public class TpTaskFastDrag
     // 外部调用方（脚本 API / 拖动恢复路径）不经 TpOnce 入口，恒为 0 → 行为不变。
     private int _tpRetryTimes = 0;
 
+    // 上一轮是否明确失败在切换地区识别阶段。仅在同一次 Tp 重试流程内保留，
+    // 下一次地区菜单确认弹出后消费，用于执行一次菜单下拉补救；其他传送失败不触发。
+    private bool _lastSwitchAreaFailed = false;
+
     // 拖动滑动窗口先验（teleport 拖动循环专用）：中心=predictedPoint，半径=预测移动距离*2，跟随拖动前移。
     // 非 null 时 GetBigMapCenterPoint 优先走此动态先验；匹配失败降级全图。与三层先验字段互斥使用。
     private Point2f? _dragPriorCenterGenshin = null;
@@ -1131,6 +1135,8 @@ public class TpTaskFastDrag
 
     public async Task<(double, double)> Tp(double tpX, double tpY, string mapName = "Teyvat", bool force = false, bool requireLoadingScreen = false, string? fastSyncId = null)
     {
+        _lastSwitchAreaFailed = false;
+
         // 仅当"点击后选项列表没有传送点(TpPointNotActivate)"时，下一次重试才把缩放拉到 5.5 稳定边沿识别。
         // 用专门标志而非笼统的 retryTimes>=1：后者会把"地图识别失败/亮度过低"等根本没点击过的失败也误判为
         // "点击后没出现传送点"，导致无关失败也拉 5.5。
@@ -2879,6 +2885,31 @@ public class TpTaskFastDrag
         TaskControl.Logger.LogDebug("[诊断-切换区域] 区域={Area} 重试轮={Retry} 菜单弹出检测={Detected} 耗时={Ms}ms",
             areaName, _tpRetryTimes, menuPopupDetected, menuPopupSw.ElapsedMilliseconds);
 
+        if (!menuPopupDetected)
+        {
+            _lastSwitchAreaFailed = true;
+        }
+        else if (_lastSwitchAreaFailed)
+        {
+            // 上一轮明确卡在切换地区识别阶段：菜单出现后执行一次下拉，让隐藏地区项进入可识别区域。
+            _lastSwitchAreaFailed = false;
+            GameCaptureRegion.GameRegion1080PPosMove(1900, 180);
+            await Delay(ApplyExtraDelay(100), ct);
+            Simulation.SendInput.Mouse.LeftButtonDown();
+            try
+            {
+                for (int y = 200; y <= 700; y += 100)
+                {
+                    GameCaptureRegion.GameRegion1080PPosMove(1900, y);
+                    await Delay(ApplyExtraDelay(100), ct);
+                }
+            }
+            finally
+            {
+                Simulation.SendInput.Mouse.LeftButtonUp();
+            }
+        }
+
         await Delay(ApplyExtraDelay(50), ct);
         // 异常重试轮：白色 X 出现≠地区格子内容渲染完成，再等多一拍（首传零开销）
         if (_tpRetryTimes > 0)
@@ -2929,6 +2960,7 @@ public class TpTaskFastDrag
         }
         if (matchRect == null)
         {
+            _lastSwitchAreaFailed = true;
             Logger.LogWarning("切换区域失败：{Country}", areaName);
             if (areaName == MapTypes.TheChasm.GetDescription() || areaName == MapTypes.Enkanomiya.GetDescription() || areaName == MapTypes.SeaOfBygoneEras.GetDescription() || areaName == MapTypes.AncientSacredMountain.GetDescription() || areaName == MapTypes.TempleOfSpace.GetDescription())
             {
