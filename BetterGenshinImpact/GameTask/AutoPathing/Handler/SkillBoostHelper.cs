@@ -12,6 +12,7 @@ using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoFight.Assets;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
+using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.AutoPathing.Model.Enum;
 using BetterGenshinImpact.GameTask.Common;
@@ -730,7 +731,7 @@ public partial class PathExecutor
                         return false;
                     }
                 }
-                catch (Exception e)
+                catch (Exception e) when (e is not (OperationCanceledException or RetryException or RetryNoCountException or NormalEndException or HandledException))
                 {
                     Logger.LogError(e, $"[{avatar.Name}] 赶路逻辑异常");
                     return false;
@@ -828,7 +829,7 @@ public partial class PathExecutor
                         return false;
                     }
                 }
-                catch (Exception e)
+                catch (Exception e) when (e is not (OperationCanceledException or RetryException or RetryNoCountException or NormalEndException or HandledException))
                 {
                     Logger.LogError(e, $"[{avatar.Name}] 赶路逻辑异常");
                     state.FlyingState = false;
@@ -1079,7 +1080,7 @@ public partial class PathExecutor
                         return false;
                     }
                 }
-                catch (Exception e)
+                catch (Exception e) when (e is not (OperationCanceledException or RetryException or RetryNoCountException or NormalEndException or HandledException))
                 {
                     Logger.LogError(e, $"[{avatar.Name}] 赶路逻辑异常");
                     state.FlyingState = false;
@@ -1650,7 +1651,8 @@ public partial class PathExecutor
             // Logger.LogInformation("[赶路调试] TryHurryOnAsync  exit: result={r}", result);
             return result;
         }
-        catch (Exception e)
+        // 重试和取消必须传到路线执行器，不能降级为继续原节点移动。
+        catch (Exception e) when (e is not (OperationCanceledException or RetryException or RetryNoCountException or NormalEndException or HandledException))
         {
             Logger.LogError(e, "赶路逻辑执行异常");
             return false;
