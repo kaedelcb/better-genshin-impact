@@ -704,7 +704,14 @@ internal sealed class InstanceRequestHandler
                             // 注意：仅 RunnerContext.Clear() 不够，taskName 还会通过 ??= 从 TaskContext.CurrentScriptProject 补残留。
                             BetterGenshinImpact.GameTask.RunnerContext.Instance.Clear();
                             BetterGenshinImpact.GameTask.TaskContext.Instance().CurrentScriptProject = null;
-                            await scriptService.RunMulti(projectsList, groupName);
+                            // [fix] 与手动 UI 启动（ScriptControlViewModel）对齐：IPC 下发路径也把当前配置组名
+                            // 写进 taskProgress，使 task.status 的 groupName 跟随每次配置组切换——
+                            // 否则联机锄地下发时 CurrentScriptGroupName 恒空/停留旧值，助手标签"配置组名"卡住。
+                            // 参考 OneDragonFlowViewModel.OnOneKeyExecute 对 taskProgress 的同样写法。
+                            var tp = new BetterGenshinImpact.GameTask.TaskProgress.TaskProgress();
+                            tp.CurrentScriptGroupName = groupName;
+                            BetterGenshinImpact.GameTask.RunnerContext.Instance.taskProgress = tp;
+                            await scriptService.RunMulti(projectsList, groupName, tp);
                             // task.start 是同步等待 RunMulti 完成的。RunMulti 结束后检查 WasCancelled：
                             // 若为 true（用户 F11 停止等取消了配置组），标记 configGroupCancelled，方法末尾返回 cancelled 状态，
                             // 助手端据此停止后续配置组。否则返回 success，助手端继续执行下一个配置组。
@@ -1487,7 +1494,12 @@ internal sealed class InstanceRequestHandler
                             {
                                 try
                                 {
-                                    await scriptService.RunMulti(projectsList, context.GroupName);
+                                    // [fix] 与 ExecuteTaskStartCoreAsync 对齐：恢复配置组路径也把配置组名写进
+                                    // taskProgress，保证 task.status 的 groupName 在 resume 后仍正确显示。
+                                    var tp = new BetterGenshinImpact.GameTask.TaskProgress.TaskProgress();
+                                    tp.CurrentScriptGroupName = context.GroupName;
+                                    BetterGenshinImpact.GameTask.RunnerContext.Instance.taskProgress = tp;
+                                    await scriptService.RunMulti(projectsList, context.GroupName, tp);
                                 }
                                 catch (Exception ex)
                                 {
