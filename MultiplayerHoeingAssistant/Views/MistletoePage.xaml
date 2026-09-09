@@ -1218,7 +1218,7 @@
                 </ScrollViewer>
             </Grid>
 
-            <!-- ======== Tab 1：任务中心（规划中） ======== -->
+            <!-- ======== Tab 1：任务中心（BGI 任务状态判断已落地，序列编排规划中） ======== -->
             <Grid>
                 <Grid.Style>
                     <Style TargetType="Grid">
@@ -1230,16 +1230,40 @@
                         </Style.Triggers>
                     </Style>
                 </Grid.Style>
-                <Border Style="{DynamicResource QuestCard}" VerticalAlignment="Top" Margin="0,20,0,0" Padding="24,20">
-                    <StackPanel>
-                        <TextBlock Text="⏳  任务中心 · 任务总序列指挥所" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"/>
-                        <Border CornerRadius="5" Padding="8,2" Background="#299C97C0" HorizontalAlignment="Left" Margin="0,8,0,10">
-                            <TextBlock Text="规划中" FontSize="10" Foreground="{DynamicResource Dim}"/>
-                        </Border>
-                        <TextBlock FontSize="12" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" LineHeight="20"
-                                   Text="构想：编排 BGI 的任务总序列——做什么任务、什么顺序、什么循环策略。沿用启动中心的树形分支节点交互，节点换成配置组/一条龙/JS 脚本。启动中心负责环境准备，跑完经「进入任务中心执行」节点交接到这里。不取代 BGI 原生调度器，只做指挥；循环靠任务生命周期事件（切片 7 已铺好）链式推进。详见仓库根目录《槲寄生调度器总计划》§3。"/>
-                    </StackPanel>
-                </Border>
+                <StackPanel>
+                    <!-- BGI 任务状态判断卡片（读 MainViewModel 状态快照，2s 刷新） -->
+                    <Border Style="{DynamicResource QuestCard}" VerticalAlignment="Top" Margin="0,20,0,0" Padding="24,20">
+                        <StackPanel>
+                            <TextBlock Text="📡  BGI 任务状态" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"/>
+                            <Border CornerRadius="5" Padding="8,2" HorizontalAlignment="Left" Margin="0,10,0,8">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#299C97C0"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding BgiTaskRunning}" Value="True">
+                                                <Setter Property="Background" Value="#2948C87E"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="{Binding BgiTaskStatusText}" FontSize="10" Foreground="{DynamicResource Dim}"/>
+                            </Border>
+                            <TextBlock FontSize="12" Foreground="{DynamicResource Dim}" TextWrapping="Wrap">
+                                <Run Text="当前任务："/><Run Text="{Binding BgiCurrentTaskDisplay}"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{DynamicResource QuestCard}" VerticalAlignment="Top" Margin="0,12,0,0" Padding="24,20">
+                        <StackPanel>
+                            <TextBlock Text="⏳  任务中心 · 任务总序列指挥所" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"/>
+                            <Border CornerRadius="5" Padding="8,2" Background="#299C97C0" HorizontalAlignment="Left" Margin="0,8,0,10">
+                                <TextBlock Text="规划中" FontSize="10" Foreground="{DynamicResource Dim}"/>
+                            </Border>
+                            <TextBlock FontSize="12" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" LineHeight="20"
+                                       Text="构想：编排 BGI 的任务总序列——做什么任务、什么顺序、什么循环策略。沿用启动中心的树形分支节点交互，节点换成配置组/一条龙/JS 脚本。启动中心负责环境准备，跑完经「进入任务中心执行」节点交接到这里（交接时已会判断并记录上方这份 BGI 任务状态）。不取代 BGI 原生调度器，只做指挥；循环靠任务生命周期事件（切片 7 已铺好）链式推进。详见仓库根目录《槲寄生调度器总计划》§3。"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
             </Grid>
 
             <!-- ======== Tab 2：执行策略（规划中） ======== -->

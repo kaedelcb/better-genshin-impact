@@ -8,7 +8,7 @@ using MultiplayerHoeingAssistant.Views;
 namespace MultiplayerHoeingAssistant.ViewModels;
 
 /// <summary>
-/// 槲寄生 · 调度器主 ViewModel（当前落地「启动中心」，其余三个子页为规划中占位）。
+/// 槲寄生 · 调度器主 ViewModel（当前落地「启动中心」与任务中心的 BGI 任务状态判断，其余子页为规划中占位）。
 /// 手写 INPC（继承 ViewModelBase），构造注入 MainViewModel 引用（同 DodocoViewModel 模式）。
 ///
 /// 启动中心定位：进入任务中心前的环境准备编排（树形分支流程：条件节点分出「是/否」两条子链，
@@ -49,6 +49,13 @@ public sealed class MistletoeViewModel : ViewModelBase
             SaveNow();
         };
 
+        // 任务中心「BGI 任务状态」卡片：2s 一拍读 MainViewModel 的 10s 状态快照缓存刷新绑定。
+        // 快照每轮换新实例且无 PropertyChanged 通知（LatestLocalStatus 为普通自动属性），故用定时器拉取，不新起 IPC。
+        _bgiStatusRefresh = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _bgiStatusRefresh.Tick += (_, _) => RefreshBgiTaskStatus();
+        _bgiStatusRefresh.Start();
+        RefreshBgiTaskStatus();
+
         // 开机自启动两个参数直接代理 MainViewModel（与设置页同一份），
         // 设置页改完后经 PropertyChanged 转发刷新本页绑定（2026-09-08 修复跨页面显示陈旧）。
         _mainVm.PropertyChanged += (_, e) =>
@@ -82,6 +89,61 @@ public sealed class MistletoeViewModel : ViewModelBase
 
     /// <summary>返回耕地机主页（同 DodocoViewModel.BackCommand）。</summary>
     public RelayCommand BackCommand => new(_ => _mainVm.CurrentPage = AppPage.Home);
+
+    // ================= 任务中心：BGI 任务状态判断（只读 LatestLocalStatus 快照，2s 定时拉取） =================
+
+    /// <summary>状态卡片刷新器（快照每轮为新实例且无变更通知，只能拉不能订）。</summary>
+    private readonly DispatcherTimer _bgiStatusRefresh;
+
+    private bool _bgiTaskRunning;
+    /// <summary>BGI 当前是否有任务在跑。判断口径用快照 TaskRunning，不用任务名非空——任务停止后任务名有残留窗口。</summary>
+    public bool BgiTaskRunning
+    {
+        get => _bgiTaskRunning;
+        private set => SetProperty(ref _bgiTaskRunning, value);
+    }
+
+    private string _bgiTaskStatusText = "暂无状态（等待 BGI 首次状态上报）";
+    /// <summary>任务中心状态行文字。</summary>
+    public string BgiTaskStatusText
+    {
+        get => _bgiTaskStatusText;
+        private set => SetProperty(ref _bgiTaskStatusText, value);
+    }
+
+    private string _bgiCurrentTaskDisplay = "—";
+    /// <summary>当前任务显示（配置组 · 任务名/线路，与主页 TaskDisplayText 同拼接口径）。</summary>
+    public string BgiCurrentTaskDisplay
+    {
+        get => _bgiCurrentTaskDisplay;
+        private set => SetProperty(ref _bgiCurrentTaskDisplay, value);
+    }
+
+    /// <summary>读 MainViewModel 最近一次状态快照刷新绑定属性（快照为只读缓存，不新起 IPC 轮询）。</summary>
+    private void RefreshBgiTaskStatus()
+    {
+        var s = _mainVm.LatestLocalStatus;
+        if (s == null)
+        {
+            BgiTaskRunning = false;
+            BgiTaskStatusText = "暂无状态（等待 BGI 首次状态上报）";
+            BgiCurrentTaskDisplay = "—";
+            return;
+        }
+        BgiTaskRunning = s.TaskRunning;
+        BgiTaskStatusText = s.TaskRunning ? "BGI 任务运行中" : "BGI 空闲（无任务运行）";
+        BgiCurrentTaskDisplay = s.TaskRunning ? ComposeTaskDisplay(s) : "—";
+    }
+
+    /// <summary>拼接任务显示文本：配置组 · 任务名 · 线路（空段跳过；联机锄地时线路优先于任务名）。与 ControlRoom 玩家卡片 TaskDisplayText 同口径。</summary>
+    private static string ComposeTaskDisplay(ControlStatus s)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrEmpty(s.CurrentTaskGroupName)) parts.Add(s.CurrentTaskGroupName);
+        if (!string.IsNullOrEmpty(s.CurrentTaskName) && string.IsNullOrEmpty(s.CurrentRouteDisplay)) parts.Add(s.CurrentTaskName);
+        if (!string.IsNullOrEmpty(s.CurrentRouteDisplay)) parts.Add(s.CurrentRouteDisplay);
+        return parts.Count > 0 ? string.Join(" · ", parts) : s.CurrentTaskName ?? "任务执行中";
+    }
 
     // ================= 流程总开关与参数 =================
 
@@ -450,11 +512,18 @@ public sealed class MistletoeViewModel : ViewModelBase
     }
 
     /// <summary>「进入任务中心执行」节点的交接实现。任务中心（总计划 §3）落地前为占位：
-    /// 记日志并返回，流程继续后续节点。落地后在此驱动任务序列。
+    /// 先判断并记录 BGI 当前任务状态与任务名（读 LatestLocalStatus 快照，同任务中心状态卡片口径），
+    /// 流程继续后续节点。落地后在此驱动任务序列。
     /// </summary>
     private Task EnterTaskCenterAsync()
     {
-        _mainVm.AddLog("[槲寄生] 任务中心尚未落地（规划中），本次交接为空转——后续节点照常继续");
+        var s = _mainVm.LatestLocalStatus;
+        var judgment = s == null
+            ? "BGI 状态未知（尚无状态快照）"
+            : s.TaskRunning
+                ? $"BGI 正在运行任务「{ComposeTaskDisplay(s)}」"
+                : "BGI 当前空闲";
+        _mainVm.AddLog($"[槲寄生] 任务中心交接判断：{judgment}。任务中心尚未落地（规划中），本次交接为空转——后续节点照常继续");
         return Task.CompletedTask;
     }
 
