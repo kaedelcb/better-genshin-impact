@@ -391,9 +391,9 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- 工具栏 -->
+                <!-- 工具栏（WrapPanel：窄窗口自动折行，不出横向滚动条/不裁剪） -->
                 <Border Grid.Row="0" Style="{DynamicResource QuestCard}" Padding="10,8" Margin="0,0,0,8">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <WrapPanel VerticalAlignment="Center">
                         <TextBlock Text="来源" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="0,0,6,0"/>
                         <ComboBox Width="130" ItemsSource="{Binding LogSources}" SelectedItem="{Binding SelectedSource}"
                                   DisplayMemberPath="Label"
@@ -437,7 +437,7 @@
                         <TextBlock Text="监控模式：本机无日志/截图可共享，共享设置已隐藏" FontSize="10" Foreground="{DynamicResource Dim}"
                                    VerticalAlignment="Center" Margin="12,0,0,0"
                                    Visibility="{Binding IsObserverMode, Converter={StaticResource BoolToVis}}"/>
-                    </StackPanel>
+                    </WrapPanel>
                 </Border>
 
                 <!-- 日志流（只读 RichTextBox：像文本编辑器一样跨行拖选/复制；行由代码后置按级别上色渲染） -->
@@ -643,8 +643,8 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <!-- 工具栏行1：时间范围搜索 / 关键字搜索 -->
-                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6" VerticalAlignment="Center">
+                        <!-- 工具栏行1：时间范围搜索 / 关键字搜索（WrapPanel：窄窗口自动折行） -->
+                        <WrapPanel Grid.Row="0" Margin="0,0,0,6" VerticalAlignment="Center">
                             <TextBlock Text="时间范围" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
                             <views:TimeOfDayPicker x:Name="StartTimePicker" Margin="6,0,2,0"
                                                    Value="{Binding Browser.StartTimeText, Mode=TwoWay}"
@@ -668,10 +668,10 @@
                                       ToolTip="不勾选=普通关键字匹配（忽略大小写）；勾选=按正则表达式匹配（如 超时|失败）"/>
                             <Button Content="按关键字搜索" Style="{DynamicResource BtnGhost}" Padding="10,4"
                                     Command="{Binding Browser.SearchCommand}"/>
-                        </StackPanel>
+                        </WrapPanel>
 
-                        <!-- 工具栏行2：级别筛选（多选） + 导出 + 使用提示 -->
-                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
+                        <!-- 工具栏行2：级别筛选（多选） + 导出 + 使用提示（WrapPanel：窄窗口自动折行） -->
+                        <WrapPanel Grid.Row="1" Margin="0,0,0,8" VerticalAlignment="Center">
                             <TextBlock Text="级别" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
                             <CheckBox Content="错误" IsChecked="{Binding Browser.ShowError}"
                                       Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="6,0,0,0"
@@ -693,7 +693,7 @@
                                     ToolTip="有搜索结果时导出命中行，否则导出当前视图（含级别筛选）；支持 .log / .csv"/>
                             <TextBlock Text="整文件一次加载 · 自由滚动不分块 · 单击选行，Ctrl/Shift 点选多行后 Ctrl+C 复制 · 点搜索结果精确定位"
                                        FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
-                        </StackPanel>
+                        </WrapPanel>
 
                         <!-- 内容区（虚拟化 ListBox：整文件全量在内存，像记事本一样自由滚动不分块加载；
                              行号+级别上色；搜索关键字鎏金高亮；Extended 多选 + Ctrl+C 复制；不换行保持行语义） -->
@@ -866,9 +866,13 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <Grid Grid.Row="0" Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
                             <TextBlock Text="监控规则" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource White}"
                                        VerticalAlignment="Center"/>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                 <CheckBox Content="事发录像" IsChecked="{Binding IncidentSnapshotEnabled, Mode=TwoWay}"
                                           Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,4,0"
                                           ToolTip="开启后本机 BGI 运行期间后台按设定间隔截帧进环形缓冲（纯本地不上传）；命中标了「存快照」的规则时保存事发前后画面+触发日志到 log/incidents/（间隔/缓存/前后秒数见 ⚙ 设置）"/>
@@ -929,14 +933,14 @@
                             <TextBlock Text="规则 = 帮你盯日志：日志里出现「匹配内容」（且级别达到最低级别）就记到右侧异常记录，勾选命中告警则同时红点+响铃"
                                        FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,0,0,6"/>
                             <TextBlock Text="① 规则名称（可选，留空则自动用匹配内容命名）" FontSize="10"
-                                       Foreground="{DynamicResource Dim}" Margin="0,0,0,2"/>
+                                       Foreground="{DynamicResource Dim}" Margin="0,0,0,2" TextWrapping="Wrap"/>
                             <TextBox Style="{StaticResource GoldInput}" Margin="0,0,0,6"
                                      Text="{Binding Watch.NewRuleName, UpdateSourceTrigger=PropertyChanged}"/>
                             <TextBlock Text="② 匹配内容（要盯住的文字，如：超时、领取失败；留空 = 只看级别）" FontSize="10"
-                                       Foreground="{DynamicResource Dim}" Margin="0,0,0,2"/>
+                                       Foreground="{DynamicResource Dim}" Margin="0,0,0,2" TextWrapping="Wrap"/>
                             <TextBox Style="{StaticResource GoldInput}" Margin="0,0,0,4"
                                      Text="{Binding Watch.NewRulePattern, UpdateSourceTrigger=PropertyChanged}"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6" VerticalAlignment="Center">
+                            <WrapPanel Margin="0,0,0,6">
                                 <CheckBox Content="正则表达式" IsChecked="{Binding Watch.NewRuleIsRegex}"
                                           Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,10,0"
                                           ToolTip="不勾选=上面的匹配内容按普通关键字匹配（忽略大小写）；勾选=按正则表达式匹配"/>
@@ -956,7 +960,7 @@
                                 <CheckBox Content="存快照" IsChecked="{Binding Watch.NewRuleSnapshot}"
                                           Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="10,0,0,0"
                                           ToolTip="勾选：命中时保存事发前后画面 + 触发日志（需开启「事发录像」总开关；前后秒数见 ⚙ 设置）"/>
-                            </StackPanel>
+                            </WrapPanel>
                             <TextBlock Text="示例：匹配内容填「超时」+ 最低级别 INF = 日志出现超时就记录；匹配内容留空 + 最低级别 ERR = 所有错误都记录"
                                        FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,0,0,6"/>
                             <Grid>
@@ -1356,7 +1360,7 @@
 
                 <!-- 工具栏 -->
                 <Border Grid.Row="0" Style="{DynamicResource QuestCard}" Padding="10,8" Margin="0,0,0,8">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <WrapPanel>
                         <TextBlock Text="画面源" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="0,0,6,0"/>
                         <ComboBox Width="150" ItemsSource="{Binding Monitor.MonitorOptions}" SelectedItem="{Binding Monitor.SelectedMonitor}"
                                   DisplayMemberPath="Label"
@@ -1400,7 +1404,7 @@
                         </ComboBox>
                         <TextBlock Text="{Binding Monitor.PrivacyNote}" FontSize="10" Foreground="{DynamicResource Dim}"
                                    VerticalAlignment="Center"/>
-                    </StackPanel>
+                    </WrapPanel>
                 </Border>
 
                 <!-- 大图 -->
@@ -1439,10 +1443,25 @@
 
                 <!-- 状态行 -->
                 <Grid Grid.Row="2" Margin="2,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
                     <TextBlock Text="{Binding Monitor.StatusText}" FontSize="11" Foreground="{DynamicResource Dim}"
-                               VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding Monitor.CurrentFrameInfo}" FontSize="11" Foreground="{DynamicResource Gold}"
-                               HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                               VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Column="1" Text="{Binding Monitor.CurrentFrameInfo}" FontSize="11" Foreground="{DynamicResource Gold}"
+                               HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Visible"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Monitor.HasFrame}" Value="False">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </Grid>
 
                 <!-- 历史帧缩略图条（点击切换查看，环形 10 帧） -->

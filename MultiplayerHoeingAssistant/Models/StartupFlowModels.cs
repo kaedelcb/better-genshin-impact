@@ -107,7 +107,8 @@ public class StartupStep
     [JsonPropertyName("falseSteps")]
     public List<StartupStep> FalseSteps { get; set; } = [];
 
-    /// <summary>到点执行的子链（timerTrigger 用；流程跑到该节点时挂载定时器，到点执行此链）。</summary>
+    /// <summary>到点执行的子链（timerTrigger 用；流程跑到该节点时挂载定时器，到点执行此链）。
+    /// watchdog 复用此字段作为「触发执行」子链（条件由不成立变成立时执行）。</summary>
     [JsonPropertyName("fireSteps")]
     public List<StartupStep> FireSteps { get; set; } = [];
 
@@ -167,6 +168,29 @@ public class StartupStep
     [JsonPropertyName("repeatDaily")]
     public bool RepeatDaily { get; set; } = false;
 
+    // ===== 电子狗参数（watchdog 用；被盯条件的参数复用上方的条件参数字段） =====
+
+    /// <summary>被盯的条件类型（watchdog 用），取值限 <see cref="StartupStepKinds.WatchableKinds"/>。</summary>
+    [JsonPropertyName("watchKind")]
+    public string WatchKind { get; set; } = StartupStepKinds.BgiTaskRunning;
+
+    /// <summary>检测间隔秒数（watchdog 用；下限 1 秒）。防抖按 WatchConfirmSeconds×WatchConfirmTimes 配置复核，
+    /// 等效确认延迟 ≈ 间隔（发现事件）+ 复核秒数×复核次数（默认 1s×1 ≈ 1 秒）。</summary>
+    [JsonPropertyName("watchIntervalSeconds")]
+    public int WatchIntervalSeconds { get; set; } = 30;
+
+    /// <summary>是否重复触发（watchdog 用）：true=条件每次由不成立变成立都触发；false=触发一次后自动撤下。</summary>
+    [JsonPropertyName("watchRepeat")]
+    public bool WatchRepeat { get; set; } = true;
+
+    /// <summary>防抖复核的间隔秒数（watchdog 用）：发现新状态后每隔这么久复核一轮。默认 1 秒。</summary>
+    [JsonPropertyName("watchConfirmSeconds")]
+    public int WatchConfirmSeconds { get; set; } = 1;
+
+    /// <summary>防抖复核的次数（watchdog 用）：全部复核轮一致为新状态才认定翻转。默认 1 次。</summary>
+    [JsonPropertyName("watchConfirmTimes")]
+    public int WatchConfirmTimes { get; set; } = 1;
+
     /// <summary>启动前先关闭 BGI（startBgi 用）：已在运行的 BGI 不会因新参数自动重启（不抢占策略），
     /// 勾选后先强杀本会话 BGI 再带参数启动，让参数生效。</summary>
     [JsonPropertyName("killBeforeStart")]
@@ -214,6 +238,9 @@ public static class StartupStepKinds
     public const string EndFlow = "endFlow";
     /// <summary>定时触发器：流程跑到此节点时挂载定时器，到指定时间执行 FireSteps 子链；定时中页面显示状态、可取消。</summary>
     public const string TimerTrigger = "timerTrigger";
+    /// <summary>电子狗：流程跑到此节点时挂载循环检测，每 N 秒求值一次被盯条件，
+    /// 条件由不成立变成立（边沿）时执行 FireSteps 子链；盯梢中页面显示状态、可查看流程、可取消。</summary>
+    public const string Watchdog = "watchdog";
 
     // ---- 旧版遗留（不在目录中，Runner 保留执行分支兼容旧配置） ----
     public const string StartGroup = "startGroup";
@@ -243,8 +270,16 @@ public static class StartupStepKinds
         new(Wait, "action", "等待", "▶", "流程内延时 N 秒（等程序就绪时常用）"),
         new(EnterTaskCenter, "action", "进入任务中心执行", "➤", "环境准备完毕，交接给任务中心执行任务序列（任务中心规划中，当前为占位节点）"),
         new(TimerTrigger, "action", "定时触发器", "⏰", "挂载定时器，到指定时间执行「到点执行」子链；定时中显示状态、可随时取消"),
+        new(Watchdog, "action", "电子狗", "🐕", "挂载循环检测：每 N 秒求值一次被盯条件，条件由不成立变成立时执行「触发执行」子链；新状态经复核（默认 1 秒×1 次，可配置）一致才认定翻转（防抖，不随间隔放大），挂载时已成立则复核确认后触发一次"),
         new(EndFlow, "action", "结束流程", "■", "立即终止整条启动流程（常用于「否」分支收尾）"),
     ];
+
+    /// <summary>电子狗可盯的条件类型（数组顺序即编辑器下拉框顺序）。
+    /// timeRange/weekday 已由定时触发器与星期条件覆盖，manualConfirm 是交互弹窗、不适合无人值守循环。</summary>
+    public static readonly string[] WatchableKinds = [BgiRunning, GameRunning, ProcessRunning, BgiTaskRunning, BgiTaskName];
+
+    /// <summary>该类型键是否可作为电子狗的被盯条件。</summary>
+    public static bool IsWatchableKind(string kind) => WatchableKinds.Contains(kind);
 
     public static KindInfo? Find(string kind) => All.FirstOrDefault(k => k.Key == kind);
 
@@ -280,6 +315,12 @@ public static class StartupStepKinds
                 break;
             case TimerTrigger:
                 step.TriggerTime = "08:00";
+                break;
+            case Watchdog:
+                step.WatchKind = BgiTaskRunning;
+                step.ExpectRunning = true;
+                step.WatchIntervalSeconds = 30;
+                step.WatchRepeat = true;
                 break;
         }
         return step;

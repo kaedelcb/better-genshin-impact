@@ -23,6 +23,8 @@ public sealed class StartupFlowRunner
     private readonly Func<Task> _enterTaskCenter;
     /// <summary>定时触发器挂载入口（由宿主 VM 注入：负责登记定时状态、到点执行 FireSteps、取消）。</summary>
     private readonly Action<StartupStep> _armTimer;
+    /// <summary>电子狗挂载入口（由宿主 VM 注入：负责登记盯梢状态、边沿触发执行 FireSteps、取消）。</summary>
+    private readonly Action<StartupStep> _armWatchdog;
     /// <summary>人工确认弹窗入口（由宿主 VM 注入：UI 线程弹窗，返回 (是/否, 判断依据描述)）。</summary>
     private readonly Func<StartupStep, CancellationToken, Task<(bool passed, string desc)>> _confirmHandler;
     /// <summary>BGI 任务状态快照提供方（bgiTaskRunning/bgiTaskName 条件用；由宿主注入，读 MainViewModel 的 10s 状态缓存，不新起 IPC）。</summary>
@@ -44,7 +46,8 @@ public sealed class StartupFlowRunner
         Action<StartupStep> armTimer,
         Func<StartupStep, CancellationToken, Task<(bool passed, string desc)>> confirmHandler,
         Action<string> log,
-        Func<ControlStatus?> statusProvider)
+        Func<ControlStatus?> statusProvider,
+        Action<StartupStep> armWatchdog)
     {
         _bgiExecutor = bgiExecutor;
         _enterTaskCenter = enterTaskCenter;
@@ -52,6 +55,7 @@ public sealed class StartupFlowRunner
         _confirmHandler = confirmHandler;
         _log = log;
         _statusProvider = statusProvider;
+        _armWatchdog = armWatchdog;
     }
 
     /// <summary>「结束流程」节点抛出的内部控制流异常（逐层展开到顶层捕获，终止整条流程）。</summary>
@@ -101,10 +105,10 @@ public sealed class StartupFlowRunner
             if (step.NodeType == "condition")
             {
                 Report(step, NodeRunState.Running);
-                // 人工确认是异步交互（UI 弹窗），其余条件是同步求值
+                // 人工确认是异步交互（UI 弹窗）；其余条件走带防抖的求值（外部状态类条件需稳定性确认）
                 var (passed, desc) = step.Kind == StartupStepKinds.ManualConfirm
                     ? await _confirmHandler(step, ct)
-                    : EvaluateCondition(step, _statusProvider());
+                    : await EvaluateConditionStableAsync(step, ct);
                 _log($"[槲寄生] {indent}条件「{display}」：{desc} → {(passed ? "是" : "否")}");
                 Report(step, passed ? NodeRunState.CondTrue : NodeRunState.CondFalse, desc);
                 var branch = passed ? step.TrueSteps : step.FalseSteps;
@@ -157,6 +161,36 @@ public sealed class StartupFlowRunner
     }
 
     // ================= 条件求值 =================
+
+    /// <summary>稳定性确认的读取间隔（防抖窗口）。</summary>
+    private const int StabilityConfirmDelayMs = 1500;
+
+    /// <summary>需要稳定性确认的条件类型：读外部进程/BGI 状态，可能撞上进程重启、任务切换间隙的中间态。
+    /// timeRange/weekday 是本机确定性判断、manualConfirm 是人工交互，不在此列。</summary>
+    private static bool NeedsStabilityConfirm(string kind) => kind is
+        StartupStepKinds.BgiRunning or StartupStepKinds.GameRunning or StartupStepKinds.ProcessRunning
+        or StartupStepKinds.BgiTaskRunning or StartupStepKinds.BgiTaskName;
+
+    /// <summary>
+    /// 带防抖的条件求值（容错）：外部状态类条件连续读取两次，一致才出结果；不一致再读第三次，
+    /// 以第三次为准（bool 三次读取中第三次必与前两次之一相同，即多数派）。全部读取依据写入 desc 留痕。
+    /// 代价：外部状态类条件固定多 1.5s（不稳定时 3s）延迟，换取不被中间态误导分支走向。
+    /// </summary>
+    private async Task<(bool passed, string desc)> EvaluateConditionStableAsync(StartupStep step, CancellationToken ct)
+    {
+        if (!NeedsStabilityConfirm(step.Kind))
+            return EvaluateCondition(step, _statusProvider());
+
+        var first = EvaluateCondition(step, _statusProvider());
+        await Task.Delay(StabilityConfirmDelayMs, ct);
+        var second = EvaluateCondition(step, _statusProvider());
+        if (first.passed == second.passed)
+            return (second.passed, $"{second.desc}（二次确认一致）");
+
+        await Task.Delay(StabilityConfirmDelayMs, ct);
+        var third = EvaluateCondition(step, _statusProvider());
+        return (third.passed, $"状态不稳定（{first.passed}→{second.passed}→{third.passed}），以第三次读取为准：{third.desc}");
+    }
 
     /// <summary>求值条件节点，返回 (是否通过, 人类可读的判断依据)。
     /// status 为 BGI 任务状态快照（bgiTaskRunning/bgiTaskName 用），null=无快照（视为未在跑任务，依据中留痕）。</summary>
@@ -280,6 +314,21 @@ public sealed class StartupFlowRunner
                         return false;
                     }
                     _armTimer(step);
+                    return true;
+                }
+                case StartupStepKinds.Watchdog:
+                {
+                    if (!StartupStepKinds.IsWatchableKind(step.WatchKind))
+                    {
+                        _log($"[槲寄生] {indent}电子狗「{display}」的被盯条件类型无效（{step.WatchKind}），跳过");
+                        return false;
+                    }
+                    if (step.FireSteps.Count == 0)
+                    {
+                        _log($"[槲寄生] {indent}电子狗「{display}」的「触发执行」链为空，不挂载");
+                        return false;
+                    }
+                    _armWatchdog(step);
                     return true;
                 }
                 // 旧版遗留节点（目录已移除，旧配置仍可执行）

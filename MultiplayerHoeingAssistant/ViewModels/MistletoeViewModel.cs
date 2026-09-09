@@ -37,11 +37,12 @@ public sealed class MistletoeViewModel : ViewModelBase
         _schemeStore = new StartupFlowSchemeStore();
         _config = _store.Load();
         _runner = new StartupFlowRunner(mainVm.ExecuteLocalBgiCommandAsync, EnterTaskCenterAsync, ArmTimer, ConfirmHandlerAsync, mainVm.AddLog,
-            () => mainVm.LatestLocalStatus);
+            () => mainVm.LatestLocalStatus, ArmWatchdog);
         _runner.NodeStateSink = OnNodeStateReported;
         RootChain = new StepChainViewModel(_config.Steps, this, parentCondition: null, branchName: "主流程");
         foreach (var s in _schemeStore.Load()) Schemes.Add(new SchemeItemViewModel(s));
         ArmedTimers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasArmedTimers));
+        ArmedWatchdogs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasArmedWatchdogs));
 
         _saveDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _saveDebounce.Tick += (_, _) =>
@@ -612,6 +613,175 @@ public sealed class MistletoeViewModel : ViewModelBase
         timer.Cts.Cancel();
     }
 
+    // ================= 电子狗（盯梢中的循环检测列表） =================
+
+    /// <summary>当前盯梢中的电子狗（运行态，不持久化；助手重启后需流程重跑才会重新挂载）。</summary>
+    public ObservableCollection<ArmedWatchdogViewModel> ArmedWatchdogs { get; } = [];
+
+    public bool HasArmedWatchdogs => ArmedWatchdogs.Count > 0;
+
+    /// <summary>电子狗节点执行到此：校验参数后挂载循环检测（Runner 注入的委托）。</summary>
+    private void ArmWatchdog(StartupStep step)
+    {
+        var interval = Math.Max(1, step.WatchIntervalSeconds);
+        var dog = new ArmedWatchdogViewModel(step, interval, this);
+        RunOnUi(() => ArmedWatchdogs.Add(dog));
+        _mainVm.AddLog($"[槲寄生] 电子狗「{StartupFlowRunner.DisplayName(step, 0)}」已挂载：每 {interval} 秒盯「{WatchKindDesc(step)}」，成立时执行「触发执行」链（{step.FireSteps.Count} 个节点，{(step.WatchRepeat ? "重复触发" : "触发一次后撤下")}，防抖复核 {Math.Clamp(step.WatchConfirmSeconds, 1, 60)}s×{Math.Clamp(step.WatchConfirmTimes, 1, 10)}）");
+        _ = RunWatchdogAsync(dog);
+    }
+
+    /// <summary>被盯条件的人类可读描述（挂载日志、卡片摘要与列表状态行共用口径）。</summary>
+    internal static string WatchKindDesc(StartupStep step) => step.WatchKind switch
+    {
+        StartupStepKinds.BgiRunning => $"BGI 进程{(step.ExpectRunning ? "在跑" : "不在")}",
+        StartupStepKinds.GameRunning => $"游戏进程{(step.ExpectRunning ? "在跑" : "不在")}",
+        StartupStepKinds.ProcessRunning => $"进程 {step.ProcessName} {(step.ExpectRunning ? "存在" : "不存在")}",
+        StartupStepKinds.BgiTaskRunning => step.ExpectRunning ? "BGI 有任务在跑" : "BGI 空闲",
+        StartupStepKinds.BgiTaskName => $"当前任务名包含「{step.TaskName}」",
+        _ => step.WatchKind,
+    };
+
+    /// <summary>把电子狗节点的扁平参数拼成一个临时条件节点，复用 Runner 的条件求值（与流程内条件节点同一判断口径）。</summary>
+    private static StartupStep BuildWatchCondition(StartupStep step) => new()
+    {
+        Kind = step.WatchKind,
+        ExpectRunning = step.ExpectRunning,
+        ProcessName = step.ProcessName,
+        TaskName = step.TaskName,
+        TimeStart = step.TimeStart,
+        TimeEnd = step.TimeEnd,
+        Weekdays = [.. step.Weekdays],
+    };
+
+    /// <summary>
+    /// 电子狗循环：每 interval 秒求值一次被盯条件，确认成立的边沿（不成立→成立）触发执行 FireSteps。
+    /// 防抖（节点可配，WatchConfirmSeconds×WatchConfirmTimes，默认 1s×1）：发现与已确认状态不同的读数时，
+    /// 按配置间隔复核 N 轮，全部一致为新状态才认定翻转（两个方向都防抖）；任一轮回到原状态或快照缺失
+    /// 都放弃本次翻转、保持原状态——确认窗口不随检测间隔放大，
+    /// 防 BGI 任务切换间隙的中间态造成假触发/假复位。
+    /// 容错：快照缺失（BGI 未连接/未上报）的轮次按「未知」处理——不翻转、保持原状态，
+    /// 避免断连-重连被误判成一次边沿；触发链执行异常只记日志，狗继续盯。
+    /// 基线按「不成立」起算：挂载时条件已成立，复核确认后触发一次（发现即触发）。
+    /// </summary>
+    private async Task RunWatchdogAsync(ArmedWatchdogViewModel dog)
+    {
+        var step = dog.Step;
+        var confirmSeconds = Math.Clamp(step.WatchConfirmSeconds, 1, 60);
+        var confirmTimes = Math.Clamp(step.WatchConfirmTimes, 1, 10);
+        var confirmed = false; // 已确认状态
+        try
+        {
+            while (!dog.Cts.Token.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(dog.IntervalSeconds), dog.Cts.Token);
+
+                var (reading, desc) = ReadWatchdog(step);
+                if (reading == null)
+                {
+                    dog.NoteLastCheck($"{desc}，本轮不计");
+                    continue;
+                }
+                if (reading == confirmed)
+                {
+                    dog.NoteLastCheck($"{desc}（状态未变）");
+                    continue;
+                }
+
+                // 出现新状态：按节点配置复核 N 轮（不等下一轮间隔），全部一致才认定翻转
+                dog.NoteLastCheck($"{desc}（新状态，{confirmSeconds}s×{confirmTimes} 复核）");
+                var flipApproved = true;
+                var flipDesc = desc;
+                for (var i = 1; i <= confirmTimes; i++)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(confirmSeconds), dog.Cts.Token);
+                    var (recheck, recheckDesc) = ReadWatchdog(step);
+                    flipDesc = recheckDesc;
+                    if (recheck == null)
+                    {
+                        dog.NoteLastCheck($"{recheckDesc}，复核第 {i}/{confirmTimes} 轮无效，保持原状态");
+                        flipApproved = false;
+                        break;
+                    }
+                    if (recheck == confirmed)
+                    {
+                        dog.NoteLastCheck($"中间态抖动未确认（{desc} → 复核第 {i}/{confirmTimes} 轮：{recheckDesc}），保持原状态");
+                        flipApproved = false;
+                        break;
+                    }
+                }
+                if (!flipApproved) continue;
+
+                var rising = reading.Value && !confirmed; // 翻转方向：false→true 才是触发边沿
+                confirmed = reading.Value;
+                if (!rising)
+                {
+                    dog.NoteLastCheck($"{flipDesc}（复核一致，已确认翻转为不成立）");
+                    continue;
+                }
+
+                dog.NoteLastCheck($"{flipDesc}（复核一致，触发）");
+                _mainVm.AddLog($"[槲寄生] 电子狗「{dog.Title}」盯到了：{flipDesc}，开始执行「触发执行」链");
+                OnNodeStateReported(step, NodeRunState.Running, $"电子狗触发：{flipDesc}");
+                try
+                {
+                    await _runner.RunAsync(step.FireSteps.ToList(), dog.Cts.Token);
+                    OnNodeStateReported(step, NodeRunState.Success, $"电子狗于 {DateTime.Now:HH:mm:ss} 触发");
+                }
+                catch (OperationCanceledException)
+                {
+                    throw; // 取消语义原样上传（用户撤下狗时中断触发链）
+                }
+                catch (Exception ex)
+                {
+                    // 容错：触发链异常只记日志，狗继续盯（RunAsync 内部已逐节点容错，这里是兜底）
+                    _mainVm.AddLog($"[槲寄生] 电子狗「{dog.Title}」的「触发执行」链执行异常：{ex.Message}（继续盯梢）");
+                }
+
+                if (!step.WatchRepeat)
+                {
+                    _mainVm.AddLog($"[槲寄生] 电子狗「{dog.Title}」设置为触发一次，已自动撤下");
+                    RunOnUi(() => ArmedWatchdogs.Remove(dog));
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            _mainVm.AddLog($"[槲寄生] 电子狗「{dog.Title}」已取消");
+        }
+        catch (Exception ex)
+        {
+            // 循环本身出意外（理论上只剩此处兜底）：留痕并撤下，避免无声残留
+            _mainVm.AddLog($"[槲寄生] 电子狗「{dog.Title}」检测循环异常：{ex.Message}，已撤下");
+            RunOnUi(() => ArmedWatchdogs.Remove(dog));
+        }
+    }
+
+    /// <summary>读取一轮被盯条件：reading=null 表示「未知」（依赖 BGI 快照的条件在快照缺失时）。
+    /// 未知≠不成立——这是断连-重连不被误判成边沿的关键。</summary>
+    private (bool? reading, string desc) ReadWatchdog(StartupStep step)
+    {
+        var status = _mainVm.LatestLocalStatus;
+        var cond = BuildWatchCondition(step);
+        if (status == null && cond.Kind is StartupStepKinds.BgiTaskRunning or StartupStepKinds.BgiTaskName)
+            return (null, "BGI 状态快照缺失（未连接/未上报）");
+        var (ok, desc) = StartupFlowRunner.EvaluateCondition(cond, status);
+        return (ok, desc);
+    }
+
+    /// <summary>取消一个盯梢中的电子狗（页面「取消」按钮）。</summary>
+    internal void CancelWatchdog(ArmedWatchdogViewModel dog)
+    {
+        RunOnUi(() => ArmedWatchdogs.Remove(dog));
+        dog.Cts.Cancel();
+    }
+
+    /// <summary>弹窗只读展示一条子链的流程内容（定时器/电子狗行的「流程」按钮）。</summary>
+    internal void ViewFlow(IReadOnlyList<StartupStep> steps, string title)
+    {
+        RunOnUi(() => FlowPreviewWindow.Show(title, steps, Application.Current.MainWindow));
+    }
+
     /// <summary>ObservableCollection 的增删必须回 UI 线程（定时器回调可能在线程池线程上）。</summary>
     private static void RunOnUi(Action action)
     {
@@ -899,6 +1069,14 @@ public sealed class StartupStepViewModel : ViewModelBase
     public string Kind => Model.Kind;
     public bool IsCondition => Model.NodeType == "condition";
     public bool IsTimerTrigger => Model.Kind == StartupStepKinds.TimerTrigger;
+    public bool IsWatchdog => Model.Kind == StartupStepKinds.Watchdog;
+
+    /// <summary>触发子链编辑区的标题（定时触发器/电子狗共用 FireChain 编辑器，标题各表）。</summary>
+    public string FireChainHeader => IsTimerTrigger
+        ? "⏰ 到点执行（时间在节点参数里设置）"
+        : IsWatchdog
+            ? "🐕 触发执行（被盯条件在节点参数里设置；条件由不成立变成立时执行此链）"
+            : "";
     public string Icon => StartupStepKinds.Find(Model.Kind)?.Icon ?? "▶";
     public string TypeName => StartupStepKinds.Find(Model.Kind)?.DisplayName ?? Model.Kind;
 
@@ -1123,38 +1301,108 @@ public sealed class StartupStepViewModel : ViewModelBase
         set { Model.TaskName = value; Changed(); }
     }
 
+    // ---- 电子狗参数（watchdog 用；被盯条件为进程类/任务状态时复用 ProcessName/ExpectRunningIndex/TaskName） ----
+
+    /// <summary>被盯条件类型键（watchdog 用；XAML 子参数区的 MultiDataTrigger 直接绑它）。</summary>
+    public string WatchKind
+    {
+        get => Model.WatchKind;
+        set { Model.WatchKind = value; Changed(); }
+    }
+
+    /// <summary>被盯条件下标（watchdog 编辑器下拉框用），顺序同 <see cref="StartupStepKinds.WatchableKinds"/>。</summary>
+    public int WatchKindIndex
+    {
+        get
+        {
+            var i = Array.IndexOf(StartupStepKinds.WatchableKinds, Model.WatchKind);
+            return i >= 0 ? i : 0;
+        }
+        set
+        {
+            if (value < 0 || value >= StartupStepKinds.WatchableKinds.Length) return;
+            Model.WatchKind = StartupStepKinds.WatchableKinds[value];
+            Changed(nameof(WatchKind)); // 联动刷新子参数区的显隐
+        }
+    }
+
+    /// <summary>检测间隔秒数文本（watchdog 用；最低 1 秒，非法输入回退 30）。</summary>
+    public string WatchIntervalSecondsText
+    {
+        get => Model.WatchIntervalSeconds.ToString();
+        set
+        {
+            Model.WatchIntervalSeconds = int.TryParse(value, out var n) ? Math.Clamp(n, 1, 86400) : 30;
+            Changed();
+        }
+    }
+
+    /// <summary>是否重复触发（watchdog 用）：勾选=每次边沿都触发；不勾=触发一次后自动撤下。</summary>
+    public bool WatchRepeat
+    {
+        get => Model.WatchRepeat;
+        set { Model.WatchRepeat = value; Changed(); }
+    }
+
+    /// <summary>防抖复核间隔秒数文本（watchdog 用；1~60，非法输入回退 1）。</summary>
+    public string WatchConfirmSecondsText
+    {
+        get => Model.WatchConfirmSeconds.ToString();
+        set
+        {
+            Model.WatchConfirmSeconds = int.TryParse(value, out var n) ? Math.Clamp(n, 1, 60) : 1;
+            Changed();
+        }
+    }
+
+    /// <summary>防抖复核次数文本（watchdog 用；1~10，非法输入回退 1）。</summary>
+    public string WatchConfirmTimesText
+    {
+        get => Model.WatchConfirmTimes.ToString();
+        set
+        {
+            Model.WatchConfirmTimes = int.TryParse(value, out var n) ? Math.Clamp(n, 1, 10) : 1;
+            Changed();
+        }
+    }
+
     // ---- 卡片摘要行 ----
 
-    public string Summary => Model.Kind switch
+    public string Summary => BuildSummary(Model);
+
+    /// <summary>卡片摘要行文本（抽成静态方法：流程预览弹窗 FlowPreviewWindow 复用同一口径，避免两处拼接逻辑漂移）。</summary>
+    internal static string BuildSummary(StartupStep model) => model.Kind switch
     {
-        StartupStepKinds.TimeRange => $"{Model.TimeStart} ~ {Model.TimeEnd}",
-        StartupStepKinds.Weekday => Model.Weekdays.Count == 7
+        StartupStepKinds.TimeRange => $"{model.TimeStart} ~ {model.TimeEnd}",
+        StartupStepKinds.Weekday => model.Weekdays.Count == 7
             ? "每天"
-            : Model.Weekdays.Count == 0
+            : model.Weekdays.Count == 0
                 ? "（未勾选任何星期）"
-                : "周" + string.Join("、", Model.Weekdays.Order().Select(d => "一二三四五六日"[d - 1])),
-        StartupStepKinds.BgiRunning => Model.ExpectRunning ? "BGI 正在运行 → 是" : "BGI 未运行 → 是",
-        StartupStepKinds.GameRunning => Model.ExpectRunning ? "游戏正在运行 → 是" : "游戏未运行 → 是",
-        StartupStepKinds.ProcessRunning => $"{Model.ProcessName} {(Model.ExpectRunning ? "存在" : "不存在")} → 是",
-        StartupStepKinds.BgiTaskRunning => Model.ExpectRunning ? "BGI 有任务在跑 → 是" : "BGI 空闲 → 是",
-        StartupStepKinds.BgiTaskName => string.IsNullOrWhiteSpace(Model.TaskName) ? "（未填写任务名）" : $"当前任务名包含「{Model.TaskName}」→ 是",
+                : "周" + string.Join("、", model.Weekdays.Order().Select(d => "一二三四五六日"[d - 1])),
+        StartupStepKinds.BgiRunning => model.ExpectRunning ? "BGI 正在运行 → 是" : "BGI 未运行 → 是",
+        StartupStepKinds.GameRunning => model.ExpectRunning ? "游戏正在运行 → 是" : "游戏未运行 → 是",
+        StartupStepKinds.ProcessRunning => $"{model.ProcessName} {(model.ExpectRunning ? "存在" : "不存在")} → 是",
+        StartupStepKinds.BgiTaskRunning => model.ExpectRunning ? "BGI 有任务在跑 → 是" : "BGI 空闲 → 是",
+        StartupStepKinds.BgiTaskName => string.IsNullOrWhiteSpace(model.TaskName) ? "（未填写任务名）" : $"当前任务名包含「{model.TaskName}」→ 是",
         StartupStepKinds.ManualConfirm =>
-            $"{(string.IsNullOrWhiteSpace(Model.ConfirmMessage) ? "（未填提示内容）" : Model.ConfirmMessage)}" +
-            $"{(Model.ConfirmTimeoutSeconds > 0 ? $"；{Model.ConfirmTimeoutSeconds} 秒超时走「{(Model.ConfirmTimeoutGoTrue ? "是" : "否")}」" : "；不限时")}",
-        StartupStepKinds.StartBgi => (string.IsNullOrWhiteSpace(Model.Arguments) ? "启动本机 BGI" : $"启动本机 BGI（参数：{Model.Arguments}）")
-            + (Model.KillBeforeStart ? "，先关闭再启动" : ""),
+            $"{(string.IsNullOrWhiteSpace(model.ConfirmMessage) ? "（未填提示内容）" : model.ConfirmMessage)}" +
+            $"{(model.ConfirmTimeoutSeconds > 0 ? $"；{model.ConfirmTimeoutSeconds} 秒超时走「{(model.ConfirmTimeoutGoTrue ? "是" : "否")}」" : "；不限时")}",
+        StartupStepKinds.StartBgi => (string.IsNullOrWhiteSpace(model.Arguments) ? "启动本机 BGI" : $"启动本机 BGI（参数：{model.Arguments}）")
+            + (model.KillBeforeStart ? "，先关闭再启动" : ""),
         StartupStepKinds.StopBgi => "强制结束本会话 BGI 进程",
         StartupStepKinds.StartGame or StartupStepKinds.StartProgram =>
-            string.IsNullOrWhiteSpace(Model.Path) ? "（未填写程序路径）" : Model.Path,
-        StartupStepKinds.RunCmd => string.IsNullOrWhiteSpace(Model.Arguments) ? "（未填写命令）" : Model.Arguments,
-        StartupStepKinds.KillProgram => string.IsNullOrWhiteSpace(Model.ProcessName) ? "（未填写进程名）" : $"结束进程 {Model.ProcessName}",
-        StartupStepKinds.Wait => $"等待 {Model.WaitSeconds} 秒",
+            string.IsNullOrWhiteSpace(model.Path) ? "（未填写程序路径）" : model.Path,
+        StartupStepKinds.RunCmd => string.IsNullOrWhiteSpace(model.Arguments) ? "（未填写命令）" : model.Arguments,
+        StartupStepKinds.KillProgram => string.IsNullOrWhiteSpace(model.ProcessName) ? "（未填写进程名）" : $"结束进程 {model.ProcessName}",
+        StartupStepKinds.Wait => $"等待 {model.WaitSeconds} 秒",
         StartupStepKinds.TimerTrigger =>
-            $"{Model.TriggerTime} 触发「到点执行」链（{Model.FireSteps.Count} 个节点{(Model.RepeatDaily ? "，每天重复" : "")}）",
+            $"{model.TriggerTime} 触发「到点执行」链（{model.FireSteps.Count} 个节点{(model.RepeatDaily ? "，每天重复" : "")}）",
+        StartupStepKinds.Watchdog =>
+            $"每 {Math.Max(1, model.WatchIntervalSeconds)}s 盯「{MistletoeViewModel.WatchKindDesc(model)}」，成立执行 {model.FireSteps.Count} 个节点（{(model.WatchRepeat ? "重复触发" : "触发一次")}，复核 {Math.Clamp(model.WatchConfirmSeconds, 1, 60)}s×{Math.Clamp(model.WatchConfirmTimes, 1, 10)}）",
         StartupStepKinds.EnterTaskCenter => "交接给任务中心执行任务序列",
         StartupStepKinds.EndFlow => "立即终止整条启动流程",
-        StartupStepKinds.StartGroup => string.IsNullOrWhiteSpace(Model.TaskName) ? "（旧版节点 · 未填写配置组名）" : $"（旧版节点）配置组「{Model.TaskName}」",
-        StartupStepKinds.StartOneClick => string.IsNullOrWhiteSpace(Model.TaskName) ? "（旧版节点 · 未填写一条龙名）" : $"（旧版节点）一条龙「{Model.TaskName}」",
+        StartupStepKinds.StartGroup => string.IsNullOrWhiteSpace(model.TaskName) ? "（旧版节点 · 未填写配置组名）" : $"（旧版节点）配置组「{model.TaskName}」",
+        StartupStepKinds.StartOneClick => string.IsNullOrWhiteSpace(model.TaskName) ? "（旧版节点 · 未填写一条龙名）" : $"（旧版节点）一条龙「{model.TaskName}」",
         _ => "",
     };
 
@@ -1235,6 +1483,8 @@ public sealed class ArmedTimerViewModel : ViewModelBase
     public string StatusLine =>
         $"{Title} — {NextFireAt:MM-dd HH:mm} 触发「到点执行」链（{Step.FireSteps.Count} 个节点{(Step.RepeatDaily ? "，每天重复" : "")}）";
 
+    public RelayCommand ViewFlowCommand => new(_ => _owner.ViewFlow(Step.FireSteps, $"定时触发器「{Title}」的到点执行流程"));
+
     public RelayCommand CancelCommand => new(_ => _owner.CancelTimer(this));
 
     /// <summary>每天重复时复用同一行项重新挂载（换发新 CTS，更新下次触发时间）。</summary>
@@ -1244,4 +1494,57 @@ public sealed class ArmedTimerViewModel : ViewModelBase
         Cts = new CancellationTokenSource();
         NextFireAt = nextFireAt;
     }
+}
+
+/// <summary>
+/// 一个盯梢中的电子狗的视图模型：页面「盯梢中的电子狗」卡片的行项。
+/// 运行态对象，不持久化——与定时触发器同口径（助手重启后需流程重跑才会重新挂载）。
+/// </summary>
+public sealed class ArmedWatchdogViewModel : ViewModelBase
+{
+    private readonly MistletoeViewModel _owner;
+
+    public ArmedWatchdogViewModel(StartupStep step, int intervalSeconds, MistletoeViewModel owner)
+    {
+        Step = step;
+        IntervalSeconds = intervalSeconds;
+        _owner = owner;
+    }
+
+    /// <summary>对应的电子狗节点模型（被盯条件参数与「触发执行」链都在上面）。</summary>
+    public StartupStep Step { get; }
+
+    /// <summary>检测间隔秒数（挂载时已按下限 5 秒收紧）。</summary>
+    public int IntervalSeconds { get; }
+
+    /// <summary>取消令牌（取消按钮 / 触发一次后自动撤下，独立取消这只狗）。</summary>
+    public CancellationTokenSource Cts { get; } = new();
+
+    /// <summary>节点显示名（日志与列表用）。</summary>
+    public string Title => StartupFlowRunner.DisplayName(Step, 0);
+
+    /// <summary>状态行：节点名 — 每 Ns 盯「条件」，成立执行 X 节点（重复/一次）。</summary>
+    public string StatusLine =>
+        $"{Title} — 每 {IntervalSeconds}s 盯「{MistletoeViewModel.WatchKindDesc(Step)}」，成立执行 {Step.FireSteps.Count} 个节点（{(Step.WatchRepeat ? "重复触发" : "触发一次")}）";
+
+    private string _lastCheckNote = "等待第一轮检测…";
+    /// <summary>最近一轮检测的判断依据（每轮刷新，盯梢过程可见）。</summary>
+    public string LastCheckNote
+    {
+        get => _lastCheckNote;
+        private set => SetProperty(ref _lastCheckNote, value);
+    }
+
+    /// <summary>检测循环（线程池线程）回报最近一轮依据：回 UI 线程写绑定属性。</summary>
+    public void NoteLastCheck(string desc)
+    {
+        var text = $"最近检测 {DateTime.Now:HH:mm:ss}：{desc}";
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.CheckAccess()) LastCheckNote = text;
+        else dispatcher.Invoke(() => LastCheckNote = text);
+    }
+
+    public RelayCommand ViewFlowCommand => new(_ => _owner.ViewFlow(Step.FireSteps, $"电子狗「{Title}」的触发执行流程"));
+
+    public RelayCommand CancelCommand => new(_ => _owner.CancelWatchdog(this));
 }

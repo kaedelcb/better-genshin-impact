@@ -147,7 +147,7 @@
         </Style>
 
         <!-- 编辑器字段行（默认折叠，由各类型的 DataTrigger 展开） -->
-        <Style x:Key="FieldGroup" TargetType="StackPanel">
+        <Style x:Key="FieldGroup" TargetType="WrapPanel">
             <Setter Property="Visibility" Value="Collapsed"/>
             <Setter Property="Margin" Value="0,4,0,0"/>
         </Style>
@@ -487,16 +487,16 @@
                                 </StackPanel>
 
                                 <!-- timeRange -->
-                                <StackPanel Orientation="Horizontal">
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="timeRange">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <TextBlock Text="时间区间" Style="{StaticResource FieldLabel}"/>
                                     <TextBox Text="{Binding TimeStart, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource GoldInput}" Width="64" Padding="6,2" HorizontalContentAlignment="Center"/>
@@ -505,19 +505,19 @@
                                              Style="{StaticResource GoldInput}" Width="64" Padding="6,2" HorizontalContentAlignment="Center"/>
                                     <TextBlock Text="HH:mm，起点大于终点表示跨零点" FontSize="10" Foreground="{DynamicResource Dim}"
                                                VerticalAlignment="Center" Margin="10,0,0,0"/>
-                                </StackPanel>
+                                </WrapPanel>
 
                                 <!-- weekday -->
-                                <StackPanel Orientation="Horizontal">
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="weekday">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <TextBlock Text="星期" Style="{StaticResource FieldLabel}"/>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
                                         <CheckBox IsChecked="{Binding W1, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
@@ -547,12 +547,12 @@
                                         <CheckBox IsChecked="{Binding W7, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
                                         <TextBlock Text="日" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
                                     </StackPanel>
-                                </StackPanel>
+                                </WrapPanel>
 
                                 <!-- bgiRunning / gameRunning：期望状态 -->
-                                <StackPanel Orientation="Horizontal">
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="bgiRunning">
                                                     <Setter Property="Visibility" Value="Visible"/>
@@ -562,62 +562,62 @@
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <TextBlock Text="「是」条件" Style="{StaticResource FieldLabel}"/>
                                     <ComboBox Width="170" Style="{StaticResource GoldComboBox}"
                                               SelectedIndex="{Binding ExpectRunningIndex, Mode=TwoWay}">
                                         <ComboBoxItem Content="正在运行时走「是」" Style="{StaticResource GoldComboItem}"/>
                                         <ComboBoxItem Content="未运行时走「是」" Style="{StaticResource GoldComboItem}"/>
                                     </ComboBox>
-                                </StackPanel>
+                                </WrapPanel>
 
                                 <!-- bgiTaskRunning：期望任务状态 -->
-                                <StackPanel Orientation="Horizontal">
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="bgiTaskRunning">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <TextBlock Text="「是」条件" Style="{StaticResource FieldLabel}"/>
                                     <ComboBox Width="190" Style="{StaticResource GoldComboBox}"
                                               SelectedIndex="{Binding ExpectRunningIndex, Mode=TwoWay}">
                                         <ComboBoxItem Content="有任务在跑时走「是」" Style="{StaticResource GoldComboItem}"/>
                                         <ComboBoxItem Content="空闲（无任务）时走「是」" Style="{StaticResource GoldComboItem}"/>
                                     </ComboBox>
-                                </StackPanel>
+                                </WrapPanel>
 
                                 <!-- bgiTaskName：任务名匹配文本 -->
-                                <StackPanel Orientation="Horizontal">
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="bgiTaskName">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <TextBlock Text="匹配文本" Style="{StaticResource FieldLabel}"/>
                                     <TextBox Text="{Binding TaskName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource GoldInput}" Width="200"
                                              ToolTip="当前任务名或配置组名包含该文本即走「是」（不区分大小写；BGI 未在跑任务时一律走「否」）"/>
-                                </StackPanel>
+                                </WrapPanel>
 
                                 <!-- processRunning -->
-                                <StackPanel Orientation="Horizontal">
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="processRunning">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <TextBlock Text="进程名" Style="{StaticResource FieldLabel}"/>
                                     <TextBox Text="{Binding ProcessName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource GoldInput}" Width="150" ToolTip="可带或不带 .exe"/>
@@ -626,44 +626,44 @@
                                         <ComboBoxItem Content="存在时走「是」" Style="{StaticResource GoldComboItem}"/>
                                         <ComboBoxItem Content="不存在时走「是」" Style="{StaticResource GoldComboItem}"/>
                                     </ComboBox>
-                                </StackPanel>
+                                </WrapPanel>
 
                                 <!-- startBgi：启动参数 -->
-                                <StackPanel Orientation="Horizontal">
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="startBgi">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <TextBlock Text="启动参数" Style="{StaticResource FieldLabel}"/>
                                     <TextBox Text="{Binding Arguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource GoldInput}" Width="280"
                                              ToolTip="传给 BetterGI.exe 的命令行参数，可留空（例如 --startGroups &quot;组名&quot;）"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                </WrapPanel>
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="startBgi">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <CheckBox IsChecked="{Binding KillBeforeStart, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
                                     <TextBlock Text="启动前先关闭 BGI" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
                                     <TextBlock Text="（已在运行的 BGI 不会因新参数自动重启——不抢占策略；勾选后先强制关闭本会话 BGI 再带参数启动，让参数生效）"
                                                FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="8,0,0,0" TextWrapping="Wrap" MaxWidth="360"/>
-                                </StackPanel>
+                                </WrapPanel>
 
                                 <!-- startGame / startProgram：路径 + 参数 -->
-                                <StackPanel>
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="startGame">
                                                     <Setter Property="Visibility" Value="Visible"/>
@@ -673,7 +673,7 @@
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="程序路径" Style="{StaticResource FieldLabel}"/>
                                         <TextBox Text="{Binding Path, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -686,19 +686,19 @@
                                         <TextBox Text="{Binding Arguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                  Style="{StaticResource GoldInput}" Width="260" ToolTip="可留空"/>
                                     </StackPanel>
-                                </StackPanel>
+                                </WrapPanel>
 
                                 <!-- manualConfirm：提示内容 + 超时 -->
-                                <StackPanel>
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="manualConfirm">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="提示内容" Style="{StaticResource FieldLabel}"/>
                                         <TextBox Text="{Binding ConfirmMessage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -719,63 +719,63 @@
                                     </StackPanel>
                                     <TextBlock Text="弹窗会同时列出「是 / 否」两条分支的后续动作供判断；超时或直接关窗未选都按上面设置的默认走向。"
                                                FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" MaxWidth="420" Margin="0,6,0,0"/>
-                                </StackPanel>
+                                </WrapPanel>
 
                                 <!-- killProgram：进程名 -->
-                                <StackPanel Orientation="Horizontal">
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="killProgram">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <TextBlock Text="进程名" Style="{StaticResource FieldLabel}"/>
                                     <TextBox Text="{Binding ProcessName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource GoldInput}" Width="180" ToolTip="可带或不带 .exe；仅结束当前会话的同名进程"/>
-                                </StackPanel>
+                                </WrapPanel>
 
                                 <!-- runCmd -->
-                                <StackPanel>
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="runCmd">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="CMD 命令" Style="{StaticResource FieldLabel}"/>
                                         <TextBox Text="{Binding Arguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                  Style="{StaticResource GoldInput}" Width="330"
                                                  ToolTip="以 cmd /c 隐藏窗口执行，不等待结果"/>
                                     </StackPanel>
-                                </StackPanel>
+                                </WrapPanel>
 
                                 <!-- wait -->
-                                <StackPanel Orientation="Horizontal">
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="wait">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <TextBlock Text="等待秒数" Style="{StaticResource FieldLabel}"/>
                                     <TextBox Text="{Binding WaitSecondsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource GoldInput}" Width="64" Padding="6,2" HorizontalContentAlignment="Center"/>
-                                </StackPanel>
+                                </WrapPanel>
 
                                 <!-- startGroup / startOneClick（旧版遗留节点，仍可读任务名） -->
-                                <StackPanel Orientation="Horizontal">
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="startGroup">
                                                     <Setter Property="Visibility" Value="Visible"/>
@@ -785,25 +785,25 @@
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <TextBlock Text="任务名" Style="{StaticResource FieldLabel}"/>
                                     <TextBox Text="{Binding TaskName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource GoldInput}" Width="220"/>
                                     <TextBlock Text="旧版节点，建议改用「进入任务中心执行」" FontSize="10" Foreground="{DynamicResource Dim}"
                                                VerticalAlignment="Center" Margin="10,0,0,0"/>
-                                </StackPanel>
+                                </WrapPanel>
 
                                 <!-- timerTrigger：触发时间 + 每天重复 -->
-                                <StackPanel Orientation="Horizontal">
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="timerTrigger">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <TextBlock Text="触发时间" Style="{StaticResource FieldLabel}"/>
                                     <TextBox Text="{Binding TriggerTime, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource GoldInput}" Width="64" Padding="6,2" HorizontalContentAlignment="Center"
@@ -812,35 +812,170 @@
                                     <TextBlock Text="每天重复" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
                                     <TextBlock Text="（流程跑到此节点时挂载定时器，到点执行下方「到点执行」链）" FontSize="10" Foreground="{DynamicResource Dim}"
                                                VerticalAlignment="Center" Margin="10,0,0,0"/>
-                                </StackPanel>
+                                </WrapPanel>
+
+                                <!-- watchdog：盯什么 + 间隔 + 重复 -->
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="watchdog">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </WrapPanel.Style>
+                                    <TextBlock Text="盯什么" Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox Width="150" Style="{StaticResource GoldComboBox}"
+                                              SelectedIndex="{Binding WatchKindIndex, Mode=TwoWay}">
+                                        <ComboBoxItem Content="BGI 进程状态" Style="{StaticResource GoldComboItem}"/>
+                                        <ComboBoxItem Content="游戏进程状态" Style="{StaticResource GoldComboItem}"/>
+                                        <ComboBoxItem Content="指定进程状态" Style="{StaticResource GoldComboItem}"/>
+                                        <ComboBoxItem Content="BGI 任务状态" Style="{StaticResource GoldComboItem}"/>
+                                        <ComboBoxItem Content="BGI 当前任务名" Style="{StaticResource GoldComboItem}"/>
+                                    </ComboBox>
+                                    <TextBlock Text="间隔(秒)" Style="{StaticResource FieldLabel}" Margin="12,0,0,0"/>
+                                    <TextBox Text="{Binding WatchIntervalSecondsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" Width="52" Padding="6,2" HorizontalContentAlignment="Center"
+                                             ToolTip="每隔多少秒检查一次被盯条件（最低 1 秒）。发现新状态后按下方「防抖复核」参数复核，一致才认定翻转——确认窗口不随间隔放大"/>
+                                    <CheckBox IsChecked="{Binding WatchRepeat, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" Margin="14,0,4,0"/>
+                                    <TextBlock Text="重复触发" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center"
+                                               ToolTip="勾选=条件每次由不成立变成立都触发；不勾=触发一次后自动撤下"/>
+                                </WrapPanel>
+
+                                <!-- watchdog：防抖复核参数（秒 × 次） -->
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="watchdog">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </WrapPanel.Style>
+                                    <TextBlock Text="防抖复核" Style="{StaticResource FieldLabel}"/>
+                                    <TextBlock Text="每" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                    <TextBox Text="{Binding WatchConfirmSecondsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" Width="40" Padding="6,2" HorizontalContentAlignment="Center"
+                                             ToolTip="发现新状态后每隔这么久复核一轮（1~60 秒，默认 1）"/>
+                                    <TextBlock Text="秒复核" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center" Margin="4,0,4,0"/>
+                                    <TextBox Text="{Binding WatchConfirmTimesText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" Width="40" Padding="6,2" HorizontalContentAlignment="Center"
+                                             ToolTip="复核轮数（1~10，默认 1）；全部轮一致为新状态才认定翻转"/>
+                                    <TextBlock Text="次，全一致才认定翻转" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                </WrapPanel>
+
+                                <!-- watchdog 子参数：进程类（bgiRunning/gameRunning/processRunning）与任务状态（bgiTaskRunning）的期望状态 -->
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding Kind}" Value="watchdog"/>
+                                                        <Condition Binding="{Binding WatchKind}" Value="bgiRunning"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </MultiDataTrigger>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding Kind}" Value="watchdog"/>
+                                                        <Condition Binding="{Binding WatchKind}" Value="gameRunning"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </MultiDataTrigger>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding Kind}" Value="watchdog"/>
+                                                        <Condition Binding="{Binding WatchKind}" Value="bgiTaskRunning"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </MultiDataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </WrapPanel.Style>
+                                    <TextBlock Text="触发条件" Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox Width="190" Style="{StaticResource GoldComboBox}"
+                                              SelectedIndex="{Binding ExpectRunningIndex, Mode=TwoWay}">
+                                        <ComboBoxItem Content="正在运行/在跑时触发" Style="{StaticResource GoldComboItem}"/>
+                                        <ComboBoxItem Content="未运行/空闲时触发" Style="{StaticResource GoldComboItem}"/>
+                                    </ComboBox>
+                                </WrapPanel>
+
+                                <!-- watchdog 子参数：指定进程（processRunning）的进程名 + 期望状态 -->
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding Kind}" Value="watchdog"/>
+                                                        <Condition Binding="{Binding WatchKind}" Value="processRunning"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </MultiDataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </WrapPanel.Style>
+                                    <TextBlock Text="进程名" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding ProcessName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" Width="150" ToolTip="可带或不带 .exe"/>
+                                    <ComboBox Width="160" Margin="10,0,0,0" Style="{StaticResource GoldComboBox}"
+                                              SelectedIndex="{Binding ExpectRunningIndex, Mode=TwoWay}">
+                                        <ComboBoxItem Content="存在时触发" Style="{StaticResource GoldComboItem}"/>
+                                        <ComboBoxItem Content="不存在时触发" Style="{StaticResource GoldComboItem}"/>
+                                    </ComboBox>
+                                </WrapPanel>
+
+                                <!-- watchdog 子参数：任务名匹配（bgiTaskName）的匹配文本 -->
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding Kind}" Value="watchdog"/>
+                                                        <Condition Binding="{Binding WatchKind}" Value="bgiTaskName"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </MultiDataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </WrapPanel.Style>
+                                    <TextBlock Text="匹配文本" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding TaskName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" Width="200"
+                                             ToolTip="当前任务名或配置组名包含该文本即触发（不区分大小写；BGI 未在跑任务时不触发）"/>
+                                </WrapPanel>
 
                                 <!-- enterTaskCenter / endFlow：无参数提示 -->
-                                <StackPanel Orientation="Horizontal">
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="enterTaskCenter">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <TextBlock Text="走到此节点即交接给任务中心执行任务序列（任务中心规划中，当前交接为空转并记日志）。通常放在主流程末尾。"
                                                FontSize="10.5" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" MaxWidth="380"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel" BasedOn="{StaticResource FieldGroup}">
+                                </WrapPanel>
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Kind}" Value="endFlow">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </StackPanel.Style>
+                                    </WrapPanel.Style>
                                     <TextBlock Text="执行到此节点立即终止整条启动流程（含外层链）。它必须是所在链的最后一个节点：之后不能再添加节点，也不能把别的节点拖到它后面。常用于「否」分支：环境不满足时直接放弃本次启动。"
                                                FontSize="10.5" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" MaxWidth="380"/>
-                                </StackPanel>
+                                </WrapPanel>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -931,13 +1066,16 @@
                     </Border>
                 </Grid>
 
-                <!-- ===== 定时触发器的「到点执行」子链（单链，与分支子链同一套交互） ===== -->
+                <!-- ===== 定时触发器/电子狗的「触发执行」子链（单链，与分支子链同一套交互） ===== -->
                 <Grid Margin="18,0,0,0">
                     <Grid.Style>
                         <Style TargetType="Grid">
                             <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsTimerTrigger}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsWatchdog}" Value="True">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -948,10 +1086,10 @@
                             AllowDrop="True" DragOver="Chain_DragOver" Drop="Chain_Drop">
                         <StackPanel>
                             <Border CornerRadius="5" Padding="8,1" Background="#33D4AF37" HorizontalAlignment="Left" Margin="0,0,0,4">
-                                <TextBlock Text="⏰ 到点执行（时间在节点参数里设置）" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"/>
+                                <TextBlock Text="{Binding ParentCondition.FireChainHeader}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"/>
                             </Border>
                             <ItemsControl ItemsSource="{Binding Steps}"/>
-                            <TextBlock Text="（空：到点无动作，定时器不会挂载）" FontSize="9.5" Foreground="{DynamicResource Dim}"
+                            <TextBlock Text="（空：触发时无动作，不会挂载）" FontSize="9.5" Foreground="{DynamicResource Dim}"
                                        Margin="2,0,0,2">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
@@ -1062,7 +1200,8 @@
                     </Style>
                 </Grid.Style>
 
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                <!-- 横向滚动禁用：宽度不足时参数行靠 WrapPanel 换行自适应，不出横向滚动条 -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               Style="{DynamicResource GoldScrollViewer}">
                     <StackPanel Margin="0,0,0,24">
 
@@ -1079,7 +1218,7 @@
                                         Padding="10,6" Margin="0,0,0,10"
                                         Visibility="{Binding DataContext.IsObserverMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
                                     <TextBlock FontSize="11" Foreground="#9FC2F5" TextWrapping="Wrap"
-                                               Text="当前为监控端：启动中心编排的是本机动作；「启动/关闭 BGI」节点本机无 BGI 时会跳过并记入冒险日志。任务中心/执行策略/三方接入仅执行端可用。"/>
+                                               Text="当前为监控端：仅编排本机动作，无 BGI 的节点自动跳过；任务中心等功能仅执行端可用。"/>
                                 </Border>
 
                                 <!-- 行 1：自动执行开关 + 延迟 + 执行按钮 -->
@@ -1177,11 +1316,14 @@
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Text="⏰" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                                 <TextBlock Grid.Column="1" Text="{Binding StatusLine}" FontSize="11.5"
                                                            Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
-                                                <Button Grid.Column="2" Content="✕ 取消" Style="{DynamicResource BtnGhost}" Padding="10,3"
+                                                <Button Grid.Column="2" Content="📄 流程" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="0,0,6,0"
+                                                        Command="{Binding ViewFlowCommand}" ToolTip="弹窗查看这个定时器到点会执行的完整流程"/>
+                                                <Button Grid.Column="3" Content="✕ 取消" Style="{DynamicResource BtnGhost}" Padding="10,3"
                                                         Command="{Binding CancelCommand}" ToolTip="取消这个定时器（不影响流程里的其他节点）"/>
                                             </Grid>
                                         </DataTemplate>
@@ -1193,17 +1335,64 @@
                         </Border>
                         </Grid>
 
+                        <!-- ===== 卡片：盯梢中的电子狗（有挂载时才显示；运行态不持久化） ===== -->
+                        <Grid Margin="0,0,0,14">
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasArmedWatchdogs}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                        <Border Style="{DynamicResource QuestCard}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,8">
+                                    <TextBlock Text="盯梢中的电子狗" Style="{DynamicResource SectionTitle}"/>
+                                    <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="98,0,0,0"/>
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding ArmedWatchdogs}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="🐕" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding StatusLine}" FontSize="11.5" Foreground="{DynamicResource White}"/>
+                                                    <TextBlock Text="{Binding LastCheckNote}" FontSize="10" Foreground="{DynamicResource Dim}" Margin="0,1,0,0"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="2" Content="📄 流程" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="0,0,6,0"
+                                                        Command="{Binding ViewFlowCommand}" ToolTip="弹窗查看这只电子狗盯到时执行的完整流程"/>
+                                                <Button Grid.Column="3" Content="✕ 取消" Style="{DynamicResource BtnGhost}" Padding="10,3"
+                                                        Command="{Binding CancelCommand}" ToolTip="撤下这只电子狗（不影响流程里的其他节点）"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="运行态，重启后由启动流程重新挂载；新状态复核一致才翻转（防抖），快照缺失不计。"
+                                           FontSize="10" Foreground="{DynamicResource Dim}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+                        </Grid>
+
                         <!-- ===== 卡片：启动流程（树形分支流程图编辑器） ===== -->
                         <Border Style="{DynamicResource QuestCard}">
                             <StackPanel>
-                                <Grid Margin="0,0,0,6">
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <TextBlock Text="启动流程" Style="{DynamicResource SectionTitle}"/>
-                                        <TextBlock Text="从上到下依次执行；条件节点分出「是/否」两条支路（默认折叠，点卡片「▸ 分支」展开），支路跑完回到主流程。拖动 ⠿ 调整顺序（可跨支路拖动），点击卡片展开参数"
-                                                   FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="10,0,0,0"
-                                                   TextWrapping="Wrap" MaxWidth="520"/>
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <!-- 标题与右侧控件分两列（左 * 右 Auto），说明文字独占一行整宽换行——避免窄窗口下左右叠字 -->
+                                <Grid Margin="0,0,0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="启动流程" Style="{DynamicResource SectionTitle}" VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                         <CheckBox IsChecked="{Binding AutoExpandTakenBranch, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"
                                                   ToolTip="执行时自动展开实际走到的分支，没走的分支灰显"/>
                                         <TextBlock Text="执行时展开走过的分支" FontSize="11" Foreground="{DynamicResource Dim}"
@@ -1218,6 +1407,8 @@
                                                 Command="{Binding ToggleAllBranchesCommand}" ToolTip="一键展开/收起所有条件节点的分支区域"/>
                                     </StackPanel>
                                 </Grid>
+                                <TextBlock Text="从上到下依次执行；条件节点分「是/否」支路，跑完回到主流程。拖 ⠿ 排序，点卡片展开参数"
+                                           FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,0,0,6"/>
 
                                 <!-- 主流程链（DataContext 切到 RootChain，与分支子链写法统一） -->
                                 <StackPanel DataContext="{Binding RootChain}"
