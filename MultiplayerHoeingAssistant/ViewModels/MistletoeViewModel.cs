@@ -226,6 +226,22 @@ public sealed class MistletoeViewModel : ViewModelBase
 
     public bool HasSteps => RootChain.Steps.Count > 0;
 
+    /// <summary>整棵树里查找第一个指定类型的节点（「进入任务中心执行」全树唯一约束等用）。</summary>
+    internal StartupStepViewModel? FindFirstByKind(string kind) => FindFirstByKind(RootChain, kind);
+
+    private static StartupStepViewModel? FindFirstByKind(StepChainViewModel chain, string kind)
+    {
+        foreach (var vm in chain.Steps)
+        {
+            if (vm.Kind == kind) return vm;
+            var hit = FindFirstByKind(vm.TrueChain, kind)
+                      ?? FindFirstByKind(vm.FalseChain, kind)
+                      ?? FindFirstByKind(vm.FireChain, kind);
+            if (hit != null) return hit;
+        }
+        return null;
+    }
+
     private StartupStepViewModel? _selectedStep;
     /// <summary>当前展开参数编辑器的节点（再点一次收起）。</summary>
     public StartupStepViewModel? SelectedStep
@@ -465,6 +481,53 @@ public sealed class MistletoeViewModel : ViewModelBase
         _mainVm.AddLog("[槲寄生] 已清除执行路径显示");
     });
 
+    // ================= 流程图弹窗（只读） =================
+
+    /// <summary>已打开的流程图窗口（重复点击时提到前台，不开第二个）。</summary>
+    private FlowChartWindow? _flowChartWindow;
+
+    /// <summary>流程图请求在编辑器中定位节点时触发（页面代码后置订阅，负责滚动到卡片）。</summary>
+    internal event Action<StartupStepViewModel>? StepRevealRequested;
+
+    public RelayCommand ShowFlowChartCommand => new(_ =>
+    {
+        if (RootChain.Steps.Count == 0)
+        {
+            _mainVm.AddLog("[槲寄生] 启动流程还没有节点，先在下方添加节点再看流程图");
+            return;
+        }
+        if (_flowChartWindow is { IsLoaded: true })
+        {
+            _flowChartWindow.Activate();
+            return;
+        }
+        _flowChartWindow = FlowChartWindow.Show(RootChain, RevealStepInEditor, ArmedTimers, ArmedWatchdogs, Application.Current.MainWindow);
+        _flowChartWindow.Closed += (_, _) => _flowChartWindow = null;
+    });
+
+    /// <summary>流程图节点点击回调：切回启动中心 Tab、展开沿途分支、选中该节点，并通知页面滚动定位。</summary>
+    internal void RevealStepInEditor(StartupStepViewModel vm)
+    {
+        SelectedTabIndex = 0;
+        // 展开从根到该节点沿途所有条件节点的分支区域，确保目标卡片在树上可见
+        for (var c = vm.OwnerChain; c.ParentCondition != null; c = c.ParentCondition.OwnerChain)
+            c.ParentCondition.BranchesExpanded = true;
+        SelectedStep = vm;
+        StepRevealRequested?.Invoke(vm);
+
+        // 把助手主窗口提到前台。必须延时到本次鼠标事件路由完之后：点击发生在流程图窗口上，
+        // 若在事件处理途中激活主窗口，鼠标弹起路由完系统会把焦点还给流程图，刚置顶又被压回去。
+        // 流程图与主窗口是相互独立的窗口（刻意不设 Owner，否则子窗口永远压在主窗口上面）。
+        Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+        {
+            var win = Application.Current.MainWindow;
+            if (win == null) return;
+            if (!win.IsVisible) win.Show();
+            if (win.WindowState == WindowState.Minimized) win.WindowState = WindowState.Normal;
+            win.Activate();
+        }));
+    }
+
     /// <summary>
     /// Runner 的节点状态回报入口（可能在线程池线程上）：定位对应节点 VM 并更新运行态。
     /// 条件节点出结果时联动：走过的分支自动展开（可在总控关掉）、没走的分支灰显。
@@ -520,6 +583,13 @@ public sealed class MistletoeViewModel : ViewModelBase
             ResetRunStatesRecursive(step.FalseChain);
             ResetRunStatesRecursive(step.FireChain);
         }
+    }
+
+    /// <summary>按模型在编辑器树中定位节点（武装中的定时器/电子狗行的「定位」按钮用）：找不到只不跳转，不影响其他逻辑。</summary>
+    internal void LocateStep(StartupStep step)
+    {
+        var vm = FindStepVm(RootChain, step);
+        if (vm != null) RevealStepInEditor(vm);
     }
 
     /// <summary>「进入任务中心执行」节点的交接实现。任务中心（总计划 §3）落地前为占位：
@@ -1032,6 +1102,12 @@ public sealed class StepChainViewModel : ViewModelBase
         if (HasEndFlow)
         {
             _owner.Log($"[槲寄生] 「{BranchName}」已有「结束流程」节点，它是终点，之后不能再添加节点");
+            return;
+        }
+        // 「进入任务中心执行」全树只能有一个：多个交接点会把任务序列的推进权搞冲突
+        if (kind == StartupStepKinds.EnterTaskCenter && _owner.FindFirstByKind(StartupStepKinds.EnterTaskCenter) is { } existing)
+        {
+            _owner.Log($"[槲寄生] 启动流程中只能有一个「进入任务中心执行」节点（已有：「{existing.DisplayName}」），多个交接会冲突；如需调整位置，请删除后重新添加");
             return;
         }
         var model = StartupStepKinds.Create(kind);
@@ -1548,6 +1624,9 @@ public sealed class ArmedTimerViewModel : ViewModelBase
 
     public RelayCommand ViewFlowCommand => new(_ => _owner.ViewFlow(Step.FireSteps, $"定时触发器「{Title}」的到点执行流程"));
 
+    /// <summary>在启动中心编辑器树中定位到挂载这个定时器的节点。</summary>
+    public RelayCommand LocateCommand => new(_ => _owner.LocateStep(Step));
+
     public RelayCommand CancelCommand => new(_ => _owner.CancelTimer(this));
 
     /// <summary>每天重复时复用同一行项重新挂载（换发新 CTS，更新下次触发时间）。</summary>
@@ -1608,6 +1687,9 @@ public sealed class ArmedWatchdogViewModel : ViewModelBase
     }
 
     public RelayCommand ViewFlowCommand => new(_ => _owner.ViewFlow(Step.FireSteps, $"电子狗「{Title}」的触发执行流程"));
+
+    /// <summary>在启动中心编辑器树中定位到挂载这只电子狗的节点。</summary>
+    public RelayCommand LocateCommand => new(_ => _owner.LocateStep(Step));
 
     public RelayCommand CancelCommand => new(_ => _owner.CancelWatchdog(this));
 }

@@ -24,6 +24,42 @@ public partial class MistletoePage : UserControl
     public MistletoePage()
     {
         InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    // ================= 流程图节点跳转定位 =================
+
+    private MistletoeViewModel? _revealSubscribed;
+
+    private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (_revealSubscribed != null) _revealSubscribed.StepRevealRequested -= OnStepRevealRequested;
+        _revealSubscribed = Vm;
+        if (_revealSubscribed != null) _revealSubscribed.StepRevealRequested += OnStepRevealRequested;
+    }
+
+    private void OnStepRevealRequested(StartupStepViewModel vm)
+    {
+        // 分支区域刚展开、目标卡片可能刚从不折叠变为可见，等布局完成后再找容器滚动
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
+        {
+            FindElementByDataContext(this, vm)?.BringIntoView();
+        }));
+    }
+
+    /// <summary>在可视树里按 DataContext 广度优先找元素（编辑器节点树未虚拟化，容器均已生成）。</summary>
+    private static FrameworkElement? FindElementByDataContext(DependencyObject root, object dataContext)
+    {
+        var queue = new Queue<DependencyObject>();
+        queue.Enqueue(root);
+        while (queue.Count > 0)
+        {
+            var cur = queue.Dequeue();
+            if (cur is FrameworkElement fe && ReferenceEquals(fe.DataContext, dataContext)) return fe;
+            var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(cur);
+            for (var i = 0; i < count; i++) queue.Enqueue(System.Windows.Media.VisualTreeHelper.GetChild(cur, i));
+        }
+        return null;
     }
 
     // ================= 拖拽重排 =================

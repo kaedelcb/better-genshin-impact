@@ -1341,13 +1341,16 @@
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Text="⏰" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                                 <TextBlock Grid.Column="1" Text="{Binding StatusLine}" FontSize="11.5"
                                                            Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
-                                                <Button Grid.Column="2" Content="📄 流程" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="0,0,6,0"
+                                                <Button Grid.Column="2" Content="⌖ 定位" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="0,0,6,0"
+                                                        Command="{Binding LocateCommand}" ToolTip="在下方启动流程树中定位到挂载这个定时器的节点"/>
+                                                <Button Grid.Column="3" Content="📄 流程" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="0,0,6,0"
                                                         Command="{Binding ViewFlowCommand}" ToolTip="弹窗查看这个定时器到点会执行的完整流程"/>
-                                                <Button Grid.Column="3" Content="✕ 取消" Style="{DynamicResource BtnGhost}" Padding="10,3"
+                                                <Button Grid.Column="4" Content="✕ 取消" Style="{DynamicResource BtnGhost}" Padding="10,3"
                                                         Command="{Binding CancelCommand}" ToolTip="取消这个定时器（不影响流程里的其他节点）"/>
                                             </Grid>
                                         </DataTemplate>
@@ -1386,15 +1389,18 @@
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Text="🐕" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding StatusLine}" FontSize="11.5" Foreground="{DynamicResource White}"/>
                                                     <TextBlock Text="{Binding LastCheckNote}" FontSize="10" Foreground="{DynamicResource Dim}" Margin="0,1,0,0"/>
                                                 </StackPanel>
-                                                <Button Grid.Column="2" Content="📄 流程" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="0,0,6,0"
+                                                <Button Grid.Column="2" Content="⌖ 定位" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="0,0,6,0"
+                                                        Command="{Binding LocateCommand}" ToolTip="在下方启动流程树中定位到挂载这只电子狗的节点"/>
+                                                <Button Grid.Column="3" Content="📄 流程" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="0,0,6,0"
                                                         Command="{Binding ViewFlowCommand}" ToolTip="弹窗查看这只电子狗盯到时执行的完整流程"/>
-                                                <Button Grid.Column="3" Content="✕ 取消" Style="{DynamicResource BtnGhost}" Padding="10,3"
+                                                <Button Grid.Column="4" Content="✕ 取消" Style="{DynamicResource BtnGhost}" Padding="10,3"
                                                         Command="{Binding CancelCommand}" ToolTip="撤下这只电子狗（不影响流程里的其他节点）"/>
                                             </Grid>
                                         </DataTemplate>
@@ -1421,6 +1427,10 @@
                                                   ToolTip="执行时自动展开实际走到的分支，没走的分支灰显"/>
                                         <TextBlock Text="执行时展开走过的分支" FontSize="11" Foreground="{DynamicResource Dim}"
                                                    VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                        <Button Content="🗺 流程图" Style="{DynamicResource BtnGhost}"
+                                                Padding="10,3" FontSize="11" Margin="0,0,6,0"
+                                                Command="{Binding ShowFlowChartCommand}"
+                                                ToolTip="把当前启动流程画成一张流程图（只读；点击图上的节点可跳回这里定位并展开参数）"/>
                                         <Button Content="⟲ 清除路径显示" Style="{DynamicResource BtnGhost}"
                                                 Padding="10,3" FontSize="11" Margin="0,0,6,0"
                                                 Command="{Binding ClearRunStateDisplayCommand}"

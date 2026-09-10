@@ -1,0 +1,184 @@
+<Window x:Class="MultiplayerHoeingAssistant.Views.FlowChartWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="槲寄生 · 启动流程图"
+        Width="1080" Height="740" MinWidth="640" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        Background="#1a1a2e"
+        Foreground="#e0e0e0">
+    <Window.Resources>
+        <!-- 工具条小按钮（同 FlowPreviewWindow 关闭按钮的平色风格） -->
+        <Style x:Key="ToolBtn" TargetType="Button">
+            <Setter Property="Background" Value="#3a3a55"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#4a4a6a"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 标题 + 缩放工具条 -->
+        <Grid Grid.Row="0" Margin="0,0,0,10">
+            <TextBlock Text="🗺  启动流程图（只读）"
+                       FontSize="15" FontWeight="Bold" Foreground="#d4af37" VerticalAlignment="Center"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button Content="－" Style="{StaticResource ToolBtn}" Width="30" Height="26" Click="ZoomOut_Click" ToolTip="缩小"/>
+                <TextBlock x:Name="ZoomText" Text="100%" FontSize="11" Foreground="#9C97C0"
+                           VerticalAlignment="Center" Margin="8,0" MinWidth="40" TextAlignment="Center"/>
+                <Button Content="＋" Style="{StaticResource ToolBtn}" Width="30" Height="26" Click="ZoomIn_Click" ToolTip="放大"/>
+                <Button Content="1:1" Style="{StaticResource ToolBtn}" Height="26" Padding="8,0" Margin="8,0,0,0" Click="ZoomReset_Click" ToolTip="实际大小"/>
+                <Button Content="⤢ 适应窗口" Style="{StaticResource ToolBtn}" Height="26" Padding="10,0" Margin="6,0,0,0" Click="Fit_Click" ToolTip="缩放到整图可见"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- 图画布（滚动 + 缩放 + 拖动平移） -->
+        <Border Grid.Row="1" Background="#14122a" CornerRadius="10" BorderBrush="#40D4AF37" BorderThickness="1">
+            <ScrollViewer x:Name="Scroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                          PreviewMouseWheel="Scroller_PreviewMouseWheel">
+                <Grid x:Name="PanSurface" Background="Transparent"
+                      PreviewMouseLeftButtonDown="Pan_PreviewMouseLeftButtonDown"
+                      PreviewMouseLeftButtonUp="Pan_PreviewMouseLeftButtonUp"
+                      PreviewMouseMove="Pan_PreviewMouseMove"
+                      Cursor="Arrow">
+                    <Canvas x:Name="ChartCanvas" Background="Transparent"
+                            HorizontalAlignment="Left" VerticalAlignment="Top">
+                        <Canvas.LayoutTransform>
+                            <ScaleTransform x:Name="Zoom" ScaleX="1" ScaleY="1"/>
+                        </Canvas.LayoutTransform>
+                    </Canvas>
+                </Grid>
+            </ScrollViewer>
+        </Border>
+
+        <!-- 已激活的定时器 / 电子狗（独立展示，运行态列表实时刷新；图里的节点仍保留） -->
+        <Border Grid.Row="2" x:Name="ArmedPanel" Background="#241d3d" CornerRadius="10" BorderBrush="#40D4AF37"
+                BorderThickness="1" Padding="12,8" Margin="0,10,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="⏰ 定时中的触发器" FontSize="12" FontWeight="SemiBold" Foreground="#FFC857"/>
+                    <ItemsControl x:Name="TimerList" Margin="0,4,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="4,2" CornerRadius="6" Margin="0,1" Cursor="Hand"
+                                        MouseLeftButtonUp="ArmedRow_Click"
+                                        ToolTip="点击定位到流程图上挂载这个定时器的节点">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding StatusLine}" FontSize="10.5" Foreground="#9C97C0"
+                                                   TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                        <Button Grid.Column="1" Content="⌖ 定位" Style="{StaticResource ToolBtn}" FontSize="10"
+                                                Height="22" Padding="8,0" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                Click="ArmedLocate_Click" ToolTip="滚动到流程图上挂载这个定时器的节点并闪烁提示"/>
+                                        <Button Grid.Column="2" Content="📄 流程" Style="{StaticResource ToolBtn}" FontSize="10"
+                                                Height="22" Padding="8,0" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                Command="{Binding ViewFlowCommand}" ToolTip="弹窗查看这个定时器到点会执行的完整流程"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="（当前没有定时中的触发器）" FontSize="10" Foreground="#669C97C0" Margin="0,4,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasItems, ElementName=TimerList}" Value="False">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="🐕 盯梢中的电子狗" FontSize="12" FontWeight="SemiBold" Foreground="#E88A6F"/>
+                    <ItemsControl x:Name="WatchdogList" Margin="0,4,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="4,2" CornerRadius="6" Margin="0,1" Cursor="Hand"
+                                        MouseLeftButtonUp="ArmedRow_Click"
+                                        ToolTip="点击定位到流程图上挂载这只电子狗的节点">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding StatusLine}" FontSize="10.5" Foreground="#9C97C0" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding LastCheckNote}" FontSize="9.5" Foreground="#669C97C0" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Content="⌖ 定位" Style="{StaticResource ToolBtn}" FontSize="10"
+                                                Height="22" Padding="8,0" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                Click="ArmedLocate_Click" ToolTip="滚动到流程图上挂载这只电子狗的节点并闪烁提示"/>
+                                        <Button Grid.Column="2" Content="📄 流程" Style="{StaticResource ToolBtn}" FontSize="10"
+                                                Height="22" Padding="8,0" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                Command="{Binding ViewFlowCommand}" ToolTip="弹窗查看这只电子狗盯到时执行的完整流程"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="（当前没有盯梢中的电子狗）" FontSize="10" Foreground="#669C97C0" Margin="0,4,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasItems, ElementName=WatchdogList}" Value="False">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 图例 + 操作提示 -->
+        <StackPanel Grid.Row="3" Margin="0,10,0,0">
+            <WrapPanel>
+                <TextBlock Text="图例：" FontSize="10.5" Foreground="#9C97C0" VerticalAlignment="Center"/>
+                <TextBlock Text="「是」出线＝青" FontSize="10.5" Foreground="#6FD8CE" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock Text="「否」出线＝橙" FontSize="10.5" Foreground="#E88A6F" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Text="节点色条＝类型（金=时间 / 青=状态 / 紫=人工·CMD / 绿=启动·任务中心 / 红=结束·关闭 / 琥珀=定时 / 橙=电子狗）" FontSize="10.5" Foreground="#9C97C0" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Text="走过的路径加粗点亮，未走分支半透明" FontSize="10.5" Foreground="#9C97C0" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Text="虚线＝「到点·触发执行」链（异步触发）" FontSize="10.5" Foreground="#9C97C0" VerticalAlignment="Center"/>
+            </WrapPanel>
+            <TextBlock Text="点击节点跳回启动中心编辑器并展开参数；Ctrl＋滚轮缩放，按住空白处拖动平移。增删/移动节点时本图自动重画。"
+                       FontSize="10" Foreground="#9C97C0" TextWrapping="Wrap" Margin="0,4,0,0"/>
+        </StackPanel>
+    </Grid>
+</Window>
