@@ -36,6 +36,10 @@ public sealed class InstanceContext
 
     public int WindowsSessionId { get; }
 
+
+    /// <summary>每个 BGI 进程独立的只读状态管道名，避免同一用户多会话共享根管道。</summary>
+    public string ReadOnlyStatusPipeName => InstancePipeNames.ForReadOnlyStatus(ProcessId);
+
     public DateTimeOffset StartedAt { get; }
 
     public bool IsRoot => InstanceType == BetterGiInstanceType.Primary;
@@ -78,6 +82,12 @@ internal static class InstancePipeNames
         var userSid = identity.User
                       ?? throw new InvalidOperationException("无法取得当前 Windows 用户 SID。");
         return ForUserSid(userSid.Value);
+    }
+
+
+    internal static string ForReadOnlyStatus(int processId)
+    {
+        return $"BetterGI.v2.status-p{processId}";
     }
 
     internal static string ForUserSid(string userSid)

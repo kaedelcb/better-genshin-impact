@@ -37,7 +37,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         _schemeStore = new StartupFlowSchemeStore();
         _config = _store.Load();
         _runner = new StartupFlowRunner(mainVm.ExecuteLocalBgiCommandAsync, EnterTaskCenterAsync, ArmTimer, ConfirmHandlerAsync, mainVm.AddLog,
-            () => mainVm.LatestLocalStatus, ArmWatchdog);
+            () => mainVm.LatestLocalStatus, ArmWatchdog, (step, ct) => mainVm.QueryReadOnlyTaskStatusAsync(step, ct));
         _runner.NodeStateSink = OnNodeStateReported;
         RootChain = new StepChainViewModel(_config.Steps, this, parentCondition: null, branchName: "主流程");
         foreach (var s in _schemeStore.Load()) Schemes.Add(new SchemeItemViewModel(s));
@@ -648,6 +648,9 @@ public sealed class MistletoeViewModel : ViewModelBase
         ExpectRunning = step.ExpectRunning,
         ProcessName = step.ProcessName,
         TaskName = step.TaskName,
+        StatusSource = step.StatusSource,
+        StatusTargetOrder = step.StatusTargetOrder,
+        StatusTargetUser = step.StatusTargetUser,
         TimeStart = step.TimeStart,
         TimeEnd = step.TimeEnd,
         Weekdays = [.. step.Weekdays],
@@ -675,7 +678,7 @@ public sealed class MistletoeViewModel : ViewModelBase
             {
                 await Task.Delay(TimeSpan.FromSeconds(dog.IntervalSeconds), dog.Cts.Token);
 
-                var (reading, desc) = ReadWatchdog(step);
+                var (reading, desc) = await ReadWatchdogAsync(step, dog.Cts.Token);
                 if (reading == null)
                 {
                     dog.NoteLastCheck($"{desc}，本轮不计");
@@ -694,7 +697,7 @@ public sealed class MistletoeViewModel : ViewModelBase
                 for (var i = 1; i <= confirmTimes; i++)
                 {
                     await Task.Delay(TimeSpan.FromSeconds(confirmSeconds), dog.Cts.Token);
-                    var (recheck, recheckDesc) = ReadWatchdog(step);
+                    var (recheck, recheckDesc) = await ReadWatchdogAsync(step, dog.Cts.Token);
                     flipDesc = recheckDesc;
                     if (recheck == null)
                     {
@@ -759,14 +762,13 @@ public sealed class MistletoeViewModel : ViewModelBase
 
     /// <summary>读取一轮被盯条件：reading=null 表示「未知」（依赖 BGI 快照的条件在快照缺失时）。
     /// 未知≠不成立——这是断连-重连不被误判成边沿的关键。</summary>
-    private (bool? reading, string desc) ReadWatchdog(StartupStep step)
+    private async Task<(bool? reading, string desc)> ReadWatchdogAsync(StartupStep step, CancellationToken ct)
     {
-        var status = _mainVm.LatestLocalStatus;
         var cond = BuildWatchCondition(step);
-        if (status == null && cond.Kind is StartupStepKinds.BgiTaskRunning or StartupStepKinds.BgiTaskName)
+        if (step.StatusSource == StartupStatusSource.CurrentSession && _mainVm.LatestLocalStatus == null
+            && cond.Kind is StartupStepKinds.BgiTaskRunning or StartupStepKinds.BgiTaskName)
             return (null, "BGI 状态快照缺失（未连接/未上报）");
-        var (ok, desc) = StartupFlowRunner.EvaluateCondition(cond, status);
-        return (ok, desc);
+        return await _runner.ReadConditionAsync(cond, ct);
     }
 
     /// <summary>取消一个盯梢中的电子狗（页面「取消」按钮）。</summary>
@@ -1301,6 +1303,54 @@ public sealed class StartupStepViewModel : ViewModelBase
         set { Model.TaskName = value; Changed(); }
     }
 
+    /// <summary>状态来源下拉框：本会话、按实际 BGI 启动顺序、按 Windows 用户名。</summary>
+    public int StatusSourceIndex
+    {
+        get
+        {
+            var i = Array.IndexOf(StartupStatusSource.All, Model.StatusSource);
+            return i >= 0 ? i : 0;
+        }
+        set
+        {
+            if (value < 0 || value >= StartupStatusSource.All.Length) return;
+            Model.StatusSource = StartupStatusSource.All[value];
+            Changed(nameof(StatusSourceIndex));
+            Changed(nameof(StatusSourceSummary));
+        }
+    }
+
+    public string StatusTargetOrderText
+    {
+        get => Math.Max(1, Model.StatusTargetOrder).ToString();
+        set
+        {
+            Model.StatusTargetOrder = int.TryParse(value, out var n) ? Math.Max(1, n) : 1;
+            Changed();
+        }
+    }
+
+    public string StatusTargetUser
+    {
+        get => Model.StatusTargetUser;
+        set { Model.StatusTargetUser = value ?? ""; Changed(); Changed(nameof(StatusSourceSummary)); }
+    }
+
+    public bool HasStatusSource => (Model.Kind == StartupStepKinds.Watchdog ? Model.WatchKind : Model.Kind)
+        is StartupStepKinds.BgiRunning or StartupStepKinds.GameRunning or StartupStepKinds.BgiTaskRunning or StartupStepKinds.BgiTaskName;
+    public bool IsOrderSource => Model.StatusSource == StartupStatusSource.StartupOrder;
+    public bool IsUserSource => Model.StatusSource == StartupStatusSource.UserName;
+
+    public string StatusSourceSummary => Model.StatusSource switch
+    {
+        StartupStatusSource.StartupOrder => $"首次按 BGI 实际启动时间给会话编号，选择第 {Math.Max(1, Model.StatusTargetOrder)} 个（包含本会话）。助手运行期间序号不前移；同会话 BGI 重启可重连。重启助手重新编号，请先按固定顺序启动全部 BGI；登录顺序不等于 BGI 启动顺序。",
+        StartupStatusSource.UserName => string.IsNullOrWhiteSpace(Model.StatusTargetUser)
+            ? "按 Windows 用户名匹配（支持 DOMAIN\\user）；同名多会话无法唯一识别时按未知处理，不执行条件。"
+            : $"按 Windows 用户名「{Model.StatusTargetUser}」匹配；同名多会话无法唯一识别时按未知处理，不执行条件。",
+        _ => "本会话（默认）：只读取当前助手所在 Windows 会话的状态。"
+    };
+
+
     // ---- 电子狗参数（watchdog 用；被盯条件为进程类/任务状态时复用 ProcessName/ExpectRunningIndex/TaskName） ----
 
     /// <summary>被盯条件类型键（watchdog 用；XAML 子参数区的 MultiDataTrigger 直接绑它）。</summary>
@@ -1410,6 +1460,10 @@ public sealed class StartupStepViewModel : ViewModelBase
     {
         if (extraProperty != null) OnPropertyChanged(extraProperty);
         OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(HasStatusSource));
+        OnPropertyChanged(nameof(IsOrderSource));
+        OnPropertyChanged(nameof(IsUserSource));
+        OnPropertyChanged(nameof(StatusSourceSummary));
         _owner.RequestSave();
     }
 }

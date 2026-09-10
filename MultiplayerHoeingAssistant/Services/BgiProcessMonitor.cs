@@ -49,6 +49,62 @@ public class BgiProcessMonitor : IDisposable
             .ToArray();
     }
 
+    /// <summary>只读枚举本机所有会话的 BGI 实例，供启动中心状态条件使用；不用于控制、杀进程或重启。</summary>
+    public static Process[] GetAllSessionBgiProcesses() =>
+        Process.GetProcessesByName("BetterGI");
+
+    private static readonly StartupSessionBindings StatusBindings = new();
+
+    internal static int ResolveStatusSession(string source, int order, string userName)
+    {
+        if (source == Models.StartupStatusSource.CurrentSession)
+        {
+            using var current = Process.GetCurrentProcess();
+            return current.SessionId;
+        }
+        if (source == Models.StartupStatusSource.UserName)
+        {
+            var matches = WindowsSessionIdentity.GetSessionIds().Where(id =>
+                WindowsSessionIdentity.Matches(WindowsSessionIdentity.GetUserName(id), userName)).ToArray();
+            if (matches.Length != 1) throw new InvalidOperationException("用户名未匹配到唯一登录会话，状态未知");
+            return matches[0];
+        }
+        if (source != Models.StartupStatusSource.StartupOrder)
+            throw new InvalidOperationException("未知状态来源");
+        var processes = GetAllSessionBgiProcesses();
+        try
+        {
+            var ordered = processes.OrderBy(p => p.StartTime.ToUniversalTime()).ThenBy(p => p.Id)
+                .Select(p => new SessionLifetime(p.SessionId, WindowsSessionIdentity.GetLogonTime(p.SessionId)))
+                .Distinct().ToArray();
+            var bound = StatusBindings.Resolve(order, ordered);
+            if (WindowsSessionIdentity.GetLogonTime(bound.SessionId) != bound.LogonTime)
+                throw new InvalidOperationException("原目标会话已注销，拒绝绑定到复用的会话编号；重启助手可重新绑定");
+            return bound.SessionId;
+        }
+        finally { foreach (var process in processes) process.Dispose(); }
+    }
+
+    public static Process[] SelectBgiProcesses(string source, int order, string userName)
+    {
+        var session = ResolveStatusSession(source, order, userName);
+        var all = GetAllSessionBgiProcesses();
+        Process[] selected = [];
+        try
+        {
+            var matches = all.Where(p => p.SessionId == session).ToArray();
+            if (source != Models.StartupStatusSource.CurrentSession && matches.Length > 1)
+                throw new InvalidOperationException("目标会话存在多个 BGI 实例，状态未知");
+            selected = matches;
+            return selected;
+        }
+        finally
+        {
+            foreach (var process in all)
+                if (!selected.Contains(process)) process.Dispose();
+        }
+    }
+
     public void Start()
     {
         if (_isRunning) return;

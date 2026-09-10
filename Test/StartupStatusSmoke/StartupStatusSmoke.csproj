@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../MultiplayerHoeingAssistant/Services/StartupFlowRunner.cs" Link="StartupFlowRunner.cs" />
+    <Compile Include="../../MultiplayerHoeingAssistant/Services/BgiProcessMonitor.cs" Link="BgiProcessMonitor.cs" />
+    <Compile Include="../../MultiplayerHoeingAssistant/Models/CommandResult.cs" Link="CommandResult.cs" />
+    <Compile Include="../../MultiplayerHoeingAssistant/Models/ControlStatus.cs" Link="ControlStatus.cs" />
+    <Compile Include="../../MultiplayerHoeingAssistant/Services/StartupSessionBindings.cs" Link="StartupSessionBindings.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/Instance/ReadOnlyStatusPipe.cs" Link="ReadOnlyStatusPipe.cs" />
+    <Compile Include="../../MultiplayerHoeingAssistant/Services/WindowsSessionIdentity.cs" Link="WindowsSessionIdentity.cs" />
+    <Compile Include="../../MultiplayerHoeingAssistant/Models/StartupFlowModels.cs" Link="StartupFlowModels.cs" />
+  </ItemGroup>
+</Project>

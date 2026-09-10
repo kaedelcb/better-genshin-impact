@@ -29,6 +29,7 @@ public sealed class StartupFlowRunner
     private readonly Func<StartupStep, CancellationToken, Task<(bool passed, string desc)>> _confirmHandler;
     /// <summary>BGI 任务状态快照提供方（bgiTaskRunning/bgiTaskName 条件用；由宿主注入，读 MainViewModel 的 10s 状态缓存，不新起 IPC）。</summary>
     private readonly Func<ControlStatus?> _statusProvider;
+    private readonly Func<StartupStep, CancellationToken, Task<ControlStatus?>> _targetStatusProvider;
     private readonly Action<string> _log;
 
     /// <summary>
@@ -47,7 +48,8 @@ public sealed class StartupFlowRunner
         Func<StartupStep, CancellationToken, Task<(bool passed, string desc)>> confirmHandler,
         Action<string> log,
         Func<ControlStatus?> statusProvider,
-        Action<StartupStep> armWatchdog)
+        Action<StartupStep> armWatchdog,
+        Func<StartupStep, CancellationToken, Task<ControlStatus?>>? targetStatusProvider = null)
     {
         _bgiExecutor = bgiExecutor;
         _enterTaskCenter = enterTaskCenter;
@@ -55,6 +57,7 @@ public sealed class StartupFlowRunner
         _confirmHandler = confirmHandler;
         _log = log;
         _statusProvider = statusProvider;
+        _targetStatusProvider = targetStatusProvider ?? ((_, _) => Task.FromResult<ControlStatus?>(null));
         _armWatchdog = armWatchdog;
     }
 
@@ -109,12 +112,18 @@ public sealed class StartupFlowRunner
                 var (passed, desc) = step.Kind == StartupStepKinds.ManualConfirm
                     ? await _confirmHandler(step, ct)
                     : await EvaluateConditionStableAsync(step, ct);
-                _log($"[槲寄生] {indent}条件「{display}」：{desc} → {(passed ? "是" : "否")}");
-                Report(step, passed ? NodeRunState.CondTrue : NodeRunState.CondFalse, desc);
-                var branch = passed ? step.TrueSteps : step.FalseSteps;
+                if (passed is null)
+                {
+                    _log($"[槲寄生] {indent}条件「{display}」状态未知：{desc}；终止本次流程，不执行任一分支");
+                    Report(step, NodeRunState.Failed, desc);
+                    throw new FlowEndException();
+                }
+                _log($"[槲寄生] {indent}条件「{display}」：{desc} → {(passed.Value ? "是" : "否")}");
+                Report(step, passed.Value ? NodeRunState.CondTrue : NodeRunState.CondFalse, desc);
+                var branch = passed.Value ? step.TrueSteps : step.FalseSteps;
                 if (branch.Count == 0)
                 {
-                    _log($"[槲寄生] {indent}「{(passed ? "是" : "否")}」分支为空，继续后续节点");
+                    _log($"[槲寄生] {indent}「{(passed.Value ? "是" : "否")}」分支为空，继续后续节点");
                 }
                 else
                 {
@@ -176,20 +185,53 @@ public sealed class StartupFlowRunner
     /// 以第三次为准（bool 三次读取中第三次必与前两次之一相同，即多数派）。全部读取依据写入 desc 留痕。
     /// 代价：外部状态类条件固定多 1.5s（不稳定时 3s）延迟，换取不被中间态误导分支走向。
     /// </summary>
-    private async Task<(bool passed, string desc)> EvaluateConditionStableAsync(StartupStep step, CancellationToken ct)
+    private async Task<(bool? passed, string desc)> EvaluateConditionStableAsync(StartupStep step, CancellationToken ct)
     {
         if (!NeedsStabilityConfirm(step.Kind))
-            return EvaluateCondition(step, _statusProvider());
+            return await ReadConditionAsync(step, ct);
 
-        var first = EvaluateCondition(step, _statusProvider());
+        var first = await ReadConditionAsync(step, ct);
         await Task.Delay(StabilityConfirmDelayMs, ct);
-        var second = EvaluateCondition(step, _statusProvider());
+        var second = await ReadConditionAsync(step, ct);
+        if (first.passed is null) return first;
+        if (second.passed is null) return second;
         if (first.passed == second.passed)
             return (second.passed, $"{second.desc}（二次确认一致）");
 
         await Task.Delay(StabilityConfirmDelayMs, ct);
-        var third = EvaluateCondition(step, _statusProvider());
+        var third = await ReadConditionAsync(step, ct);
         return (third.passed, $"状态不稳定（{first.passed}→{second.passed}→{third.passed}），以第三次读取为准：{third.desc}");
+    }
+
+
+    public async Task<(bool? passed, string desc)> ReadConditionAsync(StartupStep step, CancellationToken ct)
+    {
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+            ControlStatus? status = null;
+            if (step.Kind is StartupStepKinds.BgiTaskRunning or StartupStepKinds.BgiTaskName)
+            {
+                status = await GetStatusAsync(step, ct);
+                if (status is null && step.StatusSource != StartupStatusSource.CurrentSession)
+                    return (null, "目标任务状态查询失败或目标不唯一");
+            }
+            var result = EvaluateCondition(step, status);
+            return (result.passed, result.desc);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            _log($"[槲寄生] 状态读取失败：{ex.Message}");
+            return (null, ex.Message);
+        }
+    }
+
+    private async Task<ControlStatus?> GetStatusAsync(StartupStep step, CancellationToken ct)
+    {
+        if (step.StatusSource == StartupStatusSource.CurrentSession)
+            return _statusProvider();
+        return await _targetStatusProvider(step, ct).ConfigureAwait(false);
     }
 
     /// <summary>求值条件节点，返回 (是否通过, 人类可读的判断依据)。
@@ -217,12 +259,15 @@ public sealed class StartupFlowRunner
             }
             case StartupStepKinds.BgiRunning:
             {
-                var running = BgiProcessMonitor.GetCurrentSessionBgiProcesses().Length > 0;
+                var targets = BgiProcessMonitor.SelectBgiProcesses(step.StatusSource, step.StatusTargetOrder, step.StatusTargetUser);
+                var running = targets.Length > 0;
+                foreach (var target in targets) target.Dispose();
                 return (running == step.ExpectRunning, $"BGI {(running ? "正在运行" : "未运行")}，期望 {(step.ExpectRunning ? "运行" : "未运行")}");
             }
             case StartupStepKinds.GameRunning:
             {
-                var running = IsGameRunning();
+                var session = BgiProcessMonitor.ResolveStatusSession(step.StatusSource, step.StatusTargetOrder, step.StatusTargetUser);
+                var running = IsGameRunning(session, step.StatusSource != StartupStatusSource.CurrentSession);
                 return (running == step.ExpectRunning, $"游戏 {(running ? "正在运行" : "未运行")}，期望 {(step.ExpectRunning ? "运行" : "未运行")}");
             }
             case StartupStepKinds.ProcessRunning:
@@ -251,11 +296,20 @@ public sealed class StartupFlowRunner
                     ? status.CurrentTaskName is { Length: > 0 } n ? $"{g} · {n}" : g
                     : status.CurrentTaskName ?? "（未上报任务名）";
                 return (hit, $"当前任务「{current}」{(hit ? "包含" : "不包含")}「{step.TaskName}」");
+
             }
             default:
                 return (false, $"未知条件类型 {step.Kind}（按不满足处理）");
         }
     }
+
+
+    private static string DescribeStatusSource(StartupStep step) => step.StatusSource switch
+    {
+        StartupStatusSource.StartupOrder => $"启动顺序第 {Math.Max(1, step.StatusTargetOrder)} 个目标",
+        StartupStatusSource.UserName => $"用户「{step.StatusTargetUser}」目标",
+        _ => "本会话"
+    };
 
     // ================= 动作执行 =================
 
@@ -267,6 +321,7 @@ public sealed class StartupFlowRunner
             {
                 case StartupStepKinds.StartBgi:
                 {
+
                     // 先关闭再启动：BGI 已在运行时 start_bgi 走不抢占策略（参数不会生效），
                     // 勾选后先强杀本会话 BGI 再带参数启动
                     if (step.KillBeforeStart && BgiProcessMonitor.GetCurrentSessionBgiProcesses().Length > 0)
@@ -483,20 +538,22 @@ public sealed class StartupFlowRunner
 
     // ================= 进程检测（全部按当前 Windows 会话过滤） =================
 
-    private static bool IsGameRunning()
+    private static bool IsGameRunning(int? targetSession = null, bool strict = false)
     {
         try
         {
-            var session = Process.GetCurrentProcess().SessionId;
+            var session = targetSession ?? Process.GetCurrentProcess().SessionId;
             foreach (var name in GameProcessNames)
             {
-                if (Process.GetProcessesByName(name).Any(p => p.SessionId == session))
-                    return true;
+                var processes = Process.GetProcessesByName(name);
+                try { if (processes.Any(p => p.SessionId == session)) return true; }
+                finally { foreach (var process in processes) process.Dispose(); }
             }
         }
         catch
         {
-            // 进程枚举失败按未运行处理（与 IsProcessRunning 同策略）
+            if (strict) throw;
+            // 本会话保留既有容错；跨会话异常由 ReadConditionAsync 转换为未知。
         }
         return false;
     }

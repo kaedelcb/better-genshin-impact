@@ -117,6 +117,7 @@ internal sealed class InstanceRequestHandler
                 InstanceOperations.TaskStop => HandleTaskStop(connection, request),
                 InstanceOperations.TaskStart => await HandleTaskStart(connection, request),
                 InstanceOperations.TaskStatus => HandleTaskStatus(connection, request),
+
                 InstanceOperations.ConfigList => HandleConfigList(connection, request),
                 InstanceOperations.ExecuteHotkey => await HandleExecuteHotkey(connection, request),
                 InstanceOperations.CloseGame => HandleCloseGame(connection, request),
@@ -922,6 +923,27 @@ internal sealed class InstanceRequestHandler
             return InstanceIpcEnvelope.Failure(request, "task_status_failed", $"查询任务状态失败: {ex.Message}");
         }
     }
+
+    internal object CreateReadOnlyStatusSnapshot()
+    {
+        var request = InstanceIpcEnvelope.Request(InstanceOperations.TaskStatus);
+        var response = HandleTaskStatus(null!, request);
+        if (response.Success != true || response.Data is null)
+            throw new InvalidOperationException(response.ErrorMessage ?? "任务状态读取失败");
+        var data = response.Data;
+        using var currentProcess = Process.GetCurrentProcess();
+        return new
+        {
+            windowsSessionId = _context.WindowsSessionId,
+            processId = _context.ProcessId,
+            startedAt = _context.StartedAt,
+            processStartTicks = currentProcess.StartTime.ToUniversalTime().Ticks,
+            running = data["running"]?.ToObject<bool>() ?? false,
+            taskName = data["taskName"]?.ToObject<string>(),
+            groupName = data["groupName"]?.ToObject<string>()
+        };
+    }
+
 
     internal InstanceIpcEnvelope HandleConfigList(InstanceConnection connection, InstanceIpcEnvelope request)
     {

@@ -52,6 +52,7 @@ public class IpcClient : IDisposable
     /// </summary>
     public string GetPipeName() => _pipeName;
 
+
     public async Task ConnectAsync(int timeoutMs = 3000)
     {
         _pipeClient = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
@@ -153,6 +154,7 @@ public class IpcClient : IDisposable
             throw new TimeoutException($"BGI 命名管道命令（{request.OpCode}）响应超时（{CommandTimeout.TotalSeconds:0}s），BGI 可能忙或无响应");
         }
     }
+
 
     private async Task<IpcResponse> SendCommandCoreAsync(IpcRequest request)
     {

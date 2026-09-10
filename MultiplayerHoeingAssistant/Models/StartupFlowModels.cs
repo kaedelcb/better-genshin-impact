@@ -196,6 +196,18 @@ public class StartupStep
     [JsonPropertyName("killBeforeStart")]
     public bool KillBeforeStart { get; set; } = false;
 
+    /// <summary>状态来源：本会话（默认）、按 BGI 启动顺序、按 Windows 用户名/SID。</summary>
+    [JsonPropertyName("statusSource")]
+    public string StatusSource { get; set; } = StartupStatusSource.CurrentSession;
+
+    /// <summary>按启动顺序选择的逻辑序号，1 开始。</summary>
+    [JsonPropertyName("statusTargetOrder")]
+    public int StatusTargetOrder { get; set; } = 1;
+
+    /// <summary>按用户名选择时的 Windows 用户名。</summary>
+    [JsonPropertyName("statusTargetUser")]
+    public string StatusTargetUser { get; set; } = "";
+
     /// <summary>[旧版遗留] BGI 任务名（startGroup/startOneClick 用）。
     /// 2026-09-08 起这两个类型已从节点目录移除（启动中心不再直接配 BGI 任务，由「进入任务中心执行」节点接管），
     /// 字段与 Runner 分支保留仅为兼容旧配置。bgiTaskName 条件节点复用此字段存匹配文本。</summary>
@@ -209,6 +221,15 @@ public class StartupStep
 /// 启动中心定位：进入任务中心前的环境准备（起 BGI/游戏/三方程序/CMD/等待），
 /// 具体 BGI 任务序列不属于这里——用「进入任务中心执行」节点交接。
 /// </summary>
+public static class StartupStatusSource
+{
+    public const string CurrentSession = "currentSession";
+    public const string StartupOrder = "startupOrder";
+    public const string UserName = "userName";
+
+    public static readonly string[] All = [CurrentSession, StartupOrder, UserName];
+}
+
 public static class StartupStepKinds
 {
     // ---- 条件判断 ----

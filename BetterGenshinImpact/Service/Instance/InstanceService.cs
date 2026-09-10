@@ -39,6 +39,8 @@ public sealed class InstanceService : IHostedService, IAsyncDisposable
     private Task? _rootConnectionLoopTask;
     private InstanceConnection? _rootConnection;
     private bool _applicationReady;
+    private readonly ReadOnlyStatusPipe _readOnlyStatusPipe;
+
     private int _stopStarted;
 
     public InstanceService(
@@ -68,6 +70,8 @@ public sealed class InstanceService : IHostedService, IAsyncDisposable
             EnqueueActivation,
             DispatchWebViewMessage,
             logger);
+        _readOnlyStatusPipe = new ReadOnlyStatusPipe(Context.ReadOnlyStatusPipeName, _requestHandler.CreateReadOnlyStatusSnapshot);
+
     }
 
     public event EventHandler<WebViewMessageReceivedEventArgs>? WebViewMessageReceived;
@@ -103,9 +107,11 @@ public sealed class InstanceService : IHostedService, IAsyncDisposable
         _logger.LogDebug(
             "实例 IPC v2 已启动：{InstanceType}，进程 {ProcessId}，Session {SessionId}，根管道 {PipeName}",
             Context.InstanceType,
+
             Context.ProcessId,
             Context.WindowsSessionId,
             Context.RootPipeName);
+        _readOnlyStatusPipe.Start();
         return Task.CompletedTask;
     }
 
@@ -115,6 +121,7 @@ public sealed class InstanceService : IHostedService, IAsyncDisposable
         {
             return;
         }
+        await _readOnlyStatusPipe.DisposeAsync().ConfigureAwait(false);
 
         _lifetimeCancellationTokenSource.Cancel();
         _relativeMouseMessageHandler.Stop();

@@ -610,6 +610,31 @@
                                              ToolTip="当前任务名或配置组名包含该文本即走「是」（不区分大小写；BGI 未在跑任务时一律走「否」）"/>
                                 </WrapPanel>
 
+                                <!-- Same target settings for conditions and watchdogs. -->
+                                <StackPanel Margin="0,4,0,8">
+                                    <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding HasStatusSource}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                                    <WrapPanel>
+                                        <TextBlock Text="状态来源" Style="{StaticResource FieldLabel}"/>
+                                        <ComboBox Width="150" Style="{StaticResource GoldComboBox}" SelectedIndex="{Binding StatusSourceIndex, Mode=TwoWay}">
+                                            <ComboBoxItem Content="本会话（默认）" Style="{StaticResource GoldComboItem}"/>
+                                            <ComboBoxItem Content="按启动顺序" Style="{StaticResource GoldComboItem}"/>
+                                            <ComboBoxItem Content="按用户名" Style="{StaticResource GoldComboItem}"/>
+                                        </ComboBox>
+                                        <StackPanel Orientation="Horizontal" Margin="8,0,0,0">
+                                            <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsOrderSource}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                                            <TextBlock Text="序号" Style="{StaticResource FieldLabel}"/>
+                                            <TextBox Width="55" Style="{StaticResource GoldInput}" Text="{Binding StatusTargetOrderText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="8,0,0,0">
+                                            <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsUserSource}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                                            <TextBlock Text="用户名" Style="{StaticResource FieldLabel}"/>
+                                            <TextBox Width="160" Style="{StaticResource GoldInput}" Text="{Binding StatusTargetUser, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Windows 用户名，支持 DOMAIN\user"/>
+                                        </StackPanel>
+                                    </WrapPanel>
+                                    <TextBlock Text="{Binding StatusSourceSummary}" TextWrapping="Wrap" MaxWidth="470" FontSize="10" Foreground="{DynamicResource Dim}" Margin="0,4,0,0"/>
+                                </StackPanel>
+
+
                                 <!-- processRunning -->
                                 <WrapPanel>
                                     <WrapPanel.Style>
