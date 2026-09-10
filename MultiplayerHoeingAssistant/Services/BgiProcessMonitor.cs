@@ -91,14 +91,17 @@ public class BgiProcessMonitor : IDisposable
         // 避免 BGI 启动慢（>5s）时每 5s 轮询重复 RestartBgi 导致双开/多开 BGI。
         if (_wasRunning)
         {
-            _wasRunning = false;
-            // [P2 仲裁] 崩溃重启冷却：距上次崩溃重启 <30s 跳过并记日志，防"崩溃→拉起→又崩"快速震荡循环
+            // [P2 仲裁] 崩溃重启冷却：距上次崩溃重启 <30s 跳过并记日志，防"崩溃→拉起→又崩"快速震荡循环。
+            // 注意：冷却跳过时不卸除边沿武装（_wasRunning 保持 true）——若先卸除再跳过，
+            // 进程永远不会自己重新出现来重新武装，守护将永久失活（本次"消失"既没拉起也不再重判）。
+            // 保持武装后冷却期每轮轮询都会重判，冷却一结束即延迟拉起。
             var sinceLast = DateTime.UtcNow - _lastCrashRestartUtc;
             if (sinceLast < CrashRestartCooldown)
             {
-                _log?.Invoke($"[崩溃守护] 距上次崩溃处理仅 {sinceLast.TotalSeconds:F0}s（<{CrashRestartCooldown.TotalSeconds:F0}s 冷却），跳过本次自动重启");
+                _log?.Invoke($"[崩溃守护] 距上次崩溃处理仅 {sinceLast.TotalSeconds:F0}s（<{CrashRestartCooldown.TotalSeconds:F0}s 冷却），跳过本次自动重启，待冷却结束后重试");
                 return;
             }
+            _wasRunning = false;
             _lastCrashRestartUtc = DateTime.UtcNow;
             OnBgiCrashed?.Invoke();
         }
