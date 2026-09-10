@@ -154,7 +154,13 @@ internal sealed class ExternalInterfaceEventObserver
                 _lastProjectKey = projectKey;
                 hub.Publish(
                     ExternalInterfaceEventNames.TaskProgress,
-                    new { groupName, projectName });
+                    new
+                    {
+                        groupName,
+                        projectName,
+                        // 配置组内脚本任务当前执行线路（纯增量字段，老助手忽略；助手端只借本事件触发快照刷新）
+                        currentScriptRouteName = BetterGenshinImpact.Core.Script.ScriptRouteProgress.CurrentRouteName
+                    });
             }
         }
 
@@ -225,7 +231,10 @@ internal sealed class ExternalInterfaceEventObserver
             }
 
             var groupName = ctx!.taskProgress!.CurrentScriptGroupName;
-            return (info.Name, groupName, $"{groupName}|{info.Index}|{info.Name}");
+            // 线路名进 key：配置组内 JS 脚本逐条跑路线时项目身份不变，只有线路在变；
+            // 不带上它就不会发 task.progress（助手端也就不会刷新快照，成员状态里的线路要等 10s 轮询）。
+            var routeName = BetterGenshinImpact.Core.Script.ScriptRouteProgress.CurrentRouteName;
+            return (info.Name, groupName, $"{groupName}|{info.Index}|{info.Name}|{routeName}");
         }
         catch
         {

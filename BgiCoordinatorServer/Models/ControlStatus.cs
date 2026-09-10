@@ -26,6 +26,8 @@ public class ControlStatus
     public string? CurrentTaskGroupName { get; set; }
     /// <summary>当前联机锄地线路展示文本（如"第2条线路: 蒙德城"，非锄地为 null）。</summary>
     public string? CurrentRouteDisplay { get; set; }
+    /// <summary>配置组内脚本任务（JS/地图追踪）当前执行的具体线路名（非脚本任务为 null；与锄地线路展示互不覆盖）。</summary>
+    public string? CurrentScriptRouteName { get; set; }
     /// <summary>是否正在联机锄地（锄地房间中）。</summary>
     public bool AutoHoeingRunning { get; set; }
     /// <summary>当前锄地进度文本（仅上报给自身用，控制端不展示给对方）。</summary>

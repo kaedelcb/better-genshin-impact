@@ -365,6 +365,7 @@ public class HeartbeatMonitor : IHostedService, IDisposable
                             group, player.PlayerName, player.PlayerUid);
                         player.TaskRunning = false;
                         player.CurrentTaskName = null;
+                        player.CurrentScriptRouteName = null;
                         player.TaskRunningExpireTime = DateTime.MinValue;
                     }
                 }

@@ -137,13 +137,22 @@ public sealed class MistletoeViewModel : ViewModelBase
         BgiCurrentTaskDisplay = s.TaskRunning ? ComposeTaskDisplay(s) : "—";
     }
 
-    /// <summary>拼接任务显示文本：配置组 · 任务名 · 线路（空段跳过；联机锄地时线路优先于任务名）。与 ControlRoom 玩家卡片 TaskDisplayText 同口径。</summary>
+    /// <summary>拼接任务显示文本：配置组 · 任务名 · 线路（空段跳过；联机锄地时线路优先于任务名，
+    /// 脚本任务（JS/地图追踪）则三者全上）。与 ControlRoom 玩家卡片 TaskDisplayText 同口径。</summary>
     private static string ComposeTaskDisplay(ControlStatus s)
     {
         var parts = new List<string>();
         if (!string.IsNullOrEmpty(s.CurrentTaskGroupName)) parts.Add(s.CurrentTaskGroupName);
-        if (!string.IsNullOrEmpty(s.CurrentTaskName) && string.IsNullOrEmpty(s.CurrentRouteDisplay)) parts.Add(s.CurrentTaskName);
-        if (!string.IsNullOrEmpty(s.CurrentRouteDisplay)) parts.Add(s.CurrentRouteDisplay);
+        if (!string.IsNullOrEmpty(s.CurrentScriptRouteName))
+        {
+            if (!string.IsNullOrEmpty(s.CurrentTaskName)) parts.Add(s.CurrentTaskName);
+            parts.Add(s.CurrentScriptRouteName);
+        }
+        else
+        {
+            if (!string.IsNullOrEmpty(s.CurrentTaskName) && string.IsNullOrEmpty(s.CurrentRouteDisplay)) parts.Add(s.CurrentTaskName);
+            if (!string.IsNullOrEmpty(s.CurrentRouteDisplay)) parts.Add(s.CurrentRouteDisplay);
+        }
         return parts.Count > 0 ? string.Join(" · ", parts) : s.CurrentTaskName ?? "任务执行中";
     }
 

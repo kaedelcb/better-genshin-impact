@@ -1298,6 +1298,7 @@ public class RoomManager
                     player.BgiStatus = "";
                     player.TaskRunning = false;
                     player.CurrentTaskName = null;
+                    player.CurrentScriptRouteName = null;
                     // 断线时重置上线事件代序号：BGI 重启后 generation 从 1 重新开始，
                     // 若保留旧值（如 2/3），新 generation(1) <= 旧值会被永久忽略，导致无法上线。
                     player.OnlineEventGeneration = 0;
@@ -1331,6 +1332,8 @@ public class RoomManager
                     player.CurrentTaskName = status.TaskRunning ? status.CurrentTaskName : null;
                     player.CurrentTaskGroupName = status.TaskRunning ? status.CurrentTaskGroupName : null;
                     player.CurrentRouteDisplay = status.CurrentRouteDisplay;
+                    // 任务未在跑时一并复位：避免任务结束后广播里仍留着上一个脚本的线路名
+                    player.CurrentScriptRouteName = status.TaskRunning ? status.CurrentScriptRouteName : null;
                     // 任务运行态带过期时间（超时自愈）；TaskRunning=false 时复位
                     if (status.TaskRunning)
                         player.TaskRunningExpireTime = DateTime.UtcNow.AddSeconds(TaskRunningTimeoutSec);

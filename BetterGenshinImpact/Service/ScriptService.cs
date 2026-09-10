@@ -550,6 +550,8 @@ public partial class ScriptService : IScriptService
     private async Task ExecuteProject(ScriptGroupProject project)
     {
         TaskContext.Instance().CurrentScriptProject = project;
+        // 新项目开始：清掉上一个项目残留的线路名（上一个项目异常退出时不会走到 finally 以外的清理）
+        ScriptRouteProgress.Clear();
         try
         {
             if (project.Type == "Javascript")
@@ -601,6 +603,8 @@ public partial class ScriptService : IScriptService
             // 任务结束后清空 CurrentScriptProject，避免 HandleTaskStatus 的
             // `taskName ??= TaskContext.CurrentScriptProject?.Name` 用残留值补 taskName → running 恒 true → 任务名残留。
             TaskContext.Instance().CurrentScriptProject = null;
+            // 项目结束（正常/异常/取消）清空脚本线路名：下一个任务不该继承上一个脚本的线路显示。
+            ScriptRouteProgress.Clear();
         }
     }
 

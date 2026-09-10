@@ -47,7 +47,7 @@ public sealed class HoeingStatsViewModel : ViewModelBase, IDisposable
 
     // ========== 成员实时状态墙（直接复用主 VM 成员集合） ==========
 
-    /// <summary>成员列表（含 TaskRunning/CurrentTaskGroupName/CurrentRouteDisplay/AutoHoeingProgress）。</summary>
+    /// <summary>成员列表（含 TaskRunning/CurrentTaskGroupName/CurrentRouteDisplay/CurrentScriptRouteName/AutoHoeingProgress）。</summary>
     public System.Collections.ObjectModel.ObservableCollection<MemberViewModel> Members => _mainVm.Members;
 
     // ========== 每日运行日报 ==========

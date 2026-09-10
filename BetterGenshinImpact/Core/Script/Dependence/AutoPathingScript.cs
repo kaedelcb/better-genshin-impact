@@ -67,7 +67,11 @@ public class AutoPathingScript
             var json = await new LimitedFile(_rootPath).ReadText(path);
             
             PathingConditionConfig.GetCountryName(path);
-            
+
+            // 记录"当前执行线路"：JS 脚本任务名恒为脚本名，只有这里能拿到脚本内部正跑的线路文件名
+            // （联机助手成员状态标签 / 嘟嘟可锄地数据成员墙的「路线」显示用）。
+            ScriptRouteProgress.SetCurrentRoute(System.IO.Path.GetFileName(path));
+
             await Run(json,ct);
         }
         catch (Exception e)
@@ -84,6 +88,8 @@ public class AutoPathingScript
     public async Task RunFileFromUser(string path,CancellationToken ct = default)
     {
         var json = await AutoPathingFile.ReadText(path);
+        // 同 RunFile：订阅脚本（User\AutoPathing 下）逐条跑路线时也要能显示线路名
+        ScriptRouteProgress.SetCurrentRoute(System.IO.Path.GetFileName(path));
         await Run(json);
     }
 

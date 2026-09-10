@@ -852,6 +852,12 @@ internal sealed class InstanceRequestHandler
                 }
             }
 
+            // 配置组内脚本任务（JS/地图追踪）当前执行的具体线路名：
+            // JS 脚本逐条跑路线时 taskName 恒为脚本名，只有 ScriptRouteProgress（AutoPathingScript 写入、
+            // 项目边界清空）能给出线路名。与上面的 currentRouteDisplay（联机锄地进度）互不覆盖——
+            // 联机锄地原生任务不经 AutoPathingScript，脚本线路名为 null；两者在助手端各占一个显示位。
+            var scriptRouteName = isCancelled ? null : BetterGenshinImpact.Core.Script.ScriptRouteProgress.CurrentRouteName;
+
             // 检查 _recentTaskName 是否在 30 秒内
             string? recentTaskName = null;
             if (_recentTaskName != null && (DateTime.UtcNow - _recentTaskNameTime).TotalSeconds < 30)
@@ -905,6 +911,7 @@ internal sealed class InstanceRequestHandler
                 autoHoeingRunning = hoeing,
                 autoHoeingProgress = hoeingProgress,
                 currentRouteDisplay,
+                currentScriptRouteName = scriptRouteName,
                 recentTaskName,
                 recentTaskNameTime = _recentTaskNameTime, // 仅当 recentTaskName != null 时有效；null 时忽略
                 onlineGeneration = NotifyOnlineTask.CurrentGeneration, // 新：上线事件代序号，无任务时返回 0

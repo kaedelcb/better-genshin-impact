@@ -17,6 +17,8 @@ public class ControlRoomPlayer
     public string? CurrentTaskGroupName { get; set; }
     /// <summary>当前联机锄地线路展示文本（如"第2条线路: 蒙德城"，非锄地为 null）。</summary>
     public string? CurrentRouteDisplay { get; set; }
+    /// <summary>配置组内脚本任务（JS/地图追踪）当前执行的具体线路名（非脚本任务为 null；与锄地线路展示互不覆盖）。与服务端模型保持同步。</summary>
+    public string? CurrentScriptRouteName { get; set; }
     /// <summary>是否正在联机锄地（锄地房间中）。</summary>
     public bool AutoHoeingRunning { get; set; }
     /// <summary>当前联机锄地进度文本（如"当前进度：开始第 2/4 条线路: xx，本线路预计用时..."，非锄地为 null）。与服务端模型保持同步。</summary>

@@ -761,6 +761,7 @@ public class MainViewModel : INotifyPropertyChanged
         string? CurrentTaskName,
         string? CurrentTaskGroupName,
         string? CurrentRouteDisplay,
+        string? CurrentScriptRouteName,
         bool AutoHoeingRunning,
         string? AutoHoeingProgress);
 
@@ -770,6 +771,7 @@ public class MainViewModel : INotifyPropertyChanged
         string? currentTaskName = null;
         string? currentTaskGroupName = null;
         string? currentRouteDisplay = null;
+        string? currentScriptRouteName = null;
         var autoHoeingRunning = false;
         string? autoHoeingProgress = null;
 
@@ -788,10 +790,13 @@ public class MainViewModel : INotifyPropertyChanged
             currentTaskGroupName = gn.GetString();
         if (bgiRunning && sdata.TryGetProperty("currentRouteDisplay", out var rd) && rd.ValueKind == JsonValueKind.String)
             currentRouteDisplay = rd.GetString();
+        // 配置组内脚本任务（JS/地图追踪）当前线路名（旧 BGI 无此字段 → null，显示退回"配置组 · 任务名"）
+        if (bgiRunning && sdata.TryGetProperty("currentScriptRouteName", out var srn) && srn.ValueKind == JsonValueKind.String)
+            currentScriptRouteName = srn.GetString();
 
         return new TaskStatusPollResult(
             bgiRunning, currentTaskName, currentTaskGroupName,
-            currentRouteDisplay, autoHoeingRunning, autoHoeingProgress);
+            currentRouteDisplay, currentScriptRouteName, autoHoeingRunning, autoHoeingProgress);
     }
 
     private async Task ReportStatusAsync()
@@ -835,6 +840,7 @@ public class MainViewModel : INotifyPropertyChanged
         var currentTaskName = (string?)null;
         var currentTaskGroupName = (string?)null;
         var currentRouteDisplay = (string?)null;
+        var currentScriptRouteName = (string?)null;
 
         var bgiRunning = false;
         // 本轮 IPC 会话校验结果：不可信（跨会话/无法确认）时不采信管道返回的任何任务状态
@@ -926,6 +932,7 @@ public class MainViewModel : INotifyPropertyChanged
                         currentTaskName = parsedStatus.CurrentTaskName;
                         currentTaskGroupName = parsedStatus.CurrentTaskGroupName;
                         currentRouteDisplay = parsedStatus.CurrentRouteDisplay;
+                        currentScriptRouteName = parsedStatus.CurrentScriptRouteName;
                         autoHoeingRunning = parsedStatus.AutoHoeingRunning;
                         autoHoeingProgress = parsedStatus.AutoHoeingProgress;
                     }
@@ -1007,6 +1014,7 @@ public class MainViewModel : INotifyPropertyChanged
                     currentTaskName = parsedStatus.CurrentTaskName;
                     currentTaskGroupName = parsedStatus.CurrentTaskGroupName;
                     currentRouteDisplay = parsedStatus.CurrentRouteDisplay;
+                    currentScriptRouteName = parsedStatus.CurrentScriptRouteName;
                     autoHoeingRunning = parsedStatus.AutoHoeingRunning;
                     autoHoeingProgress = parsedStatus.AutoHoeingProgress;
                 }
@@ -1055,6 +1063,7 @@ public class MainViewModel : INotifyPropertyChanged
             CurrentTaskName = currentTaskName,
             CurrentTaskGroupName = currentTaskGroupName,
             CurrentRouteDisplay = currentRouteDisplay,
+            CurrentScriptRouteName = currentScriptRouteName,
             AutoHoeingRunning = autoHoeingRunning,
             AutoHoeingProgress = autoHoeingProgress,
             OnlineReady = _intentLifecycle.IsOnlineReady,
@@ -3887,6 +3896,7 @@ public class MainViewModel : INotifyPropertyChanged
                         existing.CurrentTaskName = np.CurrentTaskName;
                         existing.CurrentTaskGroupName = np.CurrentTaskGroupName;
                         existing.CurrentRouteDisplay = np.CurrentRouteDisplay;
+                        existing.CurrentScriptRouteName = np.CurrentScriptRouteName;
                         existing.Hotkeys = np.Hotkeys;
                         existing.ConfigGroupTasksWithStatus = np.ConfigGroupTasksWithStatus;
                         existing.OneClickTasksWithStatus = np.OneClickTasksWithStatus;
@@ -3914,6 +3924,7 @@ public class MainViewModel : INotifyPropertyChanged
                         CurrentTaskName = np.CurrentTaskName,
                         CurrentTaskGroupName = np.CurrentTaskGroupName,
                         CurrentRouteDisplay = np.CurrentRouteDisplay,
+                        CurrentScriptRouteName = np.CurrentScriptRouteName,
                         Hotkeys = np.Hotkeys,
                         ConfigGroupTasksWithStatus = np.ConfigGroupTasksWithStatus,
                         OneClickTasksWithStatus = np.OneClickTasksWithStatus,
@@ -6501,7 +6512,9 @@ public class MainViewModel : INotifyPropertyChanged
                 BgiStatus = parsed.BgiRunning ? "running" : "idle",
                 TaskRunning = parsed.BgiRunning,
                 CurrentTaskName = parsed.CurrentTaskName,
-                CurrentTaskGroupName = parsed.CurrentTaskGroupName
+                CurrentTaskGroupName = parsed.CurrentTaskGroupName,
+                CurrentRouteDisplay = parsed.CurrentRouteDisplay,
+                CurrentScriptRouteName = parsed.CurrentScriptRouteName
             };
         }
         catch (Exception ex)
@@ -6563,8 +6576,20 @@ public class MemberViewModel : INotifyPropertyChanged
     private string? _currentTaskGroupName;
     public string? CurrentTaskGroupName { get => _currentTaskGroupName; set { if (_currentTaskGroupName != value) { _currentTaskGroupName = value; OnPropertyChanged(); OnPropertyChanged(nameof(TaskDisplayText)); } } }
     private string? _currentRouteDisplay;
-    public string? CurrentRouteDisplay { get => _currentRouteDisplay; set { if (_currentRouteDisplay != value) { _currentRouteDisplay = value; OnPropertyChanged(); OnPropertyChanged(nameof(TaskDisplayText)); } } }
-    /// <summary>任务执行中时显示的完整文本：groupName · taskName · 线路（空段跳过）；联机锄地时当前线路非空则优先显示线路。</summary>
+    public string? CurrentRouteDisplay { get => _currentRouteDisplay; set { if (_currentRouteDisplay != value) { _currentRouteDisplay = value; OnPropertyChanged(); OnPropertyChanged(nameof(TaskDisplayText)); OnPropertyChanged(nameof(RouteLineText)); } } }
+    private string? _currentScriptRouteName;
+    /// <summary>配置组内脚本任务（JS/地图追踪）当前执行的具体线路名；非脚本任务为 null。</summary>
+    public string? CurrentScriptRouteName { get => _currentScriptRouteName; set { if (_currentScriptRouteName != value) { _currentScriptRouteName = value; OnPropertyChanged(); OnPropertyChanged(nameof(TaskDisplayText)); OnPropertyChanged(nameof(RouteLineText)); } } }
+
+    /// <summary>成员状态墙「路线」行文本：脚本任务的具体线路名优先（JS 任务的任务名是脚本名，线路要单独一层），
+    /// 否则显示联机锄地线路进度；都为空显示 -。</summary>
+    public string RouteLineText => !string.IsNullOrEmpty(CurrentScriptRouteName)
+        ? CurrentScriptRouteName!
+        : !string.IsNullOrEmpty(CurrentRouteDisplay) ? CurrentRouteDisplay! : "-";
+
+    /// <summary>任务执行中时显示的完整文本：groupName · taskName · 线路（空段跳过）；
+    /// 联机锄地时当前线路非空则优先显示线路（锄地任务名冗余），脚本任务（JS/地图追踪）
+    /// 因为任务名只是脚本名、线路才是关键信息，三者全上。</summary>
     public string? TaskDisplayText
     {
         get
@@ -6572,8 +6597,16 @@ public class MemberViewModel : INotifyPropertyChanged
             if (!TaskRunning) return null;
             var parts = new List<string>();
             if (!string.IsNullOrEmpty(CurrentTaskGroupName)) parts.Add(CurrentTaskGroupName);
-            if (!string.IsNullOrEmpty(CurrentTaskName) && string.IsNullOrEmpty(CurrentRouteDisplay)) parts.Add(CurrentTaskName);
-            if (!string.IsNullOrEmpty(CurrentRouteDisplay)) parts.Add(CurrentRouteDisplay);
+            if (!string.IsNullOrEmpty(CurrentScriptRouteName))
+            {
+                if (!string.IsNullOrEmpty(CurrentTaskName)) parts.Add(CurrentTaskName);
+                parts.Add(CurrentScriptRouteName);
+            }
+            else
+            {
+                if (!string.IsNullOrEmpty(CurrentTaskName) && string.IsNullOrEmpty(CurrentRouteDisplay)) parts.Add(CurrentTaskName);
+                if (!string.IsNullOrEmpty(CurrentRouteDisplay)) parts.Add(CurrentRouteDisplay);
+            }
             return parts.Count > 0 ? string.Join(" · ", parts) : CurrentTaskName ?? "任务执行中";
         }
     }

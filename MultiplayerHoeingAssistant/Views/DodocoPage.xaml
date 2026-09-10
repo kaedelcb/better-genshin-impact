@@ -1230,8 +1230,10 @@
                                                                FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,4,0,0"/>
                                                     <TextBlock Text="{Binding CurrentTaskGroupName, StringFormat='配置组: {0}', TargetNullValue=配置组: -}"
                                                                FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"/>
-                                                    <TextBlock Text="{Binding CurrentRouteDisplay, StringFormat='路线: {0}', TargetNullValue=路线: -}"
-                                                               FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"/>
+                                                    <!-- 路线：脚本任务（JS/地图追踪）显示具体线路名，否则显示联机锄地线路进度 -->
+                                                    <TextBlock Text="{Binding RouteLineText, StringFormat='路线: {0}'}"
+                                                               FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"
+                                                               ToolTip="配置组内脚本任务当前执行的具体线路（JS 任务的任务名只是脚本名，具体线路在此显示）"/>
                                                     <TextBlock Text="{Binding AutoHoeingProgress}"
                                                                FontSize="10" Foreground="{DynamicResource Water}" Margin="0,2,0,0"
                                                                TextWrapping="Wrap" MaxWidth="300"/>
