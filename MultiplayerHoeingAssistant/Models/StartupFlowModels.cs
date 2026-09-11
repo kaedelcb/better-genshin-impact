@@ -179,7 +179,8 @@ public class StartupStep
     [JsonPropertyName("watchIntervalSeconds")]
     public int WatchIntervalSeconds { get; set; } = 30;
 
-    /// <summary>是否重复触发（watchdog 用）：true=条件每次由不成立变成立都触发；false=触发一次后自动撤下。</summary>
+    /// <summary>触发后行为（watchdog 用）：true=触发后继续循环（默认，条件每次由不成立变成立都触发）；
+    /// false=触发后停止（触发一次后自动撤下）。编辑器以「触发后：继续循环/停止」下拉呈现。</summary>
     [JsonPropertyName("watchRepeat")]
     public bool WatchRepeat { get; set; } = true;
 
@@ -291,7 +292,7 @@ public static class StartupStepKinds
         new(Wait, "action", "等待", "▶", "流程内延时 N 秒（等程序就绪时常用）"),
         new(EnterTaskCenter, "action", "进入任务中心执行", "➤", "环境准备完毕，交接给任务中心执行任务序列（任务中心规划中，当前为占位节点）"),
         new(TimerTrigger, "action", "定时触发器", "⏰", "挂载定时器，到指定时间执行「到点执行」子链；定时中显示状态、可随时取消"),
-        new(Watchdog, "action", "电子狗", "🐕", "循环盯梢：每 N 秒检查条件，由不成立变成立时执行「触发执行」子链；防抖复核可调，挂载时已成立则确认后触发一次"),
+        new(Watchdog, "action", "电子狗", "🐕", "循环盯梢：每 N 秒检查条件，由不成立变成立时执行「触发执行」子链；触发后默认继续循环，可改为触发后停止；防抖复核可调，挂载时已成立则确认后触发一次"),
         new(EndFlow, "action", "结束流程", "■", "立即终止整条启动流程（常用于「否」分支收尾）"),
     ];
 

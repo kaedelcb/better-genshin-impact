@@ -105,7 +105,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         private set => SetProperty(ref _bgiTaskRunning, value);
     }
 
-    private string _bgiTaskStatusText = "暂无状态（等待 BGI 首次状态上报）";
+    private string _bgiTaskStatusText = "暂无状态（等待 BGI 首次状态采集）";
     /// <summary>任务中心状态行文字。</summary>
     public string BgiTaskStatusText
     {
@@ -705,7 +705,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         var interval = Math.Max(1, step.WatchIntervalSeconds);
         var dog = new ArmedWatchdogViewModel(step, interval, this);
         RunOnUi(() => ArmedWatchdogs.Add(dog));
-        _mainVm.AddLog($"[槲寄生] 电子狗「{StartupFlowRunner.DisplayName(step, 0)}」已挂载：每 {interval} 秒盯「{WatchKindDesc(step)}」，成立时执行「触发执行」链（{step.FireSteps.Count} 个节点，{(step.WatchRepeat ? "重复触发" : "触发一次后撤下")}，防抖复核 {Math.Clamp(step.WatchConfirmSeconds, 1, 60)}s×{Math.Clamp(step.WatchConfirmTimes, 1, 10)}）");
+        _mainVm.AddLog($"[槲寄生] 电子狗「{StartupFlowRunner.DisplayName(step, 0)}」已挂载：每 {interval} 秒盯「{WatchKindDesc(step)}」，成立时执行「触发执行」链（{step.FireSteps.Count} 个节点，{(step.WatchRepeat ? "触发后继续循环" : "触发后停止")}，防抖复核 {Math.Clamp(step.WatchConfirmSeconds, 1, 60)}s×{Math.Clamp(step.WatchConfirmTimes, 1, 10)}）");
         _ = RunWatchdogAsync(dog);
     }
 
@@ -821,7 +821,7 @@ public sealed class MistletoeViewModel : ViewModelBase
 
                 if (!step.WatchRepeat)
                 {
-                    _mainVm.AddLog($"[槲寄生] 电子狗「{dog.Title}」设置为触发一次，已自动撤下");
+                    _mainVm.AddLog($"[槲寄生] 电子狗「{dog.Title}」设置为触发后停止，已自动撤下");
                     RunOnUi(() => ArmedWatchdogs.Remove(dog));
                     return;
                 }
@@ -1472,11 +1472,17 @@ public sealed class StartupStepViewModel : ViewModelBase
         }
     }
 
-    /// <summary>是否重复触发（watchdog 用）：勾选=每次边沿都触发；不勾=触发一次后自动撤下。</summary>
-    public bool WatchRepeat
+    /// <summary>触发后行为下标（watchdog 编辑器下拉框用）：0=继续循环（默认，每次边沿都触发），1=停止（触发一次后自动撤下）。
+/// 底层存 <see cref="StartupStep.WatchRepeat"/>，不新增持久化字段，旧配置无损。</summary>
+    public int WatchAfterFireIndex
     {
-        get => Model.WatchRepeat;
-        set { Model.WatchRepeat = value; Changed(); }
+        get => Model.WatchRepeat ? 0 : 1;
+        set
+        {
+            if (value < 0 || value > 1) return;
+            Model.WatchRepeat = value == 0;
+            Changed();
+        }
     }
 
     /// <summary>防抖复核间隔秒数文本（watchdog 用；1~60，非法输入回退 1）。</summary>
@@ -1533,7 +1539,7 @@ public sealed class StartupStepViewModel : ViewModelBase
         StartupStepKinds.TimerTrigger =>
             $"{model.TriggerTime} 触发「到点执行」链（{model.FireSteps.Count} 个节点{(model.RepeatDaily ? "，每天重复" : "")}）",
         StartupStepKinds.Watchdog =>
-            $"每 {Math.Max(1, model.WatchIntervalSeconds)}s 盯「{MistletoeViewModel.WatchKindDesc(model)}」，成立执行 {model.FireSteps.Count} 个节点（{(model.WatchRepeat ? "重复触发" : "触发一次")}，复核 {Math.Clamp(model.WatchConfirmSeconds, 1, 60)}s×{Math.Clamp(model.WatchConfirmTimes, 1, 10)}）",
+            $"每 {Math.Max(1, model.WatchIntervalSeconds)}s 盯「{MistletoeViewModel.WatchKindDesc(model)}」，成立执行 {model.FireSteps.Count} 个节点（{(model.WatchRepeat ? "触发后继续循环" : "触发后停止")}，复核 {Math.Clamp(model.WatchConfirmSeconds, 1, 60)}s×{Math.Clamp(model.WatchConfirmTimes, 1, 10)}）",
         StartupStepKinds.EnterTaskCenter => "交接给任务中心执行任务序列",
         StartupStepKinds.EndFlow => "立即终止整条启动流程",
         StartupStepKinds.StartGroup => string.IsNullOrWhiteSpace(model.TaskName) ? "（旧版节点 · 未填写配置组名）" : $"（旧版节点）配置组「{model.TaskName}」",
@@ -1659,15 +1665,15 @@ public sealed class ArmedWatchdogViewModel : ViewModelBase
     /// <summary>检测间隔秒数（挂载时已按下限 5 秒收紧）。</summary>
     public int IntervalSeconds { get; }
 
-    /// <summary>取消令牌（取消按钮 / 触发一次后自动撤下，独立取消这只狗）。</summary>
+    /// <summary>取消令牌（取消按钮 / 「触发后停止」时自动撤下，独立取消这只狗）。</summary>
     public CancellationTokenSource Cts { get; } = new();
 
     /// <summary>节点显示名（日志与列表用）。</summary>
     public string Title => StartupFlowRunner.DisplayName(Step, 0);
 
-    /// <summary>状态行：节点名 — 每 Ns 盯「条件」，成立执行 X 节点（重复/一次）。</summary>
+    /// <summary>状态行：节点名 — 每 Ns 盯「条件」，成立执行 X 节点（触发后继续循环/停止）。</summary>
     public string StatusLine =>
-        $"{Title} — 每 {IntervalSeconds}s 盯「{MistletoeViewModel.WatchKindDesc(Step)}」，成立执行 {Step.FireSteps.Count} 个节点（{(Step.WatchRepeat ? "重复触发" : "触发一次")}）";
+        $"{Title} — 每 {IntervalSeconds}s 盯「{MistletoeViewModel.WatchKindDesc(Step)}」，成立执行 {Step.FireSteps.Count} 个节点（{(Step.WatchRepeat ? "触发后继续循环" : "触发后停止")}）";
 
     private string _lastCheckNote = "等待第一轮检测…";
     /// <summary>最近一轮检测的判断依据（每轮刷新，盯梢过程可见）。</summary>

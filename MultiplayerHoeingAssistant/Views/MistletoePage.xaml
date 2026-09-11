@@ -866,9 +866,13 @@
                                     <TextBox Text="{Binding WatchIntervalSecondsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource GoldInput}" Width="52" Padding="6,2" HorizontalContentAlignment="Center"
                                              ToolTip="每隔多少秒检查一次被盯条件（最低 1 秒）。发现新状态后按下方「防抖复核」参数复核，一致才认定翻转——确认窗口不随间隔放大"/>
-                                    <CheckBox IsChecked="{Binding WatchRepeat, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" Margin="14,0,4,0"/>
-                                    <TextBlock Text="重复触发" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center"
-                                               ToolTip="勾选=条件每次由不成立变成立都触发；不勾=触发一次后自动撤下"/>
+                                    <TextBlock Text="触发后" Style="{StaticResource FieldLabel}" Margin="14,0,0,0"/>
+                                    <ComboBox Width="96" Style="{StaticResource GoldComboBox}"
+                                              SelectedIndex="{Binding WatchAfterFireIndex, Mode=TwoWay}"
+                                              ToolTip="继续循环（默认）=条件每次由不成立变成立都触发；停止=触发一次后自动撤下这只电子狗">
+                                        <ComboBoxItem Content="继续循环" Style="{StaticResource GoldComboItem}"/>
+                                        <ComboBoxItem Content="停止" Style="{StaticResource GoldComboItem}"/>
+                                    </ComboBox>
                                 </WrapPanel>
 
                                 <!-- watchdog：防抖复核参数（秒 × 次） -->
