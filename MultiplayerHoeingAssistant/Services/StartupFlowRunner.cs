@@ -25,6 +25,8 @@ public sealed class StartupFlowRunner
     private readonly Action<StartupStep> _armTimer;
     /// <summary>电子狗挂载入口（由宿主 VM 注入：负责登记盯梢状态、边沿触发执行 FireSteps、取消）。</summary>
     private readonly Action<StartupStep> _armWatchdog;
+    /// <summary>日志触发器挂载入口（由宿主 VM 注入：负责订阅日志流、命中关键字执行 FireSteps、取消）。可为 null（宿主未接日志源时该节点记日志跳过）。</summary>
+    private readonly Action<StartupStep>? _armLogTrigger;
     /// <summary>人工确认弹窗入口（由宿主 VM 注入：UI 线程弹窗，返回 (是/否, 判断依据描述)）。</summary>
     private readonly Func<StartupStep, CancellationToken, Task<(bool passed, string desc)>> _confirmHandler;
     /// <summary>BGI 任务状态快照提供方（bgiTaskRunning/bgiTaskName 条件用；由宿主注入，读 MainViewModel 的 10s 状态缓存，不新起 IPC）。</summary>
@@ -49,7 +51,8 @@ public sealed class StartupFlowRunner
         Action<string> log,
         Func<ControlStatus?> statusProvider,
         Action<StartupStep> armWatchdog,
-        Func<StartupStep, CancellationToken, Task<ControlStatus?>>? targetStatusProvider = null)
+        Func<StartupStep, CancellationToken, Task<ControlStatus?>>? targetStatusProvider = null,
+        Action<StartupStep>? armLogTrigger = null)
     {
         _bgiExecutor = bgiExecutor;
         _enterTaskCenter = enterTaskCenter;
@@ -59,6 +62,7 @@ public sealed class StartupFlowRunner
         _statusProvider = statusProvider;
         _targetStatusProvider = targetStatusProvider ?? ((_, _) => Task.FromResult<ControlStatus?>(null));
         _armWatchdog = armWatchdog;
+        _armLogTrigger = armLogTrigger;
     }
 
     /// <summary>「结束流程」节点抛出的内部控制流异常（逐层展开到顶层捕获，终止整条流程）。</summary>
@@ -384,6 +388,26 @@ public sealed class StartupFlowRunner
                         return false;
                     }
                     _armWatchdog(step);
+                    return true;
+                }
+                case StartupStepKinds.LogTrigger:
+                {
+                    if (string.IsNullOrWhiteSpace(step.LogKeyword))
+                    {
+                        _log($"[槲寄生] {indent}日志触发器「{display}」未填写日志关键字，跳过");
+                        return false;
+                    }
+                    if (step.FireSteps.Count == 0)
+                    {
+                        _log($"[槲寄生] {indent}日志触发器「{display}」的「触发执行」链为空，不挂载");
+                        return false;
+                    }
+                    if (_armLogTrigger == null)
+                    {
+                        _log($"[槲寄生] {indent}日志触发器「{display}」的日志源不可用（宿主未接入日志流），跳过");
+                        return false;
+                    }
+                    _armLogTrigger(step);
                     return true;
                 }
                 // 旧版遗留节点（目录已移除，旧配置仍可执行）

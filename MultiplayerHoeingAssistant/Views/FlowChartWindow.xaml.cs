@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using MultiplayerHoeingAssistant.Models;
+using MultiplayerHoeingAssistant.Services;
 using MultiplayerHoeingAssistant.ViewModels;
 
 namespace MultiplayerHoeingAssistant.Views;
@@ -65,6 +66,7 @@ public partial class FlowChartWindow : Window
         StartupStepKinds.Wait => "#9C97C0",                                   // 等待：灰
         StartupStepKinds.TimerTrigger => "#FFC857",                           // 定时触发器：琥珀
         StartupStepKinds.Watchdog => "#E88A6F",                               // 电子狗：橙
+        StartupStepKinds.LogTrigger => "#4FC3F7",                             // 日志触发器：浅蓝
         StartupStepKinds.EnterTaskCenter => "#48C87E",                        // 交接任务中心：绿（重点节点）
         StartupStepKinds.EndFlow => "#EF5350",                                // 结束流程：红（重点节点）
         _ => "#90A4AE",                                                       // 旧版遗留等：灰蓝
@@ -72,13 +74,15 @@ public partial class FlowChartWindow : Window
 
     /// <summary>重点突出的节点（加粗描边 + 加宽色条）：流程的终点/交接点/异步触发点。</summary>
     private static bool IsEmphasized(string kind) => kind is StartupStepKinds.EndFlow
-        or StartupStepKinds.EnterTaskCenter or StartupStepKinds.TimerTrigger or StartupStepKinds.Watchdog;
+        or StartupStepKinds.EnterTaskCenter or StartupStepKinds.TimerTrigger or StartupStepKinds.Watchdog
+        or StartupStepKinds.LogTrigger;
     private readonly List<StepChainViewModel> _subscribedChains = [];
     private bool _rebuildPending;
 
     private FlowChartWindow(StepChainViewModel root, Action<StartupStepViewModel> onActivate, Window? owner,
         System.Collections.ObjectModel.ObservableCollection<ArmedTimerViewModel> armedTimers,
-        System.Collections.ObjectModel.ObservableCollection<ArmedWatchdogViewModel> armedWatchdogs)
+        System.Collections.ObjectModel.ObservableCollection<ArmedWatchdogViewModel> armedWatchdogs,
+        System.Collections.ObjectModel.ObservableCollection<ArmedLogTriggerViewModel> armedLogTriggers)
     {
         InitializeComponent();
         _root = root;
@@ -86,9 +90,10 @@ public partial class FlowChartWindow : Window
         // 不设 Owner：Owned 子窗口永远压在主窗口之上，主窗口点不上来，跳转定位会看不见。
         // 独立窗口则与助手各自正常置前/退后。
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        // 底部独立面板：已激活的定时器/电子狗（绑定运行态集合，挂载/撤下/触发实时刷新）
+        // 底部独立面板：已激活的定时器/电子狗/日志触发器（绑定运行态集合，挂载/撤下/触发实时刷新）
         TimerList.ItemsSource = armedTimers;
         WatchdogList.ItemsSource = armedWatchdogs;
+        LogTriggerList.ItemsSource = armedLogTriggers;
         BuildChart(root);
         SubscribeStructureChanges();
         // 打开时按流程图实际宽度定窗口宽（不强制整图缩放可见；高度保留默认，纵向图一般更长，交给滚动）
@@ -100,30 +105,32 @@ public partial class FlowChartWindow : Window
     public static FlowChartWindow Show(StepChainViewModel root, Action<StartupStepViewModel> onActivate,
         System.Collections.ObjectModel.ObservableCollection<ArmedTimerViewModel> armedTimers,
         System.Collections.ObjectModel.ObservableCollection<ArmedWatchdogViewModel> armedWatchdogs,
+        System.Collections.ObjectModel.ObservableCollection<ArmedLogTriggerViewModel> armedLogTriggers,
         Window? owner = null)
     {
         var o = owner ?? Application.Current?.MainWindow;
         if (o is not { IsLoaded: true, IsVisible: true }) o = null;
-        var w = new FlowChartWindow(root, onActivate, o, armedTimers, armedWatchdogs);
+        var w = new FlowChartWindow(root, onActivate, o, armedTimers, armedWatchdogs, armedLogTriggers);
         w.Show();
         return w;
     }
 
     // ================= 底部武装面板：点击行定位到图上节点 =================
 
-    /// <summary>武装面板「⌖ 定位」按钮：滚动到挂载该定时器/电子狗的图上节点并闪烁提示。</summary>
+    /// <summary>武装面板「⌖ 定位」按钮：滚动到挂载该定时器/电子狗/日志触发器的图上节点并闪烁提示。</summary>
     private void ArmedLocate_Click(object sender, RoutedEventArgs e)
     {
         var step = (sender as FrameworkElement)?.DataContext switch
         {
             ArmedTimerViewModel t => t.Step,
             ArmedWatchdogViewModel w => w.Step,
+            ArmedLogTriggerViewModel l => l.Step,
             _ => null,
         };
         if (step != null) LocateNode(step);
     }
 
-    /// <summary>点击武装面板行（点在按钮上不触发）：滚动到挂载该定时器/电子狗的图上节点并闪烁提示。</summary>
+    /// <summary>点击武装面板行（点在按钮上不触发）：滚动到挂载该定时器/电子狗/日志触发器的图上节点并闪烁提示。</summary>
     private void ArmedRow_Click(object sender, MouseButtonEventArgs e)
     {
         // 点在按钮上时不定位（按钮自己的命令优先）
@@ -134,6 +141,7 @@ public partial class FlowChartWindow : Window
         {
             ArmedTimerViewModel t => t.Step,
             ArmedWatchdogViewModel w => w.Step,
+            ArmedLogTriggerViewModel l => l.Step,
             _ => null,
         };
         if (step == null) return;
@@ -141,11 +149,20 @@ public partial class FlowChartWindow : Window
         e.Handled = true;
     }
 
-    /// <summary>滚动到模型对应的图上节点并闪烁几下提示（节点不在图上——例如结构刚改过还没重画完——则静默不跳）。</summary>
+    /// <summary>滚动到模型对应的图上节点并闪烁几下提示。
+    /// 模型不在当前流程树（实例挂载自其他方案/旧配置）→ 弹窗说明；vm 在但图元素缺（结构刚改过还没重画完）→ 静默不跳。</summary>
     private void LocateNode(StartupStep model)
     {
         var vm = FindVm(_root, model);
-        if (vm == null || !_nodeByVm.TryGetValue(vm, out var el)) return;
+        if (vm == null)
+        {
+            // 与启动中心「定位」按钮同口径：实例可能挂载自切换方案前的旧流程，不能静默无事发生
+            MessageBox.Show(this,
+                $"运行实例「{StartupFlowRunner.DisplayName(model, 0)}」不在当前启动流程中，无法在流程图上定位。\n\n它可能挂载自切换到其他方案前的流程、或流程配置被修改/恢复之前的版本；实例本身仍在正常运行。",
+                "无法定位", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (!_nodeByVm.TryGetValue(vm, out var el)) return;
 
         var center = el.TransformToVisual(ChartCanvas).Transform(new Point(el.ActualWidth / 2, el.ActualHeight / 2));
         var scale = Zoom.ScaleX;
@@ -380,13 +397,13 @@ public partial class FlowChartWindow : Window
             return new Block(canvas, w, h, nodeCX, nodeCX, looseEnds, trueB.Terminal && falseB.Terminal);
         }
 
-        // 普通动作节点；定时触发器/电子狗有触发子链时挂右侧虚线引出
+        // 普通动作节点；定时触发器/电子狗/日志触发器有触发子链时挂右侧虚线引出
         Canvas.SetLeft(card, 0);
         Canvas.SetTop(card, 0);
         canvas.Children.Add(card);
         var w2 = NodeW;
         var h2 = NodeH;
-        if ((vm.IsTimerTrigger || vm.IsWatchdog) && vm.FireChain.Steps.Count > 0)
+        if ((vm.IsTimerTrigger || vm.IsWatchdog || vm.IsLogTrigger) && vm.FireChain.Steps.Count > 0)
         {
             var fireB = BuildChain(vm.FireChain);
             var fireX = NodeW + HGap;
@@ -399,7 +416,7 @@ public partial class FlowChartWindow : Window
             DrawEdge(canvas, [new Point(NodeW, NodeH / 2), new Point(endX, NodeH / 2)], EdgeNormal, 1.3, true, true);
             var label = new TextBlock
             {
-                Text = vm.IsTimerTrigger ? "⏰ 到点执行" : "🐕 触发执行",
+                Text = vm.IsTimerTrigger ? "⏰ 到点执行" : vm.IsWatchdog ? "🐕 触发执行" : "📜 触发执行",
                 FontSize = 9.5, Foreground = DimText,
             };
             label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));

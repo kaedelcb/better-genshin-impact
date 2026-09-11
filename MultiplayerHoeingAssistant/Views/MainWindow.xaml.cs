@@ -37,7 +37,8 @@ public partial class MainWindow : Window
         TagLog($"[app start] {System.DateTime.Now:HH:mm:ss.fff}");
         ViewModel = viewModel;
         Dodoco = new DodocoViewModel(viewModel);
-        Mistletoe = new MistletoeViewModel(viewModel);
+        // 槲寄生复用嘟嘟可的 BGI 日志 tail（单线程单文件句柄，多消费者订阅），供启动中心「日志触发器」盯新日志
+        Mistletoe = new MistletoeViewModel(viewModel, Dodoco.LogTail);
         // 槲寄生启动中心：初始化全部完成后按配置自动执行启动流程
         viewModel.Initialized += Mistletoe.OnAppInitialized;
         DataContext = ViewModel;

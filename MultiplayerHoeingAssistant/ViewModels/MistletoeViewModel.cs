@@ -25,24 +25,29 @@ public sealed class MistletoeViewModel : ViewModelBase
     private readonly StartupFlowStore _store;
     private readonly StartupFlowSchemeStore _schemeStore;
     private readonly StartupFlowRunner _runner;
+    /// <summary>本机 BGI 日志实时流（日志触发器用；由宿主注入，与嘟嘟可共享同一 tail 服务）。可为 null。</summary>
+    private readonly BgiLogTailService? _logTail;
     private StartupFlowConfig _config;
     private CancellationTokenSource? _runCts;
     /// <summary>字段编辑的防抖保存（避免每敲一个字符写一次盘）。</summary>
     private readonly DispatcherTimer _saveDebounce;
 
-    public MistletoeViewModel(MainViewModel mainVm)
+    public MistletoeViewModel(MainViewModel mainVm, BgiLogTailService? logTail = null)
     {
         _mainVm = mainVm;
+        _logTail = logTail;
         _store = new StartupFlowStore();
         _schemeStore = new StartupFlowSchemeStore();
         _config = _store.Load();
         _runner = new StartupFlowRunner(mainVm.ExecuteLocalBgiCommandAsync, EnterTaskCenterAsync, ArmTimer, ConfirmHandlerAsync, mainVm.AddLog,
-            () => mainVm.LatestLocalStatus, ArmWatchdog, (step, ct) => mainVm.QueryReadOnlyTaskStatusAsync(step, ct));
+            () => mainVm.LatestLocalStatus, ArmWatchdog, (step, ct) => mainVm.QueryReadOnlyTaskStatusAsync(step, ct),
+            armLogTrigger: ArmLogTrigger);
         _runner.NodeStateSink = OnNodeStateReported;
         RootChain = new StepChainViewModel(_config.Steps, this, parentCondition: null, branchName: "主流程");
         foreach (var s in _schemeStore.Load()) Schemes.Add(new SchemeItemViewModel(s));
         ArmedTimers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasArmedTimers));
         ArmedWatchdogs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasArmedWatchdogs));
+        ArmedLogTriggers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasArmedLogTriggers));
 
         _saveDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _saveDebounce.Tick += (_, _) =>
@@ -501,7 +506,7 @@ public sealed class MistletoeViewModel : ViewModelBase
             _flowChartWindow.Activate();
             return;
         }
-        _flowChartWindow = FlowChartWindow.Show(RootChain, RevealStepInEditor, ArmedTimers, ArmedWatchdogs, Application.Current.MainWindow);
+        _flowChartWindow = FlowChartWindow.Show(RootChain, RevealStepInEditor, ArmedTimers, ArmedWatchdogs, ArmedLogTriggers, Application.Current.MainWindow);
         _flowChartWindow.Closed += (_, _) => _flowChartWindow = null;
     });
 
@@ -585,11 +590,24 @@ public sealed class MistletoeViewModel : ViewModelBase
         }
     }
 
-    /// <summary>按模型在编辑器树中定位节点（武装中的定时器/电子狗行的「定位」按钮用）：找不到只不跳转，不影响其他逻辑。</summary>
+    /// <summary>按模型在编辑器树中定位节点（武装中的定时器/电子狗/日志触发器行的「定位」按钮用）：
+    /// 找到则跳转展开；找不到（实例挂载自其他方案/旧配置，模型引用已不在当前流程树）弹窗说明并记日志，不静默。</summary>
     internal void LocateStep(StartupStep step)
     {
         var vm = FindStepVm(RootChain, step);
-        if (vm != null) RevealStepInEditor(vm);
+        if (vm != null)
+        {
+            RevealStepInEditor(vm);
+            return;
+        }
+        // 运行实例的节点模型不在当前流程树里：挂载自切换方案前的旧流程、或流程配置被修改/恢复过。
+        // 这不是异常（实例仍可正常触发/取消），但必须告诉用户为什么没跳转，不能静默无事发生
+        var title = StartupFlowRunner.DisplayName(step, 0);
+        _mainVm.AddLog($"[槲寄生] 定位失败：实例「{title}」的节点不在当前启动流程中（可能挂载自其他方案或修改前的旧配置）");
+        MessageBox.Show(
+            Application.Current.MainWindow,
+            $"运行实例「{title}」不在当前启动流程中，无法定位。\n\n它可能挂载自切换到其他方案前的流程、或流程配置被修改/恢复之前的版本；实例本身仍在正常运行。\n可在列表中用「✕ 取消」撤下它，或从当前流程重新执行以挂载新实例。",
+            "无法定位", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     /// <summary>「进入任务中心执行」节点的交接实现。任务中心（总计划 §3）落地前为占位：
@@ -855,6 +873,113 @@ public sealed class MistletoeViewModel : ViewModelBase
     {
         RunOnUi(() => ArmedWatchdogs.Remove(dog));
         dog.Cts.Cancel();
+    }
+
+    // ================= 日志触发器（监听中的日志触发器列表） =================
+
+    /// <summary>当前监听中的日志触发器（运行态，不持久化；助手重启后需流程重跑才会重新挂载）。</summary>
+    public ObservableCollection<ArmedLogTriggerViewModel> ArmedLogTriggers { get; } = [];
+
+    public bool HasArmedLogTriggers => ArmedLogTriggers.Count > 0;
+
+    /// <summary>日志触发器节点执行到此：挂载日志监听（Runner 注入的委托）。
+    /// 关键字与「触发后是否循环」在挂载时快照：挂载后再改节点参数不影响已挂载实例（撤下重挂生效），
+    /// 也避免编辑器（UI 线程）与 tail 后台线程并发读写模型字段。</summary>
+    private void ArmLogTrigger(StartupStep step)
+    {
+        if (_logTail == null)
+        {
+            _mainVm.AddLog($"[槲寄生] 日志触发器「{StartupFlowRunner.DisplayName(step, 0)}」的日志源不可用，未挂载");
+            return;
+        }
+        // 纵深防御：空关键字会匹配每一行日志（Contains("") 恒真）形成触发风暴，Runner 已拦，这里再拦一道
+        if (string.IsNullOrWhiteSpace(step.LogKeyword))
+        {
+            _mainVm.AddLog($"[槲寄生] 日志触发器「{StartupFlowRunner.DisplayName(step, 0)}」未填写日志关键字，未挂载");
+            return;
+        }
+        var trig = new ArmedLogTriggerViewModel(step, this);
+        // 先订阅再入列再启动循环：订阅在 tail 线程生效即刻可能来事件，
+        // 但循环任务未起前事件只会在信号量里攒着（max 1，超出合并），不会丢触发也不会并发执行
+        _logTail.EntryReceived += trig.OnLogEntry;
+        RunOnUi(() => ArmedLogTriggers.Add(trig));
+        _mainVm.AddLog($"[槲寄生] 日志触发器「{trig.Title}」已挂载：盯本机 BGI 新日志出现「{trig.Keyword}」，命中执行「触发执行」链（{step.FireSteps.Count} 个节点，{(trig.RepeatAfterFire ? "循环触发" : "触发一次后停止")}）；只盯挂载后的新日志");
+        _ = RunLogTriggerAsync(trig);
+    }
+
+    /// <summary>
+    /// 日志触发器循环（独立任务，一个触发器一个）：等命中信号 → 执行触发链 → 再回去等。
+    /// 并发设计要点：
+    /// - tail 后台线程的 OnLogEntry 只做「置命中行 + Release(1)」，O(1) 不阻塞日志管线；
+    /// - 信号量上限 1：触发链执行期间的再次命中自动合并为一次（链跑完后立即再触发一轮），
+    ///   关键字刷屏不会堆出无界积压，也保证「执行完触发动作后再循环」——同一触发器永远不会并发跑两条链；
+    /// - 触发链异常只记日志，触发器继续盯（与电子狗同口径）；
+    /// - 取消/自动撤下：先退订再 Cancel，退订后仍在飞的 OnLogEntry 因 CTS 已取消直接返回，
+    ///   误 Release 一个信号也无害——循环已退出或下次 WaitAsync 立刻被 Cancel 打断。
+    /// </summary>
+    private async Task RunLogTriggerAsync(ArmedLogTriggerViewModel trig)
+    {
+        var step = trig.Step;
+        var autoRemoved = false;
+        try
+        {
+            while (true)
+            {
+                await trig.HitSignal.WaitAsync(trig.Cts.Token);
+                var hitLine = trig.TakeHitLine();
+                _mainVm.AddLog($"[槲寄生] 日志触发器「{trig.Title}」命中关键字「{trig.Keyword}」：{hitLine}，开始执行「触发执行」链");
+                OnNodeStateReported(step, NodeRunState.Running, $"日志触发：{hitLine}");
+                trig.NoteStatus($"已于 {DateTime.Now:HH:mm:ss} 触发，正在执行触发链…");
+                try
+                {
+                    await _runner.RunAsync(step.FireSteps.ToList(), trig.Cts.Token);
+                    OnNodeStateReported(step, NodeRunState.Success, $"日志触发器于 {DateTime.Now:HH:mm:ss} 触发");
+                }
+                catch (OperationCanceledException)
+                {
+                    throw; // 取消语义原样上传（用户撤下时中断触发链）
+                }
+                catch (Exception ex)
+                {
+                    // 容错：触发链异常只记日志，触发器继续盯（RunAsync 内部已逐节点容错，这里是兜底）
+                    _mainVm.AddLog($"[槲寄生] 日志触发器「{trig.Title}」的「触发执行」链执行异常：{ex.Message}（继续监听）");
+                }
+
+                if (!trig.RepeatAfterFire)
+                {
+                    _mainVm.AddLog($"[槲寄生] 日志触发器「{trig.Title}」设置为触发后停止，已自动撤下");
+                    autoRemoved = true;
+                    RunOnUi(() => ArmedLogTriggers.Remove(trig));
+                    return;
+                }
+                trig.NoteStatus($"上次触发 {DateTime.Now:HH:mm:ss}，继续监听中…");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            _mainVm.AddLog($"[槲寄生] 日志触发器「{trig.Title}」已取消");
+        }
+        catch (Exception ex)
+        {
+            // 循环本身出意外（理论上只剩此处兜底）：留痕并撤下，避免无声残留
+            _mainVm.AddLog($"[槲寄生] 日志触发器「{trig.Title}」监听循环异常：{ex.Message}，已撤下");
+            RunOnUi(() => ArmedLogTriggers.Remove(trig));
+        }
+        finally
+        {
+            // 统一退订出口（取消/异常/自动撤下都经过）；退订是幂等的
+            if (_logTail != null) _logTail.EntryReceived -= trig.OnLogEntry;
+            // 异常撤下时若列表里还有（非自动撤下路径已移除），兜底移除
+            if (!autoRemoved) RunOnUi(() => ArmedLogTriggers.Remove(trig));
+        }
+    }
+
+    /// <summary>取消一个监听中的日志触发器（页面「取消」按钮）：先退订再 Cancel，循环任务自行退出并清理。</summary>
+    internal void CancelLogTrigger(ArmedLogTriggerViewModel trig)
+    {
+        if (_logTail != null) _logTail.EntryReceived -= trig.OnLogEntry;
+        RunOnUi(() => ArmedLogTriggers.Remove(trig));
+        trig.Cts.Cancel();
     }
 
     /// <summary>弹窗只读展示一条子链的流程内容（定时器/电子狗行的「流程」按钮）。</summary>
@@ -1157,13 +1282,16 @@ public sealed class StartupStepViewModel : ViewModelBase
     public bool IsCondition => Model.NodeType == "condition";
     public bool IsTimerTrigger => Model.Kind == StartupStepKinds.TimerTrigger;
     public bool IsWatchdog => Model.Kind == StartupStepKinds.Watchdog;
+    public bool IsLogTrigger => Model.Kind == StartupStepKinds.LogTrigger;
 
-    /// <summary>触发子链编辑区的标题（定时触发器/电子狗共用 FireChain 编辑器，标题各表）。</summary>
+    /// <summary>触发子链编辑区的标题（定时触发器/电子狗/日志触发器共用 FireChain 编辑器，标题各表）。</summary>
     public string FireChainHeader => IsTimerTrigger
         ? "⏰ 到点执行（时间在节点参数里设置）"
         : IsWatchdog
             ? "🐕 触发执行（被盯条件在节点参数里设置；条件由不成立变成立时执行此链）"
-            : "";
+            : IsLogTrigger
+                ? "📜 触发执行（日志关键字在节点参数里设置；本机 BGI 新日志命中关键字时执行此链）"
+                : "";
     public string Icon => StartupStepKinds.Find(Model.Kind)?.Icon ?? "▶";
     public string TypeName => StartupStepKinds.Find(Model.Kind)?.DisplayName ?? Model.Kind;
 
@@ -1388,6 +1516,13 @@ public sealed class StartupStepViewModel : ViewModelBase
         set { Model.TaskName = value; Changed(); }
     }
 
+    /// <summary>日志关键字（logTrigger 用）。已挂载的触发器用挂载时快照，改它只影响之后的新挂载。</summary>
+    public string LogKeyword
+    {
+        get => Model.LogKeyword;
+        set { Model.LogKeyword = value; Changed(); }
+    }
+
     /// <summary>状态来源下拉框：本会话、按实际 BGI 启动顺序、按 Windows 用户名。</summary>
     public int StatusSourceIndex
     {
@@ -1472,7 +1607,7 @@ public sealed class StartupStepViewModel : ViewModelBase
         }
     }
 
-    /// <summary>触发后行为下标（watchdog 编辑器下拉框用）：0=继续循环（默认，每次边沿都触发），1=停止（触发一次后自动撤下）。
+    /// <summary>触发后行为下标（watchdog/logTrigger 编辑器下拉框用）：0=继续循环（默认，每次边沿/命中都触发），1=停止（触发一次后自动撤下）。
 /// 底层存 <see cref="StartupStep.WatchRepeat"/>，不新增持久化字段，旧配置无损。</summary>
     public int WatchAfterFireIndex
     {
@@ -1540,6 +1675,9 @@ public sealed class StartupStepViewModel : ViewModelBase
             $"{model.TriggerTime} 触发「到点执行」链（{model.FireSteps.Count} 个节点{(model.RepeatDaily ? "，每天重复" : "")}）",
         StartupStepKinds.Watchdog =>
             $"每 {Math.Max(1, model.WatchIntervalSeconds)}s 盯「{MistletoeViewModel.WatchKindDesc(model)}」，成立执行 {model.FireSteps.Count} 个节点（{(model.WatchRepeat ? "触发后继续循环" : "触发后停止")}，复核 {Math.Clamp(model.WatchConfirmSeconds, 1, 60)}s×{Math.Clamp(model.WatchConfirmTimes, 1, 10)}）",
+        StartupStepKinds.LogTrigger => string.IsNullOrWhiteSpace(model.LogKeyword)
+            ? "（未填写日志关键字）"
+            : $"日志出现「{model.LogKeyword}」时执行 {model.FireSteps.Count} 个节点（{(model.WatchRepeat ? "循环触发" : "触发后停止")}）",
         StartupStepKinds.EnterTaskCenter => "交接给任务中心执行任务序列",
         StartupStepKinds.EndFlow => "立即终止整条启动流程",
         StartupStepKinds.StartGroup => string.IsNullOrWhiteSpace(model.TaskName) ? "（旧版节点 · 未填写配置组名）" : $"（旧版节点）配置组「{model.TaskName}」",
@@ -1698,4 +1836,117 @@ public sealed class ArmedWatchdogViewModel : ViewModelBase
     public RelayCommand LocateCommand => new(_ => _owner.LocateStep(Step));
 
     public RelayCommand CancelCommand => new(_ => _owner.CancelWatchdog(this));
+}
+
+/// <summary>
+/// 一个监听中的日志触发器的视图模型：页面「监听中的日志触发器」卡片的行项。
+/// 运行态对象，不持久化——与定时触发器/电子狗同口径（助手重启后需流程重跑才会重新挂载）。
+///
+/// 线程模型：OnLogEntry 跑在 BgiLogTailService 的后台线程（同步派发，必须 O(1) 不阻塞）；
+/// 命中经 <see cref="HitSignal"/>（上限 1，天然把触发链执行期间的重复命中合并为一次）交给
+/// MistletoeViewModel.RunLogTriggerAsync 的独立循环任务串行执行触发链——同一触发器绝不并发跑两条链。
+/// 关键字/循环标志在挂载时快照为不可变属性，UI 线程改节点参数不影响已挂载实例（无跨线程读写模型）。
+/// </summary>
+public sealed class ArmedLogTriggerViewModel : ViewModelBase
+{
+    private readonly MistletoeViewModel _owner;
+    /// <summary>最近一次命中行的摘要（tail 线程写、循环任务读；引用赋值原子，配合信号量 happens-before）。</summary>
+    private string? _hitLine;
+
+    public ArmedLogTriggerViewModel(StartupStep step, MistletoeViewModel owner)
+    {
+        Step = step;
+        _owner = owner;
+        // 挂载时快照：编辑器后续改动不影响本实例（撤下重挂生效），且免跨线程读模型
+        Keyword = step.LogKeyword.Trim();
+        RepeatAfterFire = step.WatchRepeat;
+    }
+
+    /// <summary>对应的日志触发器节点模型（命中时执行其 FireSteps）。</summary>
+    public StartupStep Step { get; }
+
+    /// <summary>挂载时快照的关键字（tail 线程匹配用，不可变）。</summary>
+    public string Keyword { get; }
+
+    /// <summary>挂载时快照的触发后行为：true=循环触发（默认）；false=触发一次后自动撤下。</summary>
+    public bool RepeatAfterFire { get; }
+
+    /// <summary>命中信号：tail 线程 Release、触发循环 WaitAsync；上限 1 = 链执行期间的命中合并为一次。</summary>
+    public SemaphoreSlim HitSignal { get; } = new(0, 1);
+
+    /// <summary>取消令牌（取消按钮 / 「触发后停止」时自动撤下，独立取消这个触发器）。</summary>
+    public CancellationTokenSource Cts { get; } = new();
+
+    /// <summary>节点显示名（日志与列表用）。</summary>
+    public string Title => StartupFlowRunner.DisplayName(Step, 0);
+
+    /// <summary>状态行：节点名 — 日志出现「关键字」时执行 X 个节点（循环触发/触发后停止）。</summary>
+    public string StatusLine =>
+        $"{Title} — 日志出现「{Keyword}」时执行 {Step.FireSteps.Count} 个节点（{(RepeatAfterFire ? "循环触发" : "触发后停止")}）";
+
+    private string _statusNote = "监听中…（只盯挂载后的新日志）";
+    /// <summary>最近状态（触发时间等，监听过程可见）。</summary>
+    public string StatusNote
+    {
+        get => _statusNote;
+        private set => SetProperty(ref _statusNote, value);
+    }
+
+    /// <summary>触发循环（线程池线程）回报状态：回 UI 线程写绑定属性。</summary>
+    public void NoteStatus(string text)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.CheckAccess()) StatusNote = text;
+        else dispatcher.Invoke(() => StatusNote = text);
+    }
+
+    /// <summary>
+    /// tail 后台线程入口（BgiLogTailService.EntryReceived 订阅）：匹配本机 BGI 新日志。
+    /// 必须 O(1)：匹配只做包含判断，命中只置行摘要 + Release(1)；绝不在这里跑触发链。
+    /// 取消后（含退订竞态窗口内仍在飞的调用）直接返回。
+    /// </summary>
+    public void OnLogEntry(LogEntry entry)
+    {
+        if (Cts.IsCancellationRequested) return;
+        if (!Matches(entry)) return;
+        _hitLine = Summarize(entry);
+        try
+        {
+            HitSignal.Release();
+        }
+        catch (SemaphoreFullException)
+        {
+            // 已有一个待触发/执行中的信号：本次命中合并进去（链跑完会立即再触发一轮）
+        }
+        catch (ObjectDisposedException)
+        {
+            // 撤下竞态：触发器已在拆除，忽略
+        }
+    }
+
+    /// <summary>匹配判定：关键字（不区分大小写）出现在正文/来源/异常段任一位置即命中（与关键词监控同一文本口径）。</summary>
+    private bool Matches(LogEntry entry)
+    {
+        if (entry.Message.Contains(Keyword, StringComparison.OrdinalIgnoreCase)) return true;
+        if (entry.Source.Contains(Keyword, StringComparison.OrdinalIgnoreCase)) return true;
+        return entry.Exception?.Contains(Keyword, StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    /// <summary>命中行摘要（日志与状态行用）：时间 + 正文首行，截断 120 字符防超长正文刷屏。</summary>
+    private static string Summarize(LogEntry entry)
+    {
+        var first = entry.Message.Split('\n')[0].TrimEnd();
+        if (first.Length > 120) first = first[..120] + "…";
+        return $"[{entry.Time:HH:mm:ss}] {first}";
+    }
+
+    /// <summary>取走命中行摘要（触发循环消费用；取走后清空，被合并的命中读到兜底文案）。</summary>
+    public string TakeHitLine() => Interlocked.Exchange(ref _hitLine, null) ?? "（命中行已被合并）";
+
+    public RelayCommand ViewFlowCommand => new(_ => _owner.ViewFlow(Step.FireSteps, $"日志触发器「{Title}」的触发执行流程"));
+
+    /// <summary>在启动中心编辑器树中定位到挂载这个触发器的节点。</summary>
+    public RelayCommand LocateCommand => new(_ => _owner.LocateStep(Step));
+
+    public RelayCommand CancelCommand => new(_ => _owner.CancelLogTrigger(this));
 }

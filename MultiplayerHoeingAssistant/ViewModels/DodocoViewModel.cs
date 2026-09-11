@@ -46,6 +46,10 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     private readonly MemberLogShareService _logShare;
     private readonly DispatcherTimer _flushTimer;
     private readonly ConcurrentQueue<LogEntry> _pending = new();
+
+    /// <summary>本机 BGI 日志实时流（槲寄生「日志触发器」复用同一 tail，不另起线程/文件句柄）。
+    /// 事件在 tail 后台线程同步派发，订阅者必须只做 O(1) 入列/置位，不得阻塞。</summary>
+    internal BgiLogTailService LogTail => _tailService;
     /// <summary>全量环形缓冲（筛选前）：来源 Key（"local" 或成员 uid）→ 该来源的条目。筛选/切换来源时从此重建可见列表。</summary>
     private readonly Dictionary<string, List<LogEntry>> _buffers = new();
     /// <summary>成员 uid → 最近已知名字（成员退出房间后保留下拉项用）。</summary>

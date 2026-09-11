@@ -108,7 +108,8 @@ public class StartupStep
     public List<StartupStep> FalseSteps { get; set; } = [];
 
     /// <summary>到点执行的子链（timerTrigger 用；流程跑到该节点时挂载定时器，到点执行此链）。
-    /// watchdog 复用此字段作为「触发执行」子链（条件由不成立变成立时执行）。</summary>
+    /// watchdog 复用此字段作为「触发执行」子链（条件由不成立变成立时执行）。
+    /// logTrigger 复用此字段作为「触发执行」子链（日志命中关键字时执行）。</summary>
     [JsonPropertyName("fireSteps")]
     public List<StartupStep> FireSteps { get; set; } = [];
 
@@ -180,7 +181,8 @@ public class StartupStep
     public int WatchIntervalSeconds { get; set; } = 30;
 
     /// <summary>触发后行为（watchdog 用）：true=触发后继续循环（默认，条件每次由不成立变成立都触发）；
-    /// false=触发后停止（触发一次后自动撤下）。编辑器以「触发后：继续循环/停止」下拉呈现。</summary>
+    /// false=触发后停止（触发一次后自动撤下）。编辑器以「触发后：继续循环/停止」下拉呈现。
+    /// logTrigger 复用此字段：true=循环触发（默认，执行完触发链后继续盯日志，命中再次触发）；false=触发一次后停止（自动撤下）。</summary>
     [JsonPropertyName("watchRepeat")]
     public bool WatchRepeat { get; set; } = true;
 
@@ -214,6 +216,13 @@ public class StartupStep
     /// 字段与 Runner 分支保留仅为兼容旧配置。bgiTaskName 条件节点复用此字段存匹配文本。</summary>
     [JsonPropertyName("taskName")]
     public string TaskName { get; set; } = "";
+
+    // ===== 日志触发器参数（logTrigger 用；触发子链复用 FireSteps，循环/停止复用 WatchRepeat） =====
+
+    /// <summary>日志关键字（logTrigger 用）：挂载后本机 BGI 新日志任一条目的正文/来源/异常段包含该文本即触发
+    /// （不区分大小写，纯文本包含匹配）。只盯挂载之后产生的新日志，不回扫历史。</summary>
+    [JsonPropertyName("logKeyword")]
+    public string LogKeyword { get; set; } = "";
 }
 
 /// <summary>
@@ -263,6 +272,9 @@ public static class StartupStepKinds
     /// <summary>电子狗：流程跑到此节点时挂载循环检测，每 N 秒求值一次被盯条件，
     /// 条件由不成立变成立（边沿）时执行 FireSteps 子链；盯梢中页面显示状态、可查看流程、可取消。</summary>
     public const string Watchdog = "watchdog";
+    /// <summary>日志触发器：流程跑到此节点时挂载日志监听，本机 BGI 新日志命中关键字时执行 FireSteps 子链；
+    /// 默认循环触发（执行完触发链后继续盯），可改为触发一次后停止；监听中页面显示状态、可查看流程、可取消。</summary>
+    public const string LogTrigger = "logTrigger";
 
     // ---- 旧版遗留（不在目录中，Runner 保留执行分支兼容旧配置） ----
     public const string StartGroup = "startGroup";
@@ -293,6 +305,7 @@ public static class StartupStepKinds
         new(EnterTaskCenter, "action", "进入任务中心执行", "➤", "环境准备完毕，交接给任务中心执行任务序列（任务中心规划中，当前为占位节点）"),
         new(TimerTrigger, "action", "定时触发器", "⏰", "挂载定时器，到指定时间执行「到点执行」子链；定时中显示状态、可随时取消"),
         new(Watchdog, "action", "电子狗", "🐕", "循环盯梢：每 N 秒检查条件，由不成立变成立时执行「触发执行」子链；触发后默认继续循环，可改为触发后停止；防抖复核可调，挂载时已成立则确认后触发一次"),
+        new(LogTrigger, "action", "日志触发器", "📜", "盯本机 BGI 新日志：日志中出现关键字时执行「触发执行」子链；默认循环触发（执行完触发链后继续盯，命中再次触发），可改为触发一次后停止；只盯挂载后的新日志"),
         new(EndFlow, "action", "结束流程", "■", "立即终止整条启动流程（常用于「否」分支收尾）"),
     ];
 
@@ -343,6 +356,10 @@ public static class StartupStepKinds
                 step.ExpectRunning = true;
                 step.WatchIntervalSeconds = 30;
                 step.WatchRepeat = true;
+                break;
+            case LogTrigger:
+                step.LogKeyword = "";
+                step.WatchRepeat = true; // 默认循环触发
                 break;
         }
         return step;

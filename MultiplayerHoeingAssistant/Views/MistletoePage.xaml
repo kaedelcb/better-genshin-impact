@@ -981,6 +981,32 @@
                                              ToolTip="当前任务名或配置组名包含该文本即触发（不区分大小写；BGI 未在跑任务时不触发）"/>
                                 </WrapPanel>
 
+                                <!-- logTrigger：日志关键字 + 触发后行为 -->
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="logTrigger">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </WrapPanel.Style>
+                                    <TextBlock Text="日志关键字" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding LogKeyword, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" Width="220"
+                                             ToolTip="本机 BGI 新日志的正文/来源/异常段包含该文本即触发（不区分大小写，纯文本包含匹配）"/>
+                                    <TextBlock Text="触发后" Style="{StaticResource FieldLabel}" Margin="14,0,0,0"/>
+                                    <ComboBox Width="96" Style="{StaticResource GoldComboBox}"
+                                              SelectedIndex="{Binding WatchAfterFireIndex, Mode=TwoWay}"
+                                              ToolTip="继续循环（默认）=执行完触发链后继续盯日志，命中再次触发；停止=触发一次后自动撤下这个触发器">
+                                        <ComboBoxItem Content="继续循环" Style="{StaticResource GoldComboItem}"/>
+                                        <ComboBoxItem Content="停止" Style="{StaticResource GoldComboItem}"/>
+                                    </ComboBox>
+                                    <TextBlock Text="（流程跑到此节点时挂载监听，只盯挂载后的本机 BGI 新日志；命中执行下方「触发执行」链，执行完再循环）"
+                                               FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                </WrapPanel>
+
                                 <!-- enterTaskCenter / endFlow：无参数提示 -->
                                 <WrapPanel>
                                     <WrapPanel.Style>
@@ -1095,7 +1121,7 @@
                     </Border>
                 </views:AdaptiveBranchPanel>
 
-                <!-- ===== 定时触发器/电子狗的「触发执行」子链（单链，与分支子链同一套交互） ===== -->
+                <!-- ===== 定时触发器/电子狗/日志触发器的「触发执行」子链（单链，与分支子链同一套交互） ===== -->
                 <Grid Margin="18,0,0,0">
                     <Grid.Style>
                         <Style TargetType="Grid">
@@ -1105,6 +1131,9 @@
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding IsWatchdog}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsLogTrigger}" Value="True">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -1411,6 +1440,56 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                                 <TextBlock Text="运行态，重启后由启动流程重新挂载；新状态复核一致才翻转（防抖），快照缺失不计。"
+                                           FontSize="10" Foreground="{DynamicResource Dim}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+                        </Grid>
+
+                        <!-- ===== 卡片：监听中的日志触发器（有挂载时才显示；运行态不持久化） ===== -->
+                        <Grid Margin="0,0,0,14">
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasArmedLogTriggers}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                        <Border Style="{DynamicResource QuestCard}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,8">
+                                    <TextBlock Text="监听中的日志触发器" Style="{DynamicResource SectionTitle}"/>
+                                    <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="132,0,0,0"/>
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding ArmedLogTriggers}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="📜" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding StatusLine}" FontSize="11.5" Foreground="{DynamicResource White}"/>
+                                                    <TextBlock Text="{Binding StatusNote}" FontSize="10" Foreground="{DynamicResource Dim}" Margin="0,1,0,0"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="2" Content="⌖ 定位" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="0,0,6,0"
+                                                        Command="{Binding LocateCommand}" ToolTip="在下方启动流程树中定位到挂载这个日志触发器的节点"/>
+                                                <Button Grid.Column="3" Content="📄 流程" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="0,0,6,0"
+                                                        Command="{Binding ViewFlowCommand}" ToolTip="弹窗查看这个日志触发器命中时执行的完整流程"/>
+                                                <Button Grid.Column="4" Content="✕ 取消" Style="{DynamicResource BtnGhost}" Padding="10,3"
+                                                        Command="{Binding CancelCommand}" ToolTip="撤下这个日志触发器（不影响流程里的其他节点）"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="运行态，重启后由启动流程重新挂载；只盯挂载后的本机 BGI 新日志，链执行期间的重复命中合并为一次（执行完再循环）。"
                                            FontSize="10" Foreground="{DynamicResource Dim}" Margin="0,6,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Border>

@@ -52,7 +52,7 @@ public partial class FlowPreviewWindow : Window
                 lines.Add(Line(depth + 1, "✗", "否分支", ""));
                 AddChain(s.FalseSteps, depth + 2, lines);
             }
-            if (s.Kind is StartupStepKinds.TimerTrigger or StartupStepKinds.Watchdog)
+            if (s.Kind is StartupStepKinds.TimerTrigger or StartupStepKinds.Watchdog or StartupStepKinds.LogTrigger)
             {
                 lines.Add(Line(depth + 1, "➤", s.Kind == StartupStepKinds.TimerTrigger ? "到点执行" : "触发执行", ""));
                 AddChain(s.FireSteps, depth + 2, lines);

@@ -73,11 +73,13 @@
             </ScrollViewer>
         </Border>
 
-        <!-- 已激活的定时器 / 电子狗（独立展示，运行态列表实时刷新；图里的节点仍保留） -->
+        <!-- 已激活的定时器 / 电子狗 / 日志触发器（独立展示，运行态列表实时刷新；图里的节点仍保留） -->
         <Border Grid.Row="2" x:Name="ArmedPanel" Background="#241d3d" CornerRadius="10" BorderBrush="#40D4AF37"
                 BorderThickness="1" Padding="12,8" Margin="0,10,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="16"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="16"/>
                     <ColumnDefinition Width="*"/>
@@ -164,6 +166,48 @@
                         </TextBlock.Style>
                     </TextBlock>
                 </StackPanel>
+                <StackPanel Grid.Column="4">
+                    <TextBlock Text="📜 监听中的日志触发器" FontSize="12" FontWeight="SemiBold" Foreground="#4FC3F7"/>
+                    <ItemsControl x:Name="LogTriggerList" Margin="0,4,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="4,2" CornerRadius="6" Margin="0,1" Cursor="Hand"
+                                        MouseLeftButtonUp="ArmedRow_Click"
+                                        ToolTip="点击定位到流程图上挂载这个日志触发器的节点">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding StatusLine}" FontSize="10.5" Foreground="#9C97C0" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding StatusNote}" FontSize="9.5" Foreground="#669C97C0" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Content="⌖ 定位" Style="{StaticResource ToolBtn}" FontSize="10"
+                                                Height="22" Padding="8,0" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                Click="ArmedLocate_Click" ToolTip="滚动到流程图上挂载这个日志触发器的节点并闪烁提示"/>
+                                        <Button Grid.Column="2" Content="📄 流程" Style="{StaticResource ToolBtn}" FontSize="10"
+                                                Height="22" Padding="8,0" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                Command="{Binding ViewFlowCommand}" ToolTip="弹窗查看这个日志触发器命中时执行的完整流程"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="（当前没有监听中的日志触发器）" FontSize="10" Foreground="#669C97C0" Margin="0,4,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasItems, ElementName=LogTriggerList}" Value="False">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -173,7 +217,7 @@
                 <TextBlock Text="图例：" FontSize="10.5" Foreground="#9C97C0" VerticalAlignment="Center"/>
                 <TextBlock Text="「是」出线＝青" FontSize="10.5" Foreground="#6FD8CE" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <TextBlock Text="「否」出线＝橙" FontSize="10.5" Foreground="#E88A6F" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                <TextBlock Text="节点色条＝类型（金=时间 / 青=状态 / 紫=人工·CMD / 绿=启动·任务中心 / 红=结束·关闭 / 琥珀=定时 / 橙=电子狗）" FontSize="10.5" Foreground="#9C97C0" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Text="节点色条＝类型（金=时间 / 青=状态 / 紫=人工·CMD / 绿=启动·任务中心 / 红=结束·关闭 / 琥珀=定时 / 橙=电子狗 / 蓝=日志触发器）" FontSize="10.5" Foreground="#9C97C0" VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <TextBlock Text="走过的路径加粗点亮，未走分支半透明" FontSize="10.5" Foreground="#9C97C0" VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <TextBlock Text="虚线＝「到点·触发执行」链（异步触发）" FontSize="10.5" Foreground="#9C97C0" VerticalAlignment="Center"/>
             </WrapPanel>
