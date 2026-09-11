@@ -2878,6 +2878,9 @@ public class MainViewModel : INotifyPropertyChanged
         var initPolicy = PolicyFromString(_config?.OnlineHoeingCompletionPolicy);
         var initSpecifiedType = _config?.OnlineHoeingSpecifiedTaskType ?? "group";
         var initSpecifiedName = _config?.OnlineHoeingSpecifiedTaskName ?? "";
+        // 改别人时若拉取失败：弹窗里的「完成后动作」并非对方真实值，直接保存会把默认值覆盖到对方配置上。
+        // 因此此时不静默放过，而是在弹窗内显示醒目警告 + 默认禁止保存，由用户显式确认后才允许提交。
+        var policyPullFailed = false;
         if (!isSelf && targetMember != null)
         {
             if (targetMember.Online && _signalRClient is { IsConnected: true })
@@ -2892,26 +2895,35 @@ public class MainViewModel : INotifyPropertyChanged
                 }
                 else
                 {
+                    policyPullFailed = true;
                     AddLog($"拉取 {targetMember.PlayerName} 的策略配置超时/失败，弹窗显示默认值；保存将覆盖对方配置");
                 }
             }
             else
             {
+                policyPullFailed = true;
                 AddLog($"{targetMember.PlayerName} 不在线或连接不可用，「完成后动作」显示默认值；保存将覆盖对方配置");
             }
         }
 
         // 构建可排序的深色主题绑定弹窗
         // 使用与主窗口一致的深色原神主题风格
+        // 高度自适应：不再写死 Height，改为按内容 SizeToContent=Height 量测后钳到工作区上限
+        // （内容超限时由下方两个列表回收剩余空间，见 Loaded 回调）。历史 bug：写死 720 且
+        // NoResize，内容一长（如新增的拉取失败警告条）上下就被屏幕/窗口边裁掉，按钮够不到。
         var window = new System.Windows.Window
         {
             Title = "绑定联机锄地配置组",
             Width = 460,
-            Height = 720,
+            SizeToContent = System.Windows.SizeToContent.Height,
             WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
             Owner = System.Windows.Application.Current?.MainWindow,
             WindowStyle = System.Windows.WindowStyle.SingleBorderWindow,
-            ResizeMode = System.Windows.ResizeMode.NoResize,
+            ResizeMode = System.Windows.ResizeMode.CanResize,
+            MinWidth = 460,
+            MaxWidth = 720,
+            // 下限：标题 + 一小段列表 + 按钮至少可见（实际会被工作区封顶下调，见 SourceInitialized）
+            MinHeight = 320,
             FontFamily = new System.Windows.Media.FontFamily("HarmonyOS Sans SC, Microsoft YaHei"),
             Background = new System.Windows.Media.LinearGradientBrush
             {
@@ -2926,6 +2938,16 @@ public class MainViewModel : INotifyPropertyChanged
             }
         };
 
+        // 滚动条统一为整体鎏金细窄款：把 App.xaml 的 GoldScrollViewer 作为"隐式样式"放进弹窗资源，
+        // 覆盖弹窗内所有未显式指定样式的 ScrollViewer —— 含中间区、两个 ListBox 模板内部的
+        // ScrollViewer、以及「完成后动作」下拉框 Popup 里的列表，避免出现系统默认灰白滚动条。
+        // 与 DodocoPage.xaml 的隐式 ScrollViewer 样式同一做法（该模式已在该页验证可用）。
+        // 必须在构建/挂载内容之前设置，隐式样式才能对整棵树生效。
+        if (Application.Current?.TryFindResource("GoldScrollViewer") is Style goldScrollViewer)
+        {
+            window.Resources[typeof(System.Windows.Controls.ScrollViewer)] = goldScrollViewer;
+        }
+
         // 颜色常量
         var gold = System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D);
         var goldDeep = System.Windows.Media.Color.FromRgb(0xC9, 0xA5, 0x3F);
@@ -2935,15 +2957,15 @@ public class MainViewModel : INotifyPropertyChanged
         var cardEdge = System.Windows.Media.Color.FromArgb(0x47, 0xD4, 0xAF, 0x37);
 
         var panel = new System.Windows.Controls.Grid { Margin = new System.Windows.Thickness(16) };
+        // 三段式布局：标题/缓存提示（固定）｜可滚动内容区（占满剩余）｜按钮（固定钉底）。
+        // 关键：中间区必须能滚动——200% 缩放下逻辑工作区只有 672 DIP，窗口再"自适应"也放不下全部内容，
+        // 没有滚动容器时 WPF 只会把超出部分裁掉（表现为底部按钮被截），Star 行救不了：
+        // 内容的最小高度之和一旦超过可用高度，裁剪不可避免。
         panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto }); // 标题
         panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto }); // 缓存提示
+        panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) }); // 可滚动内容（已选/可选列表 + 完成后动作 + 警告）
         panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(10) }); // 间距
-        panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) }); // 已选列表
-        panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto }); // 间距
-        panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) }); // 可选列表
-        panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto }); // 完成后动作
-        panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(10) }); // 间距
-        panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto }); // 按钮
+        panel.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto }); // 按钮（钉底，永不被裁）
 
         // 标题
         var titleLabel = new System.Windows.Controls.TextBlock
@@ -2973,6 +2995,11 @@ public class MainViewModel : INotifyPropertyChanged
             panel.Children.Add(cacheHint);
         }
 
+        // ========== 可滚动内容区（已选列表 + 可选列表 + 完成后动作 + 拉取失败警告）==========
+        // 内容放 StackPanel，外层套 ScrollViewer：内容装得下时自然铺开不显示滚动条，
+        // 装不下（高缩放/小屏/条目多）时中间区滚动，标题与底部按钮始终可见可点。
+        var scrollContent = new System.Windows.Controls.StackPanel();
+
         // ========== 已选配置组列表（带排序） ==========
         var selectedBorder = new System.Windows.Controls.Border
         {
@@ -2982,7 +3009,6 @@ public class MainViewModel : INotifyPropertyChanged
             Background = new System.Windows.Media.SolidColorBrush(cardBg),
             Padding = new System.Windows.Thickness(8)
         };
-        System.Windows.Controls.Grid.SetRow(selectedBorder, 3);
 
         var selectedInnerPanel = new System.Windows.Controls.StackPanel();
 
@@ -2997,11 +3023,14 @@ public class MainViewModel : INotifyPropertyChanged
 
         var selectedListBox = new System.Windows.Controls.ListBox
         {
-            Height = 140,
+            // 高度随条目自适应：MinHeight 保证空列表也占位，MaxHeight 防止条目过多时把窗口顶爆
+            MinHeight = 60,
+            MaxHeight = 220,
             BorderThickness = new System.Windows.Thickness(0),
             Background = System.Windows.Media.Brushes.Transparent,
             FontSize = 12
         };
+        System.Windows.Controls.ScrollViewer.SetVerticalScrollBarVisibility(selectedListBox, System.Windows.Controls.ScrollBarVisibility.Auto);
         System.Windows.Controls.ScrollViewer.SetHorizontalScrollBarVisibility(selectedListBox, System.Windows.Controls.ScrollBarVisibility.Disabled);
         // 当前已选配置组列表（可修改的副本）。改别人时用对方的已选配置组（来自服务端同步），改自己用本机绑定。
         // 遥控器模式：从执行端成员取已绑定的配置组（本机无 BGI，无本地配置）。
@@ -3015,11 +3044,14 @@ public class MainViewModel : INotifyPropertyChanged
         // 先声明可选列表框（供 RefreshAvailableList 使用）
         var availableListBox = new System.Windows.Controls.ListBox
         {
-            Height = 120,
+            // 同已选列表：随条目自适应，上限防止顶爆窗口
+            MinHeight = 60,
+            MaxHeight = 220,
             BorderThickness = new System.Windows.Thickness(0),
             Background = System.Windows.Media.Brushes.Transparent,
             FontSize = 12
         };
+        System.Windows.Controls.ScrollViewer.SetVerticalScrollBarVisibility(availableListBox, System.Windows.Controls.ScrollBarVisibility.Auto);
         System.Windows.Controls.ScrollViewer.SetHorizontalScrollBarVisibility(availableListBox, System.Windows.Controls.ScrollBarVisibility.Disabled);
 
         // 刷新可选列表（排除已选的）
@@ -3206,7 +3238,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         selectedInnerPanel.Children.Add(selectedListBox);
         selectedBorder.Child = selectedInnerPanel;
-        panel.Children.Add(selectedBorder);
+        scrollContent.Children.Add(selectedBorder);
 
         // ========== 可选配置组列表 ==========
         var availableBorder = new System.Windows.Controls.Border
@@ -3215,9 +3247,9 @@ public class MainViewModel : INotifyPropertyChanged
             BorderThickness = new System.Windows.Thickness(1),
             BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0)),
             Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
-            Padding = new System.Windows.Thickness(8)
+            Padding = new System.Windows.Thickness(8),
+            Margin = new System.Windows.Thickness(0, 10, 0, 0) // 原 Grid 行间距改由 Margin 提供
         };
-        System.Windows.Controls.Grid.SetRow(availableBorder, 5);
 
         var availableInnerPanel = new System.Windows.Controls.StackPanel();
 
@@ -3277,7 +3309,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         availableInnerPanel.Children.Add(availableListBox);
         availableBorder.Child = availableInnerPanel;
-        panel.Children.Add(availableBorder);
+        scrollContent.Children.Add(availableBorder);
 
         // ========== 完成后动作（上线锄地打断的原任务如何处置；全员就绪触发上线锄地固定打断，此处只配完成后动作）==========
         var completionPanel = new CompletionActionPanel(
@@ -3285,8 +3317,52 @@ public class MainViewModel : INotifyPropertyChanged
             isSelf
                 ? "全员就绪触发上线锄地必定打断当前任务（固定行为）。此处配置锄地完成后如何处置被中断的原任务；配置持久化保存，重启保留。"
                 : $"全员就绪触发上线锄地必定打断当前任务（固定行为）。此处配置 {targetMember?.PlayerName ?? "对方"} 锄地完成后如何处置被中断的原任务；保存后落到对方本机配置并持久化。");
-        System.Windows.Controls.Grid.SetRow(completionPanel.Root, 6);
-        panel.Children.Add(completionPanel.Root);
+        scrollContent.Children.Add(completionPanel.Root);
+
+        // 拉取失败警告：说明下方「完成后动作」不是对方真实值，保存会覆盖；需显式确认才允许提交
+        var policyWarnBox = new System.Windows.Controls.Border
+        {
+            CornerRadius = new System.Windows.CornerRadius(6),
+            BorderThickness = new System.Windows.Thickness(1),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD9, 0x77, 0x4E)),
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x33, 0xD9, 0x77, 0x4E)),
+            Padding = new System.Windows.Thickness(8, 6, 8, 6),
+            Margin = new System.Windows.Thickness(0, 0, 0, 8),
+            Visibility = policyPullFailed ? Visibility.Visible : Visibility.Collapsed
+        };
+        var policyWarnPanel = new System.Windows.Controls.StackPanel();
+        policyWarnPanel.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = $"⚠ 未取到 {targetMember?.PlayerName ?? "对方"} 当前的「完成后动作」配置，下方显示的是默认值而非对方实际设置。",
+            FontSize = 11,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF0, 0xB0, 0x8A)),
+            TextWrapping = System.Windows.TextWrapping.Wrap
+        });
+        var policyWarnCheck = new System.Windows.Controls.CheckBox
+        {
+            Content = "我已确认要用当前显示的动作覆盖对方的配置",
+            FontSize = 11,
+            Margin = new System.Windows.Thickness(0, 6, 0, 0),
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA)),
+            Cursor = System.Windows.Input.Cursors.Hand
+        };
+        policyWarnPanel.Children.Add(policyWarnCheck);
+        policyWarnBox.Child = policyWarnPanel;
+        scrollContent.Children.Add(policyWarnBox);
+
+        // 内容装入 ScrollViewer（垂直按需出滚动条；水平禁用，避免换行文本被拉成横向滚动）
+        var contentScroll = new System.Windows.Controls.ScrollViewer
+        {
+            VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Disabled,
+            Padding = new System.Windows.Thickness(0, 0, 2, 0), // 给滚动条留一点空隙
+            Content = scrollContent
+        };
+        // 显式套用鎏金样式（不依赖隐式查找时机），保证这个主滚动条一定不是系统默认款
+        if (Application.Current?.TryFindResource("GoldScrollViewer") is Style goldSvStyle)
+            contentScroll.Style = goldSvStyle;
+        System.Windows.Controls.Grid.SetRow(contentScroll, 2);
+        panel.Children.Add(contentScroll);
 
         // ========== 按钮栏 ==========
         var btnPanel = new System.Windows.Controls.StackPanel
@@ -3295,7 +3371,7 @@ public class MainViewModel : INotifyPropertyChanged
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
             Margin = new System.Windows.Thickness(0, 10, 0, 0)
         };
-        System.Windows.Controls.Grid.SetRow(btnPanel, 8);
+        System.Windows.Controls.Grid.SetRow(btnPanel, 4);
 
         var cancelBtn = new System.Windows.Controls.Button
         {
@@ -3376,6 +3452,22 @@ public class MainViewModel : INotifyPropertyChanged
                 TaskConflictPolicy.RunSpecified => $"执行动作-执行指定任务（{(completionType == "onedragon" ? "一条龙" : "配置组")}「{completionName}」）",
                 _ => "恢复任务"
             };
+
+            // 拉取失败时「完成后动作」显示的是默认值而非对方实际配置，直接保存会静默覆盖对方设置。
+            // 要求用户勾选确认才允许提交（名单部分不受影响，可正常保存）。
+            if (policyPullFailed && !isSelf && policyWarnCheck.IsChecked == true)
+            {
+                AddLog($"已确认以默认值覆盖 {targetMember?.PlayerName ?? "对方"} 的「完成后动作」配置");
+            }
+            else if (policyPullFailed && !isSelf && policyWarnCheck.IsChecked != true)
+            {
+                var keep = MessageBox.Show(
+                    $"未能读取 {targetMember?.PlayerName ?? "对方"} 当前的「完成后动作」配置，弹窗中显示的是默认值。\n\n" +
+                    $"若继续保存，对方原有的「完成后动作」设置将被当前的「{completionDesc}」覆盖（无法自动还原）。\n\n" +
+                    "是否仍要继续保存？（建议先确认对方在线后重新打开本弹窗）",
+                    "确认覆盖对方配置", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (keep != MessageBoxResult.Yes) return; // 不关闭弹窗，让用户重新选择
+            }
 
             if (names.Count > 0)
             {
@@ -3484,6 +3576,60 @@ public class MainViewModel : INotifyPropertyChanged
         btnPanel.Children.Add(saveBtn);
         panel.Children.Add(btnPanel);
         window.Content = panel;
+
+        // 高度自适应 + 位置钳制：按内容量测（SizeToContent=Height），并用"所在显示器的逻辑工作区"封顶。
+        // DPI 关键点：2560x1344 @200% 缩放下逻辑工作区只有 1280x672 DIP（rcWork 已排除任务栏），
+        // 内容自然高度约 730 DIP，超出即被裁；而 CenterOwner 只按属主窗口居中、根本不管任务栏，
+        // 属主靠下时弹窗底部会直接伸进任务栏被盖住——所以尺寸和位置都必须显式钳到工作区内。
+        // 中间区是 ScrollViewer，装不下时滚动而非裁剪，按钮永远可见。
+        // 显示器按 Owner 定位：此刻弹窗自身尚未居中，用自身句柄可能取到错误的屏幕。
+        var owner = window.Owner;
+        window.SourceInitialized += (_, _) =>
+        {
+            if (Helpers.DpiAwarenessController.GetLogicalWorkAreaRect(window, owner) is not { } wa) return;
+            const double margin = 12;
+            double maxW = Math.Max(300, wa.Width - margin * 2);
+            double maxH = Math.Max(240, wa.Height - margin * 2);
+            window.MaxWidth = Math.Min(window.MaxWidth, maxW);
+            window.MaxHeight = maxH;
+            // 极端小屏下 Min 不得大过 Max，否则 WPF 以 Min 为准又会被裁
+            if (window.MinWidth > maxW) window.MinWidth = maxW;
+            if (window.MinHeight > maxH) window.MinHeight = maxH;
+            // 首帧位置：尚无量测高度，用最坏情况（MaxHeight）先摆一个必定落在工作区内的位置
+            Helpers.DpiAwarenessController.PlaceWithinWorkArea(window, wa, maxH, margin);
+        };
+
+        // 兜底 + 收口：SourceInitialized 取不到工作区时再钳一次；随后按真实高度重新摆正，
+        // 并把 SizeToContent 转 Manual —— 否则 CanResize 下用户拖拽高度会被 SizeToContent
+        // 立刻按内容复原（表现为"拉不动"）。
+        window.Loaded += (_, _) =>
+        {
+            var wa = Helpers.DpiAwarenessController.GetLogicalWorkAreaRect(window);
+            if (wa is { } area)
+            {
+                if (double.IsPositiveInfinity(window.MaxHeight))
+                {
+                    double maxH = Math.Max(240, area.Height - 24);
+                    window.MaxHeight = maxH;
+                    if (window.MinHeight > maxH) window.MinHeight = maxH;
+                }
+            }
+            if (window.SizeToContent != System.Windows.SizeToContent.Manual)
+            {
+                window.SizeToContent = System.Windows.SizeToContent.Manual;
+                window.Height = window.ActualHeight;
+            }
+            // 量测完成后按真实高度重新居中一次（高度已 ≤ 工作区，故必然完全可见）
+            if (wa is { } area2)
+                Helpers.DpiAwarenessController.PlaceWithinWorkArea(window, area2, window.ActualHeight, 12);
+            // 诊断探针：实机核对"封顶值/最终高度/位置/是否仍被任务栏盖住"
+            Helpers.DpiAwarenessController.LogDialogMetrics(
+                "bind_dialog/Loaded",
+                $"max={window.MaxHeight:F1} actual={window.ActualHeight:F1} min={window.MinHeight:F1} " +
+                $"top={window.Top:F1} bottom={window.Top + window.ActualHeight:F1} " +
+                $"workBottom={(wa is { } a3 ? a3.Bottom : -1):F1} scrollable={contentScroll.ScrollableHeight:F1}");
+        };
+
         window.ShowDialog();
     }
 

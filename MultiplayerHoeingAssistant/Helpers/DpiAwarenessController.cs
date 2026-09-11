@@ -143,6 +143,104 @@ internal sealed class DpiAwarenessController : IDisposable
     }
 
     /// <summary>
+    /// 取指定窗口所在显示器的逻辑工作区矩形（rcWork，已按该显示器 DPI 折算为 WPF 逻辑单位）。
+    /// rcWork 已排除任务栏/停靠栏，所以用它做尺寸上限与位置钳制可同时避免
+    /// "窗口高于可用高度被裁" 与 "窗口底部被任务栏盖住" 两类问题。
+    /// 取不到真实显示器信息时退化为 <see cref="SystemParameters.WorkArea"/>（只对主显示器精确），
+    /// 不返回 null —— 静默跳过钳制正是"弹窗又被任务栏盖住"的成因。
+    /// </summary>
+    /// <param name="w">用于取句柄的窗口。</param>
+    /// <param name="monitorSource">
+    /// 可选：用哪个窗口定位显示器。弹窗在 SourceInitialized 阶段自身尚未居中，
+    /// 此时传入 Owner（已定位的主窗口）才能取到弹窗最终会落在的那块屏幕；
+    /// 不传则用 w 自身（Loaded 之后调用是正确的）。
+    /// </param>
+    public static Rect? GetLogicalWorkAreaRect(Window w, Window? monitorSource = null)
+    {
+        try
+        {
+            var hwnd = new WindowInteropHelper(monitorSource ?? w).Handle;
+            if (hwnd == IntPtr.Zero) return FallbackWorkArea("句柄未就绪");
+
+            IntPtr hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            if (hMonitor == IntPtr.Zero) return FallbackWorkArea("MonitorFromWindow 失败");
+
+            var monitorInfo = GetMonitorInfo(hMonitor);
+            if (monitorInfo == null) return FallbackWorkArea("GetMonitorInfo 失败");
+
+            var rc = monitorInfo.Value.rcWork;
+            int workWidth = rc.Right - rc.Left;
+            int workHeight = rc.Bottom - rc.Top;
+
+            uint dpiX = 96, dpiY = 96;
+            if (GetDpiForMonitor(hMonitor, 0, out dpiX, out dpiY) != 0)
+            {
+                dpiX = 96;
+                dpiY = 96;
+            }
+
+            double scaleX = dpiX / 96.0;
+            double scaleY = dpiY / 96.0;
+            return new Rect(rc.Left / scaleX, rc.Top / scaleY, workWidth / scaleX, workHeight / scaleY);
+        }
+        catch (Exception ex)
+        {
+            LogDpi($"GetLogicalWorkAreaRect EXCEPTION: {ex.Message}");
+            return FallbackWorkArea("异常: " + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// 兜底工作区：Win32 路径失败时退化为 WPF 的 SystemParameters.WorkArea。
+    /// 它只反映主显示器（多屏/异 DPI 下不精确），但"有个可用的矩形"远好于返回 null 后
+    /// 完全跳过钳制——跳过就意味着窗口可能又伸进任务栏被盖住（本函数存在的理由）。
+    /// </summary>
+    private static Rect FallbackWorkArea(string reason)
+    {
+        LogDpi($"GetLogicalWorkAreaRect 兜底 SystemParameters.WorkArea（{reason}）");
+        return SystemParameters.WorkArea;
+    }
+
+    /// <summary>
+    /// 把窗口夹进指定工作区矩形内（尺寸不超上限 + 位置不越界），并转为 Manual 定位。
+    /// 用于代码构建的弹窗：WindowStartupLocation.CenterOwner 只按属主窗口居中、
+    /// 完全不管任务栏，属主靠下时弹窗底部就会伸进任务栏被盖住，故必须显式钳位置。
+    /// </summary>
+    /// <param name="assumedHeight">
+    /// 尚未量测出真实高度时（SourceInitialized）传入预期的最大高度，先摆一个必定合法的位置；
+    /// 已量测出高度时（Loaded）传 ActualHeight 即为最终位置。
+    /// </param>
+    public static void PlaceWithinWorkArea(Window w, Rect work, double assumedHeight, double margin = 12)
+    {
+        double width = w.ActualWidth > 0 ? w.ActualWidth : w.Width;
+        if (double.IsNaN(width) || width <= 0) width = Math.Max(w.MinWidth, 300);
+        double height = assumedHeight;
+        if (double.IsNaN(height) || height <= 0) height = Math.Max(w.MinHeight, 240);
+
+        // 最大化可用区间；若窗口比工作区还大（极端小屏），区间退化为 margin，由 Math.Max 兜住
+        double minLeft = work.Left + margin;
+        double maxLeft = Math.Max(minLeft, work.Right - width - margin);
+        double minTop = work.Top + margin;
+        double maxTop = Math.Max(minTop, work.Bottom - height - margin);
+
+        w.WindowStartupLocation = WindowStartupLocation.Manual;
+        w.Left = Math.Clamp(work.Left + (work.Width - width) / 2, minLeft, maxLeft);
+        w.Top = Math.Clamp(work.Top + (work.Height - height) / 2, minTop, maxTop);
+    }
+
+    /// <summary>便利重载：只要工作区尺寸（宽/高）。</summary>
+    public static (double Width, double Height)? GetLogicalWorkArea(Window w, Window? monitorSource = null)
+        => GetLogicalWorkAreaRect(w, monitorSource) is { } r ? (r.Width, r.Height) : null;
+
+    /// <summary>
+    /// 诊断探针（与 <see cref="LogDpi"/> 同一日志文件）：记录弹窗尺寸决策的关键数值，
+    /// 便于在高缩放屏上核对"内容高度 / 封顶值 / 最终高度"，定位"底部被裁"类问题。
+    /// 纯观测，不影响任何行为。
+    /// </summary>
+    public static void LogDialogMetrics(string tag, string detail)
+        => LogDpi($"[{tag}] {detail}");
+
+    /// <summary>
     /// 诊断探针：把 DPI/尺寸计算写到应用目录 dpi_debug.log，方便确认运行时真实数值。
     /// 问题修复后可移除。
     /// </summary>
