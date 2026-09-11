@@ -7,7 +7,8 @@ namespace MultiplayerHoeingAssistant.Services;
 
 /// <summary>
 /// 日志文件浏览器（嘟嘟可 P2 / F2）。
-/// 枚举 BGI 日志（&lt;BGI&gt;\log\better-genshin-impact*.log）与助手自身日志（log\assistant_runtime.*.log），
+/// 枚举 BGI 日志（&lt;BGI&gt;\log\better-genshin-impact*.log）与助手自身日志（log\assistant_runtime.*.log）、
+/// 已下载的远程成员日志（log\remote_downloads\）、外部导入日志（log\imported\），
 /// 提供整文件加载（ReadAllLines，查看区全量视图）、分块随机访问读取（FileStream.Seek）、
 /// 按时间定位、关键字/正则搜索、导出。
 /// 所有打开均为 FileShare.ReadWrite | Delete 共享读，兼容 BGI 正在写入的当天文件。
@@ -45,7 +46,7 @@ public sealed class LogFileBrowser
     public static string AssistantLogDir =>
         Path.Combine(Path.GetDirectoryName(Environment.ProcessPath) ?? ".", "log");
 
-    /// <summary>枚举两个数据源的日志文件（本机 BGI 组 + 本机助手组 + 已下载成员组），组内按修改时间倒序。</summary>
+    /// <summary>枚举各数据源的日志文件（本机 BGI 组 + 本机助手组 + 已下载成员组 + 外部导入组），组内按修改时间倒序。</summary>
     public List<LogFileItem> EnumerateFiles()
     {
         var result = new List<LogFileItem>();
@@ -92,9 +93,27 @@ public sealed class LogFileBrowser
                 });
             }
         }
-        // 分组顺序固定：本机 BGI → 本机助手 → 已下载成员；组内按修改时间倒序（最新在最上）
+        // 第四分组：外部导入日志（imported\，用户经日志浏览「导入外部日志」复制进来的文件；
+        // 该目录是导入专用目录，故枚举全部文件、不做文件名白名单过滤）
+        var importedDir = Path.Combine(assistDir, "imported");
+        if (Directory.Exists(importedDir))
+        {
+            foreach (var f in Directory.EnumerateFiles(importedDir))
+            {
+                var fi = new FileInfo(f);
+                result.Add(new LogFileItem
+                {
+                    Name = fi.Name, FullPath = fi.FullName, Group = "外部导入日志",
+                    LastWriteTime = fi.LastWriteTime, Length = fi.Length
+                });
+            }
+        }
+        // 分组顺序固定：本机 BGI → 本机助手 → 已下载成员 → 外部导入；组内按修改时间倒序（最新在最上）
         return result
-            .OrderBy(f => f.Group switch { "本机 · BGI 日志" => 0, "本机 · 助手日志" => 1, _ => 2 })
+            .OrderBy(f => f.Group switch
+            {
+                "本机 · BGI 日志" => 0, "本机 · 助手日志" => 1, "已下载的成员日志" => 2, _ => 3
+            })
             .ThenByDescending(f => f.LastWriteTime)
             .ToList();
     }

@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Data;
 using System.Windows.Threading;
 using Microsoft.Win32;
+using MultiplayerHoeingAssistant.Helpers;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 
@@ -12,7 +13,7 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 
 /// <summary>
 /// 日志浏览 Tab 的 ViewModel（P2 / F2）。
-/// 文件列表（本机 BGI / 本机助手 / 已下载成员三分组）+ 整文件全量视图（「记事本式」：一次读入内存，
+/// 文件列表（本机 BGI / 本机助手 / 已下载成员 / 外部导入四分组）+ 整文件全量视图（「记事本式」：一次读入内存，
 /// 虚拟化 ListBox 承载，自由滚动不分块加载）+ 按级别多选筛选（错误/警告/信息/Debug 四勾选框，ERR/WRN/INF/DBG）
 /// + 按时间范围搜索（自动定位到起始时间点）
 /// + 关键字/正则搜索（结果点击精确跳转行）+ 导出（原样复制 / 筛选结果 .log/.csv）。
@@ -162,6 +163,78 @@ public sealed class LogBrowserViewModel : ViewModelBase
                 { FileName = "explorer.exe", Arguments = $"\"{dir}\"", UseShellExecute = true });
         }
         catch { /* 打开失败静默 */ }
+    });
+
+    /// <summary>导入外部日志：文件选择框（可多选）→ 复制到 log\imported\（重名覆盖需确认）→ 刷新列表并打开首个导入文件。
+    /// 覆盖确认在 UI 线程一次问完，复制放后台线程（大文件不冻 UI，与导出同款）；
+    /// 选中已在 imported\ 里的文件时跳过复制直接视为导入。</summary>
+    public RelayCommand ImportExternalLogsCommand => new(_ =>
+    {
+        var dlg = new OpenFileDialog
+        {
+            Title = "导入外部日志",
+            Filter = "日志文件|*.log|所有文件|*.*",
+            Multiselect = true
+        };
+        if (dlg.ShowDialog() != true || dlg.FileNames.Length == 0) return;
+
+        string dir;
+        try
+        {
+            dir = Path.Combine(LogFileBrowser.AssistantLogDir, "imported");
+            Directory.CreateDirectory(dir);
+        }
+        catch (Exception ex)
+        {
+            ViewStatus = $"创建导入目录失败: {ex.Message}";
+            return;
+        }
+
+        var jobs = new List<(string Src, string Dst)>();
+        foreach (var src in dlg.FileNames)
+        {
+            var dst = Path.Combine(dir, Path.GetFileName(src));
+            // 同名已存在：覆盖确认（与远程下载重名处理同款；本工程无 ThemedMessageBox，沿用 MessageBox）
+            if (File.Exists(dst)
+                && !string.Equals(src, dst, StringComparison.OrdinalIgnoreCase)
+                && MessageBox.Show($"已存在 {Path.GetFileName(src)}，覆盖导入？", "导入外部日志",
+                       MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                continue;
+            jobs.Add((src, dst));
+        }
+        if (jobs.Count == 0) { ViewStatus = "已取消导入"; return; }
+
+        IsLoading = true;
+        ViewStatus = "正在导入外部日志…";
+        Task.Run(() =>
+        {
+            var imported = new List<string>();
+            var failed = 0;
+            foreach (var (src, dst) in jobs)
+            {
+                if (string.Equals(src, dst, StringComparison.OrdinalIgnoreCase))
+                {
+                    imported.Add(dst); // 源文件本就在导入目录：无需复制
+                    continue;
+                }
+                try { _browser.CopyFile(src, dst); imported.Add(dst); }
+                catch (Exception ex)
+                {
+                    failed++;
+                    RuntimeLog.WriteLine($"[LogBrowser] 外部日志导入失败 {src}: {ex.Message}");
+                }
+            }
+            Application.Current.Dispatcher.BeginInvoke(() =>
+            {
+                IsLoading = false;
+                RefreshFiles();
+                var first = imported.Count > 0 ? Files.FirstOrDefault(f => f.FullPath == imported[0]) : null;
+                if (first != null) SelectedFile = first; // setter 触发 LoadInitial，直接可看
+                ViewStatus = failed > 0
+                    ? $"已导入 {imported.Count} 个文件，{failed} 个失败（详见运行日志）"
+                    : $"已导入 {imported.Count} 个文件到 log\\imported";
+            });
+        });
     });
 
     // ========== 查看区（整文件全量视图） ==========
@@ -678,11 +751,13 @@ public sealed class LogBrowserViewModel : ViewModelBase
     {
         var keep = SelectedRemoteMember?.Uid;
         RemoteMembers.Clear();
-        foreach (var m in _mainVm.Members)
-        {
-            if (!m.Online || m.IsSelf) continue;
-            RemoteMembers.Add(new RemoteMemberOption(m.PlayerUid, m.PlayerName));
-        }
+        // 单机模式：远程下载成员墙留空（不发起任何成员日志文件请求）
+        if (!_mainVm.IsStandaloneMode)
+            foreach (var m in _mainVm.Members)
+            {
+                if (!m.Online || m.IsSelf) continue;
+                RemoteMembers.Add(new RemoteMemberOption(m.PlayerUid, m.PlayerName));
+            }
         SelectedRemoteMember = RemoteMembers.FirstOrDefault(o => o.Uid == keep);
         // 成员刷新顺带刷新"需新版服务端"标注与状态行
         OnPropertyChanged(nameof(RemoteDownloadUnsupported));

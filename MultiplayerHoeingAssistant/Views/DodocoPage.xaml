@@ -510,7 +510,7 @@
                         </Grid.RowDefinitions>
                         <Grid Grid.Row="0" Margin="0,0,0,8">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="日志文件" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource White}"
+                                <TextBlock Text="日志" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource White}"
                                            VerticalAlignment="Center"/>
                                 <ComboBox Width="112" Margin="8,0,0,0" FontSize="11" VerticalAlignment="Center"
                                           ItemsSource="{Binding Browser.DateFilterItems}"
@@ -519,7 +519,10 @@
                                           ToolTip="按日期筛选文件列表（默认当天；按文件最后修改日期，不影响远程日志下载）"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                <Button Content="⟳" Style="{DynamicResource TextAction}" FontSize="13"
+                                <Button Content="📥" Style="{DynamicResource TextAction}" FontSize="13"
+                                        Command="{Binding Browser.ImportExternalLogsCommand}"
+                                        ToolTip="导入外部日志文件（复制到 log\imported\ 并在列表中打开）"/>
+                                <Button Content="⟳" Style="{DynamicResource TextAction}" FontSize="13" Margin="6,0,0,0"
                                         Command="{Binding Browser.RefreshFilesCommand}" ToolTip="刷新文件列表"/>
                                 <Button Content="📁" Style="{DynamicResource TextAction}" FontSize="13" Margin="6,0,0,0"
                                         Command="{Binding Browser.OpenLogFolderCommand}" ToolTip="打开日志目录"/>
