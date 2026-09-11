@@ -45,6 +45,12 @@ public sealed class KeywordWatchService : IDisposable
     private readonly Timer? _sharedDebounce;
     /// <summary>共享文件变更去抖时长。</summary>
     private static readonly TimeSpan SharedDebounceDelay = TimeSpan.FromMilliseconds(500);
+    /// <summary>监控端"发现执行端"兜底拉取间隔：Load 只在构造时读一次共享规则，信标晚活/共享文件晚建靠它补拉。</summary>
+    private static readonly TimeSpan SharedPullInterval = TimeSpan.FromSeconds(5);
+    /// <summary>监控端兜底拉取定时器（成功读到一次共享文件后转空转，增量同步由 FileSystemWatcher 接管）。</summary>
+    private readonly Timer? _sharedPullTimer;
+    /// <summary>是否已成功读过一次共享规则文件（仅监控端兜底拉取关心；volatile：Timer 线程读、Load/ApplySharedRules 写）。</summary>
+    private volatile bool _sharedSynced;
     /// <summary>规则序列化统一选项（保存与"内容是否变化"比较必须用同一份，否则自己镜像写的回环挡不住）。</summary>
     private static readonly JsonSerializerOptions IndentedOptions = new() { WriteIndented = true };
 
@@ -115,6 +121,23 @@ public sealed class KeywordWatchService : IDisposable
             {
                 System.Diagnostics.Debug.WriteLine($"[KeywordWatchService] 共享规则监听挂载失败: {ex.Message}");
             }
+
+            // 兜底拉取：监控端在 Load 之后才出现活执行端/共享文件时，每 5 秒补拉一次直到读成功
+            // （watcher 只覆盖"文件变化"，覆盖不了"文件在对端出现之前本端已完成加载"的场景）
+            _sharedPullTimer = new Timer(SharedPullTick, null, SharedPullInterval, SharedPullInterval);
+
+            // 执行端启动对账（监控端规则为空的另一半根因）：仅执行端做，监控端启动期抢写会用本地空配置冲掉共享。
+            // 共享比主副本新 → 监控端在本端离线期间改过规则：拉回（内容相同 ApplySharedRules 内部忽略）；
+            // 共享缺失/不新（含本端上次保存时镜像失败的残留：主副本才是新事实）→ 主副本权威，镜像过去，
+            // 否则执行端不修改规则时监控端永远拉不到规则。不做内容盲目拉回：共享更旧且内容不同会把新规则回滚掉。
+            if (!IsObserver())
+            {
+                if (File.Exists(LocalPeerSyncService.SharedRulesPath)
+                    && File.GetLastWriteTime(LocalPeerSyncService.SharedRulesPath) > File.GetLastWriteTime(_configPath))
+                    ApplySharedRules(null);
+                else
+                    lock (_lock) SaveLocked();
+            }
         }
     }
 
@@ -177,6 +200,7 @@ public sealed class KeywordWatchService : IDisposable
                     var json = File.ReadAllText(path);
                     _config = JsonSerializer.Deserialize<WatchConfig>(json,
                         new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new WatchConfig();
+                    if (usedShared) _sharedSynced = true; // 启动即读到共享：兜底拉取定时器不必再补
                     SeedBuiltinStallRuleLocked();
                     return;
                 }
@@ -194,6 +218,13 @@ public sealed class KeywordWatchService : IDisposable
             }
             catch { /* 配置损坏则按空规则重建 */ }
             _config = new WatchConfig();
+            // 监控端+活信标时 SaveLocked 只写共享文件：此重建分支不许落盘——否则会用"只剩内置规则的空配置"
+            // 抢写共享，经 watcher 回灌把执行端规则冲掉；等兜底拉取定时器从共享文件恢复即可
+            if (IsObserver() && _peerSync?.IsLocalExecutorAlive() == true)
+            {
+                SeedBuiltinStallRuleCoreLocked();
+                return;
+            }
             SeedBuiltinStallRuleLocked();
             SaveLocked();
         }
@@ -274,6 +305,7 @@ public sealed class KeywordWatchService : IDisposable
                 }
             }
             if (json == null) return;
+            _sharedSynced = true; // 已成功读到共享文件：监控端兜底拉取定时器转为空转
 
             var changed = false;
             lock (_lock)
@@ -308,6 +340,26 @@ public sealed class KeywordWatchService : IDisposable
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[KeywordWatchService] 共享规则应用失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>监控端兜底拉取（每 5 秒）：信标活着但本端还没成功读过共享规则时拉一次。
+    /// 覆盖两种"监控端规则为空"场景：Load 时信标未活（执行端后开）、Load 时共享文件尚未建出（对端尚未对账）。
+    /// 成功读到后增量同步由 FileSystemWatcher 接管，本定时器转空转（一次 volatile 读 + return）。</summary>
+    private void SharedPullTick(object? state)
+    {
+        try
+        {
+            if (_sharedSynced || !IsObserver()) return;
+            if (_peerSync?.IsLocalExecutorAlive() != true) return;
+            ApplySharedRules(null);
+            // 静默容错须留痕：兜底通道首次同步成功记一笔（排障时能区分"watcher 同步"与"兜底拉取"）
+            if (_sharedSynced)
+                RuntimeLog.WriteLine("[KeywordWatchService] 监控端发现同机执行端，已从共享规则文件同步监控规则");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[KeywordWatchService] 共享规则兜底拉取失败: {ex.Message}");
         }
     }
 
@@ -715,6 +767,7 @@ public sealed class KeywordWatchService : IDisposable
         _flushTimer.Dispose();
         _sharedWatcher?.Dispose();
         _sharedDebounce?.Dispose();
+        _sharedPullTimer?.Dispose();
         lock (_lock)
         {
             foreach (var p in _pendingRecords) WriteRecordLocked(p.Record);
