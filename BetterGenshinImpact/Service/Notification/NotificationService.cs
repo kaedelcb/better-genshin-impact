@@ -531,16 +531,28 @@ public class NotificationService : IHostedService, IDisposable
     {
         if (notificationData == null) throw new ArgumentNullException(nameof(notificationData));
 
-        if (!ShouldSendNotification(notificationData.Event)) return;
+        if (!ShouldSendNotification(notificationData.Event))
+        {
+            // 订阅关闭时同样需要释放调用方传入的截图，避免长期泄漏
+            notificationData.Screenshot?.Dispose();
+            notificationData.Screenshot = null;
+            return;
+        }
 
         try
         {
-            await AddScreenshotIfNeededAsync(notificationData);
+            AddScreenshotIfNeeded(notificationData);
             await _notifierManager.SendNotificationToAllAsync(notificationData);
         }
         catch (Exception ex)
         {
             TaskControl.Logger.LogError(ex, "发送通知时发生错误");
+        }
+        finally
+        {
+            // 无论截图由调用方传入还是此处补充，发送完成后统一释放并清空引用
+            notificationData.Screenshot?.Dispose();
+            notificationData.Screenshot = null;
         }
     }
 
@@ -557,9 +569,9 @@ public class NotificationService : IHostedService, IDisposable
     /// <summary>
     ///     如果需要，为通知添加截图
     /// </summary>
-    private async Task AddScreenshotIfNeededAsync(BaseNotificationData notificationData)
+    private void AddScreenshotIfNeeded(BaseNotificationData notificationData)
     {
-        if (_notificationConfig?.IncludeScreenShot != true)
+        if (_notificationConfig?.IncludeScreenShot != true || notificationData.Screenshot != null)
         {
             return;
         }
@@ -570,16 +582,13 @@ public class NotificationService : IHostedService, IDisposable
             if (mat != null)
             {
                 using var imageRegion = new ImageRegion(mat, 0, 0);
-                var screenshot = imageRegion.CacheImage.Clone();
-                notificationData.Screenshot = screenshot;
+                notificationData.Screenshot = imageRegion.CacheImage.Clone();
             }
         }
         catch (Exception ex)
         {
             TaskControl.Logger.LogDebug(ex, "补充通知截图失败");
         }
-
-        await Task.CompletedTask;
     }
 
     /// <summary>
