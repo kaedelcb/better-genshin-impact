@@ -290,10 +290,21 @@ public class CommandExecutor
 
     /// <summary>
     /// 启动 BGI：直接调用进程监控启动 BGI 进程。
+    /// [常开守护] 如实回报结果：启动调用失败（路径错误/权限等）时返回 failed，
+    /// 不再无条件报"BGI 已启动"（旧实现对失败静默，启动中心节点会以为已启动）。
     /// </summary>
     private Task<CommandResult> StartBgiAsync(string? args = null)
     {
-        _monitor.RestartBgi(args);
+        var started = _monitor.RestartBgi(args);
+        if (!started)
+        {
+            return Task.FromResult(new CommandResult
+            {
+                Status = "failed",
+                Message = "启动 BGI 失败（无法拉起进程，详见助手日志；守护会在冷却结束后自动重试）"
+            });
+        }
+
         var msg = string.IsNullOrWhiteSpace(args) ? "BGI 已启动" : $"BGI 已启动（参数：{args}）";
         return Task.FromResult(new CommandResult { Status = "success", Message = msg });
     }
@@ -443,8 +454,8 @@ public class CommandExecutor
             // + 等进程真正退净后才拉起；杀不掉（提权）时返回 false，不假成功
             if (!await _monitor.RestartBgiControlledAsync($"--startGroups {groupArgs}", "IPC回退"))
             {
-                Log($"[进程仲裁] 配置组「{groupName}」回退重启失败：无法终止现有 BGI 进程（可能提权运行），请手动关闭 BGI 后重试");
-                return new CommandResult { Status = "failed", Message = $"配置组 {groupName} 启动失败：无法终止现有 BGI 进程（可能提权运行），请手动关闭 BGI 后重试" };
+                Log($"[进程仲裁] 配置组「{groupName}」回退重启未完成：旧进程未退净（可能提权运行）或启动调用失败，详见上方日志");
+                return new CommandResult { Status = "failed", Message = $"配置组 {groupName} 启动失败：BGI 回退重启未完成（无法终止残留进程或启动失败），请查看助手日志后重试" };
             }
             _hasRestartedThisBatch = true; // 只在仲裁器确认杀净+拉起后置位，失败不算"本批次已重启"
         }
@@ -515,8 +526,8 @@ public class CommandExecutor
         // [P2 仲裁] 同 StartGroupAsync：收编到仲裁器（串行 + 抑制 + 等退净），杀不掉不假成功
         if (!await _monitor.RestartBgiControlledAsync($"--startOneDragon \"{configName}\"", "IPC回退"))
         {
-            Log($"[进程仲裁] 一条龙「{configName}」回退重启失败：无法终止现有 BGI 进程（可能提权运行），请手动关闭 BGI 后重试");
-            return new CommandResult { Status = "failed", Message = $"一条龙 {configName} 启动失败：无法终止现有 BGI 进程（可能提权运行），请手动关闭 BGI 后重试" };
+            Log($"[进程仲裁] 一条龙「{configName}」回退重启未完成：旧进程未退净（可能提权运行）或启动调用失败，详见上方日志");
+            return new CommandResult { Status = "failed", Message = $"一条龙 {configName} 启动失败：BGI 回退重启未完成（无法终止残留进程或启动失败），请查看助手日志后重试" };
         }
         return new CommandResult { Status = "success", Message = $"一条龙 {configName} 已通过重启启动" };
     }

@@ -4904,13 +4904,15 @@ public class MainViewModel : INotifyPropertyChanged
                 // 仲裁器 SemaphoreSlim 已串行化全部杀/启操作（含回退重启与 kill_bgi），双守卫语义重复，
                 // 且 async 等待（杀+等退净最长十余秒）期间 Interlocked 长时间占位会挡住合法重启。
                 // async void 事件处理器必须 try/catch 兜底，异常不能逃逸出事件回调。
+                // [常开守护 2026-09-11] 守护判定已改为电平式（没进程就拉起），本处理器不再有"补判"场景。
                 try
                 {
                     AddLog("BGI 已崩溃，自动重启");
                     var restarted = await _processMonitor.RestartBgiControlledAsync(null, "崩溃守护");
                     if (!restarted)
                     {
-                        AddLog("崩溃自动重启失败：无法终止残留 BGI 进程（可能提权运行），请手动关闭 BGI 后重试");
+                        // 两种失败：旧进程杀不掉（提权）／启动调用失败。守护保持常开，冷却后会自动重试，不再静默。
+                        AddLog("崩溃自动重启未完成（无法终止残留进程或启动失败，详见上方日志）；守护将在冷却结束后自动重试");
                         return;
                     }
                     AddLog("BGI 已自动重启");
