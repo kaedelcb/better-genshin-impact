@@ -105,17 +105,17 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         // relay 先于 Monitor 创建：Monitor 的观看端取图请求走它；FrameReceived 回调里的 Monitor
         // 在事件触发时才求值，彼时已赋值。
         _screenshotRelay = new MemberScreenshotRelayService(
-            _screenshotService, _settingsService, () => _mainVm.SignalR);
+            _screenshotService, _settingsService, () => _mainVm.IsStandaloneMode ? null : _mainVm.SignalR);
         _screenshotRelay.FrameReceived += frame =>
             Application.Current.Dispatcher.BeginInvoke(() => Monitor.OnRemoteFrame(frame));
         Monitor = new ScreenshotViewModel(_screenshotService, _settingsService, _mainVm, _screenshotRelay);
 
         // 房间实时日志汇聚：本机上报（500ms 合批）+ 成员日志批接收 → 实时日志 Tab 多来源
-        _logRelay = new MemberLogRelayService(_tailService, _settingsService, () => _mainVm.SignalR);
+        _logRelay = new MemberLogRelayService(_tailService, _settingsService, () => _mainVm.IsStandaloneMode ? null : _mainVm.SignalR);
         _logRelay.BatchReceived += OnLogBatchReceived;
 
         // 远程成员完整日志下载·被下载端：应答文件列表请求 / 分块上行（懒绑定由 FlushPending 节拍驱动）
-        _logShare = new MemberLogShareService(_settingsService, () => _mainVm.SignalR,
+        _logShare = new MemberLogShareService(_settingsService, () => _mainVm.IsStandaloneMode ? null : _mainVm.SignalR,
             () => BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath));
 
         RebuildLogSources();
@@ -280,13 +280,15 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
             LogSources.Add(new LogSourceOption(LocalSourceKey, "本机"));
             // 旧服务端无订阅方法：远程项标注（该标记在 HubException 后置位，新连接重置）
             var subscribeUnsupported = _mainVm.SignalR?.LogSubscribeUnsupported == true;
-            foreach (var m in _mainVm.Members)
-            {
-                if (m.IsSelf || string.IsNullOrEmpty(m.PlayerUid)) continue;
-                var label = m.Online ? m.PlayerName : $"{m.PlayerName}（离线）";
-                if (subscribeUnsupported && m.Online) label += "（需新版服务端）";
-                LogSources.Add(new LogSourceOption(m.PlayerUid, label));
-            }
+            // 单机模式：不进任何远程成员来源（有缓存流的已退出成员仍保留回看，见下方循环）
+            if (!_mainVm.IsStandaloneMode)
+                foreach (var m in _mainVm.Members)
+                {
+                    if (m.IsSelf || string.IsNullOrEmpty(m.PlayerUid)) continue;
+                    var label = m.Online ? m.PlayerName : $"{m.PlayerName}（离线）";
+                    if (subscribeUnsupported && m.Online) label += "（需新版服务端）";
+                    LogSources.Add(new LogSourceOption(m.PlayerUid, label));
+                }
             // 有缓存流但已退出房间的成员：保留下拉项，缓存仍可回看
             foreach (var uid in _buffers.Keys)
             {
@@ -320,6 +322,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     /// <summary>期望的订阅目标：选中远程在线成员 + 在实时日志 Tab + 在嘟嘟可页面。不满足则为 null。</summary>
     private string? DesiredSubscriptionTarget()
     {
+        if (_mainVm.IsStandaloneMode) return null; // 单机模式：不订阅任何远程成员日志
         if (SelectedTabIndex != 0) return null;
         if (_mainVm.CurrentPage != AppPage.Dodoco) return null;
         var key = CurrentSourceKey;
@@ -993,6 +996,12 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         {
             OnPropertyChanged(nameof(IsObserverMode));
             OnPropertyChanged(nameof(IsExecutorMode));
+        }
+        // 总开关单机切换：重建来源/订阅/下载成员墙/画面源（远程数据面整体随单机消失/恢复）
+        if (e.PropertyName == nameof(MainViewModel.IsStandaloneMode))
+        {
+            RebuildLogSources();
+            Monitor.RefreshForStandaloneChange();
         }
     }
 

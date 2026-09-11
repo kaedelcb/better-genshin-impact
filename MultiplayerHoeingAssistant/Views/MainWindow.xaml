@@ -596,6 +596,11 @@
                                                 <Setter Property="Background" Value="#1F5B8DEF"/>
                                                 <Setter Property="BorderBrush" Value="#665B8DEF"/>
                                             </MultiDataTrigger>
+                                            <!-- 总开关单机（有意不连/未填地址）：中性色覆盖一切连接态（后写覆盖先写） -->
+                                            <DataTrigger Binding="{Binding IsStandaloneMode}" Value="True">
+                                                <Setter Property="Background" Value="#1F9C97C0"/>
+                                                <Setter Property="BorderBrush" Value="#669C97C0"/>
+                                            </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Border.Style>
@@ -615,6 +620,10 @@
                                                     </MultiDataTrigger.Conditions>
                                                     <Setter Property="Fill" Value="#5B8DEF"/>
                                                 </MultiDataTrigger>
+                                                <!-- 总开关单机：中性灰点 -->
+                                                <DataTrigger Binding="{Binding IsStandaloneMode}" Value="True">
+                                                    <Setter Property="Fill" Value="#9C97C0"/>
+                                                </DataTrigger>
                                             </Style.Triggers>
                                             </Style>
                                         </Ellipse.Style>
@@ -637,11 +646,43 @@
                                                     <Setter Property="Text" Value="监控"/>
                                                     <Setter Property="Foreground" Value="#5B8DEF"/>
                                                 </MultiDataTrigger>
+                                                <!-- 总开关单机：显示「单机」（有意不连），与异常断连的「离线」区分 -->
+                                                <DataTrigger Binding="{Binding IsStandaloneMode}" Value="True">
+                                                    <Setter Property="Text" Value="单机"/>
+                                                    <Setter Property="Foreground" Value="#C9C4E6"/>
+                                                </DataTrigger>
                                             </Style.Triggers>
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
                                 </StackPanel>
+                                </Border>
+                            </Button>
+                            <!-- 总开关·单机/在线手动切换（离线优先：服务器是可选增强；弹窗确认；选择持久化，重启保持） -->
+                            <Button VerticalAlignment="Center" Cursor="Hand" Margin="6,0,0,0"
+                                    ToolTip="手动切换单机/在线（弹窗确认）。单机模式断开服务器，联机功能全部不可用，槲寄生/本机日志等本地功能照常；选择会被记住"
+                                    Command="{Binding ToggleStandaloneModeCommand}">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <ContentPresenter Content="{TemplateBinding Content}"
+                                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                                    </ControlTemplate>
+                                </Button.Template>
+                                <Border CornerRadius="7" Padding="9,3" VerticalAlignment="Center" BorderThickness="1"
+                                        Background="#1F9C97C0" BorderBrush="#669C97C0">
+                                    <TextBlock FontSize="10" FontWeight="Medium" VerticalAlignment="Center" Foreground="#C9C4E6">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text" Value="切到单机"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsStandaloneMode}" Value="True">
+                                                        <Setter Property="Text" Value="切到在线"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </Border>
                             </Button>
                             <!-- 跨会话警告徽章：IPC 管道指向其他会话的 BGI（或无法确认会话归属）时显示 -->

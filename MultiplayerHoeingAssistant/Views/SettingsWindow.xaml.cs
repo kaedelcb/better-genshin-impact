@@ -82,11 +82,10 @@ public partial class SettingsWindow : Window
             .Where(x => x.Length > 0)
             .ToList();
 
-        if (string.IsNullOrEmpty(serverUrl))
+        // [离线优先] 服务器地址留空 = 恒定单机模式：槲寄生等本地功能可用，联机字段（密码/队伍UID/玩家UID）留空合法
+        var standaloneMode = string.IsNullOrEmpty(serverUrl);
+        if (!standaloneMode)
         {
-            ErrorText.Text = "服务器地址不能为空";
-            return null;
-        }
         if (password.Length < 4 || password.Length > 8)
         {
             ErrorText.Text = "密码长度需为 4-8 位";
@@ -101,6 +100,7 @@ public partial class SettingsWindow : Window
         {
             ErrorText.Text = "玩家 UID 必须包含在队伍 UID 中";
             return null;
+        }
         }
 
         return new AssistConfig
@@ -128,6 +128,8 @@ public partial class SettingsWindow : Window
             // 实例标识必须保留：被清空后重新入房时服务端无法按 (UID, ClientInstanceId) 回收旧条目，
             // 会追加新条目并残留离线幽灵条目，导致成员"假离线"（在线状态被幽灵条目覆盖）
             ClientInstanceId = _configCopy?.ClientInstanceId ?? "",
+            // 总开关·手动单机 同样必须保留（设置弹窗不展示该字段，丢失会把单机用户静默拉回联机）
+            StandaloneMode = _configCopy?.StandaloneMode ?? false,
             OnlineHoeingGroupTypes = _configCopy?.OnlineHoeingGroupTypes ?? [],
             OnlineHoeingCompletionPolicy = _configCopy?.OnlineHoeingCompletionPolicy ?? "resume",
             OnlineHoeingSpecifiedTaskType = _configCopy?.OnlineHoeingSpecifiedTaskType ?? "group",

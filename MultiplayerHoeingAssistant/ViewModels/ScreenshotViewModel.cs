@@ -196,6 +196,9 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
 
     private void OnMembersChanged(object? sender, NotifyCollectionChangedEventArgs e) => RebuildMonitorOptions();
 
+    /// <summary>总开关单机切换：重建画面源列表（远程项随单机消失/恢复）。由 DodocoViewModel 转发主 VM 通知调用。</summary>
+    public void RefreshForStandaloneChange() => RebuildMonitorOptions();
+
     /// <summary>按房间成员重建画面源选项（首项本机，其余为在线成员，尽量保留选中）。</summary>
     private void RebuildMonitorOptions()
     {
@@ -209,6 +212,8 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
                 _mainVm.IsObserverMode ? "执行端画面（本机 UID）" : "主屏（本机）"));
             foreach (var m in _mainVm.Members)
             {
+                // 单机模式：画面源只留本机，不列任何远程成员
+                if (_mainVm.IsStandaloneMode) break;
                 if (m.IsSelf || string.IsNullOrEmpty(m.PlayerUid)) continue;
                 MonitorOptions.Add(new MonitorOption(m.PlayerUid, $"{m.PlayerName}（远程）"));
             }
@@ -294,6 +299,11 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     {
         var uid = PullTargetUid;
         if (string.IsNullOrEmpty(uid)) return; // 本机直截（或监控模式未配 UID）不走这里
+        if (_mainVm.IsStandaloneMode)
+        {
+            StatusText = "单机模式：不请求远程画面";
+            return;
+        }
         if (_mainVm.SignalR?.IsConnected != true)
         {
             StatusText = "未连接房间，无法请求远程画面";

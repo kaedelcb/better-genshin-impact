@@ -218,6 +218,9 @@ public class MainViewModel : INotifyPropertyChanged
     /// <summary>切换执行/监控模式（点击连接徽章触发）</summary>
     public RelayCommand SwitchModeCommand => new(_ => _ = SwitchModeAsync());
 
+    /// <summary>总开关：手动切换单机/在线（离线优先原则：服务器是可选增强；弹窗确认；选择持久化，重启保持）。</summary>
+    public RelayCommand ToggleStandaloneModeCommand => new(_ => _ = ToggleStandaloneModeAsync());
+
     // ===== 一键快捷命令（给所有在线成员下发执行绑定配置组/一条龙）=====
     public RelayCommand QuickLegendCommand => new(_ => _ = ExecuteQuickCommandAsync("一键传奇"));
     public RelayCommand QuickShieldCommand => new(_ => _ = ExecuteQuickCommandAsync("一键次数盾"));
@@ -279,11 +282,13 @@ public class MainViewModel : INotifyPropertyChanged
             }
         }
 
-        // 设置弹窗：如果配置不完整（缺密码 / 缺 TeamUids / 缺 PlayerName / 缺 PlayerUid），弹出一次性设置弹窗
-        if (string.IsNullOrEmpty(_config.ControlRoomPassword)
+        // 设置弹窗：联机模式下配置不完整（缺密码 / 缺 TeamUids / 缺 PlayerName / 缺 PlayerUid），弹出一次性设置弹窗。
+        // [离线优先] 单机模式（手动单机或服务器地址留空）下联机字段留空合法，不弹窗、不阻断启动
+        if (!IsStandaloneMode
+            && (string.IsNullOrEmpty(_config.ControlRoomPassword)
             || _config.TeamUids.Count == 0
             || string.IsNullOrEmpty(_config.PlayerName)
-            || string.IsNullOrEmpty(_config.PlayerUid))
+            || string.IsNullOrEmpty(_config.PlayerUid)))
         {
             var newConfig = SettingsWindow.ShowSettingsDialog(_config);
             if (newConfig == null)
@@ -326,7 +331,10 @@ public class MainViewModel : INotifyPropertyChanged
         // 根据配置应用模式运行时（启动/跳过 BGI 进程监控）。与 SwitchModeAsync 共享同一逻辑。
         ApplyModeRuntime(_config.ObserverMode);
 
-        // 连接 SignalR
+        // [离线优先] 本地状态采集循环先于服务器连接启动：采集是本机 IPC 事实源，不依赖 SignalR
+        EnsureStatusTimerStarted();
+
+        // 连接 SignalR（单机模式下由 ConnectSignalRAsync 入口门控直接跳过）
         await ConnectSignalRAsync();
 
         // 槲寄生启动中心挂点：初始化全部完成后广播（自动执行启动流程监听此事件）
@@ -335,6 +343,14 @@ public class MainViewModel : INotifyPropertyChanged
 
     private async Task ConnectSignalRAsync()
     {
+        // 离线优先：手动单机或服务器地址留空 = 单机模式，完全不发起连接（不连接/不重试/不刷失败日志）。
+        // 本地状态采集循环独立于本方法运行（InitializeAsync 里已启动），槲寄生等本地功能不受影响。
+        if (IsStandaloneMode)
+        {
+            IsConnected = false;
+            AddLog("单机模式（手动单机或未填服务器地址）：跳过服务器连接，槲寄生等本地功能不受影响");
+            return;
+        }
         try
         {
             _signalRClient = new SignalRClient();
@@ -361,18 +377,25 @@ public class MainViewModel : INotifyPropertyChanged
             // 上报状态
             await ReportStatusAsync();
 
-            // 启动定时上报（每10秒）
-            _statusTimer = new Timer(async _ => await ReportStatusAsync(), null, 
-                TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+            // 启动定时上报（每10秒）；通常已在 InitializeAsync 启动，此处幂等兜底
+            EnsureStatusTimerStarted();
         }
         catch (Exception ex)
         {
+            // 连接在飞时用户切到离线：失败属预期（连接被 Dispose），不再起重试
+            if (IsStandaloneMode)
+            {
+                AddLog("单机模式已开启，停止服务器连接尝试");
+                return;
+            }
             AddLog($"连接失败: {ex.Message}，10 秒后自动重试");
             // WithAutomaticReconnect 不重试"首次连接失败"：这里每 10 秒重试，直到连上
             _retryTimer = new Timer(async _ =>
             {
                 // 上次重试的 StartAsync 可能还挂着（假死服务器协商超时 ~100s），不叠加（详见 _retryRunning 注释）
                 if (Interlocked.CompareExchange(ref _retryRunning, 1, 0) != 0) return;
+                // 重试在飞时用户切到离线：本轮放弃（定时器本身已由 GoStandaloneAsync 销毁）
+                if (IsStandaloneMode) return;
                 try
                 {
                     if (_signalRClient == null || !_signalRClient.IsConnected)
@@ -386,11 +409,7 @@ public class MainViewModel : INotifyPropertyChanged
                             IsConnected = true;
                             AddLog("已连接控制房间");
                         });
-                        if (_statusTimer == null)
-                        {
-                            _statusTimer = new Timer(async _2 => await ReportStatusAsync(), null,
-                                TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
-                        }
+                        EnsureStatusTimerStarted();
                         _ = ReportStatusAsync();
                         _retryTimer?.Dispose();
                         _retryTimer = null;
@@ -407,6 +426,70 @@ public class MainViewModel : INotifyPropertyChanged
                     _retryRunning = 0;
                 }
             }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+        }
+    }
+
+    /// <summary>
+    /// 总开关：手动切换单机/在线（标题栏按钮，弹窗确认）。切单机：断连 + 停重试 + 持久化；
+    /// 切在线：持久化后立即发起连接。本地状态采集循环（_statusTimer）两种模式下都保持运行。
+    /// </summary>
+    private async Task ToggleStandaloneModeAsync()
+    {
+        if (_config == null || _configManager == null) return;
+        if (IsStandaloneMode)
+        {
+            if (string.IsNullOrWhiteSpace(_config.ServerUrl))
+            {
+                AddLog("未配置服务器地址，无法切换在线；请先在「设置」中填写服务器地址");
+                return;
+            }
+            if (!ShowSwitchConfirmDialog("切换为在线模式",
+                "切换为在线模式后，将连接服务器，耕地机、嘟嘟可、槲寄生的联机功能恢复可用。是否继续切换？")) return;
+            _config.StandaloneMode = false;
+            _configManager.Save(_config);
+            NotifyModeBindings();
+            AddLog("已切换到在线模式，正在连接服务器...");
+            await ConnectSignalRAsync();
+        }
+        else
+        {
+            if (!ShowSwitchConfirmDialog("切换为单机模式",
+                "切换为单机模式后，将断开服务器连接，耕地机、嘟嘟可、槲寄生的联机功能全部不可用（本机功能照常）。是否继续切换？")) return;
+            _config.StandaloneMode = true;
+            _configManager.Save(_config);
+            NotifyModeBindings();
+            await GoStandaloneAsync("已手动切换到单机模式：服务器连接已断开，本地功能（槲寄生/本机日志）不受影响");
+        }
+    }
+
+    /// <summary>转到单机态：停重试定时器并销毁 SignalR 客户端（复用 RefreshAsync 的 Dispose 路径语义）。
+    /// 注意刻意不停 _statusTimer：本地状态采集单机时也必须继续（LatestLocalStatus 是槲寄生条件/电子狗的数据源）。</summary>
+    private async Task GoStandaloneAsync(string reason)
+    {
+        _retryTimer?.Dispose();
+        _retryTimer = null;
+        var old = _signalRClient;
+        _signalRClient = null;
+        if (old != null)
+        {
+            await old.DisposeAsync();
+        }
+        IsConnected = false;
+        AddLog(reason);
+    }
+
+    /// <summary>设置保存后的单机态同步：清空服务器地址 = 恒定单机模式，若仍连着服务器则断开；
+    /// 反向（补填了地址）不自动重连，保持既有"刷新/重启后生效"行为，仅提示。</summary>
+    private void SyncStandaloneStateAfterSettingsSaved()
+    {
+        NotifyModeBindings();
+        if (IsStandaloneMode && _signalRClient != null)
+        {
+            _ = GoStandaloneAsync("服务器地址已清空：已转入恒定单机模式，服务器连接已断开，本地功能不受影响");
+        }
+        else if (!IsStandaloneMode && _signalRClient == null && _retryTimer == null)
+        {
+            AddLog("配置已具备联机条件，点标题栏「切到在线」或「刷新」建立连接");
         }
     }
 
@@ -799,6 +882,15 @@ public class MainViewModel : INotifyPropertyChanged
             currentRouteDisplay, currentScriptRouteName, autoHoeingRunning, autoHoeingProgress);
     }
 
+    /// <summary>本地状态采集循环（10s）幂等启动。[离线优先] 采集独立于 SignalR 连接运行：
+    /// 单机模式下 LatestLocalStatus 也持续刷新（槲寄生条件/电子狗/任务中心状态卡片的数据源），
+    /// SignalR 只是采集结果的上报出口之一（ReportStatusCoreAsync 末尾 null 守卫跳过）。</summary>
+    private void EnsureStatusTimerStarted()
+    {
+        _statusTimer ??= new Timer(async _ => await ReportStatusAsync(), null,
+            TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+    }
+
     private async Task ReportStatusAsync()
 
     {
@@ -816,10 +908,11 @@ public class MainViewModel : INotifyPropertyChanged
 
     private async Task ReportStatusCoreAsync()
     {
-        // 快照到局部变量：RefreshAsync 会把 _signalRClient 置 null 并 Dispose，
+        // 快照到局部变量：RefreshAsync/GoStandaloneAsync 会把 _signalRClient 置 null 并 Dispose，
         // 裸用字段会在方法中途踩 NullReferenceException（"状态上报失败: Object reference not set..."）
+        // [离线优先] signalRClient 为 null 不再整轮早退：本地采集（IPC/ext → LatestLocalStatus）是槲寄生
+        // 条件/电子狗的事实源，单机模式也必须运行；仅末尾 SignalR 上报段以 null 守卫跳过。
         var signalRClient = _signalRClient;
-        if (signalRClient == null) return;
 
         // [B157] 上线事件上报失败的待补报重试（每 10s 一跳）：旧实现 fire-and-forget 静默丢弃后
         // 客户端已自认"已上线"，不再重试——偶发断线即永久不上线。服务端按 gen 边沿去重，重试安全。
@@ -1204,6 +1297,8 @@ public class MainViewModel : INotifyPropertyChanged
         // 这里捕获并仅记日志（断线状态已由 Closed 事件同步 IsConnected=false，右上角徽章变"离线"）。
         // 嘟嘟可卡死心跳检测用：缓存最近一次本地任务状态快照（10s 状态轮询产物，不新起 IPC）。
         LatestLocalStatus = status;
+        // [离线优先] 单机模式/刷新重建窗口 signalRClient 为 null：跳过上报，采集结果已落 LatestLocalStatus
+        if (signalRClient == null) return;
         try
         {
             await signalRClient.ReportControlStatusAsync(status);
@@ -3883,6 +3978,12 @@ public class MainViewModel : INotifyPropertyChanged
     /// </summary>
     private async Task RefreshAsync()
     {
+        // 离线优先：单机模式下不发起连接，刷新无意义（本地状态采集循环独立运行，不靠刷新驱动）
+        if (IsStandaloneMode)
+        {
+            AddLog("当前为单机模式，刷新已忽略（切到在线后再刷新）");
+            return;
+        }
         // 防重入：连点"刷新房间"时后到的刷新会把先到的刚建好的连接 Dispose 掉（详见 _refreshRunning 注释）
         if (Interlocked.CompareExchange(ref _refreshRunning, 1, 0) != 0) return;
         // 半成品客户端（StartAsync 已成功但 JoinControlRoom 抛异常 → 挂着一条活连接）必须在失败路径销毁，
@@ -3891,9 +3992,9 @@ public class MainViewModel : INotifyPropertyChanged
         try
         {
             AddLog("正在刷新助手状态...");
-            // 1. 停止旧的定时任务（状态上报 Timer 与首次连接失败的重试 Timer），避免与重建后的重复上报。
-            _statusTimer?.Dispose();
-            _statusTimer = null;
+            // 1. 停止首次连接失败的重试 Timer，避免与重建后的重试叠加。
+            //    [离线优先] 状态采集 Timer（_statusTimer）刻意不停：采集是本地事实源，刷新期间继续刷新快照；
+            //    定时器统一经 EnsureStatusTimerStarted 幂等启动，无重复上报风险。
             _retryTimer?.Dispose();
             _retryTimer = null;
 
@@ -3923,14 +4024,22 @@ public class MainViewModel : INotifyPropertyChanged
                     _config.ServerUrl, RoomCode, _config.ControlRoomPassword,
                     _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId,
                     _config.BypassSystemProxy);
+                // 刷新连接在飞期间（最长可挂 ~100s）用户切到离线：销毁刚到手的连接，不接管
+                if (IsStandaloneMode)
+                {
+                    await pendingClient.DisposeAsync();
+                    pendingClient = null;
+                    IsConnected = false;
+                    AddLog("单机模式已开启，放弃本次刷新建立的连接");
+                    return;
+                }
                 _signalRClient = pendingClient;
                 pendingClient = null; // 所有权已移交 _signalRClient
                 IsConnected = true;
                 AddLog("刷新完成，已重新建立连接");
                 await ReportStatusAsync();
                 RefreshCompleted?.Invoke();
-                _statusTimer = new Timer(async _ => await ReportStatusAsync(), null,
-                    TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+                EnsureStatusTimerStarted();
             }
         }
         catch (Exception ex)
@@ -3981,11 +4090,7 @@ public class MainViewModel : INotifyPropertyChanged
                                 AddLog("已重新连接控制房间");
                             });
                             RefreshCompleted?.Invoke();
-                            if (_statusTimer == null)
-                            {
-                                _statusTimer = new Timer(async _2 => await ReportStatusAsync(), null,
-                                    TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
-                            }
+                            EnsureStatusTimerStarted();
                             _ = ReportStatusAsync();
                             _retryTimer?.Dispose();
                             _retryTimer = null;
@@ -5004,11 +5109,18 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>切换模式确认弹窗（深色鎏金主题）。</summary>
-    private bool ShowModeSwitchConfirm(string modeName)
+    private bool ShowModeSwitchConfirm(string modeName) => ShowSwitchConfirmDialog(
+        $"切换为{modeName}模式",
+        modeName == "监控"
+            ? "切换为监控模式后，本机 BGI 进程将继续运行，但助手将不再监控 BGI 状态。是否继续切换？"
+            : "切换为执行模式后，助手将重新监控本机 BGI 状态并参与联机任务。是否继续切换？");
+
+    /// <summary>通用切换确认弹窗（深色鎏金主题；总开关/子开关/执行监控切换共用）。</summary>
+    private bool ShowSwitchConfirmDialog(string title, string tipText)
     {
         var window = new Window
         {
-            Title = "切换模式",
+            Title = title,
             Width = 380, Height = 200,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = Application.Current.MainWindow,
@@ -5036,7 +5148,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         var titleLabel = new TextBlock
         {
-            Text = $"切换为{modeName}模式",
+            Text = title,
             FontSize = 15, FontWeight = FontWeights.SemiBold,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
             HorizontalAlignment = HorizontalAlignment.Center
@@ -5046,9 +5158,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         var tip = new TextBlock
         {
-            Text = modeName == "监控"
-                ? "切换为监控模式后，本机 BGI 进程将继续运行，但助手将不再监控 BGI 状态。是否继续切换？"
-                : "切换为执行模式后，助手将重新监控本机 BGI 状态并参与联机任务。是否继续切换？",
+            Text = tipText,
             FontSize = 12,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
             TextWrapping = TextWrapping.Wrap
@@ -5116,12 +5226,17 @@ public class MainViewModel : INotifyPropertyChanged
             _config = newConfig;
             _configManager.Save(_config);
             RoomCode = AssistConfigManager.GenerateControlRoomCode(_config.TeamUids);
+            SyncStandaloneStateAfterSettingsSaved(); // 含 NotifyModeBindings；清空地址 = 单机模式需即时断开
             AddLog("房间配置已保存并生效");
         }
         }
 
     /// <summary>当前配置（供 XAML 绑定启动策略开关/下拉选择）。</summary>
     public AssistConfig? Config => _config;
+
+    /// <summary>总开关·有效单机模式（离线优先原则）：手动单机开关 或 服务器地址留空（空地址必定是单机模式）。
+    /// 单机时完全不发起服务器连接；本地功能（槲寄生/本机日志/本机 IPC/跨会话只读查询）不受影响。</summary>
+    public bool IsStandaloneMode => _config != null && (_config.StandaloneMode || string.IsNullOrWhiteSpace(_config.ServerUrl));
 
     /// <summary>是否处于遥控器模式（ObserverMode=true）。供连接徽章 MultiDataTrigger 判断。</summary>
     public bool IsObserverMode => _config?.ObserverMode == true;
@@ -5294,6 +5409,8 @@ public class MainViewModel : INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(IsObserverMode));
         OnPropertyChanged(nameof(IsExecutorMode));
+        // 服务器地址/单机开关变化同样影响派生属性（设置弹窗清空地址 = 单机模式）
+        OnPropertyChanged(nameof(IsStandaloneMode));
     }
 
     private void OpenSettings()
@@ -5304,7 +5421,7 @@ public class MainViewModel : INotifyPropertyChanged
         {
             _config = newConfig;
             _configManager.Save(_config);
-            NotifyModeBindings(); // 可能在弹窗里改了遥控器模式 → 刷新依赖 ObserverMode 的 UI 显隐
+            SyncStandaloneStateAfterSettingsSaved(); // 含 NotifyModeBindings（ObserverMode 显隐 + 离线派生属性）；清空地址 = 单机模式需即时断开
             RoomCode = AssistConfigManager.GenerateControlRoomCode(_config.TeamUids);
             AddLog("配置已保存并生效");
         }

@@ -7,6 +7,11 @@ public class AssistConfig
     [JsonPropertyName("serverUrl")]
     public string ServerUrl { get; set; } = "http://localhost:5000";
 
+    /// <summary>总开关·手动单机（离线优先原则）：true=整个软件不连接服务器，联机功能全部不可用；
+    /// ServerUrl 留空时无论本字段如何都恒为单机。持久化，重启保持。</summary>
+    [JsonPropertyName("standaloneMode")]
+    public bool StandaloneMode { get; set; } = false;
+
     [JsonPropertyName("controlRoomPassword")]
     public string ControlRoomPassword { get; set; } = string.Empty;
 
