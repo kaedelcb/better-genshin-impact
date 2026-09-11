@@ -4557,8 +4557,10 @@ public class MainViewModel : INotifyPropertyChanged
     {
         try
         {
-            var (taskList, tasksWithStatus) = await GetLocalTaskListAsync(groupName, isOneClick: false);
-            var startFrom = ShowStartFromDialog(groupName, taskList, isOneClick: false, tasksWithStatus: tasksWithStatus, targetUids: [member.PlayerUid]);
+            var (taskList, tasksWithStatus, missReason) = await GetTaskListAsync(groupName, isOneClick: false, targetMember: member);
+            if (missReason != null) AddLog($"{missReason}；本次改为手动填写起始序号");
+            var startFrom = ShowStartFromDialog(groupName, taskList, isOneClick: false, tasksWithStatus: tasksWithStatus,
+                targetUids: [member.PlayerUid], sourceMember: member, fallbackReason: missReason);
             if (startFrom == null) return; // 用户取消
             _ = ExecuteLocalCommandAsync("start_group",
                 new Dictionary<string, object> { { "groupName", groupName }, { "startFromIndex", startFrom.Value } },
@@ -4567,7 +4569,7 @@ public class MainViewModel : INotifyPropertyChanged
         catch (Exception ex)
         {
             AddLog($"读取配置组任务列表失败: {ex.Message}");
-            var startFrom = ShowStartFromDialog(groupName, null);
+            var startFrom = ShowStartFromDialog(groupName, null, fallbackReason: $"读取任务清单异常：{ex.Message}");
             if (startFrom == null) return; // 用户取消
             _ = ExecuteLocalCommandAsync("start_group",
                 new Dictionary<string, object> { { "groupName", groupName }, { "startFromIndex", startFrom.Value } },
@@ -4579,8 +4581,10 @@ public class MainViewModel : INotifyPropertyChanged
     {
         try
         {
-            var (taskList, tasksWithStatus) = await GetLocalTaskListAsync(configName, isOneClick: true);
-            var startFrom = ShowStartFromDialog(configName, taskList, isOneClick: true, tasksWithStatus: tasksWithStatus, targetUids: [member.PlayerUid]);
+            var (taskList, tasksWithStatus, missReason) = await GetTaskListAsync(configName, isOneClick: true, targetMember: member);
+            if (missReason != null) AddLog($"{missReason}；本次改为手动填写起始序号");
+            var startFrom = ShowStartFromDialog(configName, taskList, isOneClick: true, tasksWithStatus: tasksWithStatus,
+                targetUids: [member.PlayerUid], sourceMember: member, fallbackReason: missReason);
             if (startFrom == null) return; // 用户取消
             _ = ExecuteLocalCommandAsync("start_oneclick",
                 new Dictionary<string, object> { { "configName", configName }, { "startFromIndex", startFrom.Value } },
@@ -4589,7 +4593,7 @@ public class MainViewModel : INotifyPropertyChanged
         catch (Exception ex)
         {
             AddLog($"读取一条龙任务列表失败: {ex.Message}");
-            var startFrom = ShowStartFromDialog(configName, null);
+            var startFrom = ShowStartFromDialog(configName, null, fallbackReason: $"读取任务清单异常：{ex.Message}");
             if (startFrom == null) return; // 用户取消
             _ = ExecuteLocalCommandAsync("start_oneclick",
                 new Dictionary<string, object> { { "configName", configName }, { "startFromIndex", startFrom.Value } },
@@ -4614,78 +4618,123 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// 从本机 BGI 读取指定配置组/一条龙的任务名称列表和启用状态。
+    /// 取"即将执行这份配置的那个人"的任务清单与启用状态。
+    ///
+    /// 取数优先级（原则：谁执行，谁那台机器的文件才是事实源——index/status 来自他本机 config.list，
+    /// 回传的 set_task_enabled / startFromIndex 也正是他消费）：
+    ///   ① 被点成员自己上报的清单快照（ConfigGroupTasksWithStatus / OneClickTasksWithStatus）；
+    ///   ② 执行模式：本机 BGI config.list（点自己时最新；点别人时保留"4 机配置一致"兜底）；
+    ///   ③ 被点成员快照兜底（执行模式点自己且本机 IPC 不可用时）；
+    ///   ④ 监控模式：本机无 BGI → 同 UID 执行端成员条目（遥控端与执行端同号，沿用既有行为，带重试等同步）。
+    ///
+    /// [回归背景] 历史实现只读 ①之外 的"本机/同 UID 执行端"，从不看被点成员：
+    /// 只有当两边配置组【恰好同名】时才能显示出任务列表，一旦对方改名、各机配置各用一套名字，
+    /// 或同 UID 执行端离线，就静默退化成"填写数字"弹窗——表现为"以前能看到别人的任务列表，
+    /// 现在点别人的配置组/一条龙全部变成填数字"。故此处以被点成员快照为第一优先。
+    ///
+    /// 彻底取不到时返回 MissReason，调用方必须留日志（禁止静默降级）。
     /// </summary>
-    private async Task<(List<string>? tasks, List<object>? tasksWithStatus)> GetLocalTaskListAsync(string configName, bool isOneClick)
+    private async Task<(List<string>? Tasks, List<object>? TasksWithStatus, string? MissReason)> GetTaskListAsync(
+        string configName, bool isOneClick, MemberViewModel? targetMember)
     {
-        // 遥控器模式：从在线成员获取任务列表
+        var kind = isOneClick ? "一条龙" : "配置组";
+        var selfUid = _config?.PlayerUid ?? "";
+        // "点自己"：执行模式下自己那台机器用本机直读最新；监控模式下同 UID 条目就是执行端，等同别人处理
+        var isSelfTarget = targetMember != null && !string.IsNullOrEmpty(selfUid)
+            && targetMember.PlayerUid == selfUid;
+        var triedTargetSnapshot = false;
+
+        // ① 别人：以被点成员自己上报的清单为准（历史实现的最大缺口）
+        if (targetMember != null && !isSelfTarget)
+        {
+            triedTargetSnapshot = true;
+            var (tasks, tasksWithStatus) = await TryMemberTaskListAsync(targetMember, configName, isOneClick);
+            if (tasks != null) return (tasks, tasksWithStatus, null);
+        }
+
+        // ② 执行模式：本机 BGI 直读
+        if (_config?.ObserverMode != true)
+        {
+            var (tasks, tasksWithStatus) = await ReadLocalBgiTaskListAsync(configName, isOneClick);
+            if (tasks != null) return (tasks, tasksWithStatus, null);
+        }
+
+        // ③ 被点成员快照兜底（执行模式点自己时本机 IPC 不可用；或上面的快照稍后才到）
+        if (targetMember != null && !triedTargetSnapshot)
+        {
+            var (tasks, tasksWithStatus) = await TryMemberTaskListAsync(targetMember, configName, isOneClick);
+            if (tasks != null) return (tasks, tasksWithStatus, null);
+        }
+
+        // ④ 监控模式：同 UID 执行端（重试循环：最多 5 次，每次等 1 秒，应对执行端数据尚未同步到遥控端的场景）
         if (_config?.ObserverMode == true)
         {
-            // 重试循环：最多 5 次，每次等 1 秒，应对执行端数据尚未同步到遥控端的场景
-            for (int retry = 0; retry < 5; retry++)
+            for (var retry = 0; retry < 5; retry++)
             {
-                var target = Members.FirstOrDefault(m => m.PlayerUid == _config.PlayerUid && m.Online
+                var executor = Members.FirstOrDefault(m => m.PlayerUid == selfUid && m.Online
                     && (m.ConfigGroups?.Count > 0 || m.OneClickConfigs?.Count > 0));
-                if (target == null)
+                if (executor == null)
                 {
                     if (retry < 4) await Task.Delay(1000);
                     continue;
                 }
-
-                // 从 MemberViewModel 的同步任务列表字段获取
-                if (isOneClick)
-                {
-                    // 一条龙：从 OneClickConfigs 和 OneClickTasksWithStatus 取
-                    if (target.OneClickConfigs?.Contains(configName) == true)
-                    {
-                        List<string>? tasks2 = null;
-                        List<object>? tasksWithStatus2 = null;
-                        if (target.OneClickTasksWithStatus.TryGetValue(configName, out var statusList))
-                        {
-                            tasksWithStatus2 = statusList;
-                            tasks2 = statusList
-                                .Select(s => s is System.Text.Json.JsonElement je
-                                    && je.TryGetProperty("name", out var n)
-                                    ? n.GetString() ?? "" : "")
-                                .Where(n => !string.IsNullOrEmpty(n))
-                                .ToList()!;
-                        }
-                        return (tasks2, tasksWithStatus2);
-                    }
-                }
-                else
-                {
-                    // 配置组：从 ConfigGroupTasksWithStatus 取
-                    if (target.ConfigGroups?.Contains(configName) == true)
-                    {
-                        List<string>? tasks2 = null;
-                        List<object>? tasksWithStatus2 = null;
-                        if (target.ConfigGroupTasksWithStatus.TryGetValue(configName, out var statusList))
-                        {
-                            tasksWithStatus2 = statusList;
-                            tasks2 = statusList
-                                .Select(s => s is System.Text.Json.JsonElement je
-                                    && je.TryGetProperty("name", out var n)
-                                    ? n.GetString() ?? "" : "")
-                                .Where(n => !string.IsNullOrEmpty(n))
-                                .ToList()!;
-                        }
-                        return (tasks2, tasksWithStatus2);
-                    }
-                }
-
-                // 配置组名存在但任务状态字典没有该配置名 → 说明数据还在路上，继续等
-                if (retry < 4 && target.ConfigGroups?.Contains(configName) != true
-                    && target.OneClickConfigs?.Contains(configName) != true)
-                {
-                    await Task.Delay(1000);
-                    continue;
-                }
+                var (tasks, tasksWithStatus) = await TryMemberTaskListAsync(executor, configName, isOneClick);
+                if (tasks != null) return (tasks, tasksWithStatus, null);
                 break;
             }
-            return (null, null);
         }
 
+        var who = string.IsNullOrEmpty(targetMember?.PlayerName) ? "目标成员" : targetMember!.PlayerName;
+        var missReason = _config?.ObserverMode == true
+            ? $"未取到 {who} 的{kind}「{configName}」任务清单（对方尚未上报该{kind}，且同 UID 执行端离线或无同名{kind}）"
+            : $"未取到 {who} 的{kind}「{configName}」任务清单（对方尚未上报该{kind}，且本机 BGI 也无同名{kind}）";
+        return (null, null, missReason);
+    }
+
+    /// <summary>
+    /// 成员上报快照 → 任务清单（任务名列表 + 带状态条目）。
+    /// 名单里有这个名字但任务字典还没到 → 数据还在同步路上，最多等两拍（800ms/拍）。
+    /// 只认"名字列表里有该配置名且字典有值"的快照，避免把空清单当成有效清单而误判为"任务全空"。
+    /// </summary>
+    private static async Task<(List<string>? Tasks, List<object>? TasksWithStatus)> TryMemberTaskListAsync(
+        MemberViewModel member, string configName, bool isOneClick)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            var (tasks, tasksWithStatus) = ExtractMemberTaskList(member, configName, isOneClick);
+            if (tasks != null) return (tasks, tasksWithStatus);
+
+            // 数据在同步路上的判据：该成员名单里有这个配置名、且他本人还在线
+            var names = isOneClick ? member.OneClickConfigs : member.ConfigGroups;
+            if (attempt >= 2 || !member.Online || names?.Contains(configName) != true)
+                return (null, null);
+            await Task.Delay(800);
+        }
+    }
+
+    /// <summary>成员上报快照 → 任务名列表 + 带状态条目（List&lt;object&gt; 经 JSON 往返后元素是 JsonElement）。</summary>
+    private static (List<string>? Tasks, List<object>? TasksWithStatus) ExtractMemberTaskList(
+        MemberViewModel member, string configName, bool isOneClick)
+    {
+        var dict = isOneClick ? member.OneClickTasksWithStatus : member.ConfigGroupTasksWithStatus;
+        if (dict == null || !dict.TryGetValue(configName, out var statusList) || statusList == null)
+            return (null, null);
+
+        var tasks = statusList
+            .Select(s => s is System.Text.Json.JsonElement je && je.TryGetProperty("name", out var n)
+                ? n.GetString() ?? "" : "")
+            .Where(n => !string.IsNullOrEmpty(n))
+            .ToList();
+        if (tasks.Count == 0) return (null, statusList);
+        return (tasks, statusList);
+    }
+
+    /// <summary>
+    /// 本机 BGI config.list（ext 通道优先，v2 短连接兜底）→ 指定配置组/一条龙的任务清单。
+    /// </summary>
+    private async Task<(List<string>? Tasks, List<object>? TasksWithStatus)> ReadLocalBgiTaskListAsync(
+        string configName, bool isOneClick)
+    {
         // [切片4] ext 通道优先，v2 短连接兜底（传输失败返回 null，与原"返回 (null, null)"语义一致）
         var response = await SendBgiIpcPreferredAsync("config.list", null);
         if (response is not { Success: true } || string.IsNullOrEmpty(response.Data))
@@ -4711,6 +4760,8 @@ public class MainViewModel : INotifyPropertyChanged
             tasksWithStatus = JsonSerializer.Deserialize<List<object>>(statusArr.GetRawText()) ?? [];
         }
 
+        // 本机没有这个配置名（或清单为空）→ 返回 null，交由上层继续走兜底并在最终失败时留日志
+        if (tasks == null || tasks.Count == 0) return (null, tasksWithStatus);
         return (tasks, tasksWithStatus);
     }
 
@@ -5997,11 +6048,15 @@ public class MainViewModel : INotifyPropertyChanged
         return dialog.ShowDialog() == true ? result : null;
     }
 
-    private int? ShowStartFromDialog(string configName, List<string>? taskList, bool isOneClick = false, List<object>? tasksWithStatus = null, List<string>? targetUids = null)
+    /// <param name="sourceMember">清单来源成员（用于提示"数据来自对方上次上报"）；null 表示本机 BGI 直读。</param>
+    /// <param name="fallbackReason">清单取不到的原因（非 null = 已退化为手动填写起始序号），必须一并展示，禁止静默降级。</param>
+    private int? ShowStartFromDialog(string configName, List<string>? taskList, bool isOneClick = false,
+        List<object>? tasksWithStatus = null, List<string>? targetUids = null,
+        MemberViewModel? sourceMember = null, string? fallbackReason = null)
     {
-        // 无任务列表时回退到数字输入框（兼容旧行为/配置读取失败）
+        // 无任务列表时回退到数字输入框（对方未上报/取不到清单）
         if (taskList == null || taskList.Count == 0)
-            return ShowStartFromDialogByIndex(configName);
+            return ShowStartFromDialogByIndex(configName, fallbackReason);
 
         // 构建任务选择列表：第 0 项为"从头开始"，其余为真实任务名
         var options = new List<string> { "从头开始" };
@@ -6046,6 +6101,19 @@ public class MainViewModel : INotifyPropertyChanged
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
             Margin = new Thickness(0, 0, 0, 12)
         });
+
+        // 来源提示：清单来自"离线成员的上次上报"时必须说清楚，避免把陈旧快照当成对方当前配置
+        if (sourceMember is { Online: false })
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = $"⚠ {sourceMember.PlayerName} 当前离线，清单来自其上次上报，执行前请确认",
+                FontSize = 11,
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD9, 0xA8, 0x4E)),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 10)
+            });
+        }
 
         // 任务列表（ListBox 单选，每行含 CheckBox）
         var listBox = new ListBox
@@ -6221,12 +6289,12 @@ public class MainViewModel : INotifyPropertyChanged
     /// <summary>
     /// 无任务列表时的回退：数字输入框（保持旧行为）。
     /// </summary>
-    private int? ShowStartFromDialogByIndex(string configName)
+    private int? ShowStartFromDialogByIndex(string configName, string? fallbackReason = null)
     {
         var dialog = new Window
         {
             Title = "从此处开始执行",
-            Width = 400, Height = 210,
+            Width = 400, Height = fallbackReason == null ? 210 : 260,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = Application.Current.MainWindow,
             WindowStyle = WindowStyle.SingleBorderWindow,
@@ -6252,6 +6320,20 @@ public class MainViewModel : INotifyPropertyChanged
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D)),
             Margin = new Thickness(0, 0, 0, 12), TextWrapping = TextWrapping.Wrap
         });
+
+        // 回退原因必须可见：历史上这条路径是完全静默的，用户只看到"变成填数字了"，无从判断是对方没上报、
+        // 还是配置名不存在、还是执行端离线——这是"修好又坏、反复无从定位"的直接成因之一。
+        if (!string.IsNullOrEmpty(fallbackReason))
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = $"⚠ {fallbackReason}",
+                FontSize = 11,
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD9, 0xA8, 0x4E)),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 10)
+            });
+        }
 
         var numBox = new TextBox { Text = "0", Height = 36,
             Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xCC, 0x26, 0x23, 0x4E)),
