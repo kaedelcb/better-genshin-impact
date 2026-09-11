@@ -131,12 +131,16 @@ public sealed partial class RoomOperations
             // 解析目标
             var targets = _roomManager.ResolveTargets(command);
 
-            // [监控模式修复] 远程配置编辑的回复命令（remote_config.data / push_result）额外投递给
-            // 目标 UID 的遥控端连接：监控端不入 _controlRooms、ResolveTargets 匹配不到，回复会被误判
-            // "目标离线"进缓存，导致监控端发起远程编辑永远等不到回包（切回执行模式冲刷缓存才恢复）。
+            // [监控模式修复] 请求/应答族的回复命令额外投递给目标 UID 的遥控端连接：
+            // 监控端不入 _controlRooms、ResolveTargets 匹配不到，回复会被误判"目标离线"进缓存，
+            // 导致监控端发起远程编辑永远等不到回包（切回执行模式冲刷缓存才恢复）。
             // 回复命令按 CommandId 关联、只有发起方的等待会话会消费，同 UID 执行端收到只会忽略，双投安全。
             // 执行类命令维持 FR-3 不变：遥控端一律不接收。
-            var isRemoteConfigReply = command.Cmd is "remote_config.data" or "remote_config.push_result";
+            // 历史 bug：本例举只列了 remote_config.* 两条，遗漏结构完全同一的 task_policy.data /
+            // task_policy.push_result，导致监控模式下 task_policy.pull 的回复永远投不到发起方，
+            // 必然 8s 超时（弹窗显示默认值，保存即覆盖对方配置），而绑定列表正常（走状态广播推送）。
+            // 故改为按"请求/应答族"统一判定，新增此类命令无需再改这里。
+            var isRemoteConfigReply = IsRequestReplyCommand(command.Cmd);
             if (isRemoteConfigReply)
             {
                 var remoteTargets = _roomManager.GetRemoteConnectionIdsByUids(group, command.Target);
@@ -399,4 +403,17 @@ public sealed partial class RoomOperations
     private bool IsInControlRoomOrRemote(GatewayHandlerContext ctx, string group)
         => _roomManager.IsInControlRoom(group, ctx.ConnectionId)
            || _roomManager.IsRemoteConnection(group, ctx.ConnectionId);
+
+    /// <summary>
+    /// 是否为"请求/应答族"的回复命令（发起方发起 pull → 目标回 data/push_result）。
+    /// 这类命令由发起方的等待会话按 CommandId 消费，因此必须投递给发起方连接本身；
+    /// 而遥控/监控端不在 _controlRooms，ResolveTargets 匹配不到，必须额外按 UID 回投，
+    /// 且不能进离线缓存（只对实时等待中的会话有意义，缓存冲刷出来的是迟到噪音）。
+    /// 判定 = 命令名以 ".data" / ".push_result" 结尾（覆盖 remote_config.* 与 task_policy.*，
+    /// 以及后续新增的同类命令，避免再次出现"漏登记一条导致监控模式永久超时"）。
+    /// 执行类命令不匹配，维持 FR-3（遥控端不接收）。
+    /// </summary>
+    private static bool IsRequestReplyCommand(string cmd)
+        => cmd.EndsWith(".data", StringComparison.Ordinal)
+           || cmd.EndsWith(".push_result", StringComparison.Ordinal);
 }

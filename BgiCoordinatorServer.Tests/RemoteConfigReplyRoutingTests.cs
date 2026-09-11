@@ -79,6 +79,72 @@ public class RemoteConfigReplyRoutingTests
         Assert.Empty(h.RoomManager.GetAndClearPendingCommands("uidObs"));
     }
 
+    /// <summary>
+    /// 回归：task_policy.data / task_policy.push_result 也必须回投监控端。
+    /// 原实现把回投判定硬编码为 remote_config.data / push_result 两条，漏掉 task_policy.*，
+    /// 导致监控模式下「点击他人卡片绑定 → 拉取对方完成后动作策略」永远 8s 超时（弹窗显示默认值，
+    /// 保存即覆盖对方配置），而绑定列表正常（走状态广播推送，不依赖本回投）。
+    /// </summary>
+    [Theory]
+    [InlineData("task_policy.data")]
+    [InlineData("task_policy.push_result")]
+    [InlineData("remote_config.data")]
+    [InlineData("remote_config.push_result")]
+    public async Task RequestReplyCommand_DeliveredToObserverConnection(string cmd)
+    {
+        var h = new GatewayTestHarness();
+        var (room, pwd) = NewRoom();
+        var connMember = Conn("member");
+        var connObs = Conn("obs");
+        await h.Ops.JoinControlRoomAsync(Ctx(connMember), room, pwd, "uidB", "成员B");
+        await h.Ops.JoinControlRoomAsync(Ctx(connObs), room, pwd, "uidObs", "观察者", isRemote: true);
+
+        await h.Ops.SendRemoteCommandAsync(Ctx(connMember), NewCmd(room, "uidB", "uidObs", cmd));
+
+        h.LegacyHub.Verify(x => x.Clients.Client(connObs), Times.AtLeastOnce);
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("uidObs"));
+    }
+
+    /// <summary>同 UID 双端时策略回复同样双投（执行端走 ResolveTargets，监控端走回投）。</summary>
+    [Fact]
+    public async Task TaskPolicyReply_DualDelivery_WhenExecutorWithSameUidOnline()
+    {
+        var h = new GatewayTestHarness();
+        var (room, pwd) = NewRoom();
+        var connMember = Conn("member");
+        var connExec = Conn("exec");
+        var connObs = Conn("obs");
+        await h.Ops.JoinControlRoomAsync(Ctx(connMember), room, pwd, "uidB", "成员B");
+        await h.Ops.JoinControlRoomAsync(Ctx(connExec), room, pwd, "uidObs", "执行端");
+        await h.Ops.JoinControlRoomAsync(Ctx(connObs), room, pwd, "uidObs", "观察者", isRemote: true);
+
+        await h.Ops.SendRemoteCommandAsync(Ctx(connMember), NewCmd(room, "uidB", "uidObs", "task_policy.data"));
+
+        h.LegacyHub.Verify(x => x.Clients.Client(connExec), Times.AtLeastOnce);
+        h.LegacyHub.Verify(x => x.Clients.Client(connObs), Times.AtLeastOnce);
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("uidObs"));
+    }
+
+    /// <summary>回归：策略族的请求命令（task_policy.pull，非回复）仍按执行类语义走离线缓存，
+    /// 遥控端不接收——FR-3 只对回复命令开口子。</summary>
+    [Fact]
+    public async Task TaskPolicyPull_NotDeliveredToObserver_StillCachedOffline()
+    {
+        var h = new GatewayTestHarness();
+        var (room, pwd) = NewRoom();
+        var connMember = Conn("member");
+        var connObs = Conn("obs");
+        await h.Ops.JoinControlRoomAsync(Ctx(connMember), room, pwd, "uidB", "成员B");
+        await h.Ops.JoinControlRoomAsync(Ctx(connObs), room, pwd, "uidObs", "观察者", isRemote: true);
+
+        await h.Ops.SendRemoteCommandAsync(Ctx(connMember), NewCmd(room, "uidB", "uidObs", "task_policy.pull"));
+
+        h.LegacyHub.Verify(x => x.Clients.Client(connObs), Times.Never);
+        var pending = h.RoomManager.GetAndClearPendingCommands("uidObs");
+        Assert.Single(pending);
+        Assert.Equal("task_policy.pull", pending[0].Cmd);
+    }
+
     [Fact]
     public async Task ExecutionCommand_NotDeliveredToObserver_StillCachedOffline()
     {
