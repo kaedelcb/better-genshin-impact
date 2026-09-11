@@ -115,7 +115,8 @@ public class StartupStep
 
     // ===== 条件判断参数 =====
 
-    /// <summary>期望处于运行状态（bgiRunning/gameRunning/processRunning/bgiTaskRunning 用）：true=正在运行（在跑任务）才通过，false=未运行（空闲）才通过。</summary>
+    /// <summary>期望处于运行状态（bgiRunning/gameRunning/processRunning/bgiTaskRunning 用）：true=正在运行（在跑任务）才通过，false=未运行（空闲）才通过。
+    /// bgiTaskName 复用此字段作为匹配方向：true=任务名包含匹配文本才通过（默认），false=不包含才通过（BGI 空闲/无任务在跑也算不包含）。</summary>
     [JsonPropertyName("expectRunning")]
     public bool ExpectRunning { get; set; } = true;
 

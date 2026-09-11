@@ -292,14 +292,22 @@ public sealed class StartupFlowRunner
             {
                 if (string.IsNullOrWhiteSpace(step.TaskName))
                     return (false, "未填写任务名");
+                // ExpectRunning 复用为匹配方向：true=包含才通过（默认）；false=不包含才通过。
+                // 无任务在跑时没有任务名可匹配：「包含」不成立、「不包含」成立
+                // （电子狗场景：被盯任务已停止/被切走时「不匹配」应触发，而不是永不触发）
+                var expectMatch = step.ExpectRunning;
                 if (status == null || !status.TaskRunning)
-                    return (false, $"BGI 未在跑任务{(status == null ? "（无状态快照）" : "")}，无法匹配「{step.TaskName}」");
+                {
+                    var idlePassed = !expectMatch;
+                    return (idlePassed, $"BGI 未在跑任务{(status == null ? "（无状态快照）" : "")}，按「{(expectMatch ? "匹配" : "不匹配")}」判定{(idlePassed ? "成立" : "不成立")}");
+                }
                 var hit = (status.CurrentTaskName?.Contains(step.TaskName, StringComparison.OrdinalIgnoreCase) ?? false)
                        || (status.CurrentTaskGroupName?.Contains(step.TaskName, StringComparison.OrdinalIgnoreCase) ?? false);
                 var current = status.CurrentTaskGroupName is { Length: > 0 } g
                     ? status.CurrentTaskName is { Length: > 0 } n ? $"{g} · {n}" : g
                     : status.CurrentTaskName ?? "（未上报任务名）";
-                return (hit, $"当前任务「{current}」{(hit ? "包含" : "不包含")}「{step.TaskName}」");
+                var passed = expectMatch ? hit : !hit;
+                return (passed, $"当前任务「{current}」{(hit ? "包含" : "不包含")}「{step.TaskName}」，按「{(expectMatch ? "匹配" : "不匹配")}」判定{(passed ? "成立" : "不成立")}");
 
             }
             default:

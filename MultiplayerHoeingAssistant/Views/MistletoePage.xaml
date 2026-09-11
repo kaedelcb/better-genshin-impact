@@ -960,7 +960,7 @@
                                     </ComboBox>
                                 </WrapPanel>
 
-                                <!-- watchdog 子参数：任务名匹配（bgiTaskName）的匹配文本 -->
+                                <!-- watchdog 子参数：任务名匹配（bgiTaskName）的匹配文本 + 匹配方向 -->
                                 <WrapPanel>
                                     <WrapPanel.Style>
                                         <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
@@ -978,7 +978,13 @@
                                     <TextBlock Text="匹配文本" Style="{StaticResource FieldLabel}"/>
                                     <TextBox Text="{Binding TaskName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource GoldInput}" Width="200"
-                                             ToolTip="当前任务名或配置组名包含该文本即触发（不区分大小写；BGI 未在跑任务时不触发）"/>
+                                             ToolTip="当前任务名或配置组名包含该文本即算命中（不区分大小写）"/>
+                                    <ComboBox Width="150" Margin="10,0,0,0" Style="{StaticResource GoldComboBox}"
+                                              SelectedIndex="{Binding ExpectRunningIndex, Mode=TwoWay}"
+                                              ToolTip="包含时触发（默认）=当前任务名命中该文本时触发；不包含时触发=当前任务名不含该文本时触发（BGI 空闲/无任务在跑也算不包含——被盯任务停止或切走都会触发）">
+                                        <ComboBoxItem Content="包含时触发" Style="{StaticResource GoldComboItem}"/>
+                                        <ComboBoxItem Content="不包含时触发" Style="{StaticResource GoldComboItem}"/>
+                                    </ComboBox>
                                 </WrapPanel>
 
                                 <!-- logTrigger：日志关键字 + 触发后行为 -->

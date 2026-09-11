@@ -734,7 +734,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         StartupStepKinds.GameRunning => $"游戏进程{(step.ExpectRunning ? "在跑" : "不在")}",
         StartupStepKinds.ProcessRunning => $"进程 {step.ProcessName} {(step.ExpectRunning ? "存在" : "不存在")}",
         StartupStepKinds.BgiTaskRunning => step.ExpectRunning ? "BGI 有任务在跑" : "BGI 空闲",
-        StartupStepKinds.BgiTaskName => $"当前任务名包含「{step.TaskName}」",
+        StartupStepKinds.BgiTaskName => $"当前任务名{(step.ExpectRunning ? "包含" : "不包含")}「{step.TaskName}」",
         _ => step.WatchKind,
     };
 
@@ -1659,7 +1659,7 @@ public sealed class StartupStepViewModel : ViewModelBase
         StartupStepKinds.GameRunning => model.ExpectRunning ? "游戏正在运行 → 是" : "游戏未运行 → 是",
         StartupStepKinds.ProcessRunning => $"{model.ProcessName} {(model.ExpectRunning ? "存在" : "不存在")} → 是",
         StartupStepKinds.BgiTaskRunning => model.ExpectRunning ? "BGI 有任务在跑 → 是" : "BGI 空闲 → 是",
-        StartupStepKinds.BgiTaskName => string.IsNullOrWhiteSpace(model.TaskName) ? "（未填写任务名）" : $"当前任务名包含「{model.TaskName}」→ 是",
+        StartupStepKinds.BgiTaskName => string.IsNullOrWhiteSpace(model.TaskName) ? "（未填写任务名）" : $"当前任务名{(model.ExpectRunning ? "包含" : "不包含")}「{model.TaskName}」→ 是",
         StartupStepKinds.ManualConfirm =>
             $"{(string.IsNullOrWhiteSpace(model.ConfirmMessage) ? "（未填提示内容）" : model.ConfirmMessage)}" +
             $"{(model.ConfirmTimeoutSeconds > 0 ? $"；{model.ConfirmTimeoutSeconds} 秒超时走「{(model.ConfirmTimeoutGoTrue ? "是" : "否")}」" : "；不限时")}",
