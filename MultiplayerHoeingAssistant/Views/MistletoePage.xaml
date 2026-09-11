@@ -1264,8 +1264,9 @@
                     </Style>
                 </Grid.Style>
 
-                <!-- 横向滚动禁用：宽度不足时参数行靠 WrapPanel 换行自适应，不出横向滚动条 -->
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                <!-- 横向滚动禁用：宽度不足时参数行靠 WrapPanel 换行自适应，不出横向滚动条；
+                     x:Name 供代码后置在节点拖拽期间做边缘自动滚动（见 DragHandle_MouseMove） -->
+                <ScrollViewer x:Name="FlowScroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               Style="{DynamicResource GoldScrollViewer}">
                     <StackPanel Margin="0,0,0,24">
 

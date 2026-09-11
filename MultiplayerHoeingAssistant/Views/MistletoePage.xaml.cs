@@ -12,6 +12,7 @@ namespace MultiplayerHoeingAssistant.Views;
 ///    落点在卡片上按上下半区换算插入位次，落点在链空白区（分支列/主链面板）追加到链尾；
 ///    环检测（条件节点拖进自己的子链）在 ViewModel 的 MoveStepTo 里拒绝。
 /// 2. 「浏览…」文件选择框与卡片点击展开/收起编辑器。
+/// 3. 节点拖拽到列表上下边缘时让 ScrollViewer 自动滚动（原生 DragDrop 不会触发滚动）。
 /// 拖拽只发生在节点手柄（⠿）上，卡片其余区域点击 = 展开/收起参数编辑器。
 /// </summary>
 public partial class MistletoePage : UserControl
@@ -82,7 +83,17 @@ public partial class MistletoePage : UserControl
         _dragCandidate = null;
         if (sender is FrameworkElement handle)
         {
-            DragDrop.DoDragDrop(handle, new DataObject(typeof(StartupStepViewModel), dragged), DragDropEffects.Move);
+            // DoDragDrop 是阻塞式模态循环（内部仍在泵消息，DispatcherTimer 照常走），
+            // 拖拽期间开启边缘自动滚动，结束（落下/取消）后关闭
+            StartDragAutoScroll();
+            try
+            {
+                DragDrop.DoDragDrop(handle, new DataObject(typeof(StartupStepViewModel), dragged), DragDropEffects.Move);
+            }
+            finally
+            {
+                StopDragAutoScroll();
+            }
         }
     }
 
@@ -159,6 +170,58 @@ public partial class MistletoePage : UserControl
 
         Vm.MoveStepTo(dragged, chain, chain.Steps.Count);
         e.Handled = true;
+    }
+
+    // ================= 拖拽时自动滚动 =================
+
+    /// <summary>
+    /// WPF 原生 DragDrop 期间滚轮/边缘悬停都不会让 ScrollViewer 滚动。
+    /// 在 DoDragDrop 阻塞期间挂一个定时器：用 Win32 GetCursorPos 拿真实光标位置
+    /// （WPF 的 Mouse.GetPosition 在 OLE 拖拽期间返回陈旧坐标，不能用），
+    /// 光标靠近 FlowScroller 上下边缘就按距离比例持续向该方向滚动；DoDragDrop 返回即停。
+    /// </summary>
+    private System.Windows.Threading.DispatcherTimer? _dragScrollTimer;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out Win32Point lpPoint);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct Win32Point { public int X; public int Y; }
+
+    private void StartDragAutoScroll()
+    {
+        _dragScrollTimer ??= CreateDragScrollTimer();
+        _dragScrollTimer.Start();
+    }
+
+    private void StopDragAutoScroll()
+    {
+        _dragScrollTimer?.Stop();
+    }
+
+    private System.Windows.Threading.DispatcherTimer CreateDragScrollTimer()
+    {
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(30) };
+        timer.Tick += (_, _) =>
+        {
+            if (!GetCursorPos(out var pt)) return;
+            var p = FlowScroller.PointFromScreen(new Point(pt.X, pt.Y));
+
+            // 光标横向偏离滚动条太远（拖出窗口了）就不滚
+            if (p.X < -40 || p.X > FlowScroller.ActualWidth + 40) return;
+
+            const double edge = 48;   // 上下边缘触发区高度
+            const double maxStep = 8; // 每拍最大滚动像素（越贴近边缘滚得越快）
+            double velocity = 0;
+            if (p.Y < edge)
+                velocity = -maxStep * Math.Min(edge - p.Y, edge) / edge;
+            else if (p.Y > FlowScroller.ViewportHeight - edge && p.Y < FlowScroller.ViewportHeight + 40)
+                velocity = maxStep * Math.Min(p.Y - (FlowScroller.ViewportHeight - edge), edge) / edge;
+            if (velocity != 0)
+                FlowScroller.ScrollToVerticalOffset(FlowScroller.VerticalOffset + velocity);
+        };
+        return timer;
     }
 
     // ================= 卡片点击展开/收起编辑器 =================
