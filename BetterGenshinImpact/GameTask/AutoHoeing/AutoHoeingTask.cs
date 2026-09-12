@@ -1649,9 +1649,8 @@ public class AutoHoeingTask : ISoloTask
                 };
                 process.Start();
                 _logger.LogInformation("[联机] 已自动启动联机助手（最小化）");
-                // 标记联机助手已接管锄地流程：一条龙 OnOneKeyExecute 检测到此标志后
-                // 停止执行后续配置组（"好感任务"/"关直播"等），避免与助手 IPC 双线启动同一批配置组。
-                RunnerContext.Instance.IsMultiplayerAssistantActivated = true;
+                // 注意：此处不再置任何"助手已接管"标志（IsMultiplayerAssistantActivated 已拆除）——
+                // "助手进程存在"不等于"助手会驱动一条龙后续组"，接管判定以批次名单（RunnerContext.BatchGroupNames）为准。
             }
             else
             {

@@ -67,6 +67,8 @@ internal static class ExternalInterfaceCommandPlane
         var configName = request.Data?["configName"]?.ToString();
         var startFromIndex = request.Data?["startFromIndex"]?.ToObject<int>() ?? 0;
         var generation = request.Data?["generation"]?.ToObject<int>() ?? 0;
+        // [批次名单 2026-09-13] 与 v2 HandleTaskStart 同语义：批次绑定名单透传到执行段
+        var batchGroupNames = InstanceRequestHandler.ParseBatchGroupNames(request.Data?["batchGroupNames"]?.ToString());
 
         var scriptService = App.ServiceProvider.GetService<BetterGenshinImpact.Service.Interface.IScriptService>();
         if (scriptService == null)
@@ -79,7 +81,7 @@ internal static class ExternalInterfaceCommandPlane
             groupName,
             configName,
             startFromIndex,
-            _ => handler.ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex));
+            _ => handler.ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, batchGroupNames));
 
         var result = BgiTaskCoordinator.Instance.Submit(submission);
         return result.Status switch

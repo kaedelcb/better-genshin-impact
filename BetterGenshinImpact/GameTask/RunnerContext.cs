@@ -40,11 +40,13 @@ public class RunnerContext : Singleton<RunnerContext>
     public bool IsPreExecution { get; set; } = false;
 
     /// <summary>
-    /// 联机锄地助手已接管锄地流程（AutoHoeingTask.TryLaunchAssistant 拉起助手成功时置 true）。
-    /// 一条龙 OnOneKeyExecute 检测到后停止执行后续配置组，避免与助手 IPC 双线启动同一批配置组
-    /// （"好感任务"/"关直播"等绑定在助手 OnAllReady 里的配置组，两条路径竞争会导致任务启动失败/被跳过）。
+    /// [批次名单 2026-09-13] 助手批次绑定名单（批次下发一条龙时由 IPC/命令行调用方预置）。
+    /// 一条龙 OnOneKeyExecute 开头捕获并清空（生命周期=单次执行，不跨执行残留）；
+    /// 组间检查点据此跳过"会由批次逐项驱动"的配置组（名单内跳过、名单外照常执行）。
+    /// 替代已拆除的 IsMultiplayerAssistantActivated——旧方案按"助手进程存在"猜测接管，
+    /// 会把批次名单外的组误吞（实机事故：批次只绑一条龙时龙内精英组被跳过且无人补跑）。
     /// </summary>
-    public bool IsMultiplayerAssistantActivated { get; set; }
+    public List<string>? BatchGroupNames { get; set; }
     /// <summary>
     /// 暂停实现
     /// </summary>

@@ -177,7 +177,8 @@ public class CommandExecutor
                     return await StartOneClickAsync(
                         GetStringParam(command.Params, "configName") ?? "",
                         GetIntParam(command.Params, "startFromIndex") ?? 0,
-                        GetIntParam(command.Params, "generation") ?? 0);
+                        GetIntParam(command.Params, "generation") ?? 0,
+                        ParseBatchGroupNames(command.Params));
                 case "hotkey_execute":
                     return await ExecuteHotkeyWithKeyPolicyAsync(
                         GetStringParam(command.Params, "hotkeyConfigName") ?? "");
@@ -501,9 +502,14 @@ public class CommandExecutor
     /// <summary>
     /// 启动一条龙：通过 IPC 发 task.start（含 startFromIndex），IPC 失败则杀进程重启
     /// 注意：不再预先发 task.stop（原因同 StartGroupAsync）。
+    /// batchGroupNames：[批次名单 2026-09-13] 批次绑定列表，透传给 BGI 供一条龙组间跳过判定；
+    /// 为 null（非批次来源/老路径）时 BGI 不跳过任何组。
     /// </summary>
-    private async Task<CommandResult> StartOneClickAsync(string configName, int startFromIndex, int generation = 0)
+    private async Task<CommandResult> StartOneClickAsync(string configName, int startFromIndex, int generation = 0, List<string>? batchGroupNames = null)
     {
+        // [批次名单] 逗号分隔编码（与批次循环 Params 的 batchGroupNames 一致），null = 不携带
+        var batchGroupNamesRaw = batchGroupNames is { Count: > 0 } ? string.Join(",", batchGroupNames) : null;
+
         // [任务策略] 按键门控（同 StartGroupAsync，固定行为：立即执行 + 执行完停止）：
         // 本机忙且无既有中断上下文时 suspend 抢占强制 v2；已有中断上下文走无损拒绝；空闲走原路径。
         // [弹窗竞态守卫] 同 StartGroupAsync：先等 set_task_enabled 落盘，再 suspend/启动
@@ -511,6 +517,8 @@ public class CommandExecutor
 
         if (await ShouldPreemptKeyPressAsync($"一条龙「{configName}」"))
         {
+            // 抢占路径不透传批次名单（批次场景 MainViewModel 已先行 suspend，抢占极少命中批次项；
+            // 不携带时 BGI 不跳过任何组，退化为老助手兼容行为，探针日志可观测）
             return await StartWithPreemptionAsync(FixedKeyPolicy, null, configName, startFromIndex, generation);
         }
 
@@ -519,7 +527,7 @@ public class CommandExecutor
         if (extClient is { State: BgiExternalLinkState.Ready }
             && extClient.HasCapability(BgiExternalClient.CapabilityTaskQueue))
         {
-            var queueResult = await TryStartViaQueueAsync(extClient, null, configName, startFromIndex, generation);
+            var queueResult = await TryStartViaQueueAsync(extClient, null, configName, startFromIndex, generation, batchGroupNamesRaw);
             if (queueResult != null)
             {
                 return queueResult;
@@ -550,7 +558,10 @@ public class CommandExecutor
                     // 会话守卫：阻断时直接失败返回，不进入下方的杀进程回退
                     var blocked = CheckCrossSessionBlock(ipcClient, $"task.start 一条龙「{configName}」");
                     if (blocked != null) return blocked;
-                    var payload = System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation });
+                    // [批次名单] 纯加法协议字段：老 BGI 忽略该字段，行为不变
+                    var payload = batchGroupNamesRaw != null
+                        ? System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation, batchGroupNames = batchGroupNamesRaw })
+                        : System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation });
                     var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
                     // [无损拒绝适配 b5386005] 同 StartGroupAsync：业务拒绝（任务运行中）等锁重试，最多 6 次
                     for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
@@ -593,9 +604,13 @@ public class CommandExecutor
             }
         }
 
-        // 回退：杀进程 + 重启带 --startOneDragon
+        // 回退：杀进程 + 重启带 --startOneDragon（[批次名单] 有批次绑定列表时追加 --batchGroups，
+        // BGI 命令行分支据此做龙内组间跳过判定；无名单 = 不跳过任何组）
         // [P2 仲裁] 同 StartGroupAsync：收编到仲裁器（串行 + 抑制 + 等退净），杀不掉不假成功
-        if (!await _monitor.RestartBgiControlledAsync($"--startOneDragon \"{configName}\"", "IPC回退"))
+        var fallbackArgs = batchGroupNamesRaw != null
+            ? $"--startOneDragon \"{configName}\" --batchGroups \"{batchGroupNamesRaw}\""
+            : $"--startOneDragon \"{configName}\"";
+        if (!await _monitor.RestartBgiControlledAsync(fallbackArgs, "IPC回退"))
         {
             Log($"[进程仲裁] 一条龙「{configName}」回退重启未完成：旧进程未退净（可能提权运行）或启动调用失败，详见上方日志");
             return new CommandResult { Status = "failed", Message = $"一条龙 {configName} 启动失败：BGI 回退重启未完成（无法终止残留进程或启动失败），请查看助手日志后重试" };
@@ -611,7 +626,8 @@ public class CommandExecutor
     /// 返回时机与 v2 一致：任务真正执行完（或被取消）后才返回，批次循环语义不变。
     /// </summary>
     private async Task<CommandResult?> TryStartViaQueueAsync(
-        BgiExternalClient ext, string? groupName, string? configName, int startFromIndex, int generation)
+        BgiExternalClient ext, string? groupName, string? configName, int startFromIndex, int generation,
+        string? batchGroupNames = null)
     {
         var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
         try
@@ -619,7 +635,7 @@ public class CommandExecutor
             // 等待器先于 Submit 创建：adopted 场景下既有任务可能在我们 Submit 前就完成，
             // 其终态事件先入等待器缓冲，按句柄匹配时不丢
             using var waiter = ext.CreateTaskTerminalWaiter();
-            var submit = await ext.SubmitTaskStartAsync(groupName, configName, startFromIndex, generation);
+            var submit = await ext.SubmitTaskStartAsync(groupName, configName, startFromIndex, generation, batchGroupNames);
             if (!submit.Success)
             {
                 ProbeLog($"[CommandExecutor][切片7] ext.task.start 被队列拒绝 {desc} errorCode={submit.ErrorCode}");

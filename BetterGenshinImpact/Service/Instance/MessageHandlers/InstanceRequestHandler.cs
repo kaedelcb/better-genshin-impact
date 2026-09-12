@@ -553,6 +553,20 @@ internal sealed class InstanceRequestHandler
         }
     }
 
+    /// <summary>
+    /// [批次名单 2026-09-13] 解析逗号分隔的批次绑定名单（助手批次下发 task.start 时携带，
+    /// ext/v2 两通道共用）。空/缺失返回 null——无名单路径（手动/老助手）不跳过任何组。
+    /// </summary>
+    internal static List<string>? ParseBatchGroupNames(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+        var list = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return list.Length > 0 ? list.ToList() : null;
+    }
+
     internal async Task<InstanceIpcEnvelope> HandleTaskStart(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
@@ -562,6 +576,8 @@ internal sealed class InstanceRequestHandler
             var startFromIndex = request.Data?["startFromIndex"]?.ToObject<int>() ?? 0;
             // 幂等保护：task.start 携带 generation 时，同一 generation 只执行一次
             var generation = request.Data?["generation"]?.ToObject<int>() ?? 0;
+            // [批次名单] 批次绑定列表（纯加法协议字段）：一条龙据此判断内部哪些配置组由批次逐项驱动
+            var batchGroupNames = ParseBatchGroupNames(request.Data?["batchGroupNames"]?.ToString());
 
             // 幂等检查：同一 generation + 同一配置组名已执行过则跳过（避免 OnAllReady 重复广播导致配置组重复启动）
             // 注意：允许同一 generation 执行不同配置组（OnAllReady 依次执行多个配置组的场景）
@@ -599,7 +615,7 @@ internal sealed class InstanceRequestHandler
 
             // [切片7] 执行段已抽为 ExecuteTaskStartCoreAsync：v2 handler 与 BgiTaskCoordinator
             // 共用单一事实源，行为逐字节等价。返回 true = 配置组在 RunMulti 执行中被取消（F11 停止等）。
-            var configGroupCancelled = await ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex);
+            var configGroupCancelled = await ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, batchGroupNames);
 
             if (configGroupCancelled)
             {
@@ -625,7 +641,8 @@ internal sealed class InstanceRequestHandler
         BetterGenshinImpact.Service.Interface.IScriptService scriptService,
         string? groupName,
         string? configName,
-        int startFromIndex)
+        int startFromIndex,
+        IReadOnlyList<string>? batchGroupNames = null)
     {
         // 标记配置组是否在 RunMulti 执行中被取消（F11 停止等），末尾据此返回 cancelled 状态
         var configGroupCancelled = false;
@@ -773,6 +790,11 @@ internal sealed class InstanceRequestHandler
                                     cfg.NextTaskIndex = startFromIndex;
                                     vm.WriteConfig(cfg);
                                 }
+                                // [批次名单 2026-09-13] 预置到 RunnerContext，OnOneKeyExecute 开头捕获并清空
+                                // （生命周期=本次执行）。名单内的龙内配置组由批次逐项驱动、龙内跳过；
+                                // null（非批次来源/老助手）= 不跳过任何组。
+                                BetterGenshinImpact.GameTask.RunnerContext.Instance.BatchGroupNames =
+                                    batchGroupNames is null ? null : new List<string>(batchGroupNames);
                                 await vm.OnOneKeyExecute();
                             }
                             else

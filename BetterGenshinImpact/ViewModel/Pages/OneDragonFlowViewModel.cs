@@ -1624,6 +1624,19 @@ public partial class OneDragonFlowViewModel : ViewModel
                     _logger.LogWarning("未找到，请检查。");
                 }
             }
+            // [批次名单 2026-09-13] 助手杀启回退（--startOneDragon）可携带 --batchGroups "a,b,c"：
+            // 与 IPC task.start 的 batchGroupNames 同语义，预置后由 OnOneKeyExecute 捕获并清空
+            var batchGroupsArgIndex = Array.IndexOf(args, "--batchGroups");
+            if (batchGroupsArgIndex >= 0 && batchGroupsArgIndex + 1 < args.Length)
+            {
+                var batchList = args[batchGroupsArgIndex + 1]
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (batchList.Length > 0)
+                {
+                    RunnerContext.Instance.BatchGroupNames = batchList.ToList();
+                    _logger.LogInformation("[批次名单] 命令行批次绑定名单: {Batch}", string.Join(",", batchList));
+                }
+            }
             // 异步执行一条龙
             Toast.Information($"命令行一条龙「{SelectedConfig.Name}」。");
             OnOneKeyExecute();
@@ -2231,8 +2244,11 @@ public partial class OneDragonFlowViewModel : ViewModel
     {
         CancellationContext.Instance.Set();
 
-        // 每次一条龙开始时重置联机助手接管标志，避免上一次执行的残留影响本次流程
-        RunnerContext.Instance.IsMultiplayerAssistantActivated = false;
+        // [批次名单 2026-09-13] 捕获本次执行的批次绑定名单（助手批次/命令行回退下发时由调用方预置），
+        // 随后立即清空 RunnerContext——生命周期=本次执行，杜绝跨执行残留
+        // （旧 IsMultiplayerAssistantActivated 因无退出路径清理而残留误吞后续组的教训）。
+        var batchGroupNames = RunnerContext.Instance.BatchGroupNames;
+        RunnerContext.Instance.BatchGroupNames = null;
 
         if (!_continuousExecutionMark)
         {
@@ -2561,13 +2577,15 @@ public partial class OneDragonFlowViewModel : ViewModel
                     Notify.Event(NotificationEvent.DragonEnd).Success("一条龙和配置组任务结束");
                     return; // 后续的检查任务也不执行
                 }
-                // 联机锄地助手已接管锄地流程：跳过后续配置组（"好感任务"/"关直播"等），
-                // 避免一条龙与助手 IPC 双线启动同一批配置组导致竞争。
-                if (RunnerContext.Instance.IsMultiplayerAssistantActivated)
+                // [批次名单 2026-09-13] 助手批次下发的一条龙：批次绑定名单内的配置组会由批次逐项驱动，
+                // 龙内跳过避免双线重复执行（V0.1.5 旧逻辑按"助手进程已启动"整体 break，会把名单外的组
+                // 误吞——实机事故：批次只绑一条龙时，龙内第二配置组（精英）被跳过且无任何一方补跑）。
+                // 名单外的组照常执行（continue 而非 break）；无名单（手动/快捷键/resume/老助手）不跳过任何组。
+                if (batchGroupNames is { Count: > 0 } && batchGroupNames.Contains(task.Name))
                 {
-                    _logger.LogInformation("联机助手已接管，跳过后续配置组任务");
-                    Notify.Event(NotificationEvent.DragonEnd).Success("一条龙和配置组任务结束（联机助手已接管）");
-                    break;
+                    _logger.LogInformation("[批次跳过探针] 配置组 {Name} 在批次绑定名单内，由助手批次逐项驱动，跳过龙内执行（批次名单: {Batch}）",
+                        task.Name, string.Join(",", batchGroupNames));
+                    continue;
                 }
             }
         }

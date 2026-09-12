@@ -438,11 +438,12 @@ public sealed class BgiExternalClient : IDisposable
         string? configName,
         int startFromIndex,
         int generation,
+        string? batchGroupNames = null,
         CancellationToken cancellationToken = default)
     {
         var response = await SendCommandAsync(
                 ExternalOperations.TaskStart,
-                new { groupName, configName, startFromIndex, generation },
+                new { groupName, configName, startFromIndex, generation, batchGroupNames },
                 CommandTimeout,
                 cancellationToken)
             .ConfigureAwait(false);
