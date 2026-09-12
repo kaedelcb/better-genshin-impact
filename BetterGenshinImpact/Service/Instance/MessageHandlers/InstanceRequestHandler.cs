@@ -738,7 +738,14 @@ internal sealed class InstanceRequestHandler
             {
                 // 启动一条龙
                 // 使用 InvokeAsync 而非 Invoke（同步），避免阻塞 UI 线程消息泵导致全局键盘钩子回调延迟
-                await Application.Current!.Dispatcher.InvokeAsync(async () =>
+                // [fix 2026-09-12 假终态事故] 与上方配置组分支对齐：用 TaskCompletionSource 真正等
+                // OnOneKeyExecute 执行完。原先 await Dispatcher.InvokeAsync(...).Task 只等待调度完成、
+                // 不等待内部 await——一条龙头一个未完成的 await 点就返回，导致 ext task.queue 在一条龙
+                // 刚启动几毫秒内就登记 completed 假终态 → 助手误判批次结束提前 task.resume → 恢复的
+                // 原任务抢占 TaskRunner，一条龙的全部配置组被"当前存在正在运行中的独立任务"拒掉。
+                var oneDragonStartedAt = DateTime.UtcNow;
+                var oneDragonCompletion = new TaskCompletionSource();
+                _ = Application.Current!.Dispatcher.InvokeAsync(async () =>
                 {
                     try
                     {
@@ -781,8 +788,22 @@ internal sealed class InstanceRequestHandler
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "HandleTaskStart: 启动一条龙失败");
+                        oneDragonCompletion.SetException(ex);
+                        return;
                     }
-                }).Task;
+                    // 所有正常退出路径（含 vm/cfg 为空的早退）统一在此完成，杜绝调用方永久挂起
+                    oneDragonCompletion.SetResult();
+                });
+                // 等待 OnOneKeyExecute 真正执行完（与配置组分支 await completionSource.Task 同款姿势）
+                await oneDragonCompletion.Task;
+                // 与配置组分支对齐：一条龙在执行中被取消（F11 停止等）时回传 cancelled，
+                // 助手端据此终止批次（取消优先），否则 F11 会被误判为成功并继续下发后续配置组。
+                if (BetterGenshinImpact.Core.Script.CancellationContext.Instance.WasCancelled)
+                {
+                    configGroupCancelled = true;
+                }
+                _logger.LogInformation("[IPC task.start] 一条龙 {Config} 执行流程结束，耗时 {Elapsed}，cancelled={Cancelled}",
+                    configName, DateTime.UtcNow - oneDragonStartedAt, configGroupCancelled);
             }
 
             return configGroupCancelled;

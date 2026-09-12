@@ -512,7 +512,27 @@ public class CommandExecutor
                 response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
             }
             if (response.Success)
+            {
+                // 与 StartGroupAsync 对齐：解析 BGI 响应中的 status：cancelled = 一条龙执行中被取消（如 F11）
+                // 必须透传，否则助手端收不到取消信号、批次循环会继续执行下一个配置组（违背取消优先）。
+                if (!string.IsNullOrEmpty(response.Data))
+                {
+                    try
+                    {
+                        var respData = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data);
+                        var bgiStatus = respData.TryGetProperty("status", out var st) ? st.GetString() : null;
+                        if (bgiStatus == "cancelled")
+                        {
+                            return new CommandResult { Status = "cancelled", Message = $"一条龙 {configName} 执行中被取消" };
+                        }
+                    }
+                    catch
+                    {
+                        // Data 解析失败不影响，默认走 success 分支
+                    }
+                }
                 return new CommandResult { Status = "success", Message = $"一条龙 {configName} 已启动" };
+            }
 
             // [无损拒绝适配 b5386005] 业务拒绝不杀进程，直接失败返回（只有 catch 传输异常才进回退）
             return new CommandResult { Status = "failed", Message = $"BGI 拒绝启动一条龙「{configName}」（{response.ErrorCode ?? "unknown"}）：{response.ErrorMessage ?? "无详情"}。按无损拒绝语义未杀进程，请稍后重试或先停止当前任务" };
@@ -582,6 +602,14 @@ public class CommandExecutor
                 var terminal = await waiter.WaitForHandleAsync(submit.TaskHandle, TerminalStatusPollInterval);
                 if (terminal != null)
                 {
+                    // [假终态探针 2026-09-12] 启动类任务的 completed 终态在提交后 2s 内到达是异常信号
+                    // （BGI 一条龙分支曾只等调度完成就登记 completed 的假终态事故），纯留痕不门控，
+                    // 便于实机一次定位同类回归。adopted 场景（既有任务恰好收尾）可能误报，仅为警告。
+                    if (terminal.Kind == BgiTaskTerminalKind.Completed && !terminal.Cancelled
+                        && DateTime.UtcNow - waitStartedUtc < TimeSpan.FromSeconds(2))
+                    {
+                        ProbeLog($"[CommandExecutor][假终态探针] {desc} completed 终态到达耗时 <2s，疑似 BGI 侧假终态回归 taskHandle={submit.TaskHandle}");
+                    }
                     return terminal.Kind switch
                     {
                         BgiTaskTerminalKind.Completed when terminal.Cancelled =>
