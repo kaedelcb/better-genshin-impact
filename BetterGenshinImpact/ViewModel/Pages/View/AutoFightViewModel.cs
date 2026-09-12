@@ -1,9 +1,7 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.GameTask;
-using BetterGenshinImpact.GameTask.Common.Element.Assets;
-using BetterGenshinImpact.Model;
-using BetterGenshinImpact.Service.Interface;
+using BetterGenshinImpact.GameTask.AutoFight;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.Generic;
@@ -35,9 +33,7 @@ public partial class AutoFightViewModel : ObservableObject, IViewModel
         _combatStrategyOverride = combatStrategyOverride;
         _strategyList = strategyOverride?.ToArray()
                         ?? LoadCustomScript(Global.Absolute(@"User\AutoGeniusInvokation"));
-        _combatStrategyList = combatStrategyOverride is null
-            ? ["根据队伍自动选择", .. LoadCustomScript(Global.Absolute(@"User\AutoFight"))]
-            : ["根据队伍自动选择", .. combatStrategyOverride];
+        _combatStrategyList = BuildCombatStrategyList();
     }
 
     public AutoFightViewModel(
@@ -50,9 +46,16 @@ public partial class AutoFightViewModel : ObservableObject, IViewModel
         _combatStrategyOverride = combatStrategyOverride;
         _strategyList = strategyOverride?.ToArray()
                         ?? LoadCustomScript(Global.Absolute(@"User\AutoGeniusInvokation"));
-        _combatStrategyList = combatStrategyOverride is null
-            ? ["根据队伍自动选择", .. LoadCustomScript(Global.Absolute(@"User\AutoFight"))]
-            : ["根据队伍自动选择", .. combatStrategyOverride];
+        _combatStrategyList = BuildCombatStrategyList();
+    }
+
+    /// <summary>战斗策略下拉列表：固定项（根据队伍自动选择 / 自动连招）+ 用户自定义策略</summary>
+    private string[] BuildCombatStrategyList()
+    {
+        var custom = _combatStrategyOverride is null
+            ? LoadCustomScript(Global.Absolute(@"User\AutoFight"))
+            : _combatStrategyOverride.ToArray();
+        return ["根据队伍自动选择", AutoFightParam.ComboStrategyName, .. custom];
     }
 
     [ObservableProperty]
@@ -119,7 +122,7 @@ public partial class AutoFightViewModel : ObservableObject, IViewModel
         switch (type)
         {
             case "Combat":
-                CombatStrategyList = ["根据队伍自动选择", .. LoadCustomScript(Global.Absolute(@"User\AutoFight"))];
+                CombatStrategyList = BuildCombatStrategyList();
                 break;
 
             case "GeniusInvocation":

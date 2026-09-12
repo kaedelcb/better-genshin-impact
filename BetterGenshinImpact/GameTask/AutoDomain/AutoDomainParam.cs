@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using BetterGenshinImpact.GameTask.Model;
+using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.Core.Config;
 
 namespace BetterGenshinImpact.GameTask.AutoDomain;

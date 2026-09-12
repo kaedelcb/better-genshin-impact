@@ -1,11 +1,16 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.Model;
-using BetterGenshinImpact.GameTask.Model;
 
 namespace BetterGenshinImpact.GameTask.AutoFight;
 
 public class AutoFightParam : BaseTaskParam<AutoFightTask>
 {
+    /// <summary>
+    /// 自动连招（LLM 行为树）策略的固定名称；该名称不对应任何策略文件，
+    /// 命中时由 ComboCombatTaskFactory 路由到 AutoComboRunTask，并复用此名称作为 CombatStrategyPath
+    /// </summary>
+    public const string ComboStrategyName = "自动连招（实验）";
+
     public class FightFinishDetectConfig
     {
         public bool FastCheckEnabled = false;
@@ -110,6 +115,10 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
         if ("根据队伍自动选择".Equals(strategyName) || string.IsNullOrEmpty(strategyName))
         {
             return Global.Absolute(@"User\AutoFight\");
+        }
+        if (ComboStrategyName.Equals(strategyName))
+        {
+            return strategyName;
         }
         var txtPath = Global.Absolute(@"User\AutoFight\" + strategyName + ".txt");
         if (System.IO.File.Exists(txtPath))

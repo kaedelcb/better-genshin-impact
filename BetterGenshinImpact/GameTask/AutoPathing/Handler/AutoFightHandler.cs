@@ -244,6 +244,11 @@ internal class AutoFightHandler : IActionHandler
     private string GetFightStrategy(AutoFightConfig config)
     {
         // 按文件存在性解析 .txt / .json 路径（支持 JSON 战斗策略）
+        if (AutoFightParam.ComboStrategyName.Equals(config.StrategyName))
+        {
+            return config.StrategyName;
+        }
+
         var path = AutoFightParam.ResolveStrategyPath(config.StrategyName);
 
         if (!File.Exists(path) && !Directory.Exists(path))

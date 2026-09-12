@@ -43,56 +43,15 @@ using BetterGenshinImpact.GameTask.AutoDomain.Model;
 using BetterGenshinImpact.GameTask.Common;
 using Compunet.YoloSharp;
 using Microsoft.Extensions.DependencyInjection;
-using BetterGenshinImpact.Core.Config;
 using OpenCvSharp.Extensions;
 using BetterGenshinImpact.GameTask.AutoFight;
 using OfficialAutoFightRouter = BetterGenshinImpact.GameTask.AutoFightOfficial.OfficialAutoFightRouter;
 using OfficialParamAdapter = BetterGenshinImpact.GameTask.AutoFightOfficial.OfficialParamAdapter;
 using OfficialJsonTask = BetterGenshinImpact.GameTask.AutoFightOfficial.AutoFightJsonTask;
-using BetterGenshinImpact.Core.Config;
-using BetterGenshinImpact.Core.Recognition.OCR;
-using BetterGenshinImpact.Core.Recognition.ONNX;
-using BetterGenshinImpact.Core.Simulator;
-using BetterGenshinImpact.Core.Simulator.Extensions;
-using BetterGenshinImpact.GameTask.AutoFight.Assets;
-using BetterGenshinImpact.GameTask.AutoFight.Model;
-using BetterGenshinImpact.GameTask.AutoFight.Script;
-using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
-using BetterGenshinImpact.GameTask.AutoPick.Assets;
-using BetterGenshinImpact.GameTask.Common.Map;
-using BetterGenshinImpact.GameTask.Model.Area;
-using BetterGenshinImpact.Helpers;
-using BetterGenshinImpact.Service.Notification;
-using BetterGenshinImpact.View.Drawable;
-using Microsoft.Extensions.Logging;
-using OpenCvSharp;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using BetterGenshinImpact.Core.Recognition;
-using BetterGenshinImpact.GameTask.AutoTrackPath;
-using BetterGenshinImpact.GameTask.Common.BgiVision;
-using BetterGenshinImpact.GameTask.Common.Element.Assets;
-using BetterGenshinImpact.GameTask.Common.Job;
-using BetterGenshinImpact.Service.Notification.Model.Enum;
-using static BetterGenshinImpact.GameTask.Common.TaskControl;
-using static Vanara.PInvoke.Kernel32;
-using static Vanara.PInvoke.User32;
-using Microsoft.Extensions.Localization;
-using System.Globalization;
-using System.Text.RegularExpressions;
-using BetterGenshinImpact.GameTask.AutoArtifactSalvage;
-using System.Collections.ObjectModel;
-using BetterGenshinImpact.Core.Script.Dependence;
-using BetterGenshinImpact.GameTask.AutoDomain.Model;
-using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.Reward;
-using Compunet.YoloSharp;
-using Microsoft.Extensions.DependencyInjection;
-using BetterGenshinImpact.GameTask.AutoFight;
+using BetterGenshinImpact.GameTask.AutoCombo;
+using BetterGenshinImpact.GameTask.AutoCombo.ComboBuild;
+using BetterGenshinImpact.GameTask.AutoCombo.ComboRun;
 
 namespace BetterGenshinImpact.GameTask.AutoDomain;
 
@@ -111,6 +70,12 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
     private readonly CombatScriptBag? _combatScriptBag;
     // JSON 战斗策略路径（非空表示走 AutoFightJsonTask，TXT 脚本包不解析）
     private readonly string? _jsonCombatStrategyPath;
+
+    /// <summary>策略为自动连招（LLM 行为树）时为 true：进本前调用 LLM 建树，循环战斗中 Tick 该树</summary>
+    private readonly bool _useComboStrategy;
+
+    /// <summary>进本前构建的连招建树会话，仅 _useComboStrategy 时非空</summary>
+    private ComboTreeSession? _comboSession;
     private readonly Dictionary<string, int> _rewardSummary = new();
 
     private CancellationToken _ct;
@@ -156,8 +121,12 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
 
         _config = TaskContext.Instance().Config.AutoDomainConfig;
 
-        // JSON 策略：跳过 TXT 脚本包解析，改由 AutoFightJsonTask 处理
-        if (_taskParam.CombatStrategyPath != null
+        if (AutoFightParam.ComboStrategyName.Equals(_taskParam.CombatStrategyPath))
+        {
+            _useComboStrategy = true;
+            Logger.LogInformation("自动秘境：检测到自动连招策略，将使用LLM行为树");
+        }
+        else if (_taskParam.CombatStrategyPath != null
             && _taskParam.CombatStrategyPath.EndsWith(".json", System.StringComparison.OrdinalIgnoreCase))
         {
             _jsonCombatStrategyPath = _taskParam.CombatStrategyPath;
@@ -245,6 +214,12 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
         Init();
         Notify.Event(NotificationEvent.DomainStart).Success("自动秘境启动");
 
+        // 自动连招：进本前在秘境外建树（秘境内队伍锁定，建树队伍即整场战斗队伍）
+        if (_useComboStrategy)
+        {
+            _comboSession = await BuildComboTreeForDomain(ct);
+        }
+
         // 复活重试
         for (var i = 0; i < _config.ReviveRetryCount; i++)
         {
@@ -309,28 +284,41 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
             // 0. 关闭秘境提示
             Logger.LogDebug("0. 关闭秘境提示");
             await CloseDomainTip();
-            
-            //0.5. 初始化队伍，只执行一次
-            if (i == 0)
+
+            if (_useComboStrategy)
             {
-                combatScenes = new CombatScenes().InitializeTeam(CaptureToRectArea());   
+                ESkillCdTracker.Clear();
+                Logger.LogInformation("自动秘境：{Text}", "1. 走到钥匙处启动");
+                await WalkToPressF();
+                Logger.LogInformation("自动秘境：{Text}", "2. 执行战斗策略(自动连招)");
+                await StartComboFight();
+            }
+            else if (_jsonCombatStrategyPath != null)
+            {
+                ESkillCdTracker.Clear();
+                Logger.LogInformation("自动秘境：{Text}", "1. 走到钥匙处启动");
+                await WalkToPressF();
+                Logger.LogInformation("自动秘境：{Text}", "2. 执行战斗策略(JSON)");
+                await StartJsonFight();
+            }
+            else
+            {
+                //0.5. 初始化队伍，只执行一次
+                if (i == 0)
+                {
+                    combatScenes = new CombatScenes().InitializeTeam(CaptureToRectArea());
+                }
+
+                RetryTeamInit(combatScenes);
+                var combatCommands = FindCombatScriptAndSwitchAvatar(combatScenes);
+
+                Logger.LogInformation("自动秘境：{Text}", "1. 走到钥匙处启动");
+                await WalkToPressF();
+                Logger.LogInformation("自动秘境：{Text}", "2. 执行战斗策略");
+                await StartFight(combatScenes, combatCommands);
+                combatScenes.AfterTask();
             }
 
-            RetryTeamInit(combatScenes); // 队伍没初始化成功则重试
-
-            // 0. 切换到第一个角色（JSON 策略由 AutoFightJsonTask 自行识别与切换）
-            var combatCommands = _jsonCombatStrategyPath != null
-                ? new List<CombatCommand>()
-                : FindCombatScriptAndSwitchAvatar(combatScenes);
-
-            // 1. 走到钥匙处启动
-            Logger.LogInformation("自动秘境：{Text}", "1. 走到钥匙处启动");
-            await WalkToPressF();
-
-            // 2. 执行战斗（战斗线程、视角线程、检测战斗完成线程）
-            Logger.LogInformation("自动秘境：{Text}", "2. 执行战斗策略");
-            await StartFight(combatScenes, combatCommands);
-            combatScenes.AfterTask();
             EndFightWait();
 
             // 3. 寻找石化古树 并左右移动直到石化古树位于屏幕中心
@@ -918,6 +906,107 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
         domainEndTask.Start();
         // autoEatRecoveryHpTask.Start();
         return Task.WhenAll(combatTask, domainEndTask);
+    }
+
+    /// <summary>
+    /// 自动连招：进本前在秘境外识别队伍并调用 LLM 构建连招行为树
+    /// </summary>
+    private async Task<ComboTreeSession> BuildComboTreeForDomain(CancellationToken ct)
+    {
+        var combatScenes = CombatScenes.GetCombatScenesWithRetry();
+        var avatarNames = combatScenes.GetAvatars().Select(a => a.Name).ToList();
+        Logger.LogInformation("自动秘境：识别队伍 {Avatars}，开始调用 LLM 构建连招行为树", string.Join("、", avatarNames));
+
+        var config = TaskContext.Instance().Config.AutoComboBuildConfig;
+        return await AutoComboBuildTask.BuildComboTreeAsync(avatarNames, config, Logger, ct);
+    }
+
+    /// <summary>
+    /// 自动连招战斗入口：Tick 进本前构建的连招行为树（注入建树会话，不读静态暂存），
+    /// 秘境的DomainEndDetectionTask通过CancellationToken控制战斗结束。
+    /// </summary>
+    private async Task StartComboFight()
+    {
+        CancellationTokenSource cts = new();
+        _ct.Register(cts.Cancel);
+
+        // 抑制其自带的结束检测（FightFinishDetectEnabled=false），由秘境的DomainEndDetectionTask控制战斗结束
+        var comboTask = new AutoComboRunTask(new AutoFightParam { FightFinishDetectEnabled = false }, _comboSession!);
+
+        var domainEndTask = DomainEndDetectionTask(cts);
+
+        var combatTask = Task.Run(async () =>
+        {
+            try
+            {
+                await comboTask.Start(cts.Token);
+            }
+            catch (RetryException)
+            {
+                // 复活/恢复信号必须传回 Start 的重试循环，复活后重试秘境
+                await cts.CancelAsync();
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                // 对局结束取消战斗，正常流程
+            }
+            catch (Exception e)
+            {
+                Logger.LogWarning("自动连招战斗任务异常：{Msg}", e.Message);
+            }
+        }, cts.Token);
+
+        domainEndTask.Start();
+        await Task.WhenAll(combatTask, domainEndTask);
+    }
+
+    /// <summary>
+    /// JSON策略战斗入口：委托给AutoFightJsonTask，抑制其自带的结束检测和拾取逻辑，
+    /// 秘境的DomainEndDetectionTask通过CancellationToken控制战斗结束。
+    /// </summary>
+    private async Task StartJsonFight()
+    {
+        CancellationTokenSource cts = new();
+        _ct.Register(cts.Cancel);
+
+        var jsonParam = new AutoFightParam
+        {
+            CombatStrategyPath = _jsonCombatStrategyPath!,
+            FightFinishDetectEnabled = false,
+            KazuhaPickupEnabled = false,
+            PickDropsAfterFightEnabled = false,
+            Timeout = 600,
+        };
+
+        var jsonTask = new AutoFightJsonTask(jsonParam);
+
+        var domainEndTask = DomainEndDetectionTask(cts);
+
+        var combatTask = Task.Run(async () =>
+        {
+            try
+            {
+                await jsonTask.Start(cts.Token);
+            }
+            catch (RetryException)
+            {
+                // 复活/恢复信号必须传回 Start 的重试循环，复活后重试秘境
+                await cts.CancelAsync();
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                // 对局结束取消战斗，正常流程
+            }
+            catch (Exception e)
+            {
+                Logger.LogWarning("JSON战斗任务异常：{Msg}", e.Message);
+            }
+        }, cts.Token);
+
+        domainEndTask.Start();
+        await Task.WhenAll(combatTask, domainEndTask);
     }
 
     private void EndFightWait()
