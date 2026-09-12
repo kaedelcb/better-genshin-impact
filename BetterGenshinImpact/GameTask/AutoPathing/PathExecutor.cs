@@ -2728,6 +2728,18 @@ public partial class PathExecutor
         return false;
     }
 
+    /// <summary>
+    /// 吃奶（TryPartyHealing）后用【新帧】复核是否仍低血。
+    /// 修复：原实现第二次低血判定复用吃药前捕获的 region（陈旧帧），"吃药后仍低血"判断失真。
+    /// 语义与公版原式一致：低血 && !(吃奶成功 && 吃奶后已不低血) → 才走切人/神像。
+    /// </summary>
+    private async Task<bool> TryPartyHealingThenStillLowAsync()
+    {
+        if (!await TryPartyHealing()) return false;
+        using var regionAfterHeal = CaptureToRectArea();
+        return Bv.CurrentAvatarIsLowHp(regionAfterHeal);
+    }
+
     private async Task RecoverWhenLowHp(WaypointForTrack waypoint,bool switchOnly = false)
     {
         var timing = PartyConfig.RecoverTiming;
@@ -2741,98 +2753,18 @@ public partial class PathExecutor
             return;
         }
         using var region = CaptureToRectArea();
-        if (Bv.CurrentAvatarIsLowHp(region) && !(await TryPartyHealing() && Bv.CurrentAvatarIsLowHp(region)))
+        if (Bv.CurrentAvatarIsLowHp(region) && !await TryPartyHealingThenStillLowAsync())
         {
             Logger.LogInformation("当前角色血量过低，去七天神像恢复-1 {t}", PathingConditionConfig.AutoEatCount);
-            
-            using (var bitmap = CaptureToRectArea())
-            {
-                var pixel = 0;
 
-                for (int i = 0; i < 2; i++)
-                {
-                    using (var bitmap2 = CaptureToRectArea())
-                    {
-                        var pixelValue = bitmap2.SrcMat.At<Vec3b>(1010,814);
-                        if (!(Math.Abs(pixelValue[0] - 34) <= 10 &&
-                              Math.Abs(pixelValue[1] - 215) <= 10 &&
-                              Math.Abs(pixelValue[2] - 150) <= 10))
-                        {
-                            pixel += 1;
-                        }
-                        else
-                        {
-                            pixel = 0;
-                        }
-                    }
-                    await Task.Delay(100, ct);
-                }
-                
-                if (pixel >= 2)
-                { 
-                    Logger.LogInformation("当前行走角色血量仍过低，尝试切换人-1");
-                        
-                    if (!string.IsNullOrWhiteSpace(PartyConfig.MainAvatarIndex))
-                    {
-                        var avatarCount = AvatarSwitchIndexDecisions.EffectiveAvatarCount(_combatScenes?.GetAvatars().Count);
-                        var avatarIndex = int.Parse(PartyConfig.MainAvatarIndex);
-                        var nextAvatarIndex = AvatarSwitchIndexDecisions.NextAvatarIndex(avatarIndex, avatarCount);
-                        if (_combatScenes?.SelectAvatar(nextAvatarIndex).Name == "枫原万叶" && 
-                            _combatScenes?.SelectAvatar(PathingConditionConfig.InitialMainAvatarIndex)?.Name != "枫原万叶")
-                        {
-                            nextAvatarIndex = AvatarSwitchIndexDecisions.NextAvatarIndex(nextAvatarIndex, avatarCount);
-                        }
+            // 红血生存切人（低血量生存切人域 → SurvivalAvatarSwitchService）：
+            // 仍低血 → 行走位优先 / 轮换避万叶切人；无路可切时交由下方神像兜底。
+            // PR 公版：公版 RecoverWhenLowHp 无此步，仅需插入此一行调用 + 零冲突新文件。
+            await SurvivalAvatarSwitchService.TrySwitchWhenStillLowHpAsync(_combatScenes, PartyConfig, ct,
+                index => SwitchAvatar(index));
             
-                        var avatar = _combatScenes?.SelectAvatar(avatarIndex);
-            
-                        await Delay(300, ct);
-            
-                        if (avatar != null && avatar.IsActive(bitmap))
-                        {
-                            PartyConfig.MainAvatarIndex = nextAvatarIndex.ToString();
-                            await SwitchAvatar(nextAvatarIndex.ToString());
-                        }
-                        else
-                        {
-                            await SwitchAvatar(PartyConfig.MainAvatarIndex);
-                        }
-                    }
-                    else
-                    {
-                        var avatarCount = AvatarSwitchIndexDecisions.EffectiveAvatarCount(_combatScenes?.GetAvatars().Count);
-                        for (int i = 1; i <= avatarCount; i++)
-                        {
-                            var avatar = _combatScenes?.SelectAvatar(i);
-                            if (avatar != null && avatar.IsActive(bitmap))
-                            {
-                                var nextAvatarIndex = AvatarSwitchIndexDecisions.NextAvatarIndex(i, avatarCount);
-                                if (_combatScenes?.SelectAvatar(nextAvatarIndex).Name == "枫原万叶" && 
-                                    _combatScenes?.SelectAvatar(PathingConditionConfig.InitialMainAvatarIndex)?.Name != "枫原万叶")
-                                {
-                                    nextAvatarIndex = AvatarSwitchIndexDecisions.NextAvatarIndex(nextAvatarIndex, avatarCount);
-                                }
-                                await SwitchAvatar(nextAvatarIndex.ToString());
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            
-            using (var bitmap = CaptureToRectArea())
-            {
-                var confirmRectArea = bitmap.Find(AutoFightAssets.Get(bitmap).ConfirmRa);
-                if (!confirmRectArea.IsEmpty())
-                {
-                    Simulation.ReleaseAllKey();
-                    confirmRectArea.Click();
-                    await Task.Delay(399, ct);
-                    confirmRectArea.ClickTo(-100, 0);
-                    await Task.Delay(300, ct);
-                    Simulation.SendInput.SimulateAction(GIActions.QuickUseGadget); 
-                    await Task.Delay(500, ct);
-                }
-            }
+            // 死亡/复苏确认弹窗处理（低血量生存域 → SurvivalAvatarSwitchService）
+            await SurvivalAvatarSwitchService.TryHandleDeathConfirmPopupAsync(ct);
             
             // 联机模式：低血量去七天神像，由后续 RetryException 处理 Reviving 上报（带 targetProgress）
             // 这里不上报，避免覆盖 targetProgress 为 -1
@@ -3497,91 +3429,22 @@ public partial class PathExecutor
                 //接近战斗点，确保行走位不是丝血
                 if (waypoint?.Action == ActionEnum.Fight.Code && distance < 30 && _combatScenes?.GetAvatars().Count > 1)
                 {
-                    using (var bitmap = CaptureToRectArea())
+                    // 红血生存切人（低血量生存切人域 → SurvivalAvatarSwitchService）。
+                    // 战斗点临近场景：健康色额外容忍蓝色、采样间隔 50ms（原两份拷贝的检测参数本就漂移，参数化保留）。
+                    if (await SurvivalAvatarSwitchService.IsStillLowHpAsync(ct, SurvivalPixelScene.NearFight, sampleIntervalMs: 50))
                     {
-                        var pixel = 0;
-
-                        for (int i = 0; i < 2; i++)
+                        if (distance < 10)
                         {
-                            using (var bitmap2 = CaptureToRectArea())
-                            {
-                                var pixelValue = bitmap2.SrcMat.At<Vec3b>(1010,814);
-                                if (!(Math.Abs(pixelValue[0] - 34) <= 10 &&
-                                      Math.Abs(pixelValue[1] - 215) <= 10 &&
-                                      Math.Abs(pixelValue[2] - 150) <= 10) && !(Math.Abs(pixelValue[0] - 50) <= 10 &&
-                                                                                Math.Abs(pixelValue[1] - 204) <= 10 &&
-                                                                                Math.Abs(pixelValue[2] - 255) <= 10))
-                                {
-                                    pixel += 1;
-                                }
-                                else
-                                {
-                                    pixel = 0;
-                                }
-                            }
-                            await Task.Delay(50, ct);
+                            // 抬起w键
+                            Logger.LogInformation("到达战斗点附近-2");
+                            Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                            return;
                         }
-                    
-                        if (pixel >= 2)
-                        {
-                            if (distance < 10)
-                            {
-                                // 抬起w键
-                                Logger.LogInformation("到达战斗点附近-2");
-                                Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
-                                return;
-                            }
-                            
-                            Logger.LogInformation("当前行走角色血量仍过低，尝试切换人-2");
 
-                            if (!string.IsNullOrWhiteSpace(PartyConfig.MainAvatarIndex))
-                            {
-                                var avatarCount = AvatarSwitchIndexDecisions.EffectiveAvatarCount(_combatScenes?.GetAvatars().Count);
-                                var avatarIndex = int.Parse(PartyConfig.MainAvatarIndex);
-                                
-                                var nextAvatarIndex = AvatarSwitchIndexDecisions.NextAvatarIndex(avatarIndex, avatarCount);
-                                if (_combatScenes?.SelectAvatar(nextAvatarIndex).Name == "枫原万叶" && 
-                                    _combatScenes?.SelectAvatar(PathingConditionConfig.InitialMainAvatarIndex)?.Name != "枫原万叶")
-                                {
-                                    nextAvatarIndex = AvatarSwitchIndexDecisions.NextAvatarIndex(nextAvatarIndex, avatarCount);
-                                }
-                                
-                                var avatar2 = _combatScenes?.SelectAvatar(avatarIndex);
-
-                                await Delay(300, ct);
-
-                                if (avatar2 != null && avatar2.IsActive(bitmap))
-                                {
-                                    PartyConfig.MainAvatarIndex = nextAvatarIndex.ToString();
-                                    await SwitchAvatar(nextAvatarIndex.ToString());
-                                }
-                                else
-                                {
-                                    await SwitchAvatar(PartyConfig.MainAvatarIndex);
-                                }
-                            }
-                            else
-                            {
-                                var avatarCount = AvatarSwitchIndexDecisions.EffectiveAvatarCount(_combatScenes?.GetAvatars().Count);
-                                for (int i = 1; i <= avatarCount; i++)
-                                {
-                                    var avatar2 = _combatScenes?.SelectAvatar(i);
-                                    if (avatar2 != null && avatar2.IsActive(bitmap))
-                                    {
-                                        var nextAvatarIndex = AvatarSwitchIndexDecisions.NextAvatarIndex(i, avatarCount);
-                                        if (_combatScenes?.SelectAvatar(nextAvatarIndex).Name == "枫原万叶" && 
-                                            _combatScenes?.SelectAvatar(PathingConditionConfig.InitialMainAvatarIndex)?.Name != "枫原万叶")
-                                        {
-                                            nextAvatarIndex = AvatarSwitchIndexDecisions.NextAvatarIndex(nextAvatarIndex, avatarCount);
-                                        }
-                                        await SwitchAvatar(nextAvatarIndex.ToString());
-                                        break;
-                                    }
-                                }
-                            }
-                        }
+                        Logger.LogInformation("当前行走角色血量仍过低，尝试切换人-2");
+                        await SurvivalAvatarSwitchService.SwitchAwayFromLowHpAsync(_combatScenes, PartyConfig,
+                            index => SwitchAvatar(index));
                     }
-                    
                     //防转圈，卡地形
                     if (distance < 15)
                     {
