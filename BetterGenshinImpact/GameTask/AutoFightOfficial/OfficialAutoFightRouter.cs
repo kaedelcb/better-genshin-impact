@@ -3,6 +3,9 @@ using BetterGenshinImpact.GameTask.AutoFight;
 namespace BetterGenshinImpact.GameTask.AutoFightOfficial;
 
 /// <summary>
+/// 独立理由（R4.2）：被 AutoFightHandler/AutoDomainTask/AutoBossTask/AutoFriendshipTask/
+/// AutoLeyLineOutcropTask/Dispatcher 等 7 个任务入口跨文件复用，且各消费方均为与公版同名
+/// 的高冲突文件——路由决策独立为零冲突新文件正当（B4）。
 /// 公版/茶包版自动战斗引擎路由决策（official-autofight-parallel-engine spec §4.2）。
 /// 纯函数，无副作用，便于 PBT。
 /// </summary>

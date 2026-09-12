@@ -3,6 +3,8 @@ using TeapotParam = BetterGenshinImpact.GameTask.AutoFight.AutoFightParam;
 namespace BetterGenshinImpact.GameTask.AutoFightOfficial;
 
 /// <summary>
+/// 独立理由（R4.2）：唯一消费方为各任务入口的路由分支（与 OfficialAutoFightRouter 同批），
+/// 与路由器共同构成双引擎桥接层，按功能域同文件群收拢；消费方均为与公版同名的高冲突文件。
 /// official-autofight-parallel-engine spec §4.3：把各入口已构建的茶包版 AutoFightParam
 /// 映射为公版 AutoFightParam，供 E2~E7 路由到公版引擎时复用。
 ///
