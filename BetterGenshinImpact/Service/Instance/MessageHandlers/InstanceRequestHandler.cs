@@ -1494,6 +1494,20 @@ internal sealed class InstanceRequestHandler
 
             var context = allConfig.SuspendedTaskContext;
 
+            // [契约对齐 2026-09-12] cancel=true：清上下文不恢复。
+            // spec（multiplayer-hoeing-preempt-interrupt）与助手侧 7 处调用点早已把
+            // "task.resume {cancel:true}" 当作既有原语，但 BGI 端此前从未解析该参数——
+            // cancel 请求实际走了正常恢复，"碰巧没恢复"全靠抢锁失败/WasCancelled 时序遮掩
+            // （快捷键闭环等热键任务结束后再清账的场景会真的把原任务重新拉起来）。
+            var cancelOnly = request.Data?["cancel"]?.ToObject<bool?>() == true;
+            if (cancelOnly)
+            {
+                allConfig.SuspendedTaskContext = null;
+                _logger.LogInformation("[IPC task.resume] cancel=true：清除中断上下文，不恢复: Type={Type}, Group={Group}",
+                    context.TaskType, context.GroupName);
+                return InstanceIpcEnvelope.Response(request, new { status = "cleared_not_resumed" });
+            }
+
             // 如果最近一次任务被用户取消（F11/取消热键），不恢复旧任务，只清除上下文。
             // 用户 F11 停止表达的是"不想继续"，不应在 task.resume 时又被拉起来。
             // 崩溃/强杀/死机后重启：SuspendedTaskContext 不持久化（AllConfig 上 [JsonIgnore]），已自动消失。
@@ -1503,6 +1517,20 @@ internal sealed class InstanceRequestHandler
                 allConfig.SuspendedTaskContext = null;
                 _logger.LogInformation("[IPC task.resume] 上一任务被用户取消（WasCancelled=true），不恢复，清除上下文");
                 return InstanceIpcEnvelope.Response(request, new { status = "cleared_not_resumed" });
+            }
+
+            // [另案② 2026-09-12] 恢复是"一次性消费"：必须先确认任务真的起步，才能清上下文+回执 resumed。
+            // 旧实现派发 fire-and-forget 后无条件清上下文回 resumed——抢锁失败（TaskRunner.RunCurrentAsync
+            // 只留一行 ERR 便返回）时任务静默丢失，push（task.resumed）与 pull（hasSuspendedTaskContext）
+            // 同时造假。两道闸：派发前槽位预检 + 派发后确认起步；任一不过都回 task_busy 并保留上下文，
+            // 由调用方（助手策略收尾）有限重试。
+            // 残余窗口：预检通过后、派发真正抢锁前的毫秒级空档被无关任务占锁时，确认闸会把"槽位被占"
+            // 误当"恢复起步"——窗口极小且调用方本就在"BGI 空闲"前提下发恢复，接受并在日志留痕。
+            if (BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0)
+            {
+                _logger.LogWarning("[IPC task.resume] 任务槽位被占用，本次不恢复，中断上下文保留待重试: Type={Type}, Group={Group}",
+                    context.TaskType, context.GroupName);
+                return InstanceIpcEnvelope.Failure(request, "task_busy", "任务槽位被占用，恢复未执行（中断上下文已保留，可重试）");
             }
 
             _logger.LogInformation("[IPC task.resume] 开始恢复任务: Type={Type}, Group={Group}, Index={Index}",
@@ -1648,7 +1676,30 @@ internal sealed class InstanceRequestHandler
                     break;
             }
 
-            // 清除上下文（一次性消费）
+            // [另案②] 确认起步：5s 内槽位被占用 = 恢复的任务真的拿到锁在跑了。
+            // 覆盖"派发后什么都没发生"的形态：空配置组、一条龙配置已删除（只 WRN 不执行）、
+            // UI 线程卡死未消费 Dispatcher 回调等。窗口取 5s：solo 分支拿锁前有
+            // StartGameTask 启动等待（TaskRunner.RunSoloTaskAsync），3s 可能误报。
+            var confirmDeadline = DateTime.UtcNow.AddSeconds(5);
+            var started = false;
+            while (DateTime.UtcNow < confirmDeadline)
+            {
+                await Task.Delay(100);
+                if (BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0)
+                {
+                    started = true;
+                    break;
+                }
+            }
+
+            if (!started)
+            {
+                _logger.LogWarning("[IPC task.resume] 恢复派发后 5s 内任务未起步（配置缺失/抢锁失败/UI 线程未响应），中断上下文保留待重试: Type={Type}, Group={Group}",
+                    context.TaskType, context.GroupName);
+                return InstanceIpcEnvelope.Failure(request, "task_busy", "恢复派发后任务未起步（中断上下文已保留，可重试）");
+            }
+
+            // 清除上下文（一次性消费：确认起步后才消费）
             allConfig.SuspendedTaskContext = null;
             _logger.LogInformation("[IPC task.resume] 已清除中断上下文");
 

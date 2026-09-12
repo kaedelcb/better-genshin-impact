@@ -16,6 +16,13 @@ public class CommandExecutor
     /// <summary>[P3 对账] 本机是否确有上线锄地批次在跑（MainViewModel 注入 _activeBatch?.IsAlive 判定）；
     /// null = 未注入（保守视为无批次在跑，残留上下文按孤儿对账清除）。</summary>
     private readonly Func<bool>? _isBatchInFlight;
+
+    /// <summary>[另案②] Resume 策略 task_busy 重试窗口标志（0/1，Interlocked 访问）。
+    /// 窗口内 BGI 侧中断上下文是"待重试的恢复"而非孤儿残留——孤儿对账与按键清账
+    /// 三处判定把该窗口视同批次在跑，不误清上下文。</summary>
+    private int _resumeRetryInFlight;
+
+    private bool IsResumeRetryInFlight => Interlocked.CompareExchange(ref _resumeRetryInFlight, 0, 0) != 0;
     /// <summary>[切片7] 队列式任务终态事件等待的兜底超时（事件经 SDK 断线续传不丢，超时仅为防永久挂起）。</summary>
     private static readonly TimeSpan TaskTerminalWaitTimeout = TimeSpan.FromHours(24);
     /// <summary>[终态可拉取] 终态事件等待切片长度：每切片超时即拉一次 ext.task.queueStatus 校准（安全网轮询）。</summary>
@@ -830,14 +837,57 @@ public class CommandExecutor
             }
 
             // 正常恢复
-            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.resume" });
+            // [另案②] BGI 端恢复现在是"确认起步才消费上下文"：派发后最长等 5s 确认，
+            // 默认 5s 传输超时会在慢确认时误报失败——延长到 15s 盖住 预检+派发+确认 全程。
+            // 失败透传 errorCode：task_busy（槽位占用/未起步，上下文已保留）由 Resume 策略分支有限重试。
+            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.resume" }, TimeSpan.FromSeconds(15));
             if (response.Success)
                 return new CommandResult { Status = "success", Message = "原任务已恢复" };
-            return new CommandResult { Status = "failed", Message = $"task.resume 失败: {response.ErrorMessage}" };
+            return new CommandResult { Status = "failed", Message = $"task.resume 失败: {response.ErrorMessage}", ErrorCode = response.ErrorCode };
         }
         catch (Exception ex)
         {
             return new CommandResult { Status = "failed", Message = $"IPC task.resume 失败: {ex.Message}" };
+        }
+    }
+
+    /// <summary>
+    /// [另案②] Resume 策略的 task_busy 有限重试：BGI 端恢复改为"确认起步才消费上下文"后，
+    /// 槽位被占/派发未起步会回 task_busy 且保留上下文（不再是静默丢失）。这里 10s×3 有限重试；
+    /// 重试等待窗口内置 _resumeRetryInFlight，孤儿对账/按键清账把该窗口视同批次在跑，
+    /// 不误清待重试的上下文。重试耗尽返回最后一次失败结果——上下文仍保留在 BGI 侧，
+    /// 由孤儿对账按死账清理（既有行为）并留痕。
+    /// </summary>
+    private async Task<CommandResult> ExecuteResumeWithBusyRetryAsync(Action<string>? log)
+    {
+        const int maxAttempts = 3;
+        var busySeen = false;
+        try
+        {
+            for (var attempt = 1; ; attempt++)
+            {
+                var result = await ExecuteResumeAsync();
+                if (result.Status == "success" || result.ErrorCode != "task_busy" || attempt >= maxAttempts)
+                {
+                    return result;
+                }
+
+                if (!busySeen)
+                {
+                    busySeen = true;
+                    Interlocked.Exchange(ref _resumeRetryInFlight, 1);
+                }
+                log?.Invoke($"[任务冲突策略] BGI 任务槽位忙/恢复未起步，10 秒后重试恢复（第 {attempt}/{maxAttempts - 1} 次）...");
+                await Task.Delay(TimeSpan.FromSeconds(10));
+            }
+        }
+        finally
+        {
+            // 覆盖从首个 task_busy 到重试终结的整个窗口（含在途 IPC），不只 10s 等待段
+            if (busySeen)
+            {
+                Interlocked.Exchange(ref _resumeRetryInFlight, 0);
+            }
         }
     }
 
@@ -934,7 +984,8 @@ public class CommandExecutor
         (bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)? status, string caller)
     {
         if (status is { Running: false, HasContext: true }
-            && _isBatchInFlight?.Invoke() != true)
+            && _isBatchInFlight?.Invoke() != true
+            && !IsResumeRetryInFlight) // [另案②] 恢复重试窗口内的上下文是"待重试"而非孤儿，视同批次在跑
         {
             Log($"[P3 对账] {caller}：检测到残留中断上下文（任务已结束但上下文未消费）且本机无批次在跑，按孤儿对账发 task.resume(cancel:true) 清除");
             await ExecuteResumeAsync(cancel: true);
@@ -1041,10 +1092,11 @@ public class CommandExecutor
         if (status.Value.HasContext)
         {
             // [P3 对账] 本机确有批次在跑才保持无损拒绝（保护进行中批次）；
-            // 无批次在跑 = 孤儿残留，清上下文后按 running && !hasContext 走正常抢占闭环
-            if (_isBatchInFlight?.Invoke() == true)
+            // [另案②] 恢复重试窗口内的上下文是"待重试的恢复"而非孤儿，同样无损拒绝；
+            // 无批次在跑且非重试窗口 = 孤儿残留，清上下文后按 running && !hasContext 走正常抢占闭环
+            if (_isBatchInFlight?.Invoke() == true || IsResumeRetryInFlight)
             {
-                Log($"[任务策略] 检测到 BGI 已有中断上下文（上线锄地批次进行中？），按键启动 {desc} 不抢占，走原有无损拒绝路径");
+                Log($"[任务策略] 检测到 BGI 已有中断上下文（上线锄地批次进行中或恢复重试中），按键启动 {desc} 不抢占，走原有无损拒绝路径");
                 return false;
             }
             Log($"[P3 对账] {desc}：检测到残留中断上下文但本机无批次在跑，按孤儿对账清除后继续抢占闭环");
@@ -1151,11 +1203,12 @@ public class CommandExecutor
         if (status is { Running: true, HasContext: true })
         {
             // [P3 对账] 本机确有批次在跑才保持无损拒绝（保护进行中批次）；
-            // 无批次在跑 = 孤儿残留，清上下文后视为 running && !hasContext，走下方正常抢占闭环
-            if (_isBatchInFlight?.Invoke() == true)
+            // [另案②] 恢复重试窗口内的上下文是"待重试的恢复"而非孤儿，同样无损拒绝；
+            // 无批次在跑且非重试窗口 = 孤儿残留，清上下文后视为 running && !hasContext，走下方正常抢占闭环
+            if (_isBatchInFlight?.Invoke() == true || IsResumeRetryInFlight)
             {
-                Log($"[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中），{desc} 不二次抢占，走无损拒绝");
-                return new CommandResult { Status = "failed", Message = $"{desc} 未执行：联机锄地批次进行中（已有中断上下文），按无损拒绝语义不打断，请等批次结束后再试" };
+                Log($"[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中或恢复重试中），{desc} 不二次抢占，走无损拒绝");
+                return new CommandResult { Status = "failed", Message = $"{desc} 未执行：联机锄地批次进行中或恢复重试中（已有中断上下文），按无损拒绝语义不打断，请稍后再试" };
             }
             Log($"[P3 对账] {desc}：检测到残留中断上下文但本机无批次在跑，按孤儿对账清除后继续");
             await ExecuteResumeAsync(cancel: true);
@@ -1389,7 +1442,9 @@ public class CommandExecutor
                     await ExecuteResumeAsync(cancel: true);
                     return;
                 }
-                var resumeResult = await ExecuteResumeAsync();
+                // [另案②] task_busy（槽位占用/派发未起步，BGI 已保留上下文）走 10s×3 有限重试；
+                // 其他失败（无上下文/传输失败/重试耗尽）直接响亮失败
+                var resumeResult = await ExecuteResumeWithBusyRetryAsync(log);
                 if (resumeResult.Status == "success")
                 {
                     log?.Invoke("[任务冲突策略] 原任务已按策略恢复");
