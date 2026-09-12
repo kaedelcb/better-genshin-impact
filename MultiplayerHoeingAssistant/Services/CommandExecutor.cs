@@ -26,6 +26,13 @@ public class CommandExecutor
     private static readonly TimeSpan HotkeyTaskDetectTimeout = TimeSpan.FromSeconds(15);
     /// <summary>[任务策略] 快捷键启动了新任务时，等待其结束的上限（防永久挂起）。</summary>
     private static readonly TimeSpan HotkeyTaskRunTimeout = TimeSpan.FromHours(4);
+    /// <summary>[分层超时 2026-09-12] v2 task.start 的命令超时：BGI 侧 task.start 刻意阻塞到任务
+    /// 真正执行完才响应（cancelled 回传依赖此契约），与 ext TaskTerminalWaitTimeout 对齐。
+    /// 本地命名管道在 BGI 进程死亡时立刻断流，不存在无限挂死；24h 帽只兜 BGI 活着但 handler 死锁。</summary>
+    private static readonly TimeSpan V2TaskStartCommandTimeout = TimeSpan.FromHours(24);
+    /// <summary>[分层超时 2026-09-12] task.suspend 的命令超时：BGI 内部等锁 deadline 为 5s
+    /// （InstanceRequestHandler.HandleTaskSuspend），客户端必须留余量，否则"超时但实际挂起成功"。</summary>
+    private static readonly TimeSpan V2TaskSuspendCommandTimeout = TimeSpan.FromSeconds(8);
     /// <summary>[任务策略] 6 键固定收尾策略：执行完停止（清除中断上下文，不恢复）。无 UI、无配置项。</summary>
     private static readonly TaskConflictPolicySettings FixedKeyPolicy = new();
     /// <summary>本批次是否已通过 RestartBgi 回退重启过 BGI（批次级状态，由上游批次循环管理生命周期）。</summary>
@@ -382,60 +389,79 @@ public class CommandExecutor
             // null = 通道瞬态失败，落回 v2 路径
         }
 
-        try
+        // [分层超时 2026-09-12] 失败语义分离：Connect 失败（BGI 未运行/管道不可达）才走杀启回退
+        // （既有冷启动语义）；连接建立后的命令传输失败说明 BGI 活着——超时≠未执行（at-least-once），
+        // 杀进程会杀掉可能已在跑的任务，必须经 ReconcileV2TaskStartOutcomeAsync 核实对端事实。
+        using (var ipcClient = new IpcClient())
         {
-            // 通过 IPC 发 task.start
-            using var ipcClient = new IpcClient();
-            await ipcClient.ConnectAsync(3000);
-            // 会话守卫：阻断时直接失败返回，不进入下方的杀进程回退（避免误杀本会话正在跑任务的 BGI）
-            var blocked = CheckCrossSessionBlock(ipcClient, $"task.start 配置组「{groupName}」");
-            if (blocked != null) return blocked;
-            var payload = System.Text.Json.JsonSerializer.Serialize(new { groupName, startFromIndex, generation });
-            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
-            // [无损拒绝适配 b5386005] task_already_running = BGI 明确应答的业务拒绝（非传输失败），
-            // 多半是 suspend 后旧任务退场慢（任务锁未释放）。等 1s 重发，最多 6 次
-            // （与 suspend 5s 等锁 + 助手 P1-C 6s 轮询的总容忍对齐）。
-            // 幂等安全：BGI 侧 generation 幂等登记已移到拒绝检查之后，被拒请求不会污染去重状态。
-            for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
+            var connected = false;
+            try
             {
-                ProbeLog($"[CommandExecutor] task.start 被无损拒绝（任务运行中），1s 后重试（{retry + 1}/6）groupName={groupName}");
-                await Task.Delay(1000);
-                response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
+                // 通过 IPC 发 task.start
+                await ipcClient.ConnectAsync(3000);
+                connected = true;
             }
-            if (response.Success)
+            catch
             {
-                _hasRestartedThisBatch = false; // IPC 成功 = BGI 在线，后续不再需要回退标记
-                ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] IPC task.start 成功 groupName={groupName}");
+                // BGI 未运行/管道不可达：落到下方杀启回退
+            }
 
-                // 解析 BGI 响应中的 status：cancelled = 配置组执行中被取消（如 F11）
-                // 必须透传，否则助手端收不到取消信号、会继续执行下一个配置组。
-                if (!string.IsNullOrEmpty(response.Data))
+            if (connected)
+            {
+                try
                 {
-                    try
+                    // 会话守卫：阻断时直接失败返回，不进入下方的杀进程回退（避免误杀本会话正在跑任务的 BGI）
+                    var blocked = CheckCrossSessionBlock(ipcClient, $"task.start 配置组「{groupName}」");
+                    if (blocked != null) return blocked;
+                    var payload = System.Text.Json.JsonSerializer.Serialize(new { groupName, startFromIndex, generation });
+                    var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
+                    // [无损拒绝适配 b5386005] task_already_running = BGI 明确应答的业务拒绝（非传输失败），
+                    // 多半是 suspend 后旧任务退场慢（任务锁未释放）。等 1s 重发，最多 6 次
+                    // （与 suspend 5s 等锁 + 助手 P1-C 6s 轮询的总容忍对齐）。
+                    // 幂等安全：BGI 侧 generation 幂等登记已移到拒绝检查之后，被拒请求不会污染去重状态。
+                    for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
                     {
-                        var respData = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data);
-                        var bgiStatus = respData.TryGetProperty("status", out var st) ? st.GetString() : null;
-                        if (bgiStatus == "cancelled")
-                        {
-                            return new CommandResult { Status = "cancelled", Message = $"配置组 {groupName} 执行中被取消" };
-                        }
+                        ProbeLog($"[CommandExecutor] task.start 被无损拒绝（任务运行中），1s 后重试（{retry + 1}/6）groupName={groupName}");
+                        await Task.Delay(1000);
+                        response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
                     }
-                    catch
+                    if (response.Success)
                     {
-                        // Data 解析失败不影响，默认走 success 分支
-                    }
-                }
-                return new CommandResult { Status = "success", Message = $"配置组 {groupName} 已启动" };
-            }
+                        _hasRestartedThisBatch = false; // IPC 成功 = BGI 在线，后续不再需要回退标记
+                        ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] IPC task.start 成功 groupName={groupName}");
 
-            // [无损拒绝适配 b5386005] BGI 明确应答但拒绝启动：直接失败返回，绝不进杀进程回退——
-            // 杀进程会把 BGI 正在运行的任务一起杀死，恰恰违背无损拒绝的初衷。
-            // 只有传输层异常（catch）才走 KillBgi+RestartBgi 回退。
-            return new CommandResult { Status = "failed", Message = $"BGI 拒绝启动配置组「{groupName}」（{response.ErrorCode ?? "unknown"}）：{response.ErrorMessage ?? "无详情"}。按无损拒绝语义未杀进程，请稍后重试或先停止当前任务" };
-        }
-        catch
-        {
-            // IPC 失败，回退到杀进程重启
+                        // 解析 BGI 响应中的 status：cancelled = 配置组执行中被取消（如 F11）
+                        // 必须透传，否则助手端收不到取消信号、会继续执行下一个配置组。
+                        if (!string.IsNullOrEmpty(response.Data))
+                        {
+                            try
+                            {
+                                var respData = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data);
+                                var bgiStatus = respData.TryGetProperty("status", out var st) ? st.GetString() : null;
+                                if (bgiStatus == "cancelled")
+                                {
+                                    return new CommandResult { Status = "cancelled", Message = $"配置组 {groupName} 执行中被取消" };
+                                }
+                            }
+                            catch
+                            {
+                                // Data 解析失败不影响，默认走 success 分支
+                            }
+                        }
+                        return new CommandResult { Status = "success", Message = $"配置组 {groupName} 已启动" };
+                    }
+
+                    // [无损拒绝适配 b5386005] BGI 明确应答但拒绝启动：直接失败返回，绝不进杀进程回退——
+                    // 杀进程会把 BGI 正在运行的任务一起杀死，恰恰违背无损拒绝的初衷。
+                    // 只有 Connect 失败（BGI 未运行）才走 KillBgi+RestartBgi 回退。
+                    return new CommandResult { Status = "failed", Message = $"BGI 拒绝启动配置组「{groupName}」（{response.ErrorCode ?? "unknown"}）：{response.ErrorMessage ?? "无详情"}。按无损拒绝语义未杀进程，请稍后重试或先停止当前任务" };
+                }
+                catch (Exception ex)
+                {
+                    // 命令传输失败（BGI 活着）：核实对端事实后再定性，绝不进杀进程回退
+                    return await ReconcileV2TaskStartOutcomeAsync($"配置组「{groupName}」", ex);
+                }
+            }
         }
 
         // 回退：杀进程 + 重启带 --startGroups
@@ -494,52 +520,70 @@ public class CommandExecutor
             // null = 通道瞬态失败，落回 v2 路径
         }
 
-        try
+        // [分层超时 2026-09-12] 失败语义分离（同 StartGroupAsync）：Connect 失败才走杀启回退；
+        // 命令传输失败（BGI 活着）绝不杀进程，先核实对端事实。
+        using (var ipcClient = new IpcClient())
         {
-            // 通过 IPC 发 task.start（一条龙内联启动）
-            using var ipcClient = new IpcClient();
-            await ipcClient.ConnectAsync(3000);
-            // 会话守卫：阻断时直接失败返回，不进入下方的杀进程回退
-            var blocked = CheckCrossSessionBlock(ipcClient, $"task.start 一条龙「{configName}」");
-            if (blocked != null) return blocked;
-            var payload = System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation });
-            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
-            // [无损拒绝适配 b5386005] 同 StartGroupAsync：业务拒绝（任务运行中）等锁重试，最多 6 次
-            for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
+            var connected = false;
+            try
             {
-                ProbeLog($"[CommandExecutor] task.start 被无损拒绝（任务运行中），1s 后重试（{retry + 1}/6）configName={configName}");
-                await Task.Delay(1000);
-                response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
+                // 通过 IPC 发 task.start（一条龙内联启动）
+                await ipcClient.ConnectAsync(3000);
+                connected = true;
             }
-            if (response.Success)
+            catch
             {
-                // 与 StartGroupAsync 对齐：解析 BGI 响应中的 status：cancelled = 一条龙执行中被取消（如 F11）
-                // 必须透传，否则助手端收不到取消信号、批次循环会继续执行下一个配置组（违背取消优先）。
-                if (!string.IsNullOrEmpty(response.Data))
-                {
-                    try
-                    {
-                        var respData = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data);
-                        var bgiStatus = respData.TryGetProperty("status", out var st) ? st.GetString() : null;
-                        if (bgiStatus == "cancelled")
-                        {
-                            return new CommandResult { Status = "cancelled", Message = $"一条龙 {configName} 执行中被取消" };
-                        }
-                    }
-                    catch
-                    {
-                        // Data 解析失败不影响，默认走 success 分支
-                    }
-                }
-                return new CommandResult { Status = "success", Message = $"一条龙 {configName} 已启动" };
+                // BGI 未运行/管道不可达：落到下方杀启回退
             }
 
-            // [无损拒绝适配 b5386005] 业务拒绝不杀进程，直接失败返回（只有 catch 传输异常才进回退）
-            return new CommandResult { Status = "failed", Message = $"BGI 拒绝启动一条龙「{configName}」（{response.ErrorCode ?? "unknown"}）：{response.ErrorMessage ?? "无详情"}。按无损拒绝语义未杀进程，请稍后重试或先停止当前任务" };
-        }
-        catch
-        {
-            // IPC 失败，回退到杀进程重启
+            if (connected)
+            {
+                try
+                {
+                    // 会话守卫：阻断时直接失败返回，不进入下方的杀进程回退
+                    var blocked = CheckCrossSessionBlock(ipcClient, $"task.start 一条龙「{configName}」");
+                    if (blocked != null) return blocked;
+                    var payload = System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation });
+                    var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
+                    // [无损拒绝适配 b5386005] 同 StartGroupAsync：业务拒绝（任务运行中）等锁重试，最多 6 次
+                    for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
+                    {
+                        ProbeLog($"[CommandExecutor] task.start 被无损拒绝（任务运行中），1s 后重试（{retry + 1}/6）configName={configName}");
+                        await Task.Delay(1000);
+                        response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
+                    }
+                    if (response.Success)
+                    {
+                        // 与 StartGroupAsync 对齐：解析 BGI 响应中的 status：cancelled = 一条龙执行中被取消（如 F11）
+                        // 必须透传，否则助手端收不到取消信号、批次循环会继续执行下一个配置组（违背取消优先）。
+                        if (!string.IsNullOrEmpty(response.Data))
+                        {
+                            try
+                            {
+                                var respData = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data);
+                                var bgiStatus = respData.TryGetProperty("status", out var st) ? st.GetString() : null;
+                                if (bgiStatus == "cancelled")
+                                {
+                                    return new CommandResult { Status = "cancelled", Message = $"一条龙 {configName} 执行中被取消" };
+                                }
+                            }
+                            catch
+                            {
+                                // Data 解析失败不影响，默认走 success 分支
+                            }
+                        }
+                        return new CommandResult { Status = "success", Message = $"一条龙 {configName} 已启动" };
+                    }
+
+                    // [无损拒绝适配 b5386005] 业务拒绝不杀进程，直接失败返回（只有 Connect 失败才进回退）
+                    return new CommandResult { Status = "failed", Message = $"BGI 拒绝启动一条龙「{configName}」（{response.ErrorCode ?? "unknown"}）：{response.ErrorMessage ?? "无详情"}。按无损拒绝语义未杀进程，请稍后重试或先停止当前任务" };
+                }
+                catch (Exception ex)
+                {
+                    // 命令传输失败（BGI 活着）：核实对端事实后再定性，绝不进杀进程回退
+                    return await ReconcileV2TaskStartOutcomeAsync($"一条龙「{configName}」", ex);
+                }
+            }
         }
 
         // 回退：杀进程 + 重启带 --startOneDragon
@@ -750,9 +794,10 @@ public class CommandExecutor
             var blocked = CheckCrossSessionBlock(ipcClient, "task.suspend");
             if (blocked != null) return blocked;
 
-            // 发 task.suspend
+            // 发 task.suspend（8s：BGI 内部等锁 deadline 为 5s，客户端必须留余量，
+            // 否则"超时但实际挂起成功"——超时≠未执行，2026-09-12 分层超时）
             var payload = System.Text.Json.JsonSerializer.Serialize(new { });
-            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.suspend", Payload = payload });
+            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.suspend", Payload = payload }, V2TaskSuspendCommandTimeout);
             if (response.Success)
             {
                 // 返回包含被中断任务的上下文信息（给调用方日志用）
@@ -1214,12 +1259,12 @@ public class CommandExecutor
             var payload = groupName != null
                 ? System.Text.Json.JsonSerializer.Serialize(new { groupName, startFromIndex, generation })
                 : System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation });
-            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
+            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
             for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
             {
                 ProbeLog($"[CommandExecutor] task.start 被无损拒绝（任务运行中），1s 后重试（{retry + 1}/6）{desc}");
                 await Task.Delay(1000);
-                response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload });
+                response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
             }
             if (response.Success)
             {
@@ -1247,9 +1292,63 @@ public class CommandExecutor
         }
         catch (Exception ex)
         {
-            // 抢占/指定任务路径绝不杀进程：传输失败直接失败返回
-            return new CommandResult { Status = "failed", Message = $"IPC task.start {desc} 失败: {ex.Message}（按键路径绝不杀进程）" };
+            // 抢占/指定任务路径绝不杀进程：传输失败先核实对端事实（超时≠未执行）再定性——
+            // 直接返回 failed 会让 StartWithPreemptionAsync 误判"未启动"而触发错误的策略收尾
+            // （resume 旧任务与已在跑的新任务打架，另案②的实机触发器）。
+            return await ReconcileV2TaskStartOutcomeAsync(desc, ex);
         }
+    }
+
+    /// <summary>
+    /// [分层超时 2026-09-12] v2 task.start 命令传输失败后的事实核实：
+    /// 超时/断流 ≠ 未执行（at-least-once）——请求已到达 BGI，副作用可能正在发生。
+    /// 轮询 task.status 核实：在跑 = 启动实际生效（响应帧丢失/超时），等其执行完后按 success 返回
+    /// （取消状态在此降级路径不可知，F11 场景由 BGI 侧 HandleTaskResume 的 WasCancelled 守卫兜底）；
+    /// 确认不在跑 = 按失败返回；BGI 持续不可达（1 分钟）= 任务随进程终止，按失败返回。
+    /// 绝不杀进程、绝不假成功。
+    /// </summary>
+    private async Task<CommandResult> ReconcileV2TaskStartOutcomeAsync(string desc, Exception transportError)
+    {
+        var reason = transportError.GetBaseException().Message;
+        Log($"[CommandExecutor] v2 task.start {desc} 命令传输失败（{reason}），核实对端真实状态（超时≠未执行，绝不杀进程）");
+        // 双探测收窄竞态窗：请求帧可能已被 BGI 读入但任务尚未起到 running，
+        // 单次探测"不在跑"会把"即将启动"误判为"未生效"
+        var probe = await QueryTaskStatusAsync();
+        if (probe is not { Running: true })
+        {
+            await Task.Delay(2000);
+            probe = await QueryTaskStatusAsync();
+        }
+        if (probe is not { Running: true })
+        {
+            return new CommandResult { Status = "failed", Message = $"{desc} 启动失败：{reason}（已核实 BGI 侧无任务在跑，启动未生效或任务随进程终止）" };
+        }
+
+        Log($"[CommandExecutor] 核实结果：{desc} 实际已在 BGI 侧执行中（响应帧丢失/超时），等待其执行完（5s 轮询，上限 {V2TaskStartCommandTimeout.TotalHours}h）...");
+        var deadline = DateTime.UtcNow + V2TaskStartCommandTimeout;
+        var consecutiveProbeFailures = 0;
+        while (DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(TaskPollInterval);
+            probe = await QueryTaskStatusAsync();
+            if (probe is { Running: false })
+            {
+                return new CommandResult { Status = "success", Message = $"{desc} 已在 BGI 侧执行完成（传输降级路径：响应帧丢失后经 task.status 核实，取消状态不可知）" };
+            }
+            if (probe is null)
+            {
+                // BGI 持续不可达 = 进程已死（任务随进程终止）或卡死，按失败定性，不无限等
+                if (++consecutiveProbeFailures >= 12)
+                {
+                    return new CommandResult { Status = "failed", Message = $"{desc} 执行中 BGI 持续不可达（1 分钟），任务可能已随进程终止，请检查 BGI 状态" };
+                }
+            }
+            else
+            {
+                consecutiveProbeFailures = 0;
+            }
+        }
+        return new CommandResult { Status = "failed", Message = $"{desc} 执行中但等待超时（{V2TaskStartCommandTimeout.TotalHours}h 兜底），请检查 BGI 状态" };
     }
 
     /// <summary>

@@ -128,18 +128,24 @@ public class IpcClient : IDisposable
 
     /// <summary>单条命令的读写总超时（与 BGI 侧 InstanceService.RequestTimeout=5s 对齐）。
     /// 历史上读响应无超时：BGI 卡顿（游戏高负载）时 ReadAsync 无限阻塞，状态轮询一轮挂死一轮，
-    /// 叠加出多条管道连接并引发上报日志风暴。</summary>
+    /// 叠加出多条管道连接并引发上报日志风暴。
+    /// [分层超时 2026-09-12] 该默认值只适用于控制面短操作（status/list/stop/resume 等）；
+    /// 任务面长操作必须按操作类别显式传 timeout（见 CommandExecutor 的 V2TaskStart/SuspendCommandTimeout）。</summary>
     private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(5);
 
-    public async Task<IpcResponse> SendCommandAsync(IpcRequest request)
+    /// <param name="timeout">读写总超时；null 用默认 <see cref="CommandTimeout"/>（5s）。
+    /// task.start 是阻塞契约（BGI 刻意等任务执行完才响应，用于回传 cancelled），必须传长超时——
+    /// 5s 默认值曾把执行超 5s 的 task.start 误判为传输失败，喂给杀进程回退/错误收尾（另案①）。</param>
+    public async Task<IpcResponse> SendCommandAsync(IpcRequest request, TimeSpan? timeout = null)
     {
         if (_pipeClient == null || !_pipeClient.IsConnected)
             throw new InvalidOperationException("命名管道未连接");
 
+        var effectiveTimeout = timeout ?? CommandTimeout;
         var coreTask = SendCommandCoreAsync(request);
         try
         {
-            return await coreTask.WaitAsync(CommandTimeout);
+            return await coreTask.WaitAsync(effectiveTimeout);
         }
         catch (TimeoutException)
         {
@@ -151,7 +157,7 @@ public class IpcClient : IDisposable
                 TaskContinuationOptions.OnlyOnFaulted);
             _pipeClient?.Dispose();
             _pipeClient = null;
-            throw new TimeoutException($"BGI 命名管道命令（{request.OpCode}）响应超时（{CommandTimeout.TotalSeconds:0}s），BGI 可能忙或无响应");
+            throw new TimeoutException($"BGI 命名管道命令（{request.OpCode}）响应超时（{effectiveTimeout}），BGI 可能忙或无响应");
         }
     }
 
