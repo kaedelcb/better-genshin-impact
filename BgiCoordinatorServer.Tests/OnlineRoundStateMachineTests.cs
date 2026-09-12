@@ -7,8 +7,9 @@ using Xunit;
 namespace BgiCoordinatorServer.Tests;
 
 /// <summary>
-/// 上线→就绪→开锄 状态机回归测试（B157 架构评审修复）：
-/// 1) threshold 按在线人数封顶：默认 ExpectedHoeingPlayers=4 的 2 人房不再"永远凑不齐"；
+/// 上线→就绪→开锄 状态机回归测试（B157 架构评审修复 + 严格人数门槛）：
+/// 1) threshold 严格以设置人数为准、不按在线人数封顶：默认 ExpectedHoeingPlayers=4 的房间缺人不开锄
+///    （推翻 R6 封顶修复，用户明确取舍"缺 1 人都不开锄"；人少的队伍应改配置人数）；
 /// 2) ConsumeOnlineReady 按本轮参与者 UID 集合消费：高 gen 成员不再残留武装事件（幻影轮次根因）；
 /// 3) DisarmOnlineEvents：确认超时耗尽收尾解除武装且不记"已联机记录"；
 /// 4) 单人直达 AllReady 定向只发就绪成员：不再全组广播把未上线成员拖进开锄；
@@ -39,7 +40,7 @@ public class OnlineRoundStateMachineTests
         => h.RoomManager.GetControlRoomPlayers(Group(room)).Single(p => p.PlayerUid == uid);
 
     [Fact]
-    public async Task ThresholdCap_TwoOnlineWithDefaultFour_CanTransition()
+    public async Task StrictThreshold_TwoOnlineWithDefaultFour_NoTransition()
     {
         var h = new GatewayTestHarness();
         var (room, pwd) = NewRoom();
@@ -55,8 +56,40 @@ public class OnlineRoundStateMachineTests
         Assert.False(h.RoomManager.CheckAndTransition(Group(room), out _), "仅 1 人就绪不应触发");
 
         h.RoomManager.ReportOnlineEvent(Group(room), connB, 1);
+        Assert.False(h.RoomManager.CheckAndTransition(Group(room), out _),
+            "严格人数门槛：配置 4 人只有 2 人在线，即使全部就绪也不触发（缺人不开锄）");
+    }
+
+    [Fact]
+    public async Task StrictThreshold_FourConfiguredThreeOnline_AllReady_NoTransition_UntilFourthOnline()
+    {
+        // BUG 场景锚点：4 人都配人数 4，第 4 人助手从未连接房间；
+        // 3 人全部上线不得触发，第 4 人入房并上线后才触发。
+        var h = new GatewayTestHarness();
+        var (room, pwd) = NewRoom();
+        var connA = Conn("a");
+        var connB = Conn("b");
+        var connC = Conn("c");
+        await JoinAsync(h, room, pwd, connA, "uidA", "成员A");
+        await JoinAsync(h, room, pwd, connB, "uidB", "成员B");
+        await JoinAsync(h, room, pwd, connC, "uidC", "成员C");
+        await ReportStatusAsync(h, room, connA, 4);
+        await ReportStatusAsync(h, room, connB, 4);
+        await ReportStatusAsync(h, room, connC, 4);
+
+        h.RoomManager.ReportOnlineEvent(Group(room), connA, 1);
+        h.RoomManager.ReportOnlineEvent(Group(room), connB, 1);
+        h.RoomManager.ReportOnlineEvent(Group(room), connC, 1);
+        Assert.False(h.RoomManager.CheckAndTransition(Group(room), out _),
+            "4 人配置、3 人在线且全部就绪：不得触发（缺 1 人不开锄）");
+
+        // 第 4 人入房并上线 → 凑齐 4 人 → 触发
+        var connD = Conn("d");
+        await JoinAsync(h, room, pwd, connD, "uidD", "成员D");
+        await ReportStatusAsync(h, room, connD, 4);
+        h.RoomManager.ReportOnlineEvent(Group(room), connD, 1);
         Assert.True(h.RoomManager.CheckAndTransition(Group(room), out var gen),
-            "2 人房默认配置 4：threshold 应按在线人数封顶为 2，两人就绪即可触发");
+            "第 4 人上线后凑齐 4 人，应触发");
         Assert.Equal(1, gen);
     }
 
@@ -69,6 +102,9 @@ public class OnlineRoundStateMachineTests
         var connB = Conn("b");
         await JoinAsync(h, room, pwd, connA, "uidA", "成员A");
         await JoinAsync(h, room, pwd, connB, "uidB", "成员B");
+        // 严格人数门槛下默认配置 4 在 2 人房永不触发，显式报 2 人让本测试聚焦"按参与者集合消费"
+        await ReportStatusAsync(h, room, connA, 2);
+        await ReportStatusAsync(h, room, connB, 2);
 
         // 各成员 generation 独立递增，几乎必然不等：A=5，B=2 → minGen=2
         h.RoomManager.ReportOnlineEvent(Group(room), connA, 5);

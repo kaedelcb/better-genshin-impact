@@ -52,7 +52,7 @@ public class ControlRoomPlayer
     public DateTime OnlineReadyExpireTime { get; set; } = DateTime.MinValue;
     /// <summary>当天上线消费记录列表（每次广播 AllReady 消费一次时追加一条）。</summary>
     public List<object> OnlineHistory { get; set; } = [];
-    /// <summary>预期开锄人数（默认 4）。服务端取所有已上线成员的最小值作为触发阈值。</summary>
+    /// <summary>预期开锄人数（默认 4）。服务端取所有在线成员的最小值作为触发阈值，且不按在线人数封顶：缺人不开锄。</summary>
     public int ExpectedHoeingPlayers { get; set; } = 4;
     /// <summary>当前上线事件的代序号（单调递增）。用于边沿检测：OnlineEventGeneration > LastOnlineConsumedGeneration 才算新事件。</summary>
     public int OnlineEventGeneration { get; set; } = 0;

@@ -1517,10 +1517,10 @@ public class RoomManager
 
         // 就绪成员 = 有新上线事件（未消费）的成员
         var readyPlayers = onlinePlayers.Where(p => !p.OnlineEventConsumed && p.OnlineEventGeneration > 0).ToList();
-        // 预期开锄人数 = 所有在线成员上报的 ExpectedHoeingPlayers 的最小值（下限保底 1，防止默认 0），
-        // 并按当前在线人数封顶：默认 4 人的配置在 2 人房里会导致 ready 永远凑不齐、永远不上线。
+        // 预期开锄人数 = 所有在线成员上报的 ExpectedHoeingPlayers 的最小值（下限保底 1，防止默认 0）。
+        // 严格以设置人数为准，不按在线人数封顶：缺人（含助手从未连接/已离线的成员）就等，不开锄。
+        // 人少的队伍应把人数改成实际人数。（推翻 R6 封顶修复：用户明确取舍"缺 1 人都不开锄"。）
         var threshold = onlinePlayers.Count > 0 ? onlinePlayers.Min(p => Math.Max(1, p.ExpectedHoeingPlayers)) : 1;
-        threshold = Math.Min(threshold, onlinePlayers.Count);
         Console.WriteLine("[探针服务端] CheckAndTransition: group=" + group + " onlinePlayers=" + onlinePlayers.Count + " ready=" + readyPlayers.Count + " threshold=" + threshold + " state=" + state.State);
 
         // 就绪人数未达预期 → 保持"已上线等待"，不广播 AllReady、不消费
