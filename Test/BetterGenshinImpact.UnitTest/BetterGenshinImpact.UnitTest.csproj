@@ -52,6 +52,9 @@
     <Compile Remove="GameTaskTests\AutoFightTests\**" />
     <!-- Re-include the double-check bug exploration test -->
     <Compile Include="GameTaskTests\AutoFightTests\CheckFightFinishDoubleCheckTests.cs" />
+    <!-- Re-include B7 像素检测内存图像测试与 B6/B12 决策 PBT（2026-09-13，白名单新增） -->
+    <Compile Include="GameTaskTests\AutoFightTests\CombatHealthDetectorTests.cs" />
+    <Compile Include="GameTaskTests\AutoFightTests\ArlecchinoAndMotorcycleDecisionsPbtTest.cs" />
     <!-- Re-include otherworld teammate avatar misrecognition fix bug exploration tests -->
     <!-- These files are referenced in the csproj but no longer exist on disk.
          They are excluded to allow the test project to build. -->

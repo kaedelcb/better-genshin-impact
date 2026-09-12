@@ -8,8 +8,11 @@ using Serilog.Core;
 namespace BetterGenshinImpact.GameTask.AutoFight;
 
 /// <summary>
-/// 战斗中的血量和药品状态检测辅助类
-/// 集中管理所有像素检测逻辑，使用合理的颜色容差
+/// 独立理由（R4.2）：消费方 AutoFightTask.cs 与 Model/Avatar.cs 均为与公版同名的高冲突文件
+/// （茶包战斗引擎改造的主战场），本类把散落的像素状态判定集中为独立静态工具类，
+/// 零冲突、可整体 PR；单机/联机共用。
+/// 战斗中的血量和药品状态检测辅助类：集中管理所有像素检测逻辑，使用合理的颜色容差。
+/// 覆盖：红血/契/绿血/营养袋/复活药/派蒙可见/角色死亡槽位/槽位血量与出战状态。
 /// </summary>
 public static class CombatHealthDetector
 {
@@ -20,12 +23,6 @@ public static class CombatHealthDetector
     private const int RedBloodY = 1009;
     private const int RedBloodW = 3;
     private const int RedBloodH = 3;
-    
-    // 阿蕾奇诺契检测区域
-    private const int QiX = 1014;
-    private const int QiY = 1000;
-    private const int QiW = 40;
-    private const int QiH = 20;
 
     // 绿血检测点
     private const int GreenBloodX = 814;
@@ -72,10 +69,6 @@ public static class CombatHealthDetector
     private static readonly Scalar RedBloodLower = new Scalar(255, 90, 89);
     private static readonly Scalar RedBloodUpper = new Scalar(255, 91, 90);
 
-    // 阿蕾奇诺契 BGR: (255, 144, 140) ±12
-    private static readonly Scalar QiLower = new Scalar(243, 132, 128);
-    private static readonly Scalar QiUpper = new Scalar(255, 156, 152);
-
     // 绿血 BGR: (34, 215, 150) ±15
     private const int GreenBloodB = 34;
     private const int GreenBloodG = 215;
@@ -114,18 +107,6 @@ public static class CombatHealthDetector
         return numLabels > 1;
     }
     
-    public static bool IsQi(ImageRegion ra)
-    {
-        using var bloodRect = ra.DeriveCrop(QiX, QiY, QiW, QiH);
-        using var mask = OpenCvCommonHelper.Threshold(bloodRect.SrcMat, QiLower, QiUpper);
-        using var labels = new Mat();
-        using var stats = new Mat();
-        using var centroids = new Mat();
-        var numLabels = Cv2.ConnectedComponentsWithStats(mask, labels, stats, centroids,
-            connectivity: PixelConnectivity.Connectivity4, ltype: MatType.CV_32S);
-        return numLabels > 1;
-    }
-
     /// <summary>
     /// 检测当前出战角色血条是否为绿色（正常血量）
     /// </summary>
@@ -202,10 +183,12 @@ public static class CombatHealthDetector
     }
 
     /// <summary>
-    /// 检测指定角色槽位是否有红血（EndBloodCheck 用）
+    /// 检测指定角色槽位是否有绿血（EndBloodCheck 用）。
+    /// 命名说明：原实现名 IsSlotRedBlood 名实不符——实现检测的是"槽位血条绿色存在"
+    /// （绿血=健康态），调用方语义也是 hasGreenBlood，故按实际语义改名。
     /// slotIndex: 0-3 对应 4 个角色槽位
     /// </summary>
-    public static bool IsSlotRedBlood(ImageRegion ra, int slotIndex)
+    public static bool IsSlotGreenBlood(ImageRegion ra, int slotIndex)
     {
         int y = SlotBloodBaseY + DeathCheckSlotSpacing * slotIndex;
         using var bloodRect = ra.DeriveCrop(SlotBloodX, y, SlotBloodW, SlotBloodH);
@@ -215,8 +198,7 @@ public static class CombatHealthDetector
         using var centroids = new Mat();
         var numLabels = Cv2.ConnectedComponentsWithStats(mask, labels, stats, centroids,
             connectivity: PixelConnectivity.Connectivity4, ltype: MatType.CV_32S);
-        // numLabels > 1 means green blood detected, so NOT red blood
-        return numLabels > 1;
+        return numLabels > 1;   // 绿色血条像素成连通块 → 有绿血（健康）
     }
 
     /// <summary>

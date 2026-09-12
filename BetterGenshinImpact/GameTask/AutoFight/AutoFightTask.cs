@@ -107,11 +107,6 @@ public class AutoFightTask : ISoloTask
     public static volatile bool IsTeleportingToStatue = false;
 
     /// <summary>
-    /// 玛薇卡摩托状态检测锁，防止多次并发执行导致异常
-    /// </summary>
-    private static readonly object _mavuikaMotorcycleCheckLock = new();
-
-    /// <summary>
     /// "战斗中回点移动进行中"引用计数（fight-return-to-point-seek-rotation-conflict-fix spec）。
     /// 唯一语义：当前有至少一个回点发起方正在执行移动/回点（count &gt; 0）。
     ///
@@ -1558,22 +1553,8 @@ public class AutoFightTask : ISoloTask
                         });
                         
                         //如果当前角色是玛薇卡，检测是否为摩托状态，如果是摩托状态且动作不是重击，则等待摩托状态结束，摩托状态结束后继续执行动作
-                        Task.Run(() =>{
-                            lock (_mavuikaMotorcycleCheckLock)
-                            {
-                                if (_taskParam.MavuikaMotorcycleCheckEnabled && avatar?.Name == "玛薇卡" && !command.Args.Contains("重击"))
-                                {
-                                    //摩托状态才执行
-                                    using var region = CaptureToRectArea();
-                                    
-                                    if (PathExecutor.IsMavuikaOnMotorcycleByTemplate(region) && avatar.IsActive(region)) // 这个数值是通过观察大量截图得来的，摩托状态下差值一般在10-15之间，非摩托状态一般在20以上
-                                    {
-                                        Simulation.SendInput.SimulateAction(GIActions.ElementalSkill);
-                                        // Logger.LogWarning("检测到玛薇卡处于摩托状态，等待摩托状态结束");
-                                    }
-                                }
-                            }
-                        });
+                        //（玛薇卡战斗域特化 → AvatarCombatSpecialization：Task.Run/锁/检测一并收拢）
+                        AvatarCombatSpecialization.CheckMotorcycleStateInBackground(avatar, command.Args, _taskParam.MavuikaMotorcycleCheckEnabled);
                         command.Execute(combatScenes, lastCommand);
                         //统计战斗人次
                         if (i == combatCommands.Count - 1 || command.Name != combatCommands[i + 1].Name)
@@ -3266,7 +3247,7 @@ public class AutoFightTask : ISoloTask
                     // 检查4个角色槽位的血量
                     for (var h = 0; h < 4; h++)
                     {
-                        var hasGreenBlood = CombatHealthDetector.IsSlotRedBlood(ra, h);
+                        var hasGreenBlood = CombatHealthDetector.IsSlotGreenBlood(ra, h);
                         var isActive = CombatHealthDetector.IsSlotActive(ra, h);
 
                         // 有绿血或非出战状态（可能死亡）的角色需要吃药

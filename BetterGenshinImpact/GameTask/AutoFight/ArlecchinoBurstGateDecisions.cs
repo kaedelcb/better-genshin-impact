@@ -1,8 +1,11 @@
 namespace BetterGenshinImpact.GameTask.AutoFight;
 
 /// <summary>
+/// 独立理由（R4.2）：消费方 Model/Avatar.cs 是与公版同名的高冲突文件（茶包战斗引擎改造的主战场），
+/// 决策独立为零冲突新文件正当。
 /// 阿蕾奇诺元素爆发红血门控的纯函数决策（PBT 友好，无外部依赖、无屏幕采样）。
-/// 详见 .kiro/specs/arlecchino-q-low-hp-gate/design.md。
+/// 历史来源：arlecchino-q-low-hp-gate（spec 已归档，仅存名）。
+/// 红血状态来源：CombatHealthDetector.IsRedBlood（B7 检测层）。
 /// </summary>
 public static class ArlecchinoBurstGateDecisions
 {

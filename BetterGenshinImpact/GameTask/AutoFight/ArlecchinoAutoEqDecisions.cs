@@ -1,8 +1,10 @@
 namespace BetterGenshinImpact.GameTask.AutoFight;
 
 /// <summary>
+/// 独立理由（R4.2）：消费方 Model/Avatar.cs 是与公版同名的高冲突文件（茶包战斗引擎改造的主战场），
+/// 决策独立为零冲突新文件正当。
 /// 阿蕾奇诺普攻自动EQ 放 Q 决策纯函数（PBT 友好，无外部依赖、无屏幕采样）。
-/// 详见 .kiro/specs/arlecchino-auto-eq-cd-threshold-config/design.md §Testing Strategy。
+/// 历史来源：arlecchino-auto-eq-cd-threshold-config（spec 已归档，仅存名）。
 /// </summary>
 public static class ArlecchinoAutoEqDecisions
 {
