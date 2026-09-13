@@ -301,6 +301,30 @@ internal sealed class ExternalInterfaceEventHub
     }
 
     /// <summary>
+    /// [A5-3] 龙父作业进度 → job.progress（父作业视角：currentIndex/total/currentItemName）。
+    /// 唯一挂载点 = OneDragonFlowViewModel 执行循环水位线推进处；外部观察者凭此事件族 +
+    /// ext.job.list 即可还原一条龙执行轨迹（总计划 §10 A5 验收）。绝不外抛。
+    /// </summary>
+    public void PublishJobProgress(Guid parentJobId, int currentIndex, int total, string currentItemName)
+    {
+        try
+        {
+            Publish(ExternalInterfaceEventNames.JobProgress, new
+            {
+                jobId = parentJobId.ToString("N"),
+                currentIndex,
+                total,
+                currentItemName,
+                atUtc = DateTime.UtcNow,
+            });
+        }
+        catch (Exception exception)
+        {
+            _logger.LogDebug(exception, "[job.*] 进度事件发布失败 jobId={JobId}", parentJobId);
+        }
+    }
+
+    /// <summary>
     /// 断线续传：取 lastKnownRevision 之后的缓冲事件（按订阅兴趣过滤）。
     /// 返回 resyncRequired=true 表示缺口超出缓冲（或缓冲为空但确有缺失/版本号回退），
     /// 客户端应主动拉 ext.task.status 快照校准（LSP 文档同步模型，§4.6 模块一对应实现）。

@@ -2623,6 +2623,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         // Toast.Success($"当前秘境名称: {domainConfig.domainName}, 是否自定义秘境: {custoModel}");
         
         Notify.Event(NotificationEvent.DragonStart).Success("一条龙启动");
+        var enabledOrdinal = 0; // [A5-3] 当前条目在本次执行启用序列中的序号（job.progress 的 currentIndex）
         foreach (var task in taskListCopy)
         {
             if (task is { IsEnabled: true, Action: not null }) {
@@ -2630,6 +2631,15 @@ public partial class OneDragonFlowViewModel : ViewModel
                 // resume 经 NextTaskIndex 回灌后从该条目重跑（被中断条目未完成，重跑是既定语义）。
                 // 批次跳过的配置组（由助手批次外部驱动）也会推进水位线——它们已逻辑启动。
                 _currentExecutingTaskIndex = task.Index;
+
+                // [A5-3] job.progress（父作业视角）：外部观察者凭事件族 + ext.job.list 还原执行轨迹。
+                // 父作业未登记（观察性故障容错为空）时跳过发布，绝不影响执行。
+                enabledOrdinal++;
+                if (_currentDragonJobId is { } progressParentId)
+                {
+                    BetterGenshinImpact.Service.ExternalInterface.ExternalInterfaceEventHub.Instance
+                        .PublishJobProgress(progressParentId, enabledOrdinal, enabledTaskCountall, task.Name);
+                }
 
                 if (ScriptGroupsDefault.Any(defaultSg => defaultSg.Name == task.Name && defaultSg.Name != "自动秘境") || (!custoModel && task.Name == "自动秘境"))
                 {

@@ -55,6 +55,8 @@ public static class BgiExternalEventNames
     public const string JobFailed = "job.failed";
     public const string JobCancelled = "job.cancelled";
     public const string JobHeartbeat = "job.heartbeat";
+    /// <summary>[A5-3] 龙父作业进度（currentIndex/total/currentItemName）。订阅收帧即够，当前无消费方。</summary>
+    public const string JobProgress = "job.progress";
 
     public static readonly string[] All =
     [
@@ -76,6 +78,7 @@ public static class BgiExternalEventNames
         JobFailed,
         JobCancelled,
         JobHeartbeat,
+        JobProgress,
     ];
 }
 

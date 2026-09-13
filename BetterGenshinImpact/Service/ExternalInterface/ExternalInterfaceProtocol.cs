@@ -90,6 +90,8 @@ internal static class ExternalInterfaceEventNames
     public const string JobCancelled = "job.cancelled";
     /// <summary>心跳事件（§4.4）：发布器在心跳切片接线，事件名先放行订阅。</summary>
     public const string JobHeartbeat = "job.heartbeat";
+    /// <summary>[A5-3] 龙父作业进度（父作业视角：currentIndex/total/currentItemName）。</summary>
+    public const string JobProgress = "job.progress";
 
     public static readonly string[] All =
     [
@@ -111,6 +113,7 @@ internal static class ExternalInterfaceEventNames
         JobFailed,
         JobCancelled,
         JobHeartbeat,
+        JobProgress,
     ];
 
     private static readonly HashSet<string> KnownNames = new(All, StringComparer.Ordinal);
