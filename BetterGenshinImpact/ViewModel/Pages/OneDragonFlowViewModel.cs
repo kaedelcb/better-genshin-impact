@@ -1639,6 +1639,8 @@ public partial class OneDragonFlowViewModel : ViewModel
             }
             // 异步执行一条龙
             Toast.Information($"命令行一条龙「{SelectedConfig.Name}」。");
+            // [A5-2] 命令行入口无预置父作业，提示 OnOneKeyExecute 壳按 Cli 来源新建父作业
+            RunnerContext.Instance.OneDragonJobSourceHint = BetterGenshinImpact.Service.Execution.JobSource.Cli;
             OnOneKeyExecute();
         }
         if (args.Length > 1 && args[1].Contains("startContinuousOneDragon"))
@@ -1686,6 +1688,8 @@ public partial class OneDragonFlowViewModel : ViewModel
             }
             // 异步执行一条龙
             Toast.Information($"命令行连续一条龙「{Config.SelectedOneDragonFlowPlanName}」。");
+            // [A5-2] 命令行入口来源提示（Cli）；连续执行仅首轮携带，后续轮由壳按默认 Ui 新建
+            RunnerContext.Instance.OneDragonJobSourceHint = BetterGenshinImpact.Service.Execution.JobSource.Cli;
             OnOneKeyContinuousExecutionOneKey();
         }
     }
@@ -1989,6 +1993,12 @@ public partial class OneDragonFlowViewModel : ViewModel
     /// <summary>龙级执行水位线（见 _currentExecutingTaskIndex 注释），0 = 未在执行/刚开始。</summary>
     internal int CurrentExecutingTaskIndex => _currentExecutingTaskIndex;
 
+    /// <summary>
+    /// [A5-2] 当前执行的龙父作业 Id：龙内子项描述符 ParentJobId 的来源。
+    /// 由 OnOneKeyExecute 壳设置/清空（认领 IPC 预置或按来源提示新建）。null = 未登记。
+    /// </summary>
+    private Guid? _currentDragonJobId;
+
     [RelayCommand]
     private async Task OnOneKeyContinuousExecutionOneKey()
     {
@@ -2255,6 +2265,89 @@ public partial class OneDragonFlowViewModel : ViewModel
     
     [RelayCommand]
     public async Task OnOneKeyExecute()
+    {
+        // [A5-2] 龙父作业壳（父子模型，执行体原样在 OnOneKeyExecuteCore）：
+        // IPC task.start 已登记的父作业经 RunnerContext 预置认领；否则按来源提示新建（默认 Ui）。
+        // 捕获即清空 RunnerContext（生命周期=单次执行，同 BatchGroupNames 纪律）。
+        var presetParentJobId = RunnerContext.Instance.OneDragonParentJobId;
+        var sourceHint = RunnerContext.Instance.OneDragonJobSourceHint;
+        RunnerContext.Instance.OneDragonParentJobId = null;
+        RunnerContext.Instance.OneDragonJobSourceHint = null;
+
+        BetterGenshinImpact.Service.Execution.BgiJob? dragonJob = null;
+        var createdHere = false;
+        try
+        {
+            if (presetParentJobId is { } presetId)
+            {
+                dragonJob = BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(presetId);
+                if (dragonJob == null)
+                {
+                    _logger.LogWarning("[JobRegistry] [A5-2] 预置龙父作业不存在（退化新建）: {JobId}", presetId);
+                }
+            }
+            // 未选中配置时核心体会 Toast 早退，不登记空壳父作业
+            if (dragonJob == null && !string.IsNullOrEmpty(SelectedConfig?.Name))
+            {
+                dragonJob = BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Submit(
+                    BetterGenshinImpact.Service.Execution.JobKind.OneDragon, SelectedConfig.Name,
+                    sourceHint ?? BetterGenshinImpact.Service.Execution.JobSource.Ui).Job;
+                createdHere = true;
+                BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryMarkRunning(dragonJob.JobId);
+            }
+        }
+        catch (Exception ex)
+        {
+            // 观察性故障不影响执行（注册表纪律 §3）
+            _logger.LogWarning(ex, "[JobRegistry] [A5-2] 龙父作业登记失败（不影响执行）: {Name}", SelectedConfig?.Name);
+            dragonJob = null;
+            createdHere = false;
+        }
+        _currentDragonJobId = dragonJob?.JobId;
+
+        // 终态判定口径与执行漏斗一致。_finishMark 跨次执行会残留 true，壳开头重置保证本轮换真。
+        _finishMark = false;
+        var faulted = false;
+        try
+        {
+            await OnOneKeyExecuteCore();
+        }
+        catch
+        {
+            faulted = true;
+            throw;
+        }
+        finally
+        {
+            // 终态只由创建方登记：认领（IPC）路径的终态登记在 ExecuteTaskStartCoreAsync 段末，
+            // 壳不抢它的 Failed/Cancelled 判定（重复登记幂等无操作，但先写者赢，不能先写）。
+            if (createdHere && dragonJob != null)
+            {
+                try
+                {
+                    BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryMarkTerminal(dragonJob.JobId,
+                        faulted
+                            ? BetterGenshinImpact.Service.Execution.JobState.Failed
+                            : _finishMark
+                                ? BetterGenshinImpact.Service.Execution.JobState.Succeeded
+                                : BetterGenshinImpact.Service.Execution.JobState.Cancelled,
+                        faulted
+                            ? BetterGenshinImpact.Service.Execution.JobErrorCodes.TaskStartFailed
+                            : _finishMark
+                                ? null
+                                : BetterGenshinImpact.Service.Execution.JobErrorCodes.CancelledUser,
+                        null, !_finishMark);
+                }
+                catch (Exception termEx)
+                {
+                    _logger.LogWarning(termEx, "[JobRegistry] [A5-2] 龙父作业终态登记失败: {Name}", SelectedConfig?.Name);
+                }
+            }
+            _currentDragonJobId = null;
+        }
+    }
+
+    private async Task OnOneKeyExecuteCore()
     {
         CancellationContext.Instance.Set();
 
@@ -2544,15 +2637,22 @@ public partial class OneDragonFlowViewModel : ViewModel
                     // 默认条目（自动秘境/首领讨伐等）直接 new Task().Start()，不经 ScriptService；
                     // 传入条目名作为 soloTaskName，让 task.status/包络日志携带任务身份（联机助手可识别）
                     // [A2.6] 龙内子项登记进统一注册表（Solo/OneDragonInternal），漏斗终态可靠跟踪；
-                    // 仅登记不改执行流（逐项提交/父子链接属 A5/B1）。
-                    await new TaskRunner().RunThreadAsync(async () =>
+                    // 仅登记不改执行流（逐项提交属 B2）。
+                    // [A5-2] 子项挂到龙父作业（ParentJobId）；观察槽位抢占——子作业已被漏斗显式
+                    // 登记 Rejected(task_busy)，此处留痕不静默（等待/终止策略归 B2 整龙租约）。
+                    var itemRunResult = await new TaskRunner().RunThreadAsync(async () =>
                     {
                         await task.Action();
                         await Task.Delay(1000);
                     }, soloTaskName: task.Name,
                         job: new BetterGenshinImpact.Service.Execution.JobDescriptor(
                             BetterGenshinImpact.Service.Execution.JobKind.Solo, task.Name,
-                            BetterGenshinImpact.Service.Execution.JobSource.OneDragonInternal));
+                            BetterGenshinImpact.Service.Execution.JobSource.OneDragonInternal,
+                            ParentJobId: _currentDragonJobId));
+                    if (itemRunResult == TaskRunResult.RejectedSlotBusy)
+                    {
+                        _logger.LogWarning("[A5-2] 龙内条目 {Name} 因槽位被抢占未执行（子作业已登记 Rejected(task_busy)），继续后续条目", task.Name);
+                    }
                 }
                 else
                 {
@@ -2586,10 +2686,13 @@ public partial class OneDragonFlowViewModel : ViewModel
                             RunnerContext.Instance.taskProgress = taskProgress;
 
                             IScriptService? scriptService = App.GetService<IScriptService>();
+                            // [A5-2] 子项挂到龙父作业（ParentJobId）；槽位抢占由漏斗显式登记
+                            // Rejected(task_busy)（RunMulti 无返回值，观察面走注册表，同 A2 纪律）。
                             await scriptService!.RunMulti(ScriptControlViewModel.GetNextProjects(group), group.Name, taskProgress,
                                 new BetterGenshinImpact.Service.Execution.JobDescriptor(
                                     BetterGenshinImpact.Service.Execution.JobKind.Group, group.Name,
-                                    BetterGenshinImpact.Service.Execution.JobSource.OneDragonInternal));
+                                    BetterGenshinImpact.Service.Execution.JobSource.OneDragonInternal,
+                                    ParentJobId: _currentDragonJobId));
                             await Task.Delay(1000);
                         }
                     }

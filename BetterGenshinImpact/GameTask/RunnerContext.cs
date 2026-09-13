@@ -47,6 +47,19 @@ public class RunnerContext : Singleton<RunnerContext>
     /// 会把批次名单外的组误吞（实机事故：批次只绑一条龙时龙内精英组被跳过且无人补跑）。
     /// </summary>
     public List<string>? BatchGroupNames { get; set; }
+
+    /// <summary>
+    /// [A5-2] 一条龙父作业预置：IPC task.start 已在注册表登记父作业时预置其 jobId，
+    /// OnOneKeyExecute 壳捕获并清空（生命周期=单次执行，同 BatchGroupNames 纪律）。
+    /// null = 由 OnOneKeyExecute 壳按 OneDragonJobSourceHint 新建。
+    /// </summary>
+    public Guid? OneDragonParentJobId { get; set; }
+
+    /// <summary>
+    /// [A5-2] 无预置父作业时，OnOneKeyExecute 壳新建父作业所用的来源标记
+    /// （Resume/Cli 等由调用方预置，同样捕获并清空）；null = Ui（手动/连续一条龙）。
+    /// </summary>
+    public Service.Execution.JobSource? OneDragonJobSourceHint { get; set; }
     /// <summary>
     /// 暂停实现
     /// </summary>

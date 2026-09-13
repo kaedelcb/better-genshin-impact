@@ -828,6 +828,12 @@ internal sealed class InstanceRequestHandler
                                 // null（非批次来源/老助手）= 不跳过任何组。
                                 BetterGenshinImpact.GameTask.RunnerContext.Instance.BatchGroupNames =
                                     batchGroupNames is null ? null : new List<string>(batchGroupNames);
+                                // [A5-2] 预置已登记的龙父作业，OnOneKeyExecute 壳认领（龙内子项挂到其下）；
+                                // 终态登记仍由本段末尾单一负责（壳对认领作业不登记终态）。
+                                if (dragonJob != null)
+                                {
+                                    BetterGenshinImpact.GameTask.RunnerContext.Instance.OneDragonParentJobId = dragonJob.JobId;
+                                }
                                 await vm.OnOneKeyExecute();
                             }
                             else
@@ -1747,9 +1753,21 @@ internal sealed class InstanceRequestHandler
                                 if (cfg != null)
                                 {
                                     vm.SelectedConfig = cfg;
-                                    // 设置一条龙条目索引，OnOneKeyExecute 内部会 Skip 到该条目
+                                    // 设置一条龙条目索引，OnOneKeyExecute 内部会 Skip 到该条目。
+                                    // [A5-1] 必须先持久化再执行：OnOneKeyExecute 开头 InitConfigList 会从磁盘
+                                    // 反序列化并整体替换 ConfigList/SelectedConfig，仅写内存会被覆盖丢失
+                                    // （与 ExecuteTaskStartCoreAsync startFromIndex 同款陷阱）；
+                                    // 同步界面选中配置名，否则 InitConfigList 按界面当前选中重选，可能跑错配置单。
                                     if (context.OneDragonTaskIndex > 0)
+                                    {
                                         cfg.NextTaskIndex = context.OneDragonTaskIndex;
+                                        vm.WriteConfig(cfg);
+                                    }
+                                    if (BetterGenshinImpact.GameTask.TaskContext.Instance().Config.SelectedOneDragonFlowConfigName != context.GroupName)
+                                        BetterGenshinImpact.GameTask.TaskContext.Instance().Config.SelectedOneDragonFlowConfigName = context.GroupName;
+                                    // [A5-2] 恢复入口无预置父作业，提示 OnOneKeyExecute 壳按 Resume 来源新建父作业
+                                    BetterGenshinImpact.GameTask.RunnerContext.Instance.OneDragonJobSourceHint =
+                                        BetterGenshinImpact.Service.Execution.JobSource.Resume;
                                     _ = vm.OnOneKeyExecute();
                                 }
                                 else

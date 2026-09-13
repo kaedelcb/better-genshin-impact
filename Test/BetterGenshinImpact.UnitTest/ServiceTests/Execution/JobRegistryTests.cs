@@ -114,4 +114,36 @@ public class JobRegistryTests
         Assert.Equal(JobRegistry.CurrentEpoch, registry.Epoch);
         Assert.Equal(Environment.ProcessId, JobRegistry.CurrentEpoch.ProcessId);
     }
+
+    [Fact]
+    public void Submit_WithParentJobId_ChildrenLinkToDragonParent()
+    {
+        // [A5-2] 父子模型：龙父作业存续期间子项逐个提交并挂 ParentJobId；
+        // 子项终态（含被抢占的显式 Rejected）不影响父作业存续，父作业终态独立登记。
+        var registry = new JobRegistry(startHeartbeatTimer: false);
+        var parent = registry.Submit(JobKind.OneDragon, "日常一条龙", JobSource.Ui).Job;
+        registry.TryMarkRunning(parent.JobId);
+
+        var child1 = registry.Submit(JobKind.Solo, "自动秘境", JobSource.OneDragonInternal, parentJobId: parent.JobId).Job;
+        var child2 = registry.Submit(JobKind.Group, "锄地组", JobSource.OneDragonInternal, parentJobId: parent.JobId).Job;
+
+        Assert.Equal(parent.JobId, child1.ParentJobId);
+        Assert.Equal(parent.JobId, child2.ParentJobId);
+        Assert.Null(parent.ParentJobId);
+
+        // 子项 1 正常终态；子项 2 模拟项间槽位被抢占 → 显式 Rejected（不再静默跳过）
+        registry.TryMarkRunning(child1.JobId);
+        Assert.True(registry.TryMarkTerminal(child1.JobId, JobState.Succeeded));
+        Assert.True(registry.TryMarkTerminal(child2.JobId, JobState.Rejected, JobErrorCodes.TaskBusy));
+        Assert.Equal(JobState.Running, parent.State); // 子项终态不扩散到父作业
+
+        // 快照可按 ParentJobId 还原父子拓扑
+        var snapshot = registry.Snapshot();
+        Assert.Equal(2, snapshot.Count(j => j.ParentJobId == parent.JobId));
+        Assert.Equal(JobState.Rejected, registry.Query(child2.JobId)!.State);
+
+        // 父作业终态独立登记，先写者赢
+        Assert.True(registry.TryMarkTerminal(parent.JobId, JobState.Succeeded));
+        Assert.False(registry.TryMarkTerminal(parent.JobId, JobState.Cancelled));
+    }
 }
