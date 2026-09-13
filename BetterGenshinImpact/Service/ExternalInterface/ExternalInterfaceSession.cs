@@ -32,8 +32,8 @@ internal sealed class ExternalInterfaceSession
     private readonly InstanceConnection _connection;
     private readonly ILogger _logger;
 
-    /// <summary>幂等窗口：key → (首次执行时间, 缓存的成功响应)。TTL 见 ExternalInterfaceProtocol.IdempotencyWindowSeconds。</summary>
-    private readonly ConcurrentDictionary<string, (DateTime SeenAt, InstanceIpcEnvelope Response)> _idempotencyWindow = new();
+    // [A3.4] 幂等窗口已上移到 JobRegistry（进程级、跨连接存活，总计划 §4.1）——
+    // 断线重连后新会话重发同 key 写操作也能命中缓存响应，不再重复执行。
 
     /// <summary>握手响应与事件帧共用的会话 ID（GUID），重连去重挂在它上面。</summary>
     public Guid SessionId { get; } = Guid.NewGuid();
@@ -74,6 +74,7 @@ internal sealed class ExternalInterfaceSession
             }
 
             // §3.5：写操作可携带 data.idempotencyKey；缺省按 requestId 自然幂等（同一信封重发去重）。
+            // [A3.4] 判定在注册表（进程级，跨连接存活），TTL 30min（JobRegistry.IdempotencyWindowTtl）。
             string? windowKey = null;
             if (ExternalInterfaceOperations.IsWriteOperation(request.Operation))
             {
@@ -82,14 +83,14 @@ internal sealed class ExternalInterfaceSession
                     ? $"key:{idempotencyKey}"
                     : $"rid:{request.RequestId}";
 
-                if (_idempotencyWindow.TryGetValue(windowKey, out var cached)
-                    && (DateTime.UtcNow - cached.SeenAt) < TimeSpan.FromSeconds(ExternalInterfaceProtocol.IdempotencyWindowSeconds))
+                if (BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryReplayIdempotent(
+                        windowKey, request.RequestId, out var replay))
                 {
                     _logger.LogInformation(
                         "[IDEMPOTENT_REPLAY] {Operation} key={Key} 命中幂等窗口，重放缓存响应，不再执行",
                         request.Operation,
                         windowKey);
-                    return cached.Response;
+                    return replay!;
                 }
             }
 
@@ -98,8 +99,7 @@ internal sealed class ExternalInterfaceSession
             // 只缓存成功响应：失败多为瞬态（如 task_already_running），重放失败会挡住客户端的合法重试。
             if (windowKey is not null && response.Success == true)
             {
-                PruneExpiredWindowEntries();
-                _idempotencyWindow[windowKey] = (DateTime.UtcNow, response);
+                BetterGenshinImpact.Service.Execution.JobRegistry.Instance.CacheIdempotentResponse(windowKey, response);
             }
 
             return response;
@@ -151,23 +151,6 @@ internal sealed class ExternalInterfaceSession
                 request,
                 cancellationToken)
             .ConfigureAwait(false);
-    }
-
-    private void PruneExpiredWindowEntries()
-    {
-        if (_idempotencyWindow.Count < 128)
-        {
-            return;
-        }
-
-        var expiredBefore = DateTime.UtcNow.AddSeconds(-ExternalInterfaceProtocol.IdempotencyWindowSeconds);
-        foreach (var pair in _idempotencyWindow)
-        {
-            if (pair.Value.SeenAt < expiredBefore)
-            {
-                _idempotencyWindow.TryRemove(pair.Key, out _);
-            }
-        }
     }
 }
 

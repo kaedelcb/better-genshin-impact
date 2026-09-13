@@ -149,7 +149,10 @@ public partial class MapPathingViewModel : ViewModel
 
         var fileInfo = new FileInfo(item.FilePath);
         var project = ScriptGroupProject.BuildPathingProject(fileInfo.Name, fileInfo.DirectoryName!);
-        await _scriptService.RunMulti([project]);
+        await _scriptService.RunMulti([project],
+            job: new BetterGenshinImpact.Service.Execution.JobDescriptor(
+                BetterGenshinImpact.Service.Execution.JobKind.Pathing, project.Name,
+                BetterGenshinImpact.Service.Execution.JobSource.Ui));
     }
 
     [RelayCommand]

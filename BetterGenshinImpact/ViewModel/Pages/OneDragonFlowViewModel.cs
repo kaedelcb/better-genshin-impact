@@ -2522,11 +2522,16 @@ public partial class OneDragonFlowViewModel : ViewModel
                     _logger.LogInformation($"一条龙任务执行: {finishOneTaskcount++}/{enabledoneTaskCount}");
                     // 默认条目（自动秘境/首领讨伐等）直接 new Task().Start()，不经 ScriptService；
                     // 传入条目名作为 soloTaskName，让 task.status/包络日志携带任务身份（联机助手可识别）
+                    // [A2.6] 龙内子项登记进统一注册表（Solo/OneDragonInternal），漏斗终态可靠跟踪；
+                    // 仅登记不改执行流（逐项提交/父子链接属 A5/B1）。
                     await new TaskRunner().RunThreadAsync(async () =>
                     {
                         await task.Action();
                         await Task.Delay(1000);
-                    }, soloTaskName: task.Name);
+                    }, soloTaskName: task.Name,
+                        job: new BetterGenshinImpact.Service.Execution.JobDescriptor(
+                            BetterGenshinImpact.Service.Execution.JobKind.Solo, task.Name,
+                            BetterGenshinImpact.Service.Execution.JobSource.OneDragonInternal));
                 }
                 else
                 {
@@ -2560,7 +2565,10 @@ public partial class OneDragonFlowViewModel : ViewModel
                             RunnerContext.Instance.taskProgress = taskProgress;
 
                             IScriptService? scriptService = App.GetService<IScriptService>();
-                            await scriptService!.RunMulti(ScriptControlViewModel.GetNextProjects(group), group.Name, taskProgress);
+                            await scriptService!.RunMulti(ScriptControlViewModel.GetNextProjects(group), group.Name, taskProgress,
+                                new BetterGenshinImpact.Service.Execution.JobDescriptor(
+                                    BetterGenshinImpact.Service.Execution.JobKind.Group, group.Name,
+                                    BetterGenshinImpact.Service.Execution.JobSource.OneDragonInternal));
                             await Task.Delay(1000);
                         }
                     }

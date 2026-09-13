@@ -39,6 +39,13 @@ internal static class ExternalInterfaceOperations
     /// 事件推送只是快速路径，终态必须可拉取校验——单帧事件丢失不再让等待方永久挂起。</summary>
     public const string TaskQueueStatus = "ext.task.queueStatus";
 
+    /// <summary>[A3.2] 统一作业注册表拉取（总计划 §6.4）：按 jobId 查询作业生命周期。
+    /// jobId 与协调器 taskHandle 同一 Guid 别名；not_found + bgiEpoch 组合区分"句柄淘汰"与"BGI 重启"（§4.2）。</summary>
+    public const string JobStatus = "ext.job.status";
+
+    /// <summary>[A3.2] 注册表全量快照（在队+在跑+未淘汰终态）：助手 reconcile 循环（§4.5）的输入。</summary>
+    public const string JobList = "ext.job.list";
+
     // 事件面
     public const string EventSubscribe = "ext.event.subscribe";
     public const string EventUnsubscribe = "ext.event.unsubscribe";
@@ -74,6 +81,16 @@ internal static class ExternalInterfaceEventNames
     public const string TaskQueueCancelled = "task.queueCancelled";
     public const string TaskSlotReleased = "task.slotReleased";
 
+    // [A3.1] 统一作业注册表事件族（总计划 §6.4）：JobRegistry.Transitioned 为唯一事实源。
+    // 既有 task.* 事件保留双发一个版本周期作兼容别名，不删。
+    public const string JobQueued = "job.queued";
+    public const string JobStarted = "job.started";
+    public const string JobCompleted = "job.completed";
+    public const string JobFailed = "job.failed";
+    public const string JobCancelled = "job.cancelled";
+    /// <summary>心跳事件（§4.4）：发布器在心跳切片接线，事件名先放行订阅。</summary>
+    public const string JobHeartbeat = "job.heartbeat";
+
     public static readonly string[] All =
     [
         TaskStarted,
@@ -88,6 +105,12 @@ internal static class ExternalInterfaceEventNames
         TaskFailed,
         TaskQueueCancelled,
         TaskSlotReleased,
+        JobQueued,
+        JobStarted,
+        JobCompleted,
+        JobFailed,
+        JobCancelled,
+        JobHeartbeat,
     ];
 
     private static readonly HashSet<string> KnownNames = new(All, StringComparer.Ordinal);
@@ -103,8 +126,7 @@ internal static class ExternalInterfaceEventNames
 /// </summary>
 internal static class ExternalInterfaceProtocol
 {
-    /// <summary>幂等窗口 TTL（§3.5）。</summary>
-    public const int IdempotencyWindowSeconds = 60;
+    /// <summary>幂等窗口 TTL 已上移：<see cref="BetterGenshinImpact.Service.Execution.JobRegistry.IdempotencyWindowTtl"/>（A3.4，进程级 30min）。</summary>
 
     /// <summary>"联机锄地上线"等轻量任务的近因窗口（与 HandleTaskStatus 的 30s 语义一致）。</summary>
     public const double OnlineRecentWindowSeconds = 30;
@@ -145,11 +167,20 @@ internal static class ExternalInterfaceProtocol
                 // 终态可拉取：ext.task.queueStatus 按句柄查询队列项生命周期（事件丢失时的校准安全网）
                 ["task.queueStatus"] = true,
                 ["idempotency.window"] = true,
+                // [A3.1] 统一作业注册表观察面：job.* 事件族 + ext.job.status/ext.job.list 拉取
+                // （jobId 与协调器 taskHandle 同一 Guid 别名，总计划 §6.4/§6.5）
+                ["job.registry"] = true,
+            },
+            // [A3.1] 进程纪元 fencing（总计划 §4.2）：hello/事件帧/状态响应统一携带
+            ["bgiEpoch"] = new JObject
+            {
+                ["processId"] = BetterGenshinImpact.Service.Execution.JobRegistry.CurrentEpoch.ProcessId,
+                ["startTicksUtc"] = BetterGenshinImpact.Service.Execution.JobRegistry.CurrentEpoch.StartTicksUtc,
             },
         };
     }
 
-    /// <summary>构造服务端 → 客户端事件帧 data：{ event, stateRevision, timestampUtc, payload }。</summary>
+    /// <summary>构造服务端 → 客户端事件帧 data：{ event, stateRevision, timestampUtc, bgiEpoch, payload }。</summary>
     public static JObject BuildEventData(
         string eventName,
         long stateRevision,
@@ -160,6 +191,12 @@ internal static class ExternalInterfaceProtocol
             ["event"] = eventName,
             ["stateRevision"] = stateRevision,
             ["timestampUtc"] = DateTime.UtcNow,
+            // [A3.1] 纪元 fencing 全帧携带（§4.2）：客户端据此识别 BGI 重启，旧纪元句柄一律失效
+            ["bgiEpoch"] = new JObject
+            {
+                ["processId"] = BetterGenshinImpact.Service.Execution.JobRegistry.CurrentEpoch.ProcessId,
+                ["startTicksUtc"] = BetterGenshinImpact.Service.Execution.JobRegistry.CurrentEpoch.StartTicksUtc,
+            },
             ["payload"] = payload is null
                 ? new JObject()
                 : JObject.FromObject(payload, InstanceIpcProtocol.Serializer),

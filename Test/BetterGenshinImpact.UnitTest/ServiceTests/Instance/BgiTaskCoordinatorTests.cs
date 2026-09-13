@@ -62,7 +62,7 @@ public class BgiTaskCoordinatorTests
                 groupName,
                 null,
                 0,
-                _ =>
+                (_, __) =>
                 {
                     ExecutedOrder.Enqueue(groupName);
                     return Task.FromResult(false);
@@ -302,10 +302,72 @@ public class BgiTaskCoordinatorTests
     {
         using var h = new Harness(slotFree: true);
         var submitted = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(
-            0, "组A", null, 0, _ => Task.FromResult(true))); // 执行中被取消（F11 语义）
+            0, "组A", null, 0, (_, __) => Task.FromResult(true))); // 执行中被取消（F11 语义）
 
         Assert.True(Harness.WaitFor(() =>
             h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status == "completed"));
         Assert.True(h.Coordinator.QueryItemStatus(submitted.TaskHandle).Cancelled);
+    }
+
+    // ===== [A2.4] JobRegistry 整编：taskHandle==jobId 别名 + 终态同源进注册表 =====
+    // 单测中 Executor 是测试 lambda（漏斗 TaskRunner 不参与），协调器是唯一写入者；
+    // 生产路径的"漏斗先写、协调器 TryMark 幂等无操作"由 TryMarkTerminal 的已终态返回 false 保证。
+
+    [Fact]
+    public void JobRegistry_Submit_RegistersQueuedJobWithTaskHandleAlias()
+    {
+        using var h = new Harness(slotFree: false);
+        var submitted = h.Submit("组A", generation: 7);
+
+        var job = BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(submitted.TaskHandle);
+        Assert.NotNull(job);
+        Assert.Equal(submitted.TaskHandle, job.JobId); // taskHandle==jobId 同一 Guid 别名
+        Assert.Equal(BetterGenshinImpact.Service.Execution.JobState.Queued, job.State);
+        Assert.Equal(BetterGenshinImpact.Service.Execution.JobSource.Ext, job.Source);
+        Assert.Equal(BetterGenshinImpact.Service.Execution.JobKind.Group, job.Kind);
+        Assert.Equal(7, job.Generation);
+        Assert.Equal("组A", job.Name);
+    }
+
+    [Fact]
+    public void JobRegistry_QueueCancelled_MarkedTerminalInRegistry()
+    {
+        using var h = new Harness(slotFree: false);
+        var submitted = h.Submit("组A", generation: 0);
+        h.Coordinator.CancelByHandle(submitted.TaskHandle);
+
+        var job = BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(submitted.TaskHandle);
+        Assert.NotNull(job);
+        Assert.Equal(BetterGenshinImpact.Service.Execution.JobState.Cancelled, job.State);
+        Assert.Equal(BetterGenshinImpact.Service.Execution.JobErrorCodes.CancelledUser, job.ErrorCode);
+    }
+
+    [Fact]
+    public void JobRegistry_CompletedExecution_MarkedSucceededInRegistry()
+    {
+        using var h = new Harness(slotFree: true);
+        var submitted = h.Submit("组A", generation: 0);
+
+        Assert.True(Harness.WaitFor(() =>
+            h.Events.Any(e => e.Name == ExternalInterfaceEventNames.TaskCompleted)));
+        var job = BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(submitted.TaskHandle);
+        Assert.NotNull(job);
+        Assert.Equal(BetterGenshinImpact.Service.Execution.JobState.Succeeded, job.State);
+        Assert.NotNull(job.StartedAtUtc); // 派发点 Running 推进已落地
+        Assert.NotNull(job.FinishedAtUtc);
+    }
+
+    [Fact]
+    public void JobRegistry_SlotWaitTimeout_MarkedFailedBusyInRegistry()
+    {
+        using var h = new Harness(slotFree: false, slotWaitTimeout: TimeSpan.FromMilliseconds(300));
+        var submitted = h.Submit("组A", generation: 0);
+
+        Assert.True(Harness.WaitFor(() =>
+            h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status == "failed"));
+        var job = BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(submitted.TaskHandle);
+        Assert.NotNull(job);
+        Assert.Equal(BetterGenshinImpact.Service.Execution.JobState.Failed, job.State);
+        Assert.Equal(BetterGenshinImpact.Service.Execution.JobErrorCodes.TaskBusy, job.ErrorCode);
     }
 }

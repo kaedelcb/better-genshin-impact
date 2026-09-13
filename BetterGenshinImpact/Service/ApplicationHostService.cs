@@ -88,7 +88,7 @@ public class ApplicationHostService(
                         var names = args.Skip(2).ToArray().Select(x => x.Trim()).ToArray();
                         // 启动调度器
                         var scheduler = App.GetService<ScriptControlViewModel>();
-                        scheduler?.OnStartMultiScriptGroupWithNamesAsync(names);
+                        scheduler?.OnStartMultiScriptGroupWithNamesAsync(BetterGenshinImpact.Service.Execution.JobSource.Cli, names);
                     }
                 }else if (args[1].Trim().Equals("--TaskProgress", StringComparison.InvariantCultureIgnoreCase))
                 {

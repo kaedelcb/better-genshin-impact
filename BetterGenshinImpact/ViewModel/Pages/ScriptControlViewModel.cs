@@ -10,6 +10,7 @@ using BetterGenshinImpact.GameTask.TaskProgress;
 using BetterGenshinImpact.Helpers.Ui;
 using BetterGenshinImpact.Model;
 using BetterGenshinImpact.Service.Interface;
+using BetterGenshinImpact.Service.Execution;
 using BetterGenshinImpact.View.Controls.Webview;
 using BetterGenshinImpact.View.Pages.View;
 using BetterGenshinImpact.View.Behavior;
@@ -2466,7 +2467,8 @@ public partial class ScriptControlViewModel : ViewModel
         RunnerContext.Instance.taskProgress = taskProgress;
         taskProgress.CurrentScriptGroupName = SelectedScriptGroup.Name;
         TaskProgressManager.SaveTaskProgress(taskProgress);
-        await _scriptService.RunMulti(GetNextProjects(SelectedScriptGroup), SelectedScriptGroup.Name, taskProgress);
+        await _scriptService.RunMulti(GetNextProjects(SelectedScriptGroup), SelectedScriptGroup.Name, taskProgress,
+            new JobDescriptor(JobKind.Group, SelectedScriptGroup.Name, JobSource.Ui));
     }
 
     [RelayCommand]
@@ -2669,7 +2671,7 @@ public partial class ScriptControlViewModel : ViewModel
         }
     }
 
-    public async Task OnContinueTaskProgressAsync(string name, List<TaskProgress>? taskProgresses = null)
+    public async Task OnContinueTaskProgressAsync(string name, List<TaskProgress>? taskProgresses = null, JobSource source = JobSource.Ui)
     {
         if (taskProgresses == null)
         {
@@ -2702,7 +2704,7 @@ public partial class ScriptControlViewModel : ViewModel
             }
             else
             {
-                await StartGroups(sg, taskProgress);
+                await StartGroups(sg, taskProgress, source: source);
             }
 
         }
@@ -2729,7 +2731,7 @@ public partial class ScriptControlViewModel : ViewModel
             taskProgressName = names[0];
         }
 
-        await OnContinueTaskProgressAsync(taskProgressName);
+        await OnContinueTaskProgressAsync(taskProgressName, source: JobSource.Cli);
     }
 
     [RelayCommand]
@@ -2868,7 +2870,8 @@ public partial class ScriptControlViewModel : ViewModel
         throw new NotImplementedException();
     }
 
-    public async Task OnStartMultiScriptGroupWithNamesAsync(params string[] names)
+    /// <param name="source">[A2] 作业来源；现有两个调用方均为命令行（ApplicationHostService/HomePageViewModel 的命令行分发），默认 Cli。</param>
+    public async Task OnStartMultiScriptGroupWithNamesAsync(JobSource source = JobSource.Cli, params string[] names)
     {
         if (ScriptGroups.Count == 0)
         {
@@ -2903,7 +2906,7 @@ public partial class ScriptControlViewModel : ViewModel
             {
                 TaskContext.Instance().Config.NextScriptGroupName = string.Empty;
             }
-            await StartGroups(scriptGroups);
+            await StartGroups(scriptGroups, source: source);
         }
         else
         {
@@ -2911,7 +2914,8 @@ public partial class ScriptControlViewModel : ViewModel
         }
     }
 
-    public async Task StartGroups(List<ScriptGroup> scriptGroups, TaskProgress? taskProgress = null, bool loop = false)
+    /// <param name="source">[A2] 作业来源（写入 JobRegistry 观察用，不影响执行语义）。</param>
+    public async Task StartGroups(List<ScriptGroup> scriptGroups, TaskProgress? taskProgress = null, bool loop = false, JobSource source = JobSource.Ui)
     {
         _logger.LogInformation("开始连续执行选中配置组:{Names}", string.Join(",", scriptGroups.Select(x => x.Name)));
         try
@@ -2950,7 +2954,8 @@ public partial class ScriptControlViewModel : ViewModel
                 }
                 taskProgress.CurrentScriptGroupName = scriptGroup.Name;
                 TaskProgressManager.SaveTaskProgress(taskProgress);
-                await _scriptService.RunMulti(GetNextProjects(scriptGroup), scriptGroup.Name, taskProgress);
+                await _scriptService.RunMulti(GetNextProjects(scriptGroup), scriptGroup.Name, taskProgress,
+                    new JobDescriptor(JobKind.Group, scriptGroup.Name, source));
                 await Task.Delay(2000);
             }
 
@@ -2965,7 +2970,7 @@ public partial class ScriptControlViewModel : ViewModel
                     taskProgress.LastScriptGroupName = null;
                     taskProgress.LastSuccessScriptGroupProjectInfo = null;
                     taskProgress.Next = null;
-                    await StartGroups(scriptGroups, taskProgress);
+                    await StartGroups(scriptGroups, taskProgress, source: source);
                 }
                 else
                 {

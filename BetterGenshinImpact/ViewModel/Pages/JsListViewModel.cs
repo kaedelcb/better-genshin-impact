@@ -128,7 +128,10 @@ public partial class JsListViewModel : ViewModel
             _logger.LogWarning("此脚本存在配置，可能无法直接从脚本界面运行，建议请添加至【调度器】，并右键修改配置后使用！");
         }
 
-        await _scriptService.RunMulti([new ScriptGroupProject(item)]);
+        await _scriptService.RunMulti([new ScriptGroupProject(item)],
+            job: new BetterGenshinImpact.Service.Execution.JobDescriptor(
+                BetterGenshinImpact.Service.Execution.JobKind.Script, item.Manifest.Name,
+                BetterGenshinImpact.Service.Execution.JobSource.Ui));
     }
 
     [RelayCommand]

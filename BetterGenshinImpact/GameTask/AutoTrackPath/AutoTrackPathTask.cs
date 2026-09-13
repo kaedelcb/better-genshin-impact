@@ -1,4 +1,4 @@
-﻿using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.Core.Simulator;
 using BetterGenshinImpact.Core.Simulator.Extensions;
@@ -57,6 +57,12 @@ public class AutoTrackPathTask
         _way = JsonSerializer.Deserialize<GiPath>(wayJson, ConfigService.JsonOptions) ?? throw new Exception("way json deserialize failed");
     }
 
+    /// <summary>
+    /// [A1.2 已知旁路持锁点] 本任务绕开 TaskRunner.RunCurrentAsync 直接持有 TaskSemaphore：
+    /// 抢锁失败仅 ERR 日志静默返回（无显式结果），启动/结束靠 EventObserver 200ms 边沿兜底上报。
+    /// 语义与 TaskRunner 不一致（不重置 CancellationContext、不走 Init/End 清理），
+    /// 待 A2 注册表切片收编为统一作业；此处仅显式标记，行为不变。
+    /// </summary>
     public async void Start()
     {
         var hasLock = false;

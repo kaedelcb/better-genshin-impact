@@ -192,7 +192,7 @@ public partial class HomePageViewModel : ViewModel, IDisposable
             {
                 // 启动调度器（与冷启动入口一致，fire-and-forget 调用）
                 var scheduler = App.GetService<ScriptControlViewModel>();
-                _ = scheduler?.OnStartMultiScriptGroupWithNamesAsync(commandLineOptions.GroupNames);
+                _ = scheduler?.OnStartMultiScriptGroupWithNamesAsync(BetterGenshinImpact.Service.Execution.JobSource.Cli, commandLineOptions.GroupNames);
             }
         }
 

@@ -228,6 +228,79 @@ internal sealed class ExternalInterfaceEventHub
     }
 
     /// <summary>
+    /// [A3.1] 注册表状态转换 → job.* 事件（总计划 §6.4，唯一挂载点 = JobRegistry.Transitioned）。
+    /// 状态映射：Queued→job.queued / Running→job.started / Succeeded→job.completed /
+    /// Failed|Rejected→job.failed（errorCode 区分原因：task_busy/queue_full/task_start_failed）/
+    /// Cancelled→job.cancelled；Cancelling 过渡态不发布（留 stateHistory，A4 按需再加）。
+    /// 纪元由 BuildEventData 全帧携带，payload 不重复。绝不外抛（注册表锁外触发的最后一道防线）。
+    /// </summary>
+    public void PublishJobTransition(BetterGenshinImpact.Service.Execution.BgiJob job)
+    {
+        try
+        {
+            var eventName = job.State switch
+            {
+                BetterGenshinImpact.Service.Execution.JobState.Queued => ExternalInterfaceEventNames.JobQueued,
+                BetterGenshinImpact.Service.Execution.JobState.Running => ExternalInterfaceEventNames.JobStarted,
+                BetterGenshinImpact.Service.Execution.JobState.Succeeded => ExternalInterfaceEventNames.JobCompleted,
+                BetterGenshinImpact.Service.Execution.JobState.Failed
+                    or BetterGenshinImpact.Service.Execution.JobState.Rejected => ExternalInterfaceEventNames.JobFailed,
+                BetterGenshinImpact.Service.Execution.JobState.Cancelled => ExternalInterfaceEventNames.JobCancelled,
+                _ => null,
+            };
+            if (eventName is null)
+            {
+                return;
+            }
+
+            Publish(eventName, new
+            {
+                jobId = job.JobId.ToString("N"),
+                parentJobId = job.ParentJobId?.ToString("N"),
+                kind = job.Kind.ToString(),
+                name = job.Name,
+                source = job.Source.ToString(),
+                generation = job.Generation,
+                errorCode = job.ErrorCode,
+                errorMessage = job.ErrorMessage,
+                wasCancelled = job.WasCancelled,
+                atUtc = DateTime.UtcNow,
+            });
+        }
+        catch (Exception exception)
+        {
+            _logger.LogDebug(exception, "[job.*] 注册表转换事件发布失败 state={State}", job.State);
+        }
+    }
+
+    /// <summary>
+    /// [A3-心跳] 在跑作业存活信号 → job.heartbeat（唯一挂载点 = JobRegistry.Heartbeated，15s 节拍）。
+    /// 定位：事件侧活性探针/唤醒提示；事实源仍是 ext.job.list pull（助手 reconcile 不依赖心跳推进流程）。
+    /// 绝不外抛（注册表定时器回调的最后一道防线）。
+    /// </summary>
+    public void PublishJobHeartbeat(BetterGenshinImpact.Service.Execution.BgiJob job)
+    {
+        try
+        {
+            Publish(ExternalInterfaceEventNames.JobHeartbeat, new
+            {
+                jobId = job.JobId.ToString("N"),
+                parentJobId = job.ParentJobId?.ToString("N"),
+                kind = job.Kind.ToString(),
+                name = job.Name,
+                source = job.Source.ToString(),
+                generation = job.Generation,
+                lastHeartbeatAtUtc = job.LastHeartbeatAtUtc,
+                atUtc = DateTime.UtcNow,
+            });
+        }
+        catch (Exception exception)
+        {
+            _logger.LogDebug(exception, "[job.*] 心跳事件发布失败 jobId={JobId}", job.JobId);
+        }
+    }
+
+    /// <summary>
     /// 断线续传：取 lastKnownRevision 之后的缓冲事件（按订阅兴趣过滤）。
     /// 返回 resyncRequired=true 表示缺口超出缓冲（或缓冲为空但确有缺失/版本号回退），
     /// 客户端应主动拉 ext.task.status 快照校准（LSP 文档同步模型，§4.6 模块一对应实现）。

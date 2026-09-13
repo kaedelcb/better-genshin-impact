@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using BetterGenshinImpact.Service.Instance;
 using BetterGenshinImpact.Service.Instance.MessageHandlers;
 
@@ -40,10 +42,85 @@ internal static class ExternalInterfaceQueryPlane
                 response = HandleTaskQueueStatus(request);
                 return true;
 
+            case ExternalInterfaceOperations.JobStatus:
+                response = HandleJobStatus(request);
+                return true;
+
+            case ExternalInterfaceOperations.JobList:
+                response = HandleJobList(request);
+                return true;
+
             default:
                 response = null!;
                 return false;
         }
+    }
+
+    /// <summary>[A3.2] 作业序列化（ext.job.status/list 共用形态）。state 小写字符串与 task.* 词汇表同风格。</summary>
+    private static object SerializeJob(BetterGenshinImpact.Service.Execution.BgiJob job) => new
+    {
+        jobId = job.JobId.ToString("N"),
+        parentJobId = job.ParentJobId?.ToString("N"),
+        kind = job.Kind.ToString(),
+        name = job.Name,
+        source = job.Source.ToString(),
+        generation = job.Generation,
+        state = job.State.ToString().ToLowerInvariant(),
+        errorCode = job.ErrorCode,
+        errorMessage = job.ErrorMessage,
+        wasCancelled = job.WasCancelled,
+        enqueuedAtUtc = job.EnqueuedAtUtc,
+        startedAtUtc = job.StartedAtUtc,
+        finishedAtUtc = job.FinishedAtUtc,
+        lastHeartbeatAtUtc = job.LastHeartbeatAtUtc,
+    };
+
+    /// <summary>[A3.2] 纪元帧片段（§4.2）：静态常量，不为查询创建注册表实例。</summary>
+    private static object EpochPayload() => new
+    {
+        processId = BetterGenshinImpact.Service.Execution.JobRegistry.CurrentEpoch.ProcessId,
+        startTicksUtc = BetterGenshinImpact.Service.Execution.JobRegistry.CurrentEpoch.StartTicksUtc,
+    };
+
+    /// <summary>[A3.2] ext.job.status：按 jobId 查单个作业。not_found + bgiEpoch 供客户端区分淘汰/重启。</summary>
+    private static InstanceIpcEnvelope HandleJobStatus(InstanceIpcEnvelope request)
+    {
+        var jobIdRaw = request.Data?["jobId"]?.ToString();
+        if (!Guid.TryParse(jobIdRaw, out var jobId))
+        {
+            return InstanceIpcEnvelope.Failure(request, "invalid_request", "jobId 缺失或格式错误");
+        }
+
+        // IsCreated 守卫：注册表未创建 = 本进程从未有作业登记，等价 not_found（不为查询创建单例）
+        var job = BetterGenshinImpact.Service.Execution.JobRegistry.IsCreated
+            ? BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(jobId)
+            : null;
+        if (job is null)
+        {
+            return InstanceIpcEnvelope.Response(request, new { status = "not_found", bgiEpoch = EpochPayload() });
+        }
+
+        return InstanceIpcEnvelope.Response(request, new
+        {
+            status = job.State.ToString().ToLowerInvariant(),
+            job = SerializeJob(job),
+            bgiEpoch = EpochPayload(),
+        });
+    }
+
+    /// <summary>[A3.2] ext.job.list：全量快照（reconcile 输入）。附带触发器总开关状态（A2.5 只读视图出口）。</summary>
+    private static InstanceIpcEnvelope HandleJobList(InstanceIpcEnvelope request)
+    {
+        var registryCreated = BetterGenshinImpact.Service.Execution.JobRegistry.IsCreated;
+        var jobs = registryCreated
+            ? BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Snapshot()
+            : (IReadOnlyList<BetterGenshinImpact.Service.Execution.BgiJob>)[];
+        return InstanceIpcEnvelope.Response(request, new
+        {
+            bgiEpoch = EpochPayload(),
+            triggerDispatcherRunning = registryCreated && BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TriggerDispatcherRunning,
+            jobs = jobs.Select(SerializeJob).ToArray(),
+        });
     }
 
     /// <summary>

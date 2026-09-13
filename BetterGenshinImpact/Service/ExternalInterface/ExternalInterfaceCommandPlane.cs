@@ -81,7 +81,8 @@ internal static class ExternalInterfaceCommandPlane
             groupName,
             configName,
             startFromIndex,
-            _ => handler.ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, batchGroupNames));
+            // [A2.4] Executor 首参 = taskHandle（注册表 jobId 别名），透传执行段供漏斗认领既有 Queued 作业
+            (handle, _) => handler.ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, batchGroupNames, generation, handle));
 
         var result = BgiTaskCoordinator.Instance.Submit(submission);
         return result.Status switch

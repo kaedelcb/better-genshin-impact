@@ -12,6 +12,7 @@ using BetterGenshinImpact.Helpers;
 using Wpf.Ui.Violeta.Controls;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
 using BetterGenshinImpact.Service;
+using BetterGenshinImpact.Service.Execution;
 using BetterGenshinImpact.Service.Notification;
 using BetterGenshinImpact.Service.Notification.Model.Enum;
 using BetterGenshinImpact.ViewModel;
@@ -43,19 +44,57 @@ public class TaskRunner
     /// <param name="action"></param>
     /// <param name="resetCancellationContext">任务开始时是否重建 CancellationContext。</param>
     /// <param name="clearCancellationContextOnLockFailure">获取信号量锁失败时是否清理 CancellationContext。</param>
-    /// <returns></returns>
-    public async Task RunCurrentAsync(Func<Task> action, bool resetCancellationContext = true, bool clearCancellationContextOnLockFailure = false, string? soloTaskName = null)
+    /// <param name="job">[A2] 作业描述符：非空时登记进 JobRegistry 并随执行推进状态；null = 不登记（旧行为）。</param>
+    /// <returns>[A1.1] 显式执行结果：RejectedSlotBusy = 槽位被占本次未执行（旧行为仅 ERR 日志静默返回）。</returns>
+    public async Task<TaskRunResult> RunCurrentAsync(Func<Task> action, bool resetCancellationContext = true, bool clearCancellationContextOnLockFailure = false, string? soloTaskName = null, JobDescriptor? job = null)
     {
+        // [A2 统一注册表] 登记点在抢锁之前：连"被拒"也是注册表里的一条事实（Rejected 终态），不再静默丢失。
+        // 观察性故障不影响执行：登记/推进全部容错留痕。
+        // [A2.4] job.JobId 非空 = 认领协调器入队时已建的 Queued 作业（taskHandle==jobId 别名）；
+        // 认领失败（注册表登记被容错跳过等）退化新建，日志留痕。
+        BgiJob? registeredJob = null;
+        if (job != null)
+        {
+            try
+            {
+                if (job.JobId is { } adoptId)
+                {
+                    registeredJob = JobRegistry.Instance.Query(adoptId);
+                    if (registeredJob == null)
+                    {
+                        _logger.LogWarning("[JobRegistry] 认领作业不存在（退化新建）: jobId={JobId} name={Name}", adoptId, job.Name);
+                        registeredJob = JobRegistry.Instance.Submit(job.Kind, job.Name, job.Source, job.Generation, job.IdempotencyKey, job.ParentJobId).Job;
+                    }
+                }
+                else
+                {
+                    registeredJob = JobRegistry.Instance.Submit(job.Kind, job.Name, job.Source, job.Generation, job.IdempotencyKey, job.ParentJobId).Job;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[JobRegistry] 作业登记失败（不影响执行）: {Name}", job.Name);
+            }
+        }
+
         // 加锁
         var hasLock = await TaskSemaphore.WaitAsync(0);
         if (!hasLock)
         {
             _logger.LogError("任务启动失败：当前存在正在运行中的独立任务，请不要重复执行任务！");
+            if (registeredJob != null)
+            {
+                TryRegistryTerminal(registeredJob.JobId, JobState.Rejected, JobErrorCodes.TaskBusy, "任务槽位被占用，未执行", false);
+            }
             if (clearCancellationContextOnLockFailure)
             {
                 CancellationContext.Instance.Clear();
             }
-            return;
+            return TaskRunResult.RejectedSlotBusy;
+        }
+        if (registeredJob != null)
+        {
+            TryRegistryTransition(registeredJob.JobId, JobState.Running);
         }
         // 独立任务身份：拿锁成功后立即写入，保证 ext 观察器 200ms 边沿（task.started）与
         // task.status 查询都能读到任务名；finally 中随任务结束清空。
@@ -64,6 +103,7 @@ public class TaskRunner
         // [ext事件直挂] task.started 逐次必达：观察器 200ms 边沿会漏掉连续条目的快速切换，
         // 由引擎直接发布（理由详见 ExternalInterfaceEventHub.PublishTaskStarted 注释）
         BetterGenshinImpact.Service.ExternalInterface.ExternalInterfaceEventHub.Instance.PublishTaskStarted(soloTaskName);
+        var faulted = false; // [A2] catch(Exception) 命中标记，供注册表终态判定
         try
         {
             _logger.LogInformation("→ {Text}", string.IsNullOrEmpty(soloTaskName) ? "任务启动！" : soloTaskName + "，任务启动！");
@@ -99,6 +139,7 @@ public class TaskRunner
         }
         catch (Exception e)
         {
+            faulted = true;
             Notify.Event(NotificationEvent.TaskError).Error("任务执行异常", e);
             _logger.LogError(e.Message);
             _logger.LogDebug(e.StackTrace);
@@ -129,6 +170,17 @@ public class TaskRunner
             RunnerContext.Instance.SoloTaskName = null;
             RunnerContext.Instance.Clear();
 
+            // [A2 统一注册表] 终态登记先于槽位释放/事件发布（总计划 §6.3：终态登记先于终态事件）。
+            // 判定依据 wasCancelled/faulted 两个事实源；NormalEndException 的"手动取消或正常结束"
+            // 固有歧义不在此消解（与 task.stopped(wasCancelled) 的既有口径一致）。
+            if (registeredJob != null)
+            {
+                TryRegistryTerminal(registeredJob.JobId,
+                    faulted ? JobState.Failed : wasCancelled ? JobState.Cancelled : JobState.Succeeded,
+                    faulted ? JobErrorCodes.TaskStartFailed : wasCancelled ? JobErrorCodes.CancelledUser : null,
+                    null, wasCancelled);
+            }
+
             // 释放锁
             if (hasLock)
             {
@@ -140,6 +192,8 @@ public class TaskRunner
                 BetterGenshinImpact.Service.ExternalInterface.ExternalInterfaceEventHub.Instance.PublishTaskStopped(wasCancelled);
             }
         }
+
+        return TaskRunResult.Ran;
     }
 
     public void FireAndForget(Func<Task> action)
@@ -147,12 +201,12 @@ public class TaskRunner
         Task.Run(() => RunCurrentAsync(action));
     }
 
-    public async Task RunThreadAsync(Func<Task> action, string? soloTaskName = null)
+    public async Task<TaskRunResult> RunThreadAsync(Func<Task> action, string? soloTaskName = null, JobDescriptor? job = null)
     {
-        await Task.Run(() => RunCurrentAsync(action, soloTaskName: soloTaskName));
+        return await Task.Run(() => RunCurrentAsync(action, soloTaskName: soloTaskName, job: job));
     }
 
-    public async Task RunSoloTaskAsync(ISoloTask soloTask)
+    public async Task RunSoloTaskAsync(ISoloTask soloTask, JobSource source = JobSource.Ui)
     {
         // 启动等待之前先进行取消操作的初始化，便于在任务开始前终止任务.
         CancellationContext.Instance.Set();
@@ -172,7 +226,41 @@ public class TaskRunner
             async () => await soloTask.Start(CancellationContext.Instance.Cts.Token),
             resetCancellationContext: false,
             clearCancellationContextOnLockFailure: true,
-            soloTaskName: soloTask.Name));
+            soloTaskName: soloTask.Name,
+            job: new JobDescriptor(JobKind.Solo, soloTask.Name, source)));
+    }
+
+    /// <summary>[A2] 注册表状态推进的容错留痕包装：观察性故障绝不影响任务执行（纪律 §3）。</summary>
+    private void TryRegistryTransition(Guid jobId, JobState state)
+    {
+        try
+        {
+            if (state == JobState.Running)
+            {
+                JobRegistry.Instance.TryMarkRunning(jobId);
+            }
+            else
+            {
+                JobRegistry.Instance.TryMarkCancelling(jobId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[JobRegistry] 作业状态推进失败（不影响执行）: {JobId} → {State}", jobId, state);
+        }
+    }
+
+    /// <summary>[A2] 注册表终态登记的容错留痕包装。</summary>
+    private void TryRegistryTerminal(Guid jobId, JobState terminal, string? errorCode, string? errorMessage, bool wasCancelled)
+    {
+        try
+        {
+            JobRegistry.Instance.TryMarkTerminal(jobId, terminal, errorCode, errorMessage, wasCancelled);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[JobRegistry] 作业终态登记失败（不影响执行）: {JobId} → {State}", jobId, terminal);
+        }
     }
 
     public void Init()

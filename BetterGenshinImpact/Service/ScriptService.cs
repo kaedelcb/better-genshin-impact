@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -22,6 +22,7 @@ using BetterGenshinImpact.GameTask.LogParse;
 using BetterGenshinImpact.GameTask.TaskProgress;
 using BetterGenshinImpact.Service.Interface;
 using BetterGenshinImpact.Service.Notification;
+using BetterGenshinImpact.Service.Execution;
 using BetterGenshinImpact.Service.Notification.Model.Enum;
 using BetterGenshinImpact.ViewModel.Pages;
 using Microsoft.Extensions.Logging;
@@ -132,7 +133,8 @@ public partial class ScriptService : IScriptService
     // TaskDispatcherEnabled（若已被另一条路径启动则跳过）。单机只有一条路径触发，锁无感知。
     private static readonly SemaphoreSlim StartGameLock = new(1, 1);
     
-    public async Task RunMulti(IEnumerable<ScriptGroupProject> projectList, string? groupName = null,TaskProgress? taskProgress = null)
+    /// <param name="job">[A2] 作业描述符：非空时经 TaskRunner 漏斗登记进 JobRegistry；null = 不登记（旧行为）。</param>
+    public async Task RunMulti(IEnumerable<ScriptGroupProject> projectList, string? groupName = null,TaskProgress? taskProgress = null, JobDescriptor? job = null)
     {
         groupName ??= "默认";
 
@@ -194,7 +196,7 @@ public partial class ScriptService : IScriptService
         }
 
 
-        await new TaskRunner()
+        var runResult = await new TaskRunner()
             .RunThreadAsync(async () =>
             {
                 var stopwatch = new Stopwatch();
@@ -453,12 +455,25 @@ public partial class ScriptService : IScriptService
                         }
                     }
                 }
-            });
+            }, job: job);
         
 
         // 还原定时器
         // TaskTriggerDispatcher.Instance().SetTriggers(GameTaskManager.LoadInitialTriggers());
-        
+
+        // [A1.1 抢锁显式化] 槽位被占未执行时：TaskRunner 已留 ERR，这里补组级结论并跳过
+        // "执行结束"式收尾，避免"从未启动却报执行结束"的假事实（2026-09-13 双入口抢锁事故形态）。
+        // taskProgress.Next 清理与原路径（落到 :475 收尾）保持一致。
+        if (runResult == TaskRunResult.RejectedSlotBusy)
+        {
+            _logger.LogError("配置组 {Name} 未能启动：任务槽位被占用，本次未执行", groupName);
+            if (taskProgress != null)
+            {
+                taskProgress.Next = null;
+            }
+            return;
+        }
+
         if (!string.IsNullOrEmpty(groupName)&&!RunnerContext.Instance.IsPreExecution)
         {
             _logger.LogInformation("配置组 {Name} 执行结束", groupName);

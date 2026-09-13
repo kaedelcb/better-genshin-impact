@@ -615,7 +615,7 @@ internal sealed class InstanceRequestHandler
 
             // [切片7] 执行段已抽为 ExecuteTaskStartCoreAsync：v2 handler 与 BgiTaskCoordinator
             // 共用单一事实源，行为逐字节等价。返回 true = 配置组在 RunMulti 执行中被取消（F11 停止等）。
-            var configGroupCancelled = await ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, batchGroupNames);
+            var configGroupCancelled = await ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, batchGroupNames, generation);
 
             if (configGroupCancelled)
             {
@@ -642,7 +642,11 @@ internal sealed class InstanceRequestHandler
         string? groupName,
         string? configName,
         int startFromIndex,
-        IReadOnlyList<string>? batchGroupNames = null)
+        IReadOnlyList<string>? batchGroupNames = null,
+        int generation = 0,
+        // [A2.4] 协调器队列派发时传入 taskHandle（== 注册表 jobId 别名），漏斗认领既有 Queued 作业；
+        // v2 直连路径不传（null），漏斗新建作业（A2.3 行为）。
+        Guid? jobId = null)
     {
         // 标记配置组是否在 RunMulti 执行中被取消（F11 停止等），末尾据此返回 cancelled 状态
         var configGroupCancelled = false;
@@ -729,7 +733,14 @@ internal sealed class InstanceRequestHandler
                             var tp = new BetterGenshinImpact.GameTask.TaskProgress.TaskProgress();
                             tp.CurrentScriptGroupName = groupName;
                             BetterGenshinImpact.GameTask.RunnerContext.Instance.taskProgress = tp;
-                            await scriptService.RunMulti(projectsList, groupName, tp);
+                            await scriptService.RunMulti(projectsList, groupName, tp,
+                                new BetterGenshinImpact.Service.Execution.JobDescriptor(
+                                    BetterGenshinImpact.Service.Execution.JobKind.Group, groupName,
+                                    BetterGenshinImpact.Service.Execution.JobSource.V2,
+                                    generation > 0 ? generation : null,
+                                    // [A2.4] 协调器派发路径认领既有作业（注册表里 Source=Ext）；
+                                    // v2 直连 jobId=null 新建（Source=V2），两条来源可区分。
+                                    JobId: jobId));
                             // task.start 是同步等待 RunMulti 完成的。RunMulti 结束后检查 WasCancelled：
                             // 若为 true（用户 F11 停止等取消了配置组），标记 configGroupCancelled，方法末尾返回 cancelled 状态，
                             // 助手端据此停止后续配置组。否则返回 success，助手端继续执行下一个配置组。
@@ -760,6 +771,28 @@ internal sealed class InstanceRequestHandler
                 // 不等待内部 await——一条龙头一个未完成的 await 点就返回，导致 ext task.queue 在一条龙
                 // 刚启动几毫秒内就登记 completed 假终态 → 助手误判批次结束提前 task.resume → 恢复的
                 // 原任务抢占 TaskRunner，一条龙的全部配置组被"当前存在正在运行中的独立任务"拒掉。
+                // [A2.6] 一条龙父作业登记/认领（仅 IPC 入口经此段；UI 手动入口的父子模型属 B1）。
+                // 协调器派发路径 jobId 非空 → 认领既有 Queued 作业（Source=Ext）；v2 直连 → 新建（Source=V2）。
+                // 终态在本段末尾按 WasCancelled/异常判定登记；协调器 RecordTerminal 的重复登记幂等无操作。
+                BetterGenshinImpact.Service.Execution.BgiJob? dragonJob = null;
+                try
+                {
+                    dragonJob = jobId is { } adoptDragonId
+                        ? BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(adoptDragonId)
+                          ?? BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Submit(
+                              BetterGenshinImpact.Service.Execution.JobKind.OneDragon, configName,
+                              BetterGenshinImpact.Service.Execution.JobSource.Ext,
+                              generation > 0 ? generation : null).Job
+                        : BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Submit(
+                            BetterGenshinImpact.Service.Execution.JobKind.OneDragon, configName,
+                            BetterGenshinImpact.Service.Execution.JobSource.V2,
+                            generation > 0 ? generation : null).Job;
+                    BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryMarkRunning(dragonJob.JobId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[JobRegistry] 一条龙作业登记失败（不影响执行）: {Name}", configName);
+                }
                 var oneDragonStartedAt = DateTime.UtcNow;
                 var oneDragonCompletion = new TaskCompletionSource();
                 _ = Application.Current!.Dispatcher.InvokeAsync(async () =>
@@ -817,7 +850,47 @@ internal sealed class InstanceRequestHandler
                     oneDragonCompletion.SetResult();
                 });
                 // 等待 OnOneKeyExecute 真正执行完（与配置组分支 await completionSource.Task 同款姿势）
-                await oneDragonCompletion.Task;
+                try
+                {
+                    await oneDragonCompletion.Task;
+                }
+                catch
+                {
+                    // [A2.6] 执行段异常 → 父作业 Failed 登记后原样上抛（协调器/v2 外层各有兜底）
+                    if (dragonJob != null)
+                    {
+                        try
+                        {
+                            BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryMarkTerminal(
+                                dragonJob.JobId, BetterGenshinImpact.Service.Execution.JobState.Failed,
+                                BetterGenshinImpact.Service.Execution.JobErrorCodes.TaskStartFailed, null, false);
+                        }
+                        catch (Exception termEx)
+                        {
+                            _logger.LogWarning(termEx, "[JobRegistry] 一条龙作业终态登记失败: {Name}", configName);
+                        }
+                    }
+                    throw;
+                }
+                // [A2.6] 父作业终态：先于 cancelled 判定登记（协调器 RecordTerminal 重复登记幂等无操作）
+                if (dragonJob != null)
+                {
+                    try
+                    {
+                        var dragonCancelled = BetterGenshinImpact.Core.Script.CancellationContext.Instance.WasCancelled;
+                        BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryMarkTerminal(
+                            dragonJob.JobId,
+                            dragonCancelled
+                                ? BetterGenshinImpact.Service.Execution.JobState.Cancelled
+                                : BetterGenshinImpact.Service.Execution.JobState.Succeeded,
+                            dragonCancelled ? BetterGenshinImpact.Service.Execution.JobErrorCodes.CancelledUser : null,
+                            null, dragonCancelled);
+                    }
+                    catch (Exception termEx)
+                    {
+                        _logger.LogWarning(termEx, "[JobRegistry] 一条龙作业终态登记失败: {Name}", configName);
+                    }
+                }
                 // 与配置组分支对齐：一条龙在执行中被取消（F11 停止等）时回传 cancelled，
                 // 助手端据此终止批次（取消优先），否则 F11 会被误判为成功并继续下发后续配置组。
                 if (BetterGenshinImpact.Core.Script.CancellationContext.Instance.WasCancelled)
@@ -876,6 +949,35 @@ internal sealed class InstanceRequestHandler
                 // 记录最近执行过的任务名（用于"联机锄地上线"等轻量任务检测）
                 _recentTaskName = taskName;
                 _recentTaskNameTime = DateTime.UtcNow;
+            }
+
+            // [A3.3] 注册表只读视图（原则 5：派生视图向唯一事实源收敛）：
+            // 既有链路（RunnerContext/taskProgress）为空时用在跑作业名兜底；
+            // running/slotOccupied 做注册表并集。并集而非替换——龙内前导步骤、计划表等待等
+            // 持锁路径尚未登记作业（A2.6 边界），纯读注册表会漏掉它们的占用。
+            BetterGenshinImpact.Service.Execution.BgiJob? registryRunningJob = null;
+            try
+            {
+                if (BetterGenshinImpact.Service.Execution.JobRegistry.IsCreated)
+                {
+                    registryRunningJob = BetterGenshinImpact.Service.Execution.JobRegistry.Instance.CurrentRunningJob();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[JobRegistry] task.status 注册表读数失败（回退既有链路）");
+            }
+            if (!isCancelled && taskName == null && groupName == null && registryRunningJob != null)
+            {
+                // 格式与既有语义对齐：Group 作业名是组名，其余作业名是任务名
+                if (registryRunningJob.Kind == BetterGenshinImpact.Service.Execution.JobKind.Group)
+                {
+                    groupName = registryRunningJob.Name;
+                }
+                else
+                {
+                    taskName = registryRunningJob.Name;
+                }
             }
 
             // 联机锄地进度
@@ -939,7 +1041,9 @@ internal sealed class InstanceRequestHandler
 
             return InstanceIpcEnvelope.Response(request, new
             {
-                running = BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0,
+                // [A3.3] 并集：信号量占用 ∨ 注册表在跑作业（前者覆盖未登记持锁路径，后者覆盖已登记作业）
+                running = BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0
+                          || registryRunningJob != null,
                 // 说明：用单任务锁权威判断“是否有任务在跑”，不再依赖 taskName 是否残留。
                 // 任务运行期间 TaskRunner.RunCurrentAsync 持有锁（CurrentCount==0），结束释放（CurrentCount==1）。
                 // taskName 仅作展示名（ExecuteProject/P0 已清空残留）。防止任务正常结束后 running 恒 true → 任务名残留。
@@ -963,7 +1067,8 @@ internal sealed class InstanceRequestHandler
                 suspendedTaskType,
                 suspendedTaskName,
                 // [切片7] 任务协调层扩展（spec §4.4，纯增量字段）
-                slotOccupied = BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0, // 与 running 同义但语义显式
+                slotOccupied = BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0
+                               || registryRunningJob != null, // [A3.3] 与 running 同并集口径
                 queueDepth,        // 协调器在队任务数（未协商 task.queue 的老客户端不受影响）
                 currentTaskHandle  // 在跑任务的 handle（协调器派发时登记，手动任务为 null）
             });
@@ -1599,7 +1704,10 @@ internal sealed class InstanceRequestHandler
                                     var tp = new BetterGenshinImpact.GameTask.TaskProgress.TaskProgress();
                                     tp.CurrentScriptGroupName = context.GroupName;
                                     BetterGenshinImpact.GameTask.RunnerContext.Instance.taskProgress = tp;
-                                    await scriptService.RunMulti(projectsList, context.GroupName, tp);
+                                    await scriptService.RunMulti(projectsList, context.GroupName, tp,
+                                        new BetterGenshinImpact.Service.Execution.JobDescriptor(
+                                            BetterGenshinImpact.Service.Execution.JobKind.Group, context.GroupName,
+                                            BetterGenshinImpact.Service.Execution.JobSource.Resume));
                                 }
                                 catch (Exception ex)
                                 {
@@ -1686,7 +1794,7 @@ internal sealed class InstanceRequestHandler
                                 try
                                 {
                                     await new BetterGenshinImpact.GameTask.TaskRunner()
-                                        .RunSoloTaskAsync(soloTask);
+                                        .RunSoloTaskAsync(soloTask, BetterGenshinImpact.Service.Execution.JobSource.V2);
                                 }
                                 catch (Exception ex)
                                 {

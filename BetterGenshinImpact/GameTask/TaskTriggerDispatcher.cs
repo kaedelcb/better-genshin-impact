@@ -16,6 +16,7 @@ using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.GameLoading;
 using Fischless.GameCapture.Graphics;
 using BetterGenshinImpact.Service;
+using BetterGenshinImpact.Service.Execution;
 using BetterGenshinImpact.Service.Model;
 using BetterGenshinImpact.Service.Model.OverlayMetric;
 using Vanara.PInvoke;
@@ -179,11 +180,30 @@ namespace BetterGenshinImpact.GameTask
             {
                 _timer.Start();
             }
+
+            // [A2.5] 触发器总开关状态写入注册表只读视图（观察性故障不影响启动，留痕）
+            try
+            {
+                JobRegistry.Instance.SetTriggerDispatcherRunning(true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[JobRegistry] 触发器总开关状态写入失败（不影响启动）");
+            }
         }
 
         public void Stop()
         {
             _timer.Stop();
+            // [A2.5] 触发器总开关状态写入注册表只读视图（观察性故障不影响停止，留痕）
+            try
+            {
+                JobRegistry.Instance.SetTriggerDispatcherRunning(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[JobRegistry] 触发器总开关状态写入失败（不影响停止）");
+            }
             ChatUiHotkeyGuard.Reset();
             GameCapture?.Stop();
             _gameRect = RECT.Empty;
@@ -320,7 +340,11 @@ namespace BetterGenshinImpact.GameTask
                 var shouldShowPictureInPicture = autoSkipConfig.Enabled
                                                  && autoSkipConfig.PictureInPictureEnabled
                                                  && !PictureInPictureService.IsManuallyClosed
-                                                 && TaskControl.TaskSemaphore.CurrentCount == 1; // 没有任务持有锁（也就是没有任务正在运行）
+                                                 && TaskControl.TaskSemaphore.CurrentCount == 1 // 没有任务持有锁（也就是没有任务正在运行）
+                                                 // [A2.5] 注册表活跃作业（含协调器在队未派发项）同样压制画中画。
+                                                 // 并集而非替换信号量读数：AutoTrack/AutoTrackPath 旁路持锁点（A1 已标记）
+                                                 // 尚未进注册表，纯读注册表会漏掉它们的占用。IsCreated 守卫不为读数创建单例。
+                                                 && !(JobRegistry.IsCreated && JobRegistry.Instance.HasActiveJob());
                 var active = SystemControl.IsGenshinImpactActive();
                 if (!active)
                 {

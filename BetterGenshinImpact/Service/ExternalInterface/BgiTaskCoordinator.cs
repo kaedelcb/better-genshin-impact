@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using BetterGenshinImpact.Service.Execution;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -65,13 +66,16 @@ internal sealed class BgiTaskCoordinator : IDisposable
         NotFound,
     }
 
-    /// <summary>一次任务提交。Executor = 执行段委托（内部自行 Dispatcher.InvokeAsync），返回 true = 执行中被取消。</summary>
+    /// <summary>
+    /// 一次任务提交。Executor = 执行段委托（内部自行 Dispatcher.InvokeAsync），返回 true = 执行中被取消。
+    /// [A2.4] Executor 首参 = taskHandle（与 JobRegistry jobId 同一 Guid 别名），执行段据此让漏斗认领既有作业。
+    /// </summary>
     public sealed record TaskSubmission(
         int Generation,
         string? GroupName,
         string? ConfigName,
         int StartFromIndex,
-        Func<CancellationToken, Task<bool>> Executor)
+        Func<Guid, CancellationToken, Task<bool>> Executor)
     {
         /// <summary>幂等去重名（groupName ?? configName），与 v2 taskName 语义一致。</summary>
         public string? Name => GroupName ?? ConfigName;
@@ -239,6 +243,16 @@ internal sealed class BgiTaskCoordinator : IDisposable
                 _terminals.TryRemove(_terminalOrder.Dequeue(), out _);
             }
         }
+
+        // [A2.4] 终态同源进统一注册表（幂等仲裁：执行过的项漏斗已先写终态，此处 TryMark 返回 false 自然无操作；
+        // 漏斗不可达的路径——排队取消/等槽超时/Executor 抛异常——由本点兜底，保证注册表不留 Running 僵尸）。
+        var (state, code) = status switch
+        {
+            "completed" => cancelled ? (JobState.Cancelled, JobErrorCodes.CancelledUser) : (JobState.Succeeded, null),
+            "failed" => (JobState.Failed, errorCode ?? JobErrorCodes.TaskStartFailed),
+            _ => (JobState.Cancelled, JobErrorCodes.CancelledUser), // queueCancelled
+        };
+        TryRegistryTerminal(taskHandle, state, code, message, cancelled);
     }
 
     /// <summary>
@@ -330,6 +344,9 @@ internal sealed class BgiTaskCoordinator : IDisposable
             {
                 item.DisposeCtsOnce();
                 _logger.LogWarning("[task.queue] 队列已满（容量 {Capacity}），拒绝入队 name={Name}", QueueCapacity, name);
+                // [A2.4] 连"被拒"也是注册表里的一条事实（Rejected 终态），与漏斗 Rejected(task_busy) 同哲学
+                TryRegistrySubmitQueued(item);
+                TryRegistryTerminal(item.TaskHandle, JobState.Rejected, JobErrorCodes.QueueFull, "队列已满", false);
                 return new SubmitResult(SubmitStatus.QueueFull, Guid.Empty, 0);
             }
 
@@ -338,10 +355,13 @@ internal sealed class BgiTaskCoordinator : IDisposable
                 // 兜底：Channel 物理满（与登记数不同步的极端竞态），同样不阻塞
                 item.DisposeCtsOnce();
                 _logger.LogWarning("[task.queue] 队列已满（容量 {Capacity}），拒绝入队 name={Name}", QueueCapacity, name);
+                TryRegistrySubmitQueued(item);
+                TryRegistryTerminal(item.TaskHandle, JobState.Rejected, JobErrorCodes.QueueFull, "队列已满", false);
                 return new SubmitResult(SubmitStatus.QueueFull, Guid.Empty, 0);
             }
 
             _pending[item.TaskHandle] = item;
+            TryRegistrySubmitQueued(item); // [A2.4] 入队即建 Queued 作业（jobId==taskHandle 别名）
             EnsurePumpStartedNoLock();
             var position = _pending.Count;
 
@@ -558,7 +578,11 @@ internal sealed class BgiTaskCoordinator : IDisposable
                 configName = item.Submission.ConfigName,
             });
 
-            var cancelled = await item.Submission.Executor(item.Cts.Token).ConfigureAwait(false);
+            // [A2.4] 派发点即推进 Running：执行段内部还要 Cancel 旧任务+等槽释放（最长 15s），
+            // 期间若仍显示 Queued 是假象。漏斗拿锁后的重复 TryMarkRunning 为幂等无操作。
+            TryRegistryRunning(item.TaskHandle);
+
+            var cancelled = await item.Submission.Executor(item.TaskHandle, item.Cts.Token).ConfigureAwait(false);
             var durationMs = (long)(DateTime.UtcNow - startedAt).TotalMilliseconds;
             // 终态登记先于事件发布：事件是快速路径可能丢失，登记表是安全网轮询的权威来源
             RecordTerminal(item.TaskHandle, "completed", cancelled: cancelled);
@@ -637,6 +661,52 @@ internal sealed class BgiTaskCoordinator : IDisposable
         catch (Exception exception)
         {
             _logger.LogDebug(exception, "[task.queue] 事件发布失败 {Event}", eventName);
+        }
+    }
+
+    /// <summary>
+    /// [A2.4] 入队即在统一注册表建 Queued 作业：jobId == taskHandle（同一 Guid 双名），
+    /// 执行段凭句柄认领，ext 事件里的 taskHandle 可直接查注册表。
+    /// 观察性故障不影响队列语义：登记失败仅留痕，项照常入队（漏斗认领失败会退化新建）。
+    /// </summary>
+    private void TryRegistrySubmitQueued(PendingTask item)
+    {
+        try
+        {
+            var kind = !string.IsNullOrEmpty(item.Submission.GroupName) ? JobKind.Group : JobKind.OneDragon;
+            JobRegistry.Instance.Submit(kind, item.Submission.Name ?? "未知", JobSource.Ext,
+                item.Submission.Generation > 0 ? item.Submission.Generation : null,
+                jobId: item.TaskHandle);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "[task.queue] 注册表登记失败（不影响队列执行）taskHandle={Handle}", item.TaskHandle);
+        }
+    }
+
+    /// <summary>[A2.4] 注册表终态推进的容错留痕包装（幂等：已终态返回 false，先写者赢）。</summary>
+    private void TryRegistryTerminal(Guid taskHandle, JobState state, string? errorCode, string? message, bool wasCancelled)
+    {
+        try
+        {
+            JobRegistry.Instance.TryMarkTerminal(taskHandle, state, errorCode, message, wasCancelled);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "[task.queue] 注册表终态登记失败 taskHandle={Handle} state={State}", taskHandle, state);
+        }
+    }
+
+    /// <summary>[A2.4] 注册表 Running 推进的容错留痕包装（幂等：Running→Running 允许重复，终态后返回 false）。</summary>
+    private void TryRegistryRunning(Guid taskHandle)
+    {
+        try
+        {
+            JobRegistry.Instance.TryMarkRunning(taskHandle);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "[task.queue] 注册表 Running 登记失败 taskHandle={Handle}", taskHandle);
         }
     }
 
