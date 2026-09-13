@@ -168,6 +168,11 @@ BgiExternalClient SDK ── NamedPipe ── ExternalInterfaceSession
 
 事件全部走 `EventHub.Publish`（fire-and-forget、revision 同源、近因缓冲、断线续传——切片 1/4 机制自动生效）。`slotReleased` 挂载点是本切片**唯一**触碰 `TaskRunner` 的地方：一行 Publish，只读无状态，零订阅者时开销为一次入队（可忽略），单机行为不变。
 
+> **后续演进（2026-09-13）**：统一作业注册表（`Docs/design/unified-job-registry-master-plan.md`）落地后，
+> 本表 `task.*` 事件保留为兼容别名，权威事件族为 `job.queued/started/completed/failed/cancelled/heartbeat/progress`
+> （注册表 `Transitioned/Heartbeated` 为唯一事实源，见总计划 §6.4）；`job.progress` 为一条龙父作业进度
+> （`currentIndex/total/currentItemName`，A5-3）。taskHandle 与 jobId 是同一 Guid 别名，两族事件可直接互查。
+
 ### 4.4 task.status 扩展字段
 
 `HandleTaskStatus` :826 响应体追加（纯增量，老客户端忽略未知字段）：
