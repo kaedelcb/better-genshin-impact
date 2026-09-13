@@ -102,6 +102,22 @@ public partial class HotKeySettingModel : ObservableObject
     /// <summary>重试代序号：新的注册/注销动作会使挂起的重试失效，避免用户改过快捷键后旧重试误注册。</summary>
     private int _registerRetryGeneration;
 
+    /// <summary>WPF UI 线程 Id；全局热键的 NativeWindow 必须由带消息泵的线程持有，非 UI 线程注册即埋雷。</summary>
+    internal static int UiThreadId
+    {
+        get
+        {
+            try
+            {
+                return System.Windows.Application.Current?.Dispatcher.Thread.ManagedThreadId ?? -1;
+            }
+            catch
+            {
+                return -1;
+            }
+        }
+    }
+
     public void RegisterHotKey()
     {
         // 显式注册（启动 / 用户在界面修改）使任何挂起的重试失效
@@ -114,6 +130,42 @@ public partial class HotKeySettingModel : ObservableObject
         if (HotKey.IsEmpty)
         {
             return;
+        }
+
+        // 全局热键（GlobalRegister）的 HotkeyHook 会在调用线程上创建 NativeWindow 并对它 RegisterHotKey，
+        // WM_HOTKEY 只会被"创建该窗口的线程"的消息泵分发；在其他线程注册则热键写入系统表但永不触发
+        // （实锤场景：助手连接后 IPC config.list 在管道线程首次构造 HotKeyPageViewModel）。这里统一转投 UI 线程。
+        // 用 BeginInvoke 异步转投而非 Invoke 同步等待：本方法可能在 DI 单例构造锁内被调用（HotKeyPageViewModel
+        // 构造期间），同步等待 UI 线程、而 UI 线程恰好也在等这把锁时会互相死锁；异步转投无此风险，
+        // 代价仅是注册稍后完成。
+        if (HotKeyType == HotKeyTypeEnum.GlobalRegister && Environment.CurrentManagedThreadId != UiThreadId)
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null && !dispatcher.HasShutdownStarted)
+            {
+                var generation = Interlocked.Increment(ref _registerRetryGeneration);
+                var expectedHotKey = HotKey;
+                App.GetLogger<HotKeySettingModel>().LogInformation(
+                    "全局热键注册来自非UI线程（线程={ThreadId}），转投UI线程执行：{FunctionName} [{HotKey}]",
+                    Environment.CurrentManagedThreadId, FunctionName, HotKey);
+                dispatcher.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        // 转投期间用户改了/清了快捷键，或又有新的注册/注销动作：放弃本次
+                        if (generation != _registerRetryGeneration || HotKey != expectedHotKey || HotKey.IsEmpty)
+                        {
+                            return;
+                        }
+                        RegisterHotKeyCore(attempt);
+                    }
+                    catch
+                    {
+                        // 转投链自身异常不影响主流程（下一次注册动作会重新进入注册链）
+                    }
+                }));
+                return;
+            }
         }
 
         try
