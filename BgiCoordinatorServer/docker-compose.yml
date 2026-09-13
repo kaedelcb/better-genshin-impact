@@ -9,4 +9,10 @@ services:
       - MAX_ROOMS=50
       - PLAYER_TIMEOUT_SECONDS=120
       - SYNC_POINT_TIMEOUT_SECONDS=60
+      # BGI 更新包目录（联机助手"网络"来源更新）：挂载后 /bgi-update/* 提供安装包下载，
+      # /bgi-update/latest.json 自动生成（扫描目录取版本最新的 BetterGI_v*+lcb.*.7z）。
+      # 用法：宿主机建 bgi-update 目录放茶包版 .7z，取消下面 volumes 注释并重启容器。
+      - BGI_UPDATE_ROOT=/app/bgi-update
+    # volumes:
+    #   - ./bgi-update:/app/bgi-update:ro
     restart: always

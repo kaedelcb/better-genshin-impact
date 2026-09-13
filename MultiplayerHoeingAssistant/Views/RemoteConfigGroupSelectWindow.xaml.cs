@@ -12,6 +12,8 @@ public partial class RemoteConfigGroupSelectWindow : Window
     private RemoteConfigGroupSelectWindow(IEnumerable<string> groups, string memberName)
     {
         InitializeComponent();
+        // 屏幕工作区适配：尺寸压到所在屏 95% 内并居中钳位，防止高缩放/小屏下窗口被截（与 MainWindow/SettingsWindow 同款）
+        MultiplayerHoeingAssistant.Helpers.DpiAwarenessController.Initialize(this);
         Title = $"远程编辑 - {memberName}";
         HintText.Text = $"请选择要远程编辑的「{memberName}」的配置组：";
         GroupList.ItemsSource = groups.ToList();

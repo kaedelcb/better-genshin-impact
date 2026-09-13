@@ -818,7 +818,49 @@
                                                                             Command="{Binding DataContext.RemoteConfigEditCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                             CommandParameter="{Binding}"/>
                                                                 </StackPanel>
-                                                                <TextBlock Text="{Binding DisplayUid, StringFormat='UID {0}'}" FontSize="10" Foreground="{StaticResource Dim}" Margin="0,1,0,0"/>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,1,0,0">
+                                                                    <TextBlock Text="{Binding DisplayUid, StringFormat='UID {0}'}" FontSize="10" Foreground="{StaticResource Dim}" VerticalAlignment="Center"/>
+                                                                    <!-- UID 与版本号之间的 · 分隔 -->
+                                                                    <TextBlock Text="·" FontSize="10" Foreground="{StaticResource Dim}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                                                    <!-- BGI 版本号：与 UID 同字号同色的纯文本（无框），未上报显示 "-"。
+                                                                         自机=可点（TextAction 文本按钮，静止态与 UID 文本无异，悬停变亮+手型光标）打开"更新BGI"；他人=纯文本不可点 -->
+                                                                    <TextBlock Text="{Binding BgiVersionDisplay}" FontSize="10" Foreground="#C8C4DD"
+                                                                               Margin="4,0,0,0" VerticalAlignment="Center">
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding IsSelf}" Value="True">
+                                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
+                                                                    <Button Content="{Binding BgiVersionDisplay}" FontSize="10" Padding="0" Margin="4,0,0,0"
+                                                                            VerticalAlignment="Center"
+                                                                            Command="{Binding DataContext.OpenUpdateBgiCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                            CommandParameter="{Binding}">
+                                                                        <Button.Style>
+                                                                            <Style TargetType="Button" BasedOn="{StaticResource TextAction}">
+                                                                                <!-- Foreground/ToolTip 放 Style 内（本地属性会压过触发器）：
+                                                                                     服务器有新版本时自机版本号变金色提示 -->
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                                <Setter Property="Foreground" Value="#C8C4DD"/>
+                                                                                <Setter Property="ToolTip" Value="点击更新本机 BGI"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding IsSelf}" Value="False">
+                                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    </DataTrigger>
+                                                                                    <DataTrigger Binding="{Binding DataContext.RemoteUpdateAvailable, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                                        <Setter Property="Foreground" Value="{StaticResource Gold}"/>
+                                                                                        <Setter Property="ToolTip" Value="服务器有新版本可更新，点击打开「更新BGI」"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </Button.Style>
+                                                                    </Button>
+                                                                </StackPanel>
                                                             </StackPanel>
                                                         </StackPanel>
                                                         <!-- 右侧：状态徽章 -->

@@ -1321,6 +1321,7 @@ public class RoomManager
                 if (player != null)
                 {
                     player.BgiStatus = status.BgiStatus;
+                    player.BgiVersion = status.BgiVersion;
                     player.ConfigGroups = status.ConfigGroups;
                     player.OneClickConfigs = status.OneClickConfigs;
                     player.ConfigGroupTasks = status.ConfigGroupTasks;

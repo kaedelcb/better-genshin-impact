@@ -202,6 +202,8 @@ public partial class MainViewModel : INotifyPropertyChanged
     public RelayCommand BindHoeingGroupCommand => new(OnBindHoeingGroup);
     /// <summary>远程编辑成员配置组（成员卡片昵称右侧 ⚙ 按钮）。</summary>
     public RelayCommand RemoteConfigEditCommand => new(OnRemoteConfigEdit);
+    /// <summary>打开"更新BGI"弹窗（成员卡 UID 右侧版本徽章，仅自机可点）。</summary>
+    public RelayCommand OpenUpdateBgiCommand => new(OnOpenUpdateBgi);
     public RelayCommand ClearLogCommand => new(_ => ClearLog());
 
     /// <summary>切换执行/监控模式（点击连接徽章触发）</summary>
@@ -322,6 +324,9 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         // [离线优先] 本地状态采集循环先于服务器连接启动：采集是本机 IPC 事实源，不依赖 SignalR
         EnsureStatusTimerStarted();
+
+        // 服务器网络更新检测（"网络"来源包）：周期拉 /bgi-update/latest.json，单机模式内部自动跳过
+        StartRemoteUpdateTimer();
 
         // 连接 SignalR（单机模式下由 ConnectSignalRAsync 入口门控直接跳过）
         await ConnectSignalRAsync();
@@ -785,6 +790,8 @@ public partial class MainViewModel : INotifyPropertyChanged
             PlayerUid = _config!.PlayerUid,
             PlayerName = _config.PlayerName,
             BgiStatus = _config?.ObserverMode == true ? "observer" : (_processMonitor?.IsBgiRunning == true ? "running" : "stopped"),
+            // 本机 BGI 版本：执行端快照优先（BGI 运行中），未运行回退读 BgiPath 的 ProductVersion；都取不到为空串
+            BgiVersion = BgiVersionResolver.Resolve(_externalClient?.BgiVersion, _config?.BgiPath) ?? "",
             ConfigGroups = configGroups,
             OneClickConfigs = oneClickConfigs,
             ConfigGroupTasks = configGroupTasks,
@@ -1135,12 +1142,113 @@ public partial class MainViewModel : INotifyPropertyChanged
     // ===== 远程配置组编辑（契约见 Docs/远程配置组编辑-实施方案.md §1/§2/§5）=====
 
     /// <summary>
+    // ===== 服务器网络更新检测（"网络"来源包，/bgi-update/latest.json）=====
+
+    private System.Threading.Timer? _remoteUpdateCheckTimer;
+    private int _remoteUpdateChecking;
+    private BgiRemoteUpdateInfo? _remoteBgiUpdate;
+
+    /// <summary>服务器上检测到的最新更新包（null=未检测到/单机模式/未配置服务器地址）。</summary>
+    public BgiRemoteUpdateInfo? RemoteBgiUpdate
+    {
+        get => _remoteBgiUpdate;
+        private set
+        {
+            if (ReferenceEquals(_remoteBgiUpdate, value)) return;
+            _remoteBgiUpdate = value;
+            OnPropertyChanged(nameof(RemoteBgiUpdate));
+            OnPropertyChanged(nameof(RemoteUpdateAvailable));
+            OnPropertyChanged(nameof(RemoteUpdateBannerText));
+        }
+    }
+
+    /// <summary>服务器有比本机新的版本包：耕地机页版本号变金色、更新弹窗出提醒条。</summary>
+    public bool RemoteUpdateAvailable => _remoteBgiUpdate != null
+        && BgiUpdateDecisions.IsNewerThanLocal(_remoteBgiUpdate.NameInfo, ResolveLocalBgiVersion());
+
+    /// <summary>更新弹窗提醒条文本（RemoteUpdateAvailable=true 时展示）。</summary>
+    public string RemoteUpdateBannerText => _remoteBgiUpdate == null
+        ? ""
+        : $"服务器有新版本：{_remoteBgiUpdate.FileName}（{_remoteBgiUpdate.SizeText}）。选中该包点「更新」将自动下载到安装包目录再安装。";
+
+    /// <summary>本机版本可能已变（如刚完成更新）：重新求值 RemoteUpdateAvailable 刷新版本号金色/提醒条。</summary>
+    public void NotifyRemoteUpdateStateChanged()
+    {
+        OnPropertyChanged(nameof(RemoteUpdateAvailable));
+        OnPropertyChanged(nameof(RemoteUpdateBannerText));
+    }
+
+    private void StartRemoteUpdateTimer()
+    {
+        // 首查延迟 20s（等启动流程稳定），之后每 5 分钟拉一次；单机模式/无服务器地址在检查内部直接跳过
+        _remoteUpdateCheckTimer = new System.Threading.Timer(
+            _ => { try { _ = CheckRemoteUpdateAsync(); } catch { /* 定时器回调绝不逃逸 */ } },
+            null, TimeSpan.FromSeconds(20), TimeSpan.FromMinutes(5));
+    }
+
+    /// <summary>拉取服务器最新更新包清单并刷新 RemoteBgiUpdate。任意线程可调；返回最新信息（null=无）。失败静默不打扰主流程。</summary>
+    public async Task<BgiRemoteUpdateInfo?> CheckRemoteUpdateAsync()
+    {
+        var baseUrl = _config?.ServerUrl;
+        if (_config is { StandaloneMode: true } || string.IsNullOrWhiteSpace(baseUrl)) return null;
+        if (Interlocked.Exchange(ref _remoteUpdateChecking, 1) == 1) return _remoteBgiUpdate; // 重入去重
+        try
+        {
+            var info = await BgiRemoteUpdateService.FetchLatestAsync(baseUrl);
+            var changed = info?.FileName != _remoteBgiUpdate?.FileName;
+            Application.Current?.Dispatcher.Invoke(() => RemoteBgiUpdate = info);
+            if (info != null && changed)
+            {
+                AddLog($"[更新] 检测到服务器更新包 {info.FileName}（{info.SizeText}），点自己卡片的版本号可打开「更新BGI」下载安装");
+            }
+            return info;
+        }
+        catch (Exception ex)
+        {
+            try { AddLog($"[更新] 检查服务器更新失败: {ex.Message}"); } catch { /* 日志自身失败不再上抛 */ }
+            return _remoteBgiUpdate;
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _remoteUpdateChecking, 0);
+        }
+    }
+
+    /// <summary>
+    /// 打开"更新BGI"弹窗（成员卡 UID 右侧版本徽章点击）。
+    /// 更新是纯本机操作（本机 BGI 目录 + 本机安装包），他人卡片没有语义，UI 上也只给自机做了可点按钮，这里再拦一道。
+    /// </summary>
+    private void OnOpenUpdateBgi(object? parameter)
+    {
+        if (parameter is MemberViewModel m && !m.IsSelf) return;
+        var window = new UpdateBgiWindow(this) { Owner = Application.Current.MainWindow };
+        window.ShowDialog();
+    }
+
+    /// <summary>配置落盘（"更新BGI"弹窗持久化包目录/排除目录/备份勾选用）。失败仅记日志，不打断弹窗流程。</summary>
+    public void SaveConfigToDisk()
+    {
+        if (_config == null) return;
+        try
+        {
+            _configManager?.Save(_config);
+        }
+        catch (Exception ex)
+        {
+            AddLog($"保存配置失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>解析本机 BGI 版本号（执行端快照优先，未运行回退读 BgiPath 的 ProductVersion）。
+    /// "更新BGI"弹窗首行与更新完成后刷新用。</summary>
+    public string? ResolveLocalBgiVersion()
+        => BgiVersionResolver.Resolve(_externalClient?.BgiVersion, _config?.BgiPath);
+
     /// 远程编辑成员配置组：弹配置组选择窗 → 交给 RemoteConfigEditService 走完整流程。
     /// 在 UI 线程执行（RelayCommand 回调）。
     /// </summary>
     private void OnRemoteConfigEdit(object? parameter)
-    {
-        if (parameter is not MemberViewModel member) return;
+    {        if (parameter is not MemberViewModel member) return;
         if (string.IsNullOrEmpty(member.PlayerUid)) return;
         if (member.PlayerUid == _config?.PlayerUid)
         {
@@ -3772,6 +3880,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         existing.PlayerName = np.PlayerName;
                         existing.Online = np.Online;
                         existing.BgiStatus = np.BgiStatus;
+                        existing.BgiVersion = np.BgiVersion;
                         existing.ConfigGroups = np.ConfigGroups;
                         existing.OneClickConfigs = np.OneClickConfigs;
                         existing.AutoHoeingRunning = np.AutoHoeingRunning;
@@ -3800,6 +3909,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         IsSelf = np.PlayerUid == _config?.PlayerUid,
                         Online = np.Online,
                         BgiStatus = np.BgiStatus,
+                        BgiVersion = np.BgiVersion,
                         ConfigGroups = np.ConfigGroups,
                         OneClickConfigs = np.OneClickConfigs,
                         AutoHoeingRunning = np.AutoHoeingRunning,
@@ -6296,6 +6406,25 @@ public class MemberViewModel : INotifyPropertyChanged
         }
     }
 
+    private string _bgiVersion = "";
+    /// <summary>该成员本机 BGI 版本号（服务端 reportStatus 转发）。空串=未上报（UI 显示 "-"）。</summary>
+    public string BgiVersion
+    {
+        get => _bgiVersion;
+        set
+        {
+            if (_bgiVersion != value)
+            {
+                _bgiVersion = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(BgiVersionDisplay));
+            }
+        }
+    }
+
+    /// <summary>版本徽章文本：未上报显示 "-"（空串会让徽章塌成一条缝）。</summary>
+    public string BgiVersionDisplay => string.IsNullOrEmpty(BgiVersion) ? "-" : BgiVersion;
+
     /// <summary>角色头像图片资源路径（按加入顺序从角色池分配，仅用于展示）。</summary>
     public string AvatarPath { get; set; } = "";
     /// <summary>头像元素色描边（十六进制色值）。</summary>
@@ -6451,6 +6580,8 @@ public class MemberViewModel : INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(PlayerName));
         OnPropertyChanged(nameof(DisplayUid));
+        OnPropertyChanged(nameof(BgiVersion));
+        OnPropertyChanged(nameof(BgiVersionDisplay));
         OnPropertyChanged(nameof(Online));
         OnPropertyChanged(nameof(BgiStatus));
         OnPropertyChanged(nameof(TaskRunning));

@@ -17,6 +17,8 @@
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.0" />
     <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="1.1.0" />
     <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+    <!-- 更新BGI：解压 .7z 安装包（与 BGI 主工程同版本，共享 NuGet 缓存） -->
+    <PackageReference Include="SharpCompress" Version="0.38.0" />
   </ItemGroup>
 
   <!-- 嵌入 HarmonyOS Sans SC 字体（免费商用，授权见 Assets/Fonts/HarmonyOS-LICENSE.txt）→ 圆润屏幕字体 -->
@@ -44,8 +46,9 @@
     <None Update="assistant-config.json" CopyToOutputDirectory="Never" />
   </ItemGroup>
 
-  <!-- 编译后自动部署到 BGI 输出目录下的 Tools\MultiplayerHoeingAssistant（含带 x64 平台目录的用户运行路径） -->
-  <Target Name="DeployAssistantToBgiTools" AfterTargets="Build">
+  <!-- 编译后自动部署到 BGI 输出目录下的 Tools\MultiplayerHoeingAssistant（含带 x64 平台目录的用户运行路径）。
+       助手进程运行中会锁住部署目标，此时可用 -p:DeployToBgiTools=false 跳过部署仅完成编译验证。 -->
+  <Target Name="DeployAssistantToBgiTools" AfterTargets="Build" Condition="'$(DeployToBgiTools)' != 'false'">
     <Message Text="DeployAssistantToBgiTools: 部署助手到 BGI Tools 目录" Importance="high" />
     <ItemGroup>
       <AssistOut Include="$(TargetDir)**\*" Exclude="$(TargetDir)**\assistant-config.json" />

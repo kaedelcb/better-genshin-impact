@@ -7,6 +7,8 @@ public class ControlRoomPlayer
     public string PlayerName { get; set; } = string.Empty;
     public bool Online { get; set; }
     public string BgiStatus { get; set; } = "unknown";
+    /// <summary>该成员本机 BGI 的完整版本号（服务端 reportStatus 转发）。空串=未上报，UI 显示"-"。</summary>
+    public string BgiVersion { get; set; } = string.Empty;
     public List<string> ConfigGroups { get; set; } = [];
     public List<string> OneClickConfigs { get; set; } = [];
     /// <summary>是否正在执行任务（任意任务）。</summary>

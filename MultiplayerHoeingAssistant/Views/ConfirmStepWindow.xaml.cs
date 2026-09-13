@@ -21,6 +21,8 @@ public partial class ConfirmStepWindow : Window
     private ConfirmStepWindow(StartupStep step, Window? owner)
     {
         InitializeComponent();
+        // 屏幕工作区适配：尺寸压到所在屏 95% 内并居中钳位，防止高缩放/小屏下窗口被截（与 MainWindow/SettingsWindow 同款）
+        MultiplayerHoeingAssistant.Helpers.DpiAwarenessController.Initialize(this);
         Owner = owner;
         WindowStartupLocation = owner == null
             ? WindowStartupLocation.CenterScreen

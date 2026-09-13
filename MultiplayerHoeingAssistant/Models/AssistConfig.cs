@@ -21,6 +21,24 @@ public class AssistConfig
     [JsonPropertyName("bgiPath")]
     public string BgiPath { get; set; } = string.Empty;
 
+    /// <summary>“更新BGI”弹窗记忆的安装包目录（扫描 .7z 更新包用）。持久化，重启保持。</summary>
+    [JsonPropertyName("bgiPackageDir")]
+    public string BgiPackageDir { get; set; } = string.Empty;
+
+    /// <summary>更新时排除不覆盖的目录（相对 BGI 目录，如 "User"、“Tool\MultiplayerHoeingAssistant”）。
+    /// 解压时这些目录下的条目一律跳过。持久化，下次打开弹窗自动带回。</summary>
+    [JsonPropertyName("bgiUpdateExcludeDirs")]
+    public List<string> BgiUpdateExcludeDirs { get; set; } = [];
+
+    /// <summary>"更新BGI"弹窗里通过"选择指定压缩包…"手动加入的包完整路径列表。持久化，下次打开自动带回；
+    /// 文件已被移动/删除或名字失效的自动剔除。与扫描目录重复的以扫描条目为准。</summary>
+    [JsonPropertyName("bgiPickedPackages")]
+    public List<string> BgiPickedPackages { get; set; } = [];
+
+    /// <summary>更新前是否备份排除目录（复制到 BGI\_update_backup\时间戳\）。默认开启。</summary>
+    [JsonPropertyName("bgiUpdateBackupBeforeUpdate")]
+    public bool BgiUpdateBackupBeforeUpdate { get; set; } = true;
+
     [JsonPropertyName("playerName")]
     public string PlayerName { get; set; } = string.Empty;
 

@@ -6,6 +6,9 @@ public class ControlStatus
     public string PlayerUid { get; set; } = string.Empty;
     public string PlayerName { get; set; } = string.Empty;
     public string BgiStatus { get; set; } = "unknown";      // running / stopped / crashed
+    /// <summary>上报方本机 BGI 的完整版本号（如 "0.64.2+lcb.22.7-NexusBGI-fix13"）。
+    /// 旧客户端不上报时为空串，服务端与 UI 按空处理（显示"-"）。</summary>
+    public string BgiVersion { get; set; } = string.Empty;
     public List<string> ConfigGroups { get; set; } = [];
     public List<string> OneClickConfigs { get; set; } = [];
     /// <summary>配置组名 → 该配置组内任务名列表（用于 WEB 端"从此处开始执行"选择起点）。</summary>

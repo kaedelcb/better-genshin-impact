@@ -85,6 +85,8 @@ public partial class FlowChartWindow : Window
         System.Collections.ObjectModel.ObservableCollection<ArmedLogTriggerViewModel> armedLogTriggers)
     {
         InitializeComponent();
+        // 屏幕工作区适配：尺寸压到所在屏 95% 内并居中钳位，防止高缩放/小屏下窗口被截（与 MainWindow/SettingsWindow 同款）
+        MultiplayerHoeingAssistant.Helpers.DpiAwarenessController.Initialize(this);
         _root = root;
         _onActivate = onActivate;
         // 不设 Owner：Owned 子窗口永远压在主窗口之上，主窗口点不上来，跳转定位会看不见。

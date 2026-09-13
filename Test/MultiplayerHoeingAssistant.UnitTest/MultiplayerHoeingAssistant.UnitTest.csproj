@@ -24,4 +24,9 @@
     <ProjectReference Include="..\..\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 真实 7z 夹具（py7zr 生成）：4 个条目，含应被排除的 User/Tool 子目录文件 -->
+    <None Include="TestData\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
