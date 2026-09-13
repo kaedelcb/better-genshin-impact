@@ -4906,9 +4906,11 @@ public partial class MainViewModel : INotifyPropertyChanged
                 _config.AutoLaunchOnBoot = value;
                 SaveConfig();
                 OnPropertyChanged();
-                // 即时生效：开关切换立即注册/取消注册
+                // 即时生效：开关切换立即注册/取消注册。
+                // 注册命令行里是否带 --minimized 必须跟随模式下拉（AutoLaunchOnBootMinimized），
+                // 不能用默认值——否则永远注册成静默启动，弹窗模式不生效
                 if (value)
-                    App.RegisterAutoStartup();
+                    App.RegisterAutoStartup(_config.AutoLaunchOnBootMinimized);
                 else
                     App.UnregisterAutoStartup();
             }
@@ -4943,8 +4945,14 @@ public partial class MainViewModel : INotifyPropertyChanged
         {
             if (_config != null)
             {
-                _config.AutoLaunchWithBgiMinimized = value == 1;
-                SaveConfig();
+                var minimized = value == 1;
+                if (_config.AutoLaunchWithBgiMinimized != minimized)
+                {
+                    _config.AutoLaunchWithBgiMinimized = minimized;
+                    SaveConfig();
+                }
+                // 必须通知：启动中心与设置页绑同一属性，靠它跨页实时刷新
+                OnPropertyChanged();
             }
         }
     }
@@ -4957,8 +4965,18 @@ public partial class MainViewModel : INotifyPropertyChanged
         {
             if (_config != null)
             {
-                _config.AutoLaunchOnBootMinimized = value == 1;
-                SaveConfig();
+                var minimized = value == 1;
+                if (_config.AutoLaunchOnBootMinimized != minimized)
+                {
+                    _config.AutoLaunchOnBootMinimized = minimized;
+                    SaveConfig();
+                    // 模式烤在开机启动的注册表命令行里（--minimized 参数），
+                    // 开关开着时改模式必须立即重注册，否则要等下次助手启动才会纠正
+                    if (_config.AutoLaunchOnBoot)
+                        App.RegisterAutoStartup(minimized);
+                }
+                // 必须通知：启动中心与设置页绑同一属性，靠它跨页实时刷新
+                OnPropertyChanged();
             }
         }
     }

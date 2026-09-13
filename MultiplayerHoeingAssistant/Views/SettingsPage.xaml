@@ -187,8 +187,14 @@
                                       SelectedIndex="{Binding AutoLaunchWithBgiModeIndex}"
                                       Style="{DynamicResource GoldComboBox}"
                                       VerticalAlignment="Center">
-                                <ComboBoxItem Content="弹窗启动" Style="{DynamicResource GoldComboItem}"/>
-                                <ComboBoxItem Content="静默缩小到托盘" Style="{DynamicResource GoldComboItem}"/>
+                                <!-- 闭合态显示两字短标签（Content），下拉经 ItemTemplate 显示完整选项（与启动中心同款交互） -->
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Tag, RelativeSource={RelativeSource AncestorType=ComboBoxItem}}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                                <ComboBoxItem Content="弹窗" Tag="弹窗启动" Style="{DynamicResource GoldComboItem}"/>
+                                <ComboBoxItem Content="静默" Tag="静默缩小到托盘" Style="{DynamicResource GoldComboItem}"/>
                             </ComboBox>
                         </Grid>
                     </Border>
@@ -214,8 +220,14 @@
                                       SelectedIndex="{Binding AutoLaunchOnBootModeIndex}"
                                       Style="{DynamicResource GoldComboBox}"
                                       VerticalAlignment="Center">
-                                <ComboBoxItem Content="弹窗启动" Style="{DynamicResource GoldComboItem}"/>
-                                <ComboBoxItem Content="静默缩小到托盘" Style="{DynamicResource GoldComboItem}"/>
+                                <!-- 闭合态显示两字短标签（Content），下拉经 ItemTemplate 显示完整选项（与启动中心同款交互） -->
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Tag, RelativeSource={RelativeSource AncestorType=ComboBoxItem}}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                                <ComboBoxItem Content="弹窗" Tag="弹窗启动" Style="{DynamicResource GoldComboItem}"/>
+                                <ComboBoxItem Content="静默" Tag="静默缩小到托盘" Style="{DynamicResource GoldComboItem}"/>
                             </ComboBox>
                         </Grid>
                     </Border>
