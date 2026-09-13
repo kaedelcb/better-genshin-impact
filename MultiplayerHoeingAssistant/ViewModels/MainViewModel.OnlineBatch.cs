@@ -145,11 +145,15 @@ public partial class MainViewModel
                 // [A4.3] capability 门控：新 BGI（hello 声明 job.registry）走 reconcile 对账循环
                 // （pull=ext.job.list 事实源 + job.* 事件唤醒）；老 BGI 无能力位，走原阻塞式
                 // for 循环（逐字节保留，单机/旧版零回归）。
+                // [fix 2026-09-13] 本批次是否有任何绑定组真正被 BGI 接受启动：
+                // 全部未启动（如绑定组在 BGI 侧不存在被业务拒绝）时"锄地完成"前提不成立，
+                // 下方 RunSpecified 收尾必须跳过（否则空批次凭空启动指定任务——实机事故）。
+                var anyItemStarted = false;
                 var extClient = _externalClient;
                 if (extClient is { State: BgiExternalLinkState.Ready }
                     && extClient.HasCapability(BgiExternalClient.CapabilityJobRegistry))
                 {
-                    await RunBatchReconcileLoopAsync(batch, extClient, groupNames, generation);
+                    anyItemStarted = await RunBatchReconcileLoopAsync(batch, extClient, groupNames, generation);
                 }
                 else
                 {
@@ -198,6 +202,7 @@ public partial class MainViewModel
                             AddLog($"启动配置组 \"{currentGroup}\" 失败，跳过");
                             continue;
                         }
+                        anyItemStarted = true;
                         if (batch.IsCancellationRequested)
                         {
                             break;
@@ -217,7 +222,20 @@ public partial class MainViewModel
                 // [P1b] 走恰好一次守卫：与 10s 恢复定时器互斥（同一代序号只收尾一次）
                 if (!batch.IsCancellationRequested)
                 {
-                    await ApplyPolicyTeardownOnceAsync(batch, "联机锄地", userCancelled: false);
+                    // [fix 2026-09-13] 空批次守卫：全部绑定组都未真正启动（被 BGI 拒绝/不存在）时，
+                    // "锄地完成"前提不成立，RunSpecified 收尾（启动指定任务）必须跳过——
+                    // 否则定时上线触发后组名失效会凭空启动指定任务（实机事故：空批次后"采集"自动开跑）。
+                    // Resume/Stop 不受影响：恢复原任务/清上下文是恢复现场语义，与批次是否空跑无关。
+                    // 10s 恢复定时器不会补刀：它由 autoHoeingRunning 边沿触发，空批次从未产生该边沿。
+                    if (SnapshotOnlineHoeingPolicy().Policy == TaskConflictPolicy.RunSpecified && !anyItemStarted)
+                    {
+                        AddLog("[任务冲突策略] 本批次所有绑定组均未启动成功（被 BGI 拒绝/不存在），未实际锄地，"
+                               + "跳过「完成后执行指定任务」收尾（防空批次误启动）；请检查绑定的配置组名是否在 BGI 中存在");
+                    }
+                    else
+                    {
+                        await ApplyPolicyTeardownOnceAsync(batch, "联机锄地", userCancelled: false);
+                    }
                 }
 
                 _ = ReportStatusAsync();
@@ -254,8 +272,9 @@ public partial class MainViewModel
     /// "拉快照 → 决策 → 应用动作（副作用）"三件事。
     /// 收尾语义与旧循环逐条对齐：F11 取消 → AbortUserCancelled → teardown(userCancelled:true)；
     /// 外部取消（新轮顶替/手动停止）→ 令牌退出、不收尾；全部终态确认 → Complete → 由调用方走策略收尾。
+    /// 返回值：本批次是否有任何期望项真正被 BGI 接受启动（空批次守卫的输入，fix 2026-09-13）。
     /// </summary>
-    private async Task RunBatchReconcileLoopAsync(
+    private async Task<bool> RunBatchReconcileLoopAsync(
         OnlineHoeingBatch batch, BgiExternalClient ext, IReadOnlyList<string> groupNames, int generation)
     {
         // 期望清单：串行语义（同时至多一项在飞），状态推进由 BatchReconcileDecider 决策
@@ -284,7 +303,7 @@ public partial class MainViewModel
             }
             catch (OperationCanceledException)
             {
-                return; // 外部取消：不收尾（与旧循环 break 同语义）
+                return false; // 外部取消：不收尾（与旧循环 break 同语义）
             }
             catch (Exception ex) when (ex is InvalidOperationException or IOException
                                        or TimeoutException or JsonException)
@@ -347,6 +366,7 @@ public partial class MainViewModel
                             break;
                         case BatchReconcileAction.Attach attach:
                             items[attach.Index].JobId ??= attach.JobId;
+                            items[attach.Index].Started = true; // 注册表里存在该作业 = 曾被 BGI 接受启动
                             AddLog($"[reconcile] 按名附着找回作业：「{items[attach.Index].Name}」jobId={attach.JobId}");
                             break;
                         case BatchReconcileAction.Submit submit:
@@ -390,7 +410,9 @@ public partial class MainViewModel
                 }
                 if (finished || batch.IsCancellationRequested)
                 {
-                    return;
+                    // Complete 收尾：返回是否有项真正启动过（空批次守卫输入）；
+                    // 取消/中止路径返回值不被消费（调用方见令牌即跳过收尾）
+                    return finished && items.Any(it => it.Started);
                 }
             }
 
@@ -401,13 +423,15 @@ public partial class MainViewModel
             }
             catch (OperationCanceledException)
             {
-                return;
+                return false;
             }
             if (batch.IsCancellationRequested)
             {
-                return; // WhenAny 不会因 Delay 取消而抛，此处统一接外部取消
+                return false; // WhenAny 不会因 Delay 取消而抛，此处统一接外部取消
             }
         }
+
+        return false; // while 条件退出 = 令牌置位，不收尾
     }
 
     /// <summary>
@@ -443,8 +467,10 @@ public partial class MainViewModel
                 AddLog($"[reconcile] 「{item.Name}」幂等命中 already_executed（generation={generation}），按成功终态确认");
                 item.State = BatchItemState.TerminalConfirmed;
                 item.TerminalWasCancelled = false;
+                item.Started = true; // 幂等命中 = 该 generation 已执行过
                 return;
             }
+            item.Started = true; // 提交被 BGI 接受（即便应答缺 taskHandle 也算已启动）
             if (!string.IsNullOrEmpty(submit.TaskHandle))
             {
                 item.JobId = submit.TaskHandle;

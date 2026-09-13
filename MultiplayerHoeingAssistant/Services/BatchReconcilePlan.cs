@@ -31,6 +31,11 @@ public sealed class BatchExpectedItem
 
     /// <summary>终态确认时的 errorCode（failed 时非空）。</summary>
     public string? TerminalErrorCode { get; set; }
+
+    /// <summary>是否真正被 BGI 接受启动过（提交成功/幂等命中/按名附着找回均算）。
+    /// 业务拒绝（如配置组不存在）保持 false——空批次（全部项未启动）不得触发 RunSpecified 收尾，
+    /// 否则"完成后执行指定任务"会在一条都没锄的情况下误启动指定任务（实机事故 2026-09-13）。</summary>
+    public bool Started { get; set; }
 }
 
 public enum BatchItemState
