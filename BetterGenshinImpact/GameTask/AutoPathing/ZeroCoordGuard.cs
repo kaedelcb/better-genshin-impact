@@ -4,7 +4,9 @@ using OpenCvSharp;
 namespace BetterGenshinImpact.GameTask.AutoPathing;
 
 /// <summary>
-/// 零坐标防呆纯函数（Requirement 4）。无副作用，PBT 目标。
+/// 独立理由（R4.2）：唯一消费方 PathExecutor.cs 是与公版同名的高冲突文件——纯函数防呆
+/// 独立为零冲突新文件正当；是 A13 定位域与 M12 的相邻积木（PR 随 A13 定位域同批）。
+/// 零坐标防呆纯函数（Requirement 4——历史 spec 编号，来源 spec 已归档）。无副作用，PBT 目标。
 /// </summary>
 public static class ZeroCoordGuard
 {

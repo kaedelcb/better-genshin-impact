@@ -12,7 +12,9 @@ using OpenCvSharp;
 namespace BetterGenshinImpact.GameTask.AutoPathing;
 
 /// <summary>
-/// 小地图坐标识别诊断埋点（临时调试用）。
+/// 独立理由（R4.2）：诊断埋点被 NavigationInstance/PathExecutor/SceneBaseMapByTemplateMatch/
+/// MiniMapPreprocessor 四个公版同名或高冲突文件跨文件消费——集中为独立零冲突文件（B12/M12，用户拍板保留）。
+/// 小地图坐标识别诊断埋点（茶包诊断设施，PR 不随公版——茶包固化，M17 走查定案）。
 ///
 /// 目的：定位"回点时 Navigation.GetPosition 返回 (0,0)（识别失败）"到底卡在哪个环节：
 ///   1) 截图裁剪：MimiMapRect 区域是否取对（尺寸 / 是否纯黑 / 是否被 UI 遮挡）
@@ -24,16 +26,17 @@ namespace BetterGenshinImpact.GameTask.AutoPathing;
 /// 用法：默认按开关 <see cref="Enabled"/> 输出结构化日志（DEBUG 级，带 [小地图诊断] 前缀，便于 grep）。
 /// 识别失败（(0,0)）时，按节流间隔把当时的小地图截图 dump 到 log/minimap_diag/ 供肉眼看遮挡。
 ///
-/// 该类为纯临时诊断设施，问题定位后可整体删除，不影响生产逻辑。
+/// 注释中的 "Requirement N" 编号为历史 spec 的条款号（来源 spec 已归档，仅存编号）。
+/// 该类为纯诊断设施，问题定位后可整体删除，不影响生产逻辑。
 /// </summary>
 public static class MiniMapPositionDiagnostics
 {
-    /// <summary>诊断总开关。读配置单例，UI 实时生效；配置为 null 回落默认 true（Requirement 5.1/7.4）。</summary>
+    /// <summary>诊断总开关。读配置单例，UI 实时生效；配置为 null 回落默认 false（默认关闭，Requirement 5.1/7.4）。</summary>
     public static bool Enabled
         => ConfigService.Config?.MiniMapMatchTuningConfig?.DiagnosticsEnabled
            ?? MiniMapMatchTuningConfig.DefaultDiagnosticsEnabled;
 
-    /// <summary>失败帧存图开关。配置为 null 回落默认 true（Requirement 5.2/7.4）。</summary>
+    /// <summary>失败帧存图开关。读配置单例；配置为 null 回落默认 false（默认关闭，Requirement 5.2/7.4）。</summary>
     public static bool DumpFailedFrame
         => ConfigService.Config?.MiniMapMatchTuningConfig?.DumpFailedFrame
            ?? MiniMapMatchTuningConfig.DefaultDumpFailedFrame;
