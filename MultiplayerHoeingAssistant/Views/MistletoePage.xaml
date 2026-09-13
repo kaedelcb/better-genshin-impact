@@ -1309,46 +1309,74 @@
                                 </WrapPanel>
 
                                 <!-- 行 2：开机自启动 + 方案管理（单一 WrapPanel 流式排布：窗口宽时并入一行，窄时按组折行；
-                                     方案管理=命名保存整份启动设置，改坏了可一键恢复；恢复前自动备份当前配置） -->
+                                     两组合计约 580px，默认窗口内容列约 630px 可并排，控件别再加宽挤回三行；
+                                     方案管理=命名保存/恢复/导出/导入整份启动设置，改坏了可一键恢复；恢复前自动备份当前配置；
+                                     导出发给其他机器、导入兼容单方案与整库两种文件，导入只入方案库不改动当前配置） -->
                                 <WrapPanel>
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
                                         <CheckBox IsChecked="{Binding AutoLaunchOnBoot, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
-                                        <TextBlock Text="开机自启动" FontSize="12" Foreground="{DynamicResource White}" VerticalAlignment="Center"
-                                                   ToolTip="助手随系统开机自启动；与「设置 → 启动策略」是同一个开关，两边实时同步"/>
-                                        <ComboBox Width="112" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11"
+                                        <TextBlock Text="开机启动" FontSize="12" Foreground="{DynamicResource White}" VerticalAlignment="Center"
+                                                   ToolTip="助手随系统开机自启动；与「设置 → 启动策略」是同一个开关，两边实时同步"
+                                                   ToolTipService.InitialShowDelay="0"/>
+                                        <!-- 闭合态只显示两字短标签（Content 固定短词，不靠裁字），
+                                             下拉列表经 ItemTemplate 显示 Tag 里的完整选项；
+                                             GoldComboBox 的闭合展示区不套 ItemTemplate，两边天然分离 -->
+                                        <ComboBox Width="56" Margin="6,0,0,0" VerticalAlignment="Center" FontSize="11"
                                                   Style="{StaticResource GoldComboBox}"
                                                   SelectedIndex="{Binding AutoLaunchOnBootModeIndex, Mode=TwoWay}"
                                                   IsEnabled="{Binding AutoLaunchOnBoot}"
-                                                  ToolTip="开机启动方式（与「设置 → 启动策略」实时同步）">
-                                            <ComboBoxItem Content="弹窗启动" Style="{StaticResource GoldComboItem}"/>
-                                            <ComboBoxItem Content="静默缩小到托盘" Style="{StaticResource GoldComboItem}"/>
+                                                  ToolTip="开机启动方式（与「设置 → 启动策略」实时同步）"
+                                                  ToolTipService.InitialShowDelay="0">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Tag, RelativeSource={RelativeSource AncestorType=ComboBoxItem}}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                            <ComboBoxItem Content="弹窗" Tag="弹窗启动" Style="{StaticResource GoldComboItem}"/>
+                                            <ComboBoxItem Content="静默" Tag="静默缩小到托盘" Style="{StaticResource GoldComboItem}"/>
                                         </ComboBox>
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <TextBlock Text="方案" FontSize="12" Foreground="{DynamicResource White}" VerticalAlignment="Center"
-                                                   ToolTip="把当前整个启动设置（开关、延迟、全部节点与分支）存为一份命名方案，改坏了可一键恢复"/>
+                                                   ToolTip="把当前整个启动设置（开关、延迟、全部节点与分支）存为一份命名方案，改坏了可一键恢复"
+                                                   ToolTipService.InitialShowDelay="0"/>
                                         <TextBox Text="{Binding SchemeNameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                 Style="{StaticResource GoldInput}" Width="64" Margin="6,0,0,0"
-                                                 ToolTip="给当前设置起个名字"/>
-                                        <Button Content="💾 保存" Style="{DynamicResource BtnGold}" Padding="8,3" FontSize="11" Margin="6,0,0,0"
+                                                 Style="{StaticResource GoldInput}" Width="140" Margin="4,0,0,0"
+                                                 ToolTip="给当前设置起个名字"
+                                                 ToolTipService.InitialShowDelay="0"/>
+                                        <Button Content="💾 保存" Style="{DynamicResource BtnGhost}" Padding="6,3" FontSize="11" Margin="4,0,0,0"
                                                 Command="{Binding SaveSchemeCommand}"
-                                                ToolTip="把当前整个启动设置（开关、延迟、全部节点与分支）存为一份方案；同名覆盖"/>
-                                        <ComboBox Width="120" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11"
+                                                ToolTip="把当前整个启动设置（开关、延迟、全部节点与分支）存为一份方案；同名覆盖"
+                                                ToolTipService.InitialShowDelay="0"/>
+                                        <ComboBox Width="112" Margin="6,0,0,0" VerticalAlignment="Center" FontSize="11"
                                                   Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
                                                   ItemsSource="{Binding Schemes}" SelectedItem="{Binding SelectedScheme, Mode=TwoWay}"
-                                                  ToolTip="选择一份已保存的方案">
+                                                  ToolTip="选择一份已保存的方案"
+                                                  ToolTipService.InitialShowDelay="0">
                                             <ComboBox.ItemTemplate>
                                                 <DataTemplate>
                                                     <TextBlock Text="{Binding DisplayLine}"/>
                                                 </DataTemplate>
                                             </ComboBox.ItemTemplate>
                                         </ComboBox>
-                                        <Button Content="↩ 恢复" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="6,0,0,0"
+                                        <!-- 恢复/删除/导出/导入只留图标（悬停即时看 ToolTip）；导出=↑ 传出、导入=↓ 传入，
+                                             与 ↩/✕ 同为箭头字形族，导入导出方向相反一眼可辨 -->
+                                        <Button Content="↩" Style="{DynamicResource BtnGhost}" Padding="6,3" FontSize="11" Margin="4,0,0,0"
                                                 Command="{Binding RestoreSchemeCommand}" IsEnabled="{Binding HasSelectedScheme}"
-                                                ToolTip="恢复选中的方案（恢复前会把当前配置自动备份为「恢复前自动备份」）"/>
-                                        <Button Content="✕ 删除" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="4,0,0,0"
+                                                ToolTip="恢复：应用选中的方案（恢复前会把当前配置自动备份为「恢复前自动备份」）"
+                                                ToolTipService.InitialShowDelay="0"/>
+                                        <Button Content="✕" Style="{DynamicResource BtnGhost}" Padding="6,3" FontSize="11" Margin="4,0,0,0"
                                                 Command="{Binding DeleteSchemeCommand}" IsEnabled="{Binding HasSelectedScheme}"
-                                                ToolTip="删除选中的方案（不影响当前正在使用的配置）"/>
+                                                ToolTip="删除：移除选中的方案（不影响当前正在使用的配置）"
+                                                ToolTipService.InitialShowDelay="0"/>
+                                        <Button Content="↑" Style="{DynamicResource BtnGhost}" Padding="6,3" FontSize="11" Margin="4,0,0,0"
+                                                Command="{Binding ExportSchemeCommand}" IsEnabled="{Binding HasSelectedScheme}"
+                                                ToolTip="导出：把选中的方案存为 JSON 文件，可发给其他机器的助手导入"
+                                                ToolTipService.InitialShowDelay="0"/>
+                                        <Button Content="↓" Style="{DynamicResource BtnGhost}" Padding="6,3" FontSize="11" Margin="4,0,0,0"
+                                                Command="{Binding ImportSchemeCommand}"
+                                                ToolTip="导入：从 JSON 文件加入方案（兼容单方案与整库两种文件），只入方案库、不改当前配置；与现有方案重名时自动改名"
+                                                ToolTipService.InitialShowDelay="0"/>
                                     </StackPanel>
                                 </WrapPanel>
                             </StackPanel>

@@ -996,7 +996,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         else dispatcher.Invoke(action);
     }
 
-    // ================= 方案管理（命名保存 / 恢复整份启动设置） =================
+    // ================= 方案管理（命名保存 / 恢复 / 导出导入整份启动设置） =================
 
     /// <summary>恢复前自动备份的固定方案名（每次恢复前覆盖刷新，防手滑）。</summary>
     private const string AutoBackupSchemeName = "恢复前自动备份";
@@ -1100,6 +1100,63 @@ public sealed class MistletoeViewModel : ViewModelBase
         SelectedScheme = null;
         PersistSchemes();
         _mainVm.AddLog($"[槲寄生] 已删除方案「{item.Scheme.Name}」");
+    });
+
+    public RelayCommand ExportSchemeCommand => new(_ =>
+    {
+        var item = SelectedScheme;
+        if (item == null) return; // 按钮已按 HasSelectedScheme 禁用，双保险
+        try
+        {
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "导出启动中心方案",
+                FileName = $"{item.Scheme.Name}.json",
+                Filter = "JSON 文件 (*.json)|*.json|所有文件 (*.*)|*.*",
+            };
+            if (dlg.ShowDialog() != true) return;
+            StartupFlowSchemeStore.ExportScheme(item.Scheme, dlg.FileName);
+            _mainVm.AddLog($"[槲寄生] 已导出方案「{item.Scheme.Name}」→ {dlg.FileName}");
+        }
+        catch (Exception ex)
+        {
+            _mainVm.AddLog($"[槲寄生] 方案导出失败: {ex.Message}");
+        }
+    });
+
+    public RelayCommand ImportSchemeCommand => new(_ =>
+    {
+        try
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "导入启动中心方案",
+                Filter = "JSON 文件 (*.json)|*.json|所有文件 (*.*)|*.*",
+            };
+            if (dlg.ShowDialog() != true) return;
+            var imported = StartupFlowSchemeStore.ImportSchemes(dlg.FileName);
+            if (imported.Count == 0)
+            {
+                _mainVm.AddLog($"[槲寄生] 导入失败：文件里没有可用的方案（{dlg.FileName}）");
+                return;
+            }
+            // 只入方案库、不改动当前配置；要启用请走「恢复」（自带恢复前自动备份）。
+            // 倒序逐个插到列表顶部，整批方案排在最前且保持文件内先后顺序。
+            var existingNames = Schemes.Select(s => s.Scheme.Name).ToList();
+            for (var i = imported.Count - 1; i >= 0; i--)
+            {
+                var scheme = imported[i];
+                scheme.Name = StartupFlowSchemeStore.MakeImportedNameUnique(scheme.Name, existingNames, DateTime.Now);
+                existingNames.Add(scheme.Name); // 同一文件里的重名方案也要互相错开
+                Schemes.Insert(0, new SchemeItemViewModel(scheme));
+            }
+            PersistSchemes();
+            _mainVm.AddLog($"[槲寄生] 已导入 {imported.Count} 份方案（只入方案库；要启用请选中后点「恢复」）");
+        }
+        catch (Exception ex)
+        {
+            _mainVm.AddLog($"[槲寄生] 方案导入失败（文件损坏或不是启动中心方案文件）: {ex.Message}");
+        }
     });
 
     private void PersistSchemes()
