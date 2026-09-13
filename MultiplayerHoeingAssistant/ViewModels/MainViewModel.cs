@@ -3716,22 +3716,11 @@ public partial class MainViewModel : INotifyPropertyChanged
             IsConnected = false;
 
             // 3. 用同一份连接参数重建连接（重新加入房间 → 服务端重新广播所有玩家最新状态）。
+            //    [F9-2] 创建/接线/参数/接管已收拢为共用原语（见 MainViewModel.SignalR.cs）
             if (_config != null)
             {
-                pendingClient = new SignalRClient();
-                WireSignalRClient(pendingClient);
-                pendingClient.OnConnectionStateChanged += connected =>
-                {
-                    Application.Current.Dispatcher.Invoke(() => IsConnected = connected);
-                    // 连接恢复后立即上报状态，无需等待 10 秒定时器
-                    if (connected) _ = ReportStatusAsync();
-                    // [B157] 断线时服务端已清零本成员上线事件，重连后补报上线意图（服务端按 gen 去重，安全）
-                    if (connected) _ = ReReportOnlineIntentIfNeededAsync();
-                };
-                await pendingClient.ConnectAsync(
-                    _config.ServerUrl, RoomCode, _config.ControlRoomPassword,
-                    _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId,
-                    _config.BypassSystemProxy);
+                pendingClient = CreateWiredSignalRClient();
+                await ConnectSignalRWithConfigAsync(pendingClient);
                 // 刷新连接在飞期间（最长可挂 ~100s）用户切到离线：销毁刚到手的连接，不接管
                 if (IsStandaloneMode)
                 {
@@ -3741,13 +3730,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                     AddLog("单机模式已开启，放弃本次刷新建立的连接");
                     return;
                 }
-                _signalRClient = pendingClient;
+                await AdoptConnectedSignalRClientAsync(pendingClient, "刷新完成，已重新建立连接", fireRefreshCompleted: true);
                 pendingClient = null; // 所有权已移交 _signalRClient
-                IsConnected = true;
-                AddLog("刷新完成，已重新建立连接");
-                await ReportStatusAsync();
-                RefreshCompleted?.Invoke();
-                EnsureStatusTimerStarted();
             }
         }
         catch (Exception ex)
@@ -3757,69 +3741,10 @@ public partial class MainViewModel : INotifyPropertyChanged
                 try { await pendingClient.DisposeAsync(); } catch { /* 销毁失败不影响重试 */ }
             }
             AddLog($"刷新失败: {ex.Message}");
-            // 刷新失败时尽量保持可连接：若尚未成功重建，回到 10 秒重试（复用现有重试分支逻辑）
+            // 刷新失败时尽量保持可连接：若尚未成功重建，回到 10 秒重试（[F9-2] 与首连失败共用同一重试回路）
             if (_signalRClient == null)
             {
-                _retryTimer = new Timer(async _ =>
-                {
-                    // 上次重建的 StartAsync 可能还挂着（假死服务器协商超时 ~100s），不叠加（详见 _retryRunning 注释）
-                    if (Interlocked.CompareExchange(ref _retryRunning, 1, 0) != 0) return;
-                    SignalRClient? client = null;
-                    try
-                    {
-                        if (_signalRClient == null && _config != null)
-                        {
-                            client = new SignalRClient();
-                            WireSignalRClient(client);
-                            // 与主路径一致：连接状态变化同步标题栏徽章，恢复后立即上报
-                            client.OnConnectionStateChanged += connected =>
-                            {
-                                Application.Current.Dispatcher.Invoke(() => IsConnected = connected);
-                                if (connected) _ = ReportStatusAsync();
-                                // [B157] 断线时服务端已清零本成员上线事件，重连后补报上线意图（服务端按 gen 去重，安全）
-                                if (connected) _ = ReReportOnlineIntentIfNeededAsync();
-                            };
-                            await client.ConnectAsync(
-                                _config.ServerUrl, RoomCode, _config.ControlRoomPassword,
-                                _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId,
-                                _config.BypassSystemProxy);
-                            if (_signalRClient != null)
-                            {
-                                // 本次 StartAsync 在途期间（最长 ~100s）用户又点了刷新并已重建成功——
-                                // 不能接管 _signalRClient（会把刷新成果挤成无人持有的幽灵连接），
-                                // 本次成果交 finally 销毁，后续状态由在位的连接负责
-                                return;
-                            }
-                            _signalRClient = client;
-                            client = null; // 所有权已移交 _signalRClient
-                            Application.Current.Dispatcher.Invoke(() =>
-                            {
-                                IsConnected = true;
-                                AddLog("已重新连接控制房间");
-                            });
-                            RefreshCompleted?.Invoke();
-                            EnsureStatusTimerStarted();
-                            _ = ReportStatusAsync();
-                            _retryTimer?.Dispose();
-                            _retryTimer = null;
-                        }
-                    }
-                    catch (Exception retryEx)
-                    {
-                        // 重试失败保持定时器继续，但失败原因必须可见——"连不回来"时靠它区分
-                        // 服务器不可达（网络/DNS/服务挂）与服务器拒绝（密码/白名单/协议不兼容）
-                        AddLog($"重连失败: {retryEx.Message}（10 秒后继续）");
-                    }
-                    finally
-                    {
-                        // 重建失败（含 StartAsync 成功但入房抛异常）的半成品客户端必须销毁，防幽灵连接泄漏
-                        if (client != null)
-                        {
-                            try { await client.DisposeAsync(); } catch { /* 销毁失败不影响下一轮重试 */ }
-                        }
-                        _retryRunning = 0;
-                    }
-                }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+                StartSignalRRetryTimer(fireRefreshCompletedOnSuccess: true);
             }
         }
         finally
