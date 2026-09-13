@@ -7,3 +7,4 @@
 ## 文档列表
 
 - [BetterGI 多实例命名管道协议](multi-instance-ipc.md)
+- [BGI 统一作业注册表与槲寄生调度接管 · 总计划](unified-job-registry-master-plan.md)
