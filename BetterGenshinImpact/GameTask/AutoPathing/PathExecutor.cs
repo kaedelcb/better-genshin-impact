@@ -3716,7 +3716,7 @@ public partial class PathExecutor
             // 旋转视角
             targetOrientation = Navigation.GetTargetOrientation(waypoint, position);
             //执行旋转
-            var diff = _rotateTask.RotateToApproach(targetOrientation, screen2);
+            var diff = CameraRotateService.TryRotateToApproach(_rotateTask, targetOrientation, screen2);
             if (num > 20)
             {
                 // diff == null 表示本轮未真实测量到角度（抢锁失败），不累加也不清零卡死计数，保持上一轮状态
@@ -4438,14 +4438,14 @@ public partial class PathExecutor
     private async Task WaitUntilRotatedTo(int targetOrientation, int maxDiff)
     {
         // Logger.LogError("旋转视角2");
-        if (await _rotateTask.WaitUntilRotatedTo(targetOrientation, maxDiff))
+        if (await CameraRotateService.WaitUntilRotatedTo(_rotateTask, ct, targetOrientation, maxDiff))
         {
             // 旋转成功，重置连续超时计数
             _consecutiveRotationTimeoutCount = 0;
             return;
         }
         await ResolveAnomalies();
-        if (await _rotateTask.WaitUntilRotatedTo(targetOrientation, maxDiff))
+        if (await CameraRotateService.WaitUntilRotatedTo(_rotateTask, ct, targetOrientation, maxDiff))
         {
             // 第二次旋转成功，重置连续超时计数
             _consecutiveRotationTimeoutCount = 0;
