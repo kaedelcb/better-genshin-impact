@@ -1975,6 +1975,20 @@ public partial class OneDragonFlowViewModel : ViewModel
     private int _executionSuccessCount = 0; 
     private bool _finishMark = false;
     private bool _nextModel =false;
+
+    /// <summary>
+    /// [A5-1] 龙级执行水位线：当前正在执行的一条龙条目 Index（1-based，与 NextTaskIndex 同语义）。
+    /// 仅运行时有效，供 task.suspend 读取以实现"从被中断的条目恢复"。
+    /// 与 NextTaskIndex（用户"从此执行"标记，执行开头消费后即清零）完全解耦——
+    /// 既有缺陷：OnOneKeyExecute 开头把 NextTaskIndex 置 0 后执行中不回写，
+    /// suspend 时读到的恒为 0，resume 必从头重跑。
+    /// volatile：写在执行线程、读在 IPC 线程（HandleTaskSuspend）。
+    /// </summary>
+    private volatile int _currentExecutingTaskIndex;
+
+    /// <summary>龙级执行水位线（见 _currentExecutingTaskIndex 注释），0 = 未在执行/刚开始。</summary>
+    internal int CurrentExecutingTaskIndex => _currentExecutingTaskIndex;
+
     [RelayCommand]
     private async Task OnOneKeyContinuousExecutionOneKey()
     {
@@ -2293,7 +2307,10 @@ public partial class OneDragonFlowViewModel : ViewModel
             SelectedConfig.NextTaskIndex = 0;
             LoadDisplayTaskListFromConfig();
         }
-        
+
+        // [A5-1] 每轮执行开头清零水位线（连续一条龙每轮重新进入本方法；resume 也是经 NextTaskIndex 回灌后走到这里）
+        _currentExecutingTaskIndex = 0;
+
         foreach (var task in taskListCopy)
         {
             task.InitAction(SelectedConfig);
@@ -2516,7 +2533,11 @@ public partial class OneDragonFlowViewModel : ViewModel
         foreach (var task in taskListCopy)
         {
             if (task is { IsEnabled: true, Action: not null }) {
-                
+                // [A5-1] 回写龙级水位线：suspend 时据此保存"被中断的条目"，
+                // resume 经 NextTaskIndex 回灌后从该条目重跑（被中断条目未完成，重跑是既定语义）。
+                // 批次跳过的配置组（由助手批次外部驱动）也会推进水位线——它们已逻辑启动。
+                _currentExecutingTaskIndex = task.Index;
+
                 if (ScriptGroupsDefault.Any(defaultSg => defaultSg.Name == task.Name && defaultSg.Name != "自动秘境") || (!custoModel && task.Name == "自动秘境"))
                 {
                     _logger.LogInformation($"一条龙任务执行: {finishOneTaskcount++}/{enabledoneTaskCount}");

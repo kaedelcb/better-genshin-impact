@@ -1443,7 +1443,7 @@ internal sealed class InstanceRequestHandler
             int taskIndex = 0;
             string? folderName = null;
             string? projectName = null;
-            int oneDragonTaskIndex = 0;         // 一条龙条目索引（NextTaskIndex）
+            int oneDragonTaskIndex = 0;         // 一条龙条目索引（执行水位线 CurrentExecutingTaskIndex）
             string? subTaskGroupName = null;    // 一条龙内当前执行的配置组名
             string? soloSettingsJson = null;    // solo 场景：独立任务的组级设置快照（恢复时保真）
             bool isOnlineSignalTask = false;    // 当前在跑的项目是否为「联机锄地上线」信号任务
@@ -1477,7 +1477,9 @@ internal sealed class InstanceRequestHandler
                         // 一条龙配置名（HandleTaskResume 用它从 ConfigList 找回配置）
                         groupName = oneDragonVm.SelectedConfig.Name;
                         // 一条龙条目索引（恢复时配置 Skip 到该条目）
-                        oneDragonTaskIndex = oneDragonVm.SelectedConfig.NextTaskIndex;
+                        // [A5-1] 改读执行水位线 CurrentExecutingTaskIndex：NextTaskIndex 在执行开头
+                        // 消费后即清零（OnOneKeyExecute），执行中恒 0，直接读它 resume 必从头重跑。
+                        oneDragonTaskIndex = oneDragonVm.CurrentExecutingTaskIndex;
                     }
                 }
                 catch
@@ -1575,8 +1577,8 @@ internal sealed class InstanceRequestHandler
                     SubTaskGroupName = subTaskGroupName ?? "",
                     SoloSettingsJson = soloSettingsJson ?? ""
                 };
-                _logger.LogInformation("[IPC task.suspend] 已保存中断上下文: Type={TaskType}, Group={GroupName}, Index={TaskIndex}",
-                    taskType, groupName, taskIndex);
+                _logger.LogInformation("[IPC task.suspend] 已保存中断上下文: Type={TaskType}, Group={GroupName}, Index={TaskIndex}, OneDragonIndex={OneDragonTaskIndex}",
+                    taskType, groupName, taskIndex, oneDragonTaskIndex);
             }
 
             // 4. 停止当前任务
