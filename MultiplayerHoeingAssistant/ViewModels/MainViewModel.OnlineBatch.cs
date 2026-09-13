@@ -116,6 +116,17 @@ public partial class MainViewModel
             return;
         }
 
+        // [fix 2026-09-13] 冷启动快速通道：同会话 BGI 进程确定不在（IsBgiRunning 实时枚举，
+        // 仅看本进程会话）时，suspend/settle 没有对象可等——suspend 烧满 3s 连接超时、
+        // settle 兜底循环烧满 30×(1s+0.2s)≈36s，然后才轮到裸拉起，触发到 BGI 启动白等 ~40s。
+        // 进程不存在 = 没有任务可中断、没有槽位可等释放，直接落入批次循环由裸拉起回退接管。
+        // 误判风险可控：进程在但管道暂不可达（启动中/忙）时 IsBgiRunning 仍为 true，走原路径。
+        if (_processMonitor?.IsBgiRunning == false)
+        {
+            AddLog("[上线探针] 同会话 BGI 未运行，跳过 suspend/settle 等待，直接走裸拉起批次流程");
+        }
+        else
+        {
         // 先 task.suspend 中断当前任务
         var suspendResult = await _commandExecutor.ExecuteSuspendAsync(groupName);
         if (suspendResult.Status != "success")
@@ -136,6 +147,7 @@ public partial class MainViewModel
         // [切片4/切片7] settle 判定已抽为 CommandExecutor.WaitTaskSlotSettledAsync 共享方法
         // （ext slotReleased 事件 + 快照探测 + 200ms×30 轮询兜底），按键抢占路径复用同一实现。
         await _commandExecutor.WaitTaskSlotSettledAsync("[上线探针]", AddLog);
+        }
 
         // [P1b] 依次执行所有绑定的配置组（批次有主句柄：取消语义走 batch.Cts，原共享 bool 已废弃）
         batch.RunTask = Task.Run(async () =>
