@@ -54,7 +54,7 @@ public static class MultiplayerKazuhaFightOverrides
     {
         if (taskParams is null) throw new ArgumentNullException(nameof(taskParams));
 
-        // 7 项固定值
+        // 8 项固定值
         taskParams.FinishDetectConfig.RotateFindEnemyEnabled = true;   // #1
         taskParams.RotaryFactor = 1;                                   // #2
         taskParams.CheckBeforeBurst = false;                           // #3

@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using Microsoft.Extensions.Logging;
 using Stfu.Linq;
-using ActionEnum = BetterGenshinImpact.GameTask.AutoPathing.Model.Enum.ActionEnum;
 using BetterGenshinImpact.Core.Script.Dependence;
 using AutoFightOfficialConfig = BetterGenshinImpact.GameTask.AutoFightOfficial.AutoFightOfficialConfig;
 
@@ -62,16 +61,13 @@ internal class AutoFightHandler : IActionHandler
                 ? _pathingConfig.CountryName : taskParams.CountryName;
 
             if (isAutoFightStrategy) _logger.LogInformation("地图追踪战斗将匹配 {StrategyName} 相关策略", string.Join(", ", taskParams.CountryName));
-            if (waypointForTrack?.Action == ActionEnum.Fight.Code && !string.IsNullOrEmpty(waypointForTrack?.ActionParams))
+            // B5：waypoint 级战斗超时——Action 为 fight 且 ActionParams 为数字时注入；
+            // 解析决策在 FightTimeoutResolver（纯函数，PBT 守护），与公版引擎路径共用。
+            var waypointTimeout = FightTimeoutResolver.ResolveWaypointTimeout(waypointForTrack?.Action, waypointForTrack?.ActionParams);
+            if (waypointTimeout.HasValue)
             {
-                int number;
-                var isNumber = int.TryParse(waypointForTrack.ActionParams, out number);
-                if (isNumber)
-                {
-                    //设置超时时间
-                    _logger.LogInformation("地图追踪设置战斗超时时间为 {Timeout} 秒", number);
-                    taskParams.Timeout = number;
-                }
+                _logger.LogInformation("地图追踪设置战斗超时时间为 {Timeout} 秒", waypointTimeout.Value);
+                taskParams.Timeout = waypointTimeout.Value;
             }
 
             ApplyWaypointRewardEndDetection(taskParams, waypointForTrack);
@@ -148,7 +144,7 @@ internal class AutoFightHandler : IActionHandler
                 _logger.LogInformation("[联机][万叶] 启用战斗中持续回点 (returnInterval=1000ms, distanceThreshold=1.0)");
 
                 // multiplayer-kazuha-fixed-fight-overrides §2: 联机万叶玩家专属 10 项战斗参数覆盖
-                // 7 项固定值（旋转寻敌=true, RotaryFactor=1, Q前检测=false, 尝试面敌=false,
+                // 8 项固定值（旋转寻敌=true, RotaryFactor=1, Q前检测=false, 尝试面敌=false,
                 //          GoDistance=0, 不等待旋转结束=true, 快速连续检查=true, 派蒙模式=true）
                 // 2 项钳制（FightWaitNotEndTime ≥ 1000ms, FastCheckDelay ∈ [0.08s, 0.4s]）
                 var kazuhaOverride = MultiplayerKazuhaFightOverrides.Apply(taskParams);
@@ -216,13 +212,12 @@ internal class AutoFightHandler : IActionHandler
 
         var officialParam = new BetterGenshinImpact.GameTask.AutoFightOfficial.AutoFightParam(strategyPath, officialConfig);
 
-        // waypoint 指定的战斗超时（数字）注入，与茶包路径等价（公版 param 有 Timeout 字段）
-        if (waypointForTrack?.Action == ActionEnum.Fight.Code
-            && !string.IsNullOrEmpty(waypointForTrack.ActionParams)
-            && int.TryParse(waypointForTrack.ActionParams, out var number))
+        // waypoint 指定的战斗超时（数字）注入，与茶包路径共用 FightTimeoutResolver（公版 param 有 Timeout 字段）
+        var officialWaypointTimeout = FightTimeoutResolver.ResolveWaypointTimeout(waypointForTrack?.Action, waypointForTrack?.ActionParams);
+        if (officialWaypointTimeout.HasValue)
         {
-            _logger.LogInformation("地图追踪设置战斗超时时间为 {Timeout} 秒", number);
-            officialParam.Timeout = number;
+            _logger.LogInformation("地图追踪设置战斗超时时间为 {Timeout} 秒", officialWaypointTimeout.Value);
+            officialParam.Timeout = officialWaypointTimeout.Value;
         }
 
         var fightSoloTask = BetterGenshinImpact.GameTask.AutoFightOfficial.Factory.CombatTaskFactoryProvider
