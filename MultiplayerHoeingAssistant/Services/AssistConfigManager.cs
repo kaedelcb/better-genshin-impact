@@ -47,21 +47,49 @@ public class AssistConfigManager
         }
     }
 
+    /// <summary>
+    /// [A0 容错 2026-09-13] 配置文件损坏/被占/半截写入（程序崩溃瞬间保存）时：
+    /// 备份坏文件为 .corrupt-时间戳（不删原始证据）后回退默认配置，绝不上抛——
+    /// 旧实现裸读裸反序列化，一次坏盘写 = 助手永久无法启动（App.OnStartup 弹"初始化失败"并退出）。
+    /// </summary>
     public AssistConfig Load()
     {
         MigrateIfNeeded();
-        if (System.IO.File.Exists(_configPath))
+        if (!System.IO.File.Exists(_configPath))
+        {
+            return new AssistConfig();
+        }
+        try
         {
             var json = System.IO.File.ReadAllText(_configPath);
             return System.Text.Json.JsonSerializer.Deserialize<AssistConfig>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new AssistConfig();
         }
-        return new AssistConfig();
+        catch (Exception ex)
+        {
+            // 留痕 + 备份坏文件（备份失败不掩盖主流程，仅留痕）
+            System.Diagnostics.Debug.WriteLine($"[AssistConfig] 配置加载失败，回退默认配置: {ex.Message}");
+            try
+            {
+                var corrupt = _configPath + $".corrupt-{DateTime.Now:yyyyMMddHHmmss}";
+                System.IO.File.Copy(_configPath, corrupt);
+                System.Diagnostics.Debug.WriteLine($"[AssistConfig] 损坏配置已备份: {corrupt}");
+            }
+            catch (Exception backupEx)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AssistConfig] 损坏配置备份失败: {backupEx.Message}");
+            }
+            return new AssistConfig();
+        }
     }
 
+    /// <summary>[A0 容错] 原子写：先写 .tmp 再覆盖移动，杜绝半截写入制造坏配置；失败内部留痕不抛（调用方均无 catch）。</summary>
     public void Save(AssistConfig config)
     {
         var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(_configPath, json);
+        if (!LocalPeerSyncService.WriteFileAtomic(_configPath, json))
+        {
+            System.Diagnostics.Debug.WriteLine($"[AssistConfig] 配置保存失败（已内部容错）: {_configPath}");
+        }
     }
 
     /// <summary>读取 assistant-config.json 的原始 JSON 文本（用于设置弹窗编辑展示）。</summary>
@@ -77,8 +105,8 @@ public class AssistConfigManager
         {
             var obj = JsonSerializer.Deserialize<AssistConfig>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (obj == null) return false;
-            File.WriteAllText(_configPath, JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true }));
-            return true;
+            // [A0 容错] 同 Save：原子写，杜绝半截写入
+            return LocalPeerSyncService.WriteFileAtomic(_configPath, JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch
         {

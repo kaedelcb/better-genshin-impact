@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    [A4.6] 助手侧纯逻辑单测工程（总计划 F10）。
+    首批覆盖：BatchReconcileDecider（批次 reconcile 决策纯函数）/ OnlineHoeingBatch。
+    引用 WPF 工程仅为取 Services 下的零依赖纯逻辑类；测试自身不碰 UI 线程。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -54,6 +54,9 @@ public class MainViewModel : INotifyPropertyChanged
     // OnlineEdgeFreshnessWindow/OnlineReportDebounce）已全部收编进 OnlineIntentLifecycle。
     /// <summary>[切片1] ext.event 事件通道客户端（BgiExternalClient SDK）；null = 尚未建立/已降级。</summary>
     private BgiExternalClient? _externalClient;
+    /// <summary>[A4.3] reconcile 循环的本拍唤醒器：job.* 事件到达即 TrySetResult（快速路径），
+    /// 帧丢失由 10s 节拍 pull 兜底自愈。批次线程每拍重建，事件线程只 TrySetResult，无锁安全。</summary>
+    private volatile TaskCompletionSource? _batchWakeSignal;
     /// <summary>[切片1] 事件通道探测退避：Legacy（老 BGI）或暂时连不上时，到此时间点之前不再探测。</summary>
     private DateTime _externalNextProbeUtc = DateTime.MinValue;
     /// <summary>[切片4] 事件驱动维护的 ext.task.status 快照（SDK 基线/跳号/事件触发刷新产物）；null = 尚未取得。</summary>
@@ -730,6 +733,18 @@ public class MainViewModel : INotifyPropertyChanged
                 return;
             }
 
+            // [A4.3] job.* 事件 = reconcile 循环的唤醒快速路径（事实源仍是 ext.job.list pull，
+            // 帧丢失/乱序由 10s 节拍兜底；job.heartbeat 仅作存活信号，不唤醒）
+            if (evt.Name is BgiExternalEventNames.JobQueued
+                or BgiExternalEventNames.JobStarted
+                or BgiExternalEventNames.JobCompleted
+                or BgiExternalEventNames.JobFailed
+                or BgiExternalEventNames.JobCancelled)
+            {
+                _batchWakeSignal?.TrySetResult();
+                return;
+            }
+
             // 任务/锄地状态事件：触发一次快照刷新（SDK 内部 300ms 节流 + 在飞去重）
             if (evt.Name is BgiExternalEventNames.TaskStarted
                 or BgiExternalEventNames.TaskStopped
@@ -1262,6 +1277,10 @@ public class MainViewModel : INotifyPropertyChanged
                 _resumeTimeoutTimer?.Dispose();
                 _resumeTimeoutTimer = new System.Threading.Timer(async _ =>
                 {
+                    // [A0 容错 2026-09-13] Timer 回调 = async void，任何分支漏 catch 的异常
+                    // 都会逃逸成 AppDomain 未处理异常（进程终止），这里统一兜底留痕。
+                    try
+                    {
                     if (_commandExecutor != null)
                     {
                         // [任务冲突策略] 第二个恢复触发器（10s 轮询边沿检测）：与批次内收尾走同一策略闭环
@@ -1286,6 +1305,12 @@ public class MainViewModel : INotifyPropertyChanged
                                 lock (_teardownGate) { _lastTeardownUtc = DateTime.UtcNow; }
                             }
                         }
+                    }
+                    }
+                    catch (Exception ex)
+                    {
+                        try { AddLog($"[A0 容错] 恢复定时器回调未预期异常（已拦截，防 async void 逃逸）: {ex.Message}"); }
+                        catch { /* 日志自身失败（关机竞态）不再上抛 */ }
                     }
                 }, null, TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(-1));
             }
@@ -4287,6 +4312,10 @@ public class MainViewModel : INotifyPropertyChanged
 
         client.OnRemoteCommand += async cmd =>
         {
+            // [A0 容错 2026-09-13] 事件回调 = async void，约 15 个 Cmd 分支难以逐一保证
+            // 不抛；任何逃逸异常都会变成 AppDomain 未处理异常（进程终止），这里整体兜底留痕。
+            try
+            {
             if (cmd.Cmd == "ack")
             {
                 // 显示 ack 确认日志（不执行、不回 ack，阻断循环）
@@ -4467,11 +4496,6 @@ public class MainViewModel : INotifyPropertyChanged
                         return;
                     }
                     AddLog($"收到一键锄地，开始执行本地绑定的 {groupNames.Count} 个配置组...");
-                    // [批次标记] 每次新的一键锄地下发都是新批次：循环开始前重置回退标记，
-                    // 避免上一批次 KillBgi+RestartBgi 回退残留的 _hasRestartedThisBatch
-                    // 导致本批次所有配置组被误判为"同批次后续组"而跳过 IPC（BGI 侧命令行串行早已结束/被 F11 停止）。
-                    // 循环内部不重置：多配置组共用一次回退重启的保护仍有效。
-                    _commandExecutor?.ResetBatch();
                     foreach (var groupName in groupNames)
                     {
                         if (_commandExecutor == null) break;
@@ -4509,14 +4533,14 @@ public class MainViewModel : INotifyPropertyChanged
 
             if (_commandExecutor != null)
             {
-                // [批次标记] 每次新的远程 start_group/start_oneclick 下发都是新批次：重置回退标记，
-                // 避免上一批次回退残留的 _hasRestartedThisBatch 把本次启动吞掉（静默不执行）。
-                if (cmd.Cmd is "start_group" or "start_oneclick")
-                {
-                    _commandExecutor.ResetBatch();
-                }
                 var result = await _commandExecutor.ExecuteAsync(cmd);
                 await SendAckAsync(cmd, result.Status, result.Message);
+            }
+            }
+            catch (Exception ex)
+            {
+                try { AddLog($"[A0 容错] 远程命令处理未预期异常（已拦截，防 async void 逃逸）: {cmd?.Cmd} {ex.Message}"); }
+                catch { /* 日志自身失败（关机竞态）不再上抛 */ }
             }
         };
 
@@ -4917,11 +4941,6 @@ public class MainViewModel : INotifyPropertyChanged
         if (selfTargeted)
         {
             // 有本地 BGI：走本地 IPC 执行
-            // [批次标记] 每次新的本地下发都是新批次：重置回退标记（同 OnRemoteCommand 接收端）
-            if (cmd is "start_group" or "start_oneclick")
-            {
-                _commandExecutor.ResetBatch();
-            }
             var result = await _commandExecutor.ExecuteAsync(NewCmd([selfUid]));
             AddLog($"命令结果: {result.Message}");
         }
@@ -4973,12 +4992,6 @@ public class MainViewModel : INotifyPropertyChanged
         if (_commandExecutor == null)
         {
             return new CommandResult { Status = "failed", Message = "未配置 BGI 路径，无法执行 BGI 命令" };
-        }
-
-        // [批次标记] 启动流程里的任务启动是新的下发边界，与 ExecuteLocalCommandAsync 同纪律
-        if (cmd is "start_group" or "start_oneclick")
-        {
-            _commandExecutor.ResetBatch();
         }
 
         var selfUid = _config?.PlayerUid ?? "";
@@ -5850,8 +5863,6 @@ public class MainViewModel : INotifyPropertyChanged
                 {
                     if (_commandExecutor != null)
                     {
-                        // [批次标记] 每次新的弹窗确认下发都是新批次：重置回退标记（同 OnRemoteCommand 接收端）
-                        _commandExecutor.ResetBatch();
                         var localCmd = new RemoteCommand
                         {
                             Cmd = isOneClick ? "start_oneclick" : "start_group",
@@ -6661,24 +6672,11 @@ public class MainViewModel : INotifyPropertyChanged
             AddLog("CommandExecutor 不可用（BgiPath 未配置），无法通过 IPC 启动 BGI 配置组");
             if (_processMonitor != null)
             {
-                // 命令行 --startGroups 支持多个配置组（BGI 侧 OnStartMultiScriptGroupWithNamesAsync 串行执行），
-                // 必须一次性带上全部绑定组，否则冷启动只执行第一个组就停。
-                // 一条龙配置无法用 --startGroups 启动，跳过并提示。
-                var cliGroups = new List<string>();
-                for (int i = 0; i < groupNames.Count; i++)
-                {
-                    var t = (_config?.OnlineHoeingGroupTypes?.Count > i) ? _config.OnlineHoeingGroupTypes[i] : "group";
-                    if (t == "onedragon")
-                        AddLog($"绑定的一条龙「{groupNames[i]}」无法通过命令行启动，已跳过（请配置 BGI 路径以启用 IPC）");
-                    else
-                        cliGroups.Add(groupNames[i]);
-                }
-                if (cliGroups.Count > 0)
-                {
-                    var groupArgs = string.Join(" ", cliGroups.Select(n => $"\"{n}\""));
-                    AddLog($"尝试直接启动 BGI 带配置组参数: {groupArgs}");
-                    _processMonitor.RestartBgi($"--startGroups {groupArgs}");
-                }
+                // [A4.4] 废弃 --startGroups 命令行直启（对 ext 队列/注册表不可见的黑盒执行，
+                // 是"已下发当已完成"事故的温床）。只裸拉起 BGI；执行声明权回归 IPC/reconcile——
+                // 请配置 BGI 路径后重新触发，IPC 通道可用时批次循环会自动接管全部绑定组。
+                AddLog("尝试裸拉起 BGI（不带执行参数）；配置 BGI 路径启用 IPC 后，批次将由 reconcile 循环重新声明执行");
+                _processMonitor.RestartBgi(null);
             }
             else
             {
@@ -6696,11 +6694,11 @@ public class MainViewModel : INotifyPropertyChanged
         {
             // suspend 失败（典型场景：BGI 未运行，IPC 连接超时）。
             // 不要在此 KillBgi + RestartBgi 单组并 return —— 那样冷启动只执行第一个绑定组就停，
-            // 其余绑定组永远不会执行（本 bug 根因）。直接落入下方批次循环：首个 start_group 的
-            // IPC 传输失败会在 CommandExecutor.StartGroupAsync 内触发批次回退
-            // （KillBgi + RestartBgi --startGroups 全部绑定组），由 BGI 命令行串行执行；
+            // 其余绑定组永远不会执行（本 bug 根因）。直接落入下方批次循环：reconcile 路径由对账循环
+            // 逐拍重试声明；v2 老路径下首个 start_group 的 Connect 失败会在 CommandExecutor 内
+            // 触发裸拉起回退（A4.4：不带执行参数，拉起后本方法内重试 IPC）；
             // 若 BGI 实际在运行而 suspend 仅业务失败，也不会误杀进程。
-            AddLog($"task.suspend 未成功（{suspendResult.Message}），继续走批次启动流程（IPC 不通时由批次回退统一重启 BGI 并串行执行全部绑定组）");
+            AddLog($"task.suspend 未成功（{suspendResult.Message}），继续走批次启动流程（IPC 不通时由批次回退统一裸拉起 BGI 后经 IPC 执行）");
         }
 
         // 等待 BGI 内部的 CancellationContext 取消状态传播完毕，避免取消令牌残留影响后续 start_group
@@ -6716,58 +6714,66 @@ public class MainViewModel : INotifyPropertyChanged
         {
             try
             {
-                // [架构级批次管理] 新的一批开始时重置回退标记，避免上一批次的 _hasRestartedThisBatch
-                // 状态残留导致后续批次的所有配置组被跳过（标记只应在同一批次内生效）。
-                _commandExecutor?.ResetBatch();
-
-                for (int i = 0; i < groupNames.Count; i++)
+                // [A4.3] capability 门控：新 BGI（hello 声明 job.registry）走 reconcile 对账循环
+                // （pull=ext.job.list 事实源 + job.* 事件唤醒）；老 BGI 无能力位，走原阻塞式
+                // for 循环（逐字节保留，单机/旧版零回归）。
+                var extClient = _externalClient;
+                if (extClient is { State: BgiExternalLinkState.Ready }
+                    && extClient.HasCapability(BgiExternalClient.CapabilityJobRegistry))
                 {
-                    // 取消检查点：外部"用户手动停止"（OnStop）或新一轮 AllReady 顶替都会置令牌
-                    if (batch.IsCancellationRequested)
+                    await RunBatchReconcileLoopAsync(batch, extClient, groupNames, generation);
+                }
+                else
+                {
+                    for (int i = 0; i < groupNames.Count; i++)
                     {
-                        break;
-                    }
-                    var currentGroup = groupNames[i];
-                    var groupType = (_config?.OnlineHoeingGroupTypes?.Count > i)
-                        ? _config.OnlineHoeingGroupTypes[i]
-                        : "group";
-                    var isOneClick = groupType == "onedragon";
-                    var startCmd = new RemoteCommand
-                    {
-                        Cmd = isOneClick ? "start_oneclick" : "start_group",
-                        Params = new Dictionary<string, object>
-                        {
-                            { isOneClick ? "configName" : "groupName", currentGroup },
-                            { "startFromIndex", 0 },
-                            { "generation", generation },
-                            { "batchGroupNames", string.Join(",", groupNames) }
-                        }
-                    };
-                    var startResult = await _commandExecutor.ExecuteAsync(startCmd);
-                    if (startResult.Status == "cancelled")
-                    {
-                        // 区分取消来源：令牌已被外部置位（新一轮 AllReady 顶替 / OnStop 手动停止），
-                        // 说明取消不是用户 F11——跳过 userCancelled:true 收尾直接退出，
-                        // 否则会把新轮刚建立的中断上下文清掉
+                        // 取消检查点：外部"用户手动停止"（OnStop）或新一轮 AllReady 顶替都会置令牌
                         if (batch.IsCancellationRequested)
                         {
-                            AddLog("批次被新轮/手动停止取消，跳过 F11 收尾");
                             break;
                         }
-                        batch.Cancel(); // 用户 F11 取消：记入批次令牌，阻止批次末尾再走策略收尾
-                        // 用户 F11 取消永远压过配置策略：清上下文，不恢复、不启动指定任务
-                        // [P1b] 走恰好一次守卫：10s 恢复定时器若同时命中则跳过
-                        await ApplyPolicyTeardownOnceAsync(batch, "联机锄地配置组", userCancelled: true);
-                        break;
-                    }
-                    if (startResult.Status != "success")
-                    {
-                        AddLog($"启动配置组 \"{currentGroup}\" 失败，跳过");
-                        continue;
-                    }
-                    if (batch.IsCancellationRequested)
-                    {
-                        break;
+                        var currentGroup = groupNames[i];
+                        var groupType = (_config?.OnlineHoeingGroupTypes?.Count > i)
+                            ? _config.OnlineHoeingGroupTypes[i]
+                            : "group";
+                        var isOneClick = groupType == "onedragon";
+                        var startCmd = new RemoteCommand
+                        {
+                            Cmd = isOneClick ? "start_oneclick" : "start_group",
+                            Params = new Dictionary<string, object>
+                            {
+                                { isOneClick ? "configName" : "groupName", currentGroup },
+                                { "startFromIndex", 0 },
+                                { "generation", generation },
+                                { "batchGroupNames", string.Join(",", groupNames) }
+                            }
+                        };
+                        var startResult = await _commandExecutor.ExecuteAsync(startCmd);
+                        if (startResult.Status == "cancelled")
+                        {
+                            // 区分取消来源：令牌已被外部置位（新一轮 AllReady 顶替 / OnStop 手动停止），
+                            // 说明取消不是用户 F11——跳过 userCancelled:true 收尾直接退出，
+                            // 否则会把新轮刚建立的中断上下文清掉
+                            if (batch.IsCancellationRequested)
+                            {
+                                AddLog("批次被新轮/手动停止取消，跳过 F11 收尾");
+                                break;
+                            }
+                            batch.Cancel(); // 用户 F11 取消：记入批次令牌，阻止批次末尾再走策略收尾
+                            // 用户 F11 取消永远压过配置策略：清上下文，不恢复、不启动指定任务
+                            // [P1b] 走恰好一次守卫：10s 恢复定时器若同时命中则跳过
+                            await ApplyPolicyTeardownOnceAsync(batch, "联机锄地配置组", userCancelled: true);
+                            break;
+                        }
+                        if (startResult.Status != "success")
+                        {
+                            AddLog($"启动配置组 \"{currentGroup}\" 失败，跳过");
+                            continue;
+                        }
+                        if (batch.IsCancellationRequested)
+                        {
+                            break;
+                        }
                     }
                 }
                 // [P1b] 批次正常结束的统一复位出口（Executing → Idle）
@@ -6807,6 +6813,229 @@ public class MainViewModel : INotifyPropertyChanged
         // 后台序列可能横跨整个锄地会话，锁全程持有会挡住后续合法轮次；并发第二轮的穿透风险由
         // 服务端"参与者集合消费"（B157，不再残留武装事件幻影触发）+ [P1b] 批次句柄顶替取消兜底。
         _isAllReadyProcessing = 0;
+    }
+
+    /// <summary>[A4.3] reconcile 节拍（pull 兜底周期）：job.* 事件帧丢失时 10s 内自愈。</summary>
+    private static readonly TimeSpan ReconcileTickInterval = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// [A4.3] 批次 reconcile 对账循环（总计划 §4.5，K8s 控制器风格水平触发）：
+    /// 仅当 ext Ready 且对端声明 job.registry 能力时由批次任务调用，替代原阻塞式 for 循环。
+    /// 事实源 = ext.job.list 快照 pull（每拍必拉）；job.* 事件只是唤醒快速路径（帧丢失由节拍兜底）。
+    /// 推进/取消/终态判定全部集中在 BatchReconcileDecider 纯函数（单测已穷尽），此方法只做
+    /// "拉快照 → 决策 → 应用动作（副作用）"三件事。
+    /// 收尾语义与旧循环逐条对齐：F11 取消 → AbortUserCancelled → teardown(userCancelled:true)；
+    /// 外部取消（新轮顶替/手动停止）→ 令牌退出、不收尾；全部终态确认 → Complete → 由调用方走策略收尾。
+    /// </summary>
+    private async Task RunBatchReconcileLoopAsync(
+        OnlineHoeingBatch batch, BgiExternalClient ext, IReadOnlyList<string> groupNames, int generation)
+    {
+        // 期望清单：串行语义（同时至多一项在飞），状态推进由 BatchReconcileDecider 决策
+        var items = new List<BatchExpectedItem>(groupNames.Count);
+        for (var i = 0; i < groupNames.Count; i++)
+        {
+            var t = (_config?.OnlineHoeingGroupTypes?.Count > i) ? _config.OnlineHoeingGroupTypes[i] : "group";
+            items.Add(new BatchExpectedItem(groupNames[i], t == "onedragon"));
+        }
+        var batchGroupNames = string.Join(",", groupNames);
+
+        BgiEpoch? epoch = null; // 首个成功快照捕获；之后帧间比对识别 BGI 重启
+        var snapshotFailLogged = false;
+        AddLog($"[reconcile] 批次启动（generation={generation}，期望 {items.Count} 项；pull=ext.job.list，push=job.* 事件唤醒）");
+
+        while (!batch.IsCancellationRequested)
+        {
+            // 本拍唤醒器先于拉快照建立：拉取期间到达的 job.* 事件也计入本拍（漏唤醒最多拖到节拍兜底）
+            var wake = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _batchWakeSignal = wake;
+
+            BgiJobListSnapshot? snapshot = null;
+            try
+            {
+                snapshot = await ext.QueryJobListAsync(batch.Cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return; // 外部取消：不收尾（与旧循环 break 同语义）
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or IOException
+                                       or TimeoutException or JsonException)
+            {
+                snapshot = null; // 通道瞬态失败：下一拍重试，绝不误判
+            }
+
+            if (snapshot is null)
+            {
+                if (!snapshotFailLogged)
+                {
+                    AddLog("[reconcile] ext.job.list 拉取失败（通道瞬态），节拍重试中");
+                    snapshotFailLogged = true;
+                }
+            }
+            else
+            {
+                if (snapshotFailLogged)
+                {
+                    AddLog("[reconcile] ext.job.list 拉取恢复");
+                    snapshotFailLogged = false;
+                }
+
+                var epochMatch = snapshot.Epoch is not null && epoch is not null
+                                 && snapshot.Epoch.ProcessId == epoch.ProcessId
+                                 && snapshot.Epoch.StartTicksUtc == epoch.StartTicksUtc;
+                if (epoch is null)
+                {
+                    epoch = snapshot.Epoch; // 首拍捕获，不构成纪元变化
+                    epochMatch = true;
+                }
+                else if (!epochMatch)
+                {
+                    AddLog($"[reconcile] BGI 纪元变化（pid {epoch.ProcessId} → {snapshot.Epoch?.ProcessId}），在飞项退回重对账");
+                    epoch = snapshot.Epoch;
+                }
+
+                // 观察输入：本批 generation 的作业 ∪ 已附着 jobId 的作业（跨代残留也能终态确认）
+                var attachedIds = new HashSet<string>(
+                    items.Where(it => it.JobId is not null).Select(it => it.JobId!));
+                var jobs = snapshot.Jobs
+                    .Where(j => j.JobId is not null
+                                && (j.Generation == generation || attachedIds.Contains(j.JobId)))
+                    .Select(j => new BatchJobObservation(
+                        j.JobId!, j.Name, j.Generation, j.State ?? "unknown", j.WasCancelled, j.ErrorCode))
+                    .ToList();
+
+                var actions = BatchReconcileDecider.Decide(items, jobs, epochMatch, generation);
+                var finished = false;
+                foreach (var action in actions)
+                {
+                    switch (action)
+                    {
+                        case BatchReconcileAction.EpochChanged:
+                            foreach (var it in items.Where(it => it.State == BatchItemState.Submitted))
+                            {
+                                it.State = BatchItemState.PendingSubmit;
+                                it.JobId = null;
+                            }
+                            break;
+                        case BatchReconcileAction.Attach attach:
+                            items[attach.Index].JobId ??= attach.JobId;
+                            AddLog($"[reconcile] 按名附着找回作业：「{items[attach.Index].Name}」jobId={attach.JobId}");
+                            break;
+                        case BatchReconcileAction.Submit submit:
+                            await SubmitBatchItemAsync(ext, items[submit.Index], generation, batchGroupNames, batch);
+                            break;
+                        case BatchReconcileAction.Resubmit resubmit:
+                            AddLog($"[reconcile] 「{items[resubmit.Index].Name}」已提交但快照查无此作业"
+                                   + $"（jobId={items[resubmit.Index].JobId}），限次重提交");
+                            items[resubmit.Index].JobId = null;
+                            await SubmitBatchItemAsync(ext, items[resubmit.Index], generation, batchGroupNames, batch);
+                            break;
+                        case BatchReconcileAction.ConfirmTerminal confirm:
+                            items[confirm.Index].State = BatchItemState.TerminalConfirmed;
+                            items[confirm.Index].TerminalWasCancelled = confirm.Cancelled;
+                            items[confirm.Index].TerminalErrorCode = confirm.ErrorCode;
+                            if (!confirm.Cancelled)
+                            {
+                                AddLog(confirm.ErrorCode is null
+                                    ? $"[reconcile] 「{items[confirm.Index].Name}」执行完成"
+                                    : $"[reconcile] 「{items[confirm.Index].Name}」执行失败（{confirm.ErrorCode}），继续下一项");
+                            }
+                            break;
+                        case BatchReconcileAction.AbortUserCancelled abort:
+                            AddLog($"[reconcile] 「{items[abort.Index].Name}」被用户取消（F11 语义），批次按用户取消收尾");
+                            batch.Cancel();
+                            // 与旧循环 cancelled 分支同语义：取消压过策略，清上下文，走恰好一次守卫
+                            await ApplyPolicyTeardownOnceAsync(batch, "联机锄地配置组", userCancelled: true);
+                            finished = true;
+                            break;
+                        case BatchReconcileAction.Complete:
+                            AddLog("[reconcile] 全部期望项终态确认，批次完成");
+                            finished = true;
+                            break;
+                        case BatchReconcileAction.Wait:
+                            break;
+                    }
+                    if (finished)
+                    {
+                        break;
+                    }
+                }
+                if (finished || batch.IsCancellationRequested)
+                {
+                    return;
+                }
+            }
+
+            // 等下一拍：job.* 事件唤醒（快速路径）或 10s 节拍超时（兜底）
+            try
+            {
+                await Task.WhenAny(wake.Task, Task.Delay(ReconcileTickInterval, batch.Cts.Token));
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            if (batch.IsCancellationRequested)
+            {
+                return; // WhenAny 不会因 Delay 取消而抛，此处统一接外部取消
+            }
+        }
+    }
+
+    /// <summary>
+    /// [A4.3] reconcile 循环的提交副作用（Submit/Resubmit 动作的执行体）：
+    /// 入队成功 → 记 jobId（应答缺句柄则留空，下一拍按名附着找回）；业务拒绝/幂等命中 →
+    /// 直接记终态（与旧循环"启动失败跳过 / already_executed 按成功"同语义）；通道瞬态失败 →
+    /// 保持 Submitted 无 jobId，下一拍附着或限次重提交自愈。一切失败留痕。
+    /// </summary>
+    private async Task SubmitBatchItemAsync(
+        BgiExternalClient ext, BatchExpectedItem item, int generation,
+        string batchGroupNames, OnlineHoeingBatch batch)
+    {
+        item.State = BatchItemState.Submitted;
+        item.SubmitAttempts++;
+        try
+        {
+            var submit = await ext.SubmitTaskStartAsync(
+                item.IsOneDragon ? null : item.Name,
+                item.IsOneDragon ? item.Name : null,
+                0, generation, batchGroupNames, batch.Cts.Token);
+            if (!submit.Success)
+            {
+                // 业务拒绝（queue_full 等）：与旧循环"启动失败，跳过"同语义——记失败终态，推进下一项
+                AddLog($"[reconcile] 启动「{item.Name}」被 BGI 拒绝（{submit.ErrorCode ?? "unknown"}）："
+                       + $"{submit.ErrorMessage ?? "无详情"}，按失败终态跳过");
+                item.State = BatchItemState.TerminalConfirmed;
+                item.TerminalWasCancelled = false;
+                item.TerminalErrorCode = submit.ErrorCode ?? "rejected";
+                return;
+            }
+            if (submit.Status == "already_executed")
+            {
+                AddLog($"[reconcile] 「{item.Name}」幂等命中 already_executed（generation={generation}），按成功终态确认");
+                item.State = BatchItemState.TerminalConfirmed;
+                item.TerminalWasCancelled = false;
+                return;
+            }
+            if (!string.IsNullOrEmpty(submit.TaskHandle))
+            {
+                item.JobId = submit.TaskHandle;
+                AddLog($"[reconcile] 「{item.Name}」已下发 jobId={item.JobId} status={submit.Status}");
+            }
+            else
+            {
+                AddLog($"[reconcile] 「{item.Name}」下发应答缺 taskHandle，下一拍按名附着找回");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 外部取消：保持 Submitted，循环顶部统一退出
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException
+                                   or TimeoutException or JsonException)
+        {
+            AddLog($"[reconcile] 「{item.Name}」下发通道瞬态失败：{ex.Message}，下一拍按名附着/限次重提交自愈");
+        }
     }
 
     /// <summary>查询只读任务状态；专供启动中心跨会话监控，不授予任何控制权限。</summary>

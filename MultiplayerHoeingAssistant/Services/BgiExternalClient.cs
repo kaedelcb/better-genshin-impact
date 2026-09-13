@@ -48,6 +48,14 @@ public static class BgiExternalEventNames
     public const string TaskQueueCancelled = "task.queueCancelled";
     public const string TaskSlotReleased = "task.slotReleased";
 
+    // [A3.1] 统一作业注册表事件族（总计划 §6.4）：jobId 与 taskHandle 同一 Guid 别名
+    public const string JobQueued = "job.queued";
+    public const string JobStarted = "job.started";
+    public const string JobCompleted = "job.completed";
+    public const string JobFailed = "job.failed";
+    public const string JobCancelled = "job.cancelled";
+    public const string JobHeartbeat = "job.heartbeat";
+
     public static readonly string[] All =
     [
         TaskStarted,
@@ -62,6 +70,12 @@ public static class BgiExternalEventNames
         TaskFailed,
         TaskQueueCancelled,
         TaskSlotReleased,
+        JobQueued,
+        JobStarted,
+        JobCompleted,
+        JobFailed,
+        JobCancelled,
+        JobHeartbeat,
     ];
 }
 
@@ -94,6 +108,55 @@ public sealed class BgiTaskQueueStatus
     public string? ErrorCode { get; init; }
 
     public string? ErrorMessage { get; init; }
+}
+
+/// <summary>[A3.2] 进程纪元（fencing，总计划 §4.2）：pid + 启动 ticks。帧间比对识别 BGI 重启。</summary>
+public sealed class BgiEpoch
+{
+    public int ProcessId { get; init; }
+
+    public long StartTicksUtc { get; init; }
+}
+
+/// <summary>[A3.2] 注册表作业快照条目（ext.job.status/list 的 jobs[] 元素投影）。</summary>
+public sealed class BgiJobInfo
+{
+    public string? JobId { get; init; }
+
+    public string? ParentJobId { get; init; }
+
+    public string? Kind { get; init; }
+
+    public string? Name { get; init; }
+
+    public string? Source { get; init; }
+
+    public int? Generation { get; init; }
+
+    /// <summary>queued / running / cancelling / succeeded / failed / cancelled / rejected。</summary>
+    public string? State { get; init; }
+
+    public string? ErrorCode { get; init; }
+
+    public string? ErrorMessage { get; init; }
+
+    public bool WasCancelled { get; init; }
+
+    public DateTime? EnqueuedAtUtc { get; init; }
+
+    public DateTime? StartedAtUtc { get; init; }
+
+    public DateTime? FinishedAtUtc { get; init; }
+}
+
+/// <summary>[A3.2] ext.job.list 响应投影：注册表全量快照（reconcile 对账输入）。</summary>
+public sealed class BgiJobListSnapshot
+{
+    public BgiEpoch? Epoch { get; init; }
+
+    public bool TriggerDispatcherRunning { get; init; }
+
+    public IReadOnlyList<BgiJobInfo> Jobs { get; init; } = [];
 }
 
 /// <summary>[切片7] 任务终态事件种类。</summary>
@@ -169,6 +232,8 @@ public sealed class BgiExternalClient : IDisposable
     private const int MaxPayloadLength = 1024 * 1024;
     private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
+    /// <summary>[A0 容错] 连接存活短于此阈值视为"连上即被对端断开"的抖动故障，重连走退避节拍而非零间隔。</summary>
+    private static readonly TimeSpan MinHealthyLifetime = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan FirstHandshakeWait = TimeSpan.FromSeconds(7);
 
     private readonly string _pipeName;
@@ -424,6 +489,9 @@ public sealed class BgiExternalClient : IDisposable
     /// <summary>[切片7] 能力位：BGI 支持队列式任务编排（ext.task.start 入队 + 生命周期事件 + ext.task.cancel）。</summary>
     public const string CapabilityTaskQueue = "task.queue";
 
+    /// <summary>[A3.1] 能力位：BGI 统一作业注册表观察面（job.* 事件族 + ext.job.status/ext.job.list + bgiEpoch 全帧）。</summary>
+    public const string CapabilityJobRegistry = "job.registry";
+
     /// <summary>[切片7] ext.task.stop：ext 通道默认 clearQueue=true（"停止"含"别再继续"语义，清空在队项并逐项发 task.queueCancelled）。</summary>
     public Task<BgiExternalResponse> StopTaskAsync(bool clearQueue = true, CancellationToken cancellationToken = default)
         => SendCommandAsync(ExternalOperations.TaskStop, new { clearQueue }, CommandTimeout, cancellationToken);
@@ -509,6 +577,119 @@ public sealed class BgiExternalClient : IDisposable
             ErrorMessage = root.TryGetProperty("message", out var msgEl) && msgEl.ValueKind == JsonValueKind.String
                 ? msgEl.GetString()
                 : null,
+        };
+    }
+
+    /// <summary>
+    /// [A3.2] 拉注册表全量快照（ext.job.list）——reconcile 对账循环（总计划 §4.5）的输入。
+    /// 返回 null = 通道瞬态失败或对端老 BGI 无此操作（调用方保持既有路径，不误判）。
+    /// </summary>
+    public async Task<BgiJobListSnapshot?> QueryJobListAsync(CancellationToken cancellationToken = default)
+    {
+        var response = await SendCommandAsync(
+                ExternalOperations.JobList,
+                null,
+                CommandTimeout,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (!response.Success || response.Data is null)
+        {
+            return null;
+        }
+
+        using var doc = JsonDocument.Parse(response.Data);
+        var root = doc.RootElement;
+        var jobs = new List<BgiJobInfo>();
+        if (root.TryGetProperty("jobs", out var jobsEl) && jobsEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var jobEl in jobsEl.EnumerateArray())
+            {
+                jobs.Add(ParseJobInfo(jobEl));
+            }
+        }
+
+        return new BgiJobListSnapshot
+        {
+            Epoch = ParseEpoch(root),
+            TriggerDispatcherRunning = root.TryGetProperty("triggerDispatcherRunning", out var tdEl)
+                                       && tdEl.ValueKind == JsonValueKind.True,
+            Jobs = jobs,
+        };
+    }
+
+    /// <summary>
+    /// [A3.2] 按 jobId 拉单个作业生命周期（ext.job.status）。
+    /// 返回 (null, null) = 通道瞬态失败；(status, null) = 应答成功（status 可能为 not_found）。
+    /// </summary>
+    public async Task<(string? Status, BgiJobInfo? Job)> QueryJobStatusAsync(
+        string jobId,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await SendCommandAsync(
+                ExternalOperations.JobStatus,
+                new { jobId },
+                CommandTimeout,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (!response.Success || response.Data is null)
+        {
+            return (null, null);
+        }
+
+        using var doc = JsonDocument.Parse(response.Data);
+        var root = doc.RootElement;
+        var status = root.TryGetProperty("status", out var stEl) && stEl.ValueKind == JsonValueKind.String
+            ? stEl.GetString()
+            : null;
+        var job = root.TryGetProperty("job", out var jobEl) && jobEl.ValueKind == JsonValueKind.Object
+            ? ParseJobInfo(jobEl)
+            : null;
+        return (status, job);
+    }
+
+    private static BgiJobInfo ParseJobInfo(JsonElement el)
+    {
+        static string? Str(JsonElement e, string prop)
+            => e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        static DateTime? Ts(JsonElement e, string prop)
+            => e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String
+               && DateTime.TryParse(v.GetString(), out var t) ? t : null;
+
+        return new BgiJobInfo
+        {
+            JobId = Str(el, "jobId"),
+            ParentJobId = Str(el, "parentJobId"),
+            Kind = Str(el, "kind"),
+            Name = Str(el, "name"),
+            Source = Str(el, "source"),
+            Generation = el.TryGetProperty("generation", out var genEl) && genEl.ValueKind == JsonValueKind.Number
+                ? genEl.GetInt32()
+                : null,
+            State = Str(el, "state"),
+            ErrorCode = Str(el, "errorCode"),
+            ErrorMessage = Str(el, "errorMessage"),
+            WasCancelled = el.TryGetProperty("wasCancelled", out var wcEl) && wcEl.ValueKind == JsonValueKind.True,
+            EnqueuedAtUtc = Ts(el, "enqueuedAtUtc"),
+            StartedAtUtc = Ts(el, "startedAtUtc"),
+            FinishedAtUtc = Ts(el, "finishedAtUtc"),
+        };
+    }
+
+    private static BgiEpoch? ParseEpoch(JsonElement root)
+    {
+        if (!root.TryGetProperty("bgiEpoch", out var epochEl) || epochEl.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        return new BgiEpoch
+        {
+            ProcessId = epochEl.TryGetProperty("processId", out var pidEl) && pidEl.ValueKind == JsonValueKind.Number
+                ? pidEl.GetInt32()
+                : 0,
+            StartTicksUtc = epochEl.TryGetProperty("startTicksUtc", out var tkEl) && tkEl.ValueKind == JsonValueKind.Number
+                ? tkEl.GetInt64()
+                : 0,
         };
     }
 
@@ -705,11 +886,22 @@ public sealed class BgiExternalClient : IDisposable
                 SetConnectionState(BgiExternalConnectionState.Connecting);
                 if (await TryEstablishOnceAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    delay = TimeSpan.Zero;
+                    var connectedAtUtc = DateTime.UtcNow;
                     // 挂起直到连接死亡（读循环退出即连接关闭）
                     if (_readerLoop is { } reader)
                     {
                         await reader.ConfigureAwait(false);
+                    }
+                    // [A0 容错 2026-09-13] 热重连防护：连接存活过短（疑似对端反复接受/关闭的
+                    // 循环故障）时按退避节拍重连，避免零间隔连接风暴；健康长连接的死亡仍立即重连。
+                    if (DateTime.UtcNow - connectedAtUtc < MinHealthyLifetime)
+                    {
+                        delay = ReconnectDelay;
+                        System.Diagnostics.Debug.WriteLine("[BgiExternalClient] 连接存活过短（疑似对端反复断开），退避重连");
+                    }
+                    else
+                    {
+                        delay = TimeSpan.Zero;
                     }
                 }
                 else
@@ -1238,6 +1430,9 @@ public sealed class BgiExternalClient : IDisposable
         public const string TaskCancel = "ext.task.cancel";
         public const string TaskStatus = "ext.task.status";
         public const string TaskQueueStatus = "ext.task.queueStatus";
+        // [A3.2] 统一作业注册表拉取面
+        public const string JobStatus = "ext.job.status";
+        public const string JobList = "ext.job.list";
         public const string ConfigList = "ext.config.list";
         public const string ConfigPullGroup = "ext.config.pullGroup";
         public const string ConfigApplyGroup = "ext.config.applyGroup";
