@@ -2800,12 +2800,27 @@ public partial class MainViewModel : INotifyPropertyChanged
         System.Windows.Controls.ScrollViewer.SetHorizontalScrollBarVisibility(selectedListBox, System.Windows.Controls.ScrollBarVisibility.Disabled);
         // 当前已选配置组列表（可修改的副本）。改别人时用对方的已选配置组（来自服务端同步），改自己用本机绑定。
         // 遥控器模式：从执行端成员取已绑定的配置组（本机无 BGI，无本地配置）。
+        var rawSelected = isSelf
+            ? (_config?.ObserverMode == true
+                ? (Members.FirstOrDefault(m => m.PlayerUid == _config.PlayerUid)?.OnlineHoeingGroupNames ?? [])
+                : (_config.OnlineHoeingGroupNames ?? []))
+            : (targetMember?.OnlineHoeingGroupNames ?? []);
+        // [fix 2026-09-13] 已选回填必须带 [配置]/[一条龙] 类型前缀：配置与广播里只存裸名，
+        // 裸名回填后保存解析（无前缀→默认 group）会把一条龙绑定静默翻成配置组，
+        // 下次触发按 start_group 下发 → BGI 报"配置组不存在"（实机事故：[一条龙]联机锄地
+        // 在改「完成后动作」的保存中被翻成配置组）。类型来源：本机改自己用
+        // _config.OnlineHoeingGroupTypes（权威）；其余按可选列表归属推断；两头都不在的陈旧条目原样展示。
+        string PrefixSelected(string name, string? type)
+        {
+            if (type == "onedragon") return "[一条龙]" + name;
+            if (type == "group") return "[配置]" + name;
+            if (allOneClicks.Contains(name)) return "[一条龙]" + name;
+            if (allGroups.Contains(name)) return "[配置]" + name;
+            return name;
+        }
+        var selfTypes = (isSelf && _config?.ObserverMode != true) ? _config?.OnlineHoeingGroupTypes : null;
         var currentSelected = new System.Collections.ObjectModel.ObservableCollection<string>(
-            isSelf
-                ? (_config?.ObserverMode == true
-                    ? (Members.FirstOrDefault(m => m.PlayerUid == _config.PlayerUid)?.OnlineHoeingGroupNames ?? [])
-                    : (_config.OnlineHoeingGroupNames ?? []))
-                : (targetMember?.OnlineHoeingGroupNames ?? []));
+            rawSelected.Select((n, i) => PrefixSelected(n, (selfTypes?.Count > i) ? selfTypes[i] : null)));
 
         // 先声明可选列表框（供 RefreshAvailableList 使用）
         var availableListBox = new System.Windows.Controls.ListBox
@@ -3196,9 +3211,10 @@ public partial class MainViewModel : INotifyPropertyChanged
                 }
                 else
                 {
-                    // 无前缀（兼容旧数据）
+                    // 无前缀（兼容旧数据/陈旧条目）：按可选列表归属推断类型，
+                    // 防止一条龙被静默翻成配置组；两头都不在才默认 group
                     names.Add(item);
-                    types.Add("group");
+                    types.Add(allOneClicks.Contains(item) ? "onedragon" : "group");
                 }
             }
 
