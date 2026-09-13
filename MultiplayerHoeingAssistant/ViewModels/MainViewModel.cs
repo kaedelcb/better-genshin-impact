@@ -3565,10 +3565,20 @@ public partial class MainViewModel : INotifyPropertyChanged
             _typeCombo.SelectionChanged += (_, _) =>
             {
                 if (_initializing) return;
+                // 注意 SelectedIndex 已是新值：旧类型候选取反。旧名称若是从候选里选的（在旧候选中），
+                // 切换类型后必须刷新，否则"类型=一条龙 + 名称=配置组A"错配会被随手保存（实机反馈 2026-09-13）；
+                // 旧名称不在旧候选中 = 用户手动输入的自定义名，跨类型保留由用户决定。
+                var oldCandidates = _typeCombo.SelectedIndex == 1 ? _groups : _oneClicks;
                 var current = _nameCombo.Text;
                 RefreshNameCandidates();
-                // 类型切换后名称候选随之切换；原名称不在新候选中时保留文本（允许手动输入的名字跨类型保留由用户决定）
-                _nameCombo.Text = current;
+                if (string.IsNullOrWhiteSpace(current) || oldCandidates.Contains(current))
+                {
+                    _nameCombo.Text = _nameCombo.Items.Count > 0 ? _nameCombo.Items[0] as string ?? "" : "";
+                }
+                else
+                {
+                    _nameCombo.Text = current;
+                }
             };
             _initializing = false;
         }
