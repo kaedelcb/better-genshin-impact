@@ -2619,19 +2619,40 @@ public partial class MainViewModel : INotifyPropertyChanged
             return;
         }
 
-        // [任务策略] 「完成后动作」初始值：改自己=读本机持久化配置；改别人=先定向拉取对方当前配置（超时则显示默认值）
+        // [任务策略] 「完成后动作」初始值：执行端改自己=读本机持久化配置；
+        // 改别人 / 遥控器模式改自己=先定向拉取执行端当前配置（超时则显示默认值）。
+        // [fix 2026-09-13] 遥控器模式改自己必须实拉：权威副本在执行端，本机 _config 只是镜像，
+        // 历史上初始值直接读本机镜像导致监控端打开自己的绑定弹窗恒显示"恢复执行"（本次回归根因）。
+        // 路由依据：pull 只投执行端连接（FR-3，监控端不收执行类命令），回复按 47116892 双投回监控端。
         var initPolicy = PolicyFromString(_config?.OnlineHoeingCompletionPolicy);
         var initSpecifiedType = _config?.OnlineHoeingSpecifiedTaskType ?? "group";
         var initSpecifiedName = _config?.OnlineHoeingSpecifiedTaskName ?? "";
-        // 改别人时若拉取失败：弹窗里的「完成后动作」并非对方真实值，直接保存会把默认值覆盖到对方配置上。
+        // 拉取失败时：弹窗里的「完成后动作」并非对方真实值，直接保存会把默认值覆盖到对方配置上。
         // 因此此时不静默放过，而是在弹窗内显示醒目警告 + 默认禁止保存，由用户显式确认后才允许提交。
         var policyPullFailed = false;
+        string? policyPullUid = null;
+        var policyPullDesc = "";
+        var policyPullTargetOnline = false;
         if (!isSelf && targetMember != null)
         {
-            if (targetMember.Online && _signalRClient is { IsConnected: true })
+            policyPullUid = targetMember.PlayerUid;
+            policyPullDesc = targetMember.PlayerName;
+            policyPullTargetOnline = targetMember.Online;
+        }
+        else if (isSelf && _config?.ObserverMode == true)
+        {
+            // 遥控器模式改自己：拉取对象 = 同 UID 的执行端成员（排除本机 observer 条目）
+            policyPullUid = _config?.PlayerUid;
+            policyPullDesc = "执行端";
+            policyPullTargetOnline = !string.IsNullOrEmpty(policyPullUid)
+                && Members.Any(m => m.PlayerUid == policyPullUid && m.Online && m.BgiStatus != "observer");
+        }
+        if (policyPullUid != null)
+        {
+            if (policyPullTargetOnline && _signalRClient is { IsConnected: true })
             {
-                AddLog($"正在拉取 {targetMember.PlayerName} 的上线锄地「完成后动作」配置...");
-                var pulled = await GetTaskPolicySync().PullAsync(targetMember.PlayerUid);
+                AddLog($"正在拉取 {policyPullDesc} 的上线锄地「完成后动作」配置...");
+                var pulled = await GetTaskPolicySync().PullAsync(policyPullUid);
                 if (pulled != null)
                 {
                     initPolicy = PolicyFromString(pulled.GetValueOrDefault("policy"));
@@ -2641,13 +2662,13 @@ public partial class MainViewModel : INotifyPropertyChanged
                 else
                 {
                     policyPullFailed = true;
-                    AddLog($"拉取 {targetMember.PlayerName} 的策略配置超时/失败，弹窗显示默认值；保存将覆盖对方配置");
+                    AddLog($"拉取 {policyPullDesc} 的策略配置超时/失败，弹窗显示默认值；保存将覆盖对方配置");
                 }
             }
             else
             {
                 policyPullFailed = true;
-                AddLog($"{targetMember.PlayerName} 不在线或连接不可用，「完成后动作」显示默认值；保存将覆盖对方配置");
+                AddLog($"{policyPullDesc} 不在线或连接不可用，「完成后动作」显示默认值；保存将覆盖对方配置");
             }
         }
 
@@ -3308,6 +3329,17 @@ public partial class MainViewModel : INotifyPropertyChanged
                         { ok: true } r => $"对方已应用「完成后动作」: {r.message}",
                         { } r => $"对方应用「完成后动作」失败：{r.message}"
                     });
+                    // [fix 2026-09-13] 遥控器模式改自己：push 成功后把新值镜像回本机 _config 并落盘——
+                    // 本机副本驱动设置页展示与执行端离线时的兜底显示，不镜像则永远停留旧值
+                    // （与 OnSetScheduledOnlineTime 的本地镜像模式同款）。push 失败不镜像：
+                    // 本机副本不得比执行端权威值"更新"。弹窗初始值已在打开时实拉执行端，不依赖本镜像。
+                    if (isSelf && _config?.ObserverMode == true && pushResult is { ok: true })
+                    {
+                        _config.OnlineHoeingCompletionPolicy = PolicyToString(completionPolicy);
+                        _config.OnlineHoeingSpecifiedTaskType = completionType;
+                        _config.OnlineHoeingSpecifiedTaskName = completionName;
+                        _configManager?.Save(_config);
+                    }
                 }
                 else
                 {
