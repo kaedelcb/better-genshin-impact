@@ -643,6 +643,7 @@ public class PetViewModel : ViewModelBase
             // 监控（遥控器）模式：优先本地通道——枚举本机全部 Windows 会话中的 BGI 执行端，
             // 直连各自只读状态管道（启动中心跨会话监控同款机制，跨会话可用）；本机没有
             // 可查实例时才回退到服务端房间成员广播（覆盖监控端与执行端不同机器的部署）。
+            // 行结构与执行端面板一致：每台执行端一组完整行，多台时行名加会话前缀防混淆。
             var locals = _localExecutors;
             if (locals.Count > 0)
             {
@@ -652,19 +653,17 @@ public class PetViewModel : ViewModelBase
                 {
                     var label = !string.IsNullOrWhiteSpace(e.UserName) ? e.UserName! : $"会话{e.SessionId}";
                     if (label.Length > 8) label = label[..8] + "…";
-                    if (!e.TaskRunning)
-                    {
-                        rows.Add(new(label, "空闲"));
-                        continue;
-                    }
-                    var parts = new List<string>();
-                    if (!string.IsNullOrWhiteSpace(e.Group)) parts.Add(e.Group!);
-                    if (!string.IsNullOrWhiteSpace(e.Task)) parts.Add(e.Task!);
-                    var route = !string.IsNullOrWhiteSpace(e.Route) ? e.Route
-                              : !string.IsNullOrWhiteSpace(e.ScriptRoute) ? e.ScriptRoute
-                              : null;
-                    if (route != null) parts.Add(route);
-                    rows.Add(new(label, parts.Count > 0 ? string.Join(" · ", parts) : "运行中"));
+                    rows.Add(new(label, e.TaskRunning ? "运行中" : "空闲"));
+                    if (!e.TaskRunning) continue;
+                    var prefix = locals.Count > 1 ? $"S{e.SessionId}·" : "";
+                    rows.Add(new(prefix + "配置组", OrDash(e.Group)));
+                    rows.Add(new(prefix + "任务", OrDash(e.Task)));
+                    if (!string.IsNullOrWhiteSpace(e.Route))
+                        rows.Add(new(prefix + "线路", e.Route!));
+                    if (!string.IsNullOrWhiteSpace(e.ScriptRoute))
+                        rows.Add(new(prefix + "线路信息", e.ScriptRoute!));
+                    if (!string.IsNullOrWhiteSpace(e.Progress))
+                        rows.Add(new(prefix + "锄地进度", e.Progress!));
                 }
             }
             else
@@ -725,7 +724,7 @@ public class PetViewModel : ViewModelBase
     // ========== 监控模式：本机跨会话执行端轮询（后台查询，UI 线程落缓存） ==========
 
     /// <summary>一台本机执行端的展示快照。</summary>
-    private sealed record LocalExecutorRow(int SessionId, string? UserName, bool TaskRunning, string? Group, string? Task, string? Route, string? ScriptRoute);
+    private sealed record LocalExecutorRow(int SessionId, string? UserName, bool TaskRunning, string? Group, string? Task, string? Route, string? ScriptRoute, string? Progress);
 
     /// <summary>最近一轮本机执行端快照（UI 线程读写；查询失败时保留旧值防闪烁）。</summary>
     private List<LocalExecutorRow> _localExecutors = [];
@@ -746,7 +745,8 @@ public class PetViewModel : ViewModelBase
                     snapshot = list.Select(e => new LocalExecutorRow(
                         e.SessionId, e.UserName, e.TaskRunning,
                         e.CurrentTaskGroupName, e.CurrentTaskName,
-                        e.CurrentRouteDisplay, e.CurrentScriptRouteName)).ToList();
+                        e.CurrentRouteDisplay, e.CurrentScriptRouteName,
+                        e.AutoHoeingProgress)).ToList();
                 }
                 catch (OperationCanceledException) { break; }
                 catch

@@ -6412,7 +6412,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         string? CurrentTaskName,
         string? CurrentTaskGroupName,
         string? CurrentRouteDisplay,
-        string? CurrentScriptRouteName);
+        string? CurrentScriptRouteName,
+        string? AutoHoeingProgress);
 
     /// <summary>
     /// 枚举本机全部 Windows 会话中的 BGI 实例，逐台查询其只读状态管道。
@@ -6450,7 +6451,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                 result.Add(new LocalBgiExecutorStatus(
                     process.SessionId, userName, status.TaskRunning,
                     status.CurrentTaskName, status.CurrentTaskGroupName,
-                    status.CurrentRouteDisplay, status.CurrentScriptRouteName));
+                    status.CurrentRouteDisplay, status.CurrentScriptRouteName,
+                    status.AutoHoeingProgress));
             }
         }
         finally
@@ -6503,7 +6505,9 @@ public partial class MainViewModel : INotifyPropertyChanged
             CurrentTaskName = parsed.CurrentTaskName,
             CurrentTaskGroupName = parsed.CurrentTaskGroupName,
             CurrentRouteDisplay = parsed.CurrentRouteDisplay,
-            CurrentScriptRouteName = parsed.CurrentScriptRouteName
+            CurrentScriptRouteName = parsed.CurrentScriptRouteName,
+            AutoHoeingRunning = parsed.AutoHoeingRunning,
+            AutoHoeingProgress = parsed.AutoHoeingProgress
         };
     }
 }
