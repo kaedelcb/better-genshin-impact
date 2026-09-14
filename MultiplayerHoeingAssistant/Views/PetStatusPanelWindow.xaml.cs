@@ -28,7 +28,9 @@ public partial class PetStatusPanelWindow : Window
         vm.PropertyChanged += OnVmPropertyChanged;
         var (w, h) = vm.GetPanelSize();
         Width = w;
-        Height = h;
+        // 极简模式下高度由 SizeToContent 决定——这里再写显式 Height 会使其失效（ApplyMinimalMode 白清）
+        if (!vm.PanelMinimal)
+            Height = h;
         SourceInitialized += (_, _) =>
         {
             var (x, y, _) = _vm.GetPanelRestorePosition();
