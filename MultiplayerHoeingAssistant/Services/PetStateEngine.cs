@@ -128,6 +128,22 @@ public static class PetStateEngine
             altKey = "interact";
             return true;
         }
+
+        // 工作态备片：任务运行中每隔一轮切一个情绪小表情再回工作动作（用户要求任务期表情有变化）；
+        // 光晕/节奏挂语义状态，备片期间不丢
+        if (state is PetState.Hoeing or PetState.WorkingArtifact
+            or PetState.WorkingAffection or PetState.WorkingGather)
+        {
+            altKey = state switch
+            {
+                PetState.Hoeing => "smug",        // 干活干得得意
+                PetState.WorkingArtifact => "joy", // 开箱开出好东西
+                PetState.WorkingAffection => "smug",
+                _ => "joy"
+            };
+            return true;
+        }
+
         altKey = "";
         return false;
     }
