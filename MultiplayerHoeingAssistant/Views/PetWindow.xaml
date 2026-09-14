@@ -82,10 +82,10 @@
                     <!-- 环形渐变：中心透明（被桌宠遮住）、0.62-0.78 为峰值圆环、1.0 处消散——
                          光晕整体落在窗口边界内（超出会被透明窗口裁成方形） -->
                     <RadialGradientBrush>
-                        <GradientStop Color="#00E8C96D" Offset="0.45"/>
-                        <GradientStop Color="#73E8C96D" Offset="0.62"/>
-                        <GradientStop Color="#8CE8C96D" Offset="0.75"/>
-                        <GradientStop Color="#2FE8C96D" Offset="0.90"/>
+                        <GradientStop Color="#00E8C96D" Offset="0.55"/>
+                        <GradientStop Color="#40E8C96D" Offset="0.72"/>
+                        <GradientStop Color="#8CE8C96D" Offset="0.85"/>
+                        <GradientStop Color="#33E8C96D" Offset="0.95"/>
                         <GradientStop Color="#00E8C96D" Offset="1.0"/>
                     </RadialGradientBrush>
                 </Ellipse.Fill>
