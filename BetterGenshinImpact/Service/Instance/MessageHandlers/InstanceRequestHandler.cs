@@ -1139,7 +1139,13 @@ internal sealed class InstanceRequestHandler
             processStartTicks = currentProcess.StartTime.ToUniversalTime().Ticks,
             running = data["running"]?.ToObject<bool>() ?? false,
             taskName = data["taskName"]?.ToObject<string>(),
-            groupName = data["groupName"]?.ToObject<string>()
+            groupName = data["groupName"]?.ToObject<string>(),
+            // 任务详情字段（监控端桌宠面板按执行端显示完整信息用；旧客户端忽略未知字段无兼容风险）
+            wasCancelled = data["wasCancelled"]?.ToObject<bool>() ?? false,
+            autoHoeingRunning = data["autoHoeingRunning"]?.ToObject<bool>() ?? false,
+            autoHoeingProgress = data["autoHoeingProgress"]?.ToObject<string>(),
+            currentRouteDisplay = data["currentRouteDisplay"]?.ToObject<string>(),
+            currentScriptRouteName = data["currentScriptRouteName"]?.ToObject<string>()
         };
     }
 
