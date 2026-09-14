@@ -522,7 +522,9 @@ public class PetViewModel : ViewModelBase
             _burstAnim = null;
             if (now < _alertSustainUntil && _baseState is not PetState.Sleeping)
             {
-                key = "helpless";
+                // 持续尾内每 4 秒 无奈↔哀 交替（哀表情唯一的常驻出场位）
+                var sinceSustain = (int)((now - (_alertSustainUntil - AlertSustain)).TotalSeconds);
+                key = sinceSustain / 4 % 2 == 0 ? "helpless" : "sorrow";
                 status = "唉…先盯着吧";
             }
             else
@@ -537,13 +539,10 @@ public class PetViewModel : ViewModelBase
 
     private string ResolveBaseDisplayKey(DateTime now)
     {
-        var key = PetStateEngine.ToAnimKey(_baseState);
-        if (PetStateEngine.TryGetAlternateKey(_baseState, out var alt))
-        {
-            var dwell = (now - _baseStateSince).Ticks / DwellRotate.Ticks;
-            if (Math.Abs(dwell) % 2 == 1) key = alt; // 每 20s 主片↔备片轮换
-        }
-        return key;
+        // 按状态轮换池循环（池首为主片；加权重复项营造节奏感）
+        var pool = PetStateEngine.GetRotationPool(_baseState);
+        var dwell = (int)Math.Abs((now - _baseStateSince).Ticks / DwellRotate.Ticks);
+        return pool[dwell % pool.Length];
     }
 
     private static string DescribeBurst(string burst) => burst switch

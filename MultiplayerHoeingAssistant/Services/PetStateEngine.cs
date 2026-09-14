@@ -125,34 +125,31 @@ public static class PetStateEngine
         _ => "tea"
     };
 
-    /// <summary>空闲/定时待命的轮换备片（导演层停留超时后切换，避免一张图放到底）。</summary>
-    public static bool TryGetAlternateKey(PetState state, out string altKey)
+    /// <summary>
+    /// 状态轮换池：导演层按停留时长在池内循环切换（pool[0] 为主片，重复项=提高出现权重）。
+    /// 设计原则：①主片占半，保证状态一眼可读；②备片选语义可信的情绪切镜（干活中偶尔得意/开心）；
+    /// ③全部 15 套素材均在表内使用（哀=告警持续尾，见 PetViewModel）。
+    /// 光晕/呼吸节奏挂语义状态标志，轮换到备片期间不丢。
+    /// </summary>
+    public static string[] GetRotationPool(PetState state) => state switch
     {
-        if (state is PetState.Idle or PetState.ScheduledWaiting)
-        {
-            altKey = "interact";
-            return true;
-        }
-
-        // 工作态备片：任务运行中每隔一轮切一个情绪小表情再回工作动作（用户要求任务期表情有变化）；
-        // 光晕/节奏挂语义状态，备片期间不丢
-        if (state is PetState.Hoeing or PetState.WorkingArtifact
-            or PetState.WorkingAffection or PetState.WorkingGather
-            or PetState.WorkingOther)
-        {
-            altKey = state switch
-            {
-                PetState.Hoeing => "smug",        // 干活干得得意
-                PetState.WorkingArtifact => "joy", // 开箱开出好东西
-                PetState.WorkingAffection => "smug",
-                _ => "joy"
-            };
-            return true;
-        }
-
-        altKey = "";
-        return false;
-    }
+        PetState.Sleeping => ["sleep"],
+        PetState.Idle or PetState.ScheduledWaiting
+            => ["tea", "interact", "tea", "joy"],
+        PetState.ReadyOnline
+            => ["interact", "joy", "interact", "smug"],
+        PetState.Hoeing
+            => ["act_hoeing", "smug", "act_hoeing", "joy"],
+        PetState.WorkingArtifact
+            => ["act_artifact", "joy", "act_artifact", "smug"],
+        PetState.WorkingAffection
+            => ["shy", "smug", "shy", "joy"],
+        PetState.WorkingGather
+            => ["act_gather", "joy", "act_gather", "smug"],
+        PetState.WorkingOther
+            => ["interact", "joy", "interact", "confused"],
+        _ => ["tea"]
+    };
 
     /// <summary>
     /// 上线信息 chip 三段拆分（桌宠下方信息条带图标用）：{定时时间|**:**} / {已上线}/{预期} / 三态词。
