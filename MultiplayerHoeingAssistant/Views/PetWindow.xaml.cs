@@ -100,9 +100,9 @@ public partial class PetWindow : Window
         }
         // 光晕直径≈本体1.42倍，透明内边距随之扩展——否则光晕超出窗口被裁成方形
         var px = _vm.SizePx;
-        SpriteHost.Margin = new Thickness(px * 0.21 + 8);
+        SpriteHost.Margin = new Thickness(px * 0.16 + 8);
         // 下方留白用负 margin 把状态条拉回来（状态条覆盖光晕淡出尾，间距恢复原样）
-        ChipHost.Margin = new Thickness(0, -(px * 0.14), 0, 2);
+        ChipHost.Margin = new Thickness(0, -(px * 0.11), 0, 2);
     }
 
     // ========== 交互 ==========
@@ -297,7 +297,7 @@ public partial class PetWindow : Window
         _glowLevel += (glowTarget - _glowLevel) * 0.04;
         if (_glowLevel < 0.001) _glowLevel = 0;
         TaskGlow.Opacity = _glowLevel * (0.65 + 0.35 * b);
-        var glowScale = 1.42 + 0.05 * b;
+        var glowScale = 1.32 + 0.05 * b;
         GlowScale.ScaleX = glowScale;
         GlowScale.ScaleY = glowScale;
     }

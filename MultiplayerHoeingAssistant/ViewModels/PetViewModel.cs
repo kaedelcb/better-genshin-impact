@@ -113,6 +113,7 @@ public class PetViewModel : ViewModelBase
         _petOpacity = snap.PetOpacity;
         _panelEnabled = snap.PanelEnabled;
         _panelOpacity = snap.PanelOpacity;
+        _panelMinimal = snap.PanelMinimal;
         _soundVolume = snap.SoundVolume;
         _soundMuted = snap.SoundMuted;
 
@@ -319,6 +320,7 @@ public class PetViewModel : ViewModelBase
         SetProperty(ref _clickThrough, snap.ClickThrough, nameof(ClickThrough));
         SetProperty(ref _petOpacity, snap.PetOpacity, nameof(PetOpacity));
         SetProperty(ref _panelOpacity, snap.PanelOpacity, nameof(PanelOpacity));
+        SetProperty(ref _panelMinimal, snap.PanelMinimal, nameof(PanelMinimal));
         SetProperty(ref _soundVolume, snap.SoundVolume, nameof(SoundVolume));
         SetProperty(ref _soundMuted, snap.SoundMuted, nameof(SoundMuted));
         if (SetProperty(ref _panelEnabled, snap.PanelEnabled, nameof(PanelEnabled)))
@@ -471,6 +473,13 @@ public class PetViewModel : ViewModelBase
         {
             _baseState = newState;
             _baseStateSince = now;
+        }
+
+        // 过期自愈：监控模式下快照 15s 未更新且轮询线程已死 → 重新拉起（防表情/面板永久冻结）
+        if (_mainVm.IsObserverMode
+            && (_localExecutorsAt == null || now - _localExecutorsAt.Value > TimeSpan.FromSeconds(15)))
+        {
+            StartLocalExecutorPoll();
         }
 
         UpdateChip(hoeing, onlineReady, local);
@@ -811,44 +820,63 @@ public class PetViewModel : ViewModelBase
 
     private void StartLocalExecutorPoll()
     {
+        if (_pollAlive) return; // 已在轮询（幂等；RefreshState 的过期自愈会调用这里）
+        _pollAlive = true;
         _localExecutorPollCts = new CancellationTokenSource();
         var token = _localExecutorPollCts.Token;
         _ = Task.Run(async () =>
         {
-            while (!token.IsCancellationRequested)
+            try
             {
-                List<LocalExecutorRow>? snapshot = null;
-                try
+                while (!token.IsCancellationRequested)
                 {
-                    var list = await _mainVm.QueryLocalExecutorsAsync(token).ConfigureAwait(false);
-                    snapshot = list.Select(e => new LocalExecutorRow(
-                        e.SessionId, e.UserName, e.TaskRunning,
-                        e.CurrentTaskGroupName, e.CurrentTaskName,
-                        e.CurrentRouteDisplay, e.CurrentScriptRouteName,
-                        e.AutoHoeingProgress, e.AutoHoeingRunning,
-                        e.WasCancelled)).ToList();
-                }
-                catch (OperationCanceledException) { break; }
-                catch
-                {
-                    // 整轮查询异常：保留旧快照（面板不闪），下一轮自愈
-                }
-
-                if (snapshot != null)
-                {
-                    var view = snapshot;
-                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    // 循环体全包裹：任何异常都只留痕+保旧值，绝不静默杀死轮询线程
+                    // （旧实现 RefreshState 在 Dispatcher 回调里抛一次异常，整个轮询就无声死亡，
+                    //  _localExecutors 冻结在最后一帧——桌宠表情/面板数据"修好过又坏了"的根因）
+                    try
                     {
-                        _localExecutors = view;
-                        RefreshState();
-                    });
-                }
+                        var list = await _mainVm.QueryLocalExecutorsAsync(token).ConfigureAwait(false);
+                        var view = list.Select(e => new LocalExecutorRow(
+                            e.SessionId, e.UserName, e.TaskRunning,
+                            e.CurrentTaskGroupName, e.CurrentTaskName,
+                            e.CurrentRouteDisplay, e.CurrentScriptRouteName,
+                            e.AutoHoeingProgress, e.AutoHoeingRunning,
+                            e.WasCancelled)).ToList();
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            _localExecutors = view;
+                            _localExecutorsAt = DateTime.UtcNow;
+                            try { RefreshState(); }
+                            catch (Exception ex)
+                            {
+                                _mainVm.AddLog($"[桌宠] 状态刷新异常（轮询继续）: {ex.Message}");
+                            }
+                        });
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception ex)
+                    {
+                        if (_lastPollError != ex.Message)
+                        {
+                            _lastPollError = ex.Message;
+                            _mainVm.AddLog($"[桌宠轮询] 查询异常（保旧值，下一轮自愈）: {ex.Message}");
+                        }
+                    }
 
-                try { await Task.Delay(TimeSpan.FromSeconds(3), token).ConfigureAwait(false); }
-                catch (OperationCanceledException) { break; }
+                    try { await Task.Delay(TimeSpan.FromSeconds(3), token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) { break; }
+                }
             }
+            finally { _pollAlive = false; }
         });
     }
+
+    /// <summary>轮询线程存活标志（防重复启动 + 死亡后可被过期自愈重新拉起）。</summary>
+    private volatile bool _pollAlive;
+    /// <summary>最近一次快照落缓存时间（过期检测用）。</summary>
+    private DateTime? _localExecutorsAt;
+    /// <summary>上次轮询异常指纹（去重留痕）。</summary>
+    private string? _lastPollError;
 
     // ========== 位置记忆 ==========
 
