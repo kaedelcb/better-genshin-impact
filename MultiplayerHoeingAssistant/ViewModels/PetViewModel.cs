@@ -705,7 +705,7 @@ public class PetViewModel : ViewModelBase
                 rows.Add(new("线路", local.CurrentRouteDisplay!));
             // 无信息时隐藏整行（显示 "-" 无信息量）
             if (!string.IsNullOrWhiteSpace(local?.CurrentScriptRouteName))
-                rows.Add(new("脚本线路", local.CurrentScriptRouteName!));
+                rows.Add(new("线路信息", local.CurrentScriptRouteName!));
             if (!string.IsNullOrWhiteSpace(local?.AutoHoeingProgress))
                 rows.Add(new("锄地进度", local.AutoHoeingProgress!));
         }

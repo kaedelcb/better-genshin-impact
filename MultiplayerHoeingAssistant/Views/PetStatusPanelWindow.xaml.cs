@@ -178,13 +178,22 @@ public partial class PetStatusPanelWindow : Window
 
     private void OnCloseClick(object sender, RoutedEventArgs e) => _vm.PanelEnabled = false;
 
-    /// <summary>内容矮于视口 → 垂直居中；高于视口 → 顶对齐（滚动可看全部）。</summary>
+    /// <summary>内容矮于视口 → 容器占满视口高、行内容垂直居中；高于视口 → 容器高度自适应、顶对齐（滚动可看全部）。
+    /// 注意 ScrollViewer 以无限高度测量内容，子元素自身 VerticalAlignment=Center 对不齐视口，必须显式设高度。</summary>
     private void UpdateRowsAlignment()
     {
-        if (double.IsNaN(RowsScroll.ViewportHeight) || RowsScroll.ViewportHeight <= 0) return;
-        RowsHost.VerticalAlignment = RowsHost.ActualHeight < RowsScroll.ViewportHeight
-            ? VerticalAlignment.Center
-            : VerticalAlignment.Top;
+        var viewportHeight = RowsScroll.ViewportHeight;
+        if (double.IsNaN(viewportHeight) || viewportHeight <= 0) return;
+        if (RowsHost.ActualHeight < viewportHeight)
+        {
+            RowsHostWrap.Height = viewportHeight;
+            RowsHost.VerticalAlignment = VerticalAlignment.Center;
+        }
+        else
+        {
+            RowsHostWrap.Height = double.NaN;
+            RowsHost.VerticalAlignment = VerticalAlignment.Top;
+        }
     }
 
     private void RebuildRows()
