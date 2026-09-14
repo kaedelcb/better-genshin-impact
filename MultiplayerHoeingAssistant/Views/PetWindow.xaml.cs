@@ -291,8 +291,8 @@ public partial class PetWindow : Window
         var glowTarget = IsTaskStateKey(_seq?.Key) ? 1.0 : 0.0;
         _glowLevel += (glowTarget - _glowLevel) * 0.04;
         if (_glowLevel < 0.001) _glowLevel = 0;
-        TaskGlow.Opacity = _glowLevel * (0.35 + 0.5 * b);
-        var glowScale = 1.38 + 0.05 * b;
+        TaskGlow.Opacity = _glowLevel * (0.55 + 0.45 * b);
+        var glowScale = 1.0 + 0.05 * b;
         GlowScale.ScaleX = glowScale;
         GlowScale.ScaleY = glowScale;
     }

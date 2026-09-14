@@ -76,12 +76,16 @@
                      HorizontalAlignment="Center" VerticalAlignment="Center"
                      Width="{Binding SizePx}" Height="{Binding SizePx}">
                 <Ellipse.RenderTransform>
-                    <ScaleTransform x:Name="GlowScale" CenterX="0.5" CenterY="0.5" ScaleX="1.38" ScaleY="1.38"/>
+                    <ScaleTransform x:Name="GlowScale" CenterX="0.5" CenterY="0.5"/>
                 </Ellipse.RenderTransform>
                 <Ellipse.Fill>
+                    <!-- 环形渐变：中心透明（被桌宠遮住）、0.62-0.78 为峰值圆环、1.0 处消散——
+                         光晕整体落在窗口边界内（超出会被透明窗口裁成方形） -->
                     <RadialGradientBrush>
-                        <GradientStop Color="#38E8C96D" Offset="0.55"/>
-                        <GradientStop Color="#1AE8C96D" Offset="0.78"/>
+                        <GradientStop Color="#00E8C96D" Offset="0.45"/>
+                        <GradientStop Color="#4DE8C96D" Offset="0.62"/>
+                        <GradientStop Color="#59E8C96D" Offset="0.75"/>
+                        <GradientStop Color="#1FE8C96D" Offset="0.90"/>
                         <GradientStop Color="#00E8C96D" Offset="1.0"/>
                     </RadialGradientBrush>
                 </Ellipse.Fill>
