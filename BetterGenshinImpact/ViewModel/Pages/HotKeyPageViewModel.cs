@@ -381,6 +381,10 @@ public partial class HotKeyPageViewModel : ObservableObject, IViewModel
             {
                 _logger.LogInformation("检测到您配置的停止快捷键{Key}按下，停止当前执行任务", Config.HotKeyConfig.CancelTaskHotkey);
                 CancellationContext.Instance.ManualCancel();
+                // F12 = 用户心智里的"全部停止"：级联清空 ext 任务队列在队/等槽项。
+                // 否则当前任务被杀后，队列项照常派发起步（任务开始时 Set() 会重置取消上下文），
+                // 表现为"停了 B，C/D 又跑起来"。F12 之后外部端新重发的提交不在此范围。
+                BetterGenshinImpact.Service.ExternalInterface.BgiTaskCoordinator.Instance.ClearQueue();
             }
         ));
         systemDirectory.Children.Add(new HotKeySettingModel(

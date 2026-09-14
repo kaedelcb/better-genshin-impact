@@ -134,6 +134,18 @@ internal static class InstanceIpcProtocol
 
     internal static JsonSerializer Serializer { get; } = JsonSerializer.Create(SerializerSettings);
 
+    /// <summary>
+    /// 读取信封 Data 中的字符串字段：JSON null（JValue Null）、空串、空白一律归一化为 C# null。
+    /// 客户端显式发 "key":null 时，JObject["key"] 是 JValue(Null) 而非 C# null，
+    /// 直接 ?.ToString() 会得到 ""——曾把 ext/v2 task.start 的 groupName 短路成空串，
+    /// 导致队列日志 name="" 与 generation 幂等去重把不同一条龙误判为同一任务。
+    /// </summary>
+    internal static string? GetStringOrNull(JObject? data, string key)
+    {
+        var value = data?[key]?.ToString();
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
     internal static async ValueTask WriteJsonAsync(
         Stream stream,
         InstanceIpcEnvelope envelope,

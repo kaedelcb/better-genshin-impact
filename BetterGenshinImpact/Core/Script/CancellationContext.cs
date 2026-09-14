@@ -31,6 +31,12 @@ public class CancellationContext : Singleton<CancellationContext>
     /// <summary>最近一次任务是否被用户取消（F11 或取消热键）。任务开始时 Set() 清 false，取消时 Cancel()/ManualCancel() 设 true，Clear() 不清（供 task.status 查询）。</summary>
     public bool WasCancelled { get; private set; }
 
+    /// <summary>
+    /// 最近一次手动停止（F11/停止热键 ManualCancel）的 UTC 时间；Set() 清零。
+    /// 仅 ManualCancel 置位（Cancel()/CancelTokenOnly() 不动），供 IPC task.start 手动停止冷却窗口判定。
+    /// </summary>
+    public DateTime? LastManualCancelAtUtc { get; private set; }
+
     public bool IsDisposed
     {
         get
@@ -63,7 +69,34 @@ public class CancellationContext : Singleton<CancellationContext>
             _externalCtsList.Clear();
             IsManualStop = false;
             WasCancelled = false;
+            LastManualCancelAtUtc = null;
             disposed = false;
+        }
+    }
+
+    /// <summary>
+    /// 距最近一次手动停止（ManualCancel）是否仍在 window 冷却窗口内。
+    /// 供 IPC task.start 无损拒绝：用户 F11/停止热键的语义是"全部停止"，
+    /// 但批次驱动端可能在 cancelled 后立即重发 task.start 把任务又拉起来（实机事故）。
+    /// </summary>
+    public bool IsInManualStopCooldown(TimeSpan window, out double remainingSeconds)
+    {
+        lock (_sync)
+        {
+            remainingSeconds = 0;
+            if (LastManualCancelAtUtc is not { } last)
+            {
+                return false;
+            }
+
+            var elapsed = DateTime.UtcNow - last;
+            if (elapsed >= window)
+            {
+                return false;
+            }
+
+            remainingSeconds = (window - elapsed).TotalSeconds;
+            return true;
         }
     }
 
@@ -114,6 +147,7 @@ public class CancellationContext : Singleton<CancellationContext>
             if (manualStop)
             {
                 IsManualStop = true;
+                LastManualCancelAtUtc = DateTime.UtcNow;
             }
             if (!resetToken)
             {

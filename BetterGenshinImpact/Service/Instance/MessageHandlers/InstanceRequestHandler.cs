@@ -567,17 +567,46 @@ internal sealed class InstanceRequestHandler
         return list.Length > 0 ? list.ToList() : null;
     }
 
+    /// <summary>
+    /// [手动停止冷却 2026-09-14] F11/停止热键后 30s 内拒绝外部 task.start（v2/ext 两通道共用）。
+    /// 用户 F12 的语义是"全部停止"，但批次驱动端可能在 cancelled 后立即重发把任务又拉起来
+    /// （实机事故：成员模式 F12 停止后一条龙被反复重启，用户连按 6 次 F12）。
+    /// 窗口取 30s：足够吸收 +0.1s/+2.6s 量级的立即重发循环，又不至于让"F12 后房间才开好"的
+    /// 合法批次广播长期失效；每次 ManualCancel 重新起算（滑动窗口）。
+    /// </summary>
+    internal static readonly TimeSpan ManualStopCooldownWindow = TimeSpan.FromSeconds(30);
+
+    /// <summary>冷却窗口内返回无损拒绝信封；窗口外返回 null（调用方继续原流程）。拒绝零副作用：不 Cancel、不污染幂等登记、不占队列位。</summary>
+    internal static InstanceIpcEnvelope? CheckManualStopCooldown(InstanceIpcEnvelope request, string channelTag)
+    {
+        var cancellationContext = BetterGenshinImpact.Core.Script.CancellationContext.Instance;
+        if (!cancellationContext.IsInManualStopCooldown(ManualStopCooldownWindow, out var remainingSeconds))
+        {
+            return null;
+        }
+
+        return InstanceIpcEnvelope.Failure(request, "manual_stop_cooldown",
+            $"检测到手动停止（F11/停止热键），{remainingSeconds:F0}s 冷却期内拒绝外部 task.start（{channelTag}）");
+    }
+
     internal async Task<InstanceIpcEnvelope> HandleTaskStart(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
         {
-            var groupName = request.Data?["groupName"]?.ToString();
-            var configName = request.Data?["configName"]?.ToString();
+            // 显式 "key":null 归一化为 C# null（否则 taskName 被 "" 短路、幂等去重误判，见 GetStringOrNull 注释）
+            var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
+            var configName = InstanceIpcProtocol.GetStringOrNull(request.Data, "configName");
             var startFromIndex = request.Data?["startFromIndex"]?.ToObject<int>() ?? 0;
             // 幂等保护：task.start 携带 generation 时，同一 generation 只执行一次
             var generation = request.Data?["generation"]?.ToObject<int>() ?? 0;
             // [批次名单] 批次绑定列表（纯加法协议字段）：一条龙据此判断内部哪些配置组由批次逐项驱动
             var batchGroupNames = ParseBatchGroupNames(request.Data?["batchGroupNames"]?.ToString());
+
+            // [手动停止冷却] 先于幂等检查/幂等登记/Cancel：被拒绝的请求零副作用（同 task_already_running 无损拒绝纪律）
+            if (CheckManualStopCooldown(request, "v2") is { } cooldownRejection)
+            {
+                return cooldownRejection;
+            }
 
             // 幂等检查：同一 generation + 同一配置组名已执行过则跳过（避免 OnAllReady 重复广播导致配置组重复启动）
             // 注意：允许同一 generation 执行不同配置组（OnAllReady 依次执行多个配置组的场景）
@@ -1315,8 +1344,9 @@ internal sealed class InstanceRequestHandler
     {
         try
         {
-            var groupName = request.Data?["groupName"]?.ToString();
-            var configName = request.Data?["configName"]?.ToString();
+            // 显式 "key":null 归一化为 C# null（见 InstanceIpcProtocol.GetStringOrNull 注释）
+            var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
+            var configName = InstanceIpcProtocol.GetStringOrNull(request.Data, "configName");
             var taskIndex = request.Data?["taskIndex"]?.ToObject<int>() ?? 0;
             var enabled = request.Data?["enabled"]?.ToObject<bool>() ?? false;
 
@@ -1872,7 +1902,8 @@ internal sealed class InstanceRequestHandler
     {
         try
         {
-            var groupName = request.Data?["groupName"]?.ToString();
+            // 显式 "key":null 归一化为 C# null（见 InstanceIpcProtocol.GetStringOrNull 注释）
+            var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
             if (string.IsNullOrEmpty(groupName))
             {
                 return InstanceIpcEnvelope.Response(request, new { ok = false, error = "groupName 为空" });
@@ -1978,10 +2009,11 @@ internal sealed class InstanceRequestHandler
     {
         try
         {
-            var targetName = request.Data?["targetName"]?.ToString() ?? "";
-            var targetUid = request.Data?["targetUid"]?.ToString() ?? "";
-            var groupName = request.Data?["groupName"]?.ToString() ?? "";
-            var packageJson = request.Data?["packageJson"]?.ToString() ?? "";
+            // 显式 "key":null 归一化为 C# null（见 InstanceIpcProtocol.GetStringOrNull 注释）；?? "" 兜底形态不变
+            var targetName = InstanceIpcProtocol.GetStringOrNull(request.Data, "targetName") ?? "";
+            var targetUid = InstanceIpcProtocol.GetStringOrNull(request.Data, "targetUid") ?? "";
+            var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName") ?? "";
+            var packageJson = InstanceIpcProtocol.GetStringOrNull(request.Data, "packageJson") ?? "";
 
             if (string.IsNullOrEmpty(groupName) || string.IsNullOrEmpty(packageJson))
             {
@@ -2079,11 +2111,12 @@ internal sealed class InstanceRequestHandler
     {
         try
         {
-            var groupName = request.Data?["groupName"]?.ToString();
-            var baseMd5 = request.Data?["baseMd5"]?.ToString();
-            var scriptGroupConfigJson = request.Data?["scriptGroupConfigJson"]?.ToString();
-            var soloTaskName = request.Data?["soloTaskName"]?.ToString();
-            var soloTaskSettingsJson = request.Data?["soloTaskSettingsJson"]?.ToString();
+            // 显式 "key":null 归一化为 C# null（见 InstanceIpcProtocol.GetStringOrNull 注释）
+            var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
+            var baseMd5 = InstanceIpcProtocol.GetStringOrNull(request.Data, "baseMd5");
+            var scriptGroupConfigJson = InstanceIpcProtocol.GetStringOrNull(request.Data, "scriptGroupConfigJson");
+            var soloTaskName = InstanceIpcProtocol.GetStringOrNull(request.Data, "soloTaskName");
+            var soloTaskSettingsJson = InstanceIpcProtocol.GetStringOrNull(request.Data, "soloTaskSettingsJson");
 
             if (string.IsNullOrEmpty(groupName))
             {

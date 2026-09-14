@@ -63,12 +63,26 @@ internal static class ExternalInterfaceCommandPlane
         InstanceConnection connection,
         InstanceIpcEnvelope request)
     {
-        var groupName = request.Data?["groupName"]?.ToString();
-        var configName = request.Data?["configName"]?.ToString();
+        // 显式 "key":null 归一化为 C# null（否则 Name 被 "" 短路、幂等去重误判，见 GetStringOrNull 注释）
+        var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
+        var configName = InstanceIpcProtocol.GetStringOrNull(request.Data, "configName");
         var startFromIndex = request.Data?["startFromIndex"]?.ToObject<int>() ?? 0;
         var generation = request.Data?["generation"]?.ToObject<int>() ?? 0;
         // [批次名单 2026-09-13] 与 v2 HandleTaskStart 同语义：批次绑定名单透传到执行段
         var batchGroupNames = InstanceRequestHandler.ParseBatchGroupNames(request.Data?["batchGroupNames"]?.ToString());
+
+        // 双空 task.start 是脏请求：执行段不命中任何分支，只会先取消当前任务再空跑（等价隐式停止），
+        // ext 通道直接拒绝、绝不入队。v2 通道行为冻结，不加此校验。
+        if (groupName is null && configName is null)
+        {
+            return InstanceIpcEnvelope.Failure(request, "invalid_request", "task.start 需要提供 groupName 或 configName");
+        }
+
+        // [手动停止冷却] 先于入队：F11/停止热键后窗口内拒绝外部 task.start（与 v2 同守卫，零副作用）
+        if (InstanceRequestHandler.CheckManualStopCooldown(request, "ext") is { } cooldownRejection)
+        {
+            return cooldownRejection;
+        }
 
         var scriptService = App.ServiceProvider.GetService<BetterGenshinImpact.Service.Interface.IScriptService>();
         if (scriptService == null)

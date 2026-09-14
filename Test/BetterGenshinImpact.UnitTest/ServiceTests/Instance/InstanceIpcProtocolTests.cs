@@ -195,4 +195,29 @@ public class InstanceIpcProtocolTests
 
         Assert.Equal(expected, result);
     }
+
+    /// <summary>
+    /// GetStringOrNull 归一化：客户端显式发 "key":null 时 JObject["key"] 是 JValue(Null)，
+    /// 直接 ?.ToString() 会得到 ""——必须归一化为 C# null，否则 task.start 的
+    /// groupName 被 "" 短路（队列日志 name=""、generation 幂等去重误判）。
+    /// </summary>
+    [Fact]
+    public void GetStringOrNull_ShouldNormalizeJsonNullAndEmptyToNull()
+    {
+        var data = Newtonsoft.Json.Linq.JObject.Parse("""
+            {
+                "explicitNull": null,
+                "empty": "",
+                "whitespace": "   ",
+                "normal": "联机锄地"
+            }
+            """);
+
+        Assert.Null(InstanceIpcProtocol.GetStringOrNull(data, "explicitNull"));
+        Assert.Null(InstanceIpcProtocol.GetStringOrNull(data, "empty"));
+        Assert.Null(InstanceIpcProtocol.GetStringOrNull(data, "whitespace"));
+        Assert.Null(InstanceIpcProtocol.GetStringOrNull(data, "missing"));
+        Assert.Null(InstanceIpcProtocol.GetStringOrNull(null, "normal"));
+        Assert.Equal("联机锄地", InstanceIpcProtocol.GetStringOrNull(data, "normal"));
+    }
 }
