@@ -1,0 +1,107 @@
+<Window x:Class="MultiplayerHoeingAssistant.Views.PetWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="奥黛塔"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight"
+        Topmost="{Binding Topmost}"
+        Opacity="{Binding PetOpacity}"
+        ToolTip="{Binding StatusText}"
+        FontFamily="pack://application:,,,/MultiplayerHoeingAssistant;component/Assets/Fonts/#HarmonyOS Sans SC, Segoe UI, Microsoft YaHei"
+        MouseEnter="OnMouseEnter"
+        MouseLeftButtonDown="OnMouseLeftButtonDown"
+        MouseWheel="OnMouseWheel">
+
+    <!-- 奥黛塔桌宠 v2：帧动画播放器（双层交叉淡化，见 PetWindow.xaml.cs）。
+         alpha=0 像素天然点击穿透；右键菜单在"免打扰穿透模式"（P4）下整窗穿透后自动失效。 -->
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <Style TargetType="ContextMenu">
+            <Setter Property="Background" Value="#F0201C30"/>
+            <Setter Property="BorderBrush" Value="#80D4AF37"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="4"/>
+        </Style>
+        <Style TargetType="MenuItem">
+            <Setter Property="Foreground" Value="#F2E8D5"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="10,6"/>
+        </Style>
+    </Window.Resources>
+
+    <Window.ContextMenu>
+        <!-- ContextMenu 不在可视树内，不继承 Window 的 DataContext，需从 PlacementTarget 接回 -->
+        <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+            <MenuItem Header="显示主窗口" Command="{Binding OpenMainWindowCommand}"/>
+            <Separator/>
+            <MenuItem Header="大小">
+                <MenuItem Header="小" Command="{Binding SetSizeCommand}" CommandParameter="80"/>
+                <MenuItem Header="中" Command="{Binding SetSizeCommand}" CommandParameter="140"/>
+                <MenuItem Header="大" Command="{Binding SetSizeCommand}" CommandParameter="220"/>
+            </MenuItem>
+            <MenuItem Header="置顶显示" IsCheckable="True" IsChecked="{Binding Topmost, Mode=TwoWay}"/>
+            <MenuItem Header="免打扰穿透（解锁走托盘）" IsCheckable="True" IsChecked="{Binding ClickThrough, Mode=TwoWay}"/>
+            <MenuItem Header="显示上线信息" IsCheckable="True" IsChecked="{Binding ShowTaskLabel, Mode=TwoWay}"/>
+            <MenuItem Header="任务状态面板" IsCheckable="True" IsChecked="{Binding PanelEnabled, Mode=TwoWay}"/>
+            <Separator/>
+            <MenuItem Header="隐藏奥黛塔" Command="{Binding HideCommand}"/>
+        </ContextMenu>
+    </Window.ContextMenu>
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ========== 动画播放器：双层 Grid 交叉淡化（LayerBack/LayerFront 各持两帧 Image） ========== -->
+        <Grid x:Name="SpriteHost" Grid.Row="0">
+            <!-- 后层（切换目标，平时 Opacity=0） -->
+            <Grid x:Name="LayerBack" Opacity="0">
+                <Grid.RenderTransform>
+                    <ScaleTransform x:Name="BackScale" CenterX="0.5" CenterY="0.55"/>
+                </Grid.RenderTransform>
+                <Image x:Name="BackImgA" Opacity="1"/>
+                <Image x:Name="BackImgB" Opacity="0"/>
+            </Grid>
+            <!-- 前层（当前播放） -->
+            <Grid x:Name="LayerFront" Opacity="1">
+                <Grid.RenderTransform>
+                    <ScaleTransform x:Name="FrontScale" CenterX="0.5" CenterY="0.55"/>
+                </Grid.RenderTransform>
+                <Image x:Name="FrontImgA" Opacity="1"/>
+                <Image x:Name="FrontImgB" Opacity="0"/>
+            </Grid>
+        </Grid>
+
+        <!-- ========== 上线信息条：⏰{9:00|**:**} · 👤3/4 · 三态词（图标用 Segoe MDL2 Assets 单色字形，贴 UI 风格） ========== -->
+        <Border Grid.Row="1" Margin="0,6,0,2"
+                Background="#D91C2430" BorderBrush="#66E8C96D" BorderThickness="1"
+                CornerRadius="9" Padding="10,4"
+                HorizontalAlignment="Center"
+                Visibility="{Binding ChipVisible, Converter={StaticResource BoolToVis}}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE916;" FontSize="11"
+                           Foreground="#E8C96D" VerticalAlignment="Center" Margin="0,1,4,0"
+                           ToolTip="定时上线时间"/>
+                <TextBlock Text="{Binding ChipTimeText}" FontSize="12" Foreground="#F2E8D5"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="  ·  " FontSize="12" Foreground="#66F2E8D5" VerticalAlignment="Center"/>
+                <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE77B;" FontSize="11"
+                           Foreground="#E8C96D" VerticalAlignment="Center" Margin="0,1,4,0"
+                           ToolTip="已上线人数/预期开锄人数"/>
+                <TextBlock Text="{Binding ChipCountText}" FontSize="12" Foreground="#F2E8D5"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="  ·  " FontSize="12" Foreground="#66F2E8D5" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding ChipPhaseText}" FontSize="12" Foreground="#F2E8D5"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

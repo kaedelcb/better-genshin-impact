@@ -41,6 +41,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\BetterGenshinImpact\BetterGenshinImpact.csproj" />
+    <ProjectReference Include="..\..\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj" />
   </ItemGroup>
 
   <ItemGroup>

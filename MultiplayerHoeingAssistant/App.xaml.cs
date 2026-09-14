@@ -99,6 +99,9 @@ public partial class App : Application
         var viewModel = _mainViewModel;
         _mainWindow = new MainWindow(viewModel);
 
+        // 奥黛塔桌宠托盘子菜单（模式选择：显示/穿透/面板；穿透模式下唯一解锁入口）
+        AddPetTrayMenu();
+
         if (_startMinimized)
         {
             // 静默启动：隐藏窗口到系统托盘（不显示在任务栏，仅托盘图标可见）
@@ -319,6 +322,10 @@ public partial class App : Application
         _trayIcon?.Dispose();
         _trayIcon = null;
 
+        // 奥黛塔桌宠清理（停轮询定时器/退订阅/关窗口），先于 ViewModel 销毁
+        try { _mainWindow?.Pet?.Shutdown(); }
+        catch { /* 退出路径不影响关进程 */ }
+
         // 释放 ViewModel 后台资源（SignalR 连接 / 业务定时器 / 进程监控），避免进程残留
         _mainViewModel?.Shutdown();
         _mainViewModel = null;
@@ -367,6 +374,46 @@ public partial class App : Application
             _mainWindow.WindowState = WindowState.Normal;
             _mainWindow.Activate();
         }
+    }
+
+    /// <summary>
+    /// 托盘「奥黛塔」子菜单：显示/隐藏、免打扰穿透（进入时气泡提示解锁方式）、任务状态面板。
+    /// 穿透模式下桌宠连双击都不响应，本菜单是唯一解锁入口；SubmenuOpened 时同步勾选态。
+    /// </summary>
+    private void AddPetTrayMenu()
+    {
+        if (_trayIcon?.ContextMenu == null || _mainWindow?.Pet == null) return;
+        var petMenu = new System.Windows.Controls.MenuItem { Header = "奥黛塔" };
+
+        var togglePet = new System.Windows.Controls.MenuItem { Header = "显示奥黛塔", IsCheckable = true };
+        togglePet.Click += (_, _) => _mainWindow.Pet.Enabled = togglePet.IsChecked;
+
+        var clickThrough = new System.Windows.Controls.MenuItem { Header = "免打扰穿透（从本菜单解锁）", IsCheckable = true };
+        clickThrough.Click += (_, _) =>
+        {
+            _mainWindow.Pet.ClickThrough = clickThrough.IsChecked;
+            if (clickThrough.IsChecked)
+            {
+                ShowTrayBalloon("奥黛塔 · 穿透模式",
+                    "奥黛塔与任务状态面板已完全穿透（点击会穿过它们）。回到本菜单取消勾选即可恢复交互。");
+            }
+        };
+
+        var panel = new System.Windows.Controls.MenuItem { Header = "任务状态面板", IsCheckable = true };
+        panel.Click += (_, _) => _mainWindow.Pet.PanelEnabled = panel.IsChecked;
+
+        petMenu.Items.Add(togglePet);
+        petMenu.Items.Add(clickThrough);
+        petMenu.Items.Add(panel);
+        // 打开子菜单时同步勾选态（桌宠可能在设置页/面板 ✕ 被改过）
+        petMenu.SubmenuOpened += (_, _) =>
+        {
+            togglePet.IsChecked = _mainWindow.Pet.Enabled;
+            clickThrough.IsChecked = _mainWindow.Pet.ClickThrough;
+            panel.IsChecked = _mainWindow.Pet.PanelEnabled;
+        };
+
+        _trayIcon.ContextMenu.Items.Insert(0, petMenu);
     }
 
     /// <summary>托盘气泡通知（嘟嘟可异常告警用）。托盘图标不可用时静默忽略。</summary>

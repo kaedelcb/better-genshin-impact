@@ -254,6 +254,144 @@
                 </StackPanel>
             </Border>
 
+            <!-- ========== 卡片：奥黛塔桌宠（Pet 挂在 Window 上，绑定走 RelativeSource Window） ========== -->
+            <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="奥黛塔桌宠" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"
+                               Margin="0,0,0,2"/>
+                    <TextBlock Text="桌面常驻的 Q 版徽章宠物，表情随任务状态变化；拖拽移动、滚轮缩放、双击唤出主窗口"
+                               FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,0,0,12"/>
+
+                    <!-- 显示开关 -->
+                    <Border Background="#1E262660" CornerRadius="8" Padding="12,10" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox Grid.Column="0" IsChecked="{Binding Pet.Enabled, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
+                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Top" Margin="0,2,16,0"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="显示奥黛塔" FontSize="13" FontWeight="Medium"
+                                           Foreground="{DynamicResource White}"/>
+                                <TextBlock Text="关闭后桌宠完全隐藏，大小和位置等设置保留"
+                                           FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- 大小滑条（滚轮在宠物上缩放同样生效，两处共用一个值） -->
+                    <Border Background="#1E262660" CornerRadius="8" Padding="12,10" Margin="0,0,0,10"
+                            IsEnabled="{Binding Pet.Enabled, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="大小" FontSize="13" Foreground="{DynamicResource White}"
+                                       VerticalAlignment="Center" Margin="0,0,16,0"/>
+                            <Slider Grid.Column="1" Minimum="50" Maximum="250" TickFrequency="10" IsSnapToTickEnabled="True"
+                                    Value="{Binding Pet.SizePx, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
+                                    VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" FontSize="12" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                       Text="{Binding Pet.SizePx, RelativeSource={RelativeSource AncestorType=Window}, StringFormat={}{0:0}px}"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- 透明度（宠物整体） -->
+                    <Border Background="#1E262660" CornerRadius="8" Padding="12,10" Margin="0,0,0,10"
+                            IsEnabled="{Binding Pet.Enabled, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="透明度" FontSize="13" Foreground="{DynamicResource White}"
+                                       VerticalAlignment="Center" Margin="0,0,16,0"/>
+                            <Slider Grid.Column="1" Minimum="0.3" Maximum="1"
+                                    Value="{Binding Pet.PetOpacity, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
+                                    VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" FontSize="12" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                       Text="{Binding Pet.PetOpacity, RelativeSource={RelativeSource AncestorType=Window}, StringFormat={}{0:P0}}"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- 任务状态详情面板（独立窗口） -->
+                    <Border Background="#1E262660" CornerRadius="8" Padding="12,10" Margin="0,0,0,10"
+                            IsEnabled="{Binding Pet.Enabled, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox Grid.Column="0" IsChecked="{Binding Pet.PanelEnabled, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
+                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                            <StackPanel Grid.Column="1" Margin="0,0,14,0">
+                                <TextBlock Text="任务状态面板" FontSize="13" FontWeight="Medium"
+                                           Foreground="{DynamicResource White}"/>
+                                <TextBlock Text="长方形独立窗口：锄地进度/线路/好感时间轮次等全部任务状态；可拖动、调大小、单独关闭"
+                                           FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <Slider Grid.Column="2" Width="120" Minimum="0.3" Maximum="1"
+                                    IsEnabled="{Binding Pet.PanelEnabled, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    Value="{Binding Pet.PanelOpacity, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
+                                    VerticalAlignment="Center"
+                                    ToolTip="面板透明度"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- 音效 -->
+                    <Border Background="#1E262660" CornerRadius="8" Padding="12,10" Margin="0,0,0,10"
+                            IsEnabled="{Binding Pet.Enabled, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="音效" FontSize="13" Foreground="{DynamicResource White}"
+                                       VerticalAlignment="Center" Margin="0,0,16,0"/>
+                            <Slider Grid.Column="1" Minimum="0" Maximum="1"
+                                    Value="{Binding Pet.SoundVolume, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
+                                    VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" FontSize="12" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="12,0,16,0"
+                                       Text="{Binding Pet.SoundVolume, RelativeSource={RelativeSource AncestorType=Window}, StringFormat={}{0:P0}}"/>
+                            <StackPanel Grid.Column="3" Orientation="Horizontal">
+                                <CheckBox IsChecked="{Binding Pet.SoundMuted, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
+                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="静音" FontSize="12" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- 置顶 + 任务标签 -->
+                    <Grid IsEnabled="{Binding Pet.Enabled, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Background="#1E262660" CornerRadius="8" Padding="12,10" Margin="0,0,5,0">
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox IsChecked="{Binding Pet.Topmost, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
+                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <TextBlock Text="窗口置顶" FontSize="13" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Column="1" Background="#1E262660" CornerRadius="8" Padding="12,10" Margin="5,0,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox IsChecked="{Binding Pet.ShowTaskLabel, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
+                                          Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <TextBlock Text="显示任务标签" FontSize="13" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
             <!-- ========== 卡片：关于 ========== -->
             <Border Style="{DynamicResource QuestCard}">
                 <StackPanel>

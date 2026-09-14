@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Reflection;
 using MultiplayerHoeingAssistant.Helpers;
+using MultiplayerHoeingAssistant.Services;
 using MultiplayerHoeingAssistant.ViewModels;
 
 namespace MultiplayerHoeingAssistant.Views;
@@ -16,6 +17,10 @@ public partial class MainWindow : Window
     /// <summary>槲寄生（调度器）ViewModel。手动组装（同 Dodoco）；
     /// 启动中心「助手启动后自动执行流程」挂在 MainViewModel.Initialized 事件上。</summary>
     public MistletoeViewModel Mistletoe { get; }
+
+    /// <summary>奥黛塔桌宠 ViewModel（透明徽章宠物）。手动组装（同 Dodoco）；
+    /// 显隐由 pet_settings.json 驱动，独立于主窗口显隐（主窗口缩托盘时桌宠仍常驻）。</summary>
+    public PetViewModel Pet { get; }
 
     // 标签区折叠：标签按钮全部由代码动态生成到普通 WrapPanel（Tag="group"/"oneclick"）中，
     // "更多"按钮作为流式布局的普通子元素紧跟第 maxLines 行末尾（不单独占一行、不增加高度）。
@@ -41,6 +46,9 @@ public partial class MainWindow : Window
         Mistletoe = new MistletoeViewModel(viewModel, Dodoco.LogTail);
         // 槲寄生启动中心：初始化全部完成后按配置自动执行启动流程
         viewModel.Initialized += Mistletoe.OnAppInitialized;
+        // 奥黛塔桌宠：双击/右键"显示主窗口"经 ShowToForeground 唤出主窗口；
+        // 复用嘟嘟可的 BGI 日志尾抓好感任务轮次（单线程单文件句柄多消费者，同槲寄生）
+        Pet = new PetViewModel(viewModel, Dodoco, new PetSettingsService(), ShowToForeground, Dodoco.LogTail);
         DataContext = ViewModel;
         InitializeComponent();
         // 动态设置标题：Nexus-BGI · 版本号
@@ -90,6 +98,15 @@ public partial class MainWindow : Window
             SetFoldActive(wp, false);
             ScheduleTagRebuild(wp);
         }
+    }
+
+    /// <summary>把主窗口从托盘唤出到前台（奥黛塔桌宠双击 / 右键"显示主窗口"用）。</summary>
+    public void ShowToForeground()
+    {
+        Show();
+        ShowInTaskbar = true;
+        WindowState = WindowState.Normal;
+        Activate();
     }
 
     private void MainWindow_ContentRendered(object? sender, System.EventArgs e)

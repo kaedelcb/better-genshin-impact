@@ -23,6 +23,8 @@ public class ControlStatus
     public Dictionary<string, List<string>> OneClickTasks { get; set; } = [];
     /// <summary>是否正在执行任务（任意任务，包括锄地、一条龙、配置组等）。</summary>
     public bool TaskRunning { get; set; }
+    /// <summary>最近一次任务是否被用户手动取消（BGI wasCancelled，置位保留到下个任务启动；桌宠表情用）。</summary>
+    public bool WasCancelled { get; set; }
     /// <summary>当前正在执行的任务名称（如"锄地一条龙"、"传奇"等）。</summary>
     public string? CurrentTaskName { get; set; }
     /// <summary>当前正在执行的配置组/一条龙名称（groupName，独立任务时为 null）。</summary>

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -17,17 +17,17 @@
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.0" />
     <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="1.1.0" />
     <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
-    <!-- 更新BGI：解压 .7z 安装包（与 BGI 主工程同版本，共享 NuGet 缓存） -->
+    <!-- 鏇存柊BGI锛氳В鍘?.7z 瀹夎鍖咃紙涓?BGI 涓诲伐绋嬪悓鐗堟湰锛屽叡浜?NuGet 缂撳瓨锛?-->
     <PackageReference Include="SharpCompress" Version="0.38.0" />
   </ItemGroup>
 
-  <!-- 嵌入 HarmonyOS Sans SC 字体（免费商用，授权见 Assets/Fonts/HarmonyOS-LICENSE.txt）→ 圆润屏幕字体 -->
+  <!-- 宓屽叆 HarmonyOS Sans SC 瀛椾綋锛堝厤璐瑰晢鐢紝鎺堟潈瑙?Assets/Fonts/HarmonyOS-LICENSE.txt锛夆啋 鍦嗘鼎灞忓箷瀛椾綋 -->
   <ItemGroup>
     <Resource Include="Assets\Fonts\HarmonyOS_Sans_SC_Regular.ttf" />
     <Resource Include="Assets\Fonts\HarmonyOS_Sans_SC_Medium.ttf" />
   </ItemGroup>
 
-  <!-- 嵌入品牌 Logo 和原神主题图片素材（派蒙 + 角色头像，来源 enka.network 公开素材） -->
+  <!-- 宓屽叆鍝佺墝 Logo 鍜屽師绁炰富棰樺浘鐗囩礌鏉愶紙娲捐挋 + 瑙掕壊澶村儚锛屾潵婧?enka.network 鍏紑绱犳潗锛?-->
   <ItemGroup>
     <Resource Include="Assets\Images\logo.png" />
     <Resource Include="Assets\Images\paimon.png" />
@@ -39,6 +39,11 @@
     <Resource Include="Assets\Images\Furina.png" />
     <Resource Include="Assets\Images\Zhongli.png" />
     <Resource Include="Assets\Images\Nahida.png" />
+    <Resource Include="Assets\Pet\odette_base.png" />
+    <!-- 奥黛塔双帧动画集（Anims/{set}/f1|f2.png + 清单；加载见 PetAnimCatalog，生成见 Tools/Import-OdetteAnims.ps1） -->
+    <Resource Include="Assets\Pet\anims.json" />
+    <Resource Include="Assets\Pet\Anims\**\*.png" />
+    <Resource Include="Assets\Pet\Sounds\*.wav" />
   </ItemGroup>
 
   <!-- 排除 assistant-config.json：不复制到输出目录，防止用户配置被编译覆盖 -->
@@ -46,18 +51,17 @@
     <None Update="assistant-config.json" CopyToOutputDirectory="Never" />
   </ItemGroup>
 
-  <!-- 编译后自动部署到 BGI 输出目录下的 Tools\MultiplayerHoeingAssistant（含带 x64 平台目录的用户运行路径）。
-       助手进程运行中会锁住部署目标，此时可用 -p:DeployToBgiTools=false 跳过部署仅完成编译验证。 -->
+  <!-- 缂栬瘧鍚庤嚜鍔ㄩ儴缃插埌 BGI 杈撳嚭鐩綍涓嬬殑 Tools\MultiplayerHoeingAssistant锛堝惈甯?x64 骞冲彴鐩綍鐨勭敤鎴疯繍琛岃矾寰勶級銆?       鍔╂墜杩涚▼杩愯涓細閿佷綇閮ㄧ讲鐩爣锛屾鏃跺彲鐢?-p:DeployToBgiTools=false 璺宠繃閮ㄧ讲浠呭畬鎴愮紪璇戦獙璇併€?-->
   <Target Name="DeployAssistantToBgiTools" AfterTargets="Build" Condition="'$(DeployToBgiTools)' != 'false'">
-    <Message Text="DeployAssistantToBgiTools: 部署助手到 BGI Tools 目录" Importance="high" />
+    <Message Text="DeployAssistantToBgiTools: 閮ㄧ讲鍔╂墜鍒?BGI Tools 鐩綍" Importance="high" />
     <ItemGroup>
       <AssistOut Include="$(TargetDir)**\*" Exclude="$(TargetDir)**\assistant-config.json" />
     </ItemGroup>
-    <!-- 复制到 bin\Debug\...\Tools\（无 x64 平台目录） -->
+    <!-- 澶嶅埗鍒?bin\Debug\...\Tools\锛堟棤 x64 骞冲彴鐩綍锛?-->
     <Copy SourceFiles="@(AssistOut)"
           DestinationFiles="@(AssistOut->'$(MSBuildProjectDirectory)\..\BetterGenshinImpact\bin\$(Configuration)\net8.0-windows10.0.22621.0\Tools\MultiplayerHoeingAssistant\%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="false" />
-    <!-- 复制到 bin\x64\Debug\...\Tools\（带 x64 平台目录，用户实际运行路径） -->
+    <!-- 澶嶅埗鍒?bin\x64\Debug\...\Tools\锛堝甫 x64 骞冲彴鐩綍锛岀敤鎴峰疄闄呰繍琛岃矾寰勶級 -->
     <Copy SourceFiles="@(AssistOut)"
           DestinationFiles="@(AssistOut->'$(MSBuildProjectDirectory)\..\BetterGenshinImpact\bin\x64\$(Configuration)\net8.0-windows10.0.22621.0\Tools\MultiplayerHoeingAssistant\%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="false" />

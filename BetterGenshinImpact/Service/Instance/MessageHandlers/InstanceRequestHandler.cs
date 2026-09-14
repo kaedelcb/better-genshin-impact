@@ -1038,6 +1038,15 @@ internal sealed class InstanceRequestHandler
             // 联机锄地原生任务不经 AutoPathingScript，脚本线路名为 null；两者在助手端各占一个显示位。
             var scriptRouteName = isCancelled ? null : BetterGenshinImpact.Core.Script.ScriptRouteProgress.CurrentRouteName;
 
+            // JS 脚本任务进度合成（纯增量）：原生联机锄地不在跑、但脚本任务正在跑路线时，
+            // 优先取脚本经 dispatcher.SetTaskProgress 上报的进度文本（含第X/Y条），退化为仅线路名。
+            // 原先「锄地进度」只由 AutoHoeingProgress 生产，JS 锄地一条龙等脚本任务此位恒空。
+            if (!hoeing && scriptRouteName != null)
+            {
+                hoeingProgress = BetterGenshinImpact.Core.Script.ScriptRouteProgress.ProgressText
+                                 ?? $"脚本任务：当前线路 {scriptRouteName}";
+            }
+
             // 检查 _recentTaskName 是否在 30 秒内
             string? recentTaskName = null;
             if (_recentTaskName != null && (DateTime.UtcNow - _recentTaskNameTime).TotalSeconds < 30)

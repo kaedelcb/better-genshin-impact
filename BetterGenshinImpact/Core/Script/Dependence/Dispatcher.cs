@@ -1,4 +1,5 @@
 using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.Core.Script.Dependence.Model;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.AutoBoss;
@@ -73,6 +74,17 @@ public class Dispatcher
 
     public void RunTask()
     {
+    }
+
+    /// <summary>
+    /// JS 脚本上报任务进度文本（如「第 1 组第 3/20 条: xxx.json」）。
+    /// 经 ScriptRouteProgress 暂存，IPC task.status 的 autoHoeingProgress 在原生联机锄地
+    /// 不在跑时取此值，联机助手/嘟嘟可的「锄地进度」显示位不再对脚本任务恒空。
+    /// 传空串清除；配置组项目边界（ExecuteProject 开始/结束）自动清空。
+    /// </summary>
+    public void SetTaskProgress(string text)
+    {
+        ScriptRouteProgress.SetProgressText(text);
     }
 
     /// <summary>

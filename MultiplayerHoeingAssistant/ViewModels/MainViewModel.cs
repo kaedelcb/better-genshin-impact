@@ -491,7 +491,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         string? CurrentRouteDisplay,
         string? CurrentScriptRouteName,
         bool AutoHoeingRunning,
-        string? AutoHoeingProgress);
+        string? AutoHoeingProgress,
+        bool WasCancelled);
 
     private static TaskStatusPollResult ParseTaskStatusData(JsonElement sdata)
     {
@@ -502,15 +503,22 @@ public partial class MainViewModel : INotifyPropertyChanged
         string? currentScriptRouteName = null;
         var autoHoeingRunning = false;
         string? autoHoeingProgress = null;
+        var wasCancelled = false;
 
         if (sdata.TryGetProperty("running", out var running))
             bgiRunning = running.GetBoolean();
         // 任务停止后（bgiRunning=false），taskName 可能仍有残留值，必须忽略避免状态停留
         if (bgiRunning && sdata.TryGetProperty("taskName", out var tn) && tn.ValueKind == JsonValueKind.String)
             currentTaskName = tn.GetString();
+        // 最近一次任务是否被用户手动取消（BGI 置位后保留到下个任务启动；桌宠"嫌弃"表情与
+        // 配置组取消检测共用，旧 BGI 无此字段时保持 false）
+        if (sdata.TryGetProperty("wasCancelled", out var wc) && wc.ValueKind == JsonValueKind.True)
+            wasCancelled = true;
         if (sdata.TryGetProperty("autoHoeingRunning", out var hoeing))
             autoHoeingRunning = hoeing.GetBoolean();
-        if (autoHoeingRunning && sdata.TryGetProperty("autoHoeingProgress", out var progress)
+        // 进度文本不再要求 autoHoeingRunning：JS 脚本任务（如锄地一条龙）经 dispatcher.SetTaskProgress
+        // 上报的进度也走 autoHoeingProgress 字段（BGI 侧仅在锄地或脚本任务实际运行时才产出，无残留风险）
+        if (sdata.TryGetProperty("autoHoeingProgress", out var progress)
             && progress.ValueKind == JsonValueKind.String)
             autoHoeingProgress = progress.GetString();
         // 读取配置组名与线路展示文本（新增字段，旧 BGI 无此字段时保持 null）
@@ -524,7 +532,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         return new TaskStatusPollResult(
             bgiRunning, currentTaskName, currentTaskGroupName,
-            currentRouteDisplay, currentScriptRouteName, autoHoeingRunning, autoHoeingProgress);
+            currentRouteDisplay, currentScriptRouteName, autoHoeingRunning, autoHoeingProgress, wasCancelled);
     }
 
     /// <summary>本地状态采集循环（10s）幂等启动。[离线优先] 采集独立于 SignalR 连接运行：
@@ -579,16 +587,40 @@ public partial class MainViewModel : INotifyPropertyChanged
         var currentTaskGroupName = (string?)null;
         var currentRouteDisplay = (string?)null;
         var currentScriptRouteName = (string?)null;
+        var wasCancelled = false;
 
         var bgiRunning = false;
         // 本轮 IPC 会话校验结果：不可信（跨会话/无法确认）时不采信管道返回的任何任务状态
         var ipcSessionTrusted = true;
 
-        // 遥控器模式：跳过 IPC 连接，直接上报 observer 状态
+        // 遥控器（监控）模式：不采配置组缓存、不做锄地边沿/上线检测等控制面状态机，
+        // 但仍轻量拉取本机执行端 task.status 快照填充 LatestLocalStatus——
+        // 否则同机执行端在跑任务时桌宠面板（LatestLocalStatus 数据源）全为 "-"，无法感知执行端情况。
+        // observer 的状态上报服务端本就丢弃（不入成员表），多出的任务字段无上报副作用。
         if (_config?.ObserverMode == true)
         {
-            // 跳过 IPC 连接，不上报配置组/任务状态
             IsIpcSessionUntrusted = false; // 遥控器模式不连本机管道，清除可能残留的跨会话警告
+            try
+            {
+                var observerResp = await SendBgiIpcPreferredAsync("task.status", null);
+                if (observerResp is { Success: true } && !string.IsNullOrEmpty(observerResp.Data))
+                {
+                    var observerStatus = ParseTaskStatusData(JsonSerializer.Deserialize<JsonElement>(observerResp.Data));
+                    bgiRunning = observerStatus.BgiRunning;
+                    currentTaskName = observerStatus.CurrentTaskName;
+                    currentTaskGroupName = observerStatus.CurrentTaskGroupName;
+                    currentRouteDisplay = observerStatus.CurrentRouteDisplay;
+                    currentScriptRouteName = observerStatus.CurrentScriptRouteName;
+                    // autoHoeingRunning 保持 false：不触碰锄地结束边沿机（监控端不应触发策略收尾）；
+                    // 进度/线路仅作展示，LatestLocalStatus 面板可见即可
+                    autoHoeingProgress = observerStatus.AutoHoeingProgress;
+                    wasCancelled = observerStatus.WasCancelled;
+                }
+            }
+            catch
+            {
+                // 本机执行端不可达：任务字段保持默认值，面板显示 "-"，下一轮自愈
+            }
         }
         else
         {
@@ -673,6 +705,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         currentScriptRouteName = parsedStatus.CurrentScriptRouteName;
                         autoHoeingRunning = parsedStatus.AutoHoeingRunning;
                         autoHoeingProgress = parsedStatus.AutoHoeingProgress;
+                        wasCancelled = parsedStatus.WasCancelled;
                     }
                     catch
                     {
@@ -755,6 +788,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                     currentScriptRouteName = parsedStatus.CurrentScriptRouteName;
                     autoHoeingRunning = parsedStatus.AutoHoeingRunning;
                     autoHoeingProgress = parsedStatus.AutoHoeingProgress;
+                    wasCancelled = parsedStatus.WasCancelled;
                 }
                 } // end else（IPC 会话可信）
             }
@@ -806,6 +840,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             CurrentScriptRouteName = currentScriptRouteName,
             AutoHoeingRunning = autoHoeingRunning,
             AutoHoeingProgress = autoHoeingProgress,
+            WasCancelled = wasCancelled,
             OnlineReady = _intentLifecycle.IsOnlineReady,
             OnlineMode = _intentLifecycle.OnlineMode,
             ScheduledOnlineTime = _config?.ScheduledOnlineTime ?? "",

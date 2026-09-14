@@ -538,6 +538,10 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     /// <summary>是否有未读告警（驱动 MainWindow 嘟嘟可导航按钮红点）。</summary>
     public bool HasUnreadAlerts { get => _hasUnreadAlerts; set => SetProperty(ref _hasUnreadAlerts, value); }
 
+    /// <summary>告警外发事件（奥黛塔桌宠惊慌表情用）。与红点/托盘同源同口径：MuteAll 时不触发；
+    /// 在调用线程同步触发，订阅方自行调度到 UI 线程。</summary>
+    public event Action<string, string>? AlertRaised;
+
     /// <summary>全部静音开关（持久化到 dodoco_settings.json，P4 统一设置收口）。
     /// 静音时命中只记录，不红点/不响/不弹托盘。</summary>
     public bool MuteAll
@@ -938,6 +942,8 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     internal void RaiseAlert(string title, string detail)
     {
         if (MuteAll) return;
+        // 告警外发（奥黛塔桌宠惊慌表情用）：调用线程同步触发，订阅方自行调度到 UI 线程
+        AlertRaised?.Invoke(title, detail);
         Application.Current.Dispatcher.BeginInvoke(() =>
         {
             HasUnreadAlerts = true;
