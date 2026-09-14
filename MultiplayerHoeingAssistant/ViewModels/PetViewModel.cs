@@ -406,10 +406,28 @@ public class PetViewModel : ViewModelBase
         var local = _mainVm.LatestLocalStatus;
         var now = DateTime.UtcNow;
 
-        // 任务真相=本地快照；房间真相=成员行
-        bool taskRunning = local?.TaskRunning ?? false;
-        bool hoeing = local?.AutoHoeingRunning ?? false;
-        var kind = PetStateEngine.ClassifyTask(hoeing, local?.CurrentTaskName, local?.CurrentTaskGroupName);
+        // 任务真相分源：执行端模式=本地快照；监控模式=本机跨会话执行端快照聚合
+        // （监控端 LatestLocalStatus 恒空——跨会话管道不可达，桌宠表情须跟随执行端变化）
+        bool taskRunning; bool hoeing; string? taskName; string? groupName; bool wasCancelled;
+        if (_mainVm.IsObserverMode)
+        {
+            var running = _localExecutors.Where(e => e.TaskRunning).ToList();
+            var primary = running.FirstOrDefault();
+            taskRunning = primary != null;
+            hoeing = running.Any(e => e.Hoeing);
+            taskName = primary?.Task;
+            groupName = primary?.Group;
+            wasCancelled = !taskRunning && _localExecutors.Any(e => e.WasCancelled);
+        }
+        else
+        {
+            taskRunning = local?.TaskRunning ?? false;
+            hoeing = local?.AutoHoeingRunning ?? false;
+            taskName = local?.CurrentTaskName;
+            groupName = local?.CurrentTaskGroupName;
+            wasCancelled = local?.WasCancelled ?? false;
+        }
+        var kind = PetStateEngine.ClassifyTask(hoeing, taskName, groupName);
         bool onlineReady = _self?.OnlineReady ?? local?.OnlineReady ?? false;
         bool scheduled = (_self?.OnlineMode ?? local?.OnlineMode) == "scheduled"
                          || !string.IsNullOrEmpty(FirstNonEmpty(_self?.ScheduledOnlineTime, local?.ScheduledOnlineTime));
@@ -418,7 +436,7 @@ public class PetViewModel : ViewModelBase
         if (_lastTaskRunning && !taskRunning)
             _celebrateAt = now + CelebrateGrace;
         // 取消边沿（BGI wasCancelled 置位且任务已停）→ 嫌弃
-        if (local is { WasCancelled: true } && !_lastWasCancelled && !taskRunning)
+        if (wasCancelled && !_lastWasCancelled && !taskRunning)
             StartBurst("cancel", BurstCelebrate);
         // 上线成功边沿 → 得意 + 音效
         if (onlineReady && !_lastOnlineReady)
@@ -438,7 +456,7 @@ public class PetViewModel : ViewModelBase
             _affectionStart = null;
 
         _lastTaskRunning = taskRunning;
-        _lastWasCancelled = local?.WasCancelled ?? false;
+        _lastWasCancelled = wasCancelled;
         _lastOnlineReady = onlineReady;
 
         // 宽限期内有新任务启动 → 取消待庆祝
@@ -446,7 +464,8 @@ public class PetViewModel : ViewModelBase
             _celebrateAt = DateTime.MaxValue;
 
         var newState = PetStateEngine.ResolveBase(new PetFacts(
-            BgiAlive: IsBgiAlive(), TaskRunning: taskRunning, TaskKind: kind,
+            BgiAlive: _mainVm.IsObserverMode ? _localExecutors.Count > 0 : IsBgiAlive(),
+            TaskRunning: taskRunning, TaskKind: kind,
             OnlineReady: onlineReady, HoeingRunning: hoeing, HasScheduled: scheduled));
         if (newState != _baseState)
         {
@@ -549,7 +568,7 @@ public class PetViewModel : ViewModelBase
         {
             _celebrateAt = DateTime.MaxValue;
             // 庆祝前再确认没有新任务（宽限期内可能已取消）
-            if (!(_mainVm.LatestLocalStatus?.TaskRunning ?? false))
+            if (!IsAnyTaskRunningNow())
             {
                 StartBurst("celebrate", BurstCelebrate);
                 PlaySound("done");
@@ -570,6 +589,13 @@ public class PetViewModel : ViewModelBase
     {
         try { return BgiProcessMonitor.GetCurrentSessionBgiProcesses().Length > 0; }
         catch { return false; }
+    }
+
+    /// <summary>聚合任务在跑判断：监控模式=任一本机执行端在跑；执行端模式=本地快照。</summary>
+    private bool IsAnyTaskRunningNow()
+    {
+        if (_mainVm.IsObserverMode) return _localExecutors.Any(e => e.TaskRunning);
+        return _mainVm.LatestLocalStatus?.TaskRunning ?? false;
     }
 
     // ========== 穿透模式 / 详情面板 ==========
@@ -727,7 +753,7 @@ public class PetViewModel : ViewModelBase
     // ========== 监控模式：本机跨会话执行端轮询（后台查询，UI 线程落缓存） ==========
 
     /// <summary>一台本机执行端的展示快照。</summary>
-    private sealed record LocalExecutorRow(int SessionId, string? UserName, bool TaskRunning, string? Group, string? Task, string? Route, string? ScriptRoute, string? Progress);
+    private sealed record LocalExecutorRow(int SessionId, string? UserName, bool TaskRunning, string? Group, string? Task, string? Route, string? ScriptRoute, string? Progress, bool Hoeing, bool WasCancelled);
 
     /// <summary>最近一轮本机执行端快照（UI 线程读写；查询失败时保留旧值防闪烁）。</summary>
     private List<LocalExecutorRow> _localExecutors = [];
@@ -749,7 +775,8 @@ public class PetViewModel : ViewModelBase
                         e.SessionId, e.UserName, e.TaskRunning,
                         e.CurrentTaskGroupName, e.CurrentTaskName,
                         e.CurrentRouteDisplay, e.CurrentScriptRouteName,
-                        e.AutoHoeingProgress)).ToList();
+                        e.AutoHoeingProgress, e.AutoHoeingRunning,
+                        e.WasCancelled)).ToList();
                 }
                 catch (OperationCanceledException) { break; }
                 catch
@@ -760,7 +787,11 @@ public class PetViewModel : ViewModelBase
                 if (snapshot != null)
                 {
                     var view = snapshot;
-                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _localExecutors = view);
+                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        _localExecutors = view;
+                        RefreshState();
+                    });
                 }
 
                 try { await Task.Delay(TimeSpan.FromSeconds(3), token).ConfigureAwait(false); }

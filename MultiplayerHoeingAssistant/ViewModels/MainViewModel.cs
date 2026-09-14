@@ -6413,7 +6413,9 @@ public partial class MainViewModel : INotifyPropertyChanged
         string? CurrentTaskGroupName,
         string? CurrentRouteDisplay,
         string? CurrentScriptRouteName,
-        string? AutoHoeingProgress);
+        string? AutoHoeingProgress,
+        bool AutoHoeingRunning,
+        bool WasCancelled);
 
     /// <summary>
     /// 枚举本机全部 Windows 会话中的 BGI 实例，逐台查询其只读状态管道。
@@ -6454,7 +6456,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                     process.SessionId, userName, status.TaskRunning,
                     status.CurrentTaskName, status.CurrentTaskGroupName,
                     status.CurrentRouteDisplay, status.CurrentScriptRouteName,
-                    status.AutoHoeingProgress));
+                    status.AutoHoeingProgress, status.AutoHoeingRunning,
+                    status.WasCancelled));
             }
         }
         finally
@@ -6520,7 +6523,8 @@ public partial class MainViewModel : INotifyPropertyChanged
             CurrentRouteDisplay = parsed.CurrentRouteDisplay,
             CurrentScriptRouteName = parsed.CurrentScriptRouteName,
             AutoHoeingRunning = parsed.AutoHoeingRunning,
-            AutoHoeingProgress = parsed.AutoHoeingProgress
+            AutoHoeingProgress = parsed.AutoHoeingProgress,
+            WasCancelled = parsed.WasCancelled
         };
     }
 }
