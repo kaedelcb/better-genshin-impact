@@ -498,7 +498,26 @@ public class PetViewModel : ViewModelBase
         var scheduledTime = FirstNonEmpty(_self?.ScheduledOnlineTime, local?.ScheduledOnlineTime);
         int readyCount = _mainVm.Members.Count(m => m.OnlineReady);
         int expected = local?.ExpectedHoeingPlayers is > 0 ? local.ExpectedHoeingPlayers : 4;
-        var phase = hoeing ? PetOnlinePhase.Connected : onlineReady ? PetOnlinePhase.Ready : PetOnlinePhase.NotReady;
+        // 已联机语义（用户实机纠偏）：AutoHoeingProgress 在单机锄地也会置位，仅凭它报"已联机"
+        // 会把单机锄地误标成联机。修正：已联机 = 锄地任务在跑 且 今天走过上线流程（存在消费记录）。
+        // 监控模式按房间成员聚合（远程小队锄地同样可见）；执行端模式看本机成员行。
+        PetOnlinePhase phase;
+        if (_mainVm.IsObserverMode)
+        {
+            var onlineMembers = _mainVm.Members.Where(m => m.Online).ToList();
+            var anyHoeing = hoeing || onlineMembers.Any(m => m.AutoHoeingRunning);
+            var onlineConsumed = onlineMembers.Any(m => m.OnlineHistory is { Count: > 0 });
+            phase = anyHoeing && onlineConsumed ? PetOnlinePhase.Connected
+                  : onlineMembers.Any(m => m.OnlineReady) ? PetOnlinePhase.Ready
+                  : PetOnlinePhase.NotReady;
+        }
+        else
+        {
+            var onlineConsumed = _self?.OnlineHistory is { Count: > 0 };
+            phase = hoeing && onlineConsumed ? PetOnlinePhase.Connected
+                  : onlineReady ? PetOnlinePhase.Ready
+                  : PetOnlinePhase.NotReady;
+        }
         var (time, count, phaseText) = PetStateEngine.ComposeOnlineChipParts(scheduledTime, readyCount, expected, phase);
         ChipTimeText = time;
         ChipCountText = count;
