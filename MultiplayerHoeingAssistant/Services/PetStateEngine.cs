@@ -108,11 +108,16 @@ public static class PetStateEngine
     public static string ToAnimKey(PetState state) => state switch
     {
         PetState.Sleeping => "sleep",
+        PetState.Idle => "tea",
+        PetState.ScheduledWaiting => "tea",
         PetState.ReadyOnline => "interact",
         PetState.Hoeing => "act_hoeing",
         PetState.WorkingArtifact => "act_artifact",
         PetState.WorkingAffection => "shy",
-        _ => "tea" // Idle / ScheduledWaiting / WorkingGather（通用执行=采集套图）
+        // 采集/通用任务执行必须显式映射（曾落入 _ => "tea"：任务运行显示喝茶空闲表情，
+        // 光晕/节奏的状态判定也跟着失配——"只有锄地时有光晕"的根因）
+        PetState.WorkingGather => "act_gather",
+        _ => "tea"
     };
 
     /// <summary>空闲/定时待命的轮换备片（导演层停留超时后切换，避免一张图放到底）。</summary>

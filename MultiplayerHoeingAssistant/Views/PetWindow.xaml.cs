@@ -46,6 +46,8 @@ public partial class PetWindow : Window
 
         _engine = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(30) };
         _engine.Tick += OnEngineTick;
+        _stateTask = vm.IsTaskExecution;
+        _stateSleep = vm.IsSleepingState;
 
         // 初始直接落位（无淡化）
         ApplySequenceImmediate(vm.DisplayKey);
@@ -88,6 +90,10 @@ public partial class PetWindow : Window
             Dispatcher.BeginInvoke(() => BeginLayerFade(_vm.DisplayKey));
         else if (e.PropertyName == nameof(PetViewModel.SizePx))
             Dispatcher.BeginInvoke(ApplySize);
+        else if (e.PropertyName == nameof(PetViewModel.IsTaskExecution))
+            _stateTask = _vm.IsTaskExecution;
+        else if (e.PropertyName == nameof(PetViewModel.IsSleepingState))
+            _stateSleep = _vm.IsSleepingState;
     }
 
     private void ApplySize()
@@ -258,17 +264,11 @@ public partial class PetWindow : Window
     private const double LifeSleepAmpScale = 0.6;
 
     /// <summary>状态动效档位（幅度乘数，周期毫秒）。</summary>
-    private static (double Amp, double Period) BreathProfile(string? key) => key switch
-    {
-        "act_hoeing" or "act_artifact" or "act_gather" => (1.0, LifeTaskPeriodMs),
-        "sleep" => (LifeSleepAmpScale, LifeSleepPeriodMs),
-        _ => (1.0, LifeIdlePeriodMs)
-    };
-
-    /// <summary>是否任务执行类状态（光晕只在任务态渐显）。
-    /// 注意 interact 是空闲轮换备片，绝不能入列——否则空闲时光晕误亮，观感"状态反了"。</summary>
-    private static bool IsTaskStateKey(string? key) =>
-        key is "act_hoeing" or "act_artifact" or "act_gather";
+    /// <summary>节奏档位按语义状态（而非显示的表情 key）：任务快、睡眠慢、其余空闲。
+    /// 表情 key 会因爆发态/备片轮换临时变化，语义状态才是稳定事实。</summary>
+    private (double Amp, double Period) BreathProfile() => _stateSleep
+        ? (LifeSleepAmpScale, LifeSleepPeriodMs)
+        : _stateTask ? (1.0, LifeTaskPeriodMs) : (1.0, LifeIdlePeriodMs);
 
     /// <summary>呼吸相位（弧度，持续累加；周期渐变时相位连续不跳变）。</summary>
     private double _breathPhase;
@@ -277,10 +277,13 @@ public partial class PetWindow : Window
     /// <summary>当前平滑档位：状态切换按 tick 渐变（每 tick 4%，约 0.8s 收敛），幅度节奏无跳变。</summary>
     private double _lifeAmp = 1.0;
     private double _lifePeriod = LifeIdlePeriodMs;
+    /// <summary>语义状态镜像（UI 线程写入，随 VM 属性更新）。</summary>
+    private bool _stateTask;
+    private bool _stateSleep;
 
     private void UpdateBreath(double dtMs)
     {
-        var (targetAmp, targetPeriod) = BreathProfile(_seq?.Key);
+        var (targetAmp, targetPeriod) = BreathProfile();
         _lifeAmp += (targetAmp - _lifeAmp) * 0.04;
         _lifePeriod += (targetPeriod - _lifePeriod) * 0.04;
 
@@ -294,7 +297,7 @@ public partial class PetWindow : Window
 
         // 光晕：任务态渐显（每 tick 4% 约 0.8s），透明度与缩放随呼吸相位同步涨落——
         // 吸气时晕圈微微变亮变大、呼气时收敛，观感是"光随呼吸"，非常驻不闪烁
-        var glowTarget = IsTaskStateKey(_seq?.Key) ? 1.0 : 0.0;
+        var glowTarget = _stateTask ? 1.0 : 0.0;
         _glowLevel += (glowTarget - _glowLevel) * 0.04;
         if (_glowLevel < 0.001) _glowLevel = 0;
         TaskGlow.Opacity = _glowLevel * (0.65 + 0.35 * b);

@@ -475,6 +475,12 @@ public class PetViewModel : ViewModelBase
             _baseStateSince = now;
         }
 
+        // 光晕/呼吸节奏挂语义状态（而非显示的表情 key）：
+        // 好感任务显示 shy、爆发态瞬间切换 joy 等场景下，"正在执行任务"的光晕不丢
+        IsTaskExecution = _baseState is PetState.Hoeing or PetState.WorkingArtifact
+            or PetState.WorkingAffection or PetState.WorkingGather;
+        IsSleepingState = _baseState == PetState.Sleeping;
+
         // 过期自愈：监控模式下快照 15s 未更新且轮询线程已死 → 重新拉起（防表情/面板永久冻结）
         if (_mainVm.IsObserverMode
             && (_localExecutorsAt == null || now - _localExecutorsAt.Value > TimeSpan.FromSeconds(15)))
@@ -593,6 +599,22 @@ public class PetViewModel : ViewModelBase
     }
 
     private static string? FirstNonEmpty(string? a, string? b) => !string.IsNullOrWhiteSpace(a) ? a : b;
+
+    private bool _isTaskExecution;
+    /// <summary>语义状态：正在执行任务（驱动桌宠光晕与快节奏呼吸；与显示的表情 key 解耦）。</summary>
+    public bool IsTaskExecution
+    {
+        get => _isTaskExecution;
+        private set => SetProperty(ref _isTaskExecution, value);
+    }
+
+    private bool _isSleepingState;
+    /// <summary>语义状态：BGI 离线沉睡（驱动慢呼吸档）。</summary>
+    public bool IsSleepingState
+    {
+        get => _isSleepingState;
+        private set => SetProperty(ref _isSleepingState, value);
+    }
 
     private static bool IsBgiAlive()
     {
