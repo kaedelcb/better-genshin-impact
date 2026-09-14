@@ -6425,6 +6425,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     {
         var result = new List<LocalBgiExecutorStatus>();
         var processes = BgiProcessMonitor.GetAllSessionBgiProcesses();
+        var okCount = 0;
         try
         {
             foreach (var process in processes)
@@ -6445,6 +6446,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 }
 
                 if (status == null) continue;
+                okCount++;
                 string? userName = null;
                 try { userName = WindowsSessionIdentity.GetUserName(process.SessionId); }
                 catch { /* 会话身份读取失败不影响状态展示 */ }
@@ -6459,8 +6461,19 @@ public partial class MainViewModel : INotifyPropertyChanged
         {
             foreach (var process in processes) process.Dispose();
         }
+
+        // [执行端探测] 留痕（状态变化才记）：区分"没枚举到 BGI 进程"与"枚举到但管道查询失败"
+        var probeKey = $"found={processes.Length} ok={okCount}";
+        if (probeKey != _lastLocalExecutorProbeKey)
+        {
+            _lastLocalExecutorProbeKey = probeKey;
+            AddLog($"[执行端探测] 本机 BGI 进程 {processes.Length} 台，状态查询成功 {okCount} 台");
+        }
         return result;
     }
+
+    /// <summary>[执行端探测] 上次留痕指纹（去重）。</summary>
+    private string? _lastLocalExecutorProbeKey;
 
     /// <summary>按进程查询 BGI 只读状态管道（GET_STATUS 协议 + 实例身份校验，与启动中心同款）。</summary>
     private async Task<ControlStatus?> QueryReadOnlyStatusByProcessAsync(Process process, CancellationToken ct)

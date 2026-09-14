@@ -668,6 +668,7 @@ public class PetViewModel : ViewModelBase
             }
             else
             {
+                // 本机没有可查的 BGI 实例 → 服务端房间成员广播（跨机器拓扑），行结构与本地分支一致
                 var members = _mainVm.Members.Where(m => m.Online).ToList();
                 var running = members.Where(m => m.TaskRunning).ToList();
                 if (members.Count == 0)
@@ -679,16 +680,18 @@ public class PetViewModel : ViewModelBase
                     rows.Add(new("执行端", $"{running.Count}/{members.Count} 台在跑"));
                     foreach (var m in running)
                     {
-                        var parts = new List<string>();
-                        if (!string.IsNullOrWhiteSpace(m.CurrentTaskGroupName)) parts.Add(m.CurrentTaskGroupName!);
-                        if (!string.IsNullOrWhiteSpace(m.CurrentTaskName)) parts.Add(m.CurrentTaskName!);
-                        var route = !string.IsNullOrWhiteSpace(m.CurrentRouteDisplay) ? m.CurrentRouteDisplay
-                                  : !string.IsNullOrWhiteSpace(m.CurrentScriptRouteName) ? m.CurrentScriptRouteName
-                                  : null;
-                        if (route != null) parts.Add(route);
                         var name = string.IsNullOrWhiteSpace(m.PlayerName) ? m.PlayerUid : m.PlayerName!;
                         if (name.Length > 8) name = name[..8] + "…";
-                        rows.Add(new(name, parts.Count > 0 ? string.Join(" · ", parts) : "运行中"));
+                        rows.Add(new(name, "运行中"));
+                        var prefix = running.Count > 1 ? $"{name[..Math.Min(4, name.Length)]}·" : "";
+                        rows.Add(new(prefix + "配置组", OrDash(m.CurrentTaskGroupName)));
+                        rows.Add(new(prefix + "任务", OrDash(m.CurrentTaskName)));
+                        if (!string.IsNullOrWhiteSpace(m.CurrentRouteDisplay))
+                            rows.Add(new(prefix + "线路", m.CurrentRouteDisplay!));
+                        if (!string.IsNullOrWhiteSpace(m.CurrentScriptRouteName))
+                            rows.Add(new(prefix + "线路信息", m.CurrentScriptRouteName!));
+                        if (!string.IsNullOrWhiteSpace(m.AutoHoeingProgress))
+                            rows.Add(new(prefix + "锄地进度", m.AutoHoeingProgress!));
                     }
                 }
             }
