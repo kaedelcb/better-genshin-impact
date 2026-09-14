@@ -64,19 +64,20 @@
              SpriteHost 挂单一相位驱动的"呼吸运动"（吸气=微涨+上浮，呼气=回落，见 PetWindow.xaml.cs OnEngineTick），
              帧切换锚定在呼吸极值点上；上线信息条不参与，保持稳定可读。
              TaskGlow = 任务执行态的光晕（金色径向渐变，随呼吸相位涨落，代码驱动透明度，空闲渐隐）。 ========== -->
-        <Grid x:Name="SpriteHost" Grid.Row="0">
+        <Grid x:Name="SpriteHost" Grid.Row="0" RenderTransformOrigin="0.5,0.55">
             <Grid.RenderTransform>
                 <TransformGroup>
                     <TranslateTransform x:Name="LifeTranslate"/>
-                    <ScaleTransform x:Name="LifeScale" CenterX="0.5" CenterY="0.55"/>
+                    <ScaleTransform x:Name="LifeScale"/>
                 </TransformGroup>
             </Grid.RenderTransform>
             <!-- 光晕层（最底层；不参与命中测试，避免扩大拖拽热区） -->
             <Ellipse x:Name="TaskGlow" Opacity="0" IsHitTestVisible="False"
+                     RenderTransformOrigin="0.5,0.5"
                      HorizontalAlignment="Center" VerticalAlignment="Center"
                      Width="{Binding SizePx}" Height="{Binding SizePx}">
                 <Ellipse.RenderTransform>
-                    <ScaleTransform x:Name="GlowScale" CenterX="0.5" CenterY="0.5"/>
+                    <ScaleTransform x:Name="GlowScale"/>
                 </Ellipse.RenderTransform>
                 <Ellipse.Fill>
                     <!-- 环形渐变：中心透明（被桌宠遮住）、0.62-0.78 为峰值圆环、1.0 处消散——
@@ -109,7 +110,7 @@
         </Grid>
 
         <!-- ========== 上线信息条：⏰{9:00|**:**} · 👤3/4 · 三态词（图标用 Segoe MDL2 Assets 单色字形，贴 UI 风格） ========== -->
-        <Border Grid.Row="1" Margin="0,6,0,2"
+        <Border x:Name="ChipHost" Grid.Row="1" Margin="0,6,0,2"
                 Background="#D91C2430" BorderBrush="#66E8C96D" BorderThickness="1"
                 CornerRadius="9" Padding="10,4"
                 HorizontalAlignment="Center"
