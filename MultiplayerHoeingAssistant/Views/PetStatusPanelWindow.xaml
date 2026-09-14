@@ -61,8 +61,9 @@
                     </Grid>
                 </Border>
 
-                <!-- 数据行（代码填充，每秒刷新）；滚动条用工程鎏金细窄款（App 级资源，独立窗口可用 DynamicResource 解析） -->
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="8,2,8,8"
+                <!-- 数据行（代码填充，每秒刷新）；内容不满一屏时垂直居中（上下留白均衡），超高时顶对齐+滚动；
+                     滚动条用工程鎏金细窄款（App 级资源，独立窗口可用 DynamicResource 解析） -->
+                <ScrollViewer x:Name="RowsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="8,2,8,8"
                               Style="{DynamicResource GoldScrollViewer}">
                     <StackPanel x:Name="RowsHost"/>
                 </ScrollViewer>

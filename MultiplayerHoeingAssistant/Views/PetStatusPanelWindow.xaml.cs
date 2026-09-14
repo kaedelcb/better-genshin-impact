@@ -39,6 +39,10 @@ public partial class PetStatusPanelWindow : Window
         LocationChanged += (_, _) => NotifyLayout();
         SizeChanged += (_, _) => NotifyLayout();
 
+        // 行内容垂直居中：隐藏空行后内容不满一屏时上下留白均衡（内容超高则回顶对齐+滚动）
+        RowsScroll.SizeChanged += (_, _) => UpdateRowsAlignment();
+        RowsHost.SizeChanged += (_, _) => UpdateRowsAlignment();
+
         _refresh = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _refresh.Tick += (_, _) => RebuildRows();
         Loaded += (_, _) => { RebuildRows(); _refresh.Start(); };
@@ -173,6 +177,15 @@ public partial class PetStatusPanelWindow : Window
     }
 
     private void OnCloseClick(object sender, RoutedEventArgs e) => _vm.PanelEnabled = false;
+
+    /// <summary>内容矮于视口 → 垂直居中；高于视口 → 顶对齐（滚动可看全部）。</summary>
+    private void UpdateRowsAlignment()
+    {
+        if (double.IsNaN(RowsScroll.ViewportHeight) || RowsScroll.ViewportHeight <= 0) return;
+        RowsHost.VerticalAlignment = RowsHost.ActualHeight < RowsScroll.ViewportHeight
+            ? VerticalAlignment.Center
+            : VerticalAlignment.Top;
+    }
 
     private void RebuildRows()
     {
