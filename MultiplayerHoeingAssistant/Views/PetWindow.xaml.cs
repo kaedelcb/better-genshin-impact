@@ -260,14 +260,15 @@ public partial class PetWindow : Window
     /// <summary>状态动效档位（幅度乘数，周期毫秒）。</summary>
     private static (double Amp, double Period) BreathProfile(string? key) => key switch
     {
-        "act_hoeing" or "act_artifact" or "act_gather" or "interact" => (1.0, LifeTaskPeriodMs),
+        "act_hoeing" or "act_artifact" or "act_gather" => (1.0, LifeTaskPeriodMs),
         "sleep" => (LifeSleepAmpScale, LifeSleepPeriodMs),
         _ => (1.0, LifeIdlePeriodMs)
     };
 
-    /// <summary>是否任务执行类状态（光晕只在任务态渐显）。</summary>
+    /// <summary>是否任务执行类状态（光晕只在任务态渐显）。
+    /// 注意 interact 是空闲轮换备片，绝不能入列——否则空闲时光晕误亮，观感"状态反了"。</summary>
     private static bool IsTaskStateKey(string? key) =>
-        key is "act_hoeing" or "act_artifact" or "act_gather" or "interact";
+        key is "act_hoeing" or "act_artifact" or "act_gather";
 
     /// <summary>呼吸相位（弧度，持续累加；周期渐变时相位连续不跳变）。</summary>
     private double _breathPhase;
