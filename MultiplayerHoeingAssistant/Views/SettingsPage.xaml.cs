@@ -11,5 +11,10 @@ public partial class SettingsPage : UserControl
     public SettingsPage()
     {
         InitializeComponent();
+        // 奥黛塔设置区每次进入都强制收起（不记忆展开状态，用户要求）
+        IsVisibleChanged += (_, e) =>
+        {
+            if (e.NewValue is true) PetSettingsExpander.IsExpanded = false;
+        };
     }
 }

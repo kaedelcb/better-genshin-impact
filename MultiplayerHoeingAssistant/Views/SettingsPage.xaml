@@ -262,6 +262,11 @@
                     <TextBlock Text="桌面常驻的 Q 版徽章宠物，表情随任务状态变化；拖拽移动、滚轮缩放、双击唤出主窗口"
                                FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,0,0,12"/>
 
+                    <!-- 设置项折叠：默认收起、每次进入设置页都收起（不记忆展开状态，见代码后置 IsVisibleChanged） -->
+                    <Expander x:Name="PetSettingsExpander" IsExpanded="False" Header="设置项（点击展开/收起）"
+                              FontSize="13" Foreground="{DynamicResource White}" Margin="0,0,0,4">
+                    <StackPanel Margin="0,8,0,0">
+
                     <!-- 显示开关 -->
                     <Border Background="#1E262660" CornerRadius="8" Padding="12,10" Margin="0,0,0,10">
                         <Grid>
@@ -389,6 +394,8 @@
                             </StackPanel>
                         </Border>
                     </Grid>
+                    </StackPanel>
+                    </Expander>
                 </StackPanel>
             </Border>
 
