@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -6393,48 +6394,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 throw new InvalidOperationException("目标会话没有唯一可查询的 BGI 实例");
             }
             using var process = targets[0];
-            var expectedStartTicks = process.StartTime.ToUniversalTime().Ticks;
-            var expectedSession = process.SessionId;
-            var pipeName = $"BetterGI.v2.status-p{process.Id}";
-            using var pipe = new System.IO.Pipes.NamedPipeClientStream(".", pipeName, System.IO.Pipes.PipeDirection.InOut, System.IO.Pipes.PipeOptions.Asynchronous);
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(3));
-            await pipe.ConnectAsync(timeout.Token).ConfigureAwait(false);
-            WindowsSessionIdentity.VerifyPipeServer(pipe, process.Id);
-            var request = System.Text.Encoding.UTF8.GetBytes("GET_STATUS\n");
-            await pipe.WriteAsync(request, timeout.Token).ConfigureAwait(false);
-            await pipe.FlushAsync(timeout.Token).ConfigureAwait(false);
-            using var reader = new StreamReader(pipe, System.Text.Encoding.UTF8, false, 1024, true);
-            var text = new System.Text.StringBuilder();
-            var character = new char[1];
-            while (true)
-            {
-                if (await reader.ReadAsync(character.AsMemory(), timeout.Token).ConfigureAwait(false) == 0)
-                    throw new EndOfStreamException("状态响应缺少结束标记");
-                if (character[0] == '\n') break;
-                if (text.Length >= 65536) throw new InvalidDataException("状态响应超过长度上限");
-                text.Append(character[0]);
-            }
-            var json = text.ToString();
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            if (root.GetProperty("processId").GetInt32() != process.Id
-                || root.GetProperty("windowsSessionId").GetInt32() != expectedSession
-                || root.GetProperty("processStartTicks").GetInt64() != expectedStartTicks
-                || process.HasExited)
-                throw new InvalidDataException("只读状态实例身份已变化，拒绝采信");
-            if (root.GetProperty("running").ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-                throw new InvalidDataException("任务状态缺少有效 running 字段");
-            var parsed = ParseTaskStatusData(root);
-            return new ControlStatus
-            {
-                BgiStatus = parsed.BgiRunning ? "running" : "idle",
-                TaskRunning = parsed.BgiRunning,
-                CurrentTaskName = parsed.CurrentTaskName,
-                CurrentTaskGroupName = parsed.CurrentTaskGroupName,
-                CurrentRouteDisplay = parsed.CurrentRouteDisplay,
-                CurrentScriptRouteName = parsed.CurrentScriptRouteName
-            };
+            return await QueryReadOnlyStatusByProcessAsync(process, ct);
         }
         catch (Exception ex)
         {
@@ -6444,6 +6404,108 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>本机记录：一台跨会话 BGI 执行端的只读任务快照（监控端桌宠面板数据源）。</summary>
+    public sealed record LocalBgiExecutorStatus(
+        int SessionId,
+        string? UserName,
+        bool TaskRunning,
+        string? CurrentTaskName,
+        string? CurrentTaskGroupName,
+        string? CurrentRouteDisplay,
+        string? CurrentScriptRouteName);
+
+    /// <summary>
+    /// 枚举本机全部 Windows 会话中的 BGI 实例，逐台查询其只读状态管道。
+    /// 单机多会话部署下监控端感知执行端的本地通道：只读状态管道按 PID 命名、启动中心跨会话
+    /// 监控同款机制（跨会话管道按 SID 隔离的问题对它不存在——它本来就直接按进程找管道）。
+    /// 单实例不可达时跳过（不拖垮整轮）；全部不可达返回空表。
+    /// </summary>
+    public async Task<List<LocalBgiExecutorStatus>> QueryLocalExecutorsAsync(CancellationToken ct)
+    {
+        var result = new List<LocalBgiExecutorStatus>();
+        var processes = BgiProcessMonitor.GetAllSessionBgiProcesses();
+        try
+        {
+            foreach (var process in processes)
+            {
+                ct.ThrowIfCancellationRequested();
+                ControlStatus? status = null;
+                try
+                {
+                    status = await QueryReadOnlyStatusByProcessAsync(process, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // 该实例不可达（已退出/管道未就绪）：跳过，不拖垮其余实例
+                }
+
+                if (status == null) continue;
+                string? userName = null;
+                try { userName = WindowsSessionIdentity.GetUserName(process.SessionId); }
+                catch { /* 会话身份读取失败不影响状态展示 */ }
+                result.Add(new LocalBgiExecutorStatus(
+                    process.SessionId, userName, status.TaskRunning,
+                    status.CurrentTaskName, status.CurrentTaskGroupName,
+                    status.CurrentRouteDisplay, status.CurrentScriptRouteName));
+            }
+        }
+        finally
+        {
+            foreach (var process in processes) process.Dispose();
+        }
+        return result;
+    }
+
+    /// <summary>按进程查询 BGI 只读状态管道（GET_STATUS 协议 + 实例身份校验，与启动中心同款）。</summary>
+    private async Task<ControlStatus?> QueryReadOnlyStatusByProcessAsync(Process process, CancellationToken ct)
+    {
+        var expectedStartTicks = process.StartTime.ToUniversalTime().Ticks;
+        var expectedSession = process.SessionId;
+        var pipeName = $"BetterGI.v2.status-p{process.Id}";
+        using var pipe = new System.IO.Pipes.NamedPipeClientStream(".", pipeName, System.IO.Pipes.PipeDirection.InOut, System.IO.Pipes.PipeOptions.Asynchronous);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(3));
+        await pipe.ConnectAsync(timeout.Token).ConfigureAwait(false);
+        WindowsSessionIdentity.VerifyPipeServer(pipe, process.Id);
+        var request = System.Text.Encoding.UTF8.GetBytes("GET_STATUS\n");
+        await pipe.WriteAsync(request, timeout.Token).ConfigureAwait(false);
+        await pipe.FlushAsync(timeout.Token).ConfigureAwait(false);
+        using var reader = new StreamReader(pipe, System.Text.Encoding.UTF8, false, 1024, true);
+        var text = new System.Text.StringBuilder();
+        var character = new char[1];
+        while (true)
+        {
+            if (await reader.ReadAsync(character.AsMemory(), timeout.Token).ConfigureAwait(false) == 0)
+                throw new EndOfStreamException("状态响应缺少结束标记");
+            if (character[0] == '\n') break;
+            if (text.Length >= 65536) throw new InvalidDataException("状态响应超过长度上限");
+            text.Append(character[0]);
+        }
+        var json = text.ToString();
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        if (root.GetProperty("processId").GetInt32() != process.Id
+            || root.GetProperty("windowsSessionId").GetInt32() != expectedSession
+            || root.GetProperty("processStartTicks").GetInt64() != expectedStartTicks
+            || process.HasExited)
+            throw new InvalidDataException("只读状态实例身份已变化，拒绝采信");
+        if (root.GetProperty("running").ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            throw new InvalidDataException("任务状态缺少有效 running 字段");
+        var parsed = ParseTaskStatusData(root);
+        return new ControlStatus
+        {
+            BgiStatus = parsed.BgiRunning ? "running" : "idle",
+            TaskRunning = parsed.BgiRunning,
+            CurrentTaskName = parsed.CurrentTaskName,
+            CurrentTaskGroupName = parsed.CurrentTaskGroupName,
+            CurrentRouteDisplay = parsed.CurrentRouteDisplay,
+            CurrentScriptRouteName = parsed.CurrentScriptRouteName
+        };
+    }
 }
 
 public class MemberViewModel : INotifyPropertyChanged

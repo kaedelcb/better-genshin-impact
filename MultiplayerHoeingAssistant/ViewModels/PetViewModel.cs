@@ -120,6 +120,7 @@ public class PetViewModel : ViewModelBase
         _pollTimer.Start();
         ApplyVisibility();
         ApplyPanelVisibility();
+        StartLocalExecutorPoll();
     }
 
     // ========== 设置项（改即持久化）==========
@@ -639,29 +640,57 @@ public class PetViewModel : ViewModelBase
 
         if (_mainVm.IsObserverMode)
         {
-            // 监控（遥控器）模式：执行端在其它 Windows 会话/机器上，按 SID 隔离的本地管道不可达，
-            // 执行端状态的事实源是服务端房间成员广播——逐台显示在跑的成员
-            var members = _mainVm.Members.Where(m => m.Online).ToList();
-            var running = members.Where(m => m.TaskRunning).ToList();
-            if (members.Count == 0)
+            // 监控（遥控器）模式：优先本地通道——枚举本机全部 Windows 会话中的 BGI 执行端，
+            // 直连各自只读状态管道（启动中心跨会话监控同款机制，跨会话可用）；本机没有
+            // 可查实例时才回退到服务端房间成员广播（覆盖监控端与执行端不同机器的部署）。
+            var locals = _localExecutors;
+            if (locals.Count > 0)
             {
-                rows.Add(new("执行端", "未获取到成员（未连房间或房间为空）"));
+                var runningCount = locals.Count(e => e.TaskRunning);
+                rows.Add(new("执行端", $"本机 {runningCount}/{locals.Count} 台在跑"));
+                foreach (var e in locals)
+                {
+                    var label = !string.IsNullOrWhiteSpace(e.UserName) ? e.UserName! : $"会话{e.SessionId}";
+                    if (label.Length > 8) label = label[..8] + "…";
+                    if (!e.TaskRunning)
+                    {
+                        rows.Add(new(label, "空闲"));
+                        continue;
+                    }
+                    var parts = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(e.Group)) parts.Add(e.Group!);
+                    if (!string.IsNullOrWhiteSpace(e.Task)) parts.Add(e.Task!);
+                    var route = !string.IsNullOrWhiteSpace(e.Route) ? e.Route
+                              : !string.IsNullOrWhiteSpace(e.ScriptRoute) ? e.ScriptRoute
+                              : null;
+                    if (route != null) parts.Add(route);
+                    rows.Add(new(label, parts.Count > 0 ? string.Join(" · ", parts) : "运行中"));
+                }
             }
             else
             {
-                rows.Add(new("执行端", $"{running.Count}/{members.Count} 台在跑"));
-                foreach (var m in running)
+                var members = _mainVm.Members.Where(m => m.Online).ToList();
+                var running = members.Where(m => m.TaskRunning).ToList();
+                if (members.Count == 0)
                 {
-                    var parts = new List<string>();
-                    if (!string.IsNullOrWhiteSpace(m.CurrentTaskGroupName)) parts.Add(m.CurrentTaskGroupName!);
-                    if (!string.IsNullOrWhiteSpace(m.CurrentTaskName)) parts.Add(m.CurrentTaskName!);
-                    var route = !string.IsNullOrWhiteSpace(m.CurrentRouteDisplay) ? m.CurrentRouteDisplay
-                              : !string.IsNullOrWhiteSpace(m.CurrentScriptRouteName) ? m.CurrentScriptRouteName
-                              : null;
-                    if (route != null) parts.Add(route);
-                    var name = string.IsNullOrWhiteSpace(m.PlayerName) ? m.PlayerUid : m.PlayerName!;
-                    if (name.Length > 8) name = name[..8] + "…";
-                    rows.Add(new(name, parts.Count > 0 ? string.Join(" · ", parts) : "运行中"));
+                    rows.Add(new("执行端", "未发现本机执行端，房间亦无在线成员"));
+                }
+                else
+                {
+                    rows.Add(new("执行端", $"{running.Count}/{members.Count} 台在跑"));
+                    foreach (var m in running)
+                    {
+                        var parts = new List<string>();
+                        if (!string.IsNullOrWhiteSpace(m.CurrentTaskGroupName)) parts.Add(m.CurrentTaskGroupName!);
+                        if (!string.IsNullOrWhiteSpace(m.CurrentTaskName)) parts.Add(m.CurrentTaskName!);
+                        var route = !string.IsNullOrWhiteSpace(m.CurrentRouteDisplay) ? m.CurrentRouteDisplay
+                                  : !string.IsNullOrWhiteSpace(m.CurrentScriptRouteName) ? m.CurrentScriptRouteName
+                                  : null;
+                        if (route != null) parts.Add(route);
+                        var name = string.IsNullOrWhiteSpace(m.PlayerName) ? m.PlayerUid : m.PlayerName!;
+                        if (name.Length > 8) name = name[..8] + "…";
+                        rows.Add(new(name, parts.Count > 0 ? string.Join(" · ", parts) : "运行中"));
+                    }
                 }
             }
         }
@@ -692,6 +721,50 @@ public class PetViewModel : ViewModelBase
     }
 
     private static string OrDash(string? v) => string.IsNullOrWhiteSpace(v) ? "-" : v!;
+
+    // ========== 监控模式：本机跨会话执行端轮询（后台查询，UI 线程落缓存） ==========
+
+    /// <summary>一台本机执行端的展示快照。</summary>
+    private sealed record LocalExecutorRow(int SessionId, string? UserName, bool TaskRunning, string? Group, string? Task, string? Route, string? ScriptRoute);
+
+    /// <summary>最近一轮本机执行端快照（UI 线程读写；查询失败时保留旧值防闪烁）。</summary>
+    private List<LocalExecutorRow> _localExecutors = [];
+    private CancellationTokenSource? _localExecutorPollCts;
+
+    private void StartLocalExecutorPoll()
+    {
+        _localExecutorPollCts = new CancellationTokenSource();
+        var token = _localExecutorPollCts.Token;
+        _ = Task.Run(async () =>
+        {
+            while (!token.IsCancellationRequested)
+            {
+                List<LocalExecutorRow>? snapshot = null;
+                try
+                {
+                    var list = await _mainVm.QueryLocalExecutorsAsync(token).ConfigureAwait(false);
+                    snapshot = list.Select(e => new LocalExecutorRow(
+                        e.SessionId, e.UserName, e.TaskRunning,
+                        e.CurrentTaskGroupName, e.CurrentTaskName,
+                        e.CurrentRouteDisplay, e.CurrentScriptRouteName)).ToList();
+                }
+                catch (OperationCanceledException) { break; }
+                catch
+                {
+                    // 整轮查询异常：保留旧快照（面板不闪），下一轮自愈
+                }
+
+                if (snapshot != null)
+                {
+                    var view = snapshot;
+                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _localExecutors = view);
+                }
+
+                try { await Task.Delay(TimeSpan.FromSeconds(3), token).ConfigureAwait(false); }
+                catch (OperationCanceledException) { break; }
+            }
+        });
+    }
 
     // ========== 位置记忆 ==========
 
@@ -734,6 +807,7 @@ public class PetViewModel : ViewModelBase
         _pollTimer.Stop();
         _transientTimer.Stop();
         _savePosTimer.Stop();
+        _localExecutorPollCts?.Cancel();
         _mainVm.Members.CollectionChanged -= OnMembersChanged;
         _dodoco.AlertRaised -= OnAlert;
         _settings.SettingsChanged -= OnSettingsChanged;
