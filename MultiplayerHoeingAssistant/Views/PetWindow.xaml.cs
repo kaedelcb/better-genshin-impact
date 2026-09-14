@@ -13,8 +13,9 @@ namespace MultiplayerHoeingAssistant.Views;
 /// <summary>
 /// 奥黛塔桌宠窗口（v2 帧动画版）。透明无边框、不进任务栏不抢焦点。
 /// 播放器：双层 Grid（各持两帧 Image）+ 30ms 手动驱动引擎——
-///   帧切换 = 帧保持 HoldMs 后，下一帧以 FadeMs 交叉淡化叠入（消除硬切生硬感）；
-///   状态切换 = 整层 StateFadeMs 交叉淡化；单帧套图回退为轻微呼吸缩放。
+///   呼吸运动 = 单一相位驱动（吸气=微涨+上浮、呼气=回落），幅度 barely noticeable；
+///   帧切换 = 锚定呼吸极值点（每半周期一换），以 FadeMs 交叉淡化叠入（smoothstep 缓动）；
+///   状态切换 = 整层 StateFadeMs 交叉淡化；档位（周期/幅度）随状态渐变，无跳变。
 /// 引擎全部在 UI 线程（并发契约），无 Completed 回调竞态。
 /// </summary>
 public partial class PetWindow : Window
@@ -155,8 +156,6 @@ public partial class PetWindow : Window
         FrontImgA.Opacity = 1;
         LayerFront.Opacity = 1;
         LayerBack.Opacity = 0;
-        ResetBreathing();
-        if (set.Frames.Count < 2) StartBreathing(FrontScale);
         _phase = Phase.Hold;
         _phaseStart = _lastTick = DateTime.UtcNow;
     }
@@ -166,18 +165,24 @@ public partial class PetWindow : Window
         var now = DateTime.UtcNow;
         var dt = (now - _lastTick).TotalMilliseconds;
         _lastTick = now;
+
+        // —— 呼吸相位推进（先于帧相位；_seq 为 null 也持续呼吸）——
+        UpdateBreath(dt);
+
         if (_seq == null) return;
 
         switch (_phase)
         {
             case Phase.Hold:
-                if (_seq.Frames.Count >= 2 && dt >= _seq.HoldMs)
+                // 帧切换锚定呼吸极值点（相位每 π 一个锚点=半个呼吸周期），
+                // 表情变化"骑"在呼吸上，运动有因果——这是"活"与"抖"的分界
+                if (_seq.Frames.Count >= 2 && _breathPhase >= _nextSwapPhase)
                 {
-                    // 下一帧装入后层 Image，开始交叉淡化
                     SetFrame(BackImgA, NextFrame());
                     BackImgA.Opacity = 0;
                     _phase = Phase.Fade;
                     _phaseStart = now;
+                    _nextSwapPhase += Math.PI;
                 }
                 break;
 
@@ -191,11 +196,15 @@ public partial class PetWindow : Window
                     FrontImgA.Opacity = 1;
                     BackImgA.Opacity = 0;
                     _phase = Phase.Hold;
+                    // 淡化吃掉锚点间距时（极慢呼吸），下一锚点推到未来避免连爆
+                    if (_breathPhase >= _nextSwapPhase)
+                        _nextSwapPhase = Math.Ceiling(_breathPhase / Math.PI) * Math.PI;
                     _phaseStart = now;
                 }
                 else
                 {
-                    BackImgA.Opacity = t; // 下一帧 0→1 叠在前帧上（交叉淡化）
+                    // smoothstep 缓动（两端慢中间快），替代线性透明度的生硬感
+                    BackImgA.Opacity = SmoothStep(t);
                 }
                 break;
             }
@@ -212,19 +221,73 @@ public partial class PetWindow : Window
                     FrontImgB.Opacity = 0;
                     LayerFront.Opacity = 1;
                     LayerBack.Opacity = 0;
-                    ResetBreathing();
-                    if (_seq.Frames.Count < 2) StartBreathing(FrontScale);
                     _phase = _seq.Frames.Count >= 2 ? Phase.Hold : Phase.Done;
                     _phaseStart = now;
                 }
                 else
                 {
-                    LayerBack.Opacity = t;
-                    LayerFront.Opacity = 1 - t;
+                    var s = SmoothStep(t);
+                    LayerBack.Opacity = s;
+                    LayerFront.Opacity = 1 - s;
                 }
                 break;
             }
         }
+    }
+
+    // ========== 呼吸运动：单一相位驱动的"吸气涨+上浮 / 呼气回落" ==========
+    // 设计依据（动画十二原则·次级动作 + idle 设计指南）：一个主循环，幅度 barely noticeable，
+    // 周期 2–4s；状态只改这套循环的周期（干活喘得促、睡眠放得缓），不加额外振荡器。
+    // 帧切换锚定在呼吸极值（相位每 π），换帧发生在"呼吸停顿"的瞬间，有因果不突兀。
+
+    /// <summary>呼吸缩放满幅（吸气最大时相对 1.0 涨 1%，即 ±0.5% 全程摆动）。</summary>
+    private const double LifeBreathAmp = 0.01;
+    /// <summary>吸气压满时的上浮位移（DIP）。</summary>
+    private const double LifeRiseAmp = 1.5;
+    /// <summary>基础呼吸周期（毫秒，idle）。周期即帧循环：每半周期在呼吸极值处换一帧。</summary>
+    private const double LifeIdlePeriodMs = 3200;
+    /// <summary>任务类状态呼吸周期：变促不变形——幅度不变，只是"喘"。</summary>
+    private const double LifeTaskPeriodMs = 2400;
+    /// <summary>睡眠状态：周期放长、幅度收轻。</summary>
+    private const double LifeSleepPeriodMs = 4000;
+    private const double LifeSleepAmpScale = 0.6;
+
+    /// <summary>状态动效档位（幅度乘数，周期毫秒）。</summary>
+    private static (double Amp, double Period) BreathProfile(string? key) => key switch
+    {
+        "act_hoeing" or "act_artifact" or "act_gather" or "interact" => (1.0, LifeTaskPeriodMs),
+        "sleep" => (LifeSleepAmpScale, LifeSleepPeriodMs),
+        _ => (1.0, LifeIdlePeriodMs)
+    };
+
+    /// <summary>呼吸相位（弧度，持续累加；周期渐变时相位连续不跳变）。</summary>
+    private double _breathPhase;
+    /// <summary>下一个换帧锚点相位（呼吸极值处，每 π 一个）。</summary>
+    private double _nextSwapPhase = Math.PI;
+    /// <summary>当前平滑档位：状态切换按 tick 渐变（每 tick 4%，约 0.8s 收敛），幅度节奏无跳变。</summary>
+    private double _lifeAmp = 1.0;
+    private double _lifePeriod = LifeIdlePeriodMs;
+
+    private void UpdateBreath(double dtMs)
+    {
+        var (targetAmp, targetPeriod) = BreathProfile(_seq?.Key);
+        _lifeAmp += (targetAmp - _lifeAmp) * 0.04;
+        _lifePeriod += (targetPeriod - _lifePeriod) * 0.04;
+
+        _breathPhase += dtMs * 2 * Math.PI / _lifePeriod;
+
+        // b∈[0,1]：0=呼气压底（极值锚点），1=吸气压顶（另一极值锚点）
+        var b = (1 - Math.Cos(_breathPhase)) / 2;
+        LifeScale.ScaleX = 1 + LifeBreathAmp * _lifeAmp * b;
+        LifeScale.ScaleY = 1 + LifeBreathAmp * _lifeAmp * b;
+        LifeTranslate.Y = -LifeRiseAmp * _lifeAmp * b;
+    }
+
+    /// <summary>smoothstep 缓动：t²(3−2t)，两端收敛中间平滑。</summary>
+    private static double SmoothStep(double t)
+    {
+        t = Math.Clamp(t, 0, 1);
+        return t * t * (3 - 2 * t);
     }
 
     private Uri NextFrame()
@@ -237,30 +300,5 @@ public partial class PetWindow : Window
     {
         img.Source = new BitmapImage(source);
         RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.Fant);
-    }
-
-    // —— 单帧套图的呼吸微动（避免死图） ——
-
-    private void StartBreathing(ScaleTransform scale)
-    {
-        var anim = new System.Windows.Media.Animation.DoubleAnimation(1, 1.025, TimeSpan.FromMilliseconds(900))
-        {
-            AutoReverse = true,
-            RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,
-            EasingFunction = new System.Windows.Media.Animation.QuadraticEase
-                { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut }
-        };
-        scale.BeginAnimation(ScaleTransform.ScaleXProperty, anim);
-        scale.BeginAnimation(ScaleTransform.ScaleYProperty, anim);
-    }
-
-    private void ResetBreathing()
-    {
-        FrontScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
-        FrontScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
-        FrontScale.ScaleX = 1;
-        FrontScale.ScaleY = 1;
-        BackScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
-        BackScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
     }
 }

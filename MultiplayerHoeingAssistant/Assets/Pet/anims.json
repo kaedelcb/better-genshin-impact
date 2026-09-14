@@ -1,130 +1,130 @@
 ﻿{
-    "version":  1,
-    "timing":  {
-                   "holdMs":  500,
-                   "fadeMs":  260,
-                   "stateFadeMs":  200
-               },
-    "sets":  {
-                 "joy":  {
-                             "frames":  [
-                                            "f1.png",
-                                            "f2.png"
-                                        ],
-                             "source":  "喜",
-                             "frameCount":  2
-                         },
-                 "anger":  {
-                               "frames":  [
-                                              "f1.png",
-                                              "f2.png"
-                                          ],
-                               "source":  "怒",
-                               "frameCount":  2
-                           },
-                 "sorrow":  {
-                                "frames":  [
-                                               "f1.png",
-                                               "f2.png"
-                                           ],
-                                "source":  "哀",
-                                "frameCount":  2
-                            },
-                 "shock":  {
-                               "frames":  [
-                                              "f1.png",
-                                              "f2.png"
-                                          ],
-                               "source":  "惊",
-                               "frameCount":  2
-                           },
-                 "shy":  {
-                             "frames":  [
-                                            "f1.png",
-                                            "f2.png"
-                                        ],
-                             "source":  "羞",
-                             "frameCount":  2
-                         },
-                 "smug":  {
-                              "frames":  [
-                                             "f1.png",
-                                             "f2.png"
-                                         ],
-                              "source":  "得意",
-                              "frameCount":  2
-                          },
-                 "disdain":  {
-                                 "frames":  [
-                                                "f1.png",
-                                                "f2.png"
-                                            ],
-                                 "source":  "嫌弃",
-                                 "frameCount":  2
-                             },
-                 "helpless":  {
-                                  "frames":  [
-                                                 "f1.png",
-                                                 "f2.png"
-                                             ],
-                                  "source":  "无奈",
-                                  "frameCount":  2
-                              },
-                 "confused":  {
-                                  "frames":  [
-                                                 "f1.png",
-                                                 "f2.png"
-                                             ],
-                                  "source":  "疑惑",
-                                  "frameCount":  2
-                              },
-                 "tea":  {
-                             "frames":  [
-                                            "f1.png",
-                                            "f2.png"
-                                        ],
-                             "source":  "喝茶",
-                             "frameCount":  2
-                         },
-                 "sleep":  {
-                               "frames":  [
-                                              "f1.png",
-                                              "f2.png"
-                                          ],
-                               "source":  "睡觉",
-                               "frameCount":  2
-                           },
-                 "interact":  {
-                                  "frames":  [
-                                                 "f1.png",
-                                                 "f2.png"
-                                             ],
-                                  "source":  "互动",
-                                  "frameCount":  2
-                              },
-                 "act_hoeing":  {
-                                    "frames":  [
-                                                   "f1.png",
-                                                   "f2.png"
-                                               ],
-                                    "source":  "执行锄地",
-                                    "frameCount":  2
-                                },
-                 "act_artifact":  {
-                                      "frames":  [
-                                                     "f1.png",
-                                                     "f2.png"
-                                                 ],
-                                      "source":  "执行狗粮",
-                                      "frameCount":  2
-                                  },
-                 "act_gather":  {
-                                    "frames":  [
-                                                   "f1.png",
-                                                   "f2.png"
-                                               ],
-                                    "source":  "执行采集",
-                                    "frameCount":  2
-                                }
-             }
+  "version": 1,
+  "timing": {
+    "holdMs": 500,
+    "fadeMs": 260,
+    "stateFadeMs": 280
+  },
+  "sets": {
+    "joy": {
+      "frames": [
+        "f1.png",
+        "f2.png"
+      ],
+      "source": "喜",
+      "frameCount": 2
+    },
+    "anger": {
+      "frames": [
+        "f1.png",
+        "f2.png"
+      ],
+      "source": "怒",
+      "frameCount": 2
+    },
+    "sorrow": {
+      "frames": [
+        "f1.png",
+        "f2.png"
+      ],
+      "source": "哀",
+      "frameCount": 2
+    },
+    "shock": {
+      "frames": [
+        "f1.png",
+        "f2.png"
+      ],
+      "source": "惊",
+      "frameCount": 2
+    },
+    "shy": {
+      "frames": [
+        "f1.png",
+        "f2.png"
+      ],
+      "source": "羞",
+      "frameCount": 2
+    },
+    "smug": {
+      "frames": [
+        "f1.png",
+        "f2.png"
+      ],
+      "source": "得意",
+      "frameCount": 2
+    },
+    "disdain": {
+      "frames": [
+        "f1.png",
+        "f2.png"
+      ],
+      "source": "嫌弃",
+      "frameCount": 2
+    },
+    "helpless": {
+      "frames": [
+        "f1.png",
+        "f2.png"
+      ],
+      "source": "无奈",
+      "frameCount": 2
+    },
+    "confused": {
+      "frames": [
+        "f1.png",
+        "f2.png"
+      ],
+      "source": "疑惑",
+      "frameCount": 2
+    },
+    "tea": {
+      "frames": [
+        "f1.png",
+        "f2.png"
+      ],
+      "source": "喝茶",
+      "frameCount": 2
+    },
+    "sleep": {
+      "frames": [
+        "f1.png",
+        "f2.png"
+      ],
+      "source": "睡觉",
+      "frameCount": 2
+    },
+    "interact": {
+      "frames": [
+        "f1.png",
+        "f2.png"
+      ],
+      "source": "互动",
+      "frameCount": 2
+    },
+    "act_hoeing": {
+      "frames": [
+        "f1.png",
+        "f2.png"
+      ],
+      "source": "执行锄地",
+      "frameCount": 2
+    },
+    "act_artifact": {
+      "frames": [
+        "f1.png",
+        "f2.png"
+      ],
+      "source": "执行狗粮",
+      "frameCount": 2
+    },
+    "act_gather": {
+      "frames": [
+        "f1.png",
+        "f2.png"
+      ],
+      "source": "执行采集",
+      "frameCount": 2
+    }
+  }
 }

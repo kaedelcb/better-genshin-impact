@@ -60,8 +60,16 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- ========== 动画播放器：双层 Grid 交叉淡化（LayerBack/LayerFront 各持两帧 Image） ========== -->
+        <!-- ========== 动画播放器：双层 Grid 交叉淡化（LayerBack/LayerFront 各持两帧 Image）。
+             SpriteHost 挂单一相位驱动的"呼吸运动"（吸气=微涨+上浮，呼气=回落，见 PetWindow.xaml.cs），
+             帧切换锚定在呼吸极值点上；上线信息条不参与，保持稳定可读。 ========== -->
         <Grid x:Name="SpriteHost" Grid.Row="0">
+            <Grid.RenderTransform>
+                <TransformGroup>
+                    <TranslateTransform x:Name="LifeTranslate"/>
+                    <ScaleTransform x:Name="LifeScale" CenterX="0.5" CenterY="0.55"/>
+                </TransformGroup>
+            </Grid.RenderTransform>
             <!-- 后层（切换目标，平时 Opacity=0） -->
             <Grid x:Name="LayerBack" Opacity="0">
                 <Grid.RenderTransform>
