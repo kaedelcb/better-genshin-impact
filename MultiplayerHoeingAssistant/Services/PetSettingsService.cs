@@ -87,6 +87,7 @@ public sealed class PetSettingsService
                     PetOpacity = _settings.PetOpacity,
                     PanelEnabled = _settings.PanelEnabled,
                     PanelOpacity = _settings.PanelOpacity,
+                    PanelMinimal = _settings.PanelMinimal,
                     PanelX = _settings.PanelX,
                     PanelY = _settings.PanelY,
                     PanelW = _settings.PanelW,
