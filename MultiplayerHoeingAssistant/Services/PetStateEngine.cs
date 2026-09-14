@@ -32,8 +32,10 @@ public enum PetState
     WorkingArtifact,
     /// <summary>好感任务执行中。</summary>
     WorkingAffection,
-    /// <summary>采集（及通用）任务执行中。</summary>
-    WorkingGather
+    /// <summary>采集任务执行中。</summary>
+    WorkingGather,
+    /// <summary>其他/未分类任务执行中（不占用三类工作表情——严格绑定对应任务类型）。</summary>
+    WorkingOther
 }
 
 /// <summary>上线 chip 的三态词。</summary>
@@ -97,7 +99,8 @@ public static class PetStateEngine
             PetTaskKind.Hoeing => PetState.Hoeing,
             PetTaskKind.Artifact => PetState.WorkingArtifact,
             PetTaskKind.Affection => PetState.WorkingAffection,
-            _ => PetState.WorkingGather
+            PetTaskKind.Gather => PetState.WorkingGather,
+            _ => PetState.WorkingOther
         };
         if (f.OnlineReady) return PetState.ReadyOnline;
         if (f.HasScheduled) return PetState.ScheduledWaiting;
@@ -117,6 +120,8 @@ public static class PetStateEngine
         // 采集/通用任务执行必须显式映射（曾落入 _ => "tea"：任务运行显示喝茶空闲表情，
         // 光晕/节奏的状态判定也跟着失配——"只有锄地时有光晕"的根因）
         PetState.WorkingGather => "act_gather",
+        // 其他/未分类任务：中性互动表情——三类工作表情严格绑定对应任务类型，不外借
+        PetState.WorkingOther => "interact",
         _ => "tea"
     };
 
@@ -132,7 +137,8 @@ public static class PetStateEngine
         // 工作态备片：任务运行中每隔一轮切一个情绪小表情再回工作动作（用户要求任务期表情有变化）；
         // 光晕/节奏挂语义状态，备片期间不丢
         if (state is PetState.Hoeing or PetState.WorkingArtifact
-            or PetState.WorkingAffection or PetState.WorkingGather)
+            or PetState.WorkingAffection or PetState.WorkingGather
+            or PetState.WorkingOther)
         {
             altKey = state switch
             {

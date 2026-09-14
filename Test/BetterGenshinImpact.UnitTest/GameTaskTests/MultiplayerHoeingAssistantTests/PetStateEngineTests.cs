@@ -40,7 +40,7 @@ public class PetStateEngineTests
         var otherState = PetStateEngine.ResolveBase(Facts(task: true, kind: PetTaskKind.Other, ready: ready, sched: sched));
         return (hoeingState == PetState.Hoeing && artifactState == PetState.WorkingArtifact
                 && affectionState == PetState.WorkingAffection
-                && gatherState == PetState.WorkingGather && otherState == PetState.WorkingGather).ToProperty();
+                && gatherState == PetState.WorkingGather && otherState == PetState.WorkingOther).ToProperty();
     }
 
     /// <summary>P3（totality）：任意事实组合产出合法枚举值。</summary>
@@ -50,7 +50,7 @@ public class PetStateEngineTests
     {
         var kind = PetTaskKind.Artifact;
         var s = PetStateEngine.ResolveBase(Facts(alive, task, kind, ready, hoeing, sched));
-        return (s is >= PetState.Sleeping and <= PetState.WorkingGather).ToProperty();
+        return (s is >= PetState.Sleeping and <= PetState.WorkingOther).ToProperty();
     }
 
     /// <summary>P4：ReadyOnline 压过 HasScheduled。</summary>
