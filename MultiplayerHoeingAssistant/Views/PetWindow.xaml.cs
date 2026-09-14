@@ -240,10 +240,10 @@ public partial class PetWindow : Window
     // 周期 2–4s；状态只改这套循环的周期（干活喘得促、睡眠放得缓），不加额外振荡器。
     // 帧切换锚定在呼吸极值（相位每 π），换帧发生在"呼吸停顿"的瞬间，有因果不突兀。
 
-    /// <summary>呼吸缩放满幅（吸气最大时相对 1.0 涨 1%，即 ±0.5% 全程摆动）。</summary>
-    private const double LifeBreathAmp = 0.01;
+    /// <summary>呼吸缩放满幅（吸气最大时相对 1.0 涨 1.4%）。</summary>
+    private const double LifeBreathAmp = 0.014;
     /// <summary>吸气压满时的上浮位移（DIP）。</summary>
-    private const double LifeRiseAmp = 1.5;
+    private const double LifeRiseAmp = 2.0;
     /// <summary>基础呼吸周期（毫秒，idle）。周期即帧循环：每半周期在呼吸极值处换一帧。</summary>
     private const double LifeIdlePeriodMs = 3200;
     /// <summary>任务类状态呼吸周期：变促不变形——幅度不变，只是"喘"。</summary>
@@ -259,6 +259,10 @@ public partial class PetWindow : Window
         "sleep" => (LifeSleepAmpScale, LifeSleepPeriodMs),
         _ => (1.0, LifeIdlePeriodMs)
     };
+
+    /// <summary>是否任务执行类状态（光晕只在任务态渐显）。</summary>
+    private static bool IsTaskStateKey(string? key) =>
+        key is "act_hoeing" or "act_artifact" or "act_gather" or "interact";
 
     /// <summary>呼吸相位（弧度，持续累加；周期渐变时相位连续不跳变）。</summary>
     private double _breathPhase;
@@ -281,7 +285,20 @@ public partial class PetWindow : Window
         LifeScale.ScaleX = 1 + LifeBreathAmp * _lifeAmp * b;
         LifeScale.ScaleY = 1 + LifeBreathAmp * _lifeAmp * b;
         LifeTranslate.Y = -LifeRiseAmp * _lifeAmp * b;
+
+        // 光晕：任务态渐显（每 tick 4% 约 0.8s），透明度与缩放随呼吸相位同步涨落——
+        // 吸气时晕圈微微变亮变大、呼气时收敛，观感是"光随呼吸"，非常驻不闪烁
+        var glowTarget = IsTaskStateKey(_seq?.Key) ? 1.0 : 0.0;
+        _glowLevel += (glowTarget - _glowLevel) * 0.04;
+        if (_glowLevel < 0.001) _glowLevel = 0;
+        TaskGlow.Opacity = _glowLevel * (0.35 + 0.5 * b);
+        var glowScale = 1.38 + 0.05 * b;
+        GlowScale.ScaleX = glowScale;
+        GlowScale.ScaleY = glowScale;
     }
+
+    /// <summary>光晕当前强度（0=不可见，1=任务态满强度；状态切换按 tick 渐变）。</summary>
+    private double _glowLevel;
 
     /// <summary>smoothstep 缓动：t²(3−2t)，两端收敛中间平滑。</summary>
     private static double SmoothStep(double t)

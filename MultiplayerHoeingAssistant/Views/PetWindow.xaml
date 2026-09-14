@@ -61,8 +61,9 @@
         </Grid.RowDefinitions>
 
         <!-- ========== 动画播放器：双层 Grid 交叉淡化（LayerBack/LayerFront 各持两帧 Image）。
-             SpriteHost 挂单一相位驱动的"呼吸运动"（吸气=微涨+上浮，呼气=回落，见 PetWindow.xaml.cs），
-             帧切换锚定在呼吸极值点上；上线信息条不参与，保持稳定可读。 ========== -->
+             SpriteHost 挂单一相位驱动的"呼吸运动"（吸气=微涨+上浮，呼气=回落，见 PetWindow.xaml.cs OnEngineTick），
+             帧切换锚定在呼吸极值点上；上线信息条不参与，保持稳定可读。
+             TaskGlow = 任务执行态的光晕（金色径向渐变，随呼吸相位涨落，代码驱动透明度，空闲渐隐）。 ========== -->
         <Grid x:Name="SpriteHost" Grid.Row="0">
             <Grid.RenderTransform>
                 <TransformGroup>
@@ -70,6 +71,21 @@
                     <ScaleTransform x:Name="LifeScale" CenterX="0.5" CenterY="0.55"/>
                 </TransformGroup>
             </Grid.RenderTransform>
+            <!-- 光晕层（最底层；不参与命中测试，避免扩大拖拽热区） -->
+            <Ellipse x:Name="TaskGlow" Opacity="0" IsHitTestVisible="False"
+                     HorizontalAlignment="Center" VerticalAlignment="Center"
+                     Width="{Binding SizePx}" Height="{Binding SizePx}">
+                <Ellipse.RenderTransform>
+                    <ScaleTransform x:Name="GlowScale" CenterX="0.5" CenterY="0.5" ScaleX="1.38" ScaleY="1.38"/>
+                </Ellipse.RenderTransform>
+                <Ellipse.Fill>
+                    <RadialGradientBrush>
+                        <GradientStop Color="#38E8C96D" Offset="0.55"/>
+                        <GradientStop Color="#1AE8C96D" Offset="0.78"/>
+                        <GradientStop Color="#00E8C96D" Offset="1.0"/>
+                    </RadialGradientBrush>
+                </Ellipse.Fill>
+            </Ellipse>
             <!-- 后层（切换目标，平时 Opacity=0） -->
             <Grid x:Name="LayerBack" Opacity="0">
                 <Grid.RenderTransform>
