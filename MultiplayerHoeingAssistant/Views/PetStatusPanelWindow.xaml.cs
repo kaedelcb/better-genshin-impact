@@ -23,6 +23,7 @@ public partial class PetStatusPanelWindow : Window
         _vm = vm;
         DataContext = vm;
         Opacity = vm.PanelOpacity;
+        ApplyMinimalMode();
         // 设置页透明度滑条实时生效（原先只在构造时读一次，调了没反应）
         vm.PropertyChanged += OnVmPropertyChanged;
         var (w, h) = vm.GetPanelSize();
@@ -57,6 +58,29 @@ public partial class PetStatusPanelWindow : Window
     {
         if (e.PropertyName == nameof(PetViewModel.PanelOpacity))
             Opacity = _vm.PanelOpacity;
+        else if (e.PropertyName == nameof(PetViewModel.PanelMinimal))
+            ApplyMinimalMode();
+    }
+
+    /// <summary>极简模式：高度随内容自适应（SizeToContent=Height，禁用高度缩放边）；
+    /// 退出时恢复记忆高度。宽度两种模式下都可拖调。</summary>
+    private void ApplyMinimalMode()
+    {
+        if (_vm.PanelMinimal)
+        {
+            SizeToContent = SizeToContent.Height;
+            foreach (var edge in new[] { EdgeN, EdgeS, EdgeNW, EdgeNE, EdgeSW, EdgeSE })
+                edge.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            SizeToContent = SizeToContent.Manual;
+            foreach (var edge in new[] { EdgeN, EdgeS, EdgeNW, EdgeNE, EdgeSW, EdgeSE })
+                edge.Visibility = Visibility.Visible;
+            var (_, h) = _vm.GetPanelSize();
+            if (h > 100 && h < 2000)
+                Height = h;
+        }
     }
 
     // ========== 透明度循环按钮（标题栏 ◐）：1.0 → 0.85 → 0.7 → 0.55 → 0.4 → 1.0，写回 PanelOpacity 持久化 ==========

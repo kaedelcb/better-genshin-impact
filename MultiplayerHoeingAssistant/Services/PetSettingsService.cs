@@ -34,6 +34,8 @@ public class PetSettings
 
     /// <summary>详情面板透明度（0.3~1，与宠物独立）。</summary>
     [JsonPropertyName("panelOpacity")] public double PanelOpacity { get; set; } = 1;
+    /// <summary>任务面板极简模式：只显示任务与锄地进度，高度随内容自适应。</summary>
+    [JsonPropertyName("panelMinimal")] public bool PanelMinimal { get; set; }
 
     /// <summary>详情面板位置/大小（DIP）。</summary>
     [JsonPropertyName("panelX")] public double? PanelX { get; set; }

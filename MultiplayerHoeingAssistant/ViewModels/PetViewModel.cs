@@ -651,18 +651,53 @@ public class PetViewModel : ViewModelBase
         if (!_panelSaveTimer.IsEnabled) _panelSaveTimer.Start();
     }
 
+    private bool _panelMinimal;
+    /// <summary>任务面板极简模式：只显示任务与锄地进度，高度随内容自适应（开关在面板右键菜单）。</summary>
+    public bool PanelMinimal
+    {
+        get => _panelMinimal;
+        set
+        {
+            if (!SetProperty(ref _panelMinimal, value)) return;
+            _settings.Update(s => s.PanelMinimal = value);
+        }
+    }
+
     private (double X, double Y, double W, double H) _pendingPanel;
 
     private void SavePanelLayoutNow()
     {
         var (x, y, w, h) = _pendingPanel;
-        _settings.Update(s => { s.PanelX = x; s.PanelY = y; s.PanelW = w; s.PanelH = h; });
+        // 极简模式下高度随内容变化，不持久化（退出极简时恢复进入前记忆高度）
+        _settings.Update(s => { s.PanelX = x; s.PanelY = y; s.PanelW = w; if (!PanelMinimal) s.PanelH = h; });
     }
 
     /// <summary>详情面板数据行（面板每秒拉取）。值恒非空（无数据显示 -）。</summary>
     public List<KeyValuePair<string, string>> BuildPanelRows()
     {
         var rows = new List<KeyValuePair<string, string>>();
+
+        // 极简模式：只显示任务与锄地进度（监控模式取首个在跑执行端，执行端模式取本机）
+        if (PanelMinimal)
+        {
+            string? taskName; string? progress;
+            if (_mainVm.IsObserverMode)
+            {
+                var primary = _localExecutors.FirstOrDefault(e => e.TaskRunning);
+                taskName = primary?.Task;
+                progress = primary?.Progress;
+            }
+            else
+            {
+                var local = _mainVm.LatestLocalStatus;
+                taskName = local?.CurrentTaskName;
+                progress = local?.AutoHoeingProgress;
+            }
+            rows.Add(new("任务", OrDash(taskName)));
+            if (!string.IsNullOrWhiteSpace(progress))
+                rows.Add(new("锄地进度", progress!));
+            return rows;
+        }
 
         if (_mainVm.IsObserverMode)
         {

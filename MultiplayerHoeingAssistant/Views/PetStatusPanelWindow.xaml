@@ -28,6 +28,8 @@
                       Foreground="#F2E8D5" FontSize="13" Padding="10,6"/>
             <MenuItem Header="任务状态面板" IsCheckable="True" IsChecked="{Binding PanelEnabled, Mode=TwoWay}"
                       Foreground="#F2E8D5" FontSize="13" Padding="10,6"/>
+            <MenuItem Header="极简模式（只显示任务与进度）" IsCheckable="True" IsChecked="{Binding PanelMinimal, Mode=TwoWay}"
+                      Foreground="#F2E8D5" FontSize="13" Padding="10,6"/>
         </ContextMenu>
     </Window.ContextMenu>
 
