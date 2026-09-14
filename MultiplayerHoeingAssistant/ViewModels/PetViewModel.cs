@@ -671,7 +671,9 @@ public class PetViewModel : ViewModelBase
             rows.Add(new("茶包", local == null ? "-" : local.TaskRunning ? "运行中" : "空闲"));
             rows.Add(new("配置组", OrDash(local?.CurrentTaskGroupName)));
             rows.Add(new("任务", OrDash(local?.CurrentTaskName)));
-            rows.Add(new("线路", OrDash(local?.CurrentRouteDisplay)));
+            // 线路仅原生联机锄地任务有值，无信息时同样隐藏整行
+            if (!string.IsNullOrWhiteSpace(local?.CurrentRouteDisplay))
+                rows.Add(new("线路", local.CurrentRouteDisplay!));
             // 无信息时隐藏整行（显示 "-" 无信息量）
             if (!string.IsNullOrWhiteSpace(local?.CurrentScriptRouteName))
                 rows.Add(new("脚本线路", local.CurrentScriptRouteName!));
