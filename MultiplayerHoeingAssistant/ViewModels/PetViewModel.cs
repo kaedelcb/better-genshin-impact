@@ -684,10 +684,20 @@ public class PetViewModel : ViewModelBase
             if (_mainVm.IsObserverMode)
             {
                 var primary = _localExecutors.FirstOrDefault(e => e.TaskRunning);
-                taskName = primary?.Task;
-                progress = primary?.Progress;
+                if (primary != null)
+                {
+                    taskName = primary.Task;
+                    progress = primary.Progress;
+                }
+                else
+                {
+                    // 本地通道没有在跑执行端 → 回退房间成员广播
+                    var member = _mainVm.Members.FirstOrDefault(m => m.Online && m.TaskRunning);
+                    taskName = member?.CurrentTaskName;
+                    progress = member?.AutoHoeingProgress;
+                }
                 // 数据源不可用时不做哑面板：直接显示原因
-                if (_localExecutors.Count == 0)
+                if (_localExecutors.Count == 0 && taskName == null)
                     rows.Add(new("执行端", $"未发现（找到{_mainVm.LastLocalExecutorFound}台/成功{_mainVm.LastLocalExecutorOk}台）"));
             }
             else

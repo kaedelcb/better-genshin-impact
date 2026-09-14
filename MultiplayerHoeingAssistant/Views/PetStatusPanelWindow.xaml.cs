@@ -68,11 +68,12 @@ public partial class PetStatusPanelWindow : Window
     {
         if (_vm.PanelMinimal)
         {
-            // 两个坑都得清：①显式 Height 会让 SizeToContent 失效，必须清成 NaN；
-            // ②XAML MinHeight=200 会顶住两行内容（约 110px）的高度收缩
+            // 三个坑都得清：①显式 Height 会让 SizeToContent 失效；②MinHeight=200 顶住收缩；
+            // ③居中逻辑曾把容器高度锁成旧视口高（见 UpdateRowsAlignment）
             SizeToContent = SizeToContent.Height;
             Height = double.NaN;
             MinHeight = 0;
+            RowsHostWrap.Height = double.NaN;
             foreach (var edge in new[] { EdgeN, EdgeS, EdgeNW, EdgeNE, EdgeSW, EdgeSE })
                 edge.Visibility = Visibility.Collapsed;
         }
@@ -211,6 +212,13 @@ public partial class PetStatusPanelWindow : Window
     /// 注意 ScrollViewer 以无限高度测量内容，子元素自身 VerticalAlignment=Center 对不齐视口，必须显式设高度。</summary>
     private void UpdateRowsAlignment()
     {
+        // 极简模式高度由 SizeToContent 决定，禁用"容器高度=视口"逻辑——
+        // 那会和 SizeToContent 形成反馈循环把窗口高度锁死
+        if (_vm.PanelMinimal)
+        {
+            RowsHostWrap.Height = double.NaN;
+            return;
+        }
         var viewportHeight = RowsScroll.ViewportHeight;
         if (double.IsNaN(viewportHeight) || viewportHeight <= 0) return;
         if (RowsHost.ActualHeight < viewportHeight)

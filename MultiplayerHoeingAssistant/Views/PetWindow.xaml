@@ -83,9 +83,9 @@
                          光晕整体落在窗口边界内（超出会被透明窗口裁成方形） -->
                     <RadialGradientBrush>
                         <GradientStop Color="#00E8C96D" Offset="0.45"/>
-                        <GradientStop Color="#4DE8C96D" Offset="0.62"/>
-                        <GradientStop Color="#59E8C96D" Offset="0.75"/>
-                        <GradientStop Color="#1FE8C96D" Offset="0.90"/>
+                        <GradientStop Color="#73E8C96D" Offset="0.62"/>
+                        <GradientStop Color="#8CE8C96D" Offset="0.75"/>
+                        <GradientStop Color="#2FE8C96D" Offset="0.90"/>
                         <GradientStop Color="#00E8C96D" Offset="1.0"/>
                     </RadialGradientBrush>
                 </Ellipse.Fill>

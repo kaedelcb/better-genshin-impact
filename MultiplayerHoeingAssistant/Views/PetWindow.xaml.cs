@@ -98,6 +98,9 @@ public partial class PetWindow : Window
             img.SetBinding(WidthProperty, b);
             img.SetBinding(HeightProperty, b);
         }
+        // 光晕直径≈本体1.55倍，透明内边距随之扩展——否则光晕超出窗口被裁成方形
+        var px = _vm.SizePx;
+        SpriteHost.Margin = new Thickness(px * 0.275 + 8);
     }
 
     // ========== 交互 ==========
@@ -291,8 +294,8 @@ public partial class PetWindow : Window
         var glowTarget = IsTaskStateKey(_seq?.Key) ? 1.0 : 0.0;
         _glowLevel += (glowTarget - _glowLevel) * 0.04;
         if (_glowLevel < 0.001) _glowLevel = 0;
-        TaskGlow.Opacity = _glowLevel * (0.55 + 0.45 * b);
-        var glowScale = 1.0 + 0.05 * b;
+        TaskGlow.Opacity = _glowLevel * (0.65 + 0.35 * b);
+        var glowScale = 1.55 + 0.06 * b;
         GlowScale.ScaleX = glowScale;
         GlowScale.ScaleY = glowScale;
     }
