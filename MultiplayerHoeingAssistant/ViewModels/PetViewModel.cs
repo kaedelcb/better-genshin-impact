@@ -686,12 +686,17 @@ public class PetViewModel : ViewModelBase
                 var primary = _localExecutors.FirstOrDefault(e => e.TaskRunning);
                 taskName = primary?.Task;
                 progress = primary?.Progress;
+                // 数据源不可用时不做哑面板：直接显示原因
+                if (_localExecutors.Count == 0)
+                    rows.Add(new("执行端", $"未发现（找到{_mainVm.LastLocalExecutorFound}台/成功{_mainVm.LastLocalExecutorOk}台）"));
             }
             else
             {
                 var local = _mainVm.LatestLocalStatus;
                 taskName = local?.CurrentTaskName;
                 progress = local?.AutoHoeingProgress;
+                if (local == null)
+                    rows.Add(new("执行端", "未连接本机执行端"));
             }
             rows.Add(new("任务", OrDash(taskName)));
             if (!string.IsNullOrWhiteSpace(progress))
@@ -734,7 +739,7 @@ public class PetViewModel : ViewModelBase
                 var running = members.Where(m => m.TaskRunning).ToList();
                 if (members.Count == 0)
                 {
-                    rows.Add(new("执行端", "未发现本机执行端，房间亦无在线成员"));
+                    rows.Add(new("执行端", $"未发现本机执行端（找到{_mainVm.LastLocalExecutorFound}台/成功{_mainVm.LastLocalExecutorOk}台），房间亦无在线成员"));
                 }
                 else
                 {

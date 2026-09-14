@@ -6466,6 +6466,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
 
         // [执行端探测] 留痕（状态变化才记）：区分"没枚举到 BGI 进程"与"枚举到但管道查询失败"
+        LastLocalExecutorFound = processes.Length;
+        LastLocalExecutorOk = okCount;
         var probeKey = $"found={processes.Length} ok={okCount}";
         if (probeKey != _lastLocalExecutorProbeKey)
         {
@@ -6474,6 +6476,12 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
         return result;
     }
+
+    /// <summary>[执行端探测] 上次轮询发现的本机 BGI 进程数（监控面板自诊断显示用）。</summary>
+    public int LastLocalExecutorFound { get; private set; }
+
+    /// <summary>[执行端探测] 上次轮询查询成功的实例数。</summary>
+    public int LastLocalExecutorOk { get; private set; }
 
     /// <summary>[执行端探测] 上次留痕指纹（去重）。</summary>
     private string? _lastLocalExecutorProbeKey;

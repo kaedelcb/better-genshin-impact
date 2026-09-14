@@ -68,13 +68,18 @@ public partial class PetStatusPanelWindow : Window
     {
         if (_vm.PanelMinimal)
         {
+            // 两个坑都得清：①显式 Height 会让 SizeToContent 失效，必须清成 NaN；
+            // ②XAML MinHeight=200 会顶住两行内容（约 110px）的高度收缩
             SizeToContent = SizeToContent.Height;
+            Height = double.NaN;
+            MinHeight = 0;
             foreach (var edge in new[] { EdgeN, EdgeS, EdgeNW, EdgeNE, EdgeSW, EdgeSE })
                 edge.Visibility = Visibility.Collapsed;
         }
         else
         {
             SizeToContent = SizeToContent.Manual;
+            MinHeight = 200;
             foreach (var edge in new[] { EdgeN, EdgeS, EdgeNW, EdgeNE, EdgeSW, EdgeSE })
                 edge.Visibility = Visibility.Visible;
             var (_, h) = _vm.GetPanelSize();
@@ -222,8 +227,18 @@ public partial class PetStatusPanelWindow : Window
 
     private void RebuildRows()
     {
+        List<KeyValuePair<string, string>> rows;
+        try
+        {
+            rows = _vm.BuildPanelRows();
+        }
+        catch (Exception ex)
+        {
+            // 行构建异常直接在面板上显示，杜绝"静默空白面板"
+            rows = [new("面板异常", ex.Message)];
+        }
         RowsHost.Children.Clear();
-        foreach (var row in _vm.BuildPanelRows())
+        foreach (var row in rows)
         {
             var grid = new Grid { Margin = new Thickness(0, 3, 0, 3) };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(72) });
