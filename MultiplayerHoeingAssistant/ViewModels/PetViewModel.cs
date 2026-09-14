@@ -635,19 +635,50 @@ public class PetViewModel : ViewModelBase
     /// <summary>详情面板数据行（面板每秒拉取）。值恒非空（无数据显示 -）。</summary>
     public List<KeyValuePair<string, string>> BuildPanelRows()
     {
-        var local = _mainVm.LatestLocalStatus;
-        var rows = new List<KeyValuePair<string, string>>
+        var rows = new List<KeyValuePair<string, string>>();
+
+        if (_mainVm.IsObserverMode)
         {
-            new("茶包", local == null ? "-" : local.TaskRunning ? "运行中" : "空闲"),
-            new("配置组", OrDash(local?.CurrentTaskGroupName)),
-            new("任务", OrDash(local?.CurrentTaskName)),
-            new("线路", OrDash(local?.CurrentRouteDisplay)),
-        };
-        // 无信息时隐藏整行（显示 "-" 无信息量）
-        if (!string.IsNullOrWhiteSpace(local?.CurrentScriptRouteName))
-            rows.Add(new("脚本线路", local.CurrentScriptRouteName!));
-        if (!string.IsNullOrWhiteSpace(local?.AutoHoeingProgress))
-            rows.Add(new("锄地进度", local.AutoHoeingProgress!));
+            // 监控（遥控器）模式：执行端在其它 Windows 会话/机器上，按 SID 隔离的本地管道不可达，
+            // 执行端状态的事实源是服务端房间成员广播——逐台显示在跑的成员
+            var members = _mainVm.Members.Where(m => m.Online).ToList();
+            var running = members.Where(m => m.TaskRunning).ToList();
+            if (members.Count == 0)
+            {
+                rows.Add(new("执行端", "未获取到成员（未连房间或房间为空）"));
+            }
+            else
+            {
+                rows.Add(new("执行端", $"{running.Count}/{members.Count} 台在跑"));
+                foreach (var m in running)
+                {
+                    var parts = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(m.CurrentTaskGroupName)) parts.Add(m.CurrentTaskGroupName!);
+                    if (!string.IsNullOrWhiteSpace(m.CurrentTaskName)) parts.Add(m.CurrentTaskName!);
+                    var route = !string.IsNullOrWhiteSpace(m.CurrentRouteDisplay) ? m.CurrentRouteDisplay
+                              : !string.IsNullOrWhiteSpace(m.CurrentScriptRouteName) ? m.CurrentScriptRouteName
+                              : null;
+                    if (route != null) parts.Add(route);
+                    var name = string.IsNullOrWhiteSpace(m.PlayerName) ? m.PlayerUid : m.PlayerName!;
+                    if (name.Length > 8) name = name[..8] + "…";
+                    rows.Add(new(name, parts.Count > 0 ? string.Join(" · ", parts) : "运行中"));
+                }
+            }
+        }
+        else
+        {
+            var local = _mainVm.LatestLocalStatus;
+            rows.Add(new("茶包", local == null ? "-" : local.TaskRunning ? "运行中" : "空闲"));
+            rows.Add(new("配置组", OrDash(local?.CurrentTaskGroupName)));
+            rows.Add(new("任务", OrDash(local?.CurrentTaskName)));
+            rows.Add(new("线路", OrDash(local?.CurrentRouteDisplay)));
+            // 无信息时隐藏整行（显示 "-" 无信息量）
+            if (!string.IsNullOrWhiteSpace(local?.CurrentScriptRouteName))
+                rows.Add(new("脚本线路", local.CurrentScriptRouteName!));
+            if (!string.IsNullOrWhiteSpace(local?.AutoHoeingProgress))
+                rows.Add(new("锄地进度", local.AutoHoeingProgress!));
+        }
+
         rows.Add(new("上线信息", ChipText ?? "-"));
         if (_affectionStart is { } start)
         {

@@ -29,6 +29,8 @@ public partial class MainViewModel : INotifyPropertyChanged
     private string _roomCode = "";
     private bool _isConnected;
     private string _lastLoggedProgress = "";
+    /// <summary>[监控采集探针] 上次留痕的执行端快照指纹（去重，仅在变化时打日志）。</summary>
+    private string? _lastObserverProbeKey;
     private Timer? _statusTimer;
     private Timer? _retryTimer;
     private Timer? _onlineTimer;
@@ -615,11 +617,29 @@ public partial class MainViewModel : INotifyPropertyChanged
                     // 进度/线路仅作展示，LatestLocalStatus 面板可见即可
                     autoHoeingProgress = observerStatus.AutoHoeingProgress;
                     wasCancelled = observerStatus.WasCancelled;
+                    // [监控采集探针] 仅在状态变化时留痕，便于排查"监控端看不到执行端状态"
+                    var key = $"running={bgiRunning} task={currentTaskName} group={currentTaskGroupName}";
+                    if (key != _lastObserverProbeKey)
+                    {
+                        _lastObserverProbeKey = key;
+                        AddLog($"[监控采集] 执行端快照 {key}");
+                    }
+                }
+                else
+                {
+                    // [监控采集探针] 通道不可用/查询失败：仅在失败状态变化时留痕（连续失败不刷屏）
+                    var failKey = $"不可用:{(observerResp == null ? "no-channel" : observerResp.ErrorMessage ?? "无响应")}";
+                    if (failKey != _lastObserverProbeKey)
+                    {
+                        _lastObserverProbeKey = failKey;
+                        AddLog($"[监控采集] task.status {failKey}");
+                    }
                 }
             }
-            catch
+            catch (Exception observerEx)
             {
-                // 本机执行端不可达：任务字段保持默认值，面板显示 "-"，下一轮自愈
+                // [监控采集探针] 异常也留痕
+                AddLog($"[监控采集] 采集异常: {observerEx.Message}");
             }
         }
         else
