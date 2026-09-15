@@ -34,8 +34,9 @@ public class PetViewModel : ViewModelBase
     private static readonly TimeSpan AngerWindow = TimeSpan.FromMinutes(5);
     /// <summary>告警惊慌的持续尾（爆发结束后仍显示无奈）。</summary>
     private static readonly TimeSpan AlertSustain = TimeSpan.FromSeconds(8);
-    /// <summary>空闲停留轮换周期（主片 20s ↔ 备片 20s）。</summary>
-    private static readonly TimeSpan DwellRotate = TimeSpan.FromSeconds(20);
+    /// <summary>轮换节拍下限/上限：每拍随机 15~25s，避免固定周期带来的机械感。</summary>
+    private static readonly TimeSpan RotateMin = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan RotateSpan = TimeSpan.FromSeconds(10);
     /// <summary>悬停疑惑表情的节流。</summary>
     private static readonly TimeSpan HoverThrottle = TimeSpan.FromSeconds(15);
 
@@ -73,6 +74,10 @@ public class PetViewModel : ViewModelBase
     private DateTime _hoverLastAt = DateTime.MinValue;
     private PetState _baseState = PetState.Sleeping;
     private DateTime _baseStateSince = DateTime.UtcNow;
+    /// <summary>轮换随机源与当前拍（加权随机池，见 PetStateEngine.PickRotationKey）。</summary>
+    private readonly Random _rotateRng = new();
+    private string _rotationKey = "sleep";
+    private DateTime _nextRotateAt = DateTime.MinValue;
 
     public PetViewModel(MainViewModel mainVm, DodocoViewModel dodoco, PetSettingsService settings, Action openMainWindow,
         BgiLogTailService? logTail = null)
@@ -473,6 +478,7 @@ public class PetViewModel : ViewModelBase
         {
             _baseState = newState;
             _baseStateSince = now;
+            _nextRotateAt = DateTime.MinValue; // 状态切换立即重抽轮换表情
         }
 
         // 光晕/呼吸节奏挂语义状态（而非显示的表情 key）：
@@ -497,7 +503,20 @@ public class PetViewModel : ViewModelBase
     {
         var scheduledTime = FirstNonEmpty(_self?.ScheduledOnlineTime, local?.ScheduledOnlineTime);
         int readyCount = _mainVm.Members.Count(m => m.OnlineReady);
-        int expected = local?.ExpectedHoeingPlayers is > 0 ? local.ExpectedHoeingPlayers : 4;
+        // 分母（预期开锄人数）：监控模式取在线成员上报值的最小值（与服务端触发阈值同口径，
+        // 修正"执行端改 1 人、监控端仍显示本机旧配置 4"）；执行端模式用本机配置。
+        int expected;
+        if (_mainVm.IsObserverMode)
+        {
+            var onlineExpected = _mainVm.Members.Where(m => m.Online)
+                .Select(m => m.ExpectedHoeingPlayers).Where(v => v > 0).ToList();
+            expected = onlineExpected.Count > 0 ? onlineExpected.Min()
+                     : local?.ExpectedHoeingPlayers is > 0 ? local.ExpectedHoeingPlayers : 4;
+        }
+        else
+        {
+            expected = local?.ExpectedHoeingPlayers is > 0 ? local.ExpectedHoeingPlayers : 4;
+        }
         // 已联机语义（用户实机纠偏）：AutoHoeingProgress 在单机锄地也会置位，仅凭它报"已联机"
         // 会把单机锄地误标成联机。修正：已联机 = 锄地任务在跑 且 今天走过上线流程（存在消费记录）。
         // 监控模式按房间成员聚合（远程小队锄地同样可见）；执行端模式看本机成员行。
@@ -518,12 +537,55 @@ public class PetViewModel : ViewModelBase
                   : onlineReady ? PetOnlinePhase.Ready
                   : PetOnlinePhase.NotReady;
         }
-        var (time, count, phaseText) = PetStateEngine.ComposeOnlineChipParts(scheduledTime, readyCount, expected, phase);
+        var (time, count, phaseText) = PetStateEngine.ComposeOnlineChipParts(scheduledTime, readyCount, expected, phase,
+            ResolveRoomPlayerCount(local));
+        LogChipPhaseTransition(phase, hoeing, onlineReady, local);
         ChipTimeText = time;
         ChipCountText = count;
         ChipPhaseText = phaseText;
         OnPropertyChanged(nameof(ChipText));
         OnPropertyChanged(nameof(ChipVisible));
+    }
+
+    private PetOnlinePhase _lastLoggedPhase = (PetOnlinePhase)(-1);
+
+    /// <summary>chip 相位切换诊断：仅在相位变化时打一条，吐出全部判定输入（排查"已上线/已联机"停滞）。</summary>
+    private void LogChipPhaseTransition(PetOnlinePhase phase, bool hoeing, bool onlineReady, Models.ControlStatus? local)
+    {
+        if (phase == _lastLoggedPhase) return;
+        var prev = _lastLoggedPhase;
+        _lastLoggedPhase = phase;
+        if (prev == (PetOnlinePhase)(-1)) return; // 首次定相不刷日志
+        string selfDesc;
+        if (_mainVm.IsObserverMode)
+        {
+            var online = _mainVm.Members.Where(m => m.Online).ToList();
+            selfDesc = $"members={_mainVm.Members.Count} online={online.Count} "
+                     + $"anyMemberHoeing={online.Any(m => m.AutoHoeingRunning)} "
+                     + $"anyConsumed={online.Any(m => m.OnlineHistory is { Count: > 0 })} "
+                     + $"anyReady={online.Any(m => m.OnlineReady)} localExecutors={_localExecutors.Count} hoeing={hoeing}";
+        }
+        else
+        {
+            selfDesc = $"self={( _self == null ? "null" : "found" )} "
+                     + $"selfHistory={_self?.OnlineHistory?.Count ?? -1} hoeing={hoeing} onlineReady={onlineReady} "
+                     + $"localAutoHoeing={local?.AutoHoeingRunning.ToString() ?? "null"} roomPlayers={local?.RoomPlayerCount.ToString() ?? "null"}";
+        }
+        _mainVm.AddLog($"[桌宠chip] {prev} → {phase}（{selfDesc}）");
+    }
+
+    /// <summary>
+    /// SignalR 房间当前人数（"已联机"态 chip 分子用）。
+    /// 执行端模式：本机快照直读；监控模式：本机跨会话执行端聚合，取第一个在锄地且人数&gt;0 的执行端
+    /// （同一房间的 SignalR 花名册对所有成员一致，取哪个都相同）。0=未知（旧 BGI/未在房间）→ chip 优雅降级。
+    /// </summary>
+    private int ResolveRoomPlayerCount(Models.ControlStatus? local)
+    {
+        if (!_mainVm.IsObserverMode)
+            return local?.RoomPlayerCount ?? 0;
+        return _localExecutors.Where(e => e.Hoeing && e.RoomPlayers > 0)
+            .Select(e => e.RoomPlayers)
+            .FirstOrDefault();
     }
 
     /// <summary>爆发态优先，其次告警持续尾（无奈），最后基础态（含空闲轮换备片）。</summary>
@@ -558,10 +620,14 @@ public class PetViewModel : ViewModelBase
 
     private string ResolveBaseDisplayKey(DateTime now)
     {
-        // 按状态轮换池循环（池首为主片；加权重复项营造节奏感）
-        var pool = PetStateEngine.GetRotationPool(_baseState);
-        var dwell = (int)Math.Abs((now - _baseStateSince).Ticks / DwellRotate.Ticks);
-        return pool[dwell % pool.Length];
+        // 加权随机轮换：节拍到期重抽一拍表情（主片过半权重，备片随机穿插不连拍），
+        // 拍长 15~25s 随机抖动；爆发/告警尾不经过这里
+        if (now >= _nextRotateAt)
+        {
+            _rotationKey = PetStateEngine.PickRotationKey(_baseState, _rotationKey, _rotateRng);
+            _nextRotateAt = now + RotateMin + TimeSpan.FromSeconds(_rotateRng.NextDouble() * RotateSpan.TotalSeconds);
+        }
+        return _rotationKey;
     }
 
     private static string DescribeBurst(string burst) => burst switch
@@ -852,7 +918,7 @@ public class PetViewModel : ViewModelBase
     // ========== 监控模式：本机跨会话执行端轮询（后台查询，UI 线程落缓存） ==========
 
     /// <summary>一台本机执行端的展示快照。</summary>
-    private sealed record LocalExecutorRow(int SessionId, string? UserName, bool TaskRunning, string? Group, string? Task, string? Route, string? ScriptRoute, string? Progress, bool Hoeing, bool WasCancelled);
+    private sealed record LocalExecutorRow(int SessionId, string? UserName, bool TaskRunning, string? Group, string? Task, string? Route, string? ScriptRoute, string? Progress, bool Hoeing, bool WasCancelled, int RoomPlayers);
 
     /// <summary>最近一轮本机执行端快照（UI 线程读写；查询失败时保留旧值防闪烁）。</summary>
     private List<LocalExecutorRow> _localExecutors = [];
@@ -881,7 +947,7 @@ public class PetViewModel : ViewModelBase
                             e.CurrentTaskGroupName, e.CurrentTaskName,
                             e.CurrentRouteDisplay, e.CurrentScriptRouteName,
                             e.AutoHoeingProgress, e.AutoHoeingRunning,
-                            e.WasCancelled)).ToList();
+                            e.WasCancelled, e.RoomPlayerCount)).ToList();
                         await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                         {
                             _localExecutors = view;

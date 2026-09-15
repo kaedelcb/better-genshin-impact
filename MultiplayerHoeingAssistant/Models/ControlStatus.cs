@@ -37,6 +37,9 @@ public class ControlStatus
     public bool AutoHoeingRunning { get; set; }
     /// <summary>当前锄地进度文本（仅上报给自身用，控制端不展示给对方）。</summary>
     public string? AutoHoeingProgress { get; set; }
+    /// <summary>SignalR 房间当前人数（BGI 只读快照透传；0=未知/未在房间，旧 BGI 无此字段）。
+    /// 桌宠"已联机"态 chip 分子用。</summary>
+    public int RoomPlayerCount { get; set; }
     /// <summary>是否已上线（标记了"已上线"但联机锄地尚未开始）。</summary>
     public bool OnlineReady { get; set; }
     /// <summary>上线方式：scheduled / command / none。</summary>

@@ -495,7 +495,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         string? CurrentScriptRouteName,
         bool AutoHoeingRunning,
         string? AutoHoeingProgress,
-        bool WasCancelled);
+        bool WasCancelled,
+        int RoomPlayerCount = 0);
 
     private static TaskStatusPollResult ParseTaskStatusData(JsonElement sdata)
     {
@@ -532,10 +533,15 @@ public partial class MainViewModel : INotifyPropertyChanged
         // 配置组内脚本任务（JS/地图追踪）当前线路名（旧 BGI 无此字段 → null，显示退回"配置组 · 任务名"）
         if (bgiRunning && sdata.TryGetProperty("currentScriptRouteName", out var srn) && srn.ValueKind == JsonValueKind.String)
             currentScriptRouteName = srn.GetString();
+        // SignalR 房间当前人数（旧 BGI 无此字段 → 0，chip 优雅降级回上线人数显示）
+        var roomPlayerCount = 0;
+        if (sdata.TryGetProperty("roomPlayerCount", out var rpc) && rpc.ValueKind == JsonValueKind.Number)
+            roomPlayerCount = rpc.GetInt32();
 
         return new TaskStatusPollResult(
             bgiRunning, currentTaskName, currentTaskGroupName,
-            currentRouteDisplay, currentScriptRouteName, autoHoeingRunning, autoHoeingProgress, wasCancelled);
+            currentRouteDisplay, currentScriptRouteName, autoHoeingRunning, autoHoeingProgress, wasCancelled,
+            roomPlayerCount);
     }
 
     /// <summary>本地状态采集循环（10s）幂等启动。[离线优先] 采集独立于 SignalR 连接运行：
@@ -591,6 +597,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         var currentRouteDisplay = (string?)null;
         var currentScriptRouteName = (string?)null;
         var wasCancelled = false;
+        var roomPlayerCount = 0;
 
         var bgiRunning = false;
         // 本轮 IPC 会话校验结果：不可信（跨会话/无法确认）时不采信管道返回的任何任务状态
@@ -618,6 +625,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                     // 进度/线路仅作展示，LatestLocalStatus 面板可见即可
                     autoHoeingProgress = observerStatus.AutoHoeingProgress;
                     wasCancelled = observerStatus.WasCancelled;
+                    roomPlayerCount = observerStatus.RoomPlayerCount;
                     // [监控采集探针] 仅在状态变化时留痕，便于排查"监控端看不到执行端状态"
                     var key = $"running={bgiRunning} task={currentTaskName} group={currentTaskGroupName}";
                     if (key != _lastObserverProbeKey)
@@ -727,6 +735,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         autoHoeingRunning = parsedStatus.AutoHoeingRunning;
                         autoHoeingProgress = parsedStatus.AutoHoeingProgress;
                         wasCancelled = parsedStatus.WasCancelled;
+                        roomPlayerCount = parsedStatus.RoomPlayerCount;
                     }
                     catch
                     {
@@ -810,6 +819,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                     autoHoeingRunning = parsedStatus.AutoHoeingRunning;
                     autoHoeingProgress = parsedStatus.AutoHoeingProgress;
                     wasCancelled = parsedStatus.WasCancelled;
+                    roomPlayerCount = parsedStatus.RoomPlayerCount;
                 }
                 } // end else（IPC 会话可信）
             }
@@ -862,6 +872,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             AutoHoeingRunning = autoHoeingRunning,
             AutoHoeingProgress = autoHoeingProgress,
             WasCancelled = wasCancelled,
+            RoomPlayerCount = roomPlayerCount,
             OnlineReady = _intentLifecycle.IsOnlineReady,
             OnlineMode = _intentLifecycle.OnlineMode,
             ScheduledOnlineTime = _config?.ScheduledOnlineTime ?? "",
@@ -3952,6 +3963,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         existing.OnlineReady = np.OnlineReady;
                         existing.OnlineMode = np.OnlineMode;
                         existing.ScheduledOnlineTime = np.ScheduledOnlineTime;
+                        existing.ExpectedHoeingPlayers = np.ExpectedHoeingPlayers;
                         existing.OnlineHoeingGroupNames = np.OnlineHoeingGroupNames ?? [];
                         existing.QuickCommands = np.QuickCommands ?? new();
                         existing.OnlineHistory = np.OnlineHistory;
@@ -3981,6 +3993,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         OnlineReady = np.OnlineReady,
                         OnlineMode = np.OnlineMode,
                         ScheduledOnlineTime = np.ScheduledOnlineTime,
+                        ExpectedHoeingPlayers = np.ExpectedHoeingPlayers,
                         // 新建分支必须与上方更新分支字段对齐：增量广播下状态不变的成员不会再被下发，
                         // 这里漏掉的字段（曾漏 OnlineHoeingGroupNames/QuickCommands）会永远停在默认值，
                         // 表现为"绑定弹窗看不到别人的已选配置组"（服务端数据是真的，本端 Add 路径丢了）。
@@ -6415,7 +6428,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         string? CurrentScriptRouteName,
         string? AutoHoeingProgress,
         bool AutoHoeingRunning,
-        bool WasCancelled);
+        bool WasCancelled,
+        int RoomPlayerCount = 0);
 
     /// <summary>
     /// 枚举本机全部 Windows 会话中的 BGI 实例，逐台查询其只读状态管道。
@@ -6457,7 +6471,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                     status.CurrentTaskName, status.CurrentTaskGroupName,
                     status.CurrentRouteDisplay, status.CurrentScriptRouteName,
                     status.AutoHoeingProgress, status.AutoHoeingRunning,
-                    status.WasCancelled));
+                    status.WasCancelled, status.RoomPlayerCount));
             }
         }
         finally
@@ -6532,7 +6546,8 @@ public partial class MainViewModel : INotifyPropertyChanged
             CurrentScriptRouteName = parsed.CurrentScriptRouteName,
             AutoHoeingRunning = parsed.AutoHoeingRunning,
             AutoHoeingProgress = parsed.AutoHoeingProgress,
-            WasCancelled = parsed.WasCancelled
+            WasCancelled = parsed.WasCancelled,
+            RoomPlayerCount = parsed.RoomPlayerCount
         };
     }
 }
@@ -6677,6 +6692,9 @@ public class MemberViewModel : INotifyPropertyChanged
 
     private bool _onlineReady;
     public bool OnlineReady { get => _onlineReady; set { if (_onlineReady != value) { _onlineReady = value; OnPropertyChanged(); } } }
+
+    /// <summary>该成员上报的预期开锄人数（服务端广播透传；监控端 chip 分母取在线成员最小值，与服务端触发阈值同口径）。</summary>
+    public int ExpectedHoeingPlayers { get; set; } = 4;
 
     private string _onlineMode = "none";
     public string OnlineMode { get => _onlineMode; set { if (_onlineMode != value) { _onlineMode = value; OnPropertyChanged(); } } }

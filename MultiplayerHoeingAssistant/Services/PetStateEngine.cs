@@ -125,54 +125,78 @@ public static class PetStateEngine
         _ => "tea"
     };
 
+    /// <summary>轮换池单条目：动画 key + 出现权重。</summary>
+    public sealed record RotationEntry(string Key, int Weight);
+
     /// <summary>
-    /// 状态轮换池：导演层按停留时长在池内循环切换（pool[0] 为主片，重复项=提高出现权重）。
-    /// 设计原则：①主片占半，保证状态一眼可读；②备片选语义可信的情绪切镜（干活中偶尔得意/开心）；
-    /// ③全部 15 套素材均在表内使用（哀=告警持续尾，见 PetViewModel）。
+    /// 状态轮换加权池：主片（首条目）约七成权重保证任务专属表情一眼可读，其余分给语义可信的情绪备片，
+    /// 每拍加权随机抽取（不再固定顺序循环）。禁入片不进池：
+    /// sleep=睡觉专属；sorrow/anger=告警持续尾专属（PetViewModel）；shock=惊吓爆发专属。
+    /// 全部 15 套素材仍均在表内或爆发/告警位使用。
     /// 光晕/呼吸节奏挂语义状态标志，轮换到备片期间不丢。
     /// </summary>
-    public static string[] GetRotationPool(PetState state) => state switch
+    public static readonly IReadOnlyDictionary<PetState, RotationEntry[]> RotationPools = new Dictionary<PetState, RotationEntry[]>
     {
-        PetState.Sleeping => ["sleep"],
-        PetState.Idle or PetState.ScheduledWaiting
-            => ["tea", "interact", "tea", "joy"],
-        PetState.ReadyOnline
-            => ["interact", "joy", "interact", "smug"],
-        PetState.Hoeing
-            => ["act_hoeing", "smug", "act_hoeing", "joy"],
-        PetState.WorkingArtifact
-            => ["act_artifact", "joy", "act_artifact", "smug"],
-        PetState.WorkingAffection
-            => ["shy", "smug", "shy", "joy"],
-        PetState.WorkingGather
-            => ["act_gather", "joy", "act_gather", "smug"],
-        PetState.WorkingOther
-            => ["interact", "joy", "interact", "confused"],
-        _ => ["tea"]
+        [PetState.Sleeping] = [new("sleep", 1)],
+        [PetState.Idle] = [new("tea", 70), new("interact", 10), new("joy", 8), new("helpless", 7), new("confused", 5)],
+        [PetState.ScheduledWaiting] = [new("tea", 70), new("interact", 10), new("joy", 8), new("helpless", 7), new("confused", 5)],
+        [PetState.ReadyOnline] = [new("interact", 70), new("joy", 10), new("smug", 8), new("shy", 7), new("confused", 5)],
+        [PetState.Hoeing] = [new("act_hoeing", 70), new("smug", 8), new("joy", 8), new("interact", 5), new("helpless", 4), new("disdain", 3), new("confused", 2)],
+        [PetState.WorkingArtifact] = [new("act_artifact", 70), new("joy", 8), new("smug", 8), new("interact", 5), new("helpless", 4), new("disdain", 3), new("confused", 2)],
+        [PetState.WorkingAffection] = [new("shy", 70), new("smug", 8), new("joy", 8), new("interact", 5), new("helpless", 4), new("disdain", 3), new("confused", 2)],
+        [PetState.WorkingGather] = [new("act_gather", 70), new("joy", 8), new("smug", 8), new("interact", 5), new("helpless", 4), new("disdain", 3), new("confused", 2)],
+        [PetState.WorkingOther] = [new("interact", 70), new("joy", 8), new("smug", 8), new("helpless", 5), new("confused", 5), new("shy", 4)],
     };
 
     /// <summary>
-    /// 上线信息 chip 三段拆分（桌宠下方信息条带图标用）：{定时时间|**:**} / {已上线}/{预期} / 三态词。
+    /// 加权随机取一拍轮换表情。previous 为上一拍 key：上一拍是备片时本拍强制回主片
+    /// （备片永不连续，任务专属表情稳定过半）；池缺失时回退 Idle 池。
+    /// 调用方保证 rng 非空且状态池存在主片。
+    /// </summary>
+    public static string PickRotationKey(PetState state, string? previous, Random rng)
+    {
+        var pool = RotationPools.TryGetValue(state, out var entries) ? entries : RotationPools[PetState.Idle];
+        var main = pool[0].Key;
+        var candidates = previous == null || previous == main
+            ? pool
+            : [pool[0]];
+        var roll = rng.Next(candidates.Sum(e => e.Weight));
+        foreach (var e in candidates)
+        {
+            roll -= e.Weight;
+            if (roll < 0) return e.Key;
+        }
+        return candidates[^1].Key;
+    }
+
+    /// <summary>
+    /// 上线信息 chip 三段拆分（桌宠下方信息条带图标用）：{定时时间|**:**} / {人数} / 三态词。
+    /// 人数段：已联机（开锄中）且 SignalR 房间人数&gt;0 时显示 {SignalR人数}/{开锄人数}（实时房间人头）；
+    /// 其余状态（或旧 BGI 无此字段）显示 {已上线人数}/{预期}。锄地结束 phase 离开 Connected 即自动回落。
     /// 定时时间空 → "**:**" 占位（固定三段式，宽度稳定）。
     /// </summary>
     public static (string Time, string Count, string Phase) ComposeOnlineChipParts(
-        string? scheduledTime, int readyCount, int expected, PetOnlinePhase phase)
+        string? scheduledTime, int readyCount, int expected, PetOnlinePhase phase, int roomPlayerCount = 0)
     {
         var time = string.IsNullOrWhiteSpace(scheduledTime) ? "**:**" : scheduledTime!.Trim();
-        var expectedClamped = Math.Max(expected, readyCount);
+        var expectedClamped = phase == PetOnlinePhase.Connected && roomPlayerCount > 0
+            ? Math.Max(expected, roomPlayerCount)
+            : Math.Max(expected, readyCount);
+        var numerator = phase == PetOnlinePhase.Connected && roomPlayerCount > 0 ? roomPlayerCount : readyCount;
         var phaseText = phase switch
         {
             PetOnlinePhase.Connected => "已联机",
             PetOnlinePhase.Ready => "已上线",
             _ => "未上线"
         };
-        return (time, $"{readyCount}/{expectedClamped}", phaseText);
+        return (time, $"{numerator}/{expectedClamped}", phaseText);
     }
 
     /// <summary>上线信息 chip 纯文本（面板"上线信息"行用）。</summary>
-    public static string ComposeOnlineChip(string? scheduledTime, int readyCount, int expected, PetOnlinePhase phase)
+    public static string ComposeOnlineChip(string? scheduledTime, int readyCount, int expected, PetOnlinePhase phase,
+        int roomPlayerCount = 0)
     {
-        var (time, count, phaseText) = ComposeOnlineChipParts(scheduledTime, readyCount, expected, phase);
+        var (time, count, phaseText) = ComposeOnlineChipParts(scheduledTime, readyCount, expected, phase, roomPlayerCount);
         return $"{time} · {count} · {phaseText}";
     }
 

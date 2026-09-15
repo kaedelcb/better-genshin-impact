@@ -167,4 +167,137 @@ public class PetStateEngineTests
             Assert.Contains(key, imported);
         }
     }
+
+    // —— 加权随机轮换池（PickRotationKey）——
+
+    /// <summary>禁入片：sorrow/anger=告警持续尾专属；shock=惊吓爆发专属；sleep 仅睡觉状态可用。</summary>
+    private static readonly string[] ForbiddenKeys = ["sorrow", "anger", "shock"];
+
+    /// <summary>R1：全状态 × 大样本，抽取结果都在该状态池内且无禁入片（totality）。</summary>
+    [Property(MaxTest = 100)]
+    public Property PickRotationKey_AlwaysInStatePool_NeverForbidden(int seed, sbyte stateValue)
+    {
+        var state = (PetState)((stateValue % 10 + 10) % 10);
+        if (!PetStateEngine.RotationPools.ContainsKey(state))
+            return true.ToProperty();
+        var allowed = PetStateEngine.RotationPools[state].Select(e => e.Key).ToHashSet();
+        var rng = new System.Random(seed);
+        var previous = (string?)null;
+        for (var i = 0; i < 200; i++)
+        {
+            var key = PetStateEngine.PickRotationKey(state, previous, rng);
+            if (!allowed.Contains(key)) return false.Label($"state={state} 出池: {key}");
+            if (ForbiddenKeys.Contains(key)) return false.Label($"state={state} 禁入片: {key}");
+            if (key == "sleep" && state != PetState.Sleeping) return false.Label($"state={state} 越权用 sleep");
+            previous = key;
+        }
+        return true.ToProperty();
+    }
+
+    /// <summary>R2：主片出现频率恒最高（50% 权重契约），且备片都会出现（随机不是换池）。</summary>
+    [Property(MaxTest = 50)]
+    public Property PickRotationKey_MainDominates_AllBackupsAppear(int seed, sbyte stateValue)
+    {
+        var state = (PetState)((stateValue % 10 + 10) % 10);
+        if (!PetStateEngine.RotationPools.TryGetValue(state, out var pool) || pool.Length == 1)
+            return true.ToProperty();
+        var rng = new System.Random(seed);
+        var counts = new Dictionary<string, int>();
+        string? previous = null;
+        for (var i = 0; i < 2000; i++)
+        {
+            var key = PetStateEngine.PickRotationKey(state, previous, rng);
+            counts[key] = counts.GetValueOrDefault(key) + 1;
+            previous = key;
+        }
+        var main = pool[0].Key;
+        if (counts[main] != counts.Values.Max()) return false.Label($"state={state} 主片 {main} 非最高频");
+        foreach (var e in pool.Where(e => e.Key != main))
+            if (!counts.ContainsKey(e.Key)) return false.Label($"state={state} 备片 {e.Key} 从未出现");
+        return true.ToProperty();
+    }
+
+    /// <summary>R3：备片之后必回主片（任何备片都不连续出现，主片可连续）。</summary>
+    [Property(MaxTest = 100)]
+    public Property PickRotationKey_BackupAlwaysFollowedByMain(int seed, sbyte stateValue)
+    {
+        var state = (PetState)((stateValue % 10 + 10) % 10);
+        if (!PetStateEngine.RotationPools.TryGetValue(state, out var pool) || pool.Length == 1)
+            return true.ToProperty();
+        var rng = new System.Random(seed);
+        string? previous = null;
+        for (var i = 0; i < 500; i++)
+        {
+            var key = PetStateEngine.PickRotationKey(state, previous, rng);
+            if (previous != null && previous != pool[0].Key && key != pool[0].Key)
+                return false.Label($"state={state} 备片连拍: {previous}→{key}");
+            previous = key;
+        }
+        return true.ToProperty();
+    }
+
+    /// <summary>R4：主片稳态占比 ≥ 60%（任务专属表情为主，备片只是点缀）。</summary>
+    [Property(MaxTest = 50)]
+    public Property PickRotationKey_MainShareAtLeast60Percent(int seed, sbyte stateValue)
+    {
+        var state = (PetState)((stateValue % 10 + 10) % 10);
+        if (!PetStateEngine.RotationPools.TryGetValue(state, out var pool) || pool.Length == 1)
+            return true.ToProperty();
+        var rng = new System.Random(seed);
+        const int total = 2000;
+        var mainHits = 0;
+        string? previous = null;
+        for (var i = 0; i < total; i++)
+        {
+            var key = PetStateEngine.PickRotationKey(state, previous, rng);
+            if (key == pool[0].Key) mainHits++;
+            previous = key;
+        }
+        return (mainHits * 100 >= total * 60).ToProperty();
+    }
+
+    // —— 上线信息 chip：SignalR 房间人数（已联机态）——
+
+    /// <summary>C1：已联机 + 人数&gt;0 → 分子恒等于 SignalR 人数，分母 ≥ 两者最大值（夹取口径）。</summary>
+    [Property(MaxTest = 200)]
+    public Property ComposeOnlineChip_ConnectedWithRoomCount_ShowsRoomCount(
+        string scheduledTime, int readyCount, int expected, int roomCount)
+    {
+        if (roomCount <= 0) return true.ToProperty();
+        var (_, count, phase) = PetStateEngine.ComposeOnlineChipParts(
+            scheduledTime, Math.Abs(readyCount), Math.Abs(expected), PetOnlinePhase.Connected, roomCount);
+        var numerator = count.Split('/')[0];
+        var denominator = int.Parse(count.Split('/')[1]);
+        return (numerator == roomCount.ToString() && phase == "已联机"
+                && denominator >= Math.Max(Math.Abs(expected), roomCount)).ToProperty();
+    }
+
+    /// <summary>C2：人数≤0（旧 BGI/未知）或非 Connected 态 → 回退旧显示（分子=上线人数）。</summary>
+    [Property(MaxTest = 200)]
+    public Property ComposeOnlineChip_NoRoomCountOrNotConnected_FallsBackToReadyCount(
+        sbyte phaseValue, int readyCount, int expected, int roomCount)
+    {
+        var phase = (PetOnlinePhase)((phaseValue % 3 + 3) % 3);
+        var ready = Math.Abs(readyCount);
+        var exp = Math.Abs(expected);
+        var room = Math.Abs(roomCount);
+        if (phase == PetOnlinePhase.Connected && room > 0) return true.ToProperty();
+        var (_, count, _) = PetStateEngine.ComposeOnlineChipParts(null, ready, exp, phase, room);
+        return (count.Split('/')[0] == ready.ToString()).ToProperty();
+    }
+
+    /// <summary>C3：三段式结构恒成立（时间|**:** / a/b / 三态词），任意输入不崩。</summary>
+    [Property(MaxTest = 200)]
+    public Property ComposeOnlineChip_AlwaysThreeWellFormedParts(
+        string? scheduledTime, int readyCount, int expected, sbyte phaseValue, int roomCount)
+    {
+        var phase = (PetOnlinePhase)((phaseValue % 3 + 3) % 3);
+        var (time, count, phaseText) = PetStateEngine.ComposeOnlineChipParts(
+            scheduledTime, Math.Abs(readyCount), Math.Abs(expected), phase, Math.Abs(roomCount));
+        var wellFormed = (scheduledTime is null || scheduledTime.Trim() == "" ? time == "**:**" : time == scheduledTime.Trim())
+                         && count.Contains('/')
+                         && (phaseText == "已联机" || phaseText == "已上线" || phaseText == "未上线");
+        var full = PetStateEngine.ComposeOnlineChip(scheduledTime, Math.Abs(readyCount), Math.Abs(expected), phase, Math.Abs(roomCount));
+        return (wellFormed && full == $"{time} · {count} · {phaseText}").ToProperty();
+    }
 }
