@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using BetterGenshinImpact.Core.Config;
@@ -26,19 +26,29 @@ public class ExecutionRecordStorage
         string filePath = Path.Combine(StorageDirectory, fileName);
 
         // 读取或创建当天的记录
-        DailyExecutionRecord dailyRecord;
+        DailyExecutionRecord? dailyRecord = null;
         if (File.Exists(filePath))
         {
             string json = File.ReadAllText(filePath);
-            dailyRecord = JsonConvert.DeserializeObject<DailyExecutionRecord>(json);
-        }
-        else
-        {
-            dailyRecord = new DailyExecutionRecord
+            if (!string.IsNullOrWhiteSpace(json))
             {
-                Name = dateKey
-            };
+                try
+                {
+                    dailyRecord = JsonConvert.DeserializeObject<DailyExecutionRecord>(json);
+                }
+                catch (JsonException)
+                {
+                    // 文件内容损坏，按空记录处理
+                    dailyRecord = null;
+                }
+            }
         }
+
+        dailyRecord ??= new DailyExecutionRecord
+        {
+            Name = dateKey
+        };
+        dailyRecord.ExecutionRecords ??= new List<ExecutionRecord>();
 
         // 更新或添加记录
         var existingIndex = dailyRecord.ExecutionRecords.FindIndex(r => r.Id == record.Id);
@@ -107,8 +117,21 @@ public class ExecutionRecordStorage
             if (File.Exists(filePath))
             {
                 string json = File.ReadAllText(filePath);
-                var record = JsonConvert.DeserializeObject<DailyExecutionRecord>(json);
-                results.Add(record);
+                if (string.IsNullOrWhiteSpace(json)) continue;
+
+                try
+                {
+                    var record = JsonConvert.DeserializeObject<DailyExecutionRecord>(json);
+                    if (record != null)
+                    {
+                        record.ExecutionRecords ??= new List<ExecutionRecord>();
+                        results.Add(record);
+                    }
+                }
+                catch (JsonException)
+                {
+                    // 文件内容损坏，跳过该天的记录
+                }
             }
         }
         
