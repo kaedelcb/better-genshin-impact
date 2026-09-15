@@ -4,15 +4,17 @@ using System.Collections.Generic;
 
 namespace BetterGenshinImpact.Shared.CooperativeRerun;
 
-// 共同重跑的唯一协议来源（客户端与服务器共用）。
+// 共同重跑的唯一协议来源（客户端与服务器共用同一份文件，客户端通过 csproj Link 编译它）。
 //
-// 为什么放在服务端工程目录内，而不是仓库根的独立 Shared 目录：
-// 服务端的 Docker 构建上下文就是 BgiCoordinatorServer 目录（docker-compose 的 `build: .`，
-// 且 Dockerfile 先 `COPY ["BgiCoordinatorServer.csproj", "."]` 再 `COPY . .`），
-// 任何指向父目录的文件（如 `..\Shared\...`）在容器里都不存在 —— 会以
-// `CS2001: Source file '/src/../Shared/...' could not be found` 直接构建失败。
-// 客户端通过 BetterGenshinImpact.csproj 的 <Compile Include ... Link> 链接同一个文件，
-// 因此仍然是单一来源，不存在两份拷贝漂移的风险。
+// 放置位置的两条硬约束（都踩过，别再改）：
+// 1) 必须位于 BgiCoordinatorServer 工程目录内。服务端的 Docker 构建上下文就是这个目录
+//    （docker-compose `build: .`，Dockerfile 先 COPY csproj 再 COPY . .），
+//    任何指向父目录的路径（如原先的 `..\Shared\...`）在容器里不存在 →
+//    `CS2001: Source file '/src/../Shared/...' could not be found` 直接构建失败。
+// 2) 必须放在**已有的**子目录里，不要为它新建文件夹。部署到服务器时是按目录清单同步的，
+//    新出现的顶层文件夹容易被漏掉 → 容器里编译不到这些类型，报一屏 CS0246（"namespace
+//    BetterGenshinImpact could not be found"）。放在 Gateway/ 与 GatewayProtocol.cs 同处：
+//    能力常量、消息名与网关路由本来就集中在那里。
 //
 // 约束：本文件只能依赖 BCL，不得引用游戏、UI、传输或服务端类型（两端都要能编译它）。
 

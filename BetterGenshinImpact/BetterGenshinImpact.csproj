@@ -112,9 +112,11 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<!-- 共同重跑协议：客户端链接服务端工程内的同一份文件（单一来源）。
-		     该文件必须位于 BgiCoordinatorServer 目录内，否则服务端 Docker 构建（上下文=该目录）会 CS2001 失败。 -->
-		<Compile Include="..\BgiCoordinatorServer\Shared\CooperativeRerun\RerunProtocol.cs" Link="GameTask\AutoHoeing\Multiplayer\Rerun\RerunProtocol.cs" />
+		<!-- 共同重跑协议：客户端链接服务端工程内的同一份文件（单一来源，不存在两份拷贝漂移）。
+		     该文件必须在 BgiCoordinatorServer 目录内、且放在其**已有**子目录里：
+		     服务端 Docker 构建上下文只有该目录（父目录路径会 CS2001），
+		     而部署按目录清单同步（新建顶层文件夹会被漏掉 → 容器内一屏 CS0246）。 -->
+		<Compile Include="..\BgiCoordinatorServer\Gateway\RerunProtocol.cs" Link="GameTask\AutoHoeing\Multiplayer\Rerun\RerunProtocol.cs" />
 	</ItemGroup>
 
 	<ItemGroup>
