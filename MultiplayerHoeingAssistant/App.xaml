@@ -106,9 +106,10 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ScrollViewer">
                         <Grid>
+                            <!-- 滚动条列宽固定常驻，出现/消失不改变内容区宽度（与 MainWindow 版保持一致） -->
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="6"/>
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>

@@ -375,7 +375,8 @@
             </Setter>
         </Style>
 
-        <!-- ScrollViewer 模板（需在 V/H ScrollBar 之后定义，StaticResource 前向引用） -->
+        <!-- ScrollViewer 模板（需在 V/H ScrollBar 之后定义，StaticResource 前向引用）；
+             滚动条列宽固定常驻（GoldVScrollBar 宽4+边距2），滚动条出现/消失不改变内容区宽度 -->
         <Style x:Key="GoldScrollViewer" TargetType="ScrollViewer">
             <Setter Property="Template">
                 <Setter.Value>
@@ -383,7 +384,7 @@
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="6"/>
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>

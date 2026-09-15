@@ -18,6 +18,70 @@
     <UserControl.Resources>
         <!-- 本 UserControl 的 StaticResource 无法向上找到 MainWindow 资源，转换器需自带（同 DodocoPage） -->
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- 折叠卡片通用 Expander 模板：默认模板头部带虚线焦点框且不横向拉伸，
+             此处自绘——整行可点、无焦点虚线框，头部内容（标题/右侧"设置项"）由 Header 提供 -->
+        <Style x:Key="CardExpander" TargetType="Expander">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Expander">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <ToggleButton Grid.Row="0"
+                                          IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Focusable="False" Cursor="Hand"
+                                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                          Background="Transparent" BorderThickness="0" Padding="0">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="Transparent">
+                                            <ContentPresenter HorizontalAlignment="Stretch"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                                <ContentPresenter Content="{TemplateBinding Header}"/>
+                            </ToggleButton>
+                            <ContentPresenter x:Name="ExpandSite" Grid.Row="1"
+                                              Visibility="Collapsed"
+                                              Content="{TemplateBinding Content}"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 折叠卡片头部右侧的小箭头：展开时翻转朝上 -->
+        <Style x:Key="CardChevron" TargetType="Path">
+            <Setter Property="Data" Value="M 0,0 L 4,4 L 8,0"/>
+            <Setter Property="Stroke" Value="{DynamicResource Dim}"/>
+            <Setter Property="StrokeThickness" Value="1.6"/>
+            <Setter Property="StrokeLineJoin" Value="Round"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="6,1,0,0"/>
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+            <Setter Property="LayoutTransform">
+                <Setter.Value>
+                    <RotateTransform Angle="0"/>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsExpanded, RelativeSource={RelativeSource AncestorType=Expander}}" Value="True">
+                    <Setter Property="LayoutTransform">
+                        <Setter.Value>
+                            <RotateTransform Angle="180"/>
+                        </Setter.Value>
+                    </Setter>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
         <!-- 鎏金下拉选择框（原神风格）：ToggleButton 控制开合，Popup 显示下拉项 -->
         <Style x:Key="GoldComboBox" TargetType="ComboBox">
             <Setter Property="Foreground" Value="#FFFFFF"/>
@@ -160,11 +224,24 @@
                 </Grid>
             </Border>
 
-            <!-- ========== 卡片：启动策略 ========== -->
+            <!-- ========== 卡片：启动策略（折叠式，与桌宠卡片同款交互） ========== -->
             <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,16">
-                <StackPanel>
-                    <TextBlock Text="助手启动策略" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"
-                               Margin="0,0,0,14"/>
+                <Expander IsExpanded="False" Margin="0,0,0,4" Style="{StaticResource CardExpander}">
+                    <Expander.Header>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="助手启动策略" FontSize="15" FontWeight="Medium"
+                                       Foreground="{DynamicResource White}"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="12,4,0,0">
+                                <TextBlock Text="设置项" FontSize="12" Foreground="{DynamicResource Dim}"/>
+                                <Path Style="{StaticResource CardChevron}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Expander.Header>
+                    <StackPanel Margin="0,8,0,0">
 
                     <!-- ① 随 BGI 启动 -->
                     <Border Background="#1E262660" CornerRadius="8" Padding="12,10" Margin="0,0,0,10">
@@ -251,20 +328,34 @@
                         </Grid>
                     </Border>
 
-                </StackPanel>
+                    </StackPanel>
+                </Expander>
             </Border>
 
             <!-- ========== 卡片：奥黛塔桌宠（Pet 挂在 Window 上，绑定走 RelativeSource Window） ========== -->
             <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,16">
-                <StackPanel>
-                    <TextBlock Text="奥黛塔桌宠" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"
-                               Margin="0,0,0,2"/>
-                    <TextBlock Text="桌面常驻的 Q 版徽章宠物，表情随任务状态变化；拖拽移动、滚轮缩放、双击唤出主窗口"
-                               FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,0,0,12"/>
-
-                    <!-- 设置项折叠：默认收起、每次进入设置页都收起（不记忆展开状态，见代码后置 IsVisibleChanged） -->
-                    <Expander x:Name="PetSettingsExpander" IsExpanded="False" Header="设置项（点击展开/收起）"
-                              FontSize="13" Foreground="{DynamicResource White}" Margin="0,0,0,4">
+                <!-- 设置项折叠：默认收起、每次进入设置页都收起（不记忆展开状态，见代码后置 IsVisibleChanged）；
+                     标题与描述放在 Header 内，"设置项"与标题同行右对齐 -->
+                <Expander x:Name="PetSettingsExpander" IsExpanded="False" Margin="0,0,0,4"
+                          Style="{StaticResource CardExpander}">
+                    <Expander.Header>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="奥黛塔桌宠" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"/>
+                                <TextBlock Text="桌面常驻的 Q 版徽章宠物，表情随任务状态变化；拖拽移动、滚轮缩放、双击唤出主窗口"
+                                           FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <!-- 右上角弱化的"设置项"入口 + 小箭头（展开时翻转朝上） -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="12,4,0,0">
+                                <TextBlock Text="设置项" FontSize="12" Foreground="{DynamicResource Dim}"/>
+                                <Path Style="{StaticResource CardChevron}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Expander.Header>
                     <StackPanel Margin="0,8,0,0">
 
                     <!-- 显示开关 -->
@@ -396,7 +487,6 @@
                     </Grid>
                     </StackPanel>
                     </Expander>
-                </StackPanel>
             </Border>
 
             <!-- ========== 卡片：关于 ========== -->
