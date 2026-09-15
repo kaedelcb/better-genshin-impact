@@ -239,6 +239,8 @@ public class CoordinatorClient : IAsyncDisposable
                     var list = env.Get<List<PlayerInfo>>("players");
                     if (list == null) break;
                     CurrentRoomPlayerCount = list.Count;
+                    // 同步回填全局进度载体：桌宠"已联机"人数显示用（掉线/中途进出实时刷新）
+                    AutoHoeingProgress.RoomPlayerCount = list.Count;
                     if (list.Count > 0)
                         HostPlayerUid = list[0].PlayerUid;
                     CurrentPlayerList = new List<PlayerInfo>(list);

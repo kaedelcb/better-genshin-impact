@@ -29,6 +29,9 @@ public static class AutoHoeingProgress
     /// <summary>本轮预计剩余（秒）。</summary>
     public static double RoundRemainingSeconds;
 
+    /// <summary>SignalR 房间当前人数（CoordinatorClient players 事件回填；0=未知/未在房间）。</summary>
+    public static volatile int RoomPlayerCount;
+
     public static void Clear()
     {
         lock (Sync)
@@ -40,6 +43,7 @@ public static class AutoHoeingProgress
             RouteFileName = string.Empty;
             RouteEstimatedSeconds = 0;
             RoundRemainingSeconds = 0;
+            RoomPlayerCount = 0;
         }
     }
 }

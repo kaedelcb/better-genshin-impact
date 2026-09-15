@@ -1101,6 +1101,8 @@ internal sealed class InstanceRequestHandler
                 groupName,
                 autoHoeingRunning = hoeing,
                 autoHoeingProgress = hoeingProgress,
+                // SignalR 房间当前人数（0=未知/未在房间）；桌宠"已联机"chip 显示用
+                roomPlayerCount = AutoHoeingProgress.RoomPlayerCount,
                 currentRouteDisplay,
                 currentScriptRouteName = scriptRouteName,
                 recentTaskName,
@@ -1144,6 +1146,7 @@ internal sealed class InstanceRequestHandler
             wasCancelled = data["wasCancelled"]?.ToObject<bool>() ?? false,
             autoHoeingRunning = data["autoHoeingRunning"]?.ToObject<bool>() ?? false,
             autoHoeingProgress = data["autoHoeingProgress"]?.ToObject<string>(),
+            roomPlayerCount = data["roomPlayerCount"]?.ToObject<int>() ?? 0,
             currentRouteDisplay = data["currentRouteDisplay"]?.ToObject<string>(),
             currentScriptRouteName = data["currentScriptRouteName"]?.ToObject<string>()
         };
