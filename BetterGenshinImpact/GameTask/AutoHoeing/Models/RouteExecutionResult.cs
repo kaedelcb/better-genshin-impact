@@ -5,6 +5,7 @@ namespace BetterGenshinImpact.GameTask.AutoHoeing.Models;
 /// </summary>
 public class RouteExecutionResult
 {
+    public BetterGenshinImpact.Shared.CooperativeRerun.RerunRouteOutcome CooperativeOutcome { get; set; }
     public double ActualDuration { get; set; }
     public bool ShouldSwitchFurina { get; set; }
     public bool Success { get; set; }

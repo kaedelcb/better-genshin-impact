@@ -40,6 +40,7 @@ using BetterGenshinImpact.GameTask.Common.Map.Maps;
 using BetterGenshinImpact.Core.Recognition.OpenCv;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
+using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Models;
 using BetterGenshinImpact.GameTask.AutoHoeing.Services;
 using BetterGenshinImpact.GameTask.Common.Job;
@@ -213,6 +214,32 @@ public partial class PathExecutor
     /// </summary>
     public MultiplayerCoordinator? MultiplayerCoordinator { get; set; }
 
+    public BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun.CooperativeRouteContext? CooperativeContext { get; set; }
+
+    /// <summary>Current fight scope; its PointId is captured at fight entry and is safe for delayed callbacks.</summary>
+    public BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun.CooperativeFightScope? ActiveCooperativeFight { get; private set; }
+
+    public static BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun.CooperativeFightScope? CurrentCooperativeFight
+        => CurrentActiveInstance?.ActiveCooperativeFight;
+
+    private string? _activeCooperativeFightKey;
+
+    /// <summary>
+    /// 本次重试前是否观察到过真实复苏（由 TryConsumeRevivalSignal 置位，在 catch(RetryException) 消费）。
+    /// 仅用于决定是否向队友发布“恢复中”：本机局部保护重试（传送后复苏保护、卡死保护）同样抛
+    /// RetryException，但没有真实复苏，不应占用重跑 RPC 门，也不应产生团队可见状态。单机恒 false。
+    /// </summary>
+    private volatile bool _cooperativeRecoveryPending;
+    public static string? CurrentCooperativeFightKey => CurrentActiveInstance?._activeCooperativeFightKey;
+
+    public static string? BuildCurrentCooperativeFightKey()
+    {
+        var instance = CurrentActiveInstance;
+        var context = instance?.CooperativeContext;
+        if (instance == null || context == null) return null;
+        return instance._activeCooperativeFightKey;
+    }
+
     /// <summary>
     /// 当前线路的同步点（第一个传送点）是否已到达。
     /// 用于判断异常发生在同步点前还是同步点后。
@@ -315,7 +342,15 @@ public partial class PathExecutor
     {
         var instance = CurrentActiveInstance;
         if (instance == null) return false;
-        return instance.WantsSkipCurrentFight;
+        if (instance.WantsSkipCurrentFight) return true;
+        // 协作重跑：本阶段已被服务端中止（成员掉线/任一方失败或取消/经验上限）→ 正在打的这场立即停战，
+        // 不必等下一个 RPC 才发现，避免中止后仍把整场战斗打完。
+        if (instance.CooperativeContext?.IsAborted == true) return true;
+        // 协作重跑：队友在"本机正在打的这个战斗点"复苏时，本机这一场要立即停战（各自为政三态之一）。
+        // scope 每 50ms 轮询本阶段标记，这里同步再判一次以便战斗主循环当帧退出；
+        // 单机/正常轮无协作 scope（null）→ 恒 false，行为不变。
+        var scope = instance.ActiveCooperativeFight;
+        return scope != null && scope.CheckStop();
     }
 
     /// <summary>
@@ -355,7 +390,10 @@ public partial class PathExecutor
     /// </summary>
     private bool TryConsumeRevivalSignal()
     {
-        return MultiplayerRevivalGate.TryConsume(ref _multiplayerRevivalDetected, MultiplayerCoordinator != null);
+        var consumed = MultiplayerRevivalGate.TryConsume(ref _multiplayerRevivalDetected, MultiplayerCoordinator != null);
+        // 记录“真的死过一次”，供后续 catch 决定是否向队友发布恢复中（局部保护重试不置位）。
+        if (consumed) _cooperativeRecoveryPending = true;
+        return consumed;
     }
 
     /// <summary>
@@ -596,11 +634,15 @@ public partial class PathExecutor
                 BuildSyncPointMapAuto(task, waypointsList);     // 现有 SyncPointResolver 逻辑（R4 零回归）
             }
 
+            // Replay uses the frozen canonical manifest; never derive or suffix replay sync IDs.
+            if (CooperativeContext?.IsReplay == true)
+                _syncPointMap = new Dictionary<int, string?>(CooperativeContext.Plan.SyncPointIds);
+
             // === 轮末统一重跑：同步点 ID 隔离（multiplayer-hoeing-rerun-sync-isolation）===
             // 在映射构建后统一收口追加后缀：下游所有消费方（段级抢报缓存 _wpIdxToSyncIdCache、
             // 传送点/集合点 WaitForAllPlayers、快报反查 IsFastReported、异常等待点比对）全部读自此映射，
             // 单点改写即全链路隔离。后缀为空（首次执行）时不进此分支，syncId 逐字节不变。
-            if (!string.IsNullOrEmpty(RerunSyncIdSuffix) && _syncPointMap.Count > 0)
+            if (CooperativeContext?.IsReplay != true && !string.IsNullOrEmpty(RerunSyncIdSuffix) && _syncPointMap.Count > 0)
             {
                 var __suffixedMap = new Dictionary<int, string?>(_syncPointMap.Count);
                 foreach (var __kv in _syncPointMap)
@@ -665,12 +707,22 @@ public partial class PathExecutor
             // === 集体卡死跳段消费点 2（multiplayer-mutual-wait-collective-skip §8.7 / OQ-6 A）===
             // 段切换前消费一次：避免跨段残留信号位 + 段开始前若已收到跳段请求立即处理。
             // 段切换点不在 MoveForward 持按状态，故无需 KeyUp。
-            if (MultiplayerCoordinator != null
+            if (CooperativeContext?.IsReplay != true
+                && MultiplayerCoordinator != null
                 && MultiplayerCoordinator.TryConsumeRemoteSkipSignal(out var segSkipTarget))
             {
                 Logger.LogWarning("[联机] 段循环切换点收到大部队跳段请求，target={Target}，前往七天神像回血", segSkipTarget);
                 await TpStatueOfTheSeven(requireLoadingScreen: true);
                 throw new RetryException("[联机] 大部队请求跳段");
+            }
+
+            // === 协作重跑：会话已被中止 → 立即停止游戏动作（安全取消语义）===
+            // 服务端因成员掉线租约到期、任一方失败/取消或经验上限而 Abort 时，其余成员不能继续跑完整条线路；
+            // 这里在每段开始时同步判定一次（快照由会话轮询维护）。无协作上下文（单机/正常旧路径）恒不触发。
+            if (CooperativeContext?.IsAborted == true)
+            {
+                Logger.LogWarning("[联机][共同重跑] 会话已中止，停止本线路游戏动作（不再继续执行剩余路点）");
+                throw new OperationCanceledException("共同重跑会话已中止");
             }
 
             CurrentRouteIndex = waypointsList.FindIndex(wps => wps == waypoints);
@@ -734,6 +786,16 @@ public partial class PathExecutor
                             break;
                         }
 
+                        // === 协作重跑：会话已被服务端中止 → 立即停止剩余路点 ===
+                        // 只在段起点检查是不够的：长段（数十个路点、数百米纯移动）里没有战斗也没有
+                        // 协作等待点时，中止会拖到下一段才生效，单段路线近似"整体跑完"。
+                        // 无协作上下文（单机/正常旧路径）时恒不触发。
+                        if (CooperativeContext?.IsAborted == true)
+                        {
+                            Logger.LogWarning("[联机][共同重跑] 会话已中止，停止剩余路点（路径点循环）");
+                            throw new OperationCanceledException("共同重跑会话已中止");
+                        }
+
                         // === 联机模式：已倒下复苏信号（来自 AnomalyDetector 色块检测）===
                         // 把异步事件转为 RetryException，统一走"同步点前/后"异常处理流程：
                         //   - 同步点后 → 上报 Reviving + 跳到下一段
@@ -747,6 +809,7 @@ public partial class PathExecutor
                         }
                         
                         CurWaypoint = (waypoints.FindIndex(wps => wps == waypoint), waypoint);
+                        bool cooperativeFightInterrupted = false;
 
                         // return-to-point-stale-prev-position-drift-fix (d) 线路中间节点首帧播种（进入该节点一次，Q8）：
                         // 区别于上方第 0 个 waypoint 首帧播种（waypoints[0] 非 TP 时已 SetPrevPosition）——此处处理 i>=1 的中间节点。
@@ -1043,7 +1106,7 @@ public partial class PathExecutor
                                 }
 
                                 // 优先检查服务端指令的等待点（multiplayer-abnormal-wait-coordination）
-                                if (MultiplayerCoordinator.HasPendingWaitPoint)
+                                if (CooperativeContext?.IsReplay != true && MultiplayerCoordinator.HasPendingWaitPoint)
                                 {
                                     var pendingPoint = MultiplayerCoordinator.GetPendingWaitPoint();
                                     if (pendingPoint != null && pendingPoint.IsForced)
@@ -1062,7 +1125,8 @@ public partial class PathExecutor
                                     {
                                         var tpProgress = ComputeProgress(CurWaypoints.Item1, CurWaypoint.Item1);
                                         // 检查是否是异常等待点
-                                        bool isAbnormalWaitingPoint = MultiplayerCoordinator.IsAbnormalWaitingAtPoint(tpSyncId);
+                                        bool isAbnormalWaitingPoint = CooperativeContext?.IsReplay != true
+                                             && MultiplayerCoordinator.IsAbnormalWaitingAtPoint(tpSyncId);
                                         
                                         // 异常等待点：强制同步等待
                                         if (isAbnormalWaitingPoint)
@@ -1093,7 +1157,7 @@ public partial class PathExecutor
                                             // 两项本地标志守卫：异常恢复未占用 SkipToNextSegment、本轮无待收尾跳段（关键问题 4）。
                                             // mySeg 用本地实时 ComputeProgress（不读缓存）。判定纯同步读内存、不引入不可取消阻塞。
                                             //
-                                            if (!SkipToNextSegment && !_needReportNormalBeforeSync)
+                                            if (CooperativeContext?.IsReplay != true && !SkipToNextSegment && !_needReportNormalBeforeSync)
                                             {
                                                 long mySeg = ComputeProgress(CurWaypoints.Item1, CurWaypoint.Item1);
                                                 if (MultiplayerCoordinator.TryGetLaggingCatchUpDecision(mySeg))
@@ -1108,7 +1172,16 @@ public partial class PathExecutor
                                             }
 
                                             Logger.LogInformation("[联机] 传送完成，等待所有玩家同步，syncId={SyncId}, 进度={P}", tpSyncId, tpProgress);
-                                            var waitCompleted = await MultiplayerCoordinator.WaitForAllPlayers(tpSyncId, ct, tpProgress);
+                                            bool waitCompleted;
+                                             if (CooperativeContext?.IsReplay == true)
+                                             {
+                                                 await CooperativeContext.WaitAsync(tpSyncId, ct);
+                                                 waitCompleted = true;
+                                             }
+                                             else
+                                             {
+                                                 waitCompleted = await MultiplayerCoordinator.WaitForAllPlayers(tpSyncId, ct, tpProgress);
+                                             }
                                             if (waitCompleted)
                                             {
                                                 // 仅当确认匹配 AllArrived 被严格等待消费后记录完成时间并建立窗口。
@@ -1204,7 +1277,10 @@ public partial class PathExecutor
                             {
                                 var progress = ComputeProgress(CurWaypoints.Item1, CurWaypoint.Item1);
                                 Logger.LogInformation("[联机] 到达集合点，等待所有玩家，syncId={SyncId}, 进度={Progress}", __fastSyncId, progress);
-                                _ = await MultiplayerCoordinator.WaitForAllPlayers(__fastSyncId, ct, progress);
+                                if (CooperativeContext?.IsReplay == true)
+                                    await CooperativeContext.WaitAsync(__fastSyncId, ct);
+                                else
+                                    _ = await MultiplayerCoordinator.WaitForAllPlayers(__fastSyncId, ct, progress);
                                 Logger.LogInformation("[联机] 集合完成，继续前进，syncId={SyncId}", __fastSyncId);
                             }
 
@@ -1214,10 +1290,18 @@ public partial class PathExecutor
                             {
                                 if (waypoint.Action == ActionEnum.Fight.Code)
                                 {
+                                    var cooperativePoint = CooperativeContext?.GetFightPointId(CurWaypoints.Item1, CurWaypoint.Item1);
+                                    if (cooperativePoint != null && CooperativeContext!.ShouldSkipFight(cooperativePoint))
+                                    {
+                                        CooperativeContext.MarkIncomplete("Fight skipped after arrival: " + cooperativePoint);
+                                        _lastWaypoint = waypoint;
+                                        continue;
+                                    }
+
                                     // === 联机 v3：同伴复苏战斗点级跳过（hoeing-multiplayer-route-retry-mode §9 改动 B）===
                                     // 收到同伴复苏广播且当前走到复苏战斗点时，直接跳过本战斗点（不进战斗、不战后拾取）。
                                     // 仅联机 retry-route 场景非 -1；单机 MultiplayerCoordinator == null 短路，逐字节零感知。
-                                    if (MultiplayerCoordinator != null && SkipRevivalFightPointId != -1)
+                                    if (CooperativeContext == null && MultiplayerCoordinator != null && SkipRevivalFightPointId != -1)
                                     {
                                         var curFp = CurWaypoints.Item1 * 10000 + CurWaypoint.Item1;
                                         if (FightPointSkipDecisions.IsMatch(SkipRevivalFightPointId, curFp))
@@ -1281,13 +1365,39 @@ public partial class PathExecutor
                                 // 联机模式：战斗节点上报 Fighting 状态（需求 4）
                                 if (waypoint.Action == ActionEnum.Fight.Code && MultiplayerCoordinator != null)
                                 {
+                                    CooperativeFightScope? fightScope = null;
+                                    if (CooperativeContext != null)
+                                    {
+                                        var fightPointId = CooperativeContext.GetFightPointId(CurWaypoints.Item1, CurWaypoint.Item1)
+                                            ?? CooperativeContext.BuildFightKey(CurWaypoints.Item1, CurWaypoint.Item1);
+                                        fightScope = new CooperativeFightScope(fightPointId,
+                                            () => CooperativeContext.ShouldSkipFight(fightPointId), ct);
+                                        _activeCooperativeFightKey = CooperativeContext.BuildFightKey(CurWaypoints.Item1, CurWaypoint.Item1);
+                                        ActiveCooperativeFight = fightScope;
+                                    }
                                     await MultiplayerCoordinator.ReportFightingStatusAsync(true);
                                     try
                                     {
                                         await AfterMoveToTarget(waypoint, nextWaypoint);
+                                        cooperativeFightInterrupted = fightScope?.CheckStop() == true;
+                                        if (fightScope != null && !cooperativeFightInterrupted && _multiplayerRevivalDetected == 0 && !ct.IsCancellationRequested)
+                                            CooperativeContext?.CompleteFight(fightScope.PointId);
+                                    }
+                                    catch (OperationCanceledException) when (!ct.IsCancellationRequested && fightScope?.IsInterrupted == true)
+                                    {
+                                        cooperativeFightInterrupted = true;
                                     }
                                     finally
                                     {
+                                        if (fightScope != null)
+                                        {
+                                            cooperativeFightInterrupted |= fightScope.IsInterrupted;
+                                            if (cooperativeFightInterrupted) CooperativeContext?.MarkIncomplete("Fight interrupted: " + fightScope.PointId);
+                                            await fightScope.StopMonitoringAsync();
+                                            fightScope.Dispose();
+                                            ActiveCooperativeFight = null;
+                                            _activeCooperativeFightKey = null;
+                                        }
                                         // 无论战斗正常结束还是超时（AutoFightTask 内部处理），都清除 Fighting 状态
                                         await MultiplayerCoordinator.ReportFightingStatusAsync(false);
                                     }
@@ -1332,7 +1442,7 @@ public partial class PathExecutor
 
                                     // === 集体卡死跳段消费点 3（multiplayer-mutual-wait-collective-skip §8.7 / OQ-6 A）===
                                     // 战斗结束后消费集体跳段信号位，与上面复苏信号消费点完全独立。
-                                    if (MultiplayerCoordinator != null
+                                    if (CooperativeContext?.IsReplay != true && MultiplayerCoordinator != null
                                         && MultiplayerCoordinator.TryConsumeRemoteSkipSignal(out var fightSkipTarget))
                                     {
                                         Logger.LogWarning("[联机] 战斗结束收到大部队跳段请求，target={Target}，前往七天神像回血", fightSkipTarget);
@@ -1733,7 +1843,11 @@ public partial class PathExecutor
                             try
                             {
                                 await detector.StopAsync();
-                                if (!ct.IsCancellationRequested && MultiplayerCoordinator != null)
+                                if (!ct.IsCancellationRequested && MultiplayerCoordinator != null
+                                    && CooperativeExecutionDecisions.ShouldReportExperience(
+                                        CooperativeContext?.IsReplay == true,
+                                        cooperativeFightInterrupted,
+                                        detector.HasDetectedExperience))
                                 {
                                     await MultiplayerCoordinator.OnFightNodeExpResultAsync(detector.HasDetectedExperience, ct);
                                 }
@@ -1784,6 +1898,15 @@ public partial class PathExecutor
                 }
                 catch (RetryException retryException)
                 {
+                    // 仅当本次重试确有真实复苏时才发布“恢复中”（Recovering 不豁免任何到达义务，
+                    // 也不产生计划项；它只让队友知道本机在恢复）。局部保护重试/落后追赶不发布，
+                    // 避免无谓占用重跑 RPC 门与产生团队可见噪声。
+                    var cooperativeRecoveryPending = _cooperativeRecoveryPending;
+                    _cooperativeRecoveryPending = false;
+                    if (CooperativeContext != null && cooperativeRecoveryPending
+                        && retryException is not LaggingCatchUpSkipException
+                        && retryException is not PostTeleportStuckProtectionRetryException)
+                        await CooperativeContext.ReportRecoveryAsync(retryException.Message, ct);
                     // === 落后追赶非异常跳段分支（BUG-D 修复，必须在 escalation 消费 / _syncPointReached 分流 / Reviving 上报之前）===
                     if (retryException is LaggingCatchUpSkipException)
                     {
@@ -1869,6 +1992,7 @@ public partial class PathExecutor
                         {
                             await MultiplayerCoordinator.ReportFightingStatusAsync(false);
                             await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Reviving, targetProgress);
+                            if (CooperativeContext != null) await CooperativeContext.ReportBypassAsync(CurWaypoints.Item1, true, ct);
                         }
                         catch { }
                         SkipRouteReason = "[联机] 路线累计复苏次数达上限（RouteRevivalCap），跳整路线";
@@ -1889,6 +2013,7 @@ public partial class PathExecutor
                         {
                             await MultiplayerCoordinator.ReportFightingStatusAsync(false);
                             await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Reviving, targetProgress);
+                            if (CooperativeContext != null) await CooperativeContext.ReportBypassAsync(CurWaypoints.Item1, false, ct);
                         }
                         catch { }
                         SkipToNextSegment = true;
@@ -1909,6 +2034,7 @@ public partial class PathExecutor
                         {
                             await MultiplayerCoordinator.ReportFightingStatusAsync(false);
                             await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Reviving, targetProgress);
+                            if (CooperativeContext != null) await CooperativeContext.ReportBypassAsync(CurWaypoints.Item1, false, ct);
                         }
                         catch { }
                         
@@ -1946,6 +2072,7 @@ public partial class PathExecutor
                         {
                             Logger.LogWarning("[联机] 同步点前异常重试耗尽，跳到下一段线路，目标进度={Target}，原因: {Msg}",
                                 targetProgress, retryException.Message);
+                            if (CooperativeContext != null) await CooperativeContext.ReportBypassAsync(CurWaypoints.Item1, false, ct);
                             SkipToNextSegment = true;
                             _needReportNormalBeforeSync = true;
                             break;
@@ -2001,6 +2128,7 @@ public partial class PathExecutor
         {
             SkipToNextSegment = false;
             SkipRouteReason = "成员异常：最后一个路线段，跳到下一条路线";
+            if (CooperativeContext != null) await CooperativeContext.ReportBypassAsync(CurWaypoints.Item1, true, ct);
             SkipRouteRequested = true;
             Logger.LogWarning("[联机] 成员异常发生在最后一个路线段，标记路线跳过");
         }
@@ -3174,7 +3302,7 @@ public partial class PathExecutor
             // === 集体卡死跳段消费点 1（multiplayer-mutual-wait-collective-skip §8.7 / OQ-6 A）===
             // isPoint==true 仅普通寻路段触发；MultiplayerCoordinator==null 单机模式直接 short-circuit。
             // 与上面的复苏信号消费点完全独立（preservation §3.4），抛不同 RetryException 文案便于日志追溯。
-            if (isPoint && MultiplayerCoordinator != null
+            if (isPoint && CooperativeContext?.IsReplay != true && MultiplayerCoordinator != null
                 && MultiplayerCoordinator.TryConsumeRemoteSkipSignal(out var moveSkipTarget))
             {
                 Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);

@@ -4,6 +4,9 @@ using BetterGenshinImpact.GameTask.AutoHoeing.Models;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Models;
 using BetterGenshinImpact.GameTask.AutoHoeing.Services;
+using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun;
+using BetterGenshinImpact.Shared.CooperativeRerun;
+using System.Globalization;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.AutoTrackPath;
@@ -87,6 +90,7 @@ public class AutoHoeingTask : ISoloTask
     // 仅此路径在退世界后额外传送七天神像（任务结束时可能停在怪堆/危险地形，去神像收尾更安全）；
     // 其它停止路径（超时/被踢/掉房/正常跑完）不触发，保持原行为。
     private volatile bool _expCapStopTriggered;
+    private volatile bool _restrictionStopTriggered;
 
     // 基于经验判断停止锄地：保存最后一轮（被中断时）的统计信息，供 Start.finally 补输出"本轮锄地结束统计"格式日志。
     // 仅经验上限触发（_expCapStopTriggered）且确实进入过 ProcessRoutesByGroup（_expCapTotalRoutes > 0）时使用。
@@ -726,7 +730,7 @@ public class AutoHoeingTask : ISoloTask
         var guardUnexecuted = Multiplayer.HoeingGuardDecisions.ComputeUnexecutedCount(
             _guardPlannedRouteCount, _guardExecutedRouteCount);
         var guardShouldRestart = Multiplayer.HoeingGuardDecisions.ShouldRestart(
-            guardMode: _config.HoeingGuardMode,
+            guardMode: _config.HoeingGuardMode && !_restrictionStopTriggered,
             multiplayerEnabled: _config.MultiplayerEnabled,
             stopReason: _stopReason,
             unexecutedCount: guardUnexecuted,
@@ -2938,7 +2942,146 @@ public class AutoHoeingTask : ISoloTask
         await ProcessRoutesByGroup(routes, accountName, roundContext);
     }
 
+    private sealed class CooperativeTaskScope
+    {
+        public CooperativeRerunSession? Session { get; set; }
+        public List<CooperativeRoutePlan> Plans { get; } = new();
+        public HashSet<string> NormalCompleted { get; } = new(StringComparer.Ordinal);
+        public bool EmptyRound { get; set; }
+
+        /// <summary>房间不满足协同重跑前置条件时置位：本次退回旧轮末重跑路径，而不是判整轮失败。</summary>
+        public bool Downgraded { get; set; }
+
+        /// <summary>
+        /// 本轮是否真的走到了"轮末重跑"这一步。正常轮可能因等房主路线超时、变体校验失败、
+        /// 本组无可执行路线等原因提前结束——那是旧语义里的"结束本轮"，不能升级成协作会话失败。
+        /// </summary>
+        public bool FlowReachedEnd { get; set; }
+    }
+
+    /// <summary>
+    /// 是否为"环境不满足协同重跑"的降级信号（而非真实运行故障）。
+    /// 这类错误重试永远不会成功，且应当退回旧路径继续锄地：
+    /// 房间内有旧版本成员（能力）、名册不干净、未登记、scope 不一致、身份不匹配。
+    /// </summary>
+    private static bool IsCooperativeDowngradeSignal(Exception ex)
+        => ex is BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Gateway.GatewayErrorException gw
+           && gw.Code is "rerun_capability_required" or "rerun_invalid_roster" or "rerun_not_enrolled"
+               or "rerun_scope_mismatch" or "rerun_identity" or "rerun_binding" or "rerun_not_participant";
+
     private async Task ProcessRoutesByGroup(List<RouteInfo> routes, string accountName, MultiWorldRoundContext? roundContext = null)
+    {
+        // 兼容门控：功能开关开启但服务端/房间未宣告 hoeing.rerun.v1 时，整体退回旧轮末重跑路径。
+        // 为什么要退回而不是硬失败：房间里有旧版本成员时，硬失败会把整轮正常锄地一起拖停，
+        // 而旧路径本身仍然可用；确认规则要求的是"不得半启用新机制"，不是"惩罚整轮"。
+        var rerunKeywordConfigured = CooperativeRerunTaskDecisions.IsEnabled(
+            _config.MultiplayerEnabled, _config.RouteRetryModeKeywords);
+        var capabilityAvailable = _coordinatorClientRef?.SupportsCooperativeRerun == true;
+        if (rerunKeywordConfigured && !capabilityAvailable)
+        {
+            _logger.LogWarning("[共同重跑] 已配置重跑关键词，但服务器/房间未宣告 {Cap}，本次退回旧轮末重跑路径（不启用新协同重跑）",
+                RerunProtocol.Capability);
+        }
+        if (!CooperativeRerunTaskDecisions.IsEnabled(
+                _config.MultiplayerEnabled, _config.RouteRetryModeKeywords, capabilityAvailable))
+        {
+            await ProcessRoutesByGroupCore(routes, accountName, roundContext);
+            return;
+        }
+
+        var cooperative = new CooperativeTaskScope();
+        var originalToken = _ct;
+        using var scopeCts = CancellationTokenSource.CreateLinkedTokenSource(originalToken);
+        _ct = scopeCts.Token;
+        var restrictionWatch = WatchCooperativeRestrictionAsync(scopeCts);
+        try
+        {
+            EnsureCooperativeExecutionAllowed();
+            if (_coordinatorClientRef == null || _multiplayerCoordinator == null || _executionEngine == null)
+                throw new InvalidOperationException("共同重跑要求有效的联机执行会话");
+
+            await ProcessRoutesByGroupCore(routes, accountName, roundContext, cooperative);
+            EnsureCooperativeExecutionAllowed();
+            if (cooperative.EmptyRound && cooperative.Session == null)
+            {
+                cooperative.Session = await CooperativeRerunSession.StartAsync(
+                    _coordinatorClientRef, cooperative.Plans,
+                    (roundContext?.Round1Based ?? 1).ToString(CultureInfo.InvariantCulture), _ct);
+                await cooperative.Session.CompleteNormalAsync(_ct);
+                await cooperative.Session.FinishAsync(_ct);
+            }
+            // 本轮在进入轮末重跑前就提前结束了（等房主路线超时 / 变体校验失败 / 本组无可执行路线等）：
+            // 这是旧语义里的"结束本轮"，不能升级成协作会话失败而连带跳过剩余世界轮。
+            // 只有在会话仍未到终态时才需要收口（有界中止），避免留下孤儿会话挡住下一轮；
+            // 空轮路径已在上面把会话走到 Completed，不应再报"提前结束"。
+            if (!cooperative.Downgraded && !cooperative.FlowReachedEnd
+                && cooperative.Session?.Snapshot.Stage is RerunStage stage
+                && stage is not (RerunStage.Completed or RerunStage.Aborted))
+            {
+                _logger.LogWarning("[共同重跑] 本轮在进入轮末重跑前提前结束，按旧语义收口本轮（不判会话失败）");
+                try { await cooperative.Session!.AbortAsync("本轮提前结束，未进入轮末重跑"); }
+                catch (Exception abortEx) { _logger.LogWarning(abortEx, "[共同重跑] 提前结束时的收尾中止上报失败"); }
+            }
+
+            // 降级（房间不满足前置条件）或本轮提前结束时都不校验协作完成度。
+            if (!cooperative.Downgraded && cooperative.FlowReachedEnd
+                && cooperative.Session?.Snapshot.Stage != RerunStage.Completed)
+                throw new InvalidOperationException("共同重跑未完成确认，禁止记录本世界完成");
+        }
+        catch (Exception ex)
+        {
+            _sessionTerminated = true;
+            _stopReason ??= _restrictionStopTriggered ? "接近或处于限制时间，停止执行" : $"共同重跑中止: {ex.Message}";
+            if (cooperative.Session != null)
+            {
+                try { await cooperative.Session.AbortAsync(_stopReason); }
+                catch (Exception abortEx) { _logger.LogWarning(abortEx, "[共同重跑] 中止上报失败"); }
+            }
+            throw;
+        }
+        finally
+        {
+            scopeCts.Cancel();
+            try { await restrictionWatch; }
+            catch (OperationCanceledException) { }
+            _ct = originalToken;
+            if (cooperative.Session != null)
+                await cooperative.Session.DisposeAsync();
+        }
+    }
+
+    private async Task WatchCooperativeRestrictionAsync(CancellationTokenSource scopeCts)
+    {
+        while (!scopeCts.IsCancellationRequested)
+        {
+            if (_timeChecker.IsInRestrictedPeriod() || _timeChecker.IsApproachingRestriction())
+            {
+                _restrictionStopTriggered = true;
+                _sessionTerminated = true;
+                _stopReason ??= "接近或处于限制时间，停止执行";
+                scopeCts.Cancel();
+                return;
+            }
+            await Task.Delay(1000, scopeCts.Token);
+        }
+    }
+
+    private void EnsureCooperativeExecutionAllowed()
+    {
+        _ct.ThrowIfCancellationRequested();
+        if (_sessionTerminated || _expCapStopTriggered || _multiplayerCoordinator?.IsExitTriggered == true)
+            throw new OperationCanceledException("联机会话已停止", _ct);
+        if (_timeChecker.IsInRestrictedPeriod() || _timeChecker.IsApproachingRestriction())
+        {
+            _restrictionStopTriggered = true;
+            _sessionTerminated = true;
+            _stopReason ??= "接近或处于限制时间，停止执行";
+            throw new OperationCanceledException(_stopReason, _ct);
+        }
+    }
+
+    private async Task ProcessRoutesByGroupCore(List<RouteInfo> routes, string accountName,
+        MultiWorldRoundContext? roundContext = null, CooperativeTaskScope? cooperative = null)
     {
         var targetGroup = _config.GroupIndex;
         var groupRoutes = routes.Where(r => r.Group == targetGroup && r.Selected).ToList();
@@ -3055,6 +3198,7 @@ public class AutoHoeingTask : ISoloTask
                     .Select(r => r.FileName)
                     .ToList();
                 await _coordinatorClientRef.SetHostRouteListAsync(hostRouteNames);
+                if (cooperative != null && hostRouteNames.Count == 0) cooperative.EmptyRound = true;
                 _logger.LogInformation("[联机] 房主已上传路线列表，共 {Count} 条（CD+关键词过滤后）", hostRouteNames.Count);
 
                 // 用过滤后的列表替换 groupRoutes
@@ -3089,6 +3233,7 @@ public class AutoHoeingTask : ISoloTask
                             == HostRouteListDecisions.MemberRouteListOutcome.SkipRoundEmpty)
                         {
                             _logger.LogWarning("[联机] 房主已上传且路线列表为空（可能全部在CD中），跳过本轮执行");
+                            if (cooperative != null) cooperative.EmptyRound = true;
                             return;
                         }
 
@@ -3118,6 +3263,7 @@ public class AutoHoeingTask : ISoloTask
                                 if (outcome == HostRouteListDecisions.MemberRouteListOutcome.SkipRoundEmpty)
                                 {
                                     _logger.LogWarning("[联机] 房主已上传且路线列表为空（可能全部在CD中），跳过本轮执行");
+                                    if (cooperative != null) cooperative.EmptyRound = true;
                                     return;
                                 }
 
@@ -3204,6 +3350,8 @@ public class AutoHoeingTask : ISoloTask
                     if (missing.Count > 0)
                         _logger.LogWarning("[联机] 成员本地缺少以下路线文件（路线一致性验证将检测到差异）: {Files}", string.Join(", ", missing));
                 }
+                if (cooperative != null && found.Count != hostRouteNames.Count)
+                    throw new InvalidOperationException("共同重跑计划不完整：成员本地缺少房主路线文件，禁止建立空计划");
                 groupRoutes = found;
                 _logger.LogInformation("[联机] 成员已同步房主路线列表，共 {Count} 条", groupRoutes.Count);
             }
@@ -3302,6 +3450,11 @@ public class AutoHoeingTask : ISoloTask
             _logger.LogDebug("[联机] 路线验证已在步骤2完成，跳过额外同步等待");
         }
 
+        // Eligibility follows the host representative name, before local variant replacement.
+        var retryKeywords = RouteRetryModeDecisions.ParseKeywords(_config.RouteRetryModeKeywords);
+        var eligibleRoutes = cooperative == null ? null : new HashSet<RouteInfo>(groupRoutes.Where(r =>
+            RouteRetryModeDecisions.IsRetryRoute(Path.GetFileNameWithoutExtension(r.FileName), retryKeywords)));
+
         // === route-variant-sync-by-logical-id spec / R6 + R14：变体解析 + 启动期 schema 校验 ===
         // R6.9：仅启动期一次性触发，执行过程不再校验。
         if (_multiplayerCoordinator != null && _config.MultiplayerEnabled)
@@ -3319,6 +3472,8 @@ public class AutoHoeingTask : ISoloTask
                 // 跳过它继续其余路线，避免空占位 JSON 终止整任务。
                 if (actualTask == null)
                 {
+                    if (cooperative != null)
+                        throw new InvalidOperationException("共同重跑路线加载失败: " + route.FileName);
                     _logger.LogWarning("[变体] 路线 {File} 加载失败，已从本场执行列表剔除", route.FileName);
                     failedRoutes.Add(route);
                     continue;
@@ -3432,8 +3587,41 @@ public class AutoHoeingTask : ISoloTask
         // （CD/关键词/房主列表/变体过滤完）且 startIndex 已算出后累加，跨组/跨多世界轮只增不减。
         _guardPlannedRouteCount += Math.Max(0, groupRoutes.Count - startIndex);
 
-        foreach (var route in groupRoutes.Skip(startIndex))
+        if (cooperative != null)
         {
+            EnsureCooperativeExecutionAllowed();
+            for (var originalIndex = 0; originalIndex < groupRoutes.Count; originalIndex++)
+            {
+                var plannedRoute = groupRoutes[originalIndex];
+                var plan = CooperativeRoutePlan.Build(plannedRoute, originalIndex, _config.SyncPointMinDistance);
+                plan.Manifest.Eligible = eligibleRoutes!.Contains(plannedRoute);
+                cooperative.Plans.Add(plan);
+            }
+            try
+            {
+                cooperative.Session = await CooperativeRerunSession.StartAsync(
+                    _coordinatorClientRef!, cooperative.Plans,
+                    (roundContext?.Round1Based ?? 1).ToString(CultureInfo.InvariantCulture), _ct);
+            }
+            catch (Exception ex) when (IsCooperativeDowngradeSignal(ex))
+            {
+                // 兼容门控（关键补全）：本端只看得到**服务端**是否宣告能力，看不到房间内其他参与者是否宣告；
+                // 而服务端要求"固定全员都宣告 hoeing.rerun.v1"。因此房间里只要有一个成员的客户端是旧版本，
+                // Enroll 就会被拒绝。此时必须降级回旧的轮末重跑路径，而不是把整轮锄地判失败。
+                cooperative.Session = null;
+                cooperative.Downgraded = true;
+                _logger.LogWarning(ex,
+                    "[共同重跑] 房间未满足协同重跑前置条件（服务端要求固定全员宣告 {Cap}），本次退回旧轮末重跑路径",
+                    RerunProtocol.Capability);
+            }
+        }
+
+        foreach (var entry in groupRoutes.Select((route, index) => (Route: route, Index: index)).Skip(startIndex))
+        {
+            var route = entry.Route;
+            // 降级后不再创建协作上下文：标记与异常走旧回调，轮末由旧实现收口。
+            var cooperativePlan = cooperative?.Session == null ? null : cooperative.Plans[entry.Index];
+            if (cooperative != null) EnsureCooperativeExecutionAllowed();
             // === 守护自动重开：循环走到即算"已执行到"（无论后续完成/跳过/未完整/异常）===
             _guardExecutedRouteCount++;
 
@@ -3637,7 +3825,15 @@ public class AutoHoeingTask : ISoloTask
             {
                 if (_executionEngine != null)
                 {
-                    var execResult = await _executionEngine.ExecuteRoute(route, _ct, currentRouteIndex);
+                    var execResult = await _executionEngine.ExecuteRoute(route, _ct, cooperativePlan?.Manifest.OriginalIndex ?? currentRouteIndex,
+                        cooperativeContext: cooperativePlan == null ? null : cooperative!.Session!.CreateContext(cooperativePlan, false));
+                    if (cooperative != null)
+                    {
+                        EnsureCooperativeExecutionAllowed();
+                        CooperativeRerunTaskDecisions.ThrowIfTerminalFailure(execResult.CooperativeOutcome);
+                        if (execResult.CooperativeOutcome == RerunRouteOutcome.Completed)
+                            cooperative.NormalCompleted.Add(cooperativePlan!.Manifest.RouteId);
+                    }
                     _shouldSwitchFurina = execResult.ShouldSwitchFurina;
                     sw.Stop();
                     var duration = execResult.ActualDuration;
@@ -3780,7 +3976,7 @@ public class AutoHoeingTask : ISoloTask
                         continue; // 跳到下一条路线，不记录 CD
                     }
 
-                    if (execResult.FullyCompleted)
+                    if (cooperative != null ? execResult.CooperativeOutcome == RerunRouteOutcome.Completed : execResult.FullyCompleted)
                     {
                         consecutiveSkipCount = 0; // 正常完成，归零连续跳过计数
                         consecutiveNoSkipRetryCount = 0; // 路线跳过对齐修复：正常完成时重置不跳过重试计数
@@ -3846,6 +4042,10 @@ public class AutoHoeingTask : ISoloTask
                     completedCount++;
                 }
             }
+            catch (Exception) when (cooperative != null)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError("执行路线 {Name} 出错: {Msg}", route.FileName, ex.Message);
@@ -3886,100 +4086,198 @@ public class AutoHoeingTask : ISoloTask
         {
             _logger.LogWarning(ex, "{Prefix}输出本轮锄地汇总日志时异常（忽略）", roundPrefix);
         }
+        if (cooperative != null) cooperative.FlowReachedEnd = true;
+        if (cooperative?.Session != null)
+            await RunCooperativeRerunAsync(cooperative, roundPrefix, groupRoutes.Count);
+        else
+            await RunLegacyRoundEndRerunAsync(roundContext, groupRoutes);
+    }
 
-        // === 线路重试模式轮末统一重跑（hoeing-route-retry-round-end-refactor）===
-        if (_executionEngine != null && _config.MultiplayerEnabled && _multiplayerCoordinator != null)
+    /// <summary>
+    /// 旧轮末统一重跑（hoeing-route-retry-round-end-refactor 原实现）。
+    ///
+    /// 保留原因：新协同重跑需要房间内全员宣告 hoeing.rerun.v1。能力缺失时（房间内有旧版本成员、
+    /// 或服务器较旧）本端按兼容门控**退回本路径**——"不启用新机制"不等于"不重跑"。
+    /// 行为与原实现逐字一致（本地标记集合 + 轮末屏障 + syncId 后缀 + 至少一条重跑成功才去神像）。
+    /// 协作路径（cooperative != null）不会走到这里。
+    /// </summary>
+    private async Task RunLegacyRoundEndRerunAsync(MultiWorldRoundContext? roundContext, List<RouteInfo> groupRoutes)
+    {
+        if (_executionEngine == null || !_config.MultiplayerEnabled || _multiplayerCoordinator == null)
+            return;
+
+        var executionEngine = _executionEngine;
+        try
         {
-            var executionEngine = _executionEngine;
-            try
+            var rerunSet = executionEngine.TakeRouteRerunMarkSet();
+            var rerunSucceeded = false;
+            if (rerunSet.Count > 0)
             {
-                var rerunSet = executionEngine.TakeRouteRerunMarkSet();
-                var rerunSucceeded = false;
-                if (rerunSet.Count > 0)
-                {
-                    // === 轮末重跑同步点隔离 + 全员屏障（multiplayer-hoeing-rerun-sync-isolation）===
-                    // 缺陷背景（2026-09-02 实测）：轮末重跑直接复用首次跑线的 syncId，服务端对已广播过
-                    // AllArrived 的 syncId 会幂等补发放行（BroadcastedSyncIds 仅在多世界轮换时清理），
-                    // 重跑的传送点/集合点等待在 46ms/39ms 内被"全员已到"误放行 → 各端各自为政、
-                    // 复苏成员独自跑线、健康成员提前去神像收尾。修复两点：
-                    //   1) 屏障：各端轮末收尾耗时不同，先在 round_rerun_{N} 集合全员，再统一开始重跑；
-                    //   2) 后缀：重跑期间所有 syncId 追加 _rerun_r{N}（PathExecutor 同步点映射构建收口处
-                    //      统一追加），服务端/客户端快报集合均视为全新同步点，强制真实等待。
-                    var rerunRound = roundContext?.Round1Based ?? GetCurrentWorldRound();
-                    var rerunSyncIdSuffix = $"_rerun_r{rerunRound}";
-                    _logger.LogInformation(
-                        "[联机][重试模式] 本轮结束，检测到 {N} 条需重跑线路，开始轮末统一重跑（轮次={Round}，同步点后缀={Suffix}）",
-                        rerunSet.Count, rerunRound, rerunSyncIdSuffix);
+                var rerunRound = roundContext?.Round1Based ?? GetCurrentWorldRound();
+                var rerunSyncIdSuffix = $"_rerun_r{rerunRound}";
+                _logger.LogInformation(
+                    "[联机][重试模式] 本轮结束，检测到 {N} 条需重跑线路，开始轮末统一重跑（轮次={Round}，同步点后缀={Suffix}）",
+                    rerunSet.Count, rerunRound, rerunSyncIdSuffix);
 
-                    // 轮末重跑全员屏障：预期人数=房间全员，超时 120s 放行（与 SyncRoundEndAsync 同策略）。
-                    // 未标记重跑的成员不进屏障（各自为政模型不变）；超时放行保证标记成员不被永久阻塞。
+                // 轮末重跑全员屏障：预期人数=房间全员，超时 120s 放行（与 SyncRoundEndAsync 同策略）。
+                try
+                {
+                    var rerunBarrierId = $"round_rerun_{rerunRound}";
+                    _logger.LogInformation("[联机][重试模式] 轮末重跑屏障开始等待全员: {SyncId}", rerunBarrierId);
+                    var rerunBarrier = new SyncBarrier(_multiplayerCoordinator.Client, 120);
+                    var barrierOk = await rerunBarrier.WaitAsync(rerunBarrierId, _ct);
+                    _logger.LogInformation(
+                        "[联机][重试模式] 轮末重跑屏障完成: {SyncId}，结果={Result}（true=全员到达，false=超时放行）",
+                        rerunBarrierId, barrierOk);
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[联机][重试模式] 轮末重跑屏障异常，放行继续重跑");
+                }
+
+                foreach (var routeIdx in rerunSet)
+                {
+                    if (executionEngine.IsRouteRerunDone(routeIdx))
+                        continue;
+
+                    var rerunRoute = groupRoutes.ElementAtOrDefault(routeIdx);
+                    if (rerunRoute == null)
+                    {
+                        _logger.LogWarning("[联机][重试模式] 轮末重跑线路索引 {Idx} 无效，跳过", routeIdx);
+                        continue;
+                    }
+
                     try
                     {
-                        var rerunBarrierId = $"round_rerun_{rerunRound}";
-                        _logger.LogInformation("[联机][重试模式] 轮末重跑屏障开始等待全员: {SyncId}", rerunBarrierId);
-                        var rerunBarrier = new SyncBarrier(_multiplayerCoordinator.Client, 120);
-                        var barrierOk = await rerunBarrier.WaitAsync(rerunBarrierId, _ct);
-                        _logger.LogInformation(
-                            "[联机][重试模式] 轮末重跑屏障完成: {SyncId}，结果={Result}（true=全员到达，false=超时放行）",
-                            rerunBarrierId, barrierOk);
+                        await executionEngine.ExecuteRoute(rerunRoute, _ct, routeIdx, rerunSyncIdSuffix);
+                        executionEngine.MarkRouteRerunDone(routeIdx);
+                        rerunSucceeded = true;
                     }
-                    catch (OperationCanceledException) { throw; }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "[联机][重试模式] 轮末重跑屏障异常，放行继续重跑");
+                        _logger.LogWarning(ex, "[联机][重试模式] 轮末重跑线路 {Idx} 异常，继续处理其他标记线路", routeIdx);
                     }
+                }
 
-                    foreach (var routeIdx in rerunSet)
+                if (rerunSucceeded)
+                {
+                    try
                     {
-                        if (executionEngine.IsRouteRerunDone(routeIdx))
-                            continue;
-
-                        var rerunRoute = groupRoutes.ElementAtOrDefault(routeIdx);
-                        if (rerunRoute == null)
-                        {
-                            _logger.LogWarning("[联机][重试模式] 轮末重跑线路索引 {Idx} 无效，跳过", routeIdx);
-                            continue;
-                        }
-
-                        try
-                        {
-                            await executionEngine.ExecuteRoute(rerunRoute, _ct, routeIdx, rerunSyncIdSuffix);
-                            executionEngine.MarkRouteRerunDone(routeIdx);
-                            rerunSucceeded = true;
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            throw;
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "[联机][重试模式] 轮末重跑线路 {Idx} 异常，继续处理其他标记线路", routeIdx);
-                        }
+                        await new TpTask(_ct).TpToStatueOfTheSeven();
                     }
-
-                    // 只有至少一条线路实际重跑成功，才去七天神像收尾。
-                    if (rerunSucceeded)
+                    catch (OperationCanceledException)
                     {
-                        try
-                        {
-                            await new TpTask(_ct).TpToStatueOfTheSeven();
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            throw;
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "[联机][重试模式] 轮末收尾去神像失败，继续后续流程");
-                        }
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "[联机][重试模式] 轮末收尾去神像失败，继续后续流程");
                     }
                 }
             }
-            finally
+        }
+        finally
+        {
+            executionEngine.ClearRerunRoundState();
+        }
+    }
+
+    private async Task RunCooperativeRerunAsync(CooperativeTaskScope cooperative, string roundPrefix, int totalRoutes)
+    {
+        EnsureCooperativeExecutionAllowed();
+        var session = cooperative.Session ?? throw new InvalidOperationException("共同重跑会话未建立");
+        var snapshot = await session.CompleteNormalAsync(_ct);
+        if (snapshot.Stage == RerunStage.Completed) return;
+        var byId = cooperative.Plans.ToDictionary(p => p.Manifest.RouteId, StringComparer.Ordinal);
+        var replayIds = snapshot.Plan.ToArray();
+        var completed = 0;
+        var incomplete = 0;
+        var timer = Stopwatch.StartNew();
+        foreach (var routeId in replayIds)
+        {
+            EnsureCooperativeExecutionAllowed();
+            if (!byId.TryGetValue(routeId, out var plan))
+                throw new InvalidOperationException("共同重跑计划包含本地不存在的路线: " + routeId);
+            var context = session.CreateContext(plan, true);
+            _multiplayerCoordinator?.ResetSyncTimeoutCount();
+            var remaining = replayIds.Skip(completed + incomplete).Sum(id => byId[id].Route.AdjustedTime);
+            lock (AutoHoeingProgress.Sync)
             {
-                executionEngine.ClearRerunRoundState();
+                AutoHoeingProgress.IsRunning = true;
+                AutoHoeingProgress.RoundPrefix = roundPrefix + "[重跑] ";
+                AutoHoeingProgress.CurrentRouteIndex = plan.Manifest.OriginalIndex + 1;
+                AutoHoeingProgress.TotalRoutes = totalRoutes;
+                AutoHoeingProgress.RouteFileName = plan.Route.FileName;
+                AutoHoeingProgress.RouteEstimatedSeconds = plan.Route.AdjustedTime;
+                AutoHoeingProgress.RoundRemainingSeconds = remaining;
+            }
+            _coordinatorClientRef?.UpdateRouteProgress(plan.Manifest.OriginalIndex, DateTime.UtcNow, plan.Route.AdjustedTime);
+            await PrepareCooperativeReplayAsync();
+            var result = await _executionEngine!.ExecuteRoute(plan.Route, _ct, plan.Manifest.OriginalIndex, cooperativeContext: context);
+            EnsureCooperativeExecutionAllowed();
+            _shouldSwitchFurina = result.ShouldSwitchFurina;
+            if (result.CooperativeOutcome is RerunRouteOutcome.Failed or RerunRouteOutcome.Cancelled)
+            {
+                // 失败/取消也必须先把本线路终态提交给服务端：服务端据此对全员统一 Abort 并给出同一原因，
+                // 队友不会停在"等一个不会到达的人"。提交本身可能因服务端已中止而抛，属预期，按失败收口即可。
+                try
+                {
+                    await session.CompleteRouteAsync(context, result.CooperativeOutcome, _ct);
+                }
+                catch (OperationCanceledException) when (_ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[共同重跑] 提交失败终态后服务端已中止，按失败收口");
+                }
+                CooperativeRerunTaskDecisions.ThrowIfTerminalFailure(result.CooperativeOutcome);
+            }
+            await session.CompleteRouteAsync(context, result.CooperativeOutcome, _ct);
+            if (result.CooperativeOutcome == RerunRouteOutcome.Completed)
+            {
+                completed++;
+                if (!cooperative.NormalCompleted.Contains(routeId) && SoloDebugDecisions.ShouldRecordCd(
+                    _config.MultiplayerEnabled, _multiplayerCoordinator?.IsHost ?? false, _config.SoloDebugMode))
+                {
+                    _cdManager.RecordCompletion(plan.Route, result.ActualDuration);
+                    _cdManager.Save();
+                }
+                if (_coordinatorClientRef != null)
+                    await _coordinatorClientRef.ReportMemberStatusAsync(MemberStatus.Normal);
+            }
+            else incomplete++;
+        }
+        EnsureCooperativeExecutionAllowed();
+        if (replayIds.Length > 0)
+            await new TpTask(_ct).TpToStatueOfTheSeven();
+        await session.FinishAsync(_ct);
+        _logger.LogInformation("{Prefix}[共同重跑] 完成 {Done} / 未完整 {Incomplete} / 计划 {Total}，用时 {Seconds:F1} 秒",
+            roundPrefix, completed, incomplete, replayIds.Length, timer.Elapsed.TotalSeconds);
+    }
+
+    private async Task PrepareCooperativeReplayAsync()
+    {
+        EnsureCooperativeExecutionAllowed();
+        if (_shouldSwitchFurina)
+        {
+            _shouldSwitchFurina = false;
+            var switchPath = Path.Combine(_dataDir, "assets", "强制黑芙.json");
+            if (File.Exists(switchPath))
+            {
+                var task = PathingTask.BuildFromFilePath(switchPath);
+                if (task != null)
+                    await new PathExecutor(_ct) { PartyConfig = _partyConfig }.Pathing(task);
             }
         }
+        await _cookingService.TryUseCooking(_config.CookingNames, _ct);
+        EnsureCooperativeExecutionAllowed();
     }
 
     /// <summary>

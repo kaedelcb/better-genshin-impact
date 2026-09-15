@@ -43,6 +43,9 @@ public class AnomalyDetector
     /// </summary>
     public Action? OnMultiplayerDefeatedDetected { get; set; }
 
+    /// <summary>Capture execution identity with the observation frame, before confirmation delays.</summary>
+    public Func<Action?>? CaptureCooperativeRevivalHandler { get; set; }
+
     public void LoadTemplates(string assetsDir)
     {
         _frozenRo = LoadRo(assetsDir, "解除冰冻.png", 1379, 574, 84, 39);
@@ -75,6 +78,20 @@ public class AnomalyDetector
     public async Task RunDetectionLoop(Func<bool> isRunning, CancellationToken ct)
     {
         int loopCount = 0;
+        bool cooperativeEpisodeNotified = false;
+
+        void NotifyConfirmedRevival(Action? capturedHandler)
+        {
+            if (capturedHandler == null)
+            {
+                try { OnMultiplayerDefeatedDetected?.Invoke(); } catch { }
+                return;
+            }
+            if (cooperativeEpisodeNotified) return;
+            cooperativeEpisodeNotified = true;
+            try { capturedHandler(); }
+            catch (Exception ex) { Logger.LogWarning(ex, "Cooperative revival notification failed"); }
+        }
 
         while (isRunning() && !ct.IsCancellationRequested)
         {
@@ -92,6 +109,26 @@ public class AnomalyDetector
                 if (loopCount % 5 == 0)
                 {
                     using var region = CaptureToRectArea();
+                    var cooperativeHandler = CaptureCooperativeRevivalHandler?.Invoke();
+                    bool? cooperativeColorHit = null;
+                    if (cooperativeHandler == null)
+                    {
+                        // No active cooperative fight: allow the next fight to arm a new episode.
+                        cooperativeEpisodeNotified = false;
+                    }
+                    else
+                    {
+                        bool templateHit = false;
+                        if (_revivalRo != null)
+                        {
+                            using var revivalProbe = region.Find(_revivalRo);
+                            templateHit = revivalProbe.IsExist();
+                        }
+                        cooperativeColorHit = IsMultiplayerDefeated(region);
+                        // Rearm only on a fresh frame with neither death indicator present.
+                        if (!templateHit && !cooperativeColorHit.Value)
+                            cooperativeEpisodeNotified = false;
+                    }
 
                     // 冻结检测
                     if (_frozenRo != null)
@@ -142,10 +179,10 @@ public class AnomalyDetector
                             // 联机模式：触发"已倒下"信号，PathExecutor 在 MoveTo 主循环 / waypoint 兜底位置消费走异常流程
                             // （与色块路径 IsMultiplayerDefeated 行为完全对齐，让 _revivalRo 模板路径也写信号位）
                             // 详见 .kiro/specs/multiplayer-walk-revive-skip-segment/design.md §3.1
-                            try { OnMultiplayerDefeatedDetected?.Invoke(); } catch { }
+                            NotifyConfirmedRevival(cooperativeHandler);
 
                             // 联机模式：触发复苏回调上报异常状态（回调照常触发，语义不变）
-                            if (OnRevivalDetected != null)
+                            if (cooperativeHandler == null && OnRevivalDetected != null)
                             {
                                 try { await OnRevivalDetected(); } catch { }
                             }
@@ -163,7 +200,7 @@ public class AnomalyDetector
                     // 二次确认容错：首帧命中后等待 400ms 重新捕获一帧再检测，连续两帧命中才视为真倒下，
                     // 避免战斗中红色特效/伤害数字/UI 瞬时落入检测区导致的假阳性误触发。
                     // 详见 .kiro/specs/hoeing-multiplayer-defeated-colorblock-false-trigger-recheck-fix/bugfix.md 2.1~2.3
-                    if (IsMultiplayerDefeated(region))
+                    if (cooperativeColorHit ?? IsMultiplayerDefeated(region))
                     {
                         await Task.Delay(MultiplayerDefeatedRecheckDelayMs, ct);
                         using var recheckRegion = CaptureToRectArea();
@@ -202,10 +239,10 @@ public class AnomalyDetector
 
                             // 联机模式：触发"已倒下"信号，PathExecutor 在主循环将抛 RetryException 走异常流程
                             // （信号位写入路径不变，preservation §3.3 / §3.4）
-                            try { OnMultiplayerDefeatedDetected?.Invoke(); } catch { }
+                            NotifyConfirmedRevival(cooperativeHandler);
 
                             // 兼容：仍保留通用复苏回调（当前为空操作，留作未来扩展）
-                            if (OnRevivalDetected != null)
+                            if (cooperativeHandler == null && OnRevivalDetected != null)
                             {
                                 try { await OnRevivalDetected(); } catch { }
                             }

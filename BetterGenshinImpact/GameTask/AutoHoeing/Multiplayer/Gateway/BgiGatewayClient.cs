@@ -50,6 +50,8 @@ public sealed class BgiGatewayClient : IAsyncDisposable
 
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
 
+    public bool SupportsCapability(string capability) => Array.IndexOf(ServerCapabilities, capability) >= 0;
+
     /// <summary>
     /// URL 归一化（《通信方案》§4.8）：配置只填服务器基地址（如 http://xxx:8080），
     /// SDK 内部拼 /gateway。旧配置带 /hub（或 /hub/，大小写不敏感）的剥掉并置 strippedLegacyHub=true，
@@ -142,7 +144,9 @@ public sealed class BgiGatewayClient : IAsyncDisposable
             clientKind = "bgi",
             clientVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
             protocolVersion = GatewayProtocol.ProtocolVersion,
-            capabilities = Array.Empty<string>(),
+            // 客户端能力必须真实宣告：服务端共同重跑状态机按"该连接 hello 里的能力"校验参与者
+            // （缺省即不支持），客户端此前宣告空数组会导致 Enroll 100% 被 rerun_capability_required 拒绝。
+            capabilities = new[] { BetterGenshinImpact.Shared.CooperativeRerun.RerunProtocol.Capability },
         }, null, ct);
 
         ServerCapabilities = resp.Get<string[]>("capabilities") ?? [];

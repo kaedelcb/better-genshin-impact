@@ -15,6 +15,9 @@ public class Room
     public string Protocol { get; set; } = "legacy";
 
     public List<PlayerInfo> Players { get; set; } = [];
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public BgiCoordinatorServer.Services.RerunExecutionState? RerunExecution { get; set; }
     public DateTime CreatedAt { get; set; }
 
     /// <summary>断线宽限期：connectionId → 过期时间。成员 SignalR 断线后不立即删人，宽限期内重连复用。</summary>

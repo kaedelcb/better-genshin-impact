@@ -1,4 +1,4 @@
-﻿using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoFight.Factory;
 using BetterGenshinImpact.GameTask.Common;
@@ -19,12 +19,28 @@ internal class AutoFightHandler : IActionHandler
     private readonly ILogger<AutoFightHandler> _logger = App.GetLogger<AutoFightHandler>();
     public async Task RunAsyncByScript(CancellationToken ct, WaypointForTrack? waypointForTrack = null, object? config = null)
     {
-        await StartFight(ct, config,waypointForTrack);
+        await RunWithCooperativeFightAsync(ct, config, waypointForTrack);
     }
 
     public async Task RunAsync(CancellationToken ct, WaypointForTrack? waypointForTrack = null, object? config = null)
     {
-        await StartFight(ct, config,waypointForTrack);
+        await RunWithCooperativeFightAsync(ct, config, waypointForTrack);
+    }
+
+    private async Task RunWithCooperativeFightAsync(CancellationToken routeCt, object? config, WaypointForTrack? waypoint)
+    {
+        var fight = BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.CurrentCooperativeFight;
+        try
+        {
+            var fightCt = fight?.Token ?? routeCt;
+            fightCt.ThrowIfCancellationRequested();
+            await StartFight(fightCt, config, waypoint);
+            fightCt.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException) when (fight?.IsInterrupted == true && !routeCt.IsCancellationRequested)
+        {
+            TaskControl.Logger.LogInformation("[联机协作] 当前战斗按点停止，路线继续");
+        }
     }
     
     private readonly PathingConditionConfig  _pathingConfig = TaskContext.Instance().Config.PathingConditionConfig;

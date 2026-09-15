@@ -1,3 +1,5 @@
+using BetterGenshinImpact.Shared.CooperativeRerun;
+
 namespace BgiCoordinatorServer.Gateway;
 
 /// <summary>
@@ -13,7 +15,7 @@ public static class GatewayProtocol
     public const int MinimumClientProtocol = 2;
 
     /// <summary>服务端能力清单（§4.4：能力缺省即不支持）。只列本切片真实实现的。</summary>
-    public static readonly string[] ServerCapabilities = ["gateway.envelope.v3"];
+    public static readonly string[] ServerCapabilities = ["gateway.envelope.v3", RerunProtocol.Capability];
 
     public static class MessageTypes
     {
@@ -46,6 +48,9 @@ public static class GatewayProtocol
     /// <summary>消息名常量（§9.2 按族）。</summary>
     public static class Names
     {
+        public const string RerunUpdate = RerunProtocol.Update;
+        public const string RerunState = RerunProtocol.State;
+
         public const string SessionHello = "session.hello";
         public const string SessionHeartbeat = "session.heartbeat";
 

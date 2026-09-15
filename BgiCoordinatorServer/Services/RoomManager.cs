@@ -710,6 +710,7 @@ public class RoomManager
             return;
         lock (room)
         {
+            room.RerunExecution?.Abort("RoomClosed");
             foreach (var p in room.Players)
             {
                 // 只删除映射值仍指向该房间的条目，避免误删已加入新房间的玩家映射

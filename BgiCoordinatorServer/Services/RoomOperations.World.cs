@@ -54,6 +54,8 @@ public sealed partial class RoomOperations
 
         lock (room)
         {
+            room.RerunExecution?.Abort("WorldReset");
+            room.RerunExecution = null;
             room.CurrentWorldRound = newRound;
             room.WaitPoints.Clear(); // 清理所有等待点
 

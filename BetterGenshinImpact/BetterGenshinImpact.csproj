@@ -112,6 +112,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<Compile Include="..\Shared\CooperativeRerun\RerunProtocol.cs" Link="GameTask\AutoHoeing\Multiplayer\Rerun\RerunProtocol.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\Fischless.GameCapture\Fischless.GameCapture.csproj" />
 		<ProjectReference Include="..\Fischless.HotkeyCapture\Fischless.HotkeyCapture.csproj" />
 		<ProjectReference Include="..\Fischless.WindowsInput\Fischless.WindowsInput.csproj" />

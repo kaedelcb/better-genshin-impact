@@ -169,6 +169,7 @@ public sealed partial class GatewayDispatcher
         RegisterSession();
         RegisterControlRoom();
         RegisterMemberLog();
+        RegisterRerun();
     }
 
     partial void RegisterRoomLifecycle();
@@ -184,4 +185,5 @@ public sealed partial class GatewayDispatcher
     partial void RegisterSession();
     partial void RegisterControlRoom();
     partial void RegisterMemberLog();
+    partial void RegisterRerun();
 }

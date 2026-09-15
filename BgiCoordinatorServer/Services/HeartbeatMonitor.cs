@@ -182,6 +182,7 @@ public class HeartbeatMonitor : IHostedService, IDisposable
                 {
                     lock (room)
                     {
+                        if (room.RerunExecution?.BlocksLegacyAdvancement == true) continue;
                         if (process.IsCompleted) return; // 双重检查
                         
                         // 标记未响应的玩家为异常
@@ -237,6 +238,7 @@ public class HeartbeatMonitor : IHostedService, IDisposable
                 List<PlayerInfo> activePlayers;
                 lock (room)
                 {
+                    if (room.RerunExecution?.BlocksLegacyAdvancement == true) continue;
                     // 获取活跃玩家（排除异常状态和心跳超时）
                     activePlayers = room.Players
                         .Where(p => !p.IsAbnormal)
@@ -266,9 +268,13 @@ public class HeartbeatMonitor : IHostedService, IDisposable
                     _logger.LogInformation("[RouteEnforcement] 房间{RoomCode}广播 RouteEnforceSync，目标线路={Target}",
                         roomCode, minRoute);
                     
-                    _ = _broadcaster.BroadcastGroupAsync(roomCode, "RouteEnforceSync",
-                        new { minRoute, reason = "线路偏差检测", deviationInfo },
-                        minRoute, "线路偏差检测", deviationInfo);
+                    lock (room)
+                    {
+                        if (room.RerunExecution?.BlocksLegacyAdvancement == true) continue;
+                        _ = _broadcaster.BroadcastGroupAsync(roomCode, "RouteEnforceSync",
+                            new { minRoute, reason = "线路偏差检测", deviationInfo },
+                            minRoute, "线路偏差检测", deviationInfo);
+                    }
                 }
             }
         }

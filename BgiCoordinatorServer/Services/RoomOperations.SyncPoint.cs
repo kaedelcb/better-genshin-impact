@@ -490,6 +490,7 @@ public sealed partial class RoomOperations
     /// </summary>
     private bool IsCollectiveStuckLocked(Room room)
     {
+        if (room.RerunExecution?.BlocksLegacyAdvancement == true) return false;
         if (room.HostConfig?.EnableMutualWaitCollectiveSkip != true) return false;
 
         var ratio = Math.Clamp(room.HostConfig.MutualWaitMinWaitersRatio, 0.01, 1.0);
@@ -565,6 +566,7 @@ public sealed partial class RoomOperations
 
         lock (room)
         {
+            if (room.RerunExecution?.BlocksLegacyAdvancement == true) return Task.CompletedTask;
             // 计算当前快照（深拷贝，便于"内容相等"比较）
             var currentSnapshot = room.ArrivalSets.ToDictionary(
                 kv => kv.Key,
@@ -707,6 +709,12 @@ public sealed partial class RoomOperations
         // === lock 外按顺序广播（OQ-7 A）===
         try
         {
+            // Timer may have decided before a rerun phase committed. Recheck before emitting any legacy advancement.
+            lock (room)
+            {
+                if (room.RerunExecution?.BlocksLegacyAdvancement == true) return;
+            }
+
             // ① 先 satisfiedSyncs 们：让大部队第一时间被解封
             foreach (var (sid, sp) in satisfiedSyncs)
             {
@@ -717,12 +725,22 @@ public sealed partial class RoomOperations
                 lock (room) { room.BroadcastedSyncIds.Add(sid); }   // fastsync-claim-short-circuit-premature-release-fix: 记录本轮已广播，供晚到抢报方补发
             }
 
+            lock (room)
+            {
+                if (room.RerunExecution?.BlocksLegacyAdvancement == true) return;
+            }
+
             // ② 后 RequestSkipToProgress：让落后玩家神像跳段
             if (laggingPlayerConnIds.Count > 0)
             {
                 _logger.LogWarning("[CollectiveSkip] 广播 RequestSkipToProgress: 房间={RoomCode}, target={Target}, 落后玩家数={N}",
                     roomCode, targetProgress, laggingPlayerConnIds.Count);
                 await _broadcaster.BroadcastGroupAsync(roomCode, "RequestSkipToProgress", new { targetProgress }, targetProgress);
+            }
+
+            lock (room)
+            {
+                if (room.RerunExecution?.BlocksLegacyAdvancement == true) return;
             }
 
             // ③ 降级广播（OQ-5 A）

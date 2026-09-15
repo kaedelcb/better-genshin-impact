@@ -3,6 +3,8 @@ using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoHoeing.Models;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Models;
+using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun;
+using BetterGenshinImpact.Shared.CooperativeRerun;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using Microsoft.Extensions.Logging;
@@ -65,6 +67,8 @@ public class RouteExecutionEngine
         }
 
         _coordinator = coordinator;
+        _anomalyDetector.CaptureCooperativeRevivalHandler = coordinator == null
+            ? null : CaptureCooperativeRevivalHandler;
         
         // 设置异常检测器的复苏回调
         if (coordinator != null)
@@ -88,7 +92,7 @@ public class RouteExecutionEngine
             _anomalyDetector.OnMultiplayerDefeatedDetected = () =>
             {
                 var executor = _activeExecutor;
-                if (executor == null) return;
+                if (executor == null || executor.CooperativeContext != null) return;
 
                 // 本机复苏信号与“线路重试模式”无关，必须始终交给 PathExecutor，
                 // 否则主循环不会抛 RetryException，死亡后的寻路会继续使用旧坐标。
@@ -117,12 +121,10 @@ public class RouteExecutionEngine
                 }
 
                 var c = _coordinator;
+                var fightPointId = executor.CurWaypoints.Item1 * 10000 + executor.CurWaypoint.Item1;
                 if (c != null && c.Client.IsConnected)
                 {
-                    // v3（同伴战斗点级跳过）：附带复苏者正在战斗的战斗点（segIdx*10000+wpIdx），
-                    // 供其他成员做战斗点级跳过（不是 v2 的集体回神像重跑）。
-                    // 既有 3 参 ReportAnomalyAsync 保留作 fallback（老客户端走线路级）。
-                    var fightPointId = executor.CurWaypoints.Item1 * 10000 + executor.CurWaypoint.Item1;
+                    // Legacy clients retain the existing route/fight-point broadcast.
                     _ = c.Client.ReportAnomalyWithFightPointAsync(c.Client.MyPlayerUid, routeIndex, fightPointId);
                 }
             };
@@ -134,6 +136,31 @@ public class RouteExecutionEngine
         }
     }
 
+    private Action? CaptureCooperativeRevivalHandler()
+    {
+        var executor = _activeExecutor;
+        var context = executor?.CooperativeContext;
+        if (executor == null || context == null) return null;
+
+        var pointId = executor.ActiveCooperativeFight?.PointId;
+        var eligible = context.Plan.Manifest.Eligible;
+        var retryMode = _currentRouteRetryModeEnabled;
+        var protectedRevival = executor.IsPostTeleportRevivalProtectionHit();
+        return () =>
+        {
+            if (!ReferenceEquals(_activeExecutor, executor)
+                || !ReferenceEquals(executor.CooperativeContext, context)) return;
+
+            // Always signal local recovery, including deaths outside an active fight.
+            executor.SignalMultiplayerRevival();
+            if (protectedRevival) return;
+            if (retryMode) HandleRevivalTrigger(executor);
+            if (eligible && pointId != null) context.ReportDeath(pointId);
+            else if (eligible && pointId == null)
+                Logger.LogWarning("[共同重跑] 复苏发生在没有规范战斗点身份的上下文中，未产生重跑标记");
+        };
+    }
+
     // 广播中的 routeIndex 是复苏成员所在的权威线路；接收方当前线路仅用于决定是否跳过当前战斗。
     private void OnTeammateRevivalBroadcast(string playerUid, int routeIndex, bool passedSyncPoint)
     {
@@ -142,7 +169,7 @@ public class RouteExecutionEngine
         if (routeIndex < 0) return;
 
         var executor = _activeExecutor;
-        if (executor == null) return;
+        if (executor == null || executor.CooperativeContext != null) return;
 
         if (RouteRerunDecisions.ShouldMarkRerun(routeIndex, _routeRerunMarkSet, _routeRerunDoneSet))
         {
@@ -181,7 +208,7 @@ public class RouteExecutionEngine
         if (routeIndex < 0 || fightPointId < 0) return;
 
         var executor = _activeExecutor;
-        if (executor == null) return;
+        if (executor == null || executor.CooperativeContext != null) return;
 
         // 照常标记权威线路需重跑（与既有 OnTeammateRevivalBroadcast 行为一致）。
         if (RouteRerunDecisions.ShouldMarkRerun(routeIndex, _routeRerunMarkSet, _routeRerunDoneSet))
@@ -274,9 +301,16 @@ public class RouteExecutionEngine
     /// 执行单条路线，并发启动所有子任务
     /// </summary>
     public async Task<RouteExecutionResult> ExecuteRoute(
-        RouteInfo route, CancellationToken ct, int currentJsonRouteIndex = 0, string? rerunSyncIdSuffix = null)
+        RouteInfo route, CancellationToken ct, int currentJsonRouteIndex = 0, string? rerunSyncIdSuffix = null, CooperativeRouteContext? cooperativeContext = null)
     {
         var result = new RouteExecutionResult();
+        var previousCooperativeContext = _coordinator?.ActiveCooperativeContext;
+        if (_coordinator != null) _coordinator.ActiveCooperativeContext = cooperativeContext;
+        var effectiveRoute = cooperativeContext?.Plan.Route ?? route;
+        var executionFailed = false;
+        var executionCancelled = false;
+        try
+        {
         _running = true;
         _anomalyDetector.ShouldSwitchFurina = false;
         _currentRouteRetryModeEnabled = RouteRetryModeDecisions.IsRetryRoute(
@@ -309,10 +343,11 @@ public class RouteExecutionEngine
             try
             {
                 Logger.LogInformation("开始执行地图追踪任务: {Name}", route.FileName);
-                var task = PathingTask.BuildFromFilePath(route.FullPath);
+                var task = cooperativeContext?.Plan.CreateTask() ?? PathingTask.BuildFromFilePath(route.FullPath);
                 if (task != null)
                 {
                     var executor = new PathExecutor(ct);
+                    executor.CooperativeContext = cooperativeContext;
                     executor.WantsSkipCurrentFight = false;
                     executor.SkipRevivalFightPointId = -1;   // v3：每条线路入口复位待跳过战斗点
                     executor.PartyConfig = _partyConfig;
@@ -349,7 +384,7 @@ public class RouteExecutionEngine
                     // 按线路切角色（hoeing-multiplayer-per-route-switch-roles）：仅联机 + 配了角色时注入 Hook
                     if (_config.MultiplayerEnabled && _coordinator != null && _perRouteSwitchProvider != null)
                     {
-                        var perRouteHook = _perRouteSwitchProvider.BuildHookForRoute(route);
+                        var perRouteHook = _perRouteSwitchProvider.BuildHookForRoute(effectiveRoute);
                         if (perRouteHook != null)
                         {
                             executor.PerRouteSwitchHook = perRouteHook;
@@ -391,10 +426,14 @@ public class RouteExecutionEngine
             }
             catch (OperationCanceledException)
             {
+                executionCancelled = true;
+                cooperativeContext?.MarkIncomplete("route cancelled");
                 throw; // 让取消异常穿透，不吞掉
             }
             catch (Exception ex)
             {
+                executionFailed = true;
+                cooperativeContext?.MarkIncomplete(ex.Message);
                 Logger.LogError("执行地图追踪出错: {Msg}", ex.Message);
             }
             finally
@@ -435,7 +474,7 @@ public class RouteExecutionEngine
         var dumperChars = ParseDumperCharacters(_config.DumperCharacters);
         if (dumperChars.Count > 0)
         {
-            var pathingData = PathingTask.BuildFromFilePath(route.FullPath);
+            var pathingData = cooperativeContext?.Plan.CreateTask() ?? PathingTask.BuildFromFilePath(route.FullPath);
             if (pathingData != null)
             {
                 CombatScenes? combatScenes = null;
@@ -495,8 +534,22 @@ public class RouteExecutionEngine
         result.FullyCompleted = pathingFullyCompleted;
         result.SkipRouteRequested = skipRouteRequested;
         result.SkipRouteReason = skipRouteReason;
+        result.CooperativeOutcome = cooperativeContext == null
+            ? RerunRouteOutcome.None
+            : BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun.CooperativeExecutionDecisions.Outcome(
+                completed: pathingFullyCompleted,
+                incomplete: cooperativeContext.HadIncompleteExecution,
+                failed: executionFailed,
+                cancelled: executionCancelled || ct.IsCancellationRequested,
+                skipRouteRequested: skipRouteRequested);
 
         return result;
+        }
+        finally
+        {
+            if (_coordinator != null && ReferenceEquals(_coordinator.ActiveCooperativeContext, cooperativeContext))
+                _coordinator.ActiveCooperativeContext = previousCooperativeContext;
+        }
     }
 
     private static List<int> ParseDumperCharacters(string input)

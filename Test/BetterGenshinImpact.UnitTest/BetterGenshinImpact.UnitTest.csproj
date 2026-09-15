@@ -42,6 +42,13 @@
   <ItemGroup>
     <ProjectReference Include="..\..\BetterGenshinImpact\BetterGenshinImpact.csproj" />
     <ProjectReference Include="..\..\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj" />
+    <!-- 共同重跑契约的跨端集成测试：把**服务端权威状态机**的源文件直接编进测试程序集
+         （该文件只依赖 BCL 与 Shared 协议，不依赖 ASP.NET）。
+         这样测试能同时驱动真实客户端会话与真实服务端状态机，自动捕获"两端约定不一致"这类
+         单侧假服务端测试必然漏掉的缺陷（第5轮审查的四个阻断即属此类）；
+         改用 ProjectReference 会引入 Web SDK/ASP.NET 框架引用，代价与风险都更高。 -->
+    <Compile Include="..\..\BgiCoordinatorServer\Services\RerunExecutionState.cs"
+             Link="GameTaskTests\AutoHoeingTests\ServerContract\RerunExecutionState.cs" />
   </ItemGroup>
 
   <ItemGroup>

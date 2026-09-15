@@ -7,6 +7,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Gateway;
+using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun;
+using BetterGenshinImpact.Shared.CooperativeRerun;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Models;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -155,6 +157,23 @@ public class CoordinatorClient : IAsyncDisposable
     /// 当前路线索引
     /// </summary>
     public int CurrentRouteIndex => _currentRouteIndex;
+    public CooperativeRerunSession? CooperativeSession { get; internal set; }
+    public bool SupportsCooperativeRerun => _gateway?.SupportsCapability(RerunProtocol.Capability) == true;
+
+    public async Task<RerunSnapshot> SendCooperativeRerunAsync(RerunRequest request, CancellationToken ct)
+    {
+        if (!IsConnected || !IsInRoom || IsReconnecting || _gateway == null)
+            throw new InvalidOperationException("Cooperative rerun transport is not joined.");
+        if (!SupportsCooperativeRerun)
+            throw new NotSupportedException("Server does not support hoeing.rerun.v1.");
+        var response = request.Operation == RerunProtocol.Poll
+            ? await _gateway.QueryAsync(RerunProtocol.State, request, null, ct)
+            : await _gateway.InvokeCommandAsync(RerunProtocol.Update, request, null, ct);
+        var snapshot = response.DeserializePayload<RerunSnapshot>();
+        if (snapshot == null || string.IsNullOrEmpty(snapshot.SessionId))
+            throw new InvalidOperationException("Missing cooperative rerun snapshot.");
+        return snapshot;
+    }
     public WorldStateMonitor? WorldStateMonitor
     {
         get => _worldStateMonitor;
@@ -1652,8 +1671,8 @@ public class CoordinatorClient : IAsyncDisposable
                     new { syncId, syncProgress });
             }
 
-            // while 循环退出即表示匹配 AllArrived 已被消费（严格等待完成）
-            return true;
+            // A completed TCS can also represent RoomClosed cancellation.
+            return await tcs.Task;
         }
         catch (OperationCanceledException)
         {

@@ -323,6 +323,15 @@ public class AutoFightJsonTask : ISoloTask
 
                     while (!cts2.Token.IsCancellationRequested)
                     {
+                        // 协作重跑：队友在"本机正在打的这个战斗点"复苏 → 本场立即停战（与 TXT 引擎同一判据）。
+                        // 无协作 scope（单机/正常轮）时该方法恒 false，行为逐字节不变。
+                        if (BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.ShouldAbortFightForRetryRevival())
+                        {
+                            Logger.LogWarning("[联机][重试模式] 协作停战：结束本场战斗（JSON 策略）");
+                            fightEndFlag = true;
+                            break;
+                        }
+
                         if (timeoutStopwatch.Elapsed > fightTimeout)
                         {
                             Logger.LogInformation("战斗超时结束");
@@ -432,6 +441,7 @@ public class AutoFightJsonTask : ISoloTask
             }, cts2.Token);
 
             await fightTask;
+            ct.ThrowIfCancellationRequested();
 
             try
             {

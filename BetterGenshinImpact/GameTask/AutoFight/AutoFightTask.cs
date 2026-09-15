@@ -555,6 +555,35 @@ public class AutoFightTask : ISoloTask
     public List<string> checkNames = new();*/
     public async Task Start(CancellationToken ct)
     {
+        var cooperativeFight = PathExecutor.CurrentCooperativeFight;
+        try
+        {
+            await StartCoreAsync(ct);
+        }
+        finally
+        {
+            if (cooperativeFight != null)
+            {
+                try
+                {
+                    if (_expDetector != null)
+                    {
+                        try { await _expDetector.StopAsync(); }
+                        finally { _expDetector.Dispose(); _expDetector = null; }
+                    }
+                }
+                finally
+                {
+                    FightEndFlag = true;
+                    FightStatusFlag = false;
+                    Simulation.ReleaseAllKey();
+                }
+            }
+        }
+    }
+
+    private async Task StartCoreAsync(CancellationToken ct)
+    {
         _ct = ct;
 
         LogScreenResolution();
@@ -712,8 +741,8 @@ public class AutoFightTask : ISoloTask
         }
 
         // 新的取消token
-        var cts2 = new CancellationTokenSource();
-        ct.Register(cts2.Cancel);
+        using var cts2 = new CancellationTokenSource();
+        using var fightCancellationRegistration = ct.Register(cts2.Cancel);
 
         combatScenes.BeforeTask(cts2.Token);
         // 注入阿蕾奇诺红血门控开关到每个角色（让 Avatar.KeyPress/UseBurst 读到当前配置组/独立任务的开关值，
@@ -1698,8 +1727,12 @@ public class AutoFightTask : ISoloTask
             }
         }, cts2.Token);
 
+        var fightCompleted = false;
+        try
+        {
         await fightTask;
         await WaitForRewardEndDetectionTaskAsync(rewardTimeoutEndTask);
+        fightCompleted = !ct.IsCancellationRequested;
 
         // 奖励识别结束与战斗超时共用 timeOutFlag 行为，例如不执行换队拾取。
         if (Volatile.Read(ref rewardTimeoutEndFlag) == 1)
@@ -1707,7 +1740,15 @@ public class AutoFightTask : ISoloTask
             timeOutFlag = true;
         }
 
+        }
+        finally
+        {
         StopSharedFightEndCoordination(__quorumCoordinator, __onAllFightDone);
+        if (!fightCompleted)
+        {
+            cts2.Cancel();
+            await WaitForRewardEndDetectionTaskAsync(rewardTimeoutEndTask);
+        }
 
         // fight-end-return-loop-not-joined-movement-overlap-fix:
         // 战斗结束：先 cancel 回点 CTS 立即打断进行中的 MoveCloseTo(万叶)/MoveTo(通用)，
@@ -1724,6 +1765,7 @@ public class AutoFightTask : ISoloTask
             try
             {
                 var __all = Task.WhenAll(__returnLoopTasks);
+                if (PathExecutor.CurrentCooperativeFight != null) await __all;
                 var __winner = await Task.WhenAny(__all, Task.Delay(ReturnLoopJoinTimeoutMs));
                 if (__winner != __all)
                 {
@@ -1749,6 +1791,14 @@ public class AutoFightTask : ISoloTask
             }
         }
 
+        if (!fightCompleted && _expDetector != null)
+        {
+            try { await _expDetector.StopAsync(); }
+            finally { _expDetector.Dispose(); _expDetector = null; }
+        }
+        }
+
+        ct.ThrowIfCancellationRequested();
         if (_taskParam.KazuhaPickupEnabled && _taskParam.ExpKazuhaPickup && _expDetector != null && !_expDetector.HasDetectedExperience && (combatScenes.GetAvatars().Select( a => a.Name).Contains("枫原万叶") || combatScenes.GetAvatars().Select( a => a.Name).Contains("琴")))
         {
             TaskControl.Logger.LogInformation("基于怪物经验判断：{text} 经验值显示","等待");
@@ -2247,7 +2297,7 @@ public class AutoFightTask : ISoloTask
     // 仅当 IsEnabled（联机+连接+房主开关）时启用；单机/开关关时三字段保持默认，CheckFightFinish 行为一字不变。
     private volatile bool _quorumVoted;            // 本地是否已投过 done 票（每场战斗一次）
     private volatile bool _allFightDoneReceived;   // 是否已收到本场 syncKey 的 AllFightDone 广播
-    private string _currentFightSyncKey = "";      // 本场战斗 syncKey（routeIndex:X:Y）
+    private string _currentFightSyncKey = "";      // 本场战斗 syncKey
 
     // === 共享战斗配额结束同步：订阅 AllFightDone + 上报参与者（subscribe-before-action）===
     // 仅当 IsEnabled（联机+连接+房主开关）时启用；否则三字段保持默认，全程零回归。
@@ -2268,9 +2318,8 @@ public class AutoFightTask : ISoloTask
 
         var waypoint = FightWaypoint;
         var routeIndex = coordinator!.CurrentRouteIndex;
-        _currentFightSyncKey = waypoint == null
-            ? $"{routeIndex}:0:0"
-            : $"{routeIndex}:{waypoint.X.ToString("R", CultureInfo.InvariantCulture)}:{waypoint.Y.ToString("R", CultureInfo.InvariantCulture)}";
+        _currentFightSyncKey = PathExecutor.CurrentCooperativeFightKey
+            ?? (waypoint == null ? $"{routeIndex}:0:0" : $"{routeIndex}:{waypoint.X.ToString("R", CultureInfo.InvariantCulture)}:{waypoint.Y.ToString("R", CultureInfo.InvariantCulture)}");
 
         Action<string> onAllFightDone = key =>
         {
@@ -2637,6 +2686,14 @@ public class AutoFightTask : ISoloTask
     {
         if (rewardEndDetectionTask is null)
         {
+            return;
+        }
+
+        if (PathExecutor.CurrentCooperativeFight != null)
+        {
+            try { await rewardEndDetectionTask; }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Logger.LogWarning(ex, "奖励后台识别任务异常，已忽略"); }
             return;
         }
 

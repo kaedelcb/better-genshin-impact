@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Models;
+using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 
@@ -34,6 +35,7 @@ public class MultiplayerCoordinator : IAsyncDisposable
     /// 由 PathExecutor 在战后回点 Delay 处通过 <see cref="KazuhaCollectSyncCoordinator.WaitAtFightPointAsync"/> 调用。
     /// </summary>
     public KazuhaCollectSyncCoordinator? KazuhaCollectSync { get; private set; }
+    public CooperativeRouteContext? ActiveCooperativeContext { get; set; }
 
     // === 基础状态 ===
     public bool IsHost { get; private set; }
