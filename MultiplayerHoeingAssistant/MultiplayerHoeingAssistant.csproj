@@ -51,6 +51,11 @@
     <None Update="assistant-config.json" CopyToOutputDirectory="Never" />
   </ItemGroup>
 
+  <!-- 单测工程可访问 internal 成员（如 BgiPackageUpdateService.WriteEntry 的空文件分支） -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="MultiplayerHoeingAssistant.UnitTest" />
+  </ItemGroup>
+
   <!-- 缂栬瘧鍚庤嚜鍔ㄩ儴缃插埌 BGI 杈撳嚭鐩綍涓嬬殑 Tools\MultiplayerHoeingAssistant锛堝惈甯?x64 骞冲彴鐩綍鐨勭敤鎴疯繍琛岃矾寰勶級銆?       鍔╂墜杩涚▼杩愯涓細閿佷綇閮ㄧ讲鐩爣锛屾鏃跺彲鐢?-p:DeployToBgiTools=false 璺宠繃閮ㄧ讲浠呭畬鎴愮紪璇戦獙璇併€?-->
   <Target Name="DeployAssistantToBgiTools" AfterTargets="Build" Condition="'$(DeployToBgiTools)' != 'false'">
     <Message Text="DeployAssistantToBgiTools: 閮ㄧ讲鍔╂墜鍒?BGI Tools 鐩綍" Importance="high" />

@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using SharpCompress.Archives;
 using SharpCompress.Archives.SevenZip;
+using SharpCompress.Common.SevenZip;
 
 namespace MultiplayerHoeingAssistant.Services;
 
@@ -69,8 +71,13 @@ public sealed record BgiUpdateApplyResult(
 ///   ② 条目相对路径做逃逸防护（7z 版 zip-slip）；
 ///   ③ 排除目录（用户选定不覆盖的目录，相对 BGI 目录）：可选先整目录备份到
 ///      BGI\_update_backup\时间戳\，解压时条目一律跳过，绝不触碰；
-///   ④ 文件被占用（助手部署在 BGI 目录内时，包内助手自身文件必被占用）先"改名腾位"再覆盖，
+///      备份目录 _update_backup 自身无条件视为排除目录（硬保护，包内条目永不覆盖备份）；
+///   ④ 0 字节条目（7z 空文件无数据流，OpenEntryStream 会抛
+///      "File does not have a stream"）直接落一个空文件，不再中断整个更新；
+///   ⑤ 文件被占用（助手部署在 BGI 目录内时，包内助手自身文件必被占用）先"改名腾位"再覆盖，
 ///      仍失败则跳过并记录——助手旧映像继续运行，新文件重启助手后生效。
+///   ⑥ 7z 固实包单遍解码：逐条目 OpenEntryStream 会从固实块头重解（O(n²)，526MB 实包需数小时），
+///      经反射取共享解码流按序读出（实包 3568 条目 34s）；反射失效自动回退逐条目慢路径。
 /// 调用方职责：解压前确保 BGI 已退出（弹窗内经用户确认后关闭），本类不杀进程。
 /// </summary>
 public static class BgiPackageUpdateService
@@ -156,6 +163,8 @@ public static class BgiPackageUpdateService
         Directory.CreateDirectory(targetRoot);
 
         var excludes = excludeDirs ?? [];
+        // 备份目录硬保护：_update_backup 下的包内条目一律跳过，绝不覆盖已有备份（与用户排除配置无关）
+        var extractExcludes = excludes.Append(BackupRootDirName).ToArray();
         string? backupDir = null;
         try
         {
@@ -175,6 +184,8 @@ public static class BgiPackageUpdateService
             using var archive = SevenZipArchive.Open(archivePath);
             var entries = archive.Entries.Where(e => !e.IsDirectory).ToList();
             int total = entries.Count, done = 0;
+            // 固实单遍解码器（可能为 null = 反射失效，回退逐条目慢路径）
+            using var solid = SolidSevenZipReader.TryCreate(entries.FirstOrDefault());
             foreach (var entry in entries)
             {
                 ct.ThrowIfCancellationRequested();
@@ -183,44 +194,49 @@ public static class BgiPackageUpdateService
                 if (entry.Key is null || NormalizeEntryPath(entry.Key) is not { } rel)
                 {
                     skipped.Add($"{entry.Key}（条目路径不安全，已跳过）");
+                    DrainEntry(solid, entry);
                     continue;
                 }
                 var fullTarget = Path.GetFullPath(Path.Combine(targetRoot, rel));
                 if (!fullTarget.StartsWith(targetRoot, StringComparison.OrdinalIgnoreCase))
                 {
                     skipped.Add($"{entry.Key}（条目路径逃逸目标目录，已跳过）");
+                    DrainEntry(solid, entry);
                     continue;
                 }
-                if (BgiUpdateDecisions.IsExcludedPath(rel, excludes))
+                if (BgiUpdateDecisions.IsExcludedPath(rel, extractExcludes))
                 {
                     excluded++;
+                    DrainEntry(solid, entry);
                     continue;
                 }
 
                 Directory.CreateDirectory(Path.GetDirectoryName(fullTarget)!);
                 try
                 {
-                    WriteEntry(entry, fullTarget);
+                    WriteEntry(entry, fullTarget, solid);
                     extracted++;
                 }
                 catch (IOException) when (File.Exists(fullTarget))
                 {
-                    // ④ 被占用（助手/BGI 自身文件）：先改名腾位再写一次；仍失败则跳过并记录
+                    // ⑤ 被占用（助手/BGI 自身文件）：先改名腾位再写一次；仍失败则跳过并记录
                     try
                     {
                         File.Move(fullTarget, fullTarget + ".old-" + DateTime.Now.ToString("yyyyMMddHHmmssfff"));
                         renamedAside++;
-                        WriteEntry(entry, fullTarget);
+                        WriteEntry(entry, fullTarget, solid);
                         extracted++;
                     }
                     catch (Exception inner) when (inner is IOException or UnauthorizedAccessException)
                     {
                         skipped.Add($"{Path.GetFileName(fullTarget)}（文件被占用）");
+                        DrainEntry(solid, entry);
                     }
                 }
                 catch (UnauthorizedAccessException)
                 {
                     skipped.Add($"{Path.GetFileName(fullTarget)}（无写入权限）");
+                    DrainEntry(solid, entry);
                 }
             }
         }
@@ -233,6 +249,21 @@ public static class BgiPackageUpdateService
             return new BgiUpdateApplyResult(false, extracted, renamedAside, excluded, skipped, backupDir, $"解压失败：{ex.Message}");
         }
         return new BgiUpdateApplyResult(true, extracted, renamedAside, excluded, skipped, backupDir, null);
+    }
+
+    /// <summary>固实单遍模式下，被跳过/排除的条目也要把数据从共享解码流里读掉，保持流与条目同步。</summary>
+    private static void DrainEntry(SolidSevenZipReader? solid, IArchiveEntry entry)
+    {
+        if (solid is null || entry.Size == 0) return;
+        var stream = solid.Next(entry);
+        var buf = new byte[1 << 16];
+        long remain = entry.Size;
+        while (remain > 0)
+        {
+            var r = stream.Read(buf, 0, (int)Math.Min(buf.Length, remain));
+            if (r <= 0) return; // 流提前结束：后续条目解码会报错并整体失败，此处不再处理
+            remain -= r;
+        }
     }
 
     /// <summary>把存在的排除目录整目录复制到 BGI\_update_backup\时间戳\ 下（相对结构原样保留）。</summary>
@@ -267,11 +298,121 @@ public static class BgiPackageUpdateService
         }
     }
 
-    private static void WriteEntry(IArchiveEntry entry, string targetPath)
+    /// <summary>写条目数据：0 字节条目（7z 空文件无数据流，OpenEntryStream 会抛
+    /// InvalidOperationException "File does not have a stream."）直接落一个空文件。
+    /// solid 非空时从固实共享解码流按序读（先建好目标文件再读流，File.Create 失败不消费流数据，
+    /// 改名腾位重试安全）；解码流中途失败抛 InvalidDataException（不触发改名腾位重试，防流失步）。
+    /// solid 为 null 回退逐条目 OpenEntryStream（正确但固实包慢）。</summary>
+    internal static void WriteEntry(IArchiveEntry entry, string targetPath, SolidSevenZipReader? solid = null)
     {
-        using var entryStream = entry.OpenEntryStream();
+        if (entry.Size == 0)
+        {
+            File.Create(targetPath).Dispose();
+            return;
+        }
         using var output = File.Create(targetPath);
-        entryStream.CopyTo(output);
+        if (solid is null)
+        {
+            using var entryStream = entry.OpenEntryStream();
+            entryStream.CopyTo(output);
+            return;
+        }
+        try
+        {
+            var stream = solid.Next(entry);
+            var buf = new byte[1 << 20];
+            long remain = entry.Size;
+            while (remain > 0)
+            {
+                int r = stream.Read(buf, 0, (int)Math.Min(buf.Length, remain));
+                if (r <= 0) throw new InvalidDataException($"固实解码流提前结束：{entry.Key}");
+                output.Write(buf, 0, r);
+                remain -= r;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            // 读流中途失败 = 固实流位置已不可靠：转成非 IOException，避免外层误走"改名腾位"重试造成失步
+            throw new InvalidDataException($"条目 {entry.Key} 从固实解码流读取失败：{ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// 7z 固实块共享解码流（反射适配 SharpCompress 0.38.0 内部结构）。
+    /// 7z 把多个文件打包进一个固实块，SharpCompress 公开 API 只能逐条目从块头重解并跳过
+    /// （O(n²)，实测 526MB 实包需数小时）；本类对同一固实块只建一次解码流，条目按
+    /// archive.Entries 顺序消费即可顺序读出各自数据（实测同包 34s）。
+    /// 任一内部成员反射失败返回 null（调用方回退逐条目路径）；条目必须按 Entries 顺序消费。
+    /// </summary>
+    internal sealed class SolidSevenZipReader : IDisposable
+    {
+        private readonly PropertyInfo _filePartProp;
+        private readonly PropertyInfo _folderProp;
+        private readonly FieldInfo _dbField;
+        private readonly FieldInfo _streamField;
+        private readonly MethodInfo _getFolderStream;
+        private readonly object? _passwordProvider;
+        private Stream? _current;
+        private object? _currentFolder;
+
+        private SolidSevenZipReader(PropertyInfo filePartProp, PropertyInfo folderProp,
+            FieldInfo dbField, FieldInfo streamField, MethodInfo getFolderStream,
+            object? passwordProvider)
+        {
+            _filePartProp = filePartProp;
+            _folderProp = folderProp;
+            _dbField = dbField;
+            _streamField = streamField;
+            _getFolderStream = getFolderStream;
+            _passwordProvider = passwordProvider;
+        }
+
+        /// <summary>解析反射成员；任一缺失（SharpCompress 内部结构变化）返回 null。</summary>
+        public static SolidSevenZipReader? TryCreate(IArchiveEntry? anyEntry)
+        {
+            try
+            {
+                if (anyEntry is null) return null;
+                var bf = BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance;
+                var filePartProp = typeof(SevenZipEntry).GetProperty("FilePart", bf);
+                var part = filePartProp?.GetValue(anyEntry);
+                if (filePartProp is null || part is null) return null;
+                var partType = part.GetType();
+                var folderProp = partType.GetProperty("Folder", bf);
+                var dbField = partType.GetField("_database", bf);
+                var streamField = partType.GetField("_stream", bf);
+                var getFolderStream = dbField?.FieldType.GetMethod("GetFolderStream", bf);
+                if (folderProp is null || dbField is null || streamField is null || getFolderStream is null) return null;
+                var db = dbField.GetValue(part)!;
+                var passwordProvider = db.GetType().GetProperty("PasswordProvider", bf)?.GetValue(db)
+                    ?? db.GetType().GetField("PasswordProvider", bf)?.GetValue(db);
+                return new SolidSevenZipReader(filePartProp, folderProp, dbField, streamField, getFolderStream, passwordProvider);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>返回可顺序读出当前条目数据的流（条目 Size==0 无数据，调用方不应调用）。
+        /// 条目消费顺序必须与 archive.Entries 一致，否则数据错位。</summary>
+        public Stream Next(IArchiveEntry entry)
+        {
+            var part = _filePartProp.GetValue(entry)!;
+            var folder = _folderProp.GetValue(part);
+            if (!ReferenceEquals(folder, _currentFolder))
+            {
+                _current?.Dispose();
+                var db = _dbField.GetValue(part)!;
+                var stream = _streamField.GetValue(part)!;
+                _current = (Stream)(_getFolderStream.Invoke(db, new[] { stream, folder, _passwordProvider })
+                    ?? throw new InvalidDataException("固实解码流创建失败"));
+                _currentFolder = folder;
+            }
+            return _current!;
+        }
+
+        public void Dispose() => _current?.Dispose();
     }
 
     /// <summary>统一 7z 条目相对路径：'/' 分隔、剥根前缀、拒盘符与 ".." 段。无法安全归一化返回 null。</summary>

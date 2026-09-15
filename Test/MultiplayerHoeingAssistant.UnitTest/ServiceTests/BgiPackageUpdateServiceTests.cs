@@ -1,5 +1,6 @@
 using System.IO;
 using MultiplayerHoeingAssistant.Services;
+using SharpCompress.Archives;
 using Xunit;
 
 namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
@@ -12,6 +13,11 @@ public class BgiPackageUpdateServiceTests : IDisposable
 {
     private static readonly string FixturePath = Path.Combine(
         AppContext.BaseDirectory, "TestData", "BetterGI_v0.64.2+lcb.22.7-NexusBGI-fix13.7z");
+
+    /// <summary>5 条目夹具：含 0 字节占位文件（EmptyDir/placeholder.txt）与
+    /// _update_backup/20260915-222438/BetterGI.exe 恶意条目（试图覆盖已有备份）。</summary>
+    private static readonly string Fixture16Path = Path.Combine(
+        AppContext.BaseDirectory, "TestData", "BetterGI_v0.64.2+lcb.22.7-NexusBGI-fix16.7z");
 
     private readonly string _root;
     private readonly string _bgiDir;
@@ -182,5 +188,39 @@ public class BgiPackageUpdateServiceTests : IDisposable
         Assert.Empty(BgiPackageUpdateService.ScanPackages(null));
         Assert.Empty(BgiPackageUpdateService.ScanPackages(""));
         Assert.Empty(BgiPackageUpdateService.ScanPackages(Path.Combine(_root, "not-exist")));
+    }
+
+    [Fact]
+    public void Apply_ZeroByteEntry_CreatesEmptyFile_AndDoesNotAbort()
+    {
+        // 7z 空文件无数据流，旧实现 OpenEntryStream 抛 "File does not have a stream"
+        // 导致一个 0 字节占位文件中断整个更新；新实现直接落空文件继续
+        var result = BgiPackageUpdateService.Apply(Fixture16Path, _bgiDir, [], backupExcludedDirs: false, progress: null);
+
+        Assert.True(result.Success, result.Error);
+        var placeholder = new FileInfo(Path.Combine(_bgiDir, "EmptyDir", "placeholder.txt"));
+        Assert.True(placeholder.Exists);
+        Assert.Equal(0, placeholder.Length);
+        // 5 个文件条目：3 个正常内容 + 1 个 0 字节 + 1 个 _update_backup 恶意条目（被硬保护排除）
+        Assert.Equal(4, result.ExtractedFiles);
+        Assert.Equal(1, result.ExcludedFiles);
+        Assert.Empty(result.SkippedFiles);
+    }
+
+    [Fact]
+    public void Apply_BackupRootEntries_NeverOverwriteExistingBackup()
+    {
+        // _update_backup 无条件硬保护：包内同名路径条目一律跳过，已有的历史备份分毫不动
+        var tsDir = Path.Combine(_bgiDir, "_update_backup", "20260915-222438");
+        Directory.CreateDirectory(Path.Combine(tsDir, "User"));
+        File.WriteAllText(Path.Combine(tsDir, "User", "config.json"), "REAL-BACKUP");
+
+        var result = BgiPackageUpdateService.Apply(Fixture16Path, _bgiDir, ["User"], backupExcludedDirs: true, progress: null);
+
+        Assert.True(result.Success, result.Error);
+        Assert.False(File.Exists(Path.Combine(tsDir, "BetterGI.exe"))); // 恶意条目未落盘
+        Assert.Equal("REAL-BACKUP", Read(tsDir, "User", "config.json")); // 已有备份原样
+        // User/ 排除 + _update_backup 恶意条目硬保护，都被跳过
+        Assert.Equal(2, result.ExcludedFiles);
     }
 }
