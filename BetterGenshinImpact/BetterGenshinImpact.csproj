@@ -112,7 +112,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Compile Include="..\Shared\CooperativeRerun\RerunProtocol.cs" Link="GameTask\AutoHoeing\Multiplayer\Rerun\RerunProtocol.cs" />
+		<!-- 共同重跑协议：客户端链接服务端工程内的同一份文件（单一来源）。
+		     该文件必须位于 BgiCoordinatorServer 目录内，否则服务端 Docker 构建（上下文=该目录）会 CS2001 失败。 -->
+		<Compile Include="..\BgiCoordinatorServer\Shared\CooperativeRerun\RerunProtocol.cs" Link="GameTask\AutoHoeing\Multiplayer\Rerun\RerunProtocol.cs" />
 	</ItemGroup>
 
 	<ItemGroup>

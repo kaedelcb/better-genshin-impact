@@ -4,6 +4,18 @@ using System.Collections.Generic;
 
 namespace BetterGenshinImpact.Shared.CooperativeRerun;
 
+// 共同重跑的唯一协议来源（客户端与服务器共用）。
+//
+// 为什么放在服务端工程目录内，而不是仓库根的独立 Shared 目录：
+// 服务端的 Docker 构建上下文就是 BgiCoordinatorServer 目录（docker-compose 的 `build: .`，
+// 且 Dockerfile 先 `COPY ["BgiCoordinatorServer.csproj", "."]` 再 `COPY . .`），
+// 任何指向父目录的文件（如 `..\Shared\...`）在容器里都不存在 —— 会以
+// `CS2001: Source file '/src/../Shared/...' could not be found` 直接构建失败。
+// 客户端通过 BetterGenshinImpact.csproj 的 <Compile Include ... Link> 链接同一个文件，
+// 因此仍然是单一来源，不存在两份拷贝漂移的风险。
+//
+// 约束：本文件只能依赖 BCL，不得引用游戏、UI、传输或服务端类型（两端都要能编译它）。
+
 // Shared wire contracts. No game, UI, transport or server dependencies.
 public static class RerunProtocol
 {

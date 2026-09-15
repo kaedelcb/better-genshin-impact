@@ -14,7 +14,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\Shared\CooperativeRerun\RerunProtocol.cs" Link="Shared\RerunProtocol.cs" />
+    <!-- 共享协议 RerunProtocol.cs 位于本工程目录内（Shared/CooperativeRerun/），由 SDK 默认 glob 收入编译。
+         不要改回指向父目录的 <Compile Include="..\Shared\...">：服务端的 Docker 构建上下文只有本目录
+         （docker-compose `build: .` + Dockerfile 先 COPY csproj 再 COPY . .），父目录路径在容器内不存在，
+         会直接 CS2001 构建失败。客户端链接同一个文件，保持单一来源。 -->
     <PackageReference Include="Semver" Version="3.0.0" />
   </ItemGroup>
 
