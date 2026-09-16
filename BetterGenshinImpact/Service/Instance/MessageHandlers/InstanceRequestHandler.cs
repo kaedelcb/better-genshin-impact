@@ -1204,7 +1204,9 @@ internal sealed class InstanceRequestHandler
             autoHoeingProgress = data["autoHoeingProgress"]?.ToObject<string>(),
             roomPlayerCount = data["roomPlayerCount"]?.ToObject<int>() ?? 0,
             currentRouteDisplay = data["currentRouteDisplay"]?.ToObject<string>(),
-            currentScriptRouteName = data["currentScriptRouteName"]?.ToObject<string>()
+            currentScriptRouteName = data["currentScriptRouteName"]?.ToObject<string>(),
+            // 好感任务进度文本（监控端桌宠"好感进度"行数据源；缺它监控模式永远看不到好感进度）
+            friendshipProgress = data["friendshipProgress"]?.ToObject<string>()
         };
     }
 
