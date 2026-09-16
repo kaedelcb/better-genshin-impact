@@ -25,9 +25,9 @@ public static class ScriptRouteProgress
 
     private static string? _currentRouteName;
 
-    /// <summary>脚本任务上报的进度文本（如「第 1 组第 3/20 条: xxx.json」）。
-    /// 由 JS 侧 <c>dispatcher.SetTaskProgress</c> 写入，供 IPC task.status 的 scriptTaskProgress
-    /// 通用字段展示；同时镜像到 autoHoeingProgress，兼容尚未升级的监控端。</summary>
+    /// <summary>脚本显式上报的进度文本（如「第 1 组第 3/20 条: xxx.json」）。
+    /// 未显式上报时，由 BGI 宿主侧适配器根据项目和路线生命周期生成；供 IPC task.status 的
+    /// scriptTaskProgress 通用字段展示，并镜像到 autoHoeingProgress 兼容旧监控端。</summary>
     private static string? _progressText;
 
     /// <summary>当前（最近）正在执行的线路文件名；无脚本任务在跑或项目已结束为 null。</summary>
@@ -47,12 +47,21 @@ public static class ScriptRouteProgress
     {
         get
         {
+            string? explicitText;
             lock (Sync)
             {
-                return _progressText;
+                explicitText = _progressText;
             }
+            var adaptedText = ScriptTaskProgressAdapter.GetProgressText();
+            if (explicitText == null) return adaptedText;
+            if (adaptedText == null) return explicitText;
+            return $"{adaptedText} · 脚本状态 {explicitText}";
         }
     }
+
+    /// <summary>通知宿主侧适配器开始执行一个 JS 项目；不会修改或注入脚本源码。</summary>
+    public static void BeginProject(string? folderName, object? settings) =>
+        ScriptTaskProgressAdapter.BeginProject(folderName, settings);
 
     /// <summary>记录当前执行的线路名（空值等价于 <see cref="Clear"/>）。</summary>
     public static void SetCurrentRoute(string? routeName)
@@ -63,6 +72,16 @@ public static class ScriptRouteProgress
             _currentRouteName = name;
         }
     }
+
+    /// <summary>记录路线开始，并驱动宿主侧脚本进度适配器。</summary>
+    public static void StartRoute(string? path)
+    {
+        SetCurrentRoute(System.IO.Path.GetFileName(path));
+        ScriptTaskProgressAdapter.RouteStarted(path);
+    }
+
+    /// <summary>记录路线执行返回；线路名继续保留到项目结束。</summary>
+    public static void CompleteRoute(string? path) => ScriptTaskProgressAdapter.RouteCompleted(path);
 
     /// <summary>记录脚本任务进度文本（空值清除）。生命周期与线路名一致：项目边界 Clear 时一并清空。</summary>
     public static void SetProgressText(string? text)
@@ -82,5 +101,6 @@ public static class ScriptRouteProgress
             _currentRouteName = null;
             _progressText = null;
         }
+        ScriptTaskProgressAdapter.Clear();
     }
 }

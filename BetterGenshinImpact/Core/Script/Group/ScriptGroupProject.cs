@@ -229,6 +229,9 @@ public partial class ScriptGroupProject : ObservableObject
             // 清理配置中的无效值
             CleanInvalidSettingsValues();
 
+            // 第三方脚本保持原文不变：由 BGI 宿主根据项目/路线调用生成任务进度。
+            ScriptRouteProgress.BeginProject(Project.FolderName, JsScriptSettingsObject);
+
             // JS 脚本任务豁免"配置组地图追踪切队"：拷贝后置 SkipPartySwitch=true，
             // 不原地 mutate 共享的 GroupInfo.Config.PathingConfig（防止污染同组后续 Pathing 任务）。
             var pathingPartyConfig = GroupInfo?.Config.PathingConfig?.CloneForSoloTask();

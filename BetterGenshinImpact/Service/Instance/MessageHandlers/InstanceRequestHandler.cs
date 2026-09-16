@@ -1072,7 +1072,7 @@ internal sealed class InstanceRequestHandler
             var scriptTaskProgress = isCancelled ? null : BetterGenshinImpact.Core.Script.ScriptRouteProgress.ProgressText;
 
             // JS 脚本任务进度合成（纯增量）：原生联机锄地不在跑、但脚本任务正在跑路线时，
-            // 优先取脚本经 dispatcher.SetTaskProgress 上报的进度文本（含第X/Y条），退化为仅线路名。
+            // 优先取 JS 显式上报或 BGI 宿主适配器生成的进度文本，退化为仅线路名。
             // 原先「锄地进度」只由 AutoHoeingProgress 生产，JS 锄地一条龙等脚本任务此位恒空。
             // ProgressText 单独有值也可用（脚本尚未 runFile 到路线时也能显示 N/M 计数）。
             if (!hoeing && (scriptRouteName != null || scriptTaskProgress != null))
@@ -1144,7 +1144,7 @@ internal sealed class InstanceRequestHandler
                 roomPlayerCount = AutoHoeingProgress.RoomPlayerCount,
                 currentRouteDisplay,
                 currentScriptRouteName = scriptRouteName,
-                // JS 脚本经 dispatcher.SetTaskProgress 主动上报的通用任务进度；与原生锄地进度分开。
+                // JS 显式上报或 BGI 宿主适配器生成的通用任务进度；与原生锄地进度分开。
                 scriptTaskProgress,
                 // 好感任务进度文本（纯增量字段，旧助手忽略）；null=好感任务不在跑
                 friendshipProgress,
