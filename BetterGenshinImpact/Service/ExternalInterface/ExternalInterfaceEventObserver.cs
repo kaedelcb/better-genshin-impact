@@ -163,6 +163,8 @@ internal sealed class ExternalInterfaceEventObserver
                         // 配置组内脚本任务当前执行线路（纯增量字段，老助手忽略；助手端只借本事件触发快照刷新）
                         currentScriptRouteName = BetterGenshinImpact.Core.Script.ScriptRouteProgress.CurrentRouteName,
                         // 脚本经 dispatcher.SetTaskProgress 上报的进度文本（纯增量；未上报为 null）
+                        scriptTaskProgress = BetterGenshinImpact.Core.Script.ScriptRouteProgress.ProgressText,
+                        // 兼容旧助手：旧版本只识别 autoHoeingProgress。
                         autoHoeingProgress = BetterGenshinImpact.Core.Script.ScriptRouteProgress.ProgressText
                     });
             }
@@ -252,10 +254,11 @@ internal sealed class ExternalInterfaceEventObserver
             }
 
             var groupName = ctx!.taskProgress!.CurrentScriptGroupName;
-            // 线路名进 key：配置组内 JS 脚本逐条跑路线时项目身份不变，只有线路在变；
-            // 不带上它就不会发 task.progress（助手端也就不会刷新快照，成员状态里的线路要等 10s 轮询）。
+            // 线路名与脚本进度都进 key：项目身份不变时，二者任一变化都要触发 task.progress，
+            // 否则执行端事件快照会停在上一个阶段，只能等 10s 轮询刷新。
             var routeName = BetterGenshinImpact.Core.Script.ScriptRouteProgress.CurrentRouteName;
-            return (info.Name, groupName, $"{groupName}|{info.Index}|{info.Name}|{routeName}");
+            var progressText = BetterGenshinImpact.Core.Script.ScriptRouteProgress.ProgressText;
+            return (info.Name, groupName, $"{groupName}|{info.Index}|{info.Name}|{routeName}|{progressText}");
         }
         catch
         {

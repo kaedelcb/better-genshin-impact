@@ -25,6 +25,8 @@ public class ControlRoomPlayer
     public bool AutoHoeingRunning { get; set; }
     /// <summary>当前联机锄地进度文本（如"当前进度：开始第 2/4 条线路: xx，本线路预计用时..."，非锄地为 null）。与服务端模型保持同步。</summary>
     public string? AutoHoeingProgress { get; set; }
+    /// <summary>JS 脚本经执行端 BGI 内部状态通道上报的通用任务进度。</summary>
+    public string? ScriptTaskProgress { get; set; }
     /// <summary>好感任务进度文本（BGI FriendshipProgress 合成，好感任务不在跑为 null）。与服务端模型保持同步。</summary>
     public string? FriendshipProgress { get; set; }
     public DateTime LastHeartbeat { get; set; }

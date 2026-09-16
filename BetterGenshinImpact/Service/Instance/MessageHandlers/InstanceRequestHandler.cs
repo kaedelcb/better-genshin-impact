@@ -1069,14 +1069,16 @@ internal sealed class InstanceRequestHandler
             // 项目边界清空）能给出线路名。与上面的 currentRouteDisplay（联机锄地进度）互不覆盖——
             // 联机锄地原生任务不经 AutoPathingScript，脚本线路名为 null；两者在助手端各占一个显示位。
             var scriptRouteName = isCancelled ? null : BetterGenshinImpact.Core.Script.ScriptRouteProgress.CurrentRouteName;
+            var scriptTaskProgress = isCancelled ? null : BetterGenshinImpact.Core.Script.ScriptRouteProgress.ProgressText;
 
             // JS 脚本任务进度合成（纯增量）：原生联机锄地不在跑、但脚本任务正在跑路线时，
             // 优先取脚本经 dispatcher.SetTaskProgress 上报的进度文本（含第X/Y条），退化为仅线路名。
             // 原先「锄地进度」只由 AutoHoeingProgress 生产，JS 锄地一条龙等脚本任务此位恒空。
             // ProgressText 单独有值也可用（脚本尚未 runFile 到路线时也能显示 N/M 计数）。
-            if (!hoeing && (scriptRouteName != null || BetterGenshinImpact.Core.Script.ScriptRouteProgress.ProgressText != null))
+            if (!hoeing && (scriptRouteName != null || scriptTaskProgress != null))
             {
-                hoeingProgress = BetterGenshinImpact.Core.Script.ScriptRouteProgress.ProgressText
+                // 兼容旧监控端：新版本使用 scriptTaskProgress；旧版本仍可从 autoHoeingProgress 看到同一文本。
+                hoeingProgress = scriptTaskProgress
                                  ?? $"脚本任务：当前线路 {scriptRouteName}";
             }
 
@@ -1142,6 +1144,8 @@ internal sealed class InstanceRequestHandler
                 roomPlayerCount = AutoHoeingProgress.RoomPlayerCount,
                 currentRouteDisplay,
                 currentScriptRouteName = scriptRouteName,
+                // JS 脚本经 dispatcher.SetTaskProgress 主动上报的通用任务进度；与原生锄地进度分开。
+                scriptTaskProgress,
                 // 好感任务进度文本（纯增量字段，旧助手忽略）；null=好感任务不在跑
                 friendshipProgress,
                 recentTaskName,
@@ -1188,6 +1192,7 @@ internal sealed class InstanceRequestHandler
             roomPlayerCount = data["roomPlayerCount"]?.ToObject<int>() ?? 0,
             currentRouteDisplay = data["currentRouteDisplay"]?.ToObject<string>(),
             currentScriptRouteName = data["currentScriptRouteName"]?.ToObject<string>(),
+            scriptTaskProgress = data["scriptTaskProgress"]?.ToObject<string>(),
             // 好感任务进度文本（监控端桌宠"好感进度"行数据源；缺它监控模式永远看不到好感进度）
             friendshipProgress = data["friendshipProgress"]?.ToObject<string>()
         };

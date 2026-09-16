@@ -1237,7 +1237,7 @@
                                                     <TextBlock Text="{Binding RouteLineText, StringFormat='路线: {0}'}"
                                                                FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"
                                                                ToolTip="配置组内脚本任务当前执行的具体线路（JS 任务的任务名只是脚本名，具体线路在此显示）"/>
-                                                    <TextBlock Text="{Binding AutoHoeingProgress}"
+                                                    <TextBlock Text="{Binding ProgressLineText}"
                                                                FontSize="10" Foreground="{DynamicResource Water}" Margin="0,2,0,0"
                                                                TextWrapping="Wrap" MaxWidth="300"/>
                                                 </StackPanel>

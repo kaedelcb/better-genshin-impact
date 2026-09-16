@@ -1302,6 +1302,7 @@ public class RoomManager
                     player.TaskRunning = false;
                     player.CurrentTaskName = null;
                     player.CurrentScriptRouteName = null;
+                    player.ScriptTaskProgress = null;
                     // 断线时重置上线事件代序号：BGI 重启后 generation 从 1 重新开始，
                     // 若保留旧值（如 2/3），新 generation(1) <= 旧值会被永久忽略，导致无法上线。
                     player.OnlineEventGeneration = 0;
@@ -1345,6 +1346,7 @@ public class RoomManager
                         player.TaskRunningExpireTime = DateTime.MinValue;
                     player.AutoHoeingRunning = status.AutoHoeingRunning;
                     player.AutoHoeingProgress = status.AutoHoeingProgress;
+                    player.ScriptTaskProgress = status.TaskRunning ? status.ScriptTaskProgress : null;
                     player.FriendshipProgress = status.FriendshipProgress;
                     player.OnlineReady = status.OnlineReady;
                     player.OnlineMode = status.OnlineMode;

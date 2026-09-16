@@ -26,8 +26,8 @@ public static class ScriptRouteProgress
     private static string? _currentRouteName;
 
     /// <summary>脚本任务上报的进度文本（如「第 1 组第 3/20 条: xxx.json」）。
-    /// 由 JS 侧 <c>dispatcher.SetTaskProgress</c> 写入，供 IPC task.status 的 autoHoeingProgress
-    /// 在原生联机锄地不在跑时合成「锄地进度」展示（JS 锄地一条龙等脚本任务原先此位恒空）。</summary>
+    /// 由 JS 侧 <c>dispatcher.SetTaskProgress</c> 写入，供 IPC task.status 的 scriptTaskProgress
+    /// 通用字段展示；同时镜像到 autoHoeingProgress，兼容尚未升级的监控端。</summary>
     private static string? _progressText;
 
     /// <summary>当前（最近）正在执行的线路文件名；无脚本任务在跑或项目已结束为 null。</summary>

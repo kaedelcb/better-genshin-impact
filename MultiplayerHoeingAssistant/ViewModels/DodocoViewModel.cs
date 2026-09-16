@@ -754,7 +754,8 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
                 ["currentTaskGroupName"] = m.CurrentTaskGroupName,
                 ["currentRouteDisplay"] = m.CurrentRouteDisplay,
                 ["currentScriptRouteName"] = m.CurrentScriptRouteName,
-                ["autoHoeingProgress"] = m.AutoHoeingProgress
+                ["autoHoeingProgress"] = m.AutoHoeingProgress,
+                ["scriptTaskProgress"] = m.ScriptTaskProgress
             }).ToList());
     }
 

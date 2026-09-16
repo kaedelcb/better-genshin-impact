@@ -73,17 +73,49 @@ public class ScriptRouteNameStatusTests
         status.CurrentTaskGroupName = "小怪-锄地";
         status.CurrentTaskName = "锄地一条龙";
         status.CurrentScriptRouteName = "蒙德城.json";
+        status.ScriptTaskProgress = "准备第 1/3 条线路";
         await h.Ops.ReportControlStatusAsync(Ctx(conn), status);
 
         var last = updates[^1];
         Assert.False(last.Full);
         var changed = Assert.Single(last.Changed!);
         Assert.Equal("蒙德城.json", changed.CurrentScriptRouteName);
+        Assert.Equal("准备第 1/3 条线路", changed.ScriptTaskProgress);
 
         // 服务端成员模型（广播之外的查询路径，如 WEB/房主拉取）同样带值
         var stored = Assert.Single(h.RoomManager.GetControlRoomPlayers($"CTRL_{room}"));
         Assert.Equal("蒙德城.json", stored.CurrentScriptRouteName);
+        Assert.Equal("准备第 1/3 条线路", stored.ScriptTaskProgress);
         Assert.Equal("小怪-锄地", stored.CurrentTaskGroupName);
+    }
+
+    [Fact]
+    public async Task ScriptTaskProgressChange_SameRoute_StillProducesDelta()
+    {
+        var h = new GatewayTestHarness();
+        var (room, pwd) = NewRoom();
+        var conn = Conn("progress");
+        var updates = CaptureUpdates(h);
+        await JoinAndBaselineAsync(h, conn, room, pwd);
+
+        var first = NewStatus(room, "uidR", "成员R");
+        first.TaskRunning = true;
+        first.CurrentTaskName = "AutoFishingTeyvat";
+        first.CurrentScriptRouteName = "蒙德-望风山地.json";
+        first.ScriptTaskProgress = "钓鱼点 1/12 · 跑图中 · 已用 12秒";
+        await h.Ops.ReportControlStatusAsync(Ctx(conn), first);
+        var afterFirst = updates.Count;
+
+        var second = NewStatus(room, "uidR", "成员R");
+        second.TaskRunning = true;
+        second.CurrentTaskName = "AutoFishingTeyvat";
+        second.CurrentScriptRouteName = "蒙德-望风山地.json";
+        second.ScriptTaskProgress = "钓鱼点 1/12 · 垂钓中 · 上限 5分";
+        await h.Ops.ReportControlStatusAsync(Ctx(conn), second);
+
+        Assert.True(updates.Count > afterFirst, "同一路线内脚本阶段变化必须产生一次增量广播");
+        var changed = Assert.Single(updates[^1].Changed!);
+        Assert.Equal("钓鱼点 1/12 · 垂钓中 · 上限 5分", changed.ScriptTaskProgress);
     }
 
     [Fact]
@@ -130,16 +162,20 @@ public class ScriptRouteNameStatusTests
         running.CurrentTaskGroupName = "小怪-锄地";
         running.CurrentTaskName = "锄地一条龙";
         running.CurrentScriptRouteName = "蒙德城.json";
+        running.ScriptTaskProgress = "第 1/3 条线路";
         await h.Ops.ReportControlStatusAsync(Ctx(conn), running);
 
         // 任务停止：即便上报里还带着旧线路名，服务端也必须复位（防残留到下一个任务的状态显示）
         var stopped = NewStatus(room, "uidR", "成员R");
         stopped.CurrentScriptRouteName = "蒙德城.json";
+        stopped.ScriptTaskProgress = "第 1/3 条线路";
         await h.Ops.ReportControlStatusAsync(Ctx(conn), stopped);
 
         var stored = Assert.Single(h.RoomManager.GetControlRoomPlayers($"CTRL_{room}"));
         Assert.False(stored.TaskRunning);
         Assert.Null(stored.CurrentScriptRouteName);
+        Assert.Null(stored.ScriptTaskProgress);
         Assert.Null(Assert.Single(updates[^1].Changed!).CurrentScriptRouteName);
+        Assert.Null(Assert.Single(updates[^1].Changed!).ScriptTaskProgress);
     }
 }
