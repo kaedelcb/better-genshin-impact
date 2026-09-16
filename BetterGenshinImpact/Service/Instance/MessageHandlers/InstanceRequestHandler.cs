@@ -675,11 +675,41 @@ internal sealed class InstanceRequestHandler
         int generation = 0,
         // [A2.4] 协调器队列派发时传入 taskHandle（== 注册表 jobId 别名），漏斗认领既有 Queued 作业；
         // v2 直连路径不传（null），漏斗新建作业（A2.3 行为）。
-        Guid? jobId = null)
+        Guid? jobId = null,
+        // [A6] 抢占式下发（ext preempt 项）：经有界退出契约中断当前任务（保存恢复点 + Cancel + 30s
+        // 状态确认），接通此处原"Cancel+等锁"的死语义（旧代码因调用方先确保槽空而永远杀不到活体）。
+        // 默认 false = 旧行为逐字节不变。
+        bool preempt = false)
     {
         // 标记配置组是否在 RunMulti 执行中被取消（F11 停止等），末尾据此返回 cancelled 状态
         var configGroupCancelled = false;
 
+        if (preempt && BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0)
+        {
+            // [A6] 抢占：与 IPC task.suspend 同一套捕获/保存规则（2.5 WasCancelled / 2.6 信号任务）。
+            // 仅在门未声明时 Arm 兜底（按键抢占等无 suspend 前奏的路径）——已在 suspend 声明的代际
+            // 不重复 bump，保证"每代际恢复点只存一次"守卫不被击穿。
+            if (!BetterGenshinImpact.Service.Execution.PreemptionGate.IsArmed)
+            {
+                BetterGenshinImpact.Service.Execution.PreemptionGate.Arm();
+            }
+            var preemptSnapshot = BetterGenshinImpact.Service.Execution.SuspendContextCapture.CaptureCurrent();
+            if (preemptSnapshot != null
+                && !BetterGenshinImpact.Core.Script.CancellationContext.Instance.WasCancelled
+                && BetterGenshinImpact.Service.Execution.SuspendContextCapture.Save(_logger, preemptSnapshot, "task.start.preempt"))
+            {
+                // 本代际恢复点已有着落：后续让位者不得覆写（首个受害者优先）
+                BetterGenshinImpact.Service.Execution.PreemptionGate.TryMarkContextSaved();
+            }
+            BetterGenshinImpact.Core.Script.CancellationContext.Instance.Cancel();
+            if (!await WaitSlotReleasedBoundedAsync("task.start.preempt"))
+            {
+                throw new BetterGenshinImpact.Service.Execution.PreemptTimeoutException(
+                    "抢占等待 " + BetterGenshinImpact.Service.Execution.PreemptionGate.QuiesceBound.TotalSeconds + "s 槽位仍未确认释放，旧任务可能卡死");
+            }
+        }
+        else
+        {
             // 先在主线程上停止当前任务。CancelTokenOnly() 重建 Cts 但不清 WasCancelled，
             // 保留 WasCancelled 供后续 HandleTaskResume 判断是否恢复旧任务。
             // 如果用户 F11 停止过，WasCancelled=true，task.resume 不应恢复旧任务。
@@ -699,6 +729,7 @@ internal sealed class InstanceRequestHandler
             {
                 await Task.Delay(200);
             }
+        }
 
             // 启动配置组或一条龙
             if (!string.IsNullOrEmpty(groupName))
@@ -1476,7 +1507,7 @@ internal sealed class InstanceRequestHandler
     /// JS/Pathing/KeyMouse 项目的 FolderName 均非空，不会误判；Shell 项目 FolderName 虽为空但 Name 是命令串，也不会撞名。
     /// </summary>
     internal static bool IsOnlineSignalTask(string? projectName, string? folderName)
-        => projectName == NotifyOnlineTask.TaskName && string.IsNullOrEmpty(folderName);
+        => BetterGenshinImpact.Service.Execution.SuspendContextCapture.IsOnlineSignalTask(projectName, folderName);
 
     internal async Task<InstanceIpcEnvelope> HandleTaskSuspend(InstanceConnection connection, InstanceIpcEnvelope request)
     {
@@ -1491,107 +1522,48 @@ internal sealed class InstanceRequestHandler
                 allConfigEntry.SuspendedTaskContext = null;
             }
 
-            // 1. 读取当前任务上下文
-            string? taskType = null;
-            string? groupName = null;
-            int taskIndex = 0;
-            string? folderName = null;
-            string? projectName = null;
-            int oneDragonTaskIndex = 0;         // 一条龙条目索引（执行水位线 CurrentExecutingTaskIndex）
-            string? subTaskGroupName = null;    // 一条龙内当前执行的配置组名
-            string? soloSettingsJson = null;    // solo 场景：独立任务的组级设置快照（恢复时保真）
-            bool isOnlineSignalTask = false;    // 当前在跑的项目是否为「联机锄地上线」信号任务
+            // [A6] 声明抢占意图（租约门）：无论此刻是否有活体任务都 Arm——组间缝隙场景下，
+            // 后续起步的任务会在持锁处自动让位（TaskRunner 让位点）。抢占意图不寄生在取消令牌上
+            // （取消令牌会被 Set()/Clear() 重置，组间缝隙中 suspend 的 Cancel 会打在已 disposed
+            // 的上下文上成空枪——2026-09-16 实机事故根因）。
+            BetterGenshinImpact.Service.Execution.PreemptionGate.Arm();
 
-            var ctx = BetterGenshinImpact.GameTask.RunnerContext.Instance;
-            var progress = ctx?.taskProgress;
-
-            if (progress?.CurrentScriptGroupProjectInfo != null)
+            // [A6] 活体判定：信号量被持有才是活体任务；RunnerContext 残留进度信息在组间缝隙
+            // 不可信（残留会把已自结的信号任务当受害者）。无活体 → 不保存不取消，只留门，
+            // 让位点会为真正的下一个受害者保存恢复点（信息在那时才可靠）。
+            var slotHeld = BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0;
+            var snapshot = BetterGenshinImpact.Service.Execution.SuspendContextCapture.CaptureCurrent();
+            if (!slotHeld)
             {
-                var info = progress.CurrentScriptGroupProjectInfo;
-                groupName = progress.CurrentScriptGroupName;
-                taskIndex = info.Index;
-                folderName = info.FolderName;
-                projectName = info.Name;
-                taskType = "group";
-                // 时序窗口：solo 任务脚本 0.01s 执行完毕后，ExecuteProject 的 finally 已清空
-                // CurrentScriptProject，但 RunMulti 不会在项目结束时清理 CurrentScriptGroupProjectInfo
-                // （只标 TaskEnd=true，等下一项目覆盖）。suspend 在"信号任务已自结、组包装未结束"的
-                // 几百毫秒窗口内到达时，info 仍指向该信号任务——按 info 判定正好覆盖该窗口。
-                isOnlineSignalTask = IsOnlineSignalTask(info.Name, info.FolderName);
-            }
-            else if (progress?.CurrentScriptGroupName != null)
-            {
-                // 一条龙场景：progress.CurrentScriptGroupName 是当前执行的配置组名（OneDragonFlowViewModel 配置组分支设置了 taskProgress）
-                // 一条龙配置名 + 条目索引需要从 OneDragonFlowViewModel 取
-                try
+                if (snapshot == null)
                 {
-                    var oneDragonVm = App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.OneDragonFlowViewModel>();
-                    if (oneDragonVm?.SelectedConfig != null)
-                    {
-                        // 一条龙配置名（HandleTaskResume 用它从 ConfigList 找回配置）
-                        groupName = oneDragonVm.SelectedConfig.Name;
-                        // 一条龙条目索引（恢复时配置 Skip 到该条目）
-                        // [A5-1] 改读执行水位线 CurrentExecutingTaskIndex：NextTaskIndex 在执行开头
-                        // 消费后即清零（OnOneKeyExecute），执行中恒 0，直接读它 resume 必从头重跑。
-                        oneDragonTaskIndex = oneDragonVm.CurrentExecutingTaskIndex;
-                    }
+                    _logger.LogInformation("[IPC task.suspend] BGI 当前无任务运行，无需保存上下文（已声明抢占意图）");
+                    return InstanceIpcEnvelope.Response(request, new { status = "no_task", liveTask = false });
                 }
-                catch
+                _logger.LogInformation("[IPC task.suspend] 当前无活体任务（任务间隙），已声明抢占意图：后续起步任务将自动让位");
+                ExternalInterfaceEventHub.Instance.PublishTaskSuspended(snapshot.TaskType, snapshot.GroupName, snapshot.TaskIndex);
+                return InstanceIpcEnvelope.Response(request, new
                 {
-                    // ViewModel 不可用时，退回用配置组名作 GroupName（降级为配置组恢复）
-                    groupName = progress.CurrentScriptGroupName;
-                    oneDragonTaskIndex = 0;
-                }
-
-                // 配置组级子任务信息：当前正在执行的配置组名 + 子任务索引
-                // （OneDragonFlowViewModel 配置组分支让 RunMulti 传了 taskProgress，所以 CurrentScriptGroupProjectInfo 已写入）
-                subTaskGroupName = progress.CurrentScriptGroupName;
-                if (progress.CurrentScriptGroupProjectInfo != null)
-                {
-                    taskIndex = progress.CurrentScriptGroupProjectInfo.Index; // 0-based projectIndex
-                    folderName = progress.CurrentScriptGroupProjectInfo.FolderName;
-                    projectName = progress.CurrentScriptGroupProjectInfo.Name;
-                }
-
-                taskType = "onedragon";
-            }
-            else
-            {
-                // 独立任务或 JS 脚本
-                var currentProject = BetterGenshinImpact.GameTask.TaskContext.Instance()?.CurrentScriptProject;
-                var taskName = currentProject?.Name;
-                if (!string.IsNullOrEmpty(taskName))
-                {
-                    projectName = taskName;
-                    taskType = "solo";
-                    // 独立任务直跑：按任务类型 + 注册名识别信号任务（不按任何组名）
-                    isOnlineSignalTask = currentProject is { Type: "SoloTask" }
-                                         && taskName == NotifyOnlineTask.TaskName;
-                    // [实机修复 2026-09-05] solo 保真：IPC 启动的组任务不带 taskProgress（进度字段从未写入），
-                    // 上面两个分支识别不到组关联会降级到这里。但 CurrentScriptProject 自身携带
-                    // GroupInfo（组）与 SoloTaskSettingsObject（组级独立任务设置，含联机开关）——
-                    // 不捕获的话，恢复时只能用全局默认配置重建（联机模式默认开），任务被"调包"。
-                    groupName = currentProject!.GroupInfo?.Name;
-                    if (currentProject.SoloTaskSettingsObject != null)
-                    {
-                        try
-                        {
-                            soloSettingsJson = Newtonsoft.Json.JsonConvert.SerializeObject(
-                                currentProject.SoloTaskSettingsObject);
-                        }
-                        catch
-                        {
-                            // 序列化失败则不带快照（恢复时退化为全局配置，同旧行为）
-                        }
-                    }
-                }
+                    status = "suspended",
+                    liveTask = false,
+                    quiesceConfirmed = true,
+                    taskType = snapshot.TaskType,
+                    groupName = snapshot.GroupName,
+                    taskIndex = snapshot.TaskIndex
+                });
             }
 
-            // 2. 如果没有任务在运行，直接返回"无需保存"
+            // 1. 活体任务上下文（持锁期间项目级信息可信；捕获逻辑已收口到 SuspendContextCapture，
+            // 三分支：配置组项目 / 一条龙 / 独立任务，判定规则与旧实现逐字一致）
+            var taskType = snapshot?.TaskType;
+            var groupName = snapshot?.GroupName;
+            var taskIndex = snapshot?.TaskIndex ?? 0;
+
+            // 2. 活体持锁但识别不到身份（前导步骤/计划表等待等瞬态持锁）：无可信恢复点不保存，
+            // 但仍照常中断——suspend 的目的是为锄地腾槽位，未识别持锁者不应豁免（A6 行为强化，留痕）。
             if (taskType == null)
             {
-                _logger.LogInformation("[IPC task.suspend] BGI 当前无任务运行，无需保存上下文");
-                return InstanceIpcEnvelope.Response(request, new { status = "no_task" });
+                _logger.LogInformation("[IPC task.suspend] 槽位被未识别任务持有，不保存上下文但照常中断");
             }
 
             // 2.5 如果最近一次任务被用户取消（F11/取消热键），不保存上下文。
@@ -1605,47 +1577,22 @@ internal sealed class InstanceRequestHandler
                 return InstanceIpcEnvelope.Response(request, new { status = "cleared_not_saved" });
             }
 
-            // 2.6 [实机修复 2026-09-08] 「联机锄地上线」是信号不是工作：本轮 AllReady 正是它触发的，
-            // 上线意图已经兑现；恢复执行一个信号只会再发一次上线 → gen+1 → 新一轮 AllReady → 无限循环。
-            // 因此被中断的当前项目是信号任务时，不保存中断上下文（旧上下文已在步骤 0 清除），
-            // 后续助手 ApplyPolicyTeardownAsync 的 Resume 分支查 hasSuspendedTaskContext=false，
-            // 走既有"无中断上下文，恢复策略退化为停止"分支。任务本身仍正常中断（步骤 4/5 不变）。
-            // 覆盖形态：独立任务直跑（Type=="SoloTask"）、配置组唯一项目是该任务、
-            // 组内多项目但当前在跑的是该任务（恢复会从头/从当前索引重跑信号，同样循环，故也不保存）。
-            // 3. 保存上下文到 AllConfig
-            var allConfig = BetterGenshinImpact.GameTask.TaskContext.Instance()?.Config;
-            if (isOnlineSignalTask)
+            // 3. 保存上下文到 AllConfig（2.6 信号任务规则已在 SuspendContextCapture.Save 内收口：
+            // 信号任务任何路径都不入 SuspendedTaskContext——ABABAB 防护不变；taskType==null 无可信恢复点，跳过）
+            if (snapshot != null
+                && BetterGenshinImpact.Service.Execution.SuspendContextCapture.Save(_logger, snapshot, "IPC task.suspend"))
             {
-                _logger.LogInformation("[IPC task.suspend] 被中断的是联机锄地上线信号任务，其意图已兑现，不保存中断上下文（避免恢复后重复触发上线）");
-            }
-            else if (allConfig != null)
-            {
-                allConfig.SuspendedTaskContext = new BetterGenshinImpact.Core.Config.SuspendedTaskContext
-                {
-                    TaskType = taskType,
-                    GroupName = groupName ?? "",
-                    TaskIndex = taskIndex,
-                    FolderName = folderName ?? "",
-                    ProjectName = projectName ?? "",
-                    OneDragonTaskIndex = oneDragonTaskIndex,
-                    SubTaskGroupName = subTaskGroupName ?? "",
-                    SoloSettingsJson = soloSettingsJson ?? ""
-                };
-                _logger.LogInformation("[IPC task.suspend] 已保存中断上下文: Type={TaskType}, Group={GroupName}, Index={TaskIndex}, OneDragonIndex={OneDragonTaskIndex}",
-                    taskType, groupName, taskIndex, oneDragonTaskIndex);
+                // 本代际恢复点已有着落：后续让位者不得覆写（首个受害者优先）
+                BetterGenshinImpact.Service.Execution.PreemptionGate.TryMarkContextSaved();
             }
 
             // 4. 停止当前任务
             var cancellationContext = BetterGenshinImpact.Core.Script.CancellationContext.Instance;
             cancellationContext.Cancel();
 
-            // 5. 等待 TaskSemaphore 释放（最多 5 秒）
-            var deadline = DateTime.UtcNow.AddSeconds(5);
-            while (DateTime.UtcNow < deadline
-                   && BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0)
-            {
-                await Task.Delay(200);
-            }
+            // 5. [A6 有界退出契约 ADR-2026-09-16] 等槽位确认释放：状态为准、30s 为上界。
+            // 超界 quiesceConfirmed=false 响亮留痕，不再像旧实现（5s 超时仍回报 suspended）那样谎报。
+            var quiesceConfirmed = await WaitSlotReleasedBoundedAsync("IPC task.suspend");
 
             // [切片1·挂载点③] 通知 ext.event 订阅者（无订阅者时 Publish 内部为空转）
             ExternalInterfaceEventHub.Instance.PublishTaskSuspended(taskType, groupName, taskIndex);
@@ -1655,7 +1602,9 @@ internal sealed class InstanceRequestHandler
                 status = "suspended",
                 taskType,
                 groupName,
-                taskIndex
+                taskIndex,
+                liveTask = true,
+                quiesceConfirmed
             });
         }
         catch (Exception ex)
@@ -1663,6 +1612,29 @@ internal sealed class InstanceRequestHandler
             _logger.LogError(ex, "[IPC task.suspend] 中断任务失败");
             return InstanceIpcEnvelope.Failure(request, "task_suspend_failed", $"中断任务失败: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// [A6 有界退出契约 ADR-2026-09-16] 等任务槽位确认释放：以"槽位空闲"这一状态为通过判据，
+    /// PreemptionGate.QuiesceBound（30s）只是上界。返回 true = 已确认释放；false = 超界未释放（响亮留痕）。
+    /// 两个调用方：HandleTaskSuspend（IPC 挂起）与 ExecuteTaskStartCoreAsync（preempt 抢占式下发）。
+    /// </summary>
+    private async Task<bool> WaitSlotReleasedBoundedAsync(string channelTag)
+    {
+        var deadline = DateTime.UtcNow + BetterGenshinImpact.Service.Execution.PreemptionGate.QuiesceBound;
+        while (DateTime.UtcNow < deadline
+               && BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0)
+        {
+            await Task.Delay(200);
+        }
+
+        var confirmed = BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount > 0;
+        if (!confirmed)
+        {
+            _logger.LogWarning("[{Tag}] 有界退出契约超界（{Sec:F0}s）：槽位未确认释放，旧任务可能卡死",
+                channelTag, BetterGenshinImpact.Service.Execution.PreemptionGate.QuiesceBound.TotalSeconds);
+        }
+        return confirmed;
     }
 
     internal async Task<InstanceIpcEnvelope> HandleTaskResume(InstanceConnection connection, InstanceIpcEnvelope request)

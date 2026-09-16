@@ -1,6 +1,8 @@
 namespace BgiCoordinatorServer.Gateway;
 
-/// <summary>路由表注册：控制房间族（control.* 共 6 条，与旧方法一一对应）。
+/// <summary>路由表注册：控制房间族（control.* 共 7 条，JoinControlRoom/SendRemoteCommand/ReportStatus/
+/// ReportCommandResult/ConfirmAllReady/ReportOnlineEvent/ClearOnlineHistory 与旧方法一一对应，
+/// ReportCommandResult 为纯新增回执口无旧方法）。
 /// JoinRejected/RemoteCommandAck 走事件（evt 双发），响应一律 ack。</summary>
 public sealed partial class GatewayDispatcher
 {
@@ -40,6 +42,18 @@ public sealed partial class GatewayDispatcher
             }
             await _ops.ReportControlStatusAsync(ctx, status);
             return new { ack = true };
+        };
+
+        _commands[GatewayProtocol.Names.ControlReportCommandResult] = async (env, ctx) =>
+        {
+            var result = Get<Models.RemoteCommandResult>(env, "result");
+            if (result == null)
+            {
+                return new { error = new { code = GatewayProtocol.ErrorCodes.BadRequest, message = "payload.result 缺失或格式错误" } };
+            }
+            // delivered 回传给上报方仅作观测；0（发起方离线）不算错误——回执是尽力而为通道
+            var delivered = await _ops.ReportCommandResultAsync(ctx, result);
+            return new { ack = true, delivered };
         };
 
         _commands[GatewayProtocol.Names.ControlConfirmAllReady] = async (env, ctx) =>

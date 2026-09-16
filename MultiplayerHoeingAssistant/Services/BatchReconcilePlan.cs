@@ -26,6 +26,13 @@ public sealed class BatchExpectedItem
     /// <summary>提交尝试次数（重提交限次的依据）。</summary>
     public int SubmitAttempts { get; set; }
 
+    /// <summary>[A6] 可重试瞬态拒绝/失败（queue_full、task_busy、preempt_timeout）的已重试次数。
+    /// 与 SubmitAttempts 分列：拒绝重试不消耗"已附着作业丢失"的重提交预算（ADR-2026-09-16 第 4 条）。</summary>
+    public int RejectionRetries { get; set; }
+
+    /// <summary>[A6] 首次可重试瞬态拒绝/失败的 UTC 时间（单项 2 分钟重试预算的起点）；null = 尚未发生。</summary>
+    public DateTime? FirstRejectionUtc { get; set; }
+
     /// <summary>终态确认时的取消标记（F11 语义：批次应用户取消收尾而非成功收尾）。</summary>
     public bool? TerminalWasCancelled { get; set; }
 
@@ -53,12 +60,27 @@ public sealed record BatchJobObservation(
     string JobId,
     string? Name,
     int? Generation,
-    /// <summary>queued / running / cancelling / succeeded / failed / cancelled / rejected。</summary>
+    /// <summary>queued / running / cancelling / succeeded / failed / cancelled / rejected。
+    /// [A6] BGI 新增终态（如让位 preempted 以 cancelled+errorCode=preempted 投影）按字符串透传：
+    /// 未知值不进 IsTerminal（按非成功等待处理），绝不因新值崩溃。</summary>
     string State,
     bool WasCancelled,
     string? ErrorCode)
 {
     public bool IsTerminal => State is "succeeded" or "failed" or "cancelled" or "rejected";
+}
+
+/// <summary>[A6] 提交拒绝/作业失败的错误码分类（ADR-2026-09-16 第 4 条：瞬态拒绝分类）。</summary>
+public enum BatchSubmitRejectionKind
+{
+    /// <summary>可重试瞬态：queue_full / task_busy / preempt_timeout——单项 2 分钟预算内退避重试。</summary>
+    RetryableTransient,
+
+    /// <summary>终态 + 响亮通知（绝不自动重发）：manual_stop_cooldown——F11 是用户最终权威（D1，d4dc54a9 教训）。</summary>
+    ManualStopCooldown,
+
+    /// <summary>其余永久性拒绝/失败：维持既有终态跳过语义。</summary>
+    Permanent,
 }
 
 /// <summary>reconcile 一拍的动作输出（调用方据此执行副作用：下发/确认/收尾）。</summary>
@@ -75,6 +97,10 @@ public abstract record BatchReconcileAction
 
     /// <summary>第 Index 项已提交但快照中查无此作业（同纪元 not_found = 句柄淘汰/帧丢失）：重提交。</summary>
     public sealed record Resubmit(int Index) : BatchReconcileAction;
+
+    /// <summary>[A6] 第 Index 项作业终态失败但错误码是可重试瞬态（preempt_timeout 等）且在重试预算内：
+    /// 退回 PendingSubmit 由后续拍退避重发。调用方应用：State=PendingSubmit、JobId=null、RejectionRetries++、FirstRejectionUtc ??= now。</summary>
+    public sealed record RetryFromFailure(int Index, string ErrorCode) : BatchReconcileAction;
 
     /// <summary>某在跑项被用户取消（F11 语义）：批次按用户取消收尾，不再推进后续项。</summary>
     public sealed record AbortUserCancelled(int Index) : BatchReconcileAction;
@@ -95,17 +121,42 @@ public abstract record BatchReconcileAction
 /// 纯函数零副作用零依赖——批次推进、F11 取消、终态确认的判定全部集中在此，单测可穷尽。
 /// 不变量：①同时至多一项在飞（串行）；②已 TerminalConfirmed 的项是事实，任何情况下不回退；
 /// ③jobId 未知的项可经 generation+name 在快照中附着找回（提交应答帧丢失的自愈）。
+/// [A6] ④瞬态拒绝/失败分类（ClassifySubmitRejection/CanRetryRejection）：可重试码在单项 2 分钟
+/// 预算内输出 RetryFromFailure 退回重发；manual_stop_cooldown 与未知码绝不重试（ADR-2026-09-16）。
 /// </summary>
 public static class BatchReconcileDecider
 {
     /// <summary>重提交上限：超过后按失败终态确认（避免死循环重提）。</summary>
     public const int MaxSubmitAttempts = 3;
 
+    /// <summary>[A6] 可重试瞬态拒绝/失败的单项重试时间预算（ADR-2026-09-16：每项 2min）。</summary>
+    public static readonly TimeSpan RejectionRetryBudget = TimeSpan.FromMinutes(2);
+
+    /// <summary>[A6] 可重试瞬态拒绝/失败的重试次数硬帽（沿用 MaxSubmitAttempts 风格，
+    /// 防止事件高频唤醒时在时间预算内无限拍重发）。</summary>
+    public const int MaxRejectionRetries = 12;
+
+    /// <summary>[A6] 提交拒绝/作业失败错误码分类（ADR-2026-09-16 第 4 条）。null/未知码 → Permanent。</summary>
+    public static BatchSubmitRejectionKind ClassifySubmitRejection(string? errorCode) => errorCode switch
+    {
+        "queue_full" or "task_busy" or "preempt_timeout" => BatchSubmitRejectionKind.RetryableTransient,
+        "manual_stop_cooldown" => BatchSubmitRejectionKind.ManualStopCooldown,
+        _ => BatchSubmitRejectionKind.Permanent,
+    };
+
+    /// <summary>[A6] 可重试瞬态拒绝/失败是否仍在重试预算内（次数硬帽 ∧ 单项 2 分钟时间预算）。
+    /// 非可重试码恒 false；firstRejectionUtc 为预算起点（调用方在首次拒绝时落档）。</summary>
+    public static bool CanRetryRejection(string? errorCode, int retriesSoFar, DateTime firstRejectionUtc, DateTime nowUtc)
+        => ClassifySubmitRejection(errorCode) == BatchSubmitRejectionKind.RetryableTransient
+           && retriesSoFar < MaxRejectionRetries
+           && nowUtc - firstRejectionUtc < RejectionRetryBudget;
+
     public static IReadOnlyList<BatchReconcileAction> Decide(
         IReadOnlyList<BatchExpectedItem> items,
         IReadOnlyList<BatchJobObservation> jobs,
         bool epochMatch,
-        int generation)
+        int generation,
+        DateTime nowUtc)
     {
         var actions = new List<BatchReconcileAction>();
         if (items.Count == 0)
@@ -200,6 +251,16 @@ public static class BatchReconcileDecider
                 actions.Add(new BatchReconcileAction.ConfirmTerminal(i, true, job.ErrorCode));
                 actions.Add(new BatchReconcileAction.AbortUserCancelled(i));
                 return actions;
+            }
+
+            // [A6] 终态失败/拒绝但错误码是可重试瞬态（preempt_timeout 等）且预算内：
+            // 退回重发（调用方应用后退避到下一拍），不按终态收口。预算耗尽落入下方常规终态确认。
+            if (job.State != "succeeded"
+                && CanRetryRejection(job.ErrorCode, item.RejectionRetries, item.FirstRejectionUtc ?? nowUtc, nowUtc))
+            {
+                actions.Add(new BatchReconcileAction.RetryFromFailure(i, job.ErrorCode!));
+                inFlightIndex = i; // 仍视为在飞：本拍不推进后续项，退回重发由调用方应用
+                continue;
             }
 
             // succeeded/failed/rejected：确认并推进（failed 记 errorCode，与旧循环"记日志继续下一组"同语义）

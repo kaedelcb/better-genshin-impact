@@ -189,6 +189,64 @@ public sealed partial class RoomOperations
     }
 
     /// <summary>
+    /// 远端任务下发结果回执转发（纯加法，2026-11）：目标机执行完 start_group / start_oneclick 后上报，
+    /// 服务端按 result.SenderUid 反查发起方连接（执行端成员连接 + 遥控端登记连接，与
+    /// SendRemoteCommand 的请求/应答回投同一双路由）定向回投。
+    /// evt-only 新协议域（对齐 route-anchor 先例）：旧发起方（/hub 连接）不在 /gateway 上，
+    /// 发送天然落空，发起方 UI 按 15s 超时降级为"已发送（无回执）"。
+    /// 返回实际投递的连接数（0 = 发起方不在线/已离场，仅记日志不报错——回执是尽力而为通道）。
+    /// </summary>
+    public async Task<int> ReportCommandResultAsync(GatewayHandlerContext ctx, RemoteCommandResult result)
+    {
+        try
+        {
+            var group = $"CTRL_{result.RoomCode}";
+            // 与 SendRemoteCommand 同款校验：执行端成员在 _controlRooms；同 UID 监控端登记连接也放行
+            if (!_roomManager.IsInControlRoom(group, ctx.ConnectionId)
+                && !_roomManager.IsRemoteConnection(group, ctx.ConnectionId))
+            {
+                _logger.LogWarning("连接 {ConnectionId} 不在控制房间中，拒绝转发命令回执（Cmd={Cmd}）",
+                    ctx.ConnectionId, result.Cmd);
+                return 0;
+            }
+
+            var targets = new List<string>();
+            // 发起方是执行端成员（在 _controlRooms）
+            var senderConn = _roomManager.GetConnectionIdByUid(group, result.SenderUid);
+            if (!string.IsNullOrEmpty(senderConn))
+            {
+                targets.Add(senderConn);
+            }
+            // 发起方是遥控/监控端（不入 _controlRooms，登记在 _remoteControlConnections）
+            foreach (var conn in _roomManager.GetRemoteConnectionIdsByUids(group, [result.SenderUid]))
+            {
+                if (!targets.Contains(conn)) targets.Add(conn);
+            }
+
+            if (targets.Count == 0)
+            {
+                _logger.LogInformation("命令回执找不到发起方 {SenderUid}（已离线/离场），丢弃（Cmd={Cmd} CommandId={CommandId}）",
+                    result.SenderUid, result.Cmd, result.CommandId);
+                return 0;
+            }
+
+            foreach (var connectionId in targets)
+            {
+                await _broadcaster.SendEventOnlyToConnectionAsync(
+                    connectionId, GatewayProtocol.Events.ControlRemoteCommandResult, result, result.RoomCode);
+            }
+            _logger.LogInformation("命令回执 {Cmd}({Status}) 已从 {TargetUid} 回投到 {Count} 个发起方连接",
+                result.Cmd, result.Status, result.TargetUid, targets.Count);
+            return targets.Count;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ReportCommandResult 失败");
+            return 0;
+        }
+    }
+
+    /// <summary>
     /// 成员上报自身 BGI 状态与可用配置列表，服务端更新后广播最新成员列表。
     /// </summary>
     public async Task ReportControlStatusAsync(GatewayHandlerContext ctx, ControlStatus status)

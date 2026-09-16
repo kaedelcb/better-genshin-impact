@@ -70,6 +70,8 @@ internal static class ExternalInterfaceCommandPlane
         var generation = request.Data?["generation"]?.ToObject<int>() ?? 0;
         // [批次名单 2026-09-13] 与 v2 HandleTaskStart 同语义：批次绑定名单透传到执行段
         var batchGroupNames = InstanceRequestHandler.ParseBatchGroupNames(request.Data?["batchGroupNames"]?.ToString());
+        // [A6] 抢占式下发（联机锄地批次/按键抢占置位）：等槽 3s 未果转主动抢占（有界退出契约）。默认 false 零变化
+        var preempt = request.Data?["preempt"]?.ToObject<bool?>() ?? false;
 
         // 双空 task.start 是脏请求：执行段不命中任何分支，只会先取消当前任务再空跑（等价隐式停止），
         // ext 通道直接拒绝、绝不入队。v2 通道行为冻结，不加此校验。
@@ -96,7 +98,10 @@ internal static class ExternalInterfaceCommandPlane
             configName,
             startFromIndex,
             // [A2.4] Executor 首参 = taskHandle（注册表 jobId 别名），透传执行段供漏斗认领既有 Queued 作业
-            (handle, _) => handler.ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, batchGroupNames, generation, handle));
+            (handle, _) => handler.ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, batchGroupNames, generation, handle, preempt))
+        {
+            Preempt = preempt,
+        };
 
         var result = BgiTaskCoordinator.Instance.Submit(submission);
         return result.Status switch

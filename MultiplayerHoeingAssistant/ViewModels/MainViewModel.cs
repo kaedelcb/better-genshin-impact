@@ -27,6 +27,20 @@ public partial class MainViewModel : INotifyPropertyChanged
     private RemoteConfigEditService? _remoteConfigEditService;
     /// <summary>任务策略远程互改通道（task_policy.pull/push，按 CommandId 关联 TCS；仅上线锄地完成后动作三项）。</summary>
     private TaskPolicySyncService? _taskPolicySync;
+    /// <summary>[远端任务回执 2026-11] 发起方挂起的回执等待会话：CommandId → 等待中的目标 UID 集合。
+    /// 目标机回执到达按 CommandId+TargetUid 核销；15s 超时后剩余目标卡片显示"已发送（无回执）"。
+    /// 仅 UI 线程读写（ExecuteLocalCommandAsync 由按钮命令触发、回执处理已 Marshal 到 Dispatcher）。</summary>
+    private readonly Dictionary<string, PendingCommandResult> _pendingCommandResults = new();
+
+    /// <summary>[远端任务回执] 一次远端 start 下发的挂起等待会话。</summary>
+    private sealed class PendingCommandResult
+    {
+        public required string Cmd { get; init; }
+        public required string TaskName { get; init; }
+        /// <summary>尚未收到回执的目标 UID（收到即移除；空 = 全部核销）。</summary>
+        public required HashSet<string> RemainingUids { get; init; }
+    }
+
     private string _roomCode = "";
     private bool _isConnected;
     private string _lastLoggedProgress = "";
@@ -1204,6 +1218,42 @@ public partial class MainViewModel : INotifyPropertyChanged
             Params = new Dictionary<string, object> { { "status", status }, { "message", message } }
         };
         await _signalRClient.SendRemoteCommandAsync(ack);
+    }
+
+    /// <summary>
+    /// [远端任务回执 2026-11] 目标机执行完 start_group / start_oneclick 后，把启动结果经
+    /// control.reportCommandResult 回传服务端（服务端按 SenderUid 回投发起方，卡片显示成败）。
+    /// 与既有 SendAckAsync（cmd="ack" 走 RemoteCommand 转发）并存：ack 链路不变，回执是纯加法新通道。
+    /// 旧服务端/断线由 SignalRClient 内部降级停发；本方法自身绝不抛异常（调用点在 async void 与其 catch 块里）。
+    /// </summary>
+    private async Task MaybeSendCommandResultAsync(RemoteCommand originalCmd, string status, string? errorCode, string message)
+    {
+        try
+        {
+            if (_signalRClient == null) return;
+            if (originalCmd.Cmd is not ("start_group" or "start_oneclick")) return;
+            // Params 值经 SignalR 反序列化可能是 JsonElement；其 ToString() 对 String 类型即原文（不带引号）
+            var taskName = originalCmd.Params?.GetValueOrDefault(
+                originalCmd.Cmd == "start_group" ? "groupName" : "configName")?.ToString() ?? "";
+            await _signalRClient.ReportCommandResultAsync(new RemoteCommandResult
+            {
+                CommandId = originalCmd.CommandId,
+                Cmd = originalCmd.Cmd,
+                SenderUid = originalCmd.SenderUid,
+                TargetUid = _config?.PlayerUid ?? "",
+                TargetName = _config?.PlayerName ?? "",
+                Status = status,
+                ErrorCode = errorCode,
+                Message = message,
+                TaskName = taskName
+            });
+        }
+        catch (Exception ex)
+        {
+            // 回执发送自身失败（关机竞态等）只留痕，绝不上抛
+            try { AddLog($"[回执] 上报启动结果失败（已忽略，不影响本地执行）: {ex.Message}"); }
+            catch { }
+        }
     }
 
     // ===== 远程配置组编辑（契约见 Docs/远程配置组编辑-实施方案.md §1/§2/§5）=====
@@ -4322,14 +4372,23 @@ public partial class MainViewModel : INotifyPropertyChanged
             {
                 var result = await _commandExecutor.ExecuteAsync(cmd);
                 await SendAckAsync(cmd, result.Status, result.Message);
+                // [远端任务回执] start_group/start_oneclick 额外经新通道回执给发起方卡片（内部已过滤命令名、不抛异常）
+                await MaybeSendCommandResultAsync(cmd, result.Status, result.ErrorCode, result.Message);
             }
             }
             catch (Exception ex)
             {
                 try { AddLog($"[A0 容错] 远程命令处理未预期异常（已拦截，防 async void 逃逸）: {cmd?.Cmd} {ex.Message}"); }
                 catch { /* 日志自身失败（关机竞态）不再上抛 */ }
+                // [远端任务回执] 兜底异常也要让发起方看到失败（否则静默失败无感知）；方法内部不抛
+                if (cmd != null)
+                {
+                    await MaybeSendCommandResultAsync(cmd, "failed", "unhandled_exception", $"远程命令处理未预期异常: {ex.Message}");
+                }
             }
         };
+
+        client.OnRemoteCommandResult += OnRemoteCommandResultReceived;
 
         client.OnJoinRejected += reason =>
         {
@@ -4738,7 +4797,10 @@ public partial class MainViewModel : INotifyPropertyChanged
                 var names = string.Join("、",
                     remoteTargets.Select(u => Members.FirstOrDefault(m => m.PlayerUid == u)?.PlayerName ?? u));
                 AddLog($"已向 {names} 远程下发 {cmd} 命令");
-                await _signalRClient.SendRemoteCommandAsync(NewCmd(remoteTargets));
+                var remoteCmd = NewCmd(remoteTargets);
+                // [远端任务回执] start_group/start_oneclick 登记挂起等待，回执/15s 超时驱动卡片结果展示
+                TrackPendingCommandResult(remoteCmd, remoteTargets);
+                await _signalRClient.SendRemoteCommandAsync(remoteCmd);
             }
             else
             {
@@ -4748,6 +4810,107 @@ public partial class MainViewModel : INotifyPropertyChanged
         if (!selfTargeted && remoteTargets.Count == 0)
         {
             AddLog("没有有效目标，命令未执行");
+        }
+    }
+
+    /// <summary>
+    /// [远端任务回执 2026-11] 发起方登记一次远端 start 下发的挂起回执等待（仅 start_group/start_oneclick），
+    /// 目标成员卡片先显示"等待回执…"；回执到达由 OnRemoteCommandResultReceived 核销，
+    /// 15s 未核销的目标显示"已发送（无回执）"（老助手/老服务端/断线的降级表现）。
+    /// 仅 UI 线程调用（ExecuteLocalCommandAsync 在 Dispatcher 同步上下文上运行）。
+    /// </summary>
+    private void TrackPendingCommandResult(RemoteCommand cmd, List<string> remoteTargets)
+    {
+        if (cmd.Cmd is not ("start_group" or "start_oneclick")) return;
+        var taskName = cmd.Params?.GetValueOrDefault(
+            cmd.Cmd == "start_group" ? "groupName" : "configName")?.ToString() ?? "";
+        _pendingCommandResults[cmd.CommandId] = new PendingCommandResult
+        {
+            Cmd = cmd.Cmd,
+            TaskName = taskName,
+            RemainingUids = new HashSet<string>(remoteTargets)
+        };
+        var kindText = cmd.Cmd == "start_group" ? "配置组" : "一条龙";
+        foreach (var uid in remoteTargets)
+        {
+            var member = Members.FirstOrDefault(m => m.PlayerUid == uid);
+            if (member != null)
+            {
+                member.RemoteStartResult = $"{kindText}「{taskName}」已下发，等待回执…";
+                member.RemoteStartResultState = "pending";
+            }
+        }
+        _ = ExpirePendingCommandResultAsync(cmd.CommandId);
+    }
+
+    /// <summary>[远端任务回执] 15s 超时兜底：仍未核销的目标标记"已发送（无回执）"。自身绝不抛异常。</summary>
+    private async Task ExpirePendingCommandResultAsync(string commandId)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(15));
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                if (!_pendingCommandResults.TryGetValue(commandId, out var pending)) return;
+                _pendingCommandResults.Remove(commandId);
+                foreach (var uid in pending.RemainingUids)
+                {
+                    var member = Members.FirstOrDefault(m => m.PlayerUid == uid);
+                    // 只覆盖仍是 pending 的卡片（回执先到、超时后到的竞态下不改写真实结果）
+                    if (member != null && member.RemoteStartResultState == "pending")
+                    {
+                        member.RemoteStartResult = "已发送（无回执）";
+                        member.RemoteStartResultState = "noreceipt";
+                    }
+                }
+            });
+        }
+        catch
+        {
+            // 超时任务自身异常（关机竞态等）不影响主流程
+        }
+    }
+
+    /// <summary>
+    /// [远端任务回执] 发起方收到目标机启动结果回执：核销挂起会话 + 更新目标成员卡片 + 记日志。
+    /// 挂起会话已超时被移除的迟到回执同样更新卡片（真实终态覆盖"已发送（无回执）"）；
+    /// 非本机跟踪的 CommandId（广播快捷指令等）只记日志。自身绝不抛异常（事件回调）。
+    /// </summary>
+    private void OnRemoteCommandResultReceived(RemoteCommandResult result)
+    {
+        try
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                var displayName = string.IsNullOrEmpty(result.TargetName) ? result.TargetUid : result.TargetName;
+                var statusText = result.Status switch
+                {
+                    "success" => $"启动成功：{result.TaskName}",
+                    "cancelled" => $"执行被取消：{result.TaskName}",
+                    _ => $"启动失败：{(string.IsNullOrEmpty(result.Message) ? result.Status : result.Message)}"
+                };
+                AddLog($"[回执] {displayName} {result.Cmd}「{result.TaskName}」→ {statusText}");
+
+                if (_pendingCommandResults.TryGetValue(result.CommandId, out var pending))
+                {
+                    pending.RemainingUids.Remove(result.TargetUid);
+                    if (pending.RemainingUids.Count == 0)
+                    {
+                        _pendingCommandResults.Remove(result.CommandId);
+                    }
+                }
+
+                var member = Members.FirstOrDefault(m => m.PlayerUid == result.TargetUid);
+                if (member != null)
+                {
+                    member.RemoteStartResult = statusText;
+                    member.RemoteStartResultState = result.Status == "success" ? "success" : "failed";
+                }
+            });
+        }
+        catch
+        {
+            // 回执展示失败不影响任何主流程
         }
     }
 
@@ -6734,6 +6897,15 @@ public class MemberViewModel : INotifyPropertyChanged
 
     public string ConfigGroupsDisplay => ConfigGroups.Count > 0 ? string.Join(", ", ConfigGroups) : "无";
     public string OneClickConfigsDisplay => OneClickConfigs.Count > 0 ? string.Join(", ", OneClickConfigs) : "无";
+
+    private string _remoteStartResult = "";
+    /// <summary>[远端任务回执] 本机作为发起方时，该成员卡片上显示的最近一次远端启动结果文本
+    /// （"等待回执…" / "启动成功：…" / "启动失败：…" / "已发送（无回执）"）；空串 = 无进行中/已结束的下发，UI 隐藏。</summary>
+    public string RemoteStartResult { get => _remoteStartResult; set { if (_remoteStartResult != value) { _remoteStartResult = value; OnPropertyChanged(); } } }
+
+    private string _remoteStartResultState = "";
+    /// <summary>[远端任务回执] 结果状态（pending / success / failed / noreceipt / ""），供 XAML 触发器配色。</summary>
+    public string RemoteStartResultState { get => _remoteStartResultState; set { if (_remoteStartResultState != value) { _remoteStartResultState = value; OnPropertyChanged(); } } }
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)

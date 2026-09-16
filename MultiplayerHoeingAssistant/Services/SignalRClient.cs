@@ -48,6 +48,9 @@ public class SignalRClient : IAsyncDisposable
     /// <summary>同模式：服务端无 screenshot.request 时停重试（截图按需取图·观看端）。
     /// 观看端据此提示"需新版服务端"。</summary>
     private volatile bool _screenshotRequestUnsupported;
+    /// <summary>同模式：服务端无 control.reportCommandResult 时停重试（远端任务下发结果回执）。
+    /// 旧服务端下目标机静默降级为"只回 ack 不回执"，与功能上线前行为一致。</summary>
+    private volatile bool _commandResultUnsupported;
 
     // [P1-F 止血] 自愈定时器：仅在内置重连耗尽（Closed）后启动，每 30s 对同一连接 StartAsync。
     // 同一时刻只允许一条自愈定时器；_selfHealRunning 防止定时器回调重入（StartAsync 超 30s 时）。
@@ -61,6 +64,8 @@ public class SignalRClient : IAsyncDisposable
 
     public event Action<ControlRoomPlayersUpdate>? OnPlayersUpdated;
     public event Action<RemoteCommand>? OnRemoteCommand;
+    /// <summary>收到远端任务下发结果回执（发起方侧；服务端 control.remoteCommandResult 定向回投）。</summary>
+    public event Action<RemoteCommandResult>? OnRemoteCommandResult;
     public event Action<string>? OnJoinRejected;
     public event Action<bool>? OnConnectionStateChanged;
     /// <summary>收到成员桌面截图帧（嘟嘟可 P5；广播帧或按需应答帧，均按 uid 认领）。</summary>
@@ -114,6 +119,7 @@ public class SignalRClient : IAsyncDisposable
         _logUnsupported = false;        // 同上：日志汇聚能力标记
         _logSubscribeUnsupported = false; // 同上：日志订阅能力标记
         _logFileUnsupported = false;    // 同上：远程日志下载能力标记
+        _commandResultUnsupported = false; // 同上：远端任务回执能力标记
 
         await EstablishAsync(serverUrl, roomCode, password, playerUid, playerName, teamUids, isRemote, bypassSystemProxy);
     }
@@ -262,6 +268,13 @@ public class SignalRClient : IAsyncDisposable
                 {
                     var cmd = env.Get<RemoteCommand>("command");
                     if (cmd != null) OnRemoteCommand?.Invoke(cmd);
+                    break;
+                }
+                case GatewayProtocol.Events.ControlRemoteCommandResult:
+                {
+                    // payload 即回执本体（服务端 evt-only 定向回投，无外层包裹）
+                    var result = env.DeserializePayload<RemoteCommandResult>();
+                    if (result != null) OnRemoteCommandResult?.Invoke(result);
                     break;
                 }
                 case GatewayProtocol.Events.ControlJoinRejected:
@@ -472,6 +485,32 @@ public class SignalRClient : IAsyncDisposable
         {
             // 发送瞬间断连等异常仅记日志不 throw：调用方多在 async void 事件处理器里，上抛会导致进程崩溃
             OnLog?.Invoke($"[探针助手] SendRemoteCommand({command.Cmd}) 调用失败: " + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// 上报远端任务下发结果回执（目标机 → 服务端 → 发起方回投）。
+    /// 服务端无此消息名（旧服务端）时首次 GatewayErrorException 后停重试（同 _screenshotUnsupported 模式），
+    /// 静默降级为"只回 ack 不回执"；断线等异常仅记日志不 throw（调用方在 async void 事件处理器里）。
+    /// </summary>
+    public async Task ReportCommandResultAsync(RemoteCommandResult result)
+    {
+        if (_commandResultUnsupported) return;
+        if (_gateway == null) return;
+        result.RoomCode = _roomCode;
+        try
+        {
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlReportCommandResult, new { result });
+        }
+        catch (GatewayErrorException ex)
+        {
+            _commandResultUnsupported = true;
+            OnLog?.Invoke($"ReportCommandResult 被服务端拒绝（疑似旧服务端不支持回执转发），本次连接内停止上报: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            // 回执是尽力而为通道：失败仅记日志，绝不影响命令执行主流程
+            OnLog?.Invoke($"[探针助手] ReportCommandResult({result.Cmd}) 调用失败: " + ex.Message);
         }
     }
 

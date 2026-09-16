@@ -13,6 +13,9 @@ public class BatchReconcileDeciderTests
 {
     private const int Gen = 42;
 
+    /// <summary>[A6] Decide 的 nowUtc 入参：固定时钟保证用例确定性（重试时间预算判定可复现）。</summary>
+    private static readonly DateTime Now = new(2026, 9, 16, 12, 0, 0, DateTimeKind.Utc);
+
     private static List<BatchExpectedItem> Items(params string[] names)
         => names.Select(n => new BatchExpectedItem(n, isOneDragon: false)).ToList();
 
@@ -36,6 +39,12 @@ public class BatchReconcileDeciderTests
                 case BatchReconcileAction.Attach a:
                     items[a.Index].JobId = a.JobId;
                     break;
+                case BatchReconcileAction.RetryFromFailure rf:
+                    items[rf.Index].State = BatchItemState.PendingSubmit;
+                    items[rf.Index].JobId = null;
+                    items[rf.Index].RejectionRetries++;
+                    items[rf.Index].FirstRejectionUtc ??= Now;
+                    break;
                 case BatchReconcileAction.ConfirmTerminal c:
                     items[c.Index].State = BatchItemState.TerminalConfirmed;
                     items[c.Index].TerminalWasCancelled = c.Cancelled;
@@ -55,7 +64,7 @@ public class BatchReconcileDeciderTests
     private static IReadOnlyList<BatchReconcileAction> Tick(
         List<BatchExpectedItem> items, List<BatchJobObservation> jobs, bool epochMatch = true)
     {
-        var actions = BatchReconcileDecider.Decide(items, jobs, epochMatch, Gen);
+        var actions = BatchReconcileDecider.Decide(items, jobs, epochMatch, Gen, Now);
         ApplyActions(items, actions);
         return actions;
     }
@@ -63,7 +72,7 @@ public class BatchReconcileDeciderTests
     [Fact]
     public void EmptyBatch_CompletesImmediately()
     {
-        var actions = BatchReconcileDecider.Decide([], [], true, Gen);
+        var actions = BatchReconcileDecider.Decide([], [], true, Gen, Now);
         Assert.Contains(actions, a => a is BatchReconcileAction.Complete);
     }
 
@@ -71,7 +80,7 @@ public class BatchReconcileDeciderTests
     public void FirstTick_SubmitsFirstItem_OnlyOneInFlight()
     {
         var items = Items("联机队长-传奇", "联机队长-次数盾", "联机队长-精英");
-        var actions = BatchReconcileDecider.Decide(items, [], true, Gen);
+        var actions = BatchReconcileDecider.Decide(items, [], true, Gen, Now);
 
         var submit = Assert.IsType<BatchReconcileAction.Submit>(Assert.Single(actions));
         Assert.Equal(0, submit.Index);
@@ -171,7 +180,7 @@ public class BatchReconcileDeciderTests
         Tick(items, []);
         items[0].JobId = "job-a";
 
-        var actions = BatchReconcileDecider.Decide(items, [Obs("job-a", "组A", "running")], epochMatch: false, Gen);
+        var actions = BatchReconcileDecider.Decide(items, [Obs("job-a", "组A", "running")], epochMatch: false, Gen, Now);
         Assert.Contains(actions, a => a is BatchReconcileAction.EpochChanged);
 
         ApplyActions(items, actions);

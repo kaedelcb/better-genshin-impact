@@ -148,8 +148,9 @@ public class CancellationContext : Singleton<CancellationContext>
             {
                 IsManualStop = true;
                 LastManualCancelAtUtc = DateTime.UtcNow;
-            }
-            if (!resetToken)
+                // [A6] 用户手动停止（F11/停止热键）= 收租：抢占意图门即刻失效（owner 决策 D1/D2：F11 永远是否决键）
+                BetterGenshinImpact.Service.Execution.PreemptionGate.Disarm();
+            }            if (!resetToken)
             {
                 WasCancelled = true;
             }

@@ -1032,6 +1032,35 @@
                                                             </StackPanel>
                                                         </Grid>
 
+                                                        <!-- [远端任务回执] 本机作为发起方时显示该成员的远端启动结果
+                                                             （等待回执/成功/失败/已发送（无回执））；空串隐藏 -->
+                                                        <TextBlock FontSize="10" Margin="0,3,0,0" MaxWidth="520" TextTrimming="CharacterEllipsis"
+                                                                   Text="{Binding RemoteStartResult}">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                    <Setter Property="Foreground" Value="{StaticResource Dim}"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding RemoteStartResult}" Value="">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding RemoteStartResult}" Value="{x:Null}">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding RemoteStartResultState}" Value="success">
+                                                                            <Setter Property="Foreground" Value="{StaticResource Anemo}"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding RemoteStartResultState}" Value="failed">
+                                                                            <Setter Property="Foreground" Value="{StaticResource Pyro}"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding RemoteStartResultState}" Value="noreceipt">
+                                                                            <Setter Property="Foreground" Value="{StaticResource Geo}"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+
                                                     </StackPanel>
                                                 </Grid>
                                             </Border>

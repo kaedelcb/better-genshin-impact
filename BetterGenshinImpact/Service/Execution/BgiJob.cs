@@ -54,6 +54,12 @@ public static class JobErrorCodes
     public const string TaskStartFailed = "task_start_failed";
     public const string StaleEpoch = "stale_epoch";
     public const string NotFound = "not_found";
+
+    /// <summary>[A6] 任务让位联机锄地批次（PreemptionGate 让位点，见 TaskRunResult.Preempted）。</summary>
+    public const string Preempted = "preempted";
+
+    /// <summary>[A6] 抢占未在有界时间内确认槽位释放（ADR-2026-09-16 有界退出契约）。</summary>
+    public const string PreemptTimeout = "preempt_timeout";
 }
 
 /// <summary>一次状态转换记录（UiPath 式状态时间线，随终态留档）。</summary>

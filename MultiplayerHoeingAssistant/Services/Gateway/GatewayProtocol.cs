@@ -51,6 +51,8 @@ public static class GatewayProtocol
         public const string ControlConfirmAllReady = "control.confirmAllReady";
         public const string ControlReportOnlineEvent = "control.reportOnlineEvent";
         public const string ControlClearOnlineHistory = "control.clearOnlineHistory";
+        /// <summary>远端任务下发结果回执（纯加法；旧服务端回 unsupported_operation，客户端据此降级停发）。</summary>
+        public const string ControlReportCommandResult = "control.reportCommandResult";
 
         public const string LogReportBatch = "log.reportBatch";
         public const string LogSubscribe = "log.subscribe";
@@ -77,6 +79,8 @@ public static class GatewayProtocol
         public const string ControlAllReady = "control.allReady";                   // ← AllReady
         public const string ControlAllReadyConfirm = "control.allReadyConfirm";     // ← AllReadyConfirm
         public const string ControlAllReadyAbort = "control.allReadyAbort";         // ← AllReadyAbort
+        /// <summary>远端任务回执（evt-only 新协议域，服务器侧不进 LegacyEventMap；旧客户端无订阅天然忽略）。</summary>
+        public const string ControlRemoteCommandResult = "control.remoteCommandResult";
 
         public const string ScreenshotMember = "screenshot.member";                 // ← MemberScreenshot
         public const string ScreenshotRequested = "screenshot.requested";           // ← MemberScreenshotRequested

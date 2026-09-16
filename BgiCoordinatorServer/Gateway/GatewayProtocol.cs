@@ -1,4 +1,4 @@
-﻿using BetterGenshinImpact.Shared.CooperativeRerun;
+using BetterGenshinImpact.Shared.CooperativeRerun;
 
 namespace BgiCoordinatorServer.Gateway;
 
@@ -131,6 +131,12 @@ public static class GatewayProtocol
         public const string ControlConfirmAllReady = "control.confirmAllReady";
         public const string ControlReportOnlineEvent = "control.reportOnlineEvent";
         public const string ControlClearOnlineHistory = "control.clearOnlineHistory";
+
+        /// <summary>
+        /// 远端任务下发结果回执（target → server）：纯新增消息名，旧客户端不发送即可；
+        /// 旧服务端返回 unsupported_operation，新客户端据此降级停发（不影响既有协议）。
+        /// </summary>
+        public const string ControlReportCommandResult = "control.reportCommandResult";
 
         public const string LogReportBatch = "log.reportBatch";
         public const string LogSubscribe = "log.subscribe";
@@ -320,5 +326,12 @@ public static class GatewayProtocol
 
         /// <summary>定向 Pull 命令（只发给需要被拉回的成员，不是组广播）。</summary>
         public const string RouteAnchorPull = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.PullEvent;
+
+        /// <summary>
+        /// 远端任务下发结果回执（server → 命令发起方定向投递）。
+        /// 全新协议域：从来没有旧客户端订阅者，只发 evt，不进 LegacyEventMap 双发表；
+        /// 旧发起方（/hub 连接）天然收不到，UI 按 15s 超时降级为"已发送（无回执）"。
+        /// </summary>
+        public const string ControlRemoteCommandResult = "control.remoteCommandResult";
     }
 }

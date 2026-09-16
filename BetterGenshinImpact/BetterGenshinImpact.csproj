@@ -132,7 +132,8 @@
 	</ItemGroup>
 
 	<!-- 编译后复制助手全部输出到 BGI 输出目录下的 Tools\MultiplayerHoeingAssistant 子目录（用 $(Configuration) 兼容 Debug/Release） -->
-  <Target Name="CopyMultiplayerHoeingAssistant" AfterTargets="Build">
+  <!-- 助手进程运行中会锁住部署目标目录，此时可用 -p:DeployToBgiTools=false 跳过部署仅完成编译验证（与 MHA csproj 同名开关一致） -->
+  <Target Name="CopyMultiplayerHoeingAssistant" AfterTargets="Build" Condition="'$(DeployToBgiTools)' != 'false'">
     <Message Text="CopyMultiplayerHoeingAssistant: 复制助手全部输出到 $(OutDir)Tools\MultiplayerHoeingAssistant" Importance="high" />
     <!-- 重新编译并部署助手（已实测可靠）：
          1) 此处不可用嵌套(MSBuild Targets=Rebuild)或单个 dotnet build，因其会受 MSBuild Server 的

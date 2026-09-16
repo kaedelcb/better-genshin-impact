@@ -13,4 +13,8 @@ public enum TaskRunResult
 
     /// <summary>任务槽位被占用，本次未执行（旧行为：仅 ERR 日志后静默返回）。</summary>
     RejectedSlotBusy,
+
+    /// <summary>[A6] 拿到槽位后发现抢占意图门有效（PreemptionGate armed），主动让位给
+    /// 联机锄地批次：未执行、已按需保存恢复点、已释放槽位。静默路径（无 started/stopped 事件）。</summary>
+    Preempted,
 }

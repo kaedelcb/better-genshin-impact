@@ -143,10 +143,19 @@ public partial class MainViewModel
         // 等待 BGI 内部的 CancellationContext 取消状态传播完毕，避免取消令牌残留影响后续 start_group
         // [P1-C 止血] 固定 1500ms 盲等改为轮询 IPC task.status（200ms 间隔、上限 6s）：
         // 确认 BGI 无任务在运行（或中断上下文已就位 hasSuspendedTaskContext=true）后再进入批次 task.start。
-        // 超时仅记警告日志后继续，保持原有容错语义。
         // [切片4/切片7] settle 判定已抽为 CommandExecutor.WaitTaskSlotSettledAsync 共享方法
         // （ext slotReleased 事件 + 快照探测 + 200ms×30 轮询兜底），按键抢占路径复用同一实现。
-        await _commandExecutor.WaitTaskSlotSettledAsync("[上线探针]", AddLog);
+        // [A6 状态确认 ADR-2026-09-16] 超时后复核槽位仍忙 = 旧任务可能卡死：中止本批启动尝试并
+        // 响亮告警，不再静默进入批次 task.start（事故教训：每组一行执行失败然后无人知晓）。
+        if (!await _commandExecutor.WaitTaskSlotSettledAsync("[上线探针]", AddLog))
+        {
+            _isAllReadyProcessing = 0;
+            NotifyBatchLoud("联机锄地批次中止",
+                "BGI 任务槽位在 suspend 后超时未释放（旧任务可能卡死），本批锄地未下发；请检查 BGI 状态（必要时手动停止 BGI 任务后重新触发）");
+            _intentLifecycle.OnBatchFinished(generation, $"settle 复核槽位仍忙，批次启动中止（generation={generation}）");
+            _ = ReportStatusAsync();
+            return;
+        }
         }
 
         // [P1b] 依次执行所有绑定的配置组（批次有主句柄：取消语义走 batch.Cts，原共享 bool 已废弃）
@@ -363,7 +372,7 @@ public partial class MainViewModel
                         j.JobId!, j.Name, j.Generation, j.State ?? "unknown", j.WasCancelled, j.ErrorCode))
                     .ToList();
 
-                var actions = BatchReconcileDecider.Decide(items, jobs, epochMatch, generation);
+                var actions = BatchReconcileDecider.Decide(items, jobs, epochMatch, generation, DateTime.UtcNow);
                 var finished = false;
                 foreach (var action in actions)
                 {
@@ -390,6 +399,20 @@ public partial class MainViewModel
                             items[resubmit.Index].JobId = null;
                             await SubmitBatchItemAsync(ext, items[resubmit.Index], generation, batchGroupNames, batch);
                             break;
+                        case BatchReconcileAction.RetryFromFailure retryFromFailure:
+                        {
+                            // [A6] 终态失败但错误码是可重试瞬态（preempt_timeout 等）且预算内：退回待提交，
+                            // 下一拍（事件唤醒/10s 节拍）退避重发；预算耗尽时 Decider 会改发 ConfirmTerminal
+                            var retryItem = items[retryFromFailure.Index];
+                            retryItem.State = BatchItemState.PendingSubmit;
+                            retryItem.JobId = null;
+                            retryItem.RejectionRetries++;
+                            retryItem.FirstRejectionUtc ??= DateTime.UtcNow;
+                            AddLog($"[reconcile] 「{retryItem.Name}」执行失败（{retryFromFailure.ErrorCode}，可重试瞬态），"
+                                   + $"退避后重新下发（第 {retryItem.RejectionRetries}/{BatchReconcileDecider.MaxRejectionRetries} 次，"
+                                   + $"单项预算 {BatchReconcileDecider.RejectionRetryBudget.TotalMinutes:0} 分钟）");
+                            break;
+                        }
                         case BatchReconcileAction.ConfirmTerminal confirm:
                             items[confirm.Index].State = BatchItemState.TerminalConfirmed;
                             items[confirm.Index].TerminalWasCancelled = confirm.Cancelled;
@@ -399,6 +422,17 @@ public partial class MainViewModel
                                 AddLog(confirm.ErrorCode is null
                                     ? $"[reconcile] 「{items[confirm.Index].Name}」执行完成"
                                     : $"[reconcile] 「{items[confirm.Index].Name}」执行失败（{confirm.ErrorCode}），继续下一项");
+                                // [A6/D] 可重试瞬态码走到终态确认 = 重试预算已耗尽：响亮收口，
+                                // 不允许"执行失败然后无人知晓"（批次报告 = 终态 errorCode 入档 + 通知 + 日志）
+                                if (items[confirm.Index].RejectionRetries > 0
+                                    && BatchReconcileDecider.ClassifySubmitRejection(confirm.ErrorCode)
+                                       == BatchSubmitRejectionKind.RetryableTransient)
+                                {
+                                    NotifyBatchLoud("联机锄地批次项失败",
+                                        $"「{items[confirm.Index].Name}」重试预算耗尽"
+                                        + $"（{items[confirm.Index].RejectionRetries} 次/{BatchReconcileDecider.RejectionRetryBudget.TotalMinutes:0} 分钟，"
+                                        + $"{confirm.ErrorCode}），本项按失败终态收口，批次继续后续项；请检查 BGI 任务槽位状态");
+                                }
                             }
                             break;
                         case BatchReconcileAction.AbortUserCancelled abort:
@@ -451,6 +485,10 @@ public partial class MainViewModel
     /// 入队成功 → 记 jobId（应答缺句柄则留空，下一拍按名附着找回）；业务拒绝/幂等命中 →
     /// 直接记终态（与旧循环"启动失败跳过 / already_executed 按成功"同语义）；通道瞬态失败 →
     /// 保持 Submitted 无 jobId，下一拍附着或限次重提交自愈。一切失败留痕。
+    /// [A6] AllReady 批次项一律带 preempt:true 下发（BGI 等槽 3s 未果转主动抢占）；提交拒绝按
+    /// ADR-2026-09-16 第 4 条分类：可重试瞬态（queue_full/task_busy/preempt_timeout）退回待提交
+    /// 退避重试（单项 2 分钟预算 + 次数硬帽，纯函数在 BatchReconcileDecider）；manual_stop_cooldown
+    /// 终态+响亮通知绝不重发（F11 是用户最终权威，D1）；其余永久性拒绝维持终态跳过。
     /// </summary>
     private async Task SubmitBatchItemAsync(
         BgiExternalClient ext, BatchExpectedItem item, int generation,
@@ -463,16 +501,52 @@ public partial class MainViewModel
             var submit = await ext.SubmitTaskStartAsync(
                 item.IsOneDragon ? null : item.Name,
                 item.IsOneDragon ? item.Name : null,
-                0, generation, batchGroupNames, batch.Cts.Token);
+                0, generation, batchGroupNames, batch.Cts.Token, preempt: true);
             if (!submit.Success)
             {
-                // 业务拒绝（queue_full 等）：与旧循环"启动失败，跳过"同语义——记失败终态，推进下一项
-                AddLog($"[reconcile] 启动「{item.Name}」被 BGI 拒绝（{submit.ErrorCode ?? "unknown"}）："
-                       + $"{submit.ErrorMessage ?? "无详情"}，按失败终态跳过");
-                item.State = BatchItemState.TerminalConfirmed;
-                item.TerminalWasCancelled = false;
-                item.TerminalErrorCode = submit.ErrorCode ?? "rejected";
-                return;
+                var errorCode = submit.ErrorCode ?? "rejected";
+                switch (BatchReconcileDecider.ClassifySubmitRejection(submit.ErrorCode))
+                {
+                    case BatchSubmitRejectionKind.RetryableTransient:
+                        item.FirstRejectionUtc ??= DateTime.UtcNow;
+                        if (BatchReconcileDecider.CanRetryRejection(
+                                submit.ErrorCode, item.RejectionRetries, item.FirstRejectionUtc.Value, DateTime.UtcNow))
+                        {
+                            // 可重试瞬态：退回待提交，下一拍（事件唤醒/10s 节拍）退避重发
+                            item.RejectionRetries++;
+                            item.State = BatchItemState.PendingSubmit;
+                            AddLog($"[reconcile] 启动「{item.Name}」被 BGI 瞬态拒绝（{errorCode}）：{submit.ErrorMessage ?? "无详情"}，"
+                                   + $"退避后重试（第 {item.RejectionRetries}/{BatchReconcileDecider.MaxRejectionRetries} 次，"
+                                   + $"单项预算 {BatchReconcileDecider.RejectionRetryBudget.TotalMinutes:0} 分钟）");
+                            return;
+                        }
+                        // [A6/D] 重试预算耗尽：响亮收口（通知 + 日志 + 终态 errorCode 入档）
+                        NotifyBatchLoud("联机锄地批次项失败",
+                            $"「{item.Name}」被 BGI 反复瞬态拒绝（{errorCode}），重试预算耗尽"
+                            + $"（{item.RejectionRetries} 次/{BatchReconcileDecider.RejectionRetryBudget.TotalMinutes:0} 分钟），"
+                            + "本项按失败终态收口，批次继续后续项；请检查 BGI 任务槽位状态");
+                        item.State = BatchItemState.TerminalConfirmed;
+                        item.TerminalWasCancelled = false;
+                        item.TerminalErrorCode = errorCode;
+                        return;
+                    case BatchSubmitRejectionKind.ManualStopCooldown:
+                        // [A6/D1] F11 是用户最终权威：终态 + 响亮通知，绝不自动重发（d4dc54a9 教训）
+                        NotifyBatchLoud("联机锄地批次项跳过",
+                            $"「{item.Name}」因手动停止冷却期被 BGI 拒绝（manual_stop_cooldown）：F11 是用户最终权威，"
+                            + "本批跳过该项，绝不自动重发；如需执行请稍后手动启动");
+                        item.State = BatchItemState.TerminalConfirmed;
+                        item.TerminalWasCancelled = false;
+                        item.TerminalErrorCode = errorCode;
+                        return;
+                    default:
+                        // 其余永久性业务拒绝：与旧循环"启动失败，跳过"同语义——记失败终态，推进下一项
+                        AddLog($"[reconcile] 启动「{item.Name}」被 BGI 拒绝（{errorCode}）："
+                               + $"{submit.ErrorMessage ?? "无详情"}，按失败终态跳过");
+                        item.State = BatchItemState.TerminalConfirmed;
+                        item.TerminalWasCancelled = false;
+                        item.TerminalErrorCode = errorCode;
+                        return;
+                }
             }
             if (submit.Status == "already_executed")
             {
@@ -501,6 +575,22 @@ public partial class MainViewModel
                                    or TimeoutException or JsonException)
         {
             AddLog($"[reconcile] 「{item.Name}」下发通道瞬态失败：{ex.Message}，下一拍按名附着/限次重提交自愈");
+        }
+    }
+
+    /// <summary>[A6] 抢占链响亮告警收口（ADR-2026-09-16）：用户可见日志 + 托盘气泡。
+    /// 批次侧任一段最终失败（settle 中止 / 重试预算耗尽 / F11 冷却跳过）都必须用户可见，
+    /// 不允许"每组一行执行失败然后无人知晓"。</summary>
+    private void NotifyBatchLoud(string title, string message)
+    {
+        AddLog($"[告警] {message}");
+        try
+        {
+            (System.Windows.Application.Current as App)?.ShowTrayBalloon(title, message);
+        }
+        catch
+        {
+            // 托盘不可用时静默（日志已保底）
         }
     }
 }

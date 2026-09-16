@@ -503,6 +503,9 @@ public sealed class BgiExternalClient : IDisposable
     /// [切片7] 队列式提交 task.start：入队拿 taskHandle 立即返回（BGI 侧串行派发）。
     /// 执行结果不走响应，走 task.completed/failed 事件（配合 CreateTaskTerminalWaiter 先订阅后动作）。
     /// 通道未就绪抛 InvalidOperationException（调用方降级 v2 路径）。
+    /// [A6] preempt=true（仅 AllReady 批次/抢占下发置位，普通手动下发不置位）：BGI 队列项等槽窗口
+    /// 缩为 3s、未果转主动抢占（保存恢复点+取消+30s 状态确认）。纯加法字段，老 BGI 忽略零感知；
+    /// v2 通道无此字段（抢占闭环的 v2 task.start 前置 suspend+settle 已自行腾空槽位）。
     /// </summary>
     public async Task<BgiTaskSubmitResult> SubmitTaskStartAsync(
         string? groupName,
@@ -510,11 +513,15 @@ public sealed class BgiExternalClient : IDisposable
         int startFromIndex,
         int generation,
         string? batchGroupNames = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool preempt = false)
     {
+        var payload = preempt
+            ? (object)new { groupName, configName, startFromIndex, generation, batchGroupNames, preempt = true }
+            : new { groupName, configName, startFromIndex, generation, batchGroupNames };
         var response = await SendCommandAsync(
                 ExternalOperations.TaskStart,
-                new { groupName, configName, startFromIndex, generation, batchGroupNames },
+                payload,
                 CommandTimeout,
                 cancellationToken)
             .ConfigureAwait(false);

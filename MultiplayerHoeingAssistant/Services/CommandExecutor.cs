@@ -38,8 +38,12 @@ public class CommandExecutor
     /// 本地命名管道在 BGI 进程死亡时立刻断流，不存在无限挂死；24h 帽只兜 BGI 活着但 handler 死锁。</summary>
     private static readonly TimeSpan V2TaskStartCommandTimeout = TimeSpan.FromHours(24);
     /// <summary>[分层超时 2026-09-12] task.suspend 的命令超时：BGI 内部等锁 deadline 为 5s
-    /// （InstanceRequestHandler.HandleTaskSuspend），客户端必须留余量，否则"超时但实际挂起成功"。</summary>
-    private static readonly TimeSpan V2TaskSuspendCommandTimeout = TimeSpan.FromSeconds(8);
+    /// （InstanceRequestHandler.HandleTaskSuspend），客户端必须留余量，否则"超时但实际挂起成功"。
+    /// [A6 上调 8s→35s] 有界退出契约（ADR-2026-09-16）下 BGI 会持响应等槽位确认释放，上限
+    /// QuiesceBound=30s——客户端必须先于该上界之后超时，才能读到 quiesceConfirmed 字段并据此升级，
+    /// 否则 8s 超时会把"超界未释放"的响亮信号整个吞掉。老 BGI 响应即时返回，上调零影响
+    /// （本地命名管道在进程死亡时即刻断流，不存在挂到 35s 才察觉的场景）。</summary>
+    private static readonly TimeSpan V2TaskSuspendCommandTimeout = TimeSpan.FromSeconds(35);
     /// <summary>[任务策略] 6 键固定收尾策略：执行完停止（清除中断上下文，不恢复）。无 UI、无配置项。</summary>
     private static readonly TaskConflictPolicySettings FixedKeyPolicy = new();
 
@@ -779,12 +783,66 @@ public class CommandExecutor
             var blocked = CheckCrossSessionBlock(ipcClient, "task.suspend");
             if (blocked != null) return blocked;
 
-            // 发 task.suspend（8s：BGI 内部等锁 deadline 为 5s，客户端必须留余量，
-            // 否则"超时但实际挂起成功"——超时≠未执行，2026-09-12 分层超时）
+            // 发 task.suspend（35s：A6 有界退出契约下 BGI 持响应等槽位确认，上限 QuiesceBound=30s，
+            // 客户端必须留余量覆盖该上界才能读到 quiesceConfirmed 字段，否则"超时但实际挂起成功"
+            // ——超时≠未执行，2026-09-12 分层超时）
             var payload = System.Text.Json.JsonSerializer.Serialize(new { });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.suspend", Payload = payload }, V2TaskSuspendCommandTimeout);
             if (response.Success)
             {
+                // [A6] 解析加法字段（可空读取：老 BGI 无此字段 → null，行为与原逻辑逐字一致）
+                bool? liveTask = null;
+                bool? quiesceConfirmed = null;
+                if (!string.IsNullOrEmpty(response.Data))
+                {
+                    try
+                    {
+                        var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data);
+                        if (data.TryGetProperty("liveTask", out var ltEl)
+                            && ltEl.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+                        {
+                            liveTask = ltEl.GetBoolean();
+                        }
+                        if (data.TryGetProperty("quiesceConfirmed", out var qcEl)
+                            && qcEl.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+                        {
+                            quiesceConfirmed = qcEl.GetBoolean();
+                        }
+                    }
+                    catch
+                    {
+                        // Data 解析失败不影响：按老 BGI 语义继续（字段未知 = 不告警不升级）
+                    }
+                }
+
+                // [A6 有界退出契约 ADR-2026-09-16] quiesceConfirmed=false = 30s 槽位未确认释放，
+                // 旧任务可能卡死：响亮告警 + 按既有策略升级（进程仲裁器受控重启 BGI，
+                // 沿用"有意杀死豁免崩溃误判"语义）。重启成功后槽位必然空闲，按成功返回让
+                // 调用方（批次/按键）继续后续流程；被中断任务的内存恢复点随重启丢失，
+                // 策略收尾的 Resume 分支会因 HasContext=false 自动退化为停止（既有守卫）。
+                if (quiesceConfirmed == false)
+                {
+                    NotifyLoud("联机锄地抢占告警",
+                        "task.suspend 有界退出契约超界：BGI 任务 30s 未确认释放槽位（旧任务可能卡死），按策略受控重启 BGI。被中断任务的恢复点已丢失，如需继续请之后手动启动原任务");
+                    var restarted = await _monitor.RestartBgiControlledAsync(null, "suspend有界退出超界");
+                    if (!restarted)
+                    {
+                        NotifyLoud("联机锄地抢占告警",
+                            "BGI 受控重启未完成（旧进程可能提权运行杀不掉），本次启动尝试中止；请手动关闭残留 BGI 进程后重试");
+                        return new CommandResult { Status = "failed", ErrorCode = "quiesce_timeout", Message = "task.suspend 有界退出超界且 BGI 受控重启未完成（旧进程杀不掉），启动尝试已中止，请手动处理残留 BGI 进程" };
+                    }
+                    Log("[A6] BGI 已按有界退出超界升级策略受控重启，槽位确认空闲，继续后续启动流程");
+                    return new CommandResult { Status = "success", Message = "任务已中断（有界退出超界，BGI 已受控重启，恢复点丢失）" };
+                }
+
+                // [A6] liveTask=false = suspend 到达时无活体任务（组间缝隙）：BGI 已声明抢占意图门
+                // （PreemptionGate），后续起步的任务会在持锁处自动让位并释放槽位——照常走 settle 等槽，
+                // 门会保证槽位很快空出，不是异常，不告警。
+                if (liveTask == false)
+                {
+                    Log("[A6] task.suspend 到达时 BGI 无活体任务（组间缝隙）：抢占意图门已声明，后续起步任务将在持锁处自动让位，照常等待槽位释放");
+                }
+
                 // 返回包含被中断任务的上下文信息（给调用方日志用）
                 return new CommandResult { Status = "success", Message = $"任务已中断" };
             }
@@ -793,6 +851,21 @@ public class CommandExecutor
         catch (Exception ex)
         {
             return new CommandResult { Status = "failed", Message = $"IPC task.suspend 失败: {ex.Message}" };
+        }
+    }
+
+    /// <summary>[A6] 响亮告警收口：用户可见日志（AddLog + 文件日志双写）+ 托盘气泡。
+    /// 抢占链任一段最终失败（quiesce 超界 / settle 中止 / 重试预算耗尽）绝不允许静默（ADR-2026-09-16）。</summary>
+    private void NotifyLoud(string title, string message)
+    {
+        Log($"[告警] {message}");
+        try
+        {
+            (System.Windows.Application.Current as App)?.ShowTrayBalloon(title, message);
+        }
+        catch
+        {
+            // 托盘不可用时静默（日志已保底）
         }
     }
 
@@ -976,7 +1049,11 @@ public class CommandExecutor
     /// [P1-C/切片7 共享] 等待 BGI 任务槽位释放（settle）：suspend 之后、task.start 之前调用。
     /// 先订阅 slotReleased 事件等待（先订阅后动作），再一次快照探测（已落定则直接通过，
     /// 覆盖"suspend 时本就无任务在跑、不会发 slotReleased"的场景）；未落定则等事件（6s 上限），
-    /// 超时/通道不可用落回 200ms×30 轮询 task.status 兜底。超时仅记日志容错，返回是否已落定。
+    /// 超时/通道不可用落回 200ms×30 轮询 task.status 兜底。
+    /// [A6 状态确认 ADR-2026-09-16] 轮询耗尽后再查一次槽位状态做收口：复核仍忙
+    /// （running=true 且无中断上下文）→ 返回 false，调用方必须中止本次启动尝试并响亮告警，
+    /// 不再静默继续 task.start；复核空闲/有上下文 → 照常继续；复核查询失败（通道瞬态）→
+    /// 保持旧容错语义照常继续（task.start 自有无损拒绝/裸拉起回退，不因一次查询失败误中止）。
     /// 供上线锄地（OnAllReadyConfirmedInternal）与按键抢占两条路径复用。
     /// </summary>
     public async Task<bool> WaitTaskSlotSettledAsync(string logTag, Action<string>? log = null)
@@ -1049,7 +1126,25 @@ public class CommandExecutor
         }
         if (!bgiSettled)
         {
-            log?.Invoke($"{logTag} 等待 BGI 任务停止超时（6s），按容错策略继续执行 task.start");
+            // [A6 状态确认收口] 兜底轮询耗尽后再查一次槽位状态（既有 task.status 查询通道）：
+            // 复核仍忙 → false（调用方中止 + 响亮告警，不再静默 task.start）；
+            // 复核空闲/有上下文 → 照常继续；查询失败（BGI 忙/重启中）→ 保持旧容错语义照常继续。
+            var confirm = await QueryTaskStatusAsync();
+            switch (confirm)
+            {
+                case { Running: true, HasContext: false }:
+                    log?.Invoke($"{logTag} [A6] 等待 BGI 任务停止超时（6s）且复核槽位仍被占用（旧任务可能卡死），本次启动尝试应中止");
+                    return false;
+                case not null:
+                    // 复核空闲（Running=false）或中断上下文已就位（HasContext=true）：槽位已落定
+                    log?.Invoke($"{logTag} settle 兜底轮询超时，复核确认槽位已释放（running={confirm.Value.Running} hasContext={confirm.Value.HasContext}），继续 task.start");
+                    return true;
+                default:
+                    // 复核查询失败（通道瞬态）：不知即不判死，保持旧容错继续——task.start 自有
+                    // task_already_running 无损拒绝重试与裸拉起回退托底
+                    log?.Invoke($"{logTag} 等待 BGI 任务停止超时（6s）且复核查询失败（通道瞬态），按容错策略继续执行 task.start");
+                    return true;
+            }
         }
         return bgiSettled;
     }
@@ -1158,7 +1253,13 @@ public class CommandExecutor
             Log($"[任务策略] task.suspend 失败/被阻断：{suspendResult.Message}；按键路径不回退杀进程，直接失败");
             return new CommandResult { Status = "failed", Message = $"关闭游戏失败：{suspendResult.Message}（按键路径绝不杀进程，请稍后重试）" };
         }
-        await WaitTaskSlotSettledAsync("[任务策略]", _log);
+        // [A6] settle 状态确认：复核仍忙 → 中止 + 响亮告警（不静默继续动作；中断上下文保留在 BGI 侧，
+        // 旧任务卡死时由用户或下一轮孤儿对账处置，绝不杀进程）
+        if (!await WaitTaskSlotSettledAsync("[任务策略]", _log))
+        {
+            NotifyLoud("BGI 任务疑似卡死", "关闭游戏键中止：BGI 任务在 suspend 后超时未释放槽位（旧任务可能卡死），未执行关闭游戏；请检查 BGI 状态");
+            return new CommandResult { Status = "failed", Message = "关闭游戏未执行：BGI 任务槽位在 suspend 后超时未释放（旧任务可能卡死），按有界退出语义中止（不杀进程），请检查 BGI 状态后重试" };
+        }
         var closeResult = await CloseGameAsync();
         // 收尾失败（游戏已关导致清上下文失败）只打日志，不杀进程（ApplyPolicyTeardownAsync 内部已逐条容错）
         await ApplyPolicyTeardownAsync(FixedKeyPolicy, "关闭游戏", userCancelled: false);
@@ -1204,7 +1305,12 @@ public class CommandExecutor
             Log($"[任务策略] task.suspend 失败/被阻断：{suspendResult.Message}；按键路径不回退杀进程，直接失败");
             return new CommandResult { Status = "failed", Message = $"抢占中断失败：{suspendResult.Message}（按键路径绝不杀进程，请稍后重试或先手动停止当前任务）" };
         }
-        await WaitTaskSlotSettledAsync("[任务策略]", _log);
+        // [A6] settle 状态确认：复核仍忙 → 中止 + 响亮告警（中断上下文保留在 BGI 侧，不杀进程）
+        if (!await WaitTaskSlotSettledAsync("[任务策略]", _log))
+        {
+            NotifyLoud("BGI 任务疑似卡死", $"{desc} 中止：BGI 任务在 suspend 后超时未释放槽位（旧任务可能卡死），热键未下发；请检查 BGI 状态");
+            return new CommandResult { Status = "failed", Message = $"{desc} 未执行：BGI 任务槽位在 suspend 后超时未释放（旧任务可能卡死），按有界退出语义中止（不杀进程），请检查 BGI 状态后重试" };
+        }
         var execResult = await ExecuteHotkeyAsync(hotkeyConfigName);
         if (execResult.Status != "success")
         {
@@ -1263,9 +1369,17 @@ public class CommandExecutor
         }
 
         // 2. settle 等待（与上线锄地共用同一方法）
-        await WaitTaskSlotSettledAsync("[任务冲突策略]", _log);
+        // [A6] settle 状态确认：复核仍忙 → 中止本次启动尝试 + 响亮告警，不再静默继续 task.start。
+        // 不做策略收尾：旧任务卡死仍持槽，resume 无意义、清上下文会白丢恢复点——中断上下文保留在
+        // BGI 侧，由用户处置或下一轮孤儿对账清理（按键路径绝不杀进程）。
+        if (!await WaitTaskSlotSettledAsync("[任务冲突策略]", _log))
+        {
+            NotifyLoud("BGI 任务疑似卡死", $"按键启动 {desc} 中止：BGI 任务在 suspend 后超时未释放槽位（旧任务可能卡死），新任务未下发；请检查 BGI 状态");
+            return new CommandResult { Status = "failed", Message = $"抢占启动 {desc} 中止：BGI 任务槽位在 suspend 后超时未释放（旧任务可能卡死），按有界退出语义未下发新任务（不杀进程），请检查 BGI 状态后重试" };
+        }
 
         // 3. v2 IPC task.start（抢占路径强制 v2，跳过 ext 队列；传输失败不杀进程）
+        // [A6] v2 通道无 preempt 字段：本路径前置 suspend+settle 已自行腾空槽位，无需抢占标志
         var startResult = await StartViaV2IpcNoKillAsync(groupName, configName, startFromIndex, generation);
 
         // 4. 策略收尾（F11 取消永远压过配置策略）

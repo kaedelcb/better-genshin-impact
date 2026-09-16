@@ -92,6 +92,44 @@ public class TaskRunner
             }
             return TaskRunResult.RejectedSlotBusy;
         }
+        // [A6 租约门] 持锁瞬间判定（必须在 job 推进 Running、发布 started、RunnerContext.Clear 等
+        // 一切副作用之前——让位是静默路径，不留 Running 残帧）：IPC 下发任务（V2/Ext/Resume）原子
+        // 消费抢占意图；本地任务（UI/热键/调度器/CLI/龙内条目）在门有效时让位——保存恢复点
+        // （每代际一次）后放锁返回。让位语义见 PreemptionGate 头注释（ADR-2026-09-16）。
+        var jobSource = job?.Source ?? JobSource.Ui;
+        if (PreemptionGate.ConsumeIfServedBy(jobSource))
+        {
+            _logger.LogInformation("[A6] 抢占意图已由下发任务消费（门解除）: {Name}", job?.Name ?? soloTaskName ?? "未命名");
+        }
+        else if (PreemptionGate.ShouldYield(jobSource))
+        {
+            _logger.LogInformation("[A6] 抢占意图有效，任务让位联机锄地批次: {Name}", job?.Name ?? soloTaskName ?? "未命名");
+            if (registeredJob != null)
+            {
+                TryRegistryTerminal(registeredJob.JobId, JobState.Cancelled, JobErrorCodes.Preempted, "让位联机锄地批次（抢占意图门有效）", true);
+            }
+            TaskSemaphore.Release();
+            // 槽位释放信号与正常结束同口径（协调器/助手 settle 的统一判定依据）；task.stopped 不发——任务从未起步
+            BetterGenshinImpact.Service.ExternalInterface.ExternalInterfaceEventHub.Instance.PublishTaskSlotReleased();
+            // 恢复点每代际只存一次 + 每代际只通知一次（级联让位不刷屏、不覆写首个受害者的恢复点）
+            if (PreemptionGate.TryMarkContextSaved())
+            {
+                try
+                {
+                    var snapshot = SuspendContextCapture.CaptureForYield(jobSource, job?.Name ?? soloTaskName);
+                    if (snapshot != null)
+                    {
+                        SuspendContextCapture.Save(_logger, snapshot, "A6让位");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[A6] 让位时保存恢复点失败（不影响让位本身）");
+                }
+                Toast.Information("已让位联机锄地，等待批次下发");
+            }
+            return TaskRunResult.Preempted;
+        }
         if (registeredJob != null)
         {
             TryRegistryTransition(registeredJob.JobId, JobState.Running);

@@ -474,6 +474,18 @@ public partial class ScriptService : IScriptService
             return;
         }
 
+        // [A6] 让位联机锄地：组从未起步，不走"执行结束"式收尾（同 A1.1 不假事实纪律）；
+        // 恢复点已在 TaskRunner 让位点保存，锄地批次结束后由 task.resume 恢复。
+        if (runResult == TaskRunResult.Preempted)
+        {
+            _logger.LogInformation("配置组 {Name} 已让位联机锄地批次，本次未执行", groupName);
+            if (taskProgress != null)
+            {
+                taskProgress.Next = null;
+            }
+            return;
+        }
+
         if (!string.IsNullOrEmpty(groupName)&&!RunnerContext.Instance.IsPreExecution)
         {
             _logger.LogInformation("配置组 {Name} 执行结束", groupName);

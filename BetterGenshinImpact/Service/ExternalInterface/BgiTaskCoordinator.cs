@@ -79,6 +79,10 @@ internal sealed class BgiTaskCoordinator : IDisposable
     {
         /// <summary>幂等去重名（groupName ?? configName），与 v2 taskName 语义一致。</summary>
         public string? Name => GroupName ?? ConfigName;
+
+        /// <summary>[A6] 抢占式下发（联机锄地批次/按键抢占）：等槽窗口缩短为 3s（让位点通常即刻腾槽），
+        /// 未果则转入执行段的主动抢占（有界退出契约）。默认 false = 旧 15s 等槽语义不变。</summary>
+        public bool Preempt { get; init; }
     }
 
     public readonly record struct SubmitResult(SubmitStatus Status, Guid TaskHandle, int QueuePosition);
@@ -511,7 +515,13 @@ internal sealed class BgiTaskCoordinator : IDisposable
         }
 
         // 1. 等槽位空（只读轮询 CurrentCount，绝不 WaitAsync 抢占；15s 兜底防旧任务卡死）
-        if (!await WaitSlotFreeAsync(item, pumpToken).ConfigureAwait(false))
+        // [A6] preempt 项：3s 短窗（租约门让位点通常即刻腾槽），未果不判死，转入执行段主动抢占
+        var slotFree = await WaitSlotFreeAsync(item, pumpToken).ConfigureAwait(false);
+        if (!slotFree && item.Submission.Preempt && !item.Cts.IsCancellationRequested)
+        {
+            _logger.LogInformation("[task.queue] preempt 项等槽未果，转入主动抢占（有界退出契约）: {Name}", item.Submission.Name);
+        }
+        else if (!slotFree)
         {
             if (item.Cts.IsCancellationRequested)
             {
@@ -599,11 +609,15 @@ internal sealed class BgiTaskCoordinator : IDisposable
             _logger.LogError(exception, "[task.queue] 任务执行失败 taskHandle={Handle}", item.TaskHandle);
             if (item.TryMarkTerminalEventPublished())
             {
-                RecordTerminal(item.TaskHandle, "failed", errorCode: "task_start_failed", message: exception.GetBaseException().Message);
+                // [A6] 抢占超界是可重试瞬态（reconcile 按 ADR-2026-09-16 分类重试），错误码独立于通用失败
+                var errorCode = exception is BetterGenshinImpact.Service.Execution.PreemptTimeoutException
+                    ? "preempt_timeout"
+                    : "task_start_failed";
+                RecordTerminal(item.TaskHandle, "failed", errorCode: errorCode, message: exception.GetBaseException().Message);
                 PublishSafe(ExternalInterfaceEventNames.TaskFailed, new
                 {
                     taskHandle = item.TaskHandle.ToString("N"),
-                    errorCode = "task_start_failed",
+                    errorCode,
                     message = exception.GetBaseException().Message,
                 });
             }
@@ -622,10 +636,12 @@ internal sealed class BgiTaskCoordinator : IDisposable
         }
     }
 
-    /// <summary>等槽位空：只读轮询 + 项级取消可打断 + 兜底超时。返回 false = 超时或被取消。</summary>
+    /// <summary>等槽位空：只读轮询 + 项级取消可打断 + 兜底超时。返回 false = 超时或被取消。
+    /// [A6] preempt 项超时窗口缩短为 3s——租约门让位点通常即刻腾槽；未果由执行段主动抢占。</summary>
     private async Task<bool> WaitSlotFreeAsync(PendingTask item, CancellationToken pumpToken)
     {
-        var deadline = DateTime.UtcNow + _slotWaitTimeout;
+        var timeout = item.Submission.Preempt ? TimeSpan.FromSeconds(3) : _slotWaitTimeout;
+        var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
             if (_isSlotFree())

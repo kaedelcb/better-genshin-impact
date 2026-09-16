@@ -495,3 +495,64 @@ Docs/design/multi-instance-ipc.md。
 | 2026-09-13 | A5-1 | 龙级水位线回写（A5 第一片，先修缺陷再引父子模型）：OneDragonFlowViewModel 新增运行时水位线 `_currentExecutingTaskIndex`（volatile，写=执行线程/读=IPC 线程），OnOneKeyExecute 每轮开头清零、执行循环每条目（含批次跳过项——已逻辑启动）回写 task.Index；HandleTaskSuspend 改读水位线（原读 NextTaskIndex——执行开头消费即清零，执行中恒 0，resume 必从头重跑的根因）；suspend 保存日志扩展携带 OneDragonIndex（探针留痕锚点）。NextTaskIndex 用户标记语义（从此执行/显示 IsNextTask/消费清零）与 resume 回灌路径零改动；水位线不持久化、不进 UI，单机零感知。遗留边界：默认条目（自动秘境等）执行中 suspend 仍识别不到 onedragon（taskProgress 仅配置组分支写入），另行处理 | BGI 0 error CS；BGI 单测（537 例基线，14 个 FsCheck PBT 区预存失败非回归） |
 | 2026-09-13 | A5-2 | 父子作业模型落地：OnOneKeyExecute 拆壳/核（壳=[RelayCommand] 父作业生命周期，核=原 400 行执行体逐字节不动）；父作业全入口覆盖——IPC task.start 预置认领（RunnerContext.OneDragonParentJobId，终态仍由 ExecuteTaskStartCoreAsync 单一登记，壳不抢先写者）、resume/CLI 经 OneDragonJobSourceHint 提示新建（Resume/Cli）、UI/连续一条龙默认 Ui 每轮一父作业；龙内两子项分发点挂 ParentJobId（默认条目 Solo + 配置组 Group，均 OneDragonInternal）；项间槽位抢占从静默跳过变显式 Rejected(task_busy)+响亮日志（默认条目分支观察 TaskRunResult；等待/终止策略留 B2 整龙租约）；壳终态口径=faulted→Failed/_finishMark→Succeeded/其余→Cancelled（壳开头重置 _finishMark 消跨轮残留）。**同片修复 A5-1 集成缺口**：resume 回灌 NextTaskIndex 前必须 WriteConfig 持久化+同步 SelectedOneDragonFlowConfigName——OnOneKeyExecute 开头 InitConfigList 从磁盘重载并整体替换 SelectedConfig，仅写内存会被覆盖（A5-1 水位线此前到不了执行） | BGI 0 error CS；单测 524/538（14 预存失败非回归；新增父子拓扑用例：链接/子终态不扩散/Rejected 可查/父终态先写者赢） |
 | 2026-09-13 | A5-3 | ext 新增 job.progress（A5 收尾，父作业视角）：ExternalInterfaceEventNames 增 JobProgress 入 All/IsKnown；EventHub.PublishJobProgress 唯一出口（jobId=父作业、currentIndex=启用序列 1-based 序号、total=启用条目总数、currentItemName；容错不外抛）；唯一挂载点=OnOneKeyExecuteCore 执行循环水位线推进处（批次跳过项同样推进=已逻辑启动；父作业登记失败为空时跳过发布）。助手侧 BgiExternalClient 增常量并入 All 订阅，事件分发静默落地不唤醒 reconcile（进度非状态迁移）。A5 验收口径达成：外部观察者凭 job.queued/started/progress/completed 事件族 + ext.job.list 可还原含手动启动（Attended）的任意龙执行轨迹 | BGI/MHA 0 error CS；新增锚点 2 例（事件名登记/发布不外抛） |
+
+### ADR-2026-09-16：有界退出契约（bounded quiesce）
+
+**背景**：owner 对槲寄生接管的验收语义是四句话——完全接管、想什么时候启动就什么时候启动、
+随便停、随时知道 BGI 在干什么。其中"随时启动/随便停"的物理基础是"取消必然在有界时间内
+生效"，而现状取消是协作式的，任务在检查点之间不看令牌就死不了；`HandleTaskSuspend` 等锁
+5s 超时还谎报 `suspended`（实机审计实锤）。零延迟启动在协作式执行中不存在，能承诺且必须
+承诺的是**有界延迟**。
+
+**决策**：
+1. 取消/抢占请求发出后，执行器必须在显式常量 **QuiesceBound = 30s** 内确认任务死亡并归还
+   槽位；等待方以"槽位确认空闲"这一**状态**为通过判据，时间只是上限不是通过条件。
+2. 超界即**响亮失败**（BGI 通知 + 助手横幅 + 批次报告），并逐级升级：助手侧按既有
+   BgiProcessMonitor 进程仲裁器重启 BGI（有意杀死豁免崩溃误判语义不变）。
+3. 任何等待路径不得再"超时仍回报成功"——`suspend`/`task.start` 响应新增加法布尔
+   `liveTask`/`quiesceConfirmed`，`status` 字符串保持旧值（老助手零感知）。
+4. 瞬态拒绝分类：`queue_full`/`task_busy`/`preempt_timeout` 可重试（每项 2min 预算退避）；
+   `manual_stop_cooldown` 归终态+响亮通知**不重试**（F11 是用户最终权威，d4dc54a9 教训）。
+
+**反转条件**：若未来执行器改为可强制中断的解释器宿主（JS/宏全部引擎级可杀），QuiesceBound
+可收紧；契约本身（状态判据 + 超时必响亮 + 有兜底升级）不反转。
+
+### 阶段 A6：抢占闭环真实化（租约语义的 local 态子集）
+
+**定位**：本阶段是 B2 整龙租约/C1 接管态的 **local 态地基**。所有机制按租约语义命名与建模，
+B2 落地时演化为租约而非拆除重来；managed 态下抢占退化为"取消当前 Job + 提交新 Job"，
+PreemptionGate 在 managed 态旁路、local 态继续服役。
+
+**根因（2026-09-16 实机事故）**：AllReady→suspend 的 roundtrip（~2s）确定性落在"上线信号
+任务已自结、下一条龙条目未起步"的组间缝隙：suspend 依 RunnerContext 残留把已死信号任务当
+受害者，`Cancel()` 打在已 disposed 的取消上下文上（CancelCore 早退=空枪）；下一条目拿锁后
+`RunCurrentAsync` 无条件 `Set()` 重建上下文从此免疫；ext 队列等槽 15s 判死 task_busy，
+reconcile 当终态跳过——锄地静默整批丢失。核心教训：**抢占意图不能寄生在会被 Set/Clear
+重置的取消令牌上，必须是独立结构**。
+
+**机制**：
+- `PreemptionGate`（BGI 进程级静态，租约意图门）：`Arm()`（suspend/抢占声明租约意图，代际
+  递增）、`IsArmed`（TTL 90s 惰性过期）、`SavedForEpoch`（每代际中断上下文只存一次）。
+  锁内只做标志读写，等待一律锁外。F11/F12 手动停止 = 用户收租（Disarm）。
+- 唯一强制让位点：`TaskRunner.RunCurrentAsync` 拿锁成功后、一切副作用（job 推进/started
+  事件/RunnerContext.Clear）**之前**——armed 且来源非 IPC（JobSource ∈ {V2,Ext,Resume}
+  豁免并在持锁处原子消费门）时：捕获保存中断上下文（每代际一次）→ 放锁返回新枚举
+  `TaskRunResult.Preempted`，静默（无 started 事件无 toast），job 登记 Cancelled(preempted)。
+- 安静停点：`ScriptService.RunMulti` 项目循环与一条龙条目循环各加门检查，armed 时停组/
+  停龙并发**一条**"已让位联机锄地"通知，避免级联撞门与 toast 刷屏。
+- `SuspendCurrentTaskCore`：HandleTaskSuspend 步骤 1-5 抽共用原语，三处复用（IPC suspend、
+  ext pump 抢占路径、ExecuteTaskStartCoreAsync 接通 :686-701 僵尸抢占代码）。用信号量区分
+  活体/残留：无活体→不保存+Arm+响应 `liveTask:false`；有活体→照旧保存（2.5 WasCancelled、
+  2.6 信号任务规则原样）+Cancel+等释放（QuiesceBound 内以槽位空闲为准，超界
+  `quiesceConfirmed:false`）。ext.task.start 项加 `preempt` 标志（助手锄地批次/按键抢占置位）。
+- 助手侧：settle 改状态确认（槽位空闲为准、超时再查一次仍忙则中止+告警）；reconcile 按
+  ADR-2026-09-16 第 4 条分类重试；远端下发补启动结果回执（服务端转发，加法，老端降级无回执）。
+
+**已拍板决策（owner 2026-09-16）**：D1 F11 冷却 = 终态+通知不重试；D2 门 armed 期间用户
+UI 手动启动 = 让位给锄地并通知原因（F11 永远是否决键）。
+
+**回归守卫**：ABABAB 不复发（2.6 原样保留，信号任务永不进 SuspendedTaskContext）；F11 语义
+与 30s 冷却不变；孤儿上下文对账不受影响；批次吞组不复发；老助手连新 BGI 可用（capability
+裁剪）。验收：A4 故障注入锚点 + 组间缝隙场景重放（06:39 日志时间线逐秒对照）。
+
+| 2026-09-16 | A6 | 抢占闭环真实化全量落地。BGI：新增 Service/Execution/PreemptionGate.cs（租约意图门：Arm/Disarm/ConsumeIfServedBy/ShouldYield/TryMarkContextSaved，TTL 90s、QuiesceBound 30s、PreemptTimeoutException）+ SuspendContextCapture.cs（捕获/保存单一事实源，2.5/2.6 收口；CaptureForYield 只信组级/龙级数据——项目级信息在让位点必为残留）；TaskRunner 让位点（持锁后、Running 推进前：IPC 来源原子消费门，本地来源让位→Cancelled(preempted)→放锁发 slotReleased→每代际存一次恢复点+Toast 一次，返回新增 TaskRunResult.Preempted）；CancellationContext.CancelCore manualStop 分支 Disarm（F11 收租）；HandleTaskSuspend 重写（Arm+信号量活体判定：无活体→不保存不取消只留门、status 兼容+suspended/no_task+liveTask:false；活体→捕获保存+Cancel+30s 状态确认 quiesceConfirmed，未识别持锁者不再豁免中断）；ExecuteTaskStartCoreAsync 增 preempt 可选参（默认 false 旧行为逐字节；true 时条件 Arm+保存+Cancel+有界等待，超界抛 PreemptTimeoutException）；ext pump preempt 项等槽 3s 转主动抢占、preempt_timeout 独立错误码；RunMulti 增 Preempted 分支（不走"执行结束"假收尾）；审查修复三连——门判定移到 Running 推进前（消 Running 残帧）、preempt 条件 Arm（保代际守卫）、Save 成功即标记代际（首受害者优先）。助手：settle 状态确认（超时复核仍忙→中止+响亮告警，四调用方全 honor）；suspend 客户端超时 8s→35s（覆盖 30s 契约）；quiesceConfirmed=false→告警+仲裁器重启 BGI；reconcile 拒绝分类（queue_full/task_busy/preempt_timeout 退避重试 2min/12 次帽；manual_stop_cooldown 终态+通知不重发——owner D1）；AllReady 批次 ext.task.start 置 preempt:true；NotifyLoud/NotifyBatchLoud 告警通道。服务端+助手：control.reportCommandResult/remoteCommandResult 远端回执（目标机上报→服务端按 SenderUid 双路由回投→发起方卡片显示；老端降级"已发送（无回执）"）。**设计偏差留痕**：ADR 中"RunMulti/一条龙循环安静停点"未实施——让位点级联已静默（每代际仅首者通知+保存），实测路径覆盖，不额外动循环 | BGI/MHA 0 error CS；Server 251/251、MHA 单测 128/128（新增 17 例）、BGI 单测 753/767（14 例预存 FsCheck PBT 失败非回归，均在 AutoHoeing/OCR/AutoPathing 区）；post-edit 审查修复 3 项见左 |
