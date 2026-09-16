@@ -800,9 +800,16 @@
                                                 <!-- 金色左竖条 -->
                                                 <Border Grid.Column="0" Background="{StaticResource GoldDeep}" CornerRadius="2" Margin="0,2,12,2"/>
                                                 <StackPanel Grid.Column="1">
-                                                    <!-- 首行：勾选 + 头像 + 名字/UID + 状态徽章 -->
+                                                    <!-- 首行：勾选 + 头像 + 名字/UID + 状态徽章。
+                                                         两列 * / Auto：任务胶囊在 Auto 列向左收缩（最长 400 已有省略号），
+                                                         左侧独占剩余空间——原先无分栏、胶囊后绘制会盖住 UID/版本号
+                                                         （脚本任务三段全上时必现，垂钓长任务名即例） -->
                                                     <Grid Margin="0,0,0,8">
-                                                        <StackPanel Orientation="Horizontal">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Grid.Column="0" Orientation="Horizontal">
                                                             <CheckBox IsChecked="{Binding IsSelected}" Style="{StaticResource GuildCheckBox}"/>
                                                             <!-- 角色头像（元素色描边，圆角） -->
                                                             <Rectangle Width="38" Height="38" RadiusX="11" RadiusY="11" Margin="0,0,10,0">
@@ -865,7 +872,7 @@
                                                             </StackPanel>
                                                         </StackPanel>
                                                         <!-- 右侧：状态徽章 -->
-                                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                                             <Border CornerRadius="7" Padding="8,2" Margin="0,0,8,0" BorderThickness="1">
                                                             <Border.Style>
                                                                 <Style TargetType="Border">
