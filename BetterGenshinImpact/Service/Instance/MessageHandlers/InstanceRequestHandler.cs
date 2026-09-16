@@ -1081,25 +1081,8 @@ internal sealed class InstanceRequestHandler
             }
 
             // 好感任务进度合成（纯增量）：AutoFriendshipTask 主循环写 FriendshipProgress，
-            // 文本口径与其日志一致（第X/Y轮 + 预计剩余 + 预计完成时刻）。
-            string? friendshipProgress = null;
-            if (!isCancelled)
-            {
-                lock (FriendshipProgress.Sync)
-                {
-                    if (FriendshipProgress.IsRunning)
-                    {
-                        var tsRemain = TimeSpan.FromSeconds(Math.Max(0, FriendshipProgress.EstimatedRemainingSeconds));
-                        var remainText = FriendshipProgress.EstimatedRemainingSeconds > 0
-                            ? $"，预计剩余 {(int)tsRemain.TotalMinutes}分{tsRemain.Seconds:00}秒"
-                            : "";
-                        var finishText = FriendshipProgress.EstimatedFinishTime > DateTime.MinValue
-                            ? $"，预计 {FriendshipProgress.EstimatedFinishTime:HH:mm} 完成"
-                            : "";
-                        friendshipProgress = $"好感任务：第 {FriendshipProgress.CurrentRound}/{FriendshipProgress.TotalRounds} 轮{remainText}{finishText}";
-                    }
-                }
-            }
+            // 文本与 ext 观察器共用 BuildDisplayText 单一口径（第X/Y轮 + 预计剩余 + 预计完成时刻）。
+            string? friendshipProgress = isCancelled ? null : FriendshipProgress.BuildDisplayText();
 
             // 检查 _recentTaskName 是否在 30 秒内
             string? recentTaskName = null;

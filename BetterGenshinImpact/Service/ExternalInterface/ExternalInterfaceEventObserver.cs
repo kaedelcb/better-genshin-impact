@@ -32,6 +32,8 @@ internal sealed class ExternalInterfaceEventObserver
     private string? _lastRouteDisplay;
     private int _lastOnlineGeneration;
     private DateTime _lastHoeingPushUtc = DateTime.MinValue;
+    private string? _lastFriendshipText;
+    private DateTime _lastFriendshipPushUtc = DateTime.MinValue;
 
     public ExternalInterfaceEventObserver()
     {
@@ -178,6 +180,23 @@ internal sealed class ExternalInterfaceEventObserver
                 hub.Publish(
                     ExternalInterfaceEventNames.HoeingProgress,
                     new { currentRouteDisplay = routeDisplay });
+            }
+        }
+
+        // 3.5 好感任务进度：文本变化且 1s 节流 → 发 task.progress 触发助手快照刷新。
+        // 好感任务没有线路边沿（不发 2/3 号事件），执行端助手的 ext 快照会冻结在任务开始时刻，
+        // 桌宠执行端面板恒显示旧值——监控端 GET_STATUS 轮询不受影响，本事件专补执行端。
+        var friendshipText = BetterGenshinImpact.GameTask.AutoFriendship.FriendshipProgress.BuildDisplayText();
+        if (!string.Equals(friendshipText, _lastFriendshipText, StringComparison.Ordinal)
+            && (now - _lastFriendshipPushUtc) >= HoeingPushThrottle)
+        {
+            _lastFriendshipText = friendshipText;
+            if (!string.IsNullOrEmpty(friendshipText))
+            {
+                _lastFriendshipPushUtc = now;
+                hub.Publish(
+                    ExternalInterfaceEventNames.TaskProgress,
+                    new { friendshipProgress = friendshipText });
             }
         }
 

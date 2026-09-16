@@ -36,4 +36,24 @@ public static class FriendshipProgress
             EstimatedFinishTime = DateTime.MinValue;
         }
     }
+
+    /// <summary>
+    /// 合成进度展示文本（IPC task.status 的 friendshipProgress 字段与 ext 观察器的事件载荷共用单一口径）。
+    /// 不在跑返回 null。预计剩余需要首个成功轮次的耗时样本，首轮期间显示"首轮计速中"。
+    /// </summary>
+    public static string? BuildDisplayText()
+    {
+        lock (Sync)
+        {
+            if (!IsRunning) return null;
+            var tsRemain = TimeSpan.FromSeconds(Math.Max(0, EstimatedRemainingSeconds));
+            var remainText = EstimatedRemainingSeconds > 0
+                ? $"，预计剩余 {(int)tsRemain.TotalMinutes}分{tsRemain.Seconds:00}秒"
+                : (CurrentRound <= 1 ? "，首轮计速中" : "");
+            var finishText = EstimatedFinishTime > DateTime.MinValue
+                ? $"，预计 {EstimatedFinishTime:HH:mm} 完成"
+                : "";
+            return $"好感任务：第 {CurrentRound}/{TotalRounds} 轮{remainText}{finishText}";
+        }
+    }
 }
