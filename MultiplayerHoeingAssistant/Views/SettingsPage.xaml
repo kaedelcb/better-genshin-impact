@@ -414,6 +414,24 @@
                         </Grid>
                     </Border>
 
+                    <!-- 免打扰穿透（穿透开启后桌宠窗口不再响应鼠标，本开关与托盘菜单是唯二解锁入口） -->
+                    <Border Background="#1E262660" CornerRadius="8" Padding="12,10" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox Grid.Column="0" IsChecked="{Binding Pet.ClickThrough, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
+                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Top" Margin="0,2,16,0"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="免打扰穿透" FontSize="13" FontWeight="Medium"
+                                           Foreground="{DynamicResource White}"/>
+                                <TextBlock Text="开启后鼠标点击会穿过桌宠和状态面板直达桌面/游戏，拖拽、滚轮缩放、右键菜单全部失效；解锁请用托盘菜单或关闭本开关"
+                                           FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
                     <!-- 任务状态详情面板（独立窗口） -->
                     <Border Background="#1E262660" CornerRadius="8" Padding="12,10" Margin="0,0,0,10"
                             IsEnabled="{Binding Pet.Enabled, RelativeSource={RelativeSource AncestorType=Window}}">
