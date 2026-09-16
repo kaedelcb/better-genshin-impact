@@ -418,10 +418,22 @@ public sealed partial class RoomOperations
                 player.TargetProgress = -1;
                 _logger.LogInformation("[MemberStatusChanged] 玩家={PlayerUid} 恢复正常状态", playerUid);
             }
+
             else
             {
                 _logger.LogDebug("[MemberStatusChanged] 玩家={PlayerUid}, 状态={Status}", playerUid, status);
             }
+
+            // route-anchor 阶段 5：把成员状态观察写入锚点侧状态（不改既有 PlayerStatus/IsAbnormal/TargetProgress）
+            var observed = status switch
+            {
+                "Reviving" => RouteAnchorMemberState.Reviving,
+                "Rejoining" => RouteAnchorMemberState.Rejoining,
+                "Fighting" => RouteAnchorMemberState.Fighting,
+                "Normal" => RouteAnchorMemberState.Pathing,
+                _ => (RouteAnchorMemberState?)null,
+            };
+            ObserveRouteAnchorActivityLocked(room, player.PlayerUid, observed, DateTime.UtcNow);
         }
 
         // 广播满足条件的同步点（在 lock 外执行 await）
@@ -544,6 +556,20 @@ public sealed partial class RoomOperations
         if (room == null || roomCode == null) return Task.CompletedTask;
 
         _logger.LogDebug("[FightingStatusChanged] 玩家={PlayerUid}, 战斗中={IsFighting}", playerUid, isFighting);
+
+        // route-anchor 阶段 5：只把战斗观察写入锚点状态（不改既有 PlayerStatus/IsAbnormal）。
+        // 没有活动锚点时这里等价于原来的空实现。
+        lock (room)
+        {
+            var uid = room.Players.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId)?.PlayerUid;
+            if (!string.IsNullOrEmpty(uid))
+            {
+                ObserveRouteAnchorActivityLocked(
+                    room, uid,
+                    isFighting ? RouteAnchorMemberState.Fighting : RouteAnchorMemberState.Pathing,
+                    DateTime.UtcNow);
+            }
+        }
 
         return Task.CompletedTask;
     }

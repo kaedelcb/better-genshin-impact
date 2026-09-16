@@ -16,6 +16,8 @@ builder.Services.AddHostedService<HeartbeatMonitor>();
 builder.Services.AddSingleton<GatewaySessionTracker>();
 builder.Services.AddSingleton<GatewayBroadcaster>();
 builder.Services.AddSingleton<RoomPhaseObserver>();
+builder.Services.AddSingleton<BgiCoordinatorServer.Services.IClientCapabilityLookup,
+    BgiCoordinatorServer.Services.GatewayCapabilityLookup>();
 builder.Services.AddSingleton<RoomOperations>();
 builder.Services.AddSingleton<GatewayDispatcher>();
 builder.Services.AddSignalR(options =>

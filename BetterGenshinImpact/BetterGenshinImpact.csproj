@@ -117,6 +117,8 @@
 		     服务端 Docker 构建上下文只有该目录（父目录路径会 CS2001），
 		     而部署按目录清单同步（新建顶层文件夹会被漏掉 → 容器内一屏 CS0246）。 -->
 		<Compile Include="..\BgiCoordinatorServer\Gateway\RerunProtocol.cs" Link="GameTask\AutoHoeing\Multiplayer\Rerun\RerunProtocol.cs" />
+		<!-- 路线边界锚点协议：同样链接服务端工程内的同一份文件（单一来源，能力常量/消息名/事件名两端不漂移）。 -->
+		<Compile Include="..\BgiCoordinatorServer\Gateway\RouteAnchorProtocol.cs" Link="GameTask\AutoHoeing\Multiplayer\RouteAnchor\RouteAnchorProtocol.cs" />
 	</ItemGroup>
 
 	<ItemGroup>

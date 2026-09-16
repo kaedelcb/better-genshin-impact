@@ -146,7 +146,12 @@ public sealed class BgiGatewayClient : IAsyncDisposable
             protocolVersion = GatewayProtocol.ProtocolVersion,
             // 客户端能力必须真实宣告：服务端共同重跑状态机按"该连接 hello 里的能力"校验参与者
             // （缺省即不支持），客户端此前宣告空数组会导致 Enroll 100% 被 rerun_capability_required 拒绝。
-            capabilities = new[] { BetterGenshinImpact.Shared.CooperativeRerun.RerunProtocol.Capability },
+            capabilities = new[]
+            {
+                BetterGenshinImpact.Shared.CooperativeRerun.RerunProtocol.Capability,
+                // 路线边界锚点能力：服务端据此判断"是否全员支持"，部分客户端不支持时禁止激活（禁止半启用）
+                BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability,
+            },
         }, null, ct);
 
         ServerCapabilities = resp.Get<string[]>("capabilities") ?? [];

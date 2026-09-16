@@ -99,6 +99,24 @@ public sealed partial class RoomOperations
             room.CollectiveSkipTimer?.Dispose();
             room.CollectiveSkipTimer = null;
 
+            // === 集体跳段 Applied 确认状态重置（collective-skip-applied-ack）===
+            // 新轮次不得继承上一轮的 SkipId：否则客户端迟到的旧 skipId 回报会与新轮次混淆，
+            // 且残留的活动跳段会阻止新轮次生成跳段命令。
+            ClearActiveCollectiveSkipLocked(room);
+
+            // === 路线边界锚点重置（route-anchor）===
+            // 新世界必须新建会话：旧锚点（含旧代际与旧参与者）无权影响新会话。
+            // RouteAnchorSequence 刻意不复位：锚点 ID 在房间生命周期内保持单调唯一。
+            room.ActiveRouteAnchor = null;
+            room.RouteAnchorEvaluateTimer?.Dispose();
+            room.RouteAnchorEvaluateTimer = null;
+
+            // 已放行边界必须复位：这是**每世界轮次**的状态。
+            // 缺陷（第二十三轮复查发现）：不复位会让第 2 个世界的边界 0..N 全部
+            // < 上一世界的最大边界 → Enroll 被判 stale_boundary 拒绝 → 客户端 gate 判 Failed →
+            // 整个第二世界每一轮都被误停。与第十一轮客户端同类缺陷（跨轮状态未复位）同源。
+            room.LastReleasedRouteBoundary = -1;
+
             // fastsync-claim-short-circuit-premature-release-fix（OQ-3=c→落地清理）：
             // syncId 不含轮次标识，同名路线跨轮复用。不清理则上一轮已广播的 syncId 残留，
             // 本轮第一个到达者一调 WaitForAllPlayers 即被补发 AllArrived → 跨轮误放。

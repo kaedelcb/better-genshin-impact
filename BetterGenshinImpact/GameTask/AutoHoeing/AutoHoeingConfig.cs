@@ -344,6 +344,14 @@ public partial class AutoHoeingConfig : ObservableObject
     private int? _maxRouteLag = 2;
 
     // === 集体卡死监测（multiplayer-mutual-wait-collective-skip spec / OQ-1~OQ-8 全部默认值）===
+    /// <summary>
+    /// 启用路线边界锚点（route-anchor）。默认 false：这是一条新的全局路线推进机制，
+    /// 未经过实机验证前不得默认开启（方案正文第 10 章）。
+    /// 开启后每条路线边界必须全员收口，服务端放行后才能进入下一条路线。
+    /// 第一版仅通过配置 JSON/房主下发启用，暂不在设置界面暴露。
+    /// </summary>
+    public bool EnableRouteAnchor { get; set; } = false;
+
     /// <summary>启用集体卡死监测，默认 true。关闭后服务端不创建 MutualWaitMonitor，行为退化到 60s 超时</summary>
     [ObservableProperty]
     private bool _enableMutualWaitCollectiveSkip = true;

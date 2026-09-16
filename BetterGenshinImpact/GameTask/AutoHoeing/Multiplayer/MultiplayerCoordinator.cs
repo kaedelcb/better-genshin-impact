@@ -99,6 +99,22 @@ public class MultiplayerCoordinator : IAsyncDisposable
     /// </summary>
     private long _remoteSkipTargetProgress = -1;
 
+    // === 集体跳段 Applied 确认状态（collective-skip-applied-ack）===
+    /// <summary>保护 _pendingCollectiveSkip / _activeCollectiveSkip 的锁（SignalR 线程写、PathExecutor 线程读）。</summary>
+    private readonly object _collectiveSkipLock = new();
+
+    /// <summary>已收到、等待 PathExecutor 在合法消费点消费的跳段请求（null = 无待消费请求）。</summary>
+    private CollectiveSkipRequest? _pendingCollectiveSkip;
+
+    /// <summary>已消费、正在等待服务端 AppliedAll 确认的跳段（null = 本机无进行中跳段）。</summary>
+    private CollectiveSkipRequest? _activeCollectiveSkip;
+
+    /// <summary>已回报过 Applied 的 SkipId（幂等：同一 SkipId 只回报一次）。</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _reportedCollectiveSkipIds = new();
+
+    /// <summary>已消费过的 SkipId（幂等：同一 SkipId 不重复消费/重复跳段，服务端重播也成立）。</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _handledCollectiveSkipIds = new();
+
     // === 待处理等待点 ===
     private PendingWaitPoint? _pendingWaitPoint;
 
@@ -142,7 +158,12 @@ public class MultiplayerCoordinator : IAsyncDisposable
         KazuhaCollectSync = new KazuhaCollectSyncCoordinator(_client, _config, this);
 
         // 集体卡死跳段事件订阅（multiplayer-mutual-wait-collective-skip §8.6）
-        _client.RequestSkipToProgressReceived += OnRequestSkipToProgressReceived;
+        // collective-skip-applied-ack：改订阅带 skipId 的新事件（CollectiveSkipRequested）。
+        // DispatchEvt 对同一条 sync.requestSkipToProgress 同时触发新旧两个事件，新事件载荷
+        // 是旧事件的超集（skipId + targetProgress），因此只订阅新事件即可——
+        // 同时订阅两个会让同一条广播被处理两次（信号位/目标被重复写），是必须避免的竞态。
+        _client.CollectiveSkipRequested += OnCollectiveSkipRequested;
+        _client.CollectiveSkipAppliedAllReceived += OnCollectiveSkipAppliedAllReceived;
         _client.CollectiveSkipDegradedReceived += OnCollectiveSkipDegradedReceived;
 
         // 基于经验判断停止锄地：全员达上限广播订阅（multiplayer-hoeing-exp-cap-stop）
@@ -153,16 +174,93 @@ public class MultiplayerCoordinator : IAsyncDisposable
 
     // === 集体卡死跳段事件处理（multiplayer-mutual-wait-collective-skip §8.6）===
 
-    private void OnRequestSkipToProgressReceived(long targetProgress)
+    /// <summary>
+    /// 收到集体跳段请求（collective-skip-applied-ack）。
+    ///
+    /// 与旧实现的差别：请求带唯一 SkipId，并按 SkipId 幂等受理——
+    ///   - 同一 SkipId 已在待消费/进行中/已处理 → 忽略（服务端重播不会造成重复跳段）；
+    ///   - 受理后与旧实现完全一致：写信号位 + 唤醒同步点等待（消费点 4）。
+    /// 旧服务端（载荷无 skipId）时 SkipId 为空串，行为与旧实现逐字一致（只跳段、不回报）。
+    /// </summary>
+    private void OnCollectiveSkipRequested(CollectiveSkipRequest request)
     {
-        _remoteSkipTargetProgress = targetProgress;
-        RemoteSkipGate.TargetProgress = targetProgress;
+        if (request == null) return;
+
+        // 锚点模式激活 → 旧集体跳段完全让位：不登记、不置信号位、不唤醒等待。
+        // 理由：两者都会移动成员（旧机制跳段 + 锚点 Pull 跳路线），同时生效正是"走散"的成因；
+        // 锚点在需要时会自行下发 Pull（其目标由服务端权威给出）。
+        if (IsRouteAnchorActive)
+        {
+            _logger.LogInformation(
+                "[联机][锚点] 锚点模式已激活，忽略旧集体跳段命令 {SkipId}（路线推进权归路线边界锚点）",
+                request.SkipId);
+            return;
+        }
+
+        bool accepted;
+        lock (_collectiveSkipLock)
+        {
+            bool alreadyHandled = request.HasSkipId
+                && (_handledCollectiveSkipIds.ContainsKey(request.SkipId)
+                    || string.Equals(_pendingCollectiveSkip?.SkipId, request.SkipId, StringComparison.Ordinal)
+                    || string.Equals(_activeCollectiveSkip?.SkipId, request.SkipId, StringComparison.Ordinal));
+
+            if (alreadyHandled)
+            {
+                accepted = false;
+            }
+            else
+            {
+                _pendingCollectiveSkip = request;
+                accepted = true;
+            }
+        }
+
+        if (!accepted)
+        {
+            _logger.LogInformation("[联机] 集体跳段 {SkipId} 重复请求，已忽略（幂等）", request.SkipId);
+            // 重复广播不应让正在等待同步点的流程继续卡着：仍然唤醒等待
+            RemoteSkipGate.Cancel();
+            return;
+        }
+
+        _remoteSkipTargetProgress = request.TargetProgress;
+        RemoteSkipGate.TargetProgress = request.TargetProgress;
         // Interlocked.Exchange 保证写入对所有线程立即可见
         Interlocked.Exchange(ref _remoteSkipRequested, 1);
-        _logger.LogWarning("[联机] 大部队请求跳段，target={Target}，等待 4 处消费点命中", targetProgress);
+        _logger.LogWarning("[联机] 收到集体跳段请求：skipId={SkipId}, target={Target}，等待消费点命中",
+            request.SkipId, request.TargetProgress);
 
         // 唤醒 SyncBarrier.WaitAsync 等待（消费点 4，design §8.7 备选 B 静态 Gate）
         RemoteSkipGate.Cancel();
+    }
+
+    /// <summary>
+    /// 服务端确认「全部必要成员已回报 Applied」（collective-skip-applied-ack）。
+    /// 只做本地簿记收尾：结束本机活动跳段状态。不驱动任何跳转/汇合动作——
+    /// 最终汇合仍由既有同步点（AllArrived 路径）完成，避免引入第二套汇合机制。
+    /// skipId 与当前活动跳段不一致（迟到/过期确认）一律忽略。
+    /// </summary>
+    private void OnCollectiveSkipAppliedAllReceived(CollectiveSkipRequest request)
+    {
+        if (request == null) return;
+
+        lock (_collectiveSkipLock)
+        {
+            if (_activeCollectiveSkip == null) return;
+
+            if (request.HasSkipId
+                && !string.Equals(request.SkipId, _activeCollectiveSkip.SkipId, StringComparison.Ordinal))
+            {
+                _logger.LogInformation("[联机] 收到过期 CollectiveSkipAppliedAll（skipId={SkipId}，当前={ActiveId}），忽略",
+                    request.SkipId, _activeCollectiveSkip.SkipId);
+                return;
+            }
+
+            _logger.LogInformation("[联机] 集体跳段 {SkipId} 已由服务端确认全部成员 Applied，本机结束活动跳段状态",
+                _activeCollectiveSkip.SkipId);
+            _activeCollectiveSkip = null;
+        }
     }
 
     private void OnCollectiveSkipDegradedReceived(string reason)
@@ -173,21 +271,105 @@ public class MultiplayerCoordinator : IAsyncDisposable
     }
 
     /// <summary>
-    /// CAS 消费 _remoteSkipRequested 信号位（与 PathExecutor.TryConsumeRevivalSignal 同模式但**独立信号位**）。
-    /// 命中：返回 true 并通过 out 返回 targetProgress；未命中：返回 false。
+    /// CAS 消费集体跳段信号位（collective-skip-applied-ack）。
+    /// 命中：返回 true 并给出本次请求（含 skipId 与 targetProgress），同时把请求从"待消费"移入
+    ///       "进行中"并登记 SkipId——同一 SkipId 之后不会再被消费（服务端重播不会重复跳段）。
+    /// 未命中：返回 false。
     /// 单机模式下调用方已用 <c>MultiplayerCoordinator != null</c> 守卫，本方法不重复短路。
+    /// </summary>
+    public bool TryConsumeCollectiveSkip(out CollectiveSkipRequest? request)
+    {
+        var prev = Interlocked.Exchange(ref _remoteSkipRequested, 0);
+        if (prev != 1)
+        {
+            request = null;
+            return false;
+        }
+
+        lock (_collectiveSkipLock)
+        {
+            // 待消费请求优先；缺失时（理论上不会）用缓存的 targetProgress 兜底，保证不会空手放行
+            request = _pendingCollectiveSkip ?? new CollectiveSkipRequest
+            {
+                SkipId = "",
+                TargetProgress = _remoteSkipTargetProgress,
+            };
+            _pendingCollectiveSkip = null;
+            _activeCollectiveSkip = request;
+            if (request.HasSkipId) _handledCollectiveSkipIds.TryAdd(request.SkipId, 0);
+        }
+
+        _remoteSkipTargetProgress = -1;
+        return true;
+    }
+
+    /// <summary>
+    /// 旧调用形态：只取 targetProgress。内部走 <see cref="TryConsumeCollectiveSkip"/>（同一套幂等语义）。
     /// </summary>
     public bool TryConsumeRemoteSkipSignal(out long targetProgress)
     {
-        var prev = Interlocked.Exchange(ref _remoteSkipRequested, 0);
-        if (prev == 1)
+        if (TryConsumeCollectiveSkip(out var request))
         {
-            targetProgress = _remoteSkipTargetProgress;
-            _remoteSkipTargetProgress = -1;
+            targetProgress = request?.TargetProgress ?? -1;
             return true;
         }
         targetProgress = -1;
         return false;
+    }
+
+    /// <summary>
+    /// 回报本次集体跳段的本地执行结果（collective-skip-applied-ack）。
+    /// 同一 SkipId 只回报一次（幂等）；无 skipId（旧服务端）不回报 → 退化为旧行为。
+    /// 未连接时不回报也不登记，便于后续重播时再试。
+    /// </summary>
+    public async Task ReportCollectiveSkipAppliedAsync(bool success, long actualProgress, string reason = "")
+    {
+        CollectiveSkipRequest? active;
+        lock (_collectiveSkipLock)
+        {
+            active = _activeCollectiveSkip;
+        }
+
+        if (active == null || !active.HasSkipId) return;
+
+        if (!_client.IsConnected)
+        {
+            _logger.LogInformation("[联机] 未连接，暂不回报集体跳段 Applied: skipId={SkipId}", active.SkipId);
+            return;
+        }
+
+        if (!_reportedCollectiveSkipIds.TryAdd(active.SkipId, 0))
+        {
+            _logger.LogInformation("[联机] 集体跳段 {SkipId} 已回报过 Applied，跳过重复回报", active.SkipId);
+            return;
+        }
+
+        _logger.LogInformation("[联机] 回报集体跳段 Applied: skipId={SkipId}, success={Success}, actualProgress={Progress}",
+            active.SkipId, success, actualProgress);
+
+        try
+        {
+            await _client.ReportCollectiveSkipAppliedAsync(active.SkipId, actualProgress, success, reason ?? "");
+        }
+        catch (Exception ex)
+        {
+            // 回报失败不阻塞跳段本身（服务端有重播 + 超时兜底）；撤下登记，允许后续重播再试
+            _reportedCollectiveSkipIds.TryRemove(active.SkipId, out _);
+            _logger.LogWarning(ex, "[联机] 回报集体跳段 Applied 异常（已忽略）: skipId={SkipId}", active.SkipId);
+        }
+    }
+
+    /// <summary>
+    /// 路线边界锚点（route-anchor）是否在本会话激活：配置开启 **且** 服务端宣告了该能力。
+    /// 激活时路线推进权归锚点，旧集体跳段必须完全让位（方案 §8.3 / §10 的两套控制器隔离）。
+    /// </summary>
+    public bool IsRouteAnchorActive
+        => _config.EnableRouteAnchor && _client.SupportsRouteAnchor;
+
+    /// <summary>当前是否有进行中的集体跳段（仅诊断/测试用）。</summary>
+    public bool HasActiveCollectiveSkip
+    {
+        get { lock (_collectiveSkipLock) { return _activeCollectiveSkip != null; } }
     }
 
     /// <summary>
@@ -344,6 +526,16 @@ public class MultiplayerCoordinator : IAsyncDisposable
         Interlocked.Exchange(ref _remoteSkipRequested, 0);
         _remoteSkipTargetProgress = -1;
         RemoteSkipGate.Reset();
+
+        // 集体跳段 Applied 确认状态复位（collective-skip-applied-ack）：
+        // 新轮次不得继承上一轮的待消费/进行中跳段，否则旧 SkipId 会污染新轮次判定。
+        lock (_collectiveSkipLock)
+        {
+            _pendingCollectiveSkip = null;
+            _activeCollectiveSkip = null;
+        }
+        _reportedCollectiveSkipIds.Clear();
+        _handledCollectiveSkipIds.Clear();
 
         RouteSyncCoordinator?.Reset();
         StateManager?.Reset();
@@ -798,7 +990,8 @@ public class MultiplayerCoordinator : IAsyncDisposable
         // 集体卡死跳段事件取消订阅 + Gate 重置（multiplayer-mutual-wait-collective-skip §8.6 改动 5）
         try
         {
-            _client.RequestSkipToProgressReceived -= OnRequestSkipToProgressReceived;
+            _client.CollectiveSkipRequested -= OnCollectiveSkipRequested;
+            _client.CollectiveSkipAppliedAllReceived -= OnCollectiveSkipAppliedAllReceived;
             _client.CollectiveSkipDegradedReceived -= OnCollectiveSkipDegradedReceived;
             // 基于经验判断停止锄地：退订全员达上限广播（multiplayer-hoeing-exp-cap-stop）
             _client.AllReachedExpCap -= OnAllReachedExpCap;

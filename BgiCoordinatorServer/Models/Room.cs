@@ -256,6 +256,64 @@ public class Room
     /// 仅服务端运行时状态，不进入 RoomConfig / 网络协议。
     /// </summary>
     public long LastCollectiveSkipTargetProgress { get; set; } = -1;
+
+    // === 集体跳段 Applied 确认（collective-skip-applied-ack）===
+    // 同一房间至多一个活动跳段：Requested 期间不创建第二个 SkipId，只对同一 SkipId 重播。
+
+    /// <summary>
+    /// 当前进行中的集体跳段；null = 无活动跳段。
+    /// 全部必要成员回报 Applied（或跳段失败重播耗尽被清除）后置回 null，下一轮卡死才能生成新 SkipId。
+    /// 多世界轮换 ResetForNewWorldRound 清除。
+    /// </summary>
+    public CollectiveSkipState? ActiveCollectiveSkip { get; set; }
+
+    /// <summary>
+    /// 集体跳段世代计数器（同房间内单调递增，仅用于生成唯一 SkipId 前缀）。
+    /// 不做轮次复位：SkipId 唯一性由世代 + GUID 共同保证。
+    /// </summary>
+    public int CollectiveSkipGeneration { get; set; }
+
+    /// <summary>
+    /// 活动跳段 Applied 等待的一次性重播定时器（collective-skip-applied-ack）。
+    /// 与 CollectiveSkipTimer 独立：后者只在 ArrivalSets 快照变化时重建，而真正卡死的房间
+    /// 快照不再变化 → 不会再次触发，故需要本定时器对同一 SkipId 做有界重播。
+    /// 跳段被确认 / 清除 / 轮次重置时 Dispose 并置 null。
+    /// </summary>
+    public System.Threading.Timer? CollectiveSkipApplyRetryTimer { get; set; }
+
+    // === 路线边界锚点（route-anchor）===
+    // 每个房间同一时刻至多一个活动锚点；终态（Released/Stopped）保留供查询，
+    // 直到下一个边界（completedRouteIndex 不同）到来才被替换（正文第 4 章）。
+
+    /// <summary>
+    /// 当前（或最近一次）路线边界锚点。null = 从未创建。
+    /// 多世界轮换 ResetForNewWorldRound 清除（新世界必须新建会话，旧回调无权改新会话）。
+    /// </summary>
+    public RouteAnchorState? ActiveRouteAnchor { get; set; }
+
+    /// <summary>锚点单调编号计数器（同一房间生命周期内递增，保证锚点 ID 不重复）。</summary>
+    public int RouteAnchorSequence { get; set; }
+
+    /// <summary>
+    /// 路线锚点的周期性兜底评估定时器（route-anchor）。
+    /// 必要性：真正卡死的房间不会产生新的协议消息，仅靠消息入口驱动对账会导致
+    /// "永远不评估 → 永远不下发 Pull"。一次性定时器在每次评估后续挂，直到锚点进入终态。
+    /// 锚点终结 / 轮次重置时 Dispose 并置 null。
+    /// </summary>
+    public System.Threading.Timer? RouteAnchorEvaluateTimer { get; set; }
+
+    /// <summary>
+    /// 服务端生成的会话标识（route-anchor）：区分"房间实例"，不能只用可复用的房间码。
+    /// 由 RoomManager.CreateRoom 生成；客户端不参与生成，只接收并在后续消息中原样带回。
+    /// </summary>
+    public string SessionId { get; set; } = "";
+
+    /// <summary>
+    /// 本房间已放行过的最高路线边界（route-anchor）。
+    /// 用于拒绝"旧世界/旧轮次客户端的迟到 enroll"：边界索引低于此值的请求一律视为过期。
+    /// 未放过行为 -1。
+    /// </summary>
+    public int LastReleasedRouteBoundary { get; set; } = -1;
 }
 
 /// <summary>

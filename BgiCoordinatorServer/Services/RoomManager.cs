@@ -82,6 +82,8 @@ public class RoomManager
             Code = code,
             HostConnectionId = hostConnectionId,
             CreatedAt = DateTime.UtcNow,
+            // 服务端生成的会话身份（route-anchor）：区分房间实例，避免房间码复用导致跨实例串状态
+            SessionId = $"{code}-{Guid.NewGuid():N}",
             Whitelist = whitelist ?? [],
             ExpectedPlayerCount = expectedPlayerCount,
             HostBaselineVersion = reportedVersion ?? "",

@@ -45,6 +45,9 @@ public class RoomConfig
     // === 集体卡死监测配置（multiplayer-mutual-wait-collective-skip spec, 与服务端 RoomConfig 严格对称）===
     /// <summary>启用集体卡死监测，默认 true。关闭后服务端不创建 MutualWaitMonitor，行为退化到 60s 超时</summary>
     public bool EnableMutualWaitCollectiveSkip { get; set; } = true;
+
+    /// <summary>路线边界锚点（route-anchor）开关，默认 false（与服务器 RoomConfig 严格对称）。</summary>
+    public bool EnableRouteAnchor { get; set; } = false;
     /// <summary>触发阈值比例：totalWaiters ≥ ⌈online * MutualWaitMinWaitersRatio⌉ 才进入稳定计时，OQ-3 默认 0.5</summary>
     public double MutualWaitMinWaitersRatio { get; set; } = 0.5;
     /// <summary>ArrivalSets 快照保持稳定 N 秒后触发协同跳段，默认 30 秒（保守起步）</summary>

@@ -13,6 +13,19 @@ namespace BgiCoordinatorServer.Tests;
 /// → RoomOperations → GatewayDispatcher，两侧 IHubContext 全 mock（Clients.Group/Client、
 /// Groups 均 setup，SendCoreAsync/AddToGroupAsync 返回已完成 Task，避免 NullReference）。
 /// </summary>
+/// <summary>
+/// 能力查询测试替身：默认放行全部连接；测试可关掉 <see cref="AllowAll"/> 并只放行指定连接，
+/// 用于构造"部分客户端未宣告能力"的禁止半启用场景。
+/// </summary>
+internal sealed class FakeCapabilityLookup : IClientCapabilityLookup
+{
+    public bool AllowAll { get; set; } = true;
+    public HashSet<string> SupportedConnections { get; } = new(StringComparer.Ordinal);
+
+    public bool Supports(string connectionId, string capability)
+        => AllowAll || SupportedConnections.Contains(connectionId);
+}
+
 internal sealed class GatewayTestHarness
 {
     public RoomManager RoomManager { get; }
@@ -29,6 +42,9 @@ internal sealed class GatewayTestHarness
     public Mock<IGroupManager> LegacyGroups { get; } = new();
     public Mock<IGroupManager> GatewayGroups { get; } = new();
     public RoomOperations Ops { get; }
+
+    /// <summary>能力查询测试替身（route-anchor 门控）：默认全部支持。</summary>
+    public FakeCapabilityLookup Capabilities { get; } = new();
     public GatewayDispatcher Dispatcher { get; }
 
     public GatewayTestHarness()
@@ -61,7 +77,7 @@ internal sealed class GatewayTestHarness
         var broadcaster = new GatewayBroadcaster(LegacyHub.Object, GatewayHub.Object, Tracker,
             new Mock<ILogger<GatewayBroadcaster>>().Object);
         var phaseObserver = new RoomPhaseObserver(new Mock<ILogger<RoomPhaseObserver>>().Object);
-        Ops = new RoomOperations(RoomManager, new Mock<ILogger<RoomOperations>>().Object, broadcaster, phaseObserver);
+        Ops = new RoomOperations(RoomManager, new Mock<ILogger<RoomOperations>>().Object, broadcaster, phaseObserver, Capabilities);
         Dispatcher = new GatewayDispatcher(Tracker, new Mock<ILogger<GatewayDispatcher>>().Object, Ops);
     }
 

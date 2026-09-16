@@ -100,6 +100,16 @@ public class AutoHoeingTask : ISoloTask
     private int _expCapTotalRoutes;              // 最后一轮的 groupRoutes.Count
     private DateTime _expCapGroupStartTime;      // 最后一轮的 groupStartTime
 
+    // === 路线边界锚点（route-anchor）===
+    // 会话内固定 effective mode：进入路线循环前一次性判定，运行中改配置不影响本会话。
+    private RouteAnchorClient? _routeAnchor;
+    private bool _routeAnchorEnabledThisSession;
+    private string _routeAnchorPlanId = "";
+    private int _routeAnchorLastBoundary = -1;
+    private int _routeAnchorSkippedSnapshot;
+    /// <summary>本轮路线总数（供边界判定纯函数使用；每轮初始化时写入）。</summary>
+    private int _routeAnchorRouteCount;
+
     // === 联机锄地守护自动重开（hoeing-multiplayer-guard-auto-restart）===
     // 本次运行是否由守护重开产生（新实例置 true）。true 时结束后不再触发重开（次数上限 1，R3）。
     private bool _isGuardRestartRun;
@@ -622,6 +632,22 @@ public class AutoHoeingTask : ISoloTask
             if (_multiplayerCoordinator != null)
             {
                 await _multiplayerCoordinator.DisposeAsync();
+                
+                // 路线边界锚点：先尽力通知服务端取消（否则其余成员要等满锚点超时才会停），再释放订阅
+                if (_routeAnchorEnabledThisSession && _routeAnchor != null)
+                {
+                    try { await _routeAnchor.CancelAsync("task-teardown", CancellationToken.None); }
+                    catch (Exception __anchorCancelEx)
+                    {
+                        _logger.LogDebug(__anchorCancelEx, "[联机][锚点] 收尾取消失败（已忽略）");
+                    }
+                }
+                // 路线边界锚点：同一纪律——订阅挂在 CoordinatorClient 上，不释放会逐轮累积
+                _routeAnchor?.Dispose();
+                _routeAnchor = null;
+                _routeAnchorEnabledThisSession = false;
+                _routeAnchorLastBoundary = -1;
+                _routeAnchorSkippedSnapshot = 0;
                 _multiplayerCoordinator = null;
             }
 
@@ -999,6 +1025,7 @@ public class AutoHoeingTask : ISoloTask
                     RejoinMaxWaitSeconds = _config.RejoinMaxWaitSeconds,
                     // === 集体卡死监测（multiplayer-mutual-wait-collective-skip §8.8）===
                     EnableMutualWaitCollectiveSkip = _config.EnableMutualWaitCollectiveSkip,
+                    EnableRouteAnchor = _config.EnableRouteAnchor,
                     MutualWaitMinWaitersRatio = _config.MutualWaitMinWaitersRatio,
                     MutualWaitStableSeconds = _config.MutualWaitStableSeconds,
                     MaxConsecutiveCollectiveSkips = _config.MaxConsecutiveCollectiveSkips,
@@ -1084,6 +1111,16 @@ public class AutoHoeingTask : ISoloTask
 
             var resolver = new SyncPointResolver();
             _multiplayerCoordinator = new MultiplayerCoordinator(client, resolver, _config);
+
+            // 路线边界锚点：跨轮必须重建客户端并复位轮内状态（第十一轮修复）。
+            // 锚点客户端与"已提交边界"都是**轮内**状态：跨轮复用会让第二轮边界索引全部
+            // <= 上一轮最大值而被判"已提交"→ 门控从第二轮起静默失效；且旧客户端仍挂着
+            // 上一轮 CoordinatorClient 的事件订阅（多世界每轮换房间/换客户端）→ 订阅累积。
+            _routeAnchor?.Dispose();
+            _routeAnchor = null;
+            _routeAnchorEnabledThisSession = false;
+            _routeAnchorLastBoundary = -1;
+            _routeAnchorSkippedSnapshot = 0;
 
             _logger.LogInformation("[联机] MultiplayerCoordinator 初始化完成");
 
@@ -1465,6 +1502,7 @@ public class AutoHoeingTask : ISoloTask
                         _config.RejoinMaxWaitSeconds = hostConfig.RejoinMaxWaitSeconds;
                         // === 集体卡死监测同步（multiplayer-mutual-wait-collective-skip §8.8）===
                         _config.EnableMutualWaitCollectiveSkip = hostConfig.EnableMutualWaitCollectiveSkip;
+                        _config.EnableRouteAnchor = hostConfig.EnableRouteAnchor;
                         _config.MutualWaitMinWaitersRatio = hostConfig.MutualWaitMinWaitersRatio;
                         _config.MutualWaitStableSeconds = hostConfig.MutualWaitStableSeconds;
                         _config.MaxConsecutiveCollectiveSkips = hostConfig.MaxConsecutiveCollectiveSkips;
@@ -2224,6 +2262,22 @@ public class AutoHoeingTask : ISoloTask
                     // （RequestSkipToProgress / CollectiveSkipDegraded / AllReachedExpCap）不解除会逐轮叠加，
                     // 第 N 轮同一广播触发 N 次处理（日志 ×N、重复触发协调停止/CloseRoomAsync）。
                     await _multiplayerCoordinator.DisposeAsync();
+                    
+                    // 路线边界锚点：先尽力通知服务端取消（否则其余成员要等满锚点超时才会停），再释放订阅
+                    if (_routeAnchorEnabledThisSession && _routeAnchor != null)
+                    {
+                        try { await _routeAnchor.CancelAsync("task-teardown", CancellationToken.None); }
+                        catch (Exception __anchorCancelEx)
+                        {
+                            _logger.LogDebug(__anchorCancelEx, "[联机][锚点] 收尾取消失败（已忽略）");
+                        }
+                    }
+                    // 路线边界锚点：同一纪律——订阅挂在 CoordinatorClient 上，不释放会逐轮累积
+                    _routeAnchor?.Dispose();
+                    _routeAnchor = null;
+                    _routeAnchorEnabledThisSession = false;
+                    _routeAnchorLastBoundary = -1;
+                    _routeAnchorSkippedSnapshot = 0;
                     _multiplayerCoordinator = null;
                 }
                 _executionEngine?.SetCoordinator(null);
@@ -2561,6 +2615,7 @@ public class AutoHoeingTask : ISoloTask
                     _config.RejoinMaxWaitSeconds = hostConfig.RejoinMaxWaitSeconds;
                     // === 集体卡死监测同步（multiplayer-mutual-wait-collective-skip §8.8）===
                     _config.EnableMutualWaitCollectiveSkip = hostConfig.EnableMutualWaitCollectiveSkip;
+                    _config.EnableRouteAnchor = hostConfig.EnableRouteAnchor;
                     _config.MutualWaitMinWaitersRatio = hostConfig.MutualWaitMinWaitersRatio;
                     _config.MutualWaitStableSeconds = hostConfig.MutualWaitStableSeconds;
                     _config.MaxConsecutiveCollectiveSkips = hostConfig.MaxConsecutiveCollectiveSkips;
@@ -2657,6 +2712,16 @@ public class AutoHoeingTask : ISoloTask
             // 重建 coordinator
             var resolver = new SyncPointResolver();
             _multiplayerCoordinator = new MultiplayerCoordinator(client, resolver, _config);
+
+            // 路线边界锚点：跨轮必须重建客户端并复位轮内状态（第十一轮修复）。
+            // 锚点客户端与"已提交边界"都是**轮内**状态：跨轮复用会让第二轮边界索引全部
+            // <= 上一轮最大值而被判"已提交"→ 门控从第二轮起静默失效；且旧客户端仍挂着
+            // 上一轮 CoordinatorClient 的事件订阅（多世界每轮换房间/换客户端）→ 订阅累积。
+            _routeAnchor?.Dispose();
+            _routeAnchor = null;
+            _routeAnchorEnabledThisSession = false;
+            _routeAnchorLastBoundary = -1;
+            _routeAnchorSkippedSnapshot = 0;
             // 将当前 _linkedStopCts 赋给新 coordinator，确保协调停止能传播到 _ct
             _multiplayerCoordinator.StopCts = _linkedStopCts;
 
@@ -2715,6 +2780,104 @@ public class AutoHoeingTask : ISoloTask
             _worldStateMonitor?.EndRoundSwitch();
             return RoundSetupOutcome.Abort;
         }
+    }
+
+    // ===================== 路线边界锚点（route-anchor）=====================
+
+    /// <summary>
+    /// 会话内一次性初始化路线边界锚点。
+    /// 未启用时不构造客户端、不发送任何锚点协议（单机与未开启房间行为零变化）。
+    /// </summary>
+    private void EnsureRouteAnchorInitialized(IReadOnlyList<RouteInfo> routes)
+    {
+        if (_routeAnchor != null) return;
+        if (_coordinatorClientRef == null) return;
+
+        var client = _coordinatorClientRef;
+        _routeAnchorEnabledThisSession = RouteAnchorActivationDecisions.ShouldActivate(
+            configEnabled: _config.EnableRouteAnchor,
+            multiplayerEnabled: _config.MultiplayerEnabled,
+            inRoom: client.IsInRoom && client.IsConnected,
+            serverSupportsCapability: client.SupportsRouteAnchor);
+
+        _routeAnchorPlanId = _routeAnchorEnabledThisSession
+            ? RouteAnchorActivationDecisions.BuildPlanId(routes.Select(r => r.FileName).ToList())
+            : "";
+
+        // 没有计划就没有边界：宁可关闭，也不在无计划情况下建立锚点
+        if (_routeAnchorEnabledThisSession && string.IsNullOrEmpty(_routeAnchorPlanId))
+        {
+            _routeAnchorEnabledThisSession = false;
+            _logger.LogWarning("[联机][锚点] 路线计划为空，本会话不启用路线边界锚点");
+        }
+
+        _routeAnchor = new RouteAnchorClient(client) { Enabled = _routeAnchorEnabledThisSession };
+
+        _logger.LogInformation(
+            "[联机][锚点] 本会话 effective mode: Enabled={Enabled}（配置={Config}, 服务端能力={Cap}），planId={PlanId}",
+            _routeAnchorEnabledThisSession, _config.EnableRouteAnchor, client.SupportsRouteAnchor, _routeAnchorPlanId);
+    }
+
+    /// <summary>
+    /// 进入第 <paramref name="currentRouteIndex"/> 条路线前的边界门控：
+    /// 提交上一条路线的边界（Report + Ready）并等待服务端放行。
+    ///
+    /// 返回 true 仅当允许继续：未启用 / 首条路线 / 同一边界已提交过 / 已 Released。
+    /// 其余结果（Stopped / Failed / Cancelled）一律返回 false，调用方必须停止本轮。
+    /// </summary>
+    private async Task<bool> TryPassRouteBoundaryAsync(
+        int currentRouteIndex, int startIndex, int skippedCountSnapshot, int skippedCountNow, CancellationToken ct)
+    {
+        if (!_routeAnchorEnabledThisSession || _routeAnchor == null) return true;
+
+        // 是否需要为"上一条边界"走收口（首条路线 / 同一边界已提交 / 越界 一律跳过）。
+        // 判定抽成纯函数并有测试覆盖：这里正是第十一轮"跨轮未复位导致门控静默失效"的缺陷位置。
+        if (!RouteAnchorBoundaryDecisions.ShouldSubmitBoundary(
+                currentRouteIndex, startIndex, _routeAnchorRouteCount, _routeAnchorLastBoundary))
+            return true;
+
+        var completedBoundary = currentRouteIndex - 1;
+
+        var outcome = RouteAnchorActivationDecisions.ResolveOutcome(skippedCountSnapshot, skippedCountNow);
+        _logger.LogInformation("[联机][锚点] 提交路线边界：{Boundary} → {Next}（{Outcome}）",
+            completedBoundary, currentRouteIndex, outcome);
+
+        var result = await _routeAnchor.CompleteBoundaryAsync(
+            _routeAnchorPlanId, completedBoundary, currentRouteIndex, outcome, ct);
+
+        if (RouteAnchorActivationDecisions.AllowsNextRoute(result))
+        {
+            _routeAnchorLastBoundary = completedBoundary;
+            return true;
+        }
+
+        _logger.LogError("[联机][锚点] 未获放行（{Result}），停止本轮：边界={Boundary} → {Next}",
+            result, completedBoundary, currentRouteIndex);
+        return false;
+    }
+
+    /// <summary>
+    /// 轮末边界收口（最后一条路线完成 → Finished）。未启用 / 本轮未执行路线 / 已停止时直接放行。
+    /// </summary>
+    private async Task<bool> TryFinishRoundBoundaryAsync(int lastRouteIndex, int skippedCountSnapshot, int skippedCountNow, CancellationToken ct)
+    {
+        if (!_routeAnchorEnabledThisSession || _routeAnchor == null) return true;
+        if (!RouteAnchorBoundaryDecisions.ShouldFinishRound(
+                lastRouteIndex, startIndex: 0, _routeAnchorRouteCount, _routeAnchorLastBoundary, _sessionTerminated))
+            return true;
+
+        var outcome = RouteAnchorActivationDecisions.ResolveOutcome(skippedCountSnapshot, skippedCountNow);
+        _logger.LogInformation("[联机][锚点] 轮末收口：最后一条路线 {Last} 完成（{Outcome}）", lastRouteIndex, outcome);
+
+        var result = await _routeAnchor.CompleteRoundEndAsync(_routeAnchorPlanId, lastRouteIndex, outcome, ct);
+        if (RouteAnchorActivationDecisions.AllowsNextRoute(result))
+        {
+            _routeAnchorLastBoundary = lastRouteIndex;
+            return true;
+        }
+
+        _logger.LogError("[联机][锚点] 轮末未获放行（{Result}），停止本轮：最后路线={Last}", result, lastRouteIndex);
+        return false;
     }
 
     /// <summary>全员同步本轮结束</summary>
@@ -3357,6 +3520,13 @@ public class AutoHoeingTask : ISoloTask
             }
         }
 
+        // 路线边界锚点：会话内固定 effective mode（计划冻结之后、路线循环之前一次性判定）
+        // 轮内状态每次进入路线循环前复位：边界索引是"本轮"语义，跨轮不沿用
+        _routeAnchorLastBoundary = -1;
+        _routeAnchorSkippedSnapshot = 0;
+        _routeAnchorRouteCount = groupRoutes.Count;
+        EnsureRouteAnchorInitialized(groupRoutes);
+
         // 步骤1.5：路线同步完成后的同步点，确保房主和成员同时进入验证阶段
         if (_multiplayerCoordinator != null && _config.MultiplayerEnabled)
         {
@@ -3616,11 +3786,17 @@ public class AutoHoeingTask : ISoloTask
             }
         }
 
-        foreach (var entry in groupRoutes.Select((route, index) => (Route: route, Index: index)).Skip(startIndex))
+        // === 路线外层循环：索引驱动（route-anchor 阶段 4 第一步）===
+        // 由 foreach+Skip 改为显式索引循环，**行为等价**（routeIndex 恒等于原 entry.Index）。
+        // 目的：为"服务端 Pull 真正跳到指定路线"提供可写的循环变量——
+        // 现有 `count = target - startIndex; continue;` 只是改标签的假跳转（见方案附录 A.3），
+        // 无法真正切换枚举目标；索引循环是后续接真跳转的必要前提。
+        // 注意：本轮只做等价改造，尚未接入跳转；count / currentRouteIndex 记账保持原样。
+        for (int routeIndex = startIndex; routeIndex < groupRoutes.Count; routeIndex++)
         {
-            var route = entry.Route;
+            var route = groupRoutes[routeIndex];
             // 降级后不再创建协作上下文：标记与异常走旧回调，轮末由旧实现收口。
-            var cooperativePlan = cooperative?.Session == null ? null : cooperative.Plans[entry.Index];
+            var cooperativePlan = cooperative?.Session == null ? null : cooperative.Plans[routeIndex];
             if (cooperative != null) EnsureCooperativeExecutionAllowed();
             // === 守护自动重开：循环走到即算"已执行到"（无论后续完成/跳过/未完整/异常）===
             _guardExecutedRouteCount++;
@@ -3747,6 +3923,57 @@ public class AutoHoeingTask : ISoloTask
                 _logger.LogWarning("接近或处于限制时间，停止执行");
                 break;
             }
+
+            // === 路线边界锚点：消费 Pull（route-anchor，默认关闭）===
+            // 本版在**路线边界**消费 Pull：此处上一条路线已结束、下一条尚未开始，
+            // 因此没有正在执行的路线子任务需要中断——这是刻意的安全取舍（见文档附录 T）：
+            // "立即中断进行中的路线"需要子令牌 + 输入清理 + 等待真正退出，属后续增强。
+            // 顺序：先消费 Pull 再走边界门控——跳转后下一次迭代恰好落在 target，
+            // 届时边界门控会对 (target-1 → target) 这个边界执行 Enroll(幂等)+Report+Ready。
+            if (_routeAnchorEnabledThisSession && _routeAnchor != null)
+            {
+                var pullExec = await new RouteAnchorPullExecutor(_routeAnchor).ExecuteIfPendingAsync(
+                    routeIndex, startIndex, groupRoutes.Count,
+                    abortCurrentRouteAsync: _ => Task.FromResult(true),   // 边界处无路线子任务在跑
+                    ct: _ct);
+
+                if (pullExec.Result == RouteAnchorPullExecutionResult.Applied)
+                {
+                    _logger.LogWarning("[联机][锚点] 收到 Pull，跳转到路线 {Target}（当前 {Current}）",
+                        pullExec.TargetRouteIndex, routeIndex);
+                    // 同时修正 count：不变量为 currentRouteIndex = startIndex + count（见附录 A.1），
+                    // 只改 routeIndex 会让后续日志/进度/守护计数与实际执行的路线错位。
+                    routeIndex = pullExec.RequiredLoopIndex;
+                    count = RouteAnchorBoundaryDecisions.ResolveCountAfterJump(pullExec.TargetRouteIndex, startIndex);
+                    continue;   // for 自增后恰好进入 target
+                }
+
+                if (pullExec.ShouldStopRound)
+                {
+                    _logger.LogError("[联机][锚点] Pull 未成功（{Result}），停止本轮", pullExec.Result);
+                    _stopReason = "路线边界锚点 Pull 失败";
+                    _sessionTerminated = true;
+                    try { _linkedStopCts?.Cancel(); }
+                    catch (ObjectDisposedException) { }
+                    catch { }
+                    break;
+                }
+            }
+
+            // === 路线边界锚点门控（route-anchor，默认关闭）===
+            // 进入本条路线前，先确认上一条路线的边界已由服务端放行；未放行则停止本轮。
+            // 位置理由（方案附录 A.3）：这是"所有会真正执行路线的路径"的唯一公共入口；
+            // CD/关键词跳过的 continue 分支仅单机生效，不需要边界收口。
+            if (!await TryPassRouteBoundaryAsync(currentRouteIndex, startIndex, _routeAnchorSkippedSnapshot, skippedCount, _ct))
+            {
+                _stopReason = "路线边界锚点未放行";
+                _sessionTerminated = true;
+                try { _linkedStopCts?.Cancel(); }
+                catch (ObjectDisposedException) { }
+                catch { }
+                break; // 退出路线循环，走既有轮末收尾
+            }
+            _routeAnchorSkippedSnapshot = skippedCount;
 
             // CD检查（StartRouteIndex > 0 时跳过CD检查，强制执行；填0则正常检测CD）
             // 联机模式下成员不检测CD，由房主路线列表控制
@@ -4050,6 +4277,17 @@ public class AutoHoeingTask : ISoloTask
             {
                 _logger.LogError("执行路线 {Name} 出错: {Msg}", route.FileName, ex.Message);
             }
+        }
+
+        // === 路线边界锚点：轮末收口（route-anchor，默认关闭）===
+        // 最后一条路线完成同样需要全员确认（Finished），避免个别成员提前关房/离场。
+        if (!await TryFinishRoundBoundaryAsync(startIndex + count - 1, _routeAnchorSkippedSnapshot, skippedCount, _ct))
+        {
+            _stopReason = "轮末边界锚点未放行";
+            _sessionTerminated = true;
+            try { _linkedStopCts?.Cancel(); }
+            catch (ObjectDisposedException) { }
+            catch { }
         }
 
         // 本轮锄地结束统计：用时 + 完成/跳过线路数（需求：每轮结束输出统计信息）
@@ -4825,6 +5063,8 @@ public class AutoHoeingTask : ISoloTask
             _config.FightTimeoutSeconds = Get("fightTimeoutSeconds", _config.FightTimeoutSeconds);
             // === 集体卡死监测（multiplayer-mutual-wait-collective-skip §8.8 / OQ-1~OQ-5 默认值）===
             _config.EnableMutualWaitCollectiveSkip = Get("enableMutualWaitCollectiveSkip", _config.EnableMutualWaitCollectiveSkip);
+            // 路线边界锚点（默认 false；第一版不进设置界面，仅配置 JSON / 房主下发）
+            _config.EnableRouteAnchor = Get("enableRouteAnchor", _config.EnableRouteAnchor);
             _config.MutualWaitMinWaitersRatio = Get("mutualWaitMinWaitersRatio", _config.MutualWaitMinWaitersRatio);
             _config.MutualWaitStableSeconds = Get("mutualWaitStableSeconds", _config.MutualWaitStableSeconds);
             _config.MaxConsecutiveCollectiveSkips = Get("maxConsecutiveCollectiveSkips", _config.MaxConsecutiveCollectiveSkips);

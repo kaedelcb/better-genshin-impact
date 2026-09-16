@@ -18,7 +18,7 @@ public class GatewayProtocolTests
         "KazuhaPlayerUpdated", "KazuhaCollectStarted", "AllWorldJoined", "HostReadyChanged",
         "HostRouteListReady", "PlayerAnomalyNotify", "PlayerAnomalyNotifyFightPoint",
         "PlayerAnomalyRecovered", "MemberStatusChanged", "StartRoute", "RequestSkipToProgress",
-        "CollectiveSkipDegraded", "ControlRoomPlayersUpdated", "RemoteCommand", "JoinRejected",
+        "CollectiveSkipDegraded", "CollectiveSkipAppliedAll", "ControlRoomPlayersUpdated", "RemoteCommand", "JoinRejected",
         "AllReady", "AllReadyConfirm", "AllReadyAbort", "MemberScreenshot", "MemberScreenshotRequested", "MemberLogBatch",
         "MemberLogSubscribersChanged", "MemberLogFilesRequested", "MemberLogFileList",
         "MemberLogDownloadRequested", "MemberLogFileChunk", "RemoteCommandAck",

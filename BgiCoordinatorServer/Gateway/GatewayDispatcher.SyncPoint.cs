@@ -25,5 +25,17 @@ public sealed partial class GatewayDispatcher
                 GetLong(env, "syncProgress", -1));
             return new { ack = true };
         };
+
+        // 集体跳段执行确认（collective-skip-applied-ack）：客户端按 skipId 回报本地跳段结果。
+        // 纯新增命令——旧客户端从不发送，既有命令语义零变化。
+        _commands[GatewayProtocol.Names.SyncReportCollectiveSkipApplied] = async (env, ctx) =>
+        {
+            await _ops.ReportCollectiveSkipAppliedAsync(ctx,
+                GetString(env, "skipId"),
+                GetLong(env, "actualProgress", -1),
+                GetBool(env, "success", true),
+                GetString(env, "reason"));
+            return new { ack = true };
+        };
     }
 }

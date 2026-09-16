@@ -114,6 +114,9 @@ public sealed partial class RoomOperations
                 if (caller != null)
                 {
                     caller.CurrentProgress = syncProgress;
+                    // route-anchor 阶段 5：到达同步点属于"真实推进"，刷新锚点侧有效活动时间
+                    // （不改变锚点成员状态：状态只由完成/就绪/战斗/复苏等语义事件决定）
+                    ObserveRouteAnchorActivityLocked(room, caller.PlayerUid, null, DateTime.UtcNow);
                 }
                 // collective-stuck-orphan-arrivalset fix：存该 syncId 的真实全局进度，
                 // 供放行/卡死判定使用，避免孤儿集合被成员归约 sp 卡死（见 Room.ArrivalSetProgress 注释）
@@ -492,6 +495,8 @@ public sealed partial class RoomOperations
     {
         if (room.RerunExecution?.BlocksLegacyAdvancement == true) return false;
         if (room.HostConfig?.EnableMutualWaitCollectiveSkip != true) return false;
+        // route-anchor 激活时由路线边界锚点统一推进路线，旧集体跳段不再介入卡死判定（阶段 6 隔离）
+        if (room.HostConfig?.EnableRouteAnchor == true) return false;
 
         var ratio = Math.Clamp(room.HostConfig.MutualWaitMinWaitersRatio, 0.01, 1.0);
         var stableSeconds = Math.Max(5, room.HostConfig.MutualWaitStableSeconds);
@@ -558,9 +563,12 @@ public sealed partial class RoomOperations
     /// 实际触发协同跳段的决策由 Timer 到期后调用 EvaluateCollectiveStuckTimerCallbackAsync 完成（OQ-2 C 双层判定）。
     /// 注意：本方法 await 任何调用必须在 lock 外（design §8.4 改动 2）。
     /// </summary>
-    private Task EvaluateCollectiveStuckPiggybackAsync(Room room, string roomCode)
+    /// <remarks>internal 而非 private：仅供测试直接驱动（验证锚点模式下的隔离行为）。</remarks>
+    internal Task EvaluateCollectiveStuckPiggybackAsync(Room room, string roomCode)
     {
         if (room.HostConfig?.EnableMutualWaitCollectiveSkip != true) return Task.CompletedTask;
+        // route-anchor 激活时不武装旧集体跳段的监测定时器（避免无意义定时器与两套推进）
+        if (room.HostConfig?.EnableRouteAnchor == true) return Task.CompletedTask;
 
         var stableSeconds = Math.Max(5, room.HostConfig.MutualWaitStableSeconds);
 
@@ -605,18 +613,28 @@ public sealed partial class RoomOperations
     /// 双重检查 IsCollectiveStuckLocked（OQ-8 C），命中后做 lock 内决策 + lock 外按顺序广播（OQ-7 A）。
     /// 仅在 lock 内读写 room 字段；广播一律在 lock 外 await（H-2 高风险点：死锁预防）。
     /// </summary>
-    private async Task EvaluateCollectiveStuckTimerCallbackAsync(Room room, string roomCode)
+    /// <remarks>internal 而非 private：仅供测试直接、确定性地驱动跳段创建/重播决策
+    /// （public 入口是 Timer 回调，测试无法在合理时间内触发）。可见性调整零行为影响。</remarks>
+    internal async Task EvaluateCollectiveStuckTimerCallbackAsync(Room room, string roomCode)
     {
-        long targetProgress;
-        List<(string syncId, long progress)> satisfiedSyncs;
-        List<string> laggingPlayerConnIds;
+        long targetProgress = -1;
+        List<(string syncId, long progress)> satisfiedSyncs = [];
+        List<string> laggingPlayerConnIds = [];
         bool degraded = false;
+        // collective-skip-applied-ack：本次要广播的跳段命令（新建活动跳段的首次广播 或 既有活动跳段的重播）。
+        CollectiveSkipState? skipCommandToBroadcast = null;
 
         try
         {
             lock (room)
             {
                 if (room.HostConfig?.EnableMutualWaitCollectiveSkip != true) return;
+                // route-anchor 激活时不再新建/重播集体跳段命令（阶段 6 隔离：路线推进权归锚点）
+                if (room.HostConfig?.EnableRouteAnchor == true)
+                {
+                    _logger.LogDebug("[CollectiveSkip] route-anchor 已激活，跳过集体跳段推进（房间={RoomCode}）", roomCode);
+                    return;
+                }
 
                 // 双重检查（OQ-8 C）：再次评估 IsCollectiveStuckLocked
                 if (!IsCollectiveStuckLocked(room)) return;
@@ -641,18 +659,69 @@ public sealed partial class RoomOperations
                     .Select(p => p.ConnectionId)
                     .ToList();
 
-                // 3) 主动写 IsAbnormal=true / TargetProgress=targetProgress
-                foreach (var connId in laggingPlayerConnIds)
+                // 3) 活动跳段裁决（collective-skip-applied-ack）：
+                //    同一房间至多一个活动跳段。已有 Requested 时只对【同一 SkipId】重播（有界），
+                //    绝不创建第二个 SkipId——旧实现每次触发都用最新 maxCurrent 重算 target 并广播，
+                //    多个目标并存正是"各跳各的、大家走散"的结构性来源。
+                //    重播上限耗尽则清除活动跳段，交回既有客户端同步超时 / 连续跳段计数降级路径
+                //    （不在此新增停止触发，避免误停本可自愈的会话）。
+                var activeSkip = room.ActiveCollectiveSkip;
+                if (activeSkip is { Phase: CollectiveSkipPhase.Requested })
                 {
-                    var p = room.Players.FirstOrDefault(x => x.ConnectionId == connId);
-                    if (p == null) continue;
-                    p.IsAbnormal = true;
-                    p.TargetProgress = targetProgress;
-                    _logger.LogWarning("[CollectiveSkip] 服务端主动标记落后玩家：{Uid} → IsAbnormal=true, TargetProgress={T}",
-                        p.PlayerUid, targetProgress);
+                    if (activeSkip.BroadcastCount < MaxCollectiveSkipBroadcastCount)
+                    {
+                        activeSkip.BroadcastCount += 1;
+                        skipCommandToBroadcast = activeSkip;
+                        _logger.LogWarning(
+                            "[CollectiveSkip] 活动跳段 {SkipId} 未收齐 Applied，重播第 {N}/{Max} 次：房间={RoomCode}, 已回报={Applied}/{Required}",
+                            activeSkip.SkipId, activeSkip.BroadcastCount, MaxCollectiveSkipBroadcastCount, roomCode,
+                            activeSkip.AppliedConnectionIds.Count, activeSkip.RequiredConnectionIds.Count);
+                    }
+                    else
+                    {
+                        _logger.LogError(
+                            "[CollectiveSkip] 活动跳段 {SkipId} 已重播 {N} 次仍未收齐 Applied，清除活动跳段（交回既有超时/降级路径）：房间={RoomCode}, 已回报={Applied}/{Required}, 失败={Failed}",
+                            activeSkip.SkipId, activeSkip.BroadcastCount, roomCode,
+                            activeSkip.AppliedConnectionIds.Count, activeSkip.RequiredConnectionIds.Count,
+                            activeSkip.FailedConnectionIds.Count);
+                        ClearActiveCollectiveSkipLocked(room);
+                    }
+                }
+                else
+                {
+                    // 3.1) 主动写 IsAbnormal=true / TargetProgress=targetProgress
+                    //      （保持既有语义，且必须在 CollectSatisfiedSyncsLocked 之前——
+                    //        异常玩家分支依赖 TargetProgress 判定是否需要等他）
+                    foreach (var connId in laggingPlayerConnIds)
+                    {
+                        var p = room.Players.FirstOrDefault(x => x.ConnectionId == connId);
+                        if (p == null) continue;
+                        p.IsAbnormal = true;
+                        p.TargetProgress = targetProgress;
+                        _logger.LogWarning("[CollectiveSkip] 服务端主动标记落后玩家：{Uid} → IsAbnormal=true, TargetProgress={T}",
+                            p.PlayerUid, targetProgress);
+                    }
+
+                    // 3.2) 确有落后玩家时才创建活动跳段（无可跳者不需要 Applied 闭环）
+                    if (laggingPlayerConnIds.Count > 0)
+                    {
+                        room.CollectiveSkipGeneration += 1;
+                        skipCommandToBroadcast = new CollectiveSkipState
+                        {
+                            SkipId = $"{roomCode}-{room.CollectiveSkipGeneration}-{Guid.NewGuid():N}",
+                            TargetProgress = targetProgress,
+                            RequiredConnectionIds = new HashSet<string>(laggingPlayerConnIds, StringComparer.Ordinal),
+                            CreatedAt = DateTime.UtcNow,
+                            Phase = CollectiveSkipPhase.Requested,
+                            BroadcastCount = 1,
+                        };
+                        room.ActiveCollectiveSkip = skipCommandToBroadcast;
+                        _logger.LogWarning("[CollectiveSkip] 创建集体跳段 {SkipId}：房间={RoomCode}, target={Target}, 必要成员数={N}",
+                            skipCommandToBroadcast.SkipId, roomCode, targetProgress, laggingPlayerConnIds.Count);
+                    }
                 }
 
-                // 4) 收集 satisfiedSyncs（既有 helper 复用）
+                // 4) 收集 satisfiedSyncs（既有 helper 复用；须在异常标记之后）
                 satisfiedSyncs = CollectSatisfiedSyncsLocked(room);
 
                 // 5) 计数器递增 + 降级判断
@@ -731,11 +800,22 @@ public sealed partial class RoomOperations
             }
 
             // ② 后 RequestSkipToProgress：让落后玩家神像跳段
-            if (laggingPlayerConnIds.Count > 0)
+            //    collective-skip-applied-ack：载荷新增 skipId；旧名参数字面量保持 targetProgress（旧客户端零感知）
+            if (skipCommandToBroadcast != null)
             {
-                _logger.LogWarning("[CollectiveSkip] 广播 RequestSkipToProgress: 房间={RoomCode}, target={Target}, 落后玩家数={N}",
-                    roomCode, targetProgress, laggingPlayerConnIds.Count);
-                await _broadcaster.BroadcastGroupAsync(roomCode, "RequestSkipToProgress", new { targetProgress }, targetProgress);
+                var skipCommand = skipCommandToBroadcast;
+                _logger.LogWarning("[CollectiveSkip] 广播 RequestSkipToProgress: 房间={RoomCode}, skipId={SkipId}, target={Target}, 必要成员数={N}",
+                    roomCode, skipCommand.SkipId, skipCommand.TargetProgress, skipCommand.RequiredConnectionIds.Count);
+                await _broadcaster.BroadcastGroupAsync(roomCode, "RequestSkipToProgress",
+                    new { skipId = skipCommand.SkipId, targetProgress = skipCommand.TargetProgress },
+                    skipCommand.TargetProgress);
+
+                // 武装一次性重播定时器：真正卡死的房间 ArrivalSets 快照不再变化，
+                // 既有 CollectiveSkipTimer 不会再次触发，需要本定时器对同一 SkipId 做有界重播。
+                lock (room)
+                {
+                    ArmCollectiveSkipApplyRetryTimerLocked(room, roomCode, skipCommand.SkipId);
+                }
             }
 
             lock (room)
@@ -750,13 +830,256 @@ public sealed partial class RoomOperations
                     room.ConsecutiveCollectiveSkipCount);
                 await _broadcaster.BroadcastGroupAsync(roomCode, "CollectiveSkipDegraded",
                     new { reason = "ConsecutiveCollectiveSkipExceeded" }, "ConsecutiveCollectiveSkipExceeded");
-                lock (room) { ResetConsecutiveCollectiveSkipCount(room, "collective-degraded"); }
+                lock (room)
+                {
+                    // 会话已被判定降级停止，活动跳段不再有意义：一并清除，避免残留阻塞下一世代
+                    ClearActiveCollectiveSkipLocked(room);
+                    ResetConsecutiveCollectiveSkipCount(room, "collective-degraded");
+                }
             }
         }
         catch (Exception ex)
         {
             // 广播失败不应让 Timer 回调崩溃；记录日志并放弃本次广播
             _logger.LogError(ex, "[CollectiveSkip] Timer 回调 lock 外广播失败，房间={RoomCode}", roomCode);
+        }
+    }
+
+    // =========================================================================
+    // 集体跳段 Applied 确认（collective-skip-applied-ack）
+    //
+    // 目标：把"集体跳段"从一次性瞬时广播升级为可确认的闭环，解决
+    //   「服务端广播了跳段，但部分成员没收到 / 收到了没执行 / 执行到了不同位置」
+    //   → 各打各的、没有统一汇合。
+    //
+    // 边界（刻意最小化，不动其他功能）：
+    //   - 只新增 skipId 与 Applied 回报通道；RequestSkipToProgress 的旧名参数保持 targetProgress 不变；
+    //   - 不触碰 ArrivalSets / AllArrived / ShouldBroadcastAllArrived 等既有同步点判定；
+    //   - 最终汇合仍由既有同步点（WaitForAllPlayers + AllArrived）完成，本机制只负责
+    //     "确认每个必要成员确实执行了跳段"，不新增第二套集合点；
+    //   - 失败/超时不新增停止触发，只把状态清干净后交回既有超时与连续跳段降级路径。
+    // =========================================================================
+
+    /// <summary>同一 SkipId 的最大广播次数（首次 + 2 次重播）。超过即视为该跳段无法收齐 Applied。</summary>
+    private const int MaxCollectiveSkipBroadcastCount = 3;
+
+    /// <summary>活动跳段 Applied 等待的一次性重播间隔（秒）。</summary>
+    private const int CollectiveSkipApplyRetrySeconds = 12;
+
+    /// <summary>清除活动集体跳段状态（含 Applied 重播定时器）。必须在 lock(room) 内调用。</summary>
+    private void ClearActiveCollectiveSkipLocked(Room room)
+    {
+        room.ActiveCollectiveSkip = null;
+        room.CollectiveSkipApplyRetryTimer?.Dispose();
+        room.CollectiveSkipApplyRetryTimer = null;
+    }
+
+    /// <summary>
+    /// 武装"活动跳段 Applied 等待"的一次性重播定时器。
+    /// 只有活动跳段仍是同一个 SkipId 时才武装——避免已确认/已清除的跳段留下野定时器
+    /// （清除与武装并发时，以 lock 内二次校验为准）。必须在 lock(room) 内调用。
+    /// </summary>
+    private void ArmCollectiveSkipApplyRetryTimerLocked(Room room, string roomCode, string skipId)
+    {
+        if (!string.Equals(room.ActiveCollectiveSkip?.SkipId, skipId, StringComparison.Ordinal)) return;
+
+        room.CollectiveSkipApplyRetryTimer?.Dispose();
+        room.CollectiveSkipApplyRetryTimer = new System.Threading.Timer(
+            _ => _ = EvaluateCollectiveSkipApplyTimeoutAsync(room, roomCode),
+            null,
+            TimeSpan.FromSeconds(CollectiveSkipApplyRetrySeconds),
+            Timeout.InfiniteTimeSpan);
+    }
+
+    /// <summary>
+    /// 活动跳段 Applied 等待超时入口（collective-skip-applied-ack）。
+    /// 有界重播同一 SkipId；达到上限则清除活动跳段并交回既有路径。
+    /// 房间已被关闭/删除时直接返回（不对已死房间重播）。
+    /// </summary>
+    /// <remarks>internal 而非 private：仅供测试直接驱动 Applied 等待超时/重播决策。</remarks>
+    internal async Task EvaluateCollectiveSkipApplyTimeoutAsync(Room room, string roomCode)
+    {
+        CollectiveSkipState? rebroadcast = null;
+        bool exhausted = false;
+
+        try
+        {
+            // 房间已关闭/被删除：不再重播（定时器可能晚于房间生命周期触发）
+            if (_roomManager.GetRoom(roomCode) == null) return;
+
+            lock (room)
+            {
+                if (room.HostConfig?.EnableMutualWaitCollectiveSkip != true) return;
+                // route-anchor 激活时不再新建/重播集体跳段命令（阶段 6 隔离：路线推进权归锚点）
+                if (room.HostConfig?.EnableRouteAnchor == true)
+                {
+                    _logger.LogDebug("[CollectiveSkip] route-anchor 已激活，跳过集体跳段推进（房间={RoomCode}）", roomCode);
+                    return;
+                }
+
+                var active = room.ActiveCollectiveSkip;
+                if (active is not { Phase: CollectiveSkipPhase.Requested }) return;
+
+                // 必要成员都已有结论（正常路径会立即广播 AppliedAll 并清除）→ 兜底清除即可
+                if (active.RequiredConnectionIds.All(c =>
+                        active.AppliedConnectionIds.Contains(c) || active.FailedConnectionIds.Contains(c)))
+                {
+                    ClearActiveCollectiveSkipLocked(room);
+                    return;
+                }
+
+                if (active.BroadcastCount < MaxCollectiveSkipBroadcastCount)
+                {
+                    active.BroadcastCount += 1;
+                    rebroadcast = active;
+                }
+                else
+                {
+                    exhausted = true;
+                    _logger.LogError(
+                        "[CollectiveSkip] 活动跳段 {SkipId} 重播 {N} 次仍未收齐 Applied（等待 {Elapsed:F0}s），清除活动跳段：房间={RoomCode}, 已回报={Applied}/{Required}, 失败={Failed}",
+                        active.SkipId, active.BroadcastCount, (DateTime.UtcNow - active.CreatedAt).TotalSeconds, roomCode,
+                        active.AppliedConnectionIds.Count, active.RequiredConnectionIds.Count,
+                        active.FailedConnectionIds.Count);
+                    ClearActiveCollectiveSkipLocked(room);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[CollectiveSkip] Applied 超时回调失败，房间={RoomCode}", roomCode);
+            return;
+        }
+
+        if (exhausted || rebroadcast == null) return;
+
+        try
+        {
+            _logger.LogWarning(
+                "[CollectiveSkip] 活动跳段 {SkipId} Applied 未收齐，超时重播第 {N}/{Max} 次：房间={RoomCode}, 已回报={Applied}/{Required}",
+                rebroadcast.SkipId, rebroadcast.BroadcastCount, MaxCollectiveSkipBroadcastCount, roomCode,
+                rebroadcast.AppliedConnectionIds.Count, rebroadcast.RequiredConnectionIds.Count);
+
+            await _broadcaster.BroadcastGroupAsync(roomCode, "RequestSkipToProgress",
+                new { skipId = rebroadcast.SkipId, targetProgress = rebroadcast.TargetProgress },
+                rebroadcast.TargetProgress);
+
+            lock (room)
+            {
+                ArmCollectiveSkipApplyRetryTimerLocked(room, roomCode, rebroadcast.SkipId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[CollectiveSkip] Applied 超时重播广播失败，房间={RoomCode}", roomCode);
+        }
+    }
+
+    /// <summary>
+    /// 客户端回报集体跳段执行结果（collective-skip-applied-ack / sync.reportCollectiveSkipApplied）。
+    ///
+    /// 语义：客户端在真正把本地段切换到目标（复用既有 SkipToNextSegment / SkipRouteRequested，
+    /// 不新增跳转算法）后回报 success=true；找不到目标段 / 任务结束 / 取消等无法跳段时回报 success=false。
+    ///
+    /// 服务端规则（幂等 + 防伪造）：
+    ///   - skipId 必须严格等于当前活动跳段：旧/未知 SkipId 一律忽略（迟到回报不污染新跳段）；
+    ///   - 只有 RequiredConnectionIds 内的连接可被记录（不能替他人认领完成）；
+    ///   - 同一连接重复回报只记一次；
+    ///   - 失败者从"待回报"移出并记入 Failed：既不阻塞其他成员放行，也不被当作 Applied；
+    ///   - 全部必要成员都有结论后广播 CollectiveSkipAppliedAll 并清除活动跳段。
+    /// 不触碰 ArrivalSets / AllArrived：最终汇合仍由既有同步点完成。
+    /// </summary>
+    public async Task ReportCollectiveSkipAppliedAsync(
+        GatewayHandlerContext ctx, string skipId, long actualProgress, bool success, string reason)
+    {
+        var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
+        if (room == null || roomCode == null) return;
+
+        CollectiveSkipState? appliedAll = null;
+        try
+        {
+            lock (room)
+            {
+                var active = room.ActiveCollectiveSkip;
+                if (active == null)
+                {
+                    _logger.LogInformation("[CollectiveSkip] 收到 Applied 但当前无活动跳段，忽略：房间={RoomCode}, skipId={SkipId}, 连接={ConnId}",
+                        roomCode, skipId, ctx.ConnectionId);
+                    return;
+                }
+
+                if (!string.Equals(active.SkipId, skipId, StringComparison.Ordinal))
+                {
+                    _logger.LogWarning("[CollectiveSkip] Applied 的 skipId 与活动跳段不一致（旧/未知命令），忽略：房间={RoomCode}, 收到={SkipId}, 活动={ActiveId}, 连接={ConnId}",
+                        roomCode, skipId, active.SkipId, ctx.ConnectionId);
+                    return;
+                }
+
+                if (!active.RequiredConnectionIds.Contains(ctx.ConnectionId))
+                {
+                    _logger.LogWarning("[CollectiveSkip] Applied 来自非必要成员，忽略：房间={RoomCode}, skipId={SkipId}, 连接={ConnId}",
+                        roomCode, skipId, ctx.ConnectionId);
+                    return;
+                }
+
+                if (active.AppliedConnectionIds.Contains(ctx.ConnectionId)
+                    || active.FailedConnectionIds.Contains(ctx.ConnectionId))
+                {
+                    _logger.LogInformation("[CollectiveSkip] Applied 重复回报，忽略：房间={RoomCode}, skipId={SkipId}, 连接={ConnId}",
+                        roomCode, skipId, ctx.ConnectionId);
+                    return;
+                }
+
+                var playerUid = room.Players.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId)?.PlayerUid ?? "?";
+
+                if (success)
+                {
+                    active.AppliedConnectionIds.Add(ctx.ConnectionId);
+                    _logger.LogInformation(
+                        "[CollectiveSkip] 成员回报 Applied：房间={RoomCode}, skipId={SkipId}, uid={Uid}, actualProgress={Progress}, 进度 {Applied}/{Required}",
+                        roomCode, skipId, playerUid, actualProgress,
+                        active.AppliedConnectionIds.Count, active.RequiredConnectionIds.Count);
+                }
+                else
+                {
+                    active.FailedConnectionIds.Add(ctx.ConnectionId);
+                    active.LatestFailureReason = reason ?? "";
+                    _logger.LogError(
+                        "[CollectiveSkip] 成员回报 Applied 失败（该成员不再阻塞放行）：房间={RoomCode}, skipId={SkipId}, uid={Uid}, reason={Reason}",
+                        roomCode, skipId, playerUid, reason);
+                }
+
+                bool allResolved = active.RequiredConnectionIds.All(c =>
+                    active.AppliedConnectionIds.Contains(c) || active.FailedConnectionIds.Contains(c));
+                if (allResolved)
+                {
+                    active.Phase = CollectiveSkipPhase.Applied;
+                    appliedAll = active;
+                    ClearActiveCollectiveSkipLocked(room);
+                    _logger.LogWarning(
+                        "[CollectiveSkip] 全部必要成员已有结论，广播 CollectiveSkipAppliedAll：房间={RoomCode}, skipId={SkipId}, target={Target}, 成功={Applied}, 失败={Failed}",
+                        roomCode, active.SkipId, active.TargetProgress,
+                        active.AppliedConnectionIds.Count, active.FailedConnectionIds.Count);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[CollectiveSkip] Applied 处理失败，房间={RoomCode}, skipId={SkipId}", roomCode, skipId);
+            return;
+        }
+
+        if (appliedAll == null) return;
+
+        try
+        {
+            await _broadcaster.BroadcastGroupAsync(roomCode, "CollectiveSkipAppliedAll",
+                new { skipId = appliedAll.SkipId, targetProgress = appliedAll.TargetProgress },
+                appliedAll.SkipId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[CollectiveSkip] CollectiveSkipAppliedAll 广播失败，房间={RoomCode}", roomCode);
         }
     }
 

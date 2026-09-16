@@ -112,6 +112,39 @@ public class CoordinatorClient : IAsyncDisposable
     public event Action<long>? RequestSkipToProgressReceived;
 
     /// <summary>
+    /// 集体跳段请求（collective-skip-applied-ack）：带 skipId 的新形态。
+    /// 与 <see cref="RequestSkipToProgressReceived"/> 同时触发（后者只带 targetProgress），
+    /// 保证旧订阅方行为不变；新流程（幂等去重 + Applied 回报）只订阅本事件。
+    /// </summary>
+    public event Action<Models.CollectiveSkipRequest>? CollectiveSkipRequested;
+
+    /// <summary>
+    /// 集体跳段 Applied 汇总（collective-skip-applied-ack）：服务端确认全部必要成员
+    /// 都已回报 Applied（或失败）后广播。仅用于清理本地活动跳段状态；
+    /// 最终汇合仍由既有同步点（AllArrived 路径）完成，本事件不驱动跳转。
+    /// </summary>
+    public event Action<Models.CollectiveSkipRequest>? CollectiveSkipAppliedAllReceived;
+
+    // === 路线边界锚点事件（route-anchor）===
+    /// <summary>
+    /// 锚点已放行（服务端授权进入下一条路线）。载荷为权威快照的字段子集；
+    /// 事件只负责"尽快查询"，不作为唯一正确性来源（方案正文第 7 章）。
+    /// </summary>
+    public event Action<Models.RouteAnchorSnapshotDto>? RouteAnchorReleasedReceived;
+
+    /// <summary>锚点已停止（无法确认全员安全收口，整队停止）。</summary>
+    public event Action<Models.RouteAnchorSnapshotDto>? RouteAnchorStoppedReceived;
+
+    /// <summary>锚点状态已变化（仅作查询提示，不带业务数据）。</summary>
+    public event Action? RouteAnchorChangedReceived;
+
+    /// <summary>
+    /// 收到定向 Pull 命令（route-anchor）：需要把本机拉回当前路线边界。
+    /// 处理器只负责登记与校验，真正的执行（取消当前路线子任务/跳转）由调用方在安全点完成。
+    /// </summary>
+    public event Action<Models.RouteAnchorPullCommand>? RouteAnchorPullReceived;
+
+    /// <summary>
     /// 服务端连续触发协同跳段达上限后的降级广播。载荷：reason (string)。
     /// 触发后客户端走 OnConsecutiveSyncTimeoutExceeded 等价路径协调停止（OQ-5 A）。
     /// </summary>
@@ -159,6 +192,13 @@ public class CoordinatorClient : IAsyncDisposable
     public int CurrentRouteIndex => _currentRouteIndex;
     public CooperativeRerunSession? CooperativeSession { get; internal set; }
     public bool SupportsCooperativeRerun => _gateway?.SupportsCapability(RerunProtocol.Capability) == true;
+
+    /// <summary>
+    /// 服务端是否宣告支持路线边界锚点（route-anchor）。
+    /// 客户端据此决定本会话是否激活锚点：服务端不支持时保持原有行为（不发送任何锚点协议）。
+    /// </summary>
+    public bool SupportsRouteAnchor
+        => _gateway?.SupportsCapability(BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability) == true;
 
     public async Task<RerunSnapshot> SendCooperativeRerunAsync(RerunRequest request, CancellationToken ct)
     {
@@ -417,8 +457,28 @@ public class CoordinatorClient : IAsyncDisposable
                 case GatewayProtocol.Events.SyncRequestSkipToProgress:
                 {
                     var target = env.GetLong("targetProgress");
-                    _logger.LogWarning("[联机] 收到 RequestSkipToProgress: target={Target}", target);
+                    // collective-skip-applied-ack：新服务端带 skipId；旧服务端缺省空串（退化为旧行为）
+                    var skipId = env.GetString("skipId");
+                    _logger.LogWarning("[联机] 收到 RequestSkipToProgress: target={Target}, skipId={SkipId}", target, skipId);
+                    // 旧事件先发（订阅方行为逐字不变），再发带 skipId 的新事件
                     RequestSkipToProgressReceived?.Invoke(target);
+                    CollectiveSkipRequested?.Invoke(new Models.CollectiveSkipRequest
+                    {
+                        SkipId = skipId,
+                        TargetProgress = target,
+                    });
+                    break;
+                }
+
+                case GatewayProtocol.Events.SyncCollectiveSkipAppliedAll:
+                {                    var skipId = env.GetString("skipId");
+                    var target = env.GetLong("targetProgress", -1);
+                    _logger.LogWarning("[联机] 收到 CollectiveSkipAppliedAll: skipId={SkipId}, target={Target}", skipId, target);
+                    CollectiveSkipAppliedAllReceived?.Invoke(new Models.CollectiveSkipRequest
+                    {
+                        SkipId = skipId,
+                        TargetProgress = target,
+                    });
                     break;
                 }
 
@@ -427,6 +487,50 @@ public class CoordinatorClient : IAsyncDisposable
                     var reason = env.GetString("reason");
                     _logger.LogError("[联机] 收到 CollectiveSkipDegraded: reason={Reason}", reason);
                     CollectiveSkipDegradedReceived?.Invoke(reason);
+                    break;
+                }
+
+                // === 路线边界锚点事件（route-anchor）===
+                // 事件只触发"尽快查询权威快照"，本地不据此直接放行（避免单帧依赖）。
+                case GatewayProtocol.Events.SyncRouteAnchorReleased:
+                {
+                    var snapshot = BuildRouteAnchorSnapshotFromEvent(env);
+                    _logger.LogWarning("[联机] 收到 RouteAnchorReleased: anchorId={AnchorId}, 边界={Boundary}→{Next}",
+                        snapshot.AnchorId, snapshot.CompletedRouteIndex, snapshot.NextRouteIndex);
+                    RouteAnchorReleasedReceived?.Invoke(snapshot);
+                    break;
+                }
+
+                case GatewayProtocol.Events.SyncRouteAnchorStopped:
+                {
+                    var snapshot = BuildRouteAnchorSnapshotFromEvent(env);
+                    _logger.LogError("[联机] 收到 RouteAnchorStopped: anchorId={AnchorId}", snapshot.AnchorId);
+                    RouteAnchorStoppedReceived?.Invoke(snapshot);
+                    break;
+                }
+
+                case GatewayProtocol.Events.SyncRouteAnchorPull:
+                {
+                    var pull = new Models.RouteAnchorPullCommand
+                    {
+                        AnchorId = env.GetString("anchorId"),
+                        SessionId = env.GetString("sessionId"),
+                        WorldEpoch = env.GetInt("worldEpoch"),
+                        PlanId = env.GetString("planId"),
+                        CommandId = env.GetString("commandId"),
+                        TargetRouteIndex = env.GetInt("targetRouteIndex", -1),
+                        Attempt = env.GetInt("attempt"),
+                    };
+                    _logger.LogWarning("[联机][锚点] 收到 Pull 命令: commandId={CommandId}, 目标路线={Target}, 第 {Attempt} 次",
+                        pull.CommandId, pull.TargetRouteIndex, pull.Attempt);
+                    RouteAnchorPullReceived?.Invoke(pull);
+                    break;
+                }
+
+                case GatewayProtocol.Events.SyncRouteAnchorChanged:
+                {
+                    _logger.LogDebug("[联机] 收到 RouteAnchorChanged（提示查询权威快照）: anchorId={AnchorId}", env.GetString("anchorId"));
+                    RouteAnchorChangedReceived?.Invoke();
                     break;
                 }
 
@@ -440,6 +544,25 @@ public class CoordinatorClient : IAsyncDisposable
             _logger.LogWarning(ex, "[联机] evt 事件处理失败（已吞掉）: {Name}", env.Name);
         }
     }
+
+    /// <summary>
+    /// 由锚点事件载荷构造部分快照（仅身份与边界字段）。
+    /// 完整状态一律以 <see cref="QueryRouteAnchorStateAsync"/> 的权威快照为准。
+    /// </summary>
+    private static Models.RouteAnchorSnapshotDto BuildRouteAnchorSnapshotFromEvent(GatewayEnvelope env)
+        => new()
+        {
+            HasAnchor = true,
+            AnchorId = env.GetString("anchorId"),
+            SessionId = env.GetString("sessionId"),
+            WorldEpoch = env.GetInt("worldEpoch"),
+            PlanId = env.GetString("planId"),
+            CompletedRouteIndex = env.GetInt("completedRouteIndex"),
+            NextRouteIndex = env.GetInt("nextRouteIndex"),
+            Phase = env.Name == GatewayProtocol.Events.SyncRouteAnchorReleased ? "Released" : "Stopped",
+            Released = env.Name == GatewayProtocol.Events.SyncRouteAnchorReleased,
+            Stopped = env.Name == GatewayProtocol.Events.SyncRouteAnchorStopped,
+        };
 
     /// <summary>SignalR 内置自动重连成功（同一连接，新 connectionId）。</summary>
     private async Task OnReconnected(string? newConnectionId)
@@ -1585,6 +1708,188 @@ public class CoordinatorClient : IAsyncDisposable
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "[联机] 抢报到达失败（已忽略）: {SyncId}", syncId);
+        }
+    }
+
+    /// <summary>
+    /// 集体跳段执行确认（collective-skip-applied-ack）：按 skipId 回报本地是否已执行跳段。
+    /// 服务端据此确认全部必要成员都已跳段，而不是只广播一次就假定所有人都跳了。
+    /// skipId 为空（旧服务端无 skipId）时不发送——行为退化为旧协议。
+    /// 失败只记日志不抛（与其它上报方法同纪律）。
+    /// </summary>
+    public async Task ReportCollectiveSkipAppliedAsync(string skipId, long actualProgress, bool success, string reason)
+    {
+        if (string.IsNullOrEmpty(skipId)) return;
+        if (_gateway == null || !IsConnected) return;
+        try
+        {
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.SyncReportCollectiveSkipApplied,
+                new { skipId, actualProgress, success, reason });
+            _logger.LogInformation(
+                "[联机] 上报集体跳段 Applied: skipId={SkipId}, success={Success}, actualProgress={Progress}, reason={Reason}",
+                skipId, success, actualProgress, reason);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[联机] 上报集体跳段 Applied 失败（已忽略）: skipId={SkipId}", skipId);
+        }
+    }
+
+    // === 路线边界锚点协议（route-anchor）===
+    // 与普通同步点协议完全独立；服务端在无客户端调用时不创建锚点。
+
+    /// <summary>
+    /// 加入/创建路线边界锚点：声明"我已处理完 route N，到达边界 N"。
+    /// sessionId/worldEpoch 由服务端权威生成（此处仅回带已知值，服务端会忽略并覆盖）。
+    /// 返回服务端权威快照；失败返回 null。
+    /// </summary>
+    /// <summary>
+    /// 最近一次锚点调用被服务端拒绝时的错误码（如 rerun_in_progress）。
+    /// 用于区分"重跑窗口内推进权归重跑"与"真实失败"——前者不应让客户端停止本轮。
+    /// </summary>
+    public string LastRouteAnchorErrorCode { get; private set; } = "";
+
+    public async Task<Models.RouteAnchorSnapshotDto?> RouteAnchorEnrollAsync(
+        string planId, int completedRouteIndex, int nextRouteIndex,
+        string sessionId = "", int worldEpoch = 0, CancellationToken ct = default)
+    {
+        if (_gateway == null || !IsConnected) return null;
+        try
+        {
+            var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RouteAnchorEnroll,
+                new { sessionId, worldEpoch, planId, completedRouteIndex, nextRouteIndex }, null, ct);
+            LastRouteAnchorErrorCode = "";   // 成功即清空，避免上一次的错误码"粘住"
+            var snapshot = resp.Get<Models.RouteAnchorSnapshotDto>("anchor");
+            _logger.LogInformation("[联机][锚点] enroll 完成: {Snapshot}", snapshot);
+            return snapshot;
+        }
+        catch (GatewayErrorException gex)
+        {
+            // 服务端拒绝：原因在 message 的 route_anchor:<reason> 里（AnchorError 统一格式）
+            LastRouteAnchorErrorCode = ExtractAnchorErrorReason(gex.Message);
+            _logger.LogWarning("[联机][锚点] enroll 被服务端拒绝: {Reason}", LastRouteAnchorErrorCode);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            LastRouteAnchorErrorCode = "";
+            _logger.LogWarning(ex, "[联机][锚点] enroll 失败");
+            return null;
+        }
+    }
+
+    /// <summary>提交边界结果（completed / skipped / recovered / rerun-completed）。</summary>
+    public async Task<Models.RouteAnchorSnapshotDto?> RouteAnchorReportAsync(
+        string anchorId, string sessionId, int worldEpoch, string planId,
+        int completedRouteIndex, string outcome, CancellationToken ct = default)
+    {
+        if (_gateway == null || !IsConnected) return null;
+        try
+        {
+            var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RouteAnchorReport,
+                new { anchorId, sessionId, worldEpoch, planId, completedRouteIndex, outcome }, null, ct);
+            return resp.Get<Models.RouteAnchorSnapshotDto>("anchor");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[联机][锚点] report 失败");
+            return null;
+        }
+    }
+
+    /// <summary>声明"已到达边界且可以继续"（Ready）。</summary>
+    public async Task<Models.RouteAnchorSnapshotDto?> RouteAnchorArriveAsync(
+        string anchorId, string sessionId, int worldEpoch, string planId, CancellationToken ct = default)
+    {
+        if (_gateway == null || !IsConnected) return null;
+        try
+        {
+            var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RouteAnchorArrived,
+                new { anchorId, sessionId, worldEpoch, planId }, null, ct);
+            return resp.Get<Models.RouteAnchorSnapshotDto>("anchor");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[联机][锚点] arrived 失败");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 回报 Pull 执行结果（sync.routeAnchorPullApplied）。
+    /// 成败同形，用 success 区分；commandId 必须回带服务端下发的原值（重发保持同一 ID）。
+    /// </summary>
+    public async Task<bool> RouteAnchorPullAckAsync(
+        string anchorId, string commandId, bool success, string reason, CancellationToken ct = default)
+    {
+        if (_gateway == null || !IsConnected) return false;
+        try
+        {
+            var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RouteAnchorPullAck,
+                new { anchorId, commandId, success, reason }, null, ct);
+            var failed = resp.TryGetError(out var code, out _);
+            if (failed) _logger.LogWarning("[联机][锚点] Pull 确认被服务端拒绝：{Code}", code);
+            return !failed;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[联机][锚点] Pull 确认发送失败（commandId={CommandId}）", commandId);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 取消当前锚点（sync.routeAnchorCancel）：成员主动停止/任务取消时调用，
+    /// 让服务端广播 Stopped 使全员立即停止等待，而不是各自等本地超时。
+    /// 返回服务端权威快照；失败返回 null。
+    /// </summary>
+    public async Task<Models.RouteAnchorSnapshotDto?> RouteAnchorCancelAsync(
+        string anchorId, string reason, CancellationToken ct = default)
+    {
+        if (_gateway == null || !IsConnected) return null;
+        try
+        {
+            var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RouteAnchorCancel,
+                new { anchorId, reason }, null, ct);
+            return resp.Get<Models.RouteAnchorSnapshotDto>("anchor");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[联机][锚点] 取消失败（anchorId={AnchorId}）", anchorId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 从服务端错误消息里提取锚点拒绝原因（格式由服务端 <c>AnchorError</c> 统一为
+    /// <c>route_anchor:&lt;reason&gt;</c>）。非该格式一律返回空串——**绝不猜测**，
+    /// 因为"是否让位于重跑"取决于这个值，猜错会导致该停止时继续跑。
+    /// </summary>
+    internal static string ExtractAnchorErrorReason(string? errorMessage)
+    {
+        const string prefix = "route_anchor:";
+        if (string.IsNullOrEmpty(errorMessage)) return "";
+        var idx = errorMessage.IndexOf(prefix, StringComparison.Ordinal);
+        if (idx < 0) return "";
+        var reason = errorMessage[(idx + prefix.Length)..].Trim();
+        // 只取到首个空白/换行（错误消息可能被拼接其它内容）
+        var cut = reason.IndexOfAny([' ', '\n', '\r', ']']);
+        return cut >= 0 ? reason[..cut] : reason;
+    }
+
+    /// <summary>查询权威锚点快照（事实来源：事件只是提示）。失败返回 null。</summary>
+    public async Task<Models.RouteAnchorSnapshotDto?> QueryRouteAnchorStateAsync(CancellationToken ct = default)
+    {
+        if (_gateway == null || !IsConnected) return null;
+        try
+        {
+            var resp = await _gateway.QueryAsync(GatewayProtocol.Names.RouteAnchorStateQuery, null, null, ct);
+            return resp.Get<Models.RouteAnchorSnapshotDto>("anchor");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "[联机][锚点] 查询状态失败（将按未知处理）");
+            return null;
         }
     }
 

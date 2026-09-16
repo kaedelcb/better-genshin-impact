@@ -113,6 +113,46 @@ public sealed class GatewayBroadcaster
             ? _gatewayHub.Groups.RemoveFromGroupAsync(ctx.ConnectionId, group)
             : _legacyHub.Groups.RemoveFromGroupAsync(ctx.ConnectionId, group);
 
+    /// <summary>
+    /// 只发 evt 的组广播（route-anchor 等新协议域）。
+    ///
+    /// 与 <see cref="BroadcastGroupAsync"/> 的区别：不做"旧名 → /hub"的兼容发送，
+    /// 也不要求事件名存在于 <see cref="GatewayProtocol.LegacyEventMap"/>。
+    /// 适用前提：该事件从来没有旧客户端订阅者（新协议域专属）。
+    /// 发送失败同样就地吞掉记日志，不影响任何既有通道。
+    /// </summary>
+    public async Task BroadcastGroupEventOnlyAsync(string group, string evtName, object? evtPayload, string? roomCode)
+    {
+        try
+        {
+            await _gatewayHub.Clients.Group(group).SendAsync(
+                GatewayProtocol.Callbacks.Event,
+                GatewayEnvelope.Event(evtName, evtPayload, roomCode));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[Gateway] evt-only 组广播失败（已吞掉）：{EvtName} → {Group}", evtName, group);
+        }
+    }
+
+    /// <summary>
+    /// 只发 evt 的**定向**发送（route-anchor 的 Pull 命令等新协议域专用）。
+    /// 与组广播版的区别：只发给指定连接，且不做旧事件名兼容发送。
+    /// </summary>
+    public async Task SendEventOnlyToConnectionAsync(string connectionId, string evtName, object? evtPayload, string? roomCode)
+    {
+        try
+        {
+            await _gatewayHub.Clients.Client(connectionId).SendAsync(
+                GatewayProtocol.Callbacks.Event,
+                GatewayEnvelope.Event(evtName, evtPayload, roomCode));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[Gateway] evt-only 定向发送失败（已吞掉）：{EvtName} → {ConnId}", evtName, connectionId);
+        }
+    }
+
     /// <summary>evt 一侧发送：就地捕获，记日志不冒泡（不破坏旧路径）。</summary>
     private async Task SendEvtSafeAsync(IClientProxy target, string? roomCode, string legacyEventName, object? evtPayload)
     {

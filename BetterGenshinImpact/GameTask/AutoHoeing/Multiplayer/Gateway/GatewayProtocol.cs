@@ -67,6 +67,12 @@ public static class GatewayProtocol
         public const string SyncReportArrival = "sync.reportArrival";
         public const string SyncWaitForAllPlayers = "sync.waitForAllPlayers";
 
+        /// <summary>
+        /// 集体跳段执行确认（collective-skip-applied-ack）：按 skipId 回报本地跳段结果。
+        /// 纯新增消息名；旧服务端不认识它，客户端仅在收到带 skipId 的跳段请求时才发送。
+        /// </summary>
+        public const string SyncReportCollectiveSkipApplied = "sync.reportCollectiveSkipApplied";
+
         public const string FightReportParticipant = "fight.reportParticipant";
         public const string FightReportDone = "fight.reportDone";
 
@@ -88,6 +94,16 @@ public static class GatewayProtocol
         public const string AnomalyRouteSkipped = "anomaly.routeSkipped";
         public const string AnomalyWaitPointReached = "anomaly.waitPointReached";
         public const string AnomalyFightingStatusChanged = "anomaly.fightingStatusChanged";
+
+        // === 路线边界锚点（route-anchor，独立协议域）===
+        // 与普通同步（sync.waitForAllPlayers / AllArrived）、旧集体跳段完全独立：
+        // 前者管路线内部，锚点管"上一条路线是否全员收口、能否进入下一条"。
+        public const string RouteAnchorEnroll = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Enroll;
+        public const string RouteAnchorReport = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Report;
+        public const string RouteAnchorArrived = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Arrived;
+        public const string RouteAnchorCancel = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Cancel;
+        public const string RouteAnchorStateQuery = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.State;
+        public const string RouteAnchorPullAck = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.PullAck;
     }
 
     /// <summary>room.getState 的 section 取值（§4.3 分组收敛，6 个旧查询聚合）。</summary>
@@ -139,5 +155,20 @@ public static class GatewayProtocol
         public const string RoomStartRoute = "room.startRoute";                     // ← StartRoute
         public const string SyncRequestSkipToProgress = "sync.requestSkipToProgress"; // ← RequestSkipToProgress
         public const string SyncCollectiveSkipDegraded = "sync.collectiveSkipDegraded"; // ← CollectiveSkipDegraded
+        public const string SyncCollectiveSkipAppliedAll = "sync.collectiveSkipAppliedAll"; // ← CollectiveSkipAppliedAll（collective-skip-applied-ack）
+
+        // === 路线边界锚点事件（route-anchor）===
+        // 事件只负责"尽快查询权威快照"，不作为唯一正确性来源（方案正文第 7 章）。
+        /// <summary>锚点状态变化（收到后应立即查询 sync.routeAnchorState）。</summary>
+        public const string SyncRouteAnchorChanged = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Changed;
+
+        /// <summary>锚点放行：服务端授权进入下一条路线。</summary>
+        public const string SyncRouteAnchorReleased = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Released;
+
+        /// <summary>锚点停止：无法确认全员安全收口，整队停止。</summary>
+        public const string SyncRouteAnchorStopped = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Stopped;
+
+        /// <summary>服务端定向下发"把他拉回当前边界"（只发给需要被拉回的成员）。</summary>
+        public const string SyncRouteAnchorPull = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.PullEvent;
     }
 }

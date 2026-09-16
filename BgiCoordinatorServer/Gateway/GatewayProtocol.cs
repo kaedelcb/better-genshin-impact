@@ -1,4 +1,4 @@
-using BetterGenshinImpact.Shared.CooperativeRerun;
+﻿using BetterGenshinImpact.Shared.CooperativeRerun;
 
 namespace BgiCoordinatorServer.Gateway;
 
@@ -15,7 +15,8 @@ public static class GatewayProtocol
     public const int MinimumClientProtocol = 2;
 
     /// <summary>服务端能力清单（§4.4：能力缺省即不支持）。只列本切片真实实现的。</summary>
-    public static readonly string[] ServerCapabilities = ["gateway.envelope.v3", RerunProtocol.Capability];
+    public static readonly string[] ServerCapabilities =
+        ["gateway.envelope.v3", RerunProtocol.Capability, BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability];
 
     public static class MessageTypes
     {
@@ -74,6 +75,26 @@ public static class GatewayProtocol
 
         public const string SyncReportArrival = "sync.reportArrival";
         public const string SyncWaitForAllPlayers = "sync.waitForAllPlayers";
+
+        /// <summary>
+        /// 集体跳段执行确认（collective-skip-applied-ack）：客户端按 skipId 回报本地跳段结果。
+        /// 纯新增消息名，旧客户端不发送即可，不影响既有协议。
+        /// </summary>
+        public const string SyncReportCollectiveSkipApplied = "sync.reportCollectiveSkipApplied";
+
+        // === 路线边界锚点（route-anchor，独立协议域）===
+        // 不复用普通 AllArrived / StartRoute / Abort / CollectiveSkipAppliedAll：
+        // 它们分别属于路线内同步、旧重对齐、中断和旧中途集体跳段语义。
+        // 说明：常量先于处理器定义（阶段 1 只固化协议面，不接生产路径；
+        // 对应处理器与事件映射在阶段 2 随客户端接入一并注册）。
+        public const string RouteAnchorEnroll = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Enroll;
+        public const string RouteAnchorReport = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Report;
+        public const string RouteAnchorPullApplied = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.PullAck;
+        /// <summary>失败形态与成功同形（success=false），保留独立名字以便路由别名。</summary>
+        public const string RouteAnchorPullFailed = "sync.routeAnchorPullFailed";
+        public const string RouteAnchorArrived = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Arrived;
+        public const string RouteAnchorCancel = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Cancel;
+        public const string RouteAnchorStateQuery = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.State;
 
         public const string FightReportParticipant = "fight.reportParticipant";
         public const string FightReportDone = "fight.reportDone";
@@ -249,6 +270,9 @@ public static class GatewayProtocol
             ["StartRoute"] = "room.startRoute",
             ["RequestSkipToProgress"] = "sync.requestSkipToProgress",
             ["CollectiveSkipDegraded"] = "sync.collectiveSkipDegraded",
+            // 集体跳段 Applied 汇总（collective-skip-applied-ack）：全部必要成员回报后才广播。
+            // 旧客户端不订阅此事件 → 广播被静默丢弃，行为退化为"只发跳段请求、不等确认"。
+            ["CollectiveSkipAppliedAll"] = "sync.collectiveSkipAppliedAll",
             ["RouteEnforceSync"] = "route.enforceSync",
             // 控制房间事件
             ["ControlRoomPlayersUpdated"] = "control.playersUpdated",
@@ -274,5 +298,27 @@ public static class GatewayProtocol
     {
         public const string Event = "evt";
         public const string State = "state";
+    }
+
+    /// <summary>
+    /// 纯新增协议域的事件名（route-anchor）。
+    ///
+    /// 与 <see cref="LegacyEventMap"/> 刻意分开：映射表承载的是"旧事件名→evt 名"的双发兼容，
+    /// 而 route-anchor 是全新域，从来没有旧客户端订阅者，因此只发 evt，
+    /// 不进入双发表（避免污染"客户端订阅清单"的严格校验）。
+    /// </summary>
+    public static class Events
+    {
+        /// <summary>状态已变化（客户端收到后应立即查询权威快照）。</summary>
+        public const string RouteAnchorChanged = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Changed;
+
+        /// <summary>锚点放行：授权进入下一条路线。</summary>
+        public const string RouteAnchorReleased = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Released;
+
+        /// <summary>锚点停止：无法确认全员安全收口，整队停止。</summary>
+        public const string RouteAnchorStopped = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Stopped;
+
+        /// <summary>定向 Pull 命令（只发给需要被拉回的成员，不是组广播）。</summary>
+        public const string RouteAnchorPull = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.PullEvent;
     }
 }

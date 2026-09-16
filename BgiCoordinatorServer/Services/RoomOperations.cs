@@ -23,16 +23,22 @@ public sealed partial class RoomOperations
     private readonly GatewayBroadcaster _broadcaster;
     private readonly RoomPhaseObserver _phaseObserver;
 
+    /// <summary>客户端能力查询（route-anchor 门控用）。为 null 时按"不支持"处理：
+    /// 宁可拒绝激活，也不允许"忘记接线导致静默半启用"。</summary>
+    private readonly IClientCapabilityLookup? _capabilityLookup;
+
     public RoomOperations(
         RoomManager roomManager,
         ILogger<RoomOperations> logger,
         GatewayBroadcaster broadcaster,
-        RoomPhaseObserver phaseObserver)
+        RoomPhaseObserver phaseObserver,
+        IClientCapabilityLookup? capabilityLookup = null)
     {
         _roomManager = roomManager;
         _logger = logger;
         _broadcaster = broadcaster;
         _phaseObserver = phaseObserver;
+        _capabilityLookup = capabilityLookup;
     }
 
     // ====== 连接 Group 跟踪（自 CoordinatorHub 搬迁，语义不变）======

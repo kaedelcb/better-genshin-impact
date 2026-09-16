@@ -327,6 +327,29 @@ public partial class PathExecutor
         public PostTeleportStuckProtectionRetryException(string message) : base(message) { }
     }
 
+    // === 集体跳段专用异常（collective-skip-applied-ack）===
+    // 用于把"服务端集体卡死跳段请求命中"与普通 RetryException 彻底隔离：
+    // 普通 RetryException 会落入 _syncPointReached 同步点前/后分流、escalation 消费与
+    // Reviving 上报；集体跳段不是异常恢复，它是"协调跳段"，必须走独立分支，否则会与
+    // 复苏/重试逻辑互相干扰（这是本次修复的核心问题之一）。
+    // 继承 RetryException，使现有 catch(RetryException) 能捕获（与 LaggingCatchUpSkipException 同模式），
+    // 专用分支在 catch 块最前被 is 判别短路。
+    internal sealed class CollectiveSkipRetryException : RetryException
+    {
+        /// <summary>本次集体跳段的目标进度（来自服务端广播）。</summary>
+        public long TargetProgress { get; }
+
+        /// <summary>本次集体跳段的唯一标识（collective-skip-applied-ack）。空串=旧服务端无 skipId。</summary>
+        public string SkipId { get; }
+
+        public CollectiveSkipRetryException(string message, long targetProgress, string skipId)
+            : base(message)
+        {
+            TargetProgress = targetProgress;
+            SkipId = skipId ?? "";
+        }
+    }
+
     /// <summary>
     /// 联机模式专用：外部（AnomalyDetector）检测到联机已倒下界面时调用。
     /// 仅在联机模式下有效，单机模式忽略以保留原有行为。
@@ -709,11 +732,13 @@ public partial class PathExecutor
             // 段切换点不在 MoveForward 持按状态，故无需 KeyUp。
             if (CooperativeContext?.IsReplay != true
                 && MultiplayerCoordinator != null
-                && MultiplayerCoordinator.TryConsumeRemoteSkipSignal(out var segSkipTarget))
+                && MultiplayerCoordinator.TryConsumeCollectiveSkip(out var segSkipRequest))
             {
-                Logger.LogWarning("[联机] 段循环切换点收到大部队跳段请求，target={Target}，前往七天神像回血", segSkipTarget);
+                Logger.LogWarning("[联机] 段循环切换点收到集体跳段请求，skipId={SkipId}, target={Target}，前往七天神像回血",
+                    segSkipRequest?.SkipId, segSkipRequest?.TargetProgress);
                 await TpStatueOfTheSeven(requireLoadingScreen: true);
-                throw new RetryException("[联机] 大部队请求跳段");
+                throw new CollectiveSkipRetryException("[联机] 集体大部队请求跳段",
+                    segSkipRequest?.TargetProgress ?? -1, segSkipRequest?.SkipId ?? "");
             }
 
             // === 协作重跑：会话已被中止 → 立即停止游戏动作（安全取消语义）===
@@ -1443,11 +1468,13 @@ public partial class PathExecutor
                                     // === 集体卡死跳段消费点 3（multiplayer-mutual-wait-collective-skip §8.7 / OQ-6 A）===
                                     // 战斗结束后消费集体跳段信号位，与上面复苏信号消费点完全独立。
                                     if (CooperativeContext?.IsReplay != true && MultiplayerCoordinator != null
-                                        && MultiplayerCoordinator.TryConsumeRemoteSkipSignal(out var fightSkipTarget))
+                                        && MultiplayerCoordinator.TryConsumeCollectiveSkip(out var fightSkipRequest))
                                     {
-                                        Logger.LogWarning("[联机] 战斗结束收到大部队跳段请求，target={Target}，前往七天神像回血", fightSkipTarget);
+                                        Logger.LogWarning("[联机] 战斗结束收到集体跳段请求，skipId={SkipId}, target={Target}，前往七天神像回血",
+                                            fightSkipRequest?.SkipId, fightSkipRequest?.TargetProgress);
                                         await TpStatueOfTheSeven(requireLoadingScreen: true);
-                                        throw new RetryException("[联机] 大部队请求跳段");
+                                        throw new CollectiveSkipRetryException("[联机] 集体大部队请求跳段",
+                                            fightSkipRequest?.TargetProgress ?? -1, fightSkipRequest?.SkipId ?? "");
                                     }
 
                                     if(!string.IsNullOrEmpty(PartyConfig.MainAvatarIndex)) PartyConfig.MainAvatarIndex = PathingConditionConfig.InitialMainAvatarIndex;
@@ -1905,8 +1932,79 @@ public partial class PathExecutor
                     _cooperativeRecoveryPending = false;
                     if (CooperativeContext != null && cooperativeRecoveryPending
                         && retryException is not LaggingCatchUpSkipException
-                        && retryException is not PostTeleportStuckProtectionRetryException)
+                        && retryException is not PostTeleportStuckProtectionRetryException
+                        && retryException is not CollectiveSkipRetryException)
                         await CooperativeContext.ReportRecoveryAsync(retryException.Message, ct);
+
+                    // === 集体跳段专用分支（collective-skip-applied-ack）===
+                    // 必须在 escalation 消费 / _syncPointReached 分流 / Reviving 上报之前短路：
+                    // 集体跳段是"协调跳段"，不是异常恢复——因此不上报 Reviving、不消费 escalation、
+                    // 不进入同步点前/后异常分流、不计入本段重试次数，只复用既有 SkipToNextSegment
+                    // 段切换机制（与落后追赶同一条路径）并回报 Applied。
+                    // 修复前它抛普通 RetryException → 会落入上面的异常分流，被当成复苏/异常处理，
+                    // 这是"服务端以为跳了、客户端实际走别的分支"的根因之一。
+                    if (retryException is CollectiveSkipRetryException collectiveSkip)
+                    {
+                        // 服务端给的 target 不可信（异常载荷）时不做不可逆跳段，如实回报失败，
+                        // 等服务端重播或既有超时路径兜底——避免"盲目跳段 → 各跳各的"。
+                        if (collectiveSkip.TargetProgress < 0 && collectiveSkip.SkipId.Length > 0)
+                        {
+                            Logger.LogWarning("[联机][集体跳段] 服务端 target 无效（{Target}），不做跳段并回报失败，skipId={SkipId}",
+                                collectiveSkip.TargetProgress, collectiveSkip.SkipId);
+                            if (MultiplayerCoordinator != null)
+                            {
+                                try
+                                {
+                                    await MultiplayerCoordinator.ReportCollectiveSkipAppliedAsync(
+                                        false, -1, "invalid-target-progress");
+                                }
+                                catch (Exception __skipFailReportEx)
+                                {
+                                    Logger.LogWarning(__skipFailReportEx, "[联机][集体跳段] 回报 Applied 失败异常（已忽略）");
+                                }
+                            }
+                            break;
+                        }
+
+                        // 回报值取"本机实际要去的下一段起点"（与服务端 target 同编码），
+                        // 计算失败则回退为服务端 target——回报不能因为计算问题而中断跳段。
+                        long collectiveAppliedProgress = collectiveSkip.TargetProgress;
+                        try
+                        {
+                            var collectiveNextSegIdx = CurWaypoints.Item1 + 1;
+                            collectiveAppliedProgress = collectiveNextSegIdx < waypointsList.Count
+                                ? ComputeProgress(collectiveNextSegIdx, 0)
+                                : (long)(CurrentJsonRouteIndex + 1) * 1_000_000;
+                        }
+                        catch (Exception __skipCalcEx)
+                        {
+                            Logger.LogWarning(__skipCalcEx, "[联机][集体跳段] 计算本机下一段进度失败，回报值回退为服务端 target={Target}",
+                                collectiveSkip.TargetProgress);
+                        }
+
+                        SkipToNextSegment = true;
+                        _needReportNormalBeforeSync = true;
+                        Logger.LogWarning(
+                            "[联机][集体跳段] 置 SkipToNextSegment：skipId={SkipId}, 服务端target={Target}, 本机下一段进度={Progress}, 原因: {Msg}",
+                            collectiveSkip.SkipId, collectiveSkip.TargetProgress, collectiveAppliedProgress, retryException.Message);
+
+                        if (MultiplayerCoordinator != null)
+                        {
+                            try
+                            {
+                                await MultiplayerCoordinator.ReportCollectiveSkipAppliedAsync(
+                                    true, collectiveAppliedProgress, "");
+                            }
+                            catch (Exception __skipReportEx)
+                            {
+                                // 回报失败不影响本机跳段（服务端有重播 + 超时兜底）
+                                Logger.LogWarning(__skipReportEx, "[联机][集体跳段] 回报 Applied 异常（已忽略）");
+                            }
+                        }
+
+                        break; // 出 for-i 重试循环，外层段循环下一段顶部消费 SkipToNextSegment 传送到下一段
+                    }
+
                     // === 落后追赶非异常跳段分支（BUG-D 修复，必须在 escalation 消费 / _syncPointReached 分流 / Reviving 上报之前）===
                     if (retryException is LaggingCatchUpSkipException)
                     {
@@ -3303,12 +3401,14 @@ public partial class PathExecutor
             // isPoint==true 仅普通寻路段触发；MultiplayerCoordinator==null 单机模式直接 short-circuit。
             // 与上面的复苏信号消费点完全独立（preservation §3.4），抛不同 RetryException 文案便于日志追溯。
             if (isPoint && CooperativeContext?.IsReplay != true && MultiplayerCoordinator != null
-                && MultiplayerCoordinator.TryConsumeRemoteSkipSignal(out var moveSkipTarget))
+                && MultiplayerCoordinator.TryConsumeCollectiveSkip(out var moveSkipRequest))
             {
                 Simulation.SendInput.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
-                Logger.LogWarning("[联机] 走路中收到大部队跳段请求，target={Target}，前往七天神像回血", moveSkipTarget);
+                Logger.LogWarning("[联机] 走路中收到集体跳段请求，skipId={SkipId}, target={Target}，前往七天神像回血",
+                    moveSkipRequest?.SkipId, moveSkipRequest?.TargetProgress);
                 await TpStatueOfTheSeven(requireLoadingScreen: true);
-                throw new RetryException("[联机] 大部队请求跳段");
+                throw new CollectiveSkipRetryException("[联机] 集体大部队请求跳段",
+                    moveSkipRequest?.TargetProgress ?? -1, moveSkipRequest?.SkipId ?? "");
             }
 
             num++;
