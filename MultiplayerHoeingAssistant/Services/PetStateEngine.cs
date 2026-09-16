@@ -225,8 +225,10 @@ public static class PetStateEngine
     };
 
     /// <summary>
-    /// 从日志行提取好感任务轮次："第3/10轮" 或 "轮次:3/10"。无匹配 → null。
+    /// 从日志行提取好感任务轮次："第3/10轮"、"轮次:3/10" 或好感任务的"当前进度：3/10 (30.0%)"。无匹配 → null。
     /// 时间不从日志猜（不可靠），由任务开始时刻本地计时。
+    /// 注意"当前进度"模式要求冒号后紧跟数字——锄地的"当前进度：开始第 1/49 条线路"与
+    /// JS 的"当前进度：第 1 组第 3/20 条"均不匹配，不会误判。
     /// </summary>
     public static (int Cur, int Total)? ParseAffectionRound(string? logLine)
     {
@@ -234,6 +236,8 @@ public static class PetStateEngine
         var m = System.Text.RegularExpressions.Regex.Match(logLine, @"第\s*(\d+)\s*/\s*(\d+)\s*轮");
         if (!m.Success)
             m = System.Text.RegularExpressions.Regex.Match(logLine, @"轮次[:：]?\s*(\d+)\s*/\s*(\d+)");
+        if (!m.Success)
+            m = System.Text.RegularExpressions.Regex.Match(logLine, @"当前进度[:：]?\s*(\d+)\s*/\s*(\d+)");
         if (!m.Success) return null;
         if (!int.TryParse(m.Groups[1].Value, out var cur) || !int.TryParse(m.Groups[2].Value, out var total))
             return null;

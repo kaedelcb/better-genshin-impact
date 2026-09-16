@@ -1345,6 +1345,7 @@ public class RoomManager
                         player.TaskRunningExpireTime = DateTime.MinValue;
                     player.AutoHoeingRunning = status.AutoHoeingRunning;
                     player.AutoHoeingProgress = status.AutoHoeingProgress;
+                    player.FriendshipProgress = status.FriendshipProgress;
                     player.OnlineReady = status.OnlineReady;
                     player.OnlineMode = status.OnlineMode;
                     player.ScheduledOnlineTime = status.ScheduledOnlineTime;

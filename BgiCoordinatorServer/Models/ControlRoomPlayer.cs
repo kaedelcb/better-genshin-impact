@@ -37,6 +37,8 @@ public class ControlRoomPlayer
     public bool AutoHoeingRunning { get; set; }
     /// <summary>当前锄地进度文本。</summary>
     public string? AutoHoeingProgress { get; set; }
+    /// <summary>好感任务进度文本（BGI FriendshipProgress 合成，好感任务不在跑为 null）。与服务端模型保持同步。</summary>
+    public string? FriendshipProgress { get; set; }
     public DateTime LastHeartbeat { get; set; } = DateTime.UtcNow;
     /// <summary>是否已上线（标记了"已上线"但联机锄地尚未开始）。</summary>
     public bool OnlineReady { get; set; } = false;

@@ -37,6 +37,9 @@ public class ControlStatus
     public bool AutoHoeingRunning { get; set; }
     /// <summary>当前锄地进度文本（仅上报给自身用，控制端不展示给对方）。</summary>
     public string? AutoHoeingProgress { get; set; }
+    /// <summary>好感任务进度文本（BGI FriendshipProgress 合成，如"好感任务：第 3/50 轮，预计剩余 42分10秒，预计 08:30 完成"）。
+    /// 纯增量字段，旧 BGI 无此字段时保持 null（桌宠回退本地计时+日志轮次）。</summary>
+    public string? FriendshipProgress { get; set; }
     /// <summary>SignalR 房间当前人数（BGI 只读快照透传；0=未知/未在房间，旧 BGI 无此字段）。
     /// 桌宠"已联机"态 chip 分子用。</summary>
     public int RoomPlayerCount { get; set; }

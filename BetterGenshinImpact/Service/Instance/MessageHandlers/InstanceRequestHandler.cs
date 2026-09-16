@@ -14,6 +14,7 @@ using Newtonsoft.Json;
 using BetterGenshinImpact.GameTask.AutoHoeing;
 using BetterGenshinImpact.GameTask.AutoOnline;
 using BetterGenshinImpact.Service.ExternalInterface;
+using FriendshipProgress = BetterGenshinImpact.GameTask.AutoFriendship.FriendshipProgress;
 
 namespace BetterGenshinImpact.Service.Instance.MessageHandlers;
 
@@ -1072,10 +1073,32 @@ internal sealed class InstanceRequestHandler
             // JS 脚本任务进度合成（纯增量）：原生联机锄地不在跑、但脚本任务正在跑路线时，
             // 优先取脚本经 dispatcher.SetTaskProgress 上报的进度文本（含第X/Y条），退化为仅线路名。
             // 原先「锄地进度」只由 AutoHoeingProgress 生产，JS 锄地一条龙等脚本任务此位恒空。
-            if (!hoeing && scriptRouteName != null)
+            // ProgressText 单独有值也可用（脚本尚未 runFile 到路线时也能显示 N/M 计数）。
+            if (!hoeing && (scriptRouteName != null || BetterGenshinImpact.Core.Script.ScriptRouteProgress.ProgressText != null))
             {
                 hoeingProgress = BetterGenshinImpact.Core.Script.ScriptRouteProgress.ProgressText
                                  ?? $"脚本任务：当前线路 {scriptRouteName}";
+            }
+
+            // 好感任务进度合成（纯增量）：AutoFriendshipTask 主循环写 FriendshipProgress，
+            // 文本口径与其日志一致（第X/Y轮 + 预计剩余 + 预计完成时刻）。
+            string? friendshipProgress = null;
+            if (!isCancelled)
+            {
+                lock (FriendshipProgress.Sync)
+                {
+                    if (FriendshipProgress.IsRunning)
+                    {
+                        var tsRemain = TimeSpan.FromSeconds(Math.Max(0, FriendshipProgress.EstimatedRemainingSeconds));
+                        var remainText = FriendshipProgress.EstimatedRemainingSeconds > 0
+                            ? $"，预计剩余 {(int)tsRemain.TotalMinutes}分{tsRemain.Seconds:00}秒"
+                            : "";
+                        var finishText = FriendshipProgress.EstimatedFinishTime > DateTime.MinValue
+                            ? $"，预计 {FriendshipProgress.EstimatedFinishTime:HH:mm} 完成"
+                            : "";
+                        friendshipProgress = $"好感任务：第 {FriendshipProgress.CurrentRound}/{FriendshipProgress.TotalRounds} 轮{remainText}{finishText}";
+                    }
+                }
             }
 
             // 检查 _recentTaskName 是否在 30 秒内
@@ -1136,6 +1159,8 @@ internal sealed class InstanceRequestHandler
                 roomPlayerCount = AutoHoeingProgress.RoomPlayerCount,
                 currentRouteDisplay,
                 currentScriptRouteName = scriptRouteName,
+                // 好感任务进度文本（纯增量字段，旧助手忽略）；null=好感任务不在跑
+                friendshipProgress,
                 recentTaskName,
                 recentTaskNameTime = _recentTaskNameTime, // 仅当 recentTaskName != null 时有效；null 时忽略
                 onlineGeneration = NotifyOnlineTask.CurrentGeneration, // 新：上线事件代序号，无任务时返回 0

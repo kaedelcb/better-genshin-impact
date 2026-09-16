@@ -125,6 +125,9 @@ public class PetStateEngineTests
     [InlineData("[第 2/4 轮 茶包s] xxx", 2, 4)]
     [InlineData("轮次:5/8", 5, 8)]
     [InlineData("轮次： 1 / 6", 1, 6)]
+    // 好感任务 C# 端实际日志格式（AutoFriendshipTask.LogProgress）
+    [InlineData("当前进度：3/50 (6.0%)", 3, 50)]
+    [InlineData("当前进度: 12/50 (24.0%)", 12, 50)]
     public void ParseAffectionRound_KnownFormats(string line, int cur, int total)
     {
         var r = PetStateEngine.ParseAffectionRound(line);
@@ -139,6 +142,10 @@ public class PetStateEngineTests
     [InlineData("第3/10次（不是轮）")]
     [InlineData("第 0/10 轮")]
     [InlineData("第 11/10 轮")]
+    // "当前进度"冒号后必须紧跟数字：JS 一条龙的进度文本不得误判为好感轮次
+    // （锄地文本"[第 1/1 轮 …]"会被第一条"X/Y轮"正则命中属既有行为，好感任务期间不会出现锄地行，无实际影响）
+    [InlineData("当前进度：第 1 组第 3/20 条: xxx.json，该组预计剩余 1 时 20 分")]
+    [InlineData("当前进度：开始第 1/49 条线路: A003.json")]
     public void ParseAffectionRound_NoMatchOrInvalid_ReturnsNull(string? line)
     {
         Assert.Null(PetStateEngine.ParseAffectionRound(line));

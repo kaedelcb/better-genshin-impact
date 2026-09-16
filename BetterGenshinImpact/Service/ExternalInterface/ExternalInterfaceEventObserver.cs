@@ -159,7 +159,9 @@ internal sealed class ExternalInterfaceEventObserver
                         groupName,
                         projectName,
                         // 配置组内脚本任务当前执行线路（纯增量字段，老助手忽略；助手端只借本事件触发快照刷新）
-                        currentScriptRouteName = BetterGenshinImpact.Core.Script.ScriptRouteProgress.CurrentRouteName
+                        currentScriptRouteName = BetterGenshinImpact.Core.Script.ScriptRouteProgress.CurrentRouteName,
+                        // 脚本经 dispatcher.SetTaskProgress 上报的进度文本（纯增量；未上报为 null）
+                        autoHoeingProgress = BetterGenshinImpact.Core.Script.ScriptRouteProgress.ProgressText
                     });
             }
         }

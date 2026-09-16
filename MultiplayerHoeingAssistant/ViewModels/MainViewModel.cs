@@ -44,6 +44,8 @@ public partial class MainViewModel : INotifyPropertyChanged
     private string _roomCode = "";
     private bool _isConnected;
     private string _lastLoggedProgress = "";
+    /// <summary>[JS进度探针] 上次留痕指纹（去重）：脚本在跑线路但 BGI 未产出进度文本时定位断点。</summary>
+    private string? _lastJsProgressProbeKey;
     /// <summary>[监控采集探针] 上次留痕的执行端快照指纹（去重，仅在变化时打日志）。</summary>
     private string? _lastObserverProbeKey;
     private Timer? _statusTimer;
@@ -510,7 +512,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         bool AutoHoeingRunning,
         string? AutoHoeingProgress,
         bool WasCancelled,
-        int RoomPlayerCount = 0);
+        int RoomPlayerCount = 0,
+        string? FriendshipProgress = null);
 
     private static TaskStatusPollResult ParseTaskStatusData(JsonElement sdata)
     {
@@ -521,6 +524,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         string? currentScriptRouteName = null;
         var autoHoeingRunning = false;
         string? autoHoeingProgress = null;
+        string? friendshipProgress = null;
         var wasCancelled = false;
 
         if (sdata.TryGetProperty("running", out var running))
@@ -539,6 +543,10 @@ public partial class MainViewModel : INotifyPropertyChanged
         if (sdata.TryGetProperty("autoHoeingProgress", out var progress)
             && progress.ValueKind == JsonValueKind.String)
             autoHoeingProgress = progress.GetString();
+        // 好感任务进度文本（BGI FriendshipProgress 合成；旧 BGI 无此字段 → null，桌宠回退本地计时+日志轮次）
+        if (bgiRunning && sdata.TryGetProperty("friendshipProgress", out var fpp)
+            && fpp.ValueKind == JsonValueKind.String)
+            friendshipProgress = fpp.GetString();
         // 读取配置组名与线路展示文本（新增字段，旧 BGI 无此字段时保持 null）
         if (bgiRunning && sdata.TryGetProperty("groupName", out var gn) && gn.ValueKind == JsonValueKind.String)
             currentTaskGroupName = gn.GetString();
@@ -555,7 +563,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         return new TaskStatusPollResult(
             bgiRunning, currentTaskName, currentTaskGroupName,
             currentRouteDisplay, currentScriptRouteName, autoHoeingRunning, autoHoeingProgress, wasCancelled,
-            roomPlayerCount);
+            roomPlayerCount, friendshipProgress);
     }
 
     /// <summary>本地状态采集循环（10s）幂等启动。[离线优先] 采集独立于 SignalR 连接运行：
@@ -606,6 +614,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         List<object> hotkeys = [];
         var autoHoeingRunning = false;
         var autoHoeingProgress = (string?)null;
+        var friendshipProgress = (string?)null;
         var currentTaskName = (string?)null;
         var currentTaskGroupName = (string?)null;
         var currentRouteDisplay = (string?)null;
@@ -638,6 +647,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                     // autoHoeingRunning 保持 false：不触碰锄地结束边沿机（监控端不应触发策略收尾）；
                     // 进度/线路仅作展示，LatestLocalStatus 面板可见即可
                     autoHoeingProgress = observerStatus.AutoHoeingProgress;
+                    friendshipProgress = observerStatus.FriendshipProgress;
                     wasCancelled = observerStatus.WasCancelled;
                     roomPlayerCount = observerStatus.RoomPlayerCount;
                     // [监控采集探针] 仅在状态变化时留痕，便于排查"监控端看不到执行端状态"
@@ -748,6 +758,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         currentScriptRouteName = parsedStatus.CurrentScriptRouteName;
                         autoHoeingRunning = parsedStatus.AutoHoeingRunning;
                         autoHoeingProgress = parsedStatus.AutoHoeingProgress;
+                        friendshipProgress = parsedStatus.FriendshipProgress;
                         wasCancelled = parsedStatus.WasCancelled;
                         roomPlayerCount = parsedStatus.RoomPlayerCount;
                     }
@@ -832,6 +843,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                     currentScriptRouteName = parsedStatus.CurrentScriptRouteName;
                     autoHoeingRunning = parsedStatus.AutoHoeingRunning;
                     autoHoeingProgress = parsedStatus.AutoHoeingProgress;
+                    friendshipProgress = parsedStatus.FriendshipProgress;
                     wasCancelled = parsedStatus.WasCancelled;
                     roomPlayerCount = parsedStatus.RoomPlayerCount;
                 }
@@ -864,6 +876,20 @@ public partial class MainViewModel : INotifyPropertyChanged
             AddLog(autoHoeingProgress!);
         }
 
+        // [JS进度探针] 脚本任务在跑线路但 BGI 未产出进度文本（SetTaskProgress 未生效/脚本未上报）：
+        // 状态指纹变化时留痕，用于实跑定位「只见线路名不见 N/M 进度」的断点；恢复有值时留痕一次消除
+        var jsProbeKey = bgiRunning && currentScriptRouteName != null && string.IsNullOrEmpty(autoHoeingProgress)
+            ? $"missing route={currentScriptRouteName}"
+            : "ok";
+        if (jsProbeKey != _lastJsProgressProbeKey)
+        {
+            _lastJsProgressProbeKey = jsProbeKey;
+            if (jsProbeKey != "ok")
+                AddLog($"[JS进度探针] 脚本任务在跑但无进度文本（{jsProbeKey}；持续出现说明脚本未调 SetTaskProgress 或上报未生效）");
+            else
+                AddLog("[JS进度探针] 脚本进度文本已恢复");
+        }
+
         var status = new ControlStatus
         {
             PlayerUid = _config!.PlayerUid,
@@ -885,6 +911,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             CurrentScriptRouteName = currentScriptRouteName,
             AutoHoeingRunning = autoHoeingRunning,
             AutoHoeingProgress = autoHoeingProgress,
+            FriendshipProgress = friendshipProgress,
             WasCancelled = wasCancelled,
             RoomPlayerCount = roomPlayerCount,
             OnlineReady = _intentLifecycle.IsOnlineReady,
@@ -4002,6 +4029,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         existing.OneClickConfigs = np.OneClickConfigs;
                         existing.AutoHoeingRunning = np.AutoHoeingRunning;
                         existing.AutoHoeingProgress = np.AutoHoeingProgress;
+                        existing.FriendshipProgress = np.FriendshipProgress;
                         existing.TaskRunning = np.TaskRunning;
                         existing.CurrentTaskName = np.CurrentTaskName;
                         existing.CurrentTaskGroupName = np.CurrentTaskGroupName;
@@ -4032,6 +4060,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         OneClickConfigs = np.OneClickConfigs,
                         AutoHoeingRunning = np.AutoHoeingRunning,
                         AutoHoeingProgress = np.AutoHoeingProgress,
+                        FriendshipProgress = np.FriendshipProgress,
                         TaskRunning = np.TaskRunning,
                         CurrentTaskName = np.CurrentTaskName,
                         CurrentTaskGroupName = np.CurrentTaskGroupName,
@@ -6592,7 +6621,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         string? AutoHoeingProgress,
         bool AutoHoeingRunning,
         bool WasCancelled,
-        int RoomPlayerCount = 0);
+        int RoomPlayerCount = 0,
+        string? FriendshipProgress = null);
 
     /// <summary>
     /// 枚举本机全部 Windows 会话中的 BGI 实例，逐台查询其只读状态管道。
@@ -6634,7 +6664,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                     status.CurrentTaskName, status.CurrentTaskGroupName,
                     status.CurrentRouteDisplay, status.CurrentScriptRouteName,
                     status.AutoHoeingProgress, status.AutoHoeingRunning,
-                    status.WasCancelled, status.RoomPlayerCount));
+                    status.WasCancelled, status.RoomPlayerCount,
+                    status.FriendshipProgress));
             }
         }
         finally
@@ -6709,6 +6740,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             CurrentScriptRouteName = parsed.CurrentScriptRouteName,
             AutoHoeingRunning = parsed.AutoHoeingRunning,
             AutoHoeingProgress = parsed.AutoHoeingProgress,
+            FriendshipProgress = parsed.FriendshipProgress,
             WasCancelled = parsed.WasCancelled,
             RoomPlayerCount = parsed.RoomPlayerCount
         };
@@ -6774,6 +6806,10 @@ public class MemberViewModel : INotifyPropertyChanged
 
     private string? _autoHoeingProgress;
     public string? AutoHoeingProgress { get => _autoHoeingProgress; set { if (_autoHoeingProgress != value) { _autoHoeingProgress = value; OnPropertyChanged(); } } }
+
+    private string? _friendshipProgress;
+    /// <summary>好感任务进度文本（服务端转发的执行端 ControlStatus.FriendshipProgress；旧链路无此字段为 null）。</summary>
+    public string? FriendshipProgress { get => _friendshipProgress; set { if (_friendshipProgress != value) { _friendshipProgress = value; OnPropertyChanged(); } } }
 
     private bool _taskRunning;
     public bool TaskRunning { get => _taskRunning; set { if (_taskRunning != value) { _taskRunning = value; OnPropertyChanged(); OnPropertyChanged(nameof(TaskDisplayText)); } } }

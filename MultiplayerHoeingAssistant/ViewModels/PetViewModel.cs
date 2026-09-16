@@ -795,7 +795,7 @@ public class PetViewModel : ViewModelBase
         // 极简模式：只显示任务与锄地进度（监控模式取首个在跑执行端，执行端模式取本机）
         if (PanelMinimal)
         {
-            string? taskName; string? progress;
+            string? taskName; string? progress; string? friendship;
             if (_mainVm.IsObserverMode)
             {
                 var primary = _localExecutors.FirstOrDefault(e => e.TaskRunning);
@@ -803,6 +803,7 @@ public class PetViewModel : ViewModelBase
                 {
                     taskName = primary.Task;
                     progress = primary.Progress;
+                    friendship = primary.FriendshipProgress;
                 }
                 else
                 {
@@ -810,6 +811,7 @@ public class PetViewModel : ViewModelBase
                     var member = _mainVm.Members.FirstOrDefault(m => m.Online && m.TaskRunning);
                     taskName = member?.CurrentTaskName;
                     progress = member?.AutoHoeingProgress;
+                    friendship = member?.FriendshipProgress;
                 }
                 // 数据源不可用时不做哑面板：直接显示原因
                 if (_localExecutors.Count == 0 && taskName == null)
@@ -820,12 +822,15 @@ public class PetViewModel : ViewModelBase
                 var local = _mainVm.LatestLocalStatus;
                 taskName = local?.CurrentTaskName;
                 progress = local?.AutoHoeingProgress;
+                friendship = local?.FriendshipProgress;
                 if (local == null)
                     rows.Add(new("执行端", "未连接本机执行端"));
             }
             rows.Add(new("任务", OrDash(taskName)));
             if (!string.IsNullOrWhiteSpace(progress))
                 rows.Add(new("锄地进度", progress!));
+            if (!string.IsNullOrWhiteSpace(friendship))
+                rows.Add(new("好感进度", friendship!));
             return rows;
         }
 
@@ -855,6 +860,8 @@ public class PetViewModel : ViewModelBase
                         rows.Add(new(prefix + "线路信息", e.ScriptRoute!));
                     if (!string.IsNullOrWhiteSpace(e.Progress))
                         rows.Add(new(prefix + "锄地进度", e.Progress!));
+                    if (!string.IsNullOrWhiteSpace(e.FriendshipProgress))
+                        rows.Add(new(prefix + "好感进度", e.FriendshipProgress!));
                 }
             }
             else
@@ -883,6 +890,8 @@ public class PetViewModel : ViewModelBase
                             rows.Add(new(prefix + "线路信息", m.CurrentScriptRouteName!));
                         if (!string.IsNullOrWhiteSpace(m.AutoHoeingProgress))
                             rows.Add(new(prefix + "锄地进度", m.AutoHoeingProgress!));
+                        if (!string.IsNullOrWhiteSpace(m.FriendshipProgress))
+                            rows.Add(new(prefix + "好感进度", m.FriendshipProgress!));
                     }
                 }
             }
@@ -901,6 +910,9 @@ public class PetViewModel : ViewModelBase
                 rows.Add(new("线路信息", local.CurrentScriptRouteName!));
             if (!string.IsNullOrWhiteSpace(local?.AutoHoeingProgress))
                 rows.Add(new("锄地进度", local.AutoHoeingProgress!));
+            // 好感任务 BGI 进度（第X/Y轮+预计剩余+完成时刻；旧 BGI 无此字段回退下方本地计时行）
+            if (!string.IsNullOrWhiteSpace(local?.FriendshipProgress))
+                rows.Add(new("好感进度", local.FriendshipProgress!));
         }
 
         rows.Add(new("上线信息", ChipText ?? "-"));
@@ -918,7 +930,7 @@ public class PetViewModel : ViewModelBase
     // ========== 监控模式：本机跨会话执行端轮询（后台查询，UI 线程落缓存） ==========
 
     /// <summary>一台本机执行端的展示快照。</summary>
-    private sealed record LocalExecutorRow(int SessionId, string? UserName, bool TaskRunning, string? Group, string? Task, string? Route, string? ScriptRoute, string? Progress, bool Hoeing, bool WasCancelled, int RoomPlayers);
+    private sealed record LocalExecutorRow(int SessionId, string? UserName, bool TaskRunning, string? Group, string? Task, string? Route, string? ScriptRoute, string? Progress, bool Hoeing, bool WasCancelled, int RoomPlayers, string? FriendshipProgress);
 
     /// <summary>最近一轮本机执行端快照（UI 线程读写；查询失败时保留旧值防闪烁）。</summary>
     private List<LocalExecutorRow> _localExecutors = [];
@@ -947,7 +959,8 @@ public class PetViewModel : ViewModelBase
                             e.CurrentTaskGroupName, e.CurrentTaskName,
                             e.CurrentRouteDisplay, e.CurrentScriptRouteName,
                             e.AutoHoeingProgress, e.AutoHoeingRunning,
-                            e.WasCancelled, e.RoomPlayerCount)).ToList();
+                            e.WasCancelled, e.RoomPlayerCount,
+                            e.FriendshipProgress)).ToList();
                         await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                         {
                             _localExecutors = view;

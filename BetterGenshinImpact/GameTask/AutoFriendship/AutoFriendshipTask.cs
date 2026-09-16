@@ -415,6 +415,13 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
         int successCount = 0;
         int failureCount = 0;
 
+        // 进度载体初始化（IPC task.status 的 friendshipProgress 数据源）
+        FriendshipProgress.IsRunning = true;
+        FriendshipProgress.TotalRounds = _config.RunTimes;
+        FriendshipProgress.CurrentRound = 0;
+        FriendshipProgress.EstimatedRemainingSeconds = 0;
+        FriendshipProgress.EstimatedFinishTime = DateTime.MinValue;
+
         // 启动掉落检测后台任务
         var detectExpOrMoraTask = _config.LoopTillNoExpOrMora
             ? Task.Run(() => DetectExpOrMoraLoopAsync(), _ct)
@@ -427,6 +434,9 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
             {
                 try
                 {
+                    // 轮次开始即更新当前轮（LogProgress 在轮成功后才补剩余时间估算）
+                    FriendshipProgress.CurrentRound = Math.Min(i + 1, times);
+                    FriendshipProgress.TotalRounds = times;
                     var success = await ExecuteSingleFriendshipRoundAsync(i);
                     if (!success)
                         break;
@@ -454,6 +464,7 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
         finally
         {
             _running = false;
+            FriendshipProgress.Clear();
             _logger.LogInformation("本次运行统计：成功 {Success} 次，失败 {Failure} 次", successCount, failureCount);
 
             if (detectExpOrMoraTask != null)
@@ -475,6 +486,12 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
         var estimatedCompletion = DateTime.Now + TimeSpan.FromMilliseconds(remainingTimeMs);
 
         var currentTimeStr = $"{(int)elapsed.TotalMinutes} 分 {elapsed.Seconds:D2} 秒";
+
+        // 进度载体同步写（LogProgress 每轮成功后调用；估算口径与日志一致）
+        FriendshipProgress.CurrentRound = Math.Min(currentRound + 1, totalRounds);
+        FriendshipProgress.TotalRounds = totalRounds;
+        FriendshipProgress.EstimatedRemainingSeconds = remainingTimeMs / 1000.0;
+        FriendshipProgress.EstimatedFinishTime = estimatedCompletion;
 
         _logger.LogInformation("当前进度：{Current}/{Total} ({Percent:F1}%)", currentRound + 1, totalRounds, (currentRound + 1) * 100.0 / totalRounds);
         _logger.LogInformation("当前运行总时长：{Time}", currentTimeStr);
