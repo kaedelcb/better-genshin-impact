@@ -340,6 +340,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         // 根据配置应用模式运行时（启动/跳过 BGI 进程监控）。与 SwitchModeAsync 共享同一逻辑。
         ApplyModeRuntime(_config.ObserverMode);
+        StartLocalConfigChannel();
 
         // [离线优先] 本地状态采集循环先于服务器连接启动：采集是本机 IPC 事实源，不依赖 SignalR
         EnsureStatusTimerStarted();
@@ -1388,55 +1389,6 @@ public partial class MainViewModel : INotifyPropertyChanged
     public string? ResolveLocalBgiVersion()
         => BgiVersionResolver.Resolve(_externalClient?.BgiVersion, _config?.BgiPath);
 
-    /// 远程编辑成员配置组：弹配置组选择窗 → 交给 RemoteConfigEditService 走完整流程。
-    /// 在 UI 线程执行（RelayCommand 回调）。
-    /// </summary>
-    private void OnRemoteConfigEdit(object? parameter)
-    {        if (parameter is not MemberViewModel member) return;
-        if (string.IsNullOrEmpty(member.PlayerUid)) return;
-        if (member.PlayerUid == _config?.PlayerUid)
-        {
-            AddLog("不能远程编辑自己的配置组（请在本机直接修改）");
-            return;
-        }
-        if (!member.Online)
-        {
-            AddLog($"成员 {member.PlayerName} 不在线，无法远程编辑其配置组");
-            return;
-        }
-        if (_signalRClient == null || !_signalRClient.IsConnected)
-        {
-            AddLog("SignalR 未连接，无法发起远程编辑");
-            return;
-        }
-        var groups = member.ConfigGroups ?? [];
-        if (groups.Count == 0)
-        {
-            AddLog($"成员 {member.PlayerName} 没有可用的配置组（可能状态尚未同步）");
-            return;
-        }
-
-        var groupName = RemoteConfigGroupSelectWindow.ShowSelectDialog(groups, member.PlayerName, Application.Current.MainWindow);
-        if (string.IsNullOrEmpty(groupName)) return; // 用户取消
-
-        _remoteConfigEditService ??= new RemoteConfigEditService(
-            sendAsync: async rc =>
-            {
-                var client = _signalRClient;
-                if (client == null || !client.IsConnected) return false;
-                await client.SendRemoteCommandAsync(rc);
-                return true;
-            },
-            getSelfUid: () => _config?.PlayerUid ?? "",
-            getSelfName: () => _config?.PlayerName ?? "",
-            report: AddLog,
-            // [切片4] 本机 IPC（open_remote_editor/remote_editor_result）ext 通道优先，v2 兜底
-            getExternalClient: () => _externalClient,
-            // BGI 未运行时自动拉起本机 BGI 并等待 IPC 就绪（监控/执行模式通用）
-            ensureBgiReadyAsync: EnsureLocalBgiReadyAsync);
-        _ = _remoteConfigEditService.RunAsync(member.PlayerUid, member.PlayerName, groupName);
-    }
-
     /// <summary>
     /// 确保本机 BGI 可用（远程编辑开窗前置）：BGI 未运行时按配置路径自动拉起，
     /// 并轮询等待 IPC 管道就绪（最长 90 秒，BGI 冷启动可能较慢）。返回 true = IPC 已可连接。
@@ -1499,7 +1451,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// 处理 remote_config.pull：对方请求拉取本机某个配置组。
     /// IPC config.pull_group → 回 remote_config.data（Target=[对方 UID]，CommandId 原样，Params 全 string）。
     /// </summary>
-    private async Task HandleRemoteConfigPullAsync(RemoteCommand cmd)
+    private async Task<RemoteCommand> HandleRemoteConfigPullAsync(RemoteCommand cmd)
     {
         var groupName = GetRemoteParam(cmd.Params, "groupName") ?? "";
         var ok = "false";
@@ -1509,7 +1461,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         try
         {
             // [切片4] ext.config.pullGroup 优先（长连接），v2 config.pull_group 短连接兜底
-            var resp = await SendBgiIpcPreferredAsync("config.pull_group", JsonSerializer.Serialize(new { groupName }), 3000);
+            var resp = await SendConfigBgiIpcAsync("config.pull_group", JsonSerializer.Serialize(new { groupName }));
             if (resp is { Success: true } && !string.IsNullOrEmpty(resp.Data))
             {
                 using var doc = JsonDocument.Parse(resp.Data);
@@ -1542,7 +1494,6 @@ public partial class MainViewModel : INotifyPropertyChanged
             ? $"已将配置组「{groupName}」的配置发送给 {cmd.Sender}"
             : $"远程拉取配置组「{groupName}」失败（来自 {cmd.Sender}）: {error}");
 
-        if (_signalRClient == null) return;
         var replyParams = ok == "true"
             ? new Dictionary<string, object> { ["ok"] = "true", ["packageJson"] = packageJson! }
             : new Dictionary<string, object> { ["ok"] = "false", ["error"] = error ?? "未知错误" };
@@ -1555,14 +1506,14 @@ public partial class MainViewModel : INotifyPropertyChanged
             CommandId = cmd.CommandId,
             Params = replyParams
         };
-        await _signalRClient.SendRemoteCommandAsync(reply);
+        return reply;
     }
 
     /// <summary>
     /// 处理 remote_config.push：对方回传编辑后的配置。
     /// IPC config.apply_group → 回 remote_config.push_result（ok/message 全 string）。
     /// </summary>
-    private async Task HandleRemoteConfigPushAsync(RemoteCommand cmd)
+    private async Task<RemoteCommand> HandleRemoteConfigPushAsync(RemoteCommand cmd)
     {
         var groupName = GetRemoteParam(cmd.Params, "groupName") ?? "";
 
@@ -1583,7 +1534,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         try
         {
             // [切片4] ext.config.applyGroup 优先（长连接），v2 config.apply_group 短连接兜底
-            var resp = await SendBgiIpcPreferredAsync("config.apply_group", JsonSerializer.Serialize(payloadDict), 3000);
+            var resp = await SendConfigBgiIpcAsync("config.apply_group", JsonSerializer.Serialize(payloadDict));
             if (resp is { Success: true } && !string.IsNullOrEmpty(resp.Data))
             {
                 using var doc = JsonDocument.Parse(resp.Data);
@@ -1606,7 +1557,6 @@ public partial class MainViewModel : INotifyPropertyChanged
             ? $"收到 {cmd.Sender} 远程修改的配置组「{groupName}」，已应用。{message}"
             : $"收到 {cmd.Sender} 远程修改的配置组「{groupName}」，应用失败：{message}");
 
-        if (_signalRClient == null) return;
         var reply = new RemoteCommand
         {
             Cmd = "remote_config.push_result",
@@ -1616,7 +1566,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             CommandId = cmd.CommandId,
             Params = new Dictionary<string, object> { ["ok"] = ok, ["message"] = message }
         };
-        await _signalRClient.SendRemoteCommandAsync(reply);
+        return reply;
     }
 
     /// <summary>
@@ -3874,6 +3824,8 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// </summary>
     public void Shutdown()
     {
+        _localConfigChannel?.Dispose();
+        _localConfigChannel = null;
         // 断开 SignalR 连接（HubConnection 未 Dispose 会持有网络连接/心跳定时资源）
         var signalR = _signalRClient;
         _signalRClient = null;
@@ -4023,6 +3975,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                     {
                         existing.PlayerName = np.PlayerName;
                         existing.Online = np.Online;
+                        existing.IsSelf = np.PlayerUid == _config?.PlayerUid;
+                        existing.IsObserverMode = IsObserverMode;
                         existing.BgiStatus = np.BgiStatus;
                         existing.BgiVersion = np.BgiVersion;
                         existing.ConfigGroups = np.ConfigGroups;
@@ -4053,6 +4007,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         PlayerUid = np.PlayerUid,
                         PlayerName = np.PlayerName,
                         IsSelf = np.PlayerUid == _config?.PlayerUid,
+                        IsObserverMode = IsObserverMode,
                         Online = np.Online,
                         BgiStatus = np.BgiStatus,
                         BgiVersion = np.BgiVersion,
@@ -4205,14 +4160,16 @@ public partial class MainViewModel : INotifyPropertyChanged
             // remote_config.pull：对方请求拉取本机某个配置组 → IPC config.pull_group → 回 remote_config.data
             if (cmd.Cmd == "remote_config.pull")
             {
-                await HandleRemoteConfigPullAsync(cmd);
+                var reply = await HandleRemoteConfigPullAsync(cmd);
+                if (_signalRClient != null) await _signalRClient.SendRemoteCommandAsync(reply);
                 return;
             }
 
             // remote_config.push：对方回传编辑后的配置 → IPC config.apply_group → 回 remote_config.push_result
             if (cmd.Cmd == "remote_config.push")
             {
-                await HandleRemoteConfigPushAsync(cmd);
+                var reply = await HandleRemoteConfigPushAsync(cmd);
+                if (_signalRClient != null) await _signalRClient.SendRemoteCommandAsync(reply);
                 return;
             }
 
@@ -5096,6 +5053,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         ApplyModeRuntime(targetObserver);
         OnPropertyChanged(nameof(IsObserverMode));
         OnPropertyChanged(nameof(IsExecutorMode));
+        foreach (var member in Members) member.IsObserverMode = IsObserverMode;
         AddLog($"已切换为{modeName}模式，正在重建连接...");
         await RefreshAsync();
     }
@@ -5419,6 +5377,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(IsObserverMode));
         OnPropertyChanged(nameof(IsExecutorMode));
+        foreach (var member in Members) member.IsObserverMode = IsObserverMode;
         // 服务器地址/单机开关变化同样影响派生属性（设置弹窗清空地址 = 单机模式）
         OnPropertyChanged(nameof(IsStandaloneMode));
     }
@@ -6792,11 +6751,15 @@ public class MemberViewModel : INotifyPropertyChanged
     private bool _online;
     public bool Online { get => _online; set { if (_online != value) { _online = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanRemoteEdit)); } } }
 
-    /// <summary>是否为本机自己（由 MainViewModel 创建时按 UID 比较设置），用于禁用对自己的远程编辑。</summary>
-    public bool IsSelf { get; set; }
+    /// <summary>成员 UID 是否与当前助手相同；不等于与助手处于同一 Windows 用户/会话。</summary>
+    private bool _isSelf;
+    public bool IsSelf { get => _isSelf; set { if (_isSelf != value) { _isSelf = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanRemoteEdit)); } } }
 
-    /// <summary>是否可对其发起远程配置组编辑（UID 非空 && 在线 && 非自己）。</summary>
-    public bool CanRemoteEdit => !IsSelf && Online && !string.IsNullOrEmpty(PlayerUid);
+    private bool _isObserverMode;
+    public bool IsObserverMode { get => _isObserverMode; set { if (_isObserverMode != value) { _isObserverMode = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanRemoteEdit)); } } }
+
+    /// <summary>监控端可编辑同 UID 执行端，并允许先探测本地离线成员；执行端保留禁止编辑自己的限制。</summary>
+    public bool CanRemoteEdit => !string.IsNullOrEmpty(PlayerUid) && (IsObserverMode || (!IsSelf && Online));
 
     private string _bgiStatus = "unknown";
     public string BgiStatus { get => _bgiStatus; set { if (_bgiStatus != value) { _bgiStatus = value; OnPropertyChanged(); } } }

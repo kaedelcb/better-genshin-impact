@@ -28,8 +28,9 @@ public class RemoteConfigEditService
     /// <summary>单会话锁（0=空闲，1=进行中）。</summary>
     private int _sessionActive;
 
-    /// <summary>发送 RemoteCommand；返回 false 表示 SignalR 未连接未能发出。</summary>
+    /// <summary>发送 RemoteCommand；返回 false 表示通信通道不可用。</summary>
     private readonly Func<RemoteCommand, Task<bool>> _sendAsync;
+    private readonly Func<string, string?, Task<IpcResponse?>>? _sendIpcAsync;
     private readonly Func<string> _getSelfUid;
     private readonly Func<string> _getSelfName;
     /// <summary>进度/结果上报（MainViewModel.AddLog，线程安全）。</summary>
@@ -45,9 +46,11 @@ public class RemoteConfigEditService
         Func<string> getSelfName,
         Action<string> report,
         Func<BgiExternalClient?>? getExternalClient = null,
-        Func<Task<bool>>? ensureBgiReadyAsync = null)
+        Func<Task<bool>>? ensureBgiReadyAsync = null,
+        Func<string, string?, Task<IpcResponse?>>? sendIpcAsync = null)
     {
         _sendAsync = sendAsync;
+        _sendIpcAsync = sendIpcAsync;
         _getSelfUid = getSelfUid;
         _getSelfName = getSelfName;
         _report = report;
@@ -73,7 +76,8 @@ public class RemoteConfigEditService
     /// <summary>
     /// 完整远程编辑流程。目标成员信息用基元类型传入，避免 Services 层依赖 ViewModels。
     /// </summary>
-    public async Task RunAsync(string targetUid, string targetName, string groupName)
+    public async Task RunAsync(string targetUid, string targetName, string groupName,
+        Func<RemoteCommand, Task<bool>>? sendAsync = null)
     {
         if (string.IsNullOrEmpty(targetUid))
         {
@@ -92,6 +96,7 @@ public class RemoteConfigEditService
         // [实机修复 2026-09-05] 只要发出过开窗请求，提前退出就必须补 abort——
         // 响应丢失≠窗口没开（BGI 可能已执行），不 abort 会留孤儿窗
         var openAttempted = false;
+        var pushAttempted = false;
 
         try
         {
@@ -99,7 +104,7 @@ public class RemoteConfigEditService
             var pull = NewCommand("remote_config.pull", targetUid,
                 new Dictionary<string, object> { ["groupName"] = groupName });
             _report($"已向 {targetName} 请求配置组「{groupName}」，等待对方响应（20 秒）...");
-            var (dataCmd, pullSent) = await SendAndWaitReplyAsync(pull, PullTimeout);
+            var (dataCmd, pullSent) = await SendAndWaitReplyAsync(pull, PullTimeout, sendAsync ?? _sendAsync);
             if (!pullSent) return; // 发送失败已报日志
             if (dataCmd == null)
             {
@@ -268,7 +273,8 @@ public class RemoteConfigEditService
             if (!string.IsNullOrEmpty(soloTaskSettingsJson)) pushParams["soloTaskSettingsJson"] = soloTaskSettingsJson;
             var push = NewCommand("remote_config.push", targetUid, pushParams);
             _report($"编辑已保存，正在回传给 {targetName}...");
-            var (resultCmd, pushSent) = await SendAndWaitReplyAsync(push, PushResultTimeout);
+            pushAttempted = true;
+            var (resultCmd, pushSent) = await SendAndWaitReplyAsync(push, PushResultTimeout, sendAsync ?? _sendAsync);
             if (!pushSent) return; // 发送失败已报日志
             if (resultCmd == null)
             {
@@ -283,7 +289,9 @@ public class RemoteConfigEditService
         }
         catch (Exception ex)
         {
-            _report($"远程编辑流程异常：{ex.Message}");
+            _report(pushAttempted
+                ? $"配置回传结果未确认：{ex.Message}。修改可能已生效，请刷新核实，未自动重发"
+                : $"远程编辑流程异常：{ex.Message}");
         }
         finally
         {
@@ -319,16 +327,17 @@ public class RemoteConfigEditService
         Params = prms
     };
 
-    /// <summary>注册等待 → 发送 → 等回复。sent=false 表示 SignalR 未连接未能发出（已报日志）。</summary>
-    private async Task<(RemoteCommand? reply, bool sent)> SendAndWaitReplyAsync(RemoteCommand cmd, TimeSpan timeout)
+    /// <summary>注册等待 → 发送 → 等回复。sent=false 表示通信通道不可用（已报日志）。</summary>
+    private async Task<(RemoteCommand? reply, bool sent)> SendAndWaitReplyAsync(RemoteCommand cmd, TimeSpan timeout,
+        Func<RemoteCommand, Task<bool>> sendAsync)
     {
         var tcs = new TaskCompletionSource<RemoteCommand>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pendingReplies[cmd.CommandId] = tcs;
         try
         {
-            if (!await _sendAsync(cmd))
+            if (!await sendAsync(cmd))
             {
-                _report("SignalR 未连接，无法发送远程命令");
+                _report("配置通信通道不可用，无法发送远程命令");
                 return (null, false);
             }
             return (await tcs.Task.WaitAsync(timeout), true);
@@ -349,6 +358,7 @@ public class RemoteConfigEditService
     /// </summary>
     private async Task<(IpcResponse? response, string? error)> SendIpcAsync(string opCode, string? payload)
     {
+        if (_sendIpcAsync != null) return (await _sendIpcAsync(opCode, payload), null);
         var ext = _getExternalClient?.Invoke();
         if (ext is { State: BgiExternalLinkState.Ready }
             && BgiExternalClient.TryMapToExtOperation(opCode, out var extOp))
@@ -376,6 +386,7 @@ public class RemoteConfigEditService
         {
             using var ipc = new IpcClient();
             await ipc.ConnectAsync(3000);
+            if (!ipc.IsSessionTrusted) return (null, "编辑器 IPC 未能确认 BGI 属于本会话，已拒绝操作");
             var resp = await ipc.SendCommandAsync(new IpcRequest { OpCode = opCode, Payload = payload });
             return (resp, null);
         }

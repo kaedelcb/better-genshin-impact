@@ -37,6 +37,38 @@ public class RemoteConfigReplyRoutingTests
         Params = new Dictionary<string, object> { ["ok"] = "true" }
     };
 
+    [Theory]
+    [InlineData("remote_config.pull")]
+    [InlineData("remote_config.push")]
+    public async Task ObserverEditingOwnUid_RequestGoesOnlyToExecutor_ReplyReturnsToObserver(string operation)
+    {
+        var h = new GatewayTestHarness();
+        var (room, pwd) = NewRoom();
+        var executor = Conn("self-executor");
+        var observer = Conn("self-observer");
+        await h.Ops.JoinControlRoomAsync(Ctx(executor), room, pwd, "sameUid", "执行端");
+        await h.Ops.JoinControlRoomAsync(Ctx(observer), room, pwd, "sameUid", "监控端", isRemote: true);
+        var execProxy = new Mock<Microsoft.AspNetCore.SignalR.ISingleClientProxy>();
+        var obsProxy = new Mock<Microsoft.AspNetCore.SignalR.ISingleClientProxy>();
+        foreach (var proxy in new[] { execProxy, obsProxy })
+            proxy.Setup(x => x.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+        h.LegacyHub.Setup(x => x.Clients.Client(executor)).Returns(execProxy.Object);
+        h.LegacyHub.Setup(x => x.Clients.Client(observer)).Returns(obsProxy.Object);
+
+        var request = NewCmd(room, "sameUid", "sameUid", operation);
+        await h.Ops.SendRemoteCommandAsync(Ctx(observer), request);
+        execProxy.Verify(x => x.SendCoreAsync("RemoteCommand", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Once);
+        obsProxy.Verify(x => x.SendCoreAsync("RemoteCommand", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        var reply = NewCmd(room, "sameUid", "sameUid",
+            operation == "remote_config.pull" ? "remote_config.data" : "remote_config.push_result");
+        reply.CommandId = request.CommandId;
+        await h.Ops.SendRemoteCommandAsync(Ctx(executor), reply);
+        obsProxy.Verify(x => x.SendCoreAsync("RemoteCommand", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("sameUid"));
+    }
+
     [Fact]
     public async Task RemoteConfigReply_DeliveredToObserverConnection()
     {
