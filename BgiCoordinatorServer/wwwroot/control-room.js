@@ -448,6 +448,10 @@ document.getElementById('quickRow').addEventListener('click', e => {
     const btn = e.target.closest('.quick-btn');
     if (!btn) return;
     const key = btn.dataset.key;
+    if (key === '一键锄地') {
+        showQuickHoeingConfirmModal();
+        return;
+    }
     const bindings = loadBindings();
     const binding = bindings[key];
 
@@ -490,6 +494,62 @@ document.getElementById('quickRow').addEventListener('click', e => {
         }
     });
 });
+
+// 一键锄地复用 PC 端协议，由各助手执行自己的 OnlineHoeingGroupNames。
+function showQuickHoeingConfirmModal() {
+    const targets = players.filter(p => p.online === true && p.playerUid);
+    if (targets.length === 0) {
+        log('没有在线成员可下发一键锄地');
+        return;
+    }
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal">
+            <h3>确认下发一键锄地</h3>
+            <p>各在线成员将按顺序执行自己绑定的联机锄地配置组，未绑定的成员会跳过。</p>
+            <div class="list-items" id="hoeingMembers"></div>
+            <div class="btn-row">
+                <button class="btn btn-secondary" id="hoeingCancel">取消</button>
+                <button class="btn btn-primary" id="hoeingOk">确认下发</button>
+            </div>
+        </div>`;
+    const list = overlay.querySelector('#hoeingMembers');
+    targets.forEach(p => {
+        const row = document.createElement('div');
+        row.className = 'list-item';
+        const groups = p.onlineHoeingGroupNames || [];
+        row.textContent = `${p.playerName || p.playerUid}：${groups.length ? groups.join(' → ') : '未绑定联机锄地配置组（跳过）'}`;
+        list.appendChild(row);
+    });
+    document.body.appendChild(overlay);
+    const confirm = overlay.querySelector('#hoeingOk');
+    const cancel = overlay.querySelector('#hoeingCancel');
+    cancel.addEventListener('click', () => overlay.remove());
+    confirm.addEventListener('click', async () => {
+        if (confirm.disabled) return;
+        // 只发送给确认列表中仍在线的成员，避免新入房成员被意外启动。
+        const onlineUids = new Set(players.filter(p => p.online === true).map(p => p.playerUid));
+        const targetUids = targets.map(p => p.playerUid).filter(uid => onlineUids.has(uid));
+        if (targetUids.length === 0) {
+            log('所选成员已离线，未下发一键锄地');
+            overlay.remove();
+            return;
+        }
+        confirm.disabled = true;
+        cancel.disabled = true;
+        try {
+            const cmd = makeCmd('start_group', { groupName: '', startFromIndex: 0, key: '一键锄地' });
+            cmd.target = targetUids;
+            await sendRemoteCommand(cmd);
+            log(`已向 ${targetUids.length} 个在线成员发送一键锄地指令（各成员执行自己绑定的配置组）`);
+        } catch (err) {
+            log('一键锄地发送失败：' + err.message);
+        } finally {
+            overlay.remove();
+        }
+    });
+}
 
 // ---------- 弹窗：绑定 ----------
 function showBindModal(key, callback) {
