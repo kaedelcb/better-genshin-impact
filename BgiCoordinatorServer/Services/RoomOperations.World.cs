@@ -135,6 +135,10 @@ public sealed partial class RoomOperations
             // exp-cap-prefinal-stop-by-two-noexp: 新轮清空连续2场无经验预警集合
             room.TwoConsecutiveNoExpSet.Clear();
 
+            // hoeing-multiplayer-coordinated-abort-restart: 多世界轮换复位协同中止幂等标志
+            // （房间跨轮复用时，上一轮的中止广播不得吞掉本轮的中止上报）
+            room.CoordinatedAbortBroadcasted = false;
+
             _logger.LogInformation("[ResetForNewWorldRound] 房间{RoomCode}进入第{Round}轮，等待点、异常状态、万叶候选已重置", roomCode, newRound);
         }
 

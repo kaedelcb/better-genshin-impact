@@ -24,7 +24,7 @@ public static class HoeingGuardDecisions
     ///   partyFailed == true                      → 只要 stopReason 非空即判未完成
     ///     （组队失败时 _guardPlannedRouteCount 恒为 0，未执行线路数为 0 会触发防线 A
     ///       误短路，故组队失败需显式豁免防线 A，hoeing-multiplayer-party-fail-restart）
-    ///   防线 A（治标）unexecutedCount == 0       → 恒 false（一条线路都没落下，铁证）
+    ///   防线 A（治标）unexecutedZeroProvesComplete ∧ unexecutedCount == 0 → 恒 false（一条线路都没落下，铁证）
     ///   否则回落原逻辑：stopReason 非空 ∨ 未执行数达阈值
     ///
     /// 为何不解析 stopReason 文字：正常收尾关房与房主掉线关房都产生
@@ -33,14 +33,18 @@ public static class HoeingGuardDecisions
     /// 故 EB-3"真异常照常重开"不受影响。
     ///
     /// completedNormally / partyFailed 默认 false：保证未显式传参的既有调用方行为与改动前一致。
+    /// unexecutedZeroProvesComplete 默认 true（防线 A 旧行为）；多世界模式调用方传 false——
+    /// 多世界有防线 B 完工单（每轮收尾均置位 completedNormally），防线 A 的"未执行数=0"
+    /// 会被轮末/重跑等待窗口伪造，故由调用方显式关闭（hoeing-multiplayer-coordinated-abort-restart）。
     /// </summary>
     public static bool IsIncompleteRun(
         string? stopReason, int unexecutedCount, int threshold,
-        bool completedNormally = false, bool partyFailed = false)
+        bool completedNormally = false, bool partyFailed = false,
+        bool unexecutedZeroProvesComplete = true)
     {
         if (completedNormally) return false;    // 防线 B（治本）：任务已到达正常完成点
         if (partyFailed) return !string.IsNullOrEmpty(stopReason); // 组队失败：豁免防线 A
-        if (unexecutedCount == 0) return false; // 防线 A（治标）：计划线路全部执行完毕
+        if (unexecutedZeroProvesComplete && unexecutedCount == 0) return false; // 防线 A（治标）：计划线路全部执行完毕
         return !string.IsNullOrEmpty(stopReason) || unexecutedCount >= threshold;
     }
 
@@ -58,6 +62,12 @@ public static class HoeingGuardDecisions
     ///   组队失败时尚未开锄，计划/已执行线路数均为 0，防线 A 会把组队失败误判为"全跑完了"，
     ///   故由调用方在组队失败路径显式传 true，使"只要 stopReason 非空即重开"成立。
     ///   默认 false 保证既有调用方零变化。
+    /// - coordinatedRestartRequired：收到/触发协同中止广播 → 强制重开（hoeing-multiplayer-coordinated-abort-restart）。
+    ///   判定顺序：全部硬条件（guardMode/multiplayerEnabled/userCancelled/expCapStopTriggered/isGuardRestartRun）
+    ///   与完工单（completedNormally）优先于本强制标志；全通过时本标志为 true 即重开，
+    ///   跳过防线 A/B 后续、阈值与 stopReason 判空。默认 false 保证既有调用方零变化。
+    /// - unexecutedZeroProvesComplete：防线 A"未执行数=0"是否可信，透传 IsIncompleteRun；
+    ///   多世界模式调用方传 false（防线 B 完工单权威，防线 A 会被轮末/重跑等待窗口伪造）。
     /// </summary>
     public static bool ShouldRestart(
         bool guardMode,
@@ -69,14 +79,19 @@ public static class HoeingGuardDecisions
         bool expCapStopTriggered,
         bool isGuardRestartRun,
         bool completedNormally = false,
-        bool partyFailed = false)
+        bool partyFailed = false,
+        bool coordinatedRestartRequired = false,
+        bool unexecutedZeroProvesComplete = true)
     {
         if (!guardMode) return false;              // 条件1
         if (!multiplayerEnabled) return false;     // P1 单机零感知
         if (userCancelled) return false;           // 条件3 手动停止
         if (expCapStopTriggered) return false;     // 条件4 经验上限正常停止
         if (isGuardRestartRun) return false;       // 条件5 重开只一次
-        return IsIncompleteRun(stopReason, unexecutedCount, threshold, completedNormally, partyFailed); // 条件2
+        if (completedNormally) return false;       // 完工单优先于强制标志：正常全部跑完恒不重开
+        if (coordinatedRestartRequired) return true; // 协同中止广播：强制重开
+        // 条件2：completedNormally 短路已提升到本层，IsIncompleteRun 形参保留（默认 false，行为不变）
+        return IsIncompleteRun(stopReason, unexecutedCount, threshold, completedNormally: false, partyFailed, unexecutedZeroProvesComplete);
     }
 
     /// <summary>

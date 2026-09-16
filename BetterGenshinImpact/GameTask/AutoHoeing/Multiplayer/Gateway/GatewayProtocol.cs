@@ -73,6 +73,13 @@ public static class GatewayProtocol
         /// </summary>
         public const string SyncReportCollectiveSkipApplied = "sync.reportCollectiveSkipApplied";
 
+        /// <summary>
+        /// 上报协同中止（hoeing-multiplayer-coordinated-abort-restart）：任一端真异常中止时通知
+        /// 服务器广播全房间（sync.coordinatedAborted）。纯新增消息名；旧服务端不认识它返回 error，
+        /// 客户端 catch 降级为纯本地判定（不更糟）。
+        /// </summary>
+        public const string SyncReportCoordinatedAbort = "sync.reportCoordinatedAbort";
+
         public const string FightReportParticipant = "fight.reportParticipant";
         public const string FightReportDone = "fight.reportDone";
 
@@ -128,7 +135,7 @@ public static class GatewayProtocol
 
     /// <summary>
     /// 服务端 → 客户端 evt 事件名（对应服务器 LegacyEventMap 的映射目标值）。
-    /// 客户端 DispatchEvt 按这些名字分发到 CoordinatorClient 的 23 个 C# 事件。
+    /// 客户端 DispatchEvt 按这些名字分发到 CoordinatorClient 的各 C# 事件。
     /// </summary>
     public static class Events
     {
@@ -156,6 +163,9 @@ public static class GatewayProtocol
         public const string SyncRequestSkipToProgress = "sync.requestSkipToProgress"; // ← RequestSkipToProgress
         public const string SyncCollectiveSkipDegraded = "sync.collectiveSkipDegraded"; // ← CollectiveSkipDegraded
         public const string SyncCollectiveSkipAppliedAll = "sync.collectiveSkipAppliedAll"; // ← CollectiveSkipAppliedAll（collective-skip-applied-ack）
+
+        /// <summary>协同中止广播（hoeing-multiplayer-coordinated-abort-restart）：任一端上报后由服务器广播全房间。载荷：reason, reporterUid。</summary>
+        public const string SyncCoordinatedAborted = "sync.coordinatedAborted";
 
         // === 路线边界锚点事件（route-anchor）===
         // 事件只负责"尽快查询权威快照"，不作为唯一正确性来源（方案正文第 7 章）。

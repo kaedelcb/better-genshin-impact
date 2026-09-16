@@ -82,6 +82,12 @@ public static class GatewayProtocol
         /// </summary>
         public const string SyncReportCollectiveSkipApplied = "sync.reportCollectiveSkipApplied";
 
+        /// <summary>
+        /// 协同中止上报（hoeing-multiplayer-coordinated-abort-restart）：任一成员触发真异常中止时上报，
+        /// 服务端幂等广播（首报 wins）让全组同步收口。纯新增消息名，旧客户端不发送即可。
+        /// </summary>
+        public const string SyncReportCoordinatedAbort = "sync.reportCoordinatedAbort";
+
         // === 路线边界锚点（route-anchor，独立协议域）===
         // 不复用普通 AllArrived / StartRoute / Abort / CollectiveSkipAppliedAll：
         // 它们分别属于路线内同步、旧重对齐、中断和旧中途集体跳段语义。
@@ -333,5 +339,12 @@ public static class GatewayProtocol
         /// 旧发起方（/hub 连接）天然收不到，UI 按 15s 超时降级为"已发送（无回执）"。
         /// </summary>
         public const string ControlRemoteCommandResult = "control.remoteCommandResult";
+
+        /// <summary>
+        /// 协同中止广播（hoeing-multiplayer-coordinated-abort-restart）：任一成员上报真异常中止后
+        /// 服务端房间级幂等广播（首报 wins），全组秒级同步收口。
+        /// 全新协议域：全员强制升级，无旧客户端订阅者，只发 evt，不进 LegacyEventMap 双发表。
+        /// </summary>
+        public const string SyncCoordinatedAborted = "sync.coordinatedAborted";
     }
 }

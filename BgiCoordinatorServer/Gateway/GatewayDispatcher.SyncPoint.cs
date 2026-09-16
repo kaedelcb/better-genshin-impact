@@ -37,5 +37,15 @@ public sealed partial class GatewayDispatcher
                 GetString(env, "reason"));
             return new { ack = true };
         };
+
+        // 协同中止（hoeing-multiplayer-coordinated-abort-restart）：房间级幂等广播，首报 wins。
+        // 纯新增命令——旧客户端从不发送，既有命令语义零变化。
+        _commands[GatewayProtocol.Names.SyncReportCoordinatedAbort] = async (env, ctx) =>
+        {
+            await _ops.ReportCoordinatedAbortAsync(ctx,
+                GetString(env, "reason"),
+                GetString(env, "reporterUid"));
+            return new { ack = true };
+        };
     }
 }

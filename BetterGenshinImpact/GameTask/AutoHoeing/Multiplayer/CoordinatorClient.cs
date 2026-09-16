@@ -150,6 +150,13 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public event Action<string>? CollectiveSkipDegradedReceived;
 
+    // === 协同中止广播（hoeing-multiplayer-coordinated-abort-restart）===
+    /// <summary>
+    /// 任一端真异常中止上报服务器后，服务器广播全房间。载荷：reason, reporterUid。
+    /// 旧客户端不订阅 → 广播静默丢弃，行为退化为本地守护判定（同现状）。
+    /// </summary>
+    public event Action<string?, string?>? CoordinatedAbortReceived;
+
     // === 万叶聚物同步事件 ===
     /// <summary>
     /// 万叶玩家发起聚物动作时触发，载荷为：
@@ -281,7 +288,7 @@ public class CoordinatorClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// evt 信封分发（切片 8）：服务器广播的单一 evt 回调按 Name 路由到原有 23 个事件处理器，
+    /// evt 信封分发（切片 8）：服务器广播的单一 evt 回调按 Name 路由到各事件处理器，
     /// 处理逻辑（含"过滤自己"守卫与日志文案）与迁移前的逐事件 On 订阅逐字等价。
     /// payload 键缺失/畸形时不应用（对齐旧 On&lt;T&gt; 反序列化失败不触发的语义）。
     /// 未知事件名忽略（前向兼容：服务器可能发来本客户端未订阅的锄地房间事件）。
@@ -487,6 +494,16 @@ public class CoordinatorClient : IAsyncDisposable
                     var reason = env.GetString("reason");
                     _logger.LogError("[联机] 收到 CollectiveSkipDegraded: reason={Reason}", reason);
                     CollectiveSkipDegradedReceived?.Invoke(reason);
+                    break;
+                }
+
+                // === 协同中止广播（hoeing-multiplayer-coordinated-abort-restart）===
+                case GatewayProtocol.Events.SyncCoordinatedAborted:
+                {
+                    var reason = env.GetString("reason");
+                    var reporterUid = env.GetString("reporterUid");
+                    _logger.LogWarning("[联机] 收到协同中止广播: reason={Reason}, reporter={ReporterUid}", reason, reporterUid);
+                    CoordinatedAbortReceived?.Invoke(reason, reporterUid);
                     break;
                 }
 
@@ -788,6 +805,27 @@ public class CoordinatorClient : IAsyncDisposable
 
     /// <summary>本地是否正在主动关闭房间（CloseRoomAsync 已发起，等待广播回环）</summary>
     private volatile bool _selfClosingRoom;
+
+    /// <summary>
+    /// 上报协同中止（hoeing-multiplayer-coordinated-abort-restart）：任一端真异常中止时通知服务器广播全房间。
+    /// 旧服务器无此命令会返回 error，catch 降级仅记日志，不影响本地停止。
+    /// </summary>
+    public async Task ReportCoordinatedAbortAsync(string? reason)
+    {
+        if (_gateway == null) return;
+        try
+        {
+            // reporterUid 为空时服务器端跳过冒名校验；10s 超时：半死连接下 InvokeAsync 默认要等
+            // SignalR server-timeout（~30s）才失败，会拖住后续的 CloseRoomAsync（第二收敛通道）。
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.SyncReportCoordinatedAbort,
+                new { reason, reporterUid = string.IsNullOrEmpty(_playerUid) ? null : _playerUid }, null, timeoutCts.Token);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ReportCoordinatedAbortAsync 失败（降级为纯本地判定）: reason={Reason}", reason);
+        }
+    }
 
     /// <summary>
     /// 检查并消费"自触发关闭"标志位。供 RoomClosed 订阅方使用：

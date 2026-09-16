@@ -139,7 +139,20 @@ public class AutoHoeingTask : ISoloTask
     // HoeingGuardDecisions 防线 A 短路（误判为"全跑完了"）。组队失败路径由 MarkPartyFailed
     // 同时写入 _stopReason 并置本标志，Start 尾部守护块据此以 partyFailed 豁免防线 A，
     // 使组队失败也能触发重开。volatile：赋值发生在任务线程，读取发生在 Start 尾部守护块。
+    // 注：多世界模式下防线 A 由 unexecutedZeroProvesComplete=false 整体关闭（防线 B 完工单权威），
+    // 本豁免仅对单世界路径生效（hoeing-multiplayer-coordinated-abort-restart）。
     private volatile bool _partyFailed;
+
+    // 收到/触发协同中止 → 守护强制重开（hoeing-multiplayer-coordinated-abort-restart）。
+    // 由各中止 handler 与 4 个绕过 TriggerCoordinatedStop 的真异常点经 MarkCoordinatedRestartRequired 置位；
+    // 守护块以 coordinatedRestartRequired 传入 HoeingGuardDecisions.ShouldRestart，跳过阈值与 stopReason 判空直接重开。
+    private volatile bool _coordinatedRestartRequired;
+    // 主执行已返回（收尾期），被动中止信号不再强制重开（hoeing-multiplayer-coordinated-abort-restart）。
+    // 正常收尾阶段成员逐一退世界必然产生 Offline/RoomClosed 信号，若不门控会把每场正常收尾变成误重开。
+    private volatile bool _mainExecutionReturned;
+    // 真正进入了多世界轮次循环（playerOrder 非空）才为 true。playerOrder==0 的"仅执行第1轮"降级路径
+    // 语义等同单世界（无防线 B 完工单置位点），守护块据此保留防线 A（hoeing-multiplayer-coordinated-abort-restart）。
+    private volatile bool _multiWorldRoundLoopEngaged;
 
     // hoeing-multiplayer-sync-execution-params §C2 通道 C：成员回填时暂存被覆盖的全局
     // PickDropsAfterFightSeconds 原值，finally（§C4）恢复，保证单机 ScanPickTask 零感知。
@@ -765,7 +778,9 @@ public class AutoHoeingTask : ISoloTask
             expCapStopTriggered: _expCapStopTriggered,
             isGuardRestartRun: _isGuardRestartRun,
             completedNormally: _completedNormally,       // 防线 B（hoeing-guard-false-restart-on-normal-close）
-            partyFailed: _partyFailed);                  // 组队失败豁免防线 A（hoeing-multiplayer-party-fail-restart）
+            partyFailed: _partyFailed,                   // 组队失败豁免防线 A（hoeing-multiplayer-party-fail-restart）
+            coordinatedRestartRequired: _coordinatedRestartRequired, // 协同中止强制重开（hoeing-multiplayer-coordinated-abort-restart）
+            unexecutedZeroProvesComplete: !_multiWorldRoundLoopEngaged); // 真多世界轮次循环防线 B 完工单权威，关闭防线 A；单世界与多世界降级路径保留
 
         if (guardShouldRestart)
         {
@@ -798,6 +813,13 @@ public class AutoHoeingTask : ISoloTask
                 _logger.LogError(ex, "[联机][守护] 守护重开执行异常（忽略，不影响本次任务收尾）");
             }
         }
+        else if (_config.MultiplayerEnabled)
+        {
+            // 否决日志：守护判定不重开时输出全部判定输入，便于排查"该重开却没重开"（hoeing-multiplayer-coordinated-abort-restart）
+            _logger.LogInformation(
+                "[联机][守护] 判定不重开：guardMode={GuardMode} userCancelled={UserCancelled} expCap={ExpCap} isRestartRun={IsRestart} completedNormally={Completed} partyFailed={PartyFailed} coordinatedRestart={Coordinated} stopReason={Reason} 未执行线路数={Unexec} 阈值={Threshold}",
+                _config.HoeingGuardMode && !_restrictionStopTriggered, ct.IsCancellationRequested, _expCapStopTriggered, _isGuardRestartRun, _completedNormally, _partyFailed, _coordinatedRestartRequired, _stopReason ?? "(空)", guardUnexecuted, Multiplayer.HoeingGuardDecisions.ClampThreshold(_config.GuardUnexecutedRouteThreshold));
+        }
     }
 
     /// <summary>
@@ -806,11 +828,29 @@ public class AutoHoeingTask : ISoloTask
     /// 组队失败时 _guardPlannedRouteCount 恒为 0（尚未开锄），未执行线路数为 0 会触发
     /// HoeingGuardDecisions 防线 A 短路；Start 尾部守护块以 _partyFailed 豁免该短路，
     /// 使组队失败（只要有异常原因）也能触发守护重开，保证全队重新组队跑完。
+    /// 注：多世界模式下防线 A 由 unexecutedZeroProvesComplete=false 整体关闭（防线 B 完工单权威），
+    /// 本豁免仅对单世界路径生效（hoeing-multiplayer-coordinated-abort-restart）。
     /// </summary>
     private void MarkPartyFailed(string reason)
     {
         _stopReason = reason;
         _partyFailed = true;
+    }
+
+    /// <summary>
+    /// 标记"协同中止要求强制重开"（hoeing-multiplayer-coordinated-abort-restart）。
+    /// 收尾期（已发完工单/主执行已返回）的信号不强制重开：正常收尾阶段成员逐一退世界
+    /// 必然产生 Offline/RoomClosed 信号，若强制重开会把每场正常收尾都变成误重开。
+    /// </summary>
+    private void MarkCoordinatedRestartRequired()
+    {
+        if (_completedNormally || _mainExecutionReturned)
+        {
+            _logger.LogDebug("[联机][守护] 收尾期中止信号，不置强制重开标志（completedNormally={Completed}, mainReturned={Returned}）",
+                _completedNormally, _mainExecutionReturned);
+            return;
+        }
+        _coordinatedRestartRequired = true;
     }
 
     private async Task InitializeMultiplayerAsync()
@@ -1192,6 +1232,7 @@ public class AutoHoeingTask : ISoloTask
             _worldStateMonitor.OnExitConfirmed += async (isHost, reason) =>
             {
                 _stopReason = reason;
+                MarkCoordinatedRestartRequired(); // 协同中止 → 守护强制重开（hoeing-multiplayer-coordinated-abort-restart）
                 if (!isHost) _sessionTerminated = true;
                 // 直接 cancel linkedStopCts，确保 _ct 被取消（不依赖 TriggerCoordinatedStop 的 _stopCts）
                 try { _linkedStopCts?.Cancel(); }
@@ -1202,6 +1243,7 @@ public class AutoHoeingTask : ISoloTask
             _worldStateMonitor.OnDroppedFromRoom += async () =>
             {
                 _stopReason = "掉出房间且重试失败";
+                MarkCoordinatedRestartRequired(); // 协同中止 → 守护强制重开（hoeing-multiplayer-coordinated-abort-restart）
                 if (!_multiplayerCoordinator!.IsHost) _sessionTerminated = true;
                 try { _linkedStopCts?.Cancel(); }
                 catch (ObjectDisposedException) { }
@@ -1233,10 +1275,37 @@ public class AutoHoeingTask : ISoloTask
                     return;
                 }
                 _stopReason = $"房间已关闭: {reason}";
+                MarkCoordinatedRestartRequired(); // 协同中止 → 守护强制重开（hoeing-multiplayer-coordinated-abort-restart）
                 _sessionTerminated = true;
                 try { _linkedStopCts?.Cancel(); }
                 catch (ObjectDisposedException) { }
                 catch { }
+            };
+
+            // === 协同中止广播（hoeing-multiplayer-coordinated-abort-restart）===
+            // 任一端真异常中止时经服务端广播 sync.coordinatedAborted；接收端不再等 30s 视觉窗，秒级取消。
+            // 接收端不再重复上报（reportAbortToRoom: false），上报由触发端负责。
+            client.CoordinatedAbortReceived += (reason, reporterUid) =>
+            {
+                // 收尾期（已完工/主执行已返回）只记日志：本端已正常结束，按"完工单优先于强制标志"设计不参与重开；
+                // 不能写 _stopReason——否则 finally 会误报"联机中断" Toast 并多做一次退世界。
+                if (_completedNormally || _mainExecutionReturned)
+                {
+                    _logger.LogInformation("[联机] 收尾期收到协同中止广播（上报者: {Reporter}），本端已正常结束，忽略", reporterUid);
+                    return;
+                }
+                _logger.LogWarning("[联机] 收到协同中止广播（上报者: {Reporter}），原因: {Reason}，协同中止重开", reporterUid, reason);
+                MarkCoordinatedRestartRequired();
+                _stopReason ??= $"协同中止: {reason}";
+                _sessionTerminated = true;
+                try { _linkedStopCts?.Cancel(); }
+                catch (ObjectDisposedException) { }
+                catch { }
+                // fire-and-forget 与 MemberStatusChanged Offline handler 一致；TriggerCoordinatedStop 幂等。
+                // 局部变量捕获：多世界轮间 coordinator 会 Dispose 重建置 null，避免实参二次解引用 NRE。
+                var mc = _multiplayerCoordinator;
+                if (mc != null)
+                    _ = mc.TriggerCoordinatedStop(mc.IsHost, reason ?? "协同中止", reportAbortToRoom: false);
             };
 
             // === 基于经验判断停止锄地：全员达上限广播 → 设 _stopReason 走退世界流程（multiplayer-hoeing-exp-cap-stop）===
@@ -1269,6 +1338,7 @@ public class AutoHoeingTask : ISoloTask
                 if (!inExecutionPhase) return; // 仅执行阶段；组队/轮换/换角色/吃药窗口不额外中止
                 _logger.LogWarning("[联机] 收到成员 Offline 广播: 玩家={PlayerUid}，执行阶段触发协同中止重开", playerUid);
                 _stopReason = "检测到成员离线（服务端广播），协同中止重开";
+                MarkCoordinatedRestartRequired(); // 协同中止 → 守护强制重开（hoeing-multiplayer-coordinated-abort-restart）
                 _sessionTerminated = true;
                 try { _linkedStopCts?.Cancel(); }
                 catch (ObjectDisposedException) { }
@@ -2038,6 +2108,9 @@ public class AutoHoeingTask : ISoloTask
                 // 在进入多世界循环前先加载 CD 记录（单世界路径在下面加载，多世界需要在这里加载）
                 _cdManager.Load(_dataDir, accountName);
                 await RunMultiWorldAsync(accountName);
+                // 主执行已返回：此后进入收尾期，被动中止信号（Offline/RoomClosed/协同中止广播）不再强制重开
+                // （hoeing-multiplayer-coordinated-abort-restart，见 MarkCoordinatedRestartRequired 门控）。
+                _mainExecutionReturned = true;
                 return;
             }
         }
@@ -2049,6 +2122,10 @@ public class AutoHoeingTask : ISoloTask
         var groupTags = BuildGroupTags();
 
         await RunSingleWorldAsync(accountName, groupTags);
+
+        // 主执行已返回：此后进入收尾期，被动中止信号（Offline/RoomClosed/协同中止广播）不再强制重开
+        // （hoeing-multiplayer-coordinated-abort-restart，见 MarkCoordinatedRestartRequired 门控）。
+        _mainExecutionReturned = true;
 
         // 防线 B 不在此置位（hoeing-guard-false-restart-on-normal-close 缺陷 2）：
         // RunSingleWorldAsync / ProcessRoutesByGroup 内有多条"正常 return 但并未跑完"的路径
@@ -2117,6 +2194,10 @@ public class AutoHoeingTask : ISoloTask
             await RunSingleWorldCoreAsync(accountName);
             return;
         }
+
+        // 进入真多世界轮次循环：防线 B 完工单（allRoundsCompleted → _completedNormally）覆盖所有正常收尾，
+        // 守护块据此关闭防线 A（hoeing-multiplayer-coordinated-abort-restart）。
+        _multiWorldRoundLoopEngaged = true;
 
         // 轮数 = min(配置轮数, 实际玩家数)，超出玩家数的轮数没有意义
         var totalRounds = Math.Min(_config.MultiWorldCount, playerOrder.Count);
@@ -3952,6 +4033,8 @@ public class AutoHoeingTask : ISoloTask
                 {
                     _logger.LogError("[联机][锚点] Pull 未成功（{Result}），停止本轮", pullExec.Result);
                     _stopReason = "路线边界锚点 Pull 失败";
+                    MarkCoordinatedRestartRequired(); // 真异常中止：守护强制重开 + 上报房间协同中止（hoeing-multiplayer-coordinated-abort-restart）
+                    _ = _multiplayerCoordinator?.ReportCoordinatedAbortAsync("路线边界锚点 Pull 失败");
                     _sessionTerminated = true;
                     try { _linkedStopCts?.Cancel(); }
                     catch (ObjectDisposedException) { }
@@ -3967,6 +4050,8 @@ public class AutoHoeingTask : ISoloTask
             if (!await TryPassRouteBoundaryAsync(currentRouteIndex, startIndex, _routeAnchorSkippedSnapshot, skippedCount, _ct))
             {
                 _stopReason = "路线边界锚点未放行";
+                MarkCoordinatedRestartRequired(); // 真异常中止：守护强制重开 + 上报房间协同中止（hoeing-multiplayer-coordinated-abort-restart）
+                _ = _multiplayerCoordinator?.ReportCoordinatedAbortAsync("路线边界锚点未放行");
                 _sessionTerminated = true;
                 try { _linkedStopCts?.Cancel(); }
                 catch (ObjectDisposedException) { }
@@ -4177,6 +4262,8 @@ public class AutoHoeingTask : ISoloTask
                             // 连续跳过达上限 = 会话级异常退出，不再把这次误收尾成正常完成。
                             // 先补本地异常终止标记，再保留原有房主/成员散场分叉。
                             _stopReason = "连续跳过路线达到上限";
+                            MarkCoordinatedRestartRequired(); // 真异常中止：守护强制重开 + 上报房间协同中止（hoeing-multiplayer-coordinated-abort-restart）
+                            _ = _multiplayerCoordinator?.ReportCoordinatedAbortAsync("连续跳过路线达到上限");
                             _sessionTerminated = true;
                             try { _linkedStopCts?.Cancel(); }
                             catch (ObjectDisposedException) { }
@@ -4284,6 +4371,8 @@ public class AutoHoeingTask : ISoloTask
         if (!await TryFinishRoundBoundaryAsync(startIndex + count - 1, _routeAnchorSkippedSnapshot, skippedCount, _ct))
         {
             _stopReason = "轮末边界锚点未放行";
+            MarkCoordinatedRestartRequired(); // 真异常中止：守护强制重开 + 上报房间协同中止（hoeing-multiplayer-coordinated-abort-restart）
+            _ = _multiplayerCoordinator?.ReportCoordinatedAbortAsync("轮末边界锚点未放行");
             _sessionTerminated = true;
             try { _linkedStopCts?.Cancel(); }
             catch (ObjectDisposedException) { }

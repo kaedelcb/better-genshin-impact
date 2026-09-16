@@ -384,11 +384,21 @@ public class MultiplayerCoordinator : IAsyncDisposable
     /// <summary>
     /// 触发协调停止（需求 2.2）
     /// </summary>
-    public async Task TriggerCoordinatedStop(bool isHost, string reason)
+    /// <param name="isHost">本端是否房主（房主负责关房）</param>
+    /// <param name="reason">停止原因</param>
+    /// <param name="reportAbortToRoom">是否先上报协同中止广播全房间（hoeing-multiplayer-coordinated-abort-restart）。
+    /// 真异常中止默认 true；正常停止（如经验上限）调用方传 false。</param>
+    public async Task TriggerCoordinatedStop(bool isHost, string reason, bool reportAbortToRoom = true)
     {
         IsExitTriggered = true;
         _logger.LogWarning("[联机] 触发协调停止，原因：{Reason}", reason);
-        
+
+        // 上报必须排在关房之前：关房后服务器侧已不在房间，上报会被丢弃
+        if (reportAbortToRoom)
+        {
+            try { await _client.ReportCoordinatedAbortAsync(reason); } catch { }
+        }
+
         if (isHost)
         {
             try { await _client.CloseRoomAsync(); } catch { }
@@ -420,8 +430,13 @@ public class MultiplayerCoordinator : IAsyncDisposable
     private void OnAllReachedExpCap()
     {
         _logger.LogWarning("[联机][经验上限] 收到全员达上限广播，触发协调停止");
-        _ = TriggerCoordinatedStop(IsHost, "全员达经验上限");
+        _ = TriggerCoordinatedStop(IsHost, "全员达经验上限", reportAbortToRoom: false);
     }
+
+    /// <summary>
+    /// 供绕过 TriggerCoordinatedStop 的真异常中止点单独上报协同中止（hoeing-multiplayer-coordinated-abort-restart）。
+    /// </summary>
+    public async Task ReportCoordinatedAbortAsync(string reason) => await _client.ReportCoordinatedAbortAsync(reason);
 
     /// <summary>
     /// PathExecutor 在一个"有效战斗节点"收尾后调用，传入本节点是否检测到经验。
