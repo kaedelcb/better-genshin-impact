@@ -181,6 +181,7 @@ internal static class ExternalInterfaceProtocol
                 // [A3.1] 统一作业注册表观察面：job.* 事件族 + ext.job.status/ext.job.list 拉取
                 // （jobId 与协调器 taskHandle 同一 Guid 别名，总计划 §6.4/§6.5）
                 ["job.registry"] = true,
+                ["hoeing.batchOutcome.v1"] = true,
             },
             // [A3.1] 进程纪元 fencing（总计划 §4.2）：hello/事件帧/状态响应统一携带
             ["bgiEpoch"] = new JObject

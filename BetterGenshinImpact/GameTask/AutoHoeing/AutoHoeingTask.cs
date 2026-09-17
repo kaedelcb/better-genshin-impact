@@ -470,6 +470,8 @@ public class AutoHoeingTask : ISoloTask
 
     public async Task Start(CancellationToken ct)
     {
+        Exception? executionFailure = null;
+        var teamManaged = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive;
         _taskStartTime = DateTime.Now;
         _ct = ct;
         _config = TaskContext.Instance().Config.AutoHoeingConfig;
@@ -559,6 +561,7 @@ public class AutoHoeingTask : ISoloTask
         if (!Directory.Exists(_dataDir) || !Directory.Exists(Path.Combine(_dataDir, "pathing")))
         {
             _logger.LogError("锄地一条龙资源目录不存在: {Dir}", _dataDir);
+            if (teamManaged) throw new InvalidOperationException("联机批次缺少锄地资源，禁止按成功推进");
             _logger.LogError("请先在「脚本仓库」中订阅并下载「AutoHoeingOneDragon」JS脚本，独立任务依赖该脚本的路线和资源文件");
 
             // 在UI线程弹窗提示
@@ -599,6 +602,7 @@ public class AutoHoeingTask : ISoloTask
         }
         catch (Exception ex)
         {
+            executionFailure = ex;
             _logger.LogError(ex, "锄地一条龙任务异常终止");
         }
         finally
@@ -768,6 +772,25 @@ public class AutoHoeingTask : ISoloTask
         // 用 Start 的原始外部 ct（未被 RunTask 内替换污染的局部参数）判定手动停止；满足全部条件则新建实例重开一次。
         var guardUnexecuted = Multiplayer.HoeingGuardDecisions.ComputeUnexecutedCount(
             _guardPlannedRouteCount, _guardExecutedRouteCount);
+        // 联机批次由全队协调器统一恢复；不得在本机偷偷重开、与助手下一组竞争。
+        if (teamManaged)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (_restrictionStopTriggered)
+                throw new OperationCanceledException("联机批次达到时间限制");
+            if (Multiplayer.CoordinatedHoeingOutcome.IsIncomplete(
+                    executionFailed: executionFailure != null, expCapStop: _expCapStopTriggered,
+                    completedNormally: _completedNormally, sessionTerminated: _sessionTerminated,
+                    setupIncomplete: _config.MultiplayerEnabled && !_config.SoloDebugMode && !_multiplayerPartyReady,
+                    multiWorldExpected: _config.MultiplayerEnabled && _config.MultiWorldEnabled,
+                    unexecutedCount: guardUnexecuted))
+            {
+                BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.MarkIncomplete();
+                BetterGenshinImpact.Service.Execution.ExecutionScope.Current?.Observe(TaskRunResult.Failed);
+                throw new InvalidOperationException("hoeing_incomplete: " + (_stopReason ?? "联机锄地未完整结束"), executionFailure);
+            }
+            return;
+        }
         var guardShouldRestart = Multiplayer.HoeingGuardDecisions.ShouldRestart(
             guardMode: _config.HoeingGuardMode && !_restrictionStopTriggered,
             multiplayerEnabled: _config.MultiplayerEnabled,
@@ -3223,6 +3246,8 @@ public class AutoHoeingTask : ISoloTask
         var capabilityAvailable = _coordinatorClientRef?.SupportsCooperativeRerun == true;
         if (rerunKeywordConfigured && !capabilityAvailable)
         {
+            if (BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive)
+                throw new InvalidOperationException("联机批次要求全员及服务器支持共同重跑，请统一升级");
             _logger.LogWarning("[共同重跑] 已配置重跑关键词，但服务器/房间未宣告 {Cap}，本次退回旧轮末重跑路径（不启用新协同重跑）",
                 RerunProtocol.Capability);
         }
@@ -3246,6 +3271,9 @@ public class AutoHoeingTask : ISoloTask
 
             await ProcessRoutesByGroupCore(routes, accountName, roundContext, cooperative);
             EnsureCooperativeExecutionAllowed();
+            if (BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive
+                && (cooperative.Downgraded || (!cooperative.EmptyRound && !cooperative.FlowReachedEnd)))
+                throw new InvalidOperationException("联机批次本轮未走到完整收尾，禁止按成功推进");
             if (cooperative.EmptyRound && cooperative.Session == null)
             {
                 cooperative.Session = await CooperativeRerunSession.StartAsync(

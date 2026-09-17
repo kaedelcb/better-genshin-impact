@@ -47,6 +47,8 @@
          这样测试能同时驱动真实客户端会话与真实服务端状态机，自动捕获"两端约定不一致"这类
          单侧假服务端测试必然漏掉的缺陷（第5轮审查的四个阻断即属此类）；
          改用 ProjectReference 会引入 Web SDK/ASP.NET 框架引用，代价与风险都更高。 -->
+    <Compile Include="..\..\BgiCoordinatorServer\Services\CoordinatedBatchState.cs"
+             Link="ServiceTests\Instance\ServerContract\CoordinatedBatchState.cs" />
     <Compile Include="..\..\BgiCoordinatorServer\Services\RerunExecutionState.cs"
              Link="GameTaskTests\AutoHoeingTests\ServerContract\RerunExecutionState.cs" />
   </ItemGroup>

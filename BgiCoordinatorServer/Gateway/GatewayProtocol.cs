@@ -135,6 +135,7 @@ public static class GatewayProtocol
         public const string ControlSendCommand = "control.sendCommand";
         public const string ControlReportStatus = "control.reportStatus";
         public const string ControlConfirmAllReady = "control.confirmAllReady";
+        public const string ControlBatchUpdate = "control.batch.update";
         public const string ControlReportOnlineEvent = "control.reportOnlineEvent";
         public const string ControlClearOnlineHistory = "control.clearOnlineHistory";
 

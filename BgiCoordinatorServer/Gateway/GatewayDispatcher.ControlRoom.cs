@@ -56,6 +56,11 @@ public sealed partial class GatewayDispatcher
             return new { ack = true, delivered };
         };
 
+        _commands[GatewayProtocol.Names.ControlBatchUpdate] = (env, ctx) => Task.FromResult<object?>(
+            _ops.UpdateCoordinatedBatch(ctx, GetInt(env, "generation"), GetString(env, "token") ?? "",
+                GetString(env, "batchId") ?? "", GetString(env, "layout") ?? "",
+                GetInt(env, "index"), GetInt(env, "attempt"), GetString(env, "result") ?? ""));
+
         _commands[GatewayProtocol.Names.ControlConfirmAllReady] = async (env, ctx) =>
         {
             await _ops.ConfirmAllReadyAsync(ctx, GetInt(env, "generation"));

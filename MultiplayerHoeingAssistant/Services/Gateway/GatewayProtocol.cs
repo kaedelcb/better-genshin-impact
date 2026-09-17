@@ -49,6 +49,7 @@ public static class GatewayProtocol
         public const string ControlSendCommand = "control.sendCommand";
         public const string ControlReportStatus = "control.reportStatus";
         public const string ControlConfirmAllReady = "control.confirmAllReady";
+        public const string ControlBatchUpdate = "control.batch.update";
         public const string ControlReportOnlineEvent = "control.reportOnlineEvent";
         public const string ControlClearOnlineHistory = "control.clearOnlineHistory";
         /// <summary>远端任务下发结果回执（纯加法；旧服务端回 unsupported_operation，客户端据此降级停发）。</summary>

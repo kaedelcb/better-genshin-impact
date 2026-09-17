@@ -143,18 +143,6 @@ public partial class MainViewModel
                 return;
             }
 
-            // [A4.3] job.* 事件 = reconcile 循环的唤醒快速路径（事实源仍是 ext.job.list pull，
-            // 帧丢失/乱序由 10s 节拍兜底；job.heartbeat 仅作存活信号，不唤醒）
-            if (evt.Name is BgiExternalEventNames.JobQueued
-                or BgiExternalEventNames.JobStarted
-                or BgiExternalEventNames.JobCompleted
-                or BgiExternalEventNames.JobFailed
-                or BgiExternalEventNames.JobCancelled)
-            {
-                _batchWakeSignal?.TrySetResult();
-                return;
-            }
-
             // 任务/锄地状态事件：触发一次快照刷新（SDK 内部 300ms 节流 + 在飞去重）
             if (evt.Name is BgiExternalEventNames.TaskStarted
                 or BgiExternalEventNames.TaskStopped

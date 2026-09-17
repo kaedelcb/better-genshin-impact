@@ -16,6 +16,7 @@ public sealed class OnlineHoeingBatch
 
     /// <summary>本轮 AllReady 的代序号（服务端广播值，兼做策略收尾恰好一次守卫的批次键）。</summary>
     public int Generation { get; }
+    public bool CoordinatedSucceeded { get; set; }
 
     /// <summary>批次取消令牌源（原 _isAllReadySequenceCancelled 的承载者）。</summary>
     public CancellationTokenSource Cts { get; } = new();

@@ -390,7 +390,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
     }
 
     /// <summary>按句柄取消：在队 → 移除+事件；在跑且匹配 → 由调用方走等价 task.stop；否则 task_not_found。</summary>
-    public CancelOutcome CancelByHandle(Guid taskHandle)
+    public CancelOutcome CancelByHandle(Guid taskHandle, bool ownedOnly = false)
     {
         PendingTask? queued = null;
         lock (_submitLock)
@@ -402,6 +402,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
             }
             else if (_current is { } current && current.TaskHandle == taskHandle)
             {
+                if (ownedOnly) current.Cts.Cancel();
                 return CancelOutcome.StopRequestedRunning;
             }
             else
@@ -610,9 +611,9 @@ internal sealed class BgiTaskCoordinator : IDisposable
             if (item.TryMarkTerminalEventPublished())
             {
                 // [A6] 抢占超界是可重试瞬态（reconcile 按 ADR-2026-09-16 分类重试），错误码独立于通用失败
-                var errorCode = exception is BetterGenshinImpact.Service.Execution.PreemptTimeoutException
+                var errorCode = item.Cts.IsCancellationRequested ? "task_cancelled" : exception is BetterGenshinImpact.Service.Execution.PreemptTimeoutException
                     ? "preempt_timeout"
-                    : "task_start_failed";
+                    : exception is BetterGenshinImpact.Service.Execution.HoeingIncompleteException ? "hoeing_incomplete" : "task_start_failed";
                 RecordTerminal(item.TaskHandle, "failed", errorCode: errorCode, message: exception.GetBaseException().Message);
                 PublishSafe(ExternalInterfaceEventNames.TaskFailed, new
                 {

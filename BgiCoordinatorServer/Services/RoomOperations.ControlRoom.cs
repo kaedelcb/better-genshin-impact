@@ -343,6 +343,8 @@ public sealed partial class RoomOperations
             .Select(p => p.PlayerUid)
             .ToList();
 
+        BeginCoordinatedBatch(group, readyGeneration, onlinePlayers);
+
         // 单人场景（≤1 人）：跳过确认阶段，直接广播 AllReady
         // 确认阶段的设计目的是"等所有成员确认收到 AllReady"，
         // 单人场景不存在"有人没收到"的问题，跳过可避免：

@@ -173,10 +173,13 @@ internal static class ExternalInterfaceCommandPlane
             return InstanceIpcEnvelope.Failure(request, "invalid_request", "taskHandle 缺失或格式错误");
         }
 
-        return BgiTaskCoordinator.Instance.CancelByHandle(handle) switch
+        var ownedOnly = request.Data?["ownedOnly"]?.ToString() == "v1";
+        return BgiTaskCoordinator.Instance.CancelByHandle(handle, ownedOnly) switch
         {
             BgiTaskCoordinator.CancelOutcome.CancelledQueued => InstanceIpcEnvelope.Response(
                 request, new { status = "cancelled", taskHandle = handleRaw, wasQueued = true }),
+            BgiTaskCoordinator.CancelOutcome.StopRequestedRunning when ownedOnly =>
+                InstanceIpcEnvelope.Response(request, new { status = "stop_requested", taskHandle = handleRaw }),
             BgiTaskCoordinator.CancelOutcome.StopRequestedRunning =>
                 handler.HandleTaskStop(connection, request),
             _ => InstanceIpcEnvelope.Failure(

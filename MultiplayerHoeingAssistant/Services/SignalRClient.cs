@@ -473,6 +473,16 @@ public class SignalRClient : IAsyncDisposable
         timer?.Dispose();
     }
 
+    public async Task<CoordinatedBatchSnapshot> UpdateCoordinatedBatchAsync(int generation, string token,
+        string batchId, string layout, int index, int attempt, string result, CancellationToken ct)
+    {
+        if (_gateway?.IsConnected != true) throw new InvalidOperationException("控制房间连接不可用");
+        var response = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlBatchUpdate,
+            new { generation, token, batchId, layout, index, attempt, result }, ct: ct);
+        return response.DeserializePayload<CoordinatedBatchSnapshot>()
+            ?? throw new InvalidOperationException("全队批次响应为空");
+    }
+
     public async Task SendRemoteCommandAsync(RemoteCommand command)
     {
         if (_gateway == null) return;

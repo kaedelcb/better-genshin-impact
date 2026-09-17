@@ -686,8 +686,16 @@ internal sealed class InstanceRequestHandler
         if (ExecutionScope.HasActive || BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0)
             throw new InvalidOperationException("task_busy: 原流程尚未退出");
         var completion = new TaskCompletionSource<BetterGenshinImpact.GameTask.TaskRunResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _ = Application.Current!.Dispatcher.InvokeAsync(async () =>
+        var dispatch = Application.Current!.Dispatcher.InvokeAsync(async () =>
         {
+            using var coordinatedHoeing = new CoordinatedHoeingScope(executionRequest != null
+                && InstanceIpcProtocol.GetStringOrNull(executionRequest.Data, "coordinatedHoeing") == "v1");
+            void FinishCoordinated(BetterGenshinImpact.GameTask.TaskRunResult result)
+            {
+                if (result == BetterGenshinImpact.GameTask.TaskRunResult.Failed && coordinatedHoeing.Incomplete)
+                    completion.TrySetException(new HoeingIncompleteException());
+                else completion.TrySetResult(result);
+            }
             ExecutionScope? admittedRoot = null;
             using var cancellationRegistration = cancellationToken.Register(() => admittedRoot?.Cancel());
             try
@@ -739,7 +747,7 @@ internal sealed class InstanceRequestHandler
                         ? group.Projects.Where(p => p.Index == only).ToList()
                         : BetterGenshinImpact.ViewModel.Pages.ScriptControlViewModel.GetNextProjects(group);
                     if (projects.Count == 0) throw new InvalidOperationException("no_work");
-                    completion.TrySetResult(await scriptService.RunMulti(projects, groupName, progress, descriptor));
+                    FinishCoordinated(await scriptService.RunMulti(projects, groupName, progress, descriptor));
                 }
                 else
                 {
@@ -756,11 +764,14 @@ internal sealed class InstanceRequestHandler
                     BetterGenshinImpact.GameTask.TaskContext.Instance().Config.SelectedOneDragonFlowConfigName = configName!;
                     BetterGenshinImpact.GameTask.RunnerContext.Instance.BatchGroupNames =
                         batchGroupNames == null ? null : new List<string>(batchGroupNames);
-                    completion.TrySetResult(await vm.ExecuteOneDragonAsync(descriptor));
+                    FinishCoordinated(await vm.ExecuteOneDragonAsync(descriptor));
                 }
             }
             catch (Exception ex) { completion.TrySetException(ex); }
         });
+        // Await the dispatcher delegate too: its root scope and cancellation registration
+        // must be disposed before the queue can expose a terminal result to the team.
+        await dispatch.Task.Unwrap();
         var result = await completion.Task;
         if (result == BetterGenshinImpact.GameTask.TaskRunResult.Ran) return false;
         if (result == BetterGenshinImpact.GameTask.TaskRunResult.Cancelled) return true;

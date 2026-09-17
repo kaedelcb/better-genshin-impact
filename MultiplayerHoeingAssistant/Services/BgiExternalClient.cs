@@ -512,7 +512,11 @@ public sealed class BgiExternalClient : IDisposable
     /// <summary>[A3.1] 能力位：BGI 统一作业注册表观察面（job.* 事件族 + ext.job.status/ext.job.list + bgiEpoch 全帧）。</summary>
     public const string CapabilityJobRegistry = "job.registry";
 
-    /// <summary>[切片7] ext.task.stop：ext 通道默认 clearQueue=true（"停止"含"别再继续"语义，清空在队项并逐项发 task.queueCancelled）。</summary>
+    /// <summary>只请求取消给定句柄；应答不代表清理完成，调用方须查询该句柄终态。</summary>
+    public Task<BgiExternalResponse> CancelOwnedTaskAsync(string taskHandle, CancellationToken ct)
+        => SendCommandAsync(ExternalOperations.TaskCancel, new { taskHandle, ownedOnly = "v1" }, CommandTimeout, ct);
+
+    /// <summary>停止当前任务，默认同时清空排队任务。</summary>
     public Task<BgiExternalResponse> StopTaskAsync(bool clearQueue = true, CancellationToken cancellationToken = default)
         => SendCommandAsync(ExternalOperations.TaskStop, new { clearQueue }, CommandTimeout, cancellationToken);
 
@@ -532,11 +536,11 @@ public sealed class BgiExternalClient : IDisposable
         string? batchGroupNames = null,
         CancellationToken cancellationToken = default,
         bool preempt = false, string? idempotencyKey = null,
-        string? expectedConfigRevision = null, object? bgiEpoch = null, DateTimeOffset? expiresAtUtc = null)
+        string? expectedConfigRevision = null, object? bgiEpoch = null, DateTimeOffset? expiresAtUtc = null, bool coordinatedHoeing = false)
     {
         var payload = preempt
-            ? (object)new { groupName, configName, startFromIndex, generation, batchGroupNames, preempt = true, idempotencyKey, expectedConfigRevision, bgiEpoch, expiresAtUtc }
-            : new { groupName, configName, startFromIndex, generation, batchGroupNames, idempotencyKey, expectedConfigRevision, bgiEpoch, expiresAtUtc };
+            ? (object)new { groupName, configName, startFromIndex, generation, batchGroupNames, preempt = true, idempotencyKey, expectedConfigRevision, bgiEpoch, expiresAtUtc, coordinatedHoeing = coordinatedHoeing ? "v1" : null }
+            : new { groupName, configName, startFromIndex, generation, batchGroupNames, idempotencyKey, expectedConfigRevision, bgiEpoch, expiresAtUtc, coordinatedHoeing = coordinatedHoeing ? "v1" : null };
         var response = await SendCommandAsync(
                 ExternalOperations.TaskStart,
                 payload,
