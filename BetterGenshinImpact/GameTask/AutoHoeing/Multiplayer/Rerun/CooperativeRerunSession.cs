@@ -77,6 +77,13 @@ public sealed class CooperativeRerunSession : IAsyncDisposable
     { try { while(!_stop.IsCancellationRequested && !_aborted) { try { await SendAsync(RerunProtocol.Poll,ct:_stop.Token); } catch(OperationCanceledException) { break; } catch { } await Task.Delay(750,_stop.Token); } } catch(OperationCanceledException) { } }
     public async Task<RerunSnapshot> CompleteNormalAsync(CancellationToken ct)
     {
+        // Enroll 只登记本端；空路线（全 CD / 关键词过滤）会立即收尾，此时其他成员可能尚未注册。
+        // 等待服务端确认全员进入 Normal 后才能提交 NormalDone，避免 Registering 阶段拒绝触发守护重开。
+        // 复用阶段等待的取消、Aborted 和服务端注册超时处理，不能把未知状态当作本轮完成。
+        var ready = Snapshot;
+        if (ready.Stage == RerunStage.Registering)
+            ready = await WaitForStageAsync(RerunStage.Normal, ct);
+        if (ready.Stage == RerunStage.Completed) return ready;
         // 先排空在途死亡标记，再宣告正常轮结束：服务端在最后一名成员 NormalDone 时冻结计划，
         // 迟到标记会被拒（rerun_normal_done），导致"该重跑的线路"无声丢失。
         await DrainPendingMarksAsync(ct);
@@ -85,7 +92,8 @@ public sealed class CooperativeRerunSession : IAsyncDisposable
         // PlanHash 只在"固定全员都提交 NormalDone"那一刻由服务端冻结。非末位成员的 NormalDone 响应
         // 仍处于 Normal（hash 为空），此时直接发 Prepare 必然被 rerun_plan_hash 拒绝。
         // 因此先等到 Preparing（快照已带回冻结 hash），再用该 hash 发 Prepare。
-        await WaitForStageAsync(RerunStage.Preparing,ct);
+        snap = await WaitForStageAsync(RerunStage.Preparing,ct);
+        if (snap.Stage == RerunStage.Completed) return snap;
         await SendAsync(RerunProtocol.Prepare,ct:ct);
         return await WaitForStageAsync(RerunStage.Running,ct);
     }
@@ -96,8 +104,8 @@ public sealed class CooperativeRerunSession : IAsyncDisposable
         // 服务端强制：Incomplete 也必须能验证"每个非战斗规范点都已到达或被豁免"，
         // 否则以 rerun_unresolved 拒绝——而该拒绝会让整轮中止，与"记不完整、其余计划项继续"的
         // 契约目标相反。线路提前结束（切队伍失败/校验失败/中断跳段等）时本机确实没有逐点豁免记录，
-        // 因此在提交不完整终态前补一次覆盖性豁免，把"确实没走到"如实登记下来。
-        if (outcome == RerunRouteOutcome.Incomplete && !context.HadBypass)
+        // 部分跳段记录不代表后续检查点也已处理；收尾仍需检查所有未到达点并补齐豁免。
+        if (outcome == RerunRouteOutcome.Incomplete)
         {
             var unresolved = context.UnresolvedNonFightPoints();
             if (unresolved.Count > 0)
@@ -128,15 +136,26 @@ public sealed class CooperativeRerunSession : IAsyncDisposable
         if(s.Stage!=RerunStage.Finishing)s=await WaitForStageAsync(RerunStage.Finishing,ct);
         if(s.Stage==RerunStage.Completed)return;
         await SendAsync(RerunProtocol.Finish,ct:ct);
+        // 本端收尾已登记不等于全员完成；上层只有在 Completed 后才能记录本世界并换地主。
+        await WaitForStageAsync(RerunStage.Completed, ct);
     }
     public async Task AbortAsync(string reason)
     { if(_aborted)return; if(!_client.IsConnected || string.IsNullOrEmpty(_snapshot.SessionId)) { _aborted=true; return; } using var c=new CancellationTokenSource(TimeSpan.FromSeconds(5)); try { await SendAsync(RerunProtocol.Abort,reason:reason,ct:c.Token); } catch { } finally { _aborted=true; } }
+    private async Task SendDeathMarkAsync(CooperativeRouteContext context, string pointId, CancellationToken ct)
+    {
+        // 正常轮可能先于慢成员注册开始；等待时不占 RPC 锁，让轮询能推进注册阶段。
+        // 此任务仍在 pendingMarks 内，NormalDone 必须等它上报完，防止计划冻结时漏掉死亡线路。
+        if (!context.IsReplay && Snapshot.Stage == RerunStage.Registering)
+            await WaitForStageAsync(RerunStage.Normal, ct);
+        await SendAsync(RerunProtocol.Mark, context.Plan, pointId, replay: context.IsReplay, reason: "death", ct: ct);
+    }
+
     internal void QueueDeathMark(CooperativeRouteContext c,string pointId)
     {
         Task task;
         try
         {
-            task = SendAsync(RerunProtocol.Mark,c.Plan,pointId,replay:c.IsReplay,reason:"death",ct:_stop.Token);
+            task = SendDeathMarkAsync(c, pointId, _stop.Token);
         }
         catch (Exception ex)
         {
@@ -161,7 +180,11 @@ public sealed class CooperativeRerunSession : IAsyncDisposable
         if (pending.Length == 0) return;
         try
         {
-            await Task.WhenAll(pending).ConfigureAwait(false);
+            await Task.WhenAll(pending).WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {

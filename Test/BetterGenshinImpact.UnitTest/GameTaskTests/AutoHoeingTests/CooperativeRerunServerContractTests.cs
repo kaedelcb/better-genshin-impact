@@ -38,6 +38,130 @@ public sealed class CooperativeRerunServerContractTests
         field?.SetValue(null, new BetterGenshinImpact.Core.Config.AllConfig());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EarlyNormalCompletionWaitsForOtherMemberEnrollment(bool hasRoutes)
+    {
+        var state = State("uid-a", "uid-b");
+        var clientA = new CoordinatorClient();
+        var clientB = new CoordinatorClient();
+        var seenA = new List<RerunRequest>();
+        WireToServer(clientA, state, "uid-a", seenA);
+        WireToServer(clientB, state, "uid-b");
+        var plans = hasRoutes ? new[] { Plan() } : Array.Empty<CooperativeRoutePlan>();
+        using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var a = await CooperativeRerunSession.StartAsync(clientA, plans, Scope, bound.Token);
+
+        // 模拟房主全 CD：其他成员尚未注册，本端就立刻走到正常轮收尾。
+        var doneA = a.CompleteNormalAsync(bound.Token);
+        Assert.False(doneA.IsCompleted, "其他成员注册前应等待，不能提交 NormalDone 并触发 rerun_stage。");
+        Assert.Equal(RerunStage.Registering, a.Snapshot.Stage);
+        Assert.DoesNotContain(seenA, r => r.Operation == RerunProtocol.NormalDone);
+
+        await using var b = await CooperativeRerunSession.StartAsync(clientB, plans, Scope, bound.Token);
+        var results = await Task.WhenAll(doneA, b.CompleteNormalAsync(bound.Token));
+        Assert.All(results, s => Assert.Equal(RerunStage.Completed, s.Stage));
+        Assert.Equal(RerunStage.Completed, state.Stage);
+        Assert.DoesNotContain(seenA, r => r.Operation == RerunProtocol.Prepare);
+        await a.FinishAsync(bound.Token);
+        await b.FinishAsync(bound.Token);
+    }
+
+    [Fact]
+    public async Task WaitingForEnrollmentCanBeCancelledWithoutNormalDone()
+    {
+        var state = State("uid-a", "uid-b");
+        var client = new CoordinatorClient();
+        var seen = new List<RerunRequest>();
+        WireToServer(client, state, "uid-a", seen);
+        using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await CooperativeRerunSession.StartAsync(
+            client, Array.Empty<CooperativeRoutePlan>(), Scope, bound.Token);
+        using var cancel = new CancellationTokenSource();
+        var done = session.CompleteNormalAsync(cancel.Token);
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => done);
+        Assert.DoesNotContain(seen, r => r.Operation == RerunProtocol.NormalDone);
+    }
+
+    [Fact]
+    public async Task EnrollmentTimeoutAbortsInsteadOfCompletingEmptyRound()
+    {
+        var state = State("uid-a", "uid-b");
+        var client = new CoordinatorClient();
+        var seen = new List<RerunRequest>();
+        var now = DateTime.UtcNow;
+        WireToServer(client, state, "uid-a", seen, () => now);
+        using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await CooperativeRerunSession.StartAsync(
+            client, Array.Empty<CooperativeRoutePlan>(), Scope, bound.Token);
+        now = now.AddSeconds(121);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => session.CompleteNormalAsync(bound.Token));
+        Assert.Equal("PreparationTimeout", error.Message);
+        Assert.Equal(RerunStage.Aborted, state.Stage);
+        Assert.DoesNotContain(seen, r => r.Operation == RerunProtocol.NormalDone);
+    }
+
+    [Fact]
+    public async Task PartialBypassThenEarlyExitMustRemainIncomplete()
+    {
+        var plan = Plan();
+        plan.Manifest.Checkpoints.Add(new() { Id = "s:1:tp", Segment = 1, Kind = "teleport" });
+        var state = State("uid-a");
+        var client = new CoordinatorClient();
+        WireToServer(client, state, "uid-a");
+        using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await CooperativeRerunSession.StartAsync(client, new[] { plan }, Scope, bound.Token);
+        session.CreateContext(plan, false).ReportDeath(FightPoint);
+        await session.DrainPendingMarksAsync(bound.Token);
+        await session.CompleteNormalAsync(bound.Token);
+        var context = session.CreateContext(plan, true);
+        await context.ReportBypassAsync(0, false, bound.Token);
+        context.MarkIncomplete("后续执行提前退出");
+        await session.CompleteRouteAsync(context, RerunRouteOutcome.Incomplete, bound.Token);
+        Assert.Equal(RerunStage.Finishing, session.Snapshot.Stage);
+    }
+
+    [Fact]
+    public async Task DeathBeforeOtherMemberEnrollmentMustEnterReplay()
+    {
+        var plan = Plan();
+        var state = State("uid-a", "uid-b");
+        var clientA = new CoordinatorClient();
+        var clientB = new CoordinatorClient();
+        WireToServer(clientA, state, "uid-a");
+        WireToServer(clientB, state, "uid-b");
+        using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var a = await CooperativeRerunSession.StartAsync(clientA, new[] { plan }, Scope, bound.Token);
+        a.CreateContext(plan, false).ReportDeath(FightPoint);
+        var doneA = a.CompleteNormalAsync(bound.Token);
+        Assert.False(doneA.IsCompleted);
+        await using var b = await CooperativeRerunSession.StartAsync(clientB, new[] { plan }, Scope, bound.Token);
+        var snapshots = await Task.WhenAll(doneA, b.CompleteNormalAsync(bound.Token));
+        Assert.Single(a.Snapshot.Marks);
+        Assert.All(snapshots, s => Assert.Equal(RerunStage.Running, s.Stage));
+    }
+
+    [Fact]
+    public async Task PendingDeathMarkEnrollmentWaitCanBeCancelled()
+    {
+        var plan = Plan();
+        var state = State("uid-a", "uid-b");
+        var client = new CoordinatorClient();
+        WireToServer(client, state, "uid-a");
+        using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var session = await CooperativeRerunSession.StartAsync(client, new[] { plan }, Scope, bound.Token);
+        session.CreateContext(plan, false).ReportDeath(FightPoint);
+        using var cancel = new CancellationTokenSource();
+        var drain = session.DrainPendingMarksAsync(cancel.Token);
+        Assert.False(drain.IsCompleted);
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => drain);
+        Assert.Equal(RerunStage.Registering, session.Snapshot.Stage);
+    }
+
     private const string Scope = "1";
     private const string RouteId = "0:route";
     private const string SyncPoint = "s:0:tp";
@@ -85,7 +209,7 @@ public sealed class CooperativeRerunServerContractTests
             object payload;
             try
             {
-                payload = state.Apply(uid, "conn-" + uid, request, clock?.Invoke() ?? DateTime.UtcNow);
+                lock (state) payload = state.Apply(uid, "conn-" + uid, request, clock?.Invoke() ?? DateTime.UtcNow);
             }
             catch (RerunProtocolException ex)
             {
@@ -162,9 +286,13 @@ public sealed class CooperativeRerunServerContractTests
             b.CompleteRouteAsync(contextB, RerunRouteOutcome.Completed, bound.Token));
         await WaitUntilAsync(() => a.Snapshot.Stage == RerunStage.Finishing, "进入收尾阶段");
 
-        // 收尾：神像后固定全员确认收尾，服务端才 Completed。
-        await a.FinishAsync(bound.Token);
-        await b.FinishAsync(bound.Token);
+        // 先到神像的成员必须等待慢成员收尾；返回时即可安全执行上层的 Completed 校验。
+        var finishA = a.FinishAsync(bound.Token);
+        Assert.False(finishA.IsCompleted);
+        Assert.Equal(RerunStage.Finishing, state.Stage);
+        await Task.WhenAll(finishA, b.FinishAsync(bound.Token));
+        Assert.Equal(RerunStage.Completed, a.Snapshot.Stage);
+        Assert.Equal(RerunStage.Completed, b.Snapshot.Stage);
         await WaitUntilAsync(() => a.Snapshot.Stage == RerunStage.Completed, "阶段完成");
         Assert.Equal(RerunStage.Completed, state.Stage);
     }
