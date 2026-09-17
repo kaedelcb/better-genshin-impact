@@ -19,6 +19,14 @@ public class BgiPackageUpdateServiceTests : IDisposable
     private static readonly string Fixture16Path = Path.Combine(
         AppContext.BaseDirectory, "TestData", "BetterGI_v0.64.2+lcb.22.7-NexusBGI-fix16.7z");
 
+    /// <summary>Nexus 实包形态夹具：全部条目在顶层 BetterGI/ 下（内容与 fix13 对应），验证公共根剥离。</summary>
+    private static readonly string Fixture17RootedPath = Path.Combine(
+        AppContext.BaseDirectory, "TestData", "BetterGI_v0.64.2+lcb.22.8-NexusBGI-fix17.7z");
+
+    /// <summary>混合根夹具：readme.txt 在包根、其余在顶层 BetterGI/ 下，结构无法安全判定应被拒绝。</summary>
+    private static readonly string FixtureMixedRootPath = Path.Combine(
+        AppContext.BaseDirectory, "TestData", "BetterGI_v0.64.2+lcb.22.8-NexusBGI-mixed.7z");
+
     private readonly string _root;
     private readonly string _bgiDir;
 
@@ -222,5 +230,48 @@ public class BgiPackageUpdateServiceTests : IDisposable
         Assert.Equal("REAL-BACKUP", Read(tsDir, "User", "config.json")); // 已有备份原样
         // User/ 排除 + _update_backup 恶意条目硬保护，都被跳过
         Assert.Equal(2, result.ExcludedFiles);
+    }
+
+    [Fact]
+    public void Apply_RootedPackage_StripsCommonRoot_AndLandsAtTargetRoot()
+    {
+        // Nexus 实包所有条目都在顶层 BetterGI/ 下：不剥根会把整包解压成 目标目录\BetterGI\...（2026-09-17 实跑踩坑）
+        var result = BgiPackageUpdateService.Apply(Fixture17RootedPath, _bgiDir, [], backupExcludedDirs: false, progress: null);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("NEW-BGI-EXE", Read(_bgiDir, "BetterGI.exe"));          // 落到目标根并覆盖
+        Assert.Equal("NEW-FILE", Read(_bgiDir, "NewDir", "newfile.dll"));   // 子目录同样剥根落位
+        Assert.False(Directory.Exists(Path.Combine(_bgiDir, "BetterGI")));  // 绝不再嵌套出 BetterGI 目录
+        Assert.Equal(4, result.ExtractedFiles);
+        Assert.Empty(result.SkippedFiles);
+    }
+
+    [Fact]
+    public void Apply_RootedPackage_ExcludesAndBackupWorkAfterStrip()
+    {
+        // 排除匹配按剥根后的相对路径进行：带根包的 User/Tool 目录同样能被排除+备份
+        var result = BgiPackageUpdateService.Apply(Fixture17RootedPath, _bgiDir,
+            ["User", "Tool/MultiplayerHoeingAssistant"], backupExcludedDirs: true, progress: null);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(2, result.ExcludedFiles);
+        Assert.Equal("USER-DATA", Read(_bgiDir, "User", "config.json"));
+        Assert.Equal("OLD-ASSISTANT", Read(_bgiDir, "Tool", "MultiplayerHoeingAssistant", "assistant.dll"));
+        Assert.NotNull(result.BackupDir);
+        Assert.Equal("USER-DATA", Read(result.BackupDir!, "User", "config.json"));
+        Assert.Equal("NEW-BGI-EXE", Read(_bgiDir, "BetterGI.exe"));
+    }
+
+    [Fact]
+    public void Apply_MixedRootPackage_RejectedBeforeAnyExtraction()
+    {
+        // 部分条目在包根、其余集中在一个顶层目录下：无法判定是否为包裹目录，整体拒绝且目标不被触碰
+        var result = BgiPackageUpdateService.Apply(FixtureMixedRootPath, _bgiDir, ["User"], backupExcludedDirs: true, progress: null);
+
+        Assert.False(result.Success);
+        Assert.Contains("结构异常", result.Error);
+        Assert.Equal("OLD-BGI-EXE", Read(_bgiDir, "BetterGI.exe"));
+        Assert.False(Directory.Exists(Path.Combine(_bgiDir, "BetterGI")));      // 未落任何盘
+        Assert.False(Directory.Exists(Path.Combine(_bgiDir, "_update_backup"))); // 拒绝发生在备份之前
     }
 }

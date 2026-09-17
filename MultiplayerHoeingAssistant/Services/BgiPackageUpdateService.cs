@@ -78,6 +78,9 @@ public sealed record BgiUpdateApplyResult(
 ///      仍失败则跳过并记录——助手旧映像继续运行，新文件重启助手后生效。
 ///   ⑥ 7z 固实包单遍解码：逐条目 OpenEntryStream 会从固实块头重解（O(n²)，526MB 实包需数小时），
 ///      经反射取共享解码流按序读出（实包 3568 条目 34s）；反射失效自动回退逐条目慢路径。
+///   ⑦ 公共根剥离：Nexus 实包所有条目都在顶层 BetterGI/ 下，不剥根会把整包解压成
+///      目标目录\BetterGI\...（2026-09-17 实跑踩坑）；全部条目共享同一顶层目录时剥掉该层，
+///      部分条目在包根、其余集中在一个顶层目录下的混合根结构无法安全判定，整体拒绝解压。
 /// 调用方职责：解压前确保 BGI 已退出（弹窗内经用户确认后关闭），本类不杀进程。
 /// </summary>
 public static class BgiPackageUpdateService
@@ -166,23 +169,29 @@ public static class BgiPackageUpdateService
         // 备份目录硬保护：_update_backup 下的包内条目一律跳过，绝不覆盖已有备份（与用户排除配置无关）
         var extractExcludes = excludes.Append(BackupRootDirName).ToArray();
         string? backupDir = null;
-        try
-        {
-            if (excludes.Count > 0 && backupExcludedDirs)
-                backupDir = BackupExcludedDirs(targetRoot, excludes, progress);
-        }
-        catch (Exception ex)
-        {
-            // 备份失败 = 安全网缺失，宁可中止也不覆盖
-            return BgiUpdateApplyResult.Fail($"更新前备份排除目录失败（已中止，未做任何覆盖）：{ex.Message}");
-        }
-
         int extracted = 0, renamedAside = 0, excluded = 0;
         var skipped = new List<string>();
         try
         {
             using var archive = SevenZipArchive.Open(archivePath);
             var entries = archive.Entries.Where(e => !e.IsDirectory).ToList();
+            // 先剥公共根（实包条目都在顶层 BetterGI/ 下），排除匹配与落盘路径都按剥根后的相对路径
+            var stripRoot = DetectCommonRoot(entries, out var rootError);
+            if (rootError is not null) return BgiUpdateApplyResult.Fail(rootError);
+
+            if (excludes.Count > 0 && backupExcludedDirs)
+            {
+                try
+                {
+                    backupDir = BackupExcludedDirs(targetRoot, excludes, progress);
+                }
+                catch (Exception ex)
+                {
+                    // 备份失败 = 安全网缺失，宁可中止也不覆盖
+                    return BgiUpdateApplyResult.Fail($"更新前备份排除目录失败（已中止，未做任何覆盖）：{ex.Message}");
+                }
+            }
+
             int total = entries.Count, done = 0;
             // 固实单遍解码器（可能为 null = 反射失效，回退逐条目慢路径）
             using var solid = SolidSevenZipReader.TryCreate(entries.FirstOrDefault());
@@ -196,6 +205,17 @@ public static class BgiPackageUpdateService
                     skipped.Add($"{entry.Key}（条目路径不安全，已跳过）");
                     DrainEntry(solid, entry);
                     continue;
+                }
+                if (stripRoot is not null)
+                {
+                    var rootedPrefix = stripRoot + Path.DirectorySeparatorChar;
+                    if (!rel.StartsWith(rootedPrefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        skipped.Add($"{entry.Key}（不在公共根 {stripRoot}/ 下，已跳过）");
+                        DrainEntry(solid, entry);
+                        continue;
+                    }
+                    rel = rel[rootedPrefix.Length..];
                 }
                 var fullTarget = Path.GetFullPath(Path.Combine(targetRoot, rel));
                 if (!fullTarget.StartsWith(targetRoot, StringComparison.OrdinalIgnoreCase))
@@ -249,6 +269,44 @@ public static class BgiPackageUpdateService
             return new BgiUpdateApplyResult(false, extracted, renamedAside, excluded, skipped, backupDir, $"解压失败：{ex.Message}");
         }
         return new BgiUpdateApplyResult(true, extracted, renamedAside, excluded, skipped, backupDir, null);
+    }
+
+    /// <summary>
+    /// 检测包内文件条目的公共顶层目录（Nexus 实包所有条目都在顶层 BetterGI/ 下，解压时需剥掉该层，
+    /// 否则整包落成 目标目录\BetterGI\...）。返回要剥离的顶层目录名；
+    /// null = 条目已在包根上（无包裹目录），原样解压；
+    /// error 非空 = 部分条目在包根、其余集中在一个顶层目录下的混合根，无法安全判定是否为包裹目录，整体拒绝。
+    /// 路径不安全的条目主循环里本就要跳过，不参与判定。
+    /// </summary>
+    private static string? DetectCommonRoot(IReadOnlyList<IArchiveEntry> entries, out string? error)
+    {
+        error = null;
+        bool rootLevel = false;
+        string? singleTop = null;
+        bool topsDiffer = false;
+        foreach (var entry in entries)
+        {
+            if (NormalizeEntryPath(entry.Key ?? "") is not { } rel) continue;
+            var sep = rel.IndexOf(Path.DirectorySeparatorChar);
+            if (sep < 0)
+            {
+                rootLevel = true;
+            }
+            else if (singleTop is null)
+            {
+                singleTop = rel[..sep];
+            }
+            else if (!string.Equals(singleTop, rel[..sep], StringComparison.OrdinalIgnoreCase))
+            {
+                topsDiffer = true;
+            }
+        }
+        if (rootLevel && singleTop is not null && !topsDiffer)
+        {
+            error = $"安装包结构异常：部分条目在包根上，其余条目都在顶层目录 {singleTop}/ 下，无法判定该目录是否为包裹目录，已拒绝解压（请确认安装包完整性）";
+            return null;
+        }
+        return rootLevel || topsDiffer || singleTop is null ? null : singleTop;
     }
 
     /// <summary>固实单遍模式下，被跳过/排除的条目也要把数据从共享解码流里读掉，保持流与条目同步。</summary>
