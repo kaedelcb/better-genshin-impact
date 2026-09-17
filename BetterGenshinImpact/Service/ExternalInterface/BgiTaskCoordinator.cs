@@ -106,6 +106,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
         public required Guid TaskHandle { get; init; }
         public required TaskSubmission Submission { get; init; }
         public required CancellationTokenSource Cts { get; init; }
+        public bool OwnedCancellationRequested { get; set; }
         public DateTime EnqueuedAtUtc { get; init; } = DateTime.UtcNow;
 
         /// <summary>终态事件（queueCancelled/failed）只发一次：取消路径与 pump 谁先观察到取消谁发。</summary>
@@ -402,7 +403,11 @@ internal sealed class BgiTaskCoordinator : IDisposable
             }
             else if (_current is { } current && current.TaskHandle == taskHandle)
             {
-                if (ownedOnly) current.Cts.Cancel();
+                if (ownedOnly)
+                {
+                    current.OwnedCancellationRequested = true;
+                    current.Cts.Cancel();
+                }
                 return CancelOutcome.StopRequestedRunning;
             }
             else
@@ -611,7 +616,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
             if (item.TryMarkTerminalEventPublished())
             {
                 // [A6] 抢占超界是可重试瞬态（reconcile 按 ADR-2026-09-16 分类重试），错误码独立于通用失败
-                var errorCode = item.Cts.IsCancellationRequested ? "task_cancelled" : exception is BetterGenshinImpact.Service.Execution.PreemptTimeoutException
+                var errorCode = item.OwnedCancellationRequested ? "task_cancelled" : exception is BetterGenshinImpact.Service.Execution.PreemptTimeoutException
                     ? "preempt_timeout"
                     : exception is BetterGenshinImpact.Service.Execution.HoeingIncompleteException ? "hoeing_incomplete" : "task_start_failed";
                 RecordTerminal(item.TaskHandle, "failed", errorCode: errorCode, message: exception.GetBaseException().Message);
