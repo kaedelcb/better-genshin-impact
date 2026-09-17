@@ -260,6 +260,12 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>关闭设置页面（返回成员列表主页）。</summary>
     public RelayCommand CloseSettingsCommand => new(_ => IsShowingSettings = false);
 
+    /// <summary>一键导出全部助手设置（设置页·配置迁移卡片）。</summary>
+    public RelayCommand ExportAllSettingsCommand => new(_ => ExportAllSettings());
+
+    /// <summary>一键导入全部助手设置（设置页·配置迁移卡片）。</summary>
+    public RelayCommand ImportAllSettingsCommand => new(_ => ImportAllSettings());
+
     /// <summary>[P1] 显式构造函数：创建上线意图状态机（构造内恢复持久化的本地 generation）。
     /// 不能用字段内联初始化——C# 字段初始化器不能引用实例方法 AddLog（CS0236）。</summary>
     public MainViewModel()
@@ -5202,6 +5208,83 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     /// <summary>当前配置（供 XAML 绑定启动策略开关/下拉选择）。</summary>
     public AssistConfig? Config => _config;
+
+    /// <summary>设置迁移服务（打包/解包 %APPDATA%/NexusBGI 全部设置 JSON）。</summary>
+    private readonly ConfigTransferService _configTransfer = new();
+
+    /// <summary>一键导出全部助手设置为 zip（设置迁移）。</summary>
+    private void ExportAllSettings()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "导出助手设置",
+            Filter = "NexusBGI 助手设置包 (*.zip)|*.zip",
+            FileName = $"NexusBGI助手设置_{DateTime.Now:yyyyMMdd_HHmmss}.zip",
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        var result = _configTransfer.Export(dialog.FileName);
+        MessageBox.Show(result.Message, result.Success ? "导出成功" : "导出失败",
+            MessageBoxButton.OK, result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+    }
+
+    /// <summary>一键导入全部助手设置（覆盖前自动备份；主配置立即重载进内存，多数设置建议重启生效）。</summary>
+    private void ImportAllSettings()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "导入助手设置",
+            Filter = "NexusBGI 助手设置包 (*.zip)|*.zip",
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        if (MessageBox.Show("导入将覆盖本机全部助手设置（覆盖前自动备份）。\n确定继续吗？",
+                "导入助手设置", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+
+        var result = _configTransfer.Import(dialog.FileName);
+        if (!result.Success)
+        {
+            MessageBox.Show(result.Message, "导入失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        // 导入的主配置立即重载进内存并刷新设置页绑定：防止导入后界面上的旧内存态被
+        // 某个开关保存动作写回磁盘，把导入值覆盖掉
+        _config = _configManager?.Load();
+        RefreshSetupBindings();
+        if (_config != null)
+            RoomCode = AssistConfigManager.GenerateControlRoomCode(_config.TeamUids);
+
+        if (MessageBox.Show(result.Message + "\n\n多数设置需要重启助手才能完全生效，现在重启吗？",
+                "导入成功", MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
+        {
+            RestartAssistant();
+        }
+    }
+
+    /// <summary>退出本进程并延时拉起新实例：单实例互斥体按进程存在，必须等旧进程退出后新进程才能启动成功。</summary>
+    private static void RestartAssistant()
+    {
+        var exe = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exe))
+        {
+            MessageBox.Show("无法定位助手程序，请手动重新打开。");
+            return;
+        }
+        try
+        {
+            // cmd 延时约 1 秒再启动，等旧进程退出释放单实例互斥体
+            Process.Start(new ProcessStartInfo("cmd.exe",
+                $"/c ping -n 3 -w 500 127.0.0.1 > nul & start \"\" \"{exe}\"")
+            { CreateNoWindow = true, UseShellExecute = false });
+        }
+        catch
+        {
+            MessageBox.Show("自动重启失败，请手动重新打开助手。");
+        }
+        Application.Current.Shutdown();
+    }
 
     /// <summary>总开关·有效单机模式（离线优先原则）：手动单机开关 或 服务器地址留空（空地址必定是单机模式）。
     /// 单机时完全不发起服务器连接；本地功能（槲寄生/本机日志/本机 IPC/跨会话只读查询）不受影响。</summary>

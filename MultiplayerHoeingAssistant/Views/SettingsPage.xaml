@@ -507,6 +507,28 @@
                     </Expander>
             </Border>
 
+            <!-- ========== 卡片：配置迁移（一键导出/导入全部设置，跨机器搬家用） ========== -->
+            <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,16">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="配置迁移" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"/>
+                        <TextBlock Text="一键导出/导入全部助手设置：房间、启动策略、启动流程方案、嘟嘟可、监控规则、桌宠、成员配置；导入自动备份原设置"
+                                   FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0" TextWrapping="Wrap"
+                                   MaxWidth="400" HorizontalAlignment="Left"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="导出全部设置" Style="{DynamicResource BtnGold}" Margin="0,0,8,0"
+                                Command="{Binding ExportAllSettingsCommand}"/>
+                        <Button Content="导入全部设置" Style="{DynamicResource BtnGold}"
+                                Command="{Binding ImportAllSettingsCommand}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
             <!-- ========== 卡片：关于 ========== -->
             <Border Style="{DynamicResource QuestCard}">
                 <StackPanel>
