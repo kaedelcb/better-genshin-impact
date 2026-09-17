@@ -19,17 +19,13 @@
          右键菜单与托盘/桌宠同款三选项（穿透模式下桌宠点不到，面板是另一个可见操作面）。 -->
 
     <Window.ContextMenu>
-        <!-- ContextMenu 不在可视树内，经 PlacementTarget 接回窗口 DataContext（PetViewModel） -->
-        <ContextMenu Background="#F0201C30" BorderBrush="#80D4AF37" BorderThickness="1" Padding="4"
-                     DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-            <MenuItem Header="显示奥黛塔" IsCheckable="True" IsChecked="{Binding Enabled, Mode=TwoWay}"
-                      Foreground="#F2E8D5" FontSize="13" Padding="10,6"/>
-            <MenuItem Header="鼠标穿透（请从托盘恢复）" IsCheckable="True" IsChecked="{Binding ClickThrough, Mode=TwoWay}"
-                      Foreground="#F2E8D5" FontSize="13" Padding="10,6"/>
-            <MenuItem Header="任务状态面板" IsCheckable="True" IsChecked="{Binding PanelEnabled, Mode=TwoWay}"
-                      Foreground="#F2E8D5" FontSize="13" Padding="10,6"/>
-            <MenuItem Header="极简模式（只显示任务与进度）" IsCheckable="True" IsChecked="{Binding PanelMinimal, Mode=TwoWay}"
-                      Foreground="#F2E8D5" FontSize="13" Padding="10,6"/>
+        <!-- ContextMenu 不在可视树内，经 PlacementTarget 接回窗口 DataContext（PetViewModel）；
+             外观由 App.xaml 的应用级 ContextMenu/MenuItem 样式统一提供，此处不再内联配色 -->
+        <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+            <MenuItem Header="显示奥黛塔" IsCheckable="True" IsChecked="{Binding Enabled, Mode=TwoWay}"/>
+            <MenuItem Header="鼠标穿透（请从托盘恢复）" IsCheckable="True" IsChecked="{Binding ClickThrough, Mode=TwoWay}"/>
+            <MenuItem Header="任务状态面板" IsCheckable="True" IsChecked="{Binding PanelEnabled, Mode=TwoWay}"/>
+            <MenuItem Header="极简模式（只显示任务与进度）" IsCheckable="True" IsChecked="{Binding PanelMinimal, Mode=TwoWay}"/>
         </ContextMenu>
     </Window.ContextMenu>
 

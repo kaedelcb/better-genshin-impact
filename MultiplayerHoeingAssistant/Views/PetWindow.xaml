@@ -20,19 +20,10 @@
     <!-- 奥黛塔桌宠 v2：帧动画播放器（双层交叉淡化，见 PetWindow.xaml.cs）。
          alpha=0 像素天然点击穿透；右键菜单在“鼠标穿透”开启后随整窗穿透自动失效。 -->
 
+    <!-- 右键菜单的暗色鎏金外观（含勾选栏、行内高亮、子菜单弹出层）由 App.xaml 的
+         Application.Resources 统一提供，桌宠 / 任务状态面板 / 托盘三处共用一套模板。 -->
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
-        <Style TargetType="ContextMenu">
-            <Setter Property="Background" Value="#F0201C30"/>
-            <Setter Property="BorderBrush" Value="#80D4AF37"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="4"/>
-        </Style>
-        <Style TargetType="MenuItem">
-            <Setter Property="Foreground" Value="#F2E8D5"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Padding" Value="10,6"/>
-        </Style>
     </Window.Resources>
 
     <Window.ContextMenu>

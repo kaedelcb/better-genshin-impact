@@ -274,5 +274,155 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- ========== 统一暗色鎏金右键菜单（桌宠 / 任务状态面板 / 托盘三处共用） ==========
+             为什么必须连 ContextMenu 模板一起接管：Aero2 的 ContextMenu 模板在滚动内容层之上
+             还叠了一组系统菜单装饰矩形——整幅底色 OpaqueRect、图标勾选栏 28 宽浅色矩形
+             （实测 Fill=#FFF1F1F1）、上下 1px 边线（#FFE2E3E3 / #FFFFFFFF）。
+             它们画在 ContextMenu.Background 之上，MenuItem.Background=Transparent 覆盖不到，
+             运行期就会看到菜单左侧一条白色勾选栏（用户截图实测像素 #F1F1F1）。
+             因此只改 MenuItem 模板无效，必须同时提供 ContextMenu 模板。 -->
+        <ControlTemplate x:Key="AssistantContextMenuTemplate" TargetType="ContextMenu">
+            <Border Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="8"
+                    Padding="{TemplateBinding Padding}"
+                    SnapsToDevicePixels="True">
+                <!-- 保留 ScrollViewer：菜单异常变长时仍可滚动；这些菜单只有几项，滚动条不会常驻 -->
+                <ScrollViewer Focusable="False"
+                              CanContentScroll="True"
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalScrollBarVisibility="Auto">
+                    <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                </ScrollViewer>
+            </Border>
+        </ControlTemplate>
+
+        <Style TargetType="ContextMenu">
+            <!-- 与 GoldComboBox 下拉弹出层同色系：不透明深紫底 + 金色发丝描边 + 圆角
+                 （ContextMenu 内部 Popup 的 AllowsTransparency 实测为 True，圆角不会露白角） -->
+            <Setter Property="Background" Value="#FF232048"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource GoldLine}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="4"/>
+            <Setter Property="Template" Value="{DynamicResource AssistantContextMenuTemplate}"/>
+        </Style>
+
+        <!-- 菜单项模板：接管勾选列（金色对勾）、行内高亮、子菜单箭头与子菜单弹出层暗底。
+             勾选列改为定宽 20，勾选项与普通项的文字左缘始终对齐，不再依赖系统 SharedSizeGroup。 -->
+        <ControlTemplate x:Key="AssistantMenuItemTemplate" TargetType="MenuItem">
+            <Grid>
+                <Border x:Name="ItemBorder"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="5"
+                        Padding="{TemplateBinding Padding}"
+                        SnapsToDevicePixels="True">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="20"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Path x:Name="CheckMark"
+                              Grid.Column="0"
+                              Data="M 0,5 L 3.6,8.6 L 10,1.6"
+                              Stroke="{DynamicResource Gold}"
+                              StrokeThickness="1.8"
+                              StrokeStartLineCap="Round"
+                              StrokeEndLineCap="Round"
+                              StrokeLineJoin="Round"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Visibility="Collapsed"/>
+                        <ContentPresenter Grid.Column="1"
+                                          ContentSource="Header"
+                                          RecognizesAccessKey="True"
+                                          Margin="8,0,0,0"
+                                          VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="2"
+                                   Text="{TemplateBinding InputGestureText}"
+                                   Margin="12,0,0,0"
+                                   Opacity="0.6"
+                                   VerticalAlignment="Center"/>
+                        <Path x:Name="SubmenuArrow"
+                              Grid.Column="3"
+                              Data="M 0,0 L 4,4 L 0,8"
+                              Stroke="{DynamicResource Gold}"
+                              StrokeThickness="1.5"
+                              StrokeStartLineCap="Round"
+                              StrokeEndLineCap="Round"
+                              StrokeLineJoin="Round"
+                              Margin="10,0,2,0"
+                              VerticalAlignment="Center"
+                              Visibility="Collapsed"/>
+                    </Grid>
+                </Border>
+                <Popup x:Name="PART_Popup"
+                       AllowsTransparency="True"
+                       Focusable="False"
+                       IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                       Placement="Right"
+                       HorizontalOffset="-2"
+                       VerticalOffset="-3"
+                       PopupAnimation="Fade">
+                    <Border Background="#FF232048"
+                            BorderBrush="{DynamicResource GoldLine}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="4"
+                            SnapsToDevicePixels="True">
+                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                    </Border>
+                </Popup>
+            </Grid>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+                    <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
+                </Trigger>
+                <Trigger Property="HasItems" Value="True">
+                    <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Visible"/>
+                </Trigger>
+                <Trigger Property="IsHighlighted" Value="True">
+                    <Setter TargetName="ItemBorder" Property="Background" Value="#40D4AF37"/>
+                    <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#66D4AF37"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="#809690A8"/>
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <Style TargetType="MenuItem">
+            <Setter Property="Foreground" Value="#F2E8D5"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template" Value="{DynamicResource AssistantMenuItemTemplate}"/>
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="#809690A8"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- 分隔线：金色发丝线，替代系统菜单的浅灰 1px 线（实测 #D7D7D7）。
+             菜单里的 Separator 由 MenuBase 通过 MenuItem.SeparatorStyleKey 取样式，
+             隐式 Style TargetType=Separator 不生效，必须按该键注册。 -->
+        <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Separator">
+                        <Border Height="1" Margin="8,4" Background="#33D4AF37" SnapsToDevicePixels="True"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Application.Resources>
 </Application>
