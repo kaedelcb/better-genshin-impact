@@ -121,6 +121,8 @@ public sealed class ExecutionScope : IDisposable
                     OneDragonTaskIndex = _dragonIndex, SubTaskGroupName = snapshot.TaskType == "group" ? snapshot.GroupName : null }
                 : snapshot;
             Checkpoint = Checkpoint with { RootRunId = RunId, AttemptId = Descriptor.JobId,
+                NodeId = Descriptor.NodeId, Iteration = Descriptor.Iteration,
+                TaskId = Descriptor.TaskId, ConfigRevision = Descriptor.ConfigRevision,
                 ConfigurationRevisions = new System.Collections.Generic.Dictionary<string, string>(_configurationRevisions) };
         }
     }

@@ -17,7 +17,7 @@ namespace BetterGenshinImpact.Service.Execution;
 /// 尚未接线：执行泵（A2.4 整编 BgiTaskCoordinator）、事件发布（A3）、心跳（A3）。
 /// 各入口收敛为"提交作业"是 A2 各切片的事，本类不感知 TaskSemaphore/执行体。
 /// </summary>
-public sealed class JobRegistry
+public sealed partial class JobRegistry
 {
     private static readonly Lazy<JobRegistry> _lazy = new(() =>
     {
@@ -99,7 +99,7 @@ public sealed class JobRegistry
     /// 仅影响该竞态下的去重精度，不影响执行正确性）。
     /// </summary>
     public JobSubmitResult Submit(JobKind kind, string name, JobSource source, int? generation = null,
-        string? idempotencyKey = null, Guid? parentJobId = null, Guid? jobId = null)
+        string? idempotencyKey = null, Guid? parentJobId = null, Guid? jobId = null, JobExecutionIdentity? identity = null)
     {
         BgiJob? created = null;
         JobSubmitResult result;
@@ -125,7 +125,10 @@ public sealed class JobRegistry
                 }
             }
 
-            created = new BgiJob(kind, name, source, generation, idempotencyKey, parentJobId, jobId);
+            if (identity == null && parentJobId is { } parentId && _jobs.TryGetValue(parentId, out var parent)
+                && parent.WorkflowRunId is { } run && parent.NodeId is { } node && parent.Iteration is { } iteration)
+                identity = new(run, node, iteration, parent.TaskId, parent.ConfigRevision);
+            created = new BgiJob(kind, name, source, generation, idempotencyKey, parentJobId, jobId, identity);
             _jobs[created.JobId] = created;
             if (!string.IsNullOrEmpty(idempotencyKey))
             {

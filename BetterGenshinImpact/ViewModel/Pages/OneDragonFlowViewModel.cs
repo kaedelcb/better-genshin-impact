@@ -2292,7 +2292,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         var registry = BetterGenshinImpact.Service.Execution.JobRegistry.Instance;
         var parent = descriptor.JobId is { } id ? registry.Query(id) : null;
         parent ??= registry.Submit(descriptor.Kind, descriptor.Name, descriptor.Source,
-            descriptor.Generation, descriptor.IdempotencyKey, jobId: descriptor.JobId).Job;
+            descriptor.Generation, descriptor.IdempotencyKey, jobId: descriptor.JobId, identity: descriptor.ExecutionIdentity).Job;
         _currentDragonJobId = parent.JobId;
         registry.TryMarkRunning(parent.JobId);
         scope.SetDragonNode(0);
@@ -2357,6 +2357,13 @@ public partial class OneDragonFlowViewModel : ViewModel
             InitConfigList();//初始化配置，保证当前选择的配置是最新的
         }
         var executionConfig = JsonConvert.DeserializeObject<OneDragonFlowConfig>(JsonConvert.SerializeObject(SelectedConfig))!;
+        if (scope.Descriptor.ConfigRevision is { } requiredRevision)
+        {
+            var snapshot = await BetterGenshinImpact.Service.Execution.TaskConfigurationContract.Default.ReadAsync(scope.Descriptor.Name, true);
+            if (snapshot.Revision != requiredRevision) throw new InvalidOperationException("configuration_changed");
+            executionConfig = snapshot.Document.ToObject<OneDragonFlowConfig>() ?? throw new InvalidOperationException("invalid_configuration");
+            executionConfig.Name = scope.Descriptor.Name;
+        }
         if (executionConfig.Name != scope.Descriptor.Name)
             throw new InvalidOperationException("执行配置在起步前已改变");
         _runningConfig = executionConfig;
@@ -2371,6 +2378,15 @@ public partial class OneDragonFlowViewModel : ViewModel
         ReadScriptGroup();
 
         var taskListCopy = TaskList.Select(t => new OneDragonTaskItem(t.Index, t.IsEnabled, t.Name, t.IsNextTask)).ToList();//避免执行过程中修改TaskList
+        if (scope.Descriptor.ConfigRevision != null)
+            taskListCopy = executionConfig.TaskEnabledList.Select(p => new OneDragonTaskItem(p.Key, p.Value.Item1, p.Value.Item2, false)).ToList();
+        if (scope.Descriptor.TaskId is { } singleId)
+        {
+            taskListCopy = taskListCopy.Where(t => "legacy:" + t.Index.ToString(System.Globalization.CultureInfo.InvariantCulture) == singleId).ToList();
+            if (taskListCopy.Count != 1 || !taskListCopy[0].IsEnabled) throw new InvalidOperationException("task_not_found_or_disabled");
+            executionConfig.NextTaskIndex = 0;
+            executionConfig.CompletionAction = ""; // A leaf must never execute whole-plan shutdown/close actions.
+        }
         if (!taskListCopy.Any(t => t.IsEnabled))
             throw new InvalidOperationException("no_work: 一条龙没有启用的任务");
         

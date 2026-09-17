@@ -23,6 +23,8 @@ internal static class ExternalInterfaceCommandPlane
         CancellationToken cancellationToken)
         => request.Operation switch
         {
+            ExternalInterfaceOperations.ConfigDescribe or ExternalInterfaceOperations.ConfigApplyTaskState =>
+                await ExternalInterfaceConfigurationPlane.DispatchAsync(request),
             ExternalInterfaceOperations.TaskStart =>
                 await DispatchTaskStartAsync(handler, connection, request),
             ExternalInterfaceOperations.TaskStop =>
@@ -64,6 +66,8 @@ internal static class ExternalInterfaceCommandPlane
         InstanceIpcEnvelope request)
     {
         // 显式 "key":null 归一化为 C# null（否则 Name 被 "" 短路、幂等去重误判，见 GetStringOrNull 注释）
+        if (Execution.ExecutionRequestContract.Validate(request) is { } invalid) return invalid;
+        var identity = Execution.ExecutionRequestContract.ReadIdentity(request.Data);
         var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
         var configName = InstanceIpcProtocol.GetStringOrNull(request.Data, "configName");
         var startFromIndex = request.Data?["startFromIndex"]?.ToObject<int>() ?? 0;
@@ -103,10 +107,13 @@ internal static class ExternalInterfaceCommandPlane
             startFromIndex,
             // [A2.4] Executor 首参 = taskHandle（注册表 jobId 别名），透传执行段供漏斗认领既有 Queued 作业
             (handle, token) => handler.ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, batchGroupNames, generation, handle, preempt,
-                InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket"), token))
+                InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket"), token,
+                workflowRunId: identity?.WorkflowRunId, executionIdentity: identity,
+                executionRequest: request))
         {
             Preempt = preempt,
             IdempotencyKey = InstanceIpcProtocol.GetStringOrNull(request.Data, "idempotencyKey"),
+            Identity = identity,
         };
 
         var result = BgiTaskCoordinator.Instance.Submit(submission);

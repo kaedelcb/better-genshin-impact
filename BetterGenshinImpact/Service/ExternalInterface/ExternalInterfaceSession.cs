@@ -75,40 +75,26 @@ internal sealed class ExternalInterfaceSession
 
             // §3.5：写操作可携带 data.idempotencyKey；缺省按 requestId 自然幂等（同一信封重发去重）。
             // [A3.4] 判定在注册表（进程级，跨连接存活），TTL 30min（JobRegistry.IdempotencyWindowTtl）。
-            string? windowKey = null;
             if (ExternalInterfaceOperations.IsWriteOperation(request.Operation))
             {
+                // Expiry prevents a NEW execution, not retrieval of an existing outcome.
+                if (Execution.ExecutionRequestContract.Validate(request, allowExpiredReplay: true) is { } rejection) return rejection;
                 var idempotencyKey = request.Data?["idempotencyKey"]?.ToString();
-                windowKey = idempotencyKey is { Length: > 0 }
+                var windowKey = idempotencyKey is { Length: > 0 }
                     ? $"key:{idempotencyKey}"
                     : $"rid:{request.RequestId}";
-
-                if (BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryReplayIdempotent(
-                        windowKey, request.RequestId, out var replay))
-                {
-                    _logger.LogInformation(
-                        "[IDEMPOTENT_REPLAY] {Operation} key={Key} 命中幂等窗口，重放缓存响应，不再执行",
-                        request.Operation,
-                        windowKey);
-                    return replay!;
-                }
+                return await Execution.JobRegistry.Instance.ExecuteRequestOnceAsync(windowKey,
+                    Execution.ExecutionRequestContract.Fingerprint(request), request,
+                    async () => Execution.ExecutionRequestContract.Validate(request)
+                        ?? await DispatchToPlaneAsync(handler, request, CancellationToken.None), cancellationToken).ConfigureAwait(false);
             }
-
-            var response = await DispatchToPlaneAsync(handler, request, cancellationToken).ConfigureAwait(false);
-
-            // 只缓存成功响应：失败多为瞬态（如 task_already_running），重放失败会挡住客户端的合法重试。
-            if (windowKey is not null && response.Success == true)
-            {
-                BetterGenshinImpact.Service.Execution.JobRegistry.Instance.CacheIdempotentResponse(windowKey, response);
-            }
-
-            return response;
+            return await DispatchToPlaneAsync(handler, request, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is ArgumentException
                                           or InvalidOperationException
                                           or IOException
                                           or TimeoutException
-                                          or JsonException)
+                                          or JsonException or FormatException or OverflowException)
         {
             _logger.LogWarning(exception, "处理 ext.* 请求失败：{Operation}", request.Operation);
             return InstanceIpcEnvelope.Failure(

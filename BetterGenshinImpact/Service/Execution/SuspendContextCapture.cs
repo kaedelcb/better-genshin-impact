@@ -28,7 +28,8 @@ internal static class SuspendContextCapture
         bool IsOnlineSignalTask,
         Guid? RootRunId = null,
         Guid? AttemptId = null,
-        System.Collections.Generic.Dictionary<string, string>? ConfigurationRevisions = null);
+        System.Collections.Generic.Dictionary<string, string>? ConfigurationRevisions = null,
+        string? NodeId = null, int? Iteration = null, string? TaskId = null, string? ConfigRevision = null);
 
     /// <summary>
     /// 判定"当前在跑的项目"是否为「联机锄地上线」信号任务（原 InstanceRequestHandler 步骤 2.6 判定）。
@@ -71,6 +72,8 @@ internal static class SuspendContextCapture
         {
             RootRunId = snapshot.RootRunId,
             AttemptId = snapshot.AttemptId,
+            NodeId = snapshot.NodeId, Iteration = snapshot.Iteration,
+            TaskId = snapshot.TaskId, ConfigRevision = snapshot.ConfigRevision,
             ConfigurationRevisions = snapshot.ConfigurationRevisions,
             TaskType = snapshot.TaskType,
             GroupName = snapshot.GroupName ?? "",

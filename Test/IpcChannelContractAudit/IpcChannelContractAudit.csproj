@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- No product ProjectReference, deployment target, WPF or game integration.
+       Private GUID-named fixture pipe only; never discover/connect to a product pipe. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Reference Include="Newtonsoft.Json"><HintPath>$(MSBuildSDKsPath)/../Newtonsoft.Json.dll</HintPath></Reference>
+    <Compile Include="Program.cs" />
+    <Compile Include="BoundaryStubs.cs" />
+    <Compile Include="ContractRegression.cs" />
+    <Compile Include="../../MultiplayerHoeingAssistant/Services/BgiExternalClient.cs" Link="Production/BgiExternalClient.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/Instance/InstanceIpcProtocol.cs" Link="Production/InstanceIpcProtocol.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/Instance/InstancePipeFactory.cs" Link="Production/InstancePipeFactory.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceProtocol.cs" Link="Production/ExternalInterfaceProtocol.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceSession.cs" Link="Production/ExternalInterfaceSession.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceCommandPlane.cs" Link="Production/ExternalInterfaceCommandPlane.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceQueryPlane.cs" Link="Production/ExternalInterfaceQueryPlane.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/ExternalInterface/BgiTaskCoordinator.cs" Link="Production/BgiTaskCoordinator.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/Execution/BgiJob.cs" Link="Production/BgiJob.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/Execution/JobRegistry.cs" Link="Production/JobRegistry.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/Execution/JobRegistry.Requests.cs" Link="Production/JobRegistry.Requests.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/Execution/ExecutionRequestContract.cs" Link="Production/ExecutionRequestContract.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/Execution/TaskConfigurationContract.cs" Link="Production/TaskConfigurationContract.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/ExternalInterface/ExternalInterfaceConfigurationPlane.cs" Link="Production/ExternalInterfaceConfigurationPlane.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/Execution/PreemptionGate.cs" Link="Production/PreemptionGate.cs" />
+  </ItemGroup>
+</Project>

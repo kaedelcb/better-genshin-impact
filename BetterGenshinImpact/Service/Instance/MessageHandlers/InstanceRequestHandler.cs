@@ -595,6 +595,7 @@ internal sealed class InstanceRequestHandler
     {
         try
         {
+            if (ExecutionRequestContract.Validate(request) is { } rejected) return rejected;
             // 显式 "key":null 归一化为 C# null（否则 taskName 被 "" 短路、幂等去重误判，见 GetStringOrNull 注释）
             var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
             var configName = InstanceIpcProtocol.GetStringOrNull(request.Data, "configName");
@@ -642,7 +643,8 @@ internal sealed class InstanceRequestHandler
             // [切片7] 执行段已抽为 ExecuteTaskStartCoreAsync：v2 handler 与 BgiTaskCoordinator
             // 共用单一事实源，行为逐字节等价。返回 true = 配置组在 RunMulti 执行中被取消（F11 停止等）。
             var configGroupCancelled = await ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, batchGroupNames, generation,
-                takeoverTicket: InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket"));
+                takeoverTicket: InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket"),
+                executionRequest: request, executionIdentity: ExecutionRequestContract.ReadIdentity(request.Data));
 
             if (configGroupCancelled)
             {
@@ -671,8 +673,12 @@ internal sealed class InstanceRequestHandler
         IReadOnlyList<string>? batchGroupNames = null, int generation = 0, Guid? jobId = null,
         bool preempt = false, string? takeoverTicket = null,
         CancellationToken cancellationToken = default, Action? onAdmitted = null,
-        JobSource source = JobSource.V2, Guid? workflowRunId = null)
+        JobSource source = JobSource.V2, Guid? workflowRunId = null,
+        JobExecutionIdentity? executionIdentity = null, InstanceIpcEnvelope? executionRequest = null)
     {
+        if (executionRequest != null && ExecutionRequestContract.Validate(executionRequest) is { } rejected)
+            throw new InvalidOperationException(rejected.ErrorCode + ": " + rejected.ErrorMessage);
+        workflowRunId ??= executionIdentity?.WorkflowRunId;
         cancellationToken.ThrowIfCancellationRequested();
         var stopVersion = ExecutionScope.StopVersionNow;
         if (!PreemptionGate.Authorize(takeoverTicket))
@@ -689,6 +695,8 @@ internal sealed class InstanceRequestHandler
                 cancellationToken.ThrowIfCancellationRequested();
                 if (stopVersion != ExecutionScope.StopVersionNow) throw new OperationCanceledException("启动前已被用户停止");
                 if (ExecutionScope.HasActive) throw new InvalidOperationException("task_busy");
+                if (executionRequest != null && ExecutionRequestContract.Validate(executionRequest) is { } expired)
+                    throw new InvalidOperationException(expired.ErrorCode + ": " + expired.ErrorMessage);
                 var descriptor = new JobDescriptor(string.IsNullOrEmpty(groupName) ? JobKind.OneDragon : JobKind.Group,
                     groupName ?? configName ?? throw new ArgumentException("缺少任务名"),
                     jobId.HasValue && source != JobSource.Resume ? JobSource.Ext : source,
@@ -698,11 +706,19 @@ internal sealed class InstanceRequestHandler
                         admittedRoot = ExecutionScope.Current!;
                         cancellationToken.ThrowIfCancellationRequested();
                         onAdmitted?.Invoke();
-                    }, ResumeIndex: startFromIndex > 0 ? startFromIndex : null, WorkflowRunId: workflowRunId);
+                    }, ResumeIndex: startFromIndex > 0 ? startFromIndex : null, WorkflowRunId: workflowRunId,
+                    NodeId: executionIdentity?.NodeId, Iteration: executionIdentity?.Iteration,
+                    TaskId: InstanceIpcProtocol.GetStringOrNull(executionRequest?.Data, "taskId"),
+                    ConfigRevision: InstanceIpcProtocol.GetStringOrNull(executionRequest?.Data, "expectedConfigRevision"));
+                var prepared = executionRequest == null ? (Snapshot: (TaskConfigurationContract.Snapshot?)null, SingleIndex: (int?)null)
+                    : await ExternalInterfaceConfigurationPlane.PrepareExecutionAsync(executionRequest);
+                if (executionRequest != null && ExecutionRequestContract.Validate(executionRequest) is { } staleBeforeExecution)
+                    throw new InvalidOperationException(staleBeforeExecution.ErrorCode + ": " + staleBeforeExecution.ErrorMessage);
                 if (!string.IsNullOrEmpty(groupName))
                 {
                     var path = Path.Combine(AppContext.BaseDirectory, "User", "ScriptGroup", groupName + ".json");
-                    var group = BetterGenshinImpact.Core.Script.Group.ScriptGroup.FromJson(await File.ReadAllTextAsync(path));
+                    var group = BetterGenshinImpact.Core.Script.Group.ScriptGroup.FromJson(
+                        prepared.Snapshot?.Document.ToString() ?? await File.ReadAllTextAsync(path));
                     cancellationToken.ThrowIfCancellationRequested();
                     if (stopVersion != ExecutionScope.StopVersionNow) throw new OperationCanceledException();
                     for (var i = 0; i < group.Projects.Count; i++) group.Projects[i].Index = i + 1;
@@ -719,8 +735,11 @@ internal sealed class InstanceRequestHandler
                     }
                     var progress = new BetterGenshinImpact.GameTask.TaskProgress.TaskProgress { CurrentScriptGroupName = groupName };
                     BetterGenshinImpact.GameTask.RunnerContext.Instance.taskProgress = progress;
-                    completion.TrySetResult(await scriptService.RunMulti(
-                        BetterGenshinImpact.ViewModel.Pages.ScriptControlViewModel.GetNextProjects(group), groupName, progress, descriptor));
+                    var projects = prepared.SingleIndex is { } only
+                        ? group.Projects.Where(p => p.Index == only).ToList()
+                        : BetterGenshinImpact.ViewModel.Pages.ScriptControlViewModel.GetNextProjects(group);
+                    if (projects.Count == 0) throw new InvalidOperationException("no_work");
+                    completion.TrySetResult(await scriptService.RunMulti(projects, groupName, progress, descriptor));
                 }
                 else
                 {
@@ -1188,113 +1207,20 @@ internal sealed class InstanceRequestHandler
     /// <summary>设置任务启用状态：改 ScriptGroup.json（配置组）或 OneDragon 配置（一条龙）并写回。</summary>
     internal async Task<InstanceIpcEnvelope> HandleSetTaskEnabled(InstanceConnection connection, InstanceIpcEnvelope request)
     {
-        try
-        {
-            // 显式 "key":null 归一化为 C# null（见 InstanceIpcProtocol.GetStringOrNull 注释）
-            var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
-            var configName = InstanceIpcProtocol.GetStringOrNull(request.Data, "configName");
-            var taskIndex = request.Data?["taskIndex"]?.ToObject<int>() ?? 0;
-            var enabled = request.Data?["enabled"]?.ToObject<bool>() ?? false;
-
-            if (!string.IsNullOrEmpty(groupName))
+        var response = await ExternalInterfaceConfigurationPlane.DispatchAsync(request);
+        if (response.Success == true && BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount > 0)
+            _ = Application.Current?.Dispatcher.InvokeAsync(() =>
             {
-                // 配置组：改 ScriptGroup.json 中对应项目的 status
-                var basePath = AppContext.BaseDirectory;
-                var groupPath = Path.Combine(basePath, "User", "ScriptGroup", $"{groupName}.json");
-                if (!File.Exists(groupPath))
-                    return InstanceIpcEnvelope.Failure(request, "not_found", $"配置组 {groupName} 不存在");
-
-                var json = await File.ReadAllTextAsync(groupPath);
-                var group = BetterGenshinImpact.Core.Script.Group.ScriptGroup.FromJson(json);
-                // 与 HandleTaskStart 同款兜底：FromJson 读出的 Index 可能为 0 或无效（老文件），
-                // 先按位置重排为 1-based 再匹配，同时把修正后的 Index 随写盘固化回文件。
-                for (var idx = 0; idx < (group.Projects?.Count ?? 0); idx++)
-                    group.Projects[idx].Index = idx + 1;
-                var project = group.Projects?.FirstOrDefault(p => p.Index == taskIndex);
-                if (project == null)
-                    return InstanceIpcEnvelope.Failure(request, "not_found", $"任务索引 {taskIndex} 未找到");
-
-                project.Status = enabled ? "Enabled" : "Disabled";
-                var newJson = group.ToJson();
-                await File.WriteAllTextAsync(groupPath, newJson);
-            }
-            else if (!string.IsNullOrEmpty(configName))
-            {
-                // 一条龙：改 OneDragon 配置的 TaskEnabledList
-                var basePath = AppContext.BaseDirectory;
-                var oneDragonPath = Path.Combine(basePath, "User", "OneDragon", $"{configName}.json");
-                if (!File.Exists(oneDragonPath))
-                    return InstanceIpcEnvelope.Failure(request, "not_found", $"一条龙配置 {configName} 不存在");
-
-                var json = await File.ReadAllTextAsync(oneDragonPath);
-                var config = Newtonsoft.Json.JsonConvert.DeserializeObject<BetterGenshinImpact.Core.Config.OneDragonFlowConfig>(json);
-                if (config == null)
-                    return InstanceIpcEnvelope.Failure(request, "parse_failed", "解析一条龙配置失败");
-
-                // 键缺失必须显式失败：原实现静默跳过却返回 success，调用方无从察觉保存未生效
-                if (!config.TaskEnabledList.ContainsKey(taskIndex))
-                    return InstanceIpcEnvelope.Failure(request, "not_found",
-                        $"一条龙任务索引 {taskIndex} 未找到（现有键: {string.Join(",", config.TaskEnabledList.Keys.OrderBy(k => k))}）");
-                config.TaskEnabledList[taskIndex] = (enabled, config.TaskEnabledList[taskIndex].Item2);
-
-                var newJson = Newtonsoft.Json.JsonConvert.SerializeObject(config, Newtonsoft.Json.Formatting.Indented);
-                // 写文件时重试：一条龙正在运行时，JSON 文件可能被 BGI 进程锁定
-                // 最多重试 5 次，每次 500ms，超时后抛出异常
-                Exception? lastWriteEx = null;
-                for (int retry = 0; retry < 5; retry++)
+                try
                 {
-                    try
-                    {
-                        await File.WriteAllTextAsync(oneDragonPath, newJson);
-                        lastWriteEx = null;
-                        break;
-                    }
-                    catch (IOException ex)
-                    {
-                        lastWriteEx = ex;
-                        if (retry < 4) await Task.Delay(500);
-                    }
+                    if (InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName") != null)
+                        App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.ScriptControlViewModel>()?.ReloadScriptGroups();
+                    else
+                        App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.OneDragonFlowViewModel>()?.InitConfigList();
                 }
-                if (lastWriteEx != null) throw lastWriteEx;
-            }
-            else
-            {
-                return InstanceIpcEnvelope.Failure(request, "invalid_param", "groupName 和 configName 均为空");
-            }
-
-            // 写盘成功后刷新 BGI 内存态，让调度器/一条龙页面的勾选立即反映变更。
-            // 任务运行中跳过（运行循环会逐条读 SelectedConfig.TaskEnabledList，中途换对象有风险；
-            // 文件已保存，下次启动/进页面自然生效）。fire-and-forget，不阻塞 IPC 响应。
-            if (BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount > 0)
-            {
-                _ = Application.Current?.Dispatcher.InvokeAsync(() =>
-                {
-                    try
-                    {
-                        if (!string.IsNullOrEmpty(groupName))
-                        {
-                            App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.ScriptControlViewModel>()
-                                ?.ReloadScriptGroups();
-                        }
-                        else
-                        {
-                            App.ServiceProvider.GetService<BetterGenshinImpact.ViewModel.Pages.OneDragonFlowViewModel>()
-                                ?.InitConfigList();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "set_task_enabled 后刷新内存态失败（文件已保存）");
-                    }
-                });
-            }
-
-            return InstanceIpcEnvelope.Response(request, new { status = "saved", groupName, configName, taskIndex, enabled });
-        }
-        catch (Exception ex)
-        {
-            return InstanceIpcEnvelope.Failure(request, "save_failed", $"保存启用状态失败: {ex.Message}");
-        }
+                catch (Exception ex) { _logger.LogWarning(ex, "配置已应用，页面刷新失败"); }
+            });
+        return response;
     }
 
     /// <summary>
@@ -1416,7 +1342,13 @@ internal sealed class InstanceRequestHandler
                     context.TaskType == "group" ? context.GroupName : null,
                     context.TaskType == "onedragon" ? context.GroupName : null,
                     context.TaskType == "group" ? context.TaskIndex + 1 : context.OneDragonTaskIndex,
-                    jobId: attempt, takeoverTicket: ticket, onAdmitted: OnAdmitted, source: JobSource.Resume, workflowRunId: context.RootRunId);
+                    jobId: attempt, takeoverTicket: ticket, onAdmitted: OnAdmitted, source: JobSource.Resume, workflowRunId: context.RootRunId,
+                    executionIdentity: context.RootRunId is { } run && context.NodeId is { } node && context.Iteration is { } iteration
+                        ? new JobExecutionIdentity(run, node, iteration, context.TaskId, context.ConfigRevision) : null,
+                    executionRequest: InstanceIpcEnvelope.Request("task.start", new {
+                        groupName = context.TaskType == "group" ? context.GroupName : null,
+                        configName = context.TaskType == "onedragon" ? context.GroupName : null,
+                        taskId = context.TaskId, expectedConfigRevision = context.ConfigRevision }));
             }
             else if (context.TaskType == "solo")
             {
@@ -1685,6 +1617,9 @@ internal sealed class InstanceRequestHandler
     {
         try
         {
+            if (ExecutionRequestContract.Validate(request) is { } invalid) return invalid;
+            if (!PreemptionGate.Authorize(InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket")))
+                return InstanceIpcEnvelope.Failure(request, "takeover_conflict", "当前接管所有者不允许此次配置写入");
             // 显式 "key":null 归一化为 C# null（见 InstanceIpcProtocol.GetStringOrNull 注释）
             var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
             var baseMd5 = InstanceIpcProtocol.GetStringOrNull(request.Data, "baseMd5");
@@ -1702,8 +1637,9 @@ internal sealed class InstanceRequestHandler
                 return InstanceIpcEnvelope.Response(request, new { ok = false, message = "无可应用内容（scriptGroupConfigJson 与 soloTaskSettingsJson 均为空）", md5Changed = false, groupRunning = false });
             }
 
-            return await Application.Current.Dispatcher.InvokeAsync(() =>
-                ApplyRemoteGroup(request, groupName, baseMd5, scriptGroupConfigJson, soloTaskName, soloTaskSettingsJson));
+            return await TaskConfigurationContract.Default.ExecuteLockedAsync(groupName, false, async () =>
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                    ApplyRemoteGroup(request, groupName, baseMd5, scriptGroupConfigJson, soloTaskName, soloTaskSettingsJson)));
         }
         catch (Exception ex)
         {
@@ -1721,6 +1657,13 @@ internal sealed class InstanceRequestHandler
         string? soloTaskSettingsJson)
     {
         var groupPath = Path.Combine(AppContext.BaseDirectory, "User", "ScriptGroup", $"{groupName}.json");
+
+        if (ExecutionRequestContract.Validate(request) is { } invalid) return invalid;
+        if (!PreemptionGate.Authorize(InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket")))
+            return InstanceIpcEnvelope.Failure(request, "takeover_conflict", "配置写入前接管所有权已改变");
+        if (InstanceIpcProtocol.GetStringOrNull(request.Data, "expectedConfigRevision") is { } expectedRevision
+            && (!File.Exists(groupPath) || TaskConfigurationContract.Revision(File.ReadAllBytes(groupPath)) != expectedRevision))
+            return InstanceIpcEnvelope.Failure(request, "configuration_changed", "配置已改变，未应用远程编辑");
 
         // 乐观并发提示：比较当前文件 MD5 与 pull 时的 baseMd5
         var md5Changed = false;

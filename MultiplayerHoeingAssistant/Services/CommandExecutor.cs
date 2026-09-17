@@ -24,6 +24,13 @@ public class CommandExecutor
     private string? _takeoverTicket;
     private BgiEpoch? _takeoverEpoch;
     private readonly SemaphoreSlim _suspendGate = new(1, 1);
+    private readonly AsyncLocal<RemoteCommand?> _requestContext = new();
+
+    private object BuildStartPayload(string? groupName, string? configName, int startFromIndex, int generation, string? batchGroupNames = null)
+        => new { groupName, configName, startFromIndex, generation, batchGroupNames, takeoverTicket = _takeoverTicket,
+            expectedConfigRevision = GetStringParam(_requestContext.Value?.Params, "expectedConfigRevision"),
+            bgiEpoch = _requestContext.Value?.Params?.GetValueOrDefault("bgiEpoch"),
+            expiresAtUtc = _requestContext.Value?.ExpiresAtUtc };
 
     private bool IsResumeRetryInFlight => Interlocked.CompareExchange(ref _resumeRetryInFlight, 0, 0) != 0;
     /// <summary>[切片7] 队列式任务终态事件等待的兜底超时（事件经 SDK 断线续传不丢，超时仅为防永久挂起）。</summary>
@@ -59,7 +66,7 @@ public class CommandExecutor
     private int _inflightConfigWrites;
 
     /// <summary>[弹窗竞态守卫] 等待在途 set_task_enabled 落盘：200ms 轮询，上限 10s。
-    /// 超时记日志继续（不阻塞启动）——防 set 路径卡死（IPC 挂起等）拖累启动。</summary>
+    /// 超时拒绝依赖启动，不能将未完成的配置写入当作已应用。</summary>
     private async Task WaitConfigWritesDrainedAsync(string desc)
     {
         if (Volatile.Read(ref _inflightConfigWrites) <= 0) return;
@@ -67,7 +74,7 @@ public class CommandExecutor
         while (Volatile.Read(ref _inflightConfigWrites) > 0 && DateTime.UtcNow < deadline)
             await Task.Delay(200);
         if (Volatile.Read(ref _inflightConfigWrites) > 0)
-            Log($"[弹窗竞态守卫] {desc} 等待 set_task_enabled 落盘超时（10s），仍有 {Volatile.Read(ref _inflightConfigWrites)} 条在途，继续启动");
+            throw new InvalidOperationException($"configuration_pending: {desc} 等待配置应用超时，未启动任务");
     }
 
     /// <summary>[A4.4] 批次标记已随 --startGroups 命令行回退一并废弃：执行声明权只走 IPC/reconcile，
@@ -154,8 +161,15 @@ public class CommandExecutor
 
     public async Task<CommandResult> ExecuteAsync(RemoteCommand command)
     {
+        var previous = _requestContext.Value;
+        _requestContext.Value = command;
         try
         {
+            if (command.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
+                return new CommandResult { Status = "failed", ErrorCode = "request_expired", Message = "命令已过期，未执行" };
+            if (GetStringParam(command.Params, "expectedConfigRevision") != null
+                && _externalClientProvider?.Invoke()?.HasCapability("config.applied") != true)
+                return new CommandResult { Status = "failed", ErrorCode = "capability_required", Message = "BGI 不支持配置应用合同，未启动任务" };
             switch (command.Cmd)
             {
                 case "stop":
@@ -193,6 +207,7 @@ public class CommandExecutor
         {
             return new CommandResult { Status = "failed", Message = ex.Message };
         }
+        finally { _requestContext.Value = previous; }
     }
 
     /// <summary>
@@ -355,7 +370,7 @@ public class CommandExecutor
             {
                 return queueResult;
             }
-            // null = 通道瞬态失败，落回 v2 路径
+            // 仅发送前未选用 ext 才进入 v2；已提交的未知结果不会落回。
         }
 
         // [分层超时 2026-09-12] 失败语义分离：Connect 失败（BGI 未运行/管道不可达）才走重启回退
@@ -407,7 +422,7 @@ public class CommandExecutor
                 // 会话守卫：阻断时直接失败返回，不进入重启回退（避免误杀本会话正在跑任务的 BGI）
                 var blocked = CheckCrossSessionBlock(ipcClient, $"task.start 配置组「{groupName}」");
                 if (blocked != null) return blocked;
-                var payload = System.Text.Json.JsonSerializer.Serialize(new { groupName, startFromIndex, generation, takeoverTicket = _takeoverTicket });
+                var payload = System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(groupName, null, startFromIndex, generation));
                 var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
                 // [无损拒绝适配 b5386005] task_already_running = BGI 明确应答的业务拒绝（非传输失败），
                 // 多半是 suspend 后旧任务退场慢（任务锁未释放）。等 1s 重发，最多 6 次
@@ -495,7 +510,7 @@ public class CommandExecutor
             {
                 return queueResult;
             }
-            // null = 通道瞬态失败，落回 v2 路径
+            // 仅发送前未选用 ext 才进入 v2；已提交的未知结果不会落回。
         }
 
         // [分层超时 2026-09-12] 失败语义分离（同 StartGroupAsync）：Connect 失败才走重启回退；
@@ -544,8 +559,8 @@ public class CommandExecutor
                 if (blocked != null) return blocked;
                 // [批次名单] 纯加法协议字段：老 BGI 忽略该字段，行为不变
                 var payload = batchGroupNamesRaw != null
-                    ? System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation, batchGroupNames = batchGroupNamesRaw, takeoverTicket = _takeoverTicket })
-                    : System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation, takeoverTicket = _takeoverTicket });
+                    ? System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(null, configName, startFromIndex, generation, batchGroupNamesRaw))
+                    : System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(null, configName, startFromIndex, generation));
                 var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
                 // [无损拒绝适配 b5386005] 同 StartGroupAsync：业务拒绝（任务运行中）等锁重试，最多 6 次
                 for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
@@ -594,7 +609,7 @@ public class CommandExecutor
     /// <summary>
     /// [切片7] 经 ext 任务队列通道提交启动：先创建终态事件等待器（先订阅后动作，红线7），
     /// 再 Submit 入队拿 taskHandle，最后等 task.completed/failed/queueCancelled 事件。
-    /// 返回 null = 通道瞬态失败（调用方落 v2 路径，1s×6 重试锤子与杀进程回退逐字节保留）；
+    /// 提交后未知结果直接返回 result_unknown，不换通道重新执行；
     /// 明确业务拒绝（queue_full 等）直接失败返回，绝不进杀进程回退（与 b5386005 无损拒绝语义一致）。
     /// 返回时机与 v2 一致：任务真正执行完（或被取消）后才返回，批次循环语义不变。
     /// </summary>
@@ -608,7 +623,11 @@ public class CommandExecutor
             // 等待器先于 Submit 创建：adopted 场景下既有任务可能在我们 Submit 前就完成，
             // 其终态事件先入等待器缓冲，按句柄匹配时不丢
             using var waiter = ext.CreateTaskTerminalWaiter();
-            var submit = await ext.SubmitTaskStartAsync(groupName, configName, startFromIndex, generation, batchGroupNames);
+            var submit = await ext.SubmitTaskStartAsync(groupName, configName, startFromIndex, generation, batchGroupNames,
+                idempotencyKey: string.IsNullOrWhiteSpace(_requestContext.Value?.CommandId) ? null : _requestContext.Value.CommandId,
+                expectedConfigRevision: GetStringParam(_requestContext.Value?.Params, "expectedConfigRevision"),
+                bgiEpoch: _requestContext.Value?.Params?.GetValueOrDefault("bgiEpoch"),
+                expiresAtUtc: _requestContext.Value?.ExpiresAtUtc);
             if (!submit.Success)
             {
                 ProbeLog($"[CommandExecutor][切片7] ext.task.start 被队列拒绝 {desc} errorCode={submit.ErrorCode}");
@@ -624,10 +643,10 @@ public class CommandExecutor
 
             if (string.IsNullOrEmpty(submit.TaskHandle))
             {
-                // 畸形响应（queued/adopted 但无句柄）：无法路由终态事件，按通道瞬态失败落 v2 路径，
+                // 畸形响应（queued/adopted 但无句柄）：受理结果未知，禁止换通道重发，
                 // 避免 null 句柄穿透 WaitForHandleAsync（ArgumentNullException 不在下方 catch 过滤器内）
-                ProbeLog($"[CommandExecutor][切片7] ext.task.start 响应缺少 taskHandle（status={submit.Status}），落回 v2 路径 {desc}");
-                return null;
+                ProbeLog($"[CommandExecutor][切片7] ext.task.start 响应缺少 taskHandle（status={submit.Status}），结果未知、未重发 {desc}");
+                return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 已提交但未获得有效句柄，禁止换通道重发；请先核实执行状态" };
             }
 
             ProbeLog($"[CommandExecutor][切片7] ext.task.start 已入队 {desc} status={submit.Status} taskHandle={submit.TaskHandle} queuePosition={submit.QueuePosition}");
@@ -706,9 +725,9 @@ public class CommandExecutor
                                    or TimeoutException or OperationCanceledException
                                    or System.Text.Json.JsonException)
         {
-            // 通道瞬态失败（断线/超时/握手失效）→ null 让调用方落 v2 路径
-            ProbeLog($"[CommandExecutor][切片7] 任务队列通道瞬态失败，落回 v2 路径 {desc}: {ex.Message}");
-            return null;
+            // 发送后断线/超时不等于未执行：保留未知结果，不做第二次启动。
+            ProbeLog($"[CommandExecutor] 队列提交/等待结果未知，禁止跨通道重发 {desc}: {ex.Message}");
+            return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 执行结果未知，未重新下发：{ex.Message}" };
         }
     }
 
@@ -760,6 +779,25 @@ public class CommandExecutor
         Interlocked.Increment(ref _inflightConfigWrites);
         try
         {
+            var ext = _externalClientProvider?.Invoke();
+            if (ext is { State: BgiExternalLinkState.Ready } && ext.HasCapability("config.applied"))
+            {
+                var request = _requestContext.Value;
+                var applied = await ext.SendCommandAsync("ext.config.setTaskEnabled", new {
+                    groupName, configName, taskIndex, enabled, commandId = request?.CommandId,
+                    idempotencyKey = string.IsNullOrEmpty(request?.CommandId) ? Guid.NewGuid().ToString("N") : request.CommandId,
+                    expectedConfigRevision = GetStringParam(request?.Params, "expectedConfigRevision"),
+                    bgiEpoch = request?.Params?.GetValueOrDefault("bgiEpoch"), expiresAtUtc = request?.ExpiresAtUtc });
+                if (!applied.Success || applied.Data == null)
+                    return new CommandResult { Status = "failed", ErrorCode = applied.ErrorCode, Message = applied.ErrorMessage ?? "配置应用失败" };
+                using var doc = System.Text.Json.JsonDocument.Parse(applied.Data);
+                var data = doc.RootElement;
+                if (!data.TryGetProperty("configRevision", out var revision) || revision.ValueKind != System.Text.Json.JsonValueKind.String
+                    || !data.TryGetProperty("bgiEpoch", out var epoch))
+                    return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = "配置响应缺少应用版本/目标纪元，禁止依赖启动" };
+                return new CommandResult { Status = "success", Message = "配置已应用", ConfigRevision = revision.GetString(),
+                    TargetProcessId = epoch.GetProperty("processId").GetInt32(), TargetStartTicksUtc = epoch.GetProperty("startTicksUtc").GetInt64().ToString(System.Globalization.CultureInfo.InvariantCulture) };
+            }
             using var ipcClient = new IpcClient();
             await ipcClient.ConnectAsync(3000);
             var blocked = CheckCrossSessionBlock(ipcClient, $"设置任务启用状态（group={groupName} config={configName} index={taskIndex}）");
@@ -1363,8 +1401,8 @@ public class CommandExecutor
             var blocked = CheckCrossSessionBlock(ipcClient, $"task.start {desc}");
             if (blocked != null) return blocked;
             var payload = groupName != null
-                ? System.Text.Json.JsonSerializer.Serialize(new { groupName, startFromIndex, generation, takeoverTicket = _takeoverTicket })
-                : System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation, takeoverTicket = _takeoverTicket });
+                ? System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(groupName, null, startFromIndex, generation))
+                : System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(null, configName, startFromIndex, generation));
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
             for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
             {

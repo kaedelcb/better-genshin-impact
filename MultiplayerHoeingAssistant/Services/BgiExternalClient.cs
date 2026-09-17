@@ -124,6 +124,12 @@ public sealed class BgiEpoch
 /// <summary>[A3.2] 注册表作业快照条目（ext.job.status/list 的 jobs[] 元素投影）。</summary>
 public sealed class BgiJobInfo
 {
+    public string? WorkflowRunId { get; init; }
+    public string? NodeId { get; init; }
+    public int? Iteration { get; init; }
+    public string? AttemptId { get; init; }
+    public string? TaskId { get; init; }
+    public string? ConfigRevision { get; init; }
     public string? IdempotencyKey { get; init; }
     public string? JobId { get; init; }
 
@@ -234,6 +240,7 @@ public sealed class BgiExternalResponse
 public sealed class BgiExternalClient : IDisposable
 {
     public string? TakeoverTicket { get; set; }
+    public BgiEpoch? ServerEpoch { get; private set; }
     private const int MaxPayloadLength = 1024 * 1024;
     private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
@@ -372,10 +379,12 @@ public sealed class BgiExternalClient : IDisposable
 
         try
         {
-            if (TakeoverTicket is { } ticket)
+            if (TakeoverTicket != null || ServerEpoch != null && HasCapability("execution.contract.v1"))
             {
                 var fields = System.Text.Json.JsonSerializer.SerializeToNode(payload ?? new { })!.AsObject();
-                fields["takeoverTicket"] = ticket;
+                if (TakeoverTicket is { } ticket) fields["takeoverTicket"] = ticket;
+                if (fields["bgiEpoch"] == null && ServerEpoch is { } epoch)
+                    fields["bgiEpoch"] = System.Text.Json.JsonSerializer.SerializeToNode(new { processId = epoch.ProcessId, startTicksUtc = epoch.StartTicksUtc });
                 payload = fields;
             }
             await WriteEnvelopeAsync(pipe, operation, requestId, payload, cancellationToken)
@@ -522,11 +531,12 @@ public sealed class BgiExternalClient : IDisposable
         int generation,
         string? batchGroupNames = null,
         CancellationToken cancellationToken = default,
-        bool preempt = false, string? idempotencyKey = null)
+        bool preempt = false, string? idempotencyKey = null,
+        string? expectedConfigRevision = null, object? bgiEpoch = null, DateTimeOffset? expiresAtUtc = null)
     {
         var payload = preempt
-            ? (object)new { groupName, configName, startFromIndex, generation, batchGroupNames, preempt = true, idempotencyKey }
-            : new { groupName, configName, startFromIndex, generation, batchGroupNames, idempotencyKey };
+            ? (object)new { groupName, configName, startFromIndex, generation, batchGroupNames, preempt = true, idempotencyKey, expectedConfigRevision, bgiEpoch, expiresAtUtc }
+            : new { groupName, configName, startFromIndex, generation, batchGroupNames, idempotencyKey, expectedConfigRevision, bgiEpoch, expiresAtUtc };
         var response = await SendCommandAsync(
                 ExternalOperations.TaskStart,
                 payload,
@@ -678,6 +688,12 @@ public sealed class BgiExternalClient : IDisposable
             JobId = Str(el, "jobId"),
             IdempotencyKey = Str(el, "idempotencyKey"),
             ParentJobId = Str(el, "parentJobId"),
+            WorkflowRunId = Str(el, "workflowRunId"),
+            NodeId = Str(el, "nodeId"),
+            Iteration = el.TryGetProperty("iteration", out var iterationEl) && iterationEl.ValueKind == JsonValueKind.Number ? iterationEl.GetInt32() : null,
+            AttemptId = Str(el, "attemptId"),
+            TaskId = Str(el, "taskId"),
+            ConfigRevision = Str(el, "configRevision"),
             Kind = Str(el, "kind"),
             Name = Str(el, "name"),
             Source = Str(el, "source"),
@@ -1045,6 +1061,7 @@ public sealed class BgiExternalClient : IDisposable
 
                     SessionId = sidEl.GetString();
                 }
+                ServerEpoch = ParseEpoch(root);
 
                 if (root.TryGetProperty("bgiVersion", out var verEl)
                     && verEl.ValueKind == JsonValueKind.String)
@@ -1326,7 +1343,7 @@ public sealed class BgiExternalClient : IDisposable
     }
 
     private static async Task<Envelope?> ReadEnvelopeAsync(
-        NamedPipeClientStream pipe,
+        Stream pipe,
         CancellationToken cancellationToken)
     {
         var header = new byte[4];
@@ -1348,8 +1365,13 @@ public sealed class BgiExternalClient : IDisposable
         await ReadExactAsync(pipe, payload, payload.Length, cancellationToken, allowEofOnFirstByte: false)
             .ConfigureAwait(false);
 
+        if (payload[0] != 1) throw new InvalidDataException("ext 响应不是 JSON 帧");
+
         using var doc = JsonDocument.Parse(Encoding.UTF8.GetString(payload, 1, payloadLength));
         var root = doc.RootElement;
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("version", out var version)
+            || version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var protocolVersion) || protocolVersion != 2)
+            throw new InvalidDataException("不支持的 ext 响应协议版本");
 
         string? operation = null;
         if (root.TryGetProperty("operation", out var opEl) && opEl.ValueKind == JsonValueKind.String)
@@ -1394,7 +1416,7 @@ public sealed class BgiExternalClient : IDisposable
     }
 
     private static async Task<int> ReadExactAsync(
-        NamedPipeClientStream pipe,
+        Stream pipe,
         byte[] buffer,
         int count,
         CancellationToken cancellationToken,

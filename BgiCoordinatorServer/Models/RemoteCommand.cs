@@ -9,5 +9,6 @@ public class RemoteCommand
     public List<string> Target { get; set; } = [];           // ["*"] = 全员，否则 UID 列表
     public string CommandId { get; set; } = string.Empty;
     public string Timestamp { get; set; } = string.Empty;    // ISO 8601
+    public DateTimeOffset? ExpiresAtUtc { get; set; }
     public Dictionary<string, object>? Params { get; set; }
 }

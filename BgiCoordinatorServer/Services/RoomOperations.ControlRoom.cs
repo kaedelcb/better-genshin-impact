@@ -113,6 +113,12 @@ public sealed partial class RoomOperations
     /// </summary>
     public async Task SendRemoteCommandAsync(GatewayHandlerContext ctx, RemoteCommand command)
     {
+        // Delayed control is bounded; the execution end checks the same deadline again.
+        command.ExpiresAtUtc ??= DateTimeOffset.UtcNow.AddMinutes(2);
+        if (command.ExpiresAtUtc <= DateTimeOffset.UtcNow)
+            throw new InvalidOperationException("request_expired");
+        if (command.ExpiresAtUtc > DateTimeOffset.UtcNow.AddMinutes(2))
+            command.ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(2);
         try
         {
             var group = $"CTRL_{command.RoomCode}";

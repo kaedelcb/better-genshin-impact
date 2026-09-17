@@ -1267,12 +1267,12 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// 与既有 SendAckAsync（cmd="ack" 走 RemoteCommand 转发）并存：ack 链路不变，回执是纯加法新通道。
     /// 旧服务端/断线由 SignalRClient 内部降级停发；本方法自身绝不抛异常（调用点在 async void 与其 catch 块里）。
     /// </summary>
-    private async Task MaybeSendCommandResultAsync(RemoteCommand originalCmd, string status, string? errorCode, string message)
+    private async Task MaybeSendCommandResultAsync(RemoteCommand originalCmd, string status, string? errorCode, string message, CommandResult? executionResult = null)
     {
         try
         {
             if (_signalRClient == null) return;
-            if (originalCmd.Cmd is not ("start_group" or "start_oneclick")) return;
+            if (originalCmd.Cmd is not ("start_group" or "start_oneclick" or "set_task_enabled")) return;
             // Params 值经 SignalR 反序列化可能是 JsonElement；其 ToString() 对 String 类型即原文（不带引号）
             var taskName = originalCmd.Params?.GetValueOrDefault(
                 originalCmd.Cmd == "start_group" ? "groupName" : "configName")?.ToString() ?? "";
@@ -1286,7 +1286,10 @@ public partial class MainViewModel : INotifyPropertyChanged
                 Status = status,
                 ErrorCode = errorCode,
                 Message = message,
-                TaskName = taskName
+                TaskName = taskName,
+                ConfigRevision = executionResult?.ConfigRevision,
+                TargetProcessId = executionResult?.TargetProcessId,
+                TargetStartTicksUtc = executionResult?.TargetStartTicksUtc
             });
         }
         catch (Exception ex)
@@ -4375,7 +4378,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 var result = await _commandExecutor.ExecuteAsync(cmd);
                 await SendAckAsync(cmd, result.Status, result.Message);
                 // [远端任务回执] start_group/start_oneclick 额外经新通道回执给发起方卡片（内部已过滤命令名、不抛异常）
-                await MaybeSendCommandResultAsync(cmd, result.Status, result.ErrorCode, result.Message);
+                await MaybeSendCommandResultAsync(cmd, result.Status, result.ErrorCode, result.Message, result);
             }
             }
             catch (Exception ex)

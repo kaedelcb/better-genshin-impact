@@ -9,5 +9,6 @@ public class RemoteCommand
     public List<string> Target { get; set; } = [];
     public string CommandId { get; set; } = string.Empty;
     public string Timestamp { get; set; } = string.Empty;
+    public DateTimeOffset? ExpiresAtUtc { get; set; }
     public Dictionary<string, object>? Params { get; set; }
 }

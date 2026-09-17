@@ -11,6 +11,10 @@ public class SuspendedTaskContext
 {
     public System.Guid? RootRunId { get; set; }
     public System.Guid? AttemptId { get; set; }
+    public string? NodeId { get; set; }
+    public int? Iteration { get; set; }
+    public string? TaskId { get; set; }
+    public string? ConfigRevision { get; set; }
     public System.Collections.Generic.Dictionary<string, string>? ConfigurationRevisions { get; set; }
     public string? TakeoverTicket { get; set; }
     public long StopVersion { get; set; }

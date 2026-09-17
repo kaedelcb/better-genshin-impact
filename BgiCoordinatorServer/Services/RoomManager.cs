@@ -1381,6 +1381,8 @@ public class RoomManager
     /// <summary>缓存离线命令（目标 UID → 命令）</summary>
     public void CachePendingCommand(string targetUid, RemoteCommand command)
     {
+        command.ExpiresAtUtc ??= DateTimeOffset.UtcNow.AddMinutes(2);
+        if (command.ExpiresAtUtc <= DateTimeOffset.UtcNow) return;
         var list = _pendingCommands.GetOrAdd(targetUid, _ => []);
         lock (list) { list.Add(command); }
     }
@@ -1390,7 +1392,7 @@ public class RoomManager
     {
         if (_pendingCommands.TryRemove(targetUid, out var list))
         {
-            lock (list) { return [.. list]; }
+            lock (list) { return [.. list.Where(c => c.ExpiresAtUtc is { } expiry && expiry > DateTimeOffset.UtcNow)]; }
         }
         return [];
     }

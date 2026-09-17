@@ -282,5 +282,22 @@ await Check("lost acknowledgement retry is bounded and retains request key",()=>
     A(exhausted.OfType<BatchReconcileAction.ConfirmTerminal>().Single().ErrorCode=="result_unknown","unknown result called success");
     A(item.RequestKey==key,"exhaustion changed request identity");return Done();
 });
+await Check("v2 runner registers workflow identity and preserves it in checkpoint", async () => {
+    var run = Guid.NewGuid(); var attempt = Guid.NewGuid();
+    var descriptor = new JobDescriptor(JobKind.Group, Key(), JobSource.V2, JobId:attempt,
+        WorkflowRunId:run, NodeId:"node-2", Iteration:8, TaskId:"project:fixture", ConfigRevision:"revision");
+    var result = await new TaskRunner().RunCurrentAsync(() => {
+        ExecutionScope.Current!.SetCheckpoint(Group("fixture", 2));
+        var snapshot = SuspendContextCapture.CaptureCurrent()!;
+        A(snapshot.RootRunId == run && snapshot.AttemptId == attempt && snapshot.NodeId == "node-2"
+            && snapshot.Iteration == 8 && snapshot.TaskId == "project:fixture" && snapshot.ConfigRevision == "revision", "checkpoint identity lost");
+        A(SuspendContextCapture.Save(NullLogger.Instance, snapshot, "fixture"), "save failed");
+        var saved = TaskContext.Instance().Config.SuspendedTaskContext!;
+        A(saved.NodeId == "node-2" && saved.Iteration == 8 && saved.TaskId == "project:fixture" && saved.ConfigRevision == "revision", "saved identity lost");
+        return Done();
+    }, job:descriptor);
+    var job = JobRegistry.Instance.Query(attempt)!;
+    A(result == TaskRunResult.Ran && job.WorkflowRunId == run && job.NodeId == "node-2" && job.Iteration == 8, "runner registration lost identity");
+});
 Console.WriteLine($"Regression total={total}; passed={total-failed}; failed={failed}. UI/game/transport not exercised.");
 Environment.ExitCode=failed==0?0:1;

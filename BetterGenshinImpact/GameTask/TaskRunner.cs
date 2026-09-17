@@ -68,12 +68,12 @@ public class TaskRunner
                     if (registeredJob == null)
                     {
                         _logger.LogWarning("[JobRegistry] 认领作业不存在（退化新建）: jobId={JobId} name={Name}", adoptId, job.Name);
-                        registeredJob = JobRegistry.Instance.Submit(job.Kind, job.Name, job.Source, job.Generation, job.IdempotencyKey, job.ParentJobId, job.JobId).Job;
+                        registeredJob = JobRegistry.Instance.Submit(job.Kind, job.Name, job.Source, job.Generation, job.IdempotencyKey, job.ParentJobId, job.JobId, job.ExecutionIdentity).Job;
                     }
                 }
                 else
                 {
-                    var submission = JobRegistry.Instance.Submit(job.Kind, job.Name, job.Source, job.Generation, job.IdempotencyKey, job.ParentJobId);
+                    var submission = JobRegistry.Instance.Submit(job.Kind, job.Name, job.Source, job.Generation, job.IdempotencyKey, job.ParentJobId, identity: job.ExecutionIdentity);
                     if (submission.Adopted) return TaskRunResult.RejectedSlotBusy;
                     registeredJob = submission.Job;
                 }

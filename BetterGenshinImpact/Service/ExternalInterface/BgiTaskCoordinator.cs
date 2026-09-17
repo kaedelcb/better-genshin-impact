@@ -84,6 +84,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
         /// 未果则转入执行段的主动抢占（有界退出契约）。默认 false = 旧 15s 等槽语义不变。</summary>
         public bool Preempt { get; init; }
         public string? IdempotencyKey { get; init; }
+        public JobExecutionIdentity? Identity { get; init; }
     }
 
     public readonly record struct SubmitResult(SubmitStatus Status, Guid TaskHandle, int QueuePosition);
@@ -523,6 +524,9 @@ internal sealed class BgiTaskCoordinator : IDisposable
         }
         else if (!slotFree)
         {
+            // A terminal item must leave the capacity/ownership index before CTS disposal.
+            // Serialize with CancelByHandle/ClearQueue so they cannot cancel a disposed CTS.
+            lock (_submitLock) _pending.TryRemove(item.TaskHandle, out _);
             if (item.Cts.IsCancellationRequested)
             {
                 if (item.TryMarkTerminalEventPublished())
@@ -693,7 +697,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
             JobRegistry.Instance.Submit(kind, item.Submission.Name ?? "未知", JobSource.Ext,
                 item.Submission.Generation > 0 ? item.Submission.Generation : null,
                 idempotencyKey: item.Submission.IdempotencyKey,
-                jobId: item.TaskHandle);
+                jobId: item.TaskHandle, identity: item.Submission.Identity);
         }
         catch (Exception exception)
         {

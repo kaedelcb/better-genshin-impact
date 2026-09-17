@@ -84,7 +84,18 @@ public sealed record JobDescriptor(
     string? TakeoverTicket = null,
     Action? OnAdmitted = null,
     int? ResumeIndex = null,
-    Guid? WorkflowRunId = null);
+    Guid? WorkflowRunId = null,
+    string? NodeId = null,
+    int? Iteration = null,
+    string? TaskId = null,
+    string? ConfigRevision = null)
+{
+    public JobExecutionIdentity? ExecutionIdentity => WorkflowRunId is { } run && NodeId is { } node && Iteration is { } iteration
+        ? new(run, node, iteration, TaskId, ConfigRevision) : null;
+}
+
+public sealed record JobExecutionIdentity(Guid WorkflowRunId, string NodeId, int Iteration,
+    string? TaskId = null, string? ConfigRevision = null);
 
 /// <summary>
 /// [A1.4] 统一作业模型（总计划 §6.2）。
@@ -100,6 +111,11 @@ public sealed class BgiJob
     public int? Generation { get; }
     public string? IdempotencyKey { get; }
     public Guid? ParentJobId { get; }
+    public Guid? WorkflowRunId { get; }
+    public string? NodeId { get; }
+    public int? Iteration { get; }
+    public string? TaskId { get; }
+    public string? ConfigRevision { get; }
 
     public JobState State { get; internal set; } = JobState.Queued;
     public string? ErrorCode { get; internal set; }
@@ -117,7 +133,7 @@ public sealed class BgiJob
     public bool IsTerminal => State is JobState.Succeeded or JobState.Failed or JobState.Cancelled or JobState.Rejected;
 
     public BgiJob(JobKind kind, string name, JobSource source, int? generation, string? idempotencyKey, Guid? parentJobId,
-        Guid? jobId = null)
+        Guid? jobId = null, JobExecutionIdentity? identity = null)
     {
         // [A2.4] jobId 外部指定：协调器 taskHandle 与注册表 jobId 同一 Guid 双名（别名），
         // 使 ext 事件里的 taskHandle 可直接在注册表查询，A4 双发期无需映射表。
@@ -128,6 +144,11 @@ public sealed class BgiJob
         Generation = generation;
         IdempotencyKey = idempotencyKey;
         ParentJobId = parentJobId;
+        WorkflowRunId = identity?.WorkflowRunId;
+        NodeId = identity?.NodeId;
+        Iteration = identity?.Iteration;
+        TaskId = identity?.TaskId;
+        ConfigRevision = identity?.ConfigRevision;
         _stateHistory.Add(new JobStateTransition(JobState.Queued, EnqueuedAtUtc, null));
     }
 

@@ -27,4 +27,7 @@ public class RemoteCommandResult
     public string Message { get; set; } = string.Empty;
     /// <summary>任务名（配置组/一条龙名）。</summary>
     public string TaskName { get; set; } = string.Empty;
+    public string? ConfigRevision { get; set; }
+    public int? TargetProcessId { get; set; }
+    public string? TargetStartTicksUtc { get; set; } // string: preserve Int64 precision through JavaScript
 }

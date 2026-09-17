@@ -52,8 +52,9 @@ function makeCmd(cmd, params) {
         sender: playerName,
         senderUid: 'web_' + playerName,
         target: ['*'],
-        commandId: 'web_' + Date.now(),
+        commandId: 'web_' + newRequestId(),
         timestamp: new Date().toISOString(),
+        expiresAtUtc: new Date(Date.now() + 120000).toISOString(),
         params: params || {}
     };
 }
@@ -110,6 +111,37 @@ function sendRemoteCommand(cmd) {
         .then(checkGatewayError);
 }
 
+const pendingConfigApplied = new Map();
+function resolveConfigTargets(requested, members) {
+    // An applied receipt names an actual executor; '*' can never be its target UID.
+    const targets = requested.includes('*')
+        ? members.filter(p => p.online === true).map(p => p.playerUid)
+        : requested;
+    return [...new Set(targets.filter(uid => uid && uid !== '*'))];
+}
+function consumeConfigApplied(result) {
+    if (!result || result.cmd !== 'set_task_enabled') return;
+    const pending = pendingConfigApplied.get(result.commandId);
+    if (!pending || pending.uid !== result.targetUid) return;
+    pendingConfigApplied.delete(result.commandId);
+    clearTimeout(pending.timer);
+    if (result.status !== 'success' || !result.configRevision || !result.targetProcessId || !result.targetStartTicksUtc)
+        pending.reject(new Error(result.message || '执行端未确认配置版本，未启动任务'));
+    else pending.resolve(result);
+}
+function sendAndWaitConfigApplied(cmd, uid) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            pendingConfigApplied.delete(cmd.commandId);
+            reject(new Error('等待配置应用回执超时，未启动任务'));
+        }, 15000);
+        pendingConfigApplied.set(cmd.commandId, { uid, resolve, reject, timer });
+        sendRemoteCommand(cmd).catch(error => {
+            if (pendingConfigApplied.delete(cmd.commandId)) { clearTimeout(timer); reject(error); }
+        });
+    });
+}
+
 // ---------- 记住登录：页面加载时回填 ----------
 (function restoreForm() {
     const c = loadCreds();
@@ -151,6 +183,9 @@ function joinRoom() {
         if (!env || typeof env !== 'object') return;
         const payload = env.payload;
         switch (env.name) {
+            case 'control.remoteCommandResult':
+                consumeConfigApplied(payload);
+                break;
             // 成员列表更新（payload 即全量/增量两态本体）
             case 'control.playersUpdated':
                 onPlayersUpdated(payload);
@@ -753,7 +788,8 @@ function showHotkeySelect(uid, memberName) {
 function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targetList, tasksWithStatus) {
     const label = isOneClick ? '一条龙' : '配置组';
     // 下发目标：默认单成员；targetList 传入时用自定义目标（如一键命令对全员 ['*']）
-    const targets = targetList || [uid];
+    const targets = resolveConfigTargets(targetList || [uid], players);
+    if (targets.length === 0) { log('没有在线成员可下发任务'); return; }
     // 构建任务选项列表：第一项"从头开始"，后面是真实任务名
     const options = [{ index: 0, text: '从头开始', sub: '第一个任务', isTask: false }];
     if (tasks && Array.isArray(tasks)) {
@@ -862,33 +898,43 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
             }
         });
 
-        // 逐个下发启用状态变更；await 全部完成后再发 start——
-        // fire-and-forget 会让 start 抢在 set_task_enabled 写盘前读旧状态（竞态）
-        const savePromises = [];
-        for (const [taskIdx, en] of Object.entries(changes)) {
-            const changeCmd = makeCmd('set_task_enabled', {
-                [isOneClick ? 'configName' : 'groupName']: configName,
-                taskIndex: parseInt(taskIdx),
-                enabled: en
-            });
-            changeCmd.target = targets;
-            savePromises.push(sendRemoteCommand(changeCmd).catch(err => log('启用状态变更失败: ' + err.message)));
+        // Serialize dependent writes per target, and require execution-side applied receipts.
+        // Gateway forwarding acknowledgements never authorize a dependent start.
+        try {
+            const appliedByUid = new Map();
+            for (const uid of targets) {
+                for (const [taskIdx, en] of Object.entries(changes)) {
+                    const previous = appliedByUid.get(uid);
+                    const changeCmd = makeCmd('set_task_enabled', {
+                        [isOneClick ? 'configName' : 'groupName']: configName,
+                        taskIndex: Number(taskIdx), enabled: en,
+                        expectedConfigRevision: previous?.configRevision,
+                        bgiEpoch: previous ? { processId: previous.targetProcessId, startTicksUtc: previous.targetStartTicksUtc } : undefined
+                    });
+                    changeCmd.target = [uid];
+                    appliedByUid.set(uid, await sendAndWaitConfigApplied(changeCmd, uid));
+                    if (!overlay.isConnected) return;
+                }
+            }
+            if (!overlay.isConnected) return;
+            for (const uid of targets) {
+                const applied = appliedByUid.get(uid);
+                const cmd = makeCmd(isOneClick ? 'start_oneclick' : 'start_group', {
+                    [isOneClick ? 'configName' : 'groupName']: configName,
+                    startFromIndex: selectedIndex,
+                    expectedConfigRevision: applied?.configRevision,
+                    bgiEpoch: applied ? { processId: applied.targetProcessId, startTicksUtc: applied.targetStartTicksUtc } : undefined
+                });
+                cmd.target = [uid];
+                await sendRemoteCommand(cmd);
+            }
+            log('配置应用已确认，任务启动命令已下发');
+        } catch (error) {
+            log('保存/启动未完成：' + error.message);
+            okBtn.disabled = false;
+            cancelBtn.disabled = false;
+            return;
         }
-        if (savePromises.length > 0) {
-            await Promise.all(savePromises);
-            log(`已对 ${memberName} 更新 ${savePromises.length} 个任务的启用状态`);
-        }
-        // await 期间用户可能已点取消关窗（按钮禁用只是防重入，窗口仍可能被 Esc/后续改动移除）
-        if (!overlay.isConnected) return;
-
-        // 发启动命令（startFromIndex 传真实任务键，BGI 端一条龙按 TaskEnabledList 键比对）
-        const cmd = makeCmd(isOneClick ? 'start_oneclick' : 'start_group', {
-            [isOneClick ? 'configName' : 'groupName']: configName,
-            startFromIndex: selectedIndex
-        });
-        cmd.target = targets;
-        sendRemoteCommand(cmd).catch(err => log('发送失败: ' + err.message));
-        log(`已对 ${memberName} 下发 ${label}：${configName}（从第 ${selectedIndex} 个任务开始）`);
         overlay.remove();
     });
     overlay.querySelector('#tskCancel').addEventListener('click', () => overlay.remove());

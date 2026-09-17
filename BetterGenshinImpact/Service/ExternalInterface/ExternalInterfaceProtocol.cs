@@ -23,6 +23,8 @@ internal static class ExternalInterfaceOperations
     public const string TaskSuspend = "ext.task.suspend";
     public const string TaskResume = "ext.task.resume";
     public const string ConfigSetTaskEnabled = "ext.config.setTaskEnabled";
+    public const string ConfigDescribe = "ext.config.describe";
+    public const string ConfigApplyTaskState = "ext.config.applyTaskState";
     public const string ConfigPullGroup = "ext.config.pullGroup";
     public const string ConfigOpenRemoteEditor = "ext.config.openRemoteEditor";
     public const string ConfigRemoteEditorResult = "ext.config.remoteEditorResult";
@@ -56,7 +58,7 @@ internal static class ExternalInterfaceOperations
     /// <summary>写操作集合：重复投递必须去重；查询/握手/订阅类天然幂等，不进窗口。</summary>
     public static bool IsWriteOperation(string operation) => operation is
         TaskStart or TaskStop or TaskCancel or TaskSuspend or TaskResume
-        or ConfigSetTaskEnabled or ConfigPullGroup or ConfigOpenRemoteEditor
+        or ConfigSetTaskEnabled or ConfigApplyTaskState or ConfigPullGroup or ConfigOpenRemoteEditor
         or ConfigRemoteEditorResult or ConfigApplyGroup
         or ActionExecuteHotkey or ActionCloseGame;
 }
@@ -152,6 +154,11 @@ internal static class ExternalInterfaceProtocol
                 ["task.stop"] = true,
                 ["task.suspend"] = true,
                 ["task.takeover"] = true,
+                ["execution.contract.v1"] = true,
+                ["config.revision"] = true,
+                ["config.applied"] = true,
+                ["task.single.legacy"] = true,
+                ["task.single.native"] = false,
                 ["task.resume"] = true,
                 ["task.status"] = true,
                 ["config.list"] = true,
