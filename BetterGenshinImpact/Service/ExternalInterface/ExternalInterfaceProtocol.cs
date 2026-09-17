@@ -151,6 +151,7 @@ internal static class ExternalInterfaceProtocol
                 ["task.start"] = true,
                 ["task.stop"] = true,
                 ["task.suspend"] = true,
+                ["task.takeover"] = true,
                 ["task.resume"] = true,
                 ["task.status"] = true,
                 ["config.list"] = true,

@@ -134,18 +134,24 @@ public partial class ScriptService : IScriptService
     private static readonly SemaphoreSlim StartGameLock = new(1, 1);
     
     /// <param name="job">[A2] 作业描述符：非空时经 TaskRunner 漏斗登记进 JobRegistry；null = 不登记（旧行为）。</param>
-    public async Task RunMulti(IEnumerable<ScriptGroupProject> projectList, string? groupName = null,TaskProgress? taskProgress = null, JobDescriptor? job = null)
+    public async Task<TaskRunResult> RunMulti(IEnumerable<ScriptGroupProject> projectList, string? groupName = null,TaskProgress? taskProgress = null, JobDescriptor? job = null)
     {
         groupName ??= "默认";
+        ExecutionScope? owned = null;
+        try { if (ExecutionScope.Current == null) owned = ExecutionScope.Start(job ?? new(JobKind.Group, groupName, JobSource.Ui)); }
+        catch (InvalidOperationException) { return TaskRunResult.RejectedSlotBusy; }
+        using var rootLifetime = owned;
+        var scope = ExecutionScope.Current!;
+        scope.ThrowIfStopped();
+        var configurationPath = Global.Absolute(System.IO.Path.Combine("User", "ScriptGroup", groupName + ".json"));
+        if (System.IO.File.Exists(configurationPath)) scope.TrackConfigurationFile(configurationPath);
+        scope.SetCheckpoint(new SuspendContextCapture.Snapshot("group", groupName, 0, null, null, 0, null, null, false));
 
         // 启动等待之前先进行取消操作的初始化，便于在任务开始前终止任务.
         // 仅在上下文已释放（上一个任务已结束）时重建：无条件 Set() 会在抢锁失败路径上
         // 提前清掉 WasCancelled（旧任务被注入的 task.start 取消后，这里二次伤害导致误报 started）。
         // 上下文存活时说明有任务在跑，保持原状；拿锁成功后 RunCurrentAsync 内部仍会 Set()。
-        if (CancellationContext.Instance.IsDisposed)
-        {
-            CancellationContext.Instance.Set();
-        }
+        CancellationContext.Instance.Set();
 
         var list = ReloadScriptProjects(projectList);
         
@@ -170,7 +176,7 @@ public partial class ScriptService : IScriptService
         if (CancellationContext.Instance.IsCancellationRequested)
         {
             _logger.LogInformation("配置组 {Name} 在启动阶段被取消", groupName);
-            return;
+            return TaskRunResult.Cancelled;
         }
         
         
@@ -187,6 +193,7 @@ public partial class ScriptService : IScriptService
 
         
         bool fisrt = true;
+        var executedProjects = 0;
         
         
         //非优先执行配置下，清空执行计数
@@ -203,6 +210,7 @@ public partial class ScriptService : IScriptService
                 int projectIndex = -1;
                 for (int x = 0; x < list.Count; x++)
                 {
+                    scope.ThrowIfStopped();
                     var project = list[x];
                     //正常情况下，只有一个真正执行的project，存在其他优先执行配置组情况下，会有多个任务。
                     List<ScriptGroupProject> exeProjects = [project];
@@ -373,7 +381,12 @@ public partial class ScriptService : IScriptService
                                 stopwatch.Reset();
                                 stopwatch.Start();
 
+                                scope.ThrowIfStopped();
+                                scope.SetCheckpoint(new SuspendContextCapture.Snapshot("group", groupName,
+                                    projectIndex, exeProject.FolderName, exeProject.Name, 0, null, null,
+                                    SuspendContextCapture.IsOnlineSignalTask(exeProject.Name, exeProject.FolderName)));
                                 await ExecuteProject(exeProject);
+                                executedProjects++;
 
                                 //多次执行时及时中断
                                 if (exeProject.RunNum > 1 && ShouldSkipTask(exeProject))
@@ -385,13 +398,14 @@ public partial class ScriptService : IScriptService
                             {
                                 throw;
                             }
-                            catch (TaskCanceledException e)
+                            catch (OperationCanceledException e)
                             {
                                 _logger.LogInformation("取消执行配置组: {Msg}", e.Message);
                                 throw;
                             }
                             catch (Exception e)
                             {
+                                scope.Observe(TaskRunResult.Failed);
                                 _logger.LogDebug(e, "执行脚本时发生异常");
                                 _logger.LogError("执行脚本时发生异常: {Msg}", e.Message);
                                 if (!RunnerContext.Instance.IsPreExecution && taskProgress != null && taskProgress.CurrentScriptGroupProjectInfo != null)
@@ -455,6 +469,8 @@ public partial class ScriptService : IScriptService
                         }
                     }
                 }
+                if (executedProjects == 0)
+                    throw new InvalidOperationException("no_work: 没有任何配置组项目实际完成");
             }, job: job);
         
 
@@ -471,19 +487,28 @@ public partial class ScriptService : IScriptService
             {
                 taskProgress.Next = null;
             }
-            return;
+            return runResult;
         }
 
         // [A6] 让位联机锄地：组从未起步，不走"执行结束"式收尾（同 A1.1 不假事实纪律）；
         // 恢复点已在 TaskRunner 让位点保存，锄地批次结束后由 task.resume 恢复。
         if (runResult == TaskRunResult.Preempted)
         {
-            _logger.LogInformation("配置组 {Name} 已让位联机锄地批次，本次未执行", groupName);
+            _logger.LogInformation("配置组 {Name} 已让位联机锄地批次，后续节点不再起步", groupName);
             if (taskProgress != null)
             {
                 taskProgress.Next = null;
             }
-            return;
+            return runResult;
+        }
+
+        if (runResult != TaskRunResult.Ran)
+        {
+            _logger.LogWarning("配置组 {Name} 未成功完成，结果: {Result}", groupName, runResult);
+            if (runResult == TaskRunResult.Failed)
+                Notify.Event(NotificationEvent.GroupEnd).Error($"配置组{groupName}执行失败");
+            if (taskProgress != null) taskProgress.Next = null;
+            return runResult;
         }
 
         if (!string.IsNullOrEmpty(groupName)&&!RunnerContext.Instance.IsPreExecution)
@@ -503,7 +528,7 @@ public partial class ScriptService : IScriptService
         {
             taskProgress.Next = null;
         }
-
+        return runResult;
     }
 
     private List<ScriptGroupProject> ReloadScriptProjects(IEnumerable<ScriptGroupProject> projectList)
@@ -695,7 +720,7 @@ public partial class ScriptService : IScriptService
             //   - 无窗口（0）→ 真正需要启动原神，执行 OnStartTriggerAsync。
             // 判据用"原神窗口句柄"而非 TaskDispatcherEnabled：因为另一条路径在等待原神窗口期间
             // TaskDispatcherEnabled 仍为 false，但原神窗口已开始出现，此时二次启动应被拦截。
-            await StartGameLock.WaitAsync();
+            await StartGameLock.WaitAsync(ExecutionScope.Current?.Token ?? CancellationToken.None);
             try
             {
                 // [停止响应] 等待 StartGameLock 期间用户可能已按 F11 取消。

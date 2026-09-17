@@ -27,6 +27,66 @@ public static class PreemptionGate
     private static int _epoch;
     private static DateTime _armedAtUtc;
     private static int _savedForEpoch;
+    private static string? _ticket;
+    private static readonly System.Collections.Generic.HashSet<string> Revoked = new();
+    private static readonly System.Collections.Generic.Queue<string> RevokedOrder = new();
+
+    public static bool Authorize(string? ticket)
+    {
+        lock (Sync)
+        {
+            if (!IsArmedCore()) return ticket == null;
+            return ticket != null && ticket == _ticket;
+        }
+    }
+
+    public static int Arm(string ticket)
+    {
+        if (string.IsNullOrWhiteSpace(ticket)) throw new ArgumentException("takeover ticket required");
+        lock (Sync)
+        {
+            if (Revoked.Contains(ticket)) throw new InvalidOperationException("stale_ticket");
+            if (_ticket == ticket && !IsArmedCore()) throw new InvalidOperationException("stale_ticket");
+            if (IsArmedCore())
+            {
+                if (_ticket != ticket) throw new InvalidOperationException("takeover_conflict");
+                _armedAtUtc = DateTime.UtcNow;
+                return _epoch;
+            }
+            _epoch++;
+            _ticket = ticket;
+            _armedAtUtc = DateTime.UtcNow;
+            return _epoch;
+        }
+    }
+
+    public static bool Renew(string? ticket)
+    {
+        lock (Sync)
+        {
+            if (ticket == null || _ticket != ticket || !IsArmedCore()) return false;
+            _armedAtUtc = DateTime.UtcNow;
+            return true;
+        }
+    }
+
+    public static bool Release(string? ticket)
+    {
+        lock (Sync)
+        {
+            if (_ticket != null && _ticket != ticket) return false;
+            if (_ticket != null)
+            {
+                Revoked.Add(_ticket);
+                RevokedOrder.Enqueue(_ticket);
+                while (RevokedOrder.Count > 256) Revoked.Remove(RevokedOrder.Dequeue());
+            }
+            _ticket = null;
+            _armedAtUtc = DateTime.MinValue;
+            _epoch++;
+            return true;
+        }
+    }
 
     /// <summary>当前代际（每次 Arm 递增）。仅观察用。</summary>
     public static int CurrentEpoch
@@ -40,6 +100,7 @@ public static class PreemptionGate
         lock (Sync)
         {
             _epoch++;
+            _ticket = null;
             _armedAtUtc = DateTime.UtcNow;
             return _epoch;
         }
@@ -50,7 +111,14 @@ public static class PreemptionGate
     {
         lock (Sync)
         {
+            if (_ticket != null)
+            {
+                Revoked.Add(_ticket);
+                RevokedOrder.Enqueue(_ticket);
+                while (RevokedOrder.Count > 256) Revoked.Remove(RevokedOrder.Dequeue());
+            }
             _epoch++;
+            _ticket = null;
             _armedAtUtc = DateTime.MinValue;
         }
     }
@@ -80,7 +148,7 @@ public static class PreemptionGate
         }
         lock (Sync)
         {
-            if (!IsArmedCore())
+            if (!IsArmedCore() || _ticket != null)
             {
                 return false;
             }

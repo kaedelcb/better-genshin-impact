@@ -2002,6 +2002,7 @@ public partial class OneDragonFlowViewModel : ViewModel
     [RelayCommand]
     private async Task OnOneKeyContinuousExecutionOneKey()
     {
+        var stopVersion = BetterGenshinImpact.Service.Execution.ExecutionScope.StopVersionNow;
         await ScriptService.StartGameTask();
         
         _logger.LogInformation(
@@ -2049,6 +2050,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         _lastUid = "";
         while (Config.ScheduleLoop || _lastUid == "")
         {
+            if (stopVersion != BetterGenshinImpact.Service.Execution.ExecutionScope.StopVersionNow) return;
             _finishMark = false;
             _continuousExecutionMark = true;
             _executionSuccessCount = 0;
@@ -2131,9 +2133,11 @@ public partial class OneDragonFlowViewModel : ViewModel
                     $"正在执行 {Config.SelectedOneDragonFlowPlanName} 计划的第 {configIndex} / {boundConfigs.Count} 个配置单：{config.Name}，绑定UID {config.GenshinUid}");
                 
                 await Task.Delay(500);
-                await OnOneKeyExecute();
+                if (stopVersion != BetterGenshinImpact.Service.Execution.ExecutionScope.StopVersionNow) return;
+                if (await ExecuteOneDragonAsync() != TaskRunResult.Ran) return;
                 await Task.Delay(500);
-                await new ReturnMainUiTask().Start(CancellationToken.None);
+                if (await new TaskRunner().RunCurrentAsync(
+                    () => new ReturnMainUiTask().Start(CancellationContext.Instance.Token)) != TaskRunResult.Ran) return;
                 // 如果任务已经被取消，中断所有任务
                 if (CancellationContext.Instance.Cts.IsCancellationRequested)
                 {
@@ -2264,91 +2268,81 @@ public partial class OneDragonFlowViewModel : ViewModel
     private bool _nextTaskModel = false; // 退出手机的最大次数
     
     [RelayCommand]
-    public async Task OnOneKeyExecute()
+    public async Task OnOneKeyExecute() => await ExecuteOneDragonAsync();
+
+    public async Task<TaskRunResult> ExecuteOneDragonAsync(BetterGenshinImpact.Service.Execution.JobDescriptor? request = null)
     {
-        // [A5-2] 龙父作业壳（父子模型，执行体原样在 OnOneKeyExecuteCore）：
-        // IPC task.start 已登记的父作业经 RunnerContext 预置认领；否则按来源提示新建（默认 Ui）。
-        // 捕获即清空 RunnerContext（生命周期=单次执行，同 BatchGroupNames 纪律）。
-        var presetParentJobId = RunnerContext.Instance.OneDragonParentJobId;
-        var sourceHint = RunnerContext.Instance.OneDragonJobSourceHint;
-        RunnerContext.Instance.OneDragonParentJobId = null;
+        var source = RunnerContext.Instance.OneDragonJobSourceHint ?? BetterGenshinImpact.Service.Execution.JobSource.Ui;
         RunnerContext.Instance.OneDragonJobSourceHint = null;
-
-        BetterGenshinImpact.Service.Execution.BgiJob? dragonJob = null;
-        var createdHere = false;
-        try
+        RunnerContext.Instance.OneDragonParentJobId = null;
+        if (string.IsNullOrEmpty(SelectedConfig?.Name)) return TaskRunResult.Failed;
+        var descriptor = request ?? new BetterGenshinImpact.Service.Execution.JobDescriptor(
+            BetterGenshinImpact.Service.Execution.JobKind.OneDragon, SelectedConfig.Name, source);
+        descriptor = descriptor with { JobId = descriptor.JobId ?? Guid.NewGuid() };
+        BetterGenshinImpact.Service.Execution.ExecutionScope scope;
+        try { scope = BetterGenshinImpact.Service.Execution.ExecutionScope.Start(descriptor); }
+        catch (InvalidOperationException ex)
         {
-            if (presetParentJobId is { } presetId)
-            {
-                dragonJob = BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(presetId);
-                if (dragonJob == null)
-                {
-                    _logger.LogWarning("[JobRegistry] [A5-2] 预置龙父作业不存在（退化新建）: {JobId}", presetId);
-                }
-            }
-            // 未选中配置时核心体会 Toast 早退，不登记空壳父作业
-            if (dragonJob == null && !string.IsNullOrEmpty(SelectedConfig?.Name))
-            {
-                dragonJob = BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Submit(
-                    BetterGenshinImpact.Service.Execution.JobKind.OneDragon, SelectedConfig.Name,
-                    sourceHint ?? BetterGenshinImpact.Service.Execution.JobSource.Ui).Job;
-                createdHere = true;
-                BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryMarkRunning(dragonJob.JobId);
-            }
+            _continuousExecutionMark = false;
+            _finishMark = false;
+            _logger.LogWarning(ex, "一条龙未获执行权");
+            return TaskRunResult.RejectedSlotBusy;
         }
-        catch (Exception ex)
-        {
-            // 观察性故障不影响执行（注册表纪律 §3）
-            _logger.LogWarning(ex, "[JobRegistry] [A5-2] 龙父作业登记失败（不影响执行）: {Name}", SelectedConfig?.Name);
-            dragonJob = null;
-            createdHere = false;
-        }
-        _currentDragonJobId = dragonJob?.JobId;
-
-        // 终态判定口径与执行漏斗一致。_finishMark 跨次执行会残留 true，壳开头重置保证本轮换真。
+        using var rootLifetime = scope;
+        var registry = BetterGenshinImpact.Service.Execution.JobRegistry.Instance;
+        var parent = descriptor.JobId is { } id ? registry.Query(id) : null;
+        parent ??= registry.Submit(descriptor.Kind, descriptor.Name, descriptor.Source,
+            descriptor.Generation, descriptor.IdempotencyKey, jobId: descriptor.JobId).Job;
+        _currentDragonJobId = parent.JobId;
+        registry.TryMarkRunning(parent.JobId);
+        scope.SetDragonNode(0);
         _finishMark = false;
-        var faulted = false;
+        var result = TaskRunResult.Failed;
         try
         {
             await OnOneKeyExecuteCore();
+            result = scope.Result != TaskRunResult.Ran ? scope.Result
+                : _finishMark ? TaskRunResult.Ran : TaskRunResult.Failed;
         }
-        catch
+        catch (OperationCanceledException)
         {
-            faulted = true;
-            throw;
+            result = scope.Result == TaskRunResult.Preempted ? TaskRunResult.Preempted : TaskRunResult.Cancelled;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "一条龙执行失败");
+            result = TaskRunResult.Failed;
         }
         finally
         {
-            // 终态只由创建方登记：认领（IPC）路径的终态登记在 ExecuteTaskStartCoreAsync 段末，
-            // 壳不抢它的 Failed/Cancelled 判定（重复登记幂等无操作，但先写者赢，不能先写）。
-            if (createdHere && dragonJob != null)
-            {
-                try
-                {
-                    BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryMarkTerminal(dragonJob.JobId,
-                        faulted
-                            ? BetterGenshinImpact.Service.Execution.JobState.Failed
-                            : _finishMark
-                                ? BetterGenshinImpact.Service.Execution.JobState.Succeeded
-                                : BetterGenshinImpact.Service.Execution.JobState.Cancelled,
-                        faulted
-                            ? BetterGenshinImpact.Service.Execution.JobErrorCodes.TaskStartFailed
-                            : _finishMark
-                                ? null
-                                : BetterGenshinImpact.Service.Execution.JobErrorCodes.CancelledUser,
-                        null, !_finishMark);
-                }
-                catch (Exception termEx)
-                {
-                    _logger.LogWarning(termEx, "[JobRegistry] [A5-2] 龙父作业终态登记失败: {Name}", SelectedConfig?.Name);
-                }
-            }
+            var cancelled = result is TaskRunResult.Cancelled or TaskRunResult.Preempted;
+            registry.TryMarkTerminal(parent.JobId,
+                result == TaskRunResult.Ran ? BetterGenshinImpact.Service.Execution.JobState.Succeeded
+                    : cancelled ? BetterGenshinImpact.Service.Execution.JobState.Cancelled
+                    : BetterGenshinImpact.Service.Execution.JobState.Failed,
+                result == TaskRunResult.Ran ? null : result == TaskRunResult.Preempted ? "preempted"
+                    : cancelled ? scope.StopReason : "task_start_failed", null, cancelled);
             _currentDragonJobId = null;
+            _runningConfig = null;
+            if (result != TaskRunResult.Ran) { _finishMark = false; _continuousExecutionMark = false; }
         }
+        return result;
+    }
+
+    private OneDragonFlowConfig? _runningConfig;
+    private static void RequireDragonStep(TaskRunResult result)
+    {
+        if (result == TaskRunResult.Ran) return;
+        var scope = BetterGenshinImpact.Service.Execution.ExecutionScope.Current!;
+        scope.Observe(result);
+        scope.ThrowIfStopped();
+        throw new InvalidOperationException("一条龙前置动作未成功: " + result);
     }
 
     private async Task OnOneKeyExecuteCore()
     {
+        var scope = BetterGenshinImpact.Service.Execution.ExecutionScope.Current!;
+        scope.ThrowIfStopped();
         CancellationContext.Instance.Set();
 
         // [批次名单 2026-09-13] 捕获本次执行的批次绑定名单（助手批次/命令行回退下发时由调用方预置），
@@ -2362,7 +2356,13 @@ public partial class OneDragonFlowViewModel : ViewModel
             _lastUid = "";
             InitConfigList();//初始化配置，保证当前选择的配置是最新的
         }
-        if (string.IsNullOrEmpty(SelectedConfig.Name) || string.IsNullOrEmpty(Config.SelectedOneDragonFlowConfigName))
+        var executionConfig = JsonConvert.DeserializeObject<OneDragonFlowConfig>(JsonConvert.SerializeObject(SelectedConfig))!;
+        if (executionConfig.Name != scope.Descriptor.Name)
+            throw new InvalidOperationException("执行配置在起步前已改变");
+        _runningConfig = executionConfig;
+        scope.TrackConfigurationFile(Path.Combine(OneDragonFlowConfigFolder, executionConfig.Name + ".json"));
+        if (scope.Descriptor.ResumeIndex is { } resumeIndex) executionConfig.NextTaskIndex = resumeIndex;
+        if (string.IsNullOrEmpty(executionConfig.Name) || string.IsNullOrEmpty(Config.SelectedOneDragonFlowConfigName))
         {
             Toast.Warning("请先选择配置");
             return;
@@ -2370,18 +2370,20 @@ public partial class OneDragonFlowViewModel : ViewModel
         
         ReadScriptGroup();
 
-        var taskListCopy = new List<OneDragonTaskItem>(TaskList);//避免执行过程中修改TaskList
+        var taskListCopy = TaskList.Select(t => new OneDragonTaskItem(t.Index, t.IsEnabled, t.Name, t.IsNextTask)).ToList();//避免执行过程中修改TaskList
+        if (!taskListCopy.Any(t => t.IsEnabled))
+            throw new InvalidOperationException("no_work: 一条龙没有启用的任务");
         
-        if (SelectedConfig.NextTaskIndex > 0)
+        if (executionConfig.NextTaskIndex > 0)
         {
             // 通过NextTaskIndex找到执行的任务名称
-            var taskName = TaskList.FirstOrDefault(t => t.Index == SelectedConfig.NextTaskIndex)?.Name;
+            var taskName = TaskList.FirstOrDefault(t => t.Index == executionConfig.NextTaskIndex)?.Name;
 
             if (!string.IsNullOrEmpty(taskName))
             {
                 _logger.LogInformation("连续一条龙：任务将从 {taskName} 开始执行", taskName);
                 // 找到该任务在taskListCopy中的位置
-                int taskIndex = taskListCopy.FindIndex(t => t.Index == SelectedConfig.NextTaskIndex);
+                int taskIndex = taskListCopy.FindIndex(t => t.Index == executionConfig.NextTaskIndex);
 
                 if (taskIndex >= 0)
                 {
@@ -2391,13 +2393,14 @@ public partial class OneDragonFlowViewModel : ViewModel
                 else
                 {
                     // 如果没有找到该任务，保持原样或处理错误
-                    _logger.LogWarning("连续一条龙：未找到指定的任务序号或被删除，将从头开始执行");
+                    throw new InvalidOperationException("恢复位置已不存在，不能从头重跑");
                 }
             }else
             {
-                _logger.LogWarning("连续一条龙：未找到指定的任务序号或被删除，将从头开始执行");
+                throw new InvalidOperationException("恢复位置已不存在，不能从头重跑");
             }
-            SelectedConfig.NextTaskIndex = 0;
+            executionConfig.NextTaskIndex = 0;
+            if (scope.Descriptor.ResumeIndex == null) SelectedConfig.NextTaskIndex = 0;
             LoadDisplayTaskListFromConfig();
         }
 
@@ -2406,7 +2409,7 @@ public partial class OneDragonFlowViewModel : ViewModel
 
         foreach (var task in taskListCopy)
         {
-            task.InitAction(SelectedConfig);
+            task.InitAction(executionConfig);
         }
         
         int finishOneTaskcount = 1;
@@ -2419,7 +2422,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         await ScriptService.StartGameTask();
         _logger.LogInformation($"上一个执行UID：{(string.IsNullOrEmpty(_lastUid) ? "无" : _lastUid)}");
 
-        if (_lastUid != SelectedConfig.GenshinUid)
+        if (_lastUid != executionConfig.GenshinUid)
         {
             var returnMainUiTask = new ReturnMainUiTask();
             // 验证UID
@@ -2435,7 +2438,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                 if (TaskContext.Instance().Config.MapMaskConfig.Enabled)
                 {
                     //返回主页
-                    using var cancellationTokenSource = new CancellationTokenSource();
+                    using var cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(scope.Token);
                     await _blessingOfTheWelkinMoonTask.Start(cancellationTokenSource.Token);
                     await returnMainUiTask.Start(cancellationTokenSource.Token);
                     await Task.Delay(2000, cancellationTokenSource.Token);
@@ -2446,7 +2449,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                     using var ra = CaptureToRectArea();
                     if (Bv.IsInMainUi(ra))
                     {
-                        using var cancellationTokenSource2 = new CancellationTokenSource();
+                        using var cancellationTokenSource2 = CancellationTokenSource.CreateLinkedTokenSource(scope.Token);
                         await _blessingOfTheWelkinMoonTask.Start(cancellationTokenSource2.Token);
                         Simulation.SendInput.SimulateAction(GIActions.OpenAdventurerHandbook);
                         await returnMainUiTask.Start(cancellationTokenSource2.Token);
@@ -2462,26 +2465,28 @@ public partial class OneDragonFlowViewModel : ViewModel
             }
             catch (OperationCanceledException ex)   
             {
-                _logger.LogError(ex, "UID验证:  {SelectedConfig.Name} / {SelectedConfig.GenshinUid} 配置单任务," +
+                _logger.LogError(ex, "UID验证:  {executionConfig.Name} / {executionConfig.GenshinUid} 配置单任务," +
                                      "验证UID时发生错误,退出执行",
-                    SelectedConfig.Name, SelectedConfig.GenshinUid);
+                    executionConfig.Name, executionConfig.GenshinUid);
 
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "UID验证:  {SelectedConfig.Name} / {SelectedConfig.GenshinUid} 配置单任务," +
+                _logger.LogError(ex, "UID验证:  {executionConfig.Name} / {executionConfig.GenshinUid} 配置单任务," +
                                      "验证UID时发生未知错误,退出执行",
-                    SelectedConfig.Name, SelectedConfig.GenshinUid);
+                    executionConfig.Name, executionConfig.GenshinUid);
             }
             
             
             for (int i = 0; i < retrySingleTimes * reTrySwitchTimes; i++){
+                scope.ThrowIfStopped();
+                if (scope.Result != TaskRunResult.Ran) return;
 
                 try
                 {
-                    using var cancellationTokenSource = new CancellationTokenSource();
-                    await _blessingOfTheWelkinMoonTask.Start(cancellationTokenSource.Token);
-                    await new TaskRunner().RunCurrentAsync(async () =>
+                    using var cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(scope.Token);
+                    scope.ThrowIfStopped();
+                    RequireDragonStep(await new TaskRunner().RunCurrentAsync(async () =>
                     {
                         await _blessingOfTheWelkinMoonTask.Start(cancellationTokenSource.Token);
                         //获取原神窗口焦点
@@ -2489,7 +2494,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                         retrySingleCount++;
                         await returnMainUiTask.Start(cancellationTokenSource.Token);
                         uidCheckResult = await VerifyUid(cancellationTokenSource.Token); // 验证当前登录账号的UID
-                    });
+                    }));
                 }
                 catch (TaskCanceledException ex)
                 {
@@ -2503,14 +2508,14 @@ public partial class OneDragonFlowViewModel : ViewModel
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "UID验证:  {SelectedConfig.Name} / {SelectedConfig.GenshinUid} 配置单任务," +
+                    _logger.LogError(ex, "UID验证:  {executionConfig.Name} / {executionConfig.GenshinUid} 配置单任务," +
                                          "验证UID时发生未知错误,退出执行",
-                        SelectedConfig.Name, SelectedConfig.GenshinUid);
+                        executionConfig.Name, executionConfig.GenshinUid);
                 }
 
                 // 如果任务已经被取消，中断所有任务
              
-                if (CancellationContext.Instance.Cts.IsCancellationRequested)
+                if (scope.Token.IsCancellationRequested)
                 {
                     _continuousExecutionMark = false;// 标记连续执行结束
                     _executionSuccessCount = 0;// 重置连续执行成功次数
@@ -2527,19 +2532,19 @@ public partial class OneDragonFlowViewModel : ViewModel
                         reTrySwitchCount ++;
                         if (reTrySwitchCount >= reTrySwitchTimes)
                         {
-                            _logger.LogError("UID验证:  {SelectedConfig.Name} / {SelectedConfig.GenshinUid} 配置单任务," +
+                            _logger.LogError("UID验证:  {executionConfig.Name} / {executionConfig.GenshinUid} 配置单任务," +
                                              "切换账号 {reTrySwitchTimes} 次,验证UID仍然失败,退出执行",
-                                SelectedConfig.Name,SelectedConfig.GenshinUid,reTrySwitchTimes-1);
+                                executionConfig.Name,executionConfig.GenshinUid,reTrySwitchTimes-1);
                             return;
                         }
                         _logger.LogWarning("UID验证:失败 {retrySingleTimes} 次,第 {reTrySwitchCount} 次尝试切换账号",retrySingleTimes,reTrySwitchCount);
-                        await new TaskRunner().RunCurrentAsync(async () =>
+                        RequireDragonStep(await new TaskRunner().RunCurrentAsync(async () =>
                         { 
                             retrySingleCount = 0; // 重置UID验证次数
-                            switchAccountResult = await SwitchAccount(CancellationContext.Instance.Cts.Token, reTrySwitchCount); // 失败后，切换账号
-                        });
+                            switchAccountResult = await SwitchAccount(scope.Token, reTrySwitchCount); // 失败后，切换账号
+                        }));
                         // 如果任务已经被取消，中断所有任务
-                        if (CancellationContext.Instance.Cts.IsCancellationRequested)
+                        if (scope.Token.IsCancellationRequested)
                         {
                             _continuousExecutionMark = false;// 标记连续执行结束
                             _executionSuccessCount = 0;// 重置连续执行成功次数
@@ -2557,7 +2562,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                 }
                 else
                 {
-                    _logger.LogInformation($"UID验证 {SelectedConfig.GenshinUid} ，继续执行");
+                    _logger.LogInformation($"UID验证 {executionConfig.GenshinUid} ，继续执行");
                     break;
                 }
             }
@@ -2565,19 +2570,21 @@ public partial class OneDragonFlowViewModel : ViewModel
         }
         else
         {
-            _logger.LogWarning("连续一条龙：绑定UID {GenshinUid} 一致，继续执行",SelectedConfig.GenshinUid);
+            _logger.LogWarning("连续一条龙：绑定UID {GenshinUid} 一致，继续执行",executionConfig.GenshinUid);
         }
        
-        _lastUid = SelectedConfig.GenshinUid;//记录上一次切换的UID
+        scope.ThrowIfStopped();
+        if (scope.Result != TaskRunResult.Ran) return;
+        _lastUid = executionConfig.GenshinUid;//记录上一次切换的UID
         
-        using var cancellationTokenSource33 = new CancellationTokenSource();
-        await new TaskRunner().RunCurrentAsync(async () =>
+        using var cancellationTokenSource33 = CancellationTokenSource.CreateLinkedTokenSource(scope.Token);
+        RequireDragonStep(await new TaskRunner().RunCurrentAsync(async () =>
         {
             // 在一条龙启动前检查是否需要自动兑换兑换码（无论是一条龙任务还是配置组任务都需要检查）
             await CheckAndRedeemCodeIfEnabledAsync(cancellationTokenSource33.Token);
-        });
+        }));
         // 如果任务已经被取消，中断所有任务
-        if (CancellationContext.Instance.Cts.IsCancellationRequested)
+        if (scope.Token.IsCancellationRequested)
         {
             _continuousExecutionMark = false;// 标记连续执行结束
             _executionSuccessCount = 0;// 重置连续执行成功次数
@@ -2618,19 +2625,28 @@ public partial class OneDragonFlowViewModel : ViewModel
         }
 
         //获取今天天设置的秘境名称
-        var domainConfig = SelectedConfig.GetDomainConfig();
+        var domainConfig = executionConfig.GetDomainConfig();
         var custoModel = ScriptGroups.Any(scriptGroup => scriptGroup.Name == domainConfig.domainName) && taskListCopy.Any(t => t.Name == "自动秘境" && t.IsEnabled == true);
         // Toast.Success($"当前秘境名称: {domainConfig.domainName}, 是否自定义秘境: {custoModel}");
         
         Notify.Event(NotificationEvent.DragonStart).Success("一条龙启动");
         var enabledOrdinal = 0; // [A5-3] 当前条目在本次执行启用序列中的序号（job.progress 的 currentIndex）
+        var delegatedGroups = new HashSet<string>(StringComparer.Ordinal);
         foreach (var task in taskListCopy)
         {
+            scope.ThrowIfStopped();
             if (task is { IsEnabled: true, Action: not null }) {
                 // [A5-1] 回写龙级水位线：suspend 时据此保存"被中断的条目"，
                 // resume 经 NextTaskIndex 回灌后从该条目重跑（被中断条目未完成，重跑是既定语义）。
                 // 批次跳过的配置组（由助手批次外部驱动）也会推进水位线——它们已逻辑启动。
                 _currentExecutingTaskIndex = task.Index;
+                scope.SetDragonNode(task.Index);
+                if (batchGroupNames is { Count: > 0 } && batchGroupNames.Contains(task.Name)
+                    && !ScriptGroupsDefault.Any(d => d.Name == task.Name) && delegatedGroups.Add(task.Name))
+                {
+                    _logger.LogInformation("批次外部负责配置组 {Name}，本龙执行前跳过", task.Name);
+                    continue;
+                }
 
                 // [A5-3] job.progress（父作业视角）：外部观察者凭事件族 + ext.job.list 还原执行轨迹。
                 // 父作业未登记（观察性故障容错为空）时跳过发布，绝不影响执行。
@@ -2659,6 +2675,8 @@ public partial class OneDragonFlowViewModel : ViewModel
                             BetterGenshinImpact.Service.Execution.JobKind.Solo, task.Name,
                             BetterGenshinImpact.Service.Execution.JobSource.OneDragonInternal,
                             ParentJobId: _currentDragonJobId));
+                    scope.Observe(itemRunResult);
+                    if (itemRunResult is TaskRunResult.Preempted or TaskRunResult.Cancelled or TaskRunResult.RejectedSlotBusy) return;
                     if (itemRunResult == TaskRunResult.RejectedSlotBusy)
                     {
                         _logger.LogWarning("[A5-2] 龙内条目 {Name} 因槽位被抢占未执行（子作业已登记 Rejected(task_busy)），继续后续条目", task.Name);
@@ -2675,7 +2693,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                         }
                         Notify.Event(NotificationEvent.DragonStart).Success("配置组任务启动");
 
-                        if ((SelectedConfig.TaskEnabledList.ContainsKey(task.Index) && SelectedConfig.TaskEnabledList[task.Index].Item1) || custoModel && task.Name == "自动秘境")
+                        if ((executionConfig.TaskEnabledList.ContainsKey(task.Index) && executionConfig.TaskEnabledList[task.Index].Item1) || custoModel && task.Name == "自动秘境")
                         {
                             _logger.LogInformation(custoModel && task.Name == "自动秘境" ? 
                                 $"一条龙任务执行：执行自动秘境自定义任务 {finishOneTaskcount++}/{enabledoneTaskCount}" 
@@ -2698,56 +2716,52 @@ public partial class OneDragonFlowViewModel : ViewModel
                             IScriptService? scriptService = App.GetService<IScriptService>();
                             // [A5-2] 子项挂到龙父作业（ParentJobId）；槽位抢占由漏斗显式登记
                             // Rejected(task_busy)（RunMulti 无返回值，观察面走注册表，同 A2 纪律）。
-                            await scriptService!.RunMulti(ScriptControlViewModel.GetNextProjects(group), group.Name, taskProgress,
+                            var groupResult = await scriptService!.RunMulti(ScriptControlViewModel.GetNextProjects(group), group.Name, taskProgress,
                                 new BetterGenshinImpact.Service.Execution.JobDescriptor(
                                     BetterGenshinImpact.Service.Execution.JobKind.Group, group.Name,
                                     BetterGenshinImpact.Service.Execution.JobSource.OneDragonInternal,
                                     ParentJobId: _currentDragonJobId));
-                            await Task.Delay(1000);
+                            scope.Observe(groupResult);
+                            if (groupResult is TaskRunResult.Preempted or TaskRunResult.Cancelled or TaskRunResult.RejectedSlotBusy) return;
+                            await Task.Delay(1000, scope.Token);
                         }
                     }
+                    catch (OperationCanceledException) { throw; }
                     catch (Exception e)
                     {
+                        scope.Observe(TaskRunResult.Failed);
                         _logger.LogDebug(e, "执行配置组任务时失败");
                         Toast.Error("执行配置组任务时失败");
                     }
                 }
                 // 如果任务已经被取消，中断所有任务
-                if (CancellationContext.Instance.Cts.IsCancellationRequested)
+                if (scope.Token.IsCancellationRequested)
                 {
                     _logger.LogInformation("任务被取消，退出执行");
                     Notify.Event(NotificationEvent.DragonEnd).Success("一条龙和配置组任务结束");
                     return; // 后续的检查任务也不执行
                 }
-                // [批次名单 2026-09-13] 助手批次下发的一条龙：批次绑定名单内的配置组会由批次逐项驱动，
-                // 龙内跳过避免双线重复执行（V0.1.5 旧逻辑按"助手进程已启动"整体 break，会把名单外的组
-                // 误吞——实机事故：批次只绑一条龙时，龙内第二配置组（精英）被跳过且无任何一方补跑）。
-                // 名单外的组照常执行（continue 而非 break）；无名单（手动/快捷键/resume/老助手）不跳过任何组。
-                if (batchGroupNames is { Count: > 0 } && batchGroupNames.Contains(task.Name))
-                {
-                    _logger.LogInformation("[批次跳过探针] 配置组 {Name} 在批次绑定名单内，由助手批次逐项驱动，跳过龙内执行（批次名单: {Batch}）",
-                        task.Name, string.Join(",", batchGroupNames));
-                    continue;
-                }
             }
         }
         
+        scope.ThrowIfStopped();
+        if (scope.Result != TaskRunResult.Ran) return;
         // 当次执行配置单完成后，检查和最终结束的任务
-        await new TaskRunner().RunThreadAsync(async () =>
+        RequireDragonStep(await new TaskRunner().RunThreadAsync(async () =>
         {
             // await new CheckRewardsTask().Start(CancellationContext.Instance.Cts.Token);
             await Task.Delay(500);
-            Notify.Event(NotificationEvent.DragonEnd).Success($"配置单 {SelectedConfig.Name} 绑定 {SelectedConfig.GenshinUid}，一条龙和配置组任务结束");
-            _logger.LogInformation("配置单 {SelectedConfig.Name} 绑定UID {GenshinUid} 一条龙和配置组任务结束",
-                SelectedConfig.Name,string.IsNullOrEmpty(SelectedConfig.GenshinUid) ? "未绑定" : SelectedConfig.GenshinUid);
+            Notify.Event(NotificationEvent.DragonEnd).Success($"配置单 {executionConfig.Name} 绑定 {executionConfig.GenshinUid}，一条龙和配置组任务结束");
+            _logger.LogInformation("配置单 {executionConfig.Name} 绑定UID {GenshinUid} 一条龙和配置组任务结束",
+                executionConfig.Name,string.IsNullOrEmpty(executionConfig.GenshinUid) ? "未绑定" : executionConfig.GenshinUid);
             
-            // Logger.LogInformation("Debug-Log：{t1}.{t2}.{t3}",_continuousExecutionMark,SelectedConfig.Name,SelectedConfig.CompletionAction);
+            // Logger.LogInformation("Debug-Log：{t1}.{t2}.{t3}",_continuousExecutionMark,executionConfig.Name,executionConfig.CompletionAction);
             // 单次执行完成后，不执行后续的完成任务
             if (!_continuousExecutionMark)
             {
-                if (SelectedConfig != null && !string.IsNullOrEmpty(SelectedConfig.CompletionAction))
+                if (executionConfig != null && !string.IsNullOrEmpty(executionConfig.CompletionAction))
                 {
-                    switch (SelectedConfig.CompletionAction)
+                    switch (executionConfig.CompletionAction)
                     {
                         case "关闭游戏":
                             SystemControl.CloseGame();
@@ -2764,7 +2778,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                             SystemControl.Shutdown();
                             break;
                         default:
-                            Logger.LogWarning("未知的完成任务类型: {t}",SelectedConfig.CompletionAction);
+                            Logger.LogWarning("未知的完成任务类型: {t}",executionConfig.CompletionAction);
                             break;
                     }
                 }
@@ -2772,7 +2786,7 @@ public partial class OneDragonFlowViewModel : ViewModel
             _executionSuccessCount++;
             await Task.Delay(2000);
             _finishMark = true;
-        });
+        }));
     }
     
     // 新增方法：读取粘贴板内容
@@ -2910,7 +2924,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         try
         {
             // 使用配置的UID，如果没有配置则使用默认值 "default"
-            var uid = string.IsNullOrEmpty(SelectedConfig?.GenshinUid) ? "default" : SelectedConfig!.GenshinUid;
+            var uid = string.IsNullOrEmpty((_runningConfig ?? SelectedConfig)?.GenshinUid) ? "default" : (_runningConfig ?? SelectedConfig)!.GenshinUid;
             await _autoRedeemCodeChecker.CheckAndRedeemIfNeeded(uid, cts);
         }
         catch (Exception ex)
@@ -2922,12 +2936,12 @@ public partial class OneDragonFlowViewModel : ViewModel
     //UID验证
     private async Task<bool> VerifyUid(CancellationToken cts)  
     {
-        if (string.IsNullOrEmpty(SelectedConfig?.Name))
+        if (string.IsNullOrEmpty((_runningConfig ?? SelectedConfig)?.Name))
         {
             return false;
         }
         
-        if (SelectedConfig.AccountBinding == true)
+        if ((_runningConfig ?? SelectedConfig).AccountBinding == true)
         {
             await new ReturnMainUiTask().Start(cts);
             Clipboard.Clear();
@@ -2952,15 +2966,15 @@ public partial class OneDragonFlowViewModel : ViewModel
                 return false;
             }else
             {
-                if (clipboardContent.Contains(SelectedConfig.GenshinUid))
+                if (clipboardContent.Contains((_runningConfig ?? SelectedConfig).GenshinUid))
                 {
-                    _logger.LogInformation("UID验证: {text} 绑定 {text}，完成",SelectedConfig.Name,SelectedConfig.GenshinUid);
+                    _logger.LogInformation("UID验证: {text} 绑定 {text}，完成",(_runningConfig ?? SelectedConfig).Name,(_runningConfig ?? SelectedConfig).GenshinUid);
                     return true;
                 }
                 else
                 {
                     _logger.LogWarning(clipboardContent.Length == 9 && clipboardContent.All(char.IsNumber) ? 
-                        $"UID验证: 失败 {SelectedConfig.Name} ,绑定 {SelectedConfig.GenshinUid}，验证 {clipboardContent}" : "UID验证:失败");
+                        $"UID验证: 失败 {(_runningConfig ?? SelectedConfig).Name} ,绑定 {(_runningConfig ?? SelectedConfig).GenshinUid}，验证 {clipboardContent}" : "UID验证:失败");
                     return false;
                 }
             }
@@ -3135,7 +3149,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                 var capturedArea = CaptureToRectArea();
                 bool isAccountBinding = false;
                 var phoneList = capturedArea.FindMulti(RecognitionObject.Ocr(new Rect(760 , 455 , 330, 390)));
-                if (phoneList.Count > 0 && SelectedConfig != null && !string.IsNullOrEmpty(SelectedConfig.AccountBindingCode))
+                if (phoneList.Count > 0 && (_runningConfig ?? SelectedConfig) != null && !string.IsNullOrEmpty((_runningConfig ?? SelectedConfig).AccountBindingCode))
                 {
                     _exitPhoneCount = phoneList.Count(p => p.Text.Any(c => c == '*'));
                     Logger.LogInformation("当前记录账号数量: {count}", _exitPhoneCount-1);
@@ -3189,10 +3203,10 @@ public partial class OneDragonFlowViewModel : ViewModel
                                 }
                             }
                             
-                            if (comfirmWord == SelectedConfig.AccountBindingCode)
+                            if (comfirmWord == (_runningConfig ?? SelectedConfig).AccountBindingCode)
                             {
                                // 如果账号绑定成功，点击该账号
-                                Logger.LogInformation("UID: {0} 已绑定 {1}", SelectedConfig.GenshinUid, SelectedConfig.AccountBindingCode);
+                                Logger.LogInformation("UID: {0} 已绑定 {1}", (_runningConfig ?? SelectedConfig).GenshinUid, (_runningConfig ?? SelectedConfig).AccountBindingCode);
                                 phone.Click();
                                 isAccountBinding = true;
                                 await Delay(500, cts);
@@ -3203,7 +3217,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                 }
                 else
                 {
-                    Logger.LogWarning(string.IsNullOrEmpty(SelectedConfig?.AccountBindingCode) ? "UID为绑定码为空，重新绑定UID可设置绑定码" : "未检测到账号列表");
+                    Logger.LogWarning(string.IsNullOrEmpty((_runningConfig ?? SelectedConfig)?.AccountBindingCode) ? "UID为绑定码为空，重新绑定UID可设置绑定码" : "未检测到账号列表");
                 }
                 
                 //识别识别后用旧办法

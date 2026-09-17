@@ -65,6 +65,9 @@ public class AutoTrackPathTask
     /// </summary>
     public async void Start()
     {
+        using var root = BetterGenshinImpact.Service.Execution.ExecutionScope.Current == null
+            ? TryAcquireRoot() : null;
+        if (BetterGenshinImpact.Service.Execution.ExecutionScope.Current == null) return;
         var hasLock = false;
         try
         {
@@ -75,7 +78,7 @@ public class AutoTrackPathTask
                 return;
             }
 
-            _ct = CancellationContext.Instance.Cts.Token;
+            _ct = BetterGenshinImpact.Service.Execution.ExecutionScope.Current!.Token;
 
             Init();
 
@@ -102,6 +105,13 @@ public class AutoTrackPathTask
                 TaskSemaphore.Release();
             }
         }
+    }
+
+    private static BetterGenshinImpact.Service.Execution.ExecutionScope? TryAcquireRoot()
+    {
+        try { return BetterGenshinImpact.Service.Execution.ExecutionScope.Start(new(
+            BetterGenshinImpact.Service.Execution.JobKind.Pathing, "自动路线", BetterGenshinImpact.Service.Execution.JobSource.Ui)); }
+        catch (InvalidOperationException ex) { Logger.LogWarning(ex, "自动路线未获执行权"); return null; }
     }
 
     private void Init()

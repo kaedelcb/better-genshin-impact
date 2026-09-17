@@ -22,6 +22,7 @@ public sealed class BatchExpectedItem
 
     /// <summary>提交应答拿到的 jobId（== taskHandle 别名）。应答帧丢失时为 null，靠按名附着找回。</summary>
     public string? JobId { get; set; }
+    public string RequestKey { get; set; } = Guid.NewGuid().ToString("N");
 
     /// <summary>提交尝试次数（重提交限次的依据）。</summary>
     public int SubmitAttempts { get; set; }
@@ -65,7 +66,10 @@ public sealed record BatchJobObservation(
     /// 未知值不进 IsTerminal（按非成功等待处理），绝不因新值崩溃。</summary>
     string State,
     bool WasCancelled,
-    string? ErrorCode)
+    string? ErrorCode,
+    string? IdempotencyKey = null,
+    string? Kind = null,
+    string? ParentJobId = null)
 {
     public bool IsTerminal => State is "succeeded" or "failed" or "cancelled" or "rejected";
 }
@@ -189,8 +193,7 @@ public static class BatchReconcileDecider
                 continue;
             }
 
-            var match = jobs.FirstOrDefault(j =>
-                j.Generation == generation && string.Equals(j.Name, item.Name, StringComparison.Ordinal));
+            var match = jobs.FirstOrDefault(j => j.IdempotencyKey == item.RequestKey);
             if (match is not null)
             {
                 actions.Add(new BatchReconcileAction.Attach(i, match.JobId));
@@ -224,17 +227,23 @@ public static class BatchReconcileDecider
             {
                 if (item.JobId is not null)
                 {
-                    // 已附着却查无此作业：同纪元 not_found = 句柄淘汰/应答帧丢失 → 限次重提交
-                    if (item.SubmitAttempts < MaxSubmitAttempts)
-                    {
-                        actions.Add(new BatchReconcileAction.Resubmit(i));
-                    }
-                    else
-                    {
-                        actions.Add(new BatchReconcileAction.ConfirmTerminal(i, false, "lost_job"));
-                        confirmedThisTick.Add(i);
-                    }
+                    // A known accepted handle disappearing does not prove it never executed.
+                    // Never replay side effects after terminal eviction or lost authority.
+                    actions.Add(new BatchReconcileAction.ConfirmTerminal(i, false, "lost_job"));
+                    confirmedThisTick.Add(i);
                     inFlightIndex = i;
+                }
+                else if (item.SubmitAttempts < MaxSubmitAttempts)
+                {
+                    // No acknowledgement: reuse the same request key while the server's
+                    // idempotency window is valid, never create another execution attempt.
+                    actions.Add(new BatchReconcileAction.Resubmit(i));
+                    inFlightIndex = i;
+                }
+                else
+                {
+                    actions.Add(new BatchReconcileAction.ConfirmTerminal(i, false, "result_unknown"));
+                    confirmedThisTick.Add(i);
                 }
                 continue;
             }
@@ -245,7 +254,8 @@ public static class BatchReconcileDecider
                 continue;
             }
 
-            if (job.State == "cancelled" || job.WasCancelled)
+            if ((job.State == "cancelled" || job.WasCancelled)
+                && (job.ErrorCode is null or "cancelled_user" or "manual_stop_cooldown"))
             {
                 // F11 语义：取消优先——先确认该项终态，再由 Abort 指示收尾（调用方保证不再推进）
                 actions.Add(new BatchReconcileAction.ConfirmTerminal(i, true, job.ErrorCode));
@@ -264,7 +274,8 @@ public static class BatchReconcileDecider
             }
 
             // succeeded/failed/rejected：确认并推进（failed 记 errorCode，与旧循环"记日志继续下一组"同语义）
-            actions.Add(new BatchReconcileAction.ConfirmTerminal(i, false, job.ErrorCode));
+            actions.Add(new BatchReconcileAction.ConfirmTerminal(i, job.WasCancelled,
+                job.ErrorCode ?? (job.State == "succeeded" ? null : "task_failed")));
             confirmedThisTick.Add(i);
         }
 

@@ -105,6 +105,8 @@ public sealed class JobRegistry
         JobSubmitResult result;
         lock (_gate)
         {
+            if (jobId is { } explicitId && _jobs.TryGetValue(explicitId, out var existing))
+                return new JobSubmitResult(existing, true);
             if (jobId is null)
             {
                 if (!string.IsNullOrEmpty(idempotencyKey)
@@ -114,8 +116,9 @@ public sealed class JobRegistry
                     return new JobSubmitResult(keyJob, true);
                 }
 
-                var adoptKey = $"{generation?.ToString() ?? "-"}|{name}";
-                if (_activeByGenerationName.TryGetValue(adoptKey, out var byGen)
+                var adoptKey = $"{kind}|{generation?.ToString() ?? "-"}|{parentJobId}|{name}";
+                if (string.IsNullOrEmpty(idempotencyKey) && generation.HasValue && parentJobId == null
+                    && _activeByGenerationName.TryGetValue(adoptKey, out var byGen)
                     && _jobs.TryGetValue(byGen, out var genJob) && !genJob.IsTerminal)
                 {
                     return new JobSubmitResult(genJob, true);
@@ -128,7 +131,7 @@ public sealed class JobRegistry
             {
                 _activeByIdempotencyKey[idempotencyKey] = created.JobId;
             }
-            var genKey = $"{generation?.ToString() ?? "-"}|{name}";
+            var genKey = $"{kind}|{generation?.ToString() ?? "-"}|{parentJobId}|{name}";
             _activeByGenerationName[genKey] = created.JobId;
             result = new JobSubmitResult(created, false);
         }
@@ -171,9 +174,12 @@ public sealed class JobRegistry
             // 活跃幂等索引摘除
             if (!string.IsNullOrEmpty(job.IdempotencyKey))
             {
-                _activeByIdempotencyKey.Remove(job.IdempotencyKey);
+                if (_activeByIdempotencyKey.TryGetValue(job.IdempotencyKey, out var indexed) && indexed == jobId)
+                    _activeByIdempotencyKey.Remove(job.IdempotencyKey);
             }
-            _activeByGenerationName.Remove($"{job.Generation?.ToString() ?? "-"}|{job.Name}");
+            var generationKey = $"{job.Kind}|{job.Generation?.ToString() ?? "-"}|{job.ParentJobId}|{job.Name}";
+            if (_activeByGenerationName.TryGetValue(generationKey, out var named) && named == jobId)
+                _activeByGenerationName.Remove(generationKey);
 
             // 终态表容量淘汰（FIFO）
             _terminalOrder.Enqueue(jobId);

@@ -1,0 +1,7 @@
+bin/
+obj/
+*-output/
+baseline/
+*.zip
+*.log
+test-results/

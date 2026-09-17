@@ -32,7 +32,7 @@ public class CancellationContext : Singleton<CancellationContext>
     public bool WasCancelled { get; private set; }
 
     /// <summary>
-    /// 最近一次手动停止（F11/停止热键 ManualCancel）的 UTC 时间；Set() 清零。
+    /// 最近一次手动停止（F11/停止热键 ManualCancel）的 UTC 时间；叶子 Set/Clear 不得清零。
     /// 仅 ManualCancel 置位（Cancel()/CancelTokenOnly() 不动），供 IPC task.start 手动停止冷却窗口判定。
     /// </summary>
     public DateTime? LastManualCancelAtUtc { get; private set; }
@@ -65,11 +65,11 @@ public class CancellationContext : Singleton<CancellationContext>
     {
         lock (_sync)
         {
-            Cts = new CancellationTokenSource();
+            var rootToken = BetterGenshinImpact.Service.Execution.ExecutionScope.Current?.Token ?? CancellationToken.None;
+            Cts = CancellationTokenSource.CreateLinkedTokenSource(rootToken);
             _externalCtsList.Clear();
             IsManualStop = false;
             WasCancelled = false;
-            LastManualCancelAtUtc = null;
             disposed = false;
         }
     }
@@ -135,22 +135,25 @@ public class CancellationContext : Singleton<CancellationContext>
     /// </summary>
     private void CancelCore(bool manualStop, bool cascadeExternal, bool resetToken)
     {
+        if (manualStop)
+        {
+            BetterGenshinImpact.Service.Execution.ExecutionScope.StopActive(true);
+            BetterGenshinImpact.Service.Execution.PreemptionGate.Disarm();
+            // Also revoke an already suspended victim; token disposal must not retain auto-resume intent.
+            try { BetterGenshinImpact.GameTask.TaskContext.Instance().Config.SuspendedTaskContext = null; }
+            catch (Exception) { /* Configuration may not exist during startup/shutdown; stopping still takes effect. */ }
+        }
         CancellationTokenSource toCancel;
         List<CancellationTokenSource>? externals = null;
         lock (_sync)
         {
-            if (disposed)
-            {
-                return;
-            }
-
             if (manualStop)
             {
                 IsManualStop = true;
                 LastManualCancelAtUtc = DateTime.UtcNow;
-                // [A6] 用户手动停止（F11/停止热键）= 收租：抢占意图门即刻失效（owner 决策 D1/D2：F11 永远是否决键）
-                BetterGenshinImpact.Service.Execution.PreemptionGate.Disarm();
-            }            if (!resetToken)
+            }
+            if (disposed) return;
+            if (!resetToken)
             {
                 WasCancelled = true;
             }

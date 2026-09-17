@@ -92,15 +92,21 @@ internal static class ExternalInterfaceCommandPlane
             return InstanceIpcEnvelope.Failure(request, "service_unavailable", "脚本服务不可用");
         }
 
+        var takeoverTicket = InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket");
+        if (!BetterGenshinImpact.Service.Execution.PreemptionGate.Authorize(takeoverTicket)
+            || preempt && string.IsNullOrEmpty(takeoverTicket))
+            return InstanceIpcEnvelope.Failure(request, "takeover_conflict", "接管票据无效或原流程尚未完成可靠接管");
         var submission = new BgiTaskCoordinator.TaskSubmission(
             generation,
             groupName,
             configName,
             startFromIndex,
             // [A2.4] Executor 首参 = taskHandle（注册表 jobId 别名），透传执行段供漏斗认领既有 Queued 作业
-            (handle, _) => handler.ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, batchGroupNames, generation, handle, preempt))
+            (handle, token) => handler.ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, batchGroupNames, generation, handle, preempt,
+                InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket"), token))
         {
             Preempt = preempt,
+            IdempotencyKey = InstanceIpcProtocol.GetStringOrNull(request.Data, "idempotencyKey"),
         };
 
         var result = BgiTaskCoordinator.Instance.Submit(submission);

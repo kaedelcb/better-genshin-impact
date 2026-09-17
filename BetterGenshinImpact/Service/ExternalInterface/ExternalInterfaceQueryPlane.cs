@@ -19,6 +19,7 @@ internal static class ExternalInterfaceQueryPlane
         InstanceIpcEnvelope request,
         out InstanceIpcEnvelope response)
     {
+        BetterGenshinImpact.Service.Execution.PreemptionGate.Renew(InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket"));
         switch (request.Operation)
         {
             case ExternalInterfaceOperations.TaskStatus:
@@ -60,6 +61,7 @@ internal static class ExternalInterfaceQueryPlane
     private static object SerializeJob(BetterGenshinImpact.Service.Execution.BgiJob job) => new
     {
         jobId = job.JobId.ToString("N"),
+        idempotencyKey = job.IdempotencyKey,
         parentJobId = job.ParentJobId?.ToString("N"),
         kind = job.Kind.ToString(),
         name = job.Name,

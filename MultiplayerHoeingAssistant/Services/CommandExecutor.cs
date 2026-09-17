@@ -21,6 +21,9 @@ public class CommandExecutor
     /// 窗口内 BGI 侧中断上下文是"待重试的恢复"而非孤儿残留——孤儿对账与按键清账
     /// 三处判定把该窗口视同批次在跑，不误清上下文。</summary>
     private int _resumeRetryInFlight;
+    private string? _takeoverTicket;
+    private BgiEpoch? _takeoverEpoch;
+    private readonly SemaphoreSlim _suspendGate = new(1, 1);
 
     private bool IsResumeRetryInFlight => Interlocked.CompareExchange(ref _resumeRetryInFlight, 0, 0) != 0;
     /// <summary>[切片7] 队列式任务终态事件等待的兜底超时（事件经 SDK 断线续传不丢，超时仅为防永久挂起）。</summary>
@@ -325,6 +328,8 @@ public class CommandExecutor
     /// </summary>
     private async Task<CommandResult> StartGroupAsync(string groupName, int startFromIndex, int generation = 0, List<string>? batchGroupNames = null)
     {
+        if (_isBatchInFlight?.Invoke() == true || IsResumeRetryInFlight)
+            return new CommandResult { Status = "failed", ErrorCode = "batch_busy", Message = "现有批次/恢复尚未收尾，不能借用其执行权启动另一任务" };
         // [弹窗竞态守卫] 先等弹窗下发的 set_task_enabled 全部落盘，再 suspend/启动，防读到旧启用状态
         await WaitConfigWritesDrainedAsync($"start_group「{groupName}」");
 
@@ -402,7 +407,7 @@ public class CommandExecutor
                 // 会话守卫：阻断时直接失败返回，不进入重启回退（避免误杀本会话正在跑任务的 BGI）
                 var blocked = CheckCrossSessionBlock(ipcClient, $"task.start 配置组「{groupName}」");
                 if (blocked != null) return blocked;
-                var payload = System.Text.Json.JsonSerializer.Serialize(new { groupName, startFromIndex, generation });
+                var payload = System.Text.Json.JsonSerializer.Serialize(new { groupName, startFromIndex, generation, takeoverTicket = _takeoverTicket });
                 var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
                 // [无损拒绝适配 b5386005] task_already_running = BGI 明确应答的业务拒绝（非传输失败），
                 // 多半是 suspend 后旧任务退场慢（任务锁未释放）。等 1s 重发，最多 6 次
@@ -463,6 +468,8 @@ public class CommandExecutor
     /// </summary>
     private async Task<CommandResult> StartOneClickAsync(string configName, int startFromIndex, int generation = 0, List<string>? batchGroupNames = null)
     {
+        if (_isBatchInFlight?.Invoke() == true || IsResumeRetryInFlight)
+            return new CommandResult { Status = "failed", ErrorCode = "batch_busy", Message = "现有批次/恢复尚未收尾，不能借用其执行权启动另一任务" };
         // [批次名单] 逗号分隔编码（与批次循环 Params 的 batchGroupNames 一致），null = 不携带
         var batchGroupNamesRaw = batchGroupNames is { Count: > 0 } ? string.Join(",", batchGroupNames) : null;
 
@@ -537,8 +544,8 @@ public class CommandExecutor
                 if (blocked != null) return blocked;
                 // [批次名单] 纯加法协议字段：老 BGI 忽略该字段，行为不变
                 var payload = batchGroupNamesRaw != null
-                    ? System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation, batchGroupNames = batchGroupNamesRaw })
-                    : System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation });
+                    ? System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation, batchGroupNames = batchGroupNamesRaw, takeoverTicket = _takeoverTicket })
+                    : System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation, takeoverTicket = _takeoverTicket });
                 var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
                 // [无损拒绝适配 b5386005] 同 StartGroupAsync：业务拒绝（任务运行中）等锁重试，最多 6 次
                 for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
@@ -776,6 +783,16 @@ public class CommandExecutor
     /// <summary>中断当前任务并保存上下文：IPC 发 task.suspend</summary>
     public async Task<CommandResult> ExecuteSuspendAsync(string hoeingGroupName)
     {
+        await _suspendGate.WaitAsync();
+        try { return await ExecuteSuspendCoreAsync(hoeingGroupName); }
+        finally { _suspendGate.Release(); }
+    }
+
+    private async Task<CommandResult> ExecuteSuspendCoreAsync(string hoeingGroupName)
+    {
+        if (_externalClientProvider?.Invoke() is not { State: BgiExternalLinkState.Ready } capable
+            || !capable.HasCapability("task.takeover"))
+            return new CommandResult { Status = "failed", ErrorCode = "capability_required", Message = "BGI 尚未就绪或不支持可靠接管，请更新配套版本" };
         try
         {
             using var ipcClient = new IpcClient();
@@ -786,18 +803,30 @@ public class CommandExecutor
             // 发 task.suspend（35s：A6 有界退出契约下 BGI 持响应等槽位确认，上限 QuiesceBound=30s，
             // 客户端必须留余量覆盖该上界才能读到 quiesceConfirmed 字段，否则"超时但实际挂起成功"
             // ——超时≠未执行，2026-09-12 分层超时）
-            var payload = System.Text.Json.JsonSerializer.Serialize(new { });
+            if (_takeoverTicket == null)
+            {
+                _takeoverEpoch = (await capable.QueryJobListAsync()).Epoch;
+                if (_takeoverEpoch == null)
+                    return new CommandResult { Status = "failed", ErrorCode = "epoch_unknown", Message = "无法确认目标 BGI 进程身份，不执行接管" };
+                _takeoverTicket = Guid.NewGuid().ToString("N");
+            }
+            var ticket = _takeoverTicket;
+            if (_externalClientProvider?.Invoke() is { } ext) ext.TakeoverTicket = ticket;
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { takeoverTicket = ticket,
+                bgiEpoch = new { processId = _takeoverEpoch?.ProcessId, startTicksUtc = _takeoverEpoch?.StartTicksUtc } });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.suspend", Payload = payload }, V2TaskSuspendCommandTimeout);
             if (response.Success)
             {
                 // [A6] 解析加法字段（可空读取：老 BGI 无此字段 → null，行为与原逻辑逐字一致）
                 bool? liveTask = null;
                 bool? quiesceConfirmed = null;
+                string? confirmedTicket = null;
                 if (!string.IsNullOrEmpty(response.Data))
                 {
                     try
                     {
                         var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data);
+                        if (data.TryGetProperty("takeoverTicket", out var ticketEl)) confirmedTicket = ticketEl.GetString();
                         if (data.TryGetProperty("liveTask", out var ltEl)
                             && ltEl.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
                         {
@@ -820,19 +849,10 @@ public class CommandExecutor
                 // 沿用"有意杀死豁免崩溃误判"语义）。重启成功后槽位必然空闲，按成功返回让
                 // 调用方（批次/按键）继续后续流程；被中断任务的内存恢复点随重启丢失，
                 // 策略收尾的 Resume 分支会因 HasContext=false 自动退化为停止（既有守卫）。
-                if (quiesceConfirmed == false)
+                if (quiesceConfirmed != true || confirmedTicket != ticket)
                 {
-                    NotifyLoud("联机锄地抢占告警",
-                        "task.suspend 有界退出契约超界：BGI 任务 30s 未确认释放槽位（旧任务可能卡死），按策略受控重启 BGI。被中断任务的恢复点已丢失，如需继续请之后手动启动原任务");
-                    var restarted = await _monitor.RestartBgiControlledAsync(null, "suspend有界退出超界");
-                    if (!restarted)
-                    {
-                        NotifyLoud("联机锄地抢占告警",
-                            "BGI 受控重启未完成（旧进程可能提权运行杀不掉），本次启动尝试中止；请手动关闭残留 BGI 进程后重试");
-                        return new CommandResult { Status = "failed", ErrorCode = "quiesce_timeout", Message = "task.suspend 有界退出超界且 BGI 受控重启未完成（旧进程杀不掉），启动尝试已中止，请手动处理残留 BGI 进程" };
-                    }
-                    Log("[A6] BGI 已按有界退出超界升级策略受控重启，槽位确认空闲，继续后续启动流程");
-                    return new CommandResult { Status = "success", Message = "任务已中断（有界退出超界，BGI 已受控重启，恢复点丢失）" };
+                    NotifyLoud("接管未完成", "BGI 未确认原流程退出，本次启动已中止，不自动重启 BGI。");
+                    return new CommandResult { Status = "failed", ErrorCode = "quiesce_timeout", Message = "原流程未退出或对端缺少可靠接管能力" };
                 }
 
                 // [A6] liveTask=false = suspend 到达时无活体任务（组间缝隙）：BGI 已声明抢占意图门
@@ -840,13 +860,14 @@ public class CommandExecutor
                 // 门会保证槽位很快空出，不是异常，不告警。
                 if (liveTask == false)
                 {
-                    Log("[A6] task.suspend 到达时 BGI 无活体任务（组间缝隙）：抢占意图门已声明，后续起步任务将在持锁处自动让位，照常等待槽位释放");
+                    Log("[接管] 原实例空闲，没有需要恢复的原任务；本批次已保留执行权");
                 }
 
                 // 返回包含被中断任务的上下文信息（给调用方日志用）
                 return new CommandResult { Status = "success", Message = $"任务已中断" };
             }
-            return new CommandResult { Status = "failed", Message = $"task.suspend 失败: {response.ErrorMessage}" };
+            if (response.ErrorCode is "stale_epoch" or "stale_ticket") ClearTicket(ticket);
+            return new CommandResult { Status = "failed", ErrorCode = response.ErrorCode, Message = $"task.suspend 失败: {response.ErrorMessage}" };
         }
         catch (Exception ex)
         {
@@ -872,34 +893,35 @@ public class CommandExecutor
     /// <summary>恢复原任务：IPC 发 task.resume。cancel=true 时清除上下文但不恢复。</summary>
     public async Task<CommandResult> ExecuteResumeAsync(bool cancel = false)
     {
+        var ticket = _takeoverTicket;
         try
         {
-            using var ipcClient = new IpcClient();
-            await ipcClient.ConnectAsync(3000);
-            var blocked = CheckCrossSessionBlock(ipcClient, cancel ? "task.resume(cancel)" : "task.resume");
+            using var client = new IpcClient();
+            await client.ConnectAsync(3000);
+            var blocked = CheckCrossSessionBlock(client, "task.resume");
             if (blocked != null) return blocked;
-
-            if (cancel)
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { cancel, takeoverTicket = ticket });
+            var response = await client.SendCommandAsync(new IpcRequest { OpCode = "task.resume", Payload = payload }, TimeSpan.FromSeconds(35));
+            if (!response.Success)
             {
-                // 取消恢复：发 task.resume 带 cancel=true 参数
-                var cancelPayload = System.Text.Json.JsonSerializer.Serialize(new { cancel = true });
-                var cancelResponse = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.resume", Payload = cancelPayload });
-                return new CommandResult { Status = "success", Message = "已取消恢复，BGI 保持空闲" };
+                if (response.ErrorCode is "stale_ticket" or "stale_context") ClearTicket(ticket);
+                return new CommandResult { Status = "failed", ErrorCode = response.ErrorCode, Message = response.ErrorMessage };
             }
+            ClearTicket(ticket);
+            var status = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data ?? "{}");
+            var noContext = status.TryGetProperty("status", out var state) && state.GetString() == "cleared_not_resumed";
+            return new CommandResult { Status = "success", ErrorCode = !cancel && noContext ? "no_context" : null,
+                Message = cancel ? "已释放执行权，不恢复原任务" : noContext ? "无原任务需要恢复" : "恢复请求已确认受理" };
+        }
+        catch (Exception ex) { return new CommandResult { Status = "failed", Message = ex.Message }; }
+    }
 
-            // 正常恢复
-            // [另案②] BGI 端恢复现在是"确认起步才消费上下文"：派发后最长等 5s 确认，
-            // 默认 5s 传输超时会在慢确认时误报失败——延长到 15s 盖住 预检+派发+确认 全程。
-            // 失败透传 errorCode：task_busy（槽位占用/未起步，上下文已保留）由 Resume 策略分支有限重试。
-            var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.resume" }, TimeSpan.FromSeconds(15));
-            if (response.Success)
-                return new CommandResult { Status = "success", Message = "原任务已恢复" };
-            return new CommandResult { Status = "failed", Message = $"task.resume 失败: {response.ErrorMessage}", ErrorCode = response.ErrorCode };
-        }
-        catch (Exception ex)
-        {
-            return new CommandResult { Status = "failed", Message = $"IPC task.resume 失败: {ex.Message}" };
-        }
+    private void ClearTicket(string? ticket)
+    {
+        if (_takeoverTicket != ticket) return;
+        _takeoverTicket = null;
+        _takeoverEpoch = null;
+        if (_externalClientProvider?.Invoke() is { } ext && ext.TakeoverTicket == ticket) ext.TakeoverTicket = null;
     }
 
     /// <summary>
@@ -952,6 +974,13 @@ public class CommandExecutor
     private async Task<IpcResponse?> SendIpcPreferredAsync(string v2OpCode, string? payloadJson, int connectTimeoutMs = 2000)
     {
         var ext = _externalClientProvider?.Invoke();
+        if (_takeoverTicket is { } ticket)
+        {
+            if (ext != null) ext.TakeoverTicket = ticket;
+            var fields = System.Text.Json.Nodes.JsonNode.Parse(payloadJson ?? "{}")!.AsObject();
+            fields["takeoverTicket"] = ticket;
+            payloadJson = fields.ToJsonString();
+        }
         if (ext is { State: BgiExternalLinkState.Ready }
             && BgiExternalClient.TryMapToExtOperation(v2OpCode, out var extOp))
         {
@@ -1058,95 +1087,23 @@ public class CommandExecutor
     /// </summary>
     public async Task<bool> WaitTaskSlotSettledAsync(string logTag, Action<string>? log = null)
     {
-        log ??= _log;
-        var bgiSettled = false;
-        var extForSettle = _externalClientProvider?.Invoke();
-        if (extForSettle is { State: BgiExternalLinkState.Ready }
-            && extForSettle.HasCapability(BgiExternalClient.CapabilityTaskQueue))
+        for (var i = 0; i < 30; i++)
         {
-            var slotWait = extForSettle.WaitSlotReleasedAsync(TimeSpan.FromSeconds(6));
-            try
-            {
-                var probe = await SendIpcPreferredAsync("task.status", null, 1000);
-                if (probe is { Success: true } && !string.IsNullOrEmpty(probe.Data))
-                {
-                    var pdata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(probe.Data);
-                    var stillRunning = pdata.TryGetProperty("running", out var prEl)
-                        && prEl.ValueKind == System.Text.Json.JsonValueKind.True;
-                    var hasCtxNow = pdata.TryGetProperty("hasSuspendedTaskContext", out var phEl)
-                        && phEl.ValueKind == System.Text.Json.JsonValueKind.True;
-                    if (!stillRunning || hasCtxNow)
-                    {
-                        bgiSettled = true;
-                    }
-                }
-
-                if (!bgiSettled)
-                {
-                    bgiSettled = await slotWait;
-                    if (bgiSettled)
-                    {
-                        log?.Invoke($"{logTag} 收到 task.slotReleased 事件，BGI 任务槽位已释放");
-                    }
-                }
-            }
-            catch
-            {
-                // 通道瞬态失败，落轮询兜底
-            }
-        }
-
-        if (!bgiSettled)
-        {
-            for (var waitRound = 0; waitRound < 30; waitRound++)
+            var response = await SendIpcPreferredAsync("task.status", null, 1000);
+            if (response is { Success: true } && !string.IsNullOrEmpty(response.Data))
             {
                 try
                 {
-                    var waitResp = await SendIpcPreferredAsync("task.status", null, 1000);
-                    if (waitResp is { Success: true } && !string.IsNullOrEmpty(waitResp.Data))
-                    {
-                        var wdata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(waitResp.Data);
-                        var stillRunning = wdata.TryGetProperty("running", out var rEl)
-                            && rEl.ValueKind == System.Text.Json.JsonValueKind.True;
-                        var hasCtx = wdata.TryGetProperty("hasSuspendedTaskContext", out var hEl)
-                            && hEl.ValueKind == System.Text.Json.JsonValueKind.True;
-                        if (!stillRunning || hasCtx)
-                        {
-                            bgiSettled = true;
-                            break;
-                        }
-                    }
+                    using var doc = System.Text.Json.JsonDocument.Parse(response.Data);
+                    if (doc.RootElement.TryGetProperty("executionIdle", out var idle)
+                        && idle.ValueKind == System.Text.Json.JsonValueKind.True) return true;
                 }
-                catch
-                {
-                    // IPC 暂不可达（BGI 忙/重启中），继续等待下一轮
-                }
-                await Task.Delay(200);
+                catch (System.Text.Json.JsonException) { }
             }
+            await Task.Delay(200);
         }
-        if (!bgiSettled)
-        {
-            // [A6 状态确认收口] 兜底轮询耗尽后再查一次槽位状态（既有 task.status 查询通道）：
-            // 复核仍忙 → false（调用方中止 + 响亮告警，不再静默 task.start）；
-            // 复核空闲/有上下文 → 照常继续；查询失败（BGI 忙/重启中）→ 保持旧容错语义照常继续。
-            var confirm = await QueryTaskStatusAsync();
-            switch (confirm)
-            {
-                case { Running: true, HasContext: false }:
-                    log?.Invoke($"{logTag} [A6] 等待 BGI 任务停止超时（6s）且复核槽位仍被占用（旧任务可能卡死），本次启动尝试应中止");
-                    return false;
-                case not null:
-                    // 复核空闲（Running=false）或中断上下文已就位（HasContext=true）：槽位已落定
-                    log?.Invoke($"{logTag} settle 兜底轮询超时，复核确认槽位已释放（running={confirm.Value.Running} hasContext={confirm.Value.HasContext}），继续 task.start");
-                    return true;
-                default:
-                    // 复核查询失败（通道瞬态）：不知即不判死，保持旧容错继续——task.start 自有
-                    // task_already_running 无损拒绝重试与裸拉起回退托底
-                    log?.Invoke($"{logTag} 等待 BGI 任务停止超时（6s）且复核查询失败（通道瞬态），按容错策略继续执行 task.start");
-                    return true;
-            }
-        }
-        return bgiSettled;
+        (log ?? _log)?.Invoke(logTag + " 未确认原流程退出，本次启动中止（未知不作空闲）");
+        return false;
     }
 
     /// <summary>
@@ -1274,6 +1231,10 @@ public class CommandExecutor
     /// </summary>
     private async Task<CommandResult> ExecuteHotkeyWithKeyPolicyAsync(string hotkeyConfigName)
     {
+        if (hotkeyConfigName is "CancelTaskHotkey" or "BgiEnabledHotkey" or "SuspendHotkey")
+            return await ExecuteHotkeyAsync(hotkeyConfigName);
+        if (_isBatchInFlight?.Invoke() == true || IsResumeRetryInFlight)
+            return new CommandResult { Status = "failed", ErrorCode = "batch_busy", Message = "批次/恢复进行中，不执行另一个任务热键" };
         var desc = $"快捷键「{hotkeyConfigName}」";
 
         var status = await QueryTaskStatusAsync();
@@ -1402,8 +1363,8 @@ public class CommandExecutor
             var blocked = CheckCrossSessionBlock(ipcClient, $"task.start {desc}");
             if (blocked != null) return blocked;
             var payload = groupName != null
-                ? System.Text.Json.JsonSerializer.Serialize(new { groupName, startFromIndex, generation })
-                : System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation });
+                ? System.Text.Json.JsonSerializer.Serialize(new { groupName, startFromIndex, generation, takeoverTicket = _takeoverTicket })
+                : System.Text.Json.JsonSerializer.Serialize(new { configName, startFromIndex, generation, takeoverTicket = _takeoverTicket });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
             for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
             {
@@ -1477,7 +1438,7 @@ public class CommandExecutor
             probe = await QueryTaskStatusAsync();
             if (probe is { Running: false })
             {
-                return new CommandResult { Status = "success", Message = $"{desc} 已在 BGI 侧执行完成（传输降级路径：响应帧丢失后经 task.status 核实，取消状态不可知）" };
+                return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 已不在运行，但缺少对应终态证据，结果未知，不能报告成功" };
             }
             if (probe is null)
             {
@@ -1522,7 +1483,8 @@ public class CommandExecutor
                 var status = await QueryTaskStatusAsync();
                 if (status is { HasContext: false })
                 {
-                    log?.Invoke("[任务冲突策略] BGI 侧无中断上下文（任务可能刚被 F11 取消，或 BGI 曾重启导致内存上下文丢失），「恢复」策略退化为停止");
+                    log?.Invoke("[任务冲突策略] 无原任务需要恢复，释放本批次执行权");
+                    await ExecuteResumeAsync(cancel: true);
                     return;
                 }
                 // [兜底 2026-09-08] 被中断的是「联机锄地上线」信号任务本身：恢复会重复触发上线（无限循环），
@@ -1538,7 +1500,8 @@ public class CommandExecutor
                 var resumeResult = await ExecuteResumeWithBusyRetryAsync(log);
                 if (resumeResult.Status == "success")
                 {
-                    log?.Invoke("[任务冲突策略] 原任务已按策略恢复");
+                    log?.Invoke(resumeResult.ErrorCode == "no_context"
+                        ? "[任务冲突策略] 无原任务需要恢复" : "[任务冲突策略] 原任务恢复尝试已确认受理");
                 }
                 else
                 {
@@ -1554,7 +1517,12 @@ public class CommandExecutor
             }
             case TaskConflictPolicy.RunSpecified:
             {
-                await ExecuteResumeAsync(cancel: true);
+                var release = await ExecuteResumeAsync(cancel: true);
+                if (release.Status != "success")
+                {
+                    log?.Invoke($"[任务冲突策略] 执行权未确认释放，不启动指定任务: {release.Message}");
+                    return;
+                }
                 if (string.IsNullOrWhiteSpace(policy.SpecifiedTaskName))
                 {
                     log?.Invoke("[任务冲突策略] 策略为「不恢复并执行指定任务」但未配置指定任务名称，退化为停止");

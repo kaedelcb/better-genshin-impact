@@ -1,0 +1,178 @@
+using BetterGenshinImpact;
+using BetterGenshinImpact.Core.Script;
+using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.GameTask.Common;
+using BetterGenshinImpact.Service.Execution;
+using BetterGenshinImpact.Service.ExternalInterface;
+using BetterGenshinImpact.ViewModel.Pages;
+using Microsoft.Extensions.DependencyInjection;
+using MultiplayerHoeingAssistant.Services;
+
+// Characterization, NOT fixed-behavior regression tests: PASS means the observed defect/control
+// is reproducible in the linked production sources. UI/game/IPC transport are intentionally inert.
+var failures = 0;
+var count = 0;
+async Task Check(string name, Func<Task> test)
+{
+    count++;
+    PreemptionGate.Disarm();
+    CancellationContext.Instance.Set();
+    RunnerContext.Instance.taskProgress = null;
+    RunnerContext.Instance.IsContinuousRunGroup = false;
+    TaskContext.Instance().Config.SuspendedTaskContext = null;
+    TaskContext.Instance().CurrentScriptProject = null;
+    ExternalInterfaceEventHub.Instance.OnSlotReleased = null;
+    App.ServiceProvider = new ServiceCollection().BuildServiceProvider();
+    try { Assert(TaskControl.TaskSemaphore.CurrentCount == 1, "slot leaked"); await test(); Console.WriteLine($"PASS {name}"); }
+    catch (Exception e) { failures++; Console.WriteLine($"FAIL {name}: {e}"); }
+}
+static void Assert(bool condition, string message) { if (!condition) throw new Exception(message); }
+static Task Done() => Task.CompletedTask;
+static string Unique() => Guid.NewGuid().ToString("N");
+
+await Check("D01 stale friendship saved by unnamed UID admission", async () =>
+{
+    RunnerContext.Instance.taskProgress = new() { CurrentScriptGroupName = "好感任务" };
+    PreemptionGate.Arm();
+    var ran = 0;
+    var result = await new TaskRunner().RunCurrentAsync(() => { ran++; return Done(); });
+    var saved = TaskContext.Instance().Config.SuspendedTaskContext;
+    Assert(result == TaskRunResult.Preempted && ran == 0, "UID unexpectedly executed");
+    Assert(saved?.TaskType == "group" && saved.GroupName == "好感任务" && saved.TaskIndex == 0, "stale restore not reproduced");
+});
+await Check("D02 Ext parent does not authorize its OneDragonInternal children", async () =>
+{
+    var parent = JobRegistry.Instance.Submit(JobKind.OneDragon, Unique(), JobSource.Ext).Job;
+    JobRegistry.Instance.TryMarkRunning(parent.JobId);
+    PreemptionGate.Arm();
+    var ran = 0;
+    for (var i = 0; i < 2; i++)
+    {
+        var result = await new TaskRunner().RunCurrentAsync(() => { ran++; return Done(); },
+            job: new(JobKind.Group, Unique(), JobSource.OneDragonInternal, ParentJobId: parent.JobId));
+        Assert(result == TaskRunResult.Preempted, "child not blocked");
+    }
+    Assert(ran == 0 && !CancellationContext.Instance.WasCancelled && PreemptionGate.IsArmed,
+        "fake-success preconditions differ");
+    // Models the handler's existing terminal expression, not execution of the WPF handler itself.
+    JobRegistry.Instance.TryMarkTerminal(parent.JobId,
+        CancellationContext.Instance.WasCancelled ? JobState.Cancelled : JobState.Succeeded);
+    Assert(JobRegistry.Instance.Query(parent.JobId)?.State == JobState.Succeeded, "terminal mapping differs");
+});
+await Check("C01 direct Ext group consumes gate and executes", async () =>
+{
+    PreemptionGate.Arm(); var ran = 0;
+    var result = await new TaskRunner().RunCurrentAsync(() => { ran++; return Done(); },
+        job: new(JobKind.Group, Unique(), JobSource.Ext));
+    Assert(result == TaskRunResult.Ran && ran == 1 && !PreemptionGate.IsArmed, "control failed");
+});
+await Check("D03 unrelated V2 request consumes gate; old local workflow can then run", async () =>
+{
+    PreemptionGate.Arm(); var ran = 0;
+    await new TaskRunner().RunCurrentAsync(Done, job: new(JobKind.Group, Unique(), JobSource.V2));
+    await new TaskRunner().RunCurrentAsync(() => { ran++; return Done(); });
+    Assert(!PreemptionGate.IsArmed && ran == 1, "no-owner behavior differs");
+});
+await Check("D04 slot released before checkpoint capture permits wrong-task capture", async () =>
+{
+    RunnerContext.Instance.taskProgress = new() { CurrentScriptGroupName = "victim" };
+    ExternalInterfaceEventHub.Instance.OnSlotReleased = () =>
+        RunnerContext.Instance.taskProgress!.CurrentScriptGroupName = "interleaving-other-task";
+    PreemptionGate.Arm();
+    await new TaskRunner().RunCurrentAsync(Done);
+    Assert(TaskContext.Instance().Config.SuspendedTaskContext?.GroupName == "interleaving-other-task", "race not reproduced");
+});
+await Check("D05 current dragon child captured as standalone group", () =>
+{
+    App.ServiceProvider = new ServiceCollection().AddSingleton(new OneDragonFlowViewModel
+        { SelectedConfig = new() { Name = "dragon-root" }, CurrentExecutingTaskIndex = 4 }).BuildServiceProvider();
+    RunnerContext.Instance.taskProgress = new() { CurrentScriptGroupName = "child-group",
+        CurrentScriptGroupProjectInfo = new() { Name = "route", FolderName = "routes", Index = 7 } };
+    var snapshot = SuspendContextCapture.CaptureCurrent();
+    Assert(snapshot?.TaskType == "group" && snapshot.GroupName == "child-group", "parent-loss differs"); return Done();
+});
+await Check("D06 yield checkpoint follows mutable UI selection", () =>
+{
+    App.ServiceProvider = new ServiceCollection().AddSingleton(new OneDragonFlowViewModel
+        { SelectedConfig = new() { Name = "other-selected-config" }, CurrentExecutingTaskIndex = 4 }).BuildServiceProvider();
+    var snapshot = SuspendContextCapture.CaptureForYield(JobSource.OneDragonInternal, "actual-child");
+    Assert(snapshot?.GroupName == "other-selected-config", "selection dependency differs"); return Done();
+});
+await Check("D07 thrown execution error still returns Ran", async () =>
+{
+    var job = JobRegistry.Instance.Submit(JobKind.Group, Unique(), JobSource.Ui).Job;
+    var result = await new TaskRunner().RunCurrentAsync(() => throw new InvalidOperationException("injected"),
+        job: new(JobKind.Group, job.Name, JobSource.Ui, JobId: job.JobId));
+    Assert(result == TaskRunResult.Ran && job.State == JobState.Failed, "admission/result split differs");
+});
+await Check("D08 TaskCanceledException without global flag classified succeeded", async () =>
+{
+    var job = JobRegistry.Instance.Submit(JobKind.Group, Unique(), JobSource.Ui).Job;
+    await new TaskRunner().RunCurrentAsync(() => throw new TaskCanceledException("injected"),
+        job: new(JobKind.Group, job.Name, JobSource.Ui, JobId: job.JobId));
+    Assert(job.State == JobState.Succeeded, "cancel ambiguity differs");
+});
+await Check("D09 ManualCancel on disposed context leaves gate armed", () =>
+{
+    CancellationContext.Instance.Clear(); PreemptionGate.Arm(); CancellationContext.Instance.ManualCancel();
+    Assert(PreemptionGate.IsArmed && CancellationContext.Instance.LastManualCancelAtUtc is null, "disposed behavior differs"); return Done();
+});
+await Check("D10 Set erases manual-stop cooldown", () =>
+{
+    CancellationContext.Instance.ManualCancel(); CancellationContext.Instance.Set();
+    Assert(!CancellationContext.Instance.IsInManualStopCooldown(TimeSpan.FromSeconds(30), out _), "cooldown persists"); return Done();
+});
+await Check("D11 different explicit keys still adopt same name", () =>
+{
+    var registry = new JobRegistry(false);
+    var a = registry.Submit(JobKind.Group, "same", JobSource.Ext, 3, "key-a");
+    var b = registry.Submit(JobKind.Group, "same", JobSource.Ext, 3, "key-b");
+    Assert(b.Adopted && a.Job.JobId == b.Job.JobId, "identity behavior differs"); return Done();
+});
+await Check("D12 same-name parent and child adopt each other", () =>
+{
+    var registry = new JobRegistry(false);
+    var parent = registry.Submit(JobKind.OneDragon, "same", JobSource.Ui).Job;
+    var child = registry.Submit(JobKind.Group, "same", JobSource.OneDragonInternal, parentJobId: parent.JobId);
+    Assert(child.Adopted && child.Job.JobId == parent.JobId, "parent/child alias differs"); return Done();
+});
+await Check("D13 assistant treats preemption as user cancellation", () =>
+{
+    var actions = BatchReconcileDecider.Decide([new("task", true) { State = BatchItemState.Submitted, JobId = "id" }],
+        [new("id", "task", 3, "cancelled", true, "preempted")], true, 3, DateTime.UtcNow);
+    Assert(actions.Any(a => a is BatchReconcileAction.AbortUserCancelled), "classification differs"); return Done();
+});
+await Check("D14 permanent failure reaches same Complete action as success", () =>
+{
+    var actions = BatchReconcileDecider.Decide([new("task", true) { State = BatchItemState.Submitted, JobId = "id" }],
+        [new("id", "task", 3, "failed", false, "task_start_failed")], true, 3, DateTime.UtcNow);
+    Assert(actions.Any(a => a is BatchReconcileAction.Complete), "completion mapping differs"); return Done();
+});
+await Check("C02 busy admission never executes action", async () =>
+{
+    await TaskControl.TaskSemaphore.WaitAsync();
+    try
+    {
+        var ran = false;
+        var result = await new TaskRunner().RunCurrentAsync(() => { ran = true; return Done(); });
+        Assert(result == TaskRunResult.RejectedSlotBusy && !ran, "busy control failed");
+    }
+    finally { TaskControl.TaskSemaphore.Release(); }
+});
+await Check("C03 Resume consumes gate and can execute saved friendship", async () =>
+{
+    RunnerContext.Instance.taskProgress = new() { CurrentScriptGroupName = "好感任务" };
+    PreemptionGate.Arm(); await new TaskRunner().RunCurrentAsync(Done);
+    var saved = TaskContext.Instance().Config.SuspendedTaskContext!;
+    var ran = false;
+    await new TaskRunner().RunCurrentAsync(() => { ran = true; return Done(); },
+        job: new(JobKind.Group, saved.GroupName, JobSource.Resume));
+    Assert(ran && saved.GroupName == "好感任务", "resume reproduction differs");
+});
+await Check("C04 online signal is excluded when no stale group overrides it", () =>
+{
+    TaskContext.Instance().CurrentScriptProject = new() { Name = "联机锄地上线", Type = "SoloTask" };
+    Assert(SuspendContextCapture.CaptureForYield(JobSource.Ui, null)?.IsOnlineSignalTask == true, "signal control failed"); return Done();
+});
+Console.WriteLine($"Characterization total={count}; passed={count - failures}; failed={failures}. PASS does not mean repaired.");
+Environment.ExitCode = failures == 0 ? 0 : 1;

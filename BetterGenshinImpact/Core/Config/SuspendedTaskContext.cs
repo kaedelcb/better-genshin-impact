@@ -4,11 +4,16 @@ namespace BetterGenshinImpact.Core.Config;
 
 /// <summary>
 /// 中断上下文模型。保存 BGI 被中断时正在执行的任务信息。
-/// 值类型，持久化到 config.json。
+/// 仅进程内有效；AllConfig 不持久化此恢复现场。
 /// 设计符合"助手做决策，BGI 做执行"的架构原则（bgi-implementation-patterns.md §31）。
 /// </summary>
 public class SuspendedTaskContext
 {
+    public System.Guid? RootRunId { get; set; }
+    public System.Guid? AttemptId { get; set; }
+    public System.Collections.Generic.Dictionary<string, string>? ConfigurationRevisions { get; set; }
+    public string? TakeoverTicket { get; set; }
+    public long StopVersion { get; set; }
     /// <summary>任务类型：group / onedragon / solo</summary>
     [JsonPropertyName("taskType")]
     public string TaskType { get; set; } = "";
@@ -17,7 +22,7 @@ public class SuspendedTaskContext
     [JsonPropertyName("groupName")]
     public string GroupName { get; set; } = "";
 
-    /// <summary>当前任务在配置组/一条龙中的索引（1-based）</summary>
+    /// <summary>配置组内当前被中断项目的 0-based 索引；恢复时转换为 1-based 请求游标。</summary>
     [JsonPropertyName("taskIndex")]
     public int TaskIndex { get; set; }
 

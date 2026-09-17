@@ -80,7 +80,11 @@ public sealed record JobDescriptor(
     string? IdempotencyKey = null,
     Guid? ParentJobId = null,
     /// <summary>[A2.4] 认领既有作业（协调器入队时已建 Queued，taskHandle==jobId 别名）；null=新建（旧行为）。</summary>
-    Guid? JobId = null);
+    Guid? JobId = null,
+    string? TakeoverTicket = null,
+    Action? OnAdmitted = null,
+    int? ResumeIndex = null,
+    Guid? WorkflowRunId = null);
 
 /// <summary>
 /// [A1.4] 统一作业模型（总计划 §6.2）。

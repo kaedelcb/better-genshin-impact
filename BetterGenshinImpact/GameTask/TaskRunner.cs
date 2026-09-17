@@ -48,6 +48,11 @@ public class TaskRunner
     /// <returns>[A1.1] 显式执行结果：RejectedSlotBusy = 槽位被占本次未执行（旧行为仅 ERR 日志静默返回）。</returns>
     public async Task<TaskRunResult> RunCurrentAsync(Func<Task> action, bool resetCancellationContext = true, bool clearCancellationContextOnLockFailure = false, string? soloTaskName = null, JobDescriptor? job = null)
     {
+        if (job?.ParentJobId is { } parent && ExecutionScope.Current?.Descriptor.JobId != parent)
+            return TaskRunResult.RejectedSlotBusy;
+        if (job == null && ExecutionScope.Current?.Descriptor.Kind == JobKind.OneDragon)
+            job = new JobDescriptor(JobKind.Solo, soloTaskName ?? "一条龙前置或收尾",
+                JobSource.OneDragonInternal, ParentJobId: ExecutionScope.Current.Descriptor.JobId);
         // [A2 统一注册表] 登记点在抢锁之前：连"被拒"也是注册表里的一条事实（Rejected 终态），不再静默丢失。
         // 观察性故障不影响执行：登记/推进全部容错留痕。
         // [A2.4] job.JobId 非空 = 认领协调器入队时已建的 Queued 作业（taskHandle==jobId 别名）；
@@ -63,12 +68,14 @@ public class TaskRunner
                     if (registeredJob == null)
                     {
                         _logger.LogWarning("[JobRegistry] 认领作业不存在（退化新建）: jobId={JobId} name={Name}", adoptId, job.Name);
-                        registeredJob = JobRegistry.Instance.Submit(job.Kind, job.Name, job.Source, job.Generation, job.IdempotencyKey, job.ParentJobId).Job;
+                        registeredJob = JobRegistry.Instance.Submit(job.Kind, job.Name, job.Source, job.Generation, job.IdempotencyKey, job.ParentJobId, job.JobId).Job;
                     }
                 }
                 else
                 {
-                    registeredJob = JobRegistry.Instance.Submit(job.Kind, job.Name, job.Source, job.Generation, job.IdempotencyKey, job.ParentJobId).Job;
+                    var submission = JobRegistry.Instance.Submit(job.Kind, job.Name, job.Source, job.Generation, job.IdempotencyKey, job.ParentJobId);
+                    if (submission.Adopted) return TaskRunResult.RejectedSlotBusy;
+                    registeredJob = submission.Job;
                 }
             }
             catch (Exception ex)
@@ -77,6 +84,25 @@ public class TaskRunner
             }
         }
 
+        // A duplicate may refer to somebody else's running/terminal attempt. Never execute
+        // it again or overwrite its outcome with this caller's admission failure.
+        if (registeredJob != null && (registeredJob.IsTerminal ||
+            registeredJob.State != JobState.Queued && ExecutionScope.Current?.Descriptor.JobId != registeredJob.JobId))
+            return TaskRunResult.RejectedSlotBusy;
+        ExecutionScope? ownedScope = null;
+        try
+        {
+            if (ExecutionScope.Current == null)
+                ownedScope = ExecutionScope.Start(job ?? new JobDescriptor(JobKind.Solo, soloTaskName ?? "未命名", JobSource.Ui));
+        }
+        catch (InvalidOperationException ex)
+        {
+            if (registeredJob != null)
+                TryRegistryTerminal(registeredJob.JobId, JobState.Rejected, JobErrorCodes.TaskBusy, ex.Message, false);
+            return TaskRunResult.RejectedSlotBusy;
+        }
+        using var rootLifetime = ownedScope;
+        var scope = ExecutionScope.Current!;
         // 加锁
         var hasLock = await TaskSemaphore.WaitAsync(0);
         if (!hasLock)
@@ -92,43 +118,15 @@ public class TaskRunner
             }
             return TaskRunResult.RejectedSlotBusy;
         }
-        // [A6 租约门] 持锁瞬间判定（必须在 job 推进 Running、发布 started、RunnerContext.Clear 等
-        // 一切副作用之前——让位是静默路径，不留 Running 残帧）：IPC 下发任务（V2/Ext/Resume）原子
-        // 消费抢占意图；本地任务（UI/热键/调度器/CLI/龙内条目）在门有效时让位——保存恢复点
-        // （每代际一次）后放锁返回。让位语义见 PreemptionGate 头注释（ADR-2026-09-16）。
-        var jobSource = job?.Source ?? JobSource.Ui;
-        if (PreemptionGate.ConsumeIfServedBy(jobSource))
+        // The logical root owns admission across all of its leaf tasks.
+        if (!scope.IsCurrentOwner)
         {
-            _logger.LogInformation("[A6] 抢占意图已由下发任务消费（门解除）: {Name}", job?.Name ?? soloTaskName ?? "未命名");
-        }
-        else if (PreemptionGate.ShouldYield(jobSource))
-        {
-            _logger.LogInformation("[A6] 抢占意图有效，任务让位联机锄地批次: {Name}", job?.Name ?? soloTaskName ?? "未命名");
-            if (registeredJob != null)
-            {
-                TryRegistryTerminal(registeredJob.JobId, JobState.Cancelled, JobErrorCodes.Preempted, "让位联机锄地批次（抢占意图门有效）", true);
-            }
             TaskSemaphore.Release();
-            // 槽位释放信号与正常结束同口径（协调器/助手 settle 的统一判定依据）；task.stopped 不发——任务从未起步
-            BetterGenshinImpact.Service.ExternalInterface.ExternalInterfaceEventHub.Instance.PublishTaskSlotReleased();
-            // 恢复点每代际只存一次 + 每代际只通知一次（级联让位不刷屏、不覆写首个受害者的恢复点）
-            if (PreemptionGate.TryMarkContextSaved())
-            {
-                try
-                {
-                    var snapshot = SuspendContextCapture.CaptureForYield(jobSource, job?.Name ?? soloTaskName);
-                    if (snapshot != null)
-                    {
-                        SuspendContextCapture.Save(_logger, snapshot, "A6让位");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "[A6] 让位时保存恢复点失败（不影响让位本身）");
-                }
-                Toast.Information("已让位联机锄地，等待批次下发");
-            }
-            return TaskRunResult.Preempted;
+            var stopped = scope.Result == TaskRunResult.Preempted ? TaskRunResult.Preempted : TaskRunResult.Cancelled;
+            if (registeredJob != null)
+                TryRegistryTerminal(registeredJob.JobId, JobState.Cancelled,
+                    stopped == TaskRunResult.Preempted ? JobErrorCodes.Preempted : JobErrorCodes.CancelledUser, null, true);
+            return stopped;
         }
         if (registeredJob != null)
         {
@@ -142,6 +140,9 @@ public class TaskRunner
         // 由引擎直接发布（理由详见 ExternalInterfaceEventHub.PublishTaskStarted 注释）
         BetterGenshinImpact.Service.ExternalInterface.ExternalInterfaceEventHub.Instance.PublishTaskStarted(soloTaskName);
         var faulted = false; // [A2] catch(Exception) 命中标记，供注册表终态判定
+        var failuresBefore = scope.FailureCount;
+        var interrupted = false;
+        var wasCancelled = false;
         try
         {
             _logger.LogInformation("→ {Text}", string.IsNullOrEmpty(soloTaskName) ? "任务启动！" : soloTaskName + "，任务启动！");
@@ -165,8 +166,9 @@ public class TaskRunner
                 throw;
             }
         }
-        catch (TaskCanceledException e)
+        catch (OperationCanceledException)
         {
+            interrupted = true;
             Notify.Event(NotificationEvent.TaskCancel).Success("任务被手动取消");
             _logger.LogInformation("任务中断:{Msg}", "任务被取消");
             if (RunnerContext.Instance.IsContinuousRunGroup)
@@ -178,6 +180,7 @@ public class TaskRunner
         catch (Exception e)
         {
             faulted = true;
+            scope.Observe(TaskRunResult.Failed);
             Notify.Event(NotificationEvent.TaskError).Error("任务执行异常", e);
             _logger.LogError(e.Message);
             _logger.LogDebug(e.StackTrace);
@@ -185,7 +188,6 @@ public class TaskRunner
         finally
         {
             // 任务是否被取消需在 CancellationContext.Clear() 之前捕获（Clear 后 IsDisposed=true 不可读）
-            var wasCancelled = false;
             try
             {
                 var cancellationContext = CancellationContext.Instance;
@@ -196,7 +198,16 @@ public class TaskRunner
                 // 读取失败按未取消处理，不影响收尾
             }
 
-            End();
+            faulted |= scope.FailureCount > failuresBefore;
+            wasCancelled |= interrupted || !scope.IsCurrentOwner;
+            if (wasCancelled && scope.Result != TaskRunResult.Preempted) scope.Observe(TaskRunResult.Cancelled);
+            try { End(); }
+            catch (Exception ex)
+            {
+                faulted = true;
+                scope.Observe(TaskRunResult.Failed);
+                _logger.LogError(ex, "任务清理失败，仍释放本任务槽位");
+            }
             _logger.LogInformation("→ {Text}", string.IsNullOrEmpty(soloTaskName) ? "任务结束" : soloTaskName + "，任务结束");
 
             // [传送标记] 任务结束 = 位置上下文结束：清空快速传送"上次成功传送地图"标记，
@@ -215,7 +226,7 @@ public class TaskRunner
             {
                 TryRegistryTerminal(registeredJob.JobId,
                     faulted ? JobState.Failed : wasCancelled ? JobState.Cancelled : JobState.Succeeded,
-                    faulted ? JobErrorCodes.TaskStartFailed : wasCancelled ? JobErrorCodes.CancelledUser : null,
+                    faulted ? JobErrorCodes.TaskStartFailed : wasCancelled ? (scope.Result == TaskRunResult.Preempted ? JobErrorCodes.Preempted : scope.StopReason) : null,
                     null, wasCancelled);
             }
 
@@ -231,7 +242,7 @@ public class TaskRunner
             }
         }
 
-        return TaskRunResult.Ran;
+        return faulted ? TaskRunResult.Failed : wasCancelled ? scope.Result : TaskRunResult.Ran;
     }
 
     public void FireAndForget(Func<Task> action)
@@ -246,6 +257,17 @@ public class TaskRunner
 
     public async Task RunSoloTaskAsync(ISoloTask soloTask, JobSource source = JobSource.Ui)
     {
+        ExecutionScope? owned = null;
+        try
+        {
+            if (ExecutionScope.Current == null)
+                owned = ExecutionScope.Start(new JobDescriptor(JobKind.Solo, soloTask.Name, source));
+        }
+        catch (InvalidOperationException ex) { _logger.LogWarning(ex, "独立任务未获执行权: {Name}", soloTask.Name); return; }
+        using var root = owned;
+        ExecutionScope.Current!.SetCheckpoint(new SuspendContextCapture.Snapshot(
+            "solo", null, 0, null, soloTask.Name, 0, null, null,
+            soloTask.Name == BetterGenshinImpact.GameTask.AutoOnline.NotifyOnlineTask.TaskName));
         // 启动等待之前先进行取消操作的初始化，便于在任务开始前终止任务.
         CancellationContext.Instance.Set();
 
@@ -306,7 +328,7 @@ public class TaskRunner
         if (!TaskContext.Instance().IsInitialized)
         {
             UIDispatcherHelper.Invoke(() => { Toast.Warning("请先在启动页，启动截图器再使用本功能"); });
-            throw new NormalEndException("请先在启动页，启动截图器再使用本功能");
+            throw new InvalidOperationException("请先在启动页，启动截图器再使用本功能");
         }
 
         // [输入状态安全] 任务启动前释放所有残留按键。

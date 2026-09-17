@@ -172,15 +172,16 @@ public class BatchSubmitRejectionA6Tests
     }
 
     [Fact]
-    public void CancelledJob_RetryableErrorCode_StillAbortsAsUserCancelled()
+    public void PreemptedJob_IsNotUserCancellation_AndKeepsFailureReason()
     {
-        // F11/取消语义永远压过重试分类（含 preempted 让位的 cancelled+errorCode 投影形态）
+        // Preemption is an engine interruption, not a user pressing stop.
         var item = SubmittedItem("组A", "job-a");
 
         var actions = BatchReconcileDecider.Decide(
             [item], [Obs("job-a", "组A", "cancelled", "preempted", cancelled: true)], true, Gen, Now);
 
-        Assert.Contains(actions, a => a is BatchReconcileAction.AbortUserCancelled { Index: 0 });
+        Assert.DoesNotContain(actions, a => a is BatchReconcileAction.AbortUserCancelled);
+        Assert.Contains(actions, a => a is BatchReconcileAction.ConfirmTerminal { ErrorCode: "preempted" });
         Assert.DoesNotContain(actions, a => a is BatchReconcileAction.RetryFromFailure);
     }
 

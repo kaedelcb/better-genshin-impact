@@ -406,7 +406,7 @@ public partial class HomePageViewModel : ViewModel, IDisposable
         {
             if (TaskDispatcherEnabled)
             {
-                CancellationContext.Instance.Cancel(); // 取消独立任务的运行
+                CancellationContext.Instance.ManualCancel(); // User stop must also invalidate roots between leaves.
                 _taskDispatcher.Stop();
                 if (_maskWindow != null && _maskWindow.IsExist())
                 {

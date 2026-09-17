@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Standalone diagnostic: real scheduling sources, inert UI/game boundaries. No product reference/deployment. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="BoundaryStubs.cs" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(MSBuildSDKsPath)/../Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Compile Include="../../BetterGenshinImpact/GameTask/TaskRunner.cs" Link="Production/TaskRunner.cs" />
+    <Compile Include="../../BetterGenshinImpact/GameTask/TaskRunResult.cs" Link="Production/TaskRunResult.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/Execution/PreemptionGate.cs" Link="Production/PreemptionGate.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/Execution/ExecutionScope.cs" Link="Production/ExecutionScope.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/Execution/SuspendContextCapture.cs" Link="Production/SuspendContextCapture.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/Execution/BgiJob.cs" Link="Production/BgiJob.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/Execution/JobRegistry.cs" Link="Production/JobRegistry.cs" />
+    <Compile Include="../../BetterGenshinImpact/Core/Script/CancellationContext.cs" Link="Production/CancellationContext.cs" />
+    <Compile Include="../../BetterGenshinImpact/Core/Config/SuspendedTaskContext.cs" Link="Production/SuspendedTaskContext.cs" />
+    <Compile Include="../../MultiplayerHoeingAssistant/Services/BatchReconcilePlan.cs" Link="Production/BatchReconcilePlan.cs" />
+  </ItemGroup>
+</Project>

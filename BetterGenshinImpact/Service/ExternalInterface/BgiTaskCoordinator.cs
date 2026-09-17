@@ -83,6 +83,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
         /// <summary>[A6] 抢占式下发（联机锄地批次/按键抢占）：等槽窗口缩短为 3s（让位点通常即刻腾槽），
         /// 未果则转入执行段的主动抢占（有界退出契约）。默认 false = 旧 15s 等槽语义不变。</summary>
         public bool Preempt { get; init; }
+        public string? IdempotencyKey { get; init; }
     }
 
     public readonly record struct SubmitResult(SubmitStatus Status, Guid TaskHandle, int QueuePosition);
@@ -178,7 +179,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
         TimeSpan? slotPollInterval = null,
         TimeSpan? slotWaitTimeout = null)
     {
-        _isSlotFree = isSlotFree ?? (static () => GameTask.Common.TaskControl.TaskSemaphore.CurrentCount != 0);
+        _isSlotFree = isSlotFree ?? (static () => !ExecutionScope.HasActive && GameTask.Common.TaskControl.TaskSemaphore.CurrentCount != 0);
         _publish = publish ?? ((name, payload) => ExternalInterfaceEventHub.Instance.Publish(name, payload));
         _slotPollInterval = slotPollInterval ?? DefaultSlotPollInterval;
         _slotWaitTimeout = slotWaitTimeout ?? DefaultSlotWaitTimeout;
@@ -303,18 +304,17 @@ internal sealed class BgiTaskCoordinator : IDisposable
                 return new SubmitResult(SubmitStatus.Unavailable, Guid.Empty, 0);
             }
 
-            if (submission.Generation > 0)
+            if (submission.Generation > 0 || submission.IdempotencyKey != null)
             {
                 if (_current is { } current
-                    && current.Submission.Generation == submission.Generation
-                    && current.Submission.Name == name)
+                    && SameSubmission(current.Submission, submission))
                 {
                     adopted = current;
                 }
                 else
                 {
                     adopted = _pending.Values.FirstOrDefault(
-                        p => p.Submission.Generation == submission.Generation && p.Submission.Name == name);
+                        p => SameSubmission(p.Submission, submission));
                 }
 
                 if (adopted is not null)
@@ -325,7 +325,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
                     return new SubmitResult(SubmitStatus.Adopted, adopted.TaskHandle, 0);
                 }
 
-                if (submission.Generation == _lastExecutedTask.Generation
+                if (submission.IdempotencyKey == null && submission.Generation == _lastExecutedTask.Generation
                     && name == _lastExecutedTask.Name)
                 {
                     _logger.LogInformation(
@@ -575,12 +575,6 @@ internal sealed class BgiTaskCoordinator : IDisposable
         var startedAt = DateTime.UtcNow;
         try
         {
-            // 3. 派发点幂等登记（对应 v2 "登记在拒绝检查之后、执行段之前"的位置）
-            if (item.Submission.Generation > 0)
-            {
-                RegisterExecuted(item.Submission.Generation, item.Submission.Name);
-            }
-
             PublishSafe(ExternalInterfaceEventNames.TaskStarted, new
             {
                 taskHandle = item.TaskHandle.ToString("N"),
@@ -593,6 +587,8 @@ internal sealed class BgiTaskCoordinator : IDisposable
             TryRegistryRunning(item.TaskHandle);
 
             var cancelled = await item.Submission.Executor(item.TaskHandle, item.Cts.Token).ConfigureAwait(false);
+            if (!cancelled && item.Submission.Generation > 0)
+                RegisterExecuted(item.Submission.Generation, item.Submission.Name);
             var durationMs = (long)(DateTime.UtcNow - startedAt).TotalMilliseconds;
             // 终态登记先于事件发布：事件是快速路径可能丢失，登记表是安全网轮询的权威来源
             RecordTerminal(item.TaskHandle, "completed", cancelled: cancelled);
@@ -685,6 +681,10 @@ internal sealed class BgiTaskCoordinator : IDisposable
     /// 执行段凭句柄认领，ext 事件里的 taskHandle 可直接查注册表。
     /// 观察性故障不影响队列语义：登记失败仅留痕，项照常入队（漏斗认领失败会退化新建）。
     /// </summary>
+    private static bool SameSubmission(TaskSubmission a, TaskSubmission b) =>
+        b.IdempotencyKey != null ? a.IdempotencyKey == b.IdempotencyKey :
+            a.IdempotencyKey == null && a.Generation == b.Generation && a.GroupName == b.GroupName && a.ConfigName == b.ConfigName;
+
     private void TryRegistrySubmitQueued(PendingTask item)
     {
         try
@@ -692,6 +692,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
             var kind = !string.IsNullOrEmpty(item.Submission.GroupName) ? JobKind.Group : JobKind.OneDragon;
             JobRegistry.Instance.Submit(kind, item.Submission.Name ?? "未知", JobSource.Ext,
                 item.Submission.Generation > 0 ? item.Submission.Generation : null,
+                idempotencyKey: item.Submission.IdempotencyKey,
                 jobId: item.TaskHandle);
         }
         catch (Exception exception)

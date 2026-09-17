@@ -4,17 +4,20 @@ namespace BetterGenshinImpact.GameTask;
 /// [A1.1 统一作业注册表] TaskRunner 执行的显式结果。
 /// 旧语义：抢锁失败仅一行 ERR 日志后静默返回，调用方无法区分"跑了"与"没跑"——
 /// 这是 task.resume 静默丢失、一条龙条目静默跳过、批次组被并发入口撞死等事故的共同根因。
-/// 注意：执行内部的成功/取消/异常仍沿用 RunCurrentAsync 既有 catch 分层，不在本枚举展开。
+/// 拒绝、让位、失败与取消必须传回父流程；只有 Ran 可作为成功叶子参与汇总。
 /// </summary>
 public enum TaskRunResult
 {
-    /// <summary>拿到任务槽位并执行完毕（含执行体内部被取消/异常，与旧语义一致）。</summary>
+    /// <summary>执行体完成，且未观察到失败、取消或让位。</summary>
     Ran,
 
     /// <summary>任务槽位被占用，本次未执行（旧行为：仅 ERR 日志后静默返回）。</summary>
     RejectedSlotBusy,
 
-    /// <summary>[A6] 拿到槽位后发现抢占意图门有效（PreemptionGate armed），主动让位给
-    /// 联机锄地批次：未执行、已按需保存恢复点、已释放槽位。静默路径（无 started/stopped 事件）。</summary>
+    /// <summary>所属根运行已让位；不是用户停止，也不是成功。</summary>
     Preempted,
+    /// <summary>执行或必要前置步骤失败。</summary>
+    Failed,
+    /// <summary>执行被取消，原因由根运行/注册表记录。</summary>
+    Cancelled,
 }

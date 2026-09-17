@@ -250,6 +250,7 @@ public partial class MainViewModel
                     // 10s 恢复定时器不会补刀：它由 autoHoeingRunning 边沿触发，空批次从未产生该边沿。
                     if (SnapshotOnlineHoeingPolicy().Policy == TaskConflictPolicy.RunSpecified && !anyItemStarted)
                     {
+                        await _commandExecutor.ExecuteResumeAsync(cancel: true);
                         AddLog("[任务冲突策略] 本批次所有绑定组均未启动成功（被 BGI 拒绝/不存在），未实际锄地，"
                                + "跳过「完成后执行指定任务」收尾（防空批次误启动）；请检查绑定的配置组名是否在 BGI 中存在");
                     }
@@ -305,10 +306,11 @@ public partial class MainViewModel
             var t = (_config?.OnlineHoeingGroupTypes?.Count > i) ? _config.OnlineHoeingGroupTypes[i] : "group";
             items.Add(new BatchExpectedItem(groupNames[i], t == "onedragon"));
         }
-        var batchGroupNames = string.Join(",", groupNames);
+        var batchGroupNames = string.Join(",", items.Where(it => !it.IsOneDragon).Select(it => it.Name));
 
         BgiEpoch? epoch = null; // 首个成功快照捕获；之后帧间比对识别 BGI 重启
         var snapshotFailLogged = false;
+        var lastAuthoritativeSnapshot = DateTime.UtcNow;
         AddLog($"[reconcile] 批次启动（generation={generation}，期望 {items.Count} 项；pull=ext.job.list，push=job.* 事件唤醒）");
 
         while (!batch.IsCancellationRequested)
@@ -334,6 +336,11 @@ public partial class MainViewModel
 
             if (snapshot is null)
             {
+                if (DateTime.UtcNow - lastAuthoritativeSnapshot > TimeSpan.FromSeconds(90))
+                {
+                    NotifyBatchLoud("联机锄地结果未知", "90 秒未获得 BGI 权威状态，停止推进，不自动重放或报告成功。");
+                    return false;
+                }
                 if (!snapshotFailLogged)
                 {
                     AddLog("[reconcile] ext.job.list 拉取失败（通道瞬态），节拍重试中");
@@ -342,6 +349,7 @@ public partial class MainViewModel
             }
             else
             {
+                lastAuthoritativeSnapshot = DateTime.UtcNow;
                 if (snapshotFailLogged)
                 {
                     AddLog("[reconcile] ext.job.list 拉取恢复");
@@ -358,8 +366,9 @@ public partial class MainViewModel
                 }
                 else if (!epochMatch)
                 {
-                    AddLog($"[reconcile] BGI 纪元变化（pid {epoch.ProcessId} → {snapshot.Epoch?.ProcessId}），在飞项退回重对账");
-                    epoch = snapshot.Epoch;
+                    AddLog($"[reconcile] BGI 纪元变化（pid {epoch.ProcessId} → {snapshot.Epoch?.ProcessId}），旧批次结果未知，禁止自动重放");
+                    NotifyBatchLoud("联机锄地批次中止", "BGI 已重启，无法确认旧任务结果；请核实后重新发起，不能把未知当成功或自动重跑。");
+                    return false;
                 }
 
                 // 观察输入：本批 generation 的作业 ∪ 已附着 jobId 的作业（跨代残留也能终态确认）
@@ -369,7 +378,8 @@ public partial class MainViewModel
                     .Where(j => j.JobId is not null
                                 && (j.Generation == generation || attachedIds.Contains(j.JobId)))
                     .Select(j => new BatchJobObservation(
-                        j.JobId!, j.Name, j.Generation, j.State ?? "unknown", j.WasCancelled, j.ErrorCode))
+                        j.JobId!, j.Name, j.Generation, j.State ?? "unknown", j.WasCancelled, j.ErrorCode,
+                        j.IdempotencyKey, j.Kind, j.ParentJobId))
                     .ToList();
 
                 var actions = BatchReconcileDecider.Decide(items, jobs, epochMatch, generation, DateTime.UtcNow);
@@ -379,16 +389,11 @@ public partial class MainViewModel
                     switch (action)
                     {
                         case BatchReconcileAction.EpochChanged:
-                            foreach (var it in items.Where(it => it.State == BatchItemState.Submitted))
-                            {
-                                it.State = BatchItemState.PendingSubmit;
-                                it.JobId = null;
-                            }
-                            break;
+                            return false;
                         case BatchReconcileAction.Attach attach:
                             items[attach.Index].JobId ??= attach.JobId;
                             items[attach.Index].Started = true; // 注册表里存在该作业 = 曾被 BGI 接受启动
-                            AddLog($"[reconcile] 按名附着找回作业：「{items[attach.Index].Name}」jobId={attach.JobId}");
+                            AddLog($"[reconcile] 按请求身份找回作业：「{items[attach.Index].Name}」jobId={attach.JobId}");
                             break;
                         case BatchReconcileAction.Submit submit:
                             await SubmitBatchItemAsync(ext, items[submit.Index], generation, batchGroupNames, batch);
@@ -406,6 +411,7 @@ public partial class MainViewModel
                             var retryItem = items[retryFromFailure.Index];
                             retryItem.State = BatchItemState.PendingSubmit;
                             retryItem.JobId = null;
+                            retryItem.RequestKey = Guid.NewGuid().ToString("N");
                             retryItem.RejectionRetries++;
                             retryItem.FirstRejectionUtc ??= DateTime.UtcNow;
                             AddLog($"[reconcile] 「{retryItem.Name}」执行失败（{retryFromFailure.ErrorCode}，可重试瞬态），"
@@ -443,7 +449,9 @@ public partial class MainViewModel
                             finished = true;
                             break;
                         case BatchReconcileAction.Complete:
-                            AddLog("[reconcile] 全部期望项终态确认，批次完成");
+                            AddLog(items.Any(it => it.TerminalErrorCode != null || it.TerminalWasCancelled == true)
+                                ? "[reconcile] 批次结束，但存在失败/中断项，不按成功执行后续指定任务"
+                                : "[reconcile] 全部期望项成功终态确认，批次完成");
                             finished = true;
                             break;
                         case BatchReconcileAction.Wait:
@@ -458,7 +466,8 @@ public partial class MainViewModel
                 {
                     // Complete 收尾：返回是否有项真正启动过（空批次守卫输入）；
                     // 取消/中止路径返回值不被消费（调用方见令牌即跳过收尾）
-                    return finished && items.Any(it => it.Started);
+                    return finished && items.Any(it => it.Started)
+                        && items.All(it => it.TerminalErrorCode == null && it.TerminalWasCancelled != true);
                 }
             }
 
@@ -501,7 +510,7 @@ public partial class MainViewModel
             var submit = await ext.SubmitTaskStartAsync(
                 item.IsOneDragon ? null : item.Name,
                 item.IsOneDragon ? item.Name : null,
-                0, generation, batchGroupNames, batch.Cts.Token, preempt: true);
+                0, generation, batchGroupNames, batch.Cts.Token, preempt: true, idempotencyKey: item.RequestKey);
             if (!submit.Success)
             {
                 var errorCode = submit.ErrorCode ?? "rejected";

@@ -124,6 +124,7 @@ public sealed class BgiEpoch
 /// <summary>[A3.2] 注册表作业快照条目（ext.job.status/list 的 jobs[] 元素投影）。</summary>
 public sealed class BgiJobInfo
 {
+    public string? IdempotencyKey { get; init; }
     public string? JobId { get; init; }
 
     public string? ParentJobId { get; init; }
@@ -232,6 +233,7 @@ public sealed class BgiExternalResponse
 /// </summary>
 public sealed class BgiExternalClient : IDisposable
 {
+    public string? TakeoverTicket { get; set; }
     private const int MaxPayloadLength = 1024 * 1024;
     private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
@@ -370,6 +372,12 @@ public sealed class BgiExternalClient : IDisposable
 
         try
         {
+            if (TakeoverTicket is { } ticket)
+            {
+                var fields = System.Text.Json.JsonSerializer.SerializeToNode(payload ?? new { })!.AsObject();
+                fields["takeoverTicket"] = ticket;
+                payload = fields;
+            }
             await WriteEnvelopeAsync(pipe, operation, requestId, payload, cancellationToken)
                 .ConfigureAwait(false);
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
@@ -514,11 +522,11 @@ public sealed class BgiExternalClient : IDisposable
         int generation,
         string? batchGroupNames = null,
         CancellationToken cancellationToken = default,
-        bool preempt = false)
+        bool preempt = false, string? idempotencyKey = null)
     {
         var payload = preempt
-            ? (object)new { groupName, configName, startFromIndex, generation, batchGroupNames, preempt = true }
-            : new { groupName, configName, startFromIndex, generation, batchGroupNames };
+            ? (object)new { groupName, configName, startFromIndex, generation, batchGroupNames, preempt = true, idempotencyKey }
+            : new { groupName, configName, startFromIndex, generation, batchGroupNames, idempotencyKey };
         var response = await SendCommandAsync(
                 ExternalOperations.TaskStart,
                 payload,
@@ -668,6 +676,7 @@ public sealed class BgiExternalClient : IDisposable
         return new BgiJobInfo
         {
             JobId = Str(el, "jobId"),
+            IdempotencyKey = Str(el, "idempotencyKey"),
             ParentJobId = Str(el, "parentJobId"),
             Kind = Str(el, "kind"),
             Name = Str(el, "name"),

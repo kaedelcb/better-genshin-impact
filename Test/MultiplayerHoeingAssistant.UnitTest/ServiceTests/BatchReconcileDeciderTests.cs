@@ -193,30 +193,32 @@ public class BatchReconcileDeciderTests
     }
 
     [Fact]
-    public void AttachByName_RecoversLostSubmitResponse()
+    public void AttachByRequestKey_RecoversLostSubmitResponse()
     {
         var items = Items("组A");
         Tick(items, []); // 提交，但假设应答帧丢失：JobId 仍为 null
         Assert.Null(items[0].JobId);
 
         // 快照里按 generation+name 找回（BGI 实际已入队）
-        var actions = Tick(items, [Obs("job-a", "组A", "queued")]);
+        var actions = Tick(items, [new BatchJobObservation("job-a", "组A", Gen, "queued", false, null, items[0].RequestKey)]);
         Assert.Contains(actions, a => a is BatchReconcileAction.Attach { Index: 0, JobId: "job-a" });
         Assert.Equal("job-a", items[0].JobId);
     }
 
     [Fact]
-    public void AttachedJobVanished_SameEpoch_ResubmitsUpToLimit_ThenLostJobTerminal()
+    public void AttachedJobVanished_SameEpoch_IsUnknown_AndNeverReplayed()
     {
         var items = Items("组A");
         Tick(items, []);
         items[0].JobId = "job-a";
 
-        // 作业从快照消失（同纪元 not_found = 句柄淘汰/异常）→ 重提交
+        // 已确认受理的作业消失，不代表从未执行：禁止重放有副作用的任务。
         var a1 = Tick(items, []);
-        Assert.Contains(a1, a => a is BatchReconcileAction.Resubmit { Index: 0 });
+        Assert.DoesNotContain(a1, a => a is BatchReconcileAction.Resubmit);
+        Assert.Contains(a1, a => a is BatchReconcileAction.ConfirmTerminal { Index: 0, ErrorCode: "lost_job" });
 
         // 重提交后拿到新句柄又消失…… 到达上限后按 lost_job 终态确认（不永等）
+        items[0].State = BatchItemState.Submitted;
         items[0].SubmitAttempts = BatchReconcileDecider.MaxSubmitAttempts;
         var a2 = Tick(items, []);
         Assert.Contains(a2, a => a is BatchReconcileAction.ConfirmTerminal { Index: 0, ErrorCode: "lost_job" });

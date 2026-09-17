@@ -47,6 +47,8 @@ public class AutoTrackTask(AutoTrackParam param) : BaseIndependentTask
     /// </summary>
     public async void Start()
     {
+        using var root = BetterGenshinImpact.Service.Execution.ExecutionScope.Current == null ? TryAcquireRoot() : null;
+        if (BetterGenshinImpact.Service.Execution.ExecutionScope.Current == null) return;
         var hasLock = false;
         try
         {
@@ -61,7 +63,7 @@ public class AutoTrackTask(AutoTrackParam param) : BaseIndependentTask
 
             Logger.LogInformation("→ {Text}", "自动追踪，启动！");
 
-            _ct = CancellationContext.Instance.Cts.Token;
+            _ct = BetterGenshinImpact.Service.Execution.ExecutionScope.Current!.Token;
 
             TrackMission();
         }
@@ -84,6 +86,13 @@ public class AutoTrackTask(AutoTrackParam param) : BaseIndependentTask
                 TaskSemaphore.Release();
             }
         }
+    }
+
+    private static BetterGenshinImpact.Service.Execution.ExecutionScope? TryAcquireRoot()
+    {
+        try { return BetterGenshinImpact.Service.Execution.ExecutionScope.Start(new(
+            BetterGenshinImpact.Service.Execution.JobKind.Pathing, "自动追踪", BetterGenshinImpact.Service.Execution.JobSource.Ui)); }
+        catch (InvalidOperationException ex) { Logger.LogWarning(ex, "自动追踪未获执行权"); return null; }
     }
 
     private void TrackMission()

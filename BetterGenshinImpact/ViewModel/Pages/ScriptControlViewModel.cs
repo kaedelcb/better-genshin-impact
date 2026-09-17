@@ -2917,6 +2917,7 @@ public partial class ScriptControlViewModel : ViewModel
     /// <param name="source">[A2] 作业来源（写入 JobRegistry 观察用，不影响执行语义）。</param>
     public async Task StartGroups(List<ScriptGroup> scriptGroups, TaskProgress? taskProgress = null, bool loop = false, JobSource source = JobSource.Ui)
     {
+        var stopVersion = ExecutionScope.StopVersionNow;
         _logger.LogInformation("开始连续执行选中配置组:{Names}", string.Join(",", scriptGroups.Select(x => x.Name)));
         try
         {
@@ -2936,6 +2937,7 @@ public partial class ScriptControlViewModel : ViewModel
             var groupIndex = 0;
             foreach (var scriptGroup in sg)
             {
+                if (stopVersion != ExecutionScope.StopVersionNow) return;
                 groupIndex++;
 
                 // [停止响应] 用户按 F11/取消热键后，CancellationContext 被取消，
@@ -2954,12 +2956,13 @@ public partial class ScriptControlViewModel : ViewModel
                 }
                 taskProgress.CurrentScriptGroupName = scriptGroup.Name;
                 TaskProgressManager.SaveTaskProgress(taskProgress);
-                await _scriptService.RunMulti(GetNextProjects(scriptGroup), scriptGroup.Name, taskProgress,
+                var result = await _scriptService.RunMulti(GetNextProjects(scriptGroup), scriptGroup.Name, taskProgress,
                     new JobDescriptor(JobKind.Group, scriptGroup.Name, source));
+                if (result != TaskRunResult.Ran) return;
                 await Task.Delay(2000);
             }
 
-            if (CancellationContext.Instance.IsCancellationRequested)
+            if (CancellationContext.Instance.IsCancellationRequested || stopVersion != ExecutionScope.StopVersionNow)
             {
             }
             else
