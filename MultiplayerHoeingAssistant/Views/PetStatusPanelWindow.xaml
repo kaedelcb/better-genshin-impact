@@ -24,7 +24,7 @@
                      DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
             <MenuItem Header="显示奥黛塔" IsCheckable="True" IsChecked="{Binding Enabled, Mode=TwoWay}"
                       Foreground="#F2E8D5" FontSize="13" Padding="10,6"/>
-            <MenuItem Header="免打扰穿透（解锁走托盘）" IsCheckable="True" IsChecked="{Binding ClickThrough, Mode=TwoWay}"
+            <MenuItem Header="鼠标穿透（请从托盘恢复）" IsCheckable="True" IsChecked="{Binding ClickThrough, Mode=TwoWay}"
                       Foreground="#F2E8D5" FontSize="13" Padding="10,6"/>
             <MenuItem Header="任务状态面板" IsCheckable="True" IsChecked="{Binding PanelEnabled, Mode=TwoWay}"
                       Foreground="#F2E8D5" FontSize="13" Padding="10,6"/>

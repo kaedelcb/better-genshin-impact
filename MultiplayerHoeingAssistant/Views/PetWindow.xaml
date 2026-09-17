@@ -18,7 +18,7 @@
         MouseWheel="OnMouseWheel">
 
     <!-- 奥黛塔桌宠 v2：帧动画播放器（双层交叉淡化，见 PetWindow.xaml.cs）。
-         alpha=0 像素天然点击穿透；右键菜单在"免打扰穿透模式"（P4）下整窗穿透后自动失效。 -->
+         alpha=0 像素天然点击穿透；右键菜单在“鼠标穿透”开启后随整窗穿透自动失效。 -->
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
@@ -46,7 +46,7 @@
                 <MenuItem Header="大" Command="{Binding SetSizeCommand}" CommandParameter="220"/>
             </MenuItem>
             <MenuItem Header="置顶显示" IsCheckable="True" IsChecked="{Binding Topmost, Mode=TwoWay}"/>
-            <MenuItem Header="免打扰穿透（解锁走托盘）" IsCheckable="True" IsChecked="{Binding ClickThrough, Mode=TwoWay}"/>
+            <MenuItem Header="鼠标穿透（请从托盘恢复）" IsCheckable="True" IsChecked="{Binding ClickThrough, Mode=TwoWay}"/>
             <MenuItem Header="显示上线信息" IsCheckable="True" IsChecked="{Binding ShowTaskLabel, Mode=TwoWay}"/>
             <MenuItem Header="任务状态面板" IsCheckable="True" IsChecked="{Binding PanelEnabled, Mode=TwoWay}"/>
             <Separator/>

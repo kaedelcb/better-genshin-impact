@@ -377,7 +377,7 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// 托盘「奥黛塔」子菜单：显示/隐藏、免打扰穿透（进入时气泡提示解锁方式）、任务状态面板。
+    /// 托盘「奥黛塔」子菜单：显示/隐藏、鼠标穿透（进入时气泡提示恢复方式）、任务状态面板。
     /// 穿透模式下桌宠连双击都不响应，本菜单是唯一解锁入口；SubmenuOpened 时同步勾选态。
     /// </summary>
     private void AddPetTrayMenu()
@@ -388,13 +388,13 @@ public partial class App : Application
         var togglePet = new System.Windows.Controls.MenuItem { Header = "显示奥黛塔", IsCheckable = true };
         togglePet.Click += (_, _) => _mainWindow.Pet.Enabled = togglePet.IsChecked;
 
-        var clickThrough = new System.Windows.Controls.MenuItem { Header = "免打扰穿透（从本菜单解锁）", IsCheckable = true };
+        var clickThrough = new System.Windows.Controls.MenuItem { Header = "鼠标穿透（从本菜单恢复）", IsCheckable = true };
         clickThrough.Click += (_, _) =>
         {
             _mainWindow.Pet.ClickThrough = clickThrough.IsChecked;
             if (clickThrough.IsChecked)
             {
-                ShowTrayBalloon("奥黛塔 · 穿透模式",
+                ShowTrayBalloon("奥黛塔 · 鼠标穿透",
                     "奥黛塔与任务状态面板已完全穿透（点击会穿过它们）。回到本菜单取消勾选即可恢复交互。");
             }
         };
