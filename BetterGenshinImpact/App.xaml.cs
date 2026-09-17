@@ -103,6 +103,11 @@ public partial class App : Application
                         () => all.MaskWindowConfig is { MaskEnabled: true, ShowLogBox: true }),
                     LogEventLevel.Information);
 
+                // 第三方 JS 脚本进度观察：只订阅进程内 Serilog 事件，接住脚本自身 log.* 打印的阶段计数
+                // （如采集cd管理的「路径组3 特产 第 28/119 个」），经 IPC scriptTaskProgress 呈现到助手/桌宠面板。
+                // 不读取日志文件、不修改任何脚本源码；解析失败或异常静默降级。
+                loggerConfiguration.WriteTo.Sink(new ScriptTaskProgressLogSink(), LogEventLevel.Information);
+
                 Log.Logger = loggerConfiguration.CreateLogger();
                 services.AddLogging(c => c.AddSerilog());
 

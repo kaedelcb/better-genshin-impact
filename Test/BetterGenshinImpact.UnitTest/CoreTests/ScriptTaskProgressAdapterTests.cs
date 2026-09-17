@@ -2,6 +2,9 @@ using BetterGenshinImpact.Core.Script;
 
 namespace BetterGenshinImpact.UnitTest.CoreTests;
 
+// ScriptRouteProgress / ScriptTaskProgressAdapter 是进程级静态状态，必须与脚本进度观察测试串行执行，
+// 否则并行用例之间会互相清空适配器状态（曾导致本测试的"限时剩余"断言随机失败）。
+[Collection("ScriptRouteProgressState")]
 public class ScriptTaskProgressAdapterTests
 {
     [Fact]

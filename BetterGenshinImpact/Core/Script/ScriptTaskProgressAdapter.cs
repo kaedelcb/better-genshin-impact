@@ -6,8 +6,9 @@ using System.IO;
 namespace BetterGenshinImpact.Core.Script;
 
 /// <summary>
-/// 在 BGI 脚本宿主侧生成第三方 JS 任务进度。只观察项目生命周期与 pathingScript 调用，
-/// 不修改脚本源码、不读取脚本日志。
+/// 在 BGI 脚本宿主侧根据项目生命周期与 pathingScript 调用生成第三方 JS 任务进度。
+/// 本适配器自身不解析日志；脚本既有日志文本由独立的 ScriptTaskProgressLogParser /
+/// ScriptTaskProgressLogSink 只读观察并作为补充（不读日志文件、不修改脚本源码）。
 /// </summary>
 internal static class ScriptTaskProgressAdapter
 {
