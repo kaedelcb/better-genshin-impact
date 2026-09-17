@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using MultiplayerHoeingAssistant.Helpers;
 using MultiplayerHoeingAssistant.ViewModels;
 
 namespace MultiplayerHoeingAssistant.Views;
@@ -16,12 +17,14 @@ public partial class PetStatusPanelWindow : Window
 {
     private readonly PetViewModel _vm;
     private readonly DispatcherTimer _refresh;
+    private readonly DesktopWidgetWindowGuard _windowGuard;
 
     public PetStatusPanelWindow(PetViewModel vm)
     {
         InitializeComponent();
         _vm = vm;
         DataContext = vm;
+        _windowGuard = new DesktopWidgetWindowGuard(this, () => _vm.PanelEnabled);
         Opacity = vm.PanelOpacity;
         ApplyMinimalMode();
         // 设置页透明度滑条实时生效（原先只在构造时读一次，调了没反应）
@@ -33,9 +36,17 @@ public partial class PetStatusPanelWindow : Window
             Height = h;
         SourceInitialized += (_, _) =>
         {
-            var (x, y, _) = _vm.GetPanelRestorePosition();
-            Left = x;
-            Top = y;
+            _windowGuard.BeginUserMove();
+            try
+            {
+                var (x, y, _) = _vm.GetPanelRestorePosition();
+                Left = x;
+                Top = y;
+            }
+            finally
+            {
+                _windowGuard.EndUserMove();
+            }
             // 免打扰穿透模式下任务面板同样整窗穿透（与宠物窗口行为一致，解锁走托盘子菜单/设置页）
             ApplyClickThrough(_vm.ClickThrough);
         };
@@ -53,6 +64,7 @@ public partial class PetStatusPanelWindow : Window
         {
             _refresh.Stop();
             vm.PropertyChanged -= OnVmPropertyChanged;
+            _windowGuard.Dispose();
         };
     }
 
@@ -117,6 +129,7 @@ public partial class PetStatusPanelWindow : Window
     private void OnResizeEdgeDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is not System.Windows.Shapes.Rectangle rect || rect.Tag is not string edge) return;
+        _windowGuard.BeginUserMove();
         _resizeEdge = edge;
         var source = PresentationSource.FromVisual(this);
         if (source?.CompositionTarget != null)
@@ -133,6 +146,7 @@ public partial class PetStatusPanelWindow : Window
         rect.CaptureMouse();
         rect.MouseMove += OnResizeEdgeMove;
         rect.MouseLeftButtonUp += OnResizeEdgeUp;
+        rect.LostMouseCapture += OnResizeEdgeLostMouseCapture;
     }
 
     private void OnResizeEdgeMove(object sender, MouseEventArgs e)
@@ -163,12 +177,25 @@ public partial class PetStatusPanelWindow : Window
     private void OnResizeEdgeUp(object sender, MouseButtonEventArgs e)
     {
         if (sender is FrameworkElement el)
-        {
+            FinishResize(el, releaseCapture: true);
+    }
+
+    private void OnResizeEdgeLostMouseCapture(object sender, MouseEventArgs e)
+    {
+        if (sender is FrameworkElement el)
+            FinishResize(el, releaseCapture: false);
+    }
+
+    private void FinishResize(FrameworkElement el, bool releaseCapture)
+    {
+        if (_resizeEdge == null) return;
+        el.MouseMove -= OnResizeEdgeMove;
+        el.MouseLeftButtonUp -= OnResizeEdgeUp;
+        el.LostMouseCapture -= OnResizeEdgeLostMouseCapture;
+        if (releaseCapture && el.IsMouseCaptured)
             el.ReleaseMouseCapture();
-            el.MouseMove -= OnResizeEdgeMove;
-            el.MouseLeftButtonUp -= OnResizeEdgeUp;
-        }
         _resizeEdge = null;
+        _windowGuard.EndUserMove();
         // LocationChanged/SizeChanged 已触发 NotifyLayout，位置/尺寸自动写回设置
     }
 
@@ -203,8 +230,10 @@ public partial class PetStatusPanelWindow : Window
     {
         if (e.ClickCount == 1)
         {
+            _windowGuard.BeginUserMove();
             try { DragMove(); }
             catch (InvalidOperationException) { /* 竞争忽略 */ }
+            finally { _windowGuard.EndUserMove(); }
         }
     }
 

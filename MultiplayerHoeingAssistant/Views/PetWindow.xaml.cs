@@ -4,9 +4,9 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Data;
 using System.Windows.Controls;
-using System.Windows.Interop;
 using System.Windows.Threading;
 using System.Runtime.InteropServices;
+using MultiplayerHoeingAssistant.Helpers;
 using MultiplayerHoeingAssistant.Services;
 using MultiplayerHoeingAssistant.ViewModels;
 
@@ -24,14 +24,7 @@ public partial class PetWindow : Window
 {
     private readonly PetViewModel _vm;
     private readonly DispatcherTimer _engine;
-    private HwndSource? _hwndSource;
-    private IntPtr _hwnd;
-    private bool _allowPositionChange;
-    private bool _positionLocked;
-    private int _lockedX;
-    private int _lockedY;
-    private bool _restoreQueued;
-    private bool _positionRestoreQueued;
+    private readonly DesktopWidgetWindowGuard _windowGuard;
 
     // 播放器状态（仅 UI 线程）
     private PetAnimSet? _seq;
@@ -46,6 +39,7 @@ public partial class PetWindow : Window
         InitializeComponent();
         _vm = vm;
         DataContext = vm;
+        _windowGuard = new DesktopWidgetWindowGuard(this, () => _vm.Enabled);
 
         _engine = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(30) };
         _engine.Tick += OnEngineTick;
@@ -55,8 +49,7 @@ public partial class PetWindow : Window
         Closed += (_, _) =>
         {
             vm.PropertyChanged -= OnVmPropertyChanged;
-            _hwndSource?.RemoveHook(WindowProc);
-            _hwndSource = null;
+            _windowGuard.Dispose();
             _engine.Stop();
         };
 
@@ -73,38 +66,6 @@ public partial class PetWindow : Window
 
     private const int GWL_EXSTYLE = -20;
     private const int WS_EX_TRANSPARENT = 0x20;
-    private const int WM_WINDOWPOSCHANGING = 0x0046;
-    private const int WM_WINDOWPOSCHANGED = 0x0047;
-    private const int WM_SIZE = 0x0005;
-    private const int WM_SYSCOMMAND = 0x0112;
-    private const int SC_MINIMIZE = 0xF020;
-    private const int SIZE_MINIMIZED = 1;
-    private const int SW_SHOWNOACTIVATE = 4;
-    private const uint SWP_NOSIZE = 0x0001;
-    private const uint SWP_NOMOVE = 0x0002;
-    private const uint SWP_NOZORDER = 0x0004;
-    private const uint SWP_NOACTIVATE = 0x0010;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct WindowPos
-    {
-        public IntPtr Hwnd;
-        public IntPtr HwndInsertAfter;
-        public int X;
-        public int Y;
-        public int Cx;
-        public int Cy;
-        public uint Flags;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct NativeRect
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
 
     [DllImport("user32.dll")]
     private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
@@ -112,116 +73,19 @@ public partial class PetWindow : Window
     [DllImport("user32.dll")]
     private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect rect);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
-        int x, int y, int cx, int cy, uint flags);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
-        _hwnd = new WindowInteropHelper(this).Handle;
-        _hwndSource = HwndSource.FromHwnd(_hwnd);
-        _hwndSource?.AddHook(WindowProc);
-
-        // WPF 的 Left/Top 是 DIP，而锁定值取自 GetWindowRect 的物理像素。
-        // 先允许初始恢复，待布局完成后再记录物理坐标，避免非 100% 缩放下混用坐标系。
-        _allowPositionChange = true;
+        _windowGuard.BeginUserMove();
         try
         {
             RestorePosition();
         }
         finally
         {
-            _allowPositionChange = false;
+            _windowGuard.EndUserMove();
         }
 
         ApplyClickThrough(_vm.ClickThrough);
-        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, CaptureLockedPosition);
-    }
-
-    private IntPtr WindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        switch (msg)
-        {
-            case WM_WINDOWPOSCHANGING when _positionLocked && !_allowPositionChange:
-            {
-                // Win+D / Show Desktop 在部分 DPI 组合下会让透明工具窗口收到异常位置。
-                // 始终把非用户拖拽产生的移动改回最后一次真实物理像素位置；尺寸和 Z 序仍放行。
-                var pos = Marshal.PtrToStructure<WindowPos>(lParam);
-                pos.X = _lockedX;
-                pos.Y = _lockedY;
-                Marshal.StructureToPtr(pos, lParam, false);
-                break;
-            }
-
-            case WM_WINDOWPOSCHANGED when _positionLocked && !_allowPositionChange:
-            {
-                // SWP_NOSENDCHANGING 可绕过上面的预移动消息；事后检查保证这条路径也会归位。
-                var pos = Marshal.PtrToStructure<WindowPos>(lParam);
-                if ((pos.Flags & SWP_NOMOVE) == 0 && (pos.X != _lockedX || pos.Y != _lockedY))
-                    QueuePositionRestore();
-                break;
-            }
-
-            case WM_SYSCOMMAND when ((long)wParam & 0xFFF0) == SC_MINIMIZE:
-                // 桌宠没有“最小化”语义；阻止 Win+D 把它送入最小化坐标。
-                handled = true;
-                return IntPtr.Zero;
-
-            case WM_SIZE when (long)wParam == SIZE_MINIMIZED:
-                QueueRestoreFromSystemMinimize();
-                break;
-        }
-
-        return IntPtr.Zero;
-    }
-
-    private void CaptureLockedPosition()
-    {
-        if (_hwnd != IntPtr.Zero && GetWindowRect(_hwnd, out var rect))
-        {
-            _lockedX = rect.Left;
-            _lockedY = rect.Top;
-            _positionLocked = true;
-        }
-    }
-
-    private void QueuePositionRestore()
-    {
-        if (_positionRestoreQueued || !_vm.Enabled) return;
-        _positionRestoreQueued = true;
-        Dispatcher.BeginInvoke(DispatcherPriority.Send, () =>
-        {
-            _positionRestoreQueued = false;
-            if (_hwnd == IntPtr.Zero || !_positionLocked || !_vm.Enabled) return;
-            SetWindowPos(_hwnd, IntPtr.Zero, _lockedX, _lockedY, 0, 0,
-                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-        });
-    }
-
-    private void QueueRestoreFromSystemMinimize()
-    {
-        if (_restoreQueued || !_vm.Enabled) return;
-        _restoreQueued = true;
-        Dispatcher.BeginInvoke(DispatcherPriority.Send, () =>
-        {
-            _restoreQueued = false;
-            if (_hwnd == IntPtr.Zero || !_vm.Enabled) return;
-            ShowWindow(_hwnd, SW_SHOWNOACTIVATE);
-            if (_positionLocked)
-            {
-                SetWindowPos(_hwnd, IntPtr.Zero, _lockedX, _lockedY, 0, 0,
-                    SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-            }
-        });
     }
 
     /// <summary>应用/解除整窗点击穿透（VM 侧统一入口 ApplyClickThrough）。</summary>
@@ -281,13 +145,12 @@ public partial class PetWindow : Window
             return;
         }
         _vm.NotifyDragStarted();
-        _allowPositionChange = true;
+        _windowGuard.BeginUserMove();
         try { DragMove(); }
         catch (InvalidOperationException) { /* 状态竞争时 WPF 抛出，忽略本次拖拽 */ }
         finally
         {
-            _allowPositionChange = false;
-            CaptureLockedPosition();
+            _windowGuard.EndUserMove();
         }
         _vm.NotifyDragged(Left, Top);
     }
