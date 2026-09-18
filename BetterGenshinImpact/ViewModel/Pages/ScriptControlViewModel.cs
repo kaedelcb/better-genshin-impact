@@ -737,6 +737,20 @@ public partial class ScriptControlViewModel : ViewModel
             return;
         }
 
+        // [会诊第八轮 #1] 改名前先重载对齐磁盘并按名重解析 item：人工处理冲突文件后的重试必须绑定
+        // 最新磁盘副本——否则来自已删除文件的旧内存对象会把过期内容写进人工保留的目标文件。
+        ReloadScriptGroups();
+        var originalName = item.Name;
+        item = ScriptGroups.FirstOrDefault(g => g.Name == originalName);
+        // [会诊第九轮] 重载已重建集合（旧选中对象失效）：立即恢复选中，覆盖后续所有提前返回路径；
+        // 目标不存在则置空，不留指向游离对象的选择状态。
+        SelectedScriptGroup = item;
+        if (item == null)
+        {
+            Toast.Warning("配置组已不存在（可能被外部删除），请刷新后重试");
+            return;
+        }
+
         var textBox = new System.Windows.Controls.TextBox()
         {
             VerticalAlignment = VerticalAlignment.Top
@@ -777,60 +791,62 @@ public partial class ScriptControlViewModel : ViewModel
                     return;
                 }
                 
-                var ViewModel = new OneDragonFlowViewModel();
-                ViewModel.InitConfigList();
-                var configList = ViewModel.ConfigList;
-                
-               // 读取ConfigList中所有的配置单，检查每个配置单中的TaskEnabledList，如果含有和item.Name相同的配置组，则把这个TaskEnabledList中的配置组改为str
-                foreach (var config in configList)
+                // [F12/R2.4] 引用更新改走 OneDragonConfigReferenceService：纯 JSON DOM，
+                // 不构造 OneDragonFlowViewModel（不再触发 F02 旧升级器），只写真正变更的文件。
+                var renameReport = BetterGenshinImpact.Service.OneDragon.OneDragonConfigReferenceService
+                    .RenameGroupReferences(OneDragonFlowViewModel.OneDragonFlowConfigFolder, item.Name, str);
+                // [会诊第二轮 #4] 跳过/冲突必须可见：有细节即记录日志，存在跳过项时明确提示用户（不能只看成功数）
+                if (renameReport.Details.Count > 0)
                 {
-                    var oldName = item.Name;
-                    
-                    if (config.CustomDomainList.Any(task => task == item.Name)) 
-                    {   
-                        for (int i = 0; i < config.CustomDomainList.Count; i++)
-                        {
-                            if (config.CustomDomainList[i] == oldName)
-                            {
-                                config.CustomDomainList[i] = str;
-                            }
-                        }
-                        ViewModel.WriteConfig(config);
-                    }
-                    
-                    // 使用反射检查和修改所有以 "DomainName" 结尾的属性
-                    var properties = config.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                        .Where(prop => prop.Name.EndsWith("DomainName") && prop.PropertyType == typeof(string));
-                    
-                    foreach (var prop in properties)
-                    {
-                        if (prop.GetValue(config) as string == oldName)
-                        {
-                            prop.SetValue(config, str);
-                        }
-                        ViewModel.WriteConfig(config);
-                    }
-                    
-                    if (config.TaskEnabledList.Any(task => task.Value.Item2 == item.Name))
-                    {
-                        foreach (var task in config.TaskEnabledList)
-                        {
-                            if (task.Value.Item2 == oldName)
-                            {
-                                config.TaskEnabledList[task.Key] = (task.Value.Item1, str);
-                            }
-                        }
-                        ViewModel.WriteConfig(config);
-                    }
+                    _logger.LogInformation("配置组重命名引用更新：扫描 {Scanned} 个一条龙配置，更新 {Changed} 个（{Details}）",
+                        renameReport.FilesScanned, renameReport.FilesChanged, string.Join("；", renameReport.Details));
+                }
+                if (renameReport.Details.Any(d => d.Contains("跳过") || d.Contains("放弃") || d.Contains("失败")))
+                {
+                    _snackbarService.Show("部分一条龙配置的引用未能更新",
+                        string.Join("；", renameReport.Details.Where(d => d.Contains("跳过") || d.Contains("放弃") || d.Contains("失败"))),
+                        ControlAppearance.Caution, null, TimeSpan.FromSeconds(5));
                 }
                 
-                File.Move(Path.Combine(ScriptGroupPath, $"{item.Name}.json"), Path.Combine(ScriptGroupPath, $"{str}.json"));
-                item.Name = str;
-                if (item.NextFlag)
+                // [会诊第三轮 #1] 引用更新先于组文件改名：改名失败时明确提示恢复方式（重试改名即可收敛），
+                // 不留「引用指向新名、组仍是旧名」的无提示中间态。
+                var oldName = item.Name;
+                try
                 {
-                    TaskContext.Instance().Config.NextScriptGroupName = item.Name;
+                    // [会诊第五-七轮] 改名文件操作走 ScriptGroupFileRename：可验证半成品跳过移动；
+                    // 双存/冒名/别名冲突拒绝且不删任何文件（T71 固化决策矩阵）。
+                    BetterGenshinImpact.Service.ScriptGroupFileRename.MoveForRename(ScriptGroupPath, oldName, str);
+                    item.Name = str;
+                    if (item.NextFlag)
+                    {
+                        TaskContext.Instance().Config.NextScriptGroupName = item.Name;
+                    }
+                    // [会诊第四轮 #1] WriteScriptGroup 内部吞异常，改用返回成败的接口：
+                    // 移动成功但内容保存失败时，文件内名仍旧、内存名已新——明确提示收敛路径
+                    // （重启后按文件内容恢复为旧名，届时重新改名即可，不会被「名称相同」挡住）。
+                    if (!TryWriteScriptGroupToDisk(item, out var saveError))
+                    {
+                        _logger.LogWarning("配置组改名后内容保存失败: {Error}", saveError);
+                        _snackbarService.Show(
+                            "配置组改名未完全生效",
+                            $"文件名已改为「{str}」但内容保存失败：{saveError}。该组将按文件内容恢复显示为旧名，届时重新改名为「{str}」即可自动补全保存（半成品状态已适配）。",
+                            ControlAppearance.Danger, null, TimeSpan.FromSeconds(6));
+                    }
                 }
-                WriteScriptGroup(item);
+                catch (Exception moveEx)
+                {
+                    _logger.LogWarning(moveEx, "配置组文件重命名失败（一条龙引用已更新为新名）");
+                    _snackbarService.Show(
+                        "配置组重命名未完成",
+                        $"组文件改名失败：{moveEx.Message}。一条龙配置中的引用已更新为「{str}」，可重试改名（半成品状态已适配）；若提示改名冲突，请按提示手工核对 User/ScriptGroup 目录。",
+                        ControlAppearance.Danger, null, TimeSpan.FromSeconds(6));
+                }
+
+                // [会诊第七轮 #2] 无论成败，重载使内存与磁盘对齐（重载为纯内存刷新，不落盘）：
+                // 双存/半成品产生的重复内存对象在人工处理文件后即收敛；成功后按新名保持选中。
+                ReloadScriptGroups();
+                SelectedScriptGroup = ScriptGroups.FirstOrDefault(g => g.Name == str)
+                    ?? ScriptGroups.FirstOrDefault(g => g.Name == oldName);
             }
         }
     }
@@ -854,52 +870,21 @@ public partial class ScriptControlViewModel : ViewModel
         
         try
         {
-            var ViewModel = new OneDragonFlowViewModel();
-            ViewModel.InitConfigList();
-            var configList = ViewModel.ConfigList;
-            // 读取ConfigList中所有的配置单，检查每个配置单中的TaskEnabledList，如果含有和item.Name相同的配置组，则把这个TaskEnabledList中的配置组删除
-            foreach (var config in configList)
+            // [F12/R2.4] 引用清理改走 OneDragonConfigReferenceService：纯 JSON DOM，
+            // 不构造 OneDragonFlowViewModel（不再触发 F02 旧升级器），只写真正变更的文件。
+            var deleteReport = BetterGenshinImpact.Service.OneDragon.OneDragonConfigReferenceService
+                .DeleteGroupReferences(OneDragonFlowViewModel.OneDragonFlowConfigFolder, item.Name);
+            // [会诊第二轮 #4] 跳过/隔离必须可见（不能只看成功数；删除界面只报组本身成功易掩盖引用残留）
+            if (deleteReport.Details.Count > 0)
             {
-                var oldName = item.Name;
-                // 删除 CustomDomainList 中的元素
-                if (config.CustomDomainList.Any(task => task == oldName))
-                {
-                    for (int i = 0; i < config.CustomDomainList.Count; i++)
-                    {
-                        if (config.CustomDomainList[i] == oldName)
-                        {
-                            config.CustomDomainList.RemoveAt(i);
-                            i--; // 调整索引以避免跳过元素
-                        }
-                    }
-                    ViewModel.WriteConfig(config);
-                }
-
-                // 使用反射检查和修改所有以 "DomainName" 结尾的属性（删除）
-                var propertiesToDelete = config.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                    .Where(prop => prop.Name.EndsWith("DomainName") && prop.PropertyType == typeof(string));
-
-                // 删除 DomainName 中的属性
-                foreach (var prop in propertiesToDelete)
-                {
-                    if (prop.GetValue(config) as string == oldName)
-                    {
-                        prop.SetValue(config, string.Empty); 
-                    }
-                    ViewModel.WriteConfig(config);
-                }
-                
-                if (config.TaskEnabledList.Any(task => task.Value.Item2 == item.Name))
-                {
-                    foreach (var task in config.TaskEnabledList)
-                    {
-                        if (task.Value.Item2 == oldName)
-                        {
-                            config.TaskEnabledList.Remove(task.Key);
-                        }
-                    }
-                    ViewModel.WriteConfig(config);
-                }
+                _logger.LogInformation("配置组删除引用清理：扫描 {Scanned} 个一条龙配置，更新 {Changed} 个（{Details}）",
+                    deleteReport.FilesScanned, deleteReport.FilesChanged, string.Join("；", deleteReport.Details));
+            }
+            if (deleteReport.Details.Any(d => d.Contains("跳过") || d.Contains("放弃") || d.Contains("失败")))
+            {
+                _snackbarService.Show("部分一条龙配置的引用未能清理",
+                    string.Join("；", deleteReport.Details.Where(d => d.Contains("跳过") || d.Contains("放弃") || d.Contains("失败"))),
+                    ControlAppearance.Caution, null, TimeSpan.FromSeconds(5));
             }
             
             ScriptGroups.Remove(item);
@@ -2245,9 +2230,15 @@ public partial class ScriptControlViewModel : ViewModel
         }
 
         // 保存配置组配置
-        foreach (var group in ScriptGroups)
+        // [会诊第二轮 #1] 重新加载（ReadScriptGroup/Clear+Add）只是内存刷新，不得触发整组落盘：
+        // 否则远程整组写入后的内存刷新会重写所有组文件（绕过合同锁/revision 守卫，
+        // 覆盖锁外改动，且文件名与内部 Name 不一致时按内部名另写文件）。
+        if (!_suppressScriptGroupPersistence)
         {
-            WriteScriptGroup(group);
+            foreach (var group in ScriptGroups)
+            {
+                WriteScriptGroup(group);
+            }
         }
     }
 
@@ -2352,6 +2343,14 @@ public partial class ScriptControlViewModel : ViewModel
     }
 
     /// <summary>公开包装：供远程配置组编辑（config.apply_group）写盘后刷新内存，行为与内部 ReadScriptGroup 完全一致。</summary>
+    /// <summary>
+    /// 为 true 时 ScriptGroupsCollectionChanged 跳过整组落盘（仅 ReadScriptGroup 重载期间置位）。
+    /// 静态（会诊第三轮 #2）：一条龙页的「配置组管理」内嵌对话框以共享集合构造第二个实例
+    /// （OneDragonFlowViewModel.cs:790），逐实例标志管不住另一实例的回调；重载全程在 UI 线程同步执行，
+    /// 静态标志无线程风险。
+    /// </summary>
+    private static bool _suppressScriptGroupPersistence;
+
     public void ReloadScriptGroups() => ReadScriptGroup();
 
     private void ReadScriptGroup()
@@ -2363,6 +2362,10 @@ public partial class ScriptControlViewModel : ViewModel
                 Directory.CreateDirectory(ScriptGroupPath);
             }
 
+            // [会诊第二轮 #1] 重载=内存刷新：Clear/Add 触发的集合变更不得落盘（详见 ScriptGroupsCollectionChanged）
+            _suppressScriptGroupPersistence = true;
+            try
+            {
             ScriptGroups.Clear();
             var files = Directory.GetFiles(ScriptGroupPath, "*.json");
             List<ScriptGroup> groups = [];
@@ -2397,6 +2400,11 @@ public partial class ScriptControlViewModel : ViewModel
             foreach (var group in groups)
             {
                 ScriptGroups.Add(group);
+            }
+            }
+            finally
+            {
+                _suppressScriptGroupPersistence = false;
             }
         }
         catch (Exception e)

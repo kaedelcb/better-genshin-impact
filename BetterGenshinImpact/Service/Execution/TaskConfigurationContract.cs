@@ -34,16 +34,28 @@ internal sealed class TaskConfigurationContract(string userDirectory)
     {
         var path = Resolve(name, oneDragon);
         var gate = Locks.GetOrAdd(path, _ => new(1, 1));
-        await gate.WaitAsync(token);
-        try { return Parse(await File.ReadAllBytesAsync(path, token), oneDragon); }
+        await gate.WaitAsync(token).ConfigureAwait(false);
+        try { return Parse(await File.ReadAllBytesAsync(path, token).ConfigureAwait(false), oneDragon); }
         finally { gate.Release(); }
     }
 
     internal async Task<T> ExecuteLockedAsync<T>(string name, bool oneDragon, Func<Task<T>> action)
     {
         var gate = Locks.GetOrAdd(Resolve(name, oneDragon), _ => new(1, 1));
-        await gate.WaitAsync();
-        try { return await action(); }
+        await gate.WaitAsync().ConfigureAwait(false);
+        try { return await action().ConfigureAwait(false); }
+        finally { gate.Release(); }
+    }
+
+    /// <summary>同步调用方的每文件互斥（引用服务等 UI 线程路径），与异步路径共用同一锁表（键=完整路径）。
+    /// 死锁风险收窄（会诊第三/四轮核实）：合同方法内部续体全部 ConfigureAwait(false)；
+    /// 持锁等 Dispatcher 的 HandleConfigApplyGroup 锁 ScriptGroup 文件，引用服务只锁 OneDragon 文件，
+    /// 锁键不相交，不构成互等。传入 action 委托的内部行为不受 ConfigureAwait 约束，不作总括声明。</summary>
+    internal static T ExecuteFileLockedSync<T>(string fullPath, Func<T> action)
+    {
+        var gate = Locks.GetOrAdd(Path.GetFullPath(fullPath), _ => new(1, 1));
+        gate.Wait();
+        try { return action(); }
         finally { gate.Release(); }
     }
 
@@ -52,13 +64,13 @@ internal sealed class TaskConfigurationContract(string userDirectory)
     {
         var path = Resolve(name, oneDragon);
         var gate = Locks.GetOrAdd(path, _ => new(1, 1));
-        await gate.WaitAsync(token);
+        await gate.WaitAsync(token).ConfigureAwait(false);
         string? temporary = null;
         try
         {
             if (!PreemptionGate.Authorize(takeoverTicket)) throw new InvalidOperationException("takeover_conflict");
             if (taskId == null && legacyIndex == null) throw new ArgumentException("task_identity_required");
-            var bytes = await File.ReadAllBytesAsync(path, token);
+            var bytes = await File.ReadAllBytesAsync(path, token).ConfigureAwait(false);
             var snapshot = Parse(bytes, oneDragon);
             if (expectedRevision != null && !string.Equals(snapshot.Revision, expectedRevision, StringComparison.Ordinal))
                 throw new InvalidOperationException("configuration_changed");
@@ -85,12 +97,12 @@ internal sealed class TaskConfigurationContract(string userDirectory)
             var text = snapshot.Document.ToString(Formatting.Indented);
             var encoding = new UTF8Encoding(bytes.Length >= 3 && bytes[0] == 239 && bytes[1] == 187 && bytes[2] == 191);
             temporary = path + ".ipc-" + Guid.NewGuid().ToString("N") + ".tmp";
-            await File.WriteAllTextAsync(temporary, text, encoding, token);
+            await File.WriteAllTextAsync(temporary, text, encoding, token).ConfigureAwait(false);
             // Do not overwrite a concurrent native/UI/manual edit observed since the read.
-            if (Revision(await File.ReadAllBytesAsync(path, token)) != snapshot.Revision)
+            if (Revision(await File.ReadAllBytesAsync(path, token).ConfigureAwait(false)) != snapshot.Revision)
                 throw new InvalidOperationException("configuration_changed");
             if (!PreemptionGate.Authorize(takeoverTicket)) throw new InvalidOperationException("takeover_conflict");
-            var applied = Parse(await File.ReadAllBytesAsync(temporary, token), oneDragon);
+            var applied = Parse(await File.ReadAllBytesAsync(temporary, token).ConfigureAwait(false), oneDragon);
             beforeCommit?.Invoke();
             File.Move(temporary, path, true);
             temporary = null;
@@ -98,8 +110,21 @@ internal sealed class TaskConfigurationContract(string userDirectory)
         }
         finally
         {
-            if (temporary != null && File.Exists(temporary)) File.Delete(temporary);
-            gate.Release();
+            // [会诊第四轮 #2] 清理失败不得吞掉锁释放：嵌套 finally 保证 gate 必定释放，
+            // 否则后续 ExecuteFileLockedSync（UI 线程）将永久阻塞。
+            try
+            {
+                if (temporary != null && File.Exists(temporary)) File.Delete(temporary);
+            }
+            catch (Exception)
+            {
+                // 可能残留 .tmp 临时文件（每次写入用新 GUID 名，无自动清理——清理机制留待后续阶段）；
+                // 锁泄漏才是不可恢复故障，故清理失败必须放行
+            }
+            finally
+            {
+                gate.Release();
+            }
         }
     }
 

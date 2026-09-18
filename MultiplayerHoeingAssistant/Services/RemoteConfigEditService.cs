@@ -123,7 +123,8 @@ public class RemoteConfigEditService
                 return;
             }
             var baseMd5 = ExtractFileMd5(packageJson);
-
+            // [R2.2] 新 BGI 的 pull 响应携带 configRevision（SHA256 修订）；旧 BGI 无此字段 → 为 null，走兼容路径
+            var configRevision = GetDataString(packageJson, "configRevision");
             // 2. 本机 BGI 弹远程编辑窗口（BGI 未运行时先自动拉起一次再重试）
             var openPayload = JsonSerializer.Serialize(new { targetName, targetUid, groupName, packageJson });
             var bgiStartTried = false;
@@ -268,6 +269,8 @@ public class RemoteConfigEditService
                 ["groupName"] = groupName,
                 ["baseMd5"] = baseMd5
             };
+            // [R2.2] 携带修订号时执行端启用强制 revision 校验（编辑期间文件被改动则拒绝覆盖）
+            if (!string.IsNullOrEmpty(configRevision)) pushParams["expectedConfigRevision"] = configRevision;
             if (!string.IsNullOrEmpty(scriptGroupConfigJson)) pushParams["scriptGroupConfigJson"] = scriptGroupConfigJson;
             if (!string.IsNullOrEmpty(soloTaskName)) pushParams["soloTaskName"] = soloTaskName;
             if (!string.IsNullOrEmpty(soloTaskSettingsJson)) pushParams["soloTaskSettingsJson"] = soloTaskSettingsJson;
@@ -283,9 +286,21 @@ public class RemoteConfigEditService
             }
             var ok = GetStringParam(resultCmd.Params, "ok") == "true";
             var message = GetStringParam(resultCmd.Params, "message") ?? "";
-            _report(ok
-                ? $"远程配置已应用：{message}"
-                : $"对方应用失败：{message}");
+            // [R2.2 会诊发现 #6] 写后修订贯通：声明过写入合同（携带了 expectedConfigRevision）而回执缺 configRevision，
+            // 说明中间链路（执行端助手版本过旧）未透传合同回执——应用结果本身可信但合同闭环未确认，提示核实。
+            var appliedRevision = GetStringParam(resultCmd.Params, "configRevision");
+            if (!ok)
+            {
+                _report($"对方应用失败：{message}");
+            }
+            else if (!string.IsNullOrEmpty(configRevision) && string.IsNullOrEmpty(appliedRevision))
+            {
+                _report($"远程配置已应用：{message}（注意：回执缺少写后修订号，执行端助手版本可能过旧未透传合同回执，请刷新核实实际内容）");
+            }
+            else
+            {
+                _report($"远程配置已应用：{message}");
+            }
         }
         catch (Exception ex)
         {

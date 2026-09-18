@@ -1551,8 +1551,17 @@ public partial class MainViewModel : INotifyPropertyChanged
             if (!string.IsNullOrEmpty(v)) payloadDict[key] = v;
         }
 
+        // [R2.2] 携带修订号 → 透传并声明整组写入合同（BGI 侧强制校验；旧 BGI 忽略未知字段，行为不变）
+        var expectedRevision = GetRemoteParam(cmd.Params, "expectedConfigRevision");
+        if (!string.IsNullOrEmpty(expectedRevision))
+        {
+            payloadDict["expectedConfigRevision"] = expectedRevision;
+            payloadDict["configWriteContract"] = "1";
+        }
+
         var ok = "false";
         string message;
+        string? appliedRevision = null;
         try
         {
             // [切片4] ext.config.applyGroup 优先（长连接），v2 config.apply_group 短连接兜底
@@ -1564,6 +1573,11 @@ public partial class MainViewModel : INotifyPropertyChanged
                     ? "true" : "false";
                 message = doc.RootElement.TryGetProperty("message", out var msgEl) && msgEl.ValueKind == JsonValueKind.String
                     ? msgEl.GetString() ?? "" : "";
+                // [R2.2] 写后真实修订随回执返回，供监控端链式发起 revision 守卫的后续操作
+                if (doc.RootElement.TryGetProperty("configRevision", out var revEl) && revEl.ValueKind == JsonValueKind.String)
+                {
+                    appliedRevision = revEl.GetString();
+                }
             }
             else
             {
@@ -1586,7 +1600,9 @@ public partial class MainViewModel : INotifyPropertyChanged
             SenderUid = _config?.PlayerUid ?? "",
             Target = [cmd.SenderUid],
             CommandId = cmd.CommandId,
-            Params = new Dictionary<string, object> { ["ok"] = ok, ["message"] = message }
+            Params = appliedRevision != null
+                ? new Dictionary<string, object> { ["ok"] = ok, ["message"] = message, ["configRevision"] = appliedRevision }
+                : new Dictionary<string, object> { ["ok"] = ok, ["message"] = message }
         };
         return reply;
     }

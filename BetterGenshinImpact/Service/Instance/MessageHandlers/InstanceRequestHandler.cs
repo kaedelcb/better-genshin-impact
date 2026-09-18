@@ -1426,6 +1426,12 @@ internal sealed class InstanceRequestHandler
                 return InstanceIpcEnvelope.Response(request, new { ok = false, error = "groupName 为空" });
             }
 
+            // [安全] 组名直接拼路径，拒绝路径穿越/非法字符（ASTRA 会诊安全项）
+            if (!BetterGenshinImpact.Service.Execution.GroupConfigWriteContract.IsValidGroupName(groupName))
+            {
+                return InstanceIpcEnvelope.Response(request, new { ok = false, error = "groupName 含非法字符（仅允许配置组文件名，禁止路径分隔符）" });
+            }
+
             var groupPath = Path.Combine(AppContext.BaseDirectory, "User", "ScriptGroup", $"{groupName}.json");
             if (!File.Exists(groupPath))
             {
@@ -1435,6 +1441,8 @@ internal sealed class InstanceRequestHandler
             var fileBytes = File.ReadAllBytes(groupPath);
             var scriptGroupJson = Encoding.UTF8.GetString(fileBytes);
             var fileMd5 = Convert.ToHexString(System.Security.Cryptography.MD5.HashData(fileBytes)).ToLowerInvariant();
+            // [R2.2] 修订号与文件字节绑定（SHA256，同 TaskConfigurationContract），供整组写入强制校验
+            var configRevision = BetterGenshinImpact.Service.Execution.TaskConfigurationContract.Revision(fileBytes);
 
             // AutoHoeingConfig 随 AllConfig 走 System.Text.Json（ConfigService.JsonOptions）序列化
             var autoHoeingConfigJson = System.Text.Json.JsonSerializer.Serialize(
@@ -1459,7 +1467,8 @@ internal sealed class InstanceRequestHandler
                     autoGeniusFiles,
                     bgiVersion = BetterGenshinImpact.Core.Config.Global.Version,
                     groupRunning,
-                    fileMd5
+                    fileMd5,
+                    configRevision
                 }
             });
         }
@@ -1631,6 +1640,9 @@ internal sealed class InstanceRequestHandler
             if (ExecutionRequestContract.Validate(request) is { } invalid) return invalid;
             if (!PreemptionGate.Authorize(InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket")))
                 return InstanceIpcEnvelope.Failure(request, "takeover_conflict", "当前接管所有者不允许此次配置写入");
+            // [R2.2] 声明写入合同的请求强制 expectedConfigRevision；未声明的旧请求兼容可选（兼容清单 W2）
+            if (BetterGenshinImpact.Service.Execution.GroupConfigWriteContract.ValidateApplyGroup(request) is { } writeContractInvalid)
+                return writeContractInvalid;
             // 显式 "key":null 归一化为 C# null（见 InstanceIpcProtocol.GetStringOrNull 注释）
             var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
             var baseMd5 = InstanceIpcProtocol.GetStringOrNull(request.Data, "baseMd5");
@@ -1641,6 +1653,12 @@ internal sealed class InstanceRequestHandler
             if (string.IsNullOrEmpty(groupName))
             {
                 return InstanceIpcEnvelope.Response(request, new { ok = false, message = "groupName 为空", md5Changed = false, groupRunning = false });
+            }
+
+            // [安全] 组名直接拼路径，拒绝路径穿越/非法字符（ASTRA 会诊安全项）
+            if (!BetterGenshinImpact.Service.Execution.GroupConfigWriteContract.IsValidGroupName(groupName))
+            {
+                return InstanceIpcEnvelope.Response(request, new { ok = false, message = "groupName 含非法字符（仅允许配置组文件名，禁止路径分隔符）", md5Changed = false, groupRunning = false });
             }
 
             if (string.IsNullOrEmpty(scriptGroupConfigJson) && string.IsNullOrEmpty(soloTaskSettingsJson))
@@ -1672,7 +1690,8 @@ internal sealed class InstanceRequestHandler
         if (ExecutionRequestContract.Validate(request) is { } invalid) return invalid;
         if (!PreemptionGate.Authorize(InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket")))
             return InstanceIpcEnvelope.Failure(request, "takeover_conflict", "配置写入前接管所有权已改变");
-        if (InstanceIpcProtocol.GetStringOrNull(request.Data, "expectedConfigRevision") is { } expectedRevision
+        var expectedRevision = InstanceIpcProtocol.GetStringOrNull(request.Data, "expectedConfigRevision");
+        if (expectedRevision != null
             && (!File.Exists(groupPath) || TaskConfigurationContract.Revision(File.ReadAllBytes(groupPath)) != expectedRevision))
             return InstanceIpcEnvelope.Failure(request, "configuration_changed", "配置已改变，未应用远程编辑");
 
@@ -1686,28 +1705,37 @@ internal sealed class InstanceRequestHandler
             md5Changed = !string.Equals(currentMd5, baseMd5, StringComparison.OrdinalIgnoreCase);
         }
 
-        // 1. 从 ScriptControlViewModel.ScriptGroups 找组（兜底从文件 FromJson）
+        // 1. 组对象来源：revision 守卫路径必须用刚校验过的磁盘快照构造（VM 缓存可能落后于锁外改动，
+        //    用缓存合并会丢锁外新增项目——会诊发现 #1）；无 revision 的旧请求保持 VM 优先的既有行为。
         var scVm = App.GetService<BetterGenshinImpact.ViewModel.Pages.ScriptControlViewModel>();
         BetterGenshinImpact.Core.Script.Group.ScriptGroup? group = null;
         var loadedFromFile = false;
-        try
+        if (expectedRevision != null)
         {
-            group = scVm?.ScriptGroups?.FirstOrDefault(g => g.Name == groupName);
-        }
-        catch
-        {
-            // ScriptGroups 未加载等异常时回退文件加载
-        }
-
-        if (group == null)
-        {
-            if (!File.Exists(groupPath))
-            {
-                return InstanceIpcEnvelope.Response(request, new { ok = false, message = $"配置组 {groupName} 不存在", md5Changed, groupRunning = false });
-            }
-
             group = BetterGenshinImpact.Core.Script.Group.ScriptGroup.FromJson(File.ReadAllText(groupPath));
             loadedFromFile = true;
+        }
+        else
+        {
+            try
+            {
+                group = scVm?.ScriptGroups?.FirstOrDefault(g => g.Name == groupName);
+            }
+            catch
+            {
+                // ScriptGroups 未加载等异常时回退文件加载
+            }
+
+            if (group == null)
+            {
+                if (!File.Exists(groupPath))
+                {
+                    return InstanceIpcEnvelope.Response(request, new { ok = false, message = $"配置组 {groupName} 不存在", md5Changed, groupRunning = false });
+                }
+
+                group = BetterGenshinImpact.Core.Script.Group.ScriptGroup.FromJson(File.ReadAllText(groupPath));
+                loadedFromFile = true;
+            }
         }
 
         // 2. 组级设置：反序列化 ScriptGroupConfig 替换 group.Config
@@ -1742,6 +1770,14 @@ internal sealed class InstanceRequestHandler
             project.SoloTaskSettingsObject = dict;
         }
 
+        string? newRevision = null;
+
+        // [会诊发现 #1 补强] 写前复检：revision 校验到真正写盘之间，文件仍可能被不走合同的写方改动
+        // （本机 UI 直写不在 TaskConfigurationContract 锁内）。写盘前再比对一次，失配即放弃，杜绝静默覆盖。
+        if (expectedRevision != null
+            && (!File.Exists(groupPath) || TaskConfigurationContract.Revision(File.ReadAllBytes(groupPath)) != expectedRevision))
+            return InstanceIpcEnvelope.Failure(request, "configuration_changed", "配置在写盘前已改变，未应用远程编辑");
+
         // 4. 原子写盘（WriteToFileAtomically）。
         // 内存组（来自 ScriptGroups，组名与文件名一致）走 TryWriteScriptGroupToDisk 以拿到成败；
         // 兜底从文件加载的组不走它——它按 group.Name（文件内 name）拼文件名，与请求 groupName（实际文件名）
@@ -1765,7 +1801,22 @@ internal sealed class InstanceRequestHandler
         {
             try
             {
-                group.WriteToFileAtomically(groupPath);
+                // [会诊第三轮] 修订绑定本次提交字节：先算修订，再把同一份字节原子落盘
+                // （同目录临时文件 + Move 替换，与 ScriptGroup.WriteToFileAtomically 同纪律），
+                // 杜绝「算修订的序列化」与「实际写入的序列化」不一致的可能，回执修订绝不属于写后外部改动。
+                var submittedBytes = new System.Text.UTF8Encoding(false).GetBytes(group.ToJson());
+                newRevision = TaskConfigurationContract.Revision(submittedBytes);
+                var directory = Path.GetDirectoryName(groupPath)!;
+                var tempPath = Path.Combine(directory, $".{Path.GetFileName(groupPath)}.{Guid.NewGuid():N}.tmp");
+                try
+                {
+                    File.WriteAllBytes(tempPath, submittedBytes);
+                    File.Move(tempPath, groupPath, overwrite: true);
+                }
+                finally
+                {
+                    if (File.Exists(tempPath)) File.Delete(tempPath);
+                }
             }
             catch (Exception writeEx)
             {
@@ -1814,7 +1865,24 @@ internal sealed class InstanceRequestHandler
         }
         var message = string.Join("；", parts);
 
-        return InstanceIpcEnvelope.Response(request, new { ok = true, message, md5Changed, groupRunning });
+        // [R2.2] 写入路径衔接：返回写后真实修订，调用方据此链式发起 revision 守卫的后续操作。
+        // 声明合同的请求走文件路径，修订已在写盘前绑定提交字节；此处仅兜底 VM 旧路径
+        // （未声明合同的兼容请求），写后即读存在对不合作外部写入者的残余竞态（见兼容矩阵页首声明）。
+        if (newRevision == null)
+        {
+            try
+            {
+                newRevision = File.Exists(groupPath)
+                    ? BetterGenshinImpact.Service.Execution.TaskConfigurationContract.Revision(File.ReadAllBytes(groupPath))
+                    : null;
+            }
+            catch (Exception revEx)
+            {
+                _logger.LogWarning(revEx, "[IPC config.apply_group] 读取写后修订失败（不影响已完成的写入）");
+            }
+        }
+
+        return InstanceIpcEnvelope.Response(request, new { ok = true, message, md5Changed, groupRunning, configRevision = newRevision });
     }
 
     /// <summary>SoloTaskSettingsObject 的 JsonElement→CLR 归一化（与 ScriptGroup.NormalizeSoloTaskSettings 同逻辑）。</summary>
