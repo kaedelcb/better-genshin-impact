@@ -45,13 +45,13 @@ public class AutoRedeemCodeChecker
         // 检查是否是当天首次启动一条龙（按UID独立判断）
         if (!IsFirstOneDragonToday(uid))
         {
-            _logger.LogDebug("UID {Uid} 今日已检查过兑换码，跳过", uid);
+            _logger.LogDebug("UID {Uid} 今日已检查过兑换码，跳过", SensitiveTextMask.MaskUid(uid));
             return;
         }
 
         try
         {
-            _logger.LogInformation("UID {Uid} 开始自动检查兑换码...", uid);
+            _logger.LogInformation("UID {Uid} 开始自动检查兑换码...", SensitiveTextMask.MaskUid(uid));
 
             // 入口处清理过期/兜底 TTL 已超的已兑换记录（design.md "清理策略选择" 章节）。
             // 由 IsFirstOneDragonToday(uid) 保证当日只跑一次，不依赖网络成功。
@@ -63,7 +63,7 @@ public class AutoRedeemCodeChecker
 
             if (codeList == null || codeList.Count == 0)
             {
-                _logger.LogInformation("UID {Uid} 当前没有可用的兑换码", uid);
+                _logger.LogInformation("UID {Uid} 当前没有可用的兑换码", SensitiveTextMask.MaskUid(uid));
                 UpdateLastCheckDate(uid);
                 return;
             }
@@ -72,28 +72,112 @@ public class AutoRedeemCodeChecker
             var validCodeList = FilterExpiredCodes(uid, codeList);
             if (validCodeList.Count == 0)
             {
-                _logger.LogInformation("UID {Uid} 当前没有未过期的兑换码（{ExpiredCount} 个已过期）", uid, codeList.Count);
+                _logger.LogInformation("UID {Uid} 当前没有未过期的兑换码（{ExpiredCount} 个已过期）", SensitiveTextMask.MaskUid(uid), codeList.Count);
                 UpdateLastCheckDate(uid);
                 return;
             }
             // 执行兑换
-            _logger.LogInformation("UID {Uid} 发现 {Count} 个可兑换码，开始自动兑换...", uid, validCodeList.Count);
+            _logger.LogInformation("UID {Uid} 发现 {Count} 个可兑换码，开始自动兑换...", SensitiveTextMask.MaskUid(uid), validCodeList.Count);
             var task = new UseRedemptionCodeTask(validCodeList, uid);
             await task.Start(ct);
 
             UpdateLastCheckDate(uid);
 
             // 发送通知
-            _logger.LogInformation("UID {Uid} 自动兑换码检查完成，已处理 {Count} 个兑换码", uid, validCodeList.Count);
+            _logger.LogInformation("UID {Uid} 自动兑换码检查完成，已处理 {Count} 个兑换码", SensitiveTextMask.MaskUid(uid), validCodeList.Count);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "UID {Uid} 自动兑换码检查失败", uid);
+            _logger.LogError(ex, "UID {Uid} 自动兑换码检查失败", SensitiveTextMask.MaskUid(uid));
             // 不抛出异常，避免阻塞一条龙执行
             UpdateLastCheckDate(uid);
         }
     }
 
+    /// <summary>
+    /// R4.6 D8/E2-4' 严格路径兑换检查结果（受控词表；cancelled 不经结果表达——OCE 直接传播）。
+    /// 状态词表：disabled / alreadyCheckedToday / noNewCodes / redeemed / failed。
+    /// SubmittedCount 语义遵循 OQ-1 锚点（提交即终态）：候选中已进入已兑换记录（=已提交）的码数。
+    /// </summary>
+    public sealed record RedeemCheckResult(string Status, int SubmittedCount, int CandidateCount, string? Reason)
+    {
+        public static RedeemCheckResult Of(string status, int submitted = 0, int candidates = 0, string? reason = null)
+            => new(status, submitted, candidates, reason);
+    }
+
+    /// <summary>
+    /// R4.6 D8/E2-4' 严格路径：真实结果 + 取消传播 + 失败不写当日标记 + 会话缓存按 UID 隔离。
+    /// 与 <see cref="CheckAndRedeemIfNeeded"/>（原生容错语义，逐字不动）并存；流程前置动作只走本路径。
+    /// </summary>
+    public async Task<RedeemCheckResult> CheckAndRedeemIfNeededStrict(string uid, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(uid))
+            return RedeemCheckResult.Of("failed", reason: "UID 为空，严格路径拒绝执行");
+        var masked = SensitiveTextMask.MaskUid(uid);
+
+        if (!_config.AutoRedeemCodeCheckEnabled)
+            return RedeemCheckResult.Of("disabled");
+        if (!IsFirstOneDragonToday(uid))
+            return RedeemCheckResult.Of("alreadyCheckedToday");
+
+        var today = ServerTimeHelper.GetServerTimeNow().ToString("yyyy-MM-dd");
+        _historyStore.Cleanup(today, DateTime.Now);
+
+        List<RedeemCode> codeList;
+        try
+        {
+            codeList = await FetchLatestRedeemCodesAsync(ct);
+        }
+        catch (OperationCanceledException) { throw; } // 取消传播，不写当日标记
+        catch (Exception ex)
+        {
+            // 网络获取失败发生在任何游戏副作用之前，可安全重投（I4 传输重投语义）；不写当日标记
+            _logger.LogWarning(ex, "UID {Uid} 兑换码列表获取失败（副作用前，可安全重投）", masked);
+            return RedeemCheckResult.Of("failed", reason: "兑换码列表获取失败");
+        }
+
+        var candidates = FilterExpiredCodesStrict(uid, codeList);
+        if (candidates.Count == 0)
+        {
+            UpdateLastCheckDate(uid); // 检查动作本身成功完成
+            return RedeemCheckResult.Of("noNewCodes");
+        }
+
+        _logger.LogInformation("UID {Uid} 严格路径兑换 {Count} 个候选码", masked, candidates.Count);
+        try
+        {
+            await new UseRedemptionCodeTask(candidates, uid).Start(ct);
+        }
+        catch (OperationCanceledException) { throw; } // 取消传播，不写当日标记
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "UID {Uid} 严格路径兑换执行失败（不写当日标记，允许重查）", masked);
+            return RedeemCheckResult.Of("failed", candidates: candidates.Count, reason: "兑换执行失败");
+        }
+
+        UpdateLastCheckDate(uid);
+        var submitted = candidates.Count(c => _historyStore.IsRedeemed(uid, c.Code));
+        return RedeemCheckResult.Of("redeemed", submitted, candidates.Count);
+    }
+
+    /// <summary>
+    /// 严格路径过滤（E2-4'/I6）：持久化历史按 UID 键控；<b>不使用不分 UID 的会话成功缓存</b>——
+    /// 严格路径必持显式 UID，历史记录在 OQ-1 提交锚点即时持久化，足以防同会话重复提交；
+    /// 跳过会话成功缓存避免账号 A 的兑换事实抑制账号 B。
+    /// </summary>
+    private List<RedeemCode> FilterExpiredCodesStrict(string uid, List<RedeemCode> codeList)
+    {
+        var today = ServerTimeHelper.GetServerTimeNow().ToString("yyyy-MM-dd");
+        return codeList.Where(code =>
+        {
+            if (_historyStore.IsRedeemed(uid, code.Code)) return false;
+            if (RedeemCodeCache.IsRecentlyFailed(code.Code)) return false;
+            if (string.IsNullOrEmpty(code.Valid)) return true;
+            var isValid = string.Compare(code.Valid, today, StringComparison.Ordinal) >= 0;
+            if (!isValid) RedeemCodeCache.MarkAsFailed(code.Code);
+            return isValid;
+        }).ToList();
+    }
     /// <summary>
     /// 判断是否是当天首次启动一条龙（按UID独立判断）
     /// </summary>
@@ -137,7 +221,7 @@ public class AutoRedeemCodeChecker
             // 1) 跨进程 UID 维度：该 UID 历史上已成功兑换过该码
             if (_historyStore.IsRedeemed(uid, code.Code))
             {
-                _logger.LogDebug("兑换码 {Code} 已在 UID {Uid} 历史记录中，跳过", code.Code, uid);
+                _logger.LogDebug("兑换码 {Code} 已在 UID {Uid} 历史记录中，跳过", code.Code, SensitiveTextMask.MaskUid(uid));
                 return false;
             }
 
@@ -175,14 +259,17 @@ public class AutoRedeemCodeChecker
     /// <summary>
     /// 从远程源获取最新的兑换码列表
     /// </summary>
-    private async Task<List<RedeemCode>> FetchLatestRedeemCodesAsync()
+    private Task<List<RedeemCode>> FetchLatestRedeemCodesAsync() => FetchLatestRedeemCodesAsync(CancellationToken.None);
+
+    /// <summary>R4.6 B5：严格路径全链可取消版本（旧签名保留委托，语义不变）。</summary>
+    private async Task<List<RedeemCode>> FetchLatestRedeemCodesAsync(CancellationToken ct)
     {
         const string codesJsonUrl = "https://cnb.cool/bettergi/genshin-redeem-code/-/git/raw/main/codes.json";
         using var httpClient = HttpClientFactory.GetCommonSendClient();
         var request = new HttpRequestMessage(HttpMethod.Get, codesJsonUrl);
-        var response = await httpClient.SendAsync(request);
+        var response = await httpClient.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(ct);
 
         // 直接解析 codes.json，里面已有 Valid 日期
         var feedItems = JsonConvert.DeserializeObject<List<RedeemCodeFeedItem>>(json) ?? [];

@@ -113,13 +113,13 @@ public class OneDragonAccountCapability
             {
                 if (clipboardContent.Contains(genshinUid))
                 {
-                    _logger.LogInformation("UID验证: {text} 绑定 {text}，完成",configName,genshinUid);
+                    _logger.LogInformation("UID验证: {text} 绑定 {text}，完成", configName, SensitiveTextMask.MaskUid(genshinUid));
                     return true;
                 }
                 else
                 {
                     _logger.LogWarning(clipboardContent.Length == 9 && clipboardContent.All(char.IsNumber) ? 
-                        $"UID验证: 失败 {configName} ,绑定 {genshinUid}，验证 {clipboardContent}" : "UID验证:失败");
+                        $"UID验证: 失败 {configName} ,绑定 {SensitiveTextMask.MaskUid(genshinUid)}，验证 {SensitiveTextMask.MaskUid(clipboardContent)}" : "UID验证:失败");
                     return false;
                 }
             }
@@ -351,7 +351,7 @@ public class OneDragonAccountCapability
                             if (comfirmWord == bindingCode)
                             {
                                // 如果账号绑定成功，点击该账号
-                                Logger.LogInformation("UID: {0} 已绑定 {1}", genshinUid, bindingCode);
+                                Logger.LogInformation("UID: {0} 已绑定绑定码（绑定码按 I3 纪律不落日志）", SensitiveTextMask.MaskUid(genshinUid));
                                 phone.Click();
                                 isAccountBinding = true;
                                 await Delay(500, cts);
@@ -442,7 +442,7 @@ public class OneDragonAccountCapability
             }
             else
             {
-                await new BlessingOfTheWelkinMoonTask().Start(CancellationContext.Instance.Cts.Token);
+                await new BlessingOfTheWelkinMoonTask().Start(cts); // R4.6 I5：统一到当前操作生命周期（原全局令牌）
                 GameCaptureRegion.GameRegion1080PPosClick(955, 656);//非凌晨4点，点击屏幕
                 GameCaptureRegion.GameRegion1080PPosClick(1660, 282);//非凌晨4点，点击屏幕
             }
@@ -459,5 +459,65 @@ public class OneDragonAccountCapability
         }
         await Delay(500, cts);
         return true;
+    }
+
+    // ---- R4.6 D8 严格路径（ext 前置操作专用；上方既有方法逐字不动，原生链/旧调用语义不变）----
+
+    /// <summary>严格 UID 验证结果（受控词表）。</summary>
+    public enum UidVerifyStatus { Matched, Mismatch, ReadFailed, InvalidExpected }
+
+    public sealed record UidVerifyResult(UidVerifyStatus Status, string? Reason)
+    {
+        public bool Matched => Status == UidVerifyStatus.Matched;
+    }
+
+    /// <summary>
+    /// R4.6 E2-9 严格 UID 验证：规范化完整相等（非 Contains）；空期望 UID 拒绝；无 accountBinding 豁免分支。
+    /// 读取路径与 VerifyUidAsync 绑定分支同源（回主界面 → ESC → 关弹窗 → 剪贴板）。
+    /// </summary>
+    public async Task<UidVerifyResult> VerifyUidStrictAsync(string? expectedUid, CancellationToken ct)
+    {
+        var expected = NormalizeUid(expectedUid);
+        if (expected is null)
+            return new UidVerifyResult(UidVerifyStatus.InvalidExpected, "期望 UID 为空或全空白，严格路径拒绝");
+
+        await new ReturnMainUiTask().Start(ct);
+        Clipboard.Clear();
+        Simulation.SendInput.Keyboard.KeyPress(VK.VK_ESCAPE);
+
+        for (int i = 0; i < 10; i++)
+        {
+            using var closeRa = CaptureToRectArea().Find(RecognitionAssets.Get("AutoSkip", "PageCloseMain"));
+            if (!closeRa.IsEmpty())
+            {
+                closeRa.ClickTo(closeRa.X + closeRa.Width * 3, closeRa.X + closeRa.Height * 4);
+                await new ReturnMainUiTask().Start(ct);
+                break;
+            }
+            await Task.Delay(500, ct);
+        }
+
+        var actual = NormalizeUid(GetClipboardText());
+        if (actual is null)
+            return new UidVerifyResult(UidVerifyStatus.ReadFailed, "UID 读取失败");
+        if (string.Equals(actual, expected, StringComparison.Ordinal))
+        {
+            _logger.LogInformation("UID 严格验证通过：{Uid}", SensitiveTextMask.MaskUid(expected));
+            return new UidVerifyResult(UidVerifyStatus.Matched, null);
+        }
+        _logger.LogWarning("UID 严格验证不符：期望 {Expected}，实读 {Actual}",
+            SensitiveTextMask.MaskUid(expected), SensitiveTextMask.MaskUid(actual));
+        return new UidVerifyResult(UidVerifyStatus.Mismatch, "当前账号 UID 与期望不符");
+    }
+
+    private static string? NormalizeUid(string? uid)
+        => string.IsNullOrWhiteSpace(uid) ? null : uid.Trim();
+
+    /// <summary>R4.6 E2-4' 严格兑换包装：真实结果、OCE 传播、失败不写当日标记（不再吞异常）。</summary>
+    public async Task<AutoRedeemCodeChecker.RedeemCheckResult> CheckAndRedeemCodeStrictAsync(string? uid, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(uid))
+            return AutoRedeemCodeChecker.RedeemCheckResult.Of("failed", reason: "UID 为空，严格路径拒绝执行");
+        return await _autoRedeemCodeChecker.CheckAndRedeemIfNeededStrict(uid, ct);
     }
 }

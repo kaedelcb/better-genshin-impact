@@ -649,8 +649,9 @@ public partial class OneDragonFlowViewModel : ViewModel
         try
         {
             await OnOneKeyExecuteCore();
-            result = scope.Result != TaskRunResult.Ran ? scope.Result
-                : _finishMark ? TaskRunResult.Ran : TaskRunResult.Failed;
+            // E9：Skipped（仅正常跳过）与 Ran 同样进入完成判定——尾部跑完（_finishMark）即根作业成功
+            // （Succeeded-with-skips，子作业各自携带 Skipped）；其他结果原样透传。
+            result = Service.OneDragon.OneDragonRootResultRule.DecideRootResult(scope.Result, _finishMark);
         }
         catch (OperationCanceledException)
         {
@@ -929,7 +930,9 @@ public partial class OneDragonFlowViewModel : ViewModel
         }
 
         scope.ThrowIfStopped();
-        if (scope.Result != TaskRunResult.Ran) return;
+        // E9 根/叶结果合同（R4.6 ASTRA 三轮 B7）：正常跳过（Skipped）不算坏结果——整龙跑完含跳过
+        // 仍进入尾部（CheckRewards/通知/CompletionAction 照常，D15）；失败/取消/抢占/拒绝仍提前返回。
+        if (!Service.OneDragon.OneDragonRootResultRule.ShouldRunTail(scope.Result)) return;
         if (scope.Descriptor.TaskId != null)
         {
             // R3 单项边界（定案 §8 + ASTRA 会诊）：单项执行不附带整龙收尾（CheckRewardsTask/完成后动作/整龙结束通知）
