@@ -87,6 +87,31 @@ public sealed class BoundResourceRef
 }
 
 /// <summary>执行目标身份（实例 + BGI 进程纪元；换 epoch 后旧作业终态不可信）。</summary>
+/// <summary>节点结果（D6 聚合规则的事实来源：失败/拒绝不被后续成功覆盖）。</summary>
+public sealed class WorkflowNodeOutcome
+{
+    [JsonPropertyName("nodeId")]
+    public string NodeId { get; set; } = "";
+
+    [JsonPropertyName("sequenceIndex")]
+    public int SequenceIndex { get; set; }
+
+    [JsonPropertyName("occurrence")]
+    public int Occurrence { get; set; }
+
+    [JsonPropertyName("loopIteration")]
+    public int LoopIteration { get; set; }
+
+    /// <summary>succeeded / failed / rejected / skippedFilter / skippedUser / cancelled。</summary>
+    [JsonPropertyName("result")]
+    public string Result { get; set; } = "";
+
+    [JsonPropertyName("reason")]
+    public string? Reason { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+}
 public sealed class ExecutionTargetRef
 {
     [JsonPropertyName("instanceId")]
@@ -170,6 +195,9 @@ public sealed class WorkflowRunRecord
     [JsonPropertyName("pendingCompletionAction")]
     public string? PendingCompletionAction { get; set; }
 
+    /// <summary>逐节点结果（追加；聚合判定只看此清单，不信终态单字段）。</summary>
+    [JsonPropertyName("nodeOutcomes")]
+    public List<WorkflowNodeOutcome> NodeOutcomes { get; set; } = [];
     [JsonPropertyName("wait")]
     public WaitStateRecord? Wait { get; set; }
 
