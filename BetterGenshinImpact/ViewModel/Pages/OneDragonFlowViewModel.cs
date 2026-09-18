@@ -818,8 +818,11 @@ public partial class OneDragonFlowViewModel : ViewModel
                 // resume 经 NextTaskId 回灌后从该条目重跑（被中断条目未完成，重跑是既定语义）。
                 // 批次跳过的配置组（由助手批次外部驱动）也会推进水位线——它们已逻辑启动。
                 scope.SetDragonNode(task.Id);
-                if (batchGroupNames is { Count: > 0 } && batchGroupNames.Contains(task.Name)
-                    && !scriptGroupsDefaultNames.Contains(task.Name) && delegatedGroups.Add(task.Name))
+                // ASTRA 会诊二轮：单项显式执行不适用批次委派——外部驱动者正是经单项执行来跑委派组，
+                // 跳过会造成「未执行却报成功」；整龙语义不变（判定入守卫，有夹具承载）
+                if (OneDragonFlowExecutionGuards.ShouldSkipForBatchDelegation(
+                        scope.Descriptor.TaskId != null, batchGroupNames, task.Name, scriptGroupsDefaultNames.Contains(task.Name))
+                    && delegatedGroups.Add(task.Name))
                 {
                     // [F03 修正版] 批次委派判断在执行前进行，绝不先跑后跳
                     _logger.LogInformation("批次外部负责配置组 {Name}，本龙执行前跳过", task.Name);
@@ -1215,16 +1218,31 @@ public partial class OneDragonFlowViewModel : ViewModel
             return;
         }
 
-        if (ConfigList.Any(x => x.Name == newName))
-        {
-            Toast.Warning($"配置名称「{newName}」已存在，请使用其他名称");
-            return;
-        }
+        var newFilePath = Path.Combine(OneDragonFlowConfigFolder, $"{newName}.json");
         // R3.0 同名占用防护：不覆盖待迁移的受保护文件
-        if (IsProtectedConfigFile(Path.Combine(OneDragonFlowConfigFolder, $"{newName}.json")))
+        if (IsProtectedConfigFile(newFilePath))
         {
             Toast.Warning($"名称「{newName}」被待迁移的旧版文件占用，请使用其他名称");
             return;
+        }
+        // ASTRA 会诊二轮：重命名判定入守卫（仅大小写改名=同一物理文件，写后删旧即删新；磁盘孤立文件不静默覆盖）
+        var renameDecision = OneDragonFlowExecutionGuards.EvaluateRename(
+            Path.Combine(OneDragonFlowConfigFolder, $"{SelectedConfig.Name}.json"),
+            newFilePath,
+            newName,
+            ConfigList.Where(x => x != SelectedConfig).Select(x => x.Name),
+            File.Exists(newFilePath));
+        switch (renameDecision)
+        {
+            case OneDragonRenameDecision.NameConflict:
+                Toast.Warning($"配置名称「{newName}」已存在，请使用其他名称");
+                return;
+            case OneDragonRenameDecision.CaseOnlyRenameRejected:
+                Toast.Warning($"名称「{newName}」与当前名称仅大小写不同，二者在磁盘上是同一文件，请先改为其他名称");
+                return;
+            case OneDragonRenameDecision.DiskFileConflict:
+                Toast.Warning("目标路径已存在配置列表外的文件，为避免误覆盖已拒绝重命名");
+                return;
         }
 
 
@@ -1250,8 +1268,10 @@ public partial class OneDragonFlowViewModel : ViewModel
                 _logger.LogWarning("重命名已写入新文件，但旧文件当前为受保护的旧格式（待迁移），保留不删：{Path}", oldConfigFile);
                 Toast.Warning($"新配置已保存，旧文件「{oldName}」已变为待迁移的旧版格式，已保留未删除");
             }
-            else if (File.Exists(oldConfigFile))
+            else if (File.Exists(oldConfigFile)
+                     && !string.Equals(oldConfigFile, newFilePath, StringComparison.OrdinalIgnoreCase))
             {
+                // 路径等价（仅大小写差异）已在守卫阶段拒绝，此处为纵深防御：绝不删除与目标同物理文件的旧路径
                 File.Delete(oldConfigFile);
             }
 
