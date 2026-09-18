@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using BetterGenshinImpact.Core.Config;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -71,6 +72,9 @@ internal sealed class TaskConfigurationContract(string userDirectory)
             if (!PreemptionGate.Authorize(takeoverTicket)) throw new InvalidOperationException("takeover_conflict");
             if (taskId == null && legacyIndex == null) throw new ArgumentException("task_identity_required");
             var bytes = await File.ReadAllBytesAsync(path, token).ConfigureAwait(false);
+            // R3.0 硬门槛：一条龙旧格式/歧义/损坏文件受保护——W1/applyTaskState 拒绝写回，原件保留待迁移
+            if (oneDragon && OneDragonConfigShapePreflight.InspectBytes(bytes).Shape != OneDragonConfigShape.PublicCurrent)
+                throw new InvalidOperationException("configuration_pending_migration");
             var snapshot = Parse(bytes, oneDragon);
             if (expectedRevision != null && !string.Equals(snapshot.Revision, expectedRevision, StringComparison.Ordinal))
                 throw new InvalidOperationException("configuration_changed");
@@ -139,13 +143,15 @@ internal sealed class TaskConfigurationContract(string userDirectory)
         if (oneDragon)
         {
             var list = Property(doc, "taskEnabledList") as JObject ?? throw new InvalidDataException("invalid_task_list");
+            var defs = Property(doc, "taskDefinitions") as JObject;
             foreach (var p in list.Properties())
             {
                 if (p.Value is JObject tuple && int.TryParse(p.Name, out var index) && index > 0)
                     tasks.Add(new("legacy:" + p.Name, Property(tuple, "Item2")?.ToString() ?? p.Name,
                         Property(tuple, "Item1")?.Value<bool>() ?? false, index, "legacy"));
                 else if (p.Value.Type == JTokenType.Boolean)
-                    tasks.Add(new(p.Name, p.Name, p.Value.Value<bool>(), null, "native"));
+                    // R3：公版三件套语义——名称取自 TaskDefinitions（不再「ID 即名」过渡投影）
+                    tasks.Add(new(p.Name, defs?.Property(p.Name, StringComparison.OrdinalIgnoreCase)?.Value.ToString() ?? p.Name, p.Value.Value<bool>(), null, "native"));
                 else throw new InvalidDataException("unsupported_task_schema");
             }
         }
@@ -164,6 +170,19 @@ internal sealed class TaskConfigurationContract(string userDirectory)
                     Property(item, "status")?.ToString() != "Disabled", tasks.Count + 1, "group"));
             }
         }
+        if (oneDragon && Property(doc, "taskOrder") is JArray taskOrder && taskOrder.Count > 0)
+        {
+            // R3：TaskOrder 显式顺序投影；缺/空回退 TaskEnabledList 枚举序（同 R1 判型口径）
+            var position = new Dictionary<string, int>(StringComparer.Ordinal);
+            var orderIndex = 0;
+            foreach (var token in taskOrder)
+            {
+                var key = token?.ToString();
+                if (key != null && !position.ContainsKey(key)) position[key] = orderIndex++;
+            }
+            tasks = tasks.OrderBy(t => position.TryGetValue(t.TaskId, out var p) ? p : int.MaxValue).ToList();
+        }
         return new(Revision(bytes), tasks, doc);
     }
 }
+

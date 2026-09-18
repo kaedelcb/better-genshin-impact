@@ -145,7 +145,7 @@ public partial class ScriptService : IScriptService
         scope.ThrowIfStopped();
         var configurationPath = Global.Absolute(System.IO.Path.Combine("User", "ScriptGroup", groupName + ".json"));
         if (System.IO.File.Exists(configurationPath)) scope.TrackConfigurationFile(configurationPath);
-        scope.SetCheckpoint(new SuspendContextCapture.Snapshot("group", groupName, 0, null, null, 0, null, null, false));
+        scope.SetCheckpoint(new SuspendContextCapture.Snapshot("group", groupName, 0, null, null, null, null, null, false));
 
         // 启动等待之前先进行取消操作的初始化，便于在任务开始前终止任务.
         // 仅在上下文已释放（上一个任务已结束）时重建：无条件 Set() 会在抢锁失败路径上
@@ -383,7 +383,7 @@ public partial class ScriptService : IScriptService
 
                                 scope.ThrowIfStopped();
                                 scope.SetCheckpoint(new SuspendContextCapture.Snapshot("group", groupName,
-                                    projectIndex, exeProject.FolderName, exeProject.Name, 0, null, null,
+                                    projectIndex, exeProject.FolderName, exeProject.Name, null, null, null,
                                     SuspendContextCapture.IsOnlineSignalTask(exeProject.Name, exeProject.FolderName)));
                                 await ExecuteProject(exeProject);
                                 executedProjects++;

@@ -83,7 +83,8 @@ public sealed record JobDescriptor(
     Guid? JobId = null,
     string? TakeoverTicket = null,
     Action? OnAdmitted = null,
-    int? ResumeIndex = null,
+    /// <summary>R3 原生身份：一条龙恢复/起点游标为任务项稳定字符串 ID（GUID）；配置组内项目序号游标不走此字段（组游标见 SuspendedTaskContext.TaskIndex）。</summary>
+    string? ResumeTaskId = null,
     Guid? WorkflowRunId = null,
     string? NodeId = null,
     int? Iteration = null,

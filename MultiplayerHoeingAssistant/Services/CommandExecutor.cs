@@ -26,8 +26,9 @@ public class CommandExecutor
     private readonly SemaphoreSlim _suspendGate = new(1, 1);
     private readonly AsyncLocal<RemoteCommand?> _requestContext = new();
 
-    private object BuildStartPayload(string? groupName, string? configName, int startFromIndex, int generation, string? batchGroupNames = null)
-        => new { groupName, configName, startFromIndex, generation, batchGroupNames, takeoverTicket = _takeoverTicket,
+    private object BuildStartPayload(string? groupName, string? configName, int startFromIndex, int generation, string? batchGroupNames = null, string? startFromTaskId = null)
+        // R3 原生身份：一条龙起点 startFromTaskId（字符串任务 ID）与组内 startFromIndex 并存，各自消费端各取所需
+        => new { groupName, configName, startFromIndex, startFromTaskId, generation, batchGroupNames, takeoverTicket = _takeoverTicket,
             expectedConfigRevision = GetStringParam(_requestContext.Value?.Params, "expectedConfigRevision"),
             bgiEpoch = _requestContext.Value?.Params?.GetValueOrDefault("bgiEpoch"),
             expiresAtUtc = _requestContext.Value?.ExpiresAtUtc };
@@ -183,9 +184,13 @@ public class CommandExecutor
                         GetIntParam(command.Params, "generation") ?? 0,
                         ParseBatchGroupNames(command.Params));
                 case "start_oneclick":
+                    // R3 原生身份：一条龙起点为字符串任务 ID（startFromTaskId）；旧数字索引响亮拒绝
+                    if ((GetIntParam(command.Params, "startFromIndex") ?? 0) > 0)
+                        return new CommandResult { Status = "failed", ErrorCode = "legacy_start_index_not_supported",
+                            Message = "一条龙任务起点已切换为字符串任务 ID（startFromTaskId），不再接受数字索引；请升级控制端" };
                     return await StartOneClickAsync(
                         GetStringParam(command.Params, "configName") ?? "",
-                        GetIntParam(command.Params, "startFromIndex") ?? 0,
+                        GetStringParam(command.Params, "startFromTaskId"),
                         GetIntParam(command.Params, "generation") ?? 0,
                         ParseBatchGroupNames(command.Params));
                 case "hotkey_execute":
@@ -198,6 +203,7 @@ public class CommandExecutor
                         GetStringParam(command.Params, "groupName") ?? "",
                         GetStringParam(command.Params, "configName") ?? "",
                         GetIntParam(command.Params, "taskIndex") ?? 0,
+                        GetStringParam(command.Params, "taskId"), // R3：一条龙按 GUID taskId 寻址
                         bool.TryParse(command.Params?.GetValueOrDefault("enabled")?.ToString(), out var en) && en);
                 default:
                     return new CommandResult { Status = "failed", Message = $"未知命令: {command.Cmd}" };
@@ -481,7 +487,7 @@ public class CommandExecutor
     /// batchGroupNames：[批次名单 2026-09-13] 批次绑定列表，透传给 BGI 供一条龙组间跳过判定；
     /// 为 null（非批次来源/老路径）时 BGI 不跳过任何组。
     /// </summary>
-    private async Task<CommandResult> StartOneClickAsync(string configName, int startFromIndex, int generation = 0, List<string>? batchGroupNames = null)
+    private async Task<CommandResult> StartOneClickAsync(string configName, string? startFromTaskId, int generation = 0, List<string>? batchGroupNames = null)
     {
         if (_isBatchInFlight?.Invoke() == true || IsResumeRetryInFlight)
             return new CommandResult { Status = "failed", ErrorCode = "batch_busy", Message = "现有批次/恢复尚未收尾，不能借用其执行权启动另一任务" };
@@ -497,7 +503,7 @@ public class CommandExecutor
         {
             // 抢占路径不透传批次名单（批次场景 MainViewModel 已先行 suspend，抢占极少命中批次项；
             // 不携带时 BGI 不跳过任何组，退化为老助手兼容行为，探针日志可观测）
-            return await StartWithPreemptionAsync(FixedKeyPolicy, null, configName, startFromIndex, generation);
+            return await StartWithPreemptionAsync(FixedKeyPolicy, null, configName, 0, generation, startFromTaskId);
         }
 
         // [切片7] ext 任务队列通道（同 StartGroupAsync）；通道不可用走下方 v2 路径（逐字节保留）。
@@ -505,7 +511,7 @@ public class CommandExecutor
         if (extClient is { State: BgiExternalLinkState.Ready }
             && extClient.HasCapability(BgiExternalClient.CapabilityTaskQueue))
         {
-            var queueResult = await TryStartViaQueueAsync(extClient, null, configName, startFromIndex, generation, batchGroupNamesRaw);
+            var queueResult = await TryStartViaQueueAsync(extClient, null, configName, 0, generation, batchGroupNamesRaw, startFromTaskId);
             if (queueResult != null)
             {
                 return queueResult;
@@ -559,8 +565,8 @@ public class CommandExecutor
                 if (blocked != null) return blocked;
                 // [批次名单] 纯加法协议字段：老 BGI 忽略该字段，行为不变
                 var payload = batchGroupNamesRaw != null
-                    ? System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(null, configName, startFromIndex, generation, batchGroupNamesRaw))
-                    : System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(null, configName, startFromIndex, generation));
+                    ? System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(null, configName, 0, generation, batchGroupNamesRaw, startFromTaskId))
+                    : System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(null, configName, 0, generation, startFromTaskId: startFromTaskId));
                 var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
                 // [无损拒绝适配 b5386005] 同 StartGroupAsync：业务拒绝（任务运行中）等锁重试，最多 6 次
                 for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
@@ -615,7 +621,7 @@ public class CommandExecutor
     /// </summary>
     private async Task<CommandResult?> TryStartViaQueueAsync(
         BgiExternalClient ext, string? groupName, string? configName, int startFromIndex, int generation,
-        string? batchGroupNames = null)
+        string? batchGroupNames = null, string? startFromTaskId = null)
     {
         var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
         try
@@ -624,6 +630,7 @@ public class CommandExecutor
             // 其终态事件先入等待器缓冲，按句柄匹配时不丢
             using var waiter = ext.CreateTaskTerminalWaiter();
             var submit = await ext.SubmitTaskStartAsync(groupName, configName, startFromIndex, generation, batchGroupNames,
+                startFromTaskId: startFromTaskId,
                 idempotencyKey: string.IsNullOrWhiteSpace(_requestContext.Value?.CommandId) ? null : _requestContext.Value.CommandId,
                 expectedConfigRevision: GetStringParam(_requestContext.Value?.Params, "expectedConfigRevision"),
                 bgiEpoch: _requestContext.Value?.Params?.GetValueOrDefault("bgiEpoch"),
@@ -773,7 +780,7 @@ public class CommandExecutor
     }
 
     /// <summary>设置任务启用状态：IPC 发 config.set_task_enabled</summary>
-    private async Task<CommandResult> SetTaskEnabledAsync(string groupName, string configName, int taskIndex, bool enabled)
+    private async Task<CommandResult> SetTaskEnabledAsync(string groupName, string configName, int taskIndex, string? taskId, bool enabled)
     {
         // [弹窗竞态守卫] 计入在途配置写入，启动命令会等计数归零再执行（见 WaitConfigWritesDrainedAsync）
         Interlocked.Increment(ref _inflightConfigWrites);
@@ -784,7 +791,7 @@ public class CommandExecutor
             {
                 var request = _requestContext.Value;
                 var applied = await ext.SendCommandAsync("ext.config.setTaskEnabled", new {
-                    groupName, configName, taskIndex, enabled, commandId = request?.CommandId,
+                    groupName, configName, taskIndex, taskId, enabled, commandId = request?.CommandId,
                     idempotencyKey = string.IsNullOrEmpty(request?.CommandId) ? Guid.NewGuid().ToString("N") : request.CommandId,
                     expectedConfigRevision = GetStringParam(request?.Params, "expectedConfigRevision"),
                     bgiEpoch = request?.Params?.GetValueOrDefault("bgiEpoch"), expiresAtUtc = request?.ExpiresAtUtc });
@@ -802,7 +809,7 @@ public class CommandExecutor
             await ipcClient.ConnectAsync(3000);
             var blocked = CheckCrossSessionBlock(ipcClient, $"设置任务启用状态（group={groupName} config={configName} index={taskIndex}）");
             if (blocked != null) return blocked;
-            var payload = System.Text.Json.JsonSerializer.Serialize(new { groupName, configName, taskIndex, enabled });
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { groupName, configName, taskIndex, taskId, enabled });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "config.set_task_enabled", Payload = payload });
             if (response.Success)
                 return new CommandResult { Status = "success", Message = $"任务 {taskIndex} 启用状态已设为 {enabled}" };
@@ -1354,7 +1361,7 @@ public class CommandExecutor
     /// 绝不走 KillBgi 回退（按键路径不杀进程）。
     /// </summary>
     private async Task<CommandResult> StartWithPreemptionAsync(
-        TaskConflictPolicySettings policy, string? groupName, string? configName, int startFromIndex, int generation)
+        TaskConflictPolicySettings policy, string? groupName, string? configName, int startFromIndex, int generation, string? startFromTaskId = null)
     {
         var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
         Log($"[任务冲突策略] 本机任务运行中，按键启动 {desc} 按策略（{policy.PolicyDisplayName}）抢占：先中断当前任务");
@@ -1379,7 +1386,7 @@ public class CommandExecutor
 
         // 3. v2 IPC task.start（抢占路径强制 v2，跳过 ext 队列；传输失败不杀进程）
         // [A6] v2 通道无 preempt 字段：本路径前置 suspend+settle 已自行腾空槽位，无需抢占标志
-        var startResult = await StartViaV2IpcNoKillAsync(groupName, configName, startFromIndex, generation);
+        var startResult = await StartViaV2IpcNoKillAsync(groupName, configName, startFromIndex, generation, startFromTaskId);
 
         // 4. 策略收尾（F11 取消永远压过配置策略）
         await ApplyPolicyTeardownAsync(policy, desc, startResult.Status == "cancelled");
@@ -1391,7 +1398,7 @@ public class CommandExecutor
     /// [任务冲突策略] v2 IPC task.start（无杀进程回退版）：抢占闭环与指定任务启动共用。
     /// 保留 1s×6 task_already_running 无损拒绝重试；业务拒绝/传输异常均直接失败返回，绝不 KillBgi。
     /// </summary>
-    private async Task<CommandResult> StartViaV2IpcNoKillAsync(string? groupName, string? configName, int startFromIndex, int generation)
+    private async Task<CommandResult> StartViaV2IpcNoKillAsync(string? groupName, string? configName, int startFromIndex, int generation, string? startFromTaskId = null)
     {
         var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
         try
@@ -1402,7 +1409,7 @@ public class CommandExecutor
             if (blocked != null) return blocked;
             var payload = groupName != null
                 ? System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(groupName, null, startFromIndex, generation))
-                : System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(null, configName, startFromIndex, generation));
+                : System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(null, configName, startFromIndex, generation, startFromTaskId: startFromTaskId));
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
             for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
             {

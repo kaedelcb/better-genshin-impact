@@ -67,8 +67,8 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
         var old = Task.Run(async () =>
         {
             using var root = ExecutionScope.Start(new(JobKind.OneDragon, "原单机龙", JobSource.Ui, JobId: Guid.NewGuid()));
-            root.SetDragonNode(4);
-            root.SetCheckpoint(new("group", "正在执行组", 2, "folder", "project", 0, null, null, false));
+            root.SetDragonNode("task-guid-4");
+            root.SetCheckpoint(new("group", "正在执行组", 2, "folder", "project", null, null, null, false));
             ready.SetResult();
             try { await Task.Delay(Timeout.Infinite, root.Token); } catch (OperationCanceledException) { }
         });
@@ -80,7 +80,7 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
         var victim = config.SuspendedTaskContext!;
         Assert.Equal("原单机龙", victim.GroupName);
         Assert.Equal("正在执行组", victim.SubTaskGroupName);
-        Assert.Equal(4, victim.OneDragonTaskIndex);
+        Assert.Equal("task-guid-4", victim.OneDragonTaskId);
         Assert.Equal(2, victim.TaskIndex);
         Assert.NotNull(victim.RootRunId);
         Assert.NotNull(victim.AttemptId);

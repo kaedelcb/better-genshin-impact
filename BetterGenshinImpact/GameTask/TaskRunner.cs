@@ -266,7 +266,7 @@ public class TaskRunner
         catch (InvalidOperationException ex) { _logger.LogWarning(ex, "独立任务未获执行权: {Name}", soloTask.Name); return; }
         using var root = owned;
         ExecutionScope.Current!.SetCheckpoint(new SuspendContextCapture.Snapshot(
-            "solo", null, 0, null, soloTask.Name, 0, null, null,
+            "solo", null, 0, null, soloTask.Name, null, null, null,
             soloTask.Name == BetterGenshinImpact.GameTask.AutoOnline.NotifyOnlineTask.TaskName));
         // 启动等待之前先进行取消操作的初始化，便于在任务开始前终止任务.
         CancellationContext.Instance.Set();

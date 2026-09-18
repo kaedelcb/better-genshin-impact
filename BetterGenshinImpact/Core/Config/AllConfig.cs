@@ -106,16 +106,6 @@ public partial class AllConfig : ObservableObject
     /// </summary>
     [ObservableProperty]
     private string _selectedOneDragonFlowConfigName = string.Empty;
-    
-    // 连续执行配置单完成后操作
-    [ObservableProperty]
-    private string _continuousCompletionAction = string.Empty;
-    
-    /// <summary>
-    /// 一条龙选中使用的计划表
-    /// </summary>
-    [ObservableProperty]
-    private string _selectedOneDragonFlowPlanName = "默认计划表";
 
     /// <summary>中断上下文：联机锄地中断时保存的当前任务状态，用于联机结束后恢复。不持久化到磁盘（进程级临时状态，崩溃/强杀后自动消失）。</summary>
     [JsonIgnore]
@@ -128,42 +118,6 @@ public partial class AllConfig : ObservableObject
     /// </summary>
     [JsonExtensionData]
     public Dictionary<string, System.Text.Json.JsonElement>? LegacyExtensionData { get; set; }
-    
-    // 计划表列表
-    [ObservableProperty]
-    private ObservableCollection<string> _scheduleList = new();
-    
-    // 计划表执行是否循环
-    [ObservableProperty]
-    private bool _scheduleLoop = false;
-    
-    // 计划表循环执行时间点
-    [ObservableProperty]
-    private string _cycleTime = "04:00";
-    
-    // 循环模式
-    [ObservableProperty]
-    private bool _cycleMode = false;
-    
-    //计划表执行超一天是否跳出循环
-    [ObservableProperty]
-    private bool _scheduleLoopSkip = false;
-    
-    // 计划表执行是否定时启动
-    [ObservableProperty]
-    private bool _scheduleStartOnTime = false;
-    
-    //计划表开始执行时间
-    [ObservableProperty]
-    private string _scheduleStartTime = "00:00";
-    
-    public AllConfig()
-    {
-        if (_scheduleList.Count == 0)
-        {
-            _scheduleList.Add("默认计划表");
-        }
-    }
     
     /// <summary>
     ///     遮罩窗口配置
@@ -437,3 +391,5 @@ public partial class AllConfig : ObservableObject
         NotificationService.Instance().RefreshNotifiers();
     }
 }
+
+

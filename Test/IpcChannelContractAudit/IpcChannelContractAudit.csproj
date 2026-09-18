@@ -30,6 +30,7 @@
     <Compile Include="../../BetterGenshinImpact/Service/Execution/JobRegistry.Requests.cs" Link="Production/JobRegistry.Requests.cs" />
     <Compile Include="../../BetterGenshinImpact/Service/Execution/ExecutionRequestContract.cs" Link="Production/ExecutionRequestContract.cs" />
     <Compile Include="../../BetterGenshinImpact/Service/Execution/TaskConfigurationContract.cs" Link="Production/TaskConfigurationContract.cs" />
+    <Compile Include="../../BetterGenshinImpact/Core/Config/OneDragonConfigShapePreflight.cs" Link="Production/OneDragonConfigShapePreflight.cs" />
     <Compile Include="../../BetterGenshinImpact/Service/Execution/GroupConfigWriteContract.cs" Link="Production/GroupConfigWriteContract.cs" />
     <Compile Include="../../BetterGenshinImpact/Service/OneDragon/OneDragonConfigReferenceService.cs" Link="Production/OneDragonConfigReferenceService.cs" />
     <Compile Include="../../BetterGenshinImpact/Service/ScriptGroupFileRename.cs" Link="Production/ScriptGroupFileRename.cs" />

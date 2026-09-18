@@ -799,11 +799,12 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
             const enabled = statusInfo
                 ? (isOneClick ? (statusInfo.enabled !== false) : (statusInfo.status !== 'Disabled'))
                 : true;
-            // 真实任务键：仅一条龙采信 config.list 条目自带的 index（TaskEnabledList 键，BGI 端按键比对起点）；
+            // 真实任务键（R3 原生身份）：一条龙采信条目自带的 taskId（TaskEnabledList 的 GUID 键）；
             // 配置组保持位置序号（BGI 端两个消费端都先把 Index 按位置重排为 1..N 再匹配，只认位置）。
-            // 对齐 WPF 端 MainViewModel.ShowStartFromDialog 的三元分支纪律。
-            const taskKey = isOneClick && statusInfo && typeof statusInfo.index === 'number' && statusInfo.index > 0
-                ? statusInfo.index : i + 1;
+            // 对齐 WPF 端 MainViewModel.ShowStartFromDialog 的分支纪律。
+            const taskKey = isOneClick
+                ? (statusInfo && typeof statusInfo.taskId === 'string' && statusInfo.taskId ? statusInfo.taskId : '')
+                : i + 1;
             options.push({
                 index: taskKey,
                 text: `${i + 1}. ${t}`,
@@ -844,7 +845,7 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
         </div>`;
     document.body.appendChild(overlay);
 
-    let selectedIndex = 0;
+    let selectedIndex = 0; // 配置组=数字位置；一条龙=GUID taskId 字符串（"0"=从头开始）
     // 记录启用状态变更
     const statusChanges = [];
 
@@ -855,7 +856,7 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
             if (e.target.classList.contains('task-checkbox')) return;
             listItems.forEach(x => x.classList.remove('selected'));
             el.classList.add('selected');
-            selectedIndex = parseInt(el.dataset.index);
+            selectedIndex = isOneClick ? el.dataset.index : parseInt(el.dataset.index);
         });
     });
     // 默认选中第一项
@@ -864,7 +865,7 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
     // checkbox 变更记录
     overlay.querySelectorAll('.task-checkbox').forEach(cb => {
         cb.addEventListener('change', () => {
-            const idx = parseInt(cb.dataset.index);
+            const idx = isOneClick ? cb.dataset.index : parseInt(cb.dataset.index);
             statusChanges.push({ index: idx, enabled: cb.checked });
         });
     });
@@ -888,7 +889,7 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
         // 也检查所有当前 checkbox 状态，与原始态对比
         // 注意 data-index 是真实任务键（可能 ≠ 位置序号），原始态按 options 里记录的 enabled 取
         overlay.querySelectorAll('.task-checkbox').forEach(cb => {
-            const idx = parseInt(cb.dataset.index);
+            const idx = isOneClick ? cb.dataset.index : parseInt(cb.dataset.index);
             if (!seen.has(idx)) {
                 const opt = options.find(o => o.isTask && o.index === idx);
                 if (opt && cb.checked !== opt.enabled) {
@@ -905,9 +906,10 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
             for (const uid of targets) {
                 for (const [taskIdx, en] of Object.entries(changes)) {
                     const previous = appliedByUid.get(uid);
+                    // R3 原生身份：一条龙按 GUID taskId 寻址；配置组保持数字 taskIndex
                     const changeCmd = makeCmd('set_task_enabled', {
                         [isOneClick ? 'configName' : 'groupName']: configName,
-                        taskIndex: Number(taskIdx), enabled: en,
+                        ...(isOneClick ? { taskId: taskIdx } : { taskIndex: Number(taskIdx) }), enabled: en,
                         expectedConfigRevision: previous?.configRevision,
                         bgiEpoch: previous ? { processId: previous.targetProcessId, startTicksUtc: previous.targetStartTicksUtc } : undefined
                     });
@@ -919,9 +921,13 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
             if (!overlay.isConnected) return;
             for (const uid of targets) {
                 const applied = appliedByUid.get(uid);
+                // R3 原生身份：一条龙起点为 startFromTaskId（"0"/空=从头开始，不携带）；
+                // 配置组保持 startFromIndex 数字位置
                 const cmd = makeCmd(isOneClick ? 'start_oneclick' : 'start_group', {
                     [isOneClick ? 'configName' : 'groupName']: configName,
-                    startFromIndex: selectedIndex,
+                    ...(isOneClick
+                        ? (selectedIndex && selectedIndex !== '0' ? { startFromTaskId: selectedIndex } : {})
+                        : { startFromIndex: selectedIndex }),
                     expectedConfigRevision: applied?.configRevision,
                     bgiEpoch: applied ? { processId: applied.targetProcessId, startTicksUtc: applied.targetStartTicksUtc } : undefined
                 });

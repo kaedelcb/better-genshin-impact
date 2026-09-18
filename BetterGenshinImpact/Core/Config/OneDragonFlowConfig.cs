@@ -1,228 +1,44 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Windows.Documents;
-using CommunityToolkit.Mvvm.ComponentModel;
-using Wpf.Ui.Violeta.Controls;
-using System.Collections.ObjectModel;
-using System.Collections.Specialized;
-using System.Linq;
-using System.Collections.ObjectModel;
-using System.Windows;
-using BetterGenshinImpact.View.Windows;
-using CommunityToolkit.Mvvm.Input;
-using System.Collections.Generic;
-using System.Windows;
-using System.Collections.Generic;
-using System.Linq;
-using System.Windows;
-using System.Xml.Linq;
 using System;
 using System.Collections.Generic;
-using BetterGenshinImpact.Model;
-using CommunityToolkit.Mvvm.ComponentModel;
-using Microsoft.Extensions.Logging;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Data;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows;
-using BetterGenshinImpact.Core.Config;
-using BetterGenshinImpact.Core.Script;
-using BetterGenshinImpact.Core.Script.Group;
 using BetterGenshinImpact.GameTask;
-using BetterGenshinImpact.GameTask.Common.Element.Assets;
-using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
 using BetterGenshinImpact.Helpers;
-using BetterGenshinImpact.Service;
-using BetterGenshinImpact.Service.Notification;
-using BetterGenshinImpact.Service.Notification.Model.Enum;
-using BetterGenshinImpact.View.Windows;
-using CommunityToolkit.Mvvm.Input;
-using Newtonsoft.Json;
-using Wpf.Ui.Controls;
-using Wpf.Ui.Violeta.Controls;
-using System.Windows.Controls;
-using ABI.Windows.UI.UIAutomation;
-using Wpf.Ui;
-using StackPanel = Wpf.Ui.Controls.StackPanel;
-using BetterGenshinImpact.Core.Config;
-using BetterGenshinImpact.Core.Script.Project;
-using BetterGenshinImpact.Service.Interface;
-using TextBlock = Wpf.Ui.Controls.TextBlock;
-using WinForms = System.Windows.Forms;
-using BetterGenshinImpact.Core.Simulator;
-using Vanara.PInvoke;
-using static BetterGenshinImpact.GameTask.Common.TaskControl;
-using static Vanara.PInvoke.User32;
-using BetterGenshinImpact.GameTask.AutoSkip.Assets;
-using BetterGenshinImpact.GameTask.AutoWood.Assets;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using BetterGenshinImpact.Core.Simulator;
-using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
-using BetterGenshinImpact.GameTask.AutoWood.Assets;
-using BetterGenshinImpact.GameTask.AutoWood.Utils;
-using BetterGenshinImpact.GameTask.Common.BgiVision;
-using BetterGenshinImpact.GameTask.Model.Area;
-using BetterGenshinImpact.Core.Recognition;
-using BetterGenshinImpact.GameTask.Common;
-using Rect = OpenCvSharp.Rect;
-using System.Collections.Generic;
-using System.Windows.Data;
-using CommunityToolkit.Mvvm.Input;
-using Grid = System.Windows.Controls.Grid;
-using System.Windows.Media;
-using Button = Wpf.Ui.Controls.Button;
-using System.Windows.Media.Animation;
-using System.Windows.Controls.Primitives;
-using System.Windows.Threading;
-using System.Windows.Input;
-using System.Collections.Specialized;
-using BetterGenshinImpact.ViewModel.Pages;
-using System.Collections.ObjectModel;
-using System.Collections.Specialized;
-using System.Linq;
-
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BetterGenshinImpact.Core.Config;
 
 [Serializable]
 public partial class OneDragonFlowConfig : ObservableObject
 {
-     public static AllConfig Config { get; set; } = TaskContext.Instance().Config;
-
-     /// <summary>
-     /// 秘境选择器中"首领讨伐"事件任务的标记值。
-     /// 当 DomainName 等于此值时，一条龙"自动秘境"会改为委派"自动首领讨伐"独立任务，
-     /// 所有参数沿用独立任务自身配置（AutoBoss* 字段 / AutoStygianOnslaughtConfig）。
-     /// </summary>
-     public const string BossEventMarker = "首领讨伐";
-
-     /// <summary>
-     /// 秘境选择器中"幽境危战"事件任务的标记值。
-     /// 当 DomainName 等于此值时，一条龙"自动秘境"会改为委派"自动幽境危战"独立任务。
-     /// </summary>
-     public const string StygianEventMarker = "幽境危战";
-    
-    //版本号
-    [ObservableProperty]
-    private int _version = 1;
-    
     // 配置名
     [ObservableProperty]
     private string _name = string.Empty;
-    
-    // 配置序号
-    [ObservableProperty]
-    private int _indexId = 1;
-    
-    //下次执行的配置单
-    [ObservableProperty]
-    private bool _nextConfiguration= false;
-    
-    //下次执行的任务单
-    [ObservableProperty]
-    private int _nextTaskIndex = 0;
-    
-    // 配置执行周期
-    [ObservableProperty] private string _period = "每日";
-    
-    // 配置执行周期列表
-    [ObservableProperty] private Dictionary<string, bool> _periodList = new()
-    {
-        { "每日", true },
-        { "周一", false },
-        { "周二", false },
-        { "周三", false },
-        { "周四", false },
-        { "周五", false },
-        { "周六", false },
-        { "周日", false }
-    };
-    
-    // 根据每周7天是否执行，转换成1到7的一个字符串，用逗号分隔
-    private string _eEverySelectedValueListConverter = "1,2,3,4,5,6,7";
 
-    public string EverySelectedValueListConverter
-    {
-        get
-        {
-            List<int> days = new List<int>();
-        
-            foreach (var kvp in PeriodList)
-            {
-                if (kvp.Value)
-                {
-                    switch (kvp.Key)
-                    {
-                        case "每日":
-                            // 添加1到7
-                            for (int i = 1; i <= 7; i++)
-                            {
-                                days.Add(i);
-                            }
-                            _eEverySelectedValueListConverter = string.Join("/", days);
-                            return _eEverySelectedValueListConverter;
-                        case "周一":
-                            days.Add(1);
-                            break;
-                        case "周二":
-                            days.Add(2);
-                            break;
-                        case "周三":
-                            days.Add(3);
-                            break;
-                        case "周四":
-                            days.Add(4);
-                            break;
-                        case "周五":
-                            days.Add(5);
-                            break;
-                        case "周六":
-                            days.Add(6);
-                            break;
-                        case "周日":
-                            days.Add(7);
-                            break;
-                    }
-                }
-            }
-            
-            _eEverySelectedValueListConverter = string.Join("/", days);
-            return _eEverySelectedValueListConverter;
-        }
-    }
-    
-   // 计划表
-   [ObservableProperty] private string _scheduleName = "默认计划表";
-   
-   //自定义秘境名称
-   [ObservableProperty] private List<string> _customDomainList = new();
-   
+    // 下次执行的任务 Id（为空表示从头开始）
+    [ObservableProperty]
+    private string _nextTaskId = string.Empty;
+
     /// <summary>
-    /// 所有任务的开关状态
+    /// 所有任务的开关状态（键为任务 Id）
     /// </summary>
-    public Dictionary<int,(bool,string)> TaskEnabledList { get; set; } = new();
-    
-    // 定义旧版本的TaskEnabledList
-    [Serializable]
-    public class TaskEnabledListOld
-    {
-        public Dictionary<string, bool> TaskEnabledList { get; set; } = new();
-    }
-    
+    public Dictionary<string, bool> TaskEnabledList { get; set; } = new();
+
+    /// <summary>
+    /// 任务执行顺序（任务 Id 列表），用于显式恢复 TaskList 顺序
+    /// </summary>
+    public List<string> TaskOrder { get; set; } = new();
+
+    /// <summary>
+    /// 任务定义（Id → 任务名），用于支持同名任务重复添加
+    /// </summary>
+    public Dictionary<string, string> TaskDefinitions { get; set; } = new();
     // 合成树脂的国家
     [ObservableProperty]
     private string _craftingBenchCountry = "枫丹";
 
     // 冒险者协会的国家
     [ObservableProperty]
-    private string  _adventurersGuildCountry = "枫丹";
+    private string _adventurersGuildCountry = "枫丹";
 
     // 自动战斗配置的队伍名称
     [ObservableProperty]
@@ -306,9 +122,13 @@ public partial class OneDragonFlowConfig : ObservableObject
     [ObservableProperty]
     private int _minResinToKeep = 0;
     
-    // 领取每日奖励的好感数量
+    // 普通周日或限时奖励选项
     [ObservableProperty]
     private string _sundayEverySelectedValue = "0";
+
+    // 每周秘境的全局限时奖励选项，单日留空时使用
+    [ObservableProperty]
+    private string _sundayWeeklySelectedValue = "0";
     
     // 尘歌壶传送方式，1. 地图传送 2. 尘歌壶道具
     [ObservableProperty]
@@ -316,85 +136,8 @@ public partial class OneDragonFlowConfig : ObservableObject
     
     // 尘歌壶洞天购买商品
     [ObservableProperty]
-    private List<string>? _secretTreasureObjects  = new();
-    
-    //四种树脂类型的对应数量
-    [ObservableProperty] private Dictionary<string, int> _resinCount = new()
-    {
-        { "浓缩树脂", 0 },
-        { "原粹树脂", 0 },
-        { "须臾树脂", 0 },
-        { "脆弱树脂", 0 }
-    };
-    
-    //是否按树脂类型使用
-    [ObservableProperty] private bool _specifyResinUse = false;
-    
-    private string _genshinUid = string.Empty;
-    
-    public string GenshinUid
-    {
-        get => _genshinUid;
-        set
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                _accountBinding = false;
-                _genshinUid = string.Empty;
-                OnPropertyChanged(nameof(AccountBinding));
-                OnPropertyChanged(nameof(GenshinUid));
-                return; 
-            }
-            if (value.Length == 9 && int.TryParse(value, out _))
-            {
-                _genshinUid = value;
-                OnPropertyChanged(nameof(GenshinUid));
-            }
-            else
-            {
-                Toast.Warning("无效UID，长度 "+value.Length+" 位，请输入 9 位纯数字的UID");
-            }
-            
-        }
-    }
-    
-    //绑定账号的后两位字符
-    [ObservableProperty] private string _accountBindingCode = string.Empty;
-    
-    // public int IndexID { get; set; }
-    
-    private bool _accountBinding  = false;
-    
-    public bool AccountBinding
-    {
-        get => _accountBinding;
-        set
-        {
-            if (value != _accountBinding) // 检查新值是否与当前值不同
-            {
-                if (value == false)
-                {
-                    _accountBinding = false;
-                    OnPropertyChanged(nameof(AccountBinding));
-                }
-                else
-                {
-                    if (string.IsNullOrEmpty(GenshinUid))
-                    {
-                        Toast.Warning("请输入UID");
-                        _accountBinding = false;
-                        OnPropertyChanged(nameof(AccountBinding));
-                    }
-                    else
-                    {
-                        _accountBinding = true;
-                        OnPropertyChanged(nameof(AccountBinding));
-                    }
-                }
-            }
-        }
-    }
-    
+    private List<string> _secretTreasureObjects = new();
+
     // 地脉花一条龙模式（跳过部分准备流程）
     [ObservableProperty]
     private bool _leyLineOneDragonMode = false;
@@ -476,28 +219,6 @@ public partial class OneDragonFlowConfig : ObservableObject
     [ObservableProperty]
     private bool _leyLineOpenModeCountMin = false;
 
-    // 折叠状态
-    [ObservableProperty]
-    private bool _isCraftingResinExpanded = true;
-
-    [ObservableProperty]
-    private bool _isAutoDomainExpanded = true;
-
-    [ObservableProperty]
-    private bool _isAutoLeyLineExpanded = true;
-
-    [ObservableProperty]
-    private bool _isClaimRewardsExpanded = true;
-
-    [ObservableProperty]
-    private bool _isSereniteaPotExpanded = true;
-
-    [ObservableProperty]
-    private bool _isCompletionActionExpanded = true;
-
-    [ObservableProperty]
-    private bool _isBindUidExpanded = true;
-
     #region 每周秘境配置
 
     //周一
@@ -507,9 +228,8 @@ public partial class OneDragonFlowConfig : ObservableObject
     [ObservableProperty]
     private string _mondayDomainName = string.Empty;
 
-    // 周一领奖奖励序号，留空则不指定（取默认奖励）
     [ObservableProperty]
-    private string _mondaySelectedValue = string.Empty;
+    private string _mondaySelectedValue = "0";
     
     
     //周二
@@ -519,9 +239,8 @@ public partial class OneDragonFlowConfig : ObservableObject
     [ObservableProperty]
     private string _tuesdayDomainName = string.Empty;
 
-    // 周二领奖奖励序号，留空则不指定（取默认奖励）
     [ObservableProperty]
-    private string _tuesdaySelectedValue = string.Empty;
+    private string _tuesdaySelectedValue = "0";
     
     //周三
     [ObservableProperty]
@@ -530,9 +249,8 @@ public partial class OneDragonFlowConfig : ObservableObject
     [ObservableProperty]
     private string _wednesdayDomainName = string.Empty;
 
-    // 周三领奖奖励序号，留空则不指定（取默认奖励）
     [ObservableProperty]
-    private string _wednesdaySelectedValue = string.Empty;
+    private string _wednesdaySelectedValue = "0";
     
     //周四
     [ObservableProperty]
@@ -541,9 +259,8 @@ public partial class OneDragonFlowConfig : ObservableObject
     [ObservableProperty]
     private string _thursdayDomainName = string.Empty;
 
-    // 周四领奖奖励序号，留空则不指定（取默认奖励）
     [ObservableProperty]
-    private string _thursdaySelectedValue = string.Empty;
+    private string _thursdaySelectedValue = "0";
     
     //周五
     [ObservableProperty]
@@ -552,9 +269,8 @@ public partial class OneDragonFlowConfig : ObservableObject
     [ObservableProperty]
     private string _fridayDomainName = string.Empty;
 
-    // 周五领奖奖励序号，留空则不指定（取默认奖励）
     [ObservableProperty]
-    private string _fridaySelectedValue = string.Empty;
+    private string _fridaySelectedValue = "0";
     
     //周六
     [ObservableProperty]
@@ -563,9 +279,8 @@ public partial class OneDragonFlowConfig : ObservableObject
     [ObservableProperty]
     private string _saturdayDomainName = string.Empty;
 
-    // 周六领奖奖励序号，留空则不指定（取默认奖励）
     [ObservableProperty]
-    private string _saturdaySelectedValue = string.Empty;
+    private string _saturdaySelectedValue = "0";
     
     //周日
     [ObservableProperty]
@@ -574,36 +289,51 @@ public partial class OneDragonFlowConfig : ObservableObject
     [ObservableProperty]
     private string _sundayDomainName = string.Empty;
 
-    // 周日领奖奖励序号，留空则不指定（取默认奖励）
     [ObservableProperty]
-    private string _sundayDaySelectedValue = string.Empty;
+    private string _sundaySelectedValue = "0";
 
-    // 单次执行配置单完成后操作
+    // 完成后操作
     [ObservableProperty]
     private string _completionAction = string.Empty;
     
     // 通过当天（4点起始）是哪一天来返回配置
-    public (string partyName, string domainName, string sundaySelectedValue,Dictionary<string, int> ResinCount,bool SpecifyResinUse) GetDomainConfig()
+    public (string partyName, string domainName, string sundaySelectedValue) GetDomainConfig()
     {
         if (WeeklyDomainEnabled)
         {
-            var dayOfWeek = (DateTime.Now.Hour >= 4 ? DateTime.Today : DateTime.Today.AddDays(-1)).DayOfWeek;
+            var serverTime = ServerTimeHelper.GetServerTimeNow();
+            var dayOfWeek = (serverTime.Hour >= 4 ? serverTime : serverTime.AddDays(-1)).DayOfWeek;
             return dayOfWeek switch
             {
-                DayOfWeek.Monday => (MondayPartyName, MondayDomainName, MondaySelectedValue, ResinCount, SpecifyResinUse),
-                DayOfWeek.Tuesday => (TuesdayPartyName, TuesdayDomainName, TuesdaySelectedValue, ResinCount, SpecifyResinUse),
-                DayOfWeek.Wednesday => (WednesdayPartyName, WednesdayDomainName, WednesdaySelectedValue, ResinCount, SpecifyResinUse),
-                DayOfWeek.Thursday => (ThursdayPartyName, ThursdayDomainName, ThursdaySelectedValue, ResinCount, SpecifyResinUse),
-                DayOfWeek.Friday => (FridayPartyName, FridayDomainName, FridaySelectedValue, ResinCount, SpecifyResinUse),
-                DayOfWeek.Saturday => (SaturdayPartyName, SaturdayDomainName, SaturdaySelectedValue, ResinCount, SpecifyResinUse),
-                DayOfWeek.Sunday => (SundayPartyName, SundayDomainName, SundayDaySelectedValue, ResinCount, SpecifyResinUse),
-                _ => (PartyName, DomainName, string.Empty, ResinCount, SpecifyResinUse)
+                DayOfWeek.Monday => (GetWeeklyPartyName(MondayPartyName), GetWeeklyDomainName(MondayDomainName), GetWeeklySelectedValue(MondaySelectedValue)),
+                DayOfWeek.Tuesday => (GetWeeklyPartyName(TuesdayPartyName), GetWeeklyDomainName(TuesdayDomainName), GetWeeklySelectedValue(TuesdaySelectedValue)),
+                DayOfWeek.Wednesday => (GetWeeklyPartyName(WednesdayPartyName), GetWeeklyDomainName(WednesdayDomainName), GetWeeklySelectedValue(WednesdaySelectedValue)),
+                DayOfWeek.Thursday => (GetWeeklyPartyName(ThursdayPartyName), GetWeeklyDomainName(ThursdayDomainName), GetWeeklySelectedValue(ThursdaySelectedValue)),
+                DayOfWeek.Friday => (GetWeeklyPartyName(FridayPartyName), GetWeeklyDomainName(FridayDomainName), GetWeeklySelectedValue(FridaySelectedValue)),
+                DayOfWeek.Saturday => (GetWeeklyPartyName(SaturdayPartyName), GetWeeklyDomainName(SaturdayDomainName), GetWeeklySelectedValue(SaturdaySelectedValue)),
+                DayOfWeek.Sunday => (GetWeeklyPartyName(SundayPartyName), GetWeeklyDomainName(SundayDomainName), GetWeeklySelectedValue(SundaySelectedValue)),
+                _ => (PartyName, DomainName, SundayWeeklySelectedValue)
             };
         }
         else
         {
-            return (PartyName, DomainName,SundayEverySelectedValue,ResinCount,SpecifyResinUse);
+            return (PartyName, DomainName, SundayEverySelectedValue);
         }
+    }
+
+    private string GetWeeklyPartyName(string partyName)
+    {
+        return string.IsNullOrWhiteSpace(partyName) ? PartyName : partyName;
+    }
+
+    private string GetWeeklyDomainName(string domainName)
+    {
+        return string.IsNullOrWhiteSpace(domainName) ? DomainName : domainName;
+    }
+
+    private string GetWeeklySelectedValue(string selectedValue)
+    {
+        return string.IsNullOrWhiteSpace(selectedValue) || selectedValue == "0" ? SundayWeeklySelectedValue : selectedValue;
     }
 
     public bool ShouldRunLeyLineToday()

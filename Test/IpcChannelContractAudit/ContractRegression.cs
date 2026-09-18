@@ -123,19 +123,19 @@ internal static class ContractRegression
             var r = await ExternalInterfaceConfigurationPlane.DispatchAsync(InstanceIpcEnvelope.Request("ext.config.describe", new { configName = "dragon" }), store);
             Must(r.Success == true && r.Data!["tasks"]!.Count() == 2, "describe failed");
             var ids = r.Data!["tasks"]!.Select(t => t["taskId"]!.ToString()).ToArray();
-            Must(ids.SequenceEqual(new[] { "legacy:1", "legacy:2" }), "names used as identities");
+            Must(ids.SequenceEqual(new[] { "guid-a", "guid-b" }), "names used as identities");
         });
         await check("T33 config applied receipt carries actual persisted revision", async () => {
             var before = await store.ReadAsync("dragon", true);
             var r = await ExternalInterfaceConfigurationPlane.DispatchAsync(InstanceIpcEnvelope.Request("ext.config.applyTaskState",
-                new { configName = "dragon", taskId = "legacy:2", enabled = true, expectedConfigRevision = before.Revision }), store);
+                new { configName = "dragon", taskId = "guid-b", enabled = true, expectedConfigRevision = before.Revision }), store);
             var after = await store.ReadAsync("dragon", true);
             Must(r.Success == true && r.Data!["status"]!.ToString() == "config_applied" && r.Data["configRevision"]!.ToString() == after.Revision
                 && after.Revision != before.Revision && after.Tasks.All(t => t.Enabled), "receipt not bound to persistence");
         });
         await check("T34 stale configuration update cannot overwrite newer edit", async () => {
             var before = await store.ReadAsync("dragon", true);
-            await Throws(() => store.ApplyEnabledAsync("dragon", true, "legacy:1", null, false, "stale", null), "configuration_changed");
+            await Throws(() => store.ApplyEnabledAsync("dragon", true, "guid-a", null, false, "stale", null), "configuration_changed");
             Must((await store.ReadAsync("dragon", true)).Revision == before.Revision, "stale update changed file");
         });
         await check("T35 concurrent compare-and-set permits exactly one winner", async () => {
@@ -145,14 +145,14 @@ internal static class ContractRegression
                 try { await store.ApplyEnabledAsync("dragon", true, task, null, false, before.Revision, null); return true; }
                 catch (InvalidOperationException ex) when (ex.Message == "configuration_changed") { return false; }
             }
-            var results = await Task.WhenAll(Attempt("legacy:1"), Attempt("legacy:2"));
+            var results = await Task.WhenAll(Attempt("guid-a"), Attempt("guid-b"));
             Must(results.Count(v => v) == 1, "both writers overwrote each other");
         });
         await check("T36 stale start rejected, valid single-task selection frozen", async () => {
             var s = await store.ReadAsync("dragon", true); var selected = s.Tasks.First(t => t.Enabled);
             var r = InstanceIpcEnvelope.Request("ext.task.start", new { configName = "dragon", taskId = selected.TaskId, expectedConfigRevision = s.Revision });
             var prepared = await ExternalInterfaceConfigurationPlane.PrepareExecutionAsync(r, store);
-            Must(prepared.SingleIndex == selected.LegacyIndex && prepared.Snapshot!.Revision == s.Revision, "selection did not resolve exact ID");
+            Must(prepared.SingleIndex == null && prepared.Snapshot!.Revision == s.Revision, "native single must not resolve to a numeric index");
             r.Data!["expectedConfigRevision"] = "stale";
             await Throws(() => ExternalInterfaceConfigurationPlane.PrepareExecutionAsync(r, store), "configuration_changed");
         });
@@ -170,16 +170,17 @@ internal static class ContractRegression
             Must(after.Tasks.Select(t => t.TaskId).SequenceEqual(before.Tasks.Select(t => t.TaskId)) && !after.Tasks[1].Enabled
                 && after.Tasks[0].Enabled && after.Tasks[2].Enabled, "toggle changed IDs or wrong item");
         });
-        await check("T39 native bool schema remains writable and explicitly lacks single executor", async () => {
+        await check("T39 native bool schema writable and single execution resolves without numeric index", async () => {
             var s = await store.ReadAsync("native", true);
             var after = await store.ApplyEnabledAsync("native", true, s.Tasks[0].TaskId, null, true, s.Revision, null);
             Must(after.Tasks[0].Enabled && after.Tasks[0].LegacyIndex == null, "native boolean schema damaged");
-            await Throws(() => ExternalInterfaceConfigurationPlane.PrepareExecutionAsync(InstanceIpcEnvelope.Request("ext.task.start",
-                new { configName = "native", taskId = s.Tasks[0].TaskId, expectedConfigRevision = after.Revision }), store), "native_single_execution_not_supported");
+            var single = await ExternalInterfaceConfigurationPlane.PrepareExecutionAsync(InstanceIpcEnvelope.Request("ext.task.start",
+                new { configName = "native", taskId = s.Tasks[0].TaskId, expectedConfigRevision = after.Revision }), store);
+            Must(single.SingleIndex == null && single.Snapshot!.Revision == after.Revision, "native single execution must resolve by task ID only");
         });
         await check("T40 foreign takeover ticket cannot modify configuration", async () => {
             var s = await store.ReadAsync("dragon", true); PreemptionGate.Arm("owner");
-            await Throws(() => store.ApplyEnabledAsync("dragon", true, "legacy:1", null, true, s.Revision, "foreign"), "takeover_conflict");
+            await Throws(() => store.ApplyEnabledAsync("dragon", true, "guid-a", null, true, s.Revision, "foreign"), "takeover_conflict");
             Must((await store.ReadAsync("dragon", true)).Revision == s.Revision, "foreign write persisted");
         });
         await check("T41 traversal and malformed arrays rejected without temporary leaks", async () => {
@@ -189,7 +190,7 @@ internal static class ContractRegression
         });
         await check("T42 UTF8 BOM and unknown configuration fields retained", async () => {
             var s = await store.ReadAsync("bom", true);
-            await store.ApplyEnabledAsync("bom", true, "legacy:1", null, false, s.Revision, null);
+            await store.ApplyEnabledAsync("bom", true, "guid-a", null, false, s.Revision, null);
             var bytes = await File.ReadAllBytesAsync(Path.Combine(fixture.Root, "OneDragon", "bom.json"));
             Must(bytes.Take(3).SequenceEqual(new byte[] { 239, 187, 191 }) && (await store.ReadAsync("bom", true)).Document["unknown"]!.Value<int>() == 42, "BOM or unrelated field lost");
         });
@@ -265,7 +266,7 @@ internal static class ContractRegression
             var held = store.ExecuteLockedAsync("dragon", true, async () => { entered.SetResult(); await release.Task; return 0; });
             await entered.Task;
             var request = InstanceIpcEnvelope.Request("ext.config.applyTaskState", new {
-                configName = "dragon", taskId = "legacy:1", enabled = true, expectedConfigRevision = snapshot.Revision,
+                configName = "dragon", taskId = "guid-a", enabled = true, expectedConfigRevision = snapshot.Revision,
                 expiresAtUtc = DateTimeOffset.UtcNow.AddMilliseconds(250) });
             var pending = ExternalInterfaceConfigurationPlane.DispatchAsync(request, store);
             await Task.Delay(300); release.SetResult(); await held;
@@ -291,10 +292,10 @@ internal static class ContractRegression
         public Fixture()
         {
             Directory.CreateDirectory(Path.Combine(Root, "OneDragon")); Directory.CreateDirectory(Path.Combine(Root, "ScriptGroup"));
-            var dragon = "{\"taskEnabledList\":{\"1\":{\"Item1\":true,\"Item2\":\"同名\"},\"2\":{\"Item1\":false,\"Item2\":\"同名\"}},\"unknown\":42}";
+            var dragon = "{\"TaskEnabledList\":{\"guid-a\":true,\"guid-b\":false},\"TaskDefinitions\":{\"guid-a\":\"同名\",\"guid-b\":\"同名\"},\"TaskOrder\":[\"guid-a\",\"guid-b\"],\"unknown\":42}";
             File.WriteAllText(Path.Combine(Root, "OneDragon", "dragon.json"), dragon);
             File.WriteAllText(Path.Combine(Root, "OneDragon", "bom.json"), dragon, new UTF8Encoding(true));
-            File.WriteAllText(Path.Combine(Root, "OneDragon", "native.json"), "{\"taskEnabledList\":{\"guid-task\":false}}");
+            File.WriteAllText(Path.Combine(Root, "OneDragon", "native.json"), "{\"TaskEnabledList\":{\"guid-task\":false},\"TaskDefinitions\":{\"guid-task\":\"秘境\"},\"TaskOrder\":[\"guid-task\"]}");
             File.WriteAllText(Path.Combine(Root, "ScriptGroup", "group.json"), "{\"projects\":[{\"name\":\"同名\",\"type\":\"Javascript\",\"folderName\":\"a\"},{\"name\":\"同名\",\"type\":\"Javascript\",\"folderName\":\"a\"},{\"name\":\"不同\",\"folderName\":\"b\"}]}");
         }
         public void Dispose()

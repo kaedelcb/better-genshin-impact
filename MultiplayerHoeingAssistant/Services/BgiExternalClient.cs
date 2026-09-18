@@ -536,11 +536,13 @@ public sealed class BgiExternalClient : IDisposable
         string? batchGroupNames = null,
         CancellationToken cancellationToken = default,
         bool preempt = false, string? idempotencyKey = null,
-        string? expectedConfigRevision = null, object? bgiEpoch = null, DateTimeOffset? expiresAtUtc = null, bool coordinatedHoeing = false)
+        string? expectedConfigRevision = null, object? bgiEpoch = null, DateTimeOffset? expiresAtUtc = null, bool coordinatedHoeing = false,
+        // R3 原生身份：一条龙起点为字符串任务 ID（组内游标仍走 startFromIndex）
+        string? startFromTaskId = null)
     {
         var payload = preempt
-            ? (object)new { groupName, configName, startFromIndex, generation, batchGroupNames, preempt = true, idempotencyKey, expectedConfigRevision, bgiEpoch, expiresAtUtc, coordinatedHoeing = coordinatedHoeing ? "v1" : null }
-            : new { groupName, configName, startFromIndex, generation, batchGroupNames, idempotencyKey, expectedConfigRevision, bgiEpoch, expiresAtUtc, coordinatedHoeing = coordinatedHoeing ? "v1" : null };
+            ? (object)new { groupName, configName, startFromIndex, startFromTaskId, generation, batchGroupNames, preempt = true, idempotencyKey, expectedConfigRevision, bgiEpoch, expiresAtUtc, coordinatedHoeing = coordinatedHoeing ? "v1" : null }
+            : new { groupName, configName, startFromIndex, startFromTaskId, generation, batchGroupNames, idempotencyKey, expectedConfigRevision, bgiEpoch, expiresAtUtc, coordinatedHoeing = coordinatedHoeing ? "v1" : null };
         var response = await SendCommandAsync(
                 ExternalOperations.TaskStart,
                 payload,

@@ -4565,7 +4565,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 targetUids: [member.PlayerUid], sourceMember: member, fallbackReason: missReason);
             if (startFrom == null) return; // 用户取消
             _ = ExecuteLocalCommandAsync("start_group",
-                new Dictionary<string, object> { { "groupName", groupName }, { "startFromIndex", startFrom.Value } },
+                new Dictionary<string, object> { { "groupName", groupName }, { "startFromIndex", int.TryParse(startFrom, out var sfi) ? sfi : 0 } },
                 [member.PlayerUid]);
         }
         catch (Exception ex)
@@ -4574,7 +4574,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             var startFrom = ShowStartFromDialog(groupName, null, fallbackReason: $"读取任务清单异常：{ex.Message}");
             if (startFrom == null) return; // 用户取消
             _ = ExecuteLocalCommandAsync("start_group",
-                new Dictionary<string, object> { { "groupName", groupName }, { "startFromIndex", startFrom.Value } },
+                new Dictionary<string, object> { { "groupName", groupName }, { "startFromIndex", int.TryParse(startFrom, out var sfi) ? sfi : 0 } },
                 [member.PlayerUid]);
         }
     }
@@ -4588,8 +4588,11 @@ public partial class MainViewModel : INotifyPropertyChanged
             var startFrom = ShowStartFromDialog(configName, taskList, isOneClick: true, tasksWithStatus: tasksWithStatus,
                 targetUids: [member.PlayerUid], sourceMember: member, fallbackReason: missReason);
             if (startFrom == null) return; // 用户取消
+            // R3 原生身份：一条龙起点为 GUID taskId（"0"=从头开始，不携带该字段）
+            var oneClickParam = new Dictionary<string, object> { { "configName", configName } };
+            if (startFrom != "0") oneClickParam["startFromTaskId"] = startFrom;
             _ = ExecuteLocalCommandAsync("start_oneclick",
-                new Dictionary<string, object> { { "configName", configName }, { "startFromIndex", startFrom.Value } },
+                oneClickParam,
                 [member.PlayerUid]);
         }
         catch (Exception ex)
@@ -4597,8 +4600,11 @@ public partial class MainViewModel : INotifyPropertyChanged
             AddLog($"读取一条龙任务列表失败: {ex.Message}");
             var startFrom = ShowStartFromDialog(configName, null, fallbackReason: $"读取任务清单异常：{ex.Message}");
             if (startFrom == null) return; // 用户取消
+            // R3 原生身份：一条龙起点为 GUID taskId（"0"=从头开始，不携带该字段）
+            var oneClickParam = new Dictionary<string, object> { { "configName", configName } };
+            if (startFrom != "0") oneClickParam["startFromTaskId"] = startFrom;
             _ = ExecuteLocalCommandAsync("start_oneclick",
-                new Dictionary<string, object> { { "configName", configName }, { "startFromIndex", startFrom.Value } },
+                oneClickParam,
                 [member.PlayerUid]);
         }
     }
@@ -6252,13 +6258,21 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     /// <param name="sourceMember">清单来源成员（用于提示"数据来自对方上次上报"）；null 表示本机 BGI 直读。</param>
     /// <param name="fallbackReason">清单取不到的原因（非 null = 已退化为手动填写起始序号），必须一并展示，禁止静默降级。</param>
-    private int? ShowStartFromDialog(string configName, List<string>? taskList, bool isOneClick = false,
+    private string? ShowStartFromDialog(string configName, List<string>? taskList, bool isOneClick = false,
         List<object>? tasksWithStatus = null, List<string>? targetUids = null,
         MemberViewModel? sourceMember = null, string? fallbackReason = null)
     {
-        // 无任务列表时回退到数字输入框（对方未上报/取不到清单）
+        // 无任务列表时回退：配置组保持数字输入框；一条龙已切换 GUID 任务 ID 身份（R3），
+        // 数字索引不再被 BGI 接受，无清单时按公版语义从头开始执行
         if (taskList == null || taskList.Count == 0)
-            return ShowStartFromDialogByIndex(configName, fallbackReason);
+        {
+            if (isOneClick)
+            {
+                AddLog($"一条龙「{configName}」未获取到任务清单（{fallbackReason ?? "对方未上报"}），按公版语义从头开始执行");
+                return "0";
+            }
+            return ShowStartFromDialogByIndex(configName, fallbackReason)?.ToString();
+        }
 
         // 构建任务选择列表：第 0 项为"从头开始"，其余为真实任务名
         var options = new List<string> { "从头开始" };
@@ -6333,20 +6347,28 @@ public partial class MainViewModel : INotifyPropertyChanged
             var isFirst = i == 0;
             // 获取启用状态与真实任务键（config.list 条目自带 index：配置组=项目 Index，一条龙=TaskEnabledList 键）
             var enabled = true;
-            var taskKey = i; // 回退：位置序号
+            // R3 原生身份：一条龙任务键为 GUID 字符串 taskId；配置组保持数字任务键（字符串化）
+            var taskKey = isOneClick ? "" : i.ToString();
             if (!isFirst && tasksWithStatus != null && i - 1 < tasksWithStatus.Count)
             {
                 var statusInfo = tasksWithStatus[i - 1];
                 if (statusInfo is System.Text.Json.JsonElement je)
                 {
-                    // 仅采信 >0 的 index：老配置组文件可能持久化了全 0 的 index，
-                    // 采信 0 反而连 BGI 端"重排后按位置匹配"的兜底都配不上
-                    if (je.TryGetProperty("index", out var idxEl) && idxEl.TryGetInt32(out var realKey) && realKey > 0)
-                        taskKey = realKey;
                     if (isOneClick)
+                    {
+                        // 一条龙采信条目自带 taskId（TaskEnabledList 的 GUID 键）；缺失则不可寻址
+                        if (je.TryGetProperty("taskId", out var idEl) && idEl.ValueKind == System.Text.Json.JsonValueKind.String)
+                            taskKey = idEl.GetString() ?? "";
                         enabled = je.TryGetProperty("enabled", out var enEl) ? enEl.GetBoolean() : true;
+                    }
                     else
+                    {
+                        // 配置组仅采信 >0 的 index：老文件可能持久化了全 0 的 index，
+                        // 采信 0 反而连 BGI 端"重排后按位置匹配"的兜底都配不上
+                        if (je.TryGetProperty("index", out var idxEl) && idxEl.TryGetInt32(out var realKey) && realKey > 0)
+                            taskKey = realKey.ToString();
                         enabled = je.TryGetProperty("status", out var stEl) ? stEl.GetString() != "Disabled" : true;
+                    }
                 }
             }
             listBox.Items.Add(new TaskListItemViewModel
@@ -6409,7 +6431,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         dialog.Content = stack;
 
-        int result = 0;
+        var result = "0";
         bool confirmed = false;
         okBtn.Click += async (_, _) =>
         {
@@ -6419,15 +6441,15 @@ public partial class MainViewModel : INotifyPropertyChanged
             cancelBtn.IsEnabled = false;
 
             if (listBox.SelectedItem is TaskListItemViewModel sel)
-                // 一条龙传真实任务键（TaskEnabledList 键）：BGI 端按真实键比对 NextTaskIndex，
-                // 位置序号在键有空洞/乱序时必不命中（打 warning 后从头开始）。
-                // TaskKey<=0（"从头开始"项/无真实键）回退位置序号，与 0e2a0828 的回退纪律一致。
+                // R3 原生身份：一条龙传 GUID taskId（无真实键/"从头开始"项 → "0"=从头开始）；
                 // 配置组分支保持传位置序号不变（BGI 端有按位置重排兜底）。
-                result = isOneClick && sel.TaskKey > 0 ? sel.TaskKey : sel.Index;
+                result = isOneClick
+                    ? (string.IsNullOrEmpty(sel.TaskKey) ? "0" : sel.TaskKey)
+                    : sel.Index.ToString();
             confirmed = true;
 
             // 收集启用状态变更并下发
-            var changes = new Dictionary<int, bool>();
+            var changes = new Dictionary<string, bool>();
             for (var i = 1; i < listBox.Items.Count; i++)
             {
                 if (listBox.Items[i] is TaskListItemViewModel item)
@@ -6446,7 +6468,9 @@ public partial class MainViewModel : INotifyPropertyChanged
                     }
                     if (item.IsEnabled != originalEnabled)
                     {
-                        // 用真实任务键（TaskKey）下发，不用位置序号——一条龙删过/重排过任务后两者会错位
+                        // 用真实任务键（TaskKey）下发，不用位置序号——删过/重排过任务后两者会错位；
+                        // 一条龙无 GUID 键的条目不可寻址，跳过（BGI 端也不会接受数字索引）
+                        if (isOneClick && string.IsNullOrEmpty(item.TaskKey)) continue;
                         changes[item.TaskKey] = item.IsEnabled;
                     }
                 }
@@ -6463,9 +6487,11 @@ public partial class MainViewModel : INotifyPropertyChanged
                     var param = new Dictionary<string, object>
                     {
                         { isOneClick ? "configName" : "groupName", configName },
-                        { "taskIndex", kv.Key },
                         { "enabled", kv.Value }
                     };
+                    // R3：一条龙按 GUID taskId 寻址；配置组保持数字 taskIndex
+                    if (isOneClick) param["taskId"] = kv.Key;
+                    else param["taskIndex"] = int.Parse(kv.Key);
                     saveTasks.Add(ExecuteLocalCommandAsync("set_task_enabled", param, targetUids));
                 }
                 try
@@ -7087,11 +7113,11 @@ public class TaskListItemViewModel
     public int Index { get; set; }
 
     /// <summary>
-    /// 真实任务键：配置组 = ScriptGroupProject.Index（文件持久化值），一条龙 = TaskEnabledList 的键。
-    /// 取自 config.list 返回条目的 index 字段；无效（≤0）或缺失时回退为位置序号 Index。
-    /// set_task_enabled 下发必须用它而不是位置序号——一条龙删除/重排后键有空洞，位置序号会错位或静默落空。
+    /// 真实任务键：配置组 = 位置序号（字符串化），一条龙 = R3 原生 GUID 任务 ID（taskId）。
+    /// 取自任务清单返回条目（一条龙取 taskId 字段，配置组取 index 字段）；缺失时一条龙为空串（不可寻址，跳过）。
+    /// set_task_enabled 下发必须用它而不是位置序号——删除/重排后位置序号会错位或静默落空。
     /// </summary>
-    public int TaskKey { get; set; }
+    public string TaskKey { get; set; } = "";
 
     public string Text { get; set; } = "";
     public string SubText { get; set; } = "";

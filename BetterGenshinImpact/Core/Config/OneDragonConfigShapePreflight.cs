@@ -54,7 +54,7 @@ public static class OneDragonConfigShapePreflight
         string json;
         try
         {
-            json = Encoding.UTF8.GetString(bytes);
+            json = Encoding.UTF8.GetString(bytes).TrimStart('﻿'); // 去 BOM，避免带 BOM 的合法文件误判 StructuralBad
         }
         catch (Exception ex)
         {
@@ -72,6 +72,7 @@ public static class OneDragonConfigShapePreflight
 
     private static OneDragonConfigShapeVerdict InspectText(string json, string hash)
     {
+        json = json.TrimStart('﻿'); // 去 BOM
         JsonObject raw;
         try
         {
@@ -158,3 +159,4 @@ public static class OneDragonConfigShapePreflight
         }
     }
 }
+

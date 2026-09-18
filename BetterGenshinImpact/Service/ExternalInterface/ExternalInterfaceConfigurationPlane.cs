@@ -24,8 +24,9 @@ internal static class ExternalInterfaceConfigurationPlane
         if (snapshot.Revision != expected) throw new InvalidOperationException("configuration_changed");
         if (id == null) return (snapshot, null);
         var task = snapshot.Tasks.SingleOrDefault(t => t.TaskId == id) ?? throw new InvalidOperationException("task_not_found");
-        if (task.LegacyIndex == null) throw new InvalidOperationException("native_single_execution_not_supported");
         if (!task.Enabled) throw new InvalidOperationException("task_disabled");
+        // R3：原生一条龙单项——数字索引语义退役，单项由执行段按 Descriptor.TaskId（GUID）过滤（R3.2 核心提前落地）
+        if (task.LegacyIndex == null) return (snapshot, null);
         return (snapshot, task.LegacyIndex);
     }
 

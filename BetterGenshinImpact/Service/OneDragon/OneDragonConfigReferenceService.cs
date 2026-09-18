@@ -94,6 +94,11 @@ internal static class OneDragonConfigReferenceService
             changes = TaskConfigurationContract.ExecuteFileLockedSync(file, () =>
             {
                 var bytes = File.ReadAllBytes(file);
+                // R3.0 硬门槛：受保护（旧格式/损坏，待迁移）文件不做引用改写，只读跳过并显式报告
+                if (BetterGenshinImpact.Core.Config.OneDragonConfigShapePreflight.InspectBytes(bytes).IsProtected)
+                {
+                    return -6;
+                }
                 var text = Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF');
                 JObject doc;
                 try
@@ -163,6 +168,9 @@ internal static class OneDragonConfigReferenceService
                 case > 0:
                     changedFiles++;
                     details.Add($"{Path.GetFileName(file)}: {changes} 处引用已更新");
+                    break;
+                case -6:
+                    details.Add($"{Path.GetFileName(file)}: 受保护的旧格式文件（待迁移），已跳过（原件未动）");
                     break;
                 case -1:
                     details.Add($"{Path.GetFileName(file)}: 解析失败，已隔离跳过（原件未动）");

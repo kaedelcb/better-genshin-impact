@@ -71,6 +71,7 @@ internal static class ExternalInterfaceCommandPlane
         var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
         var configName = InstanceIpcProtocol.GetStringOrNull(request.Data, "configName");
         var startFromIndex = request.Data?["startFromIndex"]?.ToObject<int>() ?? 0;
+        var startFromTaskId = InstanceIpcProtocol.GetStringOrNull(request.Data, "startFromTaskId"); // R3：一条龙起点为字符串任务 ID
         var generation = request.Data?["generation"]?.ToObject<int>() ?? 0;
         // [批次名单 2026-09-13] 与 v2 HandleTaskStart 同语义：批次绑定名单透传到执行段
         var batchGroupNames = InstanceRequestHandler.ParseBatchGroupNames(request.Data?["batchGroupNames"]?.ToString());
@@ -106,7 +107,7 @@ internal static class ExternalInterfaceCommandPlane
             configName,
             startFromIndex,
             // [A2.4] Executor 首参 = taskHandle（注册表 jobId 别名），透传执行段供漏斗认领既有 Queued 作业
-            (handle, token) => handler.ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, batchGroupNames, generation, handle, preempt,
+            (handle, token) => handler.ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, startFromTaskId, batchGroupNames, generation, handle, preempt,
                 InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket"), token,
                 workflowRunId: identity?.WorkflowRunId, executionIdentity: identity,
                 executionRequest: request))

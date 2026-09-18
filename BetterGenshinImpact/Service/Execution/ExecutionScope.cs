@@ -24,7 +24,7 @@ public sealed class ExecutionScope : IDisposable
     public CancellationToken Token => _stop.Token;
     public TaskRunResult Result { get; private set; } = TaskRunResult.Ran;
     public int FailureCount { get; private set; }
-    private int _dragonIndex;
+    private string? _dragonTaskId;
     internal SuspendContextCapture.Snapshot? Checkpoint { get; private set; }
     public static ExecutionScope? Current => Ambient.Value;
     public static bool HasActive { get { lock (Sync) return _active != null; } }
@@ -118,7 +118,7 @@ public sealed class ExecutionScope : IDisposable
             if (!IsCurrentOwner) return;
             Checkpoint = Descriptor.Kind == JobKind.OneDragon
                 ? snapshot with { TaskType = "onedragon", GroupName = Descriptor.Name,
-                    OneDragonTaskIndex = _dragonIndex, SubTaskGroupName = snapshot.TaskType == "group" ? snapshot.GroupName : null }
+                    OneDragonTaskId = _dragonTaskId, SubTaskGroupName = snapshot.TaskType == "group" ? snapshot.GroupName : null }
                 : snapshot;
             Checkpoint = Checkpoint with { RootRunId = RunId, AttemptId = Descriptor.JobId,
                 NodeId = Descriptor.NodeId, Iteration = Descriptor.Iteration,
@@ -136,12 +136,13 @@ public sealed class ExecutionScope : IDisposable
                 { ConfigurationRevisions = new System.Collections.Generic.Dictionary<string, string>(_configurationRevisions) };
         }
     }
-    public void SetDragonNode(int index)
+    /// <summary>R3 原生身份：龙内水位记录任务项稳定字符串 ID（GUID），不再是数字键。</summary>
+    public void SetDragonNode(string taskId)
     {
         lock (Sync)
         {
-            _dragonIndex = index;
-            SetCheckpoint(new SuspendContextCapture.Snapshot("onedragon", Descriptor.Name, 0, null, null, index, null, null, false));
+            _dragonTaskId = taskId;
+            SetCheckpoint(new SuspendContextCapture.Snapshot("onedragon", Descriptor.Name, 0, null, null, taskId, null, null, false));
         }
     }
     internal static SuspendContextCapture.Snapshot? Capture()

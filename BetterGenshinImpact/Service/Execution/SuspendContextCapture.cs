@@ -22,7 +22,7 @@ internal static class SuspendContextCapture
         int TaskIndex,
         string? FolderName,
         string? ProjectName,
-        int OneDragonTaskIndex,
+        string? OneDragonTaskId,
         string? SubTaskGroupName,
         string? SoloSettingsJson,
         bool IsOnlineSignalTask,
@@ -80,12 +80,12 @@ internal static class SuspendContextCapture
             TaskIndex = snapshot.TaskIndex,
             FolderName = snapshot.FolderName ?? "",
             ProjectName = snapshot.ProjectName ?? "",
-            OneDragonTaskIndex = snapshot.OneDragonTaskIndex,
+            OneDragonTaskId = snapshot.OneDragonTaskId,
             SubTaskGroupName = snapshot.SubTaskGroupName ?? "",
             SoloSettingsJson = snapshot.SoloSettingsJson ?? ""
         };
         logger.LogInformation("[{Tag}] 已保存中断上下文: Type={TaskType}, Group={GroupName}, Index={TaskIndex}, OneDragonIndex={OneDragonTaskIndex}",
-            channelTag, snapshot.TaskType, snapshot.GroupName, snapshot.TaskIndex, snapshot.OneDragonTaskIndex);
+            channelTag, snapshot.TaskType, snapshot.GroupName, snapshot.TaskIndex, snapshot.OneDragonTaskId);
         return true;
     }
 }

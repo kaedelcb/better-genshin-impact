@@ -29,7 +29,7 @@ static void Reject(Action action) {
     throw new Exception("unexpected admission");
 }
 static SuspendContextCapture.Snapshot Group(string name, int index=0) =>
-    new("group", name, index, "routes", "route", 0, null, null, false);
+    new("group", name, index, "routes", "route", null, null, null, false);
 
 await Check("idle friendship cannot create checkpoint", async () => {
     RunnerContext.Instance.taskProgress = new() { CurrentScriptGroupName="好感任务" };
@@ -76,16 +76,16 @@ await Check("completed and revoked tickets cannot reacquire",()=>{
 });
 await Check("checkpoint keeps dragon ancestor and node",()=>{
     using var root=ExecutionScope.Start(new(JobKind.OneDragon,"actual-root",JobSource.Ui));
-    root.SetDragonNode(4);root.SetCheckpoint(Group("actual-child",7));
+    root.SetDragonNode("node-4");root.SetCheckpoint(Group("actual-child",7));
     RunnerContext.Instance.taskProgress=new(){CurrentScriptGroupName="other-history"};
-    A(SuspendContextCapture.CaptureCurrent() is {TaskType:"onedragon",GroupName:"actual-root",OneDragonTaskIndex:4,SubTaskGroupName:"actual-child",TaskIndex:7},"ancestor lost");return Done();
+    A(SuspendContextCapture.CaptureCurrent() is {TaskType:"onedragon",GroupName:"actual-root",OneDragonTaskId:"node-4",SubTaskGroupName:"actual-child",TaskIndex:7},"ancestor lost");return Done();
 });
 await Check("completed root has no checkpoint",()=>{
     using(var root=ExecutionScope.Start(new(JobKind.Group,"old",JobSource.Ui)))root.SetCheckpoint(Group("old"));
     A(SuspendContextCapture.CaptureCurrent()==null,"completed root recoverable");return Done();
 });
 await Check("suspend in unlocked gap stops old loop",async()=>{
-    using var root=ExecutionScope.Start(new(JobKind.OneDragon,"old",JobSource.Ui));root.SetDragonNode(2);
+    using var root=ExecutionScope.Start(new(JobKind.OneDragon,"old",JobSource.Ui));root.SetDragonNode("node-2");
     var ticket=Key();PreemptionGate.Arm(ticket);var point=ExecutionScope.Suspend();
     A(point?.GroupName=="old"&&root.Token.IsCancellationRequested,"root not stopped");
     A(await new TaskRunner().RunCurrentAsync(()=>throw new Exception("must not run"))==TaskRunResult.Preempted,"old loop continued");

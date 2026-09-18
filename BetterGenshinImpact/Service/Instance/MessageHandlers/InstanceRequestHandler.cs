@@ -600,6 +600,7 @@ internal sealed class InstanceRequestHandler
             var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
             var configName = InstanceIpcProtocol.GetStringOrNull(request.Data, "configName");
             var startFromIndex = request.Data?["startFromIndex"]?.ToObject<int>() ?? 0;
+            var startFromTaskId = InstanceIpcProtocol.GetStringOrNull(request.Data, "startFromTaskId"); // R3：一条龙起点切换为字符串任务 ID
             // 幂等保护：task.start 携带 generation 时，同一 generation 只执行一次
             var generation = request.Data?["generation"]?.ToObject<int>() ?? 0;
             // [批次名单] 批次绑定列表（纯加法协议字段）：一条龙据此判断内部哪些配置组由批次逐项驱动
@@ -642,7 +643,7 @@ internal sealed class InstanceRequestHandler
             // 客户端按 task_already_running 重试时会被幂等检查吞掉（返回 already_executed 但任务从未启动）。
             // [切片7] 执行段已抽为 ExecuteTaskStartCoreAsync：v2 handler 与 BgiTaskCoordinator
             // 共用单一事实源，行为逐字节等价。返回 true = 配置组在 RunMulti 执行中被取消（F11 停止等）。
-            var configGroupCancelled = await ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, batchGroupNames, generation,
+            var configGroupCancelled = await ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, startFromTaskId, batchGroupNames, generation,
                 takeoverTicket: InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket"),
                 executionRequest: request, executionIdentity: ExecutionRequestContract.ReadIdentity(request.Data));
 
@@ -669,7 +670,7 @@ internal sealed class InstanceRequestHandler
     /// </summary>
     internal async Task<bool> ExecuteTaskStartCoreAsync(
         BetterGenshinImpact.Service.Interface.IScriptService scriptService,
-        string? groupName, string? configName, int startFromIndex,
+        string? groupName, string? configName, int startFromIndex, string? startFromTaskId = null,
         IReadOnlyList<string>? batchGroupNames = null, int generation = 0, Guid? jobId = null,
         bool preempt = false, string? takeoverTicket = null,
         CancellationToken cancellationToken = default, Action? onAdmitted = null,
@@ -714,7 +715,7 @@ internal sealed class InstanceRequestHandler
                         admittedRoot = ExecutionScope.Current!;
                         cancellationToken.ThrowIfCancellationRequested();
                         onAdmitted?.Invoke();
-                    }, ResumeIndex: startFromIndex > 0 ? startFromIndex : null, WorkflowRunId: workflowRunId,
+                    }, ResumeTaskId: startFromTaskId, WorkflowRunId: workflowRunId,
                     NodeId: executionIdentity?.NodeId, Iteration: executionIdentity?.Iteration,
                     TaskId: InstanceIpcProtocol.GetStringOrNull(executionRequest?.Data, "taskId"),
                     ConfigRevision: InstanceIpcProtocol.GetStringOrNull(executionRequest?.Data, "expectedConfigRevision"));
@@ -756,9 +757,11 @@ internal sealed class InstanceRequestHandler
                     vm.InitConfigList();
                     var config = vm.ConfigList.FirstOrDefault(c => c.Name == configName)
                         ?? throw new FileNotFoundException("一条龙配置不存在: " + configName);
-                    if (!config.TaskEnabledList.Any(p => p.Value.Item1))
+                    if (!config.TaskEnabledList.Any(p => p.Value))
                         throw new InvalidOperationException("no_work: 一条龙没有启用的任务");
-                    if (startFromIndex > 0 && !config.TaskEnabledList.ContainsKey(startFromIndex))
+                    if (startFromIndex > 0)
+                        throw new InvalidOperationException("legacy_start_index_not_supported: 一条龙任务起点已切换为字符串任务 ID（startFromTaskId），不再接受数字索引");
+                    if (!string.IsNullOrEmpty(startFromTaskId) && !config.TaskEnabledList.ContainsKey(startFromTaskId))
                         throw new InvalidOperationException("恢复位置已不存在");
                     vm.SelectedConfig = config;
                     BetterGenshinImpact.GameTask.TaskContext.Instance().Config.SelectedOneDragonFlowConfigName = configName!;
@@ -1073,6 +1076,16 @@ internal sealed class InstanceRequestHandler
                     if (name == null) continue;
                     oneClickConfigNames.Add(name);
 
+                    // R3.0 过渡窗口：受保护（旧格式/损坏）文件只列入配置名、不解析任务清单（执行端另有硬门槛拒绝）
+                    var shapeVerdict = BetterGenshinImpact.Core.Config.OneDragonConfigShapePreflight.InspectBytes(File.ReadAllBytes(file));
+                    if (shapeVerdict.IsProtected)
+                    {
+                        _logger.LogWarning("一条龙配置 {Name} 形状 {Shape} 受保护（待迁移），状态清单跳过任务解析", name, shapeVerdict.Shape);
+                        oneClickTasks[name] = new List<string>();
+                        oneClickTasksWithStatus[name] = new List<object>();
+                        continue;
+                    }
+
                     try
                     {
                         var json = File.ReadAllText(file);
@@ -1080,19 +1093,37 @@ internal sealed class InstanceRequestHandler
                         var root = doc.RootElement;
                         var tasks = new List<string>();
                         var tasksWithStatus = new List<object>();
-                        if (root.TryGetProperty("taskEnabledList", out var taskList)
-                            || root.TryGetProperty("TaskEnabledList", out taskList))
+                        // R3 原生形状：TaskEnabledList {任务Id:bool} + TaskDefinitions {任务Id:名称} + TaskOrder [任务Id]
+                        if (root.TryGetProperty("TaskEnabledList", out var taskList)
+                            || root.TryGetProperty("taskEnabledList", out taskList))
                         {
-                            foreach (var entry in taskList.EnumerateObject())
+                            var orderedKeys = new List<string>();
+                            if ((root.TryGetProperty("TaskOrder", out var orderEl) || root.TryGetProperty("taskOrder", out orderEl))
+                                && orderEl.ValueKind == System.Text.Json.JsonValueKind.Array)
                             {
-                                var taskEntry = entry.Value;
-                                var tIndex = int.TryParse(entry.Name, out var ti) ? ti : 0;
-                                var tName = taskEntry.TryGetProperty("Item2", out var taskName)
-                                    ? taskName.GetString() ?? $"任务{entry.Name}" : $"任务{entry.Name}";
-                                var tEnabled = taskEntry.TryGetProperty("Item1", out var enabledEl)
-                                    ? enabledEl.GetBoolean() : true;
+                                foreach (var idEl in orderEl.EnumerateArray())
+                                {
+                                    if (idEl.ValueKind == System.Text.Json.JsonValueKind.String && idEl.GetString() is { } idStr)
+                                        orderedKeys.Add(idStr);
+                                }
+                            }
+                            else
+                            {
+                                foreach (var entry in taskList.EnumerateObject()) orderedKeys.Add(entry.Name);
+                            }
+
+                            foreach (var key in orderedKeys)
+                            {
+                                if (!taskList.TryGetProperty(key, out var enabledEl) || enabledEl.ValueKind != System.Text.Json.JsonValueKind.True && enabledEl.ValueKind != System.Text.Json.JsonValueKind.False)
+                                    continue;
+                                var tName = (root.TryGetProperty("TaskDefinitions", out var defsEl) || root.TryGetProperty("taskDefinitions", out defsEl))
+                                    && defsEl.ValueKind == System.Text.Json.JsonValueKind.Object
+                                    && defsEl.TryGetProperty(key, out var nameEl) && nameEl.ValueKind == System.Text.Json.JsonValueKind.String
+                                    ? nameEl.GetString() ?? key : key;
+                                var tEnabled = enabledEl.GetBoolean();
                                 tasks.Add(tName);
-                                tasksWithStatus.Add(new { name = tName, index = tIndex, enabled = tEnabled });
+                                // R3 原生身份：任务键为 GUID 字符串 taskId（旧数字 index 键退出）
+                                tasksWithStatus.Add(new { name = tName, taskId = key, enabled = tEnabled });
                             }
                         }
                         oneClickTasks[name] = tasks;
@@ -1352,7 +1383,8 @@ internal sealed class InstanceRequestHandler
                 execution = ExecuteTaskStartCoreAsync(service,
                     context.TaskType == "group" ? context.GroupName : null,
                     context.TaskType == "onedragon" ? context.GroupName : null,
-                    context.TaskType == "group" ? context.TaskIndex + 1 : context.OneDragonTaskIndex,
+                    context.TaskType == "group" ? context.TaskIndex + 1 : 0, // 组内游标保持 int；一条龙起点走 startFromTaskId
+                    startFromTaskId: context.TaskType == "onedragon" ? context.OneDragonTaskId : null,
                     jobId: attempt, takeoverTicket: ticket, onAdmitted: OnAdmitted, source: JobSource.Resume, workflowRunId: context.RootRunId,
                     executionIdentity: context.RootRunId is { } run && context.NodeId is { } node && context.Iteration is { } iteration
                         ? new JobExecutionIdentity(run, node, iteration, context.TaskId, context.ConfigRevision) : null,
@@ -1914,3 +1946,4 @@ internal sealed class InstanceRequestHandler
         }
     }
 }
+

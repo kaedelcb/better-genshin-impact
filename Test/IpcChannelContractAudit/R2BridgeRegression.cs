@@ -33,73 +33,65 @@ internal static class R2BridgeRegression
             return Task.CompletedTask;
         });
 
-        await check("T61 reference rename updates tuple/custom/domain references without touching unrelated files", () => {
+        await check("T61 protected legacy tuple configs are skipped by reference rename, bytes untouched and reported", () => {
+            // R3.0 硬门槛：茶包 tuple 形状受保护（待迁移）——引用重命名只读跳过并逐文件报告，绝不改写
             using var fixture = new ReferenceFixture();
-            fixture.WriteOneDragon("a.json",
-                "{\"taskEnabledList\":{\"1\":{\"Item1\":true,\"Item2\":\"锄地组\"},\"2\":{\"Item1\":true,\"Item2\":\"其他\"}},"
-                + "\"customDomainList\":[\"锄地组\",\"别的\"],\"mondayDomainName\":\"锄地组\",\"partyName\":\"不变\"}");
-            var untouched = fixture.WriteOneDragon("b.json", "{\"taskEnabledList\":{\"1\":{\"Item1\":true,\"Item2\":\"别的\"}}}");
+            var a = fixture.WriteOneDragon("a.json",
+                "{\"TaskEnabledList\":{\"1\":{\"Item1\":true,\"Item2\":\"锄地组\"},\"2\":{\"Item1\":true,\"Item2\":\"其他\"}},"
+                + "\"CustomDomainList\":[\"锄地组\",\"别的\"],\"MondayDomainName\":\"锄地组\",\"partyName\":\"不变\"}");
+            var b = fixture.WriteOneDragon("b.json", "{\"TaskEnabledList\":{\"1\":{\"Item1\":true,\"Item2\":\"别的\"}}}");
             var report = OneDragonConfigReferenceService.RenameGroupReferences(fixture.OneDragonDir, "锄地组", "新锄地");
-            Must(report.FilesScanned == 2 && report.FilesChanged == 1, $"report wrong: {report}");
-            var doc = JObject.Parse(File.ReadAllText(Path.Combine(fixture.OneDragonDir, "a.json")));
-            Must(doc["taskEnabledList"]!["1"]!["Item2"]!.ToString() == "新锄地", "tuple Item2 not renamed");
-            Must(doc["taskEnabledList"]!["2"]!["Item2"]!.ToString() == "其他", "unrelated tuple entry changed");
-            Must(doc["customDomainList"]![0]!.ToString() == "新锄地" && doc["customDomainList"]![1]!.ToString() == "别的",
-                "customDomainList wrong");
-            Must(doc["mondayDomainName"]!.ToString() == "新锄地", "DomainName property not renamed");
-            Must(doc["partyName"]!.ToString() == "不变", "unrelated field changed");
-            Must(File.ReadAllText(Path.Combine(fixture.OneDragonDir, "b.json")) == untouched, "unchanged file rewritten");
+            Must(report.FilesScanned == 2 && report.FilesChanged == 0, $"protected files must not change: {report}");
+            Must(report.Details.Any(d => d.Contains("a.json") && d.Contains("待迁移"))
+                && report.Details.Any(d => d.Contains("b.json") && d.Contains("待迁移")), "protection skip not reported per file");
+            Must(File.ReadAllText(Path.Combine(fixture.OneDragonDir, "a.json")) == a
+                && File.ReadAllText(Path.Combine(fixture.OneDragonDir, "b.json")) == b, "protected file bytes changed");
             return Task.CompletedTask;
         });
 
-        await check("T62 reference delete removes tuple keys, custom domains and clears delegation", () => {
+        await check("T62 protected legacy tuple configs are skipped by reference delete, bytes untouched and reported", () => {
             using var fixture = new ReferenceFixture();
-            fixture.WriteOneDragon("a.json",
-                "{\"taskEnabledList\":{\"1\":{\"Item1\":true,\"Item2\":\"锄地组\"},\"2\":{\"Item1\":false,\"Item2\":\"保留\"}},"
-                + "\"customDomainList\":[\"锄地组\"],\"fridayDomainName\":\"锄地组\",\"sundayDomainName\":\"留着\"}");
+            var a = fixture.WriteOneDragon("a.json",
+                "{\"TaskEnabledList\":{\"1\":{\"Item1\":true,\"Item2\":\"锄地组\"},\"2\":{\"Item1\":false,\"Item2\":\"保留\"}},"
+                + "\"CustomDomainList\":[\"锄地组\"],\"FridayDomainName\":\"锄地组\",\"SundayDomainName\":\"留着\"}");
             var report = OneDragonConfigReferenceService.DeleteGroupReferences(fixture.OneDragonDir, "锄地组");
-            Must(report.FilesChanged == 1, $"report wrong: {report}");
-            var doc = JObject.Parse(File.ReadAllText(Path.Combine(fixture.OneDragonDir, "a.json")));
-            var list = (JObject)doc["taskEnabledList"]!;
-            Must(!list.Properties().Any(p => p.Name == "1") && list["2"]!["Item2"]!.ToString() == "保留",
-                "tuple key not removed or wrong key removed");
-            Must(((JArray)doc["customDomainList"]!).Count == 0, "customDomainList entry not removed");
-            Must(doc["fridayDomainName"]!.ToString() == "" && doc["sundayDomainName"]!.ToString() == "留着",
-                "delegation not cleared correctly");
+            Must(report.FilesChanged == 0, $"protected file must not change: {report}");
+            Must(report.Details.Any(d => d.Contains("a.json") && d.Contains("待迁移")), "protection skip not reported");
+            Must(File.ReadAllText(Path.Combine(fixture.OneDragonDir, "a.json")) == a, "protected file bytes changed");
             return Task.CompletedTask;
         });
 
         await check("T63 native schema updates taskDefinitions only and never synthesizes tuples", () => {
             using var fixture = new ReferenceFixture();
             fixture.WriteOneDragon("native.json",
-                "{\"taskEnabledList\":{\"id-a\":true,\"id-b\":false},\"taskOrder\":[\"id-a\",\"id-b\"],"
-                + "\"taskDefinitions\":{\"id-a\":\"锄地组\",\"id-b\":\"秘境\"},\"nextTaskId\":\"id-a\"}", withBom: true);
+                "{\"TaskEnabledList\":{\"id-a\":true,\"id-b\":false},\"TaskOrder\":[\"id-a\",\"id-b\"],"
+                + "\"TaskDefinitions\":{\"id-a\":\"锄地组\",\"id-b\":\"秘境\"},\"NextTaskId\":\"id-a\"}", withBom: true);
             var report = OneDragonConfigReferenceService.RenameGroupReferences(fixture.OneDragonDir, "锄地组", "新锄地");
             Must(report.FilesChanged == 1, $"rename report wrong: {report}");
             var renamed = JObject.Parse(File.ReadAllText(Path.Combine(fixture.OneDragonDir, "native.json")));
-            Must(renamed["taskDefinitions"]!["id-a"]!.ToString() == "新锄地", "taskDefinitions not renamed");
-            Must(renamed["taskEnabledList"]!["id-a"]!.Type == JTokenType.Boolean, "native bool entry turned into tuple");
+            Must(renamed["TaskDefinitions"]!["id-a"]!.ToString() == "新锄地", "taskDefinitions not renamed");
+            Must(renamed["TaskEnabledList"]!["id-a"]!.Type == JTokenType.Boolean, "native bool entry turned into tuple");
             Must(File.ReadAllBytes(Path.Combine(fixture.OneDragonDir, "native.json")).Take(3).SequenceEqual(new byte[] { 239, 187, 191 }),
                 "BOM lost on rename");
             var deleteReport = OneDragonConfigReferenceService.DeleteGroupReferences(fixture.OneDragonDir, "新锄地");
             Must(deleteReport.FilesChanged == 1, $"delete report wrong: {deleteReport}");
             var deleted = JObject.Parse(File.ReadAllText(Path.Combine(fixture.OneDragonDir, "native.json")));
-            Must(deleted["taskDefinitions"]!["id-a"] == null, "definition not removed");
-            Must(deleted["taskEnabledList"]!["id-a"] == null, "enabled entry not removed");
-            Must(((JArray)deleted["taskOrder"]!).Count == 1, "order entry not removed");
-            Must(deleted["nextTaskId"]!.ToString() == "", "nextTaskId not cleared");
-            Must(deleted["taskDefinitions"]!["id-b"]!.ToString() == "秘境", "unrelated definition changed");
+            Must(deleted["TaskDefinitions"]!["id-a"] == null, "definition not removed");
+            Must(deleted["TaskEnabledList"]!["id-a"] == null, "enabled entry not removed");
+            Must(((JArray)deleted["TaskOrder"]!).Count == 1, "order entry not removed");
+            Must(deleted["NextTaskId"]!.ToString() == "", "nextTaskId not cleared");
+            Must(deleted["TaskDefinitions"]!["id-b"]!.ToString() == "秘境", "unrelated definition changed");
             return Task.CompletedTask;
         });
 
         await check("T64 malformed file is isolated, others still processed, nothing overwritten", () => {
             using var fixture = new ReferenceFixture();
             var broken = fixture.WriteOneDragon("broken.json", "{ 这不是合法 json");
-            fixture.WriteOneDragon("ok.json", "{\"taskEnabledList\":{\"1\":{\"Item1\":true,\"Item2\":\"锄地组\"}}}");
+            fixture.WriteOneDragon("ok.json", "{\"TaskEnabledList\":{\"guid-1\":true},\"TaskDefinitions\":{\"guid-1\":\"锄地组\"},\"TaskOrder\":[\"guid-1\"]}");
             var report = OneDragonConfigReferenceService.RenameGroupReferences(fixture.OneDragonDir, "锄地组", "新锄地");
             Must(report.FilesScanned == 2 && report.FilesChanged == 1, $"report wrong: {report}");
             Must(File.ReadAllText(Path.Combine(fixture.OneDragonDir, "broken.json")) == broken, "broken file overwritten");
-            Must(JObject.Parse(File.ReadAllText(Path.Combine(fixture.OneDragonDir, "ok.json")))["taskEnabledList"]!["1"]!["Item2"]!
+            Must(JObject.Parse(File.ReadAllText(Path.Combine(fixture.OneDragonDir, "ok.json")))["TaskDefinitions"]!["guid-1"]!
                 .ToString() == "新锄地", "healthy file not processed");
             return Task.CompletedTask;
         });
@@ -123,7 +115,7 @@ internal static class R2BridgeRegression
             // 离线断言：全程无服务器/网络——本机内存对象 + 临时目录即完成 describe→apply→守卫启动准备。
             using var fixture = new ReferenceFixture();
             fixture.WriteOneDragon("dragon.json",
-                "{\"taskEnabledList\":{\"1\":{\"Item1\":true,\"Item2\":\"秘境\"},\"2\":{\"Item1\":false,\"Item2\":\"锄地组\"}}}");
+                "{\"TaskEnabledList\":{\"guid-a\":true,\"guid-b\":false},\"TaskDefinitions\":{\"guid-a\":\"秘境\",\"guid-b\":\"锄地组\"},\"TaskOrder\":[\"guid-a\",\"guid-b\"]}");
             var store = new TaskConfigurationContract(fixture.Root);
             var described = await ExternalInterfaceConfigurationPlane.DispatchAsync(
                 InstanceIpcEnvelope.Request("ext.config.describe", new { configName = "dragon" }), store);
@@ -131,26 +123,27 @@ internal static class R2BridgeRegression
             var revision = described.Data!["configRevision"]!.ToString();
             var applied = await ExternalInterfaceConfigurationPlane.DispatchAsync(
                 InstanceIpcEnvelope.Request("ext.config.applyTaskState",
-                    new { configName = "dragon", taskId = "legacy:2", enabled = true, expectedConfigRevision = revision }), store);
+                    new { configName = "dragon", taskId = "guid-b", enabled = true, expectedConfigRevision = revision }), store);
             Must(applied.Success == true && applied.Data!["status"]!.ToString() == "config_applied"
                 && applied.Data!["configRevision"]!.ToString() != revision, "apply failed offline");
             var stale = await ExternalInterfaceConfigurationPlane.DispatchAsync(
                 InstanceIpcEnvelope.Request("ext.config.applyTaskState",
-                    new { configName = "dragon", taskId = "legacy:1", enabled = false, expectedConfigRevision = revision }), store);
+                    new { configName = "dragon", taskId = "guid-a", enabled = false, expectedConfigRevision = revision }), store);
             Must(stale.ErrorCode == "configuration_changed", "stale revision accepted offline");
             var prepared = await ExternalInterfaceConfigurationPlane.PrepareExecutionAsync(
                 InstanceIpcEnvelope.Request("ext.task.start", new {
-                    configName = "dragon", taskId = "legacy:2",
+                    configName = "dragon", taskId = "guid-b",
                     expectedConfigRevision = applied.Data!["configRevision"]!.ToString() }), store);
-            Must(prepared.SingleIndex == 2, "guarded single-task preparation failed offline");
+            Must(prepared.SingleIndex == null, "native single-task preparation must not resolve to a numeric index");
 
             // [会诊发现 #7] 不停在准备阶段：真实经会话路由启动，由协调器跑到终态，再查 ext.job.status。
             // 执行体是惰性桩（不碰磁盘/游戏），验证的是 守卫准备→路由→协调器→终态查询 的离线全链本身。
+            // R3：一条龙起点为字符串任务 ID（startFromTaskId），数字索引已退役。
             var handler = new InstanceRequestHandler();
             var session = ExternalInterfaceSession.GetOrCreate(new InstanceConnection());
             var started = await session.RouteAsync(handler, InstanceIpcEnvelope.Request("ext.task.start", new {
                 configName = "dragon",
-                startFromIndex = prepared.SingleIndex,
+                startFromTaskId = "guid-b",
                 expectedConfigRevision = applied.Data!["configRevision"]!.ToString(),
                 idempotencyKey = Key() }), default);
             Must(started.Success == true && started.Data!["taskHandle"] != null,
@@ -163,8 +156,8 @@ internal static class R2BridgeRegression
                 "started job did not reach terminal state");
             Must(handler.Executions == 1, "start did not reach execution segment exactly once");
             // [会诊第二轮 #6] 准备阶段选定的配置与任务项必须原样到达执行边界（不是只断言「跑过一次」）
-            Must(handler.LastConfig == "dragon" && handler.LastIndex == prepared.SingleIndex,
-                $"prepared config/task did not reach execution boundary: config={handler.LastConfig}, index={handler.LastIndex}");
+            Must(handler.LastConfig == "dragon" && handler.LastTaskId == "guid-b",
+                $"prepared config/task did not reach execution boundary: config={handler.LastConfig}, taskId={handler.LastTaskId}");
             var status = await session.RouteAsync(handler,
                 InstanceIpcEnvelope.Request("ext.job.status", new { jobId = handle }), default);
             // 作业状态词汇表（BgiJobState）：succeeded/failed/cancelled；协调器条目的 "completed" 对应作业态 succeeded
@@ -173,47 +166,19 @@ internal static class R2BridgeRegression
             return;
         });
 
-        await check("T67 legacy name-key (v0) schema renames and deletes keys without touching others", () => {
+        await check("T67 legacy name-key (v0) configs are protected from reference writes, bytes untouched and reported", () => {
+            // R3.0 硬门槛：旧 name→bool 形状受保护（待迁移）——重命名/删除引用一律只读跳过，legacy 改写分支不可达
             using var fixture = new ReferenceFixture();
-            fixture.WriteOneDragon("legacy.json",
-                "{\"taskEnabledList\":{\"锄地组\":true,\"其他\":false},\"customDomainList\":[\"锄地组\"],\"wednesdayDomainName\":\"锄地组\"}");
+            var legacy = fixture.WriteOneDragon("legacy.json",
+                "{\"TaskEnabledList\":{\"锄地组\":true,\"其他\":false},\"CustomDomainList\":[\"锄地组\"],\"WednesdayDomainName\":\"锄地组\"}");
             var renamed = OneDragonConfigReferenceService.RenameGroupReferences(fixture.OneDragonDir, "锄地组", "新锄地");
-            Must(renamed.FilesChanged == 1, $"rename report wrong: {renamed}");
-            var doc = JObject.Parse(File.ReadAllText(Path.Combine(fixture.OneDragonDir, "legacy.json")));
-            var list = (JObject)doc["taskEnabledList"]!;
-            Must(list["新锄地"]!.Value<bool>() && list["锄地组"] == null, "legacy key not renamed");
-            Must(list["其他"]!.Value<bool>() == false, "unrelated legacy entry changed");
-            Must(doc["customDomainList"]![0]!.ToString() == "新锄地", "legacy customDomainList not renamed");
-            Must(doc["wednesdayDomainName"]!.ToString() == "新锄地", "legacy DomainName not renamed");
-            var deleted = OneDragonConfigReferenceService.DeleteGroupReferences(fixture.OneDragonDir, "新锄地");
-            Must(deleted.FilesChanged == 1, $"delete report wrong: {deleted}");
-            doc = JObject.Parse(File.ReadAllText(Path.Combine(fixture.OneDragonDir, "legacy.json")));
-            list = (JObject)doc["taskEnabledList"]!;
-            Must(list.Properties().Count() == 1 && list["其他"] != null, "legacy delete removed wrong key");
-            Must(((JArray)doc["customDomainList"]!).Count == 0, "legacy delete left customDomainList entry");
-            Must(doc["wednesdayDomainName"]!.ToString() == "", "legacy delete did not clear delegation");
-
-            // [会诊第二轮 #3] 键冲突守卫：目标名已存在（内置任务/悬空引用撞名）时跳过，绝不覆盖既有条目
-            fixture.WriteOneDragon("conflict.json",
-                "{\"taskEnabledList\":{\"旧组\":true,\"领取邮件\":false}}");
-            var conflictReport = OneDragonConfigReferenceService.RenameGroupReferences(fixture.OneDragonDir, "旧组", "领取邮件");
-            Must(conflictReport.FilesChanged == 0, "conflicting rename overwrote existing entry");
-            Must(conflictReport.Details.Any(d => d.Contains("目标键已存在")), "conflict skip not reported");
-            var conflictList = (JObject)JObject.Parse(
-                File.ReadAllText(Path.Combine(fixture.OneDragonDir, "conflict.json")))["taskEnabledList"]!;
-            Must(conflictList.Properties().Count() == 2
-                && conflictList["旧组"]!.Value<bool>() && conflictList["领取邮件"]!.Value<bool>() == false,
-                "conflicting rename mutated entries");
-
-            // [会诊第二轮 #3] 原位替换：重命名不改变条目枚举顺序（依赖顺序的旧格式不能被打乱）
-            fixture.WriteOneDragon("order.json",
-                "{\"taskEnabledList\":{\"甲\":true,\"待改\":false,\"丙\":true}}");
-            OneDragonConfigReferenceService.RenameGroupReferences(fixture.OneDragonDir, "待改", "乙");
-            var orderNames = ((JObject)JObject.Parse(
-                File.ReadAllText(Path.Combine(fixture.OneDragonDir, "order.json")))["taskEnabledList"]!)
-                .Properties().Select(x => x.Name).ToArray();
-            Must(orderNames.SequenceEqual(new[] { "甲", "乙", "丙" }),
-                "rename changed entry order: " + string.Join(",", orderNames));
+            Must(renamed.FilesChanged == 0 && renamed.Details.Any(d => d.Contains("legacy.json") && d.Contains("待迁移")),
+                $"legacy rename not protected: {renamed}");
+            Must(File.ReadAllText(Path.Combine(fixture.OneDragonDir, "legacy.json")) == legacy, "legacy file rewritten by rename");
+            var deleted = OneDragonConfigReferenceService.DeleteGroupReferences(fixture.OneDragonDir, "锄地组");
+            Must(deleted.FilesChanged == 0 && deleted.Details.Any(d => d.Contains("legacy.json") && d.Contains("待迁移")),
+                $"legacy delete not protected: {deleted}");
+            Must(File.ReadAllText(Path.Combine(fixture.OneDragonDir, "legacy.json")) == legacy, "legacy file rewritten by delete");
             return Task.CompletedTask;
         });
 
@@ -234,7 +199,7 @@ internal static class R2BridgeRegression
         await check("T69 rename preserves date-like strings, float representation and unknown fields", () => {
             using var fixture = new ReferenceFixture();
             fixture.WriteOneDragon("keep.json",
-                "{\"taskEnabledList\":{\"1\":{\"Item1\":true,\"Item2\":\"锄地组\"}},"
+                "{\"TaskEnabledList\":{\"guid-1\":true},\"TaskDefinitions\":{\"guid-1\":\"锄地组\"},\"TaskOrder\":[\"guid-1\"],"
                 + "\"lastRun\":\"2026-09-18T08:30:00+08:00\",\"ratio\":0.30000000000000004,"
                 + "\"unknownField\":{\"nested\":[1,2,\"x\"]}}");
             var report = OneDragonConfigReferenceService.RenameGroupReferences(fixture.OneDragonDir, "锄地组", "新锄地");
@@ -243,7 +208,7 @@ internal static class R2BridgeRegression
             Must(text.Contains("\"2026-09-18T08:30:00+08:00\""), "date-like string mutated");
             Must(text.Contains("0.30000000000000004"), "float representation lost precision");
             Must(text.Contains("\"nested\"") && text.Contains("\"x\""), "unknown field lost");
-            Must(JObject.Parse(text)["taskEnabledList"]!["1"]!["Item2"]!.ToString() == "新锄地", "rename not applied");
+            Must(JObject.Parse(text)["TaskDefinitions"]!["guid-1"]!.ToString() == "新锄地", "rename not applied");
             return Task.CompletedTask;
         });
 
@@ -251,14 +216,14 @@ internal static class R2BridgeRegression
             // [会诊第三轮 #5] 科学计数法/下溢字面量经 decimal 往返会改变表示：此类文件必须隔离跳过且字节不动
             using var fixture = new ReferenceFixture();
             var exp = fixture.WriteOneDragon("exp.json",
-                "{\"taskEnabledList\":{\"1\":{\"Item1\":true,\"Item2\":\"锄地组\"}},\"ratio\":1e2}");
+                "{\"TaskEnabledList\":{\"guid-1\":true},\"TaskDefinitions\":{\"guid-1\":\"锄地组\"},\"TaskOrder\":[\"guid-1\"],\"ratio\":1e2}");
             var tiny = fixture.WriteOneDragon("tiny.json",
-                "{\"taskEnabledList\":{\"1\":{\"Item1\":true,\"Item2\":\"锄地组\"}},\"epsilon\":1e-29}");
+                "{\"TaskEnabledList\":{\"guid-1\":true},\"TaskDefinitions\":{\"guid-1\":\"锄地组\"},\"TaskOrder\":[\"guid-1\"],\"epsilon\":1e-29}");
             fixture.WriteOneDragon("ok.json",
-                "{\"taskEnabledList\":{\"1\":{\"Item1\":true,\"Item2\":\"锄地组\"}},\"ratio\":0.5}");
+                "{\"TaskEnabledList\":{\"guid-1\":true},\"TaskDefinitions\":{\"guid-1\":\"锄地组\"},\"TaskOrder\":[\"guid-1\"],\"ratio\":0.5}");
             // 超精度样例（33 位小数，超 decimal 28-29 位精度）
             var prec = fixture.WriteOneDragon("prec.json",
-                "{\"taskEnabledList\":{\"1\":{\"Item1\":true,\"Item2\":\"锄地组\"}},\"ratio\":0.123456789012345678901234567890123}");
+                "{\"TaskEnabledList\":{\"guid-1\":true},\"TaskDefinitions\":{\"guid-1\":\"锄地组\"},\"TaskOrder\":[\"guid-1\"],\"ratio\":0.123456789012345678901234567890123}");
             var report = OneDragonConfigReferenceService.RenameGroupReferences(fixture.OneDragonDir, "锄地组", "新锄地");
             Must(report.FilesChanged == 1, $"expected only ok.json changed: {report}");
             // [会诊第四轮 #3] 字节级比较（ReadAllText 可能掩盖编码差异）+ 逐文件报告必须含文件名定位
