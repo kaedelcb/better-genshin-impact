@@ -69,12 +69,14 @@ namespace BetterGenshinImpact.Service.Instance.MessageHandlers
         public Func<InstanceIpcEnvelope, Task<InstanceIpcEnvelope>> Write { get; set; }
             = r => Task.FromResult(InstanceIpcEnvelope.Response(r, new { status = "inert_write" }));
         public int Executions;
+        /// <summary>[会诊第二轮 #6] 记录最近一次到达执行边界的参数，供断言「准备阶段的配置/任务确实到达执行段」。</summary>
+        public string? LastGroup; public string? LastConfig; public int LastIndex = -1;
         public static InstanceIpcEnvelope? CheckManualStopCooldown(InstanceIpcEnvelope r, string source) => null;
         public static string[]? ParseBatchGroupNames(string? json) => null;
         public Task<bool> ExecuteTaskStartCoreAsync(Interface.IScriptService service, string? group, string? config,
             int index, string[]? batch, int generation, Guid handle, bool preempt, string? ticket, CancellationToken token,
             Guid? workflowRunId = null, Execution.JobExecutionIdentity? executionIdentity = null, InstanceIpcEnvelope? executionRequest = null)
-        { Interlocked.Increment(ref Executions); return Task.FromResult(false); }
+        { Interlocked.Increment(ref Executions); LastGroup = group; LastConfig = config; LastIndex = index; return Task.FromResult(false); }
         public Task<InstanceIpcEnvelope> HandleTaskStart(InstanceConnection c, InstanceIpcEnvelope r)
             => throw new InvalidOperationException("Fallback to product handler is forbidden");
         public Task<InstanceIpcEnvelope> HandleSetTaskEnabled(InstanceConnection c, InstanceIpcEnvelope r) => Write(r);

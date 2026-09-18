@@ -180,6 +180,7 @@ await Check("T21 cache pressure must not replay completed task within retry wind
 
 await ContractRegression.Run(Check);
 await HoeingCompatibilityRegression.Run(Check);
+await R2BridgeRegression.Run(Check);
 if (BgiTaskCoordinator.IsCreated) BgiTaskCoordinator.Instance.Dispose();
 Console.WriteLine($"Channel contract audit: passed={passed}; failed={failed}; total={passed + failed}. Private pipe/temp fixtures only; no product UI/game/IPC/User access.");
 Environment.ExitCode = failed == 0 ? 0 : 1;
