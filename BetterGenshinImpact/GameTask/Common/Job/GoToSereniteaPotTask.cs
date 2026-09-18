@@ -73,6 +73,8 @@ internal class GoToSereniteaPotTask
         {
             Logger.LogDebug(e, "领取尘歌壶奖励异常");
             Logger.LogError("领取尘歌壶奖励异常: {Msg}", e.Message);
+            // R4.7 结果通道：吞异常保留（公版容错语义），但真实结果显式上报（Start 调用外观不变）
+            OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.Failed, "领取尘歌壶奖励异常: " + e.Message);
         }
         finally
         {
@@ -656,6 +658,8 @@ internal class GoToSereniteaPotTask
         }
         if (!success)
         {
+            // R4.7 结果通道：IntoSereniteaPot false = 非异常失败，显式上报（R3 终审挂账覆盖项）
+            OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.Failed, "无法进入尘歌壶");
             await Finished(ct);
             return;
         }
@@ -665,6 +669,8 @@ internal class GoToSereniteaPotTask
         // 领取奖励
         if (fail)
         {
+            // R4.7 结果通道：寻找阿圆失败 = 非异常失败，显式上报
+            OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.Failed, "寻找阿圆失败");
             await Finished(ct);
             return;
         }

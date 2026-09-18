@@ -85,6 +85,8 @@ public partial class OneDragonTaskItem : ObservableObject
                     catch (Exception e)
                     {
                         TaskControl.Logger.LogError("合成树脂执行异常：" + e.Message);
+                        // R4.7 结果通道：吞异常保留，真实结果显式上报
+                        OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.Failed, "合成树脂执行异常：" + e.Message);
                     }
                 };
                 break;
@@ -100,6 +102,7 @@ public partial class OneDragonTaskItem : ObservableObject
                     if (taskSettingsPageViewModel!.GetFightStrategy(out var path))
                     {
                         TaskControl.Logger.LogError("自动秘境战斗策略{Msg}，跳过", "未配置");
+                        OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.SkippedNormal, "自动秘境战斗策略未配置"); // R4.7 结果通道：正常跳过显式区分
                         return;
                     }
 
@@ -107,6 +110,7 @@ public partial class OneDragonTaskItem : ObservableObject
                     if (string.IsNullOrEmpty(domainName))
                     {
                         TaskControl.Logger.LogError("一条龙配置内{Msg}需要刷的秘境，跳过", "未选择");
+                        OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.SkippedNormal, "未选择需要刷的秘境"); // R4.7 结果通道：正常跳过显式区分
                         return;
                     }
                     else
@@ -135,12 +139,14 @@ public partial class OneDragonTaskItem : ObservableObject
                     if (taskSettingsPageViewModel!.GetFightStrategy(config.AutoBossStrategyName, out var path))
                     {
                         TaskControl.Logger.LogError("自动首领讨伐战斗策略{Msg}，跳过", "未配置");
+                        OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.SkippedNormal, "自动首领讨伐战斗策略未配置"); // R4.7 结果通道：正常跳过显式区分
                         return;
                     }
 
                     if (string.IsNullOrWhiteSpace(config.AutoBossName))
                     {
                         TaskControl.Logger.LogError("一条龙配置内{Msg}需要讨伐的首领，跳过", "未选择");
+                        OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.SkippedNormal, "未选择需要讨伐的首领"); // R4.7 结果通道：正常跳过显式区分
                         return;
                     }
 
@@ -172,6 +178,7 @@ public partial class OneDragonTaskItem : ObservableObject
                     if (taskSettingsPageViewModel!.GetFightStrategy(TaskContext.Instance().Config.AutoStygianOnslaughtConfig.StrategyName, out var path))
                     {
                         TaskControl.Logger.LogError("自动幽境危战战斗策略{Msg}，跳过", "未配置");
+                        OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.SkippedNormal, "自动幽境危战战斗策略未配置"); // R4.7 结果通道：正常跳过显式区分
                         return;
                     }
 
@@ -200,6 +207,7 @@ public partial class OneDragonTaskItem : ObservableObject
                     if (!config.ShouldRunLeyLineToday())
                     {
                         TaskControl.Logger.LogInformation("自动地脉花未在运行日期内，跳过");
+                        OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.SkippedNormal, "自动地脉花未在运行日期内"); // R4.7 结果通道：正常跳过显式区分
                         return;
                     }
 

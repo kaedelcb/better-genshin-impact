@@ -177,6 +177,8 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
         catch (Exception e)
         {
             Logger.LogInformation(e.Message);
+            // R4.7 结果通道：吞异常保留（公版容错语义），真实结果显式上报（Start 调用外观不变）
+            OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.Failed, e.Message);
         }
 
         if (!shouldContinuePostProcessing)
@@ -203,6 +205,8 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
         if (CurrentState == StygianState.MainWorld)
         {
             Logger.LogInformation($"{Name}：活动已结束，已返回主界面");
+            // R4.7 结果通道：活动结束 = 正常跳过（非失败），显式上报区分
+            OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.SkippedNormal, "活动已结束");
             return false;
         }
 

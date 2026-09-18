@@ -845,10 +845,17 @@ public partial class OneDragonFlowViewModel : ViewModel
                     // 传入条目名作为 soloTaskName，让 task.status/包络日志携带任务身份（联机助手可识别）
                     // [A2.6] 龙内子项登记进统一注册表（Solo/OneDragonInternal），漏斗终态可靠跟踪；
                     // [A5-2] 子项挂到龙父作业（ParentJobId）；观察槽位抢占留痕不静默。
+                    // R4.7 结果传播显式通道（R3 终审挂账）：壶/幽境等吞异常子项的真实结果经通道上报；
+                    // 上报失败时以显式异常抛出——子作业终态与根作业聚合拿到真实结果，失败不被后续成功覆盖。
+                    // Start 调用外观与公版容错语义不变（原生链继续执行、页面展示语义不变）。
+                    using var itemResultChannel = BetterGenshinImpact.GameTask.Common.OneDragonItemResultChannel.OpenScoped();
                     var itemRunResult = await new TaskRunner().RunThreadAsync(async () =>
                     {
                         await task.Action();
                         await Task.Delay(1000);
+                        if (itemResultChannel.Outcome == BetterGenshinImpact.GameTask.Common.OneDragonItemOutcome.Failed)
+                            throw new BetterGenshinImpact.GameTask.Common.OneDragonItemFailedException(
+                                itemResultChannel.Reason ?? "子项显式上报失败");
                     }, soloTaskName: task.Name,
                         job: new BetterGenshinImpact.Service.Execution.JobDescriptor(
                             BetterGenshinImpact.Service.Execution.JobKind.Solo, task.Name,
