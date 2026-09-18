@@ -79,6 +79,20 @@
 - **组内项目序号游标不属于本次切换**（`SuspendedTaskContext` 组内水位与一条龙任务 ID 是不同游标，逐用途核对）；一条龙悬挂水位按稳定 ID（R2 矩阵 resume 行）。
 - 失效起点分模式：原生模式按公版 B04（警告+从头）；严格外部合同（executionContractVersion=1）拒绝。不把迁移保护冒充公版现行行为。
 
+### 4.1 生产端切换面（2026-09-18 开工日补充核实）
+
+数字索引不止 BGI 内部：当前跨端合同本身就是 int 承载。以下生产端必须同步切换为字符串 taskId，**仅限一条龙（configName）路径**：
+
+| 位置 | 现状 | 切换后 |
+|---|---|---|
+| `MultiplayerHoeingAssistant/Services/CommandExecutor.cs:29/:182/:200/:484/:776`（`BuildStartPayload`/`StartOneClickAsync`/`SetTaskEnabledAsync`） | `int startFromIndex`/`int taskIndex` | 一条龙路径改字符串 `taskId`/`startFromTaskId` |
+| `BgiExternalClient.SubmitTaskStartAsync` 及 IPC 载荷 | int 字段 | 字符串字段（v2 旧命令冻结不改，ext 合同加法扩展） |
+| `BgiCoordinatorServer/wwwroot/control-room.js:858-910` | `parseInt` 收集、`Number(taskIdx)` 发送、弹窗 `data-index` 为数字键 | 从 describe 投影携带字符串 taskId；`set_task_enabled`/`start_oneclick` 改字符串参数 |
+| 服务端转发（GatewayDispatcher/RoomOperations） | 载荷透传 | 保持透传，不新增 int 假定；缓存保留 ID/类型/revision（E03 已在 R2 收口） |
+
+**游标边界（不得混替）**：配置组路径 `StartGroupAsync(groupName, startFromIndex)` 的 int 是**组内项目序号游标**，不属于本次切换，保持 int。只有一条龙任务项身份换 GUID。
+
+**旧客户端行为**：旧助手/旧网页仍发 int 时，native 形状下无映射——按 §4 规则拒绝并报明确错误，不用列表位置猜测；tuple 形状文件本属受保护、禁止执行，同样拒绝。跨版本断裂面因此是「响亮拒绝」而非静默错跑。
 ## 5. ResinBudget 预算合同（会诊 P1-5 修订；R3.3 前置定案）
 
 - **每次执行构造一次 `ResinBudget` 快照**，执行期内是唯一有效输入。来源优先级：JS 显式参数 > 独立任务参数 > 公版全局 `AutoDomainConfig`。
