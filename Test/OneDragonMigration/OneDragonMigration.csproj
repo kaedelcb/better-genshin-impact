@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- R1 只读迁移器：无副作用 JSON DOM 解析，无产品 ProjectReference，不实例化产品配置类。
+       只写自建候选目录，绝不写回输入或用户配置目录。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="Core/MigrationModels.cs" />
+    <Compile Include="Core/OneDragonMigrationEngine.cs" />
+  </ItemGroup>
+</Project>

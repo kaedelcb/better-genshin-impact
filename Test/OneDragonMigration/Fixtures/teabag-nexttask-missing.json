@@ -1,0 +1,15 @@
+{
+  "Version": 1,
+  "Name": "失效游标配置",
+  "IndexId": 3,
+  "NextConfiguration": true,
+  "NextTaskIndex": 42,
+  "ScheduleName": "工作日计划",
+  "TaskEnabledList": {
+    "1": { "Item1": true, "Item2": "领取邮件" },
+    "2": { "Item1": false, "Item2": "合成树脂" }
+  },
+  "GenshinUid": "",
+  "AccountBinding": false,
+  "CompletionAction": ""
+}

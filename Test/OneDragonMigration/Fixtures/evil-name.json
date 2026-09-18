@@ -1,0 +1,5 @@
+{
+  "Name": "../evil",
+  "TaskEnabledList": { "1": { "Item1": true, "Item2": "领取邮件" } },
+  "NextTaskIndex": 0
+}

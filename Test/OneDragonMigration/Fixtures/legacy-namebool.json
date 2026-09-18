@@ -1,0 +1,6 @@
+{
+  "Name": "旧版配置",
+  "TaskEnabledList": { "领取邮件": true, "自动秘境": true, "合成树脂": false },
+  "PartyName": "",
+  "DomainName": ""
+}

@@ -1,0 +1,8 @@
+{
+  "Name": "混合形状坏文件",
+  "NextTaskIndex": 0,
+  "TaskEnabledList": {
+    "5": { "Item1": true, "Item2": "领取邮件" },
+    "6": true
+  }
+}
