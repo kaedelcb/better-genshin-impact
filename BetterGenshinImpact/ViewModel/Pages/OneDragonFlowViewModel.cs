@@ -535,11 +535,12 @@ public partial class OneDragonFlowViewModel : ViewModel
         WriteConfig(SelectedConfig);
     }
 
-    public void WriteConfig(OneDragonFlowConfig? config)
+    /// <returns>文件已确认提交返回 true；保护拒写或 I/O 失败返回 false（ASTRA 会诊 P0：调用方据此决定是否允许后续破坏性动作）</returns>
+    public bool WriteConfig(OneDragonFlowConfig? config)
     {
         if (config == null)
         {
-            return;
+            return false;
         }
 
         var filePath = Path.Combine(OneDragonFlowConfigFolder, $"{config.Name}.json");
@@ -548,7 +549,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         {
             _logger.LogWarning("拒绝写入：{Path} 为受保护的旧格式文件（待迁移）", filePath);
             Toast.Error($"配置「{config.Name}」与待迁移的旧版文件同名，已拒绝写入");
-            return;
+            return false;
         }
 
         try
@@ -556,11 +557,13 @@ public partial class OneDragonFlowViewModel : ViewModel
             Directory.CreateDirectory(OneDragonFlowConfigFolder);
             var json = JsonConvert.SerializeObject(config, Formatting.Indented);
             File.WriteAllText(filePath, json);
+            return true;
         }
         catch (Exception e)
         {
             _logger.LogDebug(e, "保存配置时失败");
             Toast.Error("保存配置时失败");
+            return false;
         }
     }
     private bool _autoRun = true;
@@ -912,6 +915,13 @@ public partial class OneDragonFlowViewModel : ViewModel
 
         scope.ThrowIfStopped();
         if (scope.Result != TaskRunResult.Ran) return;
+        if (scope.Descriptor.TaskId != null)
+        {
+            // R3 单项边界（定案 §8 + ASTRA 会诊）：单项执行不附带整龙收尾（CheckRewardsTask/完成后动作/整龙结束通知）
+            _finishMark = true;
+            _logger.LogInformation("一条龙单项任务执行完成");
+            return;
+        }
         // 当次执行配置单完成后，检查和最终结束的任务
         RequireDragonStep(await new TaskRunner().RunThreadAsync(async () =>
         {
@@ -1133,6 +1143,13 @@ public partial class OneDragonFlowViewModel : ViewModel
         {
             // 删除对应的JSON文件
             var configFile = Path.Combine(OneDragonFlowConfigFolder, $"{SelectedConfig.Name}.json");
+            // ASTRA 会诊 P0：删除前复检磁盘形状——加载后被外部替换为旧格式/损坏文件（待迁移）时拒绝删除，保留迁移输入
+            if (IsProtectedConfigFile(configFile))
+            {
+                _logger.LogWarning("拒绝删除：{Path} 当前为受保护的旧格式文件（待迁移）", configFile);
+                Toast.Error($"配置「{SelectedConfig.Name}」的文件已变为待迁移的旧版格式，已拒绝删除");
+                return;
+            }
             if (File.Exists(configFile))
             {
                 File.Delete(configFile);
@@ -1219,12 +1236,21 @@ public partial class OneDragonFlowViewModel : ViewModel
             // 更新配置名称
             SelectedConfig.Name = newName;
 
-            // 先写入新文件
-            WriteConfig(SelectedConfig);
+            // 先写入新文件；写入被保护拒绝或 I/O 失败时中止，绝不删除旧文件（ASTRA 会诊 P0）
+            if (!WriteConfig(SelectedConfig))
+            {
+                SelectedConfig.Name = oldName;
+                return;
+            }
 
-            // 写入成功后再删除旧文件
+            // 写入确认提交后再删除旧文件；旧路径同样复检受保护状态
             var oldConfigFile = Path.Combine(OneDragonFlowConfigFolder, $"{oldName}.json");
-            if (File.Exists(oldConfigFile))
+            if (IsProtectedConfigFile(oldConfigFile))
+            {
+                _logger.LogWarning("重命名已写入新文件，但旧文件当前为受保护的旧格式（待迁移），保留不删：{Path}", oldConfigFile);
+                Toast.Warning($"新配置已保存，旧文件「{oldName}」已变为待迁移的旧版格式，已保留未删除");
+            }
+            else if (File.Exists(oldConfigFile))
             {
                 File.Delete(oldConfigFile);
             }

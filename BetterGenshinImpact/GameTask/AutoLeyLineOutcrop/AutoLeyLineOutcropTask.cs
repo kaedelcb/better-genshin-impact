@@ -1211,7 +1211,11 @@ public class AutoLeyLineOutcropTask : ISoloTask
     {
         var allConfig = TaskContext.Instance().Config;
         var original = allConfig.AutoFightConfig;
-        allConfig.AutoFightConfig = BuildLeyLineAutoFightConfig();
+        var built = BuildLeyLineAutoFightConfig();
+        // ASTRA 会诊修复：UseOfficialAutoFight 是全局引擎路由决策，地脉局部 DTO 不携带该字段，
+        // 替换后必须显式继承原全局值，否则局部配置期间 OfficialAutoFightRouter 恒读 false 而错走茶包引擎。
+        built.UseOfficialAutoFight = original.UseOfficialAutoFight;
+        allConfig.AutoFightConfig = built;
         return new AutoFightConfigScope(allConfig, original);
     }
 

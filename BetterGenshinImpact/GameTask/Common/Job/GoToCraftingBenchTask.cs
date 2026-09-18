@@ -109,17 +109,21 @@ public class GoToCraftingBenchTask
                 }
                 
                 //浓缩纠缠重试
+                // ASTRA 会诊修复（B12 局部修正，保留模板优先+OCR回退算法）：识别成功与否由显式标志承载，
+                // 未识别不再落到初始值 0 被误判为真实数量；每轮重试重新截图，不在旧画面上重复识别
+                var condensedRecognized = false;
                 var condensed = await NewRetry.WaitForAction(() =>
                 {
-                    var condensedResinCountRa = ra.Find(ElementRecognition.Get("CondensedResinCount", ra));
+                    using var retryRa = CaptureToRectArea();
+                    var condensedResinCountRa = retryRa.Find(ElementRecognition.Get("CondensedResinCount", retryRa));
                     if (!condensedResinCountRa.IsEmpty())
                     {
                         // 图像右侧就是浓缩树脂数量
-                        using (var countArea = ra.DeriveCrop(condensedResinCountRa.X + condensedResinCountRa.Width,
+                        using (var countArea = retryRa.DeriveCrop(condensedResinCountRa.X + condensedResinCountRa.Width,
                                    condensedResinCountRa.Y, condensedResinCountRa.Width * 5 / 3,
                                    condensedResinCountRa.Height))
                         {
-                            var autoFightAssets = AutoFightAssets.Get(ra);
+                            var autoFightAssets = AutoFightAssets.Get(retryRa);
                             for (var i = 0; i < 6; i++)
                             {
                                 var countResult = countArea.Find(autoFightAssets.InitializeCondensedResin(i));
@@ -129,18 +133,20 @@ public class GoToCraftingBenchTask
                                     {
                                         Logger.LogInformation("浓缩树脂数量识别失败，尝试使用OCR识别");
                                         var count = OcrFactory.Paddle.OcrWithoutDetector(countArea.SrcMat);
-                                        condensedResinCount = StringUtils.TryParseInt(count);
+                                        condensedResinCount = StringUtils.TryParseInt(count, -1);
+                                        condensedRecognized = condensedResinCount >= 0 && condensedResinCount <= 5;
                                     }
                                     continue;
                                 }
                                 condensedResinCount = i;
+                                condensedRecognized = true;
                                 break;
                             }
                         }
                     }
-                    
-                    return condensedResinCount >= 0 && condensedResinCount <= 5;
-                    
+
+                    return condensedRecognized;
+
                 },ct,3,200); 
                 if (!condensed)
                 {
@@ -340,8 +346,33 @@ public class GoToCraftingBenchTask
         OneDragonFlowConfig? selected = null;
         foreach (var configFile in configFiles)
         {
-            var json = File.ReadAllText(configFile);
-            var config = JsonConvert.DeserializeObject<OneDragonFlowConfig>(json);
+            // ASTRA 会诊修复：独立运行回退路径同样受 R3.0 硬门槛约束——受保护（旧格式/损坏，待迁移）
+            // 与无法解析的文件逐文件隔离跳过，不得作为参数来源，也不得让单个坏文件拖垮整个独立任务
+            string json;
+            try
+            {
+                json = File.ReadAllText(configFile);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "独立运行回退读取配置失败，已跳过：{Path}", configFile);
+                continue;
+            }
+            if (OneDragonConfigShapePreflight.InspectText(json).IsProtected)
+            {
+                Logger.LogWarning("独立运行回退跳过受保护的旧格式配置（待迁移）：{Path}", configFile);
+                continue;
+            }
+            OneDragonFlowConfig? config;
+            try
+            {
+                config = JsonConvert.DeserializeObject<OneDragonFlowConfig>(json);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "独立运行回退解析配置失败，已跳过：{Path}", configFile);
+                continue;
+            }
             if (config != null)
             {
                 configs.Add(config);

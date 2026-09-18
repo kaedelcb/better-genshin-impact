@@ -143,6 +143,12 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
     // R3.3 树脂归一化：本次执行的树脂预算（构造时冻结，消费只写 RemainCount，执行结束即弃）
     private List<ResinUseRecord> _resinPriorityListWhenSpecifyUse;
 
+    // R3.3 预算合同（ASTRA 会诊）：SpecifyResinUse 属预算决策的一部分，构造时随预算一并冻结，执行期不读可变参数
+    private readonly bool _specifyResinUse;
+
+    // R3.3 预算合同（ASTRA 会诊）：实例是单次执行预算的载体，禁止重复启动消费同一余额
+    private int _started;
+
     public AutoDomainTask(AutoDomainParam taskParam)
     {
         _taskParam = taskParam;
@@ -162,6 +168,7 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
             _combatScriptBag = CombatScriptParser.ReadAndParse(_taskParam.CombatStrategyPath);
         }
 
+        _specifyResinUse = taskParam.SpecifyResinUse;
         _resinPriorityListWhenSpecifyUse = ResinUseRecord.BuildFromDomainParam(taskParam);
 
         IStringLocalizer<AutoDomainTask> stringLocalizer =
@@ -228,6 +235,10 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
 
     public async Task<Dictionary<string, int>> Start(CancellationToken ct)
     {
+        if (Interlocked.CompareExchange(ref _started, 1, 0) != 0)
+        {
+            throw new InvalidOperationException("AutoDomainTask 实例为单次执行预算载体，禁止重复启动");
+        }
         _ct = ct;
         _rewardSummary.Clear();
 
@@ -276,8 +287,8 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
     {
         // R3.3 树脂归一化（F08）：预算在构造时由 ResinUseRecord.BuildFromDomainParam 冻结为本次执行
         // 唯一有效输入；全局 AutoDomainEnable 标志与全局字典不再在执行中覆写（三处改造点已全部退役）。
-        Logger.LogInformation("树脂使用模式：{ResinMode}", _taskParam.SpecifyResinUse ? "按以下配置使用树脂类型和数量" : "先用浓缩，再用原粹，其他不使用");
-        if (_taskParam.SpecifyResinUse)
+        Logger.LogInformation("树脂使用模式：{ResinMode}", _specifyResinUse ? "按以下配置使用树脂类型和数量" : "先用浓缩，再用原粹，其他不使用");
+        if (_specifyResinUse)
         {
             Logger.LogInformation("树脂类型和次数：{ResinBudget}",
                 string.Join(", ", _resinPriorityListWhenSpecifyUse.Select(o => $"{o.Name}({o.MaxCount - o.RemainCount}/{o.MaxCount})")));
@@ -1331,7 +1342,7 @@ public partial class AutoDomainTask : ISoloTask<Dictionary<string, int>>
         {
             using var ra3 = CaptureToRectArea();
 
-            if (!_taskParam.SpecifyResinUse)
+            if (!_specifyResinUse)
             {
                 // 自动刷干树脂
                 // 识别树脂状况
