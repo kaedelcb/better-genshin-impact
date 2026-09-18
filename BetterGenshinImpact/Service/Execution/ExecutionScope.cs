@@ -25,6 +25,7 @@ public sealed class ExecutionScope : IDisposable
     public TaskRunResult Result { get; private set; } = TaskRunResult.Ran;
     public int FailureCount { get; private set; }
     private string? _dragonTaskId;
+    private string? _dragonConfigSnapshotJson;
     internal SuspendContextCapture.Snapshot? Checkpoint { get; private set; }
     public static ExecutionScope? Current => Ambient.Value;
     public static bool HasActive { get { lock (Sync) return _active != null; } }
@@ -135,6 +136,16 @@ public sealed class ExecutionScope : IDisposable
             if (Checkpoint != null) Checkpoint = Checkpoint with
                 { ConfigurationRevisions = new System.Collections.Generic.Dictionary<string, string>(_configurationRevisions) };
         }
+    }
+    /// <summary>
+    /// R3.2 参数快照：本次龙执行冻结的配置 JSON（修订守卫后的执行副本）。
+    /// 间接读配置的辅助任务（合成/尘歌壶）经 DragonConfigSnapshotJson 取同一作用域上下文，
+    /// 不再跟全局 UI 选择项、也不读执行期间的磁盘新改动。独立运行（无快照）保持公版原行为。
+    /// </summary>
+    public string? DragonConfigSnapshotJson { get { lock (Sync) return _dragonConfigSnapshotJson; } }
+    public void SetDragonConfigSnapshot(string configJson)
+    {
+        lock (Sync) _dragonConfigSnapshotJson = configJson;
     }
     /// <summary>R3 原生身份：龙内水位记录任务项稳定字符串 ID（GUID），不再是数字键。</summary>
     public void SetDragonNode(string taskId)

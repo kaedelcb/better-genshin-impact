@@ -299,5 +299,13 @@ await Check("v2 runner registers workflow identity and preserves it in checkpoin
     var job = JobRegistry.Instance.Query(attempt)!;
     A(result == TaskRunResult.Ran && job.WorkflowRunId == run && job.NodeId == "node-2" && job.Iteration == 8, "runner registration lost identity");
 });
+await Check("dragon config snapshot flows through ambient scope and clears on dispose",()=>{
+    using(var root=ExecutionScope.Start(new(JobKind.OneDragon,"scoped",JobSource.Ui))){
+        root.SetDragonConfigSnapshot("{\"TaskEnabledList\":{}}");
+        A(ExecutionScope.Current!.DragonConfigSnapshotJson=="{\"TaskEnabledList\":{}}","snapshot not visible in scope");
+    }
+    A(ExecutionScope.Current==null,"snapshot scope leaked after dispose");
+    return Done();
+});
 Console.WriteLine($"Regression total={total}; passed={total-failed}; failed={failed}. UI/game/transport not exercised.");
 Environment.ExitCode=failed==0?0:1;

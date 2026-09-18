@@ -320,6 +320,18 @@ public class GoToCraftingBenchTask
     
     private void InitConfigList()
     {
+        // R3.2 作用域修正：龙执行内使用本次冻结的参数快照（反序列化为任务私有副本，
+        // 壶购买清单的消费性移除只影响本次运行），不跟全局 UI 选择项、不读执行期间的磁盘新改动；
+        // 独立运行（无快照）保持公版原行为。
+        var scopeSnapshot = BetterGenshinImpact.Service.Execution.ExecutionScope.Current?.DragonConfigSnapshotJson;
+        if (scopeSnapshot != null
+            && JsonConvert.DeserializeObject<OneDragonFlowConfig>(scopeSnapshot) is { } scopedConfig)
+        {
+            ConfigList.Clear();
+            ConfigList.Add(scopedConfig);
+            SelectedConfig = scopedConfig;
+            return;
+        }
         Directory.CreateDirectory(OneDragonFlowConfigFolder);
         // 读取文件夹内所有json配置，按创建时间正序
         var configFiles = Directory.GetFiles(OneDragonFlowConfigFolder, "*.json");

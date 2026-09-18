@@ -714,6 +714,8 @@ public partial class OneDragonFlowViewModel : ViewModel
         if (executionConfig.Name != scope.Descriptor.Name)
             throw new InvalidOperationException("执行配置在起步前已改变");
         _runningConfig = executionConfig;
+        // R3.2 参数快照下发：间接读配置的辅助任务（合成/尘歌壶）经作用域取本次冻结副本
+        scope.SetDragonConfigSnapshot(JsonConvert.SerializeObject(executionConfig));
         scope.TrackConfigurationFile(Path.Combine(OneDragonFlowConfigFolder, executionConfig.Name + ".json"));
         // R3 原生身份：桥恢复起点为任务项 GUID
         if (scope.Descriptor.ResumeTaskId is { } resumeTaskId) executionConfig.NextTaskId = resumeTaskId;
