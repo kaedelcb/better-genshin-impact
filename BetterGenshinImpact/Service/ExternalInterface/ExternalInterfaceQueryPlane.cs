@@ -69,6 +69,8 @@ internal static class ExternalInterfaceQueryPlane
         attemptId = job.JobId.ToString("N"),
         taskId = job.TaskId,
         configRevision = job.ConfigRevision,
+        occurrence = job.Occurrence,
+        attempt = job.Attempt,
         kind = job.Kind.ToString(),
         name = job.Name,
         source = job.Source.ToString(),

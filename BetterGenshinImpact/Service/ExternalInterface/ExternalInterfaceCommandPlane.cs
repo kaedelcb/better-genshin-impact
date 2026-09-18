@@ -49,6 +49,10 @@ internal static class ExternalInterfaceCommandPlane
                 await handler.HandleExecuteHotkey(connection, request),
             ExternalInterfaceOperations.ActionCloseGame =>
                 handler.HandleCloseGame(connection, request),
+            // R4.6 E1'：前置/收尾操作面（作业化生命周期；严格合同强制；语义独立于 v2 操作）
+            ExternalInterfaceOperations.PrerequisiteAccount or ExternalInterfaceOperations.PrerequisiteRedeemCode
+                or ExternalInterfaceOperations.TerminalCompletionAction =>
+                handler.HandlePrerequisiteOperation(connection, request),
             _ => InstanceIpcEnvelope.Failure(
                 request,
                 "unsupported_operation",

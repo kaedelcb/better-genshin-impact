@@ -49,12 +49,42 @@ internal static class ExecutionRequestContract
                 return InstanceIpcEnvelope.Failure(request, "invalid_request", "执行合同要求 bgiEpoch 和 idempotencyKey");
             if (data?["expiresAtUtc"] is null or { Type: JTokenType.Null })
                 return InstanceIpcEnvelope.Failure(request, "invalid_request", "执行合同要求请求有效期 expiresAtUtc");
-            if (request.Operation is "ext.task.start" or "task.start")
+            // R4.6 E1'/B1：前置/收尾操作强制严格合同 v1 + 流程身份 + 操作必需参数，全部在副作用前拒绝
+        if (request.Operation is "ext.prerequisite.account" or "ext.prerequisite.redeemCode" or "ext.terminal.completionAction")
+        {
+            if (data?["executionContractVersion"]?.Value<int?>() != 1)
+                return InstanceIpcEnvelope.Failure(request, "capability_required", "前置/收尾操作要求执行合同 v1");
+            if (ReadIdentity(data) == null)
+                return InstanceIpcEnvelope.Failure(request, "invalid_request", "前置/收尾操作要求流程身份（workflowRunId/nodeId/iteration）");
+            if (request.Operation is "ext.prerequisite.account" or "ext.prerequisite.redeemCode"
+                && string.IsNullOrWhiteSpace(InstanceIpcProtocol.GetStringOrNull(data, "uid")))
+                return InstanceIpcEnvelope.Failure(request, "invalid_request", "前置操作要求 uid（空 UID 严格拒绝）");
+            if (request.Operation == "ext.terminal.completionAction"
+                && InstanceIpcProtocol.GetStringOrNull(data, "action") is not ("closeGame" or "closeSoftware" or "closeGameAndSoftware" or "shutdown"))
+                return InstanceIpcEnvelope.Failure(request, "invalid_request", "收尾动作必须是 closeGame/closeSoftware/closeGameAndSoftware/shutdown 之一");
+        }
+
+        if (request.Operation is "ext.task.start" or "task.start")
             {
                 if (ReadIdentity(data) == null || string.IsNullOrWhiteSpace(data?["expectedConfigRevision"]?.ToString()))
                     return InstanceIpcEnvelope.Failure(request, "invalid_request", "计划启动要求流程节点身份和配置版本");
             }
         }
+        // R4.6 E1'/B1：前置/收尾操作强制严格合同 v1 + 流程身份 + 操作必需参数，全部在副作用前拒绝
+        if (request.Operation is "ext.prerequisite.account" or "ext.prerequisite.redeemCode" or "ext.terminal.completionAction")
+        {
+            if (data?["executionContractVersion"]?.Value<int?>() != 1)
+                return InstanceIpcEnvelope.Failure(request, "capability_required", "前置/收尾操作要求执行合同 v1");
+            if (ReadIdentity(data) == null)
+                return InstanceIpcEnvelope.Failure(request, "invalid_request", "前置/收尾操作要求流程身份（workflowRunId/nodeId/iteration）");
+            if (request.Operation is "ext.prerequisite.account" or "ext.prerequisite.redeemCode"
+                && string.IsNullOrWhiteSpace(InstanceIpcProtocol.GetStringOrNull(data, "uid")))
+                return InstanceIpcEnvelope.Failure(request, "invalid_request", "前置操作要求 uid（空 UID 严格拒绝）");
+            if (request.Operation == "ext.terminal.completionAction"
+                && InstanceIpcProtocol.GetStringOrNull(data, "action") is not ("closeGame" or "closeSoftware" or "closeGameAndSoftware" or "shutdown"))
+                return InstanceIpcEnvelope.Failure(request, "invalid_request", "收尾动作必须是 closeGame/closeSoftware/closeGameAndSoftware/shutdown 之一");
+        }
+
         if (request.Operation is "ext.task.start" or "task.start")
         {
             var group = InstanceIpcProtocol.GetStringOrNull(data, "groupName");
@@ -68,6 +98,14 @@ internal static class ExecutionRequestContract
         }
         return null;
     }
+
+    /// <summary>R4.6 D10/E4'：读取收尾抑制标记（仅严格合同调用方承认；缺省 false 行为不变）。</summary>
+    public static bool ReadSuppressConfigCompletionAction(Newtonsoft.Json.Linq.JObject? data)
+        => data?["suppressConfigCompletionAction"]?.ToObject<bool?>() == true;
+
+    /// <summary>R4.6 E2-9：读取期望 UID（执行权取得后复验；null=不校验）。</summary>
+    public static string? ReadExpectedUid(Newtonsoft.Json.Linq.JObject? data)
+        => InstanceIpcProtocol.GetStringOrNull(data, "expectedUid");
 
     public static string Fingerprint(InstanceIpcEnvelope request)
     {
@@ -86,7 +124,8 @@ internal static class ExecutionRequestContract
         if (!Guid.TryParse(raw, out var run) || run == Guid.Empty || string.IsNullOrWhiteSpace(node)
             || node.Length > 256 || iteration is null or < 0)
             throw new ArgumentException("流程身份要求有效 workflowRunId、nodeId 和非负 iteration");
-        return new(run, node, iteration.Value, data?["taskId"]?.ToString(), data?["expectedConfigRevision"]?.ToString());
+        return new(run, node, iteration.Value, data?["taskId"]?.ToString(), data?["expectedConfigRevision"]?.ToString(),
+            data?["occurrence"]?.Value<int?>(), data?["attempt"]?.Value<int?>()); // R4.6 B1：出现/尝试号 add-only
     }
 
     private static JToken Canonical(JToken value) => value switch

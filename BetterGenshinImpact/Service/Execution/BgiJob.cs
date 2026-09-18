@@ -12,6 +12,11 @@ public enum JobKind
     Script,
     KeyMouse,
     Pathing,
+
+    /// <summary>R4.6 E1'：流程前置动作（账号/兑换等，作业化生命周期）。尾部追加不改既有数值。</summary>
+    Prerequisite,
+    /// <summary>R4.6 E1'：流程收尾动作（terminal.completionAction）。尾部追加不改既有数值。</summary>
+    Terminal,
 }
 
 /// <summary>[A1.4] 作业来源（提交入口）。对应总计划 §6.2 Job.source。</summary>
@@ -64,6 +69,15 @@ public static class JobErrorCodes
 
     /// <summary>[A6] 抢占未在有界时间内确认槽位释放（ADR-2026-09-16 有界退出契约）。</summary>
     public const string PreemptTimeout = "preempt_timeout";
+
+    /// <summary>R4.6 E2-9：执行权取得后 UID 复验不符（受保护执行阶段拒绝，账号未被验证前不产生资源副作用）。</summary>
+    public const string AccountMismatch = "account_mismatch";
+    /// <summary>R4.6 D8：前置动作执行失败（真实结果，非取消非跳过）。</summary>
+    public const string PrerequisiteFailed = "prerequisite_failed";
+    /// <summary>R4.6 I4：前置副作用结果不明（如切号后未进主界面）——不自动重复副作用，按失败保守处置。</summary>
+    public const string PrerequisiteOutcomeUnknown = "prerequisite_outcome_unknown";
+    /// <summary>R4.6 B8：收尾动作前校验发现其他活动作业（迟到收尾不误伤新任务）。</summary>
+    public const string TerminalConflict = "terminal_conflict";
 }
 
 /// <summary>一次状态转换记录（UiPath 式状态时间线，随终态留档）。</summary>
@@ -93,14 +107,22 @@ public sealed record JobDescriptor(
     string? NodeId = null,
     int? Iteration = null,
     string? TaskId = null,
-    string? ConfigRevision = null)
+    string? ConfigRevision = null,
+    /// <summary>R4.6 E2-9：执行权取得后、首个资源副作用前复验的期望 UID（null=不校验；仅严格合同携带）。</summary>
+    string? ExpectedUid = null,
+    /// <summary>R4.6 D10/E4'：本次调用收尾权限抑制（任务中心整龙调用固定 true；缺省 false 行为不变）。</summary>
+    bool SuppressConfigCompletionAction = false,
+    /// <summary>R4.6 B1：出现序号/尝试号（线协议 add-only 扩展，缺省 null）。</summary>
+    int? Occurrence = null, int? Attempt = null)
 {
     public JobExecutionIdentity? ExecutionIdentity => WorkflowRunId is { } run && NodeId is { } node && Iteration is { } iteration
-        ? new(run, node, iteration, TaskId, ConfigRevision) : null;
+        ? new(run, node, iteration, TaskId, ConfigRevision, Occurrence, Attempt) : null;
 }
 
 public sealed record JobExecutionIdentity(Guid WorkflowRunId, string NodeId, int Iteration,
-    string? TaskId = null, string? ConfigRevision = null);
+    string? TaskId = null, string? ConfigRevision = null,
+    // R4.6 B1：出现序号/尝试号 add-only 扩展（缺省 null，旧请求零变化）
+    int? Occurrence = null, int? Attempt = null);
 
 /// <summary>
 /// [A1.4] 统一作业模型（总计划 §6.2）。
@@ -121,6 +143,8 @@ public sealed class BgiJob
     public int? Iteration { get; }
     public string? TaskId { get; }
     public string? ConfigRevision { get; }
+    public int? Occurrence { get; } // R4.6 B1
+    public int? Attempt { get; } // R4.6 B1
 
     public JobState State { get; internal set; } = JobState.Queued;
     public string? ErrorCode { get; internal set; }
@@ -154,6 +178,8 @@ public sealed class BgiJob
         Iteration = identity?.Iteration;
         TaskId = identity?.TaskId;
         ConfigRevision = identity?.ConfigRevision;
+        Occurrence = identity?.Occurrence;
+        Attempt = identity?.Attempt;
         _stateHistory.Add(new JobStateTransition(JobState.Queued, EnqueuedAtUtc, null));
     }
 

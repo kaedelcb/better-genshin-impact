@@ -86,6 +86,8 @@ namespace BetterGenshinImpact.Service.Instance.MessageHandlers
         public Task<InstanceIpcEnvelope> HandleExecuteHotkey(InstanceConnection c, InstanceIpcEnvelope r) => Write(r);
         public InstanceIpcEnvelope HandleTaskStop(InstanceConnection c, InstanceIpcEnvelope r)
             => InstanceIpcEnvelope.Response(r, new { status = "inert_stop" });
+        public InstanceIpcEnvelope HandlePrerequisiteOperation(InstanceConnection c, InstanceIpcEnvelope r)
+            => InstanceIpcEnvelope.Response(r, new { status = "inert_prerequisite" });
         public InstanceIpcEnvelope HandleCloseGame(InstanceConnection c, InstanceIpcEnvelope r)
             => throw new InvalidOperationException("Game operations are forbidden");
         public InstanceIpcEnvelope HandleConfigPullGroup(InstanceConnection c, InstanceIpcEnvelope r)

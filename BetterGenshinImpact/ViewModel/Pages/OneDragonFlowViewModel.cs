@@ -646,12 +646,23 @@ public partial class OneDragonFlowViewModel : ViewModel
         scope.SetDragonNode(string.Empty);
         _finishMark = false;
         var result = TaskRunResult.Failed;
+        var failureCode = BetterGenshinImpact.Service.Execution.JobErrorCodes.TaskStartFailed; // R4.6：受控失败码（account_mismatch 等）
         try
         {
+            // R4.6 E2-9：expectedUid 复验——执行权已取得（ExecutionScope.Start 成功）、首个资源副作用前；
+            // 不符抛 AccountMismatchException（不释放执行权再排队）。手动入口 descriptor 无 ExpectedUid，零变化。
+            await Service.OneDragon.ExpectedUidGate.VerifyOrThrowAsync(descriptor.ExpectedUid, scope.Token);
             await OnOneKeyExecuteCore();
             // E9：Skipped（仅正常跳过）与 Ran 同样进入完成判定——尾部跑完（_finishMark）即根作业成功
             // （Succeeded-with-skips，子作业各自携带 Skipped）；其他结果原样透传。
             result = Service.OneDragon.OneDragonRootResultRule.DecideRootResult(scope.Result, _finishMark);
+        }
+        catch (BetterGenshinImpact.Service.Execution.AccountMismatchException ex)
+        {
+            // R4.6 E2-9：账号不符——受保护执行阶段内拒绝，未产生资源副作用
+            _logger.LogWarning("一条龙执行被拒绝（账号不符）：{Message}", ex.Message);
+            failureCode = BetterGenshinImpact.Service.Execution.JobErrorCodes.AccountMismatch;
+            result = TaskRunResult.Failed;
         }
         catch (OperationCanceledException)
         {
@@ -670,7 +681,7 @@ public partial class OneDragonFlowViewModel : ViewModel
                     : cancelled ? BetterGenshinImpact.Service.Execution.JobState.Cancelled
                     : BetterGenshinImpact.Service.Execution.JobState.Failed,
                 result == TaskRunResult.Ran ? null : result == TaskRunResult.Preempted ? "preempted"
-                    : cancelled ? scope.StopReason : "task_start_failed", null, cancelled);
+                    : cancelled ? scope.StopReason : failureCode, null, cancelled);
             _currentDragonJobId = null;
             _runningConfig = null;
             if (result != TaskRunResult.Ran) _finishMark = false;
@@ -953,7 +964,9 @@ public partial class OneDragonFlowViewModel : ViewModel
             _logger.LogInformation("一条龙和配置组任务结束");
 
             // 执行完成后操作（公版语义：单次配置级 CompletionAction）
-            if (!string.IsNullOrEmpty(executionConfig.CompletionAction))
+            // R4.6 D10/E4'：任务中心调用固定 suppress=true——原生完成动作被抑制（流程 terminal.completionAction
+            // 在成功边界统一触发一次）；CheckRewardsTask/通知保留（D10 分别归属）；手动入口缺省 false 行为不变。
+            if (!scope.SuppressConfigCompletionAction && !string.IsNullOrEmpty(executionConfig.CompletionAction))
             {
                 switch (executionConfig.CompletionAction)
                 {

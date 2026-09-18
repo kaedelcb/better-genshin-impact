@@ -29,7 +29,11 @@ internal static class SuspendContextCapture
         Guid? RootRunId = null,
         Guid? AttemptId = null,
         System.Collections.Generic.Dictionary<string, string>? ConfigurationRevisions = null,
-        string? NodeId = null, int? Iteration = null, string? TaskId = null, string? ConfigRevision = null);
+        string? NodeId = null, int? Iteration = null, string? TaskId = null, string? ConfigRevision = null,
+        // R4.6 B6：收尾抑制权限随恢复现场携带（缺省 false，旧现场零变化）
+        bool SuppressCompletionAction = false,
+        // R4.6 B1：出现序号/尝试号（缺省 null）
+        int? Occurrence = null, int? Attempt = null);
 
     /// <summary>
     /// 判定"当前在跑的项目"是否为「联机锄地上线」信号任务（原 InstanceRequestHandler 步骤 2.6 判定）。
@@ -82,7 +86,8 @@ internal static class SuspendContextCapture
             ProjectName = snapshot.ProjectName ?? "",
             OneDragonTaskId = snapshot.OneDragonTaskId,
             SubTaskGroupName = snapshot.SubTaskGroupName ?? "",
-            SoloSettingsJson = snapshot.SoloSettingsJson ?? ""
+            SoloSettingsJson = snapshot.SoloSettingsJson ?? "",
+            SuppressCompletionAction = snapshot.SuppressCompletionAction
         };
         logger.LogInformation("[{Tag}] 已保存中断上下文: Type={TaskType}, Group={GroupName}, Index={TaskIndex}, OneDragonIndex={OneDragonTaskIndex}",
             channelTag, snapshot.TaskType, snapshot.GroupName, snapshot.TaskIndex, snapshot.OneDragonTaskId);

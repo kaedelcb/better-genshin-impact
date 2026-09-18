@@ -179,6 +179,7 @@ await Check("T21 cache pressure must not replay completed task within retry wind
 });
 
 await ContractRegression.Run(Check);
+await R46PrerequisiteContractRegression.Run(Check);
 await HoeingCompatibilityRegression.Run(Check);
 await R2BridgeRegression.Run(Check);
 if (BgiTaskCoordinator.IsCreated) BgiTaskCoordinator.Instance.Dispose();

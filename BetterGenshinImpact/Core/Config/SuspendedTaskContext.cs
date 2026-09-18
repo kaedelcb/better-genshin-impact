@@ -50,4 +50,15 @@ public class SuspendedTaskContext
     /// 空 = 无快照（恢复时退化为全局默认配置，同旧行为）。仅在挂起/恢复间传递，随 AllConfig 不持久化。</summary>
     [JsonPropertyName("soloSettingsJson")]
     public string SoloSettingsJson { get; set; } = "";
+
+    /// <summary>R4.6 B6：被中断执行的收尾抑制权限（任务中心整龙调用为 true）；恢复时随合成请求携带。</summary>
+    [JsonPropertyName("suppressCompletionAction")]
+    public bool SuppressCompletionAction { get; set; }
+
+    /// <summary>R4.6 B1：出现序号/尝试号（缺省 null，旧现场零变化）。</summary>
+    [JsonPropertyName("occurrence")]
+    public int? Occurrence { get; set; }
+
+    [JsonPropertyName("attempt")]
+    public int? Attempt { get; set; }
 }

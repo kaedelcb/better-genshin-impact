@@ -32,6 +32,11 @@ internal static class ExternalInterfaceOperations
     public const string ActionExecuteHotkey = "ext.action.executeHotkey";
     public const string ActionCloseGame = "ext.action.closeGame";
 
+    // R4.6 E1'：前置动作/收尾操作（作业化生命周期：入队受理回执 + ext.job.status 对账 + ext.task.cancel）
+    public const string PrerequisiteAccount = "ext.prerequisite.account";
+    public const string PrerequisiteRedeemCode = "ext.prerequisite.redeemCode";
+    public const string TerminalCompletionAction = "ext.terminal.completionAction";
+
     // 查询面（只读，不参与幂等窗口）
     public const string TaskStatus = "ext.task.status";
     public const string ConfigList = "ext.config.list";
@@ -60,7 +65,9 @@ internal static class ExternalInterfaceOperations
         TaskStart or TaskStop or TaskCancel or TaskSuspend or TaskResume
         or ConfigSetTaskEnabled or ConfigApplyTaskState or ConfigPullGroup or ConfigOpenRemoteEditor
         or ConfigRemoteEditorResult or ConfigApplyGroup
-        or ActionExecuteHotkey or ActionCloseGame;
+        or ActionExecuteHotkey or ActionCloseGame
+        // R4.6 B1：三新操作纳入写操作集（会话层幂等/守卫同纪律）
+        or PrerequisiteAccount or PrerequisiteRedeemCode or TerminalCompletionAction;
 }
 
 /// <summary>ext.event 事件名清单（订阅过滤与文档化的唯一权威）。</summary>
@@ -167,6 +174,11 @@ internal static class ExternalInterfaceProtocol
                 ["config.remoteEdit"] = true,
                 ["action.executeHotkey"] = true,
                 ["action.closeGame"] = true,
+                // R4.6：前置动作/收尾操作 + 收尾抑制（D8/D10；缺省即不支持，预检拒绝）
+                ["prerequisite.account"] = true,
+                ["prerequisite.redeemCode"] = true,
+                ["terminal.completionAction"] = true,
+                ["execution.suppressConfigCompletionAction"] = true,
                 // v3 核心新增：事件订阅推送
                 ["event.push"] = true,
                 ["event.taskProgress"] = true,

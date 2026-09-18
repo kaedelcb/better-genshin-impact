@@ -718,7 +718,11 @@ internal sealed class InstanceRequestHandler
                     }, ResumeTaskId: startFromTaskId, WorkflowRunId: workflowRunId,
                     NodeId: executionIdentity?.NodeId, Iteration: executionIdentity?.Iteration,
                     TaskId: InstanceIpcProtocol.GetStringOrNull(executionRequest?.Data, "taskId"),
-                    ConfigRevision: InstanceIpcProtocol.GetStringOrNull(executionRequest?.Data, "expectedConfigRevision"));
+                    ConfigRevision: InstanceIpcProtocol.GetStringOrNull(executionRequest?.Data, "expectedConfigRevision"),
+                    Occurrence: executionIdentity?.Occurrence, Attempt: executionIdentity?.Attempt, // R4.6 B1
+                    // R4.6 E2-9/E4'：期望 UID 复验 + 收尾抑制（仅严格合同请求携带；旧入口 null/false 零变化）
+                    ExpectedUid: executionRequest == null ? null : ExecutionRequestContract.ReadExpectedUid(executionRequest.Data),
+                    SuppressConfigCompletionAction: executionRequest != null && ExecutionRequestContract.ReadSuppressConfigCompletionAction(executionRequest.Data));
                 var prepared = executionRequest == null ? (Snapshot: (TaskConfigurationContract.Snapshot?)null, SingleIndex: (int?)null)
                     : await ExternalInterfaceConfigurationPlane.PrepareExecutionAsync(executionRequest);
                 if (executionRequest != null && ExecutionRequestContract.Validate(executionRequest) is { } staleBeforeExecution)
@@ -735,6 +739,8 @@ internal sealed class InstanceRequestHandler
                     if (startFromIndex > 0 && !group.Projects.Any(p => p.Index == startFromIndex))
                         throw new InvalidOperationException("恢复位置已不存在");
                     using var root = ExecutionScope.Start(descriptor);
+                    // R4.6 E2-9：expectedUid 复验——执行权已取得、首个资源副作用前；不符抛 AccountMismatchException（不释放执行权再排队）
+                    await BetterGenshinImpact.Service.OneDragon.ExpectedUidGate.VerifyOrThrowAsync(descriptor.ExpectedUid, cancellationToken);
                     if (startFromIndex > 0)
                     {
                         var project = group.Projects.FirstOrDefault(p => p.Index == startFromIndex)
@@ -1233,6 +1239,10 @@ internal sealed class InstanceRequestHandler
     }
 
     /// <summary>关闭游戏：调用 BGI 已有的 SystemControl.CloseGame()。</summary>
+    /// <summary>R4.6 E1'：前置/收尾操作面入口（作业化生命周期；经 CommandPlane 派发，审计项目由桩替代）。</summary>
+    internal InstanceIpcEnvelope HandlePrerequisiteOperation(InstanceConnection connection, InstanceIpcEnvelope request)
+        => BetterGenshinImpact.Service.ExternalInterface.ExternalInterfacePrerequisitePlane.Dispatch(request);
+
     internal InstanceIpcEnvelope HandleCloseGame(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
@@ -1387,11 +1397,13 @@ internal sealed class InstanceRequestHandler
                     startFromTaskId: context.TaskType == "onedragon" ? context.OneDragonTaskId : null,
                     jobId: attempt, takeoverTicket: ticket, onAdmitted: OnAdmitted, source: JobSource.Resume, workflowRunId: context.RootRunId,
                     executionIdentity: context.RootRunId is { } run && context.NodeId is { } node && context.Iteration is { } iteration
-                        ? new JobExecutionIdentity(run, node, iteration, context.TaskId, context.ConfigRevision) : null,
+                        ? new JobExecutionIdentity(run, node, iteration, context.TaskId, context.ConfigRevision,
+                            context.Occurrence, context.Attempt) : null, // R4.6 B1
                     executionRequest: InstanceIpcEnvelope.Request("task.start", new {
                         groupName = context.TaskType == "group" ? context.GroupName : null,
                         configName = context.TaskType == "onedragon" ? context.GroupName : null,
-                        taskId = context.TaskId, expectedConfigRevision = context.ConfigRevision }));
+                        taskId = context.TaskId, expectedConfigRevision = context.ConfigRevision,
+                        suppressConfigCompletionAction = context.SuppressCompletionAction })); // R4.6 B6：抑制权限随恢复携带
             }
             else if (context.TaskType == "solo")
             {

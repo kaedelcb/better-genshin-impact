@@ -156,7 +156,7 @@ public sealed partial class JobRegistry
     public bool TryMarkTerminal(Guid jobId, JobState terminal, string? errorCode = null,
         string? errorMessage = null, bool wasCancelled = false)
     {
-        if (terminal is not (JobState.Succeeded or JobState.Failed or JobState.Cancelled or JobState.Rejected))
+        if (terminal is not (JobState.Succeeded or JobState.Failed or JobState.Cancelled or JobState.Rejected or JobState.Skipped)) // R4.6 B7 追加修复：Skipped 是合法终态（R4.7 注册表分别表达）
         {
             throw new ArgumentException($"非终态: {terminal}", nameof(terminal));
         }

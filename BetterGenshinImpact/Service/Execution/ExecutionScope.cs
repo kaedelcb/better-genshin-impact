@@ -20,6 +20,12 @@ public sealed class ExecutionScope : IDisposable
     public string StopReason { get; private set; } = JobErrorCodes.CancelledUser;
     public Guid RunId { get; }
     public JobDescriptor Descriptor { get; }
+
+    /// <summary>R4.6 D10/E4'：本次调用收尾权限抑制（随描述符，恢复现场经 checkpoint 携带）。</summary>
+    public bool SuppressConfigCompletionAction => Descriptor.SuppressConfigCompletionAction;
+
+    /// <summary>R4.6 E2-9：执行权取得后复验的期望 UID（null=不校验）。</summary>
+    public string? ExpectedUid => Descriptor.ExpectedUid;
     public long StopVersion { get; }
     public CancellationToken Token => _stop.Token;
     public TaskRunResult Result { get; private set; } = TaskRunResult.Ran;
@@ -128,6 +134,8 @@ public sealed class ExecutionScope : IDisposable
             Checkpoint = Checkpoint with { RootRunId = RunId, AttemptId = Descriptor.JobId,
                 NodeId = Descriptor.NodeId, Iteration = Descriptor.Iteration,
                 TaskId = Descriptor.TaskId, ConfigRevision = Descriptor.ConfigRevision,
+                SuppressCompletionAction = Descriptor.SuppressConfigCompletionAction, // R4.6 B6：抑制权限随恢复现场携带
+                Occurrence = Descriptor.Occurrence, Attempt = Descriptor.Attempt, // R4.6 B1
                 ConfigurationRevisions = new System.Collections.Generic.Dictionary<string, string>(_configurationRevisions) };
         }
     }
