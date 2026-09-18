@@ -46,8 +46,8 @@ public class RunStoreTests : IDisposable
     {
         var store = new RunStore(_dir);
         var rec = store.CreateRun("wf-aaaaaaaa", "rev-1");
-        store.RecordIntent(rec);              // 提交意图先行落盘
-        rec.SubmitIntent = SubmitIntentState.Submitted; // 已发出，受理回执未确认
+        store.RecordIntent(rec, NewSubmission(rec));              // 提交意图先行落盘（一提交一身份，B2）
+        rec.CurrentSubmission!.Intent = SubmitIntentState.Submitted; // 已发出，受理回执未确认
         store.Update(rec);
         var idemBefore = rec.IdempotencyKey;
 
@@ -67,18 +67,18 @@ public class RunStoreTests : IDisposable
     {
         var store = new RunStore(_dir);
         var rec = store.CreateRun("wf-aaaaaaaa", "rev-1");
-        store.RecordIntent(rec);
-        rec.SubmitIntent = SubmitIntentState.Accepted;
-        rec.JobId = "job-123";
+        store.RecordIntent(rec, NewSubmission(rec));
+        rec.CurrentSubmission!.Intent = SubmitIntentState.Accepted;
+        rec.CurrentSubmission!.JobId = "job-123";
         rec.State = WorkflowRunState.Running;
         store.Update(rec);
-        rec.ObservedTerminal = "succeeded"; // 终态已观察，水位尚未提交
+        rec.CurrentSubmission!.ObservedTerminal = "succeeded"; // 终态已观察，水位尚未提交
         store.Update(rec);
 
         var recovered = Assert.Single(store.RecoverOnStart());
         Assert.Equal(WorkflowRunState.Interrupted, recovered.State); // 有终态事实 → 不是 Unknown
-        Assert.Equal("succeeded", recovered.ObservedTerminal);
-        Assert.Equal("job-123", recovered.JobId);
+        Assert.Equal("succeeded", recovered.CurrentSubmission!.ObservedTerminal);
+        Assert.Equal("job-123", recovered.CurrentSubmission!.JobId);
     }
 
     [Fact]
@@ -148,10 +148,54 @@ public class RunStoreTests : IDisposable
     }
 
     [Fact]
-    public void RecordIntent_RequiresFixedIdempotencyKey()
+    public void RecordIntent_RequiresDerivedKey_AndRejectsOverlapWhileInFlight()
     {
         var store = new RunStore(_dir);
-        var rec = new WorkflowRunRecord { RunId = "run-manual001", WorkflowId = "wf-aaaaaaaa", WorkflowRevision = "rev-1" };
-        Assert.Throws<InvalidOperationException>(() => store.RecordIntent(rec)); // 无幂等键拒绝
+        var rec = store.CreateRun("wf-aaaaaaaa", "rev-1");
+
+        // 无派生键拒绝
+        Assert.Throws<InvalidOperationException>(() => store.RecordIntent(rec, new WorkflowSubmission { NodeId = "n-1" }));
+
+        // B2：键按出现身份确定性派生——同身份同键（重复投递复用），不同身份不同键
+        var key1 = RunStore.DeriveSubmissionKey(rec.RunId, "n-1", 0, 0, 1);
+        Assert.Equal(key1, RunStore.DeriveSubmissionKey(rec.RunId, "n-1", 0, 0, 1));
+        Assert.NotEqual(key1, RunStore.DeriveSubmissionKey(rec.RunId, "n-2", 0, 0, 1));
+        Assert.NotEqual(key1, RunStore.DeriveSubmissionKey(rec.RunId, "n-1", 0, 1, 1));
+        Assert.NotEqual(key1, RunStore.DeriveSubmissionKey(rec.RunId, "n-1", 0, 0, 2));
+
+        // 前一提交在飞：拒绝重叠提交（防 jobId/终态跨节点残留）
+        store.RecordIntent(rec, NewSubmission(rec, "n-1"));
+        Assert.Throws<InvalidOperationException>(() => store.RecordIntent(rec, NewSubmission(rec, "n-2")));
+
+        // 终态确认后允许下一提交
+        rec.CurrentSubmission!.ObservedTerminal = "succeeded";
+        store.Update(rec);
+        store.RecordIntent(rec, NewSubmission(rec, "n-2"));
+        Assert.Equal("n-2", rec.CurrentSubmission!.NodeId);
     }
+
+    [Fact]
+    public void CrashWindow5_CompletingInFlight_RecoveredAsUnknown_CompletionNeverAutoRefired()
+    {
+        var store = new RunStore(_dir);
+        var rec = store.CreateRun("wf-aaaaaaaa", "rev-1");
+        rec.State = WorkflowRunState.Completing; // B5：收尾意图已落盘，执行结果未证实
+        rec.PendingCompletionAction = "terminal.completionAction:关闭游戏并关机";
+        store.Update(rec);
+
+        var recovered = Assert.Single(store.RecoverOnStart());
+        Assert.Equal(WorkflowRunState.Unknown, recovered.State); // 收尾在飞 = 结果不确定
+        Assert.Equal("terminal.completionAction:关闭游戏并关机", recovered.PendingCompletionAction); // 保留待人工对账
+        Assert.Contains("禁止自动补发收尾", recovered.Note);
+    }
+
+    private static WorkflowSubmission NewSubmission(WorkflowRunRecord rec, string nodeId = "n-1")
+        => new()
+        {
+            Key = RunStore.DeriveSubmissionKey(rec.RunId, nodeId, 0, 0, 1),
+            NodeId = nodeId,
+            Occurrence = 0,
+            LoopIteration = 0,
+            Attempt = 1,
+        };
 }

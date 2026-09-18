@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO;
 using MultiplayerHoeingAssistant.Models;
 
 namespace MultiplayerHoeingAssistant.Services;
@@ -58,13 +59,15 @@ public enum WorkflowRunAction
 {
     /// <summary>停止流程（终态 Cancelled；不触发收尾，D10）。</summary>
     Stop,
-    /// <summary>跳过当前节点（当前叶子等待被取消，节点记 skippedUser，流程推进）。</summary>
+    /// <summary>跳过当前节点（绑定请求时出现身份；远端取消确认后推进，B4）。</summary>
     SkipCurrent,
     /// <summary>重载流程定义（运行中改流：新修订在下一节点边界生效）。</summary>
     ReloadDefinition,
+    /// <summary>暂停（≠停止；节点边界生效，保留等待记录；显式 ResumeAsync 恢复）。</summary>
+    Pause,
 }
 
-/// <summary>引擎选项（失败策略/时钟/延时工厂——测试可注入，全计时可取消）。</summary>
+/// <summary>引擎选项（失败策略/时钟/延时工厂/确认超时——测试可注入，全计时可取消）。</summary>
 public sealed class WorkflowRunnerOptions
 {
     /// <summary>节点失败/拒绝后是否继续后续节点（D12；默认 false=停止流程，保守防假成功续跑）。</summary>
@@ -75,19 +78,27 @@ public sealed class WorkflowRunnerOptions
     /// <summary>可取消延时（测试用手动时钟快进；生产 Task.Delay）。</summary>
     public Func<TimeSpan, CancellationToken, Task> DelayAsync { get; init; } = Task.Delay;
 
+    /// <summary>显式跳过后确认远端终态的超时（B4：超时 = cancelUnconfirmed → Unknown，不猜成功）。</summary>
+    public TimeSpan SkipConfirmTimeout { get; init; } = TimeSpan.FromSeconds(15);
+
     /// <summary>日志出口（留痕纪律；不含敏感账号字段）。</summary>
     public Action<string>? Log { get; init; }
 }
 
 /// <summary>
-/// 槲寄生 · 任务中心——WorkflowRunner / Reconciler（R4.5，R4 分解 D7/D11/D12）。
+/// 槲寄生 · 任务中心——WorkflowRunner / Reconciler（R4.5，R4 分解 D7/D11/D12 + ASTRA 二轮处置）。
 /// 单运行单驱动循环（串行状态转换）：所有触发（节点终态/动作队列/修订检查/定时唤醒）
 /// 统一进入驱动循环边界处理，不并发推进。
-/// - 修订对账：每节点边界比对 WorkflowStore 当前修订，变化即重载（运行中改流节点边界生效）；
-/// - 提交意图先行：每次提交前 RunStore.RecordIntent 落盘（固定幂等键）；
-/// - 聚合规则：任何节点 failed/rejected → 流程终态 Failed（失败不被后续成功覆盖）；
-/// - 等待不占槽位：触发/轮次等待 = 纯本地可取消延时，不持有执行锁、不提交等待作业；
-/// - 收尾：仅全部节点成功/过滤跳过的成功边界触发；停止/失败/拒绝/未知/等待中不触发（D10）。
+/// ASTRA 二轮处置落点：
+/// - B1 修订寻址：Store 一致性快照（文档+修订同源）；重载后按稳定出现身份从最后完成节点
+///   重算后继，旧序列坐标绝不直接寻址新定义；链尾也是节点边界（追加节点会被执行）；
+/// - B2 一提交一身份：幂等键按 runId+出现身份+attempt 确定性派生，提交事实不跨节点残留；
+/// - B3 崩溃窗口：观察终态+节点结果+游标推进单次原子落盘；游标 null 由 TailReached 消歧；
+///   ResumeAsync 显式恢复入口；聚合只信 NodeOutcomes（含恢复后历史结果重建）；
+/// - B4 显式跳过：请求绑定出现身份，叶子建立空窗不丢动作，远端取消确认（超时=Unknown）后推进；
+/// - B5 收尾：成功边界先落盘收尾意图（Completing+PendingCompletionAction）再执行，收尾失败记 Failed；
+/// - B9 轮次等待：新一轮边界统一执行（成功/过滤/失败续跑同路径），skipAcrossDays 公式化；
+/// - 等待不占槽位：纯本地可取消延时，不持有执行锁、不提交等待作业；暂停可打断等待。
 /// </summary>
 public sealed class WorkflowRunner
 {
@@ -97,15 +108,27 @@ public sealed class WorkflowRunner
     private readonly IWorkflowPrerequisiteAdapter _prerequisites;
     private readonly IWorkflowTerminalExecutor _terminal;
     private readonly WorkflowRunnerOptions _opt;
+    private readonly ConcurrentDictionary<string, RunControl> _controls = new(StringComparer.Ordinal);
+
+    /// <summary>跳过请求（B4：绑定请求时的出现身份；身份漂移则丢弃，不误伤后续节点）。</summary>
+    private sealed record SkipRequest(string NodeId, int Occurrence, int LoopIteration)
+    {
+        public bool Matches(WorkflowNodeOccurrence occ)
+            => NodeId == occ.NodeId && Occurrence == occ.Occurrence && LoopIteration == occ.LoopIteration;
+    }
 
     private sealed class RunControl
     {
         public required CancellationTokenSource RunCts { get; init; }
-        public CancellationTokenSource? LeafCts { get; set; }
         public ConcurrentQueue<WorkflowRunAction> Actions { get; } = new();
-    }
 
-    private readonly ConcurrentDictionary<string, RunControl> _controls = new();
+        /// <summary>LeafCts/PendingSkip 互斥（B4：Cancel/Dispose 竞争消除）。</summary>
+        public object Sync { get; } = new();
+        public CancellationTokenSource? LeafCts;
+        public SkipRequest? PendingSkip;
+        public bool PauseRequested;
+        public TaskCompletionSource PauseSignal { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
 
     public WorkflowRunner(WorkflowStore workflows, RunStore runs, IWorkflowExecutionBoundary boundary,
         IWorkflowPrerequisiteAdapter prerequisites, IWorkflowTerminalExecutor terminal,
@@ -124,8 +147,31 @@ public sealed class WorkflowRunner
     {
         if (!_controls.TryGetValue(runId, out var control)) return;
         control.Actions.Enqueue(action);
-        if (action == WorkflowRunAction.Stop) control.RunCts.Cancel();
-        if (action == WorkflowRunAction.SkipCurrent) control.LeafCts?.Cancel();
+        switch (action)
+        {
+            case WorkflowRunAction.Stop:
+                control.RunCts.Cancel();
+                break;
+            case WorkflowRunAction.Pause:
+                control.PauseRequested = true;
+                control.PauseSignal.TrySetResult();
+                break;
+            case WorkflowRunAction.SkipCurrent:
+            {
+                // B4：绑定请求时的当前游标身份；等待期间无执行中节点，不登记（等待可经 Stop 中断）
+                var rec = _runs.Load(runId);
+                if (rec?.State == WorkflowRunState.Waiting)
+                {
+                    Log(runId, "等待期间无执行中节点，跳过请求不登记。");
+                    break;
+                }
+                control.PendingSkip = rec?.Cursor is { } cursor
+                    ? new SkipRequest(cursor.NodeId, cursor.Occurrence, cursor.LoopIteration)
+                    : new SkipRequest("", -1, -1); // 无游标：永不命中，仅留痕
+                lock (control.Sync) control.LeafCts?.Cancel();
+                break;
+            }
+        }
     }
 
     /// <summary>
@@ -134,14 +180,51 @@ public sealed class WorkflowRunner
     /// </summary>
     public async Task<WorkflowRunRecord> StartAsync(string workflowId, CancellationToken ct = default)
     {
-        var doc = _workflows.Load(workflowId); // 隔离文件在此响亮抛出
-        var revision = CurrentRevision(workflowId);
-        var plan = new WorkflowPlan(doc);
+        var snapshot = _workflows.LoadSnapshot(workflowId); // 隔离文件在此响亮抛出；文档+修订同源（B1）
+        var plan = new WorkflowPlan(snapshot.Document);
         var preflight = plan.Preflight(_boundary.SingleNativeSupported);
         if (!preflight.Executable)
             throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
 
-        var run = _runs.CreateRun(workflowId, revision);
+        var run = _runs.CreateRun(workflowId, snapshot.Revision);
+        var control = new RunControl { RunCts = CancellationTokenSource.CreateLinkedTokenSource(ct) };
+        if (!_controls.TryAdd(run.RunId, control))
+            throw new InvalidOperationException("运行登记冲突：" + run.RunId);
+        try
+        {
+            return await DriveAsync(run, plan, control).ConfigureAwait(false);
+        }
+        finally
+        {
+            _controls.TryRemove(run.RunId, out _);
+            control.RunCts.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// 显式恢复运行（B3 恢复入口 + D7 生命周期触发的消费侧）。
+    /// 仅接受 Interrupted/Paused；Unknown 拒绝自动恢复（结果不确定，需先按幂等键+job 查询对账）。
+    /// 恢复点 = 游标身份在当前修订中重定位；已完成节点不重放；历史失败结果参与聚合。
+    /// </summary>
+    public async Task<WorkflowRunRecord> ResumeAsync(string runId, CancellationToken ct = default)
+    {
+        var run = _runs.Load(runId) ?? throw new FileNotFoundException("运行记录不存在：" + runId);
+        if (run.State == WorkflowRunState.Unknown)
+            throw new InvalidOperationException("运行结果不确定（Unknown），需先按幂等键+job 查询对账，禁止自动恢复。");
+        if (run.State is not (WorkflowRunState.Interrupted or WorkflowRunState.Paused))
+            throw new InvalidOperationException($"仅 Interrupted/Paused 可显式恢复（当前 {run.State}）。");
+
+        var snapshot = _workflows.LoadSnapshot(run.WorkflowId);
+        var plan = new WorkflowPlan(snapshot.Document);
+        var preflight = plan.Preflight(_boundary.SingleNativeSupported);
+        if (!preflight.Executable)
+            throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
+
+        run.WorkflowRevision = snapshot.Revision; // 恢复即对账到当前修订（节点边界语义）
+        run.State = WorkflowRunState.Running;
+        run.Note = AppendNote(run.Note, "显式恢复运行（游标身份重定位，不重放已完成节点）。");
+        _runs.Update(run);
+
         var control = new RunControl { RunCts = CancellationTokenSource.CreateLinkedTokenSource(ct) };
         if (!_controls.TryAdd(run.RunId, control))
             throw new InvalidOperationException("运行登记冲突：" + run.RunId);
@@ -159,43 +242,78 @@ public sealed class WorkflowRunner
     private async Task<WorkflowRunRecord> DriveAsync(WorkflowRunRecord run, WorkflowPlan plan, RunControl control)
     {
         var ct = control.RunCts.Token;
-        var hadBadOutcome = false;
+        var flowFailure = false;
         try
         {
-            // 顶层触发器：入口等待（不占槽位）
-            await AwaitFlowTriggersAsync(run, plan, ct).ConfigureAwait(false);
+            // 顶层触发器：入口等待（不占槽位；已消费则跳过——恢复不重等，B3）
+            if (!run.TriggerConsumed)
+            {
+                await AwaitFlowTriggersAsync(run, plan, control, ct).ConfigureAwait(false);
+                if (control.PauseRequested) return Pause(run);
+                run.TriggerConsumed = true;
+                run.State = WorkflowRunState.Running;
+                _runs.Update(run);
+            }
 
-            run.State = WorkflowRunState.Running;
-            _runs.Update(run);
-
-            var occurrence = run.Cursor is null
-                ? plan.FirstOccurrence()
-                : new WorkflowNodeOccurrence(run.Cursor.NodeId, FindSequenceIndex(plan, run.Cursor),
-                    run.Cursor.Occurrence, run.Cursor.LoopIteration);
-
-            while (occurrence is not null)
+            var occurrence = Relocate(run, plan);
+            if (occurrence is not null && run.Cursor is null)
+            {
+                // 首个待执行节点即落盘游标（B4：跳过动作绑定出现身份对首节点同样成立）
+                ApplyRelocation(run, occurrence);
+                _runs.Update(run);
+            }
+            while (true)
             {
                 ct.ThrowIfCancellationRequested();
+                if (control.PauseRequested) return Pause(run);
 
-                // 边界①：显式动作 + 修订对账（运行中改流节点边界生效，D7）
-                plan = ProcessBoundaryActions(run, plan, control);
+                // 边界①：显式动作 + 修订对账（新修订按稳定身份重算后继；链尾亦对账，B1）
+                (plan, occurrence) = ProcessBoundaryActions(run, plan, occurrence, control);
+                if (occurrence is null) break; // 链尾（TailReached 已落盘）
+
+                // B3-③：提交终态已观察但结果未提交（仅遗留/手工记录可达；正常路径单次写已消除窗口）
+                // ——按提交事实补记结果，绝不重跑该节点
+                if (run.CurrentSubmission is { ObservedTerminal: { } observed } pendingSub
+                    && pendingSub.NodeId == occurrence.NodeId
+                    && pendingSub.Occurrence == occurrence.Occurrence
+                    && pendingSub.LoopIteration == occurrence.LoopIteration)
+                {
+                    var mapped = MapTerminal(observed);
+                    Log(run, $"提交 {pendingSub.Key} 终态已观察（{observed}）但结果未提交，按事实补记，不重跑。");
+                    CommitOutcome(run, plan, occurrence, mapped.Result, mapped.Reason);
+                    if (mapped.Result == "cancelled") throw new OperationCanceledException();
+                    if (mapped.Result is "failed" or "rejected" && !_opt.ContinueOnNodeFailure) break;
+                    occurrence = Relocate(run, plan);
+                    continue;
+                }
+
+                // B9：轮次起点等待统一在新一轮边界（成功/过滤跳过/失败续跑同路径；不占槽位）
+                if (occurrence is { SequenceIndex: 0, LoopIteration: > 0 }
+                    && occurrence.LoopIteration != run.LastScheduledRoundWait)
+                {
+                    if (!await AwaitLoopRoundStartAsync(run, plan, occurrence, control, ct).ConfigureAwait(false))
+                    {
+                        flowFailure = true;
+                        break;
+                    }
+                    if (control.PauseRequested) return Pause(run);
+                }
 
                 var node = plan.NodeAt(occurrence);
                 var gate = plan.EvaluateNode(occurrence, _opt.Clock(), _boundary.SingleNativeSupported);
                 if (gate.Action == NodeGateAction.Skip)
                 {
-                    RecordOutcome(run, occurrence, "skippedFilter", gate.Reason);
                     Log(run, $"节点 {occurrence.NodeId}#{occurrence.LoopIteration} 过滤跳过：{gate.Reason}");
-                    occurrence = Advance(run, plan, occurrence);
+                    CommitOutcome(run, plan, occurrence, "skippedFilter", gate.Reason);
+                    occurrence = Relocate(run, plan);
                     continue;
                 }
                 if (gate.Action == NodeGateAction.Reject)
                 {
-                    hadBadOutcome = true;
-                    RecordOutcome(run, occurrence, "rejected", gate.Reason);
                     Log(run, $"节点 {occurrence.NodeId}#{occurrence.LoopIteration} 响亮拒绝：{gate.Reason}");
+                    CommitOutcome(run, plan, occurrence, "rejected", gate.Reason);
                     if (!_opt.ContinueOnNodeFailure) break;
-                    occurrence = Advance(run, plan, occurrence);
+                    occurrence = Relocate(run, plan);
                     continue;
                 }
 
@@ -203,66 +321,70 @@ public sealed class WorkflowRunner
                 var prereqBlock = await ExecutePrerequisitesAsync(run, node, occurrence, ct).ConfigureAwait(false);
                 if (prereqBlock is not null)
                 {
-                    hadBadOutcome = true;
-                    RecordOutcome(run, occurrence, "failed", prereqBlock);
+                    CommitOutcome(run, plan, occurrence, "failed", prereqBlock);
                     if (!_opt.ContinueOnNodeFailure) break;
-                    occurrence = Advance(run, plan, occurrence);
+                    occurrence = Relocate(run, plan);
                     continue;
                 }
 
-                // 提交（意图先行 → 提交 → 终态；D11）
+                // 提交（意图先行 → 提交 → 终态；观察终态+结果+游标单次落盘，B2/B3）
                 var outcome = await SubmitAndAwaitAsync(run, plan, node, occurrence, control).ConfigureAwait(false);
-                if (outcome.CancelledByStop) throw new OperationCanceledException();
-                if (outcome.SkippedByUser)
+                CommitOutcome(run, plan, occurrence, outcome.Result, outcome.Reason);
+                if (outcome.Result == "cancelUnconfirmed")
                 {
-                    RecordOutcome(run, occurrence, "skippedUser", "显式跳过当前节点");
-                    occurrence = Advance(run, plan, occurrence);
-                    continue;
+                    // B4：显式跳过后远端终态未确认——结果不确定，不推进、不触发收尾、禁止自动重跑
+                    run.State = WorkflowRunState.Unknown;
+                    run.Note = AppendNote(run.Note, "显式跳过后远端终态未确认，标 Unknown（不推进、不触发收尾、禁止自动重跑）。");
+                    _runs.Update(run);
+                    return run;
                 }
-                if (outcome.Result != "succeeded")
-                {
-                    hadBadOutcome = true;
-                    RecordOutcome(run, occurrence, outcome.Result == "cancelled" ? "cancelled" : "failed", outcome.Reason);
-                    if (outcome.Result == "cancelled") throw new OperationCanceledException(); // BGI 侧取消事实 → 流程取消（D12）
-                    if (!_opt.ContinueOnNodeFailure) break;
-                    occurrence = Advance(run, plan, occurrence);
-                    continue;
-                }
-
-                RecordOutcome(run, occurrence, "succeeded", null);
-                occurrence = Advance(run, plan, occurrence);
-
-                // 结构性循环：轮次等待（不占槽位）
-                if (occurrence is not null && occurrence.SequenceIndex == 0 && occurrence.LoopIteration > 0
-                    && plan.Document.Loop is { } loop && loop.Mode == "scheduled")
-                {
-                    var next = WorkflowLoopSchedule.NextRoundStart(loop, _opt.Clock(), out var loopReason);
-                    if (next is null)
-                    {
-                        hadBadOutcome = true;
-                        Log(run, "循环时刻计算失败：" + loopReason);
-                        break;
-                    }
-                    await WaitAsync(run, "loop.scheduled", next.Value, ct).ConfigureAwait(false);
-                }
+                if (outcome.Result == "cancelled") throw new OperationCanceledException(); // BGI 取消事实 → 流程取消（D12）
+                if (outcome.Result is "failed" or "rejected" && !_opt.ContinueOnNodeFailure) break;
+                occurrence = Relocate(run, plan);
             }
 
-            // 流程边界：聚合判定（D6）→ 收尾（D10）
-            if (hadBadOutcome)
+            // 流程边界：聚合判定只信 NodeOutcomes（B3：含恢复后的历史结果重建，失败不被成功覆盖）
+            var hadBadOutcome = run.NodeOutcomes.Any(o =>
+                o.Result is "failed" or "rejected" or "cancelled" or "cancelUnconfirmed");
+            if (hadBadOutcome || flowFailure)
             {
                 run.State = WorkflowRunState.Failed;
-                run.Note = AppendNote(run.Note, "存在失败/拒绝节点，聚合结果 Failed（失败不被后续成功覆盖）。");
+                run.Note = AppendNote(run.Note, flowFailure
+                    ? "循环/触发时刻计算失败，聚合结果 Failed。"
+                    : "存在失败/拒绝节点，聚合结果 Failed（失败不被后续成功覆盖）。");
                 _runs.Update(run);
                 return run;
             }
 
-            run.State = WorkflowRunState.Succeeded;
-            _runs.Update(run);
-            foreach (var action in plan.Document.Terminal)
+            // B5：收尾意图先行落盘（Completing + PendingCompletionAction），再执行收尾动作；
+            // 收尾失败记 Failed 且保留待执行收尾（恢复扫描标 Unknown，禁止自动补发）。
+            // D15 定案：skippedUser/skippedFilter 不算坏结果，不阻断成功边界收尾（用户显式跳过视为认可完成）。
+            var terminalActions = plan.Document.Terminal;
+            if (terminalActions.Count > 0)
             {
-                await _terminal.ExecuteAsync(action, run, ct).ConfigureAwait(false);
+                run.State = WorkflowRunState.Completing;
+                run.PendingCompletionAction = string.Join(";", terminalActions.Select(a =>
+                    a.GetString("action") is { } act ? $"{a.Kind}:{act}" : a.Kind));
+                _runs.Update(run);
+                foreach (var action in terminalActions)
+                {
+                    try
+                    {
+                        await _terminal.ExecuteAsync(action, run, ct).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        run.State = WorkflowRunState.Failed;
+                        run.Note = AppendNote(run.Note,
+                            $"收尾动作 {action.Kind} 执行失败：{ex.Message}（流程主体成功，收尾失败不记成功；待执行收尾保留待人工处置）。");
+                        _runs.Update(run);
+                        return run;
+                    }
+                }
+                run.PendingCompletionAction = null;
             }
-            run.PendingCompletionAction = null;
+
+            run.State = WorkflowRunState.Succeeded;
             _runs.Update(run);
             return run;
         }
@@ -276,26 +398,22 @@ public sealed class WorkflowRunner
         }
     }
 
-    /// <summary>提交 + 终态等待（意图先行落盘；SkipCurrent 经叶子令牌取消）。</summary>
-    private async Task<(string? Result, string? Reason, bool SkippedByUser, bool CancelledByStop)> SubmitAndAwaitAsync(
+    /// <summary>提交 + 终态等待（意图先行落盘；SkipCurrent 经叶子令牌取消 + 远端确认，B4）。</summary>
+    private async Task<(string Result, string? Reason)> SubmitAndAwaitAsync(
         WorkflowRunRecord run, WorkflowPlan plan, WorkflowNode node, WorkflowNodeOccurrence occurrence, RunControl control)
     {
         var ct = control.RunCts.Token;
-        run.Cursor = new WorkflowNodeCursor
+        const int attempt = 1; // 有界重试机制挂账 R4.6+（键结构已含 attempt，身份合同就绪）
+        var submission = new WorkflowSubmission
         {
+            Key = RunStore.DeriveSubmissionKey(run.RunId, occurrence.NodeId, occurrence.Occurrence,
+                occurrence.LoopIteration, attempt),
             NodeId = occurrence.NodeId,
             Occurrence = occurrence.Occurrence,
             LoopIteration = occurrence.LoopIteration,
-            Attempt = run.Cursor?.Attempt ?? 1,
+            Attempt = attempt,
         };
-        run.BoundResource = new BoundResourceRef
-        {
-            Kind = node.Kind,
-            Config = node.Ref?.Config,
-            TaskId = node.Ref?.TaskId,
-            ConfigRevision = node.Ref?.Revision,
-        };
-        _runs.RecordIntent(run); // 提交意图先行（D11：崩溃后可对账，不重跑）
+        _runs.RecordIntent(run, submission); // 提交意图先行（B2/B3：崩溃后按意图对账，不重跑）
 
         var submit = await _boundary.SubmitAsync(
             new WorkflowSubmitRequest(run, occurrence, node,
@@ -303,33 +421,76 @@ public sealed class WorkflowRunner
             .ConfigureAwait(false);
         if (!submit.Accepted)
         {
-            run.SubmitIntent = SubmitIntentState.Rejected;
-            _runs.Update(run);
-            return ("failed", "提交被拒绝：" + submit.RejectReason, false, false);
+            submission.Intent = SubmitIntentState.Rejected;
+            return ("rejected", "提交被拒绝：" + submit.RejectReason);
         }
-        run.SubmitIntent = SubmitIntentState.Accepted;
-        run.JobId = submit.JobId;
-        _runs.Update(run);
+        submission.Intent = SubmitIntentState.Accepted;
+        submission.JobId = submit.JobId;
+        _runs.Update(run); // 受理事实落盘（提交仍在飞：ObservedTerminal 未填写）
 
-        control.LeafCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        CancellationTokenSource leaf;
+        lock (control.Sync)
+        {
+            leaf = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            control.LeafCts = leaf;
+            if (control.PendingSkip is { } skip)
+            {
+                control.PendingSkip = null;
+                if (skip.Matches(occurrence)) leaf.Cancel(); // B4：空窗到达的跳过在叶子建立时生效
+                else Log(run, "过期跳过动作已丢弃（出现身份漂移，不误伤后续节点）。");
+            }
+        }
         try
         {
-            var terminal = await _boundary.AwaitTerminalAsync(submit.JobId!, control.LeafCts.Token)
-                .ConfigureAwait(false);
-            run.ObservedTerminal = terminal;
-            _runs.Update(run);
-            return (terminal, null, false, false);
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            return (null, null, true, false); // 叶子被取消 = 显式跳过当前（Stop 会先取消运行令牌）
+            string terminal;
+            try
+            {
+                terminal = await _boundary.AwaitTerminalAsync(submit.JobId!, leaf.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                // 叶子被取消（显式跳过）：远端取消确认后再推进（B4 确认阶段；Stop 会先取消运行令牌）
+                return await ConfirmSkipAsync(run, submission, ct).ConfigureAwait(false);
+            }
+            return MapTerminal(terminal);
         }
         finally
         {
-            control.LeafCts.Dispose();
-            control.LeafCts = null;
+            lock (control.Sync) control.LeafCts = null;
+            leaf.Dispose();
         }
     }
+
+    /// <summary>显式跳过确认（B4：请求跳过→取消中→已确认/未知；未确认不得当成功推进）。</summary>
+    private async Task<(string Result, string? Reason)> ConfirmSkipAsync(
+        WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(_opt.SkipConfirmTimeout);
+        try
+        {
+            var terminal = await _boundary.AwaitTerminalAsync(submission.JobId!, timeout.Token).ConfigureAwait(false);
+            return terminal switch
+            {
+                "cancelled" => ("skippedUser", "显式跳过当前节点（远端取消已确认）"),
+                "succeeded" => ("succeeded", "跳过请求到达时节点已完成（留痕，不算跳过）"),
+                var t => ("failed", $"跳过请求后观察到意外终态 {t}"),
+            };
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return ("cancelUnconfirmed", $"跳过请求后 {_opt.SkipConfirmTimeout.TotalSeconds:0}s 内远端终态未确认");
+        }
+    }
+
+    /// <summary>边界终态词汇 → 节点结果（未知词汇按 failed，保守不猜成功）。</summary>
+    private static (string Result, string? Reason) MapTerminal(string terminal)
+        => terminal switch
+        {
+            "succeeded" => ("succeeded", null),
+            "cancelled" => ("cancelled", "BGI 侧取消事实"),
+            var t => ("failed", $"作业终态 {t}"),
+        };
 
     /// <summary>前置策略执行（未知策略类型响亮阻止；账号/兑换经适配器）。</summary>
     private async Task<string?> ExecutePrerequisitesAsync(WorkflowRunRecord run, WorkflowNode node,
@@ -345,8 +506,8 @@ public sealed class WorkflowRunner
         return null;
     }
 
-    /// <summary>顶层触发器等待（多触发器取最近；未知触发器响亮失败）。</summary>
-    private async Task AwaitFlowTriggersAsync(WorkflowRunRecord run, WorkflowPlan plan, CancellationToken ct)
+    /// <summary>顶层触发器等待（多触发器取最近；未知触发器响亮失败；暂停可打断）。</summary>
+    private async Task AwaitFlowTriggersAsync(WorkflowRunRecord run, WorkflowPlan plan, RunControl control, CancellationToken ct)
     {
         if (plan.Document.Triggers.Count == 0) return;
         DateTimeOffset? earliest = null;
@@ -358,11 +519,36 @@ public sealed class WorkflowRunner
         }
         run.State = WorkflowRunState.Waiting;
         _runs.Update(run);
-        await WaitAsync(run, "trigger.time", earliest!.Value, ct).ConfigureAwait(false);
+        await WaitAsync(run, "trigger.time", earliest!.Value, control, ct).ConfigureAwait(false);
     }
 
-    /// <summary>等待（不占槽位：纯本地可取消延时 + RunStore 等待状态持久化）。</summary>
-    private async Task WaitAsync(WorkflowRunRecord run, string kind, DateTimeOffset until, CancellationToken ct)
+    /// <summary>
+    /// 轮次起点等待（B9：新一轮边界统一入口；skipAcrossDays 公式化，见 WorkflowLoopSchedule）。
+    /// 返回 false = 时刻计算失败（流程级失败）。暂停打断时不记 LastScheduledRoundWait（恢复重排本轮）。
+    /// </summary>
+    private async Task<bool> AwaitLoopRoundStartAsync(WorkflowRunRecord run, WorkflowPlan plan,
+        WorkflowNodeOccurrence occurrence, RunControl control, CancellationToken ct)
+    {
+        var loop = plan.Document.Loop;
+        if (loop is null) return true; // LoopIteration>0 蕴含循环定义；防御性放行
+        var next = WorkflowLoopSchedule.NextRoundStart(loop, _opt.Clock(), out var reason);
+        if (next is null)
+        {
+            Log(run, "循环时刻计算失败：" + reason);
+            return false;
+        }
+        if (next.Value > _opt.Clock())
+        {
+            await WaitAsync(run, "loop.scheduled", next.Value, control, ct).ConfigureAwait(false);
+            if (control.PauseRequested) return true;
+        }
+        run.LastScheduledRoundWait = occurrence.LoopIteration;
+        _runs.Update(run);
+        return true;
+    }
+
+    /// <summary>等待（不占槽位：纯本地可取消延时 + RunStore 等待状态持久化；暂停打断保留等待记录）。</summary>
+    private async Task WaitAsync(WorkflowRunRecord run, string kind, DateTimeOffset until, RunControl control, CancellationToken ct)
     {
         run.State = WorkflowRunState.Waiting;
         run.Wait = new WaitStateRecord
@@ -375,62 +561,107 @@ public sealed class WorkflowRunner
         Log(run, $"进入等待（{kind}）至 {until:yyyy-MM-dd HH:mm}（不持有执行锁、不提交等待作业）");
         var delay = until - _opt.Clock();
         if (delay > TimeSpan.Zero)
-            await _opt.DelayAsync(delay, ct).ConfigureAwait(false);
+        {
+            var delayTask = _opt.DelayAsync(delay, ct);
+            if (await Task.WhenAny(delayTask, control.PauseSignal.Task).ConfigureAwait(false) != delayTask)
+                return; // 暂停打断：Wait 记录保留，恢复后按 NextTriggerAt 重排剩余
+            await delayTask.ConfigureAwait(false); // 传播 Stop 取消
+        }
         run.Wait = null;
         run.State = WorkflowRunState.Running;
         _runs.Update(run);
     }
 
-    /// <summary>边界动作处理：修订对账（默认节点边界生效）+ 显式重载。</summary>
-    private WorkflowPlan ProcessBoundaryActions(WorkflowRunRecord run, WorkflowPlan plan, RunControl control)
+    /// <summary>边界动作处理：修订对账（默认节点边界生效）+ 显式动作消费。</summary>
+    private (WorkflowPlan Plan, WorkflowNodeOccurrence? Occurrence) ProcessBoundaryActions(
+        WorkflowRunRecord run, WorkflowPlan plan, WorkflowNodeOccurrence? occurrence, RunControl control)
     {
-        var reload = false;
+        var reloadRequested = false;
         while (control.Actions.TryDequeue(out var action))
         {
-            if (action == WorkflowRunAction.ReloadDefinition) reload = true;
-            // Stop/SkipCurrent 经令牌生效，不在此处理
+            switch (action)
+            {
+                case WorkflowRunAction.ReloadDefinition:
+                    reloadRequested = true;
+                    break;
+                case WorkflowRunAction.SkipCurrent:
+                    Log(run, "显式跳过请求已登记（绑定请求时出现身份；叶子建立即生效）。");
+                    break;
+                // Stop/Pause 经运行令牌/暂停标志生效，不在此消费
+            }
         }
-        var current = CurrentRevision(run.WorkflowId);
-        if (!reload && current == run.WorkflowRevision) return plan;
 
-        // 运行中改流：新修订在节点边界生效（执行中叶子已完成到这里，无硬切）
-        var doc = _workflows.Load(run.WorkflowId);
-        var newPlan = new WorkflowPlan(doc);
+        var snapshot = _workflows.LoadSnapshot(run.WorkflowId); // 文档+修订同源（B1）
+        if (!reloadRequested && snapshot.Revision == run.WorkflowRevision) return (plan, occurrence);
+
+        var newPlan = new WorkflowPlan(snapshot.Document);
         var preflight = newPlan.Preflight(_boundary.SingleNativeSupported);
         if (!preflight.Executable)
         {
-            Log(run, "流程新修订预检未通过，沿用旧定义继续本节点边界：" + string.Join("；", preflight.BlockingReasons));
-            return plan;
+            Log(run, "流程新修订预检未通过，沿用旧定义继续：" + string.Join("；", preflight.BlockingReasons));
+            return (plan, occurrence);
         }
-        run.WorkflowRevision = current;
+
+        // 新修订节点边界生效：从最后完成身份在新定义中重算后继（B1：插入/删除/重排不错位；
+        // occurrence 为 null 时即链尾对账——新修订追加的节点会被执行）
+        var relocated = RecomputeSuccessor(run, newPlan);
+        run.WorkflowRevision = snapshot.Revision;
+        ApplyRelocation(run, relocated);
         _runs.Update(run);
-        Log(run, $"流程定义已重载（修订 {current[..Math.Min(8, current.Length)]}…），节点边界生效");
-        return newPlan;
+        Log(run, $"流程定义已重载（修订 {snapshot.Revision[..Math.Min(8, snapshot.Revision.Length)]}…），按稳定身份重算后继，节点边界生效。");
+        return (newPlan, relocated);
     }
 
-    private WorkflowNodeOccurrence? Advance(WorkflowRunRecord run, WorkflowPlan plan, WorkflowNodeOccurrence current)
+    /// <summary>按稳定出现身份重算后继：最后完成节点在新定义中的 Next；无完成节点取链首；锚失效按链尾（不静默重排）。</summary>
+    private WorkflowNodeOccurrence? RecomputeSuccessor(WorkflowRunRecord run, WorkflowPlan plan)
     {
-        var next = plan.Next(current);
-        if (next is null)
+        var last = run.NodeOutcomes.LastOrDefault();
+        if (last is null) return plan.FirstOccurrence();
+        if (plan.TryLocate(last.NodeId, last.Occurrence, last.LoopIteration, out var lastOcc))
+            return plan.Next(lastOcc);
+        Log(run, $"最后完成身份 {last.NodeId}#{last.Occurrence} 在新修订中已消失，按链尾处理（已完成节点不重跑）。");
+        return null;
+    }
+
+    /// <summary>游标 → 当前计划中的出现（恢复/推进共用；身份失效按最后完成身份重算，不回链首重跑）。</summary>
+    private WorkflowNodeOccurrence? Relocate(WorkflowRunRecord run, WorkflowPlan plan)
+    {
+        if (run.TailReached) return null;
+        if (run.Cursor is null) return plan.FirstOccurrence();
+        if (plan.TryLocate(run.Cursor.NodeId, run.Cursor.Occurrence, run.Cursor.LoopIteration, out var occ))
+            return occ;
+        var relocated = RecomputeSuccessor(run, plan);
+        ApplyRelocation(run, relocated);
+        _runs.Update(run);
+        return relocated;
+    }
+
+    private static void ApplyRelocation(WorkflowRunRecord run, WorkflowNodeOccurrence? relocated)
+    {
+        if (relocated is null)
         {
-            run.Cursor = null; // 链尾：清空游标（成功边界由调用方收口）
+            run.Cursor = null;
+            run.TailReached = true;
         }
         else
         {
+            run.TailReached = false;
             run.Cursor = new WorkflowNodeCursor
             {
-                NodeId = next.NodeId,
-                Occurrence = next.Occurrence,
-                LoopIteration = next.LoopIteration,
+                NodeId = relocated.NodeId,
+                Occurrence = relocated.Occurrence,
+                LoopIteration = relocated.LoopIteration,
                 Attempt = 1,
             };
         }
-        _runs.Update(run);
-        return next;
     }
 
-    private void RecordOutcome(WorkflowRunRecord run, WorkflowNodeOccurrence occurrence, string result, string? reason)
+    /// <summary>结果提交（B3-①：观察终态 + 节点结果 + 游标推进单次原子落盘，无中间态窗口）。</summary>
+    private void CommitOutcome(WorkflowRunRecord run, WorkflowPlan plan, WorkflowNodeOccurrence occurrence,
+        string result, string? reason)
     {
+        if (run.CurrentSubmission is { ObservedTerminal: null } sub)
+            sub.ObservedTerminal = result; // 提交终态与结果/游标同写
         run.NodeOutcomes.Add(new WorkflowNodeOutcome
         {
             NodeId = occurrence.NodeId,
@@ -440,27 +671,21 @@ public sealed class WorkflowRunner
             Result = result,
             Reason = reason,
         });
+        ApplyRelocation(run, plan.Next(occurrence));
         _runs.Update(run);
     }
 
-    private string CurrentRevision(string workflowId)
-        => _workflows.List().FirstOrDefault(e => e.WorkflowId == workflowId)?.Revision
-           ?? throw new InvalidOperationException("流程不在目录中：" + workflowId);
-
-    private static int FindSequenceIndex(WorkflowPlan plan, WorkflowNodeCursor cursor)
+    private WorkflowRunRecord Pause(WorkflowRunRecord run)
     {
-        // 游标 → 序列位置：按 nodeId + 出现序号定位（不按名称；找不到=定义已改，回链首由调用方处理）
-        var count = -1;
-        for (var i = 0; i < plan.Document.Nodes.Count; i++)
-        {
-            if (plan.Document.Nodes[i].NodeId != cursor.NodeId) continue;
-            count++;
-            if (count == cursor.Occurrence) return i;
-        }
-        return 0;
+        run.State = WorkflowRunState.Paused;
+        run.Note = AppendNote(run.Note, "已暂停（≠停止；修订按节点边界生效；显式 ResumeAsync 恢复）。");
+        _runs.Update(run);
+        return run;
     }
 
-    private void Log(WorkflowRunRecord run, string message) => _opt.Log?.Invoke($"[{run.RunId}] {message}");
+    private void Log(WorkflowRunRecord run, string message) => Log(run.RunId, message);
+
+    private void Log(string runId, string message) => _opt.Log?.Invoke($"[{runId}] {message}");
 
     private static string AppendNote(string? note, string addition)
         => string.IsNullOrEmpty(note) ? addition : note + " | " + addition;

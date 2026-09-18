@@ -1,4 +1,5 @@
 using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using MultiplayerHoeingAssistant.Models;
@@ -31,6 +32,9 @@ public sealed class RunStore
 
     private readonly string _runsDir;
     private readonly string _backupDir;
+
+    /// <summary>写入串行化闸门（ASTRA 二轮重要项①：乐观并发只防覆盖不防交错，读-检-写全程互斥）。</summary>
+    private readonly object _gate = new();
 
     public RunStore(string runsDir)
     {
@@ -79,7 +83,6 @@ public sealed class RunStore
             WorkflowRevision = workflowRevision,
             State = WorkflowRunState.Planned,
             IdempotencyKey = NewIdempotencyKey(),
-            SubmitIntent = SubmitIntentState.None,
             CreatedAt = now,
             UpdatedAt = now,
             Note = note,
@@ -90,14 +93,32 @@ public sealed class RunStore
 
     /// <summary>
     /// 记录提交意图（必须在向 BGI 提交前调用；D11/B3：崩溃后按意图 + 账本/job 查询对账，不重跑）。
-    /// 要求幂等键已固定（CreateRun 已生成；显式更换幂等键被拒绝——新尝试应新建游标尝试而非换键）。
+    /// B2：一提交一身份——submission 键须经 DeriveSubmissionKey 按出现身份确定性派生；
+    /// 前一提交终态未确认（InFlight）时拒绝重叠提交（防 jobId/终态跨节点残留误判）。
     /// </summary>
-    public void RecordIntent(WorkflowRunRecord rec)
+    public void RecordIntent(WorkflowRunRecord rec, WorkflowSubmission submission)
     {
-        if (string.IsNullOrWhiteSpace(rec.IdempotencyKey))
-            throw new InvalidOperationException("提交意图要求固定幂等键已存在。");
-        rec.SubmitIntent = SubmitIntentState.IntentRecorded;
+        if (string.IsNullOrWhiteSpace(submission.Key))
+            throw new InvalidOperationException("提交意图要求确定性派生幂等键已存在。");
+        if (string.IsNullOrWhiteSpace(submission.NodeId))
+            throw new InvalidOperationException("提交意图要求绑定节点出现身份。");
+        if (rec.CurrentSubmission is { } prev && prev.InFlight)
+            throw new InvalidOperationException(
+                $"前一提交 {prev.Key}（节点 {prev.NodeId}）终态未确认，拒绝重叠提交（一提交一身份）。");
+        submission.Intent = SubmitIntentState.IntentRecorded;
+        submission.RecordedAt = DateTimeOffset.Now;
+        rec.CurrentSubmission = submission;
         Persist(rec, rec.RecordRevision);
+    }
+
+    /// <summary>
+    /// 确定性派生单次提交幂等键（B2）：同一 runId+节点出现+attempt 重算同键（重复投递复用），
+    /// 不同节点/轮次/尝试绝不复用；崩溃恢复不产生第二次执行。
+    /// </summary>
+    public static string DeriveSubmissionKey(string runId, string nodeId, int occurrence, int loopIteration, int attempt)
+    {
+        var material = $"{runId}|{nodeId}|{occurrence}|{loopIteration}|{attempt}";
+        return "idem-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material)))[..24].ToLowerInvariant();
     }
 
     /// <summary>推进记录（提交受理/终态/水位/等待/收尾状态更新；记录修订单调递增）。</summary>
@@ -144,12 +165,24 @@ public sealed class RunStore
         foreach (var rec in List())
         {
             if (rec.IsTerminal) continue;
-            var submitInFlight = rec.SubmitIntent is SubmitIntentState.IntentRecorded or SubmitIntentState.Submitted or SubmitIntentState.Accepted
-                                 && rec.ObservedTerminal is null;
-            rec.State = submitInFlight ? WorkflowRunState.Unknown : WorkflowRunState.Interrupted;
-            rec.Note = AppendNote(rec.Note, submitInFlight
-                ? "助手重启：提交在飞且终态未证实，标 Unknown，需按幂等键+job 查询对账，禁止自动重跑。"
-                : "助手重启：运行被中断，标 Interrupted，恢复需显式决策。");
+            string note;
+            if (rec.State == WorkflowRunState.Completing || rec.PendingCompletionAction is not null)
+            {
+                // B5：收尾意图已落盘但执行结果未知——结果不确定，禁止自动补发收尾
+                rec.State = WorkflowRunState.Unknown;
+                note = "助手重启：收尾动作在飞（执行结果未证实），标 Unknown，需人工对账，禁止自动补发收尾。";
+            }
+            else if (rec.CurrentSubmission is { } sub && sub.InFlight)
+            {
+                rec.State = WorkflowRunState.Unknown;
+                note = $"助手重启：提交在飞且终态未证实（{sub.Key}，节点 {sub.NodeId}），标 Unknown，需按幂等键+job 查询对账，禁止自动重跑。";
+            }
+            else
+            {
+                rec.State = WorkflowRunState.Interrupted;
+                note = "助手重启：运行被中断，标 Interrupted，恢复需显式决策。";
+            }
+            rec.Note = AppendNote(rec.Note, note);
             Persist(rec, rec.RecordRevision);
             recovered.Add(rec);
         }
@@ -158,6 +191,8 @@ public sealed class RunStore
 
     private void Persist(WorkflowRunRecord rec, int expectedRecordRevision)
     {
+        lock (_gate)
+        {
         if (string.IsNullOrWhiteSpace(rec.RunId))
             throw new ArgumentException("RunId 不能为空", nameof(rec));
         if (rec.RecordRevision != expectedRecordRevision)
@@ -197,6 +232,7 @@ public sealed class RunStore
         finally
         {
             if (File.Exists(tmp)) File.Delete(tmp);
+        }
         }
     }
 

@@ -76,6 +76,27 @@ public sealed class WorkflowPlan
     public WorkflowNode NodeAt(WorkflowNodeOccurrence occurrence) => _doc.Nodes[occurrence.SequenceIndex];
 
     /// <summary>
+    /// 按稳定出现身份定位（B1：nodeId+出现序号与序列坐标解耦；修订插入/删除节点后重定位，
+    /// 旧 SequenceIndex 绝不直接用于新定义寻址）。loopIteration 由调用方透传（身份的一部分）。
+    /// </summary>
+    public bool TryLocate(string nodeId, int occurrenceOrdinal, int loopIteration, out WorkflowNodeOccurrence occurrence)
+    {
+        var count = -1;
+        for (var i = 0; i < _doc.Nodes.Count; i++)
+        {
+            if (_doc.Nodes[i].NodeId != nodeId) continue;
+            count++;
+            if (count == occurrenceOrdinal)
+            {
+                occurrence = new WorkflowNodeOccurrence(nodeId, i, occurrenceOrdinal, loopIteration);
+                return true;
+            }
+        }
+        occurrence = default!;
+        return false;
+    }
+
+    /// <summary>
     /// 流程预检（运行前；D4：先预检再执行任何前置副作用）。
     /// singleNativeSupported = 执行端 task.single.native 能力实况。
     /// </summary>
@@ -193,8 +214,10 @@ public static class WorkflowTriggerSchedule
 
 /// <summary>
 /// 结构性循环时刻计算（C08/C09）：每轮开始/跨天截止重新定义，不复制旧 startTime 缺陷（R1 迁移注记）。
-/// immediate：紧接上一轮；scheduled：每轮在本地 time 开始，已过则顺延下一次（skipAcrossDays 的
-/// 跳过判定在 Reconciler 运行期按「轮次是否跨过截止」执行，此处只算下一次可开始时刻）。
+/// D9/B9 定案公式：轮次窗口 = [本地起点, 下一本地起点)，时区 = 本机（v1 不套游戏服 4 点/联机宽限）。
+/// immediate：紧接上一轮。scheduled：起点未到 → 等今日起点；已错过今日起点 →
+/// skipAcrossDays=true（默认，与 R1 样例一致）跳过本轮排下一起点（不补跑跨天轮次），
+/// skipAcrossDays=false 在本轮窗口内立即补跑（返回 now）。
 /// </summary>
 public static class WorkflowLoopSchedule
 {
@@ -213,8 +236,10 @@ public static class WorkflowLoopSchedule
                     reason = "循环时间形状非法：" + (time ?? "null");
                     return null;
                 }
+                var skipAcrossDays = loop.GetBool("skipAcrossDays") ?? true; // 默认跨天跳过（保守不补跑）
                 var todayAt = new DateTimeOffset(now.Year, now.Month, now.Day, at.Hour, at.Minute, 0, now.Offset);
-                return todayAt > now ? todayAt : todayAt.AddDays(1);
+                if (todayAt > now) return todayAt; // 本轮起点未到：等今日起点
+                return skipAcrossDays ? todayAt.AddDays(1) : now; // 已错过起点：跨天跳过 / 窗口内立即补跑
             }
             default:
                 reason = "未支持的循环模式：" + loop.Mode;

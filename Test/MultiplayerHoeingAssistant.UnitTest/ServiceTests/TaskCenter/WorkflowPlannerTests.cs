@@ -265,4 +265,56 @@ public class WorkflowPlannerTests
         Assert.Equal(new DateTimeOffset(2026, 9, 17, 4, 0, 0, TimeSpan.FromHours(8)), next); // 每轮开始重新定义
         Assert.Null(reason);
     }
+
+    [Fact]
+    public void LoopScheduled_MissedStart_SkipAcrossDaysFormula()
+    {
+        // D9/B9 定案公式：轮次窗口=[本地起点,下一起点)；错过起点 → true 排下一起点（不补跑），false 窗口内立即补跑
+        WorkflowLoop MakeLoop(bool? skip) => new()
+        {
+            Mode = "scheduled",
+            Params = skip is null
+                ? new Dictionary<string, System.Text.Json.JsonElement>
+                { ["time"] = System.Text.Json.JsonSerializer.SerializeToElement("04:00") }
+                : new Dictionary<string, System.Text.Json.JsonElement>
+                {
+                    ["time"] = System.Text.Json.JsonSerializer.SerializeToElement("04:00"),
+                    ["skipAcrossDays"] = System.Text.Json.JsonSerializer.SerializeToElement(skip.Value),
+                },
+        };
+
+        // 起点未到（03:00 → 今日 04:00）：与 skipAcrossDays 无关
+        var early = new DateTimeOffset(2026, 9, 16, 3, 0, 0, TimeSpan.FromHours(8));
+        Assert.Equal(new DateTimeOffset(2026, 9, 16, 4, 0, 0, TimeSpan.FromHours(8)),
+            WorkflowLoopSchedule.NextRoundStart(MakeLoop(false), early, out _));
+
+        // 已错过起点（06:00 > 04:00）：true=排下一起点；false=立即补跑；缺省=true（保守不补跑）
+        Assert.Equal(new DateTimeOffset(2026, 9, 17, 4, 0, 0, TimeSpan.FromHours(8)),
+            WorkflowLoopSchedule.NextRoundStart(MakeLoop(true), Wednesday0600, out _));
+        Assert.Equal(Wednesday0600, WorkflowLoopSchedule.NextRoundStart(MakeLoop(false), Wednesday0600, out _));
+        Assert.Equal(new DateTimeOffset(2026, 9, 17, 4, 0, 0, TimeSpan.FromHours(8)),
+            WorkflowLoopSchedule.NextRoundStart(MakeLoop(null), Wednesday0600, out _));
+    }
+
+    [Fact]
+    public void TryLocate_StableIdentity_SurvivesInsertion()
+    {
+        var doc = new WorkflowDocument
+        {
+            Name = "定位",
+            Nodes = [ResourceNode("n-a", "resource.oneDragonConfig"), ResourceNode("n-b", "resource.oneDragonConfig")],
+        };
+        var plan = new WorkflowPlan(doc);
+
+        Assert.True(plan.TryLocate("n-b", 0, 2, out var occ));
+        Assert.Equal(1, occ.SequenceIndex); // B1：按身份定位坐标
+        Assert.Equal(2, occ.LoopIteration);
+        Assert.False(plan.TryLocate("n-x", 0, 0, out _));
+
+        // 插入节点后身份重定位（旧 SequenceIndex 不直接寻址新定义）
+        doc.Nodes.Insert(0, ResourceNode("n-z", "resource.oneDragonConfig"));
+        var newPlan = new WorkflowPlan(doc);
+        Assert.True(newPlan.TryLocate("n-b", 0, 2, out var moved));
+        Assert.Equal(2, moved.SequenceIndex);
+    }
 }

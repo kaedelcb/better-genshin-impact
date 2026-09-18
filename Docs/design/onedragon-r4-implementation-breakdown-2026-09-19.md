@@ -113,3 +113,27 @@
 | S2 生命周期对账触发 | 建议 | D7 补启动/重连/epoch 触发 + 串行状态转换 |
 | S3 敏感字段脱敏 | 建议 | §2 表述纪律 + §5 风险登记 |
 | S4 远程编辑评审结论 | 建议 | D14 挂账记录：接口边界 + 延期理由 + 保留既有通道 |
+### D15（二轮会诊补充定案）skippedUser 收尾合同
+
+显式跳过当前节点（skippedUser，远端取消已确认）与过滤跳过（skippedFilter）均**不算坏结果、不阻断成功边界收尾**——用户显式跳过视为认可完成，留痕可审计；failed/rejected/cancelled/cancelUnconfirmed 一律阻断收尾（D10 五不触发语义不变）。
+
+## 7. ASTRA 会诊处置记录（2026-09-19 二轮·中途，R4.5+R4.7 施工复核）
+
+| 发现 | 级别 | 处置 |
+|---|---|---|
+| B1 修订重载后旧序列坐标寻址错位/越界；链尾完成不再对账 | 阻断 | `WorkflowStore.LoadSnapshot` 一致性快照（文档+修订同批字节哈希）；重载后按稳定出现身份（nodeId+出现序号）从**最后完成节点**在新定义中重算后继（插入/删除/重排不错位）；链尾纳入边界对账（新修订追加节点被执行）；`WorkflowPlan.TryLocate` 身份/坐标解耦；夹具×3（插入/删除/链尾追加） |
+| B2 幂等键运行级唯一跨节点复用，jobId/终态残留上一节点 | 阻断 | `WorkflowSubmission` 一提交一身份：键=SHA256(runId+nodeId+出现+轮次+attempt) 确定性派生（崩溃重算同键，不产生第二次执行）；意图/jobId/观察终态同属提交对象；前一提交在飞拒绝重叠提交 |
+| B3 四崩溃窗口未闭环（三次分写/收尾无意图/Cursor null 双义/无 Resume/聚合不重建） | 阻断 | 观察终态+节点结果+游标推进**单次原子落盘**；`TailReached` 消歧游标 null；`TriggerConsumed`/`LastScheduledRoundWait` 持久化；`ResumeAsync` 显式恢复入口（Unknown 拒绝自动恢复）；聚合只信 NodeOutcomes（恢复后历史重建）；窗口③遗留记录按提交事实**补记不重跑**；夹具×3（恢复续跑/Unknown 拒恢复/补记） |
+| B4 SkipCurrent 竞态（空窗丢弃/Cancel-Dispose 竞争/未确认即推进） | 阻断 | 请求绑定请求时出现身份（漂移丢弃不误伤）；LeafCts 经 Sync 互斥；空窗到达叶子建立即生效；远端取消确认链（已取消→skippedUser、已成功→留痕成功、超时→cancelUnconfirmed→Unknown 不猜成功）；等待期跳过不登记；夹具×3（空窗/未确认/太迟） |
+| B5 先写 Succeeded 再执行收尾；PendingCompletionAction 只清不建；skip 收尾合同未定 | 阻断 | `Completing` 状态+PendingCompletionAction **先行落盘**再执行收尾；收尾失败记 Failed 且保留待执行（恢复扫描标 Unknown，禁止自动补发）；D15 定案 skippedUser/skippedFilter 不阻断收尾；夹具×2（收尾失败/Completing 可见） |
+| B9 轮次 scheduled 等待只在成功分支；skipAcrossDays 未消费 | 阻断 | 新一轮边界统一等待（成功/过滤跳过/失败续跑同路径）；skipAcrossDays 公式化（轮次窗口=[本地起点,下一起点)，true=默认排下一起点不补跑，false=窗口内立即补跑）；夹具×2（过滤后轮次等待/公式矩阵） |
+| I1 RunStore 乐观并发非互斥 | 重要 | Persist 读-检-写全程 `_gate` 互斥（串行化提交） |
+| I2 结果与原因应不可变快照同写 | 重要 | 引擎侧 CommitOutcome 已保证结果+原因+观察终态同写；BGI 通道侧快照化随 B6 批次处置 |
+| I3 生命周期触发/暂停/有界重试未实现 | 重要 | Pause 动作+ResumeAsync 落地（等待可暂停打断、Wait 记录保留重排、TriggerConsumed 防重等）；有界重试挂账 R4.6+（提交键已含 attempt）；重连/epoch 触发源接线归 R4.10 验收 |
+| I4 等待不占槽位缺端到端证据 | 重要 | 机制侧夹具已证（等待期无提交/无锁/时刻持久化）；他任务实际取得槽位的端到端验收归 R4.10 |
+| I5 SuppressConfigCompletionAction BGI 侧未消费 | 重要 | 提交请求侧已传递（R4.5）；BGI 整龙尾部消费接线随 R4.6 批次处置（D10 硬门槛） |
+| B6 通道仅 Failed 被消费；取消误报 Failed；SkippedNormal 未进注册表 | 阻断 | **挂账下一批（BGI 侧）**：壶/幽境 catch 区分 OperationCanceledException、幽境 TaskCanceledException 补上报、SkippedNormal/Cancelled 进注册表适配层分别表达 |
+| B7 DomainEndDetectionTask async void | 阻断 | **挂账下一批（BGI 侧）**：改真 Task + 共享受控生命周期 |
+| B8 壶/幽境残余漏报分支 | 阻断 | **挂账下一批（BGI 侧）**：按"不应误改"清单补判据（Finished/GetReward/购买重试/WaitExitCompleteLoop 等） |
+
+二轮引擎侧改动测试口径：新夹具 15/15，助手回归 210/210（195 基线 + 15）。期间两起测试桩自身缺陷（改流回调逐次插入/追加节点形成对抗性写方死循环、B9 忘记传 CancellationToken）已修正——引擎在对抗性写方下的行为符合合同（每新修订边界重算），无引擎改动；另清理失控桩在 %TEMP% 泄漏的 6.1GB 测试产物。

@@ -24,6 +24,8 @@ public enum WorkflowRunState
     Interrupted,
     /// <summary>结果不确定（提交在飞/终态未证实；禁止自动重跑）。</summary>
     Unknown,
+    /// <summary>收尾动作执行中（B5：成功边界先落盘收尾意图再执行；恢复扫描见此状态标 Unknown）。尾部追加，不改既有枚举数值。</summary>
+    Completing,
 }
 
 /// <summary>提交意图状态（D11：提交意图先行持久化，回执丢失按账本+job 查询对账）。</summary>
@@ -176,20 +178,25 @@ public sealed class WorkflowRunRecord
     [JsonPropertyName("target")]
     public ExecutionTargetRef? Target { get; set; }
 
-    /// <summary>固定幂等键（重复投递同一请求复用；新一轮/新尝试生成新身份；崩溃恢复绝不换键重跑）。</summary>
+    /// <summary>运行级固定身份键（创建即固定，绝不更换；单次提交键由它+节点出现身份确定性派生，B2）。</summary>
     [JsonPropertyName("idempotencyKey")]
     public string IdempotencyKey { get; set; } = "";
 
-    [JsonPropertyName("submitIntent")]
-    public SubmitIntentState SubmitIntent { get; set; } = SubmitIntentState.None;
+    /// <summary>当前提交（B2：一提交一身份——幂等键/意图/jobId/观察终态同属一个提交身份，不跨节点复用残留）。</summary>
+    [JsonPropertyName("currentSubmission")]
+    public WorkflowSubmission? CurrentSubmission { get; set; }
 
-    /// <summary>BGI 受理的作业 ID（受理后填写；返回 jobId 后由查询确认终态）。</summary>
-    [JsonPropertyName("jobId")]
-    public string? JobId { get; set; }
+    /// <summary>链尾已达（B3：游标 null 消歧——false+null=未开始/中断；true+null=全部节点已完成）。</summary>
+    [JsonPropertyName("tailReached")]
+    public bool TailReached { get; set; }
 
-    /// <summary>观察到的作业终态（succeeded/failed/cancelled/rejected 等；未填写 ≠ 成功）。</summary>
-    [JsonPropertyName("observedTerminal")]
-    public string? ObservedTerminal { get; set; }
+    /// <summary>顶层触发器已消费（B3：恢复后不重等已触发过的触发器；暂停在触发等待中保持 false 以便恢复重排）。</summary>
+    [JsonPropertyName("triggerConsumed")]
+    public bool TriggerConsumed { get; set; }
+
+    /// <summary>已完成起点等待的循环轮次（B9：轮次等待统一在新一轮边界执行，恢复后不重等同一轮）。</summary>
+    [JsonPropertyName("lastScheduledRoundWait")]
+    public int LastScheduledRoundWait { get; set; }
 
     /// <summary>待执行收尾动作（D10：失败/取消/未知/手动停止不得触发；结果不确定不得补发）。</summary>
     [JsonPropertyName("pendingCompletionAction")]
@@ -221,4 +228,51 @@ public sealed class WorkflowRunRecord
     /// <summary>是否终态（Succeeded/Failed/Cancelled；Interrupted/Unknown 非终态结论）。</summary>
     [JsonIgnore]
     public bool IsTerminal => State is WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.Cancelled;
+}
+
+/// <summary>
+/// 单次提交记录（B2 会诊：一提交一身份）。
+/// 幂等键按 runId+nodeId+出现序号+循环轮次+attempt 确定性派生（RunStore.DeriveSubmissionKey）：
+/// 崩溃恢复后同一出现身份重算同一键（重复投递复用），不同节点/轮次/尝试绝不复用同一键。
+/// 意图/jobId/观察终态同属本对象，禁止跨提交残留（旧字段跨节点复用导致恢复误判已废除）。
+/// </summary>
+public sealed class WorkflowSubmission
+{
+    /// <summary>确定性派生幂等键（"idem-" + 24 位十六进制）。</summary>
+    [JsonPropertyName("key")]
+    public string Key { get; set; } = "";
+
+    [JsonPropertyName("nodeId")]
+    public string NodeId { get; set; } = "";
+
+    [JsonPropertyName("occurrence")]
+    public int Occurrence { get; set; }
+
+    [JsonPropertyName("loopIteration")]
+    public int LoopIteration { get; set; }
+
+    [JsonPropertyName("attempt")]
+    public int Attempt { get; set; }
+
+    [JsonPropertyName("intent")]
+    public SubmitIntentState Intent { get; set; } = SubmitIntentState.None;
+
+    /// <summary>BGI 受理的作业 ID（受理后填写；返回 jobId 后由查询确认终态）。</summary>
+    [JsonPropertyName("jobId")]
+    public string? JobId { get; set; }
+
+    /// <summary>观察到的作业终态（succeeded/failed/cancelled/rejected/skippedUser 等；未填写 ≠ 成功）。</summary>
+    [JsonPropertyName("observedTerminal")]
+    public string? ObservedTerminal { get; set; }
+
+    [JsonPropertyName("recordedAt")]
+    public DateTimeOffset RecordedAt { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+
+    /// <summary>提交在飞（意图已录/已提交/已受理且终态未观察；恢复扫描据此标 Unknown，禁止自动重跑）。</summary>
+    [JsonIgnore]
+    public bool InFlight => ObservedTerminal is null
+        && Intent is SubmitIntentState.IntentRecorded or SubmitIntentState.Submitted or SubmitIntentState.Accepted;
 }

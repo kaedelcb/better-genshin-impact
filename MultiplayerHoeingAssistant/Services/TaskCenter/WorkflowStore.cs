@@ -86,17 +86,24 @@ public sealed class WorkflowStore
     }
 
     /// <summary>加载流程文档。隔离文件抛 <see cref="WorkflowQuarantinedException"/>（绝不回空对象）。</summary>
-    public WorkflowDocument Load(string workflowId)
+    public WorkflowDocument Load(string workflowId) => LoadSnapshot(workflowId).Document;
+
+    /// <summary>
+    /// 一致性快照加载（B1 会诊：文档与修订号必须来自同一批字节，防"读到新文档配旧修订"错位）。
+    /// 单次读盘、单次哈希、单次判型；隔离文件抛 <see cref="WorkflowQuarantinedException"/>。
+    /// </summary>
+    public WorkflowSnapshot LoadSnapshot(string workflowId)
     {
         var file = PathFor(workflowId);
         if (!File.Exists(file))
             throw new FileNotFoundException($"流程不存在: {workflowId}", file);
-        var entry = InspectFile(file);
+        var bytes = File.ReadAllBytes(file);
+        var entry = InspectBytes(bytes, file);
         if (entry.Status == WorkflowFileStatus.Quarantined)
             throw new WorkflowQuarantinedException($"流程 {workflowId} 已隔离（{entry.QuarantineReason}），原件保留，禁止执行。");
-        var json = File.ReadAllText(file, Encoding.UTF8);
-        return JsonSerializer.Deserialize<WorkflowDocument>(json, JsonOptions)
+        var doc = JsonSerializer.Deserialize<WorkflowDocument>(Encoding.UTF8.GetString(bytes), JsonOptions)
                ?? throw new WorkflowQuarantinedException($"流程 {workflowId} 反序列化为空，已按隔离处理。");
+        return new WorkflowSnapshot(doc, entry.Revision);
     }
 
     /// <summary>
@@ -161,22 +168,28 @@ public sealed class WorkflowStore
         return Save(doc, expectedRevisionForOverwrite);
     }
 
-    /// <summary>单文件判型（JSON DOM，不反序列化为产品模型前先做形状预检；同 R3.0 判型纪律）。</summary>
+    /// <summary>单文件判型（读取 + 判型分离：InspectBytes 保证快照/目录共用同一批字节）。</summary>
     private WorkflowCatalogEntry InspectFile(string file)
     {
         var fallbackId = Path.GetFileNameWithoutExtension(file).Replace(".flow", "");
-        string hash;
         byte[] bytes;
         try
         {
             bytes = File.ReadAllBytes(file);
-            hash = HashBytes(bytes);
         }
         catch (Exception ex)
         {
             return new WorkflowCatalogEntry(fallbackId, fallbackId, "", WorkflowFileStatus.Quarantined,
                 "readFailure:" + ex.GetType().Name, [], file);
         }
+        return InspectBytes(bytes, file);
+    }
+
+    /// <summary>单批字节判型（JSON DOM，不反序列化为产品模型前先做形状预检；同 R3.0 判型纪律）。</summary>
+    private WorkflowCatalogEntry InspectBytes(byte[] bytes, string file)
+    {
+        var fallbackId = Path.GetFileNameWithoutExtension(file).Replace(".flow", "");
+        var hash = HashBytes(bytes);
 
         JsonNode? root;
         try
@@ -220,3 +233,6 @@ public sealed class WorkflowStore
 
     internal static string HashFileBytes(string file) => HashBytes(File.ReadAllBytes(file));
 }
+
+/// <summary>流程一致性快照（B1：文档与修订号同源——同一批字节的解析结果与哈希）。</summary>
+public sealed record WorkflowSnapshot(WorkflowDocument Document, string Revision);
