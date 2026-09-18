@@ -16,6 +16,7 @@
     </Reference>
     <Compile Include="../../BetterGenshinImpact/GameTask/TaskRunner.cs" Link="Production/TaskRunner.cs" />
     <Compile Include="../../BetterGenshinImpact/GameTask/TaskRunResult.cs" Link="Production/TaskRunResult.cs" />
+    <Compile Include="../../BetterGenshinImpact/GameTask/Common/OneDragonItemResultChannel.cs" Link="Production/OneDragonItemResultChannel.cs" />
     <Compile Include="../../BetterGenshinImpact/Service/Execution/PreemptionGate.cs" Link="Production/PreemptionGate.cs" />
     <Compile Include="../../BetterGenshinImpact/Service/Execution/ExecutionScope.cs" Link="Production/ExecutionScope.cs" />
     <Compile Include="../../BetterGenshinImpact/Service/Execution/SuspendContextCapture.cs" Link="Production/SuspendContextCapture.cs" />

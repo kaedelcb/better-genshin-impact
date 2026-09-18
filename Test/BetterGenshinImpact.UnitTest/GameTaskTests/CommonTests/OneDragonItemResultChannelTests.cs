@@ -88,4 +88,47 @@ public class OneDragonItemResultChannelTests
         var ex = new OneDragonItemFailedException("无法进入尘歌壶");
         Assert.Equal("无法进入尘歌壶", ex.Message);
     }
+    [Fact]
+    public void Report_SnapshotPairing_ReasonNeverMismatched()
+    {
+        // ASTRA 二轮 I②：结果与原因不可变快照同写——低优先级上报的原因不得挂到高优先级结果上
+        using var channel = OneDragonItemResultChannel.OpenScoped();
+        channel.Report(OneDragonItemOutcome.Failed); // 无原因失败
+        channel.Report(OneDragonItemOutcome.SkippedNormal, "活动结束"); // 低优先级，整报丢弃
+
+        Assert.Equal(OneDragonItemOutcome.Failed, channel.Outcome);
+        Assert.Null(channel.Reason); // 旧实现会把"活动结束"错配到 Failed 上
+    }
+
+    [Fact]
+    public void Report_HigherPriority_ReplacesWholeSnapshot()
+    {
+        using var channel = OneDragonItemResultChannel.OpenScoped();
+        channel.Report(OneDragonItemOutcome.Cancelled, "取消原因");
+        channel.Report(OneDragonItemOutcome.Failed, "失败原因"); // 更高优先级整对替换
+
+        Assert.Equal(OneDragonItemOutcome.Failed, channel.Outcome);
+        Assert.Equal("失败原因", channel.Reason);
+    }
+
+    [Fact]
+    public void ReportExceptionCurrent_OperationCancelled_IsCancelledNotFailed()
+    {
+        // ASTRA 二轮 B6：OperationCanceledException（含 TaskCanceledException 子类）= 取消，不得误报失败
+        using var channel = OneDragonItemResultChannel.OpenScoped();
+        OneDragonItemResultChannel.ReportExceptionCurrent(new TaskCanceledException("已取消"), "场景: ");
+
+        Assert.Equal(OneDragonItemOutcome.Cancelled, channel.Outcome);
+        Assert.Contains("已取消", channel.Reason);
+    }
+
+    [Fact]
+    public void ReportExceptionCurrent_RegularException_IsFailed()
+    {
+        using var channel = OneDragonItemResultChannel.OpenScoped();
+        OneDragonItemResultChannel.ReportExceptionCurrent(new InvalidOperationException("识别失败"), "场景: ");
+
+        Assert.Equal(OneDragonItemOutcome.Failed, channel.Outcome);
+        Assert.Contains("识别失败", channel.Reason);
+    }
 }

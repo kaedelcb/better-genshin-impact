@@ -53,11 +53,16 @@ public sealed class OneDragonItemResultChannel : IDisposable
     /// <summary>开启通道（执行包装在每个默认条目前调用；嵌套时退出恢复上一层）。</summary>
     public static OneDragonItemResultChannel OpenScoped() => new(Ambient.Value);
 
-    /// <summary>已上报的结果（null = 子项未上报；不得把 null 当作失败之外的任何结论）。</summary>
-    public OneDragonItemOutcome? Outcome { get; private set; }
+    /// <summary>结果+原因不可变快照（ASTRA 二轮 I②：成对原子替换，杜绝"结果来自一报、原因来自另一报"的错配）。</summary>
+    private sealed record ItemResultSnapshot(OneDragonItemOutcome Outcome, string? Reason);
 
-    /// <summary>失败/跳过原因（首条优先；失败原因不被后续覆盖）。</summary>
-    public string? Reason { get; private set; }
+    private ItemResultSnapshot? _snapshot;
+
+    /// <summary>已上报的结果（null = 子项未上报；不得把 null 当作失败之外的任何结论）。</summary>
+    public OneDragonItemOutcome? Outcome => _snapshot?.Outcome;
+
+    /// <summary>失败/跳过原因（与结果同报同源；失败快照不被后续上报覆盖）。</summary>
+    public string? Reason => _snapshot?.Reason;
 
     /// <summary>上报结果。优先级：Failed &gt; Cancelled &gt; SkippedNormal &gt; Succeeded（失败不被后续上报覆盖）。</summary>
     public void Report(OneDragonItemOutcome outcome, string? reason = null)
@@ -65,21 +70,25 @@ public sealed class OneDragonItemResultChannel : IDisposable
         lock (_sync)
         {
             if (_disposed) return;
-            if (Outcome is null || Priority(outcome) > Priority(Outcome.Value))
-            {
-                Outcome = outcome;
-                if (reason != null) Reason = reason;
-            }
-            else if (Reason is null && reason != null)
-            {
-                Reason = reason;
-            }
+            // 结果与原因作为不可变快照整体替换：仅更高优先级上报替换快照，同优先级/更低保留首报（I②）
+            if (_snapshot is null || Priority(outcome) > Priority(_snapshot.Outcome))
+                _snapshot = new ItemResultSnapshot(outcome, reason);
         }
     }
 
     /// <summary>便捷静态上报：当前上下文有通道才生效（独立运行/无通道时静默丢弃，保持公版行为）。</summary>
     public static void ReportCurrent(OneDragonItemOutcome outcome, string? reason = null)
         => Current?.Report(outcome, reason);
+
+    /// <summary>
+    /// 吞异常点统一上报判据（ASTRA 二轮 B6：OperationCanceledException = 取消，不得误报失败；
+    /// TaskCanceledException 是其子类同路径）。prefix 为场景描述（如"领取尘歌壶奖励异常: "）。
+    /// </summary>
+    public static void ReportExceptionCurrent(Exception e, string prefix)
+    {
+        if (e is OperationCanceledException) ReportCurrent(OneDragonItemOutcome.Cancelled, prefix + e.Message);
+        else ReportCurrent(OneDragonItemOutcome.Failed, prefix + e.Message);
+    }
 
     private static int Priority(OneDragonItemOutcome outcome) => outcome switch
     {

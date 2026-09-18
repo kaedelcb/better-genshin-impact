@@ -20,4 +20,7 @@ public enum TaskRunResult
     Failed,
     /// <summary>执行被取消，原因由根运行/注册表记录。</summary>
     Cancelled,
+
+    /// <summary>子项经结果通道显式上报正常跳过（未配置策略/未选择目标/活动结束等；非失败非成功执行，D6 分别表达；尾部追加不改既有数值）。</summary>
+    Skipped,
 }

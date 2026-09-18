@@ -86,7 +86,8 @@ public partial class OneDragonTaskItem : ObservableObject
                     {
                         TaskControl.Logger.LogError("合成树脂执行异常：" + e.Message);
                         // R4.7 结果通道：吞异常保留，真实结果显式上报
-                        OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.Failed, "合成树脂执行异常：" + e.Message);
+                        // ASTRA 二轮 B6：OperationCanceledException = 取消，不得误报失败
+                        OneDragonItemResultChannel.ReportExceptionCurrent(e, "合成树脂执行异常：");
                     }
                 };
                 break;

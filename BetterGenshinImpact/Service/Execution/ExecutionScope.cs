@@ -108,7 +108,11 @@ public sealed class ExecutionScope : IDisposable
         lock (Sync)
         {
             if (result == TaskRunResult.Failed) FailureCount++;
-            if (Result == TaskRunResult.Ran || result is TaskRunResult.Cancelled or TaskRunResult.Preempted)
+            // R4.7 D6 聚合：Cancelled/Preempted 始终覆盖；Failed 覆盖 Ran/Skipped（失败不被跳过覆盖）；
+            // Skipped 只覆盖 Ran（正常跳过分别表达，既不算成功执行也不算失败）。
+            if (Result == TaskRunResult.Ran
+                || (Result == TaskRunResult.Skipped && result == TaskRunResult.Failed)
+                || result is TaskRunResult.Cancelled or TaskRunResult.Preempted)
                 Result = result;
         }
     }

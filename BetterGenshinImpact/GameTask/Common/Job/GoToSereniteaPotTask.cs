@@ -74,7 +74,8 @@ internal class GoToSereniteaPotTask
             Logger.LogDebug(e, "领取尘歌壶奖励异常");
             Logger.LogError("领取尘歌壶奖励异常: {Msg}", e.Message);
             // R4.7 结果通道：吞异常保留（公版容错语义），但真实结果显式上报（Start 调用外观不变）
-            OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.Failed, "领取尘歌壶奖励异常: " + e.Message);
+            // ASTRA 二轮 B6：OperationCanceledException = 取消，不得误报失败
+            OneDragonItemResultChannel.ReportExceptionCurrent(e, "领取尘歌壶奖励异常: ");
         }
         finally
         {
@@ -591,6 +592,13 @@ internal class GoToSereniteaPotTask
                             break;
                         }
                     }
+                    // ASTRA 二轮 B8：购买重试两轮后仍未购齐 = 意图未达成被吞，显式上报
+                    if (buyCount < buy.Count)
+                    {
+                        Logger.LogWarning("领取尘歌壶奖励: 部分配置物品未找到/未购得（{Got}/{Total}）", buyCount, buy.Count);
+                        OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.Failed,
+                            $"部分商店物品未找到/未购得（{buyCount}/{buy.Count}）");
+                    }
                     await Delay(900, ct);
                     Logger.LogInformation("领取尘歌壶奖励:{text}", "购买商店物品完成");
                     // 购买完成 关闭page
@@ -626,6 +634,8 @@ internal class GoToSereniteaPotTask
         if (!isMainUi)
         {
             Logger.LogError("领取尘歌壶奖励:{text}", "阿圆对话框退出出错。");
+            // ASTRA 二轮 B8：吞失败点显式上报
+            OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.Failed, "阿圆对话框退出出错");
             return;
         }
 

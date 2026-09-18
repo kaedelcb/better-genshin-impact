@@ -41,6 +41,9 @@ public enum JobState
     Failed,
     Cancelled,
     Rejected,
+
+    /// <summary>正常跳过（R4.7 结果通道：子项显式上报 SkippedNormal；终态，与成功/失败分别表达，D6）。尾部追加不改既有数值。</summary>
+    Skipped,
 }
 
 /// <summary>[A1.4] 终态失败/结束原因受控词表（总计划 §4.6，死信可排查）。</summary>
@@ -52,6 +55,7 @@ public static class JobErrorCodes
     public const string CancelledSuperseded = "cancelled_superseded";
     public const string CancelledShutdown = "cancelled_shutdown";
     public const string TaskStartFailed = "task_start_failed";
+    public const string SkippedNormal = "skipped_normal"; // R4.7 结果通道：子项显式上报正常跳过
     public const string StaleEpoch = "stale_epoch";
     public const string NotFound = "not_found";
 
@@ -131,7 +135,7 @@ public sealed class BgiJob
     private readonly List<JobStateTransition> _stateHistory = [];
     public IReadOnlyList<JobStateTransition> StateHistory => _stateHistory;
 
-    public bool IsTerminal => State is JobState.Succeeded or JobState.Failed or JobState.Cancelled or JobState.Rejected;
+    public bool IsTerminal => State is JobState.Succeeded or JobState.Failed or JobState.Cancelled or JobState.Rejected or JobState.Skipped;
 
     public BgiJob(JobKind kind, string name, JobSource source, int? generation, string? idempotencyKey, Guid? parentJobId,
         Guid? jobId = null, JobExecutionIdentity? identity = null)

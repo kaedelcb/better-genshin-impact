@@ -128,12 +128,12 @@
 | B5 先写 Succeeded 再执行收尾；PendingCompletionAction 只清不建；skip 收尾合同未定 | 阻断 | `Completing` 状态+PendingCompletionAction **先行落盘**再执行收尾；收尾失败记 Failed 且保留待执行（恢复扫描标 Unknown，禁止自动补发）；D15 定案 skippedUser/skippedFilter 不阻断收尾；夹具×2（收尾失败/Completing 可见） |
 | B9 轮次 scheduled 等待只在成功分支；skipAcrossDays 未消费 | 阻断 | 新一轮边界统一等待（成功/过滤跳过/失败续跑同路径）；skipAcrossDays 公式化（轮次窗口=[本地起点,下一起点)，true=默认排下一起点不补跑，false=窗口内立即补跑）；夹具×2（过滤后轮次等待/公式矩阵） |
 | I1 RunStore 乐观并发非互斥 | 重要 | Persist 读-检-写全程 `_gate` 互斥（串行化提交） |
-| I2 结果与原因应不可变快照同写 | 重要 | 引擎侧 CommitOutcome 已保证结果+原因+观察终态同写；BGI 通道侧快照化随 B6 批次处置 |
+| I2 结果与原因应不可变快照同写 | 重要 | 引擎侧 CommitOutcome 已保证结果+原因+观察终态同写；BGI 通道侧已快照化（六批：ItemResultSnapshot 不可变成对替换，仅更高优先级整对替换，杜绝结果/原因错配） |
 | I3 生命周期触发/暂停/有界重试未实现 | 重要 | Pause 动作+ResumeAsync 落地（等待可暂停打断、Wait 记录保留重排、TriggerConsumed 防重等）；有界重试挂账 R4.6+（提交键已含 attempt）；重连/epoch 触发源接线归 R4.10 验收 |
 | I4 等待不占槽位缺端到端证据 | 重要 | 机制侧夹具已证（等待期无提交/无锁/时刻持久化）；他任务实际取得槽位的端到端验收归 R4.10 |
 | I5 SuppressConfigCompletionAction BGI 侧未消费 | 重要 | 提交请求侧已传递（R4.5）；BGI 整龙尾部消费接线随 R4.6 批次处置（D10 硬门槛） |
-| B6 通道仅 Failed 被消费；取消误报 Failed；SkippedNormal 未进注册表 | 阻断 | **挂账下一批（BGI 侧）**：壶/幽境 catch 区分 OperationCanceledException、幽境 TaskCanceledException 补上报、SkippedNormal/Cancelled 进注册表适配层分别表达 |
-| B7 DomainEndDetectionTask async void | 阻断 | **挂账下一批（BGI 侧）**：改真 Task + 共享受控生命周期 |
-| B8 壶/幽境残余漏报分支 | 阻断 | **挂账下一批（BGI 侧）**：按"不应误改"清单补判据（Finished/GetReward/购买重试/WaitExitCompleteLoop 等） |
+| B6 通道仅 Failed 被消费；取消误报 Failed；SkippedNormal 未进注册表 | 阻断 | **已处置（六批）**：取消/失败统一判据 `ReportExceptionCurrent`（OCE→Cancelled；壶/幽境/合成 3 处吞异常点改判）；幽境 catch(TaskCanceledException) 补上报 Cancelled；SkippedNormal 进注册表分别表达——TaskRunResult.Skipped + JobState.Skipped + JobErrorCodes.skipped_normal，TaskRunner 在子项终态提交前消费通道（D6 原义），执行包装补 Cancelled→OCE 抛出（子作业 Cancelled）；ExecutionScope.Observe 聚合：Skipped 只覆盖 Ran、Failed 覆盖 Skipped、Cancelled/Preempted 始终覆盖；根作业保持 Succeeded-with-skips（子作业逐个携带 Skipped，与 D15 一致；助手边界对 skipped 词表的消费归 R4.6+） |
+| B7 DomainEndDetectionTask async void | 阻断 | **已处置（六批）**：改真 Task 热启动 + `AwaitCombatAsync` 战斗线程任意结局后取消检测并等其收尾（假 Task 立即完成/线程脱管泄漏/异常静默三缺陷消除，无泄漏无挂死）；检测体 catch 区分 OCE（正常终止不再记"异常结束"）；检测线程异常仍不上报（检测异常≠秘境结果，战斗线程自有异常路径——不误改） |
+| B8 壶/幽境残余漏报分支 | 阻断 | **已处置（六批）**：补报 6 处——幽境 SwitchToHardModeLoop（困难模式未达成）、OpenTeamPanelLoop（配置了队伍但面板未开）、FindAndSelectTeamLoop（配置了队伍但找不到）、WaitExitCompleteLoop（退出未确认，原无 else 完全静默，兼补日志）；壶 Finished 阿圆对话框退出出错、购买重试两轮未购齐。**不误改清单（判据登记）**：幽境 OpenExitMenuAndClickLoop"可能已经退出秘境"（语义模糊不上报）、DomainEndDetection 异常（见 B7 行）、壶 GetReward 好感/对话选项与商店选项未命中（可能已领取/冷却，属正常分支不上报） |
 
-二轮引擎侧改动测试口径：新夹具 15/15，助手回归 210/210（195 基线 + 15）。期间两起测试桩自身缺陷（改流回调逐次插入/追加节点形成对抗性写方死循环、B9 忘记传 CancellationToken）已修正——引擎在对抗性写方下的行为符合合同（每新修订边界重算），无引擎改动；另清理失控桩在 %TEMP% 泄漏的 6.1GB 测试产物。
+二轮引擎侧改动测试口径：新夹具 15/15，助手回归 210/210（195 基线 + 15）。六批通道闭环口径：新夹具 9/9（通道快照/判据 4 + Observe 聚合 5），BGI 全量 922/936（14 失败=既有 Hoeing/Pathing/OCR 抖动族，与基线一致）、IpcIncident 37/37（补链接通道文件）、合同 68/68、助手 210/210 不变。`task.single.native` 维持 false（机制完成，集成验收归 R4.10）。期间两起测试桩自身缺陷（改流回调逐次插入/追加节点形成对抗性写方死循环、B9 忘记传 CancellationToken）已修正——引擎在对抗性写方下的行为符合合同（每新修订边界重算），无引擎改动；另清理失控桩在 %TEMP% 泄漏的 6.1GB 测试产物。

@@ -173,12 +173,15 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
         catch (TaskCanceledException)
         {
             // do nothing
+            // ASTRA 二轮 B6：取消不得静默——显式上报取消（与失败分别表达）
+            OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.Cancelled, "幽境危战任务取消");
         }
         catch (Exception e)
         {
             Logger.LogInformation(e.Message);
             // R4.7 结果通道：吞异常保留（公版容错语义），真实结果显式上报（Start 调用外观不变）
-            OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.Failed, e.Message);
+            // ASTRA 二轮 B6：OperationCanceledException = 取消，不得误报失败
+            OneDragonItemResultChannel.ReportExceptionCurrent(e, "");
         }
 
         if (!shouldContinuePostProcessing)
@@ -946,6 +949,8 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
         else
         {
             Logger.LogWarning("切换困难模式失败，继续执行");
+            // ASTRA 二轮 B8：吞失败点显式上报（继续执行外观不变，真实结果进通道）
+            OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.Failed, "切换困难模式失败");
         }
     }
 
@@ -1035,15 +1040,29 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
             }
         }, cts.Token);
 
-        var domainEndTask = DomainEndDetectionTask(cts);
         combatTask.Start();
-        domainEndTask.Start();
-        return Task.WhenAll(combatTask, domainEndTask);
+        // ASTRA 二轮 B7：检测线程改真 Task（热启动），与战斗线程共享受控 cts 生命周期；
+        // 不再 new Task(async void)（假 Task 立即完成、线程体脱管泄漏、异常静默）。
+        var domainEndTask = DomainEndDetectionTask(cts);
+        return AwaitCombatAsync(combatTask, domainEndTask, cts);
     }
 
-    private Task DomainEndDetectionTask(CancellationTokenSource cts)
+    /// <summary>等待战斗线程结束；任何结局都取消检测线程并等其收尾（B7：无脱管泄漏、无挂死）。</summary>
+    private static async Task AwaitCombatAsync(Task combatTask, Task domainEndTask, CancellationTokenSource cts)
     {
-        return new Task(async void () =>
+        try
+        {
+            await combatTask;
+        }
+        finally
+        {
+            if (!cts.IsCancellationRequested) await cts.CancelAsync();
+            try { await domainEndTask; } catch (OperationCanceledException) { }
+        }
+    }
+
+    private async Task DomainEndDetectionTask(CancellationTokenSource cts)
+    {
         {
             try
             {
@@ -1075,12 +1094,16 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
                 Logger.LogInformation("检测到战斗结束，结束战斗操作线程");
                 await cts.CancelAsync();
             }
+            catch (OperationCanceledException)
+            {
+                // 战斗线程先结束/外部取消的正常终止（B7：不再记为"异常结束"）
+            }
             catch (Exception e)
             {
                 Logger.LogInformation("对局结束检测线程异常结束：{Msg}", e.Message);
                 Logger.LogDebug(e, "对局结束检测线程异常结束");
             }
-        }, cts.Token);
+        }
     }
 
     private async Task SwitchTeam(BvPage page)
@@ -1119,6 +1142,8 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
         else
         {
             Logger.LogWarning("未找到预设队伍按钮，不执行切换操作");
+            // ASTRA 二轮 B8：配置了战斗队伍但面板未打开 = 意图未达成，显式上报
+            OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.Failed, "未找到预设队伍按钮，无法切换战斗队伍");
         }
     }
 
@@ -1160,6 +1185,8 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
                 if (130 + yOffset > 1080)
                 {
                     Logger.LogWarning("未找到预设战斗队伍名称：{TeamName}，保持原有队伍", fightTeamName);
+                    // ASTRA 二轮 B8：配置了战斗队伍但找不到 = 意图未达成，显式上报
+                    OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.Failed, "未找到预设战斗队伍：" + fightTeamName);
                     break;
                 }
 
@@ -1208,6 +1235,12 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
         {
             Logger.LogInformation($"{Name}：退出秘境完成");
             await Delay(1000, _ct);
+        }
+        else
+        {
+            // ASTRA 二轮 B8：退出未确认完成原先完全静默，补日志 + 显式上报
+            Logger.LogWarning($"{Name}：退出秘境未确认完成");
+            OneDragonItemResultChannel.ReportCurrent(OneDragonItemOutcome.Failed, "退出秘境未确认完成");
         }
     }
 

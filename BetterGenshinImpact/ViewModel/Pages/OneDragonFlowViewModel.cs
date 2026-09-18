@@ -853,9 +853,14 @@ public partial class OneDragonFlowViewModel : ViewModel
                     {
                         await task.Action();
                         await Task.Delay(1000);
+                        // ASTRA 二轮 B6：取消/正常跳过与失败分别表达——取消显式抛出（子作业终态 Cancelled）；
+                        // 正常跳过不抛出，由 TaskRunner 终态前消费通道（注册表 JobState.Skipped，公版原生链继续执行不变）。
                         if (itemResultChannel.Outcome == BetterGenshinImpact.GameTask.Common.OneDragonItemOutcome.Failed)
                             throw new BetterGenshinImpact.GameTask.Common.OneDragonItemFailedException(
                                 itemResultChannel.Reason ?? "子项显式上报失败");
+                        if (itemResultChannel.Outcome == BetterGenshinImpact.GameTask.Common.OneDragonItemOutcome.Cancelled)
+                            throw new OperationCanceledException(
+                                itemResultChannel.Reason ?? "子项显式上报取消");
                     }, soloTaskName: task.Name,
                         job: new BetterGenshinImpact.Service.Execution.JobDescriptor(
                             BetterGenshinImpact.Service.Execution.JobKind.Solo, task.Name,

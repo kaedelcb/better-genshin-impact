@@ -140,6 +140,7 @@ public class TaskRunner
         // 由引擎直接发布（理由详见 ExternalInterfaceEventHub.PublishTaskStarted 注释）
         BetterGenshinImpact.Service.ExternalInterface.ExternalInterfaceEventHub.Instance.PublishTaskStarted(soloTaskName);
         var faulted = false; // [A2] catch(Exception) 命中标记，供注册表终态判定
+        var reportedSkipped = false; // R4.7 通道上报正常跳过标记（finally 内赋值，方法尾返回消费）
         var failuresBefore = scope.FailureCount;
         var interrupted = false;
         var wasCancelled = false;
@@ -222,12 +223,17 @@ public class TaskRunner
             // [A2 统一注册表] 终态登记先于槽位释放/事件发布（总计划 §6.3：终态登记先于终态事件）。
             // 判定依据 wasCancelled/faulted 两个事实源；NormalEndException 的"手动取消或正常结束"
             // 固有歧义不在此消解（与 task.stopped(wasCancelled) 的既有口径一致）。
+            // R4.7 结果通道消费（D6：注册表适配层在子项终态提交前消费）——龙内子项显式上报的
+            // 正常跳过在注册表分别表达（既不记成功执行也不记失败）；失败/取消仍走既有 faulted/wasCancelled 路径。
+            var itemResultChannel = BetterGenshinImpact.GameTask.Common.OneDragonItemResultChannel.Current;
+            reportedSkipped = !faulted && !wasCancelled
+                && itemResultChannel?.Outcome == BetterGenshinImpact.GameTask.Common.OneDragonItemOutcome.SkippedNormal;
             if (registeredJob != null)
             {
                 TryRegistryTerminal(registeredJob.JobId,
-                    faulted ? JobState.Failed : wasCancelled ? JobState.Cancelled : JobState.Succeeded,
-                    faulted ? JobErrorCodes.TaskStartFailed : wasCancelled ? (scope.Result == TaskRunResult.Preempted ? JobErrorCodes.Preempted : scope.StopReason) : null,
-                    null, wasCancelled);
+                    faulted ? JobState.Failed : wasCancelled ? JobState.Cancelled : reportedSkipped ? JobState.Skipped : JobState.Succeeded,
+                    faulted ? JobErrorCodes.TaskStartFailed : wasCancelled ? (scope.Result == TaskRunResult.Preempted ? JobErrorCodes.Preempted : scope.StopReason) : reportedSkipped ? JobErrorCodes.SkippedNormal : null,
+                    reportedSkipped ? itemResultChannel?.Reason : null, wasCancelled);
             }
 
             // 释放锁
@@ -242,7 +248,7 @@ public class TaskRunner
             }
         }
 
-        return faulted ? TaskRunResult.Failed : wasCancelled ? scope.Result : TaskRunResult.Ran;
+        return faulted ? TaskRunResult.Failed : wasCancelled ? scope.Result : reportedSkipped ? TaskRunResult.Skipped : TaskRunResult.Ran;
     }
 
     public void FireAndForget(Func<Task> action)
