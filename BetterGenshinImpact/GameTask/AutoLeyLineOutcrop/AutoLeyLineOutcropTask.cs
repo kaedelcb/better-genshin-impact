@@ -16,6 +16,7 @@ using BetterGenshinImpact.GameTask.AutoFight.Assets;
 using OfficialAutoFightRouter = BetterGenshinImpact.GameTask.AutoFightOfficial.OfficialAutoFightRouter;
 using OfficialParamAdapter = BetterGenshinImpact.GameTask.AutoFightOfficial.OfficialParamAdapter;
 using OfficialFightTask = BetterGenshinImpact.GameTask.AutoFightOfficial.AutoFightTask;
+using OfficialJsonTask = BetterGenshinImpact.GameTask.AutoFightOfficial.AutoFightJsonTask;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
@@ -1164,6 +1165,26 @@ public class AutoLeyLineOutcropTask : ISoloTask
     {
         var autoFightConfig = BuildLeyLineAutoFightConfig();
         var strategyPath = BuildAutoFightStrategyPath(autoFightConfig);
+        if (strategyPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+        {
+            // R3.4 D07 公版恢复：JSON 策略显式分支；双引擎边界按全局开关路由（同 AutoDomainTask 范式）
+            var jsonParam = new AutoFightParam(strategyPath, autoFightConfig)
+            {
+                FightFinishDetectEnabled = false,
+                CheckBeforeBurst = false,
+                PickDropsAfterFightEnabled = false,
+                KazuhaPickupEnabled = false
+            };
+            jsonParam.FinishDetectConfig.FastCheckEnabled = false;
+            jsonParam.FinishDetectConfig.RotateFindEnemyEnabled = false;
+            if (OfficialAutoFightRouter.UseOfficial(TaskContext.Instance().Config.AutoFightConfig, false))
+            {
+                var officialJsonParam = OfficialParamAdapter.FromTeapot(jsonParam, TaskContext.Instance().Config.AutoFightOfficialConfig);
+                return new OfficialJsonTask(officialJsonParam).Start(ct);
+            }
+            return new AutoFightJsonTask(jsonParam).Start(ct);
+        }
+
         var taskParam = new AutoFightParam(strategyPath, autoFightConfig)
         {
             FightFinishDetectEnabled = false,
@@ -1214,12 +1235,8 @@ public class AutoLeyLineOutcropTask : ISoloTask
 
     private static string BuildAutoFightStrategyPath(AutoFightConfig config)
     {
-        var path = Global.Absolute(@"User\AutoFight\" + config.StrategyName + ".txt");
-        if ("根据队伍自动选择".Equals(config.StrategyName))
-        {
-            path = Global.Absolute(@"User\AutoFight\");
-        }
-
+        // R3.4 D07 公版恢复：按文件存在性解析 .txt/.json，公版仅有 JSON 的策略不再被“文件不存在”挡住
+        var path = AutoFightParam.ResolveStrategyPath(config.StrategyName);
         if (!File.Exists(path) && !Directory.Exists(path))
         {
             throw new Exception("战斗策略文件不存在");

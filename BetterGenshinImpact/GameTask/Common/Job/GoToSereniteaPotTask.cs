@@ -95,7 +95,6 @@ internal class GoToSereniteaPotTask
         await tpTask.SwitchArea("尘歌壶");
         
         // 若未找到 ElementAssets.Instance.SereniteaPotRo 就是已经在尘歌壶了
-        var  ra = CaptureToRectArea();
         for (int i = 0; i < 5; i++){
             using var raInLoop = CaptureToRectArea();
             //确定洞天名称
@@ -121,7 +120,9 @@ internal class GoToSereniteaPotTask
 
         for (int i = 0; i < 5; i++)
         {
-            var sereniteaPotHomeIcon = ra.Find(ElementRecognition.Get("SereniteaPotHome", ra));
+            // R3.4 B13 公版恢复：每轮重新截图——缩放后继续在旧截图上找图标，循环重试形同虚设（旧画面风险）
+            using var currentRa = CaptureToRectArea();
+            var sereniteaPotHomeIcon = currentRa.Find(ElementRecognition.Get("SereniteaPotHome", currentRa));
             if (!sereniteaPotHomeIcon.IsExist())
             {
                 Logger.LogInformation("领取尘歌壶奖励:{text}", "住宅图标未找到，调整地图缩放至2。");
@@ -134,6 +135,9 @@ internal class GoToSereniteaPotTask
             else
             {
                 await Delay(500, ct);
+                // R3.4 B13 公版恢复：点击前释放按键，避免长按干扰点击命中
+                Simulation.ReleaseAllKey();
+                await Delay(200, ct);
                 sereniteaPotHomeIcon.Click();
                 await Delay(500, ct);
                 break;

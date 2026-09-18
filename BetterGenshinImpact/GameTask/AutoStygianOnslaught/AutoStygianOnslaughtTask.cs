@@ -410,7 +410,15 @@ public class AutoStygianOnslaughtTask : StateMachineBase<StygianState, BvPage>, 
         }
 
         Logger.LogInformation($"{Name}：点击前往挑战");
-        page.GetByText("前往挑战").WithRoi(r => r.CutRight(0.5)).FindAll().FirstOrDefault()?.Click();
+        // R3.4 D09 公版恢复：未识别到按钮时重试而非误报阶段转换成功
+        var challengeButton = page.GetByText("前往挑战").WithRoi(r => r.CutRight(0.5)).FindAll().FirstOrDefault();
+        if (challengeButton == null)
+        {
+            Logger.LogWarning($"{Name}：未找到前往挑战按钮");
+            return StateHandlerResult.Retry;
+        }
+
+        challengeButton.Click();
         await Delay(300, _ct);
         return StateHandlerResult.SuccessTo(
             StygianState.TeleportMap,
