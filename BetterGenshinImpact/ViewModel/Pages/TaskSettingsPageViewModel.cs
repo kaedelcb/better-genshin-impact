@@ -942,12 +942,16 @@ public partial class TaskSettingsPageViewModel : ViewModel
             return;
         }
         
-        Config.AutoDomainEnable = true;
         SwitchAutoDomainEnabled = true;
-        await new TaskRunner()
-            .RunSoloTaskAsync(new AutoDomainTask(new AutoDomainParam(AutoDomainRoundNum, path)));
-        SwitchAutoDomainEnabled = false;
-        Config.AutoDomainEnable = false;
+        try
+        {
+            await new TaskRunner()
+                .RunSoloTaskAsync(new AutoDomainTask(new AutoDomainParam(AutoDomainRoundNum, path)));
+        }
+        finally
+        {
+            SwitchAutoDomainEnabled = false;
+        }
     }
 
     public bool GetFightStrategy(out string path)

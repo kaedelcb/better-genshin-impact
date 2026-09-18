@@ -335,9 +335,7 @@ public class Dispatcher
                 {
                     return null;
                 }
-                AllConfig.AutoDomainEnable = true;
                 var a = await new AutoDomainTask(new AutoDomainParam(0, path)).Start(cancellationToken);
-                AllConfig.AutoDomainEnable = false;
                 return a;
 
             case "AutoBoss":

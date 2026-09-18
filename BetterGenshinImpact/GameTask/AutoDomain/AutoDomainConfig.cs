@@ -1,6 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace BetterGenshinImpact.GameTask.AutoDomain;
 
@@ -53,13 +54,6 @@ public partial class AutoDomainConfig : ObservableObject
     [ObservableProperty]
     private string _sundaySelectedValue = string.Empty;
     
-    //树脂使用顺序
-    [ObservableProperty] private List<string> _resinOrder = new();
-    
-    //四种树脂类型的对应数量
-    [ObservableProperty] private Dictionary<string, int> _resinCount = new();
-
-    
     // 指定树脂的使用次数
     [ObservableProperty]
     private bool _specifyResinUse = false;
@@ -74,19 +68,27 @@ public partial class AutoDomainConfig : ObservableObject
     
     // 使用原粹树脂刷取副本次数
     [ObservableProperty]
-    public int _originalResinUseCount = 0;
-    
+    private int _originalResinUseCount = 0;
+
+    // 使用原粹树脂(20)刷取副本次数
+    [ObservableProperty]
+    private int _originalResin20UseCount = 0;
+
+    // 使用原粹树脂(40)刷取副本次数
+    [ObservableProperty]
+    private int _originalResin40UseCount = 0;
+
     //使用浓缩树脂刷取副本次数
     [ObservableProperty]
-    public int _condensedResinUseCount = 0;
+    private int _condensedResinUseCount = 0;
 
     // 使用须臾树脂刷取副本次数
     [ObservableProperty]
-    public int _transientResinUseCount = 0;
+    private int _transientResinUseCount = 0;
     
     // 使用脆弱树脂刷取副本次数
     [ObservableProperty]
-    public int _fragileResinUseCount = 0;
+    private int _fragileResinUseCount = 0;
 
     // 战斗死亡后重试次数
     [ObservableProperty]
@@ -98,5 +100,12 @@ public partial class AutoDomainConfig : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _rewardRecognitionEnabled = false;
+
+    /// <summary>
+    /// R3.3 嵌套保护袋（ASTRA 会诊要求）：AllConfig 顶层袋不递归保护嵌套对象，
+    /// 退役的 ResinOrder/ResinCount 旧键在读入时落袋、保存时原样往返。过渡设施，列入 R6 退出清单。
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, System.Text.Json.JsonElement>? LegacyExtensionData { get; set; }
 
 }

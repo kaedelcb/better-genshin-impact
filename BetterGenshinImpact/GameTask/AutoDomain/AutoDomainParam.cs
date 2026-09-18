@@ -23,9 +23,6 @@ public class AutoDomainParam : BaseTaskParam<AutoDomainTask>
     // 结束后是否自动分解圣遗物
     public bool AutoArtifactSalvage { get; set; } = false;
     
-    //四种树脂类型的对应数量
-    public Dictionary<string, int> ResinCount { get; set; } = new();
-    
     //树脂刷取模式
     public bool SpecifyResinUse { get; set; } = false;
 
@@ -42,6 +39,12 @@ public class AutoDomainParam : BaseTaskParam<AutoDomainTask>
 
     // 使用原粹树脂刷取副本次数
     public int OriginalResinUseCount { get; set; } = 0;
+
+    // 使用原粹树脂(20)刷取副本次数
+    public int OriginalResin20UseCount { get; set; } = 0;
+
+    // 使用原粹树脂(40)刷取副本次数
+    public int OriginalResin40UseCount { get; set; } = 0;
 
     // 使用浓缩树脂刷取副本次数
     public int CondensedResinUseCount { get; set; } = 0;
@@ -75,15 +78,17 @@ public class AutoDomainParam : BaseTaskParam<AutoDomainTask>
         PartyName = config.PartyName;
         DomainName = config.DomainName;
         SundaySelectedValue = config.SundaySelectedValue;
-        ResinCount = config.ResinCount;
         AutoArtifactSalvage = config.AutoArtifactSalvage;
         MaxArtifactStar = TaskContext.Instance().Config.AutoArtifactSalvageConfig.MaxArtifactStar;
-        ResinPriorityList = config.ResinPriorityList;
+        // R3.3：必须复制而非引用别名，否则 SetResinPriorityList() 的 Clear() 会清空全局配置（ASTRA 会诊要求）
+        ResinPriorityList = new List<string>(config.ResinPriorityList);
         OriginalResinUseCount = config.OriginalResinUseCount;
         CondensedResinUseCount = config.CondensedResinUseCount;
         TransientResinUseCount = config.TransientResinUseCount;
         FragileResinUseCount = config.FragileResinUseCount;
         SpecifyResinUse = config.SpecifyResinUse;
+        OriginalResin20UseCount = config.OriginalResin20UseCount;
+        OriginalResin40UseCount = config.OriginalResin40UseCount;
         RewardRecognitionEnabled = config.RewardRecognitionEnabled;
     }
 
