@@ -102,7 +102,8 @@ public sealed class WorkflowPlan
     /// prerequisiteKinds/terminalKinds = 执行端前置/收尾能力实况（R4.6 I1；null = 测试接缝不检查）。
     /// </summary>
     public WorkflowPreflight Preflight(bool singleNativeSupported,
-        IReadOnlySet<string>? prerequisiteKinds = null, IReadOnlySet<string>? terminalKinds = null)
+        IReadOnlySet<string>? prerequisiteKinds = null, IReadOnlySet<string>? terminalKinds = null,
+        bool suppressConfigCompletionSupported = true)
     {
         var blocking = new List<string>();
         var warnings = new List<string>();
@@ -151,6 +152,12 @@ public sealed class WorkflowPlan
                     blocking.Add($"节点 {node.NodeId} 的 prerequisite.redeemCode 缺少 uid（策略参数与同节点账号策略均无），严格合同拒绝");
             }
         }
+
+        // R4.6 B6/E4'（四轮阻断 7）：任务中心资源提交固定 suppress=true——执行端缺 suppress 能力时
+        // 引用整龙/配置组的流程会在配置边界触发原生收尾（含关机类），响亮拒绝
+        if (!suppressConfigCompletionSupported
+            && _doc.Nodes.Any(n => n.Kind is "resource.oneDragonConfig" or "resource.configGroup"))
+            blocking.Add("执行端缺少 execution.suppressConfigCompletionAction 能力：任务中心资源提交固定 suppress=true，缺能力将触发原生收尾（阻止执行）");
 
         if (singleNativeSupported) return new WorkflowPreflight(blocking.Count == 0, blocking, warnings);
         // 单项原生能力未开放：逐节点闸门拒绝，不连坐整龙资源（D4）

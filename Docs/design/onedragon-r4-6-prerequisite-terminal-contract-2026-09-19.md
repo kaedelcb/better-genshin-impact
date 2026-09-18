@@ -158,3 +158,25 @@
 - **Batch 3a（BGI 基础修复）**：E9 根/叶结果合同（B7）+ E2-4 兑换严格路径（B5）+ UID 严格校验变体（B4 前半）+ I3 底层脱敏 + I5 月卡 ct。
 - **Batch 3b（BGI 协议+作业化）**：E1 身份合同扩展 + 三新操作作业化（JobKind.Prerequisite/Terminal、派发、取消、ext.job.status 复用）+ E4 suppress 接线（JobDescriptor/ExecutionScope/尾部消费/checkpoint 携带）+ E3 收尾 BGI 侧 + I1 capability 快照。
 - **Batch 3c（助手侧）**：WireRunId + E2-8 前置意图记录 + 生产适配器/执行器 + 结构化 PrerequisiteResult + 前置期 LeafCts + I2 通道修复 + I4 传输重投 + E6 脱敏。✅ 已落地（2026-09-19 R4 八批：夹具 15/15、助手回归 225/225、合同审计 78/78；E6 脱敏经 Runner.Sanitize 持久化面 + 适配器 MaskAccount 双层落实）。
+
+### 四轮会诊（R4.6 阶段完成审核，ASTRA 复核 Batch 3a–3c 执行效果）处置记录
+
+审核结论：7 阻断 + 6 重要。逐条处置如下（Batch 3d 落地，commit 见总计划 §7 R4 九批）：
+
+| 编号 | 发现 | 处置 |
+| --- | --- | --- |
+| 阻1 | 无 jobId 被误判取消已确认；恢复对账不被 SkipCurrent 中断；Stop 绕过前置确认 | **采纳**：PrerequisiteActionRecord 增 SendAttempted（发送前持久化）；ConfirmCancellationAsync 区分「确定未发送→Cancelled」与「可能已发送→Unknown」；恢复对账改用 leaf.Token（对账期叶子取消同走确认链）。Stop 场景诚实边界：运行取消时前置记录保留 Intent(SendAttempted)/Submitted 事实不清算，BGI 侧前置作业取消由显式动作经 ext.task.cancel 驱动，Stop 不冒充远端确认 |
+| 阻2 | 收尾发送后受理前 OCE 会清除可能已执行的意图 | **采纳**：PendingCompletion 增 dispatching 状态（发送前持久化）；Runner OCE 纪律 = pending（确定未发送）清除 / dispatching·submitted 保留标 unknown |
+| 阻3 | 事实复用缺 kind/账号身份；账号掩码可碰撞；既有失败自动产生第二次执行 | **采纳**：Matches 扩为完整身份（+Kind+AccountKey）；AccountKey 改 SHA256 截断哈希（非可逆掩码，碰撞隔离，RunStore.DeriveAccountKey）；既有 Failed/Cancelled 终态事实不自动重试（attempt 恒 1，需人工处置）；Succeeded=游戏态事实跨纪元有效（切号/兑换效果不随 BGI 重启消失——B2 epoch 约束限在飞作业，本条文档化） |
+| 阻4 | 未实现 accountRef 合同 | **不成立（按修订）**：I5 已于 Batch 3a 施工期修订——uid/bindingCode 来自流程策略参数（R1 迁移产物携带原值+sensitive 标记），因 BGI 本机无账号存储可解析 accountRef；本表 I5 行未回写该修订致会诊按旧合同判。处置=本文档回写修订（本轮），代码无改动 |
+| 阻5 | 前置 Unknown 先推进游标再标 Unknown，崩溃窗口可绕过未决前置 | **采纳**：CommitOutcome 对 unknown/cancelUnconfirmed 游标不推进+调用方先置状态单次原子落盘；ObservedTerminal 未确认不落（保持 null，恢复扫描按在飞标 Unknown）。恢复扫描不加前置在飞分支（会把恢复对账路径堵死）；不变式=在飞前置 ⟹ 游标恒在其节点（夹具证明） |
+| 阻6 | 恢复对账把 outcome_unknown 降为 Failed、把 WasCancelled 判 Proceed | **采纳**：统一终态解释器 BgiJobTerminalPolling.InterpretJob（WasCancelled 优先、skipped 协议违例不可考），正常轮询与恢复对账共用；prerequisite_outcome_unknown 恒映射 Unknown |
+| 阻7 | 任务中心 suppress 仍按流程声明，未固定 true | **采纳**：SubmitAndAwaitAsync 固定 suppress=true（生产边界常量）；IWorkflowExecutionBoundary 增 SuppressConfigCompletionSupported（默认 true=测试接缝）；Planner 预检接 suppress 能力（缺能力+含整龙/配置组节点 → 阻止执行）；启动/恢复/重载三入口接线 |
+| 重8 | I4 只有字段无重投实现；指纹未覆盖注入字段 | **采纳（诚实化）**：传输重投不实施（发送失败一律 Unknown 保守处置），RedeliveryCount 字段预留；bgiEpoch 冻结进载荷后再计算指纹（指纹覆盖完整冻结载荷） |
+| 重9 | 业务词回流 ObservedTerminal | **采纳**：WorkflowNodeOutcome 增 RawTerminal（原始词+业务结果分开）；ObservedTerminal 只存原始线协议词；MapTerminal 归一化词恒等映射降级为遗留防御 |
+| 重10 | 脱敏未覆盖主要写入口 | **采纳**：持久化面统一 Sanitize（PrerequisiteActionRecord.Reason / NodeOutcome.Reason / Note 全出口）；边界说明：Sanitize 覆盖长数字串（UID 形态），远端自由文本受 BGI 侧受控错误码约束，bindingCode 永不由远端回传 |
+| 重11 | 轮询传输异常未处理 | **采纳**：查询传输/协议异常按通道瞬态（预算内继续等），OCE 绝不降级为瞬态 |
+| 重12 | Dispose 后 HasCapability 仍放行 | **采纳**：Dispose 同步撤销 Ready 态 + 清空能力快照 |
+| 重13 | 收尾载荷缺 occurrence/attempt | **采纳**：收尾载荷与 PendingCompletion 记录补 occurrence=0/attempt=1 扩展字段 |
+
+- **Batch 3d（四轮处置）**：上表 12 项采纳落地（阻4 为文档回写）。新夹具 7/7（失败不重试/Unknown 游标不推进/在飞恢复对账/dispatching 取消/suppress 固定/suppress 能力预检/未确认不落 ObservedTerminal）；助手回归 232/232。

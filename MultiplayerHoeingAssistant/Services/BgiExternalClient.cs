@@ -892,6 +892,9 @@ public sealed class BgiExternalClient : IDisposable
 
         _disposed = true;
         _lifetimeCts.Cancel();
+        // 四轮重要 12：释放即撤销 Ready 态与能力快照（HasCapability 不得对僵尸客户端放行）
+        State = BgiExternalLinkState.Down;
+        Capabilities = new Dictionary<string, bool>();
         SetConnectionState(BgiExternalConnectionState.Closed);
         try
         {

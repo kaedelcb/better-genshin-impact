@@ -122,6 +122,14 @@ public sealed class RunStore
         return "idem-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material)))[..24].ToLowerInvariant();
     }
 
+    /// <summary>
+    /// 账号标识派生（I3 + 四轮阻断 3）：SHA256 截断哈希——稳定可比对、碰撞隔离、非可逆；
+    /// 空 UID 返回 null（严格合同另行拒绝，不参与键材料）。
+    /// </summary>
+    public static string? DeriveAccountKey(string? uid)
+        => string.IsNullOrWhiteSpace(uid) ? null
+            : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(uid)))[..16].ToLowerInvariant();
+
     /// <summary>推进记录（提交受理/终态/水位/等待/收尾状态更新；记录修订单调递增）。</summary>
     public void Update(WorkflowRunRecord rec) => Persist(rec, rec.RecordRevision);
 
@@ -178,6 +186,7 @@ public sealed class RunStore
                 rec.State = WorkflowRunState.Unknown;
                 note = $"助手重启：提交在飞且终态未证实（{sub.Key}，节点 {sub.NodeId}），标 Unknown，需按幂等键+job 查询对账，禁止自动重跑。";
             }
+
             else
             {
                 rec.State = WorkflowRunState.Interrupted;

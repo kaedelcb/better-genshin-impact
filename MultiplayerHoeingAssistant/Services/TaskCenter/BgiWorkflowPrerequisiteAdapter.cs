@@ -12,9 +12,11 @@ namespace MultiplayerHoeingAssistant.Services;
 /// <summary>
 /// R4.6 E1'/E2-8' 生产前置适配器（ext.prerequisite.account / ext.prerequisite.redeemCode 作业化客户端）。
 /// 引擎先落盘 Intent 记录 → 本适配器填充线协议身份（WireRunId+nodeId+iteration=LoopIteration，occurrence/attempt
-/// 作 add-only 扩展字段）+ 幂等键 + 指纹 + expiresAtUtc（I4：首次发送即冻结，传输重投同键同载荷同指纹）→
-/// 受理即持久化 Submitted 事实（jobId）→ ext.job.status 对账至终态 → 结构化 PrerequisiteResult。
-/// I6 无状态：全部状态在 RunStore 记录与客户端能力快照；I3：账号标识仅落脱敏形态（原值不落记录）。
+/// 作 add-only 扩展字段）+ 幂等键 + 指纹 + expiresAtUtc + bgiEpoch（I4：首次发送即冻结，传输重投同键同载荷同指纹）→
+/// 发送前持久化 SendAttempted（发送窗口崩溃/取消不误判「未发送」）→ 受理即持久化 Submitted 事实（jobId）→
+/// ext.job.status 对账至终态（统一解释器 InterpretJob，正常轮询与恢复对账同语义）→ 结构化 PrerequisiteResult。
+/// I6 无状态：全部状态在 RunStore 记录与客户端能力快照；I3：账号标识仅落 SHA256 截断哈希（原值不落记录）。
+/// I4 诚实边界：传输重投当前不实施（发送失败一律 Unknown 保守处置），RedeliveryCount 字段预留。
 /// </summary>
 public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapter
 {
@@ -47,11 +49,14 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
     public async Task<PrerequisiteResult> ExecuteAsync(WorkflowStrategy strategy, WorkflowRunRecord run,
         WorkflowNodeOccurrence occurrence, CancellationToken ct)
     {
-        // 引擎纪律：调用前已落盘 Intent 记录（同节点+出现身份+kind 的最新一条）
+        // 引擎纪律：调用前已落盘 Intent 记录（完整身份匹配：节点+出现+轮次+attempt+策略索引+kind+账号标识）
+        var accountKey = RunStore.DeriveAccountKey(strategy.GetString("uid"));
+        // 引擎刚落盘的 Intent 记录 = 同出现身份+kind+账号标识的最新一条（单驱动循环串行，无并发歧义）
         var record = run.PrerequisiteActions.LastOrDefault(r =>
             r.NodeId == occurrence.NodeId && r.Occurrence == occurrence.Occurrence
             && r.LoopIteration == occurrence.LoopIteration && r.Attempt == 1
-            && r.Kind == strategy.Kind && r.State == PrerequisiteActionState.Intent);
+            && r.Kind == strategy.Kind && r.AccountKey == accountKey
+            && r.State == PrerequisiteActionState.Intent);
         if (record is null)
             return new PrerequisiteResult(PrerequisiteStatus.Failed, "前置意图记录缺失（违反引擎纪律：先落盘意图再执行）");
 
@@ -64,9 +69,8 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
             return new PrerequisiteResult(PrerequisiteStatus.Failed, record.Reason);
         }
 
-        // I4：线协议身份/幂等键/指纹/expiresAtUtc 首次发送即冻结（传输重投不刷新）
+        // I4：线协议身份/幂等键/指纹/expiresAtUtc/bgiEpoch 首次发送即冻结（指纹覆盖冻结后的完整载荷）
         record.Epoch = _client.ServerEpoch is { } epoch ? $"{epoch.ProcessId}:{epoch.StartTicksUtc}" : null;
-        record.AccountKey = MaskAccount(uid);
         record.ExpiresAtUtc = DateTimeOffset.UtcNow.Add(ExpireWindow).ToString("O");
         record.IdempotencyKey = RunStore.DeriveSubmissionKey(run.RunId,
             $"{occurrence.NodeId}#{record.StrategyIndex}:{strategy.Kind}:{record.AccountKey}",
@@ -79,6 +83,8 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
             executionContractVersion = 1,
             idempotencyKey = record.IdempotencyKey,
             expiresAtUtc = record.ExpiresAtUtc,
+            bgiEpoch = _client.ServerEpoch is { } se
+                ? new { processId = se.ProcessId, startTicksUtc = se.StartTicksUtc } : null,
             workflowRunId = run.WireRunId,
             nodeId = occurrence.NodeId,
             iteration = occurrence.LoopIteration,
@@ -89,6 +95,8 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
         };
         record.Fingerprint = Convert.ToHexString(SHA256.HashData(
             JsonSerializer.SerializeToUtf8Bytes(payload)))[..24].ToLowerInvariant();
+        // 四轮阻断 1：发送前持久化「发送已尝试」——此后缺 jobId ≠ 未发送（取消确认不得当 Cancelled）
+        record.SendAttempted = true;
         _runs.Update(run);
 
         // 提交：受理回执 = accepted + taskHandle（jobId 别名）；发送 ≠ 完成
@@ -97,7 +105,7 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
         {
             response = await _client.SendCommandAsync(operation, payload, null, ct).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) { throw; } // 叶子取消交引擎确认链（B3）
+        catch (OperationCanceledException) { throw; } // 叶子取消交引擎确认链（B3；记录带 SendAttempted 供确认链判定）
         catch (Exception ex)
         {
             return new PrerequisiteResult(PrerequisiteStatus.Unknown,
@@ -131,47 +139,51 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
 
         var (outcome, job, reason) = await BgiJobTerminalPolling.PollUntilTerminalAsync(
             _client, acceptance.TaskHandle, ExecuteBudget, PollInterval, ct).ConfigureAwait(false);
-        return outcome switch
-        {
-            "succeeded" => new PrerequisiteResult(PrerequisiteStatus.Proceed, null, acceptance.TaskHandle),
-            "cancelled" => new PrerequisiteResult(PrerequisiteStatus.Cancelled, reason ?? "远端已取消", acceptance.TaskHandle),
-            "failed" => job?.ErrorCode switch
-            {
-                "account_mismatch" => new PrerequisiteResult(PrerequisiteStatus.Failed,
-                    "当前账号与流程声明 UID 不符（account_mismatch）", acceptance.TaskHandle),
-                "prerequisite_outcome_unknown" => new PrerequisiteResult(PrerequisiteStatus.Unknown,
-                    "BGI 侧结果不可考（prerequisite_outcome_unknown）", acceptance.TaskHandle),
-                _ => new PrerequisiteResult(PrerequisiteStatus.Failed, $"前置执行失败：{reason}", acceptance.TaskHandle),
-            },
-            _ => new PrerequisiteResult(PrerequisiteStatus.Unknown, reason ?? "终态不可考", acceptance.TaskHandle),
-        };
+        return MapOutcome(outcome, job, reason, acceptance.TaskHandle);
     }
 
-    /// <summary>恢复对账：先查远端权威终态（ext.job.status），查不到不盲目重发（B2）。</summary>
+    /// <summary>恢复对账：先查远端权威终态（ext.job.status），查不到不盲目重发（B2；与正常轮询共用终态解释器）。</summary>
     public async Task<PrerequisiteResult> ReconcileAsync(PrerequisiteActionRecord record, CancellationToken ct)
     {
         if (record.JobId is null)
-            return new PrerequisiteResult(PrerequisiteStatus.Unknown, "意图已落盘但无受理事实（无 jobId），禁止盲目重发");
-        var (status, job) = await _client.QueryJobStatusAsync(record.JobId, ct).ConfigureAwait(false);
-        if (status is null)
-            return new PrerequisiteResult(PrerequisiteStatus.Unknown, "通道瞬态故障，对账未决", record.JobId);
-        if (status == "not_found" || job is null)
-            return new PrerequisiteResult(PrerequisiteStatus.Unknown, "作业不存在于当前纪元（not_found，跨纪元事实不沿用）", record.JobId);
-        return job.State switch
+            return new PrerequisiteResult(PrerequisiteStatus.Unknown,
+                record.SendAttempted
+                    ? "发送已尝试但无受理事实（无 jobId），禁止盲目重发"
+                    : "意图已落盘但未发送（无 jobId），禁止盲目重发");
+        (string? Status, BgiJobInfo? Job) query;
+        try
         {
-            "succeeded" => new PrerequisiteResult(PrerequisiteStatus.Proceed, null, record.JobId),
-            "cancelled" => new PrerequisiteResult(PrerequisiteStatus.Cancelled, "对账：远端已取消", record.JobId),
-            "failed" => new PrerequisiteResult(PrerequisiteStatus.Failed, $"对账：远端失败（{job.ErrorCode}）", record.JobId),
-            "rejected" => new PrerequisiteResult(PrerequisiteStatus.Rejected, "对账：远端拒绝", record.JobId),
-            _ => new PrerequisiteResult(PrerequisiteStatus.Unknown, $"对账：作业仍在活动态（{job.State}）", record.JobId),
-        };
+            query = await _client.QueryJobStatusAsync(record.JobId, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception)
+        {
+            return new PrerequisiteResult(PrerequisiteStatus.Unknown, "通道瞬态故障，对账未决", record.JobId);
+        }
+        if (query.Status is null)
+            return new PrerequisiteResult(PrerequisiteStatus.Unknown, "通道瞬态故障，对账未决", record.JobId);
+        if (query.Status == "not_found" || query.Job is null)
+            return new PrerequisiteResult(PrerequisiteStatus.Unknown,
+                "作业不存在于当前纪元（not_found，跨纪元事实不沿用）", record.JobId);
+        var (outcome, reason) = BgiJobTerminalPolling.InterpretJob(query.Job);
+        if (outcome == "active")
+            return new PrerequisiteResult(PrerequisiteStatus.Unknown,
+                $"对账：作业仍在活动态（{query.Job.State}）", record.JobId);
+        if (outcome == "rejected")
+            return new PrerequisiteResult(PrerequisiteStatus.Rejected, "对账：远端拒绝", record.JobId);
+        return MapOutcome(outcome, query.Job, reason, record.JobId);
     }
 
-    /// <summary>前置期显式跳过的远端取消确认链（B3）：确认 cancelled 才算数，否则 Unknown（不猜成功）。</summary>
+    /// <summary>前置期显式跳过的远端取消确认链（B3 + 四轮阻断 1：确认 cancelled 才算数；发送窗口不可考 = Unknown）。</summary>
     public async Task<PrerequisiteResult> ConfirmCancellationAsync(PrerequisiteActionRecord record, CancellationToken ct)
     {
         if (record.JobId is null)
-            return new PrerequisiteResult(PrerequisiteStatus.Cancelled, "未受理（无 jobId），无远端在飞");
+        {
+            // 四轮阻断 1：区分「确定未发送」与「可能已发送」——后者绝不判 Cancelled
+            return record.SendAttempted
+                ? new PrerequisiteResult(PrerequisiteStatus.Unknown, "发送已尝试但受理未证实（无 jobId），远端可能在飞")
+                : new PrerequisiteResult(PrerequisiteStatus.Cancelled, "未发送（意图未离开本机），无远端在飞");
+        }
         try
         {
             await _client.CancelOwnedTaskAsync(record.JobId, ct).ConfigureAwait(false);
@@ -190,7 +202,20 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
             : new PrerequisiteResult(PrerequisiteStatus.Unknown, $"取消后远端终态未确认（{reason ?? outcome}）", record.JobId);
     }
 
-    /// <summary>I3：账号标识脱敏（≤5 位全遮盖，否则前 3***后 2；与 BGI SensitiveTextMask 同规则，稳定可比对）。</summary>
-    internal static string MaskAccount(string uid)
-        => uid.Length <= 5 ? new string('*', uid.Length) : uid[..3] + "***" + uid[^2..];
+    /// <summary>统一终态 → 结构化结果（四轮阻断 6：错误码不确定性保留，prerequisite_outcome_unknown 不降级为 Failed）。</summary>
+    private static PrerequisiteResult MapOutcome(string outcome, BgiJobInfo? job, string? reason, string? jobId)
+        => outcome switch
+        {
+            "succeeded" => new PrerequisiteResult(PrerequisiteStatus.Proceed, null, jobId),
+            "cancelled" => new PrerequisiteResult(PrerequisiteStatus.Cancelled, reason ?? "远端已取消", jobId),
+            "failed" => job?.ErrorCode switch
+            {
+                "account_mismatch" => new PrerequisiteResult(PrerequisiteStatus.Failed,
+                    "当前账号与流程声明 UID 不符（account_mismatch）", jobId),
+                "prerequisite_outcome_unknown" => new PrerequisiteResult(PrerequisiteStatus.Unknown,
+                    "BGI 侧结果不可考（prerequisite_outcome_unknown）", jobId),
+                _ => new PrerequisiteResult(PrerequisiteStatus.Failed, $"前置执行失败：{reason}", jobId),
+            },
+            _ => new PrerequisiteResult(PrerequisiteStatus.Unknown, reason ?? "终态不可考", jobId),
+        };
 }

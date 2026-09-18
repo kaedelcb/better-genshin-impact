@@ -31,11 +31,13 @@ public class R46Batch3cRunnerTests : IDisposable
     {
         public bool SingleNativeSupported { get; set; }
         public List<string> Submissions { get; } = new();
+        public List<bool> SuppressFlags { get; } = new(); // 任务中心提交固定 suppress=true（B6/E4'）的见证
         public Func<string, CancellationToken, Task<string>>? OnAwait { get; set; }
 
         public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
         {
             Submissions.Add(request.Occurrence.NodeId);
+            SuppressFlags.Add(request.SuppressConfigCompletionAction);
             return Task.FromResult(BoundarySubmitResult.AcceptedWith("job-" + Submissions.Count));
         }
 
@@ -151,6 +153,7 @@ public class R46Batch3cRunnerTests : IDisposable
         {
             NodeId = "n-1", Occurrence = 0, LoopIteration = 0, Attempt = 1, StrategyIndex = 0,
             Kind = "prerequisite.account", State = PrerequisiteActionState.Succeeded,
+            AccountKey = RunStore.DeriveAccountKey("123456789"), // 四轮阻断 3：完整身份（含账号标识哈希）
             JobId = "job-p1", IdempotencyKey = "idem-x",
         });
         _runs.Update(rec);
@@ -187,6 +190,7 @@ public class R46Batch3cRunnerTests : IDisposable
         {
             NodeId = "n-1", Occurrence = 0, LoopIteration = 0, Attempt = 1, StrategyIndex = 0,
             Kind = "prerequisite.account", State = PrerequisiteActionState.Submitted,
+            AccountKey = RunStore.DeriveAccountKey("123456789"),
             JobId = "job-p9", IdempotencyKey = "idem-y",
         });
         _runs.Update(rec);
@@ -548,5 +552,232 @@ public class R46Batch3cRunnerTests : IDisposable
             ],
         };
         Assert.True(new WorkflowPlan(withSibling).Preflight(true).Executable); // 同节点账号策略提供身份
+    }
+
+    // ── 四轮处置（ASTRA R4.6 阶段审核）故障窗口 ──────────────────────────
+
+    [Fact]
+    public async Task Prerequisite_FailedRecord_NoAutoRetry_NeedsHumanDecision()
+    {
+        var seed = SeedFlow(new WorkflowDocument
+        {
+            Name = "既有失败不重试",
+            Nodes =
+            [
+                new WorkflowNode { NodeId = "n-1", Kind = "resource.oneDragonConfig",
+                    Ref = new WorkflowResourceRef { Config = "配置A", ConfigKey = "配置A#k", Revision = "rev-1" },
+                    Strategies = [AccountStrategy()] },
+                DragonNode("n-2", "配置B"),
+            ],
+        }).Split('|');
+        var rec = _runs.CreateRun(seed[1], seed[0]);
+        rec.State = WorkflowRunState.Running;
+        rec.TriggerConsumed = true;
+        rec.Cursor = new WorkflowNodeCursor { NodeId = "n-1", Occurrence = 0, LoopIteration = 0, Attempt = 1 };
+        rec.PrerequisiteActions.Add(new PrerequisiteActionRecord // 既有失败终态事实
+        {
+            NodeId = "n-1", Occurrence = 0, LoopIteration = 0, Attempt = 1, StrategyIndex = 0,
+            Kind = "prerequisite.account", State = PrerequisiteActionState.Failed,
+            AccountKey = RunStore.DeriveAccountKey("123456789"),
+            Reason = "account_mismatch", IdempotencyKey = "idem-f",
+        });
+        _runs.Update(rec);
+        Assert.Single(_runs.RecoverOnStart());
+
+        var prereq = new FakePrerequisite();
+        var (runner, boundary, _, _) = MakeRunner(prerequisite: prereq);
+        var run = await runner.ResumeAsync(rec.RunId);
+
+        Assert.Empty(prereq.Executed); // I4/四轮阻断 3：不自动创建第二次执行
+        Assert.Empty(boundary.Submissions);
+        Assert.Equal(WorkflowRunState.Failed, run.State);
+        Assert.Contains(run.NodeOutcomes, o => o is { NodeId: "n-1", Result: "failed" });
+    }
+
+    [Fact]
+    public async Task Prerequisite_UnknownResult_CursorHeldAtCurrentNode()
+    {
+        var workflowId = SeedFlow(new WorkflowDocument
+        {
+            Name = "前置未知不推进",
+            Nodes =
+            [
+                new WorkflowNode { NodeId = "n-1", Kind = "resource.oneDragonConfig",
+                    Ref = new WorkflowResourceRef { Config = "配置A", ConfigKey = "配置A#k", Revision = "rev-1" },
+                    Strategies = [AccountStrategy()] },
+                DragonNode("n-2", "配置B"),
+            ],
+        }).Split('|')[1];
+        var prereq = new FakePrerequisite
+        {
+            OnExecute = (_, _) => Task.FromResult(new PrerequisiteResult(PrerequisiteStatus.Unknown, "对端不可考")),
+        };
+        var (runner, boundary, _, _) = MakeRunner(prerequisite: prereq);
+
+        var run = await runner.StartAsync(workflowId);
+
+        Assert.Equal(WorkflowRunState.Unknown, run.State);
+        var loaded = _runs.Load(run.RunId)!;
+        Assert.Equal("n-1", loaded.Cursor!.NodeId); // 四轮阻断 5：游标不推进（恢复回到本节点对账）
+        Assert.False(loaded.TailReached);
+        Assert.Empty(boundary.Submissions); // 节点主体未提交
+    }
+
+    [Fact]
+    public async Task RecoverOnStart_PrerequisiteInFlight_InterruptedThenResumeReconciles()
+    {
+        var seed = SeedFlow(new WorkflowDocument
+        {
+            Name = "前置在飞恢复对账",
+            Nodes =
+            [
+                new WorkflowNode { NodeId = "n-1", Kind = "resource.oneDragonConfig",
+                    Ref = new WorkflowResourceRef { Config = "配置A", ConfigKey = "配置A#k", Revision = "rev-1" },
+                    Strategies = [AccountStrategy()] },
+                DragonNode("n-2", "配置B"),
+            ],
+        }).Split('|');
+        var rec = _runs.CreateRun(seed[1], seed[0]);
+        rec.State = WorkflowRunState.Running;
+        rec.TriggerConsumed = true;
+        rec.Cursor = new WorkflowNodeCursor { NodeId = "n-1", Occurrence = 0, LoopIteration = 0, Attempt = 1 };
+        rec.PrerequisiteActions.Add(new PrerequisiteActionRecord // 崩溃窗口：前置已受理未终态
+        {
+            NodeId = "n-1", Occurrence = 0, LoopIteration = 0, Attempt = 1, StrategyIndex = 0,
+            Kind = "prerequisite.account", State = PrerequisiteActionState.Submitted,
+            AccountKey = RunStore.DeriveAccountKey("123456789"),
+            JobId = "job-p7", IdempotencyKey = "idem-z", SendAttempted = true,
+        });
+        _runs.Update(rec);
+
+        // 四轮阻断 5 处置口径：游标恒在本节点（CommitOutcome 对未决结果不推进），前置在飞 = Interrupted 可恢复，
+        // 恢复即回到本节点对账——而非恢复扫描直接标 Unknown（那会把对账路径堵死）
+        var recovered = Assert.Single(_runs.RecoverOnStart());
+        Assert.Equal(WorkflowRunState.Interrupted, recovered.State);
+
+        var reconcileCalls = 0;
+        var prereq = new FakePrerequisite
+        {
+            OnReconcile = (_, _) =>
+            {
+                reconcileCalls++;
+                return Task.FromResult(new PrerequisiteResult(PrerequisiteStatus.Proceed, null, "job-p7"));
+            },
+        };
+        var (runner, boundary, _, _) = MakeRunner(prerequisite: prereq);
+        var run = await runner.ResumeAsync(rec.RunId);
+
+        Assert.Equal(1, reconcileCalls); // 恢复后先对账
+        Assert.Empty(prereq.Executed); // 对账放行不重发
+        Assert.Equal(["n-1", "n-2"], boundary.Submissions.Select(x => x));
+        Assert.Equal(WorkflowRunState.Succeeded, run.State);
+        Assert.Equal(PrerequisiteActionState.Succeeded, _runs.Load(rec.RunId)!.PrerequisiteActions[0].State);
+    }
+
+    [Fact]
+    public async Task Terminal_OceDuringDispatch_IntentRetainedAsUnknown()
+    {
+        var workflowId = SeedFlow(new WorkflowDocument
+        {
+            Name = "收尾发送窗口取消",
+            Nodes = [DragonNode("n-1", "配置A")],
+            Terminal = [new WorkflowTerminalAction { Kind = "terminal.completionAction" }],
+        }).Split('|')[1];
+        var term = new FakeTerminal
+        {
+            OnExecute = (_, run) =>
+            {
+                run.PendingCompletion!.State = "dispatching"; // 生产执行器发送前持久化（可能已发送）
+                throw new OperationCanceledException();
+            },
+        };
+        var (runner, _, _, _) = MakeRunner(terminal: term);
+
+        var run = await runner.StartAsync(workflowId);
+
+        Assert.Equal(WorkflowRunState.Cancelled, run.State);
+        var loaded = _runs.Load(run.RunId)!;
+        Assert.Equal("unknown", loaded.PendingCompletion!.State); // 四轮阻断 2：dispatching 不当 pending 清除
+    }
+
+    [Fact]
+    public async Task Submit_SuppressConfigCompletionAction_AlwaysTrue()
+    {
+        var workflowId = SeedFlow(new WorkflowDocument
+        {
+            Name = "suppress 固定",
+            Nodes = [DragonNode("n-1", "配置A"), DragonNode("n-2", "配置B")],
+            // 注意：不声明 Execution.SuppressConfigCompletionAction
+        }).Split('|')[1];
+        var (runner, boundary, _, _) = MakeRunner();
+
+        var run = await runner.StartAsync(workflowId);
+
+        Assert.Equal(WorkflowRunState.Succeeded, run.State);
+        Assert.Equal([true, true], boundary.SuppressFlags.Select(x => x)); // B6/E4'：与流程声明无关，固定 true
+    }
+
+    [Fact]
+    public void Preflight_SuppressCapabilityMissing_BlockingForResourceNodes()
+    {
+        var dragon = new WorkflowDocument
+        {
+            Name = "龙引用",
+            Nodes = [DragonNode("n-1", "配置A")],
+        };
+        var blocked = new WorkflowPlan(dragon).Preflight(true, WorkflowKindCatalog.StrategyKinds,
+            WorkflowKindCatalog.TerminalKinds, suppressConfigCompletionSupported: false);
+        Assert.False(blocked.Executable); // 四轮阻断 7：缺 suppress 能力的整龙流程响亮拒绝
+        Assert.Contains(blocked.BlockingReasons, r => r.Contains("suppressConfigCompletionAction"));
+
+        var ok = new WorkflowPlan(dragon).Preflight(true, WorkflowKindCatalog.StrategyKinds,
+            WorkflowKindCatalog.TerminalKinds, suppressConfigCompletionSupported: true);
+        Assert.True(ok.Executable);
+
+        var singleOnly = new WorkflowDocument // 单项节点不吃 suppress 合同（D10 抑制针对配置收尾）
+        {
+            Name = "纯单项",
+            Nodes = [new WorkflowNode { NodeId = "t-1", Kind = "resource.singleTask",
+                Ref = new WorkflowResourceRef { TaskId = "task-x" } }],
+        };
+        var seam = new WorkflowPlan(singleOnly).Preflight(true, WorkflowKindCatalog.StrategyKinds,
+            WorkflowKindCatalog.TerminalKinds, suppressConfigCompletionSupported: false);
+        Assert.True(seam.Executable);
+    }
+
+    [Fact]
+    public async Task SkipCurrent_Unconfirmed_ObservedTerminalStaysNull_CursorHeld()
+    {
+        var workflowId = SeedFlow(new WorkflowDocument
+        {
+            Name = "跳过未确认词表",
+            Nodes = [DragonNode("n-1", "配置A"), DragonNode("n-2", "配置B")],
+        }).Split('|')[1];
+        var (runner, boundary, _, _) = MakeRunner();
+
+        var awaitEntered = new TaskCompletionSource();
+        boundary.OnAwait = async (_, ct) =>
+        {
+            awaitEntered.TrySetResult();
+            await Task.Delay(Timeout.Infinite, ct); // 首次等待与确认等待均不返回（确认超时）
+            return "succeeded";
+        };
+
+        var task = runner.StartAsync(workflowId);
+        await awaitEntered.Task;
+        string? runId = null;
+        for (var i = 0; i < 100 && runId is null; i++)
+        {
+            runId = _runs.List().FirstOrDefault()?.RunId;
+            if (runId is null) await Task.Delay(10);
+        }
+        runner.RequestAction(runId!, WorkflowRunAction.SkipCurrent);
+        var run = await task;
+
+        Assert.Equal(WorkflowRunState.Unknown, run.State);
+        var loaded = _runs.Load(run.RunId)!;
+        Assert.Null(loaded.CurrentSubmission!.ObservedTerminal); // I2/四轮阻断 5：未观察到原始词绝不落 ObservedTerminal
+        Assert.Equal("n-1", loaded.Cursor!.NodeId); // 游标不推进
+        Assert.Single(boundary.Submissions);
     }
 }

@@ -7,14 +7,30 @@ namespace MultiplayerHoeingAssistant.Services;
 
 /// <summary>
 /// R4.6 B3：ext.job.status 轮询对账（前置/收尾适配器共用）。
-/// 通道瞬态（status=null）不计事实、继续等；到达终态或预算耗尽返回。
+/// 通道瞬态（status=null / 传输异常）不计事实、预算内继续等；到达终态或预算耗尽返回。
 /// 终态词表 = BGI JobState 小写（queued/running/cancelling 为活动态；succeeded/failed/cancelled/rejected/skipped 为终态）。
 /// </summary>
 internal static class BgiJobTerminalPolling
 {
     /// <summary>
+    /// 统一终态解释（四轮阻断 6：正常轮询与恢复对账共用同一解释器——WasCancelled 优先于成功/失败，
+    /// skipped 对前置/收尾作业是协议违例按不可考）。Outcome ∈ succeeded/failed/cancelled/unknown/active。
+    /// </summary>
+    public static (string Outcome, string? Reason) InterpretJob(BgiJobInfo job)
+        => job.State switch
+        {
+            "succeeded" => job.WasCancelled ? ("cancelled", "远端取消已确认（WasCancelled）") : ("succeeded", null),
+            "failed" => job.WasCancelled ? ("cancelled", "远端取消已确认（WasCancelled）") : ("failed", job.ErrorCode ?? "failed"),
+            "cancelled" => ("cancelled", job.ErrorMessage ?? "远端已取消"),
+            "rejected" => ("failed", job.ErrorCode ?? "rejected"),
+            "skipped" => ("unknown", "前置/收尾作业不应出现 skipped 终态（协议违例）"),
+            _ => ("active", null), // queued / running / cancelling
+        };
+
+    /// <summary>
     /// 轮询至作业终态。Outcome ∈ succeeded / failed / cancelled / unknown
-    /// （unknown = 不可考：预算耗尽 / 查无作业 / 未登记终态词； cancelled 含 WasCancelled 补位）。
+    /// （unknown = 不可考：预算耗尽 / 查无作业 / 协议违例； cancelled 含 WasCancelled 补位）。
+    /// 四轮重要 11：查询传输/协议异常按通道瞬态处理（预算内继续等），不抛出炸掉运行循环。
     /// </summary>
     public static async Task<(string Outcome, BgiJobInfo? Job, string? Reason)> PollUntilTerminalAsync(
         BgiExternalClient client, string jobId, TimeSpan budget, TimeSpan interval, CancellationToken ct)
@@ -23,7 +39,18 @@ internal static class BgiJobTerminalPolling
         while (DateTimeOffset.UtcNow < deadline)
         {
             ct.ThrowIfCancellationRequested();
-            var (status, job) = await client.QueryJobStatusAsync(jobId, ct).ConfigureAwait(false);
+            string? status;
+            BgiJobInfo? job;
+            try
+            {
+                (status, job) = await client.QueryJobStatusAsync(jobId, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { throw; } // 用户取消/叶子取消绝不降级为瞬态
+            catch (Exception)
+            {
+                status = null; job = null; // 传输/协议异常 = 通道瞬态，不计事实，预算内继续
+            }
+
             if (status is null)
             {
                 // 通道瞬态失败：不计事实，继续等（对端可能在执行中）
@@ -34,24 +61,8 @@ internal static class BgiJobTerminalPolling
             }
             else if (job is not null)
             {
-                switch (job.State)
-                {
-                    case "succeeded":
-                        return job.WasCancelled
-                            ? ("cancelled", job, "远端取消已确认（WasCancelled）")
-                            : ("succeeded", job, null);
-                    case "failed":
-                        return job.WasCancelled
-                            ? ("cancelled", job, "远端取消已确认（WasCancelled）")
-                            : ("failed", job, job.ErrorCode ?? "failed");
-                    case "cancelled":
-                        return ("cancelled", job, job.ErrorMessage ?? "远端已取消");
-                    case "rejected":
-                        return ("failed", job, job.ErrorCode ?? "rejected");
-                    case "skipped":
-                        return ("unknown", job, "前置/收尾作业不应出现 skipped 终态（协议违例）");
-                    // queued / running / cancelling：活动态，继续等
-                }
+                var (outcome, reason) = InterpretJob(job);
+                if (outcome != "active") return (outcome, job, reason);
             }
 
             await Task.Delay(interval, ct).ConfigureAwait(false);

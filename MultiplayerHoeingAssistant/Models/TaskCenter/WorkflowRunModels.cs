@@ -104,9 +104,13 @@ public sealed class WorkflowNodeOutcome
     [JsonPropertyName("loopIteration")]
     public int LoopIteration { get; set; }
 
-    /// <summary>succeeded / failed / rejected / skippedFilter / skippedUser / cancelled。</summary>
+    /// <summary>succeeded / failed / rejected / skippedFilter / skippedUser / cancelled / cancelUnconfirmed / unknown。</summary>
     [JsonPropertyName("result")]
     public string Result { get; set; } = "";
+
+    /// <summary>原始线协议词（I2：与业务结果分开；仅边界观察到的原始终态词，前置/闸门/未确认路径为 null）。</summary>
+    [JsonPropertyName("rawTerminal")]
+    public string? RawTerminal { get; set; }
 
     [JsonPropertyName("reason")]
     public string? Reason { get; set; }
@@ -310,7 +314,7 @@ public sealed class PrerequisiteActionRecord
     [JsonPropertyName("strategyIndex")] public int StrategyIndex { get; set; }
     [JsonPropertyName("kind")] public string Kind { get; set; } = "";
 
-    /// <summary>账号标识（脱敏形态，稳定可比对；原值不落记录——I3 纪律）。</summary>
+    /// <summary>账号标识（SHA256 截断哈希，非可逆掩码——稳定可比对且碰撞隔离，原值不落记录；I3/四轮阻断 3）。</summary>
     [JsonPropertyName("accountKey")] public string? AccountKey { get; set; }
 
     /// <summary>执行纪元（"processId:startTicksUtc"；跨纪元事实不沿用，入 Unknown 对账——B2 窗口过期语义）。</summary>
@@ -322,6 +326,9 @@ public sealed class PrerequisiteActionRecord
     /// <summary>I4：重投沿用原载荷（含原 expiresAtUtc），指纹不变。</summary>
     [JsonPropertyName("expiresAtUtc")] public string ExpiresAtUtc { get; set; } = "";
 
+    /// <summary>发送已尝试（发送窗口崩溃/取消时区分「确定未发送」与「可能已发送」；后者禁止当 Cancelled——四轮阻断 1）。</summary>
+    [JsonPropertyName("sendAttempted")] public bool SendAttempted { get; set; }
+
     [JsonPropertyName("jobId")] public string? JobId { get; set; }
     [JsonPropertyName("state")] public PrerequisiteActionState State { get; set; } = PrerequisiteActionState.Intent;
     [JsonPropertyName("reason")] public string? Reason { get; set; }
@@ -331,9 +338,12 @@ public sealed class PrerequisiteActionRecord
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 
-    public bool Matches(string nodeId, int occurrence, int loopIteration, int attempt, int strategyIndex)
+    /// <summary>完整动作身份比对（四轮阻断 3：含操作类型与账号标识，防同索引换策略/换账号复用旧事实）。</summary>
+    public bool Matches(string nodeId, int occurrence, int loopIteration, int attempt, int strategyIndex,
+        string kind, string? accountKey)
         => NodeId == nodeId && Occurrence == occurrence && LoopIteration == loopIteration
-           && Attempt == attempt && StrategyIndex == strategyIndex;
+           && Attempt == attempt && StrategyIndex == strategyIndex
+           && Kind == kind && AccountKey == accountKey;
 }
 
 /// <summary>
@@ -354,7 +364,11 @@ public sealed class PendingCompletionRecord
 
     [JsonPropertyName("jobId")] public string? JobId { get; set; }
 
-    /// <summary>pending / submitted / executed / unknown。</summary>
+    /// <summary>E1' 扩展字段（add-only）：收尾身份 occurrence=0 / attempt=1。</summary>
+    [JsonPropertyName("occurrence")] public int Occurrence { get; set; }
+    [JsonPropertyName("attempt")] public int Attempt { get; set; } = 1;
+
+    /// <summary>pending（未发送）/ dispatching（发送窗口，可能已发送）/ submitted（已受理）/ executed / unknown。</summary>
     [JsonPropertyName("state")] public string State { get; set; } = "pending";
 
     [JsonExtensionData]
