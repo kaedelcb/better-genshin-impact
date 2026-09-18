@@ -87,14 +87,17 @@ public class RunStoreTests : IDisposable
         var store = new RunStore(_dir);
         var rec = store.CreateRun("wf-aaaaaaaa", "rev-1");
         rec.State = WorkflowRunState.Succeeded;
-        rec.PendingCompletionAction = "关闭游戏并关机"; // 待执行收尾
+        rec.PendingCompletion = new PendingCompletionRecord // 待执行收尾（E3' 记录形态）
+        {
+            ActionId = "$flow#0", Kind = "terminal.completionAction", Action = "关闭游戏并关机", State = "pending",
+        };
         store.Update(rec);
         var revBefore = rec.RecordRevision;
 
         Assert.Empty(store.RecoverOnStart()); // 终态记录不动
         var loaded = store.Load(rec.RunId)!;
         Assert.Equal(WorkflowRunState.Succeeded, loaded.State);
-        Assert.Equal("关闭游戏并关机", loaded.PendingCompletionAction); // 保留待显式处理，不自动触发
+        Assert.Equal("关闭游戏并关机", loaded.PendingCompletion!.Action); // 保留待显式处理，不自动触发
         Assert.Equal(revBefore, loaded.RecordRevision);
     }
 
@@ -180,12 +183,16 @@ public class RunStoreTests : IDisposable
         var store = new RunStore(_dir);
         var rec = store.CreateRun("wf-aaaaaaaa", "rev-1");
         rec.State = WorkflowRunState.Completing; // B5：收尾意图已落盘，执行结果未证实
-        rec.PendingCompletionAction = "terminal.completionAction:关闭游戏并关机";
+        rec.PendingCompletion = new PendingCompletionRecord
+        {
+            ActionId = "$flow#0", Kind = "terminal.completionAction", Action = "关闭游戏并关机", State = "submitted",
+        };
         store.Update(rec);
 
         var recovered = Assert.Single(store.RecoverOnStart());
         Assert.Equal(WorkflowRunState.Unknown, recovered.State); // 收尾在飞 = 结果不确定
-        Assert.Equal("terminal.completionAction:关闭游戏并关机", recovered.PendingCompletionAction); // 保留待人工对账
+        Assert.Equal("terminal.completionAction", recovered.PendingCompletion!.Kind); // 保留待人工对账
+        Assert.Equal("关闭游戏并关机", recovered.PendingCompletion!.Action);
         Assert.Contains("禁止自动补发收尾", recovered.Note);
     }
 

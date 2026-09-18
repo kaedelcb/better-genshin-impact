@@ -35,23 +35,65 @@ public interface IWorkflowExecutionBoundary
     Task<string> AwaitTerminalAsync(string jobId, CancellationToken ct);
 }
 
-/// <summary>前置策略适配器（D8：账号/兑换等前置动作的受控执行出口；生产实现 R4.6）。</summary>
+/// <summary>前置结果状态（R4.6 B3 结构化：Unknown 不按普通失败续跑，走保守路径）。</summary>
+public enum PrerequisiteStatus
+{
+    /// <summary>放行资源执行。</summary>
+    Proceed,
+    /// <summary>真实失败（受控原因）。</summary>
+    Failed,
+    /// <summary>受理即拒（能力/队列/合同）。</summary>
+    Rejected,
+    /// <summary>取消（远端已确认——显式跳过确认链走完）。</summary>
+    Cancelled,
+    /// <summary>结果不确定（禁止续跑/重发，标 Unknown 待对账）。</summary>
+    Unknown,
+}
+
+/// <summary>前置结果（R4.6 B3 结构化；JobId 受理即回报，供引擎落盘 submitted 事实）。</summary>
+public sealed record PrerequisiteResult(PrerequisiteStatus Status, string? Reason, string? JobId = null)
+{
+    public static readonly PrerequisiteResult ProceedInstance = new(PrerequisiteStatus.Proceed, null);
+    public bool Proceed => Status == PrerequisiteStatus.Proceed;
+    public static PrerequisiteResult FailedWith(string reason) => new(PrerequisiteStatus.Failed, reason);
+}
+
+/// <summary>前置策略适配器（D8：账号/兑换等前置动作的受控执行出口；生产实现 = BgiWorkflowPrerequisiteAdapter）。</summary>
 public interface IWorkflowPrerequisiteAdapter
 {
-    /// <summary>执行前置策略；返回是否放行资源执行。事实绑定 run/节点出现/attempt。</summary>
+    /// <summary>支持的前置策略类型（R4.6 I1 能力协商；缺省=全部——测试假实现免接线；生产按 ext capability 实况）。</summary>
+    IReadOnlySet<string> SupportedKinds => WorkflowKindCatalog.StrategyKinds;
+
+    /// <summary>执行前置策略；事实绑定 run/节点出现/attempt（意图记录由引擎先行落盘）。</summary>
     Task<PrerequisiteResult> ExecuteAsync(WorkflowStrategy strategy, WorkflowRunRecord run,
         WorkflowNodeOccurrence occurrence, CancellationToken ct);
+
+    /// <summary>恢复对账（R4.6 B2：意图/在飞记录先查远端权威终态；查不到=Unknown，不盲目重发）。默认 Unknown（保守）。</summary>
+    Task<PrerequisiteResult> ReconcileAsync(PrerequisiteActionRecord record, CancellationToken ct)
+        => Task.FromResult(new PrerequisiteResult(PrerequisiteStatus.Unknown, "适配器不支持对账", record.JobId));
+
+    /// <summary>前置期显式跳过的远端取消确认（B4 同构；确认超时=Unknown）。默认直接确认（测试假实现无远端）。</summary>
+    Task<PrerequisiteResult> ConfirmCancellationAsync(PrerequisiteActionRecord record, CancellationToken ct)
+        => Task.FromResult(new PrerequisiteResult(PrerequisiteStatus.Cancelled, null, record.JobId));
 }
 
-public sealed record PrerequisiteResult(bool Proceed, string? Reason)
+/// <summary>收尾执行结果（R4.6 E3'：executed / rejected / unknown / cancelled；发送 ≠ 完成）。</summary>
+public sealed record TerminalExecutionResult(string State, string? JobId, string? Reason)
 {
-    public static readonly PrerequisiteResult ProceedInstance = new(true, null);
+    public static TerminalExecutionResult Executed(string? jobId) => new("executed", jobId, null);
+    public static TerminalExecutionResult RejectedWith(string? reason) => new("rejected", null, reason);
+    public static TerminalExecutionResult UnknownWith(string? jobId, string? reason) => new("unknown", jobId, reason);
+    public static TerminalExecutionResult CancelledWith(string? jobId, string? reason) => new("cancelled", jobId, reason);
 }
 
-/// <summary>终止动作执行器（D10：仅流程成功边界调用；生产实现 R4.6/R4.8）。</summary>
+/// <summary>终止动作执行器（D10：仅流程成功边界调用；生产实现 = BgiWorkflowTerminalExecutor）。</summary>
 public interface IWorkflowTerminalExecutor
 {
-    Task ExecuteAsync(WorkflowTerminalAction action, WorkflowRunRecord run, CancellationToken ct);
+    /// <summary>支持的收尾类型（缺省=全部——测试假实现免接线；生产按 ext capability 实况）。</summary>
+    IReadOnlySet<string> SupportedKinds => WorkflowKindCatalog.TerminalKinds;
+
+    /// <summary>执行收尾动作；生产实现受理即持久化 submitted 事实（jobId），再等待 executed。</summary>
+    Task<TerminalExecutionResult> ExecuteAsync(WorkflowTerminalAction action, WorkflowRunRecord run, CancellationToken ct);
 }
 
 /// <summary>显式运行动作（锚点 2：立即生效走显式动作，不硬切执行中叶子）。</summary>
@@ -96,7 +138,7 @@ public sealed class WorkflowRunnerOptions
 /// - B3 崩溃窗口：观察终态+节点结果+游标推进单次原子落盘；游标 null 由 TailReached 消歧；
 ///   ResumeAsync 显式恢复入口；聚合只信 NodeOutcomes（含恢复后历史结果重建）；
 /// - B4 显式跳过：请求绑定出现身份，叶子建立空窗不丢动作，远端取消确认（超时=Unknown）后推进；
-/// - B5 收尾：成功边界先落盘收尾意图（Completing+PendingCompletionAction）再执行，收尾失败记 Failed；
+/// - B5 收尾：成功边界先落盘收尾意图（Completing+PendingCompletion 记录）再执行，收尾失败记 Failed；
 /// - B9 轮次等待：新一轮边界统一执行（成功/过滤/失败续跑同路径），skipAcrossDays 公式化；
 /// - 等待不占槽位：纯本地可取消延时，不持有执行锁、不提交等待作业；暂停可打断等待。
 /// </summary>
@@ -182,7 +224,7 @@ public sealed class WorkflowRunner
     {
         var snapshot = _workflows.LoadSnapshot(workflowId); // 隔离文件在此响亮抛出；文档+修订同源（B1）
         var plan = new WorkflowPlan(snapshot.Document);
-        var preflight = plan.Preflight(_boundary.SingleNativeSupported);
+        var preflight = plan.Preflight(_boundary.SingleNativeSupported, _prerequisites.SupportedKinds, _terminal.SupportedKinds); // R4.6 I1：能力协商预检
         if (!preflight.Executable)
             throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
 
@@ -216,7 +258,7 @@ public sealed class WorkflowRunner
 
         var snapshot = _workflows.LoadSnapshot(run.WorkflowId);
         var plan = new WorkflowPlan(snapshot.Document);
-        var preflight = plan.Preflight(_boundary.SingleNativeSupported);
+        var preflight = plan.Preflight(_boundary.SingleNativeSupported, _prerequisites.SupportedKinds, _terminal.SupportedKinds); // R4.6 I1：能力协商预检
         if (!preflight.Executable)
             throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
 
@@ -317,13 +359,22 @@ public sealed class WorkflowRunner
                     continue;
                 }
 
-                // 前置策略（D8：适配器受控执行；不通过则按失败策略处理）
-                var prereqBlock = await ExecutePrerequisitesAsync(run, node, occurrence, ct).ConfigureAwait(false);
-                if (prereqBlock is not null)
+                // 前置策略（D8 + R4.6 结构化结果：Proceed/Failed/Rejected/Cancelled/Unknown；
+                // 前置段已建立叶子令牌，SkipCurrent 可取消在飞前置并经确认链对账）
+                if (await ExecutePrerequisitesAsync(run, node, occurrence, control, ct).ConfigureAwait(false) is { } prereqOutcome)
                 {
-                    CommitOutcome(run, plan, occurrence, "failed", prereqBlock);
-                    if (!_opt.ContinueOnNodeFailure) break;
-                    occurrence = Relocate(run, plan);
+                    CommitOutcome(run, plan, occurrence, prereqOutcome.Result, prereqOutcome.Reason);
+                    if (prereqOutcome.Result is "unknown" or "cancelUnconfirmed")
+                    {
+                        // B3：前置结果不确定——标 Unknown（不推进、不触发收尾、禁止自动重跑）
+                        run.State = WorkflowRunState.Unknown;
+                        run.Note = AppendNote(run.Note, "前置动作结果不确定，标 Unknown（不推进、不触发收尾、禁止自动重跑）。");
+                        _runs.Update(run);
+                        return run;
+                    }
+                    if (prereqOutcome.Result == "cancelled") throw new OperationCanceledException();
+                    if (prereqOutcome.Result is "failed" or "rejected" && !_opt.ContinueOnNodeFailure) break;
+                    occurrence = Relocate(run, plan); // skippedUser/skippedFilter/失败续跑：推进
                     continue;
                 }
 
@@ -345,7 +396,7 @@ public sealed class WorkflowRunner
 
             // 流程边界：聚合判定只信 NodeOutcomes（B3：含恢复后的历史结果重建，失败不被成功覆盖）
             var hadBadOutcome = run.NodeOutcomes.Any(o =>
-                o.Result is "failed" or "rejected" or "cancelled" or "cancelUnconfirmed");
+                o.Result is "failed" or "rejected" or "cancelled" or "cancelUnconfirmed" or "unknown"); // R4.6 B3
             if (hadBadOutcome || flowFailure)
             {
                 run.State = WorkflowRunState.Failed;
@@ -356,32 +407,57 @@ public sealed class WorkflowRunner
                 return run;
             }
 
-            // B5：收尾意图先行落盘（Completing + PendingCompletionAction），再执行收尾动作；
-            // 收尾失败记 Failed 且保留待执行收尾（恢复扫描标 Unknown，禁止自动补发）。
+            // B5/E3'：收尾意图先行落盘（Completing + PendingCompletion 记录），再执行收尾动作；
+            // Planner 预检保证每流程至多一个收尾动作（E3'：多收尾无逐动作水位，响亮拒绝）；
+            // executed 才清偿意图；rejected/异常 → Failed 保留意图；unknown/cancelled → Failed + 意图标 unknown 禁止补发。
             // D15 定案：skippedUser/skippedFilter 不算坏结果，不阻断成功边界收尾（用户显式跳过视为认可完成）。
             var terminalActions = plan.Document.Terminal;
             if (terminalActions.Count > 0)
             {
+                var action = terminalActions[0]; // E3'：单动作（多收尾已被 Planner 预检响亮拒绝）
                 run.State = WorkflowRunState.Completing;
-                run.PendingCompletionAction = string.Join(";", terminalActions.Select(a =>
-                    a.GetString("action") is { } act ? $"{a.Kind}:{act}" : a.Kind));
-                _runs.Update(run);
-                foreach (var action in terminalActions)
+                run.PendingCompletion = new PendingCompletionRecord
                 {
-                    try
-                    {
-                        await _terminal.ExecuteAsync(action, run, ct).ConfigureAwait(false);
-                    }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
-                    {
+                    ActionId = "$flow#0", // B1：收尾身份 nodeId=$flow、iteration=动作序号（0 起）
+                    Kind = action.Kind,
+                    Action = action.GetString("action"),
+                    State = "pending",
+                };
+                _runs.Update(run);
+                TerminalExecutionResult terminalResult;
+                try
+                {
+                    terminalResult = await _terminal.ExecuteAsync(action, run, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) { throw; } // B8：意图事实交外层按 pending/submitted 纪律处置
+                catch (Exception ex)
+                {
+                    run.State = WorkflowRunState.Failed;
+                    run.Note = AppendNote(run.Note,
+                        $"收尾动作 {action.Kind} 执行失败：{Sanitize(ex.Message)}（流程主体成功，收尾失败不记成功；待执行收尾保留待人工处置）。");
+                    _runs.Update(run);
+                    return run;
+                }
+                switch (terminalResult.State)
+                {
+                    case "executed":
+                        run.PendingCompletion = null; // 已证实执行——意图清偿
+                        break;
+                    case "rejected":
                         run.State = WorkflowRunState.Failed;
                         run.Note = AppendNote(run.Note,
-                            $"收尾动作 {action.Kind} 执行失败：{ex.Message}（流程主体成功，收尾失败不记成功；待执行收尾保留待人工处置）。");
+                            $"收尾动作被拒绝：{Sanitize(terminalResult.Reason)}（动作未执行；意图保留待人工处置）。");
                         _runs.Update(run);
                         return run;
-                    }
+                    default: // unknown / cancelled：结果不可考——事实持久保留，禁止自动补发
+                        run.PendingCompletion.State = "unknown";
+                        run.PendingCompletion.JobId ??= terminalResult.JobId;
+                        run.State = WorkflowRunState.Failed;
+                        run.Note = AppendNote(run.Note,
+                            $"收尾动作结果不确定（{terminalResult.State}）：{Sanitize(terminalResult.Reason)}（事实持久保留，禁止自动补发，需人工对账）。");
+                        _runs.Update(run);
+                        return run;
                 }
-                run.PendingCompletionAction = null;
             }
 
             run.State = WorkflowRunState.Succeeded;
@@ -392,7 +468,12 @@ public sealed class WorkflowRunner
         {
             run.State = WorkflowRunState.Cancelled;
             run.Note = AppendNote(run.Note, "流程被取消（手动停止/BGI 取消事实）；不触发收尾。");
-            run.PendingCompletionAction = null; // D10：取消不清算为可执行收尾
+            // D10/B8：取消不清算为可执行收尾——pending（未提交）清除意图；submitted（已受理未证实）保留事实标 unknown，禁止补发
+            if (run.PendingCompletion is { } pendingCompletion)
+            {
+                if (pendingCompletion.State == "pending") run.PendingCompletion = null;
+                else pendingCompletion.State = "unknown";
+            }
             _runs.Update(run);
             return run;
         }
@@ -473,6 +554,8 @@ public sealed class WorkflowRunner
             return terminal switch
             {
                 "cancelled" => ("skippedUser", "显式跳过当前节点（远端取消已确认）"),
+                // I2：显式跳过意图与远端正常跳过竞态——如实记 skippedFilter（不计 skippedUser；两者均不阻断收尾，D15）
+                "skipped" => ("skippedFilter", "跳过请求到达时远端已正常跳过（来源保留，不计入显式跳过）"),
                 "succeeded" => ("succeeded", "跳过请求到达时节点已完成（留痕，不算跳过）"),
                 var t => ("failed", $"跳过请求后观察到意外终态 {t}"),
             };
@@ -483,28 +566,163 @@ public sealed class WorkflowRunner
         }
     }
 
-    /// <summary>边界终态词汇 → 节点结果（未知词汇按 failed，保守不猜成功）。</summary>
+    /// <summary>
+    /// 边界终态词汇 → 节点结果（R4.6 I2：原始线协议词与归一化业务词分开识别——ObservedTerminal 只存原始词，
+    /// 恢复回流（B3-③）经本映射不会把 skippedUser/skippedFilter 误判 failed；未知词汇按 failed，保守不猜成功）。
+    /// </summary>
     private static (string Result, string? Reason) MapTerminal(string terminal)
         => terminal switch
         {
             "succeeded" => ("succeeded", null),
             "cancelled" => ("cancelled", "BGI 侧取消事实"),
+            "skipped" => ("skippedFilter", "BGI 侧正常跳过（远端词表 skipped；D15 不阻断收尾）"),
+            // 归一化业务词恒等映射（仅恢复回流路径可达）
+            "skippedUser" => ("skippedUser", null),
+            "skippedFilter" => ("skippedFilter", null),
+            "failed" => ("failed", null),
+            "rejected" => ("rejected", null),
             var t => ("failed", $"作业终态 {t}"),
         };
 
-    /// <summary>前置策略执行（未知策略类型响亮阻止；账号/兑换经适配器）。</summary>
-    private async Task<string?> ExecutePrerequisitesAsync(WorkflowRunRecord run, WorkflowNode node,
-        WorkflowNodeOccurrence occurrence, CancellationToken ct)
+    /// <summary>
+    /// 前置策略执行（D8 + R4.6 E2-8'/B2/B3）：逐策略实例意图先行落盘（PrerequisiteActionRecord，发送前）；
+    /// 同键成功事实跳过（崩溃恢复不重发）；在飞/未知记录先对账（查不到不盲目重发）；
+    /// 前置段建立叶子令牌（SkipCurrent 绑定出现身份取消在飞前置，远端取消确认链同 B4）。
+    /// 返回 null = 全部放行；否则 (结果词, 原因) 由调用点按结构化结果处置。
+    /// </summary>
+    private async Task<(string Result, string? Reason)?> ExecutePrerequisitesAsync(WorkflowRunRecord run, WorkflowNode node,
+        WorkflowNodeOccurrence occurrence, RunControl control, CancellationToken ct)
     {
-        foreach (var strategy in node.Strategies)
+        if (node.Strategies.All(s => s.Kind == "condition.weekdays")) return null;
+
+        CancellationTokenSource leaf;
+        lock (control.Sync)
         {
-            if (strategy.Kind == "condition.weekdays") continue; // 闸门已评估
-            var result = await _prerequisites.ExecuteAsync(strategy, run, occurrence, ct).ConfigureAwait(false);
-            if (!result.Proceed)
-                return $"前置策略 {strategy.Kind} 未通过：{result.Reason}";
+            leaf = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            control.LeafCts = leaf;
+            if (control.PendingSkip is { } skip)
+            {
+                control.PendingSkip = null;
+                if (skip.Matches(occurrence)) leaf.Cancel(); // 空窗到达的跳过在叶子建立时生效
+                else Log(run, "过期跳过动作已丢弃（出现身份漂移，不误伤后续节点）。");
+            }
         }
-        return null;
+        try
+        {
+            for (var i = 0; i < node.Strategies.Count; i++)
+            {
+                var strategy = node.Strategies[i];
+                if (strategy.Kind == "condition.weekdays") continue; // 闸门已评估
+
+                var record = run.PrerequisiteActions.FirstOrDefault(r =>
+                    r.Matches(occurrence.NodeId, occurrence.Occurrence, occurrence.LoopIteration, 1, i));
+                if (record is { State: PrerequisiteActionState.Succeeded })
+                    continue; // 同键成功事实（同 attempt 恢复不重发）
+                if (record is { State: PrerequisiteActionState.Intent or PrerequisiteActionState.Submitted or PrerequisiteActionState.Unknown })
+                {
+                    // 恢复对账：先查远端权威终态，查不到不盲目重发（B2）
+                    var reconciled = await _prerequisites.ReconcileAsync(record, ct).ConfigureAwait(false);
+                    record.State = reconciled.Status switch
+                    {
+                        PrerequisiteStatus.Proceed => PrerequisiteActionState.Succeeded,
+                        PrerequisiteStatus.Cancelled => PrerequisiteActionState.Cancelled,
+                        PrerequisiteStatus.Unknown => PrerequisiteActionState.Unknown,
+                        _ => PrerequisiteActionState.Failed,
+                    };
+                    record.Reason = reconciled.Reason;
+                    _runs.Update(run);
+                    if (record.State == PrerequisiteActionState.Succeeded) continue;
+                    if (record.State == PrerequisiteActionState.Unknown)
+                        return ("unknown", $"前置策略 {strategy.Kind} 结果不确定（对账未决）：{reconciled.Reason}");
+                    return (record.State == PrerequisiteActionState.Cancelled ? "cancelled" : "failed",
+                        $"前置策略 {strategy.Kind}（对账终态）：{reconciled.Reason}");
+                }
+
+                // 意图先行落盘（发送前；E2-8'）
+                record = new PrerequisiteActionRecord
+                {
+                    NodeId = occurrence.NodeId,
+                    Occurrence = occurrence.Occurrence,
+                    LoopIteration = occurrence.LoopIteration,
+                    Attempt = 1,
+                    StrategyIndex = i,
+                    Kind = strategy.Kind,
+                    State = PrerequisiteActionState.Intent,
+                    RecordedAt = _opt.Clock(),
+                };
+                run.PrerequisiteActions.Add(record);
+                _runs.Update(run);
+
+                // E2-8' 身份来源：redeemCode 缺 uid 时注入同节点 prerequisite.account 的 uid（均无则适配器响亮失败；Planner 预检已拦截）
+                var effective = strategy;
+                if (strategy.Kind == "prerequisite.redeemCode" && string.IsNullOrWhiteSpace(strategy.GetString("uid")))
+                {
+                    var siblingUid = node.Strategies.FirstOrDefault(s => s.Kind == "prerequisite.account")?.GetString("uid");
+                    if (!string.IsNullOrWhiteSpace(siblingUid))
+                    {
+                        var merged = strategy.Params is not null
+                            ? new System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement>(strategy.Params)
+                            : new System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement>();
+                        merged["uid"] = System.Text.Json.JsonSerializer.SerializeToElement(siblingUid);
+                        effective = new WorkflowStrategy { Kind = strategy.Kind, Params = merged };
+                    }
+                }
+
+                PrerequisiteResult result;
+                try
+                {
+                    result = await _prerequisites.ExecuteAsync(effective, run, occurrence, leaf.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    // 叶子取消 = 显式跳过：远端取消确认链（确认超时 = Unknown，不猜成功）
+                    var confirmed = await _prerequisites.ConfirmCancellationAsync(record, ct).ConfigureAwait(false);
+                    record.State = confirmed.Status == PrerequisiteStatus.Cancelled
+                        ? PrerequisiteActionState.Cancelled : PrerequisiteActionState.Unknown;
+                    record.Reason = confirmed.Reason;
+                    _runs.Update(run);
+                    return confirmed.Status == PrerequisiteStatus.Cancelled
+                        ? ("skippedUser", "前置期显式跳过（远端取消已确认）")
+                        : ("cancelUnconfirmed", $"前置期跳过后远端终态未确认：{confirmed.Reason}");
+                }
+
+                // 终态与结果同写（引擎事务）
+                record.State = result.Status switch
+                {
+                    PrerequisiteStatus.Proceed => PrerequisiteActionState.Succeeded,
+                    PrerequisiteStatus.Cancelled => PrerequisiteActionState.Cancelled,
+                    PrerequisiteStatus.Unknown => PrerequisiteActionState.Unknown,
+                    _ => PrerequisiteActionState.Failed,
+                };
+                record.Reason = result.Reason;
+                record.JobId ??= result.JobId;
+                _runs.Update(run);
+
+                switch (result.Status)
+                {
+                    case PrerequisiteStatus.Proceed: continue;
+                    case PrerequisiteStatus.Rejected:
+                        return ("rejected", $"前置策略 {strategy.Kind} 被拒绝：{result.Reason}");
+                    case PrerequisiteStatus.Cancelled:
+                        return ("cancelled", $"前置策略 {strategy.Kind} 被取消：{result.Reason}");
+                    case PrerequisiteStatus.Unknown:
+                        return ("unknown", $"前置策略 {strategy.Kind} 结果不确定：{result.Reason}");
+                    default:
+                        return ("failed", $"前置策略 {strategy.Kind} 未通过：{result.Reason}");
+                }
+            }
+            return null;
+        }
+        finally
+        {
+            lock (control.Sync) control.LeafCts = null;
+            leaf.Dispose();
+        }
     }
+
+    /// <summary>I3：持久化备注脱敏——长数字串（UID 形态）打码；受控原因码+脱敏摘要，不存原始敏感面。</summary>
+    internal static string Sanitize(string? text)
+        => string.IsNullOrEmpty(text) ? "" : System.Text.RegularExpressions.Regex.Replace(text, "\\d{5,}", "***");
 
     /// <summary>顶层触发器等待（多触发器取最近；未知触发器响亮失败；暂停可打断）。</summary>
     private async Task AwaitFlowTriggersAsync(WorkflowRunRecord run, WorkflowPlan plan, RunControl control, CancellationToken ct)
@@ -595,7 +813,7 @@ public sealed class WorkflowRunner
         if (!reloadRequested && snapshot.Revision == run.WorkflowRevision) return (plan, occurrence);
 
         var newPlan = new WorkflowPlan(snapshot.Document);
-        var preflight = newPlan.Preflight(_boundary.SingleNativeSupported);
+        var preflight = newPlan.Preflight(_boundary.SingleNativeSupported, _prerequisites.SupportedKinds, _terminal.SupportedKinds); // R4.6 I1：重载入口同接能力协商预检
         if (!preflight.Executable)
         {
             Log(run, "流程新修订预检未通过，沿用旧定义继续：" + string.Join("；", preflight.BlockingReasons));

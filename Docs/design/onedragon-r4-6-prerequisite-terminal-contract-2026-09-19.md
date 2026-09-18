@@ -157,4 +157,4 @@
 
 - **Batch 3a（BGI 基础修复）**：E9 根/叶结果合同（B7）+ E2-4 兑换严格路径（B5）+ UID 严格校验变体（B4 前半）+ I3 底层脱敏 + I5 月卡 ct。
 - **Batch 3b（BGI 协议+作业化）**：E1 身份合同扩展 + 三新操作作业化（JobKind.Prerequisite/Terminal、派发、取消、ext.job.status 复用）+ E4 suppress 接线（JobDescriptor/ExecutionScope/尾部消费/checkpoint 携带）+ E3 收尾 BGI 侧 + I1 capability 快照。
-- **Batch 3c（助手侧）**：WireRunId + E2-8 前置意图记录 + 生产适配器/执行器 + 结构化 PrerequisiteResult + 前置期 LeafCts + I2 通道修复 + I4 传输重投 + E6 脱敏。
+- **Batch 3c（助手侧）**：WireRunId + E2-8 前置意图记录 + 生产适配器/执行器 + 结构化 PrerequisiteResult + 前置期 LeafCts + I2 通道修复 + I4 传输重投 + E6 脱敏。✅ 已落地（2026-09-19 R4 八批：夹具 15/15、助手回归 225/225、合同审计 78/78；E6 脱敏经 Runner.Sanitize 持久化面 + 适配器 MaskAccount 双层落实）。

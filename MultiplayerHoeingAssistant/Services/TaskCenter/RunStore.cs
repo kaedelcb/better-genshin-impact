@@ -79,6 +79,7 @@ public sealed class RunStore
         var rec = new WorkflowRunRecord
         {
             RunId = NewRunId(),
+            WireRunId = Guid.NewGuid().ToString("N"), // B1：线协议 workflowRunId 强制 Guid（BGI ReadIdentity 严格解析）
             WorkflowId = workflowId,
             WorkflowRevision = workflowRevision,
             State = WorkflowRunState.Planned,
@@ -166,7 +167,7 @@ public sealed class RunStore
         {
             if (rec.IsTerminal) continue;
             string note;
-            if (rec.State == WorkflowRunState.Completing || rec.PendingCompletionAction is not null)
+            if (rec.State == WorkflowRunState.Completing || rec.PendingCompletion is not null)
             {
                 // B5：收尾意图已落盘但执行结果未知——结果不确定，禁止自动补发收尾
                 rec.State = WorkflowRunState.Unknown;

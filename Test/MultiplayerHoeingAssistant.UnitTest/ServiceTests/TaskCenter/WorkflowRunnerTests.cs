@@ -71,10 +71,12 @@ public class WorkflowRunnerTests : IDisposable
     {
         public List<string?> Actions { get; } = new();
         public Func<WorkflowTerminalAction, WorkflowRunRecord, Task>? OnExecute { get; set; }
-        public async Task ExecuteAsync(WorkflowTerminalAction action, WorkflowRunRecord run, CancellationToken ct)
+        public TerminalExecutionResult Result { get; set; } = TerminalExecutionResult.Executed("job-terminal");
+        public async Task<TerminalExecutionResult> ExecuteAsync(WorkflowTerminalAction action, WorkflowRunRecord run, CancellationToken ct)
         {
             Actions.Add(action.GetString("action"));
             if (OnExecute is not null) await OnExecute(action, run);
+            return Result;
         }
     }
 
@@ -647,11 +649,11 @@ public class WorkflowRunnerTests : IDisposable
         }).Split('|')[1];
         var (runner, _, terminal) = MakeRunner();
         WorkflowRunState? stateAtExecution = null;
-        string? pendingAtExecution = null;
+        PendingCompletionRecord? pendingAtExecution = null;
         terminal.OnExecute = (_, run) =>
         {
             stateAtExecution = run.State; // B5：收尾执行期 = Completing + 意图已落盘
-            pendingAtExecution = run.PendingCompletionAction;
+            pendingAtExecution = run.PendingCompletion;
             throw new InvalidOperationException("模拟关机失败");
         };
 
@@ -660,7 +662,7 @@ public class WorkflowRunnerTests : IDisposable
         Assert.Equal(WorkflowRunState.Completing, stateAtExecution); // 先落盘收尾意图再执行
         Assert.NotNull(pendingAtExecution);
         Assert.Equal(WorkflowRunState.Failed, run.State); // 收尾失败不记成功
-        Assert.NotNull(run.PendingCompletionAction); // 待执行收尾保留（恢复扫描标 Unknown，禁止自动补发）
+        Assert.NotNull(run.PendingCompletion); // 待执行收尾保留（恢复扫描标 Unknown，禁止自动补发）
         Assert.Contains("收尾动作", run.Note);
     }
 

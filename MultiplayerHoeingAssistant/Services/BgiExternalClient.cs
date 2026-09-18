@@ -500,9 +500,10 @@ public sealed class BgiExternalClient : IDisposable
         return extOperation.Length > 0;
     }
 
-    /// <summary>能力查询（DAP 规则：缺省即不支持）。</summary>
+    /// <summary>能力查询（DAP 规则：缺省即不支持；I1：仅 Ready 态采信快照，断线/协商中一律不支持）。</summary>
     public bool HasCapability(string name)
-        => Capabilities is not null
+        => State == BgiExternalLinkState.Ready
+           && Capabilities is not null
            && Capabilities.TryGetValue(name, out var supported)
            && supported;
 
@@ -511,6 +512,18 @@ public sealed class BgiExternalClient : IDisposable
 
     /// <summary>[A3.1] 能力位：BGI 统一作业注册表观察面（job.* 事件族 + ext.job.status/ext.job.list + bgiEpoch 全帧）。</summary>
     public const string CapabilityJobRegistry = "job.registry";
+
+    /// <summary>[R4.6] 能力位：前置账号切换（ext.prerequisite.account，含 expectedUid 服务端强制保证，I1）。</summary>
+    public const string CapabilityPrerequisiteAccount = "prerequisite.account";
+
+    /// <summary>[R4.6] 能力位：前置兑换码严格路径（ext.prerequisite.redeemCode）。</summary>
+    public const string CapabilityPrerequisiteRedeemCode = "prerequisite.redeemCode";
+
+    /// <summary>[R4.6] 能力位：流程收尾动作作业化（ext.terminal.completionAction）。</summary>
+    public const string CapabilityTerminalCompletionAction = "terminal.completionAction";
+
+    /// <summary>[R4.6] 能力位：单配置收尾抑制合同（D10 统一名，I1）。</summary>
+    public const string CapabilitySuppressConfigCompletionAction = "execution.suppressConfigCompletionAction";
 
     /// <summary>只请求取消给定句柄；应答不代表清理完成，调用方须查询该句柄终态。</summary>
     public Task<BgiExternalResponse> CancelOwnedTaskAsync(string taskHandle, CancellationToken ct)
@@ -1041,6 +1054,8 @@ public sealed class BgiExternalClient : IDisposable
             return false;
         }
 
+        // I1：每次握手重建能力快照——缺 capabilities 字段 = 全不支持，绝不沿用上一次握手残留
+        Capabilities = new Dictionary<string, bool>();
         // 会话校验：与 IpcClient.VerifyRemoteSessionAsync 同级的跨会话防护（BGI 侧守卫之外的客户端自检）
         if (hello.Data is not null)
         {
@@ -1469,7 +1484,8 @@ public sealed class BgiExternalClient : IDisposable
         string RequestId);
 
     /// <summary>ext.* 操作名与 capability 名（与 BGI 侧 ExternalInterfaceOperations 对齐）。</summary>
-    private static class ExternalOperations
+    /// <summary>ext.* 操作名目录（R4.6 起 public：任务中心前置/收尾适配器直接引用，防字符串漂移）。</summary>
+    public static class ExternalOperations
     {
         public const string Hello = "ext.hello";
         public const string TaskStart = "ext.task.start";
@@ -1489,6 +1505,10 @@ public sealed class BgiExternalClient : IDisposable
         public const string EventUnsubscribe = "ext.event.unsubscribe";
         public const string EventPush = "ext.event";
         public const string Response = "response";
+        // [R4.6 E1'] 前置/收尾作业化操作（写操作；强制 executionContractVersion=1，缺版本即拒）
+        public const string PrerequisiteAccount = "ext.prerequisite.account";
+        public const string PrerequisiteRedeemCode = "ext.prerequisite.redeemCode";
+        public const string TerminalCompletionAction = "ext.terminal.completionAction";
         public const string CapabilityEventPush = "event.push";
         public const string CapabilityEventReplay = "event.replay";
     }

@@ -182,6 +182,10 @@ public sealed class WorkflowRunRecord
     [JsonPropertyName("idempotencyKey")]
     public string IdempotencyKey { get; set; } = "";
 
+    /// <summary>线协议运行身份（R4.6 B1：BGI 合同要求 Guid——建 run 时生成 Guid "N" 串并持久化；与 RunId 并存，绝不更换）。</summary>
+    [JsonPropertyName("wireRunId")]
+    public string WireRunId { get; set; } = "";
+
     /// <summary>当前提交（B2：一提交一身份——幂等键/意图/jobId/观察终态同属一个提交身份，不跨节点复用残留）。</summary>
     [JsonPropertyName("currentSubmission")]
     public WorkflowSubmission? CurrentSubmission { get; set; }
@@ -198,9 +202,15 @@ public sealed class WorkflowRunRecord
     [JsonPropertyName("lastScheduledRoundWait")]
     public int LastScheduledRoundWait { get; set; }
 
-    /// <summary>待执行收尾动作（D10：失败/取消/未知/手动停止不得触发；结果不确定不得补发）。</summary>
-    [JsonPropertyName("pendingCompletionAction")]
-    public string? PendingCompletionAction { get; set; }
+    /// <summary>前置动作记录（R4.6 E2-8'：意图-受理-终态逐策略实例，发送前落盘；事实只信本清单，不信流程文件标记）。</summary>
+    [JsonPropertyName("prerequisiteActions")]
+    public List<PrerequisiteActionRecord> PrerequisiteActions { get; set; } = [];
+
+    /// <summary>待执行收尾动作（R4.6 E3'/B8 结构化：动作身份+指纹+状态机 pending/submitted/executed/unknown；
+    /// D10：失败/取消/未知/手动停止不得触发；已提交未确认事实持久保留，禁止补发）。
+    /// 旧 pendingCompletionAction 字符串键退役（落入 ExtensionData 忽略——R4 开发期运行记录无存量包袱）。</summary>
+    [JsonPropertyName("pendingCompletion")]
+    public PendingCompletionRecord? PendingCompletion { get; set; }
 
     /// <summary>逐节点结果（追加；聚合判定只看此清单，不信终态单字段）。</summary>
     [JsonPropertyName("nodeOutcomes")]
@@ -275,4 +285,78 @@ public sealed class WorkflowSubmission
     [JsonIgnore]
     public bool InFlight => ObservedTerminal is null
         && Intent is SubmitIntentState.IntentRecorded or SubmitIntentState.Submitted or SubmitIntentState.Accepted;
+}
+/// <summary>前置动作状态机（R4.6 E2-8'）：Intent（意图已落盘）→ Submitted（已受理在飞）→ Succeeded/Failed/Cancelled/Unknown。</summary>
+public enum PrerequisiteActionState
+{
+    Intent,
+    Submitted,
+    Succeeded,
+    Failed,
+    Cancelled,
+    Unknown,
+}
+
+/// <summary>
+/// 前置动作记录（R4.6 E2-8'/B2）：键 = runId+nodeId+occurrence+loopIteration+attempt+策略索引+操作类型+账号标识+执行纪元。
+/// 发送前落盘意图；恢复时对账（先查远端权威终态）；传输重投同键同载荷（expiresAtUtc 不刷新，I4），重投计数持久化。
+/// </summary>
+public sealed class PrerequisiteActionRecord
+{
+    [JsonPropertyName("nodeId")] public string NodeId { get; set; } = "";
+    [JsonPropertyName("occurrence")] public int Occurrence { get; set; }
+    [JsonPropertyName("loopIteration")] public int LoopIteration { get; set; }
+    [JsonPropertyName("attempt")] public int Attempt { get; set; }
+    [JsonPropertyName("strategyIndex")] public int StrategyIndex { get; set; }
+    [JsonPropertyName("kind")] public string Kind { get; set; } = "";
+
+    /// <summary>账号标识（脱敏形态，稳定可比对；原值不落记录——I3 纪律）。</summary>
+    [JsonPropertyName("accountKey")] public string? AccountKey { get; set; }
+
+    /// <summary>执行纪元（"processId:startTicksUtc"；跨纪元事实不沿用，入 Unknown 对账——B2 窗口过期语义）。</summary>
+    [JsonPropertyName("epoch")] public string? Epoch { get; set; }
+
+    [JsonPropertyName("idempotencyKey")] public string IdempotencyKey { get; set; } = "";
+    [JsonPropertyName("fingerprint")] public string Fingerprint { get; set; } = "";
+
+    /// <summary>I4：重投沿用原载荷（含原 expiresAtUtc），指纹不变。</summary>
+    [JsonPropertyName("expiresAtUtc")] public string ExpiresAtUtc { get; set; } = "";
+
+    [JsonPropertyName("jobId")] public string? JobId { get; set; }
+    [JsonPropertyName("state")] public PrerequisiteActionState State { get; set; } = PrerequisiteActionState.Intent;
+    [JsonPropertyName("reason")] public string? Reason { get; set; }
+    [JsonPropertyName("redeliveryCount")] public int RedeliveryCount { get; set; }
+    [JsonPropertyName("recordedAt")] public DateTimeOffset RecordedAt { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+
+    public bool Matches(string nodeId, int occurrence, int loopIteration, int attempt, int strategyIndex)
+        => NodeId == nodeId && Occurrence == occurrence && LoopIteration == loopIteration
+           && Attempt == attempt && StrategyIndex == strategyIndex;
+}
+
+/// <summary>
+/// 待执行收尾动作（R4.6 E3'/B8）：pending（意图已落盘未提交）→ submitted（已提交未确认）→ executed；
+/// submitted 后断线/取消 → unknown（事实持久保留，禁止盲目补发）。每流程至多一个 completionAction（Planner 预检）。
+/// </summary>
+public sealed class PendingCompletionRecord
+{
+    /// <summary>动作身份（B1：nodeId="$flow"，iteration=动作序号）。</summary>
+    [JsonPropertyName("actionId")] public string ActionId { get; set; } = "";
+    [JsonPropertyName("kind")] public string Kind { get; set; } = "";
+    [JsonPropertyName("action")] public string? Action { get; set; }
+    [JsonPropertyName("fingerprint")] public string Fingerprint { get; set; } = "";
+    [JsonPropertyName("idempotencyKey")] public string IdempotencyKey { get; set; } = "";
+
+    /// <summary>I4：重投沿用原载荷（含原 expiresAtUtc），指纹不变。</summary>
+    [JsonPropertyName("expiresAtUtc")] public string ExpiresAtUtc { get; set; } = "";
+
+    [JsonPropertyName("jobId")] public string? JobId { get; set; }
+
+    /// <summary>pending / submitted / executed / unknown。</summary>
+    [JsonPropertyName("state")] public string State { get; set; } = "pending";
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }

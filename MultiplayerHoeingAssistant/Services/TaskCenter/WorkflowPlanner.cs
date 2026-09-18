@@ -98,9 +98,11 @@ public sealed class WorkflowPlan
 
     /// <summary>
     /// 流程预检（运行前；D4：先预检再执行任何前置副作用）。
-    /// singleNativeSupported = 执行端 task.single.native 能力实况。
+    /// singleNativeSupported = 执行端 task.single.native 能力实况；
+    /// prerequisiteKinds/terminalKinds = 执行端前置/收尾能力实况（R4.6 I1；null = 测试接缝不检查）。
     /// </summary>
-    public WorkflowPreflight Preflight(bool singleNativeSupported)
+    public WorkflowPreflight Preflight(bool singleNativeSupported,
+        IReadOnlySet<string>? prerequisiteKinds = null, IReadOnlySet<string>? terminalKinds = null)
     {
         var blocking = new List<string>();
         var warnings = new List<string>();
@@ -111,6 +113,44 @@ public sealed class WorkflowPlan
             blocking.Add("流程无节点");
         if (string.Equals(_doc.Activation?.Status, "candidate-ready", StringComparison.Ordinal))
             blocking.Add("迁移候选（candidate-ready）只可预览，正式激活由 R5 事务迁移完成（D13）");
+
+        // R4.6 E3'：每流程至多一个收尾动作（收尾身份 $flow#0；多收尾无逐动作水位，响亮拒绝）
+        if (_doc.Terminal.Count > 1)
+            blocking.Add($"收尾动作至多一个（当前 {_doc.Terminal.Count} 个）：多收尾无逐动作水位，阻止执行（E3'）");
+
+        // R4.6 I1：能力协商预检——引用的前置/收尾类型必须全部在执行端能力目录内（缺失即阻止执行）
+        if (prerequisiteKinds is not null)
+        {
+            var missing = _doc.Nodes.SelectMany(n => n.Strategies)
+                .Where(s => s.Kind.StartsWith("prerequisite.", StringComparison.Ordinal)
+                            && !prerequisiteKinds.Contains(s.Kind))
+                .Select(s => s.Kind).Distinct(StringComparer.Ordinal)
+                .OrderBy(k => k, StringComparer.Ordinal).ToList();
+            if (missing.Count > 0)
+                blocking.Add("执行端缺少前置能力（阻止执行）：" + string.Join("、", missing));
+        }
+        if (terminalKinds is not null)
+        {
+            var missing = _doc.Terminal
+                .Where(a => !terminalKinds.Contains(a.Kind))
+                .Select(a => a.Kind).Distinct(StringComparer.Ordinal)
+                .OrderBy(k => k, StringComparer.Ordinal).ToList();
+            if (missing.Count > 0)
+                blocking.Add("执行端缺少收尾能力（阻止执行）：" + string.Join("、", missing));
+        }
+
+        // R4.6 E2-8'：前置兑换码身份来源——策略自身 uid 或同节点 prerequisite.account 的 uid（均无则响亮拒绝）
+        foreach (var node in _doc.Nodes)
+        {
+            var accountUid = node.Strategies.FirstOrDefault(s => s.Kind == "prerequisite.account")?.GetString("uid");
+            foreach (var s in node.Strategies)
+            {
+                if (s.Kind == "prerequisite.redeemCode"
+                    && string.IsNullOrWhiteSpace(s.GetString("uid"))
+                    && string.IsNullOrWhiteSpace(accountUid))
+                    blocking.Add($"节点 {node.NodeId} 的 prerequisite.redeemCode 缺少 uid（策略参数与同节点账号策略均无），严格合同拒绝");
+            }
+        }
 
         if (singleNativeSupported) return new WorkflowPreflight(blocking.Count == 0, blocking, warnings);
         // 单项原生能力未开放：逐节点闸门拒绝，不连坐整龙资源（D4）
