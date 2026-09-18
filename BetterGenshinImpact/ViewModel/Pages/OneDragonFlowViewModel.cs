@@ -1097,24 +1097,31 @@ public partial class OneDragonFlowViewModel : ViewModel
         var str = PromptDialog.Prompt("请输入一条龙配置名称", "新增一条龙配置");
         if (!string.IsNullOrEmpty(str))
         {
-            // 检查是否已存在
-            if (ConfigList.Any(x => x.Name == str))
+            // R3.0 同名占用防护：不与待迁移的受保护文件抢名字
+            if (IsProtectedConfigFile(Path.Combine(OneDragonFlowConfigFolder, $"{str}.json")))
+            {
+                Toast.Warning($"名称「{str}」被待迁移的旧版文件占用，请换一个名称");
+                return;
+            }
+            // ASTRA 三轮：新增与重命名同一威胁模型——大小写差异/列表外孤立文件都不得覆盖已有文件
+            var addDecision = OneDragonFlowExecutionGuards.EvaluateNewConfigName(
+                str,
+                ConfigList.Select(x => x.Name),
+                File.Exists(Path.Combine(OneDragonFlowConfigFolder, $"{str}.json")));
+            if (addDecision == OneDragonRenameDecision.NameConflict)
             {
                 Toast.Warning($"一条龙配置 {str} 已经存在，请勿重复添加");
+                return;
             }
-            else
+            if (addDecision == OneDragonRenameDecision.DiskFileConflict)
             {
-                // R3.0 同名占用防护：不与待迁移的受保护文件抢名字
-                if (IsProtectedConfigFile(Path.Combine(OneDragonFlowConfigFolder, $"{str}.json")))
-                {
-                    Toast.Warning($"名称「{str}」被待迁移的旧版文件占用，请换一个名称");
-                    return;
-                }
-
-                var nc = new OneDragonFlowConfig { Name = str };
-                ConfigList.Insert(0, nc);
-                SelectedConfig = nc;
+                Toast.Warning("目标路径已存在配置列表外的文件，为避免误覆盖已拒绝新增");
+                return;
             }
+
+            var nc = new OneDragonFlowConfig { Name = str };
+            ConfigList.Insert(0, nc);
+            SelectedConfig = nc;
         }
 
         SaveConfig();

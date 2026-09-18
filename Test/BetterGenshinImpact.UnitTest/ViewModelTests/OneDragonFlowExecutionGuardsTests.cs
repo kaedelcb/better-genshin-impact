@@ -89,4 +89,33 @@ public class OneDragonFlowExecutionGuardsTests
         Assert.False(OneDragonFlowExecutionGuards.ShouldSkipForBatchDelegation(
             isSingleTaskExecution: false, new List<string>(), "锄地组", isDefaultTask: false));
     }
+
+    [Fact]
+    public void NewConfig_CaseVariantOfExisting_Rejected()
+    {
+        // ASTRA 三轮阻断项：已有 Alpha.json，新增 alpha 在 Windows 上覆盖同一物理文件
+        var decision = OneDragonFlowExecutionGuards.EvaluateNewConfigName(
+            "alpha", new List<string> { "Alpha" }, newFileExistsOnDisk: true);
+
+        Assert.Equal(OneDragonRenameDecision.NameConflict, decision);
+    }
+
+    [Fact]
+    public void NewConfig_OrphanNativeFileOnDisk_Rejected()
+    {
+        // 列表无冲突但磁盘存在列表外原生文件：不静默覆盖
+        var decision = OneDragonFlowExecutionGuards.EvaluateNewConfigName(
+            "Beta", new List<string> { "Alpha" }, newFileExistsOnDisk: true);
+
+        Assert.Equal(OneDragonRenameDecision.DiskFileConflict, decision);
+    }
+
+    [Fact]
+    public void NewConfig_NoCollision_Allowed()
+    {
+        var decision = OneDragonFlowExecutionGuards.EvaluateNewConfigName(
+            "Beta", new List<string> { "Alpha" }, newFileExistsOnDisk: false);
+
+        Assert.Equal(OneDragonRenameDecision.Allow, decision);
+    }
 }

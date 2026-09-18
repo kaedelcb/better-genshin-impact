@@ -58,6 +58,28 @@ internal static class OneDragonFlowExecutionGuards
     }
 
     /// <summary>
+    /// 新增配置名称判定（ASTRA 三轮阻断项）：与重命名同一威胁模型——Windows 不区分大小写，
+    /// 列表查重 Ordinal 时 "alpha" 可绕过 "Alpha" 并覆盖同一物理文件；列表外孤立原生文件同样不得静默覆盖。
+    /// </summary>
+    public static OneDragonRenameDecision EvaluateNewConfigName(
+        string newName,
+        IEnumerable<string> existingNames,
+        bool newFileExistsOnDisk)
+    {
+        if (existingNames.Any(n => string.Equals(n, newName, StringComparison.OrdinalIgnoreCase)))
+        {
+            return OneDragonRenameDecision.NameConflict;
+        }
+
+        if (newFileExistsOnDisk)
+        {
+            return OneDragonRenameDecision.DiskFileConflict;
+        }
+
+        return OneDragonRenameDecision.Allow;
+    }
+
+    /// <summary>
     /// 批次委派跳过判定。单项显式执行（Descriptor.TaskId != null）绝不适用批次委派——
     /// 外部驱动者正是通过单项执行来运行被委派的组，跳过会造成"未执行却报成功"（ASTRA 二轮 P1）。
     /// </summary>
