@@ -120,6 +120,14 @@ public partial class AllConfig : ObservableObject
     /// <summary>中断上下文：联机锄地中断时保存的当前任务状态，用于联机结束后恢复。不持久化到磁盘（进程级临时状态，崩溃/强杀后自动消失）。</summary>
     [JsonIgnore]
     public SuspendedTaskContext? SuspendedTaskContext { get; set; }
+
+    /// <summary>
+    /// R3 过渡保护（开工定案 §6）：已退役的茶包调度字段（计划表/循环/账号等）在读入时落袋、
+    /// 保存时原样往返——ConfigService 是全对象覆盖写，没有此袋会在删字段后首次保存时抹掉盘上迁移输入。
+    /// 过渡设施，列入 R6 退出清单；不得为保留数据把调度字段塞回标准模型。
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, System.Text.Json.JsonElement>? LegacyExtensionData { get; set; }
     
     // 计划表列表
     [ObservableProperty]
