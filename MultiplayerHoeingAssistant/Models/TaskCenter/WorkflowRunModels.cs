@@ -279,6 +279,22 @@ public sealed class WorkflowSubmission
     [JsonPropertyName("observedTerminal")]
     public string? ObservedTerminal { get; set; }
 
+    /// <summary>执行纪元（"pid:ticks"，发送时冻结；跨纪元事实不沿用，R4.8 §4.4）。</summary>
+    [JsonPropertyName("epoch")]
+    public string? Epoch { get; set; }
+
+    /// <summary>请求有效期（+10min 冻结不刷新，I4 同构；传输重投同键同载荷）。</summary>
+    [JsonPropertyName("expiresAtUtc")]
+    public string? ExpiresAtUtc { get; set; }
+
+    /// <summary>完整载荷指纹（SHA256 截断 24 hex，冻结后计算）。</summary>
+    [JsonPropertyName("fingerprint")]
+    public string? Fingerprint { get; set; }
+
+    /// <summary>发送已尝试（发送前持久化：此后缺 jobId ≠ 未发送，取消确认不得当未发送处置）。</summary>
+    [JsonPropertyName("sendAttempted")]
+    public bool SendAttempted { get; set; }
+
     [JsonPropertyName("recordedAt")]
     public DateTimeOffset RecordedAt { get; set; }
 

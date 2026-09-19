@@ -11,11 +11,26 @@ public sealed record WorkflowSubmitRequest(
     WorkflowNode Node,
     bool SuppressConfigCompletionAction);
 
-/// <summary>提交受理结果（accepted/rejected 与终态分开，§7.1）。</summary>
-public sealed record BoundarySubmitResult(bool Accepted, string? JobId, string? RejectReason)
+/// <summary>提交受理结果（accepted/rejected/unknown 与终态分开，§7.1）。
+/// R4.8 一轮 B1 三态化：Uncertain=受理与否不可考（传输异常/回执畸形/对账未命中/无法解释的 already_executed）——
+/// 引擎走 Unknown 停驻（游标不推进、ObservedTerminal 保持空、禁止自动重跑），绝不按拒绝/失败推进；
+/// Rejected 仅限可证实的未受理（本地校验失败或对端副作用前协议拒绝）。不猜成功，也不猜失败/拒绝。</summary>
+public sealed record BoundarySubmitResult(bool Accepted, string? JobId, string? RejectReason, bool Uncertain = false)
 {
     public static BoundarySubmitResult AcceptedWith(string jobId) => new(true, jobId, null);
     public static BoundarySubmitResult Rejected(string reason) => new(false, null, reason);
+    public static BoundarySubmitResult UnknownWith(string reason) => new(false, null, reason, Uncertain: true);
+}
+
+/// <summary>边界观察终态（R4.8 一轮 B1/I3 结构化：远端原词与本地查询不可考分开）。
+/// Terminal=远端终态原词（succeeded/failed/cancelled/skipped/rejected；null=未观察到）；
+/// Uncertain=true 时调用方走 Unknown 停驻，不得经词汇映射落 failed；
+/// Reason/ErrorCode 受控原因上 UI。</summary>
+public sealed record BoundaryTerminalResult(string? Terminal, bool Uncertain, string? Reason, string? ErrorCode = null)
+{
+    public static BoundaryTerminalResult Observed(string terminal, string? reason = null, string? errorCode = null)
+        => new(terminal, false, reason, errorCode);
+    public static BoundaryTerminalResult UncertainWith(string reason) => new(null, true, reason);
 }
 
 /// <summary>
@@ -34,8 +49,12 @@ public interface IWorkflowExecutionBoundary
     /// <summary>提交节点执行（调用前引擎已持久化提交意图，D11）。</summary>
     Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct);
 
-    /// <summary>等待作业终态（succeeded/failed/cancelled；未知不得返回 succeeded）。</summary>
-    Task<string> AwaitTerminalAsync(string jobId, CancellationToken ct);
+    /// <summary>等待作业终态（R4.8 一轮 B3 纯观察：取消只终止等待，绝不再发远端取消——取消走 RequestCancelAsync）。</summary>
+    Task<BoundaryTerminalResult> AwaitTerminalAsync(string jobId, CancellationToken ct);
+
+    /// <summary>请求远端取消在飞作业（R4.8 一轮 B3：best-effort，应答不代表清理完成，终态以 AwaitTerminalAsync 观察为准）。
+    /// 默认 no-op（测试假实现免接线）；生产实现 = ext.task.cancel（ownedOnly=v1）。</summary>
+    Task RequestCancelAsync(string jobId, CancellationToken ct) => Task.CompletedTask;
 }
 
 /// <summary>前置结果状态（R4.6 B3 结构化：Unknown 不按普通失败续跑，走保守路径）。</summary>
@@ -472,8 +491,22 @@ public sealed class WorkflowRunner
         }
         catch (OperationCanceledException)
         {
+            // R4.8 一轮 B3：Stop 对在飞提交 best-effort 远端取消（独立短令牌 ≤5s；运行令牌已取消不可复用）；
+            // 取消未确认不猜远端已停——在飞事实（ObservedTerminal 空）原样保留，Note 标注需对账
+            var inflightJob = run.CurrentSubmission is { InFlight: true, JobId: { } j } ? j : null;
+            if (inflightJob is not null)
+            {
+                try
+                {
+                    using var cancelBudget = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await _boundary.RequestCancelAsync(inflightJob, cancelBudget.Token).ConfigureAwait(false);
+                }
+                catch { /* best-effort：取消请求结果不阻断本地停止 */ }
+            }
             run.State = WorkflowRunState.Cancelled;
-            run.Note = AppendNote(run.Note, "流程被取消（手动停止/BGI 取消事实）；不触发收尾。");
+            run.Note = AppendNote(run.Note, inflightJob is not null
+                ? "流程被取消（手动停止）；在飞作业已请求远端取消（未确认，事实保留，需人工对账）；不触发收尾。"
+                : "流程被取消（手动停止/BGI 取消事实）；不触发收尾。");
             // D10/B8：取消不清算为可执行收尾——pending（未提交）清除意图；submitted（已受理未证实）保留事实标 unknown，禁止补发
             if (run.PendingCompletion is { } pendingCompletion)
             {
@@ -507,6 +540,13 @@ public sealed class WorkflowRunner
         var submit = await _boundary.SubmitAsync(
             new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true), ct)
             .ConfigureAwait(false);
+        if (submit.Uncertain)
+        {
+            // R4.8 一轮 B1：受理与否不可考——Intent 保持 Submitted（发送已尝试事实），走 Unknown 停驻（调用点）；
+            // 不按拒绝推进、不改游标；ObservedTerminal 保持空 = 在飞事实保留，恢复扫描按在飞标 Unknown
+            submission.Intent = SubmitIntentState.Submitted;
+            return ("unknown", "提交结果不可考：" + Sanitize(submit.RejectReason), null);
+        }
         if (!submit.Accepted)
         {
             submission.Intent = SubmitIntentState.Rejected;
@@ -530,7 +570,7 @@ public sealed class WorkflowRunner
         }
         try
         {
-            string terminal;
+            BoundaryTerminalResult terminal;
             try
             {
                 terminal = await _boundary.AwaitTerminalAsync(submit.JobId!, leaf.Token).ConfigureAwait(false);
@@ -540,8 +580,13 @@ public sealed class WorkflowRunner
                 // 叶子被取消（显式跳过）：远端取消确认后再推进（B4 确认阶段；Stop 会先取消运行令牌）
                 return await ConfirmSkipAsync(run, submission, ct).ConfigureAwait(false);
             }
-            var mapped = MapTerminal(terminal);
-            return (mapped.Result, mapped.Reason, terminal); // I2：原始词随结果返回，ObservedTerminal 只存它
+            if (terminal.Uncertain)
+            {
+                // R4.8 一轮 B1：终态查询不可考——Unknown 停驻（调用点），rawTerminal=null（ObservedTerminal 保持空）
+                return ("unknown", "终态查询不可考：" + Sanitize(terminal.Reason), null);
+            }
+            var mapped = MapTerminal(terminal.Terminal!);
+            return (mapped.Result, mapped.Reason ?? terminal.Reason, terminal.Terminal); // I2：原始词随结果返回，ObservedTerminal 只存它
         }
         finally
         {
@@ -555,18 +600,31 @@ public sealed class WorkflowRunner
     private async Task<(string Result, string? Reason, string? RawTerminal)> ConfirmSkipAsync(
         WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
     {
+        // R4.8 一轮 B3：取消与观察分离——先请求远端取消一次（独立有界令牌 ≤5s，best-effort 忽略结果），
+        // 再纯观察确认；AwaitTerminalAsync 不再承担取消副作用（确认超时不重发取消，15s 预算即实际退出上界）
+        try
+        {
+            using var cancelBudget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cancelBudget.CancelAfter(TimeSpan.FromSeconds(5));
+            await _boundary.RequestCancelAsync(submission.JobId!, cancelBudget.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch { /* best-effort：取消请求失败不阻断确认观察，终态以观察为准 */ }
+
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(_opt.SkipConfirmTimeout);
         try
         {
             var terminal = await _boundary.AwaitTerminalAsync(submission.JobId!, timeout.Token).ConfigureAwait(false);
-            return terminal switch
+            if (terminal.Uncertain)
+                return ("cancelUnconfirmed", $"跳过请求后远端终态不可考（{Sanitize(terminal.Reason)}）", null);
+            return terminal.Terminal switch
             {
-                "cancelled" => ("skippedUser", "显式跳过当前节点（远端取消已确认）", terminal),
+                "cancelled" => ("skippedUser", "显式跳过当前节点（远端取消已确认）", terminal.Terminal),
                 // I2：显式跳过意图与远端正常跳过竞态——如实记 skippedFilter（不计 skippedUser；两者均不阻断收尾，D15）
-                "skipped" => ("skippedFilter", "跳过请求到达时远端已正常跳过（来源保留，不计入显式跳过）", terminal),
-                "succeeded" => ("succeeded", "跳过请求到达时节点已完成（留痕，不算跳过）", terminal),
-                var t => ("failed", $"跳过请求后观察到意外终态 {Sanitize(t)}", terminal),
+                "skipped" => ("skippedFilter", "跳过请求到达时远端已正常跳过（来源保留，不计入显式跳过）", terminal.Terminal),
+                "succeeded" => ("succeeded", "跳过请求到达时节点已完成（留痕，不算跳过）", terminal.Terminal),
+                var t => ("failed", $"跳过请求后观察到意外终态 {Sanitize(t)}", terminal.Terminal),
             };
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -815,9 +873,16 @@ public sealed class WorkflowRunner
         var delay = until - _opt.Clock();
         if (delay > TimeSpan.Zero)
         {
-            var delayTask = _opt.DelayAsync(delay, ct);
+            // R4.8 一轮 I5：延时走独立链接令牌——暂停打断即取消遗留 delayTask（手动时钟夹具不悬挂、计时器不泄漏）
+            using var delayCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var delayTask = _opt.DelayAsync(delay, delayCts.Token);
             if (await Task.WhenAny(delayTask, control.PauseSignal.Task).ConfigureAwait(false) != delayTask)
+            {
+                delayCts.Cancel();
+                try { await delayTask.ConfigureAwait(false); }
+                catch (OperationCanceledException) { /* 暂停打断的主动取消，按暂停语义返回 */ }
                 return; // 暂停打断：Wait 记录保留，恢复后按 NextTriggerAt 重排剩余
+            }
             await delayTask.ConfigureAwait(false); // 传播 Stop 取消
         }
         run.Wait = null;

@@ -37,6 +37,9 @@ public class WorkflowRunnerTests : IDisposable
         public Queue<string> TerminalScript { get; } = new();
         public Func<WorkflowSubmitRequest, Task>? OnSubmit { get; set; }
         public Func<string, CancellationToken, Task<string>>? OnAwait { get; set; }
+        public Func<string, CancellationToken, Task<BoundaryTerminalResult>>? OnAwaitEx { get; set; }
+        public BoundarySubmitResult? SubmitOverride { get; set; }
+        public List<string> CancelRequests { get; } = new();
         public List<string> IntentStateAtSubmit { get; } = new();
 
         public FakeBoundary(RunStore runs) => _runs = runs;
@@ -46,12 +49,22 @@ public class WorkflowRunnerTests : IDisposable
             Submissions.Add((request.Occurrence.NodeId, request.Node.Ref?.Config));
             IntentStateAtSubmit.Add(_runs.Load(request.Run.RunId)!.CurrentSubmission?.Intent.ToString() ?? "None");
             if (OnSubmit is not null) await OnSubmit(request);
-            return BoundarySubmitResult.AcceptedWith("job-" + Submissions.Count);
+            return SubmitOverride ?? BoundarySubmitResult.AcceptedWith("job-" + Submissions.Count);
         }
 
-        public Task<string> AwaitTerminalAsync(string jobId, CancellationToken ct)
-            => OnAwait is not null ? OnAwait(jobId, ct)
-                : Task.FromResult(TerminalScript.Count > 0 ? TerminalScript.Dequeue() : "succeeded");
+        public async Task<BoundaryTerminalResult> AwaitTerminalAsync(string jobId, CancellationToken ct)
+        {
+            if (OnAwaitEx is not null) return await OnAwaitEx(jobId, ct);
+            var word = OnAwait is not null ? await OnAwait(jobId, ct)
+                : (TerminalScript.Count > 0 ? TerminalScript.Dequeue() : "succeeded");
+            return BoundaryTerminalResult.Observed(word);
+        }
+
+        public Task RequestCancelAsync(string jobId, CancellationToken ct)
+        {
+            CancelRequests.Add(jobId);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakePrerequisite : IWorkflowPrerequisiteAdapter
@@ -771,5 +784,118 @@ public class WorkflowRunnerTests : IDisposable
         Assert.Equal(2, boundary.Submissions.Count(s => s.NodeId == "n-on")); // 两轮 B 各执行一次
         Assert.Contains(capturedWaits, d => d == TimeSpan.FromMinutes(60)); // B9：上一轮以过滤跳过结束，新一轮仍经轮次起点等待（05:00→06:00）
         Assert.Equal(2, run.NodeOutcomes.Count(o => o is { NodeId: "n-off", Result: "skippedFilter" }));
+    }
+
+    [Fact]
+    public async Task SubmitUncertain_RunUnknown_IntentSubmitted_NoAdvanceNoTerminal()
+    {
+        // R4.8 一轮 B1：受理与否不可考 → Unknown 停驻（不按拒绝推进、不触发收尾、游标不动、在飞事实保留）
+        var workflowId = SeedFlow(new WorkflowDocument
+        {
+            Name = "提交不可考",
+            Nodes = [DragonNode("n-1", "配置A"), DragonNode("n-2", "配置B")],
+            Terminal = [new WorkflowTerminalAction { Kind = "terminal.completionAction" }],
+        }).Split('|')[1];
+        var (runner, boundary, terminal) = MakeRunner();
+        boundary.SubmitOverride = BoundarySubmitResult.UnknownWith("传输异常且按幂等键对账未命中");
+
+        var run = await runner.StartAsync(workflowId);
+
+        Assert.Equal(WorkflowRunState.Unknown, run.State);
+        Assert.Single(boundary.Submissions); // 不推进到下一节点
+        Assert.Contains(run.NodeOutcomes, o => o is { NodeId: "n-1", Result: "unknown" });
+        Assert.Equal(SubmitIntentState.Submitted, run.CurrentSubmission!.Intent); // 发送已尝试事实，不按拒绝
+        Assert.Null(run.CurrentSubmission!.ObservedTerminal); // 在飞事实保留（恢复扫描据此标 Unknown）
+        Assert.Equal("n-1", run.Cursor!.NodeId); // 游标不推进
+        Assert.Empty(terminal.Actions); // D10：未知不触发收尾
+    }
+
+    [Fact]
+    public async Task AwaitUncertain_RunUnknown_ObservedTerminalStaysNull()
+    {
+        // R4.8 一轮 B1：终态查询不可考 → Unknown 停驻，ObservedTerminal 保持空（不猜失败）
+        var workflowId = SeedFlow(new WorkflowDocument
+        {
+            Name = "终态不可考",
+            Nodes = [DragonNode("n-1", "配置A"), DragonNode("n-2", "配置B")],
+        }).Split('|')[1];
+        var (runner, boundary, _) = MakeRunner();
+        boundary.OnAwaitEx = (_, _) => Task.FromResult(BoundaryTerminalResult.UncertainWith("等待终态超预算"));
+
+        var run = await runner.StartAsync(workflowId);
+
+        Assert.Equal(WorkflowRunState.Unknown, run.State);
+        Assert.Single(boundary.Submissions);
+        Assert.Contains(run.NodeOutcomes, o => o is { NodeId: "n-1", Result: "unknown" });
+        Assert.Null(run.CurrentSubmission!.ObservedTerminal);
+        Assert.Equal(SubmitIntentState.Accepted, run.CurrentSubmission!.Intent); // 已受理事实不丢
+    }
+
+    [Fact]
+    public async Task SkipCurrent_RequestsRemoteCancel_BeforeConfirmObservation()
+    {
+        // R4.8 一轮 B3：确认链先请求远端取消一次，再纯观察确认；cancelled → skippedUser
+        var workflowId = SeedFlow(new WorkflowDocument
+        {
+            Name = "跳过发取消",
+            Nodes = [DragonNode("n-1", "配置A"), DragonNode("n-2", "配置B")],
+        }).Split('|')[1];
+        var (runner, boundary, _) = MakeRunner();
+
+        var awaitEntered = new TaskCompletionSource();
+        string? runId = null;
+        var job1Calls = 0;
+        boundary.OnSubmit = req => { runId = req.Run.RunId; return Task.CompletedTask; };
+        boundary.OnAwait = async (jobId, ct) =>
+        {
+            if (jobId != "job-1") return "succeeded";
+            if (Interlocked.Increment(ref job1Calls) == 1)
+            {
+                awaitEntered.TrySetResult();
+                await Task.Delay(Timeout.Infinite, ct); // 叶子取消 → OCE → 确认链
+            }
+            return "cancelled"; // 确认观察：远端取消已确认
+        };
+
+        var task = runner.StartAsync(workflowId);
+        await awaitEntered.Task;
+        runner.RequestAction(runId!, WorkflowRunAction.SkipCurrent);
+        var run = await task;
+
+        Assert.Contains("job-1", boundary.CancelRequests); // 取消请求已发出
+        Assert.Contains(run.NodeOutcomes, o => o is { NodeId: "n-1", Result: "skippedUser" });
+        Assert.Equal(WorkflowRunState.Succeeded, run.State);
+    }
+
+    [Fact]
+    public async Task Stop_InflightJob_RequestsRemoteCancel_NoteKeepsUnconfirmedFact()
+    {
+        // R4.8 一轮 B3：Stop 对在飞作业 best-effort 远端取消；本地 Cancelled + 未确认标注，事实保留
+        var workflowId = SeedFlow(new WorkflowDocument
+        {
+            Name = "停止在飞",
+            Nodes = [DragonNode("n-1", "配置A"), DragonNode("n-2", "配置B")],
+        }).Split('|')[1];
+        var (runner, boundary, _) = MakeRunner();
+
+        var awaitEntered = new TaskCompletionSource();
+        string? runId = null;
+        boundary.OnSubmit = req => { runId = req.Run.RunId; return Task.CompletedTask; };
+        boundary.OnAwait = async (_, ct) =>
+        {
+            awaitEntered.TrySetResult();
+            await Task.Delay(Timeout.Infinite, ct); // 直到运行令牌取消
+            return "succeeded";
+        };
+
+        var task = runner.StartAsync(workflowId);
+        await awaitEntered.Task;
+        runner.RequestAction(runId!, WorkflowRunAction.Stop);
+        var run = await task;
+
+        Assert.Equal(WorkflowRunState.Cancelled, run.State);
+        Assert.Contains("job-1", boundary.CancelRequests); // 在飞作业已请求远端取消
+        Assert.Contains("未确认", run.Note); // 远端未确认事实标注
+        Assert.Null(run.CurrentSubmission!.ObservedTerminal); // 不猜远端已停
     }
 }

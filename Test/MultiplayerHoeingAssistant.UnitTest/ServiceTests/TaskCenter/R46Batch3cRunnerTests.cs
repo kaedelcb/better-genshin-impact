@@ -33,6 +33,8 @@ public class R46Batch3cRunnerTests : IDisposable
         public List<string> Submissions { get; } = new();
         public List<bool> SuppressFlags { get; } = new(); // 任务中心提交固定 suppress=true（B6/E4'）的见证
         public Func<string, CancellationToken, Task<string>>? OnAwait { get; set; }
+        public List<string> CancelRequests { get; } = new();
+        public Queue<string> TerminalScript { get; } = new();
 
         public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
         {
@@ -41,8 +43,17 @@ public class R46Batch3cRunnerTests : IDisposable
             return Task.FromResult(BoundarySubmitResult.AcceptedWith("job-" + Submissions.Count));
         }
 
-        public Task<string> AwaitTerminalAsync(string jobId, CancellationToken ct)
-            => OnAwait is not null ? OnAwait(jobId, ct) : Task.FromResult("succeeded");
+        public async Task<BoundaryTerminalResult> AwaitTerminalAsync(string jobId, CancellationToken ct)
+        {
+            var word = OnAwait is not null ? await OnAwait(jobId, ct) : "succeeded";
+            return BoundaryTerminalResult.Observed(word);
+        }
+
+        public Task RequestCancelAsync(string jobId, CancellationToken ct)
+        {
+            CancelRequests.Add(jobId);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakePrerequisite : IWorkflowPrerequisiteAdapter

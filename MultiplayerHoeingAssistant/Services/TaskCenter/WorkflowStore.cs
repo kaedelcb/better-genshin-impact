@@ -61,6 +61,10 @@ public sealed class WorkflowStore
     private readonly string _flowsDir;
     private readonly string _backupDir;
 
+    /// <summary>写入串行化闸门（R4.8 一轮 I7：检查-备份-写入全程互斥，防同进程两次保存通过同一期望修订；
+    /// 与 RunStore 同模式——乐观并发只防覆盖不防交错）。</summary>
+    private readonly object _gate = new();
+
     public WorkflowStore(string flowsDir)
     {
         _flowsDir = flowsDir;
@@ -72,7 +76,15 @@ public sealed class WorkflowStore
     public static string DefaultFlowsDir()
         => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NexusBGI", "flows");
 
-    private string PathFor(string workflowId) => Path.Combine(_flowsDir, workflowId + ".flow.json");
+    /// <summary>流程身份 → 路径（R4.8 一轮 I7：身份即文件名成分，拒绝空白/路径分隔/上级跳转/非法文件名字符）。</summary>
+    private string PathFor(string workflowId)
+    {
+        if (string.IsNullOrWhiteSpace(workflowId)
+            || workflowId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || workflowId.Contains("..", StringComparison.Ordinal))
+            throw new ArgumentException($"流程身份非法（不得含路径成分）：{workflowId}", nameof(workflowId));
+        return Path.Combine(_flowsDir, workflowId + ".flow.json");
+    }
 
     /// <summary>列出流程目录（含隔离文件；每次实时重算哈希，不信任缓存）。</summary>
     public IReadOnlyList<WorkflowCatalogEntry> List()
@@ -117,42 +129,46 @@ public sealed class WorkflowStore
         if (string.IsNullOrWhiteSpace(doc.Name))
             throw new ArgumentException("流程名不能为空", nameof(doc));
 
-        var file = PathFor(doc.WorkflowId);
-        var exists = File.Exists(file);
-        if (!exists && expectedRevision is not null)
-            throw new WorkflowRevisionConflictException($"流程 {doc.WorkflowId} 不存在，但携带了期望修订（可能已被外部删除）。");
-        if (exists)
+        // R4.8 一轮 I7：检查-备份-写入全程互斥（同进程两次保存不得通过同一期望修订；外部非合作写方仍不承诺 CAS）
+        lock (_gate)
         {
-            var currentHash = HashFileBytes(file);
-            if (expectedRevision is null)
-                throw new WorkflowRevisionConflictException($"流程 {doc.WorkflowId} 已存在，覆盖保存必须携带期望修订。");
-            if (!string.Equals(currentHash, expectedRevision, StringComparison.OrdinalIgnoreCase))
-                throw new WorkflowRevisionConflictException(
-                    $"流程 {doc.WorkflowId} 修订冲突：期望 {expectedRevision[..Math.Min(8, expectedRevision.Length)]}…，当前 {currentHash[..8]}…（文件已被外部或并发修改，未覆盖）。");
-        }
+            var file = PathFor(doc.WorkflowId);
+            var exists = File.Exists(file);
+            if (!exists && expectedRevision is not null)
+                throw new WorkflowRevisionConflictException($"流程 {doc.WorkflowId} 不存在，但携带了期望修订（可能已被外部删除）。");
+            if (exists)
+            {
+                var currentHash = HashFileBytes(file);
+                if (expectedRevision is null)
+                    throw new WorkflowRevisionConflictException($"流程 {doc.WorkflowId} 已存在，覆盖保存必须携带期望修订。");
+                if (!string.Equals(currentHash, expectedRevision, StringComparison.OrdinalIgnoreCase))
+                    throw new WorkflowRevisionConflictException(
+                        $"流程 {doc.WorkflowId} 修订冲突：期望 {expectedRevision[..Math.Min(8, expectedRevision.Length)]}…，当前 {currentHash[..8]}…（文件已被外部或并发修改，未覆盖）。");
+            }
 
-        var bytes = Utf8NoBom.GetBytes(JsonSerializer.Serialize(doc, JsonOptions));
+            var bytes = Utf8NoBom.GetBytes(JsonSerializer.Serialize(doc, JsonOptions));
 
-        // 备份既有版本（保留可回滚副本，含隔离文件的显式覆盖场景）
-        if (exists)
-        {
-            Directory.CreateDirectory(_backupDir);
-            var priorHash = HashFileBytes(file);
-            File.Copy(file, Path.Combine(_backupDir, $"{doc.WorkflowId}.{priorHash[..8]}.flow.json"), overwrite: true);
-        }
+            // 备份既有版本（保留可回滚副本，含隔离文件的显式覆盖场景）
+            if (exists)
+            {
+                Directory.CreateDirectory(_backupDir);
+                var priorHash = HashFileBytes(file);
+                File.Copy(file, Path.Combine(_backupDir, $"{doc.WorkflowId}.{priorHash[..8]}.flow.json"), overwrite: true);
+            }
 
-        // 原子写：临时文件 + 同目录替换
-        var tmp = Path.Combine(_flowsDir, $".{doc.WorkflowId}.{Guid.NewGuid():N}.tmp");
-        File.WriteAllBytes(tmp, bytes);
-        try
-        {
-            File.Move(tmp, file, overwrite: true);
+            // 原子写：临时文件 + 同目录替换
+            var tmp = Path.Combine(_flowsDir, $".{doc.WorkflowId}.{Guid.NewGuid():N}.tmp");
+            File.WriteAllBytes(tmp, bytes);
+            try
+            {
+                File.Move(tmp, file, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(tmp)) File.Delete(tmp);
+            }
+            return HashBytes(bytes);
         }
-        finally
-        {
-            if (File.Exists(tmp)) File.Delete(tmp);
-        }
-        return HashBytes(bytes);
     }
 
     /// <summary>
@@ -203,7 +219,10 @@ public sealed class WorkflowStore
         if (root is not JsonObject obj)
             return Quarantined(fallbackId, hash, "jsonShapeInvalid", file);
 
-        var schema = obj["schema"]?.GetValue<string>();
+        // R4.8 一轮 I7：schema 非字符串形状（数字/对象）时 GetValue<string> 会抛——逐形状判型，错误形状隔离不炸列表
+        string? schema = null;
+        if (obj["schema"] is JsonValue schemaVal)
+            schemaVal.TryGetValue<string>(out schema);
         if (!string.Equals(schema, WorkflowDocumentSchema.Name, StringComparison.Ordinal))
             return Quarantined(fallbackId, hash, "schemaMismatch", file);
         if (obj["schemaVersion"] is not JsonValue ver || !ver.TryGetValue<int>(out var v) || v != WorkflowDocumentSchema.Version)
@@ -218,7 +237,17 @@ public sealed class WorkflowStore
         {
             return Quarantined(fallbackId, hash, "modelShapeInvalid", file);
         }
+        // R4.8 一轮 I7：可反序列化但字段形状异常（nodes:null 等）按隔离处理，FindUnsupportedKinds 不容忍 null 集合
+        if (doc.Nodes is null || doc.Triggers is null || doc.Terminal is null
+            || doc.Nodes.Any(n => n is null || n.Strategies is null))
+            return Quarantined(fallbackId, hash, "modelShapeInvalid", file);
         var id = !string.IsNullOrWhiteSpace(doc.WorkflowId) ? doc.WorkflowId! : fallbackId;
+        // R4.8 一轮 I7：本店目录内文件身份与文件名不一致 → 按身份寻址会加载错文件，响亮隔离
+        // （仅本店目录强制；Import 探针的外部源文件名合法不同，R1 候选无 workflowId 走文件名 fallback 均不受影响）
+        if (!string.IsNullOrWhiteSpace(doc.WorkflowId)
+            && string.Equals(Path.GetDirectoryName(Path.GetFullPath(file)), Path.GetFullPath(_flowsDir), StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(doc.WorkflowId, fallbackId, StringComparison.OrdinalIgnoreCase))
+            return Quarantined(fallbackId, hash, "idFilenameMismatch", file);
         return new WorkflowCatalogEntry(id, doc.Name, hash, WorkflowFileStatus.Ready, null,
             WorkflowKindCatalog.FindUnsupportedKinds(doc), file);
     }
