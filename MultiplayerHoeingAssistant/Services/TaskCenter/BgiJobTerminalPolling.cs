@@ -85,7 +85,9 @@ internal static class BgiJobTerminalPolling
             var status = root.TryGetProperty("status", out var s) && s.ValueKind == JsonValueKind.String
                 ? s.GetString() : null;
             if (status == "already_executed") return (true, null, true);
-            if (status != "accepted") return (false, null, false);
+            // 真实线路词汇（R4 真实段 2026-09-19 实锤）：BGI ext.task.start 受理回执=queued（新入队）/adopted（认领既有排队作业），
+            // 均携带 taskHandle；"accepted" 为早期假设词保留兼容。其余一律不视为受理。
+            if (status is not ("accepted" or "queued" or "adopted")) return (false, null, false);
             var handle = root.TryGetProperty("taskHandle", out var h) && h.ValueKind == JsonValueKind.String
                 ? h.GetString() : null;
             return (true, handle, false);
