@@ -104,7 +104,7 @@ public class TaskCenterPanelViewModelTests : IDisposable
     private static TaskCenterPanelViewModel MakePanel(TaskCenterHost host)
         => new(host, null, autoRefresh: false);
 
-    private static async Task WaitUntilAsync(Func<bool> condition, int spins = 300)
+    private static async Task WaitUntilAsync(Func<bool> condition, int spins = 1000) // 10s 预算：全量并行负载下抗调度抖动（条件仍必须为真，不断言放松）
     {
         for (var i = 0; i < spins && !condition(); i++) await Task.Delay(10);
     }

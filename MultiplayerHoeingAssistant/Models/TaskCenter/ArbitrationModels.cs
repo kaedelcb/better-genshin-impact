@@ -118,6 +118,8 @@ public sealed class CandidateEntry
 {
     public ArbitrationCandidate Candidate { get; set; } = new();
     public CandidateEligibility Eligibility { get; set; } = new();
+    /// <summary>运行绑定判别量（进程内裁决输入，不序列化：同候选号不同 runBinding/cursor 绑定=身份冲突整组拒绝，不去重共享——B7 复核）。</summary>
+    public string BindingDiscriminator { get; set; } = "";
 }
 
 /// <summary>票据压制事实（§5：权威校验在 BGI 侧 PreemptionGate/SuspendedTaskContext；本结构只是资格快照输入，候选自带绑定不作授权证据）。</summary>
@@ -227,10 +229,19 @@ public sealed class LeaseSegment
     [JsonPropertyName("ttlSeconds")] public int TtlSeconds { get; set; } = 15;
 }
 
-/// <summary>交接上下文段（§6.4：获取新租约只替换所有权部分、保留未决 handoff；释放不删除未决事实）。</summary>
+/// <summary>
+/// 交接上下文段（§6.4：获取新租约只替换所有权部分、保留未决 handoff；释放不删除未决事实）。
+/// R5.2 冻结稿 §4.1 三字段结构：Pending（交接责任，六值阶段机不动）+ Submission（当前未决发送，至多一笔）+
+/// Operations（逻辑操作权威记录=恢复权威，不依赖可缺失的镜像）。关闭事务=同一次锁内原子发布内
+/// 「更新 Operations 记录 + 移除 Submission」，无「已关闭、状态未记录」崩窗。
+/// </summary>
 public sealed class LeaseHandoffSegment
 {
     [JsonPropertyName("pending")] public PendingHandoffIntent? Pending { get; set; }
+    /// <summary>当前未决发送（至多一笔）；受理/确定拒绝经 §4.2c 统一关闭接口移除，绝不顺带消解 Pending。</summary>
+    [JsonPropertyName("submission")] public SubmissionRecord? Submission { get; set; }
+    /// <summary>逻辑操作权威记录（本段新增，恢复权威）：runBinding/cursorRef/submissionIdentity/targetEpoch 不可改写。</summary>
+    [JsonPropertyName("operations")] public List<OperationRecord> Operations { get; set; } = [];
 }
 
 /// <summary>未决交接/提交意图（§6.2 原子准入边界：意图先在跨进程锁内持久化再发送；消解必须基于关联的权威证据）。</summary>
@@ -263,4 +274,134 @@ public sealed class LeaseDiagSegment
     [JsonPropertyName("residueReconcilePending")] public bool ResidueReconcilePending { get; set; }
     [JsonPropertyName("switchGateReason")] public string? SwitchGateReason { get; set; }
     [JsonPropertyName("notes")] public List<string> Notes { get; set; } = [];
+}
+
+// ============================================================
+// R5.2 提交责任模型（接线设计稿 v8 §4.1 冻结——加法不动序列化框架，锚点 6/D3）
+// ============================================================
+
+/// <summary>提交子状态（§4.1：回答「本次提交是否仍可能被受理」；Reconciling=发送结果未知，等价保守语义，不换键重跑）。</summary>
+public enum SubmissionState
+{
+    /// <summary>占位成功、当次锁外发送责任存续（是责任状态，不是发送许可——重启/对账回退/重复调用不得凭此重新取得发送权）。</summary>
+    Submitting,
+    /// <summary>发送结果未知→保守待对账；Reconciling→Submitting 仅恢复责任阶段，不得重新触发发送。</summary>
+    Reconciling,
+}
+
+/// <summary>Operations 状态三区（§4.1a：同一 Operations[] 内的记录状态，非物理分区）。</summary>
+public enum OperationZone
+{
+    /// <summary>非终局：永不清理；占用主槽位（primarySlotsUsed=Active+TerminalPendingTransfer ≤ 32）。</summary>
+    Active,
+    /// <summary>已终局待迁墓碑：占用主槽位——终局只改状态不申请新槽位，迁移成功才释放原槽位。</summary>
+    TerminalPendingTransfer,
+    /// <summary>终局墓碑：环形上限 256 且最短保留 24h；迁入即释放主槽位。</summary>
+    Tombstone,
+}
+
+/// <summary>请求状态（§3.3 分类表——操作身份与处理状态分离；状态读取/迁移在权威串行边界内完成）。</summary>
+public enum OperationRequestState
+{
+    /// <summary>已登记待裁决（入队快照前）。</summary>
+    Queued,
+    /// <summary>当轮裁决中。</summary>
+    InRound,
+    /// <summary>已占位（Submission 落盘、发送责任存续）。</summary>
+    Granted,
+    /// <summary>当次锁外发送在飞。</summary>
+    Sending,
+    /// <summary>发送结果未知/待对账（返回对账状态，不重发）。</summary>
+    Reconciling,
+    /// <summary>已受理（接管台账已持久化，返回既有结果）。</summary>
+    Accepted,
+    /// <summary>终局完成（关联执行权威终态+台账一致，返回既有结果）。</summary>
+    TerminalCompleted,
+    /// <summary>可重试拒绝（操作级白名单内，已关闭 Submission；预算/窗口内可由唯一重试者重新 Admit）。</summary>
+    RetryableRejected,
+    /// <summary>终局拒绝（不得静默返回成功）。</summary>
+    TerminalRejected,
+    /// <summary>未获选（当轮裁决完成即终局，含胜者引用与压制来源，不悬置不自动进入下一轮）。</summary>
+    NotSelected,
+}
+
+/// <summary>操作受理结论（§4.1 五轮重要 1：仅两值，不设第三关闭依据；对账结论写入 evidenceSource）。</summary>
+public enum OperationOutcome
+{
+    Accepted,
+    Rejected,
+}
+
+/// <summary>操作最近一轮结果（§4.1：answeredSendSeq 标注结果对应的发送轮次——下一轮占位后不得把上一轮拒绝误当本轮结果）。</summary>
+public sealed class OperationResult
+{
+    [JsonPropertyName("outcome")] public OperationOutcome Outcome { get; set; }
+    /// <summary>结构化原因码（副作用前拒绝七码/协议映射登记词；无=空串）。</summary>
+    [JsonPropertyName("reasonCode")] public string ReasonCode { get; set; } = "";
+    /// <summary>是否操作级重试白名单内（stale_epoch/request_expired 等身份/时限类一律 false——不透明重试）。</summary>
+    [JsonPropertyName("retryable")] public bool Retryable { get; set; }
+    /// <summary>已消耗重试预算（无损拒绝重试不增加业务 attempt）。</summary>
+    [JsonPropertyName("retryBudgetUsed")] public int RetryBudgetUsed { get; set; }
+    /// <summary>证据来源（原始回执词/对账结论+产生端——保留原始证据来源、不伪造远端回执词）。</summary>
+    [JsonPropertyName("evidenceSource")] public string EvidenceSource { get; set; } = "";
+    /// <summary>结果对应的发送轮次（关联校验含 sendSeq，迟到结果不得跨轮完成）。</summary>
+    [JsonPropertyName("answeredSendSeq")] public int AnsweredSendSeq { get; set; }
+    /// <summary>未获选终局的胜者候选引用（持久化——续用/恢复返回不丢压制依据）。</summary>
+    [JsonPropertyName("winnerRef")] public string? WinnerRef { get; set; }
+    /// <summary>压制来源（票据/冲突组等——持久化，续用/恢复返回不丢压制依据）。</summary>
+    [JsonPropertyName("suppressionSource")] public string? SuppressionSource { get; set; }
+}
+
+/// <summary>当前未决发送（§4.1：至多一笔；只承载当前未决发送，操作全史由 Operations 承载）。</summary>
+public sealed class SubmissionRecord
+{
+    /// <summary>完整发送关联身份（授权签发=租约锁内一次原子发布，不可由外部请求自报）。</summary>
+    [JsonPropertyName("submissionIdentity")] public string SubmissionIdentity { get; set; } = "";
+    /// <summary>发送序号（同请求的各次发送区分轮次；上一轮迟到结果不得完成下一轮占位）。</summary>
+    [JsonPropertyName("sendSeq")] public int SendSeq { get; set; }
+    [JsonPropertyName("actionId")] public string ActionId { get; set; } = "";
+    /// <summary>目标 bgiEpoch（首次构造固定，只比较不重写）。</summary>
+    [JsonPropertyName("targetEpoch")] public string TargetEpoch { get; set; } = "";
+    [JsonPropertyName("candidateId")] public string CandidateId { get; set; } = "";
+    [JsonPropertyName("state")] public SubmissionState State { get; set; }
+    [JsonPropertyName("recordedAtUtc")] public DateTimeOffset RecordedAtUtc { get; set; }
+}
+
+/// <summary>
+/// 逻辑操作权威记录（§4.1 恢复权威——不依赖可缺失的镜像；runBinding/cursorRef 绑定不可改写，
+/// submissionIdentity/targetEpoch 原目标实例不可改写；wireSubmitKey 无法确定性推导时显式存储，逐操作 §6.1 映射表）。
+/// </summary>
+public sealed class OperationRecord
+{
+    /// <summary>入口适配器首次接纳分配一次（Guid N 小写）；同次用户操作的内部重试复用同一身份。</summary>
+    [JsonPropertyName("requestIdentity")] public string RequestIdentity { get; set; } = "";
+    [JsonPropertyName("candidateId")] public string CandidateId { get; set; } = "";
+    [JsonPropertyName("payloadFingerprint")] public string PayloadFingerprint { get; set; } = "";
+    [JsonPropertyName("sortKeyFingerprint")] public string SortKeyFingerprint { get; set; } = "";
+    /// <summary>candidateId→runId→首节点提交键（绑定后不可改写）。</summary>
+    [JsonPropertyName("runBinding")] public string? RunBinding { get; set; }
+    [JsonPropertyName("cursorRef")] public string? CursorRef { get; set; }
+    [JsonPropertyName("cursorRevision")] public long? CursorRevision { get; set; }
+    [JsonPropertyName("requestState")] public OperationRequestState RequestState { get; set; }
+    [JsonPropertyName("lastSendSeq")] public int LastSendSeq { get; set; }
+    /// <summary>首次确定拒绝派生的有界重试窗口截止（§3.3-6：持久化后不得重置；到期锁内复核才转终局，不用于 Unknown/Reconciling）。</summary>
+    [JsonPropertyName("retryWindowDeadlineUtc")] public DateTimeOffset? RetryWindowDeadlineUtc { get; set; }
+    [JsonPropertyName("lastResult")] public OperationResult? LastResult { get; set; }
+    /// <summary>接管台账关联引用（受理分支关闭前已持久化并可重建）。</summary>
+    [JsonPropertyName("takeoverRef")] public string? TakeoverRef { get; set; }
+    [JsonPropertyName("zone")] public OperationZone Zone { get; set; } = OperationZone.Active;
+    [JsonPropertyName("updatedRevision")] public long UpdatedRevision { get; set; }
+    [JsonPropertyName("updatedAtUtc")] public DateTimeOffset UpdatedAtUtc { get; set; }
+    /// <summary>完整发送关联身份（关闭后全量保留，六轮重要 1）。</summary>
+    [JsonPropertyName("submissionIdentity")] public string SubmissionIdentity { get; set; } = "";
+    /// <summary>原目标实例/epoch（不可改写）。</summary>
+    [JsonPropertyName("targetEpoch")] public string TargetEpoch { get; set; } = "";
+    /// <summary>登记时冻结的完整候选快照（不可变消费记录：占位/重试按本快照比对与重建，不凭调用方后置可变对象）。</summary>
+    [JsonPropertyName("candidate")] public ArbitrationCandidate? Candidate { get; set; }
+    [JsonPropertyName("resourceRef")] public string ResourceRef { get; set; } = "";
+    [JsonPropertyName("intent")] public string Intent { get; set; } = "";
+    /// <summary>线上提交键（无法确定性推导时显式存储，逐操作 §6.1）。</summary>
+    [JsonPropertyName("wireSubmitKey")] public string? WireSubmitKey { get; set; }
+    /// <summary>去重合并关联（发送前持久化——本项由该胜者请求身份承担发送责任；共同结清/恢复时镜像终态）。</summary>
+    [JsonPropertyName("mergedInto")] public string? MergedInto { get; set; }
 }

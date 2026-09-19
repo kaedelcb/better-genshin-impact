@@ -244,9 +244,13 @@ public class ArbitrationLeaseStoreTests : IDisposable
         Assert.Equal(bytesBefore, File.ReadAllBytes(leasePath));
         Assert.Equal(ArbitrationLeaseStatus.Corrupt, store.Read().Status);
 
-        // 手写 version=2 → Unsupported
-        File.WriteAllText(leasePath, "{\"version\":2}");
+        // 手写 version=3（高于支持版本 2，R5.2 §4.0）→ Unsupported
+        File.WriteAllText(leasePath, "{\"version\":3}");
         Assert.Equal(ArbitrationLeaseStatus.Unsupported, store.Read().Status);
+
+        // 手写 version=2 无 Lease 段 → Absent（v2 为当前支持格式代）
+        File.WriteAllText(leasePath, "{\"version\":2}");
+        Assert.Equal(ArbitrationLeaseStatus.Absent, store.Read().Status);
 
         // 正常获取 → Valid
         File.Delete(leasePath);

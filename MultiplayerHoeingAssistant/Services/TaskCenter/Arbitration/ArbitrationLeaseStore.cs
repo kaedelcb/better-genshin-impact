@@ -35,6 +35,17 @@ public sealed class LeaseOpResult
     public LeaseSegment? Lease { get; set; }
 }
 
+/// <summary>R5.2 锁内原子变更结果（MutateHandoff：成功返回变更后文件快照——含新 Revision，供链式变更/断言；拒绝时文件保持不变）。</summary>
+public sealed class LeaseMutateResult
+{
+    public bool Success { get; set; }
+
+    /// <summary>响亮拒绝原因码（lease_stale_generation/corrupt/unsupported_version/residue_reconcile_pending/switch_gate_active/变更函数返回码）。</summary>
+    public string? Reason { get; set; }
+
+    public LogicalOwnerLeaseFile? File { get; set; }
+}
+
 /// <summary>
 /// 槲寄生 · 任务中心——仲裁租约存取（R5.1 冻结稿 v5 §6，单文件三段：lease/handoff/diag）。
 /// 文件：configDir/arbitration-lease.json；锁对象：固定 configDir/arbitration-lease.lock（永不原子替换/删除/清空）。
@@ -51,6 +62,8 @@ public sealed class LeaseOpResult
 public sealed class ArbitrationLeaseStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    /// <summary>当前支持/写入的租约文件格式代（R5.2 冻结稿 §4.0：新增 Submission/Operations 字段=格式代 2；旧消费方按 Unsupported 响亮拒绝）。</summary>
+    public const int SupportedVersion = 2;
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
     private readonly string _configDir;
@@ -83,7 +96,8 @@ public sealed class ArbitrationLeaseStore
     /// 只读盘读租约（§6.4 五态）。
     /// - 正式文件不存在 → Absent（若目录存在且发现残留临时文件 → Detail 注明残件按无正式文件处理）；
     /// - 存在但 JSON 解析失败/反序列化为 null → Corrupt（原件保留留痕，绝不降级 Absent、绝不改写原件）；
-    /// - Version &gt; 1 → Unsupported；Lease 段非空 → (LastHeartbeatUtc + TtlSeconds 秒) &lt; utcNow() 为 Expired 否则 Valid；
+    /// - Version &gt; SupportedVersion(2) → Unsupported；v1 向后读兼容（Pending 段原样保留，Submission/Operations 视为空，缺字段保守拒绝不默认为无责任）；
+    ///   Lease 段非空 → (LastHeartbeatUtc + TtlSeconds 秒) &lt; utcNow() 为 Expired 否则 Valid；
     /// - Lease 段空 → Absent。
     /// 本方法只读不写盘（残件留痕只写进返回的 Detail）；配置目录不存在时直接判 Absent（不建目录、不建文件）。
     /// </summary>
@@ -148,10 +162,21 @@ public sealed class ArbitrationLeaseStore
             return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = "租约文件解析失败，原件保留留痕：" + ex.Message };
         }
 
-        if (version > 1)
-            return new LeaseReadResult { Status = ArbitrationLeaseStatus.Unsupported, File = null, Detail = $"租约文件 version={version} 高于支持版本 1，响亮拒绝执行（不降级解析）。" };
+        if (version > SupportedVersion)
+            return new LeaseReadResult { Status = ArbitrationLeaseStatus.Unsupported, File = null, Detail = $"租约文件 version={version} 高于支持版本 {SupportedVersion}，响亮拒绝执行（不降级解析）。" };
         if (version < 1)
             return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = $"租约文件 version={version} 非法，原件保留留痕。" };
+
+        // v2 责任段原始 JSON 预检（区分「字段缺失」与合法空值——handoff 段存在则 operations 必填，缺字段不得默认为合法空责任）。
+        if (version == SupportedVersion)
+        {
+            using var doc2 = JsonDocument.Parse(text);
+            if (doc2.RootElement.ValueKind == JsonValueKind.Object
+                && doc2.RootElement.TryGetProperty("handoff", out var handoffEl)
+                && handoffEl.ValueKind == JsonValueKind.Object
+                && (!handoffEl.TryGetProperty("operations", out var opsEl) || opsEl.ValueKind != JsonValueKind.Array))
+                return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = "租约文件 v2 Handoff.Operations 缺失（责任完整性校验失败），原件保留留痕。" };
+        }
 
         LogicalOwnerLeaseFile? file;
         try
@@ -174,6 +199,11 @@ public sealed class ArbitrationLeaseStore
                 || lease.HeartbeatSeq < 1
                 || lease.TtlSeconds <= 0))
             return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = "租约文件 Lease 段结构/取值非法（缺身份或零代次等），原件保留留痕。" };
+
+        // v2 责任段结构校验（R5.2 §4.0：v1 兼容默认值与 v2 责任完整性分开——version==2 时
+        // Handoff 段存在则 Operations 必填、记录身份/枚举/唯一性非法=Corrupt，不降级为空责任）。
+        if (version == SupportedVersion && !ValidateHandoffSegment(file.Handoff, out var handoffDetail))
+            return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = handoffDetail };
 
         // Lease 段空 → Absent；非空按 UTC 诊断性判 Expired/Valid（§6.3：接管依据另需单调观察+锁内复核，UTC 仅诊断）。
         if (lease is null)
@@ -232,7 +262,7 @@ public sealed class ArbitrationLeaseStore
             }
 
             // Absent/Expired（含经确认失联的 Valid）→ 获取成功。
-            var target = file ?? new LogicalOwnerLeaseFile { Version = 1 };
+            var target = file ?? new LogicalOwnerLeaseFile { Version = SupportedVersion };
             var newLease = new LeaseSegment
             {
                 LeaseId = Guid.NewGuid().ToString("N"),
@@ -343,25 +373,28 @@ public sealed class ArbitrationLeaseStore
             // 残件对账约束持续阻断发布（三轮 P1-③：不只阻断获取）。
             if (read.File.Diag?.ResidueReconcilePending == true) return Reject("residue_reconcile_pending");
 
+            // 同所有者同意图重复发布=幂等成功不改写（既有事实不因重放改变——与未决 Submission 并存亦成立，I4 复核）。
+            var existing = read.File.Handoff?.Pending;
+            if (existing is not null
+                && string.Equals(existing.ActionId, intent.ActionId, StringComparison.Ordinal)
+                && SameIntent(existing, intent))
+                return Ok(lease);
+
+            // R5.2 §4.1 组合约束（反向）：未决 Submission 存续期不得发布新交接意图
+            // （不确定期不新增抢占意图；正常顺序=Pending 先于授权方提交，§4.1 双字段组合约束覆盖两种写入顺序）。
+            if (read.File.Handoff?.Submission is not null) return Reject("submission_unresolved");
+
             // 写侧校验：关联字段非空（空关联身份会使消解端证据关联失效，P1-③复核）。
             if (string.IsNullOrWhiteSpace(intent.ActionId)
                 || string.IsNullOrWhiteSpace(intent.SubmissionIdentity)
                 || string.IsNullOrWhiteSpace(intent.TargetEpoch))
                 return Reject("invalid_request");
 
-            // §7 切换闸门：激活期间租约锁内意图发布一律拒绝。
+            // §7 切换闸门：激活期间租约锁内新意图发布一律拒绝（幂等重放不产生新事实，不受闸门阻断）。
             if (read.File!.Diag?.SwitchGateActive == true) return Reject("switch_gate_active");
 
             var handoff = read.File.Handoff ??= new LeaseHandoffSegment();
-            var existing = handoff.Pending;
-            if (existing is not null)
-            {
-                // 同所有者同意图 → 幂等成功不改写；否则并发冲突拒（不覆盖未决意图）。
-                if (string.Equals(existing.ActionId, intent.ActionId, StringComparison.Ordinal)
-                    && SameIntent(existing, intent))
-                    return Ok(lease);
-                return Reject("intent_conflict");
-            }
+            if (handoff.Pending is not null) return Reject("intent_conflict"); // 异意图并发冲突（不覆盖未决意图）
 
             intent.RecordedAtUtc = now;
             handoff.Pending = intent;
@@ -620,6 +653,51 @@ public sealed class ArbitrationLeaseStore
     }
 
     // ============================================================
+    // R5.2 统一原子变更点（接线设计稿 v8 §4.2：Submission/Operations 一切变更=租约锁内一次原子发布）
+    // ============================================================
+
+    /// <summary>
+    /// 锁内原子变更（R5.2 唯一入口）：所有者四连校验（leaseId+ownerEpoch+expectedRevision+TTL 未过期且属当前所有者）
+    /// → 残件对账闸门 →（可选）切换闸门 → 变更函数（返回 null=提交变更；非 null=响亮拒绝原因、文件保持不变）
+    /// → Revision+1/HeartbeatSeq+1/LastHeartbeatUtc → 原子发布。
+    /// 变更函数在本店跨进程锁内同步执行=权威串行边界（§4.1a 容量检查/清理迁移/新登记同边界成立）；
+    /// 锁内只消费本地事实（I-3：变更函数不得做远端网络查询）。
+    /// </summary>
+    public LeaseMutateResult MutateHandoff(string leaseId, string ownerEpoch, long expectedRevision, Func<LogicalOwnerLeaseFile, string?> mutate, bool checkSwitchGate = false)
+    {
+        ArgumentNullException.ThrowIfNull(mutate);
+        return WithLock(read =>
+        {
+            if (read.Status == ArbitrationLeaseStatus.Corrupt) return MutateReject("corrupt");
+            if (read.Status == ArbitrationLeaseStatus.Unsupported) return MutateReject("unsupported_version");
+
+            var now = _utcNow();
+            var lease = read.File?.Lease;
+            if (lease is null
+                || !string.Equals(lease.LeaseId, leaseId, StringComparison.Ordinal)
+                || !string.Equals(lease.OwnerEpoch, ownerEpoch, StringComparison.Ordinal)
+                || read.File!.Revision != expectedRevision
+                || IsOwnerExpired(lease))
+                return MutateReject("lease_stale_generation");
+
+            if (read.File.Diag?.ResidueReconcilePending == true) return MutateReject("residue_reconcile_pending");
+            if (checkSwitchGate && read.File.Diag?.SwitchGateActive == true) return MutateReject("switch_gate_active");
+
+            var reason = mutate(read.File);
+            if (reason is not null) return MutateReject(reason);
+
+            read.File.Revision += 1;
+            lease.HeartbeatSeq += 1;
+            lease.LastHeartbeatUtc = now;
+            Publish(read.File);
+            _lastOwnerWriteMono = _monotonic(); // 一律 Publish 成功后刷新（R5.1 四轮 P1-② 纪律延伸）
+            return new LeaseMutateResult { Success = true, Reason = null, File = read.File };
+        });
+    }
+
+    private static LeaseMutateResult MutateReject(string reason) => new() { Success = false, Reason = reason, File = null };
+
+    // ============================================================
 
     /// <summary>
     /// 跨进程锁内执行「读取→判定→校验→更新→发布」全程。
@@ -636,6 +714,7 @@ public sealed class ArbitrationLeaseStore
     /// <summary>原子发布：UTF8 无 BOM + 临时文件（同目录 ".guid.tmp"）→ 同目录原子替换（overwrite），finally 清残件。</summary>
     private void Publish(LogicalOwnerLeaseFile file)
     {
+        file.Version = SupportedVersion; // §4.0：写入一律 version 2（v1 向后读兼容只发生在读取方向）
         var bytes = Utf8NoBom.GetBytes(JsonSerializer.Serialize(file, JsonOptions));
         var tmp = Path.Combine(_configDir, ".lease-" + Guid.NewGuid().ToString("N") + ".tmp");
         try
@@ -652,6 +731,55 @@ public sealed class ArbitrationLeaseStore
     /// <summary>UTC 诊断性 TTL 判定（仅用于 Read 状态展示；§6.3：UTC 仅诊断，不作资格裁决依据）。</summary>
     private static bool IsExpired(LeaseSegment lease, DateTimeOffset now)
         => lease.LastHeartbeatUtc.AddSeconds(lease.TtlSeconds) < now;
+
+    /// <summary>v2 责任段结构校验：Submission 完整身份/枚举、Operations 必填身份与状态枚举合法、RequestIdentity 唯一。</summary>
+    private static bool ValidateHandoffSegment(LeaseHandoffSegment? handoff, out string detail)
+    {
+        detail = "";
+        if (handoff is null) return true;
+        if (handoff.Operations is null)
+        {
+            detail = "租约文件 v2 Handoff.Operations 缺失（责任完整性校验失败），原件保留留痕。";
+            return false;
+        }
+
+        if (handoff.Submission is { } sub)
+        {
+            if (string.IsNullOrWhiteSpace(sub.SubmissionIdentity) || sub.SendSeq < 1
+                || !Enum.IsDefined(sub.State))
+            {
+                detail = "租约文件 v2 Submission 身份/枚举非法，原件保留留痕。";
+                return false;
+            }
+
+            // 关联一致性：未决发送必须有对应操作记录（孤儿 Submission=交叉不一致，不得推导空闲/可发送）。
+            var linked = handoff.Operations.Any(o => o is not null
+                && string.Equals(o.SubmissionIdentity, sub.SubmissionIdentity, StringComparison.Ordinal)
+                && o.LastSendSeq == sub.SendSeq);
+            if (!linked)
+            {
+                detail = "租约文件 v2 Submission 无关联 Operations 记录（交叉不一致），原件保留留痕。";
+                return false;
+            }
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var op in handoff.Operations)
+        {
+            if (op is null
+                || string.IsNullOrWhiteSpace(op.RequestIdentity)
+                || string.IsNullOrWhiteSpace(op.CandidateId)
+                || !Enum.IsDefined(op.RequestState)
+                || !Enum.IsDefined(op.Zone)
+                || !seen.Add(op.RequestIdentity))
+            {
+                detail = "租约文件 v2 Operations 记录身份/枚举/唯一性非法，原件保留留痕。";
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     /// <summary>残件匹配（P2-⑥复核：仅本组件专属命名 ".lease-*.tmp"，不波及配置根其他文件）。</summary>
     private static bool IsLeaseResidueFileName(string name)

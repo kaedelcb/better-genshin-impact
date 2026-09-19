@@ -490,7 +490,8 @@ public static class ArbitrationOrdering
                 || !string.Equals(first.Intent, c.Intent, StringComparison.Ordinal)
                 || first.Tier != c.Tier
                 || first.Priority != c.Priority
-                || Nullable.Compare(first.ScheduledAt, c.ScheduledAt) != 0)
+                || Nullable.Compare(first.ScheduledAt, c.ScheduledAt) != 0
+                || !string.Equals(members[0].Entry.BindingDiscriminator, members[i].Entry.BindingDiscriminator, StringComparison.Ordinal))
             {
                 return true;
             }
