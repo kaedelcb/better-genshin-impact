@@ -1,7 +1,7 @@
 # 一条龙 R4 施工分解（2026-09-19 定案稿，ASTRA 一轮会诊修订后）
 
 > 阶段：R4（增强能力承接）开工前分解。本文是 R4.0–R4.10 的施工图纸。
-> 上游合同：[总计划](../../../槲寄生调度器总计划.md) §3.1/§3.1a/§3.2/§3.3/§3.4/§4、
+> 上游合同：[总计划](../../槲寄生调度器总计划.md) §3.1/§3.1a/§3.2/§3.3/§3.4/§4、
 > [审计方案](onedragon-public-compatibility-audit-2026-09-17.md) §7–§9/§11、
 > [R2 兼容矩阵](onedragon-r2-compat-matrix-2026-09-18.md)、[R3 开工定案](onedragon-r3-prework-contracts-2026-09-18.md)、
 > [对照表](onedragon-public-vs-teabag-comparison-2026-09-17.md) §8、`Test/OneDragonMigration/README.md`。
