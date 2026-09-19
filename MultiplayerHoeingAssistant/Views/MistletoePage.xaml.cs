@@ -26,6 +26,10 @@ public partial class MistletoePage : UserControl
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+        // R4.8 Batch D：页面常驻可视树（仅 Visibility 切换），Unloaded 只在窗口拆除时触发——此时停任务中心刷新表
+        Unloaded += (_, _) => Vm?.TaskCenter.StopAutoRefresh();
+        // 二轮（重要2）：重新 Loaded 恢复刷新（幂等；构造已启动时调用无副作用）
+        Loaded += (_, _) => Vm?.TaskCenter.StartAutoRefresh();
     }
 
     // ================= 流程图节点跳转定位 =================

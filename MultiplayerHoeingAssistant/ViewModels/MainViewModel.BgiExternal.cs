@@ -9,6 +9,21 @@ public partial class MainViewModel
     /// <summary>[切片1] ext.event 事件通道客户端（BgiExternalClient SDK）；null = 尚未建立/已降级。</summary>
     private BgiExternalClient? _externalClient;
 
+    /// <summary>R4.8 Batch D：任务中心进程内宿主字段（惰性创建；退出路径 best-effort 收敛后置 null）。</summary>
+    private TaskCenterHost? _taskCenterHost;
+
+    /// <summary>R4.8 二轮（阻断4）：退出收敛标志——AddLog 在此期间跳过 UI 派发（Shutdown 的宿主日志回调不得与退出路径互等）。</summary>
+    private volatile bool _disposing;
+
+    /// <summary>
+    /// R4.8 Batch D：任务中心进程内宿主（槲寄生 Tab1 面板与 R4.9 启动移交共用同一实例）。
+    /// 惰性创建；宿主与 Store 构造零文件副作用（目录推迟到首次写入才创建，二轮 重要2）。
+    /// 配置面与运行存储在 %APPDATA%/NexusBGI 下（Default* 路径），不碰 BGI User 目录。
+    /// </summary>
+    public TaskCenterHost TaskCenterHost => _taskCenterHost ??= new TaskCenterHost(
+        WorkflowStore.DefaultFlowsDir(), RunStore.DefaultRunsDir(), ResourceCatalogService.DefaultCacheFile(),
+        () => _externalClient, AddLog);
+
     /// <summary>[切片1] 事件通道探测退避：Legacy（老 BGI）或暂时连不上时，到此时间点之前不再探测。</summary>
     private DateTime _externalNextProbeUtc = DateTime.MinValue;
     /// <summary>[切片4] 事件驱动维护的 ext.task.status 快照（SDK 基线/跳号/事件触发刷新产物）；null = 尚未取得。</summary>

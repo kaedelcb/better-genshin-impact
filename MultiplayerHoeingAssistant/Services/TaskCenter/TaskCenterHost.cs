@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -62,7 +63,7 @@ public sealed class TaskCenterHost
     private readonly object _gate = new();
     private readonly Dictionary<string, DriveEntry> _drives = new(StringComparer.Ordinal); // key=workflowId（互斥保证唯一）
     private readonly HashSet<string> _reservedWorkflows = new(StringComparer.Ordinal); // 预留（CreateRun 窗口覆盖）
-    private bool _recovered;
+    private Task? _recoverTask; // 恢复屏障任务（R4.8 二轮 阻断5：并发 Start/Resume 共同 await 同一扫描，失败重置允许重试）
     private bool _shutdown;
 
     private sealed class DriveEntry
@@ -103,18 +104,37 @@ public sealed class TaskCenterHost
     public ResourceCatalogService Catalog => _catalog;
 
     /// <summary>启动屏障（一轮 B5）：任何 Start/Resume 前完成一次恢复扫描（Interrupted/Unknown 标记+留痕，绝不自动恢复）。幂等。</summary>
-    public void EnsureRecovered()
+    public void EnsureRecovered() => EnsureRecoveredAsync().GetAwaiter().GetResult();
+
+    /// <summary>恢复屏障任务（二轮 阻断5）：所有 Start/Resume 共同 await 同一扫描任务——扫描完成前任何入口不得越过；
+    /// 扫描失败重置为 null，下次调用重新扫描（不留永久假屏障）。</summary>
+    private Task EnsureRecoveredAsync()
     {
         lock (_gate)
         {
-            if (_recovered) return;
-            _recovered = true;
+            _recoverTask ??= RecoverScanAsync();
+            return _recoverTask;
         }
-        foreach (var run in _runs.RecoverOnStart())
+    }
+
+    private async Task RecoverScanAsync()
+    {
+        try
         {
-            _log?.Invoke(run.State == WorkflowRunState.Unknown
-                ? $"[任务中心] 恢复扫描：运行 {run.RunId}（流程 {run.WorkflowId}）存在在飞/未确认事实 → Unknown（需对账后才可恢复，禁止自动重跑）"
-                : $"[任务中心] 恢复扫描：运行 {run.RunId}（流程 {run.WorkflowId}）→ Interrupted（可显式恢复）");
+            await Task.Run(() =>
+            {
+                foreach (var run in _runs.RecoverOnStart())
+                {
+                    _log?.Invoke(run.State == WorkflowRunState.Unknown
+                        ? $"[任务中心] 恢复扫描：运行 {run.RunId}（流程 {run.WorkflowId}）存在在飞/未确认事实 → Unknown（需对账后才可恢复，禁止自动重跑）"
+                        : $"[任务中心] 恢复扫描：运行 {run.RunId}（流程 {run.WorkflowId}）→ Interrupted（可显式恢复）");
+                }
+            }).ConfigureAwait(false);
+        }
+        catch
+        {
+            lock (_gate) _recoverTask = null; // 失败允许重试
+            throw;
         }
     }
 
@@ -124,8 +144,23 @@ public sealed class TaskCenterHost
     /// <summary>一致性快照加载（编辑/预览用；隔离文件响亮抛出）。</summary>
     public WorkflowSnapshot LoadFlowSnapshot(string workflowId) => _workflows.LoadSnapshot(workflowId);
 
-    /// <summary>保存流程定义（修订守卫；返回新修订号）。</summary>
-    public string SaveFlow(WorkflowDocument doc, string? expectedRevision) => _workflows.Save(doc, expectedRevision);
+    /// <summary>保存流程定义（修订守卫；返回新修订号）。
+    /// 二轮（阻断2）：candidate-ready 候选只读——宿主层独立禁写（不依赖 UI 列表新鲜度；激活归 R5 专用入口）。</summary>
+    public string SaveFlow(WorkflowDocument doc, string? expectedRevision)
+    {
+        if (doc.WorkflowId is { } id)
+        {
+            try
+            {
+                if (string.Equals(_workflows.LoadSnapshot(id).Document.Activation?.Status,
+                        "candidate-ready", StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        "candidate-ready 候选流程为只读预览（激活归 R5 专用入口），禁止经任务中心保存覆盖。");
+            }
+            catch (FileNotFoundException) { /* 新建流程：无既有文件可查，放行 */ }
+        }
+        return _workflows.Save(doc, expectedRevision);
+    }
 
     /// <summary>活动运行（占用槽位或需关注：Planned/Running/Waiting/Completing/Paused/Unknown/Interrupted，UpdatedAt 倒序）。</summary>
     public IReadOnlyList<WorkflowRunRecord> ListActiveRuns()
@@ -151,9 +186,9 @@ public sealed class TaskCenterHost
     /// 启动流程运行（互斥护栏 + 就绪守卫 + 预检反馈 → 后台驱动在册）。
     /// Registered=已受理（运行记录随后出现在 Store）；Unavailable=响亮拒绝（原因可读）。
     /// </summary>
-    public Task<HostActionResult> StartWorkflowAsync(string workflowId)
+    public async Task<HostActionResult> StartWorkflowAsync(string workflowId)
     {
-        EnsureRecovered();
+        await EnsureRecoveredAsync().ConfigureAwait(false);
         WorkflowSnapshot snapshot;
         try
         {
@@ -161,62 +196,90 @@ public sealed class TaskCenterHost
         }
         catch (Exception ex)
         {
-            return Task.FromResult(HostActionResult.Unavailable(ex.Message));
+            return HostActionResult.Unavailable(ex.Message);
         }
+        // 二轮（阻断2）：候选只读——宿主层独立禁启动（不依赖 UI 列表新鲜度）
+        if (string.Equals(snapshot.Document.Activation?.Status, "candidate-ready", StringComparison.Ordinal))
+            return HostActionResult.Unavailable("candidate-ready 候选流程为只读预览，禁止启动（激活归 R5 专用入口）");
 
         BgiExternalClient? client;
         lock (_gate)
         {
-            if (_shutdown) return Task.FromResult(HostActionResult.Unavailable("任务中心宿主已关闭"));
+            if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
             var readiness = ExecutionReadiness();
             if (!readiness.Ready)
-                return Task.FromResult(HostActionResult.Unavailable(readiness.Reason!));
+                return HostActionResult.Unavailable(readiness.Reason!);
             client = _clientAccessor();
 
             // 同流程互斥（一轮 B4）：活动态/Unknown/本进程预留+驱动 全集合检查
             var sameFlow = _runs.List().Where(r => r.WorkflowId == workflowId).ToList();
             if (sameFlow.Any(r => ActiveStates.Contains(r.State)))
-                return Task.FromResult(HostActionResult.Unavailable("该流程已有活动运行（同流程同时只允许一个运行）"));
+                return HostActionResult.Unavailable("该流程已有活动运行（同流程同时只允许一个运行）");
             if (sameFlow.Any(r => r.State == WorkflowRunState.Unknown))
-                return Task.FromResult(HostActionResult.Unavailable("该流程存在结果不确定（Unknown）的运行，需先对账再启动"));
+                return HostActionResult.Unavailable("该流程存在结果不确定（Unknown）的运行，需先对账再启动");
             if (_reservedWorkflows.Contains(workflowId) || _drives.ContainsKey(workflowId))
-                return Task.FromResult(HostActionResult.Unavailable("该流程运行正在启动/驱动中"));
+                return HostActionResult.Unavailable("该流程运行正在启动/驱动中");
             _reservedWorkflows.Add(workflowId); // 预留：覆盖「检查 → CreateRun 落盘」窗口
         }
 
         // 引擎 StartAsync 内权威预检（同步响亮抛出 → LaunchDrive 捕获转 Unavailable 带原因，UX 反馈不另建重复预检）
-        var runner = CreateRunner(client);
-        return Task.FromResult(LaunchDrive(workflowId, runner,
-            cts => runner.StartAsync(workflowId, cts.Token), $"已受理启动（流程「{snapshot.Document.Name}」）"));
+        // 二轮（重要5）：组装失败必须释放预留槽，否则该流程被永久拒绝
+        WorkflowRunner runner;
+        try
+        {
+            runner = CreateRunner(client);
+        }
+        catch (Exception ex)
+        {
+            lock (_gate) _reservedWorkflows.Remove(workflowId);
+            return HostActionResult.Unavailable("执行组件组装失败：" + ex.Message);
+        }
+        return LaunchDrive(workflowId, runner,
+            cts => runner.StartAsync(workflowId, cts.Token), $"已受理启动（流程「{snapshot.Document.Name}」）");
     }
 
     /// <summary>显式恢复运行（Interrupted/Paused；Unknown 拒绝——需先对账）。与 Start 共用互斥临界区。</summary>
-    public Task<HostActionResult> ResumeRunAsync(string runId)
+    public async Task<HostActionResult> ResumeRunAsync(string runId)
     {
-        EnsureRecovered();
+        await EnsureRecoveredAsync().ConfigureAwait(false);
         var run = _runs.Load(runId);
-        if (run is null) return Task.FromResult(HostActionResult.Unavailable("运行记录不存在：" + runId));
+        if (run is null) return HostActionResult.Unavailable("运行记录不存在：" + runId);
         if (run.State == WorkflowRunState.Unknown)
-            return Task.FromResult(HostActionResult.Unavailable("运行结果不确定（Unknown），需先按幂等键+job 查询对账，禁止自动恢复"));
+            return HostActionResult.Unavailable("运行结果不确定（Unknown），需先按幂等键+job 查询对账，禁止自动恢复");
         if (run.State is not (WorkflowRunState.Interrupted or WorkflowRunState.Paused))
-            return Task.FromResult(HostActionResult.Unavailable($"仅 Interrupted/Paused 可恢复（当前 {run.State}）"));
+            return HostActionResult.Unavailable($"仅 Interrupted/Paused 可恢复（当前 {run.State}）");
 
         BgiExternalClient? client;
         lock (_gate)
         {
-            if (_shutdown) return Task.FromResult(HostActionResult.Unavailable("任务中心宿主已关闭"));
+            if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
             var readiness = ExecutionReadiness();
             if (!readiness.Ready)
-                return Task.FromResult(HostActionResult.Unavailable(readiness.Reason!));
+                return HostActionResult.Unavailable(readiness.Reason!);
             client = _clientAccessor();
+            // 二轮（阻断5）：与 Start 同一互斥判定——同流程其他活动运行/Unknown 一律拒绝（仅排除自身这条可恢复记录）
+            var sameFlow = _runs.List().Where(r => r.WorkflowId == run.WorkflowId && r.RunId != runId).ToList();
+            if (sameFlow.Any(r => ActiveStates.Contains(r.State)))
+                return HostActionResult.Unavailable("该流程已有其他活动运行（同流程同时只允许一个运行）");
+            if (sameFlow.Any(r => r.State == WorkflowRunState.Unknown))
+                return HostActionResult.Unavailable("该流程存在结果不确定（Unknown）的其他运行，需先对账再恢复");
             if (_reservedWorkflows.Contains(run.WorkflowId) || _drives.ContainsKey(run.WorkflowId))
-                return Task.FromResult(HostActionResult.Unavailable("该流程已有运行正在驱动（禁止双驱动）"));
+                return HostActionResult.Unavailable("该流程已有运行正在驱动（禁止双驱动）");
             _reservedWorkflows.Add(run.WorkflowId);
         }
 
-        var runner = CreateRunner(client);
-        return Task.FromResult(LaunchDrive(run.WorkflowId, runner,
-            cts => runner.ResumeAsync(runId, cts.Token), $"已受理恢复（运行 {runId}，游标身份重定位）"));
+        WorkflowRunner runner;
+        try
+        {
+            runner = CreateRunner(client);
+        }
+        catch (Exception ex)
+        {
+            lock (_gate) _reservedWorkflows.Remove(run.WorkflowId);
+            return HostActionResult.Unavailable("执行组件组装失败：" + ex.Message);
+        }
+        return LaunchDrive(run.WorkflowId, runner,
+            cts => runner.ResumeAsync(runId, cts.Token), $"已受理恢复（运行 {runId}，游标身份重定位）");
     }
 
     /// <summary>

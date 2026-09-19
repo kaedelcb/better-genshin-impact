@@ -19,6 +19,7 @@ public class WorkflowStoreTests : IDisposable
     public WorkflowStoreTests()
     {
         _dir = Path.Combine(Path.GetTempPath(), "wfstore-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(_dir); // R4.8 二轮：Store 构造零副作用（目录首次写入才建），测试落盘文件自备目录
     }
 
     public void Dispose()

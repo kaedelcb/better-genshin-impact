@@ -22,6 +22,7 @@ public sealed record WorkflowCatalogEntry(
     WorkflowFileStatus Status,
     string? QuarantineReason,
     IReadOnlyList<string> UnsupportedKinds,
+    string? ActivationStatus,
     string FilePath);
 
 /// <summary>修订冲突：期望修订与当前盘上字节哈希不一致（防并发/外部修改覆盖）。</summary>
@@ -67,9 +68,10 @@ public sealed class WorkflowStore
 
     public WorkflowStore(string flowsDir)
     {
+        // R4.8 二轮（重要2）：构造零副作用——目录推迟到首次写入才创建，
+        // 宿主/面板惰性创建或监控端绑定求值不再产生任何文件系统痕迹
         _flowsDir = flowsDir;
         _backupDir = Path.Combine(flowsDir, "_backup");
-        Directory.CreateDirectory(_flowsDir);
     }
 
     /// <summary>默认流程目录（%APPDATA%/NexusBGI/flows）。</summary>
@@ -90,6 +92,7 @@ public sealed class WorkflowStore
     public IReadOnlyList<WorkflowCatalogEntry> List()
     {
         var entries = new List<WorkflowCatalogEntry>();
+        if (!Directory.Exists(_flowsDir)) return entries; // 二轮：目录未建=空目录（构造不建目录）
         foreach (var file in Directory.EnumerateFiles(_flowsDir, "*.flow.json").OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
         {
             entries.Add(InspectFile(file));
@@ -147,6 +150,7 @@ public sealed class WorkflowStore
             }
 
             var bytes = Utf8NoBom.GetBytes(JsonSerializer.Serialize(doc, JsonOptions));
+            Directory.CreateDirectory(_flowsDir); // 二轮：首次写入才建目录
 
             // 备份既有版本（保留可回滚副本，含隔离文件的显式覆盖场景）
             if (exists)
@@ -196,7 +200,7 @@ public sealed class WorkflowStore
         catch (Exception ex)
         {
             return new WorkflowCatalogEntry(fallbackId, fallbackId, "", WorkflowFileStatus.Quarantined,
-                "readFailure:" + ex.GetType().Name, [], file);
+                "readFailure:" + ex.GetType().Name, [], null, file);
         }
         return InspectBytes(bytes, file);
     }
@@ -249,12 +253,13 @@ public sealed class WorkflowStore
             && !string.Equals(doc.WorkflowId, fallbackId, StringComparison.OrdinalIgnoreCase))
             return Quarantined(fallbackId, hash, "idFilenameMismatch", file);
         return new WorkflowCatalogEntry(id, doc.Name, hash, WorkflowFileStatus.Ready, null,
-            WorkflowKindCatalog.FindUnsupportedKinds(doc), file);
+            WorkflowKindCatalog.FindUnsupportedKinds(doc),
+            string.IsNullOrWhiteSpace(doc.Activation?.Status) ? null : doc.Activation!.Status, file);
     }
 
     private static WorkflowCatalogEntry Quarantined(string id, string hash, string reason, string file)
         => new(id, Path.GetFileNameWithoutExtension(file).Replace(".flow", ""), hash,
-            WorkflowFileStatus.Quarantined, reason, [], file);
+            WorkflowFileStatus.Quarantined, reason, [], null, file);
 
     internal static string NewWorkflowId() => "wf-" + Guid.NewGuid().ToString("N")[..8];
 

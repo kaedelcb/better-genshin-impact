@@ -1597,7 +1597,7 @@
                 </ScrollViewer>
             </Grid>
 
-            <!-- ======== Tab 1：任务中心（BGI 任务状态判断已落地，序列编排规划中） ======== -->
+            <!-- ======== Tab 1：任务中心（R4.8 Batch D：流程列表/保留式编辑/运行状态三卡；执行端限定） ======== -->
             <Grid>
                 <Grid.Style>
                     <Style TargetType="Grid">
@@ -1606,45 +1606,375 @@
                             <DataTrigger Binding="{Binding SelectedTabIndex}" Value="1">
                                 <Setter Property="Visibility" Value="Visible"/>
                             </DataTrigger>
+                            <!-- 双保险（R4.8 一轮 I1）：监控端内容整排隐藏——Tab 按钮已隐藏，内容再拦一道 -->
+                            <DataTrigger Binding="{Binding DataContext.IsExecutorMode, RelativeSource={RelativeSource AncestorType=Window}}" Value="False">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
                         </Style.Triggers>
                     </Style>
                 </Grid.Style>
-                <StackPanel>
-                    <!-- BGI 任务状态判断卡片（读 MainViewModel 状态快照，2s 刷新） -->
-                    <Border Style="{DynamicResource QuestCard}" VerticalAlignment="Top" Margin="0,20,0,0" Padding="24,20">
-                        <StackPanel>
-                            <TextBlock Text="📡  BGI 任务状态" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"/>
-                            <Border CornerRadius="5" Padding="8,2" HorizontalAlignment="Left" Margin="0,10,0,8">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="#299C97C0"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding BgiTaskRunning}" Value="True">
-                                                <Setter Property="Background" Value="#2948C87E"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <TextBlock Text="{Binding BgiTaskStatusText}" FontSize="10" Foreground="{DynamicResource Dim}"/>
-                            </Border>
-                            <TextBlock FontSize="12" Foreground="{DynamicResource Dim}" TextWrapping="Wrap">
-                                <Run Text="当前任务："/><Run Text="{Binding BgiCurrentTaskDisplay, Mode=OneWay}"/>
-                            </TextBlock>
-                        </StackPanel>
-                    </Border>
-                    <Border Style="{DynamicResource QuestCard}" VerticalAlignment="Top" Margin="0,12,0,0" Padding="24,20">
-                        <StackPanel>
-                            <TextBlock Text="⏳  任务中心 · 任务总序列指挥所" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"/>
-                            <Border CornerRadius="5" Padding="8,2" Background="#299C97C0" HorizontalAlignment="Left" Margin="0,8,0,10">
-                                <TextBlock Text="规划中" FontSize="10" Foreground="{DynamicResource Dim}"/>
-                            </Border>
-                            <TextBlock FontSize="12" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" LineHeight="20"
-                                       Text="构想：编排 BGI 的任务总序列——做什么任务、什么顺序、什么循环策略。沿用启动中心的树形分支节点交互，节点换成配置组/一条龙/JS 脚本。启动中心负责环境准备，跑完经「进入任务中心执行」节点交接到这里（交接时已会判断并记录上方这份 BGI 任务状态）。不取代 BGI 原生调度器，只做指挥；循环靠任务生命周期事件（切片 7 已铺好）链式推进。详见仓库根目录《槲寄生调度器总计划》§3。"/>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-            </Grid>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,20,0,20">
+                        <!-- BGI 任务状态判断卡片（读 MainViewModel 状态快照，2s 刷新） -->
+                        <Border Style="{DynamicResource QuestCard}" VerticalAlignment="Top" Padding="24,20">
+                            <StackPanel>
+                                <TextBlock Text="📡  BGI 任务状态" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"/>
+                                <Border CornerRadius="5" Padding="8,2" HorizontalAlignment="Left" Margin="0,10,0,8">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="#299C97C0"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding BgiTaskRunning}" Value="True">
+                                                    <Setter Property="Background" Value="#2948C87E"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding BgiTaskStatusText}" FontSize="10" Foreground="{DynamicResource Dim}"/>
+                                </Border>
+                                <TextBlock FontSize="12" Foreground="{DynamicResource Dim}" TextWrapping="Wrap">
+                                    <Run Text="当前任务："/><Run Text="{Binding BgiCurrentTaskDisplay, Mode=OneWay}"/>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
 
+                        <!-- ===== 流程列表卡 ===== -->
+                        <Border Style="{DynamicResource QuestCard}" Margin="0,12,0,0" Padding="24,20">
+                            <StackPanel>
+                                <Grid>
+                                    <TextBlock Text="🗂️  流程列表" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}" VerticalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <Button Content="刷新" Style="{DynamicResource BtnGhost}" Command="{Binding TaskCenter.RefreshCommand}" Margin="0,0,8,0"/>
+                                        <Button Content="新建流程" Style="{DynamicResource BtnGold}" Command="{Binding TaskCenter.NewFlowCommand}"/>
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock FontSize="11" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                           Text="candidate-ready 候选为只读预览（激活属 R5）；已隔离文件禁止一切写路径（原件保留）。"/>
+                                <ItemsControl ItemsSource="{Binding TaskCenter.Flows}" Margin="0,6,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{DynamicResource GoldLine}" BorderThickness="0,0,0,1" Padding="0,10">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"/>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                            <TextBlock Text="{Binding RevisionShort, StringFormat=rev {0}}" FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
+                                                            <Border CornerRadius="5" Padding="8,2" Background="#299C97C0" Margin="10,0,0,0">
+                                                                <TextBlock Text="{Binding StateBadge}" FontSize="10" Foreground="{DynamicResource Dim}"/>
+                                                            </Border>
+                                                        </StackPanel>
+                                                        <TextBlock Text="{Binding DetailNote}" FontSize="10" Foreground="#C8746A" TextWrapping="Wrap" Margin="0,4,0,0">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding DetailNote}" Value="{x:Null}">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding DetailNote}" Value="">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <Button Content="启动" Style="{DynamicResource BtnGold}" IsEnabled="{Binding CanStart}"
+                                                                Command="{Binding DataContext.TaskCenter.StartFlowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}" Margin="0,0,6,0"/>
+                                                        <Button Content="预览" Style="{DynamicResource BtnGhost}"
+                                                                Command="{Binding DataContext.TaskCenter.PreviewFlowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}" Margin="0,0,6,0"/>
+                                                        <Button Content="编辑" Style="{DynamicResource BtnGhost}" IsEnabled="{Binding CanEdit}"
+                                                                Command="{Binding DataContext.TaskCenter.EditFlowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                        <!-- ===== 流程预览卡（只读；候选与隔离文件的唯一查看口） ===== -->
+                        <Border Style="{DynamicResource QuestCard}" Margin="0,12,0,0" Padding="24,20"
+                                Visibility="{Binding TaskCenter.IsPreviewing, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <Grid>
+                                    <TextBlock Text="{Binding TaskCenter.Previewing.Title}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}" VerticalAlignment="Center"/>
+                                    <Button Content="关闭" Style="{DynamicResource BtnGhost}" HorizontalAlignment="Right" Command="{Binding TaskCenter.ClosePreviewCommand}"/>
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding TaskCenter.Previewing.Lines}" Margin="0,8,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding}" FontSize="11" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,1,0,0"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="{Binding TaskCenter.Previewing.Notice}" FontSize="11" Foreground="#C8A24A" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ===== 流程编辑卡（保留式编辑：只改触碰字段，未知字段/多触发器/多策略/loop 参数原样保留） ===== -->
+                        <Border Style="{DynamicResource QuestCard}" Margin="0,12,0,0" Padding="24,20"
+                                Visibility="{Binding TaskCenter.IsEditing, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding TaskCenter.Editing.Title}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"/>
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="流程名称" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Text="{Binding TaskCenter.Editing.NameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource GoldInput}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="触发器（trigger.time）" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Text="{Binding TaskCenter.Editing.TriggerTimeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 IsEnabled="{Binding TaskCenter.Editing.TriggerEditable}" Style="{StaticResource GoldInput}"/>
+                                        <TextBlock Text="{Binding TaskCenter.Editing.TriggerNote}" FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="循环（C08）" Style="{StaticResource FieldLabel}"/>
+                                        <ComboBox Style="{StaticResource GoldComboBox}" SelectedIndex="{Binding TaskCenter.Editing.LoopModeIndex, Mode=TwoWay}">
+                                            <ComboBoxItem Content="（无循环）" Style="{StaticResource GoldComboItem}"/>
+                                            <ComboBoxItem Content="scheduled（到点开始每轮）" Style="{StaticResource GoldComboItem}"/>
+                                            <ComboBoxItem Content="immediate（立即接续）" Style="{StaticResource GoldComboItem}"/>
+                                            <ComboBoxItem Content="保留自定义（不修改）" Style="{StaticResource GoldComboItem}"/>
+                                        </ComboBox>
+                                        <TextBlock Text="{Binding TaskCenter.Editing.LoopNote}" FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="收尾动作（至多一个 · E3）" Style="{StaticResource FieldLabel}"/>
+                                        <ComboBox Style="{StaticResource GoldComboBox}" SelectedIndex="{Binding TaskCenter.Editing.TerminalActionIndex, Mode=TwoWay}">
+                                            <ComboBoxItem Content="（无收尾动作）" Style="{StaticResource GoldComboItem}"/>
+                                            <ComboBoxItem Content="closeGame（关游戏）" Style="{StaticResource GoldComboItem}"/>
+                                            <ComboBoxItem Content="closeSoftware（关软件）" Style="{StaticResource GoldComboItem}"/>
+                                            <ComboBoxItem Content="closeGameAndSoftware（关游戏+软件）" Style="{StaticResource GoldComboItem}"/>
+                                            <ComboBoxItem Content="shutdown（关机）" Style="{StaticResource GoldComboItem}"/>
+                                            <ComboBoxItem Content="保留自定义（不修改）" Style="{StaticResource GoldComboItem}"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="节点（↑↓ 调序，无拖拽编辑器；顺序即执行序）" FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,12,0,4"/>
+                                <ItemsControl ItemsSource="{Binding TaskCenter.Editing.Nodes}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{DynamicResource GoldLine}" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,0,6">
+                                                <StackPanel>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="{Binding Index, StringFormat='{}{0}.'}" FontSize="12" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                            <TextBlock Text="{Binding KindName}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                            <TextBlock Text="{Binding ConfigName}" FontSize="12" Foreground="{DynamicResource GoldText}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                            <TextBlock Text="{Binding RevisionShort, StringFormat=rev {0}}" FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <Button Content="↑" Style="{DynamicResource BtnGhost}" Command="{Binding DataContext.TaskCenter.Editing.MoveNodeUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Margin="0,0,4,0" Padding="8,0"/>
+                                                            <Button Content="↓" Style="{DynamicResource BtnGhost}" Command="{Binding DataContext.TaskCenter.Editing.MoveNodeDownCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Margin="0,0,4,0" Padding="8,0"/>
+                                                            <Button Content="删除" Style="{DynamicResource BtnGhost}" Command="{Binding DataContext.TaskCenter.Editing.RemoveNodeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                    <TextBlock Text="{Binding StrategySummary}" FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                                    <!-- 账号策略行（uid/bindingCode 三分：原值驻草稿/掩码展示/编辑框空=不修改） -->
+                                                    <StackPanel Visibility="{Binding HasAccount, Converter={StaticResource BoolToVis}}" Margin="0,6,0,0">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="12"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel>
+                                                                <TextBlock FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap">
+                                                                    <Run Text="账号 uid（掩码："/><Run Text="{Binding AccountUidMasked, Mode=OneWay}"/><Run Text="；留空=不修改）"/>
+                                                                </TextBlock>
+                                                                <TextBox Text="{Binding AccountUidEdit, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource GoldInput}" Height="26"/>
+                                                            </StackPanel>
+                                                            <StackPanel Grid.Column="2">
+                                                                <TextBlock FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap">
+                                                                    <Run Text="bindingCode（掩码："/><Run Text="{Binding BindingCodeMasked, Mode=OneWay}"/><Run Text="；留空=不修改）"/>
+                                                                </TextBlock>
+                                                                <TextBox Text="{Binding BindingCodeEdit, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource GoldInput}" Height="26"/>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </StackPanel>
+
+                                                    <!-- 兑换码策略行 -->
+                                                    <StackPanel Visibility="{Binding HasRedeem, Converter={StaticResource BoolToVis}}" Margin="0,6,0,0">
+                                                        <TextBlock FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap">
+                                                            <Run Text="兑换码 uid（掩码："/><Run Text="{Binding RedeemUidMasked, Mode=OneWay}"/><Run Text="；留空=不修改）"/>
+                                                        </TextBlock>
+                                                        <TextBox Text="{Binding RedeemUidEdit, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource GoldInput}" Height="26" Width="260" HorizontalAlignment="Left"/>
+                                                    </StackPanel>
+
+                                                    <!-- 工作日策略行 -->
+                                                    <WrapPanel Visibility="{Binding HasWeekdays, Converter={StaticResource BoolToVis}}" Margin="0,6,0,0">
+                                                        <TextBlock Text="工作日" FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                        <CheckBox Content="一" IsChecked="{Binding W1, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" Margin="0,0,6,0"/>
+                                                        <CheckBox Content="二" IsChecked="{Binding W2, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" Margin="0,0,6,0"/>
+                                                        <CheckBox Content="三" IsChecked="{Binding W3, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" Margin="0,0,6,0"/>
+                                                        <CheckBox Content="四" IsChecked="{Binding W4, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" Margin="0,0,6,0"/>
+                                                        <CheckBox Content="五" IsChecked="{Binding W5, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" Margin="0,0,6,0"/>
+                                                        <CheckBox Content="六" IsChecked="{Binding W6, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" Margin="0,0,6,0"/>
+                                                        <CheckBox Content="日" IsChecked="{Binding W7, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
+                                                    </WrapPanel>
+
+                                                    <!-- 策略增删（加类型不改序列化框架，锚点 6） -->
+                                                    <WrapPanel Margin="0,6,0,0">
+                                                        <Button Content="＋账号" Style="{DynamicResource BtnGhost}" Command="{Binding AddAccountCommand}" Margin="0,0,4,0" Padding="8,0"/>
+                                                        <Button Content="＋兑换码" Style="{DynamicResource BtnGhost}" Command="{Binding AddRedeemCommand}" Margin="0,0,4,0" Padding="8,0"/>
+                                                        <Button Content="＋工作日" Style="{DynamicResource BtnGhost}" Command="{Binding AddWeekdaysCommand}" Margin="0,0,8,0" Padding="8,0"/>
+                                                        <Button Content="－账号" Style="{DynamicResource BtnGhost}" Command="{Binding RemoveAccountCommand}" IsEnabled="{Binding HasAccount}" Margin="0,0,4,0" Padding="8,0"/>
+                                                        <Button Content="－兑换码" Style="{DynamicResource BtnGhost}" Command="{Binding RemoveRedeemCommand}" IsEnabled="{Binding HasRedeem}" Margin="0,0,4,0" Padding="8,0"/>
+                                                        <Button Content="－工作日" Style="{DynamicResource BtnGhost}" Command="{Binding RemoveWeekdaysCommand}" IsEnabled="{Binding HasWeekdays}" Padding="8,0"/>
+                                                    </WrapPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- 追加节点（来源=资源目录快照；单项任务不在追加源） -->
+                                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                    <ComboBox Width="320" Style="{StaticResource GoldComboBox}"
+                                              ItemsSource="{Binding TaskCenter.Editing.AppendSources}"
+                                              SelectedIndex="{Binding TaskCenter.Editing.AppendSourceIndex, Mode=TwoWay}"/>
+                                    <Button Content="追加节点" Style="{DynamicResource BtnGhost}" Margin="8,0,0,0" Command="{Binding TaskCenter.Editing.AppendNodeCommand}"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding TaskCenter.Editing.AppendStatusText}" FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                <TextBlock Text="{Binding TaskCenter.CatalogStatusText}" FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                <TextBlock Text="uid/bindingCode 掩码不落盘、不进协议；掩码显示的原值只存本机流程文件。" FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                    <Button Content="保存为新修订" Style="{DynamicResource BtnGold}" Command="{Binding TaskCenter.SaveFlowCommand}"/>
+                                    <Button Content="放弃改动" Style="{DynamicResource BtnGhost}" Margin="8,0,0,0" Command="{Binding TaskCenter.DiscardEditCommand}"/>
+                                </StackPanel>
+                                <TextBlock Text="保存生成新修订号；正在运行的实例不受影响，「重载修订」在下一节点边界生效（锚点 2）。修订冲突时保留草稿不丢。" FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <!-- ===== 运行状态卡 ===== -->
+                        <Border Style="{DynamicResource QuestCard}" Margin="0,12,0,0" Padding="24,20">
+                            <StackPanel>
+                                <TextBlock Text="🎛️  运行状态" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"/>
+                                <TextBlock Text="{Binding TaskCenter.StatusMessage}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding TaskCenter.StatusIsError}" Value="True">
+                                                    <Setter Property="Foreground" Value="#C8746A"/>
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding TaskCenter.StatusIsError}" Value="False">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+
+                                <TextBlock Text="当前没有在册运行" FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,8,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding TaskCenter.HasActiveRuns}" Value="False">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <ItemsControl ItemsSource="{Binding TaskCenter.ActiveRuns}" Margin="0,8,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{DynamicResource GoldLine}" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,8">
+                                                <StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding RunIdShort, StringFormat=run-{0}}" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                        <Border CornerRadius="5" Padding="8,2" Background="#2948C87E">
+                                                            <TextBlock Text="{Binding StateText}" FontSize="10" Foreground="{DynamicResource GoldText}"/>
+                                                        </Border>
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding CurrentNodeText}" FontSize="12" Foreground="{DynamicResource GoldText}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding ProgressChainText}" FontSize="10" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                                    <TextBlock Text="{Binding NoteText}" FontSize="10" Foreground="#C8A24A" TextWrapping="Wrap" Margin="0,4,0,0">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding NoteText}" Value="{x:Null}">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding NoteText}" Value="">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <WrapPanel Margin="0,8,0,0">
+                                                        <Button Content="停止" Style="{DynamicResource BtnGhost}" IsEnabled="{Binding CanStop}"
+                                                                Command="{Binding DataContext.TaskCenter.StopRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}" Margin="0,0,6,0"/>
+                                                        <Button Content="跳过当前节点" Style="{DynamicResource BtnGhost}" IsEnabled="{Binding CanSkip}"
+                                                                Command="{Binding DataContext.TaskCenter.SkipNodeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}" Margin="0,0,6,0"/>
+                                                        <Button Content="暂停" Style="{DynamicResource BtnGhost}" IsEnabled="{Binding CanPause}"
+                                                                Command="{Binding DataContext.TaskCenter.PauseRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}" Margin="0,0,6,0"/>
+                                                        <Button Content="重载修订" Style="{DynamicResource BtnGhost}" IsEnabled="{Binding CanReload}"
+                                                                Command="{Binding DataContext.TaskCenter.ReloadRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}" Margin="0,0,6,0"/>
+                                                        <Button Content="恢复" Style="{DynamicResource BtnGold}" IsEnabled="{Binding CanResume}"
+                                                                Command="{Binding DataContext.TaskCenter.ResumeRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}"/>
+                                                    </WrapPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <TextBlock Text="历史运行（最近 20 条 · 只读）" FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,10,0,4"/>
+                                <ItemsControl ItemsSource="{Binding TaskCenter.HistoryRuns}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{DynamicResource GoldLine}" BorderThickness="0,0,0,1" Padding="0,6">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding RunIdShort, StringFormat=run-{0}}" FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                    <Border CornerRadius="5" Padding="8,2" Background="#299C97C0" Margin="0,0,10,0">
+                                                        <TextBlock Text="{Binding StateBadge}" FontSize="10" Foreground="{DynamicResource Dim}"/>
+                                                    </Border>
+                                                    <TextBlock Text="{Binding Summary}" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
             <!-- ======== Tab 2：执行策略（规划中） ======== -->
             <Grid>
                 <Grid.Style>

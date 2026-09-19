@@ -3862,6 +3862,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// </summary>
     public void Shutdown()
     {
+        _disposing = true; // R4.8 二轮（阻断4）：此后的日志回调跳过 UI 派发，避免与退出路径等待互等
         _localConfigChannel?.Dispose();
         _localConfigChannel = null;
         // 断开 SignalR 连接（HubConnection 未 Dispose 会持有网络连接/心跳定时资源）
@@ -3890,6 +3891,18 @@ public partial class MainViewModel : INotifyPropertyChanged
         _processMonitor?.Dispose();
         _processMonitor = null;
         _commandExecutor = null;
+
+        // [R4.8] 任务中心宿主退出收敛（在飞运行终态化为 Unknown/Interrupted，内部 10s 预算）；
+        // 线程池等待避免 UI 同步上下文死锁；退出路径异常吞掉不阻断进程退出
+        try
+        {
+            if (_taskCenterHost is { } tc)
+            {
+                Task.Run(tc.ShutdownAsync).Wait(TimeSpan.FromSeconds(12));
+            }
+        }
+        catch { /* 退出路径不阻断 */ }
+        _taskCenterHost = null;
 
         // [切片1] 释放 ext.event 事件通道（命名管道 + 内部重连循环）
         _externalClient?.Dispose();
@@ -6663,13 +6676,17 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     internal void AddLog(string message)
     {
-        Application.Current.Dispatcher.Invoke(() =>
+        // R4.8 二轮（阻断4）：退出收敛期间/Dispatcher 已关闭时跳过 UI 更新，仅落文件（宿主 ShutdownAsync 日志回调不得与退出路径 Wait 互等）
+        if (!_disposing && Application.Current?.Dispatcher is { HasShutdownStarted: false })
         {
-            CommandLogs.Insert(0, $"[{DateTime.Now:HH:mm:ss}] {message}");
-            if (CommandLogs.Count > 100)
-                CommandLogs.RemoveAt(CommandLogs.Count - 1);
-            CommandLogsText = string.Join("\n", CommandLogs);
-        });
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                CommandLogs.Insert(0, $"[{DateTime.Now:HH:mm:ss}] {message}");
+                if (CommandLogs.Count > 100)
+                    CommandLogs.RemoveAt(CommandLogs.Count - 1);
+                CommandLogsText = string.Join("\n", CommandLogs);
+            });
+        }
 
         // 同时写入文件：保存在助手程序目录 log/ 子目录，按日期 + Windows 会话 ID 分文件
         try

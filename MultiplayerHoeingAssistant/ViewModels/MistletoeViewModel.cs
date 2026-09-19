@@ -49,6 +49,11 @@ public sealed class MistletoeViewModel : ViewModelBase
         ArmedWatchdogs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasArmedWatchdogs));
         ArmedLogTriggers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasArmedLogTriggers));
 
+        // R4.8 Batch D：任务中心面板（流程列表/保留式编辑/运行状态三卡；宿主由 MainViewModel 惰性创建，
+        // 与 R4.9 启动移交共用同一实例；构造零文件副作用——目录首次写入才创建（二轮 重要2）；
+        // 页面 Unloaded 时 StopAutoRefresh 停表、Loaded 恢复）
+        TaskCenter = new TaskCenterPanelViewModel(_mainVm.TaskCenterHost, _mainVm.AddLog);
+
         _saveDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _saveDebounce.Tick += (_, _) =>
         {
@@ -96,6 +101,9 @@ public sealed class MistletoeViewModel : ViewModelBase
 
     /// <summary>返回耕地机主页（同 DodocoViewModel.BackCommand）。</summary>
     public RelayCommand BackCommand => new(_ => _mainVm.CurrentPage = AppPage.Home);
+
+    /// <summary>R4.8 Batch D：任务中心面板子 VM（Tab1 三张卡的数据源）。</summary>
+    public TaskCenterPanelViewModel TaskCenter { get; }
 
     // ================= 任务中心：BGI 任务状态判断（只读 LatestLocalStatus 快照，2s 定时拉取） =================
 

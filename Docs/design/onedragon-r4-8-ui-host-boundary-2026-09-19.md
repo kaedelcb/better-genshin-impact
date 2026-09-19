@@ -146,3 +146,24 @@ WorkflowSubmission 增加冻结字段（加法，JsonExtensionData 兼容旧记�
 | S2 | 能力 vs 离线分开展示 | 采纳（§4.6 拒绝文案 + §4.8 展示） |
 
 （后续轮次逐次追加）
+
+### 二轮（阶段终审：Batch D/E 执行效果，2026-09-19，11 文件 allowlist）——暂不通过 → 5 阻断/6 重要/3 建议全处置后回归 272/272：
+
+| # | 发现 | 处置 |
+|---|---|---|
+| 阻断1 | 保留式编辑实为全表单回写：自定义 loop mode 被清、未知收尾 action 被清、既有触发器被补 missPolicy、缺 time 触发器被删、days 无条件重建、名称无条件 Trim；失败重试污染「原值」语义 | 采纳：字段级基线 + 不可映射值新增「保留自定义（不修改）」索引项（Loop=3/Terminal=5）；保存改为 BuildSubmissionCopy（基线+编辑集生成提交副本，失败零污染）；uid/bindingCode/days 锚定构造基线；名称仅变化才 Trim 回写。夹具：复杂文档零修改保存逐字段保留 + uid 失败重试回基线 |
+| 阻断2 | IsCandidate 耦合 UnsupportedKinds==0 → 候选+未知类型显示为可编辑 active；列表过期窗口（条目 active/盘上已候选）；宿主无独立禁写边界 | 采纳：候选身份只依据 activation；BeginEdit 复核快照 activation（候选/缺 workflowId 拒绝编辑转预览）；宿主 SaveFlow 候选禁写 + StartWorkflowAsync 候选禁启动（双保险不依赖 UI 新鲜度）；StartFlowCommand 补 CanStart 守卫。夹具：候选+未知类型三处拒绝、过期列表复核 |
+| 阻断3 | 三处掩码 Run.Text 默认 TwoWay 绑只读属性（运行时绑定错误） | 采纳：显式 Mode=OneWay ×3 |
+| 阻断4 | Start/Resume 命令 Task.Run+GetResult 与 AddLog Dispatcher.Invoke 互等死锁；退出 Task.Run.Wait 有界但留清理竞态 | 采纳：命令真异步（async/await + 防重入 + 异常兜底）；Shutdown() 置 _disposing，AddLog 退出期跳 UI 派发仅落文件；宿主屏障 await ConfigureAwait(false) |
+| 阻断5 | _recovered 扫描前置位（并发越窗/失败不重试）；Resume 缺同流程活动/Unknown 护栏 | 采纳：屏障任务化（共同 await 同一扫描，失败重置重试）；Resume 复用 Start 互斥判定（排除自身）。夹具：并发 Start 仅一运行、Unknown+Interrupted 恢复拒绝 |
+| 重要1 | DetailNote/NoteText 默认 Collapsed 且无显示路径（隔离原因/运行附注永久不可见） | 采纳：默认可见，仅 null/空隐藏 |
+| 重要2 | 宿主经面板提前创建 flows 目录；定时器无恢复路径 | 采纳：WorkflowStore/RunStore 构造零副作用（目录首次写入才建）；面板 StartAutoRefresh + 页面 Loaded 恢复 |
+| 重要3 | 生产目录无刷新入口；RefreshCatalog 每 2s 重建下拉；已选资源消失静默改选第一项 | 采纳：面板构造/刷新命令 KickCatalogRefresh（异步防重入）；快照引用未变不重建；选择消失置未选+提示 |
+| 重要4 | 错误/状态出口未脱敏；失败重试「原值」漂移 | 采纳：SetStatus 展示前按草稿敏感值集掩码替换；基线锚定（见阻断1） |
+| 重要5 | Start/Resume 异常无兜底；CreateRunner 失败留预留槽；切换编辑静默丢冲突草稿 | 采纳：命令全 try/catch 结构化反馈；组装失败释放预留；GuardNoOpenDraft 拒切换/新建 |
+| 重要6 | 进度链混用修订/轮次（旧轮 outcome 冒充本轮）；历史新记录追加尾部破坏倒序 | 采纳：outcome 按当前轮次匹配+游标节点「运行中」优先+修订不一致显式标注；SyncCollection 按源序 Move 重排。夹具：历史刷新重排 |
+| 建议1 | 初始序号全 0；下拉索引未拒越界 | 采纳：构造 Renumber；setter 守卫 [-1 拒绝/上限] |
+| 建议2 | BeginEdit knownRevision 参数无效；缺 workflowId 文件保存致身份错位 | 采纳：参数移除；缺身份拒绝编辑（仅预览） |
+| 建议3 | ActivationStatus 三处构造点正确；XAML 命令路径/索引语义对齐 | 确认无需改动 |
+
+二轮未覆盖（转 R4.10 集成验收）：STA/Dispatcher 下真实 XAML 模板加载冒烟、独立配置根手动链路、带真实 AddLog 回调的启动恢复链路、恢复扫描失败重试夹具（RecoverOnStart 逐文件容错难以无接缝制造抛错，屏障失败重置逻辑已落码）。

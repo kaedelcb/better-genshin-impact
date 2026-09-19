@@ -38,9 +38,9 @@ public sealed class RunStore
 
     public RunStore(string runsDir)
     {
+        // R4.8 二轮（重要2）：构造零副作用——目录推迟到首次 Persist 才创建
         _runsDir = runsDir;
         _backupDir = Path.Combine(runsDir, "_backup");
-        Directory.CreateDirectory(_runsDir);
     }
 
     /// <summary>默认运行目录（%APPDATA%/NexusBGI/runs）。</summary>
@@ -55,6 +55,7 @@ public sealed class RunStore
         get
         {
             var bad = new List<string>();
+            if (!Directory.Exists(_runsDir)) return bad; // 二轮：目录未建=无记录
             foreach (var file in Directory.EnumerateFiles(_runsDir, "*.run.json"))
             {
                 try
@@ -145,6 +146,7 @@ public sealed class RunStore
     public IReadOnlyList<WorkflowRunRecord> List()
     {
         var list = new List<WorkflowRunRecord>();
+        if (!Directory.Exists(_runsDir)) return list; // 二轮：目录未建=无记录
         foreach (var file in Directory.EnumerateFiles(_runsDir, "*.run.json"))
         {
             try
@@ -241,6 +243,7 @@ public sealed class RunStore
         rec.RecordRevision = expectedRecordRevision + 1;
         rec.UpdatedAt = DateTimeOffset.Now;
         var bytes = Utf8NoBom.GetBytes(JsonSerializer.Serialize(rec, JsonOptions));
+        Directory.CreateDirectory(_runsDir); // 二轮：首次写入才建目录
         var tmp = Path.Combine(_runsDir, $".{rec.RunId}.{Guid.NewGuid():N}.tmp");
         File.WriteAllBytes(tmp, bytes);
         try
