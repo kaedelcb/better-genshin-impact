@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Threading.Channels;
 using System.Windows;
 using System.Windows.Threading;
 using MultiplayerHoeingAssistant.Models;
@@ -265,7 +267,13 @@ public sealed class MistletoeViewModel : ViewModelBase
             if (_selectedStep == value) return;
             if (_selectedStep != null) _selectedStep.IsSelected = false;
             _selectedStep = value;
-            if (_selectedStep != null) _selectedStep.IsSelected = true;
+            if (_selectedStep != null)
+            {
+                _selectedStep.IsSelected = true;
+                // R4.9 §5：选中移交节点时刷新目标流程候选（宿主 ListFlows 的 Ready 条目，仅选择体验，执行时宿主权威校验）
+                if (_selectedStep.Kind == StartupStepKinds.EnterTaskCenter)
+                    RefreshTaskCenterFlowChoices(_selectedStep.Model.TaskCenterFlowId);
+            }
             OnPropertyChanged();
         }
     }
@@ -618,20 +626,89 @@ public sealed class MistletoeViewModel : ViewModelBase
             "无法定位", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    /// <summary>「进入任务中心执行」节点的交接实现。任务中心（总计划 §3）落地前为占位：
-    /// 先判断并记录 BGI 当前任务状态与任务名（读 LatestLocalStatus 快照，同任务中心状态卡片口径），
-    /// 流程继续后续节点。落地后在此驱动任务序列。
+    /// <summary>
+    /// 「进入任务中心执行」节点的移交实现（R4.9 §6）：能力预检（VM 层提前提示）→ 宿主权威受理
+    /// （RegisterHandoffAsync：台账 → 快照辅助判定（三轮 B1 起在宿主内，VM 不预拒）→ 预检 → 受理落盘）→ 回执映射。
+    /// 监控端绕过 VM 的直接调用由宿主服务边界再次拦截（§6.2 双保险）。
     /// </summary>
-    private Task EnterTaskCenterAsync()
+    private async Task<StartupHandoffResult> EnterTaskCenterAsync(StartupHandoffRequest request, CancellationToken ct)
     {
-        var s = _mainVm.LatestLocalStatus;
-        var judgment = s == null
-            ? "BGI 状态未知（尚无状态快照）"
-            : s.TaskRunning
-                ? $"BGI 正在运行任务「{ComposeTaskDisplay(s)}」"
-                : "BGI 当前空闲";
-        _mainVm.AddLog($"[槲寄生] 任务中心交接判断：{judgment}。任务中心尚未落地（规划中），本次交接为空转——后续节点照常继续");
-        return Task.CompletedTask;
+        if (!_mainVm.IsExecutorMode)
+            return StartupHandoffResult.Rejected(HandoffReasonCodes.NoCapability,
+                "当前为监控端（无本地 BGI 执行能力），不能受理任务中心移交");
+        // 三轮 B1：快照辅助判定不在 VM 层预拒（会遮蔽台账 AlreadyAccepted）——由宿主在台账查询之后权威执行
+        try
+        {
+            var reg = await _mainVm.TaskCenterHost.RegisterHandoffAsync(request, ct);
+            return new StartupHandoffResult(reg.Outcome, reg.RunId, reg.Reason, reg.ReasonCode,
+                reg.Outcome == HandoffOutcome.Rejected && reg.ReasonCode is not HandoffReasonCodes.ConfigMissing);
+        }
+        catch (OperationCanceledException)
+        {
+            throw; // 取消语义原样上传（启动链 CTS 仅覆盖受理点之前）
+        }
+        catch (Exception ex)
+        {
+            _mainVm.AddLog($"[槲寄生] 任务中心移交受理异常：{ex.Message}");
+            return StartupHandoffResult.Rejected(HandoffReasonCodes.HandoffError,
+                $"移交受理异常：{ex.Message}（受理事实未决，终止本次启动链）");
+        }
+    }
+
+    // 快照辅助判定（§6.1）已移入宿主 TaskCenterHost.SnapshotPrecheck（三轮 B1：台账优先，VM 不预拒）。
+
+    /// <summary>计划出现键的日程日材料（R4.9 §2 + 三轮 重要6：固定文化，不受系统日历/区域影响；
+    /// 定时触发取计划触发时刻的日期，电子狗/日志取事件发生时刻的日期——同日重复触发按同一计划出现去重，保守口径）。</summary>
+    internal static string OccurrenceDate(DateTime at) => at.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    /// <summary>「进入任务中心执行」节点编辑器的目标流程候选（宿主 ListFlows 的 Ready 条目；选中移交节点时刷新）。</summary>
+    public ObservableCollection<TaskCenterFlowChoiceItem> TaskCenterFlowChoices { get; } = [];
+
+    /// <summary>刷新目标流程候选（R4.9 §5：仅选择体验，执行时宿主权威校验）。
+    /// 三轮 阻断2：增量更新（不清空重建）——先补缺失项（含保留项）再移除失效项，当前选中身份全程有匹配项，
+    /// 杜绝 ComboBox TwoWay 绑定在刷新瞬间失配把 null 回写配置；目标缺失/隔离保留原 ID 显示「不可用」，不自动改选。</summary>
+    internal void RefreshTaskCenterFlowChoices(string? currentFlowId)
+    {
+        List<TaskCenterFlowChoiceItem> target;
+        try
+        {
+            var entries = _mainVm.TaskCenterHost.ListFlows()
+                .Select(e => (e.WorkflowId, e.Name, e.Status == WorkflowFileStatus.Ready))
+                .ToList();
+            target = BuildFlowChoiceList(entries, currentFlowId);
+        }
+        catch (Exception ex)
+        {
+            _mainVm.AddLog($"[槲寄生] 任务中心流程候选刷新失败：{ex.Message}（保留既有候选与配置不变）");
+            return;
+        }
+        // 增量应用：先补缺失项（选中身份不失配）；同 ID 原位更新 Display（对象身份保留，四轮 重要2）；再移除失效项
+        foreach (var item in target)
+        {
+            var existing = TaskCenterFlowChoices.FirstOrDefault(c => c.WorkflowId == item.WorkflowId);
+            if (existing is null)
+                TaskCenterFlowChoices.Add(item);
+            else if (existing.Display != item.Display)
+                existing.Display = item.Display;
+        }
+        for (var i = TaskCenterFlowChoices.Count - 1; i >= 0; i--)
+        {
+            if (!target.Any(c => c.WorkflowId == TaskCenterFlowChoices[i].WorkflowId))
+                TaskCenterFlowChoices.RemoveAt(i);
+        }
+    }
+
+    /// <summary>构建目标流程候选列表（internal static 便于夹具直测）：Ready 条目按目录序；
+    /// 当前配置目标缺失/隔离时末尾追加保留原 ID 的「不可用」项（不自动改选）；空目标不追加。</summary>
+    internal static List<TaskCenterFlowChoiceItem> BuildFlowChoiceList(
+        IReadOnlyList<(string WorkflowId, string Name, bool Ready)> entries, string? currentFlowId)
+    {
+        var list = entries.Where(e => e.Item3)
+            .Select(e => new TaskCenterFlowChoiceItem(e.WorkflowId, e.Name)).ToList();
+        if (!string.IsNullOrWhiteSpace(currentFlowId)
+            && !list.Any(c => c.WorkflowId == currentFlowId))
+            list.Add(new TaskCenterFlowChoiceItem(currentFlowId, $"⚠ {currentFlowId}（不可用：目标缺失或已隔离）"));
+        return list;
     }
 
     /// <summary>
@@ -688,7 +765,7 @@ public sealed class MistletoeViewModel : ViewModelBase
             var step = timer.Step;
             _mainVm.AddLog($"[槲寄生] 定时触发器「{StartupFlowRunner.DisplayName(step, 0)}」到点（{DateTime.Now:HH:mm}），开始执行「到点执行」链");
             OnNodeStateReported(step, NodeRunState.Running, null);
-            await _runner.RunAsync(step.FireSteps.ToList(), timer.Cts.Token);
+            await _runner.RunAsync(step.FireSteps.ToList(), timer.Cts.Token, new StartupTriggerInfo(StartupStepKinds.TimerTrigger, step.Id, OccurrenceDate(timer.NextFireAt))); // 三轮 重要6：计划触发日（跨零点阻塞不漂）
             OnNodeStateReported(step, NodeRunState.Success, $"已于 {DateTime.Now:HH:mm} 触发");
 
             // 每天重复：本轮跑完后重新挂载到明天的同一时刻（取消语义不走到这里）
@@ -832,7 +909,7 @@ public sealed class MistletoeViewModel : ViewModelBase
                 OnNodeStateReported(step, NodeRunState.Running, $"电子狗触发：{flipDesc}");
                 try
                 {
-                    await _runner.RunAsync(step.FireSteps.ToList(), dog.Cts.Token);
+                    await _runner.RunAsync(step.FireSteps.ToList(), dog.Cts.Token, new StartupTriggerInfo(StartupStepKinds.Watchdog, step.Id, OccurrenceDate(DateTime.Now))); // 事件确认时点日程日
                     OnNodeStateReported(step, NodeRunState.Success, $"电子狗于 {DateTime.Now:HH:mm:ss} 触发");
                 }
                 catch (OperationCanceledException)
@@ -908,7 +985,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         }
         var trig = new ArmedLogTriggerViewModel(step, this);
         // 先订阅再入列再启动循环：订阅在 tail 线程生效即刻可能来事件，
-        // 但循环任务未起前事件只会在信号量里攒着（max 1，超出合并），不会丢触发也不会并发执行
+        // 但循环任务未起前事件只会在命中通道里攒着（容量 1，超出合并为最后一次），不会丢触发也不会并发执行
         _logTail.EntryReceived += trig.OnLogEntry;
         RunOnUi(() => ArmedLogTriggers.Add(trig));
         _mainVm.AddLog($"[槲寄生] 日志触发器「{trig.Title}」已挂载：盯本机 BGI 新日志出现「{trig.Keyword}」，命中执行「触发执行」链（{step.FireSteps.Count} 个节点，{(trig.RepeatAfterFire ? "循环触发" : "触发一次后停止")}）；只盯挂载后的新日志");
@@ -918,12 +995,12 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>
     /// 日志触发器循环（独立任务，一个触发器一个）：等命中信号 → 执行触发链 → 再回去等。
     /// 并发设计要点：
-    /// - tail 后台线程的 OnLogEntry 只做「置命中行 + Release(1)」，O(1) 不阻塞日志管线；
-    /// - 信号量上限 1：触发链执行期间的再次命中自动合并为一次（链跑完后立即再触发一轮），
+    /// - tail 后台线程的 OnLogEntry 只做「命中记录 TryWrite 入容量 1 通道」，O(1) 不阻塞日志管线；
+    /// - 命中通道容量 1（DropOldest）：触发链执行期间的再次命中自动合并为最后一次（链跑完后立即再触发一轮），
     ///   关键字刷屏不会堆出无界积压，也保证「执行完触发动作后再循环」——同一触发器永远不会并发跑两条链；
     /// - 触发链异常只记日志，触发器继续盯（与电子狗同口径）；
-    /// - 取消/自动撤下：先退订再 Cancel，退订后仍在飞的 OnLogEntry 因 CTS 已取消直接返回，
-    ///   误 Release 一个信号也无害——循环已退出或下次 WaitAsync 立刻被 Cancel 打断。
+    /// - 取消/自动撤下：先退订再 Cancel，退订后仍在飞的 OnLogEntry 因 CTS 已取消直接返回；
+    ///   误写入一条命中记录也无害——通道未 Complete 不等于仍有消费者，循环已退出或下次 ReadAsync 立刻被 Cancel 打断。
     /// </summary>
     private async Task RunLogTriggerAsync(ArmedLogTriggerViewModel trig)
     {
@@ -933,14 +1010,13 @@ public sealed class MistletoeViewModel : ViewModelBase
         {
             while (true)
             {
-                await trig.HitSignal.WaitAsync(trig.Cts.Token);
-                var hitLine = trig.TakeHitLine();
-                _mainVm.AddLog($"[槲寄生] 日志触发器「{trig.Title}」命中关键字「{trig.Keyword}」：{hitLine}，开始执行「触发执行」链");
-                OnNodeStateReported(step, NodeRunState.Running, $"日志触发：{hitLine}");
+                var hit = await trig.Hits.ReadAsync(trig.Cts.Token); // 五轮 重1：记录与通知同通道，消费到的必为真实事件
+                _mainVm.AddLog($"[槲寄生] 日志触发器「{trig.Title}」命中关键字「{trig.Keyword}」：{hit.Line}，开始执行「触发执行」链");
+                OnNodeStateReported(step, NodeRunState.Running, $"日志触发：{hit.Line}");
                 trig.NoteStatus($"已于 {DateTime.Now:HH:mm:ss} 触发，正在执行触发链…");
                 try
                 {
-                    await _runner.RunAsync(step.FireSteps.ToList(), trig.Cts.Token);
+                    await _runner.RunAsync(step.FireSteps.ToList(), trig.Cts.Token, new StartupTriggerInfo(StartupStepKinds.LogTrigger, step.Id, OccurrenceDate(hit.OccurredAt))); // 四轮 重要1：事件发生日（跨日排队不漂）
                     OnNodeStateReported(step, NodeRunState.Success, $"日志触发器于 {DateTime.Now:HH:mm:ss} 触发");
                 }
                 catch (OperationCanceledException)
@@ -1315,6 +1391,32 @@ public sealed class StepChainViewModel : ViewModelBase
 /// 所有属性写穿到模型并通知宿主防抖保存；Summary 为卡片上的参数摘要行。
 /// 条件节点带 TrueChain/FalseChain 两条子链（递归树形结构）。
 /// </summary>
+/// <summary>「进入任务中心执行」节点目标流程下拉的候选项（WorkflowId=稳定身份；Display=展示名；目标缺失/隔离时 Display 带不可用标记但保留原身份）。</summary>
+/// <summary>「进入任务中心执行」节点目标流程下拉的候选项（WorkflowId=稳定身份不可变；Display 可通知更新——
+/// 四轮 重要2：同 ID 原位刷新显示（改名/可用性变化立即反映），对象身份保留使 ComboBox 选中不失配、配置不回写）。</summary>
+public sealed class TaskCenterFlowChoiceItem : ViewModelBase
+{
+    public TaskCenterFlowChoiceItem(string workflowId, string display)
+    {
+        WorkflowId = workflowId;
+        _display = display;
+    }
+
+    /// <summary>流程稳定身份（不可变）。</summary>
+    public string WorkflowId { get; }
+
+    private string _display;
+    /// <summary>展示名（可用性变化/改名时原位更新并通知，闭合态与展开态一致）。</summary>
+    public string Display
+    {
+        get => _display;
+        set => SetProperty(ref _display, value);
+    }
+
+    /// <summary>ComboBox 闭合态（SelectionBoxItem 无模板时走 ToString）与展开态一致显示（三轮 重要8，同 SchemeItemViewModel 模式）。</summary>
+    public override string ToString() => Display;
+}
+
 public sealed class StartupStepViewModel : ViewModelBase
 {
     private readonly MistletoeViewModel _owner;
@@ -1588,6 +1690,34 @@ public sealed class StartupStepViewModel : ViewModelBase
         set { Model.LogKeyword = value; Changed(); }
     }
 
+    /// <summary>目标任务中心流程稳定身份（enterTaskCenter 用；空=未配置，运行时 Rejected(ConfigMissing) 链继续——旧配置兼容）。</summary>
+    public string TaskCenterFlowId
+    {
+        get => Model.TaskCenterFlowId;
+        set
+        {
+            if (value is null) return; // 三轮 阻断2：ComboBox 候选刷新瞬间失配产生的 null 不写配置（保值纵深防御）
+            if (Model.TaskCenterFlowId == value) return;
+            Model.TaskCenterFlowId = value;
+            Changed();
+        }
+    }
+
+    /// <summary>移交语义下标（enterTaskCenter 编辑器下拉框用）：0=立即执行 / 1=恢复既有运行 / 2=挂载触发器。
+    /// 底层存字符串（StartupHandoffModes.All）；显式未知持久化值运行时响亮拒绝，编辑器返回 -1 无选中
+    /// （显示空白而非误导性「立即执行」，三轮 S3；setter 负值守卫不回写，用户选定才落值）。</summary>
+    public int TaskCenterHandoffModeIndex
+    {
+        get => Array.IndexOf(StartupHandoffModes.All, Model.TaskCenterHandoffMode);
+        set
+        {
+            if (value < 0 || value >= StartupHandoffModes.All.Length) return;
+            if (Model.TaskCenterHandoffMode == StartupHandoffModes.All[value]) return;
+            Model.TaskCenterHandoffMode = StartupHandoffModes.All[value];
+            Changed();
+        }
+    }
+
     /// <summary>状态来源下拉框：本会话、按实际 BGI 启动顺序、按 Windows 用户名。</summary>
     public int StatusSourceIndex
     {
@@ -1743,7 +1873,11 @@ public sealed class StartupStepViewModel : ViewModelBase
         StartupStepKinds.LogTrigger => string.IsNullOrWhiteSpace(model.LogKeyword)
             ? "（未填写日志关键字）"
             : $"日志出现「{model.LogKeyword}」时执行 {model.FireSteps.Count} 个节点（{(model.WatchRepeat ? "循环触发" : "触发后停止")}）",
-        StartupStepKinds.EnterTaskCenter => "交接给任务中心执行任务序列",
+        StartupStepKinds.EnterTaskCenter => string.IsNullOrWhiteSpace(model.TaskCenterFlowId)
+            ? StartupHandoffModes.IsKnown(model.TaskCenterHandoffMode)
+                ? "移交任务中心（未配置目标流程）"
+                : $"移交任务中心（未配置目标流程；未知语义「{model.TaskCenterHandoffMode}」——运行时按未知语义优先响亮拒绝）"
+            : $"移交任务中心：{model.TaskCenterFlowId}（{model.TaskCenterHandoffMode switch { StartupHandoffModes.Start => "立即执行", StartupHandoffModes.Resume => "恢复既有运行", StartupHandoffModes.ArmTrigger => "挂载触发器", _ => $"未知语义「{model.TaskCenterHandoffMode}」（运行时将响亮拒绝）" }}）",
         StartupStepKinds.EndFlow => "立即终止整条启动流程",
         StartupStepKinds.StartGroup => string.IsNullOrWhiteSpace(model.TaskName) ? "（旧版节点 · 未填写配置组名）" : $"（旧版节点）配置组「{model.TaskName}」",
         StartupStepKinds.StartOneClick => string.IsNullOrWhiteSpace(model.TaskName) ? "（旧版节点 · 未填写一条龙名）" : $"（旧版节点）一条龙「{model.TaskName}」",
@@ -1908,15 +2042,21 @@ public sealed class ArmedWatchdogViewModel : ViewModelBase
 /// 运行态对象，不持久化——与定时触发器/电子狗同口径（助手重启后需流程重跑才会重新挂载）。
 ///
 /// 线程模型：OnLogEntry 跑在 BgiLogTailService 的后台线程（同步派发，必须 O(1) 不阻塞）；
-/// 命中经 <see cref="HitSignal"/>（上限 1，天然把触发链执行期间的重复命中合并为一次）交给
+/// 命中经容量 1 通道（DropOldest，天然把触发链执行期间的重复命中合并为最后一次事件）交给
 /// MistletoeViewModel.RunLogTriggerAsync 的独立循环任务串行执行触发链——同一触发器绝不并发跑两条链。
 /// 关键字/循环标志在挂载时快照为不可变属性，UI 线程改节点参数不影响已挂载实例（无跨线程读写模型）。
 /// </summary>
 public sealed class ArmedLogTriggerViewModel : ViewModelBase
 {
     private readonly MistletoeViewModel _owner;
-    /// <summary>最近一次命中行的摘要（tail 线程写、循环任务读；引用赋值原子，配合信号量 happens-before）。</summary>
-    private string? _hitLine;
+    /// <summary>命中通道（容量 1，满时挤掉旧记录 = 链执行期间的重复命中合并为最后一次事件）：
+    /// tail 线程 TryWrite、触发循环 ReadAsync。四轮 重1（五轮复核）：记录与通知同一通道传输——
+    /// 不存在「有信号无记录」的兜底消费，每条被消费的身份都有真实事件对应（IntentKey 取事件发生日，跨日排队不漂）。</summary>
+    private readonly Channel<HitRecord> _hits = Channel.CreateBounded<HitRecord>(
+        new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true, SingleWriter = false });
+
+    /// <summary>命中记录（不可变）：摘要 + 事件发生时刻。</summary>
+    public sealed record HitRecord(string Line, DateTime OccurredAt);
 
     public ArmedLogTriggerViewModel(StartupStep step, MistletoeViewModel owner)
     {
@@ -1936,8 +2076,8 @@ public sealed class ArmedLogTriggerViewModel : ViewModelBase
     /// <summary>挂载时快照的触发后行为：true=循环触发（默认）；false=触发一次后自动撤下。</summary>
     public bool RepeatAfterFire { get; }
 
-    /// <summary>命中信号：tail 线程 Release、触发循环 WaitAsync；上限 1 = 链执行期间的命中合并为一次。</summary>
-    public SemaphoreSlim HitSignal { get; } = new(0, 1);
+    /// <summary>命中读取端（触发循环 ReadAsync 消费；容量 1 + DropOldest = 链执行期间的命中合并为最后一次事件）。</summary>
+    public ChannelReader<HitRecord> Hits => _hits.Reader;
 
     /// <summary>取消令牌（取消按钮 / 「触发后停止」时自动撤下，独立取消这个触发器）。</summary>
     public CancellationTokenSource Cts { get; } = new();
@@ -1967,26 +2107,15 @@ public sealed class ArmedLogTriggerViewModel : ViewModelBase
 
     /// <summary>
     /// tail 后台线程入口（BgiLogTailService.EntryReceived 订阅）：匹配本机 BGI 新日志。
-    /// 必须 O(1)：匹配只做包含判断，命中只置行摘要 + Release(1)；绝不在这里跑触发链。
+    /// 必须 O(1)：匹配只做包含判断，命中只把记录 TryWrite 入通道；绝不在这里跑触发链。
     /// 取消后（含退订竞态窗口内仍在飞的调用）直接返回。
     /// </summary>
     public void OnLogEntry(LogEntry entry)
     {
         if (Cts.IsCancellationRequested) return;
         if (!Matches(entry)) return;
-        _hitLine = Summarize(entry);
-        try
-        {
-            HitSignal.Release();
-        }
-        catch (SemaphoreFullException)
-        {
-            // 已有一个待触发/执行中的信号：本次命中合并进去（链跑完会立即再触发一轮）
-        }
-        catch (ObjectDisposedException)
-        {
-            // 撤下竞态：触发器已在拆除，忽略
-        }
+        // 容量 1 + DropOldest：已有一条待消费命中时挤掉旧记录——合并语义=取最后一次事件（摘要与事件时刻同源一致）
+        _hits.Writer.TryWrite(new HitRecord(Summarize(entry), entry.Time));
     }
 
     /// <summary>匹配判定：关键字（不区分大小写）出现在正文/来源/异常段任一位置即命中（与关键词监控同一文本口径）。</summary>
@@ -2005,8 +2134,7 @@ public sealed class ArmedLogTriggerViewModel : ViewModelBase
         return $"[{entry.Time:HH:mm:ss}] {first}";
     }
 
-    /// <summary>取走命中行摘要（触发循环消费用；取走后清空，被合并的命中读到兜底文案）。</summary>
-    public string TakeHitLine() => Interlocked.Exchange(ref _hitLine, null) ?? "（命中行已被合并）";
+
 
     public RelayCommand ViewFlowCommand => new(_ => _owner.ViewFlow(Step.FireSteps, $"日志触发器「{Title}」的触发执行流程"));
 

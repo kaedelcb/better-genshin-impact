@@ -1013,7 +1013,7 @@
                                                FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                                 </WrapPanel>
 
-                                <!-- enterTaskCenter / endFlow：无参数提示 -->
+                                <!-- enterTaskCenter：目标任务中心流程 + 移交语义（R4.9 §5） -->
                                 <WrapPanel>
                                     <WrapPanel.Style>
                                         <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
@@ -1024,8 +1024,34 @@
                                             </Style.Triggers>
                                         </Style>
                                     </WrapPanel.Style>
-                                    <TextBlock Text="走到此节点即交接给任务中心执行任务序列（任务中心规划中，当前交接为空转并记日志）。通常放在主流程末尾。"
-                                               FontSize="10.5" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" MaxWidth="380"/>
+                                    <TextBlock Text="目标流程" Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox Width="220" Style="{StaticResource GoldComboBox}"
+                                              ItemsSource="{Binding DataContext.TaskCenterFlowChoices, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                              DisplayMemberPath="Display" SelectedValuePath="WorkflowId"
+                                              SelectedValue="{Binding TaskCenterFlowId, Mode=TwoWay}"
+                                              ToolTip="移交的目标任务中心流程（候选来自任务中心可用流程，仅选择体验，执行时由任务中心权威校验；目标缺失/隔离保留原身份显示「不可用」，不自动改选）"/>
+                                    <TextBlock Text="（受理成功/已受理即终止本启动链，后续节点不再执行；通常放在主流程末尾）"
+                                               FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                </WrapPanel>
+                                <!-- enterTaskCenter 第二行：移交语义（R4.9 §5 两行布局，三轮 S2） -->
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="enterTaskCenter">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </WrapPanel.Style>
+                                    <TextBlock Text="移交语义" Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox Width="124" Style="{StaticResource GoldComboBox}"
+                                              SelectedIndex="{Binding TaskCenterHandoffModeIndex, Mode=TwoWay}"
+                                              ToolTip="立即执行=受理后按流程配置推进；恢复既有运行=绑定最近的中断/暂停运行继续；挂载触发器=受理后等待流程触发器到点（等待不占 BGI 执行槽）">
+                                        <ComboBoxItem Content="立即执行" Style="{StaticResource GoldComboItem}"/>
+                                        <ComboBoxItem Content="恢复既有运行" Style="{StaticResource GoldComboItem}"/>
+                                        <ComboBoxItem Content="挂载触发器" Style="{StaticResource GoldComboItem}"/>
+                                    </ComboBox>
                                 </WrapPanel>
                                 <WrapPanel>
                                     <WrapPanel.Style>

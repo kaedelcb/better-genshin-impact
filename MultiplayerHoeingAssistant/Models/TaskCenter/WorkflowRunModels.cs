@@ -190,6 +190,11 @@ public sealed class WorkflowRunRecord
     [JsonPropertyName("wireRunId")]
     public string WireRunId { get; set; } = "";
 
+    /// <summary>移交身份绑定清单（R4.9 §3 + ASTRA 二轮 B1：追加式多绑定——resume/幂等挂载追加新绑定，旧绑定永不替换，
+    /// 旧意图的去重依据永存；台账查询键=IntentKey；面板/手工启动为空表）。</summary>
+    [JsonPropertyName("handoffs")]
+    public List<HandoffIdentity> Handoffs { get; set; } = [];
+
     /// <summary>当前提交（B2：一提交一身份——幂等键/意图/jobId/观察终态同属一个提交身份，不跨节点复用残留）。</summary>
     [JsonPropertyName("currentSubmission")]
     public WorkflowSubmission? CurrentSubmission { get; set; }

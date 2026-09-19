@@ -60,6 +60,12 @@ public sealed class TaskCenterHost
     /// <summary>测试接缝：替换执行就绪判定（离线拒绝与互斥护栏分开测；生产=client Ready 实况）。</summary>
     private readonly Func<(bool Ready, string? Reason)>? _readinessOverride;
 
+    /// <summary>本地执行能力提供方（R4.9 §6.2：生产=MainViewModel.IsExecutorMode，监控端 false；
+    /// 移交入口与 Start/Resume 公共检查，先于台账写入与任何副作用——绕过 VM 的调用同样被拦；null=不检查（测试接缝默认）。</summary>
+    private readonly Func<bool>? _localExecutionCapability;
+    /// <summary>BGI 任务状态快照提供方（三轮 B1：快照辅助判定在宿主内、台账之后执行；null=测试接缝跳过快照判定，生产必传）。</summary>
+    private readonly Func<ControlStatus?>? _statusSnapshotProvider;
+
     private readonly object _gate = new();
     private readonly Dictionary<string, DriveEntry> _drives = new(StringComparer.Ordinal); // key=workflowId（互斥保证唯一）
     private readonly HashSet<string> _reservedWorkflows = new(StringComparer.Ordinal); // 预留（CreateRun 窗口覆盖）
@@ -69,14 +75,18 @@ public sealed class TaskCenterHost
     private sealed class DriveEntry
     {
         public required string WorkflowId { get; init; }
+        /// <summary>准确运行身份（R4.9 移交路径已知；面板 Start 路径运行由引擎自建、为 null，收敛倒查兜底）。</summary>
+        public string? RunId { get; init; }
         public required WorkflowRunner Runner { get; init; }
         public required CancellationTokenSource Cts { get; init; }
         public required Task<WorkflowRunRecord> Task { get; init; }
     }
 
+    /// <summary>生产构造：localExecutionCapability 必传（ASTRA 二轮 I2——监控端拒绝执行入口的守卫不得遗漏接线）。</summary>
     public TaskCenterHost(string flowsDir, string runsDir, string catalogCacheFile,
-        Func<BgiExternalClient?> clientAccessor, Action<string>? log = null)
-        : this(flowsDir, runsDir, catalogCacheFile, clientAccessor, log, null, null)
+        Func<BgiExternalClient?> clientAccessor, Func<bool> localExecutionCapability,
+        Func<ControlStatus?> statusSnapshotProvider, Action<string>? log = null)
+        : this(flowsDir, runsDir, catalogCacheFile, clientAccessor, log, null, null, localExecutionCapability, statusSnapshotProvider)
     {
     }
 
@@ -84,7 +94,9 @@ public sealed class TaskCenterHost
     internal TaskCenterHost(string flowsDir, string runsDir, string catalogCacheFile,
         Func<BgiExternalClient?> clientAccessor, Action<string>? log,
         Func<BgiExternalClient?, WorkflowStore, RunStore, WorkflowRunner>? runnerFactory,
-        Func<(bool Ready, string? Reason)>? readinessOverride)
+        Func<(bool Ready, string? Reason)>? readinessOverride,
+        Func<bool>? localExecutionCapability = null,
+        Func<ControlStatus?>? statusSnapshotProvider = null)
     {
         _workflows = new WorkflowStore(flowsDir);
         _runs = new RunStore(runsDir);
@@ -94,6 +106,8 @@ public sealed class TaskCenterHost
         _log = log;
         _runnerFactory = runnerFactory;
         _readinessOverride = readinessOverride;
+        _localExecutionCapability = localExecutionCapability;
+        _statusSnapshotProvider = statusSnapshotProvider;
     }
 
     /// <summary>运行状态变更通知（终态/动作后触发；UI 以 2s 轮询为主、本事件为辅）。</summary>
@@ -188,6 +202,12 @@ public sealed class TaskCenterHost
     /// </summary>
     public async Task<HostActionResult> StartWorkflowAsync(string workflowId)
     {
+        // R4.9 I2：关闭/能力预检先于恢复屏障（恢复扫描会写运行文件，监控端不得先产生副作用）
+        lock (_gate)
+        {
+            if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
+            if (CapabilityBlockReason() is { } capPre) return HostActionResult.Unavailable(capPre);
+        }
         await EnsureRecoveredAsync().ConfigureAwait(false);
         WorkflowSnapshot snapshot;
         try
@@ -206,6 +226,7 @@ public sealed class TaskCenterHost
         lock (_gate)
         {
             if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
+            if (CapabilityBlockReason() is { } capBlock) return HostActionResult.Unavailable(capBlock);
             var readiness = ExecutionReadiness();
             if (!readiness.Ready)
                 return HostActionResult.Unavailable(readiness.Reason!);
@@ -241,6 +262,12 @@ public sealed class TaskCenterHost
     /// <summary>显式恢复运行（Interrupted/Paused；Unknown 拒绝——需先对账）。与 Start 共用互斥临界区。</summary>
     public async Task<HostActionResult> ResumeRunAsync(string runId)
     {
+        // R4.9 I2：关闭/能力预检先于恢复屏障（恢复扫描会写运行文件，监控端不得先产生副作用）
+        lock (_gate)
+        {
+            if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
+            if (CapabilityBlockReason() is { } capPre) return HostActionResult.Unavailable(capPre);
+        }
         await EnsureRecoveredAsync().ConfigureAwait(false);
         var run = _runs.Load(runId);
         if (run is null) return HostActionResult.Unavailable("运行记录不存在：" + runId);
@@ -253,6 +280,7 @@ public sealed class TaskCenterHost
         lock (_gate)
         {
             if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
+            if (CapabilityBlockReason() is { } capBlock) return HostActionResult.Unavailable(capBlock);
             var readiness = ExecutionReadiness();
             if (!readiness.Ready)
                 return HostActionResult.Unavailable(readiness.Reason!);
@@ -308,7 +336,7 @@ public sealed class TaskCenterHost
                     + "暂停态显式停止（无在飞作业；不触发收尾）。";
                 _runs.Update(fresh);
             }
-            StateChanged?.Invoke(this, EventArgs.Empty);
+            NotifyStateChanged();
             return HostActionResult.Effective("已停止（暂停态终态化，未触发收尾）");
         }
 
@@ -328,6 +356,432 @@ public sealed class TaskCenterHost
         });
     }
 
+    // ================= R4.9 启动移交受理入口 =================
+
+    /// <summary>本地执行能力守卫（R4.9 §6.2 + ASTRA 二轮 I2：先于恢复屏障与台账写入等一切副作用；绕过 VM 的调用同样被拦；
+    /// 提交临界区内复核——能力可能在两次检查间动态变化）。</summary>
+    private string? CapabilityBlockReason()
+        => _localExecutionCapability is { } cap && !cap()
+            ? "当前为监控端（无本地执行能力），任务中心执行入口由能力守卫统一拒绝"
+            : null;
+
+    /// <summary>快照辅助判定（R4.9 §6.1 辅助证据 + ASTRA 三轮 B1：在宿主内、台账查询之后、仅对未命中新受理执行——受理事实优先）：
+    /// start/resume 要求快照可考（不可考 → StatusUncertain，锚点 3 授权判断必须可考）且 BGI 空闲（在跑 → BgiBusy 含任务名）；
+    /// armTrigger 不受限（挂载等待不占槽位，到点执行由引擎边界权威裁决）。返回 null=通过。</summary>
+    internal static HandoffRegisterResult? SnapshotPrecheck(ControlStatus? snapshot, string mode)
+    {
+        if (mode == StartupHandoffModes.ArmTrigger) return null;
+        if (snapshot is null)
+            return HandoffRegisterResult.Rejected(HandoffReasonCodes.StatusUncertain,
+                "BGI 任务状态快照不可考（尚无快照），授权判断要求可考（锚点 3）");
+        if (snapshot.TaskRunning)
+        {
+            var name = snapshot.CurrentTaskGroupName is { Length: > 0 } g
+                ? snapshot.CurrentTaskName is { Length: > 0 } n ? $"{g} · {n}" : g
+                : snapshot.CurrentTaskName ?? "（未上报任务名）";
+            return HandoffRegisterResult.Rejected(HandoffReasonCodes.BgiBusy,
+                $"BGI 正在运行任务「{name}」（非本启动链提交），与移交冲突");
+        }
+        return null;
+    }
+
+    /// <summary>可挂载触发器判定（§4 armTrigger）。四轮 重要5 收窄：**仅 trigger.time 入口等待才算可挂载**——
+    /// 结构性循环不计：DriveAsync 的轮次等待（AwaitLoopRoundStartAsync）只在 LoopIteration&gt;0 生效，首轮立即执行，
+    /// 若承认 loop 可挂载，arm 会绕过 start 应有的混用/快照守卫却立即提交。带 trigger.time 的流程（含叠加循环）入口等待不变。</summary>
+    private static bool HasMountableTrigger(WorkflowDocument doc)
+        => WorkflowRunner.HasMountableTrigger(doc); // 七轮 重要3：与驱动起步复验共用同一定义（单一事实源）
+
+    /// <summary>
+    /// 台账命中回执（§2：命中=受理事实存在——AlreadyAccepted 附原 runId 与当前状态；ASTRA 二轮 S1 定案：
+    /// Unknown 同样 AlreadyAccepted（不重新驱动、不新建运行，提示需对账），未命中请求遇同流程 Unknown 才拒绝）。
+    /// 内容核对按命中的那条绑定（多绑定模型）：workflowId/mode 一致才算同一计划出现，不一致 Rejected 身份冲突。
+    /// </summary>
+    private static HandoffRegisterResult LedgerHitReceipt(WorkflowRunRecord hit, HandoffIdentity binding, StartupHandoffRequest request)
+    {
+        if (!string.Equals(hit.WorkflowId, request.WorkflowId, StringComparison.Ordinal)
+            || !string.Equals(binding.Mode, request.Mode, StringComparison.Ordinal))
+            return HandoffRegisterResult.Rejected(HandoffReasonCodes.IdentityConflict,
+                $"同一计划出现身份已受理为不同内容（台账 流程 {hit.WorkflowId}/语义 {binding.Mode} ≠ 本次 {request.WorkflowId}/{request.Mode}），拒绝覆盖");
+        var note = hit.State switch
+        {
+            WorkflowRunState.Unknown =>
+                $"此前已受理同一计划出现（运行 {hit.RunId} 结果不确定 Unknown，需先按幂等键+job 查询对账；不重新驱动、不新建运行）",
+            _ when hit.IsTerminal =>
+                $"该计划出现已完结（运行 {hit.RunId} 终态 {hit.State}）",
+            WorkflowRunState.Interrupted or WorkflowRunState.Paused =>
+                $"此前已受理同一计划出现（运行 {hit.RunId} 当前 {hit.State}，可在运行状态卡显式恢复，禁止自动换键重跑）",
+            _ => $"此前已受理同一计划出现（运行 {hit.RunId} 当前 {hit.State}）",
+        };
+        return HandoffRegisterResult.AlreadyAccepted(hit.RunId, note, hit.State);
+    }
+
+    /// <summary>台账查询统一入口（I5 三态：Incomplete → Rejected LedgerIncomplete；命中 → 内容核对回执；未命中 → null 放行新受理）。</summary>
+    private HandoffRegisterResult? LedgerGate(StartupHandoffRequest request)
+    {
+        var ledger = _runs.QueryHandoffLedger(request.IntentKey);
+        if (ledger.State == HandoffLedgerState.Incomplete)
+            return HandoffRegisterResult.Rejected(HandoffReasonCodes.LedgerIncomplete,
+                "权威台账不完整（存在无法解析的运行记录文件）——读不到 ≠ 未受理，拒绝受理新意图，请先修复或隔离处置");
+        if (ledger is { State: HandoffLedgerState.Hit, Run: { } hit, Binding: { } binding })
+            return LedgerHitReceipt(hit, binding, request);
+        return null;
+    }
+
+    /// <summary>锁外预检拒绝前的台账复核（ASTRA 二轮 I3：并发同键可能刚刚受理——返回其回执而非预检拒绝）。</summary>
+    private HandoffRegisterResult RejectedWithLedgerRecheck(StartupHandoffRequest request, string reasonCode, string reason)
+    {
+        lock (_gate)
+        {
+            // 三轮 重要9：快返回复核与最终临界区同顺序——关闭 → 能力 → 台账（等待期间状态可能已变化）
+            if (_shutdown)
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.Shutdown, "任务中心宿主已关闭");
+            if (CapabilityBlockReason() is { } capBlock)
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.NoCapability, capBlock);
+            if (LedgerGate(request) is { } receipt)
+                return receipt;
+        }
+        return HandoffRegisterResult.Rejected(reasonCode, reason);
+    }
+
+    /// <summary>向在册运行原子追加身份绑定（五轮 重6：修订冲突 → 重读最新记录重试，有界 3 次——
+    /// RunStore 修订守卫（RunRecordConflictException）下引擎并发推进会响亮冲突；追加方重读收敛，
+    /// 绝不拿旧对象覆盖（不丢既有绑定、不让引擎状态倒退）。每次重试整体重读，绑定绝不重复追加）。
+    /// stateGuard 校验重读后的目标状态仍满足语义（返回拒绝原因码+文案，null=通过）。返回 null=追加成功。</summary>
+    /// <summary>向在册运行原子追加身份绑定（五轮 重6：修订冲突 → 重读最新记录重试，有界 3 次——
+    /// RunStore 修订守卫（RunRecordConflictException）下引擎并发推进会响亮冲突；追加方重读收敛，
+    /// 绝不拿旧对象覆盖（不丢既有绑定、不让引擎状态倒退）。每次重试整体重读，绑定绝不重复追加）。
+    /// stateGuard 校验重读后的目标状态仍满足语义（返回拒绝原因码+文案，null=通过）。
+    /// 六轮 重要1/4：静态化注入 load/update（夹具可直接驱动重试路径）；成功时 committed=提交时快照——
+    /// 调用方回执必须用它（提交后引擎可能已推进，重读回报可能把已受理假报为异常/状态文案失真）。</summary>
+    internal static (string Code, string Reason)? TryAppendHandoffBinding(
+        Func<string, WorkflowRunRecord?> load, Action<WorkflowRunRecord> update,
+        string runId, StartupHandoffRequest request, string note,
+        Func<WorkflowRunRecord, (string Code, string Reason)?> stateGuard,
+        CancellationToken ct, out WorkflowRunRecord? committed)
+    {
+        committed = null;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            ct.ThrowIfCancellationRequested(); // 七轮 建议1：每轮入口复核——取消与状态失效并发时取消优先（OCE 统一表现）
+            var fresh = load(runId);
+            if (fresh is null)
+                return (HandoffReasonCodes.HandoffError, "目标运行记录已不存在，请刷新后重试");
+            if (stateGuard(fresh) is { } bad)
+                return bad;
+            ct.ThrowIfCancellationRequested(); // 取消复核贴近身份修改（三轮 重要9 + 四轮 重要3）
+            fresh.Handoffs.Add(BuildIdentity(request));
+            fresh.Note = (fresh.Note is null ? "" : fresh.Note + " ") + note;
+            try
+            {
+                update(fresh);
+                committed = fresh; // 提交时快照：回执用它能保证「追加成功时状态确为所报」
+                return null;
+            }
+            catch (RunRecordConflictException)
+            {
+                // 修订冲突=引擎/他方并发推进——重读最新记录重试（有界）；绝不拿旧对象覆盖
+            }
+            catch (Exception ex)
+            {
+                return (HandoffReasonCodes.HandoffError, "受理落盘失败：" + ex.Message);
+            }
+        }
+        ct.ThrowIfCancellationRequested(); // 七轮 建议1：耗尽出口复核——重试间到达的取消以 OCE 表现而非 HandoffError
+        return (HandoffReasonCodes.HandoffError, "受理落盘反复修订冲突（并发推进繁忙），请稍后重试");
+    }
+
+    /// <summary>状态通知隔离（八轮 重要2）：订阅者异常绝不允许改变受理/动作结论（受理已落盘不得反转为异常回执），
+    /// 也不允许成为未观察任务异常（观察器 finally 内的通知同样隔离）。</summary>
+    private void NotifyStateChanged()
+    {
+        try { StateChanged?.Invoke(this, EventArgs.Empty); }
+        catch (Exception ex)
+        {
+            try { _log?.Invoke($"[任务中心] 状态通知订阅者异常（已隔离，不影响受理/动作结论）：{ex.Message}"); }
+            catch { /* 九轮 重要2：隔离边界自身必须成立——诊断日志异常同样隔离，通知路径绝不向外抛 */ }
+        }
+    }
+
+    /// <summary>驱动在册实况（八轮 建议1：夹具直证「驱动出册」=观察器 finally 移除登记，而非仅状态到位）。</summary>
+    internal bool HasDrive(string workflowId)
+    {
+        lock (_gate) return _drives.ContainsKey(workflowId);
+    }
+
+    /// <summary>受理后回执状态尽力刷新（七轮 重要1）：读取失败/记录缺失返回 null——调用方回落受理提交时快照，
+    /// 回执结论（已受理）绝不因刷新失败反转为异常拒绝。</summary>
+    internal WorkflowRunState? TryReadRunState(string runId) // internal：夹具直接证明「读取失败不抛出」（兜底语义）
+    {
+        try { return _runs.Load(runId)?.State; }
+        catch { return null; }
+    }
+
+    private static HandoffIdentity BuildIdentity(StartupHandoffRequest request) => new()
+    {
+        IntentKey = request.IntentKey,
+        ExecutionId = request.ExecutionId ?? "",
+        StepId = request.StepId ?? "",
+        TriggerKind = request.TriggerKind,
+        Mode = request.Mode,
+    };
+
+    private static string ShortExecutionId(StartupHandoffRequest request)
+        => request.ExecutionId is { Length: > 8 } id ? id[..8] : request.ExecutionId ?? "?";
+
+    /// <summary>
+    /// 启动中心移交受理入口（R4.9 设计稿 §3 + ASTRA 二轮处置）：受理点=RunStore 落盘（start/arm=CreateRun 携带首条绑定；
+    /// resume/arm 幂等挂载=绑定原子追加 Update），台账=Handoffs[].IntentKey（随记录永存，无淘汰）；
+    /// 崩溃窗 Interrupted → 重放同键 AlreadyAccepted 不换键；受理后驱动异常由观察器收敛（在飞/未决事实→Unknown）。
+    /// 顺序（一轮 B3 + 二轮 I2/I3 + 三轮 B1）：参数/mode 校验 → 关闭/能力预检 → 恢复屏障 → 台账查询 → 快照辅助判定（仅未命中新受理）→
+    /// 最终临界区（关闭→能力复核→台账双检→就绪→取消检查→互斥→组装+权威预检→受理落盘→预留）→ 锁外驱动激活。
+    /// 启动链 CTS 仅覆盖受理点之前；受理提交后任务归宿主（启动链取消不撤销已受理运行）。
+    /// </summary>
+    public async Task<HandoffRegisterResult> RegisterHandoffAsync(StartupHandoffRequest request, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!StartupHandoffModes.IsKnown(request.Mode))
+            return HandoffRegisterResult.Rejected(HandoffReasonCodes.UnsupportedMode,
+                $"未支持的移交语义「{request.Mode}」（支持 start/resume/armTrigger，不静默回落 start）");
+        if (string.IsNullOrWhiteSpace(request.WorkflowId))
+            return HandoffRegisterResult.Rejected(HandoffReasonCodes.ConfigMissing, "未配置目标流程（移交请求 WorkflowId 为空）");
+        // ASTRA 二轮 I6：空 IntentKey/ExecutionId 是身份合同错误（非旧配置缺参），按终止链处置（HandoffError 非 ConfigMissing）
+        if (string.IsNullOrWhiteSpace(request.IntentKey) || string.IsNullOrWhiteSpace(request.ExecutionId))
+            return HandoffRegisterResult.Rejected(HandoffReasonCodes.HandoffError,
+                "移交身份不完整（IntentKey/ExecutionId 为空）——调用方合同违反");
+
+        // I2：关闭/能力预检先于恢复屏障（恢复扫描会写运行文件，监控端不得先产生副作用）
+        lock (_gate)
+        {
+            if (_shutdown)
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.Shutdown, "任务中心宿主已关闭");
+            if (CapabilityBlockReason() is { } preBlock)
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.NoCapability, preBlock);
+        }
+
+        await EnsureRecoveredAsync().ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested(); // 启动链 CTS 仅覆盖受理点之前
+
+        // 台账查询（读路径无副作用）：命中 → 内容核对（§2）；不完整 → 拒绝新受理（I5）
+        if (LedgerGate(request) is { } receipt)
+            return receipt;
+
+        // 快照辅助判定（§6.1；三轮 B1：必须在台账之后——受理事实优先，命中（含 Unknown）已由 LedgerGate 回执 AlreadyAccepted；
+        // 仅未命中新受理才查快照；拒绝返回前经台账复核，与最终临界区双检同构；测试接缝 provider=null 时跳过）
+        if (_statusSnapshotProvider is { } snap
+            && SnapshotPrecheck(snap(), request.Mode) is { } snapRejected)
+            return RejectedWithLedgerRecheck(request, snapRejected.ReasonCode!, snapRejected.Reason!);
+
+        return request.Mode == StartupHandoffModes.Resume
+            ? RegisterResumeHandoff(request, ct)
+            : RegisterStartHandoff(request, ct);
+    }
+
+    /// <summary>start / armTrigger 语义受理（§4）：arm 仅 Waiting+有待触发时刻才算已挂载（身份追加登记后 AlreadyAccepted 幂等）；其余活动态响亮拒绝。</summary>
+    private HandoffRegisterResult RegisterStartHandoff(StartupHandoffRequest request, CancellationToken ct)
+    {
+        // 锁外预检（只读无副作用；拒绝返回前经台账复核，I3）
+        WorkflowSnapshot snapshot;
+        try
+        {
+            snapshot = _workflows.LoadSnapshot(request.WorkflowId); // 隔离/缺失响亮抛出
+        }
+        catch (Exception ex)
+        {
+            return RejectedWithLedgerRecheck(request, HandoffReasonCodes.FlowUnavailable, ex.Message);
+        }
+        // 候选只读（与 SaveFlow/StartWorkflowAsync 同口径：宿主层独立护栏）
+        if (string.Equals(snapshot.Document.Activation?.Status, "candidate-ready", StringComparison.Ordinal))
+            return RejectedWithLedgerRecheck(request, HandoffReasonCodes.FlowUnavailable,
+                "candidate-ready 候选流程为只读预览，禁止移交启动（激活归 R5 专用入口）");
+
+        var arm = request.Mode == StartupHandoffModes.ArmTrigger;
+        if (arm && !HasMountableTrigger(snapshot.Document))
+            return RejectedWithLedgerRecheck(request, HandoffReasonCodes.NoTrigger,
+                "流程无可挂载触发器（须带 trigger.time 触发器；结构性循环首轮立即执行，不算可挂载——四轮 重要5）");
+
+        var shortId = ShortExecutionId(request);
+        WorkflowRunner runner;
+        WorkflowRunRecord run;
+        lock (_gate)
+        {
+            // 最终临界区（I3 顺序）：关闭 → 能力复核 → 台账双检 → 就绪 → 取消检查 → 互斥 → 组装+权威预检 → 受理落盘 → 预留
+            if (_shutdown)
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.Shutdown, "任务中心宿主已关闭");
+            if (CapabilityBlockReason() is { } capBlock)
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.NoCapability, capBlock);
+            if (LedgerGate(request) is { } raced)
+                return raced;
+            var readiness = ExecutionReadiness();
+            if (!readiness.Ready)
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.NotReady, readiness.Reason!);
+            ct.ThrowIfCancellationRequested(); // 取消检查贴近提交点（I3）
+
+            var sameFlow = _runs.List().Where(r => r.WorkflowId == request.WorkflowId).ToList();
+            if (sameFlow.Any(r => r.State == WorkflowRunState.Unknown))
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.Unknown,
+                    "该流程存在结果不确定（Unknown）的运行，需先对账");
+            if (arm)
+            {
+                var waiting = sameFlow
+                    .Where(r => r.State == WorkflowRunState.Waiting && r.Wait?.NextTriggerAt is not null)
+                    .OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+                if (waiting is not null)
+                {
+                    // B2：幂等挂载成立前，先把本次身份原子追加到在等运行（落盘失败不得报成功；旧绑定保留；
+                    // 五轮 重6：修订冲突重读收敛）
+                    if (TryAppendHandoffBinding(id => _runs.Load(id), r => _runs.Update(r), waiting.RunId, request,
+                            $"启动中心移交受理（armTrigger 幂等挂载，执行 {shortId}）。",
+                            r => r.State == WorkflowRunState.Waiting && r.Wait?.NextTriggerAt is not null
+                                ? null
+                                : (HandoffReasonCodes.AlreadyRunning, "挂载目标运行状态已变化，请刷新后重试"),
+                            ct, out var committedMount) is { } mountError)
+                        return HandoffRegisterResult.Rejected(mountError.Code, mountError.Reason);
+                    // 六轮 重要1：回执用提交时快照（提交后引擎可能已推进/清除 Wait——不重读，不把已受理假报为异常）
+                    return HandoffRegisterResult.AlreadyAccepted(committedMount!.RunId,
+                        $"流程触发器已在挂载中（运行 {committedMount.RunId} 等待 {committedMount.Wait!.NextTriggerAt:MM-dd HH:mm} 触发），本次身份已登记为幂等挂载",
+                        committedMount.State);
+                }
+                if (sameFlow.Any(r => ActiveStates.Contains(r.State)))
+                    return HandoffRegisterResult.Rejected(HandoffReasonCodes.AlreadyRunning,
+                        "该流程已有非挂载中的活动运行（不假报已挂载）");
+            }
+            else if (sameFlow.Any(r => ActiveStates.Contains(r.State)))
+            {
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.AlreadyRunning,
+                    "该流程已有活动运行（同流程同时只允许一个运行）");
+            }
+            if (_reservedWorkflows.Contains(request.WorkflowId) || _drives.ContainsKey(request.WorkflowId))
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.AlreadyRunning, "该流程运行正在启动/驱动中");
+
+            // B3：受理前权威预检（组装/计划预检失败=Rejected——不消耗 IntentKey、不留运行记录、不标 Failed）
+            try
+            {
+                runner = CreateRunner(_clientAccessor());
+                runner.PreflightStartable(snapshot);
+            }
+            catch (Exception ex)
+            {
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.FlowUnavailable, ex.Message);
+            }
+
+            ct.ThrowIfCancellationRequested(); // 三轮 重要9：组装+权威预检之后、受理落盘之前再查取消
+
+            try
+            {
+                // 受理提交点（锁内）：移交身份随创建原子落盘，runId 直接来自记录（绝不倒推查询）
+                run = _runs.CreateRun(request.WorkflowId, snapshot.Revision,
+                    note: $"启动中心移交受理（{request.Mode}，执行 {shortId}）",
+                    handoff: BuildIdentity(request));
+            }
+            catch (Exception ex)
+            {
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.HandoffError, "受理落盘失败：" + ex.Message);
+            }
+            _reservedWorkflows.Add(request.WorkflowId);
+        }
+
+        // 驱动激活（锁外；B4 关闭竞态由 LaunchDrive 册外观察兜底）。受理已提交不撤回；回执状态尽力刷新（I1）
+        var launch = LaunchDrive(request.WorkflowId, runner,
+            cts => runner.StartExistingRunAsync(run.RunId, cts.Token, armTriggerLaunch: arm), "", knownRunId: run.RunId);
+        // 七轮 重要1：回执状态读取失败/记录缺失回落受理提交时快照（Planned）——绝不把已受理假报为异常拒绝
+        var confirmed = TryReadRunState(run.RunId) ?? run.State;
+        if (launch.Status == HostActionStatus.Unavailable)
+            return HandoffRegisterResult.Accepted(run.RunId,
+                $"已受理（受理≠执行成功）；{launch.Message}（运行按退出语义留待恢复扫描/显式处置）", confirmed);
+        // 八轮 重要1：回执不假报「已挂载」——驱动刚起步（异步推进），挂载结果以运行状态为准。
+        // 九轮 重要1：Interrupted 是「无未决外部事实的驱动异常」通用收敛态（前提失效只是其中一种）——
+        // 回执按状态如实描述，具体原因一律指向运行备注，不用状态反推原因
+        var armReason = confirmed == WorkflowRunState.Interrupted
+            ? "已受理挂载请求；运行已中断（原因见运行备注），受理事实保留"
+            : "已受理挂载请求（挂载等待不占 BGI 执行槽，到点由引擎推进；受理≠执行成功，挂载结果见运行状态）";
+        return HandoffRegisterResult.Accepted(run.RunId,
+            arm ? armReason : "已移交受理，任务中心接管（受理≠执行成功）",
+            confirmed);
+    }
+
+    /// <summary>resume 语义受理（§4）：绑定最新（UpdatedAt 最大）Interrupted/Paused 运行；受理点=身份绑定原子追加落盘；重放同键 AlreadyAccepted 不重选。</summary>
+    private HandoffRegisterResult RegisterResumeHandoff(StartupHandoffRequest request, CancellationToken ct)
+    {
+        var shortId = ShortExecutionId(request);
+        WorkflowRunner runner;
+        string boundRunId;
+        WorkflowRunRecord? committedBind = null; // 七轮 重要1：受理提交时快照（锁外回执兜底用）
+        lock (_gate)
+        {
+            // 最终临界区（I3）：关闭 → 能力复核 → 台账双检 → 就绪 → 取消检查 → 互斥/目标 → 流程与权威预检 → 身份追加 → 预留
+            if (_shutdown)
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.Shutdown, "任务中心宿主已关闭");
+            if (CapabilityBlockReason() is { } capBlock)
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.NoCapability, capBlock);
+            if (LedgerGate(request) is { } raced)
+                return raced;
+            var readiness = ExecutionReadiness();
+            if (!readiness.Ready)
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.NotReady, readiness.Reason!);
+            ct.ThrowIfCancellationRequested();
+
+            var sameFlow = _runs.List().Where(r => r.WorkflowId == request.WorkflowId).ToList();
+            if (sameFlow.Any(r => r.State == WorkflowRunState.Unknown))
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.Unknown,
+                    "该流程存在结果不确定（Unknown）的运行，需先对账再恢复");
+            var target = sameFlow
+                .Where(r => r.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused)
+                .OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+            if (target is null)
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.NoResumableRun,
+                    "该流程无可恢复运行（需 Interrupted/Paused 记录；启动新计划请用 start 语义）");
+            if (sameFlow.Any(r => ActiveStates.Contains(r.State) && r.RunId != target.RunId))
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.AlreadyRunning,
+                    "该流程已有其他活动运行（同流程同时只允许一个运行）");
+            if (_reservedWorkflows.Contains(request.WorkflowId) || _drives.ContainsKey(request.WorkflowId))
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.AlreadyRunning, "该流程运行正在启动/驱动中");
+
+            // B3：resume 同样先做流程可用性/候选/权威预检——拒绝时原记录及其身份保持不变
+            WorkflowSnapshot snapshot;
+            try
+            {
+                snapshot = _workflows.LoadSnapshot(target.WorkflowId);
+            }
+            catch (Exception ex)
+            {
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.FlowUnavailable, ex.Message);
+            }
+            if (string.Equals(snapshot.Document.Activation?.Status, "candidate-ready", StringComparison.Ordinal))
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.FlowUnavailable,
+                    "candidate-ready 候选流程为只读预览，禁止移交恢复（激活归 R5 专用入口）");
+            try
+            {
+                runner = CreateRunner(_clientAccessor());
+                runner.PreflightStartable(snapshot);
+            }
+            catch (Exception ex)
+            {
+                return HandoffRegisterResult.Rejected(HandoffReasonCodes.FlowUnavailable, ex.Message);
+            }
+
+            // 受理点（锁内）：身份绑定原子追加（B1：绝不替换旧绑定，旧意图去重依据永存），落盘失败不留预留；
+            // 五轮 重6：修订冲突重读收敛（TryAppendHandoffBinding 内置取消复核贴近身份修改）
+            if (TryAppendHandoffBinding(id => _runs.Load(id), r => _runs.Update(r), target.RunId, request,
+                    $"启动中心移交受理（resume 绑定，执行 {shortId}）。",
+                    r => r.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused
+                        ? null
+                        : (HandoffReasonCodes.NoResumableRun, "目标运行状态已变化，请刷新后重试"),
+                    ct, out committedBind) is { } bindError)
+                return HandoffRegisterResult.Rejected(bindError.Code, bindError.Reason);
+            _reservedWorkflows.Add(request.WorkflowId);
+            boundRunId = committedBind!.RunId;
+        }
+
+        // 驱动激活（锁外，复用 Resume 驱动路径；B4 关闭竞态由册外观察兜底；受理不撤回——运行保持可恢复状态）
+        var launch = LaunchDrive(request.WorkflowId, runner,
+            cts => runner.ResumeAsync(boundRunId, cts.Token), "", knownRunId: boundRunId);
+        // 七轮 重要1：回执状态尽力刷新——读取失败/记录缺失回落受理提交时快照，绝不把已受理假报为异常拒绝
+        var confirmed = TryReadRunState(boundRunId) ?? committedBind!.State;
+        if (launch.Status == HostActionStatus.Unavailable)
+            return HandoffRegisterResult.Accepted(boundRunId,
+                $"已受理恢复绑定（受理≠执行成功）；{launch.Message}（运行保持可恢复状态）", confirmed);
+        return HandoffRegisterResult.Accepted(boundRunId, "已移交受理：恢复既有运行（游标身份重定位；受理≠执行成功）", confirmed);
+    }
     /// <summary>退出：取消全部驱动 + 限时收敛（未收敛=进程退出语义，在飞事实保留待下次恢复扫描）。</summary>
     public async Task ShutdownAsync()
     {
@@ -369,13 +823,15 @@ public sealed class TaskCenterHost
 
     /// <summary>登记驱动任务并观察至收敛（异常按在飞事实收敛 Unknown/Interrupted，绝不留 Running 僵尸）。</summary>
     private HostActionResult LaunchDrive(string workflowId, WorkflowRunner runner,
-        Func<CancellationTokenSource, Task<WorkflowRunRecord>> start, string registeredMessage)
+        Func<CancellationTokenSource, Task<WorkflowRunRecord>> start, string registeredMessage, string? knownRunId = null)
     {
         var cts = new CancellationTokenSource();
         Task<WorkflowRunRecord> task;
         try
         {
-            task = start(cts); // 预检/隔离等同步响亮抛出（在首个 await 前）
+            // 注意（ASTRA 二轮 I1）：异步入口的异常进入返回的 Task（不会在首个 await 前同步抛出）——
+            // 此 catch 仅兜底真正的同步抛出；任务失败统一由观察器收敛（ObserveDriveAsync/ObserveOrphanAsync）
+            task = start(cts);
         }
         catch (Exception ex)
         {
@@ -383,20 +839,21 @@ public sealed class TaskCenterHost
             cts.Dispose();
             return HostActionResult.Unavailable(ex.Message);
         }
-        var entry = new DriveEntry { WorkflowId = workflowId, Runner = runner, Cts = cts, Task = task };
+        var entry = new DriveEntry { WorkflowId = workflowId, RunId = knownRunId, Runner = runner, Cts = cts, Task = task };
         lock (_gate)
         {
             if (_shutdown)
             {
+                // B4：任务已启动就必须被观察——取消令牌不证明远端已停；转册外观察收敛（在飞事实→Unknown，否则→Interrupted）
                 _reservedWorkflows.Remove(workflowId);
                 cts.Cancel();
-                cts.Dispose();
-                return HostActionResult.Unavailable("任务中心宿主已关闭");
+                _ = ObserveOrphanAsync(entry);
+                return HostActionResult.Unavailable("任务中心宿主已关闭（驱动已启动，转关闭竞态册外观察收敛）");
             }
             _drives[workflowId] = entry;
         }
         _ = ObserveDriveAsync(entry);
-        StateChanged?.Invoke(this, EventArgs.Empty);
+        NotifyStateChanged();
         return HostActionResult.Registered(registeredMessage);
     }
 
@@ -409,22 +866,8 @@ public sealed class TaskCenterHost
         }
         catch (Exception ex)
         {
-            // 一轮 B5：驱动异常收敛——当前提交在飞→Unknown（结果不可考），否则→Interrupted（等价崩溃语义，可显式恢复）
-            try
-            {
-                var run = _runs.List()
-                    .Where(r => r.WorkflowId == entry.WorkflowId && ActiveStates.Contains(r.State))
-                    .OrderByDescending(r => r.CreatedAt).FirstOrDefault();
-                if (run is not null)
-                {
-                    run.State = run.CurrentSubmission is { InFlight: true }
-                        ? WorkflowRunState.Unknown : WorkflowRunState.Interrupted;
-                    run.Note = (run.Note is null ? "" : run.Note + " ")
-                        + $"驱动异常（{ex.GetType().Name}），按{(run.State == WorkflowRunState.Unknown ? "在飞事实标 Unknown" : "Interrupted")}收敛。";
-                    _runs.Update(run);
-                }
-            }
-            catch { /* 收敛失败不遮原异常 */ }
+            // 一轮 B5 + 二轮 I1/I4：驱动异常收敛——未决外部事实→Unknown（结果不可考），否则→Interrupted（等价崩溃语义，可显式恢复）
+            ConvergeDriveException(entry, ex);
             _log?.Invoke($"[任务中心] 运行驱动异常（{ex.GetType().Name}）：{ex.Message}");
         }
         finally
@@ -435,7 +878,65 @@ public sealed class TaskCenterHost
                 _reservedWorkflows.Remove(entry.WorkflowId);
             }
             entry.Cts.Dispose();
-            StateChanged?.Invoke(this, EventArgs.Empty);
+            NotifyStateChanged();
+        }
+    }
+
+    /// <summary>
+    /// 驱动异常收敛（ASTRA 二轮 I1/I4）：优先按准确 RunId 收敛（移交路径），面板 Start 路径倒查兜底；
+    /// 未决外部事实判定（RunStore.HasUnresolvedExternalFact：主体提交/收尾在飞；前置在飞按 R4.6 合同走 Interrupted+恢复时对账）→Unknown，否则→Interrupted；
+    /// 已是 Unknown/Interrupted/终态的不改写（幂等，不遮更保守的既有结论）。
+    /// 六轮 重要2：修订冲突（并发追加绑定/引擎推进）→ 重读重判有界重试——不再吞冲突留下「Waiting 无驱动、恢复屏障已过」的假挂载窗口；
+    /// 重试耗尽/其他失败 → 响亮留痕（记录保持非终态，下次启动恢复扫描兜底标记）。
+    /// </summary>
+    private void ConvergeDriveException(DriveEntry entry, Exception ex)
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                var run = entry.RunId is not null
+                    ? _runs.Load(entry.RunId)
+                    : _runs.List()
+                        .Where(r => r.WorkflowId == entry.WorkflowId && ActiveStates.Contains(r.State))
+                        .OrderByDescending(r => r.CreatedAt).FirstOrDefault();
+                if (run is null || run.IsTerminal || run.State is WorkflowRunState.Unknown or WorkflowRunState.Interrupted)
+                    return;
+                run.State = RunStore.HasUnresolvedExternalFact(run) ? WorkflowRunState.Unknown : WorkflowRunState.Interrupted;
+                run.Note = (run.Note is null ? "" : run.Note + " ")
+                    + $"驱动异常（{ex.GetType().Name}），按{(run.State == WorkflowRunState.Unknown ? "未决外部事实标 Unknown" : "Interrupted")}收敛。";
+                _runs.Update(run);
+                return;
+            }
+            catch (RunRecordConflictException)
+            {
+                // 并发推进/追加绑定——重读重判重试（有界），绝不拿旧对象覆盖
+            }
+            catch (Exception cex)
+            {
+                _log?.Invoke($"[任务中心] 驱动异常收敛失败（{cex.GetType().Name}）：{cex.Message}——记录保持非终态，下次启动恢复扫描兜底");
+                return;
+            }
+        }
+        _log?.Invoke($"[任务中心] 驱动异常收敛反复修订冲突（{entry.RunId ?? entry.WorkflowId}）——记录保持非终态，已留痕，下次启动恢复扫描兜底");
+    }
+
+    /// <summary>册外观察（ASTRA 二轮 B4：关闭竞态下已启动但未登记的驱动同样观察至收敛——绝不无人认领；不触发 StateChanged，宿主正在退出）。</summary>
+    private async Task ObserveOrphanAsync(DriveEntry entry)
+    {
+        try
+        {
+            var run = await entry.Task.ConfigureAwait(false);
+            _log?.Invoke($"[任务中心] 运行 {run.RunId} 终态：{run.State}（关闭竞态册外驱动）");
+        }
+        catch (Exception ex)
+        {
+            ConvergeDriveException(entry, ex);
+            _log?.Invoke($"[任务中心] 册外驱动异常收敛（{ex.GetType().Name}）：{ex.Message}");
+        }
+        finally
+        {
+            entry.Cts.Dispose();
         }
     }
 

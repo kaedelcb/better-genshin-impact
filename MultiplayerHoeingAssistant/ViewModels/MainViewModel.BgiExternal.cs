@@ -22,7 +22,7 @@ public partial class MainViewModel
     /// </summary>
     public TaskCenterHost TaskCenterHost => _taskCenterHost ??= new TaskCenterHost(
         WorkflowStore.DefaultFlowsDir(), RunStore.DefaultRunsDir(), ResourceCatalogService.DefaultCacheFile(),
-        () => _externalClient, AddLog);
+        () => _externalClient, () => IsExecutorMode, () => LatestLocalStatus, AddLog); // R4.9 §6.2+I2 能力守卫 + 三轮 B1 快照提供方必传（生产无测试接缝）
 
     /// <summary>[切片1] 事件通道探测退避：Legacy（老 BGI）或暂时连不上时，到此时间点之前不再探测。</summary>
     private DateTime _externalNextProbeUtc = DateTime.MinValue;

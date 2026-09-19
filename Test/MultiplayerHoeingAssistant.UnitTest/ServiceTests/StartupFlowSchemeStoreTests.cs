@@ -237,4 +237,69 @@ public class StartupFlowSchemeStoreTests
         Assert.Equal("导入方案 0913 1530",
             StartupFlowSchemeStore.MakeImportedNameUnique("  ", [], Stamp));
     }
+
+    [Fact]
+    public void Export_Import_RoundTrip_PreservesTaskCenterHandoffFields()
+    {
+        // R4.9 §5/矩阵13（组件级闭环）：方案导出/导入往返，移交新字段（taskCenterFlowId/taskCenterHandoffMode）不丢；Clone 同
+        var dir = NewTempDir();
+        try
+        {
+            var path = WriteFile(dir, "scheme.json", "");
+            var scheme = MakeRichScheme("移交方案");
+            scheme.Config.Steps.Add(new StartupStep
+            {
+                Kind = StartupStepKinds.EnterTaskCenter,
+                TaskCenterFlowId = "wf-目标流程",
+                TaskCenterHandoffMode = StartupHandoffModes.ArmTrigger,
+            });
+
+            StartupFlowSchemeStore.ExportScheme(scheme, path);
+            var imported = StartupFlowSchemeStore.ImportSchemes(path);
+
+            var item = Assert.Single(imported);
+            var node = item.Config.Steps.Last();
+            Assert.Equal("wf-目标流程", node.TaskCenterFlowId);
+            Assert.Equal(StartupHandoffModes.ArmTrigger, node.TaskCenterHandoffMode);
+
+            var clone = StartupFlowSchemeStore.Clone(item.Config);
+            Assert.Equal("wf-目标流程", clone.Steps.Last().TaskCenterFlowId);
+            Assert.Equal(StartupHandoffModes.ArmTrigger, clone.Steps.Last().TaskCenterHandoffMode);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SaveAll_Load_RoundTrip_PreservesTaskCenterHandoffFields()
+    {
+        // 八轮 重要3：场景 13 补证——经真实方案库持久化通道（SaveAll→Load，区别于导出/导入）往返，
+        // 移交新字段不丢：证明保存/加载路径无转换/过滤（新实例读盘，排除内存状态）
+        var dir = NewTempDir();
+        try
+        {
+            var path = Path.Combine(dir, "schemes.json");
+            var scheme = MakeRichScheme("移交方案");
+            scheme.Config.Steps.Add(new StartupStep
+            {
+                Kind = StartupStepKinds.EnterTaskCenter,
+                TaskCenterFlowId = "wf-目标流程",
+                TaskCenterHandoffMode = StartupHandoffModes.Resume,
+            });
+
+            new StartupFlowSchemeStore(path).SaveAll([scheme]);
+            var loaded = new StartupFlowSchemeStore(path).Load();
+
+            var item = Assert.Single(loaded);
+            var node = item.Config.Steps.Last();
+            Assert.Equal("wf-目标流程", node.TaskCenterFlowId);
+            Assert.Equal(StartupHandoffModes.Resume, node.TaskCenterHandoffMode);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

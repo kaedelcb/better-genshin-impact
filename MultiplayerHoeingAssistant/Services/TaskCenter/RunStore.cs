@@ -73,8 +73,9 @@ public sealed class RunStore
         }
     }
 
-    /// <summary>创建运行记录（初始 Planned + 固定幂等键；RecordRevision 从 1 起）。</summary>
-    public WorkflowRunRecord CreateRun(string workflowId, string workflowRevision, string? note = null)
+    /// <summary>创建运行记录（初始 Planned + 固定幂等键；RecordRevision 从 1 起）。
+    /// handoff（R4.9）：移交身份随创建原子落盘——受理提交点即本持久化，崩溃窗无「已受理无身份」记录。</summary>
+    public WorkflowRunRecord CreateRun(string workflowId, string workflowRevision, string? note = null, HandoffIdentity? handoff = null)
     {
         var now = DateTimeOffset.Now;
         var rec = new WorkflowRunRecord
@@ -88,6 +89,7 @@ public sealed class RunStore
             CreatedAt = now,
             UpdatedAt = now,
             Note = note,
+            Handoffs = handoff is null ? [] : [handoff],
         };
         Persist(rec, expectedRecordRevision: 0);
         return rec;
@@ -130,6 +132,57 @@ public sealed class RunStore
     public static string? DeriveAccountKey(string? uid)
         => string.IsNullOrWhiteSpace(uid) ? null
             : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(uid)))[..16].ToLowerInvariant();
+
+    /// <summary>
+    /// 权威台账查询（R4.9 §3 + ASTRA 二轮 I5 三态：命中/确定未命中/查询不完整）。
+    /// 与展示型 List 容错不同：存在无法解析的记录文件时返回 Incomplete（坏文件可能藏着受理事实），调用方必须拒绝新受理。
+    /// 命中时返回运行+具体绑定（内容核对按该绑定的 Mode）；同一运行的多条绑定按创建次序取最新（追加式，后受理者优先）。
+    /// </summary>
+    public HandoffLedgerQuery QueryHandoffLedger(string intentKey)
+    {
+        if (string.IsNullOrWhiteSpace(intentKey)) return HandoffLedgerQuery.MissInstance; // 空键由移交入口先行拒绝
+        if (!Directory.Exists(_runsDir)) return HandoffLedgerQuery.MissInstance;
+        WorkflowRunRecord? bestRun = null;
+        HandoffIdentity? bestBinding = null;
+        var incomplete = false;
+        foreach (var file in Directory.EnumerateFiles(_runsDir, "*.run.json"))
+        {
+            WorkflowRunRecord? rec;
+            try
+            {
+                rec = JsonSerializer.Deserialize<WorkflowRunRecord>(File.ReadAllText(file, Encoding.UTF8), JsonOptions);
+            }
+            catch (Exception ex) when (ex is JsonException or IOException)
+            {
+                incomplete = true; // 坏文件可能正是该键的受理记录——不得当未命中
+                continue;
+            }
+            if (rec is null || string.IsNullOrWhiteSpace(rec.RunId)) { incomplete = true; continue; }
+            foreach (var binding in rec.Handoffs)
+            {
+                if (!string.Equals(binding.IntentKey, intentKey, StringComparison.Ordinal)) continue;
+                if (bestRun is null || rec.CreatedAt > bestRun.CreatedAt
+                    || (rec.CreatedAt == bestRun.CreatedAt && rec.UpdatedAt >= bestRun.UpdatedAt))
+                {
+                    bestRun = rec;
+                    bestBinding = binding;
+                }
+            }
+        }
+        if (bestRun is not null && bestBinding is not null)
+            return HandoffLedgerQuery.Hit(bestRun, bestBinding);
+        return incomplete ? HandoffLedgerQuery.IncompleteInstance : HandoffLedgerQuery.MissInstance;
+    }
+
+    /// <summary>
+    /// 是否存在未决外部事实（ASTRA 二轮 I4：恢复扫描与驱动异常收敛统一判定）——主体提交在飞 / 收尾在意或执行中。
+    /// 注意（R4.9 二轮处置回退）：前置动作在飞【不计入】——R4.6 已验收合同是「前置在飞 → Interrupted，
+    /// 恢复时经 ReconcileAsync 对账」，标 Unknown 会绕过该合同（RecoverOnStart_PrerequisiteInFlight 回归证明）。
+    /// </summary>
+    public static bool HasUnresolvedExternalFact(WorkflowRunRecord rec)
+        => rec.CurrentSubmission is { InFlight: true }
+           || rec.State == WorkflowRunState.Completing
+           || rec.PendingCompletion is not null;
 
     /// <summary>推进记录（提交受理/终态/水位/等待/收尾状态更新；记录修订单调递增）。</summary>
     public void Update(WorkflowRunRecord rec) => Persist(rec, rec.RecordRevision);
@@ -178,8 +231,10 @@ public sealed class RunStore
             if (rec.IsTerminal) continue;
             // R4.8（宿主夹具连带发现）：Unknown 已是保守收敛终点（结果不确定待对账）——再扫描不改动、不追加笔记、
             // 更不降级 Interrupted（否则 ResumeAsync 的 Unknown 守卫被绕过，前置未知记录场景可未经对账恢复）；
-            // 仍返回供 Reconciler/宿主对账决策（幂等保持，CrashWindow2 合同不变）
-            if (rec.State == WorkflowRunState.Unknown)
+            // 仍返回供 Reconciler/宿主对账决策（幂等保持，CrashWindow2 合同不变）。
+            // R4.9（ASTRA 二轮 I4）：Interrupted 同样幂等保持——重新 Persist 会刷新 UpdatedAt
+            // 重排 resume「最新」候选并重复追加留痕；扫描不得改变业务排序依据。
+            if (rec.State is WorkflowRunState.Unknown or WorkflowRunState.Interrupted)
             {
                 recovered.Add(rec);
                 continue;
@@ -196,7 +251,6 @@ public sealed class RunStore
                 rec.State = WorkflowRunState.Unknown;
                 note = $"助手重启：提交在飞且终态未证实（{sub.Key}，节点 {sub.NodeId}），标 Unknown，需按幂等键+job 查询对账，禁止自动重跑。";
             }
-
             else
             {
                 rec.State = WorkflowRunState.Interrupted;
@@ -240,19 +294,30 @@ public sealed class RunStore
             File.Copy(file, Path.Combine(_backupDir, $"{rec.RunId}.{current?.RecordRevision ?? 0}.run.json"), overwrite: true);
         }
 
+        // ASTRA 二轮 S2：写入未发布时恢复内存对象的未提交修订/时间（避免调用方携带假修订继续推进）
+        var previousUpdatedAt = rec.UpdatedAt;
         rec.RecordRevision = expectedRecordRevision + 1;
         rec.UpdatedAt = DateTimeOffset.Now;
-        var bytes = Utf8NoBom.GetBytes(JsonSerializer.Serialize(rec, JsonOptions));
-        Directory.CreateDirectory(_runsDir); // 二轮：首次写入才建目录
-        var tmp = Path.Combine(_runsDir, $".{rec.RunId}.{Guid.NewGuid():N}.tmp");
-        File.WriteAllBytes(tmp, bytes);
         try
         {
-            File.Move(tmp, file, overwrite: true);
+            var bytes = Utf8NoBom.GetBytes(JsonSerializer.Serialize(rec, JsonOptions));
+            Directory.CreateDirectory(_runsDir); // 二轮：首次写入才建目录
+            var tmp = Path.Combine(_runsDir, $".{rec.RunId}.{Guid.NewGuid():N}.tmp");
+            File.WriteAllBytes(tmp, bytes);
+            try
+            {
+                File.Move(tmp, file, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(tmp)) File.Delete(tmp);
+            }
         }
-        finally
+        catch
         {
-            if (File.Exists(tmp)) File.Delete(tmp);
+            rec.RecordRevision = expectedRecordRevision;
+            rec.UpdatedAt = previousUpdatedAt;
+            throw;
         }
         }
     }

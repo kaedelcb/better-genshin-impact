@@ -27,6 +27,14 @@ public class StartupFlowSchemeStore
         _schemesPath = Path.Combine(dir, "startup-flow-schemes.json");
     }
 
+    /// <summary>测试接缝：显式方案库路径（生产一律走无参构造的 %APPDATA%/NexusBGI；夹具不得触碰真实用户目录）。</summary>
+    internal StartupFlowSchemeStore(string schemesPath)
+    {
+        _schemesPath = schemesPath;
+        var dir = Path.GetDirectoryName(schemesPath);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+    }
+
     public List<StartupFlowScheme> Load()
     {
         try

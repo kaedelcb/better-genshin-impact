@@ -270,6 +270,64 @@ public sealed class WorkflowRunner
     }
 
     /// <summary>
+    /// 移交受理前预检（R4.9 + ASTRA 二轮 B3：权威计划预检先于受理落盘——不可执行流程响亮拒绝、不消耗 IntentKey、不留运行记录）。
+    /// 无执行副作用；与 StartExistingRunAsync/ResumeAsync 内的预检同口径（驱动入口仍各自复验，防御纵深）。
+    /// </summary>
+    public void PreflightStartable(WorkflowSnapshot snapshot)
+    {
+        var plan = new WorkflowPlan(snapshot.Document);
+        var preflight = plan.Preflight(_boundary.SingleNativeSupported, _prerequisites.SupportedKinds, _terminal.SupportedKinds,
+            _boundary.SuppressConfigCompletionSupported);
+        if (!preflight.Executable)
+            throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
+    }
+    /// <summary>
+    /// 驱动既有 Planned 运行（R4.9 移交受理路径：受理点=宿主 CreateRun 落盘（含移交身份），本入口不再建运行——
+    /// 与 StartAsync 的「预检→建运行→驱动」不同，这里是「驱动已受理运行」。预检失败/隔离文件响亮抛出
+    /// （运行记录保留——受理不撤回，由宿主侧收敛标注，R4.9 §3 步骤 4）。
+    /// armTriggerLaunch=true（armTrigger 移交）：在本入口实际加载的定义快照上复验可挂载前提（七轮 重要3）——
+    /// 受理→驱动重载窗口内前提失效时不激活执行（受理事实保留，运行收敛 Interrupted 可处置，绝不提交）。
+    /// </summary>
+    public async Task<WorkflowRunRecord> StartExistingRunAsync(string runId, CancellationToken ct = default,
+        bool armTriggerLaunch = false)
+    {
+        var run = _runs.Load(runId) ?? throw new FileNotFoundException("运行记录不存在：" + runId);
+        if (run.State is not WorkflowRunState.Planned)
+            throw new InvalidOperationException($"仅 Planned 新运行可经移交入口驱动（当前 {run.State}）。");
+
+        var snapshot = _workflows.LoadSnapshot(run.WorkflowId); // 隔离响亮抛出；文档+修订同源（B1）
+        if (armTriggerLaunch && !HasMountableTrigger(snapshot.Document))
+        {
+            // 七轮 重要3：arm 前提必须在驱动实际使用的定义快照上复验——受理（快照 A 有 trigger.time）→驱动重载
+            // （快照 B 触发器已被移除）窗口内前提失效时不得顺势进入执行：受理事实保留、运行收敛 Interrupted
+            // （可处置/可显式恢复），绝不做任何提交
+            run.State = WorkflowRunState.Interrupted;
+            run.Note = AppendNote(run.Note,
+                "armTrigger 挂载前提失效（受理后流程已无 trigger.time 触发器），未激活执行（受理事实保留）。");
+            _runs.Update(run);
+            return run;
+        }
+        var plan = new WorkflowPlan(snapshot.Document);
+        var preflight = plan.Preflight(_boundary.SingleNativeSupported, _prerequisites.SupportedKinds, _terminal.SupportedKinds,
+            _boundary.SuppressConfigCompletionSupported); // R4.6 I1/B6：能力协商预检（含 suppress 能力）
+        if (!preflight.Executable)
+            throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
+
+        run.WorkflowRevision = snapshot.Revision; // 与 Resume 同口径：起步对账到当前修订（受理与驱动同窗口，正常相等）
+        var control = new RunControl { RunCts = CancellationTokenSource.CreateLinkedTokenSource(ct) };
+        if (!_controls.TryAdd(run.RunId, control))
+            throw new InvalidOperationException("运行登记冲突：" + runId);
+        try
+        {
+            return await DriveAsync(run, plan, control).ConfigureAwait(false);
+        }
+        finally
+        {
+            _controls.TryRemove(run.RunId, out _);
+            control.RunCts.Dispose();
+        }
+    }
+    /// <summary>
     /// 显式恢复运行（B3 恢复入口 + D7 生命周期触发的消费侧）。
     /// 仅接受 Interrupted/Paused；Unknown 拒绝自动恢复（结果不确定，需先按幂等键+job 查询对账）。
     /// 恢复点 = 游标身份在当前修订中重定位；已完成节点不重放；历史失败结果参与聚合。
@@ -815,6 +873,12 @@ public sealed class WorkflowRunner
             leaf.Dispose();
         }
     }
+
+    /// <summary>可挂载触发器判定（armTrigger 语义，宿主受理预验与驱动起步复验共用同一定义——七轮 重要3 单一事实源）。
+    /// 四轮 重要5 收窄：**仅 trigger.time 入口等待才算可挂载**——结构性循环首轮立即执行不算（AwaitLoopRoundStartAsync
+    /// 只在 LoopIteration&gt;0 生效），若承认 loop 可挂载，arm 会绕过 start 应有的混用/快照守卫却立即提交。</summary>
+    internal static bool HasMountableTrigger(WorkflowDocument doc)
+        => doc.Triggers.Any(t => t.Kind == "trigger.time");
 
     /// <summary>I3：持久化备注脱敏——长数字串（UID 形态）打码；受控原因码+脱敏摘要，不存原始敏感面。</summary>
     internal static string Sanitize(string? text)

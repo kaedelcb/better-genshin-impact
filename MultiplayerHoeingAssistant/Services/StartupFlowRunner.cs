@@ -13,14 +13,14 @@ namespace MultiplayerHoeingAssistant.Services;
 ///
 /// BGI 进程级动作（启动/关闭）经注入的 _bgiExecutor 委托路由到 MainViewModel → CommandExecutor，
 /// 继承既有跨会话守卫；监控端（无本地 BGI）由该委托返回失败，引擎记日志后继续后续节点。
-/// 「进入任务中心执行」节点经 _enterTaskCenter 委托交接（任务中心落地前为占位实现）。
+/// 「进入任务中心执行」节点经 _enterTaskCenter 委托真实移交（R4.9：双重身份 + 结构化回执，移交终态后逐层终止本启动链）。
 /// </summary>
 public sealed class StartupFlowRunner
 {
     /// <summary>BGI 命令执行入口（cmd, params）→ 结果。由 MainViewModel 注入。</summary>
     private readonly Func<string, Dictionary<string, object>?, Task<CommandResult>> _bgiExecutor;
-    /// <summary>进入任务中心交接（null 或占位实现=任务中心未落地）。</summary>
-    private readonly Func<Task> _enterTaskCenter;
+    /// <summary>进入任务中心移交入口（R4.9：携带双重身份请求 → 结构化回执；由宿主 VM 注入，路由到 TaskCenterHost.RegisterHandoffAsync）。</summary>
+    private readonly Func<StartupHandoffRequest, CancellationToken, Task<StartupHandoffResult>> _enterTaskCenter;
     /// <summary>定时触发器挂载入口（由宿主 VM 注入：负责登记定时状态、到点执行 FireSteps、取消）。</summary>
     private readonly Action<StartupStep> _armTimer;
     /// <summary>电子狗挂载入口（由宿主 VM 注入：负责登记盯梢状态、边沿触发执行 FireSteps、取消）。</summary>
@@ -45,7 +45,7 @@ public sealed class StartupFlowRunner
 
     public StartupFlowRunner(
         Func<string, Dictionary<string, object>?, Task<CommandResult>> bgiExecutor,
-        Func<Task> enterTaskCenter,
+        Func<StartupHandoffRequest, CancellationToken, Task<StartupHandoffResult>> enterTaskCenter,
         Action<StartupStep> armTimer,
         Func<StartupStep, CancellationToken, Task<(bool passed, string desc)>> confirmHandler,
         Action<string> log,
@@ -68,11 +68,31 @@ public sealed class StartupFlowRunner
     /// <summary>「结束流程」节点抛出的内部控制流异常（逐层展开到顶层捕获，终止整条流程）。</summary>
     private sealed class FlowEndException : Exception;
 
+    /// <summary>「进入任务中心执行」节点终态已定（移交成功/已受理/拒绝且须终止链）后抛出的内部控制流异常
+    /// （R4.9 §7：逐层终止当前启动链及全部分支回溯，仅最外层 RunAsync 捕获）。</summary>
+    private sealed class HandoffCompletedException(string message) : Exception(message);
+
+    /// <summary>
+    /// 一次启动链执行的上下文（R4.9 §2/§6.1）：每次 RunAsync 一个实例，参数透传到每个动作节点（不用共享字段，四入口并发共存）。
+    /// ExecutionId=本次执行身份；Trigger=触发来源（手动/自动主流程为 null）；
+    /// BgiTaskCommitFacts=本链内直接提交 BGI 任务的提交事实（混用检测主证据，成功或结果不确定均计、明确失败不计）；
+    /// FailureNote=动作节点返回 false 时附带的可读原因（RunChainAsync 单处回报后消费）。
+    /// </summary>
+    private sealed class RunContext
+    {
+        public required string ExecutionId { get; init; }
+        public StartupTriggerInfo? Trigger { get; init; }
+        public List<string> BgiTaskCommitFacts { get; } = [];
+        public string? FailureNote { get; set; }
+        /// <summary>执行身份短码（日志/回报用，并发执行可区分，R4.9 §7）。</summary>
+        public string ShortId => ExecutionId.Length >= 8 ? ExecutionId[..8] : ExecutionId;
+    }
+
     /// <summary>
     /// 从主链开始执行整条启动流程。本方法不抛业务异常（单节点失败不炸整条链）；
     /// OperationCanceledException 会原样抛出给调用方（取消语义）。
     /// </summary>
-    public async Task RunAsync(IReadOnlyList<StartupStep> steps, CancellationToken ct)
+    public async Task RunAsync(IReadOnlyList<StartupStep> steps, CancellationToken ct, StartupTriggerInfo? trigger = null)
     {
         if (steps.Count == 0)
         {
@@ -80,20 +100,25 @@ public sealed class StartupFlowRunner
             return;
         }
 
-        _log($"[槲寄生] 启动流程开始执行（主链 {steps.Count} 个节点）");
+        var ctx = new RunContext { ExecutionId = Guid.NewGuid().ToString("N"), Trigger = trigger };
+        _log($"[槲寄生] 启动流程开始执行（主链 {steps.Count} 个节点，执行 {ctx.ShortId}）");
         try
         {
-            await RunChainAsync(steps, ct, depth: 0);
-            _log("[槲寄生] 启动流程执行完毕");
+            await RunChainAsync(steps, ct, ctx, depth: 0);
+            _log($"[槲寄生] 启动流程执行完毕（执行 {ctx.ShortId}）");
         }
         catch (FlowEndException)
         {
-            _log("[槲寄生] 启动流程已由「结束流程」节点终止");
+            _log($"[槲寄生] 启动流程已由「结束流程」节点终止（执行 {ctx.ShortId}）");
+        }
+        catch (HandoffCompletedException ex)
+        {
+            _log($"[槲寄生] {ex.Message}（执行 {ctx.ShortId}）");
         }
     }
 
     /// <summary>递归执行一条节点链（主链或条件的子链）。depth 仅用于日志缩进可读性。</summary>
-    private async Task RunChainAsync(IReadOnlyList<StartupStep> steps, CancellationToken ct, int depth)
+    private async Task RunChainAsync(IReadOnlyList<StartupStep> steps, CancellationToken ct, RunContext ctx, int depth)
     {
         for (var i = 0; i < steps.Count; i++)
         {
@@ -131,20 +156,22 @@ public sealed class StartupFlowRunner
                 }
                 else
                 {
-                    await RunChainAsync(branch, ct, depth + 1);
+                    await RunChainAsync(branch, ct, ctx, depth + 1);
                 }
                 continue;
             }
 
             // 动作节点
             Report(step, NodeRunState.Running);
-            var ok = await ExecuteActionAsync(step, display, indent, ct);
+            var ok = await ExecuteActionAsync(step, display, indent, ct, ctx);
             if (!ok)
             {
                 // 动作失败统一记日志后继续后续节点（启动期动作失败不应阻塞整链，
-                // 需要严格守门时用条件节点包一层分支）
-                _log($"[槲寄生] {indent}节点「{display}」执行未成功，继续后续节点");
-                Report(step, NodeRunState.Failed);
+                // 需要严格守门时用条件节点包一层分支）；FailureNote 单次消费，不污染后续节点
+                var note = ctx.FailureNote;
+                ctx.FailureNote = null;
+                _log($"[槲寄生] {indent}节点「{display}」执行未成功{(note is null ? "" : $"：{note}")}，继续后续节点");
+                Report(step, NodeRunState.Failed, note);
             }
             else
             {
@@ -325,7 +352,7 @@ public sealed class StartupFlowRunner
 
     // ================= 动作执行 =================
 
-    private async Task<bool> ExecuteActionAsync(StartupStep step, string display, string indent, CancellationToken ct)
+    private async Task<bool> ExecuteActionAsync(StartupStep step, string display, string indent, CancellationToken ct, RunContext ctx)
     {
         try
         {
@@ -346,8 +373,12 @@ public sealed class StartupFlowRunner
                     var p = string.IsNullOrWhiteSpace(step.Arguments)
                         ? null
                         : new Dictionary<string, object> { ["args"] = step.Arguments };
-                    var r = await _bgiExecutor("start_bgi", p);
-                    _log($"[槲寄生] {indent}启动 BGI：{r.Message}");
+                    // 带任务参数（startOneDragon/--startGroups/--TaskProgress）的启动会计入提交事实（R4.9 §6.1 混用检测主证据）
+                    var taskArgs = HasBgiTaskArgs(step.Arguments);
+                    var r = taskArgs
+                        ? await ExecuteBgiTaskCommitAsync(ctx, display, "start_bgi", p)
+                        : await _bgiExecutor("start_bgi", p);
+                    _log($"[槲寄生] {indent}启动 BGI{(taskArgs ? "（带任务参数）" : "")}：{r.Message}");
                     return r.Status == "success";
                 }
                 case StartupStepKinds.StopBgi:
@@ -358,9 +389,15 @@ public sealed class StartupFlowRunner
                 }
                 case StartupStepKinds.EnterTaskCenter:
                 {
-                    _log($"[槲寄生] {indent}环境准备完毕，进入任务中心执行任务序列");
-                    await _enterTaskCenter();
-                    return true;
+                    // R4.9 §5/§7：真实移交。校验顺序与宿主一致（三轮 重要5：显式未知 mode 先于空目标检查，
+                    // 不允许空目标短路掩盖未知语义）；链继续路径（ConfigMissing）由 RunChainAsync 经 FailureNote 单处回报（三轮 重要3）
+                    var handoff = await ExecuteHandoffAsync(step, display, indent, ct, ctx);
+                    // Accepted/AlreadyAccepted 或 Rejected+TerminateChain：终态已在 ExecuteHandoffAsync 单处回报，
+                    // 抛控制流逐层终止本启动链（含分支回溯）——后续节点（含 StopBgi）一律不执行
+                    if (handoff.Outcome != HandoffOutcome.Rejected || handoff.TerminateChain)
+                        throw new HandoffCompletedException(HandoffChainEndMessage(handoff));
+                    ctx.FailureNote = $"{handoff.ReasonCode}：{handoff.Reason}（执行 {ctx.ShortId}）"; // 四轮 建议1：链继续路径回报同样附执行短码
+                    return false;
                 }
                 case StartupStepKinds.EndFlow:
                 {
@@ -426,7 +463,7 @@ public sealed class StartupFlowRunner
                         _log($"[槲寄生] {indent}节点「{display}」未填写配置组名，跳过");
                         return false;
                     }
-                    var r = await _bgiExecutor("start_group", new Dictionary<string, object> { ["groupName"] = step.TaskName });
+                    var r = await ExecuteBgiTaskCommitAsync(ctx, display, "start_group", new Dictionary<string, object> { ["groupName"] = step.TaskName });
                     _log($"[槲寄生] {indent}启动配置组「{step.TaskName}」（旧版节点）：{r.Message}");
                     return r.Status == "success";
                 }
@@ -437,7 +474,7 @@ public sealed class StartupFlowRunner
                         _log($"[槲寄生] {indent}节点「{display}」未填写一条龙名，跳过");
                         return false;
                     }
-                    var r = await _bgiExecutor("start_oneclick", new Dictionary<string, object> { ["configName"] = step.TaskName });
+                    var r = await ExecuteBgiTaskCommitAsync(ctx, display, "start_oneclick", new Dictionary<string, object> { ["configName"] = step.TaskName });
                     _log($"[槲寄生] {indent}启动一条龙「{step.TaskName}」（旧版节点）：{r.Message}");
                     return r.Status == "success";
                 }
@@ -485,6 +522,10 @@ public sealed class StartupFlowRunner
         {
             throw; // 流程终止控制流，逐层展开
         }
+        catch (HandoffCompletedException)
+        {
+            throw; // 移交终态控制流，逐层展开（R4.9 §7：绝不能被通用 catch 吞掉）
+        }
         catch (OperationCanceledException)
         {
             throw; // 取消是正常控制流，抛给 RunAsync 的调用方处理
@@ -494,6 +535,126 @@ public sealed class StartupFlowRunner
             _log($"[槲寄生] {indent}节点「{display}」执行异常：{ex.Message}");
             return false;
         }
+    }
+
+    /// <summary>「进入任务中心执行」移交（R4.9 §6/§7）：语义校验 → 混用守卫（主证据）→ 构建双重身份请求 → 委托回执 → 节点终态单处回报。</summary>
+    private async Task<StartupHandoffResult> ExecuteHandoffAsync(StartupStep step, string display, string indent, CancellationToken ct, RunContext ctx)
+    {
+        // 校验顺序与宿主 RegisterHandoffAsync 一致（三轮 重要5）：显式未知 mode 最先（终止链），空目标其次（旧配置兼容链继续）
+        if (!StartupHandoffModes.IsKnown(step.TaskCenterHandoffMode))
+        {
+            var bad = StartupHandoffResult.Rejected(HandoffReasonCodes.UnsupportedMode,
+                $"未支持的移交语义「{step.TaskCenterHandoffMode}」（支持 start/resume/armTrigger，不静默回落 start）");
+            _log($"[槲寄生] {indent}移交被拒绝[{bad.ReasonCode}]：{bad.Reason}（执行 {ctx.ShortId}）");
+            Report(step, NodeRunState.Failed, $"{bad.ReasonCode}：{bad.Reason}（执行 {ctx.ShortId}）");
+            return bad;
+        }
+        if (string.IsNullOrWhiteSpace(step.TaskCenterFlowId))
+        {
+            // 空目标=旧配置兼容：不在这里 Report——返回 TerminateChain=false 的拒绝，由 RunChainAsync 经 FailureNote 单处回报（三轮 重要3）
+            _log($"[槲寄生] {indent}「{display}」未配置目标任务中心流程，跳过移交（旧配置兼容，继续后续节点，执行 {ctx.ShortId}）");
+            return StartupHandoffResult.Rejected(HandoffReasonCodes.ConfigMissing, "未配置目标任务中心流程");
+        }
+        // 混用检测（§6.1 主证据）：本执行已直接提交 BGI 任务 + start/resume → 拒绝；armTrigger 挂载等待不占槽位，不受限
+        if (step.TaskCenterHandoffMode != StartupHandoffModes.ArmTrigger && ctx.BgiTaskCommitFacts.Count > 0)
+        {
+            var mixed = StartupHandoffResult.Rejected(HandoffReasonCodes.MixedUsage,
+                $"本启动链已直接提交 BGI 任务（{string.Join("、", ctx.BgiTaskCommitFacts)}），与任务中心移交混用，请二选一");
+            _log($"[槲寄生] {indent}移交被拒绝[{mixed.ReasonCode}]：{mixed.Reason}（执行 {ctx.ShortId}）");
+            Report(step, NodeRunState.Failed, $"{mixed.ReasonCode}：{mixed.Reason}（执行 {ctx.ShortId}）");
+            return mixed;
+        }
+
+        // 双重身份（§2）：ExecutionId=本次执行；IntentKey=计划出现（触发器=种类:实例:日程日；手动=每次新意图）
+        var request = new StartupHandoffRequest
+        {
+            ExecutionId = ctx.ExecutionId,
+            StepId = step.Id,
+            TriggerKind = ctx.Trigger?.Kind,
+            TriggerInstanceId = ctx.Trigger?.InstanceId,
+            FireDate = ctx.Trigger?.OccurrenceKey,
+            IntentKey = ctx.Trigger is { } trig
+                ? $"{trig.Kind}:{trig.InstanceId}:{trig.OccurrenceKey}"
+                : $"manual:{ctx.ExecutionId}",
+            WorkflowId = step.TaskCenterFlowId,
+            Mode = step.TaskCenterHandoffMode,
+            IntentNote = display,
+        };
+        StartupHandoffResult result;
+        try
+        {
+            result = await _enterTaskCenter(request, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw; // 取消语义原样上传
+        }
+        catch (Exception ex)
+        {
+            // 委托异常=受理事实未决（可能已受理）——按 Rejected+终止链兜底，绝不假装成功
+            result = StartupHandoffResult.Rejected(HandoffReasonCodes.HandoffError,
+                $"移交通道异常：{ex.Message}（受理事实未决）");
+        }
+
+        if (result.Outcome == HandoffOutcome.Rejected)
+        {
+            _log($"[槲寄生] {indent}移交被拒绝[{result.ReasonCode}]：{result.Reason}（执行 {ctx.ShortId}）");
+            // 三轮 重要3：链继续路径（TerminateChain=false，仅 ConfigMissing）不在此 Report——由 RunChainAsync 经 FailureNote 单处回报
+            if (result.TerminateChain)
+                Report(step, NodeRunState.Failed, $"{result.ReasonCode}：{result.Reason}（执行 {ctx.ShortId}）");
+            return result;
+        }
+        // S4：保留宿主回执 Reason（含「受理≠执行成功/驱动激活受阻」等说明）+ 执行短码（§7/S10 并发可区分）
+        var okNote = (result.Outcome == HandoffOutcome.Accepted
+            ? $"已移交任务中心（运行 {result.RunId}），任务中心接管"
+            : $"同一计划出现此前已受理（运行 {result.RunId}）")
+            + (result.Reason is null ? "" : $"——{result.Reason}");
+        _log($"[槲寄生] {indent}「{display}」{okNote}（执行 {ctx.ShortId}）");
+        Report(step, NodeRunState.Success, $"{okNote}（执行 {ctx.ShortId}）");
+        return result;
+    }
+
+    /// <summary>移交终态后终止启动链的日志文案（R4.9 §7）。</summary>
+    private static string HandoffChainEndMessage(StartupHandoffResult r) => r.Outcome switch
+    {
+        HandoffOutcome.Accepted => "已移交任务中心，本次启动链到此终止（后续节点不再执行）",
+        HandoffOutcome.AlreadyAccepted => "同一计划出现已受理，本次启动链到此终止（后续节点不再执行）",
+        _ => $"移交被拒绝（{r.ReasonCode}），按策略终止本次启动链（后续节点不再执行）",
+    };
+
+    /// <summary>执行会直接提交 BGI 任务的命令并登记提交事实（R4.9 §6.1 混用检测主证据：成功或结果不确定均计，明确失败不计）。</summary>
+    private async Task<CommandResult> ExecuteBgiTaskCommitAsync(RunContext ctx, string display, string cmd, Dictionary<string, object>? p)
+    {
+        try
+        {
+            var r = await _bgiExecutor(cmd, p);
+            if (r.Status == "success")
+                ctx.BgiTaskCommitFacts.Add($"节点「{display}」（{cmd} 已受理）");
+            else if (string.IsNullOrWhiteSpace(r.ErrorCode)) // 五轮收尾：空白错误码=无有效业务信封，同样按不确定计入
+                // 三轮 重要4：无业务信封的失败=结果不确定（BGI 侧合同：连接建立后的命令传输失败 at-least-once，超时≠未执行，
+                // 见 CommandExecutor 分层超时注释）——保守计入提交事实
+                ctx.BgiTaskCommitFacts.Add($"节点「{display}」（{cmd} 结果不确定：{r.Message}）");
+            // failed + ErrorCode = BGI 权威业务拒绝（request_expired/task_busy/batch_busy 等，确定未提交）——不计
+            return r;
+        }
+        catch (Exception)
+        {
+            // IPC/执行异常=结果不确定（命令可能已送达）——保守计入提交事实，再按既有容错路径返回失败
+            ctx.BgiTaskCommitFacts.Add($"节点「{display}」（{cmd} 结果不确定）");
+            throw;
+        }
+    }
+
+    /// <summary>BGI 启动参数是否携带任务参数（R4.9 §6.1 已查证 CommandLineOptions：判定口径与 BGI 解析对齐——
+    /// 只看第一个参数 token：startOneDragon 含子串即中；--startGroups/--TaskProgress 精确匹配；裸 start 仅启截图器不算；
+    /// 三轮 S1：不做全串子串匹配，参数值里出现同名文本不误判）。</summary>
+    internal static bool HasBgiTaskArgs(string? args)
+    {
+        if (string.IsNullOrWhiteSpace(args)) return false;
+        var first = args.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+        return first.Contains("startOneDragon", StringComparison.OrdinalIgnoreCase)
+               || first.Equals("--startGroups", StringComparison.OrdinalIgnoreCase)
+               || first.Equals("--TaskProgress", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool StartProcess(StartupStep step, string display, string indent)

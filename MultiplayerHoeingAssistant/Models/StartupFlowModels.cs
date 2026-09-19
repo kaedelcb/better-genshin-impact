@@ -224,6 +224,17 @@ public class StartupStep
     /// （不区分大小写，纯文本包含匹配）。只盯挂载之后产生的新日志，不回扫历史。</summary>
     [JsonPropertyName("logKeyword")]
     public string LogKeyword { get; set; } = "";
+
+    // ===== 任务中心移交参数（enterTaskCenter 用，R4.9；加法字段，旧配置缺失走默认值零破坏） =====
+
+    /// <summary>目标任务中心流程稳定身份（WorkflowId）。空 = 未配置 → 运行时移交 Rejected(ConfigMissing)，节点 Failed、链继续（旧配置兼容语义）。</summary>
+    [JsonPropertyName("taskCenterFlowId")]
+    public string TaskCenterFlowId { get; set; } = "";
+
+    /// <summary>移交语义（R4.9 §4）：start（默认，立即执行）/ resume（恢复既有运行）/ armTrigger（挂载流程触发器）。
+    /// 显式未知值运行时响亮拒绝（Rejected UnsupportedMode，不静默回落 start）。</summary>
+    [JsonPropertyName("taskCenterHandoffMode")]
+    public string TaskCenterHandoffMode { get; set; } = "start";
 }
 
 /// <summary>
@@ -264,7 +275,7 @@ public static class StartupStepKinds
     public const string KillProgram = "killProgram";
     public const string RunCmd = "runCmd";
     public const string Wait = "wait";
-    /// <summary>进入任务中心执行：流程走到此节点，把控制权交给任务中心的任务序列（任务中心落地前为占位，记日志）。</summary>
+    /// <summary>进入任务中心执行：流程走到此节点，携带双重身份向任务中心宿主移交（R4.9；受理成功/已受理即终止本启动链）。</summary>
     public const string EnterTaskCenter = "enterTaskCenter";
     /// <summary>结束流程：立即终止整条启动流程（含所有外层链）。</summary>
     public const string EndFlow = "endFlow";
@@ -303,7 +314,7 @@ public static class StartupStepKinds
         new(KillProgram, "action", "关闭程序", "▶", "按进程名强制结束当前会话的指定程序（如第三方工具）"),
         new(RunCmd, "action", "执行 CMD 命令", "▶", "以 cmd /c 隐藏窗口执行一条命令，不等待结果"),
         new(Wait, "action", "等待", "▶", "流程内延时 N 秒（等程序就绪时常用）"),
-        new(EnterTaskCenter, "action", "进入任务中心执行", "➤", "环境准备完毕，交接给任务中心执行任务序列（任务中心规划中，当前为占位节点）"),
+        new(EnterTaskCenter, "action", "进入任务中心执行", "➤", "环境准备完毕，移交任务中心受理并接管执行（受理成功后终止本启动链；目标流程与移交语义在节点参数里设置）"),
         new(TimerTrigger, "action", "定时触发器", "⏰", "挂载定时器，到指定时间执行「到点执行」子链；定时中显示状态、可随时取消"),
         new(Watchdog, "action", "电子狗", "🐕", "循环盯梢：每 N 秒检查条件，由不成立变成立时执行「触发执行」子链；触发后默认继续循环，可改为触发后停止；防抖复核可调，挂载时已成立则确认后触发一次"),
         new(LogTrigger, "action", "日志触发器", "📜", "盯本机 BGI 新日志：日志中出现关键字时执行「触发执行」子链；默认循环触发（执行完触发链后继续盯，命中再次触发），可改为触发一次后停止；只盯挂载后的新日志"),
