@@ -206,6 +206,9 @@ public sealed class WorkflowRunner
         _opt = options ?? new WorkflowRunnerOptions();
     }
 
+    /// <summary>运行控制登记实况（R4.8 一轮 I5：宿主动作结构化反馈用——Paused/终态运行无登记，动作不得无声吞）。</summary>
+    public bool HasActiveControl(string runId) => _controls.ContainsKey(runId);
+
     /// <summary>登记显式动作（线程安全；驱动循环在下一边界消费，Stop 同时取消运行令牌）。</summary>
     public void RequestAction(string runId, WorkflowRunAction action)
     {

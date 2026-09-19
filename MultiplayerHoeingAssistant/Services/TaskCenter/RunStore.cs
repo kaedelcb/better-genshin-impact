@@ -174,6 +174,14 @@ public sealed class RunStore
         foreach (var rec in List())
         {
             if (rec.IsTerminal) continue;
+            // R4.8（宿主夹具连带发现）：Unknown 已是保守收敛终点（结果不确定待对账）——再扫描不改动、不追加笔记、
+            // 更不降级 Interrupted（否则 ResumeAsync 的 Unknown 守卫被绕过，前置未知记录场景可未经对账恢复）；
+            // 仍返回供 Reconciler/宿主对账决策（幂等保持，CrashWindow2 合同不变）
+            if (rec.State == WorkflowRunState.Unknown)
+            {
+                recovered.Add(rec);
+                continue;
+            }
             string note;
             if (rec.State == WorkflowRunState.Completing || rec.PendingCompletion is not null)
             {
