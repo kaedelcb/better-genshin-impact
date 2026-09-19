@@ -99,7 +99,7 @@ public class TaskCenterPanelViewModelTests : IDisposable
 
     /// <summary>生产行为宿主（无 runner 接缝；不启动运行，仅列表/编辑/保存路径）。</summary>
     private TaskCenterHost MakePlainHost()
-        => new(_flowsDir, _runsDir, _cacheFile, () => null, null, null, null);
+        => new(_flowsDir, _runsDir, _cacheFile, () => null, (Action<string>?)null, null, null); // 第 5 参显式 Action<string>? 消歧：走测试接缝构造（runnerFactory/readinessOverride 均 null=生产行为）
 
     private static TaskCenterPanelViewModel MakePanel(TaskCenterHost host)
         => new(host, null, autoRefresh: false);

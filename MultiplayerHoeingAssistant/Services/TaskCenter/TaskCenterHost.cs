@@ -66,11 +66,20 @@ public sealed class TaskCenterHost
     /// <summary>BGI 任务状态快照提供方（三轮 B1：快照辅助判定在宿主内、台账之后执行；null=测试接缝跳过快照判定，生产必传）。</summary>
     private readonly Func<ControlStatus?>? _statusSnapshotProvider;
 
+    /// <summary>执行环境确保委托（2026-09-20 修复：任务中心启动时 BGI 未运行不会被拉起，启动直接被「BGI 离线」拒绝）。
+    /// 仅三个执行入口（Start/Resume/启动移交）在就绪检查前调用：锁外、有界等待；返回 null=环境已就绪继续原流程，
+    /// 非 null=响亮拒绝原因（未产生任何受理副作用）。null=不确保（测试接缝默认——保持原离线拒绝行为）。
+    /// 纪律：纯查询/监控路径绝不调用本委托（监控端零副作用合同 R4.10 不破）。</summary>
+    private readonly Func<CancellationToken, Task<string?>>? _ensureExecutionReady;
     private readonly object _gate = new();
     private readonly Dictionary<string, DriveEntry> _drives = new(StringComparer.Ordinal); // key=workflowId（互斥保证唯一）
     private readonly HashSet<string> _reservedWorkflows = new(StringComparer.Ordinal); // 预留（CreateRun 窗口覆盖）
     private Task? _recoverTask; // 恢复屏障任务（R4.8 二轮 阻断5：并发 Start/Resume 共同 await 同一扫描，失败重置允许重试）
     private bool _shutdown;
+    /// <summary>退出取消源（会诊 阻断2：环境确保等锁外等待纳入退出管理——Shutdown 即取消，等待不得漏网）。</summary>
+    private readonly CancellationTokenSource _shutdownCts = new();
+    /// <summary>快照兜底窗口（会诊 重要1；生产 15s，测试接缝可注入缩短——不改变「仍空即 StatusUncertain」语义）。</summary>
+    private readonly TimeSpan _snapshotWaitBudget;
 
     private sealed class DriveEntry
     {
@@ -85,8 +94,9 @@ public sealed class TaskCenterHost
     /// <summary>生产构造：localExecutionCapability 必传（ASTRA 二轮 I2——监控端拒绝执行入口的守卫不得遗漏接线）。</summary>
     public TaskCenterHost(string flowsDir, string runsDir, string catalogCacheFile,
         Func<BgiExternalClient?> clientAccessor, Func<bool> localExecutionCapability,
-        Func<ControlStatus?> statusSnapshotProvider, Action<string>? log = null)
-        : this(flowsDir, runsDir, catalogCacheFile, clientAccessor, log, null, null, localExecutionCapability, statusSnapshotProvider)
+        Func<ControlStatus?> statusSnapshotProvider, Action<string>? log = null,
+        Func<CancellationToken, Task<string?>>? ensureExecutionReady = null)
+        : this(flowsDir, runsDir, catalogCacheFile, clientAccessor, log, null, null, localExecutionCapability, statusSnapshotProvider, ensureExecutionReady)
     {
     }
 
@@ -96,8 +106,11 @@ public sealed class TaskCenterHost
         Func<BgiExternalClient?, WorkflowStore, RunStore, WorkflowRunner>? runnerFactory,
         Func<(bool Ready, string? Reason)>? readinessOverride,
         Func<bool>? localExecutionCapability = null,
-        Func<ControlStatus?>? statusSnapshotProvider = null)
+        Func<ControlStatus?>? statusSnapshotProvider = null,
+        Func<CancellationToken, Task<string?>>? ensureExecutionReady = null,
+        TimeSpan? snapshotWaitBudget = null)
     {
+        _snapshotWaitBudget = snapshotWaitBudget ?? TimeSpan.FromSeconds(15);
         _workflows = new WorkflowStore(flowsDir);
         _runs = new RunStore(runsDir);
         _catalog = new ResourceCatalogService(
@@ -108,7 +121,7 @@ public sealed class TaskCenterHost
         _readinessOverride = readinessOverride;
         _localExecutionCapability = localExecutionCapability;
         _statusSnapshotProvider = statusSnapshotProvider;
-    }
+        _ensureExecutionReady = ensureExecutionReady;    }
 
     /// <summary>运行状态变更通知（终态/动作后触发；UI 以 2s 轮询为主、本事件为辅）。</summary>
     public event EventHandler? StateChanged;
@@ -222,6 +235,18 @@ public sealed class TaskCenterHost
         if (string.Equals(snapshot.Document.Activation?.Status, "candidate-ready", StringComparison.Ordinal))
             return HostActionResult.Unavailable("candidate-ready 候选流程为只读预览，禁止启动（激活归 R5 专用入口）");
 
+        // 环境确保（2026-09-20，锁外有界等待）：BGI 未运行/通道未就绪 → 自动拉起并等待；仍不就绪响亮拒绝（未产生副作用）；
+        // 等待随宿主退出取消（会诊 阻断2：确保纳入退出管理，退出期不得继续拉起/探测）
+        try
+        {
+            if (await EnsureExecutionEnvironmentAsync(_shutdownCts.Token).ConfigureAwait(false) is { } startEnvError)
+                return HostActionResult.Unavailable(startEnvError);
+        }
+        catch (OperationCanceledException)
+        {
+            return HostActionResult.Unavailable("任务中心宿主正在退出，启动已取消（未发送任何任务）");
+        }
+
         BgiExternalClient? client;
         lock (_gate)
         {
@@ -275,6 +300,17 @@ public sealed class TaskCenterHost
             return HostActionResult.Unavailable("运行结果不确定（Unknown），需先按幂等键+job 查询对账，禁止自动恢复");
         if (run.State is not (WorkflowRunState.Interrupted or WorkflowRunState.Paused))
             return HostActionResult.Unavailable($"仅 Interrupted/Paused 可恢复（当前 {run.State}）");
+
+        // 环境确保（同 Start：锁外有界等待，仍不就绪响亮拒绝；等待随宿主退出取消）
+        try
+        {
+            if (await EnsureExecutionEnvironmentAsync(_shutdownCts.Token).ConfigureAwait(false) is { } resumeEnvError)
+                return HostActionResult.Unavailable(resumeEnvError);
+        }
+        catch (OperationCanceledException)
+        {
+            return HostActionResult.Unavailable("任务中心宿主正在退出，恢复已取消（未发送任何任务）");
+        }
 
         BgiExternalClient? client;
         lock (_gate)
@@ -565,11 +601,25 @@ public sealed class TaskCenterHost
         if (LedgerGate(request) is { } receipt)
             return receipt;
 
+        // 环境确保（2026-09-20 修复+会诊处置：台账之后、快照之前——受理事实优先（重放同键由 LedgerGate 先回执，不触发拉起）；
+        // 锁外有界等待，取消随调用方 ct 与宿主退出联动。失败经台账复核回执：等待期间同键可能已被并发请求受理，
+        // 不得把「已受理」误报为拒绝（会诊 阻断1）；arm 挂载同样确保——R4.9 合同维持挂载需就绪，仅把「离线即拒绝」升级为「先拉起再判定」）
+        using var ensureCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
+        if (await EnsureExecutionEnvironmentAsync(ensureCts.Token).ConfigureAwait(false) is { } envError)
+            return RejectedWithLedgerRecheck(request, HandoffReasonCodes.NotReady, envError);
+
         // 快照辅助判定（§6.1；三轮 B1：必须在台账之后——受理事实优先，命中（含 Unknown）已由 LedgerGate 回执 AlreadyAccepted；
         // 仅未命中新受理才查快照；拒绝返回前经台账复核，与最终临界区双检同构；测试接缝 provider=null 时跳过）
-        if (_statusSnapshotProvider is { } snap
-            && SnapshotPrecheck(snap(), request.Mode) is { } snapRejected)
-            return RejectedWithLedgerRecheck(request, snapRejected.ReasonCode!, snapRejected.Reason!);
+        // 会诊 重要1：刚拉起/刚就绪时快照可能尚未到达（旧序会立刻 StatusUncertain 挡死冷启动）——给有界窗口再判定；
+        // 仍不可考按原语义 StatusUncertain 拒绝，不为拉起 BGI 放宽「状态不可考则拒绝」。arm 模式快照不参与判定，不等待。
+        if (_statusSnapshotProvider is not null) // provider=null（测试接缝）保持原语义：整个快照预检跳过
+        {
+            var snapshot = request.Mode == StartupHandoffModes.ArmTrigger
+                ? _statusSnapshotProvider()
+                : await AwaitSnapshotIfMissingAsync(ensureCts.Token).ConfigureAwait(false);
+            if (SnapshotPrecheck(snapshot, request.Mode) is { } snapRejected)
+                return RejectedWithLedgerRecheck(request, snapRejected.ReasonCode!, snapRejected.Reason!);
+        }
 
         return request.Mode == StartupHandoffModes.Resume
             ? RegisterResumeHandoff(request, ct)
@@ -793,6 +843,7 @@ public sealed class TaskCenterHost
             drives = _drives.Values.ToList();
             foreach (var d in drives) d.Cts.Cancel();
         }
+        _shutdownCts.Cancel(); // 锁外取消（取消回调不持卡）：在途环境确保/快照等待立即退出
         if (drives.Count == 0) return;
         var all = Task.WhenAll(drives.Select(d => d.Task));
         await Task.WhenAny(all, Task.Delay(ShutdownConvergeBudget)).ConfigureAwait(false);
@@ -801,6 +852,45 @@ public sealed class TaskCenterHost
     }
 
     // ================= 内部 =================
+
+    /// <summary>执行入口环境确保（2026-09-20；锁外调用，有界等待在委托内）：
+    /// 未就绪且配置了确保委托 → 委托自动启动 BGI 并等待 ext 通道就绪；随后仍由原临界区就绪检查权威复核
+    /// （确保期间状态可能再变化，最终判定不旁路锁内检查）。返回非 null = 响亮拒绝原因（未产生任何受理副作用）。</summary>
+    private async Task<string?> EnsureExecutionEnvironmentAsync(CancellationToken ct)
+    {
+        if (_ensureExecutionReady is null || ExecutionReadiness().Ready) return null;
+        _log?.Invoke("[任务中心] 执行环境未就绪（BGI 离线或 ext 通道未就绪），尝试自动启动 BGI 并等待通道就绪…");
+        try
+        {
+            // 取消纪律（会诊 阻断2）：OCE 不吞——移交路径随启动链/宿主退出取消传播，面板路径由调用点映射为响亮取消
+            return await _ensureExecutionReady(ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return "自动启动 BGI 过程异常（未发送任何任务）：" + ex.Message;
+        }
+    }
+
+    /// <summary>快照短时兜底（会诊 重要1：冷启动刚就绪时快照可能尚未到达，给有界窗口而非立刻 StatusUncertain；
+    /// 仍空按原语义拒绝——不为拉起 BGI 放宽「状态不可考则拒绝」）。provider=null（测试接缝）直接返回 null。</summary>
+    private async Task<ControlStatus?> AwaitSnapshotIfMissingAsync(CancellationToken ct)
+    {
+        if (_statusSnapshotProvider is null) return null;
+        var snapshot = _statusSnapshotProvider();
+        if (snapshot is not null) return snapshot;
+        var deadline = DateTime.UtcNow.Add(_snapshotWaitBudget);
+        while (DateTime.UtcNow < deadline)
+        {
+            ct.ThrowIfCancellationRequested();
+            // 会诊三轮 建议：轮询粒度不超出剩余预算（注入短预算的测试接缝不越界等待）
+            var slice = deadline - DateTime.UtcNow;
+            if (slice <= TimeSpan.Zero) break;
+            await Task.Delay(slice < TimeSpan.FromMilliseconds(500) ? slice : TimeSpan.FromMilliseconds(500), ct).ConfigureAwait(false);
+            snapshot = _statusSnapshotProvider();
+            if (snapshot is not null) return snapshot;
+        }
+        return null;
+    }
 
     private (bool Ready, string? Reason) ExecutionReadiness()
     {
