@@ -37,7 +37,7 @@ public sealed record HostActionResult(HostActionStatus Status, string Message)
 /// 活动态 = Planned/Running/Waiting/Completing/Paused + 本进程预留/驱动；Unknown 运行禁止同流程新跑（需先对账）；
 /// Interrupted 允许另开新运行（旧记录不动，可显式恢复）。与 R4.9 入口原子提交登记互补不替代。
 /// </summary>
-public sealed class TaskCenterHost
+public sealed partial class TaskCenterHost
 {
     /// <summary>退出收敛上限（超时=进程退出语义，下次启动恢复扫描标 Interrupted/Unknown）。</summary>
     private static readonly TimeSpan ShutdownConvergeBudget = TimeSpan.FromSeconds(10);
@@ -96,7 +96,7 @@ public sealed class TaskCenterHost
         Func<BgiExternalClient?> clientAccessor, Func<bool> localExecutionCapability,
         Func<ControlStatus?> statusSnapshotProvider, Action<string>? log = null,
         Func<CancellationToken, Task<string?>>? ensureExecutionReady = null)
-        : this(flowsDir, runsDir, catalogCacheFile, clientAccessor, log, null, null, localExecutionCapability, statusSnapshotProvider, ensureExecutionReady)
+        : this(flowsDir, runsDir, catalogCacheFile, clientAccessor, log, null, null, localExecutionCapability, statusSnapshotProvider, ensureExecutionReady, admissionWired: true)
     {
     }
 
@@ -108,7 +108,8 @@ public sealed class TaskCenterHost
         Func<bool>? localExecutionCapability = null,
         Func<ControlStatus?>? statusSnapshotProvider = null,
         Func<CancellationToken, Task<string?>>? ensureExecutionReady = null,
-        TimeSpan? snapshotWaitBudget = null)
+        TimeSpan? snapshotWaitBudget = null,
+        bool admissionWired = false, string? arbitrationDir = null, TaskCenterAdmissionSeams? admissionSeams = null)
     {
         _snapshotWaitBudget = snapshotWaitBudget ?? TimeSpan.FromSeconds(15);
         _workflows = new WorkflowStore(flowsDir);
@@ -121,7 +122,11 @@ public sealed class TaskCenterHost
         _readinessOverride = readinessOverride;
         _localExecutionCapability = localExecutionCapability;
         _statusSnapshotProvider = statusSnapshotProvider;
-        _ensureExecutionReady = ensureExecutionReady;    }
+        _ensureExecutionReady = ensureExecutionReady;
+        _admissionWired = admissionWired;
+        _arbitrationDir = arbitrationDir;
+        _admissionSeams = admissionSeams;
+        _runsDirPath = runsDir;    }
 
     /// <summary>运行状态变更通知（终态/动作后触发；UI 以 2s 轮询为主、本事件为辅）。</summary>
     public event EventHandler? StateChanged;
@@ -246,6 +251,11 @@ public sealed class TaskCenterHost
         {
             return HostActionResult.Unavailable("任务中心宿主正在退出，启动已取消（未发送任何任务）");
         }
+
+        // R5.2 B2（E1）：接线后面板启动一律经统一仲裁面（无双跑：BGI 执行锁物理互斥+门面逻辑准入互斥）；
+        // 未接线=旧路径（既有测试接缝默认——R4 行为合同不变）。
+        if (_admissionWired)
+            return await SubmitFlowStartViaAdmissionAsync(workflowId, snapshot).ConfigureAwait(false);
 
         BgiExternalClient? client;
         lock (_gate)
@@ -962,6 +972,7 @@ public sealed class TaskCenterHost
         }
         finally
         {
+            MarkAdmissionTerminalIfAny(entry.RunId); // R5.2 B2：运行终态→仲裁操作终局回写（未接线/无映射=零副作用，异常留痕不掩原收敛）
             lock (_gate)
             {
                 _drives.Remove(entry.WorkflowId);

@@ -220,6 +220,10 @@ public sealed class ArbitrationAdmissionService
     public LeaseOpResult EnsureOwnership(string ownerEpoch, int ttlSeconds = 15)
         => _store.TryAcquire(ownerEpoch, ttlSeconds);
 
+    /// <summary>带接管证据的获取（§6.3：证据仅 LeaseTakeoverObserver 单调观察满 TTL 产出，锁内复核与时下文件一致才放行）。</summary>
+    public LeaseOpResult EnsureOwnership(string ownerEpoch, int ttlSeconds, LeaseTakeoverEvidence? evidence)
+        => _store.TryAcquire(ownerEpoch, ttlSeconds, evidence);
+
     /// <summary>登记时冻结候选快照（不可变消费记录：占位/重试按快照比对与重建，不凭调用方后置可变对象）。</summary>
     internal static ArbitrationCandidate CloneCandidate(ArbitrationCandidate c)
         => new()

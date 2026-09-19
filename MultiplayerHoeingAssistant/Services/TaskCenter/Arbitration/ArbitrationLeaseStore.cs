@@ -111,8 +111,11 @@ public sealed class ArbitrationLeaseStore
         // 锁文件不存在 = 无并发写者，直接读，绝不 New 出任何文件（恪守「只读不写盘」）。
         if (!File.Exists(_lockPath))
             return ReadCore();
-        using var lockStream = new FileStream(_lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-        return ReadCore();
+        return WithLockContentionRetry(() =>
+        {
+            using var lockStream = new FileStream(_lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            return ReadCore();
+        });
     }
 
     /// <summary>盘读判定核心（不做任何写盘；调用方负责是否持锁）。</summary>
@@ -706,9 +709,34 @@ public sealed class ArbitrationLeaseStore
     private T WithLock<T>(Func<LeaseReadResult, T> action)
     {
         Directory.CreateDirectory(_configDir); // §6.4：构造零副作用，首次写入才建目录
-        using var lockStream = new FileStream(_lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-        var read = ReadCore();
-        return action(read);
+        return WithLockContentionRetry(() =>
+        {
+            using var lockStream = new FileStream(_lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            var read = ReadCore();
+            return action(read);
+        });
+    }
+
+    /// <summary>
+    /// 锁争用有界重试（R5.2 B2-α 实证落地）：FileShare.None 跨进程/跨实例互斥下瞬时碰撞属预期并发形态——
+    /// 单次操作持锁极短，碰撞方有界重试（80×15ms≈1.2s 预算）即可随持锁方释放收敛；整段「读取→判定→更新→发布」
+    /// 重试安全（每轮重新盘读并以修订号守卫，不产生重复副作用）。仅兜底 IOException（锁/文件瞬时争用）；
+    /// 其他异常（编程错误/损坏）不掩饰、响亮抛出。预算耗尽后 IOException 原样上抛=响亮失败不静默。
+    /// </summary>
+    private static T WithLockContentionRetry<T>(Func<T> action)
+    {
+        const int maxAttempts = 80;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return action();
+            }
+            catch (IOException) when (attempt < maxAttempts)
+            {
+                System.Threading.Thread.Sleep(15);
+            }
+        }
     }
 
     /// <summary>原子发布：UTF8 无 BOM + 临时文件（同目录 ".guid.tmp"）→ 同目录原子替换（overwrite），finally 清残件。</summary>
