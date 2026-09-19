@@ -42,7 +42,7 @@
 
 | # | 决策 | 定案 |
 |---|---|---|
-| D1 | 引擎归属 | **独立 `WorkflowRunner`（任务中心引擎）**；删除"StartupFlowRunner 不动"的绝对约束——允许改造**移交适配边界**：移交请求带固定 workflowId + 启动运行/步骤/触发出现身份 + 意图 + CancellationToken，返回 `accepted / alreadyAccepted / rejected` + runId 结构化结果。明确「进入任务中心」语义三选一（立即执行 / 恢复既有运行 / 挂载流程触发器），成功移交后**终止当前启动链及其分支回溯**（已挂载后台触发器生命周期另行定义）。StartupFlowRunner 的节点目录/分支模型/编辑器不动 |
+| D1 | 引擎归属 | **独立 `WorkflowRunner`（任务中心引擎）**；删除"StartupFlowRunner 不动"的绝对约束——允许改造**移交适配边界**：移交请求带固定 workflowId + 启动运行/步骤/触发出现身份 + 意图 + CancellationToken，返回 `accepted / alreadyAccepted / rejected` + runId 结构化结果。明确「进入任务中心」语义三选一（立即执行 / 恢复既有运行 / 挂载流程触发器），成功移交后**终止当前启动链及其分支回溯**（已挂载后台触发器生命周期挂账——2026-09-19 R5 设计评审已裁决：现存后台触发器=统一台账三件套（所有权/撤销/动作准入）R5 退出前收口、回溯边界维持不回溯；伴随观察器完整生命周期合同定案、实施后置，见 [R5 设计评审](onedragon-r5-design-review-and-breakdown-2026-09-19.md) §2④）。StartupFlowRunner 的节点目录/分支模型/编辑器不动 |
 | D2 | 存储位置 | `%APPDATA%/NexusBGI/flows/`（定义）+ `%APPDATA%/NexusBGI/runs/`（运行水位），按 Windows 用户隔离，不走 SignalR 同步；开发验证经**独立配置根注入**，不碰真实 User 目录；Store 全新实现（原子写/备份/修订），不照搬 StartupFlowStore |
 | D3 | schema 演进 | 消费 `mistletoe.workflow` schemaVersion 1 原样；新增节点/策略类型按锚点 6 加法扩展。**三级未知处理**：可保留的未知描述性字段→原样往返；未支持的执行类型/必需语义→保留原件、可预览、**阻止执行**并留痕；不兼容语义→升 schemaVersion 单独评审。序列化可扩展不等于旧执行器可忽略新语义 |
 | D4 | 单项资源拒绝 | `task.single.native=false` 期间单项资源节点**响亮拒绝**（rejected + 原因），且**运行前预检**——避免先执行账号/兑换等前置副作用才拒绝；不得把同一流程的整龙资源无差别连坐禁用；结果传播通道（R4.7）完成且集成验收过后再开放 |

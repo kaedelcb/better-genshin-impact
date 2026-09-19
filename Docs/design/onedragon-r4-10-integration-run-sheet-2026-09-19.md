@@ -12,7 +12,7 @@
 
 | 套件 | 结果 | 证据口径 |
 |---|---|---|
-| 助手单测 | **368/368**（352 基线 + R4.10 新夹具 16） | 含生产接线夹具 R410ProductionWiringTests（A/B×4/C1–C5）+ 边界失败分类纯函数夹具 + Runner 混用分类夹具（理论 4 例+白名单 1 例）。诚实记录：曾观察到一次并行跑 `RunAction_Stop_ForwardsToHost_CancelsInFlight_Terminalizes` 自旋等待超时（359/360），单跑与全量复跑均通过——按**并行时序偶发**记录，持续观察，不做「非语义回归」全称断言 |
+| 助手单测 | **368/368**（352 基线 + R4.10 新夹具 16；`ed04355d` 词汇修复+复核补例后 **380/380**=368+12 新夹具，见 §8） | 含生产接线夹具 R410ProductionWiringTests（A/B×4/C1–C5）+ 边界失败分类纯函数夹具 + Runner 混用分类夹具（理论 4 例+白名单 1 例）。诚实记录：曾观察到一次并行跑 `RunAction_Stop_ForwardsToHost_CancelsInFlight_Terminalizes` 自旋等待超时（359/360），单跑与全量复跑均通过——按**并行时序偶发**记录，持续观察，不做「非语义回归」全称断言 |
 | 服务端 BgiCoordinatorServer.Tests | **276/276** | 本轮无服务端代码改动；基线为 R4.10 会话早前实测（含网页回执路由类 RemoteCommandResultRouting/RemoteConfigReplyRouting） |
 | 迁移器合同回归 T01–T27 | **27/27**，退出码 0 | 本轮无迁移器改动；基线为 R4.10 会话早前实测（`Test/OneDragonMigration`） |
 | IpcChannelContractAudit | **80/80**（78→80，新增 T72/T73） | T72=严格合同单项拒绝（校验器层）；T73=经 RouteAsync 完整路由的单项负向（执行/入队边界不触达）；T36/T37/T39 非严格单项选择对照不受影响 |
@@ -104,6 +104,8 @@
 | K | R4.9-8 真实 Waiting 追加身份后自然到点冲突表现。组件级已证（R4.9 夹具，不借组装夹具升级）；自然到点 UI 表现留实机 | BGI 进程+助手 UI | 否 |
 | L | 离线全链（独立配置根），证据分别陈述（复核 阻断2）：A=注入执行边界下宿主移交受理及 Waiting 行为已验证；C5=Runner 委托绑定+直接调用 VM 移交方法负向路径已验证（执行端分支本机已执行）；**生产启动入口→受理→等待的完整贯通链待实机** | 助手（独立配置根） | 否 |
 
+> **A/B/C1 三段已于 2026-09-19 晚 owner 实机窗口通过**（跳过决策同日被补验取代），证据与断言映射见 §8。
+
 ### 2.3 `task.single.native` 开放评估
 
 维持 **false**。开放前置（全部满足才可评估）：
@@ -115,7 +117,7 @@
 
 | 用例域 | 证据 | 结论 |
 |---|---|---|
-| 助手任务中心全机制（R4.1–R4.10） | 助手单测 368/368（含 R4.9 夹具 21 + R4.10 新夹具 16） | 组件级+组装级闭环；本轮变更范围内未发现新增失败 |
+| 助手任务中心全机制（R4.1–R4.10） | 助手单测 368/368（含 R4.9 夹具 21 + R4.10 新夹具 16；`ed04355d` 后 380/380，§8） | 组件级+组装级闭环；本轮变更范围内未发现新增失败 |
 | 网页回执路由（联机批次/远程配置组编辑兼容） | 服务端 276/276（本轮无改动，基线实测） | 未发现新增失败 |
 | R3 守卫（UID 识别/兑换码/A6 抢占/配置名生成等） | BGI 936 通过集内含 R3 守卫夹具 | 未发现新增失败 |
 | BGI 侧既有失败 | 14 项指纹（§1.1 名字+签名），C2 前后双 trx 一致 | **本轮 C2 变更前后失败集合零变化**；14 项与 R4.6 记录基线族一致 |
@@ -127,6 +129,10 @@
 **R4 收口阻塞项 = 硬门槛 A/B/C1 的真实段验证**（需 owner 实机窗口，独立配置根）；
 其余实机项（D–L）不阻塞收口，可与硬门槛同一实机窗口一并观察；
 `task.single.native` 维持 false（§2.3）。
+
+**owner 决策登记（2026-09-19）**：owner 决策**跳过硬门槛 A/B/C1 实机真实段验收，直接进入 R5**——如实标注：**owner 决策跳过，非验证通过**；A/B/C1 维持未验证状态，本验收单不构成其解除依据。跳过项作为风险登记带入 R5 仲裁评审兜底（[R5 设计评审与分解](onedragon-r5-design-review-and-breakdown-2026-09-19.md) §6 R-0、§4 R5.8）；`task.single.native` 维持 false（§2.3 开放前置 1 未满足，贯穿 R5 不评估开放）；owner 实机窗口一旦出现，A/B/C1 补验优先于 R5 新功能实机项。
+
+**owner 补验登记（2026-09-19 晚）**：跳过登记同日稍后即开实机窗口补验，**A/B/C1 三段全部通过**（证据 §8），R4 收口阻塞项解除；期间实锤并修复 ext.task.start 受理回执词汇 bug（`ed04355d`，TEST-2c/TEST-3 复跑通过=端到端证据）。`task.single.native` 维持 false（§2.3 开放前置 2 独立单项正向验收、3 移除 C2 闸门未做）。
 
 ## 4. ASTRA 途中会诊处置记录（3 阻断/4 重要/2 建议）
 
@@ -181,3 +187,39 @@
 | 7 | 建议 | 委托断言 Target+Method.Name 可更精确 | 改 MethodInfo 直接比较 |
 
 **第三轮复核确认（ASTRA 原文要点）**：TryMatchReconcileHit 纪元逻辑正确；SubmitAsync 单次读取修复成立；IsPreSideEffectRejection 七码白名单方向正确（各码全部产生位置未穷举——准入类「副作用前」语义以 BGI 侧合同注释+审计为准）；验收单可作为阶段记录收口；`task.single.native=false` 维持及开放前置合理。
+## 8. 真实段验收记录（2026-09-19 晚，owner 实机窗口）
+
+环境：dev 构建 BGI（Release 输出目录，独立 User 配置根，PID 30928）+ dev 助手（Administrator 会话，Tools 部署 19:42 起含 ed04355d 修复）+ 真实游戏；测试配置=「234」（收尾+领取每日奖励，完成后动作=关闭游戏）；测试流程文件由施工方预置（TEST 系列，owner 仅操作界面按钮）。
+
+### A 段·结果通道 ✅
+
+- TEST-2c（wf-test00a2c / run-20a8b296c2fd）：节点 1（n-a2skip，周一过滤，当天周六）→ `skippedFilter`；节点 2（n-a2run）真实执行 → `succeeded`（rawTerminal="succeeded"，jobId=2e7362ba…，observedTerminal="succeeded"）。
+- 断言：子作业原始终态分别到达 ✅——n-a2skip 的 `skippedFilter` 为**助手侧节点闸门过滤词**（D15：skippedUser/skippedFilter 不阻断收尾；rawTerminal=null=未发送 BGI，不经 InterpretNodeJob，与 BGI 作业终态词 `skipped` 两个层面不混淆），n-a2run 为 BGI 注册表真实终态 succeeded；根作业聚合 ✅——根=RunStore run 本体，落盘字段 state=4（=WorkflowRunState.Succeeded，WorkflowRunModels.cs 枚举），skipped 子项不拖垮根（E9/D15）；助手最终消费的 jobId（2e7362ba…）与词表（observedTerminal=succeeded）正确 ✅。
+
+### B 段·收尾抑制贯通链 ✅
+
+- 实验组 TEST-3（wf-test00b3 / run-2bd7268f0cb2）：任务中心提交（固定 suppress=true）真实执行成功；BGI 日志「一条龙和配置组任务结束」后无完成后动作，**游戏保持运行**（owner 观察+日志无退出记录）✅。载荷链路定点：助手侧提交载荷构造 `BgiWorkflowExecutionBoundary.cs:96` `suppressConfigCompletionAction = request.SuppressConfigCompletionAction`（任务中心固定 true，行 21 注释 B6/E4'）→ BGI 消费结果=收尾未执行+对照组执行，中间环以代码定点+双向结果证据支撑。
+- 对照组：同配置「234」经 BGI 原生界面启动（其余前提相同），跑完**游戏被关闭**（日志 19:53:07「游戏已退出，BetterGI 自动停止截图器」；原生路径无 RunStore 记录，留痕=BGI 日志+owner 观察）——证明收尾具备触发条件，实验组的未关闭=真抑制，非「未走到收尾」假象 ✅。
+
+### C1 段·单项拒绝留痕 ✅
+
+- TEST-1（wf-test00c1 / run-a119ec48b97a）：单项节点被 Planner 响亮拒绝（task.single.native=false）——`result:"rejected"` 不记成功 ✅；**停止策略不推进** ✅——rejected 后 tailReached=true、cursor=null、无后续提交、无重试 attempt 递增、recordRevision 停于 5、终态 Failed 不前进；currentSubmission=null，未发送 BGI ✅；pendingCompletion=null，成功收尾未授权 ✅；reason 留痕可读（UI 历史与 RunStore 同文）✅。
+
+### 真实段带出的生产修复（阻断级实锤）
+
+- **ext.task.start 受理回执词汇不匹配**：BGI 真实线路=queued/adopted（带 taskHandle），助手 ParseAcceptance 原仅认假设词 accepted → 真实提交一律误判「协议违例」Unknown（TEST-2/TEST-2b 两次复现：run-d60e7b4ec178、run-6d1b386196f1；BGI 侧 taskHandle=d61ee5f1/3f52bcb4 真实入队并执行）。整龙/配置组/前置/收尾四路共用同一解析全部受影响。
+- 修复 `ed04355d`：三词兼容 + 缺 taskHandle 仍判协议违例 + 夹具 12 例（BgiJobTerminalPollingTests 钉死真实线路词汇，含 DS 复核补 accepted 缺 handle 1 例）；助手回归 380/380。TEST-2c/TEST-3 复跑通过即修复的端到端证据。
+- **覆盖面核实**：前置适配器（BgiWorkflowPrerequisiteAdapter.cs:124）与收尾执行器（BgiWorkflowTerminalExecutor.cs:97）均调用同一 `ParseAcceptance`，无重复/旧解析——四路修复同源闭环。
+- **adopted 语义核实**：BGI 认领判定 `BgiTaskCoordinator.SameSubmission`（:694-696）——提交带 IdempotencyKey 时**严格按幂等键相等**认领既有作业；任务中心提交必带确定性派生幂等键，adopted 绑定的即本 submission 的既有排队作业，设计上无错绑面，无需额外对账。
+
+### 过程观察（不阻塞）
+
+1. 测试中途配置被再保存（19:24:12）→ BGI 以 configuration_changed 正确拒绝执行——修订守卫按设计工作（换最新修订号后复跑通过）。
+2. 双会话（YS+Administrator）下只读任务状态查询间歇报「用户名未匹配到唯一登录会话」——跨会话只读管道已知边界（总计划 §3.5），BGI 状态卡显示可能滞后。
+
+### 残留证据件
+
+- Unknown 运行两条（run-d60e7b4ec178、run-6d1b386196f1，词汇 bug 期间产生）保留为证据，不删除。
+- TEST 系列流程文件（wf-test00c1/a2/a2b/a2c/b3）保留于助手配置根，复验可用；归 R5 清理或留作回归素材由 owner 定。
+
+**结论**：R4 收口硬门槛 A/B/C1 真实段**全部通过**，§3 收口阻塞项解除；`task.single.native` 维持 false（§2.3 开放前置 2/3 未做）。
