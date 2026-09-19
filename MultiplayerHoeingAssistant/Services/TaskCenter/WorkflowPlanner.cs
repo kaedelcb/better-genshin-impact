@@ -141,15 +141,27 @@ public sealed class WorkflowPlan
         }
 
         // R4.6 E2-8'：前置兑换码身份来源——策略自身 uid 或同节点 prerequisite.account 的 uid（均无则响亮拒绝）
+        // R4.8 §4.5（一轮 I2）账号合同：每节点至多一个 account；account 存在但 uid 空白→拒绝（不得当无账号策略省略
+        // expectedUid）；redeemCode 显式 uid 与 account uid 冲突→拒绝（歧义身份不猜）
         foreach (var node in _doc.Nodes)
         {
-            var accountUid = node.Strategies.FirstOrDefault(s => s.Kind == "prerequisite.account")?.GetString("uid");
+            var accounts = node.Strategies.Where(s => s.Kind == "prerequisite.account").ToList();
+            if (accounts.Count > 1)
+                blocking.Add($"节点 {node.NodeId} 有 {accounts.Count} 个 prerequisite.account（每节点至多一个，账号语义歧义阻止执行）");
+            var accountUid = accounts.Count == 1 ? accounts[0].GetString("uid") : null;
+            if (accounts.Count == 1 && string.IsNullOrWhiteSpace(accountUid))
+                blocking.Add($"节点 {node.NodeId} 的 prerequisite.account 缺少 uid（存在账号策略即要求完整身份，阻止执行）");
             foreach (var s in node.Strategies)
             {
+                var redeemUid = s.Kind == "prerequisite.redeemCode" ? s.GetString("uid") : null;
                 if (s.Kind == "prerequisite.redeemCode"
-                    && string.IsNullOrWhiteSpace(s.GetString("uid"))
+                    && string.IsNullOrWhiteSpace(redeemUid)
                     && string.IsNullOrWhiteSpace(accountUid))
                     blocking.Add($"节点 {node.NodeId} 的 prerequisite.redeemCode 缺少 uid（策略参数与同节点账号策略均无），严格合同拒绝");
+                if (s.Kind == "prerequisite.redeemCode"
+                    && !string.IsNullOrWhiteSpace(redeemUid) && !string.IsNullOrWhiteSpace(accountUid)
+                    && !string.Equals(redeemUid, accountUid, StringComparison.Ordinal))
+                    blocking.Add($"节点 {node.NodeId} 的 prerequisite.redeemCode uid 与同节点 prerequisite.account uid 不一致（账号歧义阻止执行）");
             }
         }
 

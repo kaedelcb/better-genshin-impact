@@ -553,7 +553,9 @@ public class WorkflowRunnerTests : IDisposable
             [
                 new WorkflowNode { NodeId = "n-1", Kind = "resource.oneDragonConfig",
                     Ref = new WorkflowResourceRef { Config = "配置A", ConfigKey = "配置A#k", Revision = "rev-1" },
-                    Strategies = [new WorkflowStrategy { Kind = "prerequisite.account" }] }, // 前置挂起期 = 叶子未建立空窗
+                    Strategies = [new WorkflowStrategy { Kind = "prerequisite.account",
+                        Params = new Dictionary<string, System.Text.Json.JsonElement>
+                        { ["uid"] = System.Text.Json.JsonSerializer.SerializeToElement("10001") } }] }, // 前置挂起期 = 叶子未建立空窗（R4.8 §4.5：账号策略必须带完整 uid）
                 DragonNode("n-2", "配置B"),
             ],
         }).Split('|')[1];

@@ -317,4 +317,84 @@ public class WorkflowPlannerTests
         Assert.True(newPlan.TryLocate("n-b", 0, 2, out var moved));
         Assert.Equal(2, moved.SequenceIndex);
     }
+
+    private static WorkflowStrategy Account(string? uid)
+    {
+        var s = new WorkflowStrategy { Kind = "prerequisite.account" };
+        if (uid is not null)
+            s.Params = new Dictionary<string, System.Text.Json.JsonElement>
+            { ["uid"] = System.Text.Json.JsonSerializer.SerializeToElement(uid) };
+        return s;
+    }
+
+    private static WorkflowStrategy Redeem(string? uid)
+    {
+        var s = new WorkflowStrategy { Kind = "prerequisite.redeemCode" };
+        if (uid is not null)
+            s.Params = new Dictionary<string, System.Text.Json.JsonElement>
+            { ["uid"] = System.Text.Json.JsonSerializer.SerializeToElement(uid) };
+        return s;
+    }
+
+    [Fact]
+    public void Preflight_DuplicateAccount_Blocks()
+    {
+        // R4.8 §4.5（一轮 I2）：每节点至多一个 prerequisite.account
+        var doc = new WorkflowDocument
+        {
+            Name = "双账号",
+            Activation = new WorkflowActivation { Status = "active" },
+            Nodes = [ResourceNode("n-a", "resource.oneDragonConfig", Account("10001"), Account("10002"))],
+        };
+        var preflight = new WorkflowPlan(doc).Preflight(singleNativeSupported: false);
+
+        Assert.False(preflight.Executable);
+        Assert.Contains(preflight.BlockingReasons, r => r.Contains("至多一个"));
+    }
+
+    [Fact]
+    public void Preflight_AccountBlankUid_Blocks()
+    {
+        // 存在账号策略即要求完整身份——不得当无账号策略省略 expectedUid
+        var doc = new WorkflowDocument
+        {
+            Name = "空账号",
+            Activation = new WorkflowActivation { Status = "active" },
+            Nodes = [ResourceNode("n-a", "resource.oneDragonConfig", Account(null))],
+        };
+        var preflight = new WorkflowPlan(doc).Preflight(singleNativeSupported: false);
+
+        Assert.False(preflight.Executable);
+        Assert.Contains(preflight.BlockingReasons, r => r.Contains("prerequisite.account 缺少 uid"));
+    }
+
+    [Fact]
+    public void Preflight_RedeemUidConflictsAccountUid_Blocks()
+    {
+        // 账号歧义不猜：兑换码显式 uid 与账号 uid 不一致 → 阻断
+        var doc = new WorkflowDocument
+        {
+            Name = "身份冲突",
+            Activation = new WorkflowActivation { Status = "active" },
+            Nodes = [ResourceNode("n-a", "resource.oneDragonConfig", Account("10001"), Redeem("10002"))],
+        };
+        var preflight = new WorkflowPlan(doc).Preflight(singleNativeSupported: false);
+
+        Assert.False(preflight.Executable);
+        Assert.Contains(preflight.BlockingReasons, r => r.Contains("不一致"));
+    }
+
+    [Fact]
+    public void Preflight_RedeemUidMatchesAccountUid_Passes()
+    {
+        var doc = new WorkflowDocument
+        {
+            Name = "身份一致",
+            Activation = new WorkflowActivation { Status = "active" },
+            Nodes = [ResourceNode("n-a", "resource.oneDragonConfig", Account("10001"), Redeem("10001"))],
+        };
+        var preflight = new WorkflowPlan(doc).Preflight(singleNativeSupported: false);
+
+        Assert.True(preflight.Executable);
+    }
 }
