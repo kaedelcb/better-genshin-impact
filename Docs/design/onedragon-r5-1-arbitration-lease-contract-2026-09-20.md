@@ -378,4 +378,6 @@ DirectStart → StartExecuting（殊途同归统一提交准入；Accepted≠权
 | 六轮 P2 | Evaluate 抢占方终态普适规则仍宽于 IsLegalPhaseAdvance（None/ReconcilePending/未知枚举→SettlePending 无法持久化） | Evaluate 收窄为 PreemptRequested/Confirming→SettlePending，None/ReconcilePending/未知枚举落保守兜底待对账；策略夹具同步收窄+新增 EvaluateSuccessors_AlwaysPersistentlyLegal 交叉断言（全阶段×全事件×未知枚举，Evaluate 后继必须可持久化或为证据消解/保守路径） |
 | 六轮建议 | SameIntent 重复比对/UnknownPhase 缺拒绝后断言/Restore、Settle 六词矩阵不齐/缺字段兼容合同未记录 | SameIntent 去重；拒绝后 revision 不变断言补齐；Restore/Settle 各拒其余五词矩阵；新增夹具 ReconcilePending_WithoutFromPhase_ConservativeReject 并冻结兼容合同（租约文件无历史版本，缺字段=保守拒绝+人工/对账处置） |
 
+**R5.2 接线设计修订登记（2026-09-20，R5.2 设计稿 v8 冻结生效——ASTRA 过程会诊第八轮签署「可冻结进入 R5.2 实施，阻断项 0」）**：租约文件 version 升 2（旧消费方按 Unsupported 响亮拒绝；v1 向后读兼容——Pending 段原样保留、缺字段保守拒绝；静止≠自动降级，降级策略挂账 R5.6）；LeaseHandoffSegment 结构=Pending（交接责任，六值阶段机不动）+Submission（当前未决发送）+Operations[]（逻辑操作权威记录，三区状态及容量/清理规则见 §4.1a）——**字段级唯一定义以 R5.2 设计稿 §4.1 为准，本文不重复维护**；受理/确定拒绝只关闭 Submission（两分支统一接口 §4.2c），绝不顺带消解 Pending；静止判定扩展=未决 Submission/已受理未终结台账/Pending 任一存在即非静止；§8 注：IPC task.start 回执词=本阶段映射核实，真实线路逐词证据归 R5.8。
+
 **实现验收状态**：**ASTRA 终审（第七轮）签署「可收口（R5.1 实现验收通过），阻断项 0」（2026-09-20）**；回归 462/462（基线 397 + R5.1 新增 65）。七轮唯一非阻断建议（SettlePending 拒绝分支补文件字节级不变断言）已顺手处置并复测全绿。真实线路接线与实机验收属后续 R5.2+ 范围，不在本项。
