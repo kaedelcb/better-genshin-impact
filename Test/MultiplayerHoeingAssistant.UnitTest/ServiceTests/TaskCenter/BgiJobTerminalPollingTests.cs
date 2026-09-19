@@ -25,6 +25,7 @@ public class BgiJobTerminalPollingTests
     }
 
     [Theory]
+    [InlineData("accepted")]
     [InlineData("queued")]
     [InlineData("adopted")]
     public void Acceptance_WithoutTaskHandle_StillProtocolViolation(string status)
