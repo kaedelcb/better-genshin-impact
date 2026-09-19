@@ -117,7 +117,32 @@ internal static class ContractRegression
             Must(child.WorkflowRunId == parent.WorkflowRunId && child.NodeId == parent.NodeId && child.Iteration == 1 && child.JobId != parent.JobId, "child identity lost");
             return Task.CompletedTask;
         });
-
+        await check("T72 strict workflow single-task submission rejected while single native closed", () => {
+            // R4.10 C2（ASTRA 阻断2）：严格合同（executionContractVersion=1）流程提交携 taskId 单项寻址 →
+            // 副作用前显式 capability_required 拒绝（非修订/纪元错误）；非严格合同单项选择（T36/T37/T39）不受影响。
+            var r = InstanceIpcEnvelope.Request("ext.task.start", new { executionContractVersion = 1, idempotencyKey = Key(),
+                expiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(1), bgiEpoch = new { processId = Environment.ProcessId, startTicksUtc = JobRegistry.CurrentEpoch.StartTicksUtc },
+                configName = "dragon", taskId = "guid-a", expectedConfigRevision = "rev",
+                workflowRunId = Guid.NewGuid().ToString(), nodeId = "n-1", iteration = 0 });
+            var failure = ExecutionRequestContract.Validate(r);
+            Must(failure?.ErrorCode == "capability_required", "strict single-task start not capability-rejected");
+            r.Data!.Remove("taskId"); // 对照组：同载荷去掉 taskId（整龙节点）不受影响
+            Must(ExecutionRequestContract.Validate(r) == null, "whole-config workflow start rejected");
+            return Task.CompletedTask;
+        });
+        await check("T73 routed strict single-task start rejected before execution plane", async () => {
+            // R4.10 终审（重要1）：经 ExternalInterfaceSession.RouteAsync 完整路由的严格单项负向——
+            // capability_required 由 DispatchTaskStartAsync 内 Validate 在副作用前返回（执行/入队边界不触达，
+            // 代码顺序证据：ExternalInterfaceCommandPlane.cs DispatchTaskStartAsync 首行 Validate 短路）。
+            var r = InstanceIpcEnvelope.Request("ext.task.start", new { executionContractVersion = 1, idempotencyKey = Key(),
+                expiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(1), bgiEpoch = new { processId = Environment.ProcessId, startTicksUtc = JobRegistry.CurrentEpoch.StartTicksUtc },
+                configName = "dragon", taskId = "guid-a", expectedConfigRevision = "rev",
+                workflowRunId = Guid.NewGuid().ToString(), nodeId = "n-1", iteration = 0 });
+            var response = await ExternalInterfaceSession.GetOrCreate(new InstanceConnection())
+                .RouteAsync(new InstanceRequestHandler(), r, default);
+            Must(response.Success == false && response.ErrorCode == "capability_required",
+                "routed strict single-task start not capability-rejected: " + response.ErrorCode);
+        });
         using var fixture = new Fixture(); var store = new TaskConfigurationContract(fixture.Root);
         await check("T32 configuration describe distinguishes duplicate legacy names", async () => {
             var r = await ExternalInterfaceConfigurationPlane.DispatchAsync(InstanceIpcEnvelope.Request("ext.config.describe", new { configName = "dragon" }), store);

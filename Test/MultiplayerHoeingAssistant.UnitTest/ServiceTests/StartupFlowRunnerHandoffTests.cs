@@ -297,7 +297,7 @@ public class StartupFlowRunnerHandoffTests
     [Fact]
     public async Task BusinessRejection_WithErrorCode_NotCountedAsCommit()
     {
-        // 三轮 重要4：failed + ErrorCode=BGI 权威业务拒绝（确定未提交）→ 不计提交事实，移交正常进委托
+        // 三轮 重要4 + R4.10 终审复核 重要4：failed + 白名单码（task_busy=副作用前准入拒绝，确定未提交）→ 不计提交事实，移交正常进委托
         var group = new StartupStep { Kind = StartupStepKinds.StartGroup, TaskName = "组A" };
         var handoff = Handoff();
         var runner = MakeRunner((cmd, _) =>
@@ -307,6 +307,38 @@ public class StartupFlowRunnerHandoffTests
 
         Assert.Single(_handoffRequests);
         Assert.Equal(NodeRunState.Success, LastReport(handoff)!.Value.State);
+    }
+
+    [Theory]
+    [InlineData("result_unknown")]    // 执行后结果不可考（CommandExecutor 真实可达：656/737/804/1486 行）
+    [InlineData("quiesce_timeout")]   // 静默等待超时（命令可能已送达）
+    [InlineData("task_start_failed")] // 执行后失败不可重放（审计 T23 证明体系内存在）
+    [InlineData("some_future_code")]  // 未知码
+    public async Task MixedUsage_UnprovenErrorCode_CountsAsUncertain(string errorCode)
+    {
+        // R4.10 终审复核（重要4）：非白名单错误码 ≠ 确定未提交——保守计入提交事实，后续移交被混用守卫阻断
+        var group = new StartupStep { Kind = StartupStepKinds.StartGroup, TaskName = "组A" };
+        var handoff = Handoff();
+        var runner = MakeRunner((cmd, _) =>
+            Task.FromResult(new CommandResult { Status = "failed", ErrorCode = errorCode, Message = "结果不可考" }));
+
+        await runner.RunAsync([group, handoff], CancellationToken.None);
+
+        Assert.Empty(_handoffRequests);
+        var rep = LastReport(handoff);
+        Assert.Contains(HandoffReasonCodes.MixedUsage, rep!.Value.Note);
+        Assert.Contains("结果不确定", rep.Value.Note);
+    }
+
+    [Fact]
+    public void IsProvenNotCommitted_WhitelistOnly()
+    {
+        // R4.10 终审复核（重要4）：仅副作用前准入/合同拒绝（白名单）不计入；其余一律保守计入
+        foreach (var code in new[] { "request_expired", "capability_required", "legacy_start_index_not_supported", "batch_busy", "task_busy", "task_already_running" })
+            Assert.True(StartupFlowRunner.IsProvenNotCommitted(code), code);
+        foreach (var code in new[] { "result_unknown", "quiesce_timeout", "task_start_failed", "epoch_unknown", "", " " })
+            Assert.False(StartupFlowRunner.IsProvenNotCommitted(code), code);
+        Assert.False(StartupFlowRunner.IsProvenNotCommitted(null), "<null>");
     }
 
     [Fact]

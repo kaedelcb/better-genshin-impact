@@ -122,6 +122,17 @@ public class BgiWorkflowExecutionBoundaryTests
     }
 
     [Fact]
+    public void FailureClassification_OnlyPreSideEffectWhitelist_Rejected()
+    {
+        // R4.10 终审复核（重要6）：副作用前协议/合同/准入拒绝（白名单）→ Rejected；其余 → Unknown（不猜未受理）
+        foreach (var code in new[] { "capability_required", "invalid_request", "stale_epoch", "request_expired", "unsupported_operation", "queue_full", "task_busy" })
+            Assert.True(BgiWorkflowExecutionBoundary.IsPreSideEffectRejection(code), code);
+        foreach (var code in new[] { "result_unknown", "task_start_failed", "timeout", "" })
+            Assert.False(BgiWorkflowExecutionBoundary.IsPreSideEffectRejection(code), code);
+        Assert.False(BgiWorkflowExecutionBoundary.IsPreSideEffectRejection(null), "<null>");
+    }
+
+    [Fact]
     public void InterpretNodeJob_ActiveOrUnknown_NotGuessed()
     {
         Assert.Null(BgiWorkflowExecutionBoundary.InterpretNodeJob(new BgiJobInfo { State = "running" }).Word);

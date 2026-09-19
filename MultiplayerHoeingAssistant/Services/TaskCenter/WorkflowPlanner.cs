@@ -192,7 +192,7 @@ public sealed class WorkflowPlan
 
         if (node.Kind == "resource.singleTask" && !singleNativeSupported)
             return new NodeGateDecision(NodeGateAction.Reject,
-                "task.single.native=false：单项任务原生执行能力未开放（结果传播通道未完成），响亮拒绝");
+                "task.single.native=false：单项任务原生执行能力未开放，响亮拒绝（不进入执行、不记成功、不授权成功收尾）");
 
         // condition.weekdays 过滤语义：不命中跳过该资源，不阻塞后续节点（D9）
         foreach (var strategy in node.Strategies)

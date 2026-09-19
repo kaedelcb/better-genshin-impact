@@ -630,11 +630,12 @@ public sealed class StartupFlowRunner
             var r = await _bgiExecutor(cmd, p);
             if (r.Status == "success")
                 ctx.BgiTaskCommitFacts.Add($"节点「{display}」（{cmd} 已受理）");
-            else if (string.IsNullOrWhiteSpace(r.ErrorCode)) // 五轮收尾：空白错误码=无有效业务信封，同样按不确定计入
-                // 三轮 重要4：无业务信封的失败=结果不确定（BGI 侧合同：连接建立后的命令传输失败 at-least-once，超时≠未执行，
-                // 见 CommandExecutor 分层超时注释）——保守计入提交事实
+            else if (!IsProvenNotCommitted(r.ErrorCode))
+                // R4.10 终审复核（重要4）：仅白名单（副作用前准入/合同拒绝）可证实未提交；
+                // 空白码=无有效业务信封，非白名单码（result_unknown/quiesce_timeout/直通码等）=命令可能已送达已执行
+                // （连接建立后传输失败 at-least-once，超时≠未执行，见 CommandExecutor 分层超时注释）——保守计入提交事实
                 ctx.BgiTaskCommitFacts.Add($"节点「{display}」（{cmd} 结果不确定：{r.Message}）");
-            // failed + ErrorCode = BGI 权威业务拒绝（request_expired/task_busy/batch_busy 等，确定未提交）——不计
+            // 白名单错误码 = 副作用前拒绝（确定未提交）——不计
             return r;
         }
         catch (Exception)
@@ -644,6 +645,16 @@ public sealed class StartupFlowRunner
             throw;
         }
     }
+
+    /// <summary>
+    /// 提交事实登记分类（纯函数，R4.10 终审复核 重要4）：仅副作用前准入/合同拒绝（白名单：过期未发送/能力拒绝/
+    /// 起点索引不支持/批次占用/任务占用/已在运行）可证实未提交 → true（不计入混用事实）；空白码（无有效业务信封）/
+    /// result_unknown/quiesce_timeout/直通码/未知码 → false（保守计入不确定事实——混用守卫不得被绕过）。
+    /// 与 BgiWorkflowExecutionBoundary.IsPreSideEffectRejection 同纪律、词表各自独立（本层为 v2/命令执行器码）。
+    /// </summary>
+    internal static bool IsProvenNotCommitted(string? errorCode)
+        => errorCode is "request_expired" or "capability_required" or "legacy_start_index_not_supported"
+            or "batch_busy" or "task_busy" or "task_already_running";
 
     /// <summary>BGI 启动参数是否携带任务参数（R4.9 §6.1 已查证 CommandLineOptions：判定口径与 BGI 解析对齐——
     /// 只看第一个参数 token：startOneDragon 含子串即中；--startGroups/--TaskProgress 精确匹配；裸 start 仅启截图器不算；

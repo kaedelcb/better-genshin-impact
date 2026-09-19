@@ -69,11 +69,12 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             return BoundarySubmitResult.Rejected(mapError);
         if (TryExtractExpectedUid(node, out var expectedUid) is { } uidError)
             return BoundarySubmitResult.Rejected(uidError);
-        if (_client.ServerEpoch is null)
+        // R4.10 终审复核（重要5）：纪元单次读取——空检查与冻结使用同一局部值（断连清空属性时二次读取会 NRE 于发送 try 之外）
+        var epoch = _client.ServerEpoch;
+        if (epoch is null)
             return BoundarySubmitResult.Rejected("BGI 进程纪元未知（严格合同要求 bgiEpoch；未发送）");
 
         // 3) 冻结：纪元/有效期/指纹 → Intent=Submitted + SendAttempted 落盘（即将发送事实；此后缺 jobId ≠ 未发送）
-        var epoch = _client.ServerEpoch;
         submission.Epoch = $"{epoch.ProcessId}:{epoch.StartTicksUtc}";
         submission.ExpiresAtUtc = DateTimeOffset.UtcNow.Add(ExpireWindow).ToString("O");
         var payload = new
@@ -123,8 +124,10 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
 
         if (!response.Success)
         {
-            // 副作用前协议拒绝（合同校验/队列满/协调器不可用）：可证实未受理
-            return BoundarySubmitResult.Rejected($"受理被拒绝：{response.ErrorCode}");
+            // R4.10 终审复核（重要6）：失败分类纯函数——白名单外一律 Unknown 停驻待对账
+            return IsPreSideEffectRejection(response.ErrorCode)
+                ? BoundarySubmitResult.Rejected($"受理被副作用前协议拒绝：{response.ErrorCode}")
+                : BoundarySubmitResult.UnknownWith($"受理结果不可考（{response.ErrorCode ?? "无错误码"}），不猜未受理，待对账");
         }
 
         var acceptance = BgiJobTerminalPolling.ParseAcceptance(response.Data);
@@ -175,27 +178,58 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         try
         {
             using var budget = new CancellationTokenSource(ReconcileBudget);
+            // 纪元证据采集（判定在 TryMatchReconcileHit 纯函数）：查询前/后连接纪元 + 快照自报纪元（响应载荷内）。
+            var epochBefore = _client.ServerEpoch is { } eb ? $"{eb.ProcessId}:{eb.StartTicksUtc}" : null;
             var snapshot = await _client.QueryJobListAsync(budget.Token).ConfigureAwait(false);
-            var currentEpoch = _client.ServerEpoch is { } e ? $"{e.ProcessId}:{e.StartTicksUtc}" : null;
-            if (snapshot is null || currentEpoch is null || currentEpoch != submission.Epoch)
-                return null; // 通道瞬态/纪元已变：旧事实不可沿用，Unknown
-            var hits = snapshot.Jobs.Where(j =>
-                    j.IdempotencyKey == submission.Key
-                    && j.WorkflowRunId == run.WireRunId
-                    && j.NodeId == submission.NodeId
-                    && j.Iteration == submission.LoopIteration
-                    && j.JobId is not null)
-                .ToList();
-            if (hits.Count != 1) return null; // 0=未证实受理；>1=身份歧义；均 Unknown
+            var epochAfter = _client.ServerEpoch is { } e ? $"{e.ProcessId}:{e.StartTicksUtc}" : null;
+            var hit = TryMatchReconcileHit(snapshot, epochBefore, epochAfter, submission.Epoch,
+                submission.Key, run.WireRunId, submission.NodeId, submission.LoopIteration);
+            if (hit is null) return null; // 通道瞬态/纪元不一致（查询窗口/快照自报/冻结）/零命中/多命中：Unknown
             submission.Intent = SubmitIntentState.Accepted;
-            submission.JobId = hits[0].JobId;
+            submission.JobId = hit.JobId;
             _runs.Update(run); // 对账命中即受理事实落盘
             if (cancelOnHit)
-                await RequestCancelAsync(hits[0].JobId!, budget.Token).ConfigureAwait(false);
-            return BoundarySubmitResult.AcceptedWith(hits[0].JobId!);
+                await RequestCancelAsync(hit.JobId!, budget.Token).ConfigureAwait(false);
+            return BoundarySubmitResult.AcceptedWith(hit.JobId!);
         }
         catch (OperationCanceledException) when (cancelOnHit) { return null; } // 对账预算耗尽：事实保留，OCE 由外层重抛
         catch { return null; }
+    }
+
+    /// <summary>
+    /// 失败响应分类（纯函数，R4.10 终审复核 重要6）：仅副作用前协议/合同/准入拒绝（白名单：合同校验/纪元/有效期/
+    /// 能力/操作不支持/队列满/占用）可证实未受理 → true（Rejected）；其余失败（result_unknown/task_start_failed/无码/
+    /// 不可分类）→ false（Unknown 停驻待对账，不猜未受理——T23 已证明协议体系存在执行后失败不可重放的结果）。
+    /// </summary>
+    internal static bool IsPreSideEffectRejection(string? errorCode)
+        => errorCode is "capability_required" or "invalid_request" or "stale_epoch"
+            or "request_expired" or "unsupported_operation" or "queue_full" or "task_busy";
+
+    /// <summary>
+    /// 对账命中判定（纯函数，R4.10 集成夹具接缝；终审复核 重要4 三重纪元并入）：
+    /// 纪元一致性——查询前/后连接纪元一致（查询窗口内连接未更换的证据；同进程重连纪元不变，本校验不否决
+    /// 同进程已观察事实：合同目标=进程纪元级一致性，非连接会话级），快照自报纪元（ext.job.list 响应载荷
+    /// bgiEpoch——服务端同帧证据，HandleJobList 恒发）=连接纪元=提交冻结纪元（BGI 重启换纪元则旧事实不可沿用）；
+    /// 身份——唯一命中（幂等键+运行+节点+迭代四元一致且有 jobId）。
+    /// 任一不符/缺失/零命中/多命中 → null（未证实受理或身份歧义，均 Unknown，绝不重发）。
+    /// </summary>
+    internal static BgiJobInfo? TryMatchReconcileHit(
+        BgiJobListSnapshot? snapshot, string? epochBeforeQuery, string? epochAfterQuery, string? frozenEpoch,
+        string? idempotencyKey, string? wireRunId, string? nodeId, int? iteration)
+    {
+        if (snapshot is null || epochBeforeQuery is null || epochBeforeQuery != epochAfterQuery)
+            return null;
+        var snapshotEpoch = snapshot.Epoch is { } se ? $"{se.ProcessId}:{se.StartTicksUtc}" : null;
+        if (snapshotEpoch is null || snapshotEpoch != epochAfterQuery || epochAfterQuery != frozenEpoch)
+            return null;
+        var hits = snapshot.Jobs.Where(j =>
+                j.IdempotencyKey == idempotencyKey
+                && j.WorkflowRunId == wireRunId
+                && j.NodeId == nodeId
+                && j.Iteration == iteration
+                && j.JobId is not null)
+            .ToList();
+        return hits.Count == 1 ? hits[0] : null;
     }
 
     /// <summary>资源引用 → ext.task.start 寻址字段（纯静态可测；缺失即拒绝=未发送）。</summary>

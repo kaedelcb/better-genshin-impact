@@ -3863,6 +3863,19 @@ public partial class MainViewModel : INotifyPropertyChanged
     public void Shutdown()
     {
         _disposing = true; // R4.8 二轮（阻断4）：此后的日志回调跳过 UI 派发，避免与退出路径等待互等
+        // R4.10 终审复核（重要2/3）退出协议：捕获段前移——同锁内「标志置位（幂等）+捕获引用+字段脱离」原子完成，
+        // 后续任何清理抛异常都不得跳过宿主收敛（finally 保证到达）；锁外有界 ShutdownAsync（不持锁等待异步关闭）；
+        // 此后 getter 见 _disposing 拒绝重建；退出前已取得宿主的调用方由宿主自身 _shutdown 守卫响亮拒绝新工作。
+        // 口径：已消除首访构造漏捕获竞态；已捕获实例进入 best-effort 关闭（锁外最多等 12s，超时仅结束本次等待、不终止关闭任务）。
+        TaskCenterHost? hostToShutdown;
+        lock (_taskCenterHostGate)
+        {
+            _disposing = true; // 幂等（上行已置位）；与取引用/置空同临界区
+            hostToShutdown = _taskCenterHost;
+            _taskCenterHost = null;
+        }
+        try
+        {
         _localConfigChannel?.Dispose();
         _localConfigChannel = null;
         // 断开 SignalR 连接（HubConnection 未 Dispose 会持有网络连接/心跳定时资源）
@@ -3892,21 +3905,21 @@ public partial class MainViewModel : INotifyPropertyChanged
         _processMonitor = null;
         _commandExecutor = null;
 
-        // [R4.8] 任务中心宿主退出收敛（在飞运行终态化为 Unknown/Interrupted，内部 10s 预算）；
-        // 线程池等待避免 UI 同步上下文死锁；退出路径异常吞掉不阻断进程退出
-        try
-        {
-            if (_taskCenterHost is { } tc)
-            {
-                Task.Run(tc.ShutdownAsync).Wait(TimeSpan.FromSeconds(12));
-            }
-        }
-        catch { /* 退出路径不阻断 */ }
-        _taskCenterHost = null;
-
         // [切片1] 释放 ext.event 事件通道（命名管道 + 内部重连循环）
         _externalClient?.Dispose();
         _externalClient = null;
+        }
+        finally
+        {
+            // [R4.8] 任务中心宿主退出收敛（在飞运行终态化为 Unknown/Interrupted，内部 10s 预算）；
+            // 线程池等待避免 UI 同步上下文死锁；退出路径异常吞掉不阻断进程退出
+            try
+            {
+                if (hostToShutdown is { } tc)
+                    Task.Run(tc.ShutdownAsync).Wait(TimeSpan.FromSeconds(12));
+            }
+            catch { /* 退出路径不阻断 */ }
+        }
     }
 
     /// <summary>后台异步断开 SignalR 连接；退出路径异常仅写日志，不影响进程退出。</summary>

@@ -9,8 +9,11 @@ public partial class MainViewModel
     /// <summary>[切片1] ext.event 事件通道客户端（BgiExternalClient SDK）；null = 尚未建立/已降级。</summary>
     private BgiExternalClient? _externalClient;
 
-    /// <summary>R4.8 Batch D：任务中心进程内宿主字段（惰性创建；退出路径 best-effort 收敛后置 null）。</summary>
+    /// <summary>R4.8 Batch D：任务中心进程内宿主字段（惰性创建；R4.10 终审复核：退出路径锁内捕获时脱离字段引用，随后锁外 best-effort 关闭）。</summary>
     private TaskCenterHost? _taskCenterHost;
+
+    /// <summary>R4.10 终审（重要3）：宿主惰性初始化锁——并发首访与退出置空同锁，保证单例且退出后不再重建。</summary>
+    private readonly object _taskCenterHostGate = new();
 
     /// <summary>R4.8 二轮（阻断4）：退出收敛标志——AddLog 在此期间跳过 UI 派发（Shutdown 的宿主日志回调不得与退出路径互等）。</summary>
     private volatile bool _disposing;
@@ -20,9 +23,22 @@ public partial class MainViewModel
     /// 惰性创建；宿主与 Store 构造零文件副作用（目录推迟到首次写入才创建，二轮 重要2）。
     /// 配置面与运行存储在 %APPDATA%/NexusBGI 下（Default* 路径），不碰 BGI User 目录。
     /// </summary>
-    public TaskCenterHost TaskCenterHost => _taskCenterHost ??= new TaskCenterHost(
-        WorkflowStore.DefaultFlowsDir(), RunStore.DefaultRunsDir(), ResourceCatalogService.DefaultCacheFile(),
-        () => _externalClient, () => IsExecutorMode, () => LatestLocalStatus, AddLog); // R4.9 §6.2+I2 能力守卫 + 三轮 B1 快照提供方必传（生产无测试接缝）
+    public TaskCenterHost TaskCenterHost
+    {
+        get
+        {
+            // R4.10 终审（重要3）：并发首访经锁保证单例；退出收敛已开始则拒绝重建
+            //（退出期调用方拿已关闭宿主会立即响亮拒绝，而重建会产生未经收敛的新实例）。
+            lock (_taskCenterHostGate)
+            {
+                if (_taskCenterHost is null && _disposing)
+                    throw new InvalidOperationException("任务中心宿主已随助手退出收敛，不再创建");
+                return _taskCenterHost ??= new TaskCenterHost(
+                    WorkflowStore.DefaultFlowsDir(), RunStore.DefaultRunsDir(), ResourceCatalogService.DefaultCacheFile(),
+                    () => _externalClient, () => IsExecutorMode, () => LatestLocalStatus, AddLog); // R4.9 §6.2+I2 能力守卫 + 三轮 B1 快照提供方必传（生产无测试接缝）
+            }
+        }
+    }
 
     /// <summary>[切片1] 事件通道探测退避：Legacy（老 BGI）或暂时连不上时，到此时间点之前不再探测。</summary>
     private DateTime _externalNextProbeUtc = DateTime.MinValue;
