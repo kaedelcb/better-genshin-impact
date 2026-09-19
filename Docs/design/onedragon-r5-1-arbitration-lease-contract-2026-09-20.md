@@ -361,4 +361,21 @@ DirectStart → StartExecuting（殊途同归统一提交准入；Accepted≠权
 2 条非阻断建议随实现落实：①切换夹具断言延伸到整个崩溃区间（控制面死亡至恢复完成期间不能产生新生产意图+「读取闸门—发布意图」交界并发注入）；②§8 尾句精确化（已落于 v5）。
 
 
-**复核结论**：（ASTRA 五轮复核，待填——v5 处置完成后送复核，签署「可冻结」才进入实现）
+### 实现验收会诊记录（2026-09-20：设计冻结后实现期 ASTRA 结束会诊五轮，与上方设计冻结签署相区分）
+
+实现期会诊一至三轮处置已随代码落盘（所有者写入单调基线、观察者期限取自租约 TTL、残件对账持续阻断发布、消解事实与交接阶段相容等）；四、五轮处置明细：
+
+| # | 会诊发现 | 处置 |
+|---|---|---|
+| 四轮 P1-① | ReconcilePending/未知阶段仍可凭普通终词消解 | TryResolveIntent 阶段相容 fallback 一律拒绝（`_ => false`）；夹具 ResolveIntent_Rejected_InReconcilePending/UnknownPhase |
+| 四轮 P1-② | 单调基线在 Publish 前设置，写失败窗口可续命 | acquire/renew/release/publish/resolve 五处基线一律移至 Publish 成功之后；夹具 PublishFailure_DoesNotRefreshBaseline |
+| 四轮 P1-③ | 缺未决意图阶段推进持久化接口（Settle→Restore 无法闭环落盘） | 新增 TryAdvanceIntentPhase（锁内三连校验+残件闸门+合法转换判定）；夹具 AdvanceIntentPhase_PersistedSettleRestoreLoop |
+| 五轮 P1-① | 恢复责任可经 RestorePending→ReconcilePending→Confirming 降级绕行 | PendingHandoffIntent 增加持久化字段 reconcileFromPhase（租约文件内部加法字段，无旧读取者，不动序列化框架）；退出待对账按 ReconcileFromPhase 视同原责任阶段校验，禁止降级；夹具含绕行反例 |
+| 五轮 P1-② | 白名单遗漏 PreemptRequested→Confirming（受理回执正常路径）；存取层与策略表分叉 | 阶段推进合法性唯一判定点=HandoffTransitionPolicy.IsLegalPhaseAdvance（含 from==to 幂等）；SettlePending 普适规则收窄为 PreemptRequested/Confirming→SettlePending 与冻结表对齐（RestorePending→SettlePending 为责任倒退，禁经待对账绕行） |
+| 五轮 P2-③ | 发布失败夹具时序不足以检出原缺陷 | 检查点移至 t=16（距成功基线 16s>15s 必拒；错误实现仅 6s<15s 会误放行）+发布失败后 revision/heartbeatSeq 不变断言 |
+| 五轮建议 | 错误码优先级/消解矩阵补 failed、skipped、未知枚举阶段/拒绝后文件不变断言 | 已全部随夹具落实；文档尾部模板残留行清除 |
+
+| 六轮 P2 | Evaluate 抢占方终态普适规则仍宽于 IsLegalPhaseAdvance（None/ReconcilePending/未知枚举→SettlePending 无法持久化） | Evaluate 收窄为 PreemptRequested/Confirming→SettlePending，None/ReconcilePending/未知枚举落保守兜底待对账；策略夹具同步收窄+新增 EvaluateSuccessors_AlwaysPersistentlyLegal 交叉断言（全阶段×全事件×未知枚举，Evaluate 后继必须可持久化或为证据消解/保守路径） |
+| 六轮建议 | SameIntent 重复比对/UnknownPhase 缺拒绝后断言/Restore、Settle 六词矩阵不齐/缺字段兼容合同未记录 | SameIntent 去重；拒绝后 revision 不变断言补齐；Restore/Settle 各拒其余五词矩阵；新增夹具 ReconcilePending_WithoutFromPhase_ConservativeReject 并冻结兼容合同（租约文件无历史版本，缺字段=保守拒绝+人工/对账处置） |
+
+**实现验收状态**：**ASTRA 终审（第七轮）签署「可收口（R5.1 实现验收通过），阻断项 0」（2026-09-20）**；回归 462/462（基线 397 + R5.1 新增 65）。七轮唯一非阻断建议（SettlePending 拒绝分支补文件字节级不变断言）已顺手处置并复测全绿。真实线路接线与实机验收属后续 R5.2+ 范围，不在本项。
