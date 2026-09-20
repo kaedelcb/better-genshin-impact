@@ -1895,4 +1895,117 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(AdmissionResultKind.TerminalRejected, rejected.Kind);
         Assert.Equal("ticket_suppressed", rejected.ReasonCode);
         Assert.Equal(0, sends);
+    }
+    // ── 44. R5.3.1③④⑥⑦：交接责任存续期的准入推进／执行权另检／不凭超时放行 ──
+
+    /// <summary>
+    /// **R5.3.1③（交接责任存续期·授权方准入推进）**：`PreemptRequested` 阶段＋**执行空闲**事实下，
+    /// **同一交接的授权抢占方**（同一 stableIdentity）经准入链获准并发送一次——「资格保留」在该窗口是**可推进**的，
+    /// 不是永久全禁；无关候选同窗口零放行（见 `Ticket_*` 系列）。
+    /// </summary>
+    [Fact]
+    public async Task Handoff_AuthorizedPreemptorAdmitted_WhenExecutionFree()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h => h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); });
+
+        var preemptor = Req(trigger: "fixture:preempt-window");
+        var stable = ArbitrationOrdering.BuildStableIdentity(preemptor.Candidate);
+        PublishPending(store, authorizedPreemptor: stable, HandoffPhase.PreemptRequested, actionId: "act:preempt-window");
+
+        var admitted = await svc.SubmitAsync(preemptor);
+
+        Assert.Equal(AdmissionResultKind.Accepted, admitted.Kind);
+        Assert.Equal(1, sends);
+        Assert.Equal(1, FindOp(preemptor.RequestIdentity)!.LastSendSeq);
+    }
+
+    /// <summary>
+    /// **R5.3.1⑥（资格 ≠ 执行权）**：同一票据窗口中 **执行被占用** 时，**授权抢占方仍被执行权检查阻断**
+    /// （`NeedPreemptConfirm`／`execution_occupied`，操作回 `Queued`、**零发送**）——
+    /// 「保留资格」不授予执行权；同窗口无关候选则被票据压制。
+    /// </summary>
+    [Fact]
+    public async Task Handoff_AuthorizedPreemptorHeldByExecutionOccupancy_NoSend()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); };
+            h.FactsProvider = () => new ArbitrationFacts { ExecutionOccupied = true }; // 执行占用（票据另由本地面推导）
+        });
+
+        var preemptor = Req(trigger: "fixture:preempt-occupied");
+        var stable = ArbitrationOrdering.BuildStableIdentity(preemptor.Candidate);
+        PublishPending(store, authorizedPreemptor: stable, HandoffPhase.PreemptRequested, actionId: "act:preempt-occupied");
+
+        var occupied = await svc.SubmitAsync(preemptor);
+        Assert.Equal(AdmissionResultKind.NeedPreemptConfirm, occupied.Kind);
+        Assert.Equal("execution_occupied", occupied.ReasonCode);
+        Assert.Equal(OperationRequestState.Queued, FindOp(preemptor.RequestIdentity)!.RequestState); // 未发布发送许可
+
+        // 无关候选：本轮在**轮次级**先被执行占用判定拦下（`Decide` 的占用分支先于锁内票据复核），
+        // 结果同样**零放行**——票据压制在「执行空闲」窗口由其单独证明（见 `Ticket_FactFromPersistedPending_*`）。
+        var unrelated = await svc.SubmitAsync(Req(trigger: "fixture:preempt-occupied-other"));
+        Assert.NotEqual(AdmissionResultKind.Accepted, unrelated.Kind);
+        Assert.Equal(OperationRequestState.Queued, FindOp(unrelated.RequestIdentity)!.RequestState);
+
+        Assert.Equal(0, sends); // 执行权与压制两道闸门都不放行
+    }
+
+    /// <summary>
+    /// **R5.3.1④（不凭超时放行）**：超时／关联不符／事实未知把交接推进到 `ReconcilePending` ⇒
+    /// **任何候选（含授权方）一律零放行**，且**责任保持**（`Pending` 不被超时清空）——
+    /// missPolicy 只处置本次触发，不构成放行依据。
+    /// </summary>
+    [Fact]
+    public async Task Handoff_ReconcilePending_NoOneAdmitted_NoTimeoutRelease()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h => h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); });
+
+        var preemptor = Req(trigger: "fixture:reconcile-window");
+        var stable = ArbitrationOrdering.BuildStableIdentity(preemptor.Candidate);
+        PublishPending(store, authorizedPreemptor: stable, HandoffPhase.ReconcilePending, actionId: "act:reconcile");
+
+        var authorized = await svc.SubmitAsync(preemptor);
+        Assert.Equal(AdmissionResultKind.TerminalRejected, authorized.Kind);
+        Assert.Equal("pending_conflict", authorized.ReasonCode);
+
+        var unrelated = await svc.SubmitAsync(Req(trigger: "fixture:reconcile-other"));
+        Assert.Equal(AdmissionResultKind.TerminalRejected, unrelated.Kind);
+        Assert.Equal("ticket_suppressed", unrelated.ReasonCode);
+
+        Assert.Equal(0, sends);
+        Assert.NotNull(ReadLease().File!.Handoff!.Pending); // 超时不解除责任
+    }
+
+    /// <summary>
+    /// **R5.3.1⑤（错误确认不解除责任）**：与阶段不相容的证据（`SettlePending` 阶段收到权威退出词而非
+    /// `protocol_ended`）被拒 ⇒ **责任保持**，后续准入仍被压制（零放行）。
+    /// </summary>
+    [Fact]
+    public async Task Handoff_WrongEvidenceRejected_ResponsibilityHeld()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h => h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); });
+        var intent = PublishPending(store, authorizedPreemptor: "stable:someone-else", HandoffPhase.SettlePending, actionId: "act:wrong-evidence");
+
+        var read = store.Read();
+        var rejected = store.TryResolveIntent(read.File!.Lease!.LeaseId, read.File.Lease.OwnerEpoch, read.File.Revision,
+            new IntentResolveEvidence
+            {
+                ActionId = intent.ActionId,
+                SubmissionIdentity = intent.SubmissionIdentity,
+                Epoch = intent.TargetEpoch,
+                ObservedFact = "cancelled", // SettlePending 只认 protocol_ended
+            });
+        Assert.False(rejected.Success);
+        Assert.Equal("evidence_phase_incompatible", rejected.Reason);
+        Assert.NotNull(ReadLease().File!.Handoff!.Pending);
+
+        var stillSuppressed = await svc.SubmitAsync(Req(trigger: "fixture:wrong-evidence-other"));
+        Assert.Equal(AdmissionResultKind.TerminalRejected, stillSuppressed.Kind);
+        Assert.Equal("ticket_suppressed", stillSuppressed.ReasonCode);
+        Assert.Equal(0, sends);
     }}
