@@ -224,41 +224,59 @@ public class TaskCenterHostAdmissionTests : IDisposable
         }
     }
 
-    // ── 3b. R5.3.1 安全交接（未确认分支零启动/零许可）＋ 占用解除后可推进（有效票据≠永久全禁启） ──
+    // ── 3c. R5.3.1：重跑必须**走 E1 流程登记准入链**（新操作/新许可），不复用旧授权 ──
 
     /// <summary>
-    /// **R5.3.1（安全交接）组件验收**：
-    /// ①**占用未确认**：零启动（无边界提交）、**零发送许可**（租约无未决 Submission）、操作保持 <c>Queued</c>（交接存续**非终局**）；
-    /// ②**占用解除后**：同一流程**重新发起**（**新请求**，不是原交接请求的推进）⇒ **获准并真实启动**——
-    /// 只证明「占用阻断及解除后新请求可启动」，**不证明**安全交接状态机的确认/超时/推进（R5.3.1 **未完成**）。
-    /// 场景施工方内置（注入事实接缝，不触真实 IPC），owner 0 点击。
+    /// **R5.3.1（重跑与旧授权隔离）**：一次运行**成功结束后再次面板启动**同一流程 ⇒ 必须分配**新操作**
+    /// （新 RequestIdentity/candidateId）、**新运行**（新 RunBinding）与**新的发送许可**（新 SubmissionIdentity）；
+    /// 且**旧操作不被改写**（绑定/发送身份/发送水位不变）。
+    /// **证明范围（[纠正·2026-09-21 会诊] 收窄）**：本夹具覆盖**E1 流程登记准入链**上的「新操作隔离」，
+    /// **不覆盖**取消确认、业务 **attempt 递增**、节点**新提交键**（后者归 R5.3.2／R5.3.3，相关实现另映射）；
+    /// 也不证明「实际消费的授权归属」（本夹具用自定义 Runner＋FakeBoundary，见 §18.1 登记）。
+    /// 场景施工方内置，owner 0 点击。
     /// </summary>
     [Fact]
-    public async Task PanelStart_OccupiedThenCleared_NoStartWhileHeld_ThenAdmitted()
+    public async Task PanelStart_ReRunAfterRunEnded_AllocatesNewOperationAndPermission()
     {
-        var workflowId = Seed("交接存续流程");
+        var workflowId = Seed("重跑流程");
         var boundary = new FakeBoundary();
-        var seams = new TaskCenterAdmissionSeams { Occupied = true };
+        var seams = new TaskCenterAdmissionSeams();
         var host = MakeWiredHost(boundary, seams);
         try
         {
-            // ① 占用未确认：零启动 + 零发送许可 + 交接存续（Queued，非终局）
-            var held = await host.StartWorkflowAsync(workflowId);
-            Assert.Equal(HostActionStatus.Unavailable, held.Status);
-            Assert.Empty(boundary.Submissions);                       // 零启动（Sender 未被调用 ⇒ 无边界提交）
-            var heldLease = ReadLease();
-            Assert.Null(heldLease.File!.Handoff!.Submission);         // **零发送许可**（持有阶段无未决 Submission）
-            var heldOp = Assert.Single(Ops(heldLease));
-            Assert.Equal(OperationRequestState.Queued, heldOp.RequestState);
-            Assert.Equal(0, heldOp.LastSendSeq);                      // 未进入发送轮次
-            Assert.True(string.IsNullOrEmpty(heldOp.SubmissionIdentity));
-
-            // ② 占用解除：重新发起 ⇒ 获准并真实启动（不是永久全禁启）
-            seams.Occupied = false;
-            var admitted = await host.StartWorkflowAsync(workflowId);
-            Assert.Equal(HostActionStatus.Registered, admitted.Status);
-            await WaitUntilAsync(() => boundary.Submissions.Count == 1);
+            // 第一次运行：受理 → 驱动 → **确认成功结束**（不依赖轮询静默超时）
+            Assert.Equal(HostActionStatus.Registered, (await host.StartWorkflowAsync(workflowId)).Status);
+            await WaitUntilAsync(() => boundary.Submissions.Count == 1 && host.ListActiveRuns().Count == 0);
             Assert.Single(boundary.Submissions);
+            var firstRun = Assert.Single(_runs.List());
+            Assert.Equal(WorkflowRunState.Succeeded, firstRun.State);
+            var firstOpBefore = Assert.Single(StartFlowOps());
+            Assert.False(string.IsNullOrEmpty(firstOpBefore.RunBinding));
+            Assert.False(string.IsNullOrEmpty(firstOpBefore.SubmissionIdentity));
+
+            // 重跑：必须走 E1 流程登记准入链（新操作/新运行/新许可）
+            Assert.Equal(HostActionStatus.Registered, (await host.StartWorkflowAsync(workflowId)).Status);
+            await WaitUntilAsync(() => boundary.Submissions.Count == 2 && host.ListActiveRuns().Count == 0);
+            Assert.Equal(2, boundary.Submissions.Count);                       // 恰好两次节点提交（无第三次、无空过）
+
+            var startOps = StartFlowOps();
+            Assert.Equal(2, startOps.Count);                                   // 两笔流程级 start 操作
+            Assert.Equal(2, startOps.Select(o => o.RequestIdentity).Distinct().Count());       // 不复用旧操作身份
+            Assert.Equal(2, startOps.Select(o => o.CandidateId).Distinct().Count());           // 不复用旧候选身份
+            Assert.Equal(2, startOps.Select(o => o.RunBinding).Distinct().Count());             // 两次运行不同（新 RunBinding）
+            Assert.Equal(2, startOps.Select(o => o.SubmissionIdentity).Distinct().Count());    // **两份发送许可互异**
+            Assert.DoesNotContain(startOps, o => string.IsNullOrEmpty(o.SubmissionIdentity));
+
+            // 旧操作在重跑后**未被改写**（绑定/发送身份/水位不变）
+            var firstOpAfter = Assert.Single(startOps.Where(o => o.RequestIdentity == firstOpBefore.RequestIdentity));
+            Assert.Equal(firstOpBefore.RunBinding, firstOpAfter.RunBinding);
+            Assert.Equal(firstOpBefore.SubmissionIdentity, firstOpAfter.SubmissionIdentity);
+            Assert.Equal(firstOpBefore.LastSendSeq, firstOpAfter.LastSendSeq);
+
+            // 两个运行均在册且各自终局成功
+            var runs = _runs.List();
+            Assert.Equal(2, runs.Count);
+            Assert.All(runs, r => Assert.Equal(WorkflowRunState.Succeeded, r.State));
         }
         finally
         {
@@ -266,6 +284,9 @@ public class TaskCenterHostAdmissionTests : IDisposable
         }
     }
 
+    /// <summary>流程级 start 操作（候选无节点身份）——本夹具判定「新操作隔离」的口径。</summary>
+    private IReadOnlyList<OperationRecord> StartFlowOps()
+        => SafeOps().Where(o => o.Intent == "start" && string.IsNullOrEmpty(o.Candidate?.NodeId)).ToList();
     // ── 4. 双流程并发：同一仲裁面唯一胜者（无双跑逻辑准入互斥）+落败方清理 ──
 
     [Fact]
