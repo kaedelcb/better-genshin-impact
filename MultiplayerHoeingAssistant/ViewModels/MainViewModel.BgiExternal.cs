@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text.Json;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
@@ -33,14 +34,28 @@ public partial class MainViewModel
             {
                 if (_taskCenterHost is null && _disposing)
                     throw new InvalidOperationException("任务中心宿主已随助手退出收敛，不再创建");
-                return _taskCenterHost ??= new TaskCenterHost(
+                var host = _taskCenterHost ??= new TaskCenterHost(
                     WorkflowStore.DefaultFlowsDir(), RunStore.DefaultRunsDir(), ResourceCatalogService.DefaultCacheFile(),
                     () => _externalClient, () => IsExecutorMode, () => LatestLocalStatus, AddLog, // R4.9 §6.2+I2 能力守卫 + 三轮 B1 快照提供方必传（生产无测试接缝）
                     EnsureTaskCenterExecutionReadyAsync); // 2026-09-20：执行入口环境确保（BGI 未运行自动拉起+有界等待通道就绪）
+                // R5.8 §21.4：注入**真实 BGI User 配置根来源**（迁移演练隔离校验用）；未配置/无法解析 ⇒ null ⇒ 演练**保守拒绝**。
+                host.UserConfigRootProvider ??= ResolveBgiUserConfigRoot;
+                return host;
             }
         }
     }
 
+    /// <summary>
+    /// **BGI User 配置根**（迁移演练隔离校验用）：取配置的 `BgiPath` 所在目录下的 `User`；
+    /// **未配置或无法解析 ⇒ `null`** ⇒ 宿主演练入口**保守拒绝**（不写任何产物）。
+    /// </summary>
+    private string? ResolveBgiUserConfigRoot()
+    {
+        var bgiPath = Config?.BgiPath;
+        if (string.IsNullOrWhiteSpace(bgiPath)) return null;
+        var dir = Path.GetDirectoryName(bgiPath);
+        return string.IsNullOrWhiteSpace(dir) ? null : Path.Combine(dir, "User");
+    }
     /// <summary>[切片1] 事件通道探测退避：Legacy（老 BGI）或暂时连不上时，到此时间点之前不再探测。</summary>
     private DateTime _externalNextProbeUtc = DateTime.MinValue;
     /// <summary>[切片4] 事件驱动维护的 ext.task.status 快照（SDK 基线/跳号/事件触发刷新产物）；null = 尚未取得。</summary>
