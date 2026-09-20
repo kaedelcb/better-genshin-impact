@@ -982,15 +982,13 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
     [Fact]
     public void Roots_DifferentVolumes_RejectedBeforeAnyWrite()
     {
-        var cfgVolume = (Path.GetPathRoot(Path.GetFullPath(_configRoot)) ?? "").TrimEnd(Path.DirectorySeparatorChar);
-        var other = System.IO.DriveInfo.GetDrives()
-            .Where(d => d.IsReady && d.DriveType == DriveType.Fixed)
-            .Select(d => d.RootDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar))
-            .FirstOrDefault(v => !string.Equals(v, cfgVolume, StringComparison.OrdinalIgnoreCase));
-        if (other is null) return;                       // 单卷环境：不可构造，如实跳过（不伪报通过）
+        // **确定性构造**：同卷约束按设计在访问磁盘之前执行 ⇒ 使用「另一个盘符」即可验证，无需该卷真实存在
+        // （因此单卷环境同样确定性通过，不存在「提前 return 计为通过」的空过分支）。
+        var cfgVolume = (Path.GetPathRoot(Path.GetFullPath(_configRoot)) ?? "C:").TrimEnd(Path.DirectorySeparatorChar);
+        var alt = string.Equals(cfgVolume, "Z:", StringComparison.OrdinalIgnoreCase) ? "Y:" : "Z:";
+        var altRoot = alt + Path.DirectorySeparatorChar + "r56-tx";
 
-        Assert.Throws<InvalidOperationException>(() =>
-            new MigrationSwitchTransaction(_configRoot, Path.Combine(other, "r56-tx")));
+        Assert.Throws<InvalidOperationException>(() => new MigrationSwitchTransaction(_configRoot, altRoot));
     }
     [Theory]
     [InlineData(MigrationStage.Snapshotting)]
