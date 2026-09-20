@@ -464,3 +464,11 @@ B1 统一提交边界/B2 F11 与快照/B3 仲裁轮次/B4 范围裁决表/B5 恢
 **验收口径（施工方内置，owner 0 点击）**：后继节点经仲裁面**真实**提交（断言发送次数与边界调用来源为门面而非直通）；同游标（`cursorRef+cursorRevision`）双提交仅一胜（⑪b 唯一消费）；三态映射各一例；首节点触发身份继承向量；epoch 变化拒绝；`attempt` 递增产生新身份（同 run 后继仍继承 `RunId` 段）。
 
 **实施前置发现（2026-09-20 核实，必须先解决否则上述验收口径不可满足）**：`BgiExternalClient` 是 **sealed 具体类且无线协议注入接缝**（既有测试只能用反射调其私有 `WriteEnvelopeAsync/ReadEnvelopeAsync`），而 `BgiWorkflowExecutionBoundary` 直接持有该实例调用 `SendCommandAsync`。因此第 1 步「拆分边界」必须**同时引入发送段接缝**（可注入的发送委托/最小接口，生产默认仍走 `BgiExternalClient`），否则「后继节点经仲裁面真实提交 + 断言发送次数」这条组件级验收无法在不起真实 IPC 的前提下成立——不许用「反射私有方法」或「起真链路」绕过该前置。
+
+**第 1 步已完成（284e6b72）**：新增 `IBgiExecutionPort`（最小端口：Ready/能力/纪元/发送/作业列表/作业状态/取消；生产实现 `BgiExternalClientPort` 逐字转发）+ `BgiWorkflowExecutionBoundary` 拆为 `PrepareSubmit`（本地校验+身份冻结，无远端副作用）与 `SendPreparedAsync`（锁外发送+三态对账）；`BgiJobTerminalPolling` 改吃端口并保留客户端兼容重载。新增 6 项端口接缝夹具（发送次数可断言、冻结身份四段、两段可分别调用、三态映射、零发送拒绝）。
+
+**第 2/3 步的架构决定（已定，照此实现，勿再摇摆）**：
+
+- **冻结只发生一次、且发生在 sender 内**：装饰器**不**预先 `PrepareSubmit`（否则与门面「占位→锁外发送」次序冲突、并产生载荷在门面登记前就落盘的窗口）。正确次序＝装饰器构造候选 → 门面 `SubmitAsync`（锁内占位）→ 门面 Sender 回调（宿主 `DispatchViaHostAsync` 的节点分支）内执行 `PrepareSubmit + SendPreparedAsync` → 结果回传门面三态对账。
+- **跨层只需回传 jobId**：`SendOutcome.Accepted` 不带 BGI jobId，而 Runner 的 `BoundarySubmitResult.Accepted` 需要它。做法＝宿主在 sender 内把该次发送的 `BoundarySubmitResult` 暂存到以「`runId|nodeId|occurrence|loopIteration|attempt`」为键的并发字典，装饰器在门面返回后按键取出并映射；取不到即 `Unknown`（不猜成功）。
+- **节点对象来源**：sender 内从 `RunStore` 取 run、从流程快照按 `candidate.NodeId` 取节点，与候选三段共同重建 `WorkflowNodeOccurrence`；**不得**依赖 Runner 侧内存对象（跨线程/跨恢复都不可靠）。
