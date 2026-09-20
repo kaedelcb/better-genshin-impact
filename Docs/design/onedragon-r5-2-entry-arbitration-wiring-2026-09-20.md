@@ -472,3 +472,18 @@ B1 统一提交边界/B2 F11 与快照/B3 仲裁轮次/B4 范围裁决表/B5 恢
 - **冻结只发生一次、且发生在 sender 内**：装饰器**不**预先 `PrepareSubmit`（否则与门面「占位→锁外发送」次序冲突、并产生载荷在门面登记前就落盘的窗口）。正确次序＝装饰器构造候选 → 门面 `SubmitAsync`（锁内占位）→ 门面 Sender 回调（宿主 `DispatchViaHostAsync` 的节点分支）内执行 `PrepareSubmit + SendPreparedAsync` → 结果回传门面三态对账。
 - **跨层只需回传 jobId**：`SendOutcome.Accepted` 不带 BGI jobId，而 Runner 的 `BoundarySubmitResult.Accepted` 需要它。做法＝宿主在 sender 内把该次发送的 `BoundarySubmitResult` 暂存到以「`runId|nodeId|occurrence|loopIteration|attempt`」为键的并发字典，装饰器在门面返回后按键取出并映射；取不到即 `Unknown`（不猜成功）。
 - **节点对象来源**：sender 内从 `RunStore` 取 run、从流程快照按 `candidate.NodeId` 取节点，与候选三段共同重建 `WorkflowNodeOccurrence`；**不得**依赖 Runner 侧内存对象（跨线程/跨恢复都不可靠）。
+
+### 12.1 过程会诊（ASTRA，2026-09-20）发现与强制合同
+
+第 1 步（端口化+两段拆分）已按会诊修完可当场修的两项并补夹具；其余项固化为 **第 2/3 步开工前必须满足的条件**，不得再以「看起来顺」代替证据：
+
+| # | 发现 | 状态 / 强制合同 |
+|---|---|---|
+| 阻断-1 | `PreparedSubmit` 可用任意字段组合构造→「拒绝对象被送去发送」或「字段残缺的成功对象」；同一冻结载荷可被重复消费（重复发送） | **已修**：构造封闭（仅 `Ok`/`No`）；发送段入口先返回 `Rejection`、再校验三字段齐全、最后用 `Interlocked` 一次性消费；补 4 项夹具（拒绝对象零发送、重复消费不增发、纪元不符零发送、纪元一致不误杀） |
+| 阻断-2 | sender 内 `PrepareSubmit` 读的是**当前**纪元，而门面是按纪元 A 占位的；期间切到 B 会「按 B 发送而授权是 A」 | **部分已修**：`PrepareSubmit(request, authorizedEpoch)` 增加比对，不一致即「可证实未发送地拒绝」。**第 2/3 步必须**把门面本轮授权的固定目标 epoch 从候选 `Scope` 取出并传入；`SuppressConfigCompletionAction` 等请求级标量同样必须显式跨层保留（不得从 RUNNER 内存对象推断） |
+| 阻断-3 | 结果回传字典的键 `runId\|nodeId\|occurrence\|loopIteration\|attempt` 是**业务提交身份**而非**发送身份**——同业务 attempt 可有多个 `sendSeq`（见 §3.3），键缺 sendSeq 会让上一轮结果污染下一轮；且 `TryRemove` 使多个合并调用者只有一个拿到结果，其余无谓降为 Unknown。更关键：正常受理路径**只返回 jobId、不落盘受理事实**（落盘只发生在不确定发送的对账命中路径） | **第 2/3 步必须**：①键含完整发送关联（至少 `submissionIdentity/sendSeq`），结果写入后不可被迟到轮次覆盖、合并调用者可共享读取；②明确「门面关闭 Submission 之前由谁持久化正常受理的 jobId」，满足 §4.2 接管顺序（受理→台账落盘→确认可重建→关闭）；③装饰器先尊重门面权威结论，再补充匹配的 jobId；④字典丢失只损失即时返回信息（恢复仍可从持久化记录取证） |
+| 重要-1 | 超时转发是否等价 | **不按猜测改**：端口转发沿用与原调用相同的 `timeout=null` 实参；`CancelOwnedTaskAsync` 仍走客户端原方法（其内部超时未被绕过）。**接线前**须补客户端 `null` 分支与 `CommandTimeout` 用途的源码证据，再签署等价 |
+| 重要-2 | 「行为逐字不变」缺基线差异证据 | 第 2/3 步开工前补：基线调用表达式对照 + 本批两次提交的差异审查（不得只凭当前代码顺畅） |
+| 重要-3 | `PreparedSubmit` 持有可变的 `Run/Submission` 引用（record 不做深冻结）→两段之间被改写会「按身份 A 发送、按身份 B 对账」；sender 从 RunStore 重载还与 Runner 持有的旧对象存在**写覆盖**风险（Runner 后存旧对象可能盖掉冻结字段/jobId） | **第 2/3 步必须**：对账消费不可变的冻结身份；重建一律用该 run 固定的流程快照与修订（不读后来编辑的当前流程）；核对节点/出现身份/attempt/提交键/合法游标修订；明确 sender 与 Runner 的更新合并或版本守卫 |
+| 重要-4 | 6+4 项夹具的盲区 | 后续补：删除 `Fingerprint`/`ExpiresAtUtc` 赋值仍会全绿；happy-path 只在调用结束后读盘（不能证明「发送前已落盘」）；出现身份恒 0/attempt 恒 1（排除不了字段混用）；缺传输异常/取消/对账命中/纪元变化/落盘失败路径。**要求**：在 FakePort 发送入口**读持久化记录**断言发送前冻结已完成；用非零且互不相同的身份值；解析 JSON 精确比对；异常路径断言查询次数/取消次数/落盘事实与零重发 |
+| 建议 | 脚本响应耗尽后重复最后响应可能掩盖未断言的意外发送 | 夹具后续改为「脚本耗尽即失败」或显式声明可重复，并对记录与领取用同一同步机制 |

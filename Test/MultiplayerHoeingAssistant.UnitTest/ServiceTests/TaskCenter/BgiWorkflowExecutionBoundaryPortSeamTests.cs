@@ -195,4 +195,76 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         Assert.False(result.Uncertain);
         Assert.Single(port.Sends);
     }
+
+    // ── 7. 会诊阻断项处置：拒绝对象送进发送段 → 永不发送 ──
+
+    [Fact]
+    public async Task SendPrepared_RejectionObject_ReturnsRejectionWithoutSending()
+    {
+        var (run, node, occurrence) = Seed(revision: null); // 第 1 段必然拒绝
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true));
+        Assert.NotNull(prepared.Rejection); // 前置：这是拒绝对象
+
+        var result = await boundary.SendPreparedAsync(prepared, default);
+
+        Assert.False(result.Accepted);
+        Assert.False(result.Uncertain);
+        Assert.Empty(port.Sends); // 拒绝对象绝不能被送去发送
+    }
+
+    // ── 8. 会诊阻断项处置：同一冻结载荷重复消费 → 不增发 ──
+
+    [Fact]
+    public async Task SendPrepared_SecondConsumption_DoesNotSendAgain()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true));
+
+        var first = await boundary.SendPreparedAsync(prepared, default);
+        var second = await boundary.SendPreparedAsync(prepared, default);
+
+        Assert.True(first.Accepted);
+        Assert.True(second.Uncertain); // 内部违例：响亮未知，不重发
+        Assert.Single(port.Sends); // 全链只发送一次
+    }
+
+    // ── 9. 会诊阻断项处置：授权纪元与本机当前纪元不一致 → 可证实未发送地拒绝 ──
+
+    [Fact]
+    public void PrepareSubmit_AuthorizedEpochMismatch_RejectedWithoutSending()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort(); // 当前纪元 4321:638999999999999999
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+
+        var prepared = boundary.PrepareSubmit(
+            new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true),
+            authorizedEpoch: "9999:111111111111111111"); // 门面授权的是另一个纪元
+
+        Assert.NotNull(prepared.Rejection);
+        Assert.False(prepared.Rejection!.Accepted);
+        Assert.Empty(port.Sends); // 绝不把新纪元写成旧授权对应的发送身份
+    }
+
+    // ── 10. 授权纪元一致=正常放行（护栏不得误杀正常路径）──
+
+    [Fact]
+    public void PrepareSubmit_AuthorizedEpochMatches_Accepted()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+
+        var prepared = boundary.PrepareSubmit(
+            new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true),
+            authorizedEpoch: "4321:638999999999999999");
+
+        Assert.Null(prepared.Rejection);
+        Assert.Empty(port.Sends);
+    }
 }
