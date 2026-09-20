@@ -1570,27 +1570,65 @@ public class CommandExecutor
             return new CommandResult { Status = "failed", ErrorCode = "batch_busy", Message = "批次/恢复进行中，不执行另一个任务热键" };
         var desc = $"快捷键「{hotkeyConfigName}」";
 
-        var status = await QueryTaskStatusAsync();
-        // [P3 对账] 开头先清孤儿上下文（任务已结束但上下文未消费），避免残留把热键永久卡在无损拒绝
-        status = await ReconcileOrphanedContextAsync(status, desc);
-        if (status is { Running: true, HasContext: true })
+        // [B3 第 3 步] **准入前**完成冲突策略解析（只读，且不改变 BGI 任务状态）。
+        var decision = await ResolveStartConflictAsync();
+        if (decision == StartConflictDecision.RefuseContextHeld)
         {
-            // [P3 对账] 本机确有批次在跑才保持无损拒绝（保护进行中批次）；
-            // [另案②] 恢复重试窗口内的上下文是"待重试的恢复"而非孤儿，同样无损拒绝；
-            // 无批次在跑且非重试窗口 = 孤儿残留，清上下文后视为 running && !hasContext，走下方正常抢占闭环
-            if (_isBatchInFlight?.Invoke() == true || IsResumeRetryInFlight)
-            {
-                Log($"[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中或恢复重试中），{desc} 不二次抢占，走无损拒绝");
-                return new CommandResult { Status = "failed", Message = $"{desc} 未执行：联机锄地批次进行中或恢复重试中（已有中断上下文），按无损拒绝语义不打断，请稍后再试" };
-            }
+            // 无损拒绝（保护进行中批次/恢复重试）：**不进入准入**（不产候选、不签发许可）。
+            Log($"[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中或恢复重试中），{desc} 不二次抢占，走无损拒绝");
+            return new CommandResult { Status = "failed", Message = $"{desc} 未执行：联机锄地批次进行中或恢复重试中（已有中断上下文），按无损拒绝语义不打断，请稍后再试" };
+        }
+
+        // [R5.2 B3／E4] 接线态：经统一仲裁面；准入后由核心**只执行既定决策**对应动作（不重新判定）。
+        // 未接线（委托为 null）＝既有路径逐字不变（核心用同一决策，行为等价）。
+        if (_externalStartAdmission is { } admitHotkey)
+        {
+            // §2.1 可信来源：本地按钮=manual／远程命令=v2。本地命令以 `local_` 前缀 CommandId 标识（**临时判别**，
+            // 正式来源标记登记于设计稿 §14；不得据远程自报字段推断）。
+            var hotkeyNamespace = _requestContext.Value?.CommandId?.StartsWith("local_", StringComparison.Ordinal) == true
+                ? "manual"
+                : "v2";
+            return await StartViaAdmissionAsync(admitHotkey,
+                ns: hotkeyNamespace,
+                workflowId: "hotkey:" + hotkeyConfigName,
+                trigger: hotkeyNamespace + ":hotkey:{requestIdentity}",
+                sourceDetail: hotkeyNamespace + ":hotkey_execute",
+                target: desc,
+                core: () => ExecuteHotkeyCoreAsync(hotkeyConfigName, desc, decision));
+        }
+
+        return await ExecuteHotkeyCoreAsync(hotkeyConfigName, desc, decision);
+    }
+
+    /// <summary>
+    /// **热键冲突策略核心（原主体，业务语句保留）**：按**预先解析的决策**执行既定动作——
+    /// `Idle`／`IdleAfterClearingEndedContext` ⇒ 直接发键；`PreemptRunning`／`PreemptAfterClearingContext` ⇒
+    /// （必要时先清上下文）suspend → settle → 发键 → 等运行结束 → 收尾；`RefuseContextHeld` ⇒ 无损拒绝（防御分支）。
+    /// **不重新判定**（§6.1：候选获准后不得追加抢占）。接线态下由准入方在获准后回调本方法（≤1 次）。
+    /// </summary>
+    private async Task<CommandResult> ExecuteHotkeyCoreAsync(string hotkeyConfigName, string desc, StartConflictDecision decision)
+    {
+        if (decision == StartConflictDecision.IdleAfterClearingEndedContext)
+        {
+            // [P3 对账] 原「开头先清孤儿上下文」语义（任务已结束但上下文未消费），避免残留把热键永久卡在无损拒绝
+            Log($"[P3 对账] {desc}：检测到残留中断上下文（任务已结束但上下文未消费）且本机无批次在跑，按孤儿对账发 task.resume(cancel:true) 清除");
+            await ExecuteResumeAsync(cancel: true);
+        }
+        else if (decision == StartConflictDecision.PreemptAfterClearingContext)
+        {
             Log($"[P3 对账] {desc}：检测到残留中断上下文但本机无批次在跑，按孤儿对账清除后继续");
             await ExecuteResumeAsync(cancel: true);
-            status = (true, false, null, null);
         }
-        if (status is not { Running: true })
+        else if (decision == StartConflictDecision.RefuseContextHeld)
         {
-            return await ExecuteHotkeyAsync(hotkeyConfigName); // 空闲/状态未知：原语义（无被中断任务，无收尾）
+            // 防御分支：包装层已在准入前处理（不进入准入）；此处只保证核心自身语义完备
+            Log($"[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中或恢复重试中），{desc} 不二次抢占，走无损拒绝");
+            return new CommandResult { Status = "failed", Message = $"{desc} 未执行：联机锄地批次进行中或恢复重试中（已有中断上下文），按无损拒绝语义不打断，请稍后再试" };
         }
+
+        var willPreempt = decision is StartConflictDecision.PreemptRunning or StartConflictDecision.PreemptAfterClearingContext;
+        if (!willPreempt)
+            return await ExecuteHotkeyAsync(hotkeyConfigName); // 空闲/状态未知：原语义（无被中断任务，无收尾）
 
         Log($"[任务策略] 本机任务运行中，{desc} 先中断当前任务（固定行为：执行完停止，不恢复）");
         var suspendResult = await ExecuteSuspendAsync(desc);

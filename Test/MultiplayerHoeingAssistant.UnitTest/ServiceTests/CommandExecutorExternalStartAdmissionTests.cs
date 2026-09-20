@@ -153,6 +153,93 @@ public sealed class CommandExecutorExternalStartAdmissionTests
     }
 
     /// <summary>
+    /// **E4 热键接线（默认未启用）**：候选按 §2.2 映射（`hotkey:{配置名}`；本地=`manual:hotkey:{requestIdentity}`、
+    /// 远程=`v2:hotkey:{requestIdentity}`）；被阻断时**未发键**。
+    /// 控制热键（CancelTask/BgiEnabled/Suspend）**不走准入**（保持动作分类）。
+    /// </summary>
+    [Fact]
+    public async Task Hotkey_RoutesThroughAdmission_BlockedDoesNotPress()
+    {
+        var calls = new List<ExternalStartAdmissionRequest>();
+        CommandExecutor NewExecutor() => new(null!, "unused",
+            externalStartAdmission: (request, _) =>
+            {
+                calls.Add(request);
+                return Task.FromResult(new ExternalStartAdmissionOutcome(
+                    ExternalStartAdmissionStatus.Blocked, "f11_active", "F11 激活"));
+            })
+        {
+            // 空闲（无任务在跑）＝决策 Idle，故直接进入准入（不触碰 IPC）
+            TaskStatusQueryOverride = _ => Task.FromResult(
+                ((bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)?)(false, false, null, null)),
+        };
+
+        // 本地来源（`local_` 前缀 CommandId）⇒ manual；远程来源 ⇒ v2（**临时判别**，见设计稿 §14）
+        await NewExecutor().ExecuteAsync(new RemoteCommand
+        {
+            Cmd = "hotkey_execute", CommandId = "local_1",
+            Params = new() { ["hotkeyConfigName"] = "测试热键" },
+        });
+        var localResult = await NewExecutor().ExecuteAsync(new RemoteCommand
+        {
+            Cmd = "hotkey_execute", CommandId = "remote-1",
+            Params = new() { ["hotkeyConfigName"] = "测试热键" },
+        });
+
+        Assert.Equal(2, calls.Count);
+        var request = calls[0];
+        Assert.Equal("manual", request.Namespace);                            // 本地按钮来源
+        Assert.Equal("manual:hotkey_execute", request.SourceDetail);
+        Assert.Equal("hotkey:测试热键", request.WorkflowId);
+        Assert.Equal("hotkey:测试热键", request.ResourceRef);
+        Assert.Equal("manual:hotkey:{requestIdentity}", request.TriggerOccurrenceId); // 占位符由门面回填
+        Assert.Equal("v2", calls[1].Namespace);                               // 远程命令来源
+        Assert.Equal("v2:hotkey:{requestIdentity}", calls[1].TriggerOccurrenceId);
+        Assert.Equal("failed", localResult.Status);
+        Assert.Equal("f11_active", localResult.ErrorCode);
+    }
+
+    /// <summary>
+    /// **E4 无损拒绝不进入准入**：本机批次在跑 + BGI 有中断上下文 ⇒ 决策 `RefuseContextHeld`，
+    /// 入口直接按既有文案拒绝（**不产候选、不签发许可、不发键**）。
+    /// 注意：包装层顶部的批次守卫与决策读取**同一组标志**，故该分支只在「守卫通过后、判定前批次开始」的竞态窗可达——
+    /// 本夹具用计数委托精确模拟该竞态（第一次读=false 放行，后续读=true 触发拒绝）。
+    /// 控制热键（如 `SuspendHotkey`）保持直通，**不经准入**。
+    /// </summary>
+    [Fact]
+    public async Task Hotkey_ContextHeldRefusalSkipsAdmission_AndControlHotkeyBypasses()
+    {
+        var admitted = 0;
+        var busyReads = 0;
+        var executor = new CommandExecutor(null!, "unused",
+            isBatchInFlight: () => System.Threading.Interlocked.Increment(ref busyReads) > 1, // 竞态：守卫通过后批次开始
+            externalStartAdmission: (_, _) =>
+            {
+                admitted++;
+                return Task.FromResult(new ExternalStartAdmissionOutcome(
+                    ExternalStartAdmissionStatus.Accepted, "accepted", "ok"));
+            })
+        {
+            TaskStatusQueryOverride = _ => Task.FromResult(
+                ((bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)?)(true, true, "group", "批次")),
+        };
+
+        var refused = await executor.ExecuteAsync(new RemoteCommand
+        {
+            Cmd = "hotkey_execute",
+            Params = new() { ["hotkeyConfigName"] = "测试热键" },
+        });
+
+        Assert.Equal("failed", refused.Status);
+        Assert.Contains("无损拒绝", refused.Message);
+        Assert.Equal(0, admitted); // 未进入准入
+
+        // 控制热键（CancelTask/BgiEnabled/Suspend）**本夹具不执行**：其直通分支会真实调用 ExecuteHotkeyAsync →
+        // 真实 IPC（可能真的向运行中的 BGI 发键）。该分支「不经准入」以源码审查为据，**测试注入发送接缝**归启用前置
+        // （见设计稿 §14）——禁止在单测中触达真实系统。
+    }
+
+    /// <summary>
     /// **B3 第 3 步：无副作用冲突解析决策表**（只读状态 + 本机批次/重试窗口标志 ⇒ 决策）：
     /// 空闲/状态未知=Idle；任务已结束但上下文未消费且本机无批次=IdleAfterClearingEndedContext（孤儿）；
     /// 在跑无上下文=PreemptRunning；在跑带上下文且本机无批次=PreemptAfterClearingContext；
