@@ -1,5 +1,6 @@
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
+using System.Text.Json;
 using Xunit;
 
 namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
@@ -60,6 +61,45 @@ public class TaskCenterSuccessorPathGateTests
     }
 
     // ── ② 三态映射（按结果确定性，不按可否重试） ─────────────────────────────────
+
+    /// <summary>
+    /// **G1／§13.10 A1 节点冻结语义完整性**：`FreezeNode` 必须是 JSON 往返**深拷贝**——
+    /// 语义等价（序列化逐字相同）且与原对象**不共享可变子树**（排队期间的流程编辑不得影响已冻结请求）。
+    /// </summary>
+    [Fact]
+    public void FreezeNode_IsDeepCopy_AndIsolatedFromLaterMutation()
+    {
+        var node = new WorkflowNode
+        {
+            NodeId = "n-1",
+            Kind = "resource.oneDragonConfig",
+            Ref = new WorkflowResourceRef { Config = "配置A", Revision = "rev-1" },
+            Strategies =
+            [
+                new WorkflowStrategy
+                {
+                    Kind = "strategy.retry",
+                    Params = new Dictionary<string, JsonElement> { ["max"] = JsonSerializer.SerializeToElement(3) },
+                },
+            ],
+        };
+
+        var frozen = TaskCenterHost.FreezeNode(node);
+
+        Assert.NotSame(node, frozen);
+        Assert.NotSame(node.Ref, frozen.Ref);
+        Assert.NotSame(node.Strategies, frozen.Strategies);
+        Assert.Equal(JsonSerializer.Serialize(node), JsonSerializer.Serialize(frozen)); // 语义等价
+
+        node.Ref!.Config = "被改写配置";
+        node.Strategies![0].Kind = "被改写策略";
+        node.NodeId = "被改写节点";
+
+        Assert.Equal("配置A", frozen.Ref!.Config);              // 深拷贝：原对象改写不影响副本
+        Assert.Equal("strategy.retry", frozen.Strategies![0].Kind);
+        Assert.NotSame(node.Strategies[0].Params, frozen.Strategies[0].Params);
+        Assert.Equal("n-1", frozen.NodeId);
+    }
 
     [Theory]
     // 门面给出**确定结论** → Rejected（本层不自行断言「一定没发送」）
@@ -133,9 +173,13 @@ public class TaskCenterSuccessorPathGateTests
         public Task CancelOwnedTaskAsync(string jobId, CancellationToken ct) => Task.CompletedTask;
     }
 
+    /// <summary>「已受理→台账→关闭」观测点事实（绑定节点身份，并记录此刻对应 Submission 是否仍在册）。</summary>
+    private sealed record LedgerPointObservation(string NodeId, SubmitIntentState Intent, string? JobId,
+        string? AcceptedSendIdentity, bool SubmissionOpen);
+
     private sealed record RoutingProbe(
         IReadOnlyList<OperationRecord> Ops, bool ReadOk, bool Converged, string RunId, WorkflowRunState? State,
-        string Note, int SendCount, IReadOnlyList<string> Logs)
+        string Note, int SendCount, IReadOnlyList<string> Logs, IReadOnlyList<LedgerPointObservation> LedgerPointReceipts)
     {
         public bool IsSettled => State is WorkflowRunState.Succeeded or WorkflowRunState.Failed
             or WorkflowRunState.Cancelled or WorkflowRunState.Interrupted or WorkflowRunState.Unknown;
@@ -175,9 +219,12 @@ public class TaskCenterSuccessorPathGateTests
         };
         ws.Save(doc, null);
 
+        var arbitrationDir = Path.Combine(root, "arbitration");
         var logGate = new object();
         var logList = new List<string>();
+        var ledgerPoint = new List<LedgerPointObservation>();
         var port = new RoutingFakePort();
+        var runs = new RunStore(runsDir);
         var host = new TaskCenterHost(
             flowsDir, runsDir, Path.Combine(root, "catalog.json"),
             () => client, log: entry => { lock (logGate) logList.Add(entry); },
@@ -187,6 +234,30 @@ public class TaskCenterSuccessorPathGateTests
             admissionSeams: new TaskCenterAdmissionSeams
             {
                 Epoch = RoutingFakePort.Epoch,
+                // 门面在「Sender 返回 Accepted 之后、持久化接管台账/关闭 Submission 之前」回调——
+                // 用它取证「先接管、后关闭」的先后顺序（M2/§12.2 B2）：此刻须已能读到本轮 jobId，
+                // 且对应 Submission **仍在册**（尚未关闭）。观测点位于门面同步流水线，不依赖抢时序。
+                Barriers = new AdmissionBarriers
+                {
+                    AfterAcceptBeforeLedger = () =>
+                    {
+                        var record = runs.List().OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+                        if (record?.CurrentSubmission is { } s)
+                        {
+                            bool open;
+                            try
+                            {
+                                open = new ArbitrationLeaseStore(arbitrationDir).Read().File?.Handoff?.Submission is not null;
+                            }
+                            catch (IOException)
+                            {
+                                open = false; // 读数失败＝不臆断「仍在册」
+                            }
+                            ledgerPoint.Add(new LedgerPointObservation(s.NodeId, s.Intent, s.JobId, s.AcceptedSendIdentity, open));
+                        }
+                        return Task.CompletedTask;
+                    },
+                },
                 ProductionBoundaryFactory = (_, runs) =>
                 {
                     if (concurrentWriteBeforeSend is not null) port.BeforeSend = () => concurrentWriteBeforeSend(runs);
@@ -194,7 +265,6 @@ public class TaskCenterSuccessorPathGateTests
                 },
             },
             successorAdmissionWired: successorWired);
-        var runs = new RunStore(runsDir);
         try
         {
             var start = await host.StartWorkflowAsync(doc.WorkflowId!);
@@ -257,7 +327,7 @@ public class TaskCenterSuccessorPathGateTests
             IReadOnlyList<string> logs;
             lock (logGate) logs = logList.ToList();
             return new RoutingProbe(snapshot, readOk, converged, run?.RunId ?? "", run?.State, run?.Note ?? "",
-                port.SendCount, logs);
+                port.SendCount, logs, ledgerPoint.ToList());
         }
         finally
         {
@@ -343,6 +413,39 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
             Assert.True(probe.State == WorkflowRunState.Unknown, Diag("并发改动下必须保守 Unknown，不得假报成功", probe));
             Assert.Contains(probe.Logs, l => l.Contains("后继提交合并被拒"));
             Assert.Contains("并发写入（夹具注入", probe.Note); // 并发事实必须保留（不得被静默覆盖）
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
+    /// **「先接管、后关闭」顺序验收（M2／§12.2 B2 的 G7(c) 部分）**：门面在 `Sender 返回 Accepted 之后、
+    /// 持久化接管台账与关闭 Submission 之前`回调（`AdmissionBarriers.AfterAcceptBeforeLedger`）——此刻运行记录
+    /// **必须已经**携带本轮的 `Intent=Accepted` ＋ 非空 `JobId`（即接管先落盘），否则关闭就发生在受理事实落盘之前。
+    /// </summary>
+    [Fact]
+    public async Task AcceptedReceipt_PersistedBeforeSubmissionClose()
+    {
+        var root = NewRoot("tctakeover-");
+        try
+        {
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true);
+
+            Assert.True(probe.ReadOk, Diag("租约台账必须成功读取过", probe));
+            Assert.True(probe.Converged, Diag("运行必须收敛", probe));
+            Assert.True(probe.State == WorkflowRunState.Succeeded, Diag("端到端应跑通", probe));
+            Assert.True(probe.LedgerPointReceipts.Count > 0,
+                Diag("门面必须在「已受理→台账→关闭」之间触发观测点", probe));
+            // 绑定节点身份、预期 jobId、**本轮完整发送身份**，并断言此刻对应 Submission **仍在册**（即尚未关闭）——
+            // 「先接管、后关闭」的完整顺序＋身份关联证据，而不是任意一次观测到非空 jobId。
+            var nodeOps = probe.Ops.Where(o => o.Candidate?.NodeId == "n-1").ToList();
+            Assert.True(nodeOps.Count == 1, Diag("应恰有一个该节点操作（用于比对发送身份）", probe));
+            Assert.Contains(probe.LedgerPointReceipts,
+                r => r.NodeId == "n-1" && r.Intent == SubmitIntentState.Accepted
+                     && r.JobId == "job-node-1" && r.SubmissionOpen
+                     && r.AcceptedSendIdentity == nodeOps[0].SubmissionIdentity);
         }
         finally
         {

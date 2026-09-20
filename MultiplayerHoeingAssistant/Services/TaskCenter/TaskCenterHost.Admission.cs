@@ -120,8 +120,50 @@ public sealed partial class TaskCenterHost
                 BgiEpochProvider = CurrentBgiEpoch,
                 Sender = DispatchViaHostAsync,
                 Barriers = _admissionSeams?.Barriers,
-                TakeoverPersist = entry => Task.FromResult<string?>(
-                    entry.RunId is { } rid && _runs.Load(rid) is not null ? null : "run_record_missing"),
+                // M2／§12.2 B2：**节点操作不得复用流程级验证**——`ResourceRef` 前缀区分操作层：
+                // - `node:`（节点执行操作）：必须验证「**本轮**受理事实已落盘且可重建」——run 记录携带
+                //   同身份、同授权纪元的 `Intent=Accepted`＋非空 `JobId`；否则拒绝关闭 Submission。
+                // - 其他（流程登记/恢复等非节点操作）：沿用流程级验证（run 记录在册）。
+                TakeoverPersist = entry =>
+                {
+                    var run = entry.RunId is { } rid ? _runs.Load(rid) : null;
+                    if (run is null) return Task.FromResult<string?>("run_record_missing");
+                    if (entry.ResourceRef?.StartsWith("node:", StringComparison.Ordinal) != true)
+                        return Task.FromResult<string?>(null);
+                    // **完整发送身份关联**（会诊阻断项）：本笔发送的受理事实必须来自**这一笔**租约责任，
+                    // 不得用「同一 run 当前恰好是 Accepted」的另一笔提交回执来关闭本 Submission。
+                    var op = _admissionStore?.Read().File?.Handoff?.Operations?
+                        .FirstOrDefault(o => string.Equals(o.SubmissionIdentity, entry.SubmissionIdentity, StringComparison.Ordinal));
+                    if (op is null) return Task.FromResult<string?>("operation_identity_missing");
+                    if (!string.Equals(op.RunBinding, entry.RunId, StringComparison.Ordinal))
+                        return Task.FromResult<string?>("run_binding_mismatch");
+                    if (op.Candidate is not { } cand) return Task.FromResult<string?>("candidate_missing");
+                    var nodeIdFromRef = entry.ResourceRef!["node:".Length..];
+                    if (!string.Equals(cand.NodeId, nodeIdFromRef, StringComparison.Ordinal))
+                        return Task.FromResult<string?>("resource_ref_identity_mismatch");
+                    if (run.CurrentSubmission is not { } sub) return Task.FromResult<string?>("submission_missing");
+                    if (!string.Equals(sub.NodeId, cand.NodeId, StringComparison.Ordinal)
+                        || sub.Occurrence != cand.Occurrence
+                        || sub.LoopIteration != cand.LoopIteration
+                        || sub.Attempt != cand.Attempt)
+                        return Task.FromResult<string?>("receipt_identity_mismatch");
+                    // 提交键 ↔ 本笔操作线上键（节点操作**必须**有键且一致）：不得让「业务身份相同但提交键不同」的回执冒充本笔。
+                    if (string.IsNullOrEmpty(op.WireSubmitKey)
+                        || !string.Equals(sub.Key, op.WireSubmitKey, StringComparison.Ordinal))
+                        return Task.FromResult<string?>("receipt_key_mismatch");
+                    if (sub.Intent != SubmitIntentState.Accepted || string.IsNullOrEmpty(sub.JobId))
+                        return Task.FromResult<string?>("accepted_receipt_not_persisted");
+                    // **完整发送身份关联（节点操作无条件要求）**：回执必须由**本笔**发送轮次落盘；
+                    // 缺失身份一律不放行——「未记录」不等于「属于合法历史路径」，此时应保留对账责任而不是关闭。
+                    if (string.IsNullOrEmpty(entry.SubmissionIdentity))
+                        return Task.FromResult<string?>("receipt_send_identity_missing");
+                    if (!string.Equals(sub.AcceptedSendIdentity, entry.SubmissionIdentity, StringComparison.Ordinal))
+                        return Task.FromResult<string?>("receipt_send_identity_mismatch");
+                    if (!string.IsNullOrEmpty(entry.TargetBgiEpoch)
+                        && !string.Equals(sub.Epoch, entry.TargetBgiEpoch, StringComparison.Ordinal))
+                        return Task.FromResult<string?>("receipt_epoch_mismatch");
+                    return Task.FromResult<string?>(null);
+                },
                 TakeoverTerminalConfirmed = (submissionIdentity, _) =>
                 {
                     var read = _admissionStore?.Read();
@@ -613,7 +655,7 @@ public sealed partial class TaskCenterHost
         WorkflowNode Node, WorkflowNodeOccurrence Occurrence, bool Suppress, int Attempt, string ExpectedSubmissionKey);
 
     /// <summary>把节点冻结成不可变副本（JSON 往返；失败＝抛错，由调用方保守拒绝，不降级为「用原引用」）。</summary>
-    private static WorkflowNode FreezeNode(WorkflowNode node)
+    internal static WorkflowNode FreezeNode(WorkflowNode node)
     {
         var json = System.Text.Json.JsonSerializer.Serialize(node);
         return System.Text.Json.JsonSerializer.Deserialize<WorkflowNode>(json)
@@ -637,6 +679,23 @@ public sealed partial class TaskCenterHost
         // §7.1-1：F11 判定先于租约获取
         if (CurrentArbitrationFacts().F11Active)
             return BoundarySubmitResult.Rejected("F11 独立停止闸门激活（未发生租约副作用；未发送）");
+
+        // 【顺序纪律】节点冻结与调用方取消必须在**门面初始化之前**——`EnsureAdmissionFacadeAsync` 会创建目录、
+        // 获取/接管租约、执行恢复并启动心跳（均属租约副作用）。会诊重要项：原顺序把冻结放在初始化之后，
+        // 使「冻结失败」也带着租约副作用，与「可证实未发送」的表述不符。
+        // §13.10 A1：节点深拷贝失败＝可证实未发送地拒绝（此前落通用 catch 被报成 Unknown，语义不符）。
+        WorkflowNode frozenNode;
+        try
+        {
+            frozenNode = FreezeNode(request.Node);
+        }
+        catch (Exception ex)
+        {
+            return BoundarySubmitResult.Rejected("提交前节点冻结失败（未发送，且未发生任何租约副作用）：" + ex.GetType().Name);
+        }
+
+        // 调用方已取消：在任何租约副作用之前就返回（发布发送许可之后不再由此令牌中止——见 §13.11 G7）。
+        ct.ThrowIfCancellationRequested();
 
         ArbitrationAdmissionService facade;
         try { await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false); facade = _admission!; }
@@ -679,10 +738,13 @@ public sealed partial class TaskCenterHost
                 Kind = AdmissionKind.Create,
                 SourceDetail = "runner:successor",
                 RunBinding = run.RunId,
+                // 线上提交键（§6.1 映射表）：无法确定性推导时显式携带——后继提交的键由引擎派生且随 run 落盘，
+                // 显式登记使台账侧可自足重建（PID 未传时台账只有空键）。
+                WireSubmitKey = sub.Key,
                 // §13.10 A1/A2：入队即冻结「Runner 当时提交的请求」（节点深拷贝＋完整出现身份＋提交选项＋预期提交键），
                 // 随获选排队项传到 Sender；Sender 不得再从当前流程定义重建。
                 ProcessLocalContext = new SuccessorContext(
-                    FreezeNode(request.Node), request.Occurrence, request.SuppressConfigCompletionAction,
+                    frozenNode, request.Occurrence, request.SuppressConfigCompletionAction,
                     sub.Attempt, sub.Key),
                 CursorRef = run.Cursor is { } cur ? $"{cur.NodeId}#{cur.Occurrence}#{cur.LoopIteration}" : null,
                 Candidate = new ArbitrationCandidate
@@ -775,6 +837,7 @@ public sealed partial class TaskCenterHost
         runnerSub.SendAttempted = freshSub.SendAttempted;
         runnerSub.Intent = freshSub.Intent;
         runnerSub.JobId = freshSub.JobId;
+        runnerSub.AcceptedSendIdentity = freshSub.AcceptedSendIdentity;
         if (freshSub.ObservedTerminal is { } terminal) runnerSub.ObservedTerminal = terminal;
         if (!string.IsNullOrEmpty(fresh.WireRunId)) runnerRun.WireRunId = fresh.WireRunId;
         // 版本对齐：Runner 的后续 `_runs.Update(run)` 以**权威修订**为期望值（否则必撞修订冲突）。
@@ -800,6 +863,7 @@ public sealed partial class TaskCenterHost
             foreach (var key in new[]
                      {
                          "epoch", "expiresAtUtc", "fingerprint", "sendAttempted", "intent", "jobId",
+                         "acceptedSendIdentity",
                      })
                 sub[key] = null;
         }
@@ -903,11 +967,91 @@ public sealed partial class TaskCenterHost
 
         var sent = await inner.SendPreparedAsync(prepared, CancellationToken.None).ConfigureAwait(false);
         if (d.SubmissionIdentity.Length > 0) _successorSendResults[d.SubmissionIdentity] = sent;
-        return sent.Accepted
-            ? new SendOutcome.Accepted("host:successor_sent", runId)
-            : sent.Uncertain
+        if (!sent.Accepted)
+            return sent.Uncertain
                 ? (SendOutcome)new SendOutcome.Unknown("host:successor_uncertain")
                 : new SendOutcome.Rejected("host:successor_rejected", false, "host:boundary");
+
+        // **M2／§12.2 B2「先接管、后关闭」**：远端已受理 → **先按完整发送身份把受理事实（jobId）落盘**，
+        // 之后才允许门面关闭 Submission（门面 TakeoverPersist 会复核该记录）。
+        // 落盘失败＝远端已受理但接管未落盘：**不得**重新解释为确定拒绝（否则会诱发重发），只能报 Unknown，
+        // 由门面把 Submission 置 Reconciling 保守待对账。
+        if (!TryPersistAcceptedTakeover(runId, ctx, sent.JobId, d.TargetEpoch, d.SubmissionIdentity))
+            return new SendOutcome.Unknown("host:takeover_persist_failed");
+        return new SendOutcome.Accepted("host:successor_sent", runId);
+    }
+
+    /// <summary>
+    /// **受理接管落盘（M2／§12.2 B2）**：读最新记录 → 按提交身份与授权纪元复核 → 写 `Intent=Accepted`＋`JobId`
+    /// → CAS 落盘。只改本轮提交字段，**不整体覆盖**其他运行事实；修订冲突有界重读重试（读取后立即 CAS）。
+    /// 返回 false＝受理事实未落盘（调用方必须报 Unknown：不得报 Accepted、不得重发）。
+    /// 纪律：本落盘**不得**复用调用方取消令牌（此处为同步本地写，天然不受用户令牌影响）。
+    /// </summary>
+    private bool TryPersistAcceptedTakeover(string runId, SuccessorContext ctx, string? jobId, string targetEpoch,
+        string submissionIdentity)
+    {
+        if (string.IsNullOrEmpty(jobId) || string.IsNullOrEmpty(submissionIdentity)) return false;
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            WorkflowRunRecord? run;
+            try
+            {
+                run = _runs.Load(runId);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            if (run?.CurrentSubmission is not { } sub) return false;
+            // 身份复核：不得把本轮受理结果写进已被替换/改写的另一轮提交。
+            if (sub.Attempt != ctx.Attempt
+                || !string.Equals(sub.Key, ctx.ExpectedSubmissionKey, StringComparison.Ordinal)
+                || !string.Equals(sub.NodeId, ctx.Occurrence.NodeId, StringComparison.Ordinal)
+                || sub.Occurrence != ctx.Occurrence.Occurrence
+                || sub.LoopIteration != ctx.Occurrence.LoopIteration)
+                return false;
+            // 授权纪元复核：冻结纪元必须等于本轮门面授权纪元（否则不得认领本次受理）。
+            if (!string.Equals(sub.Epoch, targetEpoch, StringComparison.Ordinal)) return false;
+            if (string.Equals(sub.JobId, jobId, StringComparison.Ordinal)
+                && sub.Intent == SubmitIntentState.Accepted)
+            {
+                // 幂等（重放安全）：**同回执必须同时确认发送身份**——不得因短路而留下空身份，
+                // 也不得把已属另一轮的完整发送身份改写成本轮。
+                if (string.Equals(sub.AcceptedSendIdentity, submissionIdentity, StringComparison.Ordinal)) return true;
+                if (sub.AcceptedSendIdentity is { Length: > 0 }) return false;
+                // 身份缺失但回执一致：补记本轮身份后落盘（一次性补齐，之后钩子即可严格校验）。
+                sub.AcceptedSendIdentity = submissionIdentity;
+            }
+            else
+            {
+                // **冲突 jobId 不得覆盖**（会诊阻断项）：记录里已有另一受理事实＝他人事实来源，
+                // 本方法无权改写（CAS 只防过期版本，不防重读后主动覆盖）。报 false → 调用方报 Unknown。
+                if (!string.IsNullOrEmpty(sub.JobId)) return false;
+                // 合法转换：IntentRecorded/Submitted → Accepted；不得从已拒绝/已观察终态回退。
+                if (sub.Intent is not (SubmitIntentState.IntentRecorded or SubmitIntentState.Submitted)) return false;
+                if (sub.ObservedTerminal is not null) return false;
+                sub.Intent = SubmitIntentState.Accepted;
+                sub.JobId = jobId;
+                // **本轮发送身份一并落盘**（会诊阻断处置）：使「回执 ↔ 本笔发送轮次」的关联可跨重启验证，
+                // 门面 TakeoverPersist 据此排除「同 run 另一笔同业务身份/同纪元回执关闭本 Submission」。
+                sub.AcceptedSendIdentity = submissionIdentity;
+            }
+            try
+            {
+                _runs.Update(run);
+                return true;
+            }
+            catch (RunRecordConflictException)
+            {
+                // 并发推进：重读后按同一身份重试（只改本轮提交字段，故可安全重放）。
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+        return false;
     }
 
     /// <summary>运行终态→仲裁操作终局回写（按 runBinding 反查 Operations；台账交叉确认经 TakeoverTerminalConfirmed 钩子）。</summary>

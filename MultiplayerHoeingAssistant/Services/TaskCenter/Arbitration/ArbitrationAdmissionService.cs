@@ -35,6 +35,7 @@ public sealed class AdmissionRequest
     /// **不参与任何序列化**（租约/台账均不落此字段）；用于让 Sender 消费「Runner 当时提交的那份请求」，
     /// 而不是从当前流程定义/运行对象重建。**上下文缺失时调用方必须响亮拒绝，不得静默重建后发送。**
     /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
     public object? ProcessLocalContext { get; set; }
     /// <summary>candidateId→runId→首节点提交键（E1 流程绑定：首绑写入、再绑必须一致，不可改写）。</summary>
     public string? RunBinding { get; set; }
@@ -121,6 +122,7 @@ public sealed class SubmissionDispatch
     /// <see cref="AdmissionRequest.ProcessLocalContext"/> 传入，门面**原样**附到派发对象上；
     /// Sender 只消费本字段，**不得**用「最新 Operation」或执行上下文重新拼接另一轮上下文。
     /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
     public object? ProcessLocalContext { get; set; }
 }
 

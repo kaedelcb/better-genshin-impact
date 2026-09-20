@@ -300,6 +300,15 @@ public sealed class WorkflowSubmission
     [JsonPropertyName("sendAttempted")]
     public bool SendAttempted { get; set; }
 
+    /// <summary>
+    /// **本轮受理回执所属的完整发送身份**（R5.2 B2-γ：`sub:&lt;requestIdentity&gt;:&lt;sendSeq&gt;`）。
+    /// 由宿主节点 Sender 在「先接管、后关闭」的接管落盘时写入；门面 `TakeoverPersist` 据此证明
+    /// 「本笔 Submission 拿到的回执确实是这一轮的发送结果」，而不是同一 run 下另一笔同业务身份/同纪元的回执。
+    /// 加法字段（缺失=null）：旧记录与不经节点 Sender 的路径不受影响。
+    /// </summary>
+    [JsonPropertyName("acceptedSendIdentity")]
+    public string? AcceptedSendIdentity { get; set; }
+
     [JsonPropertyName("recordedAt")]
     public DateTimeOffset RecordedAt { get; set; }
 
