@@ -952,7 +952,7 @@ public sealed partial class TaskCenterHost
     {
         if (_runnerFactory is not null) return _runnerFactory(client, _workflows, _runs);
         var c = client ?? throw new InvalidOperationException("BGI 客户端缺失（就绪守卫之外不得组装生产 Runner）");
-        var boundary = new BgiWorkflowExecutionBoundary(c, _runs);
+        var boundary = CreateProductionBoundary(c);
         // R5.2 B2-γ 第 3 步（§13.10 A）：**节点提交**改道经仲裁面。双门：`_admissionWired`（E1/E2 入口已接线）
         // ＋ `_successorAdmissionWired`（第 3 步路径启用，§12.3 施工阻断）。缺任一＝保持原直通（R4 行为合同不变）。
         IWorkflowExecutionBoundary effective = _admissionWired && _successorAdmissionWired

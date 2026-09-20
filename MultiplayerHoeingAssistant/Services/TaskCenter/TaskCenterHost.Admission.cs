@@ -22,6 +22,13 @@ internal sealed class TaskCenterAdmissionSeams
     /// <summary>夹具接缝：进入「§6.3 接管观察」阶段时回调（用于把并发首调者的目标交错固定下来，
     /// 证明后继观察者确实与先行接管者重叠，而不是靠调度运气）。</summary>
     public Action? OnTakeoverObservationEntered { get; set; }
+    /// <summary>
+    /// 夹具接缝：**生产执行边界**工厂覆盖（null＝真实 `new BgiWorkflowExecutionBoundary(client, runs)`）。
+    /// 依据设计稿 §12「实施前置发现」：`BgiExternalClient` 是 sealed 具体类且无线协议注入接缝，宿主级
+    /// 「后继节点经仲裁面真实提交 + 断言发送次数/路由」验收在不注入端口时不可满足。仅测试注入；生产
+    /// 构造恒不注入（`_admissionSeams` 为 null），故生产组装与行为不变。
+    /// </summary>
+    public Func<BgiExternalClient, RunStore, BgiWorkflowExecutionBoundary>? ProductionBoundaryFactory { get; set; }
 }
 
 /// <summary>
@@ -63,6 +70,16 @@ public sealed partial class TaskCenterHost
 
     /// <summary>夹具接缝：第 3 步路径门当前是否生效（＝E1/E2 已接线 **且** 第 3 步显式启用）。</summary>
     internal bool SuccessorAdmissionWiredForTest => _admissionWired && _successorAdmissionWired;
+
+    /// <summary>
+    /// **生产执行边界的唯一组装点**（`CreateRunner` 的 Runner 边界 与 后继发送分派的 Sender 边界共用）。
+    /// 会诊复审发现：发送分派若自行 `new BgiWorkflowExecutionBoundary(c, _runs)`，会与 Runner 侧走不同实例；
+    /// 端口化夹具下更会导致「预检用注入端口、发送用真实客户端」的分裂。统一走本方法。
+    /// 返回的是**生产边界本体**（不含仲裁装饰器），故不会造成重入。
+    /// </summary>
+    private BgiWorkflowExecutionBoundary CreateProductionBoundary(BgiExternalClient client)
+        => _admissionSeams?.ProductionBoundaryFactory?.Invoke(client, _runs)
+           ?? new BgiWorkflowExecutionBoundary(client, _runs);
     private readonly string? _arbitrationDir;
     private readonly TaskCenterAdmissionSeams? _admissionSeams;
     private string? _runsDirPath;
@@ -649,6 +666,10 @@ public sealed partial class TaskCenterHost
                 "无已登记仲裁授权（缺固定 Scope/绑定，按 AMD-1-5 第三条不签发不发送）");
         }
 
+        // G2 并发守卫基线：提交前快照（发送段**只允许**改动 CurrentSubmission 的冻结/受理字段与
+        // RecordRevision/UpdatedAt；其余任何字段变化都属并发修改，合并必须拒绝）。
+        var baseline = NormalizeVolatile(run);
+
         AdmissionResult result;
         try
         {
@@ -689,11 +710,100 @@ public sealed partial class TaskCenterHost
         {
             // 按**完整发送身份**取回 sender 内真实发送结果（§13.10 A2：**非破坏性读取**——合并调用者共享同一结果，
             // 不得因首个读取者 `TryRemove` 而让其余调用者降级为 Unknown）。取不到＝不猜成功，保守待对账。
-            if (result.SubmissionIdentity is { } sid && _successorSendResults.TryGetValue(sid, out var sent)) return sent;
+            if (result.SubmissionIdentity is { } sid && _successorSendResults.TryGetValue(sid, out var sent))
+            {
+                // G2 处置（§12.1 重要-3 / M3：Sender 与 Runner 走字段合并或版本守卫）。Sender 内的
+                // `PrepareSubmit` 改的是**它自己 load 的那份 run**（冻结纪元/有效期/指纹/发送已尝试/意图一并落盘），
+                // 而 Runner 仍持提交前的旧副本；不合并＝Runner 随后 `_runs.Update(run)` 以旧修订冲突
+                // （宿主级夹具已实证：RunRecordConflictException → 运行被保守收敛 Unknown）。
+                MergeBackAuthoritativeSubmission(run, sub, baseline);
+                return sent;
+            }
             return BoundarySubmitResult.UnknownWith("仲裁已受理但未取得发送回执（不猜成功，待对账）");
         }
 
         return MapAdmissionResultToBoundary(result);
+    }
+
+    /// <summary>
+    /// **按提交身份把权威落盘事实合并回 Runner 持有的实例**（G2：字段合并＋版本对齐，**不做整体覆盖**）。
+    /// 前置：身份一致（同 attempt／同提交键／同节点出现身份）——不一致一律不合并，绝不把另一轮身份写进本实例。
+    /// 读盘失败＝不合并（Runner 随后的写回按自身修订判定，保守失败而非臆断成功）。
+    /// </summary>
+    private void MergeBackAuthoritativeSubmission(WorkflowRunRecord runnerRun, WorkflowSubmission runnerSub, string baselineNormalized)
+    {
+        WorkflowRunRecord? fresh;
+        try
+        {
+            fresh = _runs.Load(runnerRun.RunId);
+        }
+        catch (Exception)
+        {
+            return; // 读失败：不合并（不臆断）
+        }
+
+        if (fresh?.CurrentSubmission is not { } freshSub) return;
+        if (freshSub.Attempt != runnerSub.Attempt
+            || !string.Equals(freshSub.Key, runnerSub.Key, StringComparison.Ordinal)
+            || !string.Equals(freshSub.NodeId, runnerSub.NodeId, StringComparison.Ordinal)
+            || freshSub.Occurrence != runnerSub.Occurrence
+            || freshSub.LoopIteration != runnerSub.LoopIteration)
+            return; // 身份不符＝另一轮提交，禁止合并
+
+        // **并发守卫（会诊阻断处置）**：版本对齐**只允许**在「除发送段冻结/受理字段与 RecordRevision/UpdatedAt 外，
+        // 权威记录与本实例提交前基线**逐字段一致**」时进行。若另有写入者推进过记录，凭「业务身份相同」就接受
+        // 任意最新修订是错的——那会把未合并的并发事实在 Runner 随后的整体写回中静默覆盖。
+        // 拒绝合并＝Runner 的更新按自身修订判定并响亮冲突（保守 Unknown），绝不静默覆盖他人事实。
+        if (!string.Equals(NormalizeVolatile(fresh), baselineNormalized, StringComparison.Ordinal))
+        {
+            try
+            {
+                _log?.Invoke("[任务中心] 后继提交合并被拒（运行 " + runnerRun.RunId
+                             + "）：权威记录存在发送段之外的并发修改，保守不合并（Runner 写回将按修订冲突响亮失败）。");
+            }
+            catch (Exception)
+            {
+                // 诊断失败不改变结论。
+            }
+            return;
+        }
+
+        // 只并发送段冻结/受理相关的字段（其余运行事实保持 Runner 侧权威，不整体覆盖）。
+        runnerSub.Epoch = freshSub.Epoch;
+        runnerSub.ExpiresAtUtc = freshSub.ExpiresAtUtc;
+        runnerSub.Fingerprint = freshSub.Fingerprint;
+        runnerSub.SendAttempted = freshSub.SendAttempted;
+        runnerSub.Intent = freshSub.Intent;
+        runnerSub.JobId = freshSub.JobId;
+        if (freshSub.ObservedTerminal is { } terminal) runnerSub.ObservedTerminal = terminal;
+        if (!string.IsNullOrEmpty(fresh.WireRunId)) runnerRun.WireRunId = fresh.WireRunId;
+        // 版本对齐：Runner 的后续 `_runs.Update(run)` 以**权威修订**为期望值（否则必撞修订冲突）。
+        runnerRun.RecordRevision = fresh.RecordRevision;
+    }
+
+    /// <summary>
+    /// 归一化「发送段允许变更」的可变字段（RecordRevision／UpdatedAt／CurrentSubmission 的冻结与受理字段），
+    /// 供「除发送段外无人改动运行记录」的并发守卫做逐字段比较。**不得**把 `wireRunId`、`state`、`note`、
+    /// `nodeOutcomes`、`handoffs`、`cursor` 等运行事实排除在比较之外（那些字段一旦变化即属并发修改）。
+    /// </summary>
+    private static string NormalizeVolatile(WorkflowRunRecord run)
+    {
+        var node = System.Text.Json.Nodes.JsonNode
+            .Parse(System.Text.Json.JsonSerializer.Serialize(run))!.AsObject();
+        node["recordRevision"] = -1;
+        node["updatedAt"] = "~";
+        if (node["currentSubmission"] is System.Text.Json.Nodes.JsonObject sub)
+        {
+            // 白名单**只含发送段确实会写的字段**。`recordedAt`／`observedTerminal` **不在**白名单内——
+            // `PrepareSubmit`/`SendPreparedAsync` 都不改它们；被忽略却又不合并回 Runner 的字段，
+            // 会让 Runner 的整体写回静默恢复旧值（会诊阻断/建议项处置）。
+            foreach (var key in new[]
+                     {
+                         "epoch", "expiresAtUtc", "fingerprint", "sendAttempted", "intent", "jobId",
+                     })
+                sub[key] = null;
+        }
+        return node.ToJsonString();
     }
 
     /// <summary>
@@ -745,6 +855,10 @@ public sealed partial class TaskCenterHost
         var op = read.File?.Handoff?.Operations?.FirstOrDefault(
             o => string.Equals(o.RequestIdentity, d.RequestIdentity, StringComparison.Ordinal));
         if (op?.RunBinding is not { } runId) return new SendOutcome.Unknown("run_binding_missing");
+        // 会诊重要项：业务身份（runId|node|occ|loop|attempt）相同**不足以**区分同 attempt 的多个 sendSeq，
+        // 派遣对象必须与台账中该操作的**本轮完整发送身份**一致；不一致＝不得发送（可证实未发送的拒绝）。
+        if (!string.Equals(op.SubmissionIdentity, d.SubmissionIdentity, StringComparison.Ordinal))
+            return new SendOutcome.Rejected("successor_submission_identity_mismatch", false, "host:identity");
         var run = _runs.Load(runId);
         if (run is null) return new SendOutcome.Rejected("run_record_missing", false, "host:runstore");
         var c = _clientAccessor();
@@ -768,11 +882,24 @@ public sealed partial class TaskCenterHost
             || !string.Equals(liveSub.Key, ctx.ExpectedSubmissionKey, StringComparison.Ordinal))
             return new SendOutcome.Rejected("successor_submission_identity_changed", false, "host:context");
 
-        var inner = new BgiWorkflowExecutionBoundary(c, _runs);
+        // 与 Runner 侧共用同一「生产边界组装点」（会诊复审：不得在此另 new 一份，否则预检/发送分裂）。
+        var inner = CreateProductionBoundary(c);
         var prepared = inner.PrepareSubmit(new WorkflowSubmitRequest(run, occ, node, ctx.Suppress),
             authorizedEpoch: d.TargetEpoch); // 授权纪元＝门面本轮授权值（A2：不在 sender 内重读当前 epoch）
         if (prepared.Rejection is { } rej)
+        {
+            // G10（会诊 P2 处置·第一步）：原始拒绝原因**不得**在发送侧被压成固定码后丢失——
+            // 至少保留原文到宿主诊断日志（结构化台账字段归 R5.3 登记）。
+            try
+            {
+                _log?.Invoke("[任务中心] 后继提交准备阶段拒绝（" + runId + "）：" + rej.RejectReason);
+            }
+            catch (Exception)
+            {
+                // 诊断失败不改变结论。
+            }
             return rej.Uncertain ? new SendOutcome.Unknown("boundary_precheck_uncertain") : new SendOutcome.Rejected("boundary_precheck_rejected", false, "host:boundary");
+        }
 
         var sent = await inner.SendPreparedAsync(prepared, CancellationToken.None).ConfigureAwait(false);
         if (d.SubmissionIdentity.Length > 0) _successorSendResults[d.SubmissionIdentity] = sent;
