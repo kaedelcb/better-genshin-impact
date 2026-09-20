@@ -462,3 +462,5 @@ B1 统一提交边界/B2 F11 与快照/B3 仲裁轮次/B4 范围裁决表/B5 恢
 **必须同时满足的约束**：门面 Sender 回调与边界发送段之间的回环**不得重入 `_gate`**（回调在锁外执行，发送段自身也不得取门面信号量）；`unsupported_dispatch_shape_b2a` 只保留给「非节点且非 flow」的未知形状；`checkSwitchGate` 在同一次占位事务内仍为 `true`。
 
 **验收口径（施工方内置，owner 0 点击）**：后继节点经仲裁面**真实**提交（断言发送次数与边界调用来源为门面而非直通）；同游标（`cursorRef+cursorRevision`）双提交仅一胜（⑪b 唯一消费）；三态映射各一例；首节点触发身份继承向量；epoch 变化拒绝；`attempt` 递增产生新身份（同 run 后继仍继承 `RunId` 段）。
+
+**实施前置发现（2026-09-20 核实，必须先解决否则上述验收口径不可满足）**：`BgiExternalClient` 是 **sealed 具体类且无线协议注入接缝**（既有测试只能用反射调其私有 `WriteEnvelopeAsync/ReadEnvelopeAsync`），而 `BgiWorkflowExecutionBoundary` 直接持有该实例调用 `SendCommandAsync`。因此第 1 步「拆分边界」必须**同时引入发送段接缝**（可注入的发送委托/最小接口，生产默认仍走 `BgiExternalClient`），否则「后继节点经仲裁面真实提交 + 断言发送次数」这条组件级验收无法在不起真实 IPC 的前提下成立——不许用「反射私有方法」或「起真链路」绕过该前置。
