@@ -1614,4 +1614,88 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(AdmissionResultKind.Error, last.Kind);
         Assert.StartsWith("operations_capacity_full", last.ReasonCode, StringComparison.Ordinal);
     }
+
+    // ── 42. R5.3.4：A6 票据压制 —— 授权抢占方保留资格、无关候选被压制（组件级） ──
+
+    /// <summary>
+    /// **R5.3.4①（授权抢占方保留资格）**：存在存续 A6 票据且**授权抢占方身份＝本候选 stableIdentity** 时，
+    /// 候选**不被票据压制**（不得以 `ticket_suppressed` 拒绝；空闲事实下应正常获准并发送一次）。
+    /// </summary>
+    [Fact]
+    public async Task Ticket_AuthorizedPreemptorRetainsEligibility()
+    {
+        var r = Req(trigger: "fixture:preemptor");
+        var stable = ArbitrationOrdering.BuildStableIdentity(r.Candidate);
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); };
+            h.FactsProvider = () => new ArbitrationFacts
+            {
+                ActiveTicket = new TicketBinding
+                {
+                    SuspendedRunIdentity = "run-suspended",
+                    AuthorizedPreemptorIdentity = stable,
+                    Epoch = "ep1",
+                },
+            };
+        });
+
+        var result = await svc.SubmitAsync(r);
+
+        Assert.NotEqual("ticket_suppressed", result.ReasonCode); // 授权抢占方保留资格
+        Assert.Equal(AdmissionResultKind.Accepted, result.Kind);
+        Assert.Equal(1, sends);
+    }
+
+    /// <summary>
+    /// **R5.3.4②（压制无关候选）**：票据存续期间**非授权方**候选一律被压制 ⇒
+    /// **`NotSelected`＋原因码 `ticket_suppressed`＋`SuppressionSource == "ticket"`**。
+    /// **定性**：压制经「**资格筛选→无胜者**」路径落地 ⇒ 这是**资格筛选产生的本地未获选终局**，
+    /// **不是**「发送后取得的远端拒绝回执」，也**不是**「确定未受理」（依据 §3.1 非胜者终局＋§4.1a 第一行）。
+    /// **不得泛化（均为有条件结果，勿写成无条件规则）**：本用例在**事实已知、其余前置满足**时经票据筛选无胜者 ⇒ `NotSelected`；
+    /// 若与 `ExecutionFactsUnknown` 并存 ⇒ `NeedReconcile`（退回 `Queued`，**非** NotSelected）。
+    /// **获选后、占位前**锁内复核判 `ticket_suppressed` 且终局落盘成功 ⇒ `TerminalRejected`；**票据变化本身不必然拒绝**
+    /// （撤销票据、或替换后仍匹配授权身份均可能放行；当前实现亦不校验票据 `Epoch`/`SuspendedRunIdentity`）。恢复专用边界同理。
+    /// 后两条**分类分支已有实现、本批尚未补反例夹具**（登记为 R5.3.4③–⑦）。
+    /// **作用域收窄**：本用例只证明「未发送（`LastSendSeq==0`／发送身份为空）＋未占位（无 Submission）」，
+    /// **不**声称「零副作用」——请求仍会被登记进 `Operations` 并推进到 `NotSelected` 终局。
+    /// </summary>
+    [Fact]
+    public async Task Ticket_UnrelatedCandidateSuppressed_NoSendNoPlaceholder()
+    {
+        var unrelated = Req(trigger: "fixture:unrelated");
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); };
+            h.FactsProvider = () => new ArbitrationFacts
+            {
+                ActiveTicket = new TicketBinding
+                {
+                    SuspendedRunIdentity = "run-suspended",
+                    AuthorizedPreemptorIdentity = "not-this-candidate",
+                    Epoch = "ep1",
+                },
+            };
+        });
+
+        var result = await svc.SubmitAsync(unrelated);
+
+        // 结果面：本地未获选终局（**非**远端拒绝回执）＋压制来源可鉴别。
+        Assert.Equal(AdmissionResultKind.NotSelected, result.Kind);
+        Assert.Equal("ticket_suppressed", result.ReasonCode);
+        Assert.Equal("ticket", result.SuppressionSource);
+        Assert.Equal(0, sends);                                       // 未发送
+
+        // 持久化面：操作登记在册、停在 NotSelected 终局，受理从未发生。
+        var op = FindOp(unrelated.RequestIdentity);
+        Assert.NotNull(op);
+        Assert.Equal(OperationRequestState.NotSelected, op!.RequestState);
+        Assert.Equal("ticket_suppressed", op.LastResult!.ReasonCode);  // 原因持久化
+        Assert.Equal("ticket", op.LastResult.SuppressionSource);       // 压制来源持久化
+        Assert.Equal(0, op.LastSendSeq);                               // 未发布发送许可
+        Assert.True(string.IsNullOrEmpty(op.SubmissionIdentity));      // 发送身份为空
+        Assert.Null(ReadLease().File!.Handoff!.Submission);            // 未占位（无发送许可）
+    }
 }
