@@ -454,7 +454,9 @@ B1 统一提交边界/B2 F11 与快照/B3 仲裁轮次/B4 范围裁决表/B5 恢
 **实施要点（三步，缺一不可）**：
 
 1. **拆分边界**：把 `BgiWorkflowExecutionBoundary.SubmitAsync` 拆为「本地校验+身份冻结」（可重复调用、无发送副作用）与「锁外发送+不确定对账」两段，使发送段可被仲裁面当作 Sender 回调调用，而不重复冻结/重复落盘。
-2. **适配器装饰器**：新增 `ArbitrationWorkflowExecutionBoundary`（`IWorkflowExecutionBoundary` 其余成员一律委托 inner），其 `SubmitAsync` 构造后继候选后经门面提交：`Scope=bgi:local:{当前 epoch}`、`Namespace=successor`、`WorkflowId`、`TriggerOccurrenceId`＝**首节点触发身份继承**（I-1，不得重造）、`RunId=run.RunId`、`NodeId/Occurrence/LoopIteration/Attempt`＝出现身份与 `submission.Attempt`、`ResourceRef`＝节点资源引用、`Intent=start`、`CursorRef/CursorRevision`＝运行台账**合法游标**（§3.2 授权）。
+2. **适配器装饰器**：新增 `ArbitrationWorkflowExecutionBoundary`（`IWorkflowExecutionBoundary` 其余成员一律委托 inner），其 `SubmitAsync` 构造后继候选后经门面提交。
+   **I-1 的正确含义（勿误读）**：I-1 指 **`scope` 的 bgiEpoch 在首次构造时捕获并固定、之后只比较不重写**（§2.2/I-1）——因此后继候选的 `Scope` 必须**继承该 runBinding 已登记启动操作的 `Candidate.Scope`**（即首次提交固定下来的 epoch），**不得在提交时用 `CurrentBgiEpoch()` 重新读取**；epoch 变化一律走拒绝或对账。§2.2「首次节点提交身份继承（I-1）」指的正是这条，**不是**继承 `TriggerOccurrenceId`。
+   其余段：`Namespace=successor`、`WorkflowId`、`TriggerOccurrenceId`＝本次后继提交自身的稳定来源身份（不得重造已有操作的触发身份）、`RunId=run.RunId`（同 run 后继继承 runId 段）、`NodeId/Occurrence/LoopIteration/Attempt`＝出现身份与 `submission.Attempt`、`ResourceRef`＝节点资源引用、`Intent=start`、`CursorRef/CursorRevision`＝运行台账**合法游标**（§3.2 授权）。
 3. **三态双向映射**：`SendOutcome` ↔ `BoundarySubmitResult`——`Accepted(jobId)`→`AcceptedWith(jobId)`；确定拒绝→`Rejected(reason)`（仅可证实未受理）；其余→`Uncertain`（不猜成功也不猜失败）。`RecordIntent` 先行与「Unknown 停驻不重发」纪律保持不变。
 
 **必须同时满足的约束**：门面 Sender 回调与边界发送段之间的回环**不得重入 `_gate`**（回调在锁外执行，发送段自身也不得取门面信号量）；`unsupported_dispatch_shape_b2a` 只保留给「非节点且非 flow」的未知形状；`checkSwitchGate` 在同一次占位事务内仍为 `true`。
