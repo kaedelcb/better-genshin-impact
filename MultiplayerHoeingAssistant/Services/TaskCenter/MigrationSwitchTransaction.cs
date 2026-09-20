@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 
 namespace MultiplayerHoeingAssistant.Services;
 
-/// <summary>事务阶段（**持久化**；除 `Committed` 外一律不可生产执行）。</summary>
+/// <summary>事务阶段（**持久化**；除 Committed 外一律不可生产执行）。</summary>
 public enum MigrationStage
 {
     None = 0,
@@ -18,11 +18,12 @@ public enum MigrationStage
     ReferenceUpdating = 3,
     Activated = 4,
     Committed = 5,
-    RolledBack = 6,
-    Blocked = 7,
+    RollingBack = 6,
+    RolledBack = 7,
+    Blocked = 8,
 }
 
-/// <summary>变更归属（回滚据此判定「本事务新增」——**不再删除未登记文件**）。</summary>
+/// <summary>变更归属（回滚据此判定「本事务新增」；**不再删除未登记文件**）。</summary>
 public enum ChangeKind { Added = 0, Modified = 1, Deleted = 2 }
 
 /// <summary>一条变更记录（相对路径 + 归属）。</summary>
@@ -32,9 +33,7 @@ public sealed class ChangeRecord
     [JsonPropertyName("kind")] public ChangeKind Kind { get; set; }
 }
 
-/// <summary>
-/// 迁移 manifest（**全字段完整性**：`ManifestIntegrity` 覆盖除自身外全部字段，含阶段/提交标记/演练结果）。
-/// </summary>
+/// <summary>迁移 manifest（**全字段完整性 + 结构与状态不变量**）。</summary>
 public sealed class MigrationManifest
 {
     [JsonPropertyName("schemaVersion")] public int SchemaVersion { get; set; } = 1;
@@ -44,19 +43,21 @@ public sealed class MigrationManifest
     [JsonPropertyName("snapshotPath")] public string SnapshotPath { get; set; } = "";
     [JsonPropertyName("rollbackEntry")] public string RollbackEntry { get; set; } = "";
     [JsonPropertyName("fileHashes")] public Dictionary<string, string> FileHashes { get; set; } = new(StringComparer.Ordinal);
-    /// <summary>本事务的**变更归属**（有记录才按归属回滚；无记录一律**不删除**任何文件）。</summary>
+    /// <summary>本事务变更归属（回滚据此判定新增；无记录 ⇒ 不删除任何文件）。</summary>
     [JsonPropertyName("changedFiles")] public List<ChangeRecord> ChangedFiles { get; set; } = [];
     [JsonPropertyName("snapshotManifestHash")] public string SnapshotManifestHash { get; set; } = "";
     [JsonPropertyName("stage")] public MigrationStage Stage { get; set; }
-    /// <summary>唯一提交标记；**提交前为空**。</summary>
+    /// <summary>唯一提交标记；提交前为空、非提交态必为空。</summary>
     [JsonPropertyName("commitMarker")] public string? CommitMarker { get; set; }
     [JsonPropertyName("rollbackRehearsed")] public bool RollbackRehearsed { get; set; }
-    /// <summary>演练范围（绑定「快照清单 + 变更归属」；与当前不符 ⇒ 演练资格失效）。</summary>
+    /// <summary>演练范围（绑定快照清单 + 变更归属；变更集改变即失效）。</summary>
     [JsonPropertyName("rehearsalScope")] public string? RehearsalScope { get; set; }
-    /// <summary>结构化 blocked 原因（非空 ⇒ 禁止提交且不可生产执行）。</summary>
+    /// <summary>结构化 blocked 原因（非空 ⇒ 禁止提交与生产执行）。</summary>
     [JsonPropertyName("blockedReason")] public string? BlockedReason { get; set; }
-    /// <summary>写入静止窗口取得时刻（**null ⇒ 未取得静止窗口** ⇒ 严格模式拒绝提交）。</summary>
+    /// <summary>静止窗口取得时刻（须与 QuiesceSessionId 同会话才算有效）。</summary>
     [JsonPropertyName("quiescedAtUtc")] public DateTimeOffset? QuiescedAtUtc { get; set; }
+    /// <summary>取得静止窗口的会话标识（重启后不得凭历史记录提交）。</summary>
+    [JsonPropertyName("quiesceSessionId")] public string? QuiesceSessionId { get; set; }
     [JsonPropertyName("manifestIntegrity")] public string ManifestIntegrity { get; set; } = "";
 }
 
@@ -66,16 +67,14 @@ public sealed record MigrationResult(bool Success, string Reason, MigrationStage
     public static MigrationResult Ok(MigrationStage s) => new(true, "", s);
     public static MigrationResult Fail(string reason, MigrationStage s) => new(false, reason, s);
 }
-
 /// <summary>
-/// **R5.6 事务迁移切换（v2：按第 1 轮会诊 8 项必改重构）**。
-/// 不变量：①**事务串行边界**＝事务根独占锁（`migration.lock`，`FileShare.None`）全程持有；
-/// ②**静止窗口**＝调用方提供 `quiesce` 委托，严格模式下未取得静止窗口**拒绝提交**；
-/// ③**合法阶段转换**（见 <see cref="IsLegalAdvance"/>），跳步提交被拒；
-/// ④**回滚资格随范围失效**（演练范围＝快照清单+变更归属哈希，回滚/变更后作废）；
-/// ⑤**回滚只按变更归属**（无记录⇒不删任何文件）；
-/// ⑥**manifest 全字段完整性**校验，闸门先校验再判定；
-/// ⑦**未提交绝不生产执行**——生产入口须经 <see cref="TryRunProduction"/>（唯一强制检查点）。
+/// **R5.6 事务迁移切换（v3：按第 2 轮会诊 7 项必改重构）**。
+/// 不变量：①串行边界覆盖全部入口（恢复/变更/授权/执行/回滚均须本实例持锁，且实例内串行；
+/// TryRunProduction 的「授权+执行」在同一临界区）；②回滚可恢复（先落 RollingBack 再做 IO，
+/// 恢复路径幂等续做）；③静止窗口覆盖全程且绑定会话（重启后不得凭历史时间戳提交）；
+/// ④身份/路径前置校验（事务号安全、快照路径属本事务、根绑定、链接拒绝）；
+/// ⑤未决事务存在时拒绝开新事务，事务号/快照目录不复用；⑥变更归属按基线校验；
+/// ⑦结构与状态不变量 + 全字段完整性双校验，null 字段结构化拒绝。
 /// 开发验证只用独立配置根；真实 User 目录切换由 owner 另行下令。
 /// </summary>
 public sealed class MigrationSwitchTransaction : IDisposable
@@ -86,8 +85,10 @@ public sealed class MigrationSwitchTransaction : IDisposable
     private readonly Func<IDisposable>? _quiesce;
     private readonly bool _requireQuiescence;
     private readonly Action<MigrationStage>? _stageHook;
+    private readonly object _sync = new();
+    private readonly string _sessionId = Guid.NewGuid().ToString("N");
     private FileStream? _lock;
-    private string _transactionId = "";
+    private IDisposable? _quiet;
 
     public MigrationSwitchTransaction(string configRoot, string transactionRoot, Func<DateTimeOffset>? utcNow = null,
         Func<IDisposable>? quiesce = null, bool requireQuiescence = true, Action<MigrationStage>? stageHook = null)
@@ -103,8 +104,12 @@ public sealed class MigrationSwitchTransaction : IDisposable
 
     public string ManifestPath => Path.Combine(_transactionRoot, "migration-manifest.json");
     internal bool HoldsExclusiveLock => _lock is not null;
+    internal string SessionId => _sessionId;
 
-    /// <summary>根关系校验：事务根**不得**位于配置根内（避免自包含快照/回滚删事务资料），也不得包含配置根。</summary>
+    /// <summary>快照路径＝事务根下按「事务号 + 会话」确定性推导（不复用既有目录）。</summary>
+    internal string SnapshotPathOf(string transactionId, string sessionId)
+        => Path.Combine(_transactionRoot, "snapshot-" + transactionId + "-" + sessionId);
+
     private void ValidateRoots()
     {
         var cfg = _configRoot.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
@@ -113,141 +118,211 @@ public sealed class MigrationSwitchTransaction : IDisposable
             throw new InvalidOperationException("事务根不得位于配置根内（自包含快照会污染备份）。");
         if (cfg.StartsWith(tx, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("配置根不得位于事务根内。");
+        foreach (var chain in new[] { _configRoot, _transactionRoot })
+            if (HasReparsePoint(chain))
+                throw new InvalidOperationException("根路径链上存在重解析点（junction/符号链接），拒绝迁移事务：" + chain);
     }
 
-    /// <summary>相对路径安全校验：拒绝绝对路径、盘符、`..` 段与目录分隔逃逸（写入/删除前一律先校验）。</summary>
+    /// <summary>链接逃逸防护：路径链上任一层为 reparse point 即拒绝。</summary>
+    internal static bool HasReparsePoint(string path)
+    {
+        var dir = new DirectoryInfo(path);
+        while (dir is not null)
+        {
+            if (dir.Exists && dir.Attributes.HasFlag(FileAttributes.ReparsePoint)) return true;
+            dir = dir.Parent;
+        }
+        return false;
+    }
+
+    /// <summary>相对路径安全校验（拒绝绝对路径/盘符/.. /./空段）。</summary>
     internal static bool IsSafeRelativePath(string? rel)
     {
         if (string.IsNullOrWhiteSpace(rel)) return false;
         var norm = rel.Replace('\\', '/');
         if (norm.StartsWith('/') || norm.Contains(':')) return false;
         foreach (var seg in norm.Split('/'))
-            if (seg == ".." || seg == "." || seg.Length == 0) return false;
+            if (seg is ".." or "." || seg.Length == 0) return false;
         return true;
     }
 
-    /// <summary>启动事务：取得**独占锁**并**先持久化** `Snapshotting`（提交标记为空、无演练资格）。</summary>
+    /// <summary>事务号安全校验（单段安全路径）。</summary>
+    internal static bool IsSafeTransactionId(string? txId)
+        => IsSafeRelativePath(txId) && !(txId ?? "").Contains('/') && !(txId ?? "").Contains('\\');
+
+    /// <summary>取得事务独占锁（不写 manifest；恢复路径用）。</summary>
+    public MigrationResult TryAcquireExclusive()
+    {
+        lock (_sync)
+        {
+            if (HoldsExclusiveLock) return MigrationResult.Ok(MigrationStage.None);
+            Directory.CreateDirectory(_transactionRoot);
+            try
+            {
+                _lock = new FileStream(Path.Combine(_transactionRoot, "migration.lock"), FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (IOException)
+            {
+                return MigrationResult.Fail("transaction_busy", MigrationStage.None);
+            }
+            return MigrationResult.Ok(MigrationStage.None);
+        }
+    }
+
+    /// <summary>开启新事务：须持锁；有未决事务或事务号占用 ⇒ 拒绝；先持久化 Snapshotting 并取得全程静止窗口。</summary>
     public MigrationResult BeginTransaction(string transactionId)
     {
-        if (string.IsNullOrWhiteSpace(transactionId)) return MigrationResult.Fail("invalid_transaction_id", MigrationStage.None);
-        if (HoldsExclusiveLock) return MigrationResult.Fail("already_begun", LoadManifest()?.Stage ?? MigrationStage.None);
-        Directory.CreateDirectory(_transactionRoot);
-        try
+        lock (_sync)
         {
-            _lock = new FileStream(Path.Combine(_transactionRoot, "migration.lock"), FileMode.OpenOrCreate,
-                FileAccess.ReadWrite, FileShare.None);
-        }
-        catch (IOException)
-        {
-            return MigrationResult.Fail("transaction_busy", MigrationStage.None); // 跨实例/跨进程排他
-        }
-        _transactionId = transactionId;
-        var manifest = new MigrationManifest
-        {
-            TransactionId = transactionId,
-            CreatedAtUtc = _utcNow(),
-            ConfigRoot = _configRoot,
-            SnapshotPath = Path.Combine(_transactionRoot, "snapshot-" + transactionId),
-            RollbackEntry = "rollback:MigrationSwitchTransaction.Rollback(transactionId=" + transactionId + ")",
-            Stage = MigrationStage.Snapshotting,
-            CommitMarker = null,
-            RollbackRehearsed = false,
-        };
-        WriteManifest(manifest);
-        return MigrationResult.Ok(MigrationStage.Snapshotting);
-    }
+            if (!IsSafeTransactionId(transactionId)) return MigrationResult.Fail("invalid_transaction_id", MigrationStage.None);
+            if (!HoldsExclusiveLock)
+            {
+                var acq = TryAcquireExclusive();
+                if (!acq.Success) return acq;
+            }
 
-    /// <summary>步骤①②：取得静止窗口 → 全量快照（字节+SHA256）→ 写清单哈希与快照路径 → 阶段 `SnapshotReady`。</summary>
+            var existing = LoadManifest();
+            if (existing is not null)
+            {
+                if (existing.Stage is not (MigrationStage.Committed or MigrationStage.RolledBack))
+                    return MigrationResult.Fail("pending_transaction_exists:" + existing.TransactionId, existing.Stage);
+                if (string.Equals(existing.TransactionId, transactionId, StringComparison.Ordinal))
+                    return MigrationResult.Fail("transaction_id_in_use", existing.Stage);
+            }
+
+            var snapshotPath = SnapshotPathOf(transactionId, _sessionId);
+            if (Directory.Exists(snapshotPath)) return MigrationResult.Fail("snapshot_path_in_use", MigrationStage.None);
+
+            _quiet = _quiesce?.Invoke();                       // 静止窗口：覆盖全程，提交/回滚/释放时结束
+            var manifest = new MigrationManifest
+            {
+                TransactionId = transactionId,
+                CreatedAtUtc = _utcNow(),
+                ConfigRoot = _configRoot,
+                SnapshotPath = snapshotPath,
+                RollbackEntry = "rollback:MigrationSwitchTransaction.Rollback(transactionId=" + transactionId + ")",
+                Stage = MigrationStage.Snapshotting,
+                CommitMarker = null,
+                RollbackRehearsed = false,
+                QuiescedAtUtc = _quiet is null ? null : _utcNow(),
+                QuiesceSessionId = _quiet is null ? null : _sessionId,
+            };
+            WriteManifest(manifest);
+            return MigrationResult.Ok(MigrationStage.Snapshotting);
+        }
+    }
+    /// <summary>步骤①②：全量快照（字节+SHA256）→ 清单哈希与快照路径落盘 → SnapshotReady。</summary>
     public MigrationResult TakeSnapshot()
     {
-        var m = LoadValidated();
-        if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
-        if (m.Stage != MigrationStage.Snapshotting) return MigrationResult.Fail("illegal_stage:" + m.Stage, m.Stage);
-        if (!Directory.Exists(_configRoot)) return MigrationResult.Fail("config_root_missing", m.Stage);
-
-        using var quiet = _quiesce?.Invoke();     // 写入静止窗口（等效一致性机制；调用方负责覆盖所有写方）
-        m.QuiescedAtUtc = quiet is null ? null : _utcNow();
-
-        var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
-        try
+        lock (_sync)
         {
-            foreach (var file in EnumerateFiles(_configRoot))
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+            var m = LoadValidated();
+            if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", m.Stage);
+            if (m.Stage != MigrationStage.Snapshotting) return MigrationResult.Fail("illegal_stage:" + m.Stage, m.Stage);
+            if (!Directory.Exists(_configRoot)) return MigrationResult.Fail("config_root_missing", m.Stage);
+
+            var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
+            try
             {
-                var rel = Rel(file, _configRoot);
-                if (!IsSafeRelativePath(rel)) return MigrationResult.Fail("unsafe_path:" + rel, m.Stage);
-                var bytes = File.ReadAllBytes(file);
-                var target = Path.Combine(m.SnapshotPath, rel.Replace('/', Path.DirectorySeparatorChar));
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                File.WriteAllBytes(target, bytes);
-                hashes[rel] = Sha256Hex(bytes);
+                foreach (var file in EnumerateFiles(_configRoot))
+                {
+                    var rel = Rel(file, _configRoot);
+                    if (!IsSafeRelativePath(rel)) return MarkBlocked("unsafe_path:" + rel);
+                    var bytes = File.ReadAllBytes(file);
+                    var target = Path.Combine(m.SnapshotPath, rel.Replace('/', Path.DirectorySeparatorChar));
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    File.WriteAllBytes(target, bytes);
+                    hashes[rel] = Sha256Hex(bytes);
+                }
             }
-        }
-        catch (IOException ex)
-        {
-            return MarkBlocked("snapshot_io_failed:" + ex.GetType().Name);
-        }
+            catch (IOException ex)
+            {
+                return MarkBlocked("snapshot_io_failed:" + ex.GetType().Name);
+            }
 
-        m.FileHashes = hashes;
-        m.SnapshotManifestHash = ComputeSnapshotManifestHash(hashes);
-        m.Stage = MigrationStage.SnapshotReady;
-        WriteManifest(m);
-        return MigrationResult.Ok(MigrationStage.SnapshotReady);
+            m.FileHashes = hashes;
+            m.SnapshotManifestHash = ComputeSnapshotManifestHash(hashes);
+            m.Stage = MigrationStage.SnapshotReady;
+            WriteManifest(m);
+            return MigrationResult.Ok(m.Stage);
+        }
     }
 
-    /// <summary>快照清单哈希（相对路径 + 内容哈希，排序后取 SHA256）。</summary>
+    /// <summary>快照清单哈希（排序后的 相对路径:内容哈希 取 SHA256）。</summary>
     public static string ComputeSnapshotManifestHash(IReadOnlyDictionary<string, string> fileHashes)
     {
+        var ordered = (fileHashes ?? new Dictionary<string, string>(StringComparer.Ordinal))
+            .Where(p => !string.IsNullOrEmpty(p.Key))
+            .OrderBy(p => p.Key, StringComparer.Ordinal);
         var sb = new StringBuilder();
-        foreach (var p in fileHashes.OrderBy(p => p.Key, StringComparer.Ordinal))
-            sb.Append(p.Key).Append(':').Append(p.Value).Append('\n');
+        foreach (var p in ordered) sb.Append(p.Key).Append(':').Append(p.Value ?? "").Append('\n');
         return Sha256Hex(Encoding.UTF8.GetBytes(sb.ToString()));
     }
 
-    /// <summary>记录**变更归属**（回滚据此判定新增/修改/删除；无记录⇒回滚不删除任何文件）。</summary>
+    /// <summary>记录变更归属（基线校验：Added 不得命中快照；Modified/Deleted 必须在快照中）。</summary>
     public MigrationResult RecordChanges(IEnumerable<ChangeRecord> changes)
     {
-        var m = LoadValidated();
-        if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
-        if (m.Stage is not (MigrationStage.SnapshotReady or MigrationStage.ReferenceUpdating or MigrationStage.Activated))
-            return MigrationResult.Fail("illegal_stage:" + m.Stage, m.Stage);
-        foreach (var c in changes)
+        lock (_sync)
         {
-            if (!IsSafeRelativePath(c.Path)) return MigrationResult.Fail("unsafe_path:" + c.Path, m.Stage);
-            m.ChangedFiles.RemoveAll(x => string.Equals(x.Path, c.Path, StringComparison.Ordinal));
-            m.ChangedFiles.Add(new ChangeRecord { Path = c.Path, Kind = c.Kind });
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+            var m = LoadValidated();
+            if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", m.Stage);
+            if (m.Stage is not (MigrationStage.SnapshotReady or MigrationStage.ReferenceUpdating or MigrationStage.Activated))
+                return MigrationResult.Fail("illegal_stage:" + m.Stage, m.Stage);
+
+            var batch = new List<ChangeRecord>();
+            foreach (var c in changes ?? [])
+            {
+                var path = (c.Path ?? "").Replace('\\', '/').Trim();
+                if (!IsSafeRelativePath(path)) return MigrationResult.Fail("unsafe_path:" + c.Path, m.Stage);
+                if (batch.Any(x => string.Equals(x.Path, path, StringComparison.OrdinalIgnoreCase)))
+                    return MigrationResult.Fail("duplicate_change_path:" + path, m.Stage);
+                var inSnapshot = m.FileHashes.ContainsKey(path);
+                var ok = c.Kind switch
+                {
+                    ChangeKind.Added => !inSnapshot,
+                    ChangeKind.Modified or ChangeKind.Deleted => inSnapshot,
+                    _ => false,
+                };
+                if (!ok) return MigrationResult.Fail("change_baseline_mismatch:" + path, m.Stage);
+                batch.Add(new ChangeRecord { Path = path, Kind = c.Kind });
+            }
+
+            foreach (var c in batch)
+            {
+                m.ChangedFiles.RemoveAll(x => string.Equals(x.Path, c.Path, StringComparison.OrdinalIgnoreCase));
+                m.ChangedFiles.Add(c);
+            }
+            m.RollbackRehearsed = false;
+            m.RehearsalScope = null;
+            WriteManifest(m);
+            return MigrationResult.Ok(m.Stage);
         }
-        // 变更归属变化 ⇒ 既有演练资格失效（演练范围绑定变更集合）
-        m.RollbackRehearsed = false;
-        m.RehearsalScope = null;
-        WriteManifest(m);
-        return MigrationResult.Ok(m.Stage);
     }
 
-    /// <summary>步骤③前半：引用更新完成（阶段 `ReferenceUpdating`）。</summary>
-    public MigrationResult MarkReferenceUpdateCompleted()
+    public MigrationResult MarkReferenceUpdateCompleted() => Advance(MigrationStage.ReferenceUpdating);
+    public MigrationResult MarkActivated() => Advance(MigrationStage.Activated);
+
+    private MigrationResult Advance(MigrationStage to)
     {
-        var m = LoadValidated();
-        if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
-        if (!IsLegalAdvance(m.Stage, MigrationStage.ReferenceUpdating))
-            return MigrationResult.Fail("illegal_advance:" + m.Stage + "->" + MigrationStage.ReferenceUpdating, m.Stage);
-        m.Stage = MigrationStage.ReferenceUpdating;
-        WriteManifest(m);
-        return MigrationResult.Ok(m.Stage);
+        lock (_sync)
+        {
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+            var m = LoadValidated();
+            if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", m.Stage);
+            if (!IsLegalAdvance(m.Stage, to)) return MigrationResult.Fail("illegal_advance:" + m.Stage + "->" + to, m.Stage);
+            m.Stage = to;
+            WriteManifest(m);
+            return MigrationResult.Ok(m.Stage);
+        }
     }
 
-    /// <summary>步骤③后半：激活完成（`candidate → active`；阶段 `Activated`）——**仍未提交**。</summary>
-    public MigrationResult MarkActivated()
-    {
-        var m = LoadValidated();
-        if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
-        if (!IsLegalAdvance(m.Stage, MigrationStage.Activated))
-            return MigrationResult.Fail("illegal_advance:" + m.Stage + "->" + MigrationStage.Activated, m.Stage);
-        m.Stage = MigrationStage.Activated;
-        WriteManifest(m);
-        return MigrationResult.Ok(m.Stage);
-    }
-
-    /// <summary>合法阶段转换（**跳步提交被拒**）：`Snapshotting→SnapshotReady→ReferenceUpdating→Activated→Committed`；任意中间态→`Blocked`；`Activated/Blocked→RollingBack`。</summary>
+    /// <summary>合法阶段转换（跳步提交被拒；回滚可自任意中间态/已提交/阻塞态发起）。</summary>
     public static bool IsLegalAdvance(MigrationStage from, MigrationStage to) => (from, to) switch
     {
         (MigrationStage.Snapshotting, MigrationStage.SnapshotReady) => true,
@@ -255,163 +330,200 @@ public sealed class MigrationSwitchTransaction : IDisposable
         (MigrationStage.ReferenceUpdating, MigrationStage.Activated) => true,
         (MigrationStage.Activated, MigrationStage.Committed) => true,
         (_, MigrationStage.Blocked) => from is not (MigrationStage.Committed or MigrationStage.RolledBack),
-        // 回滚允许自「快照就绪/引用更新/已激活/已提交/阻塞」发起：**已提交后仍须可回滚**（I1：恢复旧文件+清新增+撤销激活）。
         (MigrationStage.SnapshotReady or MigrationStage.ReferenceUpdating or MigrationStage.Activated
-            or MigrationStage.Committed or MigrationStage.Blocked, MigrationStage.RolledBack) => true,
+            or MigrationStage.Committed or MigrationStage.Blocked or MigrationStage.RollingBack,
+            MigrationStage.RollingBack) => true,
+        (MigrationStage.RollingBack, MigrationStage.RolledBack) => true,
+        (MigrationStage.RolledBack, MigrationStage.RolledBack) => true,
         _ => false,
     };
-
-    /// <summary>
-    /// 步骤④：**回滚演练**——在隔离副本上先施加「本次变更归属」代表的变更，再**复用实际回滚核心**回滚，
-    /// 校验逐字节恢复 + 新增文件被清理；通过则记录 `RehearsalScope`（绑定快照清单+变更归属）。
-    /// </summary>
+    /// <summary>步骤④：回滚演练——副本＝快照 → 施加代表变更 → 复用实际回滚核心 → 逐字节校验。</summary>
     public MigrationResult RehearseRollback()
     {
-        var m = LoadValidated();
-        if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
-        if (m.Stage != MigrationStage.Activated) return MigrationResult.Fail("illegal_stage:" + m.Stage, m.Stage);
-        if (VerifySnapshot() is { Length: > 0 } bad) return MigrationResult.Fail("snapshot_invalid:" + bad, m.Stage);
+        lock (_sync)
+        {
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+            var m = LoadValidated();
+            if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", m.Stage);
+            if (m.Stage != MigrationStage.Activated) return MigrationResult.Fail("illegal_stage:" + m.Stage, m.Stage);
+            if (VerifySnapshot() is { Length: > 0 } bad) return MigrationResult.Fail("snapshot_invalid:" + bad, m.Stage);
 
-        var rehearsalRoot = Path.Combine(_transactionRoot, "rehearsal");
-        try
-        {
-            if (Directory.Exists(rehearsalRoot)) Directory.Delete(rehearsalRoot, true);
-            Directory.CreateDirectory(rehearsalRoot);
-            RestoreFromSnapshot(m, rehearsalRoot);                       // 副本＝快照
-            ApplyRepresentativeChanges(m, rehearsalRoot);                // 施加本次变更（新增/修改/删除）
-            RestoreFromSnapshot(m, rehearsalRoot);                       // **复用实际回滚核心**
-            DeleteRecordedAdditions(m, rehearsalRoot);                   // 同一删除归属逻辑
-            foreach (var p in m.FileHashes)
+            var rehearsalRoot = Path.Combine(_transactionRoot, "rehearsal-" + _sessionId);
+            try
             {
-                var target = Path.Combine(rehearsalRoot, p.Key.Replace('/', Path.DirectorySeparatorChar));
-                if (!File.Exists(target)) return MigrationResult.Fail("rehearsal_missing:" + p.Key, m.Stage);
-                if (!string.Equals(Sha256Hex(File.ReadAllBytes(target)), p.Value, StringComparison.Ordinal))
-                    return MigrationResult.Fail("rehearsal_hash_mismatch:" + p.Key, m.Stage);
+                if (Directory.Exists(rehearsalRoot)) Directory.Delete(rehearsalRoot, true);
+                Directory.CreateDirectory(rehearsalRoot);
+                RestoreFromSnapshot(m, rehearsalRoot);
+                ApplyRepresentativeChanges(m, rehearsalRoot);
+                RestoreFromSnapshot(m, rehearsalRoot);      // 复用实际回滚核心
+                DeleteRecordedAdditions(m, rehearsalRoot);
+                foreach (var p in m.FileHashes)
+                {
+                    var target = Path.Combine(rehearsalRoot, p.Key.Replace('/', Path.DirectorySeparatorChar));
+                    if (!File.Exists(target)) return MigrationResult.Fail("rehearsal_missing:" + p.Key, m.Stage);
+                    if (!string.Equals(Sha256Hex(File.ReadAllBytes(target)), p.Value, StringComparison.Ordinal))
+                        return MigrationResult.Fail("rehearsal_hash_mismatch:" + p.Key, m.Stage);
+                }
+                foreach (var added in m.ChangedFiles.Where(c => c.Kind == ChangeKind.Added))
+                {
+                    var target = Path.Combine(rehearsalRoot, added.Path.Replace('/', Path.DirectorySeparatorChar));
+                    if (File.Exists(target)) return MigrationResult.Fail("rehearsal_addition_not_cleaned:" + added.Path, m.Stage);
+                }
             }
-            foreach (var added in m.ChangedFiles.Where(c => c.Kind == ChangeKind.Added))
+            catch (IOException ex)
             {
-                var target = Path.Combine(rehearsalRoot, added.Path.Replace('/', Path.DirectorySeparatorChar));
-                if (File.Exists(target)) return MigrationResult.Fail("rehearsal_addition_not_cleaned:" + added.Path, m.Stage);
+                return MarkBlocked("rehearsal_io_failed:" + ex.GetType().Name);
             }
-        }
-        catch (IOException ex)
-        {
-            return MarkBlocked("rehearsal_io_failed:" + ex.GetType().Name);
-        }
-        finally
-        {
-            try { if (Directory.Exists(rehearsalRoot)) Directory.Delete(rehearsalRoot, true); } catch { }
-        }
+            finally
+            {
+                try { if (Directory.Exists(rehearsalRoot)) Directory.Delete(rehearsalRoot, true); } catch { }
+            }
 
-        m.RollbackRehearsed = true;
-        m.RehearsalScope = RehearsalScopeOf(m);
-        WriteManifest(m);
-        return MigrationResult.Ok(m.Stage);
+            m.RollbackRehearsed = true;
+            m.RehearsalScope = RehearsalScopeOf(m);
+            WriteManifest(m);
+            return MigrationResult.Ok(m.Stage);
+        }
     }
 
-    /// <summary>
-    /// **提交**：前置＝阶段 `Activated`、**演练范围与当前一致**、**无 blocked**、严格模式须**已取得静止窗口**、
-    /// 快照有效 ⇒ 写唯一提交标记。任一前置不满足 ⇒ 结构化拒绝（**不写标记**）。
-    /// </summary>
+    /// <summary>提交：阶段 Activated、演练范围一致、无 blocked、静止窗口为当前会话且快照有效 ⇒ 写唯一提交标记。</summary>
     public MigrationResult Commit()
     {
-        var m = LoadValidated();
-        if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
-        if (m.Stage != MigrationStage.Activated)
-            return MigrationResult.Fail("illegal_stage:" + m.Stage, m.Stage);
-        if (!string.IsNullOrEmpty(m.BlockedReason)) return MigrationResult.Fail("blocked:" + m.BlockedReason, m.Stage);
-        if (!m.RollbackRehearsed || !string.Equals(m.RehearsalScope, RehearsalScopeOf(m), StringComparison.Ordinal))
-            return MigrationResult.Fail("rollback_not_rehearsed_for_current_scope", m.Stage);
-        if (_requireQuiescence && m.QuiescedAtUtc is null)
-            return MigrationResult.Fail("no_quiescence_window", m.Stage);
-        if (VerifySnapshot() is { Length: > 0 } bad) return MigrationResult.Fail("snapshot_invalid:" + bad, m.Stage);
+        lock (_sync)
+        {
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+            var m = LoadValidated();
+            if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", m.Stage);
+            if (m.Stage != MigrationStage.Activated) return MigrationResult.Fail("illegal_stage:" + m.Stage, m.Stage);
+            if (!string.IsNullOrEmpty(m.BlockedReason)) return MigrationResult.Fail("blocked:" + m.BlockedReason, m.Stage);
+            if (!m.RollbackRehearsed || !string.Equals(m.RehearsalScope, RehearsalScopeOf(m), StringComparison.Ordinal))
+                return MigrationResult.Fail("rollback_not_rehearsed_for_current_scope", m.Stage);
+            if (_requireQuiescence && (m.QuiescedAtUtc is null || !string.Equals(m.QuiesceSessionId, _sessionId, StringComparison.Ordinal)))
+                return MigrationResult.Fail("no_quiescence_window", m.Stage);
+            if (VerifySnapshot() is { Length: > 0 } bad) return MigrationResult.Fail("snapshot_invalid:" + bad, m.Stage);
 
-        m.CommitMarker = m.TransactionId;
-        m.Stage = MigrationStage.Committed;
-        WriteManifest(m);
-        return MigrationResult.Ok(MigrationStage.Committed);
+            m.CommitMarker = m.TransactionId;
+            m.Stage = MigrationStage.Committed;
+            WriteManifest(m);
+            ReleaseQuiescence();
+            return MigrationResult.Ok(m.Stage);
+        }
     }
 
-    /// <summary>
-    /// **回滚**：恢复快照内旧字节（含被删文件）→ **只删除「本事务新增」**（按变更归属；无记录⇒不删）→
-    /// 撤销激活（清提交标记）→ 置 `RolledBack` 并**作废演练资格**。
-    /// </summary>
+    /// <summary>回滚：先落 RollingBack（清提交标记与演练资格）再做 IO，最后落 RolledBack；只删归属为 Added 的文件。</summary>
     public MigrationResult Rollback()
     {
-        var m = LoadValidated();
-        if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
-        if (!IsLegalAdvance(m.Stage, MigrationStage.RolledBack))
-            return MigrationResult.Fail("illegal_advance:" + m.Stage + "->RolledBack", m.Stage);
-        if (VerifySnapshot() is { Length: > 0 } bad) return MigrationResult.Fail("snapshot_invalid:" + bad, m.Stage);
+        lock (_sync)
+        {
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+            var m = LoadValidated();
+            if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", m.Stage);
+            if (m.Stage == MigrationStage.RolledBack) return MigrationResult.Ok(MigrationStage.RolledBack);
+            if (!IsLegalAdvance(m.Stage, MigrationStage.RollingBack))
+                return MigrationResult.Fail("illegal_advance:" + m.Stage + "->RollingBack", m.Stage);
+            if (VerifySnapshot() is { Length: > 0 } bad) return MigrationResult.Fail("snapshot_invalid:" + bad, m.Stage);
 
-        m.Stage = MigrationStage.RolledBack;   // 先落盘：进入回滚即失去提交资格
-        m.RollbackRehearsed = false;
-        m.RehearsalScope = null;
-        m.CommitMarker = null;
-        WriteManifest(m);
-        try
-        {
-            RestoreFromSnapshot(m, _configRoot);
-            DeleteRecordedAdditions(m, _configRoot);
+            m.Stage = MigrationStage.RollingBack;
+            m.RollbackRehearsed = false;
+            m.RehearsalScope = null;
+            m.CommitMarker = null;
+            WriteManifest(m);
+            return CompleteRollback(m);
         }
-        catch (IOException ex)
-        {
-            return MarkBlocked("rollback_io_failed:" + ex.GetType().Name);
-        }
-        WriteManifest(m);
-        return MigrationResult.Ok(MigrationStage.RolledBack);
     }
 
-    /// <summary>
-    /// **重启恢复入口**：按持久化阶段收敛——`Committed`（标记＝事务号）保持**完整新态**并可执行；
-    /// 其余中间态（`Snapshotting`/`SnapshotReady`/`ReferenceUpdating`/`Activated`/`RolledBack`/`Blocked`）
-    /// 收敛为**完整旧态**（回滚）或标记 `Blocked`（快照不可用时）。
-    /// </summary>
+    /// <summary>回滚主体（恢复旧字节 + 按归属删除新增 + 撤销激活 + 落 RolledBack）；可被恢复路径幂等重入。</summary>
+    private MigrationResult CompleteRollback(MigrationManifest m)
+    {
+        lock (_sync)
+        {
+            try
+            {
+                RestoreFromSnapshot(m, _configRoot);
+                DeleteRecordedAdditions(m, _configRoot);
+            }
+            catch (IOException ex)
+            {
+                return MarkBlocked("rollback_io_failed:" + ex.GetType().Name);
+            }
+            m.Stage = MigrationStage.RolledBack;
+            m.CommitMarker = null;
+            WriteManifest(m);
+            ReleaseQuiescence();
+            return MigrationResult.Ok(m.Stage);
+        }
+    }
+
+    /// <summary>重启恢复（须先持锁）：已提交+标记+无 blocked ⇒ 保持新态；RollingBack ⇒ 幂等续做；RolledBack ⇒ 幂等；其余 ⇒ 回滚旧态。</summary>
     public MigrationResult RecoverOnStart()
     {
-        var m = LoadValidated();
-        if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
-        if (m.Stage == MigrationStage.Committed && string.Equals(m.CommitMarker, m.TransactionId, StringComparison.Ordinal))
-            return MigrationResult.Ok(MigrationStage.Committed);   // 完整新态（已提交）
-        if (m.Stage is MigrationStage.None) return MigrationResult.Fail("illegal_stage:None", m.Stage);
-        if (VerifySnapshot() is { Length: > 0 } bad) return MarkBlocked("recover_snapshot_invalid:" + bad);
-        return Rollback();
-    }
+        lock (_sync)
+        {
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+            var m = LoadValidated();
+            if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", m.Stage);
+            if (m.Stage == MigrationStage.Committed
+                && string.Equals(m.CommitMarker, m.TransactionId, StringComparison.Ordinal)
+                && string.IsNullOrEmpty(m.BlockedReason))
+                return MigrationResult.Ok(MigrationStage.Committed);
+            if (m.Stage == MigrationStage.RolledBack) return MigrationResult.Ok(MigrationStage.RolledBack);
+            if (m.Stage == MigrationStage.None) return MigrationResult.Fail("illegal_stage:None", m.Stage);
+            if (VerifySnapshot() is { Length: > 0 } bad) return MarkBlocked("recover_snapshot_invalid:" + bad);
 
-    /// <summary>**强制闸门**：生产执行前必须调用；仅当完整性校验通过、已提交、标记匹配且无 blocked 时为真。</summary>
+            if (m.Stage != MigrationStage.RollingBack)
+            {
+                m.Stage = MigrationStage.RollingBack;
+                m.RollbackRehearsed = false;
+                m.RehearsalScope = null;
+                m.CommitMarker = null;
+                WriteManifest(m);
+            }
+            return CompleteRollback(m);
+        }
+    }
+    /// <summary>授权（须持锁）：完整性校验 → 已提交 → 标记匹配 → 无 blocked。</summary>
     public MigrationResult AuthorizeProductionExecution()
     {
-        var m = LoadValidated();
-        if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
-        if (m.Stage != MigrationStage.Committed) return MigrationResult.Fail("not_committed:" + m.Stage, m.Stage);
-        if (string.IsNullOrEmpty(m.CommitMarker) || !string.Equals(m.CommitMarker, m.TransactionId, StringComparison.Ordinal))
-            return MigrationResult.Fail("commit_marker_mismatch", m.Stage);
-        if (!string.IsNullOrEmpty(m.BlockedReason)) return MigrationResult.Fail("blocked:" + m.BlockedReason, m.Stage);
-        return MigrationResult.Ok(m.Stage);
+        lock (_sync)
+        {
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", LoadManifest()?.Stage ?? MigrationStage.None);
+            var m = LoadValidated();
+            if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
+            if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", m.Stage);
+            if (m.Stage != MigrationStage.Committed) return MigrationResult.Fail("not_committed:" + m.Stage, m.Stage);
+            if (string.IsNullOrEmpty(m.CommitMarker) || !string.Equals(m.CommitMarker, m.TransactionId, StringComparison.Ordinal))
+                return MigrationResult.Fail("commit_marker_mismatch", m.Stage);
+            if (!string.IsNullOrEmpty(m.BlockedReason)) return MigrationResult.Fail("blocked:" + m.BlockedReason, m.Stage);
+            return MigrationResult.Ok(m.Stage);
+        }
     }
 
-    /// <summary>**唯一生产执行检查点**：未获授权则**不执行**（`action` 调用次数＝0）并返回结构化拒绝。</summary>
+    /// <summary>唯一生产执行检查点：授权与执行在同一临界区；未获授权 ⇒ 不执行任何动作。</summary>
     public MigrationResult TryRunProduction(Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        var auth = AuthorizeProductionExecution();
-        if (!auth.Success) return auth;
-        action();
-        return MigrationResult.Ok(MigrationStage.Committed);
+        lock (_sync)
+        {
+            var auth = AuthorizeProductionExecution();
+            if (!auth.Success) return auth;
+            action();
+            return MigrationResult.Ok(MigrationStage.Committed);
+        }
     }
 
-    /// <summary>快照完整性：清单哈希自洽 + 快照文件齐全且哈希一致 + **无未登记多余文件**。</summary>
+    /// <summary>快照完整性：manifest 结构与不变量 → 快照文件齐全/哈希一致 → 无未登记多余文件。</summary>
     public string VerifySnapshot()
     {
         var m = LoadManifest();
         if (m is null) return "manifest_missing_or_corrupt";
         if (!IsManifestIntegrityValid(m)) return "manifest_integrity_mismatch";
-        if (!string.Equals(m.ConfigRoot, _configRoot, StringComparison.OrdinalIgnoreCase)) return "config_root_mismatch";
         if (!string.Equals(m.SnapshotManifestHash, ComputeSnapshotManifestHash(m.FileHashes), StringComparison.Ordinal))
             return "snapshot_manifest_hash_mismatch";
         if (!Directory.Exists(m.SnapshotPath)) return "snapshot_missing";
-        foreach (var key in m.FileHashes.Keys)
-            if (!IsSafeRelativePath(key)) return "unsafe_snapshot_path:" + key;
 
         var onDisk = EnumerateFiles(m.SnapshotPath).Select(f => Rel(f, m.SnapshotPath)).ToHashSet(StringComparer.Ordinal);
         foreach (var extra in onDisk.Where(f => !m.FileHashes.ContainsKey(f)).OrderBy(f => f, StringComparer.Ordinal))
@@ -426,7 +538,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
         return "";
     }
 
-    /// <summary>manifest 全字段完整性（覆盖阶段/提交标记/演练范围/静止窗口/变更归属等，防单字段改写）。</summary>
+    /// <summary>全字段完整性摘要（仅完整性，不提供来源认证）。</summary>
     public static string ComputeManifestIntegrity(MigrationManifest m)
     {
         var sb = new StringBuilder();
@@ -435,29 +547,57 @@ public sealed class MigrationSwitchTransaction : IDisposable
         sb.Append(m.SnapshotManifestHash).Append('|').Append((int)m.Stage).Append('|').Append(m.CommitMarker ?? "<null>").Append('|');
         sb.Append(m.RollbackRehearsed ? '1' : '0').Append('|').Append(m.RehearsalScope ?? "<null>").Append('|');
         sb.Append(m.BlockedReason ?? "<null>").Append('|').Append(m.QuiescedAtUtc?.ToString("O") ?? "<null>").Append('|');
-        foreach (var c in m.ChangedFiles.OrderBy(c => c.Path, StringComparer.Ordinal))
+        sb.Append(m.QuiesceSessionId ?? "<null>").Append('|');
+        foreach (var c in (m.ChangedFiles ?? []).OrderBy(c => c.Path, StringComparer.Ordinal))
             sb.Append(c.Path).Append(':').Append((int)c.Kind).Append(';');
-        sb.Append('|').Append(ComputeSnapshotManifestHash(m.FileHashes));
+        sb.Append('|').Append(ComputeSnapshotManifestHash(m.FileHashes ?? new Dictionary<string, string>(StringComparer.Ordinal)));
         return Sha256Hex(Encoding.UTF8.GetBytes(sb.ToString()));
     }
 
-    /// <summary>结构+完整性校验（闸门与所有变更前**先校验**）。</summary>
+    /// <summary>结构与状态不变量校验（先于摘要校验；null/非法枚举/非法组合一律拒绝）。</summary>
     public bool IsManifestIntegrityValid(MigrationManifest m)
-        => m.SchemaVersion == 1
-           && !string.IsNullOrWhiteSpace(m.TransactionId)
-           && !string.IsNullOrWhiteSpace(m.ConfigRoot)
-           && !string.IsNullOrWhiteSpace(m.SnapshotPath)
-           && IsSafeRelativePath("probe")         // 常量自检（保证校验函数本身可用）
-           && string.Equals(m.ManifestIntegrity, ComputeManifestIntegrity(m), StringComparison.Ordinal);
+    {
+        if (m is null) return false;
+        if (m.SchemaVersion != 1) return false;
+        if (!IsSafeTransactionId(m.TransactionId)) return false;
+        if (!string.Equals(m.ConfigRoot, _configRoot, StringComparison.OrdinalIgnoreCase)) return false;
+        if (!IsWithin(m.SnapshotPath, _transactionRoot)) return false;
+        if (!Enum.IsDefined(m.Stage)) return false;
+        if (m.FileHashes is null || m.ChangedFiles is null) return false;
+        foreach (var k in m.FileHashes.Keys) if (!IsSafeRelativePath(k)) return false;
+        foreach (var c in m.ChangedFiles)
+        {
+            if (c is null || !IsSafeRelativePath(c.Path) || !Enum.IsDefined(c.Kind)) return false;
+            var inSnapshot = m.FileHashes.ContainsKey(c.Path);
+            if (c.Kind == ChangeKind.Added && inSnapshot) return false;
+            if (c.Kind is ChangeKind.Modified or ChangeKind.Deleted && !inSnapshot) return false;
+        }
+        if (m.Stage == MigrationStage.Committed)
+        {
+            if (string.IsNullOrEmpty(m.CommitMarker) || !string.Equals(m.CommitMarker, m.TransactionId, StringComparison.Ordinal)) return false;
+        }
+        else if (!string.IsNullOrEmpty(m.CommitMarker)) return false;
+        if (m.Stage == MigrationStage.RolledBack && (m.RollbackRehearsed || m.RehearsalScope is not null)) return false;
+        if (m.RollbackRehearsed && string.IsNullOrEmpty(m.RehearsalScope)) return false;
+        if (m.BlockedReason is { Length: 0 }) return false;
+        return string.Equals(m.ManifestIntegrity, ComputeManifestIntegrity(m), StringComparison.Ordinal);
+    }
 
-    /// <summary>读取并按**全字段完整性**校验的 manifest（不合格＝null，调用方一律拒绝）。</summary>
+    private static bool IsWithin(string path, string root)
+    {
+        var full = Path.GetFullPath(path);
+        var prefix = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        return full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>读取并按结构+不变量+完整性校验的 manifest（不合格＝null）。</summary>
     public MigrationManifest? LoadValidated()
     {
         var m = LoadManifest();
         return m is not null && IsManifestIntegrityValid(m) ? m : null;
     }
 
-    /// <summary>读取 manifest（原样；不校验——供诊断/夹具查看，业务判定请用 <see cref="LoadValidated"/>）。</summary>
+    /// <summary>读取 manifest（原样，不校验；业务判定用 LoadValidated）。</summary>
     public MigrationManifest? LoadManifest()
     {
         if (!File.Exists(ManifestPath)) return null;
@@ -465,10 +605,8 @@ public sealed class MigrationSwitchTransaction : IDisposable
         {
             return JsonSerializer.Deserialize<MigrationManifest>(File.ReadAllText(ManifestPath, Encoding.UTF8));
         }
-        catch (JsonException)
-        {
-            return null;
-        }
+        catch (JsonException) { return null; }
+        catch (NotSupportedException) { return null; }
     }
 
     private MigrationResult MarkBlocked(string reason)
@@ -491,7 +629,6 @@ public sealed class MigrationSwitchTransaction : IDisposable
         return Sha256Hex(Encoding.UTF8.GetBytes(sb.ToString()));
     }
 
-    /// <summary>演练用「代表本次变更」的模拟（只作用于**演练副本**；真实目录不参与）。</summary>
     private static void ApplyRepresentativeChanges(MigrationManifest m, string root)
     {
         foreach (var c in m.ChangedFiles)
@@ -516,19 +653,20 @@ public sealed class MigrationSwitchTransaction : IDisposable
     private void WriteManifest(MigrationManifest manifest)
     {
         Directory.CreateDirectory(_transactionRoot);
-        _stageHook?.Invoke(manifest.Stage);                       // 夹具接缝：写前崩溃注入
-        manifest.ManifestIntegrity = ComputeManifestIntegrity(manifest);   // 全字段完整性
+        _stageHook?.Invoke(manifest.Stage);
+        manifest.ManifestIntegrity = ComputeManifestIntegrity(manifest);
         var json = JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true });
         var tmp = ManifestPath + ".tmp";
         File.WriteAllText(tmp, json, new UTF8Encoding(false));
-        File.Move(tmp, ManifestPath, overwrite: true);            // 同目录原子替换
-        _stageHook?.Invoke(manifest.Stage);                       // 夹具接缝：写后崩溃注入
+        File.Move(tmp, ManifestPath, overwrite: true);
+        _stageHook?.Invoke(manifest.Stage);
     }
 
     private static void RestoreFromSnapshot(MigrationManifest m, string targetRoot)
     {
         foreach (var rel in m.FileHashes.Keys)
         {
+            if (!IsSafeRelativePath(rel)) continue;
             var source = Path.Combine(m.SnapshotPath, rel.Replace('/', Path.DirectorySeparatorChar));
             var target = Path.Combine(targetRoot, rel.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
@@ -536,7 +674,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
         }
     }
 
-    /// <summary>只删除**变更归属记录为「本事务新增」**的文件（无记录⇒不删任何文件）。</summary>
+    /// <summary>只删除变更归属为「本事务新增」的文件（无记录 ⇒ 不删任何文件）。</summary>
     private static void DeleteRecordedAdditions(MigrationManifest m, string targetRoot)
     {
         foreach (var c in m.ChangedFiles.Where(c => c.Kind == ChangeKind.Added))
@@ -547,13 +685,23 @@ public sealed class MigrationSwitchTransaction : IDisposable
         }
     }
 
+    private void ReleaseQuiescence()
+    {
+        try { _quiet?.Dispose(); } catch { }
+        _quiet = null;
+    }
+
     private static IEnumerable<string> EnumerateFiles(string root) => Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories);
     private static string Rel(string file, string root) => Path.GetRelativePath(root, file).Replace('\\', '/');
     private static string Sha256Hex(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
     public void Dispose()
     {
-        _lock?.Dispose();
-        _lock = null;
+        lock (_sync)
+        {
+            ReleaseQuiescence();
+            _lock?.Dispose();
+            _lock = null;
+        }
     }
 }
