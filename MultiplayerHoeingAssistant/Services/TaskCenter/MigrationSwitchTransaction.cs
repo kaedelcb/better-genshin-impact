@@ -382,12 +382,16 @@ public sealed class MigrationSwitchTransaction : IDisposable
             // **拓扑约束**：`Added` 路径不得与 `Modified/Deleted` 路径互为祖先——文件↔目录互换会让「先恢复子路径、
             // 后删除父路径」无法收敛（父被新文件阻挡）。登记期结构化拒绝，避免提交前崩溃后进入不可恢复回滚。
             var merged = m.ChangedFiles.Concat(batch).ToList();
-            foreach (var added in merged.Where(c => c.Kind == ChangeKind.Added))
+            for (var i = 0; i < merged.Count; i++)
             {
-                foreach (var other in merged.Where(c => c.Kind != ChangeKind.Added))
+                for (var j = 0; j < merged.Count; j++)
                 {
-                    if (IsAncestorPath(added.Path, other.Path) || IsAncestorPath(other.Path, added.Path))
-                        return MigrationResult.Fail("unsupported_topology_change:" + added.Path + "<->" + other.Path, m.Stage);
+                    if (i == j) continue;
+                    var a = merged[i];
+                    var b = merged[j];
+                    if (a.Kind != ChangeKind.Added && b.Kind != ChangeKind.Added) continue;   // Modified/Deleted 必对应基线文件，不互为祖先
+                    if (IsAncestorPath(a.Path, b.Path))                                        // 含 **Added↔Added**（同批与跨次）
+                        return MigrationResult.Fail("unsupported_topology_change:" + a.Path + "<->" + b.Path, m.Stage);
                 }
             }
 

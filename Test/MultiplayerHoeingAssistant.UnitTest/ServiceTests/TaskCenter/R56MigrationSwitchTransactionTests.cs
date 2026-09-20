@@ -839,6 +839,36 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         Assert.StartsWith("unsupported_topology_change", bad.Reason, StringComparison.Ordinal);
         Assert.Empty(tx.LoadManifest()!.ChangedFiles);      // 拒绝后不得留下部分变更归属
     }
+    /// <summary>
+    /// **第 10 轮必改（Added↔Added 祖先）**：同批 `Added("sub")` + `Added("sub/a.json")` 与**跨次登记**同类组合
+    /// 都必须在**登记期**拒绝，且**既有变更记录保持不变**（校验先于任何写入）。
+    /// </summary>
+    [Fact]
+    public void RecordChanges_AddedAncestorPair_Rejected_ExistingRecordsIntact()
+    {
+        // 空基线：Added 均合法，问题只来自拓扑
+        using var tx = NewTx();
+        tx.BeginTransaction("t1");
+        tx.TakeSnapshot();
+        Assert.True(tx.RecordChanges([new ChangeRecord { Path = "ok.json", Kind = ChangeKind.Added }]).Success);
+
+        // ① 同批：Added↔Added 互为祖先前缀 ⇒ 拒绝
+        var batch = tx.RecordChanges([
+            new ChangeRecord { Path = "sub", Kind = ChangeKind.Added },
+            new ChangeRecord { Path = "sub/a.json", Kind = ChangeKind.Added },
+        ]);
+        Assert.False(batch.Success);
+        Assert.StartsWith("unsupported_topology_change", batch.Reason, StringComparison.Ordinal);
+        Assert.Single(tx.LoadManifest()!.ChangedFiles);                        // 既有记录不变（未写入部分归属）
+        Assert.Equal("ok.json", tx.LoadManifest()!.ChangedFiles[0].Path);
+
+        // ② 跨次：先登记 Added("sub") 成功，再登记 Added("sub/a.json") ⇒ 拒绝且前次记录保留
+        Assert.True(tx.RecordChanges([new ChangeRecord { Path = "sub", Kind = ChangeKind.Added }]).Success);
+        var cross = tx.RecordChanges([new ChangeRecord { Path = "sub/a.json", Kind = ChangeKind.Added }]);
+        Assert.False(cross.Success);
+        Assert.StartsWith("unsupported_topology_change", cross.Reason, StringComparison.Ordinal);
+        Assert.DoesNotContain(tx.LoadManifest()!.ChangedFiles, c => c.Path == "sub/a.json");
+    }
     [Theory]
     [InlineData(MigrationStage.Snapshotting)]
     [InlineData(MigrationStage.SnapshotReady)]
