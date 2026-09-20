@@ -48,6 +48,8 @@ public sealed class MigrationManifest
     /// <summary>本事务变更归属（回滚据此判定新增；无记录 ⇒ 不删除任何文件）。</summary>
     [JsonPropertyName("changedFiles")] public List<ChangeRecord> ChangedFiles { get; set; } = [];
     [JsonPropertyName("snapshotManifestHash")] public string SnapshotManifestHash { get; set; } = "";
+    /// <summary>**基线是否完成**（快照清单已发布）。未完成 ⇒ 允许安全中止（**不得**用部分快照恢复）。</summary>
+    [JsonPropertyName("baselineCompleted")] public bool BaselineCompleted { get; set; }
     [JsonPropertyName("stage")] public MigrationStage Stage { get; set; }
     /// <summary>唯一提交标记；提交前为空、非提交态必为空。</summary>
     [JsonPropertyName("commitMarker")] public string? CommitMarker { get; set; }
@@ -317,6 +319,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
 
             m.FileHashes = hashes;
             m.SnapshotManifestHash = ComputeSnapshotManifestHash(hashes);
+            m.BaselineCompleted = true;                       // 基线（完整清单）已发布
             m.Stage = MigrationStage.SnapshotReady;
             WriteManifest(m);
             return MigrationResult.Ok(m.Stage);
@@ -500,6 +503,19 @@ public sealed class MigrationSwitchTransaction : IDisposable
             if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", m.Stage);
             if (m.Stage == MigrationStage.RolledBack) return MigrationResult.Ok(MigrationStage.RolledBack);
+            if (!m.BaselineCompleted)
+            {
+                // 基线未完成（快照发布前失败/中止）⇒ **安全中止**：清理未完成快照、置 RolledBack，使新事务可开启。
+                try { if (Directory.Exists(m.SnapshotPath)) Directory.Delete(m.SnapshotPath, recursive: true); } catch { }
+                m.Stage = MigrationStage.RolledBack;
+                m.CommitMarker = null;
+                m.RollbackRehearsed = false;
+                m.RehearsalScope = null;
+                m.BlockedReason = null;
+                WriteManifest(m);
+                ReleaseQuiescence();
+                return MigrationResult.Ok(MigrationStage.RolledBack);
+            }
             if (!IsLegalAdvance(m.Stage, MigrationStage.RollingBack))
                 return MigrationResult.Fail("illegal_advance:" + m.Stage + "->RollingBack", m.Stage);
 
@@ -554,7 +570,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
                 return MigrationResult.Ok(MigrationStage.Committed);
             if (m.Stage == MigrationStage.RolledBack) return MigrationResult.Ok(MigrationStage.RolledBack);
             if (m.Stage == MigrationStage.None) return MigrationResult.Fail("illegal_stage:None", m.Stage);
-            if (m.Stage == MigrationStage.Snapshotting)
+            if (m.Stage == MigrationStage.Snapshotting || (m.Stage == MigrationStage.Blocked && !m.BaselineCompleted))
             {
                 // **基线尚未完成**（且尚未发生任何迁移变更）⇒ 安全中止：清理未完成快照、置 RolledBack，使新事务可开启。
                 // **绝不**把部分快照用于恢复（不调用 VerifySnapshot/CompleteRollback）。
@@ -652,7 +668,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
         var sb = new StringBuilder();
         sb.Append(m.SchemaVersion).Append('|').Append(m.TransactionId).Append('|').Append(m.CreatedAtUtc.ToString("O")).Append('|');
         sb.Append(m.ConfigRoot).Append('|').Append(m.SnapshotPath).Append('|').Append(m.SnapshotId).Append('|').Append(m.RollbackEntry).Append('|');
-        sb.Append(m.SnapshotManifestHash).Append('|').Append((int)m.Stage).Append('|').Append(m.CommitMarker ?? "<null>").Append('|');
+        sb.Append(m.SnapshotManifestHash).Append('|').Append(m.BaselineCompleted ? '1' : '0').Append('|').Append((int)m.Stage).Append('|').Append(m.CommitMarker ?? "<null>").Append('|');
         sb.Append(m.RollbackRehearsed ? '1' : '0').Append('|').Append(m.RehearsalScope ?? "<null>").Append('|');
         sb.Append(m.BlockedReason ?? "<null>").Append('|').Append(m.QuiescedAtUtc?.ToString("O") ?? "<null>").Append('|');
         sb.Append(m.QuiesceSessionId ?? "<null>").Append('|').Append(m.QuiesceGeneration).Append('|');
@@ -696,6 +712,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
         {
             if (string.IsNullOrEmpty(m.CommitMarker) || !string.Equals(m.CommitMarker, m.TransactionId, StringComparison.Ordinal)) return false;
             if (!string.IsNullOrEmpty(m.BlockedReason)) return false;          // 已提交不得带 blocked
+            if (!m.BaselineCompleted) return false;                            // 已提交 ⇒ 基线必已建立
         }
         else if (!string.IsNullOrEmpty(m.CommitMarker)) return false;          // 非提交态不得带标记（含 Blocked）
         if (m.Stage == MigrationStage.RolledBack && (m.RollbackRehearsed || m.RehearsalScope is not null)) return false;

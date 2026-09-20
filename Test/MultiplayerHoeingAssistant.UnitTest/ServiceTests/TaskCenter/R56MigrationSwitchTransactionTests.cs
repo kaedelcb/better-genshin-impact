@@ -756,6 +756,41 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         Assert.True(next.BeginTransaction("t2").Success, "中止后应可开启下一事务");   // 未决事务不再阻塞
         next.Dispose();
     }
+    /// <summary>
+    /// **第 7 轮必改（基线未完成的 `Blocked` 亦须有中止出口）**：快照复制中途失败（组件自身转为 `Blocked`，
+    /// 基线未完成）⇒ 重开 `RecoverOnStart` 必须**安全中止**（清未完成快照、置 `RolledBack`），
+    /// 旧配置保持完整且**可开启下一事务**；不得被 `pending_transaction_exists` 永久阻挡。
+    /// </summary>
+    [Fact]
+    public void Recovery_SnapshotCopyWithFailureAbortsBaseline_AndAllowsNextTransaction()
+    {
+        Seed("a.json", "{\"v\":1}");
+        var original = HashOf(Full("a.json"));
+        var tx = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () => new NoopQuiet());
+        Assert.True(tx.BeginTransaction("t1").Success);
+        // 受控故障：**开事务后**在快照目录内预置同名目录，使 File.WriteAllBytes 复制该文件时失败（无需链接权限）
+        var snap = tx.SnapshotPathOf("t1", tx.SessionId);
+        Directory.CreateDirectory(Path.Combine(snap, "a.json"));
+        var snapResult = tx.TakeSnapshot();
+        Assert.False(snapResult.Success);                                  // 复制失败
+        Assert.StartsWith("snapshot_io_failed", snapResult.Reason, StringComparison.Ordinal);
+        var m = tx.LoadManifest()!;
+        Assert.Equal(MigrationStage.Blocked, m.Stage);
+        Assert.False(m.BaselineCompleted);                                 // **基线未完成**
+        tx.Dispose();
+
+        var probe = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () => new NoopQuiet());
+        Assert.True(probe.TryAcquireExclusive().Success);
+        Assert.True(probe.RecoverOnStart().Success);
+        Assert.Equal(MigrationStage.RolledBack, probe.LoadManifest()!.Stage);
+        Assert.Equal(original, HashOf(Full("a.json")));                    // 旧配置完整
+        probe.Dispose();
+
+        var next = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () => new NoopQuiet());
+        Assert.True(next.TryAcquireExclusive().Success);
+        Assert.True(next.BeginTransaction("t2").Success, "基线中止后应可开启下一事务");
+        next.Dispose();
+    }
     [Theory]
     [InlineData(MigrationStage.Snapshotting)]
     [InlineData(MigrationStage.SnapshotReady)]
