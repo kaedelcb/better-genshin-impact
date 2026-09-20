@@ -2221,3 +2221,43 @@ R4.9 启动链终止**维持不回溯既有后台触发器**（既有行为不�
 | 本批静态材料审查 | **完整迁移承接、生产切换**及相应启用验收 |
 
 **与 R5.6 的边界**：R5.6 收口仅为**事务组件层**（不证明真实迁移编排、生产消费接线、真实静止窗口）；**合并会诊序列不合并两者的验收结论**；本轮**不授权生产开门，也不授权真实 User 目录切换**。
+## 23. R5.8 集成验收 + 仲裁评审兜底（[新增·2026-09-21；**I5 硬前置：验收单先成稿**]）
+
+> **性质**：本节的**验收单**是 R5.8 的**开始前置**（ASTRA 终审 I5）。**证据三类互不替代**：①**组件/组装层**（本仓夹具，本批已跑）②**协议集成层**（适配器＋接管台账＋回执分类）③**真实入口/实机层**（owner 按本单点按钮，真实 BGI/IPC/网页线路）。**实机未跑＝未验收**。
+
+### 23.1 七入口逐项验收单（热键计按键、CLI 计实际操作；每项 owner 操作 ≤3 步）
+
+| 入口 | 准备方·操作次数 | 启动方式 | 证据（组件/集成/真实三层） | 通过断言 |
+|---|---|---|---|---|
+| **E1 UI 面板** | 施工方内置夹具（0 点击）；实机 owner 1 步：面板点「启动」 | 任务中心面板启动流程 | 组件：`Capacity_33NodeCandidates_AllAccepted_WhenEachSettled` 等；集成：`SubmissionPointInventoryTests`；真实：**待 owner 实机** | 受理链落盘→发送 1 次→台账可重建；失败时响亮拒绝且不迁移终态 |
+| **E2 恢复入口** | 夹具 0 点击；实机 owner 1 步：面板点「恢复」 | `ResumeRunAsync` → 恢复专用准入边界 | 组件：`ResumeRun_Unknown_RejectedNoAutoReRun_NoLeaseSideEffect`／`ResumeRun_Paused_BranchRecorded_Accepted`／`Ticket_A6Restore*`；真实：**待 owner 实机** | 四类恢复可区分；重投＝新 attempt/新键；A6 用原票据；不自动重跑 Unknown |
+| **E3 网页** | 夹具 0 点击；实机 owner 2 步：网页点「一键锄地」＋看回执 | 网页 `start_group`/`start_oneclick` → CommandExecutor 准入接线 | 组件：R5.2/R5.3 仲裁面夹具；**集成：组合根未注入 `externalStartAdmission`（§14/§17）**；真实：**待 owner 实机** | 入口进同一仲裁面、恰一胜；**未注入前不得判「已验证」** |
+| **E4 热键**（**计按键**） | 夹具 0 点击；实机 owner 2 步：按热键 1 次＋看回执 | 热键 → 同一仲裁面（E4 双路竞争已接线） | 组件：热键双路竞争夹具（R5.2）；真实：**待 owner 实机（计按键次数）** | 双路竞争至多一发送；按键次数如实记录 |
+| **E5 助手承载 RemoteCommand** | 夹具 0 点击；实机 owner 2 步：下发命令＋看回执 | 助手承载入口 → 同一仲裁面 | 组件：R5.2/R5.3；**集成：同上组合根状态**；真实：**待 owner 实机** | 同仲裁面；驳回词与本地分类一致 |
+| **E5b 直连 v2** | 夹具 0 点击；实机 owner 1 步：v2 客户端下发 | BGI 原生面（**锚点 3「无计划引用时」限定**） | 组件：E5b 范围裁决（§1 入口范围表）；真实：**待 owner 实机** | 不要求旧客户端升级；旧入口按兼容候选处理 |
+| **E7 CLI**（**计实际操作**） | 实机 owner N 步：逐条敲命令（如实计数） | CLI = BGI 原生面（排除保留） | 范围裁决：§1 入口范围表；真实：**待 owner 实机** | CLI 不绕过停机/停止语义；操作次数逐条记录 |
+
+### 23.2 后台触发器来源（**单列**，不计入七入口）
+
+| 来源 | 载体 | 组件证据 | 集成/真实 |
+|---|---|---|---|
+| 启动中心**定时/电子狗/日志**触发器 | 进程级（`Armed*` 集合 + `TriggerLedger` 投影，§20.2） | `R55BackgroundTriggerLedgerTests`（17 条） | 触发动作的**本地命令直发路径**未接线（§20.4/§22.3）⇒ 保留门禁 |
+| 任务中心根级触发器（`trigger.time*`） | RunStore 持久化 | `R54MechanismSchemaTests`（20 条）；**引擎消费未接线**（§19.4） | **未闭合**，保留门禁 |
+
+### 23.3 R5.8 验收项与结论映射
+
+| 验收项 | 证据 | 结论 |
+|---|---|---|
+| **端到端「无双跑」对抗（全入口）** | **本批新增** `R58DualRunContestTests`：①`SevenEntries_Concurrent_ExactlyOneWinner_NoSecondSend`（七入口同轮⇒恰一胜、零二次发送）②`SevenEntries_F11Active_AllBlocked_ZeroSend`（F11 优先全阻断、零发送）③`SevenEntries_ExecutionOccupied_NoSendAtAll`（占用下全员未受理、零发送） | 组件/组装层**通过**；**真实入口层待实机** |
+| **F11 正确** | 同上②＋既有 F11 夹具（零租约副作用、锁内复核） | 组件层通过 |
+| **失联/接管正确** | R5.1 接管夹具（单调观察满 TTL + 锁内复核取证；`LeaseTakeoverObserver`） | 组件层通过 |
+| **回滚正确** | §21.10（18 轮会诊收口）：字节级一致、清理按归属、清理未完成即阻断、演练复用真实回滚核心 | 组件层通过；**真实 User 目录切换未执行**（owner 另行下令） |
+| **R4 补验事实一致性确认** | R4.10 §8（A/B/C1 已补验通过）＋`ed04355d` 三词兼容（`accepted`/`queued`/`adopted`）已并入 `SubmissionResultClassifier`；**确认仲裁面设计与已验证事实一致、无矛盾假设**（受理≠执行、发送未知⇒Unknown 不换键重跑） | **确认通过**（不改既有事实） |
+| **`task.single.native` 维持 false 复核** | 该能力为**执行端实况**（`HasCapability("task.single.native")`，非硬编码）；`WorkflowPlannerTests`（`task.single.native=false ⇒ 响亮拒绝`）＋`ResourceCatalogServiceTests`（`SingleExecutionSupported=false ⇒ 预检拒绝`） | 组件层通过；**R5.8 实机复核**待 owner |
+| **R-8 回执词真实线路** | 本地合成词 `cancelUnconfirmed` 已由 `LocalSyntheticWordInventoryTests` 锁定（非线路词）；**远端五场景**（受理仍在跑时取消／真正取消完成／自然完成与取消竞态／取消超时／迟到回执）＋对照表字段 | **未闭合**：需真实线路，保留门禁；对照表字段见 §18.4 |
+
+### 23.4 未闭合项（保留门禁，不得据本轮签署）
+
+①**E3/E4/E5 组合根未注入** `externalStartAdmission`（§14/§17）；②**任务中心移交后节点提交**的 `_successorAdmissionWired` 未接线；③**`start_bgi(args)` 直发路径**的覆盖或排除裁决（§20.4/§22.3）；④**R-8 回执词真实线路五场景**；⑤**实机段全部**（七入口＋后台触发器来源＋`task.single.native` 复核）；⑥环境残余（UNC／映射盘／SUBST／8.3 别名）；⑦R5.6 的真实引用/激活编排与生产消费接线。
+
+**验收单签署前置**：③④⑤⑦ 逐项处置或经 owner 明确「显式移交并保留门禁」后，方可签署「无双跑」验收单；**签署不代表生产开门**。
