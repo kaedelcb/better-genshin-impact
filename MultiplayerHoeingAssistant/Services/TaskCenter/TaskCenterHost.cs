@@ -322,6 +322,11 @@ public sealed partial class TaskCenterHost
             return HostActionResult.Unavailable("任务中心宿主正在退出，恢复已取消（未发送任何任务）");
         }
 
+        // R5.2 B2-β（E2）：接线后恢复一律经恢复专用准入边界（§5.1：不排序不产候选、意图持久化后发送、保留原票据责任）；
+        // 未接线=旧路径（既有测试接缝默认——R4 行为合同不变）。
+        if (_admissionWired)
+            return await SubmitResumeViaAdmissionAsync(run, "ui:panel:resume").ConfigureAwait(false);
+
         BgiExternalClient? client;
         lock (_gate)
         {
@@ -632,7 +637,7 @@ public sealed partial class TaskCenterHost
         }
 
         return request.Mode == StartupHandoffModes.Resume
-            ? RegisterResumeHandoff(request, ct)
+            ? await RegisterResumeHandoff(request, ct).ConfigureAwait(false)
             : RegisterStartHandoff(request, ct);
     }
 
@@ -760,7 +765,7 @@ public sealed partial class TaskCenterHost
     }
 
     /// <summary>resume 语义受理（§4）：绑定最新（UpdatedAt 最大）Interrupted/Paused 运行；受理点=身份绑定原子追加落盘；重放同键 AlreadyAccepted 不重选。</summary>
-    private HandoffRegisterResult RegisterResumeHandoff(StartupHandoffRequest request, CancellationToken ct)
+    private async Task<HandoffRegisterResult> RegisterResumeHandoff(StartupHandoffRequest request, CancellationToken ct)
     {
         var shortId = ShortExecutionId(request);
         WorkflowRunner runner;
@@ -828,8 +833,31 @@ public sealed partial class TaskCenterHost
                         : (HandoffReasonCodes.NoResumableRun, "目标运行状态已变化，请刷新后重试"),
                     ct, out committedBind) is { } bindError)
                 return HandoffRegisterResult.Rejected(bindError.Code, bindError.Reason);
-            _reservedWorkflows.Add(request.WorkflowId);
+            if (!_admissionWired) _reservedWorkflows.Add(request.WorkflowId); // B2-β：接线后由恢复准入 sender 侧预留（避免双预留自拒）
             boundRunId = committedBind!.RunId;
+        }
+
+        // B2-β：接线后恢复动作经 E2 恢复专用准入边界（意图持久化后发送；发送=门面回调驱动 ResumeAsync）。
+        // 受理不撤回——绑定台账已落盘；准入未放行=运行保持可恢复状态（与旧路径 launch Unavailable 同口径）。
+        if (_admissionWired)
+        {
+            // 会诊 P1 处置：绑定台账已在上方锁内原子追加=受理已成立，本 await 起的任何异常（锁争用耗尽/门面异常）
+            // 都不得把「已受理」变成对外异常——隔离异常并如实报告执行状态未知（受理不撤回，与 I1 同口径）。
+            HostActionResult admitted;
+            try
+            {
+                admitted = await SubmitResumeViaAdmissionAsync(committedBind!, "startup:handoff:resume").ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                var unknownState = TryReadRunState(boundRunId) ?? committedBind!.State;
+                return HandoffRegisterResult.Accepted(boundRunId,
+                    $"已受理恢复绑定（受理≠执行成功）；准入边界异常，执行结果待核实：{ex.GetType().Name}", unknownState);
+            }
+            var confirmedWired = TryReadRunState(boundRunId) ?? committedBind!.State;
+            return admitted.Status == HostActionStatus.Registered
+                ? HandoffRegisterResult.Accepted(boundRunId, "已移交受理：恢复既有运行（仲裁准入通过，游标身份重定位；受理≠执行成功）", confirmedWired)
+                : HandoffRegisterResult.Accepted(boundRunId, $"已受理恢复绑定（受理≠执行成功）；仲裁面未放行：{admitted.Message}（运行保持可恢复状态）", confirmedWired);
         }
 
         // 驱动激活（锁外，复用 Resume 驱动路径；B4 关闭竞态由册外观察兜底；受理不撤回——运行保持可恢复状态）
@@ -854,11 +882,18 @@ public sealed partial class TaskCenterHost
             foreach (var d in drives) d.Cts.Cancel();
         }
         _shutdownCts.Cancel(); // 锁外取消（取消回调不持卡）：在途环境确保/快照等待立即退出
-        if (drives.Count == 0) return;
+        // R5.2 B2-β：释放租约一律在驱动收敛之后（终局回写仍需所有权；心跳已随取消停止）；
+        // 未决事实保留于 Handoff 段（§6.2 更替继承）；释放失败仅留痕（留待 TTL 接管路径兜底）。
+        if (drives.Count == 0)
+        {
+            ReleaseAdmissionLeaseOnShutdown();
+            return;
+        }
         var all = Task.WhenAll(drives.Select(d => d.Task));
         await Task.WhenAny(all, Task.Delay(ShutdownConvergeBudget)).ConfigureAwait(false);
         if (!all.IsCompleted)
             _log?.Invoke($"[任务中心] 宿主关闭：{drives.Count} 个运行未在 {ShutdownConvergeBudget.TotalSeconds:0}s 内收敛（在飞事实保留，下次启动恢复扫描标记）");
+        ReleaseAdmissionLeaseOnShutdown();
     }
 
     // ================= 内部 =================
@@ -946,8 +981,25 @@ public sealed partial class TaskCenterHost
             {
                 // B4：任务已启动就必须被观察——取消令牌不证明远端已停；转册外观察收敛（在飞事实→Unknown，否则→Interrupted）
                 _reservedWorkflows.Remove(workflowId);
-                cts.Cancel();
+                // 会诊 P1 处置（四轮收紧）：册外观察必须「无条件」启动——故先启动观察，再尽力取消。
+                // 取消回调可能抛出（AggregateException）甚至长期阻塞，日志委托同样可能抛出；把观察放在这些不可信
+                // 调用之前，才能同时保证「任务已启动就必须被观察」与「受理不撤回」不被日志/取消行为破坏。
                 _ = ObserveOrphanAsync(entry);
+                try
+                {
+                    cts.Cancel();
+                }
+                catch (Exception ex)
+                {
+                    try
+                    {
+                        _log?.Invoke("[任务中心] 关闭竞态取消异常（不影响册外观察收敛）：" + ex.Message);
+                    }
+                    catch
+                    {
+                        // 日志委托异常一律吞掉：绝不能穿透 LaunchDrive 丢掉已成立的受理回执。
+                    }
+                }
                 return HostActionResult.Unavailable("任务中心宿主已关闭（驱动已启动，转关闭竞态册外观察收敛）");
             }
             _drives[workflowId] = entry;

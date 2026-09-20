@@ -398,3 +398,46 @@ B1 统一提交边界/B2 F11 与快照/B3 仲裁轮次/B4 范围裁决表/B5 恢
 | B2 | TaskCenterHost 接入（E1/E2：面板 start/恢复五路径/启动移交）+Runner 后继提交边界 | B1 |
 | B3 | CommandExecutor 接入（E3/E4/E5：兼容候选/冲突策略无副作用解析/适配层重试同身份/external-start-ledger） | B1 |
 | B4 | 提交点清单+路由证据+并发屏障夹具收口+全量回归+结束会诊 | B2/B3 |
+
+## 11. B2-β 实施入档（ASTRA 会诊发现与处置，实现裁决登记）
+
+本批实施与终审会诊（ASTRA）暴露的问题及处置，逐条登记；**均不改动序列化框架与已冻结语义，只用加法**：
+
+| # | 发现 | 性质 | 处置 |
+|---|---|---|---|
+| 1 | `ExtractEpoch` 按 `':'` 全量切分只取 `[2]`，而生产 epoch 形如 `{ProcessId}:{StartTicksUtc}`（含冒号）→ 目标 epoch 被截断成 pid，与完整值比较恒不相等 → `stale_epoch` **确定性误拒**，E1/E2 全部生产入口不可用（夹具恒用空/单段 epoch 掩盖） | 阻断（生产不可用） | `Split(':', 3)`——只切前两段，第三段整体即 epoch；补「生产 epoch 形状」确定性夹具（断言受理成功且落盘 `TargetEpoch` 完整） |
+| 2 | 宿主在 `EnsureAdmissionFacadeAsync`（含 `EnsureOwnership`/`RecoverAfterRestart`/心跳/重试窗口扫描）**之后**才判 F11，违反 §7.1-1「F11 判定先于租约获取」 | 阻断（合同违背） | E1/E2 两个入口各补 F11 前置：E2 早于门面组装直接返回；E1 置于「同流程互斥→预建 Planned 运行」之后、门面组装之前（预建运行属 RunStore 侧非租约副作用，且 B2-α 已签署「F11 阻断亦终态化清理留痕」）。门面内锁内复核保留为双保险 |
+| 3 | 并发首调者 + 外部进程仍持有租约时，复用检查 `if (_admission is not null)` 只在「接管证据成熟」后执行——先接管者持续心跳使后继者观察永不成形，后继者空转到接管观察预算耗尽后响亮失败 | 阻断（可用性） | 在接管观察等待循环内每轮先检查并复用已完成门面；补「外部持有租约 + 并发首调」确定性夹具 |
+| 4 | 服务层普遍「`Read()` 取修订号 → `MutateHandoff(捕获修订)`」存在 TOCTOU：并发方任何一次成功写入都使捕获修订失效 → 误判 `lease_stale_generation`；恢复路径该码被映射为**终局拒绝**（并发下合法用户请求假失败，实测并发双恢复约 1/5 命中） | 缺陷（并发可用性） | 存储层加法变体 `MutateHandoffLatest`（与冻结 `MutateHandoff` 共用私有锁内核，`expectedRevision=null`＝锁内就地取最新修订号）；服务层 13 处调用点全部切换。冻结签名与 R5.1 夹具不变 |
+| 5 | 心跳「`Read()` 取修订 → `TryRenew(捕获修订)`」同型 TOCTOU；续期是所有权存续的主要手段（任何成功的所有者写入同样刷新心跳与单调基线），续期误判累积到 TTL 即失去租约 | 缺陷（并发可用性） | 存储层加法变体 `TryRenewLatest`（同锁内核、同身份/TTL 校验）；宿主心跳改用之。`TryRelease` 保持既有尽力而为合同（失败仅留痕，TTL 接管兜底） |
+| 6 | `RecoverAfterRestart` ⑤ 最初在 `MutateHandoff` 变更回调内调用宿主钩子（钩子内部 `Read()` 本店＝锁内重入共享冲突），改走 `MarkOperationTerminal` 又会自取 `_gate`（`SemaphoreSlim` 不可重入＝自死锁） | 缺陷（自引入） | 最终形态：`mutate` 提交后，**文件锁外**调用钩子筛出「权威终态已确认」的操作，再逐笔用 `MutateHandoffLatest` 直写 `TerminalCompleted`（回调内重校验 `Active+Accepted`）；所有者身份沿用首事务捕获的 `leaseId/ownerEpoch`，**绝不重取新快照的租约身份**（否则接管后旧流程会借新身份写入） |
+| 7 | 夹具 `FakeBoundary.Submissions` 用非线程安全 `List` 记录提交，并发驱动下可能破坏计数而掩盖真双跑 | 缺陷（验收强度） | 改为加锁快照（每次读取返回副本），调用点零改动 |
+| 8 | 并发恢复夹具落败方断言过窄：`submission_conflict`/`run_state_changed`/`task_running`(→`RetryableRejected`)/前置互斥无登记 均为合法落败路径 | 缺陷（验收强度） | 落败方断言改为 `∈{TerminalRejected, RetryableRejected}` 且原因码分别落在对应白名单；无双跑硬断言（`Assert.Single(boundary.Submissions)`）保持不放宽。胜者判据用「唯一 `Accepted|TerminalCompleted` 操作」——**不用 LastSendSeq 判胜**：落败方在路径③同样可能取得过发送许可 |
+
+**无双跑归属（如实登记，不冒充自足）**：门面层对同一 `runBinding` 不设唯一守卫——「启动 op 已 `Accepted` + 恢复 op」属合法并存，而「op1 已 `Accepted` 后 op2 再占位」在门面层可达；无双跑由宿主 `DispatchResumeViaHostAsync` 的台账运行态（`run_state_changed`）与在飞预留（`task_running`）兜底。曾尝试门面内拒（在途即拒），但 `Granted/Sending/Reconciling` 蕴含 `Submission≠null` 必被 ⑧ 前置吞没＝防御性死代码，且无法覆盖「先行者已 `Accepted`」窗，故不设该守卫。
+
+**仍挂账 B4**（本轮未处置，登记为风险）：`MarkAdmissionTerminalIfAny` 在「无可回写目标」时仍空转约 5s（建议提前退出并留痕）；`ShutdownAsync` 释放租约与火忘终局回写存在竞争（失败方向保守＝操作滞留 `Accepted`，依赖重启 ⑤ 兜底）；`RetryableRejected` 的结构化诊断（`RetryWindowDeadlineUtc`/`retryBudgetUsed`）未上抛。
+
+### 11.1 第二轮会诊发现与处置（终审复审）
+
+| # | 发现 | 性质 | 处置 |
+|---|---|---|---|
+| 9 | E2 前置同流程互斥「检查后不预留」，与 `DispatchResumeViaHostAsync` 的预留之间存在窗口：同流程两个 `Interrupted` 运行可先后进入 sender（首个转 `Paused`/`Unknown` 并退出驱动后，第二个仍能通过发送侧检查）→ 绕过「同流程同时只允许一个运行」 | 阻断（互斥漏） | 在 sender 的 `_gate` 预留临界区内**原子再复核**：重载目标运行仍可恢复 + 同流程无其他活动态（`same_flow_active_run`）+ 无其他 `Unknown`（`same_flow_unknown_run`），任一不成立即拒绝、不预留、不驱动 |
+| 10 | `RegisterResumeHandoff` 在绑定台账原子追加（=受理已成立）之后直接 `await SubmitResumeViaAdmissionAsync`，该 await 的异常（锁争用耗尽等）会一路抛出，**丢失已受理回执** | 阻断（受理不撤回违背） | 隔离异常：捕获后仍返回 `Accepted`，如实标注「准入边界异常，执行状态未知」，不绝不把已受理假报为异常拒绝（与 I1 同口径） |
+| 11 | `MarkReconcilingAsync`/`TransitionSingleAsync` 只校验状态枚举，不校验「结果对应的发送轮次」完整关联身份；`MutateHandoffLatest` 取消修订 CAS 后，**迟到的一轮 Unknown 结果可把新一轮（已 `Granted`）责任改成 `Reconciling`** | 重要（责任串轮） | 待对账迁移强制校验 `submissionIdentity + sendSeq` 匹配（不匹配＝`state_changed` 不覆盖），落实 `answeredSendSeq` 语义的写入侧护栏 |
+| 12 | 并发初始化夹具断言「两路都 Registered」过强——同轮仲裁下非胜者合法返回 `NotSelected`；且未保证两者都进入观察阶段 | 重要（验收强度） | 夹具拆分为「两个等待者都拿到共享门面」与「启动请求如何分轮」两件事：断言无接管观察超时/无初始化失败、至少一路获选、非预期结果仅允许 `Registered` 或「并发仲裁未获选」，并限定提交次数 ∈{1,2}（无第三路发送） |
+
+**两个存储加法变体的准确语义**（避免夸大）：冻结签名 `MutateHandoff`/`TryRenew` 仍执行 `expectedRevision` 比较；`*Latest` 变体**跳过调用方快照 CAS**，改由「锁内就地取最新修订号 + 回调内业务复核」承担正确性。`MutateHandoffLatest` 保留身份、单调 TTL、残件闸门、可选切换闸门与发布后刷新基线（占位仍传 `checkSwitchGate: true`）；`TryRenewLatest` 与旧续期核一致，两者本身都不含残件/切换闸门检查。所有权存续并非只靠续期：任何成功的所有者写入同样刷新心跳与单调基线。
+
+### 11.2 第三轮会诊发现与处置（收口终审）
+
+| # | 发现 | 性质 | 处置 |
+|---|---|---|---|
+| 13 | `LaunchDrive` 关闭竞态分支中 `cts.Cancel()` 位于 `_ = ObserveOrphanAsync(entry)` **之前**：取消回调若抛出（`AggregateException`），既跳过册外观察启动，又让异常穿透 `LaunchDrive` 而丢掉已提交的受理回执 | 阻断（相邻既有遗漏） | 取消单独隔离（catch 留痕），册外观察启动无条件执行——保证「任务已启动就必须被观察」与「受理不撤回」两条同时成立 |
+| 14 | 预建 Planned 运行被移到门面初始化之前后，`facade.SweepExpiredRetryWindows()` 仍在异常保护之外：扫描 IO 异常会使 Planned 记录残留，之后同流程启动被活动态检查持续拒绝，直到重启恢复 | 重要（孤儿窗口） | 扫描段独立 try/catch：异常即终态化清理预建运行并返回 Unavailable（未产生发送） |
+| 15 | 并发初始化夹具虽已允许同轮 `NotSelected`，但未固定目标交错（第二路可能晚进入，或两路旧证据几乎同时成熟），旧实现的空转缺陷可能偶发漏检 | 重要（验收强度） | 新增夹具接缝 `TaskCenterAdmissionSeams.OnTakeoverObservationEntered`（生产 null=空操作），夹具用 `Barrier(2)` 强制两路**都进入接管观察阶段后才继续**，把目标交错固定为确定性 |
+| 16 | 入档与代码注释仍保留自相矛盾表述（「续期是所有权存续唯一手段」「唯一发送许可持有者」「同一四连校验/不削弱任何校验强度」） | 建议（文档一致性） | 逐处修订原文：续期改为「主要手段」（任何成功所有者写入同样刷新心跳与单调基线）；胜者判据改为「唯一 Accepted/TerminalCompleted 操作」并注明落败方也可能取得过发送许可；两个 Latest 变体明确记为**跳过调用方快照 CAS**、正确性由锁内最新修订 + 回调业务复核承担，并注明续期核本就不含残件/切换闸门检查 |
+
+**异常边界与回执纪律**：凡「受理已成立」（台账/运行记录原子落盘）之后的任何 await 或派发，异常都不得穿透为对外拒绝——一律保留 `Accepted` 并按可读状态如实描述（执行结果待核实），与 I1「区分已发送/已入队/已执行/终态、未知不得当作成功或空闲」同口径。**该纪律同样覆盖取消回调与日志委托**：`LaunchDrive` 关闭竞态分支改为**先无条件启动册外观察，再尽力取消**（取消回调与日志委托异常均被隔离），使「任务已启动就必须被观察」与「受理不撤回」不被日志/取消行为破坏。
+
+**关于「current/expected revision」的权威口径**（消解 §4.2/§4.2c 字面与实现的差异）：§4.2「统一提交边界」与 §4.2c「关闭接口」中的「当前 revision」应理解为**锁内权威修订号**——冻结签名 `MutateHandoff` 要求调用方显式提供并比对（调用方快照 CAS）；`MutateHandoffLatest` 变体在锁内就地取最新修订号、跳过调用方快照 CAS，改由「锁内最新修订 + 回调内业务复核（含待对账迁移的 `submissionIdentity+sendSeq` 关联校验）」承担正确性。两者都保证「读-判-写-发布」在同一锁内完成、修订号单调递增。

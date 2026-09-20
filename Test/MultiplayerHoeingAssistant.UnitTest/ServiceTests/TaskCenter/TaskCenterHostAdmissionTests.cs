@@ -30,13 +30,25 @@ public class TaskCenterHostAdmissionTests : IDisposable
 
     private sealed class FakeBoundary : IWorkflowExecutionBoundary
     {
+        private readonly object _sync = new();
+        private readonly List<string> _submissions = [];
+
         public bool SingleNativeSupported => false;
-        public List<string> Submissions { get; } = new();
+
+        /// <summary>线程安全快照（会诊重要项：并发驱动下 List 非线程安全——每次读取返回副本，
+        /// 避免竞态破坏计数而掩盖真双跑/漏计）。</summary>
+        public IReadOnlyList<string> Submissions { get { lock (_sync) return _submissions.ToList(); } }
 
         public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
         {
-            Submissions.Add(request.Occurrence.NodeId);
-            return Task.FromResult(BoundarySubmitResult.AcceptedWith("job-" + Submissions.Count));
+            int seq;
+            lock (_sync)
+            {
+                _submissions.Add(request.Occurrence.NodeId);
+                seq = _submissions.Count;
+            }
+
+            return Task.FromResult(BoundarySubmitResult.AcceptedWith("job-" + seq));
         }
 
         public Task<BoundaryTerminalResult> AwaitTerminalAsync(string jobId, CancellationToken ct)

@@ -37,6 +37,24 @@ public sealed class AdmissionRequest
     public long? CursorRevision { get; set; }
 }
 
+/// <summary>
+/// E2 恢复准入请求（冻结稿 v8 §5.1：恢复不产候选、不排序——过恢复专用准入边界）。
+/// 恢复分支：paused-continue（暂停续行——仅解除调度暂停，实际执行留待 §5.2 后继提交边界）/
+/// interrupted-relocate（中断游标重定位——A6 票据恢复的状态机消费侧归 R5.3，本边界只负责准入与责任持久化）。
+/// </summary>
+public sealed class RecoveryAdmissionRequest
+{
+    /// <summary>诊断用自由文本（入口名），不参与判定。</summary>
+    public string SourceDetail { get; set; } = "";
+    /// <summary>被恢复运行（台账身份匹配依据；candidateId→runId 绑定不可改写同口径）。</summary>
+    public string RunId { get; set; } = "";
+    public string WorkflowId { get; set; } = "";
+    /// <summary>恢复分支（paused-continue / interrupted-relocate）。</summary>
+    public string RestoreBranch { get; set; } = "";
+    /// <summary>作用域 bgi:{实例}:{bgiEpoch}——首次构造捕获固定，锁内只比较不重写。</summary>
+    public string Scope { get; set; } = "";
+}
+
 /// <summary>许可结果类别。</summary>
 public enum AdmissionResultKind
 {
@@ -303,7 +321,7 @@ public sealed class ArbitrationAdmissionService
                 var targetEpoch = ExtractEpoch(frz.Candidate.Scope);
                 var sortKeyFingerprint = SortKeyFingerprintOf(frz.Candidate, frz.RunBinding, frz.CursorRef, frz.CursorRevision);
                 var now = _utcNow();
-                register = _store.MutateHandoff(read.File.Lease.LeaseId, read.File.Lease.OwnerEpoch, read.File.Revision, file =>
+                register = _store.MutateHandoffLatest(read.File.Lease.LeaseId, read.File.Lease.OwnerEpoch, file =>
                 {
                     var capacity = EnsureCapacityForCreate(file, now);
                     if (capacity is not null) return capacity;
@@ -341,7 +359,7 @@ public sealed class ArbitrationAdmissionService
             return AdmissionResult.Of(AdmissionResultKind.Error, "corrupt", "租约文件损坏（保守待对账）。", request.RequestIdentity);
         if (read.Status == ArbitrationLeaseStatus.Unsupported)
             return AdmissionResult.Of(AdmissionResultKind.Error, "unsupported_version", "租约文件版本不受支持。", request.RequestIdentity);
-        // UTC 诊断态（Valid/Expired）不作资格裁决——所有者资格一律由 MutateHandoff 单调四连判定（R5.1 §6.3 合同）。
+        // UTC 诊断态（Valid/Expired）不作资格裁决——所有者资格一律由 MutateHandoff/Latest 锁内核单调 TTL 判定（R5.1 §6.3 合同）。
         if (read.File?.Lease is null)
             return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "未持有租约（先 EnsureOwnership）。", request.RequestIdentity);
 
@@ -489,6 +507,164 @@ public sealed class ArbitrationAdmissionService
     }
 
     // ============================================================
+    // E2 恢复专用准入边界（冻结稿 v8 §5.1 行1/行2 冻结——不排序、不产候选、不换键重跑）
+    // ============================================================
+
+    /// <summary>
+    /// 恢复专用准入（E2：面板恢复/启动移交 resume 共用）：
+    /// ①F11 前置零副作用；②恢复意图登记（Operations 直接 InRound——恢复不入队不排序，无轮次快照；
+    ///   崩溃窗「登记后占位前」由 RecoverAfterRestart ② 三无确认终局中止同口径覆盖）；
+    /// ③锁内共同闸门复用 §4.2 统一校验链（F11 复核/票据压制/事实未知/执行占用/切换闸门/目标 epoch 只比较/
+    ///   Pending 阶段与身份——恢复 stableIdentity 由 resume 伪候选派生≠授权抢占方身份，Pending 存续期一律
+    ///   pending_conflict 保守拒绝；「用于完成该交接的合法恢复动作不受此禁」的授权恢复豁免归 R5.3 A6 消费侧落实）；
+    /// ④占位（Submission 落盘）→锁外发送→三态对账——与启动同一提交边界（§4.2/§4.2c）。
+    /// 保留原票据与 RestorePending 责任：本方法绝不触碰 Pending 段、绝不改写既有操作为新作业。
+    /// 恢复操作不走 RetryAsync（重试轮次排序违反「恢复不排序」——可重试拒绝由入口以新操作重新发起，每次=新操作）。
+    /// </summary>
+    public async Task<AdmissionResult> AdmitRecoveryAsync(RecoveryAdmissionRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (string.IsNullOrWhiteSpace(request.RunId) || string.IsNullOrWhiteSpace(request.WorkflowId))
+            return AdmissionResult.Of(AdmissionResultKind.Error, "invalid_request", "恢复准入请求缺 RunId/WorkflowId。");
+        if (request.RestoreBranch is not ("paused-continue" or "interrupted-relocate"))
+            return AdmissionResult.Of(AdmissionResultKind.Error, "invalid_request", "未知恢复分支：" + request.RestoreBranch);
+
+        // ① F11 独立停止闸门：先于一切操作级租约副作用（§7.1 口径=Operations/Submission 零副作用；
+        //    所有权自举/心跳不受此限——会诊 建议-3 措辞对齐；占位事务内还会锁内复核）。
+        if (_hooks.F11Active())
+            return AdmissionResult.Of(AdmissionResultKind.F11Blocked, "f11_active", "F11 独立停止闸门激活（不发生租约副作用）。");
+
+        // N2 同口径（会诊 建议-2 处置）：读快照+恢复登记在同一进程内串行段（修订不漂移；与其他准入/结清串行）。
+        string rid;
+        string stableIdentity;
+        string candidateId;
+        string targetEpoch;
+        DateTimeOffset now;
+        AdmissionRequest inner;
+        LeaseSegment lease;
+        LeaseMutateResult register;
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var read = _store.Read();
+            if (read.Status == ArbitrationLeaseStatus.Corrupt)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "corrupt", "租约文件损坏（保守待对账）。");
+            if (read.Status == ArbitrationLeaseStatus.Unsupported)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "unsupported_version", "租约文件版本不受支持。");
+            if (read.File?.Lease is null)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "未持有租约（先 EnsureOwnership）。");
+            lease = read.File.Lease;
+
+            // ② 恢复意图登记（持久化先于发送）：身份分配+Operations 登记=同一次原子发布；候选快照冻结（不可变消费记录）。
+            rid = Guid.NewGuid().ToString("N");
+            var candidate = new ArbitrationCandidate
+            {
+                Scope = request.Scope,
+                Namespace = "resume",
+                WorkflowId = request.WorkflowId,
+                TriggerOccurrenceId = $"resume:{request.RestoreBranch}:{rid}", // 身份分配后一次性成形（无占位符往返）
+                RunId = request.RunId,
+                Intent = "resume",
+                ResourceRef = "run:" + request.RunId,
+            };
+            stableIdentity = ArbitrationOrdering.BuildStableIdentity(candidate);
+            candidateId = ArbitrationOrdering.DeriveCandidateId(stableIdentity);
+            targetEpoch = ExtractEpoch(candidate.Scope);
+            now = _utcNow();
+            inner = new AdmissionRequest
+            {
+                Namespace = "resume",
+                RequestIdentity = rid,
+                Kind = AdmissionKind.Create,
+                SourceDetail = request.SourceDetail,
+                Candidate = candidate,
+                RunBinding = request.RunId, // 绑定登记即固定（不可改写）
+            };
+            register = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            {
+                var capacity = EnsureCapacityForCreate(file, now);
+                if (capacity is not null) return capacity;
+                file.Handoff ??= new LeaseHandoffSegment();
+                file.Handoff.Operations.Add(new OperationRecord
+                {
+                    RequestIdentity = rid,
+                    CandidateId = candidateId,
+                    PayloadFingerprint = "",
+                    SortKeyFingerprint = SortKeyFingerprintOf(candidate, inner.RunBinding, null, null),
+                    Candidate = CloneCandidate(candidate),
+                    RunBinding = request.RunId,
+                    RequestState = OperationRequestState.InRound, // 恢复无轮次：登记即进入占位校验态
+                    LastSendSeq = 0,
+                    Zone = OperationZone.Active,
+                    UpdatedRevision = file.Revision + 1,
+                    UpdatedAtUtc = now,
+                    TargetEpoch = targetEpoch,
+                    ResourceRef = candidate.ResourceRef ?? "",
+                    Intent = "resume",
+                });
+                return null;
+            });
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        if (!register.Success) return ClassifyMutateReject(register.Reason ?? "invalid_request", rid);
+
+        // ③④ 锁内共同闸门+占位（统一校验链）→锁外发送→三态对账（统一提交边界）。
+        var occupy = ValidateAndOccupy(inner, lease, stableIdentity, candidateId, targetEpoch,
+            OperationRequestState.InRound, mergedIdentities: null, now, out var special);
+        if (!occupy.Success) return await ClassifyRecoveryOccupyRejectAsync(inner, lease, occupy.Reason ?? "invalid_request").ConfigureAwait(false);
+        if (special is not null) return AdmissionResult.Of(AdmissionResultKind.Error, special, "占位事务异常分支。", rid);
+
+        SendOutcome outcome;
+        try
+        {
+            outcome = await _hooks.Sender(BuildDispatch(inner, occupy.File!, stableIdentity, candidateId, targetEpoch)).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            outcome = new SendOutcome.Unknown("发送回调异常（保守待对账，不重发）：" + ex.GetType().Name); // I1 同口径
+        }
+
+        return await ReconcileOutcomeAsync(inner, lease, occupy.File!, outcome).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 恢复占位拒绝分类（会诊 重要-1 处置——恢复操作无再驱动者：不走 RetryAsync、不入轮次）：
+    /// 本地预检类拒绝（未发布发送许可+无未决发送责任+无当前处理者）按 §4.1a 判据表第一行同边界终局，
+    /// 不遗留 Queued 孤儿占主槽位/阻塞同 runBinding 同胞的终局回写；执行占用保留可重试拒绝（窗口派生，到期扫描终局）。
+    /// </summary>
+    private async Task<AdmissionResult> ClassifyRecoveryOccupyRejectAsync(AdmissionRequest request, LeaseSegment lease, string reason)
+    {
+        switch (reason)
+        {
+            // 执行占用：无损拒绝类可重试（窗口派生不重置；恢复不重驱动——占用解除后由入口新操作重新发起）。
+            case "execution_occupied":
+                return (await RetryablePrecheckRejectAsync(request, lease, "execution_occupied", "执行占用（锁内复核——按无损拒绝类可重试处理）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
+            // 事实未知：终局中止但按待对账类别返回（禁止换键重跑；恢复操作本身未发布发送许可，不遗留可再驱动占位）。
+            case "facts_unknown":
+                return (await TerminatePrecheckAsync(request, lease, "facts_unknown", AdmissionResultKind.NeedReconcile, "权威执行事实未知→待对账（恢复操作终局中止：未发布发送许可；对账后由入口新操作重新发起）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
+            // 未决发送冲突：并发恢复仅一胜者——本操作终局中止（未发布发送许可）。
+            case "submission_conflict":
+                return (await TerminatePrecheckAsync(request, lease, "submission_conflict", AdmissionResultKind.Error, "存在未决发送（至多一笔）——恢复操作终局中止（并发恢复仅一胜者，未发布发送许可）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
+            // 状态已由其他处理者推进：不回退——返回当前事实分类（B1）。
+            case "state_changed":
+                return ClassifyCurrentState(request.RequestIdentity);
+            // f11 锁内复核：终局中止+F11 类别（前置已拦，此处为竞态复核路径）。
+            case "f11_active":
+                return (await TerminatePrecheckAsync(request, lease, "f11_active", AdmissionResultKind.F11Blocked, "F11 独立停止闸门激活（锁内复核）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
+            // 票据/资格/epoch/绑定/Pending：终局拒绝（恢复无重驱动者，Queued 回退=永久孤儿）。
+            case "ticket_suppressed" or "eligibility_lost" or "stale_epoch" or "identity_conflict" or "binding_conflict" or "pending_conflict":
+                return (await TerminatePrecheckAsync(request, lease, reason, AdmissionResultKind.TerminalRejected, "恢复准入锁内复核拒绝（" + reason + "）——终局中止（未发布发送许可，修正事实后由入口新操作重新发起）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
+            // 切换闸门/租约资格/残件/容量等存取拒绝：同样终局中止（恢复操作不留 Queued）。
+            default:
+                return (await TerminatePrecheckAsync(request, lease, reason, AdmissionResultKind.Error, "恢复准入拒绝（" + reason + "）——终局中止（未发布发送许可）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
+        }
+    }
+
+    // ============================================================
     // 仲裁轮次（§3.1：入队与「快照并移除」原子；当轮持续至占位成功或明确失败；排序仅进程内队列）
     // ============================================================
 
@@ -565,7 +741,7 @@ public sealed class ArbitrationAdmissionService
             var ids = round.Select(r => r.Request.RequestIdentity).ToHashSet(StringComparer.Ordinal);
             var advanced = new List<string>(); // 状态已被其他处理者推进（B1：不覆盖——分类返回当前事实）
             var now0 = _utcNow();
-            var mark = _store.MutateHandoff(lease.LeaseId, lease.OwnerEpoch, read0.File.Revision, file =>
+            var mark = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
             {
                 foreach (var op in (file.Handoff?.Operations ?? []).Where(o => ids.Contains(o.RequestIdentity)))
                 {
@@ -608,7 +784,7 @@ public sealed class ArbitrationAdmissionService
             switch (decision.Outcome)
             {
                 case ArbitrationOutcome.F11Blocked:
-                    await TerminateRoundAsync(round, lease, mark.File!.Revision, decision,
+                    await TerminateRoundAsync(round, lease, decision,
                         r => (OperationRequestState.TerminalRejected, "f11_active"),
                         r => AdmissionResult.Of(AdmissionResultKind.F11Blocked, "f11_active", "F11 独立停止闸门激活。", r.Request.RequestIdentity)).ConfigureAwait(false);
                     return;
@@ -616,17 +792,17 @@ public sealed class ArbitrationAdmissionService
                 case ArbitrationOutcome.TicketSuppressed:
                 {
                     // 身份冲突（同候选号不同载荷/排序键）=终局拒绝（§3.3）；其余未获选=NotSelected。
-                    await SettleRejectedAsync(round, lease, mark.File!.Revision, decision).ConfigureAwait(false);
+                    await SettleRejectedAsync(round, lease, decision).ConfigureAwait(false);
                     return;
                 }
                 case ArbitrationOutcome.NeedReconcile:
                     // 未发布发送许可的操作回 Queued（可经续用重新驱动）——不转 Reconciling（无发送责任则无对账对象）。
-                    await TransitionRoundAsync(round, lease, mark.File!.Revision, OperationRequestState.Queued,
+                    await TransitionRoundAsync(round, lease, OperationRequestState.Queued,
                         r => new AdmissionResult { Kind = AdmissionResultKind.NeedReconcile, ReasonCode = "facts_unknown", Detail = decision.Reason, RequestIdentity = r.Request.RequestIdentity, SuppressionSource = decision.SuppressionSource, Decision = decision }).ConfigureAwait(false);
                     return;
                 case ArbitrationOutcome.NeedPreemptConfirm:
                 {
-                    await SettleRejectedAsync(round.Where(r => !IsWinner(decision)(r)).ToList(), lease, mark.File!.Revision, decision).ConfigureAwait(false);
+                    await SettleRejectedAsync(round.Where(r => !IsWinner(decision)(r)).ToList(), lease, decision).ConfigureAwait(false);
                     var preemptWinners = round.Where(IsWinner(decision)).ToList();
                     foreach (var w in preemptWinners.Take(1))
                     {
@@ -644,7 +820,7 @@ public sealed class ArbitrationAdmissionService
                 }
                 case ArbitrationOutcome.AllowRequestExecution:
                 {
-                    await SettleRejectedAsync(round.Where(r => !IsWinner(decision)(r)).ToList(), lease, mark.File!.Revision, decision).ConfigureAwait(false);
+                    await SettleRejectedAsync(round.Where(r => !IsWinner(decision)(r)).ToList(), lease, decision).ConfigureAwait(false);
                     var winnerPending = round.First(IsWinner(decision));
                     // 去重合并（§3.1：同身份+同载荷+同排序键留一项）——合并项不新增发送者，共享胜者结果（并发重试者合并）。
                     var mergedWin = round.Where(IsWinner(decision)).Skip(1).ToList();
@@ -688,7 +864,7 @@ public sealed class ArbitrationAdmissionService
         }
         else
         {
-            await TerminateRoundAsync(merged, lease, _store.Read().File?.Revision ?? 0, decision,
+            await TerminateRoundAsync(merged, lease, decision,
                 _ => (OperationRequestState.NotSelected, "merged_duplicate"),
                 m => new AdmissionResult { Kind = winnerResult.Kind, ReasonCode = winnerResult.ReasonCode, Detail = winnerResult.Detail + "（去重合并：共享胜者结果，不新增发送者）", RequestIdentity = m.Request.RequestIdentity, SubmissionIdentity = winnerResult.SubmissionIdentity, SendSeq = winnerResult.SendSeq, WinnerCandidateId = winnerResult.WinnerCandidateId, Decision = winnerResult.Decision }).ConfigureAwait(false);
         }
@@ -718,17 +894,17 @@ public sealed class ArbitrationAdmissionService
     }
 
     /// <summary>未获选/冲突分流（身份冲突=终局拒绝；其余=NotSelected——混合冲突组逐候选判定，不统一降级）。</summary>
-    private async Task SettleRejectedAsync(IReadOnlyList<PendingAdmission> targets, LeaseSegment lease, long revision, ArbitrationDecision decision)
+    private async Task SettleRejectedAsync(IReadOnlyList<PendingAdmission> targets, LeaseSegment lease, ArbitrationDecision decision)
     {
         if (targets.Count == 0) return;
         var conflicts = targets.Where(r => RejectionReasonOf(decision, r) == "identity_conflict").ToList();
         var notSelected = targets.Where(r => RejectionReasonOf(decision, r) != "identity_conflict").ToList();
         if (conflicts.Count > 0)
-            await TerminateRoundAsync(conflicts, lease, revision, decision,
+            await TerminateRoundAsync(conflicts, lease, decision,
                 _ => (OperationRequestState.TerminalRejected, "identity_conflict"),
                 r => new AdmissionResult { Kind = AdmissionResultKind.TerminalRejected, ReasonCode = "identity_conflict", Detail = "同候选号不同载荷/排序键=整组冲突拒绝（终局，不静默成功）。", RequestIdentity = r.Request.RequestIdentity, SuppressionSource = decision.SuppressionSource, Decision = decision }).ConfigureAwait(false);
         if (notSelected.Count > 0)
-            await TerminateRoundAsync(notSelected, lease, _store.Read().File?.Revision ?? revision, decision,
+            await TerminateRoundAsync(notSelected, lease, decision,
                 r => (OperationRequestState.NotSelected, RejectionReasonOf(decision, r)),
                 r => new AdmissionResult { Kind = AdmissionResultKind.NotSelected, ReasonCode = RejectionReasonOf(decision, r), Detail = "未获选终局（含胜者引用与压制来源）。", RequestIdentity = r.Request.RequestIdentity, WinnerCandidateId = decision.WinnerCandidateId, SuppressionSource = decision.SuppressionSource, Decision = decision }).ConfigureAwait(false);
     }
@@ -747,14 +923,14 @@ public sealed class ArbitrationAdmissionService
     }
 
     /// <summary>整轮终局（逐候选状态/原因迁移+Operations 结果记录+终局转区迁移=同次原子发布）。</summary>
-    private Task TerminateRoundAsync(IReadOnlyList<PendingAdmission> targets, LeaseSegment lease, long revision, ArbitrationDecision decision,
+    private Task TerminateRoundAsync(IReadOnlyList<PendingAdmission> targets, LeaseSegment lease, ArbitrationDecision decision,
         Func<PendingAdmission, (OperationRequestState State, string Reason)> outcomeOf, Func<PendingAdmission, AdmissionResult> resultOf)
     {
         if (targets.Count == 0) return Task.CompletedTask;
         var byId = targets.ToDictionary(r => r.Request.RequestIdentity, StringComparer.Ordinal);
         var now = _utcNow();
         var skipped = new List<string>(); // B1：状态已推进者不覆盖——分类返回当前事实
-        var mutate = _store.MutateHandoff(lease.LeaseId, lease.OwnerEpoch, revision, file =>
+        var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var ops = file.Handoff?.Operations ?? [];
             foreach (var op in ops.Where(o => byId.ContainsKey(o.RequestIdentity)))
@@ -793,14 +969,14 @@ public sealed class ArbitrationAdmissionService
     }
 
     /// <summary>整轮状态迁移（非终局：回 Queued 等——可经续用重新驱动）。</summary>
-    private Task TransitionRoundAsync(IReadOnlyList<PendingAdmission> targets, LeaseSegment lease, long revision,
+    private Task TransitionRoundAsync(IReadOnlyList<PendingAdmission> targets, LeaseSegment lease,
         OperationRequestState state, Func<PendingAdmission, AdmissionResult> resultOf)
     {
         if (targets.Count == 0) return Task.CompletedTask;
         var ids = targets.Select(r => r.Request.RequestIdentity).ToHashSet(StringComparer.Ordinal);
         var now = _utcNow();
         var skipped = new List<string>(); // B1：状态已推进者不覆盖——分类返回当前事实
-        var mutate = _store.MutateHandoff(lease.LeaseId, lease.OwnerEpoch, revision, file =>
+        var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             foreach (var op in (file.Handoff?.Operations ?? []).Where(o => ids.Contains(o.RequestIdentity)))
             {
@@ -899,7 +1075,7 @@ public sealed class ArbitrationAdmissionService
             return new LeaseMutateResult { Success = false, Reason = "lease_not_valid", File = null };
         }
 
-        var result = _store.MutateHandoff(lease.LeaseId, lease.OwnerEpoch, read.File.Revision, file =>
+        var result = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             // ① F11 独立停止闸门（锁内复核——校验后激活同样阻断占位与发送）。
             if (_hooks.F11Active()) return "f11_active";
@@ -991,6 +1167,15 @@ public sealed class ArbitrationAdmissionService
                     && other.RequestState is OperationRequestState.Granted or OperationRequestState.Sending
                         or OperationRequestState.Reconciling or OperationRequestState.Accepted or OperationRequestState.TerminalCompleted))
                 return "cursor_already_consumed";
+
+            // ⑪c runBinding 双跑归属（会诊 重要-2/复核 重要-1 处置——**门面层不自足，无双跑由宿主发送侧兜底**）：
+            //    恢复候选 CursorRef=null（⑪b 不适用），同 runBinding 的「启动 op（Accepted，驱动在跑）+恢复 op」属
+            //    合法并存（夹具 ResumeRun_Paused 验证）；「op1 已 Accepted 后 op2 再占位」在门面层可达——门面不拒，
+            //    无双跑实际由宿主 DispatchResumeViaHostAsync 的 run_state_changed（台账运行态）+task_running
+            //    （_reservedWorkflows/_drives 在飞）兜底（恢复路径即终局中止/可重试拒绝）。曾尝试门面内拒
+            //    （LastSendSeq>0 在途即拒 run_already_active），但 Granted/Sending/Reconciling 蕴含 Submission≠null
+            //    必被 ⑧ 前置吞没=防御性死代码，且无法拒「先行者 Accepted」窗（拒 Accepted 又会误杀合法启动+恢复并存）
+            //    ——故门面层不设此守卫，归属关系如实登记（不冒充自足）。
 
             // ⑫ 绑定一致（runBinding/cursorRef：首绑写入、再绑必须一致，不可改写）。
             if (request.RunBinding is { } runBinding)
@@ -1129,7 +1314,7 @@ public sealed class ArbitrationAdmissionService
         var read = _store.Read();
         if (read.File?.Lease is null)
             return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "终局落盘前租约丢失（操作保持 Active，未持久化终局不报告）。", request.RequestIdentity);
-        var mutate = _store.MutateHandoff(lease.LeaseId, lease.OwnerEpoch, read.File.Revision, file =>
+        var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var op = FindOp(file, request.RequestIdentity);
             if (op is null || op.Zone != OperationZone.Active) return "state_changed";
@@ -1157,7 +1342,7 @@ public sealed class ArbitrationAdmissionService
         var read = _store.Read();
         if (read.File?.Lease is null)
             return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "可重试拒绝落盘前租约丢失。", request.RequestIdentity);
-        var mutate = _store.MutateHandoff(lease.LeaseId, lease.OwnerEpoch, read.File.Revision, file =>
+        var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var op = FindOp(file, request.RequestIdentity);
             if (op is null || op.Zone != OperationZone.Active) return "state_changed";
@@ -1219,7 +1404,7 @@ public sealed class ArbitrationAdmissionService
 
                 if (persistFailure is not null)
                 {
-                    var markPersist = await MarkReconcilingAsync(request.RequestIdentity, lease).ConfigureAwait(false);
+                    var markPersist = await MarkReconcilingAsync(request.RequestIdentity, lease, submission.SubmissionIdentity, submission.SendSeq).ConfigureAwait(false);
                     return markPersist.Success
                         ? new AdmissionResult { Kind = AdmissionResultKind.Reconciling, ReasonCode = "takeover_persist_failed", Detail = "接管台账持久化失败（" + persistFailure + "）——Submission 保持未决，保守待对账。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq }
                         : AdmissionResult.Of(AdmissionResultKind.Error, markPersist.Reason ?? "invalid_request", "待对账落盘失败（不报告未持久化状态）。", request.RequestIdentity);
@@ -1291,7 +1476,7 @@ public sealed class ArbitrationAdmissionService
             default:
             {
                 // 未知→Submission.Reconciling（不换键重跑、不重发；持续停驻待对账——处置入口=SettleReconciledAsync）。
-                var markUnknown = await MarkReconcilingAsync(request.RequestIdentity, lease).ConfigureAwait(false);
+                var markUnknown = await MarkReconcilingAsync(request.RequestIdentity, lease, submission.SubmissionIdentity, submission.SendSeq).ConfigureAwait(false);
                 return markUnknown.Success
                     ? new AdmissionResult { Kind = AdmissionResultKind.Reconciling, ReasonCode = "send_unknown", Detail = outcome is SendOutcome.Unknown u ? u.Detail : "发送结果未知。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq }
                     : AdmissionResult.Of(AdmissionResultKind.Error, markUnknown.Reason ?? "invalid_request", "待对账落盘失败（不报告未持久化状态）。", request.RequestIdentity);
@@ -1384,7 +1569,7 @@ public sealed class ArbitrationAdmissionService
                 return AdmissionResult.Of(AdmissionResultKind.Error, "ledger_not_terminal", "接管台账未确认权威终态（保守不终局）。", requestIdentity);
 
             var now = _utcNow();
-            var mutate = _store.MutateHandoff(lease.LeaseId, lease.OwnerEpoch, read.File.Revision, file =>
+            var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
             {
                 var op2 = FindOp(file, requestIdentity);
                 if (op2 is null || op2.RequestState != OperationRequestState.Accepted) return "state_changed";
@@ -1408,11 +1593,10 @@ public sealed class ArbitrationAdmissionService
     /// <summary>统一关闭接口（§4.2c 两个合法分支共用：当前所有者+当前 revision+目标发送身份匹配；绝不消解 Pending；关闭即同次原子发布更新 Operations 并移除 Submission）。</summary>
     private LeaseMutateResult CloseSubmission(LeaseSegment lease, SubmissionRecord submission, Func<LogicalOwnerLeaseFile, string?> applyOutcome)
     {
-        var read = _store.Read();
-        if (read.File?.Lease is null)
-            return new LeaseMutateResult { Success = false, Reason = "lease_not_valid", File = null };
-        // 流程起点捕获的所有者身份（所有权更替=旧身份响亮拒绝——非所有者收到回执只能提供证据，§4.2a）。
-        return _store.MutateHandoff(lease.LeaseId, lease.OwnerEpoch, read.File.Revision, file =>
+        // 修订号锁内就地读取（MutateHandoffLatest）：本方法原「Read()→MutateHandoff(捕获修订)」在并发下会被
+        // 任何一次同胞写入顶掉修订号而误判 lease_stale_generation（⑤c 并发实证）。回调内身份关联校验保证
+        // 幂等（重复关闭=submission_identity_mismatch 自然拒绝）；所有权真更替/过期仍在锁内身份+TTL 校验处响亮拒绝。
+        return _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var current = file.Handoff?.Submission;
             // 旧回执不关闭另一笔 Submission（sendSeq+身份关联）。
@@ -1442,21 +1626,33 @@ public sealed class ArbitrationAdmissionService
             string.Equals(o.SubmissionIdentity, submission.SubmissionIdentity, StringComparison.Ordinal)
             && o.LastSendSeq == submission.SendSeq);
 
-    private Task<LeaseMutateResult> MarkReconcilingAsync(string requestIdentity, LeaseSegment lease)
+    /// <summary>
+    /// 待对账迁移（会诊 P2 处置：必须校验「结果对应的发送轮次」完整关联身份，不能只看状态枚举）。
+    /// 缺失该关联时，迟到的一轮 Unknown 结果会在新一轮已 Granted 时把新轮责任改成 Reconciling
+    /// （同时 Latest 变体不再提供修订 CAS 的偶然保护）。故本方法强制要求 submissionIdentity+sendSeq 匹配。
+    /// </summary>
+    private Task<LeaseMutateResult> MarkReconcilingAsync(string requestIdentity, LeaseSegment lease, string submissionIdentity, int sendSeq)
         => TransitionSingleAsync(requestIdentity, lease, OperationRequestState.Reconciling, markSubmissionReconciling: true,
+            expectedSubmissionIdentity: submissionIdentity, expectedSendSeq: sendSeq,
             OperationRequestState.Granted, OperationRequestState.Sending, OperationRequestState.Reconciling);
 
     private async Task<LeaseMutateResult> TransitionSingleAsync(string requestIdentity, LeaseSegment lease, OperationRequestState state,
-        bool markSubmissionReconciling = false, params OperationRequestState[] expectedStates)
+        bool markSubmissionReconciling = false, string? expectedSubmissionIdentity = null, int? expectedSendSeq = null,
+        params OperationRequestState[] expectedStates)
     {
         var read = _store.Read();
         if (read.File?.Lease is null)
             return new LeaseMutateResult { Success = false, Reason = "lease_not_valid", File = null };
         var now = _utcNow();
-        var result = _store.MutateHandoff(lease.LeaseId, lease.OwnerEpoch, read.File.Revision, file =>
+        var result = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var op = FindOp(file, requestIdentity);
             if (op is null || op.Zone != OperationZone.Active) return "stale_operation_identity";
+            // 轮次关联校验（会诊 P2）：迟到结果不得改写更新轮次的责任（answeredSendSeq 语义的写入侧护栏）。
+            if (expectedSendSeq is { } seq
+                && (op.LastSendSeq != seq
+                    || !string.Equals(op.SubmissionIdentity, expectedSubmissionIdentity, StringComparison.Ordinal)))
+                return "state_changed";
             // B1：状态已被其他处理者推进=不覆盖（响亮失败，调用方分类返回当前事实）。
             if (expectedStates.Length > 0 && !expectedStates.Contains(op.RequestState)) return "state_changed";
             op.RequestState = state;
@@ -1475,7 +1671,7 @@ public sealed class ArbitrationAdmissionService
     private static AdmissionResult ClassifyMutateReject(string reason, string requestIdentity)
         => AdmissionResult.Of(AdmissionResultKind.Error, reason, reason switch
         {
-            "lease_stale_generation" => "租约所有权/修订/TTL 四连校验失败（响亮拒绝；未决事实不变——所有权更替后旧身份不得借新身份写入）。",
+            "lease_stale_generation" => "租约所有权身份/TTL 校验失败（或调用方快照修订已过期）——响亮拒绝；未决事实不变，所有权更替后旧身份不得借新身份写入。",
             "switch_gate_active" => "切换闸门激活期间禁止意图发布。",
             "residue_reconcile_pending" => "崩窗残件未对账，持续准入约束。",
             "corrupt" => "租约文件损坏（保守待对账）。",
@@ -1592,7 +1788,7 @@ public sealed class ArbitrationAdmissionService
                             && o.RetryWindowDeadlineUtc is { } d && d <= now)
                 .Select(o => o.RequestIdentity)
                 .ToList();
-            // B8：流程起点捕获身份——整个扫描沿用（逐项 MutateHandoff 四连核验，不逐项重取身份）。
+            // B8：流程起点捕获身份——整个扫描沿用（逐项锁内身份/TTL 核验，不逐项重取身份）。
             var captured = read.File.Lease;
             var count = 0;
             foreach (var identity in expired)
@@ -1608,12 +1804,12 @@ public sealed class ArbitrationAdmissionService
         }
     }
 
-    /// <summary>到期锁内复核（流程起点捕获身份+当前修订四连核验；复核不成立=保守停驻不臆断；仅确定拒绝证据可转终局）。</summary>
+    /// <summary>到期锁内复核（流程起点捕获身份 + 锁内最新修订核验；复核不成立=保守停驻不臆断；仅确定拒绝证据可转终局）。</summary>
     private bool ReviewExpiredOperation(LeaseSegment captured, string requestIdentity, DateTimeOffset now)
     {
         var current = _store.Read();
         if (current.File?.Lease is null) return false;
-        var mutate = _store.MutateHandoff(captured.LeaseId, captured.OwnerEpoch, current.File.Revision, file =>
+        var mutate = _store.MutateHandoffLatest(captured.LeaseId, captured.OwnerEpoch, file =>
         {
             var op = FindOp(file, requestIdentity);
             if (op is null || op.RequestState != OperationRequestState.RetryableRejected) return "state_changed";
@@ -1652,7 +1848,7 @@ public sealed class ArbitrationAdmissionService
             if (read.File?.Lease is null) return 0;
             var now = _utcNow();
             var recovered = 0;
-            var mutate = _store.MutateHandoff(read.File.Lease.LeaseId, read.File.Lease.OwnerEpoch, read.File.Revision, file =>
+            var mutate = _store.MutateHandoffLatest(read.File.Lease.LeaseId, read.File.Lease.OwnerEpoch, file =>
             {
                 if (file.Handoff is null) return null;
                 // ① 未决发送责任保守转对账（不重新触发发送）。
@@ -1729,6 +1925,50 @@ public sealed class ArbitrationAdmissionService
                 MigrateAndClean(file, now);
                 return null;
             });
+
+            // ⑤ Accepted 崩溃留滞收敛（会诊 建议-3 处置 + 复核 阻断-1 处置——进程在「受理→驱动终态→终局回写」窗口
+            //    崩溃，火忘回写未执行=Active 占槽泄漏）。**不得在 MutateHandoff 变更回调内调用钩子**——宿主
+            //    TakeoverTerminalConfirmed 会 Read() 本店，而回调执行时跨进程锁（FileShare.None）仍持有=同进程
+            //    共享冲突重入（会诊复核实证）；故改为 mutate 提交后逐操作锁外终局化（MarkOperationTerminal 内部
+            //    自带钩子确认+独立事务）。无权威终态=不动（驱动可能在途/留待对账）。
+            if (mutate.Success)
+            {
+                // 钩子必须在锁外调用：宿主 TakeoverTerminalConfirmed 内部会 Read() 本店，而本方法自始持有 _gate、
+                // 目任何锁内回调亦持跨进程锁——锁内调用=同进程共享冲突重入（会诊复核实证）。
+                // 另：终局化不得走 MarkOperationTerminal（它自取 _gate，SemaphoreSlim 不可重入=自死锁），
+                // 故此处直接使用存储层原子变更写入（仍受锁内身份/TTL 校验与残件闸门约束）。
+                // 会诊阻断项处置：所有者身份必须沿用首事务（本方法起点）捕获的 leaseId/ownerEpoch，绝不重新取快照里的
+                // 当前租约——期间若发生接管，重取会把新所有者的身份当成自己的身份写入（违反「旧流程不得借新身份继续」）。
+                // 沿用旧身份时，真发生更替会在锁内身份校验处响亮拒绝 lease_stale_generation（正是期望行为）。
+                var ownLease = mutate.File?.Lease;
+                var confirmed = ownLease is null
+                    ? new List<string>()
+                    : (mutate.File!.Handoff?.Operations ?? [])
+                        .Where(o => o.Zone == OperationZone.Active && o.RequestState == OperationRequestState.Accepted)
+                        .Where(o => o.SubmissionIdentity is not null
+                                    && _hooks.TakeoverTerminalConfirmed?.Invoke(o.SubmissionIdentity, o.LastSendSeq) == true)
+                        .Select(o => o.RequestIdentity)
+                        .ToList();
+                foreach (var identity in confirmed)
+                {
+                    var terminalNow = _utcNow();
+                    var terminal = _store.MutateHandoffLatest(ownLease!.LeaseId, ownLease.OwnerEpoch, file =>
+                    {
+                        var op = FindOp(file, identity);
+                        if (op is null || op.Zone != OperationZone.Active || op.RequestState != OperationRequestState.Accepted)
+                            return "state_changed";
+                        op.RequestState = OperationRequestState.TerminalCompleted;
+                        op.LastResult = new OperationResult { Outcome = OperationOutcome.Accepted, ReasonCode = "terminal_confirmed_after_restart", Retryable = false, RetryBudgetUsed = op.LastResult?.RetryBudgetUsed ?? 0, EvidenceSource = "restart_recovery:terminal_confirmed", AnsweredSendSeq = op.LastSendSeq };
+                        op.Zone = OperationZone.TerminalPendingTransfer;
+                        op.UpdatedRevision = file.Revision + 1;
+                        op.UpdatedAtUtc = terminalNow;
+                        MigrateAndClean(file, terminalNow);
+                        return null;
+                    });
+                    if (terminal.Success) recovered++;
+                }
+            }
+
             return mutate.Success ? recovered : 0;
         }
         finally
@@ -1792,7 +2032,9 @@ public sealed class ArbitrationAdmissionService
     /// <summary>scope=bgi:{实例id}:{bgiEpoch}——epoch=首次构造时捕获并固定（I-1），提交时只比较不重写。</summary>
     internal static string ExtractEpoch(string scope)
     {
-        var parts = (scope ?? "").Split(':');
+        // 只切前两段：scope=bgi:{实例id}:{bgiEpoch}，而生产 epoch 本身形如 "{ProcessId}:{StartTicksUtc}"
+        // （含冒号）——按全量 Split 取 [2] 会把 epoch 截断成 pid，导致 stale_epoch 确定性误拒（会诊阻断项）。
+        var parts = (scope ?? "").Split(':', 3);
         return parts.Length >= 3 ? parts[2] : "";
     }
 

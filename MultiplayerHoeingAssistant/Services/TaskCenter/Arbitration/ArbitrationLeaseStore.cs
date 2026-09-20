@@ -294,6 +294,20 @@ public sealed class ArbitrationLeaseStore
     /// 通过 → HeartbeatSeq+1、Revision+1、LastHeartbeatUtc=now。
     /// </summary>
     public LeaseOpResult TryRenew(string leaseId, string ownerEpoch, long expectedRevision)
+        => TryRenewCore(leaseId, ownerEpoch, expectedRevision);
+
+    /// <summary>
+    /// 尝试续期（修订号「最新」加法变体，B2-β 并发实证）：与 <see cref="TryRenew"/> 同一锁内核与同一身份/TTL 校验，
+    /// 唯一差别=不要求调用方提供 expectedRevision（锁内就地取最新修订号，即**跳过调用方快照 CAS**）。
+    /// 两者均不含残件/切换闸门检查（与冻结语义一致）。
+    /// 动机：心跳调用方「Read() 取修订号 → TryRenew」之间存在 TOCTOU——并发方任何一次成功写入都会让捕获的修订号
+    /// 失效而被误判 lease_stale_generation；续期是所有权存续的主要手段（任何成功的所有者写入同样刷新心跳与
+    /// 单调基线），续期误判累积到 TTL 即失去租约（比其它写入点更严重）。
+    /// </summary>
+    public LeaseOpResult TryRenewLatest(string leaseId, string ownerEpoch)
+        => TryRenewCore(leaseId, ownerEpoch, null);
+
+    private LeaseOpResult TryRenewCore(string leaseId, string ownerEpoch, long? expectedRevision)
     {
         return WithLock(read =>
         {
@@ -304,7 +318,7 @@ public sealed class ArbitrationLeaseStore
             if (lease is null
                 || !string.Equals(lease.LeaseId, leaseId, StringComparison.Ordinal)
                 || !string.Equals(lease.OwnerEpoch, ownerEpoch, StringComparison.Ordinal)
-                || read.File!.Revision != expectedRevision)
+                || (expectedRevision is { } expected && read.File!.Revision != expected))
                 return Reject("lease_stale_generation");
 
             if (IsOwnerExpired(lease)) return Reject("lease_expired_no_renew"); // 单调判定（§6.3：UTC 仅诊断）
@@ -667,6 +681,26 @@ public sealed class ArbitrationLeaseStore
     /// 锁内只消费本地事实（I-3：变更函数不得做远端网络查询）。
     /// </summary>
     public LeaseMutateResult MutateHandoff(string leaseId, string ownerEpoch, long expectedRevision, Func<LogicalOwnerLeaseFile, string?> mutate, bool checkSwitchGate = false)
+        => MutateCore(leaseId, ownerEpoch, expectedRevision, mutate, checkSwitchGate);
+
+    /// <summary>
+    /// 锁内原子变更（修订号「最新」加法变体，B2-β 并发实证）：与 <see cref="MutateHandoff"/> 同一边界，
+    /// **区别在于跳过调用方快照 CAS**——不接受 expectedRevision、修订号在锁内就地读取；身份
+    /// （leaseId+ownerEpoch）、单调 TTL、残件闸门与可选切换闸门仍逐次核验，修订号单调发布语义不变。
+    /// 正确性由「锁内取最新修订号 + 变更回调内的业务复核」共同承担，而非调用方快照比对——调用点必须保证
+    /// 回调内自带足够的业务关联校验（例：待对账迁移校验 submissionIdentity+sendSeq）。
+    /// 动机：调用方「Read() 取修订号 → MutateHandoff」之间存在 TOCTOU 窗口——并发方任何一次成功写入
+    /// （心跳续期/同胞登记/对账/终局化/迁移清理）都会使捕获的修订号失效，被误判 lease_stale_generation；
+    /// 恢复路径该码映射为终局拒绝，等于把并发下的合法用户请求假失败。变更回调本身在锁内对活动 file 做全部
+    /// 校验（回调=权威判定），故锁内取最新修订号不改变身份/TTL 校验与单调发布语义——**改变的是快照 CAS 责任**：
+    /// 由调用方比对转为「锁内最新修订号 + 回调业务复核」。仅当调用方刻意要「基于旧快照裁决」时才应使用带
+    /// expectedRevision 的冻结签名。
+    /// </summary>
+    public LeaseMutateResult MutateHandoffLatest(string leaseId, string ownerEpoch, Func<LogicalOwnerLeaseFile, string?> mutate, bool checkSwitchGate = false)
+        => MutateCore(leaseId, ownerEpoch, null, mutate, checkSwitchGate);
+
+    /// <summary>统一锁内核（expectedRevision=null 表示锁内取最新修订号；其余校验两变体完全一致）。</summary>
+    private LeaseMutateResult MutateCore(string leaseId, string ownerEpoch, long? expectedRevision, Func<LogicalOwnerLeaseFile, string?> mutate, bool checkSwitchGate)
     {
         ArgumentNullException.ThrowIfNull(mutate);
         return WithLock(read =>
@@ -679,7 +713,7 @@ public sealed class ArbitrationLeaseStore
             if (lease is null
                 || !string.Equals(lease.LeaseId, leaseId, StringComparison.Ordinal)
                 || !string.Equals(lease.OwnerEpoch, ownerEpoch, StringComparison.Ordinal)
-                || read.File!.Revision != expectedRevision
+                || (expectedRevision is { } expected && read.File!.Revision != expected)
                 || IsOwnerExpired(lease))
                 return MutateReject("lease_stale_generation");
 
