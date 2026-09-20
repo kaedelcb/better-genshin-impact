@@ -54,8 +54,10 @@ public static class TriggerOwnerKinds
 /// <summary>
 /// **R5.5 统一后台触发器台账（机制五a）——「挂载投影」语义（会诊整改）**：
 /// 台账是宿主**已挂载集合的可查视图**；**撤销不在此处发生**（`Apply/Remove/Clear` 为 `internal`，仅供宿主集合同源同步调用）。
-/// 实际撤销一律走宿主取消入口（页面「取消」按钮／`MistletoeViewModel.RevokeAllArmedTriggers`），集合移除后条目随之消失——
-/// 从而**不会**出现「台账说已撤、触发器仍在跑」的脱钩。**进程级**：不持久化（进程退出后台账为空且无残留挂载）。
+/// 实际撤销一律走宿主取消入口（页面「取消」按钮／`MistletoeViewModel.RevokeAllArmedTriggers`），集合移除后条目随之消失。
+/// **范围如实（三轮会诊收窄）**：由此只能主张「**外部无法借集合或同步器只清投影**」；
+/// **不构成**「撤销/通知/异步执行始终一致」的全称保证——集合通知订阅方抛错仍可能打断通知链，
+/// 该情形由宿主取消入口以「先取消 CTS／退订 → 再移除 → `finally` 按集合重建投影」收敛。**进程级**：不持久化。
 /// 线程安全（内部锁）；查询返回快照副本。
 /// </summary>
 public sealed class BackgroundTriggerLedger
@@ -190,7 +192,7 @@ public sealed class ArmedTriggerLedgerSync
     }
 
     /// <summary>按当前快照重建（Reset/兜底）：先清该类条目与实例表，再按快照登记。</summary>
-    private void ResetTo(IReadOnlyList<object> currentSnapshot)
+    internal void ResetTo(IReadOnlyList<object> currentSnapshot)
     {
         _ledger.RemoveKind(_kind);
         _instanceIds.Clear();

@@ -2006,12 +2006,12 @@ M1 的①—⑤与 §3.2「E1 发送前固定 candidateId→runId→首节点提
 ### 20.2 台账三件套（所有权／挂载时刻／意图／撤销入口）
 
 - **实现**：`BackgroundTriggerLedger`（登记／查询／快照；**进程级、不持久化**——与「启动中心临时触发器不跨重启恢复」一致）。
-- **语义＝挂载投影（会诊整改）**：台账是宿主**已挂载集合的可查视图**；**撤销不在台账内发生**——`Apply/Remove/RemoveKind` 为 `internal`，仅供集合同源同步调用；**公开面只有查询**（`List/TryGet/Count`）。从而不会出现「台账说已撤、触发器仍在跑」的脱钩。
-- **实际撤销入口**：各列表的「取消」按钮，或 `MistletoeViewModel.RevokeAllArmedTriggers()`——后者把**快照与取消同处 UI 串行边界**、单项异常隔离并如实报告；逐个走既有 `CancelTimer/CancelWatchdog/CancelLogTrigger` ⇒ 取消 CTS／退订日志 ⇒ 集合移除 ⇒ 条目随之消失。
+- **语义＝挂载投影（会诊整改）**：台账是宿主**已挂载集合的可查视图**；**撤销不在台账内发生**——`Apply/Remove/RemoveKind` 为 `internal`，仅供集合同源同步调用；**公开面只有查询**（`List/TryGet/Count`）。**范围如实（三轮会诊收窄）**：由此只能主张「**外部无法借集合或同步器只清投影**」——**不构成**「撤销／通知／异步执行始终一致」的全称保证（集合通知订阅方抛错仍可能打断通知链）。
+- **实际撤销入口**：各列表的「取消」按钮，或 `MistletoeViewModel.RevokeAllArmedTriggers()`——后者把**快照与取消同处 UI 串行边界**、单项异常隔离并如实报告；逐个走既有 `CancelTimer/CancelWatchdog/CancelLogTrigger`，其顺序为「**先取消 CTS（日志触发器先退订）→ 再集合移除 → `finally` 按集合重建投影**」，故通知订阅方抛错**不会跳过取消**、投影亦按实际集合收敛。
 - **变更面封闭（第二轮会诊整改）**：三个 `Armed*` 集合对外改为 **`ReadOnlyObservableCollection` 只读视图**（可变集合 `Armed*Mutable` 为 `internal`；XAML 与窗口仍绑只读视图）；同步器构造函数与 `ResetTo` **均非 public** —— 外部无法借同步器只清投影而不撤销触发器。
 - **同源同步**：`ArmedTriggerLedgerSync` 按 `NotifyCollectionChangedAction` 处理 **Add／Remove／Replace／Reset／Move**（`Reset` 按当前快照重建、不残留陈旧；`Move` 不变更成员；`Replace` 先销旧再登新），**按实例引用计数**（同实例重复加入＝一条；撤下一次不注销，归零才注销），**按实例分配进程内唯一编号**（不用哈希）并对标识分段转义。
 - **所有权如实**：启动中心临时触发器无运行台账身份（`StartupFlowConfig` 无 runId）⇒ 登记为「启动链（进程级）＋节点身份」（`startup-chain(process)/step:<id>`）；**不得**写成 task-center 触发出身身份；台账保留 `task-center-trigger`／`manual` 常量。
-- **证据**：`R55BackgroundTriggerLedgerTests`（**13 条**：登记/查询、Remove、Reset 无陈旧、Move 不变、Replace 换条、引用计数、**登记后描述变化/变 null 仍能正确注销**（用登记时保存的标识）、异实例唯一编号、分段转义、**台账与同步器均无公开变更面**、作用域界限、VM 接线＋真撤销入口守卫）。
+- **证据**：`R55BackgroundTriggerLedgerTests`（**14 条**：登记/查询、Remove、Reset 无陈旧、Move 不变、Replace 换条、引用计数、**登记后描述变化/变 null 仍能正确注销**（用登记时保存的标识）、异实例唯一编号、分段转义、**台账与同步器均无公开变更面**、作用域界限、VM 接线＋真撤销入口守卫）。
 - **能力边界（如实）**：同步器逻辑由纯逻辑夹具覆盖；**VM 生命周期三维（arm／自动收场／取消）与 UI 装配未被夹具覆盖**（仅源码接线文本守卫）。
 ### 20.3 回溯边界维持（§2④a-2）
 

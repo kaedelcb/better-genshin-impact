@@ -51,7 +51,8 @@ public sealed class MistletoeViewModel : ViewModelBase
         foreach (var s in _schemeStore.Load()) Schemes.Add(new SchemeItemViewModel(s));
         // R5.5／§2④a-1：统一触发器台账是**已挂载集合的投影**——集合变更（含 Replace/Reset/Move）由同步器按
         // `NotifyCollectionChangedAction` 正确处理；**实际撤销仍走各列表的「取消」按钮**（或 RevokeAllArmedTriggers），
-        // 集合移除后台账条目随之消失（不存在「台账说已撤、触发器仍在跑」）。台账**进程级**（见 TriggerScope）。
+        // 集合移除后台账条目随之消失；**范围如实**：此举只能保证「外部无法借集合/同步器只清投影」，不构成
+        // 「撤销/通知/异步始终一致」的全称保证——取消入口以「先取消 CTS → 再移除 → finally 重建投影」收敛通知异常。台账**进程级**。
         _timerLedgerSync = new ArmedTriggerLedgerSync(TriggerLedger, "timer", TriggerOwnerKinds.StartupChain,
             TriggerScope.ProcessEphemeral, RevokeEntryText, item => item is ArmedTimerViewModel t
                 ? new ArmedTriggerDescriptor(OwnerRefOf(t.Step), IntentOfArmed("timer", t.Step), "") : null);
@@ -895,8 +896,15 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>取消一个定时中的触发器（页面「取消」按钮）。</summary>
     internal void CancelTimer(ArmedTimerViewModel timer)
     {
-        RunOnUi(() => ArmedTimersMutable.Remove(timer));
+        // 会诊整改：**先取消**（集合通知订阅方抛错不得跳过取消），再移除并在 finally 按集合**重建投影**
+        // （通知异常导致同步漏更新时，投影仍与集合一致）。
         timer.Cts.Cancel();
+        RunOnUi(() =>
+        {
+            try { ArmedTimersMutable.Remove(timer); }
+            catch (Exception ex) { _mainVm.AddLog($"[槲寄生] 移除定时触发器「{timer.Title}」时集合通知出错：{ex.Message}"); }
+            finally { _timerLedgerSync.ResetTo(ArmedTimersMutable.Cast<object>().ToList()); }
+        });
     }
 
     // ================= 电子狗（盯梢中的循环检测列表） =================
@@ -1063,8 +1071,13 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>取消一个盯梢中的电子狗（页面「取消」按钮）。</summary>
     internal void CancelWatchdog(ArmedWatchdogViewModel dog)
     {
-        RunOnUi(() => ArmedWatchdogsMutable.Remove(dog));
-        dog.Cts.Cancel();
+        dog.Cts.Cancel(); // 先取消（同 CancelTimer 口径：通知异常不跳过取消）
+        RunOnUi(() =>
+        {
+            try { ArmedWatchdogsMutable.Remove(dog); }
+            catch (Exception ex) { _mainVm.AddLog($"[槲寄生] 移除电子狗「{dog.Title}」时集合通知出错：{ex.Message}"); }
+            finally { _watchdogLedgerSync.ResetTo(ArmedWatchdogsMutable.Cast<object>().ToList()); }
+        });
     }
 
     // ================= 日志触发器（监听中的日志触发器列表） =================
@@ -1171,9 +1184,14 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>取消一个监听中的日志触发器（页面「取消」按钮）：先退订再 Cancel，循环任务自行退出并清理。</summary>
     internal void CancelLogTrigger(ArmedLogTriggerViewModel trig)
     {
-        if (_logTail != null) _logTail.EntryReceived -= trig.OnLogEntry;
-        RunOnUi(() => ArmedLogTriggersMutable.Remove(trig));
-        trig.Cts.Cancel();
+        if (_logTail != null) _logTail.EntryReceived -= trig.OnLogEntry; // 先退订
+        trig.Cts.Cancel();                                              // 再取消（在飞触发链被取消，通知异常不跳过）
+        RunOnUi(() =>
+        {
+            try { ArmedLogTriggersMutable.Remove(trig); }
+            catch (Exception ex) { _mainVm.AddLog($"[槲寄生] 移除日志触发器「{trig.Title}」时集合通知出错：{ex.Message}"); }
+            finally { _logLedgerSync.ResetTo(ArmedLogTriggersMutable.Cast<object>().ToList()); }
+        });
     }
 
     /// <summary>弹窗只读展示一条子链的流程内容（定时器/电子狗行的「流程」按钮）。</summary>

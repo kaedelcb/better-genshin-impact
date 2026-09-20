@@ -204,6 +204,38 @@ public class R55BackgroundTriggerLedgerTests
         Assert.DoesNotContain(typeof(ArmedTriggerLedgerSync).GetMethods().Where(m => m.IsPublic).Select(m => m.Name),
             n => n is "ResetTo" or "Apply" or "Remove" or "RemoveKind");
     }
+    /// <summary>
+    /// **会诊反例（第 3 轮）**：集合通知订阅方抛错时，同步回调可能**未执行** ⇒ 投影会陈旧；
+    /// 宿主取消入口在 `finally` 中按集合**重建投影**（`ResetTo`）恢复一致。本用例验证该恢复机制：
+    /// ①抛错后集合本身已完成移除（可用于重建）；②重建后投影与集合一致（无陈旧条目）。
+    /// </summary>
+    [Fact]
+    public void ThrowingCollectionNotification_ResyncRestoresConsistency()
+    {
+        var ledger = new BackgroundTriggerLedger();
+        var sync = new ArmedTriggerLedgerSync(ledger, "timer", TriggerOwnerKinds.StartupChain, TriggerScope.ProcessEphemeral,
+            "列表「取消」按钮", item => new ArmedTriggerDescriptor("owner:" + item, "意图", ""), () => Now);
+        var collection = new System.Collections.ObjectModel.ObservableCollection<object>();
+        var item = new object();
+
+        // 先登记的订阅方抛错（模拟外部订阅者）：它先于同步回调执行 ⇒ 同步回调被跳过
+        collection.CollectionChanged += (_, _) => throw new InvalidOperationException("外部订阅方抛错");
+        collection.CollectionChanged += (_, e) => sync.OnCollectionChanged(e.Action, e.OldItems, e.NewItems, collection.ToList());
+
+        // Add 通知同样被首个订阅方打断（这正是要复现的失败模式）⇒ 显式重建一次建立基线
+        Assert.Throws<InvalidOperationException>(() => collection.Add(item));
+        Assert.Single(collection);
+        sync.ResetTo(collection.ToList());
+        Assert.Equal(1, ledger.Count);
+
+        // Remove 通知被首个订阅方打断：同步回调未执行 ⇒ 投影暂时陈旧
+        Assert.Throws<InvalidOperationException>(() => collection.Remove(item));
+        Assert.Equal(1, ledger.Count);      // 陈旧（正是需要重建的原因）
+        Assert.Empty(collection);           // 集合本身已完成移除 ⇒ 可据其重建
+
+        sync.ResetTo(collection.ToList());  // 宿主取消入口 finally 中的重建
+        Assert.Empty(ledger.List());        // 恢复一致
+    }
     /// <summary>三类作用域界限互异，且启动中心背景触发器恒为进程级临时。</summary>
     [Fact]
     public void Scope_Boundaries_AreDistinct()
@@ -230,6 +262,18 @@ public class R55BackgroundTriggerLedgerTests
         Assert.Contains("CancelTimer(", text, StringComparison.Ordinal);
         Assert.Contains("CancelWatchdog(", text, StringComparison.Ordinal);
         Assert.Contains("CancelLogTrigger(", text, StringComparison.Ordinal);
+
+        // 取消顺序（会诊必改）：**先取消 CTS**，再移除集合（通知异常不得跳过取消）；移除处 finally 重建投影。
+        // 用**方法体内的连续片段**判定（文件较早处另有一处同形移除语句，不能按全局首次出现比较）。
+        var normalized = text.Replace("\r\n", "\n");
+        Assert.Contains("timer.Cts.Cancel();\n        RunOnUi(() =>", normalized, StringComparison.Ordinal);
+        Assert.Contains("dog.Cts.Cancel(); // 先取消", normalized, StringComparison.Ordinal);
+        Assert.Contains("trig.Cts.Cancel();", normalized, StringComparison.Ordinal);
+        Assert.Contains("try { ArmedTimersMutable.Remove(timer); }", normalized, StringComparison.Ordinal);
+        Assert.Contains("try { ArmedWatchdogsMutable.Remove(dog); }", normalized, StringComparison.Ordinal);
+        Assert.Contains("try { ArmedLogTriggersMutable.Remove(trig); }", normalized, StringComparison.Ordinal);
+        foreach (var resync in new[] { "_timerLedgerSync.ResetTo(", "_watchdogLedgerSync.ResetTo(", "_logLedgerSync.ResetTo(" })
+            Assert.Contains(resync, normalized, StringComparison.Ordinal);
     }
 
     private static string RepoRoot()
