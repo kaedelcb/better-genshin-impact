@@ -819,6 +819,26 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         Assert.True(next.BeginTransaction("t2").Success);
         next.Dispose();
     }
+    /// <summary>
+    /// **第 9 轮必改（文件/目录拓扑互换）**：`Added("sub")` 与 `Deleted("sub/a.json")` 这类**拓扑互换**必须
+    /// 在**登记期**被结构化拒绝（否则提交前崩溃后回滚「先恢复子路径、后删父路径」无法收敛）。
+    /// </summary>
+    [Fact]
+    public void RecordChanges_FileDirectoryTopologySwap_Rejected()
+    {
+        Seed("sub/a.json", "{\"a\":1}");                    // 基线下 sub 是目录
+        using var tx = NewTx();
+        tx.BeginTransaction("t1");
+        tx.TakeSnapshot();
+
+        var bad = tx.RecordChanges([
+            new ChangeRecord { Path = "sub", Kind = ChangeKind.Added },          // 想变成文件
+            new ChangeRecord { Path = "sub/a.json", Kind = ChangeKind.Deleted },
+        ]);
+        Assert.False(bad.Success);
+        Assert.StartsWith("unsupported_topology_change", bad.Reason, StringComparison.Ordinal);
+        Assert.Empty(tx.LoadManifest()!.ChangedFiles);      // 拒绝后不得留下部分变更归属
+    }
     [Theory]
     [InlineData(MigrationStage.Snapshotting)]
     [InlineData(MigrationStage.SnapshotReady)]

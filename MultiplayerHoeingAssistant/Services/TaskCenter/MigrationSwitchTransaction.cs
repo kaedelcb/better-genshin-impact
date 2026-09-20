@@ -189,6 +189,15 @@ public sealed class MigrationSwitchTransaction : IDisposable
         return false;
     }
 
+    /// <summary>路径前缀判定（a 为 b 的祖先目录）：用于**文件/目录拓扑互换**的登记拒绝。</summary>
+    internal static bool IsAncestorPath(string? a, string? b)
+    {
+        var ka = PathKey(a);
+        var kb = PathKey(b);
+        if (ka.Length == 0 || kb.Length == 0 || ka == kb) return false;
+        return kb.StartsWith(ka + "/", StringComparison.Ordinal);
+    }
+
     /// <summary>目标路径安全性：规范化后必须仍在 root 内，且**父目录链上无 reparse point**（逐段链接拒绝）。</summary>
     internal static bool IsSafeTarget(string root, string rel)
     {
@@ -368,6 +377,18 @@ public sealed class MigrationSwitchTransaction : IDisposable
                 };
                 if (!ok) return MigrationResult.Fail("change_baseline_mismatch:" + path, m.Stage);
                 batch.Add(new ChangeRecord { Path = path, Kind = c.Kind });
+            }
+
+            // **拓扑约束**：`Added` 路径不得与 `Modified/Deleted` 路径互为祖先——文件↔目录互换会让「先恢复子路径、
+            // 后删除父路径」无法收敛（父被新文件阻挡）。登记期结构化拒绝，避免提交前崩溃后进入不可恢复回滚。
+            var merged = m.ChangedFiles.Concat(batch).ToList();
+            foreach (var added in merged.Where(c => c.Kind == ChangeKind.Added))
+            {
+                foreach (var other in merged.Where(c => c.Kind != ChangeKind.Added))
+                {
+                    if (IsAncestorPath(added.Path, other.Path) || IsAncestorPath(other.Path, added.Path))
+                        return MigrationResult.Fail("unsupported_topology_change:" + added.Path + "<->" + other.Path, m.Stage);
+                }
             }
 
             foreach (var c in batch)
