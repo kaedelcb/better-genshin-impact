@@ -6,7 +6,7 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 /// **R5.7 旧补丁退出：静态残留守卫**（施工方内置、owner 0 点击）。
 /// R3.1 已删除旧计划表/连续运行/定时循环的字段与 UI 写入者（见 R3.1 分解与审计 §8）；本守卫在**助手侧**持续锁定
 /// 「这些旧标识符不得回归」。**能力边界（如实）**：①文本匹配（非语义识别），注释/同形字面量会误报、别名会漏报；
-/// ②**只扫助手侧**——BGI 侧（`BetterGenshinImpact/`）的同类标识符在本节以**一次性全仓扫描**取证（10 个标识符 0 命中，见 §22.2），
+/// ②**只扫助手侧 `*.cs`**（不含 XAML/改名实现），范围为**12 个指定标识符**；BGI 侧（`BetterGenshinImpact/`）同类标识符以**一次性全仓扫描**取证（见 §22.2），
 /// 其持续守卫归 R6 diff 收敛；③本守卫不证明「不存在两个调度器同时活跃」，并存防护论证见 §22.3。
 /// </summary>
 public sealed class LegacySchedulerResidueTests
@@ -24,6 +24,8 @@ public sealed class LegacySchedulerResidueTests
         "_continuousCompletionAction",
         "ScheduleName",
         "ContinuousCompletionAction",
+        "IndexId",
+        "NextConfiguration",
     ];
 
     [Fact]
