@@ -58,6 +58,8 @@ public sealed class MigrationManifest
     [JsonPropertyName("quiescedAtUtc")] public DateTimeOffset? QuiescedAtUtc { get; set; }
     /// <summary>取得静止窗口的会话标识（重启后不得凭历史记录提交）。</summary>
     [JsonPropertyName("quiesceSessionId")] public string? QuiesceSessionId { get; set; }
+    /// <summary>静止窗口**代次**（释放即失效；同实例重新取锁不得复用历史资格）。</summary>
+    [JsonPropertyName("quiesceGeneration")] public int QuiesceGeneration { get; set; }
     [JsonPropertyName("manifestIntegrity")] public string ManifestIntegrity { get; set; } = "";
 }
 
@@ -89,6 +91,8 @@ public sealed class MigrationSwitchTransaction : IDisposable
     private readonly string _sessionId = Guid.NewGuid().ToString("N");
     private FileStream? _lock;
     private IDisposable? _quiet;
+    private bool _quietValid;
+    private int _quietGeneration;
 
     public MigrationSwitchTransaction(string configRoot, string transactionRoot, Func<DateTimeOffset>? utcNow = null,
         Func<IDisposable>? quiesce = null, bool requireQuiescence = true, Action<MigrationStage>? stageHook = null)
@@ -103,6 +107,9 @@ public sealed class MigrationSwitchTransaction : IDisposable
     }
 
     public string ManifestPath => Path.Combine(_transactionRoot, "migration-manifest.json");
+
+    /// <summary>事务号**占用历史**（追加式；重复事务号一律拒绝——不依赖当前 manifest 是否仍在）。</summary>
+    public string HistoryPath => Path.Combine(_transactionRoot, "migration-history.txt");
     internal bool HoldsExclusiveLock => _lock is not null;
     internal string SessionId => _sessionId;
 
@@ -135,14 +142,57 @@ public sealed class MigrationSwitchTransaction : IDisposable
         return false;
     }
 
-    /// <summary>相对路径安全校验（拒绝绝对路径/盘符/.. /./空段）。</summary>
+    /// <summary>相对路径安全校验（拒绝绝对路径/盘符/.. /./空段，以及 Windows 别名「尾点/尾空格」段）。</summary>
     internal static bool IsSafeRelativePath(string? rel)
     {
         if (string.IsNullOrWhiteSpace(rel)) return false;
         var norm = rel.Replace('\\', '/');
         if (norm.StartsWith('/') || norm.Contains(':')) return false;
         foreach (var seg in norm.Split('/'))
+        {
             if (seg is ".." or "." || seg.Length == 0) return false;
+            if (seg.EndsWith('.') || seg.EndsWith(' ')) return false; // Windows 会去掉尾点/尾空格 ⇒ 别名冲突
+        }
+        return true;
+    }
+
+    /// <summary>路径身份规范化（与大小写无关比较用）：分隔符统一 + 去尾空格（不含大小写折叠）。</summary>
+    internal static string NormalizePath(string? rel)
+        => (rel ?? "").Replace('\\', '/').Trim();
+
+    /// <summary>路径**身份键**（Windows 语义：大小写不敏感）——基线、变更记录与实际文件操作三处统一使用。</summary>
+    internal static string PathKey(string? rel) => NormalizePath(rel).ToLowerInvariant();
+
+    /// <summary>按身份键查快照哈希（大小写不敏感；避免 `A.json` 与 `a.json` 在 Windows 上互相删改）。</summary>
+    internal static bool TryGetHashCaseInsensitive(IReadOnlyDictionary<string, string> hashes, string? path, out string? hash)
+    {
+        var key = PathKey(path);
+        foreach (var p in hashes)
+        {
+            if (PathKey(p.Key) == key)
+            {
+                hash = p.Value;
+                return true;
+            }
+        }
+        hash = null;
+        return false;
+    }
+
+    /// <summary>目标路径安全性：规范化后必须仍在 root 内，且**父目录链上无 reparse point**（逐段链接拒绝）。</summary>
+    internal static bool IsSafeTarget(string root, string rel)
+    {
+        if (!IsSafeRelativePath(rel)) return false;
+        var full = Path.GetFullPath(Path.Combine(root, NormalizePath(rel).Replace('/', Path.DirectorySeparatorChar)));
+        var prefix = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (!full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
+        var dir = new DirectoryInfo(Path.GetDirectoryName(full)!);
+        while (dir is not null && dir.FullName.Length >= Path.GetFullPath(root).Length)
+        {
+            if (dir.Exists && dir.Attributes.HasFlag(FileAttributes.ReparsePoint)) return false;   // 链接逃逸
+            if (string.Equals(dir.FullName.TrimEnd(Path.DirectorySeparatorChar), Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase)) break;
+            dir = dir.Parent;
+        }
         return true;
     }
 
@@ -182,19 +232,24 @@ public sealed class MigrationSwitchTransaction : IDisposable
                 if (!acq.Success) return acq;
             }
 
-            var existing = LoadManifest();
-            if (existing is not null)
+            if (File.Exists(ManifestPath))
             {
-                if (existing.Stage is not (MigrationStage.Committed or MigrationStage.RolledBack))
-                    return MigrationResult.Fail("pending_transaction_exists:" + existing.TransactionId, existing.Stage);
-                if (string.Equals(existing.TransactionId, transactionId, StringComparison.Ordinal))
-                    return MigrationResult.Fail("transaction_id_in_use", existing.Stage);
+                var validated = LoadValidated();
+                if (validated is null) return MigrationResult.Fail("pending_manifest_corrupt", MigrationStage.None);  // 存在但不可验证 ⇒ 保守阻断
+                if (validated.Stage is not (MigrationStage.Committed or MigrationStage.RolledBack))
+                    return MigrationResult.Fail("pending_transaction_exists:" + validated.TransactionId, validated.Stage);
+                if (string.Equals(validated.TransactionId, transactionId, StringComparison.Ordinal))
+                    return MigrationResult.Fail("transaction_id_in_use", validated.Stage);
             }
+            if (File.Exists(HistoryPath) && File.ReadAllLines(HistoryPath).Any(l => string.Equals(l.Trim(), transactionId, StringComparison.Ordinal)))
+                return MigrationResult.Fail("transaction_id_in_use", MigrationStage.None);        // 历史占用：事务号不复用
 
             var snapshotPath = SnapshotPathOf(transactionId, _sessionId);
             if (Directory.Exists(snapshotPath)) return MigrationResult.Fail("snapshot_path_in_use", MigrationStage.None);
 
             _quiet = _quiesce?.Invoke();                       // 静止窗口：覆盖全程，提交/回滚/释放时结束
+            _quietValid = _quiet is not null;
+            _quietGeneration++;
             var manifest = new MigrationManifest
             {
                 TransactionId = transactionId,
@@ -207,8 +262,10 @@ public sealed class MigrationSwitchTransaction : IDisposable
                 RollbackRehearsed = false,
                 QuiescedAtUtc = _quiet is null ? null : _utcNow(),
                 QuiesceSessionId = _quiet is null ? null : _sessionId,
+                QuiesceGeneration = _quiet is null ? 0 : _quietGeneration,
             };
             WriteManifest(manifest);
+            if (_quiet is not null) File.AppendAllText(HistoryPath, transactionId + Environment.NewLine);  // 占用历史（成功后登记）
             return MigrationResult.Ok(MigrationStage.Snapshotting);
         }
     }
@@ -230,7 +287,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
                 foreach (var file in EnumerateFiles(_configRoot))
                 {
                     var rel = Rel(file, _configRoot);
-                    if (!IsSafeRelativePath(rel)) return MarkBlocked("unsafe_path:" + rel);
+                    if (!IsSafeTarget(_configRoot, rel)) return MarkBlocked("unsafe_path:" + rel);
                     var bytes = File.ReadAllBytes(file);
                     var target = Path.Combine(m.SnapshotPath, rel.Replace('/', Path.DirectorySeparatorChar));
                     Directory.CreateDirectory(Path.GetDirectoryName(target)!);
@@ -238,7 +295,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
                     hashes[rel] = Sha256Hex(bytes);
                 }
             }
-            catch (IOException ex)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
                 return MarkBlocked("snapshot_io_failed:" + ex.GetType().Name);
             }
@@ -277,11 +334,12 @@ public sealed class MigrationSwitchTransaction : IDisposable
             var batch = new List<ChangeRecord>();
             foreach (var c in changes ?? [])
             {
+                if (c is null) return MigrationResult.Fail("null_change_record", m.Stage);
                 var path = (c.Path ?? "").Replace('\\', '/').Trim();
                 if (!IsSafeRelativePath(path)) return MigrationResult.Fail("unsafe_path:" + c.Path, m.Stage);
-                if (batch.Any(x => string.Equals(x.Path, path, StringComparison.OrdinalIgnoreCase)))
+                if (batch.Any(x => PathKey(x.Path) == PathKey(path)))
                     return MigrationResult.Fail("duplicate_change_path:" + path, m.Stage);
-                var inSnapshot = m.FileHashes.ContainsKey(path);
+                var inSnapshot = TryGetHashCaseInsensitive(m.FileHashes, path, out _);
                 var ok = c.Kind switch
                 {
                     ChangeKind.Added => !inSnapshot,
@@ -294,7 +352,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
 
             foreach (var c in batch)
             {
-                m.ChangedFiles.RemoveAll(x => string.Equals(x.Path, c.Path, StringComparison.OrdinalIgnoreCase));
+                m.ChangedFiles.RemoveAll(x => PathKey(x.Path) == PathKey(c.Path));
                 m.ChangedFiles.Add(c);
             }
             m.RollbackRehearsed = false;
@@ -400,8 +458,10 @@ public sealed class MigrationSwitchTransaction : IDisposable
             if (!string.IsNullOrEmpty(m.BlockedReason)) return MigrationResult.Fail("blocked:" + m.BlockedReason, m.Stage);
             if (!m.RollbackRehearsed || !string.Equals(m.RehearsalScope, RehearsalScopeOf(m), StringComparison.Ordinal))
                 return MigrationResult.Fail("rollback_not_rehearsed_for_current_scope", m.Stage);
-            if (_requireQuiescence && (m.QuiescedAtUtc is null || !string.Equals(m.QuiesceSessionId, _sessionId, StringComparison.Ordinal)))
-                return MigrationResult.Fail("no_quiescence_window", m.Stage);
+            if (_requireQuiescence && (!_quietValid || _quiet is null || m.QuiescedAtUtc is null
+                || !string.Equals(m.QuiesceSessionId, _sessionId, StringComparison.Ordinal)
+                || m.QuiesceGeneration != _quietGeneration))
+                return MigrationResult.Fail("no_quiescence_window", m.Stage);   // 须**实际存续**且同代次的窗口
             if (VerifySnapshot() is { Length: > 0 } bad) return MigrationResult.Fail("snapshot_invalid:" + bad, m.Stage);
 
             m.CommitMarker = m.TransactionId;
@@ -424,13 +484,16 @@ public sealed class MigrationSwitchTransaction : IDisposable
             if (m.Stage == MigrationStage.RolledBack) return MigrationResult.Ok(MigrationStage.RolledBack);
             if (!IsLegalAdvance(m.Stage, MigrationStage.RollingBack))
                 return MigrationResult.Fail("illegal_advance:" + m.Stage + "->RollingBack", m.Stage);
-            if (VerifySnapshot() is { Length: > 0 } bad) return MigrationResult.Fail("snapshot_invalid:" + bad, m.Stage);
 
+            // **先持久化封锁**（落 RollingBack 并清标记/演练资格）——此后即不可生产执行；
+            // 再做窗口/快照校验与恢复，失败一律 Blocked（失败处理产出仍可加载）。
             m.Stage = MigrationStage.RollingBack;
             m.RollbackRehearsed = false;
             m.RehearsalScope = null;
             m.CommitMarker = null;
             WriteManifest(m);
+            if (!EnsureQuiescence(m)) return MigrationResult.Fail("no_quiescence_window", m.Stage);
+            if (VerifySnapshot() is { Length: > 0 } bad) return MarkBlocked("rollback_snapshot_invalid:" + bad);
             return CompleteRollback(m);
         }
     }
@@ -445,7 +508,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
                 RestoreFromSnapshot(m, _configRoot);
                 DeleteRecordedAdditions(m, _configRoot);
             }
-            catch (IOException ex)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
                 return MarkBlocked("rollback_io_failed:" + ex.GetType().Name);
             }
@@ -482,6 +545,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
                 m.CommitMarker = null;
                 WriteManifest(m);
             }
+            if (!EnsureQuiescence(m)) return MigrationResult.Fail("no_quiescence_window", m.Stage);   // 恢复亦须有效窗口
             return CompleteRollback(m);
         }
     }
@@ -547,7 +611,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
         sb.Append(m.SnapshotManifestHash).Append('|').Append((int)m.Stage).Append('|').Append(m.CommitMarker ?? "<null>").Append('|');
         sb.Append(m.RollbackRehearsed ? '1' : '0').Append('|').Append(m.RehearsalScope ?? "<null>").Append('|');
         sb.Append(m.BlockedReason ?? "<null>").Append('|').Append(m.QuiescedAtUtc?.ToString("O") ?? "<null>").Append('|');
-        sb.Append(m.QuiesceSessionId ?? "<null>").Append('|');
+        sb.Append(m.QuiesceSessionId ?? "<null>").Append('|').Append(m.QuiesceGeneration).Append('|');
         foreach (var c in (m.ChangedFiles ?? []).OrderBy(c => c.Path, StringComparer.Ordinal))
             sb.Append(c.Path).Append(':').Append((int)c.Kind).Append(';');
         sb.Append('|').Append(ComputeSnapshotManifestHash(m.FileHashes ?? new Dictionary<string, string>(StringComparer.Ordinal)));
@@ -561,6 +625,11 @@ public sealed class MigrationSwitchTransaction : IDisposable
         if (m.SchemaVersion != 1) return false;
         if (!IsSafeTransactionId(m.TransactionId)) return false;
         if (!string.Equals(m.ConfigRoot, _configRoot, StringComparison.OrdinalIgnoreCase)) return false;
+        if (string.IsNullOrWhiteSpace(m.SnapshotPath) || string.IsNullOrWhiteSpace(m.RollbackEntry)) return false;  // 先验空值，避免 GetFullPath 抛异常
+        if (!string.Equals(Path.GetFileName(m.SnapshotPath.TrimEnd(Path.DirectorySeparatorChar)),
+                "snapshot-" + m.TransactionId + "-" + m.QuiesceSessionId, StringComparison.OrdinalIgnoreCase)
+            && !Path.GetFileName(m.SnapshotPath.TrimEnd(Path.DirectorySeparatorChar)).StartsWith("snapshot-" + m.TransactionId + "-", StringComparison.OrdinalIgnoreCase))
+            return false;                                                                                            // 快照归属绑定本事务
         if (!IsWithin(m.SnapshotPath, _transactionRoot)) return false;
         if (!Enum.IsDefined(m.Stage)) return false;
         if (m.FileHashes is null || m.ChangedFiles is null) return false;
@@ -568,15 +637,16 @@ public sealed class MigrationSwitchTransaction : IDisposable
         foreach (var c in m.ChangedFiles)
         {
             if (c is null || !IsSafeRelativePath(c.Path) || !Enum.IsDefined(c.Kind)) return false;
-            var inSnapshot = m.FileHashes.ContainsKey(c.Path);
+            var inSnapshot = TryGetHashCaseInsensitive(m.FileHashes, c.Path, out _);
             if (c.Kind == ChangeKind.Added && inSnapshot) return false;
             if (c.Kind is ChangeKind.Modified or ChangeKind.Deleted && !inSnapshot) return false;
         }
         if (m.Stage == MigrationStage.Committed)
         {
             if (string.IsNullOrEmpty(m.CommitMarker) || !string.Equals(m.CommitMarker, m.TransactionId, StringComparison.Ordinal)) return false;
+            if (!string.IsNullOrEmpty(m.BlockedReason)) return false;          // 已提交不得带 blocked
         }
-        else if (!string.IsNullOrEmpty(m.CommitMarker)) return false;
+        else if (!string.IsNullOrEmpty(m.CommitMarker)) return false;          // 非提交态不得带标记（含 Blocked）
         if (m.Stage == MigrationStage.RolledBack && (m.RollbackRehearsed || m.RehearsalScope is not null)) return false;
         if (m.RollbackRehearsed && string.IsNullOrEmpty(m.RehearsalScope)) return false;
         if (m.BlockedReason is { Length: 0 }) return false;
@@ -617,6 +687,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
         m.Stage = MigrationStage.Blocked;
         m.RollbackRehearsed = false;
         m.RehearsalScope = null;
+        m.CommitMarker = null;                 // 与校验规则一致：Blocked 态不得带提交标记（失败处理产出仍可加载）
         WriteManifest(m);
         return MigrationResult.Fail(reason, MigrationStage.Blocked);
     }
@@ -666,7 +737,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
     {
         foreach (var rel in m.FileHashes.Keys)
         {
-            if (!IsSafeRelativePath(rel)) continue;
+            if (!IsSafeTarget(targetRoot, rel)) throw new InvalidOperationException("unsafe_target:" + rel);
             var source = Path.Combine(m.SnapshotPath, rel.Replace('/', Path.DirectorySeparatorChar));
             var target = Path.Combine(targetRoot, rel.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
@@ -679,16 +750,37 @@ public sealed class MigrationSwitchTransaction : IDisposable
     {
         foreach (var c in m.ChangedFiles.Where(c => c.Kind == ChangeKind.Added))
         {
-            if (!IsSafeRelativePath(c.Path)) continue;
+            if (!IsSafeTarget(targetRoot, c.Path)) continue;   // 不安全目标一律不删（保守）
             var target = Path.Combine(targetRoot, c.Path.Replace('/', Path.DirectorySeparatorChar));
             if (File.Exists(target)) File.Delete(target);
         }
     }
 
+    /// <summary>释放实际窗口并**使资格失效**（代次前进 ⇒ 历史时间戳/会话不可复用）。</summary>
     private void ReleaseQuiescence()
     {
         try { _quiet?.Dispose(); } catch { }
         _quiet = null;
+        _quietValid = false;
+        _quietGeneration++;
+    }
+
+    /// <summary>确保存在**有效（存续）**静止窗口：已有效则通过；否则重新取得并持久化会话/时刻/代次。</summary>
+    private bool EnsureQuiescence(MigrationManifest m)
+    {
+        if (!_requireQuiescence) return true;
+        if (!_quietValid || _quiet is null)
+        {
+            _quiet = _quiesce?.Invoke();
+            if (_quiet is null) return false;
+            _quietValid = true;
+            _quietGeneration++;
+        }
+        m.QuiescedAtUtc = _utcNow();
+        m.QuiesceSessionId = _sessionId;
+        m.QuiesceGeneration = _quietGeneration;
+        WriteManifest(m);
+        return true;
     }
 
     private static IEnumerable<string> EnumerateFiles(string root) => Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories);

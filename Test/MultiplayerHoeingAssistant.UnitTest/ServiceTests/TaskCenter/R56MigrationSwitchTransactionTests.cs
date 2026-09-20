@@ -363,6 +363,169 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         Assert.True(tx.AuthorizeProductionExecution().Success);
     }
 
+    [Fact]
+    public void CrashAfterStageWrite_NeverExecutable()
+    {
+        Seed("a.json", "{\"v\":1}");
+        var seen = new Dictionary<MigrationStage, int>();
+        var tx = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () => new NoopQuiet(), true,
+            stage =>
+            {
+                seen[stage] = seen.TryGetValue(stage, out var n) ? n + 1 : 1;
+                if (stage == MigrationStage.Activated && seen[stage] == 2)   // **写后**（第二次回调）崩溃
+                    throw new InvalidOperationException("模拟写入完成后崩溃");
+            });
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            tx.BeginTransaction("t1");
+            tx.TakeSnapshot();
+            tx.RecordChanges([new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified }]);
+            tx.MarkReferenceUpdateCompleted();
+            tx.MarkActivated();
+        });
+        tx.Dispose();
+
+        var probe = NewTx();
+        Assert.True(probe.TryAcquireExclusive().Success);
+        Assert.False(probe.AuthorizeProductionExecution().Success);
+        probe.Dispose();
+    }
+
+    [Fact]
+    public void RecoverFromPersistedRollingBack_ConvergesToOldState()
+    {
+        Seed("a.json", "{\"v\":1}");
+        var original = HashOf(Full("a.json"));
+        var phase = 0;
+        var tx = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () => new NoopQuiet(), true,
+            stage =>
+            {
+                if (stage == MigrationStage.RollingBack && ++phase == 2)    // RollingBack **已落盘**后崩溃（恢复尚未开始）
+                    throw new InvalidOperationException("回滚中断");
+            });
+        tx.BeginTransaction("t1");
+        tx.TakeSnapshot();
+        tx.RecordChanges([new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified }]);
+        tx.MarkReferenceUpdateCompleted();
+        tx.MarkActivated();
+        Assert.Throws<InvalidOperationException>(() => tx.Rollback());
+        tx.Dispose();
+
+        var probe = NewTx();
+        Assert.True(probe.TryAcquireExclusive().Success);
+        Assert.Equal(MigrationStage.RollingBack, probe.LoadManifest()!.Stage);   // 持久化在回滚中
+        Assert.True(probe.RecoverOnStart().Success);
+        Assert.Equal(MigrationStage.RolledBack, probe.LoadManifest()!.Stage);
+        Assert.Equal(original, HashOf(Full("a.json")));
+        probe.Dispose();
+    }
+
+    [Fact]
+    public void Baseline_CaseInsensitiveAlias_Rejected()
+    {
+        using var tx = Activated();
+        Assert.StartsWith("change_baseline_mismatch",
+            tx.RecordChanges([new ChangeRecord { Path = "A.json", Kind = ChangeKind.Added }]).Reason, StringComparison.Ordinal);
+        Assert.StartsWith("unsafe_path",
+            tx.RecordChanges([new ChangeRecord { Path = "a.json.", Kind = ChangeKind.Added }]).Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SameInstanceReLock_CannotReuseHistoricalQuiescence()
+    {
+        Seed("a.json", "{\"v\":1}");
+        var tx = NewTx();
+        tx.BeginTransaction("t1");
+        tx.TakeSnapshot();
+        tx.RecordChanges([new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified }]);
+        tx.MarkReferenceUpdateCompleted();
+        tx.MarkActivated();
+        tx.RehearseRollback();
+        tx.Dispose();                                     // 释放锁与窗口（代次前进）
+
+        tx.TryAcquireExclusive();
+        Assert.Equal("no_quiescence_window", tx.Commit().Reason);   // 同实例重取锁也不得复用历史资格
+        tx.Dispose();
+    }
+
+    [Fact]
+    public void Rollback_AfterCommit_AcquiresFreshQuiescence()
+    {
+        var quietCount = 0;
+        Seed("a.json", "{\"v\":1}");
+        var tx = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () =>
+        {
+            quietCount++;
+            return new NoopQuiet();
+        }, true);
+        tx.BeginTransaction("t1");
+        tx.TakeSnapshot();
+        tx.RecordChanges([new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified }]);
+        tx.MarkReferenceUpdateCompleted();
+        tx.MarkActivated();
+        tx.RehearseRollback();
+        Assert.True(tx.Commit().Success);
+        Assert.Equal(1, quietCount);                                 // 提交后窗口已释放
+
+        Seed("a.json", "{\"v\":2}");
+        Assert.True(tx.Rollback().Success, "提交后回滚应重新取得窗口并成功");
+        Assert.Equal(2, quietCount);
+        tx.Dispose();
+    }
+
+    [Fact]
+    public void PendingCorruptManifest_BlocksNewBegin()
+    {
+        Seed("a.json", "{\"v\":1}");
+        using var tx = NewTx();
+        Assert.True(tx.TryAcquireExclusive().Success);
+        Directory.CreateDirectory(_txRoot);
+        File.WriteAllText(tx.ManifestPath, "{ this is not json");
+        Assert.Equal("pending_manifest_corrupt", tx.BeginTransaction("t2").Reason);
+    }
+
+    [Fact]
+    public void TransactionId_HistoryReuse_Rejected()
+    {
+        Seed("a.json", "{\"v\":1}");
+        using var tx = NewTx();
+        tx.BeginTransaction("t1");
+        tx.TakeSnapshot();
+        tx.MarkReferenceUpdateCompleted();
+        tx.MarkActivated();
+        tx.RehearseRollback();
+        Assert.True(tx.Commit().Success);
+
+        var again = tx.BeginTransaction("t1");               // 历史占用：事务号不得复用
+        Assert.False(again.Success);
+        Assert.Equal("transaction_id_in_use", again.Reason);
+    }
+
+    [Fact]
+    public void ManifestIntegrity_NullSnapshotPath_StructuredReject()
+    {
+        using var tx = Activated(changes: [new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified }]);
+        tx.RehearseRollback();
+        tx.Commit();
+        var json = System.Text.RegularExpressions.Regex.Replace(
+            File.ReadAllText(tx.ManifestPath), "\"snapshotPath\":\\s*\"[^\"]*\"", "\"snapshotPath\": null");
+        File.WriteAllText(tx.ManifestPath, json);
+        Assert.Null(tx.LoadValidated());                     // 不得抛异常
+    }
+
+    [Fact]
+    public void StateCombination_CommittedWithBlocked_Rejected()
+    {
+        using var tx = Activated(changes: [new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified }]);
+        tx.RehearseRollback();
+        tx.Commit();
+        var m = tx.LoadManifest()!;
+        m.BlockedReason = "tampered";
+        m.ManifestIntegrity = MigrationSwitchTransaction.ComputeManifestIntegrity(m);
+        File.WriteAllText(tx.ManifestPath, System.Text.Json.JsonSerializer.Serialize(m, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        Assert.Null(tx.LoadValidated());                     // Committed + blocked 组合非法
+    }
+
     [Theory]
     [InlineData(MigrationStage.Snapshotting)]
     [InlineData(MigrationStage.SnapshotReady)]
@@ -373,7 +536,7 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
     {
         Seed("a.json", "{\"v\":1}");
         var original = HashOf(Full("a.json"));
-        using var tx = NewTx(hook: stage =>
+        var tx = NewTx(hook: stage =>
         {
             if (stage == crashAt) throw new InvalidOperationException("模拟阶段崩溃：" + stage);
         });
@@ -389,9 +552,11 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
             tx.Commit();
         });
 
-        using var probe = NewTx();
-        probe.TryAcquireExclusive();
+        tx.Dispose();                                     // 先释放锁（否则探针的失败只由 lock_not_held 解释）
+        var probe = NewTx();
+        Assert.True(probe.TryAcquireExclusive().Success, "探针须真正取到锁，否则授权失败可能只由 lock_not_held 解释");
         Assert.False(probe.AuthorizeProductionExecution().Success);
         Assert.Equal(original, HashOf(Full("a.json")));
+        probe.Dispose();
     }
 }
