@@ -202,7 +202,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
     {
         notCanonicalAt = "";
         var segments = NormalizePath(rel).Split('/', StringSplitOptions.RemoveEmptyEntries);
-        var current = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
+        var current = EnsureTrailingSeparator(root);   // 保留分隔符：`C:\` + seg 必须仍是**完全限定**路径
         for (var i = 0; i < segments.Length; i++)
         {
             var candidate = Path.Combine(current, segments[i]);
@@ -218,6 +218,14 @@ public sealed class MigrationSwitchTransaction : IDisposable
             current = candidate;
         }
         return true;
+    }
+
+    /// <summary>规范化并**保留尾分隔符**（避免 `C:\` 被裁剪成 `C:`；盘符相对路径会随当前目录漂移）。</summary>
+    internal static string EnsureTrailingSeparator(string path)
+    {
+        var full = Path.GetFullPath(path);
+        return full.EndsWith(Path.DirectorySeparatorChar) || full.EndsWith(Path.AltDirectorySeparatorChar)
+            ? full : full + Path.DirectorySeparatorChar;
     }
 
     /// <summary>绝对路径版规范名校验（从盘符/UNC 根逐段枚举比对；用于根路径别名防护）。</summary>
@@ -243,16 +251,16 @@ public sealed class MigrationSwitchTransaction : IDisposable
     internal static bool IsSafeTarget(string root, string rel)
     {
         if (!IsSafeRelativePath(rel)) return false;
-        var rootFull = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
+        var rootFull = EnsureTrailingSeparator(root);
         var full = Path.GetFullPath(Path.Combine(rootFull, NormalizePath(rel).Replace('/', Path.DirectorySeparatorChar)));
-        if (!full.StartsWith(rootFull + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return false;
+        if (!full.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase)) return false;
         if (File.Exists(full) && File.GetAttributes(full).HasFlag(FileAttributes.ReparsePoint))
             return false;                                                                         // **目标文件本身**是链接 ⇒ 拒绝
         var dir = new DirectoryInfo(Path.GetDirectoryName(full)!);
         while (dir is not null)
         {
             if (dir.Exists && dir.Attributes.HasFlag(FileAttributes.ReparsePoint)) return false;   // 父链任一段链接 ⇒ 拒绝
-            if (string.Equals(dir.FullName.TrimEnd(Path.DirectorySeparatorChar), rootFull, StringComparison.OrdinalIgnoreCase)) break;
+            if (string.Equals(EnsureTrailingSeparator(dir.FullName), rootFull, StringComparison.OrdinalIgnoreCase)) break;
             dir = dir.Parent;
         }
         return true;

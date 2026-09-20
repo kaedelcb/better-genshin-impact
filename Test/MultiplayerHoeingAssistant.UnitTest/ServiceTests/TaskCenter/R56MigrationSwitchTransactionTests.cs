@@ -937,6 +937,23 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         using var tx = NewTx();
         Assert.True(tx.BeginTransaction("t1").Success);
     }
+    /// <summary>
+    /// **第 14 轮必改（盘符根分隔符丢失）**：`EnsureTrailingSeparator` 必须保留根分隔符，
+    /// 使「根 + 首段」始终是**完全限定**路径（不得退化为 `C:Users` 这种随当前目录漂移的盘符相对路径）。
+    /// </summary>
+    [Fact]
+    public void EnsureTrailingSeparator_DriveRoot_KeepsAbsoluteSemantics()
+    {
+        var driveRoot = Path.GetPathRoot(Path.GetFullPath(_configRoot))!;      // 例如 "C:\"
+        var withSep = MigrationSwitchTransaction.EnsureTrailingSeparator(driveRoot);
+        Assert.EndsWith(Path.DirectorySeparatorChar.ToString(), withSep, StringComparison.Ordinal);
+        var combined = Path.Combine(withSep, "probe-segment");
+        Assert.True(Path.IsPathFullyQualified(combined), "根 + 首段必须仍为完全限定路径");
+        Assert.NotEqual("C:probe-segment", combined);
+
+        // 对真实配置根的绝对路径做规范名校验应通过（且不会因首段位置错误而“提前通过”）
+        Assert.True(MigrationSwitchTransaction.IsCanonicalAbsolutePath(Path.GetFullPath(_configRoot), out var bad), bad);
+    }
     [Theory]
     [InlineData(MigrationStage.Snapshotting)]
     [InlineData(MigrationStage.SnapshotReady)]
