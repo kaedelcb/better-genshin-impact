@@ -599,6 +599,45 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
     }
 
     /// <summary>
+    /// **§12.3 交错 ⑤（连续超 32 节点）验收**：整条 33 节点流程必须跑通且发送恰好 33 次——若节点操作
+    /// 未随时间结清，第 33 个占位会因 `operations_capacity_full` 失败；故本夹具是 G8「主槽位随责任结清释放」
+    /// 的端到端证据（同时断言全程未出现 `operations_capacity_full`）。
+    /// **附带登记（交错 ① 首节点抢先）**：本夹具**观测到的是已收口顺序**（首节点发送时 E1 操作已 Accepted）——
+    /// 「E1 未关闭时首节点抢先」需**强制**该交错，而现有 `AdmissionBarriers` 回调均在门面 `_gate` 内执行，
+    /// 在其中阻塞等待节点占位会自死锁；故强制版夹具**仍欠**（需新增门面 `_gate` 外的观察点，见设计稿 §15/§16）。
+    /// </summary>
+    [Fact]
+    public async Task NodeSubmit_33NodeFlow_NoCapacityExhaustion()
+    {
+        var root = NewRoot("tccap-");
+        try
+        {
+            var nodeIds = Enumerable.Range(1, 33).Select(i => "n-" + i).ToArray();
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: nodeIds);
+
+            Assert.True(probe.ReadOk, Diag("租约台账必须成功读取过", probe));
+            Assert.True(probe.Converged, Diag("33 节点流程必须收敛", probe));
+            Assert.True(probe.State == WorkflowRunState.Succeeded, Diag("33 节点流程应跑通", probe));
+            Assert.True(probe.SendCount == 33, Diag("应恰好发送 33 次（实际=" + probe.SendCount + "）", probe));
+            // 逐节点身份证据（会诊要求）：本 run 恰有 33 个**不同**节点的 successor 操作，每笔发送身份非空且唯一，
+            // 总计 34 条记录（33 successor + 1 条 E1 流程操作）——比「只看终态快照」更能证明逐节点登记与释放。
+            var nodeOps = probe.Ops.Where(o => !string.IsNullOrEmpty(o.Candidate?.NodeId)).ToList();
+            Assert.True(nodeOps.Count == 33, Diag("successor 操作数应为 33（实际=" + nodeOps.Count + "）", probe));
+            Assert.Equal(nodeIds.OrderBy(x => x), nodeOps.Select(o => o.Candidate!.NodeId).OrderBy(x => x));
+            Assert.Equal(33, nodeOps.Select(o => o.SubmissionIdentity).Distinct().Count());
+            Assert.DoesNotContain(nodeOps, o => string.IsNullOrEmpty(o.SubmissionIdentity));
+            Assert.True(probe.Ops.Count == 34, Diag("操作总数应为 34（33 successor + 1 E1；实际=" + probe.Ops.Count + "）", probe));
+            // 「全程无容量拒绝」的**原因码取证仍欠**（会诊指出：创建容量检查失败发生在新 Operation 登记之前，
+            // 原因经 AdmissionResult 返回、不保证出现在最终 Ops.LastResult；真实码形如
+            // operations_capacity_full(active=…)）。本夹具以「33 个不同节点操作全部登记成功且身份唯一」间接约束该失败路径。
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
     /// **G6 真实链路反例（会诊遗留阻断的端到端验收；范围已按会诊收窄）**：Sender **已返回 Accepted**、
     /// 接管台账已落盘，随后在**关闭调用之前**抛异常（`AdmissionBarriers.AfterLedgerBeforeClose` 注入）⇒
     /// 门面 `ProcessRoundAsync` 收敛为 `Error` ⇒ 宿主必须映射为 **Unknown**（不猜成功、也不猜失败），
