@@ -50,26 +50,54 @@ public static class MigrationRehearsal
     {
         if (string.IsNullOrWhiteSpace(rehearsalRoot))
             return Fail("", "", "", new MigrationRehearsalStep("参数校验", false, "rehearsalRoot 为空"));
-        var baseRoot = Path.GetFullPath(rehearsalRoot);
-        var root = Path.Combine(baseRoot, "rehearsal-" + Guid.NewGuid().ToString("N")[..8]);   // **每次新建、独占**
-        var configRoot = Path.Combine(root, "independent-config-root");
-        var transactionRoot = Path.Combine(root, "transaction");
+        string baseRoot;
+        string root;
+        string configRoot;
+        string transactionRoot;
+        try
+        {
+            if (!PathIdentity.TryNormalizeLocalDriveAbsolute(rehearsalRoot, out baseRoot))
+                return Fail("", "", "", new MigrationRehearsalStep("独立根校验", false,
+                    "演练根须为本地盘符绝对路径（拒绝相对/UNC/设备命名空间，未写入任何内容）"));
+            root = Path.Combine(baseRoot, "rehearsal-" + Guid.NewGuid().ToString("N")[..8]);   // **每次新建、独占**
+            configRoot = Path.Combine(root, "independent-config-root");
+            transactionRoot = Path.Combine(root, "transaction");
+        }
+        catch (Exception ex)
+        {
+            return Fail("", "", "", new MigrationRehearsalStep("独立根校验", false,
+                "演练根路径非法/无法解析（拒绝，未写入任何内容）：" + ex.GetType().Name));
+        }
         var steps = new List<MigrationRehearsalStep>();
 
         // ① **写入前**独立根校验：不得与真实 User 目录重叠（相等/包含/被包含），不得含重解析点，目标须尚不存在
-        if (!string.IsNullOrWhiteSpace(userConfigRoot))
+        try
         {
-            var user = Path.GetFullPath(userConfigRoot).TrimEnd(Path.DirectorySeparatorChar);
-            var cfg = configRoot.TrimEnd(Path.DirectorySeparatorChar);
-            if (string.Equals(user, cfg, StringComparison.OrdinalIgnoreCase)
-                || cfg.StartsWith(user + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
-                || user.StartsWith(cfg + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                return Fail(root, configRoot, transactionRoot, new MigrationRehearsalStep("独立根校验", false, "演练根与真实 User 目录重叠（拒绝，未写入任何内容）"));
+            if (!string.IsNullOrWhiteSpace(userConfigRoot))
+            {
+                // 先解析 Windows 最终路径身份，SUBST/映射盘/符号链接不会以字符串前缀漏判；
+                // 任一路径无法解析时拒绝，绝不退回纯字符串猜测。
+                if (!PathIdentity.TryCanonicalizeForComparison(userConfigRoot, out var user)
+                    || !PathIdentity.TryCanonicalizeForComparison(configRoot, out var cfg))
+                    return Fail(root, configRoot, transactionRoot, new MigrationRehearsalStep("独立根校验", false,
+                        "无法证明真实 User 根与演练配置根的实际路径身份（拒绝，未写入任何内容）"));
+                user = user.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                cfg = cfg.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (string.Equals(user, cfg, StringComparison.OrdinalIgnoreCase)
+                    || cfg.StartsWith(user + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                    || user.StartsWith(cfg + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    return Fail(root, configRoot, transactionRoot, new MigrationRehearsalStep("独立根校验", false, "演练根与真实 User 目录重叠（拒绝，未写入任何内容）"));
+            }
+            if (MigrationSwitchTransaction.HasReparsePoint(baseRoot))
+                return Fail(root, configRoot, transactionRoot, new MigrationRehearsalStep("独立根校验", false, "演练根链上存在重解析点（拒绝，未写入任何内容）"));
+            if (Directory.Exists(root) || File.Exists(root))
+                return Fail(root, configRoot, transactionRoot, new MigrationRehearsalStep("独立根校验", false, "演练目录已存在（须使用新建独占目录）"));
         }
-        if (MigrationSwitchTransaction.HasReparsePoint(baseRoot))
-            return Fail(root, configRoot, transactionRoot, new MigrationRehearsalStep("独立根校验", false, "演练根链上存在重解析点（拒绝，未写入任何内容）"));
-        if (Directory.Exists(root) || File.Exists(root))
-            return Fail(root, configRoot, transactionRoot, new MigrationRehearsalStep("独立根校验", false, "演练目录已存在（须使用新建独占目录）"));
+        catch (Exception ex)
+        {
+            return Fail(root, configRoot, transactionRoot, new MigrationRehearsalStep("独立根校验", false,
+                "用户配置根或演练根路径非法/无法解析（拒绝，未写入任何内容）：" + ex.GetType().Name));
+        }
         steps.Add(new MigrationRehearsalStep("独立根校验", true, "写入前校验通过：演练使用新建独占独立配置根"));
 
         var txId = "rehearsal-" + Guid.NewGuid().ToString("N")[..8];
@@ -114,7 +142,6 @@ public static class MigrationRehearsal
             var rollback = tx.Rollback();
             steps.Add(Step("真实回滚（恢复旧字节+按归属清理+撤销激活）", rollback));
             if (!rollback.Success) return Abort(tx, steps, root, configRoot, transactionRoot, txId);
-            // 全文件集比对：**完整文件集合 + 逐字节**（含被修改与未被修改者；新增文件须不存在）
             // 全文件集比对：**完整文件集合 + 逐字节**（含被修改与未被修改者；新增文件须不存在）
             var after = Directory.EnumerateFiles(configRoot, "*", SearchOption.AllDirectories)
                 .Select(f => Path.GetRelativePath(configRoot, f).Replace(Path.DirectorySeparatorChar, '/'))

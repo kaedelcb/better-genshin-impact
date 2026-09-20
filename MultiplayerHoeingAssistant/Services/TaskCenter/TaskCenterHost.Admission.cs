@@ -513,14 +513,32 @@ public sealed partial class TaskCenterHost
 
     /// <summary>
     /// **一键「迁移演练」（R5.8 §21.4 入口）**：在**助手数据根**下的独立目录（`migration-rehearsal/`）跑
-    /// **事务组件模拟演练**并返回报告；**不接触真实 User 目录**（演练根位于助手自身数据根内）。
+    /// **事务组件模拟演练**并返回报告；**助手数据根位置本身不是隔离证明**——写入前须由真实 User 根来源
+    /// 与新建独占演练根做重叠/链接校验，无法证明时**保守拒绝**。
     /// **语义限定**：不代表真实引用更新/激活已接线，也不执行真实 User 目录切换（须 owner 另行下令）。
     /// </summary>
     public MigrationRehearsalReport RunMigrationRehearsal()
     {
-        var root = _admissionRoot ?? Directory.GetParent(_runsDirPath ?? "")?.FullName ?? _runsDirPath ?? Path.GetTempPath();
-        var rehearsalRoot = Path.Combine(root, "migration-rehearsal");
-        var userRoot = UserConfigRootProvider?.Invoke();
+        string rehearsalRoot;
+        string? userRoot;
+        try
+        {
+            var root = _admissionRoot ?? Directory.GetParent(_runsDirPath ?? "")?.FullName ?? _runsDirPath ?? Path.GetTempPath();
+            rehearsalRoot = Path.Combine(root, "migration-rehearsal");
+            userRoot = UserConfigRootProvider?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            var refusal = new MigrationRehearsalReport
+            {
+                Success = false,
+                RehearsalRoot = "",
+                Steps = [new MigrationRehearsalStep("独立根校验", false,
+                    "真实 User 配置根来源调用或演练根解析失败（保守拒绝）：" + ex.GetType().Name)],
+            };
+            TryLog("[任务中心] 迁移演练已拒绝：" + refusal.Summary);
+            return refusal;
+        }
         if (string.IsNullOrWhiteSpace(userRoot))
         {
             // **保守拒绝**：无法证明与真实 User 目录隔离时，不得在可能位于 User 下的目录写演练产物。

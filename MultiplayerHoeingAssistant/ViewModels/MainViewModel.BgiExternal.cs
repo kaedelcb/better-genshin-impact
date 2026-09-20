@@ -46,15 +46,119 @@ public partial class MainViewModel
     }
 
     /// <summary>
-    /// **BGI User 配置根**（迁移演练隔离校验用）：取配置的 `BgiPath` 所在目录下的 `User`；
-    /// **未配置或无法解析 ⇒ `null`** ⇒ 宿主演练入口**保守拒绝**（不写任何产物）。
+    /// **BGI User 配置根**（迁移演练隔离校验用）：取**生产启动 BGI 所用的同一配置来源**
+    /// `BgiPath` 所在目录下的 `User`（与 BGI `AppContext.BaseDirectory/User` 约定对齐）。
+    /// **未配置、文件不存在、User 不存在/非目录、路径非法、含重解析点或无法解析 ⇒ `null`** ⇒
+    /// 宿主演练入口**保守拒绝**（不写演练产物、不改配置；诊断日志除外）。本方法只证明“配置的可执行文件路径可派生
+    /// 一个已存在的 User 目录”，**不单独证明**没有工作目录/别名导致的实际根差异；
+    /// 此类环境无法证明时返回 `null`，并在 R5.8 保留真实环境门禁。
     /// </summary>
     private string? ResolveBgiUserConfigRoot()
     {
-        var bgiPath = Config?.BgiPath;
-        if (string.IsNullOrWhiteSpace(bgiPath)) return null;
-        var dir = Path.GetDirectoryName(bgiPath);
-        return string.IsNullOrWhiteSpace(dir) ? null : Path.Combine(dir, "User");
+        if (!BgiProcessMonitor.TryGetCurrentSessionBgiProcessesStrict(out var processes, out _))
+            return null;
+        try
+        {
+            var images = processes.Select(p => p.MainModule?.FileName).ToArray();
+            return ResolveBgiUserConfigRootCore(Config?.BgiPath, images);
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            foreach (var process in processes)
+                process.Dispose();
+        }
+    }
+
+    /// <summary>生产判定核心：先证明运行实例同一性，再解析已存在的 User 根。</summary>
+    internal static string? ResolveBgiUserConfigRootCore(string? configuredBgiPath,
+        IReadOnlyList<string?> runningImagePaths)
+        => ResolveBgiUserConfigRootCore(configuredBgiPath, runningImagePaths, enumerationComplete: true);
+
+    /// <summary>严格枚举结果的核心判定；枚举不完整时无条件拒绝，不得把“读不到”当“没有实例”。</summary>
+    internal static string? ResolveBgiUserConfigRootCore(string? configuredBgiPath,
+        IReadOnlyList<string?> runningImagePaths, bool enumerationComplete)
+        => enumerationComplete
+            && MatchesRunningBgiImagePaths(configuredBgiPath, runningImagePaths)
+            ? TryResolveBgiUserConfigRoot(configuredBgiPath)
+            : null;
+
+    /// <summary>带枚举来源接缝的核心；来源抛错 ⇒ `null`（保守拒绝）。</summary>
+    internal static string? ResolveBgiUserConfigRootCore(string? configuredBgiPath,
+        Func<IReadOnlyList<string?>> runningImagePathsProvider)
+    {
+        try
+        {
+            return ResolveBgiUserConfigRootCore(configuredBgiPath, runningImagePathsProvider(), enumerationComplete: true);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>当前会话 BGI 实例与配置路径同一性：无实例=按配置目标；多实例/无法读取=保守拒绝。</summary>
+    private static bool MatchesRunningBgiImagePaths(string? configuredBgiPath,
+        IReadOnlyList<string?> runningImagePaths)
+    {
+        // 先做配置原值白名单，避免在配置非法时仍去探测运行映像。
+        if (string.IsNullOrWhiteSpace(configuredBgiPath)
+            || !PathIdentity.TryNormalizeLocalDriveAbsolute(configuredBgiPath, out _))
+            return false;
+        if (runningImagePaths.Count == 0)
+            return true;
+        if (runningImagePaths.Count != 1)
+            return false;
+
+        var imagePath = runningImagePaths[0];
+        if (string.IsNullOrWhiteSpace(imagePath))
+            return false;
+        if (!PathIdentity.TryCanonicalizeForComparison(imagePath, out var actual)
+            || !PathIdentity.TryCanonicalizeForComparison(configuredBgiPath, out var configured))
+            return false;
+
+        actual = actual.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        configured = configured.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return string.Equals(actual, configured, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>生产解析核心（internal 供夹具直接验证；不得用替身测试替代）。</summary>
+    internal static string? TryResolveBgiUserConfigRoot(string? configuredBgiPath)
+    {
+        try
+        {
+            // 先校验原始配置值，再做任何规范化；否则首尾控制字符可能被 Trim 静默吞掉。
+            if (string.IsNullOrWhiteSpace(configuredBgiPath) || configuredBgiPath.Any(char.IsControl))
+                return null;
+
+            if (!PathIdentity.TryNormalizeLocalDriveAbsolute(configuredBgiPath, out var fullBgiPath))
+                return null;
+            if (!File.Exists(fullBgiPath))
+                return null;
+            // 符号链接/junction 会使“配置路径目录”与 BGI 进程实际 BaseDirectory 可能不一致；
+            // 无法证明时保守返回 null，由宿主拒绝演练。
+            if (File.GetAttributes(fullBgiPath).HasFlag(FileAttributes.ReparsePoint))
+                return null;
+
+            var dir = Path.GetDirectoryName(fullBgiPath);
+            if (string.IsNullOrWhiteSpace(dir) || MigrationSwitchTransaction.HasReparsePoint(dir))
+                return null;
+
+            var userRoot = Path.Combine(dir, "User");
+            if (!Directory.Exists(userRoot))
+                return null;
+            if (MigrationSwitchTransaction.HasReparsePoint(userRoot))
+                return null;
+            return Path.GetFullPath(userRoot);
+        }
+        catch
+        {
+            // 路径解析/属性读取异常不向宿主抛出：返回 null，宿主按“真实 User 根未知”结构化拒绝。
+            return null;
+        }
     }
     /// <summary>[切片1] 事件通道探测退避：Legacy（老 BGI）或暂时连不上时，到此时间点之前不再探测。</summary>
     private DateTime _externalNextProbeUtc = DateTime.MinValue;

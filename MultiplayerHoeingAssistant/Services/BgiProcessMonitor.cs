@@ -79,6 +79,110 @@ public class BgiProcessMonitor : IDisposable
         return matched.ToArray();
     }
 
+    /// <summary>
+    /// **严格枚举（隔离判定专用）**：返回 false 表示无法证明枚举完整（会话读取失败、进程会话身份未知/访问失败、
+    /// 枚举 API 抛错等）。成功时调用方拥有返回数组，必须逐个 Dispose。
+    /// 与宽容版分开，避免改变守护/UI 既有“读不到按不存在处理”的容错合同。
+    /// </summary>
+    internal static bool TryGetCurrentSessionBgiProcessesStrict(out Process[] processes, out string? uncertainty)
+        => TryGetCurrentSessionBgiProcessesStrictCore(
+            () => Process.GetProcessesByName("BetterGI"),
+            () => { using var current = Process.GetCurrentProcess(); return current.SessionId; },
+            process => process.SessionId,
+            process => process.HasExited,
+            out processes,
+            out uncertainty);
+
+    /// <summary>严格枚举的生产共用入口；枚举/当前会话读取抛错时返回 false。</summary>
+    internal static bool TryGetCurrentSessionBgiProcessesStrictCore(
+        Func<Process[]> enumerateProcesses,
+        Func<int> readCurrentSession,
+        Func<Process, int> readSessionId,
+        Func<Process, bool> readHasExited,
+        out Process[] processes,
+        out string? uncertainty,
+        Action<Process>? disposeProcess = null)
+    {
+        processes = [];
+        uncertainty = null;
+        try
+        {
+            // 先读当前会话：即使后续枚举抛错，也不会留下已枚举但无人释放的数组。
+            var currentSession = readCurrentSession();
+            var all = enumerateProcesses();
+            return TryGetCurrentSessionBgiProcessesStrictCore(
+                all,
+                currentSession,
+                readSessionId,
+                readHasExited,
+                out processes,
+                out uncertainty,
+                disposeProcess);
+        }
+        catch (Exception ex)
+        {
+            uncertainty = ex.GetType().Name;
+            return false;
+        }
+    }
+
+    /// <summary>严格枚举的生产共用核心；委托仅供故障注入夹具使用，生产调用真实 Process 属性。</summary>
+    internal static bool TryGetCurrentSessionBgiProcessesStrictCore(
+        Process[] all,
+        int currentSession,
+        Func<Process, int> readSessionId,
+        Func<Process, bool> readHasExited,
+        out Process[] processes,
+        out string? uncertainty,
+        Action<Process>? disposeProcess = null)
+    {
+        processes = [];
+        uncertainty = null;
+        var matched = new List<Process>();
+        var success = false;
+        try
+        {
+            foreach (var process in all)
+            {
+                try
+                {
+                    if (readSessionId(process) == currentSession)
+                        matched.Add(process);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    // SessionId 读失败不必然等于进程已退出；只有 HasExited 明确为 true 才能安全忽略。
+                    var exited = false;
+                    try { exited = readHasExited(process); } catch { }
+                    if (!exited)
+                    {
+                        uncertainty = ex.GetType().Name;
+                        return false;
+                    }
+                }
+            }
+
+            processes = matched.ToArray();
+            success = true;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            uncertainty = ex.GetType().Name;
+            return false;
+        }
+        finally
+        {
+            var dispose = disposeProcess ?? (process => process.Dispose());
+            // 成功时 matched 所有权转移给调用方；失败时全部释放。
+            foreach (var process in all)
+            {
+                if (!success || !matched.Contains(process))
+                    dispose(process);
+            }
+        }
+    }
+
     /// <summary>只读枚举本机所有会话的 BGI 实例，供启动中心状态条件使用；不用于控制、杀进程或重启。</summary>
     public static Process[] GetAllSessionBgiProcesses() =>
         Process.GetProcessesByName("BetterGI");
