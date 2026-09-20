@@ -2008,4 +2008,147 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(AdmissionResultKind.TerminalRejected, stillSuppressed.Kind);
         Assert.Equal("ticket_suppressed", stillSuppressed.ReasonCode);
         Assert.Equal(0, sends);
+    }
+    // ── 45. R5.3.2 被切任务三选（放弃／顺延／显式重投）：准入面不变量 ──
+
+    /// <summary>
+    /// **R5.3.2（三选之一·放弃）**：被切源按 D15/D12 钉死归类 ⇒ 操作**终局完成**；此后 `RetryAsync`
+    /// **只返回既有终局事实（`already_terminal`）**，**不重发、不消耗重试预算、不再触发有界重试**。
+    /// </summary>
+    [Fact]
+    public async Task Preempted_Abandon_TerminalNoRetryNoResend()
+    {
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); };
+            h.TakeoverTerminalConfirmed = (_, _) => true;
+        });
+
+        var r = Req(trigger: "fixture:preempted-abandon", workflow: "wf-abandon");
+        r.Candidate!.NodeId = "n-1";
+        r.RunBinding = "run-1";
+        r.CursorRef = "n-1#0#0";
+        r.CursorRevision = 1;
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(r)).Kind);
+        Assert.Equal(AdmissionResultKind.Accepted, svc.MarkOperationTerminal(r.RequestIdentity, "node_outcome:被切源归类=skippedUser（D15 收尾合同）").Kind);
+
+        var afterTerminal = FindOp(r.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.TerminalCompleted, afterTerminal.RequestState);
+        var sendsBefore = sends;
+
+        var retry = await svc.RetryAsync(r.RequestIdentity);
+
+        Assert.Equal("already_terminal", retry.ReasonCode);                      // 返回既有终局事实（非新发送）
+        Assert.Equal(sendsBefore, sends);                                        // 不重发
+        Assert.Equal(OperationRequestState.TerminalCompleted, FindOp(r.RequestIdentity)!.RequestState); // 不回退
+    }
+
+    /// <summary>
+    /// **R5.3.2（三选之二·顺延）**：窗口内的「重新参选」必须是**显式新提交**（新出现身份 ⇒ 新操作）——
+    /// 旧被切操作**不被复活/改写**；自动路径（`RetryAsync`）只返回既有终局。
+    /// </summary>
+    [Fact]
+    public async Task Preempted_Deferred_RequiresExplicitNewSubmission()
+    {
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); };
+            h.TakeoverTerminalConfirmed = (_, _) => true;
+        });
+
+        var first = Req(trigger: "fixture:defer-a", workflow: "wf-defer");
+        first.Candidate!.NodeId = "n-9";
+        first.RunBinding = "run-9";
+        first.CursorRef = "n-9#0#0";
+        first.CursorRevision = 1;
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(first)).Kind);
+        Assert.Equal(AdmissionResultKind.Accepted, svc.MarkOperationTerminal(first.RequestIdentity, "node_outcome:被切源归类=skippedUser").Kind);
+
+        // 自动路径：不复活。
+        Assert.Equal("already_terminal", (await svc.RetryAsync(first.RequestIdentity)).ReasonCode);
+
+        // 显式新提交（同一窗口、同一节点、新出现身份）⇒ 新操作获准。
+        var second = Req(trigger: "fixture:defer-b", workflow: "wf-defer");
+        second.Candidate!.NodeId = "n-9";
+        second.RunBinding = "run-9";
+        second.CursorRef = "n-9#0#1";
+        second.CursorRevision = 2;
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(second)).Kind);
+
+        Assert.NotEqual(first.RequestIdentity, second.RequestIdentity);
+        Assert.Equal(OperationRequestState.TerminalCompleted, FindOp(first.RequestIdentity)!.RequestState); // 旧操作未被改写
+        Assert.Equal(2, sends);
+    }
+
+    /// <summary>
+    /// **R5.3.2（三选之二·跨窗不补跑）**：窗口关闭（资格事实不满足）⇒ 提交**终局拒绝**（`eligibility_lost`）、
+    /// **零发送**——跨窗**不补跑**，也不得凭旧操作自动复活。
+    /// </summary>
+    [Fact]
+    public async Task Preempted_OutsideWindow_RejectedNoBackfill()
+    {
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); };
+            h.EligibilityProvider = _ => new CandidateEligibility { IsDue = true, PrerequisiteReady = true, FlexibleWindowOpen = false }; // 跨窗
+        });
+
+        var r = Req(trigger: "fixture:backfill-closed", workflow: "wf-backfill");
+        r.Candidate!.NodeId = "n-7";
+
+        var result = await svc.SubmitAsync(r);
+
+        // 资格筛选在**轮次级**完成：窗口关闭 ⇒ 本地未获选终局（**非**发送后的远端拒绝回执），零发送、不补跑。
+        Assert.Equal(AdmissionResultKind.NotSelected, result.Kind);
+        Assert.Equal("window_closed", result.ReasonCode);
+        Assert.Equal("eligibility", result.SuppressionSource);
+        Assert.Equal(0, sends);
+        var op = FindOp(r.RequestIdentity)!;
+        Assert.Equal(0, op.LastSendSeq);
+        Assert.Equal(OperationRequestState.NotSelected, op.RequestState);
+    }
+
+    /// <summary>
+    /// **R5.3.2（三选之三·显式重投＝新 attempt/新提交键）**：确认取消后重投**不是**复活旧操作——
+    /// 新 attempt 既改变 `RunStore` 幂等提交键，也改变仲裁候选身份（attempt 属 stableIdentity 八段）
+    /// ⇒ 两操作并存、**不合并**（不违反 D11/D3），且**旧被切操作不被改写**。
+    /// </summary>
+    [Fact]
+    public async Task Preempted_ReRunWithNewAttempt_NewKeyNewIdentity_OldOpUnchanged()
+    {
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); };
+            h.TakeoverTerminalConfirmed = (_, _) => true;
+        });
+
+        var a1 = Req(trigger: "fixture:rerun", workflow: "wf-rerun");
+        a1.Candidate!.Attempt = 1;
+        a1.Candidate.NodeId = "n-3";
+        a1.RunBinding = "run-3";
+        a1.CursorRef = "n-3#0#0";
+        a1.CursorRevision = 1;
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(a1)).Kind);
+        Assert.Equal(AdmissionResultKind.Accepted, svc.MarkOperationTerminal(a1.RequestIdentity, "node_outcome:被切源归类=skippedUser").Kind);
+
+        var a2 = Req(trigger: "fixture:rerun", workflow: "wf-rerun");
+        a2.Candidate!.Attempt = 2;
+        a2.Candidate.NodeId = "n-3";
+        a2.RunBinding = "run-3";
+        a2.CursorRef = "n-3#0#1";
+        a2.CursorRevision = 2;
+        var accepted2 = await svc.SubmitAsync(a2);
+
+        Assert.Equal(AdmissionResultKind.Accepted, accepted2.Kind);
+        Assert.NotEqual(a1.RequestIdentity, a2.RequestIdentity);
+        Assert.NotEqual(FindOp(a1.RequestIdentity)!.CandidateId, FindOp(a2.RequestIdentity)!.CandidateId); // attempt 进身份 ⇒ 不合并
+        Assert.Equal(OperationRequestState.TerminalCompleted, FindOp(a1.RequestIdentity)!.RequestState);   // 旧操作未被改写
+        Assert.NotEqual(
+            RunStore.DeriveSubmissionKey("run-3", "n-3", 0, 0, 1),
+            RunStore.DeriveSubmissionKey("run-3", "n-3", 0, 0, 2));                                        // 新 attempt ⇒ 新幂等提交键
+        Assert.Equal(2, sends);
     }}
