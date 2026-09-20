@@ -1355,8 +1355,19 @@ public sealed partial class TaskCenterHost
 
         // 与 Runner 侧共用同一「生产边界组装点」（会诊复审：不得在此另 new 一份，否则预检/发送分裂）。
         var inner = CreateProductionBoundary(c);
-        var prepared = inner.PrepareSubmit(new WorkflowSubmitRequest(run, occ, node, ctx.Suppress),
-            authorizedEpoch: d.TargetEpoch); // 授权纪元＝门面本轮授权值（A2：不在 sender 内重读当前 epoch）
+        BgiWorkflowExecutionBoundary.PreparedSubmit prepared;
+        try
+        {
+            prepared = inner.PrepareSubmit(new WorkflowSubmitRequest(run, occ, node, ctx.Suppress),
+                authorizedEpoch: d.TargetEpoch); // 授权纪元＝门面本轮授权值（A2：不在 sender 内重读当前 epoch）
+        }
+        catch (Exception ex)
+        {
+            // [P16/G10 诊断保留] 准备阶段异常原文必须留痕：门面 catch 只保留异常**类型名**，结构化台账字段尚缺，
+            // 若不在此留原创诊断，负载下的偶发失败（如记录修订争用）将无从定位。异常仍上抛（门面按 Unknown 处置）。
+            TryLog("[任务中心] 后继提交准备阶段异常（" + runId + "）：" + ex.GetType().Name + "：" + ex.Message);
+            throw;
+        }
         if (prepared.Rejection is { } rej)
         {
             // G10（会诊 P2 处置·第一步）：原始拒绝原因**不得**在发送侧被压成固定码后丢失——

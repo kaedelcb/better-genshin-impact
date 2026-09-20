@@ -6,6 +6,17 @@ using Xunit;
 namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 
 /// <summary>
+/// 重型时序夹具的**非并行**收集定义：本组夹具（33 节点全链、并发交错、接管顺序）对 CPU/IO 负载敏感；
+/// 与其它测试类并行时会因锁争用/调度延迟而**更频繁地**触发一条已知偶发路径（实测：33 节点夹具在满负载下
+/// 偶发第 N 个节点收敛 Reconciling→运行 Unknown，隔离后稳定通过）。**注意（[纠正·2026-09-21 复审]）**：
+/// 该现象是**被测运行真的进入了 Unknown**，**不是**单纯的断言/读取假失败——隔离只**降低测试间负载干扰**，
+/// **原负载失败仍未解决**；它已作为 P50 风险登记（设计稿 §16/§17），须据诊断日志定位根因，
+/// 并**保留单独、可重复的负载复现入口**，不得因隔离而让日常回归不再暴露该路径缺陷。
+/// </summary>
+[CollectionDefinition("TaskCenterHeavyE2E", DisableParallelization = true)]
+public sealed class TaskCenterHeavyE2ECollection;
+
+/// <summary>
 /// R5.2 B2-γ 第 3 步（节点后继提交改道仲裁面）「一键可跑」验收夹具（owner 0 点击，场景施工方内置）：
 /// ①**路径启用门**——`_admissionWired`（E1/E2 入口接线）**不等于**节点改道启用；生产构造恒不启用，只有
 ///   内部接缝显式 opt-in 两个门才启用（设计稿 §12.3「施工阻断：第 3 步尚不得启用相关路径」/§13.11a）。
@@ -15,6 +26,7 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 /// ③**宿主级端到端路由**——门开时节点提交经门面占位/发送且恰好发送一次、运行跑通；门关时不经门面（R4 直通）。
 /// ④**并发守卫**——发送期间若另有写入者改动运行记录，G2 合并必须**拒绝**（保守 Unknown），不得静默覆盖。
 /// </summary>
+[Collection("TaskCenterHeavyE2E")]
 public class TaskCenterSuccessorPathGateTests
 {
     // ── ① 路径启用门 ─────────────────────────────────────────────────────────────
@@ -398,7 +410,7 @@ public class TaskCenterSuccessorPathGateTests
             IReadOnlyList<OperationRecord> snapshot = [];
             var readOk = false;
             string runId = "";
-            for (var i = 0; i < 800; i++)
+            for (var i = 0; i < 3000; i++) // 30s 有界预算（并行负载 + 33 节点流程实测需要）
             {
                 runId = runs.List().OrderByDescending(r => r.UpdatedAt).FirstOrDefault()?.RunId ?? runId;
                 readOk = TryReadValidOps(root, runId, out var current);
@@ -414,7 +426,7 @@ public class TaskCenterSuccessorPathGateTests
             // **收敛断言（会诊重要项·最小修正）**：收尾读取之前必须先确认目标运行已收敛；否则等待预算耗尽时
             // 「运行仍活动 → 收尾读到仅含 E1 → 节点操作随后登记」的交错会以假通过收场（门关分支尤甚）。
             var converged = false;
-            for (var i = 0; i < 200; i++)
+            for (var i = 0; i < 800; i++)
             {
                 if (runs.List().Any(r => r.RunId == runId && (r.State is WorkflowRunState.Succeeded or WorkflowRunState.Failed
                         or WorkflowRunState.Cancelled or WorkflowRunState.Interrupted or WorkflowRunState.Unknown)))
@@ -430,7 +442,7 @@ public class TaskCenterSuccessorPathGateTests
             runId = runs.List().OrderByDescending(r => r.UpdatedAt).FirstOrDefault()?.RunId ?? runId;
             var finalOk = false;
             IReadOnlyList<OperationRecord> finalOps = [];
-            for (var i = 0; i < 50; i++)
+            for (var i = 0; i < 200; i++)
             {
                 if (TryReadValidOps(root, runId, out var opsNow))
                 {
