@@ -23,6 +23,17 @@ namespace MultiplayerHoeingAssistant.Services;
 /// </summary>
 public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
 {
+    /// <summary>
+    /// 冻结提交（R5.2 B2-γ 边界拆分产物）：第 1 段产出的「身份已冻结、可发送」载荷；
+    /// 或可证实未受理的拒绝（此时其余字段为 null）。
+    /// </summary>
+    internal sealed record PreparedSubmit(
+        WorkflowRunRecord? Run, WorkflowSubmission? Submission, object? Payload, BoundarySubmitResult? Rejection)
+    {
+        /// <summary>构造可证实未受理的拒绝结果（第 1 段未通过时唯一出口）。</summary>
+        public static PreparedSubmit No(BoundarySubmitResult rejection) => new(null, null, null, rejection);
+    }
+
     private static readonly TimeSpan ExpireWindow = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
 
@@ -32,24 +43,45 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     /// <summary>不确定发送后的对账窗口（cleanup 语义，有界）。</summary>
     private static readonly TimeSpan ReconcileBudget = TimeSpan.FromSeconds(5);
 
-    private readonly BgiExternalClient _client;
+    private readonly IBgiExecutionPort _port;
     private readonly RunStore _runs;
 
     public BgiWorkflowExecutionBoundary(BgiExternalClient client, RunStore runs)
+        : this(new BgiExternalClientPort(client ?? throw new ArgumentNullException(nameof(client))), runs)
     {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
+    }
+
+    /// <summary>端口构造（R5.2 B2-γ：组件级夹具注入可控端口；生产经上面的客户端构造走最薄转发）。</summary>
+    internal BgiWorkflowExecutionBoundary(IBgiExecutionPort port, RunStore runs)
+    {
+        _port = port ?? throw new ArgumentNullException(nameof(port));
         _runs = runs ?? throw new ArgumentNullException(nameof(runs));
     }
 
     /// <summary>单配置原生执行能力实况（D4；BGI 侧当前恒 false，R4.10 集成验收后评估开放）。</summary>
-    public bool SingleNativeSupported => _client.State == BgiExternalLinkState.Ready
-                                         && _client.HasCapability("task.single.native");
+    public bool SingleNativeSupported => _port.IsReady
+                                         && _port.HasCapability("task.single.native");
 
     /// <summary>收尾抑制能力实况（B6/E4'；缺能力时 Planner 预检响亮拒绝整龙/配置组流程）。</summary>
-    public bool SuppressConfigCompletionSupported => _client.State == BgiExternalLinkState.Ready
-        && _client.HasCapability(BgiExternalClient.CapabilitySuppressConfigCompletionAction);
+    public bool SuppressConfigCompletionSupported => _port.IsReady
+        && _port.HasCapability(BgiExternalClient.CapabilitySuppressConfigCompletionAction);
 
+    /// <summary>
+    /// 统一提交入口（与非接线路径逐字等价）：本地校验+身份冻结 → 锁外发送 → 三态对账。
+    /// R5.2 B2-γ：接线态由 <see cref="ArbitrationWorkflowExecutionBoundary"/> 在这两段之间插入仲裁面。
+    /// </summary>
     public async Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
+    {
+        var prepared = PrepareSubmit(request);
+        if (prepared.Rejection is { } rejection) return rejection;
+        return await SendPreparedAsync(prepared, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 第 1 段：本地校验 + 身份冻结（**发送前，无远端副作用**）。
+    /// 通过=返回可发送的冻结载荷；未通过=返回可证实未受理的 Rejected。
+    /// </summary>
+    internal PreparedSubmit PrepareSubmit(WorkflowSubmitRequest request)
     {
         var run = request.Run;
         var occurrence = request.Occurrence;
@@ -62,17 +94,17 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             || submission.Occurrence != occurrence.Occurrence
             || submission.LoopIteration != occurrence.LoopIteration
             || submission.Intent != SubmitIntentState.IntentRecorded)
-            return BoundarySubmitResult.Rejected("提交意图缺失或身份不符（违反引擎纪律：先落盘意图再提交；未发送）");
+            return PreparedSubmit.No(BoundarySubmitResult.Rejected("提交意图缺失或身份不符（违反引擎纪律：先落盘意图再提交；未发送）"));
 
         // 2) 资源映射 + 账号合同（本地校验失败 = 可证实未发送 → Rejected）
         if (TryMapResource(node, out var groupName, out var configName, out var taskId, out var expectedRevision) is { } mapError)
-            return BoundarySubmitResult.Rejected(mapError);
+            return PreparedSubmit.No(BoundarySubmitResult.Rejected(mapError));
         if (TryExtractExpectedUid(node, out var expectedUid) is { } uidError)
-            return BoundarySubmitResult.Rejected(uidError);
+            return PreparedSubmit.No(BoundarySubmitResult.Rejected(uidError));
         // R4.10 终审复核（重要5）：纪元单次读取——空检查与冻结使用同一局部值（断连清空属性时二次读取会 NRE 于发送 try 之外）
-        var epoch = _client.ServerEpoch;
+        var epoch = _port.ServerEpoch;
         if (epoch is null)
-            return BoundarySubmitResult.Rejected("BGI 进程纪元未知（严格合同要求 bgiEpoch；未发送）");
+            return PreparedSubmit.No(BoundarySubmitResult.Rejected("BGI 进程纪元未知（严格合同要求 bgiEpoch；未发送）"));
 
         // 3) 冻结：纪元/有效期/指纹 → Intent=Submitted + SendAttempted 落盘（即将发送事实；此后缺 jobId ≠ 未发送）
         submission.Epoch = $"{epoch.ProcessId}:{epoch.StartTicksUtc}";
@@ -101,12 +133,26 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         submission.Intent = SubmitIntentState.Submitted;
         _runs.Update(run);
 
+        return new PreparedSubmit(run, submission, payload, null);
+    }
+
+    /// <summary>
+    /// 第 2 段：锁外发送一次 + 三态对账（绝不重发；不确定 → 按幂等键对账）。
+    /// 本段不做任何仲裁判定、也不得取门面信号量——它既是直通路径的发送段，也是接线态下仲裁面
+    /// Sender 回调的目标（门面 Sender 在锁外调用，回环不得重入 `_gate`）。
+    /// </summary>
+    internal async Task<BoundarySubmitResult> SendPreparedAsync(PreparedSubmit prepared, CancellationToken ct)
+    {
+        var run = prepared.Run;
+        var submission = prepared.Submission;
+        var payload = prepared.Payload;
+
         // 4) 发送一次（绝不重发；不确定 → 对账）
         BgiExternalResponse response;
         try
         {
-            response = await _client.SendCommandAsync(
-                BgiExternalClient.ExternalOperations.TaskStart, payload, null, ct).ConfigureAwait(false);
+            response = await _port.SendCommandAsync(
+                BgiExternalClient.ExternalOperations.TaskStart, payload, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -145,7 +191,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     public async Task<BoundaryTerminalResult> AwaitTerminalAsync(string jobId, CancellationToken ct)
     {
         var (outcome, job, reason) = await BgiJobTerminalPolling.PollUntilTerminalAsync(
-            _client, jobId, ObserveBudget, PollInterval, ct).ConfigureAwait(false);
+            _port, jobId, ObserveBudget, PollInterval, ct).ConfigureAwait(false);
         if (job is not null)
         {
             var (word, r) = InterpretNodeJob(job);
@@ -161,7 +207,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     {
         try
         {
-            await _client.CancelOwnedTaskAsync(jobId, ct).ConfigureAwait(false);
+            await _port.CancelOwnedTaskAsync(jobId, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) { throw; } // 预算/运行取消交调用方分辨
         catch { /* best-effort：取消请求失败不阻断确认观察 */ }
@@ -179,9 +225,9 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         {
             using var budget = new CancellationTokenSource(ReconcileBudget);
             // 纪元证据采集（判定在 TryMatchReconcileHit 纯函数）：查询前/后连接纪元 + 快照自报纪元（响应载荷内）。
-            var epochBefore = _client.ServerEpoch is { } eb ? $"{eb.ProcessId}:{eb.StartTicksUtc}" : null;
-            var snapshot = await _client.QueryJobListAsync(budget.Token).ConfigureAwait(false);
-            var epochAfter = _client.ServerEpoch is { } e ? $"{e.ProcessId}:{e.StartTicksUtc}" : null;
+            var epochBefore = _port.ServerEpoch is { } eb ? $"{eb.ProcessId}:{eb.StartTicksUtc}" : null;
+            var snapshot = await _port.QueryJobListAsync(budget.Token).ConfigureAwait(false);
+            var epochAfter = _port.ServerEpoch is { } e ? $"{e.ProcessId}:{e.StartTicksUtc}" : null;
             var hit = TryMatchReconcileHit(snapshot, epochBefore, epochAfter, submission.Epoch,
                 submission.Key, run.WireRunId, submission.NodeId, submission.LoopIteration);
             if (hit is null) return null; // 通道瞬态/纪元不一致（查询窗口/快照自报/冻结）/零命中/多命中：Unknown

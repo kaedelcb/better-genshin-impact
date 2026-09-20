@@ -12,6 +12,13 @@ namespace MultiplayerHoeingAssistant.Services;
 /// </summary>
 internal static class BgiJobTerminalPolling
 {
+    /// <summary>兼容重载（既有调用方持具体客户端）——转端口后走同一实现，行为不变。</summary>
+    public static Task<(string Outcome, BgiJobInfo? Job, string? Reason)> PollUntilTerminalAsync(
+        BgiExternalClient client, string jobId, TimeSpan budget, TimeSpan interval, CancellationToken ct)
+        => PollUntilTerminalAsync(
+            new BgiExternalClientPort(client ?? throw new ArgumentNullException(nameof(client))),
+            jobId, budget, interval, ct);
+
     /// <summary>
     /// 统一终态解释（四轮阻断 6：正常轮询与恢复对账共用同一解释器——WasCancelled 优先于成功/失败，
     /// skipped 对前置/收尾作业是协议违例按不可考）。Outcome ∈ succeeded/failed/cancelled/unknown/active。
@@ -33,7 +40,7 @@ internal static class BgiJobTerminalPolling
     /// 四轮重要 11：查询传输/协议异常按通道瞬态处理（预算内继续等），不抛出炸掉运行循环。
     /// </summary>
     public static async Task<(string Outcome, BgiJobInfo? Job, string? Reason)> PollUntilTerminalAsync(
-        BgiExternalClient client, string jobId, TimeSpan budget, TimeSpan interval, CancellationToken ct)
+        IBgiExecutionPort port, string jobId, TimeSpan budget, TimeSpan interval, CancellationToken ct)
     {
         var deadline = DateTimeOffset.UtcNow + budget;
         while (DateTimeOffset.UtcNow < deadline)
@@ -43,7 +50,7 @@ internal static class BgiJobTerminalPolling
             BgiJobInfo? job;
             try
             {
-                (status, job) = await client.QueryJobStatusAsync(jobId, ct).ConfigureAwait(false);
+                (status, job) = await port.QueryJobStatusAsync(jobId, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { throw; } // 用户取消/叶子取消绝不降级为瞬态
             catch (Exception)
