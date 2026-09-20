@@ -164,109 +164,67 @@ public sealed class ArmedTriggerLedgerSync
         _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
     }
 
-    /// <summary>集合变更入口（`currentSnapshot` = 变更**之后**的集合快照，Reset 重建用）。</summary>
+    /// <summary>
+    /// 集合变更入口（**唯一权威＝当前快照**，会诊整改）：`Move` 成员未变 ⇒ 不变更；其余动作
+    /// （Add／Remove／Replace／Reset／未知）一律按 `currentSnapshot` **对账**——新增补登、消失注销、
+    /// 引用计数以快照为准。故「描述暂时不可用期间已存在的重复引用」在恢复后也会被正确计入，
+    /// 不会因增量 Add 只处理 `newItems` 而漏计（上一轮反例）。
+    /// </summary>
     public void OnCollectionChanged(NotifyCollectionChangedAction action, IList? oldItems, IList? newItems,
         IReadOnlyList<object> currentSnapshot)
     {
-        switch (action)
-        {
-            case NotifyCollectionChangedAction.Add:
-                RegisterEach(newItems);
-                break;
-            case NotifyCollectionChangedAction.Remove:
-                DetachEach(oldItems);
-                break;
-            case NotifyCollectionChangedAction.Replace:
-                DetachEach(oldItems);
-                RegisterEach(newItems);
-                break;
-            case NotifyCollectionChangedAction.Move:
-                break; // 集合成员未变
-            case NotifyCollectionChangedAction.Reset:
-                ResetTo(currentSnapshot);
-                break;
-            default:
-                ResetTo(currentSnapshot); // 未知动作：按当前快照重建（保守取真）
-                break;
-        }
+        if (action == NotifyCollectionChangedAction.Move) return; // 成员未变
+        Reconcile(currentSnapshot);
     }
 
-    /// <summary>
-    /// 按当前快照**对账**（`Reset`／兜底／「取消后收尾」）——**不再无条件重建**（会诊整改）：
-    /// 仍在集合中的实例**保留**其条目标识、**首次挂载时刻**与登记信息；消失的实例注销（用登记时保存的标识）；
-    /// 新出现的实例补登；**引用计数按快照重算**。因此「取消 A」不会改写仍挂载的 B 的标识或挂载时刻。
-    /// </summary>
-    internal void ResetTo(IReadOnlyList<object> currentSnapshot)
+    /// <summary>按当前快照对账（`ResetTo` 供宿主「取消后收尾」调用；语义同 <see cref="OnCollectionChanged"/> 的对账分支）。</summary>
+    internal void ResetTo(IReadOnlyList<object> currentSnapshot) => Reconcile(currentSnapshot);
+
+    private void Reconcile(IReadOnlyList<object> currentSnapshot)
     {
         var counts = new Dictionary<object, int>(ReferenceEqualityComparer.Instance);
         foreach (var item in currentSnapshot)
             if (item is not null) counts[item] = counts.TryGetValue(item, out var n) ? n + 1 : 1;
 
-        // ① 已消失 ⇒ 注销（用登记时保存的完整标识；不重算描述）
+        // ① 已消失 ⇒ 注销（用登记时保存的完整标识）
         foreach (var tracked in _refs.Keys.ToList())
-        {
-            if (counts.ContainsKey(tracked)) continue;
-            _refs.Remove(tracked);
-            _instanceIds.Remove(tracked);
-            if (_triggerIds.Remove(tracked, out var goneId)) _ledger.Remove(goneId);
-        }
+            if (!counts.ContainsKey(tracked)) Deregister(tracked);
 
-        // ② 新出现 ⇒ 补登
-        RegisterEach(currentSnapshot);
+        // ② 快照中尚未跟踪者 ⇒ 尝试补登（描述不可用则跳过，下次对账可重试——不写引用计数）
+        foreach (var item in counts.Keys)
+            if (!_refs.ContainsKey(item)) Register(item);
 
-        // ③ 引用计数以快照为准（幸存者身份/挂载时刻**不变**）。
-        //    仅对**已成功登记**的实例记数：`_describe` 返回 null 的实例**不**写入 `_refs`，
-        //    以便其描述恢复有效后**再次对账时能重新尝试登记**（会诊整改：否则永久漏登且只增计数）。
+        // ③ 引用计数以快照为准（**仅已成功登记**者）
         foreach (var item in counts.Keys)
             if (_triggerIds.ContainsKey(item)) _refs[item] = counts[item];
     }
 
-    private void RegisterEach(IEnumerable? items)
+    private void Register(object item)
     {
-        if (items is null) return;
-        foreach (var item in items)
+        var descriptor = _describe(item);
+        if (descriptor is null) return;
+        var instanceId = _kind + "#" + (++_sequence); // 进程内唯一编号（非哈希）
+        _refs[item] = 1;
+        _instanceIds[item] = instanceId;
+        var triggerId = BackgroundTriggerLedger.TriggerIdOf(_kind, _ownerKind, descriptor.OwnerRef, instanceId);
+        _triggerIds[item] = triggerId; // 注销用**登记时**的完整标识（描述变化/变 null 也能销）
+        _ledger.Apply(new BackgroundTriggerEntry
         {
-            if (item is null) continue;
-            if (_refs.TryGetValue(item, out var n))
-            {
-                _refs[item] = n + 1; // 同实例重复加入：引用计数，不新建条目
-                continue;
-            }
-            var descriptor = _describe(item);
-            if (descriptor is null) continue;
-            var instanceId = _kind + "#" + (++_sequence); // 进程内唯一编号（非哈希）
-            _refs[item] = 1;
-            _instanceIds[item] = instanceId;
-            var triggerId = BackgroundTriggerLedger.TriggerIdOf(_kind, _ownerKind, descriptor.OwnerRef, instanceId);
-            _triggerIds[item] = triggerId; // 会诊整改：注销用**登记时**的完整标识（描述变化/变 null 也能销）
-            _ledger.Apply(new BackgroundTriggerEntry
-            {
-                TriggerId = triggerId,
-                Kind = _kind,
-                OwnerKind = _ownerKind,
-                OwnerRef = descriptor.OwnerRef,
-                MountedAtUtc = _utcNow(),
-                Intent = descriptor.Intent,
-                RevokeEntry = descriptor.RevokeEntry.Length > 0 ? descriptor.RevokeEntry : _mountedRevokeEntry,
-                Scope = _scope,
-            });
-        }
+            TriggerId = triggerId,
+            Kind = _kind,
+            OwnerKind = _ownerKind,
+            OwnerRef = descriptor.OwnerRef,
+            MountedAtUtc = _utcNow(),
+            Intent = descriptor.Intent,
+            RevokeEntry = descriptor.RevokeEntry.Length > 0 ? descriptor.RevokeEntry : _mountedRevokeEntry,
+            Scope = _scope,
+        });
     }
 
-    private void DetachEach(IEnumerable? items)
+    private void Deregister(object item)
     {
-        if (items is null) return;
-        foreach (var item in items)
-        {
-            if (item is null || !_refs.TryGetValue(item, out var n)) continue;
-            if (n > 1)
-            {
-                _refs[item] = n - 1; // 仍有同一实例在集合中：不注销
-                continue;
-            }
-            _refs.Remove(item);
-            _instanceIds.Remove(item);
-            if (_triggerIds.Remove(item, out var registeredId)) _ledger.Remove(registeredId);
-        }
+        _refs.Remove(item);
+        _instanceIds.Remove(item);
+        if (_triggerIds.Remove(item, out var registeredId)) _ledger.Remove(registeredId);
     }
 }

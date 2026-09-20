@@ -297,6 +297,39 @@ public class R55BackgroundTriggerLedgerTests
             new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, x, 0).OldItems, null, Array.Empty<object>());
         Assert.True(ledger.Count == 0, "归零后应注销，实际条目数=" + ledger.Count);
     }
+    /// <summary>
+    /// **会诊反例（第 6 轮）**：描述暂时不可用期间集合已含**两份** x；描述恢复后**通过增量 Add 补登**时，
+    /// 引用计数必须反映快照中**全部出现次数**（3），否则会在第一次移除时就提前注销。
+    /// </summary>
+    [Fact]
+    public void IncrementalAdd_AfterNullDescriptor_CountsAllExistingOccurrences()
+    {
+        var ledger = new BackgroundTriggerLedger();
+        var describable = false;
+        var sync = new ArmedTriggerLedgerSync(ledger, "timer", TriggerOwnerKinds.StartupChain, TriggerScope.ProcessEphemeral,
+            "列表「取消」按钮", _ => describable ? new ArmedTriggerDescriptor("owner:X", "意图", "") : null, () => Now);
+        var x = "X";
+
+        sync.ResetTo(new[] { x, x });        // 描述为 null：不登记
+        Assert.Equal(0, ledger.Count);
+
+        describable = true;
+        sync.OnCollectionChanged(NotifyCollectionChangedAction.Add,
+            null, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, x).NewItems, new[] { x, x, x });
+        Assert.Single(ledger.List());         // 补登一条
+
+        // 逐次移除：前两次仍有一条，第三次才注销（计数=3）
+        for (var remaining = 2; remaining >= 1; remaining--)
+        {
+            var snapshot = Enumerable.Repeat("X", remaining).ToArray();
+            sync.OnCollectionChanged(NotifyCollectionChangedAction.Remove,
+                new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, x, 0).OldItems, null, snapshot);
+            Assert.True(ledger.Count == 1, $"剩余 {remaining} 份引用时应保留条目，实际 {ledger.Count}");
+        }
+        sync.OnCollectionChanged(NotifyCollectionChangedAction.Remove,
+            new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, x, 0).OldItems, null, Array.Empty<object>());
+        Assert.Equal(0, ledger.Count);
+    }
     /// <summary>三类作用域界限互异，且启动中心背景触发器恒为进程级临时。</summary>
     [Fact]
     public void Scope_Boundaries_AreDistinct()
