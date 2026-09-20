@@ -1607,7 +1607,10 @@ M1 的①—⑤与 §3.2「E1 发送前固定 candidateId→runId→首节点提
      确定拒绝＝`failed`＋原因码；不可考（含接管落盘失败）＝既有 `result_unknown` 口径且**禁止重发**。
      夹具：`CommandExecutorExternalStartAdmissionTests`（准入形状／批次忙先于准入／三态映射词汇）。
    - **[会诊两轮处置·2026-09-21] 适配器三态取保守方向**：`success`＝受理证据；**其余（含 `failed`/`cancelled`/超时/持续不可达/对账查询失败）一律 Unknown**——既有核心失败词汇**不能证明「确定未受理」**，升格为 Rejected 会诱发重发（事实反转）；准入调用取消/异常亦统一按既有 `result_unknown` 口径回执且禁止重发。`ExecuteAsync` 回调期间**冻结本次请求上下文**（否则 `BuildStartPayload` 会从 AsyncLocal 读到另一请求的 expectedConfigRevision/bgiEpoch/ExpiresAtUtc，组合出错误载荷身份）。
-   - **仍待接线**：`start_oneclick`（E3）、`hotkey_execute`（E4）、E5 其余 start 类 opcode（含 CLI/网页同源命令）。
+   - **[批次 3 部分落地·2026-09-21] E3 `start_oneclick` 已接线**（同一通用接线助手 `StartViaAdmissionAsync`，候选 `onedragon:{配置名}`／`v2:remote:{requestIdentity}`）：副作用前段＝批次占用检查＋批次名单编码＋配置写入落盘等待；核心＝原直启主体（**业务语句保留**——方法边界与注释有变，非字节等价；`startFromTaskId`/`generation`/`batchGroupNamesRaw` 全量传递）。
+   - **仍待接线**：`hotkey_execute`（E4）、E5 其余 start 类 opcode（含 CLI/网页同源命令）。
+   - **E4（热键）接线依赖「冲突策略无副作用解析」（见本清单第 2 项）**：其现有路径在「实际启动」之前即含**副作用**（`ReconcileOrphanedContextAsync` 清上下文、`ExecuteResumeAsync(cancel:true)`、`ExecuteSuspendAsync` 抢占、`WaitTaskSlotSettledAsync`（查询/等待，本身不改状态））——必须先把冲突策略解析改写为**无副作用解析**再准入，否则会出现「先 suspend 后拒签」的既成事实。故 E4 接线**不得**在该解析落地之前单独落地；三个控制热键直通分支（CancelTask/BgiEnabled/Suspend）**保持动作分类**，不并入启动候选。
+   - **启用前置（批次 3 会诊追加）**：④**受理确定性与执行终态未分离**——门面返回 Unknown 而核心已明确取消/失败时，入口仍折成 `failed/result_unknown`（丢失调用方依赖的取消信号）；但**不得**无条件回核心结果（会遮蔽接管失败），须分别表达「是否曾受理」与「执行终态」。⑤夹具未独立证明「阻断时核心零调用」（`null!` monitor 不是零副作用证明）；需可注入核心/传输接缝，覆盖 Accepted 回核心结果、执行后门面异常、取消、故障 Task、非零参数、上下文隔离、配置等待、恢复重试忙。⑥「冻结请求上下文」目前只是**捕获引用**（未复制标量/`Params`）；启用前须冻结实际消费字段或证明请求对象全生命周期不可变。
    - **启用前置（会诊登记，不得据此签署 E3 接线完成）**：①**失败分类细化**——核心须能区分「网络前可证实未发送」（才可映射 Rejected 并关闭责任）与「已发送后失败/不可考」；②**核心内仍会重新抢占与六次重发**：「核心回调 ≤1 次」**不等于**「实际发送 ≤1 次」，也不等于逐轮发送许可已成立（§6.1 候选获准后不得追加抢占）；③夹具**未覆盖** `ExecuteAsync`/`ToExecution`/获准后核心结果保留/取消与执行失败分类/非零参数传递/请求上下文隔离/配置写入等待/恢复重试忙，也未证明「未接线＝运行级等价」（仅源码层面未见默认路径业务行为变化；探针日志仍写文件，故只能说「无**启动**副作用」）。
 2. **冲突策略无副作用解析**：抢占/suspend/等待配置写入等现有策略解析必须在**提交前**完成且不产生副作用；
    与门面占位的次序须逐项界定（避免「先 suspend 后拒签」）。

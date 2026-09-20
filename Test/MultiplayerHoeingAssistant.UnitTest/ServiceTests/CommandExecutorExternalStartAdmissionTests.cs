@@ -106,4 +106,36 @@ public sealed class CommandExecutorExternalStartAdmissionTests
         Assert.Equal("result_unknown", result.ErrorCode);
         Assert.Contains("禁止重发", result.Message);
     }
+
+    /// <summary>
+    /// **E3 `start_oneclick` 同源接线**：候选按 §2.2 映射为 `onedragon:{配置名}`（不得与 `group:` 混用），
+    /// 且被阻断时**未启动**。与 `start_group` 共用同一 `StartViaAdmissionAsync` 接线助手（路径一致）。
+    /// </summary>
+    [Fact]
+    public async Task StartOneClick_RoutesThroughAdmission_OneDragonCandidate()
+    {
+        var calls = new List<ExternalStartAdmissionRequest>();
+        var executor = new CommandExecutor(null!, "unused",
+            externalStartAdmission: (request, _) =>
+            {
+                calls.Add(request);
+                return Task.FromResult(new ExternalStartAdmissionOutcome(
+                    ExternalStartAdmissionStatus.Blocked, "need_preempt_confirm", "占用中"));
+            });
+
+        var result = await executor.ExecuteAsync(new RemoteCommand
+        {
+            Cmd = "start_oneclick",
+            Params = new() { ["configName"] = "测试一条龙", ["startFromTaskId"] = "task-1" },
+        });
+
+        var request = Assert.Single(calls);
+        Assert.Equal("v2", request.Namespace);
+        Assert.Equal("onedragon:测试一条龙", request.WorkflowId);   // §2.2：start_oneclick 段
+        Assert.Equal("onedragon:测试一条龙", request.ResourceRef);
+        Assert.Equal("v2:remote:{requestIdentity}", request.TriggerOccurrenceId);
+        Assert.Equal("v2:start_oneclick", request.SourceDetail);
+        Assert.Equal("failed", result.Status);
+        Assert.Equal("need_preempt_confirm", result.ErrorCode);
+    }
 }

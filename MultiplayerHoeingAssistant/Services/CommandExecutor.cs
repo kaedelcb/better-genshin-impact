@@ -113,31 +113,64 @@ public class CommandExecutor
     private async Task<CommandResult> StartGroupViaAdmissionAsync(
         Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>> admit,
         string groupName, int startFromIndex, int generation, List<string>? batchGroupNames)
+        => await StartViaAdmissionAsync(admit,
+            ns: "v2",
+            workflowId: "group:" + groupName,
+            trigger: "v2:remote:{requestIdentity}",
+            sourceDetail: "v2:start_group",
+            target: $"配置组「{groupName}」",
+            core: () => StartGroupCoreAsync(groupName, startFromIndex, generation, batchGroupNames))
+            .ConfigureAwait(false);
+
+    /// <summary>
+    /// **E3（`start_oneclick`）经统一仲裁面启动**：候选按 §2.2 兼容映射（namespace=v2、
+    /// workflowId/resourceRef=`onedragon:{配置名}`、触发出现身份=`v2:remote:{requestIdentity}` 由门面回填）；
+    /// 实际启动＝<see cref="StartOneClickCoreAsync"/>（**获准后**由准入方回调，≤1 次）。
+    /// </summary>
+    private async Task<CommandResult> StartOneClickViaAdmissionAsync(
+        Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>> admit,
+        string configName, string? startFromTaskId, int generation, string? batchGroupNamesRaw)
+        => await StartViaAdmissionAsync(admit,
+            ns: "v2",
+            workflowId: "onedragon:" + configName,
+            trigger: "v2:remote:{requestIdentity}",
+            sourceDetail: "v2:start_oneclick",
+            target: $"一条龙「{configName}」",
+            core: () => StartOneClickCoreAsync(configName, startFromTaskId, generation, batchGroupNamesRaw))
+            .ConfigureAwait(false);
+
+    /// <summary>
+    /// **外部启动通用接线（E3/E4/E5 共用）**：候选按 §2.2 映射（`ns`/`workflowId`/`trigger`/`resourceRef`＝workflowId）
+    /// → 准入 → **获准后**由准入方回调 `core`（≤1 次）。
+    /// 回执语义：①获准且核心已执行＝**回核心结果**（既有 Status/ErrorCode/文案逐字不变）；
+    /// ②未获准（核心未执行）＝按准入结论回执；③准入调用取消/异常＝既有 `result_unknown` 口径且禁止重发。
+    /// [会诊处置] 回调期间**冻结本次请求上下文**：回调可能在其他执行上下文被调用，而 `BuildStartPayload`
+    /// 仍从 AsyncLocal 读 expectedConfigRevision/bgiEpoch/ExpiresAtUtc——不冻结会读到另一请求的字段。
+    /// </summary>
+    private async Task<CommandResult> StartViaAdmissionAsync(
+        Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>> admit,
+        string ns, string workflowId, string trigger, string sourceDetail, string target,
+        Func<Task<CommandResult>> core)
     {
         ExternalStartAdmissionOutcome outcome;
         CommandResult? coreResult = null;
-        // [会诊阻断处置] **冻结本次请求上下文**（§13.10 A1 同纪律）：`ExecuteAsync` 回调可能在其他执行上下文
-        // 被调用（门面轮次线程），而 `BuildStartPayload` 仍从 AsyncLocal 读 expectedConfigRevision/bgiEpoch/
-        // ExpiresAtUtc——不冻结会读到**另一请求**的字段，组合出错误载荷身份。
         var capturedCommand = _requestContext.Value;
         try
         {
             outcome = await admit(new ExternalStartAdmissionRequest
             {
-                Namespace = "v2",
-                WorkflowId = "group:" + groupName,
-                TriggerOccurrenceId = "v2:remote:{requestIdentity}",
-                ResourceRef = "group:" + groupName,
-                SourceDetail = "v2:start_group",
-                // 实际启动（获准后由准入方回调，≤1 次）：核心结果**原样保留**，供获准路径逐字回既有线上文案。
+                Namespace = ns,
+                WorkflowId = workflowId,
+                TriggerOccurrenceId = trigger,
+                ResourceRef = workflowId,
+                SourceDetail = sourceDetail,
                 ExecuteAsync = async _ =>
                 {
                     var previousContext = _requestContext.Value;
                     _requestContext.Value = capturedCommand; // 冻结的请求上下文（回调期间生效，结束即还原）
                     try
                     {
-                        coreResult = await StartGroupCoreAsync(groupName, startFromIndex, generation, batchGroupNames)
-                            .ConfigureAwait(false);
+                        coreResult = await core().ConfigureAwait(false);
                         return ToExecution(coreResult);
                     }
                     finally
@@ -154,7 +187,7 @@ public class CommandExecutor
             {
                 Status = "failed",
                 ErrorCode = "result_unknown",
-                Message = $"配置组「{groupName}」准入调用被取消：启动结果不可考、禁止重发，请查看台账对账",
+                Message = $"{target}准入调用被取消：启动结果不可考、禁止重发，请查看台账对账",
             };
         }
         catch (Exception ex)
@@ -165,14 +198,14 @@ public class CommandExecutor
             {
                 Status = "failed",
                 ErrorCode = "result_unknown",
-                Message = $"配置组「{groupName}」准入调用异常（{ex.GetType().Name}）：启动结果不可考、禁止重发，请查看台账对账",
+                Message = $"{target}准入调用异常（{ex.GetType().Name}）：启动结果不可考、禁止重发，请查看台账对账",
             };
         }
 
         // 获准且核心已执行：**回核心结果**（既有 Status/ErrorCode/文案逐字不变）；
         // 未获准（核心未执行）＝按准入结论回执。
         if (outcome.Status == ExternalStartAdmissionStatus.Accepted && coreResult is not null) return coreResult;
-        return MapAdmissionOutcome(outcome, $"配置组「{groupName}」");
+        return MapAdmissionOutcome(outcome, target);
     }
 
     /// <summary>
@@ -633,11 +666,26 @@ public class CommandExecutor
         // [批次名单] 逗号分隔编码（与批次循环 Params 的 batchGroupNames 一致），null = 不携带
         var batchGroupNamesRaw = batchGroupNames is { Count: > 0 } ? string.Join(",", batchGroupNames) : null;
 
-        // [任务策略] 按键门控（同 StartGroupAsync，固定行为：立即执行 + 执行完停止）：
-        // 本机忙且无既有中断上下文时 suspend 抢占强制 v2；已有中断上下文走无损拒绝；空闲走原路径。
         // [弹窗竞态守卫] 同 StartGroupAsync：先等 set_task_enabled 落盘，再 suspend/启动
         await WaitConfigWritesDrainedAsync($"start_oneclick「{configName}」");
 
+        // [R5.2 B3／E3] 接线态：启动一律经统一仲裁面；准入先于**任何启动副作用**（抢占 suspend／ext 入队／
+        // v2 task.start 均在获准后由核心执行）。**未接线（委托为 null）＝下方既有直启路径逐字不变**。
+        if (_externalStartAdmission is { } admitOneClick)
+            return await StartOneClickViaAdmissionAsync(admitOneClick, configName, startFromTaskId, generation, batchGroupNamesRaw);
+
+        return await StartOneClickCoreAsync(configName, startFromTaskId, generation, batchGroupNamesRaw);
+    }
+
+    /// <summary>
+    /// **启动一条龙核心（原直启主体，逐字节保留）**：从「按键门控/抢占」起到 v2 IPC 与裸拉起回退为止；
+    /// 接线态下由统一仲裁面在**获准后**经 `ExecuteAsync` 回调本方法（≤1 次）。
+    /// </summary>
+    private async Task<CommandResult> StartOneClickCoreAsync(string configName, string? startFromTaskId, int generation,
+        string? batchGroupNamesRaw)
+    {
+        // [任务策略] 按键门控（同 StartGroupAsync，固定行为：立即执行 + 执行完停止）：
+        // 本机忙且无既有中断上下文时 suspend 抢占强制 v2；已有中断上下文走无损拒绝；空闲走原路径。
         if (await ShouldPreemptKeyPressAsync($"一条龙「{configName}」"))
         {
             // 抢占路径不透传批次名单（批次场景 MainViewModel 已先行 suspend，抢占极少命中批次项；
