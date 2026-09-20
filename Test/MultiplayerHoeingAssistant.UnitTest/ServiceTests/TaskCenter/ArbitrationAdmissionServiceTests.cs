@@ -2328,5 +2328,6 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(AdmissionResultKind.TerminalRejected, rejected.Kind);
         Assert.Equal("ticket_conflict", rejected.ReasonCode);
         Assert.Equal(0, sends);
-        Assert.NotNull(ReadLease().File!.Handoff!.Pending);
+        Assert.Null(ReadLease().File!.Handoff!.Submission);   // 零占位
+        Assert.NotNull(ReadLease().File!.Handoff!.Pending);   // 交接责任保留
     }}

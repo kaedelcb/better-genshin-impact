@@ -158,6 +158,12 @@ public sealed class WorkflowStrategy
         }
         return list;
     }
+
+    /// <summary>读取 int32 参数（不存在/类型不符/越界返回 null——R5.4 机制一 `schedule.priority` 用；加法读取器，不动序列化框架）。</summary>
+    public int? GetInt(string key)
+        => Params is not null && Params.TryGetValue(key, out var v)
+           && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var i)
+            ? i : null;
 }
 
 /// <summary>流程触发器：kind + 扁平参数（trigger.time 等；missPolicy 必须明确，§7.3 时间合同）。</summary>
@@ -247,11 +253,17 @@ public static class WorkflowKindCatalog
         "condition.weekdays",
         "prerequisite.account",
         "prerequisite.redeemCode",
+        // R5.4 机制一：节点级优先级修饰（int32 `priority`，数值大者优先，缺省 0；§2③1/§2③3）。
+        "schedule.priority",
     };
 
     public static readonly IReadOnlySet<string> TriggerKinds = new HashSet<string>(StringComparer.Ordinal)
     {
         "trigger.time",
+        // R5.4 机制二：时间固定型到点（结构性层级＝Fixed；missPolicy 默认 skip+留痕，§2②6）。
+        "trigger.timeFixed",
+        // R5.4 机制三：灵活型窗口触发（结构性层级＝Plan；窗口内取得执行权即锁定本轮，可越窗完成，§2③6）。
+        "trigger.timeFlexible",
     };
 
     public static readonly IReadOnlySet<string> TerminalKinds = new HashSet<string>(StringComparer.Ordinal)
