@@ -230,6 +230,8 @@ public class TaskCenterHostRecoveryAdmissionTests : IDisposable
             Assert.StartsWith("resume:paused-continue:", resumeOp.Candidate!.TriggerOccurrenceId);
             Assert.Equal(runId, resumeOp.RunBinding);
             Assert.Equal(WorkflowRunState.Succeeded, _runs.Load(runId)!.State);
+            // 会诊要求：最终**提交序列**恰为 [n-1, n-2]（排除节点1重放与任何额外提交）
+            Assert.Equal(new[] { "n-1", "n-2" }, boundary.Submissions.ToArray());
         }
         finally
         {
@@ -606,6 +608,46 @@ public class TaskCenterHostRecoveryAdmissionTests : IDisposable
             var afterResume = _runs.Load(runId)!;                                // 原运行仍为可恢复态、绑定未变
             Assert.Equal(WorkflowRunState.Interrupted, afterResume.State);
             Assert.Equal(startOp.RunBinding, afterResume.RunId);
+        }
+        finally
+        {
+            await host.ShutdownAsync();
+        }
+    }
+
+    // ── R5.3.3：Unknown 待对账 ⇒ 停驻、**禁止自动重跑**（零副作用） ──
+
+    /// <summary>
+    /// **R5.3.3（四类恢复区别之一：Unknown 待对账）**——**证明范围限于「显式恢复入口」**：运行处于 `Unknown` 时
+    /// `ResumeRunAsync` 必须拒绝并提示**需先对账**，且该次调用**未进入仲裁准入路径**（不提交边界、未生成 arbitration 目录）、
+    /// 运行状态原样保留。
+    /// **不覆盖（会诊登记）**：`cancelUnconfirmed → Unknown` 的**形成过程**、后台 tick／自动重试／启动移交重放、
+    /// 以及原提交键/游标/未决责任在拒绝期间的保留断言——不得由本夹具推定「禁止自动重跑」整体已验收。
+    /// 另注：`EnsureRecoveredAsync`（恢复扫描）**先于** Unknown 判断执行，可能维护运行记录——
+    /// 本夹具断言的是**零执行提交／零租约副作用**，**不宣称**「全程零副作用」。
+    /// </summary>
+    [Fact]
+    public async Task ResumeRun_Unknown_RejectedNoAutoReRun_NoLeaseSideEffect()
+    {
+        var workflowId = SeedFlow("Unknown待对账流程");
+        var run = _runs.CreateRun(workflowId, _workflows.LoadSnapshot(workflowId).Revision, note: "Unknown 夹具");
+        run.State = WorkflowRunState.Unknown;
+        run.Note = (run.Note ?? "") + "；结果不确定待对账";
+        _runs.Update(run);
+
+        var boundary = new FakeBoundary();
+        var host = MakeWiredHost(boundary, new TaskCenterAdmissionSeams());
+        try
+        {
+            var result = await host.ResumeRunAsync(run.RunId!);
+
+            Assert.Equal(HostActionStatus.Unavailable, result.Status);
+            Assert.Contains("Unknown", result.Message);
+            Assert.Contains("对账", result.Message);                          // 明确「需先对账」提示语义
+            Assert.Empty(boundary.Submissions);                              // **零重跑**（未提交任何节点）
+            Assert.False(Directory.Exists(Path.Combine(_dir, "arbitration")), // 该次显式恢复**未进入仲裁准入路径**（无租约产物）
+                "Unknown 拒绝对账前不得进入仲裁准入路径/生成 arbitration 目录");
+            Assert.Equal(WorkflowRunState.Unknown, _runs.Load(run.RunId!)!.State); // 状态原样保留
         }
         finally
         {
