@@ -191,14 +191,32 @@ public sealed class ArmedTriggerLedgerSync
         }
     }
 
-    /// <summary>按当前快照重建（Reset/兜底）：先清该类条目与实例表，再按快照登记。</summary>
+    /// <summary>
+    /// 按当前快照**对账**（`Reset`／兜底／「取消后收尾」）——**不再无条件重建**（会诊整改）：
+    /// 仍在集合中的实例**保留**其条目标识、**首次挂载时刻**与登记信息；消失的实例注销（用登记时保存的标识）；
+    /// 新出现的实例补登；**引用计数按快照重算**。因此「取消 A」不会改写仍挂载的 B 的标识或挂载时刻。
+    /// </summary>
     internal void ResetTo(IReadOnlyList<object> currentSnapshot)
     {
-        _ledger.RemoveKind(_kind);
-        _instanceIds.Clear();
-        _triggerIds.Clear();
-        _refs.Clear();
+        var counts = new Dictionary<object, int>(ReferenceEqualityComparer.Instance);
+        foreach (var item in currentSnapshot)
+            if (item is not null) counts[item] = counts.TryGetValue(item, out var n) ? n + 1 : 1;
+
+        // ① 已消失 ⇒ 注销（用登记时保存的完整标识；不重算描述）
+        foreach (var tracked in _refs.Keys.ToList())
+        {
+            if (counts.ContainsKey(tracked)) continue;
+            _refs.Remove(tracked);
+            _instanceIds.Remove(tracked);
+            if (_triggerIds.Remove(tracked, out var goneId)) _ledger.Remove(goneId);
+        }
+
+        // ② 新出现 ⇒ 补登
         RegisterEach(currentSnapshot);
+
+        // ③ 引用计数以快照为准（幸存者身份/挂载时刻**不变**）
+        foreach (var item in counts.Keys)
+            _refs[item] = counts[item];
     }
 
     private void RegisterEach(IEnumerable? items)

@@ -783,7 +783,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     public void RevokeAllArmedTriggers()
     {
         // 会诊整改：**快照与取消同处 UI 串行边界**（并发挂载/自动收场下不漏项、不跨线程读集合）；
-        // 单项取消异常**隔离**并如实报告，保证其余项仍被撤销。
+        // 单项取消异常**隔离**并如实报告（失败项记日志；日志本身异常不在隔离范围内，未另行保证）。
         RunOnUi(() =>
         {
             var failures = 0;

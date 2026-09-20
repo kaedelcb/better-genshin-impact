@@ -236,6 +236,38 @@ public class R55BackgroundTriggerLedgerTests
         sync.ResetTo(collection.ToList());  // 宿主取消入口 finally 中的重建
         Assert.Empty(ledger.List());        // 恢复一致
     }
+    /// <summary>
+    /// **会诊反例（第 4 轮）**：取消 A 触发「按集合对账」时，**仍挂载的 B 必须保持其条目标识与首次挂载时刻**
+    /// （不得因同批重建而被改写身份/时刻）。
+    /// </summary>
+    [Fact]
+    public void Resync_AfterCancel_PreservesSurvivingIdentityAndMountedAt()
+    {
+        var now = Now;
+        var ledger = new BackgroundTriggerLedger();
+        var sync = new ArmedTriggerLedgerSync(ledger, "timer", TriggerOwnerKinds.StartupChain, TriggerScope.ProcessEphemeral,
+            "列表「取消」按钮", item => new ArmedTriggerDescriptor("owner:" + item, "意图", ""), () => now);
+        var a = "A";   // 用字符串以便描述可区分（object.ToString() 会让不同实例同形）
+        var b = "B";
+
+        sync.OnCollectionChanged(NotifyCollectionChangedAction.Add, null,
+            new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, a).NewItems, new[] { a });
+        now = Now.AddHours(1);
+        sync.OnCollectionChanged(NotifyCollectionChangedAction.Add, null,
+            new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, b).NewItems, new[] { a, b });
+
+        var beforeB = ledger.List().Single(e => e.OwnerRef == "owner:" + b);
+        Assert.Equal(Now.AddHours(1), beforeB.MountedAtUtc);
+
+        // 取消 A ⇒ 按当前集合（仅 B）对账
+        now = Now.AddHours(2);
+        sync.ResetTo(new[] { b });
+
+        var afterB = Assert.Single(ledger.List());
+        Assert.Equal(beforeB.TriggerId, afterB.TriggerId);        // 标识不变
+        Assert.Equal(beforeB.MountedAtUtc, afterB.MountedAtUtc);  // 首次挂载时刻不变（不取“现在”）
+        Assert.Equal(beforeB.Intent, afterB.Intent);
+    }
     /// <summary>三类作用域界限互异，且启动中心背景触发器恒为进程级临时。</summary>
     [Fact]
     public void Scope_Boundaries_AreDistinct()
