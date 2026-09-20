@@ -161,7 +161,7 @@ public class R54MechanismSchemaTests
 
     /// <summary>
     /// **到点水位去重（会诊整改：由「单个上次键」改为每出现身份单调水位）**：①同到点至多参选一次；
-    /// ②**回拨不重放**——t1 已消费、水位已推进到 t2 后再求值 t1 仍判重复；③**前跳不补跑**——旧轮次全部 ≤ 水位 ⇒ 重复；
+    /// ②**回拨不重放**——t1 已消费、水位已推进到 t2 后再求值 t1 仍判重复；③**水位真实边界**（前跳不补跑**不**由本函数保证，依赖调用方过期筛选＋missPolicy）；
     /// ④水位**单调**（重复消费不倒退）。
     /// </summary>
     [Fact]
@@ -185,7 +185,10 @@ public class R54MechanismSchemaTests
         // ② 回拨：水位在 t2，重放 t1 ⇒ 仍 ≤ 水位 ⇒ 判重复（**不重放**）
         Assert.True(TaskCenterMechanismPolicy.IsDuplicateFire(wm, occurrence, t1));
 
-        // ③ 前跳跳过 t2：t3 为更晚到点（新），而 t2 的补跑尝试仍被水位判为重复（**不补跑**）
+        // ③ 前跳场景的正确边界（二轮会诊收窄）：
+        //   (a) 水位仍在 t2 时，更晚的 t3 **不是重复**——水位**不负责**过期判定；
+        //   (b) 推进到 t3 后，落在水位之下的历史时刻 t2 被**抑制**（这一点才是水位保证的）。
+        //   「前跳不补跑」需调用方先按 now 过滤过期轮次并应用 missPolicy（调度接线＝§19.3 残余①），本夹具不声称已证。
         Assert.False(TaskCenterMechanismPolicy.IsDuplicateFire(wm, occurrence, t3));
         wm = TaskCenterMechanismPolicy.AdvanceWatermark(wm, occurrence, t3);
         Assert.True(TaskCenterMechanismPolicy.IsDuplicateFire(wm, occurrence, t2));

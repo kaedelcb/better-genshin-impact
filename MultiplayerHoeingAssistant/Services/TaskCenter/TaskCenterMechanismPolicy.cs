@@ -154,8 +154,11 @@ public static class TaskCenterMechanismPolicy
     /// <summary>
     /// 到点幂等去重（§2③5/§2②6 的**水位合同**，会诊整改：单一「上次键」不能兑现回拨不重放）：
     /// 计划时刻 **≤ 该出现身份水位** ⇒ 重复（**不参选、不重放**）；**严格晚于水位** ⇒ 新到点（可参选并推进水位）。
-    /// 由此得到：①回拨（t1 已消费、水位在 t2）后再求值 t1 ⇒ 仍 ≤ 水位 ⇒ **不重放**；
-    /// ②时钟前跳跳过若干轮次时，旧轮次全部 ≤ 水位 ⇒ **不补跑**，调用方只需对**最近一次到点**求值。
+    /// **范围如实（二轮会诊收窄）**：本函数**只**承担「同出现身份去重 ＋ 水位单调」——
+    /// ①**回拨不重放**：t1 已消费、水位已推进到 t2 后再求值 t1 ⇒ 仍 ≤ 水位 ⇒ 判重复（本函数可独立保证）；
+    /// ②**前跳不补跑**：**不由本函数保证**——本函数不接收 `now`，无法判断「晚于水位但已过期」的轮次；
+    /// 该性质要求调用方**先按当前时间筛除过期轮次并按 `missPolicy` 处置**（`ResolveMissedFire`）**再**求值去重，
+    /// 该**调用顺序与调度接线尚未落地**（残余见 §19.3 ①②）。
     /// </summary>
     public static bool IsDuplicateFire(FireWatermark? watermark, string occurrenceIdentity, DateTimeOffset scheduled)
         => watermark is not null
