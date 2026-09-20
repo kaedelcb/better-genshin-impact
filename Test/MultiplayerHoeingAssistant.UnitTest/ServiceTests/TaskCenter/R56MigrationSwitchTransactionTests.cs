@@ -672,7 +672,7 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         var tx = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () => new NoopQuiet(), true,
             stageHook: null, fileRestoredHook: _ =>
             {
-                if (++restored == 2) throw new InvalidOperationException("模拟第二个文件恢复后中断");   // 混合态
+                if (++restored == 1) throw new InvalidOperationException("模拟**第一个**文件恢复后中断");   // 制造混合态
             });
         tx.BeginTransaction("t1");
         tx.TakeSnapshot();
@@ -690,6 +690,11 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         var rb = tx.Rollback();
         Assert.False(rb.Success);                                        // 中断 ⇒ 失败
         Assert.Equal(MigrationStage.Blocked, tx.LoadManifest()!.Stage);
+        // 重开前必须**确实处于混合态**（一个文件已恢复为旧字节、另一个仍是新字节）
+        var hA = HashOf(Full("a.json"));
+        var hB = HashOf(Full("b.json"));
+        Assert.True((hA == originalA && hB != originalB) || (hA != originalA && hB == originalB),
+            "夹具须制造混合态（至少一个旧文件 + 至少一个新文件）");
         tx.Dispose();
 
         var probe = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () => new NoopQuiet());
@@ -721,6 +726,35 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         Assert.Equal(newHash, HashOf(Full("a.json")));                   // 不得回滚新态
         Assert.True(probe.AuthorizeProductionExecution().Success);
         probe.Dispose();
+    }
+    /// <summary>
+    /// **第 6 轮必改①（基线未完成的中止出口）**：`BeginTransaction` 发布 `Snapshotting` 后（或复制中途）退出 ⇒
+    /// 重开 `RecoverOnStart` **不得**用部分快照恢复，而应安全中止（清未完成快照、置 `RolledBack`），
+    /// 且**旧配置保持完整、可开启下一事务**。
+    /// </summary>
+    [Fact]
+    public void Recovery_SnapshottingAborted_OldConfigIntactAndNewTransactionPossible()
+    {
+        Seed("a.json", "{\"v\":1}");
+        var original = HashOf(Full("a.json"));
+        var tx = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () => new NoopQuiet(), true,
+            stageHook: null, fileRestoredHook: null);
+        Assert.True(tx.BeginTransaction("t1").Success);      // 仅发布 Snapshotting（基线未完成）
+        tx.Dispose();                                        // 模拟复制前/中途退出
+
+        var probe = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () => new NoopQuiet());
+        Assert.True(probe.TryAcquireExclusive().Success);
+        var rec = probe.RecoverOnStart();
+        Assert.True(rec.Success, rec.Reason);
+        Assert.Equal(MigrationStage.RolledBack, rec.Stage);
+        Assert.Equal(original, HashOf(Full("a.json")));       // 旧配置完整
+        Assert.False(probe.AuthorizeProductionExecution().Success);
+        probe.Dispose();
+
+        var next = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () => new NoopQuiet());
+        Assert.True(next.TryAcquireExclusive().Success);
+        Assert.True(next.BeginTransaction("t2").Success, "中止后应可开启下一事务");   // 未决事务不再阻塞
+        next.Dispose();
     }
     [Theory]
     [InlineData(MigrationStage.Snapshotting)]

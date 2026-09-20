@@ -407,6 +407,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
         (MigrationStage.SnapshotReady or MigrationStage.ReferenceUpdating or MigrationStage.Activated
             or MigrationStage.Committed or MigrationStage.Blocked or MigrationStage.RollingBack,
             MigrationStage.RollingBack) => true,
+        (MigrationStage.Snapshotting, MigrationStage.RolledBack) => true,   // 基线未完成的中止出口（不迁移任何变更）
         (MigrationStage.RollingBack, MigrationStage.RolledBack) => true,
         (MigrationStage.RolledBack, MigrationStage.RolledBack) => true,
         _ => false,
@@ -553,6 +554,20 @@ public sealed class MigrationSwitchTransaction : IDisposable
                 return MigrationResult.Ok(MigrationStage.Committed);
             if (m.Stage == MigrationStage.RolledBack) return MigrationResult.Ok(MigrationStage.RolledBack);
             if (m.Stage == MigrationStage.None) return MigrationResult.Fail("illegal_stage:None", m.Stage);
+            if (m.Stage == MigrationStage.Snapshotting)
+            {
+                // **基线尚未完成**（且尚未发生任何迁移变更）⇒ 安全中止：清理未完成快照、置 RolledBack，使新事务可开启。
+                // **绝不**把部分快照用于恢复（不调用 VerifySnapshot/CompleteRollback）。
+                try { if (Directory.Exists(m.SnapshotPath)) Directory.Delete(m.SnapshotPath, recursive: true); } catch { }
+                m.Stage = MigrationStage.RolledBack;
+                m.CommitMarker = null;
+                m.RollbackRehearsed = false;
+                m.RehearsalScope = null;
+                m.BlockedReason = null;
+                WriteManifest(m);
+                ReleaseQuiescence();
+                return MigrationResult.Ok(MigrationStage.RolledBack);
+            }
             if (VerifySnapshot() is { Length: > 0 } bad) return MarkBlocked("recover_snapshot_invalid:" + bad);
 
             if (m.Stage != MigrationStage.RollingBack)
