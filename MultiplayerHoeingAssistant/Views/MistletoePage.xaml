@@ -1671,11 +1671,16 @@
                                     <TextBlock Text="🗂️  流程列表" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}" VerticalAlignment="Center"/>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                         <Button Content="刷新" Style="{DynamicResource BtnGhost}" Command="{Binding TaskCenter.RefreshCommand}" Margin="0,0,8,0"/>
-                                        <Button Content="新建流程" Style="{DynamicResource BtnGold}" Command="{Binding TaskCenter.NewFlowCommand}"/>
+                                        <Button Content="新建流程" Style="{DynamicResource BtnGold}" Command="{Binding TaskCenter.NewFlowCommand}" Margin="0,0,8,0"/>
+                                        <!-- R5.8 §21.4：一键迁移演练（独立配置根；不接触真实 User 目录） -->
+                                        <Button Content="迁移演练" Style="{DynamicResource BtnGhost}" Command="{Binding TaskCenter.MigrationRehearsalCommand}"/>
                                     </StackPanel>
                                 </Grid>
                                 <TextBlock FontSize="11" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,6,0,0"
                                            Text="candidate-ready 候选为只读预览（激活属 R5）；已隔离文件禁止一切写路径（原件保留）。"/>
+                                <!-- R5.8 §21.4：演练报告摘要（独立配置根） -->
+                                <TextBlock FontSize="11" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                           Text="{Binding TaskCenter.MigrationRehearsalSummary}"/>
                                 <ItemsControl ItemsSource="{Binding TaskCenter.Flows}" Margin="0,6,0,0">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>

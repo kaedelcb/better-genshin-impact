@@ -59,6 +59,31 @@ public sealed class TaskCenterPanelViewModel : ViewModelBase
     public bool StatusIsError { get => _statusIsError; private set => SetProperty(ref _statusIsError, value); }
 
     public RelayCommand RefreshCommand => new(_ => { KickCatalogRefresh(); Refresh(); });
+    /// <summary>迁移演练摘要（R5.8 §21.4；绑定到面板上的报告文本）。</summary>
+    public string MigrationRehearsalSummary
+    {
+        get => _migrationRehearsalSummary;
+        private set { _migrationRehearsalSummary = value; OnPropertyChanged(nameof(MigrationRehearsalSummary)); }
+    }
+    private string _migrationRehearsalSummary = "未运行（点击「迁移演练」在独立配置根上生成报告）";
+
+    /// <summary>
+    /// **一键「迁移演练」（R5.8 §21.4）**：调用宿主入口，在**助手数据根下的独立目录**跑事务组件模拟演练；
+    /// **不接触真实 User 目录**；结果摘要写入 <see cref="MigrationRehearsalSummary"/>（页面展示）。
+    /// </summary>
+    public RelayCommand MigrationRehearsalCommand => new(_ =>
+    {
+        try
+        {
+            var report = _host.RunMigrationRehearsal();
+            MigrationRehearsalSummary = (report.Success ? "✅ " : "❌ ") + report.Summary + "｜根：" + report.RehearsalRoot;
+        }
+        catch (Exception ex)
+        {
+            MigrationRehearsalSummary = "❌ 演练异常：" + ex.GetType().Name + ": " + ex.Message;
+            _log?.Invoke("[任务中心] 迁移演练异常：" + ex.Message);
+        }
+    });
 
     private bool _catalogRefreshInFlight;
 
