@@ -135,6 +135,10 @@ public sealed class MigrationSwitchTransaction : IDisposable
         foreach (var chain in new[] { _configRoot, _transactionRoot })
             if (HasReparsePoint(chain))
                 throw new InvalidOperationException("根路径链上存在重解析点（junction/符号链接），拒绝迁移事务：" + chain);
+        foreach (var chain in new[] { _configRoot, _transactionRoot })
+            if (!IsCanonicalAbsolutePath(chain, out var badSegment))
+                throw new InvalidOperationException("根路径存在非规范名（如 NTFS 8.3 短名别名），拒绝迁移事务：" + badSegment
+                    + "（根：" + chain + "）");
     }
 
     /// <summary>链接逃逸防护：路径链上任一层为 reparse point 即拒绝。</summary>
@@ -214,6 +218,16 @@ public sealed class MigrationSwitchTransaction : IDisposable
             current = candidate;
         }
         return true;
+    }
+
+    /// <summary>绝对路径版规范名校验（从盘符/UNC 根逐段枚举比对；用于根路径别名防护）。</summary>
+    internal static bool IsCanonicalAbsolutePath(string fullPath, out string notCanonicalAt)
+    {
+        var full = Path.GetFullPath(fullPath);
+        var root = Path.GetPathRoot(full) ?? "";
+        var rel = full.Length > root.Length ? full[root.Length..] : "";
+        if (rel.Length == 0) { notCanonicalAt = ""; return true; }
+        return IsCanonicalExistingPath(root, rel, out notCanonicalAt);
     }
 
     /// <summary>路径前缀判定（a 为 b 的祖先目录）：用于**文件/目录拓扑互换**的登记拒绝。</summary>

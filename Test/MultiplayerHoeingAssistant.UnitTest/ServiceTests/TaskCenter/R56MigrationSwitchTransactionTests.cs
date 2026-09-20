@@ -922,6 +922,21 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         Assert.Equal(3, keys.Count);                                   // 大小写变体**按身份去重**（不新增记录）
         Assert.Equal(new[] { "a.json", "new/x.json", "sub/b.json" }, keys);
     }
+    /// <summary>
+    /// **第 13 轮必改（根路径别名）**：根路径的**已有祖先段**必须为规范枚举名（短名别名会绕过根隔离）。
+    /// 可构造分支：规范根（临时目录）通过校验且可正常开事务；**8.3 别名反例不可移植**（需启用短名的目标机），
+    /// 按纪律登记为残余并由「非枚举名 ⇒ 拒绝」代码路径承接。
+    /// </summary>
+    [Fact]
+    public void Roots_CanonicalAbsolutePath_Accepted()
+    {
+        Assert.True(MigrationSwitchTransaction.IsCanonicalAbsolutePath(_configRoot, out var bad1), bad1);
+        Assert.True(MigrationSwitchTransaction.IsCanonicalAbsolutePath(_txRoot, out var bad2), bad2);
+
+        Seed("a.json", "{\"v\":1}");
+        using var tx = NewTx();
+        Assert.True(tx.BeginTransaction("t1").Success);
+    }
     [Theory]
     [InlineData(MigrationStage.Snapshotting)]
     [InlineData(MigrationStage.SnapshotReady)]
