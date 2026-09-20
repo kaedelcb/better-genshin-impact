@@ -49,22 +49,32 @@ public sealed class MistletoeViewModel : ViewModelBase
         _runner.NodeStateSink = OnNodeStateReported;
         RootChain = new StepChainViewModel(_config.Steps, this, parentCondition: null, branchName: "主流程");
         foreach (var s in _schemeStore.Load()) Schemes.Add(new SchemeItemViewModel(s));
-        // R5.5／§2④a-1：统一触发器台账与「已挂载」集合**同源同步**——加入=登记，移除=撤销
-        // （撤销入口即各列表的「取消」按钮；自动收场/重排亦随实例移除同步撤销）。台账**进程级**
-        // （启动中心临时触发器不跨重启恢复，见 TriggerScope.ProcessEphemeral）。
+        // R5.5／§2④a-1：统一触发器台账是**已挂载集合的投影**——集合变更（含 Replace/Reset/Move）由同步器按
+        // `NotifyCollectionChangedAction` 正确处理；**实际撤销仍走各列表的「取消」按钮**（或 RevokeAllArmedTriggers），
+        // 集合移除后台账条目随之消失（不存在「台账说已撤、触发器仍在跑」）。台账**进程级**（见 TriggerScope）。
+        _timerLedgerSync = new ArmedTriggerLedgerSync(TriggerLedger, "timer", TriggerOwnerKinds.StartupChain,
+            TriggerScope.ProcessEphemeral, RevokeEntryText, item => item is ArmedTimerViewModel t
+                ? new ArmedTriggerDescriptor(OwnerRefOf(t.Step), IntentOfArmed("timer", t.Step), "") : null);
+        _watchdogLedgerSync = new ArmedTriggerLedgerSync(TriggerLedger, "watchdog", TriggerOwnerKinds.StartupChain,
+            TriggerScope.ProcessEphemeral, RevokeEntryText, item => item is ArmedWatchdogViewModel d
+                ? new ArmedTriggerDescriptor(OwnerRefOf(d.Step), IntentOfArmed("watchdog", d.Step), "") : null);
+        _logLedgerSync = new ArmedTriggerLedgerSync(TriggerLedger, "log", TriggerOwnerKinds.StartupChain,
+            TriggerScope.ProcessEphemeral, RevokeEntryText, item => item is ArmedLogTriggerViewModel g
+                ? new ArmedTriggerDescriptor(OwnerRefOf(g.Step), IntentOfArmed("log", g.Step), "") : null);
+
         ArmedTimers.CollectionChanged += (_, e) =>
         {
-            SyncTriggerLedger("timer", e);
+            _timerLedgerSync.OnCollectionChanged(e.Action, e.OldItems, e.NewItems, ArmedTimers.Cast<object>().ToList());
             OnPropertyChanged(nameof(HasArmedTimers));
         };
         ArmedWatchdogs.CollectionChanged += (_, e) =>
         {
-            SyncTriggerLedger("watchdog", e);
+            _watchdogLedgerSync.OnCollectionChanged(e.Action, e.OldItems, e.NewItems, ArmedWatchdogs.Cast<object>().ToList());
             OnPropertyChanged(nameof(HasArmedWatchdogs));
         };
         ArmedLogTriggers.CollectionChanged += (_, e) =>
         {
-            SyncTriggerLedger("log", e);
+            _logLedgerSync.OnCollectionChanged(e.Action, e.OldItems, e.NewItems, ArmedLogTriggers.Cast<object>().ToList());
             OnPropertyChanged(nameof(HasArmedLogTriggers));
         };
 
@@ -745,33 +755,30 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>当前定时中的触发器（运行态，不持久化；助手重启后需流程重跑才会重新挂载）。</summary>
     public ObservableCollection<ArmedTimerViewModel> ArmedTimers { get; } = [];
 
+    /// <summary>台账条目中登记的撤销入口文本（实际撤销在各列表的「取消」按钮）。</summary>
+    internal const string RevokeEntryText = "流程视图「已挂载触发器」列表的「取消」按钮（或 RevokeAllArmedTriggers / 流程整体撤下）";
+
     /// <summary>
     /// **R5.5 统一后台触发器台账**（机制五a：所有权／挂载时刻／意图／撤销入口；可查可撤）。
+    /// **语义＝挂载投影**：台账本身不撤销（撤销走宿主取消入口），集合移除后条目随之消失。
     /// **进程级**：与 `TriggerScope.ProcessEphemeral` 一致——进程退出后台账为空且无残留挂载。
     /// </summary>
     public BackgroundTriggerLedger TriggerLedger { get; } = new();
 
-    /// <summary>集合同步：加入 ⇒ 登记（按挂载**实例**计数），移除 ⇒ 撤销（幂等）。</summary>
-    private void SyncTriggerLedger(string kind, NotifyCollectionChangedEventArgs e)
+    private readonly ArmedTriggerLedgerSync _timerLedgerSync;
+    private readonly ArmedTriggerLedgerSync _watchdogLedgerSync;
+    private readonly ArmedTriggerLedgerSync _logLedgerSync;
+
+    /// <summary>
+    /// **程序化撤销入口（会诊整改：真撤销，不是只清台账）**：逐个走既有取消入口（各自 `Cancel*` ⇒ 取消 CTS/退订日志
+    /// ⇒ 集合移除 ⇒ 台账条目随之消失）。可在任意线程调用（内部经 `RunOnUi` 归到 UI 线程）。
+    /// </summary>
+    public void RevokeAllArmedTriggers()
     {
-        if (e.NewItems is { } added)
-            foreach (var item in added) RegisterArmedTrigger(kind, item);
-        if (e.OldItems is { } removed)
-            foreach (var item in removed) TriggerLedger.Revoke(TriggerIdOfArmed(kind, item));
+        foreach (var timer in ArmedTimers.ToList()) CancelTimer(timer);
+        foreach (var dog in ArmedWatchdogs.ToList()) CancelWatchdog(dog);
+        foreach (var trig in ArmedLogTriggers.ToList()) CancelLogTrigger(trig);
     }
-
-    private static StartupStep? ArmedStepOf(string kind, object? item) => kind switch
-    {
-        "timer" => (item as ArmedTimerViewModel)?.Step,
-        "watchdog" => (item as ArmedWatchdogViewModel)?.Step,
-        "log" => (item as ArmedLogTriggerViewModel)?.Step,
-        _ => null,
-    };
-
-    /// <summary>条目标识（同一节点**重复挂载**＝多条；实例哈希仅用于进程内区分，与本台账进程级语义一致）。</summary>
-    private static string TriggerIdOfArmed(string kind, object? item)
-        => BackgroundTriggerLedger.TriggerIdOf(kind, TriggerOwnerKinds.StartupChain,
-            OwnerRefOf(ArmedStepOf(kind, item)), kind + "#" + RuntimeHelpers.GetHashCode(item ?? kind));
 
     /// <summary>
     /// 所有权引用：启动中心临时触发器**没有运行台账身份**（`StartupFlowConfig` 无 runId），
@@ -779,25 +786,6 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// </summary>
     internal static string OwnerRefOf(StartupStep? step)
         => "startup-chain(process)/step:" + (step?.Id ?? "unknown");
-
-    private void RegisterArmedTrigger(string kind, object? item)
-    {
-        var step = ArmedStepOf(kind, item);
-        if (step is null) return;
-        var ownerRef = OwnerRefOf(step);
-        TriggerLedger.Register(new BackgroundTriggerEntry
-        {
-            TriggerId = BackgroundTriggerLedger.TriggerIdOf(kind, TriggerOwnerKinds.StartupChain, ownerRef,
-                kind + "#" + RuntimeHelpers.GetHashCode(item ?? kind)),
-            Kind = kind,
-            OwnerKind = TriggerOwnerKinds.StartupChain,
-            OwnerRef = ownerRef,
-            MountedAtUtc = DateTimeOffset.UtcNow,
-            Intent = IntentOfArmed(kind, step),
-            RevokeEntry = "流程视图「已挂载触发器」列表的「取消」按钮（或流程整体撤下）",
-            Scope = TriggerScope.ProcessEphemeral,
-        });
-    }
 
     /// <summary>意图（人类可读：盯什么／成立时执行什么／是否循环——与挂载日志同口径）。</summary>
     private static string IntentOfArmed(string kind, StartupStep step) => kind switch
