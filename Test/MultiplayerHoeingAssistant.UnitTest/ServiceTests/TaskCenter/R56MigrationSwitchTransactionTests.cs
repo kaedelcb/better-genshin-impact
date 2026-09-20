@@ -954,6 +954,26 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         // 对真实配置根的绝对路径做规范名校验应通过（且不会因首段位置错误而“提前通过”）
         Assert.True(MigrationSwitchTransaction.IsCanonicalAbsolutePath(Path.GetFullPath(_configRoot), out var bad), bad);
     }
+    /// <summary>
+    /// **第 15 轮必改（路径命名空间别名）**：`\\?\C:\data` 与 `C:\data` 指向同一目录但字符串前缀不匹配，
+    /// 可绕过根互不包含检查。处置＝**明确拒绝尚不支持的扩展/设备前缀**并要求两根同命名空间；
+    /// 断言在**创建任何事务资料之前**拒绝（构造期抛）。
+    /// </summary>
+    [Fact]
+    public void Roots_ExtendedOrMixedNamespacePrefixes_RejectedBeforeAnyWrite()
+    {
+        // ① 扩展路径前缀（任一根）⇒ 拒绝
+        Assert.Throws<InvalidOperationException>(() =>
+            new MigrationSwitchTransaction(_configRoot, @"\\?\C:\data\tx"));
+        Assert.Throws<InvalidOperationException>(() =>
+            new MigrationSwitchTransaction(@"\\?\C:\data", _txRoot));
+        // ② 设备前缀 ⇒ 拒绝
+        Assert.Throws<InvalidOperationException>(() =>
+            new MigrationSwitchTransaction(_configRoot, @"\\.\C:\data\tx"));
+        // ③ 普通盘符根 与 UNC 根 混用 ⇒ 拒绝（不同命名空间，无法比较目录身份）
+        Assert.Throws<InvalidOperationException>(() =>
+            new MigrationSwitchTransaction(_configRoot, @"\\server\share\tx"));
+    }
     [Theory]
     [InlineData(MigrationStage.Snapshotting)]
     [InlineData(MigrationStage.SnapshotReady)]

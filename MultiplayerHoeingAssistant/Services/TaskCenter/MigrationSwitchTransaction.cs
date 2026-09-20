@@ -126,6 +126,18 @@ public sealed class MigrationSwitchTransaction : IDisposable
 
     private void ValidateRoots()
     {
+        // **路径命名空间门禁（第 15 轮会诊）**：`\\?\C:\data` 与 `C:\data` 指向同一目录却字符串前缀不匹配，
+        // 可绕过「根互不包含」。此处**明确拒绝尚不支持的扩展/设备前缀**，并要求两根同属一种命名空间。
+        foreach (var chain in new[] { _configRoot, _transactionRoot })
+        {
+            if (chain.StartsWith(@"\\?\", StringComparison.Ordinal) || chain.StartsWith(@"\\.\", StringComparison.Ordinal))
+                throw new InvalidOperationException("不支持扩展/设备路径前缀（\\\\?\\、\\\\.\\）：无法保证与普通路径的目录身份一致，拒绝迁移事务：" + chain);
+        }
+        var cfgIsUnc = _configRoot.StartsWith(@"\\", StringComparison.Ordinal);
+        var txIsUnc = _transactionRoot.StartsWith(@"\\", StringComparison.Ordinal);
+        if (cfgIsUnc != txIsUnc)
+            throw new InvalidOperationException("配置根与事务根必须同属一种路径命名空间（均为盘符路径或均为 UNC），拒绝迁移事务。");
+
         var cfg = _configRoot.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         var tx = _transactionRoot.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         if (tx.StartsWith(cfg, StringComparison.OrdinalIgnoreCase))
