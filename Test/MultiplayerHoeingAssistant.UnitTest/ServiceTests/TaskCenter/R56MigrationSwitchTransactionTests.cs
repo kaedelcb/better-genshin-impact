@@ -974,6 +974,24 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         Assert.Throws<InvalidOperationException>(() =>
             new MigrationSwitchTransaction(_configRoot, @"\\server\share\tx"));
     }
+    /// <summary>
+    /// **第 16 轮必改（映射盘/SUBST 别名）**：不同盘符的两个根可能由 SUBST/映射盘指向同一目录 ⇒ 目录身份不可比较，
+    /// 故要求**同卷**；不同卷在**创建任何事务资料之前**拒绝。若本机只有一个就绪卷，本条不可构造 ⇒ 依据事实跳过
+    /// （不得伪报通过；该环境残余由 §21.10 登记承接）。
+    /// </summary>
+    [Fact]
+    public void Roots_DifferentVolumes_RejectedBeforeAnyWrite()
+    {
+        var cfgVolume = (Path.GetPathRoot(Path.GetFullPath(_configRoot)) ?? "").TrimEnd(Path.DirectorySeparatorChar);
+        var other = System.IO.DriveInfo.GetDrives()
+            .Where(d => d.IsReady && d.DriveType == DriveType.Fixed)
+            .Select(d => d.RootDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar))
+            .FirstOrDefault(v => !string.Equals(v, cfgVolume, StringComparison.OrdinalIgnoreCase));
+        if (other is null) return;                       // 单卷环境：不可构造，如实跳过（不伪报通过）
+
+        Assert.Throws<InvalidOperationException>(() =>
+            new MigrationSwitchTransaction(_configRoot, Path.Combine(other, "r56-tx")));
+    }
     [Theory]
     [InlineData(MigrationStage.Snapshotting)]
     [InlineData(MigrationStage.SnapshotReady)]

@@ -133,6 +133,13 @@ public sealed class MigrationSwitchTransaction : IDisposable
             if (chain.StartsWith(@"\\?\", StringComparison.Ordinal) || chain.StartsWith(@"\\.\", StringComparison.Ordinal))
                 throw new InvalidOperationException("不支持扩展/设备路径前缀（\\\\?\\、\\\\.\\）：无法保证与普通路径的目录身份一致，拒绝迁移事务：" + chain);
         }
+        // **同卷约束（第 16 轮会诊）**：`SUBST X: C:\data` / 映射盘会让两个不同盘符指向同一目录，字符串互不包含且
+        // 逐段名称检查也通过 ⇒ 无法证明隔离。处置＝要求两根**同卷**（不同卷直接拒绝；同卷别名由 reparse point 检查拦截）。
+        var cfgVolume = (Path.GetPathRoot(_configRoot) ?? "").TrimEnd(Path.DirectorySeparatorChar);
+        var txVolume = (Path.GetPathRoot(_transactionRoot) ?? "").TrimEnd(Path.DirectorySeparatorChar);
+        if (!string.Equals(cfgVolume, txVolume, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("配置根与事务根必须位于**同一卷**（不同卷可能由 SUBST/映射盘指向同一目录，目录身份不可比较），拒绝迁移事务。");
+
         var cfgIsUnc = _configRoot.StartsWith(@"\\", StringComparison.Ordinal);
         var txIsUnc = _transactionRoot.StartsWith(@"\\", StringComparison.Ordinal);
         if (cfgIsUnc != txIsUnc)
