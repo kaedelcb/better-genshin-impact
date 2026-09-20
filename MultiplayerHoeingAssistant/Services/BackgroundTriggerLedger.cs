@@ -146,10 +146,11 @@ public sealed class ArmedTriggerLedgerSync
     private readonly Func<object, ArmedTriggerDescriptor?> _describe;
     private readonly Func<DateTimeOffset> _utcNow;
     private readonly Dictionary<object, string> _instanceIds = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<object, string> _triggerIds = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<object, int> _refs = new(ReferenceEqualityComparer.Instance);
     private long _sequence;
 
-    public ArmedTriggerLedgerSync(BackgroundTriggerLedger ledger, string kind, string ownerKind, TriggerScope scope,
+    internal ArmedTriggerLedgerSync(BackgroundTriggerLedger ledger, string kind, string ownerKind, TriggerScope scope,
         string mountedRevokeEntry, Func<object, ArmedTriggerDescriptor?> describe, Func<DateTimeOffset>? utcNow = null)
     {
         _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
@@ -189,10 +190,11 @@ public sealed class ArmedTriggerLedgerSync
     }
 
     /// <summary>按当前快照重建（Reset/兜底）：先清该类条目与实例表，再按快照登记。</summary>
-    public void ResetTo(IReadOnlyList<object> currentSnapshot)
+    private void ResetTo(IReadOnlyList<object> currentSnapshot)
     {
         _ledger.RemoveKind(_kind);
         _instanceIds.Clear();
+        _triggerIds.Clear();
         _refs.Clear();
         RegisterEach(currentSnapshot);
     }
@@ -213,9 +215,11 @@ public sealed class ArmedTriggerLedgerSync
             var instanceId = _kind + "#" + (++_sequence); // 进程内唯一编号（非哈希）
             _refs[item] = 1;
             _instanceIds[item] = instanceId;
+            var triggerId = BackgroundTriggerLedger.TriggerIdOf(_kind, _ownerKind, descriptor.OwnerRef, instanceId);
+            _triggerIds[item] = triggerId; // 会诊整改：注销用**登记时**的完整标识（描述变化/变 null 也能销）
             _ledger.Apply(new BackgroundTriggerEntry
             {
-                TriggerId = BackgroundTriggerLedger.TriggerIdOf(_kind, _ownerKind, descriptor.OwnerRef, instanceId),
+                TriggerId = triggerId,
                 Kind = _kind,
                 OwnerKind = _ownerKind,
                 OwnerRef = descriptor.OwnerRef,
@@ -239,8 +243,8 @@ public sealed class ArmedTriggerLedgerSync
                 continue;
             }
             _refs.Remove(item);
-            if (_instanceIds.Remove(item, out var instanceId))
-                _ledger.Remove(BackgroundTriggerLedger.TriggerIdOf(_kind, _ownerKind, _describe(item)?.OwnerRef ?? "", instanceId));
+            _instanceIds.Remove(item);
+            if (_triggerIds.Remove(item, out var registeredId)) _ledger.Remove(registeredId);
         }
     }
 }

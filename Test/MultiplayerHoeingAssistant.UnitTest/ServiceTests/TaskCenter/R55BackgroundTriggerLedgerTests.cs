@@ -160,6 +160,50 @@ public class R55BackgroundTriggerLedgerTests
         Assert.Contains("TryGet", publicNames);
     }
 
+    /// <summary>
+    /// **会诊反例⑥：登记后描述变化（或变为 null）仍能正确注销**——注销用**登记时保存的完整标识**，
+    /// 不用「当前描述重新拼键」（否则会留下永久陈旧条目）。
+    /// </summary>
+    [Fact]
+    public void Detach_UsesRegisteredId_EvenIfDescriptorChanges()
+    {
+        var ledger = new BackgroundTriggerLedger();
+        var described = "owner-A";
+        var sync = new ArmedTriggerLedgerSync(ledger, "timer", TriggerOwnerKinds.StartupChain, TriggerScope.ProcessEphemeral,
+            "列表「取消」按钮", item => new ArmedTriggerDescriptor(described, "意图", ""), () => Now);
+        var item = new object();
+
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, item), item);
+        Assert.Equal(1, ledger.Count);
+
+        described = "owner-B"; // 描述变化（同一实例）
+        Apply(sync, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, item, 0));
+        Assert.Empty(ledger.List());
+
+        // 描述变为 null（解析失败）同样不得遗留条目
+        var item2 = new object();
+        var nullAfter = false;
+        var sync2 = new ArmedTriggerLedgerSync(ledger, "watchdog", TriggerOwnerKinds.StartupChain, TriggerScope.ProcessEphemeral,
+            "列表「取消」按钮", _ => nullAfter ? null : new ArmedTriggerDescriptor("o", "i", ""), () => Now);
+        Apply(sync2, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, item2), item2);
+        nullAfter = true;
+        Apply(sync2, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, item2, 0));
+        Assert.Empty(ledger.List());
+    }
+
+    /// <summary>**会诊整改（结构断言）**：同步器的变更能力不外露（ctor 与 ResetTo 非 public）。</summary>
+    [Fact]
+    public void Sync_MutationSurface_NotPublic()
+    {
+        var ctors = typeof(ArmedTriggerLedgerSync).GetConstructors();
+        Assert.DoesNotContain(ctors, c => c.IsPublic);
+        var reset = typeof(ArmedTriggerLedgerSync).GetMethod("ResetTo",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(reset);           // 存在但非公开（仅同步器内部使用）
+        Assert.False(reset!.IsPublic);
+        Assert.DoesNotContain(typeof(ArmedTriggerLedgerSync).GetMethods().Where(m => m.IsPublic).Select(m => m.Name),
+            n => n is "ResetTo" or "Apply" or "Remove" or "RemoveKind");
+    }
     /// <summary>三类作用域界限互异，且启动中心背景触发器恒为进程级临时。</summary>
     [Fact]
     public void Scope_Boundaries_AreDistinct()

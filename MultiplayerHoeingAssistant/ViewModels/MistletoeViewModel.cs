@@ -62,19 +62,22 @@ public sealed class MistletoeViewModel : ViewModelBase
             TriggerScope.ProcessEphemeral, RevokeEntryText, item => item is ArmedLogTriggerViewModel g
                 ? new ArmedTriggerDescriptor(OwnerRefOf(g.Step), IntentOfArmed("log", g.Step), "") : null);
 
-        ArmedTimers.CollectionChanged += (_, e) =>
+        ArmedTimers = new ReadOnlyObservableCollection<ArmedTimerViewModel>(ArmedTimersMutable);
+        ArmedWatchdogs = new ReadOnlyObservableCollection<ArmedWatchdogViewModel>(ArmedWatchdogsMutable);
+        ArmedLogTriggers = new ReadOnlyObservableCollection<ArmedLogTriggerViewModel>(ArmedLogTriggersMutable);
+        ArmedTimersMutable.CollectionChanged += (_, e) =>
         {
-            _timerLedgerSync.OnCollectionChanged(e.Action, e.OldItems, e.NewItems, ArmedTimers.Cast<object>().ToList());
+            _timerLedgerSync.OnCollectionChanged(e.Action, e.OldItems, e.NewItems, ArmedTimersMutable.Cast<object>().ToList());
             OnPropertyChanged(nameof(HasArmedTimers));
         };
-        ArmedWatchdogs.CollectionChanged += (_, e) =>
+        ArmedWatchdogsMutable.CollectionChanged += (_, e) =>
         {
-            _watchdogLedgerSync.OnCollectionChanged(e.Action, e.OldItems, e.NewItems, ArmedWatchdogs.Cast<object>().ToList());
+            _watchdogLedgerSync.OnCollectionChanged(e.Action, e.OldItems, e.NewItems, ArmedWatchdogsMutable.Cast<object>().ToList());
             OnPropertyChanged(nameof(HasArmedWatchdogs));
         };
-        ArmedLogTriggers.CollectionChanged += (_, e) =>
+        ArmedLogTriggersMutable.CollectionChanged += (_, e) =>
         {
-            _logLedgerSync.OnCollectionChanged(e.Action, e.OldItems, e.NewItems, ArmedLogTriggers.Cast<object>().ToList());
+            _logLedgerSync.OnCollectionChanged(e.Action, e.OldItems, e.NewItems, ArmedLogTriggersMutable.Cast<object>().ToList());
             OnPropertyChanged(nameof(HasArmedLogTriggers));
         };
 
@@ -753,7 +756,10 @@ public sealed class MistletoeViewModel : ViewModelBase
     // ================= 定时触发器（武装中的定时器列表） =================
 
     /// <summary>当前定时中的触发器（运行态，不持久化；助手重启后需流程重跑才会重新挂载）。</summary>
-    public ObservableCollection<ArmedTimerViewModel> ArmedTimers { get; } = [];
+    internal ObservableCollection<ArmedTimerViewModel> ArmedTimersMutable { get; } = [];
+
+    /// <summary>**只读视图**（XAML/外部消费者）；变更只允许经宿主生命周期入口（挂载/取消/`RevokeAllArmedTriggers`）。</summary>
+    public ReadOnlyObservableCollection<ArmedTimerViewModel> ArmedTimers { get; }
 
     /// <summary>台账条目中登记的撤销入口文本（实际撤销在各列表的「取消」按钮）。</summary>
     internal const string RevokeEntryText = "流程视图「已挂载触发器」列表的「取消」按钮（或 RevokeAllArmedTriggers / 流程整体撤下）";
@@ -775,9 +781,30 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// </summary>
     public void RevokeAllArmedTriggers()
     {
-        foreach (var timer in ArmedTimers.ToList()) CancelTimer(timer);
-        foreach (var dog in ArmedWatchdogs.ToList()) CancelWatchdog(dog);
-        foreach (var trig in ArmedLogTriggers.ToList()) CancelLogTrigger(trig);
+        // 会诊整改：**快照与取消同处 UI 串行边界**（并发挂载/自动收场下不漏项、不跨线程读集合）；
+        // 单项取消异常**隔离**并如实报告，保证其余项仍被撤销。
+        RunOnUi(() =>
+        {
+            var failures = 0;
+            foreach (var timer in ArmedTimersMutable.ToList())
+            {
+                try { CancelTimer(timer); }
+                catch (Exception ex) { failures++; _mainVm.AddLog($"[槲寄生] 撤销定时触发器「{timer.Title}」失败：{ex.Message}"); }
+            }
+            foreach (var dog in ArmedWatchdogsMutable.ToList())
+            {
+                try { CancelWatchdog(dog); }
+                catch (Exception ex) { failures++; _mainVm.AddLog($"[槲寄生] 撤销电子狗「{dog.Title}」失败：{ex.Message}"); }
+            }
+            foreach (var trig in ArmedLogTriggersMutable.ToList())
+            {
+                try { CancelLogTrigger(trig); }
+                catch (Exception ex) { failures++; _mainVm.AddLog($"[槲寄生] 撤销日志触发器「{trig.Title}」失败：{ex.Message}"); }
+            }
+            _mainVm.AddLog(failures == 0
+                ? "[槲寄生] 已撤销全部后台触发器（台账随集合同步清空）"
+                : $"[槲寄生] 后台触发器撤销完成，其中 {failures} 项失败（详见上方日志；台账仅反映实际撤下的项）");
+        });
     }
 
     /// <summary>
@@ -805,7 +832,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         StartupStepKinds.BgiTaskName => $"当前任务名{(step.ExpectRunning ? "包含" : "不包含")}「{step.TaskName}」",
         _ => step.WatchKind,
     };
-    public bool HasArmedTimers => ArmedTimers.Count > 0;
+    public bool HasArmedTimers => ArmedTimersMutable.Count > 0;
 
     /// <summary>定时触发器节点执行到此：校验参数后挂载定时器（Runner 注入的委托）。</summary>
     private void ArmTimer(StartupStep step)
@@ -817,7 +844,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         }
         var fireAt = NextOccurrence(t);
         var timer = new ArmedTimerViewModel(step, fireAt, this);
-        RunOnUi(() => ArmedTimers.Add(timer));
+        RunOnUi(() => ArmedTimersMutable.Add(timer));
         _mainVm.AddLog($"[槲寄生] 定时触发器「{StartupFlowRunner.DisplayName(step, 0)}」已挂载：{fireAt:MM-dd HH:mm} 触发「到点执行」链（{step.FireSteps.Count} 个节点{(step.RepeatDaily ? "，每天重复" : "" )}）");
         _ = RunTimerAsync(timer);
     }
@@ -838,7 +865,7 @@ public sealed class MistletoeViewModel : ViewModelBase
             if (delay > TimeSpan.Zero)
                 await Task.Delay(delay, timer.Cts.Token);
 
-            RunOnUi(() => ArmedTimers.Remove(timer));
+            RunOnUi(() => ArmedTimersMutable.Remove(timer));
             var step = timer.Step;
             _mainVm.AddLog($"[槲寄生] 定时触发器「{StartupFlowRunner.DisplayName(step, 0)}」到点（{DateTime.Now:HH:mm}），开始执行「到点执行」链");
             OnNodeStateReported(step, NodeRunState.Running, null);
@@ -850,7 +877,7 @@ public sealed class MistletoeViewModel : ViewModelBase
             {
                 var fireAt = NextOccurrence(t);
                 timer.Reset(fireAt);
-                RunOnUi(() => ArmedTimers.Add(timer));
+                RunOnUi(() => ArmedTimersMutable.Add(timer));
                 _mainVm.AddLog($"[槲寄生] 定时触发器「{StartupFlowRunner.DisplayName(step, 0)}」已按「每天重复」重新挂载：{fireAt:MM-dd HH:mm}");
                 _ = RunTimerAsync(timer);
             }
@@ -868,23 +895,26 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>取消一个定时中的触发器（页面「取消」按钮）。</summary>
     internal void CancelTimer(ArmedTimerViewModel timer)
     {
-        RunOnUi(() => ArmedTimers.Remove(timer));
+        RunOnUi(() => ArmedTimersMutable.Remove(timer));
         timer.Cts.Cancel();
     }
 
     // ================= 电子狗（盯梢中的循环检测列表） =================
 
     /// <summary>当前盯梢中的电子狗（运行态，不持久化；助手重启后需流程重跑才会重新挂载）。</summary>
-    public ObservableCollection<ArmedWatchdogViewModel> ArmedWatchdogs { get; } = [];
+    internal ObservableCollection<ArmedWatchdogViewModel> ArmedWatchdogsMutable { get; } = [];
 
-    public bool HasArmedWatchdogs => ArmedWatchdogs.Count > 0;
+    /// <summary>**只读视图**（见 ArmedTimersMutable 同口径）。</summary>
+    public ReadOnlyObservableCollection<ArmedWatchdogViewModel> ArmedWatchdogs { get; }
+
+    public bool HasArmedWatchdogs => ArmedWatchdogsMutable.Count > 0;
 
     /// <summary>电子狗节点执行到此：校验参数后挂载循环检测（Runner 注入的委托）。</summary>
     private void ArmWatchdog(StartupStep step)
     {
         var interval = Math.Max(1, step.WatchIntervalSeconds);
         var dog = new ArmedWatchdogViewModel(step, interval, this);
-        RunOnUi(() => ArmedWatchdogs.Add(dog));
+        RunOnUi(() => ArmedWatchdogsMutable.Add(dog));
         _mainVm.AddLog($"[槲寄生] 电子狗「{StartupFlowRunner.DisplayName(step, 0)}」已挂载：每 {interval} 秒盯「{WatchKindDesc(step)}」，成立时执行「触发执行」链（{step.FireSteps.Count} 个节点，{(step.WatchRepeat ? "触发后继续循环" : "触发后停止")}，防抖复核 {Math.Clamp(step.WatchConfirmSeconds, 1, 60)}s×{Math.Clamp(step.WatchConfirmTimes, 1, 10)}）");
         _ = RunWatchdogAsync(dog);
     }
@@ -1002,7 +1032,7 @@ public sealed class MistletoeViewModel : ViewModelBase
                 if (!step.WatchRepeat)
                 {
                     _mainVm.AddLog($"[槲寄生] 电子狗「{dog.Title}」设置为触发后停止，已自动撤下");
-                    RunOnUi(() => ArmedWatchdogs.Remove(dog));
+                    RunOnUi(() => ArmedWatchdogsMutable.Remove(dog));
                     return;
                 }
             }
@@ -1015,7 +1045,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         {
             // 循环本身出意外（理论上只剩此处兜底）：留痕并撤下，避免无声残留
             _mainVm.AddLog($"[槲寄生] 电子狗「{dog.Title}」检测循环异常：{ex.Message}，已撤下");
-            RunOnUi(() => ArmedWatchdogs.Remove(dog));
+            RunOnUi(() => ArmedWatchdogsMutable.Remove(dog));
         }
     }
 
@@ -1033,16 +1063,19 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>取消一个盯梢中的电子狗（页面「取消」按钮）。</summary>
     internal void CancelWatchdog(ArmedWatchdogViewModel dog)
     {
-        RunOnUi(() => ArmedWatchdogs.Remove(dog));
+        RunOnUi(() => ArmedWatchdogsMutable.Remove(dog));
         dog.Cts.Cancel();
     }
 
     // ================= 日志触发器（监听中的日志触发器列表） =================
 
     /// <summary>当前监听中的日志触发器（运行态，不持久化；助手重启后需流程重跑才会重新挂载）。</summary>
-    public ObservableCollection<ArmedLogTriggerViewModel> ArmedLogTriggers { get; } = [];
+    internal ObservableCollection<ArmedLogTriggerViewModel> ArmedLogTriggersMutable { get; } = [];
 
-    public bool HasArmedLogTriggers => ArmedLogTriggers.Count > 0;
+    /// <summary>**只读视图**（见 ArmedTimersMutable 同口径）。</summary>
+    public ReadOnlyObservableCollection<ArmedLogTriggerViewModel> ArmedLogTriggers { get; }
+
+    public bool HasArmedLogTriggers => ArmedLogTriggersMutable.Count > 0;
 
     /// <summary>日志触发器节点执行到此：挂载日志监听（Runner 注入的委托）。
     /// 关键字与「触发后是否循环」在挂载时快照：挂载后再改节点参数不影响已挂载实例（撤下重挂生效），
@@ -1064,7 +1097,7 @@ public sealed class MistletoeViewModel : ViewModelBase
         // 先订阅再入列再启动循环：订阅在 tail 线程生效即刻可能来事件，
         // 但循环任务未起前事件只会在命中通道里攒着（容量 1，超出合并为最后一次），不会丢触发也不会并发执行
         _logTail.EntryReceived += trig.OnLogEntry;
-        RunOnUi(() => ArmedLogTriggers.Add(trig));
+        RunOnUi(() => ArmedLogTriggersMutable.Add(trig));
         _mainVm.AddLog($"[槲寄生] 日志触发器「{trig.Title}」已挂载：盯本机 BGI 新日志出现「{trig.Keyword}」，命中执行「触发执行」链（{step.FireSteps.Count} 个节点，{(trig.RepeatAfterFire ? "循环触发" : "触发一次后停止")}）；只盯挂载后的新日志");
         _ = RunLogTriggerAsync(trig);
     }
@@ -1110,7 +1143,7 @@ public sealed class MistletoeViewModel : ViewModelBase
                 {
                     _mainVm.AddLog($"[槲寄生] 日志触发器「{trig.Title}」设置为触发后停止，已自动撤下");
                     autoRemoved = true;
-                    RunOnUi(() => ArmedLogTriggers.Remove(trig));
+                    RunOnUi(() => ArmedLogTriggersMutable.Remove(trig));
                     return;
                 }
                 trig.NoteStatus($"上次触发 {DateTime.Now:HH:mm:ss}，继续监听中…");
@@ -1124,14 +1157,14 @@ public sealed class MistletoeViewModel : ViewModelBase
         {
             // 循环本身出意外（理论上只剩此处兜底）：留痕并撤下，避免无声残留
             _mainVm.AddLog($"[槲寄生] 日志触发器「{trig.Title}」监听循环异常：{ex.Message}，已撤下");
-            RunOnUi(() => ArmedLogTriggers.Remove(trig));
+            RunOnUi(() => ArmedLogTriggersMutable.Remove(trig));
         }
         finally
         {
             // 统一退订出口（取消/异常/自动撤下都经过）；退订是幂等的
             if (_logTail != null) _logTail.EntryReceived -= trig.OnLogEntry;
             // 异常撤下时若列表里还有（非自动撤下路径已移除），兜底移除
-            if (!autoRemoved) RunOnUi(() => ArmedLogTriggers.Remove(trig));
+            if (!autoRemoved) RunOnUi(() => ArmedLogTriggersMutable.Remove(trig));
         }
     }
 
@@ -1139,7 +1172,7 @@ public sealed class MistletoeViewModel : ViewModelBase
     internal void CancelLogTrigger(ArmedLogTriggerViewModel trig)
     {
         if (_logTail != null) _logTail.EntryReceived -= trig.OnLogEntry;
-        RunOnUi(() => ArmedLogTriggers.Remove(trig));
+        RunOnUi(() => ArmedLogTriggersMutable.Remove(trig));
         trig.Cts.Cancel();
     }
 

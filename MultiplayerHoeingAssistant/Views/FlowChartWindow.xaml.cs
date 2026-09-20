@@ -80,9 +80,9 @@ public partial class FlowChartWindow : Window
     private bool _rebuildPending;
 
     private FlowChartWindow(StepChainViewModel root, Action<StartupStepViewModel> onActivate, Window? owner,
-        System.Collections.ObjectModel.ObservableCollection<ArmedTimerViewModel> armedTimers,
-        System.Collections.ObjectModel.ObservableCollection<ArmedWatchdogViewModel> armedWatchdogs,
-        System.Collections.ObjectModel.ObservableCollection<ArmedLogTriggerViewModel> armedLogTriggers)
+        System.Collections.IEnumerable armedTimers,
+        System.Collections.IEnumerable armedWatchdogs,
+        System.Collections.IEnumerable armedLogTriggers)
     {
         InitializeComponent();
         // 屏幕工作区适配：尺寸压到所在屏 95% 内并居中钳位，防止高缩放/小屏下窗口被截（与 MainWindow/SettingsWindow 同款）
@@ -105,9 +105,9 @@ public partial class FlowChartWindow : Window
 
     /// <summary>弹窗展示整条启动流程的流程图（非模态，可开着对照编辑器操作）。</summary>
     public static FlowChartWindow Show(StepChainViewModel root, Action<StartupStepViewModel> onActivate,
-        System.Collections.ObjectModel.ObservableCollection<ArmedTimerViewModel> armedTimers,
-        System.Collections.ObjectModel.ObservableCollection<ArmedWatchdogViewModel> armedWatchdogs,
-        System.Collections.ObjectModel.ObservableCollection<ArmedLogTriggerViewModel> armedLogTriggers,
+        System.Collections.IEnumerable armedTimers,
+        System.Collections.IEnumerable armedWatchdogs,
+        System.Collections.IEnumerable armedLogTriggers,
         Window? owner = null)
     {
         var o = owner ?? Application.Current?.MainWindow;
