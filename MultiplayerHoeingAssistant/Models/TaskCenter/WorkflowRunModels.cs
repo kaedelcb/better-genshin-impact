@@ -112,6 +112,27 @@ public sealed class WorkflowNodeOutcome
     [JsonPropertyName("rawTerminal")]
     public string? RawTerminal { get; set; }
 
+    /// <summary>
+    /// **产生本结果的提交键**（R5.2 B2-γ G8：仅当 `RawTerminal` 非空且该提交属于本出现身份时填写）。
+    /// 与租约 `OperationRecord.WireSubmitKey` 比对，使「节点操作独立终局」可证明**该结果属于本笔发送**——
+    /// 不得凭「同一出现身份曾有某结果」结清另一笔 Accepted 责任。加法字段（缺失=null）。
+    /// </summary>
+    [JsonPropertyName("submissionKey")]
+    public string? SubmissionKey { get; set; }
+
+    /// <summary>产生本结果的发送 attempt（与 `SubmissionKey` 同规则填写；加法字段）。</summary>
+    [JsonPropertyName("attempt")]
+    public int? Attempt { get; set; }
+
+    /// <summary>
+    /// **产生本结果的完整发送身份**（`sub:&lt;requestIdentity&gt;:&lt;sendSeq&gt;`，取自提交记录的
+    /// `AcceptedSendIdentity`；与 `SubmissionKey`/`Attempt` 同规则填写，加法字段）。
+    /// 结清节点 Operation 时按本字段与 `OperationRecord.SubmissionIdentity` **精确匹配**——
+    /// 提交键在同 attempt 的多个 sendSeq 间可复用，只有完整发送身份才能区分「两笔发送」。
+    /// </summary>
+    [JsonPropertyName("acceptedSendIdentity")]
+    public string? AcceptedSendIdentity { get; set; }
+
     [JsonPropertyName("reason")]
     public string? Reason { get; set; }
 

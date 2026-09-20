@@ -234,10 +234,14 @@ public class TaskCenterSuccessorPathGateTests
         /// <summary>发送入口注入（夹具用于制造「发送期间另有写入者改动运行记录」的交错）。</summary>
         public Action? BeforeSend { get; set; }
 
+        /// <summary>发送入口注入（带 1 起的发送序号；用于「第二节点发送前上一节点操作是否已独立终局」取证）。</summary>
+        public Action<int>? OnBeforeSend { get; set; }
+
         public Task<BgiExternalResponse> SendCommandAsync(string operation, object? payload, CancellationToken ct)
         {
             lock (_sync) _sends.Add(operation);
             BeforeSend?.Invoke();
+            OnBeforeSend?.Invoke(SendCount);
             return Task.FromResult(new BgiExternalResponse
             {
                 Success = true,
@@ -278,7 +282,8 @@ public class TaskCenterSuccessorPathGateTests
     /// `concurrentWriteBeforeSend`＝在发送入口注入「另有写入者改动运行记录」的交错（仅④使用）。
     /// </summary>
     private static async Task<RoutingProbe> ProbeNodeSubmitRoutingAsync(
-        string root, bool successorWired, Action<RunStore>? concurrentWriteBeforeSend = null)
+        string root, bool successorWired, Action<RunStore>? concurrentWriteBeforeSend = null,
+        Action<RunStore, int>? onBeforeSend = null, string[]? nodeIds = null)
     {
         using var client = new BgiExternalClient();
         var flowsDir = Path.Combine(root, "flows");
@@ -290,12 +295,12 @@ public class TaskCenterSuccessorPathGateTests
             Activation = new WorkflowActivation { Status = "active" },
             Nodes =
             [
-                new WorkflowNode
+                .. (nodeIds ?? ["n-1"]).Select(id => new WorkflowNode
                 {
-                    NodeId = "n-1",
+                    NodeId = id,
                     Kind = "resource.oneDragonConfig",
-                    Ref = new WorkflowResourceRef { Config = "配置A", Revision = "rev-1" },
-                },
+                    Ref = new WorkflowResourceRef { Config = "配置" + id, Revision = "rev-1" },
+                }),
             ],
         };
         ws.Save(doc, null);
@@ -342,6 +347,7 @@ public class TaskCenterSuccessorPathGateTests
                 ProductionBoundaryFactory = (_, runs) =>
                 {
                     if (concurrentWriteBeforeSend is not null) port.BeforeSend = () => concurrentWriteBeforeSend(runs);
+                    if (onBeforeSend is not null) port.OnBeforeSend = n => onBeforeSend(runs, n);
                     return new BgiWorkflowExecutionBoundary(port, runs);
                 },
             },
@@ -505,6 +511,47 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
     }
 
     /// <summary>
+    /// **G8 节点操作独立终局出口验收（§12.3）**：两节点流程中，**第二节点发送之前**第一节点 Operation
+    /// 必须已经独立终局（`TerminalCompleted`）——即按「该节点权威终态结果」结清，而**不是**等整条 run 终态
+    /// （后者会让长流程堆满 32 个主槽位）。观测点＝执行端口第二次发送的入口（门面流水线内，不靠抢时序）。
+    /// </summary>
+    [Fact]
+    public async Task NodeOperation_TerminalizedBeforeRunEnds_OnNextNodeAdmission()
+    {
+        var root = NewRoot("tcsweep-");
+        try
+        {
+            OperationRequestState? firstNodeOpAtSecondSend = null;
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true,
+                nodeIds: ["n-1", "n-2"],
+                onBeforeSend: (_, index) =>
+                {
+                    if (index != 2) return;
+                    try
+                    {
+                        firstNodeOpAtSecondSend = new ArbitrationLeaseStore(Path.Combine(root, "arbitration"))
+                            .Read().File?.Handoff?.Operations?
+                            .FirstOrDefault(o => o.Candidate?.NodeId == "n-1")?.RequestState;
+                    }
+                    catch (IOException)
+                    {
+                        // 瞬时争用＝本轮观测不到，保持 null（断言会失败并给出诊断）
+                    }
+                });
+
+            Assert.True(probe.ReadOk, Diag("租约台账必须成功读取过", probe));
+            Assert.True(probe.Converged, Diag("两节点流程必须收敛", probe));
+            Assert.True(probe.State == WorkflowRunState.Succeeded, Diag("两节点流程应跑通", probe));
+            Assert.True(firstNodeOpAtSecondSend == OperationRequestState.TerminalCompleted,
+                Diag("第一节点 Operation 必须在第二节点发送前独立终局（实际=" + (firstNodeOpAtSecondSend?.ToString() ?? "<null>") + "）", probe));
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
     /// **「先接管、后关闭」顺序验收（M2／§12.2 B2 的 G7(c) 部分）**：门面在 `Sender 返回 Accepted 之后、
     /// 持久化接管台账与关闭 Submission 之前`回调（`AdmissionBarriers.AfterAcceptBeforeLedger`）——此刻运行记录
     /// **必须已经**携带本轮的 `Intent=Accepted` ＋ 非空 `JobId`（即接管先落盘），否则关闭就发生在受理事实落盘之前。
@@ -538,6 +585,44 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
     }
 
     // ── 工具 ────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// **G8 结清判据的反例组（会诊阻断处置）**：节点 Operation 只有在其结果**能证明属于本笔发送**时才可独立结清——
+    /// 逐项证明「错提交键 / 错 attempt / 无原始终态词 / 未确认结果 / 非终态结果」一律**不结清**（保守保留责任）。
+    /// </summary>
+    [Theory]
+    [InlineData("ok", true)]                 // 键+attempt+原始终态词+业务终态 ⇒ 可结清
+    [InlineData("key", false)]               // 错提交键（另一笔发送的结果）⇒ 不得结清
+    [InlineData("attempt", false)]           // 错 attempt ⇒ 不得结清
+    [InlineData("noRawTerminal", false)]     // 无原始终态词（本地拒绝/闸门/跳过）⇒ 不得结清
+    [InlineData("unknown", false)]           // 未确认结果 ⇒ 不得结清
+    [InlineData("runningRawWord", false)]    // 原始终态词仍是活动态词（running）⇒ 不得结清
+    [InlineData("sameKeyOtherSendIdentity", false)] // **同键同 attempt 的另一笔发送** ⇒ 不得结清
+    public void NodeOutcomeIsTerminal_RequiresSendLinkedObservedTerminal(string mode, bool expected)
+    {
+        var run = new WorkflowRunRecord { RunId = "run-1", WorkflowId = "wf-1" };
+        run.NodeOutcomes.Add(new WorkflowNodeOutcome
+        {
+            NodeId = "n-1",
+            Occurrence = 0,
+            LoopIteration = 0,
+            Result = mode == "unknown" ? "unknown" : "succeeded",
+            RawTerminal = mode == "noRawTerminal" ? null : mode == "runningRawWord" ? "running" : "succeeded",
+            SubmissionKey = mode == "key" ? "other-key" : "key-1",
+            Attempt = mode == "attempt" ? 9 : 1,
+            AcceptedSendIdentity = mode == "sameKeyOtherSendIdentity" ? "sub:req-9:2" : "sub:req-1:1",
+        });
+        var op = new OperationRecord
+        {
+            RequestIdentity = "req-1",
+            SubmissionIdentity = "sub:req-1:1",
+            WireSubmitKey = "key-1",
+            ResourceRef = "node:n-1",
+            Candidate = new ArbitrationCandidate { NodeId = "n-1", Occurrence = 0, LoopIteration = 0, Attempt = 1 },
+        };
+
+        Assert.Equal(expected, TaskCenterHost.NodeOutcomeIsTerminal(run, op));
+    }
 
     private static string NewRoot(string prefix)
     {

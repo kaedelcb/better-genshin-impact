@@ -1330,6 +1330,42 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(2, sends);                                        // 两个运行各自合法发送一次
     }
 
+    /// <summary>
+    /// [新增·2026-09-21 会诊重要项处置] ⑪b **不得按 Zone 过滤**：消费记录经 `TerminalPendingTransfer→Tombstone`
+    /// 迁区后仍在盘上，同一 (runBinding, cursorRef, cursorRevision) **不得被再次消费**——否则 G8 让节点操作
+    /// 提前终局（迁区释放主槽位）会让「同游标唯一消费」的防双跑保护静默消失。
+    /// </summary>
+    [Fact]
+    public async Task Cursor_AlreadyConsumed_AfterMigrationStillBlocks()
+    {
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); };
+            h.TakeoverTerminalConfirmed = (_, _) => true; // 本夹具聚焦消费保护，权威终态确认另测
+        });
+
+        var r1 = Req(workflow: "group:c1");
+        r1.RunBinding = "run:1";
+        r1.CursorRef = "n-1#0#0";
+        r1.CursorRevision = 5;
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(r1)).Kind);
+
+        // 独立终局→迁区（主槽位释放），但记录仍在盘上
+        Assert.Equal(AdmissionResultKind.Accepted,
+            svc.MarkOperationTerminal(r1.RequestIdentity, "node_outcome:已观察节点权威终态").Kind);
+        Assert.NotEqual(OperationZone.Active, FindOp(r1.RequestIdentity)!.Zone);
+
+        var r2 = Req(workflow: "group:c2"); // 另一候选，但同一消费键
+        r2.RunBinding = "run:1";
+        r2.CursorRef = "n-1#0#0";
+        r2.CursorRevision = 5;
+        var second = await svc.SubmitAsync(r2);
+
+        Assert.Equal("cursor_already_consumed", second.ReasonCode); // 迁区后仍必须拦住
+        Assert.Equal(1, sends);                                     // 未再发送
+    }
+
     // ── 39. I1：发送回调异常=保守待对账（不抛出不悬置）；显式对账结清可恢复 ──
 
     [Fact]

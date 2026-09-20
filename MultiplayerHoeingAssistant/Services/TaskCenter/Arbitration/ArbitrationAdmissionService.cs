@@ -1178,6 +1178,8 @@ public sealed class ArbitrationAdmissionService
             }
 
             // ⑪b 游标唯一消费（B7：同 runBinding+cursorRef+cursorRevision 不得被两个操作消费——锁内核验，防双跑）。
+            // **不按 Zone 过滤**（会诊重要项）：消费记录经 TerminalPendingTransfer→Tombstone 迁区后**仍在盘上**，
+            // 若只看 Active，则该游标可被再次消费（G8 让节点操作提前终局后尤甚）——消费保护不得随迁区消失。
             // [纠正·2026-09-21 会诊阻断] **必须带运行归属**：`cursorRef`（节点#出现#轮次）与 `cursorRevision`
             // （运行记录修订）都不是全局唯一——两个不同 run 完全可能同时是 `n-1#0#0`＋同一修订，
             // 缺 RunBinding 会把他们互判为「同一游标已消费」而误拒合法提交。加运行归属只会**减少误拒**，
@@ -1185,7 +1187,6 @@ public sealed class ArbitrationAdmissionService
             if (request.CursorRef is { } cursorRefToCheck
                 && (file.Handoff.Operations ?? []).Any(other =>
                     !string.Equals(other.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal)
-                    && other.Zone == OperationZone.Active
                     && string.Equals(other.RunBinding, request.RunBinding, StringComparison.Ordinal)
                     && string.Equals(other.CursorRef, cursorRefToCheck, StringComparison.Ordinal)
                     && other.CursorRevision == request.CursorRevision

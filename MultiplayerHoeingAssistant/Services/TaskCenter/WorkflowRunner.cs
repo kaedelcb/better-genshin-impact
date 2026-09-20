@@ -1053,6 +1053,15 @@ public sealed class WorkflowRunner
     {
         if (rawTerminal is not null && run.CurrentSubmission is { ObservedTerminal: null } sub)
             sub.ObservedTerminal = rawTerminal; // 提交终态与结果/游标同写（仅原始线协议词）
+        // G8／§12.3：结果若来自**边界观察到的权威终态**，则把「产生它的提交键＋attempt」随结果落盘——
+        // 供租约侧按完整发送关联独立结清该节点 Operation（不得凭「同一出现曾有过某结果」结清另一笔责任）。
+        // 仅当当前提交确实属于本次出现身份时才记录（前置/闸门/恢复路径的 CurrentSubmission 可能属别的出现）。
+        var producing = run.CurrentSubmission is { } cur
+                        && string.Equals(cur.NodeId, occurrence.NodeId, StringComparison.Ordinal)
+                        && cur.Occurrence == occurrence.Occurrence
+                        && cur.LoopIteration == occurrence.LoopIteration
+            ? cur
+            : null;
         run.NodeOutcomes.Add(new WorkflowNodeOutcome
         {
             NodeId = occurrence.NodeId,
@@ -1062,6 +1071,11 @@ public sealed class WorkflowRunner
             Result = result,
             RawTerminal = rawTerminal,
             Reason = Sanitize(reason),
+            SubmissionKey = rawTerminal is not null ? producing?.Key : null,
+            Attempt = rawTerminal is not null ? producing?.Attempt : null,
+            // 完整发送身份（租约侧签发）：与 SubmissionKey/Attempt 同规则随结果落盘，
+            // 使「节点操作独立终局」可证明该结果属于**这一笔发送**（提交键在同 attempt 多 sendSeq 间可复用）。
+            AcceptedSendIdentity = rawTerminal is not null ? producing?.AcceptedSendIdentity : null,
         });
         if (result is "unknown" or "cancelUnconfirmed")
             ApplyRelocation(run, occurrence); // 结果不确定：游标留在当前出现（恢复回到本节点对账），绝不推进

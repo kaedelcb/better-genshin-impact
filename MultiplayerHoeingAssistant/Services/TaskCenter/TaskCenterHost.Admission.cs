@@ -72,6 +72,103 @@ public sealed partial class TaskCenterHost
     internal bool SuccessorAdmissionWiredForTest => _admissionWired && _successorAdmissionWired;
 
     /// <summary>
+    /// 该节点操作对应的**权威节点终态**是否已在运行台账观察到（G8／§12.3）。
+    /// 判据（先按**完整发送身份**定位结果，再逐项验证，缺一不结清）：
+    /// ①结果记录的 `AcceptedSendIdentity == op.SubmissionIdentity`（**完整发送身份**——提交键在同 attempt 的
+    ///   多个 `sendSeq` 间可复用，只有完整身份才能区分「两笔发送」）；
+    /// ②同一出现身份（节点＋出现＋轮次）；③结果属**业务终态**（`unknown`/`cancelUnconfirmed` 一律不算）；
+    /// ④`RawTerminal` 非空**且为终态词**（＝来自边界观察到的权威终态，不是本地拒绝/闸门/跳过）；
+    /// ⑤`SubmissionKey == op.WireSubmitKey` 且 `Attempt == op.Candidate.Attempt`（标识一致，防错配）。
+    /// 会诊阻断处置：仅比对出现身份/提交键会让「同出现、同键同 attempt 的另一笔发送」借旧结果被结清。
+    /// **按身份定位（而非 `LastOrDefault` 取最后一条）**：同一出现若有多笔发送结果，各按自身发送身份结清，
+    /// 不得因后一笔结果遮蔽前一笔的有效终局证据。
+    /// </summary>
+    internal static bool NodeOutcomeIsTerminal(WorkflowRunRecord run, OperationRecord op)
+    {
+        if (op.ResourceRef?.StartsWith("node:", StringComparison.Ordinal) != true) return false;
+        if (string.IsNullOrEmpty(op.SubmissionIdentity)) return false; // 无完整发送身份＝不得结清
+        var nodeId = op.ResourceRef["node:".Length..];
+        var outcome = run.NodeOutcomes.LastOrDefault(o =>
+            string.Equals(o.NodeId, nodeId, StringComparison.Ordinal)
+            && o.Occurrence == (op.Candidate?.Occurrence ?? -1)
+            && o.LoopIteration == (op.Candidate?.LoopIteration ?? -1)
+            && string.Equals(o.AcceptedSendIdentity, op.SubmissionIdentity, StringComparison.Ordinal));
+        if (outcome is null) return false;
+        if (outcome.RawTerminal is null) return false;
+        // 原始终态词本身必须是**终态词**（防「观察到的还是活动态词」被当作终局依据）。
+        if (outcome.RawTerminal is not ("succeeded" or "failed" or "cancelled" or "rejected" or "skipped")) return false;
+        if (string.IsNullOrEmpty(outcome.SubmissionKey)
+            || !string.Equals(outcome.SubmissionKey, op.WireSubmitKey, StringComparison.Ordinal))
+            return false;
+        if (outcome.Attempt is { } attempt && attempt != (op.Candidate?.Attempt ?? -1)) return false;
+        if (outcome.Attempt is null) return false;
+        return outcome.Result is "succeeded" or "failed" or "rejected" or "skippedUser" or "skippedFilter" or "cancelled";
+    }
+
+    /// <summary>
+    /// **节点操作独立终局出口（G8／§12.3）**：把「已可被运行台账证明终局」的节点 Operation 按
+    /// 完整发送身份结清（→TerminalPendingTransfer→Tombstone，主槽位随迁移释放），**不等整条 run 终态**。
+    /// 触发点＝下一次节点准入之前（此时 Runner 已 await 上一节点终态并落盘 `NodeOutcomes`）。
+    /// 只结清能证明终局的；未确认/未知一律不动（保守）。异常留痕不影响准入主流程。
+    /// </summary>
+    private void SweepTerminalNodeOperations(string runId)
+    {
+        if (!_admissionWired || _admission is null || _admissionStore is null) return;
+        WorkflowRunRecord? run;
+        try
+        {
+            run = _runs.Load(runId);
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        if (run is null) return;
+
+        List<OperationRecord> candidates;
+        try
+        {
+            candidates = _admissionStore.Read().File?.Handoff?.Operations?
+                .Where(o => string.Equals(o.RunBinding, runId, StringComparison.Ordinal)
+                            && o.Zone == OperationZone.Active
+                            && o.RequestState == OperationRequestState.Accepted
+                            && NodeOutcomeIsTerminal(run, o))
+                .ToList() ?? [];
+        }
+        catch (IOException)
+        {
+            return; // 锁文件瞬时争用＝下一轮再清（不阻塞准入）
+        }
+
+        foreach (var op in candidates)
+        {
+            try
+            {
+                var r = _admission.MarkOperationTerminal(op.RequestIdentity, "node_outcome:已观察节点权威终态");
+                if (r.Kind == AdmissionResultKind.Error)
+                    TryLog("[任务中心] 节点操作独立终局被拒（" + r.ReasonCode + "）：" + r.Detail + "——保守留待对账。");
+            }
+            catch (Exception ex)
+            {
+                TryLog("[任务中心] 节点操作独立终局回写失败（保守留待对账）：" + ex.GetType().Name);
+            }
+        }
+    }
+
+    /// <summary>诊断留痕（日志委托异常不得穿透执行路径——会诊要求）。</summary>
+    private void TryLog(string message)
+    {
+        try
+        {
+            _log?.Invoke(message);
+        }
+        catch (Exception)
+        {
+            // 诊断失败不影响执行结论。
+        }
+    }
+
+    /// <summary>
     /// **生产执行边界的唯一组装点**（`CreateRunner` 的 Runner 边界 与 后继发送分派的 Sender 边界共用）。
     /// 会诊复审发现：发送分派若自行 `new BgiWorkflowExecutionBoundary(c, _runs)`，会与 Runner 侧走不同实例；
     /// 端口化夹具下更会导致「预检用注入端口、发送用真实客户端」的分裂。统一走本方法。
@@ -169,8 +266,15 @@ public sealed partial class TaskCenterHost
                     var read = _admissionStore?.Read();
                     var op = read.File?.Handoff?.Operations?.FirstOrDefault(
                         o => string.Equals(o.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal));
-                    return op?.RunBinding is { } rb
-                        && _runs.Load(rb)?.State is WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.Cancelled;
+                    if (op?.RunBinding is not { } rb) return false;
+                    var run = _runs.Load(rb);
+                    if (run is null) return false;
+                    // G8／§12.3：**节点操作按「该节点的权威终态结果」确认，不等整条 run 终态**——
+                    // 否则节点 Operation 会一直占主槽位到流程结束（长流程堆满 32 槽）。
+                    if (op.ResourceRef?.StartsWith("node:", StringComparison.Ordinal) == true)
+                        return NodeOutcomeIsTerminal(run, op);
+                    // 非节点（流程登记/恢复）仍按运行级终态确认。
+                    return run.State is WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.Cancelled;
                 },
             };
             facade = new ArbitrationAdmissionService(store, hooks, utcNow);
@@ -730,6 +834,11 @@ public sealed partial class TaskCenterHost
             return BoundarySubmitResult.Rejected("运行游标与本次提交出现身份不一致（未发送）");
         var cursorRef = $"{runCursor.NodeId}#{runCursor.Occurrence}#{runCursor.LoopIteration}";
         var cursorRevision = (long)run.RecordRevision;
+
+        // G8：进入本轮准入之前，先按运行台账已观察到的节点终态**独立结清**此前节点的 Operation
+        // （不等整条 run 终态，避免长流程堆满 32 主槽位）。失败只留痕，不影响本次准入。
+        SweepTerminalNodeOperations(run.RunId!);
+
         // G5：准入阶段**请求内容指纹**——门面把它作为候选载荷指纹落盘，用于
         // ①冲突组内「同 candidateId 不同载荷＝整组拒绝」的判别（空串会让不同载荷被当成同载荷），
         // ②续用（ContinueUse）与占位时的「候选载荷一致」复核。覆盖冻结节点内容＋出现身份＋提交选项＋提交身份。
