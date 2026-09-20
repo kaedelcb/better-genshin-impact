@@ -6,8 +6,9 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 
 /// <summary>
 /// **R5.8 端到端「无双跑」对抗夹具（组件/组装层）**（施工方内置、owner 0 点击）。
-/// 覆盖：①**跨入口对抗**——七个入口命名空间（E1 面板/E2 恢复/E3 网页/E4 热键/E5 助手承载/直连 v2/触发）在同一仲裁面并发，
-/// **恰一胜者、零二次发送**；②**F11 优先**——F11 激活时全入口一律 `F11Blocked` 且零发送（先于排序，不作候选）。
+/// 覆盖：①**七个合成启动候选**（仅用于**入口标签多样性**，**不代表真实入口一一对应**——E2 恢复走独立边界、
+/// E5b/E7 属 BGI 原生排除面，见 §23）同轮并发 ⇒ **恰一胜者、发送计数＝1**；②F11 激活 ⇒ 全部 `F11Blocked`、**计数＝0** 且**无租约副作用**；
+/// ③执行占用 ⇒ 全员未受理、零发送；④**恢复边界 × 启动轮次互斥**（恢复先获准后，启动候选在占用事实下全部未受理）。
 /// **证据分层（不得互相替代）**：本夹具＝**组件/组装层**证据；**协议集成层**（适配器/台账）与**真实入口/实机层**（R5.8 验收单）另见 §23；
 /// **失联/接管**不双跑证据由 R5.1 接管夹具承接（本文件不重复）。
 /// </summary>
@@ -29,16 +30,24 @@ public sealed class R58DualRunContestTests : IDisposable
 
     private ArbitrationLeaseStore NewStore() => new(_dir, () => _now, () => _mono);
 
-    private (ArbitrationAdmissionService Svc, int Sends) BuildFacade(bool f11 = false, AdmissionBarriers? barriers = null)
+    /// <summary>线程安全发送计数（**实时读取**；不再返回 int 副本）。</summary>
+    private sealed class SendCounter
+    {
+        private int _n;
+        public int Count => Volatile.Read(ref _n);
+        public void Inc() => Interlocked.Increment(ref _n);
+    }
+
+    private (ArbitrationAdmissionService Svc, SendCounter Sends) BuildFacade(bool f11 = false, AdmissionBarriers? barriers = null)
     {
         var store = NewStore();
         var ledger = new ExternalStartLedger(_dir, () => _now);
-        var sends = 0;
+        var sends = new SendCounter();
         var hooks = new AdmissionHooks
         {
             BgiEpochProvider = () => "ep1",
             F11Active = () => f11,
-            Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); },
+            Sender = _ => { sends.Inc(); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); },
             TakeoverPersist = entry =>
             {
                 var r = ledger.RecordAccepted(entry);
@@ -82,11 +91,11 @@ public sealed class R58DualRunContestTests : IDisposable
 
     /// <summary>**跨入口对抗**：七个入口同轮并发 ⇒ 恰一胜者（Accepted）＋其余未获选/终局拒绝；**发送次数恒为 1**（无双跑）。</summary>
     [Fact]
-    public async Task SevenEntries_Concurrent_ExactlyOneWinner_NoSecondSend()
+    public async Task SevenSyntheticCandidates_Concurrent_ExactlyOneWinner_SendsOnce()
     {
         var arrived = 0;
         var allArrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var (svc, _) = BuildFacade(barriers: new AdmissionBarriers
+        var (svc, sends) = BuildFacade(barriers: new AdmissionBarriers
         {
             AfterEnqueue = () => { if (Interlocked.Increment(ref arrived) == SevenEntryNamespaces.Length) allArrived.TrySetResult(); return Task.CompletedTask; },
             BeforeRoundSnapshot = () => allArrived.Task,
@@ -99,14 +108,17 @@ public sealed class R58DualRunContestTests : IDisposable
         Assert.All(results.Where(r => r.Kind != AdmissionResultKind.Accepted), r =>
             Assert.True(r.Kind is AdmissionResultKind.NotSelected or AdmissionResultKind.TerminalRejected,
                 "非胜者应为未获选/终局拒绝，实际 " + r.Kind + "/" + r.ReasonCode));
-        Assert.Equal(1, results.Count(r => r.Kind == AdmissionResultKind.Accepted));   // 恰一胜者（其余不得发送）
+        Assert.Equal(1, results.Count(r => r.Kind == AdmissionResultKind.Accepted));   // 恰一胜者
+        Assert.Equal(1, sends.Count);                                                  // **实时计数**：Sender 恰被调用一次（不存在双发）
     }
 
     /// <summary>**F11 优先**：F11 激活时七个入口一律 `F11Blocked`、**零发送**（先于排序与租约副作用）。</summary>
     [Fact]
-    public async Task SevenEntries_F11Active_AllBlocked_ZeroSend()
+    public async Task SevenSyntheticCandidates_F11Active_AllBlocked_ZeroSend_NoLeaseSideEffect()
     {
-        var (svc, _) = BuildFacade(f11: true);
+        var (svc, sends) = BuildFacade(f11: true);
+        var leasePath = Path.Combine(_dir, "arbitration-lease.json");
+        var before = File.Exists(leasePath) ? Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(leasePath))) : "<none>";
 
         foreach (var ns in SevenEntryNamespaces)
         {
@@ -114,20 +126,66 @@ public sealed class R58DualRunContestTests : IDisposable
             Assert.Equal(AdmissionResultKind.F11Blocked, r.Kind);
             Assert.Equal("f11_active", r.ReasonCode);
         }
+
+        Assert.Equal(0, sends.Count);                                   // **实时计数**：零发送
+        var after = File.Exists(leasePath) ? Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(leasePath))) : "<none>";
+        Assert.Equal(before, after);                                    // **无租约副作用**（持久化状态不变）
+    }
+
+    /// <summary>
+    /// **恢复边界 × 启动轮次互斥**：恢复走**独立边界**（`AdmitRecoveryAsync`，不参与轮次排序）；恢复获准并发送后，
+    /// 启动候选在**执行占用事实**下全部未受理 ⇒ 两条路径合计**至多一次发送**。
+    /// </summary>
+    [Fact]
+    public async Task RecoveryBoundary_ThenStarts_AtMostOneSend()
+    {
+        var store = NewStore();
+        var ledger = new ExternalStartLedger(_dir, () => _now);
+        var sends = new SendCounter();
+        var occupied = false;
+        var hooks = new AdmissionHooks
+        {
+            BgiEpochProvider = () => "ep1",
+            FactsProvider = () => new ArbitrationFacts { ExecutionOccupied = occupied },
+            Sender = _ => { sends.Inc(); occupied = true; return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); },
+            TakeoverPersist = entry =>
+            {
+                var r = ledger.RecordAccepted(entry);
+                return Task.FromResult<string?>(r.Success ? null : "record_failed");
+            },
+        };
+        var svc = new ArbitrationAdmissionService(store, hooks, () => _now);
+        Assert.True(svc.EnsureOwnership("pid:test").Success);
+
+        var recovery = await svc.AdmitRecoveryAsync(new RecoveryAdmissionRequest
+        {
+            SourceDetail = "fixture:recovery",
+            RunId = "run-1",
+            WorkflowId = "wf-1",
+            RestoreBranch = "paused-continue",
+            Scope = "bgi:inst:ep1",
+        });
+        Assert.Equal(AdmissionResultKind.Accepted, recovery.Kind);
+        Assert.Equal(1, sends.Count);
+
+        foreach (var ns in SevenEntryNamespaces)
+            Assert.NotEqual(AdmissionResultKind.Accepted, (await svc.SubmitAsync(Req(ns))).Kind);
+
+        Assert.Equal(1, sends.Count);   // 恢复 + 启动合计**至多一次发送**
     }
 
     /// <summary>**跨入口对抗（含恢复入口）且执行已占用**：占用事实下无人发送（授权方亦须过执行权检查）。</summary>
     [Fact]
-    public async Task SevenEntries_ExecutionOccupied_NoSendAtAll()
+    public async Task SevenSyntheticCandidates_ExecutionOccupied_NoSendAtAll()
     {
         var store = NewStore();
         var ledger = new ExternalStartLedger(_dir, () => _now);
-        var sends = 0;
+        var sends = new SendCounter();
         var hooks = new AdmissionHooks
         {
             BgiEpochProvider = () => "ep1",
             FactsProvider = () => new ArbitrationFacts { ExecutionOccupied = true },
-            Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); },
+            Sender = _ => { sends.Inc(); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); },
             TakeoverPersist = entry =>
             {
                 var r = ledger.RecordAccepted(entry);
@@ -142,6 +200,6 @@ public sealed class R58DualRunContestTests : IDisposable
             var r = await svc.SubmitAsync(Req(ns));
             Assert.NotEqual(AdmissionResultKind.Accepted, r.Kind);   // 全部未受理
         }
-        Assert.Equal(0, sends);
+        Assert.Equal(0, sends.Count);
     }
 }
