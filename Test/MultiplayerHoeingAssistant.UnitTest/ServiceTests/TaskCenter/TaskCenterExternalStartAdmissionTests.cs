@@ -188,4 +188,122 @@ public class TaskCenterExternalStartAdmissionTests
             TryDelete(root);
         }
     }
+
+    /// <summary>
+    /// **B3 第 4 步：同身份续用（§2.1）**——续用必须复用首次身份：门面按该身份定位 Operations 记录，
+    /// **缺失＝stale_operation_identity 响亮拒绝**（绝不回退为创建新操作/换身份/重新绑定）。
+    /// </summary>
+    [Fact]
+    public async Task ExternalStart_ContinueUseWithUnknownIdentity_LoudlyRejected_NoNewOperation()
+    {
+        var root = NewRoot();
+        var executed = 0;
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+
+            var result = await host.SubmitExternalStartViaAdmissionAsync(
+                new ExternalStartAdmissionRequest
+                {
+                    Namespace = "v2",
+                    WorkflowId = "group:测试组",
+                    TriggerOccurrenceId = "v2:remote:{requestIdentity}",
+                    ResourceRef = "group:测试组",
+                    SourceDetail = "fixture:continue_use",
+                    RequestIdentity = "ffffffffffffffffffffffffffffffff", // 从未登记的身份
+                    ExecuteAsync = _ => { System.Threading.Interlocked.Increment(ref executed); return Task.FromResult(ExternalStartExecution.AcceptedWith()); },
+                }, default);
+
+            Assert.Equal(AdmissionResultKind.Error, result.Kind);
+            Assert.Equal("stale_operation_identity", result.ReasonCode);
+            Assert.Equal(0, System.Threading.Volatile.Read(ref executed)); // 未执行
+            Assert.Empty(Ops(root));                                        // 未新建任何操作
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
+    /// **B3 第 4 步：同身份续用命中既有操作**——首次 `Create` 分配身份并回显；以同一身份＋同一模板发起
+    /// `ContinueUse` ⇒ 命中**同一笔** Operations 记录（不新建第二笔），且触发出现身份的占位符由本层以该身份回填。
+    /// </summary>
+    [Fact]
+    public async Task ExternalStart_ContinueUseSameIdentity_HitsExistingOperation_NoSecondOperation()
+    {
+        var root = NewRoot();
+        var executed = 0;
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+
+            var first = await host.SubmitExternalStartViaAdmissionAsync(
+                Request(_ => { System.Threading.Interlocked.Increment(ref executed); return Task.FromResult(ExternalStartExecution.AcceptedWith()); }), default);
+            Assert.Equal(AdmissionResultKind.Accepted, first.Kind);
+            Assert.False(string.IsNullOrEmpty(first.RequestIdentity));       // 首次身份已回显（§2.1）
+            var beforeOps = Ops(root);
+            Assert.Single(beforeOps);
+
+            var second = await host.SubmitExternalStartViaAdmissionAsync(
+                new ExternalStartAdmissionRequest
+                {
+                    Namespace = "v2",
+                    WorkflowId = "group:测试组",
+                    TriggerOccurrenceId = "v2:remote:{requestIdentity}",     // 同一模板：由本层以既有身份回填
+                    ResourceRef = "group:测试组",
+                    SourceDetail = "fixture:continue_use",
+                    RequestIdentity = first.RequestIdentity,
+                    ExecuteAsync = _ => { System.Threading.Interlocked.Increment(ref executed); return Task.FromResult(ExternalStartExecution.AcceptedWith()); },
+                }, default);
+
+            // 续用命中既有已受理操作 ⇒ 返回既有结论（不新增发送者、不再执行）
+            Assert.Equal(AdmissionResultKind.Accepted, second.Kind);
+            Assert.Equal(first.RequestIdentity, second.RequestIdentity);
+            Assert.Equal(1, System.Threading.Volatile.Read(ref executed));
+            var afterOps = Ops(root);
+            Assert.Single(afterOps);                                        // 未新建第二笔
+            Assert.Equal(beforeOps[0].Candidate!.TriggerOccurrenceId, afterOps[0].Candidate!.TriggerOccurrenceId);
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
+    /// **公开入口的身份回显（会诊重要项）**：以既有身份发起**续用**时，即使被前置阻断（本夹具用 F11），
+    /// 返回值也必须回显**传入的该身份**（不得回显空串，否则调用方会把下一次续用误变成新建操作）。
+    /// </summary>
+    [Fact]
+    public async Task AdmitExternalStart_ContinueUseBlocked_StillEchoesSuppliedIdentity()
+    {
+        var root = NewRoot();
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900", F11Active = true });
+            const string identity = "0123456789abcdef0123456789abcdef";
+
+            var outcome = await host.AdmitExternalStartAsync(new ExternalStartAdmissionRequest
+            {
+                Namespace = "v2",
+                WorkflowId = "group:测试组",
+                TriggerOccurrenceId = "v2:remote:{requestIdentity}",
+                ResourceRef = "group:测试组",
+                SourceDetail = "fixture:continue_use_blocked",
+                RequestIdentity = identity,
+                ExecuteAsync = _ => Task.FromResult(ExternalStartExecution.AcceptedWith()),
+            });
+
+            Assert.Equal(ExternalStartAdmissionStatus.Blocked, outcome.Status);
+            Assert.Equal(identity, outcome.RequestIdentity); // 回显传入身份（不得为空串）
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
 }

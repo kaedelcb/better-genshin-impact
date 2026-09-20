@@ -1658,5 +1658,14 @@ M1 的①—⑤与 §3.2「E1 发送前固定 candidateId→runId→首节点提
    - **用途**：E4（热键）接线将据此在**准入前**完成策略解析、准入后只执行**既定动作**（不再重新判定），从而满足「候选获准后不得追加抢占」；E4 接线与其反例夹具归下一批。
      **证明范围**：目前以 `ConflictRetryLimit(true)=6`／`(false)=0` 纯函数夹具＋决策表夹具＋源码审查为据；
      「接线态确实不进入抢占分支」「冲突确实零重发」的**端到端**反例仍欠（需可注入传输/核心接缝，归 B4）。
-3. **适配层重试同身份**：重试复用同一 `requestIdentity`（`ContinueUse`），不得换身份重绑。
+3. **适配层重试同身份**  **[批次 7 落地·2026-09-21]**：
+   - `ExternalStartAdmissionRequest.RequestIdentity`：空＝**新建**（门面在同一次原子发布中分配身份并回显）；
+     非空＝**续用**（`AdmissionKind.ContinueUse`）——门面按该身份定位 Operations，**缺失＝`stale_operation_identity` 响亮拒绝**（绝不回退为创建新操作/换身份/重新绑定）。
+   - `ExternalStartAdmissionOutcome.RequestIdentity`：回显本次操作身份，供适配器在**同次用户操作**的内部重试上复用。
+   - 续用路径由宿主以既有身份回填触发出现身份中的 `{requestIdentity}` 占位符，使候选身份与首次登记**逐字一致**
+     （不换身份＝不换 candidateId，避免 `identity_conflict`）。新建路径仍由门面回填（适配器无需预知身份）。
+   - 夹具：①未知身份续用 ⇒ `stale_operation_identity` 且**未新建操作、未执行**；
+     ②首次 Create 后以同一身份＋同一模板续用 ⇒ 命中同一笔 Operations（**不新建第二笔、不重复执行**），占位符回填一致。
+   - **[会诊重要项处置] 公开入口身份回显修正**：`AdmissionResult.RequestIdentity` 默认是空串（门面各前置/异常分支亦返回空串），故回显**不得用 `??` 兜底**——续用被前置阻断时也必须回显**传入身份**（夹具 `AdmitExternalStart_ContinueUseBlocked_StillEchoesSuppliedIdentity`）。
+   - **仍欠（登记为启用前置）**：①**外部启动候选未提供可验证的载荷绑定**（宿主构造候选未设 `PayloadFingerprint`）⇒「同身份、不同实际启动参数」的续用**当前无法被拒**（候选指纹同为空的空串比较），且 `ProcessLocalContext`（含执行委托）在重新驱动 Queued 操作时按本次传入取值；须补外部启动的载荷指纹/键绑定后再谈启用；②**当前接线态无内部重试点**（冲突重试＝0），故续用机制**暂无使用场景**（不得读作「适配层没有重试」——未接线旧路径仍保留六次无损重试）；③未覆盖：并发续用、与首次请求交错、续用时载荷/排序键不一致被拒、ContinueUse 对 `TerminalCompleted/Reconciling/Queued` 再驱动/可重试拒绝的分类（`RetryableRejected` **不自动 RetryAsync**，故**不是完整重试闭环**）；④同次操作不得误走 Create 需适配器端断言。
 4. E5b/E6 外部直连**排除项**与 R5.8 真实线路逐词证据保持原登记（不在本批范围）。

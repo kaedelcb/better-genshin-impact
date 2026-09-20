@@ -398,10 +398,14 @@ public sealed partial class TaskCenterHost
                 "仲裁面初始化失败（未发送）：" + ex.GetType().Name, "");
         }
 
+        // §2.1：非空身份＝**续用既有操作**（同次用户操作的内部重试复用同一身份）；
+        // 空＝新建操作（身份由门面在同一次原子发布中分配并回显）。
+        var continuing = !string.IsNullOrEmpty(request.RequestIdentity);
         var admission = new AdmissionRequest
         {
             Namespace = request.Namespace,
-            Kind = AdmissionKind.Create,
+            Kind = continuing ? AdmissionKind.ContinueUse : AdmissionKind.Create,
+            RequestIdentity = continuing ? request.RequestIdentity! : "",
             SourceDetail = string.IsNullOrEmpty(request.SourceDetail) ? "external:start" : request.SourceDetail,
             WireSubmitKey = request.WireSubmitKey,
             ProcessLocalContext = new ExternalStartContext(request.ExecuteAsync),
@@ -410,8 +414,11 @@ public sealed partial class TaskCenterHost
                 Scope = $"bgi:local:{externalEpoch}",
                 Namespace = request.Namespace,
                 WorkflowId = request.WorkflowId,
-                // §2.2/I3：`{requestIdentity}` 占位符由门面在身份分配后回填。
-                TriggerOccurrenceId = request.TriggerOccurrenceId,
+                // §2.2/I3：`{requestIdentity}` 占位符——新建由门面在身份分配后回填（适配器无需预知身份）；
+                // **续用**则由本层以既有身份回填，使候选身份与首次登记**逐字一致**（否则换身份＝identity_conflict）。
+                TriggerOccurrenceId = continuing
+                    ? request.TriggerOccurrenceId.Replace("{requestIdentity}", request.RequestIdentity!, StringComparison.Ordinal)
+                    : request.TriggerOccurrenceId,
                 ResourceRef = request.ResourceRef,
                 Intent = "start",
                 // §2.2：start 候选 runId/节点身份为空、轮次/attempt=0、排序键缺省（tier=plan/priority=0/scheduledAt=null）。
@@ -1269,7 +1276,13 @@ public sealed partial class TaskCenterHost
                 or AdmissionResultKind.NotSelected => ExternalStartAdmissionStatus.Rejected,
             _ => ExternalStartAdmissionStatus.NeedReconcile,
         };
-        return new ExternalStartAdmissionOutcome(status, result.ReasonCode, result.Detail);
+        // 回显本次操作身份（§2.1）：适配器据此在**同次用户操作**的内部重试上发起 ContinueUse。
+        // **不得用 `??`**：`AdmissionResult.RequestIdentity` 默认是空串（门面各前置/异常分支也显式返回空串），
+        // `??` 会让「已有身份续用时被前置阻断」回显空串 ⇒ 调用方可能把下一次续用误变成新建操作（会诊重要项）。
+        var echoedIdentity = string.IsNullOrEmpty(result.RequestIdentity)
+            ? (request.RequestIdentity ?? "")
+            : result.RequestIdentity;
+        return new ExternalStartAdmissionOutcome(status, result.ReasonCode, result.Detail, echoedIdentity);
     }
 
     /// <summary>

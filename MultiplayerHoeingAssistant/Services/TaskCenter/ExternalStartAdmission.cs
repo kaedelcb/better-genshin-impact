@@ -29,6 +29,15 @@ public sealed class ExternalStartAdmissionRequest
     public string? WireSubmitKey { get; init; }
 
     /// <summary>
+    /// **同次用户操作的内部重试身份**（§2.1：入口适配器首次接纳分配一次，内部重试复用同一身份）。
+    /// null/空＝**新建操作**（`Kind=Create`，身份由门面在同一次原子发布中分配并回显）；
+    /// 非空＝**续用既有操作**（`Kind=ContinueUse`）：门面按该身份定位 Operations 记录，
+    /// **缺失＝`stale_operation_identity` 响亮拒绝**，绝不回退为创建新操作/换身份/重新绑定。
+    /// 纪律：重试必须复用该身份并把触发出现身份中的 `{requestIdentity}` 以同一身份回填（适配器无需预填模板）。
+    /// </summary>
+    public string? RequestIdentity { get; init; }
+
+    /// <summary>
     /// **实际启动执行**（适配层既有实现，例如 v2 `task.start` 或 ext 队列通道）。
     /// 纪律：**仅在获准后**由门面 Sender 调用一次；调用前不得产生任何启动副作用。
     /// </summary>
@@ -70,6 +79,10 @@ public enum ExternalStartAdmissionStatus
     Blocked,
 }
 
-/// <summary>准入结论载荷（原因码 + 说明，供适配层生成 `CommandResult`）。</summary>
+/// <summary>
+/// 准入结论载荷（原因码 + 说明 + **本次操作身份**，供适配层生成 `CommandResult`）。
+/// `RequestIdentity` 是「同次用户操作的内部重试」唯一可复用凭据（§2.1）：适配器须记录它，
+/// 重试时以同一身份经 `ExternalStartAdmissionRequest.RequestIdentity` 发起 `ContinueUse`。
+/// </summary>
 public sealed record ExternalStartAdmissionOutcome(
-    ExternalStartAdmissionStatus Status, string Code, string Message);
+    ExternalStartAdmissionStatus Status, string Code, string Message, string RequestIdentity = "");
