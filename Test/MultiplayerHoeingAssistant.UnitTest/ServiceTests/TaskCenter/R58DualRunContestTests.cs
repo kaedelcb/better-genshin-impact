@@ -5,12 +5,12 @@ using Xunit;
 namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 
 /// <summary>
-/// **R5.8 端到端「无双跑」对抗夹具（组件/组装层）**（施工方内置、owner 0 点击）。
+/// **R5.8「同轮互斥 × 恢复边界」对抗夹具（组件/组装层）**（施工方内置、owner 0 点击）。
 /// 覆盖：①**七个合成启动候选**（仅用于**入口标签多样性**，**不代表真实入口一一对应**——E2 恢复走独立边界、
 /// E5b/E7 属 BGI 原生排除面，见 §23）同轮并发 ⇒ **恰一胜者、发送计数＝1**；②F11 激活 ⇒ 全部 `F11Blocked`、**计数＝0** 且**无租约副作用**；
 /// ③执行占用 ⇒ 全员未受理、零发送；④**恢复边界 × 启动轮次互斥**（恢复先获准后，启动候选在占用事实下全部未受理）。
 /// **证据分层（不得互相替代）**：本夹具＝**组件/组装层**证据；**协议集成层**（适配器/台账）与**真实入口/实机层**（R5.8 验收单）另见 §23；
-/// **失联/接管**不双跑证据由 R5.1 接管夹具承接（本文件不重复）。
+/// **失联/接管**证据由 R5.1 接管夹具承接；**真实入口/协议集成层不在此文件范围内**（§23）。
 /// </summary>
 public sealed class R58DualRunContestTests : IDisposable
 {
@@ -176,7 +176,7 @@ public sealed class R58DualRunContestTests : IDisposable
         Assert.Equal(1, sends.Count);   // **回调次数**（Sender 桩）＝1；不代表执行发送互斥（见证明边界）
     }
 
-    /// <summary>**跨入口对抗（含恢复入口）且执行已占用**：占用事实下无人发送（授权方亦须过执行权检查）。</summary>
+    /// <summary>**执行占用**：占用事实下七个合成启动候选全部未受理、零发送（授权方亦须过执行权检查）。</summary>
     [Fact]
     public async Task SevenSyntheticCandidates_ExecutionOccupied_NoSendAtAll()
     {
