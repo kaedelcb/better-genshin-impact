@@ -526,6 +526,142 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         Assert.Null(tx.LoadValidated());                     // Committed + blocked 组合非法
     }
 
+    /// <summary>**第 4 轮必改⑥**：已提交后快照损坏 ⇒ 回滚**先封锁**再失败 ⇒ 必须撤销生产授权（不得继续可执行）。</summary>
+    [Fact]
+    public void Rollback_BrokenSnapshotAfterCommit_RevokesAuthorization()
+    {
+        using var tx = Activated(changes: [new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified }]);
+        tx.RehearseRollback();
+        Assert.True(tx.Commit().Success);
+        Assert.True(tx.AuthorizeProductionExecution().Success);
+
+        var m = tx.LoadManifest()!;
+        File.Delete(Path.Combine(m.SnapshotPath, "a.json"));       // 提交后快照损坏
+
+        var rb = tx.Rollback();
+        Assert.False(rb.Success);
+        Assert.StartsWith("rollback_snapshot_invalid", rb.Reason, StringComparison.Ordinal);
+        Assert.Equal(MigrationStage.Blocked, tx.LoadManifest()!.Stage);   // 已封锁
+        Assert.Null(tx.LoadManifest()!.CommitMarker);                     // 授权已撤销
+        Assert.False(tx.AuthorizeProductionExecution().Success);
+        var runs = 0;
+        Assert.False(tx.TryRunProduction(() => runs++).Success);
+        Assert.Equal(0, runs);
+    }
+
+    /// <summary>**第 4 轮必改①**：清理未完成（新增文件删除失败）⇒ **保持阻断**，不得落 `RolledBack` 假报成功。</summary>
+    [Fact]
+    public void Rollback_CleanupIncomplete_StaysBlocked()
+    {
+        Seed("a.json", "{\"v\":1}");
+        using var tx = NewTx();
+        tx.BeginTransaction("t1");
+        tx.TakeSnapshot();
+        Assert.True(tx.RecordChanges([
+            new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified },
+            new ChangeRecord { Path = "added/x.json", Kind = ChangeKind.Added },
+        ]).Success);
+        tx.MarkReferenceUpdateCompleted();
+        tx.MarkActivated();
+        tx.RehearseRollback();
+        Assert.True(tx.Commit().Success);
+
+        Seed("added/x.json", "{\"tx\":true}");
+        var added = Full("added/x.json");
+        File.SetAttributes(added, FileAttributes.ReadOnly);        // 使删除失败（清理未完成）
+        try
+        {
+            var rb = tx.Rollback();
+            Assert.False(rb.Success);
+            Assert.Equal("rollback_cleanup_incomplete", rb.Reason);
+            Assert.Equal(MigrationStage.Blocked, tx.LoadManifest()!.Stage);   // 不得报告完整回滚
+            Assert.False(tx.AuthorizeProductionExecution().Success);
+        }
+        finally
+        {
+            if (File.Exists(added)) File.SetAttributes(added, FileAttributes.Normal);
+        }
+    }
+
+    /// <summary>**第 4 轮必改③**：快照归属**精确绑定**本事务——他事务（同前缀）的快照路径必须被拒。</summary>
+    [Fact]
+    public void SnapshotIdentity_OtherTransactionPrefix_Rejected()
+    {
+        using var tx = Activated(changes: [new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified }]);
+        tx.RehearseRollback();
+        tx.Commit();
+        var json = File.ReadAllText(tx.ManifestPath);
+        var tampered = System.Text.RegularExpressions.Regex.Replace(json,
+            "\"snapshotPath\":\\s*\"[^\"]*\"", "\"snapshotPath\": \"" + Path.Combine(_txRoot, "snapshot-t1-b-other").Replace("\\", "\\\\") + "\"");
+        File.WriteAllText(tx.ManifestPath, tampered);
+        Assert.Null(tx.LoadValidated());
+    }
+
+    /// <summary>**第 4 轮必改④**：占号历史**先于 manifest 发布** ⇒ 占号后崩溃（有历史、无 manifest）也不得复用事务号。</summary>
+    [Fact]
+    public void TransactionId_HistoryOccupiedBeforeManifest_BlocksReuse()
+    {
+        Seed("a.json", "{\"v\":1}");
+        using var tx = NewTx();
+        Assert.True(tx.TryAcquireExclusive().Success);
+        Directory.CreateDirectory(_txRoot);
+        File.AppendAllText(tx.HistoryPath, "t9" + Environment.NewLine);   // 模拟「占号已落盘、manifest 未发布」的崩溃残件
+        Assert.Equal("transaction_id_in_use", tx.BeginTransaction("t9").Reason);
+    }
+
+    /// <summary>**第 4 轮必改⑤**：含 NUL 的非法 snapshotPath ⇒ **结构化拒绝**（不得抛异常）。</summary>
+    [Fact]
+    public void ManifestIntegrity_NulInSnapshotPath_StructuredReject()
+    {
+        using var tx = Activated(changes: [new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified }]);
+        tx.RehearseRollback();
+        tx.Commit();
+        var json = File.ReadAllText(tx.ManifestPath);
+        var tampered = System.Text.RegularExpressions.Regex.Replace(json,
+            "\"snapshotPath\":\\s*\"[^\"]*\"", "\"snapshotPath\": \"bad\\u0000path\"");
+        File.WriteAllText(tx.ManifestPath, tampered);
+        Assert.Null(tx.LoadValidated());     // 不抛异常
+    }
+
+    /// <summary>**第 4 轮必改⑥**：授权/执行与回滚**互斥**（同一临界区）——执行期间回滚不得并行介入。</summary>
+    [Fact]
+    public async Task Concurrency_AuthorizationAndRollback_AreSerialized()
+    {
+        using var tx = Activated(changes: [new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified }]);
+        tx.RehearseRollback();
+        Assert.True(tx.Commit().Success);
+
+        using var entered = new ManualResetEventSlim(false);
+        using var release = new ManualResetEventSlim(false);
+        var runs = 0;
+        var exec = Task.Run(() => tx.TryRunProduction(() =>
+        {
+            runs++;
+            entered.Set();
+            release.Wait(TimeSpan.FromSeconds(5));
+        }));
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(5)), "生产执行应已进入临界区");
+
+        var rollback = Task.Run(() => tx.Rollback());
+        Assert.False(rollback.Wait(TimeSpan.FromMilliseconds(200)), "执行期间回滚不得并行完成（同临界区串行）");
+
+        release.Set();
+        Assert.True((await exec).Success);
+        Assert.True((await rollback).Success);
+        Assert.Equal(1, runs);
+    }
+
+    /// <summary>**第 4 轮必改⑥**：`.tmp` 半写残件**不污染**权威 manifest（读取只看正式文件）。</summary>
+    [Fact]
+    public void PartialTmpWrite_DoesNotCorruptManifest()
+    {
+        using var tx = Activated(changes: [new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified }]);
+        tx.RehearseRollback();
+        Assert.True(tx.Commit().Success);
+        File.WriteAllText(tx.ManifestPath + ".tmp", "{ half-written");      // 模拟半写残件
+        Assert.NotNull(tx.LoadValidated());
+        Assert.True(tx.AuthorizeProductionExecution().Success);
+    }
     [Theory]
     [InlineData(MigrationStage.Snapshotting)]
     [InlineData(MigrationStage.SnapshotReady)]
