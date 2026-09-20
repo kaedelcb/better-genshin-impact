@@ -683,7 +683,7 @@ public sealed class ArbitrationAdmissionService
             case "f11_active":
                 return (await TerminatePrecheckAsync(request, lease, "f11_active", AdmissionResultKind.F11Blocked, "F11 独立停止闸门激活（锁内复核）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             // 票据/资格/epoch/绑定/Pending：终局拒绝（恢复无重驱动者，Queued 回退=永久孤儿）。
-            case "ticket_suppressed" or "ticket_malformed" or "eligibility_lost" or "stale_epoch" or "identity_conflict" or "binding_conflict" or "pending_conflict":
+            case "ticket_suppressed" or "ticket_malformed" or "ticket_conflict" or "eligibility_lost" or "stale_epoch" or "identity_conflict" or "binding_conflict" or "pending_conflict":
                 return (await TerminatePrecheckAsync(request, lease, reason, AdmissionResultKind.TerminalRejected, "恢复准入锁内复核拒绝（" + reason + "）——终局中止（未发布发送许可，修正事实后由入口新操作重新发起）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             // 切换闸门/租约资格/残件/容量等存取拒绝：同样终局中止（恢复操作不留 Queued）。
             default:
@@ -1118,6 +1118,14 @@ public sealed class ArbitrationAdmissionService
             //    **绝不**降级为「无票据」放行。
             //    A6 原票据恢复豁免（P55⑥）：只免除「非授权抢占方身份」这一条压制，**不免除**要素校验与共同闸门。
             var authorizedRestore = IsAuthorizedTicketRestore(request, pending, targetEpoch);
+            // ②-1 **双源一致性**（小节会诊必改）：两源**同时存在**时必须属于**同一票据关联**（三要素逐字全等），
+            //      否则保守阻断——「恢复豁免」只免除「非授权抢占方身份」这一条压制，**不免除**两源关联一致性
+            //      （否则「仅授权方不同」或「仅被挂起运行不同」的冲突会被豁免路径绕过）。
+            if (facts.ActiveTicket is { } snapBoth && TicketOf(pending) is { } localBoth
+                && !(string.Equals(snapBoth.SuspendedRunIdentity, localBoth.SuspendedRunIdentity, StringComparison.Ordinal)
+                     && string.Equals(snapBoth.AuthorizedPreemptorIdentity, localBoth.AuthorizedPreemptorIdentity, StringComparison.Ordinal)
+                     && string.Equals(snapBoth.Epoch, localBoth.Epoch, StringComparison.Ordinal)))
+                return "ticket_conflict";
             // ②-0 同一被挂起运行的恢复但责任阶段未到 ⇒ 不得抢跑（不另建替代作业；也不该用「压制」词混淆责任存续）。
             if (pending is not null && IsResumeRequest(request) && !authorizedRestore
                 && string.Equals(pending.SuspendedRunIdentity, request.RunBinding ?? "", StringComparison.Ordinal))
@@ -1319,6 +1327,8 @@ public sealed class ArbitrationAdmissionService
                 return (await TerminatePrecheckAsync(request, lease, "ticket_suppressed", AdmissionResultKind.TerminalRejected, "票据压制期：无关候选不得占位（锁内复核）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             case "ticket_malformed":
                 return (await TerminatePrecheckAsync(request, lease, "ticket_malformed", AdmissionResultKind.TerminalRejected, "票据缺必要要素（被挂起运行/授权抢占方/epoch）——不得当「无票据」放行（锁内复核）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
+            case "ticket_conflict":
+                return (await TerminatePrecheckAsync(request, lease, "ticket_conflict", AdmissionResultKind.TerminalRejected, "两个票据事实源（BGI 侧快照与本地未决责任）关联不一致——保守阻断（锁内复核）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             case "eligibility_lost":
                 return (await TerminatePrecheckAsync(request, lease, "eligibility_lost", AdmissionResultKind.TerminalRejected, "资格关键事实复核失败（锁内复核）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             case "stale_epoch":

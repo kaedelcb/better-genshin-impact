@@ -1656,7 +1656,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     /// **不得泛化（均为有条件结果，勿写成无条件规则）**：本用例在**事实已知、其余前置满足**时经票据筛选无胜者 ⇒ `NotSelected`；
     /// 若与 `ExecutionFactsUnknown` 并存 ⇒ `NeedReconcile`（退回 `Queued`，**非** NotSelected）。
     /// **获选后、占位前**锁内复核判 `ticket_suppressed` 且终局落盘成功 ⇒ `TerminalRejected`；**票据变化本身不必然拒绝**
-    /// （撤销票据、或替换后仍匹配授权身份均可能放行；当前实现亦不校验票据 `Epoch`/`SuspendedRunIdentity`）。恢复专用边界同理。
+    /// （撤销票据、或替换后仍匹配授权身份均可能放行；**[已整改]** 锁内现已校验 `Epoch`／`SuspendedRunIdentity` 并加**双源一致性**与缺字段阻断）。恢复专用边界同理。
     /// 后两条**分类分支已有实现、本批尚未补反例夹具**（登记为 R5.3.4③–⑦）。
     /// **作用域收窄**：本用例只证明「未发送（`LastSendSeq==0`／发送身份为空）＋未占位（无 Submission）」，
     /// **不**声称「零副作用」——请求仍会被登记进 `Operations` 并推进到 `NotSelected` 终局。
@@ -2117,9 +2117,12 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     }
 
     /// <summary>
-    /// **R5.3.2（三选之三·显式重投＝新 attempt/新提交键）**：确认取消后重投**不是**复活旧操作——
-    /// 新 attempt 既改变 `RunStore` 幂等提交键，也改变仲裁候选身份（attempt 属 stableIdentity 八段）
-    /// ⇒ 两操作并存、**不合并**（不违反 D11/D3），且**旧被切操作不被改写**。
+    /// <summary>
+    /// **R5.3.2（三选之三·显式重投）**：重投**不是**复活旧操作——①**同 attempt＋同游标修订**再投被
+    /// **唯一消费约束**阻断（`cursor_already_consumed`，防复用已取消作业）；②**新 attempt＋新游标代次＋新幂等提交键**
+    /// 才获准，且新键**实际随请求携带并持久化**（`OperationRecord.WireSubmitKey`）；③旧被切操作**不被改写**。
+    /// **范围如实**：本用例**不**裁决「顺延/重投应采用哪种游标代次」——该语义＝**§17 P56 待裁决**；
+    /// 此处只记录实现的**可观测约束**。
     /// </summary>
     [Fact]
     public async Task Preempted_ReRunWithNewAttempt_NewKeyNewIdentity_OldOpUnchanged()
@@ -2131,37 +2134,56 @@ public class ArbitrationAdmissionServiceTests : IDisposable
             h.TakeoverTerminalConfirmed = (_, _) => true;
         });
 
+        // ① 原被切操作（attempt=1）：同一节点出现/循环轮次，游标 ref 归一、修订=1、键按 attempt 派生。
+        var key1 = RunStore.DeriveSubmissionKey("run-3", "n-3", 0, 0, 1);
         var a1 = Req(trigger: "fixture:rerun", workflow: "wf-rerun");
         a1.Candidate!.Attempt = 1;
         a1.Candidate.NodeId = "n-3";
         a1.RunBinding = "run-3";
         a1.CursorRef = "n-3#0#0";
         a1.CursorRevision = 1;
+        a1.WireSubmitKey = key1;
         Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(a1)).Kind);
+        Assert.Equal(key1, FindOp(a1.RequestIdentity)!.WireSubmitKey); // 键实际持久化
         Assert.Equal(AdmissionResultKind.Accepted, svc.MarkOperationTerminal(a1.RequestIdentity, "node_outcome:被切源归类=cancelled（远端确认后）").Kind);
 
+        // ② 反例：同 attempt＋同游标修订再投 ⇒ 唯一消费约束阻断（不得复用已取消作业、不得重发）。
+        var reuse = Req(trigger: "fixture:rerun", workflow: "wf-rerun");
+        reuse.Candidate!.Attempt = 1;
+        reuse.Candidate.NodeId = "n-3";
+        reuse.RunBinding = "run-3";
+        reuse.CursorRef = "n-3#0#0";
+        reuse.CursorRevision = 1;
+        reuse.WireSubmitKey = key1;
+        var blocked = await svc.SubmitAsync(reuse);
+        Assert.Equal(AdmissionResultKind.TerminalRejected, blocked.Kind);
+        Assert.Equal("cursor_already_consumed", blocked.ReasonCode);
+        Assert.Equal(1, sends); // 仍是首次那一笔
+
+        // ③ 正向：新 attempt ＋ 新游标代次 ＋ 新键（同一节点出现/循环轮次）⇒ 获准，且新键随请求持久化。
+        var key2 = RunStore.DeriveSubmissionKey("run-3", "n-3", 0, 0, 2);
         var a2 = Req(trigger: "fixture:rerun", workflow: "wf-rerun");
         a2.Candidate!.Attempt = 2;
         a2.Candidate.NodeId = "n-3";
         a2.RunBinding = "run-3";
-        a2.CursorRef = "n-3#0#1";
+        a2.CursorRef = "n-3#0#0";
         a2.CursorRevision = 2;
+        a2.WireSubmitKey = key2;
         var accepted2 = await svc.SubmitAsync(a2);
 
         Assert.Equal(AdmissionResultKind.Accepted, accepted2.Kind);
+        Assert.Equal(key2, FindOp(a2.RequestIdentity)!.WireSubmitKey);        // 新键确实随本次重投落地
+        Assert.NotEqual(key1, key2);                                          // 新 attempt ⇒ 新幂等键
         Assert.NotEqual(a1.RequestIdentity, a2.RequestIdentity);
-        Assert.NotEqual(FindOp(a1.RequestIdentity)!.CandidateId, FindOp(a2.RequestIdentity)!.CandidateId); // attempt 进身份 ⇒ 不合并
-        Assert.Equal(OperationRequestState.TerminalCompleted, FindOp(a1.RequestIdentity)!.RequestState);   // 旧操作未被改写
-        Assert.NotEqual(
-            RunStore.DeriveSubmissionKey("run-3", "n-3", 0, 0, 1),
-            RunStore.DeriveSubmissionKey("run-3", "n-3", 0, 0, 2));                                        // 新 attempt ⇒ 新幂等提交键
+        Assert.NotEqual(FindOp(a1.RequestIdentity)!.CandidateId, FindOp(a2.RequestIdentity)!.CandidateId);
+        Assert.Equal(OperationRequestState.TerminalCompleted, FindOp(a1.RequestIdentity)!.RequestState); // 旧操作未被改写
         Assert.Equal(2, sends);
     }
     // ── 46. R5.3.4 会诊整改：双源校验的冲突/缺字段/分支误用反例 ──
 
     /// <summary>
-    /// **反例（会诊必改项 1）**：注入的 BGI 侧票据快照与本地未决责任**冲突**时，A6 恢复豁免**不得**绕过 ②-a 校验——
-    /// 注入票据 epoch（`ep0`）≠ 当前纪元 ⇒ `stale_epoch` 终局拒绝、零发送（**两个事实源并列校验、不取或**）。
+    /// **反例（会诊必改项 1）**：注入的 BGI 侧票据快照与本地未决责任**冲突**时，A6 恢复豁免**不得**绕过双源校验——
+    /// 两源要素不一致 ⇒ `ticket_conflict` 终局拒绝、零发送、**交接责任保留**（**两个事实源并列校验、不取或**）。
     /// </summary>
     [Fact]
     public async Task Ticket_ConflictingInjectedSnapshotAndLocalPending_BlocksRestore()
@@ -2187,8 +2209,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         });
 
         Assert.Equal(AdmissionResultKind.TerminalRejected, rejected.Kind);
-        Assert.Equal("stale_epoch", rejected.ReasonCode);
+        Assert.Equal("ticket_conflict", rejected.ReasonCode); // 双源一致性先于单源要素判定
         Assert.Equal(0, sends);
+        Assert.NotNull(ReadLease().File!.Handoff!.Pending);
     }
 
     /// <summary>
@@ -2240,4 +2263,70 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(AdmissionResultKind.TerminalRejected, rejected.Kind);
         Assert.Equal("pending_conflict", rejected.ReasonCode);
         Assert.Equal(0, sends);
+    }
+    /// <summary>
+    /// **反例（验证轮必改项 1）**：两源**仅授权抢占方身份不同**（其余要素全等）时，恢复豁免**不得**通过 ⇒
+    /// `ticket_conflict` 终局拒绝、**零发送、零占位**，且**交接责任保留**（`Pending` 不被清除）。
+    /// </summary>
+    [Fact]
+    public async Task Ticket_TwoSourcesDifferOnlyInPreemptor_BlocksRestore()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); };
+            h.FactsProvider = () => new ArbitrationFacts
+            {
+                ActiveTicket = new TicketBinding { SuspendedRunIdentity = "run:take", AuthorizedPreemptorIdentity = "stable:B", Epoch = "ep1" },
+            };
+        });
+        PublishPending(store, authorizedPreemptor: "stable:A", HandoffPhase.RestorePending, suspendedRun: "run:take", actionId: "act:preemptor-conflict");
+
+        var rejected = await svc.AdmitRecoveryAsync(new RecoveryAdmissionRequest
+        {
+            SourceDetail = "fixture:preemptor-conflict",
+            RunId = "run:take",
+            WorkflowId = "group:g1",
+            RestoreBranch = "interrupted-relocate",
+            Scope = "bgi:inst:ep1",
+        });
+
+        Assert.Equal(AdmissionResultKind.TerminalRejected, rejected.Kind);
+        Assert.Equal("ticket_conflict", rejected.ReasonCode);
+        Assert.Equal(0, sends);
+        Assert.Null(ReadLease().File!.Handoff!.Submission);              // 零占位
+        Assert.NotNull(ReadLease().File!.Handoff!.Pending);              // 交接责任保留
+    }
+
+    /// <summary>
+    /// **反例（验证轮必改项 1）**：两源**仅被挂起运行不同**（授权方与 epoch 全等）⇒ 同样保守阻断
+    /// （`ticket_conflict`）、零发送、责任保留。
+    /// </summary>
+    [Fact]
+    public async Task Ticket_TwoSourcesDifferOnlyInSuspendedRun_BlocksRestore()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); };
+            h.FactsProvider = () => new ArbitrationFacts
+            {
+                ActiveTicket = new TicketBinding { SuspendedRunIdentity = "run:other", AuthorizedPreemptorIdentity = "stable:A", Epoch = "ep1" },
+            };
+        });
+        PublishPending(store, authorizedPreemptor: "stable:A", HandoffPhase.RestorePending, suspendedRun: "run:take", actionId: "act:run-conflict");
+
+        var rejected = await svc.AdmitRecoveryAsync(new RecoveryAdmissionRequest
+        {
+            SourceDetail = "fixture:run-conflict",
+            RunId = "run:take",
+            WorkflowId = "group:g1",
+            RestoreBranch = "interrupted-relocate",
+            Scope = "bgi:inst:ep1",
+        });
+
+        Assert.Equal(AdmissionResultKind.TerminalRejected, rejected.Kind);
+        Assert.Equal("ticket_conflict", rejected.ReasonCode);
+        Assert.Equal(0, sends);
+        Assert.NotNull(ReadLease().File!.Handoff!.Pending);
     }}
