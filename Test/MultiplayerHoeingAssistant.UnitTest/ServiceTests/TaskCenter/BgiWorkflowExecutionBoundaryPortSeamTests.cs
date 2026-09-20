@@ -35,22 +35,54 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         public List<(string Operation, string PayloadJson)> Sends { get; } = [];
         public List<BgiExternalResponse> ScriptedResponses { get; } = [];
 
+        /// <summary>发送前注入（夹具用于在「准备完成、对账之前」制造身份被改／被替换等交错）。</summary>
+        public Action? BeforeSend { get; set; }
+
+        /// <summary>发送抛出（触发异常对账路径；OCE 触发取消对账路径）。</summary>
+        public Exception? SendThrows { get; set; }
+
+        /// <summary>对账查询返回的作业列表快照（null＝查不到，对账判 Unknown）。</summary>
+        public BgiJobListSnapshot? JobList { get; set; }
+
+        /// <summary>对账查询次数（会诊要求：断言取消分支确实执行了对账，而非直接跳过）。</summary>
+        public int JobListQueries { get; private set; }
+
+        /// <summary>远端取消请求次数。</summary>
+        public int CancelCalls { get; private set; }
+
+        /// <summary>取消被请求时，持久化记录里**已**带有该 jobId（证明「先落盘、后取消」顺序）。</summary>
+        public bool CancelObservedPersistedJob { get; private set; }
+
+        /// <summary>取消观测回调（夹具注入：读取持久化记录判断顺序）。</summary>
+        public Func<bool>? OnCancelObserve { get; set; }
+
         public bool HasCapability(string name) => Ready;
 
         public Task<BgiExternalResponse> SendCommandAsync(string operation, object? payload, CancellationToken ct)
         {
             Sends.Add((operation, payload is null ? "" : System.Text.Json.JsonSerializer.Serialize(payload)));
+            BeforeSend?.Invoke();
+            if (SendThrows is not null) throw SendThrows;
             return Task.FromResult(ScriptedResponses.Count > 0
                 ? ScriptedResponses[Sends.Count - 1 < ScriptedResponses.Count ? Sends.Count - 1 : ScriptedResponses.Count - 1]
                 : new BgiExternalResponse { Success = true, Data = "{\"status\":\"accepted\",\"taskHandle\":\"job-1\"}" });
         }
 
-        public Task<BgiJobListSnapshot?> QueryJobListAsync(CancellationToken ct) => Task.FromResult<BgiJobListSnapshot?>(null);
+        public Task<BgiJobListSnapshot?> QueryJobListAsync(CancellationToken ct)
+        {
+            JobListQueries++;
+            return Task.FromResult(JobList);
+        }
 
         public Task<(string? Status, BgiJobInfo? Job)> QueryJobStatusAsync(string jobId, CancellationToken ct)
             => Task.FromResult<(string?, BgiJobInfo?)>((null, null));
 
-        public Task CancelOwnedTaskAsync(string jobId, CancellationToken ct) => Task.CompletedTask;
+        public Task CancelOwnedTaskAsync(string jobId, CancellationToken ct)
+        {
+            CancelCalls++;
+            CancelObservedPersistedJob = OnCancelObserve?.Invoke() ?? false;
+            return Task.CompletedTask;
+        }
     }
 
     /// <summary>种子运行：CurrentSubmission 已按引擎纪律落盘意图（Intent=IntentRecorded）。</summary>
@@ -141,7 +173,8 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         Assert.Empty(port.Sends);
     }
 
-    // ── 4. 两段拆分可独立调用：PrepareSubmit 不发送、SendPreparedAsync 才发送（接线态仲裁面必须插在两者之间）──
+    // ── 4. 两段拆分可独立调用：PrepareSubmit 不发送、SendPreparedAsync 才发送 ──
+    // 注意（会诊定稿）：接线态次序是「门面锁内占位 → Sender 内准备 → 发送」，**不是**在准备与发送之间插仲裁。
 
     [Fact]
     public async Task PrepareThenSend_Split_SendsOnlyInSecondSegment()
@@ -328,6 +361,172 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         Assert.Contains("\"processId\":4321", send.PayloadJson);
         Assert.Contains("\"startTicksUtc\":638999999999999999", send.PayloadJson);
         Assert.Equal("4321:638999999999999999", _runs.Load(run.RunId)!.CurrentSubmission!.Epoch); // 持久化同一组值
+    }
+
+    // ── 14b. 会诊回溯复核反例：拒绝槽位不得承载非拒绝结果（No(Accepted)/No(Unknown) 必须被工厂拒绝）──
+    // 反例形态：No(AcceptedWith("x")) 会让 SendPreparedAsync 零发送却报 Accepted（第一道护栏只看 Rejection 非空）。
+
+    [Fact]
+    public void PrepareSubmit_NoFactory_RejectsNonRejectedResults()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            BgiWorkflowExecutionBoundary.PreparedSubmit.No(BoundarySubmitResult.AcceptedWith("fabricated-job")));
+        Assert.Throws<ArgumentException>(() =>
+            BgiWorkflowExecutionBoundary.PreparedSubmit.No(BoundarySubmitResult.UnknownWith("fabricated-unknown")));
+        Assert.Throws<ArgumentNullException>(() =>
+            BgiWorkflowExecutionBoundary.PreparedSubmit.No(null!));
+        // 合法拒绝仍可构造（不误伤正常路径）
+        var ok = BgiWorkflowExecutionBoundary.PreparedSubmit.No(BoundarySubmitResult.Rejected("precheck_rejected"));
+        Assert.NotNull(ok.Rejection);
+    }
+
+    // ── 15. 对账路径（会诊要求）：正常命中用冻结身份落盘受理事实 ──
+
+    private static BgiJobListSnapshot SnapshotFor(string key, string wireRunId, string nodeId, int iteration, string jobId)
+        => new()
+        {
+            Epoch = new BgiEpoch { ProcessId = 4321, StartTicksUtc = 638999999999999999 },
+            Jobs = [new BgiJobInfo { IdempotencyKey = key, WorkflowRunId = wireRunId, NodeId = nodeId, Iteration = iteration, JobId = jobId, State = "queued" }],
+        };
+
+    [Fact]
+    public async Task Reconcile_UncertainSendHitWithFrozenIdentity_PersistsAccepted()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort
+        {
+            SendThrows = new InvalidOperationException("transport down"),
+            JobList = SnapshotFor(run.CurrentSubmission!.Key, run.WireRunId, "n-1", 0, "job-reconciled"),
+        };
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+
+        var result = await boundary.SubmitAsync(new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true), default);
+
+        Assert.True(result.Accepted);
+        Assert.Equal("job-reconciled", result.JobId);
+        Assert.Single(port.Sends); // 只发送一次（对账命中不重发）
+        var persisted = _runs.Load(run.RunId)!;
+        Assert.Equal(SubmitIntentState.Accepted, persisted.CurrentSubmission!.Intent);
+        Assert.Equal("job-reconciled", persisted.CurrentSubmission.JobId);
+    }
+
+    // ── 16. 对账路径（会诊反例 1）：同一实例身份被原地改写 → 不得落盘受理事实 ──
+
+    [Fact]
+    public async Task Reconcile_SubmissionIdentityMutatedInPlace_DoesNotPersistAccepted()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort
+        {
+            SendThrows = new InvalidOperationException("transport down"),
+            JobList = SnapshotFor(run.CurrentSubmission!.Key, run.WireRunId, "n-1", 0, "job-reconciled"),
+        };
+        port.BeforeSend = () => run.CurrentSubmission!.Key = "mutated-key"; // 准备之后、对账之前改写身份
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+
+        var result = await boundary.SubmitAsync(new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true), default);
+
+        Assert.True(result.Uncertain); // 不臆断落盘：保守 Unknown
+        Assert.Single(port.Sends);     // 零重发
+        Assert.NotEqual(SubmitIntentState.Accepted, run.CurrentSubmission!.Intent);
+        Assert.Null(run.CurrentSubmission.JobId);
+        // 磁盘断言（会诊要求）：盘上仍是「准备阶段」的事实——Submitted、SendAttempted、空 jobId。
+        var diskMutated = _runs.Load(run.RunId)!;
+        Assert.Equal(SubmitIntentState.Submitted, diskMutated.CurrentSubmission!.Intent);
+        Assert.True(diskMutated.CurrentSubmission.SendAttempted);
+        Assert.Null(diskMutated.CurrentSubmission.JobId);
+    }
+
+    // ── 17. 对账路径（会诊反例 2）：提交被替换成另一实例 → 不得落盘受理事实 ──
+
+    [Fact]
+    public async Task Reconcile_SubmissionReplaced_DoesNotPersistAccepted()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort
+        {
+            SendThrows = new InvalidOperationException("transport down"),
+            JobList = SnapshotFor(run.CurrentSubmission!.Key, run.WireRunId, "n-1", 0, "job-reconciled"),
+        };
+        // 会诊要求：只换对象引用、**完整保留冻结身份字段**——否则单删 ReferenceEquals 比较也测不出来。
+        var original = run.CurrentSubmission!;
+        port.BeforeSend = () => run.CurrentSubmission = new WorkflowSubmission
+        {
+            Key = original.Key, NodeId = original.NodeId, Occurrence = original.Occurrence,
+            LoopIteration = original.LoopIteration, Attempt = original.Attempt,
+            Epoch = original.Epoch, Intent = original.Intent,
+        };
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+
+        var result = await boundary.SubmitAsync(new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true), default);
+
+        Assert.True(result.Uncertain);
+        Assert.Single(port.Sends);
+        Assert.Null(run.CurrentSubmission!.JobId);
+        Assert.NotEqual(SubmitIntentState.Accepted, original.Intent); // 旧实例也不得被错误写成 Accepted
+        // 磁盘断言（会诊要求）：盘上不得出现受理事实。
+        var diskReplaced = _runs.Load(run.RunId)!;
+        Assert.Null(diskReplaced.CurrentSubmission!.JobId);
+        Assert.NotEqual(SubmitIntentState.Accepted, diskReplaced.CurrentSubmission.Intent);
+    }
+
+    // ── 18. 对账路径（会诊要求）：取消分支保持「对账后重抛 OCE」纪律，且不重发 ──
+
+    [Fact]
+    public async Task Reconcile_OperationCanceledToSend_ReThrowsAfterReconcile()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort
+        {
+            SendThrows = new OperationCanceledException(),
+            JobList = SnapshotFor(run.CurrentSubmission!.Key, run.WireRunId, "n-1", 0, "job-reconciled"),
+        };
+        // 取消发生时，盘上是否已带 jobId（证明「先落盘、后取消」）
+        port.OnCancelObserve = () => _runs.Load(run.RunId)?.CurrentSubmission?.JobId == "job-reconciled";
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            boundary.SubmitAsync(new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true), default));
+
+        Assert.Single(port.Sends); // 取消也不重发
+        // 会诊要求：断言对账确实发生、受理事实已落盘、且「先落盘、后取消」的顺序。
+        Assert.True(port.JobListQueries > 0, "取消分支必须执行按幂等键的对账查询");
+        var diskAfterOce = _runs.Load(run.RunId)!;
+        Assert.Equal("job-reconciled", diskAfterOce.CurrentSubmission!.JobId);
+        Assert.True(port.CancelCalls > 0, "对账命中后必须请求远端取消");
+        Assert.True(port.CancelObservedPersistedJob, "顺序必须是「先落盘 jobId、后请求取消」");
+    }
+
+    // ── 19. 并发写入边界（会诊要求）：另一写入者先推进记录修订 → 本次写回被修订守卫拒绝，保守 Unknown ──
+
+    [Fact]
+    public async Task Reconcile_ConcurrentRecordAdvance_WriteBackRejected_ConservativeUnknown()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort
+        {
+            SendThrows = new InvalidOperationException("transport down"),
+            JobList = SnapshotFor(run.CurrentSubmission!.Key, run.WireRunId, "n-1", 0, "job-reconciled"),
+        };
+        // 模拟「另一写入者先推进」：用磁盘上的最新副本再写一次，使盘上 RecordRevision 前进，
+        // 而本地 run 对象仍持旧修订——写回必须被 RunRecordConflictException 挡住。
+        port.BeforeSend = () =>
+        {
+            var fresh = _runs.Load(run.RunId)!;
+            fresh.Note = (fresh.Note ?? "") + "；并发推进";
+            _runs.Update(fresh);
+        };
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+
+        var result = await boundary.SubmitAsync(new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true), default);
+
+        Assert.True(result.Uncertain); // 写回被拒 → 保守 Unknown
+        Assert.Single(port.Sends);     // 零重发
+        var disk = _runs.Load(run.RunId)!;
+        Assert.Null(disk.CurrentSubmission!.JobId); // 盘上不得出现受理事实
+        // 会诊要求：冲突后**内存对象也不得残留**未持久化的受理状态（回滚到写回前的原值）。
+        Assert.Equal(SubmitIntentState.Submitted, run.CurrentSubmission!.Intent);
+        Assert.Null(run.CurrentSubmission.JobId);
     }
 
     // ── 14. 会诊复核反例：把同一冻结载荷**重新包装**成新实例 → 仍不得二次发送 ──

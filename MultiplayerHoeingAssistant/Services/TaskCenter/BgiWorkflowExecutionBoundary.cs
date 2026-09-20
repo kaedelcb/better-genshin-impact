@@ -40,12 +40,21 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     {
         private int _consumed;
 
-        private PreparedSubmit(WorkflowRunRecord? run, WorkflowSubmission? submission, object? payload, BoundarySubmitResult? rejection)
+        /// <summary>
+        /// **不可变对账身份快照**（会诊回溯复核）：发送载荷用的是准备时冻结的值，对账必须用**同一组值**，
+        /// 不得改读仍然可变的 `submission.*`／`run.WireRunId`——否则准备后这些字段被改写会造成
+        /// 「按纪元 A 发送、按纪元 B 对账」，合法命中被拒或错误命中被接受。
+        /// </summary>
+        internal sealed record ReconcileIdentity(string Epoch, string Key, string WireRunId, string NodeId, int LoopIteration);
+
+        private PreparedSubmit(WorkflowRunRecord? run, WorkflowSubmission? submission, object? payload,
+            BoundarySubmitResult? rejection, ReconcileIdentity? reconcile)
         {
             Run = run;
             Submission = submission;
             Payload = payload;
             Rejection = rejection;
+            Reconcile = reconcile;
         }
 
         public WorkflowRunRecord? Run { get; }
@@ -53,20 +62,41 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         public object? Payload { get; }
         public BoundarySubmitResult? Rejection { get; }
 
+        /// <summary>冻结的对账身份（拒绝分支为 null）。</summary>
+        public ReconcileIdentity? Reconcile { get; }
+
         /// <summary>
         /// 构造可证实未受理的拒绝结果（第 1 段未通过时唯一出口）。
         /// </summary>
-        internal static PreparedSubmit No(BoundarySubmitResult rejection) => new(null, null, null, rejection);
+        internal static PreparedSubmit No(BoundarySubmitResult rejection)
+        {
+            ArgumentNullException.ThrowIfNull(rejection);
+            // 会诊回溯复核：拒绝槽位承载 Accepted/Unknown 会让发送段把非拒绝当拒绝返回
+            // （反例 `No(AcceptedWith(...))` → 零发送却报 Accepted）。工厂必须自守该不变量。
+            if (rejection.Accepted || rejection.Uncertain)
+                throw new ArgumentException("拒绝分支只接受可证实未受理的结果。", nameof(rejection));
+            return new(null, null, null, rejection, null);
+        }
 
-        /// <summary>构造可发送的冻结载荷（仅第 1 段全部校验通过时可达）。</summary>
+        /// <summary>构造可发送的冻结载荷（**内部信任边界**：不校验提交/记录/指纹是否匹配——见类型注释）。</summary>
         internal static PreparedSubmit Ok(WorkflowRunRecord run, WorkflowSubmission submission, object payload)
-            => new(run, submission, payload, null);
+            => new(run, submission, payload, null,
+                new ReconcileIdentity(submission.Epoch ?? "", submission.Key ?? "", run.WireRunId ?? "",
+                    submission.NodeId ?? "", submission.LoopIteration));
 
         /// <summary>
         /// 一次性消费护栏（仅防**进程内重复调用**；持久化的发送授权责任仍在门面，绝不由本护栏替代）。
         /// **消费状态绑定到底层冻结凭据（WorkflowSubmission 实例）而非本包装实例**——否则调用方可把同一
-        /// 载荷重新包装成新实例（计数从零）而绕过护栏（会诊复核反例）。同一次业务提交每次只有一份
-        /// submission 对象，重试由引擎签发新对象，故不误伤合法重试。
+        /// 载荷重新包装成新实例（计数从零）而绕过护栏（会诊复核反例）。
+        /// **前置条件（本层不保证、须由引擎级夹具证明）**：合法重试必须由引擎签发**新的**
+        /// `WorkflowSubmission` 实例；若某条重试路径复用同一实例，会被本护栏一并挡住。
+        /// **当前调用链证据（会诊要求，已核实）**：`SubmitAndAwaitAsync` 的生产调用点**只有一处**
+        /// （`WorkflowRunner.cs:467`，节点循环内），且其中 `attempt` 为 `const int = 1`、注明「有界重试机制挂账
+        /// R4.6+」——即**本层当前不存在透明重试路径**，故不存在「合法重试被本护栏挡住」的情形；每次调用都在
+        /// `WorkflowRunner.cs:589` **新建** `WorkflowSubmission`，经 `RecordIntent` 替换 `run.CurrentSubmission`。
+        /// 将来实现重试时，必须按 §3.2a/§3.3 以**新 attempt + 新提交身份（新实例）**重新准入，不得复用旧实例。
+        /// 另注：登记先于端口调用，故无论前次是 Accepted／协议拒绝／异常／取消，同一实例都不再放行；
+        /// **不得**在异常或取消时移除登记（那会重新打开不确定发送后的重复执行窗口）。
         /// </summary>
         public bool TryConsume()
         {
@@ -219,12 +249,12 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         {
             // 发送窗口取消（Stop）：cleanup 令牌对账——命中绑定 jobId 落盘并即发远端取消（引擎 Stop 路径随后再确认），
             // 未命中保留 SendAttempted 事实；随后重抛 OCE（取消纪律不吞）
-            await ReconcileAfterUncertainSendAsync(run, submission, cancelOnHit: true).ConfigureAwait(false);
+            await ReconcileAfterUncertainSendAsync(run, submission, prepared.Reconcile!, cancelOnHit: true).ConfigureAwait(false);
             throw;
         }
         catch (Exception ex)
         {
-            var reconciled = await ReconcileAfterUncertainSendAsync(run, submission, cancelOnHit: false).ConfigureAwait(false);
+            var reconciled = await ReconcileAfterUncertainSendAsync(run, submission, prepared.Reconcile!, cancelOnHit: false).ConfigureAwait(false);
             return reconciled ?? BoundarySubmitResult.UnknownWith(
                 $"发送结果不可考（{ex.GetType().Name}），按幂等键对账未命中（不重发，待人工/恢复对账）");
         }
@@ -280,7 +310,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     /// cancelOnHit=true（发送窗口取消场景）：命中即绑定落盘 + 发远端取消（best-effort）。
     /// </summary>
     private async Task<BoundarySubmitResult?> ReconcileAfterUncertainSendAsync(
-        WorkflowRunRecord run, WorkflowSubmission submission, bool cancelOnHit)
+        WorkflowRunRecord run, WorkflowSubmission submission, PreparedSubmit.ReconcileIdentity identity, bool cancelOnHit)
     {
         try
         {
@@ -289,12 +319,55 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             var epochBefore = _port.ServerEpoch is { } eb ? $"{eb.ProcessId}:{eb.StartTicksUtc}" : null;
             var snapshot = await _port.QueryJobListAsync(budget.Token).ConfigureAwait(false);
             var epochAfter = _port.ServerEpoch is { } e ? $"{e.ProcessId}:{e.StartTicksUtc}" : null;
-            var hit = TryMatchReconcileHit(snapshot, epochBefore, epochAfter, submission.Epoch,
-                submission.Key, run.WireRunId, submission.NodeId, submission.LoopIteration);
+            // 只消费冻结快照（不得改读可变对象字段——会诊回溯复核）
+            var hit = TryMatchReconcileHit(snapshot, epochBefore, epochAfter, identity.Epoch,
+                identity.Key, identity.WireRunId, identity.NodeId, identity.LoopIteration);
             if (hit is null) return null; // 通道瞬态/纪元不一致（查询窗口/快照自报/冻结）/零命中/多命中：Unknown
+            // 写回前复核提交身份未被替换**且未被原地改写**（会诊复核：`ReferenceEquals` 只挡得住换实例，
+            // 挡不住同一实例的 Key/Epoch/NodeId/LoopIteration 被改）。任一不符=不臆断落盘，保守返回 null
+            // （调用方按 Unknown 处置、零重发）——绝不把「身份 A 的受理结果」写进身份已是 B 的提交。
+            //
+            // 并发写入边界的证据（会诊要求，勿删）：
+            // - **本层能证明的**：单个 `TaskCenterHost` 内 `_runs` 是**同一实例**（构造于 `TaskCenterHost.cs:116`，
+            //   `CreateRunner` 传同一 `_runs`），其 `Persist` 在同一把 `_gate` 内完成读盘/修订比较/写入——因此
+            //   **同一宿主内、持有旧修订的独立副本**提交时必被拒（`RunRecordConflictException`「并发推进未覆盖」），
+            //   本次写回不会错误覆盖；该异常由外层 catch 收敛为 null（Unknown、零重发）。
+            // - **本层不能证明、不得据此宣称的**：`_gate` 是实例字段，**不提供跨实例/跨进程互斥**；「生产只有一个宿主」
+            //   属**部署前提**，不是本层可核实的实现事实；「仲裁租约已覆盖全部运行记录写入」亦未在本层证明
+            //   （例如启动恢复扫描会写运行记录、退出释放在有界等待未收敛时仍会释放）。
+            //   故跨进程写入排他只能记为**外部合同前提**（租约设计 R5.1 §6.1/§6.3），本层既不重复实现、也不背书其落实。
+            // - 上述字段比较覆盖的是**不经 RunStore 的原地内存改写**这一类，其可靠性依赖「同一 run 对象在驱动调用链内
+            //   串行变更」这一**对象所有权前提**；字段守卫本身**不构成共享对象的并发保证**。将来若引入共享对象并发
+            //   写入或实现真正的重试，必须让所有写入者共用同一同步机制（仅本方法加锁、或仅 `Update` 内部加锁都不够）。
+            if (!ReferenceEquals(run.CurrentSubmission, submission)
+                || !string.Equals(submission.Epoch, identity.Epoch, StringComparison.Ordinal)
+                || !string.Equals(submission.Key, identity.Key, StringComparison.Ordinal)
+                || !string.Equals(run.WireRunId, identity.WireRunId, StringComparison.Ordinal)
+                || !string.Equals(submission.NodeId, identity.NodeId, StringComparison.Ordinal)
+                || submission.LoopIteration != identity.LoopIteration)
+                return null;
+            // 已有受理事实冲突保护（会诊要求）：jobId 为空＝允许绑定；相同＝幂等确认；**不同＝保留原事实并返回
+            // null（Unknown）**——不得用本轮命中覆盖既有的另一个 jobId。
+            if (submission.JobId is { } existingJob && !string.Equals(existingJob, hit.JobId, StringComparison.Ordinal))
+                return null;
+            // 会诊要求：落盘失败不得把「未持久化的受理状态」留在可继续使用的对象上。
+            // 先记住原值；仅在字段仍是我们刚写入的值时恢复（**注意：这是在「同一 run 对象于驱动调用链内串行变更」
+            // 这一对象所有权前提下的恢复，字段守卫本身不提供共享对象的并发保证**）；异常交外层 catch 收敛为 Unknown。
+            var prevIntent = submission.Intent;
+            var prevJobId = submission.JobId;
             submission.Intent = SubmitIntentState.Accepted;
             submission.JobId = hit.JobId;
-            _runs.Update(run); // 对账命中即受理事实落盘
+            try
+            {
+                _runs.Update(run); // 对账命中即受理事实落盘
+            }
+            catch (Exception) when (submission.Intent == SubmitIntentState.Accepted
+                                    && string.Equals(submission.JobId, hit.JobId, StringComparison.Ordinal))
+            {
+                submission.Intent = prevIntent;
+                submission.JobId = prevJobId;
+                throw;
+            }
             if (cancelOnHit)
                 await RequestCancelAsync(hit.JobId!, budget.Token).ConfigureAwait(false);
             return BoundarySubmitResult.AcceptedWith(hit.JobId!);
