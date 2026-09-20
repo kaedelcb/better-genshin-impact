@@ -441,3 +441,22 @@ B1 统一提交边界/B2 F11 与快照/B3 仲裁轮次/B4 范围裁决表/B5 恢
 **异常边界与回执纪律**：凡「受理已成立」（台账/运行记录原子落盘）之后的任何 await 或派发，异常都不得穿透为对外拒绝——一律保留 `Accepted` 并按可读状态如实描述（执行结果待核实），与 I1「区分已发送/已入队/已执行/终态、未知不得当作成功或空闲」同口径。**该纪律同样覆盖取消回调与日志委托**：`LaunchDrive` 关闭竞态分支改为**先无条件启动册外观察，再尽力取消**（取消回调与日志委托异常均被隔离），使「任务已启动就必须被观察」与「受理不撤回」不被日志/取消行为破坏。
 
 **关于「current/expected revision」的权威口径**（消解 §4.2/§4.2c 字面与实现的差异）：§4.2「统一提交边界」与 §4.2c「关闭接口」中的「当前 revision」应理解为**锁内权威修订号**——冻结签名 `MutateHandoff` 要求调用方显式提供并比对（调用方快照 CAS）；`MutateHandoffLatest` 变体在锁内就地取最新修订号、跳过调用方快照 CAS，改由「锁内最新修订 + 回调内业务复核（含待对账迁移的 `submissionIdentity+sendSeq` 关联校验）」承担正确性。两者都保证「读-判-写-发布」在同一锁内完成、修订号单调递增。
+
+## 12. B2-γ 实施计划（Runner 后继提交接仲裁面，§5.2 落地）
+
+**已核实现状（2026-09-20，HEAD=a3cc086c 后）**：
+
+- `WorkflowRunner.SubmitAndAwaitAsync` 先 `_runs.RecordIntent(run, submission)` 落盘意图，再 `_boundary.SubmitAsync(new WorkflowSubmitRequest(...))`；提交键由 `RunStore.DeriveSubmissionKey(runId, nodeId, occurrence, loopIteration, attempt)` 派生。
+- 生产边界 `BgiWorkflowExecutionBoundary.SubmitAsync` 目前**直接**做「本地校验 → 冻结纪元/有效期/指纹 → 标记 SendAttempted → 线协议发送 → 不确定对账」，**未经过仲裁面**。
+- 宿主 `TaskCenterHost.CreateRunner` 直接 `new BgiWorkflowExecutionBoundary(c, _runs)`；`DispatchViaHostAsync` 对携带 `NodeId` 的候选目前返回 `Unknown("unsupported_dispatch_shape_b2a")`。
+- 候选身份 9 段（含 `NodeId/Occurrence/LoopIteration/Attempt`）与 §2.2 编码器均已就绪，`ArbitrationOrderingTests` 已覆盖编码与越界；缺口**只在接线**。
+
+**实施要点（三步，缺一不可）**：
+
+1. **拆分边界**：把 `BgiWorkflowExecutionBoundary.SubmitAsync` 拆为「本地校验+身份冻结」（可重复调用、无发送副作用）与「锁外发送+不确定对账」两段，使发送段可被仲裁面当作 Sender 回调调用，而不重复冻结/重复落盘。
+2. **适配器装饰器**：新增 `ArbitrationWorkflowExecutionBoundary`（`IWorkflowExecutionBoundary` 其余成员一律委托 inner），其 `SubmitAsync` 构造后继候选后经门面提交：`Scope=bgi:local:{当前 epoch}`、`Namespace=successor`、`WorkflowId`、`TriggerOccurrenceId`＝**首节点触发身份继承**（I-1，不得重造）、`RunId=run.RunId`、`NodeId/Occurrence/LoopIteration/Attempt`＝出现身份与 `submission.Attempt`、`ResourceRef`＝节点资源引用、`Intent=start`、`CursorRef/CursorRevision`＝运行台账**合法游标**（§3.2 授权）。
+3. **三态双向映射**：`SendOutcome` ↔ `BoundarySubmitResult`——`Accepted(jobId)`→`AcceptedWith(jobId)`；确定拒绝→`Rejected(reason)`（仅可证实未受理）；其余→`Uncertain`（不猜成功也不猜失败）。`RecordIntent` 先行与「Unknown 停驻不重发」纪律保持不变。
+
+**必须同时满足的约束**：门面 Sender 回调与边界发送段之间的回环**不得重入 `_gate`**（回调在锁外执行，发送段自身也不得取门面信号量）；`unsupported_dispatch_shape_b2a` 只保留给「非节点且非 flow」的未知形状；`checkSwitchGate` 在同一次占位事务内仍为 `true`。
+
+**验收口径（施工方内置，owner 0 点击）**：后继节点经仲裁面**真实**提交（断言发送次数与边界调用来源为门面而非直通）；同游标（`cursorRef+cursorRevision`）双提交仅一胜（⑪b 唯一消费）；三态映射各一例；首节点触发身份继承向量；epoch 变化拒绝；`attempt` 递增产生新身份（同 run 后继仍继承 `RunId` 段）。
