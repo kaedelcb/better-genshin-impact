@@ -189,6 +189,33 @@ public sealed class MigrationSwitchTransaction : IDisposable
         return false;
     }
 
+    /// <summary>
+    /// **规范化名称校验**（Windows 短名/别名防护）：对已存在的每一段，要求该段名称与其父目录**枚举名**大小写不敏感匹配；
+    /// 若路径在磁盘上存在、却**未被父目录枚举名匹配**（例：NTFS 8.3 短名别名）⇒ 视为**非规范名**拒绝。
+    /// 尚未存在的新路径（新增文件/新目录）不受此限（新名不可能是既有别名）。
+    /// </summary>
+    internal static bool IsCanonicalExistingPath(string root, string? rel, out string notCanonicalAt)
+    {
+        notCanonicalAt = "";
+        var segments = NormalizePath(rel).Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var current = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var candidate = Path.Combine(current, segments[i]);
+            var exists = File.Exists(candidate) || Directory.Exists(candidate);
+            if (!exists) return true;                        // 从这里起都是新路径 ⇒ 无别名风险
+            var parentEntries = Directory.EnumerateFileSystemEntries(current)
+                .Select(Path.GetFileName).Where(n => n is not null).ToList();
+            if (!parentEntries.Any(n => string.Equals(n, segments[i], StringComparison.OrdinalIgnoreCase)))
+            {
+                notCanonicalAt = string.Join('/', segments.Take(i + 1));   // 存在但非枚举名 ⇒ 别名（如 8.3 短名）
+                return false;
+            }
+            current = candidate;
+        }
+        return true;
+    }
+
     /// <summary>路径前缀判定（a 为 b 的祖先目录）：用于**文件/目录拓扑互换**的登记拒绝。</summary>
     internal static bool IsAncestorPath(string? a, string? b)
     {
@@ -381,6 +408,12 @@ public sealed class MigrationSwitchTransaction : IDisposable
 
             // **拓扑约束**：`Added` 路径不得与 `Modified/Deleted` 路径互为祖先——文件↔目录互换会让「先恢复子路径、
             // 后删除父路径」无法收敛（父被新文件阻挡）。登记期结构化拒绝，避免提交前崩溃后进入不可恢复回滚。
+            foreach (var c in batch)
+            {
+                if (!IsCanonicalExistingPath(_configRoot, c.Path, out var badSegment))
+                    return MigrationResult.Fail("non_canonical_path:" + badSegment, m.Stage);   // 短名/别名等新引用不一致 ⇒ 拒绝
+            }
+
             var merged = m.ChangedFiles.Concat(batch).ToList();
             for (var i = 0; i < merged.Count; i++)
             {

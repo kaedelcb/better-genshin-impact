@@ -897,6 +897,31 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         Assert.Single(changed);                                  // 既有登记保持不变（无部分写入）
         Assert.Equal("ok.json", changed[0].Path);
     }
+    /// <summary>
+    /// **第 12 轮必改（Windows 短名/别名防护）**：已存在段的名称必须与其父目录**枚举名**匹配；
+    /// 位处「存在但非枚举名」（如 NTFS 8.3 短名）⇒ 拒绝。此处覆盖**可构造分支**：
+    /// ①规范存在路径（`a.json`）被接受；②新增不存在路径（`new/x.json`）被接受；
+    /// ③已存在目录下的新文件（`sub/b.json`，`sub` 为规范名）被接受。
+    /// **8.3 短名本身的反例构造不可移植**（需启用 8.3 的目标机）——按纪律**不设计需 owner 手工构造的场景**，
+    /// 该分支以「存在但非枚举名 ⇒ 拒绝」的代码路径 + §21.10 残余登记承接。
+    /// </summary>
+    [Fact]
+    public void RecordChanges_CanonicalNameRules_AcceptCanonicalAndNewPaths()
+    {
+        Seed("a.json", "{\"v\":1}");
+        Seed("sub/b.json", "{\"w\":1}");
+        using var tx = NewTx();
+        tx.BeginTransaction("t1");
+        tx.TakeSnapshot();
+
+        Assert.True(tx.RecordChanges([new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified }]).Success);
+        Assert.True(tx.RecordChanges([new ChangeRecord { Path = "new/x.json", Kind = ChangeKind.Added }]).Success);
+        Assert.True(tx.RecordChanges([new ChangeRecord { Path = "sub/b.json", Kind = ChangeKind.Modified }]).Success);
+        Assert.True(tx.RecordChanges([new ChangeRecord { Path = "A.JSON", Kind = ChangeKind.Modified }]).Success); // 大小写变体＝同一身份
+        var keys = tx.LoadManifest()!.ChangedFiles.Select(c => c.Path.ToLowerInvariant()).OrderBy(p => p, StringComparer.Ordinal).ToList();
+        Assert.Equal(3, keys.Count);                                   // 大小写变体**按身份去重**（不新增记录）
+        Assert.Equal(new[] { "a.json", "new/x.json", "sub/b.json" }, keys);
+    }
     [Theory]
     [InlineData(MigrationStage.Snapshotting)]
     [InlineData(MigrationStage.SnapshotReady)]
