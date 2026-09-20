@@ -114,7 +114,8 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
 
     /// <summary>
     /// 统一提交入口（与非接线路径逐字等价）：本地校验+身份冻结 → 锁外发送 → 三态对账。
-    /// R5.2 B2-γ：接线态由 <see cref="ArbitrationWorkflowExecutionBoundary"/> 在这两段之间插入仲裁面。
+    /// R5.2 B2-γ 接线次序（会诊定稿，勿照旧解读为「两段之间插仲裁」）：**门面锁内占位 → Sender 内
+    /// 准备（本方法第 1 段）→ 发送（第 2 段）→ 门面三态对账**。即仲裁在准备之前，不在两段之间。
     /// </summary>
     public async Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
     {

@@ -5,7 +5,9 @@ using System.Threading.Tasks;
 namespace MultiplayerHoeingAssistant.Services;
 
 /// <summary>
-/// R5.2 B2-γ 第 2 步：把 Runner 的**后继节点提交**接进仲裁面的装饰器（设计稿 §5.2/§12）。
+/// R5.2 B2-γ 第 2 步：把 Runner 的**节点提交**（含**首个执行节点**与后继节点）接进仲裁面的装饰器
+/// （设计稿 §5.2/§12/§12.3）。**注意：本层不区分首节点与后继**——父子授权关系由宿主委托与门面裁决，
+/// 本层只负责改道，不得在此自行判定「是不是后继」。
 ///
 /// 除 <see cref="SubmitAsync"/> 外的成员一律逐字委托 inner——终态观察/远端取消与仲裁无关，不得被本层改写。
 /// <see cref="SubmitAsync"/> 交给注入的准入委托：由宿主构造后继候选（节点出现身份+轮次+attempt、同 run 继承
@@ -33,7 +35,7 @@ internal sealed class ArbitrationWorkflowExecutionBoundary : IWorkflowExecutionB
 
     public bool SuppressConfigCompletionSupported => _inner.SuppressConfigCompletionSupported;
 
-    /// <summary>后继提交唯一的分流点：经仲裁面（其余路径一律与 inner 等价）。</summary>
+    /// <summary>节点提交唯一的分流点：经仲裁面（其余路径一律与 inner 等价）。</summary>
     public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
         => _submitViaAdmission(request, ct);
 
