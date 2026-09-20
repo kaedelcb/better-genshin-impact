@@ -821,13 +821,28 @@ public sealed partial class TaskCenterHost
                 return HostActionResult.Unavailable("该流程已有运行正在驱动（禁止双驱动）");
         }
 
+        // §5.1／AMD-1-5（**P28 部分处置**）：
+        // ①**有已登记来源时一律继承该 run 的固定 Scope**——不得用 `CurrentBgiEpoch()` 重新构造：那会让 epoch 变化后的
+        //   恢复被绑到**新纪元**（等于换身份），违反「epoch 变化→拒绝或对账，**不重写既有身份**」（I-1）。
+        // ②**无已登记来源时**（启动移交创建、来源登记尚未落地——P4/G4a）暂沿用接线前行为**并逐次留痕**：
+        //   按 AMD-1-5 第三条本应拒绝签发，但强制拒绝会破坏 R4.9 移交运行的既有恢复；本分支**登记为待移除**
+        //   （P28 残余），P4 落地后删除并改为响亮拒绝。
+        var inheritedScope = TryGetAdmissionScope(run.RunId!);
+        if (inheritedScope is null)
+        {
+            TryLog("[任务中心] 恢复准入缺少已登记固定来源（运行 " + run.RunId
+                   + "）——暂按接线前行为以当前纪元构造 Scope，属**已登记缺口**（P28 残余／P4）；"
+                   + "不得据此视为「来源合同已满足」。");
+        }
+        var resumeScope = inheritedScope ?? $"bgi:local:{CurrentBgiEpoch()}";
+
         var result = await facade.AdmitRecoveryAsync(new RecoveryAdmissionRequest
         {
             SourceDetail = sourceDetail,
             RunId = run.RunId!,
             WorkflowId = run.WorkflowId!,
             RestoreBranch = run.State == WorkflowRunState.Paused ? "paused-continue" : "interrupted-relocate",
-            Scope = $"bgi:local:{CurrentBgiEpoch()}",
+            Scope = resumeScope,
         }).ConfigureAwait(false);
 
         if (result.Kind == AdmissionResultKind.Accepted)

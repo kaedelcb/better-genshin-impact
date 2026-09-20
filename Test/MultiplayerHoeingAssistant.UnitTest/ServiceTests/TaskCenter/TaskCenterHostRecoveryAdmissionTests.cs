@@ -517,4 +517,99 @@ public class TaskCenterHostRecoveryAdmissionTests : IDisposable
             await host.ShutdownAsync();
         }
     }
+
+    // ── P28：恢复沿用原固定 Scope/绑定（纪元变化时不得换身份） ──
+
+    /// <summary>
+    /// **P28（R5.3）正向**：运行由面板 E1 启动（登记固定 Scope＝`bgi:local:1:100`）后变为 Interrupted，
+    /// **纪元不变**时发起恢复 ⇒ 恢复操作落盘 Scope/TargetEpoch 与启动操作**逐字一致**。
+    /// **证明边界（[纠正·2026-09-21 会诊]）**：本用例**不能**独立区分「继承」与「重新读取当前值」——
+    /// 真正检出本次修复的是换纪元用例（`ResumeRun_EpochChanged_RejectedNoSilentRebinding`）。
+    /// 场景施工方内置，owner 0 点击。
+    /// </summary>
+    [Fact]
+    public async Task ResumeRun_InheritsOriginalScope_WhenEpochUnchanged()
+    {
+        var workflowId = SeedFlow("恢复来源继承流程");
+        var boundary = new FakeBoundary();
+        var seams = new TaskCenterAdmissionSeams { Epoch = "1:100" };
+        var host = MakeWiredHost(boundary, seams);
+        try
+        {
+            Assert.Equal(HostActionStatus.Registered, (await host.StartWorkflowAsync(workflowId)).Status);
+            await WaitUntilAsync(() => boundary.Submissions.Count >= 1 && host.ListActiveRuns().Count == 0);
+            var startOp = Assert.Single(Ops(ReadLease()).Where(o => o.Intent == "start"));
+            var runId = startOp.RunBinding!;
+            Assert.Equal("1:100", startOp.TargetEpoch); // 启动时固定的目标纪元
+
+            // 令其变为可恢复态（**纪元不变**：本夹具先验证「继承」这一正向路径）
+            var run = _runs.Load(runId)!;
+            run.State = WorkflowRunState.Interrupted;
+            run.Note = (run.Note ?? "") + "；夹具置为可恢复态";
+            _runs.Update(run);
+
+            var resume = await host.ResumeRunAsync(runId);
+            Assert.Equal(HostActionStatus.Registered, resume.Status);
+
+            // 恢复操作必须**继承该 run 的固定 Scope/epoch**（而不是任何「当前」值）
+            var resumeOp = Assert.Single(Ops(ReadLease()).Where(o => o.Intent == "resume"));
+            Assert.Equal("1:100", resumeOp.TargetEpoch);
+            Assert.Equal("bgi:local:1:100", resumeOp.Candidate!.Scope);
+            Assert.Equal(startOp.Candidate!.Scope, resumeOp.Candidate!.Scope); // 与启动操作逐字一致
+        }
+        finally
+        {
+            await host.ShutdownAsync();
+        }
+    }
+
+    /// <summary>
+    /// **P28（R5.3）负向**：纪元已变（启动时 `1:100`，恢复时 `1:200`）时，
+    /// 恢复必须**拒绝**（`stale_epoch`）——**不得**静默把恢复请求重绑到新纪元（那等于换身份）。
+    /// 场景施工方内置，owner 0 点击。
+    /// </summary>
+    [Fact]
+    public async Task ResumeRun_EpochChanged_RejectedNoSilentRebinding()
+    {
+        var workflowId = SeedFlow("恢复纪元变化流程");
+        var boundary = new FakeBoundary();
+        var seams = new TaskCenterAdmissionSeams { Epoch = "1:100" };
+        var host = MakeWiredHost(boundary, seams);
+        try
+        {
+            Assert.Equal(HostActionStatus.Registered, (await host.StartWorkflowAsync(workflowId)).Status);
+            await WaitUntilAsync(() => boundary.Submissions.Count >= 1 && host.ListActiveRuns().Count == 0);
+            var startOp = Assert.Single(Ops(ReadLease()).Where(o => o.Intent == "start"));
+            var runId = startOp.RunBinding!;
+
+            var run = _runs.Load(runId)!;
+            run.State = WorkflowRunState.Interrupted;
+            _runs.Update(run);
+            seams.Epoch = "1:200"; // 纪元变化
+
+            var resume = await host.ResumeRunAsync(runId);
+
+            Assert.Equal(HostActionStatus.Unavailable, resume.Status);
+            Assert.Contains("stale_epoch", resume.Message);            // 拒绝，不重绑
+            // 恢复入口**先登记再锁内校验**（登记→校验拒绝），故会留下一条 resume 记录；关键是它必须
+            // **仍是原纪元/原 Scope**（未重绑到 1:200）且处于**拒绝终态**（未获得发送许可）。
+            var resumeOp = Assert.Single(Ops(ReadLease()).Where(o => o.Intent == "resume"));
+            Assert.Equal("1:100", resumeOp.TargetEpoch);                       // 仍为原纪元（未重绑 1:200）
+            Assert.Equal("bgi:local:1:100", resumeOp.Candidate!.Scope);
+            // 精确锁定：本地预检的**终局拒绝**（非可重试拒绝），且**未取得发送许可**
+            Assert.Equal(OperationRequestState.TerminalRejected, resumeOp.RequestState);
+            Assert.Equal("stale_epoch", resumeOp.LastResult!.ReasonCode);
+            Assert.False(resumeOp.LastResult.Retryable);
+            Assert.Equal(0, resumeOp.LastSendSeq);
+            Assert.True(string.IsNullOrEmpty(resumeOp.SubmissionIdentity));
+            Assert.Null(ReadLease().File!.Handoff!.Submission);                  // 无新增未决发送
+            var afterResume = _runs.Load(runId)!;                                // 原运行仍为可恢复态、绑定未变
+            Assert.Equal(WorkflowRunState.Interrupted, afterResume.State);
+            Assert.Equal(startOp.RunBinding, afterResume.RunId);
+        }
+        finally
+        {
+            await host.ShutdownAsync();
+        }
+    }
 }
