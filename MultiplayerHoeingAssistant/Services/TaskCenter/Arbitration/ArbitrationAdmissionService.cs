@@ -1100,9 +1100,32 @@ public sealed class ArbitrationAdmissionService
             // ① F11 独立停止闸门（锁内复核——校验后激活同样阻断占位与发送）。
             if (_hooks.F11Active()) return "f11_active";
             var facts = _hooks.FactsProvider();
-            // ② 票据压制（无关候选不得占位；授权方保留资格）。
-            if (facts.ActiveTicket is { } ticket && !string.Equals(ticket.AuthorizedPreemptorIdentity, stableIdentity, StringComparison.Ordinal))
-                return "ticket_suppressed";
+            var pending = file.Handoff?.Pending;
+            // ② 票据三要素（§5 / P55③）：无关候选不得占位；授权抢占方保留资格，但**须通过另两要素校验**。
+            //    事实来源（P55④ 本地面）：注入的资格快照（BGI 侧票据权威，生产尚未接线）
+            //    ∪ **锁内已持久化的未决交接责任**——宿主不供给 `ActiveTicket` 时以 `Handoff.Pending` 的既有冻结字段
+            //    在本边界内推导：不新增读取、不破「锁内只消费本地事实」；方向保守（责任存续即压制，
+            //    绝不因缺票据事实而推导空闲）。
+            //    A6 原票据恢复豁免（P55⑥）：唯一允许「非授权抢占方」进入提交准入的动作＝恢复目标即被挂起运行、
+            //    目标 epoch 相符、且责任阶段已到 RestorePending（已选择原票据恢复、待确认）——该动作不另建替代作业。
+            var ticket = facts.ActiveTicket ?? TicketOf(pending);
+            var authorizedRestore = IsAuthorizedTicketRestore(request, pending, targetEpoch);
+            if (ticket is { } t && !authorizedRestore)
+            {
+                // 同一被挂起运行的恢复：责任阶段/目标 epoch 未满足 ⇒ 不得抢跑（不另建替代作业；也不该用压制词混淆责任存续）。
+                if (IsResumeRequest(request) && pending is not null
+                    && string.Equals(pending.SuspendedRunIdentity, request.RunBinding ?? "", StringComparison.Ordinal))
+                    return "pending_conflict";
+                if (!string.Equals(t.AuthorizedPreemptorIdentity, stableIdentity, StringComparison.Ordinal))
+                    return "ticket_suppressed";
+                // 票据 epoch ≠ 当前 BGI 纪元 ⇒ 票据失效：失效 ≠ 清责 ≠ 立即放行（字段缺失同样不得降级为「无票据」）。
+                if (!string.Equals(t.Epoch, _hooks.BgiEpochProvider(), StringComparison.Ordinal))
+                    return "stale_epoch";
+                // 恢复目标 ≠ 票据被挂起运行 ⇒ 拒绝（不得另建替代作业、不得换键重跑）。
+                if (IsResumeRequest(request)
+                    && !string.Equals(t.SuspendedRunIdentity, request.RunBinding ?? "", StringComparison.Ordinal))
+                    return "binding_conflict";
+            }
             // ③ 权威事实未知（禁止换键重跑、禁止占位）。
             if (facts.ExecutionFactsUnknown) return "facts_unknown";
             // ④ 执行占用（锁内复核——按无损拒绝类可重试处理）。
@@ -1115,8 +1138,9 @@ public sealed class ArbitrationAdmissionService
 
             file.Handoff ??= new LeaseHandoffSegment();
             // ⑦ Pending 组合约束：授权抢占方+目标 epoch 匹配（双字段组合约束），且阶段许可——
-            //    SettlePending/RestorePending/ReconcilePending 阶段不得准入抢占方（恢复责任存续期禁止另建替代作业）。
-            if (file.Handoff.Pending is { } pending)
+            //    SettlePending/RestorePending/ReconcilePending 阶段不得准入抢占方（恢复责任存续期禁止另建替代作业）；
+            //    唯一例外＝已授权的**原票据恢复**（P55⑥，②处 authorizedRestore：该动作正是完成交接，不是替代作业）。
+            if (pending is not null && !authorizedRestore)
             {
                 if (!string.Equals(pending.AuthorizedPreemptor, stableIdentity, StringComparison.Ordinal)
                     || !string.Equals(pending.TargetEpoch, targetEpoch, StringComparison.Ordinal))
@@ -2054,6 +2078,37 @@ public sealed class ArbitrationAdmissionService
     // ============================================================
     // 辅助
     // ============================================================
+
+    /// <summary>
+    /// 从未决交接责任推导票据三要素（P55④ **本地面**）。BGI 侧票据权威（SuspendedTaskContext/PreemptionGate）
+    /// 另需接线（§17 P55 残余）——缺该信号时本推导即当前唯一压制事实源，方向保守：责任存续即压制。
+    /// </summary>
+    private static TicketBinding? TicketOf(PendingHandoffIntent? pending)
+        => pending is null
+            ? null
+            : new TicketBinding
+            {
+                SuspendedRunIdentity = pending.SuspendedRunIdentity ?? "",
+                AuthorizedPreemptorIdentity = pending.AuthorizedPreemptor ?? "",
+                Epoch = pending.TargetEpoch ?? "",
+            };
+
+    /// <summary>恢复类请求判定（命名空间或候选意图——两者均由可信适配器在入队时冻结，不取自自报字段）。</summary>
+    private static bool IsResumeRequest(AdmissionRequest request)
+        => string.Equals(request.Namespace, "resume", StringComparison.Ordinal)
+           || string.Equals(request.Candidate?.Intent, "resume", StringComparison.Ordinal);
+
+    /// <summary>
+    /// A6 原票据恢复豁免（P55⑥）：恢复目标＝被挂起运行 ＋ 目标 epoch 相符 ＋ 责任阶段=RestorePending
+    /// （已选择原票据恢复、待确认）——该动作不另建替代作业；其余阶段/目标一律 pending_conflict（不得抢跑）。
+    /// </summary>
+    private static bool IsAuthorizedTicketRestore(AdmissionRequest request, PendingHandoffIntent? pending, string targetEpoch)
+        => pending is not null
+           && IsResumeRequest(request)
+           && !string.IsNullOrEmpty(pending.SuspendedRunIdentity)
+           && string.Equals(pending.SuspendedRunIdentity, request.RunBinding ?? "", StringComparison.Ordinal)
+           && string.Equals(pending.TargetEpoch, targetEpoch, StringComparison.Ordinal)
+           && pending.Phase == HandoffPhase.RestorePending;
 
     /// <summary>scope=bgi:{实例id}:{bgiEpoch}——epoch=首次构造时捕获并固定（I-1），提交时只比较不重写。</summary>
     internal static string ExtractEpoch(string scope)

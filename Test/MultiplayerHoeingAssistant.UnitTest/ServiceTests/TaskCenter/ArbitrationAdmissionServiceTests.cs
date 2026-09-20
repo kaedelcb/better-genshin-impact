@@ -1698,4 +1698,201 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.True(string.IsNullOrEmpty(op.SubmissionIdentity));      // 发送身份为空
         Assert.Null(ReadLease().File!.Handoff!.Submission);            // 未占位（无发送许可）
     }
-}
+
+    // ── 43. R5.3.4③–⑦：票据三要素（epoch／被挂起运行）＋本地面事实源＋settle 生命周期＋A6 原票据恢复 ──
+
+    /// <summary>发布一条未决交接责任（夹具：权威票据三要素在本地的可推导面＝`Handoff.Pending`）。</summary>
+    private PendingHandoffIntent PublishPending(ArbitrationLeaseStore store, string authorizedPreemptor,
+        HandoffPhase phase, string suspendedRun = "run:suspended", string targetEpoch = "ep1", string actionId = "act:r534")
+    {
+        var read = store.Read();
+        var intent = new PendingHandoffIntent
+        {
+            ActionId = actionId,
+            SuspendedRunIdentity = suspendedRun,
+            AuthorizedPreemptor = authorizedPreemptor,
+            TargetEpoch = targetEpoch,
+            Phase = phase,
+            SubmissionIdentity = "sub:" + actionId + ":1",
+        };
+        var pub = store.TryPublishIntent(read.File!.Lease!.LeaseId, read.File.Lease.OwnerEpoch, read.File.Revision, intent);
+        Assert.True(pub.Success, "夹具前置：发布未决交接责任失败 " + pub.Reason);
+        return intent;
+    }
+
+    /// <summary>
+    /// **R5.3.4③（票据 epoch 要素）**：授权抢占方身份匹配，但**票据 epoch ≠ 当前 BGI 纪元** ⇒ **不得放行**
+    /// （`stale_epoch` 终局拒绝、零发送）——「票据失效」不等于「解除责任／可立即启动」。
+    /// </summary>
+    [Fact]
+    public async Task Ticket_StaleEpoch_AuthorizedPreemptorNotAdmitted()
+    {
+        var sends = 0;
+        var r = Req(trigger: "fixture:stale-ticket");
+        var stable = ArbitrationOrdering.BuildStableIdentity(r.Candidate);
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); };
+            h.FactsProvider = () => new ArbitrationFacts
+            {
+                ActiveTicket = new TicketBinding { SuspendedRunIdentity = "run:suspended", AuthorizedPreemptorIdentity = stable, Epoch = "ep0" },
+            };
+        });
+
+        var result = await svc.SubmitAsync(r);
+
+        Assert.Equal(AdmissionResultKind.TerminalRejected, result.Kind);
+        Assert.Equal("stale_epoch", result.ReasonCode);
+        Assert.Equal(0, sends);
+        Assert.Equal(OperationRequestState.TerminalRejected, FindOp(r.RequestIdentity)!.RequestState);
+    }
+
+    /// <summary>
+    /// **R5.3.4④（本地面事实源）**：宿主**不供给** `ActiveTicket` 时，锁内以**已持久化的未决交接责任**
+    /// （`Handoff.Pending`）推导三要素 ⇒ 无关候选仍被压制（`ticket_suppressed`／零发送），
+    /// **绝不因缺票据事实而推导空闲**（保守方向）。
+    /// </summary>
+    [Fact]
+    public async Task Ticket_FactFromPersistedPending_UnrelatedSuppressedWithoutInjectedFacts()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h => h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); });
+        PublishPending(store, authorizedPreemptor: "stable:someone-else", HandoffPhase.PreemptRequested);
+
+        var other = Req(trigger: "fixture:unrelated-no-injected-facts");
+        var result = await svc.SubmitAsync(other);
+
+        Assert.Equal(AdmissionResultKind.TerminalRejected, result.Kind); // 锁内复核路径（非轮次筛选的 NotSelected）
+        Assert.Equal("ticket_suppressed", result.ReasonCode);
+        Assert.Equal(0, sends);
+        var op = FindOp(other.RequestIdentity)!;
+        Assert.Equal(0, op.LastSendSeq);
+        Assert.True(string.IsNullOrEmpty(op.SubmissionIdentity));
+        Assert.Null(ReadLease().File!.Handoff!.Submission);
+    }
+
+    /// <summary>
+    /// **R5.3.4⑤（settle 生命周期）**：抢占方终态只把责任推进到 `SettlePending` ⇒ **压制保持**
+    /// （无关候选仍 `ticket_suppressed`）；且该阶段**不得准入授权抢占方**（`pending_conflict`）——
+    /// 「抢占方终态／Submission 关闭」均**不直接**解除压制。
+    /// </summary>
+    [Fact]
+    public async Task Ticket_SettlePending_HoldsSuppression_AndBlocksPreemptor()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h => h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); });
+
+        var preemptor = Req(trigger: "fixture:preemptor-settle");
+        var stable = ArbitrationOrdering.BuildStableIdentity(preemptor.Candidate);
+        PublishPending(store, authorizedPreemptor: stable, HandoffPhase.SettlePending);
+
+        var suppressed = await svc.SubmitAsync(Req(trigger: "fixture:other-settle"));
+        Assert.Equal(AdmissionResultKind.TerminalRejected, suppressed.Kind);
+        Assert.Equal("ticket_suppressed", suppressed.ReasonCode);
+
+        var authorized = await svc.SubmitAsync(preemptor);
+        Assert.Equal(AdmissionResultKind.TerminalRejected, authorized.Kind);
+        Assert.Equal("pending_conflict", authorized.ReasonCode);
+
+        Assert.Equal(0, sends); // 压制保持期间双方均不得发
+    }
+
+    /// <summary>
+    /// **R5.3.4⑤（settle 闭环才解除压制）**：仅当未决交接责任经**关联权威证据**消解（`Pending` 清空）后，
+    /// 无关候选方可重新准入——「责任存续」是压制的唯一本地判据（消解前零放行）。
+    /// </summary>
+    [Fact]
+    public async Task Ticket_SuppressionReleasedOnlyAfterIntentResolved()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h => h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); });
+        var intent = PublishPending(store, authorizedPreemptor: "stable:someone-else", HandoffPhase.PreemptRequested);
+
+        var blocked = await svc.SubmitAsync(Req(trigger: "fixture:before-resolve"));
+        Assert.Equal("ticket_suppressed", blocked.ReasonCode);
+        Assert.Equal(0, sends);
+
+        var read = store.Read();
+        var resolved = store.TryResolveIntent(read.File!.Lease!.LeaseId, read.File.Lease.OwnerEpoch, read.File.Revision,
+            new IntentResolveEvidence
+            {
+                ActionId = intent.ActionId,
+                SubmissionIdentity = intent.SubmissionIdentity,
+                Epoch = intent.TargetEpoch,
+                ObservedFact = "cancelled",
+            });
+        Assert.True(resolved.Success, "夹具前置：消解未决交接责任失败 " + resolved.Reason);
+
+        var admitted = await svc.SubmitAsync(Req(trigger: "fixture:after-resolve"));
+        Assert.Equal(AdmissionResultKind.Accepted, admitted.Kind);
+        Assert.Equal(1, sends);
+    }
+
+    /// <summary>
+    /// **R5.3.4⑥（A6 原票据恢复）**：责任阶段=`RestorePending` ＋ **恢复目标＝被挂起运行** ＋ 目标 epoch 相符时，
+    /// 该恢复动作**正是完成该交接**（不另建替代作业）⇒ 获准；且**恢复本身不消解交接责任**（保留原票据）。
+    /// </summary>
+    [Fact]
+    public async Task Ticket_A6RestoreAllowedInRestorePendingWithMatchingRun()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h => h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); });
+        PublishPending(store, authorizedPreemptor: "stable:someone-else", HandoffPhase.RestorePending, suspendedRun: "run:take", actionId: "act:restore");
+
+        var admitted = await svc.AdmitRecoveryAsync(new RecoveryAdmissionRequest
+        {
+            SourceDetail = "fixture:a6-restore",
+            RunId = "run:take",
+            WorkflowId = "group:g1",
+            RestoreBranch = "interrupted-relocate",
+            Scope = "bgi:inst:ep1",
+        });
+
+        Assert.Equal(AdmissionResultKind.Accepted, admitted.Kind);
+        Assert.Equal(1, sends);
+        Assert.NotNull(ReadLease().File!.Handoff!.Pending); // 用原票据：恢复动作不消解交接责任
+    }
+
+    /// <summary>**R5.3.4⑥（反例·禁止抢跑）**：阶段未到 `RestorePending` 时，同一被挂起运行的恢复一律 `pending_conflict`（零发送）。</summary>
+    [Fact]
+    public async Task Ticket_A6RestoreBeforeRestorePending_RejectedNoSend()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h => h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); });
+        PublishPending(store, authorizedPreemptor: "stable:someone-else", HandoffPhase.Confirming, suspendedRun: "run:take");
+
+        var rejected = await svc.AdmitRecoveryAsync(new RecoveryAdmissionRequest
+        {
+            SourceDetail = "fixture:a6-early",
+            RunId = "run:take",
+            WorkflowId = "group:g1",
+            RestoreBranch = "interrupted-relocate",
+            Scope = "bgi:inst:ep1",
+        });
+
+        Assert.Equal(AdmissionResultKind.TerminalRejected, rejected.Kind);
+        Assert.Equal("pending_conflict", rejected.ReasonCode);
+        Assert.Equal(0, sends);
+    }
+
+    /// <summary>**R5.3.4③（反例·不得另建替代作业）**：恢复目标 ≠ 票据被挂起运行 ⇒ 压制（零发送，不得换键重跑）。</summary>
+    [Fact]
+    public async Task Ticket_A6RestoreWrongRun_SuppressedNoSend()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h => h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); });
+        PublishPending(store, authorizedPreemptor: "stable:someone-else", HandoffPhase.RestorePending, suspendedRun: "run:take");
+
+        var rejected = await svc.AdmitRecoveryAsync(new RecoveryAdmissionRequest
+        {
+            SourceDetail = "fixture:a6-wrong-run",
+            RunId = "run:other",
+            WorkflowId = "group:g1",
+            RestoreBranch = "interrupted-relocate",
+            Scope = "bgi:inst:ep1",
+        });
+
+        Assert.Equal(AdmissionResultKind.TerminalRejected, rejected.Kind);
+        Assert.Equal("ticket_suppressed", rejected.ReasonCode);
+        Assert.Equal(0, sends);
+    }}
