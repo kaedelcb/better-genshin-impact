@@ -151,4 +151,45 @@ public sealed class CommandExecutorExternalStartAdmissionTests
         Assert.Equal(6, CommandExecutor.ConflictRetryLimit(allowLegacyRetry: true));  // 未接线＝既有语义
         Assert.Equal(0, CommandExecutor.ConflictRetryLimit(allowLegacyRetry: false)); // 接线＝零盲目重发
     }
+
+    /// <summary>
+    /// **B3 第 3 步：无副作用冲突解析决策表**（只读状态 + 本机批次/重试窗口标志 ⇒ 决策）：
+    /// 空闲/状态未知=Idle；任务已结束但上下文未消费且本机无批次=IdleAfterClearingEndedContext（孤儿）；
+    /// 在跑无上下文=PreemptRunning；在跑带上下文且本机无批次=PreemptAfterClearingContext；
+    /// 在跑带上下文且批次在跑/恢复重试窗口=RefuseContextHeld（无损拒绝）。
+    /// **解析本身不产生副作用**（清上下文/恢复取消/suspend 均在决策之后的动作阶段执行）。
+    /// </summary>
+    [Theory]
+    [InlineData("unknown", false, "Idle")]                          // 状态未知（查询失败）
+    [InlineData("idleNoContext", false, "Idle")]                    // 空闲无上下文
+    [InlineData("idleWithContext", false, "IdleAfterClearingEndedContext")] // 已结束但上下文未消费（孤儿）
+    [InlineData("idleWithContext", true, "Idle")]                   // 已结束带上下文且批次在跑＝正常间隙态（不清）
+    [InlineData("runningNoContext", false, "PreemptRunning")]       // 在跑无上下文
+    [InlineData("runningNoContext", true, "PreemptRunning")]        // 在跑无上下文 + 批次在跑：仍不因此改判拒绝
+    [InlineData("runningWithContext", false, "PreemptAfterClearingContext")] // 在跑带上下文、本机无批次
+    [InlineData("runningWithContext", true, "RefuseContextHeld")]   // 在跑带上下文、批次在跑＝无损拒绝
+    [InlineData("idleWithContext", false, "Idle", true)]            // 同「无批次」但**恢复重试窗口**在飞＝正常间隙态
+    [InlineData("runningWithContext", false, "RefuseContextHeld", true)] // 恢复重试窗口在飞＝无损拒绝
+    public async Task ResolveStartConflict_DecisionTable(string scenario, bool batchInFlight, string expected,
+        bool resumeRetryInFlight = false)
+    {
+        (bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)? status = scenario switch
+        {
+            "unknown" => null,
+            "idleNoContext" => (false, false, null, null),
+            "idleWithContext" => (false, true, null, null),
+            "runningNoContext" => (true, false, null, null),
+            "runningWithContext" => (true, true, null, null),
+            _ => throw new ArgumentOutOfRangeException(nameof(scenario)),
+        };
+        var executor = new CommandExecutor(null!, "unused", isBatchInFlight: () => batchInFlight)
+        {
+            TaskStatusQueryOverride = _ => Task.FromResult(status),
+        };
+        if (resumeRetryInFlight) executor.ResumeRetryInFlightForTest = true;
+
+        var decision = await executor.ResolveStartConflictAsync();
+
+        Assert.Equal(expected, decision.ToString());
+    }
 }

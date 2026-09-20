@@ -74,6 +74,58 @@ public class CommandExecutor
 
     internal static int ConflictRetryLimit(bool allowLegacyRetry) => allowLegacyRetry ? LegacyConflictRetryLimit : 0;
 
+    /// <summary>
+    /// **[夹具接缝] BGI 任务状态查询覆盖**（null＝真实 IPC）。仅用于组件级决策表验收——只替换「读事实」，
+    /// 不改变任何判定/动作逻辑；生产构造不注入。
+    /// </summary>
+    internal Func<int, Task<(bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)?>>?
+        TaskStatusQueryOverride { get; set; }
+
+    /// <summary>[夹具接缝] 恢复重试窗口标志（生产仅由恢复路径自身切换；此 setter 只供组件级决策表验收）。</summary>
+    internal bool ResumeRetryInFlightForTest
+    {
+        set => Interlocked.Exchange(ref _resumeRetryInFlight, value ? 1 : 0);
+    }
+
+    /// <summary>
+    /// **按键启动的冲突策略决策（B3 第 3 步：无副作用解析）**——只读 `task.status` 得出决策，
+    /// **不**清上下文、**不**恢复取消、**不** suspend。入口可在**准入前**完成解析，准入后只执行既定动作
+    /// （不再重新判定），从而满足 §6.1「候选获准后不得追加抢占」。
+    /// </summary>
+    internal enum StartConflictDecision
+    {
+        /// <summary>空闲/状态未知：直接启动（原语义）。</summary>
+        Idle,
+        /// <summary>任务已结束但中断上下文未消费（孤儿）：先清上下文，再按空闲启动。</summary>
+        IdleAfterClearingEndedContext,
+        /// <summary>有任务在跑且无中断上下文：需先 suspend 再启动。</summary>
+        PreemptRunning,
+        /// <summary>有任务在跑且带中断上下文、但本机无批次/非重试窗口：先清上下文再 suspend+启动。</summary>
+        PreemptAfterClearingContext,
+        /// <summary>有中断上下文且批次在跑或恢复重试窗口：**无损拒绝**（不抢占）。</summary>
+        RefuseContextHeld,
+    }
+
+    /// <summary>无副作用冲突解析（判定输入＝`task.status` 只读快照 ＋ 本机批次/重试窗口标志）。</summary>
+    internal async Task<StartConflictDecision> ResolveStartConflictAsync()
+    {
+        // 注意：**不得**在此用 ConfigureAwait(false)——本方法由既有 `ShouldPreemptKeyPressAsync` 调用，
+        // 旧实现会在调用方（可能是 UI）上下文继续执行 Log/动作；改变上下文＝改变既有行为（会诊重要项）。
+        var status = await QueryTaskStatusAsync();
+        // 本机忙标志**按需读取**（与旧实现的调用点一致：只在带上下文的分支才触达注入委托）。
+        if (status is not { Running: true })
+        {
+            // 任务已结束但上下文未消费＝孤儿（本机确有批次在跑时属正常间隙态，不清）
+            return status is { Running: false, HasContext: true } && !IsLocalBatchBusy()
+                ? StartConflictDecision.IdleAfterClearingEndedContext
+                : StartConflictDecision.Idle;
+        }
+        if (!status.Value.HasContext) return StartConflictDecision.PreemptRunning;
+        return IsLocalBatchBusy() ? StartConflictDecision.RefuseContextHeld : StartConflictDecision.PreemptAfterClearingContext;
+    }
+
+    private bool IsLocalBatchBusy() => _isBatchInFlight?.Invoke() == true || IsResumeRetryInFlight;
+
     /// <summary>[弹窗竞态守卫] 在途 config.set_task_enabled 写入计数。
     /// 背景：OnRemoteCommand 是 Action 事件 async void 并发分发，弹窗下发的多条 set_task_enabled
     /// 与紧随的 start_group/start_oneclick 会并发执行，启动动作可能读到旧启用状态。
@@ -1290,6 +1342,9 @@ public class CommandExecutor
     /// <summary>[任务冲突策略] 查询 BGI 任务状态（running / hasSuspendedTaskContext / 中断上下文身份）。查询失败返回 null（按现状容错）。</summary>
     private async Task<(bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)?> QueryTaskStatusAsync(int connectTimeoutMs = 1500)
     {
+        // [夹具接缝] 组件级决策表验收用（生产恒 null＝真实 IPC）；只覆盖查询，不改变任何判定逻辑。
+        if (TaskStatusQueryOverride is { } queryOverride)
+            return await queryOverride(connectTimeoutMs).ConfigureAwait(false);
         var resp = await SendIpcPreferredAsync("task.status", null, connectTimeoutMs);
         if (resp is not { Success: true } || string.IsNullOrEmpty(resp.Data)) return null;
         try
@@ -1386,25 +1441,32 @@ public class CommandExecutor
     /// </summary>
     private async Task<bool> ShouldPreemptKeyPressAsync(string desc)
     {
-        var status = await QueryTaskStatusAsync();
-        // [P3 对账] 判定前先清孤儿上下文（任务已结束但上下文未消费），避免残留把抢占判定永久卡死
-        status = await ReconcileOrphanedContextAsync(status, $"按键抢占判定（{desc}）");
-        if (status is not { Running: true }) return false; // 空闲或状态未知：不抢占
-        if (status.Value.HasContext)
+        // [B3 第 3 步] 判定改为**无副作用解析**（ResolveStartConflictAsync 只读状态）＋**动作后置**：
+        // 判定表与动作一一对应，行为与拆分前等价（含既有日志文案与清上下文顺序），但决策本身不再产生副作用。
+        switch (await ResolveStartConflictAsync())
         {
-            // [P3 对账] 本机确有批次在跑才保持无损拒绝（保护进行中批次）；
-            // [另案②] 恢复重试窗口内的上下文是"待重试的恢复"而非孤儿，同样无损拒绝；
-            // 无批次在跑且非重试窗口 = 孤儿残留，清上下文后按 running && !hasContext 走正常抢占闭环
-            if (_isBatchInFlight?.Invoke() == true || IsResumeRetryInFlight)
+            case StartConflictDecision.IdleAfterClearingEndedContext:
             {
-                Log($"[任务策略] 检测到 BGI 已有中断上下文（上线锄地批次进行中或恢复重试中），按键启动 {desc} 不抢占，走原有无损拒绝路径");
+                // [P3 对账] 判定前先清孤儿上下文（任务已结束但上下文未消费），避免残留把抢占判定永久卡死
+                Log($"[P3 对账] 按键抢占判定（{desc}）：检测到残留中断上下文（任务已结束但上下文未消费）且本机无批次在跑，按孤儿对账发 task.resume(cancel:true) 清除");
+                await ExecuteResumeAsync(cancel: true);
                 return false;
             }
-            Log($"[P3 对账] {desc}：检测到残留中断上下文但本机无批次在跑，按孤儿对账清除后继续抢占闭环");
-            await ExecuteResumeAsync(cancel: true);
-            return true;
+            case StartConflictDecision.PreemptRunning:
+                return true;
+            case StartConflictDecision.PreemptAfterClearingContext:
+                // [P3 对账] 无批次在跑且非重试窗口 = 孤儿残留，清上下文后按 running && !hasContext 走正常抢占闭环
+                Log($"[P3 对账] {desc}：检测到残留中断上下文但本机无批次在跑，按孤儿对账清除后继续抢占闭环");
+                await ExecuteResumeAsync(cancel: true);
+                return true;
+            case StartConflictDecision.RefuseContextHeld:
+                // [P3 对账] 本机确有批次在跑才保持无损拒绝（保护进行中批次）；
+                // [另案②] 恢复重试窗口内的上下文是"待重试的恢复"而非孤儿，同样无损拒绝
+                Log($"[任务策略] 检测到 BGI 已有中断上下文（上线锄地批次进行中或恢复重试中），按键启动 {desc} 不抢占，走原有无损拒绝路径");
+                return false;
+            default:
+                return false; // 空闲或状态未知：不抢占
         }
-        return true;
     }
 
     /// <summary>

@@ -340,16 +340,23 @@ public class TaskCenterSuccessorPathGateTests
                         var record = runs.List().OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
                         if (record?.CurrentSubmission is { } s)
                         {
-                            bool open;
-                            try
+                            // 有界重试：全量并行负载下跨进程锁（FileShare.None）瞬时争用会让单次读抛 IOException——
+                            // 那会被误记为「已关闭」而让本夹具偶发失败（实测：满负载下 1/1 次）。此处重试后再定论。
+                            bool? open = null;
+                            for (var readAttempt = 0; readAttempt < 20 && open is null; readAttempt++)
                             {
-                                open = new ArbitrationLeaseStore(arbitrationDir).Read().File?.Handoff?.Submission is not null;
+                                try
+                                {
+                                    open = new ArbitrationLeaseStore(arbitrationDir).Read().File?.Handoff?.Submission is not null;
+                                }
+                                catch (IOException)
+                                {
+                                    Thread.Sleep(5);
+                                }
                             }
-                            catch (IOException)
-                            {
-                                open = false; // 读数失败＝不臆断「仍在册」
-                            }
-                            ledgerPoint.Add(new LedgerPointObservation(s.NodeId, s.Intent, s.JobId, s.AcceptedSendIdentity, open));
+                            // 仍读不到＝不臆断「仍在册」：记 false（断言会失败并给出诊断），绝不静默放宽。
+                            open ??= false;
+                            ledgerPoint.Add(new LedgerPointObservation(s.NodeId, s.Intent, s.JobId, s.AcceptedSendIdentity, open.Value));
                         }
                         return Task.CompletedTask;
                     },
