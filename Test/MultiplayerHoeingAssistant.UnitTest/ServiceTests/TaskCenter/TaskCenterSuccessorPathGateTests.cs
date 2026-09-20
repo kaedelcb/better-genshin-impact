@@ -101,6 +101,38 @@ public class TaskCenterSuccessorPathGateTests
         Assert.Equal("n-1", frozen.NodeId);
     }
 
+    /// <summary>
+    /// **G5 准入阶段请求内容指纹**：确定性（同内容同指纹）＋判别性（节点内容/出现身份/提交选项/提交身份
+    /// 任一不同 ⇒ 指纹不同——**限于本夹具样本**，不外推为「任意语义等价节点必得同一指纹」）。
+    /// 空串或与内容无关的常量会让门面「同 candidateId 不同载荷＝整组拒绝」形同虚设。
+    /// </summary>
+    [Fact]
+    public void SuccessorPayloadFingerprint_IsDeterministicAndDiscriminating()
+    {
+        var node = new WorkflowNode
+        {
+            NodeId = "n-1",
+            Kind = "resource.oneDragonConfig",
+            Ref = new WorkflowResourceRef { Config = "配置A", Revision = "rev-1" },
+        };
+        var occ = new WorkflowNodeOccurrence("n-1", 0, 0, 0);
+
+        var baseline = TaskCenterHost.SuccessorPayloadFingerprint(node, occ, suppress: true, attempt: 1, submissionKey: "k-1");
+
+        Assert.Equal(24, baseline.Length);
+        Assert.Equal(baseline,
+            TaskCenterHost.SuccessorPayloadFingerprint(TaskCenterHost.FreezeNode(node), occ, true, 1, "k-1")); // 确定性
+
+        Assert.NotEqual(baseline, TaskCenterHost.SuccessorPayloadFingerprint(
+            new WorkflowNode { NodeId = "n-1", Kind = "resource.oneDragonConfig", Ref = new WorkflowResourceRef { Config = "配置B", Revision = "rev-1" } },
+            occ, true, 1, "k-1"));                                                                    // 内容不同
+        Assert.NotEqual(baseline, TaskCenterHost.SuccessorPayloadFingerprint(
+            node, new WorkflowNodeOccurrence("n-1", 0, 1, 0), true, 1, "k-1"));                        // 出现身份不同
+        Assert.NotEqual(baseline, TaskCenterHost.SuccessorPayloadFingerprint(node, occ, false, 1, "k-1")); // 提交选项不同
+        Assert.NotEqual(baseline, TaskCenterHost.SuccessorPayloadFingerprint(node, occ, true, 2, "k-1"));  // attempt 不同
+        Assert.NotEqual(baseline, TaskCenterHost.SuccessorPayloadFingerprint(node, occ, true, 1, "k-2"));  // 提交身份不同
+    }
+
     [Theory]
     // 门面给出**确定结论** → Rejected（本层不自行断言「一定没发送」）
     [InlineData(AdmissionResultKind.TerminalRejected, false)]
@@ -131,6 +163,55 @@ public class TaskCenterSuccessorPathGateTests
     }
 
     // ── ③④ 宿主级端到端路由 ＋ 并发守卫 ──────────────────────────────────────────
+
+    /// <summary>
+    /// **G4 游标纪律（负向）**：游标缺失或与本次提交的出现身份不一致 ⇒ **可证实未发送地拒绝**，
+    /// 且在**任何租约副作用之前**（不得因此创建 arbitration 目录/租约）。直接以内部准入方法驱动，
+    /// 场景施工方内置、owner 0 点击。
+    /// </summary>
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("mismatch")]
+    public async Task SuccessorSubmit_CursorMissingOrMismatched_RejectedWithoutLeaseSideEffect(string mode)
+    {
+        var root = NewRoot("tccursor-");
+        var runsDir = Path.Combine(root, "runs");
+        try
+        {
+            var runs = new RunStore(runsDir);
+            var host = new TaskCenterHost(
+                Path.Combine(root, "flows"), runsDir, Path.Combine(root, "catalog.json"),
+                () => null, log: null, runnerFactory: null, readinessOverride: () => (true, null),
+                admissionWired: true, successorAdmissionWired: true);
+
+            var run = runs.CreateRun("wf-x", "r-1");
+            run.CurrentSubmission = new WorkflowSubmission
+            {
+                Key = RunStore.DeriveSubmissionKey(run.RunId, "n-1", 0, 0, 1),
+                NodeId = "n-1", Occurrence = 0, LoopIteration = 0, Attempt = 1,
+                Intent = SubmitIntentState.IntentRecorded,
+            };
+            run.Cursor = mode == "missing"
+                ? null
+                : new WorkflowNodeCursor { NodeId = "n-OTHER", Occurrence = 0, LoopIteration = 0, Attempt = 1 };
+            runs.Update(run);
+
+            var result = await host.SubmitSuccessorViaAdmissionAsync(
+                new WorkflowSubmitRequest(run, new WorkflowNodeOccurrence("n-1", 0, 0, 0),
+                    new WorkflowNode { NodeId = "n-1", Kind = "resource.oneDragonConfig" }, true),
+                default);
+
+            Assert.False(result.Accepted);
+            Assert.False(result.Uncertain); // 可证实未发送 ⇒ 确定拒绝（不是「待对账」）
+            Assert.Contains("游标", result.RejectReason);
+            Assert.False(Directory.Exists(Path.Combine(root, "arbitration")), // 拒绝发生在租约副作用之前
+                "游标判定必须早于门面初始化（不得创建 arbitration 目录）");
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
 
     /// <summary>
     /// 可控执行端口（§12「实施前置发现」：`BgiExternalClient` 是 sealed 具体类且无线协议注入接缝，
@@ -353,6 +434,9 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
             Assert.Equal("start", nodeOp.Intent);
             Assert.Equal(probe.RunId, nodeOp.RunBinding);                           // runBinding 段继承自启动操作
             Assert.False(string.IsNullOrEmpty(nodeOp.SubmissionIdentity));          // 完整发送身份已签发（§13.10 A2）
+            Assert.Equal("n-1#0#0", nodeOp.CursorRef);                              // G4：游标引用非空且与提交出现一致
+            Assert.NotNull(nodeOp.CursorRevision);                                  // G4：所依据的运行记录修订已冻结
+            Assert.False(string.IsNullOrEmpty(nodeOp.Candidate!.PayloadFingerprint)); // G5：准入阶段内容指纹已落盘
             Assert.True(probe.SendCount == 1, Diag("恰好一次发送（经门面，非直通）", probe));
             Assert.True(probe.State == WorkflowRunState.Succeeded, Diag("端到端跑通（含终态观察）", probe));
         }

@@ -662,6 +662,27 @@ public sealed partial class TaskCenterHost
                ?? throw new InvalidOperationException("节点冻结失败（反序列化为空）。");
     }
 
+    /// <summary>
+    /// **准入阶段请求内容指纹**（G5）：对「冻结节点内容 ＋ 出现身份 ＋ 提交选项 ＋ 提交身份」取 SHA256 前 24 位
+    /// 十六进制小写，与运行台账 `WorkflowSubmission.Fingerprint`（线上载荷指纹）风格一致但**语义不同**——
+    /// 本指纹在**获得发送许可之前**即可计算（不含 epoch/有效期等占位后才冻结的字段），
+    /// 供门面「同 candidateId 不同载荷＝整组拒绝」与续用/占位的载荷一致性复核使用。
+    /// </summary>
+    internal static string SuccessorPayloadFingerprint(
+        WorkflowNode frozenNode, WorkflowNodeOccurrence occurrence, bool suppress, int attempt, string submissionKey)
+    {
+        var content = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            node = frozenNode,
+            occurrence = new { occurrence.NodeId, occurrence.Occurrence, occurrence.LoopIteration },
+            suppressConfigCompletionAction = suppress,
+            attempt,
+            submissionKey,
+        });
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(content)))[..24].ToLowerInvariant();
+    }
+
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, BoundarySubmitResult> _successorSendResults = new();
 
     /// <summary>
@@ -696,6 +717,24 @@ public sealed partial class TaskCenterHost
 
         // 调用方已取消：在任何租约副作用之前就返回（发布发送许可之后不再由此令牌中止——见 §13.11 G7）。
         ct.ThrowIfCancellationRequested();
+
+        // §3.2／§13.10 A1（G4 处置）：游标必须存在且与本次提交的出现身份一致——
+        // `CursorRef=null` 会让门面 ⑪b「同游标唯一消费」静默失效（防双跑约束凭空消失）；
+        // `CursorRevision` 必须冻结为**本次提交所依据的运行记录修订**（入队冻结、占位按同值比对，
+        // 失配不得改读最新值继续发送）。二者均为纯本地判定，失败在任何租约副作用之前返回。
+        if (run.Cursor is not { } runCursor)
+            return BoundarySubmitResult.Rejected("运行游标缺失（同一游标唯一消费无从判定；未发送）");
+        if (!string.Equals(runCursor.NodeId, occ.NodeId, StringComparison.Ordinal)
+            || runCursor.Occurrence != occ.Occurrence
+            || runCursor.LoopIteration != occ.LoopIteration)
+            return BoundarySubmitResult.Rejected("运行游标与本次提交出现身份不一致（未发送）");
+        var cursorRef = $"{runCursor.NodeId}#{runCursor.Occurrence}#{runCursor.LoopIteration}";
+        var cursorRevision = (long)run.RecordRevision;
+        // G5：准入阶段**请求内容指纹**——门面把它作为候选载荷指纹落盘，用于
+        // ①冲突组内「同 candidateId 不同载荷＝整组拒绝」的判别（空串会让不同载荷被当成同载荷），
+        // ②续用（ContinueUse）与占位时的「候选载荷一致」复核。覆盖冻结节点内容＋出现身份＋提交选项＋提交身份。
+        var payloadFingerprint = SuccessorPayloadFingerprint(frozenNode, occ, request.SuppressConfigCompletionAction,
+            sub.Attempt, sub.Key);
 
         ArbitrationAdmissionService facade;
         try { await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false); facade = _admission!; }
@@ -746,12 +785,14 @@ public sealed partial class TaskCenterHost
                 ProcessLocalContext = new SuccessorContext(
                     frozenNode, request.Occurrence, request.SuppressConfigCompletionAction,
                     sub.Attempt, sub.Key),
-                CursorRef = run.Cursor is { } cur ? $"{cur.NodeId}#{cur.Occurrence}#{cur.LoopIteration}" : null,
+                CursorRef = cursorRef,
+                CursorRevision = cursorRevision,
                 Candidate = new ArbitrationCandidate
                 {
                     Scope = scope,
                     Namespace = "successor",
                     WorkflowId = run.WorkflowId,
+                    PayloadFingerprint = payloadFingerprint,
                     TriggerOccurrenceId = "successor:" + run.RunId,
                     RunId = run.RunId,
                     NodeId = occ.NodeId,
@@ -898,13 +939,28 @@ public sealed partial class TaskCenterHost
         };
     }
 
-    /// <summary>该 runBinding 已登记操作的固定 `Scope`（I-1 继承；查不到＝无授权，不得读当前 epoch 补造）。</summary>
+    /// <summary>
+    /// 该 runBinding 的**流程级启动操作**（`Intent=="start"` ＋ 候选无节点身份）所固定的 `Scope`
+    /// （I-1：继承首次构造时捕获的 bgiEpoch，只比较不重写）。
+    /// [纠正·2026-09-21 会诊 G4] ①**不得取「最新」操作**——最新操作可能是本轮后继/恢复操作，其 Scope 不是该 run
+    /// 的授权来源；②也**不能只按最早更新时间判定**——`UpdatedAtUtc` 会被关闭/迁移/恢复改写，且排队或被拒的
+    /// 恢复操作同样携带 RunBinding。因此按**来源类型**（流程级 start 操作）判定，再取其中最早的：
+    /// 并行/后继/恢复操作（`Intent=="resume"` 或带节点身份）一律不作来源。
+    /// 注意：首节点可能在该操作仍处 `Granted/Sending` 时抢先到达（设计明确要求的交错）——故**不以请求状态过滤**。
+    /// **不得**把「RunBinding 已绑定 ＋ Scope 非空」读作「授权来源已发布」：这些字段在 **Queued 创建登记阶段**
+    /// 就已写入，类型过滤能排除后继/恢复，但**不能证明父授权已签发或已成功接管**（会诊纠正）。
+    /// **已知残余（登记为路径启用前置）**：精确的「来源引用/父引用」（AMD-1-3）尚未实现，本判别是**临时**的
+    /// （此处只取「当前 `UpdatedAtUtc` 最小的同类操作」）；来源记录被**实际删除**（而非仅迁区）后本查询会查不到
+    /// → 按无授权拒绝（保守方向），不得改读当前 epoch 补造。
+    /// </summary>
     private string? TryGetAdmissionScope(string runId)
     {
         var read = _admissionStore?.Read();
         return read?.File?.Handoff?.Operations?
-            .Where(o => string.Equals(o.RunBinding, runId, StringComparison.Ordinal))
-            .OrderByDescending(o => o.UpdatedAtUtc)
+            .Where(o => string.Equals(o.RunBinding, runId, StringComparison.Ordinal)
+                        && string.Equals(o.Intent, "start", StringComparison.Ordinal)
+                        && string.IsNullOrEmpty(o.Candidate?.NodeId))
+            .OrderBy(o => o.UpdatedAtUtc)   // 同类型内取最早的建立操作
             .Select(o => o.Candidate?.Scope)
             .FirstOrDefault(s => !string.IsNullOrEmpty(s));
     }

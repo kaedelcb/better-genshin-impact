@@ -1284,18 +1284,50 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var sends = 0;
         var (svc, _, _, _) = BuildFacade(h => h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); });
         var r1 = Req(workflow: "group:c1");
+        r1.RunBinding = "run:same";
         r1.CursorRef = "cur:1";
         r1.CursorRevision = 5;
         var accepted = await svc.SubmitAsync(r1);
         Assert.Equal(AdmissionResultKind.Accepted, accepted.Kind);
 
         var r2 = Req(workflow: "group:c2"); // 不同候选——只共享游标
+        r2.RunBinding = "run:same";          // 会诊要求：明确绑定**同一非空 run**（不靠 null==null）
         r2.CursorRef = "cur:1";
         r2.CursorRevision = 5;
         var second = await svc.SubmitAsync(r2);
         Assert.Equal(AdmissionResultKind.TerminalRejected, second.Kind);
         Assert.Equal("cursor_already_consumed", second.ReasonCode);
         Assert.Equal(1, sends); // 第二次未发送
+    }
+
+    // ── 38b. [新增·2026-09-21 会诊阻断处置] ⑪b 唯一消费键必须**含运行归属** ──
+
+    /// <summary>
+    /// 两个**不同 run** 完全可能同时是同一 `cursorRef`（节点#出现#轮次）与同一 `cursorRevision`
+    /// （运行记录修订）——缺 `RunBinding` 会把它们互判为「同一游标已消费」而**误拒合法提交**。
+    /// 本夹具＝该误拒的可执行反例；同 run 内的唯一消费约束由上一夹具继续把守。
+    /// </summary>
+    [Fact]
+    public async Task Cursor_SameRefDifferentRunBinding_NotTreatedAsConsumed()
+    {
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h => h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); });
+
+        var r1 = Req(workflow: "group:c1");
+        r1.RunBinding = "run:1";
+        r1.CursorRef = "n-1#0#0";
+        r1.CursorRevision = 5;
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(r1)).Kind);
+
+        var r2 = Req(workflow: "group:c2"); // 另一运行：同游标引用、同修订
+        r2.RunBinding = "run:2";
+        r2.CursorRef = "n-1#0#0";
+        r2.CursorRevision = 5;
+        var second = await svc.SubmitAsync(r2);
+
+        Assert.NotEqual("cursor_already_consumed", second.ReasonCode); // 不得误判为「同一游标已消费」
+        Assert.Equal(AdmissionResultKind.Accepted, second.Kind);        // 明确受理（排除「发了但接管失败」）
+        Assert.Equal(2, sends);                                        // 两个运行各自合法发送一次
     }
 
     // ── 39. I1：发送回调异常=保守待对账（不抛出不悬置）；显式对账结清可恢复 ──
