@@ -1600,6 +1600,15 @@ M1 的①—⑤与 §3.2「E1 发送前固定 candidateId→runId→首节点提
 
 1. **CommandExecutor 接线**（E3 `start_group`／`start_oneclick`、E4 `hotkey_execute`、E5 全 start 类 opcode）：
    经适配端口提交，开关**默认关闭**（未启用＝既有直启路径逐字不变；不得以「代码就绪」当路径启用）。
+   - **[批次 2 部分落地·2026-09-21] E3 `start_group` 已接线**：`CommandExecutor` 新增准入委托（构造参数，**默认 null**）；
+     有委托＝候选按 §2.2 兼容映射（v2／`group:{组名}`／`v2:remote:{requestIdentity}`）经准入后才执行核心启动体；
+     **无委托＝既有直启路径逐字不变**。既有「副作用前段」（批次占用检查＋配置写入落盘等待）**先于**准入。
+     三态映射**不改线协议**（`Status` 仍只用 `success/failed`）：获准＝回核心结果（文案/错误码逐字不变）；
+     确定拒绝＝`failed`＋原因码；不可考（含接管落盘失败）＝既有 `result_unknown` 口径且**禁止重发**。
+     夹具：`CommandExecutorExternalStartAdmissionTests`（准入形状／批次忙先于准入／三态映射词汇）。
+   - **[会诊两轮处置·2026-09-21] 适配器三态取保守方向**：`success`＝受理证据；**其余（含 `failed`/`cancelled`/超时/持续不可达/对账查询失败）一律 Unknown**——既有核心失败词汇**不能证明「确定未受理」**，升格为 Rejected 会诱发重发（事实反转）；准入调用取消/异常亦统一按既有 `result_unknown` 口径回执且禁止重发。`ExecuteAsync` 回调期间**冻结本次请求上下文**（否则 `BuildStartPayload` 会从 AsyncLocal 读到另一请求的 expectedConfigRevision/bgiEpoch/ExpiresAtUtc，组合出错误载荷身份）。
+   - **仍待接线**：`start_oneclick`（E3）、`hotkey_execute`（E4）、E5 其余 start 类 opcode（含 CLI/网页同源命令）。
+   - **启用前置（会诊登记，不得据此签署 E3 接线完成）**：①**失败分类细化**——核心须能区分「网络前可证实未发送」（才可映射 Rejected 并关闭责任）与「已发送后失败/不可考」；②**核心内仍会重新抢占与六次重发**：「核心回调 ≤1 次」**不等于**「实际发送 ≤1 次」，也不等于逐轮发送许可已成立（§6.1 候选获准后不得追加抢占）；③夹具**未覆盖** `ExecuteAsync`/`ToExecution`/获准后核心结果保留/取消与执行失败分类/非零参数传递/请求上下文隔离/配置写入等待/恢复重试忙，也未证明「未接线＝运行级等价」（仅源码层面未见默认路径业务行为变化；探针日志仍写文件，故只能说「无**启动**副作用」）。
 2. **冲突策略无副作用解析**：抢占/suspend/等待配置写入等现有策略解析必须在**提交前**完成且不产生副作用；
    与门面占位的次序须逐项界定（避免「先 suspend 后拒签」）。
 3. **适配层重试同身份**：重试复用同一 `requestIdentity`（`ContinueUse`），不得换身份重绑。

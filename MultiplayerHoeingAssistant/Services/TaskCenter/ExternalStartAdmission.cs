@@ -56,3 +56,20 @@ public sealed record ExternalStartExecution(bool Accepted, string? JobId, string
 /// </summary>
 internal sealed record ExternalStartContext(
     System.Func<CancellationToken, Task<ExternalStartExecution>> ExecuteAsync);
+
+/// <summary>适配层可见的准入结论（**不泄漏门面内部类型**；适配器只按本节三态处置）。</summary>
+public enum ExternalStartAdmissionStatus
+{
+    /// <summary>已获准：适配层启动已由门面 Sender 执行（≤1 次）。</summary>
+    Accepted,
+    /// <summary>确定未受理（可证实未启动）：入口按既有失败语义回执。</summary>
+    Rejected,
+    /// <summary>事实不可考（含接管落盘失败/宿主退出）：**不得重发**，保守待对账。</summary>
+    NeedReconcile,
+    /// <summary>门禁/占用阻断（F11、需安全交接确认）：未启动，按既有门禁文案回执。</summary>
+    Blocked,
+}
+
+/// <summary>准入结论载荷（原因码 + 说明，供适配层生成 `CommandResult`）。</summary>
+public sealed record ExternalStartAdmissionOutcome(
+    ExternalStartAdmissionStatus Status, string Code, string Message);

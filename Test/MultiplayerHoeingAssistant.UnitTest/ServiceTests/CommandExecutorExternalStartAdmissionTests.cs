@@ -1,0 +1,109 @@
+using MultiplayerHoeingAssistant.Models;
+using MultiplayerHoeingAssistant.Services;
+using Xunit;
+
+namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
+
+/// <summary>
+/// **R5.2 B3 第 2 步：CommandExecutor（E3 `start_group`）适配器接线验收**（施工方内置、owner 0 点击）。
+/// 接线态＝注入准入委托；**未注入＝既有直启路径逐字不变**（故这些夹具只覆盖「接线态的准入边界」，
+/// 不进入核心启动体——核心体涉及真实 IPC/BGI 进程，禁止在单测中触达）。
+/// </summary>
+public sealed class CommandExecutorExternalStartAdmissionTests
+{
+    private static RemoteCommand StartGroupCommand()
+        => new() { Cmd = "start_group", Params = new() { ["groupName"] = "测试组" } };
+
+    /// <summary>
+    /// 接线态下 `start_group` 必须**先经准入**：候选按 §2.2 兼容映射（namespace=v2、
+    /// workflowId/resourceRef=`group:{组名}`、触发出现身份含门面回填占位符）；被阻断＝按门禁结论回执且**未启动**。
+    /// </summary>
+    [Fact]
+    public async Task StartGroup_RoutesThroughAdmission_BlockedMapsToFailure()
+    {
+        var calls = new List<ExternalStartAdmissionRequest>();
+        var executor = new CommandExecutor(null!, "unused",
+            externalStartAdmission: (request, _) =>
+            {
+                calls.Add(request);
+                return Task.FromResult(new ExternalStartAdmissionOutcome(
+                    ExternalStartAdmissionStatus.Blocked, "f11_active", "F11 独立停止闸门激活（未发生租约副作用）"));
+            });
+
+        var result = await executor.ExecuteAsync(StartGroupCommand());
+
+        var request = Assert.Single(calls);
+        Assert.Equal("v2", request.Namespace);                                  // §2.1 可信来源：远程命令=v2
+        Assert.Equal("group:测试组", request.WorkflowId);                        // §2.2 workflowId 段
+        Assert.Equal("group:测试组", request.ResourceRef);
+        Assert.Equal("v2:remote:{requestIdentity}", request.TriggerOccurrenceId); // 占位符由门面回填
+        Assert.Equal("v2:start_group", request.SourceDetail);
+        Assert.Equal("failed", result.Status);
+        Assert.Equal("f11_active", result.ErrorCode);
+    }
+
+    /// <summary>
+    /// **顺序纪律**：既有「副作用前段」（批次占用检查）必须**先于**准入——批次忙时不发起准入、更不启动。
+    /// </summary>
+    [Fact]
+    public async Task StartGroup_BatchBusyGuard_PrecedesAdmission()
+    {
+        var admitted = 0;
+        var executor = new CommandExecutor(null!, "unused", isBatchInFlight: () => true,
+            externalStartAdmission: (_, _) =>
+            {
+                admitted++;
+                return Task.FromResult(new ExternalStartAdmissionOutcome(
+                    ExternalStartAdmissionStatus.Accepted, "accepted", "ok"));
+            });
+
+        var result = await executor.ExecuteAsync(StartGroupCommand());
+
+        Assert.Equal("failed", result.Status);
+        Assert.Equal("batch_busy", result.ErrorCode);
+        Assert.Equal(0, admitted); // 准入未被调用（更没有启动）
+    }
+
+    /// <summary>
+    /// 准入结论三态映射（**不改线协议**：`Status` 仍只用既有 `success/failed`）：
+    /// 未获准/不可考一律 `failed` ＋ 明确错误码，其中不可考用既有 `result_unknown` 口径且**禁止重发**。
+    /// </summary>
+    [Fact]
+    public async Task StartGroup_AdmissionOutcomeMapping_UsesExistingWireVocabulary()
+    {
+        async Task<CommandResult> Run(ExternalStartAdmissionOutcome outcome)
+        {
+            var executor = new CommandExecutor(null!, "unused",
+                externalStartAdmission: (_, _) => Task.FromResult(outcome));
+            return await executor.ExecuteAsync(StartGroupCommand());
+        }
+
+        var rejected = await Run(new ExternalStartAdmissionOutcome(
+            ExternalStartAdmissionStatus.Rejected, "capability_blocked", "缺少能力"));
+        Assert.Equal("failed", rejected.Status);
+        Assert.Equal("capability_blocked", rejected.ErrorCode);
+
+        var reconcile = await Run(new ExternalStartAdmissionOutcome(
+            ExternalStartAdmissionStatus.NeedReconcile, "takeover_persist_failed", "接管未落盘"));
+        Assert.Equal("failed", reconcile.Status);
+        Assert.Equal("result_unknown", reconcile.ErrorCode);   // 既有口径：不得重发
+        Assert.Contains("不得重发", reconcile.Message);
+    }
+
+    /// <summary>
+    /// **会诊重要项**：准入调用异常**不得**落成可重试的普通失败（异常可能发生在核心已执行之后）——
+    /// 一律按既有 `result_unknown` 口径回执且明确禁止重发。
+    /// </summary>
+    [Fact]
+    public async Task StartGroup_AdmissionThrows_MapsToResultUnknownNeverRetryable()
+    {
+        var executor = new CommandExecutor(null!, "unused",
+            externalStartAdmission: (_, _) => throw new InvalidOperationException("admission exploded"));
+
+        var result = await executor.ExecuteAsync(StartGroupCommand());
+
+        Assert.Equal("failed", result.Status);
+        Assert.Equal("result_unknown", result.ErrorCode);
+        Assert.Contains("禁止重发", result.Message);
+    }
+}

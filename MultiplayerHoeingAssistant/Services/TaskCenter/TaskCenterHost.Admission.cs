@@ -1252,6 +1252,27 @@ public sealed partial class TaskCenterHost
     }
 
     /// <summary>
+    /// **适配层可见的外部启动准入（B3）**：把门面内部 `AdmissionResult` 折叠为
+    /// <see cref="ExternalStartAdmissionStatus"/> 三态 + 门禁/占用阻断，供 `CommandExecutor` 生成 `CommandResult`。
+    /// **不泄漏门面内部类型**；`NeedReconcile` 一律按「不得重发、保守待对账」处置。
+    /// </summary>
+    public async Task<ExternalStartAdmissionOutcome> AdmitExternalStartAsync(
+        ExternalStartAdmissionRequest request, CancellationToken ct = default)
+    {
+        var result = await SubmitExternalStartViaAdmissionAsync(request, ct).ConfigureAwait(false);
+        var status = result.Kind switch
+        {
+            AdmissionResultKind.Accepted => ExternalStartAdmissionStatus.Accepted,
+            AdmissionResultKind.F11Blocked or AdmissionResultKind.NeedPreemptConfirm =>
+                ExternalStartAdmissionStatus.Blocked,
+            AdmissionResultKind.TerminalRejected or AdmissionResultKind.RetryableRejected
+                or AdmissionResultKind.NotSelected => ExternalStartAdmissionStatus.Rejected,
+            _ => ExternalStartAdmissionStatus.NeedReconcile,
+        };
+        return new ExternalStartAdmissionOutcome(status, result.ReasonCode, result.Detail);
+    }
+
+    /// <summary>
     /// **外部启动发送分派（B3／§6.1）**：调用适配层既有启动实现一次，并把其结论映射为 `SendOutcome`。
     /// 纪律：适配层异常一律 `Unknown`（**不得**凭异常推断未受理）；「确定未受理」只能由适配层给出关联验证后的结论。
     /// </summary>

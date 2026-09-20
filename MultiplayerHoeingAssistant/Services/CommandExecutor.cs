@@ -16,6 +16,12 @@ public class CommandExecutor
     /// <summary>[P3 对账] 本机是否确有上线锄地批次在跑（MainViewModel 注入 _activeBatch?.IsAlive 判定）；
     /// null = 未注入（保守视为无批次在跑，残留上下文按孤儿对账清除）。</summary>
     private readonly Func<bool>? _isBatchInFlight;
+    /// <summary>
+    /// [R5.2 B3] 外部启动统一仲裁面（E3/E4/E5）：非 null＝接线态——启动动作在**任何启动副作用之前**经本委托准入，
+    /// 实际启动由准入方在获准后回调 `ExternalStartAdmissionRequest.ExecuteAsync` 执行（≤1 次）。
+    /// **null＝既有直启路径逐字不变**（未向旧用户强制切换；接线由组合根显式注入）。
+    /// </summary>
+    private readonly Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>>? _externalStartAdmission;
 
     /// <summary>[另案②] Resume 策略 task_busy 重试窗口标志（0/1，Interlocked 访问）。
     /// 窗口内 BGI 侧中断上下文是"待重试的恢复"而非孤儿残留——孤儿对账与按键清账
@@ -81,13 +87,15 @@ public class CommandExecutor
     /// <summary>[A4.4] 批次标记已随 --startGroups 命令行回退一并废弃：执行声明权只走 IPC/reconcile，
     /// 不再存在"命令行串行执行期间 IPC 假空闲"的竞态，无需跨调用的批次级重启标记。</summary>
     public CommandExecutor(BgiProcessMonitor monitor, string bgiPath, Func<BgiExternalClient?>? externalClientProvider = null,
-        Action<string>? logger = null, Func<bool>? isBatchInFlight = null)
+        Action<string>? logger = null, Func<bool>? isBatchInFlight = null,
+        Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>>? externalStartAdmission = null)
     {
         _monitor = monitor;
         _bgiPath = bgiPath;
         _externalClientProvider = externalClientProvider;
         _log = logger;
         _isBatchInFlight = isBatchInFlight;
+        _externalStartAdmission = externalStartAdmission;
     }
 
     /// <summary>[任务冲突策略] 用户可见日志 + 文件日志双写。</summary>
@@ -96,6 +104,123 @@ public class CommandExecutor
         _log?.Invoke(message);
         ProbeLog(message);
     }
+
+    /// <summary>
+    /// **E3（`start_group`）经统一仲裁面启动**：候选按 §2.2 兼容映射（namespace=v2、workflowId/resourceRef=
+    /// `group:{组名}`、触发出现身份=`v2:remote:{requestIdentity}` 由门面回填）；实际启动＝
+    /// <see cref="StartGroupCoreAsync"/>（**获准后**由准入方回调，≤1 次）。
+    /// </summary>
+    private async Task<CommandResult> StartGroupViaAdmissionAsync(
+        Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>> admit,
+        string groupName, int startFromIndex, int generation, List<string>? batchGroupNames)
+    {
+        ExternalStartAdmissionOutcome outcome;
+        CommandResult? coreResult = null;
+        // [会诊阻断处置] **冻结本次请求上下文**（§13.10 A1 同纪律）：`ExecuteAsync` 回调可能在其他执行上下文
+        // 被调用（门面轮次线程），而 `BuildStartPayload` 仍从 AsyncLocal 读 expectedConfigRevision/bgiEpoch/
+        // ExpiresAtUtc——不冻结会读到**另一请求**的字段，组合出错误载荷身份。
+        var capturedCommand = _requestContext.Value;
+        try
+        {
+            outcome = await admit(new ExternalStartAdmissionRequest
+            {
+                Namespace = "v2",
+                WorkflowId = "group:" + groupName,
+                TriggerOccurrenceId = "v2:remote:{requestIdentity}",
+                ResourceRef = "group:" + groupName,
+                SourceDetail = "v2:start_group",
+                // 实际启动（获准后由准入方回调，≤1 次）：核心结果**原样保留**，供获准路径逐字回既有线上文案。
+                ExecuteAsync = async _ =>
+                {
+                    var previousContext = _requestContext.Value;
+                    _requestContext.Value = capturedCommand; // 冻结的请求上下文（回调期间生效，结束即还原）
+                    try
+                    {
+                        coreResult = await StartGroupCoreAsync(groupName, startFromIndex, generation, batchGroupNames)
+                            .ConfigureAwait(false);
+                        return ToExecution(coreResult);
+                    }
+                    finally
+                    {
+                        _requestContext.Value = previousContext;
+                    }
+                },
+            }, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // 准入调用被取消：结果不可考（不得断言未启动）——按既有 result_unknown 口径回执，绝不重发。
+            return new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = "result_unknown",
+                Message = $"配置组「{groupName}」准入调用被取消：启动结果不可考、禁止重发，请查看台账对账",
+            };
+        }
+        catch (Exception ex)
+        {
+            // 准入调用异常：**无法证明「未发送」**（异常可能发生在核心已执行之后）——一律按 result_unknown 回执，
+            // 绝不落成可重试的普通失败（会诊重要项：外层 ExecuteAsync 的通用 failed 兜底不适用于本路径）。
+            return new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = "result_unknown",
+                Message = $"配置组「{groupName}」准入调用异常（{ex.GetType().Name}）：启动结果不可考、禁止重发，请查看台账对账",
+            };
+        }
+
+        // 获准且核心已执行：**回核心结果**（既有 Status/ErrorCode/文案逐字不变）；
+        // 未获准（核心未执行）＝按准入结论回执。
+        if (outcome.Status == ExternalStartAdmissionStatus.Accepted && coreResult is not null) return coreResult;
+        return MapAdmissionOutcome(outcome, $"配置组「{groupName}」");
+    }
+
+    /// <summary>
+    /// 核心 `CommandResult` → 门面三态：`success`＝已受理；`result_unknown`＝不可考（不得重发）；
+    /// **其余（含 `failed`/`cancelled`/超时等）一律＝不可考**。
+    /// [会诊阻断处置] 既有核心的失败词汇**不能证明「确定未受理」**：`failed` 同时覆盖「已启动后执行失败」
+    /// 「已入队后等待超时/持续不可达」「对账查询失败」等情形——把它们升格为确定拒绝会诱发重发（事实反转）。
+    /// 因此本层取**保守方向**：只有 `success` 才是受理证据；其余一律 Unknown，责任保持待对账。
+    /// **启用前置**：细化核心失败分类（区分「网络前可证实未发送」与「已发送后失败/不可考」）后，
+    /// 才允许把前者映射为 Rejected（见设计稿 §14）。
+    /// </summary>
+    private static ExternalStartExecution ToExecution(CommandResult result)
+        => result.Status == "success"
+            ? ExternalStartExecution.AcceptedWith()
+            : ExternalStartExecution.UnknownWith(result.Message);
+
+    /// <summary>
+    /// 准入结论 → `CommandResult`（三态映射，**不改线协议**：`Status` 仍只用既有 `success/failed`）：
+    /// Accepted＝已受理（受理≠执行成功）；Rejected＝确定未受理（可重试语义由调用方决定，本层不重发）；
+    /// 其余（NeedReconcile/门禁未列情形）＝结果不可考，按既有 `result_unknown` 口径回执且**禁止重发**。
+    /// </summary>
+    private static CommandResult MapAdmissionOutcome(ExternalStartAdmissionOutcome outcome, string target)
+        => outcome.Status switch
+        {
+            ExternalStartAdmissionStatus.Accepted => new CommandResult
+            {
+                Status = "success",
+                Message = $"{target}：已受理启动（经统一仲裁面；受理≠执行成功）",
+            },
+            ExternalStartAdmissionStatus.Rejected => new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = string.IsNullOrEmpty(outcome.Code) ? "admission_rejected" : outcome.Code,
+                Message = $"{target} 被拒绝（确定未受理）：{outcome.Message}",
+            },
+            ExternalStartAdmissionStatus.Blocked => new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = string.IsNullOrEmpty(outcome.Code) ? "admission_blocked" : outcome.Code,
+                Message = $"{target} 被阻断（未启动）：{outcome.Message}",
+            },
+            _ => new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = "result_unknown",
+                Message = $"{target}：启动结果不可考（不得重发），保守待对账：{outcome.Message}",
+            },
+        };
 
     /// <summary>
     /// [DUPLAUNCH_PROBE] 探针辅助：追加一行到助手程序目录 assistant_runtime.log，方便定位远程触发路径。
@@ -357,6 +482,20 @@ public class CommandExecutor
         // [DUPLAUNCH_PROBE] 探针：记录 start_group 命令触发路径（IPC 成功 vs 回退裸拉起重试）
         ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] start_group 收到 groupName={groupName} startFromIndex={startFromIndex} generation={generation}");
 
+        // [R5.2 B3／E3] 接线态：启动一律经统一仲裁面；准入先于**任何启动副作用**（抢占 suspend／ext 入队／
+        // v2 task.start 均在获准后由核心执行）。**未接线（委托为 null）＝下方既有直启路径逐字不变**。
+        if (_externalStartAdmission is { } admit)
+            return await StartGroupViaAdmissionAsync(admit, groupName, startFromIndex, generation, batchGroupNames);
+
+        return await StartGroupCoreAsync(groupName, startFromIndex, generation, batchGroupNames);
+    }
+
+    /// <summary>
+    /// **启动配置组核心（原直启主体，逐字节保留）**：从「按键门控/抢占」起到 v2 IPC 与裸拉起回退为止；
+    /// 接线态下由统一仲裁面在**获准后**经 `ExecuteAsync` 回调本方法（≤1 次）。
+    /// </summary>
+    private async Task<CommandResult> StartGroupCoreAsync(string groupName, int startFromIndex, int generation, List<string>? batchGroupNames)
+    {
         // [任务策略] 按键门控（固定行为：立即执行 + 执行完停止，无配置项）。
         // 本机忙且无既有中断上下文时 suspend 抢占（强制 v2，跳过下方 ext 队列通道——队列语义与抢占冲突）；
         // 已有中断上下文（上线锄地批次进行中）不二次抢占，走原有无损拒绝；空闲直接走下方原路径。
