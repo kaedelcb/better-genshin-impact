@@ -214,9 +214,11 @@ public sealed class ArmedTriggerLedgerSync
         // ② 新出现 ⇒ 补登
         RegisterEach(currentSnapshot);
 
-        // ③ 引用计数以快照为准（幸存者身份/挂载时刻**不变**）
+        // ③ 引用计数以快照为准（幸存者身份/挂载时刻**不变**）。
+        //    仅对**已成功登记**的实例记数：`_describe` 返回 null 的实例**不**写入 `_refs`，
+        //    以便其描述恢复有效后**再次对账时能重新尝试登记**（会诊整改：否则永久漏登且只增计数）。
         foreach (var item in counts.Keys)
-            _refs[item] = counts[item];
+            if (_triggerIds.ContainsKey(item)) _refs[item] = counts[item];
     }
 
     private void RegisterEach(IEnumerable? items)

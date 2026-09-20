@@ -268,6 +268,35 @@ public class R55BackgroundTriggerLedgerTests
         Assert.Equal(beforeB.MountedAtUtc, afterB.MountedAtUtc);  // 首次挂载时刻不变（不取“现在”）
         Assert.Equal(beforeB.Intent, afterB.Intent);
     }
+    /// <summary>
+    /// **会诊反例（第 5 轮）**：快照中的实例首次**无法登记**（`_describe` 返回 null）时不得写入引用计数——
+    /// 否则描述恢复有效后会被「已跟踪」挡住，**永久漏登**。断言：null 期间无条目 ⇒ 描述恢复后再次对账可补登；
+    /// 且重复出现时只登记一条、逐次移除按计数归零才注销。
+    /// </summary>
+    [Fact]
+    public void Resync_UnregisteredInstance_CanBeRegisteredLater()
+    {
+        var ledger = new BackgroundTriggerLedger();
+        var describable = false;
+        var sync = new ArmedTriggerLedgerSync(ledger, "timer", TriggerOwnerKinds.StartupChain, TriggerScope.ProcessEphemeral,
+            "列表「取消」按钮", _ => describable ? new ArmedTriggerDescriptor("owner:X", "意图", "") : null, () => Now);
+        var x = "X";
+
+        sync.ResetTo(new[] { x, x });           // 重复出现且描述为 null
+        Assert.True(ledger.Count == 0, "描述为 null 时不应登记，实际条目数=" + ledger.Count);
+
+        describable = true;
+        sync.ResetTo(new[] { x, x });            // 再次对账：应补登（且只一条）
+        Assert.Single(ledger.List());
+
+        // 逐次移除（重复实例引用计数=2）：一次不注销、再移除才注销
+        sync.OnCollectionChanged(NotifyCollectionChangedAction.Remove,
+            new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, x, 0).OldItems, null, new[] { x });
+        Assert.Single(ledger.List());
+        sync.OnCollectionChanged(NotifyCollectionChangedAction.Remove,
+            new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, x, 0).OldItems, null, Array.Empty<object>());
+        Assert.True(ledger.Count == 0, "归零后应注销，实际条目数=" + ledger.Count);
+    }
     /// <summary>三类作用域界限互异，且启动中心背景触发器恒为进程级临时。</summary>
     [Fact]
     public void Scope_Boundaries_AreDistinct()
