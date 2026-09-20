@@ -1956,20 +1956,20 @@ M1 的①—⑤与 §3.2「E1 发送前固定 candidateId→runId→首节点提
 | `trigger.timeFixed` | 根级 `triggers[]` | 机制二：时间固定型到点（结构性层级＝`Fixed`） |
 | `trigger.timeFlexible` | 根级 `triggers[]` | 机制三：灵活型窗口触发（结构性层级＝`Plan`） |
 
-已登记于 `WorkflowKindCatalog`；`WorkflowStrategy.GetInt` 为**加法读取器**（不动序列化框架）。旧消费方经 `FindUnsupportedKinds` 检出 ⇒ **fail-closed**（可预览、阻止执行、留痕）。
+已登记于 `WorkflowKindCatalog`；`WorkflowStrategy.GetInt` 为**加法读取器**（不动序列化框架）。**登记 ≠ 可执行（会诊整改）**：三个 kind 同时列入 `WorkflowKindCatalog.RegisteredNotExecutable`，**引擎消费接线落地前 `FindUnsupportedKinds` 一律检出并阻止执行**（可预览、阻止执行、留痕＝D3 第二级）；若不如此，当前执行器会**静默忽略新语义**（把到点/窗口/优先级当噪声跳过）＝**fail-open**。接线完成并有夹具验证后，再从该集合移除并在此登记。
 
 ### 19.2 设计冻结前置问题（I4）逐条答案
 
 1. **节点级时间策略表达位置**：用**既有节点 `strategies[]` 的新 kind**（`schedule.priority`）；固定型/灵活型时间语义用**根级** `trigger.timeFixed`／`trigger.timeFlexible`。**不新增节点级触发器位置**——`FindUnsupportedKinds` 只遍历根级 triggers，新增位置会使旧执行器**检不出**而失去 fail-closed。节点级固定到点（某节点只在某时刻执行）**本阶段不引入**，登记为已知边界。
 2. **最小合法定义与归一化**：含**两个不同节点时间策略**的最小合法定义＝两个节点各带一条 `schedule.priority`（不同值）；归一化＝**各节点取自身值**（`PriorityOfNode`），不跨节点合并。
-3. **前序未完成时固定节点到点的 missPolicy**：**默认 `skip` ＋留痕**（不排队无限等待、不补跑）；`nextDay` ⇒ **严格晚于 `now` 的最近一个同刻时刻**（跨多日错过亦直接取未来最近一次，**绝不返回已过期时刻**）。停机恢复后已过期者不补跑。
-4. **灵活型确定性空闲判据**：占用 ＝ **当前在跑 ∪ 固定型已声明排程**，**不预测未知执行时长**；窗口**约束启动时刻**（窗口内取得执行权即锁定本轮，可越窗完成）。「特殊原因」＝**开放枚举**：联机批次进行中／人工暂停／恢复票据有效／F11 冷却／系统级抢占源活跃；`IsFlexiblyIdle` 返回 `false` 且 `reason == null` ＝ 仅普通占用（非特殊原因）。
-5. **手工/v2 无计划时刻候选排序**：`ScheduledAt = null` 的候选在**同层级同优先级组内以稳定身份兜底**（不因缺计划时刻获得优先权）；排序键仍为 §2③1：结构性层级 → 优先级 → 计划到点时刻 → 稳定身份。
+3. **前序未完成时固定节点到点的 missPolicy**：**默认 `skip` ＋留痕**（不排队无限等待、不补跑）；`nextDay` ⇒ **严格晚于 `now` 的最近一个同刻时刻**（跨多日错过亦直接取未来最近一次，**绝不返回已过期时刻**）。停机恢复后已过期者不补跑。**偏移语义合同**：按 `DateTimeOffset` 的**固定偏移**解析（保留原计划偏移量）；**地区时区／DST 未实现**（登记为残余，不做隐式换算）。
+4. **灵活型确定性空闲判据**（**合同要求**；候选产出与窗口锁定判定的**实现归残余①**）：占用 ＝ **当前在跑 ∪ 固定型已声明排程**，**不预测未知执行时长**；窗口**约束启动时刻**（窗口内取得执行权即锁定本轮，可越窗完成）。「特殊原因」＝**开放枚举**：联机批次进行中／人工暂停／恢复票据有效／F11 冷却／系统级抢占源活跃；`IsFlexiblyIdle` 返回 `false` 且 `reason == null` ＝ 仅普通占用（非特殊原因）。
+5. **手工/v2 无计划时刻候选排序**（**合同要求**；落地归残余①）：`ScheduledAt = null` 的候选在**同层级同优先级组内以稳定身份兜底**（不因缺计划时刻获得优先权）；排序键仍为 §2③1：结构性层级 → 优先级 → 计划到点时刻 → 稳定身份。
 6. **覆盖节点出现/run 的唯一兜底身份**：`workflowId + 来源标签 + 身份`——出现身份（`occ:`）与请求身份（`req:`）**分别打标**、分段**转义**（避免 `|` 歧义与两类互相同形）；**两者皆缺 ⇒ 拒绝**（返回 `null`，调用方响亮拒绝，**不得**以空身份兜底）。
 7. **时钟前跳/回拨的去重与过期规则**：**每出现身份单调水位**（`FireWatermark.LastFiredAtUtc`）——计划时刻 **≤ 水位 ⇒ 重复**（不参选、**不重放**）；**严格晚于水位 ⇒ 新到点**（可参选并推进水位）。故：回拨不重放（旧到点 ≤ 水位）、前跳不补跑（被跳过的旧轮次全部 ≤ 水位）；水位**单调**（重复消费不倒退）；出现身份不同**不跨身份比较**（调用方按身份分表持久化）。过期按 `missPolicy` 处置。
-8. **节点级新 kind 的旧执行器拒绝标记**：`schedule.priority` 落在**已检出位置**（`strategies[]`），旧执行器经 `FindUnsupportedKinds` 检出 ⇒ fail-closed；**无需**额外类型标记（与「若新增节点级触发器位置则必须另有拒绝标记」的约束一致——本阶段不新增该位置）。
+8. **节点级新 kind 的旧执行器拒绝标记**：`schedule.priority` 落在**已检出位置**（`strategies[]`），旧执行器经 `FindUnsupportedKinds` 检出 ⇒ fail-closed；**无需**额外类型标记（与「若新增节点级触发器位置则必须另有拒绝标记」的约束一致——本阶段不新增该位置）。**本批已额外收紧**：即便「已登记」，未接线期间同样检出阻止执行（见 §19.1）。
 
 ### 19.3 本批落地与残余
 
-- **已落地**：idle/kind 登记（3 个 kind）＋`WorkflowStrategy.GetInt`；`TaskCenterMechanismPolicy` 纯函数（结构性层级映射／节点级优先级／missPolicy 与错过处置／灵活型空闲与特殊原因／稳定身份兜底／到点水位）；夹具 `R54MechanismSchemaTests`（18 条：kind 登记、fail-closed 检出、旧流程缺省不变、层级映射、节点级归一化、missPolicy 与跨多日错过、空闲矩阵、水位去重与回拨/前跳、身份兜底与拒绝）。
-- **残余（保留门禁，不得据本节签署「引擎已消费」）**：①**触发 kind → 候选的引擎消费接线**（tier／priority／scheduledAt 实际写入 `AdmissionRequest.Candidate`）与既有入口贯通；②水位与 `missPolicy` 的**持久化载体**（RunStore 字段与迁移）；③`trigger.timeFixed`／`trigger.timeFlexible` 的**参数 schema 与取值域**（at／window／missPolicy）及旧 `trigger.time` 的映射；④真实入口贯通与实机（R5.8）。
+- **已落地**：kind 登记（3 个）＋**未接线即阻止执行的 fail-closed 门禁**（`RegisteredNotExecutable`）＋`WorkflowStrategy.GetInt`；`TaskCenterMechanismPolicy` 纯函数（结构性层级映射／节点级优先级／missPolicy 与错过处置／灵活型空闲与特殊原因／稳定身份兜底／到点水位）；夹具 `R54MechanismSchemaTests`（20 条：kind 登记、未接线阻止执行、fail-closed 检出、旧流程缺省不变、层级映射、节点级归一化、missPolicy 与跨多日错过与固定偏移、空闲矩阵、水位去重与回拨/前跳＋**纯函数（输入不被修改）**、身份兜底与拒绝）。
+- **残余（保留门禁，不得据本节签署「引擎已消费」）**：①**触发 kind → 候选的引擎消费接线**（tier／priority／scheduledAt 实际写入 `AdmissionRequest.Candidate`）与既有入口贯通；②水位与 `missPolicy` 的**持久化载体**（RunStore 字段与迁移）；③`trigger.timeFixed`／`trigger.timeFlexible` 的**参数 schema 与取值域**（at／window／missPolicy）及旧 `trigger.time` 的映射；④**地区时区／DST 语义**（现为固定偏移合同）；⑤真实入口贯通与实机（R5.8）。

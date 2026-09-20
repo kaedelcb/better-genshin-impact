@@ -91,6 +91,7 @@ public static class TaskCenterMechanismPolicy
     /// <summary>
     /// 错过到点的处置（§2②6）：未错过 ⇒ 原时刻；`skip` ⇒ `null`（**本次放弃、不补跑**）；
     /// `nextDay` ⇒ 返回**严格晚于 `now` 的最近一个同刻时刻**（跨多日错过同样直接取未来最近一次，
+    /// **偏移语义合同**：按 `DateTimeOffset` 的**固定偏移**解析（保留原计划偏移量）；**地区时区／DST 未实现**（残余见 §19.3）。
     /// **绝不返回已过期时刻、绝不枚举补跑历史轮次**——停机恢复后已过期者不补跑）。
     /// </summary>
     public static DateTimeOffset? ResolveMissedFire(DateTimeOffset scheduled, DateTimeOffset now, MissPolicy policy)
@@ -162,19 +163,18 @@ public static class TaskCenterMechanismPolicy
            && scheduled.UtcDateTime <= watermark.LastFiredAtUtc.UtcDateTime;
 
     /// <summary>
-    /// 推进水位（**单调**）：同出现身份取更晚者；重复到点（≤ 现值）**水位不变**（幂等，重复消费不倒退）；
-    /// 出现身份不同 ⇒ 水位无法跨身份比较，返回**原水位**并要求调用方按身份**分别持久化**。
+    /// 推进水位（**纯函数：不修改输入对象**，会诊整改）——**单调**：同出现身份取更晚者；
+    /// 重复到点（≤ 现值）⇒ 返回**等价副本**（幂等、不倒退）；null ⇒ 建立首个水位；
+    /// 出现身份不同 ⇒ **不跨身份比较**，返回等价副本并要求调用方按身份**分别持久化**。
+    /// 调用方保留旧引用即等于推进前快照，便于「先计算、后提交」与提交失败后的状态隔离。
     /// </summary>
     public static FireWatermark? AdvanceWatermark(FireWatermark? watermark, string occurrenceIdentity, DateTimeOffset scheduled)
     {
         if (watermark is null)
             return new FireWatermark { OccurrenceIdentity = occurrenceIdentity, LastFiredAtUtc = scheduled }; // 首个水位
-        if (string.Equals(watermark.OccurrenceIdentity, occurrenceIdentity, StringComparison.Ordinal))
-        {
-            if (scheduled.UtcDateTime <= watermark.LastFiredAtUtc.UtcDateTime) return watermark; // 幂等：不倒退
-            watermark.LastFiredAtUtc = scheduled;
-            return watermark;
-        }
-        return watermark; // 身份不同：不跨身份比较（调用方须按身份分表持久化）
+        if (string.Equals(watermark.OccurrenceIdentity, occurrenceIdentity, StringComparison.Ordinal)
+            && scheduled.UtcDateTime > watermark.LastFiredAtUtc.UtcDateTime)
+            return new FireWatermark { OccurrenceIdentity = occurrenceIdentity, LastFiredAtUtc = scheduled }; // 仅在更晚时推进
+        return new FireWatermark { OccurrenceIdentity = watermark.OccurrenceIdentity, LastFiredAtUtc = watermark.LastFiredAtUtc };
     }
 }

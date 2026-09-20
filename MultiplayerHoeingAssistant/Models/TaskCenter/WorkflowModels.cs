@@ -278,7 +278,21 @@ public static class WorkflowKindCatalog
     };
 
     /// <summary>
-    /// 检出文档中未登记的类型键（D3 第二级：可加载可预览，阻止执行）。
+    /// **已登记但尚未接线执行**的 kind（会诊整改：**目录登记 ≠ 可执行**）。
+    /// 登记只用于解析/往返与**可检出**；引擎消费接线落地前，`FindUnsupportedKinds` **仍须检出并阻止执行**——
+    /// 否则当前执行器会**静默忽略新语义**（例如「到点/窗口/优先级」被当噪声跳过）＝fail-open。
+    /// 接线完成并有夹具验证后，从此集合移除（同步 §19 登记）。
+    /// </summary>
+    public static readonly IReadOnlySet<string> RegisteredNotExecutable = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "strategy:schedule.priority",
+        "trigger:trigger.timeFixed",
+        "trigger:trigger.timeFlexible",
+    };
+
+    /// <summary>
+    /// 检出**不可执行**的类型键（D3 第二级：可加载可预览，阻止执行）——包含两类：
+    /// ①完全未登记的 kind；②**已登记但尚未接线执行**的 kind（见 <see cref="RegisteredNotExecutable"/>）。
     /// 返回稳定排序的 kind 列表（含来源前缀，如 "node:resource.x"）。
     /// </summary>
     public static IReadOnlyList<string> FindUnsupportedKinds(WorkflowDocument doc)
@@ -288,10 +302,16 @@ public static class WorkflowKindCatalog
         {
             if (!NodeKinds.Contains(n.Kind)) bad.Add("node:" + n.Kind);
             foreach (var s in n.Strategies)
+            {
                 if (!StrategyKinds.Contains(s.Kind)) bad.Add("strategy:" + s.Kind);
+                else if (RegisteredNotExecutable.Contains("strategy:" + s.Kind)) bad.Add("strategy:" + s.Kind);
+            }
         }
         foreach (var t in doc.Triggers)
+        {
             if (!TriggerKinds.Contains(t.Kind)) bad.Add("trigger:" + t.Kind);
+            else if (RegisteredNotExecutable.Contains("trigger:" + t.Kind)) bad.Add("trigger:" + t.Kind);
+        }
         foreach (var t in doc.Terminal)
             if (!TerminalKinds.Contains(t.Kind)) bad.Add("terminal:" + t.Kind);
         if (doc.Loop is not null && !LoopModes.Contains(doc.Loop.Mode)) bad.Add("loop:" + doc.Loop.Mode);

@@ -70,18 +70,33 @@ public class R54MechanismSchemaTests
         Assert.Equal(0, TaskCenterMechanismPolicy.PriorityOfNode(Node("n-4", bad)));
     }
 
-    /// <summary>含两个不同节点优先级的**最小合法定义**：归一化为**各自节点的值**（不合并、不取最大值）。</summary>
+    /// <summary>
+    /// 含两个不同节点优先级的**最小合法定义**：归一化为**各自节点的值**（不合并、不取最大值）；
+    /// 且**目录登记 ≠ 可执行**——引擎消费接线落地前，含新 kind 的定义**仍被检出并阻止执行**（会诊整改）。
+    /// </summary>
     [Fact]
-    public void MinimalDefinition_TwoNodePriorities_NormalizePerNode()
+    public void MinimalDefinition_TwoNodePriorities_NormalizePerNode_StillBlockedUntilWired()
     {
         var a = Node("n-a", Priority(7));
         var b = Node("n-b", Priority(1));
         var doc = Doc(a, b);
 
-        Assert.Empty(WorkflowKindCatalog.FindUnsupportedKinds(doc)); // 新 kind 已登记 ⇒ 不阻断
+        var blocked = WorkflowKindCatalog.FindUnsupportedKinds(doc);
+        Assert.Contains("strategy:" + TaskCenterMechanismPolicy.PriorityStrategyKind, blocked); // 零执行反例：未接线 ⇒ 检出
         Assert.Equal(7, TaskCenterMechanismPolicy.PriorityOfNode(doc.Nodes[0]));
         Assert.Equal(1, TaskCenterMechanismPolicy.PriorityOfNode(doc.Nodes[1]));
         Assert.NotEqual(TaskCenterMechanismPolicy.PriorityOfNode(doc.Nodes[0]), TaskCenterMechanismPolicy.PriorityOfNode(doc.Nodes[1]));
+    }
+
+    /// <summary>两个新触发器 kind 同样「已登记未接线 ⇒ 检出阻止执行」（fail-closed 零执行反例）。</summary>
+    [Theory]
+    [InlineData("trigger.timeFixed")]
+    [InlineData("trigger.timeFlexible")]
+    public void NewTriggerKinds_BlockedUntilEngineWired(string triggerKind)
+    {
+        var doc = Doc(Node("n-1"));
+        doc.Triggers = [new WorkflowTrigger { Kind = triggerKind }];
+        Assert.Contains("trigger:" + triggerKind, WorkflowKindCatalog.FindUnsupportedKinds(doc));
     }
 
     [Fact]
@@ -107,6 +122,13 @@ public class R54MechanismSchemaTests
         Assert.NotNull(resolved);
         Assert.True(resolved!.Value > multiDayNow, "nextDay 解析结果必须严格晚于 now");
         Assert.Equal(new DateTimeOffset(multiDayNow.Date.AddDays(1) + scheduled.TimeOfDay, scheduled.Offset), resolved.Value);
+
+        // **偏移语义合同**：按固定偏移解析（保留原计划偏移）——地区时区/DST **未实现**（残余），不做隐式换算。
+        var shifted = new DateTimeOffset(2026, 11, 2, 7, 0, 0, TimeSpan.FromHours(-4));  // now 用另一偏移
+        var planned = new DateTimeOffset(2026, 11, 1, 9, 0, 0, TimeSpan.FromHours(-5));  // 计划保留 -05:00
+        var kept = TaskCenterMechanismPolicy.ResolveMissedFire(planned, shifted, MissPolicy.NextDay);
+        Assert.NotNull(kept);
+        Assert.Equal(TimeSpan.FromHours(-5), kept!.Value.Offset); // 仍以原偏移构造（不换算为 -04:00）
     }
 
     [Theory]
@@ -171,6 +193,20 @@ public class R54MechanismSchemaTests
         // ④ 单调：重复消费更早到点不倒退水位
         var same = TaskCenterMechanismPolicy.AdvanceWatermark(wm, occurrence, t1);
         Assert.Equal(t3.UtcDateTime, same!.LastFiredAtUtc.UtcDateTime);
+
+        // ⑤ **纯函数**：推进不修改输入对象（旧引用＝推进前快照，便于先计算后提交/提交失败隔离）
+        var before = new TaskCenterMechanismPolicy.FireWatermark { OccurrenceIdentity = occurrence, LastFiredAtUtc = t1 };
+        var advanced = TaskCenterMechanismPolicy.AdvanceWatermark(before, occurrence, t3);
+        Assert.Equal(t1.UtcDateTime, before.LastFiredAtUtc.UtcDateTime);   // 输入保持原值
+        Assert.Equal(t3.UtcDateTime, advanced!.LastFiredAtUtc.UtcDateTime); // 结果为新水位
+        Assert.NotSame(before, advanced);
+
+        // ⑥ 身份不同的推进分支：**不跨身份比较**（返回**原身份等价副本**、不改输入；调用方须按身份分表持久化）
+        var other = TaskCenterMechanismPolicy.AdvanceWatermark(before, "wf-1|occ:other", t3);
+        Assert.Equal(t1.UtcDateTime, other!.LastFiredAtUtc.UtcDateTime);
+        Assert.Equal(occurrence, other.OccurrenceIdentity);              // 不采用他身份
+        Assert.Equal(t1.UtcDateTime, before.LastFiredAtUtc.UtcDateTime); // 输入仍为原值
+        Assert.NotSame(before, other);
 
         // 身份不同 ⇒ 不跨身份比较（调用方按身份分表持久化）
         Assert.False(TaskCenterMechanismPolicy.IsDuplicateFire(wm, "wf-1|occ:other", t1));
