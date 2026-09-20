@@ -39,6 +39,13 @@ public sealed class AdmissionRequest
     public object? ProcessLocalContext { get; set; }
     /// <summary>candidateId→runId→首节点提交键（E1 流程绑定：首绑写入、再绑必须一致，不可改写）。</summary>
     public string? RunBinding { get; set; }
+    /// <summary>
+    /// **恢复分支**（仅恢复专用边界填充：`paused-continue`／`interrupted-relocate`）——
+    /// 进程内判定输入（**不序列化**）：用于把「A6 原票据恢复」与「暂停续行」分开，
+    /// 避免暂停续行借用 A6 恢复豁免（小节会诊整改）。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? RecoveryBranch { get; set; }
     /// <summary>运行台账合法游标（Runner 后继授权：游标合法+授权未消费双条件）。</summary>
     public string? CursorRef { get; set; }
     public long? CursorRevision { get; set; }
@@ -598,6 +605,7 @@ public sealed class ArbitrationAdmissionService
                 SourceDetail = request.SourceDetail,
                 Candidate = candidate,
                 RunBinding = request.RunId, // 绑定登记即固定（不可改写）
+                RecoveryBranch = request.RestoreBranch, // A6 原票据恢复豁免只对 interrupted-relocate 生效
             };
             register = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
             {
@@ -675,7 +683,7 @@ public sealed class ArbitrationAdmissionService
             case "f11_active":
                 return (await TerminatePrecheckAsync(request, lease, "f11_active", AdmissionResultKind.F11Blocked, "F11 独立停止闸门激活（锁内复核）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             // 票据/资格/epoch/绑定/Pending：终局拒绝（恢复无重驱动者，Queued 回退=永久孤儿）。
-            case "ticket_suppressed" or "eligibility_lost" or "stale_epoch" or "identity_conflict" or "binding_conflict" or "pending_conflict":
+            case "ticket_suppressed" or "ticket_malformed" or "eligibility_lost" or "stale_epoch" or "identity_conflict" or "binding_conflict" or "pending_conflict":
                 return (await TerminatePrecheckAsync(request, lease, reason, AdmissionResultKind.TerminalRejected, "恢复准入锁内复核拒绝（" + reason + "）——终局中止（未发布发送许可，修正事实后由入口新操作重新发起）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             // 切换闸门/租约资格/残件/容量等存取拒绝：同样终局中止（恢复操作不留 Queued）。
             default:
@@ -1101,29 +1109,46 @@ public sealed class ArbitrationAdmissionService
             if (_hooks.F11Active()) return "f11_active";
             var facts = _hooks.FactsProvider();
             var pending = file.Handoff?.Pending;
-            // ② 票据三要素（§5 / P55③）：无关候选不得占位；授权抢占方保留资格，但**须通过另两要素校验**。
-            //    事实来源（P55④ 本地面）：注入的资格快照（BGI 侧票据权威，生产尚未接线）
-            //    ∪ **锁内已持久化的未决交接责任**——宿主不供给 `ActiveTicket` 时以 `Handoff.Pending` 的既有冻结字段
-            //    在本边界内推导：不新增读取、不破「锁内只消费本地事实」；方向保守（责任存续即压制，
-            //    绝不因缺票据事实而推导空闲）。
-            //    A6 原票据恢复豁免（P55⑥）：唯一允许「非授权抢占方」进入提交准入的动作＝恢复目标即被挂起运行、
-            //    目标 epoch 相符、且责任阶段已到 RestorePending（已选择原票据恢复、待确认）——该动作不另建替代作业。
-            var ticket = facts.ActiveTicket ?? TicketOf(pending);
+            var bgiEpoch = _hooks.BgiEpochProvider();
+            // ② 票据三要素（§5 / P55③）：无关候选不得占位；授权抢占方保留资格，但**须通过三要素校验**。
+            //    **两个事实源各自独立校验、互不替代、不取或**（小节会诊整改：原 `facts.ActiveTicket ?? TicketOf(pending)`
+            //    取值会让「注入票据与本地责任冲突」被绕过）：
+            //    ②-a 注入的资格快照（BGI 侧票据权威面，生产尚未接线）；②-b 锁内已持久化的未决交接责任 `Handoff.Pending`
+            //    （本地面：不新增读取、不破「锁内只消费本地事实」）。任一源**缺字段或冲突 ⇒ 保守阻断**，
+            //    **绝不**降级为「无票据」放行。
+            //    A6 原票据恢复豁免（P55⑥）：只免除「非授权抢占方身份」这一条压制，**不免除**要素校验与共同闸门。
             var authorizedRestore = IsAuthorizedTicketRestore(request, pending, targetEpoch);
-            if (ticket is { } t && !authorizedRestore)
+            // ②-0 同一被挂起运行的恢复但责任阶段未到 ⇒ 不得抢跑（不另建替代作业；也不该用「压制」词混淆责任存续）。
+            if (pending is not null && IsResumeRequest(request) && !authorizedRestore
+                && string.Equals(pending.SuspendedRunIdentity, request.RunBinding ?? "", StringComparison.Ordinal))
+                return "pending_conflict";
+            // ②-a BGI 侧票据快照（无条件校验；缺字段=非法票据，不得当「无票据」放行）。
+            if (facts.ActiveTicket is { } snap)
             {
-                // 同一被挂起运行的恢复：责任阶段/目标 epoch 未满足 ⇒ 不得抢跑（不另建替代作业；也不该用压制词混淆责任存续）。
-                if (IsResumeRequest(request) && pending is not null
-                    && string.Equals(pending.SuspendedRunIdentity, request.RunBinding ?? "", StringComparison.Ordinal))
-                    return "pending_conflict";
-                if (!string.Equals(t.AuthorizedPreemptorIdentity, stableIdentity, StringComparison.Ordinal))
+                if (string.IsNullOrEmpty(snap.AuthorizedPreemptorIdentity)
+                    || string.IsNullOrEmpty(snap.Epoch)
+                    || string.IsNullOrEmpty(snap.SuspendedRunIdentity))
+                    return "ticket_malformed";
+                if (!authorizedRestore && !string.Equals(snap.AuthorizedPreemptorIdentity, stableIdentity, StringComparison.Ordinal))
                     return "ticket_suppressed";
-                // 票据 epoch ≠ 当前 BGI 纪元 ⇒ 票据失效：失效 ≠ 清责 ≠ 立即放行（字段缺失同样不得降级为「无票据」）。
-                if (!string.Equals(t.Epoch, _hooks.BgiEpochProvider(), StringComparison.Ordinal))
+                if (!string.Equals(snap.Epoch, bgiEpoch, StringComparison.Ordinal))
+                    return "stale_epoch"; // 票据 epoch ≠ 当前纪元 ⇒ 票据失效：失效 ≠ 清责 ≠ 立即放行
+                if (IsResumeRequest(request) && !string.Equals(snap.SuspendedRunIdentity, request.RunBinding ?? "", StringComparison.Ordinal))
+                    return "binding_conflict";
+            }
+            // ②-b 本地未决交接责任（无条件校验；与 ②-a 并列，不互相替代）。
+            if (TicketOf(pending) is { } local)
+            {
+                if (string.IsNullOrEmpty(local.AuthorizedPreemptorIdentity)
+                    || string.IsNullOrEmpty(local.Epoch)
+                    || string.IsNullOrEmpty(local.SuspendedRunIdentity))
+                    return "ticket_malformed";
+                if (!authorizedRestore && !string.Equals(local.AuthorizedPreemptorIdentity, stableIdentity, StringComparison.Ordinal))
+                    return "ticket_suppressed";
+                if (!string.Equals(local.Epoch, bgiEpoch, StringComparison.Ordinal))
                     return "stale_epoch";
-                // 恢复目标 ≠ 票据被挂起运行 ⇒ 拒绝（不得另建替代作业、不得换键重跑）。
-                if (IsResumeRequest(request)
-                    && !string.Equals(t.SuspendedRunIdentity, request.RunBinding ?? "", StringComparison.Ordinal))
+                if (IsResumeRequest(request) && !authorizedRestore
+                    && !string.Equals(local.SuspendedRunIdentity, request.RunBinding ?? "", StringComparison.Ordinal))
                     return "binding_conflict";
             }
             // ③ 权威事实未知（禁止换键重跑、禁止占位）。
@@ -1292,6 +1317,8 @@ public sealed class ArbitrationAdmissionService
                 return (await TerminatePrecheckAsync(request, lease, "f11_active", AdmissionResultKind.F11Blocked, "F11 独立停止闸门激活（锁内复核）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             case "ticket_suppressed":
                 return (await TerminatePrecheckAsync(request, lease, "ticket_suppressed", AdmissionResultKind.TerminalRejected, "票据压制期：无关候选不得占位（锁内复核）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
+            case "ticket_malformed":
+                return (await TerminatePrecheckAsync(request, lease, "ticket_malformed", AdmissionResultKind.TerminalRejected, "票据缺必要要素（被挂起运行/授权抢占方/epoch）——不得当「无票据」放行（锁内复核）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             case "eligibility_lost":
                 return (await TerminatePrecheckAsync(request, lease, "eligibility_lost", AdmissionResultKind.TerminalRejected, "资格关键事实复核失败（锁内复核）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             case "stale_epoch":
@@ -2099,12 +2126,15 @@ public sealed class ArbitrationAdmissionService
            || string.Equals(request.Candidate?.Intent, "resume", StringComparison.Ordinal);
 
     /// <summary>
-    /// A6 原票据恢复豁免（P55⑥）：恢复目标＝被挂起运行 ＋ 目标 epoch 相符 ＋ 责任阶段=RestorePending
-    /// （已选择原票据恢复、待确认）——该动作不另建替代作业；其余阶段/目标一律 pending_conflict（不得抢跑）。
+    /// A6 原票据恢复豁免（P55⑥）：**分支限 `interrupted-relocate`**（暂停续行**不得**借用该豁免）
+    /// ＋ 恢复目标＝被挂起运行 ＋ 目标 epoch 相符 ＋ 责任阶段=RestorePending（已选择原票据恢复、待确认）。
+    /// **范围如实**：本豁免只让其通过「非授权抢占方身份」这一条压制，**不免除**票据要素校验与共同闸门；
+    /// 「原票据协议消费与完整恢复闭环」另需验收（本阶段不闭合，见 §17 P57）。
     /// </summary>
     private static bool IsAuthorizedTicketRestore(AdmissionRequest request, PendingHandoffIntent? pending, string targetEpoch)
         => pending is not null
            && IsResumeRequest(request)
+           && string.Equals(request.RecoveryBranch, "interrupted-relocate", StringComparison.Ordinal)
            && !string.IsNullOrEmpty(pending.SuspendedRunIdentity)
            && string.Equals(pending.SuspendedRunIdentity, request.RunBinding ?? "", StringComparison.Ordinal)
            && string.Equals(pending.TargetEpoch, targetEpoch, StringComparison.Ordinal)

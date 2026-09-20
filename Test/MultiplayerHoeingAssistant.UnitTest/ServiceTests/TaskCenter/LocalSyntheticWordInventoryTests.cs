@@ -7,7 +7,7 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 /// 纪律（设计稿 §18.4）：`cancelUnconfirmed` 是**助手本地合成词**，**不是 BGI 线路词**；
 /// 其生产条件仅两处——①跳过请求后**远端终态不可考**（`terminal.Uncertain`）；②跳过确认**超时**（OCE 且非用户取消）。
 /// **能力边界（如实，勿夸大）**：本守卫是**文本匹配计数**（非语义识别），且**不读 §18.4 文档**；
-/// 注释/同形字面量会误报，变量/别名会漏报。它只保证「合成点数量与所在文件未变」且「该词未出现在已登记的线路层文件」，
+/// 注释/同形字面量会误报，变量/别名会漏报。它只保证「**已登记文本模式**的合成点计数未变」且「该词未出现在**已登记**的线路层文件」，
 /// **不证明**远端没有同形词、也不替代 R5.8 的远端词表对照（远端线路＝本阶段不闭合）。
 /// </summary>
 public sealed class LocalSyntheticWordInventoryTests
@@ -42,6 +42,13 @@ public sealed class LocalSyntheticWordInventoryTests
     public void LocalSyntheticWord_NotPresentInWireLayerFiles()
     {
         var root = RepoRoot();
+        // 会诊整改：登记的线路层文件**缺失即失败**（不得因 `Where(File.Exists)` 静默跳过而使守卫空转）。
+        var missing = WireLayerFiles
+            .Where(rel => !File.Exists(Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar))))
+            .ToList();
+        Assert.True(missing.Count == 0,
+            "登记的线路层文件缺失（本地合成词守卫必须响亮失败）：[" + string.Join(", ", missing) + "]");
+
         var offenders = WireLayerFiles
             .Where(rel => File.Exists(Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar))))
             .Where(rel => File.ReadAllText(Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar))).Contains(Word, StringComparison.Ordinal))

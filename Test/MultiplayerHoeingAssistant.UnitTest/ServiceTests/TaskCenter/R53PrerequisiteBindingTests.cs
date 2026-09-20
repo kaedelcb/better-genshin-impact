@@ -5,8 +5,9 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 
 /// <summary>
 /// **R5.3.3④（D8：前置复验身份绑定）**：前置事实的复用必须按**节点出现／attempt／策略-类型／账号标识**分别绑定，
-/// 任一维度变化都不得复用旧事实；**会话（执行纪元 `Epoch`）**在身份五段之外单独承载（跨纪元事实不沿用，
-/// 由恢复对账路径据该字段判别入 Unknown）。纯组件夹具，owner 0 点击。
+/// 任一维度变化都不得复用旧事实。**范围如实（小节会诊收窄）**：`Epoch` 在本夹具中只证明「**独立字段且可区分**、
+/// 不参与身份五段比对」——**不证明**其持久化链路、*会话等价*判定或「跨会话事实⇒Unknown」的消费实现
+/// （后者属恢复集成复验，见 §18.1 R5.3.3④残余）。纯组件夹具，owner 0 点击。
 /// </summary>
 public class R53PrerequisiteBindingTests
 {
@@ -45,7 +46,7 @@ public class R53PrerequisiteBindingTests
         => Assert.False(Record().Matches("n-1", 0, 0, 1, 0, "prerequisite.account", null));
 
     [Fact]
-    public void Binding_EpochPersistedSeparately_NotPartOfIdentityMatch()
+    public void Binding_EpochIsSeparateField_NotPartOfIdentityMatch()
     {
         var a = Record();
         var b = Record();
