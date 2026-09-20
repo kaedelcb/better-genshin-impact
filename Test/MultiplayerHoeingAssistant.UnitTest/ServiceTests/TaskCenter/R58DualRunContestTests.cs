@@ -133,11 +133,13 @@ public sealed class R58DualRunContestTests : IDisposable
     }
 
     /// <summary>
-    /// **恢复边界 × 启动轮次互斥**：恢复走**独立边界**（`AdmitRecoveryAsync`，不参与轮次排序）；恢复获准并发送后，
-    /// 启动候选在**执行占用事实**下全部未受理 ⇒ 两条路径合计**至多一次发送**。
+    /// **恢复边界 × 启动轮次（限定结论）**：恢复走**独立边界**（`AdmitRecoveryAsync`，不参与轮次排序）；
+    /// 本用例只证明「**恢复回调次数 ≤1**」＋「**注入占用事实后启动候选全部未受理**」。
+    /// **证明边界（勿外推）**：`paused-continue` 按 §5.1 只解除调度暂停，**实际节点执行另经 §4 提交边界**，本用例**不含**该边界；
+    /// 故**不证明执行发送互斥**、不证明并发交错、也不证明生产占用事实已接线。
     /// </summary>
     [Fact]
-    public async Task RecoveryBoundary_ThenStarts_AtMostOneSend()
+    public async Task RecoveryBoundary_ThenStarts_OccupancyBlocksStarts_CallbackAtMostOnce()
     {
         var store = NewStore();
         var ledger = new ExternalStartLedger(_dir, () => _now);
@@ -171,7 +173,7 @@ public sealed class R58DualRunContestTests : IDisposable
         foreach (var ns in SevenEntryNamespaces)
             Assert.NotEqual(AdmissionResultKind.Accepted, (await svc.SubmitAsync(Req(ns))).Kind);
 
-        Assert.Equal(1, sends.Count);   // 恢复 + 启动合计**至多一次发送**
+        Assert.Equal(1, sends.Count);   // **回调次数**（Sender 桩）＝1；不代表执行发送互斥（见证明边界）
     }
 
     /// <summary>**跨入口对抗（含恢复入口）且执行已占用**：占用事实下无人发送（授权方亦须过执行权检查）。</summary>

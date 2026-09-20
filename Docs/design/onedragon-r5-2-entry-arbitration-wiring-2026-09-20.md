@@ -2234,7 +2234,7 @@ R4.9 启动链终止**维持不回溯既有后台触发器**（既有行为不�
 |---|---|---|---|---|---|---|
 | **E1 UI 面板** | S1 面板启动流程 | 夹具内置（0 点击）；实机 owner 1 步：点「启动」 | `SubmitFlowStartViaAdmissionAsync` | `Capacity_*`／`SubmitResume*` 等 | **未验收**：E1 宿主登记→节点提交链的**专属运行证据未取得**（`SubmissionPointInventoryTests` 为文本守卫，**不证明路由**；§14 证据属 **E3–E5 外部启动**，不能替代 E1） | **待实机** |
 | **E2 恢复入口（四场景分流，逐场景列明）** | S2a **暂停续行** | 夹具内置（0 点击）；实机 owner 1 步：面板「恢复」 | 仅**解除调度暂停**（不产发送许可）；实际节点执行另经 §4 **提交边界** | `ResumeRun_Paused_BranchRecorded_Accepted`（断言：恢复后**不重放已完成节点**、序列 `[n-1,n-2]`） | **未验收**（提交边界运行证据待补） | **待实机（1 场景）** |
-| | S2b **A6 票据恢复** | 夹具内置（0 点击）；实机 owner 1 步 | `AdmitRecoveryAsync`（**恢复专用准入边界**，不参与轮次排序） | `Ticket_A6Restore*`（原票据、不另建替代作业、责任保留） | **未验收** | **待实机（1 场景）** |
+| | S2b **A6 票据恢复** | 夹具内置（0 点击）；实机 owner 1 步 | `AdmitRecoveryAsync`（**恢复专用准入边界**，不参与轮次排序） | `Ticket_A6Restore*`（**恢复准入分支**获准、不另建替代作业、责任保留；**原票据协议消费与 `restore_confirmed` 回流＝§17 P57 待验收**） | **未验收** | **待实机（1 场景）** |
 | | S2c **确认取消后重跑** | 夹具内置（0 点击）；实机 owner 1 步 | §4 **完整提交边界**（`SubmitAsync`）；**新 attempt／新提交键** | `Preempted_ReRunWithNewAttempt_NewKeyNewIdentity_OldOpUnchanged` | **未验收** | **待实机（1 场景）** |
 | | S2d **Unknown 待对账** | 夹具内置（0 点击）；实机 owner 1 步 | **仅对账**（`SettleReconciledAsync`）；**不产生新发送许可** | `ResumeRun_Unknown_RejectedNoAutoReRun_NoLeaseSideEffect` | **未验收** | **待实机（1 场景）** |
 | **E3 网页** | S3 网页一键锄地 | 夹具 0 点击；实机 owner 2 步：点「一键锄地」＋看回执 | `start_group`/`start_oneclick` → CommandExecutor 准入接线 | R5.2/R5.3 仲裁面夹具 | **未验收**：组合根**未注入** `externalStartAdmission` | **待实机** |
@@ -2260,7 +2260,7 @@ R4.9 启动链终止**维持不回溯既有后台触发器**（既有行为不�
 | **同轮互斥（恰一胜、单次发送）** | **通过**：`R58DualRunContestTests.SevenSyntheticCandidates_Concurrent_ExactlyOneWinner_SendsOnce`（**七个合成候选**；断言**实时发送计数＝1**） | **未验收**（适配器内重发/跨进程并发待补） | **待实机** |
 | **F11 优先** | **通过**：`…F11Active_AllBlocked_ZeroSend_NoLeaseSideEffect`（计数＝0＋**租约文件字节前后一致**）＋既有 F11 夹具 | **未验收** | **待实机** |
 | **执行占用 / 资格≠执行权** | **通过**：`…ExecutionOccupied_NoSendAtAll` | **未验收** | **待实机** |
-| **恢复边界 × 启动轮次互斥** | **通过（限定）**：`RecoveryBoundary_ThenStarts_AtMostOneSend`——证明的是「**恢复先完成**，随后在**注入的占用事实**下启动被阻断」，**不证明并发交错**，也不证明**生产占用事实已接线**（§17/§20.4） | **未验收** | **待实机（E2 四场景）** |
+| **恢复边界 × 启动轮次（限定）** | **通过（限定）**：`RecoveryBoundary_ThenStarts_OccupancyBlocksStarts_CallbackAtMostOnce`——仅证明「**恢复回调次数 ≤1**」＋「**注入占用事实后启动全部未受理**」；**不证明执行发送互斥**（`paused-continue` 的实际节点执行另经 §4，本用例不含该边界）、**不证明并发交错**、**不证明生产占用事实已接线**（§17/§20.4） | **未验收** | **待实机（E2 四场景）** |
 | **失联/接管** | 通过（R5.1 接管夹具：满 TTL 观察＋锁内复核取证） | **未验收** | **待实机** |
 | **回滚正确** | 通过（§21.10：字节级一致、按归属清理、未完成即阻断、演练复用真实回滚核心） | **未验收**（真实引用/激活编排未接线） | **未执行**（真实 User 目录须 owner 另行下令） |
 | **R4 补验事实一致性确认** | **引用既有证据**（R4.10 §8＋`ed04355d` 三词兼容已并入 `SubmissionResultClassifier`）：确认仲裁面设计与已验证事实**无矛盾假设** | — | — |
