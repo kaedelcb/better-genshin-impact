@@ -43,7 +43,9 @@ public sealed class FlexibleWindowFacts
 
 /// <summary>
 /// 槲寄生 · **R5.4 机制一/二/三 schema 与引擎消费**（纯函数、无 I/O；§2②3/②6、§2③1/③3/③6 的可测实现）。
-/// 设计冻结前置问题（ASTRA 终审 I4）的逐条答案见 R5.2 接线稿 §19；本类即那些答案的**唯一引用点**。
+/// 设计冻结前置问题（ASTRA 终审 I4）的逐条答案见 R5.2 接线稿 §19（R5.4 入档）；本类即那些答案的**唯一引用点**。
+/// **范围如实**：本类只提供**纯函数策略与目录登记**——「触发 kind → 候选（tier/priority/scheduledAt）」的**引擎消费接线**
+/// 与既有入口贯通尚未落地（见 §19 残余），不得据本类签署「引擎已消费」或「旧流程运行行为不变」（后者由既有回归承接）。
 /// </summary>
 public static class TaskCenterMechanismPolicy
 {
@@ -88,12 +90,18 @@ public static class TaskCenterMechanismPolicy
 
     /// <summary>
     /// 错过到点的处置（§2②6）：未错过 ⇒ 原时刻；`skip` ⇒ `null`（**本次放弃、不补跑**）；
-    /// `nextDay` ⇒ 次日同刻。**任何分支都不枚举补跑历史轮次**（停机恢复后已过期者不补跑）。
+    /// `nextDay` ⇒ 返回**严格晚于 `now` 的最近一个同刻时刻**（跨多日错过同样直接取未来最近一次，
+    /// **绝不返回已过期时刻、绝不枚举补跑历史轮次**——停机恢复后已过期者不补跑）。
     /// </summary>
     public static DateTimeOffset? ResolveMissedFire(DateTimeOffset scheduled, DateTimeOffset now, MissPolicy policy)
     {
         if (now <= scheduled) return scheduled;
-        return policy == MissPolicy.NextDay ? scheduled.AddDays(1) : null;
+        if (policy != MissPolicy.NextDay) return null;
+
+        var localNow = now.ToOffset(scheduled.Offset);
+        var candidate = new DateTimeOffset(localNow.Date + scheduled.TimeOfDay, scheduled.Offset);
+        if (candidate <= localNow) candidate = candidate.AddDays(1);
+        return candidate;
     }
 
     /// <summary>
@@ -114,22 +122,59 @@ public static class TaskCenterMechanismPolicy
     }
 
     /// <summary>
-    /// 稳定身份兜底（§2③1）——`workflowId + 触发出现身份`；出现身份缺失（手工/v2 无计划时刻候选）时
-    /// 以**请求身份**确定性派生，使身份**跨恢复稳定、确定性可重放**。
+    /// 用来源分隔符（会诊整改）：`|` 与 `%` 百分号转义，避免分段歧义（`a|b` 与 `a` + `b` 不再同形）。
     /// </summary>
-    public static string StableFallbackIdentity(string workflowId, string? triggerOccurrenceId, string? requestIdentity)
-        => workflowId + "|" + (string.IsNullOrEmpty(triggerOccurrenceId)
-            ? "req:" + (requestIdentity ?? "")
-            : triggerOccurrenceId);
+    private static string EscapeSegment(string value)
+        => value.Replace("%", "%25", StringComparison.Ordinal).Replace("|", "%7C", StringComparison.Ordinal);
 
     /// <summary>
-    /// 到点键（时钟前跳/回拨的去重基准，§2③5/§2②6）：`出现身份 + 计划时刻(UTC, 往返格式)`——
-    /// 与墙钟读取次数无关，故**回拨不产生重放**、**前跳的多轮错过只取最近一次**（不枚举补跑）。
+    /// 稳定身份兜底（§2③1）——`workflowId + 来源标签 + 身份`：**出现身份（`occ:`）与请求身份（`req:`）分别打标**，
+    /// 故二者不会互相同形（会诊整改：原实现 `("wf","req:r1",null)` 与 `("wf",null,"r1")` 会碰撞）。
+    /// **两者都缺失 ⇒ 返回 `null`**——调用方必须**响亮拒绝**，不得以空身份兜底（空身份会跨请求碰撞）。
+    /// 分段经转义后拼接，确定性可重放；其「跨恢复稳定」仍取决于调用方持久化同一身份（不作为本函数结论）。
     /// </summary>
-    public static string FireKeyOf(string occurrenceIdentity, DateTimeOffset scheduled)
-        => occurrenceIdentity + "@" + scheduled.UtcDateTime.ToString("O");
+    public static string? StableFallbackIdentity(string? workflowId, string? triggerOccurrenceId, string? requestIdentity)
+    {
+        var head = EscapeSegment(workflowId ?? "");
+        if (!string.IsNullOrEmpty(triggerOccurrenceId))
+            return head + "|occ:" + EscapeSegment(triggerOccurrenceId);
+        if (!string.IsNullOrEmpty(requestIdentity))
+            return head + "|req:" + EscapeSegment(requestIdentity);
+        return null;
+    }
 
-    /// <summary>同一到点键是否已参选过（同键至多参选一次＝幂等去重；去重依据是**持久化键**而非墙钟）。</summary>
-    public static bool IsDuplicateFire(string occurrenceIdentity, DateTimeOffset scheduled, string? lastFiredKey)
-        => string.Equals(lastFiredKey, FireKeyOf(occurrenceIdentity, scheduled), StringComparison.Ordinal);
+    /// <summary>到点**水位**（每个出现身份一条，持久化）：记录该出现身份**已消费的最晚计划时刻（UTC）**。</summary>
+    public sealed class FireWatermark
+    {
+        public string OccurrenceIdentity { get; set; } = "";
+        public DateTimeOffset LastFiredAtUtc { get; set; }
+    }
+
+    /// <summary>
+    /// 到点幂等去重（§2③5/§2②6 的**水位合同**，会诊整改：单一「上次键」不能兑现回拨不重放）：
+    /// 计划时刻 **≤ 该出现身份水位** ⇒ 重复（**不参选、不重放**）；**严格晚于水位** ⇒ 新到点（可参选并推进水位）。
+    /// 由此得到：①回拨（t1 已消费、水位在 t2）后再求值 t1 ⇒ 仍 ≤ 水位 ⇒ **不重放**；
+    /// ②时钟前跳跳过若干轮次时，旧轮次全部 ≤ 水位 ⇒ **不补跑**，调用方只需对**最近一次到点**求值。
+    /// </summary>
+    public static bool IsDuplicateFire(FireWatermark? watermark, string occurrenceIdentity, DateTimeOffset scheduled)
+        => watermark is not null
+           && string.Equals(watermark.OccurrenceIdentity, occurrenceIdentity, StringComparison.Ordinal)
+           && scheduled.UtcDateTime <= watermark.LastFiredAtUtc.UtcDateTime;
+
+    /// <summary>
+    /// 推进水位（**单调**）：同出现身份取更晚者；重复到点（≤ 现值）**水位不变**（幂等，重复消费不倒退）；
+    /// 出现身份不同 ⇒ 水位无法跨身份比较，返回**原水位**并要求调用方按身份**分别持久化**。
+    /// </summary>
+    public static FireWatermark? AdvanceWatermark(FireWatermark? watermark, string occurrenceIdentity, DateTimeOffset scheduled)
+    {
+        if (watermark is null)
+            return new FireWatermark { OccurrenceIdentity = occurrenceIdentity, LastFiredAtUtc = scheduled }; // 首个水位
+        if (string.Equals(watermark.OccurrenceIdentity, occurrenceIdentity, StringComparison.Ordinal))
+        {
+            if (scheduled.UtcDateTime <= watermark.LastFiredAtUtc.UtcDateTime) return watermark; // 幂等：不倒退
+            watermark.LastFiredAtUtc = scheduled;
+            return watermark;
+        }
+        return watermark; // 身份不同：不跨身份比较（调用方须按身份分表持久化）
+    }
 }
