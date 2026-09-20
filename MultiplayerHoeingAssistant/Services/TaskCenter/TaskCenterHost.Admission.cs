@@ -185,6 +185,8 @@ public sealed partial class TaskCenterHost
     private ArbitrationAdmissionService? _admission;
     private string? _admissionLeaseId; // 获取时捕获的所有者身份（心跳只续本进程租约——绝不为他人续命，会诊 建议-1）
     private string? _admissionOwnerEpoch;
+    /// <summary>配置面根目录（＝运行目录的父目录）：租约目录与 `external-start-ledger.json` 同根。</summary>
+    private string? _admissionRoot;
 
     /// <summary>
     /// 门面懒组装（所有权+§6.3 失联接管编排+每进程一次重启恢复；失败留 null 允许下次重试）。
@@ -206,6 +208,7 @@ public sealed partial class TaskCenterHost
         {
             if (_admission is not null) return;
             var root = Directory.GetParent(_runsDirPath!)?.FullName ?? _runsDirPath!;
+            _admissionRoot = root;
             var dir = _arbitrationDir ?? Path.Combine(root, "arbitration");
             Directory.CreateDirectory(dir); // 首个执行入口才落目录（构造零副作用原则不破）
             var utcNow = _admissionSeams?.UtcNow;
@@ -223,17 +226,30 @@ public sealed partial class TaskCenterHost
                 // - 其他（流程登记/恢复等非节点操作）：沿用流程级验证（run 记录在册）。
                 TakeoverPersist = entry =>
                 {
-                    var run = entry.RunId is { } rid ? _runs.Load(rid) : null;
-                    if (run is null) return Task.FromResult<string?>("run_record_missing");
-                    if (entry.ResourceRef?.StartsWith("node:", StringComparison.Ordinal) != true)
-                        return Task.FromResult<string?>(null);
-                    // **完整发送身份关联**（会诊阻断项）：本笔发送的受理事实必须来自**这一笔**租约责任，
-                    // 不得用「同一 run 当前恰好是 Accepted」的另一笔提交回执来关闭本 Submission。
+                    // **接管路径必须按「权威操作类型」选择**（会诊阻断）：不得用 `entry.RunId` 是否为空来判定外部启动——
+                    // 该字段来自回执/对账方（`SendOutcome.Accepted.RunId`／`ReconcileSettlement.Accepted.RunId`），
+                    // 不是持久化的操作类型。节点/流程操作若缺 runId 必须**失败**，绝不能自动转成外部启动台账而跳过
+                    // 节点侧的 jobId/提交键/发送身份/纪元验证。
                     var op = _admissionStore?.Read().File?.Handoff?.Operations?
                         .FirstOrDefault(o => string.Equals(o.SubmissionIdentity, entry.SubmissionIdentity, StringComparison.Ordinal));
                     if (op is null) return Task.FromResult<string?>("operation_identity_missing");
-                    if (!string.Equals(op.RunBinding, entry.RunId, StringComparison.Ordinal))
+                    var resourceRef = op.ResourceRef ?? "";
+                    var isNode = resourceRef.StartsWith("node:", StringComparison.Ordinal);
+                    var isRunLevel = resourceRef.StartsWith("flow:", StringComparison.Ordinal)
+                                     || resourceRef.StartsWith("run:", StringComparison.Ordinal);
+                    if (!isNode && !isRunLevel)
+                    {
+                        // §4.2a：E3/E4/E5 的受理接管台账＝external-start-ledger.json（修订守卫、可跨重启重建）。
+                        return Task.FromResult(PersistExternalStartLedger(entry));
+                    }
+                    if (entry.RunId is not { } boundRunId) return Task.FromResult<string?>("run_id_missing");
+                    if (!string.Equals(op.RunBinding, boundRunId, StringComparison.Ordinal))
                         return Task.FromResult<string?>("run_binding_mismatch");
+                    var run = _runs.Load(boundRunId);
+                    if (run is null) return Task.FromResult<string?>("run_record_missing");
+                    if (!isNode) return Task.FromResult<string?>(null); // 流程级（E1/E2）：运行记录在册即可
+                    // **完整发送身份关联**（会诊阻断项）：本笔发送的受理事实必须来自**这一笔**租约责任，
+                    // 不得用「同一 run 当前恰好是 Accepted」的另一笔提交回执来关闭本 Submission。
                     if (op.Candidate is not { } cand) return Task.FromResult<string?>("candidate_missing");
                     var nodeIdFromRef = entry.ResourceRef!["node:".Length..];
                     if (!string.Equals(cand.NodeId, nodeIdFromRef, StringComparison.Ordinal))
@@ -346,6 +362,78 @@ public sealed partial class TaskCenterHost
     private static TimeSpan _admissionMonotonic() => _admissionStopwatch.Elapsed;
 
     /// <summary>
+    /// **外部启动准入（B3：E3/E4/E5）**：适配器在**任何启动副作用之前**调用本入口。
+    /// 链路＝§2.2 兼容候选构造 → 门面 `SubmitAsync`（锁内占位）→ Sender 内执行适配层既有启动实现（**仅一次**）
+    /// → 三态对账；受理接管台账＝`external-start-ledger.json`（§4.2a：E1/E2=RunStore，E3/E4/E5=外接启动台账）。
+    /// 纪律：候选的来源字段必须由可信适配器提供；旧客户端不携合同字段＝兼容候选，不得从远程自报字段推断。
+    /// </summary>
+    internal async Task<AdmissionResult> SubmitExternalStartViaAdmissionAsync(
+        ExternalStartAdmissionRequest request, CancellationToken ct)
+    {
+        // §7.1-1：F11 判定先于租约获取。
+        if (CurrentArbitrationFacts().F11Active)
+            return AdmissionResult.Of(AdmissionResultKind.F11Blocked, "f11_active",
+                "F11 独立停止闸门激活（未发生租约副作用；未发送）。", "");
+        if (string.IsNullOrEmpty(request.Namespace) || string.IsNullOrEmpty(request.WorkflowId)
+            || string.IsNullOrEmpty(request.ResourceRef) || string.IsNullOrEmpty(request.TriggerOccurrenceId))
+            return AdmissionResult.Of(AdmissionResultKind.Error, "invalid_request",
+                "外部启动准入请求字段缺失（namespace/workflowId/resourceRef/trigger 必填）。", "");
+        // 严格合同要求固定 bgiEpoch（§2.2/I-1）：未知纪元不得签发发送许可——否则台账/线协议身份会以空纪元落盘。
+        var externalEpoch = CurrentBgiEpoch();
+        if (string.IsNullOrEmpty(externalEpoch))
+            return AdmissionResult.Of(AdmissionResultKind.Error, "bgi_epoch_unknown",
+                "BGI 进程纪元未知（严格合同要求固定 bgiEpoch；未发送、未签发许可）。", "");
+        ct.ThrowIfCancellationRequested();
+
+        ArbitrationAdmissionService facade;
+        try { await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false); facade = _admission!; }
+        catch (OperationCanceledException)
+        {
+            return AdmissionResult.Of(AdmissionResultKind.NeedReconcile, "host_shutdown",
+                "宿主退出，仲裁面初始化取消（未发送，待对账）。", "");
+        }
+        catch (Exception ex)
+        {
+            return AdmissionResult.Of(AdmissionResultKind.Error, "facade_init_failed",
+                "仲裁面初始化失败（未发送）：" + ex.GetType().Name, "");
+        }
+
+        var admission = new AdmissionRequest
+        {
+            Namespace = request.Namespace,
+            Kind = AdmissionKind.Create,
+            SourceDetail = string.IsNullOrEmpty(request.SourceDetail) ? "external:start" : request.SourceDetail,
+            WireSubmitKey = request.WireSubmitKey,
+            ProcessLocalContext = new ExternalStartContext(request.ExecuteAsync),
+            Candidate = new ArbitrationCandidate
+            {
+                Scope = $"bgi:local:{externalEpoch}",
+                Namespace = request.Namespace,
+                WorkflowId = request.WorkflowId,
+                // §2.2/I3：`{requestIdentity}` 占位符由门面在身份分配后回填。
+                TriggerOccurrenceId = request.TriggerOccurrenceId,
+                ResourceRef = request.ResourceRef,
+                Intent = "start",
+                // §2.2：start 候选 runId/节点身份为空、轮次/attempt=0、排序键缺省（tier=plan/priority=0/scheduledAt=null）。
+            },
+        };
+
+        try
+        {
+            return await facade.SubmitAsync(admission).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return AdmissionResult.Of(AdmissionResultKind.Error, "admission_exception",
+                "仲裁面异常（结果待对账）：" + ex.GetType().Name, "");
+        }
+    }
+
+    /// <summary>
     /// 优雅退出释放租约（会诊 建议-1 处置：缩短重启接管观察窗——释放保留 Handoff/Diag 段，未决事实不清空，§6.2 更替继承）；
     /// 释放失败/所有权已更替=仅留痕（留待 TTL 接管路径兜底，绝不强制）。
     /// </summary>
@@ -413,22 +501,50 @@ public sealed partial class TaskCenterHost
     /// <summary>仲裁事实快照（接缝优先；生产=BGI 控制面快照——缺失即未知，不解释为空闲）。</summary>
     private ArbitrationFacts CurrentArbitrationFacts()
     {
+        // §4.2a 准入读取规则（**部分实现**）：当前合并 BGI 快照 ∪ **external-start-ledger 已受理未终结记录**；
+        // queued 不因运行快照为空而失去占用意义；台账损坏/读取失败＝**不推导空闲**（按事实未知保守拒绝）。
+        // 该合并对**事实接缝与生产事实面一律生效**（接缝只覆盖 BGI 快照来源，不豁免台账占用）。
+        // **如实限定**：本方法**未**读取运行台账，「∪ 运行台账」尚未由本处实现；占用被压成布尔值，不足以区分
+        // §6.2 的原生/托管占用与重试资格。副作用：旧未终结记录/损坏文件/锁争用会对**所有生产准入**新增拒绝
+        // （合同要求的保守方向，但属可用性影响，且读取原因当前未保留）。
+        var (ledgerOccupied, ledgerUnknown) = ReadExternalStartLedgerOccupancy();
         if (_admissionSeams is { } s)
         {
             return new ArbitrationFacts
             {
                 F11Active = s.F11Active ?? false,
-                ExecutionOccupied = s.Occupied ?? false,
-                ExecutionFactsUnknown = s.FactsUnknown ?? false,
+                ExecutionOccupied = (s.Occupied ?? false) || ledgerOccupied,
+                ExecutionFactsUnknown = (s.FactsUnknown ?? false) || ledgerUnknown,
             };
         }
 
         var status = _statusSnapshotProvider?.Invoke();
         return new ArbitrationFacts
         {
-            ExecutionOccupied = status?.TaskRunning == true,
-            ExecutionFactsUnknown = status is null,
+            ExecutionOccupied = status?.TaskRunning == true || ledgerOccupied,
+            ExecutionFactsUnknown = status is null || ledgerUnknown,
         };
+    }
+
+    /// <summary>外部启动台账占用判定（§4.2a）：已受理未终结（AcceptedPendingExecution/Running）＝占用；读取失败＝事实未知。</summary>
+    private (bool Occupied, bool Unknown) ReadExternalStartLedgerOccupancy()
+    {
+        try
+        {
+            var root = _admissionRoot ?? Directory.GetParent(_runsDirPath ?? "")?.FullName;
+            if (string.IsNullOrEmpty(root)) return (false, false);
+            var read = new ExternalStartLedger(root).Read();
+            if (!read.Valid) return (false, true); // 损坏/读取失败：保守按事实未知（不推导空闲）
+            var entries = read.File?.Entries;
+            if (entries is null) return (false, false);
+            return (entries.Any(e => !string.IsNullOrEmpty(e.SubmissionIdentity)
+                                     && e.State is LedgerEntryState.AcceptedPendingExecution or LedgerEntryState.Running),
+                false);
+        }
+        catch (Exception)
+        {
+            return (false, true);
+        }
     }
 
     /// <summary>当前 BGI epoch（只比较不重写；缺失=空串——就绪守卫先行，实践中非空）。</summary>
@@ -555,6 +671,10 @@ public sealed partial class TaskCenterHost
         // 非节点且非流程启动的未知形状仍按 B2-α 口径保守 Unknown。
         if (!string.IsNullOrEmpty(d.Candidate.NodeId))
             return await DispatchSuccessorViaHostAsync(d).ConfigureAwait(false);
+        // B3（E3/E4/E5）：外部启动操作——**仅**在获准后执行适配层既有启动实现（进程内上下文缺失＝响亮拒绝，
+        // 绝不退回直通启动；那会绕开占位/Pending/固定纪元校验）。
+        if (d.ProcessLocalContext is ExternalStartContext ext)
+            return await DispatchExternalStartViaHostAsync(ext).ConfigureAwait(false);
         if (!d.ResourceRef.StartsWith("flow:", StringComparison.Ordinal))
             return new SendOutcome.Unknown("unsupported_dispatch_shape_b2a");
 
@@ -1091,6 +1211,75 @@ public sealed partial class TaskCenterHost
             .OrderBy(o => o.UpdatedAtUtc)   // 同类型内取最早的建立操作
             .Select(o => o.Candidate?.Scope)
             .FirstOrDefault(s => !string.IsNullOrEmpty(s));
+    }
+
+    /// <summary>
+    /// **外部启动受理接管落盘（§4.2a／B3）**：把 `external-start-ledger.json` 写成「已受理待执行」并**读回确认**——
+    /// 返回 null＝接管完成（门面才允许关闭 Submission）；返回原因＝接管未完成（保守待对账）。
+    /// 台账损坏/读取失败一律视为**未完成**（不推导空闲、不冒充成功）。
+    /// **如实限定**：`ConfirmRebuildable` 证明的是**本地记录可读回**；远端作业关联（jobId/受理词）尚未随台账落盘，
+    /// 故「远端关联可重建」未成立（登记为启用前置，见设计稿 §14）。
+    /// </summary>
+    private string? PersistExternalStartLedger(ExternalStartLedgerEntry entry)
+    {
+        var root = _admissionRoot ?? Directory.GetParent(_runsDirPath!)?.FullName ?? _runsDirPath!;
+        try
+        {
+            var ledger = new ExternalStartLedger(root);
+            var recorded = ledger.RecordAccepted(entry);
+            if (!recorded.Success)
+            {
+                // 诊断：指明缺哪个必填关联字段（写侧校验口径与台账读侧一致）。
+                var missing = new List<string>();
+                if (string.IsNullOrWhiteSpace(entry.SubmissionIdentity)) missing.Add("submissionIdentity");
+                if (entry.SendSeq < 1) missing.Add("sendSeq");
+                if (string.IsNullOrWhiteSpace(entry.CandidateId)) missing.Add("candidateId");
+                if (string.IsNullOrWhiteSpace(entry.ResourceRef)) missing.Add("resourceRef");
+                if (string.IsNullOrWhiteSpace(entry.ActionId)) missing.Add("actionId");
+                if (string.IsNullOrWhiteSpace(entry.TargetBgiEpoch)) missing.Add("targetBgiEpoch");
+                if (string.IsNullOrWhiteSpace(entry.EvidenceSource)) missing.Add("evidenceSource");
+                return "ledger_record_failed:" + (recorded.Reason ?? "unknown")
+                       + (missing.Count > 0 ? "（缺：" + string.Join(",", missing) + "）" : "");
+            }
+            return ledger.ConfirmRebuildable(entry.SubmissionIdentity, entry.SendSeq)
+                ? null
+                : "ledger_not_rebuildable";
+        }
+        catch (Exception ex)
+        {
+            return "ledger_exception:" + ex.GetType().Name;
+        }
+    }
+
+    /// <summary>
+    /// **外部启动发送分派（B3／§6.1）**：调用适配层既有启动实现一次，并把其结论映射为 `SendOutcome`。
+    /// 纪律：适配层异常一律 `Unknown`（**不得**凭异常推断未受理）；「确定未受理」只能由适配层给出关联验证后的结论。
+    /// </summary>
+    private static async Task<SendOutcome> DispatchExternalStartViaHostAsync(ExternalStartContext ext)
+    {
+        ExternalStartExecution execution;
+        try
+        {
+            execution = await ext.ExecuteAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // 启动期取消＝结果不可考（适配层可能已发出）——按 Unknown 保守对账，绝不折成确定拒绝。
+            return new SendOutcome.Unknown("external_start_cancelled_after_admission");
+        }
+        catch (Exception ex)
+        {
+            return new SendOutcome.Unknown("external_adapter_exception:" + ex.GetType().Name);
+        }
+
+        // 三态自守（会诊建议）：`Accepted=true 且 Uncertain=true` 是**矛盾结果**——不得按已受理放行，
+        // 按事实不可考处理（既不猜成功也不猜失败）。
+        if (execution.Accepted && execution.Uncertain)
+            return new SendOutcome.Unknown("external_adapter_contradictory_result");
+        if (execution.Accepted) return new SendOutcome.Accepted("external:adapter_accepted", null);
+        if (execution.Uncertain)
+            return new SendOutcome.Unknown("external_uncertain:" + (execution.RejectReason ?? ""));
+        return new SendOutcome.Rejected(execution.RejectReason ?? "external_rejected", false, "external:adapter");
     }
 
     /// <summary>

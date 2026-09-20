@@ -1565,3 +1565,42 @@ M1 的①—⑤与 §3.2「E1 发送前固定 candidateId→runId→首节点提
 > **与既有验收的关系**：G4a 的旁路已作废（现为**响亮拒绝**，不发送），且**节点提交改道由 §13.11a 的门关闭**——故本次提交**不改变生产节点提交行为**（仍为 R4 直通）。G4a 缺口本体（移交运行缺固定 Scope/绑定）登记为 **R5.8 入口覆盖验收的前置项**。
 
 > **§13.11a 第 3 步「路径启用」独立门（[新增·2026-09-21]）**：`_admissionWired` 只表示 E1/E2 入口已接线（生产构造恒 `true`）；**节点后继提交改道另设 `_successorAdmissionWired`，生产构造恒不传（＝`false`）**——即按 §12.3「施工阻断：第 3 步尚不得启用相关路径」，**代码就绪 ≠ 路径启用**。仅当 G1／G2／G4／G4a／G5／G6／G7／G8／G9／G10 逐条闭环，并完成 §12.3 末尾六类交错验收（①首节点抢先 ②发起者 A→获选者 B 错配 ③准备阶段故障 ④受理接管故障 ⑤连续超 32 节点 ⑥四类入口覆盖）后，才允许在后续批次由生产构造显式打开该门。
+
+
+## 14. B3 实施入档：外部启动准入（E3/E4/E5 ＋ external-start-ledger）（[新增·2026-09-21]）
+
+> **性质**：**实施入档**（§10「B3 CommandExecutor 接入」的落地记录）。**不改变** §1–§13 已冻结条款的效力。
+
+**已落地（第 1 步：宿主侧准入入口，代码就绪／适配器接线尚未启用）**
+
+> **生产影响如实声明**：CommandExecutor 的**直启路由未改**（适配器接线尚未启用）；但 **`CurrentArbitrationFacts` 已对全部生产准入（含 E1/E2）合并外部台账占用**——旧未终结记录、台账损坏或锁争用会新增拒绝。故本批**不得**表述为「生产行为完全不变」。
+
+- 新增端口 `ExternalStartAdmissionRequest`／`ExternalStartExecution`（`Services/TaskCenter/ExternalStartAdmission.cs`）：
+  适配器提供 §2.2 可信来源字段（namespace/workflowId/trigger/resourceRef/wireKey）与**实际启动执行委托**；
+  准入前不得产生任何启动副作用。
+- 宿主入口 `TaskCenterHost.SubmitExternalStartViaAdmissionAsync`：F11 先于租约 → **固定纪元守卫**（未知纪元不签发）
+  → §2.2 兼容候选（`{requestIdentity}` 由门面回填）→ 门面占位 → Sender 内调用适配层执行**恰好一次** → 三态对账。
+- Sender 分派 `DispatchExternalStartViaHostAsync`：适配层异常／启动期取消一律 `Unknown`（**不得**凭异常推断未受理）；
+  确定未受理只能由适配层给出**关联验证后**的结论。进程内上下文缺失＝`Unknown` 保守待对账且**不启动**（绝不退回直通启动）。
+
+- **受理接管台账**：`TakeoverPersist` **按权威操作类型**分流（会诊阻断处置——不得用 `entry.RunId` 是否为空判定：该字段来自回执/对账方而非持久化的操作类型）：`node:` ⇒ 节点完整发送身份关联验证（缺 runId 失败）；`flow:`/`run:` ⇒ 运行记录在册；**其他前缀（含 `group:`/`onedragon:`/`hotkey:` 与任何未列前缀）⇒ `external-start-ledger.json`**（**未知前缀不是保守拒绝**——按外部台账校验决定成败，登记为待收紧点）（`RecordAccepted` ＋ `ConfirmRebuildable`，§4.2a）。写失败＝接管未完成，Submission 保持未决（Reconciling）。
+- **§4.2a 准入读取规则（部分实现）**：当前 `CurrentArbitrationFacts` 合并 **BGI 快照 ∪ external-start-ledger 已受理未终结记录**；该合并对**事实接缝与生产事实面一律生效**；台账损坏/读取失败＝事实未知（不推导空闲）。**如实收窄**：本方法**未**读取运行台账，故「∪ 运行台账」尚未由本处实现；占用被压成布尔值，不足以区分 §6.2 的原生/托管占用与重试资格；旧未终结记录/损坏文件/锁争用会新增拒绝（合同要求的保守方向，但属可用性影响，读取原因未保留）。
+- **已知残余（登记为启用前置，不得据此签署外部启动生命周期已交付）**：
+  1. **固定纪元未贯穿执行**：入口捕获并只比较占位期纪元；分派给适配层的委托只拿到 `CancellationToken`，拿不到本轮 `TargetEpoch/submissionIdentity/sendSeq/actionId`——占位后切纪元仍可能按新纪元启动而台账记旧纪元。需传递本轮不可变授权上下文并由发送边界消费、验证固定目标（含 `AfterOccupyBeforeSend` 切纪元反例）。
+  2. **受理后的作业关联丢失**：端口的 `Accepted(jobId)` 未透传到台账/Operation（统一写成 `external:adapter_accepted`），故 `ConfirmRebuildable` 只证明**本地记录可读回**，未证明**远端作业关联可重建**。
+  3. **外部操作终局出口未建立**：`TakeoverTerminalConfirmed` 对无 RunBinding 的操作返回 false ⇒ 外部 Accepted Operation无法独立终局、持续占主槽位（与 G8 同类问题）。
+  4. **外部权威终态自动取得链路未建立**：本批未展示「自动取得外部权威终态 → 台账 `MarkTerminal`」的实现，夹具中的终局标记是**手工**调用（不证明该出口成立）。
+  5. 夹具证明范围：四条夹具证明**单次调用内**的执行一次、F11 零副作用、确定拒绝不写台账、台账未终结记录使占用成立；**未**覆盖并发/续用/异常/取消/重启零重发、空纪元零副作用、纪元变化、接管写失败、服务端读回失败、台账损坏、以及「`entry.RunId=null` 的节点操作不得走外部台账」这一阻断的反例（该阻断已由类型分流修复，反例待补）。
+- **验收夹具**（`TaskCenterExternalStartAdmissionTests`，施工方内置、owner 0 点击）：①受理全链（候选形状／
+  触发身份回填／固定纪元／执行恰好一次／台账含完整发送身份与 resourceRef 与纪元／Submission 关闭）；
+  ②F11 激活时不执行且无租约副作用；③适配层确定拒绝＝关闭 Submission 且**不写**台账；④台账未终结记录使
+  执行占用成立（快照为空也不失去意义）；标记终局后**相同参数的新操作**获准（**未**证明同身份续用）。
+
+**待办（第 2–4 步）**
+
+1. **CommandExecutor 接线**（E3 `start_group`／`start_oneclick`、E4 `hotkey_execute`、E5 全 start 类 opcode）：
+   经适配端口提交，开关**默认关闭**（未启用＝既有直启路径逐字不变；不得以「代码就绪」当路径启用）。
+2. **冲突策略无副作用解析**：抢占/suspend/等待配置写入等现有策略解析必须在**提交前**完成且不产生副作用；
+   与门面占位的次序须逐项界定（避免「先 suspend 后拒签」）。
+3. **适配层重试同身份**：重试复用同一 `requestIdentity`（`ContinueUse`），不得换身份重绑。
+4. E5b/E6 外部直连**排除项**与 R5.8 真实线路逐词证据保持原登记（不在本批范围）。
