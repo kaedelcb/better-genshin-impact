@@ -300,6 +300,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
             var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
             try
             {
+                Directory.CreateDirectory(m.SnapshotPath);   // **空配置根也须建立可验证快照目录**（否则基线完成后 VerifySnapshot 报 snapshot_missing）
                 foreach (var file in EnumerateFiles(_configRoot))
                 {
                     var rel = Rel(file, _configRoot);

@@ -791,6 +791,34 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         Assert.True(next.BeginTransaction("t2").Success, "基线中止后应可开启下一事务");
         next.Dispose();
     }
+    /// <summary>
+    /// **第 8 轮必改（空配置根）**：空基线也必须**可验证**（建立快照目录），否则基线完成后 `VerifySnapshot` 报
+    /// `snapshot_missing`、事务永久卡在 `Blocked`。断言：空根 ⇒ 快照成功 + 验证通过 + 重开可收敛（置 `RolledBack`）+
+    /// 可开启下一事务。
+    /// </summary>
+    [Fact]
+    public void EmptyConfigRoot_SnapshotVerifiable_RecoverableAndNextTransactionPossible()
+    {
+        // 空配置根（不 Seed 任何文件）
+        var tx = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () => new NoopQuiet());
+        Assert.True(tx.BeginTransaction("t1").Success);
+        var snap = tx.TakeSnapshot();
+        Assert.True(snap.Success, snap.Reason);
+        Assert.Equal("", tx.VerifySnapshot());                        // 空基线可验证（快照目录已建立）
+        Assert.True(tx.LoadManifest()!.BaselineCompleted);
+        tx.Dispose();
+
+        var probe = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () => new NoopQuiet());
+        Assert.True(probe.TryAcquireExclusive().Success);
+        Assert.True(probe.RecoverOnStart().Success);                   // 未提交 ⇒ 收敛
+        Assert.Equal(MigrationStage.RolledBack, probe.LoadManifest()!.Stage);
+        probe.Dispose();
+
+        var next = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () => new NoopQuiet());
+        Assert.True(next.TryAcquireExclusive().Success);
+        Assert.True(next.BeginTransaction("t2").Success);
+        next.Dispose();
+    }
     [Theory]
     [InlineData(MigrationStage.Snapshotting)]
     [InlineData(MigrationStage.SnapshotReady)]
