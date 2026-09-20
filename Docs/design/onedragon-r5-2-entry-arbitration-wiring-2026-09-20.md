@@ -1993,3 +1993,32 @@ M1 的①—⑤与 §3.2「E1 发送前固定 candidateId→runId→首节点提
 
 - **已落地**：kind 登记（3 个）＋**未接线即阻止执行的 fail-closed 门禁**（`RegisteredNotExecutable`）＋`WorkflowStrategy.GetInt`；`TaskCenterMechanismPolicy` 纯函数（结构性层级映射／节点级优先级／missPolicy 与错过处置／灵活型空闲与特殊原因／稳定身份兜底／到点水位）；夹具 `R54MechanismSchemaTests`（20 条：kind 登记、未接线阻止执行、fail-closed 检出、旧流程缺省不变、层级映射、节点级归一化、missPolicy 与跨多日错过与固定偏移、空闲矩阵、水位去重与回拨/前跳＋**纯函数（输入不被修改）**、身份兜底与拒绝）。
 - **残余（保留门禁，不得据本节签署「引擎已消费」）**：①**触发 kind → 候选的引擎消费接线**（tier／priority／scheduledAt 实际写入 `AdmissionRequest.Candidate`）与既有入口贯通；②水位与 `missPolicy` 的**持久化载体**（RunStore 字段与迁移）；③`trigger.timeFixed`／`trigger.timeFlexible` 的**参数 schema 与取值域**（at／window／missPolicy）及旧 `trigger.time` 的映射；④**地区时区／DST 语义**（现为固定偏移合同）；⑤真实入口贯通与实机（R5.8）。
+## 20. R5.5 入档：现存后台触发器收口（机制五a ＋ D1 挂账）（[新增·2026-09-21]）
+
+### 20.1 三类触发器界限（不得混称；§2④a-4）
+
+| 类别 | 载体 | 跨重启 | 现状 |
+|---|---|---|---|
+| **启动中心临时触发器**（定时 arm／电子狗／日志） | 进程内（`MistletoeViewModel.ArmedTimers/ArmedWatchdogs/ArmedLogTriggers`） | **不跨重启恢复**（进程级） | 既有实现；本批接入**统一台账** |
+| **任务中心根级触发器**（`trigger.time`／`trigger.timeFixed`／`trigger.timeFlexible`） | RunStore（持久化） | **可恢复**（D11 既有） | `trigger.time` 既有；新 kind 未接线（§19 残余） |
+| **节点伴随观察器**（机制五b） | —— | —— | **后置未实施**（合同已定案，见 R5 评审 §2④b） |
+
+### 20.2 台账三件套（所有权／挂载时刻／意图／撤销入口）
+
+- **实现**：`BackgroundTriggerLedger`（登记／查询／撤销／快照；**进程级、不持久化**——与「启动中心临时触发器不跨重启恢复」一致，进程退出后台账为空且无残留挂载）；VM 侧 `TriggerLedger` 与三个「已挂载」集合**同源同步**：加入 ⇒ 登记，移除 ⇒ 撤销（**自动收场/按天重排亦随实例移除同步撤销**）。
+- **所有权如实**：启动中心临时触发器**没有运行台账身份**（`StartupFlowConfig` 无 runId）⇒ 登记为「**启动链（进程级）＋节点身份**」（`startup-chain(process)/step:<id>`）；**不得**写成 task-center 触发出身身份。台账保留 `task-center-trigger`／`manual` 两类所有者常量供后续接入。
+- **撤销入口**：各「已挂载触发器」列表的「取消」按钮（或流程整体撤下）；台账另提供 `Revoke`／`RevokeAll` 供程序化撤销。
+- **证据**：`R55BackgroundTriggerLedgerTests`（7 条：登记/查询/撤销、幂等同标识不叠加、按挂载**实例**计数、`RevokeAll`、标识确定性、作用域界限、**VM 接线文本守卫**）。
+- **能力边界（如实）**：接线证据为**文本守卫**（源码含三个集合同步调用点），**不证明**运行期 arm／自动收场／取消三维行为（UI 装配夹具未建立）；台账是**登记与撤销的权威视图**，**不自行** arm/disarm。
+
+### 20.3 回溯边界维持（§2④a-2）
+
+R4.9 启动链终止**维持不回溯既有后台触发器**（既有行为不变）；台账提供**显式撤销**；F11/有界退出兜底不变——证据＝既有 R4.8/R4.9 夹具在本次全量回归中全绿（654→674 无新增失败）。
+
+### 20.4 动作准入（§2④a-3）——**本阶段未闭合，保留门禁**
+
+后台触发器触发的子链经 `StartupFlowRunner.RunAsync` → 本地命令／任务中心移交；启动类命令最终经 `CommandExecutor`，其 **E3/E4/E5 准入接线已具备**（`externalStartAdmission` 参数与 `StartXxxViaAdmissionAsync`），但**组合根尚未注入**该委托（§14／§17 已登记）。故**当前不能证明**「后台触发器产生的执行动作一律进统一仲裁面、无旁路」——**不得**据本节签署「无旁路」。与「外部启用门」同源，待组合根注入＋夹具后闭合。
+
+### 20.5 残余（保留门禁）
+
+①**动作准入接线**（组合根注入 `externalStartAdmission`）＋「无旁路」夹具；②台账的**运行期行为夹具**（UI 装配）；③任务中心根级触发器在本台账中的登记口径（现为 RunStore 持久化，**未纳入**进程级台账——不得混称）；④真实入口贯通与实机（R5.8）。

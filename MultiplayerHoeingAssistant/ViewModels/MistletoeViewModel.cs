@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.Runtime.CompilerServices;
 using System.Globalization;
 using System.Threading.Channels;
 using System.Windows;
@@ -47,9 +49,24 @@ public sealed class MistletoeViewModel : ViewModelBase
         _runner.NodeStateSink = OnNodeStateReported;
         RootChain = new StepChainViewModel(_config.Steps, this, parentCondition: null, branchName: "主流程");
         foreach (var s in _schemeStore.Load()) Schemes.Add(new SchemeItemViewModel(s));
-        ArmedTimers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasArmedTimers));
-        ArmedWatchdogs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasArmedWatchdogs));
-        ArmedLogTriggers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasArmedLogTriggers));
+        // R5.5／§2④a-1：统一触发器台账与「已挂载」集合**同源同步**——加入=登记，移除=撤销
+        // （撤销入口即各列表的「取消」按钮；自动收场/重排亦随实例移除同步撤销）。台账**进程级**
+        // （启动中心临时触发器不跨重启恢复，见 TriggerScope.ProcessEphemeral）。
+        ArmedTimers.CollectionChanged += (_, e) =>
+        {
+            SyncTriggerLedger("timer", e);
+            OnPropertyChanged(nameof(HasArmedTimers));
+        };
+        ArmedWatchdogs.CollectionChanged += (_, e) =>
+        {
+            SyncTriggerLedger("watchdog", e);
+            OnPropertyChanged(nameof(HasArmedWatchdogs));
+        };
+        ArmedLogTriggers.CollectionChanged += (_, e) =>
+        {
+            SyncTriggerLedger("log", e);
+            OnPropertyChanged(nameof(HasArmedLogTriggers));
+        };
 
         // R4.8 Batch D：任务中心面板（流程列表/保留式编辑/运行状态三卡；宿主由 MainViewModel 惰性创建，
         // 与 R4.9 启动移交共用同一实例；构造零文件副作用——目录首次写入才创建（二轮 重要2）；
@@ -728,6 +745,78 @@ public sealed class MistletoeViewModel : ViewModelBase
     /// <summary>当前定时中的触发器（运行态，不持久化；助手重启后需流程重跑才会重新挂载）。</summary>
     public ObservableCollection<ArmedTimerViewModel> ArmedTimers { get; } = [];
 
+    /// <summary>
+    /// **R5.5 统一后台触发器台账**（机制五a：所有权／挂载时刻／意图／撤销入口；可查可撤）。
+    /// **进程级**：与 `TriggerScope.ProcessEphemeral` 一致——进程退出后台账为空且无残留挂载。
+    /// </summary>
+    public BackgroundTriggerLedger TriggerLedger { get; } = new();
+
+    /// <summary>集合同步：加入 ⇒ 登记（按挂载**实例**计数），移除 ⇒ 撤销（幂等）。</summary>
+    private void SyncTriggerLedger(string kind, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems is { } added)
+            foreach (var item in added) RegisterArmedTrigger(kind, item);
+        if (e.OldItems is { } removed)
+            foreach (var item in removed) TriggerLedger.Revoke(TriggerIdOfArmed(kind, item));
+    }
+
+    private static StartupStep? ArmedStepOf(string kind, object? item) => kind switch
+    {
+        "timer" => (item as ArmedTimerViewModel)?.Step,
+        "watchdog" => (item as ArmedWatchdogViewModel)?.Step,
+        "log" => (item as ArmedLogTriggerViewModel)?.Step,
+        _ => null,
+    };
+
+    /// <summary>条目标识（同一节点**重复挂载**＝多条；实例哈希仅用于进程内区分，与本台账进程级语义一致）。</summary>
+    private static string TriggerIdOfArmed(string kind, object? item)
+        => BackgroundTriggerLedger.TriggerIdOf(kind, TriggerOwnerKinds.StartupChain,
+            OwnerRefOf(ArmedStepOf(kind, item)), kind + "#" + RuntimeHelpers.GetHashCode(item ?? kind));
+
+    /// <summary>
+    /// 所有权引用：启动中心临时触发器**没有运行台账身份**（`StartupFlowConfig` 无 runId），
+    /// 故如实登记为「启动链（进程级）＋节点身份」——**不得**写成 task-center 触发出身身份（那是另一类所有者）。
+    /// </summary>
+    internal static string OwnerRefOf(StartupStep? step)
+        => "startup-chain(process)/step:" + (step?.Id ?? "unknown");
+
+    private void RegisterArmedTrigger(string kind, object? item)
+    {
+        var step = ArmedStepOf(kind, item);
+        if (step is null) return;
+        var ownerRef = OwnerRefOf(step);
+        TriggerLedger.Register(new BackgroundTriggerEntry
+        {
+            TriggerId = BackgroundTriggerLedger.TriggerIdOf(kind, TriggerOwnerKinds.StartupChain, ownerRef,
+                kind + "#" + RuntimeHelpers.GetHashCode(item ?? kind)),
+            Kind = kind,
+            OwnerKind = TriggerOwnerKinds.StartupChain,
+            OwnerRef = ownerRef,
+            MountedAtUtc = DateTimeOffset.UtcNow,
+            Intent = IntentOfArmed(kind, step),
+            RevokeEntry = "流程视图「已挂载触发器」列表的「取消」按钮（或流程整体撤下）",
+            Scope = TriggerScope.ProcessEphemeral,
+        });
+    }
+
+    /// <summary>意图（人类可读：盯什么／成立时执行什么／是否循环——与挂载日志同口径）。</summary>
+    private static string IntentOfArmed(string kind, StartupStep step) => kind switch
+    {
+        "timer" => $"到点({step.TriggerTime})执行「到点执行」链（{step.FireSteps.Count} 节点{(step.RepeatDaily ? "，每天重复" : "")}）",
+        "watchdog" => $"盯「{WatchdogIntentDesc(step)}」成立时执行「触发执行」链（{step.FireSteps.Count} 节点，{(step.WatchRepeat ? "触发后继续循环" : "触发后停止")}）",
+        "log" => $"本机 BGI 新日志出现「{step.LogKeyword}」时执行「触发执行」链（{step.FireSteps.Count} 节点，{(step.WatchRepeat ? "循环触发" : "触发一次后停止")}）",
+        _ => "未知触发器",
+    };
+
+    private static string WatchdogIntentDesc(StartupStep step) => step.WatchKind switch
+    {
+        StartupStepKinds.BgiRunning => $"BGI 进程{(step.ExpectRunning ? "在跑" : "不在")}",
+        StartupStepKinds.GameRunning => $"游戏进程{(step.ExpectRunning ? "在跑" : "不在")}",
+        StartupStepKinds.ProcessRunning => $"进程 {step.ProcessName} {(step.ExpectRunning ? "存在" : "不存在")}",
+        StartupStepKinds.BgiTaskRunning => step.ExpectRunning ? "BGI 有任务在跑" : "BGI 空闲",
+        StartupStepKinds.BgiTaskName => $"当前任务名{(step.ExpectRunning ? "包含" : "不包含")}「{step.TaskName}」",
+        _ => step.WatchKind,
+    };
     public bool HasArmedTimers => ArmedTimers.Count > 0;
 
     /// <summary>定时触发器节点执行到此：校验参数后挂载定时器（Runner 注入的委托）。</summary>
