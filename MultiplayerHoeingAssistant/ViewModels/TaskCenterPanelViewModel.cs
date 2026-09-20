@@ -81,7 +81,7 @@ public sealed class TaskCenterPanelViewModel : ViewModelBase
         catch (Exception ex)
         {
             MigrationRehearsalSummary = "❌ 演练异常：" + ex.GetType().Name + ": " + ex.Message;
-            _log?.Invoke("[任务中心] 迁移演练异常：" + ex.Message);
+            try { _log?.Invoke("[任务中心] 迁移演练异常：" + ex.Message); } catch { }   // 日志异常不得穿透 UI 命令
         }
     });
 

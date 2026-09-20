@@ -189,6 +189,12 @@ public sealed partial class TaskCenterHost
     private string? _admissionRoot;
 
     /// <summary>
+    /// **真实 BGI User 配置根来源（仅演练隔离用）**：由组合根注入（生产＝BGI User 目录）。
+    /// **未注入 ⇒ 演练保守拒绝**（无法证明隔离时不得在可能位于 User 下的目录写演练产物）。
+    /// </summary>
+    internal Func<string?>? UserConfigRootProvider { get; set; }
+
+    /// <summary>
     /// 门面懒组装（所有权+§6.3 失联接管编排+每进程一次重启恢复；失败留 null 允许下次重试）。
     /// 接管编排=宿主职责（门面不自行接管）：TryAcquire held → LeaseTakeoverObserver 单调观察满 TTL 产出证据 →
     /// 证据获取（锁内复核）；TTL 内重启=等满观察期（单调钟，UTC 拨动不影响）——§6.3 唯一接管依据，不抄近道。
@@ -513,9 +519,23 @@ public sealed partial class TaskCenterHost
     public MigrationRehearsalReport RunMigrationRehearsal()
     {
         var root = _admissionRoot ?? Directory.GetParent(_runsDirPath ?? "")?.FullName ?? _runsDirPath ?? Path.GetTempPath();
-        var report = MigrationRehearsal.Run(Path.Combine(root, "migration-rehearsal"));
-        _log?.Invoke("[任务中心] 迁移演练：" + report.Summary
-                     + "（演练根：" + report.RehearsalRoot + "）");
+        var rehearsalRoot = Path.Combine(root, "migration-rehearsal");
+        var userRoot = UserConfigRootProvider?.Invoke();
+        if (string.IsNullOrWhiteSpace(userRoot))
+        {
+            // **保守拒绝**：无法证明与真实 User 目录隔离时，不得在可能位于 User 下的目录写演练产物。
+            var refusal = new MigrationRehearsalReport
+            {
+                Success = false,
+                RehearsalRoot = "",
+                Steps = [new MigrationRehearsalStep("独立根校验", false, "真实 User 配置根未知（未注入路径来源）——保守拒绝演练")],
+            };
+            TryLog("[任务中心] 迁移演练已拒绝：" + refusal.Summary);
+            return refusal;
+        }
+
+        var report = MigrationRehearsal.Run(rehearsalRoot, userConfigRoot: userRoot);
+        TryLog("[任务中心] 迁移演练：" + report.Summary + "（演练根：" + report.RehearsalRoot + "）");
         return report;
     }
     /// <summary>仲裁事实快照（接缝优先；生产=BGI 控制面快照——缺失即未知，不解释为空闲）。</summary>

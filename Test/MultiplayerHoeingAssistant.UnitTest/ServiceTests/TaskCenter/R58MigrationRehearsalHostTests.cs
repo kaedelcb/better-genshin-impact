@@ -27,6 +27,7 @@ public sealed class R58MigrationRehearsalHostTests : IDisposable
         var host = new TaskCenterHost(
             Path.Combine(_dir, "flows"), Path.Combine(_dir, "runs"), Path.Combine(_dir, "catalog.json"),
             () => null, () => true, () => null, logs.Add);
+        host.UserConfigRootProvider = () => Path.Combine(_dir, "real-user");   // 非重叠「真实 User 根」来源
 
         var report = host.RunMigrationRehearsal();
 
@@ -68,11 +69,54 @@ public sealed class R58MigrationRehearsalHostTests : IDisposable
         throw new InvalidOperationException("未能定位仓库根目录（UI 接线守卫需要源码路径）。");
     }
     [Fact]
+    public void HostEntry_UserRootUnknown_RefusesConservatively()
+    {
+        var host = new TaskCenterHost(
+            Path.Combine(_dir, "flows"), Path.Combine(_dir, "runs"), Path.Combine(_dir, "catalog.json"),
+            () => null, () => true, () => null);
+
+        var report = host.RunMigrationRehearsal();     // 未注入 User 根来源
+
+        Assert.False(report.Success);
+        Assert.Contains(report.Steps, s => s.Name == "独立根校验" && !s.Success);
+        Assert.False(Directory.Exists(Path.Combine(_dir, "migration-rehearsal")));   // 写入前拒绝
+    }
+
+    [Fact]
+    public void HostEntry_OverlappingUserRoot_RefusedBeforeAnyWrite()
+    {
+        var host = new TaskCenterHost(
+            Path.Combine(_dir, "flows"), Path.Combine(_dir, "runs"), Path.Combine(_dir, "catalog.json"),
+            () => null, () => true, () => null);
+        host.UserConfigRootProvider = () => _dir;      // 伪造「真实 User 根」＝包含助手数据根
+
+        var report = host.RunMigrationRehearsal();
+
+        Assert.False(report.Success);
+        Assert.Contains(report.Steps, s => s.Name == "独立根校验" && !s.Success);
+        Assert.False(Directory.Exists(Path.Combine(_dir, "migration-rehearsal")));   // 写入前拒绝
+    }
+
+    [Fact]
+    public void HostEntry_LogThrows_StillReturnsReport()
+    {
+        var host = new TaskCenterHost(
+            Path.Combine(_dir, "flows"), Path.Combine(_dir, "runs"), Path.Combine(_dir, "catalog.json"),
+            () => null, () => true, () => null, _ => throw new InvalidOperationException("日志抛错"));
+        host.UserConfigRootProvider = () => Path.Combine(_dir, "real-user");
+
+        var report = host.RunMigrationRehearsal();      // 日志异常不得吞掉报告
+
+        Assert.True(report.Success, report.Summary);
+        Assert.True(File.Exists(report.ManifestPath));
+    }
+    [Fact]
     public void HostEntry_RepeatedRuns_UseFreshIndependentRoots()
     {
         var host = new TaskCenterHost(
             Path.Combine(_dir, "flows"), Path.Combine(_dir, "runs"), Path.Combine(_dir, "catalog.json"),
             () => null, () => true, () => null);
+        host.UserConfigRootProvider = () => Path.Combine(_dir, "real-user");
 
         var first = host.RunMigrationRehearsal();
         var second = host.RunMigrationRehearsal();
