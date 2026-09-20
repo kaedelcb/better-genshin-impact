@@ -138,4 +138,17 @@ public sealed class CommandExecutorExternalStartAdmissionTests
         Assert.Equal("failed", result.Status);
         Assert.Equal("need_preempt_confirm", result.ErrorCode);
     }
+
+    /// <summary>
+    /// **B3 第 3 步（接线态的冲突纪律）**：既有路径对 BGI「task_already_running」无损拒绝做 1s×6 重试；
+    /// **接线态（获准后）一律 0 次**——每次重新发送都需要新的发送许可（§3.2a），盲目重发即「未准入即重发」。
+    /// **冲突后只停止本轮发送**：适配层把非 success 一律映射为 Unknown（待对账），
+    /// 故不得表述为「确定未受理／可直接重新准入」（责任结清证据与合法重新准入闭环仍待补）。
+    /// </summary>
+    [Fact]
+    public void ConflictRetryLimit_WiredPathHasZeroBlindRetries()
+    {
+        Assert.Equal(6, CommandExecutor.ConflictRetryLimit(allowLegacyRetry: true));  // 未接线＝既有语义
+        Assert.Equal(0, CommandExecutor.ConflictRetryLimit(allowLegacyRetry: false)); // 接线＝零盲目重发
+    }
 }

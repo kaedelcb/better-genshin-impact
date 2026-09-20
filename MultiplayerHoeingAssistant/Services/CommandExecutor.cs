@@ -64,6 +64,16 @@ public class CommandExecutor
     /// <summary>[任务策略] 6 键固定收尾策略：执行完停止（清除中断上下文，不恢复）。无 UI、无配置项。</summary>
     private static readonly TaskConflictPolicySettings FixedKeyPolicy = new();
 
+    /// <summary>
+    /// **冲突重试上限（R5.2 B3 第 3 步）**：既有路径对 BGI「task_already_running」无损拒绝做 1s×6 重试；
+    /// **接线态（获准后）一律 0 次**——每次重新发送都需要新的发送许可（§3.2a），盲目重发正是「未准入即重发」。
+    /// **冲突后只停止本轮发送**：当前适配层把非 success 一律映射为 Unknown（待对账），
+    /// 故**不得**表述为「确定未受理／可直接重新准入」——「上一轮确定未受理 + 责任结清」的证据链与合法重新准入闭环仍待补（见设计稿 §14）。
+    /// </summary>
+    private const int LegacyConflictRetryLimit = 6;
+
+    internal static int ConflictRetryLimit(bool allowLegacyRetry) => allowLegacyRetry ? LegacyConflictRetryLimit : 0;
+
     /// <summary>[弹窗竞态守卫] 在途 config.set_task_enabled 写入计数。
     /// 背景：OnRemoteCommand 是 Action 事件 async void 并发分发，弹窗下发的多条 set_task_enabled
     /// 与紧随的 start_group/start_oneclick 会并发执行，启动动作可能读到旧启用状态。
@@ -119,7 +129,7 @@ public class CommandExecutor
             trigger: "v2:remote:{requestIdentity}",
             sourceDetail: "v2:start_group",
             target: $"配置组「{groupName}」",
-            core: () => StartGroupCoreAsync(groupName, startFromIndex, generation, batchGroupNames))
+            core: () => StartGroupCoreAsync(groupName, startFromIndex, generation, batchGroupNames, allowPreemption: false))
             .ConfigureAwait(false);
 
     /// <summary>
@@ -136,7 +146,8 @@ public class CommandExecutor
             trigger: "v2:remote:{requestIdentity}",
             sourceDetail: "v2:start_oneclick",
             target: $"一条龙「{configName}」",
-            core: () => StartOneClickCoreAsync(configName, startFromTaskId, generation, batchGroupNamesRaw))
+            core: () => StartOneClickCoreAsync(configName, startFromTaskId, generation, batchGroupNamesRaw,
+                allowPreemption: false))
             .ConfigureAwait(false);
 
     /// <summary>
@@ -527,12 +538,15 @@ public class CommandExecutor
     /// **启动配置组核心（原直启主体，逐字节保留）**：从「按键门控/抢占」起到 v2 IPC 与裸拉起回退为止；
     /// 接线态下由统一仲裁面在**获准后**经 `ExecuteAsync` 回调本方法（≤1 次）。
     /// </summary>
-    private async Task<CommandResult> StartGroupCoreAsync(string groupName, int startFromIndex, int generation, List<string>? batchGroupNames)
+    private async Task<CommandResult> StartGroupCoreAsync(string groupName, int startFromIndex, int generation,
+        List<string>? batchGroupNames, bool allowPreemption = true)
     {
         // [任务策略] 按键门控（固定行为：立即执行 + 执行完停止，无配置项）。
         // 本机忙且无既有中断上下文时 suspend 抢占（强制 v2，跳过下方 ext 队列通道——队列语义与抢占冲突）；
         // 已有中断上下文（上线锄地批次进行中）不二次抢占，走原有无损拒绝；空闲直接走下方原路径。
-        if (await ShouldPreemptKeyPressAsync($"配置组「{groupName}」"))
+        // 接线态（allowPreemption=false）：**获准后不得追加抢占**——「安全交接/抢占确认」语义归 R5.3；
+        // 本层只做「获准即启动」，对端仍有任务在跑时由下方发送返回冲突（不盲目重发、不追加 suspend）。
+        if (allowPreemption && await ShouldPreemptKeyPressAsync($"配置组「{groupName}」"))
         {
             return await StartWithPreemptionAsync(FixedKeyPolicy, groupName, null, startFromIndex, generation);
         }
@@ -584,6 +598,19 @@ public class CommandExecutor
 
                 // [P2 仲裁] 杀/启收编到仲裁器：信号量串行 + 有意杀死抑制（防守护误判崩溃再拉无参实例）
                 // + 等进程真正退净后才拉起；杀不掉（提权）时返回 false，不假成功
+                // [R5.2 B3 第 3 步·会诊阻断处置] **接线态禁止裸拉起回退**：连接失败**不能证明**进程不存在或没有活任务，
+                // 杀启既会实际打断在跑任务、又会改变授权目标 epoch —— 与「获准后不得追加抢占」冲突。
+                // 冷启动归 R5.3（须带目标身份校验的独立流程）；此处保守失败（未发送、责任由准入层保持）。
+                if (!allowPreemption)
+                {
+                    ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] 接线态禁止裸拉起回退（IPC 不可达）groupName={groupName}");
+                    return new CommandResult
+                    {
+                        Status = "failed",
+                        ErrorCode = "cold_start_required",
+                        Message = $"配置组 {groupName} 未发送：BGI IPC 不可达，接线态禁止裸拉起回退（冷启动归 R5.3；未发送）",
+                    };
+                }
                 ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] IPC 不可达，回退裸拉起 BGI（不带执行参数）groupName={groupName}");
                 if (!await _monitor.RestartBgiControlledAsync(null, "IPC回退-裸拉起"))
                 {
@@ -606,7 +633,7 @@ public class CommandExecutor
                 // 多半是 suspend 后旧任务退场慢（任务锁未释放）。等 1s 重发，最多 6 次
                 // （与 suspend 5s 等锁 + 助手 P1-C 6s 轮询的总容忍对齐）。
                 // 幂等安全：BGI 侧 generation 幂等登记已移到拒绝检查之后，被拒请求不会污染去重状态。
-                for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
+                for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < ConflictRetryLimit(allowPreemption); retry++)
                 {
                     ProbeLog($"[CommandExecutor] task.start 被无损拒绝（任务运行中），1s 后重试（{retry + 1}/6）groupName={groupName}");
                     await Task.Delay(1000);
@@ -682,11 +709,12 @@ public class CommandExecutor
     /// 接线态下由统一仲裁面在**获准后**经 `ExecuteAsync` 回调本方法（≤1 次）。
     /// </summary>
     private async Task<CommandResult> StartOneClickCoreAsync(string configName, string? startFromTaskId, int generation,
-        string? batchGroupNamesRaw)
+        string? batchGroupNamesRaw, bool allowPreemption = true)
     {
         // [任务策略] 按键门控（同 StartGroupAsync，固定行为：立即执行 + 执行完停止）：
         // 本机忙且无既有中断上下文时 suspend 抢占强制 v2；已有中断上下文走无损拒绝；空闲走原路径。
-        if (await ShouldPreemptKeyPressAsync($"一条龙「{configName}」"))
+        // 接线态（allowPreemption=false）：同 StartGroupCoreAsync——获准后不得追加抢占（R5.3 语义）。
+        if (allowPreemption && await ShouldPreemptKeyPressAsync($"一条龙「{configName}」"))
         {
             // 抢占路径不透传批次名单（批次场景 MainViewModel 已先行 suspend，抢占极少命中批次项；
             // 不携带时 BGI 不跳过任何组，退化为老助手兼容行为，探针日志可观测）
@@ -735,6 +763,17 @@ public class CommandExecutor
                 }
 
                 // [P2 仲裁] 同 StartGroupAsync：收编到仲裁器（串行 + 抑制 + 等退净），杀不掉不假成功
+                // [R5.2 B3 第 3 步·会诊阻断处置] 同 StartGroupAsync：接线态禁止裸拉起回退（见上方说明）。
+                if (!allowPreemption)
+                {
+                    ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartOneClickAsync] 接线态禁止裸拉起回退（IPC 不可达）configName={configName}");
+                    return new CommandResult
+                    {
+                        Status = "failed",
+                        ErrorCode = "cold_start_required",
+                        Message = $"一条龙 {configName} 未发送：BGI IPC 不可达，接线态禁止裸拉起回退（冷启动归 R5.3；未发送）",
+                    };
+                }
                 ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartOneClickAsync] IPC 不可达，回退裸拉起 BGI（不带执行参数）configName={configName}");
                 if (!await _monitor.RestartBgiControlledAsync(null, "IPC回退-裸拉起"))
                 {
@@ -756,7 +795,7 @@ public class CommandExecutor
                     : System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(null, configName, 0, generation, startFromTaskId: startFromTaskId));
                 var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
                 // [无损拒绝适配 b5386005] 同 StartGroupAsync：业务拒绝（任务运行中）等锁重试，最多 6 次
-                for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
+                for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < ConflictRetryLimit(allowPreemption); retry++)
                 {
                     ProbeLog($"[CommandExecutor] task.start 被无损拒绝（任务运行中），1s 后重试（{retry + 1}/6）configName={configName}");
                     await Task.Delay(1000);
