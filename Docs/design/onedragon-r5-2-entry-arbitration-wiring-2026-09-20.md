@@ -453,7 +453,7 @@ B1 统一提交边界/B2 F11 与快照/B3 仲裁轮次/B4 范围裁决表/B5 恢
 
 **实施要点（三步，缺一不可）**：
 
-1. **拆分边界**：把 `BgiWorkflowExecutionBoundary.SubmitAsync` 拆为「本地校验+身份冻结」（可重复调用、无发送副作用）与「锁外发送+不确定对账」两段，使发送段可被仲裁面当作 Sender 回调调用，而不重复冻结/重复落盘。
+1. **拆分边界**：把 `BgiWorkflowExecutionBoundary.SubmitAsync` 拆为「本地校验+身份冻结」（无远端副作用）与「锁外发送+不确定对账」两段，使发送段可被仲裁面当作 Sender 回调调用，而不重复冻结/重复落盘。**注意：准备段不是幂等可重复的**——首次成功即把 `Intent` 置为 `Submitted`，再次准备必被「意图身份校验」拒绝；每笔提交只准备一次。
 2. **适配器装饰器**：新增 `ArbitrationWorkflowExecutionBoundary`（`IWorkflowExecutionBoundary` 其余成员一律委托 inner），其 `SubmitAsync` 构造后继候选后经门面提交。
    **I-1 的正确含义（勿误读）**：I-1 指 **`scope` 的 bgiEpoch 在首次构造时捕获并固定、之后只比较不重写**（§2.2/I-1）——因此后继候选的 `Scope` 必须**继承该 runBinding 已登记启动操作的 `Candidate.Scope`**（即首次提交固定下来的 epoch），**不得在提交时用 `CurrentBgiEpoch()` 重新读取**；epoch 变化一律走拒绝或对账。§2.2「首次节点提交身份继承（I-1）」指的正是这条，**不是**继承 `TriggerOccurrenceId`。
    其余段：`Namespace=successor`、`WorkflowId`、`TriggerOccurrenceId`＝本次后继提交自身的稳定来源身份（不得重造已有操作的触发身份）、`RunId=run.RunId`（同 run 后继继承 runId 段）、`NodeId/Occurrence/LoopIteration/Attempt`＝出现身份与 `submission.Attempt`、`ResourceRef`＝节点资源引用、`Intent=start`、`CursorRef/CursorRevision`＝运行台账**合法游标**（§3.2 授权）。
@@ -470,7 +470,7 @@ B1 统一提交边界/B2 F11 与快照/B3 仲裁轮次/B4 范围裁决表/B5 恢
 **第 2/3 步的架构决定（已定，照此实现，勿再摇摆）**：
 
 - **冻结只发生一次、且发生在 sender 内**：装饰器**不**预先 `PrepareSubmit`（否则与门面「占位→锁外发送」次序冲突、并产生载荷在门面登记前就落盘的窗口）。正确次序＝装饰器构造候选 → 门面 `SubmitAsync`（锁内占位）→ 门面 Sender 回调（宿主 `DispatchViaHostAsync` 的节点分支）内执行 `PrepareSubmit + SendPreparedAsync` → 结果回传门面三态对账。
-- **跨层只需回传 jobId**：`SendOutcome.Accepted` 不带 BGI jobId，而 Runner 的 `BoundarySubmitResult.Accepted` 需要它。做法＝宿主在 sender 内把该次发送的 `BoundarySubmitResult` 暂存到以「`runId|nodeId|occurrence|loopIteration|attempt`」为键的并发字典，装饰器在门面返回后按键取出并映射；取不到即 `Unknown`（不猜成功）。
+- **跨层结果回传**：`SendOutcome.Accepted` 不带 BGI jobId，而 Runner 的 `BoundarySubmitResult.Accepted` 需要它。**键必须含完整发送关联**（至少 `submissionIdentity + sendSeq`，业务身份 `runId|nodeId|occurrence|loopIteration|attempt` 单独不足以区分同业务 attempt 的多个 sendSeq，见 §3.3）；结果写入后不得被迟到轮次覆盖；合并调用者共享读取（不得用 `TryRemove` 让其一无谓降级）；**装饰器先尊重门面权威结论、再补充匹配的 jobId**；字典丢失只损失即时返回信息（恢复仍从持久化记录取证）。取不到即 `Unknown`。**另须明确「门面关闭 Submission 之前由谁持久化正常受理的 jobId」**（正常受理路径当前只返回 jobId、不落盘；见 §12.1 阻断-3）。
 - **节点对象来源**：sender 内从 `RunStore` 取 run、从流程快照按 `candidate.NodeId` 取节点，与候选三段共同重建 `WorkflowNodeOccurrence`；**不得**依赖 Runner 侧内存对象（跨线程/跨恢复都不可靠）。
 
 ### 12.1 过程会诊（ASTRA，2026-09-20）发现与强制合同

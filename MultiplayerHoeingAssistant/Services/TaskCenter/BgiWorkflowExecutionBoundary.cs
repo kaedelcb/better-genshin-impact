@@ -30,8 +30,9 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     /// <summary>
     /// 冻结提交（R5.2 B2-γ 边界拆分产物）：第 1 段产出的「身份已冻结、可发送」载荷；
     /// 或可证实未受理的拒绝（此时其余字段为 null）。
-    /// **封闭构造**：只能经 <see cref="Ok"/> / <see cref="No"/> 产生，杜绝「拒绝对象被送去发送」
-    /// 或「字段残缺的成功对象」这两类误用（会诊阻断项 1）。
+    /// **封闭构造**：两个工厂均为私有，唯一签发面＝本边界准备段——杜绝「拒绝对象被送去发送」与
+    /// 「同一冻结载荷被重新包装后重复发送」两类误用（会诊阻断项 1 + 复核反例）。
+    /// 注：非空参数声明不构成运行时校验，`Ok` 仍可传 null；「字段残缺对象不被发送」由发送段入口承担。
     /// </summary>
     internal sealed class PreparedSubmit
     {
@@ -50,17 +51,31 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         public object? Payload { get; }
         public BoundarySubmitResult? Rejection { get; }
 
-        /// <summary>构造可证实未受理的拒绝结果（第 1 段未通过时唯一出口）。</summary>
-        public static PreparedSubmit No(BoundarySubmitResult rejection) => new(null, null, null, rejection);
+        /// <summary>
+        /// 构造可证实未受理的拒绝结果（第 1 段未通过时唯一出口）。
+        /// </summary>
+        internal static PreparedSubmit No(BoundarySubmitResult rejection) => new(null, null, null, rejection);
 
         /// <summary>构造可发送的冻结载荷（仅第 1 段全部校验通过时可达）。</summary>
-        public static PreparedSubmit Ok(WorkflowRunRecord run, WorkflowSubmission submission, object payload)
+        internal static PreparedSubmit Ok(WorkflowRunRecord run, WorkflowSubmission submission, object payload)
             => new(run, submission, payload, null);
 
         /// <summary>
         /// 一次性消费护栏（仅防**进程内重复调用**；持久化的发送授权责任仍在门面，绝不由本护栏替代）。
+        /// **消费状态绑定到底层冻结凭据（WorkflowSubmission 实例）而非本包装实例**——否则调用方可把同一
+        /// 载荷重新包装成新实例（计数从零）而绕过护栏（会诊复核反例）。同一次业务提交每次只有一份
+        /// submission 对象，重试由引擎签发新对象，故不误伤合法重试。
         /// </summary>
-        public bool TryConsume() => Interlocked.CompareExchange(ref _consumed, 1, 0) == 0;
+        public bool TryConsume()
+        {
+            if (Submission is not { } submission) return false;      // 拒绝对象无凭据：发送段在此之前已返回
+            if (!_consumedSubmissions.TryAdd(submission, submission)) return false;
+            Interlocked.Exchange(ref _consumed, 1);
+            return true;
+        }
+
+        /// <summary>进程内「已消费的冻结凭据」登记（弱引用表：不阻止 submission 被回收）。</summary>
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<WorkflowSubmission, WorkflowSubmission> _consumedSubmissions = new();
     }
 
     private static readonly TimeSpan ExpireWindow = TimeSpan.FromMinutes(10);
@@ -134,22 +149,26 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         var epoch = _port.ServerEpoch;
         if (epoch is null)
             return PreparedSubmit.No(BoundarySubmitResult.Rejected("BGI 进程纪元未知（严格合同要求 bgiEpoch；未发送）"));
+        // 会诊复核：纪元标量一次性捕获——比较文本、持久化 epoch、线协议载荷必须来自同一组值，
+        // 否则「比较通过后纪元对象被原地改写」会让三者不一致（不得依赖纪元对象不可变这一未证前提）。
+        var epochProcessId = epoch.ProcessId;
+        var epochStartTicks = epoch.StartTicksUtc;
         // 会诊阻断项 2：接线态下本段在门面「锁内占位」之后、锁外发送之前执行。若期间连接切到新纪元，
         // 冻结新纪元会让「服务端执行对象」与「门面授权对象」不一致。故携带本轮授权的固定目标 epoch 比对：
         // 不一致一律可证实未发送地拒绝（绝不把新 epoch 写进旧授权对应的发送身份）。
-        var epochText = $"{epoch.ProcessId}:{epoch.StartTicksUtc}";
+        var epochText = $"{epochProcessId}:{epochStartTicks}";
         if (authorizedEpoch is not null && !string.Equals(epochText, authorizedEpoch, StringComparison.Ordinal))
             return PreparedSubmit.No(BoundarySubmitResult.Rejected("授权目标纪元与本机当前纪元不一致（stale_epoch；未发送）"));
 
         // 3) 冻结：纪元/有效期/指纹 → Intent=Submitted + SendAttempted 落盘（即将发送事实；此后缺 jobId ≠ 未发送）
-        submission.Epoch = $"{epoch.ProcessId}:{epoch.StartTicksUtc}";
+        submission.Epoch = epochText;
         submission.ExpiresAtUtc = DateTimeOffset.UtcNow.Add(ExpireWindow).ToString("O");
         var payload = new
         {
             executionContractVersion = 1,
             idempotencyKey = submission.Key,
             expiresAtUtc = submission.ExpiresAtUtc,
-            bgiEpoch = new { processId = epoch.ProcessId, startTicksUtc = epoch.StartTicksUtc },
+            bgiEpoch = new { processId = epochProcessId, startTicksUtc = epochStartTicks },
             workflowRunId = run.WireRunId,
             nodeId = occurrence.NodeId,
             iteration = occurrence.LoopIteration,

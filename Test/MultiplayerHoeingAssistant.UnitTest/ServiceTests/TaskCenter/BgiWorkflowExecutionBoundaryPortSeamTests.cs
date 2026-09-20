@@ -267,4 +267,87 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         Assert.Null(prepared.Rejection);
         Assert.Empty(port.Sends);
     }
+
+    // ── 11. 会诊复核反例处置：同一冻结载荷**并发**消费 → 全链仍只发送一次 ──
+
+    [Fact]
+    public async Task SendPrepared_ConcurrentConsumption_SendsExactlyOnce()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true));
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 8)
+            .Select(_ => Task.Run(() => boundary.SendPreparedAsync(prepared, default))));
+
+        Assert.Single(port.Sends); // 并发下仍恰好一次
+        Assert.Single(results.Where(r => r.Accepted)); // 恰一胜者
+        Assert.Equal(7, results.Count(r => r.Uncertain)); // 其余响亮未知，不重发
+    }
+
+    // ── 12. 会诊复核要求：纪元不符时必须**在冻结之前**拒绝（内存与持久化冻结字段均不变）──
+
+    [Fact]
+    public void PrepareSubmit_AuthorizedEpochMismatch_DoesNotFreezeOrPersist()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+
+        var prepared = boundary.PrepareSubmit(
+            new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true),
+            authorizedEpoch: "9999:111111111111111111");
+
+        Assert.NotNull(prepared.Rejection);
+        Assert.Null(prepared.Run);                       // 未产出可发送载荷
+        Assert.Null(run.CurrentSubmission!.Epoch);       // 内存未冻结
+        Assert.False(run.CurrentSubmission.SendAttempted);
+        Assert.Equal(SubmitIntentState.IntentRecorded, run.CurrentSubmission.Intent);
+        var persisted = _runs.Load(run.RunId)!;          // 持久化亦未冻结
+        Assert.Null(persisted.CurrentSubmission!.Epoch);
+        Assert.False(persisted.CurrentSubmission.SendAttempted);
+    }
+
+    // ── 13. 会诊复核要求：纪元一致时，实际发送载荷必须携带**授权纪元**（同组标量一致）──
+
+    [Fact]
+    public async Task SendPrepared_AuthorizedEpochMatch_PayloadCarriesAuthorizedEpoch()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var prepared = boundary.PrepareSubmit(
+            new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true),
+            authorizedEpoch: "4321:638999999999999999");
+
+        var result = await boundary.SendPreparedAsync(prepared, default);
+
+        Assert.True(result.Accepted);
+        var send = Assert.Single(port.Sends);
+        Assert.Contains("\"processId\":4321", send.PayloadJson);
+        Assert.Contains("\"startTicksUtc\":638999999999999999", send.PayloadJson);
+        Assert.Equal("4321:638999999999999999", _runs.Load(run.RunId)!.CurrentSubmission!.Epoch); // 持久化同一组值
+    }
+
+    // ── 14. 会诊复核反例：把同一冻结载荷**重新包装**成新实例 → 仍不得二次发送 ──
+    // 消费状态绑定在冻结凭据（WorkflowSubmission 实例）上，而不是包装实例上——因此重新包装不重置护栏。
+
+    [Fact]
+    public async Task SendPrepared_RewrappedSamePayload_StillSendsOnlyOnce()
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var first = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true));
+        // 会诊反例的构造方式（现在仍可表达）：同凭据、同载荷，但换一个新的包装实例。
+        var rewrapped = BgiWorkflowExecutionBoundary.PreparedSubmit.Ok(first.Run!, first.Submission!, first.Payload!);
+
+        var r1 = await boundary.SendPreparedAsync(first, default);
+        var r2 = await boundary.SendPreparedAsync(rewrapped, default);
+
+        Assert.True(r1.Accepted);
+        Assert.True(r2.Uncertain); // 凭据已消费：响亮未知，不重发
+        Assert.Single(port.Sends);
+    }
 }
