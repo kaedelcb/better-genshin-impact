@@ -165,7 +165,7 @@ public class R54MechanismSchemaTests
     /// ④水位**单调**（重复消费不倒退）。
     /// </summary>
     [Fact]
-    public void FireDedup_WatermarkMonotonic_RollbackNoReplay_ForwardJumpNoBackfill()
+    public void FireDedup_WatermarkMonotonic_RollbackNoReplay_ExpiredRoundsSuppressed()
     {
         var occurrence = "wf-1|occ:trigger-2026-09-21";
         var t1 = new DateTimeOffset(2026, 9, 21, 4, 0, 0, TimeSpan.FromHours(8));
