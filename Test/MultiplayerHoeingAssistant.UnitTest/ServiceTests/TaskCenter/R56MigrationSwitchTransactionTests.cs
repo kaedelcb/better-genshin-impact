@@ -125,12 +125,7 @@ public sealed class R56MigrationSwitchTransactionTests : IDisposable
         Seed("a.json", "{\"v\":1}");
         using var tx = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, quiesce: null, requireQuiescence: true);
         Assert.True(tx.BeginTransaction("t1").Success);
-        Assert.True(tx.TakeSnapshot().Success);
-        Assert.True(tx.RecordChanges([new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified }]).Success);
-        tx.MarkReferenceUpdateCompleted();
-        tx.MarkActivated();
-        tx.RehearseRollback();
-        Assert.Equal("no_quiescence_window", tx.Commit().Reason);
+        Assert.Equal("no_quiescence_window", tx.TakeSnapshot().Reason);   // 采集期即须有存续窗口（不得事后补资格）
     }
 
     [Fact]
@@ -661,6 +656,71 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         File.WriteAllText(tx.ManifestPath + ".tmp", "{ half-written");      // 模拟半写残件
         Assert.NotNull(tx.LoadValidated());
         Assert.True(tx.AuthorizeProductionExecution().Success);
+    }
+    /// <summary>
+    /// **第 5 轮必改⑥之一（逐文件恢复中断）**：回滚在**恢复第二个文件后**中断 ⇒ 配置根处于**混合态**且事务 `Blocked`；
+    /// 重开实例 `RecoverOnStart` 必须收敛为**完整旧态**（两文件均恢复原字节）。
+    /// </summary>
+    [Fact]
+    public void Recovery_AfterPartialRestoreInterruption_ConvergesToCompleteOldState()
+    {
+        Seed("a.json", "{\"v\":1}");
+        Seed("b.json", "{\"w\":1}");
+        var originalA = HashOf(Full("a.json"));
+        var originalB = HashOf(Full("b.json"));
+        var restored = 0;
+        var tx = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () => new NoopQuiet(), true,
+            stageHook: null, fileRestoredHook: _ =>
+            {
+                if (++restored == 2) throw new InvalidOperationException("模拟第二个文件恢复后中断");   // 混合态
+            });
+        tx.BeginTransaction("t1");
+        tx.TakeSnapshot();
+        Assert.True(tx.RecordChanges([
+            new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified },
+            new ChangeRecord { Path = "b.json", Kind = ChangeKind.Modified },
+        ]).Success);
+        tx.MarkReferenceUpdateCompleted();
+        tx.MarkActivated();
+        tx.RehearseRollback();
+        Assert.True(tx.Commit().Success);
+
+        Seed("a.json", "{\"v\":2}");     // 事务期改动（真实新内容）
+        Seed("b.json", "{\"w\":2}");
+        var rb = tx.Rollback();
+        Assert.False(rb.Success);                                        // 中断 ⇒ 失败
+        Assert.Equal(MigrationStage.Blocked, tx.LoadManifest()!.Stage);
+        tx.Dispose();
+
+        var probe = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () => new NoopQuiet());
+        Assert.True(probe.TryAcquireExclusive().Success);
+        Assert.True(probe.RecoverOnStart().Success);
+        Assert.Equal(MigrationStage.RolledBack, probe.LoadManifest()!.Stage);
+        Assert.Equal(originalA, HashOf(Full("a.json")));                 // 完整旧态（含中断前已恢复者）
+        Assert.Equal(originalB, HashOf(Full("b.json")));
+        probe.Dispose();
+    }
+
+    /// <summary>**第 5 轮必改⑥之二（真实新态 + 重开实例）**：已提交并产生真实新内容后重开 ⇒ 保持完整新态且可执行。</summary>
+    [Fact]
+    public void Recovery_CommittedWithRealNewContent_ReopenKeepsNewState()
+    {
+        Seed("a.json", "{\"v\":1}");
+        var tx = Activated(changes: [new ChangeRecord { Path = "a.json", Kind = ChangeKind.Modified }]);
+        tx.RehearseRollback();
+        Assert.True(tx.Commit().Success);
+        Seed("a.json", "{\"v\":2}");                                     // 真实新内容
+        var newHash = HashOf(Full("a.json"));
+        tx.Dispose();
+
+        var probe = new MigrationSwitchTransaction(_configRoot, _txRoot, () => Now, () => new NoopQuiet());
+        Assert.True(probe.TryAcquireExclusive().Success);
+        var rec = probe.RecoverOnStart();
+        Assert.True(rec.Success);
+        Assert.Equal(MigrationStage.Committed, rec.Stage);
+        Assert.Equal(newHash, HashOf(Full("a.json")));                   // 不得回滚新态
+        Assert.True(probe.AuthorizeProductionExecution().Success);
+        probe.Dispose();
     }
     [Theory]
     [InlineData(MigrationStage.Snapshotting)]

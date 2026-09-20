@@ -89,6 +89,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
     private readonly Func<IDisposable>? _quiesce;
     private readonly bool _requireQuiescence;
     private readonly Action<MigrationStage>? _stageHook;
+    private readonly Action<string>? _fileRestoredHook;
     private readonly object _sync = new();
     private readonly string _sessionId = Guid.NewGuid().ToString("N");
     private FileStream? _lock;
@@ -97,7 +98,8 @@ public sealed class MigrationSwitchTransaction : IDisposable
     private int _quietGeneration;
 
     public MigrationSwitchTransaction(string configRoot, string transactionRoot, Func<DateTimeOffset>? utcNow = null,
-        Func<IDisposable>? quiesce = null, bool requireQuiescence = true, Action<MigrationStage>? stageHook = null)
+        Func<IDisposable>? quiesce = null, bool requireQuiescence = true, Action<MigrationStage>? stageHook = null,
+        Action<string>? fileRestoredHook = null)
     {
         _configRoot = Path.GetFullPath(configRoot ?? throw new ArgumentNullException(nameof(configRoot)));
         _transactionRoot = Path.GetFullPath(transactionRoot ?? throw new ArgumentNullException(nameof(transactionRoot)));
@@ -105,6 +107,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
         _quiesce = quiesce;
         _requireQuiescence = requireQuiescence;
         _stageHook = stageHook;
+        _fileRestoredHook = fileRestoredHook;   // 夹具接缝：逐文件恢复后回调（生产=null）
         ValidateRoots();
     }
 
@@ -288,6 +291,8 @@ public sealed class MigrationSwitchTransaction : IDisposable
             if (m is null) return MigrationResult.Fail("manifest_missing_or_invalid", MigrationStage.None);
             if (!HoldsExclusiveLock) return MigrationResult.Fail("lock_not_held", m.Stage);
             if (m.Stage != MigrationStage.Snapshotting) return MigrationResult.Fail("illegal_stage:" + m.Stage, m.Stage);
+            if (_requireQuiescence && (!_quietValid || _quiet is null))
+                return MigrationResult.Fail("no_quiescence_window", m.Stage);   // 采集期须有**存续**窗口（重开实例不得续用旧资格）
             if (!Directory.Exists(_configRoot)) return MigrationResult.Fail("config_root_missing", m.Stage);
 
             var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -345,8 +350,9 @@ public sealed class MigrationSwitchTransaction : IDisposable
             foreach (var c in changes ?? [])
             {
                 if (c is null) return MigrationResult.Fail("null_change_record", m.Stage);
-                var path = (c.Path ?? "").Replace('\\', '/').Trim();
-                if (!IsSafeRelativePath(path)) return MigrationResult.Fail("unsafe_path:" + c.Path, m.Stage);
+                var raw = c.Path ?? "";
+                if (!IsSafeRelativePath(raw)) return MigrationResult.Fail("unsafe_path:" + raw, m.Stage);   // **先验原始输入**
+                var path = NormalizePath(raw);                                                             // 再统一解析（**不裁剪**）
                 if (batch.Any(x => PathKey(x.Path) == PathKey(path)))
                     return MigrationResult.Fail("duplicate_change_path:" + path, m.Stage);
                 var inSnapshot = TryGetHashCaseInsensitive(m.FileHashes, path, out _);
@@ -601,15 +607,26 @@ public sealed class MigrationSwitchTransaction : IDisposable
             return "snapshot_manifest_hash_mismatch";
         if (!Directory.Exists(m.SnapshotPath)) return "snapshot_missing";
 
-        var onDisk = EnumerateFiles(m.SnapshotPath).Select(f => Rel(f, m.SnapshotPath)).ToHashSet(StringComparer.Ordinal);
+        List<string> onDisk;
+        try { onDisk = EnumerateFilesSafe(m.SnapshotPath); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return "snapshot_enumeration_failed:" + ex.GetType().Name;      // 读端链接/IO 失败 ⇒ 验证失败（不继续读）
+        }
         foreach (var extra in onDisk.Where(f => !m.FileHashes.ContainsKey(f)).OrderBy(f => f, StringComparer.Ordinal))
             return "snapshot_untracked_file:" + extra;
         foreach (var p in m.FileHashes.OrderBy(p => p.Key, StringComparer.Ordinal))
         {
-            var target = Path.Combine(m.SnapshotPath, p.Key.Replace('/', Path.DirectorySeparatorChar));
+            if (!IsSafeTarget(m.SnapshotPath, p.Key)) return "snapshot_unsafe_target:" + p.Key;   // **读端**同样拒绝链接逃逸
+            var target = Path.Combine(m.SnapshotPath, NormalizePath(p.Key).Replace('/', Path.DirectorySeparatorChar));
             if (!File.Exists(target)) return "snapshot_file_missing:" + p.Key;
-            if (!string.Equals(Sha256Hex(File.ReadAllBytes(target)), p.Value, StringComparison.Ordinal))
-                return "snapshot_hash_mismatch:" + p.Key;
+            string hash;
+            try { hash = Sha256Hex(File.ReadAllBytes(target)); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                return "snapshot_read_failed:" + p.Key;
+            }
+            if (!string.Equals(hash, p.Value, StringComparison.Ordinal)) return "snapshot_hash_mismatch:" + p.Key;
         }
         return "";
     }
@@ -644,7 +661,8 @@ public sealed class MigrationSwitchTransaction : IDisposable
         if (!IsSafeTransactionId(m.TransactionId)) return false;
         if (!string.Equals(m.ConfigRoot, _configRoot, StringComparison.OrdinalIgnoreCase)) return false;
         if (string.IsNullOrWhiteSpace(m.SnapshotPath) || string.IsNullOrWhiteSpace(m.RollbackEntry)) return false;  // 先验空值，避免 GetFullPath 抛异常
-        if (string.IsNullOrWhiteSpace(m.SnapshotId)) return false;                                                  // 快照身份必填
+        if (m.SnapshotId is not { Length: 32 }) return false;                                                       // 快照身份必填且格式固定
+        foreach (var ch in m.SnapshotId) if (!Uri.IsHexDigit(ch)) return false;                                     // 仅 32 位十六进制（无分隔符/..）
         var expectedSnapshot = SnapshotPathOf(m.TransactionId, m.SnapshotId);
         if (!string.Equals(Path.GetFullPath(m.SnapshotPath ?? ""), Path.GetFullPath(expectedSnapshot), StringComparison.OrdinalIgnoreCase))
             return false;                                                                                            // **精确**绑定本事务快照（非前缀判定）
@@ -751,7 +769,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
         _stageHook?.Invoke(manifest.Stage);
     }
 
-    private static void RestoreFromSnapshot(MigrationManifest m, string targetRoot)
+    private void RestoreFromSnapshot(MigrationManifest m, string targetRoot)
     {
         foreach (var rel in m.FileHashes.Keys)
         {
@@ -761,6 +779,9 @@ public sealed class MigrationSwitchTransaction : IDisposable
             var target = Path.Combine(targetRoot, rel.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             File.WriteAllBytes(target, File.ReadAllBytes(source));
+            if (string.Equals(Path.GetFullPath(targetRoot).TrimEnd(Path.DirectorySeparatorChar),
+                    _configRoot.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+                _fileRestoredHook?.Invoke(rel);   // 恢复中断注入点（**仅真实配置根**；演练副本不触发）
         }
     }
 
@@ -774,8 +795,10 @@ public sealed class MigrationSwitchTransaction : IDisposable
         foreach (var c in m.ChangedFiles.Where(c => c.Kind == ChangeKind.Added))
         {
             if (!IsSafeTarget(targetRoot, c.Path)) { failed++; continue; }
-            var target = Path.Combine(targetRoot, c.Path.Replace('/', Path.DirectorySeparatorChar));
-            try { if (File.Exists(target)) File.Delete(target); }
+            var target = Path.Combine(targetRoot, NormalizePath(c.Path).Replace('/', Path.DirectorySeparatorChar));
+            if (Directory.Exists(target)) { failed++; continue; }     // 期望文件却出现目录/目录链接 ⇒ 不得递归删除，计为未完成
+            if (!File.Exists(target)) continue;                       // 确认不存在 ⇒ 无需删除
+            try { File.Delete(target); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failed++; }
         }
         return failed;
@@ -809,6 +832,34 @@ public sealed class MigrationSwitchTransaction : IDisposable
     }
 
     private static IEnumerable<string> EnumerateFiles(string root) => Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories);
+
+    /// <summary>安全枚举（**先拒绝重解析点再进入子目录**）；用于快照验证读端。</summary>
+    private static List<string> EnumerateFilesSafe(string root)
+    {
+        var rootFull = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
+        var result = new List<string>();
+        var pending = new Stack<string>();
+        pending.Push(rootFull);
+        while (pending.Count > 0)
+        {
+            var dir = pending.Pop();
+            if (new DirectoryInfo(dir).Attributes.HasFlag(FileAttributes.ReparsePoint))
+                throw new InvalidOperationException("snapshot_dir_reparse_point:" + dir);
+            foreach (var sub in Directory.EnumerateDirectories(dir))
+            {
+                if (new DirectoryInfo(sub).Attributes.HasFlag(FileAttributes.ReparsePoint))
+                    throw new InvalidOperationException("snapshot_dir_reparse_point:" + sub);
+                pending.Push(sub);
+            }
+            foreach (var f in Directory.EnumerateFiles(dir))
+            {
+                if (File.GetAttributes(f).HasFlag(FileAttributes.ReparsePoint))
+                    throw new InvalidOperationException("snapshot_file_reparse_point:" + f);
+                result.Add(Rel(f, root));
+            }
+        }
+        return result;
+    }
     private static string Rel(string file, string root) => Path.GetRelativePath(root, file).Replace('\\', '/');
     private static string Sha256Hex(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
