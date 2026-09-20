@@ -1538,4 +1538,80 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal("internal_error", redrive.ReasonCode);
         Assert.Equal(0, sends);
     }
+
+    // ── 41. R5.3.1／G8：主槽位容量 —— 逐节点结清后可持续创建（33 节点）＋ 不结清时第 33 个创建被拒 ──
+
+    /// <summary>
+    /// **容量正向（确定性，组件级）**：连续 33 个**不同节点**候选，每个获准后立即按「节点权威终态」结清（`MarkOperationTerminal`），
+    /// 则后续创建**始终获准**（主槽位随责任结清释放）——不得出现 `operations_capacity_full`。
+    /// </summary>
+    [Fact]
+    public async Task Capacity_33NodeCandidates_AllAccepted_WhenEachSettled()
+    {
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); };
+            h.TakeoverTerminalConfirmed = (_, _) => true; // 节点权威终态另测；本夹具聚焦容量释放
+        });
+
+        for (var i = 1; i <= 33; i++)
+        {
+            var r = Req(workflow: "wf-" + i);
+            r.RunBinding = "run-" + i;
+            r.Candidate!.NodeId = "n-" + i;
+            r.Candidate.Attempt = 1;
+            r.CursorRef = "n-" + i + "#0#0";
+            r.CursorRevision = 1;
+            var accepted = await svc.SubmitAsync(r);
+            Assert.True(accepted.Kind == AdmissionResultKind.Accepted,
+                "第 " + i + " 个节点创建应获准，实际 " + accepted.Kind + "/" + accepted.ReasonCode);
+            Assert.Equal(AdmissionResultKind.Accepted,
+                svc.MarkOperationTerminal(r.RequestIdentity, "node_outcome:已观察节点权威终态").Kind);
+            Assert.Equal(OperationRequestState.TerminalCompleted, FindOp(r.RequestIdentity)!.RequestState);
+        }
+
+        Assert.Equal(33, sends);
+        Assert.DoesNotContain(ReadLease().File!.Handoff!.Operations,
+            o => o.LastResult?.ReasonCode?.StartsWith("operations_capacity_full", StringComparison.Ordinal) == true);
+    }
+
+    /// <summary>
+    /// **容量负向（确定性）**：32 个**不可结清**（仍 Active/Queued）的操作占满主槽位后，第 33 个创建必须被
+    /// `operations_capacity_full` 拒绝（本夹具即该上限的可执行证据）。
+    /// </summary>
+    [Fact]
+    public async Task Capacity_MainSlotsExhausted_33rdCreateRejected()
+    {
+        // 占槽构造：Sender 返回 **Unknown** ⇒ 操作进入 Reconciling（**Active，不结清、不迁区**）持续占主槽位；
+        // 注意：`TerminalRejected` 会经 TerminalPendingTransfer→Tombstone **释放**主槽位，不适用于本负向夹具。
+        var (svc, _, _, _) = BuildFacade(h => h.Sender = _ => Task.FromResult<SendOutcome>(new SendOutcome.Unknown("fixture_unknown")));
+
+        for (var i = 1; i <= 32; i++)
+        {
+            var r = Req(workflow: "wf-" + i);
+            r.RunBinding = "run-" + i;
+            r.Candidate!.NodeId = "n-" + i;
+            r.CursorRef = "n-" + i + "#0#0";
+            r.CursorRevision = 1;
+            var res = await svc.SubmitAsync(r); // 不可考路径：操作停在 Reconciling ⇒ 持续占主槽位
+            Assert.False(res.ReasonCode.StartsWith("operations_capacity_full", StringComparison.Ordinal));
+            // 占槽判据＝**Zone=Active**（主槽位＝Active+TerminalPendingTransfer；终局迁墓碑后才释放）
+            Assert.Equal(OperationZone.Active, FindOp(r.RequestIdentity)!.Zone);
+        }
+
+        // 会诊要求：第 33 次调用前**一次性**确认 32 个不同身份仍为 Active（占槽在调用时刻成立）
+        var activeIds = ReadLease().File!.Handoff!.Operations
+            .Where(o => o.Zone == OperationZone.Active).Select(o => o.RequestIdentity).Distinct().ToList();
+        Assert.Equal(32, activeIds.Count);
+
+        var overflow = Req(workflow: "wf-overflow");
+        overflow.RunBinding = "run-overflow";
+        overflow.Candidate!.NodeId = "n-overflow";
+        overflow.CursorRef = "n-overflow#0#0";
+        overflow.CursorRevision = 1;
+        var last = await svc.SubmitAsync(overflow);
+        Assert.Equal(AdmissionResultKind.Error, last.Kind);
+        Assert.StartsWith("operations_capacity_full", last.ReasonCode, StringComparison.Ordinal);
+    }
 }

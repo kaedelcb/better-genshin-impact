@@ -224,6 +224,48 @@ public class TaskCenterHostAdmissionTests : IDisposable
         }
     }
 
+    // ── 3b. R5.3.1 安全交接（未确认分支零启动/零许可）＋ 占用解除后可推进（有效票据≠永久全禁启） ──
+
+    /// <summary>
+    /// **R5.3.1（安全交接）组件验收**：
+    /// ①**占用未确认**：零启动（无边界提交）、**零发送许可**（租约无未决 Submission）、操作保持 <c>Queued</c>（交接存续**非终局**）；
+    /// ②**占用解除后**：同一流程**重新发起**（**新请求**，不是原交接请求的推进）⇒ **获准并真实启动**——
+    /// 只证明「占用阻断及解除后新请求可启动」，**不证明**安全交接状态机的确认/超时/推进（R5.3.1 **未完成**）。
+    /// 场景施工方内置（注入事实接缝，不触真实 IPC），owner 0 点击。
+    /// </summary>
+    [Fact]
+    public async Task PanelStart_OccupiedThenCleared_NoStartWhileHeld_ThenAdmitted()
+    {
+        var workflowId = Seed("交接存续流程");
+        var boundary = new FakeBoundary();
+        var seams = new TaskCenterAdmissionSeams { Occupied = true };
+        var host = MakeWiredHost(boundary, seams);
+        try
+        {
+            // ① 占用未确认：零启动 + 零发送许可 + 交接存续（Queued，非终局）
+            var held = await host.StartWorkflowAsync(workflowId);
+            Assert.Equal(HostActionStatus.Unavailable, held.Status);
+            Assert.Empty(boundary.Submissions);                       // 零启动（Sender 未被调用 ⇒ 无边界提交）
+            var heldLease = ReadLease();
+            Assert.Null(heldLease.File!.Handoff!.Submission);         // **零发送许可**（持有阶段无未决 Submission）
+            var heldOp = Assert.Single(Ops(heldLease));
+            Assert.Equal(OperationRequestState.Queued, heldOp.RequestState);
+            Assert.Equal(0, heldOp.LastSendSeq);                      // 未进入发送轮次
+            Assert.True(string.IsNullOrEmpty(heldOp.SubmissionIdentity));
+
+            // ② 占用解除：重新发起 ⇒ 获准并真实启动（不是永久全禁启）
+            seams.Occupied = false;
+            var admitted = await host.StartWorkflowAsync(workflowId);
+            Assert.Equal(HostActionStatus.Registered, admitted.Status);
+            await WaitUntilAsync(() => boundary.Submissions.Count == 1);
+            Assert.Single(boundary.Submissions);
+        }
+        finally
+        {
+            await host.ShutdownAsync();
+        }
+    }
+
     // ── 4. 双流程并发：同一仲裁面唯一胜者（无双跑逻辑准入互斥）+落败方清理 ──
 
     [Fact]
