@@ -53,6 +53,16 @@ internal sealed class TaskCenterAdmissionSeams
 public sealed partial class TaskCenterHost
 {
     private readonly bool _admissionWired;
+    /// <summary>
+    /// B2-γ 第 3 步「路径启用」独立门（§12.3 施工阻断：第 3 步尚不得启用相关路径）。
+    /// `_admissionWired` 只表示 E1/E2 入口已接线；**节点后继提交改道必须另开此门**——生产构造恒不传
+    /// （＝false，节点提交保持 R4 直通）；仅当 G1/G2/G4/G4a/G5/G6/G7/G8/G9/G10 逐条闭环并通过 §12.3 交错验收后，
+    /// 才允许由后续批次在生产构造显式打开。代码就绪 ≠ 路径启用。
+    /// </summary>
+    private readonly bool _successorAdmissionWired;
+
+    /// <summary>夹具接缝：第 3 步路径门当前是否生效（＝E1/E2 已接线 **且** 第 3 步显式启用）。</summary>
+    internal bool SuccessorAdmissionWiredForTest => _admissionWired && _successorAdmissionWired;
     private readonly string? _arbitrationDir;
     private readonly TaskCenterAdmissionSeams? _admissionSeams;
     private string? _runsDirPath;
@@ -378,7 +388,11 @@ public sealed partial class TaskCenterHost
         if (_admissionSeams?.SenderOverride is { } over) return await over(d).ConfigureAwait(false);
         if (string.Equals(d.Intent, "resume", StringComparison.Ordinal))
             return await DispatchResumeViaHostAsync(d).ConfigureAwait(false); // E2 恢复专用（B2-β）
-        if (!string.IsNullOrEmpty(d.Candidate.NodeId) || !d.ResourceRef.StartsWith("flow:", StringComparison.Ordinal))
+        // R5.2 B2-γ 第 3 步（§13.10 A2）：**节点执行操作**走后继专用分派（候选带节点出现身份）；
+        // 非节点且非流程启动的未知形状仍按 B2-α 口径保守 Unknown。
+        if (!string.IsNullOrEmpty(d.Candidate.NodeId))
+            return await DispatchSuccessorViaHostAsync(d).ConfigureAwait(false);
+        if (!d.ResourceRef.StartsWith("flow:", StringComparison.Ordinal))
             return new SendOutcome.Unknown("unsupported_dispatch_shape_b2a");
 
         // runBinding 反查（消费权威=租约 Operations；不凭内存映射——崩溃窗不丢绑定）
@@ -567,6 +581,206 @@ public sealed partial class TaskCenterHost
 
             return false;
         }
+    }
+
+    /// <summary>
+    /// R5.2 B2-γ 第 3 步（§13.10 A）：节点提交的后继结果回传槽。**按完整发送身份**（submissionIdentity）存取，
+    /// 不得用业务身份做键（同 attempt 可有多 sendSeq）；装饰器据此返回 Runner 所需的 `BoundarySubmitResult`。
+    /// </summary>
+    /// <summary>
+    /// **节点后继的进程内不可变请求快照**（§13.10 A1/A2）：入队时按 Runner 当时提交的请求**冻结**，
+    /// 随获选排队项传到 Sender。**节点经 JSON 往返深拷贝**——不得把可变 `WorkflowNode` 引用当作冻结快照
+    /// （排队期间流程定义可能被编辑）。
+    /// </summary>
+    internal sealed record SuccessorContext(
+        WorkflowNode Node, WorkflowNodeOccurrence Occurrence, bool Suppress, int Attempt, string ExpectedSubmissionKey);
+
+    /// <summary>把节点冻结成不可变副本（JSON 往返；失败＝抛错，由调用方保守拒绝，不降级为「用原引用」）。</summary>
+    private static WorkflowNode FreezeNode(WorkflowNode node)
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(node);
+        return System.Text.Json.JsonSerializer.Deserialize<WorkflowNode>(json)
+               ?? throw new InvalidOperationException("节点冻结失败（反序列化为空）。");
+    }
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, BoundarySubmitResult> _successorSendResults = new();
+
+    /// <summary>
+    /// 后继提交准入（§5.2／§13.10 A）：门面先占位，Sender 内再准备与发送；本方法只负责**准入**与**结果映射**。
+    /// </summary>
+    internal async Task<BoundarySubmitResult> SubmitSuccessorViaAdmissionAsync(WorkflowSubmitRequest request, CancellationToken ct)
+    {
+        var run = request.Run;
+        var occ = request.Occurrence;
+        var sub = run.CurrentSubmission;
+        // 引擎纪律：意图先行（Runner 已落盘）；身份不符＝可证实未发送
+        if (sub is null || sub.Intent != SubmitIntentState.IntentRecorded
+            || sub.NodeId != occ.NodeId || sub.Occurrence != occ.Occurrence || sub.LoopIteration != occ.LoopIteration)
+            return BoundarySubmitResult.Rejected("提交意图缺失或身份不符（未发送）");
+        // §7.1-1：F11 判定先于租约获取
+        if (CurrentArbitrationFacts().F11Active)
+            return BoundarySubmitResult.Rejected("F11 独立停止闸门激活（未发生租约副作用；未发送）");
+
+        ArbitrationAdmissionService facade;
+        try { await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false); facade = _admission!; }
+        catch (OperationCanceledException) { return BoundarySubmitResult.UnknownWith("宿主退出，仲裁面初始化取消（未发送，待对账）"); }
+        catch (Exception ex) { return BoundarySubmitResult.UnknownWith("仲裁面初始化失败（未发送，待对账）：" + ex.GetType().Name); }
+
+        // 授权来源：该 runBinding 已登记操作的固定 Scope（I-1：继承，不重读当前 epoch）
+        var scope = TryGetAdmissionScope(run.RunId!);
+        if (scope is null)
+        {
+            // [纠正·2026-09-21] 原「缺 Scope 时退回直通发送」的临时旁路被会诊否决（ASTRA high 阻断项 1）：
+            // 那会凭空建立一条**不受仲裁许可约束的发送入口**（绕过占位/Pending/Submission 冲突与固定授权纪元校验），
+            // 与 AMD-1-5 第三条「缺固定 Scope/绑定＝不签发、不发送」直接冲突。
+            // 正确处置＝响亮拒绝并留痕（可证实未发送）。缺口本体（启动移交来源未登记固定 Scope/绑定）归
+            // §13.11 G4a，须先按 AMD-1-5 的四类来源规则在移交受理处落定来源记录，再启用本路径。
+            try
+            {
+                // 会诊复审：日志委托是外部注入的诊断面，其异常不得改变本方法的结构化返回值。
+                _log?.Invoke("[任务中心] 后继提交缺少已登记仲裁授权（运行 " + run.RunId + " 无固定 Scope/绑定）——"
+                             + "按 AMD-1-5 第三条拒绝签发（未发送）；缺口见设计稿 §13.11 G4a。");
+            }
+            catch (Exception)
+            {
+                // 诊断失败不改变结论：仍按 AMD-1-5 第三条拒绝签发。
+            }
+            return BoundarySubmitResult.Rejected(
+                "无已登记仲裁授权（缺固定 Scope/绑定，按 AMD-1-5 第三条不签发不发送）");
+        }
+
+        AdmissionResult result;
+        try
+        {
+            result = await facade.SubmitAsync(new AdmissionRequest
+            {
+                Namespace = "successor",
+                Kind = AdmissionKind.Create,
+                SourceDetail = "runner:successor",
+                RunBinding = run.RunId,
+                // §13.10 A1/A2：入队即冻结「Runner 当时提交的请求」（节点深拷贝＋完整出现身份＋提交选项＋预期提交键），
+                // 随获选排队项传到 Sender；Sender 不得再从当前流程定义重建。
+                ProcessLocalContext = new SuccessorContext(
+                    FreezeNode(request.Node), request.Occurrence, request.SuppressConfigCompletionAction,
+                    sub.Attempt, sub.Key),
+                CursorRef = run.Cursor is { } cur ? $"{cur.NodeId}#{cur.Occurrence}#{cur.LoopIteration}" : null,
+                Candidate = new ArbitrationCandidate
+                {
+                    Scope = scope,
+                    Namespace = "successor",
+                    WorkflowId = run.WorkflowId,
+                    TriggerOccurrenceId = "successor:" + run.RunId,
+                    RunId = run.RunId,
+                    NodeId = occ.NodeId,
+                    Occurrence = occ.Occurrence,
+                    LoopIteration = occ.LoopIteration,
+                    Attempt = sub.Attempt,
+                    ResourceRef = "node:" + occ.NodeId,
+                    Intent = "start",
+                },
+            }).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            return BoundarySubmitResult.UnknownWith("仲裁面异常（结果待对账）：" + ex.GetType().Name);
+        }
+
+        if (result.Kind == AdmissionResultKind.Accepted)
+        {
+            // 按**完整发送身份**取回 sender 内真实发送结果（§13.10 A2：**非破坏性读取**——合并调用者共享同一结果，
+            // 不得因首个读取者 `TryRemove` 而让其余调用者降级为 Unknown）。取不到＝不猜成功，保守待对账。
+            if (result.SubmissionIdentity is { } sid && _successorSendResults.TryGetValue(sid, out var sent)) return sent;
+            return BoundarySubmitResult.UnknownWith("仲裁已受理但未取得发送回执（不猜成功，待对账）");
+        }
+
+        return MapAdmissionResultToBoundary(result);
+    }
+
+    /// <summary>
+    /// §13.10 A3 三态映射（internal static＝可直接夹具断言）。
+    /// [纠正·2026-09-21] 会诊阻断（ASTRA high 阻断项 2）：三态必须按「**结果确定性**」映射，不得按「可否重试」
+    /// 映射，也不得用 `_ => Rejected` 兜底——否则「sender 已 Accepted、随后关闭/接管抛异常」会被
+    /// `ProcessRoundAsync` 收敛成 `Error`，再被本层**反转为确定拒绝**（事实反转）。
+    /// 判据：门面给出**确定结论** → Rejected（本层只转发门面结论，**不**自行断言「一定没发送」）；
+    /// **事实不可考**（含 Error）→ Unknown（不猜成功不猜失败）。
+    /// 原因码与明细原样保留，供对账与诊断。
+    /// </summary>
+    internal static BoundarySubmitResult MapAdmissionResultToBoundary(AdmissionResult result)
+    {
+        return result.Kind switch
+        {
+            AdmissionResultKind.TerminalRejected or AdmissionResultKind.RetryableRejected
+                or AdmissionResultKind.NotSelected or AdmissionResultKind.F11Blocked
+                or AdmissionResultKind.NeedPreemptConfirm
+                => BoundarySubmitResult.Rejected(
+                    "仲裁确定未受理（" + result.Kind + "/" + result.ReasonCode + "）：" + result.Detail),
+            AdmissionResultKind.NeedReconcile or AdmissionResultKind.Reconciling
+                => BoundarySubmitResult.UnknownWith(
+                    "仲裁待对账（事实不可考，不猜成功也不猜失败）：" + result.Kind + "/" + result.ReasonCode
+                    + "：" + result.Detail),
+            _ => BoundarySubmitResult.UnknownWith(
+                "仲裁面事实不可考（" + result.Kind + "/" + result.ReasonCode + "）：" + result.Detail
+                + "（不臆断未发送，待对账）"),
+        };
+    }
+
+    /// <summary>该 runBinding 已登记操作的固定 `Scope`（I-1 继承；查不到＝无授权，不得读当前 epoch 补造）。</summary>
+    private string? TryGetAdmissionScope(string runId)
+    {
+        var read = _admissionStore?.Read();
+        return read?.File?.Handoff?.Operations?
+            .Where(o => string.Equals(o.RunBinding, runId, StringComparison.Ordinal))
+            .OrderByDescending(o => o.UpdatedAtUtc)
+            .Select(o => o.Candidate?.Scope)
+            .FirstOrDefault(s => !string.IsNullOrEmpty(s));
+    }
+
+    /// <summary>
+    /// 后继发送分派（门面 Sender 回调，§13.10 A2/A3）：runBinding 反查 run → 由请求重建出现身份与节点 →
+    /// 发送段内 `PrepareSubmit + SendPreparedAsync`（准入已在门面完成）→ 结果按完整发送身份暂存并映射三态。
+    /// </summary>
+    private async Task<SendOutcome> DispatchSuccessorViaHostAsync(SubmissionDispatch d)
+    {
+        var read = _admissionStore!.Read();
+        var op = read.File?.Handoff?.Operations?.FirstOrDefault(
+            o => string.Equals(o.RequestIdentity, d.RequestIdentity, StringComparison.Ordinal));
+        if (op?.RunBinding is not { } runId) return new SendOutcome.Unknown("run_binding_missing");
+        var run = _runs.Load(runId);
+        if (run is null) return new SendOutcome.Rejected("run_record_missing", false, "host:runstore");
+        var c = _clientAccessor();
+        if (c is null) return new SendOutcome.Rejected("bgi_client_missing", false, "host:client");
+
+        // §13.10 A1/A2/A2′：**只消费获选排队项携带的不可变请求快照**——
+        // 不得 LoadSnapshot 重建节点（排队期间流程定义可变）、不得写死 occurrence 参数、不得丢弃提交选项。
+        // 上下文缺失（续用/重试/重启后未携带）= 响亮拒绝，绝不静默重建后发送。
+        if (d.ProcessLocalContext is not SuccessorContext ctx)
+            return new SendOutcome.Rejected("successor_context_missing", false, "host:context");
+        var occ = ctx.Occurrence;
+        var node = ctx.Node;
+        // 出现身份与候选必须一致（防上下文与候选错配）
+        if (!string.Equals(occ.NodeId, d.Candidate.NodeId, StringComparison.Ordinal)
+            || occ.Occurrence != d.Candidate.Occurrence || occ.LoopIteration != d.Candidate.LoopIteration)
+            return new SendOutcome.Rejected("successor_context_mismatch", false, "host:context");
+        // §13.10 A1（[补·2026-09-21] 会诊要求）：**消费**冻结的 attempt/key——排队期间若当前提交已换身份
+        // （新 attempt / 新提交键），旧授权不得被准备成新提交，一律响亮拒绝（确定未发送）。
+        if (run.CurrentSubmission is not { } liveSub
+            || liveSub.Attempt != ctx.Attempt
+            || !string.Equals(liveSub.Key, ctx.ExpectedSubmissionKey, StringComparison.Ordinal))
+            return new SendOutcome.Rejected("successor_submission_identity_changed", false, "host:context");
+
+        var inner = new BgiWorkflowExecutionBoundary(c, _runs);
+        var prepared = inner.PrepareSubmit(new WorkflowSubmitRequest(run, occ, node, ctx.Suppress),
+            authorizedEpoch: d.TargetEpoch); // 授权纪元＝门面本轮授权值（A2：不在 sender 内重读当前 epoch）
+        if (prepared.Rejection is { } rej)
+            return rej.Uncertain ? new SendOutcome.Unknown("boundary_precheck_uncertain") : new SendOutcome.Rejected("boundary_precheck_rejected", false, "host:boundary");
+
+        var sent = await inner.SendPreparedAsync(prepared, CancellationToken.None).ConfigureAwait(false);
+        if (d.SubmissionIdentity.Length > 0) _successorSendResults[d.SubmissionIdentity] = sent;
+        return sent.Accepted
+            ? new SendOutcome.Accepted("host:successor_sent", runId)
+            : sent.Uncertain
+                ? (SendOutcome)new SendOutcome.Unknown("host:successor_uncertain")
+                : new SendOutcome.Rejected("host:successor_rejected", false, "host:boundary");
     }
 
     /// <summary>运行终态→仲裁操作终局回写（按 runBinding 反查 Operations；台账交叉确认经 TakeoverTerminalConfirmed 钩子）。</summary>

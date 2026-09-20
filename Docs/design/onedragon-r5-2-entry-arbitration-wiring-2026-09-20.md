@@ -1529,3 +1529,27 @@ M1 的①—⑤与 §3.2「E1 发送前固定 candidateId→runId→首节点提
 >
 > **本 C 节即 AMD-1-12 去向表的当前有效状态**（[纠正·2026-09-21]）：**原表行按其标注与本 C 节合并阅读**——本 C 节已逐行给出当前值，**不再另行"要求改写原表"**；原表中与本 C 节不一致处（①③⑤⑥⑦a⑧a 的「待补承接」标注、③「第 2 条」、⑤「原句旁尚无界定」）**均以本 C 节为当前状态**，其旧文字作为**历史时点记录**保留。
 > **仍未完成**：**AMD-1-12 的逐段、逐表行覆盖复核记录**（须按 AMD-1-12 验收④的字段：位置／当前原句／局部标注／效力分类／正式去向／待办或完成状态／复核版本，逐段产出），以及 **§12.2「其他强制/关注项」第一项的原处四类来源限定**。**不得**据已有几处纠正宣布覆盖归零；**也不得**称「所有待补项归零」。
+
+
+### 13.11 B2-γ 第 3 步实现期会诊挂账与处置清单（[新增·2026-09-21]）
+
+> **性质**：**实施期登记**（不改变 §13.5–§13.10 已起草条款的效力状态；不宣称任何条款生效）。**用途**：把 ASTRA（high）在 B2-γ 第 3 步实现期判定的必改项逐条登记，使「方案落定／合同生效／验收关闭」三层可分，并支撑「挂账不阻塞提交、B4 统一过一遍」的处置策略（owner 已明示，见 §13.8）。
+
+| 编号 | 会诊判定项 | 当前处置状态 | 收口归属 |
+|---|---|---|---|
+| G1 | 不可变发送上下文贯穿 | 主路径已修（`frz` 冻结副本／`redrive` 补 `ProcessLocalContext`／attempt-key 一致性校验）；**仍欠**：`FreezeNode` 语义完整性证明、`ProcessLocalContext` 无 `[JsonIgnore]`、`FreezeNode` 失败落通用 Unknown 与注释语义不符 | B2-γ 第 3 步 |
+| G2 | run 双副本脱节 | **未处置**：`PrepareSubmit` 改的是 sender 自 load 的 run，Runner 持有对象拿不到 Epoch/JobId → 需按提交身份校验的字段合并或版本守卫 | B2-γ 第 3 步／B4 |
+| G3 | 结果破坏性领取 | **已闭合**：`TryRemove` → `TryGetValue`（非破坏性读取）；**仍欠**：结果槽按 run 终态／全部调用者完成后回收 | G3 欠项 → B4 |
+| G4 | 游标与授权来源 | **部分闭合**：`CursorRef` 可为 null、未校验 `run.Cursor` 与 occurrence 一致、缺 `CursorRevision`、门面游标检查未比 runBinding、`TryGetAdmissionScope` 取「最新」≠「当前授权来源」 | B2-γ 第 3 步 |
+| G4a | **启动移交入口无授权来源（确定性入口回归）** | **[纠正·2026-09-21 会诊后] 上一稿的「退回直通发送」旁路已被 ASTRA（high）判为阻断项并作废**：那会凭空建立一条不受仲裁许可约束的发送入口（绕过占位／Pending／Submission 冲突与固定授权纪元校验），与 **AMD-1-5 第三条**「缺固定 Scope/绑定＝不签发、不发送」直接冲突。**现实现＝响亮拒绝并留痕（本分支在任何发送调用之前返回）**：`SubmitSuccessorViaAdmissionAsync` 在 `TryGetAdmissionScope` 返回 null 时返回 `Rejected("无已登记仲裁授权…")`，不发送。**缺口本体（未闭合）**：按 AMD-1-5 四类来源规则，为移交启动的运行落定**固定 Scope/来源绑定**的权威记录（不得读当前 epoch 补造）。本项**不属于**「可挂账即提交」——它**阻塞路径启用与 R5.8 入口覆盖验收**，但**不阻塞**「关闭门的阶段提交」（本批即按此提交） | B2-γ 第 3 步（设计修订 AMD-1-5 扩展）→ R5.8 |
+| G5 | 候选身份补证 | **未处置**：身份公式证明、`PayloadFingerprint` 未赋值（需补准入阶段内容指纹）、`Namespace="successor"` 未在 §2.1 登记 | B2-γ 第 3 步 |
+| G6 | 三态映射事实反转 | **[已处置·2026-09-21 本轮] 会诊阻断项 2 已修**：`RetryableRejected/TerminalRejected/NotSelected/F11Blocked/NeedPreemptConfirm` → `Rejected`（门面已给确定未受理结论）；`NeedReconcile/Reconciling/Error/其余` → `UnknownWith`（事实不可考，不臆断未发送）；原因码与明细原样保留。**分类单测已补**（`TaskCenterSuccessorPathGateTests` 八组 Theory，含 `Error→Unknown`）；**仍欠**：「Accepted 回执读取」与「sender 已 Accepted、随后关闭抛异常 → 必须 Unknown」的**真实链路**交错夹具（现仅分类级证明，非三态完整链路验收） | B2-γ 第 3 步（夹具） |
+| G7 | 取消令牌与 jobId 落盘 | **未处置**：入口 `ct` 未用、`SendPreparedAsync` 用 `CancellationToken.None`（破坏「发送期取消→cleanup 对账→命中后取消远端→重抛 OCE」）；普通 Accepted 的 jobId 未落盘（`TakeoverPersist` 只查 run 存在即允许关闭）；`WireSubmitKey` 未传 | B2-γ 第 3 步 |
+| G8 | 节点操作无独立终局出口 | **未处置**：现仅在整条 run 终态后 `MarkAdmissionTerminalIfAny`，长流程会堆满 32 主槽位 | B4 |
+| G9 | 门控验收仅断言开关值 | **[新增·2026-09-21 复审 P2]** `TaskCenterSuccessorPathGateTests` 只读 `SuccessorAdmissionWiredForTest`（与 `CreateRunner` 重复同一布尔表达式）——将来 `CreateRunner` 若漏接第二道门，这些测试仍可能全绿。**待补**：对**实际组装结果**（Runner 持有的边界／节点提交是否经门面）断言 | B2-γ 第 3 步（夹具） |
+| G10 | 发送侧原始诊断被丢弃 | **[新增·2026-09-21 复审 P2]** `DispatchSuccessorViaHostAsync` 把准备/发送拒绝与未知原因压成 `boundary_precheck_rejected`／`host:successor_rejected`／`host:successor_uncertain` 固定文本，未透传原 `RejectReason`；`MapAdmissionResultToBoundary` 无法恢复上游已丢失的信息。**待补**：发送侧保留并透传原始原因码／明细 | B2-γ 第 3 步 |
+
+> **登记纪律**：本表为 **B2-γ 实施期挂账清单**；后续会诊新发现一律**先入表再处置**，避免「发现—修复」无限循环。**挂账 ≠ 验收通过**：凡状态为「未处置／部分处置」的行，均须在 B4 提交点清单与并发屏障阶段逐条复核；**未复核完成不得宣称 R5.2 实现收口**。
+> **与既有验收的关系**：G4a 的旁路已作废（现为**响亮拒绝**，不发送），且**节点提交改道由 §13.11a 的门关闭**——故本次提交**不改变生产节点提交行为**（仍为 R4 直通）。G4a 缺口本体（移交运行缺固定 Scope/绑定）登记为 **R5.8 入口覆盖验收的前置项**。
+
+> **§13.11a 第 3 步「路径启用」独立门（[新增·2026-09-21]）**：`_admissionWired` 只表示 E1/E2 入口已接线（生产构造恒 `true`）；**节点后继提交改道另设 `_successorAdmissionWired`，生产构造恒不传（＝`false`）**——即按 §12.3「施工阻断：第 3 步尚不得启用相关路径」，**代码就绪 ≠ 路径启用**。仅当 G1／G2／G4／G4a／G5／G6／G7／G8／G9／G10 逐条闭环，并完成 §12.3 末尾六类交错验收（①首节点抢先 ②发起者 A→获选者 B 错配 ③准备阶段故障 ④受理接管故障 ⑤连续超 32 节点 ⑥四类入口覆盖）后，才允许在后续批次由生产构造显式打开该门。

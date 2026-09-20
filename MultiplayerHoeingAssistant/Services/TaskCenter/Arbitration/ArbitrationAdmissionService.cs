@@ -30,6 +30,12 @@ public sealed class AdmissionRequest
     public ArbitrationCandidate Candidate { get; set; } = new();
     /// <summary>线上提交键（无法确定性推导时显式携带，逐操作 §6.1 映射表）。</summary>
     public string? WireSubmitKey { get; set; }
+    /// <summary>
+    /// **进程内不可变请求上下文**（§13.10 A1/A2）：由**可信适配器**在入队时冻结携带，随获选排队项一路传到 Sender。
+    /// **不参与任何序列化**（租约/台账均不落此字段）；用于让 Sender 消费「Runner 当时提交的那份请求」，
+    /// 而不是从当前流程定义/运行对象重建。**上下文缺失时调用方必须响亮拒绝，不得静默重建后发送。**
+    /// </summary>
+    public object? ProcessLocalContext { get; set; }
     /// <summary>candidateId→runId→首节点提交键（E1 流程绑定：首绑写入、再绑必须一致，不可改写）。</summary>
     public string? RunBinding { get; set; }
     /// <summary>运行台账合法游标（Runner 后继授权：游标合法+授权未消费双条件）。</summary>
@@ -110,6 +116,12 @@ public sealed class SubmissionDispatch
     public string Intent { get; set; } = "";
     public string? WireSubmitKey { get; set; }
     public ArbitrationCandidate Candidate { get; set; } = new();
+    /// <summary>
+    /// **本轮获选排队项携带的进程内不可变请求上下文**（§13.10 A2）：`SubmitAsync` 的调用方经
+    /// <see cref="AdmissionRequest.ProcessLocalContext"/> 传入，门面**原样**附到派发对象上；
+    /// Sender 只消费本字段，**不得**用「最新 Operation」或执行上下文重新拼接另一轮上下文。
+    /// </summary>
+    public object? ProcessLocalContext { get; set; }
 }
 
 /// <summary>发送结果三态（§4.2 三态对账：受理/确定拒绝/未知——未知立即转对账不再重试）。</summary>
@@ -311,6 +323,9 @@ public sealed class ArbitrationAdmissionService
                     RunBinding = request.RunBinding,
                     CursorRef = request.CursorRef,
                     CursorRevision = request.CursorRevision,
+                    // §13.10 A2（[纠正·2026-09-21] 会诊阻断项）：冻结副本必须**原样携带**进程内不可变请求上下文——
+                    // 漏掉它会让正常后继路径在 Sender 处确定性落到 successor_context_missing。
+                    ProcessLocalContext = request.ProcessLocalContext,
                 };
                 frozen = frz;
                 // 内部冻结（B3）：登记/队列/裁决/占位/发送一律只消费本副本——调用方后置修改/替换不改变已登记事实。
@@ -478,6 +493,8 @@ public sealed class ArbitrationAdmissionService
                     RunBinding = op.RunBinding,
                     CursorRef = op.CursorRef,
                     CursorRevision = op.CursorRevision,
+                    // §13.10 A2：续用同样必须携带调用方传入的进程内不可变上下文（不得丢弃后由 Sender 重建）。
+                    ProcessLocalContext = request.ProcessLocalContext,
                 };
                 var pending = Enqueue(redrive, file.Lease!);
                 _ = Task.Run(() => DrainRoundAsync());
@@ -1055,6 +1072,7 @@ public sealed class ArbitrationAdmissionService
             Intent = op.Intent,
             WireSubmitKey = op.WireSubmitKey,
             Candidate = request.Candidate,
+            ProcessLocalContext = request.ProcessLocalContext, // §13.10 A2：随获选项原样传给 Sender
         };
     }
 
