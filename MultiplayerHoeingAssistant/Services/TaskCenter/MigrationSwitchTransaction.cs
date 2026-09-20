@@ -395,6 +395,17 @@ public sealed class MigrationSwitchTransaction : IDisposable
                 }
             }
 
+            // **拓扑（基线侧）**：每条 Added 亦须与**完整基线文件集合**双向祖先检查——只登记 Added（未同时登记
+            // 对应 Deleted）同样可能造成「先恢复基线子路径、后删除新增父路径」的不可收敛回滚，不能依赖调用方补齐。
+            foreach (var added in merged.Where(c => c.Kind == ChangeKind.Added))
+            {
+                foreach (var basePath in m.FileHashes.Keys)
+                {
+                    if (IsAncestorPath(added.Path, basePath) || IsAncestorPath(basePath, added.Path))
+                        return MigrationResult.Fail("unsupported_topology_change:" + added.Path + "<->baseline:" + basePath, m.Stage);
+                }
+            }
+
             foreach (var c in batch)
             {
                 m.ChangedFiles.RemoveAll(x => PathKey(x.Path) == PathKey(c.Path));

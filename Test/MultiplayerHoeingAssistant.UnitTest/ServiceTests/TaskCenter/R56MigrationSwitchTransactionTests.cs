@@ -869,6 +869,34 @@ public sealed class R56MigrationSwitchTransactionTests_Part2 : IDisposable
         Assert.StartsWith("unsupported_topology_change", cross.Reason, StringComparison.Ordinal);
         Assert.DoesNotContain(tx.LoadManifest()!.ChangedFiles, c => c.Path == "sub/a.json");
     }
+    /// <summary>
+    /// **第 11 轮必改（Added 与基线文件的拓扑冲突）**：仅登记 `Added`（未同时登记对应 Deleted）也必须被拒——
+    /// ①新增 `sub`（基线有 `sub/a.json`）②新增 `f.txt/x.json`（基线有文件 `f.txt`）；拒绝后既有登记不变。
+    /// </summary>
+    [Fact]
+    public void RecordChanges_AddedConflictsWithBaselineTopology_Rejected()
+    {
+        Seed("sub/a.json", "{\"a\":1}");     // 基线下 sub 是目录
+        Seed("f.txt", "{\"f\":1}");          // 基线下 f.txt 是文件
+        using var tx = NewTx();
+        tx.BeginTransaction("t1");
+        tx.TakeSnapshot();
+        Assert.True(tx.RecordChanges([new ChangeRecord { Path = "ok.json", Kind = ChangeKind.Added }]).Success);
+
+        // ① Added("sub") 是基线文件 sub/a.json 的祖先 ⇒ 拒绝
+        var a = tx.RecordChanges([new ChangeRecord { Path = "sub", Kind = ChangeKind.Added }]);
+        Assert.False(a.Success);
+        Assert.StartsWith("unsupported_topology_change", a.Reason, StringComparison.Ordinal);
+
+        // ② Added("f.txt/x.json") 以基线文件 f.txt 为祖先 ⇒ 拒绝
+        var b = tx.RecordChanges([new ChangeRecord { Path = "f.txt/x.json", Kind = ChangeKind.Added }]);
+        Assert.False(b.Success);
+        Assert.StartsWith("unsupported_topology_change", b.Reason, StringComparison.Ordinal);
+
+        var changed = tx.LoadManifest()!.ChangedFiles;
+        Assert.Single(changed);                                  // 既有登记保持不变（无部分写入）
+        Assert.Equal("ok.json", changed[0].Path);
+    }
     [Theory]
     [InlineData(MigrationStage.Snapshotting)]
     [InlineData(MigrationStage.SnapshotReady)]
