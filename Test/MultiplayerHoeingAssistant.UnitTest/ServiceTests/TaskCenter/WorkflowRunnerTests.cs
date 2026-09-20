@@ -120,6 +120,42 @@ public class WorkflowRunnerTests : IDisposable
         return (runner, boundary, terminal);
     }
 
+    /// <summary>
+    /// [R5.2 G6 会诊] **「已存在受理事实却收到确定拒绝」的冲突分支回归**：本层不得因拿到确定拒绝就
+    /// 降级受理事实、更不得按确定拒绝**推进游标**（那会记 rejected 结果并可能继续下一节点、随后替换
+    /// CurrentSubmission）——必须按 `unknown` 停驻、游标留在本节点、受理记录（Intent/JobId）保留。
+    /// </summary>
+    [Fact]
+    public async Task AcceptedReceiptThenRejected_ConvergesUnknown_KeepsReceiptAndCursor()
+    {
+        var seed = SeedFlow(new WorkflowDocument
+        {
+            Name = "受理与拒绝冲突",
+            Nodes = [DragonNode("n-1", "配置A"), DragonNode("n-2", "配置B")],
+        });
+        var workflowId = seed.Split('|')[1];
+        var (runner, boundary, _) = MakeRunner();
+        boundary.OnSubmit = req =>
+        {
+            // 模拟「边界已把本轮落盘为 Accepted（含 jobId）」，随后却向本层返回确定拒绝。
+            var self = req.Run; // 与 Runner 持有的是同一实例（故本层可见该受理事实）
+            self.CurrentSubmission!.Intent = SubmitIntentState.Accepted;
+            self.CurrentSubmission.JobId = "job-accepted";
+            _runs.Update(self);
+            return Task.CompletedTask;
+        };
+        boundary.SubmitOverride = BoundarySubmitResult.Rejected("boundary_rejected");
+
+        var run = await runner.StartAsync(workflowId);
+
+        Assert.Equal(WorkflowRunState.Unknown, run.State);                 // 保守 Unknown 停驻
+        Assert.Equal("unknown", run.NodeOutcomes[^1].Result);              // 不得记为 rejected
+        Assert.Single(boundary.Submissions);                               // 未继续下一节点
+        Assert.Equal("n-1", run.Cursor!.NodeId);                           // 游标未推进
+        Assert.Equal(SubmitIntentState.Accepted, run.CurrentSubmission!.Intent); // 受理事实保留
+        Assert.Equal("job-accepted", run.CurrentSubmission.JobId);
+    }
+
     [Fact]
     public async Task SequentialChain_SubmitsInOrder_IntentRecordedBeforeSubmit_TerminalFiresOnce()
     {

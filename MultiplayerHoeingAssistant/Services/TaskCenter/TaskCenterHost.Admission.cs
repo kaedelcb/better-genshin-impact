@@ -928,12 +928,18 @@ public sealed partial class TaskCenterHost
                 // `PrepareSubmit` 改的是**它自己 load 的那份 run**（冻结纪元/有效期/指纹/发送已尝试/意图一并落盘），
                 // 而 Runner 仍持提交前的旧副本；不合并＝Runner 随后 `_runs.Update(run)` 以旧修订冲突
                 // （宿主级夹具已实证：RunRecordConflictException → 运行被保守收敛 Unknown）。
-                MergeBackAuthoritativeSubmission(run, sub, baseline);
+                MergeBackAuthoritativeSubmission(run, sub, baseline, copyOutcome: true);
                 return sent;
             }
+            // 已受理但取不到回执：仍须与权威记录对齐（否则 Runner 的后续写回会以旧修订冲突，结果记录丢失）。
+            MergeBackAuthoritativeSubmission(run, sub, baseline, copyOutcome: false);
             return BoundarySubmitResult.UnknownWith("仲裁已受理但未取得发送回执（不猜成功，待对账）");
         }
 
+        // 失败/未知路径同样必须对齐权威记录（会诊实证：不对齐会让 Runner 的旧修订写回撞冲突、结果记录丢失）。
+        // 意图语义：该路径由 Runner 按自身语义定（Submitted/Rejected）；但若权威记录已是 Accepted+jobId，
+        // 合并会**无条件保留该受理事实**（只允许增强不允许降级，见 MergeBackAuthoritativeSubmission）。
+        MergeBackAuthoritativeSubmission(run, sub, baseline, copyOutcome: false);
         return MapAdmissionResultToBoundary(result);
     }
 
@@ -942,7 +948,8 @@ public sealed partial class TaskCenterHost
     /// 前置：身份一致（同 attempt／同提交键／同节点出现身份）——不一致一律不合并，绝不把另一轮身份写进本实例。
     /// 读盘失败＝不合并（Runner 随后的写回按自身修订判定，保守失败而非臆断成功）。
     /// </summary>
-    private void MergeBackAuthoritativeSubmission(WorkflowRunRecord runnerRun, WorkflowSubmission runnerSub, string baselineNormalized)
+    private void MergeBackAuthoritativeSubmission(WorkflowRunRecord runnerRun, WorkflowSubmission runnerSub,
+        string baselineNormalized, bool copyOutcome)
     {
         WorkflowRunRecord? fresh;
         try
@@ -985,9 +992,21 @@ public sealed partial class TaskCenterHost
         runnerSub.ExpiresAtUtc = freshSub.ExpiresAtUtc;
         runnerSub.Fingerprint = freshSub.Fingerprint;
         runnerSub.SendAttempted = freshSub.SendAttempted;
-        runnerSub.Intent = freshSub.Intent;
-        runnerSub.JobId = freshSub.JobId;
         runnerSub.AcceptedSendIdentity = freshSub.AcceptedSendIdentity;
+        // **受理回执只允许增强、不允许被 Runner 的后续整体写回降级**（会诊阻断）：权威记录已是
+        // `Accepted + jobId` 时（含 G6「已受理但关闭阶段抛异常」场景）必须一并并入 Runner 实例，
+        // 否则版本对齐后 Runner 的旧 `Intent/JobId` 会成功覆盖已确认的受理事实，破坏恢复依据。
+        if (freshSub.Intent == SubmitIntentState.Accepted && !string.IsNullOrEmpty(freshSub.JobId))
+        {
+            runnerSub.Intent = SubmitIntentState.Accepted;
+            runnerSub.JobId = freshSub.JobId;
+        }
+        else if (copyOutcome)
+        {
+            // 仅「已受理」路径把受理结论（意图/jobId）并入 Runner 实例；失败/未知路径由 Runner 按自身语义定。
+            runnerSub.Intent = freshSub.Intent;
+            runnerSub.JobId = freshSub.JobId;
+        }
         if (freshSub.ObservedTerminal is { } terminal) runnerSub.ObservedTerminal = terminal;
         if (!string.IsNullOrEmpty(fresh.WireRunId)) runnerRun.WireRunId = fresh.WireRunId;
         // 版本对齐：Runner 的后续 `_runs.Update(run)` 以**权威修订**为期望值（否则必撞修订冲突）。

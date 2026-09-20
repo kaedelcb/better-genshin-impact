@@ -605,11 +605,20 @@ public sealed class WorkflowRunner
         {
             // R4.8 一轮 B1：受理与否不可考——Intent 保持 Submitted（发送已尝试事实），走 Unknown 停驻（调用点）；
             // 不按拒绝推进、不改游标；ObservedTerminal 保持空 = 在飞事实保留，恢复扫描按在飞标 Unknown
-            submission.Intent = SubmitIntentState.Submitted;
+            // [R5.2 G6 会诊] **不得降级已确认的受理事实**：边界可能已把本轮落盘为 Accepted（含 jobId），
+            // 受理事实是接管/恢复依据，只允许增强不允许回退——否则后续异常会被当作「未受理」处理。
+            submission.Intent = submission.Intent == SubmitIntentState.Accepted
+                ? SubmitIntentState.Accepted
+                : SubmitIntentState.Submitted;
             return ("unknown", "提交结果不可考：" + Sanitize(submit.RejectReason), null);
         }
         if (!submit.Accepted)
         {
+            // 同理：已 Accepted 的提交不得因本层拿到 Rejected 而回退（受理事实优先，冲突留待对账）。
+            // 且此时**不得按「确定拒绝」推进游标**（会记拒绝结果并可能继续下一节点）——冲突一律按 Unknown 停驻。
+            if (submission.Intent == SubmitIntentState.Accepted)
+                return ("unknown", "提交被拒但已存在受理事实（冲突，保守 Unknown 留待对账）："
+                                   + Sanitize(submit.RejectReason), null);
             submission.Intent = SubmitIntentState.Rejected;
             return ("rejected", "提交被拒绝：" + Sanitize(submit.RejectReason), null);
         }

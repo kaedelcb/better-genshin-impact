@@ -262,9 +262,16 @@ public class TaskCenterSuccessorPathGateTests
     private sealed record LedgerPointObservation(string NodeId, SubmitIntentState Intent, string? JobId,
         string? AcceptedSendIdentity, bool SubmissionOpen);
 
+    /// <summary>注入点记录：故障注入时**已落盘**的受理发送身份（证明「Sender 已 Accepted 且接管已落盘」先于异常）。</summary>
+    private sealed record FaultInjectionObservation(string AcceptedSendIdentity);
+
     private sealed record RoutingProbe(
         IReadOnlyList<OperationRecord> Ops, bool ReadOk, bool Converged, string RunId, WorkflowRunState? State,
-        string Note, int SendCount, IReadOnlyList<string> Logs, IReadOnlyList<LedgerPointObservation> LedgerPointReceipts)
+        string Note, string FirstNodeResult, int SendCount, IReadOnlyList<string> Logs,
+        IReadOnlyList<LedgerPointObservation> LedgerPointReceipts,
+        IReadOnlyList<FaultInjectionObservation> FaultInjections,
+        SubmitIntentState? PersistedIntent, string? PersistedJobId, string? PersistedSendIdentity,
+        string? OpenSubmissionIdentity)
     {
         public bool IsSettled => State is WorkflowRunState.Succeeded or WorkflowRunState.Failed
             or WorkflowRunState.Cancelled or WorkflowRunState.Interrupted or WorkflowRunState.Unknown;
@@ -283,7 +290,8 @@ public class TaskCenterSuccessorPathGateTests
     /// </summary>
     private static async Task<RoutingProbe> ProbeNodeSubmitRoutingAsync(
         string root, bool successorWired, Action<RunStore>? concurrentWriteBeforeSend = null,
-        Action<RunStore, int>? onBeforeSend = null, string[]? nodeIds = null)
+        Action<RunStore, int>? onBeforeSend = null, string[]? nodeIds = null,
+        Action? afterLedgerBeforeClose = null)
     {
         using var client = new BgiExternalClient();
         var flowsDir = Path.Combine(root, "flows");
@@ -309,6 +317,8 @@ public class TaskCenterSuccessorPathGateTests
         var logGate = new object();
         var logList = new List<string>();
         var ledgerPoint = new List<LedgerPointObservation>();
+        var faultInjections = new List<FaultInjectionObservation>();
+        var ledgerCloseCount = 0; // 1＝E1 流程启动轮次（夹具不注入故障）；≥2＝节点提交轮次（注入点）
         var port = new RoutingFakePort();
         var runs = new RunStore(runsDir);
         var host = new TaskCenterHost(
@@ -343,6 +353,22 @@ public class TaskCenterSuccessorPathGateTests
                         }
                         return Task.CompletedTask;
                     },
+                    // G6「Accepted 后关闭阶段抛异常」交错注入点（会诊要求的真实链路反例）。
+                    AfterLedgerBeforeClose = afterLedgerBeforeClose is null
+                        ? null
+                        : () =>
+                        {
+                            // 只对**节点提交**轮次注入（E1 流程启动轮次跳过，否则启动本身会被夹具打断）。
+                            if (Interlocked.Increment(ref ledgerCloseCount) > 1)
+                            {
+                                // 注入前取证「受理回执已落盘」——否则本夹具可能因别的原因（如接管落盘失败）而通过。
+                                var injected = runs.List().OrderByDescending(r => r.UpdatedAt).FirstOrDefault()
+                                    ?.CurrentSubmission?.AcceptedSendIdentity ?? "";
+                                faultInjections.Add(new FaultInjectionObservation(injected));
+                                afterLedgerBeforeClose();
+                            }
+                            return Task.CompletedTask;
+                        },
                 },
                 ProductionBoundaryFactory = (_, runs) =>
                 {
@@ -413,8 +439,22 @@ public class TaskCenterSuccessorPathGateTests
             var run = runs.List().FirstOrDefault(r => r.RunId == runId);
             IReadOnlyList<string> logs;
             lock (logGate) logs = logList.ToList();
+            string? openSubmissionIdentity = null;
+            try
+            {
+                openSubmissionIdentity = new ArbitrationLeaseStore(arbitrationDir)
+                    .Read().File?.Handoff?.Submission?.SubmissionIdentity;
+            }
+            catch (IOException)
+            {
+                // 瞬时争用：保持 null（断言会给出诊断）
+            }
+            var firstNodeResult = (nodeIds ?? ["n-1"])[0];
             return new RoutingProbe(snapshot, readOk, converged, run?.RunId ?? "", run?.State, run?.Note ?? "",
-                port.SendCount, logs, ledgerPoint.ToList());
+                run?.NodeOutcomes?.LastOrDefault(o => o.NodeId == firstNodeResult)?.Result ?? "",
+                port.SendCount, logs, ledgerPoint.ToList(), faultInjections.ToList(),
+                run?.CurrentSubmission?.Intent, run?.CurrentSubmission?.JobId,
+                run?.CurrentSubmission?.AcceptedSendIdentity, openSubmissionIdentity);
         }
         finally
         {
@@ -544,6 +584,59 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
             Assert.True(probe.State == WorkflowRunState.Succeeded, Diag("两节点流程应跑通", probe));
             Assert.True(firstNodeOpAtSecondSend == OperationRequestState.TerminalCompleted,
                 Diag("第一节点 Operation 必须在第二节点发送前独立终局（实际=" + (firstNodeOpAtSecondSend?.ToString() ?? "<null>") + "）", probe));
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
+    /// **G6 真实链路反例（会诊遗留阻断的端到端验收；范围已按会诊收窄）**：Sender **已返回 Accepted**、
+    /// 接管台账已落盘，随后在**关闭调用之前**抛异常（`AdmissionBarriers.AfterLedgerBeforeClose` 注入）⇒
+    /// 门面 `ProcessRoundAsync` 收敛为 `Error` ⇒ 宿主必须映射为 **Unknown**（不猜成功、也不猜失败），
+    /// Runner 记录节点结果为 `unknown` 并让运行 `Unknown` 停驻——**绝不允许**被 `_ => Rejected` 兜底反转成
+    /// 「确定拒绝」（那会诱发重发）。
+    /// **证明边界**：本注入点在 `CloseSubmission` **之前**，故等价于「关闭调用前、尚无关闭副作用的异常」；
+    /// **不**代表关闭事务内发布失败、关闭已提交后抛错或 `close.Success=false` 等情形（归后续批次）。
+    /// 本夹具走真实门面轮次处理链，不是仅分类级断言。
+    /// </summary>
+    [Fact]
+    public async Task SenderAcceptedThenCloseThrows_ConvergesUnknown_NotRejected()
+    {
+        var root = NewRoot("tcacc-");
+        try
+        {
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true,
+                afterLedgerBeforeClose: () => throw new InvalidOperationException("close-phase failure"));
+
+            Assert.True(probe.ReadOk, Diag("租约台账必须成功读取过", probe));
+            Assert.True(probe.Converged, Diag("运行必须收敛（不得停在活动态）", probe));
+            Assert.True(probe.SendCount == 1, Diag("发送已发生且不得因后续异常重发", probe));
+            Assert.True(probe.State == WorkflowRunState.Unknown,
+                Diag("Accepted 后关闭异常必须收敛 Unknown（不得假报成功/确定拒绝）", probe));
+            Assert.True(probe.FirstNodeResult == "unknown",
+                Diag("节点结果必须是 unknown（实际=" + probe.FirstNodeResult + "）——rejected 即事实反转", probe));
+            // 注入命中证明：异常确实发生在「Sender 已 Accepted 且接管已落盘」之后（否则本反例未成立）。
+            var injectedIdentity = Assert.Single(probe.FaultInjections).AcceptedSendIdentity;
+            var nodeOps = probe.Ops.Where(o => o.Candidate?.NodeId == "n-1").ToList();
+            Assert.True(nodeOps.Count == 1, Diag("应恰有一个该节点操作", probe));
+            Assert.Equal(nodeOps[0].SubmissionIdentity, injectedIdentity);
+            // 责任保留：最终未决 Submission 必须仍是**本笔**发送身份（不是被当作未受理而丢弃）。
+            Assert.Equal(nodeOps[0].SubmissionIdentity, probe.OpenSubmissionIdentity);
+            // 受理事实不得被后续整体写回降级（会诊阻断）：Intent=Accepted ＋ jobId ＋ 发送身份三项都必须在盘上。
+            Assert.Equal(SubmitIntentState.Accepted, probe.PersistedIntent);
+            Assert.Equal("job-node-1", probe.PersistedJobId);
+            Assert.Equal(nodeOps[0].SubmissionIdentity, probe.PersistedSendIdentity);
+            // 未决责任必须**保持**——若宿主把 Error 反转成确定拒绝，门面会走「确定拒绝」分支关闭 Submission
+            // （op 变 TerminalRejected）。故断言「未决/在飞状态」，这直接证伪「事实反转」。
+            var nodeOpState = probe.Ops.Where(o => o.Candidate?.NodeId == "n-1")
+                .Select(o => (OperationRequestState?)o.RequestState).FirstOrDefault();
+            Assert.True(nodeOpState is OperationRequestState.Granted or OperationRequestState.Sending
+                        or OperationRequestState.Reconciling or OperationRequestState.Queued
+                        or OperationRequestState.InRound,
+                Diag("未决责任必须保持（实际 op 状态=" + (nodeOpState?.ToString() ?? "<none>")
+                     + "）——若为 TerminalRejected 即事实反转", probe));
         }
         finally
         {
