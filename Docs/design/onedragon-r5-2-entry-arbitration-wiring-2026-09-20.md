@@ -1669,3 +1669,49 @@ M1 的①—⑤与 §3.2「E1 发送前固定 candidateId→runId→首节点提
    - **[会诊重要项处置] 公开入口身份回显修正**：`AdmissionResult.RequestIdentity` 默认是空串（门面各前置/异常分支亦返回空串），故回显**不得用 `??` 兜底**——续用被前置阻断时也必须回显**传入身份**（夹具 `AdmitExternalStart_ContinueUseBlocked_StillEchoesSuppliedIdentity`）。
    - **仍欠（登记为启用前置）**：①**外部启动候选未提供可验证的载荷绑定**（宿主构造候选未设 `PayloadFingerprint`）⇒「同身份、不同实际启动参数」的续用**当前无法被拒**（候选指纹同为空的空串比较），且 `ProcessLocalContext`（含执行委托）在重新驱动 Queued 操作时按本次传入取值；须补外部启动的载荷指纹/键绑定后再谈启用；②**当前接线态无内部重试点**（冲突重试＝0），故续用机制**暂无使用场景**（不得读作「适配层没有重试」——未接线旧路径仍保留六次无损重试）；③未覆盖：并发续用、与首次请求交错、续用时载荷/排序键不一致被拒、ContinueUse 对 `TerminalCompleted/Reconciling/Queued` 再驱动/可重试拒绝的分类（`RetryableRejected` **不自动 RetryAsync**，故**不是完整重试闭环**）；④同次操作不得误走 Create 需适配器端断言。
 4. E5b/E6 外部直连**排除项**与 R5.8 真实线路逐词证据保持原登记（不在本批范围）。
+
+
+
+## 15. B4 提交点清单与路由证据（[新增·2026-09-21；会诊后扩充]）
+
+> **性质**：**实施入档**。目的：把「一切执行提交点」显式登记，避免将来新增发送路径绕过统一仲裁面而无人发现。
+> **路由证据＝两层**：①本清单（人工登记：位置/入口/仲裁归属/门禁/证据）；②**结构提醒守卫**
+> `SubmissionPointInventoryTests`——**文本匹配计数**（非语义调用点识别），与硬编码清单逐一比对；
+> **该守卫不读本表**，故它只是「提醒有人改了提交点」，**不构成文档一致性或运行期路由证明**。
+
+**A. 执行提交点（会创建/下发执行）**
+
+| # | 提交点（位置） | 入口/来源 | 仲裁归属 | 当前状态 | 证据 |
+|---|---|---|---|---|---|
+| **S1** | `BgiWorkflowExecutionBoundary.SendPreparedAsync` → `ExternalOperations.TaskStart` | E6 助手侧提交通道（托管节点提交） | **经仲裁装饰器**（`CreateRunner` 唯一组装点） | **生产门关闭**（§13.11a） | `TaskCenterSuccessorPathGateTests`（门开＝经门面占位/恰好发送一次；门关＝直通且无 successor 操作） |
+| **S2** | `CommandExecutor.StartGroupCoreAsync`（v2 `task.start`；首次＋冲突重试＝2 处静态语句） | E3/E5 `start_group` | **接线态经准入**（`externalStartAdmission` 非 null）；未接线＝既有直启 | 组合根**未注入** | 候选形状/映射夹具；重试上限纯函数＋源码审查；**实际「阻断零发送／冲突零重发」端到端反例待补** |
+| **S3** | `CommandExecutor.StartOneClickCoreAsync`（v2 `task.start`；2 处静态语句） | E3/E5 `start_oneclick` | 同 S2 | 同 S2 | 同上 |
+| **S4a** | `CommandExecutor.StartViaV2IpcNoKillAsync`（v2；2 处静态语句） ← `StartWithPreemptionAsync` | **E3/E5 既有抢占分支** | 接线态**不可达**（`allowPreemption:false` 跳过抢占）；未接线＝既有行为 | 保留 | 源码审查（§14 批次 4/5） |
+| **S4b** | 同上 ← `StartSpecifiedTaskAsync` ← `ApplyPolicyTeardownAsync(RunSpecified)` ← `MainViewModel:1064` | **策略/触发器入口**（联机锄地批次收尾「执行指定任务」） | **未经仲裁面**：既有**未接入**提交点；**R5.2 未闭合项**：与 R5.5 的承接方式及实施批次**待裁决**，**不据此减免 R5.2 验收**（§6.1 明确要求 `RunSpecified` 进入启动候选） | 保留既有行为 | 代码路径核实；**待承接/待裁决**（R5.2 未闭合项） |
+| **S5** | `BgiExternalClient` 的 `ExternalOperations.TaskStart` 薄封装 | ext 任务队列通道（`TryStartViaQueueAsync` ← `StartGroupCoreAsync`／`StartOneClickCoreAsync`；**E4 热键无 ext 分支**——其实际发送是 `action.execute_hotkey`） | **自身无仲裁检查**：准入保证**依赖经核实的上游调用链**（S2/S3 接线态经准入；**批次/策略来源**见 S4b，**待核实其 ext 分支是否存在**） | 随上游 | 上游夹具；**通用 `SendCommandAsync(operation, …)` 可直发 ext 操作 ⇒ 新增未准入调用方不会被本守卫发现**（登记为待粗化点） |
+| **S7** | `CommandExecutor.ExecuteHotkeyAsync` → `action.execute_hotkey` | **E4 实际发送**（启动类热键；控制热键同名通道但语义不同） | **接线态经准入**（`StartViaAdmissionAsync` 回调内执行）；未接线＝直通 | 组合根**未注入** | 候选形状夹具（`manual:`/`v2:` ＋ 阻断未发键）；控制热键直通「不经准入」以源码审查为据 |
+| **S8a** | `ExecuteResumeAsync(cancel:false)` ← E2 恢复入口（`ResumeRunAsync`／`RegisterResumeHandoff` → `SubmitResumeViaAdmissionAsync` → Sender） | 恢复执行副作用（入口来源） | **经 §5.1 恢复专用准入** | 已接线（生产 `admissionWired:true`） | `TaskCenterHostRecoveryAdmissionTests` |
+| **S8b** | 同方法 ← `ExecuteResumeWithBusyRetryAsync` ← `ApplyPolicyTeardownAsync(Resume)` | 恢复执行副作用（**策略收尾来源**） | **未经恢复准入**（内部链直发，不经过 E2 准入面）——既有**未接入** | 保留既有行为 | 代码路径核实；**不得**因 E2 已接线而推定本来源受保护（与 S4b 同性质） |
+
+**B. 控制/观察面（非执行提交，登记排除理由）**
+
+| 操作 | 分类 | 排除理由 |
+|---|---|---|
+| `task.resume(cancel:true)` | 清上下文 / 释放责任的控制动作 | 不创建新执行；作为抢占/收尾闭环内动作受既有合同约束（§4.2c） |
+| `task.suspend` | 中断/接管控制动作 | 不创建新执行；抢占用途仍受「交接责任 + 获准后不得追加抢占」约束（§14） |
+| `task.stop` / `cancel` / `close_game` | 停止类控制动作 | 立即停止语义保留独立；不属启动候选 |
+| `task.status` / `config.*` / `ext.task.queueStatus` 等 | 观察面 / 配置面 | 只读或配置写入，不产生执行提交 |
+
+**C. 原生排除项与待核实范围**
+
+- **S6**：BGI 原生面外部直连（E5b/E6 外部/E7）——**排除项**（§1/§3.3：助手侧锁不冻结外部原生启动）；R5.8「不干扰验收」。
+- **待核实**：①`start_bgi` 的 `args` 是否可携带执行参数（当前按「仅启动进程」登记）；
+  ②ext 常量目录中的前置/收尾作业操作是否纳入广义执行提交清单；③仓库内是否还有其它 opcode 直发点（本守卫只覆盖两种文本模式）。
+
+**D. 守卫的能力边界（如实登记，不得夸大）**
+
+- 守卫为**文本匹配计数**：注释/字符串常量中的同形文本会**误报**，改用变量/别名/字面量 `"ext.task.start"` 会**漏报**；
+  同文件内新增旁路调用、先构造后重复发送、把发送搬到同文件另一方法，计数**不变**。
+- 因此守卫只能保证「已登记的文本模式数量未变」，**不能**证明提交点完整、不能证明授权先于发送（后者由各入口夹具与 R5.8 真实线路证据承担）。
+- 合法重构（抽取方法/改常量）应走「行为断言复核 + 同步更新本表与守卫」；**禁止**只改数字消警。
+- 需源码树（`AppContext.BaseDirectory` 上溯定位仓库根）：仅发布产物/影子目录下会**环境前置失败**并明确报错。
