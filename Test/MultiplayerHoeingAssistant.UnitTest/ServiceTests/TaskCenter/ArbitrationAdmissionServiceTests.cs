@@ -37,7 +37,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
 
     /// <summary>takeover=true=模拟进程重启后接管（LeaseTakeoverObserver 单调观察满 TTL+锁内复核，§6.3 唯一接管依据）。</summary>
     private (ArbitrationAdmissionService Svc, ArbitrationLeaseStore Store, ExternalStartLedger Ledger, AdmissionHooks Hooks) BuildFacade(
-        Action<AdmissionHooks>? configure = null, bool takeover = false)
+        Action<AdmissionHooks>? configure = null, bool takeover = false, string ownerPid = "pid:test")
     {
         var store = NewStore();
         var ledger = new ExternalStartLedger(_dir, () => _now);
@@ -56,7 +56,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var svc = new ArbitrationAdmissionService(store, hooks, () => _now);
         if (!takeover)
         {
-            var acq = svc.EnsureOwnership("pid:test");
+            var acq = svc.EnsureOwnership(ownerPid);
             Assert.True(acq.Success, "夹具前置：获取租约失败 " + acq.Reason);
         }
         else
@@ -66,7 +66,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
             _mono += TimeSpan.FromSeconds(20);
             var evidence = observer.Observe(store.Read());
             Assert.NotNull(evidence);
-            var acq = store.TryAcquire("pid:test", evidence: evidence);
+            var acq = store.TryAcquire(ownerPid, evidence: evidence);
             Assert.True(acq.Success, "夹具前置：接管租约失败 " + acq.Reason);
         }
 
@@ -3729,6 +3729,102 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(AdmissionResultKind.Accepted, firstResult.Kind);   // 锁外并发不改变本笔结算
         Assert.Equal(1, Volatile.Read(ref sends));                     // 发送仍恰好一次（无重发）
         Assert.Null(ReadLease().File!.Handoff!.Submission);            // 关闭已完成
+    }
+
+    // ── §24.36 范围残余：**宿主重建后**未决责任仍阻挡再次发送（[新增·2026-09-22 批次四十一]）──
+
+    /// <summary>
+    /// **重启/宿主重建后：未决发送责任仍然阻挡、不得新增许可、不得换键**（组件级模拟）：
+    /// ①门面 A 使某一候选进入**不可考**（`Unknown`）⇒ 操作 `Reconciling`、许可水位 1、未决 `Submission` 在册；
+    /// ②模拟重启：**同一租约目录**上经**接管观察**新建门面 B（新实例、新所有权代次）；
+    /// ③门面 B 对**同一候选**再发起创建 ⇒ 仍必须因**未决发送**拒绝（`submission_conflict`），
+    /// 且 **B 侧零发送**、原许可水位与发送身份**不变**（**不换键、不新增许可**）。
+    /// 说明：这是**组件级**「宿主重建」；子进程级重启仍归 B4（§24.41-C#9）。
+    /// </summary>
+    [Fact]
+    public async Task RestartAfterUnknown_SameCandidateStillBlocked_NoNewPermitNoKeyChange()
+    {
+        AdmissionRequest NewSameIdentity() => new()
+        {
+            Namespace = "successor",
+            Kind = AdmissionKind.Create,
+            SourceDetail = "fixture",
+            OperationType = OperationType.NodeExecution,
+            RunBinding = "run-r1",
+            CursorRef = "n-r1#0#0",
+            CursorRevision = 1,
+            Candidate = new ArbitrationCandidate
+            {
+                Scope = "bgi:inst:ep1",
+                Namespace = "successor",
+                WorkflowId = "wf-r1",
+                TriggerOccurrenceId = "manual:panel:r1",
+                RunId = "run-r1",
+                NodeId = "n-r1",
+                Occurrence = 0,
+                LoopIteration = 0,
+                Attempt = 1,
+                Tier = ArbitrationTier.Plan,
+                PayloadFingerprint = "p-r1",
+                ResourceRef = "node:n-r1",
+                Intent = "start",
+            },
+            WireSubmitKey = "wire-r1",
+        };
+
+        // ① 门面 A：制造不可考（未决发送）
+        var sendsA = 0;
+        var (svcA, _, _, _) = BuildFacade(h =>
+            h.Sender = _ => { Interlocked.Increment(ref sendsA); return Task.FromResult<SendOutcome>(new SendOutcome.Unknown("fixture_unknown")); });
+        var r1 = NewSameIdentity();
+        Assert.Equal(AdmissionResultKind.Reconciling, (await svcA.SubmitAsync(r1)).Kind);
+        Assert.Equal(1, sendsA);
+        var op1 = FindOp(r1.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.Reconciling, op1.RequestState);
+        Assert.Equal(1, op1.LastSendSeq);
+        var sub1 = ReadLease().File!.Handoff!.Submission!;
+        Assert.Equal(op1.SubmissionIdentity, sub1.SubmissionIdentity);
+        Assert.Equal(SubmissionState.Reconciling, sub1.State);
+
+        // ② 模拟重启：同一租约目录上经**接管观察**新建门面 B（**不同所有者**＝新实例、新所有权代次）
+        var leaseBefore = ReadLease().File!.Lease!;
+        var sendsB = 0;
+        var (svcB, _, _, _) = BuildFacade(h =>
+            h.Sender = _ => { Interlocked.Increment(ref sendsB); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null, "job-new")); },
+            takeover: true, ownerPid: "pid:testB");
+        var leaseAfterTakeover = ReadLease().File!.Lease!;
+        Assert.NotEqual(leaseBefore.OwnerEpoch, leaseAfterTakeover.OwnerEpoch);   // 所有权代次确实更替
+        Assert.NotEqual(leaseBefore.LeaseId, leaseAfterTakeover.LeaseId);
+
+        // ③ 门面 B 对同一候选再发起创建 ⇒ 未决责任仍阻挡；零发送、许可与身份不变
+        var preObsBefore = ReadLease().File!.Handoff!.PreObservations?.Count ?? 0;
+        var r2 = NewSameIdentity();
+        var second = await svcB.SubmitAsync(r2);
+        Assert.Equal(AdmissionResultKind.Error, second.Kind);
+        Assert.Equal("submission_conflict", second.ReasonCode);
+        Assert.Equal(0, sendsB);                                          // **B 侧零发送**
+        Assert.NotEqual(r1.RequestIdentity, r2.RequestIdentity);          // 两笔为**新创建**
+        var op2 = FindOp(r2.RequestIdentity);
+        if (op2 is not null)
+        {
+            Assert.Equal(op1.CandidateId, op2.CandidateId);               // 同一候选
+            Assert.Equal(0, op2.LastSendSeq);                             // **B 侧未新增许可**
+            Assert.True(string.IsNullOrEmpty(op2.SubmissionIdentity));
+        }
+        Assert.Equal(preObsBefore, ReadLease().File!.Handoff!.PreObservations?.Count ?? 0);   // 未新增预观察
+
+        var opAfter = FindOp(r1.RequestIdentity)!;
+        Assert.Equal(1, opAfter.LastSendSeq);                             // **不新增许可**
+        Assert.Equal("wire-r1", opAfter.WireSubmitKey);                   // **不换键**
+        Assert.Equal(op1.WireSubmitKey, opAfter.WireSubmitKey);
+        var subAfter = ReadLease().File!.Handoff!.Submission!;
+        Assert.Equal(op1.SubmissionIdentity, subAfter.SubmissionIdentity); // **不换发送身份**
+        Assert.Equal(sub1.SendSeq, subAfter.SendSeq);
+        Assert.Equal(SubmissionState.Reconciling, subAfter.State);         // 未决状态保持
+        // 第二次被拒**不得**改变 B 的所有权（不得借这次拒绝重新接管/续期）
+        var leaseAfterReject = ReadLease().File!.Lease!;
+        Assert.Equal(leaseAfterTakeover.OwnerEpoch, leaseAfterReject.OwnerEpoch);
+        Assert.Equal(leaseAfterTakeover.LeaseId, leaseAfterReject.LeaseId);
     }
 
     // ── §24.41-C#17：未决发送责任**阻挡再次发送**（门面级直接证据；[新增·2026-09-21 批次三十七]）──
