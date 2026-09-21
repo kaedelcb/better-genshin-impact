@@ -519,6 +519,64 @@ public class TaskCenterSuccessorPathGateTests
     }
 
     /// <summary>
+    /// **§17 P49／§16 交错③「准备阶段 `RunStore` 更新（发布）失败」（[新增·2026-09-21 批次二十一]）**：
+    /// 经**仅测试**接缝 `RunStore.PublishFaultForTest`（生产恒 `null`）在**原子发布步骤**注入 `IOException`——
+    /// 注入条件＝该记录已带**准备段冻结写**标记（`CurrentSubmission.SendAttempted == true`），故发生在
+    /// 「占位后、合并回调已修改内存记录、真实发布失败」的窗口（§12.3 M3③ 所指场景），而非「准备段调用之前」。
+    /// 阶段边界＝**已占位、尚未调用发送**（§12.3 M3①），故必须：**零发送**、不得假报成功、
+    /// 责任**保留**（未决 `Submission` 在册且状态 `Reconciling`、节点操作非终局 `Reconciling`、
+    /// `LastSendSeq==1`＝确系已占位、发送身份与提交键仍属原笔），
+    /// 且**不得**把「发布失败」反解为「确定未受理」（§12.3 M3③：那会诱发换键重跑）。
+    /// **范围限定**：本夹具覆盖**活进程内的一次驱动**；「重启/恢复后仍不换键」不在本节范围（归 B4 恢复项）。
+    /// </summary>
+    [Fact]
+    public async Task NodeSubmit_PrepareStageWriteFault_NoSendResponsibilityRetained()
+    {
+        var root = NewRoot("tcprepwf-");
+        try
+        {
+            var injected = 0;
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: ["n-1"],
+                configureRuns: r => r.PublishFaultForTest = rec =>
+                {
+                    // 只对「准备段冻结写」注入（intent 已由 Runner 落盘、冻结字段已写、发布尚未完成）：
+                    // 其余写入（意图落盘、结果写回等）不受影响 ⇒ 故障确落在准备段发布窗口。
+                    if (rec.CurrentSubmission?.SendAttempted != true) return null;
+                    Interlocked.Increment(ref injected);
+                    return new IOException("fixture: prepare-stage run-store publish fault");
+                });
+
+            Assert.Equal(1, Volatile.Read(ref injected));   // 注入确实命中准备段（且只命中一次）
+            Assert.True(probe.Converged, Diag("运行必须收敛（不得悬挂）", probe));
+            Assert.True(probe.State != WorkflowRunState.Succeeded, Diag("准备段写失败不得假报成功", probe));
+            Assert.Equal(0, probe.SendCount);               // **零发送**（尚未进入可能发送阶段）
+            Assert.Equal("unknown", probe.FirstNodeResult); // 不得反解为确定未受理/拒绝
+            Assert.True(probe.State == WorkflowRunState.Unknown,
+                Diag("发布失败＝不可考 ⇒ 必须保守停驻 Unknown（不得 Failed/Cancelled 等终态）", probe));
+
+            var handoff = ReadLeaseFileWithRetry(root)?.Handoff;
+            Assert.NotNull(handoff);
+            var op = handoff!.Operations.Single(o => !string.IsNullOrEmpty(o.Candidate?.NodeId));
+            Assert.Equal(1, op.LastSendSeq);                                    // 已发布发送许可＝确系「已占位」
+            Assert.Equal(OperationRequestState.Reconciling, op.RequestState);   // 责任载体非终局（不得记成 TerminalRejected）
+            Assert.False(string.IsNullOrEmpty(op.SubmissionIdentity));
+            Assert.NotNull(handoff.Submission);                                 // **责任保留**（未决发送责任在册）
+            Assert.Equal(op.SubmissionIdentity, handoff.Submission!.SubmissionIdentity);
+            Assert.Equal(SubmissionState.Reconciling, handoff.Submission.State);
+            // 发送身份仍绑定**原笔提交**：租约操作携带的线上提交键＝运行记录中本笔提交的键（未换键、未新 attempt）
+            var persistedRun = new RunStore(Path.Combine(root, "runs")).List().Single();
+            Assert.False(string.IsNullOrEmpty(op.WireSubmitKey));
+            Assert.Equal(persistedRun.CurrentSubmission!.Key, op.WireSubmitKey);
+            Assert.Equal(1, persistedRun.CurrentSubmission.Attempt);
+            Assert.Equal("n-1", op.Candidate!.NodeId);
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
     /// **§16 交错⑥·格 B＝启动移交／续行／恢复类运行（无已登记固定来源）**：`TryGetAdmissionScope` 查不到
     /// 「同 `RunBinding` ＋ `Intent=start` ＋无节点身份 ＋ Scope 非空」的登记操作 ⇒ 后继节点提交按
     /// **AMD-1-5 第三条「缺固定 Scope/绑定＝不签发、不发送」响亮拒绝**（**不得**退回直通发送、不得临时读
@@ -745,7 +803,9 @@ public class TaskCenterSuccessorPathGateTests
         Action<RoutingFakePort>? configurePort = null,
         // [§16 交错⑥ 格 A′] 暴露接缝实例（默认 null＝不影响既有夹具）：用于在「E1 已登记固定 Scope、
         // 节点尚未准入」之间改变当前纪元，从而区分「继承登记值」与「重读当前值」。
-        Action<TaskCenterAdmissionSeams>? configureSeams = null)
+        Action<TaskCenterAdmissionSeams>? configureSeams = null,
+        // [§17 P49／§16 交错③] 存储侧注入钩子（默认 null＝不影响既有夹具）：例如注入「准备段发布失败」。
+        Action<RunStore>? configureRuns = null)
     {
         using var client = new BgiExternalClient();
         var flowsDir = Path.Combine(root, "flows");
@@ -835,6 +895,7 @@ public class TaskCenterSuccessorPathGateTests
                 if (onBeforeSendWithPayload is not null)
                     port.OnBeforeSendWithPayload = (n, payloadJson) => onBeforeSendWithPayload(r, n, payloadJson);
                 configurePort?.Invoke(port);
+                configureRuns?.Invoke(r);   // [§17 P49] 宿主实际使用的 RunStore 实例（非本方法局部 `runs`）
                 return new BgiWorkflowExecutionBoundary(port, r);
             },
         };

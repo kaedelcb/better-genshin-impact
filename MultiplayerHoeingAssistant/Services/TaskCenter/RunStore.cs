@@ -36,6 +36,14 @@ public sealed class RunStore
     /// <summary>写入串行化闸门（ASTRA 二轮重要项①：乐观并发只防覆盖不防交错，读-检-写全程互斥）。</summary>
     private readonly object _gate = new();
 
+    /// <summary>
+    /// **仅测试接缝**（生产恒 `null`）：按记录判定是否在**原子发布步骤**注入故障（返回 `null`＝不注入）。
+    /// 依据：[§17 P49／§16 交错③] 需要可确定地制造「准备阶段 `RunStore` 更新（发布）失败」，
+    /// 该窗口内**内存记录已被合并回调修改**、磁盘发布结果不明——正是 §12.3 M3③ 所指的
+    /// 「禁止继续用该对象发送、禁止无条件回滚、禁止立即再次 PrepareSubmit」的判定场景。
+    /// </summary>
+    internal Func<WorkflowRunRecord, Exception?>? PublishFaultForTest { get; set; }
+
     public RunStore(string runsDir)
     {
         // R4.8 二轮（重要2）：构造零副作用——目录推迟到首次 Persist 才创建
@@ -337,6 +345,12 @@ public sealed class RunStore
     {
         lock (_gate)
         {
+        // **仅测试接缝**（生产恒 `null`）：在**原子发布步骤之前**（尚未写临时文件/替换目标）注入故障——
+        // 用于 §17 P49／§16 交错③「准备阶段 `RunStore` 更新失败」的**真实存储写入路径**（此时内存记录
+        // 已被合并回调修改、发布结果不明，正是 §12.3 M3③ 所指的窗口）。异常**原样抛出**（不包装），
+        // 与真实磁盘故障走同一归类路径。回调按记录判定，便于只对「准备段冻结写」（`SendAttempted` 已置真）注入。
+        if (PublishFaultForTest is { } faultForTest && faultForTest(rec) is { } injectedFault)
+            throw injectedFault;
         if (string.IsNullOrWhiteSpace(rec.RunId))
             throw new ArgumentException("RunId 不能为空", nameof(rec));
         if (rec.RecordRevision != expectedRecordRevision)
