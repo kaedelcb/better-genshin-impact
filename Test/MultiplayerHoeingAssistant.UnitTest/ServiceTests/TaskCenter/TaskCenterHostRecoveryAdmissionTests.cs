@@ -611,6 +611,13 @@ public class TaskCenterHostRecoveryAdmissionTests : IDisposable
             Assert.Equal("1:100", resumeOp.TargetEpoch);
             Assert.Equal("bgi:local:1:100", resumeOp.Candidate!.Scope);
             Assert.Equal(startOp.Candidate!.Scope, resumeOp.Candidate!.Scope); // 与启动操作逐字一致
+            // [C 表 #10 余项／批次四十八] **恢复入口另行取许可**：恢复操作**自己**取得本轮发送许可
+            // （`LastSendSeq == 1` 且发送身份自证），**不是**沿用启动操作那笔许可；两者身份互不相同。
+            Assert.Equal(1, resumeOp.LastSendSeq);
+            Assert.Equal("sub:" + resumeOp.RequestIdentity + ":1", resumeOp.SubmissionIdentity);
+            Assert.Equal(1, startOp.LastSendSeq);
+            Assert.Equal("sub:" + startOp.RequestIdentity + ":1", startOp.SubmissionIdentity);   // 自证（防「空值也算不等」）
+            Assert.NotEqual(startOp.SubmissionIdentity, resumeOp.SubmissionIdentity);
         }
         finally
         {

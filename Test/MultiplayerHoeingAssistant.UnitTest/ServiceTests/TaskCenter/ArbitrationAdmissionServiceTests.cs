@@ -4537,6 +4537,98 @@ public class ArbitrationAdmissionServiceTests : IDisposable
 
     // ── 恢复扫描集合②/③（R5.3 §24.12-3；[Batch B 收尾之五]）────────────────────────────────────
 
+    /// <summary>
+    /// **[C 表 #10 余项／批次四十八] 恢复入口「再次取许可」的许可语义**：
+    /// ①**不得复用**既有未决许可——同一 runBinding 尚存未决 `Submission` 时，恢复准入被 `submission_conflict`
+    /// **确定拒绝**（因未发布发送许可而终局中止）：**零新增发送**、恢复操作 `LastSendSeq == 0`、原未决发送不变；
+    /// ②该未决发送经**权威对账确定未受理**关闭后，恢复**再次发起**必须**新签发本轮许可**
+    /// （`LastSendSeq == 1`、本笔发送身份 `sub:{rid}:1`、Sender 恰一次、结算后无未决发送）——
+    /// 即「再次取许可」是**重新签发**，不是沿用旧身份。
+    /// </summary>
+    [Fact]
+    public async Task RecoveryEntry_ReacquiresOwnPermit_AfterUnresolvedSubmissionClosed()
+    {
+        var sends = 0;
+        var acceptSend = false;
+        var dispatches = new List<SubmissionDispatch>();
+        var (svc, _, _, _) = BuildFacade(h => h.Sender = _ =>
+        {
+            dispatches.Add(_);          // **逐次保存派发对象**（直接证据：Sender 实际消费的发送身份）
+            Interlocked.Increment(ref sends);
+            return Task.FromResult<SendOutcome>(acceptSend
+                ? new SendOutcome.Accepted("ext:accepted", "run-rec")
+                : new SendOutcome.Unknown("ipc_timeout"));
+        });
+
+        // 甲：制造**未决发送**（Unknown ⇒ `Reconciling` ＋ `Submission` 在册）
+        var unresolved = Req(ns: "v2", workflow: "wf-rec", operationType: OperationType.ExternalStart);
+        unresolved.RunBinding = "run-rec";
+        Assert.Equal(AdmissionResultKind.Reconciling, (await svc.SubmitAsync(unresolved)).Kind);
+        var unresolvedOp = FindOp(unresolved.RequestIdentity)!;
+        Assert.NotNull(ReadLease().File!.Handoff!.Submission);
+        var sendsAfterUnresolved = sends;
+
+        // ① 未决发送在册 ⇒ 恢复准入**确定拒绝**（零许可、零发送）
+        var blocked = await svc.AdmitRecoveryAsync(new RecoveryAdmissionRequest
+        {
+            SourceDetail = "fixture:recovery-reacquire",
+            RunId = "run-rec",
+            WorkflowId = "wf-rec",
+            RestoreBranch = "interrupted-relocate",
+            Scope = "bgi:inst:ep1",
+        });
+        Assert.Equal(AdmissionResultKind.Error, blocked.Kind);
+        Assert.Equal("submission_conflict", blocked.ReasonCode);
+        Assert.Equal(sendsAfterUnresolved, sends);                       // 零新增发送
+        var blockedOp = FindOp(blocked.RequestIdentity)!;
+        Assert.Equal(0, blockedOp.LastSendSeq);                          // 未签发许可
+        Assert.True(string.IsNullOrEmpty(blockedOp.SubmissionIdentity));
+        // **终局中止**的直接证据（不只断返回码）：操作终局拒绝＋原因码＋迁区（不悬置在活跃区）
+        Assert.Equal(OperationRequestState.TerminalRejected, blockedOp.RequestState);
+        Assert.Equal("submission_conflict", blockedOp.LastResult?.ReasonCode);
+        Assert.NotEqual(OperationZone.Active, blockedOp.Zone);
+        Assert.Single(dispatches);                                       // 被拒的恢复**未派发**给 Sender（仍只有甲那一次）
+        Assert.NotNull(ReadLease().File!.Handoff!.Submission);           // 原未决发送**未被复用/未被动过**
+        Assert.Equal(unresolvedOp.SubmissionIdentity, ReadLease().File!.Handoff!.Submission!.SubmissionIdentity);
+
+        // ② 权威对账**确定未受理** ⇒ 关闭该未决发送
+        var settle = await svc.SettleReconciledAsync(unresolved.RequestIdentity,
+            new ReconcileSettlement.NotAccepted(unresolvedOp.SubmissionIdentity, unresolvedOp.LastSendSeq,
+                "bgi_rejected", Retryable: false, "fixture:对账确定未受理"));
+        Assert.Equal(AdmissionResultKind.TerminalRejected, settle.Kind);
+        Assert.Null(ReadLease().File!.Handoff!.Submission);
+
+        // ③ 恢复**再次发起** ⇒ 新签发本轮许可（重新签发，非沿用）
+        acceptSend = true;
+        var admitted = await svc.AdmitRecoveryAsync(new RecoveryAdmissionRequest
+        {
+            SourceDetail = "fixture:recovery-reacquire-2",
+            RunId = "run-rec",
+            WorkflowId = "wf-rec",
+            RestoreBranch = "interrupted-relocate",
+            Scope = "bgi:inst:ep1",
+        });
+        Assert.Equal(AdmissionResultKind.Accepted, admitted.Kind);
+        Assert.Equal(sendsAfterUnresolved + 1, sends);                   // 恰一次新发送（无重发）
+        var recoveryOp = FindOp(admitted.RequestIdentity)!;
+        Assert.Equal(1, recoveryOp.LastSendSeq);                         // **新签发**
+        Assert.Equal("sub:" + admitted.RequestIdentity + ":1", recoveryOp.SubmissionIdentity);
+        Assert.NotEqual(unresolvedOp.SubmissionIdentity, recoveryOp.SubmissionIdentity);  // 不复用旧身份
+        // **Sender 实际消费的许可身份**（跨边界直接证据）：恢复那次的派发对象身份＝新许可，且 ≠ 旧许可
+        var recoveryDispatch = Assert.Single(dispatches.Where(d => d.RequestIdentity == admitted.RequestIdentity));
+        Assert.Equal(recoveryOp.SubmissionIdentity, recoveryDispatch.SubmissionIdentity);
+        Assert.Equal(1, recoveryDispatch.SendSeq);
+        Assert.Equal("ep1", recoveryDispatch.TargetEpoch);
+        Assert.NotEqual(unresolvedOp.SubmissionIdentity, recoveryDispatch.SubmissionIdentity);
+        // **旧操作重新读盘**：身份/许可水位原样保留在册，未被恢复操作覆盖或清洗
+        var oldAfter = FindOp(unresolved.RequestIdentity)!;
+        Assert.Equal(unresolvedOp.SubmissionIdentity, oldAfter.SubmissionIdentity);
+        Assert.Equal(unresolvedOp.LastSendSeq, oldAfter.LastSendSeq);
+        Assert.Equal(OperationRequestState.TerminalRejected, oldAfter.RequestState);   // 对账确定未受理的终局
+        Assert.NotEqual(unresolved.RequestIdentity, admitted.RequestIdentity);
+        Assert.Null(ReadLease().File!.Handoff!.Submission);              // 新许可已按唯一顺序结算关闭
+    }
+
     /// <summary>夹具辅助：把某笔外部启动操作**推进到下一发送轮次**（模拟「扫描快照后责任被并发推进」）。</summary>
     private string? PromoteToNextSendSeq(ArbitrationLeaseStore store, string requestIdentity)
     {
