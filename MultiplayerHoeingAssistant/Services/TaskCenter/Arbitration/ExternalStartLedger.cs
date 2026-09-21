@@ -50,6 +50,8 @@ public sealed class ExternalStartLedgerEntry
     [JsonPropertyName("rawTerminal")] public string? RawTerminal { get; set; }
     /// <summary>终态副本：完成层执行错误码（与信封 errorCode 语义分离）。</summary>
     [JsonPropertyName("executionErrorCode")] public string? ExecutionErrorCode { get; set; }
+    /// <summary>终态副本：**完成观察证据来源**（[第三轮验证会诊] 新增，供 §24.15 读回逐字段比对）。</summary>
+    [JsonPropertyName("terminalEvidenceSource")] public string? TerminalEvidenceSource { get; set; }
     /// <summary>终态副本：持久化操作类型（§24.17；类型相关判定 fail-closed 的依据）。</summary>
     [JsonPropertyName("operationType")] public OperationType OperationType { get; set; } = OperationType.Unknown;
 }
@@ -248,9 +250,9 @@ public sealed class ExternalStartLedger
                            && string.Equals(existing.TargetBgiEpoch, entry.TargetBgiEpoch, StringComparison.Ordinal)
                            && string.Equals(existing.RunId, entry.RunId, StringComparison.Ordinal);
                 if (!same) return "identity_conflict"; // 重复接管幂等（含 RunId 与既有状态）；同身份不同要素=响亮拒绝
-                // 终态不得被降级回未终结（R5.3 §24.7-1：迟到活动态不得降级 Terminal）。
-                if (existing.State == LedgerEntryState.Terminal && entry.State != LedgerEntryState.Terminal)
-                    return "terminal_downgrade";
+                // 终态不得被降级回未终结（R5.3 §24.7-1：迟到活动态不得降级 Terminal）——
+                // [第五轮验证会诊] 本函数**从不改写既有 State/终态副本**，故「不降级」已由「不写入」保证；
+                // 直接拒绝会让「终态已成、句柄后补」的对账重试永久失败，故此处放行并仅做下方句柄合并。
                 // JobId 合并规则（R5.3 §24.3-3）：两空=幂等；一空一非空=补齐；两侧非空且不同=拒绝并保守待对账。
                 var existingJob = existing.JobId ?? "";
                 var incomingJob = entry.JobId ?? "";
@@ -289,7 +291,8 @@ public sealed class ExternalStartLedger
     public LedgerMutateResult MarkTerminal(
         string submissionIdentity, int sendSeq, string terminalEvidence, DateTimeOffset observedAtUtc,
         string? rawTerminal = null, string? executionErrorCode = null,
-        OperationType operationType = OperationType.Unknown, string? jobId = null)
+        OperationType operationType = OperationType.Unknown, string? jobId = null,
+        string? terminalEvidenceSource = null)
     {
         if (string.IsNullOrWhiteSpace(terminalEvidence))
             return new LedgerMutateResult { Success = false, Reason = "evidence_required", File = null };
@@ -330,6 +333,15 @@ public sealed class ExternalStartLedger
                 }
                 else if (executionErrorCode is { Length: > 0 }) entry.ExecutionErrorCode = executionErrorCode;
 
+                // 完成观察证据来源同样按「有值必须原值重放」核对（[第三轮验证会诊]：读回逐字段比对需要该副本）。
+                if (entry.TerminalEvidenceSource is { Length: > 0 } recordedSource)
+                {
+                    if (string.IsNullOrEmpty(terminalEvidenceSource)) return "terminal_payload_required";
+                    if (!string.Equals(recordedSource, terminalEvidenceSource, StringComparison.Ordinal))
+                        return "terminal_payload_conflict";
+                }
+                else if (terminalEvidenceSource is { Length: > 0 }) entry.TerminalEvidenceSource = terminalEvidenceSource;
+
                 if (entry.OperationType is not OperationType.Unknown)
                 {
                     if (operationType == OperationType.Unknown) return "terminal_payload_required";
@@ -344,6 +356,7 @@ public sealed class ExternalStartLedger
             entry.TerminalEvidence = terminalEvidence;
             entry.RawTerminal ??= rawTerminal;
             entry.ExecutionErrorCode ??= executionErrorCode;
+            entry.TerminalEvidenceSource ??= terminalEvidenceSource;
             if (operationType != OperationType.Unknown) entry.OperationType = operationType;
             // 句柄补齐（一空一非空=补齐；两侧非空且不同=拒绝并保守待对账，§24.3-3）。
             var existingJob = entry.JobId ?? "";

@@ -198,6 +198,25 @@ public abstract record ReconcileSettlement
     public sealed record NotAccepted(string SubmissionIdentity, int SendSeq, string ReasonCode, bool Retryable, string EvidenceSource) : ReconcileSettlement;
 }
 
+/// <summary>台账句柄读取状态（[第八轮验证会诊]：**读取失败/不可确认**必须与「读取成功但无句柄」严格区分）。</summary>
+public enum LedgerHandleState
+{
+    /// <summary>读取失败/台账损坏/记录不可确认 ⇒ **保守停驻**（不得当作「无句柄」放行终局）。</summary>
+    Unreadable = 0,
+    /// <summary>读取成功但该发送身份无句柄。</summary>
+    Absent = 1,
+    /// <summary>读取成功且存在句柄。</summary>
+    Present = 2,
+}
+
+/// <summary>台账句柄读取结论（`TakeoverJobIdRead` 返回；三态判别式，避免 fail-open）。</summary>
+public sealed record LedgerHandleProbe(LedgerHandleState State, string? JobId)
+{
+    public static LedgerHandleProbe Unreadable() => new(LedgerHandleState.Unreadable, null);
+    public static LedgerHandleProbe Absent() => new(LedgerHandleState.Absent, null);
+    public static LedgerHandleProbe Present(string jobId) => new(LedgerHandleState.Present, jobId);
+}
+
 /// <summary>
 /// 门面钩子（I-3：事实供给方在锁外先刷新、锁内只消费本地最新快照——F11/票据/资格/epoch 均为本地事实，
 /// 锁内最终校验链在 MutateHandoff 权威串行边界内复核；含远端查询的取证一律锁外有界等待）。
@@ -225,6 +244,26 @@ public sealed class AdmissionHooks
     /// 未配置=一律不允许终局完成（保守）。
     /// </summary>
     public Func<string, int, bool>? TakeoverTerminalConfirmed { get; set; }
+    /// <summary>
+    /// **台账权威终态写入**（R5.3 §24.15 完成结算事务中的「台账 Terminal」步；[Batch B] 新增）。
+    /// 参数＝`submissionIdentity`／`sendSeq`／终态证据词／观察时点／原始终态词／完成层错误码／远端句柄。
+    /// 返回 `null`＝已提交（含幂等：同观察时点同载荷）；非 `null`＝失败原因 ⇒ 门面**保守停驻**（不继续后续步骤、不重发）。
+    /// **仅外部启动操作**会走本钩子（其余类型不写外部台账）；未配置 ⇒ 门面按「终态回写钩子缺失」保守停驻。
+    /// </summary>
+    public Func<string, int, string, DateTimeOffset, string?, string?, string?, string?, string?>? TakeoverTerminalPersist { get; set; }
+    /// <summary>
+    /// **台账终态载荷读回确认**（R5.3 §24.15 读回验证；[第二轮验证会诊阻断处置] 新增）：
+    /// 台账回写失败/结果不明时，必须按**同一发送身份**读回并核对终态载荷（原始终态词／错误码／句柄／证据来源／观察时点）
+    /// 是否与本次事实**逐字段等值**——仅「记录存在且为 Terminal」不足以判定本次提交成功。
+    /// 未配置 ⇒ 门面按「未确认」保守停驻（不使用宽松布尔确认代替）。
+    /// </summary>
+    public Func<string, int, string?, string?, string?, string?, DateTimeOffset, bool>? TakeoverTerminalPayloadConfirmed { get; set; }
+    /// <summary>
+    /// **台账已登记句柄读回**（R5.3 §24.3-3「一侧为空＝补齐」；[第四轮验证会诊] 新增；[第八轮] 改为三态）：
+    /// 返回该 `submissionIdentity+sendSeq` 在接管台账中的**合并后权威句柄**及其**读取状态**——
+    /// `Unreadable`（读取失败/损坏/不可确认）**不得**与 `Absent`（读取成功但无句柄）混淆：前者必须保守停驻。
+    /// </summary>
+    public Func<string, int, LedgerHandleProbe>? TakeoverJobIdRead { get; set; }
     /// <summary>并发屏障夹具接缝（九类交错可控屏障；生产=null 零开销）。</summary>
     public AdmissionBarriers? Barriers { get; set; }
 }
@@ -1706,6 +1745,13 @@ public sealed class ArbitrationAdmissionService
     public async Task<AdmissionResult> SettleReconciledAsync(string requestIdentity, ReconcileSettlement settlement)
     {
         ArgumentNullException.ThrowIfNull(settlement);
+        // [Batch B 会诊阻断处置] 携带**完成层结果**的受理对账统一进入完成结算状态机（§24.3-4 三分支的唯一实现）：
+        // 必须在取 `_gate` 之前转派（`SettleCompletionAsync` 自取门面锁；SemaphoreSlim 不可重入）。
+        if (settlement is ReconcileSettlement.Accepted { Completion: not null } withCompletion)
+            return await SettleCompletionAsync(requestIdentity, withCompletion.SubmissionIdentity, withCompletion.SendSeq,
+                withCompletion.Completion,
+                // [第二轮验证会诊阻断处置] 外层对账字段必须**完整携带**（否则受理接管会丢证据/运行绑定/句柄）。
+                withCompletion.EvidenceSource, withCompletion.RunId, withCompletion.JobId).ConfigureAwait(false);
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
@@ -1734,11 +1780,6 @@ public sealed class ArbitrationAdmissionService
                 return AdmissionResult.Of(AdmissionResultKind.Error, "stale_evidence", "对账证据与当前发送轮次不关联（旧证据不得关闭新责任）。", requestIdentity);
 
             var candidate = op.Candidate ?? new ArbitrationCandidate();
-            // R5.3 §24.3-4（[落地批次会诊阻断处置]）：显式对账携带的完成层结果**本批尚未实现结算入口**——
-            // 必须**响亮拒绝**，不得静默按普通受理关闭（否则「看似支持、实际丢弃终态事实」＝事实反转）。
-            if (settlement is ReconcileSettlement.Accepted { Completion: not null })
-                return AdmissionResult.Of(AdmissionResultKind.Error, "completion_settlement_not_implemented",
-                    "完成层结果结算（§24.3-4 终态分支）尚未实现，保守拒绝（不得按普通受理关闭）。", requestIdentity);
             var request = new AdmissionRequest
             {
                 Namespace = candidate.Namespace ?? "manual",
@@ -1766,6 +1807,632 @@ public sealed class ArbitrationAdmissionService
     }
 
     /// <summary>
+    /// **完成层结算入口**（R5.3 §24.3-4／§24.10-3／§24.15；[Batch B] 新增）：由当前所有者（或恢复扫描）在
+    /// **权威完成结果到达**时调用。三个分支：
+    /// - `completion = null` ⇒ 普通受理（不写终态载体；责任 `Pending`）；
+    /// - `Unknown` ⇒ **不写** `PendingTerminal`（§24.19-2），保留观察依据与既有接管台账，对外 `NeedReconcile`；
+    /// - `Succeeded`／`Cancelled`／`ExecutionFailed` ⇒ **唯一顺序**：①同次权威发布写 `ExecutionResult`＋`PendingTerminal`
+    ///   → ②台账转 `Terminal`（仅外部启动；钩子缺失/失败＝保守停驻）→ ③关闭 Submission（若仍在册）→
+    ///   ④同一边界内完成 Operation 终局与迁移（**不重入 `_gate`**，§24.1-5）。
+    /// 纪律：只接受按**完整发送身份**（`submissionIdentity`＋`sendSeq`）匹配的完成结果（旧轮次证据不得结算新责任）；
+    /// 任一步失败＝保守停驻（不重发、不释放占用），返回可对账原因。
+    /// </summary>
+    public async Task<AdmissionResult> SettleCompletionAsync(
+        string requestIdentity, string submissionIdentity, int sendSeq, ExternalStartCompletion? completion,
+        string? acceptanceEvidenceSource = null, string? acceptanceRunId = null, string? acceptanceJobId = null)
+    {
+        if (string.IsNullOrWhiteSpace(requestIdentity))
+            return AdmissionResult.Of(AdmissionResultKind.Error, "invalid_request", "请求身份必填。", requestIdentity);
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var read = _store.Read();
+            if (read.File?.Lease is null)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "未持有租约。", requestIdentity);
+            var lease = read.File.Lease;
+            var op = FindOp(read.File, requestIdentity);
+            if (op is null)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "Operations 记录缺失=响亮拒绝。", requestIdentity);
+            // §24.17／§24.1-6（[Batch B 会诊阻断处置]）：本入口**只服务外部启动**（E3/E4/E5）——
+            // 其余类型走各自终局入口；`Unknown` fail-closed（不得借完成入口跳过台账步而释放占用）。
+            if (op.OperationType != OperationType.ExternalStart)
+                return LocatedStop(requestIdentity, op,
+                    op.OperationType == OperationType.Unknown ? "legacy_operation_type_unresolved" : "operation_type_not_external_start",
+                    op.OperationType == OperationType.Unknown
+                        ? "操作类型未知（旧格式代隔离产物）——完成结算 fail-closed。"
+                        : "完成结算入口只服务外部启动操作（其余类型走各自终局入口）。");
+            // 完整发送身份关联：完成结果必须属于**本笔**发送轮次（旧轮次证据不得结算新责任）。
+            if (string.IsNullOrEmpty(submissionIdentity)
+                || !string.Equals(op.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+                || op.LastSendSeq != sendSeq)
+                return LocatedStop(requestIdentity, op, "stale_evidence",
+                    "完成结果与当前发送轮次不关联（旧证据不得结算新责任，也不得替换本笔身份）。");
+            // 完成层载荷**封闭校验**（[Batch B 会诊阻断处置]）：非法枚举/缺必填字段一律 fail-closed——
+            // 必须**先于**任何重放/结算分支（否则非法载荷可借「已终局重放」路径绕过校验）。
+            if (completion is not null)
+            {
+                if (!Enum.IsDefined(completion.Kind))
+                    return LocatedStop(requestIdentity, op, "completion_invalid_kind", "完成层结果类别非法（枚举未定义）。");
+                if (completion.Kind != ExternalStartCompletionKind.Unknown)
+                {
+                    if (string.IsNullOrWhiteSpace(completion.RawTerminal)
+                        || string.IsNullOrWhiteSpace(completion.EvidenceSource)
+                        || completion.ObservedAtUtc is null
+                        || completion.ObservedAtUtc.Value == default)
+                        return LocatedStop(requestIdentity, op, "completion_payload_incomplete",
+                            "权威终态必须携带原始终态词／证据来源／观察时点（非默认值）。");
+                    if (completion.Kind == ExternalStartCompletionKind.ExecutionFailed
+                        && string.IsNullOrWhiteSpace(completion.ExecutionErrorCode))
+                        return LocatedStop(requestIdentity, op, "completion_error_code_required",
+                            "ExecutionFailed 必须携带 ExecutionErrorCode（与信封 errorCode 语义分离）。");
+                }
+            }
+            // 已受理/待对账之外的状态不得走完成结算（未占位/终局/未获选各有各的判据）。
+            // 已终局者按 §24.13-2 返回**既有终态事实**（幂等重放，不重复写盘、不改变责任状态）。
+            if (op.RequestState == OperationRequestState.TerminalCompleted)
+            {
+                var existing = op.ExecutionResult;
+                if (existing is null)
+                    return AdmissionResult.Of(AdmissionResultKind.Error, "execution_result_missing",
+                        "已终局但缺少 ExecutionResult（损坏：不得据终局状态推断成功）。", requestIdentity);
+                // §24.13-3（[Batch B 会诊阻断处置]）：**冲突终态不得静默重放**——迟到/矛盾的终态事实必须进入冲突对账，
+                // 不得把调用方的新事实当成既有事实的等价重放（既不是覆盖，也不是接受）。
+                if (completion is not null && completion.Kind != ExternalStartCompletionKind.Unknown
+                    && !CompletionMatchesExecutionResult(existing, completion, completion.ObservedAtUtc ?? default,
+                        submissionIdentity, sendSeq))
+                    return LocatedStop(requestIdentity, op, "terminal_conflict",
+                        "既有权威终态与本次完成结果不一致（冲突对账：不覆盖、不重放、不释放占用）。", conflictPending: true);
+                return new AdmissionResult
+                {
+                    Kind = existing.Kind switch
+                    {
+                        ExecutionResultKind.Cancelled => AdmissionResultKind.Cancelled,
+                        ExecutionResultKind.Failed => AdmissionResultKind.ExecutionFailed,
+                        _ => AdmissionResultKind.Accepted,
+                    },
+                    ReasonCode = "already_terminal",
+                    Detail = "终局已完成（幂等重放既有事实，不重复结算）。",
+                    RequestIdentity = requestIdentity,
+                    SubmissionIdentity = submissionIdentity,
+                    SendSeq = sendSeq,
+                    JobId = existing.JobId,
+                    ExecutionDisposition = existing.Kind switch
+                    {
+                        ExecutionResultKind.Cancelled => ExecutionDisposition.Cancelled,
+                        ExecutionResultKind.Failed => ExecutionDisposition.ExecutionFailed,
+                        ExecutionResultKind.Unknown => ExecutionDisposition.Unknown,
+                        _ => ExecutionDisposition.None,
+                    },
+                    ResponsibilityState = ResponsibilityState.Settled,
+                    RawTerminal = existing.RawTerminal,
+                    ExecutionErrorCode = existing.ExecutionErrorCode,
+                    EvidenceSource = existing.EvidenceSource,
+                };
+            }
+            if (op.RequestState is not (OperationRequestState.Accepted or OperationRequestState.Reconciling))
+                return LocatedStop(requestIdentity, op, "not_accepted",
+                    "操作不在可结算状态（完成结算仅对已受理/待对账操作）。");
+            // 外部启动的固定目标纪元必须已持久化（不可改写；未知纪元不签发也不结算）。
+            if (op.OperationType == OperationType.ExternalStart && string.IsNullOrEmpty(op.TargetEpoch))
+                return LocatedStop(requestIdentity, op, "epoch_missing", "外部启动缺少固定目标纪元（不结算）。");
+
+            // ── 分支一/二：无终态（普通受理）或结果未知 ──
+            if (completion is null || completion.Kind == ExternalStartCompletionKind.Unknown)
+            {
+                // 已有权威终态者**不得**被 null/Unknown 掩盖或降级（§24.6-2：事实不可反转）——按既有事实返回。
+                if (op.ExecutionResult is { } existingFact)
+                    return ReplayExistingFact(requestIdentity, op, existingFact);
+                var plain = completion is null;
+                // 仍未关闭（Reconciling/Granted/Sending）⇒ 先完成**普通受理**：接管台账落盘→关闭 Submission→Accepted。
+                if (op.RequestState != OperationRequestState.Accepted)
+                {
+                    var acceptance = await AcceptOrdinaryAsync(op, lease, read.File,
+                        acceptanceEvidenceSource, acceptanceRunId, acceptanceJobId).ConfigureAwait(false);
+                    if (acceptance is not null) return acceptance;
+                }
+                return new AdmissionResult
+                {
+                    Kind = plain ? AdmissionResultKind.Accepted : AdmissionResultKind.NeedReconcile,
+                    ReasonCode = plain ? "accepted_no_terminal" : "completion_unknown",
+                    Detail = plain
+                        ? "已受理（尚无权威终态：保持 Accepted/Active，台账不转 Terminal）。"
+                        : "完成层结果未知（保留观察依据与接管台账，**不写** PendingTerminal，保守待对账）。",
+                    RequestIdentity = requestIdentity,
+                    SubmissionIdentity = submissionIdentity,
+                    SendSeq = sendSeq,
+                    JobId = completion?.JobId ?? op.ExecutionResult?.JobId,
+                    ExecutionDisposition = plain ? ExecutionDisposition.None : ExecutionDisposition.Unknown,
+                    ResponsibilityState = ResponsibilityState.Pending,
+                    RawTerminal = completion?.RawTerminal,
+                    ExecutionErrorCode = completion?.ExecutionErrorCode,
+                    EvidenceSource = completion?.EvidenceSource,
+                };
+            }
+
+            var observedAt = completion.ObservedAtUtc!.Value;
+
+            var now = _utcNow();
+            var resultKind = completion.Kind switch
+            {
+                ExternalStartCompletionKind.Succeeded => ExecutionResultKind.Succeeded,
+                ExternalStartCompletionKind.Cancelled => ExecutionResultKind.Cancelled,
+                _ => ExecutionResultKind.Failed,
+            };
+
+            // [第三轮验证会诊阻断处置] 终态先到且发送未关闭时，**唯一顺序**为：
+            // 接管事实落盘（**只落接管，不关闭**）→ ExecutionResult＋PendingTerminal → 台账 Terminal → 关闭 Submission → Operation 终局。
+            // 关闭由下方 finalize 完成（不得在此提前关闭，否则违反 §24.15 顺序）。
+            if (op.RequestState != OperationRequestState.Accepted)
+            {
+                var takeover = await PersistAcceptanceTakeoverAsync(op, lease,
+                    acceptanceEvidenceSource ?? completion.EvidenceSource, acceptanceRunId,
+                    acceptanceJobId ?? completion.JobId).ConfigureAwait(false);
+                if (takeover is not null) return takeover;
+            }
+            // [第四轮验证会诊阻断处置] 句柄必须取**台账合并后的权威值**（含正常受理时已登记的句柄），
+            // 否则「台账有句柄、两载体为 null」的分裂会被 MarkTerminal 的「一侧为空＝补齐」静默吸收。
+            // [第六轮验证会诊阻断处置] 空串同样是「空句柄」：先规范化再按优先级合并（`??` 会让上游空串截断下游有效句柄）。
+            // [第八轮验证会诊阻断处置] 台账读回为**三态**：`Unreadable`（读取失败/损坏/不可确认）⇒ 保守停驻，
+            // **不得**当作「无句柄」继续（否则读取故障会被当成权威事实而错误释放占用）。
+            // 未配置读取器＝**不可确认**（等同 `Unreadable`）：不得把「读不到」折成「无句柄」而放行终局。
+            var handleProbe = _hooks.TakeoverJobIdRead?.Invoke(submissionIdentity, sendSeq) ?? LedgerHandleProbe.Unreadable();
+            if (handleProbe.State == LedgerHandleState.Unreadable)
+                return SettleStop(requestIdentity, submissionIdentity, sendSeq, "terminal_ledger_unreadable",
+                    completion, "接管台账不可读/不可确认（不得把读取失败当作无句柄：保守停驻、责任保留）。",
+                    acceptanceJobId ?? completion.JobId ?? op.ExecutionResult?.JobId);
+            var ledgerHandle = handleProbe is { State: LedgerHandleState.Present } ? handleProbe.JobId : null;
+            var effectiveJobId = new[] { acceptanceJobId, completion.JobId, op.ExecutionResult?.JobId, ledgerHandle }
+                .FirstOrDefault(v => !string.IsNullOrEmpty(v));
+
+            // ① 同次权威发布写 ExecutionResult ＋ PendingTerminal（§24.12-7 合法中间态：责任尚未结算）。
+            var stageResult = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            {
+                var op2 = FindOp(file, requestIdentity);
+                if (op2 is null) return "stale_operation_identity";
+                if (op2.Zone != OperationZone.Active) return "state_changed";
+                if (!string.Equals(op2.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+                    || op2.LastSendSeq != sendSeq)
+                    return "state_changed";
+                // [Batch B 会诊阻断处置] **已写终态事实不可改写**：重复结算必须逐字段等值（幂等续跑），
+                // 不等值＝冲突/损坏，fail-closed（不得用新终态覆盖旧终态，也不得形成新 ExecutionResult＋旧 PendingTerminal）。
+                if (op2.ExecutionResult is { } priorResult)
+                {
+                    if (!CompletionMatchesExecutionResult(priorResult, completion, observedAt, submissionIdentity, sendSeq))
+                        return "terminal_conflict";
+                    // [第五轮验证会诊阻断处置] **空句柄按 §24.3-3 补齐**（不得让既有载体长期为 null 而与台账分裂）。
+                    if (string.IsNullOrEmpty(priorResult.JobId) && !string.IsNullOrEmpty(effectiveJobId))
+                        priorResult.JobId = effectiveJobId;
+                }
+                else
+                {
+                    op2.ExecutionResult = new ExecutionResult
+                    {
+                        Kind = resultKind,
+                        RawTerminal = completion.RawTerminal ?? "",
+                        ExecutionErrorCode = completion.ExecutionErrorCode,
+                        JobId = effectiveJobId,
+                        EvidenceSource = completion.EvidenceSource ?? "",
+                        SubmissionIdentity = submissionIdentity,
+                        SendSeq = sendSeq,
+                        ObservedAtUtc = observedAt,
+                    };
+                }
+                if (op2.PendingTerminal is { } priorPending)
+                {
+                    if (!CompletionMatchesPendingTerminal(priorPending, completion, observedAt, submissionIdentity, sendSeq))
+                        return "terminal_conflict";
+                    if (string.IsNullOrEmpty(priorPending.JobId) && !string.IsNullOrEmpty(effectiveJobId))
+                        priorPending.JobId = effectiveJobId;
+                }
+                else
+                {
+                    op2.PendingTerminal = new PendingTerminal
+                    {
+                        Kind = resultKind, // [第三轮验证会诊] 类别与 ExecutionResult 一致（四类事实一致性判据使用）
+                        RawTerminal = completion.RawTerminal ?? "",
+                        ExecutionErrorCode = completion.ExecutionErrorCode,
+                        JobId = effectiveJobId,
+                        EvidenceSource = completion.EvidenceSource ?? "",
+                        SubmissionIdentity = submissionIdentity,
+                        SendSeq = sendSeq,
+                        OperationType = op2.OperationType,
+                        ObservedAtUtc = observedAt,
+                        RecordedAtUtc = now,
+                        LocalCancelRequested = op2.LocalCancelRequested,
+                    };
+                }
+                op2.UpdatedRevision = file.Revision + 1;
+                op2.UpdatedAtUtc = now;
+                return null;
+            });
+            if (!stageResult.Success)
+            {
+                // §24.15 读回验证（[Batch B 会诊阻断处置]）：发布结果不明时先读回——载体**实际已提交且与本次终态等值**
+                // ⇒ 视为提交成功（继续后续步骤）；确未提交/值不符才保守停驻。
+                var readBack = _store.Read();
+                var opBack = readBack.File is null ? null : FindOp(readBack.File, requestIdentity);
+                // 读回必须**逐字段等值且两载体齐备**（否则冲突载荷可被误判为「本次已提交」）。
+                var committed = opBack?.ExecutionResult is { } rb
+                    && CompletionMatchesExecutionResult(rb, completion, observedAt, submissionIdentity, sendSeq)
+                    && opBack.PendingTerminal is { } rp
+                    && CompletionMatchesPendingTerminal(rp, completion, observedAt, submissionIdentity, sendSeq);
+                if (!committed)
+                    return SettleStop(requestIdentity, submissionIdentity, sendSeq, "terminal_persist_failed:" + (stageResult.Reason ?? "invalid_request"),
+                        completion, "终态载体落盘失败或与既有终态冲突（读回确认未提交：保守停驻，不覆盖、不重发）。",
+                        effectiveJobId);
+            }
+
+            // ② 台账 Terminal（仅外部启动；钩子缺失/失败＝保守停驻，§24.3-5）。
+            if (op.OperationType == OperationType.ExternalStart)
+            {
+                var persistTerminal = _hooks.TakeoverTerminalPersist;
+                if (persistTerminal is null)
+                    return SettleStop(requestIdentity, submissionIdentity, sendSeq, "terminal_persist_not_configured",
+                        completion, "终态回写钩子缺失（接管台账未确认权威终态：保守停驻）。", effectiveJobId);
+                string? persistReason;
+                try
+                {
+                    persistReason = persistTerminal(submissionIdentity, sendSeq,
+                        completion.RawTerminal ?? "", observedAt,
+                        completion.RawTerminal, completion.ExecutionErrorCode, effectiveJobId, completion.EvidenceSource);
+                }
+                catch (Exception ex)
+                {
+                    persistReason = "terminal_persist_exception:" + ex.GetType().Name;
+                }
+                // §24.15 读回验证（[第四轮验证会诊阻断处置]）：**无论回写返回成功或失败**，都必须以
+                // 「台账终态**逐字段等值**读回」作为继续关闭/终局的前置条件（仅 API 返回成功不足）。
+                var actuallyTerminal = _hooks.TakeoverTerminalPayloadConfirmed?.Invoke(
+                    submissionIdentity, sendSeq, completion.RawTerminal, completion.ExecutionErrorCode,
+                    effectiveJobId, completion.EvidenceSource, observedAt) == true;
+                if (!actuallyTerminal)
+                        return SettleStop(requestIdentity, submissionIdentity, sendSeq,
+                            "terminal_persist_unconfirmed:" + (persistReason ?? "payload_mismatch"),
+                            completion, "接管台账终态未按本次载荷逐字段确认（保守停驻：责任保留、不释放占用、不重发）。",
+                            effectiveJobId);
+            }
+
+            // ③ 关闭 Submission（若仍在册）＋ ④ 同一边界内完成 Operation 终局与迁移（不重入 `_gate`）。
+            var finalize = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            {
+                var op3 = FindOp(file, requestIdentity);
+                if (op3 is null) return "state_changed";
+                if (op3.Zone != OperationZone.Active) return "state_changed";
+                if (!string.Equals(op3.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+                    || op3.LastSendSeq != sendSeq)
+                    return "state_changed";
+                // [第二轮验证会诊阻断处置] 释放占用前必须复核**四类事实一致**：本次完成结果 ↔ ExecutionResult ↔ PendingTerminal。
+                if (op3.ExecutionResult is not { } ready
+                    || !CompletionMatchesExecutionResult(ready, completion, observedAt, submissionIdentity, sendSeq)
+                    || op3.PendingTerminal is not { } readyPending
+                    || !CompletionMatchesPendingTerminal(readyPending, completion, observedAt, submissionIdentity, sendSeq))
+                    return "terminal_facts_inconsistent";
+                // [第四轮验证会诊阻断处置] 两载体**互相一致**（含句柄等值）且绑定本 Operation 的完整发送身份——
+                // 完成层缺句柄时，上面两个判据会把句柄当通配，故必须再由本判据强制。
+                if (!TerminalFactsConsistent(op3)) return "terminal_facts_inconsistent";
+                // [第五轮验证会诊阻断处置] 两载体句柄必须等于**合并后的权威句柄**（不得仅彼此相等而与台账分裂）。
+                if (!string.IsNullOrEmpty(effectiveJobId)
+                    && (!string.Equals(ready.JobId, effectiveJobId, StringComparison.Ordinal)
+                        || !string.Equals(readyPending.JobId, effectiveJobId, StringComparison.Ordinal)))
+                    return "terminal_job_id_mismatch";
+                // [第六轮验证会诊阻断处置] **台账句柄 TOCTOU**：提交事务内重读台账句柄——若台账此时已有句柄
+                // 而两载体仍为空（并发对账/接管刚刚补入），本轮**不得**终局（先补齐，下一轮一致后再释放占用）。
+                // 说明：本钩子只读**台账文件**（不读租约），故在租约变更回调内调用不构成自锁。
+                // 未配置读取器同样视为**不可确认**（fail-closed；不得因缺配置而释放占用）。
+                var probeNow = _hooks.TakeoverJobIdRead?.Invoke(submissionIdentity, sendSeq) ?? LedgerHandleProbe.Unreadable();
+                // 三态：读取失败/不可确认 ⇒ 本轮**不得**终局（防止把读取故障当成「台账无句柄」而释放占用）。
+                if (probeNow.State == LedgerHandleState.Unreadable) return "terminal_ledger_unreadable";
+                if (probeNow is { State: LedgerHandleState.Present, JobId: { Length: > 0 } handleNow }
+                    && (string.IsNullOrEmpty(ready.JobId) || string.IsNullOrEmpty(readyPending.JobId)))
+                    return "terminal_job_id_backfill_required";
+                var stillOpen = file.Handoff?.Submission;
+                if (stillOpen is not null)
+                {
+                    if (!string.Equals(stillOpen.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+                        || stillOpen.SendSeq != sendSeq)
+                        return "submission_identity_mismatch"; // 未决发送属于别的轮次：不越权关闭
+                    file.Handoff!.Submission = null;
+                    var pre = (file.Handoff.PreObservations ?? []).FirstOrDefault(p => p is not null
+                        && string.Equals(p.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+                        && p.SendSeq == sendSeq);
+                    if (pre is not null) pre.State = "completed";
+                }
+                op3.RequestState = OperationRequestState.TerminalCompleted;
+                op3.Zone = OperationZone.TerminalPendingTransfer;
+                op3.PendingTerminal = null; // 责任已结清：终态事实由 ExecutionResult 长期承载（§24.12-7）
+                op3.UpdatedRevision = file.Revision + 1;
+                op3.UpdatedAtUtc = now;
+                MigrateAndClean(file, now); // 主槽位随迁移释放
+                return null;
+            });
+            if (!finalize.Success)
+            {
+                // §24.15 读回验证（[Batch B 会诊阻断处置]）：发布结果不明时先读回——已终局且发送已关闭 ⇒ 按成功返回；
+                // 否则保守停驻（保持 Accepted＋PendingTerminal，不重建 Submission、不重发）。
+                var after = _store.Read();
+                var opAfter = after.File is null ? null : FindOp(after.File, requestIdentity);
+                var closedAfter = after.File?.Handoff?.Submission is not { } stillOpen2
+                    || !string.Equals(stillOpen2.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal);
+                // [第三轮验证会诊] 读回必须**逐字段等值**（并发写入的不同终态不得被当成本次提交成功）。
+                var committedAfter = opAfter?.RequestState == OperationRequestState.TerminalCompleted
+                    && closedAfter
+                    && opAfter.ExecutionResult is { } rb2
+                    && CompletionMatchesExecutionResult(rb2, completion, observedAt, submissionIdentity, sendSeq);
+                if (!committedAfter)
+                {
+                    var reason = finalize.Reason ?? "invalid_request";
+                    // [第七轮验证会诊] 特定停驻原因**原样透传**：`terminal_job_id_backfill_required` 是合同规定的
+                    // 可观察停驻码，不得被 `finalize_failed:` 包装改变调用方可判定的事实。
+                    // `terminal_ledger_unreadable` 同样是合同规定的可观察停驻码（读取失败不得被包装掩盖）。
+                    var reasonCode = reason is "terminal_job_id_backfill_required" or "terminal_ledger_unreadable"
+                        ? reason
+                        : "finalize_failed:" + reason;
+                    return SettleStop(requestIdentity, submissionIdentity, sendSeq, reasonCode,
+                        completion, "关闭/终局失败（读回确认未提交：保持 Accepted＋PendingTerminal 待对账，不重建 Submission）。",
+                        effectiveJobId);
+                }
+            }
+
+            return new AdmissionResult
+            {
+                Kind = completion.Kind switch
+                {
+                    ExternalStartCompletionKind.Succeeded => AdmissionResultKind.Accepted,
+                    ExternalStartCompletionKind.Cancelled => AdmissionResultKind.Cancelled,
+                    _ => AdmissionResultKind.ExecutionFailed,
+                },
+                ReasonCode = completion.Kind switch
+                {
+                    ExternalStartCompletionKind.Succeeded => "terminal_completed",
+                    ExternalStartCompletionKind.Cancelled => "cancelled",
+                    _ => "execution_failed",
+                },
+                Detail = "权威终态已结算（台账 Terminal＋Submission 关闭＋Operation 终局）。",
+                RequestIdentity = requestIdentity,
+                SubmissionIdentity = submissionIdentity,
+                SendSeq = sendSeq,
+                JobId = effectiveJobId,
+                ExecutionDisposition = completion.Kind switch
+                {
+                    ExternalStartCompletionKind.Cancelled => ExecutionDisposition.Cancelled,
+                    ExternalStartCompletionKind.ExecutionFailed => ExecutionDisposition.ExecutionFailed,
+                    _ => ExecutionDisposition.None,
+                },
+                ResponsibilityState = ResponsibilityState.Settled,
+                RawTerminal = completion.RawTerminal,
+                ExecutionErrorCode = completion.ExecutionErrorCode,
+                EvidenceSource = completion.EvidenceSource,
+            };
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>完成结算中途失败：责任保留（`Pending`），返回可对账原因（不重发、不释放占用）。</summary>
+    private static AdmissionResult SettleStop(
+        string requestIdentity, string submissionIdentity, int sendSeq, string reasonCode,
+        ExternalStartCompletion completion, string detail, string? effectiveJobId = null)
+        => new()
+        {
+            // [Batch B 会诊阻断处置] **结果维保留已观察事实**（§24.6-2：后续持久化失败不得把取消/失败改写成"未知"）；
+            // 仅**责任维**保持 `Pending`（未结清），并用 ReasonCode 说明停驻原因。
+            Kind = completion.Kind switch
+            {
+                ExternalStartCompletionKind.Cancelled => AdmissionResultKind.Cancelled,
+                ExternalStartCompletionKind.ExecutionFailed => AdmissionResultKind.ExecutionFailed,
+                ExternalStartCompletionKind.Succeeded => AdmissionResultKind.NeedReconcile,
+                _ => AdmissionResultKind.NeedReconcile,
+            },
+            ReasonCode = reasonCode,
+            Detail = detail,
+            RequestIdentity = requestIdentity,
+            SubmissionIdentity = submissionIdentity,
+            SendSeq = sendSeq,
+            JobId = effectiveJobId ?? completion.JobId,
+            ExecutionDisposition = completion.Kind switch
+            {
+                ExternalStartCompletionKind.Cancelled => ExecutionDisposition.Cancelled,
+                ExternalStartCompletionKind.ExecutionFailed => ExecutionDisposition.ExecutionFailed,
+                _ => ExecutionDisposition.Unknown,
+            },
+            ResponsibilityState = ResponsibilityState.Pending,
+            RawTerminal = completion.RawTerminal,
+            ExecutionErrorCode = completion.ExecutionErrorCode,
+            EvidenceSource = completion.EvidenceSource,
+        };
+
+    /// <summary>
+    /// 已定位 Operation 之后的**响亮拒绝**（[Batch B 会诊阻断处置]）：一律带责任维 `Pending`（已登记≠不适用）
+    /// 与已知发送身份，避免调用方把「已签发发送责任的拒绝」误读成「未发生」。
+    /// </summary>
+    private static AdmissionResult LocatedStop(string requestIdentity, OperationRecord op, string reasonCode, string detail,
+        bool conflictPending = false)
+        => new()
+        {
+            Kind = AdmissionResultKind.Error,
+            ReasonCode = reasonCode,
+            Detail = detail,
+            RequestIdentity = requestIdentity,
+            SubmissionIdentity = op.SubmissionIdentity,
+            SendSeq = op.LastSendSeq,
+            JobId = op.ExecutionResult?.JobId,
+            ExecutionDisposition = ExecutionDisposition.Unknown,
+            // 冲突证据到达（`conflictPending=true`）时**不得**报「已结清」：冲突断言本身是需要权威裁决的未结清责任。
+            ResponsibilityState = !conflictPending && op.RequestState == OperationRequestState.TerminalCompleted
+                ? ResponsibilityState.Settled
+                : ResponsibilityState.Pending,
+            EvidenceSource = op.ExecutionResult?.EvidenceSource,
+        };
+
+    /// <summary>
+    /// 已存在权威终态事实时按 §24.13-2 **幂等重放**（不得被 `null`/`Unknown` 掩盖或降级为普通受理）。
+    /// </summary>
+    private static AdmissionResult ReplayExistingFact(string requestIdentity, OperationRecord op, ExecutionResult existing)
+        => new()
+        {
+            Kind = existing.Kind switch
+            {
+                ExecutionResultKind.Cancelled => AdmissionResultKind.Cancelled,
+                ExecutionResultKind.Failed => AdmissionResultKind.ExecutionFailed,
+                _ => AdmissionResultKind.Accepted,
+            },
+            ReasonCode = "existing_terminal_fact",
+            Detail = "已有权威终态事实（幂等重放；不得由 null/未知降级）。",
+            RequestIdentity = requestIdentity,
+            SubmissionIdentity = op.SubmissionIdentity,
+            SendSeq = op.LastSendSeq,
+            JobId = existing.JobId,
+            ExecutionDisposition = existing.Kind switch
+            {
+                ExecutionResultKind.Cancelled => ExecutionDisposition.Cancelled,
+                ExecutionResultKind.Failed => ExecutionDisposition.ExecutionFailed,
+                ExecutionResultKind.Unknown => ExecutionDisposition.Unknown,
+                _ => ExecutionDisposition.None,
+            },
+            ResponsibilityState = op.RequestState == OperationRequestState.TerminalCompleted
+                ? ResponsibilityState.Settled
+                : ResponsibilityState.Pending,
+            RawTerminal = existing.RawTerminal,
+            ExecutionErrorCode = existing.ExecutionErrorCode,
+            EvidenceSource = existing.EvidenceSource,
+        };
+
+    /// <summary>
+    /// **只落接管、不关闭**（[第三轮验证会诊阻断处置] §24.15 唯一顺序）：终态先到且发送未关闭时，
+    /// 必须先写受理接管台账（否则台账无在册记录 ⇒ `MarkTerminal` 只能失败），但**不得**在此关闭 Submission——
+    /// 关闭必须排在同一顺序的「台账 Terminal」之后。返回 `null`＝接管已落盘；非 null＝保守停驻结果。
+    /// </summary>
+    private async Task<AdmissionResult?> PersistAcceptanceTakeoverAsync(
+        OperationRecord op, LeaseSegment lease, string? evidenceSource, string? runId, string? jobId)
+    {
+        if (op.RequestState == OperationRequestState.Accepted) return null; // 已受理（无需补接管）
+        var entry = new ExternalStartLedgerEntry
+        {
+            SubmissionIdentity = op.SubmissionIdentity,
+            SendSeq = op.LastSendSeq,
+            CandidateId = op.CandidateId,
+            ResourceRef = op.ResourceRef ?? "",
+            ActionId = op.Candidate?.ActionId ?? ArbitrationOrdering.DeriveActionId(op.CandidateId),
+            TargetBgiEpoch = op.TargetEpoch,
+            AcceptedAtUtc = _utcNow(),
+            EvidenceSource = evidenceSource ?? "reconcile:accepted",
+            State = LedgerEntryState.AcceptedPendingExecution,
+            RunId = runId,
+            JobId = jobId,
+            OperationType = op.OperationType,
+        };
+        string? failure;
+        try
+        {
+            failure = await _hooks.TakeoverPersist(entry).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            failure = "persist_exception:" + ex.GetType().Name;
+        }
+        return failure is null
+            ? null
+            : LocatedStop(op.RequestIdentity, op, "takeover_persist_failed",
+                "终态先到：受理接管台账落盘失败（" + failure + "）——保守停驻，不写终态载体、不关闭、不重发。");
+    }
+
+    /// <summary>
+    /// 普通受理补完（[Batch B]）：`null`/`Unknown` 完成结果到达而 Submission 仍未关闭时，
+    /// 必须走「接管台账落盘 → 关闭 Submission → Operation=Accepted」——复用 §4.2c 第一分支既有实现。
+    /// 返回 `null`＝已完成；非 null＝保守停驻结果（责任 `Pending`）。
+    /// </summary>
+    private async Task<AdmissionResult?> AcceptOrdinaryAsync(OperationRecord op, LeaseSegment lease, LogicalOwnerLeaseFile file,
+        string? evidenceSource = null, string? runId = null, string? jobId = null)
+    {
+        var candidate = op.Candidate ?? new ArbitrationCandidate();
+        var request = new AdmissionRequest
+        {
+            Namespace = candidate.Namespace ?? "manual",
+            Kind = AdmissionKind.ContinueUse,
+            RequestIdentity = op.RequestIdentity,
+            Candidate = CloneCandidate(candidate),
+            WireSubmitKey = op.WireSubmitKey,
+            RunBinding = op.RunBinding,
+            CursorRef = op.CursorRef,
+            CursorRevision = op.CursorRevision,
+        };
+        var acceptance = await ReconcileOutcomeAsync(request, lease, file,
+            // 对账取得的证据来源/运行绑定/句柄**完整携带**（不得用合成值替代，否则接管台账丢关联字段）。
+            new SendOutcome.Accepted(evidenceSource ?? "reconcile:accepted", runId ?? op.RunBinding, jobId))
+            .ConfigureAwait(false);
+        // [第二轮验证会诊阻断处置] **只有 `Accepted` 才算补完成功**：`Reconciling` 恰恰可能是
+        // 接管落盘失败/关闭失败——把它当成功会让上层错误报告「普通受理已完成」。原样返回其失败原因与载荷。
+        if (acceptance.Kind == AdmissionResultKind.Accepted) return null;
+        if (acceptance.Kind == AdmissionResultKind.Reconciling) return acceptance;
+        return LocatedStop(op.RequestIdentity, op, acceptance.ReasonCode, "普通受理补完失败（保守停驻）：" + acceptance.Detail);
+    }
+
+    /// <summary>完成层结果 ↔ 执行结果载体的**逐字段等值**判据（[第二轮验证会诊] 唯一实现，供写入幂等、读回验证与恢复共用）。</summary>
+    private static bool CompletionMatchesExecutionResult(
+        ExecutionResult r, ExternalStartCompletion c, DateTimeOffset observedAt, string submissionIdentity, int sendSeq)
+        => r.Kind == (c.Kind switch
+            {
+                ExternalStartCompletionKind.Succeeded => ExecutionResultKind.Succeeded,
+                ExternalStartCompletionKind.Cancelled => ExecutionResultKind.Cancelled,
+                _ => ExecutionResultKind.Failed,
+            })
+           // [第三轮验证会诊] **JobId 必须参与等值比较**（否则「台账有句柄、载体无句柄」的分裂会被当成幂等通过）；
+           // 完成层未提供句柄时按 §24.3-3「一侧为空＝补齐」语义处理（有效句柄来自对账/接管侧），
+           // 两载体之间的句柄一致性由 `TerminalFactsConsistent` 与台账读回另行强制。
+           && (string.IsNullOrEmpty(c.JobId) || string.Equals(r.JobId, c.JobId, StringComparison.Ordinal))
+           && string.Equals(r.RawTerminal, c.RawTerminal ?? "", StringComparison.Ordinal)
+           && string.Equals(r.ExecutionErrorCode, c.ExecutionErrorCode, StringComparison.Ordinal)
+           && string.Equals(r.EvidenceSource, c.EvidenceSource ?? "", StringComparison.Ordinal)
+           && string.Equals(r.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+           && r.SendSeq == sendSeq
+           && r.ObservedAtUtc == observedAt;
+
+    /// <summary>完成层结果 ↔ 待终局处置载体的**逐字段等值**判据（同上；含 JobId 与证据来源/错误码）。</summary>
+    private static bool CompletionMatchesPendingTerminal(
+        PendingTerminal p, ExternalStartCompletion c, DateTimeOffset observedAt, string submissionIdentity, int sendSeq)
+        => p.Kind == (c.Kind switch
+            {
+                ExternalStartCompletionKind.Succeeded => ExecutionResultKind.Succeeded,
+                ExternalStartCompletionKind.Cancelled => ExecutionResultKind.Cancelled,
+                _ => ExecutionResultKind.Failed,
+            })
+           && string.Equals(p.RawTerminal, c.RawTerminal ?? "", StringComparison.Ordinal)
+           && string.Equals(p.ExecutionErrorCode, c.ExecutionErrorCode, StringComparison.Ordinal)
+           && string.Equals(p.EvidenceSource, c.EvidenceSource ?? "", StringComparison.Ordinal)
+           // 同上：完成层未携带句柄时按「一侧为空＝补齐」处理（有效句柄一致性由两载体互校与台账读回强制）。
+           && (string.IsNullOrEmpty(c.JobId) || string.Equals(p.JobId, c.JobId, StringComparison.Ordinal))
+           && string.Equals(p.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+           && p.SendSeq == sendSeq
+           && p.ObservedAtUtc == observedAt;
+
+    /// <summary>
+    /// 恢复/终局前的**四类事实一致性**（[第二轮验证会诊阻断处置]）：终态载体与待终局载体必须自洽
+    /// （同一发送身份/轮次/观察时点，且终态类别与原始终态词一致）——否则不得释放占用、不得补终局。
+    /// </summary>
+    private static bool TerminalFactsConsistent(OperationRecord op)
+    {
+        if (op.ExecutionResult is not { } result || op.PendingTerminal is not { } pending) return false;
+        // [第四轮验证会诊阻断处置] 判据必须**绑定本 Operation 的完整发送身份与类型**：
+        // 仅证明两载体彼此一致，无法排除「错轮次的成对载体」通过台账确认后错误释放占用。
+        return string.Equals(result.SubmissionIdentity, op.SubmissionIdentity, StringComparison.Ordinal)
+               && result.SendSeq == op.LastSendSeq
+               && pending.OperationType == op.OperationType
+               && op.OperationType == OperationType.ExternalStart
+               && string.Equals(result.SubmissionIdentity, pending.SubmissionIdentity, StringComparison.Ordinal)
+               // [第三轮验证会诊] **终态类别必须一致**（仅「属于三个终态之一」不足）。
+               && result.Kind == pending.Kind
+               && result.SendSeq == pending.SendSeq
+               && result.ObservedAtUtc == pending.ObservedAtUtc
+               && string.Equals(result.RawTerminal, pending.RawTerminal, StringComparison.Ordinal)
+               && string.Equals(result.ExecutionErrorCode, pending.ExecutionErrorCode, StringComparison.Ordinal)
+               && string.Equals(result.JobId, pending.JobId, StringComparison.Ordinal)
+               && string.Equals(result.EvidenceSource, pending.EvidenceSource, StringComparison.Ordinal)
+               && result.Kind is ExecutionResultKind.Succeeded or ExecutionResultKind.Failed or ExecutionResultKind.Cancelled;
+    }
+
+    /// <summary>
     /// 权威终态完成（§4.1a 判据表第三行：关联执行权威终态+接管台账一致才允许 Accepted→TerminalCompleted——
     /// 正常操作的主槽位出口；无本入口 Accepted 永驻 Active）。
     /// </summary>
@@ -1785,6 +2452,11 @@ public sealed class ArbitrationAdmissionService
                 return AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "Operations 记录缺失=响亮拒绝。", requestIdentity);
             if (op.RequestState != OperationRequestState.Accepted)
                 return AdmissionResult.Of(AdmissionResultKind.Error, "not_accepted", "仅已受理操作可终局完成（其余状态按各自判据）。", requestIdentity);
+            // §24.15／§24.1-6（[Batch B 会诊阻断处置]）：外部启动**禁止**借通用终局入口的「台账布尔确认」旁路——
+            // 其终局必须经完成结算入口按唯一顺序完成（ExecutionResult＋PendingTerminal → 台账 Terminal → 关闭 → 终局）。
+            if (op.OperationType == OperationType.ExternalStart)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "external_start_requires_completion_settlement",
+                    "外部启动必须经完成结算入口（SettleCompletionAsync）终局，禁止旁路通用终局入口。", requestIdentity);
             // 台账一致交叉确认（关联 job 权威终态；未配置=保守不允许）。
             if (_hooks.TakeoverTerminalConfirmed?.Invoke(op.SubmissionIdentity, op.LastSendSeq) != true)
                 return AdmissionResult.Of(AdmissionResultKind.Error, "ledger_not_terminal", "接管台账未确认权威终态（保守不终局）。", requestIdentity);
@@ -2172,11 +2844,34 @@ public sealed class ArbitrationAdmissionService
                     ? new List<string>()
                     : (mutate.File!.Handoff?.Operations ?? [])
                         .Where(o => o.Zone == OperationZone.Active && o.RequestState == OperationRequestState.Accepted)
+                        // [Batch B 会诊阻断处置] 外部启动**不得**借通用「台账布尔确认」旁路：单独走下方 externalReady。
+                        .Where(o => o.OperationType != OperationType.ExternalStart)
                         .Where(o => o.SubmissionIdentity is not null
                                     && _hooks.TakeoverTerminalConfirmed?.Invoke(o.SubmissionIdentity, o.LastSendSeq) == true)
                         .Select(o => o.RequestIdentity)
                         .ToList();
-                foreach (var identity in confirmed)
+                // 外部启动补终局（§24.15）：**四类事实齐备**（ExecutionResult＋PendingTerminal＋台账 Terminal＋Submission 已关闭）
+                // 才在同一边界补 Operation 终局；缺任一事实＝保守停驻（不释放占用、不重发）。
+                var externalReady = ownLease is null
+                    ? new List<string>()
+                    : (mutate.File!.Handoff?.Operations ?? [])
+                        .Where(o => o.Zone == OperationZone.Active && o.RequestState == OperationRequestState.Accepted
+                                    && o.OperationType == OperationType.ExternalStart
+                                    // [第二轮验证会诊阻断处置] **四类事实必须自洽**（身份/轮次/观察时点/类别/原始词/错误码/句柄/来源全等），
+                                    // 否则损坏或交叉组合的载体不得被补成终局、不得释放主槽位。
+                                    && TerminalFactsConsistent(o)
+                                    && o.SubmissionIdentity is not null
+                                    // [第三轮验证会诊] 台账侧必须**逐字段**确认（原始词/错误码/句柄/来源/观察时点），
+                                    // 仅「记录存在且 Terminal」不足以证明台账终态属于本次载荷。
+                                    && _hooks.TakeoverTerminalPayloadConfirmed?.Invoke(o.SubmissionIdentity, o.LastSendSeq,
+                                        o.PendingTerminal!.RawTerminal, o.PendingTerminal.ExecutionErrorCode,
+                                        o.PendingTerminal.JobId, o.PendingTerminal.EvidenceSource,
+                                        o.PendingTerminal.ObservedAtUtc) == true
+                                    && (mutate.File!.Handoff?.Submission is not { } stillOpen
+                                        || !string.Equals(stillOpen.SubmissionIdentity, o.SubmissionIdentity, StringComparison.Ordinal)))
+                        .Select(o => o.RequestIdentity)
+                        .ToList();
+                foreach (var identity in confirmed.Concat(externalReady))
                 {
                     var terminalNow = _utcNow();
                     var terminal = _store.MutateHandoffLatest(ownLease!.LeaseId, ownLease.OwnerEpoch, file =>
@@ -2184,9 +2879,25 @@ public sealed class ArbitrationAdmissionService
                         var op = FindOp(file, identity);
                         if (op is null || op.Zone != OperationZone.Active || op.RequestState != OperationRequestState.Accepted)
                             return "state_changed";
+                        // [第三轮验证会诊] 提交事务内**重新**执行四类事实一致性复核（消除「快照检查→提交」窗口）。
+                        if (op.OperationType == OperationType.ExternalStart)
+                        {
+                            if (!TerminalFactsConsistent(op)) return "terminal_facts_inconsistent";
+                            // [第六轮验证会诊] 台账句柄 TOCTOU：台账已有句柄而载体为空/不等 ⇒ 本轮不终局（先补齐）。
+                            // 未配置读取器＝不可确认（fail-closed：不补终局）。
+                            var probe = _hooks.TakeoverJobIdRead?.Invoke(op.SubmissionIdentity, op.LastSendSeq)
+                                ?? LedgerHandleProbe.Unreadable();
+                            // 三态：读取失败/不可确认 ⇒ 不补终局（不得把读取故障当作「台账无句柄」而释放占用）。
+                            if (probe.State == LedgerHandleState.Unreadable) return "terminal_ledger_unreadable";
+                            if (probe is { State: LedgerHandleState.Present, JobId: { Length: > 0 } ledgerJob }
+                                && !string.Equals(ledgerJob, op.ExecutionResult!.JobId, StringComparison.Ordinal))
+                                return "terminal_job_id_backfill_required";
+                        }
                         op.RequestState = OperationRequestState.TerminalCompleted;
                         op.LastResult = new OperationResult { Outcome = OperationOutcome.Accepted, ReasonCode = "terminal_confirmed_after_restart", Retryable = false, RetryBudgetUsed = op.LastResult?.RetryBudgetUsed ?? 0, EvidenceSource = "restart_recovery:terminal_confirmed", AnsweredSendSeq = op.LastSendSeq };
                         op.Zone = OperationZone.TerminalPendingTransfer;
+                        // 外部启动：补终局即责任结清 ⇒ 清理待终局处置投影（终态事实由 ExecutionResult 长期承载）。
+                        if (op.OperationType == OperationType.ExternalStart) op.PendingTerminal = null;
                         op.UpdatedRevision = file.Revision + 1;
                         op.UpdatedAtUtc = terminalNow;
                         MigrateAndClean(file, terminalNow);

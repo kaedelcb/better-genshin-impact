@@ -425,6 +425,8 @@ public sealed class ExecutionResult
 /// </summary>
 public sealed class PendingTerminal
 {
+    /// <summary>终态类别（与 `ExecutionResult.Kind` 必须一致；[第三轮验证会诊] 新增，供四类事实一致性判据使用）。</summary>
+    [JsonPropertyName("kind")] public ExecutionResultKind Kind { get; set; } = ExecutionResultKind.Unknown;
     [JsonPropertyName("rawTerminal")] public string RawTerminal { get; set; } = "";
     [JsonPropertyName("executionErrorCode")] public string? ExecutionErrorCode { get; set; }
     [JsonPropertyName("jobId")] public string? JobId { get; set; }

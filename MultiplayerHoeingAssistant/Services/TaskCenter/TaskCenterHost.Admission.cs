@@ -305,9 +305,25 @@ public sealed partial class TaskCenterHost
                     var op = read.File?.Handoff?.Operations?.FirstOrDefault(
                         o => string.Equals(o.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal));
                     // R5.3 §24.1-6（[落地批次会诊阻断处置]）：**按持久化类型分派**，未知类型 fail-closed。
-                    // 外部启动的权威终态须查 `ExternalStartLedger`（§24.1-6）；本批尚未实现该查询 ⇒ 保守返回 false
-                    // （外部 Operation 保持 Active，不释放主槽位；由 Batch B 的完成结算入口接管）。
-                    if (op is null || op.OperationType is OperationType.Unknown or OperationType.ExternalStart) return false;
+                    // 外部启动的权威终态由 `ExternalStartLedger` 承载：**改查台账终态记录**（§24.1-6：仅同一
+                    // `submissionIdentity+sendSeq` 记录为 `Terminal` 才为 true；不得用运行快照或「查询未命中」代替）。
+                    if (op is not null && op.OperationType == OperationType.ExternalStart)
+                    {
+                        var root = _admissionRoot ?? Directory.GetParent(_runsDirPath!)?.FullName ?? _runsDirPath!;
+                        try
+                        {
+                            var ledgerRead = new ExternalStartLedger(root).Read();
+                            return ledgerRead.Valid && ledgerRead.File?.Entries.Any(e =>
+                                string.Equals(e.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+                                && e.SendSeq == op.LastSendSeq
+                                && e.State == LedgerEntryState.Terminal) == true;
+                        }
+                        catch (IOException)
+                        {
+                            return false; // 读取失败/争用＝保守不确认（不推导终态）
+                        }
+                    }
+                    if (op is null || op.OperationType == OperationType.Unknown) return false;
                     if (op.OperationType is not (OperationType.NodeExecution or OperationType.FlowRegistration
                         or OperationType.Recovery or OperationType.Handoff)) return false;
                     if (op?.RunBinding is not { } rb) return false;
@@ -319,6 +335,81 @@ public sealed partial class TaskCenterHost
                         return NodeOutcomeIsTerminal(run, op);
                     // 非节点（流程登记/恢复）仍按运行级终态确认。
                     return run.State is WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.Cancelled;
+                },
+                // R5.3 §24.15 完成结算事务的「台账 Terminal」步（[Batch B]）：仅外部启动操作写外部台账；
+                // 其余类型不写（由各自载体承载），未知类型 fail-closed。失败原因原样回传门面 ⇒ 保守停驻。
+                TakeoverTerminalPersist = (submissionIdentity, sendSeq, terminalEvidence, observedAtUtc, rawTerminal, executionErrorCode, jobId, terminalEvidenceSource) =>
+                {
+                    var read = _admissionStore?.Read();
+                    var op = read?.File?.Handoff?.Operations?.FirstOrDefault(
+                        o => string.Equals(o.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal));
+                    if (op is null) return "operation_identity_missing";
+                    if (op.OperationType != OperationType.ExternalStart) return "operation_type_not_external_start";
+                    var root = _admissionRoot ?? Directory.GetParent(_runsDirPath!)?.FullName ?? _runsDirPath!;
+                    try
+                    {
+                        var marked = new ExternalStartLedger(root).MarkTerminal(
+                            submissionIdentity, sendSeq, terminalEvidence, observedAtUtc,
+                            rawTerminal, executionErrorCode, op.OperationType, jobId, terminalEvidenceSource);
+                        if (marked.Success) return null;
+                        return "ledger_terminal_failed:" + (marked.Reason ?? "unknown");
+                    }
+                    catch (Exception ex)
+                    {
+                        return "ledger_terminal_exception:" + ex.GetType().Name;
+                    }
+                },
+                // §24.15 读回验证（[第二轮验证会诊阻断处置]）：按同一发送身份读回台账终态，并**逐字段**核对
+                // 原始终态词／错误码／句柄／证据来源／观察时点是否与本次事实等值（仅「记录存在且 Terminal」不算确认）。
+                TakeoverTerminalPayloadConfirmed = (submissionIdentity, sendSeq, rawTerminal, executionErrorCode, jobId, evidenceSource, observedAtUtc) =>
+                {
+                    var root = _admissionRoot ?? Directory.GetParent(_runsDirPath!)?.FullName ?? _runsDirPath!;
+                    try
+                    {
+                        var ledgerRead = new ExternalStartLedger(root).Read();
+                        if (!ledgerRead.Valid || ledgerRead.File is null) return false;
+                        var entry = ledgerRead.File.Entries.FirstOrDefault(e =>
+                            string.Equals(e.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal) && e.SendSeq == sendSeq);
+                        if (entry is null || entry.State != LedgerEntryState.Terminal) return false;
+                        return string.Equals(entry.TerminalEvidence, rawTerminal, StringComparison.Ordinal)
+                               // [第四轮验证会诊] **逐字段等值**：不得用期望值补空（缺副本字段即不确认）。
+                               && string.Equals(entry.RawTerminal, rawTerminal, StringComparison.Ordinal)
+                               && string.Equals(entry.ExecutionErrorCode, executionErrorCode, StringComparison.Ordinal)
+                               && string.Equals(entry.JobId, jobId, StringComparison.Ordinal)
+                               && string.Equals(entry.TerminalEvidenceSource, evidenceSource, StringComparison.Ordinal)
+                               && entry.TerminalObservedAtUtc == observedAtUtc;
+                    }
+                    catch (IOException)
+                    {
+                        return false; // 读取失败/争用＝保守不确认
+                    }
+                },
+                // §24.3-3 句柄合并读回（[第四轮验证会诊]）：门面据此取台账合并后的权威句柄，避免载体与台账分裂。
+                TakeoverJobIdRead = (submissionIdentity, sendSeq) =>
+                {
+                    var root = _admissionRoot ?? Directory.GetParent(_runsDirPath!)?.FullName ?? _runsDirPath!;
+                    try
+                    {
+                        var read = new ExternalStartLedger(root).Read();
+                        // [第八轮验证会诊] 三态：读取失败/损坏/记录不可确认 ⇒ `Unreadable`（门面据此保守停驻），
+                        // **不得**返回「无句柄」而让读取故障被当成权威事实。
+                        if (!read.Valid) return LedgerHandleProbe.Unreadable();
+                        var entry = read.File?.Entries.FirstOrDefault(e =>
+                            string.Equals(e.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal) && e.SendSeq == sendSeq);
+                        if (entry is null) return LedgerHandleProbe.Absent();
+                        return string.IsNullOrEmpty(entry.JobId)
+                            ? LedgerHandleProbe.Absent()
+                            : LedgerHandleProbe.Present(entry.JobId);
+                    }
+                    catch (IOException)
+                    {
+                        return LedgerHandleProbe.Unreadable(); // 读取失败/争用＝不可确认（保守停驻，不臆造）
+                    }
+                    catch (Exception)
+                    {
+                        // [第九轮验证会诊] 任何**预期外读取异常**同样折为 `Unreadable`（稳定返回合同码，fail-closed）。
+                        return LedgerHandleProbe.Unreadable();
+                    }
                 },
             };
             facade = new ArbitrationAdmissionService(store, hooks, utcNow);

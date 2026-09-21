@@ -1154,6 +1154,81 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Null(ReadLease().File!.Handoff!.Submission);
     }
 
+    [Fact]
+    public async Task SettleCompletion_LedgerJobIdArrivesLate_DoesNotReleaseSlotUntilBackfilled()
+    {
+        // TOCTOU 反例：台账句柄在「载体写入之后、终局之前」才可见 ⇒ 本轮**不得**释放占用；
+        // 下一轮（句柄可见）补齐载体句柄后方可终局。
+        var (svc, ledger) = BuildExternalFacadeWithCompletion(senderUnknown: true, jobIdReadLate: "job-late");
+        var req = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-ext-toctou");
+        req.OperationType = OperationType.ExternalStart;
+        var unknown = await svc.SubmitAsync(req);
+        Assert.Equal(AdmissionResultKind.Reconciling, unknown.Kind);
+
+        var first = await svc.SettleReconciledAsync(unknown.RequestIdentity,
+            new ReconcileSettlement.Accepted(unknown.SubmissionIdentity!, unknown.SendSeq, "owner:rc", null, null,
+                ExternalStartCompletion.SucceededWith("completed", "owner:rc", _now)));
+        Assert.Equal(ResponsibilityState.Pending, first.ResponsibilityState);            // 停驻（不得释放占用）
+        Assert.Equal("terminal_job_id_backfill_required", first.ReasonCode);             // 停驻原因原样透传（合同码）
+        Assert.Equal(OperationRequestState.Reconciling, FindOp(unknown.RequestIdentity)!.RequestState);
+        Assert.Null(FindOp(unknown.RequestIdentity)!.ExecutionResult!.JobId);            // 载体句柄暂为空
+
+        var second = await svc.SettleReconciledAsync(unknown.RequestIdentity,
+            new ReconcileSettlement.Accepted(unknown.SubmissionIdentity!, unknown.SendSeq, "owner:rc", null, null,
+                ExternalStartCompletion.SucceededWith("completed", "owner:rc", _now)));
+        Assert.Equal(ResponsibilityState.Settled, second.ResponsibilityState);
+        Assert.Equal("job-late", second.JobId);
+        var op = FindOp(unknown.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState);
+        Assert.Equal("job-late", op.ExecutionResult!.JobId);                             // 补齐后与台账一致
+        Assert.Equal("job-late", Assert.Single(ledger.Read().File!.Entries).JobId);
+        Assert.Null(ReadLease().File!.Handoff!.Submission);
+    }
+
+    [Fact]
+    public async Task SettleCompletion_LedgerUnreadableDuringFinalize_DoesNotReleaseSlot()
+    {
+        // 读取故障反例：终局事务内台账复读失败/不可确认 ⇒ 不得当作「无句柄」继续（保守停驻、责任保留）。
+        var (svc, ledger) = BuildExternalFacadeWithCompletion(senderUnknown: true, ledgerUnreadableInFinalize: true);
+        var req = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-ext-unreadable");
+        req.OperationType = OperationType.ExternalStart;
+        var unknown = await svc.SubmitAsync(req);
+        Assert.Equal(AdmissionResultKind.Reconciling, unknown.Kind);
+
+        var held = await svc.SettleReconciledAsync(unknown.RequestIdentity,
+            new ReconcileSettlement.Accepted(unknown.SubmissionIdentity!, unknown.SendSeq, "owner:rc", null, null,
+                ExternalStartCompletion.SucceededWith("completed", "owner:rc", _now)));
+        Assert.Equal(ResponsibilityState.Pending, held.ResponsibilityState);
+        Assert.Equal("terminal_ledger_unreadable", held.ReasonCode);
+        var op = FindOp(unknown.RequestIdentity)!;
+        Assert.NotEqual(OperationRequestState.TerminalCompleted, op.RequestState);   // 未终局
+        Assert.NotNull(op.PendingTerminal);                                          // 责任保留
+        Assert.NotNull(ReadLease().File!.Handoff!.Submission);                       // Submission 未关闭
+        // 台账步本身已成功（记录转 Terminal），但**终局事务内复读不可确认** ⇒ 门面拒绝在租约侧释放占用
+        // （责任保留：既不关闭 Submission、也不清 PendingTerminal、也不迁墓碑）。
+        Assert.Equal(LedgerEntryState.Terminal, Assert.Single(ledger.Read().File!.Entries).State);
+    }
+
+    [Fact]
+    public async Task SettleCompletion_JobIdReadHookMissing_FailsClosedAsUnreadable()
+    {
+        // 配置缺失反例：终态写入/确认钩子在位，但**句柄读取器未配置** ⇒ 归为「不可确认」，一律保守停驻。
+        var (svc, ledger) = BuildExternalFacadeWithCompletion(noJobIdReadHook: true);
+        var (rid, sub, seq) = await AcceptedExternalOpAsync(svc);
+
+        var held = await svc.SettleCompletionAsync(rid, sub, seq,
+            ExternalStartCompletion.SucceededWith("completed", "ext:watch", _now));
+        Assert.Equal("terminal_ledger_unreadable", held.ReasonCode);
+        Assert.Equal(ResponsibilityState.Pending, held.ResponsibilityState);
+        var op = FindOp(rid)!;
+        Assert.NotEqual(OperationRequestState.TerminalCompleted, op.RequestState);   // 未终局
+        // 读取器缺失在**写终态载体之前**即停驻 ⇒ 两载体均未写（责任仍由 Operation=Accepted/Active 承载）。
+        Assert.Null(op.PendingTerminal);
+        Assert.Null(op.ExecutionResult);
+        Assert.Equal(LedgerEntryState.AcceptedPendingExecution,
+            Assert.Single(ledger.Read().File!.Entries).State);                       // 未写终态副本
+    }
+
     // ── 34. B5：缺字段不得默认为合法（台账 {} / {version:1} / 记录缺关联字段；租约 handoff:{}）──
 
     [Fact]
@@ -2331,4 +2406,391 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(0, sends);
         Assert.Null(ReadLease().File!.Handoff!.Submission);   // 零占位
         Assert.NotNull(ReadLease().File!.Handoff!.Pending);   // 交接责任保留
-    }}
+    }
+
+    // ── 23. 完成结算入口（R5.3 §24.3-4／§24.15，Batch B）：三分支＋幂等重放＋陈旧身份拒绝 ──
+
+    /// <summary>
+    /// 夹具前置：终态钩子**接真实 `ExternalStartLedger`**（RecordAccepted／MarkTerminal／读回逐字段比对），
+    /// 不用外层字符串记录冒充台账（[第三轮验证会诊阻断处置]）。
+    /// </summary>
+    private (ArbitrationAdmissionService Svc, ExternalStartLedger Ledger) BuildExternalFacadeWithCompletion(
+        bool senderUnknown = false, bool acceptanceFails = false,
+        bool noTerminalHooks = false, bool terminalPersistFailsWithMismatchedPayload = false,
+        bool ledgerConfirmFailsOnce = false, string? jobIdReadLate = null, bool ledgerUnreadableInFinalize = false,
+        bool noJobIdReadHook = false)
+    {
+        var ledger = new ExternalStartLedger(_dir, () => _now);
+        var jobCounter = 0;
+        var confirmCalls = 0;
+        var jobIdReadCalls = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            // 每笔发送各自独立句柄（台账禁止同一 jobId 归属两笔发送：夹具按真实语义给唯一句柄）。
+            h.Sender = _ => senderUnknown
+                ? Task.FromResult<SendOutcome>(new SendOutcome.Unknown("adapter_unknown", "ext:adapter"))
+                : Task.FromResult<SendOutcome>(new SendOutcome.Accepted(
+                    "ext:accepted", null, "job-" + System.Threading.Interlocked.Increment(ref jobCounter)));
+            if (acceptanceFails) h.TakeoverPersist = _ => Task.FromResult<string?>("record_failed:fixture");
+            // §24.3-3 句柄合并读回（**所有分支都需要**：钩子缺失/不匹配分支同样要能读出台账权威句柄）。
+            if (!noJobIdReadHook) h.TakeoverJobIdRead = (sub, seq) =>
+            {
+                // 反例支持：首次读回为 null（模拟「台账句柄并发后补」的 TOCTOU 窗口），其后返回指定句柄。
+                var call = System.Threading.Interlocked.Increment(ref jobIdReadCalls);
+                if (jobIdReadLate is not null && call == 1) return LedgerHandleProbe.Absent();
+                // 反例支持：终局事务内复读失败（读取故障不得被当作「无句柄」而释放占用）。
+                if (ledgerUnreadableInFinalize && call >= 2) return LedgerHandleProbe.Unreadable();
+                var entry = ledger.Read().File?.Entries.FirstOrDefault(e =>
+                    string.Equals(e.SubmissionIdentity, sub, StringComparison.Ordinal) && e.SendSeq == seq);
+                if (jobIdReadLate is not null)
+                    return string.IsNullOrEmpty(entry?.JobId)
+                        ? LedgerHandleProbe.Present(jobIdReadLate)
+                        : LedgerHandleProbe.Present(entry!.JobId);
+                return string.IsNullOrEmpty(entry?.JobId)
+                    ? LedgerHandleProbe.Absent()
+                    : LedgerHandleProbe.Present(entry!.JobId);
+            };
+            if (noTerminalHooks) return; // 钩子缺失：验证「终态回写钩子缺失 ⇒ 保守停驻」
+            if (terminalPersistFailsWithMismatchedPayload)
+            {
+                // **真实 MarkTerminal 写入不同载荷**（原始终态词/证据词加后缀）⇒ 生产式**逐字段**读回必然不确认
+                // ⇒ 必须停驻（不得用宽松确认继续关闭/终局）。此处不使用硬编码 false，以真实台账驱动反例。
+                h.TakeoverTerminalPersist = (sub, seq, evidence, observed, raw, err, job, source) =>
+                {
+                    var r = ledger.MarkTerminal(sub, seq, evidence + "-mismatch", observed,
+                        (raw ?? "") + "-mismatch", err, OperationType.ExternalStart, job, source);
+                    return r.Success ? null : "ledger_terminal_failed:" + (r.Reason ?? "unknown");
+                };
+                h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, err, job, source, observed) =>
+                {
+                    var entry = ledger.Read().File?.Entries.FirstOrDefault(e =>
+                        string.Equals(e.SubmissionIdentity, sub, StringComparison.Ordinal) && e.SendSeq == seq);
+                    return entry is { State: LedgerEntryState.Terminal }
+                        && string.Equals(entry.TerminalEvidence, raw, StringComparison.Ordinal)
+                        && string.Equals(entry.RawTerminal, raw, StringComparison.Ordinal)
+                        && string.Equals(entry.ExecutionErrorCode, err, StringComparison.Ordinal)
+                        && string.Equals(entry.JobId, job, StringComparison.Ordinal)
+                        && string.Equals(entry.TerminalEvidenceSource, source, StringComparison.Ordinal)
+                        && entry.TerminalObservedAtUtc == observed;
+                };
+                h.TakeoverJobIdRead = (sub, seq) =>
+                {
+                    var read = ledger.Read();
+                    if (!read.Valid) return LedgerHandleProbe.Unreadable();
+                    var entry = read.File?.Entries.FirstOrDefault(e =>
+                        string.Equals(e.SubmissionIdentity, sub, StringComparison.Ordinal) && e.SendSeq == seq);
+                    return string.IsNullOrEmpty(entry?.JobId)
+                        ? LedgerHandleProbe.Absent()
+                        : LedgerHandleProbe.Present(entry!.JobId);
+                };
+                return;
+            }
+            h.TakeoverTerminalPersist = (sub, seq, evidence, observed, raw, err, job, source) =>
+            {
+                var r = ledger.MarkTerminal(sub, seq, evidence, observed, raw, err, OperationType.ExternalStart, job, source);
+                return r.Success ? null : "ledger_terminal_failed:" + (r.Reason ?? "unknown");
+            };
+            h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, err, job, source, observed) =>
+            {
+                // 反例支持：首次读回不确认（模拟「发布结果不明」），随后按真实台账逐字段确认。
+                if (ledgerConfirmFailsOnce && System.Threading.Interlocked.Increment(ref confirmCalls) == 1) return false;
+                var entry = ledger.Read().File?.Entries.FirstOrDefault(e =>
+                    string.Equals(e.SubmissionIdentity, sub, StringComparison.Ordinal) && e.SendSeq == seq);
+                return entry is { State: LedgerEntryState.Terminal }
+                    && string.Equals(entry.TerminalEvidence, raw, StringComparison.Ordinal)
+                    && string.Equals(entry.ExecutionErrorCode, err, StringComparison.Ordinal)
+                    && string.Equals(entry.JobId, job, StringComparison.Ordinal)
+                    && string.Equals(entry.TerminalEvidenceSource, source, StringComparison.Ordinal)
+                    && entry.TerminalObservedAtUtc == observed;
+            };
+            // §24.3-3 句柄合并读回由上方**统一**赋值（含 `jobIdReadLate` 反例支持，不得在此覆盖）。
+        });
+        return (svc, ledger);
+    }
+
+    private async Task<(string RequestIdentity, string SubmissionIdentity, int SendSeq)> AcceptedExternalOpAsync(
+        ArbitrationAdmissionService svc)
+    {
+        var req = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-ext");
+        // §24.17：外部启动的可信操作类型由适配器提供（这里模拟 E3/E4/E5 适配层）。
+        req.OperationType = OperationType.ExternalStart;
+        var accepted = await svc.SubmitAsync(req);
+        Assert.Equal(AdmissionResultKind.Accepted, accepted.Kind);
+        return (accepted.RequestIdentity, accepted.SubmissionIdentity!, accepted.SendSeq);
+    }
+
+    [Fact]
+    public async Task SettleCompletion_NullOrUnknown_WritesNoTerminalCarriers()
+    {
+        var (svc, ledger) = BuildExternalFacadeWithCompletion();
+        var (rid, sub, seq) = await AcceptedExternalOpAsync(svc);
+
+        var plain = await svc.SettleCompletionAsync(rid, sub, seq, null);
+        Assert.Equal(AdmissionResultKind.Accepted, plain.Kind);
+        Assert.Equal("accepted_no_terminal", plain.ReasonCode);
+        Assert.Equal(ResponsibilityState.Pending, plain.ResponsibilityState); // 已登记后不得回落 None（§24.6-5）
+        Assert.Equal(ExecutionDisposition.None, plain.ExecutionDisposition);
+
+        var unknown = await svc.SettleCompletionAsync(rid, sub, seq, ExternalStartCompletion.UnknownWith("not yet observed"));
+        Assert.Equal(AdmissionResultKind.NeedReconcile, unknown.Kind);
+        Assert.Equal(ResponsibilityState.Pending, unknown.ResponsibilityState);
+        Assert.Equal(ExecutionDisposition.Unknown, unknown.ExecutionDisposition);
+
+        var op = FindOp(rid)!;
+        Assert.Null(op.PendingTerminal);   // §24.19-2：Unknown 不得生成 PendingTerminal
+        Assert.Null(op.ExecutionResult);   // 且不得借未知写权威终态
+        // 台账：仍为「已受理未终结」（未写终态副本 ⇒ 继续占用，且无观察时点副本）。
+        var ledgerEntry = Assert.Single(ledger.Read().File!.Entries);
+        Assert.Equal(LedgerEntryState.AcceptedPendingExecution, ledgerEntry.State);
+        Assert.Null(ledgerEntry.TerminalObservedAtUtc);
+        Assert.Single(ledger.GetOccupancy().Entries);
+    }
+
+    [Fact]
+    public async Task SettleCompletion_Terminal_WritesCarriersThenFinalizes_AndReplaysIdempotently()
+    {
+        var (svc, ledger) = BuildExternalFacadeWithCompletion();
+        var (rid, sub, seq) = await AcceptedExternalOpAsync(svc);
+
+        var done = await svc.SettleCompletionAsync(rid, sub, seq,
+            ExternalStartCompletion.SucceededWith("completed", "ext:watch", _now));
+        Assert.Equal(AdmissionResultKind.Accepted, done.Kind);
+        Assert.Equal("terminal_completed", done.ReasonCode);
+        Assert.Equal(ResponsibilityState.Settled, done.ResponsibilityState);
+        Assert.Equal(ExecutionDisposition.None, done.ExecutionDisposition);
+        // 真实台账：终态副本已写、观察时点与落盘时点分离、终局后不再占用。
+        var ledgerEntry = Assert.Single(ledger.Read().File!.Entries);
+        Assert.Equal(LedgerEntryState.Terminal, ledgerEntry.State);
+        Assert.Equal("completed", ledgerEntry.TerminalEvidence);
+        Assert.Equal(_now, ledgerEntry.TerminalObservedAtUtc);
+        Assert.Empty(ledger.GetOccupancy().Entries);
+
+        var op = FindOp(rid)!;
+        Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState);
+        Assert.NotEqual(OperationZone.Active, op.Zone);
+        Assert.Null(op.PendingTerminal);                 // 终局完成 ⇒ 责任已结清（终态事实由 ExecutionResult 承载）
+        Assert.NotNull(op.ExecutionResult);
+        Assert.Equal(ExecutionResultKind.Succeeded, op.ExecutionResult!.Kind);
+        Assert.Equal(_now, op.ExecutionResult.ObservedAtUtc);
+        Assert.Null(ReadLease().File!.Handoff!.Submission);
+
+        // 幂等重放：返回既有终态事实，不重复写台账、不改责任状态（§24.13-2）。
+        var replay = await svc.SettleCompletionAsync(rid, sub, seq,
+            ExternalStartCompletion.SucceededWith("completed", "ext:watch", _now));
+        Assert.Equal("already_terminal", replay.ReasonCode);
+        Assert.Equal(ResponsibilityState.Settled, replay.ResponsibilityState);
+        Assert.Single(ledger.Read().File!.Entries); // 幂等重放：不写第二份终态
+    }
+
+    [Fact]
+    public async Task SettleCompletion_CancelledAndFailed_MapResultDimension()
+    {
+        var (svc, ledger) = BuildExternalFacadeWithCompletion();
+        var (rid, sub, seq) = await AcceptedExternalOpAsync(svc);
+
+        var cancelled = await svc.SettleCompletionAsync(rid, sub, seq,
+            ExternalStartCompletion.CancelledWith("cancelled", "ext:watch", _now));
+        Assert.Equal(AdmissionResultKind.Cancelled, cancelled.Kind);
+        Assert.Equal(ExecutionDisposition.Cancelled, cancelled.ExecutionDisposition);
+        Assert.Equal(ResponsibilityState.Settled, cancelled.ResponsibilityState);
+        Assert.Equal("cancelled", cancelled.RawTerminal);
+        Assert.Equal(ExecutionResultKind.Cancelled, FindOp(rid)!.ExecutionResult!.Kind);
+
+        // 台账：两条记录均转 Terminal，且保留各自原始终态词（不得被后续冲突改写）。
+        Assert.Equal("cancelled", Assert.Single(ledger.Read().File!.Entries).TerminalEvidence);
+
+        var (rid2, sub2, seq2) = await AcceptedExternalOpAsync(svc);
+        var failed = await svc.SettleCompletionAsync(rid2, sub2, seq2,
+            ExternalStartCompletion.ExecutionFailedWith("failed", "E_TASK_FAIL", "ext:watch", _now));
+        Assert.Equal(AdmissionResultKind.ExecutionFailed, failed.Kind);
+        Assert.Equal(ExecutionDisposition.ExecutionFailed, failed.ExecutionDisposition);
+        Assert.Equal("E_TASK_FAIL", failed.ExecutionErrorCode);
+        var op2 = FindOp(rid2)!;
+        Assert.Equal(ExecutionResultKind.Failed, op2.ExecutionResult!.Kind);
+        Assert.Equal("E_TASK_FAIL", op2.ExecutionResult.ExecutionErrorCode);
+    }
+
+    [Fact]
+    public async Task SettleCompletion_StaleIdentity_LoudRejectWithoutStateChange()
+    {
+        var (svc, _) = BuildExternalFacadeWithCompletion();
+        var (rid, _, seq) = await AcceptedExternalOpAsync(svc);
+
+        var stale = await svc.SettleCompletionAsync(rid, "sub:someone-else:1", seq,
+            ExternalStartCompletion.SucceededWith("completed", "ext:watch", _now));
+        Assert.Equal(AdmissionResultKind.Error, stale.Kind);
+        Assert.Equal("stale_evidence", stale.ReasonCode); // 旧轮次/他人身份证据不得结算本笔责任
+        Assert.Equal(OperationRequestState.Accepted, FindOp(rid)!.RequestState);
+        Assert.Null(FindOp(rid)!.PendingTerminal);
+    }
+
+    [Fact]
+    public async Task SettleCompletion_TerminalPersistNotConfigured_HoldsWithPendingTerminal()
+    {
+        var (svc, _) = BuildExternalFacadeWithCompletion(noTerminalHooks: true);
+        var (rid, sub, seq) = await AcceptedExternalOpAsync(svc); // 发送句柄＝job-1（受理时已并入接管台账）
+
+        var held = await svc.SettleCompletionAsync(rid, sub, seq,
+            ExternalStartCompletion.SucceededWith("completed", "ext:watch", _now));
+        // 结果维：已观察成功但结算未完成 ⇒ 待对账（**不得**因后续持久化失败改写成取消/失败，也不得冒充已结清）。
+        Assert.Equal(AdmissionResultKind.NeedReconcile, held.Kind);
+        Assert.Equal(ExecutionDisposition.Unknown, held.ExecutionDisposition);
+        Assert.Equal("terminal_persist_not_configured", held.ReasonCode); // §24.3-5：钩子缺失＝保守停驻
+        Assert.Equal(ResponsibilityState.Pending, held.ResponsibilityState);
+        Assert.Equal("job-1", held.JobId); // [第五轮] 停驻返回同样必须携带合并后的有效句柄
+
+        var op = FindOp(rid)!;
+        Assert.NotNull(op.ExecutionResult);   // 第一段已提交（§24.12-7 合法中间态）
+        Assert.NotNull(op.PendingTerminal);
+        Assert.Equal(OperationRequestState.Accepted, op.RequestState); // 未终局、不释放占用、不重发
+    }
+
+    [Fact]
+    public async Task SettleCompletion_NonExternalOperationType_FailClosed()
+    {
+        var (svc, ledger) = BuildExternalFacadeWithCompletion();
+        // 同名入口但操作类型非外部启动（模拟节点/流程操作误用完成结算入口）。
+        var req = Req(ns: "manual", workflow: "flow:cfg", payload: "p-node");
+        req.OperationType = OperationType.NodeExecution;
+        var accepted = await svc.SubmitAsync(req);
+        Assert.Equal(AdmissionResultKind.Accepted, accepted.Kind);
+
+        var refused = await svc.SettleCompletionAsync(accepted.RequestIdentity, accepted.SubmissionIdentity!, accepted.SendSeq,
+            ExternalStartCompletion.SucceededWith("completed", "ext:watch", _now));
+        Assert.Equal(AdmissionResultKind.Error, refused.Kind);
+        Assert.Equal("operation_type_not_external_start", refused.ReasonCode);
+        // 非外部类型**不得写终态副本**（受理接管由通用夹具落盘，但终态/关闭/终局一概不得发生）。
+        Assert.Equal(LedgerEntryState.AcceptedPendingExecution,
+            Assert.Single(ledger.Read().File!.Entries).State);
+        Assert.Equal(OperationRequestState.Accepted, FindOp(accepted.RequestIdentity)!.RequestState); // 不释放占用
+    }
+
+    [Fact]
+    public async Task SettleCompletion_TerminalConflictWithExistingFact_NotOverwritten()
+    {
+        var (svc, ledger) = BuildExternalFacadeWithCompletion();
+        var (rid, sub, seq) = await AcceptedExternalOpAsync(svc);
+
+        var cancelled = await svc.SettleCompletionAsync(rid, sub, seq,
+            ExternalStartCompletion.CancelledWith("cancelled", "ext:watch", _now));
+        Assert.Equal(AdmissionResultKind.Cancelled, cancelled.Kind);
+
+        // 同一发送轮次再来一个**不同**终态：不得覆盖既有事实（冲突/损坏 fail-closed，且不写第二次台账）。
+        var conflict = await svc.SettleCompletionAsync(rid, sub, seq,
+            ExternalStartCompletion.SucceededWith("completed", "ext:watch", _now));
+        Assert.Equal(AdmissionResultKind.Error, conflict.Kind);
+        Assert.Equal("terminal_conflict", conflict.ReasonCode); // 冲突终态：不覆盖、不重放、不释放占用（§24.13-3）
+        Assert.Equal(ResponsibilityState.Pending, conflict.ResponsibilityState); // 冲突断言需权威裁决
+        Assert.Equal(ExecutionResultKind.Cancelled, FindOp(rid)!.ExecutionResult!.Kind);
+        Assert.Equal("cancelled", Assert.Single(ledger.Read().File!.Entries).TerminalEvidence); // 台账仍为首次终态
+    }
+
+    [Fact]
+    public async Task SettleReconciled_WithTerminalCompletion_RoutesToCompletionSettlement()
+    {
+        // **真实对账场景**：发送结果未知 ⇒ Reconciling（Submission 未关闭、台账无受理记录），
+        // 随后 owner 对账确认「曾受理」并携带权威终态 ⇒ 必须先补受理接管，再按 §24.15 完成唯一顺序结算。
+        var (svc, ledger) = BuildExternalFacadeWithCompletion(senderUnknown: true);
+        var req = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-ext");
+        req.OperationType = OperationType.ExternalStart;
+        var unknown = await svc.SubmitAsync(req);
+        Assert.Equal(AdmissionResultKind.Reconciling, unknown.Kind);
+        Assert.NotNull(ReadLease().File!.Handoff!.Submission); // 发送未关闭
+        Assert.Empty(new ExternalStartLedger(_dir, () => _now).GetOccupancy().Entries); // 台账尚无受理记录
+
+        var settled = await svc.SettleReconciledAsync(unknown.RequestIdentity,
+            new ReconcileSettlement.Accepted(unknown.SubmissionIdentity!, unknown.SendSeq, "owner:reconcile_query", null, "job-reconciled",
+                ExternalStartCompletion.SucceededWith("completed", "owner:reconcile_query", _now)));
+
+        Assert.NotEqual("completion_settlement_not_implemented", settled.ReasonCode);
+        Assert.Equal(ResponsibilityState.Settled, settled.ResponsibilityState);
+        // 受理接管确实补上了台账记录，且终态副本已写、句柄来自对账（不丢字段），终局后不再占用。
+        var entry = Assert.Single(ledger.Read().File!.Entries);
+        Assert.Equal(LedgerEntryState.Terminal, entry.State);
+        Assert.Equal("job-reconciled", entry.JobId);
+        Assert.Empty(ledger.GetOccupancy().Entries);
+        var op = FindOp(unknown.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState);
+        Assert.Null(ReadLease().File!.Handoff!.Submission);
+    }
+
+    [Fact]
+    public async Task MarkOperationTerminal_ExternalStart_RefusesBypass()
+    {
+        var (svc, _) = BuildExternalFacadeWithCompletion();
+        var (rid, _, _) = await AcceptedExternalOpAsync(svc);
+
+        var bypass = svc.MarkOperationTerminal(rid, "bgi:job_terminal");
+        Assert.Equal(AdmissionResultKind.Error, bypass.Kind);
+        Assert.Equal("external_start_requires_completion_settlement", bypass.ReasonCode);
+        Assert.Equal(OperationRequestState.Accepted, FindOp(rid)!.RequestState); // 不得旁路释放占用
+    }
+
+    [Fact]
+    public async Task SettleCompletion_NullWhenAcceptanceFails_DoesNotReportPlainAcceptance()
+    {
+        // 发送未知 ⇒ Reconciling（未关闭）；接管台账落盘失败 ⇒ 普通受理**未完成**，不得报「已受理」。
+        var (svc, ledger) = BuildExternalFacadeWithCompletion(senderUnknown: true, acceptanceFails: true);
+        var req = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-ext-fail");
+        req.OperationType = OperationType.ExternalStart;
+        var unknown = await svc.SubmitAsync(req);
+        Assert.Equal(AdmissionResultKind.Reconciling, unknown.Kind);
+
+        var held = await svc.SettleCompletionAsync(unknown.RequestIdentity, unknown.SubmissionIdentity!, unknown.SendSeq, null);
+        Assert.NotEqual(AdmissionResultKind.Accepted, held.Kind);                       // 不得冒充「普通受理已完成」
+        Assert.Equal(ResponsibilityState.Pending, held.ResponsibilityState);
+        Assert.Equal(OperationRequestState.Reconciling, FindOp(unknown.RequestIdentity)!.RequestState); // 保守停驻
+        Assert.NotNull(ReadLease().File!.Handoff!.Submission);                          // Submission 未被误关
+        Assert.True(ledger.Read().File is null);                                        // 接管落盘失败 ⇒ 台账无记录
+    }
+
+    [Fact]
+    public async Task SettleCompletion_TerminalPersistFailedWithMismatchedLedgerPayload_Stops()
+    {
+        var (svc, ledger) = BuildExternalFacadeWithCompletion(terminalPersistFailsWithMismatchedPayload: true);
+        var (rid, sub, seq) = await AcceptedExternalOpAsync(svc);
+
+        var held = await svc.SettleCompletionAsync(rid, sub, seq,
+            ExternalStartCompletion.SucceededWith("completed", "ext:watch", _now));
+        // 台账确有一条终态记录，但其载荷与本次事实**不符**（生产式逐字段读回不确认）⇒ 不得继续关闭/终局。
+        Assert.Equal(AdmissionResultKind.NeedReconcile, held.Kind);
+        Assert.StartsWith("terminal_persist_unconfirmed", held.ReasonCode);
+        Assert.Equal(ResponsibilityState.Pending, held.ResponsibilityState);
+        var op = FindOp(rid)!;
+        Assert.Equal(OperationRequestState.Accepted, op.RequestState); // 未终局、不释放占用
+        Assert.NotNull(op.PendingTerminal);
+        var mismatched = Assert.Single(ledger.Read().File!.Entries);
+        Assert.Equal(LedgerEntryState.Terminal, mismatched.State);
+        Assert.EndsWith("-mismatch", mismatched.TerminalEvidence);      // 台账载荷不同 ⇒ 门面据此停驻
+    }
+
+    [Fact]
+    public async Task SettleCompletion_RetryAfterUnconfirmedReadBack_BackfillsJobIdIntoCarriers()
+    {
+        // 两阶段：①首次读回不确认 ⇒ 停驻（载体句柄为空、台账暂无句柄）；
+        //        ②对账带来句柄 ⇒ 接管合并句柄 → 载体**补齐**句柄 → 台账确认 → 终局（全链句柄一致）。
+        var (svc, ledger) = BuildExternalFacadeWithCompletion(senderUnknown: true, ledgerConfirmFailsOnce: true);
+        var req = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-ext-retry");
+        req.OperationType = OperationType.ExternalStart;
+        var unknown = await svc.SubmitAsync(req);
+        Assert.Equal(AdmissionResultKind.Reconciling, unknown.Kind);
+
+        var first = await svc.SettleReconciledAsync(unknown.RequestIdentity,
+            new ReconcileSettlement.Accepted(unknown.SubmissionIdentity!, unknown.SendSeq, "owner:reconcile_1", null, null,
+                ExternalStartCompletion.SucceededWith("completed", "owner:reconcile_1", _now)));
+        Assert.Equal(ResponsibilityState.Pending, first.ResponsibilityState); // 读回不确认 ⇒ 保守停驻
+        Assert.Equal(OperationRequestState.Reconciling, FindOp(unknown.RequestIdentity)!.RequestState);
+
+        var second = await svc.SettleReconciledAsync(unknown.RequestIdentity,
+            // 同一观测事实重试（证据来源/原始终态词不变），只是这次带来了远端句柄 ⇒ 载体按合并值补齐句柄。
+            new ReconcileSettlement.Accepted(unknown.SubmissionIdentity!, unknown.SendSeq, "owner:reconcile_1", null, "job-r2",
+                ExternalStartCompletion.SucceededWith("completed", "owner:reconcile_1", _now)));
+        Assert.Equal(ResponsibilityState.Settled, second.ResponsibilityState);
+        Assert.Equal("job-r2", second.JobId);
+        var op = FindOp(unknown.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState);
+        Assert.Equal("job-r2", op.ExecutionResult!.JobId);   // 载体句柄已按台账合并值**补齐**
+        Assert.Equal("job-r2", Assert.Single(ledger.Read().File!.Entries).JobId);
+        Assert.Null(ReadLease().File!.Handoff!.Submission);
+    }
+}
