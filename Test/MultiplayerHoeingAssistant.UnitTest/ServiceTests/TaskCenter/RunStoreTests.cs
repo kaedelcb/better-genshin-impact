@@ -25,6 +25,63 @@ public class RunStoreTests : IDisposable
         try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); } catch { }
     }
 
+    /// <summary>
+    /// **[P7／§12.2 第 3 项] 字段合并：`UpdateMerging` 保留并发写入者的非自有字段改动**。
+    /// 对照：旧对象整对象写回（`Update`）在修订漂移时**响亮冲突**（`RunRecordConflictException`）——
+    /// 这正是「旧 Runner 对象覆盖接管事实」的既有护栏；`UpdateMerging` 则把自有字段合并进**最新记录**，
+    /// 使并发改动被保留而非整笔失败。
+    /// </summary>
+    [Fact]
+    public void UpdateMerging_PreservesConcurrentNonOwnedChange_WhileUpdateConflicts()
+    {
+        var store = new RunStore(_dir);
+        var rec = store.CreateRun("wf-merge", "rev-1");
+        rec.Note = "初始";
+        store.Update(rec);
+        var stale = store.Load(rec.RunId)!;              // 旧对象（修订落后）
+
+        // 并发写入者推进记录（自有字段：Note）
+        var other = store.Load(rec.RunId)!;
+        other.Note = "并发写入者的改动";
+        store.Update(other);
+
+        // ① 旧对象整写＝响亮冲突（不得静默覆盖）
+        Assert.Throws<RunRecordConflictException>(() => store.Update(stale));
+
+        // ② 合并写（前置条件成立）：自有字段（State）生效，且并发改动（Note）保留
+        var applied = store.UpdateMergingIf(rec.RunId, latest =>
+        {
+            latest.State = WorkflowRunState.Running;
+            return true;
+        }, out var latest);
+        Assert.True(applied);
+        Assert.NotNull(latest);
+        Assert.Equal(WorkflowRunState.Running, latest!.State);              // 自有字段已应用
+        Assert.Equal("并发写入者的改动", latest.Note);                       // 非自有字段保留（未被旧对象覆盖）
+        var reloaded = store.Load(rec.RunId)!;
+        Assert.Equal(WorkflowRunState.Running, reloaded.State);
+        Assert.Equal("并发写入者的改动", reloaded.Note);
+
+        // ③ **旧对象 rebase**：把盘上最新字段整体同步回旧对象后，旧对象再整写**不再覆盖并发改动**
+        RunStore.RebaseOnto(stale, reloaded);
+        stale.State = WorkflowRunState.Waiting;      // 自有字段改动
+        store.Update(stale);                          // rebase 后修订已对齐 ⇒ 不再冲突
+        var after = store.Load(rec.RunId)!;
+        Assert.Equal(WorkflowRunState.Waiting, after.State);
+        Assert.Equal("并发写入者的改动", after.Note);   // **并发改动仍保留**（rebase 生效，未被旧字段洗回）
+
+        // ④ 前置条件不成立 ⇒ **零发布、零修订推进**（返回 false，latest 为盘上原样）
+        var revBefore = store.Load(rec.RunId)!.RecordRevision;
+        var appliedNo = store.UpdateMergingIf(rec.RunId, _ => false, out var unchanged);
+        Assert.False(appliedNo);
+        Assert.NotNull(unchanged);
+        Assert.Equal(revBefore, store.Load(rec.RunId)!.RecordRevision);   // 未推进修订
+
+        // 不存在的记录：无副作用（返回 false）
+        Assert.False(store.UpdateMergingIf("wf-not-exists", _ => true, out var missing));
+        Assert.Null(missing);
+    }
+
     [Fact]
     public void CrashWindow1_BeforeSubmit_RecoveredAsInterrupted_IdemKeyUnchanged()
     {

@@ -187,6 +187,76 @@ public sealed class RunStore
     /// <summary>推进记录（提交受理/终态/水位/等待/收尾状态更新；记录修订单调递增）。</summary>
     public void Update(WorkflowRunRecord rec) => Persist(rec, rec.RecordRevision);
 
+    /// <summary>
+    /// **[P7／§12.2 第 3 项「字段合并」] 按身份字段的选择性更新**：在存储闸门内**重新加载盘上最新记录**，把调用方
+    /// 经 <paramref name="applyOwnedFields"/> 声明的**自有字段**应用到**最新记录**上，再以最新修订原子发布。
+    /// 与 <see cref="Update"/> 的区别：并发写入者改动的**非自有字段**由此**保留**，不再因修订漂移整笔失败
+    /// （也不再允许调用方携带的旧对象整对象覆盖他人改动）。
+    /// 返回 `false`＝记录不存在（无副作用）；盘上记录损坏时抛 <see cref="RunRecordConflictException"/>（原件保留、拒绝覆盖）。
+    /// **自有字段范围**由调用方声明；本方法不做字段语义校验（身份校验由调用方在其回调内完成）。
+    /// </summary>
+    /// <param name="applyOwnedFields">
+    /// 回调返回 **`false`＝前置条件不成立 ⇒ 不发布、不推进修订**（调用方须据此保守处置并自行回滚内存视图）。
+    /// 返回 `true`＝已按**自有字段**更新并原子发布。
+    /// </param>
+    public bool UpdateMergingIf(string runId, Func<WorkflowRunRecord, bool> applyOwnedFields, out WorkflowRunRecord? latest)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        ArgumentNullException.ThrowIfNull(applyOwnedFields);
+        lock (_gate)
+        {
+            var file = PathFor(runId);
+            if (!File.Exists(file))
+            {
+                latest = null;
+                return false;
+            }
+
+            WorkflowRunRecord? current;
+            try
+            {
+                current = JsonSerializer.Deserialize<WorkflowRunRecord>(File.ReadAllText(file, Encoding.UTF8), JsonOptions);
+            }
+            catch (JsonException)
+            {
+                throw new RunRecordConflictException($"运行 {runId} 盘上记录已损坏，拒绝覆盖写入（原件保留）。");
+            }
+
+            // 坏记录一律响亮冲突（不得当作「不存在」或落到别的目标路径）：JSON null／缺 RunId／RunId 与请求不一致。
+            if (current is null || string.IsNullOrWhiteSpace(current.RunId)
+                || !string.Equals(current.RunId, runId, StringComparison.Ordinal))
+                throw new RunRecordConflictException($"运行 {runId} 盘上记录不可确认（RunId 缺失或与请求不一致），拒绝覆盖写入（原件保留）。");
+
+            if (!applyOwnedFields(current))     // 前置条件不成立：**零发布、零修订推进**
+            {
+                latest = current;
+                return false;
+            }
+
+            Persist(current, current.RecordRevision);   // 以**最新**修订发布（不会自撞冲突）
+            latest = current;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// **[P7／§12.2 第 3 项] 旧对象 rebase**：把**盘上最新记录**的字段整体同步到调用方持有的旧对象上
+    /// （含嵌套对象），使调用方后续再用 <see cref="Update"/> 写回时**不会把并发写入者的改动整对象覆盖**。
+    /// 语义说明：这是「以最新盘上状态为准」的**全量同步**（嵌套引用会被替换为新实例）；仅用于合并写成功之后。
+    /// </summary>
+    public static void RebaseOnto(WorkflowRunRecord target, WorkflowRunRecord latest)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(latest);
+        // 逐字段复制（含嵌套引用，均指向「盘上最新」实例）；本工程所用 STJ 版本无 `JsonSerializer.Populate`，
+        // 故用反射完成同类型浅复制——只用于合并写成功后的**全量 rebase**，不做深拷贝（文档已声明该语义）。
+        foreach (var property in typeof(WorkflowRunRecord)
+                     .GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+        {
+            if (property.CanRead && property.CanWrite) property.SetValue(target, property.GetValue(latest));
+        }
+    }
+
     /// <summary>读取运行记录（不存在返回 null；解析失败抛 JsonException——调用方按隔离处理，不回空）。</summary>
     public WorkflowRunRecord? Load(string runId)
     {

@@ -129,7 +129,9 @@ public class TaskCenterSuccessorPathGateTests
         var root = NewRoot("tcsweep2-");
         try
         {
-            var nodeIds = Enumerable.Range(1, 6).Select(i => "n-" + i).ToArray();
+            // **4 节点**（而非 6）：在保持「逐次取证」语义（第 2..4 次发送共 3 次观察）的同时**降低本收集内的负载**——
+            // 该收集为 `DisableParallelization` 的宿主级重夹具集合，P50 类负载敏感性对重型夹具敏感（见 §17 P50）。
+            var nodeIds = Enumerable.Range(1, 4).Select(i => "n-" + i).ToArray();
             var arbitrationDir = Path.Combine(root, "arbitration");
             var observations = new List<(int Index, string CurrentNodeId, string PrevNodeId, OperationRequestState State, OperationZone Zone)>();
             var violations = new List<string>();
@@ -182,9 +184,9 @@ public class TaskCenterSuccessorPathGateTests
                     violations.Add($"第 {index} 次发送取证失败（租约读取争用）");
                 });
 
-            Assert.True(probe.State == WorkflowRunState.Succeeded, Diag("6 节点流程应收口成功", probe));
-            Assert.True(probe.SendCount == 6, Diag("应恰好发送 6 次", probe));
-            Assert.Equal(5, observations.Count);            // 第 2..6 次发送各观察一次（共 5 次逐节点释放取证）
+            Assert.True(probe.State == WorkflowRunState.Succeeded, Diag("4 节点流程应收口成功", probe));
+            Assert.True(probe.SendCount == 4, Diag("应恰好发送 4 次", probe));
+            Assert.Equal(3, observations.Count);            // 第 2..4 次发送各观察一次（共 3 次逐节点释放取证）
             Assert.Empty(violations);                       // 逐次取证：无一次出现「前节点未终局/仍占主槽位」
         }
         finally

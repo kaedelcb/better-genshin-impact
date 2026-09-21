@@ -45,7 +45,11 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         /// 不得改读仍然可变的 `submission.*`／`run.WireRunId`——否则准备后这些字段被改写会造成
         /// 「按纪元 A 发送、按纪元 B 对账」，合法命中被拒或错误命中被接受。
         /// </summary>
-        internal sealed record ReconcileIdentity(string Epoch, string Key, string WireRunId, string NodeId, int LoopIteration);
+        /// <summary>[P7／§12.2 第 3 项] **`Attempt` 必须纳入冻结身份**：§12.2 第 3 项要求「核对
+        /// occurrence/iteration/**attempt**/提交键/游标修订」——attempt 前进＝重试轮次变更，旧命中不得据以绑定受理事实
+        /// （游标修订的核对仍在门面层按 `CursorRevision` 执行，不在此重复）。</summary>
+        internal sealed record ReconcileIdentity(
+            string Epoch, string Key, string WireRunId, string NodeId, int Occurrence, int LoopIteration, int Attempt);
 
         private PreparedSubmit(WorkflowRunRecord? run, WorkflowSubmission? submission, object? payload,
             BoundarySubmitResult? rejection, ReconcileIdentity? reconcile)
@@ -82,7 +86,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         internal static PreparedSubmit Ok(WorkflowRunRecord run, WorkflowSubmission submission, object payload)
             => new(run, submission, payload, null,
                 new ReconcileIdentity(submission.Epoch ?? "", submission.Key ?? "", run.WireRunId ?? "",
-                    submission.NodeId ?? "", submission.LoopIteration));
+                    submission.NodeId ?? "", submission.Occurrence, submission.LoopIteration, submission.Attempt));
 
         /// <summary>
         /// 一次性消费护栏（仅防**进程内重复调用**；持久化的发送授权责任仍在门面，绝不由本护栏替代）。
@@ -194,13 +198,21 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             return PreparedSubmit.No(BoundarySubmitResult.Rejected("授权目标纪元与本机当前纪元不一致（stale_epoch；未发送）"));
 
         // 3) 冻结：纪元/有效期/指纹 → Intent=Submitted + SendAttempted 落盘（即将发送事实；此后缺 jobId ≠ 未发送）
-        submission.Epoch = epochText;
-        submission.ExpiresAtUtc = DateTimeOffset.UtcNow.Add(ExpireWindow).ToString("O");
+        // [P7／§12.2 第 3 项「字段合并」] 冻结事实以**盘上最新记录**为基线做选择性更新（自有字段＝冻结字段＋意图），
+        // 并发写入者改动的**非自有字段**由此保留；同时**重新核对本次提交身份**（节点/出现次数/轮次/attempt/提交键），
+        // 身份已被并发推进＝可证实未发送地拒绝（不得把旧身份发送出去）。
+        var frozenEpoch = epochText;
+        var frozenExpiresAt = DateTimeOffset.UtcNow.Add(ExpireWindow).ToString("O");
+        var frozenKey = submission.Key;
+        var frozenNodeId = submission.NodeId;
+        var frozenOccurrence = submission.Occurrence;
+        var frozenLoopIteration = submission.LoopIteration;
+        var frozenAttempt = submission.Attempt;
         var payload = new
         {
             executionContractVersion = 1,
             idempotencyKey = submission.Key,
-            expiresAtUtc = submission.ExpiresAtUtc,
+            expiresAtUtc = frozenExpiresAt,
             bgiEpoch = new { processId = epochProcessId, startTicksUtc = epochStartTicks },
             workflowRunId = run.WireRunId,
             nodeId = occurrence.NodeId,
@@ -214,11 +226,42 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             expectedUid,
             suppressConfigCompletionAction = request.SuppressConfigCompletionAction,
         };
-        submission.Fingerprint = Convert.ToHexString(SHA256.HashData(
+        var fingerprint = Convert.ToHexString(SHA256.HashData(
             JsonSerializer.SerializeToUtf8Bytes(payload)))[..24].ToLowerInvariant();
+        // **身份与合法前态必须在同一锁内先核对、核对通过后才允许写字段**（会诊阻断处置）：
+        // 前置条件不成立 ⇒ `UpdateMergingIf` 返回 false ⇒ **零发布、零修订推进**，调用方内存视图也不被污染。
+        var merged = _runs.UpdateMergingIf(run.RunId!, latest =>
+        {
+            var live = latest.CurrentSubmission;
+            if (live is null) return false;
+            if (live.Intent != SubmitIntentState.IntentRecorded) return false;   // 合法前态：意图已落盘、尚未提交
+            if (!string.Equals(latest.WireRunId, run.WireRunId, StringComparison.Ordinal)
+                || !string.Equals(live.NodeId, frozenNodeId, StringComparison.Ordinal)
+                || live.Occurrence != frozenOccurrence
+                || live.LoopIteration != frozenLoopIteration
+                || live.Attempt != frozenAttempt
+                || !string.Equals(live.Key, frozenKey, StringComparison.Ordinal))
+                return false;                                                    // 身份已被并发推进
+            // 自有字段（冻结事实＋意图）；其余字段（并发写入者改动）不动。
+            live.Epoch = frozenEpoch;
+            live.ExpiresAtUtc = frozenExpiresAt;
+            live.Fingerprint = fingerprint;
+            live.SendAttempted = true;
+            live.Intent = SubmitIntentState.Submitted;
+            return true;
+        }, out var latestRecord);
+        if (!merged || latestRecord is null)
+            return PreparedSubmit.No(BoundarySubmitResult.Rejected(
+                "运行记录缺失或提交身份已被并发推进（合法前态/身份核对未通过；未发送、未发布冻结事实）"));
+        // **旧对象 rebase**：把盘上最新字段整体同步回调用方对象（含并发写入者的改动），
+        // 使调用方后续 `Update` 不会把并发改动整对象覆盖（会诊阻断处置：只回写修订号＝洗白旧对象）。
+        RunStore.RebaseOnto(run, latestRecord);
+        submission = run.CurrentSubmission!;   // rebase 后以盘上实例为准（发送与对账按同一组冻结值）
+        submission.Epoch = frozenEpoch;
+        submission.ExpiresAtUtc = frozenExpiresAt;
+        submission.Fingerprint = fingerprint;
         submission.SendAttempted = true;
         submission.Intent = SubmitIntentState.Submitted;
-        _runs.Update(run);
 
         return PreparedSubmit.Ok(run, submission, payload);
     }
@@ -344,7 +387,8 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
                 || !string.Equals(submission.Key, identity.Key, StringComparison.Ordinal)
                 || !string.Equals(run.WireRunId, identity.WireRunId, StringComparison.Ordinal)
                 || !string.Equals(submission.NodeId, identity.NodeId, StringComparison.Ordinal)
-                || submission.LoopIteration != identity.LoopIteration)
+                || submission.LoopIteration != identity.LoopIteration
+                || submission.Attempt != identity.Attempt)
                 return null;
             // 已有受理事实冲突保护（会诊要求）：jobId 为空＝允许绑定；相同＝幂等确认；**不同＝保留原事实并返回
             // null（Unknown）**——不得用本轮命中覆盖既有的另一个 jobId。
@@ -359,7 +403,37 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             submission.JobId = hit.JobId;
             try
             {
-                _runs.Update(run); // 对账命中即受理事实落盘
+                // [P7／§12.2 第 3 项「字段合并」] 对账命中的**受理事实**同样按盘上最新记录做选择性更新：
+                // 只写自有字段（Intent/JobId），并发写入者改动的其它字段保留；且**重新核验发送身份**（不一致＝
+                // 该命中不属于本笔 ⇒ 不落盘、按未命中保守处置）。
+                var applied = _runs.UpdateMergingIf(run.RunId!, latest =>
+                {
+                    var live = latest.CurrentSubmission;
+                    if (live is null) return false;
+                    if (!string.Equals(live.Epoch, identity.Epoch, StringComparison.Ordinal)
+                        || !string.Equals(live.Key, identity.Key, StringComparison.Ordinal)
+                        || !string.Equals(latest.WireRunId, identity.WireRunId, StringComparison.Ordinal)
+                        || !string.Equals(live.NodeId, identity.NodeId, StringComparison.Ordinal)
+                        || live.Occurrence != identity.Occurrence
+                        || live.LoopIteration != identity.LoopIteration
+                        || live.Attempt != identity.Attempt
+                        || live.JobId is { Length: > 0 } existing && !string.Equals(existing, hit.JobId, StringComparison.Ordinal))
+                        return false;   // 身份/既有句柄不符 ⇒ **零发布**（不产生未持久化状态的假受理、不推进修订）
+                    live.Intent = SubmitIntentState.Accepted;
+                    live.JobId = hit.JobId;
+                    return true;
+                }, out var mergedRecord);
+                if (!applied || mergedRecord?.CurrentSubmission is not { } mergedSubmission
+                    || mergedSubmission.Intent != SubmitIntentState.Accepted
+                    || !string.Equals(mergedSubmission.JobId, hit.JobId, StringComparison.Ordinal))
+                {
+                    // **未落盘＝不得留下内存假受理**（会诊阻断处置）：把调用方对象回滚到写回前的原值。
+                    submission.Intent = prevIntent;
+                    submission.JobId = prevJobId;
+                    return null;   // 交外层按 Unknown 保守收敛
+                }
+                // **旧对象 rebase**（含并发写入者改动），避免调用方后续整写覆盖并发改动。
+                RunStore.RebaseOnto(run, mergedRecord);
             }
             catch (Exception) when (submission.Intent == SubmitIntentState.Accepted
                                     && string.Equals(submission.JobId, hit.JobId, StringComparison.Ordinal))

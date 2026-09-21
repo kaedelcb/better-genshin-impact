@@ -497,7 +497,8 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         Assert.True(port.CancelObservedPersistedJob, "顺序必须是「先落盘 jobId、后请求取消」");
     }
 
-    // ── 19. 并发写入边界（会诊要求）：另一写入者先推进记录修订 → 本次写回被修订守卫拒绝，保守 Unknown ──
+    // ── 19. 并发写入边界（[P7／§12.2 第 3 项「字段合并」更新语义]）：并发推进 ⇒ **合并不丢事实**；
+    //        若并发推进改变了**本次发送身份**，则该命中不属于本笔 ⇒ 不落盘、保守 Unknown（零重发）。 ──
 
     [Fact]
     public async Task Reconcile_ConcurrentRecordAdvance_WriteBackRejected_ConservativeUnknown()
@@ -508,8 +509,7 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
             SendThrows = new InvalidOperationException("transport down"),
             JobList = SnapshotFor(run.CurrentSubmission!.Key, run.WireRunId, "n-1", 0, "job-reconciled"),
         };
-        // 模拟「另一写入者先推进」：用磁盘上的最新副本再写一次，使盘上 RecordRevision 前进，
-        // 而本地 run 对象仍持旧修订——写回必须被 RunRecordConflictException 挡住。
+        // 情形①：另一写入者只改了**非自有字段**（Note）⇒ 合并写回：受理事实落盘 **且** 并发改动保留。
         port.BeforeSend = () =>
         {
             var fresh = _runs.Load(run.RunId)!;
@@ -520,13 +520,35 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
 
         var result = await boundary.SubmitAsync(new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true), default);
 
-        Assert.True(result.Uncertain); // 写回被拒 → 保守 Unknown
-        Assert.Single(port.Sends);     // 零重发
+        Assert.True(result.Accepted, "并发只改动非自有字段时，受理事实应经**字段合并**落盘（P7）");
+        Assert.Single(port.Sends);     // 零重发（对账命中不重发）
         var disk = _runs.Load(run.RunId)!;
-        Assert.Null(disk.CurrentSubmission!.JobId); // 盘上不得出现受理事实
-        // 会诊要求：冲突后**内存对象也不得残留**未持久化的受理状态（回滚到写回前的原值）。
-        Assert.Equal(SubmitIntentState.Submitted, run.CurrentSubmission!.Intent);
-        Assert.Null(run.CurrentSubmission.JobId);
+        Assert.Equal("job-reconciled", disk.CurrentSubmission!.JobId);          // 受理事实已在盘上
+        Assert.Contains("并发推进", disk.Note);                                  // 并发写入者的改动**未被覆盖**
+        Assert.Equal(SubmitIntentState.Accepted, run.CurrentSubmission!.Intent); // 内存视图与盘上一致
+        Assert.Equal("job-reconciled", run.CurrentSubmission.JobId);
+
+        // 情形②：另一写入者推进了**本次发送身份**（attempt 前进）⇒ 命中不属于本笔：不落盘、保守 Unknown。
+        var (run2, node2, occurrence2) = Seed();
+        var port2 = new FakePort
+        {
+            SendThrows = new InvalidOperationException("transport down"),
+            JobList = SnapshotFor(run2.CurrentSubmission!.Key, run2.WireRunId, "n-1", 0, "job-reconciled"),
+        };
+        port2.BeforeSend = () =>
+        {
+            var fresh = _runs.Load(run2.RunId)!;
+            fresh.CurrentSubmission!.Attempt += 1;   // 发送身份被并发推进（attempt 改变）
+            _runs.Update(fresh);
+        };
+        var boundary2 = new BgiWorkflowExecutionBoundary(port2, _runs);
+        var result2 = await boundary2.SubmitAsync(
+            new WorkflowSubmitRequest(run2, occurrence2, node2, SuppressConfigCompletionAction: true), default);
+
+        Assert.True(result2.Uncertain, "并发推进改变发送身份时不得绑定受理事实（保守 Unknown）");
+        Assert.Single(port2.Sends);                  // 零重发
+        var disk2 = _runs.Load(run2.RunId)!;
+        Assert.Null(disk2.CurrentSubmission!.JobId); // 盘上不得出现该笔的受理事实
     }
 
     // ── 14. 会诊复核反例：把同一冻结载荷**重新包装**成新实例 → 仍不得二次发送 ──

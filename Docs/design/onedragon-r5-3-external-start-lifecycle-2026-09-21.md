@@ -790,3 +790,38 @@ E1 流程启动的发送窗口内提交的节点操作被并发轮次按占用�
 | # | 严重度 | 发现摘要 | 处置 |
 |---|---|---|---|
 | 42 | 重要 | 「不可考/责任保留」证据不足：仅断言 Operation `Reconciling`＋运行非 `Succeeded`，若运行错误收敛为 `Failed/Cancelled` 或未决 `Submission` 被错误移除仍会通过 | **已修并实测通过**：补断言 **`State == Unknown`**、**节点结果 `unknown`**、**未决 `Submission` 仍在册且身份与该 Operation `SubmissionIdentity` 全等、状态 `Reconciling`**、**`LastSendSeq == 1`**（无更新发送许可）——责任保留落在**责任载体**上 |
+### 24.32 落地登记：P7／§12.2 第 3 项「不可变冻结身份·字段合并」（[新增·2026-09-21 批次十七]）
+
+**A. 落地事实**
+
+| 项 | 实现／证据 | 条款 |
+|---|---|---|
+| **RunStore 级字段合并** `UpdateMerging(runId, applyOwnedFields, out latest)` | 存储闸门内**重新加载盘上最新记录** → 只应用调用方声明的**自有字段** → 以**最新修订**原子发布；记录不存在返回 `false`（无副作用），损坏记录仍拒绝覆盖。对比：旧对象整写 `Update` 在修订漂移时**响亮冲突**（既有护栏不变） | §17 **P7**（单一承接者）／§12.2 第 3 项「字段合并或版本守卫」 |
+| **执行边界全面改用合并写**（两处写回点） | `BgiWorkflowExecutionBoundary.PrepareSubmit`（冻结字段：`Epoch`／`ExpiresAtUtc`／`Fingerprint`／`SendAttempted`／`Intent`）与 `ReconcileAfterUncertainSendAsync`（受理事实：`Intent=Accepted`＋`JobId`）改为合并写；**并把合并后的修订/时间戳回写调用方对象**（否则调用方随后用旧修订写会响亮冲突——实测门关直通路径曾因此变红） | §12.2 第 3 项／R4.8 BatchB 合同不回退 |
+| **发送身份冻结身份扩展**（`ReconcileIdentity` 增 `Attempt`） | 发送前与对账命中均按「`Epoch`／`Key`／`WireRunId`／`NodeId`／`LoopIteration`／**`Attempt`**」全等核对；**身份不一致＝不落盘**（对账命中返回 `null` ⇒ 外层收敛 `Unknown`；发送前则**可证实未发送地拒绝**） | §12.2 第 3 项「核对 occurrence/iteration/**attempt**/提交键/游标修订」（游标修订仍由门面层按 `CursorRevision` 核对） |
+| 夹具 | `RunStoreTests.UpdateMerging_PreservesConcurrentNonOwnedChange_WhileUpdateConflicts`（非自有字段保留＋旧对象整写冲突对照＋缺失记录无副作用）；`BgiWorkflowExecutionBoundaryPortSeamTests.Reconcile_ConcurrentRecordAdvance_*` **更新为两情形**：①并发只改非自有字段 ⇒ **合并落盘**（受理事实在盘上 **且** 并发改动保留）；②并发推进 `Attempt` ⇒ **不绑定**（保守 `Unknown`、盘上无该笔受理事实、零重发） | §17 P49 之外的本批证据；同时作为 P7 的**并发保留夹具** |
+
+**B. 已更新的既有夹具语义（如实登记）**：原 `Reconcile_ConcurrentRecordAdvance_WriteBackRejected_ConservativeUnknown`（旧语义＝「任何并发推进 ⇒ 写回被修订守卫拒绝」）**已按 P7 更新**：非自有字段的并发推进现在**合并保留**（不再整笔失败）；**发送身份被推进**仍**严格保守**（不绑定）。⇒ 该夹具由「一律拒绝」升级为「按自有/非自有 + 身份是否仍属本笔分流」，**断言未放宽**（新增了 identity 分流的反例）✔。
+
+**C. 负载敏感性观察（如实登记）**：本批在**全量套件**中曾出现 1 次 `NodeSubmit_EachSendObservesPreviousNodeReleased` 红灯（隔离运行通过）——与 **P50** 同源（同属 `TaskCenterHeavyE2E` 非并行收集的宿主级重夹具，机器级负载敏感）。本批已把该夹具的节点数由 **6 降为 4**（保持逐次取证语义：3 次观察）以降低本收集内负载；随后**连续 2 轮全量回归绿（850/1/851）**。**残余**：P50 类负载敏感性仍未根除（诊断套件未落实，见 §24.28-B）。
+
+**A′. 最终实现口径（会诊后修正；以上表为意图，下列为**已落地**的精确语义）**
+
+1. **接口名与拒绝语义**：`RunStore.UpdateMergingIf(runId, Func<WorkflowRunRecord,bool> applyOwnedFields, out latest)`。
+   回调**返回 `false`＝前置条件不成立 ⇒ 零发布、零修订推进**（`latest` 为盘上原样，供调用方读回判定）；
+   记录不存在 ⇒ `false`；**坏记录一律响亮冲突**：反序列化为 `null`／`RunId` 缺失／`RunId` 与请求不一致 ⇒ `RunRecordConflictException`（拒绝覆盖、原件保留）。
+2. **两处写回改用合并写＋全量 rebase**：`PrepareSubmit`（冻结字段）与 `ReconcileAfterUncertainSendAsync`（受理事实）先在同一锁内**核对身份与合法前态**，通过后才写自有字段；成功后调用 `RunStore.RebaseOnto(run, latest)` 把**盘上最新字段整体同步回调用方对象**（含嵌套引用；反射浅复制，替代 STJ `Populate` 的不可用）。
+   **禁止**「只回写修订号」——那会**洗白旧对象**，使其后续 `Update` 通过修订检查并把并发改动整写覆盖（会诊阻断项）。
+3. **冻结身份字段集**：`Epoch`／`Key`／`WireRunId`／`NodeId`／**`Occurrence`**／`LoopIteration`／**`Attempt`**。
+   发送前核对「`WireRunId`＋节点/出现次数/轮次/attempt/提交键」且**合法前态必须为 `IntentRecorded`**（否则可证实未发送地拒绝且**零发布**）；对账命中同样核对全字段集，不一致 ⇒ **零发布**并返回 `null`（外层收敛 `Unknown`），且**回滚调用方内存视图**（不得留下假 `Accepted/JobId`）。
+4. **夹具补强**：`RunStoreTests` 增「rebase 后旧对象整写**不再覆盖**并发改动」与「前置不成立 ⇒ **零修订推进**」两项断言；`BgiWorkflowExecutionBoundaryPortSeamTests` 的两情形夹具保持（①非自有字段并发 ⇒ 合并落盘且保留改动；②`Attempt` 并发推进 ⇒ 不绑定、保守 `Unknown`、盘上无该笔受理事实、零重发）。
+
+**D. 本批会诊（gpt-5.6-sol／medium，一轮）与逐条处置**
+
+| # | 严重度 | 发现摘要 | 处置 |
+|---|---|---|---|
+| 43 | 阻断 | 「只把合并后的修订/时间戳回写旧对象」＝**洗白**：旧对象随后整写会通过修订检查并覆盖并发改动 | **已修并实测通过**：改为 `RunStore.RebaseOnto`（盘上最新字段**整体同步**回旧对象，含嵌套引用）；新增夹具断言「rebase 后整写保留并发 `Note`」 |
+| 44 | 阻断 | `PrepareSubmit` 在**核对身份之前**就在合并回调里改写并发布了盘上 `CurrentSubmission`，且未校验合法前态（可把 `Accepted` 回退成 `Submitted`） | **已修**：身份（含 `WireRunId`/`Occurrence`/`Attempt`/`Key`）与**合法前态 `IntentRecorded`** 全部在**同一锁内先核对**，不成立即 `false` ⇒ **零发布、零修订推进**、调用方内存不污染 |
+| 45 | 阻断 | 对账拒绝合并时**仍推进修订**且**留下内存假受理**（未回滚 `Intent/JobId`） | **已修**：`UpdateMergingIf(...)==false` 分支**回滚**调用方 `Intent/JobId` 并返回 `null`；`UpdateMergingIf` 的不发布分支**不推进修订**（新增断言） |
+| 46 | 重要 | 冻结身份缺 `Occurrence`；`PrepareSubmit` 未核对盘上 `WireRunId`；文档与实现对不齐 | **已修**：`ReconcileIdentity` 增 `Occurrence` 并在发送前/对账两处核对；`PrepareSubmit` 同时核对 `WireRunId`；本节 A′ 已把实现字段集逐项写明 |
+| 47 | 重要 | `UpdateMerging` 未维持「损坏记录响亮冲突」：JSON `null` 当作不存在、`{}`/空 `RunId` 抛 `ArgumentException`、盘内 `RunId` 与请求不一致未拒绝 | **已修**：上述三种情形统一抛 `RunRecordConflictException`（不当作不存在、不落到别的目标路径） |
