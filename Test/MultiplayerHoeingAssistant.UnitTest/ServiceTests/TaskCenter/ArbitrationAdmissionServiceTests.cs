@@ -3746,6 +3746,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     [InlineData("accepted")]
     [InlineData("takeover-persist-failed")]
     [InlineData("precheck-rejected")]
+    [InlineData("retryable-rejected")]
     public async Task SendLayerOutcome_MapsToAdmissionResultAndResponsibility(string mode)
     {
         var sends = 0;
@@ -3756,9 +3757,16 @@ public class ArbitrationAdmissionServiceTests : IDisposable
             h.Sender = _ =>
             {
                 Interlocked.Increment(ref sends);
-                return Task.FromResult<SendOutcome>(mode == "precheck-rejected"
-                    ? new SendOutcome.Rejected("boundary_precheck_rejected", false, "host:boundary")
-                    : new SendOutcome.Accepted("ext:accepted", null, "job-1"));
+                return Task.FromResult<SendOutcome>(mode switch
+                {
+                    "precheck-rejected" => new SendOutcome.Rejected("boundary_precheck_rejected", false, "host:boundary"),
+                    // 可重试拒绝（§3.3 白名单内）：**首次**拒绝为可重试；**重试**（第 2 次发送）放行，
+                    // 用于验证「重试须重新签发新许可（sendSeq 递增）」（§3.2a）。
+                    "retryable-rejected" => Volatile.Read(ref sends) == 1
+                        ? new SendOutcome.Rejected("queue_full", true, "host:precheck")
+                        : new SendOutcome.Accepted("ext:accepted", null, "job-1"),
+                    _ => new SendOutcome.Accepted("ext:accepted", null, "job-1"),
+                });
             };
             if (mode == "takeover-persist-failed")
                 h.TakeoverPersist = _ => Task.FromResult<string?>("takeover_persist_not_persisted");   // 失败且**不写台账**
@@ -3805,6 +3813,27 @@ public class ArbitrationAdmissionServiceTests : IDisposable
                 Assert.Equal(op.LastSendSeq, result.SendSeq);
                 Assert.Equal(1, op.LastSendSeq);                                 // 许可已发布；不得重发
                 Assert.Equal(0, ledgerEntries);                                  // 接管未落盘 ⇒ **不得**写台账
+                break;
+            case "retryable-rejected":
+                // **可重试拒绝**（§3.3 白名单内）：本轮发送责任**已确定结清**（无未决 `Submission`），
+                // 但**许可确已签发并被本次尝试消费**（`LastSendSeq==1`）；后续重试须**重新签发新许可**（§3.2a）。
+                Assert.Equal(AdmissionResultKind.RetryableRejected, result.Kind);
+                Assert.Equal(ResponsibilityState.Settled, result.ResponsibilityState);
+                // 操作状态＝**可重试拒绝**（与终局拒绝区分；后续重试须重新签发许可，§3.2a/§3.3）
+                Assert.Equal(OperationRequestState.RetryableRejected, op.RequestState);
+                Assert.Equal("queue_full", result.ReasonCode);                     // 精确原因码（`queue_full` 在可重试白名单）
+                Assert.Equal("queue_full", op.LastResult?.ReasonCode);             // 落盘侧原因码同源
+                Assert.True(op.LastResult?.Retryable == true);
+                Assert.Equal(1, op.LastSendSeq);
+                Assert.Null(handoff.Submission);
+                Assert.Equal(0, ledgerEntries);
+                // **重试须重新签发新许可**（§3.2a）：同身份重试 ⇒ `sendSeq` 递增（1→2），且本支 Sender 对第 2 次发送放行
+                var retry = await svc.RetryAsync(r.RequestIdentity);
+                Assert.Equal(AdmissionResultKind.Accepted, retry.Kind);
+                Assert.Equal(2, FindOp(r.RequestIdentity)!.LastSendSeq);
+                Assert.Equal(2, sends);
+                Assert.Null(ReadLease().File!.Handoff!.Submission);      // 重试成功路径也已关闭
+                Assert.Equal(1, ledger.Read().File?.Entries?.Count ?? 0); // 接管台账 1 条（重试受理）
                 break;
             default:
                 Assert.Equal(AdmissionResultKind.TerminalRejected, result.Kind);
