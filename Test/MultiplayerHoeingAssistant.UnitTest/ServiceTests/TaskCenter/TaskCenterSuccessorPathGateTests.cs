@@ -472,6 +472,148 @@ public class TaskCenterSuccessorPathGateTests
     }
 
     /// <summary>
+    /// **§16 交错④「接管故障后**取消**」组合（[2026-09-21 批次二十五]）**：先制造「远端已受理、接管落盘失败」
+    /// （⇒ 不可考、责任保留），**随后取消**（宿主关闭令牌＝取消运行器传给发送段的同一令牌），断言：
+    /// **取消不得释放责任、不得新增发送许可、不得把不可考改写成确定结论**——
+    /// 取消前后的未决 `Submission` 状态/身份、节点操作状态/`LastSendSeq`/`WireSubmitKey` **全等**；
+    /// 发送仍恰一次；盘上仍**无受理事实**；运行仍 `Unknown`。
+    /// **层级限定**：取消经**令牌**维度（宿主关闭）；**E4 控制热键／命令执行器**入口的取消映射不在本夹具范围。
+    /// </summary>
+    [Fact]
+    public async Task NodeSubmit_TakeoverPersistFailedThenCancel_KeepsResponsibilityNoResend()
+    {
+        var root = NewRoot("tctakeover-cancel-");
+        TaskCenterHost? host = null;
+        RoutingFakePort? port = null;
+        var hostShutDown = false;
+        var injected = 0;
+        try
+        {
+            using var client = new BgiExternalClient();
+            port = new RoutingFakePort();
+            var flowsDir = Path.Combine(root, "flows");
+            var runsDir = Path.Combine(root, "runs");
+            var ws = new WorkflowStore(flowsDir);
+            var doc = new WorkflowDocument
+            {
+                Name = "接管故障后取消流程",
+                Activation = new WorkflowActivation { Status = "active" },
+                Nodes =
+                [
+                    new WorkflowNode
+                    {
+                        NodeId = "n-1", Kind = "resource.oneDragonConfig",
+                        Ref = new WorkflowResourceRef { Config = "配置n-1", Revision = "rev-1" },
+                    },
+                ],
+            };
+            ws.Save(doc, null);
+            var runs = new RunStore(runsDir);
+            host = new TaskCenterHost(
+                flowsDir, runsDir, Path.Combine(root, "catalog.json"),
+                () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null),
+                localExecutionCapability: () => true,
+                statusSnapshotProvider: () => new ControlStatus { TaskRunning = false },
+                admissionWired: true, successorAdmissionWired: true,
+                admissionSeams: new TaskCenterAdmissionSeams
+                {
+                    Epoch = RoutingFakePort.Epoch,
+                    ProductionBoundaryFactory = (_, r) =>
+                    {
+                        // 接管写专属形态注入（与批次二十二同口径）：仅远端受理事实的落盘失败。
+                        r.PublishFaultForTest = rec =>
+                        {
+                            if (rec.CurrentSubmission is not { } s
+                                || s.Intent != SubmitIntentState.Accepted
+                                || string.IsNullOrEmpty(s.JobId)
+                                || string.IsNullOrEmpty(s.AcceptedSendIdentity)
+                                || s.ObservedTerminal is not null
+                                || (rec.NodeOutcomes?.Count ?? 0) != 0)
+                                return null;
+                            Interlocked.Increment(ref injected);
+                            return new IOException("fixture: takeover persist fault");
+                        };
+                        return new BgiWorkflowExecutionBoundary(port!, r);
+                    },
+                });
+
+            var start = await host.StartWorkflowAsync(doc.WorkflowId!);
+            Assert.Equal(HostActionStatus.Registered, start.Status);
+
+            // 等接管故障收敛（有界）
+            WorkflowRunRecord? converged = null;
+            for (var i = 0; i < 600 && converged is null; i++)
+            {
+                var candidate = runs.List().FirstOrDefault();
+                if (candidate?.State is WorkflowRunState.Unknown or WorkflowRunState.Failed
+                    or WorkflowRunState.Succeeded or WorkflowRunState.Cancelled) converged = candidate;
+                else await Task.Delay(10);
+            }
+            Assert.NotNull(converged);
+            Assert.Equal(WorkflowRunState.Unknown, converged!.State);
+            Assert.Equal(1, port.SendCount);
+            Assert.Equal(1, Volatile.Read(ref injected));                 // 接管写故障**恰命中一次**（时序真实）
+            Assert.Equal("unknown", converged.NodeOutcomes.Last(o => o.NodeId == "n-1").Result);
+            Assert.True(port.LastSendToken.CanBeCanceled, "发送段须持有调用方令牌（§17 P6）");
+            var before = ReadLeaseFileWithRetry(root)?.Handoff;
+            Assert.NotNull(before?.Submission);
+            Assert.Equal(SubmissionState.Reconciling, before!.Submission!.State);
+            var opBefore = before.Operations!.Single(o => !string.IsNullOrEmpty(o.Candidate?.NodeId));
+            var runBefore = runs.List().Single();
+            var keyBefore = runBefore.CurrentSubmission!.Key;
+            var intentBefore = runBefore.CurrentSubmission.Intent;
+            var nodeResultBefore = runBefore.NodeOutcomes.Last(o => o.NodeId == "n-1").Result;
+
+            // **随后取消**（调用方取消＝宿主关闭；本夹具的取消**不在飞发送**——「取消确发生在发送所用**同一枚令牌**上」
+            // 的因果证据由 §24.39 在飞发送版夹具提供（端口侧 `SendCanceledByToken`）。本夹具证明的是
+            // 「接管故障**后**的取消**不改变**责任载体与持久化事实」，故不重复主张令牌身份。）
+            await host.ShutdownAsync().WaitAsync(TimeSpan.FromSeconds(20));
+            hostShutDown = true;
+
+            // 取消**不得**释放责任/新增许可/把不可考改写为确定结论
+            Assert.Equal(1, port.SendCount);
+            var after = ReadLeaseFileWithRetry(root)?.Handoff;
+            Assert.NotNull(after?.Submission);
+            var opAfter = after!.Operations!.Single(o => !string.IsNullOrEmpty(o.Candidate?.NodeId));
+            Assert.Equal(SubmissionState.Reconciling, after.Submission!.State);
+            Assert.Equal(OperationRequestState.Reconciling, opBefore.RequestState);   // 取消前即非终局
+            Assert.Equal(opBefore.RequestState, opAfter.RequestState);                // 取消不改变操作状态
+            Assert.False(string.IsNullOrEmpty(opBefore.SubmissionIdentity));
+            Assert.False(string.IsNullOrEmpty(opAfter.SubmissionIdentity));
+            Assert.Equal(opBefore.SubmissionIdentity, before.Submission.SubmissionIdentity);  // 操作↔责任互证（前）
+            Assert.Equal(opAfter.SubmissionIdentity, after.Submission.SubmissionIdentity);    // 操作↔责任互证（后）
+            Assert.Equal(1, opBefore.LastSendSeq);
+            Assert.Equal(opBefore.LastSendSeq, before.Submission.SendSeq);            // 许可水位＝未决发送序号
+            Assert.Equal(1, opAfter.LastSendSeq);                                     // 取消**未新增发送许可**
+            Assert.Equal(opAfter.LastSendSeq, after.Submission.SendSeq);
+            Assert.Equal(before.Submission.SubmissionIdentity, after.Submission.SubmissionIdentity);
+            Assert.Equal(before.Submission.SendSeq, after.Submission.SendSeq);
+            Assert.Equal(opBefore.SubmissionIdentity, opAfter.SubmissionIdentity);
+            Assert.Equal(opBefore.LastSendSeq, opAfter.LastSendSeq);
+            Assert.Equal(opBefore.WireSubmitKey, opAfter.WireSubmitKey);
+
+            var run = runs.List().Single();
+            Assert.Equal(WorkflowRunState.Unknown, run.State);                  // 仍不可考（未被取消改写）
+            Assert.Equal(nodeResultBefore, run.NodeOutcomes.Last(o => o.NodeId == "n-1").Result);  // 节点结果未变
+            Assert.Equal("unknown", run.NodeOutcomes.Last(o => o.NodeId == "n-1").Result);
+            Assert.Equal(intentBefore, run.CurrentSubmission!.Intent);          // 取消**未改写**持久化事实
+            Assert.Equal(keyBefore, run.CurrentSubmission.Key);
+            Assert.Equal(SubmitIntentState.Submitted, run.CurrentSubmission.Intent);
+            Assert.Null(run.CurrentSubmission.JobId);                           // 盘上仍无受理事实
+            Assert.Null(run.CurrentSubmission.AcceptedSendIdentity);
+            Assert.Equal(1, run.CurrentSubmission.Attempt);
+        }
+        finally
+        {
+            if (!hostShutDown && host is not null)
+            {
+                try { await host.ShutdownAsync().WaitAsync(TimeSpan.FromSeconds(10)); } catch { }
+            }
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
     /// **§17 P6／§12.3 M3（[2026-09-21 批次二十四]）宿主级端到端：在飞发送期取消 ⇒ `Unknown`＋责任保持**。
     /// 构造：端口在发送入口**阻塞在取消令牌上**（在飞）；随后触发宿主关闭（＝取消运行器传给发送段的**同一令牌**）。
     /// 断言：发送**恰一次**（无重发）、端口观察到**可取消令牌**、运行收敛 `Unknown`（不得成功、不得确定拒绝）、
