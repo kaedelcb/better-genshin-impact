@@ -475,6 +475,35 @@ public sealed class ConflictResolutionEvidenceRef
 }
 
 /// <summary>
+/// **冲突证据记录**（R5.3 §24.2-2″；[Batch B 续] 结构化）：追加式、不覆盖既有事实。
+/// `evidenceId` 由适配器/对账方按稳定业务键派生（**同 ID 同载荷＝幂等，同 ID 异载荷＝冲突**）。
+/// </summary>
+public sealed class ConflictEvidenceRecord
+{
+    [JsonPropertyName("evidenceId")] public string EvidenceId { get; set; } = "";
+    /// <summary>证据侧原始词（不伪造）。</summary>
+    [JsonPropertyName("rawTerminal")] public string RawTerminal { get; set; } = "";
+    [JsonPropertyName("executionErrorCode")] public string? ExecutionErrorCode { get; set; }
+    [JsonPropertyName("evidenceSource")] public string EvidenceSource { get; set; } = "";
+    /// <summary>证据首次被可信观察层接收的时点（不可改写）。</summary>
+    [JsonPropertyName("observedAtUtc")] public DateTimeOffset ObservedAtUtc { get; set; }
+    [JsonPropertyName("submissionIdentity")] public string SubmissionIdentity { get; set; } = "";
+    [JsonPropertyName("sendSeq")] public int SendSeq { get; set; }
+    /// <summary>被取代的拒绝结果侧原始词/原因（审计关联；不得伪造）。</summary>
+    [JsonPropertyName("supersededRawTerminal")] public string? SupersededRawTerminal { get; set; }
+    [JsonPropertyName("supersededReasonCode")] public string? SupersededReasonCode { get; set; }
+}
+
+/// <summary>
+/// **权威未受理观察**（R5.3 §24.2-2″ 裁决输入；[Batch B 续] 由可信观察层提供）：
+/// 写事务前必须校验 `FactKind` 命中白名单、来源可信、身份/轮次与发送身份全等、观察时点非默认；
+/// 持久化时**逐字段原样复制**（不得现场构造）。
+/// </summary>
+public sealed record NotAcceptedObservation(
+    string FactKind, string RawEvidenceWord, string EvidenceSource,
+    DateTimeOffset ObservedAtUtc, string SubmissionIdentity, int SendSeq);
+
+/// <summary>
 /// **冲突裁决审计项**（§24.2-2″；租约 v3 `ConflictResolutionAudits[]`，追加式、不可变、**不计入** 32 主槽位/256 墓碑容量）。
 /// `resolutionEvidence*` 为**判别式互斥**：`ResolvedAcceptedTerminal` 用 `resolutionEvidenceSnapshot`；`ResolvedNotAccepted` 用 `resolutionEvidenceRef`（仅 `evidenceId`，不内嵌字段）。
 /// </summary>
@@ -618,10 +647,16 @@ public sealed class OperationRecord
     [JsonPropertyName("localCancelRequested")] public bool LocalCancelRequested { get; set; }
     /// <summary>冲突对账待决标志（§24.2-2″：活动覆盖层；已裁决后清除，但审计与证据不删除）。</summary>
     [JsonPropertyName("conflictPending")] public bool ConflictPending { get; set; }
-    /// <summary>冲突证据集合（双方证据与完整发送身份；追加式，不覆盖既有事实）。</summary>
-    [JsonPropertyName("conflictEvidence")] public List<string> ConflictEvidence { get; set; } = [];
+    /// <summary>冲突证据集合（结构化；追加式，不覆盖既有事实——[Batch B 续] 会诊要求：不得用自由字符串承载责任事实）。</summary>
+    [JsonPropertyName("conflictEvidence")] public List<ConflictEvidenceRecord> ConflictEvidence { get; set; } = [];
     /// <summary>冲突裁决后的责任延续状态（§24.2-2″ 分支②：`AcceptedAwaitingTerminal`）。</summary>
     [JsonPropertyName("conflictResolutionState")] public string? ConflictResolutionState { get; set; }
     /// <summary>裁决审计引用（§24.2-2″：**仅存 ID**，指向租约 `ConflictResolutionAudits[]`）。</summary>
     [JsonPropertyName("conflictResolutionAuditId")] public string? ConflictResolutionAuditId { get; set; }
+    /// <summary>
+    /// **裁决方向声明**（[第二轮验证会诊阻断处置] 新增，进程内实现细节）：`ResolvedAcceptedTerminal` 裁决需先
+    /// 完成 §24.15 终态链再写审计，中间窗口不得被**相反方向**裁决穿插——故先原子声明方向；
+    /// 同方向重试可复用；相反方向 ⇒ `conflict_adjudication_in_progress`。清除时机＝审计落盘同一次发布。
+    /// </summary>
+    [JsonPropertyName("conflictAdjudicationClaim")] public string? ConflictAdjudicationClaim { get; set; }
 }

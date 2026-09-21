@@ -264,6 +264,12 @@ public sealed class AdmissionHooks
     /// `Unreadable`（读取失败/损坏/不可确认）**不得**与 `Absent`（读取成功但无句柄）混淆：前者必须保守停驻。
     /// </summary>
     public Func<string, int, LedgerHandleProbe>? TakeoverJobIdRead { get; set; }
+    /// <summary>
+    /// **权威未受理观察可信性校验**（R5.3 §24.2-2″；[第五轮验证会诊阻断处置] 新增）：
+    /// 由可信观察层提供校验器——返回 `null`＝来源可信；非 `null`＝拒绝原因。
+    /// **未配置 ⇒ 一律拒绝**（`observation_source_unverified`）：不得让任意调用方自造观察解除冲突阻断。
+    /// </summary>
+    public Func<NotAcceptedObservation, string?>? NotAcceptedObservationVerifier { get; set; }
     /// <summary>并发屏障夹具接缝（九类交错可控屏障；生产=null 零开销）。</summary>
     public AdmissionBarriers? Barriers { get; set; }
 }
@@ -531,6 +537,19 @@ public sealed class ArbitrationAdmissionService
         if (op is null)
             return AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity",
                 "续用方 Operations 记录缺失=响亮拒绝（绝不回退为创建新操作/换身份/重新绑定）。", request.RequestIdentity);
+        // [第二轮验证会诊阻断处置] **冲突优先**：待决冲突覆盖历史拒绝/可重试分类（不得让调用方把未裁决责任当已结清）。
+        if (op.ConflictPending)
+            return new AdmissionResult
+            {
+                Kind = AdmissionResultKind.NeedReconcile,
+                ReasonCode = "conflict_pending",
+                Detail = "存在待决冲突（待权威裁决：不释放占用、禁止重发）。",
+                RequestIdentity = request.RequestIdentity,
+                SubmissionIdentity = op.SubmissionIdentity,
+                SendSeq = op.LastSendSeq,
+                ExecutionDisposition = ExecutionDisposition.Unknown,
+                ResponsibilityState = ResponsibilityState.Pending,
+            };
 
         // 候选身份核验（B3：换 workflow/scope=换候选号——同载荷/排序键不得命中他者缓存）。
         if (!string.Equals(op.CandidateId, ArbitrationOrdering.DeriveCandidateId(stableIdentity), StringComparison.Ordinal))
@@ -549,14 +568,39 @@ public sealed class ArbitrationAdmissionService
                 "同身份不同规范化载荷/排序键=终局拒绝（原请求事实不变）。", request.RequestIdentity);
 
         // 去重合并关联（B6）：未镜像完成前按胜者当前事实分类；已镜像终态的按本记录分类（落入下方 switch）。
-        if (op.MergedInto is { } mergedInto
-            && op.RequestState is OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected)
+        if (op.MergedInto is { } mergedInto)
         {
             var target = ops.FirstOrDefault(o => string.Equals(o.RequestIdentity, mergedInto, StringComparison.Ordinal));
-            return target?.RequestState switch
+            // [第三轮验证会诊阻断处置] 合并目标的冲突待决优先于**任何**本记录状态（含已镜像终态）——
+            // 只要胜者责任未裁决，调用方就不得看到「已结清的拒绝结果」。
+            if (target is { ConflictPending: true })
+                return new AdmissionResult
+                {
+                    Kind = AdmissionResultKind.NeedReconcile,
+                    ReasonCode = "conflict_pending",
+                    Detail = "去重合并目标存在待决冲突（待权威裁决：不释放占用、禁止重发）。",
+                    RequestIdentity = request.RequestIdentity,
+                    SubmissionIdentity = target.SubmissionIdentity,
+                    SendSeq = target.LastSendSeq,
+                    ExecutionDisposition = ExecutionDisposition.Unknown,
+                    ResponsibilityState = ResponsibilityState.Pending,
+                };
+            // [第五轮验证会诊阻断处置] 目标**已有执行事实**（含裁决后的取消/失败/成功）⇒ 共享目标事实，
+            // 无论本（镜像）记录自身处于何种状态（历史镜像的 `TerminalRejected` 不得回放旧事实）。
+            if (target is { ExecutionResult: not null }
+                && target.RequestState is OperationRequestState.Accepted or OperationRequestState.TerminalCompleted)
+                return ClassifyFromExecutionResult(request.RequestIdentity, target,
+                    settled: target.RequestState == OperationRequestState.TerminalCompleted,
+                    "already_accepted", "去重合并：共享胜者结果事实（含取消/失败，不新增发送者）。");
+            // 未镜像完成前的共享结果分类；已镜像终态的落到下方 switch（按本记录状态分类）。
+            if (op.RequestState is OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected)
+                return target?.RequestState switch
             {
                 OperationRequestState.Accepted or OperationRequestState.TerminalCompleted =>
-                    new AdmissionResult { Kind = AdmissionResultKind.Accepted, ReasonCode = "already_accepted", Detail = "去重合并：共享胜者受理结果（不新增发送者）。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = target.SubmissionIdentity, SendSeq = target.LastSendSeq },
+                    // 共享胜者的**结果事实**（含取消/失败）；不得固定返回 Accepted（§24.6-4）。
+                    ClassifyFromExecutionResult(request.RequestIdentity, target,
+                        settled: target.RequestState == OperationRequestState.TerminalCompleted,
+                        "already_accepted", "去重合并：共享胜者受理结果（不新增发送者）。"),
                 OperationRequestState.TerminalRejected =>
                     AdmissionResult.Of(AdmissionResultKind.TerminalRejected, target.LastResult?.ReasonCode ?? "terminal_rejected", "去重合并：共享胜者终局拒绝。", request.RequestIdentity),
                 OperationRequestState.NotSelected =>
@@ -603,9 +647,11 @@ public sealed class ArbitrationAdmissionService
                 return AdmissionResult.Of(AdmissionResultKind.Reconciling, "reconciling", "发送结果未知，保守待对账（不重发）。", request.RequestIdentity);
             // 已受理/终局完成：返回既有结果。
             case OperationRequestState.Accepted:
-                return new AdmissionResult { Kind = AdmissionResultKind.Accepted, ReasonCode = "already_accepted", Detail = "已受理（返回既有结果）。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = op.SubmissionIdentity, SendSeq = op.LastSendSeq, WinnerCandidateId = op.CandidateId, SuppressionSource = op.LastResult?.EvidenceSource ?? "" };
+                return ClassifyFromExecutionResult(request.RequestIdentity, op, settled: false,
+                    "already_accepted", "已受理（返回既有结果）。", winnerCandidateId: op.CandidateId);
             case OperationRequestState.TerminalCompleted:
-                return new AdmissionResult { Kind = AdmissionResultKind.Accepted, ReasonCode = "already_terminal", Detail = "终局完成（返回既有结果）。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = op.SubmissionIdentity, SendSeq = op.LastSendSeq };
+                return ClassifyFromExecutionResult(request.RequestIdentity, op, settled: true,
+                    "already_terminal", "终局完成（返回既有结果）。");
             // 可重试拒绝：预算/窗口内由唯一重试者重新 Admit（RetryAsync）。
             case OperationRequestState.RetryableRejected:
                 return AdmissionResult.Of(AdmissionResultKind.RetryableRejected, op.LastResult?.ReasonCode ?? "retryable_rejected", "可重试拒绝（经 RetryAsync 重新 Admit；并发重试者合并）。", request.RequestIdentity);
@@ -1194,6 +1240,10 @@ public sealed class ArbitrationAdmissionService
             // ① F11 独立停止闸门（锁内复核——校验后激活同样阻断占位与发送）。
             if (_hooks.F11Active()) return "f11_active";
             var facts = _hooks.FactsProvider();
+            // [Batch B 续 会诊阻断处置] 盘上**任一冲突待决** ⇒ 执行事实未知（墓碑冲突不占主槽位，
+            // 必须在此全局阻断新启动；不得只依赖可能漏接线的外部事实源）。
+            if ((file.Handoff?.Operations ?? []).Any(o => o is not null && o.ConflictPending))
+                return "facts_unknown";
             var pending = file.Handoff?.Pending;
             var bgiEpoch = _hooks.BgiEpochProvider();
             // ② 票据三要素（§5 / P55③）：无关候选不得占位；授权抢占方保留资格，但**须通过三要素校验**。
@@ -1273,6 +1323,9 @@ public sealed class ArbitrationAdmissionService
 
             var op = (file.Handoff.Operations ?? []).FirstOrDefault(o => string.Equals(o.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal));
             if (op is null || op.Zone != OperationZone.Active) return "stale_operation_identity";
+            // [Batch B 续 会诊阻断处置] **冲突待决＝最高优先级阻断**：不得签发新发送轮次（禁止重发，
+            // 重试资格在冲突期间一律失效——不得靠外部配置或调用方自觉）。
+            if (op.ConflictPending) return "conflict_pending";
             // ⑨ 不可变消费记录比对（占位按持久化快照校验——调用方后置可变对象不得改变发送目标/载荷）。
             if (!string.Equals(op.CandidateId, candidateId, StringComparison.Ordinal)
                 || !string.Equals(op.PayloadFingerprint, request.Candidate.PayloadFingerprint ?? "", StringComparison.Ordinal)
@@ -1453,6 +1506,17 @@ public sealed class ArbitrationAdmissionService
                 return (await TerminatePrecheckAsync(request, lease, "cursor_already_consumed", AdmissionResultKind.TerminalRejected, "同一游标（cursorRef+cursorRevision）已被其他操作消费（唯一消费约束，防双跑）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             case "pending_conflict":
                 return (await TerminatePrecheckAsync(request, lease, "pending_conflict", AdmissionResultKind.TerminalRejected, "交接责任存续期：非授权方或阶段不许可（SettlePending/RestorePending/ReconcilePending 禁止另建替代作业）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
+            // [Batch B 续 会诊阻断处置] 冲突待决 ⇒ **禁止重发**：不得签发新发送轮次、不得据此终局/释放占用。
+            case "conflict_pending":
+                return new AdmissionResult
+                {
+                    Kind = AdmissionResultKind.NeedReconcile,
+                    ReasonCode = "conflict_pending",
+                    Detail = "存在待决冲突（禁止重发：必须先经权威裁决，冲突期间不签发新发送轮次）。",
+                    RequestIdentity = request.RequestIdentity,
+                    ExecutionDisposition = ExecutionDisposition.Unknown,
+                    ResponsibilityState = ResponsibilityState.Pending,
+                };
             case "retry_budget_exhausted":
                 return (await TerminatePrecheckAsync(request, lease, "retry_budget_exhausted", AdmissionResultKind.TerminalRejected, "重试预算耗尽（终局拒绝）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             // 事实未知/占用：未发布发送许可→回 Queued 可再驱动。
@@ -1494,10 +1558,25 @@ public sealed class ArbitrationAdmissionService
         var op = read.File is null ? null : FindOp(read.File, requestIdentity);
         if (op is null)
             return AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "Operations 记录缺失=响亮拒绝。", requestIdentity);
+        // [第二轮验证会诊阻断处置] **冲突优先于历史拒绝分类**（冲突状态覆盖历史结果：不得把待决责任当已结清）。
+        if (op.ConflictPending)
+            return new AdmissionResult
+            {
+                Kind = AdmissionResultKind.NeedReconcile,
+                ReasonCode = "conflict_pending",
+                Detail = "存在待决冲突（待权威裁决：不释放占用、禁止重发）。",
+                RequestIdentity = requestIdentity,
+                SubmissionIdentity = op.SubmissionIdentity,
+                SendSeq = op.LastSendSeq,
+                ExecutionDisposition = ExecutionDisposition.Unknown,
+                ResponsibilityState = ResponsibilityState.Pending,
+            };
         return op.RequestState switch
         {
-            OperationRequestState.Accepted => new AdmissionResult { Kind = AdmissionResultKind.Accepted, ReasonCode = "already_accepted", Detail = "已受理（返回既有结果）。", RequestIdentity = requestIdentity, SubmissionIdentity = op.SubmissionIdentity, SendSeq = op.LastSendSeq, WinnerCandidateId = op.CandidateId, SuppressionSource = op.LastResult?.EvidenceSource ?? "" },
-            OperationRequestState.TerminalCompleted => new AdmissionResult { Kind = AdmissionResultKind.Accepted, ReasonCode = "already_terminal", Detail = "终局完成（返回既有结果）。", RequestIdentity = requestIdentity, SubmissionIdentity = op.SubmissionIdentity, SendSeq = op.LastSendSeq },
+            // [第四轮验证会诊阻断处置] **续用/重启分类必须保持同一结果事实**（§24.6-4／§24.13-2）：
+            // 已取得 `ExecutionResult` 者按其类别返回（取消/执行失败不得被改写成成功），责任维按是否结清区分。
+            OperationRequestState.Accepted => ClassifyFromExecutionResult(requestIdentity, op, settled: false, "already_accepted", "已受理（返回既有结果）。"),
+            OperationRequestState.TerminalCompleted => ClassifyFromExecutionResult(requestIdentity, op, settled: true, "already_terminal", "终局完成（返回既有结果）。"),
             OperationRequestState.TerminalRejected => AdmissionResult.Of(AdmissionResultKind.TerminalRejected, op.LastResult?.ReasonCode ?? "terminal_rejected", "终局拒绝（返回既有结果）。", requestIdentity),
             OperationRequestState.NotSelected => new AdmissionResult { Kind = AdmissionResultKind.NotSelected, ReasonCode = op.LastResult?.ReasonCode ?? "not_selected", Detail = "未获选终局（返回既有结果）。", RequestIdentity = requestIdentity, WinnerCandidateId = op.LastResult?.WinnerRef, SuppressionSource = op.LastResult?.SuppressionSource ?? "" },
             OperationRequestState.RetryableRejected => AdmissionResult.Of(AdmissionResultKind.RetryableRejected, op.LastResult?.ReasonCode ?? "retryable_rejected", "可重试拒绝（经 RetryAsync 重新 Admit）。", requestIdentity),
@@ -1763,6 +1842,11 @@ public sealed class ArbitrationAdmissionService
             var submission = read.File.Handoff?.Submission;
             if (op is null)
                 return AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "Operations 记录缺失=响亮拒绝。", requestIdentity);
+            // [Batch B 续 会诊阻断处置] 冲突待决记录**不得**走普通对账结清（含 NotAccepted）：必须经冲突裁决，
+            // 否则会绕过审计/证据留痕并可能释放占用。
+            if (op.ConflictPending)
+                return LocatedStop(requestIdentity, op, "conflict_requires_adjudication",
+                    "冲突待决记录必须经 AdjudicateConflictAsync 裁决（不得以普通对账关闭/结清）。");
             // I1：接受 Reconciling 以及 Granted/Sending（异常/关闭失败中断但发送责任可识别）——责任关联必须匹配。
             if (op.RequestState is not (OperationRequestState.Reconciling or OperationRequestState.Granted or OperationRequestState.Sending)
                 || submission is null
@@ -1909,7 +1993,10 @@ public sealed class ArbitrationAdmissionService
                     EvidenceSource = existing.EvidenceSource,
                 };
             }
-            if (op.RequestState is not (OperationRequestState.Accepted or OperationRequestState.Reconciling))
+            // [Batch B 续] 冲突裁决里的「曾受理」分支：既有拒绝（`TerminalRejected`/`RetryableRejected`/墓碑）之后
+            // 才取得的权威终态同样必须经本入口结算——否则冲突修正无路可走（既有拒绝本体不改写，仅作审计）。
+            var conflicted = op.ConflictPending;
+            if (op.RequestState is not (OperationRequestState.Accepted or OperationRequestState.Reconciling) && !conflicted)
                 return LocatedStop(requestIdentity, op, "not_accepted",
                     "操作不在可结算状态（完成结算仅对已受理/待对账操作）。");
             // 外部启动的固定目标纪元必须已持久化（不可改写；未知纪元不签发也不结算）。
@@ -1919,6 +2006,11 @@ public sealed class ArbitrationAdmissionService
             // ── 分支一/二：无终态（普通受理）或结果未知 ──
             if (completion is null || completion.Kind == ExternalStartCompletionKind.Unknown)
             {
+                // [Batch B 续 会诊阻断处置] 冲突待决记录**只能**经裁决携带权威终态完成结算：
+                // 禁止走普通受理/未知分支（那里会假定未决 Submission 存在并误补受理）。
+                if (conflicted)
+                    return LocatedStop(requestIdentity, op, "conflict_requires_terminal_settlement",
+                        "冲突待决记录只能以权威终态完成结算（禁止普通受理/未知分支）。");
                 // 已有权威终态者**不得**被 null/Unknown 掩盖或降级（§24.6-2：事实不可反转）——按既有事实返回。
                 if (op.ExecutionResult is { } existingFact)
                     return ReplayExistingFact(requestIdentity, op, existingFact);
@@ -1989,7 +2081,8 @@ public sealed class ArbitrationAdmissionService
             {
                 var op2 = FindOp(file, requestIdentity);
                 if (op2 is null) return "stale_operation_identity";
-                if (op2.Zone != OperationZone.Active) return "state_changed";
+                // 冲突裁决允许在**已迁墓碑/待迁移**的记录上补写权威终态载体（既有拒绝/墓碑事实不改写）。
+                if (!op2.ConflictPending && op2.Zone != OperationZone.Active) return "state_changed";
                 if (!string.Equals(op2.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
                     || op2.LastSendSeq != sendSeq)
                     return "state_changed";
@@ -2097,7 +2190,8 @@ public sealed class ArbitrationAdmissionService
             {
                 var op3 = FindOp(file, requestIdentity);
                 if (op3 is null) return "state_changed";
-                if (op3.Zone != OperationZone.Active) return "state_changed";
+                // 冲突裁决：墓碑/待迁移记录同样允许补终局（终局后仍在墓碑区，受保护不被裁剪）。
+                if (!op3.ConflictPending && op3.Zone != OperationZone.Active) return "state_changed";
                 if (!string.Equals(op3.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
                     || op3.LastSendSeq != sendSeq)
                     return "state_changed";
@@ -2138,7 +2232,11 @@ public sealed class ArbitrationAdmissionService
                     if (pre is not null) pre.State = "completed";
                 }
                 op3.RequestState = OperationRequestState.TerminalCompleted;
-                op3.Zone = OperationZone.TerminalPendingTransfer;
+                // [第二轮验证会诊阻断处置] **到达时所在区域冻结**：冲突到达时已在墓碑的记录终局后**仍留在墓碑**
+                // （不得重新申请主槽位）；其余（Active）才迁入待迁移区。
+                op3.Zone = op3.Zone == OperationZone.Tombstone
+                    ? OperationZone.Tombstone
+                    : OperationZone.TerminalPendingTransfer;
                 op3.PendingTerminal = null; // 责任已结清：终态事实由 ExecutionResult 长期承载（§24.12-7）
                 op3.UpdatedRevision = file.Revision + 1;
                 op3.UpdatedAtUtc = now;
@@ -2209,6 +2307,588 @@ public sealed class ArbitrationAdmissionService
             _gate.Release();
         }
     }
+
+    /// <summary>
+    /// **冲突证据登记**（R5.3 §24.2-2″；[Batch B 续] 新增）：发送层「确定未受理」之后又出现指向「曾受理/终态」的
+    /// 证据时，证据必须**原样追加**并置「冲突待决」——不覆盖既有事实、不释放占用、**禁止重发**（重试资格立即失效）。
+    /// 返回 `NeedReconcile`（责任 `Pending`）。
+    /// </summary>
+    public async Task<AdmissionResult> RegisterConflictEvidenceAsync(
+        string requestIdentity, ConflictEvidenceRecord evidence)
+    {
+        if (string.IsNullOrWhiteSpace(requestIdentity) || evidence is null)
+            return AdmissionResult.Of(AdmissionResultKind.Error, "invalid_request", "冲突登记参数缺失。", requestIdentity);
+        // [Batch B 续 会诊阻断处置] 入口**严格限定**：仅外部启动、仅「本笔当前轮已确定拒绝」之后、且证据字段完整。
+        if (string.IsNullOrWhiteSpace(evidence.EvidenceId) || string.IsNullOrWhiteSpace(evidence.RawTerminal)
+            || string.IsNullOrWhiteSpace(evidence.EvidenceSource) || evidence.ObservedAtUtc == default
+            || evidence.SendSeq < 1 || string.IsNullOrWhiteSpace(evidence.SubmissionIdentity))
+            return AdmissionResult.Of(AdmissionResultKind.Error, "invalid_request",
+                "冲突证据字段不完整（需 evidenceId/原始终态词/来源/观察时点/完整发送身份）。", requestIdentity);
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var read = _store.Read();
+            if (read.File?.Lease is null)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "未持有租约。", requestIdentity);
+            var lease = read.File.Lease;
+            var op = FindOp(read.File, requestIdentity);
+            if (op is null)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "Operations 记录缺失=响亮拒绝。", requestIdentity);
+            if (op.OperationType != OperationType.ExternalStart)
+                return LocatedStop(requestIdentity, op,
+                    op.OperationType == OperationType.Unknown ? "legacy_operation_type_unresolved" : "operation_type_not_external_start",
+                    "冲突登记只服务外部启动操作（其余类型走各自责任链）。");
+            if (!string.Equals(op.SubmissionIdentity, evidence.SubmissionIdentity, StringComparison.Ordinal)
+                || op.LastSendSeq != evidence.SendSeq)
+                return LocatedStop(requestIdentity, op, "stale_evidence", "冲突证据与本笔发送轮次不关联（不得据旧轮次证据改动本笔责任）。");
+            if (op.LastResult is not { Outcome: OperationOutcome.Rejected } rejected
+                || rejected.AnsweredSendSeq != op.LastSendSeq)
+                return LocatedStop(requestIdentity, op, "conflict_requires_current_rejection",
+                    "冲突登记要求「本笔当前轮」确为确定拒绝（不得对未拒绝/旧轮结论登记冲突）。");
+            var now = _utcNow();
+            var record = new ConflictEvidenceRecord
+            {
+                EvidenceId = evidence.EvidenceId,
+                RawTerminal = evidence.RawTerminal,
+                ExecutionErrorCode = evidence.ExecutionErrorCode,
+                EvidenceSource = evidence.EvidenceSource,
+                ObservedAtUtc = evidence.ObservedAtUtc,
+                SubmissionIdentity = evidence.SubmissionIdentity,
+                SendSeq = evidence.SendSeq,
+                SupersededRawTerminal = rejected.ReasonCode,
+                SupersededReasonCode = rejected.ReasonCode,
+            };
+            var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            {
+                var op2 = FindOp(file, requestIdentity);
+                if (op2 is null) return "state_changed";
+                if (!string.Equals(op2.SubmissionIdentity, evidence.SubmissionIdentity, StringComparison.Ordinal)
+                    || op2.LastSendSeq != evidence.SendSeq)
+                    return "state_changed";
+                // 追加式且**按 evidenceId 幂等**：同 ID 同载荷＝成功；同 ID 异载荷＝冲突（fail-closed，不覆盖）。
+                var existing = (op2.ConflictEvidence ??= []).FirstOrDefault(e => e is not null
+                    && string.Equals(e.EvidenceId, record.EvidenceId, StringComparison.Ordinal));
+                if (existing is not null)
+                {
+                    if (!string.Equals(existing.RawTerminal, record.RawTerminal, StringComparison.Ordinal)
+                        || !string.Equals(existing.ExecutionErrorCode, record.ExecutionErrorCode, StringComparison.Ordinal)
+                        || !string.Equals(existing.EvidenceSource, record.EvidenceSource, StringComparison.Ordinal)
+                        || existing.ObservedAtUtc != record.ObservedAtUtc)
+                        return "conflict_evidence_conflict";
+                }
+                else
+                {
+                    op2.ConflictEvidence.Add(record);
+                }
+                op2.ConflictPending = true;
+                op2.UpdatedRevision = file.Revision + 1;
+                op2.UpdatedAtUtc = now;
+                return null;
+            });
+            if (!mutate.Success)
+            {
+                var registerReason = mutate.Reason ?? "invalid_request";
+                // [第二轮验证会诊] 约定错误码**原样透传**（不得被 `conflict_register_failed:` 包装改变可观察合同）。
+                if (registerReason == "conflict_evidence_conflict")
+                    return LocatedStop(requestIdentity, op, registerReason,
+                        "同一 evidenceId 的载荷与既有记录不一致（冲突/损坏：不覆盖，保守停驻）。");
+                return LocatedStop(requestIdentity, op, "conflict_register_failed:" + registerReason,
+                    "冲突证据登记失败（保守停驻：不得据此释放占用或重发）。");
+            }
+            return new AdmissionResult
+            {
+                Kind = AdmissionResultKind.NeedReconcile,
+                ReasonCode = "conflict_registered",
+                Detail = "冲突证据已登记（待权威裁决：不覆盖既有事实、不释放占用、禁止重发）。",
+                RequestIdentity = requestIdentity,
+                SubmissionIdentity = evidence.SubmissionIdentity,
+                SendSeq = evidence.SendSeq,
+                ExecutionDisposition = ExecutionDisposition.Unknown,
+                ResponsibilityState = ResponsibilityState.Pending,
+                RawTerminal = evidence.RawTerminal,
+                ExecutionErrorCode = evidence.ExecutionErrorCode,
+                EvidenceSource = evidence.EvidenceSource,
+            };
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// **冲突裁决**（R5.3 §24.2-2″；[Batch B 续] 新增）：
+    /// `ResolvedAcceptedTerminal` ⇒ 先按 §24.15 完成终态链（复用完成结算入口），再以**一次租约原子发布**完成三项
+    /// （追加审计项 ＋ 写 `ConflictResolutionAuditId` ＋ 清 `conflict.pending`）；
+    /// `ResolvedNotAccepted` ⇒ 以**一次租约原子发布**完成四项（追加 `ReconciledNotAcceptedEvidence` ＋ 审计项 ＋ 写引用 ＋ 清 `pending`）。
+    /// 幂等：`auditId`／`evidenceId` 由完整发送身份确定性派生（重试复用同一 ID；同 ID 同载荷＝幂等，同 ID 异载荷＝损坏）。
+    /// 「清冲突」只清活动覆盖层 `pending`——审计、证据记录与拒绝快照**一律保留**。
+    /// </summary>
+    public async Task<AdmissionResult> AdjudicateConflictAsync(
+        string requestIdentity, ConflictResolutionKind resolution, string evidenceSource,
+        ExternalStartCompletion? terminalEvidence = null, NotAcceptedObservation? notAccepted = null)
+    {
+        if (string.IsNullOrWhiteSpace(requestIdentity) || string.IsNullOrWhiteSpace(evidenceSource))
+            return AdmissionResult.Of(AdmissionResultKind.Error, "invalid_request", "裁决参数缺失。", requestIdentity);
+        if (!Enum.IsDefined(resolution))
+            return AdmissionResult.Of(AdmissionResultKind.Error, "invalid_request", "裁决类型非法。", requestIdentity);
+        // [Batch B 续 会诊阻断处置] 未受理裁决必须携带**权威观察**（白名单事实类型/原始词/来源/时点/完整身份），
+        // 不得现场构造（否则任意非空来源即可解除冲突阻断＝fail-open）。
+        if (resolution == ConflictResolutionKind.ResolvedNotAccepted)
+        {
+            if (notAccepted is null)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "observation_required",
+                    "「确认未受理」裁决必须携带权威未受理观察（不得现场构造证据）。", requestIdentity);
+            if (!ReconciledNotAcceptedFactKinds.All.Contains(notAccepted.FactKind))
+                return AdmissionResult.Of(AdmissionResultKind.Error, "observation_invalid_fact_kind",
+                    "未受理观察的事实类型不在封闭白名单内。", requestIdentity);
+            if (string.IsNullOrWhiteSpace(notAccepted.RawEvidenceWord) || string.IsNullOrWhiteSpace(notAccepted.EvidenceSource)
+                || notAccepted.ObservedAtUtc == default || notAccepted.SendSeq < 1
+                || string.IsNullOrWhiteSpace(notAccepted.SubmissionIdentity))
+                return AdmissionResult.Of(AdmissionResultKind.Error, "observation_incomplete",
+                    "未受理观察字段不完整（原始词/来源/观察时点/完整发送身份）。", requestIdentity);
+            // 可信来源校验（fail-closed：未配置校验器＝不得裁决；校验失败＝拒绝并保留冲突待决）。
+            var verifier = _hooks.NotAcceptedObservationVerifier;
+            if (verifier is null)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "observation_source_unverified",
+                    "未配置权威未受理观察的可信性校验器（不得据未验证来源裁决）。", requestIdentity);
+            var verificationFailure = verifier(notAccepted);
+            if (verificationFailure is not null)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "observation_source_untrusted:" + verificationFailure,
+                    "权威未受理观察未通过可信性校验（不得解除冲突阻断）。", requestIdentity);
+        }
+
+        string submissionIdentity;
+        int sendSeq;
+        {
+            var read0 = _store.Read();
+            var op0 = read0.File is null ? null : FindOp(read0.File, requestIdentity);
+            if (op0 is null)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "Operations 记录缺失=响亮拒绝。", requestIdentity);
+            submissionIdentity = op0.SubmissionIdentity;
+            sendSeq = op0.LastSendSeq;
+            if (!op0.ConflictPending)
+            {
+                // [Batch B 续] **幂等重放**：已裁决且审计在册（同 resolution／同来源）⇒ 返回既有结论，不重复写盘。
+                if (op0.ConflictResolutionAuditId is { Length: > 0 } settledAuditId)
+                {
+                    var handoff0 = read0.File!.Handoff;
+                    var settledAudit = (handoff0?.ConflictResolutionAudits ?? [])
+                        .FirstOrDefault(a => a is not null && string.Equals(a.AuditId, settledAuditId, StringComparison.Ordinal));
+                    // [第三轮验证会诊阻断处置] 幂等重放同样必须**全载荷**比较（不得只看来源）。
+                    var samePayload = settledAudit is not null && (resolution == ConflictResolutionKind.ResolvedAcceptedTerminal
+                        ? terminalEvidence is not null && AuditMatchesCompletion(settledAudit, terminalEvidence, op0.ExecutionResult, submissionIdentity, sendSeq)
+                        : notAccepted is not null && AuditMatchesNotAccepted(settledAudit,
+                            handoff0?.ReconciledNotAcceptedEvidence ?? [], notAccepted, submissionIdentity, sendSeq));
+                    if (settledAudit is not null && settledAudit.Resolution != resolution)
+                        return LocatedStop(requestIdentity, op0, "conflict_audit_conflict",
+                            "既有审计的裁决方向与本请求不一致（冲突：不追加、不改引用）。");
+                    if (settledAudit is not null && !samePayload)
+                        return LocatedStop(requestIdentity, op0, "conflict_audit_conflict",
+                            "既有审计载荷与本请求不一致（冲突：不追加、不改引用）。");
+                    if (settledAudit is not null && settledAudit.Resolution == resolution && samePayload)
+                        return new AdmissionResult
+                        {
+                            // 结果维以**已持久化 `ExecutionResult` 为权威**（不得把取消/失败压成 Accepted）。
+                            Kind = resolution == ConflictResolutionKind.ResolvedNotAccepted
+                                ? AdmissionResultKind.TerminalRejected
+                                : MapResultKindFromExecution(op0.ExecutionResult?.Kind),
+                            ReasonCode = "already_adjudicated",
+                            Detail = "冲突已裁决（幂等重放既有审计事实，不重复写盘）。",
+                            RequestIdentity = requestIdentity,
+                            SubmissionIdentity = op0.SubmissionIdentity,
+                            SendSeq = op0.LastSendSeq,
+                            JobId = op0.ExecutionResult?.JobId,
+                            ResponsibilityState = ResponsibilityState.Settled,
+                            ExecutionDisposition = MapDispositionFromExecution(op0.ExecutionResult?.Kind),
+                            RawTerminal = op0.ExecutionResult?.RawTerminal,
+                            ExecutionErrorCode = op0.ExecutionResult?.ExecutionErrorCode,
+                            EvidenceSource = evidenceSource,
+                        };
+                }
+                return LocatedStop(requestIdentity, op0, "no_pending_conflict", "该操作没有待决冲突（不得据无冲突记录补审计）。");
+            }
+            if (string.IsNullOrEmpty(submissionIdentity) || sendSeq < 1)
+                return LocatedStop(requestIdentity, op0, "identity_missing", "缺少完整发送身份（不得裁决）。");
+            // 未受理观察必须与本笔完整发送身份全等（不得据他人/旧轮观察裁决）。
+            if (notAccepted is not null
+                && (!string.Equals(notAccepted.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+                    || notAccepted.SendSeq != sendSeq))
+                return LocatedStop(requestIdentity, op0, "observation_identity_mismatch",
+                    "未受理观察的发送身份与本笔不一致（拒绝关联）。");
+        }
+
+        // 阶段一（不持 `_gate`）：受理终态分支先按 §24.15 完成终态链，未结清则原样返回（不写审计）。
+        if (resolution == ConflictResolutionKind.ResolvedAcceptedTerminal)
+        {
+            if (terminalEvidence is null)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "completion_required",
+                    "「确认曾受理」裁决必须携带权威终态证据（不得仅凭类型/印象裁决）。", requestIdentity);
+            // [第三轮验证会诊阻断处置] **先原子声明裁决方向**：受理终态分支跨越「终态链 + 审计」两个发布，
+            // 中间窗口不得被相反方向裁决穿插（否则会出现 ExecutionResult 终态与 ResolvedNotAccepted 审计并存的矛盾状态）。
+            var claimResult = await ClaimAdjudicationAsync(requestIdentity, submissionIdentity, sendSeq, resolution).ConfigureAwait(false);
+            if (claimResult is not null) return claimResult;
+            var settled = await SettleCompletionAsync(requestIdentity, submissionIdentity, sendSeq, terminalEvidence,
+                evidenceSource, null, terminalEvidence.JobId).ConfigureAwait(false);
+            if (settled.ResponsibilityState != ResponsibilityState.Settled) return settled;
+        }
+
+        // 阶段二（持 `_gate`）：一次权威原子发布写审计（未受理分支另加证据记录）并清活动 `pending`。
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var read = _store.Read();
+            if (read.File?.Lease is null)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "未持有租约。", requestIdentity);
+            var lease = read.File.Lease;
+            var op = FindOp(read.File, requestIdentity);
+            if (op is null)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "Operations 记录缺失=响亮拒绝。", requestIdentity);
+            if (!string.Equals(op.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal) || op.LastSendSeq != sendSeq)
+                return LocatedStop(requestIdentity, op, "stale_evidence", "发送身份已变更（不得据旧身份写审计）。");
+            // [Batch B 续 会诊阻断处置] 阶段二必须重新要求**冲突待决**（否则两个不同 resolution 的并发裁决会各写一份审计）。
+            if (!op.ConflictPending)
+                return LocatedStop(requestIdentity, op, "no_pending_conflict",
+                    "阶段二复核：冲突待决已被其他裁决清除（不得追加第二份审计）。");
+            // [第三轮验证会诊阻断处置] 阶段二必须复核**裁决方向声明**（受理终态分支跨两个发布，
+            // 相反方向不得在本窗口内抢先落审计——否则形成终态载体与未受理审计并存的矛盾状态）。
+            if (resolution == ConflictResolutionKind.ResolvedAcceptedTerminal
+                && !string.Equals(op.ConflictAdjudicationClaim, nameof(ConflictResolutionKind.ResolvedAcceptedTerminal), StringComparison.Ordinal))
+                return LocatedStop(requestIdentity, op, "conflict_adjudication_claim_missing",
+                    "阶段二复核：缺少本方向裁决声明（不得跨方向写入审计）。");
+            if (resolution == ConflictResolutionKind.ResolvedNotAccepted
+                && op.ConflictAdjudicationClaim is { Length: > 0 })
+                return LocatedStop(requestIdentity, op, "conflict_adjudication_in_progress",
+                    "已有相反方向的裁决声明在处理中（不得并发写入第二份审计）。");
+            if (op.LastResult is not { Outcome: OperationOutcome.Rejected } rejectedHistory)
+                return LocatedStop(requestIdentity, op, "conflict_requires_rejected_history",
+                    "冲突裁决要求存在「被取代的拒绝结果」快照（否则不得声称拒绝了本笔发送）。");
+            // 拒绝快照必须属于**本笔当前轮次**（不得把旧轮拒绝伪造成本轮快照）。
+            if (rejectedHistory.AnsweredSendSeq != sendSeq)
+                return LocatedStop(requestIdentity, op, "conflict_rejection_not_current_round",
+                    "既有拒绝结果不属于本笔当前轮次（不得据此写审计）。");
+
+            var now = _utcNow();
+            var auditId = DeriveConflictAuditId(requestIdentity, submissionIdentity, sendSeq, resolution);
+            var evidenceId = DeriveConflictEvidenceId(requestIdentity, submissionIdentity, sendSeq);
+            var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            {
+                var op2 = FindOp(file, requestIdentity);
+                if (op2 is null) return "state_changed";
+                if (!string.Equals(op2.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal) || op2.LastSendSeq != sendSeq)
+                    return "state_changed";
+                // [第二轮验证会诊阻断处置] 待决与当前轮拒绝复核必须**在原子回调内**（`_gate` 只保护本进程：
+                // 两个进程可能同时通过外层检查，随后依次进入存储锁——缺此复核会写入第二份审计并覆盖引用）。
+                if (!op2.ConflictPending) return "no_pending_conflict";
+                // [第四轮验证会诊阻断处置] 方向声明必须在**原子回调内**复核（`_gate` 只保护本进程；
+                // 相反方向可在外层检查之后、本回调之前写入声明）。
+                if (resolution == ConflictResolutionKind.ResolvedNotAccepted
+                    && op2.ConflictAdjudicationClaim is { Length: > 0 })
+                    return "conflict_adjudication_in_progress";
+                if (resolution == ConflictResolutionKind.ResolvedAcceptedTerminal
+                    && !string.Equals(op2.ConflictAdjudicationClaim,
+                        nameof(ConflictResolutionKind.ResolvedAcceptedTerminal), StringComparison.Ordinal))
+                    return "conflict_adjudication_in_progress";
+                if (op2.LastResult is not { Outcome: OperationOutcome.Rejected } currentRejection
+                    || currentRejection.AnsweredSendSeq != sendSeq)
+                    return "conflict_rejection_not_current_round";
+                var audits = file.Handoff!.ConflictResolutionAudits ??= [];
+                var existingAudit = audits.FirstOrDefault(a => a is not null
+                    && string.Equals(a.AuditId, auditId, StringComparison.Ordinal));
+                if (existingAudit is not null)
+                {
+                    // [第三轮验证会诊阻断处置] 幂等必须**全载荷**比较（同 ID 同全载荷＝幂等；异载荷＝损坏，不覆盖）：
+                    // 仅比较来源会让「同来源、改事实类型/原始词/观察时点/终态类别」被当成幂等成功。
+                    var samePayload = resolution == ConflictResolutionKind.ResolvedAcceptedTerminal
+                        ? AuditMatchesCompletion(existingAudit, terminalEvidence!, op2.ExecutionResult, submissionIdentity, sendSeq)
+                        : AuditMatchesNotAccepted(existingAudit, file.Handoff.ReconciledNotAcceptedEvidence ?? [],
+                            notAccepted!, submissionIdentity, sendSeq);
+                    if (existingAudit.Resolution != resolution || !samePayload) return "conflict_audit_conflict";
+                }
+                else
+                {
+                    string? evidenceRef = null;
+                    if (resolution == ConflictResolutionKind.ResolvedNotAccepted)
+                    {
+                        var evidences = file.Handoff.ReconciledNotAcceptedEvidence ??= [];
+                        var existingEvidence = evidences.FirstOrDefault(e => e is not null
+                            && string.Equals(e.EvidenceId, evidenceId, StringComparison.Ordinal));
+                        if (existingEvidence is null)
+                        {
+                            evidences.Add(new ReconciledNotAcceptedEvidence
+                            {
+                                EvidenceId = evidenceId,
+                                // [Batch B 续 会诊阻断处置] **逐字段原样复制**权威观察（不得现场构造）。
+                                SubmissionIdentity = notAccepted!.SubmissionIdentity,
+                                SendSeq = notAccepted.SendSeq,
+                                FactKind = notAccepted.FactKind,
+                                RawEvidenceWord = notAccepted.RawEvidenceWord,
+                                EvidenceSource = notAccepted.EvidenceSource,
+                                ObservedAtUtc = notAccepted.ObservedAtUtc,
+                            });
+                        }
+                        else if (!string.Equals(existingEvidence.EvidenceSource, notAccepted!.EvidenceSource, StringComparison.Ordinal)
+                                 || !string.Equals(existingEvidence.FactKind, notAccepted.FactKind, StringComparison.Ordinal)
+                                 || !string.Equals(existingEvidence.RawEvidenceWord, notAccepted.RawEvidenceWord, StringComparison.Ordinal)
+                                 || existingEvidence.ObservedAtUtc != notAccepted.ObservedAtUtc
+                                 || !string.Equals(existingEvidence.SubmissionIdentity, notAccepted.SubmissionIdentity, StringComparison.Ordinal)
+                                 || existingEvidence.SendSeq != notAccepted.SendSeq)
+                        {
+                            return "conflict_audit_conflict";
+                        }
+                        evidenceRef = evidenceId;
+                    }
+
+                    audits.Add(new ConflictResolutionAudit
+                    {
+                        AuditId = auditId,
+                        RequestIdentity = requestIdentity,
+                        SubmissionIdentity = submissionIdentity,
+                        SendSeq = sendSeq,
+                        Resolution = resolution,
+                        ResolvedAtUtc = now,
+                        SupersededRejectedResultSnapshot = new OperationResult
+                        {
+                            Outcome = OperationOutcome.Rejected,
+                            ReasonCode = rejectedHistory.ReasonCode,
+                            Retryable = rejectedHistory.Retryable,
+                            RetryBudgetUsed = rejectedHistory.RetryBudgetUsed,
+                            EvidenceSource = rejectedHistory.EvidenceSource,
+                            AnsweredSendSeq = sendSeq,
+                        },
+                        ResolutionEvidenceSnapshot = resolution == ConflictResolutionKind.ResolvedAcceptedTerminal
+                            ? op2.ExecutionResult
+                            : null,
+                        ResolutionEvidenceRef = evidenceRef is null ? null : new ConflictResolutionEvidenceRef { EvidenceId = evidenceRef },
+                    });
+                }
+                op2.ConflictResolutionAuditId = auditId;
+                op2.ConflictPending = false; // 只清活动覆盖层；审计/证据/拒绝快照一律保留
+                op2.ConflictResolutionState = null;
+                op2.ConflictAdjudicationClaim = null; // 审计落盘同一次发布清方向声明
+                // [第五轮验证会诊阻断处置] **镜像合并项到胜者的结果事实**（否则镜像记录会继续回放历史拒绝）。
+                foreach (var m in (file.Handoff.Operations ?? []).Where(o => o is not null
+                    && string.Equals(o.MergedInto, requestIdentity, StringComparison.Ordinal)))
+                {
+                    if (m.Zone != OperationZone.Active) continue;
+                    m.ExecutionResult = op2.ExecutionResult is null ? null : new ExecutionResult
+                    {
+                        Kind = op2.ExecutionResult.Kind,
+                        RawTerminal = op2.ExecutionResult.RawTerminal,
+                        ExecutionErrorCode = op2.ExecutionResult.ExecutionErrorCode,
+                        JobId = op2.ExecutionResult.JobId,
+                        EvidenceSource = op2.ExecutionResult.EvidenceSource,
+                        SubmissionIdentity = op2.ExecutionResult.SubmissionIdentity,
+                        SendSeq = op2.ExecutionResult.SendSeq,
+                        ObservedAtUtc = op2.ExecutionResult.ObservedAtUtc,
+                    };
+                    m.RequestState = op2.RequestState;
+                    m.Zone = op2.Zone == OperationZone.Tombstone ? OperationZone.TerminalPendingTransfer : op2.Zone;
+                    m.UpdatedRevision = file.Revision + 1;
+                    m.UpdatedAtUtc = now;
+                }
+                op2.UpdatedRevision = file.Revision + 1;
+                op2.UpdatedAtUtc = now;
+                return null;
+            });
+            if (!mutate.Success)
+            {
+                var failReason = mutate.Reason ?? "invalid_request";
+                // [第四轮验证会诊阻断处置] 已知审计/方向冲突码**原样透传**（不得被 `conflict_adjudication_failed:` 包装）。
+                if (failReason is "conflict_audit_conflict" or "conflict_adjudication_in_progress" or "no_pending_conflict"
+                    or "conflict_rejection_not_current_round")
+                    return LocatedStop(requestIdentity, op, failReason,
+                        "裁决审计未提交（保守停驻：保持冲突待决，不释放占用、不重发）。");
+                return LocatedStop(requestIdentity, op, "conflict_adjudication_failed:" + failReason,
+                    "裁决审计发布失败（保守停驻：保持冲突待决，不释放占用、不重发）。");
+            }
+
+            return new AdmissionResult
+            {
+                Kind = resolution == ConflictResolutionKind.ResolvedNotAccepted
+                    ? AdmissionResultKind.TerminalRejected
+                    : MapResultKindFromExecution(op.ExecutionResult?.Kind),
+                ReasonCode = resolution == ConflictResolutionKind.ResolvedNotAccepted
+                    ? "conflict_resolved_not_accepted"
+                    : "conflict_resolved_accepted_terminal",
+                Detail = "冲突已裁决（审计与证据已原子留痕；活动 `pending` 已清除，历史拒绝仅作审计）。",
+                RequestIdentity = requestIdentity,
+                SubmissionIdentity = submissionIdentity,
+                SendSeq = sendSeq,
+                JobId = op.ExecutionResult?.JobId,
+                ExecutionDisposition = op.ExecutionResult?.Kind switch
+                {
+                    ExecutionResultKind.Cancelled => ExecutionDisposition.Cancelled,
+                    ExecutionResultKind.Failed => ExecutionDisposition.ExecutionFailed,
+                    _ => ExecutionDisposition.None,
+                },
+                ResponsibilityState = ResponsibilityState.Settled,
+                RawTerminal = op.ExecutionResult?.RawTerminal,
+                ExecutionErrorCode = op.ExecutionResult?.ExecutionErrorCode,
+                EvidenceSource = evidenceSource,
+            };
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// **原子声明裁决方向**（[第三轮验证会诊阻断处置]）：同方向复用；相反方向 ⇒ `conflict_adjudication_in_progress`；
+    /// 冲突已被清除（已裁决）⇒ 交由调用方走幂等重放。声明在审计落盘的**同一次发布**清除。
+    /// </summary>
+    private async Task<AdmissionResult?> ClaimAdjudicationAsync(
+        string requestIdentity, string submissionIdentity, int sendSeq, ConflictResolutionKind resolution)
+    {
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var read = _store.Read();
+            if (read.File?.Lease is null)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "未持有租约。", requestIdentity);
+            var lease = read.File.Lease;
+            AdmissionResult? reject = null;
+            var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            {
+                var op = FindOp(file, requestIdentity);
+                if (op is null) return "state_changed";
+                if (!string.Equals(op.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal) || op.LastSendSeq != sendSeq)
+                    return "state_changed";
+                if (!op.ConflictPending) return null; // 已裁决：交由幂等重放路径
+                var want = resolution.ToString();
+                if (op.ConflictAdjudicationClaim is { Length: > 0 } claim
+                    && !string.Equals(claim, want, StringComparison.Ordinal))
+                {
+                    reject = LocatedStop(requestIdentity, op, "conflict_adjudication_in_progress",
+                        "已有相反方向的裁决声明在处理中（不得并发裁决）。");
+                    return "conflict_adjudication_in_progress";
+                }
+                op.ConflictAdjudicationClaim = want;
+                op.UpdatedRevision = file.Revision + 1;
+                op.UpdatedAtUtc = _utcNow();
+                return null;
+            });
+            return reject;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>裁决审计 ↔ 本次受理终态事实的**全载荷**等值判据（[第三轮验证会诊]）。</summary>
+    private static bool AuditMatchesCompletion(
+        ConflictResolutionAudit audit, ExternalStartCompletion c, ExecutionResult? persisted,
+        string submissionIdentity, int sendSeq)
+    {
+        if (audit.ResolutionEvidenceSnapshot is not { } s) return false;
+        // [第五轮验证会诊阻断处置] 审计快照必须**命中已持久化权威事实**（`persisted == null` ⇒ 不是幂等，是损坏）。
+        if (persisted is null) return false;
+        // ① 审计快照必须与**已持久化**权威执行结果**全等**（含 JobId 与观察时点——不留通配）。
+        if (s.Kind != persisted.Kind
+            || !string.Equals(s.RawTerminal, persisted.RawTerminal, StringComparison.Ordinal)
+            || !string.Equals(s.ExecutionErrorCode, persisted.ExecutionErrorCode, StringComparison.Ordinal)
+            || !string.Equals(s.JobId, persisted.JobId, StringComparison.Ordinal)
+            || !string.Equals(s.EvidenceSource, persisted.EvidenceSource, StringComparison.Ordinal)
+            || s.ObservedAtUtc != persisted.ObservedAtUtc
+            || !string.Equals(s.SubmissionIdentity, persisted.SubmissionIdentity, StringComparison.Ordinal)
+            || s.SendSeq != persisted.SendSeq)
+            return false;
+        // ② 本次请求携带的字段必须与快照一致；`JobId` 请求未携带时以**持久化句柄**为准（§24.3-3 合并语义）。
+        return s.Kind == (c.Kind switch
+               {
+                   ExternalStartCompletionKind.Succeeded => ExecutionResultKind.Succeeded,
+                   ExternalStartCompletionKind.Cancelled => ExecutionResultKind.Cancelled,
+                   _ => ExecutionResultKind.Failed,
+               })
+               && string.Equals(s.RawTerminal, c.RawTerminal ?? "", StringComparison.Ordinal)
+               && string.Equals(s.ExecutionErrorCode, c.ExecutionErrorCode, StringComparison.Ordinal)
+               && string.Equals(s.JobId, persisted.JobId, StringComparison.Ordinal)
+               && (string.IsNullOrEmpty(c.JobId) || string.Equals(s.JobId, c.JobId, StringComparison.Ordinal))
+               && string.Equals(s.EvidenceSource, c.EvidenceSource ?? "", StringComparison.Ordinal)
+               && string.Equals(s.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+               && s.SendSeq == sendSeq
+               && c.ObservedAtUtc is { } observed && s.ObservedAtUtc == observed;
+    }
+
+    /// <summary>裁决审计 ↔ 本次未受理观察的**全载荷**等值判据（[第三轮验证会诊]）。</summary>
+    private static bool AuditMatchesNotAccepted(
+        ConflictResolutionAudit audit, List<ReconciledNotAcceptedEvidence> evidences,
+        NotAcceptedObservation observation, string submissionIdentity, int sendSeq)
+    {
+        if (audit.ResolutionEvidenceRef?.EvidenceId is not { Length: > 0 } evidenceId) return false;
+        var record = evidences.FirstOrDefault(e => e is not null
+            && string.Equals(e.EvidenceId, evidenceId, StringComparison.Ordinal));
+        return record is not null
+               // [第五轮验证会诊阻断处置] 观察的**完整发送身份**同样必须全等（不得「同业务字段、异身份」被当幂等）。
+               && string.Equals(observation.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+               && observation.SendSeq == sendSeq
+               && string.Equals(record.FactKind, observation.FactKind, StringComparison.Ordinal)
+               && string.Equals(record.RawEvidenceWord, observation.RawEvidenceWord, StringComparison.Ordinal)
+               && string.Equals(record.EvidenceSource, observation.EvidenceSource, StringComparison.Ordinal)
+               && record.ObservedAtUtc == observation.ObservedAtUtc
+               && string.Equals(record.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+               && record.SendSeq == sendSeq;
+    }
+
+    /// <summary>
+    /// 由**已持久化执行事实**构造分类结果（[第四轮验证会诊阻断处置]）：续用/重启/合并共享同一结果事实，
+    /// 取消与执行失败不得被改写成成功；责任维按「是否已结清」区分。
+    /// </summary>
+    private static AdmissionResult ClassifyFromExecutionResult(
+        string requestIdentity, OperationRecord op, bool settled, string reasonCode, string detail,
+        string? winnerCandidateId = null)
+    {
+        var r = op.ExecutionResult;
+        return new AdmissionResult
+        {
+            Kind = MapResultKindFromExecution(r?.Kind),
+            ReasonCode = reasonCode,
+            Detail = detail,
+            RequestIdentity = requestIdentity,
+            SubmissionIdentity = op.SubmissionIdentity,
+            SendSeq = op.LastSendSeq,
+            JobId = r?.JobId,
+            ExecutionDisposition = MapDispositionFromExecution(r?.Kind),
+            ResponsibilityState = settled ? ResponsibilityState.Settled : ResponsibilityState.Pending,
+            RawTerminal = r?.RawTerminal,
+            ExecutionErrorCode = r?.ExecutionErrorCode,
+            EvidenceSource = r?.EvidenceSource,
+            WinnerCandidateId = winnerCandidateId,
+        };
+    }
+
+    /// <summary>已持久化执行结果类别 → 对外结果类别（[Batch B 续 会诊] 结果维不得被压成 Accepted）。</summary>
+    private static AdmissionResultKind MapResultKindFromExecution(ExecutionResultKind? kind)
+        => kind switch
+        {
+            ExecutionResultKind.Cancelled => AdmissionResultKind.Cancelled,
+            ExecutionResultKind.Failed => AdmissionResultKind.ExecutionFailed,
+            ExecutionResultKind.Unknown => AdmissionResultKind.NeedReconcile,
+            _ => AdmissionResultKind.Accepted,
+        };
+
+    private static ExecutionDisposition MapDispositionFromExecution(ExecutionResultKind? kind)
+        => kind switch
+        {
+            ExecutionResultKind.Cancelled => ExecutionDisposition.Cancelled,
+            ExecutionResultKind.Failed => ExecutionDisposition.ExecutionFailed,
+            ExecutionResultKind.Unknown => ExecutionDisposition.Unknown,
+            _ => ExecutionDisposition.None,
+        };
+
+    /// <summary>裁决审计 ID（**确定性派生**：重试复用同一 ID，使「同 ID 同载荷＝幂等」可判定）。</summary>
+    private static string DeriveConflictAuditId(string requestIdentity, string submissionIdentity, int sendSeq, ConflictResolutionKind resolution)
+        => "audit-" + ShortHash($"{requestIdentity}|{submissionIdentity}|{sendSeq}|{resolution}");
+
+    /// <summary>未受理证据 ID（同上，确定性派生）。</summary>
+    private static string DeriveConflictEvidenceId(string requestIdentity, string submissionIdentity, int sendSeq)
+        => "ev-" + ShortHash($"{requestIdentity}|{submissionIdentity}|{sendSeq}|notaccepted");
+
+    private static string ShortHash(string text)
+        => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)))
+            .ToLowerInvariant()[..16];
 
     /// <summary>完成结算中途失败：责任保留（`Pending`），返回可对账原因（不重发、不释放占用）。</summary>
     private static AdmissionResult SettleStop(
@@ -2634,6 +3314,20 @@ public sealed class ArbitrationAdmissionService
                         case OperationRequestState.RetryableRejected:
                         case OperationRequestState.Queued:
                         case OperationRequestState.InRound:
+                            // [Batch B 续 会诊阻断处置] 冲突待决 ⇒ **重试资格失效**（不重新入队、不改写状态）。
+                            if (op.ConflictPending)
+                            {
+                                early = new AdmissionResult
+                                {
+                                    Kind = AdmissionResultKind.NeedReconcile,
+                                    ReasonCode = "conflict_pending",
+                                    Detail = "存在待决冲突：重试资格失效（禁止重发，必须先经权威裁决）。",
+                                    RequestIdentity = requestIdentity,
+                                    ExecutionDisposition = ExecutionDisposition.Unknown,
+                                    ResponsibilityState = ResponsibilityState.Pending,
+                                };
+                                break;
+                            }
                             // 重试按 Operations 权威快照重建请求（完整身份八段/排序键/显式 ActionId——分派身份内部一致）。
                             var candidate = op.Candidate is not null
                                 ? CloneCandidate(op.Candidate)
@@ -2712,6 +3406,8 @@ public sealed class ArbitrationAdmissionService
         {
             var op = FindOp(file, requestIdentity);
             if (op is null || op.RequestState != OperationRequestState.RetryableRejected) return "state_changed";
+            // [Batch B 续 会诊阻断处置] 冲突待决 ⇒ 窗口到期**不得**据此转终局中止（重试资格在冲突期间失效）。
+            if (op.ConflictPending) return "conflict_pending";
             // 锁内复核：最近发送确定未受理（结果对应最后发送轮次）且无更新发送责任（无匹配未决 Submission）。
             var determinedNotAccepted = op.LastResult is { Outcome: OperationOutcome.Rejected } r
                                         && r.AnsweredSendSeq == op.LastSendSeq;
@@ -2767,6 +3463,7 @@ public sealed class ArbitrationAdmissionService
                 foreach (var op in file.Handoff.Operations.Where(o =>
                              o.Zone == OperationZone.Active
                              && o.MergedInto is null // 合并项由 ④ 专属处理（不得按孤儿登记中止）
+                             && !o.ConflictPending  // [Batch B 续] 第四类集合：冲突待决不得被通用恢复改写
                              && (o.RequestState == OperationRequestState.Queued || o.RequestState == OperationRequestState.InRound)
                              && o.LastSendSeq == 0
                              && (file.Handoff.Submission is null
@@ -2784,6 +3481,7 @@ public sealed class ArbitrationAdmissionService
                 //    目标记录缺失=终局拒绝（不悬置不静默）。
                 foreach (var m in file.Handoff.Operations.Where(o =>
                              o.Zone == OperationZone.Active && o.MergedInto is not null
+                             && !o.ConflictPending  // [Batch B 续] 同上
                              && o.RequestState is OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected))
                 {
                     var target = file.Handoff.Operations.FirstOrDefault(o => string.Equals(o.RequestIdentity, m.MergedInto, StringComparison.Ordinal));
@@ -2846,6 +3544,8 @@ public sealed class ArbitrationAdmissionService
                         .Where(o => o.Zone == OperationZone.Active && o.RequestState == OperationRequestState.Accepted)
                         // [Batch B 会诊阻断处置] 外部启动**不得**借通用「台账布尔确认」旁路：单独走下方 externalReady。
                         .Where(o => o.OperationType != OperationType.ExternalStart)
+                        // [Batch B 续] 冲突待决记录**不得**被补终局（冲突断言需权威裁决；占位与恢复依据保留）。
+                        .Where(o => !o.ConflictPending)
                         .Where(o => o.SubmissionIdentity is not null
                                     && _hooks.TakeoverTerminalConfirmed?.Invoke(o.SubmissionIdentity, o.LastSendSeq) == true)
                         .Select(o => o.RequestIdentity)
@@ -2860,6 +3560,8 @@ public sealed class ArbitrationAdmissionService
                                     // [第二轮验证会诊阻断处置] **四类事实必须自洽**（身份/轮次/观察时点/类别/原始词/错误码/句柄/来源全等），
                                     // 否则损坏或交叉组合的载体不得被补成终局、不得释放主槽位。
                                     && TerminalFactsConsistent(o)
+                                    // [Batch B 续] 冲突待决 ⇒ 不补终局、不释放占用（等待权威裁决）。
+                                    && !o.ConflictPending
                                     && o.SubmissionIdentity is not null
                                     // [第三轮验证会诊] 台账侧必须**逐字段**确认（原始词/错误码/句柄/来源/观察时点），
                                     // 仅「记录存在且 Terminal」不足以证明台账终态属于本次载荷。
@@ -2930,7 +3632,9 @@ public sealed class ArbitrationAdmissionService
         var tombstones = ops.Count(o => o.Zone == OperationZone.Tombstone);
         if (active + pendingTransfer >= PrimarySlotLimit)
             return CapacityReject(active, pendingTransfer, tombstones, ops, now);
-        var cleanable = ops.Where(o => o.Zone == OperationZone.Tombstone && o.UpdatedAtUtc + TombstoneRetain <= now)
+        // 受保护（冲突待决）墓碑**不构成可清理额度**（不得据其宣称容量可用）。
+        var cleanable = ops.Where(o => o.Zone == OperationZone.Tombstone && !o.ConflictPending
+                                       && o.UpdatedAtUtc + TombstoneRetain <= now)
             .OrderBy(o => o.UpdatedAtUtc).FirstOrDefault()?.UpdatedAtUtc;
         if (tombstones >= TombstoneLimit && cleanable is null)
             return CapacityReject(active, pendingTransfer, tombstones, ops, now);
@@ -2951,10 +3655,22 @@ public sealed class ArbitrationAdmissionService
     {
         if (file.Handoff is null) return;
         var ops = file.Handoff.Operations;
-        ops.RemoveAll(o => o.Zone == OperationZone.Tombstone && o.UpdatedAtUtc + TombstoneRetain <= now);
+        // §24.2-2″／§24.12-3（[Batch B 续]）：**带冲突待决的墓碑不得被保留期裁剪**（那会删掉唯一恢复依据）。
+        // 曾进入冲突覆盖层（已有裁决审计引用）的墓碑只有在该审计引用**唯一命中且身份匹配**时才允许清理。
+        var auditsByld = (file.Handoff.ConflictResolutionAudits ?? [])
+            .Where(a => a is not null).ToDictionary(a => a.AuditId, a => a, StringComparer.Ordinal);
+        ops.RemoveAll(o => o.Zone == OperationZone.Tombstone && !o.ConflictPending
+                           && o.UpdatedAtUtc + TombstoneRetain <= now
+                           && (o.ConflictResolutionAuditId is not { Length: > 0 } auditId
+                               || (auditsByld.TryGetValue(auditId, out var audit)
+                                   && string.Equals(audit.RequestIdentity, o.RequestIdentity, StringComparison.Ordinal)
+                                   && string.Equals(audit.SubmissionIdentity, o.SubmissionIdentity, StringComparison.Ordinal)
+                                   && audit.SendSeq == o.LastSendSeq)));
         var tombstones = ops.Count(o => o.Zone == OperationZone.Tombstone);
         foreach (var op in ops.Where(o => o.Zone == OperationZone.TerminalPendingTransfer).OrderBy(o => o.UpdatedAtUtc))
         {
+            // [Batch B 续 会诊] 冲突到达时已在 `TerminalPendingTransfer` 的记录**继续占主槽位**（不得迁墓碑）。
+            if (op.ConflictPending) continue;
             if (tombstones >= TombstoneLimit) break;
             op.Zone = OperationZone.Tombstone;
             op.UpdatedAtUtc = now; // 迁入起算 24h 最短保留

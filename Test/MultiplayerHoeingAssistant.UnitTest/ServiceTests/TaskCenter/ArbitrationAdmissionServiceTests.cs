@@ -1209,6 +1209,398 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(LedgerEntryState.Terminal, Assert.Single(ledger.Read().File!.Entries).State);
     }
 
+    // ── 24. 冲突登记与裁决（R5.3 §24.2-2″，Batch B 续）：追加不覆盖／四项原子事务／幂等／待决保护 ──
+
+    /// <summary>夹具前置：确认**确定拒绝**收尾（制造「拒绝后收到冲突证据」的起点），并接真实台账三个钩子。</summary>
+    private (ArbitrationAdmissionService Svc, ExternalStartLedger Ledger, ArbitrationLeaseStore Store) BuildRejectedExternalFacade(
+        bool retryable = false)
+    {
+        var ledger = new ExternalStartLedger(_dir, () => _now);
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => Task.FromResult<SendOutcome>(new SendOutcome.Rejected("fixture_reject", retryable, "fixture:reject"));
+            // [第五轮会诊] 权威未受理观察可信性校验器（夹具：仅接受 owner:* 来源）。
+            h.NotAcceptedObservationVerifier = o => o.EvidenceSource.StartsWith("owner:", StringComparison.Ordinal) ? null : "untrusted_source";
+            h.TakeoverTerminalPersist = (sub, seq, evidence, observed, raw, err, job, source) =>
+            {
+                var r = ledger.MarkTerminal(sub, seq, evidence, observed, raw, err, OperationType.ExternalStart, job, source);
+                return r.Success ? null : "ledger_terminal_failed:" + (r.Reason ?? "unknown");
+            };
+            h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, err, job, source, observed) =>
+            {
+                var read = ledger.Read();
+                if (!read.Valid) return false;
+                var e = read.File?.Entries.FirstOrDefault(x =>
+                    string.Equals(x.SubmissionIdentity, sub, StringComparison.Ordinal) && x.SendSeq == seq);
+                return e is { State: LedgerEntryState.Terminal }
+                    && string.Equals(e.TerminalEvidence, raw, StringComparison.Ordinal)
+                    && string.Equals(e.RawTerminal, raw, StringComparison.Ordinal)
+                    && string.Equals(e.ExecutionErrorCode, err, StringComparison.Ordinal)
+                    && string.Equals(e.JobId, job, StringComparison.Ordinal)
+                    && string.Equals(e.TerminalEvidenceSource, source, StringComparison.Ordinal)
+                    && e.TerminalObservedAtUtc == observed;
+            };
+            h.TakeoverJobIdRead = (sub, seq) =>
+            {
+                var read = ledger.Read();
+                if (!read.Valid) return LedgerHandleProbe.Unreadable();
+                var e = read.File?.Entries.FirstOrDefault(x =>
+                    string.Equals(x.SubmissionIdentity, sub, StringComparison.Ordinal) && x.SendSeq == seq);
+                return string.IsNullOrEmpty(e?.JobId) ? LedgerHandleProbe.Absent() : LedgerHandleProbe.Present(e!.JobId);
+            };
+        });
+        return (svc, ledger, store);
+    }
+
+    private async Task<(string Rid, string Sub, int Seq)> RejectedExternalOpAsync(ArbitrationAdmissionService svc)
+    {
+        var req = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-conflict");
+        req.OperationType = OperationType.ExternalStart;
+        var rejected = await svc.SubmitAsync(req);
+        Assert.Equal(AdmissionResultKind.TerminalRejected, rejected.Kind);
+        return (rejected.RequestIdentity, rejected.SubmissionIdentity!, rejected.SendSeq);
+    }
+
+    [Fact]
+    public async Task ConflictRegister_AfterRejection_AppendsEvidenceWithoutRelease()
+    {
+        var (svc, _, _) = BuildRejectedExternalFacade();
+        var (rid, sub, seq) = await RejectedExternalOpAsync(svc);
+
+        var reg = await svc.RegisterConflictEvidenceAsync(rid, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-1", RawTerminal = "completed", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = sub, SendSeq = seq,
+        });
+        Assert.Equal(AdmissionResultKind.NeedReconcile, reg.Kind);
+        Assert.Equal(ResponsibilityState.Pending, reg.ResponsibilityState);   // 冲突待决 ⇒ 不得报已结清
+        var op = FindOp(rid)!;
+        Assert.True(op.ConflictPending);
+        Assert.Single(op.ConflictEvidence);                                   // 追加式（不覆盖既有事实）
+        Assert.Equal("ev-1", op.ConflictEvidence[0].EvidenceId);
+        Assert.Equal(OperationRequestState.TerminalRejected, op.RequestState);
+        Assert.Null(op.ExecutionResult);
+    }
+
+    [Fact]
+    public async Task ConflictAdjudicate_NotAccepted_WritesEvidenceAndAuditAtomically()
+    {
+        var (svc, _, _) = BuildRejectedExternalFacade();
+        var (rid, sub, seq) = await RejectedExternalOpAsync(svc);
+        _ = await svc.RegisterConflictEvidenceAsync(rid, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-1", RawTerminal = "completed", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = sub, SendSeq = seq,
+        });
+
+        var done = await svc.AdjudicateConflictAsync(rid, ConflictResolutionKind.ResolvedNotAccepted, "owner:reconcile_query",
+            notAccepted: new NotAcceptedObservation(ReconciledNotAcceptedFactKinds.ReconcileQueryNotAccepted, "rejected",
+                "owner:reconcile_query", _now, sub, seq));
+        Assert.Equal(AdmissionResultKind.TerminalRejected, done.Kind);        // 原拒绝终局继续有效
+        Assert.Equal(ResponsibilityState.Settled, done.ResponsibilityState);
+
+        // 读侧完整性：`_store.Read()` 必须仍然合法（审计↔证据↔Operation 双向绑定与判别式字段通过校验）。
+        var lease = ReadLease();
+        Assert.NotNull(lease.File);
+        var op = FindOp(rid)!;
+        Assert.False(op.ConflictPending);
+        Assert.NotNull(op.ConflictResolutionAuditId);
+        var audit = Assert.Single(lease.File!.Handoff!.ConflictResolutionAudits!);
+        Assert.Equal(op.ConflictResolutionAuditId, audit.AuditId);
+        Assert.Equal(ConflictResolutionKind.ResolvedNotAccepted, audit.Resolution);
+        Assert.Null(audit.ResolutionEvidenceSnapshot);                        // 判别式：未受理分支不得有快照
+        var evidence = Assert.Single(lease.File.Handoff.ReconciledNotAcceptedEvidence!);
+        Assert.Equal(audit.ResolutionEvidenceRef!.EvidenceId, evidence.EvidenceId);
+    }
+
+    [Fact]
+    public async Task ConflictAdjudicate_Idempotent_ReusesAuditAndEvidenceIds()
+    {
+        var (svc, _, _) = BuildRejectedExternalFacade();
+        var (rid, sub, seq) = await RejectedExternalOpAsync(svc);
+        _ = await svc.RegisterConflictEvidenceAsync(rid, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-1", RawTerminal = "completed", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = sub, SendSeq = seq,
+        });
+        _ = await svc.AdjudicateConflictAsync(rid, ConflictResolutionKind.ResolvedNotAccepted, "owner:reconcile_query",
+            notAccepted: new NotAcceptedObservation(ReconciledNotAcceptedFactKinds.ReconcileQueryNotAccepted, "rejected",
+                "owner:reconcile_query", _now, sub, seq));
+
+        var again = await svc.AdjudicateConflictAsync(rid, ConflictResolutionKind.ResolvedNotAccepted, "owner:reconcile_query",
+            notAccepted: new NotAcceptedObservation(ReconciledNotAcceptedFactKinds.ReconcileQueryNotAccepted, "rejected",
+                "owner:reconcile_query", _now, sub, seq));
+        Assert.Equal(ResponsibilityState.Settled, again.ResponsibilityState);
+        var lease = ReadLease();
+        Assert.Single(lease.File!.Handoff!.ConflictResolutionAudits!);         // 幂等：复用同一 auditId，不产第二份
+        Assert.Single(lease.File.Handoff.ReconciledNotAcceptedEvidence!);      // 证据同理
+    }
+
+    [Fact]
+    public async Task ConflictAdjudicate_AcceptedTerminal_SettlesThenAudits()
+    {
+        var (svc, ledger, _) = BuildRejectedExternalFacade();
+        var (rid, sub, seq) = await RejectedExternalOpAsync(svc);
+        _ = await svc.RegisterConflictEvidenceAsync(rid, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-1", RawTerminal = "completed", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = sub, SendSeq = seq,
+        });
+
+        var done = await svc.AdjudicateConflictAsync(rid, ConflictResolutionKind.ResolvedAcceptedTerminal,
+            "owner:reconcile_query", ExternalStartCompletion.SucceededWith("completed", "owner:reconcile_query", _now));
+        Assert.Equal(ResponsibilityState.Settled, done.ResponsibilityState);
+        var op = FindOp(rid)!;
+        Assert.Equal(OperationRequestState.TerminalCompleted, op.RequestState); // 冲突修正后完成独立终局
+        Assert.False(op.ConflictPending);
+        Assert.Equal(ExecutionResultKind.Succeeded, op.ExecutionResult!.Kind);
+        var lease = ReadLease();
+        var audit = Assert.Single(lease.File!.Handoff!.ConflictResolutionAudits!);
+        Assert.Equal(ConflictResolutionKind.ResolvedAcceptedTerminal, audit.Resolution);
+        Assert.NotNull(audit.ResolutionEvidenceSnapshot);
+        Assert.Equal(op.ExecutionResult.RawTerminal, audit.ResolutionEvidenceSnapshot!.RawTerminal);
+        Assert.Equal(LedgerEntryState.Terminal, Assert.Single(ledger.Read().File!.Entries).State);
+    }
+
+    [Fact]
+    public async Task ConflictPending_TombstoneProtectedFromRetentionTrim_AndRecoverySkipsTerminalize()
+    {
+        // §24.2-2″／§24.12-3 第四类恢复集合：带冲突待决的记录**不得**被保留期裁剪，也不得被恢复扫描补终局。
+        var (svc, _, store) = BuildRejectedExternalFacade(); // 复用同一 store 实例（所有权单调基线）
+        var (rid, sub, seq) = await RejectedExternalOpAsync(svc);
+        _ = await svc.RegisterConflictEvidenceAsync(rid, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-1", RawTerminal = "completed", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = sub, SendSeq = seq,
+        });
+
+        // 手工置为「已过期墓碑」（超过 24h 保留期）——受保护墓碑不得被 MigrateAndClean 裁剪。
+        var lease = store.Read().File!.Lease!;
+        var mutate = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var op = file.Handoff!.Operations.First(o => string.Equals(o.RequestIdentity, rid, StringComparison.Ordinal));
+            op.Zone = OperationZone.Tombstone;
+            op.UpdatedAtUtc = _now - TimeSpan.FromHours(30);
+            return null;
+        });
+        Assert.True(mutate.Success, "夹具前置：置墓碑失败 " + mutate.Reason);
+
+        _ = svc.RecoverAfterRestart();
+
+        var after = ReadLease();
+        var op2 = after.File!.Handoff!.Operations.FirstOrDefault(o => string.Equals(o.RequestIdentity, rid, StringComparison.Ordinal));
+        Assert.NotNull(op2);                   // 唯一恢复依据保留（不得裁剪）
+        Assert.True(op2!.ConflictPending);
+        Assert.NotEqual(OperationRequestState.TerminalCompleted, op2.RequestState); // 冲突待决不得补终局
+    }
+
+    [Fact]
+    public async Task ConflictPending_BlocksRetryAndWindowExpiry_WithoutStateChange()
+    {
+        // 可重试拒绝 + 冲突登记 ⇒ 重试资格失效、窗口到期不得转终局、状态不得被改写（禁止重发）。
+        var (svc, _, _) = BuildRejectedExternalFacade(retryable: true);
+        var req = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-conflict-retry");
+        req.OperationType = OperationType.ExternalStart;
+        var rejected = await svc.SubmitAsync(req);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, rejected.Kind);
+        var (rid, sub, seq) = (rejected.RequestIdentity, rejected.SubmissionIdentity!, rejected.SendSeq);
+        _ = await svc.RegisterConflictEvidenceAsync(rid, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-retry", RawTerminal = "completed", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = sub, SendSeq = seq,
+        });
+
+        var retry = await svc.RetryAsync(rid);
+        Assert.Equal(AdmissionResultKind.NeedReconcile, retry.Kind);
+        Assert.Equal("conflict_pending", retry.ReasonCode);
+        Assert.Equal(ResponsibilityState.Pending, retry.ResponsibilityState);
+
+        _now += TimeSpan.FromMinutes(2);                  // 越过 30s 重试窗口
+        _ = svc.SweepExpiredRetryWindows();
+        var op = FindOp(rid)!;
+        Assert.Equal(OperationRequestState.RetryableRejected, op.RequestState); // 未被窗口到期转终局
+        Assert.True(op.ConflictPending);
+    }
+
+    [Fact]
+    public async Task ConflictPending_BlocksNewStartAsFactsUnknown()
+    {
+        var (svc, _, _) = BuildRejectedExternalFacade();
+        var (rid, sub, seq) = await RejectedExternalOpAsync(svc);
+        _ = await svc.RegisterConflictEvidenceAsync(rid, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-block", RawTerminal = "completed", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = sub, SendSeq = seq,
+        });
+
+        var other = Req(ns: "manual", workflow: "onedragon:other", payload: "p-other");
+        other.OperationType = OperationType.ExternalStart;
+        var blocked = await svc.SubmitAsync(other);
+        Assert.Equal(AdmissionResultKind.NeedReconcile, blocked.Kind);          // 冲突未裁决 ⇒ 准入事实未知
+        Assert.Equal("facts_unknown", blocked.ReasonCode);
+    }
+
+    [Fact]
+    public async Task ConflictPending_TerminalPendingTransfer_StaysInPrimarySlot()
+    {
+        var (svc, _, store) = BuildRejectedExternalFacade();
+        var (rid, sub, seq) = await RejectedExternalOpAsync(svc);
+        _ = await svc.RegisterConflictEvidenceAsync(rid, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-tpt", RawTerminal = "completed", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = sub, SendSeq = seq,
+        });
+        var lease = store.Read().File!.Lease!;
+        var moved = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var op = file.Handoff!.Operations.First(o => string.Equals(o.RequestIdentity, rid, StringComparison.Ordinal));
+            op.Zone = OperationZone.TerminalPendingTransfer;   // 冲突到达时已在待迁移区
+            return null;
+        });
+        Assert.True(moved.Success, "夹具前置：置待迁移失败 " + moved.Reason);
+
+        _ = svc.RecoverAfterRestart();                         // 触发迁移清理
+
+        var op2 = FindOp(rid)!;
+        Assert.Equal(OperationZone.TerminalPendingTransfer, op2.Zone); // 继续占主槽位（不得迁墓碑）
+        Assert.True(op2.ConflictPending);
+    }
+
+    [Fact]
+    public async Task ConflictAdjudicate_AcceptedTerminal_MapsCancelledResultDimension()
+    {
+        var (svc, _, _) = BuildRejectedExternalFacade();
+        var (rid, sub, seq) = await RejectedExternalOpAsync(svc);
+        _ = await svc.RegisterConflictEvidenceAsync(rid, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-cancel", RawTerminal = "cancelled", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = sub, SendSeq = seq,
+        });
+
+        var done = await svc.AdjudicateConflictAsync(rid, ConflictResolutionKind.ResolvedAcceptedTerminal,
+            "owner:reconcile_query", ExternalStartCompletion.CancelledWith("cancelled", "owner:reconcile_query", _now));
+        Assert.Equal(AdmissionResultKind.Cancelled, done.Kind);                 // 结果维以 ExecutionResult 为权威
+        Assert.Equal(ExecutionDisposition.Cancelled, done.ExecutionDisposition);
+        Assert.Equal(ResponsibilityState.Settled, done.ResponsibilityState);
+        Assert.Equal(ExecutionResultKind.Cancelled, FindOp(rid)!.ExecutionResult!.Kind);
+    }
+
+    [Fact]
+    public async Task ConflictAdjudicate_FromTombstone_StaysTombstoneWithoutRegainingPrimarySlot()
+    {
+        // §24.2-2″：墓碑冲突「不虚称重新占有已释放的主槽位」——裁决后仍留在墓碑区。
+        var (svc, _, store) = BuildRejectedExternalFacade();
+        var (rid, sub, seq) = await RejectedExternalOpAsync(svc);
+        _ = await svc.RegisterConflictEvidenceAsync(rid, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-tomb", RawTerminal = "completed", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = sub, SendSeq = seq,
+        });
+        var lease = store.Read().File!.Lease!;
+        var moved = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var op = file.Handoff!.Operations.First(o => string.Equals(o.RequestIdentity, rid, StringComparison.Ordinal));
+            op.Zone = OperationZone.Tombstone;   // 冲突到达时已在墓碑
+            return null;
+        });
+        Assert.True(moved.Success, "夹具前置：置墓碑失败 " + moved.Reason);
+
+        var done = await svc.AdjudicateConflictAsync(rid, ConflictResolutionKind.ResolvedAcceptedTerminal,
+            "owner:reconcile_query", ExternalStartCompletion.SucceededWith("completed", "owner:reconcile_query", _now));
+        Assert.Equal(ResponsibilityState.Settled, done.ResponsibilityState);
+        var op2 = FindOp(rid)!;
+        Assert.Equal(OperationRequestState.TerminalCompleted, op2.RequestState);
+        Assert.Equal(OperationZone.Tombstone, op2.Zone);   // 不得迁回主槽位区
+    }
+
+    [Fact]
+    public async Task ConflictAdjudicate_OppositeDirectionClaimInFlight_IsRefused()
+    {
+        // 并发方向锁定反例：已有「受理终态」方向声明在处理中时，相反方向裁决必须被拒绝（不得写入矛盾审计）。
+        var (svc, _, store) = BuildRejectedExternalFacade();
+        var (rid, sub, seq) = await RejectedExternalOpAsync(svc);
+        _ = await svc.RegisterConflictEvidenceAsync(rid, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-claim", RawTerminal = "completed", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = sub, SendSeq = seq,
+        });
+        var lease = store.Read().File!.Lease!;
+        var claimed = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var op = file.Handoff!.Operations.First(o => string.Equals(o.RequestIdentity, rid, StringComparison.Ordinal));
+            op.ConflictAdjudicationClaim = nameof(ConflictResolutionKind.ResolvedAcceptedTerminal);
+            return null;
+        });
+        Assert.True(claimed.Success, "夹具前置：置方向声明失败 " + claimed.Reason);
+
+        var refused = await svc.AdjudicateConflictAsync(rid, ConflictResolutionKind.ResolvedNotAccepted, "owner:rc",
+            notAccepted: new NotAcceptedObservation(ReconciledNotAcceptedFactKinds.ReconcileQueryNotAccepted, "rejected",
+                "owner:rc", _now, sub, seq));
+        Assert.Equal("conflict_adjudication_in_progress", refused.ReasonCode);
+        Assert.Equal(ResponsibilityState.Pending, refused.ResponsibilityState);
+        Assert.Empty(ReadLease().File!.Handoff!.ConflictResolutionAudits!);   // 未写入矛盾审计
+    }
+
+    [Fact]
+    public async Task ConflictAdjudicate_SameIdDifferentPayload_FailsClosed()
+    {
+        // 全载荷幂等反例：同 evidenceId/auditId 但观察载荷不同 ⇒ 必须判冲突（不得静默当作幂等成功）。
+        var (svc, _, _) = BuildRejectedExternalFacade();
+        var (rid, sub, seq) = await RejectedExternalOpAsync(svc);
+        _ = await svc.RegisterConflictEvidenceAsync(rid, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-payload", RawTerminal = "completed", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = sub, SendSeq = seq,
+        });
+        _ = await svc.AdjudicateConflictAsync(rid, ConflictResolutionKind.ResolvedNotAccepted, "owner:rc",
+            notAccepted: new NotAcceptedObservation(ReconciledNotAcceptedFactKinds.ReconcileQueryNotAccepted, "rejected",
+                "owner:rc", _now, sub, seq));
+
+        // 同 ID、同来源，但原始证据词/观察时点不同 ⇒ 异载荷。
+        var conflict = await svc.AdjudicateConflictAsync(rid, ConflictResolutionKind.ResolvedNotAccepted, "owner:rc",
+            notAccepted: new NotAcceptedObservation(ReconciledNotAcceptedFactKinds.ReconcileQueryNotAccepted, "other_word",
+                "owner:rc", _now + TimeSpan.FromMinutes(1), sub, seq));
+        Assert.Equal(AdmissionResultKind.Error, conflict.Kind);
+        Assert.Contains("conflict", conflict.ReasonCode, StringComparison.Ordinal);
+        Assert.Single(ReadLease().File!.Handoff!.ConflictResolutionAudits!);   // 不追加第二份
+    }
+
+    [Fact]
+    public async Task ConflictAdjudicate_CancelledFact_SurvivesContinueUseAndRestart()
+    {
+        // §24.6-4／§24.13-2：裁决后的**取消/失败事实**必须在续用与重启后保持（不得被改写成成功）。
+        var (svc, _, _) = BuildRejectedExternalFacade();
+        var req = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-conflict-continue");
+        req.OperationType = OperationType.ExternalStart;
+        var rejected = await svc.SubmitAsync(req);
+        Assert.Equal(AdmissionResultKind.TerminalRejected, rejected.Kind);
+        var rid = rejected.RequestIdentity;
+        var sub = rejected.SubmissionIdentity!;
+        var seq = rejected.SendSeq;
+        _ = await svc.RegisterConflictEvidenceAsync(rid, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-continue", RawTerminal = "cancelled", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = sub, SendSeq = seq,
+        });
+        var done = await svc.AdjudicateConflictAsync(rid, ConflictResolutionKind.ResolvedAcceptedTerminal,
+            "owner:reconcile_query", ExternalStartCompletion.CancelledWith("cancelled", "owner:reconcile_query", _now));
+        Assert.Equal(AdmissionResultKind.Cancelled, done.Kind);
+
+        // 续用（同一请求对象 + ContinueUse + 同一身份）⇒ 必须仍返回取消事实。
+        req.Kind = AdmissionKind.ContinueUse;
+        req.RequestIdentity = rid;
+        var continued = await svc.SubmitAsync(req);
+        Assert.Equal(AdmissionResultKind.Cancelled, continued.Kind);
+        Assert.Equal(ResponsibilityState.Settled, continued.ResponsibilityState);
+        Assert.Equal(ExecutionDisposition.Cancelled, continued.ExecutionDisposition);
+
+        // 重启恢复后再续用 ⇒ 结果事实不变。
+        _ = svc.RecoverAfterRestart();
+        var afterRestart = await svc.SubmitAsync(req);
+        Assert.Equal(AdmissionResultKind.Cancelled, afterRestart.Kind);
+        Assert.Equal("cancelled", afterRestart.RawTerminal);
+    }
+
     [Fact]
     public async Task SettleCompletion_JobIdReadHookMissing_FailsClosedAsUnreadable()
     {

@@ -878,6 +878,26 @@ public sealed class ArbitrationLeaseStore
                 detail = "租约文件 v2 Operations 记录身份/枚举/唯一性非法，原件保留留痕。";
                 return false;
             }
+            // [Batch B 续 会诊] 冲突证据必须**结构化且字段完整**（自由字符串无法执行幂等/关联校验）。
+            var seenConflictEvidence = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var ce in op.ConflictEvidence ?? [])
+            {
+                if (ce is null
+                    || string.IsNullOrWhiteSpace(ce.EvidenceId)
+                    || string.IsNullOrWhiteSpace(ce.RawTerminal)
+                    || string.IsNullOrWhiteSpace(ce.EvidenceSource)
+                    || ce.ObservedAtUtc == default
+                    || string.IsNullOrWhiteSpace(ce.SubmissionIdentity)
+                    || ce.SendSeq < 1
+                    // [第二轮验证会诊] 冲突证据的发送身份必须**与所属 Operation 全等**（不得错挂他笔责任）。
+                    || !string.Equals(ce.SubmissionIdentity, op.SubmissionIdentity, StringComparison.Ordinal)
+                    || ce.SendSeq != op.LastSendSeq
+                    || !seenConflictEvidence.Add(ce.EvidenceId))
+                {
+                    detail = "租约文件 v3 冲突证据记录字段/唯一性非法（保守待对账）。";
+                    return false;
+                }
+            }
         }
 
         // R5.3 §24.2-2″／§24.20-A′：追加式集合的**引用完整性**（写入一律 v3，故仅对本格式代校验）。
