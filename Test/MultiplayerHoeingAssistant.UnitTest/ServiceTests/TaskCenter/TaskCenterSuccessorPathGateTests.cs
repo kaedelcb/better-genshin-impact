@@ -303,7 +303,12 @@ public class TaskCenterSuccessorPathGateTests
     private static async Task<RoutingProbe> ProbeNodeSubmitRoutingAsync(
         string root, bool successorWired, Action<RunStore>? concurrentWriteBeforeSend = null,
         Action<RunStore, int>? onBeforeSend = null, string[]? nodeIds = null,
-        Action? afterLedgerBeforeClose = null)
+        Action? afterLedgerBeforeClose = null,
+        // [§17 P17／§12.3 交错①] 强制版交错用（默认 null＝不影响既有夹具）：
+        //   `holdFirstAccept`＝首轮（E1）「Accepted 后、台账前」阻塞点；`beforeSuccessorAdmission`＝节点准入入口、
+        //   取得门面锁**之前**的只发信号观察点（读取/取证用）。
+        TaskCompletionSource? holdFirstAccept = null,
+        Func<Task>? beforeSuccessorAdmission = null)
     {
         using var client = new BgiExternalClient();
         var flowsDir = Path.Combine(root, "flows");
@@ -331,6 +336,7 @@ public class TaskCenterSuccessorPathGateTests
         var ledgerPoint = new List<LedgerPointObservation>();
         var faultInjections = new List<FaultInjectionObservation>();
         var ledgerCloseCount = 0; // 1＝E1 流程启动轮次（夹具不注入故障）；≥2＝节点提交轮次（注入点）
+        var acceptCount = 0;      // 1＝E1 轮次的「Accepted 后、台账前」观测（交错① 的强制阻塞点）
         var port = new RoutingFakePort();
         var runs = new RunStore(runsDir);
         var host = new TaskCenterHost(
@@ -342,13 +348,21 @@ public class TaskCenterSuccessorPathGateTests
             admissionSeams: new TaskCenterAdmissionSeams
             {
                 Epoch = RoutingFakePort.Epoch,
+                // [§17 P17／§12.3 交错①] 节点准入入口、取得门面锁**之前**的只发信号观察点（生产 null）。
+                BeforeSuccessorAdmission = beforeSuccessorAdmission is null
+                    ? null
+                    : beforeSuccessorAdmission,
                 // 门面在「Sender 返回 Accepted 之后、持久化接管台账/关闭 Submission 之前」回调——
                 // 用它取证「先接管、后关闭」的先后顺序（M2/§12.2 B2）：此刻须已能读到本轮 jobId，
                 // 且对应 Submission **仍在册**（尚未关闭）。观测点位于门面同步流水线，不依赖抢时序。
                 Barriers = new AdmissionBarriers
                 {
-                    AfterAcceptBeforeLedger = () =>
+                    AfterAcceptBeforeLedger = async () =>
                     {
+                        // [§17 P17／§12.3 交错①] 强制版：**首轮（E1）**在此阻塞——直到节点已到达「取得门面锁之前」
+                        // 的观察点（`BeforeSuccessorAdmission`）再放行，从而确定性制造「E1 未关闭时首节点抢先」。
+                        if (holdFirstAccept is not null && Interlocked.Increment(ref acceptCount) == 1)
+                            await holdFirstAccept.Task.ConfigureAwait(false);
                         var record = runs.List().OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
                         if (record?.CurrentSubmission is { } s)
                         {
@@ -370,7 +384,6 @@ public class TaskCenterSuccessorPathGateTests
                             open ??= false;
                             ledgerPoint.Add(new LedgerPointObservation(s.NodeId, s.Intent, s.JobId, s.AcceptedSendIdentity, open.Value));
                         }
-                        return Task.CompletedTask;
                     },
                     // G6「Accepted 后关闭阶段抛异常」交错注入点（会诊要求的真实链路反例）。
                     AfterLedgerBeforeClose = afterLedgerBeforeClose is null
@@ -611,12 +624,113 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
     }
 
     /// <summary>
+    /// **§12.3 交错①（强制版）·首节点抢先**：E1 轮次在「Accepted 后、台账前」被阻塞（**尚未关闭**）时，
+    /// 首节点已到达**节点准入入口、取得门面锁之前**的观察点——此刻必须：①**父责任仍在**（E1 的 Submission
+    /// 未关闭、其操作未终局）；②**子许可/发送为零**（尚无该节点操作，发送仍只有 E1 那一次）；放行后流程仍正常收口
+    /// （既不自拒也不重复占位/循环等待）。
+    /// 依据 §17 P17：观察点必须位于**取得门面锁之前**（`AdmissionBarriers` 全在锁内，锁内等待会自死锁）。
+    /// </summary>
+    [Fact]
+    public async Task NodeAdmission_BeforeGateObservation_E1StillOpen_NoChildPermitYet()
+    {
+        var root = NewRoot("tcpreempt-");
+        Task<RoutingProbe>? probeTask = null;
+        var holdE1 = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            var nodeAtPreGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var parentSubmissionOpen = false;
+            var parentUnique = false;
+            var parentIdentityMatchesOpenSubmission = false;
+            var parentState = OperationRequestState.NotSelected;   // 占位：未命中时断言必须失败（不得默认成非终局态）
+            var childOpsAtPreGate = -1;
+            var sendsAtPreGate = -1;
+            var sendsObserved = 0;
+            var leaseRead = false;
+            probeTask = ProbeNodeSubmitRoutingAsync(root, successorWired: true,
+                nodeIds: ["n-1", "n-2"],
+                onBeforeSend: (_, index) => sendsObserved = index,
+                holdFirstAccept: holdE1,
+                beforeSuccessorAdmission: () =>
+                {
+                    // **锁外只读快照**（不得改变任何状态）：父责任仍在？子许可/发送为零？
+                    // 有界重试：全量并行负载下文件锁瞬时争用会让单次读抛 IOException（与既有观测点同口径）。
+                    for (var attempt = 0; attempt < 20 && !leaseRead; attempt++)
+                    {
+                        try
+                        {
+                            var read = new ArbitrationLeaseStore(Path.Combine(root, "arbitration")).Read();
+                            var ops = read.File?.Handoff?.Operations ?? [];
+                            var openSubmission = read.File?.Handoff?.Submission;
+                            parentSubmissionOpen = openSubmission is not null;
+                            var parents = ops.Where(o =>
+                                string.IsNullOrEmpty(o.Candidate?.NodeId) && o.LastSendSeq > 0).ToList();
+                            parentUnique = parents.Count == 1;
+                            if (parentUnique)
+                            {
+                                parentState = parents[0].RequestState;
+                                parentIdentityMatchesOpenSubmission = openSubmission is not null
+                                    && string.Equals(parents[0].SubmissionIdentity, openSubmission.SubmissionIdentity,
+                                        StringComparison.Ordinal);
+                            }
+                            childOpsAtPreGate = ops.Count(o => !string.IsNullOrEmpty(o.Candidate?.NodeId));
+                            leaseRead = true;
+                        }
+                        catch (IOException)
+                        {
+                            Thread.Sleep(5);
+                        }
+                    }
+                    sendsAtPreGate = sendsObserved;
+                    nodeAtPreGate.TrySetResult();
+                    return Task.CompletedTask;
+                });
+
+            try
+            {
+                await nodeAtPreGate.Task.WaitAsync(TimeSpan.FromSeconds(20));
+                Assert.True(leaseRead, "交错①：观察点必须读到一致租约快照（有界重试后仍失败=取证不足）");
+                Assert.True(parentUnique, "交错①：父（E1）操作必须唯一命中");
+                Assert.True(parentSubmissionOpen, "交错①：节点到达准入入口时 E1 必须**尚未关闭**（父责任仍在）");
+                Assert.True(parentIdentityMatchesOpenSubmission,
+                    "交错①：当前开放的 Submission 必须属于该父操作（按完整发送身份关联）");
+                Assert.Contains(parentState, new[]
+                {
+                    OperationRequestState.Queued, OperationRequestState.InRound, OperationRequestState.Granted,
+                    OperationRequestState.Sending, OperationRequestState.Accepted, OperationRequestState.Reconciling,
+                });   // **非终局集合**（排除 TerminalCompleted/TerminalRejected 等终局态）
+                Assert.Equal(0, childOpsAtPreGate);   // 子许可为零（尚无该节点操作）
+                // `RoutingFakePort` 只统计**节点提交**的 BGI 发送（E1 的流程登记发送走宿主 `host:drive_registered`，
+                // 不经该端口）⇒ 此刻「子发送为零」＝端口计数 0。
+                Assert.Equal(0, sendsAtPreGate);
+            }
+            finally
+            {
+                holdE1.TrySetResult();             // **无条件**放行 E1（断言失败/异常时也不悬挂门面轮次）
+            }
+
+            var probe = await probeTask.WaitAsync(TimeSpan.FromSeconds(90));
+            Assert.True(probe.State == WorkflowRunState.Succeeded, Diag("交错①放行后流程应收口成功", probe));
+            Assert.True(probe.SendCount == 2, Diag("应共 2 次节点发送（2 节点）", probe));
+        }
+        finally
+        {
+            holdE1.TrySetResult();
+            if (probeTask is not null)
+            {
+                try { await probeTask.WaitAsync(TimeSpan.FromSeconds(60)); } catch { /* 清理：吞掉失败以免遮蔽真实断言 */ }
+            }
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
     /// **§12.3 交错 ⑤（连续超 32 节点）验收**：整条 33 节点流程必须跑通且发送恰好 33 次——若节点操作
     /// 未随时间结清，第 33 个占位会因 `operations_capacity_full` 失败；故本夹具是 G8「主槽位随责任结清释放」
     /// 的端到端证据（同时断言全程未出现 `operations_capacity_full`）。
-    /// **附带登记（交错 ① 首节点抢先）**：本夹具**观测到的是已收口顺序**（首节点发送时 E1 操作已 Accepted）——
-    /// 「E1 未关闭时首节点抢先」需**强制**该交错，而现有 `AdmissionBarriers` 回调均在门面 `_gate` 内执行，
-    /// 在其中阻塞等待节点占位会自死锁；故强制版夹具**仍欠**（需新增门面 `_gate` 外的观察点，见设计稿 §15/§16）。
+    /// **[更新·2026-09-21 批次十三]** 原「附带登记（交错 ① 首节点抢先）：强制版夹具仍欠」的表述**已被取代**：
+    /// 强制版夹具 `NodeAdmission_BeforeGateObservation_E1StillOpen_NoChildPermitYet` 已建（经**门面锁外**观察点
+    /// `TaskCenterAdmissionSeams.BeforeSuccessorAdmission`，见设计稿 §24.29）。本夹具只保留交错⑤的容量证据。
     /// </summary>
     // **[P50 复现证据·2026-09-21]** 曾尝试取消 Skip：定向单跑通过，但**满负载全量套件 5 轮中出现 1 轮红灯**——
     // 同宿主类的负载敏感夹具 `NodeOperation_TerminalizedBeforeRunEnds_OnNextNodeAdmission` 收敛失败（保守方向、无双跑）。

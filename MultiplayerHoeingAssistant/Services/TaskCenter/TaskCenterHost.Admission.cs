@@ -29,6 +29,14 @@ internal sealed class TaskCenterAdmissionSeams
     /// 构造恒不注入（`_admissionSeams` 为 null），故生产组装与行为不变。
     /// </summary>
     public Func<BgiExternalClient, RunStore, BgiWorkflowExecutionBoundary>? ProductionBoundaryFactory { get; set; }
+
+    /// <summary>
+    /// **夹具接缝：节点准入入口、取得门面锁（`_gate`）之前**的**只发信号**观察点（§17 P17／§12.3 交错①
+    /// 「首节点抢先」的强制版需要锁外观察点——`AdmissionBarriers` 全部在锁内，锁内等待会自死锁）。
+    /// **生产恒 null＝空操作**；本回调**不得**改变任何状态（只读快照＋信号）——故签名**不接收任何生产对象**
+    /// （不给测试接缝留下修改 `WorkflowSubmitRequest`/`Run`/`Node` 的能力）。
+    /// </summary>
+    public Func<Task>? BeforeSuccessorAdmission { get; set; }
 }
 
 /// <summary>
@@ -1196,6 +1204,12 @@ public sealed partial class TaskCenterHost
         // ②续用（ContinueUse）与占位时的「候选载荷一致」复核。覆盖冻结节点内容＋出现身份＋提交选项＋提交身份。
         var payloadFingerprint = SuccessorPayloadFingerprint(frozenNode, occ, request.SuppressConfigCompletionAction,
             sub.Attempt, sub.Key);
+
+        // [§17 P17／§12.3 交错①] **取得门面锁之前**的只发信号观察点（生产 null＝空操作）：
+        // 强制版「首节点抢先」夹具在此固定交错（E1 尚未关闭时节点已到达本入口），并在此刻只读取证
+        // 「父责任仍在（未关闭）＋子许可/发送为零」。本回调**不得**改变任何状态。
+        if (_admissionSeams?.BeforeSuccessorAdmission is { } beforeSuccessorAdmission)
+            await beforeSuccessorAdmission().ConfigureAwait(false);
 
         ArbitrationAdmissionService facade;
         try { await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false); facade = _admission!; }
