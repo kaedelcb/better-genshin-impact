@@ -109,19 +109,58 @@ public sealed class ArbitrationLeaseStore
     /// </summary>
     public LeaseReadResult Read()
     {
-        // 配置目录不存在 = 从未写入发布 → Absent，不建目录、不建文件（构造零副作用延伸）。
-        if (!Directory.Exists(_configDir))
-            return new LeaseReadResult { Status = ArbitrationLeaseStatus.Absent, File = null, Detail = null };
-
-        // 锁文件存在 = 曾有写入者（写者先建锁再发布，且锁文件永不删除）——读取也在锁内，与写者串行；
-        // 锁文件不存在 = 无并发写者，直接读，绝不 New 出任何文件（恪守「只读不写盘」）。
-        if (!File.Exists(_lockPath))
-            return ReadCore();
-        return WithLockContentionRetry(() =>
+        // **[P50 复核·批次四十九] 不得用 `Exists` 探测**（`Directory.Exists`／`File.Exists` 在任何访问错误下
+        // 静默返回 false，会把「不可读/被拒」折成「目录不存在/无锁文件/无正式文件」⇒ 误判 **Absent**，
+        // 而 Absent 是「可获取」的依据 ⇒ 有误判「无归属」的风险。改为**直接访问 + 异常分类**：
+        // 锁文件存在 = 曾有写入者（写者先建锁再发布，锁文件永不删除）——读取也在锁内，与写者串行；
+        // 锁文件不存在 = 无并发写者，直接读（`FileMode.Open` **绝不新建**文件，恪守「只读不写盘」）；
+        // 争用族（共享冲突/拒绝访问）⇒ 有界重试；**预算耗尽 ⇒ Corrupt（fail-closed），绝不降级 Absent**。
+        try
         {
-            using var lockStream = new FileStream(_lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-            return ReadCore();
-        });
+            return WithContentionRetry(() =>
+            {
+                if (TryOpenLockFile(out var lockStream))
+                {
+                    using (lockStream) return ReadCore();
+                }
+
+                var unlocked = ReadCore();
+                // **[第五轮会诊重要项处置]** 无锁快照的**首写者竞态**：`Open` 抛 NotFound 之后、快照读之前/期间，
+                // 首个写者可能已建锁并发布 ⇒ 快照可能早于其发布。故**读后复核锁文件是否已出现**（复核同样
+                // **不得**用 `Exists` 探测：以 `Open` 成败分类，`FileNotFound` 才算「仍无锁」）；已出现 ⇒
+                // **丢弃快照**、改走锁内读取（宁可重读，也不返回可能陈旧的快照）。
+                if (TryOpenLockFile(out var lateLock))
+                {
+                    using (lateLock) return ReadCore();
+                }
+                return unlocked;
+            });
+        }
+        catch (Exception ex) when (RunStore.IsFileContention(ex))
+        {
+            return new LeaseReadResult
+            {
+                Status = ArbitrationLeaseStatus.Corrupt,
+                File = null,
+                Detail = "租约锁不可用（争用预算耗尽），按不可读 fail-closed 处理（不降级为 Absent）：" + ex.Message,
+            };
+        }
+
+        // **[P50 复核]** 以 `Open`（**绝不新建**）成败分类「锁文件是否存在」：`FileNotFound`／`DirectoryNotFound`
+        // ⇒ false（仍无锁）；其余异常（争用/拒绝访问）**原样抛出**交给有界重试，杜绝 `Exists` 的静默 false。
+        bool TryOpenLockFile(out FileStream? stream)
+        {
+            try
+            {
+                stream = new FileStream(_lockPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                return true;
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+            {
+                stream = null;
+                return false;
+            }
+        }
     }
 
     /// <summary>盘读判定核心（不做任何写盘；调用方负责是否持锁）。</summary>
@@ -129,27 +168,37 @@ public sealed class ArbitrationLeaseStore
     {
         var now = _utcNow();
 
-        // 正式文件不存在 → Absent；目录存在时探测残留临时文件并把留痕写进 Detail（不落盘）。
-        if (!File.Exists(_leasePath))
-        {
-            string? detail = null;
-            if (Directory.Exists(_configDir))
-            {
-                var residue = Directory.EnumerateFiles(_configDir)
-                    .Where(p => IsLeaseResidueFileName(Path.GetFileName(p)))
-                    .ToList();
-                if (residue.Count > 0)
-                    detail = "正式文件不存在；发现残留临时文件（残件按无正式文件处理，不采用）："
-                        + string.Join("，", residue.Select(Path.GetFileName));
-            }
-            return new LeaseReadResult { Status = ArbitrationLeaseStatus.Absent, File = null, Detail = detail, UncertainResidue = detail is not null };
-        }
-
-        // 先判版本再严格解析（§6.2 复核：未来版本改变字段类型时必须 Unsupported 而非 Corrupt）。
+        // **[P50 复核]** 同上：以**读取**取代 `File.Exists` 探测——「不存在」⇒ Absent（合法无正式文件）；
+        // 「争用/拒绝访问」⇒ 有界重试后 **Corrupt（fail-closed，绝不 Absent）**；其余 IOException ⇒ 既有 Corrupt 口径。
         string text;
         try
         {
-            text = File.ReadAllText(_leasePath, Encoding.UTF8);
+            text = WithContentionRetry(() => File.ReadAllText(_leasePath, Encoding.UTF8));
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return ReadAbsentWithResidueProbe();   // 已确认不存在（含「探测与读取之间被移除」竞态）
+        }
+        catch (IOException ex) when (RunStore.IsFileContention(ex))
+        {
+            // 争用族预算耗尽：**不可读 ≠ 不存在** ⇒ 取与「损坏」同族的 fail-closed（调用方一律拒绝变更/接管），
+            // 绝不 Absent（那会给「无归属」结论）；原件保留留痕、绝不改写。
+            return new LeaseReadResult
+            {
+                Status = ArbitrationLeaseStatus.Corrupt,
+                File = null,
+                Detail = "租约文件不可读（争用预算耗尽），按 fail-closed 处理（原件保留留痕）：" + ex.Message,
+            };
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            // 同上：以 `UnauthorizedAccessException` 形态出现的「拒绝访问」（Win32 路径占用/ACL）不是 IOException 子类。
+            return new LeaseReadResult
+            {
+                Status = ArbitrationLeaseStatus.Corrupt,
+                File = null,
+                Detail = "租约文件不可读（拒绝访问），按 fail-closed 处理（原件保留留痕）：" + ex.Message,
+            };
         }
         catch (IOException ex)
         {
@@ -576,9 +625,11 @@ public sealed class ArbitrationLeaseStore
             if (read.Status == ArbitrationLeaseStatus.Corrupt) return Reject("corrupt");
             if (read.Status == ArbitrationLeaseStatus.Unsupported) return Reject("unsupported_version");
 
-            var remnants = Directory.EnumerateFiles(_configDir)
+            // **[第五轮会诊重要项处置]** 枚举/建目录/**逐个迁件**各自有界重试（逐点，不整段重放）：
+            // 迁移是**幂等可控**的（每个残件一次 `File.Move`；成功即不再重试该件）。
+            var remnants = WithContentionRetry(() => Directory.EnumerateFiles(_configDir)
                 .Where(p => IsLeaseResidueFileName(Path.GetFileName(p)))
-                .ToList();
+                .ToList());
             if (remnants.Count == 0) return Ok(read.File?.Lease);
 
             // 崩窗保守序（会诊二轮 P1-④）：先持久化不确定标记——隔离完成前崩溃，重启仍见标记，
@@ -591,12 +642,13 @@ public sealed class ArbitrationLeaseStore
             Publish(file);
 
             var backupDir = Path.Combine(_configDir, "_backup");
-            Directory.CreateDirectory(backupDir);
+            WithContentionRetry(() => Directory.CreateDirectory(backupDir));
             var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMddHHmmssfffffff", CultureInfo.InvariantCulture);
             foreach (var remnant in remnants)
             {
                 // 不覆盖同名历史留痕：目标名追加单调时间戳后缀。
-                File.Move(remnant, Path.Combine(backupDir, Path.GetFileName(remnant) + "." + stamp), overwrite: false);
+                WithContentionRetry(() => File.Move(
+                    remnant, Path.Combine(backupDir, Path.GetFileName(remnant) + "." + stamp), overwrite: false));
             }
 
             file.Diag.Notes.Add($"崩窗残件隔离留痕（{remnants.Count} 件移入 _backup，未决不确定性保持）：{string.Join("，", remnants.Select(Path.GetFileName))}");
@@ -760,25 +812,70 @@ public sealed class ArbitrationLeaseStore
     // ============================================================
 
     /// <summary>
+    /// **[P50 复核·批次四十九]** 「正式文件已确认不存在」的 Absent 结果（含**诊断性**残件留痕探测）：
+    /// 状态**只**由「正式文件不存在」决定（到达此处的必要条件＝读取抛 `FileNotFoundException`／
+    /// `DirectoryNotFoundException`，即目录可读或不存在）。
+    /// **[第五轮会诊阻断项处置]** 残件探测**失败**（拒绝访问/争用耗尽）**不得**折成「无残件」：
+    /// `TryAcquire` 只在 `UncertainResidue == true` 时拒 `residue_uncertain` ⇒ 折成 false 是 **fail-open**
+    /// （未能排除崩窗残件却仍可获取新租约，绕过 `QuarantineResidues`）。故此时按**存在未决残件**保守处理
+    /// （`UncertainResidue = true` ＋ 明细说明「残件目录不可枚举」），须人工/隔离对账后方可获取。
+    /// </summary>
+    private LeaseReadResult ReadAbsentWithResidueProbe()
+    {
+        string? detail = null;
+        var residueUnknown = false;
+        try
+        {
+            var residue = Directory.EnumerateFiles(_configDir)
+                .Where(p => IsLeaseResidueFileName(Path.GetFileName(p)))
+                .ToList();
+            if (residue.Count > 0)
+                detail = "正式文件不存在；发现残留临时文件（残件按无正式文件处理，不采用）："
+                    + string.Join("，", residue.Select(Path.GetFileName));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // **[第五轮会诊阻断项]** 不可枚举 ⇒ **不能排除残件**：按存在未决残件保守处理（fail-closed）。
+            residueUnknown = true;
+            detail = "正式文件不存在且残件目录不可枚举（**按存在未决残件保守处理**，须隔离/对账后方可获取）：" + ex.Message;
+        }
+        return new LeaseReadResult
+        {
+            Status = ArbitrationLeaseStatus.Absent,
+            File = null,
+            Detail = detail,
+            UncertainResidue = detail is not null || residueUnknown,
+        };
+    }
+
+    /// <summary>
     /// 跨进程锁内执行「读取→判定→校验→更新→发布」全程。
     /// 首次写入才建目录；锁对象固定 arbitration-lease.lock，OpenOrCreate 打开后永不替换/删除/清空。
     /// </summary>
     private T WithLock<T>(Func<LeaseReadResult, T> action)
     {
-        Directory.CreateDirectory(_configDir); // §6.4：构造零副作用，首次写入才建目录
-        return WithLockContentionRetry(() =>
-        {
-            using var lockStream = new FileStream(_lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-            var read = ReadCore();
-            return action(read);
-        });
+        // **[P50 复核·批次四十九]** 建目录也纳入争用重试（原先在重试边界之外抛出 ⇒ 与「全部文件访问点
+        // 覆盖争用族」不符）。
+        WithContentionRetry(() => Directory.CreateDirectory(_configDir)); // §6.4：构造零副作用，首次写入才建目录
+        // **[第五轮会诊重要项处置]** 有界重试**只包围「取锁句柄」**——重试的对象是「瞬时拿不到锁」这一碰撞；
+        // 持锁后的「读取→业务回调→发布」**不再整段重放**（否则发布/枚举抛争用时会把 `mutate` 回调、身份生成、
+        // 残件迁移**重复执行**）。持锁后的各文件访问点各自有界重试（`ReadCore`／`Publish`／`QuarantineResidues`）。
+        using var lockStream = WithContentionRetry(
+            () => new FileStream(_lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
+        var read = ReadCore();
+        return action(read);
     }
 
     /// <summary>
     /// 锁争用有界重试（R5.2 B2-α 实证落地）：FileShare.None 跨进程/跨实例互斥下瞬时碰撞属预期并发形态——
-    /// 单次操作持锁极短，碰撞方有界重试（80×15ms≈1.2s 预算）即可随持锁方释放收敛；整段「读取→判定→更新→发布」
-    /// 重试安全（每轮重新盘读并以修订号守卫，不产生重复副作用）。仅兜底 IOException（锁/文件瞬时争用）；
-    /// 其他异常（编程错误/损坏）不掩饰、响亮抛出。预算耗尽后 IOException 原样上抛=响亮失败不静默。
+    /// 单次操作持锁极短，碰撞方有界重试（80×15ms≈1.2s 预算）即可随持锁方释放收敛。
+    /// **[第五轮会诊重要项处置·注意]** 现调用方**只把它用于「取锁句柄」（及各访问点单点重试）**，
+    /// **不再**把整段「读取→判定→更新→发布」包进重试边界——否则争用时业务回调/身份生成/残件迁移会被
+    /// **重复执行**（旧注释曾称整段重试「安全」，该表述**已作废**，勿据此把事务重新包回重试）。
+    /// **[P50 根因修复·批次四十九]** 争用族**统一取自 `RunStore.IsFileContention`**（`UnauthorizedAccessException` ∪
+    /// `IOException` 且非 `FileNotFoundException`/`DirectoryNotFoundException`）——Windows 上「路径被占用/拒绝访问」
+    /// 与共享冲突同属瞬时争用；**「不存在」不是争用**（等多久也不会出现，纳入只会白烧预算）。
+    /// 其他异常（编程错误/损坏）不掩饰、响亮抛出；**预算耗尽后原样上抛＝响亮失败不静默**。
     /// </summary>
     private static T WithLockContentionRetry<T>(Func<T> action)
     {
@@ -789,12 +886,23 @@ public sealed class ArbitrationLeaseStore
             {
                 return action();
             }
-            catch (IOException) when (attempt < maxAttempts)
+            catch (Exception ex) when (RunStore.IsFileContention(ex) && attempt < maxAttempts)
             {
                 System.Threading.Thread.Sleep(15);
             }
         }
     }
+
+    /// <summary>
+    /// **[P50 复核·批次四十九]** 单次文件访问的有界争用重试（与锁窗口**同预算同口径**）：
+    /// 用于锁窗口之外的访问点（读正文、建目录、清临时件）——使「瞬时争用」不再被误判为「损坏」。
+    /// 预算耗尽后**原样抛出**，由各调用点按既有 fail-closed 语义归类（读正文 ⇒ `Corrupt`；发布路径 ⇒ 响亮）。
+    /// </summary>
+    private static T WithContentionRetry<T>(Func<T> action) => WithLockContentionRetry(action);
+
+    /// <summary>**有界争用重试（无返回值重载）**：建目录／写临时件／原子替换／残件迁移等无返回值的访问点。</summary>
+    private static void WithContentionRetry(Action action)
+        => WithContentionRetry<object?>(() => { action(); return null; });
 
     /// <summary>原子发布：UTF8 无 BOM + 临时文件（同目录 ".guid.tmp"）→ 同目录原子替换（overwrite），finally 清残件。</summary>
     private void Publish(LogicalOwnerLeaseFile file)
@@ -804,12 +912,25 @@ public sealed class ArbitrationLeaseStore
         var tmp = Path.Combine(_configDir, ".lease-" + Guid.NewGuid().ToString("N") + ".tmp");
         try
         {
-            File.WriteAllBytes(tmp, bytes);
-            File.Move(tmp, _leasePath, overwrite: true);
+            // **[第五轮会诊重要项处置]** 发布内各文件访问点**逐点**有界重试（不再靠整段事务重放 ⇒
+            // 业务回调不会被重复执行）；预算耗尽**原样抛出**＝响亮失败。
+            WithContentionRetry(() => File.WriteAllBytes(tmp, bytes));
+            WithContentionRetry(() => File.Move(tmp, _leasePath, overwrite: true));
         }
         finally
         {
-            if (File.Exists(tmp)) File.Delete(tmp);
+            // **[P50 复核·批次四十九]** 清残件是**尽力而为**（发布已成功 ⇒ 主流程结果不受清理失败影响），
+            // 且**不得**用 `File.Exists` 探测（拒绝访问会被折成「无残件」而跳过清理）。残留 `.tmp` 由既有
+            // **残件语义**保守承接：`IsLeaseResidueFileName` ⇒ `UncertainResidue` 约束（未隔离前禁止新获取）
+            // ＋ `QuarantineResidues` 留痕，故这里吞掉清理异常不构成「静默放行」。
+            try
+            {
+                File.Delete(tmp);   // 不存在时 `File.Delete` 本身即无操作（幂等）
+            }
+            catch (Exception)
+            {
+                // best-effort：残留 .tmp 由残件语义保守承接（保守方向，不误判「无未决动作」）。
+            }
         }
     }
 

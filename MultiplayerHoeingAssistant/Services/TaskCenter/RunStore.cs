@@ -63,15 +63,22 @@ public sealed class RunStore
         get
         {
             var bad = new List<string>();
-            if (!Directory.Exists(_runsDir)) return bad; // 二轮：目录未建=无记录
-            foreach (var file in Directory.EnumerateFiles(_runsDir, "*.run.json"))
+            foreach (var file in EnumerateRunFilesOrEmpty())   // 目录未建=空集；拒绝访问⇒响亮上抛（见枚举助手）
             {
                 try
                 {
-                    var rec = JsonSerializer.Deserialize<WorkflowRunRecord>(File.ReadAllText(file, Encoding.UTF8), JsonOptions);
+                    var text = TryReadAllTextOrNull(file, "read-unknown");
+                    if (text is null) continue;               // 读取前已被移除＝已确认不存在
+                    var rec = JsonSerializer.Deserialize<WorkflowRunRecord>(text, JsonOptions);
                     if (rec is null || string.IsNullOrWhiteSpace(rec.RunId)) bad.Add(file);
                 }
-                catch (Exception ex) when (ex is JsonException or IOException)
+                catch (Exception ex) when (IsFileContention(ex))
+                {
+                    // [第一／二轮会诊重要项处置] **争用家族预算耗尽后必须响亮**（`IOException` 与
+                    // `UnauthorizedAccessException` 同族）：不得被当作「坏记录」而静默隐藏。
+                    throw;
+                }
+                catch (JsonException)
                 {
                     bad.Add(file);
                 }
@@ -166,18 +173,36 @@ public sealed class RunStore
     public HandoffLedgerQuery QueryHandoffLedger(string intentKey)
     {
         if (string.IsNullOrWhiteSpace(intentKey)) return HandoffLedgerQuery.MissInstance; // 空键由移交入口先行拒绝
-        if (!Directory.Exists(_runsDir)) return HandoffLedgerQuery.MissInstance;
+        // [第三轮会诊重要项处置] 目录枚举争用**不得逸出**：枚举预算耗尽 ⇒ 对账**不可确认**（`Incomplete`，
+        // 不得当未命中）；目录未建仍由枚举助手返回空集。
+        IReadOnlyList<string> handoffFiles;
+        try
+        {
+            handoffFiles = EnumerateRunFilesOrEmpty();
+        }
+        catch (Exception ex) when (IsFileContention(ex))
+        {
+            return HandoffLedgerQuery.IncompleteInstance;
+        }
         WorkflowRunRecord? bestRun = null;
         HandoffIdentity? bestBinding = null;
         var incomplete = false;
-        foreach (var file in Directory.EnumerateFiles(_runsDir, "*.run.json"))
+        foreach (var file in handoffFiles)
         {
             WorkflowRunRecord? rec;
             try
             {
-                rec = JsonSerializer.Deserialize<WorkflowRunRecord>(File.ReadAllText(file, Encoding.UTF8), JsonOptions);
+                var text = TryReadAllTextOrNull(file, "read-handoff");
+                if (text is null) continue;               // 读取前已被移除＝已确认不存在（非未命中）
+                rec = JsonSerializer.Deserialize<WorkflowRunRecord>(text, JsonOptions);
             }
-            catch (Exception ex) when (ex is JsonException or IOException)
+            catch (Exception ex) when (IsFileContention(ex))
+            {
+                // [第一／二轮会诊重要项处置] 争用家族预算耗尽 ⇒ **不可确认**（保守：不得当未命中，也不得当坏记录）
+                incomplete = true;   // 由既有 `Incomplete` 语义承接
+                continue;
+            }
+            catch (JsonException)
             {
                 incomplete = true; // 坏文件可能正是该键的受理记录——不得当未命中
                 continue;
@@ -231,16 +256,17 @@ public sealed class RunStore
         lock (_gate)
         {
             var file = PathFor(runId);
-            if (!File.Exists(file))
+            var currentText = TryReadAllTextOrNull(file, "read-merging");   // 「不存在」与「拒绝访问」在此分流
+            if (currentText is null)
             {
-                latest = null;
+                latest = null;                        // 已确认不存在（拒绝访问会在此抛出，不落此分支）
                 return false;
             }
 
             WorkflowRunRecord? current;
             try
             {
-                current = JsonSerializer.Deserialize<WorkflowRunRecord>(File.ReadAllText(file, Encoding.UTF8), JsonOptions);
+                current = JsonSerializer.Deserialize<WorkflowRunRecord>(currentText, JsonOptions);
             }
             catch (JsonException)
             {
@@ -286,23 +312,32 @@ public sealed class RunStore
     public WorkflowRunRecord? Load(string runId)
     {
         var file = PathFor(runId);
-        if (!File.Exists(file)) return null;
-        return JsonSerializer.Deserialize<WorkflowRunRecord>(File.ReadAllText(file, Encoding.UTF8), JsonOptions);
+        // [第三轮会诊阻断项处置] **不得用 `File.Exists` 探测**（它会把「拒绝访问」静默折成 false ⇒ 误判为不存在）：
+        // 直接读——NotFound ⇒ null（合法「无记录」）；争用 ⇒ 有界重试后原样抛出。
+        var text = TryReadAllTextOrNull(file, "read-load");
+        return text is null ? null : JsonSerializer.Deserialize<WorkflowRunRecord>(text, JsonOptions);
     }
 
     /// <summary>列出全部可解析记录（按创建时间排序）。</summary>
     public IReadOnlyList<WorkflowRunRecord> List()
     {
         var list = new List<WorkflowRunRecord>();
-        if (!Directory.Exists(_runsDir)) return list; // 二轮：目录未建=无记录
-        foreach (var file in Directory.EnumerateFiles(_runsDir, "*.run.json"))
+        foreach (var file in EnumerateRunFilesOrEmpty())   // 目录未建=空集；拒绝访问⇒响亮上抛（见枚举助手）
         {
             try
             {
-                var rec = JsonSerializer.Deserialize<WorkflowRunRecord>(File.ReadAllText(file, Encoding.UTF8), JsonOptions);
+                var text = TryReadAllTextOrNull(file, "read-list");
+                if (text is null) continue;               // 读取前已被移除＝已确认不存在
+                var rec = JsonSerializer.Deserialize<WorkflowRunRecord>(text, JsonOptions);
                 if (rec is not null && !string.IsNullOrWhiteSpace(rec.RunId)) list.Add(rec);
             }
-            catch (Exception ex) when (ex is JsonException or IOException)
+            catch (Exception ex) when (IsFileContention(ex))
+            {
+                // [第一／二轮会诊重要项处置] **争用家族预算耗尽后必须响亮**：不得当作「内容损坏」静默丢弃
+                // （否则活动运行会被隐藏 ⇒ 有双跑/误判风险）。
+                throw;
+            }
+            catch (JsonException)
             {
                 // 隔离：坏文件不参与列表（UnknownFiles 另行展示），原件保留
             }
@@ -362,6 +397,9 @@ public sealed class RunStore
     {
         lock (_gate)
         {
+        // [P50 根因修复·批次四十九] Windows 文件争用家族：目标文件被其他句柄占用（并发读/原子替换窗口）时，
+        // 既可能抛 `IOException`，也可能抛 `UnauthorizedAccessException`（"Access to the path is denied"）。
+        // 两者都按**有界重试**处理；预算耗尽后**原样抛出**（响亮失败不静默，仍走既有 Unknown/冲突归类）。
         // **仅测试接缝**（生产恒 `null`）：在**原子发布步骤之前**（尚未写临时文件/替换目标）注入故障——
         // 用于 §17 P49／§16 交错③「准备阶段 `RunStore` 更新失败」的**真实存储写入路径**（此时内存记录
         // 已被合并回调修改、发布结果不明，正是 §12.3 M3③ 所指的窗口）。异常**原样抛出**（不包装），
@@ -375,12 +413,15 @@ public sealed class RunStore
                 $"运行 {rec.RunId} 记录修订冲突：期望 {expectedRecordRevision}，对象携带 {rec.RecordRevision}。");
 
         var file = PathFor(rec.RunId);
-        if (File.Exists(file))
+        // [第二轮会诊阻断项处置] 用**读取**取代 `File.Exists` 探测：不存在 ⇒ 无盘上记录（跳过核对与备份）；
+        // 拒绝访问/争用 ⇒ 有界重试后**原样抛出**（不得被静默当作「不存在」而跳过修订核对与备份）。
+        var currentText = TryReadAllTextOrNull(file, "read-persist-check");
+        if (currentText is not null)
         {
             WorkflowRunRecord? current;
             try
             {
-                current = JsonSerializer.Deserialize<WorkflowRunRecord>(File.ReadAllText(file, Encoding.UTF8), JsonOptions);
+                current = JsonSerializer.Deserialize<WorkflowRunRecord>(currentText, JsonOptions);
             }
             catch (JsonException)
             {
@@ -391,8 +432,21 @@ public sealed class RunStore
                 throw new RunRecordConflictException(
                     $"运行 {rec.RunId} 记录修订冲突：盘上 {current.RecordRevision}，期望 {expectedRecordRevision}（并发推进未覆盖）。");
 
-            Directory.CreateDirectory(_backupDir);
-            File.Copy(file, Path.Combine(_backupDir, $"{rec.RunId}.{current?.RecordRevision ?? 0}.run.json"), overwrite: true);
+            WithContentionRetry(() =>
+            {
+                ThrowIfFileFaultInjected("create-backup-dir");   // [第三轮会诊重要项] 建目录同样纳入覆盖取证
+                Directory.CreateDirectory(_backupDir);
+            });
+            WithContentionRetry(() =>
+            {
+                ThrowIfFileFaultInjected("backup");
+                // 备份源可能已被并发移除（合法）⇒ 仅忽略「不存在」，争用仍走重试/响亮
+                try
+                {
+                    File.Copy(file, Path.Combine(_backupDir, $"{rec.RunId}.{current?.RecordRevision ?? 0}.run.json"), overwrite: true);
+                }
+                catch (FileNotFoundException) { }
+            });
         }
 
         // ASTRA 二轮 S2：写入未发布时恢复内存对象的未提交修订/时间（避免调用方携带假修订继续推进）
@@ -402,16 +456,43 @@ public sealed class RunStore
         try
         {
             var bytes = Utf8NoBom.GetBytes(JsonSerializer.Serialize(rec, JsonOptions));
-            Directory.CreateDirectory(_runsDir); // 二轮：首次写入才建目录
+            WithContentionRetry(() =>
+            {
+                ThrowIfFileFaultInjected("create-runs-dir");     // [第三轮会诊重要项] 建目录同样纳入覆盖取证
+                Directory.CreateDirectory(_runsDir);             // 二轮：首次写入才建目录（纳入争用重试）
+            });
             var tmp = Path.Combine(_runsDir, $".{rec.RunId}.{Guid.NewGuid():N}.tmp");
-            File.WriteAllBytes(tmp, bytes);
+            // 临时文件写入同样纳入争用重试（[首轮会诊阻断项] 覆盖全部文件访问点）
+            WithContentionRetry(() =>
+            {
+                ThrowIfFileFaultInjected("write-tmp");
+                File.WriteAllBytes(tmp, bytes);
+            });
             try
             {
-                File.Move(tmp, file, overwrite: true);
+                // 原子替换同样受争用影响（目标被并发读者/发布者占用）⇒ 有界重试；耗尽后抛出
+                WithContentionRetry(() =>
+                {
+                    ThrowIfFileFaultInjected("publish");
+                    File.Move(tmp, file, overwrite: true);
+                });
             }
             finally
             {
-                if (File.Exists(tmp)) File.Delete(tmp);
+                // 临时文件清理**尽力而为**：不给主流程结果添乱（残留 `.tmp` 不被 `List`/`UnknownFiles` 读取——
+                // 二者只匹配 `*.run.json`），故此处吞掉清理异常（含争用耗尽）并留注释说明。
+                try
+                {
+                    WithContentionRetry(() =>
+                    {
+                        ThrowIfFileFaultInjected("cleanup-tmp"); // [第三轮会诊重要项] 清残件同样纳入覆盖取证
+                        if (File.Exists(tmp)) File.Delete(tmp);
+                    });
+                }
+                catch (Exception)
+                {
+                    // best-effort：残留临时文件不影响权威读取路径
+                }
             }
         }
         catch
@@ -421,6 +502,114 @@ public sealed class RunStore
             throw;
         }
         }
+    }
+
+    /// <summary>
+    /// **[P50 根因修复] 文件争用家族判定**：`IOException`（共享冲突）与 `UnauthorizedAccessException`
+    /// （Windows 上「路径被占用/拒绝访问」，例如目标正被另一句柄 `FileShare.None` 打开或正被原子替换）
+    /// 在本工程中属**同一类瞬时争用**，一律按有界重试处理。
+    /// </summary>
+    internal static bool IsFileContention(Exception ex)
+        // [第二轮会诊处置·收窄] **「不存在」不是争用**：`FileNotFoundException`／`DirectoryNotFoundException`
+        // 都是 `IOException` 子类，但**等多久也不会出现**——把它们排除出重试族，避免在「路径已删除/从未创建」
+        // 的病态路径上白烧整段预算（实测：夹具收尾后台写在已删除临时根上，单夹具白烧 237 次重试 ≈6s）。
+        // 保留真正的争用族：共享冲突类 `IOException` 与 Windows「拒绝访问」（`UnauthorizedAccessException`）。
+        => ex is UnauthorizedAccessException
+           || (ex is IOException and not (FileNotFoundException or DirectoryNotFoundException));
+
+    /// <summary>**有界争用重试**（默认 80×15ms ≈ 1.2s，与租约存储同口径）；预算耗尽后原样抛出。</summary>
+    internal static T WithContentionRetry<T>(Func<T> action, int attempts = 80, int delayMs = 15)
+    {
+        for (var i = 0; ; i++)
+        {
+            try
+            {
+                return action();
+            }
+            catch (Exception ex) when (IsFileContention(ex) && i < attempts - 1)
+            {
+                // [第二轮会诊建议·诊断计数] 争用重试可观测：供负载诊断入口/回归排查（**只读观测，不参与判定**）。
+                Interlocked.Increment(ref _contentionRetryAttempts);
+                Volatile.Write(ref _lastContentionException, ex);
+                Thread.Sleep(delayMs);
+            }
+            catch (Exception ex) when (IsFileContention(ex))
+            {
+                Interlocked.Increment(ref _contentionExhausted);
+                Volatile.Write(ref _lastContentionException, ex);
+                throw;
+            }
+        }
+    }
+
+    private static long _contentionRetryAttempts;
+    private static long _contentionExhausted;
+    private static Exception? _lastContentionException;
+    /// <summary>**争用重试诊断计数**（[第二轮会诊建议] **只读观测**，不参与任何判定）：累计重试次数。</summary>
+    internal static long ContentionRetryAttempts => Interlocked.Read(ref _contentionRetryAttempts);
+    /// <summary>**争用重试诊断计数**：预算耗尽次数（耗尽即原样抛出）。</summary>
+    internal static long ContentionExhausted => Interlocked.Read(ref _contentionExhausted);
+    /// <summary>最近一次争用异常（**只读快照**，仅供诊断；不参与判定）。</summary>
+    internal static Exception? LastContentionException => Volatile.Read(ref _lastContentionException);
+
+    /// <summary>**有界争用重试**（无返回值重载）。</summary>
+    internal static void WithContentionRetry(Action action, int attempts = 80, int delayMs = 15)
+        => WithContentionRetry<object?>(() => { action(); return null; }, attempts, delayMs);
+
+    /// <summary>
+    /// **仅测试接缝**（生产恒 `null`）：按**操作标签**（`read-load`／`read-list`／`read-unknown`／`read-handoff`／
+    /// `read-merging`／`read-persist-check`／`backup`／`write-tmp`／`publish`／`enumerate`／`create-runs-dir`／
+    /// `create-backup-dir`／`cleanup-tmp`）注入文件访问故障——
+    /// 用于**确定性**验证「争用家族（`IOException`／`UnauthorizedAccessException`）有界重试」与
+    /// 「预算耗尽后的响亮失败」两类语义；回调每次返回非 null 即抛出该异常（可只抛前 N 次以模拟瞬时争用）。
+    /// </summary>
+    internal Func<string, Exception?>? FileOperationFaultForTest { get; set; }
+
+    private string ReadAllTextWithFaultHook(string file, string operation)
+    {
+        ThrowIfFileFaultInjected(operation);
+        return File.ReadAllText(file, Encoding.UTF8);
+    }
+
+    /// <summary>
+    /// **[P50 结题·第二轮会诊阻断项处置] 读取文件，且**区分「不存在」与「被拒/争用」**：
+    /// 不存在（`FileNotFoundException`／`DirectoryNotFoundException`）⇒ 返回 `null`（合法「无记录」）；
+    /// 争用家族（`IOException`／`UnauthorizedAccessException`）⇒ **有界重试**，耗尽后**原样抛出**（响亮）；
+    /// 其余原样抛出。**不得**再用 `File.Exists` 探测——那会把「拒绝访问」静默当作「不存在」。
+    /// </summary>
+    private string? TryReadAllTextOrNull(string file, string operation)
+    {
+        try
+        {
+            return WithContentionRetry(() => ReadAllTextWithFaultHook(file, operation));
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;   // 已确认不存在（不含「拒绝访问」）
+        }
+    }
+
+    /// <summary>**[第二轮会诊阻断项处置]** 枚举目录中的运行记录：目录不存在 ⇒ 返回空集；
+    /// 争用家族 ⇒ 有界重试、耗尽后**原样抛出**（**不得**把不可访问目录误判为空目录）。</summary>
+    private IReadOnlyList<string> EnumerateRunFilesOrEmpty()
+    {
+        try
+        {
+            return WithContentionRetry(() =>
+            {
+                ThrowIfFileFaultInjected("enumerate");
+                return Directory.EnumerateFiles(_runsDir, "*.run.json").ToList();
+            });
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return [];
+        }
+    }
+
+    private void ThrowIfFileFaultInjected(string operation)
+    {
+        if (FileOperationFaultForTest?.Invoke(operation) is { } injected) throw injected;
     }
 
     private static string AppendNote(string? note, string addition)

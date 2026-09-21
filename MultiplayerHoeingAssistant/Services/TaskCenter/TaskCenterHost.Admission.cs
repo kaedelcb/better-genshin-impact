@@ -147,7 +147,15 @@ public sealed partial class TaskCenterHost
         List<OperationRecord> candidates;
         try
         {
-            candidates = _admissionStore.Read().File?.Handoff?.Operations?
+            var leaseRead = _admissionStore.Read();
+            if (leaseRead.Status == ArbitrationLeaseStatus.Corrupt)
+            {
+                // **[P50 复核·批次四十九]** **不可读 ≠ 确无映射**：租约不可确认（争用预算耗尽/损坏）时
+                // 不得按「无未决映射」静默通过本轮扫描——留诊断并放弃**本轮**清理（下一轮/心跳再清，保守方向）。
+                TryLog("[任务中心] 节点终局扫描：租约不可确认（Corrupt），本轮不清理：" + leaseRead.Detail);
+                return;
+            }
+            candidates = leaseRead.File?.Handoff?.Operations?
                 .Where(o => string.Equals(o.RunBinding, runId, StringComparison.Ordinal)
                             && o.Zone == OperationZone.Active
                             && o.RequestState == OperationRequestState.Accepted
@@ -2033,12 +2041,26 @@ public sealed partial class TaskCenterHost
                 // B2-β（恢复接入后）：同一 runBinding 可有多笔操作（启动 op + 恢复 op 共享同一运行事实）——
                 // 运行终态=绑定该运行的全部已受理操作一同终局；有操作仍在过渡态（受理管线未关闭）则等有界窗口。
                 List<OperationRecord>? accepted = null;
+                // **[第六轮会诊重要项处置] 以墙钟界定整个收敛窗口**：`Read()` 在争用下自身最坏消耗 ≈1.2s 预算
+                // （80×15ms）；若仍按「次数」循环（500 次），持续不可读时窗口会被放大到 ≈10 分钟（500×1.2s）
+                // ＝可用性回归。故总墙钟 >15s 即放弃本轮（由下一次触发/恢复扫描再对账，保守方向且留日志）。
+                var settleClock = System.Diagnostics.Stopwatch.StartNew();
                 for (var spin = 0; spin < 500; spin++)
                 {
+                    if (settleClock.Elapsed > TimeSpan.FromSeconds(15)) break;   // 墙钟耗尽 ⇒ 走下方「放弃本轮」分支
                     List<OperationRecord> current;
                     try
                     {
-                        current = _admissionStore!.Read().File?.Handoff?.Operations?
+                        var leaseRead = _admissionStore!.Read();
+                        if (leaseRead.Status == ArbitrationLeaseStatus.Corrupt)
+                        {
+                            // **[P50 复核·批次四十九]** 租约不可确认 ⇒ 按「尚未收敛」重试（有界 spin，
+                            // 且受上方**墙钟预算**约束 —— [第六轮会诊重要项处置]），
+                            // **不得**按「无映射」静默结束本轮回写（不可读 ≠ 确无映射）。
+                            await Task.Delay(20).ConfigureAwait(false);
+                            continue;
+                        }
+                        current = leaseRead.File?.Handoff?.Operations?
                             .Where(o => string.Equals(o.RunBinding, runId, StringComparison.Ordinal)).ToList() ?? [];
                     }
                     catch (IOException)

@@ -731,6 +731,65 @@ public class ArbitrationLeaseStoreTests : IDisposable
 
     // ── 辅助 ────────────────────────────────────────────────────
 
+    /// <summary>
+    /// **[P50 复核·批次四十九·阻断项处置]** **不可读 ≠ 不存在**：真实 Windows **共享冲突**下
+    /// （测试持 `FileShare.None` 独占打开租约正文）——
+    /// ①`Read()` 必须判 **`Corrupt`（fail-closed）**，**绝不** `Absent`（`Absent` 是「可获取」的依据 ⇒
+    /// 误判「无归属」有双跑风险）；②任何变更入口（`TryAcquire`）必须**响亮拒绝** `corrupt`，**不得**接管、
+    /// **不得**改写原件；③独占释放后**正向对照**：`Read()` 恢复为 `Valid`（同一文件、零改写）。
+    /// 本夹具同时覆盖「`File.Exists` 探测被弃用」的回归——(旧实现会把该情形折成「无正式文件」⇒ Absent)。
+    /// </summary>
+    [Fact]
+    public void Read_LeaseBodyUnreadable_ShareViolation_YieldsCorruptNeverAbsent_FailClosed()
+    {
+        var store = new ArbitrationLeaseStore(_dir);
+        Assert.True(store.TryAcquire("pid:1", ttlSeconds: 300).Success);
+        var leasePath = Path.Combine(_dir, "arbitration-lease.json");
+        var bytesBefore = File.ReadAllBytes(leasePath);
+
+        using (new FileStream(leasePath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var read = store.Read();
+            sw.Stop();
+            // **[第五轮会诊建议处置]** 弱证据：确实发生了**有界争用重试**（80×15ms≈1.2s）——若实现「零重试」
+            // （例如把共享冲突直接当拒绝），耗时会回落到毫秒量级 ⇒ 本断言转红（不强依赖精确次数，避免脆弱）。
+            Assert.True(sw.ElapsedMilliseconds >= 800,
+                $"租约读取未出现有界重试（耗时 {sw.ElapsedMilliseconds}ms）——争用可能被直接当失败。");
+            Assert.Equal(ArbitrationLeaseStatus.Corrupt, read.Status);   // **不得** Absent
+            Assert.Null(read.File);
+            Assert.Contains("不可读", read.Detail);
+
+            var acquire = store.TryAcquire("pid:2", ttlSeconds: 300);
+            Assert.False(acquire.Success);                              // 不可读 ⇒ 不得接管
+            Assert.Equal("corrupt", acquire.Reason);
+            Assert.Null(acquire.Lease);
+        }
+
+        Assert.Equal(bytesBefore, File.ReadAllBytes(leasePath));         // 原件零改写
+        Assert.Equal(ArbitrationLeaseStatus.Valid, store.Read().Status); // 争用解除 ⇒ 正向对照恢复
+        Assert.Equal("pid:1", store.Read().File!.Lease!.OwnerEpoch);
+    }
+
+    /// <summary>
+    /// **[第五轮会诊建议处置·零副作用]** `Read()` 的**只读不写盘**（§6.4 延伸）：目录与锁文件都**不得**被新建
+    /// ——旧实现以 `File.Exists` 探测并用 `FileMode.OpenOrCreate` 打开锁文件，新实现以 `FileMode.Open`
+    /// 成败分类；本夹具把该不变量钉死（否则一次「读取」会顺带伪造出「曾有写者」的事实）。
+    /// </summary>
+    [Fact]
+    public void Read_MissingDirectoryOrLock_CreatesNothing()
+    {
+        var store = new ArbitrationLeaseStore(_dir);
+
+        Assert.Equal(ArbitrationLeaseStatus.Absent, store.Read().Status);
+        Assert.False(Directory.Exists(_dir));                                     // 目录未建
+        Assert.False(File.Exists(Path.Combine(_dir, "arbitration-lease.lock")));  // 锁文件未建
+
+        Directory.CreateDirectory(_dir);
+        Assert.Equal(ArbitrationLeaseStatus.Absent, store.Read().Status);         // 目录在但无正式文件
+        Assert.Empty(Directory.GetFiles(_dir));                                   // 一个文件也没新建
+    }
+
     private static PendingHandoffIntent MakeIntent(string actionId)
         => new()
         {

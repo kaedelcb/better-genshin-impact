@@ -26,6 +26,258 @@ public class RunStoreTests : IDisposable
     }
 
     /// <summary>
+    /// **[P50 结题·批次四十九]** 文件**争用家族**有界重试与**权限故障响亮**的确定性验证（注入按操作标签）：
+    /// ①**发布路径**（`publish`）瞬时拒绝两次后成功 ⇒ 写入成功（证明有界重试覆盖原子替换）；
+    /// ②**读取路径**（`read-load`／`read-list`／`read-merging`）瞬时拒绝两次后成功 ⇒ 读取成功
+    /// （覆盖 `Load`／`List`／`UpdateMergingIf` 的盘上读取——[首轮会诊阻断项]）；
+    /// ③**持久化路径**（`read-persist-check`／`backup`／`write-tmp`）瞬时拒绝后仍能成功发布；并补**定向反证**：
+    /// 陈旧修订仍抛 `RunRecordConflictException`（⇒ 盘上读取**未被吞成「无记录」**）、备份文件**确实新增**
+    /// （⇒ 未被吞成「跳过备份」）；
+    /// ③′**建目录／清残件路径**（`create-runs-dir`／`create-backup-dir`／`cleanup-tmp`）瞬时拒绝后仍能完成
+    /// （[第三轮会诊重要项] 原先无注入标签 ⇒ 无覆盖证据）；
+    /// ④**目录枚举路径**（`enumerate`）瞬时拒绝两次后仍能列出记录（**不得**把争用误判成「空目录」）；
+    /// ⑤**预算耗尽后的权限故障必须响亮**：**逐点**断言「**恰好**烧完 80 次预算后**原样抛出**
+    /// `UnauthorizedAccessException`」（`read-list`／`read-load`／`read-merging`／`read-persist-check`／
+    /// `backup`／`write-tmp`／`publish`／`read-unknown`；**不得**被当作「坏记录」静默丢弃，也**不得**在
+    /// 读路径折成「无记录」）；**枚举**争用耗尽 ⇒ `List()` 响亮而 `QueryHandoffLedger`
+    /// 归**不可确认**（`Incomplete`，不得当未命中）；逐条记录读取争用耗尽 ⇒ 同样归 `Incomplete`；
+    /// ⑥**共享冲突类 `IOException` 耗尽后原样抛出**（同一实例，不换类型、不包装、不静默）。
+    /// **[第三轮会诊重要项处置]** 每个注入标签在回调内**计数**，收尾逐标签断言**确实命中**——
+    /// 防止「注入点未接线/标签写错」让夹具空过（假绿）。
+    /// </summary>
+    [Fact]
+    public void FileContentionFamily_TransientDeniedRetries_PermanentDeniedSurfacesLoudly()
+    {
+        var store = new RunStore(_dir);
+        var rec = store.CreateRun("wf-p50", "rev-1");
+        var hitTags = new System.Collections.Concurrent.ConcurrentDictionary<string, int>(StringComparer.Ordinal);
+
+        // 注入器：[第三轮会诊重要项] **全部标签都计数**（含最终成功那一次）——否则「装机遇点是否真被走到」
+        // 无法跨标签取证（例如断言「建备份目录重试时备份确实发生」）；**仅 `armedTag` 注入**，`faults` 次后放行
+        // ⇒ 模拟瞬时争用（`int.MaxValue` ＝ 永久拒绝对，用于耗尽路径）。
+        string? armedTag = null;
+        var remaining = 0;
+        Func<Exception> armedFactory = static () => new UnauthorizedAccessException("Access to the path is denied.（夹具注入：争用）");
+        store.FileOperationFaultForTest = op =>
+        {
+            hitTags.AddOrUpdate(op, 1, (_, v) => v + 1);
+            if (!string.Equals(op, armedTag, StringComparison.Ordinal)) return null;
+            return remaining-- > 0 ? armedFactory() : null;
+        };
+        void Arm(string tag, int faults, Func<Exception>? factory = null)
+        {
+            armedTag = tag;
+            remaining = faults;
+            armedFactory = factory
+                ?? (static () => new UnauthorizedAccessException("Access to the path is denied.（夹具注入：争用）"));
+        }
+
+        void AssertTagHits(string tag, int minHits)
+        {
+            var hits = hitTags.TryGetValue(tag, out var n) ? n : 0;
+            Assert.True(hits >= minHits,
+                $"注入标签 `{tag}` 未命中（实得 {hits} 次，期望 ≥{minHits}）——夹具未真正触达该文件访问点");
+        }
+
+        // ① 发布路径（原子替换）瞬时拒绝两次 ⇒ 有界重试后成功（2 次注入 + 1 次成功 = 3 次调用）
+        Arm("publish", 2);
+        rec.Note = "发布重试";
+        store.Update(rec);                                   // 不抛 ⇒ 重试生效
+        AssertTagHits("publish", 3);
+        rec = store.Load(rec.RunId)!;                        // 每次写入后取回最新修订（避免后续自撞修订冲突）
+        Assert.Equal("发布重试", rec.Note);
+
+        // ② 读取路径瞬时拒绝两次 ⇒ 有界重试后成功（Load／List／UpdateMergingIf 三处盘上读取）
+        Arm("read-load", 2);
+        Assert.NotNull(store.Load(rec.RunId));
+        AssertTagHits("read-load", 3);
+
+        Arm("read-list", 2);
+        Assert.Contains(store.List(), r => r.RunId == rec.RunId);
+        AssertTagHits("read-list", 3);
+
+        Arm("read-merging", 2);
+        Assert.True(store.UpdateMergingIf(rec.RunId, latest => { latest.Note = "合并写"; return true; }, out _));
+        AssertTagHits("read-merging", 3);
+        rec = store.Load(rec.RunId)!;
+
+        // ③ 持久化各步瞬时拒绝 ⇒ 仍能成功发布
+        foreach (var tag in new[] { "read-persist-check", "backup", "write-tmp" })
+        {
+            Arm(tag, 1);
+            rec.Note = "持久化重试-" + tag;
+            store.Update(rec);
+            AssertTagHits(tag, 2);
+            rec = store.Load(rec.RunId)!;
+        }
+        Assert.Equal("持久化重试-write-tmp", store.Load(rec.RunId)!.Note);
+
+        // ③′ 建目录／清残件同样纳入争用重试（新增注入标签），并补写入点的**定向反证**。
+        Arm("create-runs-dir", 2);
+        rec.Note = "建目录重试";
+        store.Update(rec);                                   // 不抛 ⇒ 建目录重试生效
+        AssertTagHits("create-runs-dir", 3);
+        rec = store.Load(rec.RunId)!;
+
+        var backupBefore = hitTags["backup"];
+        var revisionBeforeBackup = rec.RecordRevision;
+        var noteBeforeBackup = rec.Note;
+        Arm("create-backup-dir", 1);
+        rec.Note = "建备份目录重试";
+        store.Update(rec);
+        AssertTagHits("create-backup-dir", 2);
+        // 备份步骤**确实执行**（吞掉争用即不会走到 File.Copy）；本步只注入建目录 ⇒ 备份恰多 1 次调用。
+        Assert.Equal(backupBefore + 1, hitTags["backup"]);
+        // [第五轮会诊建议处置] **不强依赖「文件总数 +1」**（那隐含「一修订一文件」的实现细节）：
+        // 改为断言「该修订号的备份文件存在」**且其内容＝发布前盘上修订**（修订号单调不回退 ⇒ 该名由本步产生）。
+        var backupPath = Path.Combine(_dir, "_backup", $"{rec.RunId}.{revisionBeforeBackup}.run.json");
+        Assert.True(File.Exists(backupPath), "备份未发生（吞掉争用即不会走到 File.Copy）");
+        // 备份内容＝**发布前**的盘上修订（非直接文本比对：序列化器默认转义非 ASCII，故按记录反序列化后比对）。
+        var backupRecord = System.Text.Json.JsonSerializer.Deserialize<WorkflowRunRecord>(File.ReadAllText(backupPath));
+        Assert.Equal(noteBeforeBackup, backupRecord!.Note);
+        rec = store.Load(rec.RunId)!;
+
+        // `read-persist-check` 的争用**不得被吞成「盘上无记录」**：用**陈旧修订**发布——只有真读到盘上记录
+        // 才会抛修订冲突（若被吞成「无记录」则会静默覆盖成功 ⇒ 本断言转红）。
+        var staleSnapshot = store.Load(rec.RunId)!;           // 携带当前（即将过期）修订的副本
+        rec.Note = "占用一次修订";
+        store.Update(rec);
+        rec = store.Load(rec.RunId)!;
+        var persistCheckBefore = hitTags["read-persist-check"];
+        Arm("read-persist-check", 1);
+        staleSnapshot.Note = "陈旧修订写入";
+        Assert.Throws<RunRecordConflictException>(() => store.Update(staleSnapshot));
+        Assert.Equal(persistCheckBefore + 2, hitTags["read-persist-check"]);   // 1 次注入 + 1 次真正读到盘上记录
+
+        Arm("cleanup-tmp", 1);
+        rec.Note = "清残件重试";
+        store.Update(rec);
+        AssertTagHits("cleanup-tmp", 2);
+        rec = store.Load(rec.RunId)!;
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));      // 清残件在重试后不留痕
+
+        // ④ 目录枚举瞬时拒绝两次 ⇒ 有界重试后仍可列出
+        Arm("enumerate", 2);
+        Assert.Contains(store.List(), r => r.RunId == rec.RunId);
+        AssertTagHits("enumerate", 3);
+
+        // ⑤ 预算耗尽 ⇒ **权限故障响亮**：逐点断言「**恰好**烧完一轮 80 次预算后原样抛出」（不缺不溢不静默）
+        void AssertBudgetExhausted(string tag, Action action)
+        {
+            var before = hitTags.TryGetValue(tag, out var n) ? n : 0;
+            Arm(tag, int.MaxValue);
+            Assert.Throws<UnauthorizedAccessException>(action);
+            Assert.Equal(before + 80, hitTags.TryGetValue(tag, out var after) ? after : 0);
+        }
+
+        AssertBudgetExhausted("read-list", () => store.List());
+        AssertBudgetExhausted("read-load", () => store.Load(rec.RunId));      // 读路径**不得**折成「无记录」
+        AssertBudgetExhausted("read-merging", () => store.UpdateMergingIf(rec.RunId, r => true, out _));
+        AssertBudgetExhausted("read-persist-check", () => store.Update(rec));
+        AssertBudgetExhausted("backup", () => store.Update(rec));
+        AssertBudgetExhausted("write-tmp", () => store.Update(rec));
+        AssertBudgetExhausted("publish", () => store.Update(rec));
+        AssertBudgetExhausted("read-unknown", () => { _ = store.UnknownFiles; });
+
+        // 逐条记录读取争用 ⇒ 对账**不可确认**（不得当未命中，也不得静默忽略）
+        var handoffBefore = hitTags.TryGetValue("read-handoff", out var h0) ? h0 : 0;
+        Arm("read-handoff", int.MaxValue);
+        Assert.Equal(HandoffLedgerState.Incomplete, store.QueryHandoffLedger("intent:p50").State);
+        Assert.Equal(handoffBefore + 80, hitTags["read-handoff"]);
+
+        // 枚举争用耗尽 ⇒ 列出**响亮失败**，对账归**不可确认**（连续两次仍不可确认，语义幂等）
+        var enumerateBefore = hitTags["enumerate"];
+        Arm("enumerate", int.MaxValue);
+        Assert.Throws<UnauthorizedAccessException>(() => store.List());
+        Assert.Equal(enumerateBefore + 80, hitTags["enumerate"]);
+        Assert.Equal(HandoffLedgerState.Incomplete, store.QueryHandoffLedger("intent:p50").State);
+        Assert.Equal(HandoffLedgerState.Incomplete, store.QueryHandoffLedger("intent:p50").State);
+        Assert.Equal(enumerateBefore + 240, hitTags["enumerate"]);   // 1×列出 + 2×对账，各烧一轮完整预算
+
+        // ⑥ 共享冲突类 `IOException` 耗尽 ⇒ **原样抛出**（同一实例；发布未生效 ⇒ 盘上仍是上次成功载荷）
+        var sharingViolation = new IOException(
+            "The process cannot access the file because it is being used by another process.",
+            unchecked((int)0x80070020));
+        var publishBefore = hitTags["publish"];
+        Arm("publish", int.MaxValue, () => sharingViolation);
+        var thrown = Assert.Throws<IOException>(() => store.Update(rec));
+        Assert.Same(sharingViolation, thrown);
+        Assert.Equal(publishBefore + 80, hitTags["publish"]);
+        Assert.Equal("清残件重试", store.Load(rec.RunId)!.Note);   // 失败**未半写**：盘上仍是上次成功载荷
+    }
+
+    /// <summary>
+    /// **[P50 结题·第二轮会诊处置] 争用族**判定**（收窄口径）**：真正的争用＝共享冲突类 `IOException` 与
+    /// Windows「拒绝访问」（`UnauthorizedAccessException`）；**「不存在」类（`FileNotFoundException`／
+    /// `DirectoryNotFoundException`）不是争用**——等多久也不会出现，纳入重试只会白烧预算（实测：夹具收尾后台写
+    /// 已删除临时根时单夹具白烧 237 次重试 ≈6s；收窄后整类 152s→8s）。
+    /// </summary>
+    [Fact]
+    public void IsFileContention_NarrowFamily_ExcludesNotFound()
+    {
+        Assert.True(RunStore.IsFileContention(new UnauthorizedAccessException("Access to the path is denied.")));
+        Assert.True(RunStore.IsFileContention(new IOException("The process cannot access the file because it is being used by another process.")));
+        // **[第三轮会诊建议处置]** 真实 Windows 形态：共享冲突（`ERROR_SHARING_VIOLATION`=32）与字节区间锁冲突
+        // （`ERROR_LOCK_VIOLATION`=33）以 `IOException` + HRESULT `0x80070020`／`0x80070021` 出现，同属争用族。
+        Assert.True(RunStore.IsFileContention(new IOException("sharing violation", unchecked((int)0x80070020))));
+        Assert.True(RunStore.IsFileContention(new IOException("lock violation", unchecked((int)0x80070021))));
+        Assert.False(RunStore.IsFileContention(new FileNotFoundException("gone")));
+        Assert.False(RunStore.IsFileContention(new DirectoryNotFoundException("gone")));
+        Assert.False(RunStore.IsFileContention(new System.Text.Json.JsonException("bad json")));
+    }
+
+    /// <summary>
+    /// **[P50 结题·第三轮会诊重要项处置] 有界重试的**预算语义**（机制级、精确、零等待）**：
+    /// 所有文件访问点共用同一助手 ⇒ 在此**逐条锁死**其语义，替代「每个访问点各跑一次 ≈1.2s 真耗尽」：
+    /// ①**瞬时争用后成功**：调用次数 = 注入次数 + 1；
+    /// ②**预算耗尽**：**恰好** `attempts` 次调用后**原样抛出**（`Assert.Same`＝同一实例，不换类型、不包装；
+    ///   「恰好」也证明**不多烧**预算）；
+    /// ③**非争用异常一次也不重试**（`NotFound` 族／JSON 损坏／编程错误）——「不存在」等多久也不会出现，
+    ///   纳入重试只会白烧预算（实测曾致单夹具 237 次重试、整类 152s）。
+    /// </summary>
+    [Fact]
+    public void WithContentionRetry_BudgetEatsExactlyAttempts_NonContentionNeverRetried()
+    {
+        // ① 瞬时争用两次 ⇒ 第 3 次成功
+        var calls = 0;
+        var faults = 2;
+        var value = RunStore.WithContentionRetry(
+            () =>
+            {
+                calls++;
+                if (faults-- > 0) throw new UnauthorizedAccessException("Access to the path is denied.");
+                return 42;
+            },
+            attempts: 5, delayMs: 0);
+        Assert.Equal(42, value);
+        Assert.Equal(3, calls);
+
+        // ② 预算耗尽 ⇒ **恰好 attempts 次**调用后原样抛出（同一实例）
+        var exhausted = new IOException("sharing violation", unchecked((int)0x80070020));
+        calls = 0;
+        var thrown = Assert.Throws<IOException>(() => RunStore.WithContentionRetry<int>(
+            () => { calls++; throw exhausted; }, attempts: 4, delayMs: 0));
+        Assert.Same(exhausted, thrown);
+        Assert.Equal(4, calls);
+
+        // ③ 非争用异常**一次也不重试**（不白烧预算，也不改变异常类型）
+        foreach (var nonContention in new Exception[]
+                 {
+                     new FileNotFoundException("gone"),
+                     new DirectoryNotFoundException("gone"),
+                     new System.Text.Json.JsonException("bad json"),
+                     new ArgumentException("bad"),
+                 })
+        {
+            calls = 0;
+            var thrownNonContention = Assert.ThrowsAny<Exception>(() => RunStore.WithContentionRetry<int>(
+                () => { calls++; throw nonContention; }, attempts: 80, delayMs: 0));
+            Assert.Same(nonContention, thrownNonContention);
+            Assert.Equal(1, calls);
+        }
+    }
+
+    /// <summary>
     /// **G4a（[批次四十五 第三轮验证会诊处置]）`CreateRun` 的准入来源 Scope 写入边界**：
     /// ①空白 ⇒ 规范化为 `null`（无固定来源；旧记录缺字段同样反序列化为 null）；
     /// ②规范 `bgi:local:{非空完整 epoch}`（含冒号的完整 epoch）原样落盘；

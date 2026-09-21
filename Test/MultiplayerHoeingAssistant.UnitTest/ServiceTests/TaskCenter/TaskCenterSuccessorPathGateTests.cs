@@ -10,11 +10,31 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 /// 与其它测试类并行时会因锁争用/调度延迟而**更频繁地**触发一条已知偶发路径（实测：33 节点夹具在满负载下
 /// 偶发第 N 个节点收敛 Reconciling→运行 Unknown，隔离后稳定通过）。**注意（[纠正·2026-09-21 复审]）**：
 /// 该现象是**被测运行真的进入了 Unknown**，**不是**单纯的断言/读取假失败——隔离只**降低测试间负载干扰**，
-/// **原负载失败仍未解决**；它已作为 P50 风险登记（设计稿 §16/§17），须据诊断日志定位根因，
-/// 并**保留单独、可重复的负载复现入口**，不得因隔离而让日常回归不再暴露该路径缺陷。
+/// **[更正·2026-09-22 批次四十九] 已结题**：负载复现入口（本文件 `P50_LoadRepro_WholeClass_UnderControlledLoad`）
+/// 复现并定位根因为 **Windows 文件争用家族**（`UnauthorizedAccessException：Access to the path is denied`）未被
+/// 纳入有界重试；修复见 `RunStore`／`ArbitrationLeaseStore`，结题证据见设计稿 §24.61（修复后 10×16 连续两轮全绿；
+/// 33 节点用例 `Skip` 已解除、全量连续 3 轮 951/2/953）。**保留**该负载复现入口以便后续回归与实机段复用。
 /// </summary>
 [CollectionDefinition("TaskCenterHeavyE2E", DisableParallelization = true)]
 public sealed class TaskCenterHeavyE2ECollection;
+
+/// <summary>
+/// **[C 表 #1／P50][批次四十九] 负载复现入口的专用特性**：xUnit 2.5.3 无「动态 Skip」API，故用自定义
+/// <see cref="FactAttribute"/> 在**发现阶段**按环境变量决定 Skip——**不改编源码**即可单独、可重复运行，
+/// 且**默认仍是 Skip**（不计为通过、不增加日常负载）。
+/// 启用：先设环境变量（值必须为 `1`），再运行。
+/// </summary>
+public sealed class P50LoadReproFactAttribute : FactAttribute
+{
+    /// <summary>启用开关（值 `1` 才运行）。</summary>
+    public const string EnvVar = "BGI_R5_P50_LOAD_REPRO";
+
+    public P50LoadReproFactAttribute()
+    {
+        if (Environment.GetEnvironmentVariable(EnvVar) != "1")
+            Skip = "P50 负载复现入口：设 " + EnvVar + "=1 显式启用（默认 Skip，不计为通过）";
+    }
+}
 
 /// <summary>
 /// R5.2 B2-γ 第 3 步（节点后继提交改道仲裁面）「一键可跑」验收夹具（owner 0 点击，场景施工方内置）：
@@ -711,6 +731,107 @@ public class TaskCenterSuccessorPathGateTests
             }
             TryDelete(root);
         }
+    }
+
+    /// <summary>
+    /// **[C 表 #1／P50][批次四十九] 负载复现入口（覆盖整个重夹具类；可控负载＋可重复；默认 Skip，不计为通过）**：
+    /// ①**可控负载**：按 `BGI_R5_P50_LOAD_CPUS`（默认＝`Environment.ProcessorCount`）起 CPU 忙等负载线程；
+    /// ②**覆盖整个用例类**：逐轮**直接调用**该类的重夹具（包含受 P50 影响被 `Skip` 的 **33 节点端到端**方法本体，
+    /// 直调绕过 Skip 属性、仍按其**严格断言**执行）：`NodeSubmit_33NodeFlow_NoCapacityExhaustion`／
+    /// `NodeOperation_TerminalizedBeforeRunEnds_OnNextNodeAdmission`／`NodeSubmit_EachSendObservesPreviousNodeReleased`／
+    /// `NodeSubmit_GoesThroughAdmissionFace_WhenPathGateOpen`；
+    /// ③**轮次**：`BGI_R5_P50_LOAD_ROUNDS`（默认 3）；
+    /// ④**根因取证**：任一夹具抛出即收集其**异常消息**（各夹具内部已带 `Diag(...)` 运行态/逐操作快照）与轮次号，
+    /// 循环结束后统一失败输出——不吞异常、不放宽断言、不改既有夹具。
+    /// **启用**：`$env:BGI_R5_P50_LOAD_REPRO=1` 后运行 `dotnet test --filter P50_LoadRepro`（可重复、可并行叠加外部负载）。
+    /// </summary>
+    [P50LoadReproFact]
+    public async Task P50_LoadRepro_WholeClass_UnderControlledLoad()
+    {
+        var roundsRaw = Environment.GetEnvironmentVariable("BGI_R5_P50_LOAD_ROUNDS");
+        if (!int.TryParse(roundsRaw, out var rounds) || rounds <= 0) rounds = 3;
+        var cpusRaw = Environment.GetEnvironmentVariable("BGI_R5_P50_LOAD_CPUS");
+        if (!int.TryParse(cpusRaw, out var loadCpus) || loadCpus < 0) loadCpus = Environment.ProcessorCount;
+        Assert.True(loadCpus > 0, "负载线程数必须 ≥1（CPUS=0 会让本入口在**零负载**下假绿）。");
+
+        using var loadCts = new CancellationTokenSource();
+        using var ready = new CountdownEvent(loadCpus);
+        using var start = new ManualResetEventSlim(false);
+        var loadErrors = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        var loadTasks = Enumerable.Range(0, loadCpus).Select(_ => Task.Run(() =>
+        {
+            try
+            {
+                ready.Signal();                       // **就绪屏障**：先报就绪
+                start.Wait(loadCts.Token);            // 再等统一开跑 ⇒ 保证首个夹具执行时负载已在跑
+                var spin = System.Diagnostics.Stopwatch.StartNew();
+                while (!loadCts.IsCancellationRequested)
+                {
+                    // 忙等 + 短让出：制造可预测的 CPU 争用（不睡眠，避免负载失真）
+                    if (spin.ElapsedMilliseconds % 50 == 0) Thread.Sleep(1);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // 正常收尾
+            }
+            catch (Exception ex)
+            {
+                loadErrors.Enqueue(ex);               // 负载线程异常**不得静默**（清理后统一断言）
+            }
+        }, loadCts.Token)).ToArray();
+        var failures = new List<string>();
+        var workersDiedEarly = false;
+        try
+        {
+            // [第二轮会诊重要项处置] **就绪等待与开跑都放进 try**：就绪超时也必须走 finally 取消负载线程，
+            // 否则被阻塞在 `start.Wait` 的线程会泄漏到测试之后。
+            Assert.True(ready.Wait(TimeSpan.FromSeconds(30)), "负载线程未能在 30s 内就绪。");
+            start.Set();
+            for (var round = 1; round <= rounds; round++)
+            {
+                var sut = new TaskCenterSuccessorPathGateTests();
+                foreach (var (name, run) in new (string, Func<Task>)[]
+                         {
+                             ("NodeSubmit_33NodeFlow_NoCapacityExhaustion", sut.NodeSubmit_33NodeFlow_NoCapacityExhaustion),
+                             ("NodeOperation_TerminalizedBeforeRunEnds_OnNextNodeAdmission", sut.NodeOperation_TerminalizedBeforeRunEnds_OnNextNodeAdmission),
+                             ("NodeSubmit_EachSendObservesPreviousNodeReleased", sut.NodeSubmit_EachSendObservesPreviousNodeReleased),
+                             ("NodeSubmit_GoesThroughAdmissionFace_WhenPathGateOpen", sut.NodeSubmit_GoesThroughAdmissionFace_WhenPathGateOpen),
+                         })
+                {
+                    try
+                    {
+                        await run().WaitAsync(TimeSpan.FromSeconds(180));
+                    }
+                    catch (TimeoutException)
+                    {
+                        // **[首轮会诊重要项处置] 超时不得叠加执行**：底层夹具无法强制中止，故记录后**立即停止**
+                        // 本轮与后续轮次（避免超时夹具与下一夹具/下一轮并发，破坏串行前提与临时目录生命周期）。
+                        failures.Add($"第 {round} 轮 · {name} ⇒ 超时（180s；底层任务不可强制中止，已停止后续轮次）");
+                        workersDiedEarly = true;
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        failures.Add($"第 {round} 轮 · {name} ⇒ {ex.GetType().Name}：{ex.Message}");
+                    }
+                }
+                if (workersDiedEarly) break;
+            }
+        }
+        finally
+        {
+            if (loadTasks.Any(t => t.IsCompleted && t.IsFaulted)) workersDiedEarly = true;
+            loadCts.Cancel();
+            try { await Task.WhenAll(loadTasks).WaitAsync(TimeSpan.FromSeconds(10)); } catch { /* 清理：负载线程异常不遮蔽真实失败 */ }
+        }
+
+        Assert.True(loadErrors.IsEmpty,
+            "负载线程自身抛出异常（负载前提被破坏，本轮证据不可用）："
+            + string.Join(" ｜ ", loadErrors.Select(e => e.GetType().Name)));
+        Assert.True(failures.Count == 0,
+            "P50 负载复现命中 " + failures.Count + " 次异常（共 " + rounds + " 轮 × 4 夹具，负载线程 "
+            + loadCpus + "）：\n" + string.Join("\n---\n", failures));
     }
 
     /// <summary>
@@ -1963,15 +2084,15 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
     /// 强制版夹具 `NodeAdmission_BeforeGateObservation_E1StillOpen_NoChildPermitYet` 已建（经**门面锁外**观察点
     /// `TaskCenterAdmissionSeams.BeforeSuccessorAdmission`，见设计稿 §24.29）。本夹具只保留交错⑤的容量证据。
     /// </summary>
-    // **[P50 复现证据·2026-09-21]** 曾尝试取消 Skip：定向单跑通过，但**满负载全量套件 5 轮中出现 1 轮红灯**——
-    // 同宿主类的负载敏感夹具 `NodeOperation_TerminalizedBeforeRunEnds_OnNextNodeAdmission` 收敛失败（保守方向、无双跑）。
-    // 结论：**负载敏感性真实存在且可复现**（不再只是历史观察），启用本用例会以约 20% 概率污染基线；
-    // 按「基线必须稳定 + 断言不得放宽」纪律**恢复 Skip**（断言保持严格、未放宽），P50 继续为**阻断式挂账**
-    // （根因未定位；**隔离探针已建立但「负载下重复＋覆盖目标夹具/整类」入口仍未建立**（见 §24.47）；生产节点改道门继续保留）。
-    // 容量证据由确定性**组件级**夹具承担：
-    //   `ArbitrationAdmissionServiceTests.Capacity_33NodeCandidates_AllAccepted_WhenEachSettled`（正向）
-    //   `ArbitrationAdmissionServiceTests.Capacity_MainSlotsExhausted_33rdCreateRejected`（负向）
-    [Fact(Skip = "P50：负载敏感性已复现（启用后满负载 5 轮中 1 轮红灯，同宿主类夹具收敛失败）。隔离探针已建立但负载下入口未建立（§24.47）⇒ 维持暂停执行（断言严格未放宽）；生产节点改道门继续保留。")]
+    // **[P50 结题·2026-09-22 批次四十九]** 本用例的 `Skip` 已**解除**——根因不再是「未知的负载敏感」：
+    // 负载复现入口 `P50_LoadRepro_WholeClass_UnderControlledLoad`（10 轮 × 16 负载线程 × 本类四个重夹具，
+    // 直调本方法本体）在修复前稳定复现（10 轮中 5 轮红灯），取证显示根因＝Windows **文件争用家族**：
+    // `UnauthorizedAccessException：Access to the path is denied`（运行记录原子替换/读取与租约锁路径未把该族
+    // 异常纳入有界重试）⇒ 运行被收敛为 `Unknown`/`Interrupted`。修复（`RunStore` 与 `ArbitrationLeaseStore`
+    // 把 `UnauthorizedAccessException` 与 `IOException` 同列**有界争用重试**，预算耗尽仍原样抛出）之后，
+    // 同参数**连续两轮 10×16 全绿**（§24.61）。**断言保持严格、未放宽**；容量证据另由组件级
+    // `Capacity_33NodeCandidates_AllAccepted_WhenEachSettled`（正向）／`Capacity_MainSlotsExhausted_33rdCreateRejected`（负向）承担。
+    [Fact]
     public async Task NodeSubmit_33NodeFlow_NoCapacityExhaustion()
     {
         var root = NewRoot("tccap-");
