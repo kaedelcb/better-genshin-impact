@@ -680,6 +680,34 @@ public class TaskCenterSuccessorPathGateTests
     }
 
     /// <summary>
+    /// **§17 P6（[2026-09-21 批次二十三]）：发送段必须观察到调用方取消令牌**——此前宿主恒传
+    /// `CancellationToken.None`，发送窗口内的取消无法中止在飞发送（亦无法触发「命中即取消远端」的对账清理）。
+    /// 取证：端口在真实节点发送时观察到**可取消**的令牌（`CanBeCanceled == true`）；
+    /// 若透传缺失（None）则 `CanBeCanceled == false` ⇒ 本用例变红。
+    /// </summary>
+    [Fact]
+    public async Task NodeSubmit_SendSegmentSeesCallerToken_NotNone()
+    {
+        var root = NewRoot("tctoken-");
+        try
+        {
+            RoutingFakePort? captured = null;
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: ["n-1"],
+                configurePort: p => captured = p);
+
+            Assert.True(probe.ReadOk, Diag("租约台账必须成功读取过", probe));
+            Assert.True(probe.State == WorkflowRunState.Succeeded, Diag("1 节点流程应收口成功", probe));
+            Assert.NotNull(captured);
+            Assert.True(captured!.LastSendToken.CanBeCanceled,
+                "发送段必须观察到**调用方令牌**（可取消）；若观察到 `CancellationToken.None` 即 §17 P6 透传缺失");
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
     /// **§17 P49／§16 交错③「准备阶段 `RunStore` 更新（发布）失败」（[新增·2026-09-21 批次二十一]）**：
     /// 经**仅测试**接缝 `RunStore.PublishFaultForTest`（生产恒 `null`）在**原子发布步骤**注入 `IOException`——
     /// 注入条件＝该记录已带**准备段冻结写**标记（`CurrentSubmission.SendAttempted == true`），故发生在
@@ -878,8 +906,16 @@ public class TaskCenterSuccessorPathGateTests
         /// </summary>
         public bool ThrowOnSend { get; set; }
 
+        /// <summary>最近一次发送观察到的取消令牌（§17 P6 透传取证；应为**调用方令牌**而非 `CancellationToken.None`）。</summary>
+        public CancellationToken LastSendToken { get; private set; } = new(canceled: false);
+
+        /// <summary>为 true 时在发送入口 `ct.ThrowIfCancellationRequested()`（模拟「发送窗口内取消」）。</summary>
+        public bool HonorCancelOnSend { get; set; }
+
         public Task<BgiExternalResponse> SendCommandAsync(string operation, object? payload, CancellationToken ct)
         {
+            LastSendToken = ct;   // §17 P6 取证：发送段实际观察到的令牌（应为调用方令牌，而非 None）
+            if (HonorCancelOnSend) ct.ThrowIfCancellationRequested();   // 模拟「发送窗口取消」
             lock (_sync) _sends.Add(operation);
             BeforeSend?.Invoke();
             OnBeforeSend?.Invoke(SendCount);

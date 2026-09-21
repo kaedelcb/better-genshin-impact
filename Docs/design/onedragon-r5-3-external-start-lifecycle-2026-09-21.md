@@ -1006,3 +1006,43 @@ R5.2 稿 §16 行③与 §16-A 汇总裁**由「部分」升为「已覆盖（�
 **C. 状态与回归**：§16 行④与 §16-A **仍记「部分」**（接管落盘失败支＋重启支已覆盖；取消支与上述两项仍欠）；
 **不得**据此把 ④ 计入已覆盖。全量回归 **862 通过／1 跳过／863**（跳过项＝既有 P50 严格用例，断言未放宽；
 基线 552 未降）。**生产接线仍关闭**。
+
+### 24.38 落地登记：§17 P6「发送段取消令牌透传」（[新增·2026-09-21 批次二十三]）
+
+**A. 本批落地事实（**本批为生产行为变更**：发送段由此前恒 `CancellationToken.None` 改为**调用方令牌**）**
+
+1. **透传实现**：①`AdmissionRequest` 新增**进程内**字段 `CallerToken`（`[JsonIgnore]`，**不参与任何序列化**；冻结副本一并携带）；
+   ②发送分派 `SubmissionDispatch` 新增同名字段（`[JsonIgnore]`），由 `BuildDispatch` **原样**从获选排队项复制；
+   ③宿主 `SubmitSuccessorViaAdmissionAsync` 以入参 `ct` 填 `CallerToken`；`DispatchSuccessorViaHostAsync` 以
+   **`d.CallerToken`** 调 `SendPreparedAsync`（此前恒传 `CancellationToken.None`）。
+   **[会诊重要项处置]** ④**续用重新驱动同样携带**：`ContinueUseAsync` 在「Queued/InRound 且本进程无在途处理者」时
+   构造 `redrive` 重新入队——该副本此前**只复制了 `ProcessLocalContext`、漏带 `CallerToken`**（⇒ 该路径发送段会重新落回 `None`）；
+   现已在同处补 `CallerToken = request.CallerToken`。⑤**范围限定**：`RetryAsync` 的 API 当前**没有**调用方令牌参数，
+   其重试发送仍只能用 `default`（不可取消）——本批**不扩展**该 API（须另行定义合同），如实登记为未覆盖。
+2. **语义边界（未放宽）**：取消是**调用结束方式**，**不是关闭依据**——发送段在取消/异常路径上仍按
+   「不可考 → 对账清理 → 保留责任」处置；本批**未新增**任何「取消即结清/取消即未受理」路径
+   （§13.11 G7 纪律、§12.3 M3③）。
+3. **夹具（两级互补）**：
+   - **组件级·按身份**（[会诊重要项处置] 仅断言「可取消」可能被内部另建的链接/预算令牌误绿）：
+     `ArbitrationAdmissionServiceTests.Dispatch_CarriesCallerTokenByIdentity`——调用方传入**已知** `CancellationTokenSource.Token`，
+     断言 Sender 收到的 `SubmissionDispatch.CallerToken` **与传入令牌按底层源相等**（`Assert.Equal`，即**同一枚**），
+     且取消后发送段可观察到 `IsCancellationRequested`；
+     `Dispatch_WithoutCallerToken_StaysNonCancelable`——缺省时保持**不可取消**，证明门面**不自铸令牌**。
+   - **宿主级·生产接线**：`TaskCenterSuccessorPathGateTests.NodeSubmit_SendSegmentSeesCallerToken_NotNone`——真实 1 节点流程中，
+     端口断言发送入口令牌 **`CanBeCanceled == true`**（恒 `None` 时必红），且流程仍正常收口 `Succeeded`（透传不改变成功路径）。
+4. **「取消时责任保持」的证据分担（[会诊重要项处置] 收窄口径）**：**边界级**既有夹具
+   `BgiWorkflowExecutionBoundaryPortSeamTests.Reconcile_OperationCanceledToSend_ReThrowsAfterReconcile` 只证明
+   **取消传播＋对账被调用＋`OperationCanceledException` 不被吞**；它**不**证明宿主仲裁层的责任载体
+   （`Submission`／`Operation` 维持 `Reconciling`/`Pending`、未被关闭）。因此：
+   **「仲裁责任保持」的宿主级端到端验收仍未完成**（需能受控取消「运行器传给发送段的同一令牌」）⇒ 归 **B4**。
+   （实现路径本身的保守性：`OperationCanceledException` 经门面 Sender 异常归类为 `Unknown` → `MarkReconcilingAsync`，
+   **未新增**「取消即确定未受理/结清」分支——但该结论**以端到端夹具验收为准**，本批不据此主张已覆盖。）
+5. **范围限定**：本批只对**节点后继发送**路径取证（`DispatchSuccessorViaHostAsync`）；
+   外部启动（E3/E4/E5）与恢复路径的令牌透传**未逐条取证**（其 `CallerToken` 未设置 ⇒ 保持 `default`＝None，行为与改动前一致，
+   **不主张已覆盖**）。
+6. **回归**：全量 **865 通过／1 跳过／866**（跳过项＝既有 P50，断言未放宽；基线 552 未降）。
+   透传为**生产行为变更**，全量回归无回归；**生产接线仍关闭**。
+
+**B. 相邻项状态（不代做）**：**P8**（通用失败分类细化：网络前可证实未发送 vs 已发送后失败）**仍未闭环**——
+本批不改变「非 success 一律 `Unknown`」的既有分类；**P54**（适配器取消传播/执行失败/接管失败三条映射的显式断言）
+已有组件级覆盖，**接管失败映射**的显式断言仍欠。

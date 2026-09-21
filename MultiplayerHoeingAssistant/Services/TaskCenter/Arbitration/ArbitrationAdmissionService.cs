@@ -37,6 +37,14 @@ public sealed class AdmissionRequest
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public object? ProcessLocalContext { get; set; }
+    /// <summary>
+    /// **调用方取消令牌**（§17 P6／§13.11 G7；[2026-09-21 批次二十三] 透传到**发送段**）：
+    /// 进程内字段、**不参与序列化**。语义纪律：取消是**调用结束方式**，**不是关闭依据**——
+    /// 发送段据此可中止在飞发送（外发取消/对账清理），但**不得**把「被取消」解释为
+    /// 「可证实未受理」而据此关闭责任（§12.3 M3③）。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public CancellationToken CallerToken { get; set; }
     /// <summary>candidateId→runId→首节点提交键（E1 流程绑定：首绑写入、再绑必须一致，不可改写）。</summary>
     public string? RunBinding { get; set; }
     /// <summary>
@@ -158,6 +166,12 @@ public sealed class SubmissionDispatch
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public object? ProcessLocalContext { get; set; }
+    /// <summary>
+    /// **调用方取消令牌**（§17 P6）：由获选排队项携带、**原样**传给 Sender（进程内字段，不序列化）。
+    /// Sender 只消费本字段，不得用别处的令牌代替，也不得把取消当作关闭依据。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public CancellationToken CallerToken { get; set; }
 }
 
 /// <summary>发送结果三态（§4.2 三态对账：受理/确定拒绝/未知——未知立即转对账不再重试）。</summary>
@@ -476,6 +490,8 @@ public sealed class ArbitrationAdmissionService
                     // §13.10 A2（[纠正·2026-09-21] 会诊阻断项）：冻结副本必须**原样携带**进程内不可变请求上下文——
                     // 漏掉它会让正常后继路径在 Sender 处确定性落到 successor_context_missing。
                     ProcessLocalContext = request.ProcessLocalContext,
+                    // §17 P6：调用方取消令牌随**冻结副本**携带（否则发送段拿不到调用方令牌）
+                    CallerToken = request.CallerToken,
                     // §24.17（[R5.3 落地批次会诊阻断处置]）：**可信操作类型必须随冻结副本一起携带**——
                     // 否则创建时落盘恒为 `Unknown`，外部台账分派与类型相关判定全部失效（fail-closed 方向被绕过）。
                     OperationType = request.OperationType,
@@ -719,6 +735,9 @@ public sealed class ArbitrationAdmissionService
                     CursorRevision = op.CursorRevision,
                     // §13.10 A2：续用同样必须携带调用方传入的进程内不可变上下文（不得丢弃后由 Sender 重建）。
                     ProcessLocalContext = request.ProcessLocalContext,
+                    // §17 P6（[会诊重要项·批次二十三]）：重新驱动同样必须携带调用方令牌——漏带会让发送段
+                    // 重新落回 `CancellationToken.None`，使该路径的发送窗口取消失效。
+                    CallerToken = request.CallerToken,
                 };
                 var pending = Enqueue(redrive, file.Lease!);
                 _ = Task.Run(() => DrainRoundAsync());
@@ -1411,6 +1430,7 @@ public sealed class ArbitrationAdmissionService
             WireSubmitKey = op.WireSubmitKey,
             Candidate = request.Candidate,
             ProcessLocalContext = request.ProcessLocalContext, // §13.10 A2：随获选项原样传给 Sender
+            CallerToken = request.CallerToken,                 // §17 P6：调用方令牌原样传给 Sender（发送段透传）
         };
     }
 

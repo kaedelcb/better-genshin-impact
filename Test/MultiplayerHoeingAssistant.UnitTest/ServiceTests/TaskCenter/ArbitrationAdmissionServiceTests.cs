@@ -3731,6 +3731,65 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Null(ReadLease().File!.Handoff!.Submission);            // 关闭已完成
     }
 
+    // ── §17 P6：发送段取消令牌**按身份**原样透传（[新增·2026-09-21 批次二十三]）──
+
+    /// <summary>
+    /// **调用方令牌必须按身份原样到达 Sender**（§17 P6）：门面交给 Sender 的 `SubmissionDispatch.CallerToken`
+    /// 必须等于调用方传入的**同一枚令牌**（`CancellationToken` 按底层源比较）——仅断言「可取消」不足以排除
+    /// 「内部另建可取消令牌/链接令牌/budget 令牌」造成的误绿；并断言该令牌取消后可被发送段观察
+    /// （`IsCancellationRequested`），即发送窗口取消真的能透到发送段。
+    /// </summary>
+    [Fact]
+    public async Task Dispatch_CarriesCallerTokenByIdentity()
+    {
+        using var cts = new CancellationTokenSource();
+        SubmissionDispatch? seen = null;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Sender = d =>
+            {
+                seen = d;
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null));
+            };
+        });
+        var r = Req();
+        r.CallerToken = cts.Token;
+
+        var result = await svc.SubmitAsync(r);
+
+        Assert.Equal(AdmissionResultKind.Accepted, result.Kind);
+        Assert.NotNull(seen);
+        Assert.True(seen!.CallerToken.CanBeCanceled);
+        Assert.Equal(cts.Token, seen.CallerToken);   // **同一枚令牌**（按底层取消源比较），非「另一个可取消令牌」
+        Assert.False(seen.CallerToken.IsCancellationRequested);
+        cts.Cancel();
+        Assert.True(seen.CallerToken.IsCancellationRequested);   // 取消真实可被发送段观察
+    }
+
+    /// <summary>
+    /// **未显式提供令牌的调用方保持既有行为**（§17 P6 范围限定）：`CallerToken` 缺省＝`default`（不可取消），
+    /// 门面**不得**自行铸造可取消令牌（那会伪造一个调用方从未持有的取消源）。
+    /// </summary>
+    [Fact]
+    public async Task Dispatch_WithoutCallerToken_StaysNonCancelable()
+    {
+        SubmissionDispatch? seen = null;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Sender = d =>
+            {
+                seen = d;
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null));
+            };
+        });
+
+        var result = await svc.SubmitAsync(Req());   // 未设置 CallerToken
+
+        Assert.Equal(AdmissionResultKind.Accepted, result.Kind);
+        Assert.NotNull(seen);
+        Assert.False(seen!.CallerToken.CanBeCanceled);   // 门面不得自行铸造令牌
+    }
+
     // ── §16② 调用者≠获选者（§12.2 B1／§13.10 A1·A2；[Batch B 收尾·批次十八]）────────────
 
     /// <summary>

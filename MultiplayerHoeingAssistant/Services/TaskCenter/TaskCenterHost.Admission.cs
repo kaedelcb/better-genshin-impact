@@ -1263,6 +1263,8 @@ public sealed partial class TaskCenterHost
                     sub.Attempt, sub.Key),
                 CursorRef = cursorRef,
                 CursorRevision = cursorRevision,
+                // §17 P6：调用方取消令牌**入队冻结**并随获选项传到 Sender ⇒ 发送段可中止在飞发送（取消≠关闭依据）
+                CallerToken = ct,
                 Candidate = new ArbitrationCandidate
                 {
                     Scope = scope,
@@ -1799,7 +1801,10 @@ public sealed partial class TaskCenterHost
             return rej.Uncertain ? new SendOutcome.Unknown("boundary_precheck_uncertain") : new SendOutcome.Rejected("boundary_precheck_rejected", false, "host:boundary");
         }
 
-        var sent = await inner.SendPreparedAsync(prepared, CancellationToken.None).ConfigureAwait(false);
+        // §17 P6／§13.11 G7：调用方令牌**透传到发送段**（此前恒 `CancellationToken.None` ⇒ 发送窗口取消无法中止在飞发送）。
+        // 取消的语义边界不变：取消是**调用结束方式**，不是关闭依据——发送段取消后仍按不可考/对账路径保留责任，
+        // 本行**不**引入任何「取消即结清」的路径。
+        var sent = await inner.SendPreparedAsync(prepared, d.CallerToken).ConfigureAwait(false);
         if (d.SubmissionIdentity.Length > 0) _successorSendResults[d.SubmissionIdentity] = sent;
         if (!sent.Accepted)
             return sent.Uncertain
