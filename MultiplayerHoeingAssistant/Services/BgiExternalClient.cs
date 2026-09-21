@@ -372,7 +372,14 @@ public sealed class BgiExternalClient : IDisposable
         var pipe = _pipe;
         if (State != BgiExternalLinkState.Ready || pipe is null || !pipe.IsConnected)
         {
-            throw new InvalidOperationException("ext 通道未就绪");
+            // **[P8／§24.62 判据接缝]** 「未写入任何字节」是本进程**可证实**的事实 ⇒ 用证据载体抛出
+            // （`BgiNotSentException` 继承 `InvalidOperationException`，既有降级 catch 逐字不变），
+            // 使上层可把「可证实未发送」与「已进入线路后失败」严格分离（前者不得留未决责任）。
+            throw new BgiNotSentException(
+                State != BgiExternalLinkState.Ready || pipe is null
+                    ? BgiNotSentException.ChannelNotReady
+                    : BgiNotSentException.PipeNotConnected,
+                "ext 通道未就绪");
         }
 
         var requestId = Guid.NewGuid().ToString("N");
@@ -380,7 +387,9 @@ public sealed class BgiExternalClient : IDisposable
             TaskCreationOptions.RunContinuationsAsynchronously);
         if (!_pendingRequests.TryAdd(requestId, completionSource))
         {
-            throw new InvalidOperationException($"重复的 ext 请求 ID：{requestId}");
+            // 同上：请求在**写入任何字节之前**于本地被拒 ⇒ 可证实未发送（证据码 `local_request_rejected`）。
+            throw new BgiNotSentException(
+                BgiNotSentException.LocalRequestRejected, $"重复的 ext 请求 ID：{requestId}");
         }
 
         try

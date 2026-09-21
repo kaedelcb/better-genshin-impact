@@ -1456,7 +1456,13 @@ public sealed partial class TaskCenterHost
     {
         return result.Kind switch
         {
-            AdmissionResultKind.TerminalRejected or AdmissionResultKind.RetryableRejected
+            // **[会诊重要项处置]** `RetryableRejected`**单独分流**：门面已按 §3.3 结清并把操作落
+            // `RetryableRejected`（责任 `Settled`、`Submission` 关闭、重试窗口派生）⇒ 回映射必须**保留可重试性**
+            // （否则「窗口内可经 `RetryAsync` 再入场」的事实会在返回给 Runner 的结果维上丢失）。
+            AdmissionResultKind.RetryableRejected
+                => BoundarySubmitResult.RejectedWithRetryWindow(
+                    "仲裁确定未受理·开重试窗口（" + result.Kind + "/" + result.ReasonCode + "）：" + result.Detail),
+            AdmissionResultKind.TerminalRejected
                 or AdmissionResultKind.NotSelected or AdmissionResultKind.F11Blocked
                 or AdmissionResultKind.NeedPreemptConfirm
                 => BoundarySubmitResult.Rejected(
@@ -1940,7 +1946,9 @@ public sealed partial class TaskCenterHost
         if (!sent.Accepted)
             return sent.Uncertain
                 ? (SendOutcome)new SendOutcome.Unknown("host:successor_uncertain")
-                : new SendOutcome.Rejected("host:successor_rejected", false, "host:boundary");
+                // **[P8／§24.62]** 确定拒绝的**可重试性来自证据**（`BoundarySubmitResult.Retryable`）：
+                // 「可证实未发送」（传输层证据载体）⇒ 开重试窗口（§3.2a 无损拒绝类）；其余确定拒绝保持终局。
+                : new SendOutcome.Rejected("host:successor_rejected", sent.Retryable, "host:boundary");
 
         // **M2／§12.2 B2「先接管、后关闭」**：远端已受理 → **先按完整发送身份把受理事实（jobId）落盘**，
         // 之后才允许门面关闭 Submission（门面 TakeoverPersist 会复核该记录）。

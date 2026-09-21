@@ -138,6 +138,59 @@ public class TaskCenterSuccessorPathGateTests
     }
 
     /// <summary>
+    /// **[P8／§24.62] 「可证实未发送」在宿主链路上的**分离取证**（对照上一支 `NodeSubmit_SendStageFailure_...`）**：
+    /// 发送层抛**证据载体** `BgiNotSentException`（通道未就绪／管道未连接／本地请求被拒＝本进程在任何字节写入
+    /// 线路之前失败）⇒ 按 §3.2a「无损拒绝类」**确定拒绝 ＋ 开重试窗口**：
+    /// ①运行**不得**停在 `Unknown`（受理与否**可判**：远端不可能存在本笔受理事实）；
+    /// ②节点结果 `rejected`（不是 `unknown`）；③发送**恰一次**（不重发）；
+    /// ④操作状态 `RetryableRejected` ＋ `LastResult.Retryable=true` ＋ 重试窗口**已派生**（§3.3-6 不得重置）
+    /// ＋ `LastSendSeq==1`（本轮许可已签发并消费）；⑤`Submission` **已关闭**（无未决发送责任）；
+    /// ⑥运行记录内**无受理事实**（`Intent=Rejected`、无 `JobId`）。
+    /// **对照**：`NodeSubmit_SendStageFailure_StaysReconcilingNoResend`（同端口在**记录发送尝试之后**抛
+    /// `IOException`）⇒ 运行 `Unknown` ＋未决 `Submission` ⇒ **两类失败不得互相代替**（本批核心判据）。
+    /// </summary>
+    [Fact]
+    public async Task NodeSubmit_ProvenNotSent_RejectedWithRetryWindow_NotUnknown()
+    {
+        var root = NewRoot("tcnotsent-");
+        try
+        {
+            var arbitrationDir = Path.Combine(root, "arbitration");
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: ["n-1"],
+                configurePort: port => port.SendThrows =
+                    new BgiNotSentException(BgiNotSentException.ChannelNotReady, "ext 通道未就绪"));
+
+            Assert.True(probe.ReadOk, Diag("租约台账必须成功读取过", probe));
+            Assert.True(probe.Converged, Diag("运行必须收敛（不得悬挂）", probe));
+            Assert.True(probe.State != WorkflowRunState.Unknown,
+                Diag("可证实未发送=受理可判 ⇒ **不得**停在 Unknown", probe));
+            Assert.Equal(WorkflowRunState.Failed, probe.State);
+            Assert.Equal("rejected", probe.FirstNodeResult);
+            Assert.True(probe.SendCount == 1, Diag("只允许一次发送尝试（不重发：实际=" + probe.SendCount + "）", probe));
+
+            var op = probe.Ops.SingleOrDefault(o => !string.IsNullOrEmpty(o.Candidate?.NodeId));
+            Assert.NotNull(op);
+            Assert.Equal(OperationRequestState.RetryableRejected, op!.RequestState);
+            Assert.True(op.LastResult?.Retryable == true);
+            Assert.NotNull(op.RetryWindowDeadlineUtc);          // 首次确定拒绝派生（§3.3-6）
+            Assert.Equal(1, op.LastSendSeq);
+
+            var handoff = new ArbitrationLeaseStore(arbitrationDir).Read().File!.Handoff!;
+            Assert.Null(handoff.Submission);                    // 责任已结清（无未决发送责任）
+            var live = handoff.Operations.Single(o => !string.IsNullOrEmpty(o.Candidate?.NodeId));
+            Assert.Equal(OperationRequestState.RetryableRejected, live.RequestState);
+
+            var run = new RunStore(Path.Combine(root, "runs")).List().Single(r => r.WorkflowId.Length > 0);
+            Assert.Equal(SubmitIntentState.Rejected, run.CurrentSubmission!.Intent);   // 无受理事实
+            Assert.True(string.IsNullOrEmpty(run.CurrentSubmission.JobId));
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
     /// **§12.3 交错⑤·逐节点释放直接证据（组件层；[新增·2026-09-21 批次十四]）**：
     /// **4 节点**流程（[更正·2026-09-21] 初版 6 节点，批次十七为降低重夹具集合负载降载为 4；实际为
     /// 第 2..4 次发送共 **3 次**观察）中，**第 k 次（k≥2）节点发送时**，前一节点的 Operation 必须**已按自身发送身份终局**
@@ -1309,6 +1362,13 @@ public class TaskCenterSuccessorPathGateTests
         /// </summary>
         public bool ThrowOnSend { get; set; }
 
+        /// <summary>
+        /// **[P8／§24.62] 可证实未发送证据注入**：抛出**证据载体** `BgiNotSentException`
+        /// （本进程在任何字节写入线路之前失败）。与 `ThrowOnSend`（已进入线路后失败）**严格分离**——
+        /// 两者在宿主链路上的处置**不得互相代替**（本类的两支对照夹具即为此设置）。
+        /// </summary>
+        public Exception? SendThrows { get; set; }
+
         /// <summary>最近一次发送观察到的取消令牌（§17 P6 透传取证；应为**调用方令牌**而非 `CancellationToken.None`）。</summary>
         public CancellationToken LastSendToken { get; private set; } = new(canceled: false);
 
@@ -1356,6 +1416,7 @@ public class TaskCenterSuccessorPathGateTests
                 }
             }
             if (ThrowOnSend) throw new IOException("fixture: 发送阶段故障（已进入可能发送阶段）");
+            if (SendThrows is not null) throw SendThrows;   // [P8] 可证实未发送的证据注入（见属性注释）
             return new BgiExternalResponse
             {
                 Success = true,

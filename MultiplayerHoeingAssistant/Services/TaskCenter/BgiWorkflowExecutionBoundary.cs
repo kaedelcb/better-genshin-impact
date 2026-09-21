@@ -298,8 +298,18 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         catch (Exception ex)
         {
             var reconciled = await ReconcileAfterUncertainSendAsync(run, submission, prepared.Reconcile!, cancelOnHit: false).ConfigureAwait(false);
-            return reconciled ?? BoundarySubmitResult.UnknownWith(
-                $"发送结果不可考（{ex.GetType().Name}），按幂等键对账未命中（不重发，待人工/恢复对账）");
+            if (reconciled is not null) return reconciled;
+            // **[P8／§24.62 判据接缝]** 两类失败**严格分离**：
+            // ①**可证实未发送**（证据载体 `BgiNotSentException`：本进程在任何字节写入线路之前失败——通道未就绪/
+            //   管道未连接/本地请求被拒）⇒ 远端**不可能**存在本笔受理事实 ⇒ **确定拒绝＋开重试窗口**
+            //   （§3.2a「无损拒绝类」）；对账仍先执行（一旦命中即证明证据有误，按命中结果回执，绝不硬判未发送）。
+            // ②**其余一切异常**（写入后超时/部分写入/未知异常）⇒ 可能已进入线路 ⇒ **保留未决责任**（Unknown 停驻，
+            //   禁重发）——现状不变，不得仅凭「异常看起来弱」升级为未发送。
+            return IsProvenNotSent(ex)
+                ? BoundarySubmitResult.RejectedWithRetryWindow(
+                    $"发送前即可证实未发送（证据 {NotSentEvidence(ex)}）：未产生远端受理事实，按无损拒绝开重试窗口")
+                : BoundarySubmitResult.UnknownWith(
+                    $"发送结果不可考（{ex.GetType().Name}），按幂等键对账未命中（不重发，待人工/恢复对账）");
         }
 
         if (!response.Success)
@@ -458,6 +468,26 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     internal static bool IsPreSideEffectRejection(string? errorCode)
         => errorCode is "capability_required" or "invalid_request" or "stale_epoch"
             or "request_expired" or "unsupported_operation" or "queue_full" or "task_busy";
+
+    /// <summary>
+    /// **[P8／§24.62] 「可证实未发送」判据（纯函数；唯一证据来源＝`BgiNotSentException`）**：
+    /// **true**＝失败发生在本进程**任何字节写入线路之前**（通道未就绪／管道未连接／本地请求被拒）
+    /// ⇒ 远端不可能存在本笔受理事实；**false**（含一切其它异常、超时、无响应、回执缺失）＝
+    /// **不得**据此判「未发送」（必须保留未决责任）。
+    /// **纪律**：只认证据载体，**不得**按异常消息文本/类型泛化推断——那会把「可能已发送」误判为未发送（双跑风险）。
+    /// </summary>
+    /// **[会诊重要项处置·双保险]** 同时要求**证据码在已登记白名单内**（配合构造期校验形成双层防线：
+    /// 即使未来有人绕过构造期校验（反射/后续新增 ctor），未登记码也**不会**被判为「可证实未发送」）。
+    internal static bool IsProvenNotSent(Exception ex)
+        => ex is BgiNotSentException notSent && BgiNotSentException.IsKnownEvidenceCode(notSent.EvidenceCode);
+
+    /// <summary>
+    /// **[P8]** 可证实未发送的**证据码**（**不可证实/未登记码时一律返回 `null`**，用于文案/留痕，不参与判定）。
+    /// **[第 3 轮会诊重要项处置]** 与 `IsProvenNotSent` **同判据**：不得对「未登记码的证据载体」（判据为 false）
+    /// 返回非空证据码——否则后续调用方可能把非空码误当作证明。
+    /// </summary>
+    internal static string? NotSentEvidence(Exception ex)
+        => IsProvenNotSent(ex) ? ((BgiNotSentException)ex).EvidenceCode : null;
 
     /// <summary>
     /// 对账命中判定（纯函数，R4.10 集成夹具接缝；终审复核 重要4 三重纪元并入）：

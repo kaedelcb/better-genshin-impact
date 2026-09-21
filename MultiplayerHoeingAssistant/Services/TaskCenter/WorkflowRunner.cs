@@ -15,10 +15,22 @@ public sealed record WorkflowSubmitRequest(
 /// R4.8 一轮 B1 三态化：Uncertain=受理与否不可考（传输异常/回执畸形/对账未命中/无法解释的 already_executed）——
 /// 引擎走 Unknown 停驻（游标不推进、ObservedTerminal 保持空、禁止自动重跑），绝不按拒绝/失败推进；
 /// Rejected 仅限可证实的未受理（本地校验失败或对端副作用前协议拒绝）。不猜成功，也不猜失败/拒绝。</summary>
-public sealed record BoundarySubmitResult(bool Accepted, string? JobId, string? RejectReason, bool Uncertain = false)
+/// <param name="Uncertain">true＝结果不可考（`Unknown` 停驻：保留未决责任、禁重发）。</param>
+/// <param name="Retryable">
+/// **[P8／§24.62]** true＝**确定拒绝 ＋ 可证实未发送**（远端不存在本笔受理事实）⇒ 按 §3.2a「无损拒绝类」
+/// 开**重试窗口**（重试须新许可）；默认 false（既有确定拒绝保持终局语义，不因本字段改动）。
+/// </param>
+public sealed record BoundarySubmitResult(bool Accepted, string? JobId, string? RejectReason, bool Uncertain = false,
+    bool Retryable = false)
 {
     public static BoundarySubmitResult AcceptedWith(string jobId) => new(true, jobId, null);
     public static BoundarySubmitResult Rejected(string reason) => new(false, null, reason);
+    /// <summary>
+    /// **[P8／§24.62]** 确定拒绝·**开重试窗口**（§3.2a）：证据＝**可证实未发送**（`BgiNotSentException`）
+    /// 或门面已结清的等值无损拒绝（`AdmissionResultKind.RetryableRejected`）。语义与普通「终局确定拒绝」
+    /// 分开：窗口内可经**新许可**（`RetryAsync`）再入场。
+    /// </summary>
+    public static BoundarySubmitResult RejectedWithRetryWindow(string reason) => new(false, null, reason, Retryable: true);
     public static BoundarySubmitResult UnknownWith(string reason) => new(false, null, reason, Uncertain: true);
 }
 

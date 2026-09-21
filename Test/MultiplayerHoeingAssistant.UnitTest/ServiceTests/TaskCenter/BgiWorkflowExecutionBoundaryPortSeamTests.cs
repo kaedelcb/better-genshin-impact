@@ -571,4 +571,192 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         Assert.True(r2.Uncertain); // 凭据已消费：响亮未知，不重发
         Assert.Single(port.Sends);
     }
+
+    // ── 15. [P8／§24.62] 「可证实未发送 vs 已进入线路后失败」判据接缝（本批核心） ─────────────────────
+
+    /// <summary>
+    /// **[P8／§24.62]** 判据**只认证据载体**（`BgiNotSentException`）：证据码三值 ⇒ true；
+    /// **一切其它异常**（含同样派生自 `InvalidOperationException` 的普通异常、`IOException`、`TimeoutException`、
+    /// `OperationCanceledException`）⇒ false（必须保留未决责任）——防「按消息文本/类型泛化推断」把可能已发送
+    /// 误判为未发送。
+    /// </summary>
+    [Theory]
+    [InlineData("not_sent_channel", true)]
+    [InlineData("not_sent_pipe", true)]
+    [InlineData("not_sent_local", true)]
+    [InlineData("plain_invalid_operation", false)]
+    [InlineData("io", false)]
+    [InlineData("timeout", false)]
+    [InlineData("canceled", false)]
+    public void IsProvenNotSent_EvidenceCarrierOnly(string kind, bool expected)
+    {
+        Exception ex = kind switch
+        {
+            "not_sent_channel" => new BgiNotSentException(BgiNotSentException.ChannelNotReady, "ext 通道未就绪"),
+            "not_sent_pipe" => new BgiNotSentException(BgiNotSentException.PipeNotConnected, "ext 通道未就绪"),
+            "not_sent_local" => new BgiNotSentException(BgiNotSentException.LocalRequestRejected, "重复的 ext 请求 ID"),
+            // 同一消息文本、同一父类型，但**不是**证据载体 ⇒ 不得判为未发送
+            "plain_invalid_operation" => new InvalidOperationException("ext 通道未就绪"),
+            "io" => new IOException("broken pipe"),
+            "timeout" => new TimeoutException("no response"),
+            _ => new OperationCanceledException(),
+        };
+
+        Assert.Equal(expected, BgiWorkflowExecutionBoundary.IsProvenNotSent(ex));
+        Assert.Equal(expected, BgiWorkflowExecutionBoundary.NotSentEvidence(ex) is not null);
+    }
+
+    /// <summary>
+    /// **[P8／§24.62]** 证据码**枚举全表**＋兼容性：①白名单恰三值且与 `AllEvidenceCodes` 一致
+    /// （新增证据码必须同时登记，防「悄悄加码」）；②证据载体仍**派生自 `InvalidOperationException`**
+    /// ⇒ 既有 `catch (InvalidOperationException)` 降级路径**逐字不变**。
+    /// </summary>
+    [Fact]
+    public void BgiNotSentEvidence_WhitelistEnumerated_AndStaysCatchCompatible()
+    {
+        Assert.Equal(3, BgiNotSentException.AllEvidenceCodes.Count);
+        Assert.All(BgiNotSentException.AllEvidenceCodes,
+            code => Assert.True(BgiNotSentException.IsKnownEvidenceCode(code), code));
+        Assert.False(BgiNotSentException.IsKnownEvidenceCode("unknown_code"));
+        Assert.False(BgiNotSentException.IsKnownEvidenceCode(null));
+
+        var ex = new BgiNotSentException(BgiNotSentException.ChannelNotReady, "ext 通道未就绪");
+        Assert.IsAssignableFrom<InvalidOperationException>(ex);
+        Assert.Equal("ext 通道未就绪", ex.Message);   // 既有文案逐字保留（外部降级判据不得失真）
+
+        // **[会诊重要项处置]** 未登记证据码**构造即拒**（fail-fast）＋判据侧再校验（双层防线）：
+        // 否则 `new BgiNotSentException("write_failed", …)` 这类误用会自动打开重试窗口，使枚举边界失效。
+        Assert.Throws<ArgumentException>(() => new BgiNotSentException("write_failed", "写后失败（未登记码）"));
+        Assert.Throws<ArgumentException>(() => new BgiNotSentException("", "空码"));
+        Assert.Throws<ArgumentException>(() => new BgiNotSentException(null!, "空码"));
+        Assert.Throws<ArgumentException>(() => new BgiNotSentException("CHANNEL_NOT_READY", "大小写变形"));  // 大小写敏感
+
+        // **[会诊重要项处置·第二层防线独立取证]** 绕过构造期校验（仅测试接缝）后，判据**仍**不得把未登记码
+        // 当成「可证实未发送」——否则「只看异常类型」的退化实现会让本断言转红。
+        Assert.False(BgiWorkflowExecutionBoundary.IsProvenNotSent(
+            BgiNotSentException.CreateBypassingWhitelistForTest("write_failed")));
+        Assert.False(BgiWorkflowExecutionBoundary.IsProvenNotSent(
+            BgiNotSentException.CreateBypassingWhitelistForTest(null)));
+        Assert.False(BgiWorkflowExecutionBoundary.IsProvenNotSent(
+            BgiNotSentException.CreateBypassingWhitelistForTest("CHANNEL_NOT_READY")));
+        // **[第 3 轮会诊重要项处置]** 证据码读取与判据**同口径**：未登记码一律**不得**返回非空证据
+        // （否则后续调用方可能把非空码误当证明）。
+        Assert.Null(BgiWorkflowExecutionBoundary.NotSentEvidence(
+            BgiNotSentException.CreateBypassingWhitelistForTest("write_failed")));
+        Assert.Null(BgiWorkflowExecutionBoundary.NotSentEvidence(
+            BgiNotSentException.CreateBypassingWhitelistForTest(null)));
+        Assert.Null(BgiWorkflowExecutionBoundary.NotSentEvidence(
+            BgiNotSentException.CreateBypassingWhitelistForTest("CHANNEL_NOT_READY")));   // 大小写变形 ⇒ 无证据
+        // 正向对照：同一接缝用已登记码 ⇒ 判据成立（证明上面三支不是因为对象构造失败而被判 false）
+        Assert.True(BgiWorkflowExecutionBoundary.IsProvenNotSent(
+            BgiNotSentException.CreateBypassingWhitelistForTest(BgiNotSentException.PipeNotConnected)));
+        Assert.Equal(BgiNotSentException.PipeNotConnected, BgiWorkflowExecutionBoundary.NotSentEvidence(
+            BgiNotSentException.CreateBypassingWhitelistForTest(BgiNotSentException.PipeNotConnected)));
+    }
+
+    /// <summary>
+    /// **[P8／§24.62·会诊重要项处置]** `MapAdmissionResultToBoundary` 对 `RetryableRejected` **单独分流**：
+    /// 门面已按 §3.3 结清（责任 `Settled`、`Submission` 关闭、重试窗口派生）⇒ 回映射到 Runner 的结果
+    /// **必须保留可重试性**；其余确定拒绝（`TerminalRejected`／`NotSelected`／`F11Blocked`／`NeedPreemptConfirm`）
+    /// 保持**终局**（`Retryable=false`）。
+    /// </summary>
+    [Fact]
+    public void MapAdmissionResultToBoundary_PreservesRetryWindowForRetryableRejected()
+    {
+        var retryable = TaskCenterHost.MapAdmissionResultToBoundary(new AdmissionResult
+        {
+            Kind = AdmissionResultKind.RetryableRejected,
+            ReasonCode = "channel_not_ready",
+            Detail = "可证实未发送 ⇒ 窗口内可经 RetryAsync 再入场。",
+        });
+        Assert.False(retryable.Accepted);
+        Assert.False(retryable.Uncertain);
+        Assert.True(retryable.Retryable);
+
+        foreach (var kind in new[]
+                 {
+                     AdmissionResultKind.TerminalRejected, AdmissionResultKind.NotSelected,
+                     AdmissionResultKind.F11Blocked, AdmissionResultKind.NeedPreemptConfirm,
+                 })
+        {
+            var terminal = TaskCenterHost.MapAdmissionResultToBoundary(new AdmissionResult
+            {
+                Kind = kind, ReasonCode = "x", Detail = "终局确定拒绝",
+            });
+            Assert.False(terminal.Uncertain);
+            Assert.False(terminal.Retryable);   // 终局：不开重试窗口
+        }
+    }
+
+    /// <summary>
+    /// **[P8／§24.62]** 发送层抛**证据载体** ⇒ `Rejected` ＋ **可重试窗口**（§3.2a 无损拒绝类），
+    /// **不是** `Uncertain`；且对账**仍先执行**（一旦命中即证明证据有误、按命中回执，绝不硬判未发送）；
+    /// 发送恰一次（不重发）。
+    /// </summary>
+    [Theory]
+    [InlineData(BgiNotSentException.ChannelNotReady, "ext 通道未就绪")]
+    [InlineData(BgiNotSentException.PipeNotConnected, "ext 通道未就绪（管道未连接）")]
+    [InlineData(BgiNotSentException.LocalRequestRejected, "重复的 ext 请求 ID")]
+    public async Task Send_ProvenNotSent_RejectedWithRetryWindow_ReconcileStillAttempted(string evidenceCode, string message)
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort { SendThrows = new BgiNotSentException(evidenceCode, message) };
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+
+        var result = await boundary.SubmitAsync(
+            new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true), default);
+
+        Assert.False(result.Accepted);
+        Assert.False(result.Uncertain);          // **不得**按不可考停驻
+        Assert.True(result.Retryable);           // 无损拒绝类 ⇒ 开重试窗口
+        Assert.Contains(evidenceCode, result.RejectReason!);
+        Assert.Single(port.Sends);               // 一次尝试、不重发
+        Assert.True(port.JobListQueries > 0, "对账必须先执行：一旦命中即证明证据有误，不得硬判未发送");
+    }
+
+    /// <summary>
+    /// **[P8／§24.62 反例]** 「已进入（或可能已进入）线路后失败」= 写入后无响应/部分写入等 ⇒ 必须**保留未决责任**
+    /// （`Uncertain` ＋ `Retryable=false`）：不得因「异常看起来弱」升级为未发送（双跑风险）。
+    /// </summary>
+    [Theory]
+    [InlineData("io")]
+    [InlineData("timeout")]
+    public async Task Send_SentThenFailed_StaysUncertain_NoRetryWindow(string kind)
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort
+        {
+            SendThrows = kind == "io" ? new IOException("broken pipe") : new TimeoutException("no response"),
+        };
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+
+        var result = await boundary.SubmitAsync(
+            new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true), default);
+
+        Assert.False(result.Accepted);
+        Assert.True(result.Uncertain);
+        Assert.False(result.Retryable);
+        Assert.Single(port.Sends);
+        Assert.True(port.JobListQueries > 0);
+    }
+
+    /// <summary>
+    /// **[P8／§24.62 真实传输]** 生产客户端**未连接**时抛**证据载体**且证据码＝`channel_not_ready`
+    /// （沿用既有文案与父类型，既有降级 catch 不受影响）。
+    /// **[会诊重要项处置]** **不动全局静态接缝**：`BgiExternalClient` 仅在 `Start/StartAsync` 后才会连接，
+    /// 本夹具**不启动**客户端 ⇒ `State=Down`、`_pipe=null` 恒成立，**与并行测试无相互污染**（原先改写静态
+    /// 管道名会把随机假名泄漏给并行构造的客户端）。
+    /// </summary>
+    [Fact]
+    public async Task RealClient_ChannelNotReady_ThrowsNotSentEvidence()
+    {
+        using var client = new BgiExternalClient();   // 未 Start：State=Down、无管道（不写任何全局接缝）
+        var ex = await Assert.ThrowsAsync<BgiNotSentException>(() =>
+            client.SendCommandAsync(BgiExternalClient.ExternalOperations.TaskStart, new { }, TimeSpan.FromSeconds(1), default));
+
+        Assert.Equal(BgiNotSentException.ChannelNotReady, ex.EvidenceCode);
+        Assert.IsAssignableFrom<InvalidOperationException>(ex);
+        Assert.Equal("ext 通道未就绪", ex.Message);
+        Assert.True(BgiWorkflowExecutionBoundary.IsProvenNotSent(ex));
+    }
 }
