@@ -472,6 +472,106 @@ public class TaskCenterSuccessorPathGateTests
     }
 
     /// <summary>
+    /// **§17 P6／§12.3 M3（[2026-09-21 批次二十四]）宿主级端到端：在飞发送期取消 ⇒ `Unknown`＋责任保持**。
+    /// 构造：端口在发送入口**阻塞在取消令牌上**（在飞）；随后触发宿主关闭（＝取消运行器传给发送段的**同一令牌**）。
+    /// 断言：发送**恰一次**（无重发）、端口观察到**可取消令牌**、运行收敛 `Unknown`（不得成功、不得确定拒绝）、
+    /// 节点结果 `unknown`、节点操作与未决 `Submission` 保持**非终局**（`Reconciling`）且**身份全等**、
+    /// 盘上**无受理事实**（`JobId == null`）。⇒ 「取消是调用结束方式、**不是关闭依据**」在宿主链路上被验证。
+    /// </summary>
+    [Fact]
+    public async Task CancelDuringInFlightSend_ConvergesUnknown_ResponsibilityRetained()
+    {
+        var root = NewRoot("tccancel-");
+        TaskCenterHost? host = null;
+        RoutingFakePort? port = null;
+        var hostShutDown = false;
+        try
+        {
+            using var client = new BgiExternalClient();
+            port = new RoutingFakePort { BlockUntilCanceled = true };
+            var flowsDir = Path.Combine(root, "flows");
+            var runsDir = Path.Combine(root, "runs");
+            var ws = new WorkflowStore(flowsDir);
+            var doc = new WorkflowDocument
+            {
+                Name = "取消链流程",
+                Activation = new WorkflowActivation { Status = "active" },
+                Nodes =
+                [
+                    new WorkflowNode
+                    {
+                        NodeId = "n-1", Kind = "resource.oneDragonConfig",
+                        Ref = new WorkflowResourceRef { Config = "配置n-1", Revision = "rev-1" },
+                    },
+                ],
+            };
+            ws.Save(doc, null);
+            var runs = new RunStore(runsDir);
+            host = new TaskCenterHost(
+                flowsDir, runsDir, Path.Combine(root, "catalog.json"),
+                () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null),
+                localExecutionCapability: () => true,
+                statusSnapshotProvider: () => new ControlStatus { TaskRunning = false },
+                admissionWired: true, successorAdmissionWired: true,
+                admissionSeams: new TaskCenterAdmissionSeams
+                {
+                    Epoch = RoutingFakePort.Epoch,
+                    ProductionBoundaryFactory = (_, r) => new BgiWorkflowExecutionBoundary(port, r),
+                });
+
+            var start = await host.StartWorkflowAsync(doc.WorkflowId!);
+            Assert.Equal(HostActionStatus.Registered, start.Status);
+            await port.SendStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));   // 已进入**在飞**发送
+            Assert.Equal(1, port.SendCount);
+            Assert.True(port.LastSendToken.CanBeCanceled, "发送段必须持有**调用方令牌**（§17 P6）");
+            Assert.False(port.LastSendToken.IsCancellationRequested);
+
+            // 取消「运行器传给发送段的同一令牌」：宿主关闭令牌（生产：Stop/退出路径）。
+            // [会诊加固] **因果证据**＝端口侧「在飞发送因该令牌被取消而退出」信号（不得用「ShutdownAsync 返回」代替——
+            // 宿主关闭自身可能有界收敛运行，从而在发送仍悬挂时也能返回）。
+            var shutdownTask = host.ShutdownAsync();
+            await port.SendCanceledByToken.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.True(port.LastSendToken.IsCancellationRequested, "取消必须真的发生在运行器传给发送段的同一令牌上");
+            await shutdownTask.WaitAsync(TimeSpan.FromSeconds(20));
+            hostShutDown = true;
+
+            Assert.Equal(1, port.SendCount);                                   // **无重发**
+            var run = runs.List().Single();
+            Assert.Equal(WorkflowRunState.Unknown, run.State);                 // 不可考（不得成功、不得确定拒绝）
+            Assert.Equal("unknown", run.NodeOutcomes.Last(o => o.NodeId == "n-1").Result);
+            // 盘上**无受理事实**（与相邻接管故障夹具同口径：三个字段一起断言，避免「部分受理事实」蒙混）
+            Assert.Equal(SubmitIntentState.Submitted, run.CurrentSubmission!.Intent);
+            Assert.Null(run.CurrentSubmission.JobId);
+            Assert.Null(run.CurrentSubmission.AcceptedSendIdentity);
+            var sendKey = run.CurrentSubmission.Key;
+
+            var handoff = ReadLeaseFileWithRetry(root)?.Handoff;
+            Assert.NotNull(handoff);
+            var op = handoff!.Operations!.Single(o => !string.IsNullOrEmpty(o.Candidate?.NodeId));
+            Assert.Equal(OperationRequestState.Reconciling, op.RequestState);  // 责任载体非终局
+            Assert.False(string.IsNullOrEmpty(op.SubmissionIdentity));
+            Assert.Equal(1, op.LastSendSeq);                                   // 取消**未**新增发送许可
+            Assert.Equal(sendKey, op.WireSubmitKey);                           // 未换键
+            Assert.Equal(1, op.Candidate!.Attempt);
+            Assert.NotNull(handoff.Submission);
+            Assert.Equal(SubmissionState.Reconciling, handoff.Submission!.State);
+            Assert.Equal(op.SubmissionIdentity, handoff.Submission.SubmissionIdentity);
+            Assert.Equal(op.LastSendSeq, handoff.Submission.SendSeq);          // 许可水位与未决责任一致
+        }
+        finally
+        {
+            // [会诊加固] 清理路径**有界**：先放行被阻塞的在飞发送（**仅清理用**，不被当作取消证据），
+            // 再给宿主关闭加超时——避免「首次关闭超时后，finally 里无超时 await」导致测试整体悬挂。
+            try { port.ReleaseBlockedSend.TrySetResult(); } catch { }
+            if (!hostShutDown && host is not null)
+            {
+                try { await host.ShutdownAsync().WaitAsync(TimeSpan.FromSeconds(10)); } catch { }
+            }
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
     /// **§16 交错⑥·格 A′＝「继承登记值」与「重读当前值」的判别反例（[2026-09-21 会诊加固]）**：
     /// E1 已按纪元 `E0` 登记固定 Scope；在**节点尚未准入之前**把当前纪元改为另一值（经接缝 `Epoch`）。
     /// 后继提交若**继承登记值**，节点候选的目标纪元仍是 `E0` ⇒ 与当前纪元不符 ⇒ **`stale_epoch` 终局拒绝、
@@ -912,7 +1012,19 @@ public class TaskCenterSuccessorPathGateTests
         /// <summary>为 true 时在发送入口 `ct.ThrowIfCancellationRequested()`（模拟「发送窗口内取消」）。</summary>
         public bool HonorCancelOnSend { get; set; }
 
-        public Task<BgiExternalResponse> SendCommandAsync(string operation, object? payload, CancellationToken ct)
+        /// <summary>为 true 时发送**阻塞在取消令牌上**（模拟「在飞发送」；取消令牌 ⇒ 抛 OCE）。</summary>
+        public bool BlockUntilCanceled { get; set; }
+
+        /// <summary>已进入在飞发送的信号（§17 P6 宿主级取消夹具用）。</summary>
+        public TaskCompletionSource SendStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>在飞发送**因该令牌被取消而退出**的信号（因果证据；[会诊加固] 不得用「宿主关闭返回」代替）。</summary>
+        public TaskCompletionSource SendCanceledByToken { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>**仅清理用**逃生放行（夹具 finally 中放行，避免永久悬挂；不得被当作取消成功的证据）。</summary>
+        public TaskCompletionSource ReleaseBlockedSend { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<BgiExternalResponse> SendCommandAsync(string operation, object? payload, CancellationToken ct)
         {
             LastSendToken = ct;   // §17 P6 取证：发送段实际观察到的令牌（应为调用方令牌，而非 None）
             if (HonorCancelOnSend) ct.ThrowIfCancellationRequested();   // 模拟「发送窗口取消」
@@ -921,12 +1033,31 @@ public class TaskCenterSuccessorPathGateTests
             OnBeforeSend?.Invoke(SendCount);
             OnBeforeSendWithPayload?.Invoke(SendCount,
                 payload is null ? null : System.Text.Json.JsonSerializer.Serialize(payload));
+            SendStarted.TrySetResult();
+            if (BlockUntilCanceled)
+            {
+                try
+                {
+                    // 在飞发送：等待取消（或夹具的**清理用**逃生放行）
+                    var canceled = Task.Delay(Timeout.Infinite, ct);
+                    await Task.WhenAny(canceled, ReleaseBlockedSend.Task).ConfigureAwait(false);
+                    if (ReleaseBlockedSend.Task.IsCompleted && !ct.IsCancellationRequested)
+                        return new BgiExternalResponse { Success = true, Data = "{\"status\":\"accepted\",\"taskHandle\":\"job-escape\"}" };
+                    await canceled.ConfigureAwait(false);   // 取消路径：抛 OCE
+                    throw new InvalidOperationException("fixture: 不可达");
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    SendCanceledByToken.TrySetResult();   // **因果证据**：在飞发送确因该令牌被取消而退出
+                    throw;
+                }
+            }
             if (ThrowOnSend) throw new IOException("fixture: 发送阶段故障（已进入可能发送阶段）");
-            return Task.FromResult(new BgiExternalResponse
+            return new BgiExternalResponse
             {
                 Success = true,
                 Data = "{\"status\":\"accepted\",\"taskHandle\":\"job-node-1\"}",
-            });
+            };
         }
 
         public Task<BgiJobListSnapshot?> QueryJobListAsync(CancellationToken ct)

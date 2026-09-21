@@ -1046,3 +1046,35 @@ R5.2 稿 §16 行③与 §16-A 汇总裁**由「部分」升为「已覆盖（�
 **B. 相邻项状态（不代做）**：**P8**（通用失败分类细化：网络前可证实未发送 vs 已发送后失败）**仍未闭环**——
 本批不改变「非 success 一律 `Unknown`」的既有分类；**P54**（适配器取消传播/执行失败/接管失败三条映射的显式断言）
 已有组件级覆盖，**接管失败映射**的显式断言仍欠。
+
+### 24.39 落地登记：§17 P6 收束——宿主级「在飞发送期取消 ⇒ `Unknown`＋责任保持」（[新增·2026-09-21 批次二十四]）
+
+**A. 本批落地事实（回归证据；**未改生产行为**）**
+
+1. 夹具 `TaskCenterSuccessorPathGateTests.CancelDuringInFlightSend_ConvergesUnknown_ResponsibilityRetained`（宿主级端到端）：
+   端口在**发送入口阻塞在取消令牌上**（在飞发送；端口新增 `BlockUntilCanceled`／`SendStarted`／**`SendCanceledByToken`**／
+   **仅清理用** `ReleaseBlockedSend`）⇒ 触发宿主关闭（＝**取消运行器传给发送段的同一令牌**）。
+2. 断言链（[会诊加固] **因果证据取自端口**，不用「宿主关闭返回」代替）：`SendStarted` 确认已进入在飞发送 →
+   发送**恰一次**且端口观察到**可取消令牌**（§24.38 透传）→ **`SendCanceledByToken` 置位**
+   （端口在 `catch (OperationCanceledException) when (ct.IsCancellationRequested)` 中置位 ⇒ **在飞发送确因该令牌被取消而退出**）
+   ＋`LastSendToken.IsCancellationRequested`＋随后 `ShutdownAsync` 有界返回 →
+   **无重发**（`SendCount` 仍为 1）＋运行收敛 **`Unknown`**（不得成功、不得确定拒绝）＋节点结果 `unknown`
+   ＋盘上**无受理事实**（**三字段同口径**：`Intent == Submitted` ＋ `JobId == null` ＋ `AcceptedSendIdentity == null`）
+   ＋节点操作与未决 `Submission` 均 **`Reconciling`**，**身份非空且全等**、`LastSendSeq == 1`（**取消未新增发送许可**）、
+   `Submission.SendSeq ==` 许可水位、`WireSubmitKey ==` 盘上本笔提交键（未换键）、`Attempt == 1`。
+3. **由此关闭的结论**：「发送窗口取消 ⇒ **不可考、责任保留、不得据取消结清/放行**」在**宿主链路**上被验证
+   （§13.11 G7「取消是调用结束方式，不是关闭依据」＋§12.3 M3③）；配合 §24.38 的**按身份透传**取证，
+   **§17 P6 的两项子目标（透传实现／取消时责任保持）均已覆盖（组件/宿主层）**。
+4. **未覆盖（登记，禁悬空）**：①**§16 交错④的「接管故障后取消」组合**（先远端已受理、接管落盘失败，**随后取消**）
+   仍欠——本夹具的取消发生在**受理之前**，不构成该组合的证据（归 B4）；②**子进程级重启**与
+   **E3/E4/E5／恢复路径的令牌透传**仍按 §24.38 的范围限定未覆盖；③`RetryAsync` 仍无令牌参数（未扩展）。
+5. **B′. 本批会诊（一轮：4 重要）与逐条处置**：
+
+   | # | 严重度 | 发现摘要 | 处置 |
+   |---|---|---|---|
+   | 63 | 重要 | 「`ShutdownAsync` 返回」**不能**作为「取消确实中止在飞发送」的因果证据（宿主关闭自身可能有界收敛运行），且未证明 `Task.Delay` 因该令牌抛 OCE | **已修**：端口新增 `SendCanceledByToken` 信号（在 `catch (OperationCanceledException) when (ct.IsCancellationRequested)` 内置位）作为**因果证据**，夹具先有界等待该信号、再等 `ShutdownAsync`；并断言 `LastSendToken.IsCancellationRequested` |
+   | 64 | 重要 | 失败清理存在**无界悬挂**风险（首次关闭超时后 `finally` 仍无超时 `await`） | **已修**：清理路径**有界**（`WaitAsync(10s)`＋catch）；端口新增**仅清理用** `ReleaseBlockedSend` 逃生放行（注释明示**不得**被当作取消成功的证据） |
+   | 65 | 重要 | 身份/许可断言不足（`SubmissionIdentity` 两侧同为空也能通过；未断言许可水位） | **已修**：补 `SubmissionIdentity` 非空、`LastSendSeq == 1`、`Submission.SendSeq ==` 许可水位、`WireSubmitKey ==` 盘上本笔提交键、`Attempt == 1` |
+   | 66 | 重要 | 「盘上无受理事实」仅查 `JobId`，证明不足 | **已修**：与相邻接管故障夹具同口径，三字段一起断言（`Intent == Submitted`／`JobId == null`／`AcceptedSendIdentity == null`） |
+
+6. **回归**：全量 **866 通过／1 跳过／867**（跳过项＝既有 P50；基线 552 未降）。**生产接线仍关闭**。
