@@ -567,6 +567,73 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// **§24.41-C#7／S2·S3 组合根反例（冲突零重发）**（[新增·2026-09-21 批次三十九]）：
+    /// v2 `task.start` 返回**业务冲突**（替身脚本 `task_already_running`）时，**接线态**（经真实组合根准入）必须
+    /// **不得**触发既有「冲突重试」的第二次发送：断言 **`task.start` 恰一次**、`ext.task.start == 0`、
+    /// 适配器出口**不得报成功**，且仲裁面已登记该操作并**已签发本轮许可**（`LastSendSeq == 1`；责任保持）。
+    /// 依据：S2/S3 的两个静态发送点属**未接线**既有路径；接线态下「冲突」应经**准入结论/对账**表达，而非盲目重发。
+    /// </summary>
+    [Fact]
+    public async Task CompositionRoot_V2ConflictRejection_NoRetryResend()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "r5comp-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var client = new BgiExternalClient();
+            // [诊断纠正] 接线态 E3 优先走 **ext 队列**（`ext.task.start`）⇒ 要覆盖 **v2 冲突**必须先让 **ext 不可用**
+            // （`AcceptHello=false` ⇒ 客户端降级 `Legacy` ⇒ 回退既有关键路径 `core()`＝v2 `task.start`）。
+            _double.AcceptHello = false;                       // ext 通道不可用 ⇒ 回退 v2 路径
+            _double.AcceptV2TaskStart = false;                 // 脚本化 v2「业务冲突」回执（task_already_running）
+            var host = new TaskCenterHost(
+                Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
+                () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null),
+                localExecutionCapability: () => true,
+                statusSnapshotProvider: () => new ControlStatus { TaskRunning = false },
+                admissionWired: true,
+                admissionSeams: new TaskCenterAdmissionSeams { Epoch = "1:1" });
+            var executor = new CommandExecutor(null!, "unused",
+                externalClientProvider: () => client,
+                externalStartAdmission: (request, ct) => host.AdmitExternalStartAsync(request, ct));
+
+            await client.StartAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            // ext 不可用时客户端降级 `Legacy`（订阅属 ext 操作 ⇒ 此时不得调用，否则响亮失败）
+            if (client.State == BgiExternalLinkState.Ready) await client.SubscribeAsync([]);
+            Assert.NotEqual(BgiExternalLinkState.Down, client.State);
+
+            // 冲突路径会先做**有界槽位等待**（`WaitTaskSlotSettledAsync` 等，最长约 36s/轮）后返回，故给足预算；
+            // [诊断] 若仍超时，先用下列计数确认「是否发生了第二次发送」而不是让断言静默通过。
+            CommandResult result;
+            try
+            {
+                result = await executor.ExecuteAsync(StartGroupCommand("冲突组")).WaitAsync(TimeSpan.FromSeconds(90));
+            }
+            catch (TimeoutException)
+            {
+                throw new Xunit.Sdk.XunitException(
+                    "冲突路径未在预算内返回（诊断计数）：task.start=" + _double.CountOf("task.start")
+                    + " ext.task.start=" + _double.CountOf("ext.task.start")
+                    + " task.status=" + _double.CountOf("task.status"));
+            }
+
+            Assert.NotEqual("success", result.Status);                         // 冲突不得报成功
+            Assert.Equal(1, _double.CountOf("task.start"));                    // **冲突零重发**（未触发第二次发送）
+            Assert.Equal(0, _double.CountOf("ext.task.start"));                // ext 不可用 ⇒ 本笔不经 ext 队列
+            var ops = new ArbitrationLeaseStore(Path.Combine(root, "arbitration")).Read().File?.Handoff?.Operations ?? [];
+            var op = ops.SingleOrDefault(o => o.Candidate?.WorkflowId == "group:冲突组");
+            Assert.NotNull(op);                                                // 已经仲裁面登记
+            Assert.Equal(1, op!.LastSendSeq);                                  // 本轮许可**已签发**（发送确已发生一次）
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            _double.AcceptV2TaskStart = true;                                  // 还原脚本（同一替身实例跨用例复用）
+            _double.AcceptHello = true;
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    /// <summary>
     /// **§24.4-7 切监控模式（切换闸门）双向断言**：置 `Diag.SwitchGateActive` ⇒ 新启动被**拒绝且零发送**；
     /// 闸门解除 ⇒ 启动恢复正常。切换闸门属控制面写入（不续命、不需所有权，§6.1）。
     /// </summary>
