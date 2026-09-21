@@ -57,12 +57,15 @@ public sealed class ClaimSurfaceGuardTests
     private static string Fingerprint(string normalized)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
-        return Convert.ToHexString(hash)[..16];
+        // [批次四十七 第二轮会诊建议采纳] 身份用**完整** SHA-256（不再截断 16 位）：该身份是「措辞批豁免」的
+        // 机械依据，碰撞风险虽低，但截断收益为零、代价是长期评审可能对 64 位截断提出质疑。
+        return Convert.ToHexString(hash);
     }
 
     /// <summary>抽取声明面：每一行声明 →（指纹, 规范化文本）。按文本序号排序，保证确定性。</summary>
     /// <remarks>
-    /// **身份＝文档路径＋规范化全文的 SHA256 前 16 位**（全文入哈希，不受下文截断影响，故无碰撞放宽）；
+    /// **身份＝文档路径＋规范化全文的**完整** SHA-256＋同文本出现序号**（全文入哈希；
+    /// 序号用于区分同文档内**完全相同的重复声明行**——见 `[批次四十七 首轮会诊阻断项处置]`）；
     /// **清单落盘时另附 160 字符摘要**，仅为人工可读——摘要不参与比对，比对只用身份键。
     /// </remarks>
     private static SortedDictionary<string, string> ExtractClaimSurface(string root)
@@ -80,17 +83,23 @@ public sealed class ClaimSurfaceGuardTests
                 var normalized = Normalize(raw);
                 if (normalized.Length == 0) continue;
                 var preview = normalized.Length <= 160 ? normalized : normalized[..160] + "…";
-                result[relKey + "\u0001" + Fingerprint(normalized)] = preview;
+                // [批次四十七 首轮会诊阻断项处置] 身份＝文档路径＋规范化全文哈希＋**同文本出现序号**：
+                // 只按「路径＋哈希」做键会让**同一文档内两条完全相同的声明行互相覆盖**——删除其中一条时身份不变、
+                // 守卫静默通过。加入出现序号后，「重复行少了一条」必然改变清单。
+                var prefix = relKey + "\u0001" + Fingerprint(normalized) + "\u0001";
+                var ordinal = 1;
+                while (result.ContainsKey(prefix + ordinal)) ordinal++;
+                result[prefix + ordinal] = preview;
             }
         }
         return result;
     }
 
-    /// <summary>清单行＝`文档路径 \u0001 指纹 \u0001 摘要`；比对只用前两段，摘要在差异报告里显示。</summary>
+    /// <summary>清单行＝`文档路径 \u0001 指纹 \u0001 出现序号 \u0001 摘要`；比对只用前三段，摘要在差异报告里显示。</summary>
     private static string Identity(string manifestLine)
     {
         var parts = manifestLine.Split('\u0001');
-        return parts.Length >= 2 ? parts[0] + "\u0001" + parts[1] : manifestLine;
+        return parts.Length >= 3 ? parts[0] + "\u0001" + parts[1] + "\u0001" + parts[2] : manifestLine;
     }
 
     private static string Render(SortedDictionary<string, string> surface) =>
