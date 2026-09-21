@@ -1222,18 +1222,128 @@ public sealed class ArbitrationAdmissionService
         if (special is not null) return AdmissionResult.Of(AdmissionResultKind.Error, special, "占位事务异常分支。", request.RequestIdentity);
 
         if (_hooks.Barriers?.AfterOccupyBeforeSend is { } afterOccupy) await afterOccupy().ConfigureAwait(false);
+        // ── §24.18-2／§24.14-2「两段式 `_gate`」（**仅外部启动**的启动/早期取证走锁外）─────────────────────
+        // 第一段（锁内，本函数进入前由 `DrainRoundAsync` 持有 `_gate`）已完成：轮次快照 → 裁决 → **占位** →
+        // 发布唯一发送责任与 `PreObservation`/`Submission`（同次权威原子发布；未持久化不得发送，§24.16-2）。
+        // 第二段（**锁外**）：调用外部启动适配层的启动/早期受理（`StartAsync`／ext 队列提交）——该网络等待
+        // **不得**占用权威串行权（§24.14-2 明文；与 §24.10-2「完成等待不得在门面锁内」同源）。
+        // [施工方判定·有实测证据] 锁外窗口**限定 ExternalStart**：流程登记/节点执行的发送若同样放手，会让
+        // 「E1 启动发送窗口内提交的节点操作」被并发轮次按占用冲突拒绝（实测 `TaskCenterSuccessorPathGateTests`
+        // 两条已验证夹具转红：节点操作停留 `Queued`、`sends=0`、运行收敛 Unknown）——即该两类的并发语义需与
+        // §3.1/§4.2a 的「在飞父操作占用判定」一并调整，属 B2-γ 批次范围（登记见 §24.21-C）。故此处按类型分派，
+        // 保持流程登记/节点执行的既有单段串行（**逐字不变**）。
+        // 锁外期间允许其他请求进入（并发裁决/接管/换主），故返回后必须重新取得串行权再结算（§24.18-3）。
         SendOutcome outcome;
+        // [验证会诊阻断处置] 类型来源＝**已持久化的操作类型**（§24.17-2／§24.8-1：外部启动识别只按持久化类型；
+        // 不得用调用方请求字段决定生命周期分支——续用/重驱动请求不回填类型、伪造请求更不可信）。
+        var occupiedOp = occupy.File!.Handoff!.Operations.First(o =>
+            string.Equals(o.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal));
+        var releaseGateDuringSend = occupiedOp.OperationType == OperationType.ExternalStart;
+        // 占位基线（锁内捕获）：锁外返回后用它复核「本笔责任是否仍属本层」（§24.18-3）。
+        // **必须以值快照捕获**（不得依赖可能被后续写入改写的对象引用）。
+        var occupyBaseline = new OccupyBaseline(
+            lease.LeaseId, lease.OwnerEpoch, occupiedOp.RequestState,
+            occupy.File!.Handoff!.Submission!.SubmissionIdentity, occupy.File!.Handoff!.Submission!.SendSeq);
+        if (releaseGateDuringSend) _gate.Release();
         try
         {
-            outcome = await _hooks.Sender(BuildDispatch(request, occupy.File!, stableIdentity, candidateId, targetEpoch)).ConfigureAwait(false);
+            try
+            {
+                // [验证会诊重要项处置] `BuildDispatch` 保留在「捕获异常⇒Unknown」归类内：派发快照缺失/损坏时与既有
+                // 行为一致落 `Unknown`（已占位责任→`Reconciling`），不得因本批改变占位后的失败状态。
+                outcome = await _hooks.Sender(
+                    BuildDispatch(request, occupy.File!, stableIdentity, candidateId, targetEpoch)).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                outcome = new SendOutcome.Unknown("发送回调异常（保守待对账，不重发）：" + ex.GetType().Name); // I1：已发出结果未知=对账，不抛出不悬置
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            outcome = new SendOutcome.Unknown("发送回调异常（保守待对账，不重发）：" + ex.GetType().Name); // I1：已发出结果未知=对账，不抛出不悬置
+            // 无论发送成功/异常，都必须先回到权威串行边界（本函数返回后由 `DrainRoundAsync` 的 finally 释放）。
+            if (releaseGateDuringSend) await _gate.WaitAsync().ConfigureAwait(false);
         }
 
+        // [验证会诊阻断处置] 重取串行权后、**任何台账/适配器副作用之前**复核「本笔发送责任是否仍属本层」：
+        // 锁外期间同一发送身份可能已被其他入口推进（换主后的恢复扫描转 `Reconciling`／对账判「确定未受理」／
+        // 他人改写本笔轮次）——此时按占位快照写接管台账会造成「租约侧拒绝、台账侧受理」的分裂，旧身份还会
+        // 覆盖新所有者名下的责任。仅在**锁外窗口**生效（流程登记/节点执行保持逐字不变）。
+        if (releaseGateDuringSend)
+        {
+            var advanced = DetectSendResponsibilityAdvanced(request, occupyBaseline);
+            if (advanced is not null) return advanced;
+        }
+
+        // §24.18-3 其余口径由既有机制承担（**以既有已验证夹具为证**）：每次写入都由
+        // `_store.MutateHandoffLatest(leaseId, ownerEpoch, …)` 在锁内校验 owner/epoch/revision（换主/接管后
+        // 旧身份写入一律响亮拒绝），且各回调内逐笔校验本笔 `submissionIdentity＋sendSeq`；证据＝
+        // `OwnershipChanged_OldFlowWrite_LeaseStaleGeneration`（换主 ⇒ Reconciling＋`lease_stale_generation`＋
+        // 未决事实不被旧身份推进）与 `StateAdvancedExternally_OldRoundDoesNotOverwrite`。
         return await ReconcileOutcomeAsync(request, lease, occupy.File!, outcome).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// **占位基线（锁内捕获；§24.18-3）**：锁外发送返回后用它复核「本笔责任是否仍属本层」。
+    /// 以**值快照**捕获（不得依赖后续可能被改写的对象引用）。
+    /// </summary>
+    private sealed record OccupyBaseline(
+        string LeaseId, string OwnerEpoch, OperationRequestState RequestState,
+        string SubmissionIdentity, int SendSeq);
+
+    /// <summary>
+    /// **锁外发送后的责任归属复核（R5.3 §24.18-3/4）**：重新取得权威串行权后、**任何台账/适配器副作用之前**，
+    /// 逐项核对：①当前租约 `leaseId／ownerEpoch` 仍等于占位时捕获值（未被接管/换代——换主后即使发送身份未变，
+    /// 旧层也不得写台账/关闭/释放）；②同名操作的**请求状态**未被他人推进（如恢复扫描转 `Reconciling`、
+    /// 对账判「确定未受理」）；③本笔发送身份（`submissionIdentity＋sendSeq`）在操作与 Submission 两侧仍是占位那一轮。
+    /// 任一不成立 ⇒ **保守停驻**（`NeedReconcile`／责任 `Pending`／禁止重发／保留占用；**不写**接管台账、
+    /// **不**关闭 Submission、**不**释放占用），把结算与冲突裁决交给当前所有者/恢复路径；成立 ⇒ `null`（继续既有
+    /// `ReconcileOutcomeAsync`，其写入仍由 `MutateHandoffLatest` 复核 owner/epoch/revision）。
+    /// **残余说明（如实登记）**：本复核与随后 `TakeoverPersist`（**独立文件**）之间不存在跨文件原子边界——
+    /// 跨进程处理者仍可能在此缝隙内推进；该情形按 §24.12 恢复集合②/③与冲突裁决处置（登记 §24.22-C-8）。
+    /// **归属边界**：非终态「曾受理」证据与「确定未受理」之间的冲突词表口径归冲突批次（登记 §24.21-C-1③）。
+    /// </summary>
+    private AdmissionResult? DetectSendResponsibilityAdvanced(
+        AdmissionRequest request, OccupyBaseline baseline)
+    {
+        var file = _store.Read().File;
+        if (file?.Lease is not { } currentLease)
+            return Stop(request.RequestIdentity, "lease_unreadable_during_send", "锁外发送期间租约不可读——不得按占位快照写台账/释放占用；保守待对账、禁止重发。", baseline);
+        if (!string.Equals(currentLease.LeaseId, baseline.LeaseId, StringComparison.Ordinal)
+            || !string.Equals(currentLease.OwnerEpoch, baseline.OwnerEpoch, StringComparison.Ordinal))
+            return Stop(request.RequestIdentity, "owner_or_lease_changed_during_send", "锁外发送期间租约代次/所有者已更替——发送责任移交当前所有者对账（不写台账、不关闭、不释放占用、禁止重发）。", baseline);
+
+        var liveOp = file.Handoff?.Operations?.FirstOrDefault(o =>
+            string.Equals(o.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal));
+        var liveSub = file.Handoff?.Submission;
+        var responsibilityIntact = liveOp is not null
+            && liveOp.RequestState == baseline.RequestState
+            && string.Equals(liveOp.SubmissionIdentity, baseline.SubmissionIdentity, StringComparison.Ordinal)
+            && liveOp.LastSendSeq == baseline.SendSeq
+            && liveSub is not null
+            && string.Equals(liveSub.SubmissionIdentity, baseline.SubmissionIdentity, StringComparison.Ordinal)
+            && liveSub.SendSeq == baseline.SendSeq;
+        if (responsibilityIntact) return null;
+
+        return Stop(request.RequestIdentity, "send_responsibility_advanced_during_send",
+            "锁外发送期间本笔发送责任已被其他入口推进（换主恢复/对账/关闭/轮次改写）——"
+            + "不得按占位快照写接管台账或释放占用；保守待对账、禁止重发。", baseline);
+    }
+
+    private static AdmissionResult Stop(
+        string requestIdentity, string reasonCode, string detail, OccupyBaseline baseline)
+        => new()
+        {
+            Kind = AdmissionResultKind.NeedReconcile,
+            ReasonCode = reasonCode,
+            Detail = detail,
+            RequestIdentity = requestIdentity,
+            SubmissionIdentity = baseline.SubmissionIdentity,
+            SendSeq = baseline.SendSeq,
+            ExecutionDisposition = ExecutionDisposition.Unknown,
+            ResponsibilityState = ResponsibilityState.Pending,
+            EvidenceSource = "arbitration:responsibility_advanced",
+        };
 
     private SubmissionDispatch BuildDispatch(AdmissionRequest request, LogicalOwnerLeaseFile occupiedFile, string stableIdentity, string candidateId, string targetEpoch)
     {

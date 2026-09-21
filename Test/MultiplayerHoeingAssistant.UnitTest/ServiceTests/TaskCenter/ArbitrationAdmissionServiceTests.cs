@@ -3361,4 +3361,164 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal("job-r2", Assert.Single(ledger.Read().File!.Entries).JobId);
         Assert.Null(ReadLease().File!.Handoff!.Submission);
     }
+
+    /// <summary>
+    /// **锁外发送期间换主（发送身份未变）**：租约被他人接管（`leaseId`/`ownerEpoch` 更替）而本笔
+    /// `submissionIdentity＋sendSeq` 未变时，旧层迟到的 `Accepted` **仍须**停驻（不得写接管台账——否则会出现
+    /// 「旧身份写台账、新所有者名下租约侧拒绝」的分裂；§24.18-3/4）。
+    /// </summary>
+    [Fact]
+    public async Task ExternalStartSend_OwnershipChangedDuringSend_LateAcceptStopsBeforeLedgerWrite()
+    {
+        var inSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (svc, store, ledger, _) = BuildFacade(h => h.Sender = async _ =>
+        {
+            inSend.TrySetResult();
+            await releaseSend.Task;
+            return new SendOutcome.Accepted("ext:accepted", null);
+        });
+
+        var submit = svc.SubmitAsync(Req(ns: "v2", workflow: "group:g1", operationType: OperationType.ExternalStart));
+        await inSend.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // 锁外期间：换主（单调观察满 TTL＋锁内复核，§6.3 唯一接管依据）——发送身份保持不变。
+        var observer = new LeaseTakeoverObserver(() => _mono);
+        Assert.Null(observer.Observe(store.Read()));
+        _mono += TimeSpan.FromSeconds(20);
+        var evidence = observer.Observe(store.Read());
+        Assert.NotNull(evidence);
+        Assert.True(store.TryAcquire("pid:other", evidence: evidence).Success);
+
+        releaseSend.TrySetResult();
+        var result = await submit.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(AdmissionResultKind.NeedReconcile, result.Kind);
+        Assert.Equal("owner_or_lease_changed_during_send", result.ReasonCode);
+        Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);
+        Assert.True(ledger.Read().File?.Entries is null or { Count: 0 });   // 旧身份**未**写接管台账
+    }
+
+    /// <summary>
+    /// **锁外发送后的责任归属复核（§24.18-3/4）**：发送窗口内本笔发送责任被其他入口推进（夹具直接改写本轮
+    /// `Submission.SendSeq` 模拟换主恢复/对账/轮次改写）⇒ 迟到的 `Accepted` **不得**写接管台账、不得关闭、
+    /// 不得释放占用，必须保守停驻（`NeedReconcile`／责任 `Pending`／禁止重发）。
+    /// </summary>
+    [Fact]
+    public async Task ExternalStartSend_ResponsibilityAdvancedDuringSend_LateAcceptStopsBeforeLedgerWrite()
+    {
+        var inSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (svc, store, ledger, _) = BuildFacade(h => h.Sender = async _ =>
+        {
+            inSend.TrySetResult();
+            await releaseSend.Task;
+            return new SendOutcome.Accepted("ext:accepted", null);
+        });
+
+        var submit = svc.SubmitAsync(Req(ns: "v2", workflow: "group:g1", operationType: OperationType.ExternalStart));
+        await inSend.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // 锁外期间：另一入口推进本笔责任（恢复扫描/对账把本笔操作转为 Reconciling；发送身份保持不变）——
+        // 旧层不得再按占位快照写台账/关闭/释放。
+        var read = store.Read();
+        var lease = read.File!.Lease!;
+        Assert.True(store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            file.Handoff!.Operations.First().RequestState = OperationRequestState.Reconciling;
+            return null;
+        }).Success);
+
+        releaseSend.TrySetResult();
+        var result = await submit.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(AdmissionResultKind.NeedReconcile, result.Kind);
+        Assert.Equal("send_responsibility_advanced_during_send", result.ReasonCode);
+        Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);   // 责任未结清
+        Assert.True(ledger.Read().File?.Entries is null or { Count: 0 });        // **未**写接管台账（无分裂）
+    }
+
+    /// <summary>
+    /// **锁外发送异常后的配对与可用性（§24.18-3/5）**：外部启动 Sender 抛异常 ⇒ 本笔落 `Reconciling`（责任
+    /// `Pending`、禁止重发），且**后续请求仍能取得门面锁**（证明重取/释放严格配对，无漏释放或死锁）。
+    /// </summary>
+    [Fact]
+    public async Task ExternalStartSend_Throws_ReacquiresGate_AndLaterRequestsStillProceed()
+    {
+        var (svc, _, _, _) = BuildFacade(h => h.Sender = _ => throw new InvalidOperationException("boom"));
+
+        var failed = await svc.SubmitAsync(Req(ns: "v2", workflow: "group:g1", operationType: OperationType.ExternalStart));
+        Assert.Equal(AdmissionResultKind.Reconciling, failed.Kind);
+        Assert.Equal(ResponsibilityState.Pending, failed.ResponsibilityState);
+
+        var later = await svc.SubmitAsync(Req(ns: "v2", workflow: "group:g2", operationType: OperationType.ExternalStart))
+            .WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.NotNull(later);
+    }
+
+    /// <summary>
+    /// **边界对照（同一份代码的类型分派）**：流程登记的发送**保持既有单段串行**——发送窗口内提交的另一笔请求
+    /// 在发送返回前**不得**取得串行权（这是 B2-γ 既有夹具所依赖的顺序；放开则 E1 启动窗口内提交的节点操作
+    /// 会被并发轮次误拒，实测见 §24.21-C）。
+    /// </summary>
+    [Fact]
+    public async Task FlowRegistrationSend_KeepsGate_SerializedUntilSendReturns()
+    {
+        var inSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (svc, _, _, _) = BuildFacade(h => h.Sender = async _ =>
+        {
+            inSend.TrySetResult();
+            await releaseSend.Task;
+            return new SendOutcome.Accepted("flow:accepted", null);
+        });
+
+        var first = svc.SubmitAsync(Req(ns: "manual", workflow: "group:flow1"));
+        await inSend.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var second = svc.SubmitAsync(Req(ns: "manual", workflow: "group:flow2"));
+        // 发送返回前不得完成（若此处未超时，说明流程登记也被放到了锁外＝边界被误放宽）。
+        await Assert.ThrowsAsync<TimeoutException>(() => second.WaitAsync(TimeSpan.FromMilliseconds(300)));
+
+        releaseSend.TrySetResult();
+        Assert.Equal(AdmissionResultKind.Accepted, (await first.WaitAsync(TimeSpan.FromSeconds(5))).Kind);
+        Assert.NotNull(await second.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
+    // ── 两段式 `_gate`（R5.3 §24.18-2／§24.14-2；[Batch B 收尾之四]）──────────────────────────────
+
+    /// <summary>
+    /// **外部启动的启动/取证必须在门面锁外**：发送期间另一笔请求必须仍能走完准入（旧实现持 `_gate` 跨发送，
+    /// 本夹具会在 5s 预算内超时失败）；发送结束后本笔仍按占位身份正常结算。
+    /// 对照：流程登记/节点执行的发送保持既有单段串行（`TaskCenterSuccessorPathGateTests` 既有夹具为证，
+    /// 其并发语义需与「在飞父操作占用判定」一并调整＝B2-γ 批次范围）。
+    /// </summary>
+    [Fact]
+    public async Task ExternalStartSend_ReleasesGate_OtherRequestAdmittedDuringSend()
+    {
+        var inSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h => h.Sender = async _ =>
+        {
+            Interlocked.Increment(ref sends);
+            inSend.TrySetResult();
+            await releaseSend.Task;   // 模拟外部启动网络期（§24.14-2 要求此间不占权威串行权）
+            return new SendOutcome.Accepted("ext:accepted", null);
+        });
+
+        var first = svc.SubmitAsync(Req(ns: "v2", workflow: "group:g1", operationType: OperationType.ExternalStart));
+        await inSend.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // 发送窗口内：另一笔请求必须能完成准入（结论不限：占用/合并/拒绝均可接受，关键是**未被阻塞**）。
+        var second = await svc.SubmitAsync(Req(ns: "v2", workflow: "group:g2", operationType: OperationType.ExternalStart))
+            .WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.NotNull(second);
+
+        releaseSend.TrySetResult();
+        var firstResult = await first.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(AdmissionResultKind.Accepted, firstResult.Kind);   // 锁外并发不改变本笔结算
+        Assert.Equal(1, Volatile.Read(ref sends));                     // 发送仍恰好一次（无重发）
+        Assert.Null(ReadLease().File!.Handoff!.Submission);            // 关闭已完成
+    }
 }

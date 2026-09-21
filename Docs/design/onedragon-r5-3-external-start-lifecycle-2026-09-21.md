@@ -509,6 +509,36 @@
 
 **C. 未完成项登记（带批次归属，禁止悬空）**
 
-1. **下一批（B3 收尾之四＝D6 两段式 `_gate`）**：①门面在**占位/发布发送责任与 `PreObservation` 之后释放 `_gate`**，再调用适配层启动/取证，结果回到权威串行边界后**重新校验 owner/epoch/revision/完整发送身份**再结算（§24.14-2／§24.18-2，当前违反点＝`ArbitrationAdmissionService` 的 `DrainRoundAsync`→`ProcessWinnerAsync`→`_hooks.Sender` 链路持锁）；②端口形状按 §24.14-1 收敛为 `ExternalStartReply`（`EarlyAccepted／Rejected／Unknown`）＋完成观察（＝本批 `CompletionObserver` 的正式化）；③恢复扫描**四类集合**（含**集合②未终结台账记录**）接线，使「无权威证据时长期保守停驻」具备**持续观察/重绑入口**（§24.12-3／§24.14-6；对应 §24.21-B 阻断 2 残余与阻断 3）。
+1. **D6 两段式 `_gate`（§24.14-2／§24.18-2）**：**已落地**（§24.22-A：外部启动的启动/取证在门面锁外执行＋锁外并发不改变本笔结算，两枚夹具）；**仍余**：①**流程登记/节点执行**的锁外窗口——实测放开后 `TaskCenterSuccessorPathGateTests` 两条既有夹具转红（E1 启动发送窗口内提交的节点操作被并发轮次按占用冲突拒绝 ⇒ 节点操作停留 `Queued`、`sends=0`、运行收敛 `Unknown`），故须与「**在飞父操作（已发布发送责任、尚未结算）的占用/合并判定**」（§3.1／§4.2a／§24.1-5/7）一并调整，归 **B2-γ 批次**；②端口形状按 §24.14-1 收敛为 `ExternalStartReply`（`EarlyAccepted／Rejected／Unknown`）＋完成观察（＝`CompletionObserver` 的正式化）；③恢复扫描**四类集合**（含**集合②未终结台账记录**）接线，使「无权威证据时长期保守停驻」具备**持续观察/重绑入口**（§24.12-3／§24.14-6；对应 §24.21-B 阻断 2 残余与阻断 3）。
 2. **同批夹具**（§24.14-5／§24.18-5／§24.4-4）：`CompletionTask` 未完成时其他请求取得门面锁（**本批已补**）、终态先于接管/关闭的唯一顺序、接管失败后终态由当前所有者/恢复路径结算、本地取消与调用方退出后的观察责任移交、换主接续、重复结算与等待器单次释放、**真实回退 core 的 v2 普通 success 保持 `Accepted/Pending`**（需 §24.4 组合根的真实传输接缝）。
 3. **归 R5.3 取消链批次**：§24.11 全阶段矩阵的**本地取消**实现（入口取消 + 责任 `Pending` + 后台观察继续的分离语义）与 `ct` 贯通。
+
+### 24.22 落地登记：Batch B 收尾之四（两段式 `_gate`·外部启动锁外窗口）（[新增·2026-09-21]）
+
+**A. 落地事实**
+
+| 落地项 | 实现位置 | 条款 |
+|---|---|---|
+| 占位/发布发送责任与 `PreObservation`（锁内）之后，**释放 `_gate`** 再调用适配层启动/早期取证（锁外），返回后**重新取得权威串行权**再结算 | `ArbitrationAdmissionService.ProcessWinnerAsync`（`releaseGateDuringSend` 分支） | §24.18-2／§24.14-2（与 §24.10-2「完成等待不在门面锁内」同源） |
+| **锁外窗口按操作类型分派**：仅 `OperationType.ExternalStart` 走锁外；流程登记/节点执行保持既有单段串行（逐字不变）。类型来源＝**已持久化**的 `OperationRecord.OperationType`（不得用请求字段决定生命周期分支） | 同上（读 `occupy.File` 中本操作记录的类型，§24.17-2／§24.8-1） | §24.14（外部启动生命周期）／§24.8-3（不回归既有路径）／§24.17-2 |
+**C′. 第二轮（窄范围验证）处置补充**
+
+- **阻断 6 的加固（§24.18-3 全维度）**：`DetectSendResponsibilityAdvanced` 扩展为逐项核对「①当前租约 `leaseId／ownerEpoch` 仍等于**占位基线**（锁内以值快照捕获，不信对象引用）；②同名操作的**请求状态**未被他人推进；③`submissionIdentity＋sendSeq` 在操作与 Submission 两侧仍是占位那一轮」。任一不成立 ⇒ 保守停驻且**零台账写入**。新增夹具 `ExternalStartSend_OwnershipChangedDuringSend_LateAcceptStopsBeforeLedgerWrite`（换主但发送身份未变 ⇒ `owner_or_lease_changed_during_send`＋责任 `Pending`＋台账 `Entries` 为空）与 `ExternalStartSend_ResponsibilityAdvancedDuringSend_LateAcceptStopsBeforeLedgerWrite`（换主恢复把本笔转 `Reconciling` ⇒ `send_responsibility_advanced_during_send`）。
+- **残余（如实登记，非本批可闭合）**：本复核（读租约）与随后 `TakeoverPersist`（**独立文件**）之间不存在跨文件原子边界，跨进程处理者仍可能在此缝隙内推进；该缝隙按 §24.12 恢复集合②/③（未终结台账、台账已终态而 Operation 未终局）与冲突裁决处置。若后续要求更强的跨文件原子协议，需 owner 级裁决（本批不擅自引入新的事务机制）。
+| 锁外并发安全：锁外期间其他请求可完成准入；返回后按既有写入时校验（`MutateHandoffLatest` 的 owner/epoch/revision）与逐回调发送身份校验结算——**换主/接管时旧身份写入一律响亮拒绝** | 同上 ＋ 既有 `Checks` | §24.18-3／§24.18-4（证据＝既有 `OwnershipChanged_OldFlowWrite_LeaseStaleGeneration`、`StateAdvancedExternally_OldRoundDoesNotOverwrite`） |
+| 夹具：外部启动发送窗口内另一笔请求可完成准入（旧实现超时失败）＋边界对照（流程登记仍串行） | `ArbitrationAdmissionServiceTests.ExternalStartSend_ReleasesGate_OtherRequestAdmittedDuringSend`／`FlowRegistrationSend_KeepsGate_SerializedUntilSendReturns` | §24.18-5（部分） |
+
+**B. 实测反例（登记为流程登记/节点执行放开的前置条件）**：把锁外窗口无条件放开后，`TaskCenterSuccessorPathGateTests` 的
+`AcceptedReceipt_PersistedBeforeSubmissionClose` 与 `ConcurrentRunWriteDuringSend_MergeRefused_ConvergesUnknown` 转红——
+E1 流程启动的发送窗口内提交的节点操作被并发轮次按占用冲突拒绝（节点操作停留 `Queued`、`sends=0`、运行收敛 `Unknown`）。
+结论：该两类的锁外窗口**不能**单独放开，须与「在飞父操作占用/合并判定」一并调整（见 §24.21-C-1①）。
+
+**C. 本批会诊（gpt-5.6-sol／medium，一轮）与逐条处置**
+
+| # | 严重度 | 发现摘要 | 处置 |
+|---|---|---|---|
+| 5 | 阻断 | 锁外窗口按**请求字段** `AdmissionRequest.OperationType` 分派 ⇒ 续用/重驱动（请求不回填类型）会走错分支，伪造请求更可令持久化为流程登记/节点执行的操作进入锁外窗口 | **已修**：改读**已持久化的 `OperationRecord.OperationType`**（§24.17-2／§24.8-1） |
+| 6 | 阻断 | 重取 `_gate` 后**首个动作即台账副作用**（`TakeoverPersist`）——锁外期间本笔发送身份若已被他人推进（换主恢复/对账判「确定未受理」/关闭/轮次改写），会出现「租约侧拒绝、台账侧受理」的分裂，且旧身份会覆盖新所有者名下的责任 | **已修**：新增 `DetectSendResponsibilityAdvanced`（**仅锁外窗口生效**）——结算与任何副作用**之前**复核「本笔 `submissionIdentity＋sendSeq` 仍是占位那一轮且 Submission 在册」，不成立即**保守停驻**（`NeedReconcile`／责任 `Pending`／禁止重发／保留占用；不写台账、不关闭）。夹具：`ExternalStartSend_ResponsibilityAdvancedDuringSend_LateAcceptStopsBeforeLedgerWrite` |
+| 7 | 重要 | `BuildDispatch` 被移出「捕获异常⇒Unknown」归类 ⇒ 派发快照异常时由外层落 `internal_error`，占位后状态与既有行为不一致（影响所有类型） | **已修**：`BuildDispatch` 保留在原归类内（哨兵夹具不变） |
+| 8 | 重要 | 新夹具未覆盖「发送异常后重取锁的配对/可用性」与「责任被推进后迟到受理」两类交错 | **部分已修**：+2 夹具（责任推进 ⇒ 停驻且**零台账写入**；外部启动 Sender 抛异常 ⇒ `Reconciling` 且**后续请求仍能取得门面锁**）。仍未覆盖：同一身份被**终态**证据推进后的裁决入口联动（归冲突批次） |
+| 9 | 建议（登记） | 非终态「曾受理」证据与「确定未受理」之间的**冲突词表口径**（`ConflictEvidenceRecord.RawTerminal` 目前只表达终态词） | **登记挂账**：归冲突裁决批次（不得为凑语义伪造终态词，§24.2-2″） |
