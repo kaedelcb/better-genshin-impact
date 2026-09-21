@@ -2092,7 +2092,16 @@ public sealed class ArbitrationAdmissionService
                     RequestIdentity = requestIdentity,
                     SubmissionIdentity = submissionIdentity,
                     SendSeq = sendSeq,
-                    JobId = completion?.JobId ?? op.ExecutionResult?.JobId,
+                    // §24.6-2（[Batch B 收尾之三] 修正）：**未知分支同样必须携带已取得的 JobId**——
+                    // 受理时拿到的句柄是调用方对账的唯一依据，不得在门面/适配器边界断链
+                    // （`completion` 为 `Unknown` 时其 JobId 必空，故取受理/对账携带的 `acceptanceJobId`）。
+                    // [验证会诊阻断处置] 恢复/换主等**未随调用方携带** `acceptanceJobId` 的路径，
+                    // 仍须从已接管台账读回句柄（§24.7-1：记录合并不等于远端关联可重建，故只在**可确认**时补齐）。
+                    JobId = completion?.JobId ?? acceptanceJobId ?? op.ExecutionResult?.JobId
+                        ?? (_hooks.TakeoverJobIdRead?.Invoke(submissionIdentity, sendSeq) is
+                            { State: LedgerHandleState.Present, JobId: { Length: > 0 } readHandle }
+                            ? readHandle
+                            : null),
                     ExecutionDisposition = plain ? ExecutionDisposition.None : ExecutionDisposition.Unknown,
                     ResponsibilityState = ResponsibilityState.Pending,
                     RawTerminal = completion?.RawTerminal,
@@ -2133,6 +2142,13 @@ public sealed class ArbitrationAdmissionService
                     completion, "接管台账不可读/不可确认（不得把读取失败当作无句柄：保守停驻、责任保留）。",
                     acceptanceJobId ?? completion.JobId ?? op.ExecutionResult?.JobId);
             var ledgerHandle = handleProbe is { State: LedgerHandleState.Present } ? handleProbe.JobId : null;
+            // [Batch B 收尾之三 验证会诊阻断处置] §24.3-3：**多个非空且不相同**的句柄＝冲突，
+            // 必须保守待对账（不得按优先级静默挑一个——那会把冲突句柄写成权威事实）。
+            if (!string.IsNullOrEmpty(acceptanceJobId) && !string.IsNullOrEmpty(completion.JobId)
+                && !string.Equals(acceptanceJobId, completion.JobId, StringComparison.Ordinal))
+                return SettleStop(requestIdentity, submissionIdentity, sendSeq, "terminal_job_id_conflict",
+                    completion, "受理句柄与完成层句柄不一致（不得静默择一：保守待对账、责任保留）。",
+                    acceptanceJobId);
             var effectiveJobId = new[] { acceptanceJobId, completion.JobId, op.ExecutionResult?.JobId, ledgerHandle }
                 .FirstOrDefault(v => !string.IsNullOrEmpty(v));
 

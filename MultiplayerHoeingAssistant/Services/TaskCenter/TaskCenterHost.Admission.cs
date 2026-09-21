@@ -1453,13 +1453,25 @@ public sealed partial class TaskCenterHost
         // [Batch B 收尾之二] §24.10／§24.14 完成观察接线：受理成功后取完成层结果并交完成结算入口——
         // `CompletionProvider` 缺失/返回 null ⇒ 保持普通受理（责任 Pending）；返回 `Unknown` ⇒ 不写终态载体、保守待对账；
         // 返回权威终态 ⇒ 由门面按 §24.15 唯一顺序结算（终态载体→台账 Terminal→关闭→终局）并回传结算事实。
-        if (result.Kind == AdmissionResultKind.Accepted && request.CompletionProvider is { } provideCompletion
-            && !string.IsNullOrEmpty(result.SubmissionIdentity) && _admission is { } facadeForCompletion)
+        // [Batch B 收尾之三 验证会诊阻断处置] **不只 `Accepted` 才消费完成观察**（§24.14-4）：
+        // 接管/关闭失败时门面返回 `Reconciling`（Submission 未关闭），此时完成层若已取得**权威终态**，
+        // 必须由本层暂存结果送结算入口按 §24.15 唯一顺序（终态载体→台账 Terminal→关闭→终局）处理；
+        // 否则终态会只留在无人消费的后台观察任务里（观察责任丢失）。判定标准＝**有完整发送身份**，
+        // 且**确有完成事实**（观察/提供者返回 null 时下面不结算，保持门面原结论）。
+        if (!string.IsNullOrEmpty(result.SubmissionIdentity)
+            && (request.CompletionProvider is not null || request.CompletionObserver is not null)
+            && _admission is { } facadeForCompletion)
         {
             ExternalStartCompletion? completion;
             try
             {
-                completion = provideCompletion();
+                // 同步提供者优先（阻塞式协议）；提供者返回 null（例如早期 ack 通道：核心未等待完成）时
+                // 再等异步完成观察（§24.10：受理与完成等待分离；等待在门面锁外，§24.14-2）。
+                // **观察返回 null ＝本通道不承载完成事实**（未配置/不适用）⇒ 保持普通受理（责任 `Pending`），
+                // 不得据此走完成结算（否则 v2 普通受理会被误判成待对账）。
+                completion = request.CompletionProvider?.Invoke();
+                if (completion is null && request.CompletionObserver is { } observer)
+                    completion = await observer(CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -1469,9 +1481,26 @@ public sealed partial class TaskCenterHost
             {
                 try
                 {
-                    result = await facadeForCompletion.SettleCompletionAsync(
+                    var settled = await facadeForCompletion.SettleCompletionAsync(
                         result.RequestIdentity, result.SubmissionIdentity!, result.SendSeq, completion,
-                        result.EvidenceSource).ConfigureAwait(false);
+                        result.EvidenceSource,
+                        // §24.6-2／D9：**已取得的 JobId 不得在适配器边界断链**——受理时拿到的句柄必须随
+                        // 完成结算一路传递（也是「完成层 Unknown／失败但句柄已取得」时对调用方回显的来源）。
+                        acceptanceJobId: result.JobId).ConfigureAwait(false);
+                    // [验证会诊阻断处置] 结算入口可能因「操作不在可结算状态」返回**停止结论**（`not_accepted` 等）：
+                    // 此时**不得**用停止结论覆盖既有的 Rejected/RetryableRejected 事实；但若本次确有**权威终态**证据，
+                    // 属于 §24.2-2″／§24.15「已拒绝后收到冲突证据」——必须原子追加冲突证据并置冲突待决
+                    // （责任 Pending、禁止重发；由冲突裁决入口按四分支裁决），**禁止静默丢证据**。
+                    if (settled.ReasonCode == "not_accepted")
+                    {
+                        var conflict = await RegisterObservedTerminalConflictAsync(
+                            facadeForCompletion, result, completion).ConfigureAwait(false);
+                        if (conflict is not null) result = conflict;
+                    }
+                    else
+                    {
+                        result = settled;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -1530,6 +1559,48 @@ public sealed partial class TaskCenterHost
             result.JobId, result.ExecutionDisposition, result.ResponsibilityState,
             result.RawTerminal, result.ExecutionErrorCode, result.EvidenceSource,
             result.SubmissionIdentity, result.SendSeq);
+    }
+
+    /// <summary>
+    /// **「已拒绝后收到权威终态」的冲突登记**（§24.2-2″／§24.15 最后一行；[验证会诊阻断处置] 新增）：
+    /// 普通完成结算对本笔返回 `not_accepted`（本笔已被判「确定未受理」）时，**不得静默丢弃**同一发送身份上
+    /// 新观察到的**权威终态**——必须原子追加冲突证据并置冲突待决（既有拒绝本体不改写，只由审计项表达取代关系），
+    /// 由冲突裁决入口按四分支裁决。
+    /// 返回 `null`＝证据不构成冲突（`Unknown`／缺观察时点／登记被拒）⇒ 调用方保留门面原结论。
+    /// </summary>
+    private static async Task<AdmissionResult?> RegisterObservedTerminalConflictAsync(
+        ArbitrationAdmissionService facade, AdmissionResult rejectedResult, ExternalStartCompletion completion)
+    {
+        if (completion.Kind == ExternalStartCompletionKind.Unknown
+            || string.IsNullOrEmpty(completion.RawTerminal)
+            || completion.ObservedAtUtc is not { } observedAt || observedAt == default
+            || string.IsNullOrEmpty(rejectedResult.SubmissionIdentity))
+            return null;
+        var evidence = new ConflictEvidenceRecord
+        {
+            // 确定性 evidenceId：同一观察事实重复登记幂等；不同观察时点＝不同证据（§24.2-2″ 追加式）。
+            EvidenceId = "host-observed:" + rejectedResult.SubmissionIdentity + ":" + rejectedResult.SendSeq + ":"
+                         + completion.RawTerminal + ":" + observedAt.UtcTicks,
+            RawTerminal = completion.RawTerminal!,
+            ExecutionErrorCode = completion.ExecutionErrorCode,
+            EvidenceSource = string.IsNullOrEmpty(completion.EvidenceSource) ? "host:completion" : completion.EvidenceSource!,
+            ObservedAtUtc = observedAt,
+            SubmissionIdentity = rejectedResult.SubmissionIdentity!,
+            SendSeq = rejectedResult.SendSeq,
+        };
+        try
+        {
+            var registered = await facade
+                .RegisterConflictEvidenceAsync(rejectedResult.RequestIdentity, evidence).ConfigureAwait(false);
+            // 登记成功＝责任 Pending＋禁止重发（NeedReconcile）；其余（损坏/身份不符/类型不符）保留门面原结论。
+            return registered.Kind is AdmissionResultKind.NeedReconcile or AdmissionResultKind.Accepted
+                ? registered
+                : null;
+        }
+        catch (Exception)
+        {
+            return null;   // 登记异常不得改变既有拒绝结论（保守：证据本轮不登记，责任仍由拒绝结论承担）
+        }
     }
 
     /// <summary>

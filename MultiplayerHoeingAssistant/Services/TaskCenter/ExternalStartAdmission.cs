@@ -59,6 +59,18 @@ public sealed class ExternalStartAdmissionRequest
     /// 返回 `null` ⇒ 保持普通受理（责任 `Pending`、不写终态载体）。
     /// </summary>
     public System.Func<ExternalStartCompletion?>? CompletionProvider { get; init; }
+
+    /// <summary>
+    /// **异步完成观察**（R5.3 §24.10／§24.14；[Batch B 收尾之三] 新增）：用于**有早期 ack 的通道**
+    /// （如 ext 任务队列：`ext.task.start` 先回 `taskHandle`，终态由事件／轮询后到）。
+    /// 门面获准并受理后由宿主调用；语义：等待到**权威终态**返回完成层结果（允许长期等待，不得用超时强制终局）。
+    /// **返回 `null` ＝本通道不承载完成事实**（无早期 ack／观察未接线）⇒ 与 <see cref="CompletionProvider"/>
+    /// 返回 `null` 同义：保持**普通受理**（责任 `Pending`、不写终态载体）；**不得**把「未接线」写成 `Unknown`
+    /// （那会把 v2 普通受理误判成待对账，§24.6-5「普通受理已关闭、完成层尚未报终态」＝`Pending`）。
+    /// 抛异常 ⇒ 宿主按「完成层未知」处置（不写终态载体、责任保留）。
+    /// 与 <see cref="CompletionProvider"/> 同时存在时，**同步提供者优先**（阻塞式协议语义更强）。
+    /// </summary>
+    public System.Func<CancellationToken, Task<ExternalStartCompletion?>>? CompletionObserver { get; init; }
 }
 
 /// <summary>外部启动执行结果（适配层对「是否受理」的**关联验证后**结论；不得凭超时/异常推断未受理）。</summary>

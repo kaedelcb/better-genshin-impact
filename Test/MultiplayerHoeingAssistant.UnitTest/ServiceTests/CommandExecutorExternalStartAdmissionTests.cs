@@ -18,10 +18,12 @@ public sealed class CommandExecutorExternalStartAdmissionTests
 
     /// <summary>
     /// 核心结果 → 完成层结果的映射纪律：**明确取消事实**＝终态 `Cancelled`（线路词表不改）；
-    /// **普通发送成功/失败但非终态**＝`Unknown`（不得据此构造终态、不得释放占用）。
+    /// **非终态（普通发送成功／仅业务失败）＝`null`**（＝本层无完成事实，§24.3-4 第一分支 ⇒ 保持普通受理）。
+    /// **[Batch B 收尾之三 验证会诊阻断处置]** 原先返回 `Unknown` 会让 §24.4-4 明文要求的
+    /// 「v2 发送成功：入口 success」被改判成 `NeedReconcile`（对外 `result_unknown`）——已纠正。
     /// </summary>
     [Fact]
-    public void ToCompletion_CancelFact_IsTerminalCancelled_ButPlainSuccessStaysUnknown()
+    public void ToCompletion_CancelFact_IsTerminalCancelled_ButNonTerminalIsNullNotUnknown()
     {
         var cancelled = CommandExecutor.ToCompletion(new CommandResult
         {
@@ -35,12 +37,11 @@ public sealed class CommandExecutorExternalStartAdmissionTests
 
         // v2「发送成功」＝非终态（§24.2-1／§24.2-5）。
         var success = CommandExecutor.ToCompletion(new CommandResult { Status = "success", Message = "已启动" });
-        Assert.NotNull(success);
-        Assert.Equal(ExternalStartCompletionKind.Unknown, success!.Kind);
+        Assert.Null(success);   // 无完成事实 ⇒ 普通受理（不得写成 Unknown）
 
-        // 明确失败但**未观察到终态** ⇒ 同样保持 Unknown（不得据信封错误码断言执行终态）。
+        // 明确失败但**未观察到终态** ⇒ 同样无完成事实（不得据信封错误码断言执行终态）。
         var failedNoTerminal = CommandExecutor.ToCompletion(new CommandResult { Status = "failed", ErrorCode = "task_busy" });
-        Assert.Equal(ExternalStartCompletionKind.Unknown, failedNoTerminal!.Kind);
+        Assert.Null(failedNoTerminal);
 
         // 权威失败终态（IsTerminal）⇒ `ExecutionFailed`（携带执行错误码）。
         var failedTerminal = CommandExecutor.ToCompletion(new CommandResult
@@ -81,7 +82,7 @@ public sealed class CommandExecutorExternalStartAdmissionTests
         // 反例：仅信封错误码为 cancelled（无终态、无取消事实）⇒ 不得当取消（也不得据此释放占用）。
         var envelopeOnly = new CommandResult { Status = "failed", ErrorCode = "cancelled" };
         Assert.False(CommandExecutor.IsObservedCancel(envelopeOnly));
-        Assert.Equal(ExternalStartCompletionKind.Unknown, CommandExecutor.ToCompletion(envelopeOnly)!.Kind);
+        Assert.Null(CommandExecutor.ToCompletion(envelopeOnly));   // 无终态/无取消事实 ⇒ 无完成事实
     }
 
     /// <summary>
@@ -348,5 +349,256 @@ public sealed class CommandExecutorExternalStartAdmissionTests
         var decision = await executor.ResolveStartConflictAsync();
 
         Assert.Equal(expected, decision.ToString());
+    }
+
+    // ── ext 队列通道「早期受理 ＋ 完成观察」拆分（R5.3 §24.10／§24.14，[Batch B 收尾之三／P38]）──
+
+    /// <summary>
+    /// **早期受理段分类（§24.14-1）**：一次 `ext.task.start` 回执只产出一个早期结论；副作用前拒绝＝
+    /// **确定未受理（可重试）**；`already_executed`＝**等同 executed**（完成层给权威终态、不得凭空生成句柄）；
+    /// 缺句柄＝协议违例（不可考）；queued/adopted＋句柄＝已受理（句柄随早期受理全链传递，§24.5-1）。
+    /// </summary>
+    [Fact]
+    public void QueueEarly_ClassifySubmit_SingleConclusionPerReceipt()
+    {
+        var observedAt = DateTimeOffset.UtcNow;
+
+        var rejected = CommandExecutor.ClassifyQueueSubmitEarly(
+            new BgiTaskSubmitResult { Success = false, ErrorCode = "queue_full", ErrorMessage = "队列已满" },
+            "配置组「A」", 3, observedAt);
+        Assert.Equal(CommandExecutor.QueueStartEarlyKind.Rejected, rejected.Kind);
+        var rejectedMapped = CommandExecutor.MapQueueEarlyToAdmission(rejected);
+        Assert.Equal(ExternalStartExecutionKind.Rejected, rejectedMapped.Early.Kind);
+        Assert.True(rejectedMapped.Early.Retryable);          // 可重试窗口（旧词表「请稍后重试」同义）
+        Assert.Equal("ext:task.queue", rejectedMapped.Early.EvidenceSource);
+        Assert.Null(rejectedMapped.Observer);                  // 未受理 ⇒ 无完成观察
+
+        var already = CommandExecutor.ClassifyQueueSubmitEarly(
+            new BgiTaskSubmitResult { Success = true, Status = "already_executed" }, "配置组「A」", 3, observedAt);
+        Assert.Equal(CommandExecutor.QueueStartEarlyKind.AlreadyExecuted, already.Kind);
+        var alreadyMapped = CommandExecutor.MapQueueEarlyToAdmission(already);
+        Assert.Equal(ExternalStartExecutionKind.Accepted, alreadyMapped.Early.Kind);
+        Assert.Null(alreadyMapped.Early.JobId);                // 无句柄 ⇒ 不得凭空生成
+        var alreadyCompletion = alreadyMapped.Observer!(CancellationToken.None).GetAwaiter().GetResult();
+        Assert.Equal(ExternalStartCompletionKind.Succeeded, alreadyCompletion!.Kind);  // R4 既有口径：等同 executed
+        Assert.Equal("already_executed", alreadyCompletion.RawTerminal);
+        Assert.Equal("ext:idempotency", alreadyCompletion.EvidenceSource);
+        Assert.Equal(observedAt, alreadyCompletion.ObservedAtUtc);                     // 观察时点＝回执接收时点
+
+        var missing = CommandExecutor.ClassifyQueueSubmitEarly(
+            new BgiTaskSubmitResult { Success = true, Status = "queued" }, "配置组「A」", 3, observedAt);
+        Assert.Equal(CommandExecutor.QueueStartEarlyKind.MissingHandle, missing.Kind);
+        Assert.Equal(ExternalStartExecutionKind.Unknown,
+            CommandExecutor.MapQueueEarlyToAdmission(missing).Early.Kind);             // 协议违例 ⇒ 不可考
+        Assert.Null(CommandExecutor.MapQueueEarlyToAdmission(missing).Observer);
+
+        var faulted = new CommandExecutor.QueueStartEarly(
+            CommandExecutor.QueueStartEarlyKind.Unknown, Detail: "pipe broken");
+        Assert.Equal(ExternalStartExecutionKind.Unknown, CommandExecutor.MapQueueEarlyToAdmission(faulted).Early.Kind);
+        Assert.Null(CommandExecutor.MapQueueEarlyToAdmission(faulted).Observer);
+
+        // 已受理：句柄与完成观察分离（§24.10-1 两层各有独立类型，不得互相代替）
+        var accepted = CommandExecutor.ClassifyQueueSubmitEarly(
+            new BgiTaskSubmitResult { Success = true, Status = "queued", TaskHandle = "h-1" },
+            "配置组「A」", 3, observedAt);
+        Assert.Equal(CommandExecutor.QueueStartEarlyKind.Accepted, accepted.Kind);
+        Assert.Equal("h-1", accepted.TaskHandle);
+        Assert.Null(accepted.Observation);                     // 观察任务由早期段入口创建（纯分类不建连接）
+        var observation = Task.FromResult(new CommandExecutor.QueueTerminalObservation(
+            CommandExecutor.QueueTerminalSource.Event, "completed", false, null, null, "h-1", false, null,
+            observedAt));
+        var acceptedWithReply = accepted with
+        {
+            Observation = observation,
+            Reply = new ExternalStartReply.EarlyAccepted("h-1", CommandExecutor.MapObservationTaskAsync(observation)),
+        };
+        var acceptedMapped = CommandExecutor.MapQueueEarlyToAdmission(acceptedWithReply);
+        Assert.Equal(ExternalStartExecutionKind.Accepted, acceptedMapped.Early.Kind);
+        Assert.Equal("h-1", acceptedMapped.Early.JobId);       // §24.5-1：句柄不得在准入层丢弃
+        Assert.NotNull(acceptedMapped.Observer);
+        var completion = acceptedMapped.Observer!(CancellationToken.None).GetAwaiter().GetResult();
+        Assert.Equal(ExternalStartCompletionKind.Succeeded, completion!.Kind);
+        Assert.Equal("h-1", completion.JobId);
+        Assert.Equal("ext:task.event", completion.EvidenceSource);
+    }
+
+    /// <summary>
+    /// **完成观察 → 完成层结果（§24.2-2／§24.7-3）**：只有事件／轮询取得的**权威终态**才构造终态载体；
+    /// `not_found`／超预算／观察中断一律 `Unknown`（不写 `PendingTerminal`、禁止借超时或未命中转终态）。
+    /// </summary>
+    [Fact]
+    public void QueueObservation_TerminalFactsMapToCompletion_NonTerminalStaysUnknown()
+    {
+        // 观察结论必须携带**接收时点**（§24.2-2″）：映射阶段不得重取，本夹具用固定时点验证等值传递。
+        var receivedAt = DateTimeOffset.UtcNow.AddSeconds(-7);
+        static ExternalStartCompletion Map(
+            CommandExecutor.QueueTerminalSource source, string? raw, bool cancelled = false,
+            string? code = null, string? detail = null, DateTimeOffset? observedAt = null)
+            => CommandExecutor.MapQueueObservationToCompletion(new CommandExecutor.QueueTerminalObservation(
+                source, raw, cancelled, code, null, "h-9", false, detail, observedAt));
+
+        var succeeded = Map(CommandExecutor.QueueTerminalSource.Event, "completed", observedAt: receivedAt);
+        Assert.Equal(ExternalStartCompletionKind.Succeeded, succeeded.Kind);
+        Assert.Equal("h-9", succeeded.JobId);
+        Assert.Equal(receivedAt, succeeded.ObservedAtUtc);        // 接收时点原样传递（不重取）
+
+        // ext 的取消＝`completed` ＋ `Cancelled=true`：**原词不得被改写**（§24.2-2″），取消事实由 Kind 承载。
+        var cancelledEvent = Map(CommandExecutor.QueueTerminalSource.Event, "completed", cancelled: true,
+            observedAt: receivedAt);
+        Assert.Equal(ExternalStartCompletionKind.Cancelled, cancelledEvent.Kind);
+        Assert.Equal("completed", cancelledEvent.RawTerminal);
+        Assert.Equal(receivedAt, cancelledEvent.ObservedAtUtc);
+        Assert.Equal(ExternalStartCompletionKind.Cancelled,
+            Map(CommandExecutor.QueueTerminalSource.Poll, "completed", cancelled: true, observedAt: receivedAt).Kind);
+        Assert.Equal(ExternalStartCompletionKind.Cancelled,
+            Map(CommandExecutor.QueueTerminalSource.Poll, "queueCancelled", cancelled: true, observedAt: receivedAt).Kind);
+
+        var failed = Map(CommandExecutor.QueueTerminalSource.Poll, "failed", code: "task_failed", observedAt: receivedAt);
+        Assert.Equal(ExternalStartCompletionKind.ExecutionFailed, failed.Kind);
+        Assert.Equal("task_failed", failed.ExecutionErrorCode);   // 完成层执行错误码（不得复用信封 ErrorCode）
+        Assert.Equal("ext:task.queueStatus", failed.EvidenceSource);
+
+        // §24.2-2″（验证会诊阻断处置）：**权威终态缺观察时点 ⇒ fail-closed**（不得以映射时刻冒充接收时点）。
+        var missingObservedAt = Map(CommandExecutor.QueueTerminalSource.Event, "completed");
+        Assert.Equal(ExternalStartCompletionKind.Unknown, missingObservedAt.Kind);
+        Assert.Null(missingObservedAt.ObservedAtUtc);
+
+        var notFound = Map(CommandExecutor.QueueTerminalSource.Poll, "not_found");
+        Assert.Equal(ExternalStartCompletionKind.Unknown, notFound.Kind);
+        Assert.Null(notFound.ObservedAtUtc);                      // 非权威终态 ⇒ 无观察时点（不得生成 PendingTerminal）
+        Assert.DoesNotContain("completed", notFound.RawTerminal!); // 不得把「未命中」写成终态词
+
+        var timeout = Map(CommandExecutor.QueueTerminalSource.Timeout, null);
+        Assert.Equal(ExternalStartCompletionKind.Unknown, timeout.Kind);
+        Assert.Null(timeout.ObservedAtUtc);                       // 无权威终态 ⇒ 无观察时点
+
+        var faulted = Map(CommandExecutor.QueueTerminalSource.Faulted, null, detail: "pipe broken");
+        Assert.Equal(ExternalStartCompletionKind.Unknown, faulted.Kind);
+        Assert.Contains("pipe broken", faulted.RawTerminal);
+    }
+
+    /// <summary>
+    /// **可重试白名单（§24.2-2″／§24.11 第 3′ 行）**：只有**无损拒绝类**才开重试窗口；
+    /// 未列入的错误码一律**终局拒绝**（保守方向，防止「可能已产生副作用」的失败进入可重试分类）。
+    /// </summary>
+    [Fact]
+    public void QueueEarly_RejectionRetryability_IsClosedWhitelist()
+    {
+        static ExternalStartExecution MapRejected(string? code)
+            => CommandExecutor.MapQueueEarlyToAdmission(CommandExecutor.ClassifyQueueSubmitEarly(
+                new BgiTaskSubmitResult { Success = false, ErrorCode = code, ErrorMessage = "拒绝" },
+                "配置组「A」", 1, DateTimeOffset.UtcNow)).Early;
+
+        Assert.True(CommandExecutor.IsRetryableQueueRejection("queue_full"));
+        Assert.True(CommandExecutor.IsRetryableQueueRejection("task_already_running"));
+        Assert.False(CommandExecutor.IsRetryableQueueRejection("contract_violation"));  // 未列入 ⇒ 终局拒绝
+        Assert.False(CommandExecutor.IsRetryableQueueRejection(null));
+
+        Assert.True(MapRejected("queue_full").Retryable);
+        Assert.Equal(ExternalStartExecutionKind.Rejected, MapRejected("queue_full").Kind);
+        var terminalReject = MapRejected("unknown_side_effect_code");
+        Assert.Equal(ExternalStartExecutionKind.Rejected, terminalReject.Kind);
+        Assert.False(terminalReject.Retryable);
+        Assert.Equal("unknown_side_effect_code", terminalReject.Reason);
+    }
+
+    /// <summary>
+    /// **未接线直启路径的旧词表投影逐字保留**（本批只改内部结构：对外文案与错误码不得回归）。
+    /// </summary>
+    [Fact]
+    public async Task QueueLegacyProjection_PreservesExistingVocabulary()
+    {
+        static CommandExecutor.QueueStartEarly Observed(
+            CommandExecutor.QueueTerminalSource source, string? raw, bool cancelled = false,
+            string? code = null, string? message = null, string? detail = null)
+            => new(CommandExecutor.QueueStartEarlyKind.Accepted, TaskHandle: "h-7",
+                Observation: Task.FromResult(new CommandExecutor.QueueTerminalObservation(
+                    source, raw, cancelled, code, message, "h-7", false, detail, DateTimeOffset.UtcNow)));
+
+        var eventCompleted = await CommandExecutor.MapQueueEarlyToLegacyResultAsync(
+            Observed(CommandExecutor.QueueTerminalSource.Event, "completed"), "配置组「A」", 1);
+        Assert.Equal("success", eventCompleted.Status);
+        Assert.Contains("已启动并执行完成（队列通道）", eventCompleted.Message);
+
+        var pollCompleted = await CommandExecutor.MapQueueEarlyToLegacyResultAsync(
+            Observed(CommandExecutor.QueueTerminalSource.Poll, "completed"), "配置组「A」", 1);
+        Assert.Contains("已启动并执行完成（队列通道，轮询校准）", pollCompleted.Message);
+
+        Assert.Equal("cancelled", (await CommandExecutor.MapQueueEarlyToLegacyResultAsync(
+            Observed(CommandExecutor.QueueTerminalSource.Event, "completed", cancelled: true), "配置组「A」", 1)).Status);
+        Assert.Equal("cancelled", (await CommandExecutor.MapQueueEarlyToLegacyResultAsync(
+            Observed(CommandExecutor.QueueTerminalSource.Poll, "queueCancelled", cancelled: true), "配置组「A」", 1)).Status);
+        Assert.Contains("排队中被取消", (await CommandExecutor.MapQueueEarlyToLegacyResultAsync(
+            Observed(CommandExecutor.QueueTerminalSource.Poll, "queueCancelled", cancelled: true), "配置组「A」", 1)).Message);
+
+        var pollFailed = await CommandExecutor.MapQueueEarlyToLegacyResultAsync(
+            Observed(CommandExecutor.QueueTerminalSource.Poll, "failed", code: "task_failed", message: "任务失败"),
+            "配置组「A」", 1);
+        Assert.Contains("执行失败（task_failed）：任务失败", pollFailed.Message);
+
+        Assert.Contains("任务句柄在 BGI 侧不存在", (await CommandExecutor.MapQueueEarlyToLegacyResultAsync(
+            Observed(CommandExecutor.QueueTerminalSource.Poll, "not_found"), "配置组「A」", 1)).Message);
+        Assert.Contains("等待执行结果超时", (await CommandExecutor.MapQueueEarlyToLegacyResultAsync(
+            Observed(CommandExecutor.QueueTerminalSource.Timeout, null), "配置组「A」", 1)).Message);
+
+        var faulted = await CommandExecutor.MapQueueEarlyToLegacyResultAsync(
+            Observed(CommandExecutor.QueueTerminalSource.Faulted, null, detail: "pipe broken"), "配置组「A」", 1);
+        Assert.Equal("result_unknown", faulted.ErrorCode);
+        Assert.Contains("执行结果未知，未重新下发：pipe broken", faulted.Message);
+
+        var rejected = await CommandExecutor.MapQueueEarlyToLegacyResultAsync(
+            new CommandExecutor.QueueStartEarly(CommandExecutor.QueueStartEarlyKind.Rejected,
+                ReasonCode: "queue_full", Detail: "队列已满"), "配置组「A」", 4);
+        Assert.Equal("failed", rejected.Status);
+        Assert.Contains("BGI 任务队列拒绝启动配置组「A」（queue_full）：队列已满", rejected.Message);
+
+        var already = await CommandExecutor.MapQueueEarlyToLegacyResultAsync(
+            new CommandExecutor.QueueStartEarly(CommandExecutor.QueueStartEarlyKind.AlreadyExecuted),
+            "配置组「A」", 4);
+        Assert.Equal("success", already.Status);
+        Assert.Contains("已执行过（generation=4，幂等跳过）", already.Message);
+
+        var missing = await CommandExecutor.MapQueueEarlyToLegacyResultAsync(
+            new CommandExecutor.QueueStartEarly(CommandExecutor.QueueStartEarlyKind.MissingHandle, Detail: "queued"),
+            "配置组「A」", 4);
+        Assert.Equal("result_unknown", missing.ErrorCode);
+        Assert.Contains("已提交但未获得有效句柄，禁止换通道重发", missing.Message);
+
+        var unknown = await CommandExecutor.MapQueueEarlyToLegacyResultAsync(
+            new CommandExecutor.QueueStartEarly(CommandExecutor.QueueStartEarlyKind.Unknown, Detail: "pipe broken"),
+            "配置组「A」", 4);
+        Assert.Equal("result_unknown", unknown.ErrorCode);
+        Assert.Contains("执行结果未知，未重新下发：pipe broken", unknown.Message);
+    }
+
+    /// <summary>
+    /// **无早期 ack 通道时观察委托必须返回 `null`（＝本通道不承载完成事实）**：
+    /// 不得伪造 `Unknown` —— 否则「普通受理」会被结算成待对账（对外 `result_unknown`），
+    /// 既有 v2 发送成功语义（§24.6-5「普通受理已关闭、完成层尚未报终态」＝责任 `Pending`）随之回归。
+    /// </summary>
+    [Fact]
+    public async Task StartGroup_AdmissionAcceptedWithoutEarlyAck_ObserverYieldsNullNotUnknown()
+    {
+        ExternalStartAdmissionRequest? captured = null;
+        var executor = new CommandExecutor(null!, "unused",
+            externalStartAdmission: (request, _) =>
+            {
+                captured = request;
+                // 模拟门面「已受理」（发送段未被执行 ⇒ `coreResult` 保持 null ⇒ 回执走 MapAdmissionOutcome）
+                return Task.FromResult(new ExternalStartAdmissionOutcome(
+                    ExternalStartAdmissionStatus.Accepted, "accepted", "已受理",
+                    JobId: "job-x", ExecutionDisposition: ExecutionDisposition.None,
+                    ResponsibilityState: ResponsibilityState.Pending,
+                    SubmissionIdentity: "sub-1", SendSeq: 1));
+            });
+
+        var result = await executor.ExecuteAsync(StartGroupCommand());
+
+        Assert.Equal("success", result.Status);                    // 受理≠终态：既有词表仍为 success
+        Assert.False(result.IsTerminal);
+        Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);
+        Assert.NotNull(captured!.CompletionObserver);
+        Assert.Null(await captured.CompletionObserver!(CancellationToken.None));  // 不承载完成事实
+        Assert.Null(captured.CompletionProvider?.Invoke());
     }
 }

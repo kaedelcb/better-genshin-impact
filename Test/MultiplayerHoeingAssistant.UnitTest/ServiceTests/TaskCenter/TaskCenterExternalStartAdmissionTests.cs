@@ -35,7 +35,8 @@ public class TaskCenterExternalStartAdmissionTests
             admissionWired: true, admissionSeams: seams);
 
     private static ExternalStartAdmissionRequest Request(Func<System.Threading.CancellationToken, Task<ExternalStartExecution>> execute,
-        string ns = "v2", Func<ExternalStartCompletion?>? completion = null)
+        string ns = "v2", Func<ExternalStartCompletion?>? completion = null,
+        Func<System.Threading.CancellationToken, Task<ExternalStartCompletion?>>? observer = null)
         => new()
         {
             Namespace = ns,
@@ -45,6 +46,7 @@ public class TaskCenterExternalStartAdmissionTests
             SourceDetail = "fixture:external_start",
             ExecuteAsync = execute,
             CompletionProvider = completion,
+            CompletionObserver = observer,
         };
 
     private static IReadOnlyList<OperationRecord> Ops(string root)
@@ -377,6 +379,188 @@ public class TaskCenterExternalStartAdmissionTests
             Assert.Equal(ExternalStartAdmissionStatus.Accepted, outcome.Status);    // 早期受理：保持非终态
             Assert.Equal(ResponsibilityState.Pending, outcome.ResponsibilityState);
             Assert.False(outcome.ExecutionDisposition == ExecutionDisposition.Cancelled);
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    // ── 早期 ack 通道的「异步完成观察」接线（R5.3 §24.10／§24.14，[Batch B 收尾之三／P38]）──────
+
+    /// <summary>
+    /// **异步完成观察（早期 ack 通道）**：完成事实由观察委托在**门面锁外**等待后送达，
+    /// 仍按 §24.15 唯一顺序结算（终态载体→台账 Terminal→关闭→终局），与同步提供者同口径。
+    /// </summary>
+    [Fact]
+    public async Task ExternalStart_CompletionObserver_AsyncTerminalSettlesLikeSyncProvider()
+    {
+        var root = NewRoot();
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            var outcome = await host.AdmitExternalStartAsync(Request(
+                _ => Task.FromResult(ExternalStartExecution.AcceptedWith("job-ob", "ext:task.queue")),
+                observer: _ => Task.FromResult<ExternalStartCompletion?>(ExternalStartCompletion.CancelledWith(
+                    "cancelled", "ext:task.event", DateTimeOffset.UtcNow, "job-ob"))));
+
+            Assert.Equal(ExternalStartAdmissionStatus.Cancelled, outcome.Status);
+            Assert.Equal(ResponsibilityState.Settled, outcome.ResponsibilityState);
+            Assert.Equal(ExecutionDisposition.Cancelled, outcome.ExecutionDisposition);
+            Assert.Equal("cancelled", outcome.RawTerminal);
+            Assert.Equal("job-ob", outcome.JobId);
+            var entry = new ExternalStartLedger(root).Read().File!.Entries.Single();
+            Assert.Equal(LedgerEntryState.Terminal, entry.State);
+            Assert.Contains(Ops(root), o => o.RequestState == OperationRequestState.TerminalCompleted);
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
+    /// **观察中断不得抹掉责任**（§24.6-2／§24.19-2-②）：观察委托抛异常 ⇒ 完成层 `Unknown` ⇒
+    /// 保持 `Accepted/Pending`、**不写**终态载体（`PendingTerminal`／`ExecutionResult`）、台账不终局。
+    /// </summary>
+    [Fact]
+    public async Task ExternalStart_CompletionObserverThrows_KeepsPendingWithoutTerminalCarriers()
+    {
+        var root = NewRoot();
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            var outcome = await host.AdmitExternalStartAsync(Request(
+                _ => Task.FromResult(ExternalStartExecution.AcceptedWith("job-throw", "ext:task.queue")),
+                observer: _ => throw new InvalidOperationException("observer exploded")));
+
+            Assert.Equal(ExternalStartAdmissionStatus.NeedReconcile, outcome.Status);
+            Assert.Equal(ResponsibilityState.Pending, outcome.ResponsibilityState);
+            Assert.Equal("job-throw", outcome.JobId);                  // 已取得的句柄不得丢失
+            var op = Ops(root).Single();
+            Assert.Null(op.PendingTerminal);
+            Assert.Null(op.ExecutionResult);
+            Assert.Equal(LedgerEntryState.AcceptedPendingExecution,
+                new ExternalStartLedger(root).Read().File!.Entries.Single().State);
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
+    /// **观察返回 `null` ＝本通道不承载完成事实**（未配置/不适用）：保持**普通受理**（责任 `Pending`），
+    /// **不得**走完成结算（否则既有 v2 发送成功会被误判成待对账）。
+    /// </summary>
+    [Fact]
+    public async Task ExternalStart_ObserverReturnsNull_KeepsAcceptedPending()
+    {
+        var root = NewRoot();
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            var outcome = await host.AdmitExternalStartAsync(Request(
+                _ => Task.FromResult(ExternalStartExecution.AcceptedWith("job-null", "ext:task.queue")),
+                observer: _ => Task.FromResult<ExternalStartCompletion?>(null)));
+
+            Assert.Equal(ExternalStartAdmissionStatus.Accepted, outcome.Status);
+            Assert.Equal(ResponsibilityState.Pending, outcome.ResponsibilityState);
+            Assert.Equal(ExecutionDisposition.None, outcome.ExecutionDisposition);
+            var op = Ops(root).Single();
+            Assert.Null(op.PendingTerminal);
+            Assert.Null(op.ExecutionResult);
+            Assert.Equal(LedgerEntryState.AcceptedPendingExecution,
+                new ExternalStartLedger(root).Read().File!.Entries.Single().State);
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
+    /// **「已拒绝后收到权威终态」不得静默丢证据**（§24.2-2″／§24.15 末行；[验证会诊阻断处置] 新增）：
+    /// 适配层给出确定未受理（本笔转 `RetryableRejected`）同时又交出**权威终态**时，宿主必须把它登记为
+    /// **冲突证据**（`conflict.pending=true`、责任 `Pending`、禁止重发），不得保留原拒绝结论了事。
+    /// </summary>
+    [Fact]
+    public async Task ExternalStart_RejectedThenAuthoritativeTerminal_RegistersConflictEvidence()
+    {
+        var root = NewRoot();
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            var outcome = await host.AdmitExternalStartAsync(Request(
+                _ => Task.FromResult(ExternalStartExecution.RejectedWith(
+                    "queue_full", retryable: true, evidenceSource: "ext:task.queue")),
+                completion: () => ExternalStartCompletion.SucceededWith(
+                    "completed", "ext:task.event", DateTimeOffset.UtcNow, "job-conflict")));
+
+            Assert.Equal(ExternalStartAdmissionStatus.NeedReconcile, outcome.Status);   // 冲突待决：保守对账、禁重发
+            Assert.Equal(ResponsibilityState.Pending, outcome.ResponsibilityState);
+            var op = Ops(root).Single();
+            Assert.True(op.ConflictPending);                                            // 冲突待决标志已置
+            var evidence = Assert.Single(op.ConflictEvidence!);                          // 证据原样追加（不覆盖既有拒绝）
+            Assert.Equal("completed", evidence!.RawTerminal);
+            Assert.Equal("queue_full", evidence.SupersededReasonCode);                   // 既有拒绝事实保留为「被取代」
+            // 冲突证据必须**携带完整发送身份与观察事实**（§24.2-2″：不得只留结论）
+            Assert.Equal(op.SubmissionIdentity, evidence.SubmissionIdentity);
+            Assert.Equal(op.LastSendSeq, evidence.SendSeq);
+            Assert.Equal("ext:task.event", evidence.EvidenceSource);
+            Assert.NotEqual(default, evidence.ObservedAtUtc);
+            Assert.Contains("host-observed:", evidence.EvidenceId);                      // 确定性 evidenceId（可按同一事实重放）
+            Assert.NotNull(op.LastResult);                                              // 拒绝本体未被改写
+            Assert.Equal(OperationRequestState.RetryableRejected, op.RequestState);
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
+    /// **§24.14-5／§24.18-2（观察等待不得占住门面锁）**：`CompletionTask` 未完成期间，**其他请求必须能取得门面锁**
+    /// 并得到结论（这里用另一身份的第二笔准入验证）——若等待发生在 `_gate` 内，本夹具会在此超时失败。
+    /// </summary>
+    [Fact]
+    public async Task ExternalStart_CompletionPending_OtherRequestStillAcquiresGate()
+    {
+        var root = NewRoot();
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            var gate = new System.Threading.Tasks.TaskCompletionSource<ExternalStartCompletion?>(
+                System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var pending = host.AdmitExternalStartAsync(Request(
+                _ => Task.FromResult(ExternalStartExecution.AcceptedWith("job-lock", "ext:task.queue")),
+                observer: _ => gate.Task));
+            // 让首笔先走到「等待完成」处（受理与观察都已开始）。
+            await Task.Delay(50);
+
+            var second = await host.AdmitExternalStartAsync(new ExternalStartAdmissionRequest
+            {
+                Namespace = "v2",
+                WorkflowId = "onedragon:另一条龙",
+                TriggerOccurrenceId = "v2:remote:{requestIdentity}",
+                ResourceRef = "onedragon:另一条龙",
+                SourceDetail = "fixture:second",
+                ExecuteAsync = _ => Task.FromResult(ExternalStartExecution.AcceptedWith("job-2nd", "ext:task.queue")),
+            }).WaitAsync(TimeSpan.FromSeconds(5));     // 不得被首笔的完成等待阻塞
+            Assert.NotEqual(ExternalStartAdmissionStatus.Accepted, second.Status); // 第二笔应被既有占用拒绝（不重复启动）
+
+            // 收尾：给出首笔完成事实，验证等待结束后仍按 §24.15 结算。
+            gate.SetResult(ExternalStartCompletion.SucceededWith(
+                "completed", "ext:task.event", DateTimeOffset.UtcNow, "job-lock"));
+            var first = await pending;
+            Assert.Equal(ExternalStartAdmissionStatus.Accepted, first.Status);
+            Assert.Equal(ResponsibilityState.Settled, first.ResponsibilityState);
             await host.ShutdownAsync();
         }
         finally

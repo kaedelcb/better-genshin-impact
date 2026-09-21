@@ -181,7 +181,13 @@ public class CommandExecutor
             trigger: "v2:remote:{requestIdentity}",
             sourceDetail: "v2:start_group",
             target: $"配置组「{groupName}」",
-            core: () => StartGroupCoreAsync(groupName, startFromIndex, generation, batchGroupNames, allowPreemption: false))
+            core: () => StartGroupCoreAsync(groupName, startFromIndex, generation, batchGroupNames, allowPreemption: false),
+            // [Batch B 收尾之三／P38] ext 队列通道的「早期受理＋完成观察」拆分（§24.10／§24.14）：
+            // 通道可用＝早期段提交一次并交回句柄，完成由观察段在**门面锁外**等待；
+            // 通道不可用＝返回 null（**未发送**）回退 `core`（既有 v2／裸拉起语义逐字不变）。
+            // 注：`start_group` 的 ext 队列投递不携带批次名单（与 `StartGroupCoreAsync` 既有调用逐字一致）。
+            earlyStart: () => TryStartViaQueueEarlyForAdmissionAsync(
+                groupName, null, startFromIndex, generation, batchGroupNames: null, startFromTaskId: null))
             .ConfigureAwait(false);
 
     /// <summary>
@@ -199,7 +205,10 @@ public class CommandExecutor
             sourceDetail: "v2:start_oneclick",
             target: $"一条龙「{configName}」",
             core: () => StartOneClickCoreAsync(configName, startFromTaskId, generation, batchGroupNamesRaw,
-                allowPreemption: false))
+                allowPreemption: false),
+            // [Batch B 收尾之三／P38] 同 `start_group`：早期受理与完成观察分离。
+            earlyStart: () => TryStartViaQueueEarlyForAdmissionAsync(
+                null, configName, 0, generation, batchGroupNamesRaw, startFromTaskId))
             .ConfigureAwait(false);
 
     /// <summary>
@@ -213,10 +222,14 @@ public class CommandExecutor
     private async Task<CommandResult> StartViaAdmissionAsync(
         Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>> admit,
         string ns, string workflowId, string trigger, string sourceDetail, string target,
-        Func<Task<CommandResult>> core)
+        Func<Task<CommandResult>> core,
+        // [Batch B 收尾之三／P38] 可选「早期受理＋完成观察」拆分（有早期 ack 的通道，§24.10／§24.14）。
+        // 返回 null ＝ 通道不可用/不适用 ⇒ 回退 `core`（**未发送**，既有含等待语义逐字不变）。
+        Func<Task<(ExternalStartExecution Early, Func<CancellationToken, Task<ExternalStartCompletion?>>? Observer)?>>? earlyStart = null)
     {
         ExternalStartAdmissionOutcome outcome;
         CommandResult? coreResult = null;
+        Func<CancellationToken, Task<ExternalStartCompletion?>>? earlyObserver = null;
         var capturedCommand = _requestContext.Value;
         try
         {
@@ -233,6 +246,15 @@ public class CommandExecutor
                     _requestContext.Value = capturedCommand; // 冻结的请求上下文（回调期间生效，结束即还原）
                     try
                     {
+                        if (earlyStart is not null)
+                        {
+                            var early = await earlyStart().ConfigureAwait(false);
+                            if (early is { } e)
+                            {
+                                earlyObserver = e.Observer;   // 完成等待交给观察委托（受理与完成分离）
+                                return e.Early;
+                            }
+                        }
                         coreResult = await core().ConfigureAwait(false);
                         return ToExecution(coreResult);
                     }
@@ -243,6 +265,12 @@ public class CommandExecutor
                 },
                 // [Batch B 收尾之二] §24.2-5：核心结果的**明确取消/失败事实**必须经完成层保留（普通发送成功保持非终态）。
                 CompletionProvider = () => coreResult is null ? null : ToCompletion(coreResult),
+                // [Batch B 收尾之三] 早期 ack 通道的完成观察（`coreResult` 为空且已返回早期句柄时由宿主等待）。
+                // **返回 `null` ＝本通道不承载完成事实**（未走早期 ack／观察未接线）——宿主据此保持普通受理，
+                // 与 `CompletionProvider` 返回 null 同义；**不得**把「未接线」写成 `Unknown`（会污染 v2 普通受理）。
+                CompletionObserver = async ct => earlyObserver is { } observer
+                    ? await observer(ct).ConfigureAwait(false)
+                    : null,
             }, CancellationToken.None).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -290,9 +318,12 @@ public class CommandExecutor
             : ExternalStartExecution.UnknownWith(result.Message);
 
     /// <summary>
-    /// **核心结果 → 完成层结果**（R5.3 §24.2-5／§24.2-1；[Batch B 收尾之二] 新增）：
-    /// 只有**权威终态**（`IsTerminal`）或**明确取消事实**（`cancelled`）才能构成终态完成结果——
-    /// v2「普通发送成功」保持**非终态**（不得据此释放占用）；`result_unknown`/超时/未命中一律 `Unknown`（不写终态载体）。
+    /// **核心结果 → 完成层结果**（R5.3 §24.2-5／§24.2-1／§24.3-4；[Batch B 收尾之二] 新增）：
+    /// 只有**权威终态**（`IsTerminal`）或**明确取消事实**（`cancelled`）才能构成终态完成结果。
+    /// **[Batch B 收尾之三 验证会诊阻断处置]** 非终态观察（普通发送成功、仅业务失败等）返回 **`null`**＝
+    /// 「**本层无完成事实**」⇒ §24.3-4 **第一分支**（普通受理：责任 `Pending`、不写终态载体）。
+    /// **不得**返回 `Unknown`：`Unknown` 是「**有观察动作**但结果不可考」（§24.3-4 第二分支 ⇒ 对外 `NeedReconcile`），
+    /// 而 §24.4-4 明文要求「**v2 发送成功：入口 success**，但台账保持未终局」。
     /// </summary>
     internal static ExternalStartCompletion? ToCompletion(CommandResult result)
     {
@@ -305,9 +336,10 @@ public class CommandExecutor
             return ExternalStartCompletion.CancelledWith(
                 string.IsNullOrEmpty(result.RawTerminal) ? "cancelled" : result.RawTerminal!, source, observed, result.JobId);
 
-        // ② 非终态一律按「观察未完成」处理（不得借超时/未命中/普通成功构造终态）。
+        // ② 非终态＝**本层没有完成事实**（§24.3-4 第一分支）：返回 null 保持普通受理。
+        // 不得借普通成功/业务失败/超时构造终态，也不得写成「完成层 Unknown」（那会改判受理结论）。
         if (!result.IsTerminal)
-            return ExternalStartCompletion.UnknownWith(result.Message, source);
+            return null;
 
         // ③ 权威终态：失败/成功分明。
         var raw = !string.IsNullOrEmpty(result.RawTerminal) ? result.RawTerminal! : result.Status;
@@ -980,10 +1012,10 @@ public class CommandExecutor
     }
 
     /// <summary>
-    /// [切片7] 经 ext 任务队列通道提交启动：先创建终态事件等待器（先订阅后动作，红线7），
-    /// 再 Submit 入队拿 taskHandle，最后等 task.completed/failed/queueCancelled 事件。
-    /// 提交后未知结果直接返回 result_unknown，不换通道重新执行；
-    /// 明确业务拒绝（queue_full 等）直接失败返回，绝不进杀进程回退（与 b5386005 无损拒绝语义一致）。
+    /// [切片7] 经 ext 任务队列通道提交启动（**旧词表投影**：未接线直启路径专用，对外文案与探针**逐字保留**）。
+    /// **[Batch B 收尾之三／P38]** 实现改为「早期受理段 ＋ 完成观察段」两段式（§24.10-1／§24.14-1）：
+    /// 两段的事实与接线态共用同一实现（<see cref="TryStartViaQueueEarlyAsync"/>／
+    /// <see cref="ObserveQueueTerminalAsync"/>），本方法只把结论投影回 `CommandResult`。
     /// 返回时机与 v2 一致：任务真正执行完（或被取消）后才返回，批次循环语义不变。
     /// </summary>
     private async Task<CommandResult?> TryStartViaQueueAsync(
@@ -991,40 +1023,183 @@ public class CommandExecutor
         string? batchGroupNames = null, string? startFromTaskId = null)
     {
         var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
+        var early = await TryStartViaQueueEarlyAsync(ext, groupName, configName, startFromIndex, generation,
+            batchGroupNames, startFromTaskId).ConfigureAwait(false);
+        // 通道不可用＝**未发送**：回下方 v2 路径（逐字节保留）；已提交的结论一律不落回。
+        if (early.Kind == QueueStartEarlyKind.ChannelUnavailable) return null;
+        return await MapQueueEarlyToLegacyResultAsync(early, desc, generation).ConfigureAwait(false);
+    }
+
+    // ── [Batch B 收尾之三／P38] §24.10／§24.14「早期受理 ＋ 完成观察」拆分 ─────────────────────────────
+    //
+    // 设计口径（§24.10-1）：**早期受理**只证明「是否已受理」；**完成层**只证明「执行是否已到终态」；
+    // 两者各有独立类型、不得互相代替。本节把 ext 任务队列通道按该边界拆成两段，供
+    // ①接线态（门面 Sender → `StartViaAdmissionAsync` 的 `earlyStart`）②未接线直启路径（旧词表）共用。
+    //
+    // [施工方自行判定·事后可剔除] §24.14-1 的 `CompletionTask` 在本实现里落地为**热任务**
+    // （早期段创建等待器后立刻开始观察，`ExternalStartReply.EarlyAccepted` 承载该任务）：
+    // 理由＝等待器必须**先于提交**建立（红线7：adopted 场景先到的终态事件要入缓冲），
+    // 且观察责任不得随调用方退出而提前释放（§24.14-3）。若会诊要求改为冷委托，则需同步改
+    // `StartViaAdmissionAsync` 的 `earlyStart` 委托形状（改动面＝本节＋该委托）。
+
+    /// <summary>早期受理段结论类别（§24.14-1 的 `EarlyAccepted／Rejected／Unknown` 三态展开）。</summary>
+    internal enum QueueStartEarlyKind
+    {
+        /// <summary>通道不可用／能力缺失：**尚未发送**；调用方回退既有 v2 路径（不得读作未受理）。</summary>
+        ChannelUnavailable,
+        /// <summary>确定未受理（对端副作用前拒绝：queue_full／协调器不可用／合同校验）。</summary>
+        Rejected,
+        /// <summary>幂等命中（同 generation+name 已执行）：**等同 executed，不产生第二次执行**。</summary>
+        AlreadyExecuted,
+        /// <summary>受理回执缺句柄（协议违例）：受理与否不可考，禁止换通道重发。</summary>
+        MissingHandle,
+        /// <summary>已受理（携带句柄）：完成事实由观察段承载。</summary>
+        Accepted,
+        /// <summary>提交期通道瞬态（发送后结果不可考）：禁止换通道重发。</summary>
+        Unknown,
+    }
+
+    /// <summary>完成观察结论来源（§24.7-3：事件／轮询各自登记可证明的事实范围）。</summary>
+    internal enum QueueTerminalSource
+    {
+        /// <summary>终态事件快速路径（`task.completed/failed/queueCancelled`）。</summary>
+        Event,
+        /// <summary>安全网轮询（`ext.task.queueStatus`，事件帧丢失时自愈）。</summary>
+        Poll,
+        /// <summary>兜底等待超预算（**未取得权威终态**，不得据此终局）。</summary>
+        Timeout,
+        /// <summary>观察中断（通道瞬态／本地等待取消）：远端结果未观察。</summary>
+        Faulted,
+    }
+
+    /// <summary>
+    /// **早期受理段结论**（§24.14-1；内部事实投影，不参与任何序列化）。
+    /// `Accepted` 时同时携带 `Reply`（§24.14-1 规定的早期层回执 `EarlyAccepted(jobId, CompletionTask)`）
+    /// 与 `Observation`（同一观察的两段投影：旧词表需要原始观察事实，完成层需要判别式结果）。
+    /// </summary>
+    internal sealed record QueueStartEarly(
+        QueueStartEarlyKind Kind,
+        string? TaskHandle = null,
+        string? ReasonCode = null,
+        string? Detail = null,
+        DateTimeOffset? ObservedAtUtc = null,
+        Task<QueueTerminalObservation>? Observation = null,
+        ExternalStartReply? Reply = null);
+
+    /// <summary>
+    /// **完成观察结论**（单一等待实现的事实投影，§24.7-3）：由两个映射器分别投影到
+    /// 旧词表 `CommandResult`（未接线路径，逐字保留）与完成层 `ExternalStartCompletion`（§24.2-2）。
+    /// `ObservedAtUtc`＝**证据首次被可信观察层接收**的时点（§24.2-2″：捕获一次、不得在映射阶段重取）；
+    /// `RawTerminal` 保留**线路原词**（ext 的取消是 `completed` ＋ `Cancelled=true`，不得改写成 `cancelled`）。
+    /// </summary>
+    internal sealed record QueueTerminalObservation(
+        QueueTerminalSource Source,
+        string? RawTerminal,
+        bool Cancelled,
+        string? ErrorCode,
+        string? ErrorMessage,
+        string TaskHandle,
+        bool EarlyWithinTwoSeconds,
+        string? Detail,
+        DateTimeOffset? ObservedAtUtc = null);
+
+    /// <summary>
+    /// **早期受理段（§24.10-1／§24.14-1）**：通道可用性判定（未发送 ⇒ `ChannelUnavailable`）→
+    /// **先订阅后动作**建等待器（红线7）→ 提交**一次** → 早期结论。**不在本段等待完成**
+    /// （§24.10-2：完成等待必须在门面锁外；§24.18-2 两段式 `_gate` 的第二段）。
+    /// </summary>
+    private async Task<QueueStartEarly> TryStartViaQueueEarlyAsync(
+        BgiExternalClient ext, string? groupName, string? configName, int startFromIndex, int generation,
+        string? batchGroupNames = null, string? startFromTaskId = null)
+    {
+        var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
+        if (ext is not { State: BgiExternalLinkState.Ready }
+            || !ext.HasCapability(BgiExternalClient.CapabilityTaskQueue))
+            return new QueueStartEarly(QueueStartEarlyKind.ChannelUnavailable);
+
+        // 等待器先于 Submit 创建：adopted 场景下既有任务可能在我们 Submit 前就完成，
+        // 其终态事件先入等待器缓冲，按句柄匹配时不丢
+        var waiter = ext.CreateTaskTerminalWaiter();
+        BgiTaskSubmitResult submit;
         try
         {
-            // 等待器先于 Submit 创建：adopted 场景下既有任务可能在我们 Submit 前就完成，
-            // 其终态事件先入等待器缓冲，按句柄匹配时不丢
-            using var waiter = ext.CreateTaskTerminalWaiter();
-            var submit = await ext.SubmitTaskStartAsync(groupName, configName, startFromIndex, generation, batchGroupNames,
+            submit = await ext.SubmitTaskStartAsync(groupName, configName, startFromIndex, generation, batchGroupNames,
                 startFromTaskId: startFromTaskId,
                 idempotencyKey: string.IsNullOrWhiteSpace(_requestContext.Value?.CommandId) ? null : _requestContext.Value.CommandId,
                 expectedConfigRevision: GetStringParam(_requestContext.Value?.Params, "expectedConfigRevision"),
                 bgiEpoch: _requestContext.Value?.Params?.GetValueOrDefault("bgiEpoch"),
-                expiresAtUtc: _requestContext.Value?.ExpiresAtUtc);
-            if (!submit.Success)
-            {
-                ProbeLog($"[CommandExecutor][切片7] ext.task.start 被队列拒绝 {desc} errorCode={submit.ErrorCode}");
-                return new CommandResult { Status = "failed", Message = $"BGI 任务队列拒绝启动{desc}（{submit.ErrorCode ?? "unknown"}）：{submit.ErrorMessage ?? "无详情"}。请稍后重试或先取消排队任务" };
-            }
+                expiresAtUtc: _requestContext.Value?.ExpiresAtUtc).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsQueueTransportFault(ex))
+        {
+            // 发送后断线/超时不等于未执行：保留未知结果，不做第二次启动。
+            waiter.Dispose();
+            ProbeLog($"[CommandExecutor] 队列提交/等待结果未知，禁止跨通道重发 {desc}: {ex.Message}");
+            return new QueueStartEarly(QueueStartEarlyKind.Unknown, Detail: ex.Message);
+        }
 
-            if (submit.Status == "already_executed")
-            {
-                // 与 v2 路径一致：幂等命中按成功处理（同 generation+name 已执行过）
-                ProbeLog($"[CommandExecutor][切片7] ext.task.start 幂等命中 already_executed {desc} generation={generation}");
-                return new CommandResult { Status = "success", Message = $"{desc} 已执行过（generation={generation}，幂等跳过）" };
-            }
+        var classified = ClassifyQueueSubmitEarly(submit, desc, generation, DateTimeOffset.UtcNow);
+        if (classified.Kind != QueueStartEarlyKind.Accepted)
+        {
+            waiter.Dispose();
+            return classified;
+        }
 
-            if (string.IsNullOrEmpty(submit.TaskHandle))
-            {
-                // 畸形响应（queued/adopted 但无句柄）：受理结果未知，禁止换通道重发，
-                // 避免 null 句柄穿透 WaitForHandleAsync（ArgumentNullException 不在下方 catch 过滤器内）
-                ProbeLog($"[CommandExecutor][切片7] ext.task.start 响应缺少 taskHandle（status={submit.Status}），结果未知、未重发 {desc}");
-                return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 已提交但未获得有效句柄，禁止换通道重发；请先核实执行状态" };
-            }
+        // 已受理：等待器所有权转交观察段（观察段在自己的 `finally` 释放；等待器已先于提交建立）。
+        var observation = ObserveQueueTerminalAsync(ext, waiter, classified.TaskHandle!, desc, CancellationToken.None);
+        return classified with
+        {
+            Observation = observation,
+            Reply = new ExternalStartReply.EarlyAccepted(classified.TaskHandle!, MapObservationTaskAsync(observation)),
+        };
+    }
 
-            ProbeLog($"[CommandExecutor][切片7] ext.task.start 已入队 {desc} status={submit.Status} taskHandle={submit.TaskHandle} queuePosition={submit.QueuePosition}");
+    /// <summary>
+    /// **早期受理段分类（纯函数，内部可见供夹具驱动）**：把一次 `ext.task.start` 回执分类为早期结论。
+    /// 依据 R4 既有口径（`BgiWorkflowTerminalExecutor`／`BgiWorkflowPrerequisiteAdapter`）：
+    /// 副作用前拒绝＝**确定未受理**；缺句柄＝协议违例（不可考）；`already_executed`＝**等同 executed**
+    /// （幂等命中，不产生第二次执行）。探针文案与拆分前逐字一致。
+    /// </summary>
+    internal static QueueStartEarly ClassifyQueueSubmitEarly(
+        BgiTaskSubmitResult submit, string desc, int generation, DateTimeOffset observedAtUtc)
+    {
+        if (!submit.Success)
+        {
+            ProbeLog($"[CommandExecutor][切片7] ext.task.start 被队列拒绝 {desc} errorCode={submit.ErrorCode}");
+            return new QueueStartEarly(QueueStartEarlyKind.Rejected,
+                ReasonCode: submit.ErrorCode, Detail: submit.ErrorMessage);
+        }
 
+        if (submit.Status == "already_executed")
+        {
+            // 与 v2 路径一致：幂等命中按成功处理（同 generation+name 已执行过）
+            ProbeLog($"[CommandExecutor][切片7] ext.task.start 幂等命中 already_executed {desc} generation={generation}");
+            return new QueueStartEarly(QueueStartEarlyKind.AlreadyExecuted, ObservedAtUtc: observedAtUtc);
+        }
+
+        if (string.IsNullOrEmpty(submit.TaskHandle))
+        {
+            // 畸形响应（queued/adopted 但无句柄）：受理结果未知，禁止换通道重发，
+            // 避免 null 句柄穿透 WaitForHandleAsync（ArgumentNullException 不在 catch 过滤器内）
+            ProbeLog($"[CommandExecutor][切片7] ext.task.start 响应缺少 taskHandle（status={submit.Status}），结果未知、未重发 {desc}");
+            return new QueueStartEarly(QueueStartEarlyKind.MissingHandle, Detail: submit.Status);
+        }
+
+        ProbeLog($"[CommandExecutor][切片7] ext.task.start 已入队 {desc} status={submit.Status} taskHandle={submit.TaskHandle} queuePosition={submit.QueuePosition}");
+        return new QueueStartEarly(QueueStartEarlyKind.Accepted, TaskHandle: submit.TaskHandle);
+    }
+
+    /// <summary>
+    /// **完成观察段（§24.10-2／§24.14-3）**：等待权威终态——终态事件快速路径 ＋ 5s 切片轮询安全网
+    /// （[终态可拉取 2026-09-09] 实现逐字保留）。等待器由本方法 `finally` 释放（观察责任不随调用方退出而丢）。
+    /// **本地等待取消／超预算／通道瞬态／`not_found` 一律不作为终态证据**（§24.7-3／§24.11／§24.20-B：
+    /// 允许长期保守停驻，禁止用超时或未命中强制终局）。
+    /// </summary>
+    internal static async Task<QueueTerminalObservation> ObserveQueueTerminalAsync(
+        BgiExternalClient ext, BgiTaskTerminalWaiter waiter, string taskHandle, string desc, CancellationToken ct)
+    {
+        try
+        {
             // [终态可拉取 2026-09-09] 事件是快速路径、轮询是安全网：终态事件单帧丢失
             // （推送乱序被 revision 过滤误吞等，实机确诊）曾让批次循环在此永久挂起、
             // 后续配置组全部被吞。每 5s 切片等待，切片超时主动拉 queueStatus 校准；
@@ -1032,26 +1207,26 @@ public class CommandExecutor
             var waitStartedUtc = DateTime.UtcNow;
             while (DateTime.UtcNow - waitStartedUtc < TaskTerminalWaitTimeout)
             {
-                var terminal = await waiter.WaitForHandleAsync(submit.TaskHandle, TerminalStatusPollInterval);
+                var terminal = await waiter.WaitForHandleAsync(taskHandle, TerminalStatusPollInterval, ct)
+                    .ConfigureAwait(false);
                 if (terminal != null)
                 {
                     // [假终态探针 2026-09-12] 启动类任务的 completed 终态在提交后 2s 内到达是异常信号
-                    // （BGI 一条龙分支曾只等调度完成就登记 completed 的假终态事故），纯留痕不门控，
-                    // 便于实机一次定位同类回归。adopted 场景（既有任务恰好收尾）可能误报，仅为警告。
-                    if (terminal.Kind == BgiTaskTerminalKind.Completed && !terminal.Cancelled
-                        && DateTime.UtcNow - waitStartedUtc < TimeSpan.FromSeconds(2))
-                    {
-                        ProbeLog($"[CommandExecutor][假终态探针] {desc} completed 终态到达耗时 <2s，疑似 BGI 侧假终态回归 taskHandle={submit.TaskHandle}");
-                    }
+                    // （BGI 一条龙分支曾只等调度完成就登记 completed 的假终态事故），纯留痕不门控。
+                    var receivedAt = DateTimeOffset.UtcNow;
+                    var nearImmediate = !terminal.Cancelled && receivedAt.UtcDateTime - waitStartedUtc < TimeSpan.FromSeconds(2);
                     return terminal.Kind switch
                     {
-                        BgiTaskTerminalKind.Completed when terminal.Cancelled =>
-                            new CommandResult { Status = "cancelled", Message = $"{desc} 执行中被取消" },
-                        BgiTaskTerminalKind.Completed =>
-                            new CommandResult { Status = "success", Message = $"{desc} 已启动并执行完成（队列通道）" },
-                        BgiTaskTerminalKind.QueueCancelled =>
-                            new CommandResult { Status = "cancelled", Message = $"{desc} 排队中被取消" },
-                        _ => new CommandResult { Status = "failed", Message = $"{desc} 执行失败（{terminal.ErrorCode ?? "unknown"}）：{terminal.ErrorMessage ?? "无详情"}" },
+                        // §24.2-2″：`RawTerminal` 保留线路原词（取消事实由 `Cancelled` 承载，不得改写原词）。
+                        BgiTaskTerminalKind.Completed => new QueueTerminalObservation(
+                            QueueTerminalSource.Event, "completed", terminal.Cancelled, terminal.ErrorCode,
+                            terminal.ErrorMessage, taskHandle, nearImmediate, null, receivedAt),
+                        BgiTaskTerminalKind.QueueCancelled => new QueueTerminalObservation(
+                            QueueTerminalSource.Event, "queueCancelled", true, terminal.ErrorCode, terminal.ErrorMessage,
+                            taskHandle, false, null, receivedAt),
+                        _ => new QueueTerminalObservation(
+                            QueueTerminalSource.Event, "failed", false, terminal.ErrorCode, terminal.ErrorMessage,
+                            taskHandle, false, null, receivedAt),
                     };
                 }
 
@@ -1060,11 +1235,9 @@ public class CommandExecutor
                 BgiTaskQueueStatus? queueStatus = null;
                 try
                 {
-                    queueStatus = await ext.QueryTaskQueueStatusAsync(submit.TaskHandle);
+                    queueStatus = await ext.QueryTaskQueueStatusAsync(taskHandle).ConfigureAwait(false);
                 }
-                catch (Exception pollEx) when (pollEx is InvalidOperationException or System.IO.IOException
-                                               or TimeoutException or OperationCanceledException
-                                               or System.Text.Json.JsonException)
+                catch (Exception pollEx) when (IsQueueTransportFault(pollEx))
                 {
                     // 通道瞬态失败：下一切片再试
                 }
@@ -1072,38 +1245,254 @@ public class CommandExecutor
                 switch (queueStatus?.Status)
                 {
                     case "completed":
-                        ProbeLog($"[CommandExecutor][切片7] 终态事件未到达，安全网轮询命中 {desc} queueStatus=completed cancelled={queueStatus.Cancelled} taskHandle={submit.TaskHandle}（事件帧丢失已自愈）");
-                        return queueStatus.Cancelled
-                            ? new CommandResult { Status = "cancelled", Message = $"{desc} 执行中被取消" }
-                            : new CommandResult { Status = "success", Message = $"{desc} 已启动并执行完成（队列通道，轮询校准）" };
+                        return new QueueTerminalObservation(QueueTerminalSource.Poll, "completed",
+                            queueStatus.Cancelled, queueStatus.ErrorCode, queueStatus.ErrorMessage,
+                            taskHandle, false, null, DateTimeOffset.UtcNow);
                     case "queueCancelled":
-                        ProbeLog($"[CommandExecutor][切片7] 终态事件未到达，安全网轮询命中 {desc} queueStatus=queueCancelled taskHandle={submit.TaskHandle}（事件帧丢失已自愈）");
-                        return new CommandResult { Status = "cancelled", Message = $"{desc} 排队中被取消" };
+                        return new QueueTerminalObservation(QueueTerminalSource.Poll, "queueCancelled",
+                            true, queueStatus.ErrorCode, queueStatus.ErrorMessage, taskHandle, false, null,
+                            DateTimeOffset.UtcNow);
                     case "failed":
-                        ProbeLog($"[CommandExecutor][切片7] 终态事件未到达，安全网轮询命中 {desc} queueStatus=failed taskHandle={submit.TaskHandle}（事件帧丢失已自愈）");
-                        return new CommandResult { Status = "failed", Message = $"{desc} 执行失败（{queueStatus.ErrorCode ?? "unknown"}）：{queueStatus.ErrorMessage ?? "无详情"}" };
+                        return new QueueTerminalObservation(QueueTerminalSource.Poll, "failed",
+                            false, queueStatus.ErrorCode, queueStatus.ErrorMessage, taskHandle, false, null,
+                            DateTimeOffset.UtcNow);
                     case "not_found":
                         // 句柄在 BGI 侧不存在：BGI 已重启（任务随进程终止）或句柄从未存在。
-                        // 按失败返回让批次循环继续后续组（各组独立提交，新 BGI 上可正常执行）。
-                        ProbeLog($"[CommandExecutor][切片7] 安全网轮询 {desc} queueStatus=not_found taskHandle={submit.TaskHandle}（BGI 可能已重启，任务随进程终止）");
-                        return new CommandResult { Status = "failed", Message = $"{desc} 任务句柄在 BGI 侧不存在（BGI 可能已重启，任务随进程终止），taskHandle={submit.TaskHandle}" };
+                        // §24.7-3：`not_found` **不进入终态证据** ⇒ 完成层 `Unknown`（旧词表投影另文，逐字保留）。
+                        return new QueueTerminalObservation(QueueTerminalSource.Poll, "not_found",
+                            false, queueStatus.ErrorCode, queueStatus.ErrorMessage, taskHandle, false, null,
+                            DateTimeOffset.UtcNow);
                     default:
                         // pending/running/null：任务未终结或状态未知，继续下一切片
                         break;
                 }
             }
 
-            return new CommandResult { Status = "failed", Message = $"{desc} 等待执行结果超时（{TaskTerminalWaitTimeout.TotalHours}h 兜底），taskHandle={submit.TaskHandle}" };
+            return new QueueTerminalObservation(QueueTerminalSource.Timeout, null, false, null, null,
+                taskHandle, false, null);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or System.IO.IOException
-                                   or TimeoutException or OperationCanceledException
-                                   or System.Text.Json.JsonException)
+        catch (Exception ex) when (IsQueueTransportFault(ex))
         {
             // 发送后断线/超时不等于未执行：保留未知结果，不做第二次启动。
+            var detail = ct.IsCancellationRequested
+                ? "本地等待被取消（远端结果未观察，不得据此终局）"
+                : ex.Message;
             ProbeLog($"[CommandExecutor] 队列提交/等待结果未知，禁止跨通道重发 {desc}: {ex.Message}");
-            return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 执行结果未知，未重新下发：{ex.Message}" };
+            return new QueueTerminalObservation(QueueTerminalSource.Faulted, null, false, null, null,
+                taskHandle, false, detail);
+        }
+        finally
+        {
+            waiter.Dispose();
         }
     }
+
+    /// <summary>观察任务 → 完成层结果（同一观察的完成层投影；§24.2-2／§24.7-3）。</summary>
+    internal static async Task<ExternalStartCompletion> MapObservationTaskAsync(Task<QueueTerminalObservation> observation)
+        => MapQueueObservationToCompletion(await observation.ConfigureAwait(false));
+
+    /// <summary>
+    /// **完成观察结论 → 完成层结果（§24.2-2／§24.2-5／§24.7-3；内部可见供夹具驱动）**：
+    /// 只有**事件／轮询取得的权威终态**才构造终态载体；`not_found`／超预算／通道瞬态／本地取消一律 `Unknown`
+    /// （不写 `PendingTerminal`、不得借超时或未命中转终态）。
+    /// </summary>
+    internal static ExternalStartCompletion MapQueueObservationToCompletion(QueueTerminalObservation obs)
+    {
+        var source = obs.Source == QueueTerminalSource.Event ? "ext:task.event"
+            : obs.Source == QueueTerminalSource.Poll ? "ext:task.queueStatus"
+            : "ext:task.wait";
+        // §24.7-3／§24.20-B：非终态观察（超预算／观察中断／本地取消）一律 `Unknown`——
+        // 不写终态载体、不生成观察时点，禁止借超时或未命中转终局。
+        if (obs.Source == QueueTerminalSource.Timeout)
+            return ExternalStartCompletion.UnknownWith(
+                $"等待执行结果超预算（{TaskTerminalWaitTimeout.TotalHours}h 兜底，未取得权威终态）：taskHandle={obs.TaskHandle}",
+                "ext:task.wait");
+        if (obs.Source == QueueTerminalSource.Faulted)
+            return ExternalStartCompletion.UnknownWith(
+                obs.Detail is null ? "完成观察中断（远端结果未观察）" : $"完成观察中断：{obs.Detail}",
+                "ext:task.wait");
+        // §24.7-3：句柄不存在（BGI 重启/句柄从未存在）**不进入终态证据**。
+        if (obs.RawTerminal == "not_found")
+            return ExternalStartCompletion.UnknownWith(
+                $"任务句柄在 BGI 侧不存在（BGI 可能已重启，任务随进程终止），taskHandle={obs.TaskHandle}",
+                source);
+        // §24.2-2″：观察时点＝**证据首次被可信观察层接收**的时点（接收层捕获一次、不可改写）。
+        // [验证会诊阻断处置] 缺失/默认值**fail-closed**（不得用映射时刻 `UtcNow` 冒充证据接收时点）。
+        if (obs.ObservedAtUtc is not { } observedAt || observedAt == default)
+            return ExternalStartCompletion.UnknownWith(
+                $"权威终态缺少观察时点（{obs.RawTerminal ?? "null"}）：不写终态载体、保守待对账",
+                source);
+        return obs.RawTerminal switch
+        {
+            // 取消事实由 `Kind=Cancelled` 承载；`RawTerminal` 保留线路原词（ext 取消＝`completed`＋`Cancelled=true`）。
+            "completed" when obs.Cancelled =>
+                ExternalStartCompletion.CancelledWith("completed", source, observedAt, obs.TaskHandle),
+            "completed" =>
+                ExternalStartCompletion.SucceededWith("completed", source, observedAt, obs.TaskHandle),
+            "queueCancelled" =>
+                ExternalStartCompletion.CancelledWith("queueCancelled", source, observedAt, obs.TaskHandle),
+            "failed" => ExternalStartCompletion.ExecutionFailedWith(
+                "failed", string.IsNullOrEmpty(obs.ErrorCode) ? "unknown" : obs.ErrorCode!, source, observedAt,
+                obs.TaskHandle),
+            _ => ExternalStartCompletion.UnknownWith(
+                $"完成观察结论不可解释（{obs.RawTerminal ?? "null"}）：不写终态载体", source),
+        };
+    }
+
+    /// <summary>
+    /// **早期结论 → 门面接线席位**（§24.2-2″唯一映射；§24.10 两段式）：
+    /// ①确定未受理 ⇒ `Rejected`（可重试窗口，与旧词表「请稍后重试」一致）；②幂等命中 ⇒
+    /// 发送层 `Accepted`（**无句柄**，不得凭空生成）＋完成层权威终态 `Succeeded(already_executed)`；
+    /// ③缺句柄／提交期瞬态 ⇒ `Unknown`（禁止换通道重发）；④已受理 ⇒ `Accepted(句柄)`＋完成观察。
+    /// </summary>
+    internal static (ExternalStartExecution Early, Func<CancellationToken, Task<ExternalStartCompletion?>>? Observer)
+        MapQueueEarlyToAdmission(QueueStartEarly early)
+        => early.Kind switch
+        {
+            QueueStartEarlyKind.Rejected => (
+                ExternalStartExecution.RejectedWith(
+                    early.ReasonCode ?? "external_rejected",
+                    // §24.2-2″：只有**无损拒绝类**（可证明未入队/未占用副作用）才开重试窗口；
+                    // 其余错误码按**终局拒绝**（`retryable=false`，默认保守方向）。
+                    retryable: IsRetryableQueueRejection(early.ReasonCode),
+                    evidenceSource: "ext:task.queue"),
+                null),
+            // 幂等命中：R4 既有口径「等同 executed，不产生第二次执行」
+            // （`BgiWorkflowTerminalExecutor`／`BgiWorkflowPrerequisiteAdapter`）——完成层给权威终态。
+            QueueStartEarlyKind.AlreadyExecuted => (
+                ExternalStartExecution.AcceptedWith(null, "ext:idempotency"),
+                _ => Task.FromResult<ExternalStartCompletion?>(ExternalStartCompletion.SucceededWith(
+                    "already_executed", "ext:idempotency", early.ObservedAtUtc ?? DateTimeOffset.UtcNow))),
+            QueueStartEarlyKind.MissingHandle => (
+                ExternalStartExecution.UnknownWith(
+                    $"ext.task.start 受理回执缺 taskHandle（status={early.Detail ?? "unknown"}）：受理与否不可考、禁止换通道重发",
+                    "ext:task.queue"),
+                null),
+            QueueStartEarlyKind.Unknown => (
+                ExternalStartExecution.UnknownWith(
+                    early.Detail is null ? "队列提交结果未知，未重新下发" : $"队列提交结果未知，未重新下发：{early.Detail}",
+                    "ext:task.queue"),
+                null),
+            _ => (
+                ExternalStartExecution.AcceptedWith(early.TaskHandle, "ext:task.queue"),
+                early.Reply is ExternalStartReply.EarlyAccepted accepted
+                    ? _ => AwaitCompletionTaskAsync(accepted.CompletionTask)
+                    : null),
+        };
+
+    private static async Task<ExternalStartCompletion?> AwaitCompletionTaskAsync(Task<ExternalStartCompletion> task)
+        => await task.ConfigureAwait(false);
+
+    /// <summary>
+    /// **队列通道「副作用前拒绝」的可重试白名单**（§24.2-2″／§24.11 第 3′ 行）：
+    /// 只有**无损拒绝类**（队列满／执行中占用／任务槽繁忙）才开重试窗口；**未列入者一律 `retryable=false`**
+    /// （终局拒绝，保守方向——不得让「可能已产生副作用」的失败进入可重试分类）。
+    /// 依据（BGI 侧现状，`ExternalInterfaceCommandPlane.DispatchTaskStart`）：队列通道的非受理失败只有
+    /// `queue_full`（副作用前，未入队）；`Unavailable` 由 BGI 回退 v2 处理，其业务拒绝（`task_already_running` 等）
+    /// 同为副作用前拒绝。新增错误码默认终局拒绝。
+    /// </summary>
+    internal static bool IsRetryableQueueRejection(string? errorCode)
+        => errorCode is "queue_full" or "task_already_running" or "task_busy" or "execution_occupied";
+
+    /// <summary>
+    /// **接线态早期段入口**：通道不可用（含无外部客户端）⇒ 返回 `null`（**未发送**）让门面回退 `core`。
+    /// </summary>
+    private async Task<(ExternalStartExecution Early, Func<CancellationToken, Task<ExternalStartCompletion?>>? Observer)?>
+        TryStartViaQueueEarlyForAdmissionAsync(
+            string? groupName, string? configName, int startFromIndex, int generation,
+            string? batchGroupNames, string? startFromTaskId)
+    {
+        var ext = _externalClientProvider?.Invoke();
+        if (ext is null) return null;
+        var early = await TryStartViaQueueEarlyAsync(ext, groupName, configName, startFromIndex, generation,
+            batchGroupNames, startFromTaskId).ConfigureAwait(false);
+        if (early.Kind == QueueStartEarlyKind.ChannelUnavailable) return null;
+        return MapQueueEarlyToAdmission(early);
+    }
+
+    /// <summary>
+    /// **旧词表投影（未接线直启路径专用）**：把早期结论／观察结论还原成拆分前的 `CommandResult`
+    /// （文案、错误码与探针**逐字保留**；本方法只为承载旧文案，不承载任何新语义）。
+    /// </summary>
+    internal static async Task<CommandResult> MapQueueEarlyToLegacyResultAsync(
+        QueueStartEarly early, string desc, int generation)
+    {
+        switch (early.Kind)
+        {
+            case QueueStartEarlyKind.Rejected:
+                return new CommandResult
+                {
+                    Status = "failed",
+                    Message = $"BGI 任务队列拒绝启动{desc}（{early.ReasonCode ?? "unknown"}）：{early.Detail ?? "无详情"}。请稍后重试或先取消排队任务"
+                };
+            case QueueStartEarlyKind.AlreadyExecuted:
+                return new CommandResult { Status = "success", Message = $"{desc} 已执行过（generation={generation}，幂等跳过）" };
+            case QueueStartEarlyKind.MissingHandle:
+                return new CommandResult
+                {
+                    Status = "failed",
+                    ErrorCode = "result_unknown",
+                    Message = $"{desc} 已提交但未获得有效句柄，禁止换通道重发；请先核实执行状态"
+                };
+            case QueueStartEarlyKind.Unknown:
+                return new CommandResult
+                {
+                    Status = "failed",
+                    ErrorCode = "result_unknown",
+                    Message = $"{desc} 执行结果未知，未重新下发：{early.Detail}"
+                };
+        }
+
+        var obs = await (early.Observation
+            ?? throw new InvalidOperationException("早期受理结论缺少观察任务（内部不一致）")).ConfigureAwait(false);
+        if (obs.Source == QueueTerminalSource.Event && obs.RawTerminal == "completed" && obs.EarlyWithinTwoSeconds)
+        {
+            ProbeLog($"[CommandExecutor][假终态探针] {desc} completed 终态到达耗时 <2s，疑似 BGI 侧假终态回归 taskHandle={obs.TaskHandle}");
+        }
+        if (obs.Source == QueueTerminalSource.Poll)
+        {
+            ProbeLog(obs.RawTerminal switch
+            {
+                "completed" => $"[CommandExecutor][切片7] 终态事件未到达，安全网轮询命中 {desc} queueStatus=completed cancelled={obs.Cancelled} taskHandle={obs.TaskHandle}（事件帧丢失已自愈）",
+                "queueCancelled" => $"[CommandExecutor][切片7] 终态事件未到达，安全网轮询命中 {desc} queueStatus=queueCancelled taskHandle={obs.TaskHandle}（事件帧丢失已自愈）",
+                "failed" => $"[CommandExecutor][切片7] 终态事件未到达，安全网轮询命中 {desc} queueStatus=failed taskHandle={obs.TaskHandle}（事件帧丢失已自愈）",
+                _ => $"[CommandExecutor][切片7] 安全网轮询 {desc} queueStatus=not_found taskHandle={obs.TaskHandle}（BGI 可能已重启，任务随进程终止）",
+            });
+        }
+
+        return obs switch
+        {
+            // 事件快速路径（取消＝`completed`＋`Cancelled=true`，旧词表仍输出 cancelled 语义）
+            { Source: QueueTerminalSource.Event, RawTerminal: "completed", Cancelled: true } =>
+                new CommandResult { Status = "cancelled", Message = $"{desc} 执行中被取消" },
+            { Source: QueueTerminalSource.Event, RawTerminal: "completed" } =>
+                new CommandResult { Status = "success", Message = $"{desc} 已启动并执行完成（队列通道）" },
+            { Source: QueueTerminalSource.Event, RawTerminal: "queueCancelled" } =>
+                new CommandResult { Status = "cancelled", Message = $"{desc} 排队中被取消" },
+            { Source: QueueTerminalSource.Event } =>
+                new CommandResult { Status = "failed", Message = $"{desc} 执行失败（{obs.ErrorCode ?? "unknown"}）：{obs.ErrorMessage ?? "无详情"}" },
+            // 安全网轮询
+            { Source: QueueTerminalSource.Poll, RawTerminal: "completed" } when obs.Cancelled =>
+                new CommandResult { Status = "cancelled", Message = $"{desc} 执行中被取消" },
+            { Source: QueueTerminalSource.Poll, RawTerminal: "completed" } =>
+                new CommandResult { Status = "success", Message = $"{desc} 已启动并执行完成（队列通道，轮询校准）" },
+            { Source: QueueTerminalSource.Poll, RawTerminal: "queueCancelled" } =>
+                new CommandResult { Status = "cancelled", Message = $"{desc} 排队中被取消" },
+            { Source: QueueTerminalSource.Poll, RawTerminal: "failed" } =>
+                new CommandResult { Status = "failed", Message = $"{desc} 执行失败（{obs.ErrorCode ?? "unknown"}）：{obs.ErrorMessage ?? "无详情"}" },
+            { Source: QueueTerminalSource.Poll, RawTerminal: "not_found" } =>
+                new CommandResult { Status = "failed", Message = $"{desc} 任务句柄在 BGI 侧不存在（BGI 可能已重启，任务随进程终止），taskHandle={obs.TaskHandle}" },
+            // 兜底超时／观察中断：发送后不可考，保留未知结果且不重发
+            { Source: QueueTerminalSource.Timeout } =>
+                new CommandResult { Status = "failed", Message = $"{desc} 等待执行结果超时（{TaskTerminalWaitTimeout.TotalHours}h 兜底），taskHandle={obs.TaskHandle}" },
+            _ => new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 执行结果未知，未重新下发：{obs.Detail}" },
+        };
+    }
+
+    /// <summary>队列通道传输类故障过滤（与拆分前的 catch 过滤器逐项一致）。</summary>
+    private static bool IsQueueTransportFault(Exception ex)
+        => ex is InvalidOperationException or System.IO.IOException or TimeoutException
+            or OperationCanceledException or System.Text.Json.JsonException;
 
     /// <summary>执行快捷键：IPC 发 action.execute_hotkey</summary>
     private async Task<CommandResult> ExecuteHotkeyAsync(string hotkeyConfigName)

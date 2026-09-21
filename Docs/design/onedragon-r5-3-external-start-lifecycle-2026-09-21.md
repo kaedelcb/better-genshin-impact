@@ -465,3 +465,50 @@
 | 生产接线 | **关闭**（不依赖冻结与否：实现与 §24.14 夹具完成并通过验收前不恢复，§23.8） |
 
 **冻结状态**：见 §24.20-E 末尾「冻结状态」表（唯一来源；冻结 ≠ 生效、≠ 生产开门）。无论冻结与否，实现与 §24.14 夹具完成并通过验收前，**不恢复** §23.8 所述生产接线。
+
+### 24.21 落地登记：Batch B 收尾之三（P38 早期受理／完成观察拆分）与会诊处置（[新增·2026-09-21]）
+
+**A. 本批落地事实（登记；证据＝提交记录＋全量回归）**
+
+| 落地项 | 实现位置 | 条款 |
+|---|---|---|
+| 早期受理段／完成观察段拆分（通道不可用＝未发送 ⇒ 回退既有路径；先订阅后动作；提交一次） | `CommandExecutor.TryStartViaQueueEarlyAsync` | §24.10-1／§24.14-1／§24.14-3（红线7） |
+| 早期层回执 `ExternalStartReply.EarlyAccepted(jobId, CompletionTask)` 构造与断言 | 同上（`Reply` 字段）＋夹具 | §24.14-1 |
+| 完成观察（门面锁外；事件快速路径＋5s 轮询安全网；等待器由观察段 `finally` 释放） | `CommandExecutor.ObserveQueueTerminalAsync` | §24.10-2／§24.14-3／§24.18-2 |
+| 观察结论 → 完成层结果（仅事件/轮询权威终态构造终态载体；`not_found`／超预算／瞬态／本地取消 ⇒ `Unknown`，**不写** `PendingTerminal`） | `CommandExecutor.MapQueueObservationToCompletion` | §24.2-2／§24.7-3／§24.19-2／§24.20-B |
+| 旧词表投影（未接线直启路径文案/错误码/探针逐字保留） | `CommandExecutor.MapQueueEarlyToLegacyResultAsync` | §24.8-3（不回归既有直启路径） |
+| `CompletionObserver` 返回 `null`＝本通道不承载完成事实；宿主**仅在确有完成事实**时结算 | `ExternalStartAdmissionRequest.CompletionObserver`／`TaskCenterHost.AdmitExternalStartAsync` | §24.3-4（第一分支）／§24.6-5 |
+| 观察记录携带**接收时点**、`RawTerminal` 保留线路原词 | `CommandExecutor.QueueTerminalObservation` | §24.2-2″（两条独立链） |
+| 队列拒绝的**可重试封闭白名单**（仅无损拒绝类；其余默认终局拒绝） | `CommandExecutor.IsRetryableQueueRejection` | §24.2-2″／§24.11 第 3′ 行 |
+| 未知分支 JobId 回退（`acceptanceJobId` → 既有结果 → 台账句柄读回）；受理句柄与完成层句柄**非空冲突** ⇒ `terminal_job_id_conflict` 保守停驻 | `ArbitrationAdmissionService.SettleCompletionAsync` | §24.3-3／§24.6-2／D9 |
+| `ToCompletion` 非终态 ⇒ **`null`**（原 `Unknown` 会把「v2 发送成功」改判为对外 `result_unknown`，与 §24.4-4 明文冲突） | `CommandExecutor.ToCompletion` | §24.3-4／§24.4-4／§24.6-5 |
+| 完成观察消费条件＝「**有完整发送身份＋确有完成事实**」（不再限于 `Accepted`）：接管/关闭失败（`Reconciling`）时权威终态仍按唯一顺序结算 | `TaskCenterHost.AdmitExternalStartAsync` | §24.14-4／§24.15 |
+
+**B. 本批会诊（gpt-5.6-sol／effort=medium，一轮）与逐条处置**
+
+| # | 严重度 | 发现摘要 | 处置 |
+|---|---|---|---|
+| 1 | 阻断 | `ToCompletion` 对普通 v2 成功返回 `Unknown` ⇒ 宿主结算成 `NeedReconcile`（对外 `result_unknown`），与 §24.4-4「v2 发送成功：入口 success」冲突 | **已修**（非终态 ⇒ `null`；夹具改为断言 `null`） |
+| 2 | 阻断 | ext 受理后**热观察任务**在接管/关闭失败（门面返回 `Reconciling`）时无人消费 ⇒ 终态可能只留在被遗弃的任务里 | **部分已修**：宿主消费条件改为「有完整发送身份＋确有完成事实」（覆盖 `Reconciling` 暂存结算）；**残余**＝接管失败后由恢复扫描接续（见 §24.21-C-2） |
+| 3 | 阻断 | 24h／`not_found`／瞬态后不再观察，仅「不写终态」不足以保证「停驻≠放弃」 | **部分认领**：不写终态已满足（§24.20-B 禁止超时强制终局）；**持续观察/重绑**归 §24.12-3 集合②（未终结台账）→ 见 §24.21-C-2 |
+| 4 | 阻断 | 早期层接口未成为**端口边界**（端口仍返回 `ExternalStartExecution`）；`already_executed` 直接制造无句柄 `Accepted` | **部分认领**：端口形状改造与两段式 `_gate` **同批**执行（见 §24.21-C-1）；`already_executed` 判定**保留**＝§24.11 第 3′ 行（同一发送身份已出现权威终态 ⇒ 本地未发送证明失效 ⇒ 先接管、后关闭、再终局）＋§24.7-2（无句柄路径以线上提交键登记替代查询依据）；**事后可剔除入口**：若 owner 要求严格按 §24.14-1 字面改为 `Unknown`，改动面＝`MapQueueEarlyToAdmission` 单分支＋一个夹具 |
+| 5 | 阻断 | 启动/早期网络取证仍发生在门面 `_gate` 内（`DrainRoundAsync` → `ProcessRoundAsync` → `ProcessWinnerAsync` → `hooks.Sender`） | **认领为未完成项**（D6 残项）：两段式 `_gate` 为**下一批首项**（见 §24.21-C-1）；当前生产接线**关闭**，故无运行影响 |
+| 6 | 重要 | `submit.Success=false` 一律视为「确定未受理且可重试」 | **已修**（封闭白名单，默认终局拒绝） |
+| 7 | 重要 | `ObservedAtUtc` 在映射阶段重取；`completed＋Cancelled=true` 被改写成 `cancelled` | **已修**（接收时点随观察记录传递；原词不改写，取消事实由 `Kind` 承载） |
+| 8 | 重要 | 本地取消链未落地（宿主传 `CancellationToken.None`，热观察不可取消） | **认领挂账**：归 R5.3 取消链（§24.11 全矩阵）批次；本批与拆分前**行为一致**（无回归），观察段已支持 `ct` |
+| 9 | 重要 | 未知分支依赖调用方传 `acceptanceJobId`；多来源非空句柄冲突被静默择一 | **已修**（台账读回回退＋`terminal_job_id_conflict` 保守停驻） |
+| 10 | 重要 | §24.14-5／§24.18-5 交错夹具缺失 | **部分已修**（新增「完成观察等待期间其他请求可取得门面锁」）；其余归下一批与 §24.4 组合根夹具（见 §24.21-C） |
+| 11 | 建议 | 保持 E3/E4/E5 生产接线关闭 | **遵循**（本批未开任何生产接线） |
+
+**B′. 验证会诊（第二轮，同一批次；gpt-5.6-sol／medium）与处置**
+
+| # | 严重度 | 发现摘要 | 处置 |
+|---|---|---|---|
+| 12 | 阻断 | 处置 2 未闭合：`SettleCompletionAsync` 返回 `not_accepted` 时宿主「保留原拒绝」会**静默丢掉**同一发送身份上新的权威终态（§24.2-2″「已拒绝后收到冲突证据」） | **已修**：新增 `TaskCenterHost.RegisterObservedTerminalConflictAsync`——`not_accepted` ＋**权威终态**（非 `Unknown`、带观察时点/原词/完整发送身份）时原子追加冲突证据并置冲突待决（返回 `NeedReconcile`＋责任 `Pending`＋禁止重发；既有拒绝本体不改写，仅由 `Superseded*` 审计表达取代关系）；证据不完整/登记被拒/异常时保留门面原结论。夹具：`ExternalStart_RejectedThenAuthoritativeTerminal_RegistersConflictEvidence` |
+| 13 | 重要 | 权威终态映射仍可 `ObservedAtUtc ?? UtcNow` 补时点（等于把映射时刻伪装成证据接收时刻） | **已修**：`MapQueueObservationToCompletion` 对权威终态**缺观察时点/默认值 fail-closed**（返回 `Unknown`，不写终态载体）；夹具补「缺时点 ⇒ `Unknown`」断言，其余夹具一律显式提供接收时点 |
+
+**C. 未完成项登记（带批次归属，禁止悬空）**
+
+1. **下一批（B3 收尾之四＝D6 两段式 `_gate`）**：①门面在**占位/发布发送责任与 `PreObservation` 之后释放 `_gate`**，再调用适配层启动/取证，结果回到权威串行边界后**重新校验 owner/epoch/revision/完整发送身份**再结算（§24.14-2／§24.18-2，当前违反点＝`ArbitrationAdmissionService` 的 `DrainRoundAsync`→`ProcessWinnerAsync`→`_hooks.Sender` 链路持锁）；②端口形状按 §24.14-1 收敛为 `ExternalStartReply`（`EarlyAccepted／Rejected／Unknown`）＋完成观察（＝本批 `CompletionObserver` 的正式化）；③恢复扫描**四类集合**（含**集合②未终结台账记录**）接线，使「无权威证据时长期保守停驻」具备**持续观察/重绑入口**（§24.12-3／§24.14-6；对应 §24.21-B 阻断 2 残余与阻断 3）。
+2. **同批夹具**（§24.14-5／§24.18-5／§24.4-4）：`CompletionTask` 未完成时其他请求取得门面锁（**本批已补**）、终态先于接管/关闭的唯一顺序、接管失败后终态由当前所有者/恢复路径结算、本地取消与调用方退出后的观察责任移交、换主接续、重复结算与等待器单次释放、**真实回退 core 的 v2 普通 success 保持 `Accepted/Pending`**（需 §24.4 组合根的真实传输接缝）。
+3. **归 R5.3 取消链批次**：§24.11 全阶段矩阵的**本地取消**实现（入口取消 + 责任 `Pending` + 后台观察继续的分离语义）与 `ct` 贯通。
