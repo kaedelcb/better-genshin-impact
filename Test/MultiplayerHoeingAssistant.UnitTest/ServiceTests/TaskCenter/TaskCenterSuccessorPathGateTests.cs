@@ -75,6 +75,82 @@ public class TaskCenterSuccessorPathGateTests
     // ── ② 三态映射（按结果确定性，不按可否重试） ─────────────────────────────────
 
     /// <summary>
+    /// **§12.3 交错⑤·逐节点释放直接证据（组件层；[新增·2026-09-21 批次十四]）**：
+    /// 6 节点流程中，**第 k 次（k≥2）节点发送时**，前一节点的 Operation 必须**已按自身发送身份终局**
+    /// （`TerminalCompleted`）并**迁出 `Active` 计容区**——**逐次**取证（不是只看最终态，故与 P19② 的
+    /// 「宿主链路逐节点释放直接断言」对应；不依赖被 P50 暂停的 33 节点用例）。
+    /// </summary>
+    [Fact]
+    public async Task NodeSubmit_EachSendObservesPreviousNodeReleased()
+    {
+        var root = NewRoot("tcsweep2-");
+        try
+        {
+            var nodeIds = Enumerable.Range(1, 6).Select(i => "n-" + i).ToArray();
+            var arbitrationDir = Path.Combine(root, "arbitration");
+            var observations = new List<(int Index, string CurrentNodeId, string PrevNodeId, OperationRequestState State, OperationZone Zone)>();
+            var violations = new List<string>();
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: nodeIds,
+                onBeforeSendWithPayload: (_, index, payloadJson) =>
+                {
+                    // ①**把本次发送关联到具体节点**（不得按发送序号推断）：从 payload 的 `configName`（＝「配置n-i」）反查。
+                    var currentConfig = ParseConfigName(payloadJson);
+                    var currentNode = nodeIds.FirstOrDefault(id => "配置" + id == currentConfig);
+                    if (currentNode is null)
+                    {
+                        violations.Add($"第 {index} 次发送的 payload 无法关联到节点（configName={currentConfig ?? "<null>"}）");
+                        return;
+                    }
+                    if (index < 2) return;                       // 首节点没有「前一节点」
+                    var currentOrdinal = int.Parse(currentNode.AsSpan(2));
+                    var prevNode = "n-" + (currentOrdinal - 1);
+                    // 有界重试：满负载下租约文件锁瞬时争用会让单次读抛 IOException（与既有观测点同口径）。
+                    for (var attempt = 0; attempt < 20; attempt++)
+                    {
+                        try
+                        {
+                            var ops = new ArbitrationLeaseStore(arbitrationDir).Read().File?.Handoff?.Operations ?? [];
+                            // ②前节点必须**唯一命中**（按节点出现身份；两条同 NodeId 记录必须视为取证失败，不得 FirstOrDefault 取一条）。
+                            var prevOps = ops.Where(o => o.Candidate?.NodeId == prevNode).ToList();
+                            var currentOps = ops.Where(o => o.Candidate?.NodeId == currentNode).ToList();
+                            if (prevOps.Count != 1)
+                            {
+                                violations.Add($"第 {index} 次发送时前节点 {prevNode} 记录数={prevOps.Count}（应唯一）");
+                                return;
+                            }
+                            var prev = prevOps[0];
+                            observations.Add((index, currentNode, prevNode, prev.RequestState, prev.Zone));
+                            // ③**§16 交错⑤ 等强判据**：前节点终局 + **`Tombstone`（真正迁出计容区）** + 发送身份非空；
+                            //    且同一时点**当前节点必须已在 `Active`**（本轮占位）。
+                            if (prev.RequestState != OperationRequestState.TerminalCompleted
+                                || prev.Zone != OperationZone.Tombstone)
+                                violations.Add($"第 {index} 次发送时前节点 {prevNode} 未释放：state={prev.RequestState} zone={prev.Zone}");
+                            if (string.IsNullOrEmpty(prev.SubmissionIdentity))
+                                violations.Add($"第 {index} 次发送时前节点 {prevNode} 缺少发送身份（不得仅按 NodeId 关联）");
+                            if (currentOps.Count != 1 || currentOps[0].Zone != OperationZone.Active)
+                                violations.Add($"第 {index} 次发送时当前节点 {currentNode} 未处于 Active（记录数={currentOps.Count}，zone={(currentOps.Count == 1 ? currentOps[0].Zone.ToString() : "<n/a>")}）");
+                            return;
+                        }
+                        catch (IOException)
+                        {
+                            Thread.Sleep(5);
+                        }
+                    }
+                    violations.Add($"第 {index} 次发送取证失败（租约读取争用）");
+                });
+
+            Assert.True(probe.State == WorkflowRunState.Succeeded, Diag("6 节点流程应收口成功", probe));
+            Assert.True(probe.SendCount == 6, Diag("应恰好发送 6 次", probe));
+            Assert.Equal(5, observations.Count);            // 第 2..6 次发送各观察一次（共 5 次逐节点释放取证）
+            Assert.Empty(violations);                       // 逐次取证：无一次出现「前节点未终局/仍占主槽位」
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
     /// **G1／§13.10 A1 节点冻结语义完整性**：`FreezeNode` 必须是 JSON 往返**深拷贝**——
     /// 语义等价（序列化逐字相同）且与原对象**不共享可变子树**（排队期间的流程编辑不得影响已冻结请求）。
     /// </summary>
@@ -249,11 +325,19 @@ public class TaskCenterSuccessorPathGateTests
         /// <summary>发送入口注入（带 1 起的发送序号；用于「第二节点发送前上一节点操作是否已独立终局」取证）。</summary>
         public Action<int>? OnBeforeSend { get; set; }
 
+        /// <summary>
+        /// 发送入口注入（1 起序号 ＋ **本次发送的实际 payload JSON**）：用于把「第 k 次发送」**关联到具体节点**
+        /// （§12.3 交错⑤ 要求「按节点发送身份」而非仅按发送序号推断）。
+        /// </summary>
+        public Action<int, string?>? OnBeforeSendWithPayload { get; set; }
+
         public Task<BgiExternalResponse> SendCommandAsync(string operation, object? payload, CancellationToken ct)
         {
             lock (_sync) _sends.Add(operation);
             BeforeSend?.Invoke();
             OnBeforeSend?.Invoke(SendCount);
+            OnBeforeSendWithPayload?.Invoke(SendCount,
+                payload is null ? null : System.Text.Json.JsonSerializer.Serialize(payload));
             return Task.FromResult(new BgiExternalResponse
             {
                 Success = true,
@@ -297,6 +381,24 @@ public class TaskCenterSuccessorPathGateTests
            + " logs=[" + string.Join(" || ", p.Logs) + "]";
 
     /// <summary>
+    /// <summary>从节点提交 payload 中取 `configName`（把「第 k 次发送」关联到具体节点身份；§12.3 交错⑤）。</summary>
+    private static string? ParseConfigName(string? payloadJson)
+    {
+        if (string.IsNullOrEmpty(payloadJson)) return null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(payloadJson);
+            return doc.RootElement.TryGetProperty("configName", out var el)
+                   && el.ValueKind == System.Text.Json.JsonValueKind.String
+                ? el.GetString()
+                : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
     /// 驱动「面板启动 → 节点提交 → 终态观察」全链并回收可断言事实。门关分支节点提交不经门面（无 successor 操作）。
     /// `concurrentWriteBeforeSend`＝在发送入口注入「另有写入者改动运行记录」的交错（仅④使用）。
     /// </summary>
@@ -308,7 +410,9 @@ public class TaskCenterSuccessorPathGateTests
         //   `holdFirstAccept`＝首轮（E1）「Accepted 后、台账前」阻塞点；`beforeSuccessorAdmission`＝节点准入入口、
         //   取得门面锁**之前**的只发信号观察点（读取/取证用）。
         TaskCompletionSource? holdFirstAccept = null,
-        Func<Task>? beforeSuccessorAdmission = null)
+        Func<Task>? beforeSuccessorAdmission = null,
+        // [§12.3 交错⑤] 发送入口注入（1 起序号 ＋ payload JSON）：把「第 k 次发送」关联到具体节点身份。
+        Action<RunStore, int, string?>? onBeforeSendWithPayload = null)
     {
         using var client = new BgiExternalClient();
         var flowsDir = Path.Combine(root, "flows");
@@ -406,6 +510,8 @@ public class TaskCenterSuccessorPathGateTests
                 {
                     if (concurrentWriteBeforeSend is not null) port.BeforeSend = () => concurrentWriteBeforeSend(runs);
                     if (onBeforeSend is not null) port.OnBeforeSend = n => onBeforeSend(runs, n);
+                    if (onBeforeSendWithPayload is not null)
+                        port.OnBeforeSendWithPayload = (n, payloadJson) => onBeforeSendWithPayload(runs, n, payloadJson);
                     return new BgiWorkflowExecutionBoundary(port, runs);
                 },
             },
