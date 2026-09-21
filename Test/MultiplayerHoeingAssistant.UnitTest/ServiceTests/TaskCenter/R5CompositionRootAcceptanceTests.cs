@@ -504,6 +504,69 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
         }
     }
     /// <summary>
+    /// **§24.41-C#7／S2·S3 组合根反例（阻断零发送）**（[新增·2026-09-21 批次二十九]）：
+    /// **F11 独立停止闸门激活**时，E3 `start_group` 经真实组合根（`externalStartAdmission` 已注入＝测试接线态）
+    /// 必须**不成功且零 `ext.task.start`**，且**无租约副作用**（判定先于租约获取 ⇒ `arbitration` 目录不应被创建；
+    /// 若已存在则不得新增任何操作）。依据：§7.1-1（F11 判定先于租约获取）／§24.4-7／§16 交错③「阻断 ⇒ 零发送」。
+    /// </summary>
+    [Fact]
+    public async Task CompositionRoot_F11Active_DeniedZeroSendNoLeaseSideEffect()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "r5comp-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var client = new BgiExternalClient();
+            var host = new TaskCenterHost(
+                Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
+                () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null),
+                localExecutionCapability: () => true,
+                statusSnapshotProvider: () => new ControlStatus { TaskRunning = false },
+                admissionWired: true,
+                admissionSeams: new TaskCenterAdmissionSeams { Epoch = "1:1", F11Active = true });
+            var executor = new CommandExecutor(null!, "unused",
+                externalClientProvider: () => client,
+                externalStartAdmission: (request, ct) => host.AdmitExternalStartAsync(request, ct));
+
+            await client.StartAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            await client.SubscribeAsync([]);
+            Assert.Equal(BgiExternalLinkState.Ready, client.State);           // 前提：传输就绪（防「传输故障伪造零计数」）
+            var arbitrationDir = Path.Combine(root, "arbitration");
+            Assert.False(Directory.Exists(arbitrationDir), "前提：本用例调用前不应存在仲裁目录");
+
+            // 组名**中性**（不含 "F11" 字样）：避免「通用错误文案回显组名」把因果断言蒙对
+            var blocked = await executor.ExecuteAsync(StartGroupCommand("组合根阻断对照组")).WaitAsync(TimeSpan.FromSeconds(20));
+
+            Assert.NotEqual("success", blocked.Status);                       // 不得报成功
+            // **因果证据**：拒绝来自 F11 独立闸门——①结构化责任维为「不适用」`None`（该拒绝未产生发送责任）；
+            // ②消息命中 F11 **专属文案**（不得靠「零发送」或组名回显推断——别的故障也会零发送）
+            Assert.Equal(ResponsibilityState.None, blocked.ResponsibilityState);
+            Assert.Contains("F11 独立停止闸门激活", blocked.Message);
+            Assert.Equal(0, _double.CountOf("ext.task.start"));               // **零发送**（直接证据）
+            Assert.Equal(0, _double.CountOf("task.start"));                   // 回退面（v2 直发）同样零发送
+            // **零租约副作用**（严格）：F11 判定先于租约获取 ⇒ 调用后仍不得创建仲裁目录/台账；
+            // 若目录被创建（防御分支）则必须完整为空：无 Operations／无 PreObservations／无未决 Submission／无未决交接。
+            Assert.False(Directory.Exists(arbitrationDir),
+                "F11 判定必须早于租约获取：不得因被阻断的请求创建 arbitration 目录");
+            var handoff = new ArbitrationLeaseStore(arbitrationDir).Read().File?.Handoff;
+            if (handoff is not null)
+            {
+                Assert.Empty(handoff.Operations ?? []);
+                Assert.Empty(handoff.PreObservations ?? []);
+                Assert.Null(handoff.Submission);
+                Assert.Null(handoff.Pending);
+            }
+            Assert.False(File.Exists(Path.Combine(root, "external-start-ledger.json")),
+                "被阻断的请求不得写入外部启动台账");
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    /// <summary>
     /// **§24.4-7 切监控模式（切换闸门）双向断言**：置 `Diag.SwitchGateActive` ⇒ 新启动被**拒绝且零发送**；
     /// 闸门解除 ⇒ 启动恢复正常。切换闸门属控制面写入（不续命、不需所有权，§6.1）。
     /// </summary>
