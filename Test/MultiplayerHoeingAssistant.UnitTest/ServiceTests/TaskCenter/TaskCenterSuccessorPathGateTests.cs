@@ -618,13 +618,15 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
     /// 「E1 未关闭时首节点抢先」需**强制**该交错，而现有 `AdmissionBarriers` 回调均在门面 `_gate` 内执行，
     /// 在其中阻塞等待节点占位会自死锁；故强制版夹具**仍欠**（需新增门面 `_gate` 外的观察点，见设计稿 §15/§16）。
     /// </summary>
-    // **P50（已登记缺陷）**：满负载下偶发「第 N 个节点收敛 Reconciling → 运行 Unknown」（保守方向、无双跑）。
-    // 根因未定位前，本**宿主级端到端**用例**暂停执行**（Skip；断言保持严格、未放宽），**不计入绿色基线**；
-    // **复现入口尚未落实**（需建成可显式运行的诊断套件——「可单独运行」在固定 Skip 下并不成立）。
-    // 容量证据改由确定性**组件级**夹具承担：
+    // **[P50 复现证据·2026-09-21]** 曾尝试取消 Skip：定向单跑通过，但**满负载全量套件 5 轮中出现 1 轮红灯**——
+    // 同宿主类的负载敏感夹具 `NodeOperation_TerminalizedBeforeRunEnds_OnNextNodeAdmission` 收敛失败（保守方向、无双跑）。
+    // 结论：**负载敏感性真实存在且可复现**（不再只是历史观察），启用本用例会以约 20% 概率污染基线；
+    // 按「基线必须稳定 + 断言不得放宽」纪律**恢复 Skip**（断言保持严格、未放宽），P50 继续为**阻断式挂账**
+    // （根因未定位、诊断入口未落实、生产节点改道门继续保留——见设计稿 §24.28-B）。
+    // 容量证据由确定性**组件级**夹具承担：
     //   `ArbitrationAdmissionServiceTests.Capacity_33NodeCandidates_AllAccepted_WhenEachSettled`（正向）
     //   `ArbitrationAdmissionServiceTests.Capacity_MainSlotsExhausted_33rdCreateRejected`（负向）
-    [Fact(Skip = "P50 未定位：满负载偶发第 N 节点收敛 Reconciling→Unknown。本用例**暂停执行**（断言保持严格，未放宽）；「可显式运行的诊断套件」尚未建立——复现入口未落实。容量证据由组件级确定性夹具承担。")]
+    [Fact(Skip = "P50：负载敏感性已复现（启用后满负载 5 轮中 1 轮红灯，同宿主类夹具收敛失败）。诊断入口未落实 ⇒ 维持暂停执行（断言严格未放宽）；生产节点改道门继续保留。")]
     public async Task NodeSubmit_33NodeFlow_NoCapacityExhaustion()
     {
         var root = NewRoot("tccap-");
