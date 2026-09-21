@@ -1098,3 +1098,37 @@ R5.2 稿 §16 行③与 §16-A 汇总裁**由「部分」升为「已覆盖（�
    ③**令牌身份主张收窄**：本夹具的取消**不在飞发送**，故**不**主张「取消发生在发送所用同一枚令牌上」——
    该因果证据由 **§24.39**（在飞发送版，端口侧 `SendCanceledByToken`）提供，并在夹具注释中显式说明分工。
 6. 回归：全量 **867 通过／1 跳过／868**（跳过项＝既有 P50；基线 552 未降）。**生产接线仍关闭**。
+
+### 24.40 落地登记：§17 P54「接管失败映射的显式断言」（[新增·2026-09-21 批次二十六]）
+
+**A. 本批落地事实（组件层；**未改生产行为**）**
+
+1. 夹具 `ArbitrationAdmissionServiceTests.SendLayerOutcome_MapsToAdmissionResultAndResponsibility`（Theory 三支）：
+   把**发送层报告**与**准入结果层**的映射**逐项显式断言**（此前只有分类/枚举级覆盖，映射本身未被点名）：
+
+   **接管落盘失败支的构造（[会诊阻断处置]）**：`Sender` 仍报 **`Accepted("ext:accepted", null, "job-1")`**，
+   仅让接管钩子 **`TakeoverPersist` 失败且不写台账**——初版让 `Sender` 直接回 `Unknown` 会使接管钩子**根本不执行**、
+   目标空过（属阻断级构造错误，已改）。操作用 `OperationType.NodeExecution`＋`ResourceRef="node:n-1"`＋`NodeId="n-1"`。
+
+   | 发送层结果 | 准入结果 | 结果维 | 责任维 | 责任载体 | 台账 |
+   |---|---|---|---|---|---|
+   | `Accepted`（受理） | `Accepted` | **`None`**（本层无权威终态；终态只由完成层承载） | `Pending`（远端作业存续 ⇒ **受理≠结清**） | 节点操作 `Accepted`、`Submission` **已关闭**、`JobId="job-1"` 可读 | **1 条**且逐项核对：`SubmissionIdentity`／`SendSeq`／`JobId`／`CandidateId` 与操作一致，`ActionId` 非空 |
+   | `Accepted(job-1)` ＋ **接管钩子失败**（真实接管落盘失败） | `Reconciling` | **`Unknown`**（已受理但接管未落盘 ⇒ **结果不可考**） | **`Pending`**（不得报成功、不得反解为「确定未受理」） | 节点操作 `Reconciling`＋三侧身份对齐（`result`／操作／未决 `Submission` 的 `SubmissionIdentity` 与 `SendSeq` 全等）＋`LastSendSeq==1`（许可已发布、**不得重发**） | **0 条**（接管未落盘 ⇒ **不得写台账**） |
+   | `Rejected("boundary_precheck_rejected", false, "host:boundary")` | `TerminalRejected` | `None` | `Settled` | 节点操作 `TerminalRejected`、`Submission` 已关闭 | **0 条**；原因码含 `boundary_precheck_rejected`、证据源含 `host:boundary` |
+
+2. **口径纠正（本批实测暴露）**：**「受理」不等于「责任结清」**——受理后远端作业存续，责任维按 §24.6-5 为 **`Pending`**；
+   夹具初版按 `Settled` 断言即被实测纠正（该纠正已写入夹具断言与文档）。
+3. **[会诊处置·一轮 1 阻断／3 重要]** ①**阻断（构造错误）**：初版「接管落盘失败支」让 `Sender` 直接返回 `Unknown`，
+   接管钩子 `TakeoverPersist` 根本不会执行 ⇒ 目标空过；**已改**为「`Sender` 报 `Accepted(job-1)` ＋ 接管钩子失败且不写台账」。
+   ②**断言辨识力（重要）**：补结果维（受理 `None`／接管未落盘 `Unknown` 的**区分**）、台账条目**逐项身份核对**
+   （`SubmissionIdentity`／`SendSeq`／`JobId`／`CandidateId`／`ActionId` 非空）、三侧身份与 `SendSeq` 对齐、
+   拒绝支的 `ReasonCode`／`EvidenceSource` 点名。③**收敛结论过早（重要）**：本节按修正后的真实构造重新收敛。
+   ④**交接稿批次范围（重要）**⇒ 页首一览与计数同步（不依赖后置纠错）。
+4. 回归：全量 **870 通过／1 跳过／871**（Theory 三支各计一项；跳过项＝既有 P50；基线 552 未降）。**生产接线仍关闭**。
+
+**B. 状态与残余**
+
+1. **§17 P54 本项收敛**：取消 Task／执行失败分类的映射此前已有覆盖（`CommandExecutorExternalStartAdmissionTests`
+   的 `ToExecution`／`ToCompletion` 分阶段映射），**接管失败映射**由本节在**准入结果层**显式断言 ⇒ 本项按组件/宿主层收敛。
+2. **仍未覆盖（禁悬空）**：①**外部启动（E3/E4/E5/E6）路径**上的接管失败映射端点（本节为节点后继路径的准入结果层）；
+   ②适配器**入参**层（`externalStartAdmission` 委托注入前的形状）与真实入口层证据（§23.1）。均归 **B4/真实入口层**。

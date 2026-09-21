@@ -3731,6 +3731,93 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Null(ReadLease().File!.Handoff!.Submission);            // 关闭已完成
     }
 
+    // ── §17 P54：发送层三态 → 准入结果／责任维／许可水位的**显式映射**（[新增·2026-09-21 批次二十六]）──
+
+    /// <summary>
+    /// **§17 P54（接管失败映射的显式断言）**：发送层报告的三态必须在**准入结果层**逐项显式映射——
+    /// ①**受理** ⇒ `Accepted`＋`IsTerminal=false`＋责任 **`Pending`**（远端作业仍在跑 ⇒ 执行责任未结清；
+    /// **不得**因「本层发送责任已交付」而报 `Settled`）＋台账在册＋`Submission` 已关闭；
+    /// ②**接管落盘失败**（`host:takeover_persist_failed`）⇒ `Reconciling`＋责任 **`Pending`**（**不得**报成功、
+    /// **不得**反解为「确定未受理」）＋节点操作 `Reconciling`＋未决 `Submission` 在册＋`LastSendSeq==1`
+    /// （许可已发布、**不得重发**）＋**零台账写入**；
+    /// ③**副作用前确定拒绝** ⇒ `TerminalRejected`＋责任**已结清**＋`Submission` 已关闭＋零台账写入。
+    /// </summary>
+    [Theory]
+    [InlineData("accepted")]
+    [InlineData("takeover-persist-failed")]
+    [InlineData("precheck-rejected")]
+    public async Task SendLayerOutcome_MapsToAdmissionResultAndResponsibility(string mode)
+    {
+        var sends = 0;
+        var (svc, _, ledger, _) = BuildFacade(h =>
+        {
+            // **接管落盘失败必须被"真的制造"**（[会诊阻断处置]）：Sender 仍报**已受理（带 jobId）**，
+            // 只让接管钩子 `TakeoverPersist` 失败（且**不写台账**）——这才覆盖「远端已受理、接管未落盘」的映射。
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(mode == "precheck-rejected"
+                    ? new SendOutcome.Rejected("boundary_precheck_rejected", false, "host:boundary")
+                    : new SendOutcome.Accepted("ext:accepted", null, "job-1"));
+            };
+            if (mode == "takeover-persist-failed")
+                h.TakeoverPersist = _ => Task.FromResult<string?>("takeover_persist_not_persisted");   // 失败且**不写台账**
+        });
+        var r = Req(operationType: OperationType.NodeExecution);
+        r.Candidate.ResourceRef = "node:n-1";
+        r.Candidate.NodeId = "n-1";
+        var result = await svc.SubmitAsync(r);
+        var op = FindOp(r.RequestIdentity)!;
+        var handoff = ReadLease().File!.Handoff!;
+        var ledgerEntries = ledger.Read().File?.Entries?.Count ?? 0;
+
+        Assert.Equal(1, sends);
+        switch (mode)
+        {
+            case "accepted":
+                Assert.Equal(AdmissionResultKind.Accepted, result.Kind);
+                // 受理≠结清：远端作业存续 ⇒ 责任维为 `Pending`（§24.6-5）
+                Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);
+                // 结果维：本层只有「发送受理」，**无权威终态** ⇒ `ExecutionDisposition.None`（终态只由完成层承载）
+                Assert.Equal(ExecutionDisposition.None, result.ExecutionDisposition);
+                Assert.Equal("job-1", result.JobId);
+                Assert.Equal(OperationRequestState.Accepted, op.RequestState);
+                Assert.Null(handoff.Submission);                                  // 关闭
+                Assert.Equal(1, ledgerEntries);                                   // 接管台账在册
+                var entry = ledger.Read().File!.Entries.Single();
+                Assert.Equal(op.SubmissionIdentity, entry.SubmissionIdentity);    // 台账身份＝本轮发送身份
+                Assert.Equal(op.LastSendSeq, entry.SendSeq);
+                Assert.Equal("job-1", entry.JobId);
+                Assert.Equal(op.CandidateId, entry.CandidateId);
+                Assert.False(string.IsNullOrEmpty(entry.ActionId));               // 台账动作号（派生）不得为空
+                break;
+            case "takeover-persist-failed":
+                Assert.Equal(AdmissionResultKind.Reconciling, result.Kind);
+                Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);   // 责任保留（不得结清）
+                // 结果维：**已受理但接管未落盘 ⇒ 结果不可考**（`Unknown`）——与「普通受理且无终态」的 `None` 区分
+                Assert.Equal(ExecutionDisposition.Unknown, result.ExecutionDisposition);
+                Assert.Equal(OperationRequestState.Reconciling, op.RequestState);
+                Assert.False(string.IsNullOrEmpty(op.SubmissionIdentity));
+                Assert.NotNull(handoff.Submission);                              // 未决发送责任在册
+                Assert.Equal(op.SubmissionIdentity, handoff.Submission!.SubmissionIdentity);
+                Assert.Equal(op.LastSendSeq, handoff.Submission.SendSeq);
+                Assert.Equal(op.SubmissionIdentity, result.SubmissionIdentity);  // 结果↔操作↔责任三侧身份对齐
+                Assert.Equal(op.LastSendSeq, result.SendSeq);
+                Assert.Equal(1, op.LastSendSeq);                                 // 许可已发布；不得重发
+                Assert.Equal(0, ledgerEntries);                                  // 接管未落盘 ⇒ **不得**写台账
+                break;
+            default:
+                Assert.Equal(AdmissionResultKind.TerminalRejected, result.Kind);
+                Assert.Equal(ResponsibilityState.Settled, result.ResponsibilityState);
+                Assert.Equal(OperationRequestState.TerminalRejected, op.RequestState);
+                Assert.Contains("boundary_precheck_rejected", result.ReasonCode);
+                Assert.Contains("host:boundary", op.LastResult?.EvidenceSource ?? "");
+                Assert.Null(handoff.Submission);
+                Assert.Equal(0, ledgerEntries);
+                break;
+        }
+    }
+
     // ── §17 P6：发送段取消令牌**按身份**原样透传（[新增·2026-09-21 批次二十三]）──
 
     /// <summary>
