@@ -1180,7 +1180,7 @@ R5.2 稿 §16 行③与 §16-A 汇总裁**由「部分」升为「已覆盖（�
 | 3 | **首节点绑定（§12.3 M1）**：父子关系与首节点绑定持久化 | R5.8 实现闭合序列（施工方：宿主实现＋夹具负责人） | 持久化父子/首节点绑定＋「E1 关闭后首节点另行取许可」夹具 | 节点改道门 | **部分已交付·未验收**（[批次四十四] §24.54：父子绑定由门面自行反查写入＋首/后继节点各自取许可夹具＋自有占用限定豁免＋发送前 F11 复核；**仍欠**：生产归属事实源与真实入口层证据，见 §24.55） |
 | 4 | **G4a 启动移交/暂停续行的来源登记** | R5.8 实现闭合序列（施工方：宿主实现＋夹具负责人） | 移交受理处落定固定 Scope/绑定来源记录＋后继提交可查得 | 节点改道门 | **已交付（组件/宿主层）**（[批次四十五] §24.56：来源权威下沉运行台账 `admissionSourceScope`（受理同次落盘）＋来源解析判据（面板唯一／歧义拒绝／零条回落且需移交受理事实）＋恢复路径删除当前 epoch 兜底＋端到端「移交启动→首节点继承固定 Scope」；**仍欠**：真实入口/实机证据与移交来源在自有占用豁免中的适用） |
 | 5 | **P8 通用失败分类细化** | R5.8 实现闭合序列（施工方：设计＋夹具负责人） | 「网络前可证实未发送 vs 已发送后失败」的可判据接缝＋夹具（现非 success 一律 Unknown） | 外部启用门 | 已移交·**未验收** |
-| 6 | **集合②持续观察重绑** | R5.8 实现闭合序列（施工方：宿主实现＋夹具负责人） | 重启后未终结台账记录**重绑观察责任**并可后续结算 | 外部启用门 | 已移交·**未验收** |
+| 6 | **集合②持续观察重绑** | R5.8 实现闭合序列（施工方：宿主实现＋夹具负责人） | 重启后未终结台账记录**重绑观察责任**并可后续结算 | 外部启用门 | **已交付（组件/宿主层）**（[批次四十六] §24.57：观察义务**持久化重绑**（时点／句柄／单调次数）＋写事务内按完整发送身份复核＋句柄冲突与扫描事实矛盾的 fail-closed＋溢出零污染＋「重绑→权威终态→后续结算」夹具；残余＝§24.55 同源的真入口/控制面证据） |
 | 7 | **S2/S3 组合根端到端反例**（**F11** 阻断零发送／**冲突零重发**／执行占用零发送） | R5.8 实现闭合序列（施工方：组合根夹具负责人） | **F11 阻断零发送支已交付**（§24.42）＋**冲突零重发支已交付**（[批次三十九] §24.50：ext 不可用⇒回退 v2＋脚本化 `task_already_running` ⇒ `task.start` **恰一次**、无第二次发送、不报成功、许可已签发）；**执行占用零发送**待裁定（C#18） | 外部启用门（生产未注入）；执行占用支另受 C#18 裁定 | **部分已交付·未验收**（仅余执行占用子项） |
 | 8 | **S4b／S8b 未接入提交点**（策略/触发器收尾两处） | **owner 产品裁决** | 承接方式与批次书面裁决 | 相应入口门禁 | 已移交 owner·**未验收（待裁决）** |
 | 9 | **外部启动（E3/E4/E5/E6）路径接管失败映射端点；子进程级重启；E4 取消入口映射** | R5.8 真实入口层（§23.1；施工方：入口夹具负责人） | 该路径上的端到端夹具或实机证据 | 外部启用门＋R5.8 门 | 已移交·**未验收** |
@@ -1631,3 +1631,51 @@ R5.2 稿 §16 行③与 §16-A 汇总裁**由「部分」升为「已覆盖（�
 「**已交付（组件/宿主层）**」：移交受理处落定固定来源 ＋ 后继提交可查得（端到端夹具）＋缺来源 fail-closed。
 **仍欠**（§24.55 同源）：真实入口层/实机证据、以及移交来源在**自有占用限定豁免**中的适用（现按 fail-closed）。
 **生产外部启动接线与节点改道门仍关闭**；本批**不代表 R5 收口、不代表生产开门**。
+
+### 24.57 落地登记：C 表 #6「集合②持续观察**重绑**」——观察义务持久化与后续结算（[新增·2026-09-22 批次四十六]）
+
+**A. 本批落地事实（生产代码＋夹具；生产外部启动接线与节点改道门仍关闭）**
+
+1. **问题（§24.12-3 集合②／§24.14-6）**：重启/接管后的恢复扫描此前对「外部启动台账**未终结**且本笔仍负发送
+   责任」只**计数**（`ObservationKept`）——「停驻≠放弃」缺少**落盘载体**：其他处理者/后续轮次无法从持久化
+   事实看出「这笔仍在持续观察中」，也没有可续扫的依据。
+2. **观察义务持久化（重绑）**：`OperationRecord` 增三个加法字段 `observationReboundAtUtc`／`observationJobId`／
+   `observationRebindCount`；`RecoverExternalStartObservationsAsync` 在**同一权威串行边界**内对每一笔
+   集合②目标写回：**重绑时点（本轮一次捕获）＋次数单调 +1 ＋ 台账给出的句柄（可用时）**——
+   **不改责任状态、不写终态载体、不释放占用、不重发**。
+3. **写事务内按完整发送身份复核**（[会诊处置]）：只凭 `RequestIdentity + Zone` 定位会把**旧轮次的句柄写到已推进的
+   新责任**上；现要求写事务内逐笔复核 `OperationType == ExternalStart`＋`Zone == Active`＋`!ConflictPending`＋
+   无 `PendingTerminal`／`ExecutionResult`＋责任状态 ∈ {Accepted, Granted, Sending, Reconciling}＋
+   `SubmissionIdentity`／`LastSendSeq` **与扫描事实逐字相等**；任一不满足 ⇒ **整笔跳过**（`observation_rebind_state_advanced`）。
+4. **扫描事实规范化与 fail-closed**：事实先按**完整发送身份分组**——句柄忽略空值**稳定合并**（与事实顺序无关）；
+   同组**两个不同非空句柄**或**终态标志矛盾**（`true`/`false` 并存）⇒ **整组不处理**（既不重绑也不补终局），
+   经 `ScanFactConflicts` 计数报告。
+5. **零部分写入与溢出保护**：校验（身份／状态／句柄合并与冲突／计数合法性）**全部先行**，通过后**一次性写入**
+   三个字段；`ObservationRebindCount` 非法或达 `int.MaxValue` ⇒ 保守失败（`observation_rebind_count_overflow`，
+   不回绕、不静默重置、**不写任何字段**）。
+6. **报告合同**：`ExternalStartRecoveryReport` 追加 `ObservationRebound`（本轮**实际落盘**笔数）、
+   `ObservationRebindFailure`（未全部落盘的原因：状态已推进／句柄冲突／计数溢出／接缝异常）、
+   `ScanFactConflicts`（自相矛盾组数）；三者均纳入 `AnythingReported` 与 `ToString()`。
+7. **可后续结算（C 表 #6 的完成证据）**：重绑**不吞责任**——随后台账报**权威终态**时仍按集合③用已持久化的
+   `PendingTerminal` 走 `SettleCompletionAsync` 唯一顺序补终局（操作 `TerminalCompleted`、未决发送关闭、
+   主槽位经迁移释放），且重绑载体作为**历史**保留（不回退、不清洗）。
+8. **夹具接缝**：新增 `AdmissionHooks.BeforeObservationRebindPersist`（**夹具接缝；生产装配不设置**）用于
+   **确定性**复现「分类快照之后、写事务之前责任被推进」的交错；接缝异常只**放弃本轮重绑**并如实登记
+   （`observation_rebind_seam_exception`），**集合③补终局照常继续**（同轮互不连坐）。
+9. **夹具**（＋7 项，全量 **929 通过／2 跳过／931**，0 失败；基线 552 未降）：
+   `RecoverObservations_UnterminatedLedger_RebindsDurableObservationResponsibility`（重绑落盘＋责任/身份不变＋
+   连续两轮次数单调）／`RecoverObservations_RebindTargetAdvanced_SkipsWithoutOverwriting`（快照后被推进 ⇒ 整笔跳过、
+   零污染）／`RecoverObservations_JobIdConflict_DoesNotOverwrite_EqualJobIdIdempotent`（同句柄幂等／异句柄不覆盖）／
+   `RecoverObservations_DuplicateScanFacts_NormalizedOrderIndependently`（4 支：顺序无关合并／两不同句柄冲突／
+   终态标志矛盾）／`RecoverObservations_RebindCountOverflow_NoFieldPollution`（溢出零污染）／
+   `RecoverObservations_RebindSeamThrows_ReportedAndSettlementStillRuns`／
+   `RecoverObservations_ScanConflictPlusSeamThrow_SeamReasonNotMasked`（原因码不被遮蔽）／
+   `RecoverObservations_MixedBatch_RebindsAndSettlesIndependently`（一笔重绑＋一笔补终局各自计数）／
+   `RecoverObservations_ReboundThenAuthoritativeTerminal_SettlesLater`（**重绑→权威终态→后续结算**）；
+   宿主级既有 `Recovery_UnterminatedLedger_KeepsObservationResponsibility` 追加三个重绑字段断言。
+10. **会诊**：**四轮**（1 轮 4 重要 → 2 轮 3 重要＋1 一般 → 3 轮 1 必改 → **第四轮「无必改项」**），逐条处置
+    全部落入代码/夹具；**第四轮判定：无必改项**。
+
+**B. 状态**：§24.41-C#6「集合②持续观察重绑」由「已移交·未验收」改为「**已交付（组件/宿主层）**」。
+**仍欠**（§24.55 同源）：真实入口层/实机证据与**控制面**侧的持续观察接缝（本轮交付的是本地仲裁面的重绑载体与
+结算闭环）。**生产外部启动接线与节点改道门仍关闭**；本批**不代表 R5 收口、不代表生产开门**。

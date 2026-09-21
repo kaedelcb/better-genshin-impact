@@ -644,6 +644,16 @@ public sealed class OperationRecord
     /// 缺省 `null` ⇒ 「父子关系不可证明」——资格判定的自有占用豁免一律**不成立**（fail-closed）。
     /// </summary>
     [JsonPropertyName("parentRequestIdentity")] public string? ParentRequestIdentity { get; set; }
+    /// <summary>
+    /// **观察责任重绑时点（C 表 #6／§24.12-3 集合②；[批次四十六]）**：重启/接管后的恢复扫描发现「外部启动台账
+    /// **未终结**且本笔仍负发送责任」时，**持久化**该观察义务的最近一次重绑时刻——「停驻」由此具备**可追溯、
+    /// 可续扫**的落盘载体（缺省 null＝从未重绑；不得据此转终局、不得释放占用、不得重发）。
+    /// </summary>
+    [JsonPropertyName("observationReboundAtUtc")] public DateTimeOffset? ObservationReboundAtUtc { get; set; }
+    /// <summary>**观察句柄（远端 jobId）**（同上）：重绑时若台账已给出句柄则一并落盘，供后续重新取证/结算定位。</summary>
+    [JsonPropertyName("observationJobId")] public string? ObservationJobId { get; set; }
+    /// <summary>**观察责任重绑次数**（同上）：单调递增，用于区分「持续观察中」与「从未被观察过」。</summary>
+    [JsonPropertyName("observationRebindCount")] public int ObservationRebindCount { get; set; }
 
     // ============================================================
     // R5.3 §24（B3 外部启动生命周期补全）——加法字段（租约 v3；旧 ≤2 记录缺字段按 §24.20-A′ 迁移/隔离口径处置）

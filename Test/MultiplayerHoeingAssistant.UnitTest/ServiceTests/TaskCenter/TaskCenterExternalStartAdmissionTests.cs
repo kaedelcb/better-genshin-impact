@@ -564,6 +564,12 @@ public class TaskCenterExternalStartAdmissionTests
             Assert.Equal(OperationRequestState.Accepted, keptOp.RequestState);
             Assert.Null(keptOp.PendingTerminal);                                                      // 无权威终态 ⇒ 不得写终态载体
             Assert.Null(keptOp.ExecutionResult);
+            // [C 表 #6／批次四十六] **重启后重绑观察责任**：观察义务落盘（时点＋句柄＋单调次数），
+            // 责任状态/发送身份不变 ⇒「停驻≠放弃」具备可追溯、可续扫载体。
+            Assert.NotNull(keptOp.ObservationReboundAtUtc);
+            Assert.Equal(1, keptOp.ObservationRebindCount);
+            Assert.Equal("job-keep", keptOp.ObservationJobId);
+            Assert.Equal(keptSubmission, keptOp.SubmissionIdentity);
             Assert.Equal(LedgerEntryState.AcceptedPendingExecution,
                 new ExternalStartLedger(root).Read().File!.Entries.First(e => e.JobId == "job-keep").State); // 台账未终结
             await host2.ShutdownAsync();

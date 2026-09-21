@@ -256,12 +256,19 @@ public sealed record ExternalStartRecoveryReport(
     int LeaseTerminalButLedgerOpen,
     int OrphanLedgerEntries,
     int ConflictPendingSkipped = 0,
-    int IncompletePendingPayload = 0)
+    int IncompletePendingPayload = 0,
+    /// <summary>本轮**成功重绑观察责任**的笔数（C 表 #6／§24.12-3 集合②；[批次四十六] 新增）。</summary>
+    int ObservationRebound = 0,
+    /// <summary>观察责任重绑**写盘失败**原因（非 null ⇒ 本轮未落盘，责任仍保留、下轮再试）。</summary>
+    string? ObservationRebindFailure = null,
+    /// <summary>**扫描事实自相矛盾**的完整发送身份组数（同组终态标志矛盾或非空句柄不一致 ⇒ 整组不处理）。</summary>
+    int ScanFactConflicts = 0)
 {
     public bool AnythingReported =>
         LedgerUnreadable || ObservationKept > 0 || TerminalizationCompleted > 0 || TerminalizationFailed > 0
         || TerminalWithoutPendingTerminal > 0 || LeaseTerminalButLedgerOpen > 0 || OrphanLedgerEntries > 0
-        || ConflictPendingSkipped > 0 || IncompletePendingPayload > 0;
+        || ConflictPendingSkipped > 0 || IncompletePendingPayload > 0 || ObservationRebound > 0
+        || ObservationRebindFailure is not null || ScanFactConflicts > 0;
 
     public override string ToString()
         => LedgerUnreadable
@@ -270,7 +277,9 @@ public sealed record ExternalStartRecoveryReport(
               + TerminalizationFailed + "；台账终态缺 PendingTerminal " + TerminalWithoutPendingTerminal
               + "；租约/台账终局不一致 " + LeaseTerminalButLedgerOpen + "；台账孤儿 " + OrphanLedgerEntries
               + "；冲突待决（归裁决入口） " + ConflictPendingSkipped + "；载荷不完整（不驱动终局） "
-              + IncompletePendingPayload;
+              + IncompletePendingPayload + "；观察责任重绑 " + ObservationRebound
+              + (ObservationRebindFailure is null ? "" : "（本轮重绑未全部落盘：" + ObservationRebindFailure + "）")
+              + (ScanFactConflicts > 0 ? "；扫描事实自相矛盾组 " + ScanFactConflicts : "");
 }
 
 /// <summary>
@@ -326,6 +335,12 @@ public sealed class AdmissionHooks
     /// ⇒ 恢复扫描**保守停驻**（不推导、不释放）。未配置＝不可读（不得当作「无记录」）。
     /// </summary>
     public Func<TakeoverLedgerScan>? TakeoverLedgerScan { get; set; }
+    /// <summary>
+    /// **夹具接缝**（生产恒 null＝空操作）：观察恢复的「分类完成 → 重绑写事务开始」之间回调，用于**确定性**
+    /// 复现「扫描快照之后、写事务之前责任被并发推进/换轮」的交错（验收 `observation_rebind_state_advanced`）。
+    /// 本回调**不得**改动门面状态，只允许夹具在同一租约目录上模拟其他处理者的推进。
+    /// </summary>
+    public Func<Task>? BeforeObservationRebindPersist { get; set; }
     /// <summary>
     /// **权威未受理观察可信性校验**（R5.3 §24.2-2″；[第五轮验证会诊阻断处置] 新增）：
     /// 由可信观察层提供校验器——返回 `null`＝来源可信；非 `null`＝拒绝原因。
@@ -4377,7 +4392,9 @@ public sealed class ArbitrationAdmissionService
     /// ③其余不一致（台账终态但缺 `PendingTerminal`／租约侧已终态而台账未终结／台账孤儿记录）**只登记计数**，
     ///   不改变任何责任（禁止静默释放或补造事实）。
     /// **锁边界**：单次权威串行快照完成分类与待补清单后**释放 `_gate`**，再逐笔调用自取锁的 `SettleCompletionAsync`
-    /// （SemaphoreSlim 不可重入）；除集合③补终局外不产生任何状态改动。台账不可读/未配置扫描 ⇒ 保守停驻。
+    /// （SemaphoreSlim 不可重入）。**状态改动仅限两类**：①集合②的**观察责任重绑载体**（`[批次四十六]`：时点／句柄／
+    /// 单调次数，写事务内按**完整发送身份**复核，不改责任状态、不释放占用、不重发）；②集合③的**补终局**。
+    /// 台账不可读/未配置扫描 ⇒ 保守停驻。
     /// </summary>
     public async Task<ExternalStartRecoveryReport> RecoverExternalStartObservationsAsync(CancellationToken ct = default)
     {
@@ -4403,14 +4420,44 @@ public sealed class ArbitrationAdmissionService
         var orphans = 0;
         var conflictPendingSkipped = 0;
         var incompletePayload = 0;
+        var rebound = 0;
+        string? rebindFailure = null;
+        var scanFactConflicts = 0;
+        var rebindTargets = new List<(string RequestIdentity, string SubmissionIdentity, int SendSeq, string? JobId)>();
         var pendingSettlements = new List<(string RequestIdentity, PendingTerminal Pending, ExternalStartCompletion Completion)>();
+
+        // **扫描事实规范化（按完整发送身份分组）**（[批次四十六 第二轮验证会诊处置]）：
+        //  ·句柄：忽略空值稳定合并（null + job-A ⇒ job-A，与事实顺序无关）；两个**不同非空**句柄 ⇒ 冲突；
+        //  ·终态标志：同组同时出现 `Terminal=true` 与 `false` ⇒ 冲突；
+        //  冲突组**整组不处理**（既不重绑也不补终局），只登记计数 —— 责任保留，待下一轮权威证据。
+        var normalized = new Dictionary<(string SubmissionIdentity, int SendSeq), (bool Terminal, string? JobId, bool Conflict)>();
+        foreach (var fact in scan.Facts)
+        {
+            var key = (fact.SubmissionIdentity, fact.SendSeq);
+            if (!normalized.TryGetValue(key, out var agg))
+            {
+                normalized[key] = (fact.Terminal, string.IsNullOrEmpty(fact.JobId) ? null : fact.JobId, false);
+                continue;
+            }
+            var conflict = agg.Conflict
+                           || agg.Terminal != fact.Terminal
+                           || (!string.IsNullOrEmpty(agg.JobId) && !string.IsNullOrEmpty(fact.JobId)
+                               && !string.Equals(agg.JobId, fact.JobId, StringComparison.Ordinal));
+            var mergedJobId = !string.IsNullOrEmpty(agg.JobId) ? agg.JobId
+                : string.IsNullOrEmpty(fact.JobId) ? null : fact.JobId;
+            normalized[key] = (agg.Terminal, mergedJobId, conflict);
+        }
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
-            var ops = _store.Read().File?.Handoff?.Operations;
-            if (ops is null) return new ExternalStartRecoveryReport(false, 0, 0, 0, 0, 0, 0);
-            foreach (var fact in scan.Facts)
+            var read = _store.Read();
+            var lease = read.File?.Lease;
+            var ops = read.File?.Handoff?.Operations;
+            if (lease is null || ops is null) return new ExternalStartRecoveryReport(false, 0, 0, 0, 0, 0, 0);
+            foreach (var (factKey, agg) in normalized)
             {
+                if (agg.Conflict) { scanFactConflicts++; continue; }   // 矛盾扫描结果 ⇒ 整组不处理（fail-closed）
+                var fact = new TakeoverLedgerFact(factKey.SubmissionIdentity, factKey.SendSeq, agg.Terminal, agg.JobId);
                 var op = ops.FirstOrDefault(o => o is not null
                     && string.Equals(o.SubmissionIdentity, fact.SubmissionIdentity, StringComparison.Ordinal)
                     && o.LastSendSeq == fact.SendSeq);
@@ -4433,7 +4480,10 @@ public sealed class ArbitrationAdmissionService
                         mismatch++;   // 租约侧已终局而台账未终结：保留双方事实，待冲突裁决
                         continue;
                     }
-                    kept++;   // 集合②：保留观察责任（禁止超时或重启转终局、禁止重发）
+                    // 集合②：保留观察责任（禁止超时或重启转终局、禁止重发）＋**持久化重绑观察义务**
+                    // （C 表 #6／[批次四十六]：让「停驻≠放弃」具备可追溯、可续扫的落盘载体；句柄可用则一并落盘）。
+                    kept++;
+                    rebindTargets.Add((op.RequestIdentity, fact.SubmissionIdentity, fact.SendSeq, fact.JobId));
                     continue;
                 }
                 if (op.RequestState == OperationRequestState.TerminalCompleted) continue;
@@ -4450,6 +4500,95 @@ public sealed class ArbitrationAdmissionService
                     continue;
                 }
                 pendingSettlements.Add((op.RequestIdentity, pending, completion));
+            }
+
+            // **观察责任重绑写盘**（同一权威串行边界内；只写观察载体，不改责任状态/不释放占用/不重发）：
+            // 状态已被其他处理者推进（非 Active）⇒ 不覆盖（§4.2c 纪律）。
+            if (rebindTargets.Count > 0)
+            {
+                var applied = 0;
+                // 扫描事实冲突**只经 `ScanFactConflicts` 报告**（不再预填到 skipReason —— 否则会遮蔽接缝异常等
+                // 更具体的原因码；[批次四十六 第三轮验证会诊处置]）。
+                string? skipReason = null;
+                var rebindNow = _utcNow();   // 本轮时刻**一次捕获**（同一轮所有重绑共用同一时点）
+                var seamFailed = false;
+                // 夹具接缝（生产 null）：分类 → 写事务之间的交错注入点（确定性复现「快照后被推进」）
+                // **异常不得吞掉本轮**：接缝异常 ⇒ 只放弃本轮重绑（登记原因），集合③补终局照常继续。
+                if (_hooks.BeforeObservationRebindPersist is { } beforeRebind)
+                {
+                    try
+                    {
+                        await beforeRebind().ConfigureAwait(false);
+                    }
+                    catch (Exception)
+                    {
+                        skipReason = "observation_rebind_seam_exception";   // 覆盖式赋值：接缝异常原因必须可见
+                        seamFailed = true;   // 接缝异常 ⇒ **放弃本轮重绑**（不进入写事务），集合③补终局仍照常继续
+                    }
+                }
+                if (seamFailed)
+                {
+                    rebindFailure = skipReason;
+                }
+                else
+                {
+                    var rebind = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+                    {
+                        foreach (var target in rebindTargets)
+                        {
+                            var op2 = FindOp(file, target.RequestIdentity);
+                        // **写事务内按完整发送身份复核**（跨进程推进/换轮/已取得终态载体/冲突待决 ⇒ 一律跳过，不覆盖）：
+                        // 只凭 `RequestIdentity + Zone` 定位会把旧轮次的句柄写到已推进的新责任上（会诊 重要-1）。
+                        if (op2 is null
+                            || op2.OperationType != OperationType.ExternalStart
+                            || op2.Zone != OperationZone.Active
+                            || op2.ConflictPending
+                            || op2.PendingTerminal is not null
+                            || op2.ExecutionResult is not null
+                            || op2.RequestState is not (OperationRequestState.Accepted or OperationRequestState.Granted
+                                or OperationRequestState.Sending or OperationRequestState.Reconciling)
+                            || !string.Equals(op2.SubmissionIdentity, target.SubmissionIdentity, StringComparison.Ordinal)
+                            || op2.LastSendSeq != target.SendSeq)
+                        {
+                            skipReason ??= "observation_rebind_state_advanced";
+                            continue;
+                        }
+                        // **全部校验先行、通过后一次性写入三个观察字段**（会诊第二轮 重要-2：不得出现「句柄已写、
+                        // 计数却因溢出/冲突未写」的部分污染）。
+                        // ①句柄：空 ⇒ 补齐；相等 ⇒ 幂等；两非空不同 ⇒ **不覆盖**（fail-closed）
+                        var mergedJobId = op2.ObservationJobId;
+                        if (!string.IsNullOrEmpty(target.JobId))
+                        {
+                            if (string.IsNullOrEmpty(mergedJobId))
+                                mergedJobId = target.JobId;
+                            else if (!string.Equals(mergedJobId, target.JobId, StringComparison.Ordinal))
+                            {
+                                skipReason ??= "observation_job_id_conflict";
+                                continue;
+                            }
+                        }
+                        // ②**计数溢出保护**：持久化值非法/已达上限 ⇒ 保守失败（不回绕、不静默重置、**不写任何字段**）
+                        if (op2.ObservationRebindCount is < 0 or int.MaxValue)
+                        {
+                            skipReason ??= "observation_rebind_count_overflow";
+                            continue;
+                        }
+                        // ③校验全通过 ⇒ 一次性写入（时点／句柄／计数）
+                        op2.ObservationJobId = mergedJobId;
+                        op2.ObservationReboundAtUtc = rebindNow;
+                        op2.ObservationRebindCount += 1;
+                        op2.UpdatedRevision = file.Revision + 1;
+                        op2.UpdatedAtUtc = rebindNow;
+                        applied++;   // 只计**实际落盘**的笔数（被跳过的不得计入）
+                    }
+                    return null;
+                });
+                if (rebind.Success) rebound = applied;
+                else rebindFailure = rebind.Reason ?? "invalid_request";
+                if (rebind.Success && skipReason is not null) rebindFailure = skipReason;   // 部分/全部跳过如实登记
+                if (rebind.Success && applied == 0 && rebindFailure is null)
+                    rebindFailure = "observation_rebind_no_target_applied";
+                }
             }
         }
         finally
@@ -4482,7 +4621,7 @@ public sealed class ArbitrationAdmissionService
         }
 
         return new ExternalStartRecoveryReport(false, kept, completed, failed, noPending, mismatch, orphans,
-            conflictPendingSkipped, incompletePayload);
+            conflictPendingSkipped, incompletePayload, rebound, rebindFailure, scanFactConflicts);
     }
 
     /// <summary>

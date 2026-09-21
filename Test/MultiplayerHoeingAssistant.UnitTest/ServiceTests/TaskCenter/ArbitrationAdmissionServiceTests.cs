@@ -4537,6 +4537,23 @@ public class ArbitrationAdmissionServiceTests : IDisposable
 
     // ── 恢复扫描集合②/③（R5.3 §24.12-3；[Batch B 收尾之五]）────────────────────────────────────
 
+    /// <summary>夹具辅助：把某笔外部启动操作**推进到下一发送轮次**（模拟「扫描快照后责任被并发推进」）。</summary>
+    private string? PromoteToNextSendSeq(ArbitrationLeaseStore store, string requestIdentity)
+    {
+        var read = store.Read();
+        if (read.File?.Lease is null) return "lease_missing";
+        var mutate = store.MutateHandoff(read.File.Lease.LeaseId, read.File.Lease.OwnerEpoch, read.File.Revision, file =>
+        {
+            var op = file.Handoff!.Operations.FirstOrDefault(o => o.RequestIdentity == requestIdentity);
+            if (op is null) return "operation_missing";
+            op.LastSendSeq += 1;                       // 责任被推进到新一轮（身份随之改变）
+            op.UpdatedRevision = file.Revision + 1;
+            op.UpdatedAtUtc = _now;
+            return null;
+        });
+        return mutate.Success ? null : (mutate.Reason ?? "invalid_request");
+    }
+
     /// <summary>
     /// **集合②未终结台账**：恢复扫描只**保留观察责任**——不改状态、不写终态载体、不释放占用、不重发。
     /// </summary>
@@ -4560,6 +4577,449 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Null(after.PendingTerminal);                                 // 无权威终态 ⇒ 不得写终态载体
         Assert.Null(after.ExecutionResult);
         Assert.Contains(ledger.Read().File!.Entries, e => e.State == LedgerEntryState.AcceptedPendingExecution);
+    }
+
+    /// <summary>
+    /// **[C 表 #6／批次四十六] 集合②「持续观察**重绑**观察责任」**：重启后扫描发现台账**未终结**且本笔仍负
+    /// 责任 ⇒ **持久化**观察义务（重绑时点＋句柄＋单调次数），责任状态/占用/发送身份**一律不变**、不重发；
+    /// 连续两轮扫描次数递增（「停驻≠放弃」＝可追溯、可续扫），且报告区分「观察保留」与「本轮重绑」。
+    /// </summary>
+    [Fact]
+    public async Task RecoverObservations_UnterminatedLedger_RebindsDurableObservationResponsibility()
+    {
+        var (svc, _, ledger, hooks) = BuildFacade();
+        var r = Req(ns: "v2", workflow: "group:g1", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(r)).Kind);
+        var before = FindOp(r.RequestIdentity)!;
+        Assert.Null(before.ObservationReboundAtUtc);                       // 首次观察前：无重绑载体
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true,
+            [new TakeoverLedgerFact(before.SubmissionIdentity, before.LastSendSeq, Terminal: false, JobId: "job-obs-1")]);
+
+        var first = await svc.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(1, first.ObservationKept);
+        Assert.True(first.ObservationRebound == 1,
+            "本轮必须重绑成功；失败原因=" + (first.ObservationRebindFailure ?? "<none>")); // 本轮确实重绑成功
+        Assert.Equal(0, first.TerminalizationCompleted);
+        var afterFirst = FindOp(r.RequestIdentity)!;
+        Assert.True(afterFirst.ObservationReboundAtUtc is not null,
+            "重绑载体必须落盘；state=" + afterFirst.RequestState + " zone=" + afterFirst.Zone
+            + " applied=" + first.ObservationRebound + " failure=" + (first.ObservationRebindFailure ?? "<none>"));
+        Assert.Equal("job-obs-1", afterFirst.ObservationJobId);            // 句柄随重绑落盘（供后续取证/结算）
+        Assert.Equal(1, afterFirst.ObservationRebindCount);
+        Assert.Equal(OperationRequestState.Accepted, afterFirst.RequestState); // 责任状态不变
+        Assert.Equal(before.SubmissionIdentity, afterFirst.SubmissionIdentity); // 发送身份不变
+        Assert.Equal(before.LastSendSeq, afterFirst.LastSendSeq);               // 未新增发送许可
+        Assert.Null(afterFirst.PendingTerminal);
+        Assert.Null(afterFirst.ExecutionResult);
+        Assert.Equal(OperationZone.Active, afterFirst.Zone);               // 未迁区（主槽位不释放）
+        // 占用仍由**台账未终结**承载（外部启动受理后 Submission 已关闭，占位≠未决发送）
+        Assert.Contains(ledger.Read().File!.Entries, e => e.State == LedgerEntryState.AcceptedPendingExecution);
+
+        var second = await svc.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(1, second.ObservationRebound);
+        Assert.Equal(2, FindOp(r.RequestIdentity)!.ObservationRebindCount); // **可续扫**（次数单调递增）
+    }
+
+    /// <summary>
+    /// **[C 表 #6／批次四十六 会诊处置] 重绑写事务的**完整发送身份复核**（跨进程推进反例）**：扫描快照后同一笔
+    /// 已被推进到**新的发送轮次**（`sendSeq` 不同）时，重绑**不得**把旧轮次句柄写到新责任上——整笔跳过、
+    /// 计数与句柄**均不写入**，报告如实登记「未全部落盘」（`ObservationRebindFailure`）。
+    /// </summary>
+    [Fact]
+    public async Task RecoverObservations_RebindTargetAdvanced_SkipsWithoutOverwriting()
+    {
+        var (svc, store, _, hooks) = BuildFacade();
+        var r = Req(ns: "v2", workflow: "group:g1", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(r)).Kind);
+        var before = FindOp(r.RequestIdentity)!;
+        // 事实指向**当前轮**；在「分类完成 → 重绑写事务」之间由接缝把责任**推进到下一轮**
+        // （确定性复现「扫描快照之后、写事务之前被其他处理者推进」）。
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true,
+            [new TakeoverLedgerFact(before.SubmissionIdentity, SendSeq: 1, Terminal: false, JobId: "job-stale")]);
+        hooks.BeforeObservationRebindPersist = () =>
+        {
+            var advance = PromoteToNextSendSeq(store, r.RequestIdentity);
+            Assert.True(advance is null, "造景：推进发送轮次失败（" + advance + "）");
+            return Task.CompletedTask;
+        };
+
+        var report = await svc.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(0, report.ObservationRebound);                                   // 整笔跳过
+        Assert.Equal("observation_rebind_state_advanced", report.ObservationRebindFailure);
+        Assert.True(report.AnythingReported);                                        // 失败在报告中可见
+        var after = FindOp(r.RequestIdentity)!;
+        Assert.Null(after.ObservationReboundAtUtc);                                   // 载体未被污染
+        Assert.Equal(0, after.ObservationRebindCount);
+        Assert.Null(after.ObservationJobId);
+    }
+
+    /// <summary>
+    /// **[C 表 #6／批次四十六 会诊处置] 句柄冲突保护**：已持久化句柄 `job-A` 时，扫描给出**不同非空句柄**
+    /// `job-B` ⇒ **不得覆盖**（fail-closed，报 `observation_job_id_conflict`）；相同句柄 ⇒ 幂等重绑。
+    /// </summary>
+    [Fact]
+    public async Task RecoverObservations_JobIdConflict_DoesNotOverwrite_EqualJobIdIdempotent()
+    {
+        var (svc, _, _, hooks) = BuildFacade();
+        var r = Req(ns: "v2", workflow: "group:g1", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(r)).Kind);
+        var op = FindOp(r.RequestIdentity)!;
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true,
+            [new TakeoverLedgerFact(op.SubmissionIdentity, op.LastSendSeq, Terminal: false, JobId: "job-A")]);
+        var first = await svc.RecoverExternalStartObservationsAsync();
+        Assert.Equal(1, first.ObservationRebound);
+        Assert.Equal("job-A", FindOp(r.RequestIdentity)!.ObservationJobId);
+
+        // 同句柄 ⇒ 幂等重绑（句柄不变、次数继续递增）
+        var second = await svc.RecoverExternalStartObservationsAsync();
+        Assert.Equal(1, second.ObservationRebound);
+        Assert.Null(second.ObservationRebindFailure);
+        Assert.Equal(2, FindOp(r.RequestIdentity)!.ObservationRebindCount);
+
+        // 不同非空句柄 ⇒ 冲突：不覆盖、不计数、如实上报
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true,
+            [new TakeoverLedgerFact(op.SubmissionIdentity, op.LastSendSeq, Terminal: false, JobId: "job-B")]);
+        var third = await svc.RecoverExternalStartObservationsAsync();
+        Assert.Equal(0, third.ObservationRebound);
+        Assert.Equal("observation_job_id_conflict", third.ObservationRebindFailure);
+        var after = FindOp(r.RequestIdentity)!;
+        Assert.Equal("job-A", after.ObservationJobId);                                // **不覆盖历史句柄**
+        Assert.Equal(2, after.ObservationRebindCount);
+    }
+
+    /// <summary>
+    /// **[C 表 #6／批次四十六 第二轮验证会诊反例] 同轮重复扫描事实的**规范化**（顺序无关）**：
+    /// ①`(null, job-A)` ⇒ 稳定合并出 `job-A` 并正常重绑；②`(job-A, job-B)` ⇒ **整组冲突不处理**
+    /// （不重绑、不写句柄、计数不递增）；③同组 `Terminal=false` 与 `true` 并存 ⇒ 同样整组冲突
+    /// （既不重绑也不补终局）。
+    /// </summary>
+    [Theory]
+    [InlineData("merge_null_then_job", 1, 0, "job-A")]
+    [InlineData("merge_job_then_null", 1, 0, "job-A")]
+    [InlineData("conflict_two_jobs", 0, 1, null)]
+    [InlineData("conflict_terminal_flags", 0, 1, null)]
+    public async Task RecoverObservations_DuplicateScanFacts_NormalizedOrderIndependently(
+        string mode, int expectedRebound, int expectedConflicts, string? expectedJobId)
+    {
+        var (svc, _, _, hooks) = BuildFacade();
+        var r = Req(ns: "v2", workflow: "group:g1", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(r)).Kind);
+        var op = FindOp(r.RequestIdentity)!;
+        var sub = op.SubmissionIdentity;
+        var seq = op.LastSendSeq;
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true, mode switch
+        {
+            "merge_null_then_job" =>
+            [
+                new TakeoverLedgerFact(sub, seq, Terminal: false, JobId: null),
+                new TakeoverLedgerFact(sub, seq, Terminal: false, JobId: "job-A"),
+            ],
+            "merge_job_then_null" =>
+            [
+                new TakeoverLedgerFact(sub, seq, Terminal: false, JobId: "job-A"),
+                new TakeoverLedgerFact(sub, seq, Terminal: false, JobId: null),
+            ],
+            "conflict_two_jobs" =>
+            [
+                new TakeoverLedgerFact(sub, seq, Terminal: false, JobId: "job-A"),
+                new TakeoverLedgerFact(sub, seq, Terminal: false, JobId: "job-B"),
+            ],
+            _ =>
+            [
+                new TakeoverLedgerFact(sub, seq, Terminal: false, JobId: "job-A"),
+                new TakeoverLedgerFact(sub, seq, Terminal: true, JobId: "job-A"),
+            ],
+        });
+
+        var report = await svc.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(expectedRebound, report.ObservationRebound);
+        Assert.Equal(expectedConflicts, report.ScanFactConflicts);
+        if (expectedConflicts > 0) Assert.True(report.AnythingReported);
+        var after = FindOp(r.RequestIdentity)!;
+        Assert.Equal(expectedJobId, after.ObservationJobId);                    // 冲突组**不写句柄**（零污染）
+        Assert.Equal(expectedRebound, after.ObservationRebindCount);
+        Assert.Equal(OperationRequestState.Accepted, after.RequestState);       // 冲突组不补终局
+    }
+
+    /// <summary>
+    /// **[C 表 #6／批次四十六 第二轮验证会诊反例] 计数溢出零污染**：已持久化计数为 `int.MaxValue`（非法/越界）
+    /// ⇒ 该笔**保守失败**：不写时点、不写句柄、计数不回绕；报告如实给出原因。
+    /// </summary>
+    [Fact]
+    public async Task RecoverObservations_RebindCountOverflow_NoFieldPollution()
+    {
+        var (svc, store, _, hooks) = BuildFacade();
+        var r = Req(ns: "v2", workflow: "group:g1", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(r)).Kind);
+        var op = FindOp(r.RequestIdentity)!;
+        var seeded = store.MutateHandoff(store.Read().File!.Lease!.LeaseId, store.Read().File!.Lease.OwnerEpoch,
+            store.Read().File!.Revision, file =>
+            {
+                file.Handoff!.Operations.First(o => o.RequestIdentity == r.RequestIdentity).ObservationRebindCount = int.MaxValue;
+                return null;
+            });
+        Assert.True(seeded.Success, "造景写入失败：" + seeded.Reason);
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true,
+            [new TakeoverLedgerFact(op.SubmissionIdentity, op.LastSendSeq, Terminal: false, JobId: "job-overflow")]);
+
+        var report = await svc.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(0, report.ObservationRebound);
+        Assert.Equal("observation_rebind_count_overflow", report.ObservationRebindFailure);
+        var after = FindOp(r.RequestIdentity)!;
+        Assert.Equal(int.MaxValue, after.ObservationRebindCount);   // 不回绕
+        Assert.Null(after.ObservationJobId);                       // **句柄零污染**
+        Assert.Null(after.ObservationReboundAtUtc);
+    }
+
+    /// <summary>
+    /// **[C 表 #6／批次四十六 第二轮验证会诊反例] 交错接缝异常不得吞掉本轮**：接缝抛异常 ⇒ 只放弃**本轮重绑**
+    /// 并如实登记原因，**集合③补终局照常继续**（同一轮内互不连坐）。
+    /// </summary>
+    [Fact]
+    public async Task RecoverObservations_RebindSeamThrows_ReportedAndSettlementStillRuns()
+    {
+        var (svc, store, _, hooks) = BuildFacade(h =>
+            h.BeforeObservationRebindPersist = () => throw new InvalidOperationException("fixture seam boom"));
+        // 甲：集合②（本应重绑，因接缝异常放弃）
+        var a = Req(ns: "v2", workflow: "group:gap", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(a)).Kind);
+        var opA = FindOp(a.RequestIdentity)!;
+        // 乙：集合③（台账已终态＋已有 PendingTerminal 载体）⇒ 即使接缝异常也必须照常补终局
+        var b = Req(ns: "v2", workflow: "group:gbq", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(b)).Kind);
+        var opB = FindOp(b.RequestIdentity)!;
+        var observedAt = _now;
+        hooks.F11Active = () => false;
+        hooks.TakeoverTerminalPersist = (sub, seq, evidence, at, raw, code, jobId, source) => null;
+        hooks.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, code, jobId, source, at) => true;
+        hooks.TakeoverJobIdRead = (sub, seq) => LedgerHandleProbe.Present("job-seam");
+        var seeded = store.MutateHandoff(store.Read().File!.Lease!.LeaseId, store.Read().File!.Lease.OwnerEpoch,
+            store.Read().File!.Revision, file =>
+            {
+                var target = file.Handoff!.Operations.First(o => o.RequestIdentity == b.RequestIdentity);
+                target.ExecutionResult = new ExecutionResult
+                {
+                    Kind = ExecutionResultKind.Succeeded, RawTerminal = "completed", JobId = "job-seam",
+                    EvidenceSource = "ext:task.event", SubmissionIdentity = opB.SubmissionIdentity,
+                    SendSeq = opB.LastSendSeq, ObservedAtUtc = observedAt,
+                };
+                target.PendingTerminal = new PendingTerminal
+                {
+                    Kind = ExecutionResultKind.Succeeded, RawTerminal = "completed", JobId = "job-seam",
+                    EvidenceSource = "ext:task.event", SubmissionIdentity = opB.SubmissionIdentity,
+                    SendSeq = opB.LastSendSeq, OperationType = OperationType.ExternalStart,
+                    ObservedAtUtc = observedAt, RecordedAtUtc = observedAt,
+                };
+                return null;
+            });
+        Assert.True(seeded.Success, "造景写入失败：" + seeded.Reason);
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true,
+        [
+            new TakeoverLedgerFact(opA.SubmissionIdentity, opA.LastSendSeq, Terminal: false, JobId: "job-a"),
+            new TakeoverLedgerFact(opB.SubmissionIdentity, opB.LastSendSeq, Terminal: true, JobId: "job-seam"),
+        ]);
+
+        var report = await svc.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(0, report.ObservationRebound);                                  // 本轮重绑放弃
+        Assert.Equal("observation_rebind_seam_exception", report.ObservationRebindFailure);
+        Assert.Equal(1, report.TerminalizationCompleted);                            // 集合③照常
+        Assert.Equal(OperationRequestState.TerminalCompleted, FindOp(b.RequestIdentity)!.RequestState);
+        Assert.Null(FindOp(a.RequestIdentity)!.ObservationReboundAtUtc);              // 甲笔未被写入
+    }
+
+    /// <summary>
+    /// **[C 表 #6／批次四十六 第三轮验证会诊反例] 诊断原因码不得被遮蔽**：同一轮同时存在
+    /// 「扫描事实冲突组」＋「可重绑目标」＋「接缝抛异常」时，`ObservationRebindFailure` 必须是
+    /// **`observation_rebind_seam_exception`**（更具体的原因），扫描冲突只经 `ScanFactConflicts` 报告。
+    /// </summary>
+    [Fact]
+    public async Task RecoverObservations_ScanConflictPlusSeamThrow_SeamReasonNotMasked()
+    {
+        var (svc, _, _, hooks) = BuildFacade(h =>
+            h.BeforeObservationRebindPersist = () => throw new InvalidOperationException("fixture seam boom"));
+        // 甲：可重绑目标（本因接缝异常放弃重绑）
+        var a = Req(ns: "v2", workflow: "group:mask-a", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(a)).Kind);
+        var opA = FindOp(a.RequestIdentity)!;
+        // 乙：同轮另有一组**自相矛盾**的扫描事实（两不同非空句柄）
+        var b = Req(ns: "v2", workflow: "group:mask-b", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(b)).Kind);
+        var opB = FindOp(b.RequestIdentity)!;
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true,
+        [
+            new TakeoverLedgerFact(opA.SubmissionIdentity, opA.LastSendSeq, Terminal: false, JobId: "job-a"),
+            new TakeoverLedgerFact(opB.SubmissionIdentity, opB.LastSendSeq, Terminal: false, JobId: "job-b1"),
+            new TakeoverLedgerFact(opB.SubmissionIdentity, opB.LastSendSeq, Terminal: false, JobId: "job-b2"),
+        ]);
+
+        var report = await svc.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(1, report.ScanFactConflicts);                              // 冲突组经专用计数报告
+        Assert.Equal(0, report.ObservationRebound);
+        Assert.Equal("observation_rebind_seam_exception", report.ObservationRebindFailure); // **原因不得被遮蔽**
+        var opAAfter = FindOp(a.RequestIdentity)!;                              // 三个重绑字段**均无部分写入**
+        Assert.Null(opAAfter.ObservationReboundAtUtc);
+        Assert.Null(opAAfter.ObservationJobId);
+        Assert.Equal(0, opAAfter.ObservationRebindCount);
+        Assert.Null(FindOp(b.RequestIdentity)!.ObservationJobId);               // 冲突组不写句柄
+    }
+
+    /// <summary>
+    /// **[C 表 #6／批次四十六 会诊处置] 混合批次**：同一轮里「一笔集合②重绑」＋「一笔集合③补终局」并存 ⇒
+    /// 两者各自如实计数（`ObservationRebound=1` 且 `TerminalizationCompleted=1`），互不吞并。
+    /// </summary>
+    [Fact]
+    public async Task RecoverObservations_MixedBatch_RebindsAndSettlesIndependently()
+    {
+        ExternalStartLedger? ledgerRef = null;
+        var (svc, store, ledger, hooks) = BuildFacade(h =>
+        {
+            h.TakeoverTerminalPersist = (sub, seq, evidence, observedAt, raw, code, jobId, source) =>
+            {
+                var m = ledgerRef!.MarkTerminal(sub, seq, evidence, observedAt, raw, code,
+                    OperationType.ExternalStart, jobId, source);
+                return m.Success ? null : m.Reason;
+            };
+            h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, code, jobId, source, observedAt) => true;
+            h.TakeoverJobIdRead = (sub, seq) => LedgerHandleProbe.Present("job-settle");
+        });
+        ledgerRef = ledger;
+
+        // 甲：集合②（台账未终结）
+        var a = Req(ns: "v2", workflow: "group:gA", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(a)).Kind);
+        var opA = FindOp(a.RequestIdentity)!;
+        // 乙：集合③（台账已终态、Operation 未终局）——先造 PendingTerminal 载体与台账终态
+        var b = Req(ns: "v2", workflow: "group:gB", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(b)).Kind);
+        var opB = FindOp(b.RequestIdentity)!;
+        var observedAt = _now;
+        var seeded = store.MutateHandoff(ReadLease().File!.Lease!.LeaseId, ReadLease().File!.Lease.OwnerEpoch,
+            ReadLease().File!.Revision, file =>
+            {
+                var target = file.Handoff!.Operations.First(o => o.RequestIdentity == b.RequestIdentity);
+                target.ExecutionResult = new ExecutionResult
+                {
+                    Kind = ExecutionResultKind.Succeeded, RawTerminal = "completed", JobId = "job-settle",
+                    EvidenceSource = "ext:task.event", SubmissionIdentity = opB.SubmissionIdentity,
+                    SendSeq = opB.LastSendSeq, ObservedAtUtc = observedAt,
+                };
+                target.PendingTerminal = new PendingTerminal
+                {
+                    Kind = ExecutionResultKind.Succeeded, RawTerminal = "completed", JobId = "job-settle",
+                    EvidenceSource = "ext:task.event", SubmissionIdentity = opB.SubmissionIdentity,
+                    SendSeq = opB.LastSendSeq, OperationType = OperationType.ExternalStart,
+                    ObservedAtUtc = observedAt, RecordedAtUtc = observedAt,
+                };
+                return null;
+            });
+        Assert.True(seeded.Success, "造景写入失败：" + seeded.Reason);
+        Assert.True(ledger.MarkTerminal(opB.SubmissionIdentity, opB.LastSendSeq, "completed", observedAt,
+            rawTerminal: "completed", jobId: "job-settle", operationType: OperationType.ExternalStart,
+            terminalEvidenceSource: "ext:task.event").Success, "造景前置：台账终态写入失败");
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true,
+        [
+            new TakeoverLedgerFact(opA.SubmissionIdentity, opA.LastSendSeq, Terminal: false, JobId: "job-rebind"),
+            new TakeoverLedgerFact(opB.SubmissionIdentity, opB.LastSendSeq, Terminal: true, JobId: "job-settle"),
+        ]);
+
+        var report = await svc.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(1, report.ObservationKept);
+        Assert.Equal(1, report.ObservationRebound);          // 甲：重绑
+        Assert.Equal(1, report.TerminalizationCompleted);    // 乙：补终局
+        Assert.Equal("job-rebind", FindOp(a.RequestIdentity)!.ObservationJobId);
+        Assert.Equal(OperationRequestState.TerminalCompleted, FindOp(b.RequestIdentity)!.RequestState);
+    }
+
+    /// <summary>
+    /// **[C 表 #6／批次四十六] 重绑后可**后续结算****：同一笔先按集合②重绑（台账未终结），随后台账报
+    /// **权威终态** ⇒ 恢复扫描按集合③用已持久化 `PendingTerminal` 补终局（`TerminalCompleted`＋未决发送关闭），
+    /// 即「停驻」不吞掉责任、后续证据到达即可结清。
+    /// </summary>
+    [Fact]
+    public async Task RecoverObservations_ReboundThenAuthoritativeTerminal_SettlesLater()
+    {
+        ExternalStartLedger? ledgerRef = null;
+        var (svc, store, ledger, hooks) = BuildFacade(h =>
+        {
+            h.TakeoverTerminalPersist = (sub, seq, evidence, observedAt, raw, code, jobId, source) =>
+            {
+                var m = ledgerRef!.MarkTerminal(sub, seq, evidence, observedAt, raw, code,
+                    OperationType.ExternalStart, jobId, source);
+                return m.Success ? null : m.Reason;
+            };
+            h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, code, jobId, source, observedAt) =>
+            {
+                var read = ledgerRef!.Read();
+                if (!read.Valid || read.File is null) return false;
+                var e = read.File.Entries.FirstOrDefault(x =>
+                    string.Equals(x.SubmissionIdentity, sub, StringComparison.Ordinal) && x.SendSeq == seq);
+                return e is { State: LedgerEntryState.Terminal }
+                       && string.Equals(e.RawTerminal, raw, StringComparison.Ordinal)
+                       && string.Equals(e.JobId, jobId, StringComparison.Ordinal);
+            };
+            h.TakeoverJobIdRead = (sub, seq) => LedgerHandleProbe.Present("job-obs-late");
+        });
+        ledgerRef = ledger;
+        var r = Req(ns: "v2", workflow: "group:g1", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(r)).Kind);
+        var before = FindOp(r.RequestIdentity)!;
+
+        // 第一轮：台账未终结 ⇒ 重绑观察责任（不终局）
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true,
+            [new TakeoverLedgerFact(before.SubmissionIdentity, before.LastSendSeq, Terminal: false, JobId: "job-obs-late")]);
+        var first = await svc.RecoverExternalStartObservationsAsync();
+        Assert.Equal(1, first.ObservationRebound);
+        Assert.Equal(0, first.TerminalizationCompleted);
+        Assert.Equal(OperationRequestState.Accepted, FindOp(r.RequestIdentity)!.RequestState);
+
+        // 之后权威终态到达：先落 PendingTerminal 载体（生产由完成观察写入），再以台账终态驱动补终局
+        var observedAt = _now;
+        var submission = before.SubmissionIdentity;
+        var seq = before.LastSendSeq;
+        var seeded = store.MutateHandoff(ReadLease().File!.Lease!.LeaseId, ReadLease().File!.Lease.OwnerEpoch,
+            ReadLease().File!.Revision, file =>
+            {
+                var op = file.Handoff!.Operations.First(o => o.RequestIdentity == r.RequestIdentity);
+                op.ExecutionResult = new ExecutionResult
+                {
+                    Kind = ExecutionResultKind.Succeeded, RawTerminal = "completed", JobId = "job-obs-late",
+                    EvidenceSource = "ext:task.event", SubmissionIdentity = submission, SendSeq = seq, ObservedAtUtc = observedAt,
+                };
+                op.PendingTerminal = new PendingTerminal
+                {
+                    Kind = ExecutionResultKind.Succeeded, RawTerminal = "completed", JobId = "job-obs-late",
+                    EvidenceSource = "ext:task.event", SubmissionIdentity = submission, SendSeq = seq,
+                    OperationType = OperationType.ExternalStart, ObservedAtUtc = observedAt, RecordedAtUtc = observedAt,
+                };
+                return null;
+            });
+        Assert.True(seeded.Success, "造景写入失败：" + seeded.Reason);
+        Assert.True(ledger.MarkTerminal(submission, seq, "completed", observedAt, rawTerminal: "completed",
+            jobId: "job-obs-late", operationType: OperationType.ExternalStart,
+            terminalEvidenceSource: "ext:task.event").Success, "造景前置：台账终态写入失败");
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true,
+            [new TakeoverLedgerFact(submission, seq, Terminal: true, JobId: "job-obs-late")]);
+
+        var second = await svc.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(1, second.TerminalizationCompleted);                   // **重绑后可后续结算**
+        Assert.Equal(0, second.ObservationRebound);                          // 已结算 ⇒ 本轮无待观察笔（不再重绑）
+        var settled = FindOp(r.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.TerminalCompleted, settled.RequestState);
+        Assert.Equal(ExecutionResultKind.Succeeded, settled.ExecutionResult!.Kind);
+        Assert.Equal(1, settled.ObservationRebindCount);                      // **重绑载体保留**（历史可追溯，不回退/不清洗）
+        Assert.NotNull(settled.ObservationReboundAtUtc);
+        Assert.Equal("job-obs-late", settled.ObservationJobId);
+        Assert.Null(ReadLease().File!.Handoff!.Submission);                  // 未决发送已关闭
+        Assert.Equal(LedgerEntryState.Terminal, ledger.Read().File!.Entries.Single().State);
     }
 
     /// <summary>
