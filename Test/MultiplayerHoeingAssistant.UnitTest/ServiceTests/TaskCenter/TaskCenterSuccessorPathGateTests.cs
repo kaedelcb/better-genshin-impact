@@ -714,6 +714,46 @@ public class TaskCenterSuccessorPathGateTests
     }
 
     /// <summary>
+    /// **P50 诊断探针（[2026-09-21 批次三十六]；**默认 Skip，不计为通过**）**：
+    /// **性质（[会诊收窄]）**：本探针只是**隔离 + 重复**的取证入口，**不满足** §17 P50 要求的「**负载下**重复 + 覆盖目标夹具/整个用例类」
+    /// ——它既未制造全量并发负载，也未运行实际红灯的 `NodeOperation_TerminalizedBeforeRunEnds_OnNextNodeAdmission`。
+    /// **启用方式（可单独、可重复）**：临时移除本方法的 `Skip` 参数，并（可选）设 `BGI_R5_P50_REPEAT=<n>`（默认 10 轮）后运行
+    /// `dotnet test --filter P50_DiagnosticRepeat`；失败时输出取证快照（运行状态/说明/发送计数/逐操作 状态·许可水位·区域·原因码）。
+    /// **纪律**：不修改任何既有夹具的断言；默认 Skip ⇒ 既不增加日常负载，也不会计入「通过」。
+    /// </summary>
+    [Fact(Skip = "P50 诊断探针：需显式启用（见 §24.47）；默认 Skip，不计为通过")]
+    public async Task P50_DiagnosticRepeat_OptIn()
+    {
+        var raw = Environment.GetEnvironmentVariable("BGI_R5_P50_REPEAT");
+        if (!int.TryParse(raw, out var repeats) || repeats <= 0) repeats = 10;   // 启用后默认 10 轮；非法值不再静默空跑
+
+        var nodeIds = Enumerable.Range(1, 4).Select(i => "n-" + i).ToArray();
+        var anomalies = new List<string>();
+        for (var round = 1; round <= repeats; round++)
+        {
+            var root = NewRoot("tcp50diag-");
+            try
+            {
+                var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: nodeIds);
+                if (probe.State != WorkflowRunState.Succeeded || probe.SendCount != nodeIds.Length)
+                {
+                    var ops = string.Join("; ", probe.Ops.Select(o =>
+                        (o.Candidate?.NodeId ?? "-") + "/" + o.RequestState + "/send=" + o.LastSendSeq + "/zone=" + o.Zone
+                        + "/" + (o.LastResult?.ReasonCode ?? "-")));
+                    anomalies.Add($"第 {round} 轮：state={probe.State} sends={probe.SendCount} note={probe.Note} ops=[{ops}]");
+                }
+            }
+            finally
+            {
+                TryDelete(root);
+            }
+        }
+
+        Assert.True(anomalies.Count == 0,
+            "P50 诊断复现到 " + anomalies.Count + "/" + repeats + " 轮异常（取证快照如下）：\n" + string.Join("\n", anomalies));
+    }
+
+    /// <summary>
     /// **§16 交错⑥·格 A′＝「继承登记值」与「重读当前值」的判别反例（[2026-09-21 会诊加固]）**：
     /// E1 已按纪元 `E0` 登记固定 Scope；在**节点尚未准入之前**把当前纪元改为另一值（经接缝 `Epoch`）。
     /// 后继提交若**继承登记值**，节点候选的目标纪元仍是 `E0` ⇒ 与当前纪元不符 ⇒ **`stale_epoch` 终局拒绝、
@@ -1704,11 +1744,11 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
     // 同宿主类的负载敏感夹具 `NodeOperation_TerminalizedBeforeRunEnds_OnNextNodeAdmission` 收敛失败（保守方向、无双跑）。
     // 结论：**负载敏感性真实存在且可复现**（不再只是历史观察），启用本用例会以约 20% 概率污染基线；
     // 按「基线必须稳定 + 断言不得放宽」纪律**恢复 Skip**（断言保持严格、未放宽），P50 继续为**阻断式挂账**
-    // （根因未定位、诊断入口未落实、生产节点改道门继续保留——见设计稿 §24.28-B）。
+    // （根因未定位；**隔离探针已建立但「负载下重复＋覆盖目标夹具/整类」入口仍未建立**（见 §24.47）；生产节点改道门继续保留）。
     // 容量证据由确定性**组件级**夹具承担：
     //   `ArbitrationAdmissionServiceTests.Capacity_33NodeCandidates_AllAccepted_WhenEachSettled`（正向）
     //   `ArbitrationAdmissionServiceTests.Capacity_MainSlotsExhausted_33rdCreateRejected`（负向）
-    [Fact(Skip = "P50：负载敏感性已复现（启用后满负载 5 轮中 1 轮红灯，同宿主类夹具收敛失败）。诊断入口未落实 ⇒ 维持暂停执行（断言严格未放宽）；生产节点改道门继续保留。")]
+    [Fact(Skip = "P50：负载敏感性已复现（启用后满负载 5 轮中 1 轮红灯，同宿主类夹具收敛失败）。隔离探针已建立但负载下入口未建立（§24.47）⇒ 维持暂停执行（断言严格未放宽）；生产节点改道门继续保留。")]
     public async Task NodeSubmit_33NodeFlow_NoCapacityExhaustion()
     {
         var root = NewRoot("tccap-");
