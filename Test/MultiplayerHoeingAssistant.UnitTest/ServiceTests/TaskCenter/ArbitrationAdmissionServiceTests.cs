@@ -3731,6 +3731,92 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Null(ReadLease().File!.Handoff!.Submission);            // 关闭已完成
     }
 
+    // ── §24.41-C#17：未决发送责任**阻挡再次发送**（门面级直接证据；[新增·2026-09-21 批次三十七]）──
+
+    /// <summary>
+    /// **未决责任阻挡再次发送（门面级直接证据）**：第 1 笔发送结果为**不可考**（`Unknown`）⇒ 该操作停在
+    /// `Reconciling` 且**保留完整发送身份**；此时对**同一候选**发起新的创建（**绕过运行器意图预检**，直接进门面），
+    /// 门面必须因**未决发送**拒绝（`submission_conflict`），并保证：**零新增发送**、**许可水位不推进**
+    /// （`LastSendSeq` 仍为 1）、**未决发送身份与状态不变**（提交键/身份不被替换、`Reconciling` 保持）。
+    /// 说明：本夹具钉住「**阻挡**」这一预期语义；「被拒尝试是否应占主槽位」是另一独立问题（§24.44／C#19）。
+    /// </summary>
+    [Fact]
+    public async Task UnresolvedSubmission_BlocksRedrive_NoSendNoSeqAdvance()
+    {
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Unknown("fixture_unknown")); });
+
+        AdmissionRequest NewSameIdentity() => new()
+        {
+            Namespace = "successor",
+            Kind = AdmissionKind.Create,
+            SourceDetail = "fixture",
+            OperationType = OperationType.NodeExecution,
+            RunBinding = "run-1",
+            CursorRef = "n-1#0#0",
+            CursorRevision = 1,
+            Candidate = new ArbitrationCandidate
+            {
+                Scope = "bgi:inst:ep1",
+                Namespace = "successor",
+                WorkflowId = "wf-x",
+                TriggerOccurrenceId = "manual:panel:same1",
+                RunId = "run-1",
+                NodeId = "n-1",
+                Occurrence = 0,
+                LoopIteration = 0,
+                Attempt = 1,
+                Tier = ArbitrationTier.Plan,
+                PayloadFingerprint = "p1",
+                ResourceRef = "node:n-1",
+                Intent = "start",
+            },
+        };
+
+        var r1 = NewSameIdentity();
+        var first = await svc.SubmitAsync(r1);
+        Assert.Equal(AdmissionResultKind.Reconciling, first.Kind);      // 不可考 ⇒ 保守停驻
+        Assert.Equal(1, sends);
+        var op1 = FindOp(r1.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.Reconciling, op1.RequestState);
+        Assert.Equal(1, op1.LastSendSeq);
+        Assert.False(string.IsNullOrEmpty(op1.SubmissionIdentity));
+        var sub1 = ReadLease().File!.Handoff!.Submission!;
+        Assert.Equal(op1.SubmissionIdentity, sub1.SubmissionIdentity);
+        Assert.Equal(SubmissionState.Reconciling, sub1.State);
+
+        // **绕过运行器意图预检**：直接对同一候选再发起创建 ⇒ 门面必须因未决发送拒绝
+        var preObsBefore = ReadLease().File!.Handoff!.PreObservations?.Count ?? 0;
+        var r2 = NewSameIdentity();
+        var second = await svc.SubmitAsync(r2);
+        Assert.Equal(AdmissionResultKind.Error, second.Kind);
+        Assert.Equal("submission_conflict", second.ReasonCode);
+        Assert.Equal(1, sends);                                        // **零新增发送**
+
+        // 语义：两笔为**同一候选的「新创建」**（请求身份不同、候选号相同 ⇒ 非续用短路）
+        Assert.NotEqual(r1.RequestIdentity, r2.RequestIdentity);
+        var op2 = FindOp(r2.RequestIdentity);                          // §24.44／C#19 待裁：被拒尝试「未登记」或「已登记」均可接受
+        if (op2 is not null)
+        {
+            Assert.Equal(op1.CandidateId, op2.CandidateId);            // 同一候选
+            Assert.Equal(0, op2.LastSendSeq);                          // **第二笔未签发发送许可**
+            Assert.True(string.IsNullOrEmpty(op2.SubmissionIdentity)); // 也未形成发送身份
+        }
+        // 第二笔**不得**新增预观察记录（占位前发布的观察依据只属于第 1 笔）
+        Assert.Equal(preObsBefore, ReadLease().File!.Handoff!.PreObservations?.Count ?? 0);
+
+        // 第 1 笔在第二笔被拒之后**状态不变**（复核而非复用先前快照）
+        var opAfter = FindOp(r1.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.Reconciling, opAfter.RequestState);
+        Assert.Equal(1, opAfter.LastSendSeq);                          // **许可水位不推进**
+        Assert.Equal(op1.SubmissionIdentity, opAfter.SubmissionIdentity);
+        var subAfter = ReadLease().File!.Handoff!.Submission!;
+        Assert.Equal(op1.SubmissionIdentity, subAfter.SubmissionIdentity);   // **提交键/发送身份不变**
+        Assert.Equal(sub1.SendSeq, subAfter.SendSeq);
+        Assert.Equal(SubmissionState.Reconciling, subAfter.State);           // 未决状态保持
+    }
+
     // ── §17 P54：发送层三态 → 准入结果／责任维／许可水位的**显式映射**（[新增·2026-09-21 批次二十六]）──
 
     /// <summary>
