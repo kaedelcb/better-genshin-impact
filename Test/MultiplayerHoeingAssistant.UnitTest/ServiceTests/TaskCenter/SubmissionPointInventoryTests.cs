@@ -5,13 +5,72 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 /// <summary>
 /// **R5.2 B4：提交点清单结构提醒守卫**（施工方内置、owner 0 点击）。
 /// 纪律（设计稿 §15）：执行提交点必须登记。**本夹具的触发条件限于**：①出现**匹配模式的新文件**；
-/// ②已登记文件的**匹配计数**变化。其余情形（同文件新增旁路、改常量/别名等）**不会**让本夹具失败。
+/// ②已登记文件的**匹配计数**变化（**含同文件内新增「已匹配形态」的语句**——那会使计数变化并失败）。
+/// **不会**被发现的形态：变量化／别名／拼装操作名、拼写不同或计数守恒式的等价替换（见下方能力边界）。
 /// **能力边界（如实，勿夸大）**：本夹具是**文本匹配计数**（非语义调用点识别），且**不读 §15 文档**——
 /// 注释/同形字面量会误报，变量/别名/`"ext.task.start"` 字面量会漏报，同文件内新增旁路/重复发送/搬移方法计数不变。
 /// 它只能保证「已登记文本模式的数量未变」，**不证明**提交点完整、更不证明「授权先于发送」。
 /// </summary>
 public sealed class SubmissionPointInventoryTests
 {
+    /// <summary>
+    /// **S5 粗化（[2026-09-21 批次三十四] §24.41-C#11）**：「**执行类操作**」的**直发字面量**也纳入结构守卫——
+    /// 此前只覆盖 `task.start`／`ExternalOperations.TaskStart`，而通用 `SendCommandAsync(operation, …)` 的
+    /// **停机／取消／热键执行**等直发点**没有守卫** ⇒ 新增未准入调用方不会被本清单发现。
+    /// **能力边界（与既有守卫同口径，如实）**：文本匹配计数、非语义识别；变量/别名/拼装字面量会漏报；
+    /// 同文件内新增同形语句会因计数变化被发现；**不证明**授权先于发送。
+    /// </summary>
+    private static readonly Dictionary<string, int[]> AllowedExecutionSends = new(StringComparer.Ordinal)
+    {
+        // 顺序＝[OpCode="task.start", OpCode="task.stop", OpCode="action.execute_hotkey",
+        //         ext.TaskStart, ext.TaskStop, ext.TaskCancel]
+        // 顺序＝[v2 task.start, v2 task.stop, v2 action.execute_hotkey, ext.TaskStart, ext.TaskStop, ext.TaskCancel,
+        //         "ext.task.start", "ext.task.stop", "ext.task.cancel"]（末三项＝**ext 线协议字面量**，防新增硬编码直发）
+        ["MultiplayerHoeingAssistant/Services/CommandExecutor.cs"] = [6, 1, 1, 0, 0, 0, 0, 0, 0],
+        ["MultiplayerHoeingAssistant/Services/BgiExternalClient.cs"] = [0, 0, 0, 1, 1, 1, 1, 1, 1],
+        ["MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs"] = [0, 0, 0, 1, 0, 0, 0, 0, 0],
+    };
+
+    private static readonly string[] ExecutionSendPatterns =
+    [
+        "OpCode = \"task.start\"", "OpCode = \"task.stop\"", "OpCode = \"action.execute_hotkey\"",
+        "ExternalOperations.TaskStart,", "ExternalOperations.TaskStop,", "ExternalOperations.TaskCancel,",
+        // ext 线协议**字面量**（常量定义或硬编码直发都计入）：任何新文件硬编码这些词即被标记
+        "\"ext.task.start\"", "\"ext.task.stop\"", "\"ext.task.cancel\"",
+    ];
+
+    [Fact]
+    public void ProductionExecutionSends_MatchRegisteredInventory()
+    {
+        var root = Path.Combine(RepoRoot(), "MultiplayerHoeingAssistant");
+        var found = new Dictionary<string, int[]>(StringComparer.Ordinal);
+        foreach (var file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+        {
+            var rel = Path.GetRelativePath(Path.GetDirectoryName(root)!, file).Replace('\\', '/');
+            var text = File.ReadAllText(file);
+            var counts = ExecutionSendPatterns.Select(p => CountOccurrences(text, p)).ToArray();
+            if (counts.Sum() > 0) found[rel] = counts;
+        }
+
+        // ①不得出现含未登记执行类直发字面量的文件（仅文件粒度；同文件新增旁路不入本守卫能力范围）
+        var unregistered = found.Keys.Where(k => !AllowedExecutionSends.ContainsKey(k)).OrderBy(k => k, StringComparer.Ordinal).ToList();
+        Assert.True(unregistered.Count == 0,
+            "发现**含未登记「执行类」直发字面量的文件**：[" + string.Join(", ", unregistered)
+            + "]——必须先在设计稿 §15／§24.41-C#11 登记（含仲裁归属与门禁），再更新本守卫。");
+
+        // ②登记清单每项必须存在且计数不变
+        foreach (var (path, expected) in AllowedExecutionSends)
+        {
+            Assert.True(found.TryGetValue(path, out var actual), $"登记的执行类直发点缺失（已删除/搬迁？）：{path}——请同步更新 §15 与本守卫。");
+            Assert.True(actual!.SequenceEqual(expected),
+                $"执行类直发计数变化：{path} 期望 [{string.Join(",", expected)}]，实际 [{string.Join(",", actual)}]"
+                + "——请先更新 §15 登记再改本守卫（禁止只改数字消警）。");
+        }
+
+        // ③文件集合守恒
+        Assert.Equal(AllowedExecutionSends.Count, found.Count);
+    }
+
     /// <summary>登记清单：生产源码中允许出现的「执行提交」调用点（文件 → 次数）。</summary>
     private static readonly Dictionary<string, (int V2TaskStart, int ExtTaskStart)> Allowed = new(StringComparer.Ordinal)
     {
