@@ -735,6 +735,960 @@ public class ArbitrationAdmissionServiceTests : IDisposable
 
     // ── 21. 租约文件 v1 向后读兼容（Pending 保留/接管写入升 3，R5.3 §24.20-A）──
 
+    // ── 20b. §12.3 M1③/M1⑤：自有父登记占用的**限定**豁免（组件矩阵，六支 fail-closed）──
+
+    /// <summary>
+    /// **[§12.3 M1③][2026-09-22 批次四十四]**「执行占用」**只**豁免「可证明属于本宿主自有驱动、同一父授权的
+    /// 节点子提交」。构造（确定性）：同一 `runBinding` 的流程登记**父操作**先受理并**完成接管关闭**
+    /// （`Accepted`／`TerminalCompleted`、无开放未决发送），随后该 run 的**节点执行**在「执行占用＝真」下提交
+    /// （生产时序对应：E1 登记时无占用 → 自有驱动起跑后占用成立）。
+    /// **父子绑定不由调用方自报**（[批次四十四 会诊重要项处置]）：由门面在创建事务内按严格父判据自行反查，
+    /// 故本夹具不再传任何父身份字段——`exempt` 支断言落盘绑定确被自动写出。
+    /// 十一支：`exempt`＝唯一豁免路径（父子绑定已持久化 ⇒ 首节点**另行取得**自己的发送许可）；其余十支
+    /// **必须**零**节点**发送且不签发许可——轮次级占用为 `NeedPreemptConfirm`＋`execution_occupied`（胜者回
+    /// `Queued`，非终局）：`own_run_not_declared`（归属集不含本 run）／`ownership_absent`（归属不可证明＝空集）／
+    /// `own_multiple_runs`（多个自有驱动并存 ⇒ 归属不唯一，不豁免）／`parent_unresolved`（父登记责任未结清：
+    /// 发送结果不可考、未决发送仍在册）／`parent_wrong_type`（父类型非 `FlowRegistration`）／
+    /// `parent_source_shape_invalid`（父 `ResourceRef` 非 `flow:` 来源形状）⇒ 二者均**不产生绑定**（fail-closed）／
+    /// `workflow_mismatch`（非同父授权 workflow）／`non_node_shape`（流程登记形状不豁免）／
+    /// `other_node_in_flight`（同 run 另有**已受理未终结**的节点操作 ⇒ 其他节点在飞仍须阻挡）；
+    /// 以及**锁内** ④ 复核拦下的 `own_withdrawn_before_occupy`（轮次已按豁免放行、占位前撤回归属）
+    /// ⇒ `RetryableRejected`＋`execution_occupied`（证明锁内判定本身承重，而非只靠轮次前筛）。
+    /// **范围**：组件层；**不**证明宿主自带归属事实来源与真实入口层（宿主级另有端到端夹具）。
+    /// </summary>
+    [Theory]
+    [InlineData("exempt")]
+    [InlineData("own_run_not_declared")]
+    [InlineData("ownership_absent")]
+    [InlineData("own_multiple_runs")]
+    [InlineData("parent_unresolved")]
+    [InlineData("parent_wrong_type")]
+    [InlineData("parent_source_shape_invalid")]
+    [InlineData("parent_workflow_mismatch")]
+    [InlineData("workflow_mismatch")]
+    [InlineData("non_node_shape")]
+    [InlineData("other_node_in_flight")]
+    [InlineData("own_withdrawn_before_occupy")]
+    public async Task Ownership_ExecutionOccupied_OnlyVerifiedOwnParentChildExempted(string mode)
+    {
+        const string run = "run-m1";
+        const string wf = "wf-m1";
+        var sends = 0;
+        var occupied = false;   // E1 登记时无占用（生产前置），驱动起跑后置真
+        var phase = 1;          // 1＝父登记；2＝节点提交（用于把「归属在轮次后撤回」的对插点限定到节点笔）
+        IReadOnlyCollection<string> own = mode switch
+        {
+            "own_run_not_declared" => ["run-other"],
+            "ownership_absent" => [],
+            "own_multiple_runs" => [run, "run-other"],
+            _ => [run],
+        };
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts
+            {
+                ExecutionOccupied = occupied,
+                OwnInFlightRunBindings = own,
+            };
+            h.Sender = _ =>
+            {
+                // parent_unresolved 支：父登记发送结果不可考（责任未结清、未决发送仍在册）⇒ 一律不豁免
+                if (mode == "parent_unresolved" && Volatile.Read(ref phase) == 1)
+                    return Task.FromResult<SendOutcome>(new SendOutcome.Unknown("fixture_unknown"));
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("host:drive_registered", run));
+            };
+            h.TakeoverTerminalConfirmed = (_, _) => true; // 父登记终局出口另测；本夹具聚焦占用豁免
+            // 轮次（已按豁免归一＝放行）之后、锁内占用复核之前撤回归属 ⇒ 只可能被**锁内** ④ 复核拦下
+            // （用于证明锁内豁免判定本身承重，而不是只靠轮次前筛）。
+            if (mode == "own_withdrawn_before_occupy")
+                h.Barriers = new AdmissionBarriers
+                {
+                    BeforeOccupyPublish = () =>
+                    {
+                        if (Volatile.Read(ref phase) == 2) own = [];
+                        return Task.CompletedTask;
+                    },
+                };
+        });
+
+        // ① 父登记：受理 → （除 parent_unresolved 支外）终局关闭。
+        //    两支持意构造「形状像父、但不满足严格判据」：类型非 FlowRegistration／来源非 `flow:` 形状。
+        var parent = Req(workflow: wf,
+            operationType: mode == "parent_wrong_type" ? OperationType.Handoff : OperationType.FlowRegistration);
+        parent.RunBinding = run;
+        // parent_workflow_mismatch 支：父记录**自身自洽**（`flow:{自己的 workflow}`）但与本运行 workflow 不同
+        parent.Candidate!.WorkflowId = mode == "parent_workflow_mismatch" ? "wf-other" : wf;
+        parent.Candidate.ResourceRef = mode == "parent_source_shape_invalid"
+            ? "flowx:" + parent.Candidate.WorkflowId
+            : "flow:" + parent.Candidate.WorkflowId;
+        var parentRes = await svc.SubmitAsync(parent);
+        Assert.Contains(parentRes.Kind, new[] { AdmissionResultKind.Accepted, AdmissionResultKind.Reconciling });
+        if (mode != "parent_unresolved")
+        {
+            Assert.Equal(AdmissionResultKind.Accepted,
+                svc.MarkOperationTerminal(parent.RequestIdentity, "host:drive_registered").Kind);
+            Assert.Equal(OperationRequestState.TerminalCompleted, FindOp(parent.RequestIdentity)!.RequestState);
+        }
+
+        // ② other_node_in_flight 支：先建一个**同 run 的节点操作**并令其停在 `Accepted`（远端未终结）
+        if (mode == "other_node_in_flight")
+        {
+            var prev = Req(workflow: wf, operationType: OperationType.NodeExecution);
+            prev.RunBinding = run;
+            prev.Candidate!.NodeId = "n-0";
+            prev.Candidate.ResourceRef = "node:n-0";
+            prev.Candidate.Attempt = 1;
+            prev.CursorRef = "n-0#0#1";
+            prev.CursorRevision = 1;
+            var prevRes = await svc.SubmitAsync(prev);   // 此刻占用未成立：正常受理＝该节点责任在飞
+            Assert.Equal(AdmissionResultKind.Accepted, prevRes.Kind);
+        }
+
+        // ③ 自有驱动起跑 ⇒ 执行占用成立；该 run 的节点执行提交
+        var sendsBeforeTarget = sends;   // 父登记/先行节点自身那次发送不计入「本笔是否发送」的判据
+        occupied = true;
+        var node = Req(workflow: mode == "workflow_mismatch" ? "wf-other" : wf,
+            operationType: OperationType.NodeExecution);
+        node.RunBinding = run;
+        node.Candidate!.NodeId = "n-1";
+        node.Candidate.ResourceRef = "node:n-1";
+        node.Candidate.Attempt = 1;
+        node.CursorRef = "n-1#0#1";
+        node.CursorRevision = 1;
+        if (mode == "non_node_shape")
+        {
+            node.OperationType = OperationType.FlowRegistration;
+            node.Candidate.NodeId = "";
+            node.Candidate.ResourceRef = "flow:" + wf;
+            node.CursorRef = null;
+            node.CursorRevision = null;
+        }
+
+        Volatile.Write(ref phase, 2);
+        var res = await svc.SubmitAsync(node);
+        var nodeOp = FindOp(node.RequestIdentity);
+        Assert.NotNull(nodeOp);
+
+        if (mode == "exempt")
+        {
+            Assert.Equal(AdmissionResultKind.Accepted, res.Kind);
+            Assert.Equal(sendsBeforeTarget + 1, sends);
+            // 父子绑定由门面在创建事务内**自行反查并持久化**（M1⑤；不由调用方自报）
+            Assert.Equal(parent.RequestIdentity, nodeOp!.ParentRequestIdentity);
+            // 首节点**另行取得自己的**发送许可（M1①②）：本笔 sendSeq=1、身份自证、与父登记身份不同
+            Assert.Equal(1, nodeOp.LastSendSeq);
+            Assert.Equal("sub:" + node.RequestIdentity + ":1", nodeOp.SubmissionIdentity);
+            var parentOp = FindOp(parent.RequestIdentity)!;
+            Assert.Equal(OperationRequestState.TerminalCompleted, parentOp.RequestState);
+            Assert.NotEqual(parentOp.SubmissionIdentity, nodeOp.SubmissionIdentity);
+            Assert.Equal(OperationZone.Active, nodeOp.Zone);
+        }
+        else if (mode == "own_withdrawn_before_occupy")
+        {
+            // 锁内 ④ 复核拦下（轮次已放行）：可重试拒绝，操作停在可重试状态、零发送、零占位
+            Assert.Equal(AdmissionResultKind.RetryableRejected, res.Kind);
+            Assert.Equal("execution_occupied", res.ReasonCode);
+            Assert.Equal(sendsBeforeTarget, sends);
+            Assert.Equal(OperationRequestState.RetryableRejected, nodeOp!.RequestState);
+            Assert.Equal(0, nodeOp.LastSendSeq);
+            Assert.True(string.IsNullOrEmpty(nodeOp.SubmissionIdentity));
+            Assert.Null(ReadLease().File?.Handoff?.Submission);
+        }
+        else
+        {
+            // 轮次级「执行占用→需安全交接确认」：交接未闭环 ⇒ 胜者回 Queued（非终局），零发送、零占位
+            Assert.Equal(AdmissionResultKind.NeedPreemptConfirm, res.Kind);
+            Assert.Equal("execution_occupied", res.ReasonCode);
+            Assert.Equal(sendsBeforeTarget, sends);   // 零**本笔**发送（父登记/先行节点那次不计）
+            Assert.Equal(OperationRequestState.Queued, nodeOp!.RequestState);
+            Assert.Equal(0, nodeOp.LastSendSeq);                     // 未签发许可
+            Assert.True(string.IsNullOrEmpty(nodeOp.SubmissionIdentity));
+            // 零**节点**占位：未决发送槽要么为空，要么仍只承载父登记自己那笔（parent_unresolved 支）
+            var openSubmission = ReadLease().File?.Handoff?.Submission;
+            if (openSubmission is not null)
+                Assert.Equal("sub:" + parent.RequestIdentity + ":1", openSubmission.SubmissionIdentity);
+            // 严格父判据不成立的两支：**不产生绑定**（不得补造）
+            if (mode is "parent_wrong_type" or "parent_source_shape_invalid" or "parent_workflow_mismatch")
+                Assert.Null(nodeOp.ParentRequestIdentity);
+        }
+    }
+
+    /// <summary>
+    /// **[§12.3 M1③ 验证会诊反例·混轮粒度]** 占用豁免**按候选**生效：同一轮里「可证明属于本宿主自有父授权的
+    /// 合法节点子提交」与「非豁免候选（另一流程的流程登记）」并发入队时——节点**仍须获准**（不得因同轮混入无关
+    /// 候选而被整体改判 `NeedPreemptConfirm`），非豁免者仍按占用回 `Queued`、零发送。
+    /// </summary>
+    [Fact]
+    public async Task Ownership_ExecutionOccupied_MixedRound_ExemptNodeStillAdmitted()
+    {
+        const string run = "run-mix";
+        const string wf = "wf-mix";
+        var sends = 0;
+        var occupied = false;
+        // 入队收齐闸门**只在并发阶段武装**（父登记先行单独提交，若开局即等收齐会自死锁）。
+        var barrierArmed = false;
+        var arrived = 0;
+        var bothEnqueued = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts
+            {
+                ExecutionOccupied = occupied,
+                OwnInFlightRunBindings = [run],
+            };
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("host:drive_registered", run));
+            };
+            h.TakeoverTerminalConfirmed = (_, _) => true;
+            h.Barriers = new AdmissionBarriers
+            {
+                AfterEnqueue = () =>
+                {
+                    if (barrierArmed && Interlocked.Increment(ref arrived) == 2) bothEnqueued.TrySetResult();
+                    return Task.CompletedTask;
+                },
+                BeforeRoundSnapshot = () => barrierArmed ? bothEnqueued.Task : Task.CompletedTask,
+            };
+        });
+
+        var parent = Req(workflow: wf, operationType: OperationType.FlowRegistration);
+        parent.RunBinding = run;
+        parent.Candidate!.ResourceRef = "flow:" + wf;
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(parent)).Kind);
+        Assert.Equal(AdmissionResultKind.Accepted, svc.MarkOperationTerminal(parent.RequestIdentity, "host:drive_registered").Kind);
+        var sendsAfterParent = sends;
+
+        occupied = true;   // 自有驱动在飞
+        var node = Req(workflow: wf, operationType: OperationType.NodeExecution);
+        node.RunBinding = run;
+        node.Candidate!.NodeId = "n-1";
+        node.Candidate.ResourceRef = "node:n-1";
+        node.Candidate.Attempt = 1;
+        node.CursorRef = "n-1#0#0";
+        node.CursorRevision = 1;
+        // 非豁免候选：另一流程的流程登记（不满足节点形状 ⇒ 一律不豁免）
+        var other = Req(workflow: "wf-other", operationType: OperationType.FlowRegistration);
+        other.RunBinding = "run-other";
+        other.Candidate!.ResourceRef = "flow:wf-other";
+
+        barrierArmed = true;   // 两笔并发入队收齐后再开轮（确定性同轮）
+        var nodeTask = svc.SubmitAsync(node);
+        var otherTask = svc.SubmitAsync(other);
+        var results = await Task.WhenAll(nodeTask, otherTask);
+
+        var nodeResult = results[0];
+        var otherResult = results[1];
+        Assert.Equal(AdmissionResultKind.Accepted, nodeResult.Kind);           // 合法节点**不被同轮无关候选连坐**
+        Assert.Equal(sendsAfterParent + 1, sends);                             // 恰一次节点发送
+        var nodeOp = FindOp(node.RequestIdentity);
+        Assert.Equal(parent.RequestIdentity, nodeOp!.ParentRequestIdentity);
+        Assert.Equal(1, nodeOp.LastSendSeq);
+        Assert.Equal(AdmissionResultKind.NeedPreemptConfirm, otherResult.Kind); // 非豁免候选仍按占用
+        Assert.Equal("execution_occupied", otherResult.ReasonCode);
+        var otherOp = FindOp(other.RequestIdentity);
+        Assert.Equal(OperationRequestState.Queued, otherOp!.RequestState);      // 交接存续（非终局）
+        Assert.Equal(0, otherOp.LastSendSeq);
+        Assert.True(string.IsNullOrEmpty(otherOp.SubmissionIdentity));
+    }
+
+    /// <summary>
+    /// **[§12.3 M1③ 第四／五轮验证会诊反例·分流前置]**：分流**只允许发生在「纯占用」事实下**——占用与
+    /// **事实未知**（或 **F11 激活**）并存时整轮沿用原语义结清，**不得**把可豁免节点单独拆出来放行。
+    /// 本夹具为**真混轮**：可豁免节点与**非豁免候选**（另一流程的流程登记）并发入队（收齐闸门固定同轮），
+    /// 断言：**零发送**；节点**不获准**（未签发许可、零占位）；返回类别与事实一致
+    /// （未知 ⇒ `NeedReconcile`／`Queued`；F11 ⇒ `F11Blocked`／`TerminalRejected`）。
+    /// </summary>
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("f11")]
+    public async Task Ownership_ExecutionOccupied_WithUnknownOrF11_MixedRoundNotSplit(string mode)
+    {
+        const string run = "run-guard";
+        const string wf = "wf-guard";
+        var sends = 0;
+        var guardActive = false;   // 父登记阶段须为干净事实；节点阶段才同时成立「占用＋未知/F11」
+        var armed = false;
+        var arrived = 0;
+        var bothEnqueued = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts
+            {
+                ExecutionOccupied = Volatile.Read(ref guardActive),
+                ExecutionFactsUnknown = Volatile.Read(ref guardActive) && mode == "unknown",
+                F11Active = Volatile.Read(ref guardActive) && mode == "f11",
+                OwnInFlightRunBindings = [run],
+            };
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("host:drive_registered", run));
+            };
+            h.TakeoverTerminalConfirmed = (_, _) => true;
+            h.Barriers = new AdmissionBarriers
+            {
+                AfterEnqueue = () =>
+                {
+                    if (armed && Interlocked.Increment(ref arrived) == 2) bothEnqueued.TrySetResult();
+                    return Task.CompletedTask;
+                },
+                BeforeRoundSnapshot = () => armed ? bothEnqueued.Task : Task.CompletedTask,
+            };
+        });
+
+        // 已关闭的父登记（若分流被错误触发，本节点会被放行并真的发送）
+        var parent = Req(workflow: wf, operationType: OperationType.FlowRegistration);
+        parent.RunBinding = run;
+        parent.Candidate!.ResourceRef = "flow:" + wf;
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(parent)).Kind);
+        Assert.Equal(AdmissionResultKind.Accepted, svc.MarkOperationTerminal(parent.RequestIdentity, "host:drive_registered").Kind);
+        var sendsAfterParent = sends;
+
+        guardActive = true;   // 占用与「事实未知／F11」并存：整轮不得拆分
+        var node = Req(workflow: wf, operationType: OperationType.NodeExecution);
+        node.RunBinding = run;
+        node.Candidate!.NodeId = "n-1";
+        node.Candidate.ResourceRef = "node:n-1";
+        node.Candidate.Attempt = 1;
+        node.CursorRef = "n-1#0#0";
+        node.CursorRevision = 1;
+        // 非豁免同轮候选：另一流程的流程登记（形状上不可能是节点子提交 ⇒ 一律不豁免）
+        var other = Req(workflow: "wf-guard-other", operationType: OperationType.FlowRegistration);
+        other.RunBinding = "run-guard-other";
+        other.Candidate!.ResourceRef = "flow:wf-guard-other";
+        armed = true;
+        var results = await Task.WhenAll(svc.SubmitAsync(node), svc.SubmitAsync(other));
+        var res = results[0];
+
+        Assert.Equal(sendsAfterParent, sends);                       // 零发送（未拆分放行）
+        var op = FindOp(node.RequestIdentity);
+        Assert.NotNull(op);
+        Assert.Equal(0, op!.LastSendSeq);                            // 未签发许可
+        Assert.True(string.IsNullOrEmpty(op.SubmissionIdentity));
+        Assert.Null(ReadLease().File?.Handoff?.Submission);          // 零占位
+        Assert.Equal(0, FindOp(other.RequestIdentity)!.LastSendSeq); // 非豁免候选同样零许可
+        if (mode == "unknown")
+        {
+            Assert.Equal(AdmissionResultKind.NeedReconcile, res.Kind);
+            Assert.Equal("facts_unknown", res.ReasonCode);
+            Assert.Equal(OperationRequestState.Queued, op.RequestState);
+        }
+        else
+        {
+            Assert.Equal(AdmissionResultKind.F11Blocked, res.Kind);
+            Assert.Equal("f11_active", res.ReasonCode);
+            Assert.Equal(OperationRequestState.TerminalRejected, op.RequestState);
+        }
+    }
+
+    /// <summary>
+    /// **[§12.3 M1③ 第四轮验证会诊反例·身份唯一性前置]**：同一轮内**同候选号**（stable identity 相同、
+    /// 绑定不同）的同伴必须继续互相比较——**不得**因一侧可豁免而拆开比较并放行。断言：**零发送**、两侧均不获准
+    /// （`Accepted` 必须缺席）、两侧许可水位均为 0、无占位。
+    /// </summary>
+    [Fact]
+    public async Task Ownership_ExecutionOccupied_SameCandidateIdPeer_PreventsSplitAndSending()
+    {
+        const string run = "run-dup";
+        const string wf = "wf-dup";
+        var sends = 0;
+        var occupied = false;
+        var arrived = 0;
+        var armed = false;
+        var bothEnqueued = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts
+            {
+                ExecutionOccupied = occupied,
+                OwnInFlightRunBindings = [run],
+            };
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("host:drive_registered", run));
+            };
+            h.TakeoverTerminalConfirmed = (_, _) => true;
+            h.Barriers = new AdmissionBarriers
+            {
+                AfterEnqueue = () =>
+                {
+                    if (armed && Interlocked.Increment(ref arrived) == 2) bothEnqueued.TrySetResult();
+                    return Task.CompletedTask;
+                },
+                BeforeRoundSnapshot = () => armed ? bothEnqueued.Task : Task.CompletedTask,
+            };
+        });
+
+        var parent = Req(workflow: wf, operationType: OperationType.FlowRegistration);
+        parent.RunBinding = run;
+        parent.Candidate!.ResourceRef = "flow:" + wf;
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(parent)).Kind);
+        Assert.Equal(AdmissionResultKind.Accepted, svc.MarkOperationTerminal(parent.RequestIdentity, "host:drive_registered").Kind);
+        var sendsAfterParent = sends;
+
+        occupied = true;   // 自有驱动在飞
+        // 两笔**同候选号**（同触发出现身份）但**载荷不同** ⇒ 排序层判整组身份冲突（不得因一侧可豁免而拆开）：
+        // 一笔属可豁免 run（同父登记 workflow），另一笔属无父登记 run。
+        var a = Req(workflow: wf, operationType: OperationType.NodeExecution, trigger: "successor:dup", payload: "p1");
+        a.RunBinding = run;
+        a.Candidate!.NodeId = "n-1";
+        a.Candidate.ResourceRef = "node:n-1";
+        a.Candidate.Attempt = 1;
+        a.CursorRef = "n-1#0#0";
+        a.CursorRevision = 1;
+        var b = Req(workflow: wf, operationType: OperationType.NodeExecution, trigger: "successor:dup", payload: "p2");
+        b.RunBinding = "run-other";
+        b.Candidate!.NodeId = "n-1";
+        b.Candidate.ResourceRef = "node:n-1";
+        b.Candidate.Attempt = 1;
+        b.CursorRef = "n-1#0#0";
+        b.CursorRevision = 1;
+
+        armed = true;
+        var results = await Task.WhenAll(svc.SubmitAsync(a), svc.SubmitAsync(b));
+
+        Assert.Equal(sendsAfterParent, sends);                                  // **零发送**（不得拆开比较后放行）
+        // 整组身份冲突按既有合同终局拒绝（而非被拆成「一侧放行、一侧交接确认」）
+        Assert.All(results, r => Assert.Equal(AdmissionResultKind.TerminalRejected, r.Kind));
+        Assert.All(results, r => Assert.Equal("identity_conflict", r.ReasonCode));
+        var opA = FindOp(a.RequestIdentity)!;
+        var opB = FindOp(b.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.TerminalRejected, opA.RequestState);
+        Assert.Equal(OperationRequestState.TerminalRejected, opB.RequestState);
+        Assert.Equal("identity_conflict", opA.LastResult?.ReasonCode);
+        Assert.Equal("identity_conflict", opB.LastResult?.ReasonCode);
+        Assert.Equal(0, opA.LastSendSeq);
+        Assert.Equal(0, opB.LastSendSeq);
+        Assert.Null(ReadLease().File?.Handoff?.Submission);
+    }
+
+    /// <summary>
+    /// **[§12.3 M1③ 第五轮验证会诊反例·不拆分回退]**：当被阻断子集的子裁决**不是** `NeedPreemptConfirm`
+    /// （此处：非豁免候选资格不成立 ⇒ `NoEligibleCandidate`）时，**不得拆分**——整轮沿用原语义结清，
+    /// 可豁免节点同样**不得放行**。断言：零发送、节点未签发许可、节点停在非终局 `Queued`。
+    /// </summary>
+    [Fact]
+    public async Task Ownership_ExecutionOccupied_BlockedSubDecisionNotPreempt_NoSplitNoSend()
+    {
+        const string run = "run-fallback";
+        const string wf = "wf-fallback";
+        var sends = 0;
+        var occupied = false;
+        var armed = false;
+        var arrived = 0;
+        var bothEnqueued = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts
+            {
+                ExecutionOccupied = occupied,
+                OwnInFlightRunBindings = [run],
+            };
+            // 非本 run 的候选**资格不成立** ⇒ 其子裁决为 NoEligibleCandidate（非 NeedPreemptConfirm）
+            h.EligibilityProvider = r => string.Equals(r.RunBinding, run, StringComparison.Ordinal)
+                ? new CandidateEligibility()
+                : new CandidateEligibility { IsDue = false, PrerequisiteReady = true, FlexibleWindowOpen = true };
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("host:drive_registered", run));
+            };
+            h.TakeoverTerminalConfirmed = (_, _) => true;
+            h.Barriers = new AdmissionBarriers
+            {
+                AfterEnqueue = () =>
+                {
+                    if (armed && Interlocked.Increment(ref arrived) == 2) bothEnqueued.TrySetResult();
+                    return Task.CompletedTask;
+                },
+                BeforeRoundSnapshot = () => armed ? bothEnqueued.Task : Task.CompletedTask,
+            };
+        });
+
+        var parent = Req(workflow: wf, operationType: OperationType.FlowRegistration);
+        parent.RunBinding = run;
+        parent.Candidate!.ResourceRef = "flow:" + wf;
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(parent)).Kind);
+        Assert.Equal(AdmissionResultKind.Accepted, svc.MarkOperationTerminal(parent.RequestIdentity, "host:drive_registered").Kind);
+        var sendsAfterParent = sends;
+
+        occupied = true;
+        var node = Req(workflow: wf, operationType: OperationType.NodeExecution);
+        node.RunBinding = run;
+        node.Candidate!.NodeId = "n-1";
+        node.Candidate.ResourceRef = "node:n-1";
+        node.Candidate.Attempt = 1;
+        node.CursorRef = "n-1#0#0";
+        node.CursorRevision = 1;
+        var notDue = Req(workflow: "wf-notdue", operationType: OperationType.FlowRegistration);
+        notDue.RunBinding = "run-notdue";
+        notDue.Candidate!.ResourceRef = "flow:wf-notdue";
+
+        armed = true;
+        var results = await Task.WhenAll(svc.SubmitAsync(node), svc.SubmitAsync(notDue));
+
+        Assert.Equal(sendsAfterParent, sends);                       // 零发送（未拆分放行）
+        var op = FindOp(node.RequestIdentity);
+        Assert.NotNull(op);
+        Assert.Equal(0, op!.LastSendSeq);
+        Assert.True(string.IsNullOrEmpty(op.SubmissionIdentity));
+        Assert.Equal(OperationRequestState.Queued, op.RequestState); // 非终局（可再驱动）
+        Assert.Null(ReadLease().File?.Handoff?.Submission);
+        Assert.All(results, r => Assert.NotEqual(AdmissionResultKind.Accepted, r.Kind)); // 两侧均未获准
+        Assert.Equal("not_due", FindOp(notDue.RequestIdentity)!.LastResult?.ReasonCode);  // 子裁决确为「资格不成立」
+    }
+
+    /// <summary>
+    /// **[§12.3 M1③ 第六轮验证会诊反例·真实 F11 闸门]（`fact.F11Active == false` 而 `_hooks.F11Active()==true`）**：
+    /// 真实闸门在**入队之后**翻转（入口检查已过），事实快照尚未同步 ⇒ 整轮仍必须按 **F11 阻断**结清
+    /// （不得落成 `NeedPreemptConfirm`）。断言：零发送、节点终局拒绝、返回 `F11Blocked`／`f11_active`。
+    /// </summary>
+    [Fact]
+    public async Task Ownership_ExecutionOccupied_RealF11GateFlipsAfterEnqueue_RoundStillF11Blocked()
+    {
+        const string run = "run-f11gate";
+        const string wf = "wf-f11gate";
+        var sends = 0;
+        var occupied = false;
+        var gateActive = false;
+        var armed = false;
+        var arrived = 0;
+        var bothEnqueued = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            // 事实快照**不含** F11（模拟独立事实源未同步）；真实闸门由 hook 提供并在入队后翻转。
+            h.FactsProvider = () => new ArbitrationFacts
+            {
+                ExecutionOccupied = occupied,
+                OwnInFlightRunBindings = [run],
+            };
+            h.F11Active = () => Volatile.Read(ref gateActive);
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("host:drive_registered", run));
+            };
+            h.TakeoverTerminalConfirmed = (_, _) => true;
+            h.Barriers = new AdmissionBarriers
+            {
+                AfterEnqueue = () =>
+                {
+                    if (armed && Interlocked.Increment(ref arrived) == 2)
+                    {
+                        Volatile.Write(ref gateActive, true);   // 入口检查已过之后真实闸门才激活
+                        bothEnqueued.TrySetResult();
+                    }
+                    return Task.CompletedTask;
+                },
+                BeforeRoundSnapshot = () => armed ? bothEnqueued.Task : Task.CompletedTask,
+            };
+        });
+
+        var parent = Req(workflow: wf, operationType: OperationType.FlowRegistration);
+        parent.RunBinding = run;
+        parent.Candidate!.ResourceRef = "flow:" + wf;
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(parent)).Kind);
+        Assert.Equal(AdmissionResultKind.Accepted, svc.MarkOperationTerminal(parent.RequestIdentity, "host:drive_registered").Kind);
+        var sendsAfterParent = sends;
+
+        occupied = true;
+        var node = Req(workflow: wf, operationType: OperationType.NodeExecution);
+        node.RunBinding = run;
+        node.Candidate!.NodeId = "n-1";
+        node.Candidate.ResourceRef = "node:n-1";
+        node.Candidate.Attempt = 1;
+        node.CursorRef = "n-1#0#0";
+        node.CursorRevision = 1;
+        var other = Req(workflow: "wf-f11-other", operationType: OperationType.FlowRegistration);
+        other.RunBinding = "run-f11-other";
+        other.Candidate!.ResourceRef = "flow:wf-f11-other";
+
+        armed = true;
+        var results = await Task.WhenAll(svc.SubmitAsync(node), svc.SubmitAsync(other));
+
+        var nodeResult = results[0];
+        Assert.Equal(sendsAfterParent, sends);                                  // 零发送
+        Assert.Equal(AdmissionResultKind.F11Blocked, nodeResult.Kind);          // 按 F11 结清（非 NeedPreemptConfirm）
+        Assert.Equal("f11_active", nodeResult.ReasonCode);
+        // 整轮统一：同轮另一候选同样按 F11 结清（证明「整轮」而非仅本笔）
+        Assert.All(results, r => Assert.Equal(AdmissionResultKind.F11Blocked, r.Kind));
+        Assert.Equal(OperationRequestState.TerminalRejected, FindOp(other.RequestIdentity)!.RequestState);
+        var op = FindOp(node.RequestIdentity);
+        Assert.Equal(OperationRequestState.TerminalRejected, op!.RequestState);
+        Assert.Equal(0, op.LastSendSeq);
+        Assert.True(string.IsNullOrEmpty(op.SubmissionIdentity));
+        Assert.Null(ReadLease().File?.Handoff?.Submission);
+    }
+
+    /// <summary>
+    /// **[§12.3 M1③ 第六轮验证会诊反例·冲突待决]（占用 ＋ 盘上 `ConflictPending`）**：盘上任一冲突待决必须
+    /// 计入「事实未知」——整轮按 `NeedReconcile`／`facts_unknown` 结清（节点回 `Queued`、零发送），
+    /// **不得**落成 `NeedPreemptConfirm`。
+    /// </summary>
+    [Fact]
+    public async Task Ownership_ExecutionOccupied_DiskConflictPending_RoundStaysFactsUnknown()
+    {
+        const string run = "run-conflict";
+        const string wf = "wf-conflict";
+        var sends = 0;
+        var occupied = false;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts
+            {
+                ExecutionOccupied = occupied,
+                OwnInFlightRunBindings = [run],
+            };
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("host:drive_registered", run));
+            };
+            h.TakeoverTerminalConfirmed = (_, _) => true;
+        });
+
+        var parent = Req(workflow: wf, operationType: OperationType.FlowRegistration);
+        parent.RunBinding = run;
+        parent.Candidate!.ResourceRef = "flow:" + wf;
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(parent)).Kind);
+        Assert.Equal(AdmissionResultKind.Accepted, svc.MarkOperationTerminal(parent.RequestIdentity, "host:drive_registered").Kind);
+
+        // 盘上植入一条**冲突待决**记录（与生产同一 MutateHandoff 串行边界）
+        var read = store.Read();
+        var planted = store.MutateHandoff(read.File!.Lease!.LeaseId, read.File.Lease.OwnerEpoch, read.File.Revision, file =>
+        {
+            file.Handoff ??= new LeaseHandoffSegment();
+            file.Handoff.Operations.Add(new OperationRecord
+            {
+                RequestIdentity = "conflict-pending-fixture",
+                CandidateId = "cand-conflict-fixture",
+                RunBinding = "run-fixture-other",
+                OperationType = OperationType.NodeExecution,
+                RequestState = OperationRequestState.Reconciling,
+                ConflictPending = true,
+                Zone = OperationZone.Active,
+                UpdatedAtUtc = _now,
+                UpdatedRevision = file.Revision + 1,
+            });
+            return null;
+        });
+        Assert.True(planted.Success, "前置：冲突待决记录植入失败 " + planted.Reason);
+        var sendsAfterParent = sends;
+
+        occupied = true;
+        var node = Req(workflow: wf, operationType: OperationType.NodeExecution);
+        node.RunBinding = run;
+        node.Candidate!.NodeId = "n-1";
+        node.Candidate.ResourceRef = "node:n-1";
+        node.Candidate.Attempt = 1;
+        node.CursorRef = "n-1#0#0";
+        node.CursorRevision = 1;
+        var res = await svc.SubmitAsync(node);
+
+        Assert.Equal(sendsAfterParent, sends);                 // 零发送
+        Assert.Equal(AdmissionResultKind.NeedReconcile, res.Kind);
+        Assert.Equal("facts_unknown", res.ReasonCode);
+        var op = FindOp(node.RequestIdentity);
+        Assert.Equal(OperationRequestState.Queued, op!.RequestState);   // 非终局（可再驱动）
+        Assert.Equal(0, op.LastSendSeq);
+        Assert.True(string.IsNullOrEmpty(op.SubmissionIdentity));
+    }
+
+    /// <summary>
+    /// **[§12.3 M1③ 第七轮验证会诊反例·并存优先级]**：**真实 F11 闸门**与**盘上冲突待决**并存（且执行为占用、
+    /// 本笔节点本可豁免）时，整轮必须按 **F11 阻断**结清（F11 在 `Decide` 内优先级高于「待对账」），
+    /// 而不是 `NeedPreemptConfirm`／`NeedReconcile`。断言：零发送、整轮统一 `F11Blocked`、节点终局拒绝、零许可。
+    /// </summary>
+    [Fact]
+    public async Task Ownership_ExecutionOccupied_F11AndDiskConflict_F11WinsWholeRound()
+    {
+        const string run = "run-both";
+        const string wf = "wf-both";
+        var sends = 0;
+        var occupied = false;
+        var gateActive = false;
+        var armed = false;
+        var arrived = 0;
+        var bothEnqueued = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts
+            {
+                ExecutionOccupied = occupied,
+                OwnInFlightRunBindings = [run],
+            };
+            h.F11Active = () => Volatile.Read(ref gateActive);
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("host:drive_registered", run));
+            };
+            h.TakeoverTerminalConfirmed = (_, _) => true;
+            h.Barriers = new AdmissionBarriers
+            {
+                AfterEnqueue = () =>
+                {
+                    if (armed && Interlocked.Increment(ref arrived) == 2)
+                    {
+                        // 入口检查已过之后：占用、真实 F11、盘上冲突三者并存
+                        Volatile.Write(ref occupied, true);
+                        Volatile.Write(ref gateActive, true);
+                        bothEnqueued.TrySetResult();
+                    }
+                    return Task.CompletedTask;
+                },
+                BeforeRoundSnapshot = () => armed ? bothEnqueued.Task : Task.CompletedTask,
+            };
+        });
+
+        var parent = Req(workflow: wf, operationType: OperationType.FlowRegistration);
+        parent.RunBinding = run;
+        parent.Candidate!.ResourceRef = "flow:" + wf;
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(parent)).Kind);
+        Assert.Equal(AdmissionResultKind.Accepted, svc.MarkOperationTerminal(parent.RequestIdentity, "host:drive_registered").Kind);
+
+        // 盘上冲突待决（事实未知面）
+        var read = store.Read();
+        var planted = store.MutateHandoff(read.File!.Lease!.LeaseId, read.File.Lease.OwnerEpoch, read.File.Revision, file =>
+        {
+            file.Handoff ??= new LeaseHandoffSegment();
+            file.Handoff.Operations.Add(new OperationRecord
+            {
+                RequestIdentity = "conflict-with-f11",
+                CandidateId = "cand-conflict-with-f11",
+                RunBinding = "run-fixture-other",
+                OperationType = OperationType.NodeExecution,
+                RequestState = OperationRequestState.Reconciling,
+                ConflictPending = true,
+                Zone = OperationZone.Active,
+                UpdatedAtUtc = _now,
+                UpdatedRevision = file.Revision + 1,
+            });
+            return null;
+        });
+        Assert.True(planted.Success, "前置：冲突待决记录植入失败 " + planted.Reason);
+        var sendsAfterParent = sends;
+
+        var node = Req(workflow: wf, operationType: OperationType.NodeExecution);
+        node.RunBinding = run;
+        node.Candidate!.NodeId = "n-1";
+        node.Candidate.ResourceRef = "node:n-1";
+        node.Candidate.Attempt = 1;
+        node.CursorRef = "n-1#0#0";
+        node.CursorRevision = 1;
+        var other = Req(workflow: "wf-both-other", operationType: OperationType.FlowRegistration);
+        other.RunBinding = "run-both-other";
+        other.Candidate!.ResourceRef = "flow:wf-both-other";
+
+        armed = true;
+        var results = await Task.WhenAll(svc.SubmitAsync(node), svc.SubmitAsync(other));
+
+        Assert.Equal(sendsAfterParent, sends);                                   // 零发送
+        Assert.All(results, r => Assert.Equal(AdmissionResultKind.F11Blocked, r.Kind)); // F11 胜出：整轮统一
+        Assert.All(results, r => Assert.Equal("f11_active", r.ReasonCode));
+        var op = FindOp(node.RequestIdentity);
+        Assert.Equal(OperationRequestState.TerminalRejected, op!.RequestState);
+        Assert.Equal(0, op.LastSendSeq);
+        Assert.True(string.IsNullOrEmpty(op.SubmissionIdentity));
+    }
+
+    /// <summary>
+    /// **[§12.3 M1③ 第八轮验证会诊反例·占位后发送前 F11 翻转]**：F11 是**外部活信号**，可在锁内初读之后、
+    /// 占位发布之前翻转（本夹具由 `FactsProvider` 在占位事务内翻转闸门，构造确定性交错）⇒ **发送前复核**必须命中：
+    /// 以「占位后、网络前的本地未发送证明」关闭该笔占位（§4.2c），返回 `F11Blocked`，**绝不发送**。
+    /// 断言：零发送、无开放未决发送、操作 `TerminalRejected`＋`f11_active`＋证据源 `local_not_sent_pre_send`、
+    /// 且该拒绝答复本笔轮次（`AnsweredSendSeq == LastSendSeq`）。
+    /// </summary>
+    [Fact]
+    public async Task Ownership_ExecutionOccupied_F11FlipsDuringOccupy_NoSendAndLocalNotSentClose()
+    {
+        const string run = "run-presend";
+        const string wf = "wf-presend";
+        var sends = 0;
+        var occupied = false;
+        var gateActive = false;
+        var flipArmed = false;
+        var phase = 1;   // 1＝父登记；2＝节点提交（翻转只对节点笔武装）
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () =>
+            {
+                // **占位事务内**（锁内 F11 初读之后、紧接着的 facts 读取）翻转真实闸门：
+                // 确定性构造「锁内读取后、许可发布前」的外部信号变化（轮次阶段不受影响）。
+                if (Volatile.Read(ref flipArmed)) Volatile.Write(ref gateActive, true);
+                return new ArbitrationFacts
+                {
+                    ExecutionOccupied = occupied,
+                    OwnInFlightRunBindings = [run],
+                };
+            };
+            h.F11Active = () => Volatile.Read(ref gateActive);
+            // 轮次前段（快照/投影/锁内复核）之后、进入占位事务之前武装翻转
+            h.Barriers = new AdmissionBarriers
+            {
+                BeforeOccupyPublish = () =>
+                {
+                    if (Volatile.Read(ref phase) == 2) Volatile.Write(ref flipArmed, true);
+                    return Task.CompletedTask;
+                },
+            };
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("host:drive_registered", run));
+            };
+            h.TakeoverTerminalConfirmed = (_, _) => true;
+        });
+
+        var parent = Req(workflow: wf, operationType: OperationType.FlowRegistration);
+        parent.RunBinding = run;
+        parent.Candidate!.ResourceRef = "flow:" + wf;
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(parent)).Kind);
+        Assert.Equal(AdmissionResultKind.Accepted, svc.MarkOperationTerminal(parent.RequestIdentity, "host:drive_registered").Kind);
+        var sendsAfterParent = sends;
+
+        occupied = true;
+        Volatile.Write(ref phase, 2);
+        var node = Req(workflow: wf, operationType: OperationType.NodeExecution);
+        node.RunBinding = run;
+        node.Candidate!.NodeId = "n-1";
+        node.Candidate.ResourceRef = "node:n-1";
+        node.Candidate.Attempt = 1;
+        node.CursorRef = "n-1#0#0";
+        node.CursorRevision = 1;
+
+        var res = await svc.SubmitAsync(node);
+
+        Assert.Equal(sendsAfterParent, sends);                                   // **零发送**
+        Assert.Equal(AdmissionResultKind.F11Blocked, res.Kind);
+        Assert.Equal("f11_active", res.ReasonCode);
+        Assert.Equal(ResponsibilityState.Settled, res.ResponsibilityState);      // 责任已结清（本地未发送关闭）
+        Assert.Equal("local_not_sent_pre_send", res.EvidenceSource);             // 证据来源回显
+        Assert.False(string.IsNullOrEmpty(res.SubmissionIdentity));              // 回显本笔发送关联
+        Assert.Null(ReadLease().File?.Handoff?.Submission);                      // 占位已关闭（无开放未决发送）
+        var op = FindOp(node.RequestIdentity);
+        Assert.Equal(OperationRequestState.TerminalRejected, op!.RequestState);
+        Assert.Equal("f11_active", op.LastResult?.ReasonCode);
+        Assert.Equal("local_not_sent_pre_send", op.LastResult?.EvidenceSource);  // §4.2c 本地未发送证明
+        Assert.Equal(op.LastSendSeq, op.LastResult?.AnsweredSendSeq);            // 拒绝答复本笔轮次
+    }
+
+    /// <summary>
+    /// **[§12.3 M1③ 第九轮验证会诊反例·恢复准入同构]**：**恢复专用准入边界**（`AdmitRecoveryAsync`）同样必须
+    /// 在**占位后、发送前**复核真实 F11——交错与节点路径同构（锁内 F11 初读 false、紧接着的 facts 读取把真实
+    /// 闸门翻 true）。断言：零发送、占位已按本地未发送证明关闭、返回 `F11Blocked`／`f11_active`、
+    /// 责任维 `Settled` 且回显本笔发送关联与证据来源。
+    /// </summary>
+    [Fact]
+    public async Task RecoveryAdmission_F11FlipsDuringOccupy_NoSendAndLocalNotSentClose()
+    {
+        var sends = 0;
+        var gateActive = false;
+        var flipArmed = false;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () =>
+            {
+                if (Volatile.Read(ref flipArmed)) Volatile.Write(ref gateActive, true);
+                return new ArbitrationFacts { ExecutionOccupied = false };
+            };
+            h.F11Active = () => Volatile.Read(ref gateActive);
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("host:drive_registered", "run:take"));
+            };
+        });
+
+        // 恢复路径**无**占位前屏障接缝 ⇒ 用同一构造原理：入口 F11 检查（false）之后、占位事务内的
+        // `FactsProvider` 调用把真实闸门翻为 true（占位已发布、尚未发送）。
+        Volatile.Write(ref flipArmed, true);
+        var res = await svc.AdmitRecoveryAsync(new RecoveryAdmissionRequest
+        {
+            SourceDetail = "fixture:f11-presend-recovery",
+            RunId = "run:take",
+            WorkflowId = "group:g1",
+            RestoreBranch = "paused-continue",
+            Scope = "bgi:inst:ep1",
+        });
+
+        Assert.Equal(0, sends);                                  // **零发送**
+        Assert.Equal(AdmissionResultKind.F11Blocked, res.Kind);
+        Assert.Equal("f11_active", res.ReasonCode);
+        Assert.Equal(ResponsibilityState.Settled, res.ResponsibilityState);
+        Assert.False(string.IsNullOrEmpty(res.SubmissionIdentity));   // 回显本笔发送关联
+        Assert.True(res.SendSeq >= 1);
+        Assert.Equal("local_not_sent_pre_send", res.EvidenceSource);
+        Assert.Null(ReadLease().File?.Handoff?.Submission);       // 占位已关闭
+    }
+
+    /// <summary>
+    /// **[§12.3 M1⑤ 会诊证据补强]** 既有 v3 租约中**缺 `parentRequestIdentity`** 的操作：读侧必须**仍判合法**
+    /// （该字段是可选加法字段，缺省＝「父子关系不可证明」，**不是**损坏），且**不得**被读侧补造出任何值。
+    /// 构造：走通 `exempt` 场景（父登记 + 已受理节点操作，绑定已落盘）后，把该字段从盘上 JSON 剥掉，重新读取。
+    /// **范围**：只证明读取/反序列化口径与「不补造」；该记录当时为 `Accepted`（不可重驱动），故不重驱动；
+    /// 也不证明历史 v2→v3 迁移路径（另由 §24.20-A′ 迁移口径覆盖）。
+    /// </summary>
+    [Fact]
+    public async Task ParentBinding_MissingFieldInExistingV3_ReadsValidAndNotBackfilled()
+    {
+        const string run = "run-m1";
+        const string wf = "wf-m1";
+        var sends = 0;
+        var occupied = false;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts
+            {
+                ExecutionOccupied = occupied,
+                OwnInFlightRunBindings = [run],
+            };
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("host:drive_registered", run));
+            };
+            h.TakeoverTerminalConfirmed = (_, _) => true;
+        });
+
+        var parent = Req(workflow: wf, operationType: OperationType.FlowRegistration);
+        parent.RunBinding = run;
+        parent.Candidate!.ResourceRef = "flow:" + wf;
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(parent)).Kind);
+        Assert.Equal(AdmissionResultKind.Accepted, svc.MarkOperationTerminal(parent.RequestIdentity, "host:drive_registered").Kind);
+
+        occupied = true;
+        var node = Req(workflow: wf, operationType: OperationType.NodeExecution);
+        node.RunBinding = run;
+        node.Candidate!.NodeId = "n-1";
+        node.Candidate.ResourceRef = "node:n-1";
+        node.Candidate.Attempt = 1;
+        node.CursorRef = "n-1#0#1";
+        node.CursorRevision = 1;
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(node)).Kind);
+        Assert.Equal(parent.RequestIdentity, FindOp(node.RequestIdentity)!.ParentRequestIdentity); // 前置：绑定确已落盘
+
+        // 剥掉该字段（模拟本批之前写入的既有 v3 记录）
+        var path = Path.Combine(_dir, "arbitration-lease.json");
+        var text = File.ReadAllText(path);
+        var stripped = System.Text.RegularExpressions.Regex.Replace(
+            text, ",\\s*\"parentRequestIdentity\"\\s*:\\s*\"[^\"]*\"", "");
+        Assert.NotEqual(text, stripped);
+        File.WriteAllText(path, stripped);
+
+        var read = NewStore().Read();
+        Assert.Equal(ArbitrationLeaseStatus.Valid, read.Status);        // 缺字段 ≠ 损坏
+        var op = read.File!.Handoff!.Operations.FirstOrDefault(o => o.Candidate?.NodeId == "n-1");
+        Assert.NotNull(op);
+        Assert.Null(op!.ParentRequestIdentity);                         // 缺省＝不可证明；读侧**不补造**
+        Assert.Equal(OperationRequestState.Accepted, op.RequestState);
+        Assert.False(string.IsNullOrEmpty(op.SubmissionIdentity));
+    }
+
     [Fact]
     public void LeaseV1_BackwardRead_TakeoverWritesUpgradeToV3()
     {

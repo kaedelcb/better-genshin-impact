@@ -13,6 +13,17 @@ internal sealed class TaskCenterAdmissionSeams
     public bool? F11Active { get; set; }
     public bool? Occupied { get; set; }
     public bool? FactsUnknown { get; set; }
+    /// <summary>
+    /// 夹具接缝：执行占用事实的**时变**来源（生产＝BGI 控制面快照 `TaskRunning`）。用于复现
+    /// 「E1 登记时无占用 → 驱动起跑后占用成立」的真实时序；未注入时回落到 <see cref="Occupied"/>。
+    /// </summary>
+    public Func<bool>? OccupiedProvider { get; set; }
+    /// <summary>
+    /// 夹具接缝：**本宿主自有在飞驱动** runBinding 集合的供给（§12.3 M1③ 限定豁免的事实输入）。
+    /// **生产恒 null**（见 `CurrentArbitrationFacts` 的保守口径说明）；注入时**只**影响「执行占用」这一项的
+    /// 有限豁免，不改变其他闸门（外部启动台账占用存在时仍一律不给归属）。
+    /// </summary>
+    public Func<IReadOnlyCollection<string>>? OwnInFlightRunBindingsProvider { get; set; }
     public string? Epoch { get; set; }
     public Func<SubmissionDispatch, Task<SendOutcome>>? SenderOverride { get; set; }
     public Func<DateTimeOffset>? UtcNow { get; set; }
@@ -579,8 +590,11 @@ public sealed partial class TaskCenterHost
             SourceDetail = string.IsNullOrEmpty(request.SourceDetail) ? "external:start" : request.SourceDetail,
             WireSubmitKey = request.WireSubmitKey,
             ProcessLocalContext = new ExternalStartContext(request.ExecuteAsync),
-            // §24.17：外部启动的可信持久化操作类型（由适配器按调用位置提供，不由远程自报）。
-            OperationType = request.OperationType,
+            // §24.17（[批次四十四 验证会诊重要项处置]）：**本入口（E3/E4/E5 外部启动）的操作类型恒为
+            // `ExternalStart`**——由**调用位置**决定，不采信入参字段：否则受污染调用可把真实外部启动登记成
+            // `FlowRegistration`/`NodeExecution`，而 Sender 仍按 `ExternalStartContext` 执行外部副作用，
+            // 造成「已经启动、但接管按错误类型分派」的拒绝/不一致面。入参字段仅保留用于兼容（不再透传）。
+            OperationType = OperationType.ExternalStart,
             Candidate = new ArbitrationCandidate
             {
                 Scope = $"bgi:local:{externalEpoch}",
@@ -734,10 +748,16 @@ public sealed partial class TaskCenterHost
         var (ledgerOccupied, ledgerUnknown) = ReadExternalStartLedgerOccupancy();
         if (_admissionSeams is { } s)
         {
+            var occupied = s.OccupiedProvider?.Invoke() ?? s.Occupied ?? false;
             return new ArbitrationFacts
             {
                 F11Active = s.F11Active ?? false,
-                ExecutionOccupied = (s.Occupied ?? false) || ledgerOccupied,
+                ExecutionOccupied = occupied || ledgerOccupied,
+                // §12.3 M1③（[批次四十四 会诊阻断项处置]）：归属**只认精确来源事实**。BGI 控制面快照当前只给
+                // 「是否有任务在跑」这一个布尔值，`_drives` 包含关系**不能证明**该占用确实来自本候选所属 run
+                // （原生/外部任务在跑、多个自有驱动并存时都会误判）⇒ **生产不填归属＝一律不豁免（fail-closed）**。
+                // 夹具注入的归属**不得覆盖外部启动台账占用**（台账有未终结记录时一律不给归属）。
+                OwnInFlightRunBindings = ledgerOccupied ? null : s.OwnInFlightRunBindingsProvider?.Invoke(),
                 ExecutionFactsUnknown = (s.FactsUnknown ?? false) || ledgerUnknown,
             };
         }
@@ -746,6 +766,11 @@ public sealed partial class TaskCenterHost
         return new ArbitrationFacts
         {
             ExecutionOccupied = status?.TaskRunning == true || ledgerOccupied,
+            // §12.3 M1③（[批次四十四 会诊阻断项处置]）**生产恒不填归属**：现有权威事实源（`ControlStatus.TaskRunning`
+            // 单一布尔 + 外部启动台账占用）**无法证明**该占用归属本候选所属 run——按「归属不可证明即不豁免」
+            // （fail-closed）处置，缺口登记为「控制面需暴露带来源的占用事实（runBinding/jobId/来源）」，
+            // 属 R5.8 真实入口层前置；在生产节点改道门验收前本项不影响任何生产路径（门仍关闭）。
+            OwnInFlightRunBindings = null,
             ExecutionFactsUnknown = status is null || ledgerUnknown,
         };
     }
@@ -1045,7 +1070,7 @@ public sealed partial class TaskCenterHost
         // ②**无已登记来源时**（启动移交创建、来源登记尚未落地——P4/G4a）暂沿用接线前行为**并逐次留痕**：
         //   按 AMD-1-5 第三条本应拒绝签发，但强制拒绝会破坏 R4.9 移交运行的既有恢复；本分支**登记为待移除**
         //   （P28 残余），P4 落地后删除并改为响亮拒绝。
-        var inheritedScope = TryGetAdmissionScope(run.RunId!);
+        var inheritedScope = TryGetAdmissionScope(run.RunId!, run.WorkflowId);
         if (inheritedScope is null)
         {
             TryLog("[任务中心] 恢复准入缺少已登记固定来源（运行 " + run.RunId
@@ -1217,8 +1242,11 @@ public sealed partial class TaskCenterHost
         catch (Exception ex) { return BoundarySubmitResult.UnknownWith("仲裁面初始化失败（未发送，待对账）：" + ex.GetType().Name); }
 
         // 授权来源：该 runBinding 已登记操作的固定 Scope（I-1：继承，不重读当前 epoch）
-        var scope = TryGetAdmissionScope(run.RunId!);
-        if (scope is null)
+        // §12.3 M1⑤：本处只反查**授权来源（固定 Scope）**；父子绑定由门面在同一权威事务内自行反查写入
+        // （**不采信调用方自报**，[批次四十四 会诊重要项处置]）。
+        var parentRegistration = TryGetAdmissionParent(run.RunId!, run.WorkflowId);
+        var scope = parentRegistration is { } parent ? parent.Scope : null;
+        if (scope is null || parentRegistration is null)
         {
             // [纠正·2026-09-21] 原「缺 Scope 时退回直通发送」的临时旁路被会诊否决（ASTRA high 阻断项 1）：
             // 那会凭空建立一条**不受仲裁许可约束的发送入口**（绕过占位/Pending/Submission 冲突与固定授权纪元校验），
@@ -1450,16 +1478,34 @@ public sealed partial class TaskCenterHost
     /// （此处只取「当前 `UpdatedAtUtc` 最小的同类操作」）；来源记录被**实际删除**（而非仅迁区）后本查询会查不到
     /// → 按无授权拒绝（保守方向），不得改读当前 epoch 补造。
     /// </summary>
-    private string? TryGetAdmissionScope(string runId)
+    private string? TryGetAdmissionScope(string runId, string? workflowId) => TryGetAdmissionParent(runId, workflowId)?.Scope;
+
+    /// <summary>
+    /// **父登记反查（§12.3 M1⑤ 父子/首节点绑定）**：按同一 `runBinding` 取该 run 的**流程登记父操作**
+    /// （`intent=start`、无节点身份、取最早建立者），返回其 `requestIdentity` 与固定 `Scope`。
+    /// **顺序按契约**：缺失固定来源（无记录/`Scope` 空/身份空）⇒ 返回 null——调用方一律**响亮拒绝且不签发**，
+    /// 不得改读当前 epoch 或按快照补造（AMD-1-5 第三条）。
+    /// **[批次四十四 会诊重要项处置]** 父判据改用门面**同一实现** `ArbitrationAdmissionService.IsFlowRegistrationParent`
+    /// （严格到 `OperationType == FlowRegistration` 与 `flow:` 来源形状）——宿主反查与门面锁内判定不得漂移。
+    /// **[批次四十四 验证会诊重要项处置]** ①**歧义不得任选**：严格判据命中**恰一条**才返回；0 条或多条 ⇒ null
+    /// （多条＝同一 runBinding 出现重复/冲突的流程登记 ⇒ 不签发、不绑定，而不是按时间取最早者）。
+    /// ②**必须与本运行 workflow 逐字相等**：否则「workflow B ＋ `flow:B`」这种自洽但无关的父记录会被当成
+    /// 本运行的固定授权来源（父/子 workflow 关联必须在**授权来源反查与父子绑定建立两处**都强制）。
+    /// </summary>
+    private (string RequestIdentity, string Scope)? TryGetAdmissionParent(string runId, string? workflowId)
     {
+        if (string.IsNullOrEmpty(workflowId)) return null;
         var read = _admissionStore?.Read();
-        return read?.File?.Handoff?.Operations?
-            .Where(o => string.Equals(o.RunBinding, runId, StringComparison.Ordinal)
-                        && string.Equals(o.Intent, "start", StringComparison.Ordinal)
-                        && string.IsNullOrEmpty(o.Candidate?.NodeId))
-            .OrderBy(o => o.UpdatedAtUtc)   // 同类型内取最早的建立操作
-            .Select(o => o.Candidate?.Scope)
-            .FirstOrDefault(s => !string.IsNullOrEmpty(s));
+        var matches = read?.File?.Handoff?.Operations?
+            .Where(o => o is not null
+                        && ArbitrationAdmissionService.IsFlowRegistrationParent(o, runId)
+                        && string.Equals(o.Candidate?.WorkflowId, workflowId, StringComparison.Ordinal))
+            .ToList();
+        if (matches is not { Count: 1 }) return null;
+        var op = matches[0];
+        var scope = op.Candidate?.Scope;
+        if (string.IsNullOrEmpty(scope) || string.IsNullOrEmpty(op.RequestIdentity)) return null;
+        return (op.RequestIdentity, scope);
     }
 
     /// <summary>

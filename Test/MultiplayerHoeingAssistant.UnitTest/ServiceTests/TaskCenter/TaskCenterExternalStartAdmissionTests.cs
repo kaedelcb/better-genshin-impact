@@ -97,6 +97,46 @@ public class TaskCenterExternalStartAdmissionTests
         }
     }
 
+    /// <summary>
+    /// **[§24.17／批次四十四 验证会诊取证]** 外部启动入口的操作类型**由调用位置决定**：入参**伪报**其他类型
+    /// （此处 `NodeExecution`）也必须落盘为 `ExternalStart`——否则受污染调用可制造「外部副作用已执行、
+    /// 而接管按错误持久化类型分派」的不一致面。断言：操作获准、适配层执行恰一次、且在册类型为 `ExternalStart`。
+    /// </summary>
+    [Fact]
+    public async Task ExternalStart_SelfReportedOtherType_PersistsExternalStart()
+    {
+        var root = NewRoot();
+        var executed = 0;
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            var result = await host.SubmitExternalStartViaAdmissionAsync(new ExternalStartAdmissionRequest
+            {
+                Namespace = "v2",
+                WorkflowId = "group:测试组",
+                TriggerOccurrenceId = "v2:remote:{requestIdentity}",
+                ResourceRef = "group:测试组",
+                SourceDetail = "fixture:external_start_type_spoof",
+                OperationType = OperationType.NodeExecution,   // 伪报类型：入口必须忽略
+                ExecuteAsync = _ =>
+                {
+                    System.Threading.Interlocked.Increment(ref executed);
+                    return Task.FromResult(ExternalStartExecution.AcceptedWith("job-ext-spoof"));
+                },
+            }, default);
+
+            Assert.Equal(AdmissionResultKind.Accepted, result.Kind);
+            Assert.Equal(1, System.Threading.Volatile.Read(ref executed));
+            var op = Assert.Single(Ops(root));
+            Assert.Equal(OperationType.ExternalStart, op.OperationType);   // **入口写死：不采信入参自报**
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
     [Fact]
     public async Task ExternalStart_F11Active_DoesNotExecute()
     {

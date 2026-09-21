@@ -510,6 +510,8 @@ public sealed class ArbitrationAdmissionService
                     var capacity = EnsureCapacityForCreate(file, now);
                     if (capacity is not null) return capacity;
                     file.Handoff ??= new LeaseHandoffSegment();
+                    // §12.3 M1⑤：**父子绑定由门面在同一权威事务内自行反查**（不采信调用方自报）——
+                    // 仅节点执行操作绑定「同 runBinding 唯一流程登记父操作」；无命中共存/歧义 ⇒ 不绑定（fail-closed）。
                     file.Handoff.Operations.Add(new OperationRecord
                     {
                         RequestIdentity = rid,
@@ -518,6 +520,9 @@ public sealed class ArbitrationAdmissionService
                         SortKeyFingerprint = sortKeyFingerprint,
                         Candidate = CloneCandidate(frz.Candidate),
                         RunBinding = frz.RunBinding,
+                        ParentRequestIdentity = frz.OperationType == OperationType.NodeExecution
+                            ? ResolveParentRequestIdentity(file.Handoff, frz.RunBinding, frz.Candidate.WorkflowId)
+                            : null,
                         CursorRef = frz.CursorRef,
                         CursorRevision = frz.CursorRevision,
                         RequestState = OperationRequestState.Queued,
@@ -733,6 +738,9 @@ public sealed class ArbitrationAdmissionService
                     RunBinding = op.RunBinding,
                     CursorRef = op.CursorRef,
                     CursorRevision = op.CursorRevision,
+                    // [批次四十四 验证会诊重要项处置] 重驱必须沿用**持久化操作类型**——缺省 `Unknown` 会让
+                    // 类型相关判定（如自有父占用的限定豁免）在重驱路径上确定性失效。
+                    OperationType = op.OperationType,
                     // §13.10 A2：续用同样必须携带调用方传入的进程内不可变上下文（不得丢弃后由 Sender 重建）。
                     ProcessLocalContext = request.ProcessLocalContext,
                     // §17 P6（[会诊重要项·批次二十三]）：重新驱动同样必须携带调用方令牌——漏带会让发送段
@@ -882,6 +890,11 @@ public sealed class ArbitrationAdmissionService
         if (!occupy.Success) return await ClassifyRecoveryOccupyRejectAsync(inner, lease, occupy.Reason ?? "invalid_request").ConfigureAwait(false);
         if (special is not null) return AdmissionResult.Of(AdmissionResultKind.Error, special, "占位事务异常分支。", rid);
 
+        // [批次四十四 第九轮验证会诊处置] **恢复准入同样必须先做发送前 F11 复核**（占位后、未发送）——
+        // 与 `ProcessWinnerAsync` 同口径：命中即以本地未发送证明关闭占位并返回 F11Blocked，绝不发送。
+        if (await BlockSendIfF11Async(inner, lease, occupy.File!).ConfigureAwait(false) is { } f11Blocked)
+            return f11Blocked;
+
         SendOutcome outcome;
         try
         {
@@ -975,6 +988,152 @@ public sealed class ArbitrationAdmissionService
         }
     }
 
+    /// <summary>
+    /// **整轮事实投影**（§12.3 M1③；[批次四十四 第六／七轮验证会诊处置]）：把**真实 F11 闸门**与**盘上任一
+    /// 冲突待决**（锁内一律解释为 `facts_unknown`）并入本轮裁决事实；两者是**独立于注入事实快照**的来源，
+    /// 不投影会让整轮得到 `NeedPreemptConfirm` 而丢掉 F11 阻断／待对账的优先语义。
+    /// 参数 `handoff`／`f11`／`unknown` 均可为 null/false ⇒ 该维度不变。**只读**，不写状态。
+    /// </summary>
+    private static ArbitrationFacts ProjectGuardFacts(ArbitrationFacts facts, LeaseHandoffSegment? handoff = null,
+        bool f11 = false, bool unknown = false)
+    {
+        var diskConflict = handoff is not null
+                           && (handoff.Operations ?? []).Any(o => o is not null && o.ConflictPending);
+        var f11Active = facts.F11Active || f11;
+        var factsUnknown = facts.ExecutionFactsUnknown || unknown || diskConflict;
+        if (f11Active == facts.F11Active && factsUnknown == facts.ExecutionFactsUnknown) return facts;
+        return new ArbitrationFacts
+        {
+            F11Active = f11Active,
+            ActiveTicket = facts.ActiveTicket,
+            ExecutionOccupied = facts.ExecutionOccupied,
+            ExecutionFactsUnknown = factsUnknown,
+            RequesterHoldsValidLease = facts.RequesterHoldsValidLease,
+            FactsReference = facts.FactsReference,
+            OwnInFlightRunBindings = facts.OwnInFlightRunBindings,
+        };
+    }
+
+    /// <summary>
+    /// **发送前 F11 复核**（[批次四十四 第八轮验证会诊处置]）：占位已发布、**尚未调用 Sender** 时再读一次真实闸门；
+    /// 命中即以「占位后、网络前的**本地未发送证明**」（§4.2c 合法关闭依据）原子关闭该笔 Submission，并把操作
+    /// 记 `f11_active` 终局拒绝（`EvidenceSource = local_not_sent_pre_send`、`AnsweredSendSeq` 指本笔轮次）。
+    /// **返回 null＝未命中（继续发送）**；关闭失败 ⇒ 返回 `NeedReconcile`（责任保留、**仍不发送**）。
+    /// **残余**：外部活信号与真实发送之间非严格原子，彻底闭合需发送权威侧原子检查（§24.55）。
+    /// </summary>
+    private async Task<AdmissionResult?> BlockSendIfF11Async(AdmissionRequest request, LeaseSegment lease,
+        LogicalOwnerLeaseFile occupiedFile)
+    {
+        if (!_hooks.F11Active()) return null;
+        if (occupiedFile.Handoff?.Submission is not { } submission) return null;
+        var close = CloseSubmission(lease, submission, file =>
+        {
+            var op = FindOp(file, request.RequestIdentity);
+            if (op is null) return "operation_missing";
+            op.RequestState = OperationRequestState.TerminalRejected;
+            op.LastResult = new OperationResult
+            {
+                Outcome = OperationOutcome.Rejected,
+                ReasonCode = "f11_active",
+                Retryable = false,
+                RetryBudgetUsed = op.LastResult?.RetryBudgetUsed ?? 0,
+                EvidenceSource = "local_not_sent_pre_send",
+                AnsweredSendSeq = submission.SendSeq,
+            };
+            op.Zone = OperationZone.TerminalPendingTransfer;
+            return null;
+        });
+        await Task.CompletedTask.ConfigureAwait(false);
+        if (close.Success)
+            // [批次四十四 第九轮验证会诊处置] 责任结清载荷必须与本笔权威记录一致：本笔**已签发过**本轮占位、
+            // 并以「本地未发送证明」完成关闭 ⇒ 回显**完整发送关联**（身份／轮次）＋责任维 `Settled`＋证据来源。
+            return new AdmissionResult
+            {
+                Kind = AdmissionResultKind.F11Blocked,
+                ReasonCode = "f11_active",
+                Detail = "发送前 F11 复核命中：占位已按「本地未发送」关闭（零发送，§4.2c）。",
+                RequestIdentity = request.RequestIdentity,
+                SubmissionIdentity = submission.SubmissionIdentity,
+                SendSeq = submission.SendSeq,
+                ExecutionDisposition = ExecutionDisposition.None,
+                ResponsibilityState = ResponsibilityState.Settled,
+                EvidenceSource = "local_not_sent_pre_send",
+            };
+        return new AdmissionResult
+        {
+            Kind = AdmissionResultKind.NeedReconcile,
+            ReasonCode = "f11_block_before_send_close_failed",
+            Detail = "发送前 F11 复核命中且占位关闭失败（**未发送**，责任保留待对账）：" + close.Reason,
+            RequestIdentity = request.RequestIdentity,
+            SubmissionIdentity = submission.SubmissionIdentity,
+            SendSeq = submission.SendSeq,
+            ExecutionDisposition = ExecutionDisposition.Unknown,
+            ResponsibilityState = ResponsibilityState.Pending,
+        };
+    }
+
+    /// <summary>
+    /// **整轮优先事实的锁内权威复核**（[批次四十四 第七轮验证会诊处置]）：`Decide` 之前再读一次**真实 F11 闸门**
+    /// 与**盘上冲突待决**，命中返回 `f11_active`／`facts_unknown`，否则 null。
+    /// **残余（如实登记）**：F11 是**外部活信号**、盘上冲突亦可由其他进程在本次复核之后写入，故「复核 → 本轮结清
+    /// 写盘」之间存在不可原子化的极窄窗口；该窗口内只可能造成**分类偏差**（本轮按占用/未获选结清），
+    /// **不产生未授权发送**——唯一可发送的路径（占位）在 `ValidateAndOccupy` 内对 F11 与盘上冲突各自再复核一次。
+    /// 彻底闭合需把两类事实纳入同一结清事务（设计项，登记 §24.55）。
+    /// </summary>
+    private string? RecheckRoundGuard(LeaseSegment lease)
+    {
+        if (_hooks.F11Active()) return "f11_active";
+        var read = _store.Read();
+        if (read.File?.Lease is null) return null;
+        return (read.File.Handoff?.Operations ?? []).Any(o => o is not null && o.ConflictPending)
+            ? "facts_unknown"
+            : null;
+    }
+
+    /// <summary>候选号（身份唯一性比较用；与登记路径同一派生：stableIdentity → candidateId）。</summary>
+    private static string CandidateIdOf(AdmissionRequest r)
+        => ArbitrationOrdering.DeriveCandidateId(ArbitrationOrdering.BuildStableIdentity(r.Candidate));
+
+    /// <summary>轮次候选条目（裁决输入）：候选快照＋资格快照＋绑定判别式（唯一性比较用）。</summary>
+    private CandidateEntry BuildEntry(PendingAdmission r) => new()
+    {
+        Candidate = r.Request.Candidate,
+        Eligibility = _hooks.EligibilityProvider(r.Request),
+        BindingDiscriminator = (r.Request.RunBinding ?? "~") + "|" + (r.Request.CursorRef ?? "~")
+                               + "|" + (r.Request.CursorRevision?.ToString() ?? "~"),
+    };
+
+    /// <summary>
+    /// **「执行占用→需安全交接确认」结清**（§4.2a／R5.3 交接状态机的前置）：非胜者按裁决结清；
+    /// **胜者**（去重组首位）回 `Queued`（非终局）并回传 `NeedPreemptConfirm`。
+    /// **去重镜像的现状（[第四轮验证会诊处置] 如实登记，不冒充等价）**：镜像走 `MirrorMergedAsync(…,
+    /// winnerAccepted:false)` ⇒ 落盘为 `NotSelected`＋`merged_duplicate`（终局迁区），而本笔调用方拿到的是
+    /// `NeedPreemptConfirm`——**即时结果与随后续用分类不一致、镜像失去交接后继续资格**。该行为系从既有分支
+    /// **原样抽取**（非本轮引入），属既有语义、需设计确认后统一整改，已登记为残余（§24.55），本批不改写
+    /// 已验收的合并/镜像合同。
+    /// [批次四十四 验证会诊重要项处置] 抽为独立方法：**占用豁免按候选分流**后，被分流出去的候选
+    /// （非豁免者）也按同一语义结清，而不是把同轮合法节点一并改判。
+    /// </summary>
+    private async Task HandleNeedPreemptConfirmAsync(List<PendingAdmission> group, ArbitrationDecision decision,
+        LeaseSegment lease)
+    {
+        if (group.Count == 0) return;
+        await SettleRejectedAsync(group.Where(r => !IsWinner(decision)(r)).ToList(), lease, decision).ConfigureAwait(false);
+        var preemptWinners = group.Where(IsWinner(decision)).ToList();
+        foreach (var w in preemptWinners.Take(1))
+        {
+            // 胜者交接存续：操作回 Queued 待交接闭环（非终局；R5.3 交接状态机接管后续准入）。
+            var back = await TransitionSingleAsync(w.Request.RequestIdentity, lease, OperationRequestState.Queued, expectedStates: OperationRequestState.InRound).ConfigureAwait(false);
+            w.Completion.TrySetResult(back.Success
+                ? new AdmissionResult { Kind = AdmissionResultKind.NeedPreemptConfirm, ReasonCode = "execution_occupied", Detail = "执行占用→需安全交接确认（分流交接状态机，R5.3）。", RequestIdentity = w.Request.RequestIdentity, WinnerCandidateId = decision.WinnerCandidateId, Decision = decision }
+                : ClassifyCurrentState(w.Request.RequestIdentity)); // 状态已推进=不覆盖，返回当前事实
+        }
+
+        if (preemptWinners.Count > 1)
+            await MirrorMergedAsync(preemptWinners.Skip(1).ToList(), lease, decision,
+                new AdmissionResult { Kind = AdmissionResultKind.NeedPreemptConfirm, ReasonCode = "execution_occupied", Detail = "执行占用→需安全交接确认。", WinnerCandidateId = decision.WinnerCandidateId, Decision = decision }, winnerAccepted: false).ConfigureAwait(false);
+    }
+
     private async Task ProcessRoundAsync(List<PendingAdmission> round)
     {
         try
@@ -1036,14 +1195,63 @@ public sealed class ArbitrationAdmissionService
                 if (round.Count == 0) return;
             }
 
-            var facts = _hooks.FactsProvider();
-            var entries = round.Select(r => new CandidateEntry
-            {
-                Candidate = r.Request.Candidate,
-                Eligibility = _hooks.EligibilityProvider(r.Request),
-                BindingDiscriminator = (r.Request.RunBinding ?? "~") + "|" + (r.Request.CursorRef ?? "~") + "|" + (r.Request.CursorRevision?.ToString() ?? "~"),
-            }).ToList();
+            // [批次四十四 会诊＋验证会诊重要项处置] 占用豁免**按候选**生效——不得因同轮混入无关候选而把
+            // 合法节点子提交整体改判为 `NeedPreemptConfirm`：
+            // ① 轮次前筛只消费**本次状态迁移提交后的权威快照**（`mark.File`；不得在已写入 `InRound` 之后再发起
+            //    可能抛异常的额外读取而把操作悬在 `InRound`）；
+            // ② 占用成立时先分流：可证明属于本宿主自有父授权的节点子提交继续本轮（其占用事实按已豁免归一），
+            //    其余候选仍按占用走「需安全交接确认」（回 `Queued`，非终局）；
+            // ③ **锁内** ④ 仍逐候选以权威文件复核（本处只是轮次前筛，读快照非权威）。
+            // [批次四十四 第六／七轮验证会诊处置] 整轮裁决事实＝事实快照 ＋ **真实 F11 闸门** ＋ **盘上冲突待决**
+            // （后者锁内一律解释为 `facts_unknown`）；并在 `Decide` 之前再做一次**锁内权威复核**，命中即覆盖事实重判
+            // （保证「优先级事实」压过占用，而不是被拆成 `NeedPreemptConfirm`）。
+            var facts = ProjectGuardFacts(_hooks.FactsProvider(), mark.File?.Handoff, _hooks.F11Active());
+            var entries = round.Select(BuildEntry).ToList();
             var decision = ArbitrationOrdering.Decide(entries, facts);
+            if (RecheckRoundGuard(lease) is { } guardNow)
+            {
+                facts = ProjectGuardFacts(facts, null, guardNow == "f11_active", guardNow == "facts_unknown");
+                decision = ArbitrationOrdering.Decide(entries, facts);
+            }
+            // [批次四十四 第四／五轮验证会诊处置] **分流只允许发生在「纯占用」事实下**——下列任一成立即**不拆分**
+            // （整轮沿用原语义结清），否则会把「F11 阻断／待对账／票据压制／冲突待决」的整轮判定拆散：
+            //   ·F11（快照或真实闸门）；·事实未知；·注入票据快照；·**盘上本地未决交接责任**（`Handoff.Pending`，
+            //     与注入票据并列的独立事实源，锁内 `TicketOf(pending)` 会独立校验）；·**盘上任一冲突待决**。
+            // 且**只分流在本轮中身份唯一的候选**（同候选号的同伴必须继续在同一轮内互相比较：身份冲突/去重是
+            // **整轮**语义）；**且只在最终裁决恰为 `NeedPreemptConfirm`（纯占用）时才分流**。
+            if (facts.ExecutionOccupied && decision.Outcome == ArbitrationOutcome.NeedPreemptConfirm
+                && !facts.ExecutionFactsUnknown && !facts.F11Active && facts.ActiveTicket is null
+                && mark.File?.Handoff?.Pending is null
+                && !(mark.File?.Handoff?.Operations ?? []).Any(o => o is not null && o.ConflictPending))
+            {
+                var handoffNow = mark.File?.Handoff;
+                var exempt = handoffNow is null
+                    ? []
+                    : round.Where(r => IsOwnParentOccupationExempt(r.Request, facts, handoffNow)
+                                       && round.Count(x => string.Equals(CandidateIdOf(x.Request), CandidateIdOf(r.Request),
+                                           StringComparison.Ordinal)) == 1).ToList();
+                var allExempt = exempt.Count > 0 && exempt.Count == round.Count;
+                var split = false;
+                if (exempt.Count > 0 && exempt.Count < round.Count)
+                {
+                    var blocked = round.Where(r => !exempt.Contains(r)).ToList();
+                    var blockedDecision = ArbitrationOrdering.Decide(blocked.Select(BuildEntry).ToList(), facts);
+                    // 子裁决必须确为「执行占用→需安全交接确认」才按该语义结清（否则**不拆分**，整轮走原有分支）。
+                    if (blockedDecision.Outcome == ArbitrationOutcome.NeedPreemptConfirm)
+                    {
+                        await HandleNeedPreemptConfirmAsync(blocked, blockedDecision, lease).ConfigureAwait(false);
+                        round = exempt;
+                        split = true;
+                    }
+                }
+                // ①全部可豁免 ⇒ 本轮占用事实归一；②已成功分流 ⇒ 剩余 `round` 只剩可豁免子集、被分流候选已按
+                // 占用结清 ⇒ 同样归一，并按归一后事实**重判**。未拆分 ⇒ 保留原裁决。
+                if (allExempt || split)
+                {
+                    facts = WithoutExecutionOccupation(facts);
+                    decision = ArbitrationOrdering.Decide(round.Select(BuildEntry).ToList(), facts);
+                }
+            }
 
             switch (decision.Outcome)
             {
@@ -1065,23 +1273,8 @@ public sealed class ArbitrationAdmissionService
                         r => new AdmissionResult { Kind = AdmissionResultKind.NeedReconcile, ReasonCode = "facts_unknown", Detail = decision.Reason, RequestIdentity = r.Request.RequestIdentity, SuppressionSource = decision.SuppressionSource, Decision = decision }).ConfigureAwait(false);
                     return;
                 case ArbitrationOutcome.NeedPreemptConfirm:
-                {
-                    await SettleRejectedAsync(round.Where(r => !IsWinner(decision)(r)).ToList(), lease, decision).ConfigureAwait(false);
-                    var preemptWinners = round.Where(IsWinner(decision)).ToList();
-                    foreach (var w in preemptWinners.Take(1))
-                    {
-                        // 胜者交接存续：操作回 Queued 待交接闭环（非终局；R5.3 交接状态机接管后续准入）。
-                        var back = await TransitionSingleAsync(w.Request.RequestIdentity, lease, OperationRequestState.Queued, expectedStates: OperationRequestState.InRound).ConfigureAwait(false);
-                        w.Completion.TrySetResult(back.Success
-                            ? new AdmissionResult { Kind = AdmissionResultKind.NeedPreemptConfirm, ReasonCode = "execution_occupied", Detail = "执行占用→需安全交接确认（分流交接状态机，R5.3）。", RequestIdentity = w.Request.RequestIdentity, WinnerCandidateId = decision.WinnerCandidateId, Decision = decision }
-                            : ClassifyCurrentState(w.Request.RequestIdentity)); // 状态已推进=不覆盖，返回当前事实
-                    }
-
-                    if (preemptWinners.Count > 1)
-                        await MirrorMergedAsync(preemptWinners.Skip(1).ToList(), lease, decision,
-                            new AdmissionResult { Kind = AdmissionResultKind.NeedPreemptConfirm, ReasonCode = "execution_occupied", Detail = "执行占用→需安全交接确认。", WinnerCandidateId = decision.WinnerCandidateId, Decision = decision }, winnerAccepted: false).ConfigureAwait(false);
+                    await HandleNeedPreemptConfirmAsync(round, decision, lease).ConfigureAwait(false);
                     return;
-                }
                 case ArbitrationOutcome.AllowRequestExecution:
                 {
                     await SettleRejectedAsync(round.Where(r => !IsWinner(decision)(r)).ToList(), lease, decision).ConfigureAwait(false);
@@ -1314,6 +1507,13 @@ public sealed class ArbitrationAdmissionService
         if (releaseGateDuringSend) _gate.Release();
         try
         {
+            // [批次四十四 第八轮验证会诊处置] **发送前 F11 复核**（占位已发布、尚未发送）：F11 是**不受租约锁
+            // 约束的外部活信号**，在锁内初读之后仍可能翻转 ⇒ 命中时以「占位后、网络前的**本地未发送证明**」
+            // （§4.2c 合法关闭依据）关闭刚发布的占位并返回 `F11Blocked`，**绝不发送**。
+            // **残余**：本复核与真实发送之间仍非严格原子（彻底闭合须由发送权威侧提供「F11 清零才入队」的原子检查，
+            // 登记 §24.55）；关闭失败时**同样不发送**、保留责任待对账（fail-closed）。
+            if (await BlockSendIfF11Async(request, lease, occupy.File!).ConfigureAwait(false) is { } f11Blocked)
+                return f11Blocked;
             try
             {
                 // [验证会诊重要项处置] `BuildDispatch` 保留在「捕获异常⇒Unknown」归类内：派发快照缺失/损坏时与既有
@@ -1514,7 +1714,13 @@ public sealed class ArbitrationAdmissionService
             // ③ 权威事实未知（禁止换键重跑、禁止占位）。
             if (facts.ExecutionFactsUnknown) return "facts_unknown";
             // ④ 执行占用（锁内复核——按无损拒绝类可重试处理）。
-            if (facts.ExecutionOccupied) return "execution_occupied";
+            //    **[§12.3 M1③][2026-09-22 批次四十四] 限定豁免**：若占用**可证明由本宿主自身托管驱动产生**
+            //    （`facts.OwnInFlightRunBindings` 含本笔 runBinding）且本笔是**同一父授权的合法子提交**
+            //    （持久化父子绑定成立＋父登记已接管关闭＋无开放未决发送），则不按占用拒绝——否则该 run 的托管
+            //    执行会把自身后继节点提交永久压在 `execution_occupied` 上。豁免**只**消除「本父登记自身占用」
+            //    这一项：其他节点在飞／未知责任／外部占用／外部启动台账占用一律**不豁免**（fail-closed）。
+            if (facts.ExecutionOccupied && !IsOwnParentOccupationExempt(request, facts, file.Handoff))
+                return "execution_occupied";
             // ⑤ 资格关键事实复核（资格变化不构成确定性失效，但当轮不得占位）。
             var eligibility = _hooks.EligibilityProvider(request);
             if (!eligibility.IsDue || !eligibility.PrerequisiteReady || !eligibility.FlexibleWindowOpen) return "eligibility_lost";
@@ -1698,6 +1904,121 @@ public sealed class ArbitrationAdmissionService
         }, checkSwitchGate: true);
         specialOutcome = special;
         return result;
+    }
+
+    /// <summary>
+    /// **[§12.3 M1③][2026-09-22 批次四十四] 自有父登记占用的**限定**豁免**——「执行占用」项的唯一豁免入口，
+    /// 全条件成立才返回 true（任一不成立 ⇒ 继续按 `execution_occupied` 拒绝，fail-closed）：
+    /// ①**归属可证明**：宿主注入的 `OwnInFlightRunBindings` **恰为本笔 `runBinding` 一项**（＝该占用可证明由本宿主
+    ///   自身托管驱动产生，而非外部/原生态执行；多个自有驱动并存 ⇒ 归属不唯一 ⇒ 不豁免）；
+    ///   ②**形状**（证据一律取**持久化记录**，不以重建请求字段为类型证据——[批次四十四 验证会诊重要项处置]）：
+    ///   本笔操作在册且 `OperationType == NodeExecution`、候选带非空 `NodeId`（流程登记/恢复/外部启动一律不豁免）；
+    /// ③**父登记已接管关闭**（M1①：**接管与关闭**完成即可，不要求父登记已终局完成——终局是更后的账龄出口）：
+    ///   按 <see cref="IsFlowRegistrationParent"/> **严格判据**（同 `runBinding`＋`OperationType == FlowRegistration`
+    ///   ＋`intent=start`＋无节点身份＋`flow:` 来源形状）**唯一命中**父登记，其 `RequestState` ∈ {`Accepted`
+    ///   （已受理且已关闭）、`TerminalCompleted`}、`SubmissionIdentity` 非空且 `LastSendSeq > 0`（证明该父登记确
+    ///   经受理与发送），且**全局未决发送槽为空**（`Reconciling` 等未结清状态一律不豁免）；
+    ///   ④**同 run 无其他在飞节点责任**（M1③「其他节点在飞仍须阻挡」，[批次四十四 会诊阻断项处置]）：除本笔外，
+    ///   该 `runBinding` 下**不得**存在处于 `Queued/InRound/Granted/Sending/Accepted/Reconciling` 的节点执行操作——
+    ///   「全局未决发送槽为空」**不足以**证明无其他节点在跑（已受理但远端未终结的节点其 Submission 早已关闭）；
+    ///   ⑤**父子绑定已持久化且一致**：本笔操作在册、
+    ///   其 `ParentRequestIdentity` 等于该父登记身份（缺字段或有歧义 ⇒ 不豁免）。
+    /// **只读**：不写任何状态、不改变门面轮次（§24.14-2）。
+    /// </summary>
+    /// <summary>
+    /// **流程登记父操作的严格判据**（§12.3 M1③⑤；**宿主反查与门面锁内判定共用同一实现，避免判据漂移**）：
+    /// 同 `runBinding`、`OperationType == FlowRegistration`（**类型必须可信持久化**——不得只按「无节点身份 + intent=start」
+    /// 的形状识别，否则 `ExternalStart`/`Handoff`/错登记的无节点操作都可能被当成父登记）、`intent == start`、
+    /// 候选无节点身份、身份非空，且 `ResourceRef` **恰为该候选 workflow 的 `flow:` 来源形**（`flow:` 前缀只判前缀
+    /// 会让 `flow:`／`flow:别的流程` 也命中——[批次四十四 验证会诊建议采纳]）。
+    /// </summary>
+    internal static bool IsFlowRegistrationParent(OperationRecord op, string runBinding)
+        => string.Equals(op.RunBinding, runBinding, StringComparison.Ordinal)
+           && op.OperationType == OperationType.FlowRegistration
+           && string.Equals(op.Intent, "start", StringComparison.Ordinal)
+           && string.IsNullOrEmpty(op.Candidate?.NodeId)
+           && !string.IsNullOrEmpty(op.RequestIdentity)
+           && !string.IsNullOrEmpty(op.Candidate?.WorkflowId)
+           && string.Equals(op.ResourceRef, "flow:" + op.Candidate!.WorkflowId, StringComparison.Ordinal);
+
+    /// <summary>
+    /// **父子绑定反查（§12.3 M1⑤）**：按严格判据取该 `runBinding` 的流程登记父操作身份；
+    /// **唯一命中**才返回（无命中/多条 = 歧义）⇒ `null`，调用方一律**不绑定、不补造**（fail-closed）。
+    /// **[批次四十四 验证会诊重要项处置]** 还必须与**本笔节点的 workflow 逐字相等**——否则「workflow B +
+    /// `flow:B`」这种**自洽但无关**的父记录会被绑定给 workflow A 的节点，形成错误的授权来源。
+    /// </summary>
+    private static string? ResolveParentRequestIdentity(LeaseHandoffSegment? handoff, string? runBinding, string? workflowId)
+    {
+        if (handoff is null || string.IsNullOrEmpty(runBinding) || string.IsNullOrEmpty(workflowId)) return null;
+        var parents = (handoff.Operations ?? [])
+            .Where(o => o is not null
+                        && IsFlowRegistrationParent(o, runBinding!)
+                        && string.Equals(o.Candidate?.WorkflowId, workflowId, StringComparison.Ordinal))
+            .ToList();
+        return parents.Count == 1 ? parents[0].RequestIdentity : null;
+    }
+
+    /// <summary>
+    /// **轮次事实快照 + §12.3 M1③ 限定豁免归一**：门面在**轮次裁决**（`ArbitrationOrdering.Decide`）与
+    /// **锁内占位复核**（④）两处消费「执行占用」事实，二者必须一致——若该轮**全部**候选都是「可证明属于本宿主
+    /// 自有驱动、同一父授权的合法子提交」（父子绑定已持久化＋父登记已终局关闭＋无开放未决发送），则本轮按
+    /// **占用已豁免** 归一；否则原样返回（自有驱动不会把本 run 的后继节点提交整体压成 `NeedPreemptConfirm`）。
+    /// **保守方向不降级**：混轮中任一候选不满足豁免 ⇒ 本轮仍按占用裁决；且**锁内**仍逐候选复核（本处只是
+    /// 轮次前筛，读快照非权威，权威仍以 `MutateHandoffLatest` 内的事实为准）。**只读**，不改任何状态。
+    /// </summary>
+    private static ArbitrationFacts WithoutExecutionOccupation(ArbitrationFacts facts) => new()
+    {
+        F11Active = facts.F11Active,
+        ActiveTicket = facts.ActiveTicket,
+        ExecutionOccupied = false,   // 唯一被归一掉的维度＝本宿主自有父登记自身的占用
+        ExecutionFactsUnknown = facts.ExecutionFactsUnknown,
+        RequesterHoldsValidLease = facts.RequesterHoldsValidLease,
+        FactsReference = facts.FactsReference,
+        OwnInFlightRunBindings = facts.OwnInFlightRunBindings,
+    };
+
+    private static bool IsOwnParentOccupationExempt(AdmissionRequest request, ArbitrationFacts facts,
+        LeaseHandoffSegment? handoff)
+    {
+        // ① 归属可证明：归属集必须**恰为本笔 runBinding 一项**（缺省/空集/多项一律不豁免）
+        if (facts.OwnInFlightRunBindings is not { Count: 1 } own) return false;
+        var runBinding = request.RunBinding;
+        if (string.IsNullOrEmpty(runBinding)
+            || !string.Equals(own.First(), runBinding, StringComparison.Ordinal)) return false;
+        if (handoff is null) return false;
+        // ② 形状：**按持久化记录判定**（续用/重试路径重建请求可能不带类型；类型证据必须来自权威记录）
+        var op = (handoff.Operations ?? [])
+            .FirstOrDefault(o => o is not null
+                                 && string.Equals(o.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal));
+        if (op is null) return false;
+        if (op.OperationType != OperationType.NodeExecution) return false;
+        if (string.IsNullOrEmpty(op.Candidate?.NodeId)) return false;
+        // ③ 全局未决发送槽为空（其他节点在飞/父未结清 ⇒ 不豁免）
+        if (handoff.Submission is not null) return false;
+        var parents = (handoff.Operations ?? [])
+            .Where(o => o is not null && IsFlowRegistrationParent(o, runBinding))
+            .ToList();
+        if (parents.Count != 1) return false;
+        var parent = parents[0];
+        if (parent.RequestState is not (OperationRequestState.Accepted or OperationRequestState.TerminalCompleted))
+            return false;
+        if (string.IsNullOrEmpty(parent.SubmissionIdentity) || parent.LastSendSeq <= 0) return false;
+        // ④ 同 run 不得存在其他在飞节点责任（已受理但远端未终结的节点同样计入）
+        var otherNodeInFlight = (handoff.Operations ?? []).Any(o => o is not null
+            && o.OperationType == OperationType.NodeExecution
+            && string.Equals(o.RunBinding, runBinding, StringComparison.Ordinal)
+            && !string.Equals(o.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal)
+            && o.RequestState is OperationRequestState.Queued or OperationRequestState.InRound
+                or OperationRequestState.Granted or OperationRequestState.Sending
+                or OperationRequestState.Accepted or OperationRequestState.Reconciling);
+        if (otherNodeInFlight) return false;
+        // ⑤ 父子绑定已持久化且与本笔操作一致
+        if (!string.Equals(op.ParentRequestIdentity, parent.RequestIdentity, StringComparison.Ordinal)) return false;
+        // ⑤ 本笔候选确实属于该父授权的同一 run/workflow（身份级归属，不笼统豁免「相同 run」）
+        if (!string.Equals(op.RunBinding, runBinding, StringComparison.Ordinal)) return false;
+        if (!string.Equals(op.Candidate?.WorkflowId ?? "", parent.Candidate?.WorkflowId ?? "", StringComparison.Ordinal))
+            return false;
+        return true;
     }
 
     /// <summary>占位拒绝分类（原因→终局/可重试/回队/对账；一切状态迁移同样经权威串行边界且校验发布成功；状态已推进=不覆盖，分类返回当前事实）。</summary>
@@ -3661,6 +3982,8 @@ public sealed class ArbitrationAdmissionService
                                 RunBinding = op.RunBinding,
                                 CursorRef = op.CursorRef,
                                 CursorRevision = op.CursorRevision,
+                                // [批次四十四 验证会诊重要项处置] 同续用路径：重试重建请求必须沿用持久化类型。
+                                OperationType = op.OperationType,
                             };
                             captured = read.File.Lease;
                             break;

@@ -1733,6 +1733,178 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
     }
 
     /// <summary>
+    /// **§12.3 M1①⑤（宿主/端到端·批次四十四）**：E1（流程登记）**完成接管与关闭之后**，该 run 的
+    /// **首节点与后继节点各自取得独立且唯一**的发送许可，且节点操作**持久化父子绑定**
+    /// （`parentRequestIdentity` ＝该 run 唯一流程登记父操作的身份、`runBinding` ＝该 run）。
+    /// 本夹具同时令**自有驱动在飞占用成立**（E1 受理、驱动登记后 BGI 侧即处于运行态 ⇒ `Occupied=true`；
+    /// 该时点由「受理后」屏障固定，屏障是测试注入点、不改动任何生产对象）——占用豁免**只**覆盖
+    /// 「本宿主自有驱动（`_drives` 推导）＋同一父授权＋父子绑定已持久化＋父已终局关闭」的合法子提交，
+    /// 故流程仍必须整体跑通；若豁免失效，本夹具会以「节点 `execution_occupied`／发送数不足／运行未成功」转红。
+    /// **范围**：宿主层（**测试接线态**；生产 `_successorAdmissionWired` 仍关闭）；**不证明**真实进程实机路径、
+    /// 也不证明 BGI 快照事实源本身（占用事实在此由接缝模拟）。
+    /// </summary>
+    [Fact]
+    public async Task NodeSubmit_AfterE1Closed_OwnDriveOccupied_PerNodePermitAndParentBinding()
+    {
+        var root = NewRoot("tcm1-");
+        try
+        {
+            var occupied = false;   // 生产时序：E1 登记时无占用（否则 E1 自身即被占用拒绝）→ 驱动起跑后占用成立
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true,
+                nodeIds: ["n-1", "n-2"],
+                configureSeams: seams =>
+                {
+                    seams.OccupiedProvider = () => Volatile.Read(ref occupied);
+                    // 归属事实：本夹具只有这一个 run（该 run 的驱动在飞）⇒ 归属集恰为该 run。
+                    // 生产侧**不填归属**（控制面快照只给布尔「有任务在跑」，无法证明归属；见
+                    // `CurrentArbitrationFacts` 的保守口径与 §24.54 的 R5.8 前置）。
+                    var runsDir = Path.Combine(root, "runs");
+                    seams.OwnInFlightRunBindingsProvider = () => new RunStore(runsDir).List()
+                        .Select(r => r.RunId)
+                        .Where(id => !string.IsNullOrEmpty(id))
+                        .Select(id => id!)
+                        .Distinct(StringComparer.Ordinal)
+                        .ToList();
+                    seams.Barriers = new AdmissionBarriers
+                    {
+                        // E1 受理（＝宿主驱动已登记）之后置占用成立：固定「自有驱动在飞」这一生产时点。
+                        AfterAcceptBeforeLedger = () =>
+                        {
+                            Volatile.Write(ref occupied, true);
+                            return Task.CompletedTask;
+                        },
+                    };
+                });
+
+            Assert.True(probe.ReadOk, Diag("租约台账必须成功读取过", probe));
+            Assert.True(probe.State == WorkflowRunState.Succeeded,
+                Diag("自有驱动在飞占用下，E1 关闭后首/后继节点仍必须各自取许可并跑通", probe));
+            Assert.Equal(2, probe.SendCount);
+
+            // 父登记（流程登记）：无节点身份、intent=start、唯一命中、且**已终局**（＝已接管关闭）
+            var parents = probe.Ops
+                .Where(o => string.IsNullOrEmpty(o.Candidate?.NodeId)
+                            && string.Equals(o.Intent, "start", StringComparison.Ordinal))
+                .ToList();
+            Assert.True(parents.Count == 1, Diag("父登记（流程登记）必须唯一命中", probe));
+            var parentOp = parents[0];
+            // M1①：判据是**父登记已完成接管与关闭**——`Accepted`（接管台账已持久化、Submission 已关闭）
+            // 即已满足；`TerminalCompleted` 是更后的账龄出口，不是首节点取许可的前置。
+            Assert.Contains(parentOp.RequestState,
+                new[] { OperationRequestState.Accepted, OperationRequestState.TerminalCompleted });
+            Assert.False(string.IsNullOrEmpty(parentOp.SubmissionIdentity));
+            Assert.True(parentOp.LastSendSeq > 0, Diag("父登记必须确经受理与发送才谈得上「已关闭」", probe));
+
+            foreach (var nodeId in new[] { "n-1", "n-2" })
+            {
+                var nodeOps = probe.Ops.Where(o => o.Candidate?.NodeId == nodeId).ToList();
+                Assert.True(nodeOps.Count == 1, Diag("节点 " + nodeId + " 应恰有一个操作", probe));
+                var op = nodeOps[0];
+                // M1⑤ 父子绑定**已持久化**（指向该 run 的流程登记父操作）
+                Assert.Equal(parentOp.RequestIdentity, op.ParentRequestIdentity);
+                Assert.Equal(probe.RunId, op.RunBinding);
+                // M1①② 每个节点**各自**取得独立且唯一的发送许可（本笔 sendSeq=1、身份自证）
+                Assert.Equal(1, op.LastSendSeq);
+                Assert.Equal("sub:" + op.RequestIdentity + ":1", op.SubmissionIdentity);
+            }
+
+            var nodePermits = probe.Ops
+                .Where(o => !string.IsNullOrEmpty(o.Candidate?.NodeId))
+                .Select(o => o.SubmissionIdentity).ToList();
+            Assert.Equal(nodePermits.Count, nodePermits.Distinct(StringComparer.Ordinal).Count()); // 节点许可互不相同
+            Assert.DoesNotContain(parentOp.SubmissionIdentity, nodePermits);                        // 与父登记许可不同
+            Assert.Null(probe.OpenSubmissionIdentity);                                              // 全部结清（无开放未决发送）
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
+    /// **§12.3 M1③（反例·[批次四十四 会诊重要项处置]）**：**外部启动台账占用存在时，夹具注入的自有归属
+    /// 也不得触发豁免**——台账已有未终结的外部启动记录 ⇒ 占用归属不可证明为本 run 自身 ⇒ 一律 fail-closed。
+    /// 构造：E1 受理（驱动登记）后由屏障在该时点写入一条未终结外部启动台账记录，**同时**让接缝归属供给器
+    /// 返回本 run 的 runBinding（取证「归属确被提供」），并把执行占用置真。断言：节点**零发送**、操作停在
+    /// `Queued`、运行不得成功——即阻断来自「台账占用优先」规则，而不是「没有归属可用」。
+    /// **范围**：宿主层测试接线态；生产不填归属（见 `CurrentArbitrationFacts`）。
+    /// </summary>
+    [Fact]
+    public async Task NodeSubmit_OwnDriveOccupied_LedgerOccupationOverridesSeamOwnership_NoExemption()
+    {
+        var root = NewRoot("tcledger-");
+        try
+        {
+            var occupied = false;
+            var providerCalls = 0;
+            var callsWhenLedgerPlanted = -1;
+            IReadOnlyCollection<string>? lastOwnOffered = null;
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true,
+                nodeIds: ["n-1"],
+                configureSeams: seams =>
+                {
+                    seams.OccupiedProvider = () => Volatile.Read(ref occupied);
+                    var runsDir = Path.Combine(root, "runs");
+                    seams.OwnInFlightRunBindingsProvider = () =>
+                    {
+                        Interlocked.Increment(ref providerCalls);
+                        var list = new RunStore(runsDir).List()
+                            .Select(r => r.RunId)
+                            .Where(id => !string.IsNullOrEmpty(id))
+                            .Select(id => id!)
+                            .Distinct(StringComparer.Ordinal)
+                            .ToList();
+                        lastOwnOffered = list;
+                        return list;
+                    };
+                    seams.Barriers = new AdmissionBarriers
+                    {
+                        AfterAcceptBeforeLedger = () =>
+                        {
+                            // E1 已受理（驱动登记）后：写入一条**未终结**外部启动台账记录（＝外部占用存在）
+                            var ledger = new ExternalStartLedger(root);
+                            var recorded = ledger.RecordAccepted(new ExternalStartLedgerEntry
+                            {
+                                SubmissionIdentity = "sub:fixture-external:1",
+                                SendSeq = 1,
+                                CandidateId = "cand-fixture-external",
+                                ResourceRef = "flow:外部占用占位",
+                                ActionId = "act-fixture-external",
+                                TargetBgiEpoch = RoutingFakePort.Epoch,
+                                EvidenceSource = "fixture_ledger_occupation",
+                            });
+                            Assert.True(recorded.Success, "夹具前置：外部启动台账未终结记录写入失败 " + recorded.Reason);
+                            callsWhenLedgerPlanted = Volatile.Read(ref providerCalls);
+                            Volatile.Write(ref occupied, true);
+                            return Task.CompletedTask;
+                        },
+                    };
+                });
+
+            Assert.True(probe.ReadOk, Diag("租约台账必须成功读取过", probe));
+            Assert.True(probe.Converged, Diag("运行必须收敛（不得悬挂）", probe));
+            Assert.True(providerCalls > 0, "取证前置：归属供给器必须确实被调用过（否则本分支无意义）");
+            Assert.Equal(probe.RunId, Assert.Single(lastOwnOffered ?? []));
+            Assert.True(callsWhenLedgerPlanted >= 0, "取证前置：台账注入时点必须已记录");
+            // **关键证据**：台账占用存在后宿主**不再咨询归属供给器**（`ledgerOccupied ? null : provider()`），
+            // 即节点笔的归属恒为 null ⇒ 与「相邻正例夹具（同一供给器形态可生效）应由豁免放行」形成对照，
+            // 证明本夹具的阻断来自「台账占用优先」，而不是「没有归属可用」或断言空过。
+            Assert.Equal(callsWhenLedgerPlanted, Volatile.Read(ref providerCalls));
+            Assert.Equal(0, probe.SendCount);                                   // 零节点发送
+            var nodeOps = probe.Ops.Where(o => o.Candidate?.NodeId == "n-1").ToList();
+            Assert.True(nodeOps.Count == 1, Diag("节点操作已在册（被登记但未取许可）", probe));
+            Assert.Equal(OperationRequestState.Queued, nodeOps[0].RequestState);
+            Assert.Equal(0, nodeOps[0].LastSendSeq);
+            Assert.True(string.IsNullOrEmpty(nodeOps[0].SubmissionIdentity));
+            Assert.NotEqual(WorkflowRunState.Succeeded, probe.State);            // 台账占用优先：不得成功
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
     /// **§12.3 交错 ⑤（连续超 32 节点）验收**：整条 33 节点流程必须跑通且发送恰好 33 次——若节点操作
     /// 未随时间结清，第 33 个占位会因 `operations_capacity_full` 失败；故本夹具是 G8「主槽位随责任结清释放」
     /// 的端到端证据（同时断言全程未出现 `operations_capacity_full`）。

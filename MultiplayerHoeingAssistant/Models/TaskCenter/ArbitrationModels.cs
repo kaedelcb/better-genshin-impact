@@ -144,6 +144,14 @@ public sealed class ArbitrationFacts
     public bool ExecutionOccupied { get; set; }
     /// <summary>权威事实未知（发送窗口崩溃/超时/对账未完成）→ NeedReconcile，禁止启动。</summary>
     public bool ExecutionFactsUnknown { get; set; }
+    /// <summary>
+    /// **本宿主自有在飞驱动的 runBinding 集合**（§12.3 M1③ 限定豁免的唯一事实来源）：仅由**宿主**注入，
+    /// 表示「这些 run 的执行占用可证明是由本宿主自身的托管驱动产生」。资格判定的「执行占用」项据此**只**豁免
+    /// **可证明属于同一 runBinding 父授权的合法子提交**（持久化父子绑定成立＋父登记已接管关闭＋无开放未决发送）；
+    /// 其他节点在飞／未知责任／外部占用（含外部启动台账占用）**仍须阻挡**。
+    /// **缺省 null／空集 ⇒ 一律不豁免（fail-closed）**——不得按 `ExecutionOccupied` 自行推断归属。
+    /// </summary>
+    public IReadOnlyCollection<string>? OwnInFlightRunBindings { get; set; }
     /// <summary>请求方持有有效租约（§6.2 过期即禁启：代次相等≠有效）。</summary>
     public bool RequesterHoldsValidLease { get; set; } = true;
     /// <summary>关联事实引用（NeedReconcile 载荷必填：待对账的提交身份/动作号等；无=空串）。</summary>
@@ -630,6 +638,12 @@ public sealed class OperationRecord
     [JsonPropertyName("wireSubmitKey")] public string? WireSubmitKey { get; set; }
     /// <summary>去重合并关联（发送前持久化——本项由该胜者请求身份承担发送责任；共同结清/恢复时镜像终态）。</summary>
     [JsonPropertyName("mergedInto")] public string? MergedInto { get; set; }
+    /// <summary>
+    /// **父子绑定（§12.3 M1⑤）**：本**节点执行**操作所属流程登记操作（同一 runBinding 的 `flow:` 父登记）的
+    /// `requestIdentity`；登记时由可信宿主按本地权威反查写入，**首绑写入、再绑必须一致、不可改写**。
+    /// 缺省 `null` ⇒ 「父子关系不可证明」——资格判定的自有占用豁免一律**不成立**（fail-closed）。
+    /// </summary>
+    [JsonPropertyName("parentRequestIdentity")] public string? ParentRequestIdentity { get; set; }
 
     // ============================================================
     // R5.3 §24（B3 外部启动生命周期补全）——加法字段（租约 v3；旧 ≤2 记录缺字段按 §24.20-A′ 迁移/隔离口径处置）

@@ -1177,7 +1177,7 @@ R5.2 稿 §16 行③与 §16-A 汇总裁**由「部分」升为「已覆盖（�
 |---|---|---|---|---|---|
 | 1 | **P50 负载敏感诊断套件**（33 节点端到端暂停，须覆盖整个用例类） | 独立诊断批（施工方） | 可单独重复运行的负载复现入口＋根因定位＋该类夹具稳定 | 节点改道门保留；Skip 与严格断言不放宽 | 已移交·**未验收** |
 | 2 | **P19① 原因码逐次取证**（[批次三十二] 逐次原因码证据**已取得**，但夹具待 §24.44 裁定后按实际语义重写） | R5.8 实现闭合序列（施工方：门面夹具负责人） | 准入结果层逐次记录并断言拒绝原因码（如 `operations_capacity_full`） | 同上 | 已移交·**未验收** |
-| 3 | **首节点绑定（§12.3 M1）**：父子关系与首节点绑定持久化 | R5.8 实现闭合序列（施工方：宿主实现＋夹具负责人） | 持久化父子/首节点绑定＋「E1 关闭后首节点另行取许可」夹具 | 节点改道门 | 已移交·**未验收** |
+| 3 | **首节点绑定（§12.3 M1）**：父子关系与首节点绑定持久化 | R5.8 实现闭合序列（施工方：宿主实现＋夹具负责人） | 持久化父子/首节点绑定＋「E1 关闭后首节点另行取许可」夹具 | 节点改道门 | **部分已交付·未验收**（[批次四十四] §24.54：父子绑定由门面自行反查写入＋首/后继节点各自取许可夹具＋自有占用限定豁免＋发送前 F11 复核；**仍欠**：生产归属事实源与真实入口层证据，见 §24.55） |
 | 4 | **G4a 启动移交/暂停续行的来源登记** | R5.8 实现闭合序列（施工方：宿主实现＋夹具负责人） | 移交受理处落定固定 Scope/绑定来源记录＋后继提交可查得 | 节点改道门 | 已移交·**未验收** |
 | 5 | **P8 通用失败分类细化** | R5.8 实现闭合序列（施工方：设计＋夹具负责人） | 「网络前可证实未发送 vs 已发送后失败」的可判据接缝＋夹具（现非 success 一律 Unknown） | 外部启用门 | 已移交·**未验收** |
 | 6 | **集合②持续观察重绑** | R5.8 实现闭合序列（施工方：宿主实现＋夹具负责人） | 重启后未终结台账记录**重绑观察责任**并可后续结算 | 外部启用门 | 已移交·**未验收** |
@@ -1186,7 +1186,7 @@ R5.2 稿 §16 行③与 §16-A 汇总裁**由「部分」升为「已覆盖（�
 | 9 | **外部启动（E3/E4/E5/E6）路径接管失败映射端点；子进程级重启；E4 取消入口映射** | R5.8 真实入口层（§23.1；施工方：入口夹具负责人） | 该路径上的端到端夹具或实机证据 | 外部启用门＋R5.8 门 | 已移交·**未验收** |
 | 10 | **§24.36 范围残余**：重启/恢复后不换键、不新增许可；真实磁盘故障分布 | R5.8 实现闭合序列（施工方：恢复项负责人） | 恢复入口再次取许可路径的夹具＋故障分布说明 | 节点改道门 | **部分已交付·未验收**（[批次四十一] §24.52：**重启后阻塞半**已交付＝同租约目录经接管观察新建门面后，同候选仍 `submission_conflict`＋零发送＋许可与身份不变；**恢复入口再取许可**与**子进程级重启**仍欠） |
 | 11 | **S5 通用 `SendCommandAsync` 直发粗化** | R5.8 安全粗化批（施工方：守卫负责人） | **部分已交付（[批次三十四] §24.46）**：执行类直发**字面量**已纳入结构守卫（6 模式、三文件计数登记；新增未登记文件/计数变化即失败）。**非字面量形态已补（[批次四十三] §24.53：`ProductionNonLiteralSends_MatchRegisteredInventory` 登记 10 文件）**；**仍未覆盖**：反射/别名/拼装后传参等形态、`IpcClient` 只读操作（非执行类，不覆盖）、以及「守卫不证明授权先于发送」的根本限制 | 外部启用门 | **部分已交付·未验收** |
-| 12 | **⑥ 入口表逐项签注** | R5.8 收口文档＋夹具批（施工方：入口表负责人） | **部分已交付（[批次三十三] §24.45-B）**：**Scope 来源维度 4/4 已签注**（面板＝§24.35 格 A／A′；移交・续行＝格 B fail-closed；恢复＝P28 正/负向）；**首节点绑定维度 0/4 未验收**（M1）；提交路由：面板/移交＝测试接线态已验、续行/恢复＝生产已接线（**S8b 策略收尾来源未接入**） | **节点改道门＋R5.8 门** | **部分已交付·未验收** |
+| 12 | **⑥ 入口表逐项签注** | R5.8 收口文档＋夹具批（施工方：入口表负责人） | **部分已交付（[批次三十三] §24.45-B）**：**Scope 来源维度 4/4 已签注**（面板＝§24.35 格 A／A′；移交・续行＝格 B fail-closed；恢复＝P28 正/负向）；**首节点绑定维度**：面板启动（测试接线态）**已验**、移交/续行/恢复**未验**（[批次四十四] §24.54；M1 余项见 §24.55）；提交路由：面板/移交＝测试接线态已验、续行/恢复＝生产已接线（**S8b 策略收尾来源未接入**） | **节点改道门＋R5.8 门** | **部分已交付·未验收** |
 | 13 | **§24.33 范围残余**：节点后继/外部启动路径「调用者≠获选者」端到端证据 | R5.8 真实入口层（施工方：入口夹具负责人） | 真实入口层绑定证据 | R5.8 门 | 已移交·**未验收** |
 | 14 | **§24.38–§24.39 范围残余**：E3/E4/E5／恢复路径令牌透传；`RetryAsync` 令牌合同 | R5.8 取消链收束批（施工方：令牌透传负责人）；**E3/E4/E5 侧须先裁决（见交接稿「owner 待决#3」：入口 API 当前无令牌参数）** | 各入口令牌透传取证＋`RetryAsync` 合同扩展或明确不扩展 | **节点改道门／外部启用门／恢复路径既有门禁＋R5.8 门** | 已移交·**未验收** |
 | 15 | **§24.40 范围残余**：`RetryableRejected` 责任维显式断言；适配器入参层形状 | R5.8 夹具批（施工方：映射断言负责人） | **`RetryableRejected` 已交付（[批次三十三] §24.45-A）**：四支 Theory 断言 `Kind=RetryableRejected`＋责任维 `Settled`＋**操作状态 `RetryableRejected`**＋**`LastSendSeq==1`（本轮许可已签发并消费；重试须新许可）**＋`Submission` 关闭＋台账 0；**适配器入参层形状仍未验收** | 外部启用门 | **已交付（组件层；[批次三十八] §24.49）**——适配器入参形状矩阵已补齐（`start_group`／`start_oneclick`／`hotkey` manual 与 v2 的**五字段＋三委托非空**）；**不得外推**：不证明发送行为、完成观察协议语义、真实入口/组合根接线、IPC/ext/v2 集成或生产开门 |
@@ -1525,3 +1525,68 @@ R5.2 稿 §16 行③与 §16-A 汇总裁**由「部分」升为「已覆盖（�
 
 **B. 状态**：§24.41-C#11 记「**部分已交付·未验收**」——**字面量（九种）＋非字面量（10 文件）双登记**已交付；
 **仍欠**：反射/别名/拼接形态与「授权先于发送」的语义级守卫（后者不属本项范围）。
+
+### 24.54 落地登记：§12.3 M1①②③⑤「父登记/首节点绑定 ＋ 自有驱动占用的**限定**豁免」（[新增·2026-09-22 批次四十四]）
+
+**A. 本批落地事实（生产代码＋夹具；生产外部启动接线与节点改道门仍关闭）**
+
+1. **问题（§12.3 M1）**：E1 流程登记只授权「登记该 run 的驱动」，其 `Accepted` **不构成任何节点受理证据**；
+   而该 run 的**节点子提交**在自有驱动在飞（BGI 侧 `TaskRunning=true`）时会被「执行占用」整体拒绝 ⇒
+   后继节点**永远拿不到自己的发送许可**（实测表现为节点停留 `Queued`、`sends=0`、运行 `Unknown`）。
+   同时**父子/首节点绑定未持久化**，「豁免只能覆盖可证明的父授权子提交」缺少可判据载体。
+2. **父子绑定持久化（M1⑤）**：租约 v3 `OperationRecord` 新增加法字段 `parentRequestIdentity`；
+   由**门面在创建事务内自行反查**同一 `runBinding` 的流程登记父操作写入（`ResolveParentRequestIdentity`：
+   **唯一命中**才绑定；无命中/歧义/父类型非 `FlowRegistration`/来源形不符/父 workflow ≠ 本笔 workflow
+   ⇒ **不绑定、不补造**）。**不采信调用方自报**（`AdmissionRequest` 无该字段；`ContinueUse`/`Retry` 只读已持久化值）。
+3. **自有驱动占用的限定豁免（M1③）**：`ArbitrationFacts` 新增 `OwnInFlightRunBindings`（**宿主注入的归属事实**），
+   `IsOwnParentOccupationExempt` 全条件成立才豁免：①归集**恰为本笔 runBinding 一项**；②按**持久化记录**判定
+   `OperationType == NodeExecution` 且候选带 `NodeId`；③父登记按严格判据唯一命中、状态 ∈ {`Accepted`（已接管关闭）、
+   `TerminalCompleted`}、`SubmissionIdentity` 非空且 `LastSendSeq > 0`；④**同 run 无其他在飞节点责任**
+   （`Queued/InRound/Granted/Sending/Accepted/Reconciling`）；⑤全局未决发送槽为空；⑥父子绑定与 workflow 一致。
+   **归属来源（保守口径）**：BGI 控制面快照只给「是否有任务在跑」这一布尔值，`_drives` 包含关系**不能证明**
+   占用确属本候选 run ⇒ **生产恒不填归属＝一律不豁免（fail-closed）**；夹具经接缝 `OwnInFlightRunBindingsProvider`
+   注入，且**外部启动台账占用存在时一律不给归属**。
+4. **轮次/锁内一致性与分流**：`ProjectGuardFacts` 把**真实 F11 闸门**与**盘上任一冲突待决**（⇒ `facts_unknown`）
+   投影进本轮事实；`Decide` 前再经 `RecheckRoundGuard` 做一次锁内复核并**重判**；**分流只允许发生在「纯占用
+   ＋本轮身份唯一 ＋子裁决恰为 `NeedPreemptConfirm`」**时（`HandleNeedPreemptConfirmAsync` 结清其余候选、
+   剩余子集按归一事实重判）——避免「同轮混入无关候选即整体误拒」与「拆散同候选号冲突组」两种反例。
+5. **发送前 F11 复核（占位后、未发送）**：节点/流程/外部启动路径（`ProcessWinnerAsync`）与**恢复专用边界**
+   （`AdmitRecoveryAsync`）在调用 Sender **之前**复用 `BlockSendIfF11Async`——命中即以「占位后、网络前的
+   **本地未发送证明**」（§4.2c）原子关闭该笔 Submission，操作记 `TerminalRejected`＋`f11_active`＋
+   `EvidenceSource=local_not_sent_pre_send`＋`AnsweredSendSeq=本笔轮次`，返回 `F11Blocked`／责任维 `Settled`
+   ＋完整发送关联；**关闭失败 ⇒ `NeedReconcile` 且同样不发送**（fail-closed）。
+6. **外部启动类型的调用位置决定（§24.17 加固）**：E3/E4/E5 入口 `OperationType` **写死** `ExternalStart`
+   （不再透传入参字段），避免「已执行外部副作用、接管按错误持久化类型分派」。
+7. **夹具**（＋9 项，全量 **905 通过／2 跳过／907**，0 失败；基线 552 未降）：组件矩阵
+   `Ownership_ExecutionOccupied_OnlyVerifiedOwnParentChildExempted`（11 支：`exempt`＋10 支 fail-closed，含
+   `own_multiple_runs`／`parent_unresolved`／`parent_wrong_type`／`parent_source_shape_invalid`／
+   `parent_workflow_mismatch`／`other_node_in_flight`／`own_withdrawn_before_occupy`）＋
+   `Ownership_ExecutionOccupied_MixedRound_ExemptNodeStillAdmitted`（混轮按候选分流）＋
+   `Ownership_ExecutionOccupied_SameCandidateIdPeer_PreventsSplitAndSending`（整组身份冲突不被拆散）＋
+   `Ownership_ExecutionOccupied_BlockedSubDecisionNotPreempt_NoSplitNoSend`（不拆分回退）＋
+   `Ownership_ExecutionOccupied_WithUnknownOrF11_MixedRoundNotSplit`＋
+   `Ownership_ExecutionOccupied_RealF11GateFlipsAfterEnqueue_RoundStillF11Blocked`＋
+   `Ownership_ExecutionOccupied_DiskConflictPending_RoundStaysFactsUnknown`＋
+   `Ownership_ExecutionOccupied_F11AndDiskConflict_F11WinsWholeRound`＋
+   `Ownership_ExecutionOccupied_F11FlipsDuringOccupy_NoSendAndLocalNotSentClose`＋
+   `RecoveryAdmission_F11FlipsDuringOccupy_NoSendAndLocalNotSentClose`＋
+   `ParentBinding_MissingFieldInExistingV3_ReadsValidAndNotBackfilled`；宿主层
+   `NodeSubmit_AfterE1Closed_OwnDriveOccupied_PerNodePermitAndParentBinding`（E1 关闭后首/后继节点**各自取许可**、
+   父子绑定落盘、许可互不相同）＋`NodeSubmit_OwnDriveOccupied_LedgerOccupationOverridesSeamOwnership_NoExemption`
+   ＋`ExternalStart_SelfReportedOtherType_PersistsExternalStart`。
+8. **会诊**：实现批**十轮**（1 阻断/4 重要 → 3 重要 → 3 重要 → 2 高+1 重要 → 1 高+2 重要 → 1 高+2 重要 →
+   1 高+1 中 → **第十轮「无必改项」**），逐条处置全部落入代码/夹具/残余登记；**第十轮判定：无必改项**。
+
+**B. 状态**：§24.41-C#3「首节点绑定（§12.3 M1）」由「已移交·未验收」改为
+「**部分已交付·未验收**」——持久化父子绑定 ＋「E1 关闭后首节点另行取许可」夹具**已交付（组件/宿主层）**；
+**仍欠**（见 §24.55）：生产归属事实源（控制面需暴露带来源的占用事实）与真实入口层证据。
+§24.41-C#12「⑥ 入口表」随本项目**首节点绑定维度**由 0/4 升为**部分**（面板启动路径已验，测试接线态）。
+**生产外部启动接线与节点改道门仍关闭**；本批**不代表 R5 收口、不代表生产开门**。
+
+### 24.55 残余登记：批次四十四移交项（[新增·2026-09-22]）
+
+| # | 残余 | 承接 | 完成证据要求 | 保留门禁 | 状态 |
+|---|---|---|---|---|---|
+| 1 | **生产归属事实源缺失**：控制面快照只有布尔 `TaskRunning`，无法证明占用归属本候选 run ⇒ 生产侧自有占用豁免**恒不生效**（节点子提交在自有驱动在飞时仍被占用阻断） | R5.8 真实入口层／控制面（发送权威侧） | 控制面暴露**带来源**的占用事实（runBinding/jobId/来源）＋宿主归属由该事实推导＋端到端夹具 | 节点改道门＋外部启用门 | 已移交·**未验收** |
+| 2 | **外部活信号与真实发送之间的严格原子性**：`BlockSendIfF11Async` 之后、真实发送动作之前仍非原子（本地布尔再读无法闭合） | 设计／控制面批（发送权威侧） | 控制面提供「F11 清零才入队」原子操作＋本地占位携带其关联身份＋失败按确定未发送关闭 | 节点改道门 | 已移交·**未验收**（本批已消除「占位后发送前」路径的确定性反例） |
+| 3 | **去重镜像在占用路径的状态语义**：`MirrorMergedAsync(winnerAccepted:false)` 使镜像落 `NotSelected`＋`merged_duplicate`（终局），而本笔调用方拿到 `NeedPreemptConfirm` ⇒ 即时结果与续用分类不一致、镜像失去交接后继续资格（**既有语义，非本批引入**） | 设计批（合并/镜像语义） | 重新定义镜像交接期状态与 `ContinueUse` 分类（含对既有 dedupe/镜像验收结论的影响面说明） | 节点改道门 | 已移交·**未验收** |
