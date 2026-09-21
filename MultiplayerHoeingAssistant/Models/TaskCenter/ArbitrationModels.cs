@@ -242,6 +242,18 @@ public sealed class LeaseHandoffSegment
     [JsonPropertyName("submission")] public SubmissionRecord? Submission { get; set; }
     /// <summary>逻辑操作权威记录（本段新增，恢复权威）：runBinding/cursorRef/submissionIdentity/targetEpoch 不可改写。</summary>
     [JsonPropertyName("operations")] public List<OperationRecord> Operations { get; set; } = [];
+    /// <summary>
+    /// **预观察记录**（§24.16；租约 v3 加法字段）：与发送许可占位同一权威发布写入，未持久化不得发送。
+    /// </summary>
+    [JsonPropertyName("preObservations")] public List<PreObservationRecord> PreObservations { get; set; } = [];
+    /// <summary>
+    /// **冲突裁决审计**（§24.2-2″；租约 v3 加法字段）：追加式、不可变，**不计入** 32 主槽位/256 墓碑容量。
+    /// </summary>
+    [JsonPropertyName("conflictResolutionAudits")] public List<ConflictResolutionAudit> ConflictResolutionAudits { get; set; } = [];
+    /// <summary>
+    /// **权威未受理证据**（§24.2-2″；租约 v3 加法字段）：四项裁决事务的证据载体，同不计容、本轮不裁剪。
+    /// </summary>
+    [JsonPropertyName("reconciledNotAcceptedEvidence")] public List<ReconciledNotAcceptedEvidence> ReconciledNotAcceptedEvidence { get; set; } = [];
 }
 
 /// <summary>未决交接/提交意图（§6.2 原子准入边界：意图先在跨进程锁内持久化再发送；消解必须基于关联的权威证据）。</summary>
@@ -332,6 +344,189 @@ public enum OperationOutcome
     Rejected,
 }
 
+// ============================================================
+// R5.3 §24（B3 外部启动生命周期补全）——加法类型（锚点 6：加类型不改序列化框架）
+// ============================================================
+
+/// <summary>
+/// **可信持久化操作类型**（§24.17）：由可信适配器在 Operation 创建时提供、与 Operation **同次原子发布**，后续不可改写。
+/// 缺失/`Unknown`/与来源记录冲突 ⇒ **fail-closed**（不得按 `ResourceRef`、`RunId` 空值或运行快照猜测）。
+/// </summary>
+public enum OperationType
+{
+    /// <summary>流程登记（E1 启动）。</summary>
+    FlowRegistration,
+    /// <summary>节点执行（首节点/后继节点）。</summary>
+    NodeExecution,
+    /// <summary>外部启动（E3/E4/E5）。</summary>
+    ExternalStart,
+    /// <summary>恢复（E2）。</summary>
+    Recovery,
+    /// <summary>启动移交。</summary>
+    Handoff,
+    /// <summary>未知（旧格式记录隔离产物；**类型相关判定一律 fail-closed**）。</summary>
+    Unknown,
+}
+
+/// <summary>
+/// **执行结果维**（§24.6-1）：表达调用者可见事实；与责任维（<see cref="OperationRequestState"/>／`ResponsibilityState`）分离，不得压成一个枚举。
+/// `None`＝不适用（未进入执行结果维，例如前置门禁阻断）。
+/// </summary>
+public enum ExecutionDisposition
+{
+    None,
+    Cancelled,
+    ExecutionFailed,
+    Unknown,
+}
+
+/// <summary>
+/// **责任维**（§24.6-5 唯一映射表）：`None`＝不适用（未登记/前置门禁阻断）／`Pending`＝责任未结清／`Settled`＝已结清。
+/// **已登记之后除「已证明结清」外一律不得返回 `None`。**
+/// </summary>
+public enum ResponsibilityState
+{
+    None,
+    Pending,
+    Settled,
+}
+
+/// <summary>执行结果类别（§24.13-1：`ExecutionResult` 与 `OperationRequestState` 分列保存；`TerminalCompleted` 只表示责任结清、不表示成功）。</summary>
+public enum ExecutionResultKind
+{
+    Succeeded,
+    Failed,
+    Cancelled,
+    /// <summary>非终态观察（**不得**生成 `PendingTerminal`、不得借超时/未命中/重启转终态）。</summary>
+    Unknown,
+}
+
+/// <summary>
+/// **执行结果字段**（§24.13-1；加法字段）：与责任状态分列保存。`ObservedAtUtc`＝权威证据**首次被可信观察层接收**的时点（捕获一次后不可改写，§24.2-2″ 两条独立链）。
+/// </summary>
+public sealed class ExecutionResult
+{
+    [JsonPropertyName("kind")] public ExecutionResultKind Kind { get; set; }
+    /// <summary>原始终态词（不伪造）。</summary>
+    [JsonPropertyName("rawTerminal")] public string RawTerminal { get; set; } = "";
+    /// <summary>完成层执行错误码（与信封 errorCode 语义分离；`Failed` 时应有值）。</summary>
+    [JsonPropertyName("executionErrorCode")] public string? ExecutionErrorCode { get; set; }
+    [JsonPropertyName("jobId")] public string? JobId { get; set; }
+    [JsonPropertyName("evidenceSource")] public string EvidenceSource { get; set; } = "";
+    [JsonPropertyName("submissionIdentity")] public string SubmissionIdentity { get; set; } = "";
+    [JsonPropertyName("sendSeq")] public int SendSeq { get; set; }
+    /// <summary>权威观察时点（§24.2-2″：与 `PendingTerminal`／审计快照三处取值全等）。</summary>
+    [JsonPropertyName("observedAtUtc")] public DateTimeOffset ObservedAtUtc { get; set; }
+}
+
+/// <summary>
+/// **待终局处置记录**（§24.12-1；加法字段）：承载「已取得权威终态、但接管/关闭/终局尚未完成」的责任事实。
+/// 发布顺序＝`ExecutionResult`＋`PendingTerminal` → 台账 Terminal → 关闭 → Operation 终局（§24.15 唯一顺序）。
+/// </summary>
+public sealed class PendingTerminal
+{
+    [JsonPropertyName("rawTerminal")] public string RawTerminal { get; set; } = "";
+    [JsonPropertyName("executionErrorCode")] public string? ExecutionErrorCode { get; set; }
+    [JsonPropertyName("jobId")] public string? JobId { get; set; }
+    [JsonPropertyName("evidenceSource")] public string EvidenceSource { get; set; } = "";
+    [JsonPropertyName("submissionIdentity")] public string SubmissionIdentity { get; set; } = "";
+    [JsonPropertyName("sendSeq")] public int SendSeq { get; set; }
+    [JsonPropertyName("operationType")] public OperationType OperationType { get; set; } = OperationType.Unknown;
+    [JsonPropertyName("observedAtUtc")] public DateTimeOffset ObservedAtUtc { get; set; }
+    [JsonPropertyName("recordedAtUtc")] public DateTimeOffset RecordedAtUtc { get; set; }
+    /// <summary>本地取消意向（§24.13-5：只表达调用方停止等待与批次停止，**不写入** `ExecutionResult.cancelled`）。</summary>
+    [JsonPropertyName("localCancelRequested")] public bool LocalCancelRequested { get; set; }
+}
+
+/// <summary>
+/// **预观察记录**（§24.16；加法字段，租约 v3 `PreObservations[]`）：与**发送许可占位同一权威发布**写入；
+/// **未持久化不得发送**（杜绝「已发送、尚无句柄」的不可恢复窗口）。取得 JobId 后在同一权威边界转为正式接管台账并标记完成。
+/// </summary>
+public sealed class PreObservationRecord
+{
+    [JsonPropertyName("submissionIdentity")] public string SubmissionIdentity { get; set; } = "";
+    [JsonPropertyName("sendSeq")] public int SendSeq { get; set; }
+    [JsonPropertyName("operationType")] public OperationType OperationType { get; set; } = OperationType.Unknown;
+    [JsonPropertyName("targetEpoch")] public string TargetEpoch { get; set; } = "";
+    [JsonPropertyName("wireSubmitKey")] public string? WireSubmitKey { get; set; }
+    /// <summary>该协议的替代查询依据（线上提交键/权威快照等；缺失＝不得宣称观察可重建）。</summary>
+    [JsonPropertyName("queryBasis")] public string QueryBasis { get; set; } = "";
+    [JsonPropertyName("ownerEpoch")] public string OwnerEpoch { get; set; } = "";
+    [JsonPropertyName("createdAtUtc")] public DateTimeOffset CreatedAtUtc { get; set; }
+    /// <summary>`pending`／`completed`（完成＝已转为正式接管台账或已持久化 `PendingTerminal`）。</summary>
+    [JsonPropertyName("state")] public string State { get; set; } = "pending";
+}
+
+/// <summary>冲突裁决结论（§24.2-2″）。</summary>
+public enum ConflictResolutionKind
+{
+    /// <summary>确认曾受理且已有权威终态：以匹配的 `ExecutionResult` 为权威，历史拒绝仅作审计。</summary>
+    ResolvedAcceptedTerminal,
+    /// <summary>确认未受理：原拒绝终局继续有效。</summary>
+    ResolvedNotAccepted,
+}
+
+/// <summary>裁决证据引用（§24.2-2″：`{ evidenceId }` 对象，**不内嵌**证据字段）。</summary>
+public sealed class ConflictResolutionEvidenceRef
+{
+    [JsonPropertyName("evidenceId")] public string EvidenceId { get; set; } = "";
+}
+
+/// <summary>
+/// **冲突裁决审计项**（§24.2-2″；租约 v3 `ConflictResolutionAudits[]`，追加式、不可变、**不计入** 32 主槽位/256 墓碑容量）。
+/// `resolutionEvidence*` 为**判别式互斥**：`ResolvedAcceptedTerminal` 用 `resolutionEvidenceSnapshot`；`ResolvedNotAccepted` 用 `resolutionEvidenceRef`（仅 `evidenceId`，不内嵌字段）。
+/// </summary>
+public sealed class ConflictResolutionAudit
+{
+    [JsonPropertyName("auditId")] public string AuditId { get; set; } = "";
+    [JsonPropertyName("requestIdentity")] public string RequestIdentity { get; set; } = "";
+    [JsonPropertyName("submissionIdentity")] public string SubmissionIdentity { get; set; } = "";
+    [JsonPropertyName("sendSeq")] public int SendSeq { get; set; }
+    [JsonPropertyName("resolution")] public ConflictResolutionKind Resolution { get; set; }
+    [JsonPropertyName("resolvedAtUtc")] public DateTimeOffset ResolvedAtUtc { get; set; }
+    /// <summary>被取代的拒绝结果快照（`Outcome=Rejected`＋`AnsweredSendSeq`＋`Retryable`＋`ReasonCode`＋`EvidenceSource`）。</summary>
+    [JsonPropertyName("supersededRejectedResultSnapshot")] public OperationResult? SupersededRejectedResultSnapshot { get; set; }
+    /// <summary>仅 `ResolvedAcceptedTerminal` 使用：完整终态证据快照（业务字段与匹配的 `ExecutionResult` 逐字段一致）。</summary>
+    [JsonPropertyName("resolutionEvidenceSnapshot")] public ExecutionResult? ResolutionEvidenceSnapshot { get; set; }
+    /// <summary>仅 `ResolvedNotAccepted` 使用：`{ evidenceId }` 引用（**不内嵌**证据字段）。</summary>
+    [JsonPropertyName("resolutionEvidenceRef")] public ConflictResolutionEvidenceRef? ResolutionEvidenceRef { get; set; }
+}
+
+/// <summary>
+/// **权威未受理证据记录**（§24.2-2″；租约 v3 `ReconciledNotAcceptedEvidence[]`）：该记录**即权威观察事件的唯一持久化载体**
+/// （四项事务写入前校验输入事件；提交后只校验 `evidenceId` 唯一性、载荷不变性与身份关联，**不再要求第二份观察事件**）。
+/// </summary>
+public sealed class ReconciledNotAcceptedEvidence
+{
+    [JsonPropertyName("evidenceId")] public string EvidenceId { get; set; } = "";
+    [JsonPropertyName("submissionIdentity")] public string SubmissionIdentity { get; set; } = "";
+    [JsonPropertyName("sendSeq")] public int SendSeq { get; set; }
+    /// <summary>权威未受理事实类型（**封闭白名单**，见 <see cref="ReconciledNotAcceptedFactKinds"/>；未知取值＝损坏，读侧 fail-closed）。</summary>
+    [JsonPropertyName("factKind")] public string FactKind { get; set; } = "";
+    /// <summary>原始证据词（不伪造）。</summary>
+    [JsonPropertyName("rawEvidenceWord")] public string RawEvidenceWord { get; set; } = "";
+    [JsonPropertyName("evidenceSource")] public string EvidenceSource { get; set; } = "";
+    [JsonPropertyName("observedAtUtc")] public DateTimeOffset ObservedAtUtc { get; set; }
+}
+
+/// <summary>
+/// 权威未受理事实类型的**封闭白名单**（§24.2-2″：不得用自由字符串冒充「权威未受理事实」）。
+/// </summary>
+public static class ReconciledNotAcceptedFactKinds
+{
+    /// <summary>显式对账后确认：初始发送未被受理（远端查询/权威快照给出未受理事实）。</summary>
+    public const string ReconcileQueryNotAccepted = "not_accepted_after_reconcile";
+    /// <summary>协议回执明确拒绝（关联验证后的确定未受理）。</summary>
+    public const string ProtocolRejected = "not_accepted_protocol_reject";
+    /// <summary>本地未发送证明成立（§24.11 第 3′ 行的第二分支关闭依据）。</summary>
+    public const string LocalUnsentProven = "not_accepted_local_unsent";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
+    {
+        ReconcileQueryNotAccepted, ProtocolRejected, LocalUnsentProven,
+    };
+}
+
 /// <summary>操作最近一轮结果（§4.1：answeredSendSeq 标注结果对应的发送轮次——下一轮占位后不得把上一轮拒绝误当本轮结果）。</summary>
 public sealed class OperationResult
 {
@@ -404,4 +599,27 @@ public sealed class OperationRecord
     [JsonPropertyName("wireSubmitKey")] public string? WireSubmitKey { get; set; }
     /// <summary>去重合并关联（发送前持久化——本项由该胜者请求身份承担发送责任；共同结清/恢复时镜像终态）。</summary>
     [JsonPropertyName("mergedInto")] public string? MergedInto { get; set; }
+
+    // ============================================================
+    // R5.3 §24（B3 外部启动生命周期补全）——加法字段（租约 v3；旧 ≤2 记录缺字段按 §24.20-A′ 迁移/隔离口径处置）
+    // ============================================================
+
+    /// <summary>
+    /// **可信持久化操作类型**（§24.17）：创建时由可信适配器提供、与 Operation 同次原子发布；缺失/`Unknown` ⇒ 类型相关判定 fail-closed。
+    /// </summary>
+    [JsonPropertyName("operationType")] public OperationType OperationType { get; set; } = OperationType.Unknown;
+    /// <summary>**待终局处置**（§24.12-1）：已取得权威终态、接管/关闭/终局未完成的唯一责任载体。</summary>
+    [JsonPropertyName("pendingTerminal")] public PendingTerminal? PendingTerminal { get; set; }
+    /// <summary>**执行结果**（§24.13-1）：与责任状态分列保存（`TerminalCompleted` 只表示责任结清）。</summary>
+    [JsonPropertyName("executionResult")] public ExecutionResult? ExecutionResult { get; set; }
+    /// <summary>本地取消意向（§24.13-5；不写入 `ExecutionResult.cancelled`）。</summary>
+    [JsonPropertyName("localCancelRequested")] public bool LocalCancelRequested { get; set; }
+    /// <summary>冲突对账待决标志（§24.2-2″：活动覆盖层；已裁决后清除，但审计与证据不删除）。</summary>
+    [JsonPropertyName("conflictPending")] public bool ConflictPending { get; set; }
+    /// <summary>冲突证据集合（双方证据与完整发送身份；追加式，不覆盖既有事实）。</summary>
+    [JsonPropertyName("conflictEvidence")] public List<string> ConflictEvidence { get; set; } = [];
+    /// <summary>冲突裁决后的责任延续状态（§24.2-2″ 分支②：`AcceptedAwaitingTerminal`）。</summary>
+    [JsonPropertyName("conflictResolutionState")] public string? ConflictResolutionState { get; set; }
+    /// <summary>裁决审计引用（§24.2-2″：**仅存 ID**，指向租约 `ConflictResolutionAudits[]`）。</summary>
+    [JsonPropertyName("conflictResolutionAuditId")] public string? ConflictResolutionAuditId { get; set; }
 }

@@ -694,8 +694,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Single(ledger.Read().File!.Entries); // 不产第二份
 
         Assert.True(ledger.ConfirmRebuildable("sub:1:1", 1));
-        Assert.False(ledger.MarkTerminal("sub:1:1", 1, "").Success); // 空证据=evidence_required
-        Assert.True(ledger.MarkTerminal("sub:1:1", 1, "bgi_snapshot_terminal").Success);
+        // §24.2-2″：观察时点由调用方传入（首写保存、幂等重试严格比对）；缺参数/空证据=响亮拒绝。
+        Assert.False(ledger.MarkTerminal("sub:1:1", 1, "", _now).Success); // 空证据=evidence_required
+        Assert.True(ledger.MarkTerminal("sub:1:1", 1, "bgi_snapshot_terminal", _now).Success);
         Assert.Empty(ledger.GetOccupancy().Entries); // Terminal 不再占用
         Assert.False(ledger.GetOccupancy().Unknown);
         Assert.True(ledger.ConfirmRebuildable("sub:1:1", 1)); // 完整终态记录同样证明「曾受理」（快速完成 job 不阻断结清）
@@ -729,10 +730,10 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(OperationRequestState.Queued, FindOp(winner.RequestIdentity)!.RequestState); // 交接存续非终局
     }
 
-    // ── 21. 租约文件 v1 向后读兼容（Pending 保留/接管写入升 2）──
+    // ── 21. 租约文件 v1 向后读兼容（Pending 保留/接管写入升 3，R5.3 §24.20-A）──
 
     [Fact]
-    public void LeaseV1_BackwardRead_TakeoverWritesUpgradeToV2()
+    public void LeaseV1_BackwardRead_TakeoverWritesUpgradeToV3()
     {
         var v1 = """
         {
@@ -761,7 +762,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Null(read.File.Handoff?.Pending); // Pending 段原样保留
         Assert.Empty(read.File.Handoff?.Operations ?? []); // 缺字段视为空（向后读）
 
-        // 写入一律 version 2（接管路径：单调观察满 TTL+锁内复核）
+        // 写入一律 version 3（接管路径：单调观察满 TTL+锁内复核）
         var observer = new LeaseTakeoverObserver(() => _mono);
         Assert.Null(observer.Observe(store.Read()));
         _mono += TimeSpan.FromSeconds(20);
@@ -769,18 +770,18 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.NotNull(evidence);
         var acq = store.TryAcquire("pid:test2", evidence: evidence);
         Assert.True(acq.Success, "接管失败 " + acq.Reason);
-        Assert.Equal(2, store.Read().File!.Version); // 发布单点升级
+        Assert.Equal(3, store.Read().File!.Version); // 发布单点升级（v2→v3：承载责任事实字段）
         Assert.Null(store.Read().File!.Handoff?.Pending); // Pending 段保留
         Assert.Equal(6, store.Read().File!.Revision); // 修订单调延续不回退
     }
 
-    // ── 22. v3 Unsupported + 写入一律 version 2 ─────────────────
+    // ── 22. 更高版本 Unsupported + 写入一律 version 3（R5.3 §24.20-A）─────────────────
 
     [Fact]
-    public async Task LeaseV3_Unsupported_LoudReject()
+    public async Task LeaseFutureVersion_Unsupported_LoudReject()
     {
         var (svc, _, _, _) = BuildFacade();
-        var text = File.ReadAllText(Path.Combine(_dir, "arbitration-lease.json")).Replace("\"version\": 2", "\"version\": 3");
+        var text = File.ReadAllText(Path.Combine(_dir, "arbitration-lease.json")).Replace("\"version\": 3", "\"version\": 4");
         File.WriteAllText(Path.Combine(_dir, "arbitration-lease.json"), text);
         var result = await svc.SubmitAsync(Req());
         Assert.Equal(AdmissionResultKind.Error, result.Kind);
@@ -789,13 +790,13 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Publish_AlwaysVersion2()
+    public async Task Publish_AlwaysVersion3()
     {
         var (svc, _, _, _) = BuildFacade();
         _ = await svc.SubmitAsync(Req());
         var text = File.ReadAllText(Path.Combine(_dir, "arbitration-lease.json"));
-        Assert.Contains("\"version\": 2", text);
-        Assert.Equal(2, NewStore().Read().File!.Version);
+        Assert.Contains("\"version\": 3", text);
+        Assert.Equal(3, NewStore().Read().File!.Version);
     }
 
     // ── 23. 混合冲突组+合法胜者（逐候选分流：冲突组整组终局拒绝、合法候选照常获选受理）──
@@ -957,7 +958,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var stillDenied = svc.MarkOperationTerminal(r.RequestIdentity, "bgi:job_terminal");
         Assert.Equal("ledger_not_terminal", stillDenied.ReasonCode); // 台账未确认权威终态=不终局
 
-        Assert.True(ledger.MarkTerminal(accepted.SubmissionIdentity!, accepted.SendSeq, "bgi:job_terminal").Success);
+        Assert.True(ledger.MarkTerminal(accepted.SubmissionIdentity!, accepted.SendSeq, "bgi:job_terminal", _now).Success);
         var done = svc.MarkOperationTerminal(r.RequestIdentity, "bgi:job_terminal");
         Assert.Equal(AdmissionResultKind.Accepted, done.Kind);
         Assert.Equal("terminal_completed", done.ReasonCode);

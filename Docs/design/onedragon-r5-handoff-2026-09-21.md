@@ -51,7 +51,9 @@
 
 - **§24 设计稿已原样抽出**为独立文件 [`onedragon-r5-3-external-start-lifecycle-2026-09-21.md`](onedragon-r5-3-external-start-lifecycle-2026-09-21.md)（**章节号保留 §24.x**；原设计稿 §24 处保留指针）。抽出原因：原设计稿体积超过会诊工具单文件上限。
 - **§24 正在按 §17.4 迭代冻结**（GPT-5.6 sol / medium）：冻结轮 12 项必改、复会诊轮 6 项、终轮 6 项、第四轮 4 项、第五轮 1 项、第六轮 2 项、第七轮 4 项、第八轮 4 项、第九轮 5 项、第十轮 4 项、第十一轮 2 项、第十二轮 1 项、第十三轮 1 项——**均已逐条文本处置**，逐条处置表与**唯一冻结状态表**见该文件 §24.20-E。**尚未出现「无必改项」轮次 ⇒ §24 未冻结**。
-- **下一步**：继续复会诊至「无必改项」→ 登记冻结 → 按 §24.20-D 落地清单实现（`CommandExecutor`／`AdmissionResult`／`ArbitrationAdmissionService`／`TaskCenterHost.Admission`／`ExternalStartLedger`／`ExternalStartAdmission`／`CommandResult`）→ 生产组合根闭环夹具 → B2-γ 第 3 步 → B4 → R5.3/5.5/5.8 收口。
+- **§24 已冻结**：迭代至**第 23 轮「无必改项」**（冻结轮 12→…→第二十二轮 2 项，全部逐条文本处置）；冻结 ≠ 生效。
+- **落地批次一已完成（代码）**：`ExternalStartExecution` 判别式化＋完成层 `ExternalStartCompletion`／早期层 `ExternalStartReply`；`ExternalStartAdmissionStatus` 增 `Cancelled`/`ExecutionFailed`；`AdmissionResult`／`ExternalStartAdmissionOutcome`／`CommandResult` 增结果维×责任维加法字段（线路词表不变）；**租约 version 3**（`OperationType`／`PendingTerminal`／`ExecutionResult`／`PreObservations[]`／`ConflictResolutionAudits[]`／`ReconciledNotAcceptedEvidence[]`，≤2 兼容读＋旧代未决责任 fail-closed，v3 审计双向绑定与逐字段校验）；**台账 version 2**（`jobId`／`terminalObservedAtUtc`／终态副本）；门面**占位同次发布写 `PreObservationRecord`**；宿主发送层判别式无损映射＋接管路由改按 `OperationType`。实现批次会诊 5 轮（10→6→5→4→2→1），**末轮无必改项＝可提交**；全量回归 **775/1/776**（基线未降）。
+- **下一步（Batch B）**：完成结算入口 `SettleCompletionAsync`（§24.3-4 三分支）→ 冲突裁决四项事务写入侧与第四类恢复集合 → `ContinueUse`/`ClassifyCurrentState` 的 §24.6-5 逐分支映射 → 既有 v2 `Status="cancelled"` 等价转换 → Create 对 `Unknown` 硬拒绝（先迁移夹具）→ 生产组合根闭环夹具（§24.4）→ B2-γ 第 3 步 → B4 → R5.3/5.5/5.8 收口。
 - 生产外部启动接线（E3/E4/E5）**仍关闭**；`.bak`／`.stale`／`TestResults` 等未跟踪文件未动。
 
 > 继续 BGI 槲寄生调度器 R5（接管与切换）。先读本交接稿与设计稿 §24；owner 已选 A，B3 架构整改纳入 R5。先冻结 §24（GPT-5.6 sol medium 会诊至无必改项），再实现、回归、补生产组合根夹具。目标：R5.1–R5.8 全部收口，R5.8「无双跑」验收单签署。不要向我索取「继续」确认。

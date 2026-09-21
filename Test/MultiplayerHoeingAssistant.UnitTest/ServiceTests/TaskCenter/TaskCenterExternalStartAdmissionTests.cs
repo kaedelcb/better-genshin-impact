@@ -174,7 +174,7 @@ public class TaskCenterExternalStartAdmissionTests
 
             // 台账标记终局后，同一请求可获准（占用解除）
             Assert.True(new ExternalStartLedger(root)
-                .MarkTerminal("sub:prior:1", 1, "fixture:terminal").Success);
+                .MarkTerminal("sub:prior:1", 1, "fixture:terminal", DateTimeOffset.UtcNow).Success);
             var allowed = await host.SubmitExternalStartViaAdmissionAsync(
                 Request(_ => { System.Threading.Interlocked.Increment(ref executed); return Task.FromResult(ExternalStartExecution.AcceptedWith()); }), default);
             Assert.True(allowed.Kind == AdmissionResultKind.Accepted,

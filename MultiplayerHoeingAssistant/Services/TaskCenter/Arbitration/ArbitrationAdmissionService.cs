@@ -49,6 +49,12 @@ public sealed class AdmissionRequest
     /// <summary>运行台账合法游标（Runner 后继授权：游标合法+授权未消费双条件）。</summary>
     public string? CursorRef { get; set; }
     public long? CursorRevision { get; set; }
+    /// <summary>
+    /// **可信持久化操作类型**（R5.3 §24.17）：由**可信适配器按调用位置**提供（E1/首节点＝`FlowRegistration`、
+    /// 后继节点＝`NodeExecution`、E3/E4/E5＝`ExternalStart`、移交＝`Handoff`）；缺失/`Unknown` ⇒ **类型相关判定 fail-closed**
+    /// （不得按 `ResourceRef`、`RunId` 空值或运行快照猜测）。
+    /// </summary>
+    public OperationType OperationType { get; set; } = OperationType.Unknown;
 }
 
 /// <summary>
@@ -90,6 +96,13 @@ public enum AdmissionResultKind
     Reconciling,
     /// <summary>门面/存取响亮拒绝（invalid_request/lease_stale_generation/stale_operation_identity/operations_capacity_full 等）。</summary>
     Error,
+    /// <summary>
+    /// **取消**（R5.3 §24.2-2：完成层 `Cancelled` 驱动）——入口按取消口径回执并停止批次推进；
+    /// 责任是否结清由 <see cref="AdmissionResult.ResponsibilityState"/> 表达（**不得**压成普通失败）。
+    /// </summary>
+    Cancelled,
+    /// <summary>**确定执行失败**（R5.3 §24.9／§24.13-1：完成层 `ExecutionFailed` 驱动；与拒绝/未知分离、**不得触发重发**）。</summary>
+    ExecutionFailed,
 }
 
 /// <summary>许可结果（结构化载荷：原因码/胜者引用/压制来源/完整判定——日志与夹具按载荷断言）。</summary>
@@ -105,6 +118,20 @@ public sealed class AdmissionResult
     public int SendSeq { get; set; }
     /// <summary>当轮完整判定（决策集合完整性：冲突组/重复项/非胜者结果，不只看胜者）。</summary>
     public ArbitrationDecision? Decision { get; set; }
+
+    // ==== R5.3 §24.6-1/2：结果维 × 责任维（加法字段，旧调用默认值兼容） ====
+    /// <summary>远端作业句柄（§24.3；无则 null，不得臆造）。</summary>
+    public string? JobId { get; set; }
+    /// <summary>执行结果维（§24.6-1）。</summary>
+    public ExecutionDisposition ExecutionDisposition { get; set; } = ExecutionDisposition.None;
+    /// <summary>责任维（§24.6-5：`None`/`Pending`/`Settled`）。</summary>
+    public ResponsibilityState ResponsibilityState { get; set; } = ResponsibilityState.None;
+    /// <summary>原始终态词（不伪造）。</summary>
+    public string? RawTerminal { get; set; }
+    /// <summary>完成层执行错误码（与信封 `ErrorCode` 语义分离）。</summary>
+    public string? ExecutionErrorCode { get; set; }
+    /// <summary>证据来源（原始回执词/对账结论+产生端）。</summary>
+    public string? EvidenceSource { get; set; }
 
     public static AdmissionResult Of(AdmissionResultKind kind, string reasonCode, string detail, string requestIdentity = "")
         => new() { Kind = kind, ReasonCode = reasonCode, Detail = detail, RequestIdentity = requestIdentity };
@@ -136,12 +163,19 @@ public sealed class SubmissionDispatch
 /// <summary>发送结果三态（§4.2 三态对账：受理/确定拒绝/未知——未知立即转对账不再重试）。</summary>
 public abstract record SendOutcome
 {
-    /// <summary>受理（evidenceSource=原始回执词+产生端；runId=托管流程关联运行）。</summary>
-    public sealed record Accepted(string EvidenceSource, string? RunId) : SendOutcome;
+    /// <summary>
+    /// 受理（evidenceSource=原始回执词+产生端；runId=托管流程关联运行）。
+    /// **R5.3 §24.2-2**：`jobId`＝远端作业句柄（无则 null，**不得臆造**）；**不设 `Terminal`**——
+    /// 终态事实只由完成层 `ExternalStartCompletion`／`SettleCompletionAsync` 承载，杜绝第三套终态来源。
+    /// </summary>
+    public sealed record Accepted(string EvidenceSource, string? RunId, string? JobId = null) : SendOutcome;
     /// <summary>经关联验证的确定未受理（先关闭 Submission 再按 §3.3 记可重试/终局）。</summary>
     public sealed record Rejected(string ReasonCode, bool Retryable, string EvidenceSource) : SendOutcome;
-    /// <summary>未知（Submission.Reconciling；不换键重跑）。</summary>
-    public sealed record Unknown(string Detail) : SendOutcome;
+    /// <summary>
+    /// 未知（Submission.Reconciling；不换键重跑）。
+    /// **R5.3 §24.6-2**：携带证据来源（原始回执词/产生端），保证发送层三态均为**字段级无损**映射。
+    /// </summary>
+    public sealed record Unknown(string Detail, string? EvidenceSource = null) : SendOutcome;
 }
 
 /// <summary>
@@ -150,8 +184,16 @@ public abstract record SendOutcome
 /// </summary>
 public abstract record ReconcileSettlement
 {
-    /// <summary>权威事实确认「曾受理」（evidenceSource=对账结论+产生端，保留原始证据来源、不伪造远端回执词）。证据必须携带原发送关联——旧轮次证据不得关闭新轮次责任。</summary>
-    public sealed record Accepted(string SubmissionIdentity, int SendSeq, string EvidenceSource, string? RunId) : ReconcileSettlement;
+    /// <summary>
+    /// 权威事实确认「曾受理」（evidenceSource=对账结论+产生端，保留原始证据来源、不伪造远端回执词）。
+    /// 证据必须携带原发送关联——旧轮次证据不得关闭新轮次责任。
+    /// **R5.3 §24.3-4**：`jobId`＝远端句柄；`completion`＝可选的完成层结果（**不是**发送层 `Terminal` 布尔）：
+    /// 缺省/null ⇒ 普通受理；`Unknown` ⇒ 保持观察依据且**不得**生成 `PendingTerminal`；
+    /// `Succeeded/Cancelled/ExecutionFailed` ⇒ 先写 `ExecutionResult`＋`PendingTerminal` 再按 §24.15 结算。
+    /// </summary>
+    public sealed record Accepted(
+        string SubmissionIdentity, int SendSeq, string EvidenceSource, string? RunId,
+        string? JobId = null, ExternalStartCompletion? Completion = null) : ReconcileSettlement;
     /// <summary>权威事实确认「确定未受理」。同上携带原发送关联。</summary>
     public sealed record NotAccepted(string SubmissionIdentity, int SendSeq, string ReasonCode, bool Retryable, string EvidenceSource) : ReconcileSettlement;
 }
@@ -335,6 +377,9 @@ public sealed class ArbitrationAdmissionService
                     // §13.10 A2（[纠正·2026-09-21] 会诊阻断项）：冻结副本必须**原样携带**进程内不可变请求上下文——
                     // 漏掉它会让正常后继路径在 Sender 处确定性落到 successor_context_missing。
                     ProcessLocalContext = request.ProcessLocalContext,
+                    // §24.17（[R5.3 落地批次会诊阻断处置]）：**可信操作类型必须随冻结副本一起携带**——
+                    // 否则创建时落盘恒为 `Unknown`，外部台账分派与类型相关判定全部失效（fail-closed 方向被绕过）。
+                    OperationType = request.OperationType,
                 };
                 frozen = frz;
                 // 内部冻结（B3）：登记/队列/裁决/占位/发送一律只消费本副本——调用方后置修改/替换不改变已登记事实。
@@ -369,6 +414,7 @@ public sealed class ArbitrationAdmissionService
                         WireSubmitKey = frz.WireSubmitKey,
                         ResourceRef = frz.Candidate.ResourceRef ?? "",
                         Intent = frz.Candidate.Intent ?? "",
+                        OperationType = frz.OperationType, // §24.17：创建时由可信适配器提供、同次原子发布、后续不可改写
                     });
                     return null;
                 });
@@ -628,6 +674,7 @@ public sealed class ArbitrationAdmissionService
                     TargetEpoch = targetEpoch,
                     ResourceRef = candidate.ResourceRef ?? "",
                     Intent = "resume",
+                    OperationType = OperationType.Recovery, // §24.17：恢复操作的可信类型
                 });
                 return null;
             });
@@ -1297,6 +1344,32 @@ public sealed class ArbitrationAdmissionService
                 State = SubmissionState.Submitting,
                 RecordedAtUtc = now,
             };
+            // §24.16-2（[终审会诊阻断处置]）：**预观察记录必须与发送许可占位同次原子发布**——
+            // 否则「占位成功→发送→崩溃」窗口内没有可重建的观察依据（不可恢复发送窗口）。
+            // 未持久化不得发送：门面只在本次发布成功后才调用 Sender。
+            file.Handoff.PreObservations ??= [];
+            if (!file.Handoff.PreObservations.Any(p => p is not null
+                    && string.Equals(p.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+                    && p.SendSeq == sendSeq))
+                file.Handoff.PreObservations.Add(new PreObservationRecord
+                {
+                    SubmissionIdentity = submissionIdentity,
+                    SendSeq = sendSeq,
+                    OperationType = op.OperationType,
+                    TargetEpoch = targetEpoch,
+                    WireSubmitKey = op.WireSubmitKey,
+                    // 替代查询依据（§24.7-2）：无句柄路径必须登记可查询依据；本批取线上提交键（节点/流程）或台账引用（外部启动）。
+                    QueryBasis = op.OperationType == OperationType.ExternalStart
+                        ? "external-start-ledger:" + submissionIdentity
+                        // 无线上提交键的路径（流程登记等）以**操作记录引用**作为替代查询依据——
+                        // 不得登记空依据（§24.7-2：无查询依据＝不得宣称接管可重建）。
+                        : (string.IsNullOrEmpty(op.WireSubmitKey)
+                            ? "operation-record:" + request.RequestIdentity
+                            : "wire-submit-key:" + op.WireSubmitKey),
+                    OwnerEpoch = lease.OwnerEpoch,
+                    CreatedAtUtc = now,
+                    State = "pending",
+                });
             // ⑭ 去重合并关联发送前落盘（B6：合并项由本胜者承担发送责任；共同结清/恢复时镜像终态）。
             if (mergedIdentities is { Count: > 0 })
             {
@@ -1478,6 +1551,8 @@ public sealed class ArbitrationAdmissionService
                     EvidenceSource = accepted.EvidenceSource,
                     State = LedgerEntryState.AcceptedPendingExecution,
                     RunId = accepted.RunId,
+                    JobId = accepted.JobId, // §24.3-2：JobId 全链传递（不得在准入层丢弃已取得的句柄）
+                    OperationType = op.OperationType, // §24.17：类型相关判定只按持久化类型（不得用 RunId 空值推断）
                 };
                 string? persistFailure;
                 try
@@ -1493,8 +1568,22 @@ public sealed class ArbitrationAdmissionService
                 {
                     var markPersist = await MarkReconcilingAsync(request.RequestIdentity, lease, submission.SubmissionIdentity, submission.SendSeq).ConfigureAwait(false);
                     return markPersist.Success
-                        ? new AdmissionResult { Kind = AdmissionResultKind.Reconciling, ReasonCode = "takeover_persist_failed", Detail = "接管台账持久化失败（" + persistFailure + "）——Submission 保持未决，保守待对账。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq }
-                        : AdmissionResult.Of(AdmissionResultKind.Error, markPersist.Reason ?? "invalid_request", "待对账落盘失败（不报告未持久化状态）。", request.RequestIdentity);
+                        ? new AdmissionResult { Kind = AdmissionResultKind.Reconciling, ReasonCode = "takeover_persist_failed", Detail = "接管台账持久化失败（" + persistFailure + "）——Submission 保持未决，保守待对账。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq, ExecutionDisposition = ExecutionDisposition.Unknown, ResponsibilityState = ResponsibilityState.Pending, JobId = accepted.JobId, EvidenceSource = accepted.EvidenceSource }
+                        // [终审会诊阻断处置] 已登记且已签发发送责任 ⇒ 二次持久化失败**不得**回落 `ResponsibilityState.None`（那是「不适用」），
+                        // 责任仍未结清 = `Pending`（`Unknown` 结果维）；只是未能把状态落到盘上。
+                        : new AdmissionResult
+                        {
+                            Kind = AdmissionResultKind.Error,
+                            ReasonCode = markPersist.Reason ?? "invalid_request",
+                            Detail = "待对账落盘失败（不报告未持久化状态）。",
+                            RequestIdentity = request.RequestIdentity,
+                            SubmissionIdentity = submission.SubmissionIdentity,
+                            SendSeq = submission.SendSeq,
+                            ExecutionDisposition = ExecutionDisposition.Unknown,
+                            ResponsibilityState = ResponsibilityState.Pending,
+                            JobId = accepted.JobId,
+                            EvidenceSource = accepted.EvidenceSource,
+                        };
                 }
 
                 if (_hooks.Barriers?.AfterLedgerBeforeClose is { } b2) await b2().ConfigureAwait(false);
@@ -1509,9 +1598,23 @@ public sealed class ArbitrationAdmissionService
                     return null;
                 });
                 if (!close.Success)
-                    return new AdmissionResult { Kind = AdmissionResultKind.Reconciling, ReasonCode = close.Reason ?? "close_failed", Detail = "Submission 关闭失败——台账已在册（重复接管幂等），保守待对账。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq };
+                    return new AdmissionResult { Kind = AdmissionResultKind.Reconciling, ReasonCode = close.Reason ?? "close_failed", Detail = "Submission 关闭失败——台账已在册（重复接管幂等），保守待对账。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq, ExecutionDisposition = ExecutionDisposition.Unknown, ResponsibilityState = ResponsibilityState.Pending, JobId = accepted.JobId, EvidenceSource = accepted.EvidenceSource };
 
-                return new AdmissionResult { Kind = AdmissionResultKind.Accepted, ReasonCode = "accepted", Detail = "已受理（接管台账已持久化并可重建）。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq, Decision = null };
+                // R5.3 §24.6-5：普通受理已关闭、完成层尚未报终态 ⇒ 责任 `Pending`（`Settled` 只在权威终态结算全部完成时给出）。
+                return new AdmissionResult
+                {
+                    Kind = AdmissionResultKind.Accepted,
+                    ReasonCode = "accepted",
+                    Detail = "已受理（接管台账已持久化并可重建）。",
+                    RequestIdentity = request.RequestIdentity,
+                    SubmissionIdentity = submission.SubmissionIdentity,
+                    SendSeq = submission.SendSeq,
+                    Decision = null,
+                    JobId = accepted.JobId,
+                    ExecutionDisposition = ExecutionDisposition.None,
+                    ResponsibilityState = ResponsibilityState.Pending,
+                    EvidenceSource = accepted.EvidenceSource,
+                };
             }
             case SendOutcome.Rejected rejected:
             {
@@ -1555,18 +1658,43 @@ public sealed class ArbitrationAdmissionService
                     return null;
                 });
                 if (!close.Success)
-                    return new AdmissionResult { Kind = AdmissionResultKind.Reconciling, ReasonCode = close.Reason ?? "close_failed", Detail = "拒绝关闭失败——保守待对账。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq };
+                    return new AdmissionResult { Kind = AdmissionResultKind.Reconciling, ReasonCode = close.Reason ?? "close_failed", Detail = "拒绝关闭失败——保守待对账。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq, ExecutionDisposition = ExecutionDisposition.Unknown, ResponsibilityState = ResponsibilityState.Pending, EvidenceSource = rejected.EvidenceSource };
                 return canRetry
-                    ? new AdmissionResult { Kind = AdmissionResultKind.RetryableRejected, ReasonCode = rejected.ReasonCode, Detail = "可重试拒绝（窗口内经 RetryAsync 重新 Admit）。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq }
-                    : new AdmissionResult { Kind = AdmissionResultKind.TerminalRejected, ReasonCode = rejected.ReasonCode, Detail = "终局拒绝。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq };
+                    ? new AdmissionResult { Kind = AdmissionResultKind.RetryableRejected, ReasonCode = rejected.ReasonCode, Detail = "可重试拒绝（窗口内经 RetryAsync 重新 Admit）。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq, ResponsibilityState = ResponsibilityState.Settled, EvidenceSource = rejected.EvidenceSource }
+                    : new AdmissionResult { Kind = AdmissionResultKind.TerminalRejected, ReasonCode = rejected.ReasonCode, Detail = "终局拒绝。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq, ResponsibilityState = ResponsibilityState.Settled, EvidenceSource = rejected.EvidenceSource };
             }
             default:
             {
                 // 未知→Submission.Reconciling（不换键重跑、不重发；持续停驻待对账——处置入口=SettleReconciledAsync）。
                 var markUnknown = await MarkReconcilingAsync(request.RequestIdentity, lease, submission.SubmissionIdentity, submission.SendSeq).ConfigureAwait(false);
                 return markUnknown.Success
-                    ? new AdmissionResult { Kind = AdmissionResultKind.Reconciling, ReasonCode = "send_unknown", Detail = outcome is SendOutcome.Unknown u ? u.Detail : "发送结果未知。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq }
-                    : AdmissionResult.Of(AdmissionResultKind.Error, markUnknown.Reason ?? "invalid_request", "待对账落盘失败（不报告未持久化状态）。", request.RequestIdentity);
+                    ? new AdmissionResult
+                    {
+                        Kind = AdmissionResultKind.Reconciling,
+                        ReasonCode = "send_unknown",
+                        Detail = outcome is SendOutcome.Unknown u ? u.Detail : "发送结果未知。",
+                        RequestIdentity = request.RequestIdentity,
+                        SubmissionIdentity = submission.SubmissionIdentity,
+                        SendSeq = submission.SendSeq,
+                        // §24.6-2（[第三轮验证会诊重要项处置]）：未结清责任必须带责任维与证据来源——
+                        // 不得在门面内部把「不可考」压成只有一个字符串。
+                        ExecutionDisposition = ExecutionDisposition.Unknown,
+                        ResponsibilityState = ResponsibilityState.Pending,
+                        EvidenceSource = outcome is SendOutcome.Unknown u2 ? u2.EvidenceSource : null,
+                    }
+                    // [终审会诊阻断处置] 同上：已签发发送责任的二次持久化失败不得回落 `None`。
+                    : new AdmissionResult
+                    {
+                        Kind = AdmissionResultKind.Error,
+                        ReasonCode = markUnknown.Reason ?? "invalid_request",
+                        Detail = "待对账落盘失败（不报告未持久化状态）。",
+                        RequestIdentity = request.RequestIdentity,
+                        SubmissionIdentity = submission.SubmissionIdentity,
+                        SendSeq = submission.SendSeq,
+                        ExecutionDisposition = ExecutionDisposition.Unknown,
+                        ResponsibilityState = ResponsibilityState.Pending,
+                        EvidenceSource = outcome is SendOutcome.Unknown u3 ? u3.EvidenceSource : null,
+                    };
             }
         }
     }
@@ -1606,6 +1734,11 @@ public sealed class ArbitrationAdmissionService
                 return AdmissionResult.Of(AdmissionResultKind.Error, "stale_evidence", "对账证据与当前发送轮次不关联（旧证据不得关闭新责任）。", requestIdentity);
 
             var candidate = op.Candidate ?? new ArbitrationCandidate();
+            // R5.3 §24.3-4（[落地批次会诊阻断处置]）：显式对账携带的完成层结果**本批尚未实现结算入口**——
+            // 必须**响亮拒绝**，不得静默按普通受理关闭（否则「看似支持、实际丢弃终态事实」＝事实反转）。
+            if (settlement is ReconcileSettlement.Accepted { Completion: not null })
+                return AdmissionResult.Of(AdmissionResultKind.Error, "completion_settlement_not_implemented",
+                    "完成层结果结算（§24.3-4 终态分支）尚未实现，保守拒绝（不得按普通受理关闭）。", requestIdentity);
             var request = new AdmissionRequest
             {
                 Namespace = candidate.Namespace ?? "manual",
@@ -1619,7 +1752,8 @@ public sealed class ArbitrationAdmissionService
             };
             SendOutcome outcome = settlement switch
             {
-                ReconcileSettlement.Accepted a => new SendOutcome.Accepted(a.EvidenceSource, a.RunId),
+                // §24.3-2：JobId 全链传递——显式对账取得的句柄同样不得在门面层丢弃。
+                ReconcileSettlement.Accepted a => new SendOutcome.Accepted(a.EvidenceSource, a.RunId, a.JobId),
                 ReconcileSettlement.NotAccepted n => new SendOutcome.Rejected(n.ReasonCode, n.Retryable, n.EvidenceSource),
                 _ => new SendOutcome.Unknown("未知结清类型"),
             };
@@ -1693,6 +1827,12 @@ public sealed class ArbitrationAdmissionService
                 return "submission_identity_mismatch";
             var reason = applyOutcome(file);
             if (reason is not null) return reason;
+            // R5.3 §24.16-4：正式接管台账/PendingTerminal 落盘后（本处＝受理或确定拒绝的关闭事务内）同一权威发布内
+            // 把对应预观察记录标记 `completed`——清理仍归 R5.6 统一裁决（本批不删除唯一恢复依据）。
+            var pre = (file.Handoff!.PreObservations ?? []).FirstOrDefault(p => p is not null
+                && string.Equals(p.SubmissionIdentity, submission.SubmissionIdentity, StringComparison.Ordinal)
+                && p.SendSeq == submission.SendSeq);
+            if (pre is not null) pre.State = "completed";
             var op = FindOp(file, submission);
             if (op is not null)
             {

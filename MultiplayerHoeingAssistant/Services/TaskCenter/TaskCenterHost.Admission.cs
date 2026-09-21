@@ -239,14 +239,30 @@ public sealed partial class TaskCenterHost
                     var op = _admissionStore?.Read().File?.Handoff?.Operations?
                         .FirstOrDefault(o => string.Equals(o.SubmissionIdentity, entry.SubmissionIdentity, StringComparison.Ordinal));
                     if (op is null) return Task.FromResult<string?>("operation_identity_missing");
-                    var resourceRef = op.ResourceRef ?? "";
-                    var isNode = resourceRef.StartsWith("node:", StringComparison.Ordinal);
-                    var isRunLevel = resourceRef.StartsWith("flow:", StringComparison.Ordinal)
-                                     || resourceRef.StartsWith("run:", StringComparison.Ordinal);
-                    if (!isNode && !isRunLevel)
+                    // **R5.3 §24.17（[落地批次会诊阻断处置]）**：接管载体**只按持久化的 `OperationType` 分派**——
+                    // 不得再按 `ResourceRef` 前缀推断操作类别；`Unknown`（旧格式代隔离产物/缺类型）一律 **fail-closed**：
+                    // 既不冒充外部启动，也不跳过节点侧 jobId/提交键/发送身份/纪元验证。
+                    var isNode = op.OperationType == OperationType.NodeExecution;
+                    switch (op.OperationType)
                     {
-                        // §4.2a：E3/E4/E5 的受理接管台账＝external-start-ledger.json（修订守卫、可跨重启重建）。
-                        return Task.FromResult(PersistExternalStartLedger(entry));
+                        case OperationType.ExternalStart:
+                            // §4.2a：E3/E4/E5 的受理接管台账＝external-start-ledger.json（修订守卫、可跨重启重建）。
+                            return Task.FromResult<string?>(PersistExternalStartLedger(entry));
+                        case OperationType.FlowRegistration:
+                            // [验证会诊重要项处置] **类型与来源记录不得冲突**（§24.17-3）：流程登记的 resourceRef 必为 `flow:`。
+                            if (!(op.ResourceRef ?? "").StartsWith("flow:", StringComparison.Ordinal))
+                                return Task.FromResult<string?>("operation_type_source_mismatch");
+                            break;
+                        case OperationType.NodeExecution:
+                            // 节点执行必为 `node:{nodeId}`；下方按前缀切节点身份，前缀不符即响亮拒绝。
+                            if (!(op.ResourceRef ?? "").StartsWith("node:", StringComparison.Ordinal))
+                                return Task.FromResult<string?>("operation_type_source_mismatch");
+                            break;
+                        case OperationType.Recovery:
+                        case OperationType.Handoff:
+                            break; // 继续走下方 run 级/节点级验证
+                        default:
+                            return Task.FromResult<string?>("legacy_operation_type_unresolved");
                     }
                     if (entry.RunId is not { } boundRunId) return Task.FromResult<string?>("run_id_missing");
                     if (!string.Equals(op.RunBinding, boundRunId, StringComparison.Ordinal))
@@ -288,12 +304,18 @@ public sealed partial class TaskCenterHost
                     var read = _admissionStore?.Read();
                     var op = read.File?.Handoff?.Operations?.FirstOrDefault(
                         o => string.Equals(o.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal));
+                    // R5.3 §24.1-6（[落地批次会诊阻断处置]）：**按持久化类型分派**，未知类型 fail-closed。
+                    // 外部启动的权威终态须查 `ExternalStartLedger`（§24.1-6）；本批尚未实现该查询 ⇒ 保守返回 false
+                    // （外部 Operation 保持 Active，不释放主槽位；由 Batch B 的完成结算入口接管）。
+                    if (op is null || op.OperationType is OperationType.Unknown or OperationType.ExternalStart) return false;
+                    if (op.OperationType is not (OperationType.NodeExecution or OperationType.FlowRegistration
+                        or OperationType.Recovery or OperationType.Handoff)) return false;
                     if (op?.RunBinding is not { } rb) return false;
                     var run = _runs.Load(rb);
                     if (run is null) return false;
                     // G8／§12.3：**节点操作按「该节点的权威终态结果」确认，不等整条 run 终态**——
                     // 否则节点 Operation 会一直占主槽位到流程结束（长流程堆满 32 槽）。
-                    if (op.ResourceRef?.StartsWith("node:", StringComparison.Ordinal) == true)
+                    if (op.OperationType == OperationType.NodeExecution)
                         return NodeOutcomeIsTerminal(run, op);
                     // 非节点（流程登记/恢复）仍按运行级终态确认。
                     return run.State is WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.Cancelled;
@@ -415,6 +437,8 @@ public sealed partial class TaskCenterHost
             SourceDetail = string.IsNullOrEmpty(request.SourceDetail) ? "external:start" : request.SourceDetail,
             WireSubmitKey = request.WireSubmitKey,
             ProcessLocalContext = new ExternalStartContext(request.ExecuteAsync),
+            // §24.17：外部启动的可信持久化操作类型（由适配器按调用位置提供，不由远程自报）。
+            OperationType = request.OperationType,
             Candidate = new ArbitrationCandidate
             {
                 Scope = $"bgi:local:{externalEpoch}",
@@ -678,6 +702,7 @@ public sealed partial class TaskCenterHost
             Kind = AdmissionKind.Create,
             SourceDetail = "ui:panel:start",
             RunBinding = run.RunId,
+            OperationType = OperationType.FlowRegistration, // §24.17：E1 面板启动＝流程登记（可信调用位置）
             Candidate = new ArbitrationCandidate
             {
                 Scope = $"bgi:local:{CurrentBgiEpoch()}",
@@ -1079,6 +1104,7 @@ public sealed partial class TaskCenterHost
                 Kind = AdmissionKind.Create,
                 SourceDetail = "runner:successor",
                 RunBinding = run.RunId,
+                OperationType = OperationType.NodeExecution, // §24.17：后继节点提交＝节点执行（可信调用位置）
                 // 线上提交键（§6.1 映射表）：无法确定性推导时显式携带——后继提交的键由引擎派生且随 run 落盘，
                 // 显式登记使台账侧可自足重建（PID 未传时台账只有空键）。
                 WireSubmitKey = sub.Key,
@@ -1336,6 +1362,9 @@ public sealed partial class TaskCenterHost
         var status = result.Kind switch
         {
             AdmissionResultKind.Accepted => ExternalStartAdmissionStatus.Accepted,
+            // R5.3 §24.2-2／§24.9：取消与确定执行失败各自成列（**不得**压成 Unknown/Rejected──前者会丢取消信号、后者会诱发重发）。
+            AdmissionResultKind.Cancelled => ExternalStartAdmissionStatus.Cancelled,
+            AdmissionResultKind.ExecutionFailed => ExternalStartAdmissionStatus.ExecutionFailed,
             AdmissionResultKind.F11Blocked or AdmissionResultKind.NeedPreemptConfirm =>
                 ExternalStartAdmissionStatus.Blocked,
             AdmissionResultKind.TerminalRejected or AdmissionResultKind.RetryableRejected
@@ -1348,7 +1377,12 @@ public sealed partial class TaskCenterHost
         var echoedIdentity = string.IsNullOrEmpty(result.RequestIdentity)
             ? (request.RequestIdentity ?? "")
             : result.RequestIdentity;
-        return new ExternalStartAdmissionOutcome(status, result.ReasonCode, result.Detail, echoedIdentity);
+        // R5.3 §24.6-2：结果维 × 责任维贯通到适配器边界（不得在宿主侧丢弃 JobId/终态词/证据来源/责任状态）。
+        return new ExternalStartAdmissionOutcome(
+            status, result.ReasonCode, result.Detail, echoedIdentity,
+            result.JobId, result.ExecutionDisposition, result.ResponsibilityState,
+            result.RawTerminal, result.ExecutionErrorCode, result.EvidenceSource,
+            result.SubmissionIdentity, result.SendSeq);
     }
 
     /// <summary>
@@ -1372,14 +1406,24 @@ public sealed partial class TaskCenterHost
             return new SendOutcome.Unknown("external_adapter_exception:" + ex.GetType().Name);
         }
 
-        // 三态自守（会诊建议）：`Accepted=true 且 Uncertain=true` 是**矛盾结果**——不得按已受理放行，
-        // 按事实不可考处理（既不猜成功也不猜失败）。
-        if (execution.Accepted && execution.Uncertain)
-            return new SendOutcome.Unknown("external_adapter_contradictory_result");
-        if (execution.Accepted) return new SendOutcome.Accepted("external:adapter_accepted", null);
-        if (execution.Uncertain)
-            return new SendOutcome.Unknown("external_uncertain:" + (execution.RejectReason ?? ""));
-        return new SendOutcome.Rejected(execution.RejectReason ?? "external_rejected", false, "external:adapter");
+        // R5.3 §24.2-2（[落地批次会诊阻断处置]）：按**判别式**穷尽分派——**字段级无损**映射到门面 `SendOutcome`：
+        // `Accepted(JobId)`／`Rejected(reason, retryable, evidenceSource)`／`Unknown(detail)`；
+        // 不得再用旧布尔兼容属性（会让 JobId/Retryable/证据来源在宿主边界丢失）。
+        return execution.Kind switch
+        {
+            ExternalStartExecutionKind.Accepted => new SendOutcome.Accepted(
+                string.IsNullOrEmpty(execution.EvidenceSource) ? "external:adapter_accepted" : execution.EvidenceSource!,
+                null,
+                execution.JobId),
+            ExternalStartExecutionKind.Rejected => new SendOutcome.Rejected(
+                string.IsNullOrEmpty(execution.Reason) ? "external_rejected" : execution.Reason!,
+                execution.Retryable,
+                string.IsNullOrEmpty(execution.EvidenceSource) ? "external:adapter" : execution.EvidenceSource!),
+            // §24.6-2：Unknown 也必须保留证据来源（字段级无损；不得在宿主边界丢弃）。
+            _ => new SendOutcome.Unknown(
+                "external_uncertain:" + (string.IsNullOrEmpty(execution.Reason) ? "unknown" : execution.Reason!),
+                execution.EvidenceSource),
+        };
     }
 
     /// <summary>

@@ -424,18 +424,18 @@ public class HandoffTransitionPolicyTests : IDisposable
     // ── 16. 先判版本：未来版本 + 垃圾类型 = Unsupported 非 Corrupt ─
 
     [Fact]
-    public void VersionFirst_GarbageV3_Unsupported_NotCorrupt()
+    public void VersionFirst_GarbageFutureVersion_Unsupported_NotCorrupt()
     {
         Directory.CreateDirectory(_dir);
         var store = new ArbitrationLeaseStore(_dir);
         var leasePath = Path.Combine(_dir, "arbitration-lease.json");
 
-        // version 超前（>2，R5.2 §4.0）+ lease 垃圾类型 → 先判版本 → Unsupported（不降级解析、不当 Corrupt）。
-        File.WriteAllText(leasePath, "{\"version\":3,\"lease\":\"垃圾类型\"}");
+        // version 超前（>3，R5.3 §24.20-A：v3＝当前支持格式代）+ lease 垃圾类型 → 先判版本 → Unsupported（不降级解析、不当 Corrupt）。
+        File.WriteAllText(leasePath, "{\"version\":4,\"lease\":\"垃圾类型\"}");
         Assert.Equal(ArbitrationLeaseStatus.Unsupported, store.Read().Status);
 
-        // version=2（当前支持格式代）+ lease 垃圾类型 → 结构解析失败 = Corrupt。
-        File.WriteAllText(leasePath, "{\"version\":2,\"lease\":\"垃圾类型\"}");
+        // version=3（当前支持格式代）+ lease 垃圾类型 → 结构解析失败 = Corrupt。
+        File.WriteAllText(leasePath, "{\"version\":3,\"lease\":\"垃圾类型\"}");
         Assert.Equal(ArbitrationLeaseStatus.Corrupt, store.Read().Status);
 
         // version 缺失 → Corrupt（不当作合法 v1）。

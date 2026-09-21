@@ -2,6 +2,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using MultiplayerHoeingAssistant.Models; // R5.3 §24：OperationType 等仲裁面模型类型
 
 namespace MultiplayerHoeingAssistant.Services;
 
@@ -35,12 +36,28 @@ public sealed class ExternalStartLedgerEntry
     [JsonPropertyName("runId")] public string? RunId { get; set; }
     [JsonPropertyName("terminalAtUtc")] public DateTimeOffset? TerminalAtUtc { get; set; }
     [JsonPropertyName("terminalEvidence")] public string? TerminalEvidence { get; set; }
+    /// <summary>
+    /// **远端作业句柄**（R5.3 §24.3-1；加法字段）：ext 队列 `taskHandle`／协议句柄；无则 null（**不得臆造**）。
+    /// 重复接管按 §24.3-3 合并：两侧皆空=幂等；一侧空=补齐；两侧非空且不同=**拒绝并保守待对账**。
+    /// </summary>
+    [JsonPropertyName("jobId")] public string? JobId { get; set; }
+    /// <summary>
+    /// **观察时点副本**（R5.3 §24.2-2″／§24.20-D4）：权威终态证据首次被可信观察层接收的时点；
+    /// 与「台账落盘时点」<see cref="TerminalAtUtc"/> **分离**，不得复用（首写保存、幂等重试严格比对）。
+    /// </summary>
+    [JsonPropertyName("terminalObservedAtUtc")] public DateTimeOffset? TerminalObservedAtUtc { get; set; }
+    /// <summary>终态副本：原始结果词（不伪造）。</summary>
+    [JsonPropertyName("rawTerminal")] public string? RawTerminal { get; set; }
+    /// <summary>终态副本：完成层执行错误码（与信封 errorCode 语义分离）。</summary>
+    [JsonPropertyName("executionErrorCode")] public string? ExecutionErrorCode { get; set; }
+    /// <summary>终态副本：持久化操作类型（§24.17；类型相关判定 fail-closed 的依据）。</summary>
+    [JsonPropertyName("operationType")] public OperationType OperationType { get; set; } = OperationType.Unknown;
 }
 
 /// <summary>接管台账文件（修订守卫：一切写入走 revision 守卫的同一配置面）。</summary>
 public sealed class ExternalStartLedgerFile
 {
-    [JsonPropertyName("version")] public int Version { get; set; } = 1;
+    [JsonPropertyName("version")] public int Version { get; set; } = 2;
     [JsonPropertyName("revision")] public long Revision { get; set; }
     [JsonPropertyName("entries")] public List<ExternalStartLedgerEntry> Entries { get; set; } = [];
 }
@@ -70,7 +87,11 @@ public sealed class LedgerMutateResult
 /// </summary>
 public sealed class ExternalStartLedger
 {
-    public const int SupportedVersion = 1;
+    /// <summary>
+    /// 当前支持/写入的台账格式代（R5.3 §24.20-A：v2 起承载 `jobId` 与责任终态副本；
+    /// **旧 v1 消费者**遇 2＝版本过高 → 保守待对账（响亮拒绝）；**新代码**读 v1＝兼容（缺字段视为「未取得」，**不等于**「无责任」），写入一律升 2）。
+    /// </summary>
+    public const int SupportedVersion = 2;
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
@@ -144,16 +165,34 @@ public sealed class ExternalStartLedger
             return new LedgerReadResult { Valid = false, File = null, Detail = $"台账 version={file.Version} 非法（缺版本不得默认为合法空台账——保守待对账）。" };
         if (file.Entries is null)
             return new LedgerReadResult { Valid = false, File = null, Detail = "台账 entries 缺失（保守待对账）。" };
+
+        // §24.20-A 兼容读（[验证会诊阻断处置]）：**旧 v1 记录的终态副本观察时点缺失时做一次性投影**——
+        // 以落盘时点（`TerminalAtUtc`，缺失则受理时点）作为观察时点的**兼容投影**，避免「v1 升版后立即自判损坏」的死路；
+        // 投影后写入即持久化该值，责任判定不因此被放宽（旧记录本就没有冲突裁决审计可比对）。
+        if (file.Version < 2)
+        {
+            foreach (var e in file.Entries.Where(x => x is not null && x.State == LedgerEntryState.Terminal
+                                                      && x.TerminalObservedAtUtc is null))
+                e.TerminalObservedAtUtc = e.TerminalAtUtc ?? e.AcceptedAtUtc;
+        }
         var seenIdentities = new HashSet<string>(StringComparer.Ordinal);
+        var seenJobIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var e in file.Entries)
         {
             if (e is null || string.IsNullOrWhiteSpace(e.SubmissionIdentity) || e.SendSeq < 1 || !Enum.IsDefined(e.State)
                 || string.IsNullOrWhiteSpace(e.CandidateId) || string.IsNullOrWhiteSpace(e.ResourceRef)
                 || string.IsNullOrWhiteSpace(e.ActionId) || string.IsNullOrWhiteSpace(e.TargetBgiEpoch)
                 || string.IsNullOrWhiteSpace(e.EvidenceSource)
-                || (e.State == LedgerEntryState.Terminal && string.IsNullOrWhiteSpace(e.TerminalEvidence))
+                || !Enum.IsDefined(e.OperationType)
+                || (e.State == LedgerEntryState.Terminal
+                    && (string.IsNullOrWhiteSpace(e.TerminalEvidence)
+                        // §24.20-A：v1 兼容读——旧终态记录缺观察时点副本视为「未取得」（≠「无责任」），
+                        // 只有当前格式代（≥2）才要求该字段完整，否则旧终态记录会被误判损坏。
+                        || (file.Version >= 2 && e.TerminalObservedAtUtc is null)))
+                // 同一 jobId 只能归属一笔发送（非空才比较；跨记录重复句柄＝交叉不一致，保守待对账）
+                || (!string.IsNullOrWhiteSpace(e.JobId) && !seenJobIds.Add(e.JobId!))
                 || !seenIdentities.Add(e.SubmissionIdentity + "#" + e.SendSeq))
-                return new LedgerReadResult { Valid = false, File = null, Detail = "台账记录身份/关联字段/枚举/唯一性/终态证据非法（保守待对账——不完整记录不得充当占用证明）。" };
+                return new LedgerReadResult { Valid = false, File = null, Detail = "台账记录身份/关联字段/枚举/唯一性/终态证据/作业句柄非法（保守待对账——不完整记录不得充当占用证明）。" };
         }
 
         return new LedgerReadResult { Valid = true, File = file, Detail = null };
@@ -208,7 +247,18 @@ public sealed class ExternalStartLedger
                            && string.Equals(existing.ActionId, entry.ActionId, StringComparison.Ordinal)
                            && string.Equals(existing.TargetBgiEpoch, entry.TargetBgiEpoch, StringComparison.Ordinal)
                            && string.Equals(existing.RunId, entry.RunId, StringComparison.Ordinal);
-                return same ? null : "identity_conflict"; // 重复接管幂等（含 RunId 与既有状态）；同身份不同要素=响亮拒绝
+                if (!same) return "identity_conflict"; // 重复接管幂等（含 RunId 与既有状态）；同身份不同要素=响亮拒绝
+                // 终态不得被降级回未终结（R5.3 §24.7-1：迟到活动态不得降级 Terminal）。
+                if (existing.State == LedgerEntryState.Terminal && entry.State != LedgerEntryState.Terminal)
+                    return "terminal_downgrade";
+                // JobId 合并规则（R5.3 §24.3-3）：两空=幂等；一空一非空=补齐；两侧非空且不同=拒绝并保守待对账。
+                var existingJob = existing.JobId ?? "";
+                var incomingJob = entry.JobId ?? "";
+                if (existingJob.Length == 0 && incomingJob.Length > 0) existing.JobId = incomingJob;
+                else if (existingJob.Length > 0 && incomingJob.Length > 0
+                         && !string.Equals(existingJob, incomingJob, StringComparison.Ordinal))
+                    return "job_id_conflict";
+                return null;
             }
 
             file.Entries.Add(entry);
@@ -232,21 +282,76 @@ public sealed class ExternalStartLedger
     /// <summary>
     /// 权威终态转移（§4.2a：仅在关联 job 权威终态确认后转 Terminal；Terminal 记录不即时删除，
     /// 按既有历史保留策略清理——本组件不做保留期裁剪，裁剪归 R5.6 迁移/清理统一裁决）。
+    /// **观察时点口径（R5.3 §24.2-2″／§24.20-D4）**：`observedAtUtc`＝权威证据首次被可信观察层接收的时点，
+    /// 由调用方传入并**首写保存**；幂等重试必须**严格比对**既有值（不一致＝损坏/冲突，fail-closed）。
+    /// `TerminalAtUtc` 仍＝**台账落盘时点**（本组件自行取时钟），二者不得复用。
     /// </summary>
-    public LedgerMutateResult MarkTerminal(string submissionIdentity, int sendSeq, string terminalEvidence)
+    public LedgerMutateResult MarkTerminal(
+        string submissionIdentity, int sendSeq, string terminalEvidence, DateTimeOffset observedAtUtc,
+        string? rawTerminal = null, string? executionErrorCode = null,
+        OperationType operationType = OperationType.Unknown, string? jobId = null)
     {
         if (string.IsNullOrWhiteSpace(terminalEvidence))
             return new LedgerMutateResult { Success = false, Reason = "evidence_required", File = null };
+        if (observedAtUtc == default)
+            return new LedgerMutateResult { Success = false, Reason = "observed_at_required", File = null };
         return Mutate(-1, file =>
         {
             var entry = file.Entries.FirstOrDefault(e =>
                 string.Equals(e.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
                 && e.SendSeq == sendSeq);
             if (entry is null) return "entry_not_found";
-            if (entry.State == LedgerEntryState.Terminal) return null; // 幂等
+            if (entry.State == LedgerEntryState.Terminal)
+            {
+                // 幂等：既有观察时点必须与本次传入**全等**（重试不得改写观察事实）。
+                if (entry.TerminalObservedAtUtc is { } existingObserved && existingObserved != observedAtUtc)
+                    return "terminal_observed_conflict";
+                // §24.2-2″／§24.7-1（[落地批次会诊重要项处置]）：**先做句柄合并与终态载荷核对，再判幂等**——
+                // 否则「相同观察时点、不同终态载荷」或「既有句柄为空需补齐」都会被静默当作幂等吞掉。
+                var existingJobId = entry.JobId ?? "";
+                var incomingJobId = jobId ?? "";
+                if (existingJobId.Length > 0 && incomingJobId.Length > 0
+                    && !string.Equals(existingJobId, incomingJobId, StringComparison.Ordinal))
+                    return "job_id_conflict";
+                if (existingJobId.Length == 0 && incomingJobId.Length > 0) entry.JobId = incomingJobId;
+                // [验证会诊重要项处置] 终态载荷**逐步强校验**：既有记录已带值的字段，重试必须**原值重放**——
+                // 传空/Unknown 视为「载荷缺失」而拒绝（不得用「调用方省略」跳过一致性核对）。
+                if (entry.RawTerminal is { Length: > 0 } recordedRaw)
+                {
+                    if (string.IsNullOrEmpty(rawTerminal)) return "terminal_payload_required";
+                    if (!string.Equals(recordedRaw, rawTerminal, StringComparison.Ordinal)) return "terminal_payload_conflict";
+                }
+                else if (rawTerminal is { Length: > 0 }) entry.RawTerminal = rawTerminal;
+
+                if (entry.ExecutionErrorCode is { Length: > 0 } recordedError)
+                {
+                    if (string.IsNullOrEmpty(executionErrorCode)) return "terminal_payload_required";
+                    if (!string.Equals(recordedError, executionErrorCode, StringComparison.Ordinal)) return "terminal_payload_conflict";
+                }
+                else if (executionErrorCode is { Length: > 0 }) entry.ExecutionErrorCode = executionErrorCode;
+
+                if (entry.OperationType is not OperationType.Unknown)
+                {
+                    if (operationType == OperationType.Unknown) return "terminal_payload_required";
+                    if (entry.OperationType != operationType) return "terminal_payload_conflict";
+                }
+                else if (operationType != OperationType.Unknown) entry.OperationType = operationType;
+                return null;
+            }
             entry.State = LedgerEntryState.Terminal;
-            entry.TerminalAtUtc = _utcNow();
+            entry.TerminalAtUtc = _utcNow();          // 台账落盘时点（诊断/保留策略用）
+            entry.TerminalObservedAtUtc = observedAtUtc; // 观察时点副本（审计比对用；与上一行分离）
             entry.TerminalEvidence = terminalEvidence;
+            entry.RawTerminal ??= rawTerminal;
+            entry.ExecutionErrorCode ??= executionErrorCode;
+            if (operationType != OperationType.Unknown) entry.OperationType = operationType;
+            // 句柄补齐（一空一非空=补齐；两侧非空且不同=拒绝并保守待对账，§24.3-3）。
+            var existingJob = entry.JobId ?? "";
+            var incomingJob = jobId ?? "";
+            if (existingJob.Length == 0 && incomingJob.Length > 0) entry.JobId = incomingJob;
+            else if (existingJob.Length > 0 && incomingJob.Length > 0
+                     && !string.Equals(existingJob, incomingJob, StringComparison.Ordinal))
+                return "job_id_conflict";
             return null;
         });
     }
@@ -265,6 +370,9 @@ public sealed class ExternalStartLedger
 
     private void Publish(ExternalStartLedgerFile file)
     {
+        // §24.20-A（[落地批次会诊阻断处置]）：**任何写入一律升到当前格式代**——
+        // 若读 v1 后按原版本写回，新增的责任副本字段会以旧版本落盘，旧消费者会静默忽略（fail-open）。
+        file.Version = SupportedVersion;
         var bytes = Utf8NoBom.GetBytes(JsonSerializer.Serialize(file, JsonOptions));
         var tmp = Path.Combine(_configDir, ".ledger-" + Guid.NewGuid().ToString("N") + ".tmp");
         try

@@ -297,24 +297,71 @@ public class CommandExecutor
             {
                 Status = "success",
                 Message = $"{target}：已受理启动（经统一仲裁面；受理≠执行成功）",
+                // R5.3 §24.2-1：受理≠终态；责任仍未结清（§24.6-5）——结果维/责任维透传到调用方。
+                IsTerminal = false,
+                JobId = outcome.JobId,
+                ExecutionDisposition = outcome.ExecutionDisposition,
+                ResponsibilityState = outcome.ResponsibilityState,
+                EvidenceSource = outcome.EvidenceSource,
             },
             ExternalStartAdmissionStatus.Rejected => new CommandResult
             {
                 Status = "failed",
                 ErrorCode = string.IsNullOrEmpty(outcome.Code) ? "admission_rejected" : outcome.Code,
                 Message = $"{target} 被拒绝（确定未受理）：{outcome.Message}",
+                ResponsibilityState = outcome.ResponsibilityState,
             },
             ExternalStartAdmissionStatus.Blocked => new CommandResult
             {
                 Status = "failed",
                 ErrorCode = string.IsNullOrEmpty(outcome.Code) ? "admission_blocked" : outcome.Code,
                 Message = $"{target} 被阻断（未启动）：{outcome.Message}",
+                ResponsibilityState = outcome.ResponsibilityState,
+            },
+            // R5.3 §24.2-5：取消——**保留确定取消事实**（`ExecutionDisposition=Cancelled`）且不压成 `result_unknown`；
+            // 线路词表不改（`Status` 仍只在 success/failed 内）；责任是否结清由 `ResponsibilityState` 表达。
+            ExternalStartAdmissionStatus.Cancelled => new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = string.IsNullOrEmpty(outcome.Code) ? "cancelled" : outcome.Code,
+                Message = $"{target} 已取消（批次停止）：{outcome.Message}",
+                IsTerminal = outcome.ExecutionDisposition == ExecutionDisposition.Cancelled,
+                JobId = outcome.JobId,
+                ExecutionDisposition = ExecutionDisposition.Cancelled,
+                ResponsibilityState = outcome.ResponsibilityState,
+                RawTerminal = outcome.RawTerminal,
+                ExecutionErrorCode = outcome.ExecutionErrorCode,
+                EvidenceSource = outcome.EvidenceSource,
+            },
+            // R5.3 §24.9：确定执行失败（与拒绝/未知分离；**不得触发重发**）。
+            ExternalStartAdmissionStatus.ExecutionFailed => new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = string.IsNullOrEmpty(outcome.Code) ? "execution_failed" : outcome.Code,
+                Message = $"{target} 执行失败（不得重发）：{outcome.Message}",
+                IsTerminal = true,
+                JobId = outcome.JobId,
+                ExecutionDisposition = ExecutionDisposition.ExecutionFailed,
+                ResponsibilityState = outcome.ResponsibilityState,
+                RawTerminal = outcome.RawTerminal,
+                ExecutionErrorCode = outcome.ExecutionErrorCode,
+                EvidenceSource = outcome.EvidenceSource,
             },
             _ => new CommandResult
             {
                 Status = "failed",
                 ErrorCode = "result_unknown",
                 Message = $"{target}：启动结果不可考（不得重发），保守待对账：{outcome.Message}",
+                JobId = outcome.JobId,
+                ExecutionDisposition = outcome.ExecutionDisposition == ExecutionDisposition.None
+                    ? ExecutionDisposition.Unknown
+                    : outcome.ExecutionDisposition,
+                ResponsibilityState = outcome.ResponsibilityState,
+                // §24.6-2（[终审会诊重要项处置]）：不可考分支同样**端到端**保留证据来源与原始词/错误码——
+                // 不得在适配器边界丢弃（否则门面已闭合的字段又在此处丢失）。
+                RawTerminal = outcome.RawTerminal,
+                ExecutionErrorCode = outcome.ExecutionErrorCode,
+                EvidenceSource = outcome.EvidenceSource,
             },
         };
 

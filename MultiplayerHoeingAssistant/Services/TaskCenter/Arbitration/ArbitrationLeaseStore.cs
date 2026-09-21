@@ -62,8 +62,14 @@ public sealed class LeaseMutateResult
 public sealed class ArbitrationLeaseStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
-    /// <summary>当前支持/写入的租约文件格式代（R5.2 冻结稿 §4.0：新增 Submission/Operations 字段=格式代 2；旧消费方按 Unsupported 响亮拒绝）。</summary>
-    public const int SupportedVersion = 2;
+    /// <summary>
+    /// 当前支持/写入的租约文件格式代。
+    /// R5.2 §4.0：新增 Submission/Operations 字段＝格式代 2；
+    /// **R5.3 §24.20-A**：新增 `OperationType`／`PendingTerminal`／`ExecutionResult`／`PreObservations[]`／
+    /// `ConflictResolutionAudits[]`／`ReconciledNotAcceptedEvidence[]` 等**责任事实**字段＝格式代 **3**
+    /// （旧 ≤2 消费者遇 3＝`unsupported_version` 响亮拒绝；新代码读 ≤2＝兼容读并按 §24.20-A′ 在写入时升 3）。
+    /// </summary>
+    public const int SupportedVersion = 3;
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
     private readonly string _configDir;
@@ -170,15 +176,20 @@ public sealed class ArbitrationLeaseStore
         if (version < 1)
             return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = $"租约文件 version={version} 非法，原件保留留痕。" };
 
-        // v2 责任段原始 JSON 预检（区分「字段缺失」与合法空值——handoff 段存在则 operations 必填，缺字段不得默认为合法空责任）。
+        // 当前格式代（v3）责任段原始 JSON 预检（区分「字段缺失」与合法空值——handoff 段存在则
+        // operations 与 §24.20-A′ 的追加式集合（preObservations／conflictResolutionAudits／
+        // reconciledNotAcceptedEvidence）必填，缺字段不得默认为合法空责任；**既有 v3 文件缺字段＝损坏，fail-closed**）。
         if (version == SupportedVersion)
         {
             using var doc2 = JsonDocument.Parse(text);
             if (doc2.RootElement.ValueKind == JsonValueKind.Object
                 && doc2.RootElement.TryGetProperty("handoff", out var handoffEl)
                 && handoffEl.ValueKind == JsonValueKind.Object
-                && (!handoffEl.TryGetProperty("operations", out var opsEl) || opsEl.ValueKind != JsonValueKind.Array))
-                return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = "租约文件 v2 Handoff.Operations 缺失（责任完整性校验失败），原件保留留痕。" };
+                && (!handoffEl.TryGetProperty("operations", out var opsEl) || opsEl.ValueKind != JsonValueKind.Array
+                    || !handoffEl.TryGetProperty("preObservations", out var preEl) || preEl.ValueKind != JsonValueKind.Array
+                    || !handoffEl.TryGetProperty("conflictResolutionAudits", out var auditEl) || auditEl.ValueKind != JsonValueKind.Array
+                    || !handoffEl.TryGetProperty("reconciledNotAcceptedEvidence", out var evEl) || evEl.ValueKind != JsonValueKind.Array))
+                return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = "租约文件 v3 Handoff 责任段集合缺失（Operations／PreObservations／ConflictResolutionAudits／ReconciledNotAcceptedEvidence），原件保留留痕。" };
         }
 
         LogicalOwnerLeaseFile? file;
@@ -192,6 +203,18 @@ public sealed class ArbitrationLeaseStore
         }
         if (file is null)
             return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = "租约文件反序列化为空，原件保留留痕。" };
+
+        // §24.20-A′（[R5.3 落地批次会诊阻断处置]）**有序升级第一步＝先判未决责任**：
+        // 旧格式代（≤2）仍含未决责任（Submission／未终结 Pending／Granted／Sending／Reconciling／Accepted）时，
+        // **禁止就地升版**——必须走隔离态结算事务（本批尚未实现 ⇒ 响亮拒绝、原文件保持只读、不做任何写入）。
+        // 无未决责任的旧文件仍兼容读，写入时由 Publish 单点升为当前格式代。
+        if (version < SupportedVersion && HasUnresolvedResponsibilityForLegacyUpgrade(file))
+            return new LeaseReadResult
+            {
+                Status = ArbitrationLeaseStatus.Unsupported,
+                File = null,
+                Detail = $"租约文件 version={version} 仍含未决责任（§24.20-A′：须走隔离态结算事务，禁止就地升版），响亮拒绝执行。",
+            };
 
         // Lease 段结构校验（§6.2 复核：缺失身份/零代次等非法取值 = Corrupt，不得当作可获取）。
         var lease = file.Lease;
@@ -814,10 +837,27 @@ public sealed class ArbitrationLeaseStore
                 return false;
             }
 
-            // 关联一致性：未决发送必须有对应操作记录（孤儿 Submission=交叉不一致，不得推导空闲/可发送）。
+            // [终审会诊阻断处置] 未决发送身份必须是**规范形式** `sub:{requestIdentity}:{sendSeq}`：
+            // 尾段必须是**不变文化的精确十进制文本**（`01`／`+1`／带空白一律拒绝），且与该记录 SendSeq 全等。
+            var subLastColon = sub.SubmissionIdentity.LastIndexOf(':');
+            var subSeqText = subLastColon > 4 ? sub.SubmissionIdentity[(subLastColon + 1)..] : "";
+            if (!sub.SubmissionIdentity.StartsWith("sub:", StringComparison.Ordinal)
+                || subLastColon <= 4
+                || !TryParseCanonicalSeq(subSeqText, out var parsedSubSeq)
+                || parsedSubSeq != sub.SendSeq)
+            {
+                detail = "租约文件 v2 Submission 身份非规范形式（应为 sub:{requestIdentity}:{sendSeq} 且尾段＝SendSeq）。";
+                return false;
+            }
+
+            var subRequestIdentity = sub.SubmissionIdentity[4..subLastColon];
+
+            // 关联一致性（[终审会诊阻断处置] **绑定到同一 Operation**）：未决发送必须有**同身份、同轮次、且其请求身份
+            // 恰为身份中声明的 requestIdentity** 的操作记录——否则「身份声明的请求」与「实际持有记录的请求」可分属不同记录（交叉关联绕过）。
             var linked = handoff.Operations.Any(o => o is not null
                 && string.Equals(o.SubmissionIdentity, sub.SubmissionIdentity, StringComparison.Ordinal)
-                && o.LastSendSeq == sub.SendSeq);
+                && o.LastSendSeq == sub.SendSeq
+                && string.Equals(o.RequestIdentity, subRequestIdentity, StringComparison.Ordinal));
             if (!linked)
             {
                 detail = "租约文件 v2 Submission 无关联 Operations 记录（交叉不一致），原件保留留痕。";
@@ -840,12 +880,273 @@ public sealed class ArbitrationLeaseStore
             }
         }
 
+        // R5.3 §24.2-2″／§24.20-A′：追加式集合的**引用完整性**（写入一律 v3，故仅对本格式代校验）。
+        var seenEvidence = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var ev in handoff.ReconciledNotAcceptedEvidence ?? [])
+        {
+            if (ev is null
+                || string.IsNullOrWhiteSpace(ev.EvidenceId)
+                || string.IsNullOrWhiteSpace(ev.SubmissionIdentity)
+                || ev.SendSeq < 1
+                || string.IsNullOrWhiteSpace(ev.FactKind)
+                // [终审会诊阻断处置] 事实类型必须命中**封闭白名单**——否则任意非空字符串都能冒充「权威未受理事实」。
+                || !ReconciledNotAcceptedFactKinds.All.Contains(ev.FactKind)
+                || string.IsNullOrWhiteSpace(ev.RawEvidenceWord)
+                || string.IsNullOrWhiteSpace(ev.EvidenceSource)
+                || ev.ObservedAtUtc == default
+                || !seenEvidence.Add(ev.EvidenceId))
+            {
+                detail = "租约文件 v3 ReconciledNotAcceptedEvidence 记录身份/唯一性/观察时点非法，原件保留留痕。";
+                return false;
+            }
+        }
+
+        var seenAudits = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var audit in handoff.ConflictResolutionAudits ?? [])
+        {
+            if (audit is null
+                || string.IsNullOrWhiteSpace(audit.AuditId)
+                || string.IsNullOrWhiteSpace(audit.RequestIdentity)
+                || string.IsNullOrWhiteSpace(audit.SubmissionIdentity)
+                || audit.SendSeq < 1
+                || audit.ResolvedAtUtc == default
+                || !Enum.IsDefined(audit.Resolution)
+                || audit.SupersededRejectedResultSnapshot is null
+                || !seenAudits.Add(audit.AuditId))
+            {
+                detail = "租约文件 v3 ConflictResolutionAudits 记录身份/枚举/唯一性/拒绝快照非法，原件保留留痕。";
+                return false;
+            }
+
+            // 判别式两字段**严格互斥且必需**（§24.2-2″ 分支必需载荷）：受理终态⇒快照；未受理⇒证据引用。
+            var expectSnapshot = audit.Resolution == ConflictResolutionKind.ResolvedAcceptedTerminal;
+            var hasSnapshot = audit.ResolutionEvidenceSnapshot is not null;
+            var hasRef = !string.IsNullOrWhiteSpace(audit.ResolutionEvidenceRef?.EvidenceId);
+            if (expectSnapshot != hasSnapshot || hasSnapshot == hasRef)
+            {
+                detail = "租约文件 v3 裁决审计的 resolutionEvidence 判别式字段非法（必需载荷缺失或两字段并存）。";
+                return false;
+            }
+
+            // 关联 Operation（唯一命中：requestIdentity＋submissionIdentity＋sendSeq 全等）。
+            var op = handoff.Operations.FirstOrDefault(o => o is not null
+                && string.Equals(o.RequestIdentity, audit.RequestIdentity, StringComparison.Ordinal));
+            if (op is null
+                || !string.Equals(op.SubmissionIdentity, audit.SubmissionIdentity, StringComparison.Ordinal)
+                || op.LastSendSeq != audit.SendSeq)
+            {
+                detail = "租约文件 v3 裁决审计与 Operation 关联不一致（引用完整性失败）。";
+                return false;
+            }
+
+            // 拒绝快照必须与事务前不可变拒绝结果逐字段一致（不得自引用、不得篡改）。
+            var snapshot = audit.SupersededRejectedResultSnapshot!;
+            // [验证会诊阻断处置] **拒绝侧权威依据必须存在**：`LastResult` 缺失时不得默认通过（那会让「无拒绝依据」的审计被接受）。
+            if (op.LastResult is null
+                || snapshot.Outcome != OperationOutcome.Rejected
+                || snapshot.AnsweredSendSeq != audit.SendSeq
+                || op.LastResult.Outcome != snapshot.Outcome
+                || op.LastResult.AnsweredSendSeq != snapshot.AnsweredSendSeq
+                || op.LastResult.Retryable != snapshot.Retryable
+                || !string.Equals(op.LastResult.ReasonCode, snapshot.ReasonCode, StringComparison.Ordinal)
+                || !string.Equals(op.LastResult.EvidenceSource, snapshot.EvidenceSource, StringComparison.Ordinal))
+            {
+                detail = "租约文件 v3 裁决审计的拒绝快照与既有拒绝结果不一致（逐字段校验失败）。";
+                return false;
+            }
+
+            if (expectSnapshot)
+            {
+                // 受理终态分支：必须存在同身份同轮次的权威终态 ExecutionResult，且快照与其业务字段逐字段一致。
+                var result = op.ExecutionResult;
+                var ev = audit.ResolutionEvidenceSnapshot!;
+                // [验证会诊阻断处置] 权威执行终态包括 Succeeded／Failed／Cancelled（§24.15：三类终态均可独立终局），
+                // 不得只认 Succeeded（否则合法失败/取消终态被判损坏）。
+                if (result is null
+                    || !string.Equals(result.SubmissionIdentity, audit.SubmissionIdentity, StringComparison.Ordinal)
+                    || result.SendSeq != audit.SendSeq
+                    // [第三轮验证会诊阻断处置] 先 `Enum.IsDefined` 再白名单：反序列化得到的非法枚举值
+                    // （如 999）不等于 Unknown，仅比较 `!= Unknown` 会 fail-open。
+                    || !Enum.IsDefined(result.Kind)
+                    || result.Kind is not (ExecutionResultKind.Succeeded or ExecutionResultKind.Failed or ExecutionResultKind.Cancelled)
+                    || string.IsNullOrWhiteSpace(result.RawTerminal)
+                    || string.IsNullOrWhiteSpace(result.EvidenceSource)
+                    || result.ObservedAtUtc == default
+                    || (result.Kind == ExecutionResultKind.Failed && string.IsNullOrWhiteSpace(result.ExecutionErrorCode))
+                    || !string.Equals(ev.SubmissionIdentity, result.SubmissionIdentity, StringComparison.Ordinal)
+                    || ev.SendSeq != result.SendSeq
+                    || ev.Kind != result.Kind
+                    || ev.ObservedAtUtc != result.ObservedAtUtc
+                    || !string.Equals(ev.RawTerminal, result.RawTerminal, StringComparison.Ordinal)
+                    || !string.Equals(ev.ExecutionErrorCode, result.ExecutionErrorCode, StringComparison.Ordinal)
+                    || !string.Equals(ev.JobId, result.JobId, StringComparison.Ordinal)
+                    || !string.Equals(ev.EvidenceSource, result.EvidenceSource, StringComparison.Ordinal))
+                {
+                    detail = "租约文件 v3 受理终态裁决审计缺少匹配的 ExecutionResult 或快照逐字段不一致。";
+                    return false;
+                }
+            }
+            else
+            {
+                // 未受理分支：证据引用必须唯一命中，且身份/轮次与 Operation、审计项一致。
+                var evidenceId = audit.ResolutionEvidenceRef!.EvidenceId;
+                var evidence = (handoff.ReconciledNotAcceptedEvidence ?? [])
+                    .FirstOrDefault(e => e is not null && string.Equals(e.EvidenceId, evidenceId, StringComparison.Ordinal));
+                if (!seenEvidence.Contains(evidenceId) || evidence is null
+                    || !string.Equals(evidence.SubmissionIdentity, audit.SubmissionIdentity, StringComparison.Ordinal)
+                    || evidence.SendSeq != audit.SendSeq)
+                {
+                    detail = "租约文件 v3 未受理裁决审计的证据引用不完整或身份/来源不一致（引用完整性失败）。";
+                    return false;
+                }
+                // [第三轮验证会诊阻断处置] **删除** `evidence.EvidenceSource == snapshot.EvidenceSource` 约束：
+                // 二者是**两个独立事实**（历史拒绝结果来源 vs 后续权威未受理观察来源），设计未要求相等，强制相等会误拒合法记录。
+            }
+        }
+
+        var seenPre = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var pre in handoff.PreObservations ?? [])
+        {
+            if (pre is null
+                || string.IsNullOrWhiteSpace(pre.SubmissionIdentity)
+                || pre.SendSeq < 1
+                || !Enum.IsDefined(pre.OperationType)
+                // 目标纪元：流程/节点路径既有行为允许为空（纪元未知，§14 残余1），不得据此判损坏；
+                // **外部启动**必须非空（入口已有固定纪元守卫：未知纪元不签发）。
+                || pre.TargetEpoch is null
+                || (pre.OperationType == OperationType.ExternalStart && string.IsNullOrWhiteSpace(pre.TargetEpoch))
+                // [终审会诊阻断处置] 状态必须是**封闭二值**（`pending`/`completed`），任意非空字符串不得通过。
+                || pre.State is not ("pending" or "completed")
+                // 无句柄路径必须有**替代查询依据**（§24.7-2）：空依据不得当作可重建观察。
+                || string.IsNullOrWhiteSpace(pre.QueryBasis)
+                || pre.CreatedAtUtc == default
+                || !seenPre.Add(pre.SubmissionIdentity + "#" + pre.SendSeq))
+            {
+                detail = "租约文件 v3 PreObservations 记录身份/枚举/唯一性非法，原件保留留痕。";
+                return false;
+            }
+
+            // [终审会诊阻断处置] 与 Operation 的**关联一致性**：由**规范形式** `sub:{requestIdentity}:{sendSeq}` 反解身份——
+            // 必须校验尾段与 `SendSeq` 全等（否则 `sub:x:garbage` 之类的畸形身份会绕过跨轮隔离）。
+            var preIdentity = pre.SubmissionIdentity;
+            var lastColon = preIdentity.LastIndexOf(':');
+            var preSeqText = lastColon > 4 ? preIdentity[(lastColon + 1)..] : "";
+            if (!preIdentity.StartsWith("sub:", StringComparison.Ordinal)
+                || lastColon <= 4
+                || !TryParseCanonicalSeq(preSeqText, out var parsedPreSeq)
+                || parsedPreSeq != pre.SendSeq)
+            {
+                detail = "租约文件 v3 PreObservations 的发送身份非规范形式（应为 sub:{requestIdentity}:{sendSeq} 且尾段＝SendSeq）。";
+                return false;
+            }
+            var preRequestIdentity = preIdentity[4..lastColon];
+            var preOp = string.IsNullOrEmpty(preRequestIdentity)
+                ? null
+                : handoff.Operations.FirstOrDefault(o => o is not null
+                    && string.Equals(o.RequestIdentity, preRequestIdentity, StringComparison.Ordinal));
+            if (preOp is null || preOp.OperationType != pre.OperationType)
+            {
+                detail = "租约文件 v3 PreObservations 与对应 Operation 的关联/类型不一致（引用完整性失败）。";
+                return false;
+            }
+
+            // 未完成（`pending`）的预观察必须**正对应当前未决发送**（身份＋轮次全等），否则视为孤立残件。
+            if (pre.State == "pending"
+                && (handoff.Submission is not { } currentPre
+                    || !string.Equals(currentPre.SubmissionIdentity, pre.SubmissionIdentity, StringComparison.Ordinal)
+                    || currentPre.SendSeq != pre.SendSeq))
+            {
+                detail = "租约文件 v3 存在未对应未决发送的 pending 预观察记录（不可恢复发送窗口）。";
+                return false;
+            }
+        }
+
+        // [终审会诊阻断处置] **反向不变量**：存在未决发送时，必须有同身份/同轮次的预观察记录（未持久化不得发送）。
+        if (handoff.Submission is { } pendingSubmission
+            && !(handoff.PreObservations ?? []).Any(p => p is not null
+                && string.Equals(p.SubmissionIdentity, pendingSubmission.SubmissionIdentity, StringComparison.Ordinal)
+                && p.SendSeq == pendingSubmission.SendSeq
+                && p.State == "pending"))
+        {
+            detail = "租约文件 v3 未决发送缺少同身份/同轮次的预观察记录（§24.16-2 持久化不变量）。";
+            return false;
+        }
+
+        // Operation 侧的裁决引用必须能唯一命中审计项（§24.2-2″ 引用完整性）。
+        // [第三轮验证会诊阻断处置] **双向绑定**：①Operation→Audit 必须身份/轮次全等且**同一审计不得被多个 Operation 引用**；
+        // ②每条审计必须有**对应 Operation 以同一 `AuditId` 反向引用**（否则「四项/三项事务漏写 Operation 引用」会被误判为已提交）。
+        var auditIdToOperation = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var op in handoff.Operations)
+        {
+            if (op.ConflictResolutionAuditId is not { Length: > 0 } auditId) continue;
+            var bound = (handoff.ConflictResolutionAudits ?? [])
+                .FirstOrDefault(a => a is not null && string.Equals(a.AuditId, auditId, StringComparison.Ordinal));
+            if (bound is null
+                || !string.Equals(bound.RequestIdentity, op.RequestIdentity, StringComparison.Ordinal)
+                || !string.Equals(bound.SubmissionIdentity, op.SubmissionIdentity, StringComparison.Ordinal)
+                || bound.SendSeq != op.LastSendSeq)
+            {
+                detail = "租约文件 v3 Operation 引用的裁决审计不存在或与自身身份/轮次不匹配（引用完整性失败）。";
+                return false;
+            }
+
+            if (!auditIdToOperation.TryAdd(auditId, op.RequestIdentity))
+            {
+                detail = "租约文件 v3 同一裁决审计被多个 Operation 引用（引用完整性失败）。";
+                return false;
+            }
+        }
+
+        foreach (var audit in handoff.ConflictResolutionAudits ?? [])
+        {
+            if (audit is null) continue;
+            if (!auditIdToOperation.TryGetValue(audit.AuditId, out var referencing)
+                || !string.Equals(referencing, audit.RequestIdentity, StringComparison.Ordinal))
+            {
+                detail = "租约文件 v3 裁决审计缺少对应 Operation 的反向引用（三项/四项原子事务未提交）。";
+                return false;
+            }
+        }
+
         return true;
     }
 
     /// <summary>残件匹配（P2-⑥复核：仅本组件专属命名 ".lease-*.tmp"，不波及配置根其他文件）。</summary>
     private static bool IsLeaseResidueFileName(string name)
         => name.StartsWith(".lease-", StringComparison.Ordinal) && name.EndsWith(".tmp", StringComparison.Ordinal);
+
+    /// <summary>
+    /// 发送身份尾段的**规范十进制文本**解析（§24.2-2″／终审会诊）：
+    /// 只接受 `value.ToString(CultureInfo.InvariantCulture)` 的不变文化精确写法——`01`／`+1`／前后空白等一律拒绝，
+    /// 避免「数值等价 ≠ 文本规范」的绕过。
+    /// </summary>
+    private static bool TryParseCanonicalSeq(string text, out int value)
+    {
+        value = 0;
+        if (!int.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+            return false;
+        if (!string.Equals(text, parsed.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal))
+            return false;
+        value = parsed;
+        return true;
+    }
+
+    /// <summary>
+    /// §24.20-A′ 有序升级判定的第一步：旧格式代文件是否仍含**未决责任**
+    /// （`Submission`／未终结 `Pending`／`Granted`／`Sending`／`Reconciling`／`Accepted` 记录）。
+    /// 命中 ⇒ 必须走隔离态结算事务，**不得**就地升版（本批尚未实现该事务 ⇒ fail-closed 只读拒绝）。
+    /// </summary>
+    private static bool HasUnresolvedResponsibilityForLegacyUpgrade(LogicalOwnerLeaseFile file)
+    {
+        var handoff = file.Handoff;
+        if (handoff is null) return false;
+        if (handoff.Submission is not null || handoff.Pending is not null) return true;
+        return (handoff.Operations ?? []).Any(o => o is not null
+            && o.RequestState is OperationRequestState.Granted
+                or OperationRequestState.Sending
+                or OperationRequestState.Reconciling
+                or OperationRequestState.Accepted);
+    }
 
     /// <summary>可消解事实白名单（§6.2/§4.1）：权威退出四词 + settle 协议事实；未知/超时/未命中不在其列。</summary>
     private static bool IsResolvableFact(string? fact)
