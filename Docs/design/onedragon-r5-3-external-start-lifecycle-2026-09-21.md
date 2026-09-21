@@ -825,3 +825,54 @@ E1 流程启动的发送窗口内提交的节点操作被并发轮次按占用�
 | 45 | 阻断 | 对账拒绝合并时**仍推进修订**且**留下内存假受理**（未回滚 `Intent/JobId`） | **已修**：`UpdateMergingIf(...)==false` 分支**回滚**调用方 `Intent/JobId` 并返回 `null`；`UpdateMergingIf` 的不发布分支**不推进修订**（新增断言） |
 | 46 | 重要 | 冻结身份缺 `Occurrence`；`PrepareSubmit` 未核对盘上 `WireRunId`；文档与实现对不齐 | **已修**：`ReconcileIdentity` 增 `Occurrence` 并在发送前/对账两处核对；`PrepareSubmit` 同时核对 `WireRunId`；本节 A′ 已把实现字段集逐项写明 |
 | 47 | 重要 | `UpdateMerging` 未维持「损坏记录响亮冲突」：JSON `null` 当作不存在、`{}`/空 `RunId` 抛 `ArgumentException`、盘内 `RunId` 与请求不一致未拒绝 | **已修**：上述三种情形统一抛 `RunRecordConflictException`（不当作不存在、不落到别的目标路径） |
+
+### 24.33 落地登记：B2-γ 第 3 步·第三批——§16②「调用者≠获选者」组件级夹具（[新增·2026-09-21 批次十八]）
+
+**A. 本批落地事实（登记；证据＝夹具名＋全量回归）**
+
+1. **新增夹具** `ArbitrationAdmissionServiceTests.CallerContextNotSelected_DispatchCarriesWinnerIdentityOnly`：
+   A（低优先级＝**落选**）与 B（高优先级＝**获选**）并发入队于**同一轮次**，断言门面交给 Sender 的
+   `SubmissionDispatch` **完全属于获选者 B**——① 请求身份与**完整发送身份**（`submissionIdentity`／`sendSeq`）
+   等于锁内原子发布的 B 占位事实；② **候选八段身份**（`Scope`／`Namespace`／`WorkflowId`／`TriggerOccurrenceId`／
+   `RunId`／`NodeId`／`Occurrence`／`LoopIteration`／`Attempt`）＋`PayloadFingerprint`＋`ResourceRef`＋`Intent`＋
+   `ActionId`＋`Priority` **逐字段绑定 B 的期望值**（A/B 逐段取不同值，故「从 A 或执行上下文选择性拼入」任一字段即红）；
+   ③ `StableIdentity`／`CandidateId` 等于 B 的**确定性派生**；④ **进程内不可变上下文**（§13.10 A1/A2）原样属于 B、
+   不得泄漏 A 的对象；⑤ 派发携带**内部冻结副本**（`NotSame` 调用方对象）。
+2. **落选面落盘证据**：A 的 `Operation` 停在 `NotSelected` 且 `LastSendSeq == 0`（**未发布发送许可**）、
+   载荷指纹仍为 A 自身；B 为 `Accepted`＋`LastSendSeq == 1`；本轮**发送恰一次**；`Submission` 已关闭；
+   **台账只留 B 一笔**（`SubmissionIdentity` 与派发对象全等）。
+3. **反例非空洞的设计（[会诊处置·第 1＋2 轮]）**：轮次放行条件**只有**「两笔入队收齐」（**有界**等待，
+   与执行上下文无关——谁启动的 drain 处理本轮都不影响结论）；夹具**不再断言任何执行上下文流行性**：
+   §12.2 B1 的判据是**发送归属**（身份来自获选者的锁内占位快照），而非 `AsyncLocal` 是否跨越 await 继续传播
+   ——生产即使在某处抑制上下文流动，本用例仍成立（初版「放行＝处理 drain 的 ambient 属于 A」已被判为
+   **把待证前提写进放行条件＋把上下文传播变成测试合同**，故删除）。落选调用者 A 的请求对象与其
+   `ProcessLocalContext` 全程存活，任何「按调用方请求／执行上下文／最新 Operation 拼装身份」的实现都会在
+   逐字段断言上变红。
+4. **回归**：全量 **851 通过／1 跳过／852**（跳过项＝既有 P50，断言未放宽；基线 552 未降），
+   定向连跑 5 次全绿（无调度敏感）。**生产接线仍关闭**（`_successorAdmissionWired` 生产构造恒不传；
+   E3/E4/E5 组合根准入委托仍未注入）。
+
+**B. 本批会诊（gpt-5.6-sol／medium，一轮）与逐条处置**
+
+| # | 严重度 | 发现摘要 | 处置 |
+|---|---|---|---|
+| 48 | 阻断 | `AsyncLocal` 闸门把**待证明前提写进放行条件**（放行 = 处理 drain 的 ambient 属于 A ⇒ `ambientAtSend` 恒真），并把「上下文必然传播」变成测试硬要求（生产若改 `SuppressFlow`，身份仍正确但用例会超时变红）——与 B1 合同方向相悖 | **已修**：删除 ambient 闸门；放行条件改为**仅**「两笔入队收齐」（非 ambient 接缝）；标记改为**同步写入** drain 自身上下文（不依赖自然传播、不参与放行）。定向连跑 5 次全绿 |
+| 49 | 阻断 | 「全部获选者身份」覆盖不足：`CandidateId`／`ActionId`／`TargetEpoch` 仅与落盘 `Submission` **自洽比较**（两处同错仍可通过）、`Intent` 未断言、八段中多数维度 A/B 同值、未断言落选者未发布发送许可 | **已修**：A/B 逐段取不同值并**逐字段绑定期望值**（八段＋`PayloadFingerprint`／`ResourceRef`／`Intent`／`ActionId`／`Priority`／`StableIdentity`／`CandidateId`＝B 的确定性派生）；新增「A 的 `LastSendSeq==0` 且载荷指纹仍为 A」「台账单笔且身份与派发全等」「`Submission` 已关闭」断言 |
+| 50 | 重要 | 总计划 §3.3 R5 行「**R5.0–R5.7 已完成**」**效力拔高**：未限定证据层级，与 §7「生产接线仍关闭、P50 等门禁未闭、未签署」冲突 | **已修**：该行改为「**R5.0–R5.7 组件/设计层按各自范围收口（≠ 生产启用、≠ 验收签署；R5 整体仍未完成）**」，并同步 §7 汇总行的 R5.3 口径为「组件/组装层持续收口＋残余登记（逐批见 §7 行）」 |
+
+**B′. 验证会诊（第 2 轮）与逐条处置**
+
+| # | 严重度 | 发现摘要 | 处置 |
+|---|---|---|---|
+| 51 | 阻断 | `ambientAtSend` 断言仍要求 `AsyncLocal` **跨越 await 自然传播**（写入点与断言点之间存在未完成 await）——生产若在该边界使用抑制流动，身份逻辑即使正确、用例仍失败 | **已修**：**删除**上下文标记与 `ambientAtSend` 断言（及相应机制），不再把「上下文流行性」设为合同；判定核心＝身份归属断言本身 |
+| 52 | 阻断 | 「完整发送身份绑定 B」仍留**自洽比较**缺口（`SubmissionIdentity` 只与 `winner`／盘上互相比较，三处同时串错仍可通过）；且 A/B 的 `Scope`／`Namespace` 实为**同值**，与「逐段取不同值」表述不符 | **已修**：新增 `Assert.Equal("sub:{B.RequestIdentity}:1", d.SubmissionIdentity)`（按 B 的请求身份与 `sendSeq` **直接派生**）；A/B 的 `Scope`（`bgi:inst-a:ep1`／`bgi:inst-b:ep1`，epoch 均 `ep1`）与 `Namespace`（`v2`／`manual`）改为不同值并加 `NotEqual` 反向断言 |
+| 53 | 重要 | 屏障等待**无界**：外层 `WaitAsync` 超时只停止等待、不取消仍挂在屏障上的提交任务，可能在测试结束后继续访问已清理的临时目录 | **已修**：屏障等待改为**有界** `allEnqueued.Task.WaitAsync(TimeSpan.FromSeconds(5))`；超时/异常按门面既有语义**响亮完成本轮**（不遗留悬挂提交任务） |
+| 54 | 重要 | 交接稿「当前权威状态」自相矛盾：页首 849／「已完成」段 775／新增批次 851 并存，且声明「工作区无未提交改动」而材料为在途 diff | **已修**：页首与「已完成」段计数统一为 **851 通过／1 跳过／852**（并注明本会话起点 775）；批次一览补「十三–十八」；工作区表述改为「仅本批有意提交的改动（在途批次标注），提交后回到无未提交改动」 |
+
+**C. 仍未覆盖（登记，禁悬空）**
+
+1. **节点后继／外部启动路径的同类端到端断言**（本轮为**组件层**证据：`ArbitrationAdmissionService` 门面派发对象）。
+   真实入口层（E1/E4/E5/E6 的 Host 装饰器→Sender 实际载荷归属）归 **§23.1 真实入口证据**，两者**不得互相替代**（§8）。
+2. §12.3 交错清单（§24.30-C／§24.31-C 口径延续）：仍未做 **③其余两支**（准备阶段 `RunStore` 更新失败＝§17 P49 归 B4；
+   占位前校验拒绝夹具）、**④受理接管故障后续取消/重启**、**⑥四类入口 Scope 来源**；以及 P19①、M1/M3 其余、
+   P50 诊断套件、P6/P8。**不可变冻结身份**已于批次十七关闭（§24.32）。

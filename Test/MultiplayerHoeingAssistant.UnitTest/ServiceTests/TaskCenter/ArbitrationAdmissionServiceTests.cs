@@ -3730,4 +3730,140 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(1, Volatile.Read(ref sends));                     // 发送仍恰好一次（无重发）
         Assert.Null(ReadLease().File!.Handoff!.Submission);            // 关闭已完成
     }
+
+    // ── §16② 调用者≠获选者（§12.2 B1／§13.10 A1·A2；[Batch B 收尾·批次十八]）────────────
+
+    /// <summary>
+    /// **调用者的请求不得决定发送归属**（§12.2 B1／§13.10 A1·A2）：A（低优先级＝落选）与 B（高优先级＝获选）
+    /// 并发入队于**同一轮次**，且两笔请求的**八段身份逐段取不同值**（调用者 A 的请求对象与其
+    /// `ProcessLocalContext` 全程存活）；断言门面交给 Sender 的 `SubmissionDispatch` 的请求身份／
+    /// **完整发送身份（按 B 的请求身份与 `sendSeq` 确定性派生）**／八段身份／载荷指纹／资源引用／Intent／
+    /// 线上提交键／动作号／候选号（B 的确定性派生）／**进程内不可变上下文** **全部等于 B 的期望值**；
+    /// A 自身停在 `NotSelected` 且**未发布发送许可**（`LastSendSeq==0`），本轮发送恰好一次（无双跑），
+    /// 落盘台账只留 B 一笔、胜者 `Submission` 已关闭。
+    /// **判定核心＝身份归属断言本身**：任何「按调用方请求／执行上下文／最新 Operation 拼装身份」的实现都会在
+    /// 逐字段断言上变红。本用例**不**把「`AsyncLocal` 是否跨越 await 继续传播」设为合同——§12.2 B1 的判据是
+    /// **发送归属**而非上下文流行性（生产即使在某处抑制上下文流动，身份仍必须属于获选者）；也不存在
+    /// 「用处理上下文决定放行、再断言上下文属于谁」的闸门自证：放行条件只有「两笔入队收齐」。
+    /// </summary>
+    [Fact]
+    public async Task CallerContextNotSelected_DispatchCarriesWinnerIdentityOnly()
+    {
+        var aCtx = new object();   // A（落选调用者）的进程内不可变请求上下文（§13.10 A1）
+        var bCtx = new object();   // B（获选者）的进程内不可变请求上下文
+        SubmissionDispatch? seen = null;
+        LogicalOwnerLeaseFile? fileAtSend = null;
+        var arrived = 0;
+        var allEnqueued = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sends = 0;
+        ArbitrationLeaseStore? storeRef = null;
+        var (svc, store, ledger, _) = BuildFacade(h =>
+        {
+            h.Barriers = new AdmissionBarriers
+            {
+                AfterEnqueue = () =>
+                {
+                    if (Interlocked.Increment(ref arrived) == 2) allEnqueued.TrySetResult();
+                    return Task.CompletedTask;
+                },
+                // 放行条件**只有**「两笔入队收齐」（与执行上下文无关——谁启动的 drain 处理本轮都不影响结论）；
+                // 等待**有界**，屏障异常/超时按门面既有语义响亮完成本轮（不留下悬挂提交任务）。
+                BeforeRoundSnapshot = () => allEnqueued.Task.WaitAsync(TimeSpan.FromSeconds(5)),
+            };
+            h.Sender = d =>
+            {
+                Interlocked.Increment(ref sends);
+                seen = d;
+                fileAtSend = storeRef!.Read().File;
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null));
+            };
+        });
+        storeRef = store;
+
+        // A＝落选（低优先级）＋调用者上下文；B＝获选（高优先级）。八段身份逐段取不同值（含 scope/namespace）。
+        var a = Req(ns: "v2", scope: "bgi:inst-a:ep1", payload: "p-A", workflow: "group:gA",
+            trigger: "manual:panel:a1", wire: "wire-A", priority: 0);
+        var b = Req(payload: "p-B", workflow: "group:gB", trigger: "manual:panel:b1", wire: "wire-B", priority: 5);
+        b.Candidate.Scope = "bgi:inst-b:ep1";
+        a.Candidate.ActionId = "act-A";
+        b.Candidate.ActionId = "act-B";
+        b.Candidate.RunId = "run-B";
+        b.Candidate.NodeId = "n-B";
+        b.Candidate.Occurrence = 3;
+        b.Candidate.LoopIteration = 1;
+        b.Candidate.Attempt = 2;
+        a.ProcessLocalContext = aCtx;
+        b.ProcessLocalContext = bCtx;
+
+        var taskA = Task.Run(() => svc.SubmitAsync(a));
+        var taskB = Task.Run(() => svc.SubmitAsync(b));
+        var results = await Task.WhenAll(taskA, taskB).WaitAsync(TimeSpan.FromSeconds(10));
+
+        var winner = results.Single(r => r.RequestIdentity == b.RequestIdentity);
+        var loser = results.Single(r => r.RequestIdentity == a.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.Accepted, winner.Kind);      // 获选者＝B（高优先级）
+        Assert.Equal(AdmissionResultKind.NotSelected, loser.Kind);    // 调用者＝A 落选
+        Assert.Equal(1, Volatile.Read(ref sends));
+
+        Assert.NotNull(seen);
+        var d = seen!;
+        // ① 请求身份／完整发送身份：全部等于获选者 B 在锁内原子发布的占位事实
+        Assert.Equal(b.RequestIdentity, d.RequestIdentity);
+        Assert.NotEqual(a.RequestIdentity, d.RequestIdentity);
+        Assert.Equal("sub:" + b.RequestIdentity + ":1", d.SubmissionIdentity);   // 按 B 的请求身份与 sendSeq 确定性派生
+        Assert.Equal(winner.SubmissionIdentity, d.SubmissionIdentity);
+        Assert.Equal(1, d.SendSeq);
+        Assert.Equal(SubmissionState.Submitting, fileAtSend!.Handoff!.Submission!.State);
+        Assert.Equal(fileAtSend.Handoff.Submission.SubmissionIdentity, d.SubmissionIdentity);
+        Assert.Equal(fileAtSend.Handoff.Submission.SendSeq, d.SendSeq);
+        Assert.Equal(fileAtSend.Handoff.Submission.ActionId, d.ActionId);
+        Assert.Equal(fileAtSend.Handoff.Submission.CandidateId, d.CandidateId);
+        Assert.Equal(fileAtSend.Handoff.Submission.TargetEpoch, d.TargetEpoch);
+        // ② 候选八段身份逐段绑定 B 的期望值（A/B 逐段取不同值——从 A／最新 Operation 拼入任一字段即红）
+        Assert.Equal("bgi:inst-b:ep1", d.Candidate.Scope);
+        Assert.NotEqual(a.Candidate.Scope, d.Candidate.Scope);
+        Assert.Equal("manual", d.Candidate.Namespace);
+        Assert.NotEqual(a.Candidate.Namespace, d.Candidate.Namespace);
+        Assert.Equal("group:gB", d.Candidate.WorkflowId);
+        Assert.Equal("manual:panel:b1", d.Candidate.TriggerOccurrenceId);
+        Assert.Equal("run-B", d.Candidate.RunId);
+        Assert.Equal("n-B", d.Candidate.NodeId);
+        Assert.Equal(3, d.Candidate.Occurrence);
+        Assert.Equal(1, d.Candidate.LoopIteration);
+        Assert.Equal(2, d.Candidate.Attempt);
+        Assert.Equal("p-B", d.Candidate.PayloadFingerprint);
+        Assert.Equal("group:gB", d.Candidate.ResourceRef);
+        Assert.Equal("start", d.Candidate.Intent);
+        Assert.Equal("act-B", d.Candidate.ActionId);
+        Assert.Equal(5, d.Candidate.Priority);
+        // ③ 派发标量＝八段身份的确定性派生＋线上提交键＋目标纪元
+        Assert.Equal("group:gB", d.ResourceRef);
+        Assert.Equal("start", d.Intent);
+        Assert.Equal("ep1", d.TargetEpoch);
+        Assert.Equal("act-B", d.ActionId);
+        Assert.Equal("wire-B", d.WireSubmitKey);
+        Assert.Equal(ArbitrationOrdering.BuildStableIdentity(b.Candidate), d.StableIdentity);
+        Assert.Equal(ArbitrationOrdering.DeriveCandidateId(ArbitrationOrdering.BuildStableIdentity(b.Candidate)), d.CandidateId);
+        Assert.NotEqual(ArbitrationOrdering.BuildStableIdentity(a.Candidate), d.StableIdentity);
+        Assert.NotSame(b.Candidate, d.Candidate);   // 派发携带内部冻结副本（B3：调用方后置修改不改变已登记事实）
+        // ④ 进程内不可变上下文必须原样属于 B（§13.10 A1/A2：不得丢弃后由 Sender 重建）
+        Assert.Same(bCtx, d.ProcessLocalContext);
+        Assert.NotSame(aCtx, d.ProcessLocalContext);
+        // ⑤ 落盘面无串写：A 未发布发送许可、台账只留 B 一笔
+        var ops = ReadLease().File!.Handoff!.Operations;
+        var opA = ops.Single(o => o.RequestIdentity == a.RequestIdentity);
+        var opB = ops.Single(o => o.RequestIdentity == b.RequestIdentity);
+        Assert.Equal(OperationRequestState.NotSelected, opA.RequestState);
+        Assert.Equal(0, opA.LastSendSeq);
+        Assert.Equal("p-A", opA.PayloadFingerprint);
+        Assert.NotEqual(opA.CandidateId, opB.CandidateId);
+        Assert.Equal(OperationRequestState.Accepted, opB.RequestState);
+        Assert.Equal(1, opB.LastSendSeq);
+        Assert.Equal("p-B", opB.PayloadFingerprint);
+        Assert.Null(ReadLease().File!.Handoff!.Submission);            // 胜者 Submission 已关闭
+        var entries = ledger.Read().File?.Entries;
+        Assert.NotNull(entries);
+        Assert.Single(entries!);
+        Assert.Equal(d.SubmissionIdentity, entries![0].SubmissionIdentity);
+    }
 }
