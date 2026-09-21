@@ -14,6 +14,76 @@ public sealed class CommandExecutorExternalStartAdmissionTests
     private static RemoteCommand StartGroupCommand()
         => new() { Cmd = "start_group", Params = new() { ["groupName"] = "测试组" } };
 
+    // ── §24.2-5 v2 取消等价与「发送成功非终态」（[Batch B 收尾之二]）──────────────
+
+    /// <summary>
+    /// 核心结果 → 完成层结果的映射纪律：**明确取消事实**＝终态 `Cancelled`（线路词表不改）；
+    /// **普通发送成功/失败但非终态**＝`Unknown`（不得据此构造终态、不得释放占用）。
+    /// </summary>
+    [Fact]
+    public void ToCompletion_CancelFact_IsTerminalCancelled_ButPlainSuccessStaysUnknown()
+    {
+        var cancelled = CommandExecutor.ToCompletion(new CommandResult
+        {
+            Status = "failed", ErrorCode = "cancelled", RawTerminal = "cancelled",
+            IsTerminal = true, ExecutionDisposition = ExecutionDisposition.Cancelled, JobId = "job-c",
+        });
+        Assert.NotNull(cancelled);
+        Assert.Equal(ExternalStartCompletionKind.Cancelled, cancelled!.Kind);
+        Assert.Equal("cancelled", cancelled.RawTerminal);
+        Assert.Equal("job-c", cancelled.JobId);
+
+        // v2「发送成功」＝非终态（§24.2-1／§24.2-5）。
+        var success = CommandExecutor.ToCompletion(new CommandResult { Status = "success", Message = "已启动" });
+        Assert.NotNull(success);
+        Assert.Equal(ExternalStartCompletionKind.Unknown, success!.Kind);
+
+        // 明确失败但**未观察到终态** ⇒ 同样保持 Unknown（不得据信封错误码断言执行终态）。
+        var failedNoTerminal = CommandExecutor.ToCompletion(new CommandResult { Status = "failed", ErrorCode = "task_busy" });
+        Assert.Equal(ExternalStartCompletionKind.Unknown, failedNoTerminal!.Kind);
+
+        // 权威失败终态（IsTerminal）⇒ `ExecutionFailed`（携带执行错误码）。
+        var failedTerminal = CommandExecutor.ToCompletion(new CommandResult
+        {
+            Status = "failed", IsTerminal = true, ExecutionDisposition = ExecutionDisposition.ExecutionFailed,
+            RawTerminal = "failed", ExecutionErrorCode = "E_TASK", ErrorCode = "envelope",
+        });
+        Assert.Equal(ExternalStartCompletionKind.ExecutionFailed, failedTerminal!.Kind);
+        Assert.Equal("E_TASK", failedTerminal.ExecutionErrorCode);
+    }
+
+    /// <summary>
+    /// **v2 明确取消的端到端（适配器侧）**：核心返回取消事实时，发送层必须表达「**已受理**」（否则宿主不会取完成观察），
+    /// 完成层携带 `Cancelled`（`IsTerminal`）——两段合起来才构成 §24.2-5 的分阶段链。
+    /// 同时校验收据：**信封 `ErrorCode=cancelled` 但无终态/取消事实时不得升格为取消**。
+    /// </summary>
+    [Fact]
+    public void V2CancelFact_SendLayerAccepted_CompletionCancelled_EnvelopeErrorCodeAloneIsNotCancel()
+    {
+        var cancelCore = new CommandResult
+        {
+            Status = "failed", RawTerminal = "cancelled", IsTerminal = true,
+            ExecutionDisposition = ExecutionDisposition.Cancelled, JobId = "job-v2",
+        };
+        var sendLayer = CommandExecutor.ToExecution(cancelCore);
+        Assert.Equal(ExternalStartExecutionKind.Accepted, sendLayer.Kind);   // 曾受理（否则宿主不取完成观察）
+        Assert.Equal("job-v2", sendLayer.JobId);
+        var completion = CommandExecutor.ToCompletion(cancelCore);
+        Assert.Equal(ExternalStartCompletionKind.Cancelled, completion!.Kind);
+        Assert.Equal("job-v2", completion.JobId);
+
+        // **真实最小形状**：`new CommandResult { Status = "cancelled" }`（无 IsTerminal/无 RawTerminal）——
+        // 发送层同样必须表达「已受理」，否则真实 v2 取消永远进不了完成结算链。
+        var realShape = new CommandResult { Status = "cancelled" };
+        Assert.Equal(ExternalStartExecutionKind.Accepted, CommandExecutor.ToExecution(realShape).Kind);
+        Assert.Equal(ExternalStartCompletionKind.Cancelled, CommandExecutor.ToCompletion(realShape)!.Kind);
+
+        // 反例：仅信封错误码为 cancelled（无终态、无取消事实）⇒ 不得当取消（也不得据此释放占用）。
+        var envelopeOnly = new CommandResult { Status = "failed", ErrorCode = "cancelled" };
+        Assert.False(CommandExecutor.IsObservedCancel(envelopeOnly));
+        Assert.Equal(ExternalStartCompletionKind.Unknown, CommandExecutor.ToCompletion(envelopeOnly)!.Kind);
+    }
+
     /// <summary>
     /// 接线态下 `start_group` 必须**先经准入**：候选按 §2.2 兼容映射（namespace=v2、
     /// workflowId/resourceRef=`group:{组名}`、触发出现身份含门面回填占位符）；被阻断＝按门禁结论回执且**未启动**。

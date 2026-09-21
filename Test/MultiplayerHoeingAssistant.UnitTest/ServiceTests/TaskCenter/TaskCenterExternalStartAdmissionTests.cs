@@ -35,7 +35,7 @@ public class TaskCenterExternalStartAdmissionTests
             admissionWired: true, admissionSeams: seams);
 
     private static ExternalStartAdmissionRequest Request(Func<System.Threading.CancellationToken, Task<ExternalStartExecution>> execute,
-        string ns = "v2")
+        string ns = "v2", Func<ExternalStartCompletion?>? completion = null)
         => new()
         {
             Namespace = ns,
@@ -44,6 +44,7 @@ public class TaskCenterExternalStartAdmissionTests
             ResourceRef = "group:测试组",
             SourceDetail = "fixture:external_start",
             ExecuteAsync = execute,
+            CompletionProvider = completion,
         };
 
     private static IReadOnlyList<OperationRecord> Ops(string root)
@@ -299,6 +300,83 @@ public class TaskCenterExternalStartAdmissionTests
 
             Assert.Equal(ExternalStartAdmissionStatus.Blocked, outcome.Status);
             Assert.Equal(identity, outcome.RequestIdentity); // 回显传入身份（不得为空串）
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    // ── 完成观察接线（R5.3 §24.10／§24.14／§24.2-5，[Batch B 收尾之二]）─────────────────
+
+    [Fact]
+    public async Task ExternalStart_CompletionCancelled_SettlesAndReportsCancelled()
+    {
+        var root = NewRoot();
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            var outcome = await host.AdmitExternalStartAsync(Request(
+                _ => Task.FromResult(ExternalStartExecution.AcceptedWith("job-obs", "adapter:accepted")),
+                completion: () => ExternalStartCompletion.CancelledWith("cancelled", "adapter:watch", DateTimeOffset.UtcNow, "job-obs")));
+
+            Assert.Equal(ExternalStartAdmissionStatus.Cancelled, outcome.Status);   // 取消事实端到端保留
+            Assert.Equal(ResponsibilityState.Settled, outcome.ResponsibilityState); // 已结算（台账 Terminal＋关闭＋终局）
+            Assert.Equal(ExecutionDisposition.Cancelled, outcome.ExecutionDisposition);
+            Assert.Equal("cancelled", outcome.RawTerminal);
+            Assert.Equal("job-obs", outcome.JobId);
+            // 台账终态 + 操作终局（§24.15 唯一顺序的结果）。
+            var entry = new ExternalStartLedger(root).Read().File!.Entries.Single();
+            Assert.Equal(LedgerEntryState.Terminal, entry.State);
+            Assert.Contains(Ops(root), o => o.RequestState == OperationRequestState.TerminalCompleted);
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    [Fact]
+    public async Task ExternalStart_CompletionUnknown_KeepsPendingWithoutTerminalCarriers()
+    {
+        var root = NewRoot();
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            var outcome = await host.AdmitExternalStartAsync(Request(
+                _ => Task.FromResult(ExternalStartExecution.AcceptedWith("job-u", "adapter:accepted")),
+                completion: () => ExternalStartCompletion.UnknownWith("completion_not_observed", "adapter:watch")));
+
+            Assert.Equal(ExternalStartAdmissionStatus.NeedReconcile, outcome.Status);
+            Assert.Equal(ResponsibilityState.Pending, outcome.ResponsibilityState);
+            var op = Ops(root).Single();
+            Assert.Null(op.PendingTerminal);   // §24.19-2：未知不得写终态载体
+            Assert.Null(op.ExecutionResult);
+            Assert.Equal(LedgerEntryState.AcceptedPendingExecution,
+                new ExternalStartLedger(root).Read().File!.Entries.Single().State);
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    [Fact]
+    public async Task ExternalStart_NoCompletionProvider_KeepsAcceptedPending()
+    {
+        var root = NewRoot();
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            var outcome = await host.AdmitExternalStartAsync(Request(
+                _ => Task.FromResult(ExternalStartExecution.AcceptedWith("job-n", "adapter:accepted"))));
+
+            Assert.Equal(ExternalStartAdmissionStatus.Accepted, outcome.Status);    // 早期受理：保持非终态
+            Assert.Equal(ResponsibilityState.Pending, outcome.ResponsibilityState);
+            Assert.False(outcome.ExecutionDisposition == ExecutionDisposition.Cancelled);
             await host.ShutdownAsync();
         }
         finally

@@ -1450,6 +1450,62 @@ public sealed partial class TaskCenterHost
         ExternalStartAdmissionRequest request, CancellationToken ct = default)
     {
         var result = await SubmitExternalStartViaAdmissionAsync(request, ct).ConfigureAwait(false);
+        // [Batch B 收尾之二] §24.10／§24.14 完成观察接线：受理成功后取完成层结果并交完成结算入口——
+        // `CompletionProvider` 缺失/返回 null ⇒ 保持普通受理（责任 Pending）；返回 `Unknown` ⇒ 不写终态载体、保守待对账；
+        // 返回权威终态 ⇒ 由门面按 §24.15 唯一顺序结算（终态载体→台账 Terminal→关闭→终局）并回传结算事实。
+        if (result.Kind == AdmissionResultKind.Accepted && request.CompletionProvider is { } provideCompletion
+            && !string.IsNullOrEmpty(result.SubmissionIdentity) && _admission is { } facadeForCompletion)
+        {
+            ExternalStartCompletion? completion;
+            try
+            {
+                completion = provideCompletion();
+            }
+            catch (Exception ex)
+            {
+                completion = ExternalStartCompletion.UnknownWith("completion_provider_exception:" + ex.GetType().Name);
+            }
+            if (completion is not null)
+            {
+                try
+                {
+                    result = await facadeForCompletion.SettleCompletionAsync(
+                        result.RequestIdentity, result.SubmissionIdentity!, result.SendSeq, completion,
+                        result.EvidenceSource).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    // [Batch B 收尾之二 会诊阻断处置] 结算入口抛异常时**不得抹掉已观察的取消/失败事实**（§24.6-2）：
+                    // 结果维按完成层事实返回、责任维 `Pending`（未结清），并携带完整发送身份与证据。
+                    result = new AdmissionResult
+                    {
+                        Kind = completion.Kind switch
+                        {
+                            ExternalStartCompletionKind.Cancelled => AdmissionResultKind.Cancelled,
+                            ExternalStartCompletionKind.ExecutionFailed => AdmissionResultKind.ExecutionFailed,
+                            ExternalStartCompletionKind.Succeeded => AdmissionResultKind.NeedReconcile,
+                            _ => AdmissionResultKind.NeedReconcile,
+                        },
+                        ReasonCode = "completion_settle_exception:" + ex.GetType().Name,
+                        Detail = "完成结算入口异常（结果维保留已观察事实；责任未结清，保守待对账）。",
+                        RequestIdentity = result.RequestIdentity,
+                        SubmissionIdentity = result.SubmissionIdentity,
+                        SendSeq = result.SendSeq,
+                        JobId = completion.JobId ?? result.JobId,
+                        ExecutionDisposition = completion.Kind switch
+                        {
+                            ExternalStartCompletionKind.Cancelled => ExecutionDisposition.Cancelled,
+                            ExternalStartCompletionKind.ExecutionFailed => ExecutionDisposition.ExecutionFailed,
+                            _ => ExecutionDisposition.Unknown,
+                        },
+                        ResponsibilityState = ResponsibilityState.Pending,
+                        RawTerminal = completion.RawTerminal,
+                        ExecutionErrorCode = completion.ExecutionErrorCode,
+                        EvidenceSource = completion.EvidenceSource,
+                    };
+                }
+            }
+        }
         var status = result.Kind switch
         {
             AdmissionResultKind.Accepted => ExternalStartAdmissionStatus.Accepted,

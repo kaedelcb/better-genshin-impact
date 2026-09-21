@@ -50,6 +50,15 @@ public sealed class ExternalStartAdmissionRequest
     /// **不得**由远程自报字段推断；门面在创建 Operation 时与记录同次原子发布，后续不可改写。
     /// </summary>
     public OperationType OperationType { get; init; } = OperationType.ExternalStart;
+
+    /// <summary>
+    /// **完成观察提供者**（R5.3 §24.10／§24.14／§24.2-5；[Batch B 收尾之二] 新增）：
+    /// 门面**获准并受理**后由宿主调用一次，返回该次执行的**完成层结果**（`ExternalStartCompletion`）。
+    /// 阻塞式协议（如 v2 `task.start`）此时可给出明确取消/失败事实；**有早期 ack 的通道**返回 `null`
+    /// 表示完成观察由句柄／回调另行承载（该接线仍登记为未闭合）。
+    /// 返回 `null` ⇒ 保持普通受理（责任 `Pending`、不写终态载体）。
+    /// </summary>
+    public System.Func<ExternalStartCompletion?>? CompletionProvider { get; init; }
 }
 
 /// <summary>外部启动执行结果（适配层对「是否受理」的**关联验证后**结论；不得凭超时/异常推断未受理）。</summary>

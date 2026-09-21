@@ -241,6 +241,8 @@ public class CommandExecutor
                         _requestContext.Value = previousContext;
                     }
                 },
+                // [Batch B 收尾之二] §24.2-5：核心结果的**明确取消/失败事实**必须经完成层保留（普通发送成功保持非终态）。
+                CompletionProvider = () => coreResult is null ? null : ToCompletion(coreResult),
             }, CancellationToken.None).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -280,10 +282,50 @@ public class CommandExecutor
     /// **启用前置**：细化核心失败分类（区分「网络前可证实未发送」与「已发送后失败/不可考」）后，
     /// 才允许把前者映射为 Rejected（见设计稿 §14）。
     /// </summary>
-    private static ExternalStartExecution ToExecution(CommandResult result)
-        => result.Status == "success"
-            ? ExternalStartExecution.AcceptedWith()
+    internal static ExternalStartExecution ToExecution(CommandResult result)
+        // [Batch B 收尾之二] §24.2-5：**明确取消/权威终态**意味着「曾受理、后到终态」——发送层按 **已受理** 表达，
+        // 终态事实由完成层（`CompletionProvider → ToCompletion`）携带；否则沿用既有保守口径（success＝受理，其余＝Unknown）。
+        => result.Status == "success" || result.IsTerminal || IsObservedCancel(result)
+            ? ExternalStartExecution.AcceptedWith(result.JobId, result.EvidenceSource ?? "adapter:core")
             : ExternalStartExecution.UnknownWith(result.Message);
+
+    /// <summary>
+    /// **核心结果 → 完成层结果**（R5.3 §24.2-5／§24.2-1；[Batch B 收尾之二] 新增）：
+    /// 只有**权威终态**（`IsTerminal`）或**明确取消事实**（`cancelled`）才能构成终态完成结果——
+    /// v2「普通发送成功」保持**非终态**（不得据此释放占用）；`result_unknown`/超时/未命中一律 `Unknown`（不写终态载体）。
+    /// </summary>
+    internal static ExternalStartCompletion? ToCompletion(CommandResult result)
+    {
+        var source = string.IsNullOrEmpty(result.EvidenceSource) ? "adapter:core" : result.EvidenceSource!;
+        var observed = DateTimeOffset.UtcNow;
+
+        // ① 明确取消事实（含 v2 `status=cancelled` 的等价转换）⇒ 终态 `Cancelled`（线路词表不改）。
+        // **信封 `ErrorCode` 不构成取消证据**（§24.2-1／§24.2-5：词表语义分离）。
+        if (IsObservedCancel(result))
+            return ExternalStartCompletion.CancelledWith(
+                string.IsNullOrEmpty(result.RawTerminal) ? "cancelled" : result.RawTerminal!, source, observed, result.JobId);
+
+        // ② 非终态一律按「观察未完成」处理（不得借超时/未命中/普通成功构造终态）。
+        if (!result.IsTerminal)
+            return ExternalStartCompletion.UnknownWith(result.Message, source);
+
+        // ③ 权威终态：失败/成功分明。
+        var raw = !string.IsNullOrEmpty(result.RawTerminal) ? result.RawTerminal! : result.Status;
+        if (result.ExecutionDisposition == ExecutionDisposition.ExecutionFailed || result.Status != "success")
+            return ExternalStartCompletion.ExecutionFailedWith(raw,
+                string.IsNullOrEmpty(result.ExecutionErrorCode) ? (result.ErrorCode ?? "unknown") : result.ExecutionErrorCode!,
+                source, observed, result.JobId);
+        return ExternalStartCompletion.SucceededWith(raw, source, observed, result.JobId);
+    }
+
+    /// <summary>
+    /// **是否观察到明确取消**（§24.2-5；[Batch B 收尾之二]）：只认 `ExecutionDisposition.Cancelled`、
+    /// 权威终态下的原始词 `cancelled`，或兼容词位 `Status=cancelled`——**不得**把信封 `ErrorCode` 当取消证据。
+    /// </summary>
+    internal static bool IsObservedCancel(CommandResult result)
+        => result.ExecutionDisposition == ExecutionDisposition.Cancelled
+           || (result.IsTerminal && string.Equals(result.RawTerminal, "cancelled", StringComparison.OrdinalIgnoreCase))
+           || string.Equals(result.Status, "cancelled", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// 准入结论 → `CommandResult`（三态映射，**不改线协议**：`Status` 仍只用既有 `success/failed`）：
