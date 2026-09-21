@@ -1811,7 +1811,7 @@ M1 的①—⑤与 §3.2「E1 发送前固定 candidateId→runId→首节点提
 | **③ 准备阶段故障** | 校验拒绝／RunStore 更新失败／占位后冻结前崩溃 ⇒ 零发送或责任结清 | **部分（[纠正·2026-09-21 结束会诊] 收敛）** | 已覆盖：B1 组件夹具（发布失败不发送、未知 Reconciling 不重发）、B2-γ（`successor_context_missing`／`successor_context_mismatch`／`boundary_precheck_rejected`）、冻结失败 ⇒ Rejected（批次三）、**发送阶段故障 ⇒ `Reconciling` 零重发**（§24.31）、**占位前校验拒绝五支**（§24.34：提交缺失／意图状态不合法／出现身份不符／节点冻结失败／F11 激活 ⇒ 确定拒绝＋**端口 `SendCount==0`**＋`arbitration` 目录未创建＝零租约初始化/零占位，宿主层）。**未验收（不得计入完成）**：准备阶段 `RunStore` 更新失败按 **§17 P49** 归 B4（当前无注入接缝） |
 | **④ 受理接管故障** | 远端已 Accepted、接管落盘失败 ⇒ 责任保留、零重发、不得反解为确定拒绝 | **部分（[纠正·2026-09-21 会诊] 原判「已覆盖」不成立）** | 已覆盖**关闭前异常**（G6）：`SenderAcceptedThenCloseThrows_ConvergesUnknown_NotRejected` 注入点在 `AfterLedgerBeforeClose`，断言已落盘的 `AcceptedSendIdentity`/`Intent=Accepted`/jobId——**不证明接管写失败**；`TryPersistAcceptedTakeover` 的冲突/身份分支属源码证据。**仍欠**：接管写失败故障注入（含随后取消/重启）＋外部启动路径同项端到端夹具 |
 | **⑤ 连续超 32 节点** | 逐节点终局、主槽位随责任结清释放 | **部分（[纠正·2026-09-21]）** | **容量证据＝确定性组件级夹具**：`Capacity_33NodeCandidates_AllAccepted_WhenEachSettled`（33 个不同节点候选逐个获准并结清 ⇒ 后续创建始终获准）＋`Capacity_MainSlotsExhausted_33rdCreateRejected`（32 个 **Active** 占槽操作后第 33 个创建被 `operations_capacity_full(…)` 拒绝——**前缀匹配**）。**宿主级 33 节点端到端用例＝暂停执行**（固定 `Skip`，断言保持严格、未放宽；**诊断套件未建立 ⇒ 复现入口未落实**，不计入绿色基线）；**仍欠**：由宿主链路直接取证「第 2—33 次发送入口处前一节点已 TerminalCompleted＋Tombstone、当前节点 Active」的**逐节点释放直接证据**。注：若完全不释放，实际会在**第 32 个节点创建**即被拒（E1 亦占一槽） |
-| **⑥ 四类入口覆盖** | 面板启动／启动移交／暂停续行／Interrupted 恢复：Scope 来源、首节点绑定与提交路由 | **部分** | 已覆盖：面板启动（宿主级 E2E）、Interrupted 恢复（`TaskCenterHostRecoveryAdmissionTests`）、启动移交（G4a ⇒ 缺来源拒绝）；**四类入口的 Scope 来源端到端矩阵（含移交来源登记）仍欠** |
+| **⑥ 四类入口覆盖** | 面板启动／启动移交／暂停续行／Interrupted 恢复：Scope 来源、首节点绑定与提交路由 | **部分（[2026-09-21 批次二十] Scope 来源矩阵格 A／A′／B 落地）** | 已覆盖：面板启动（宿主级 E2E）、Interrupted 恢复（`TaskCenterHostRecoveryAdmissionTests`）、启动移交（G4a ⇒ 缺来源拒绝）；**Scope 来源矩阵**＝§24.35 格 A（面板继承固定 Scope、逐字一致）／**格 A′**（纪元变化判别反例 ⇒ 「继承登记值、不按当前纪元重建」）／格 B（移交・续行・恢复类无来源 ⇒ 响亮拒绝＋零发送＋无开放 Submission＋零占位＋运行快照逐字段未变）／格 C（恢复有来源继承＝P28 既有夹具）；**仍欠（归 B4）**：**首节点绑定**（**§12.3 M1**）＋**启动移交/续行来源登记**（G4a）＋入口表逐项签注 |
 | 续用并发 | 并发续用／续用与首次请求交错 | **仍欠** | §14 登记（B3 第 4 步）；机制已有夹具，并发版未做 |
 | 控制热键不经准入 | 控制键发送一次／状态查询零次／准入零次 | **仍欠** | §14 登记：其直通分支会真实调用 `ExecuteHotkeyAsync` → 真实 IPC，**单测中禁止触达真实系统**；需发送接缝 |
 | 真实双副本＋Rejected | 真双副本下的拒绝分支 | **仍欠** | §13.11 G2(e)：现夹具用共享实例建立前提，不独立证明双副本合并 |
@@ -1820,7 +1820,7 @@ M1 的①—⑤与 §3.2「E1 发送前固定 candidateId→runId→首节点提
 
 ### 16-A. 状态同步（R5.3 §24 批次；[新增·2026-09-21]）
 
-> **效力**：以下行的**状态与证据以本节为准**（未列行者不变）；**汇总统计同步更正**：§16 表原汇总「六类交错中 0 项已覆盖、6 项部分」→ 按逐行现状应为 **2 项已覆盖（①②）、4 项部分**（③④⑤⑥）。**③ 仍记「部分」**：其「校验拒绝」支与「发送阶段故障」支已覆盖，「准备阶段 `RunStore` 更新失败」支按 §17 P49 归 B4 且**未验收**（[纠正·2026-09-21 结束会诊] 本稿收口判据禁止把「已移交／未验收」计入已覆盖）；③⑤ 的限定与承接项见下表。
+> **效力**：以下行的**状态与证据以本节为准**（未列行者不变）；**汇总统计同步更正**：§16 表原汇总「六类交错中 0 项已覆盖、6 项部分」→ 按逐行现状应为 **2 项已覆盖（①②）、4 项部分**（③④⑤⑥）。**③ 仍记「部分」**：其「校验拒绝」支与「发送阶段故障」支已覆盖，「准备阶段 `RunStore` 更新失败」支按 §17 P49 归 B4 且**未验收**（[纠正·2026-09-21 结束会诊] 本稿收口判据禁止把「已移交／未验收」计入已覆盖）。**⑥ 仍记「部分」**：Scope 来源矩阵格 A/B 已落地（§24.35），但「首节点绑定」（M1）与「移交/续行来源登记」（G4a）仍欠、入口表未签注。③⑤⑥ 的限定与承接项见下表。
 
 | 上表行 | 新状态 | 证据（夹具／实现） | 备注 |
 |---|---|---|---|
@@ -1829,6 +1829,7 @@ M1 的①—⑤与 §3.2「E1 发送前固定 candidateId→runId→首节点提
 | **③ 准备阶段故障** | 仍「**部分**」——**校验拒绝支已覆盖（五支）**＋**发送阶段支已覆盖**；余 1 支**已移交／未验收** | §24.31：`NodeSubmit_SendStageFailure_StaysReconcilingNoResend`（运行恰 `Unknown`＋节点结果 `unknown`＋恰一次发送尝试＋`LastSendSeq==1`＋Operation `Reconciling`＋未决 `Submission` 在册且身份全等）；**§24.34**：`SuccessorSubmit_PreOccupyRejection_DeterministicNoSendNoLeaseSideEffect`（Theory 五支＝提交缺失／意图状态不合法／出现身份不符／节点冻结失败／F11 激活 ⇒ `Accepted=false`＋`Uncertain=false`＋**端口 `SendCount==0`**（零发送的**直接**证据）＋`arbitration` 目录未创建（＝零租约初始化/零占位/零仲裁写入；事实快照读取不计）＋原因码指向对应预检项） | 余支：准备阶段 `RunStore` 更新失败按 **§17 P49** 归 B4（当前无注入接缝，**不得**以发送阶段夹具替代）；**该项未验收 ⇒ ③ 不得计入已覆盖** |
 | **⑤ 连续超 32 节点** | 仍「**部分**」，但**逐节点释放直接证据已补** | §24.30：`NodeSubmit_EachSendObservesPreviousNodeReleased`（**4 节点**逐次取证＝第 2..4 次发送共 **3 次观察**；[更正·2026-09-21] 节点数经 §24.32 批次十七 6→4 降载，此处为**实际值**：第 k（k≥2）次发送时前节点 `TerminalCompleted`＋**`Zone == Tombstone`**（真正迁出计容区）＋`SubmissionIdentity` 非空＋唯一命中；同时点当前节点 `Zone == Active`；用实际 payload 的 `configName` 关联发送↔节点） | **33 节点用例仍受 P50 暂停**（只提供最终态证据）；P19①「原因码逐次取证」仍未关闭 |
 | **控制热键不经准入** | **已覆盖（组合根层）** | `CompositionRoot_ControlKeyHotkeys_BypassAdmissionEntirely`（§24.27-A 组合根夹具族）：**控制键**（`CancelTaskHotkey`／`BgiEnabledHotkey`／`SuspendHotkey`）在**已注入准入委托（接线态）**下仍**始终直通**——断言 `action.execute_hotkey` 每次**恰一次**、**`task.status` 零次**、**零仲裁操作**（③「状态查询零次／准入零次」逐项满足） | 原欠项原因「需发送接缝」已由**进程内管道替身**（`BgiInstancePipeDouble`＋`PipeNameOverrideForTest`，仅测试生效）满足；**普通热键**（E4）仍按 §24.8-3 分接线／未接线两态断言（`CompositionRoot_ControlHotkey_WiredGoesThroughAdmission_UnwiredDoesNot`），两者语义不同、不得互相替代 |
+| **⑥ 四类入口 Scope 来源矩阵** | 面板／移交／续行／恢复各自的 Scope 来源、首节点绑定与提交路由 | **部分（Scope 来源矩阵格 A／A′／B 已落地）** | §24.35（表列＝上表行／新状态／证据／备注）：格 A＝`NodeSubmit_InheritsRegisteredFlowScope`（后继节点操作与流程级 start 登记的固定 Scope **逐字一致**，1 节点）；**格 A′**＝`NodeSubmit_ScopeIsInherited_NotRereadFromCurrentEpoch`（E1 登记后、节点准入前改当前纪元 ⇒ 断言零发送＋不得收口成功＋节点侧登记不得携带新纪元 ⇒ 与格 A 合读构成「**继承登记值、不得按当前纪元重建**」的判别证据）；格 B＝`NodeSubmit_NoRegisteredScopeSource_RejectedNoSendNoOccupy`（无来源 ⇒ 确定拒绝＋`SendCount==0`＋无开放 Submission＋零占位＋运行快照逐字段未变）；格 C＝恢复有来源继承（P28 既有正/负向夹具）。**仍欠（归 B4）**：首节点绑定（**§12.3 M1**）／移交・续行来源登记（G4a）／入口表逐项签注；**不得**据此把 ⑥ 计入已覆盖 |
 | 续用并发／真实双副本＋Rejected | 不变（**仍欠**） | 见上表原文；续用并发归 B3 第 4 步，双副本拒绝归 §13.11 G2(e) | 本节不据此关闭 |
 
 ## 17. 启用前置清单（B2-γ／B3／B4 挂账归并 · [新增·2026-09-21]）
@@ -1873,7 +1874,7 @@ M1 的①—⑤与 §3.2「E1 发送前固定 candidateId→runId→首节点提
 | P18 | **② A→B 错配（节点/外部路径）**：断言实际载荷完全属于获选者 | B4 | 端到端夹具 |
 | P19 | **⑤ 容量三项欠项**：①原因码逐次取证 ②逐节点释放直接证据 ③32 槽位负向夹具 | B4（夹具） | **⑤-③ 已补**：`Capacity_MainSlotsExhausted_33rdCreateRejected`（**前缀匹配**，32 个不同身份 **Active** 占槽 ⇒ 第 33 个创建 `Kind=Error`＋原因码前缀）；**正向已补**：`Capacity_33NodeCandidates_AllAccepted_WhenEachSettled`（33 候选逐个获准并结清至 `TerminalCompleted`）；**仍欠**：①逐次准入结果取证 ②宿主链路逐节点释放直接断言（组件级正向只证明手动结清后的容量行为，**不能**替代同一宿主长流程自动结清） |
 | P20 | **④ 接管写失败**（含随后取消/重启）＋外部路径同项 | B3/B4 | 故障注入夹具 |
-| P21 | **⑥ 四类入口 Scope 来源矩阵**（面板/移交/续行/恢复） | **分层**：组件矩阵归 B4（启用前置）；实现欠项见 P28；R5.8 承接真实入口证据 | 矩阵夹具＋入口表 |
+| P21 | **⑥ 四类入口 Scope 来源矩阵**（面板/移交/续行/恢复） | **分层**：组件矩阵归 B4（启用前置）；实现欠项见 P28；R5.8 承接真实入口证据 | **部分落地（[2026-09-21 批次二十] §24.35）**：格 A＝面板启动（`NodeSubmit_InheritsRegisteredFlowScope`：后继节点操作与流程级 start 登记的固定 Scope **逐字一致**）／**格 A′**＝`NodeSubmit_ScopeIsInherited_NotRereadFromCurrentEpoch`（E1 登记后、节点准入前改当前纪元 ⇒ 零发送＋不得收口成功＋节点侧登记不得携带新纪元 ⇒ **判别**「继承」与「重读」）／格 B＝移交・续行・恢复类**无已登记来源**（`NodeSubmit_NoRegisteredScopeSource_RejectedNoSendNoOccupy`：按 AMD-1-5 第三条**响亮拒绝**＋端口 `SendCount==0`＋无开放 Submission＋零占位＋运行快照逐字段未变）／格 C＝恢复**有来源**继承（P28 既有两条夹具，含纪元变化 ⇒ `stale_epoch` 终局拒绝）。**仍未做（归 B4）**：**首节点绑定**（**§12.3 M1**）＋**启动移交/续行来源落定**（G4a）＋入口表逐项签注 |
 | P22 | **真实双副本＋Rejected** 组合 | B4 | 端到端夹具 |
 | P23 | **控制热键「不经准入」发送接缝夹具**（发送一次/状态查询零次/准入零次） | B3 续 | 发送接缝＋夹具 |
 | P24 | **续用并发/状态分类（夹具部分）** | B4 | 夹具（并发续用、与首次交错、载荷冲突被拒、各状态分类） |

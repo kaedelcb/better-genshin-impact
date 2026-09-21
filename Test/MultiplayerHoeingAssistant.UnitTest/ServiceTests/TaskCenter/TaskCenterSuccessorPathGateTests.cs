@@ -431,6 +431,199 @@ public class TaskCenterSuccessorPathGateTests
     }
 
     /// <summary>
+    /// **§16 交错⑥·四类入口 Scope 来源矩阵（组件/宿主层；[新增·2026-09-21 批次二十]）·格 A＝面板启动**：
+    /// 面板 E1 启动在租约中登记**流程级 start 操作**（无节点身份 ＋ `RunBinding=runId` ＋ 固定 `Scope`），
+    /// 后继节点提交必须**继承该固定 Scope**（逐字一致），不得按当前纪元重建。
+    /// **证明边界（如实，同 §17 P28 口径）**：本格**不能独立区分**「继承登记值」与「重读当前值」——
+    /// 二者在本夹具中取值相同；区分需要「纪元在 E1 与节点提交之间变化」的构造（恢复路径的同型负向夹具见
+    /// `TaskCenterHostRecoveryAdmissionTests.ResumeRun_EpochChanged_RejectedNoSilentRebinding`）。
+    /// </summary>
+    [Fact]
+    public async Task NodeSubmit_InheritsRegisteredFlowScope()
+    {
+        var root = NewRoot("tcscopea-");
+        try
+        {
+            // **1 节点**：本格只需「流程级登记 1 条 ＋ 节点操作 ≥1 条」即可比较 Scope（降低重夹具集合内负载，见 §17 P50）。
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: ["n-1"]);
+
+            Assert.True(probe.ReadOk, Diag("租约台账必须成功读取过", probe));
+            Assert.True(probe.State == WorkflowRunState.Succeeded, Diag("1 节点流程应收口成功", probe));
+            Assert.Equal(1, probe.SendCount);
+
+            // 流程级登记＝无节点身份 ＋ Intent=start ＋ RunBinding=本次运行（`TryGetAdmissionScope` 的唯一识别口径）
+            var flowOps = probe.Ops.Where(o => string.IsNullOrEmpty(o.Candidate?.NodeId)
+                                               && o.Intent == "start"
+                                               && o.RunBinding == probe.RunId).ToList();
+            Assert.True(flowOps.Count == 1, Diag("流程级 start 登记必须唯一命中（识别口径：无节点身份＋Intent=start＋RunBinding）", probe));
+            var flowScope = flowOps[0].Candidate?.Scope ?? "";
+            Assert.False(string.IsNullOrEmpty(flowScope), Diag("流程级登记的固定 Scope 不得为空", probe));
+            Assert.StartsWith("bgi:", flowScope);   // `bgi:{实例}:{epoch}` 形状（§2.2）
+
+            // 后继节点操作逐条继承同一固定 Scope（不得各节点自行重建）
+            var nodeOps = probe.Ops.Where(o => !string.IsNullOrEmpty(o.Candidate?.NodeId)).ToList();
+            Assert.True(nodeOps.Count >= 1, Diag("至少一条节点操作在册（本格用于与流程级登记比较 Scope）", probe));
+            Assert.All(nodeOps, o => Assert.Equal(flowScope, o.Candidate!.Scope));
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
+    /// **§16 交错⑥·格 A′＝「继承登记值」与「重读当前值」的判别反例（[2026-09-21 会诊加固]）**：
+    /// E1 已按纪元 `E0` 登记固定 Scope；在**节点尚未准入之前**把当前纪元改为另一值（经接缝 `Epoch`）。
+    /// 后继提交若**继承登记值**，节点候选的目标纪元仍是 `E0` ⇒ 与当前纪元不符 ⇒ **`stale_epoch` 终局拒绝、
+    /// 零发送**；若实现退化为「提交时重读当前纪元」，节点会以新纪元通过校验并**真的发送** ⇒ 本用例变红。
+    /// 故本格把格 A 的自陈边界（「不能区分继承/重读」）在本批内**升级为可判别证据**。
+    /// </summary>
+    [Fact]
+    public async Task NodeSubmit_ScopeIsInherited_NotRereadFromCurrentEpoch()
+    {
+        var root = NewRoot("tcscopea2-");
+        try
+        {
+            const string changedEpoch = "4321:638999999999999998";   // 与 RoutingFakePort.Epoch 不同
+            TaskCenterAdmissionSeams? seamsRef = null;
+            var mutated = false;
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: ["n-1"],
+                beforeSuccessorAdmission: () =>
+                {
+                    // 只改一次：此刻 E1 已完成登记（固定 Scope 携带 E0），节点尚未取门面锁。
+                    if (!mutated) { mutated = true; seamsRef!.Epoch = changedEpoch; }
+                    return Task.CompletedTask;
+                },
+                configureSeams: s => seamsRef = s);
+
+            Assert.True(probe.ReadOk, Diag("租约台账必须成功读取过", probe));
+            Assert.False(probe.State == WorkflowRunState.Succeeded,
+                Diag("纪元变化后不得收口成功（必须按 stale_epoch 拒绝，而非按当前纪元重建后发送）", probe));
+            Assert.Equal(0, probe.SendCount);   // 零发送：未用「当前纪元」重建并发出
+
+            var flowOps = probe.Ops.Where(o => string.IsNullOrEmpty(o.Candidate?.NodeId)
+                                               && o.Intent == "start" && o.RunBinding == probe.RunId).ToList();
+            Assert.True(flowOps.Count == 1, Diag("流程级 start 登记必须唯一命中", probe));
+            var flowScope = flowOps[0].Candidate?.Scope ?? "";
+            Assert.DoesNotContain(changedEpoch, flowScope);   // 登记值仍属 E0
+
+            // 任何节点侧登记都不得携带「当前纪元」重建出来的 Scope/目标纪元
+            var nodeOps = probe.Ops.Where(o => !string.IsNullOrEmpty(o.Candidate?.NodeId)).ToList();
+            Assert.DoesNotContain(nodeOps, o => (o.Candidate!.Scope ?? "").Contains(changedEpoch, StringComparison.Ordinal)
+                                                || o.TargetEpoch.Contains(changedEpoch, StringComparison.Ordinal));
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
+    /// **§16 交错⑥·格 B＝启动移交／续行／恢复类运行（无已登记固定来源）**：`TryGetAdmissionScope` 查不到
+    /// 「同 `RunBinding` ＋ `Intent=start` ＋无节点身份 ＋ Scope 非空」的登记操作 ⇒ 后继节点提交按
+    /// **AMD-1-5 第三条「缺固定 Scope/绑定＝不签发、不发送」响亮拒绝**（**不得**退回直通发送、不得临时读
+    /// 当前 epoch 补造）——断言：确定拒绝（非「待对账」）＋**端口 `SendCount==0`** ＋ 该运行的**零占位**
+    /// （租约中不存在 `RunBinding=runId` 的操作）＋ 运行记录未被推进（意图仍为 `IntentRecorded`）。
+    /// </summary>
+    [Fact]
+    public async Task NodeSubmit_NoRegisteredScopeSource_RejectedNoSendNoOccupy()
+    {
+        var root = NewRoot("tcscopeb-");
+        var runsDir = Path.Combine(root, "runs");
+        TaskCenterHost? host = null;
+        var hostShutDown = false;
+        try
+        {
+            using var client = new BgiExternalClient();
+            var port = new RoutingFakePort();
+            var runs = new RunStore(runsDir);
+            host = new TaskCenterHost(
+                Path.Combine(root, "flows"), runsDir, Path.Combine(root, "catalog.json"),
+                () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null),
+                localExecutionCapability: () => true,
+                statusSnapshotProvider: () => new ControlStatus { TaskRunning = false },
+                admissionWired: true, successorAdmissionWired: true,
+                admissionSeams: new TaskCenterAdmissionSeams
+                {
+                    Epoch = RoutingFakePort.Epoch,
+                    ProductionBoundaryFactory = (_, r) => new BgiWorkflowExecutionBoundary(port, r),
+                });
+
+            var run = runs.CreateRun("wf-x", "r-1");
+            run.CurrentSubmission = new WorkflowSubmission
+            {
+                Key = RunStore.DeriveSubmissionKey(run.RunId, "n-1", 0, 0, 1),
+                NodeId = "n-1", Occurrence = 0, LoopIteration = 0, Attempt = 1,
+                Intent = SubmitIntentState.IntentRecorded,
+            };
+            run.Cursor = new WorkflowNodeCursor { NodeId = "n-1", Occurrence = 0, LoopIteration = 0, Attempt = 1 };
+            runs.Update(run);
+            var before = runs.List().Single(r => r.RunId == run.RunId);   // 调用前的运行业务快照
+
+            var result = await host.SubmitSuccessorViaAdmissionAsync(
+                new WorkflowSubmitRequest(run, new WorkflowNodeOccurrence("n-1", 0, 0, 0),
+                    new WorkflowNode { NodeId = "n-1", Kind = "resource.oneDragonConfig" }, true),
+                default);
+
+            Assert.False(result.Accepted, "缺固定来源不得签发（reason=" + result.RejectReason + "）");
+            Assert.False(result.Uncertain, "缺固定来源属可证实未发送 ⇒ 确定拒绝，不得报「待对账」");
+            Assert.Contains("无已登记仲裁授权", result.RejectReason);
+            Assert.Equal(0, port.SendCount);   // 零发送（直接证据）
+
+            // **运行未被推进（逐字段）**：状态/修订/游标/节点结果/提交字段一律不变
+            var after = runs.List().Single(r => r.RunId == run.RunId);
+            Assert.Equal(before.State, after.State);
+            Assert.Equal(before.RecordRevision, after.RecordRevision);
+            Assert.Equal(before.Cursor!.NodeId, after.Cursor!.NodeId);
+            Assert.Equal(before.Cursor.Occurrence, after.Cursor.Occurrence);
+            Assert.Equal(before.Cursor.LoopIteration, after.Cursor.LoopIteration);
+            Assert.Equal(before.NodeOutcomes?.Count ?? 0, after.NodeOutcomes?.Count ?? 0);
+            Assert.Equal(before.CurrentSubmission!.Key, after.CurrentSubmission!.Key);
+            Assert.Equal(before.CurrentSubmission.NodeId, after.CurrentSubmission.NodeId);
+            Assert.Equal(SubmitIntentState.IntentRecorded, after.CurrentSubmission.Intent);
+            Assert.Null(after.CurrentSubmission.JobId);
+            Assert.Null(after.CurrentSubmission.AcceptedSendIdentity);
+
+            // **先可靠关闭宿主**（`EnsureAdmissionFacadeAsync` 已启动租约心跳）：不得在心跳仍在跑时删目录/读快照
+            await host.ShutdownAsync();
+            hostShutDown = true;
+
+            // **零占位（直接证据）**：先证明「门面确实已初始化」（租约文件在册——说明本条**真的走到了缺来源分支**、
+            // 而不是在更早的预检就被拒），再断言无开放 Submission ＋ 无任何归属本运行的仲裁操作。
+            var leaseFile = ReadLeaseFileWithRetry(root);
+            Assert.NotNull(leaseFile);
+            Assert.Null(leaseFile!.Handoff?.Submission);                                // 无未决发送责任
+            var ops = leaseFile.Handoff?.Operations ?? [];
+            Assert.DoesNotContain(ops, o => o.RunBinding == run.RunId
+                                            || (o.Candidate?.RunId ?? "") == run.RunId
+                                            || (o.Candidate?.NodeId ?? "") == "n-1"
+                                            || !string.IsNullOrEmpty(o.SubmissionIdentity));
+        }
+        finally
+        {
+            if (!hostShutDown && host is not null) { try { await host.ShutdownAsync(); } catch { } }
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>宿主关闭后读租约文件（非 Handoff 段）：文件锁瞬时争用时有界重试（与既有观测点同口径）。</summary>
+    private static LogicalOwnerLeaseFile? ReadLeaseFileWithRetry(string root)
+    {
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            try
+            {
+                return new ArbitrationLeaseStore(Path.Combine(root, "arbitration")).Read().File;
+            }
+            catch (IOException)
+            {
+                Thread.Sleep(5);
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
     /// 可控执行端口（§12「实施前置发现」：`BgiExternalClient` 是 sealed 具体类且无线协议注入接缝，
     /// 宿主级「后继节点经仲裁面真实提交 + 断言发送次数/路由」验收在不注入端口时不可满足）。
     /// </summary>
@@ -549,7 +742,10 @@ public class TaskCenterSuccessorPathGateTests
         // [§12.3 交错⑤] 发送入口注入（1 起序号 ＋ payload JSON）：把「第 k 次发送」关联到具体节点身份。
         Action<RunStore, int, string?>? onBeforeSendWithPayload = null,
         // [§12.3 交错③] 端口配置钩子（例如注入发送阶段故障 `ThrowOnSend`）。
-        Action<RoutingFakePort>? configurePort = null)
+        Action<RoutingFakePort>? configurePort = null,
+        // [§16 交错⑥ 格 A′] 暴露接缝实例（默认 null＝不影响既有夹具）：用于在「E1 已登记固定 Scope、
+        // 节点尚未准入」之间改变当前纪元，从而区分「继承登记值」与「重读当前值」。
+        Action<TaskCenterAdmissionSeams>? configureSeams = null)
     {
         using var client = new BgiExternalClient();
         var flowsDir = Path.Combine(root, "flows");
@@ -580,79 +776,76 @@ public class TaskCenterSuccessorPathGateTests
         var acceptCount = 0;      // 1＝E1 轮次的「Accepted 后、台账前」观测（交错① 的强制阻塞点）
         var port = new RoutingFakePort();
         var runs = new RunStore(runsDir);
+        // [§16 交错⑥ 格 A′] 接缝实例先建后传给 host：夹具可在「E1 已登记、节点未准入」之间改当前纪元。
+        var seams = new TaskCenterAdmissionSeams
+        {
+            Epoch = RoutingFakePort.Epoch,
+            // [§17 P17／§12.3 交错①] 节点准入入口、取得门面锁**之前**的只发信号观察点（生产 null）。
+            BeforeSuccessorAdmission = beforeSuccessorAdmission is null
+                ? null
+                : beforeSuccessorAdmission,
+            // 门面在「Sender 返回 Accepted 之后、持久化接管台账/关闭 Submission 之前」回调——
+            // 用它取证「先接管、后关闭」的先后顺序（M2/§12.2 B2）：此刻须已能读到本轮 jobId，
+            // 且对应 Submission **仍在册**（尚未关闭）。观测点位于门面同步流水线，不依赖抢时序。
+            Barriers = new AdmissionBarriers
+            {
+                AfterAcceptBeforeLedger = async () =>
+                {
+                    // [§17 P17／§12.3 交错①] 强制版：**首轮（E1）**在此阻塞——直到节点已到达「取得门面锁之前」
+                    // 的观察点（`BeforeSuccessorAdmission`）再放行，从而确定性制造「E1 未关闭时首节点抢先」。
+                    if (holdFirstAccept is not null && Interlocked.Increment(ref acceptCount) == 1)
+                        await holdFirstAccept.Task.ConfigureAwait(false);
+                    var record = runs.List().OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
+                    if (record?.CurrentSubmission is { } s)
+                    {
+                        bool? open = null;
+                        for (var readAttempt = 0; readAttempt < 20 && open is null; readAttempt++)
+                        {
+                            try
+                            {
+                                open = new ArbitrationLeaseStore(arbitrationDir).Read().File?.Handoff?.Submission is not null;
+                            }
+                            catch (IOException)
+                            {
+                                Thread.Sleep(5);
+                            }
+                        }
+                        open ??= false;
+                        ledgerPoint.Add(new LedgerPointObservation(s.NodeId, s.Intent, s.JobId, s.AcceptedSendIdentity, open.Value));
+                    }
+                },
+                AfterLedgerBeforeClose = afterLedgerBeforeClose is null
+                    ? null
+                    : () =>
+                    {
+                        if (Interlocked.Increment(ref ledgerCloseCount) > 1)
+                        {
+                            var injected = runs.List().OrderByDescending(r => r.UpdatedAt).FirstOrDefault()
+                                ?.CurrentSubmission?.AcceptedSendIdentity ?? "";
+                            faultInjections.Add(new FaultInjectionObservation(injected));
+                            afterLedgerBeforeClose();
+                        }
+                        return Task.CompletedTask;
+                    },
+            },
+            ProductionBoundaryFactory = (_, r) =>
+            {
+                if (concurrentWriteBeforeSend is not null) port.BeforeSend = () => concurrentWriteBeforeSend(r);
+                if (onBeforeSend is not null) port.OnBeforeSend = n => onBeforeSend(r, n);
+                if (onBeforeSendWithPayload is not null)
+                    port.OnBeforeSendWithPayload = (n, payloadJson) => onBeforeSendWithPayload(r, n, payloadJson);
+                configurePort?.Invoke(port);
+                return new BgiWorkflowExecutionBoundary(port, r);
+            },
+        };
+        configureSeams?.Invoke(seams);
         var host = new TaskCenterHost(
             flowsDir, runsDir, Path.Combine(root, "catalog.json"),
             () => client, log: entry => { lock (logGate) logList.Add(entry); },
             runnerFactory: null, readinessOverride: () => (true, null),
             localExecutionCapability: () => true, statusSnapshotProvider: () => null,
             admissionWired: true,
-            admissionSeams: new TaskCenterAdmissionSeams
-            {
-                Epoch = RoutingFakePort.Epoch,
-                // [§17 P17／§12.3 交错①] 节点准入入口、取得门面锁**之前**的只发信号观察点（生产 null）。
-                BeforeSuccessorAdmission = beforeSuccessorAdmission is null
-                    ? null
-                    : beforeSuccessorAdmission,
-                // 门面在「Sender 返回 Accepted 之后、持久化接管台账/关闭 Submission 之前」回调——
-                // 用它取证「先接管、后关闭」的先后顺序（M2/§12.2 B2）：此刻须已能读到本轮 jobId，
-                // 且对应 Submission **仍在册**（尚未关闭）。观测点位于门面同步流水线，不依赖抢时序。
-                Barriers = new AdmissionBarriers
-                {
-                    AfterAcceptBeforeLedger = async () =>
-                    {
-                        // [§17 P17／§12.3 交错①] 强制版：**首轮（E1）**在此阻塞——直到节点已到达「取得门面锁之前」
-                        // 的观察点（`BeforeSuccessorAdmission`）再放行，从而确定性制造「E1 未关闭时首节点抢先」。
-                        if (holdFirstAccept is not null && Interlocked.Increment(ref acceptCount) == 1)
-                            await holdFirstAccept.Task.ConfigureAwait(false);
-                        var record = runs.List().OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
-                        if (record?.CurrentSubmission is { } s)
-                        {
-                            // 有界重试：全量并行负载下跨进程锁（FileShare.None）瞬时争用会让单次读抛 IOException——
-                            // 那会被误记为「已关闭」而让本夹具偶发失败（实测：满负载下 1/1 次）。此处重试后再定论。
-                            bool? open = null;
-                            for (var readAttempt = 0; readAttempt < 20 && open is null; readAttempt++)
-                            {
-                                try
-                                {
-                                    open = new ArbitrationLeaseStore(arbitrationDir).Read().File?.Handoff?.Submission is not null;
-                                }
-                                catch (IOException)
-                                {
-                                    Thread.Sleep(5);
-                                }
-                            }
-                            // 仍读不到＝不臆断「仍在册」：记 false（断言会失败并给出诊断），绝不静默放宽。
-                            open ??= false;
-                            ledgerPoint.Add(new LedgerPointObservation(s.NodeId, s.Intent, s.JobId, s.AcceptedSendIdentity, open.Value));
-                        }
-                    },
-                    // G6「Accepted 后关闭阶段抛异常」交错注入点（会诊要求的真实链路反例）。
-                    AfterLedgerBeforeClose = afterLedgerBeforeClose is null
-                        ? null
-                        : () =>
-                        {
-                            // 只对**节点提交**轮次注入（E1 流程启动轮次跳过，否则启动本身会被夹具打断）。
-                            if (Interlocked.Increment(ref ledgerCloseCount) > 1)
-                            {
-                                // 注入前取证「受理回执已落盘」——否则本夹具可能因别的原因（如接管落盘失败）而通过。
-                                var injected = runs.List().OrderByDescending(r => r.UpdatedAt).FirstOrDefault()
-                                    ?.CurrentSubmission?.AcceptedSendIdentity ?? "";
-                                faultInjections.Add(new FaultInjectionObservation(injected));
-                                afterLedgerBeforeClose();
-                            }
-                            return Task.CompletedTask;
-                        },
-                },
-                ProductionBoundaryFactory = (_, runs) =>
-                {
-                    if (concurrentWriteBeforeSend is not null) port.BeforeSend = () => concurrentWriteBeforeSend(runs);
-                    if (onBeforeSend is not null) port.OnBeforeSend = n => onBeforeSend(runs, n);
-                    if (onBeforeSendWithPayload is not null)
-                        port.OnBeforeSendWithPayload = (n, payloadJson) => onBeforeSendWithPayload(runs, n, payloadJson);
-                    configurePort?.Invoke(port);
-                    return new BgiWorkflowExecutionBoundary(port, runs);
-                },
-            },
+            admissionSeams: seams,
             successorAdmissionWired: successorWired);
         try
         {
