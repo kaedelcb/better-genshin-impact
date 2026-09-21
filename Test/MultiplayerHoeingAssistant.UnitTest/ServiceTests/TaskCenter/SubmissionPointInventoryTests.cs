@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
@@ -126,6 +127,56 @@ public sealed class SubmissionPointInventoryTests
 
         // ③总闸门数守恒（新增/删除提交点必须显式改清单）
         Assert.Equal(Allowed.Count, found.Count);
+    }
+
+    /// <summary>
+    /// **S5 非字面量粗化（[2026-09-22 批次四十三]）**：登记「**操作名非字面量**」的直发形态——
+    /// `xx.SendCommandAsync(&lt;标识符&gt;, …)`（操作名来自变量/参数/常量表达式），此前只登记**字面量**拼写，
+    /// 因此「先把操作名拼进变量再直发」可绕过既有守卫。登记现状（文件 → 次数，全部为 1）：
+    /// 端口转发层 `BgiExecutionPort` 与两个适配器（`BgiWorkflowPrerequisiteAdapter`／`ResourceCatalogService`）
+    /// 属**入口透传**（操作名由调用方给出）；其余为既有发送点。
+    /// **能力边界（如实）**：仍为**文本匹配**；不覆盖「反射调用」「别名变量间接调用」「字符串拼接后传参」等形态；
+    /// **不证明**授权先于发送，也不替代 §17 原条款与真实入口证据。
+    /// </summary>
+    private static readonly Dictionary<string, int> AllowedNonLiteralSends = new(StringComparer.Ordinal)
+    {
+        ["MultiplayerHoeingAssistant/Services/CommandExecutor.cs"] = 1,
+        ["MultiplayerHoeingAssistant/Services/RemoteConfigEditService.cs"] = 1,
+        ["MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowExecutionBoundary.cs"] = 1,
+        ["MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowPrerequisiteAdapter.cs"] = 1,
+        ["MultiplayerHoeingAssistant/Services/TaskCenter/BgiWorkflowTerminalExecutor.cs"] = 1,
+        ["MultiplayerHoeingAssistant/Services/TaskCenter/IBgiExecutionPort.cs"] = 1,
+        ["MultiplayerHoeingAssistant/Services/TaskCenter/ResourceCatalogService.cs"] = 1,
+        ["MultiplayerHoeingAssistant/ViewModels/MainViewModel.BgiExternal.cs"] = 1,
+        ["MultiplayerHoeingAssistant/ViewModels/MainViewModel.cs"] = 1,
+        ["MultiplayerHoeingAssistant/ViewModels/MainViewModel.RemoteConfig.cs"] = 1,
+    };
+
+    [Fact]
+    public void ProductionNonLiteralSends_MatchRegisteredInventory()
+    {
+        var root = Path.Combine(RepoRoot(), "MultiplayerHoeingAssistant");
+        var pattern = new Regex(@"\.\s*SendCommandAsync\(\s*(?!ExternalOperations\.)(?!new\b)([A-Za-z_][A-Za-z0-9_\.]*)");
+        var found = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+        {
+            var rel = Path.GetRelativePath(Path.GetDirectoryName(root)!, file).Replace('\\', '/');
+            var count = pattern.Matches(File.ReadAllText(file)).Count;
+            if (count > 0) found[rel] = count;
+        }
+
+        var unregistered = found.Keys.Where(k => !AllowedNonLiteralSends.ContainsKey(k)).OrderBy(k => k, StringComparer.Ordinal).ToList();
+        Assert.True(unregistered.Count == 0,
+            "发现**未登记的「操作名非字面量」直发点**：[" + string.Join(", ", unregistered)
+            + "]——必须先在设计稿 §15／§24.46 与 §24.41-C#11 登记（含仲裁归属与门禁），再更新本守卫。");
+
+        foreach (var (path, expected) in AllowedNonLiteralSends)
+        {
+            Assert.True(found.TryGetValue(path, out var actual) && actual == expected,
+                $"非字面量直发计数变化：{path} 期望 {expected}，实际 {(found.TryGetValue(path, out var a) ? a : 0)}"
+                + "——请先更新 §15／§24.46 登记再改本守卫（禁止只改数字消警）。");
+        }
+        Assert.Equal(AllowedNonLiteralSends.Count, found.Count);
     }
 
     private static int CountOccurrences(string text, string needle)
