@@ -21,15 +21,17 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
     private readonly object _stateGate = new();
     private readonly List<(string Operation, JsonElement? Data)> _received = new();
     private readonly HashSet<string> _subscribedEvents = new(StringComparer.Ordinal);
-    private NamedPipeServerStream? _active;
+    private readonly List<NamedPipeServerStream> _connections = new();
+    private readonly Dictionary<NamedPipeServerStream, HashSet<string>> _subscriptions = new();
+    private readonly HashSet<NamedPipeServerStream> _subscribedAllConnections = new();
+    private readonly List<Task> _serveTasks = new();
     private Task? _acceptLoop;
     private int _queuedStarts;   // 已应答的 ext.task.start 次数（脚本化句柄命名）
-    private bool _subscribedAll; // 客户端订阅了「全部事件」（空数组语义，与服务端一致）
 
-    private void SubscribeAllLocked()
+    private bool IsSubscribedLocked(NamedPipeServerStream connection, string eventName)
     {
-        _subscribedAll = true;
-        _subscribedEvents.Clear();
+        if (_subscribedAllConnections.Contains(connection)) return true;
+        return _subscriptions.TryGetValue(connection, out var set) && set.Contains(eventName);
     }
 
     /// <summary>已成功订阅的事件名集合（`ext.event.subscribe` 载荷 `events[]`；空数组＝订阅全部）。</summary>
@@ -41,7 +43,7 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
     public string PipeName { get; } = "Codex.BgiCompositionRoot." + Guid.NewGuid().ToString("N")[..12];
 
     /// <summary>当前是否有客户端连接（夹具在推送事件前等待它为真）。</summary>
-    public bool Connected { get { lock (_stateGate) return _active is { IsConnected: true }; } }
+    public bool Connected { get { lock (_stateGate) return _connections.Any(c => c.IsConnected); } }
 
     /// <summary>收到的请求（operation + data），供断言「只发一次」等纪律。</summary>
     public IReadOnlyList<(string Operation, JsonElement? Data)> Received
@@ -72,11 +74,16 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
     public async Task PushEventAsync(string eventName, string taskHandle, object? extra = null)
     {
         // **同构纪律**：只有在客户端**成功订阅**了该事件时才允许推送（否则夹具会掩盖「生产漏订阅/订阅集不含终态事件」）。
+        // 订阅按**连接**维护：从未订阅的 v2 IPC 连接不会被注入 `ext.event`。`subscribedAll` 表示「本连接订阅全部」。
+        List<NamedPipeServerStream> targets;
         lock (_stateGate)
         {
-            if (!_subscribedEvents.Contains(eventName) && !_subscribedAll)
+            targets = _connections
+                .Where(c => c.IsConnected && IsSubscribedLocked(c, eventName))
+                .ToList();
+            if (targets.Count == 0)
                 throw new InvalidOperationException(
-                    $"替身拒绝推送未订阅事件 {eventName}（已订阅：{string.Join(",", _subscribedEvents)}）");
+                    $"替身拒绝推送未订阅事件 {eventName}（无连接订阅该事件）");
         }
         // 终态事件的实际口径（与 `BgiTaskTerminalWaiter.OnEvent` 一致）：句柄/cancelled/errorCode/message
         // 都在 `payload` 内（不是 `data` 根）。
@@ -95,7 +102,9 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
             ["operation"] = "ext.event",
             ["data"] = payload,
         };
-        await WriteFrameAsync(envelope.ToJsonString()).ConfigureAwait(false);
+        var json = envelope.ToJsonString();
+        foreach (var target in targets)
+            await WriteFrameToAsync(target, json).ConfigureAwait(false);
     }
 
     private async Task AcceptLoopAsync()
@@ -105,11 +114,19 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
             NamedPipeServerStream? server = null;
             try
             {
+                // 与生产一致：同一管道名支持**多实例并发**（ext 客户端与 v2 IPC 客户端各占一条连接）。
                 server = new NamedPipeServerStream(
-                    PipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+                    PipeName, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances,
+                    PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
                 await server.WaitForConnectionAsync(_cts.Token).ConfigureAwait(false);
-                lock (_stateGate) _active = server;
-                await ServeAsync(server).ConfigureAwait(false);
+                lock (_stateGate)
+                {
+                    _connections.Add(server);
+                    _subscriptions[server] = new HashSet<string>(StringComparer.Ordinal);
+                }
+                var owned = server;
+                lock (_stateGate) _serveTasks.Add(Task.Run(() => ServeAsync(owned)));   // 每连接独立服务（互不阻塞）
+                server = null;                            // 所有权移交服务任务（其 finally 负责释放）
             }
             catch (OperationCanceledException)
             {
@@ -121,7 +138,6 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
             }
             finally
             {
-                lock (_stateGate) _active = null;
                 try { server?.Dispose(); } catch { }
             }
         }
@@ -129,26 +145,67 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
 
     private async Task ServeAsync(NamedPipeServerStream server)
     {
-        while (!_cts.IsCancellationRequested && server.IsConnected)
+        try
         {
-            var json = await ReadFrameAsync(server).ConfigureAwait(false);
-            if (json is null) return;
-            JsonDocument doc;
-            try { doc = JsonDocument.Parse(json); }
-            catch (JsonException) { continue; }
-            using (doc)
+            while (!_cts.IsCancellationRequested && server.IsConnected)
             {
-                var root = doc.RootElement;
-                var operation = root.TryGetProperty("operation", out var opEl) && opEl.ValueKind == JsonValueKind.String
-                    ? opEl.GetString() ?? "" : "";
-                JsonElement? data = root.TryGetProperty("data", out var dEl) && dEl.ValueKind == JsonValueKind.Object
-                    ? dEl.Clone() : null;
-                var requestId = root.TryGetProperty("requestId", out var ridEl) && ridEl.ValueKind == JsonValueKind.String
-                    ? ridEl.GetString() ?? "" : "";
-                lock (_stateGate) _received.Add((operation, data));
-                var response = BuildResponse(operation, data, requestId);
-                await WriteFrameAsync(JsonSerializer.Serialize(response)).ConfigureAwait(false);
+                var json = await ReadFrameAsync(server).ConfigureAwait(false);
+                if (json is null) return;
+                JsonDocument doc;
+                try { doc = JsonDocument.Parse(json); }
+                catch (JsonException) { continue; }
+                using (doc)
+                {
+                    var root = doc.RootElement;
+                    var operation = root.TryGetProperty("operation", out var opEl) && opEl.ValueKind == JsonValueKind.String
+                        ? opEl.GetString() ?? "" : "";
+                    JsonElement? data = root.TryGetProperty("data", out var dEl) && dEl.ValueKind == JsonValueKind.Object
+                        ? dEl.Clone() : null;
+                    var requestId = root.TryGetProperty("requestId", out var ridEl) && ridEl.ValueKind == JsonValueKind.String
+                        ? ridEl.GetString() ?? "" : "";
+                    lock (_stateGate) _received.Add((operation, data));
+                    if (operation == "ext.event.subscribe")
+                        RecordSubscription(server, data);
+                    var response = BuildResponse(operation, data, requestId);
+                    await WriteFrameToAsync(server, JsonSerializer.Serialize(response)).ConfigureAwait(false);
+                }
             }
+        }
+        catch (Exception) when (_cts.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            lock (_stateGate)
+            {
+                _connections.Remove(server);
+                _subscriptions.Remove(server);
+                _subscribedAllConnections.Remove(server);
+            }
+            try { server.Dispose(); } catch { }
+        }
+    }
+
+    /// <summary>记录**本连接**的事件订阅（空数组＝订阅全部，与服务端语义一致）。</summary>
+    private void RecordSubscription(NamedPipeServerStream connection, JsonElement? data)
+    {
+        lock (_stateGate)
+        {
+            if (!_subscriptions.TryGetValue(connection, out var set))
+                _subscriptions[connection] = set = new HashSet<string>(StringComparer.Ordinal);
+            set.Clear();
+            _subscribedAllConnections.Remove(connection);
+            var any = false;
+            if (data is { } sub && sub.TryGetProperty("events", out var evEl) && evEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in evEl.EnumerateArray())
+                    if (item.ValueKind == JsonValueKind.String && item.GetString() is { Length: > 0 } name)
+                    {
+                        set.Add(name);
+                        any = true;
+                    }
+            }
+            if (!any) _subscribedAllConnections.Add(connection);   // 未声明具体事件（含空数组）＝订阅全部
         }
     }
 
@@ -217,21 +274,7 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
                         ? new { status = QueueStatus }
                         : (object)new { status = QueueStatus, taskHandle = queried });
             case "ext.event.subscribe":
-                lock (_stateGate)
-                {
-                    _subscribedEvents.Clear();
-                    if (data is { } sub && sub.TryGetProperty("events", out var evEl) && evEl.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var item in evEl.EnumerateArray())
-                            if (item.ValueKind == JsonValueKind.String && item.GetString() is { Length: > 0 } name)
-                                _subscribedEvents.Add(name);
-                        if (_subscribedEvents.Count == 0) SubscribeAllLocked();
-                    }
-                    else
-                    {
-                        SubscribeAllLocked();
-                    }
-                }
+                // 订阅记录按**连接**维护（见 `RecordSubscription`：连接与会话状态在 ServeAsync 中绑定）。
                 return (true, null, null, new { });
             default:
                 // 其余 ext/v2 操作：成功但空载荷（夹具不覆盖的路径不应因此响亮失败）。
@@ -239,10 +282,8 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
         }
     }
 
-    private async Task WriteFrameAsync(string json)
+    private async Task WriteFrameToAsync(NamedPipeServerStream lease, string json)
     {
-        var lease = _active;
-        if (lease is null || !lease.IsConnected) return;
         var bytes = Encoding.UTF8.GetBytes(json);
         var frame = new byte[4 + 1 + bytes.Length];
         BitConverter.GetBytes(bytes.Length).CopyTo(frame, 0);
@@ -291,7 +332,19 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
     {
         _cts.Cancel();
         try { await (_acceptLoop ?? Task.CompletedTask).ConfigureAwait(false); } catch { }
-        lock (_stateGate) _active = null;
+        List<NamedPipeServerStream> connections;
+        List<Task> serveTasks;
+        lock (_stateGate)
+        {
+            connections = _connections.ToList();
+            serveTasks = _serveTasks.ToList();
+            _connections.Clear();
+            _subscriptions.Clear();
+            _subscribedAllConnections.Clear();
+        }
+        // 先关闭连接让其读循环退出，再**等待全部服务任务收敛**，最后才释放同步原语（避免 Release/CTS 竞态）。
+        foreach (var c in connections) { try { c.Dispose(); } catch { } }
+        try { await Task.WhenAll(serveTasks).WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); } catch { }
         _writeLock.Dispose();
         _cts.Dispose();
     }

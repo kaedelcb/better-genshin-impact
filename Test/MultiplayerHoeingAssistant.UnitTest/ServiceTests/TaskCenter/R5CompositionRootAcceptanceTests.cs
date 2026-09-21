@@ -503,4 +503,103 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
             try { Directory.Delete(root, recursive: true); } catch { }
         }
     }
+    /// <summary>
+    /// **§24.4-7 切监控模式（切换闸门）双向断言**：置 `Diag.SwitchGateActive` ⇒ 新启动被**拒绝且零发送**；
+    /// 闸门解除 ⇒ 启动恢复正常。切换闸门属控制面写入（不续命、不需所有权，§6.1）。
+    /// </summary>
+    [Fact]
+    public async Task CompositionRoot_SwitchGate_DeniesThenAllows()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "r5comp-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var client = new BgiExternalClient();
+            var host = NewHost(root, client);
+            var executor = new CommandExecutor(null!, "unused",
+                externalClientProvider: () => client,
+                externalStartAdmission: (request, ct) => host.AdmitExternalStartAsync(request, ct));
+            await client.StartAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            await client.SubscribeAsync([]);
+            var arbitrationDir = Path.Combine(root, "arbitration");
+
+            // 先跑通一笔（同时让仲裁目录/租约就位）
+            var first = executor.ExecuteAsync(StartGroupCommand("闸门组A"));
+            await WaitForAsync(() => _double.CountOf("ext.task.start") == 1, TimeSpan.FromSeconds(10));
+            await _double.PushEventAsync("task.completed", HandleOf(_double, 1));
+            Assert.Equal("success", (await first.WaitAsync(TimeSpan.FromSeconds(15))).Status);
+
+            // ① 切模式：闸门激活 ⇒ 拒绝且**零发送**
+            Assert.True(new ArbitrationLeaseStore(arbitrationDir).SetSwitchGate(true, "夹具：切监控模式").Success);
+            var opsBeforeGate = new ArbitrationLeaseStore(arbitrationDir).Read().File!.Handoff!.Operations.Count;
+            var blocked = await executor.ExecuteAsync(StartGroupCommand("闸门组B")).WaitAsync(TimeSpan.FromSeconds(20));
+            // 闸门**因果证据**（不靠错误码宽松匹配）：①适配器出口不得成功；②**零新增发送**；
+            // ③被阻断候选只**登记**（`LastSendSeq==0`）且回到 `Queued` 可再驱动（未占位、无发送责任）。
+            Assert.NotEqual("success", blocked.Status);
+            Assert.Equal(1, _double.CountOf("ext.task.start"));   // 零新增发送
+            var opsAfterGate = new ArbitrationLeaseStore(arbitrationDir).Read().File!.Handoff!.Operations;
+            Assert.Equal(opsBeforeGate + 1, opsAfterGate.Count);
+            var gated = opsAfterGate.Single(o => o.Candidate is { WorkflowId: "group:闸门组B" });
+            Assert.Equal(0, gated.LastSendSeq);                       // 未签发发送许可
+            Assert.Equal(OperationRequestState.Queued, gated.RequestState);   // 可再驱动（非 InRound 悬挂）
+            Assert.True(new ArbitrationLeaseStore(arbitrationDir).Read().File!.Diag!.SwitchGateActive);  // 前提：闸门确实激活
+
+            // ② 解除闸门 ⇒ 恢复
+            Assert.True(new ArbitrationLeaseStore(arbitrationDir).SetSwitchGate(false, null).Success);
+            var allowed = executor.ExecuteAsync(StartGroupCommand("闸门组C"));
+            await WaitForAsync(() => _double.CountOf("ext.task.start") == 2, TimeSpan.FromSeconds(10));
+            await _double.PushEventAsync("task.completed", HandleOf(_double, 2));
+            Assert.Equal("success", (await allowed.WaitAsync(TimeSpan.FromSeconds(15))).Status);
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    /// <summary>
+    /// **§24.8-3 控制热键双向断言（组合根层）**：接线态 ⇒ 热键经统一仲裁面（产生仲裁操作、核心仍发热键 IPC）；
+    /// 未接线（生产默认）⇒ **不产生任何仲裁操作**，热键直接走 IPC（既有语义逐字不变）。
+    /// </summary>
+    [Fact]
+    public async Task CompositionRoot_ControlHotkey_WiredGoesThroughAdmission_UnwiredDoesNot()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "r5comp-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var client = new BgiExternalClient();
+            var host = NewHost(root, client);
+            var wired = new CommandExecutor(null!, "unused", externalClientProvider: () => client,
+                externalStartAdmission: (request, ct) => host.AdmitExternalStartAsync(request, ct));
+            var unwired = new CommandExecutor(null!, "unused", externalClientProvider: () => client);   // 生产默认
+            await client.StartAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+            var hotkey = new RemoteCommand { Cmd = "hotkey_execute", Params = new() { ["hotkeyConfigName"] = "组合根热键" } };
+            var wiredResult = await wired.ExecuteAsync(hotkey).WaitAsync(TimeSpan.FromSeconds(20));
+            Assert.Equal("success", wiredResult.Status);
+            Assert.True(_double.CountOf("action.execute_hotkey") == 1,
+                $"接线态热键应经统一仲裁面并执行核心：status={wiredResult.Status} code={wiredResult.ErrorCode} msg={wiredResult.Message}");
+            var arbitrationDir = Path.Combine(root, "arbitration");
+            var ops = new ArbitrationLeaseStore(arbitrationDir).Read().File!.Handoff!.Operations;
+            Assert.Contains(ops, o => o.Candidate is { WorkflowId: "hotkey:组合根热键" });   // 接线态：经统一仲裁面
+            var identitiesBeforeUnwired = ops.Select(o => o.RequestIdentity).ToArray();
+
+            var unwiredResult = await unwired.ExecuteAsync(hotkey).WaitAsync(TimeSpan.FromSeconds(20));
+            Assert.Equal("success", unwiredResult.Status);
+            Assert.Equal(2, _double.CountOf("action.execute_hotkey"));                     // 未接线仍直发热键
+            // 门关闭证据：**操作集合逐项不变**（不只是数量相同——避免「新增一笔又裁掉一笔」的假通过）。
+            var opsAfterUnwired = new ArbitrationLeaseStore(arbitrationDir).Read().File!.Handoff!.Operations;
+            Assert.Equal(identitiesBeforeUnwired, opsAfterUnwired.Select(o => o.RequestIdentity).ToArray());
+            Assert.DoesNotContain(opsAfterUnwired,
+                o => o.Candidate is { WorkflowId: "hotkey:组合根热键" }
+                     && !identitiesBeforeUnwired.Contains(o.RequestIdentity));
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
 }
