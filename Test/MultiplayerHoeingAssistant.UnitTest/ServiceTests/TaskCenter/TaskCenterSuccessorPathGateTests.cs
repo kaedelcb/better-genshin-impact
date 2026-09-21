@@ -119,7 +119,8 @@ public class TaskCenterSuccessorPathGateTests
 
     /// <summary>
     /// **§12.3 交错⑤·逐节点释放直接证据（组件层；[新增·2026-09-21 批次十四]）**：
-    /// 6 节点流程中，**第 k 次（k≥2）节点发送时**，前一节点的 Operation 必须**已按自身发送身份终局**
+    /// **4 节点**流程（[更正·2026-09-21] 初版 6 节点，批次十七为降低重夹具集合负载降载为 4；实际为
+    /// 第 2..4 次发送共 **3 次**观察）中，**第 k 次（k≥2）节点发送时**，前一节点的 Operation 必须**已按自身发送身份终局**
     /// （`TerminalCompleted`）并**迁出 `Active` 计容区**——**逐次**取证（不是只看最终态，故与 P19② 的
     /// 「宿主链路逐节点释放直接断言」对应；不依赖被 P50 暂停的 33 节点用例）。
     /// </summary>
@@ -339,6 +340,89 @@ public class TaskCenterSuccessorPathGateTests
             Assert.Contains("游标", result.RejectReason);
             Assert.False(Directory.Exists(Path.Combine(root, "arbitration")), // 拒绝发生在租约副作用之前
                 "游标判定必须早于门面初始化（不得创建 arbitration 目录）");
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
+    /// **§12.3 交错③·占位前校验拒绝（宿主层；[新增·2026-09-21 批次十九]）**：`SubmitSuccessorViaAdmissionAsync`
+    /// 的**本地预检**（提交缺失／意图状态不合法／出现身份不符／节点冻结失败／F11 独立闸门）必须在
+    /// **任何租约副作用之前**给出**确定拒绝**——逐支断言 `Accepted=false` 且 `Uncertain=false`
+    /// （**不得**报成「待对账」）、**注入的发送端口 `SendCount == 0`**（"零发送"的**直接**证据，不靠
+    /// 「目录未创建」间接推断）、`arbitration` 目录未被创建（＝门面未初始化 ⇒ **零租约初始化、零占位、
+    /// 零仲裁写入**；事实快照读取本身不计入）、拒绝原因指向该预检项。
+    /// 依据：§12.3 M3 阶段边界（尚未进入可能发送阶段＝可证实未发送）／§16 交错③「校验拒绝 ⇒ 零发送」。
+    /// **范围**：本夹具只覆盖「校验拒绝」支；「准备阶段 `RunStore` 更新失败」按 §17 P49 归 B4（**未验收**）。
+    /// </summary>
+    [Theory]
+    [InlineData("submission-null")]
+    [InlineData("intent-state-invalid")]
+    [InlineData("identity-mismatch")]
+    [InlineData("freeze-fail")]
+    [InlineData("f11")]
+    public async Task SuccessorSubmit_PreOccupyRejection_DeterministicNoSendNoLeaseSideEffect(string mode)
+    {
+        var root = NewRoot("tcprecheck-");
+        var runsDir = Path.Combine(root, "runs");
+        try
+        {
+            using var client = new BgiExternalClient();
+            var port = new RoutingFakePort();            // 计数发送端口：本用例任何一次实际发送都必须为 0
+            var runs = new RunStore(runsDir);
+            var host = new TaskCenterHost(
+                Path.Combine(root, "flows"), runsDir, Path.Combine(root, "catalog.json"),
+                () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null),
+                localExecutionCapability: () => true,
+                statusSnapshotProvider: () => new ControlStatus { TaskRunning = false },
+                admissionWired: true, successorAdmissionWired: true,
+                admissionSeams: new TaskCenterAdmissionSeams
+                {
+                    Epoch = RoutingFakePort.Epoch,
+                    F11Active = mode == "f11",
+                    ProductionBoundaryFactory = (_, r) => new BgiWorkflowExecutionBoundary(port, r),
+                });
+
+            var run = runs.CreateRun("wf-x", "r-1");
+            // 「提交缺失」＝`CurrentSubmission == null`；「意图状态不合法」＝存在提交但意图非 `IntentRecorded`
+            // （引擎纪律要求意图先行；两者在门面里同属「可证实未发送」的拒绝分支，但构造互不相同）。
+            run.CurrentSubmission = mode == "submission-null"
+                ? null
+                : new WorkflowSubmission
+                {
+                    Key = RunStore.DeriveSubmissionKey(run.RunId, "n-1", 0, 0, 1),
+                    NodeId = "n-1", Occurrence = 0, LoopIteration = 0, Attempt = 1,
+                    Intent = mode == "intent-state-invalid" ? SubmitIntentState.Submitted : SubmitIntentState.IntentRecorded,
+                };
+            run.Cursor = new WorkflowNodeCursor { NodeId = "n-1", Occurrence = 0, LoopIteration = 0, Attempt = 1 };
+            runs.Update(run);
+
+            // 「身份不符」＝提交请求的出现身份与已落盘意图不一致（可证实未发送）
+            var occurrence = mode == "identity-mismatch"
+                ? new WorkflowNodeOccurrence("n-OTHER", 0, 0, 0)
+                : new WorkflowNodeOccurrence("n-1", 0, 0, 0);
+            // 「冻结失败」＝节点无法完成深拷贝冻结（`FreezeNode` 反序列化为空 ⇒ 抛错并被归类为可证实未发送）
+            var node = new WorkflowNode { NodeId = "n-1", Kind = "resource.oneDragonConfig" };
+
+            var result = await host.SubmitSuccessorViaAdmissionAsync(
+                new WorkflowSubmitRequest(run, occurrence, mode == "freeze-fail" ? null! : node, true), default);
+
+            Assert.False(result.Accepted, "预检拒绝不得报受理（mode=" + mode + "，reason=" + result.RejectReason + "）");
+            Assert.False(result.Uncertain, "可证实未发送 ⇒ 确定拒绝，不得报「待对账」（mode=" + mode + "）");
+            Assert.Equal(0, port.SendCount);   // "零发送"的直接证据：发送接缝一次都未被调用
+            Assert.False(Directory.Exists(Path.Combine(root, "arbitration")),
+                "预检拒绝必须早于门面初始化（不得创建 arbitration 目录 ⇒ 零租约初始化、零占位、零仲裁写入，mode=" + mode + "）");
+            var expect = mode switch
+            {
+                "submission-null" => "提交意图缺失或身份不符",
+                "intent-state-invalid" => "提交意图缺失或身份不符",
+                "identity-mismatch" => "提交意图缺失或身份不符",
+                "freeze-fail" => "冻结失败",
+                _ => "F11",
+            };
+            Assert.Contains(expect, result.RejectReason);
         }
         finally
         {
