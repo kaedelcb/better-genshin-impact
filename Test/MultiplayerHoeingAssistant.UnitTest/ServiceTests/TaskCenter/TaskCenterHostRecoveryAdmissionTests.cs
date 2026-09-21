@@ -121,25 +121,45 @@ public class TaskCenterHostRecoveryAdmissionTests : IDisposable
         return doc.WorkflowId!;
     }
 
-    /// <summary>预置可恢复运行（Interrupted/Paused——恢复五路径场景由施工方内置，不靠 owner 手工构造）。</summary>
-    private WorkflowRunRecord SeedResumableRun(string workflowId, WorkflowRunState state)
+    /// <summary>
+    /// 预置可恢复运行（Interrupted/Paused——恢复五路径场景由施工方内置，不靠 owner 手工构造）。
+    /// **[批次四十五 G4a] 预置运行必须带「已登记固定来源」**：本夹具预置的是**启动移交**语义的运行
+    /// （携 start 移交绑定 ＋ 受理时固定的来源 Scope）——恢复准入按 AMD-1-5 第三条**继承**该固定来源，
+    /// **缺来源一律不签发**（无来源反例见 `ResumeRun_NoRegisteredSource_RejectedNoLeaseSideEffect`）。
+    /// </summary>
+    private WorkflowRunRecord SeedResumableRun(string workflowId, WorkflowRunState state, string? sourceEpoch = null)
     {
         var snapshot = _workflows.LoadSnapshot(workflowId);
-        var run = _runs.CreateRun(workflowId, snapshot.Revision, note: "预置可恢复运行（B2-β 夹具）");
+        var run = _runs.CreateRun(workflowId, snapshot.Revision, note: "预置可恢复运行（B2-β 夹具）",
+            handoff: new HandoffIdentity
+            {
+                IntentKey = "fixture:recovery:" + Guid.NewGuid().ToString("N")[..8],
+                ExecutionId = Guid.NewGuid().ToString("N"),
+                StepId = "step-recovery-fixture",
+                Mode = StartupHandoffModes.Start,
+            },
+            admissionSourceScope: "bgi:local:" + (sourceEpoch ?? FixedSourceEpoch));
         run.State = state;
         _runs.Update(run);
         return run;
     }
 
+    /// <summary>夹具固定来源纪元（预置运行受理时捕获；恢复必须继承它、不得读当前纪元）。</summary>
+    private const string FixedSourceEpoch = "fixture-epoch:1";
+
     private readonly List<string> _hostLog = new();
 
     private TaskCenterHost MakeWiredHost(FakeBoundary boundary, TaskCenterAdmissionSeams seams)
-        => new(
+    {
+        // 预置运行的**固定来源纪元**＝本夹具当前纪元（恢复继承固定来源；「纪元变化不得重读」的反例在节点路径另测）
+        seams.Epoch ??= FixedSourceEpoch;
+        return new(
             Path.Combine(_dir, "flows"), Path.Combine(_dir, "runs"), Path.Combine(_dir, "catalog-cache.json"),
             () => null, m => _hostLog.Add(m),
             (_, w, r) => new WorkflowRunner(w, r, boundary, new NoopPrerequisite(), new NoopTerminal()),
             () => (true, null),
             admissionWired: true, admissionSeams: seams);
+    }
 
     private LeaseReadResult ReadLease()
         => new ArbitrationLeaseStore(Path.Combine(_dir, "arbitration")).Read();
@@ -158,6 +178,39 @@ public class TaskCenterHostRecoveryAdmissionTests : IDisposable
         catch (IOException) { return []; }
     }
 
+    /// <summary>
+    /// **G4a 反例（[批次四十五 验证会诊处置]）**：**无已登记固定来源**的可恢复运行（历史遗留：既无面板流程登记、
+    /// 也无移交受理登记 Scope）⇒ 恢复准入必须**响亮拒绝**且**零租约副作用**（不落 Operation、不占位、不发送、
+    /// 不动原运行记录）——**不得**按当前 epoch 补造 Scope（AMD-1-5 第三条；P28 残余已随 G4a 落地删除）。
+    /// </summary>
+    [Fact]
+    public async Task ResumeRun_NoRegisteredSource_RejectedNoLeaseSideEffect()
+    {
+        var workflowId = SeedFlow("无来源恢复流程");
+        var snapshot = _workflows.LoadSnapshot(workflowId);
+        var legacy = _runs.CreateRun(workflowId, snapshot.Revision, note: "历史遗留运行（G4a 前：无固定来源）");
+        legacy.State = WorkflowRunState.Interrupted;
+        _runs.Update(legacy);
+        var boundary = new FakeBoundary();
+        var host = MakeWiredHost(boundary, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+        try
+        {
+            var result = await host.ResumeRunAsync(legacy.RunId!);
+            Assert.Equal(HostActionStatus.Unavailable, result.Status);
+            Assert.Contains("缺少已登记固定来源", result.Message);
+            Assert.Empty(boundary.Submissions);                       // 未发送
+            Assert.Empty(SafeOps());                                  // 零租约操作（不占位、不落责任）
+            // **[批次四十五 第三轮验证会诊处置] 零租约副作用**：拒绝发生在门面初始化之前 ⇒
+            // 仲裁租约文件**不得**因本次被拒恢复而被创建（目录/租约皆无）。
+            Assert.False(File.Exists(Path.Combine(_dir, "arbitration", "arbitration-lease.json")));
+            Assert.Equal(WorkflowRunState.Interrupted, _runs.Load(legacy.RunId!)!.State); // 原运行不动
+        }
+        finally
+        {
+            await host.ShutdownAsync();
+        }
+    }
+
     // ── 1. Interrupted 恢复全贯：准入受理→驱动恢复→运行终态→恢复操作终局回写（§5.1 行2+统一链路）──
 
     [Fact]
@@ -170,7 +223,7 @@ public class TaskCenterHostRecoveryAdmissionTests : IDisposable
         try
         {
             var result = await host.ResumeRunAsync(seeded.RunId!);
-            Assert.Equal(HostActionStatus.Registered, result.Status);
+            Assert.True(result.Status == HostActionStatus.Registered, "恢复受理被拒：" + result.Message);
             await WaitUntilAsync(() => boundary.Submissions.Count == 1);
             Assert.Single(boundary.Submissions); // 恢复驱动真实提交后继节点
 
@@ -413,7 +466,7 @@ public class TaskCenterHostRecoveryAdmissionTests : IDisposable
     {
         const string epoch = "4821:638912345678901234"; // 生产形状：{ProcessId}:{StartTicksUtc}（含冒号）
         var workflowId = SeedFlow("生产epoch流程");
-        var seeded = SeedResumableRun(workflowId, WorkflowRunState.Interrupted);
+        var seeded = SeedResumableRun(workflowId, WorkflowRunState.Interrupted, sourceEpoch: epoch);
         var boundary = new FakeBoundary();
         var host = MakeWiredHost(boundary, new TaskCenterAdmissionSeams { Epoch = epoch });
         try

@@ -1035,6 +1035,20 @@ public sealed partial class TaskCenterHost
         if (CurrentArbitrationFacts().F11Active)
             return HostActionResult.Unavailable("F11 独立停止闸门激活（未发生租约副作用）");
 
+        // §5.1／AMD-1-5（**P28 于 G4a 落地后收口**）：
+        // ①**有已登记来源时一律继承该 run 的固定 Scope**——不得用 `CurrentBgiEpoch()` 重新构造：那会让 epoch 变化后的
+        //   恢复被绑到**新纪元**（等于换身份），违反「epoch 变化→拒绝或对账，**不重写既有身份**」（I-1）。
+        // ②**无已登记来源时一律响亮拒绝**——AMD-1-5 第三条：缺固定来源**不得**读当前 epoch 补造。
+        //   **[批次四十五 第三轮验证会诊处置] 顺序纪律**：本解析必须**早于门面初始化**（初始化会建目录、获取/接管
+        //   租约、执行恢复扫描并启动心跳＝租约副作用），因此这里用**只读**租约实例（`Read()` 不建目录、不建文件）
+        //   或运行台账回落解析来源；命中才继续走后续链路。
+        var inheritedScope = TryGetAdmissionScopeForResume(run.RunId!, run.WorkflowId);
+        if (inheritedScope is null)
+            return HostActionResult.Unavailable(
+                "恢复缺少已登记固定来源（无面板流程登记且无移交受理登记 Scope）——按 AMD-1-5 第三条不签发、不发送"
+                + "（且未产生任何租约副作用）；历史遗留运行需显式处置（不得读当前 epoch 补造）。");
+        var resumeScope = inheritedScope;
+
         ArbitrationAdmissionService facade;
         try
         {
@@ -1063,21 +1077,6 @@ public sealed partial class TaskCenterHost
             if (_reservedWorkflows.Contains(run.WorkflowId!) || _drives.ContainsKey(run.WorkflowId!))
                 return HostActionResult.Unavailable("该流程已有运行正在驱动（禁止双驱动）");
         }
-
-        // §5.1／AMD-1-5（**P28 部分处置**）：
-        // ①**有已登记来源时一律继承该 run 的固定 Scope**——不得用 `CurrentBgiEpoch()` 重新构造：那会让 epoch 变化后的
-        //   恢复被绑到**新纪元**（等于换身份），违反「epoch 变化→拒绝或对账，**不重写既有身份**」（I-1）。
-        // ②**无已登记来源时**（启动移交创建、来源登记尚未落地——P4/G4a）暂沿用接线前行为**并逐次留痕**：
-        //   按 AMD-1-5 第三条本应拒绝签发，但强制拒绝会破坏 R4.9 移交运行的既有恢复；本分支**登记为待移除**
-        //   （P28 残余），P4 落地后删除并改为响亮拒绝。
-        var inheritedScope = TryGetAdmissionScope(run.RunId!, run.WorkflowId);
-        if (inheritedScope is null)
-        {
-            TryLog("[任务中心] 恢复准入缺少已登记固定来源（运行 " + run.RunId
-                   + "）——暂按接线前行为以当前纪元构造 Scope，属**已登记缺口**（P28 残余／P4）；"
-                   + "不得据此视为「来源合同已满足」。");
-        }
-        var resumeScope = inheritedScope ?? $"bgi:local:{CurrentBgiEpoch()}";
 
         var result = await facade.AdmitRecoveryAsync(new RecoveryAdmissionRequest
         {
@@ -1481,12 +1480,46 @@ public sealed partial class TaskCenterHost
     private string? TryGetAdmissionScope(string runId, string? workflowId) => TryGetAdmissionParent(runId, workflowId)?.Scope;
 
     /// <summary>
+    /// **恢复路径的只读来源解析**（[批次四十五 第三轮验证会诊处置]）：与 `TryGetAdmissionScope` 同判据，
+    /// 但使用**只读**租约实例（门面尚未初始化时 `_admissionStore` 为 null；直接读盘构造不产生任何副作用——
+    /// `ArbitrationLeaseStore.Read()` 既不改写也不新建文件/目录），失败/不可解析 ⇒ null（调用方响亮拒绝）。
+    /// </summary>
+    private string? TryGetAdmissionScopeForResume(string runId, string? workflowId)
+    {
+        if (string.IsNullOrEmpty(workflowId)) return null;
+        IReadOnlyList<OperationRecord>? sources = null;
+        try
+        {
+            if (_admissionStore is not null)
+                sources = _admissionStore.Read().File?.Handoff?.Operations;
+            else
+            {
+                // 门面未初始化：按门面同一公式解析租约目录（只读；目录不存在=Absent，不建目录/文件）
+                var root = _admissionRoot ?? Directory.GetParent(_runsDirPath ?? "")?.FullName;
+                var dir = _arbitrationDir ?? (root is null ? null : Path.Combine(root, "arbitration"));
+                if (dir is not null)
+                    sources = new ArbitrationLeaseStore(dir).Read().File?.Handoff?.Operations;
+            }
+        }
+        catch (IOException)
+        {
+            sources = null;   // 租约锁瞬时争用：按「面板来源不可判」处理（仍可回落运行台账来源）
+        }
+        return ResolveAdmissionParent(sources, _runs.Load(runId), runId, workflowId)?.Scope;
+    }
+
+    /// <summary>
     /// **父登记反查（§12.3 M1⑤ 父子/首节点绑定）**：按同一 `runBinding` 取该 run 的**流程登记父操作**
     /// （`intent=start`、无节点身份、取最早建立者），返回其 `requestIdentity` 与固定 `Scope`。
     /// **顺序按契约**：缺失固定来源（无记录/`Scope` 空/身份空）⇒ 返回 null——调用方一律**响亮拒绝且不签发**，
     /// 不得改读当前 epoch 或按快照补造（AMD-1-5 第三条）。
-    /// **[批次四十四 会诊重要项处置]** 父判据改用门面**同一实现** `ArbitrationAdmissionService.IsFlowRegistrationParent`
-    /// （严格到 `OperationType == FlowRegistration` 与 `flow:` 来源形状）——宿主反查与门面锁内判定不得漂移。
+    /// **[批次四十四 会诊重要项处置]** 父判据改用门面**同一实现**（严格到操作类型与 `flow:` 来源形状）——
+    /// 宿主反查与门面锁内判定不得漂移。
+    /// **[批次四十五 G4a]** 来源按**类别分权威**：**面板启动**＝租约中的流程登记操作（`IsFlowRegistrationParent`）；
+    /// **启动移交**＝**运行台账的受理登记事实**（`WorkflowRunRecord.AdmissionSourceScope`，随受理**同一次落盘**）。
+    /// **会诊处置**：不在租约里另造 `Handoff` 来源记录——那会引入「受理-来源」跨存储窗口、空发送身份的终局错配
+    /// 与主槽位长期占用，且其形状无法与调用方伪造的普通操作区分。暂停续行／Interrupted 恢复继承其原始来源；
+    /// 缺来源仍**不签发、不发送**（AMD-1-5 第三条）。
     /// **[批次四十四 验证会诊重要项处置]** ①**歧义不得任选**：严格判据命中**恰一条**才返回；0 条或多条 ⇒ null
     /// （多条＝同一 runBinding 出现重复/冲突的流程登记 ⇒ 不签发、不绑定，而不是按时间取最早者）。
     /// ②**必须与本运行 workflow 逐字相等**：否则「workflow B ＋ `flow:B`」这种自洽但无关的父记录会被当成
@@ -1496,17 +1529,61 @@ public sealed partial class TaskCenterHost
     {
         if (string.IsNullOrEmpty(workflowId)) return null;
         var read = _admissionStore?.Read();
-        var matches = read?.File?.Handoff?.Operations?
+        return ResolveAdmissionParent(read?.File?.Handoff?.Operations, _runs.Load(runId), runId, workflowId);
+    }
+
+    /// <summary>
+    /// **准入来源解析判据（G4a；纯函数，便于逐支取证）**：
+    /// ①租约侧面板来源（`IsFlowRegistrationParent` ＋ workflow 逐字相等）**恰一条** ⇒ 只认它（内容不完整 ⇒ null）；
+    /// ②租约侧**多条** ⇒ **来源歧义，直接拒绝**（**禁止**借运行台账字段继续签发）；
+    /// ③租约侧零条 ⇒ 回落运行台账：该 run 必须**确有启动移交受理事实**（`Handoffs` 含 start/armTrigger 绑定）、
+    ///   `WorkflowId` 逐字相等、且 `AdmissionSourceScope` 为规范形状 `bgi:local:{非空完整 epoch}`
+    ///   ⇒ 返回合成来源身份 `run-source:{runId}` 与该固定 Scope；任一不成立 ⇒ null（不签发、不发送）。
+    /// </summary>
+    internal static (string RequestIdentity, string Scope)? ResolveAdmissionParent(
+        IReadOnlyList<OperationRecord>? sources, WorkflowRunRecord? run, string runId, string workflowId)
+    {
+        var matches = (sources ?? [])
             .Where(o => o is not null
                         && ArbitrationAdmissionService.IsFlowRegistrationParent(o, runId)
                         && string.Equals(o.Candidate?.WorkflowId, workflowId, StringComparison.Ordinal))
             .ToList();
-        if (matches is not { Count: 1 }) return null;
-        var op = matches[0];
-        var scope = op.Candidate?.Scope;
-        if (string.IsNullOrEmpty(scope) || string.IsNullOrEmpty(op.RequestIdentity)) return null;
-        return (op.RequestIdentity, scope);
+        // 面板来源**唯一**命中 ⇒ 只认它；内容不完整 ⇒ 不签发（不回落到运行台账、不补造）。
+        if (matches is { Count: 1 })
+        {
+            var op = matches[0];
+            var scope0 = op.Candidate?.Scope;
+            // [批次四十五 第三轮验证会诊处置] 面板来源的 Scope **同样**必须满足规范形状（`bgi:local:{非空完整 epoch}`）：
+            // 否则 `garbage`／`bgi:local:`／其它实例前缀都会被当成权威来源。
+            return IsCanonicalAdmissionScope(scope0) && !string.IsNullOrEmpty(op.RequestIdentity)
+                ? (op.RequestIdentity, scope0!)
+                : null;
+        }
+        // 面板来源**歧义**（同一 runBinding 多条）⇒ **直接拒绝**，**禁止**借运行台账字段继续签发
+        // （[批次四十五 验证会诊处置]：否则来源冲突会被运行来源掩盖，形成越权/误判路径）。
+        if (matches is { Count: > 1 }) return null;
+        // 零条面板来源 ⇒ 按类别回落：启动移交的来源权威＝**运行台账受理登记事实**（与租约相互独立的存储；
+        // 租约未初始化/不可读时同样回落——准入本身仍由门面 fail-closed 把关）。
+        if (run is null || !string.Equals(run.WorkflowId, workflowId, StringComparison.Ordinal)) return null;
+        // 来源类别证明：该 run 必须**确有启动移交受理事实**（start/armTrigger 绑定），且 Scope 为规范形状。
+        if (!(run.Handoffs ?? []).Any(h => h is not null
+                                          && h.Mode is StartupHandoffModes.Start or StartupHandoffModes.ArmTrigger))
+            return null;
+        var fixedScope = run.AdmissionSourceScope;
+        if (!IsCanonicalAdmissionScope(fixedScope)) return null;
+        return ("run-source:" + runId, fixedScope!);
     }
+
+    /// <summary>准入来源 Scope 规范形状：`bgi:local:{非空完整 epoch}`（实例段固定 `local`；epoch 含冒号不成问题）。</summary>
+    internal static bool IsCanonicalAdmissionScope(string? scope)
+    {
+        if (string.IsNullOrEmpty(scope) || !scope.StartsWith("bgi:local:", StringComparison.Ordinal)) return false;
+        return !string.IsNullOrEmpty(scope["bgi:local:".Length..].Trim());
+    }
+
+    /// <summary>夹具接缝：按运行反查**准入来源**（身份＋固定 Scope）；生产路径内部同源（`TryGetAdmissionParent`）。</summary>
+    internal (string RequestIdentity, string Scope)? AdmissionParentForTest(string runId, string workflowId)
+        => TryGetAdmissionParent(runId, workflowId);
 
     /// <summary>
     /// **外部启动受理接管落盘（§4.2a／B3）**：把 `external-start-ledger.json` 写成「已受理待执行」并**读回确认**——

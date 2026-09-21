@@ -842,6 +842,183 @@ public class StartupHandoffHostTests : IDisposable
         Assert.Empty(_runs.List());
     }
 
+    /// <summary>
+    /// **G4a（[批次四十五]）**：**启动移交受理处**落定**准入来源固定 Scope**——接缝提供 BGI epoch 时，
+    /// `RegisterHandoffAsync(start)` 必须把 `bgi:local:{受理时 epoch}` 随受理**同一次**写入运行记录
+    /// （`WorkflowRunRecord.AdmissionSourceScope`；**权威＝运行台账受理登记事实**，不在租约内再造来源记录），
+    /// 且后继准入反查（`AdmissionParentForTest`，生产路径同一实现）返回该固定 Scope 与来源身份；
+    /// **epoch 不可用 ⇒ 不留来源**（后继准入不签发、不发送；不得读当前 epoch 补造），受理本身仍按 R4.9 成立。
+    /// </summary>
+    [Fact]
+    public async Task StartHandoff_PersistsFixedAdmissionSourceScope_AndSuccessorResolvesIt()
+    {
+        var wf = Seed("移交来源登记流程");
+        var host = new TaskCenterHost(
+            Path.Combine(_dir, "flows"), Path.Combine(_dir, "runs"), Path.Combine(_dir, "catalog-cache.json"),
+            () => null, null,
+            (_, w, r) => new WorkflowRunner(w, r, new FakeBoundary(), new NoopPrerequisite(), new NoopTerminal()),
+            () => (true, null), () => true,
+            () => new ControlStatus { TaskRunning = false },
+            admissionWired: true, admissionSeams: new TaskCenterAdmissionSeams { Epoch = "9:900" });
+        try
+        {
+            var first = await host.RegisterHandoffAsync(Req(wf, "manual:exec-source"));
+            Assert.Equal(HandoffOutcome.Accepted, first.Outcome);
+            var run = _runs.Load(first.RunId!);
+            Assert.Equal("bgi:local:9:900", run!.AdmissionSourceScope);   // 受理时捕获的固定 Scope
+
+            // 后继准入反查（生产路径同一实现）：来源身份为合成运行来源，Scope＝**登记值**（不重读当前纪元）
+            var parent = host.AdmissionParentForTest(first.RunId!, wf);
+            Assert.NotNull(parent);
+            Assert.Equal("run-source:" + first.RunId, parent!.Value.RequestIdentity);
+            Assert.Equal("bgi:local:9:900", parent.Value.Scope);
+
+            // 已受理的运行不因「已有来源」而重复登记/改写（来源随受理固定，重放同键不重选）
+            var replay = await host.RegisterHandoffAsync(Req(wf, "manual:exec-source"));
+            Assert.Equal(HandoffOutcome.AlreadyAccepted, replay.Outcome);
+            Assert.Equal("bgi:local:9:900", _runs.Load(first.RunId!)!.AdmissionSourceScope);
+        }
+        finally
+        {
+            await host.ShutdownAsync();
+        }
+    }
+
+    /// <summary>
+    /// **G4a 反例（[批次四十五]）**：**当前 BGI epoch 不可用**时，启动移交仍按 R4.9 既有合同受理，但运行记录
+    /// **不得**留下来源 Scope ⇒ 后继准入反查返回 null（不签发、不发送，**不得**读当前 epoch 补造）。
+    /// </summary>
+    [Fact]
+    public async Task StartHandoff_WithoutEpoch_LeavesNoSourceScope_SuccessorFailsClosed()
+    {
+        var wf = Seed("移交无纪元流程");
+        // 生产构造（无接缝 epoch、clientAccessor=null）⇒ `CurrentBgiEpoch()` 为空
+        var host = new TaskCenterHost(
+            Path.Combine(_dir, "flows"), Path.Combine(_dir, "runs"), Path.Combine(_dir, "catalog-cache.json"),
+            () => null, null,
+            (_, w, r) => new WorkflowRunner(w, r, new FakeBoundary(), new NoopPrerequisite(), new NoopTerminal()),
+            () => (true, null), () => true,
+            () => new ControlStatus { TaskRunning = false });
+        try
+        {
+            var reg = await host.RegisterHandoffAsync(Req(wf, "manual:exec-no-epoch"));
+            Assert.Equal(HandoffOutcome.Accepted, reg.Outcome);          // R4.9 受理合同不变
+            Assert.Null(_runs.Load(reg.RunId!)!.AdmissionSourceScope);   // 不留来源（不得补造）
+            Assert.Null(host.AdmissionParentForTest(reg.RunId!, wf));    // 后继准入 fail-closed
+        }
+        finally
+        {
+            await host.ShutdownAsync();
+        }
+    }
+
+    /// <summary>
+    /// **G4a 来源解析矩阵（[批次四十五 验证会诊处置]）**：`TaskCenterHost.ResolveAdmissionParent` 逐支判定——
+    /// ①**恰一条**面板来源 ⇒ 只认它；②租约侧**多条** ⇒ **来源歧义直接拒绝**（不得借运行台账字段继续签发）；
+    /// ③零条 ＋ 运行台账**确有** start/armTrigger 移交受理事实 ＋ 规范 Scope ⇒ 回落（合成来源身份）；
+    /// ④零条 ＋ 运行**无移交受理事实**（普通运行被写入来源字段）⇒ 不认；⑤畸形/空 Scope ⇒ 不认；
+    /// ⑥workflow 不一致 ⇒ 不认。
+    /// </summary>
+    [Theory]
+    [InlineData("panel_single", true)]
+    [InlineData("panel_ambiguous_with_run_source", false)]
+    [InlineData("run_source_with_handoff_binding", true)]
+    [InlineData("run_source_without_handoff_binding", false)]
+    [InlineData("run_source_malformed_scope", false)]
+    [InlineData("run_source_wrong_workflow", false)]
+    [InlineData("panel_scope_malformed", false)]
+    public void ResolveAdmissionParent_Matrix(string mode, bool expectSource)
+    {
+        const string runId = "run-g4a-matrix";
+        const string wf = "wf-g4a-matrix";
+        OperationRecord PanelSource() => new()
+        {
+            RequestIdentity = "panel-" + Guid.NewGuid().ToString("N")[..8],
+            RunBinding = runId,
+            Intent = "start",
+            ResourceRef = "flow:" + wf,
+            OperationType = OperationType.FlowRegistration,
+            RequestState = OperationRequestState.TerminalCompleted,
+            SubmissionIdentity = "sub:panel:1",
+            LastSendSeq = 1,
+            Candidate = new ArbitrationCandidate
+            {
+                Scope = "bgi:local:ep-panel", WorkflowId = wf, RunId = runId,
+                ResourceRef = "flow:" + wf, Intent = "start",
+            },
+        };
+        WorkflowRunRecord Run(string? scope) => new()
+        {
+            RunId = runId,
+            WorkflowId = wf,
+            AdmissionSourceScope = scope,
+            Handoffs =
+            [
+                new HandoffIdentity
+                {
+                    IntentKey = "fixture:matrix", ExecutionId = "e", StepId = "s",
+                    Mode = StartupHandoffModes.Start,
+                },
+            ],
+        };
+
+        IReadOnlyList<OperationRecord>? sources = mode switch
+        {
+            "panel_single" => [PanelSource()],
+            "panel_ambiguous_with_run_source" => [PanelSource(), PanelSource()],
+            // 面板唯一命中但 Scope 畸形（`bgi:local:` 空 epoch 段）⇒ 不得作为权威来源
+            "panel_scope_malformed" => [PanelSourceWithScope("bgi:local:")],
+            _ => [],
+        };
+        var run = mode switch
+        {
+            "panel_single" => Run(null),
+            "panel_ambiguous_with_run_source" => Run("bgi:local:ep-run"),
+            "run_source_with_handoff_binding" => Run("bgi:local:ep-run:1234"),
+            "run_source_without_handoff_binding" => RunWithNoHandoff("bgi:local:ep-run"),
+            "run_source_malformed_scope" => Run("bgi:other:ep-run"),
+            // 该支**只保留 workflow 为唯一差异**（移交受理事实与规范 Scope 均具备）⇒ 才能证明 workflow 逐字守卫有效
+            "run_source_wrong_workflow" => RunWrongWorkflow("bgi:local:ep-run"),
+            "panel_scope_malformed" => Run(null),
+            _ => null,
+        };
+
+        var resolved = TaskCenterHost.ResolveAdmissionParent(sources, run, runId, wf);
+        if (expectSource) Assert.NotNull(resolved);
+        else Assert.Null(resolved);
+        if (mode == "panel_single")
+            Assert.Equal(sources![0].RequestIdentity, resolved!.Value.RequestIdentity);   // 只认面板来源
+        if (mode == "run_source_with_handoff_binding")
+        {
+            Assert.Equal("run-source:" + runId, resolved!.Value.RequestIdentity);
+            Assert.Equal("bgi:local:ep-run:1234", resolved.Value.Scope);                  // 完整 epoch 不截断
+        }
+
+        WorkflowRunRecord RunWithNoHandoff(string scope) => new()
+        {
+            RunId = runId, WorkflowId = wf, AdmissionSourceScope = scope, Handoffs = [],
+        };
+        // **只** workflow 不同（移交受理事实 + 规范 Scope 均具备）——唯一差异可判别
+        WorkflowRunRecord RunWrongWorkflow(string scope) => new()
+        {
+            RunId = runId, WorkflowId = "wf-other", AdmissionSourceScope = scope,
+            Handoffs =
+            [
+                new HandoffIdentity
+                {
+                    IntentKey = "fixture:matrix-wf", ExecutionId = "e", StepId = "s",
+                    Mode = StartupHandoffModes.Start,
+                },
+            ],
+        };
+        OperationRecord PanelSourceWithScope(string scope)
+        {
+            var op = PanelSource();
+            op.Candidate!.Scope = scope;
+            return op;
+        }
+    }
+
     [Fact]
     public void CtorAndListFlows_DoNotCreateMissingDirs()
     {

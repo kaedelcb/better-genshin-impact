@@ -83,7 +83,8 @@ public sealed class RunStore
 
     /// <summary>创建运行记录（初始 Planned + 固定幂等键；RecordRevision 从 1 起）。
     /// handoff（R4.9）：移交身份随创建原子落盘——受理提交点即本持久化，崩溃窗无「已受理无身份」记录。</summary>
-    public WorkflowRunRecord CreateRun(string workflowId, string workflowRevision, string? note = null, HandoffIdentity? handoff = null)
+    public WorkflowRunRecord CreateRun(string workflowId, string workflowRevision, string? note = null,
+        HandoffIdentity? handoff = null, string? admissionSourceScope = null)
     {
         var now = DateTimeOffset.Now;
         var rec = new WorkflowRunRecord
@@ -98,9 +99,25 @@ public sealed class RunStore
             UpdatedAt = now,
             Note = note,
             Handoffs = handoff is null ? [] : [handoff],
+            // G4a：**启动移交**的来源固定 Scope 随受理同一次落盘（只比较、不重写；空=无固定来源）。
+            // 形状校验：仅接受规范 `bgi:local:{非空完整 epoch}`（畸形值=编程/接线错误 ⇒ 响亮抛出，不落权威字段）。
+            AdmissionSourceScope = NormalizeAdmissionSourceScope(admissionSourceScope),
         };
         Persist(rec, expectedRecordRevision: 0);
         return rec;
+    }
+
+    /// <summary>
+    /// 准入来源 Scope 规范化（G4a）：空 ⇒ null（无固定来源）；非空必须是 `bgi:local:{非空完整 epoch}`，
+    /// 否则**响亮抛出**（不得把畸形值写入权威字段；调用方为宿主内部接线点，属编程错误）。
+    /// </summary>
+    private static string? NormalizeAdmissionSourceScope(string? scope)
+    {
+        if (string.IsNullOrWhiteSpace(scope)) return null;
+        if (!scope.StartsWith("bgi:local:", StringComparison.Ordinal)
+            || string.IsNullOrEmpty(scope["bgi:local:".Length..].Trim()))
+            throw new InvalidOperationException("准入来源 Scope 形状非法（应为 bgi:local:{非空完整 epoch}）：" + scope);
+        return scope;
     }
 
     /// <summary>

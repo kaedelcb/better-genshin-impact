@@ -748,7 +748,8 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     /// **必须**零**节点**发送且不签发许可——轮次级占用为 `NeedPreemptConfirm`＋`execution_occupied`（胜者回
     /// `Queued`，非终局）：`own_run_not_declared`（归属集不含本 run）／`ownership_absent`（归属不可证明＝空集）／
     /// `own_multiple_runs`（多个自有驱动并存 ⇒ 归属不唯一，不豁免）／`parent_unresolved`（父登记责任未结清：
-    /// 发送结果不可考、未决发送仍在册）／`parent_wrong_type`（父类型非 `FlowRegistration`）／
+    /// 发送结果不可考、未决发送仍在册）／`parent_wrong_type`（**父类型不属于租约侧准入来源类**——租约侧来源类
+    /// 仅 `FlowRegistration`（面板启动）；启动移交的来源权威在**运行台账**（G4a），不在租约；本支用 `NodeExecution`）／
     /// `parent_source_shape_invalid`（父 `ResourceRef` 非 `flow:` 来源形状）⇒ 二者均**不产生绑定**（fail-closed）／
     /// `workflow_mismatch`（非同父授权 workflow）／`non_node_shape`（流程登记形状不豁免）／
     /// `other_node_in_flight`（同 run 另有**已受理未终结**的节点操作 ⇒ 其他节点在飞仍须阻挡）；
@@ -813,9 +814,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         });
 
         // ① 父登记：受理 → （除 parent_unresolved 支外）终局关闭。
-        //    两支持意构造「形状像父、但不满足严格判据」：类型非 FlowRegistration／来源非 `flow:` 形状。
+        //    两支持意构造「形状像父、但不满足严格判据」：类型不属于来源类／来源非 `flow:` 形状。
         var parent = Req(workflow: wf,
-            operationType: mode == "parent_wrong_type" ? OperationType.Handoff : OperationType.FlowRegistration);
+            operationType: mode == "parent_wrong_type" ? OperationType.NodeExecution : OperationType.FlowRegistration);
         parent.RunBinding = run;
         // parent_workflow_mismatch 支：父记录**自身自洽**（`flow:{自己的 workflow}`）但与本运行 workflow 不同
         parent.Candidate!.WorkflowId = mode == "parent_workflow_mismatch" ? "wf-other" : wf;

@@ -216,6 +216,15 @@ public sealed class WorkflowRunRecord
     [JsonPropertyName("handoffs")]
     public List<HandoffIdentity> Handoffs { get; set; } = [];
 
+    /// <summary>
+    /// **准入来源固定 Scope（G4a／AMD-1-5 第 2 类来源「启动移交」）**：移交**受理时捕获**的目标实例与完整 epoch
+    /// （`bgi:{实例}:{epoch}`），随受理**同一次落盘**写入，随后**只比较、不重写**；后继节点提交据此**继承**来源
+    /// （缺省/空 ⇒ 无固定来源 ⇒ 后继准入**不签发、不发送**，不得读当前 epoch 补造）。
+    /// **面板启动**不需本字段（其来源权威＝租约中的流程登记操作）；**暂停续行/Interrupted 恢复**继承其原始来源。
+    /// </summary>
+    [JsonPropertyName("admissionSourceScope")]
+    public string? AdmissionSourceScope { get; set; }
+
     /// <summary>当前提交（B2：一提交一身份——幂等键/意图/jobId/观察终态同属一个提交身份，不跨节点复用残留）。</summary>
     [JsonPropertyName("currentSubmission")]
     public WorkflowSubmission? CurrentSubmission { get; set; }

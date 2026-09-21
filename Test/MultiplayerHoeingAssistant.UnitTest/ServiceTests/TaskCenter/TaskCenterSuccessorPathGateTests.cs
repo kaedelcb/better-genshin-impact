@@ -1315,7 +1315,9 @@ public class TaskCenterSuccessorPathGateTests
         // 节点尚未准入」之间改变当前纪元，从而区分「继承登记值」与「重读当前值」。
         Action<TaskCenterAdmissionSeams>? configureSeams = null,
         // [§17 P49／§16 交错③] 存储侧注入钩子（默认 null＝不影响既有夹具）：例如注入「准备段发布失败」。
-        Action<RunStore>? configureRuns = null)
+        Action<RunStore>? configureRuns = null,
+        // [G4a] true＝**经启动移交**受理同一流程（来源权威＝运行记录 `AdmissionSourceScope`，无面板 E1 来源操作）。
+        bool startViaHandoff = false)
     {
         using var client = new BgiExternalClient();
         var flowsDir = Path.Combine(root, "flows");
@@ -1414,14 +1416,31 @@ public class TaskCenterSuccessorPathGateTests
             flowsDir, runsDir, Path.Combine(root, "catalog.json"),
             () => client, log: entry => { lock (logGate) logList.Add(entry); },
             runnerFactory: null, readinessOverride: () => (true, null),
-            localExecutionCapability: () => true, statusSnapshotProvider: () => null,
+            localExecutionCapability: () => true,
+            // 启动移交受理带快照预检（生产语义）⇒ 该分支需可用快照；节点路径在接缝下不消费快照。
+            statusSnapshotProvider: startViaHandoff ? (() => new ControlStatus { TaskRunning = false }) : (() => null),
             admissionWired: true,
             admissionSeams: seams,
             successorAdmissionWired: successorWired);
         try
         {
-            var start = await host.StartWorkflowAsync(doc.WorkflowId!);
-            Assert.Equal(HostActionStatus.Registered, start.Status);
+            if (startViaHandoff)
+            {
+                var reg = await host.RegisterHandoffAsync(new StartupHandoffRequest
+                {
+                    ExecutionId = Guid.NewGuid().ToString("N"),
+                    StepId = "step-g4a",
+                    IntentKey = "manual:exec-g4a-" + Guid.NewGuid().ToString("N")[..8],
+                    WorkflowId = doc.WorkflowId!,
+                    Mode = StartupHandoffModes.Start,
+                });
+                Assert.Equal(HandoffOutcome.Accepted, reg.Outcome);
+            }
+            else
+            {
+                var start = await host.StartWorkflowAsync(doc.WorkflowId!);
+                Assert.Equal(HostActionStatus.Registered, start.Status);
+            }
 
             // 有界等待**路由收敛**：门开时须同时看到「successor 节点操作已发布」与「运行已离开活动态」——
             // 只在占位瞬间（Granted）就读会误判发送次数（并行负载下夹具实证）。门关时节点操作永不出现，
@@ -1434,7 +1453,7 @@ public class TaskCenterSuccessorPathGateTests
             for (var i = 0; i < 3000; i++) // 30s 有界预算（并行负载 + 33 节点流程实测需要）
             {
                 runId = runs.List().OrderByDescending(r => r.UpdatedAt).FirstOrDefault()?.RunId ?? runId;
-                readOk = TryReadValidOps(root, runId, out var current);
+                readOk = TryReadValidOps(root, runId, out var current, requirePanelStartOp: !startViaHandoff);
                 if (readOk) snapshot = current;
 
                 var settled = runs.List().Any(r => r.State is WorkflowRunState.Succeeded or WorkflowRunState.Failed
@@ -1465,7 +1484,7 @@ public class TaskCenterSuccessorPathGateTests
             IReadOnlyList<OperationRecord> finalOps = [];
             for (var i = 0; i < 200; i++)
             {
-                if (TryReadValidOps(root, runId, out var opsNow))
+                if (TryReadValidOps(root, runId, out var opsNow, requirePanelStartOp: !startViaHandoff))
                 {
                     finalOk = true;
                     finalOps = opsNow;
@@ -1728,6 +1747,38 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
             {
                 try { await probeTask.WaitAsync(TimeSpan.FromSeconds(60)); } catch { /* 清理：吞掉失败以免遮蔽真实断言 */ }
             }
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
+    /// **G4a 端到端（[批次四十五]）**：**经启动移交**受理的 run（**无面板 E1 来源操作**）——后继节点提交必须
+    /// 按**运行台账的来源固定 Scope**（受理时捕获的 `bgi:local:{epoch}`）**继承**：节点操作落盘 Scope 与该登记值
+    /// **逐字一致**、并整体跑通（发送恰一次）。这是「移交受理处落定固定来源 ＋ 后继提交可查得」的端到端证据。
+    /// **范围**：宿主层测试接线态（`_successorAdmissionWired` 显式打开）；生产门仍关闭。
+    /// </summary>
+    [Fact]
+    public async Task NodeSubmit_AfterHandoffStart_InheritsRecordedFixedScope()
+    {
+        var root = NewRoot("tcg4a-");
+        try
+        {
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: ["n-1"],
+                startViaHandoff: true);
+
+            Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台账", probe));
+            Assert.True(probe.ReadOk, Diag("台账读取必须有效（本 run 已有节点操作在册）", probe));
+            Assert.True(probe.State == WorkflowRunState.Succeeded, Diag("移交启动的流程应整体跑通", probe));
+            Assert.Equal(1, probe.SendCount);
+            var nodeOp = Assert.Single(probe.Ops, o => o.Candidate?.NodeId == "n-1");
+            Assert.Equal("bgi:local:" + RoutingFakePort.Epoch, nodeOp.Candidate!.Scope); // **继承运行记录固定 Scope（逐字）**
+            Assert.Equal(probe.RunId, nodeOp.RunBinding);
+            Assert.False(string.IsNullOrEmpty(nodeOp.SubmissionIdentity));
+            // 移交路径**没有**面板流程登记来源操作（来源权威＝运行记录，不在租约）
+            Assert.DoesNotContain(probe.Ops, o => o.OperationType == OperationType.FlowRegistration);
+        }
+        finally
+        {
             TryDelete(root);
         }
     }
@@ -2091,7 +2142,12 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
 
     /// <summary>有效台账读取：文件＋Handoff 段在册，且已含**本次运行**的 E1 启动操作
     /// （manual／`RunBinding==runId`／`Intent=="start"`／无节点身份）。</summary>
-    private static bool TryReadValidOps(string root, string runId, out IReadOnlyList<OperationRecord> ops)
+    /// <summary>
+    /// 台账读取有效性：默认要求**本 run 的面板流程登记来源操作**在册（跨运行误认防护）；**启动移交**受理的 run
+    /// （G4a：来源权威＝运行记录，租约内**无**面板来源操作）改用「本 run 已有节点操作在册」为有效性判据。
+    /// </summary>
+    private static bool TryReadValidOps(string root, string runId, out IReadOnlyList<OperationRecord> ops,
+        bool requirePanelStartOp = true)
     {
         ops = [];
         if (string.IsNullOrEmpty(runId)) return false;
@@ -2099,11 +2155,14 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
         {
             var handoff = new ArbitrationLeaseStore(Path.Combine(root, "arbitration")).Read().File?.Handoff;
             if (handoff?.Operations is not { } list) return false;
-            if (!list.Any(o => o.Candidate?.Namespace == "manual"
-                               && string.Equals(o.RunBinding, runId, StringComparison.Ordinal)
-                               && string.Equals(o.Intent, "start", StringComparison.Ordinal)
-                               && string.IsNullOrEmpty(o.Candidate?.NodeId)))
-                return false; // 本次运行的 E1 启动操作必须已登记（跨运行误认防护）
+            var valid = requirePanelStartOp
+                ? list.Any(o => o.Candidate?.Namespace == "manual"
+                                && string.Equals(o.RunBinding, runId, StringComparison.Ordinal)
+                                && string.Equals(o.Intent, "start", StringComparison.Ordinal)
+                                && string.IsNullOrEmpty(o.Candidate?.NodeId))
+                : list.Any(o => string.Equals(o.RunBinding, runId, StringComparison.Ordinal)
+                                && !string.IsNullOrEmpty(o.Candidate?.NodeId));
+            if (!valid) return false;
             ops = list;
             return true;
         }

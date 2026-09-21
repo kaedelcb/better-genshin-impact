@@ -791,6 +791,7 @@ public sealed class ArbitrationAdmissionService
     /// 保留原票据与 RestorePending 责任：本方法绝不触碰 Pending 段、绝不改写既有操作为新作业。
     /// 恢复操作不走 RetryAsync（重试轮次排序违反「恢复不排序」——可重试拒绝由入口以新操作重新发起，每次=新操作）。
     /// </summary>
+    /// <summary>
     public async Task<AdmissionResult> AdmitRecoveryAsync(RecoveryAdmissionRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -1941,6 +1942,10 @@ public sealed class ArbitrationAdmissionService
            && !string.IsNullOrEmpty(op.Candidate?.WorkflowId)
            && string.Equals(op.ResourceRef, "flow:" + op.Candidate!.WorkflowId, StringComparison.Ordinal);
 
+    // 说明（[批次四十五 G4a 会诊处置]）：**启动移交的来源权威＝运行台账的受理登记事实**
+    // （`WorkflowRunRecord.AdmissionSourceScope`，与受理同一次落盘），**不**在租约里再造一条 `Handoff` 来源记录——
+    // 后者会引入「受理-来源」跨存储窗口、空发送身份终局错配与主槽位长期占用，且 `OperationType.Handoff`
+    // 的形状无法与调用方伪造的普通操作区分（会诊 3 阻断）。租约侧只认**面板启动**的来源记录（`FlowRegistration`）。
     /// <summary>
     /// **父子绑定反查（§12.3 M1⑤）**：按严格判据取该 `runBinding` 的流程登记父操作身份；
     /// **唯一命中**才返回（无命中/多条 = 歧义）⇒ `null`，调用方一律**不绑定、不补造**（fail-closed）。
@@ -1996,10 +2001,13 @@ public sealed class ArbitrationAdmissionService
         // ③ 全局未决发送槽为空（其他节点在飞/父未结清 ⇒ 不豁免）
         if (handoff.Submission is not null) return false;
         var parents = (handoff.Operations ?? [])
-            .Where(o => o is not null && IsFlowRegistrationParent(o, runBinding))
+            .Where(o => o is not null && IsFlowRegistrationParent(o, runBinding)
+                        && string.Equals(o.Candidate?.WorkflowId, op.Candidate?.WorkflowId, StringComparison.Ordinal))
             .ToList();
         if (parents.Count != 1) return false;
         var parent = parents[0];
+        // 父来源（面板启动的流程登记）已接管关闭 ⇒ 需真实发送责任已结清。
+        // **启动移交**（G4a）的来源权威在运行台账，不在租约 ⇒ 本豁免对其**不适用**（fail-closed；残余 §24.55）。
         if (parent.RequestState is not (OperationRequestState.Accepted or OperationRequestState.TerminalCompleted))
             return false;
         if (string.IsNullOrEmpty(parent.SubmissionIdentity) || parent.LastSendSeq <= 0) return false;

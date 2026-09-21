@@ -643,6 +643,17 @@ public sealed partial class TaskCenterHost
             : RegisterStartHandoff(request, ct);
     }
 
+    /// <summary>
+    /// **准入来源固定 Scope（G4a／[批次四十五]）**：启动移交受理时**捕获** `bgi:{实例}:{epoch}` 作为该 run 的
+    /// 固定来源 Scope；当前 epoch 不可用 ⇒ 返回 null（该 run 无固定来源 ⇒ 后继准入**不签发、不发送**；
+    /// **不得**读当前 epoch 补造，也不因此否决 R4.9 的既有受理合同）。
+    /// </summary>
+    private string? AdmissionSourceScopeForRun()
+    {
+        var epoch = CurrentBgiEpoch();
+        return string.IsNullOrEmpty(epoch) ? null : "bgi:local:" + epoch;
+    }
+
     /// <summary>start / armTrigger 语义受理（§4）：arm 仅 Waiting+有待触发时刻才算已挂载（身份追加登记后 AlreadyAccepted 幂等）；其余活动态响亮拒绝。</summary>
     private HandoffRegisterResult RegisterStartHandoff(StartupHandoffRequest request, CancellationToken ct)
     {
@@ -736,9 +747,13 @@ public sealed partial class TaskCenterHost
             try
             {
                 // 受理提交点（锁内）：移交身份随创建原子落盘，runId 直接来自记录（绝不倒推查询）
+                // G4a（[批次四十五]）：**准入来源固定 Scope 与受理同一次落盘**（`bgi:{实例}:{受理时 epoch}`）——
+                // 来源权威＝运行台账的受理登记事实（AMD-1-5 第 2 类来源）；epoch 不可用 ⇒ 留空（后继准入
+                // 不签发、不发送，**不得**读当前 epoch 补造），受理本身仍按 R4.9 既有合同成立。
                 run = _runs.CreateRun(request.WorkflowId, snapshot.Revision,
                     note: $"启动中心移交受理（{request.Mode}，执行 {shortId}）",
-                    handoff: BuildIdentity(request));
+                    handoff: BuildIdentity(request),
+                    admissionSourceScope: AdmissionSourceScopeForRun());
             }
             catch (Exception ex)
             {

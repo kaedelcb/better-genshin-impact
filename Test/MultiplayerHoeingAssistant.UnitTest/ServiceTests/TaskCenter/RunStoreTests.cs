@@ -26,6 +26,34 @@ public class RunStoreTests : IDisposable
     }
 
     /// <summary>
+    /// **G4a（[批次四十五 第三轮验证会诊处置]）`CreateRun` 的准入来源 Scope 写入边界**：
+    /// ①空白 ⇒ 规范化为 `null`（无固定来源；旧记录缺字段同样反序列化为 null）；
+    /// ②规范 `bgi:local:{非空完整 epoch}`（含冒号的完整 epoch）原样落盘；
+    /// ③畸形非空（其它实例前缀／空 epoch 段）⇒ **响亮抛出**且**不创建运行记录**（不落权威字段）。
+    /// </summary>
+    [Fact]
+    public void CreateRun_AdmissionSourceScope_WhitespaceNormalizedMalformedRejected()
+    {
+        var store = new RunStore(_dir);
+
+        var blank = store.CreateRun("wf-g4a-a", "rev-1", admissionSourceScope: "   ");
+        Assert.Null(blank.AdmissionSourceScope);
+        Assert.Null(store.Load(blank.RunId)!.AdmissionSourceScope);   // 落盘同样为 null（缺字段=无来源）
+
+        var canonical = store.CreateRun("wf-g4a-b", "rev-1",
+            admissionSourceScope: "bgi:local:4821:638912345678901234");
+        Assert.Equal("bgi:local:4821:638912345678901234", canonical.AdmissionSourceScope);
+        Assert.Equal("bgi:local:4821:638912345678901234", store.Load(canonical.RunId)!.AdmissionSourceScope);
+
+        var before = store.List().Count;
+        Assert.Throws<InvalidOperationException>(() =>
+            store.CreateRun("wf-g4a-c", "rev-1", admissionSourceScope: "bgi:other:ep"));
+        Assert.Throws<InvalidOperationException>(() =>
+            store.CreateRun("wf-g4a-d", "rev-1", admissionSourceScope: "bgi:local:"));
+        Assert.Equal(before, store.List().Count);                      // 畸形值不产生运行记录
+    }
+
+    /// <summary>
     /// **[P7／§12.2 第 3 项] 字段合并：`UpdateMerging` 保留并发写入者的非自有字段改动**。
     /// 对照：旧对象整对象写回（`Update`）在修订漂移时**响亮冲突**（`RunRecordConflictException`）——
     /// 这正是「旧 Runner 对象覆盖接管事实」的既有护栏；`UpdateMerging` 则把自有字段合并进**最新记录**，
