@@ -590,3 +590,38 @@ E1 流程启动的发送窗口内提交的节点操作被并发轮次按占用�
 | 7 | 重要 | `BuildDispatch` 被移出「捕获异常⇒Unknown」归类 ⇒ 派发快照异常时由外层落 `internal_error`，占位后状态与既有行为不一致（影响所有类型） | **已修**：`BuildDispatch` 保留在原归类内（哨兵夹具不变） |
 | 8 | 重要 | 新夹具未覆盖「发送异常后重取锁的配对/可用性」与「责任被推进后迟到受理」两类交错 | **部分已修**：+2 夹具（责任推进 ⇒ 停驻且**零台账写入**；外部启动 Sender 抛异常 ⇒ `Reconciling` 且**后续请求仍能取得门面锁**）。仍未覆盖：同一身份被**终态**证据推进后的裁决入口联动（归冲突批次） |
 | 9 | 建议（登记） | 非终态「曾受理」证据与「确定未受理」之间的**冲突词表口径**（`ConflictEvidenceRecord.RawTerminal` 目前只表达终态词） | **登记挂账**：归冲突裁决批次（不得为凑语义伪造终态词，§24.2-2″） |
+### 24.25 落地登记：§24.4 生产组合根闭环夹具（第一批：外部启动 ext 闭环）（[新增·2026-09-21]）
+
+**A. 组装与传输替换（真实组装、仅替换外部传输）**
+
+- **组装**＝真实 `CommandExecutor`（E3 接线）→ 真实 `TaskCenterHost`（真实仲裁门面＋真实接管台账＋真实 `BgiExternalClient`）→ 真实 Core；`MainViewModel` 的真实构造路径由既有 `R410ProductionWiringTests` 覆盖（本批不重复构造，登记为组合根的 `MainViewModel` 侧证据）。
+- **传输替换**＝新增**仅测试**接缝 `IpcClient.PipeNameOverrideForTest`／`BgiExternalClient.PipeNameOverrideForTest`（**生产恒 `null`**；夹具在 `InitializeAsync/DisposeAsync` 成对设置/还原，并以 `[CollectionDefinition(..., DisableParallelization = true)]` 保证静态覆盖不与其它测试并行）+ 进程内管道替身 `BgiInstancePipeDouble`：帧格式与生产一致（`[4 字节长度][1 字节 type=1][v2 信封 JSON]`），实现 v2／ext 协议子集（`ping`／`task.status`／`task.start`／`ext.hello`／`ext.task.start`／`ext.task.queueStatus`）与 `ext.event` 事件推送。
+
+**B. 已覆盖场景（`R5CompositionRootAcceptanceTests`，三枚夹具；仅替换传输、不替换任何判定/责任逻辑）**
+
+| 场景 | 断言 |
+|---|---|
+| §24.4-1 连续两次成功启动 | 两次均 `success`；第二次不被第一次未终结台账阻断；`ext.task.start` 恰两次（无重发） |
+| §24.4-2 ext `Completed` 闭环 | 台账 `Terminal`＋`JobId` 可读；外部 Operation `TerminalCompleted`；主槽位（Submission）释放；`ExecutionResult.Kind=Succeeded`、`RawTerminal="completed"` |
+| §24.4-3 权威取消终态 | `task.queueCancelled` ⇒ 入口 `failed`＋`cancelled`（结果维 `Cancelled`）、责任 `Settled`；台账 Terminal／Operation 终局／**不重建** Submission |
+| §24.4-4 v2 发送成功 | ext 不可用（对端老 BGI）⇒ 回退 v2；入口 `success`、`IsTerminal=false`、责任 `Pending`；台账保持 `AcceptedPendingExecution`、无 `ExecutionResult`／`PendingTerminal` |
+
+**C. 本批发现并修复的实现缺口（组合根验收的直接产出）**
+
+- **D9 贯通缺口**：v2 路径「获准且核心已执行 ⇒ 回核心结果」原样返回核心 `CommandResult`，**丢失结果维/责任维**（`ResponsibilityState=None`）。已修：在**线路字段逐字保留**的前提下，按准入结论补齐 `ResponsibilityState`／`JobId`／`EvidenceSource`／`ExecutionDisposition`（核心已给更强事实时不改写），使「普通受理 ⇒ 责任 `Pending`」贯通到调用方（§24.6-2／§24.6-5／D9）。
+
+**D. 仍未覆盖（归 §24.4 第二批；禁止悬空）**
+
+1. §24.4-5 终态落盘失败交错（关闭前 `PendingTerminal` 首写失败／关闭后补写失败）与 §24.4-3 的「关闭前 `Reconciling` 断言」细分；
+2. §24.4-6 **大于 32 笔**外部启动完成后的容量与终局释放（在替身上跑 33+ 轮闭环）；
+3. §24.4-7 冷启动／授权纪元变化／切监控模式／宿主关闭交错；
+4. §24.8-3 的「默认未注入路径（生产门仍关闭）＋控制热键」在**组合根层面**的显式断言（组件级默认门关闭已有既有夹具覆盖）。
+
+**E. 本批会诊（gpt-5.6-sol／medium，一轮）与逐条处置**
+
+| # | 严重度 | 发现摘要 | 处置 |
+|---|---|---|---|
+| 20 | 重要 | 替身可推送**未订阅**事件 ⇒ 事件链存在假通过风险（掩盖生产漏订阅/订阅集不含终态事件） | **已修**：替身实现 `ext.event.subscribe`（记录订阅集；空数组＝全部）并**拒绝未订阅事件的推送**；夹具镜像生产启动步骤（`MainViewModel.BgiExternal`：Ready 且未激活时 `SubscribeAsync([])`）并断言订阅已发生 |
+| 21 | 重要 | D9 贯通仍不完整：`RawTerminal`／`ExecutionErrorCode` 未贯通到适配器可见结果 | **已修**：`MapAdmissionOutcome` 各分支与「核心回执补齐」路径均投影 `RawTerminal`／`ExecutionErrorCode`。**口径说明**：`SubmissionIdentity`／`SendSeq` 属 `AdmissionResult`／`ExternalStartAdmissionOutcome` 合同（D9），**不在** D1 的 `CommandResult` 字段清单内——`CommandResult` 层不重复承载，避免两套权威发送身份 |
+| 22 | 重要 | §24.4-2「主槽位释放」断言不足（Submission 关闭 ≠ 计容释放） | **已修**：断言终局操作**已迁出 `Active` 计容区**（`Zone != Active`）且当次快照中**不存在 `Active` 操作**（§24.1-3） |
+| 23 | 建议 | 静态接缝未还原原值（无条件置 null） | **已修**：保存并还原初始化前的原值 |

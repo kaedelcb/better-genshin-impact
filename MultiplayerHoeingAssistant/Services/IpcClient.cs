@@ -29,6 +29,12 @@ public class IpcClient : IDisposable
     private NamedPipeClientStream? _pipeClient;
     private readonly string _pipeName;
 
+    /// <summary>
+    /// **[夹具接缝] 管道名覆盖**（null＝按当前用户 SID 的真实 BGI 管道名）：仅用于**组合根验收**把外部传输
+    /// 替换为进程内测试服务器（§24.4「真实组装、仅替换外部传输」）。**生产恒 null**；夹具须在 finally 还原。
+    /// </summary>
+    internal static string? PipeNameOverrideForTest { get; set; }
+
     /// <summary>连接握手后的会话校验结果（详见 <see cref="IpcSessionCheck"/>）。</summary>
     public IpcSessionCheck SessionCheck { get; private set; } = IpcSessionCheck.NotChecked;
 
@@ -44,7 +50,7 @@ public class IpcClient : IDisposable
     public IpcClient()
     {
         var sid = System.Security.Principal.WindowsIdentity.GetCurrent()?.User?.Value;
-        _pipeName = $"BetterGI.v2.user-{sid}.root";
+        _pipeName = PipeNameOverrideForTest ?? $"BetterGI.v2.user-{sid}.root";
     }
 
     /// <summary>

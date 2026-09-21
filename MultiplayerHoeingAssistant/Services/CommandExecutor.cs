@@ -297,7 +297,22 @@ public class CommandExecutor
 
         // 获准且核心已执行：**回核心结果**（既有 Status/ErrorCode/文案逐字不变）；
         // 未获准（核心未执行）＝按准入结论回执。
-        if (outcome.Status == ExternalStartAdmissionStatus.Accepted && coreResult is not null) return coreResult;
+        if (outcome.Status == ExternalStartAdmissionStatus.Accepted && coreResult is not null)
+        {
+            // [Batch B 收尾之六] §24.6-2／D9：核心回执的**线路字段逐字保留**，但「结果维 × 责任维」必须**贯通到
+            // 调用方**（不得在适配器边界断链）——核心未携带时按准入结论补齐（例：v2 阻塞协议普通受理 ⇒ 责任 `Pending`、
+            // `IsTerminal=false`；句柄/证据来源按准入结论合并）。核心已给出更强事实（终态/句柄/责任）时不改写。
+            if (coreResult.ResponsibilityState == ResponsibilityState.None)
+                coreResult.ResponsibilityState = outcome.ResponsibilityState;
+            if (string.IsNullOrEmpty(coreResult.JobId)) coreResult.JobId = outcome.JobId;
+            if (string.IsNullOrEmpty(coreResult.EvidenceSource)) coreResult.EvidenceSource = outcome.EvidenceSource;
+            if (coreResult.ExecutionDisposition == ExecutionDisposition.None)
+                coreResult.ExecutionDisposition = outcome.ExecutionDisposition;
+            if (string.IsNullOrEmpty(coreResult.RawTerminal)) coreResult.RawTerminal = outcome.RawTerminal;
+            if (string.IsNullOrEmpty(coreResult.ExecutionErrorCode))
+                coreResult.ExecutionErrorCode = outcome.ExecutionErrorCode;
+            return coreResult;
+        }
         return MapAdmissionOutcome(outcome, target);
     }
 
@@ -376,6 +391,9 @@ public class CommandExecutor
                 JobId = outcome.JobId,
                 ExecutionDisposition = outcome.ExecutionDisposition,
                 ResponsibilityState = outcome.ResponsibilityState,
+                // [会诊重要项处置] D1／D9：适配器可见结果**逐字段贯通**（原始终态词／执行错误码也不得丢弃）。
+                RawTerminal = outcome.RawTerminal,
+                ExecutionErrorCode = outcome.ExecutionErrorCode,
                 EvidenceSource = outcome.EvidenceSource,
             },
             ExternalStartAdmissionStatus.Rejected => new CommandResult
@@ -384,6 +402,9 @@ public class CommandExecutor
                 ErrorCode = string.IsNullOrEmpty(outcome.Code) ? "admission_rejected" : outcome.Code,
                 Message = $"{target} 被拒绝（确定未受理）：{outcome.Message}",
                 ResponsibilityState = outcome.ResponsibilityState,
+                RawTerminal = outcome.RawTerminal,
+                ExecutionErrorCode = outcome.ExecutionErrorCode,
+                EvidenceSource = outcome.EvidenceSource,
             },
             ExternalStartAdmissionStatus.Blocked => new CommandResult
             {
@@ -391,6 +412,9 @@ public class CommandExecutor
                 ErrorCode = string.IsNullOrEmpty(outcome.Code) ? "admission_blocked" : outcome.Code,
                 Message = $"{target} 被阻断（未启动）：{outcome.Message}",
                 ResponsibilityState = outcome.ResponsibilityState,
+                RawTerminal = outcome.RawTerminal,
+                ExecutionErrorCode = outcome.ExecutionErrorCode,
+                EvidenceSource = outcome.EvidenceSource,
             },
             // R5.3 §24.2-5：取消——**保留确定取消事实**（`ExecutionDisposition=Cancelled`）且不压成 `result_unknown`；
             // 线路词表不改（`Status` 仍只在 success/failed 内）；责任是否结清由 `ResponsibilityState` 表达。
