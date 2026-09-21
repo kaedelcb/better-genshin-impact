@@ -519,6 +519,167 @@ public class TaskCenterSuccessorPathGateTests
     }
 
     /// <summary>
+    /// **§12.3 交错④·受理接管故障（[新增·2026-09-21 批次二十二]）**：远端**已 Accepted**、但
+    /// **接管事实（`Intent=Accepted`＋`JobId`＋本轮发送身份）落盘失败** ⇒ 必须：不得报成功、
+    /// **不得反解为确定未受理**、**不得重发**、且**不得在盘上留下受理事实**（旧 Runner 对象也不能覆盖接管事实）。
+    /// 注入＝`RunStore.PublishFaultForTest` 条件化在**接管写**（记录已带 `Intent=Accepted`）上。
+    /// </summary>
+    [Fact]
+    public async Task NodeSubmit_TakeoverPersistFailed_UnknownNoResendNoAcceptedFact()
+    {
+        var root = NewRoot("tctakeover-");
+        try
+        {
+            var injected = 0;
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: ["n-1"],
+                configureRuns: r => r.PublishFaultForTest = rec =>
+                {
+                    // **接管写专属形态**（[会诊加固] 仅 `Intent=Accepted` 不足以定位接管写：结果写回/终态写回
+                    // 也可能带 Accepted）——要求同时满足：Accepted 意图 ＋ `JobId` 非空 ＋ 本轮受理发送身份非空
+                    // ＋ 尚无终态观察 ＋ 尚无节点结果写回（接管发生在这两者之前）。
+                    if (rec.CurrentSubmission is not { } s
+                        || s.Intent != SubmitIntentState.Accepted
+                        || string.IsNullOrEmpty(s.JobId)
+                        || string.IsNullOrEmpty(s.AcceptedSendIdentity)
+                        || s.ObservedTerminal is not null
+                        || (rec.NodeOutcomes?.Count ?? 0) != 0)
+                        return null;
+                    Interlocked.Increment(ref injected);
+                    return new IOException("fixture: takeover persist fault");
+                });
+
+            Assert.Equal(1, Volatile.Read(ref injected));      // 注入确实命中接管写
+            Assert.True(probe.Converged, Diag("运行必须收敛（不得悬挂）", probe));
+            Assert.True(probe.State == WorkflowRunState.Unknown,
+                Diag("远端已受理而接管落盘失败 ⇒ 不可考，必须保守停驻 Unknown", probe));
+            Assert.Equal("unknown", probe.FirstNodeResult);
+            Assert.Equal(1, probe.SendCount);                  // 只发送一次（不得重发）
+
+            var handoff = ReadLeaseFileWithRetry(root)?.Handoff;
+            Assert.NotNull(handoff);
+            var op = handoff!.Operations.Single(o => !string.IsNullOrEmpty(o.Candidate?.NodeId));
+            Assert.Equal(OperationRequestState.Reconciling, op.RequestState);
+            Assert.Equal(1, op.LastSendSeq);
+            Assert.False(string.IsNullOrEmpty(op.SubmissionIdentity));
+            Assert.NotNull(handoff.Submission);
+            Assert.Equal(op.SubmissionIdentity, handoff.Submission!.SubmissionIdentity);
+            Assert.Equal(SubmissionState.Reconciling, handoff.Submission.State);
+
+            // **盘上不得留下受理事实**（旧 Runner 对象也不得把接管事实写成既成事实）：冻结写已落盘（Submitted）、
+            // 但不得出现 JobId／Accepted 意图／本轮受理发送身份。
+            var persisted = new RunStore(Path.Combine(root, "runs")).List().Single();
+            Assert.Equal(SubmitIntentState.Submitted, persisted.CurrentSubmission!.Intent);
+            Assert.Null(persisted.CurrentSubmission.JobId);
+            Assert.Null(persisted.CurrentSubmission.AcceptedSendIdentity);
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
+    /// **§12.3 交错④·接管故障后【宿主对象重建】**（[新增·2026-09-21 批次二十二]；[会诊收窄命名] 本夹具为
+    /// **同进程内新建宿主与端口**，**不是**子进程级重启——静态/进程级缓存残留**未排除**，文档与命名一律按
+    /// 「host recreation」口径表述）：同一接管落盘故障收敛 `Unknown` 后新建宿主，断言：
+    /// ①**责任与完整发送身份跨宿主重建保留**（前后未决 `Submission` 均非空且 `Reconciling`；节点操作
+    /// **唯一存在**且 `Reconciling`；`SubmissionIdentity`＋`SendSeq`＋`WireSubmitKey`＋运行记录
+    /// `CurrentSubmission.Key`／`Attempt` **前后全等**⇒未新增发送许可、未换键）；
+    /// ②**重建后再次驱动＝确定拒绝且零发送**（新端口 `SendCount == 0`；`Accepted=false`、`Uncertain=false`，
+    /// 原因码定位**意图预检**「提交意图缺失或身份不符」）；③盘上仍**无受理事实**、无新 attempt。
+    /// **如实边界**：该「零发送」由**意图预检**保证——「未决责任本身阻挡再发送」的**门面级**直接证据仍欠，
+    /// 归 B4 恢复项（与 §24.36 的范围限定同口径）。
+    /// **取消侧**（接管故障后取消）归取消链批次（P6）：其入口在 E4 控制热键/命令执行器，本文件不冒充。
+    /// </summary>
+    [Fact]
+    public async Task NodeSubmit_TakeoverPersistFailed_HostRecreationKeepsResponsibilityNoResend()
+    {
+        var root = NewRoot("tctakeover2-");
+        var runsDir = Path.Combine(root, "runs");
+        var flowsDir = Path.Combine(root, "flows");
+        TaskCenterHost? first = null;
+        TaskCenterHost? second = null;
+        var firstShutDown = false;
+        var secondShutDown = false;
+        try
+        {
+            // 第一次运行：真实 1 节点流程 + 接管落盘故障 ⇒ 远端已受理（恰一次发送）、盘上无受理事实、收敛 Unknown
+            var injected = 0;
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: ["n-1"],
+                configureRuns: r => r.PublishFaultForTest = rec =>
+                {
+                    if (rec.CurrentSubmission?.Intent != SubmitIntentState.Accepted) return null;
+                    Interlocked.Increment(ref injected);
+                    return new IOException("fixture: takeover persist fault");
+                });
+
+            Assert.Equal(1, Volatile.Read(ref injected));
+            Assert.Equal(1, probe.SendCount);                          // 远端已受理（恰一次发送，不重发）
+            Assert.True(probe.State == WorkflowRunState.Unknown, Diag("接管落盘失败 ⇒ 必须保守停驻 Unknown", probe));
+            Assert.Equal("unknown", probe.FirstNodeResult);
+            var before = ReadLeaseFileWithRetry(root)?.Handoff;        // probe 结束时其宿主已关闭
+            Assert.NotNull(before);
+            Assert.NotNull(before!.Submission);
+            Assert.Equal(SubmissionState.Reconciling, before.Submission!.State);
+
+            // ——重启：同 root 新建宿主与端口（不复用任何进程内对象）——
+            using var client = new BgiExternalClient();
+            var portTwo = new RoutingFakePort();
+            second = new TaskCenterHost(
+                flowsDir, runsDir, Path.Combine(root, "catalog.json"),
+                () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null),
+                localExecutionCapability: () => true,
+                statusSnapshotProvider: () => new ControlStatus { TaskRunning = false },
+                admissionWired: true, successorAdmissionWired: true,
+                admissionSeams: new TaskCenterAdmissionSeams
+                {
+                    Epoch = RoutingFakePort.Epoch,
+                    ProductionBoundaryFactory = (_, r) => new BgiWorkflowExecutionBoundary(portTwo, r),
+                });
+
+            var persistedRun = new RunStore(runsDir).List().Single();
+            var keyBefore = persistedRun.CurrentSubmission!.Key;
+            var resultTwo = await second.SubmitSuccessorViaAdmissionAsync(
+                new WorkflowSubmitRequest(persistedRun, new WorkflowNodeOccurrence("n-1", 0, 0, 0),
+                    new WorkflowNode { NodeId = "n-1", Kind = "resource.oneDragonConfig" }, true), default);
+            Assert.False(resultTwo.Accepted);
+            Assert.False(resultTwo.Uncertain);    // 确定拒绝（不得报「待对账」）
+            Assert.Contains("提交意图缺失或身份不符", resultTwo.RejectReason);   // 定位到**意图预检**（见本夹具边界）
+            Assert.Equal(0, portTwo.SendCount);   // **重建后再次驱动：零发送**
+
+            // 责任与**完整发送身份**跨宿主重建未变（无新键、无新 attempt、无新增发送许可）
+            var after = ReadLeaseFileWithRetry(root)?.Handoff;
+            Assert.NotNull(before);
+            Assert.NotNull(after);
+            var opBefore = before!.Operations!.Single(o => !string.IsNullOrEmpty(o.Candidate?.NodeId));
+            var opAfter = after!.Operations!.Single(o => !string.IsNullOrEmpty(o.Candidate?.NodeId));
+            Assert.NotNull(before.Submission);
+            Assert.NotNull(after.Submission);
+            Assert.Equal(SubmissionState.Reconciling, before.Submission!.State);
+            Assert.Equal(SubmissionState.Reconciling, after.Submission!.State);
+            Assert.Equal(opBefore.SubmissionIdentity, before.Submission.SubmissionIdentity);   // 操作↔未决责任身份互证
+            Assert.Equal(opAfter.SubmissionIdentity, after.Submission.SubmissionIdentity);
+            Assert.Equal(opBefore.SubmissionIdentity, opAfter.SubmissionIdentity);             // 身份未变
+            Assert.Equal(before.Submission.SendSeq, after.Submission.SendSeq);                 // 发送序号未变
+            Assert.Equal(opBefore.LastSendSeq, opAfter.LastSendSeq);                           // 许可序号未变（无新增许可）
+            Assert.Equal(opBefore.WireSubmitKey, opAfter.WireSubmitKey);                       // **未换键**
+            Assert.Equal(OperationRequestState.Reconciling, opAfter.RequestState);             // 仍非终局
+            Assert.Equal(1, opAfter.LastSendSeq);
+            var persistedAfter = new RunStore(runsDir).List().Single();
+            Assert.Equal(keyBefore, persistedAfter.CurrentSubmission!.Key);                    // 提交键未变
+            Assert.Null(persistedAfter.CurrentSubmission!.JobId);                 // 盘上仍无受理事实
+            Assert.Null(persistedAfter.CurrentSubmission.AcceptedSendIdentity);
+            Assert.Equal(1, persistedAfter.CurrentSubmission.Attempt);            // 未新开 attempt
+        }
+        finally
+        {
+            if (!firstShutDown && first is not null) { try { await first.ShutdownAsync(); } catch { } }
+            if (!secondShutDown && second is not null) { try { await second.ShutdownAsync(); } catch { } }
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
     /// **§17 P49／§16 交错③「准备阶段 `RunStore` 更新（发布）失败」（[新增·2026-09-21 批次二十一]）**：
     /// 经**仅测试**接缝 `RunStore.PublishFaultForTest`（生产恒 `null`）在**原子发布步骤**注入 `IOException`——
     /// 注入条件＝该记录已带**准备段冻结写**标记（`CurrentSubmission.SendAttempted == true`），故发生在
