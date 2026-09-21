@@ -70,6 +70,8 @@ public sealed class R58DualRunContestTests : IDisposable
         {
             Namespace = ns,
             SourceDetail = "fixture:" + ns,
+            // §24.17-3：创建必须携带可信操作类型（合成候选按外部启动类入口标注）。
+            OperationType = OperationType.ExternalStart,
             Candidate = new ArbitrationCandidate
             {
                 Scope = "bgi:inst:ep1",

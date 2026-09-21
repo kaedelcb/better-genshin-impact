@@ -98,12 +98,15 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     }
 
     private static AdmissionRequest Req(string ns = "manual", string workflow = "group:g1", string payload = "p1",
-        string scope = "bgi:inst:ep1", string? trigger = null, string? wire = null, int priority = 0)
+        string scope = "bgi:inst:ep1", string? trigger = null, string? wire = null, int priority = 0,
+        OperationType operationType = OperationType.FlowRegistration)
         => new()
         {
             Namespace = ns,
             SourceDetail = "fixture",
             WireSubmitKey = wire,
+            // [Batch B 收尾] §24.17-3：创建必须携带可信操作类型（调用方可显式指定节点执行等类型）。
+            OperationType = operationType,
             Candidate = new ArbitrationCandidate
             {
                 Scope = scope,
@@ -1602,6 +1605,147 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_UnknownOperationType_FailsClosedWithoutRegistration()
+    {
+        // §24.17-3：创建必须携带可信操作类型；缺失/Unknown ⇒ 响亮拒绝且**零登记、零副作用**。
+        var (svc, _, _, _) = BuildFacade();
+        var req = Req();
+        req.OperationType = OperationType.Unknown;
+
+        var result = await svc.SubmitAsync(req);
+        Assert.Equal(AdmissionResultKind.Error, result.Kind);
+        Assert.Equal("operation_type_required", result.ReasonCode);
+        Assert.Empty(ReadLease().File?.Handoff?.Operations ?? []);
+    }
+
+    [Fact]
+    public async Task PersistedUnknownOperationType_RefusesResend()
+    {
+        // §24.17-3／§24.20-A：**旧格式代隔离产物（持久化类型 Unknown）**不得重新占位/发送——
+        // 续用/重试路径一律以持久化类型为准（调用方即便携带类型也不得覆盖）。
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); };
+        });
+        var req = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-legacy");
+        req.OperationType = OperationType.ExternalStart;
+        var accepted = await svc.SubmitAsync(req);
+        Assert.Equal(AdmissionResultKind.Accepted, accepted.Kind);
+
+        var lease = store.Read().File!.Lease!;
+        var marked = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var op = file.Handoff!.Operations.First(o => string.Equals(o.RequestIdentity, accepted.RequestIdentity, StringComparison.Ordinal));
+            op.OperationType = OperationType.Unknown;   // 模拟旧格式代隔离产物
+            op.RequestState = OperationRequestState.Queued;
+            // 与预观察记录的类型关联保持一致（否则读侧会按 v3 引用完整性判损坏）。
+            foreach (var pre in file.Handoff.PreObservations ?? [])
+                if (string.Equals(pre.SubmissionIdentity, op.SubmissionIdentity, StringComparison.Ordinal)
+                    && pre.SendSeq == op.LastSendSeq)
+                    pre.OperationType = OperationType.Unknown;
+            return null;
+        });
+        Assert.True(marked.Success, "夹具前置：置 Unknown 类型失败 " + marked.Reason);
+
+        req.Kind = AdmissionKind.ContinueUse;
+        req.RequestIdentity = accepted.RequestIdentity;
+        var blocked = await svc.SubmitAsync(req);
+        Assert.Equal(AdmissionResultKind.Error, blocked.Kind);
+        Assert.Equal("legacy_operation_type_unresolved", blocked.ReasonCode);
+        Assert.Equal(1, sends);                                       // 未发生第二次发送
+        Assert.Null(ReadLease().File!.Handoff!.Submission);           // 未产生未决发送（未占位）
+        // 重试路径同样前置拒绝（不改写状态、不重发），且责任维保持 Pending（§24.6-5）。
+        var retry = await svc.RetryAsync(accepted.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.Error, retry.Kind);
+        Assert.Equal("legacy_operation_type_unresolved", retry.ReasonCode);
+        Assert.Equal(ResponsibilityState.Pending, retry.ResponsibilityState);
+        Assert.Equal(1, sends);
+    }
+
+    [Fact]
+    public async Task OccupyStage_LegacyUnknownType_RefusedWithoutSend()
+    {
+        // 反例：**入队后、占位前**把持久化类型改成 Unknown（模拟旧格式代隔离产物窗口）⇒ 占位阶段响亮拒绝、零发送。
+        ArbitrationLeaseStore? storeRef = null;
+        var mutated = false;
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); };
+            h.Barriers = new AdmissionBarriers
+            {
+                BeforeOccupyPublish = () =>
+                {
+                    if (!mutated && storeRef is not null)
+                    {
+                        mutated = true;
+                        var lease = storeRef.Read().File!.Lease!;
+                        storeRef.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+                        {
+                            var op = file.Handoff!.Operations.First();
+                            op.OperationType = OperationType.Unknown;
+                            return null;
+                        });
+                    }
+                    return Task.CompletedTask;
+                },
+            };
+        });
+        storeRef = store;
+
+        var req = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-occupy-legacy");
+        req.OperationType = OperationType.ExternalStart;
+        var result = await svc.SubmitAsync(req);
+
+        Assert.Equal(AdmissionResultKind.Error, result.Kind);
+        Assert.Equal("legacy_operation_type_unresolved", result.ReasonCode);
+        Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);
+        Assert.Equal(0, sends);                                     // 未签发发送许可
+        Assert.Null(ReadLease().File!.Handoff!.Submission);          // 未占位
+    }
+
+    [Fact]
+    public async Task ContinueUse_MergedUnknownRecordWithConflictedTarget_ReportsConflictFirst()
+    {
+        // 顺序纪律反例：合并记录自身类型为 Unknown，但**合并目标冲突待决** ⇒ 必须先报告 `conflict_pending`
+        // （冲突待裁决优先于类型隔离；两者都 fail-closed）。
+        var (svc, store, _, _) = BuildFacade();
+        var a = Req(ns: "manual", workflow: "onedragon:winner", payload: "p-winner");
+        a.OperationType = OperationType.ExternalStart;
+        var wa = await svc.SubmitAsync(a);
+        Assert.Equal(AdmissionResultKind.Accepted, wa.Kind);
+        var m = Req(ns: "manual", workflow: "onedragon:merged", payload: "p-merged");
+        m.OperationType = OperationType.ExternalStart;
+        var wm = await svc.SubmitAsync(m);
+        Assert.Equal(AdmissionResultKind.Accepted, wm.Kind);
+
+        var lease = store.Read().File!.Lease!;
+        var mutated = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var winner = file.Handoff!.Operations.First(o => string.Equals(o.RequestIdentity, wa.RequestIdentity, StringComparison.Ordinal));
+            var merged = file.Handoff.Operations.First(o => string.Equals(o.RequestIdentity, wm.RequestIdentity, StringComparison.Ordinal));
+            winner.ConflictPending = true;                                   // 胜者冲突待决
+            merged.MergedInto = winner.RequestIdentity;                      // 合并项指向胜者
+            merged.OperationType = OperationType.Unknown;                    // 合并项类型缺失（旧格式代隔离产物）
+            merged.RequestState = OperationRequestState.RetryableRejected;   // 触发合并共享分类分支
+            foreach (var pre in file.Handoff.PreObservations ?? [])
+                if (string.Equals(pre.SubmissionIdentity, merged.SubmissionIdentity, StringComparison.Ordinal)
+                    && pre.SendSeq == merged.LastSendSeq)
+                    pre.OperationType = OperationType.Unknown;
+            return null;
+        });
+        Assert.True(mutated.Success, "夹具前置：构造合并+冲突失败 " + mutated.Reason);
+
+        m.Kind = AdmissionKind.ContinueUse;
+        m.RequestIdentity = wm.RequestIdentity;
+        var result = await svc.SubmitAsync(m);
+        Assert.Equal(AdmissionResultKind.NeedReconcile, result.Kind);
+        Assert.Equal("conflict_pending", result.ReasonCode);   // 冲突优先（不得先报类型隔离）
+        Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);
+    }
+
+    [Fact]
     public async Task SettleCompletion_JobIdReadHookMissing_FailsClosedAsUnreadable()
     {
         // 配置缺失反例：终态写入/确认钩子在位，但**句柄读取器未配置** ⇒ 归为「不可确认」，一律保守停驻。
@@ -1751,14 +1895,18 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     {
         var sends = 0;
         var (svc, _, _, _) = BuildFacade(h => h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); });
-        var r1 = Req(workflow: "group:c1");
+        var r1 = Req(workflow: "group:c1", operationType: OperationType.NodeExecution);
+        r1.Candidate!.NodeId = "n-1";
+        r1.Candidate.ResourceRef = "node:n-1";
         r1.RunBinding = "run:same";
         r1.CursorRef = "cur:1";
         r1.CursorRevision = 5;
         var accepted = await svc.SubmitAsync(r1);
         Assert.Equal(AdmissionResultKind.Accepted, accepted.Kind);
 
-        var r2 = Req(workflow: "group:c2"); // 不同候选——只共享游标
+        var r2 = Req(workflow: "group:c2", operationType: OperationType.NodeExecution);
+        r2.Candidate!.NodeId = "n-1";
+        r2.Candidate.ResourceRef = "node:n-1"; // 不同候选——只共享游标
         r2.RunBinding = "run:same";          // 会诊要求：明确绑定**同一非空 run**（不靠 null==null）
         r2.CursorRef = "cur:1";
         r2.CursorRevision = 5;
@@ -1781,13 +1929,17 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var sends = 0;
         var (svc, _, _, _) = BuildFacade(h => h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null)); });
 
-        var r1 = Req(workflow: "group:c1");
+        var r1 = Req(workflow: "group:c1", operationType: OperationType.NodeExecution);
+        r1.Candidate!.NodeId = "n-1";
+        r1.Candidate.ResourceRef = "node:n-1";
         r1.RunBinding = "run:1";
         r1.CursorRef = "n-1#0#0";
         r1.CursorRevision = 5;
         Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(r1)).Kind);
 
-        var r2 = Req(workflow: "group:c2"); // 另一运行：同游标引用、同修订
+        var r2 = Req(workflow: "group:c2", operationType: OperationType.NodeExecution);
+        r2.Candidate!.NodeId = "n-1";
+        r2.Candidate.ResourceRef = "node:n-1"; // 另一运行：同游标引用、同修订
         r2.RunBinding = "run:2";
         r2.CursorRef = "n-1#0#0";
         r2.CursorRevision = 5;
@@ -1813,7 +1965,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
             h.TakeoverTerminalConfirmed = (_, _) => true; // 本夹具聚焦消费保护，权威终态确认另测
         });
 
-        var r1 = Req(workflow: "group:c1");
+        var r1 = Req(workflow: "group:c1", operationType: OperationType.NodeExecution);
+        r1.Candidate!.NodeId = "n-1";
+        r1.Candidate.ResourceRef = "node:n-1";
         r1.RunBinding = "run:1";
         r1.CursorRef = "n-1#0#0";
         r1.CursorRevision = 5;
@@ -1824,7 +1978,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
             svc.MarkOperationTerminal(r1.RequestIdentity, "node_outcome:已观察节点权威终态").Kind);
         Assert.NotEqual(OperationZone.Active, FindOp(r1.RequestIdentity)!.Zone);
 
-        var r2 = Req(workflow: "group:c2"); // 另一候选，但同一消费键
+        var r2 = Req(workflow: "group:c2", operationType: OperationType.NodeExecution);
+        r2.Candidate!.NodeId = "n-1";
+        r2.Candidate.ResourceRef = "node:n-1"; // 另一候选，但同一消费键
         r2.RunBinding = "run:1";
         r2.CursorRef = "n-1#0#0";
         r2.CursorRevision = 5;
@@ -2025,9 +2181,10 @@ public class ArbitrationAdmissionServiceTests : IDisposable
 
         for (var i = 1; i <= 33; i++)
         {
-            var r = Req(workflow: "wf-" + i);
+            var r = Req(workflow: "wf-" + i, operationType: OperationType.NodeExecution);
             r.RunBinding = "run-" + i;
             r.Candidate!.NodeId = "n-" + i;
+            r.Candidate.ResourceRef = "node:n-" + i;
             r.Candidate.Attempt = 1;
             r.CursorRef = "n-" + i + "#0#0";
             r.CursorRevision = 1;
@@ -2057,9 +2214,10 @@ public class ArbitrationAdmissionServiceTests : IDisposable
 
         for (var i = 1; i <= 32; i++)
         {
-            var r = Req(workflow: "wf-" + i);
+            var r = Req(workflow: "wf-" + i, operationType: OperationType.NodeExecution);
             r.RunBinding = "run-" + i;
             r.Candidate!.NodeId = "n-" + i;
+            r.Candidate.ResourceRef = "node:n-" + i;
             r.CursorRef = "n-" + i + "#0#0";
             r.CursorRevision = 1;
             var res = await svc.SubmitAsync(r); // 不可考路径：操作停在 Reconciling ⇒ 持续占主槽位
@@ -2075,7 +2233,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
 
         var overflow = Req(workflow: "wf-overflow");
         overflow.RunBinding = "run-overflow";
+        overflow.OperationType = OperationType.NodeExecution;
         overflow.Candidate!.NodeId = "n-overflow";
+        overflow.Candidate.ResourceRef = "node:n-overflow";
         overflow.CursorRef = "n-overflow#0#0";
         overflow.CursorRevision = 1;
         var last = await svc.SubmitAsync(overflow);
@@ -2496,7 +2656,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         });
 
         var r = Req(trigger: "fixture:preempted-abandon", workflow: "wf-abandon");
+        r.OperationType = OperationType.NodeExecution;
         r.Candidate!.NodeId = "n-1";
+        r.Candidate.ResourceRef = "node:n-1";
         r.RunBinding = "run-1";
         r.CursorRef = "n-1#0#0";
         r.CursorRevision = 1;
@@ -2531,7 +2693,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         });
 
         var first = Req(trigger: "fixture:defer-a", workflow: "wf-defer");
+        first.OperationType = OperationType.NodeExecution;
         first.Candidate!.NodeId = "n-9";
+        first.Candidate.ResourceRef = "node:n-9";
         first.RunBinding = "run-9";
         first.CursorRef = "n-9#0#0";
         first.CursorRevision = 1;
@@ -2543,7 +2707,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
 
         // 显式新提交（同一窗口、同一节点、**另一个出现身份**）⇒ 新操作获准。
         var second = Req(trigger: "fixture:defer-b", workflow: "wf-defer");
+        second.OperationType = OperationType.NodeExecution;
         second.Candidate!.NodeId = "n-9";
+        second.Candidate.ResourceRef = "node:n-9";
         second.Candidate.Occurrence = 1;      // 出现身份与候选字段同步变化（避免「只改游标」的自相矛盾）
         second.RunBinding = "run-9";
         second.CursorRef = "n-9#1#0";
@@ -2570,7 +2736,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         });
 
         var r = Req(trigger: "fixture:backfill-closed", workflow: "wf-backfill");
+        r.OperationType = OperationType.NodeExecution;
         r.Candidate!.NodeId = "n-7";
+        r.Candidate.ResourceRef = "node:n-7";
 
         var result = await svc.SubmitAsync(r);
 
@@ -2606,7 +2774,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var key1 = RunStore.DeriveSubmissionKey("run-3", "n-3", 0, 0, 1);
         var a1 = Req(trigger: "fixture:rerun", workflow: "wf-rerun");
         a1.Candidate!.Attempt = 1;
+        a1.OperationType = OperationType.NodeExecution;
         a1.Candidate.NodeId = "n-3";
+        a1.Candidate.ResourceRef = "node:n-3";
         a1.RunBinding = "run-3";
         a1.CursorRef = "n-3#0#0";
         a1.CursorRevision = 1;
@@ -2618,7 +2788,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         // ② 反例：同 attempt＋同游标修订再投 ⇒ 唯一消费约束阻断（不得复用已取消作业、不得重发）。
         var reuse = Req(trigger: "fixture:rerun", workflow: "wf-rerun");
         reuse.Candidate!.Attempt = 1;
+        reuse.OperationType = OperationType.NodeExecution;
         reuse.Candidate.NodeId = "n-3";
+        reuse.Candidate.ResourceRef = "node:n-3";
         reuse.RunBinding = "run-3";
         reuse.CursorRef = "n-3#0#0";
         reuse.CursorRevision = 1;
@@ -2632,7 +2804,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var key2 = RunStore.DeriveSubmissionKey("run-3", "n-3", 0, 0, 2);
         var a2 = Req(trigger: "fixture:rerun", workflow: "wf-rerun");
         a2.Candidate!.Attempt = 2;
+        a2.OperationType = OperationType.NodeExecution;
         a2.Candidate.NodeId = "n-3";
+        a2.Candidate.ResourceRef = "node:n-3";
         a2.RunBinding = "run-3";
         a2.CursorRef = "n-3#0#0";
         a2.CursorRevision = 2;
@@ -3044,6 +3218,8 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         // 同名入口但操作类型非外部启动（模拟节点/流程操作误用完成结算入口）。
         var req = Req(ns: "manual", workflow: "flow:cfg", payload: "p-node");
         req.OperationType = OperationType.NodeExecution;
+        req.Candidate!.NodeId = "n-cfg";
+        req.Candidate.ResourceRef = "node:n-cfg";   // 节点类型的来源引用必须一致（生产接管校验口径）
         var accepted = await svc.SubmitAsync(req);
         Assert.Equal(AdmissionResultKind.Accepted, accepted.Kind);
 

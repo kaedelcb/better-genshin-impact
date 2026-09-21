@@ -390,6 +390,12 @@ public sealed class ArbitrationAdmissionService
         // F11 独立停止闸门：先于租约获取与一切排序——不发生租约副作用（§7.1；占位事务内还会锁内复核）。
         if (_hooks.F11Active())
             return AdmissionResult.Of(AdmissionResultKind.F11Blocked, "f11_active", "F11 独立停止闸门激活（不发生租约副作用）。", request.RequestIdentity);
+        // §24.17-3（[Batch B 收尾]）：**创建必须携带可信操作类型**——缺失/`Unknown` 一律 fail-closed
+        // （类型相关判定不得按 `ResourceRef`/`RunId`/快照猜测；旧格式代隔离产物不得凭新登记绕过）。
+        if (request.Kind == AdmissionKind.Create
+            && (!Enum.IsDefined(request.OperationType) || request.OperationType == OperationType.Unknown))
+            return AdmissionResult.Of(AdmissionResultKind.Error, "operation_type_required",
+                "创建操作必须由可信适配器提供操作类型（缺失/Unknown/未定义枚举一律 fail-closed）。", request.RequestIdentity);
 
         // N2：读快照+创建登记在同一进程内串行段（修订不漂移；跨线程并发提交不争用存取锁）。
         LeaseReadResult read;
@@ -544,6 +550,38 @@ public sealed class ArbitrationAdmissionService
                 Kind = AdmissionResultKind.NeedReconcile,
                 ReasonCode = "conflict_pending",
                 Detail = "存在待决冲突（待权威裁决：不释放占用、禁止重发）。",
+                RequestIdentity = request.RequestIdentity,
+                SubmissionIdentity = op.SubmissionIdentity,
+                SendSeq = op.LastSendSeq,
+                ExecutionDisposition = ExecutionDisposition.Unknown,
+                ResponsibilityState = ResponsibilityState.Pending,
+            };
+        // [Batch B 收尾 会诊阻断处置] **持久化类型 fail-closed 必须早于重新入队/仲裁**——
+        // 否则未知类型记录可能先被裁决改写为 `NotSelected`/`TerminalRejected` 并迁区，绕过隔离语义。
+        // （顺序纪律：**冲突待决优先于类型隔离**——本记录冲突、**以及合并目标的冲突**都必须先于类型判断。）
+        if (op.MergedInto is { } mergedIntoPre)
+        {
+            var targetPre = ops.FirstOrDefault(o => string.Equals(o.RequestIdentity, mergedIntoPre, StringComparison.Ordinal));
+            if (targetPre is { ConflictPending: true })
+                return new AdmissionResult
+                {
+                    Kind = AdmissionResultKind.NeedReconcile,
+                    ReasonCode = "conflict_pending",
+                    Detail = "去重合并目标存在待决冲突（待权威裁决：不释放占用、禁止重发）。",
+                    RequestIdentity = request.RequestIdentity,
+                    SubmissionIdentity = targetPre.SubmissionIdentity,
+                    SendSeq = targetPre.LastSendSeq,
+                    ExecutionDisposition = ExecutionDisposition.Unknown,
+                    ResponsibilityState = ResponsibilityState.Pending,
+                };
+        }
+        if (!Enum.IsDefined(op.OperationType) || op.OperationType == OperationType.Unknown)
+            // §24.6-5：已登记操作的责任维不得回落 `None`（仍需隔离/人工处置）——带完整发送身份与 `Pending`。
+            return new AdmissionResult
+            {
+                Kind = AdmissionResultKind.Error,
+                ReasonCode = "legacy_operation_type_unresolved",
+                Detail = "持久化操作类型缺失/未知（旧格式代隔离产物）：不得重新驱动或改写状态，需显式隔离/迁移处置。",
                 RequestIdentity = request.RequestIdentity,
                 SubmissionIdentity = op.SubmissionIdentity,
                 SendSeq = op.LastSendSeq,
@@ -1323,6 +1361,10 @@ public sealed class ArbitrationAdmissionService
 
             var op = (file.Handoff.Operations ?? []).FirstOrDefault(o => string.Equals(o.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal));
             if (op is null || op.Zone != OperationZone.Active) return "stale_operation_identity";
+            // [Batch B 收尾 会诊阻断处置] **持久化类型 fail-closed**：续用/重试（本回调是唯一签发发送许可处）
+            // 一律以**持久化 `OperationType`** 为准——旧格式代隔离产物（`Unknown`）不得重新占位/发送。
+            if (!Enum.IsDefined(op.OperationType) || op.OperationType == OperationType.Unknown)
+                return "legacy_operation_type_unresolved";
             // [Batch B 续 会诊阻断处置] **冲突待决＝最高优先级阻断**：不得签发新发送轮次（禁止重发，
             // 重试资格在冲突期间一律失效——不得靠外部配置或调用方自觉）。
             if (op.ConflictPending) return "conflict_pending";
@@ -1517,6 +1559,24 @@ public sealed class ArbitrationAdmissionService
                     ExecutionDisposition = ExecutionDisposition.Unknown,
                     ResponsibilityState = ResponsibilityState.Pending,
                 };
+            // [Batch B 收尾] 持久化类型未知（旧格式代隔离产物）⇒ **不签发发送许可**（fail-closed，责任保留）。
+            case "legacy_operation_type_unresolved":
+            {
+                // [第四轮验证会诊] 占位阶段出口同样必须携带**完整发送关联**（与前置拒绝口径一致）。
+                var current = _store.Read();
+                var currentOp = current.File is null ? null : FindOp(current.File, request.RequestIdentity);
+                return new AdmissionResult
+                {
+                    Kind = AdmissionResultKind.Error,
+                    ReasonCode = "legacy_operation_type_unresolved",
+                    Detail = "持久化操作类型缺失/未知：不得重新占位或发送（需显式隔离/迁移处置）。",
+                    RequestIdentity = request.RequestIdentity,
+                    SubmissionIdentity = currentOp?.SubmissionIdentity,
+                    SendSeq = currentOp?.LastSendSeq ?? 0,
+                    ExecutionDisposition = ExecutionDisposition.Unknown,
+                    ResponsibilityState = ResponsibilityState.Pending,
+                };
+            }
             case "retry_budget_exhausted":
                 return (await TerminatePrecheckAsync(request, lease, "retry_budget_exhausted", AdmissionResultKind.TerminalRejected, "重试预算耗尽（终局拒绝）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             // 事实未知/占用：未发布发送许可→回 Queued 可再驱动。
@@ -3323,6 +3383,22 @@ public sealed class ArbitrationAdmissionService
                                     ReasonCode = "conflict_pending",
                                     Detail = "存在待决冲突：重试资格失效（禁止重发，必须先经权威裁决）。",
                                     RequestIdentity = requestIdentity,
+                                    ExecutionDisposition = ExecutionDisposition.Unknown,
+                                    ResponsibilityState = ResponsibilityState.Pending,
+                                };
+                                break;
+                            }
+                            // [Batch B 收尾 会诊阻断处置] 持久化类型未知（旧格式代隔离产物）⇒ 不重新入队、不改写状态。
+                            if (!Enum.IsDefined(op.OperationType) || op.OperationType == OperationType.Unknown)
+                            {
+                                early = new AdmissionResult
+                                {
+                                    Kind = AdmissionResultKind.Error,
+                                    ReasonCode = "legacy_operation_type_unresolved",
+                                    Detail = "持久化操作类型缺失/未知：不得重新驱动（需显式隔离/迁移处置）。",
+                                    RequestIdentity = requestIdentity,
+                                    SubmissionIdentity = op.SubmissionIdentity,
+                                    SendSeq = op.LastSendSeq,
                                     ExecutionDisposition = ExecutionDisposition.Unknown,
                                     ResponsibilityState = ResponsibilityState.Pending,
                                 };
