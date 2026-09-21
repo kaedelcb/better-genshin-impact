@@ -47,4 +47,11 @@
 
 ## 新会话开场建议
 
+## 续办进度（2026-09-21 批次）
+
+- **§24 设计稿已原样抽出**为独立文件 [`onedragon-r5-3-external-start-lifecycle-2026-09-21.md`](onedragon-r5-3-external-start-lifecycle-2026-09-21.md)（**章节号保留 §24.x**；原设计稿 §24 处保留指针）。抽出原因：原设计稿体积超过会诊工具单文件上限。
+- **§24 正在按 §17.4 迭代冻结**（GPT-5.6 sol / medium）：冻结轮 12 项必改、复会诊轮 6 项、终轮 6 项、第四轮 4 项、第五轮 1 项、第六轮 2 项、第七轮 4 项、第八轮 4 项、第九轮 5 项、第十轮 4 项、第十一轮 2 项、第十二轮 1 项、第十三轮 1 项——**均已逐条文本处置**，逐条处置表与**唯一冻结状态表**见该文件 §24.20-E。**尚未出现「无必改项」轮次 ⇒ §24 未冻结**。
+- **下一步**：继续复会诊至「无必改项」→ 登记冻结 → 按 §24.20-D 落地清单实现（`CommandExecutor`／`AdmissionResult`／`ArbitrationAdmissionService`／`TaskCenterHost.Admission`／`ExternalStartLedger`／`ExternalStartAdmission`／`CommandResult`）→ 生产组合根闭环夹具 → B2-γ 第 3 步 → B4 → R5.3/5.5/5.8 收口。
+- 生产外部启动接线（E3/E4/E5）**仍关闭**；`.bak`／`.stale`／`TestResults` 等未跟踪文件未动。
+
 > 继续 BGI 槲寄生调度器 R5（接管与切换）。先读本交接稿与设计稿 §24；owner 已选 A，B3 架构整改纳入 R5。先冻结 §24（GPT-5.6 sol medium 会诊至无必改项），再实现、回归、补生产组合根夹具。目标：R5.1–R5.8 全部收口，R5.8「无双跑」验收单签署。不要向我索取「继续」确认。

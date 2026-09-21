@@ -1,0 +1,467 @@
+# R5.2 接线设计稿 §24 独立承载：B3 外部启动生命周期补全设计（2026-09-21 抽出；冻结状态见 §24.20-E）
+
+> **来源与编号**：本文件内容原为《R5.2 全入口仲裁接入 · 接线设计稿 v8》`Docs/design/onedragon-r5-2-entry-arbitration-wiring-2026-09-20.md` 的 **§24**，于 2026-09-21 **原样抽出**（**章节号保留 §24.x，条款文本未改动**）。抽出原因：上述设计稿体积超过会诊工具的单文件上限，抽出后 §24 可独立会诊、冻结与实施。
+> **交叉引用**：本文件中的 §2／§3／§4.1／§4.2a／§4.2c／§5.1／§6.1／§8／§12／§13.7／§13.10／§14／§17／§18.5／§19.4／§21.10／§22.5／§23.4／§23.8 等编号，均指原设计稿的对应章节。
+> **效力**：抽出**不改变**任何条款效力；§24 的冻结 ≠ 生效，未完成 §24.20-D 落地清单与 §24.14 全部夹具前，**不恢复** §23.8 所述生产接线。
+## 24. B3 外部启动生命周期补全设计（[2026-09-21 **已冻结**：第 23 轮会诊判「无必改项」，§17.4 收口；生产接线仍关闭]）
+
+> **性质**：本设计只补 **E3/E4/E5 外部启动** 的受理后生命周期、取消分类、JobId 关联与生产组合根验收；**不改变**节点后继仲裁、R4 默认直通路径、`task.single.native=false` 或真实 User 目录合同。**生产接线在本文冻结并通过实现验收前继续关闭。**
+>
+> **冻结声明（[2026-09-21]）**：本章按 **GPT-5.6 sol / effort=medium** 会诊推进，按 §17.4「有必改项即处置→回归→复会诊」迭代至**第 23 轮判「无必改项」⇒ 本章冻结**（轮次与逐条处置见 §24.20-E，**冻结状态表为唯一来源**）。**冻结 ≠ 生效**：条款的**实现验收**仍按 §23.4／§17 门禁并集执行；**未完成 §24.20-D 落地清单与 §24.14 全部夹具前，不恢复 §23.8 所述生产接线**（`externalStartAdmission` 组合根注入、`_successorAdmissionWired`、`start_bgi(args)` 覆盖均保持关闭）。
+>
+> **编号说明**：小节号按**追加顺序**保留（§24.13–§24.19 为后续补充合同，§24.9／§24.10 为追加插入项），**不重排**以保证既有交叉引用（§24.1-6、§24.12-6、§24.15 等）继续可解析；**阅读顺序**按下表主题索引。
+>
+> **效力顺序**：与其他小节冲突时，**以 §24.15（唯一终态事务与恢复状态表）为先**，其次 §24.19（`unknown` 与权威终态）与 §24.20-A（版本口径）；任何小节不得与上述三者冲突。
+>
+> **主题索引（= 阅读顺序）**：
+
+| # | 主题 | 小节 |
+|---|---|---|
+| 1 | 外部 Operation 的独立终局出口（非终态/终态受理、分阶段失败语义、容量释放） | §24.1 |
+| 2 | 取消分类与责任保留 | §24.2 |
+| 3 | JobId 与台账身份规则 | §24.3 |
+| 4 | 生产组合根闭环验收要求 | §24.4 |
+| 5 | 受理后终态取得责任链 | §24.5 |
+| 6 | 结果与责任双维合同 | §24.6 |
+| 7 | JobId／证据关联边界 | §24.7 |
+| 8 | 操作类型与七项门禁映射 | §24.8 |
+| 9 | 确定执行失败的结果合同 | §24.9 |
+| 10 | 早期受理与完成观察接口 | §24.10 |
+| 11 | 取消阶段矩阵（补充合同） | §24.11 |
+| 12 | 待终局处置的持久化与恢复（补充合同） | §24.12 |
+| 13 | 执行结果与责任分离（补充合同） | §24.13 |
+| 14 | 早期受理接口（补充合同；句柄前窗口／屏障验收） | §24.14 |
+| 15 | **唯一终态事务与恢复状态表**（补充合同；权威顺序） | §24.15 |
+| 16 | 预观察记录 PreObservationRecord | §24.16 |
+| 17 | OperationType 可信持久化 | §24.17 |
+| 18 | `_gate` 两段事务 | §24.18 |
+| 19 | `unknown` 与权威终态 | §24.19 |
+| 20 | 冻结登记：版本口径／长期保守停驻总则／落地清单／会诊记录 | §24.20 |
+
+### 24.1 外部 Operation 的独立终局出口
+
+1. `SendOutcome.Accepted` 增加**远端 `JobId`**（无则 null，不得臆造）。**[纠正·2026-09-21 第五轮 N24-07] 不加 `Terminal` 标记**：终态事实**只**由完成层 `ExternalStartCompletion` 承载（§24.2-2″），不得在发送层再造第三套终态来源。
+2. **受理（完成层尚未报终态）**：受理→接管台账落盘→关闭 Submission→外部 Operation 保持 `Accepted/Active`；台账继续为 `AcceptedPendingExecution/Running` 并继续占用。**不得**转 `TerminalCompleted`。
+3. **终态（完成层报 `Succeeded`／`Cancelled`／`ExecutionFailed`）且接管一致性验证通过**：受理→接管台账落盘→**同一次权威发布写 `ExecutionResult` ＋ `PendingTerminal`**→台账转 `Terminal`→关闭 Submission（或按已提交关闭事实确认关闭）→外部 Operation `Accepted→TerminalCompleted→TerminalPendingTransfer→Tombstone`；主槽位只在迁移成功后释放。墓碑已满时允许独立终局但保留 `TerminalPendingTransfer`，不突破容量。**[纠正·2026-09-21 冻结轮 B24-04]** 本行**不得**被读成「台账 Terminal 先于 `PendingTerminal`/`ExecutionResult`」——完整顺序以 **§24.15** 为唯一规范（仅**成功**路径的先行步骤在此列出）。**即刻完成**（如 v2 阻塞式 `task.start`）亦走本行：适配器以**已完成的 `CompletionTask`** 表达，不得另立第三套终态载体。
+4. **分阶段失败语义**：关闭前失败保留原 Submission；关闭已提交但 Operation 终局失败时保留 `Accepted` 并走独立终局恢复，**不得重建 Submission**；台账 Terminal 已提交后关闭失败时保留原责任并读回验证，不得把已提交事实回滚成未提交。
+5. 终局迁移必须复核完整发送身份、已提交关闭事实与无更新责任；**不得**在已持 `_gate` 的结果处理路径直接调用会再次 `_gate.Wait()` 的 `MarkOperationTerminal`，终局化须经无重入的串行入口/锁外调度。
+6. `TakeoverTerminalConfirmed` 仅对**持久化操作类型为 E3/E4/E5 外部启动**的 Operation 查 `ExternalStartLedger`：仅当同一 `submissionIdentity+sendSeq` 记录为 `Terminal` 才返回 true；不得用运行快照或“查询未命中”代替，也不得依据“无 RunBinding”推断外部类型。
+7. 门面初始化/重启恢复必须按**持久化阶段**处理：仅有已提交关闭事实且无 Submission 时，允许补 Operation 终局；仅扫描到台账 Terminal 但关闭尚未提交时，必须先完成关闭，**不得越过关闭事务直接补终局**。发布结果不明时先读回验证。
+8. 连续 32 笔以上已完成外部启动后，主槽位必须随终局与迁移释放；必须新增容量回归夹具证明后续启动仍可获准。
+
+### 24.2 取消分类与责任保留
+
+1. `CommandResult` 增加 `IsTerminal`（仅权威终态返回 true；v2 仅“发送成功”不得置 true）与 `JobId`（ext 队列的 `taskHandle`，无则 null）。
+2. **[纠正·2026-09-21 冻结轮 B24-08/B24-09；第四轮 N24-04 改两层；第五轮 N24-07 去 `Terminal` 并冻结唯一映射]** 外部启动结果**按阶段分为两个判别式类型**，不再用一组布尔位，也不让同一类型同时承载「未受理」与「执行终态」：
+   - **发送层** `ExternalStartExecution`（适配器 → 门面，**既有类型改造**）：`Kind ∈ {Accepted, Rejected, Unknown}` ＋ `JobId` ＋ `Reason` ＋ **[第七轮 N24-11] `Retryable`（`Rejected` 时必填语义：可否重试）＋ `EvidenceSource`（原始证据词/产生端）**（工厂 `AcceptedWith`／`RejectedWith(reason, retryable, evidenceSource)`／`UnknownWith`；原 `Uncertain` 布尔由 `Kind=Unknown` 取代）。**无 `Terminal` 字段**（[N24-07]）。与 `SendOutcome` **一对一、字段级无损**：`Accepted(JobId)`／`Rejected(reason, retryable, evidenceSource)`／`Unknown(detail)`。
+   - **完成层** `ExternalStartCompletion`（**新增**；由 §24.14-1 的 `CompletionTask`／等价权威观察依据承载）：`Kind ∈ {Succeeded, Cancelled, ExecutionFailed, Unknown}` ＋ `RawTerminal`（原始终态词）＋ **[第七轮 N24-12；第十轮 N24-23 改名] `ExecutionErrorCode`（`ExecutionFailed` 必填；其余可为空）** ＋ `JobId` ＋ `EvidenceSource`。**不含 `Rejected`**——受理之后不存在「未受理」，从**类型层**杜绝「先受理、后未受理」的事实反转（[N24-04]）。
+   - **同一发送身份只允许产生一次发送层结论**；`EarlyAccepted` 之后不得再出现发送层 `Rejected`／`Unknown`（[N24-07]）。
+   - **门面内部** `SendOutcome` **[纠正·2026-09-21 第六轮 N24-07 残留]**：**严格冻结为发送层三态** `{Accepted(JobId), Rejected(reason, retryable, evidenceSource), Unknown(detail)}`，与 `ExternalStartExecution` **一对一**；`Accepted` 增加 `JobId`（**不加 `Terminal`**）；**不含 `Cancelled`**。完成层事实（`Succeeded`／`Cancelled`／`ExecutionFailed`／`Unknown`）**只**经完成结算通道进入门面：新增结算入口 `SettleCompletionAsync(requestIdentity, submissionIdentity, sendSeq, ExternalStartCompletion)`，其内部结算结论类型 `CompletionSettlementOutcome ∈ {Succeeded, Cancelled, ExecutionFailed, Unknown}` 映射到 `AdmissionResultKind`（`Succeeded→Accepted`／`Cancelled→Cancelled`／`ExecutionFailed→ExecutionFailed`／`Unknown→Reconciling`／`NeedReconcile`）与 `ExternalStartAdmissionStatus`（§24.9）。`AdmissionResultKind` 增加 `Cancelled`。**[第八轮]** `CompletionSettlementOutcome.Unknown` 的 `Reconciling`/`NeedReconcile` **仅是「对外结论」**，**不改变**已确认受理 Operation 的 `Accepted/Active` 责任状态（§24.19-2 第二种情形）。
+   - **适配器对外映射（一对一，不合并语义）**：发送层 `Rejected→Rejected`、`Unknown→NeedReconcile`（对外 `Unknown`）、`Accepted→Accepted`；完成层 `Succeeded→Accepted`、`Cancelled→Cancelled`、`ExecutionFailed→ExecutionFailed`、`Unknown→NeedReconcile`。`ExternalStartAdmissionStatus` 增加 `Cancelled` 与 `ExecutionFailed`（**保留** `Blocked`＝前置门禁阻断、未进入执行结果维）。
+
+**2″. 三层载体的唯一转换表与非法序列（[新增·2026-09-21 第五轮 N24-07]）**
+
+| 早期回复 `ExternalStartReply`（§24.14-1） | 发送层结论 `ExternalStartExecution` | 完成层结果 `ExternalStartCompletion` |
+|---|---|---|
+| `EarlyAccepted(jobId, CompletionTask)` | **`Accepted(jobId)`**（唯一映射；不得再产出 `Rejected`/`Unknown`） | 由 `CompletionTask` 稍后交付或**已完成**：`Succeeded`／`Cancelled`／`ExecutionFailed`／`Unknown` |
+| `Rejected(reason, retryable, evidenceSource)` | `Rejected(reason, retryable, evidenceSource)`（字段无损） | **不产生**（无受理＝无完成层事实） |
+| `Unknown(detail)` | `Unknown(detail)`（**只此一次**：同一发送身份**不得**再产生第二个发送层结论） | 本次早期调用**不附带**完成层；观察责任按 §24.14-6 保留。后续查明**曾受理** ⇒ 必须走 `ReconcileSettlement.Accepted(JobId, ExternalStartCompletion?)` 对账通道（**不得**再创建第二个发送层 `Accepted`）；查明**确定未受理** ⇒ 走既有对账拒绝结算分支 |
+
+**非法序列（构造层或实现层必须拒绝）**：①`EarlyAccepted` 后出现发送层 `Rejected`／`Unknown`；②同一发送身份出现**第二次**发送层结论（含「`Unknown` 后补一个 `Accepted`」）；③把发送层 `Accepted` 与完成层 `Unknown` 同时当作终态（只有完成层 `Succeeded/Cancelled/ExecutionFailed` 是权威执行终态，§24.19）；④以「即刻完成」为名另立第三套终态载体（即刻完成必须以**已完成的 `CompletionTask`** 表达）。
+
+**`Rejected` 后的冲突性证据（[新增·2026-09-21 第六轮；第七轮 N24-09 改为路由规则＋持久化责任状态]）**
+
+- 已产生发送层 `Rejected`（确定未受理）后又出现指向**曾受理/终态**的证据时：**不得**按「非法序列」丢弃证据，**不得**走普通 `SettleCompletionAsync`，必须**原样路由至冲突对账**。
+- **冲突责任状态（必须持久化，可跨重启）**：`OperationRecord` 新增加法字段 `conflict`（冲突证据集合：双方原始终态词/证据来源/完整发送身份/记录时点）。
+- **入口适用（原子迁移，不覆盖既有事实）**：该证据可能落在 `RetryableRejected`／`TerminalRejected`／`TerminalPendingTransfer`／`Tombstone` 任何状态之后——一律在同一权威串行发布内**追加** `conflict` 事实并置**冲突对账待决**标志：
+  - **不重建** Submission（`Rejected` 路径已关闭的关系不得复活）；
+  - **占用语义按到达时所在区域冻结**（[第八轮 N24-13]，**不修改** §4.1a 容量公式）：冲突到达时记录仍在 `Active`／`TerminalPendingTransfer` ⇒ **继续占主槽位**；记录**已在 `Tombstone`** ⇒ **不虚称重新占有已释放的主槽位**，改为「**墓碑受保护不可裁剪** ＋ 该执行的权威事实置为**冲突未知**并阻断冲突启动（全局 Unknown 占用）」；
+  - **禁止重发**（重试资格立即失效，`RetryableRejected` 的窗口到期不得据此转终局中止）；
+  - §24.12-3 恢复扫描必须覆盖带 `conflict` 的记录，并在裁决完成前保留唯一恢复依据。
+- 裁决入口与**四分支**（[第八轮 N24-13；第九轮 N24-15 拆分首分支]，唯一权威串行发布内原子写入）：`SettleReconciledAsync` 的冲突分支——
+  ①**确认曾受理且已有权威终态** ⇒ 按接管证据＋§24.15 唯一顺序完成结算，随后在同一权威发布内**追加 `Resolution=ResolvedAcceptedTerminal` 的审计项 ＋ 把 `OperationRecord.ConflictResolutionAuditId` 指向该项 ＋ 清除活动覆盖层 `pending`**（**历史拒绝仅作审计**，分类读取以匹配的 `ExecutionResult` 为权威——见下「裁决审计的持久化模型」）；
+  ②**确认曾受理但尚无权威终态** ⇒ 持久化 `ConflictResolutionState=AcceptedAwaitingTerminal`：**不迁回 `Active`**、**不申请主槽位**、**不清除**墓碑保护与冲突证据，`ResponsibilityState=Pending`，终态到达后再按 §24.15 结算并清冲突；
+  ③**确认未受理** ⇒ 保留原拒绝终局，在同一权威发布内完成**四项**（[第二十轮 N24-37]）：①**追加或幂等确认 `ReconciledNotAcceptedEvidence` 证据记录**（重试复用同一 `evidenceId`）＋②**追加或幂等确认引用该 `evidenceId` 的 `ResolvedNotAccepted` 审计项**（重试复用同一 `auditId`）＋③**写入 `OperationRecord.ConflictResolutionAuditId`** ＋④**清除活动覆盖层 `pending`**（解除阻断），`ResponsibilityState=Settled`；**四项缺一＝视为未提交**（读回后以同一 `auditId`／`evidenceId` 重试）；
+  ④**仍不可考** ⇒ 继续保留冲突责任与证据（长期保守停驻，§24.20-B），`ResponsibilityState=Pending`。
+- **[第九轮 N24-15] 冲突事实必须进入可执行数据流**：带 `conflict`（含 `AcceptedAwaitingTerminal`）的记录必须汇入准入事实面的**执行事实未知/占用**（`ArbitrationFacts.ExecutionFactsUnknown` 或等价占用来源，§14/§17 P51 三源并集），从而**阻断冲突启动**；分类读取必须让**冲突状态覆盖历史 `TerminalRejected` 结果**（不得返回已作废的拒绝结论）。**只有**权威裁决才能清除 `conflict` 并解除占用/阻断。
+- **[第十轮 N24-21] `conflict` 是与 `OperationZone` 正交的「对账责任覆盖层」**：原拒绝操作**仍是 `Tombstone`**（**不迁回 `Active`**、**不占主槽位**），冲突责任**单独**处于 `Pending`；受保护墓碑**不计主槽位但禁止按保留策略裁剪**——本条是对 §4.1a 墓碑清理规则的**显式例外**（**不修改** §4.1a 容量公式 `Active + TerminalPendingTransfer ≤ 32`），并同时通过全局 `ExecutionFactsUnknown` 阻断冲突启动。
+- **[第十一轮 N24-24；第十二轮 N24-25 改为独立审计载体；第十四轮 N24-27 统一命名] 裁决审计的持久化模型**：**权威审计载体＝租约 v3 新增追加式 `ConflictResolutionAudits[]`**（条目不可变）。该集合**不计入** §4.1a 的 32 主槽位与 256 墓碑容量（避免「永久保护墓碑」造成容量永久耗尽）；其保留期裁剪归 R5.6 迁移/清理统一裁决，**本批不做裁剪**（无界代价如实登记）。**字段命名唯一（不得使用 `OperationRecord.ConflictResolution`／`SupersededResultRef` 等旧称）**：`OperationRecord.ConflictResolutionAuditId` **仅保存 ID 引用**；审计项内嵌 `supersededRejectedResultSnapshot`（被取代的拒绝结果快照）与 `resolutionEvidenceSnapshot`（裁决依据侧证据快照），**不得**指向可能随墓碑删除的 `LastResult`。
+  - **最小审计结构（唯一保留定义；[第十五轮] 版本已去重，不得再生第二组同名条款；[第二十一轮 N24-38] `resolutionEvidence*` 为**判别式**且两分支互斥；[第二十二轮 N24-40] **删除顶层 `evidenceSource`**——分支事实来源只存在于分支载荷内，避免证据双写）**：`auditId` ＋ `requestIdentity` ＋ `submissionIdentity` ＋ `sendSeq` ＋ `resolution` ＋ `resolvedAtUtc` ＋ `supersededRejectedResultSnapshot` ＋ **`resolutionEvidenceSnapshot`（仅 `ResolvedAcceptedTerminal` 使用：完整终态证据快照，内含该分支的 `evidenceSource`）** ＋ **`resolutionEvidenceRef`（仅 `ResolvedNotAccepted` 使用：`{ evidenceId }`，**不含**内嵌字段）**。**两字段严格互斥**：与 `resolution` 不匹配、或两字段**同时出现**，均视为损坏（fail-closed）。
+    - `supersededRejectedResultSnapshot` 固定字段：`Outcome=Rejected`／`AnsweredSendSeq`／拒绝类别（可重试或终局）／`ReasonCode`／`EvidenceSource`／完整发送身份。
+    - `resolutionEvidenceSnapshot` 按裁决类型冻结为**封闭字段表**（[第十六轮 N24-30-R；第十七轮 N24-30-R-R/N24-33] 不得再写「至少含」、**不得自引用**）：
+      - `ResolvedAcceptedTerminal` ⇒ 匹配的权威终态结果快照（完整发送身份／终态类型／原始终态词／`ExecutionErrorCode`／JobId／证据来源／`ObservedAtUtc`），**业务字段与匹配的 `ExecutionResult` 逐字段一致**，`ObservedAtUtc` 与 `ExecutionResult.ObservedAtUtc` 全等；
+      - `ResolvedNotAccepted` ⇒ **独立不可变证据记录 `ReconciledNotAcceptedEvidence[]`（租约 v3 新增；[第十七轮 N24-30-R-R；第二十轮字段名显式化；第二十一轮 N24-38 引用化；第二十二轮 N24-40 定为**权威观察事件的唯一持久化载体**]）**：含独立 `evidenceId` ＋ 封闭表**全部**字段（`submissionIdentity`／`sendSeq`（＝轮次口径，**不另立 `round` 等第二字段**）／权威未受理事实类型／原始证据词／证据来源／`ObservedAtUtc`）。**该记录即权威观察事件的持久化载体**：四项事务**写入前**校验输入观察事件（来源可信、字段完整、与发送身份匹配）；**提交后**的完整性检查**只**校验 `evidenceId` 唯一性、载荷不变性与身份关联，**不再要求查找第二份观察事件**（因此重启后仍可执行）。审计项**只保存 `resolutionEvidenceRef={evidenceId}`**（**不内嵌**上述字段）；唯一引用＝`evidenceId`（另需与审计项、Operation 的 `submissionIdentity`／`sendSeq` 一致）。
+  - **引用完整性校验（可执行判据；墓碑清理前置与分类读取共用；[第二十一轮 N24-38] 判别式两字段互斥）**：`auditId` 非空且在 `ConflictResolutionAudits[]` 内**唯一**；重试**必须复用同一 `auditId`**；**同 ID 同载荷＝幂等**，**同 ID 异载荷＝文件损坏并 fail-closed**；Operation 的引用必须**唯一命中**一个审计项，且 `requestIdentity`／`submissionIdentity`／`sendSeq` 与 Operation 完全一致（**Operation 侧只存 ID，故不比较 Operation 的裁决类型**）；**拒绝快照逐字段核对（两分支均适用，[第十六轮 N24-30-R]）**：`supersededRejectedResultSnapshot` 的 `Outcome`／`AnsweredSendSeq`／拒绝类别（`Retryable`）／`ReasonCode`／`EvidenceSource`／`submissionIdentity`＋`sendSeq`，必须与**事务开始前不可变的拒绝结果**或 `conflict` 内保存的拒绝侧证据**逐字段相等**。**分支兼容矩阵**：
+    - `ResolvedAcceptedTerminal` ⇒ 必须存在**同 `submissionIdentity`、同 `sendSeq`** 的权威终态 `ExecutionResult`，且 `resolutionEvidenceSnapshot` 与其**业务字段逐字段一致**、`ObservedAtUtc` 与其 `ObservedAtUtc` 全等；**该分支不得出现 `resolutionEvidenceRef`**；
+    - `ResolvedNotAccepted` ⇒ 原拒绝终局仍有效（其身份／`sendSeq`／结果与拒绝快照一致）；**取 `resolutionEvidenceRef.evidenceId` 唯一命中** `ReconciledNotAcceptedEvidence`（该记录**即**权威观察事件载体，[第二十二轮 N24-40]），校验其载荷不变性与 `submissionIdentity`／`sendSeq` 与审计项及 Operation 一致；**该分支不得出现 `resolutionEvidenceSnapshot`**。
+    校验不通过（**分支必需载荷缺失**：`ResolvedAcceptedTerminal` 缺 `resolutionEvidenceSnapshot`、或 `ResolvedNotAccepted` 缺 `resolutionEvidenceRef`；引用缺失、多发命中、身份/`sendSeq` 不符、两字段同时出现、拒绝快照字段不等、证据记录载荷/身份不符）⇒ **不得清理墓碑、不得解除阻断**，按损坏保守处置并留痕。
+
+**`ObservedAtUtc` 的唯一语义与两条独立链（[第十七轮 N24-33；第十八轮 N24-36 拆链]）**：`ObservedAtUtc` ＝**该项权威证据首次被可信观察层接收的时点**，**捕获一次后不可改写**。**禁止把两个互斥事实域写成同一条链**：
+
+- **权威执行终态链**：`ExternalStartCompletion.ObservedAtUtc → PendingTerminal.ObservedAtUtc → ExecutionResult.ObservedAtUtc → ResolvedAcceptedTerminal 审计快照.ObservedAtUtc`（四者取值**全等**）。
+- **权威未受理链**：不可变观察事件的 `ObservedAtUtc → ReconciledNotAcceptedEvidence.ObservedAtUtc`；审计项**只保存 `evidenceId`**，按该证据记录校验（**不再**声称未受理事实贯穿审计快照的 `ObservedAtUtc`）。
+
+**台账终态副本字段（[第十八轮 N24-36]）**：台账新增 `TerminalObservedAtUtc`（终态副本的观察时点）；**`TerminalAtUtc` 仍定义为台账落盘时点、由落盘时钟生成，二者不得复用**。`MarkTerminal` 签名扩为**接收既有 `observedAtUtc`**：首写保存该值，幂等重试必须**严格比对**既有值与本次传入值（不一致＝损坏/冲突，fail-closed 并留痕）。**本条删除**「台账时间／观察事件二选一」的未决口径。
+
+**`evidenceId` 完整性判据（[第十八轮 N24-35；第十九轮去掉「轮次」重名]）**：`evidenceId` 非空且在 `ReconciledNotAcceptedEvidence[]` 内**唯一**；重试**必须复用同一 `evidenceId`**；**同 ID 同载荷＝幂等**，**同 ID 异载荷＝损坏并 fail-closed**；`ResolvedNotAccepted` 的审计引用必须**唯一命中**一条证据，且 `submissionIdentity`／`sendSeq`（＝该证据的轮次口径，**不另立第二套「轮次」字段**）／证据类型**逐字段相符**；校验不通过 ⇒ 不得清 `pending`、不得解除阻断。
+  - **裁决事务（[第十三轮 N24-26] 三项原子变更；[第十七轮 N24-30-R-R] `ResolvedNotAccepted` 分支扩为**四项**，缺一不可）**：同一权威发布内「①**追加或幂等确认审计项**（重试必须复用同一 `auditId`）＋②**写入 `OperationRecord.ConflictResolutionAuditId`** 指向该项 ＋③**清除活动 `conflict.pending` 标志**」；`ResolvedNotAccepted` 分支**另加**②′「**追加或幂等确认 `ReconciledNotAcceptedEvidence` 记录**（重试必须复用同一 `evidenceId`）」——**四项缺一即视为未提交**（读回验证后重试）；**「清除冲突」一律只指清除活动覆盖层 `pending`**，**不删除**审计、证据记录与双方证据。
+  - **分类读取**：`ResolvedAcceptedTerminal` 时以**匹配的 `ExecutionResult`** 为权威（历史 `Rejected` **仅作审计**）；`ResolvedNotAccepted` 时原拒绝终局继续有效。
+  - **§4.1a 墓碑清理前置（显式例外，[第十四轮 N24-29] 仅限曾进入冲突覆盖层的 Operation）**：**曾进入 `conflict` 覆盖层**的 Operation——`conflict.pending=true` 时**禁止清理**；裁决后仅在 `ConflictResolutionAuditId` 唯一命中且通过上方完整性校验时允许清理。**未曾进入冲突覆盖层的墓碑完全按 §4.1a 原规则清理**（不得被本条扩大为「所有墓碑都需审计引用」）。**§24.12-3 的第四类恢复集合只扫描 `conflict.pending=true`**——已裁决记录不再阻断准入（墓碑仍在 `Tombstone`，不占主槽位）。
+
+**初次回复与后续对账（补充表，[新增·2026-09-21 第六轮；建议项已并入]）**
+
+| 情形 | 首次产生的发送层结论 | 后续取得的证据 | 允许的处置 |
+|---|---|---|---|
+| 拿到句柄 | `Accepted(JobId)` | 完成层结果（稍后/已完成） | 按 §24.15 完成结算；不得再造发送层结论 |
+| 明确未受理 | `Rejected(reason)` | 无 | 按 §4.2c 第二分支关闭；可重试则按预算/窗口 |
+| 未受理但证据冲突 | `Rejected(reason)` | 指向曾受理/终态 | **冲突对账**（保留证据、保持责任、不释放、不重发） |
+| 结果未知 | `Unknown(detail)` | 对账确认曾受理 | `ReconcileSettlement.Accepted(JobId, ExternalStartCompletion?)`（**不再补发送层结论**） |
+| 结果未知 | `Unknown(detail)` | 对账确认确定未受理 | 对账拒绝结算分支（**不再补发送层结论**） |
+3. **关闭前取消**：若为**本地取消等待**或**关联不足/持久化失败**，保留未决责任并将 Operation 置 `Reconciling`；若已取得**权威取消终态**且接管/持久化各步成功，则完成关闭并按 §24.1 独立终局。入口均得到 `Cancelled`；不得走确定拒绝关闭、不得重发。若只是调用方停止等待而未观察到远端取消终态，不得伪造原始终态词。**[澄清·2026-09-21 冻结轮 B24-01]** 本款**不含**已形成合法「本地未发送证明」的发送前取消（该情形按 §24.11 第 3′ 行与 §4.2c **第二分支**处置）。**[第八轮 N24-14] 返回同时标注 `ResponsibilityState`（取值以 §24.6-5 唯一映射表为准）**：保留未决责任（`Reconciling`）⇒ `Pending`；权威取消终态且接管/持久化/关闭全部成功 ⇒ `Settled`。
+4. **关闭后取消**：不得重建 Submission；Operation 保持已受理事实并写入独立的“待终局处置”记录（仅在已取得权威取消终态时记录原始终态词；仅有本地取消意向时记录 `local_cancel_requested` 并继续观察），入口仍得到 `Cancelled`；权威终态且接管一致时完成独立终局；无权威证据时允许长期保守停驻，但观察责任不得遗弃。**[第八轮 N24-14] `ResponsibilityState`（§24.6-5）**：已受理且待终局处置 ⇒ `Pending`；接管一致并完成独立终局 ⇒ `Settled`。
+5. **[纠正·2026-09-21 复会诊／终轮 B24-10]** v2 路径中**观察到明确的取消事实**（响应/回执**原始词** `cancelled`，属证据词而非 `CommandResult.Status` 词位）→ 适配器置 `ExecutionDisposition=Cancelled`＋`IsTerminal=true`，并把原始词写入 `RawTerminal`／`EvidenceSource`（**线路词表不改**：`Status` 仍只用 `success/failed`），再走上述分阶段链；普通 v2 success/发送成功保持**非终态**，不得据此释放占用。
+6. `not_found`、等待超时、通道瞬态失败一律 `IsTerminal=false`；不得作为终局证据。ext `Completed/QueueCancelled` 及权威 `failed` 才可置终态，并记录原始终态词。
+7. **[新增·2026-09-21 冻结轮；第六轮 N24-07 收窄]** **取消不构成独立的关闭依据**：完成层 `Cancelled` 由 `SettleCompletionAsync` 结算，在提交责任维仍属 §4.2c **第一分支**（受理类关闭）；只有「可证实未发送」才属第二分支；**本地取消意向本身不构成任何关闭依据**（它只停止等待与批次推进）。`SendOutcome` 不设 `Cancelled` 分支（§24.2-2）。
+
+### 24.3 JobId 与台账身份规则
+
+1. `ExternalStartLedgerEntry` 增加加法字段 `jobId`（不改格式 `version`，不改变序列化框架）。
+2. JobId 从 `CommandResult → ExternalStartExecution → SendOutcome.Accepted → ArbitrationAdmissionService → ExternalStartLedger` 全链传递；任何层不得丢弃已取得的句柄。
+3. 同 `submissionIdentity+sendSeq` 重复接管：两侧均为空=幂等成功；一侧为空、一侧非空=补齐空值；两侧非空且不同=**拒绝并保守待对账**；两侧相同=幂等成功。
+4. **[纠正·2026-09-21 第五轮 N24-07；第六轮 N24-08 补三分支]** `ReconcileSettlement.Accepted` 必须扩展携带 `JobId` 与**可选的完成层结果 `ExternalStartCompletion?`**（**不是**发送层 `Terminal` 布尔），使终态回写失败后的显式对账能按**同一发送身份**重试；旧字段调用保持兼容默认值（默认＝未提供完成结果）。三分支处置：
+   - `Completion=null` ⇒ 接管落盘后按**普通受理**关闭，Operation 保持 `Accepted/Active`（§24.1-2），`ResponsibilityState=Pending`；
+   - `Completion.Kind=Unknown` ⇒ **不得**生成 `PendingTerminal`；保留观察责任，普通受理关闭后保持 `Accepted/Active`，**对调用方返回 `NeedReconcile`（对外 `Unknown`）**（§24.19-2 第二种情形），`ResponsibilityState=Pending`；
+   - `Completion.Kind=Succeeded/Cancelled/ExecutionFailed` ⇒ **先**原子写 `ExecutionResult`＋`PendingTerminal`，**再**台账 Terminal、**再**关闭、**最后** Operation 终局（§24.15 唯一顺序）；任一步未完成 ⇒ `Pending`，全部完成 ⇒ `Settled`。
+5. 终态回写钩子缺失、抛异常或返回失败时：**关闭前**保持原 Submission 与 `Reconciling`；**关闭后**不得重建 Submission，Operation 保持 `Accepted` 并按 §24.12 写 PendingTerminal，由独立终局补写入口按完整发送身份重试，给出可对账原因。
+
+### 24.9 确定执行失败的结果合同
+
+1. 对外结果新增**确定执行失败**分支（与 `Rejected`、`Unknown` 分离），携带原始终态词/错误码、JobId 与证据来源。
+2. 该分支只允许由权威执行终态产生；不得映射为“确定未受理”，也不得触发重发。
+3. 失败结果按 §24.1 的非终态/终态顺序持久化：终态证据完整时完成接管与独立终局；证据不足时保留责任待对账。
+4. 续用、合并调用与重启后必须返回同一失败事实与责任状态；补失败终态与接管异常后的结果保持夹具。
+
+### 24.10 早期受理与完成观察接口
+
+1. 外部适配层拆为**早期受理通知**与**完成观察**两段，两层各有独立类型、**不得互相代替**：`StartAsync` 在拿到早期回执/句柄后按 §24.14 返回 **`ExternalStartReply`**（`EarlyAccepted(jobId, CompletionTask)`／`Rejected`／`Unknown`）；**完成**结果由句柄 `CompletionTask`／等价权威观察依据承载，以 **`ExternalStartCompletion`**（`Kind ∈ {Succeeded, Cancelled, ExecutionFailed, Unknown}`，**不含 `Rejected`**，§24.2-2）表达；**发送层**结论（既有类型改造）＝ `ExternalStartExecution`（`Kind ∈ {Accepted, Rejected, Unknown}`，§24.2-2）。三者不是同一事实的副本：早期回复只证明「是否已受理」，发送层结论只证明「是否受理/确定未受理」，完成层结果只证明「执行是否已到终态」。
+2. 门面只对早期句柄执行受理→接管台账→关闭 Submission，并按当前轮次发布；**不得在门面锁内 await 完成等待**（两段式 `_gate` 见 §24.18）。
+3. `CommandExecutor` 在获准后等待完成结果以保持既有“任务完成后再推进批次”的行为；完成事实到达时经当前所有者/恢复扫描执行终局、取消或失败落盘。
+4. 断线/换主后，恢复扫描按 §24.12 的三类持久化集合重新绑定 `CompletionTask` 或等价观察依据；无法重新关联的 v2/E4 路径保持关闭。
+
+### 24.4 生产组合根闭环验收要求
+
+以下场景必须由施工方内置、owner 0 点击；至少覆盖：
+
+1. 真实 `MainViewModel → CommandExecutor → TaskCenterHost → Core` 组装下的**连续两次成功启动**，第二次不再被第一次未终局台账阻断。
+2. ext `Completed` 后：台账 Terminal、外部 Operation TerminalCompleted、主槽位释放、JobId 可读。
+3. ext `QueueCancelled/Completed(cancelled)` 后：入口返回 cancelled，批次停止；**本地取消等待/关联不足**时关闭前断言 Reconciling；**权威取消终态且持久化成功**时断言最终结清；关闭后断言不重建 Submission；只有取得权威终态且接管一致时才断言最终完成独立终局，否则保持观察。
+4. v2 发送成功：入口 success，但台账保持未终局；v2 明确 cancelled：入口 cancelled；本地等待取消保留责任，权威取消终态且持久化成功后结清。
+5. 终态落盘失败：关闭前保持 Submission/不释放占用；关闭后若 PendingTerminal 已存在则保持 Accepted/PendingTerminal 并由独立补写入口恢复；若 PendingTerminal 首写失败则保持 Accepted、观察责任仍在并重新取证；两种情况均不得重发。
+6. 大于 32 笔外部启动完成后的容量与终局释放。
+7. 冷启动/旧 v2、授权后纪元变化、切监控模式/宿主关闭交错各自有独立拒绝或待对账断言。
+
+### 24.5 受理后终态取得责任链
+
+1. **早期受理与句柄持久化**必须先于等待完成：拿到 `taskHandle/jobId` 后按完整发送身份写台账；不得等任务执行完才首次落盘。
+2. **完成观察责任**归当前所有者；ext 事件快速路径与轮询安全网继续共用终态等待器，断线/换主后由恢复扫描按台账未终结记录重新建立观察。
+3. v2/E4 等**没有可关联查询依据**的路径在早期受理与完成观察合同落地前继续关闭；不得以“发送成功”冒充终态。
+4. `AcceptedPendingExecution/Running` 台账的解除条件只有**权威终态并完成接管一致性**；确定未受理只用于未决 Submission 的拒绝关闭，不得解除已受理台账。受理与未受理证据冲突时进入冲突对账，不得直接清除占用。
+
+### 24.6 结果与责任双维合同
+
+1. **对外结果维**：`Accepted/Cancelled/ExecutionFailed/Rejected/Unknown` 表达调用者可见事实；**前置门禁结论 `Blocked`（F11／票据压制／占用阻断等，未进入执行结果维）与执行结果并列时须显式区分**，不得混入同一词位；**内部责任维**：`Submission/Operation` 状态独立表达待结算责任。两维不得压成一个枚举。
+2. 取消、失败、未知分支均须携带已取得的 `JobId`、原始终态词/错误码、证据来源与完整发送身份；后续持久化异常不得把已观察的取消/失败事实改写成普通 `result_unknown`。**载体落点（加法字段，[第七轮；第八轮 N24-14 补 `ResponsibilityState`；第九轮 N24-19 统一为 `ExecutionErrorCode`]）**：门面返回的 `AdmissionResult` 与适配器可见的 `ExternalStartAdmissionOutcome` 均须新增 `JobId`／`ExecutionDisposition`（`None/Cancelled/ExecutionFailed/Unknown`）／**`ResponsibilityState`（`None`＝不适用／`Pending`＝责任未结清／`Settled`＝已结清，取值以 §24.6-5 唯一映射表为准）**／`RawTerminal`／**`ExecutionErrorCode`**／`EvidenceSource`／`SubmissionIdentity`／`SendSeq`（默认空值/`None`，旧调用兼容），使「结果维 × 责任维」**贯通到调用方**（不得在适配器边界断链）。**名称唯一**：本链一律用 `ExecutionErrorCode`；`ErrorCode` 仅保留既有 BGI 信封语义（`CommandResult`）。
+3. **[收窄·2026-09-21 冻结轮 B24-05]** 已取得合法终态者由当前所有者**持续保留结果与结算责任并重试持久化**，不得在无观察责任的情况下遗弃；**持久化或关联条件长期不成立时允许长期保守停驻（§24.20-B），禁止以超时/未命中/重启强制终局**；仅事实不可考者保留 Reconciling 待对账。
+4. 续用、合并调用、重启后必须保持同一结果事实与责任状态；补续用、合并调用与重启保持断言。
+
+**5. `ResponsibilityState` 唯一映射表（[新增·2026-09-21 第九轮 N24-17]；§24.2-3／4、§24.3-4、§24.2-2″ 一律引用本表）**
+
+| 情形 | `ResponsibilityState` |
+|---|---|
+| 前置门禁阻断（F11／票据／占用）／未登记 | `None` |
+| 确定未受理并完成关闭（可重试或终局） | `Settled` |
+| 本地未发送证明完成关闭（`TerminalRejected`） | `Settled` |
+| 普通受理已关闭、完成层尚未报终态 | `Pending` |
+| 完成层 `Unknown`（已受理、执行结果未知） | `Pending` |
+| 取得权威终态但关闭／台账／终局任一步未完成 | `Pending` |
+| 完成层权威终态且结算全部完成（`TerminalCompleted`） | `Settled` |
+| 冲突待决（含 `AcceptedAwaitingTerminal`） | `Pending` |
+| 冲突裁决确认未受理并清除冲突 | `Settled` |
+| 已登记、未占位且仍由既有处理者负责（§24.11 第 2 行） | `Pending` |
+| 发送结果未知（`Reconciling`）／关联不足／持久化失败 | `Pending` |
+| 确定未受理但关闭尚未提交 | `Pending` |
+| 本地取消意向已记录、责任尚未结清 | `Pending` |
+| `NotSelected`／本地校验拒绝／「三无」终局中止且已原子落盘 | `Settled` |
+
+> **默认规则（[第十轮 N24-22]）**：**已登记之后**除「**已证明结清**」外**一律不得**返回 `None`；`None` 只用于**未登记**与**前置门禁阻断**（未进入执行与登记流程）。
+
+### 24.7 JobId/证据关联边界
+
+1. “记录合并成功”不等于“远端关联可重建”。JobId 补空必须同时验证固定目标 epoch、线上提交键与证据来源；重复接管不得把既有 `Terminal` 降回 `AcceptedPendingExecution`。
+2. 无 JobId 的路径必须逐协议登记替代查询依据（线上提交键/权威快照等）；缺失则保留责任，不宣称接管可重建。
+3. 事件、轮询、v2 响应、`already_executed`、热键应答分别登记可证明的事实范围；`not_found`、超时、通道瞬态不进入终态证据。
+4. 必须补错 epoch、错轮次、冲突 JobId、迟到活动态不得降级 Terminal 的反例。
+
+### 24.8 操作类型与七项门禁映射
+
+1. 外部启动识别**只按持久化的实际操作类型/来源记录**；`flow:`/`run:` 缺绑定或绑定损坏必须阻断，未知类型不得降级为外部启动。
+2. §24 验收通过**不替代** §23.4/§23.8/§17 的门禁并集；上轮七项阻断未在本章逐项解决者继续保留门禁。
+3. 组合根验收必须使用真实 `MainViewModel → CommandExecutor → TaskCenterHost → Core` 组装，仅替换外部传输；同时验证默认未注入路径、控制热键、冷启动/旧 v2/重试/取消行为保持。
+4. 真实 F11 事实源、运行台账占用合并、授权 epoch 贯穿实际发送、能力复核、在飞跟踪与取消令牌生命周期，未闭合前不得恢复生产接线。
+
+### 24.11 取消阶段矩阵（补充合同）
+
+| # | 阶段（Operation 是否存在） | 本地取消等待（未观察权威取消终态） | 权威取消终态（已观察） |
+|---|---|---|---|
+| 1 | **未登记**（无 Operation、无 Submission） | **不创建** Operation/Submission；入口按本地取消结束；**不写**任何远端终态证据 | 不适用（无对象）；若上一轮已受理，按第 3 行处置 |
+| 2 | **已登记、未占位** | Operation 保持 `Queued`/既有非终局状态，由既有处理者结束；**不得**据此删除登记事实，也不得在无「三无」复核时终局中止 | **不适用**（未占位＝本操作无**当前轮**发送责任）；若证据属于该操作的**既有发送轮**，**按该轮当前阶段**进第 3／4／5 行（该轮未关闭→第 3 行；已关闭→第 4 行；关闭结果不明→第 5 行）——**不得**对不存在的当前轮 Submission 执行关闭 |
+| 3 | **占位后、关闭前（可能已发送）** | Submission/Operation 保持 `Reconciling`；入口 `Cancelled`；记录 `local_cancel_requested` 并继续观察 | 先完成接管与关闭，再按 §24.15 终局事务独立终局；入口 `Cancelled` |
+| 3′ | **占位后、关闭前**（已形成合法本地未发送证明） | 按 §4.2c **第二分支**关闭并终局中止（**不写**远端终态词）；入口 `Cancelled` | **[纠正·2026-09-21 复会诊轮 N24-02]** 同一发送身份若出现权威终态 ⇒ **本地未发送证明失效**，转第 3 行（先接管、后关闭、再终局）；若证据属**其他轮次/其他身份** ⇒ 拒绝关联并保守对账；并发到达时按**完整发送身份**判定，不得笼统称「证据更强」 |
+| 4 | **关闭后** | 不得重建 Submission；Operation 保持 `Accepted`；记录本地取消意向并继续观察 | 接管一致后按 §24.15 完成独立终局；入口 `Cancelled`，最终责任已结清 |
+| 5 | **关闭结果不明** | 读回验证：未提交→按第 3 行；已提交→按第 4 行；仍不可确认→`Reconciling` | 已提交关闭＋接管一致→补终局；仅确认关闭但终局补写失败→`Accepted`＋`PendingTerminal`；未确认→`Reconciling` |
+
+**约束**：本地取消不得冒充远端取消终态；权威取消终态不得被后续持久化异常抹掉；两种取消都必须停止批次推进，但责任结清条件不同。**[纠正·2026-09-21 冻结轮 B24-01/B24-12；第七轮 N24-09 修正载体名]** 「本地未发送证明」须满足 AMD-1-4 的关联验证（发送身份/epoch 全等 ＋ 发送路径已停止 ＋ 持久化关联），否则一律按第 3 行「可能已发送」处置；**完成层 `Cancelled` 不构成第三种关闭依据**（§24.2-7；`SendOutcome` 本身不含 `Cancelled`，§24.2-2）。
+
+**本地未发送证明的终局状态（[新增·2026-09-21 第四轮 N24-06]）**：第 3′ 行与 §24.15「已形成合法本地未发送证明」行完成的关闭，Operation 终局状态为 **`TerminalRejected`**（`OperationResult.Outcome=Rejected`，`EvidenceSource` 标注本地未发送证明来源），**不得**写 `TerminalCompleted`；**不得**生成 `ExecutionResult` 的权威终态，**不得**写 `PendingTerminal`（§24.19-3：`TerminalCompleted` 必须同时存在**权威终态结果**与关闭事实，本地未发送证明不是执行终态）。**[第七轮 N24-09]** 该路径之后若出现指向曾受理/终态的冲突证据，按 §24.2-2″「冲突责任状态」处置（追加 `conflict`、禁止重发、不释放占用）。
+
+### 24.12 待终局处置的持久化与恢复
+
+1. **权威载体**：`OperationRecord` 增加加法字段承载 `PendingTerminal`（原始结果词／**`ExecutionErrorCode`**（[第十轮 N24-23] 统一命名）、JobId、证据来源、完整发送身份、记录时点）；`ExternalStartLedger` 承载同一终态证据的对外可读副本。因这些字段承载责任事实，租约格式 `version` **升至 3**；旧 version 2 消费者必须 fail-closed 拒绝读写，不得静默忽略后回写。序列化框架本身不变。
+2. **发布顺序**：先持久化 `OperationRecord.PendingTerminal`，再写台账 Terminal，再关闭/确认关闭，最后转 Operation `TerminalCompleted`。若第一步失败，保持 Reconciling；若后续失败，恢复扫描按已落盘的 PendingTerminal 继续。
+3. **恢复扫描集合（[第八轮 N24-13] 增第四类）**：①仅 Submission 未关闭；②未终结台账记录；③台账已 Terminal 但 Operation 尚未终局；④**`conflict.pending=true` 的全部记录（含受保护墓碑）**。恢复必须按完整发送身份关联，不得新建替代 Submission；第四类在裁决完成前**不得**被清理或裁剪。
+4. **关闭后补写入口**：独立于 `SettleReconciledAsync`（后者要求 Submission 在册），仅接受已提交关闭事实 + PendingTerminal + 无更新发送责任；失败保持 Accepted/PendingTerminal，不释放主槽位。
+5. **证据未持久化且远端不可查询**：保守记为不可考并保留责任；不得承诺重启后返回同一终态事实。清理前不得删除唯一的 PendingTerminal 恢复依据。
+6. **首步失败分阶段**：关闭前 PendingTerminal 首写失败=保持 Submission 并在活进程内有界重试，重启后先查同发送身份的已知/可查询证据；关闭后首写失败=Operation 保持 Accepted，由在飞责任继续重试或按 §24.14 的观察依据重新取证，禁止靠不存在的 PendingTerminal 恢复。
+7. **原子投影**：PendingTerminal 与 `ExecutionResult` 必须在同一权威串行发布中写入或具有可恢复投影关系。**合法中间态**＝`ExecutionResult` 已终态＋PendingTerminal 已持久化＋Operation 仍 `Accepted`（接管/关闭/终局尚未完成）；只禁止①责任已 `TerminalCompleted` 但 `ExecutionResult` 缺失，②`ExecutionResult` 已终态但既无 PendingTerminal、也无预观察/查询恢复依据。发布返回结果不明时先读回验证；终局事务必须同时验证匹配的结果与关闭事实。
+
+### 24.13 执行结果与责任分离（补充合同）
+
+1. **执行结果字段**：新增 `ExecutionResult`（`succeeded/failed/cancelled/unknown` ＋ `RawTerminal`／**`ExecutionErrorCode`**（[第十轮 N24-23] 统一命名，与 `CommandResult.ErrorCode` 的信封语义分离）／`JobId`／`EvidenceSource`／完整发送身份／**`ObservedAtUtc`**（[第十六轮 N24-30-R] 权威观察时点，供裁决审计快照逐字段对齐）），与 `OperationRequestState` 分列保存。`TerminalCompleted` 只表示责任结清，不表示成功。
+2. **门面结论**：`ClassifyCurrentState`、续用与恢复读取 `ExecutionResult`：failed 返回确定执行失败，cancelled 返回取消，unknown 返回待对账；不得把 `TerminalCompleted` 一律返回 Accepted。
+3. **合并/续用**：结果合并按完整发送身份；迟到活动态不得降级既有终态结果；冲突结果保守待对账。
+4. **失败终态**：执行失败且接管一致时走独立终局；执行事实确定但接管关联不完整时保持责任待对账，不得直接释放。
+5. **本地取消意向单独承载**：`local_cancel_requested` 只表达调用方停止等待与批次停止，不写入 `ExecutionResult.cancelled`。后续远端 succeeded/failed/cancelled 仍以远端结果为准。
+6. **续用/恢复读取顺序**：若权威 ExecutionResult 已存在，返回该结果并按责任状态对账；若仅有本地取消意向，返回“调用已取消、远端结果待观察”，不得把本地取消当成远端终态。
+
+### 24.14 早期受理接口（补充合同）
+
+1. **启动返回联合类型**：`ExternalStartReply` ∈ `{ EarlyAccepted(jobId, CompletionTask), Rejected(reason, retryable, evidenceSource), Unknown(detail) }`（[第八轮 N24-11] 补齐 `retryable`／`evidenceSource`，以与发送层字段无损对应）；无句柄的早期响应一律 Unknown，不得凭空生成句柄；**与发送层/完成层的唯一映射与非法序列见 §24.2-2″**。
+2. **门面锁边界**：占位提交后必须先释放门面 `_gate`，再调用适配层 `StartAsync`/早期网络取证；结果回到权威串行边界后重新校验完整身份、租约代次与关闭前置。
+3. **观察器所有权**：`CompletionTask` 的等待器/订阅必须在启动前建立；句柄随 `EarlyAccepted` 交给门面与 `CommandExecutor` 共同引用。接管失败、调用方退出、合并调用均须把观察责任交给当前所有者或恢复扫描，不得随 `using` 提前释放。
+4. **[纠正·2026-09-21 第六轮 N24-08]** **交错**：完成先于接管/关闭时，结果**先按完整发送身份暂存**；接管事实持久化后，若暂存结果为**权威终态**，必须**严格执行 §24.15 的唯一顺序**（`ExecutionResult`＋`PendingTerminal`→台账 Terminal→关闭→Operation 终局），**不得先关闭 Submission**；暂存结果为 `Unknown` 时按 §24.3-4 第二分支处置。调用方未拿到句柄即退出时，由恢复扫描按 `PendingTerminal`/台账关联接管观察责任。
+5. **屏障验收**：`CompletionTask` 未完成时其他请求必须能取得门面锁；提前完成、接管失败、取消、退出、换主五种交错不得丢失观察责任。
+6. **句柄前窗口**：发送前必须先按固定 epoch/线上发送键持久化“预观察记录”；适配器负责在拿到句柄前继续保持观察。若崩溃时仅有预观察记录、远端可查询则恢复观察，不可查询则保持 Unknown；**没有可查询依据的协议路径不得启用**。
+7. **验收**：补“拿到句柄前调用方退出/进程崩溃”的退出与恢复夹具；观察责任在句柄落盘前不得随调用方终止。
+
+### 24.15 唯一终态事务与恢复状态表（补充合同）
+
+以下顺序为唯一规范；其他小节与本节冲突时以本节为准：
+
+| 阶段／到达顺序 | 权威终态已到 | 处理顺序 | 失败时状态 |
+|---|---|---|---|
+| **登记后、未占位** | 否 | **仅在权威串行边界证明「从未发布发送许可 ＋ 无当前处理者 ＋ 无更新责任 ＋ 确定不再处理」时**，才在同一权威事务终局中止 Operation；否则保持 `Queued`/合并既有处理者，不创建 Submission | 保持登记事实并重新读回 |
+| **占位后、尚未发送（未形成合法本地未发送证明）** | 否 | 本地取消→保持 Submission/Operation `Reconciling`（记录 `local_cancel_requested`）并继续观察；**不得**伪造未受理 | 见 §24.12-6 |
+| **占位后、尚未发送（已形成合法本地未发送证明）** | 否 | 按 §4.2c **第二分支**关闭并终局中止——Operation 终局状态＝**`TerminalRejected`**；**不写**远端终态词、**不生成** `ExecutionResult`／`PendingTerminal`（§24.11「本地未发送证明的终局状态」） | 关闭失败＝保持原责任并读回验证 |
+| **占位完成且 PreObservation 已提交、尚无句柄** | 否 | 按既有 PreObservation 继续观察；**不得在发送之后补建 PreObservation** | 发送前 PreObservation 发布失败＝**禁止发送**；崩溃按 PreObservation 恢复 |
+| 早期受理、未关闭 | 是 | 写 PendingTerminal/ExecutionResult→台账 Terminal→关闭→Operation 终局 | 首写失败按 §24.12-6；关闭失败保留原责任 |
+| 已关闭、终态随后到 | 是 | 写 PendingTerminal/ExecutionResult→台账 Terminal→Operation 终局 | **首写失败＝保持 `Accepted` 并保留观察依据（PreObservation／台账／可查询依据）重试取证**；只有读回确认 `PendingTerminal` 已提交时才记 `Accepted`＋`PendingTerminal` |
+| 台账 Terminal 已提交、关闭未完成 | 是 | 读回关闭事务；完成关闭后补 Operation 终局 | 关闭结果不明→Reconciling；已关闭未终局→Accepted |
+| 关闭已提交、Operation 终局失败 | 是 | 按完整身份补终局；不重建 Submission | 保持 `Accepted`＋`PendingTerminal`；**若 `PendingTerminal` 首写未提交则保持 `Accepted` 并重新取证** |
+| `PendingTerminal`/`ExecutionResult` 发布结果不明 | 可能 | 读回；已提交则继续后续步骤，未提交则重试首写 | 不得当成已终态或已结清 |
+| **已拒绝（`TerminalRejected`／`RetryableRejected`／已迁墓碑）后收到冲突证据** | 可能 | **原子追加 `conflict`**（保留双方证据与完整发送身份）；**不得走普通 `SettleCompletionAsync`**；由 `SettleReconciledAsync` 冲突入口按 **§24.2-2″ 四分支**裁决——①曾受理＋**已有**权威终态 ⇒ 先原子写入权威 `ExecutionResult`＋`PendingTerminal`（**[第十五轮 N24-31] 历史拒绝本体不改写**：其「已被取代」关系**只由审计项表达**；事务提交前仍由 `conflict.pending` 覆盖历史拒绝分类）、台账 Terminal→关闭/确认→终局投影，**随后以一次租约原子发布完成三项**「追加或幂等确认 `ResolvedAcceptedTerminal` 审计项 ＋ 写 `ConflictResolutionAuditId` ＋ 清 `conflict.pending`」；②曾受理＋**尚无**终态 ⇒ 只写 `ConflictResolutionState=AcceptedAwaitingTerminal`（**不生成**终态载体），终态到达时**再次进入本冲突入口**；③未受理 ⇒ 保留原拒绝终局，**同一次租约原子发布完成四项**（[第十八轮 N24-34]）「追加或幂等确认 `ReconciledNotAcceptedEvidence` 证据记录 ＋ 追加或幂等确认 `ResolvedNotAccepted` 审计项 ＋ 写 `ConflictResolutionAuditId` ＋ 清 `conflict.pending`」；④不可考 ⇒ 继续保留。**[第十四轮 N24-28]「清冲突」一律只指清 `conflict.pending`**——**不得**删除 `conflict` 证据、审计项、证据记录或拒绝快照 | **[第十八轮 N24-34] 缺失判据按分支**：`ResolvedAcceptedTerminal` ⇒ **三项**任一缺失＝视为未提交；`ResolvedNotAccepted` ⇒ **四项**任一缺失＝视为未提交。读回验证后**以同一 `auditId`／`evidenceId` 重试**；追加失败/发布不明时不得据此释放占用或重发 |
+
+`failed/cancelled` 均属于“已受理后的执行终态”，不得进入确定未受理关闭分支。
+
+### 24.16 预观察记录（PreObservationRecord）
+
+1. **位置与字段**：权威载体为租约文件 version 3 的 `PreObservations[]`；字段至少含 `submissionIdentity`、`sendSeq`、`operationType`、`targetEpoch`、`wireSubmitKey`、协议/查询依据、owner、创建时点、状态。
+2. **发布时点**：与发送许可占位同一权威串行发布；未持久化不得发送。取得 JobId 后在同一权威串行边界转为正式外部接管台账并标记 PreObservation 完成。
+3. **恢复**：`RecoverAfterRestart` 扫描未完成 PreObservation；按固定 epoch/线上键重查并恢复观察；不可查询时保持 Unknown 且不释放占用，相关协议路径保持关闭。
+4. **清理与冲突**：只有正式接管台账或 PendingTerminal 已持久化后才允许清理 PreObservation；冲突/多重 owner 按保守对账拒绝。
+
+### 24.17 OperationType（可信持久化操作类型）
+
+1. `OperationRecord` 增加不可变 `OperationType` 字段，合法值至少含 `FlowRegistration`、`NodeExecution`、`ExternalStart`、`Recovery`、`Handoff`、`Unknown`。
+2. 该字段由可信适配器在 Operation 创建时提供，与 Operation 同次原子发布，后续不得改写。
+3. 缺失、`Unknown`、与 `ResourceRef`/来源记录冲突时 fail-closed；旧 version 2 记录必须在升级事务中显式迁移或隔离，不得按 `ResourceRef` 猜测成外部启动。
+
+### 24.18 `_gate` 两段事务（补充合同）
+
+1. **第一段（锁内）**：轮次快照、裁决、**占位**、发布唯一发送责任与 `PreObservation`/`Submission`（同次权威原子发布；未持久化不得发送——[纠正·2026-09-21 冻结轮 B24-03，原「占位占位」为笔误]）。
+2. **第二段（锁外）**：释放 `_gate` 后调用早期受理/启动/取证；`_inflight` 继续标记本请求，下一轮可处理其他请求但不得重新驱动同一请求。
+3. **重入结算**：启动返回后重新取得权威串行权，复核 owner/epoch/revision/完整发送身份；只有匹配当前责任者才可结算。
+4. **并发/换主**：换主、关闭、取消、回执同时发生时，以完整身份与租约代次确定唯一结算者；一方完成终局后，另一方只能读回既有结果，不得重复结算。
+5. **验收**：补“CompletionTask 未完成时其他请求取得门面锁”、重复结算、双重释放、换主接续夹具。
+
+### 24.19 `unknown` 与权威终态
+
+1. `ExecutionResult` 区分：权威终态 `succeeded/failed/cancelled`；非终态观察 `unknown`。
+2. 只有权威终态可生成 `PendingTerminal` 并参与 Operation `TerminalCompleted`。**[纠正·2026-09-21 第七轮 N24-10] `unknown` 的责任状态按「是否已确认受理」二分，不得压成一个状态**：①**发送结果未知**（尚未判定是否受理）⇒ Operation 保持 `Reconciling`；②**已确认受理、完成层为 `Unknown`**（执行结果未知）⇒ 发送受理事实＝`Accepted`、Operation 请求状态＝`Accepted/Active`、**保留观察依据**（`PreObservation`／接管台账／可查询依据）、**不得**生成 `PendingTerminal`，对调用方返回 `NeedReconcile`（对外 `Unknown`）。第二种情形**不得**写成 `Reconciling`（那会与「受理已确认」的事实冲突，也会掩盖投递责任）。
+3. `TerminalCompleted` 必须同时存在匹配的权威终态结果与关闭事实；`unknown` 不得借超时、未命中或重启转为终态。
+
+### 24.20 冻结登记：版本口径／长期保守停驻总则／落地清单／会诊记录（[新增·2026-09-21 冻结批]）
+
+**A. 版本口径（唯一定义；与 §24.3-1／§24.12-1 合并阅读，冲突时以本节为准）**
+
+| 载体 | 旧 | 新 | 旧消费者 / 旧记录处置 |
+|---|---|---|---|
+| 租约文件 `version`（`LogicalOwnerLeaseFile`） | 2 | **3** | **旧（≤2）消费者**遇 3＝`unsupported_version` **响亮拒绝**（不降级解析）；**新代码**遇 ≤2＝**兼容读**（`Operations` 缺类型字段按 §24.17-3 记为 `Unknown` 并 fail-closed），**任何写入一律升为 3**（发布单点升级，修订/代次单调不回退） |
+| 外部启动台账 `version`（`ExternalStartLedgerFile`） | 1 | **2** | **旧（1）消费者**遇 2＝版本过高 → **保守待对账（响亮拒绝，不推导空闲）**；**新代码**遇 1＝兼容读，缺 `jobId`/终态副本字段视为「**未取得**」（**不等于**「无责任」），写入一律升为 2 |
+
+- 台账 `jobId` 本身是**加法字段**（§24.3-1）；触发升版的是**承载责任事实**的 `pendingTerminal`／`executionResult` 副本（§24.12-1）。
+- **禁止**按 `ResourceRef` 前缀、`RunId` 是否为空、来源记录缺失或运行快照查询结果**猜测**「该 Operation 属外部启动」（§24.1-6／§24.17-3）；类型缺失或未知一律 fail-closed。
+- 本节对两处载体的版本决定属**施工方自行判定**（owner 未单独裁决），保留「事后可剔除」入口：若 owner 要求保持台账 version 1，则须改为「台账不承载责任副本、只承载对外可读引用」并重开会诊。
+
+**A′. `version ≤ 2 → v3` 升级事务（[新增·2026-09-21 冻结轮 B24-11；复会诊轮 N24-01 改为**有序判定**并补隔离态结算事务；第十五轮 N24-32 把起点由「v2」扩为「**version ≤ 2**」]）**
+
+租约由 **`version ≤ 2` 升 3**（[第十五轮 N24-32；第十六轮措辞收窄] **v1 与 v2 执行同一套事务**，不因起点版本不同而绕过未决责任判定、隔离结算、类型证明与审计集合初始化；对任何**实际发现**的 v1/v2 文件的 fail-closed **只表示「升级事务完成前禁止业务发送」**——**不得**被实现为永久拒绝迁移，兼容读取后必须进入与 v2 相同的升级/隔离事务）**不是纯格式声明**，按下述**有序判定**处置（**逐条命中即止**，保证分支互斥、实现可唯一选择事务）；**不得**把旧记录直接改写成 v3 `Unknown` 后继续写入（那会把真实责任冻结成不可操作状态）。
+
+1. **先判未决责任**：盘上存在 `Submission`／未终结 `Pending`／`Accepted`／`Reconciling`／`Granted`／`Sending` 记录 ⇒ 进入第 4 条**隔离态结算事务**，**不得**就地升版。
+2. 无未决责任且 `Operations` 为空（或全部已 `TerminalCompleted`／`Tombstone`）⇒ **原子升版**：同一次发布写 `Version=3`。
+3. 无未决责任且有记录：
+   - 类型可由**可信创建记录**证明（同次创建写入的请求状态/来源记录/回执来源）⇒ 升级事务内写 `OperationType` 并发布 `Version=3`；
+   - 类型不可证明 ⇒ 升版并写 `OperationType=Unknown`；该记录**类型相关判定一律 fail-closed**（外部台账不查、不得独立终局），恢复扫描登记「需人工处置」。
+4. **隔离态结算事务（[新增·2026-09-21 复会诊轮 N24-01；终轮 N24-03 收窄适用范围；第十五轮 N24-32 扩至 v1/v2]）**——用于**所有「有未决责任」的 `version ≤ 2` 记录**（**不限于**类型起初即不可证明者：类型证据在事务内判定），**不得**变成永久死锁：
+   - **禁止发送**：隔离期间任何占位/发送一律响亮拒绝（`legacy_operation_type_unresolved`）；
+   - 结算入口**只**接受按完整发送身份（`submissionIdentity`＋`sendSeq`）＋固定 `targetEpoch`＋`wireSubmitKey`＋合法证据的对账：
+     a) 证据足以证明类型 ⇒ 同一事务**只**写 `OperationType` 并升 `Version=3`；**类型证据 ≠ 终态证据**（[第四轮 N24-05]），随后必须**按实际证据事实分流**：已受理未终态→继续观察（`Accepted`／`PendingTerminal` 仅在取得权威终态后写）；取得权威终态→按 §24.15 完成终局；确定未受理→走 §4.2c 第二分支；证据不足→继续隔离；
+     b) 取得**确定未受理**证据但类型仍不可证明 ⇒ 同一事务完成 §4.2c **第二分支**关闭、写 `OperationType=Unknown` 并升 `Version=3`；
+     c) 证据不足 ⇒ **继续隔离**（长期保守停驻，§24.20-B），并在 §23.4 门禁并集登记**责任方、人工处置入口与恢复依据**；
+   - **任何中间状态不得暴露为「可发送」**。
+
+- 升级事务**崩溃/读回**语义：发布返回不明时**先读回**——已提交则继续后续步骤，未提交则重试；**旧进程并存**期间不得双写（旧进程见 v3＝`unsupported_version` 响亮拒绝）。
+- **[第十三轮 N24-26；第十八轮 N24-35 扩至两个集合]** 审计与证据集合的升级口径：所有**成功升至 v3** 的事务必须**初始化或保留合法的 `ConflictResolutionAudits[]` 与 `ReconciledNotAcceptedEvidence[]`**（空集合＝合法；**既有 v3 文件缺字段或集合非法＝损坏，fail-closed**）；隔离态结算（第 4 条）若产生冲突裁决，同样必须使用 §24.2-2″ 的原子事务（`ResolvedAcceptedTerminal` **三项**／`ResolvedNotAccepted` **四项**）。
+- 台账 `version` 1→2 同理由：**缺 `jobId`/终态副本字段视为「未取得」**，不得据此推断「无责任」；**有未终结记录时不得把台账降级或重建**。
+
+**B. 长期保守停驻总则（跨节；与 §24.2-4／§24.19-3 合并阅读）**
+
+- **[纠正·2026-09-21 冻结轮 B24-06] 两种停驻状态不得混同**：①**未取得权威终态证据**（远端不可查询、通道瞬态、句柄丢失、对账未命中……）→ 停在 `Reconciling`／`Accepted`＋**观察依据**（`PreObservation`／正式接管台账／可查询依据），**不得**产生 `PendingTerminal`（`PendingTerminal` 只由**权威终态**生成，§24.19-2）；②**已取得权威终态、仅关闭或终局结算未完成** → 停在 `Accepted`＋`PendingTerminal`（同样允许长期停驻）。
+- 两种停驻均**禁止**以超时、未命中、重启、批次推进或资源压力为由**强制终局**或释放主槽位。
+- 「停驻」≠「放弃」：观察责任、恢复扫描与显式对账入口必须持续可用（§24.12-3／§24.12-4／§24.14-6）；清理唯一恢复依据（`PendingTerminal`／`PreObservation`）之前必须先取得**替代权威证据**。
+- 停驻可带来可用性代价（主槽位被占），该代价由 §24.1-8 容量夹具与 §24.12-5 保守记不可考共同约束，**不得**以可用性为由放宽为「超时即终局」。
+
+**C. 与既有条款的关系**
+
+- 本章**不减免** §23.4 门禁并集（§18.5 F11 生产事实源、P28/P55/P57、§19.4、§21.10、§22.5、§17 P1–P57 全部原条款）；§24.8-2 已明文，本节重申。
+- 本章**取代**草稿阶段的下列隐含口径（属澄清，非新增义务）：①「未知可超时强制终局」→ 见 B；②「台账写入 `version` 1」→ 见 A；③「按 `ResourceRef` 前缀判定外部类型」→ 见 A 第三条。
+- 本章与 §4.1/§4.2a/§4.2c/§13.7/§13.10 的**加法关系**：仅新增类型与责任字段，**不改变序列化框架**（锚点 6），不改变 §4.2c 统一关闭接口的两个合法分支。
+
+**D. 落地清单（冻结即登记；每项在实现批内逐条关闭，本批不声称完成）**
+
+| # | 落地项 | 对应条款 | 责任批 |
+|---|---|---|---|
+| D1 | `CommandResult`：新增 `IsTerminal`／`JobId`／`ExecutionDisposition`（`None/Cancelled/ExecutionFailed/Unknown`）／**`ResponsibilityState`（`None/Pending/Settled`；取代原布尔 `ResponsibilityPending`，[第八轮 N24-14]）**／`RawTerminal`／`ExecutionErrorCode`（**完成层执行错误码**，与既有 `ErrorCode`「BGI 信封错误码」语义分离、不得复用）／`EvidenceSource`；**线路词表不改**（`Status` 仍只用 `success/failed`；v2 的**原始取消词 `cancelled`** 写入 `RawTerminal`，以 `ExecutionDisposition=Cancelled`＋`IsTerminal=true` 承载取消事实）；v2 仅「发送成功」不得置 `IsTerminal=true` | §24.2-1、§24.2-5、§24.6-1／2、§24.9 | B3 实现批 |
+| D2 | **两层判别式＋唯一转换表**：发送层 `ExternalStartExecution`＝`Kind ∈ {Accepted,Rejected,Unknown}` ＋ `JobId` ＋ `Reason` ＋ **`Retryable`** ＋ **`EvidenceSource`**（[第九轮 N24-18] 工厂：`AcceptedWith(JobId)`／`RejectedWith(reason, retryable, evidenceSource)`／`UnknownWith(detail)`；非 `Rejected` 时 `Retryable` 不适用；**无 `Terminal`**；同一发送身份只产出一次；`EarlyAccepted` 后不得再产出 `Rejected`/`Unknown`）；完成层新增 `ExternalStartCompletion`＝`Kind ∈ {Succeeded,Cancelled,ExecutionFailed,Unknown}` ＋ `RawTerminal` ＋ **`ExecutionErrorCode`（`ExecutionFailed` 必填，其余可空；[第十一轮 N24-23-R] 全链统一命名）** ＋ `JobId` ＋ `EvidenceSource` ＋ **`ObservedAtUtc`（[第十七轮 N24-33] 权威观察时点；贯穿 `PendingTerminal`／`ExecutionResult`／审计快照三处全等且不可改写）**（**不含 `Rejected`**）；**`SendOutcome` 冻结为发送层 `{Accepted(JobId), Rejected(reason, retryable, evidenceSource), Unknown}`（不含 `Cancelled`）**；新增完成结算入口 `SettleCompletionAsync(requestIdentity, submissionIdentity, sendSeq, ExternalStartCompletion)` 与内部 `CompletionSettlementOutcome`；`AdmissionResultKind.Cancelled`；`ExternalStartAdmissionStatus.Cancelled`／`ExecutionFailed`（保留 `Blocked`，`NeedReconcile`＝对外 `Unknown`）。**错误码唯一映射链**：`ExternalStartCompletion.ExecutionErrorCode → AdmissionResult.ExecutionErrorCode → ExternalStartAdmissionOutcome.ExecutionErrorCode → CommandResult.ExecutionErrorCode`（既有 `CommandResult.ErrorCode` 仅表示 BGI 信封错误码）；**观察时点唯一映射链**：`ExternalStartCompletion.ObservedAtUtc → PendingTerminal.ObservedAtUtc → ExecutionResult.ObservedAtUtc → 审计快照.ObservedAtUtc`（全等、不可改写） | §24.2-2、§24.2-2″、§24.2-7、§24.3-4、§24.9、§24.10-1／3、§24.14-1、§24.6-1／2／3／5 | B3 实现批 |
+| D3 | `SendOutcome.Accepted`：新增 `JobId`（**不加 `Terminal`**）；`ReconcileSettlement.Accepted`：新增 `JobId`＋可选 `ExternalStartCompletion?`（旧字段调用保持兼容默认值） | §24.1-1、§24.3-4、§24.2-2″ | B3 实现批 |
+| D4 | `ExternalStartLedgerEntry`：`jobId` ＋ 终态副本（升 version 2）＋ **`TerminalObservedAtUtc`（[第十八轮 N24-36] 观察时点副本，与落盘时点 `TerminalAtUtc` 分离）**；台账 `MarkTerminal` 签名**接收既有 `observedAtUtc`**（首写保存、幂等重试严格比对）；`OperationRecord`：`OperationType`／`PendingTerminal`／`ExecutionResult`／本地取消意向 | §24.3-1、§24.12-1、§24.13-1、§24.17-1、§24.2-2″ | B3 实现批 |
+| D5 | 租约 `version` 3 ＋ `PreObservations[]`（含发布时点、恢复、清理规则）＋ **`ConflictResolutionAudits[]`（追加式冲突裁决审计，[第十二轮 N24-25] 不计入 32 主槽位／256 墓碑容量，本批不裁剪）** ＋ **`ReconciledNotAcceptedEvidence[]`（[第十七轮 N24-30-R-R] 独立不可变未受理证据记录，含 `evidenceId`；同不计容）** | §24.16、§24.20-A、§24.2-2″ | B3 实现批 |
+| D6 | 门面：两段式 `_gate`（锁内占位发布责任 → 锁外启动/取证 → 重新串行校验结算）；无重入终局入口；`TakeoverTerminalConfirmed` 按**持久化操作类型**分派；恢复扫描**四类集合**（①仅 Submission 未关闭／②未终结台账／③台账已 Terminal 但 Operation 未终局／④**`conflict.pending=true` 全部记录，含受保护墓碑**；裁决前禁止裁剪） | §24.18、§24.1-5/6/7、§24.12-3/4、§24.2-2″ | B3 实现批 |
+| D7 | 宿主与适配器：早期受理与完成观察拆分、JobId 全链传递、取消阶段矩阵落地、生产组合根夹具（含 >32 笔容量回归） | §24.10／§24.14、§24.3-2、§24.11、§24.4 | B3 实现批 ＋ B4 |
+| D8 | 实现批开工时登记 `SendOutcome`／`ReconcileSettlement`／`AdmissionResultKind`／`ArbitrationAdmissionService` 的**定义文件与成员签名**（冻结轮会诊材料仅含四个类型文件，未含上述定义处——属材料范围限制，非缺陷） | §24.20-E（冻结轮「引用锚点」说明） | B3 实现批 |
+| D9 | `OperationRecord` 新增加法字段 `conflict`（冲突证据集合＋冲突对账待决标志）、`ConflictResolutionState`（含 `AcceptedAwaitingTerminal`）与 **`ConflictResolutionAuditId` 审计引用**（仅存引用 → 租约 `ConflictResolutionAudits[]`；[第十一/十二/十三轮 N24-24／25／26]「清除冲突」只指清活动 `pending` 标志；审计本体在独立集合、不受墓碑清理影响；**[第十九轮 N24-34-R] 分支化原子裁决事务**：`ResolvedAcceptedTerminal` **三项**；`ResolvedNotAccepted` **四项**（含追加或幂等确认 `ReconciledNotAcceptedEvidence`，重试复用同一 `evidenceId`）——事务规模、引用完整性与逐字段校验一律**以 §24.2-2″ 为准**）**；`AdmissionResult`／`ExternalStartAdmissionOutcome` 新增 `JobId`／`ExecutionDisposition`／**`ResponsibilityState`（`None/Pending/Settled`；取值一律按 §24.6-5 唯一映射表）**／`RawTerminal`／`ExecutionErrorCode`／`EvidenceSource`／`SubmissionIdentity`／`SendSeq`（默认空值/`None`）；冲突记录须汇入准入事实面（`ArbitrationFacts.ExecutionFactsUnknown`／占用），分类读取以冲突状态**覆盖**历史 `TerminalRejected` | §24.2-2″、§24.2-3／4、§24.6-2／5、§24.20-D5 | B3 实现批 |
+
+**E. 会诊记录（gpt-5.6-sol / effort=medium；按 §17.4「有必改项即处置→回归→复会诊」迭代至某轮无必改项）**
+
+| 轮次 | 该轮结论 |
+|---|---|
+| 冻结轮（2026-09-21） | 12 项必改（4 阻断／8 重要）；「引用不存在锚点」＝**无发现** |
+| 复会诊轮 | 6 项必改（含 2 项新发现） |
+| 终轮复核 | 6 项必改（含 2 项新发现） |
+| 第四轮复核 | 4 项必改（含 2 项新发现） |
+| 第五轮复核 | 1 项必改（新发现） |
+| 第六轮复核 | 2 项必改（含 1 项新发现） |
+| 第七轮复核 | 4 项必改（含 2 项新发现） |
+| 第八轮复核 | 4 项必改（含 2 项新发现） |
+| 第九轮复核 | 5 项必改（含 3 项新发现） |
+| 第十轮复核 | 4 项必改（含 4 项新发现） |
+| 第十一轮复核 | 2 项必改（含 2 项新发现） |
+| 第十二轮复核 | 1 项必改（新发现） |
+| 第十三轮复核 | 1 项必改（新发现） |
+| 第十四轮复核 | 4 项必改（含 4 项新发现） |
+| 第十五轮复核 | 4 项必改（含 2 项新发现） |
+| 第十六轮复核 | 1 项必改（新发现） |
+| 第十七轮复核 | 2 项必改（新发现） |
+| 第十八轮复核 | 3 项必改（新发现） |
+| 第十九轮复核 | 1 项必改（新发现） |
+| 第二十轮复核 | 1 项必改（新发现） |
+| 第二十一轮复核 | 1 项必改（新发现） |
+| 第二十二轮复核 | 2 项必改（新发现） |
+| **第二十三轮复核** | **无必改项 ⇒ 冻结**（最小审计结构×兼容矩阵、三项/四项事务、D9、§24.12 恢复扫描逐面一致；仅留 2 条非必改实现建议） |
+
+**逐条处置（全部在文本层完成，无代码改动）**
+
+| 轮 | 编号 | 严重度 | 发现摘要 | 处置位置 |
+|---|---|---|---|---|
+| 冻结 | B24-01 | 阻断 | §24.2-3／§24.11 取消关闭依据矛盾 | §24.2-3、§24.2-7、§24.11 第 2／3／3′ 行 |
+| 冻结 | B24-02 | 阻断 | 「登记后未占位」无条件终局 | §24.15 首行（「三无」四条件）、§24.11 第 2 行 |
+| 冻结 | B24-03 | 阻断 | PreObservation 发送时序矛盾 | §24.15、§24.16-2、§24.18-1 |
+| 冻结 | B24-04 | 阻断 | 终态事务顺序冲突／首写失败自述矛盾 | §24.1-3、§24.15（失败列） |
+| 冻结 | B24-05 | 重要 | 「不得无限停驻」可被读成超时终局 | §24.6-3 |
+| 冻结 | B24-06 | 重要 | 停驻状态混同（无证据 vs 有终态） | §24.20-B 两类停驻 |
+| 冻结 | B24-07 | 重要 | 章首与 §24.20-E 状态双写 | §24 标题／冻结声明／末尾（状态表唯一来源） |
+| 冻结 | B24-08 | 重要 | 对外结果集合与 D2 不一致／`Blocked` 去留 | §24.6-1、§24.20-D2 |
+| 冻结 | B24-09 | 重要 | 布尔叠加与两套分类并存 | §24.2-2、§24.10-1 |
+| 冻结 | B24-10 | 重要 | `status=cancelled` 与线协议词表 | §24.2-5、§24.20-D1 |
+| 冻结 | B24-11 | 重要 | v2→v3 迁移/隔离事务缺失 | §24.20-A′ |
+| 冻结 | B24-12 | 重要 | 取消矩阵缺「未登记」行 | §24.11 六行 |
+| 复诊 | N24-01 | 阻断 | 隔离态造成合法关闭死锁 | §24.20-A′-4 隔离态结算事务 |
+| 复诊 | N24-02 | 阻断 | §24.11 第 2／3′ 行终态列互斥 | §24.11 第 2、3′ 行 |
+| 终轮 | N24-03 | 重要 | 隔离事务适用范围歧义 | §24.20-A′-4（适用范围） |
+| 终轮 | N24-04 | 阻断 | 三层载体映射／`Rejected` 组合未冻结 | §24.2-2、§24.2-2″ |
+| 四轮 | N24-05 | 阻断 | 类型证据被当作终态证据 | §24.20-A′-4a（分流） |
+| 四轮 | N24-06 | 重要 | 本地未发送证明的内部终局状态 | §24.11 末段、§24.15 |
+| 五轮 | N24-07 | 阻断 | 三层唯一映射缺失／第三套终态来源 | §24.1-1、§24.2-2／2″、§24.3-4、§24.10-1、§24.14-1 |
+| 六轮 | N24-08 | 阻断 | §24.14-4 与 §24.15 唯一顺序相反 | §24.14-4、§24.3-4 三分支 |
+| 七轮 | N24-09 | 阻断 | 冲突证据的占用／恢复／裁决未闭合 | §24.2-2″、§24.12-3、§24.15 |
+| 七轮 | N24-10 | 阻断 | 完成层 `Unknown` 责任状态相反 | §24.19-2 二分、§24.3-4 |
+| 七轮 | N24-11 | 重要 | 发送层 `Rejected` 字段不足以一对一 | §24.2-2、§24.2-2″、§24.14-1、D2 |
+| 七轮 | N24-12 | 重要 | 完成层缺 `ErrorCode` | §24.2-2、D1（`ExecutionErrorCode`）、D2 |
+| 八轮 | N24-13 | 阻断 | `Tombstone` 后冲突的容量／恢复集合／事务 | §24.2-2″（占用语义）、§24.12-3 第四类、§24.15 |
+| 八轮 | N24-14 | 阻断 | 责任状态未贯穿到适配器边界 | §24.6-2、§24.2-3／4、D1／D9 |
+| 九轮 | N24-15 | 阻断 | 墓碑冲突「确认曾受理但无终态」无合法责任状态 | §24.2-2″（四分支＋`AcceptedAwaitingTerminal`）、§24.12-3 |
+| 九轮 | N24-16 | 阻断 | D6 仍写「三类集合」 | §24.20-D6（四类集合） |
+| 九轮 | N24-17 | 阻断 | `ResponsibilityState` 无唯一分支矩阵 | §24.6-5 唯一映射表（§24.2-3／4、§24.3-4、§24.2-2″ 引用） |
+| 九轮 | N24-18 | 重要 | D2 未同步发送层 `Retryable`/`EvidenceSource` | §24.20-D2（`RejectedWith(reason, retryable, evidenceSource)`） |
+| 九轮 | N24-19 | 重要 | `ErrorCode` 出现两套名称 | §24.6-2、D1、D2（统一 `ExecutionErrorCode`＋唯一映射链） |
+| 十轮 | N24-20 | 阻断 | §24.15 冲突行仍「三分支」且无反修正事务 | §24.15 冲突行（四分支＋「已被冲突裁决取代」＋再入冲突入口） |
+| 十轮 | N24-21 | 阻断 | 墓碑冲突责任与 §4.1a 三区/容量语义冲突 | §24.2-2″（`conflict`＝与区域正交的覆盖层；显式例外，不改容量公式） |
+| 十轮 | N24-22 | 阻断 | `ResponsibilityState` 表非穷尽 | §24.6-5 补 5 行＋默认规则（已登记后非结清不得 `None`） |
+| 十轮 | N24-23 | 重要 | 生命周期错误码仍混用 `ErrorCode` | §24.2-2、§24.12-1、§24.13-1、D2（统一 `ExecutionErrorCode`） |
+| 十一轮 | N24-24 | 阻断 | 「清除冲突」缺持久化审计模型 | §24.2-2″（只清 `pending`＋`ConflictResolution` 审计）、§24.12-3、D9 |
+| 十一轮 | N24-23-R | 重要 | D2 完成层仍写 `ErrorCode` | §24.20-D2（统一 `ExecutionErrorCode`＋映射链首端改名） |
+| 十二轮 | N24-25 | 阻断 | 冲突裁决审计随墓碑清理而丢失／或永久占容量 | §24.2-2″（独立追加式 `ConflictResolutionAudits[]`、仅存 `auditId`、快照入审计）、§4.1a 清理前置、D5／D9 |
+| 十三轮 | N24-26 | 阻断 | 审计引用无唯一原子事务与可执行完整性判据 | §24.2-2″（三项原子变更、`ConflictResolutionAuditId`、最小审计结构、引用校验）、§24.20-A′、D9 |
+| 十四轮 | N24-27 | 阻断 | 审计字段三套命名／ID-only 下无法比较裁决类型 | §24.2-2″（命名唯一化＋分支兼容矩阵） |
+| 十四轮 | N24-28 | 阻断 | §24.15 冲突行未要求三项事务（高优先级行可绕过） | §24.15 冲突行（三项原子事务＋「清冲突」限定＋失败列） |
+| 十四轮 | N24-29 | 阻断 | 墓碑清理前置被写成了对所有墓碑生效 | §24.2-2″（仅限曾进入冲突覆盖层者） |
+| 十四轮 | N24-30 | 重要 | 审计未保存裁决依据侧证据快照 | §24.2-2″（`resolutionEvidenceSnapshot`） |
+| 十五轮 | N24-27-R | 阻断 | §24.2-2″ 残留第二组同名审计条款 | §24.2-2″（去重，唯一保留定义） |
+| 十五轮 | N24-31 | 重要 | §24.15 出现未定义的「拒绝已被取代」写入 | §24.15 冲突行（历史拒绝本体不改写，关系由审计项表达） |
+| 十五轮 | N24-32 | 阻断 | 升级起点只写 v2，未覆盖 v1 | §24.20-A′（`version ≤ 2 → v3`；v1 同套事务；实际 v1 文件 fail-closed） |
+| 十六轮 | N24-30-R | 重要 | 审计快照字段与逐字段校验不封闭 | §24.2-2″（封闭字段表、拒绝快照逐字段核对、`ExecutionResult.ObservedAtUtc`）、§24.13-1 |
+| 十七轮 | N24-30-R-R | 重要 | `ResolvedNotAccepted` 校验自引用 | §24.2-2″（新增 `ReconciledNotAcceptedEvidence[]` 独立证据记录、四项原子事务）、D5 |
+| 十七轮 | N24-33 | 重要 | `ObservedAtUtc` 来源与写入时序未冻结 | §24.2-2″（唯一语义与来源）、§24.13-1、D2（唯一映射链） |
+| 十八轮 | N24-34 | 阻断 | §24.15 仍以「三项事务」覆盖四项 | §24.15 冲突行（分支③四项＋缺失判据按分支）、§24.20-A′、D9 |
+| 十八轮 | N24-35 | 重要 | 新证据集合缺版本与引用完整性合同 | §24.2-2″（`evidenceId` 判据）、§24.20-A′（两集合）、D5／D9 |
+| 十八轮 | N24-36 | 重要 | `ObservedAtUtc` 混链、台账存储点未定义 | §24.2-2″（两条独立链）、D4（`TerminalObservedAtUtc`＋`MarkTerminal(observedAtUtc)`） |
+| 十九轮 | N24-34-R | 阻断 | D9 仍写「三项原子裁决事务」 | §24.20-D9（分支化三项/四项） |
+| 二十轮 | N24-37 | 阻断 | §24.2-2″ 分支③漏第四项 | §24.2-2″ 分支③（四项原子变更）、证据记录字段名显式化 |
+| 二十一轮 | N24-38 | 阻断 | `resolutionEvidenceSnapshot` 在未受理分支语义二义 | §24.2-2″（判别式两字段 `resolutionEvidenceSnapshot`／`resolutionEvidenceRef` 互斥＋兼容矩阵） |
+| 二十二轮 | N24-39 | 阻断 | 失败条件「快照缺失」与未受理分支冲突 | §24.2-2″（分支必需载荷缺失判据） |
+| 二十二轮 | N24-40 | 阻断 | 顶层 `evidenceSource` 证据双写；重启后校验对象未定义 | §24.2-2″（删顶层来源；`ReconciledNotAcceptedEvidence` 定为权威观察事件载体） |
+
+**非必改建议（实现期执行，不计入必改项）**：①为「权威未受理事实类型／原始证据词／证据来源」确定唯一代码字段名与**封闭枚举**（不得退化为自由字符串比较）；②为 `ResolvedNotAccepted` 提供**统一审计联接读取器**（禁止调用方只读审计项而不解析 `resolutionEvidenceRef`）；③`CommandResult.ErrorCode` 保持信封语义、生命周期错误码一律 `ExecutionErrorCode`；④`ExternalStartExecution` 判别式化属进程内破坏性改造，实施时一次性审计构造点／属性访问／模式匹配调用点，并保留旧工厂重载以避免改动解构与记录相等性断言的调用方。
+
+> **登记纪律**：各轮发现均在**文本**层面处置完毕（无代码改动）；**后轮处置优先**（例：N24-04 的「发送层 `Terminal=false`」已被 N24-07 的「发送层去掉 `Terminal`」取代）；**未出现「无必改项」轮次前不得宣布冻结完成**（§17.4，轮次不设上限）。
+
+**冻结状态（唯一来源）**
+
+| 状态项 | 当前值 |
+|---|---|
+| 已完成会诊轮次 | 冻结轮（12）／复（6）／终（6）／四（4）／五（1）／六（2）／七（4）／八（4）／九（5）／十（4）／十一（2）／十二（1）／十三（1）／十四（4）／十五（4）／十六（1）／十七（2）／十八（3）／十九（1）／二十（1）／二十一（1）／二十二（2）／**二十三（无必改项）** |
+| 是否已出现「无必改项」轮次 | **是**（第二十三轮：判「无必改项」，§17.4 收口） |
+| 处置优先级说明 | 同一编号在多轮重复出现时**后轮优先**（例：N24-04 的「发送层 `Terminal=false`」已被 N24-07 的「发送层去掉 `Terminal`」取代） |
+| 本章状态 | **已冻结**（第二十三轮「无必改项」；设计冻结 = 合同冻结，**不代表实现完成**） |
+| 生产接线 | **关闭**（不依赖冻结与否：实现与 §24.14 夹具完成并通过验收前不恢复，§23.8） |
+
+**冻结状态**：见 §24.20-E 末尾「冻结状态」表（唯一来源；冻结 ≠ 生效、≠ 生产开门）。无论冻结与否，实现与 §24.14 夹具完成并通过验收前，**不恢复** §23.8 所述生产接线。
