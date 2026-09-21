@@ -769,3 +769,24 @@ E1 流程启动的发送窗口内提交的节点操作被并发轮次按占用�
 | 39 | 阻断 | 原判据「`TerminalCompleted && Zone != Active`」**弱于** §16 交错⑤：`TerminalPendingTransfer` 同样 `Zone != Active` 却仍计容；且未断言当前节点处于 `Active` | **已修并实测通过**：前节点判据改为 **`Zone == Tombstone`**（真正迁出计容区）＋**当前节点 `Zone == Active`** 同时点断言 ⇒ 强于原判据且成立 |
 | 40 | 重要 | 发送序号未与具体节点/发送身份关联（按 `index` 推断 `n-{index}`、按 `NodeId` `FirstOrDefault` 取旧记录） | **已修**：新增 `RoutingFakePort.OnBeforeSendWithPayload`（1 起序号＋**实际 payload JSON**），夹具从 payload 的 `configName` 反查当前节点；前节点/当前节点均要求**唯一命中**且前节点 `SubmissionIdentity` 非空（缺一即取证失败） |
 | 41 | 重要 | 加固前把 P19② 记为「已关闭」属**越界登记** | **处置**：本轮先加固夹具；**加固后实测通过**，故 P19② 在**组件/宿主层**关闭（理由＝更强的直接证据，而非放宽）。P19①「原因码逐次取证」**仍未关闭** |
+### 24.31 落地登记：§12.3 交错③「准备/发送阶段故障」·发送阶段支（[新增·2026-09-21 批次十五]）
+
+**A. 落地事实**
+
+| 项 | 实现／证据 | 条款 |
+|---|---|---|
+| 端口级**发送阶段故障注入** `RoutingFakePort.ThrowOnSend`（**记录本次发送尝试之后**抛 `IOException`＝「已进入可能发送阶段后失败」） | 夹具侧注入（`ProbeNodeSubmitRoutingAsync(..., configurePort)`） | §12.3 M3（阶段边界） |
+| 夹具 `NodeSubmit_SendStageFailure_StaysReconcilingNoResend`（**会诊加固后**） | 断言：运行**收敛**（不悬挂）且 **恰为 `WorkflowRunState.Unknown`**（不得 `Succeeded`/`Failed`/`Cancelled`）、节点结果为 **`unknown`**；**只允许一次发送尝试**（`SendCount == 1`，不得换通道重发）且 `LastSendSeq == 1`（无更新发送许可）；该节点 Operation 为 **`Reconciling`**；**未决 `Submission` 仍在册**（身份与该 Operation 的 `SubmissionIdentity` 全等、状态 `Reconciling`）——「不可考/责任保留」由此落在**责任载体**上而非仅 Operation 枚举 | §12.3 交错③／M3／§4.0 `Submission.Reconciling` 责任语义／§3.2a（Unknown 不产生下一轮）／§24.20-B |
+
+**B. 交错③ 其余两支的承接（登记，禁悬空）**
+
+1. **准备阶段 `RunStore` 更新失败**：需按 §17 **P49** 建「故障注入夹具」（归 B4）；当前无注入接缝，故本批未做——**不得**以「发送阶段故障」夹具替代（两者阶段不同）。
+2. **占位前的校验拒绝**（意图/身份/游标/冻结）：`SubmitSuccessorViaAdmissionAsync` 的本地预检在**任何租约副作用之前**返回 `Rejected`（代码顺序可证）；**尚无独立夹具**直接断言「拒绝＋零发送＋零仲裁操作」——登记为后续夹具项（与 §12.3 交错⑥「入口覆盖」同批处理更经济）。
+
+**C. §12.3 交错清单（更新后）**：①首节点抢先＝组件层已关闭（§24.29）；**③发送阶段支＝已补直接证据**（本节）；⑤逐节点释放＝已补直接证据（§24.30）；仍未做：②调用者≠获选者、③其余两支（P49＋校验拒绝夹具）、④接管故障后续取消/重启、⑥四类入口 Scope 来源，以及 P19①、不可变冻结身份、M1/M3 其余、P50 诊断套件、P6/P8。
+
+**D. 本批会诊（gpt-5.6-sol／medium，一轮）与处置**
+
+| # | 严重度 | 发现摘要 | 处置 |
+|---|---|---|---|
+| 42 | 重要 | 「不可考/责任保留」证据不足：仅断言 Operation `Reconciling`＋运行非 `Succeeded`，若运行错误收敛为 `Failed/Cancelled` 或未决 `Submission` 被错误移除仍会通过 | **已修并实测通过**：补断言 **`State == Unknown`**、**节点结果 `unknown`**、**未决 `Submission` 仍在册且身份与该 Operation `SubmissionIdentity` 全等、状态 `Reconciling`**、**`LastSendSeq == 1`**（无更新发送许可）——责任保留落在**责任载体**上 |

@@ -75,6 +75,49 @@ public class TaskCenterSuccessorPathGateTests
     // ── ② 三态映射（按结果确定性，不按可否重试） ─────────────────────────────────
 
     /// <summary>
+    /// **§12.3 交错③·发送阶段故障（组件/宿主层）**：节点提交在**已进入可能发送阶段**后失败（端口在记录本次
+    /// 发送尝试后抛 `IOException`）⇒ 门面必须按**不可考**处置：**不得判为「确定未受理」**、**不得换通道重发**，
+    /// 责任**保留**（Operation `Reconciling`／`Pending`，等待对账），且流程**不得**被标成 `Succeeded`。
+    /// 依据：§12.3 M3（阶段边界：不得用笼统 catch 推定未受理）／§12.3 交错③。
+    /// </summary>
+    [Fact]
+    public async Task NodeSubmit_SendStageFailure_StaysReconcilingNoResend()
+    {
+        var root = NewRoot("tcsendfail-");
+        try
+        {
+            var arbitrationDir = Path.Combine(root, "arbitration");
+            var probe = await ProbeNodeSubmitRoutingAsync(root, successorWired: true, nodeIds: ["n-1"],
+                configurePort: port => port.ThrowOnSend = true);
+
+            Assert.True(probe.ReadOk, Diag("租约台账必须成功读取过", probe));
+            Assert.True(probe.Converged, Diag("运行必须收敛（不得悬挂）", probe));
+            Assert.True(probe.State != WorkflowRunState.Succeeded, Diag("发送阶段失败后不得假报成功", probe));
+            // **责任保留的直接证据**（会诊加固）：运行必须收敛为 **`Unknown`**（不得 Failed/Cancelled 等其它终态），
+            // 节点结果必须为 `unknown`，且**未决 Submission 仍在册**、身份与 `LastSendSeq` 未变（不存在更新发送许可）。
+            Assert.True(probe.State == WorkflowRunState.Unknown, Diag("发送阶段失败后必须保守停驻为 Unknown", probe));
+            Assert.Equal("unknown", probe.FirstNodeResult);
+            Assert.True(probe.SendCount == 1, Diag("只允许一次发送尝试（不得重发：实际=" + probe.SendCount + "）", probe));
+            var op = probe.Ops.SingleOrDefault(o => !string.IsNullOrEmpty(o.Candidate?.NodeId));
+            Assert.NotNull(op);
+            // 阶段边界纪律：已进入可能发送阶段 ⇒ **不可考**（Reconciling），不得落成确定拒绝（那会诱发重发）。
+            Assert.Equal(OperationRequestState.Reconciling, op!.RequestState);
+            Assert.Equal(1, op.LastSendSeq);
+            var handoff = new ArbitrationLeaseStore(arbitrationDir).Read().File!.Handoff!;
+            var live = handoff.Operations.Single(o => !string.IsNullOrEmpty(o.Candidate?.NodeId));
+            Assert.Equal(OperationRequestState.Reconciling, live.RequestState);
+            Assert.Equal(1, live.LastSendSeq);
+            Assert.NotNull(handoff.Submission);                                   // 未决发送责任仍在册（未关闭/未移除）
+            Assert.Equal(live.SubmissionIdentity, handoff.Submission!.SubmissionIdentity);
+            Assert.Equal(SubmissionState.Reconciling, handoff.Submission.State);
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
     /// **§12.3 交错⑤·逐节点释放直接证据（组件层；[新增·2026-09-21 批次十四]）**：
     /// 6 节点流程中，**第 k 次（k≥2）节点发送时**，前一节点的 Operation 必须**已按自身发送身份终局**
     /// （`TerminalCompleted`）并**迁出 `Active` 计容区**——**逐次**取证（不是只看最终态，故与 P19② 的
@@ -331,6 +374,12 @@ public class TaskCenterSuccessorPathGateTests
         /// </summary>
         public Action<int, string?>? OnBeforeSendWithPayload { get; set; }
 
+        /// <summary>
+        /// 发送阶段故障注入（§12.3 交错③）：为 true 时**在记录本次发送尝试之后**抛 `IOException`
+        /// （模拟「已进入可能发送阶段后失败」⇒ 门面必须按**不可考**处置、不得判为未受理、不得换通道重发）。
+        /// </summary>
+        public bool ThrowOnSend { get; set; }
+
         public Task<BgiExternalResponse> SendCommandAsync(string operation, object? payload, CancellationToken ct)
         {
             lock (_sync) _sends.Add(operation);
@@ -338,6 +387,7 @@ public class TaskCenterSuccessorPathGateTests
             OnBeforeSend?.Invoke(SendCount);
             OnBeforeSendWithPayload?.Invoke(SendCount,
                 payload is null ? null : System.Text.Json.JsonSerializer.Serialize(payload));
+            if (ThrowOnSend) throw new IOException("fixture: 发送阶段故障（已进入可能发送阶段）");
             return Task.FromResult(new BgiExternalResponse
             {
                 Success = true,
@@ -380,7 +430,6 @@ public class TaskCenterSuccessorPathGateTests
                + "/" + o.RequestState + "/" + (o.LastResult?.ReasonCode ?? "") + "/" + (o.LastResult?.EvidenceSource ?? ""))) + "]"
            + " logs=[" + string.Join(" || ", p.Logs) + "]";
 
-    /// <summary>
     /// <summary>从节点提交 payload 中取 `configName`（把「第 k 次发送」关联到具体节点身份；§12.3 交错⑤）。</summary>
     private static string? ParseConfigName(string? payloadJson)
     {
@@ -412,7 +461,9 @@ public class TaskCenterSuccessorPathGateTests
         TaskCompletionSource? holdFirstAccept = null,
         Func<Task>? beforeSuccessorAdmission = null,
         // [§12.3 交错⑤] 发送入口注入（1 起序号 ＋ payload JSON）：把「第 k 次发送」关联到具体节点身份。
-        Action<RunStore, int, string?>? onBeforeSendWithPayload = null)
+        Action<RunStore, int, string?>? onBeforeSendWithPayload = null,
+        // [§12.3 交错③] 端口配置钩子（例如注入发送阶段故障 `ThrowOnSend`）。
+        Action<RoutingFakePort>? configurePort = null)
     {
         using var client = new BgiExternalClient();
         var flowsDir = Path.Combine(root, "flows");
@@ -512,6 +563,7 @@ public class TaskCenterSuccessorPathGateTests
                     if (onBeforeSend is not null) port.OnBeforeSend = n => onBeforeSend(runs, n);
                     if (onBeforeSendWithPayload is not null)
                         port.OnBeforeSendWithPayload = (n, payloadJson) => onBeforeSendWithPayload(runs, n, payloadJson);
+                    configurePort?.Invoke(port);
                     return new BgiWorkflowExecutionBoundary(port, runs);
                 },
             },
