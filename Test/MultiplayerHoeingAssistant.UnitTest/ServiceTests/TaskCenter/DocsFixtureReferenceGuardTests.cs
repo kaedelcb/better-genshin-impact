@@ -33,6 +33,8 @@ public sealed class DocsFixtureReferenceGuardTests
         {
             Path.Combine(root, "Docs", "design", "onedragon-r5-3-external-start-lifecycle-2026-09-21.md"),
             Path.Combine(root, "Docs", "design", "onedragon-r5-2-entry-arbitration-wiring-2026-09-20.md"),
+            // [批次四十二] 收口自审稿同样纳入（其点名的夹具也必须真实存在）
+            Path.Combine(root, "Docs", "design", "onedragon-r5-closure-audit-2026-09-22.md"),
         };
         var testSources = string.Join("\n", Directory
             .EnumerateFiles(Path.Combine(root, "Test"), "*.cs", SearchOption.AllDirectories)
