@@ -559,6 +559,53 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// **§16 台账行「控制热键不经准入」·组合根层强制版**：**控制键**（`CancelTaskHotkey`／`BgiEnabledHotkey`／
+    /// `SuspendHotkey`）必须**始终直通**——断言：`action.execute_hotkey` 每次恰一次、**`task.status` 零次**、
+    /// **零新增仲裁操作**（不经统一仲裁面）。与**普通热键**（E4：接线态经统一仲裁面）形成对照：
+    /// `CompositionRoot_ControlHotkey_WiredGoesThroughAdmission_UnwiredDoesNot`。
+    /// </summary>
+    [Fact]
+    public async Task CompositionRoot_ControlKeyHotkeys_BypassAdmissionEntirely()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "r5comp-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var client = new BgiExternalClient();
+            var host = NewHost(root, client);
+            // 即使**注入准入委托**（＝接线态），控制键也不得经仲裁面。
+            var wired = new CommandExecutor(null!, "unused", externalClientProvider: () => client,
+                externalStartAdmission: (request, ct) => host.AdmitExternalStartAsync(request, ct));
+            await client.StartAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+            var executed = 0;
+            foreach (var key in new[] { "CancelTaskHotkey", "BgiEnabledHotkey", "SuspendHotkey" })
+            {
+                var result = await wired.ExecuteAsync(new RemoteCommand
+                {
+                    Cmd = "hotkey_execute",
+                    Params = new() { ["hotkeyConfigName"] = key },
+                }).WaitAsync(TimeSpan.FromSeconds(20));
+                Assert.Equal("success", result.Status);
+                executed++;
+                Assert.Equal(executed, _double.CountOf("action.execute_hotkey"));   // 每次都恰发一次
+            }
+
+            Assert.Equal(0, _double.CountOf("task.status"));    // 状态查询零次（控制键直通路径不查状态）
+            var arbitrationDir = Path.Combine(root, "arbitration");
+            Assert.True(!Directory.Exists(arbitrationDir)
+                        || new ArbitrationLeaseStore(arbitrationDir).Read().File?.Handoff?.Operations is null
+                        || new ArbitrationLeaseStore(arbitrationDir).Read().File!.Handoff!.Operations.Count == 0,
+                "控制键不得经统一仲裁面（零仲裁操作）");
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    /// <summary>
     /// **§24.8-3 控制热键双向断言（组合根层）**：接线态 ⇒ 热键经统一仲裁面（产生仲裁操作、核心仍发热键 IPC）；
     /// 未接线（生产默认）⇒ **不产生任何仲裁操作**，热键直接走 IPC（既有语义逐字不变）。
     /// </summary>

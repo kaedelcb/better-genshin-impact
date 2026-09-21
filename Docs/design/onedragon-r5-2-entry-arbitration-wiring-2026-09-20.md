@@ -1818,6 +1818,17 @@ M1 的①—⑤与 §3.2「E1 发送前固定 candidateId→runId→首节点提
 
 **收口判据（[纠正·2026-09-21 会诊] 可执行版）**：必须按**每项未完成断言**追踪（**含「部分」行**），逐条满足其一——（a）补出该断言的组件/端到端证据并更新为本项已覆盖；（b）**已移交**：写明承接批次＋完成证据要求＋**保留的启用门禁**，此时该项只能记「**已移交／未验收**」，**不得**计入完成。**禁止**用本台账自身的状态修改来证明本台账完成（自证循环）；亦不得以「转 R5.8 前置」代替组件验收证据（§8：组件夹具与真实入口证据不得互相替代）。当前状态（[纠正·2026-09-21 会诊] 重新统计）：**六类交错中 0 项「已覆盖」、6 项「部分」（①②③④⑤⑥）；另有 3 项跨批欠项（续用并发／控制热键不经准入／真实双副本＋Rejected）**。
 
+### 16-A. 状态同步（R5.3 §24 批次；[新增·2026-09-21]）
+
+> **效力**：以下行的**状态与证据以本节为准**（未列行者不变）；**汇总统计同步更正**：§16 表原汇总「六类交错中 0 项已覆盖、6 项部分」→ 按逐行现状应为 **1 项已覆盖（①）、5 项部分**（②③④⑤⑥），③⑤ 的「部分」限定与承接项见下表。
+
+| 上表行 | 新状态 | 证据（夹具／实现） | 备注 |
+|---|---|---|---|
+| **① 首节点抢先（强制版）** | **已覆盖** | §24.29：`NodeAdmission_BeforeGateObservation_E1StillOpen_NoChildPermitYet` ＋ **门面锁外**只发信号观察点 `TaskCenterAdmissionSeams.BeforeSuccessorAdmission`（**生产恒 `null`＝空操作**，无参签名不暴露生产对象） | 原「仍欠」原因为「需新增门面 `_gate` 外观察点」——该观察点已按 §17 P17 建成；断言：E1 Submission 仍开＋父操作唯一命中且身份全等＋非终局集合＋子许可 0＋子发送 0，放行后 `Succeeded` 且恰 2 次节点发送 |
+| **③ 准备阶段故障** | 仍「**部分**」，但**发送阶段支已覆盖** | §24.31：`NodeSubmit_SendStageFailure_StaysReconcilingNoResend`（运行恰 `Unknown`＋节点结果 `unknown`＋恰一次发送尝试＋`LastSendSeq==1`＋Operation `Reconciling`＋未决 `Submission` 在册且身份全等） | 其余两支仍欠：准备阶段 `RunStore` 更新失败按 **§17 P49**（归 B4，当前无注入接缝）；**占位前校验拒绝**（代码顺序可证「拒绝＋零发送＋零仲裁操作」）**尚无独立夹具**，与交错⑥同批更经济 |
+| **⑤ 连续超 32 节点** | 仍「**部分**」，但**逐节点释放直接证据已补** | §24.30：`NodeSubmit_EachSendObservesPreviousNodeReleased`（6 节点逐次取证：第 k（k≥2）次发送时前节点 `TerminalCompleted`＋**`Zone == Tombstone`**（真正迁出计容区）＋`SubmissionIdentity` 非空＋唯一命中；同时点当前节点 `Zone == Active`；用实际 payload 的 `configName` 关联发送↔节点） | **33 节点用例仍受 P50 暂停**（只提供最终态证据）；P19①「原因码逐次取证」仍未关闭 |
+| **控制热键不经准入** | **已覆盖（组合根层）** | `CompositionRoot_ControlKeyHotkeys_BypassAdmissionEntirely`（§24.27-A 组合根夹具族）：**控制键**（`CancelTaskHotkey`／`BgiEnabledHotkey`／`SuspendHotkey`）在**已注入准入委托（接线态）**下仍**始终直通**——断言 `action.execute_hotkey` 每次**恰一次**、**`task.status` 零次**、**零仲裁操作**（③「状态查询零次／准入零次」逐项满足） | 原欠项原因「需发送接缝」已由**进程内管道替身**（`BgiInstancePipeDouble`＋`PipeNameOverrideForTest`，仅测试生效）满足；**普通热键**（E4）仍按 §24.8-3 分接线／未接线两态断言（`CompositionRoot_ControlHotkey_WiredGoesThroughAdmission_UnwiredDoesNot`），两者语义不同、不得互相替代 |
+| 续用并发／真实双副本＋Rejected | 不变（**仍欠**） | 见上表原文；续用并发归 B3 第 4 步，双副本拒绝归 §13.11 G2(e) | 本节不据此关闭 |
 
 ## 17. 启用前置清单（B2-γ／B3／B4 挂账归并 · [新增·2026-09-21]）
 
@@ -1972,6 +1983,17 @@ M1 的①—⑤与 §3.2「E1 发送前固定 candidateId→runId→首节点提
 两条序列各自**轮次不设上限**；中途不再因单个夹具、单个提交或措辞批另开会诊序列。若①中新出现运行时语义或生产开门动作，回到 §17.4 的 A 级规则处理，不把风险带入②。
 
 **每条序列的规则不变**：开到某轮**无必改项**才收口；有必改项（语义或措辞）即处置→回归→复会诊；**轮次不设上限**。另有不可省的固定点：**任一「生产构造开门」前**、**R5.8 实机前**。
+### 17-A. 状态同步（R5.3 §24 批次；[新增·2026-09-21]）
+
+> **效力**：下列 §17 行的**状态以本节为准**（未列行者不变）；**不得**据本节减免任何门禁（生产节点改道门／外部启用门继续保留）。
+
+| §17 行 | 新状态 | 证据 |
+|---|---|---|
+| **P17**（首节点抢先强制版：观察点＋该交错夹具） | **已覆盖（组件层）** | §24.29：门面锁外只发信号观察点 `TaskCenterAdmissionSeams.BeforeSuccessorAdmission`（**生产恒 `null`**）＋夹具 `NodeAdmission_BeforeGateObservation_E1StillOpen_NoChildPermitYet`；**真实入口证据**仍属 §23.1（owner 侧） |
+| **P19②**（宿主链路逐节点释放直接断言） | **已覆盖（组件/宿主层）** | §24.30：夹具 `NodeSubmit_EachSendObservesPreviousNodeReleased`（6 节点逐次取证：前节点 `TerminalCompleted`＋`Zone == Tombstone`＋`SubmissionIdentity` 非空＋唯一命中；同时点当前节点 `Zone == Active`）；**P19①「原因码逐次取证」仍未关闭** |
+| **P23**（控制热键「不经准入」发送接缝夹具） | **已覆盖（组合根层）** | 夹具 `CompositionRoot_ControlKeyHotkeys_BypassAdmissionEntirely`（控制键在接线态下仍直通：`action.execute_hotkey` 每次恰一次、`task.status` 零次、零仲裁操作）；发送接缝＝进程内管道替身（`PipeNameOverrideForTest`，仅测试生效） |
+| **P50** | **不变（阻断式 Skip 维持）** | §24.28-B：负载敏感性已复现（启用后满负载 5 轮中 1 轮同宿主类夹具红灯）；诊断入口未落实 |
+
 ## 18. R5.3 工作分解（打断/恢复与联机兼容 · [新增·2026-09-21；会诊后扩充]）
 
 > **性质**：**WBS 登记（草案）**（承接 R5 评审文档 §2②3／②4／②7、§2③2/③5、§6 R-8，与本文 §17 中归 R5.3 的 P 项）。
