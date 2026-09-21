@@ -229,6 +229,208 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
             admissionWired: true,
             admissionSeams: new TaskCenterAdmissionSeams { Epoch = "1:1" });
 
+    /// <summary>
+    /// **§24.4-6 大于 32 笔外部启动完成后的容量与终局释放**：33 轮闭环（受理→推送 Completed→结算）后
+    /// 全部成功、无重发，且**不留任何 `Active` 计容操作**（主槽位随终局释放）。
+    /// </summary>
+    [Fact]
+    public async Task CompositionRoot_MoreThan32CompletedStarts_NoCapacityExhaustion()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "r5comp-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var client = new BgiExternalClient();
+            var host = NewHost(root, client);
+            var executor = new CommandExecutor(null!, "unused",
+                externalClientProvider: () => client,
+                externalStartAdmission: (request, ct) => host.AdmitExternalStartAsync(request, ct));
+            await client.StartAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            await client.SubscribeAsync([]);
+
+            for (var i = 1; i <= 33; i++)
+            {
+                var start = executor.ExecuteAsync(StartGroupCommand("容量组" + i));
+                await WaitForAsync(() => _double.CountOf("ext.task.start") == i, TimeSpan.FromSeconds(10));
+                await _double.PushEventAsync("task.completed", HandleOf(_double, i));
+                var result = await start.WaitAsync(TimeSpan.FromSeconds(15));
+                Assert.Equal("success", result.Status);
+            }
+
+            Assert.Equal(33, _double.CountOf("ext.task.start"));           // 无重发（发送恰 33 次）
+            var arbitrationDir = Path.Combine(root, "arbitration");
+            var ops = new ArbitrationLeaseStore(arbitrationDir).Read().File!.Handoff!.Operations;
+            // 计容公式＝`Active + TerminalPendingTransfer ≤ 32`：两类都占主槽位，故必须**双双为 0**才算释放
+            // （仅断言「无 Active」不足以证明容量的终局释放，§24.1-3／§24.1-8）。
+            Assert.DoesNotContain(ops, o => o.Zone is OperationZone.Active or OperationZone.TerminalPendingTransfer);
+            Assert.Equal(33, new ExternalStartLedger(root).Read().File!.Entries
+                .Count(e => e.State == LedgerEntryState.Terminal));
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    /// <summary>
+    /// **§24.8-3 默认未注入路径（生产门仍关闭）**：`CommandExecutor` **不注入**外部启动准入委托（＝当前生产默认）
+    /// ⇒ 启动走既有直启路径（ext 队列通道旧词表），**完全不触碰仲裁面与外部启动台账**（门关闭的可观测证据）。
+    /// 同时断言控制热键在未接线时同样不经门面（IPC 直发）。
+    /// </summary>
+    [Fact]
+    public async Task CompositionRoot_DefaultUnwiredPath_DoorStaysClosedAndLegacyQueuePathUnchanged()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "r5comp-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var client = new BgiExternalClient();
+            var host = NewHost(root, client);
+            var executor = new CommandExecutor(null!, "unused", externalClientProvider: () => client);   // 不注入＝生产默认
+            await client.StartAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            await client.SubscribeAsync([]);
+
+            var start = executor.ExecuteAsync(StartGroupCommand("未接线组A"));
+            await WaitForAsync(() => _double.CountOf("ext.task.start") == 1, TimeSpan.FromSeconds(10));
+            await _double.PushEventAsync("task.completed", HandleOf(_double, 1));
+            var result = await start.WaitAsync(TimeSpan.FromSeconds(15));
+
+            Assert.Equal("success", result.Status);
+            Assert.Contains("队列通道", result.Message);                       // 旧词表（未接线直启路径逐字保留）
+            Assert.Equal(1, _double.CountOf("ext.task.start"));
+            // 门关闭的可观测证据：仲裁面无任何操作、外部启动台账不存在
+            var arbitrationDir = Path.Combine(root, "arbitration");
+            Assert.True(!Directory.Exists(arbitrationDir)
+                        || new ArbitrationLeaseStore(arbitrationDir).Read().File?.Handoff?.Operations is null
+                        || new ArbitrationLeaseStore(arbitrationDir).Read().File!.Handoff!.Operations.Count == 0,
+                "默认未注入路径不得产生仲裁操作（生产门应保持关闭）");
+            Assert.True(!File.Exists(Path.Combine(root, "external-start-ledger.json")),
+                "默认未注入路径不得写外部启动台账");
+
+            // 说明：`cold_start_required` 只由**接线态核心**（`allowPreemption=false`）产生；未接线路径的冷启动
+            // 走既有「裸拉起回退」语义（不属本批范围，另有组件级夹具覆盖）。故接线态出口的对外合同＝
+            // `result_unknown`＋责任 `Pending`＋零发送（见 `CompositionRoot_ColdStart_WiredPathRefusesWithoutSending`）。
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    /// <summary>
+    /// **§24.4-5 终态落盘失败 → 保守停驻 → 恢复补终局**（组合根层面）：
+    /// 受理后把接管台账置为**只读**（模拟台账写入失败）⇒ 完成结算的「台账 Terminal」步失败：
+    /// ①本笔落保守停驻（责任保留、**不重发**、不释放占用）；②`PendingTerminal` 已持久化；
+    /// ③恢复写权限后，重启路径（`RecoverExternalStartObservationsAsync`）按已持久化事实**补终局**。
+    /// </summary>
+    [Fact]
+    public async Task CompositionRoot_LedgerTerminalWriteFails_StaysPendingThenRecoveryCompletes()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "r5comp-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var client = new BgiExternalClient();
+            var host = NewHost(root, client);
+            var executor = new CommandExecutor(null!, "unused",
+                externalClientProvider: () => client,
+                externalStartAdmission: (request, ct) => host.AdmitExternalStartAsync(request, ct));
+            await client.StartAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            await client.SubscribeAsync([]);
+
+            var start = executor.ExecuteAsync(StartGroupCommand("落盘失败组"));
+            await WaitForAsync(() => _double.CountOf("ext.task.start") == 1, TimeSpan.FromSeconds(10));
+            var ledgerPath = Path.Combine(root, "external-start-ledger.json");
+            Assert.True(File.Exists(ledgerPath), "受理接管台账应已落盘");
+            File.SetAttributes(ledgerPath, FileAttributes.ReadOnly);      // 注入「台账写入失败」
+            await _double.PushEventAsync("task.completed", HandleOf(_double, 1));
+            var blocked = await start.WaitAsync(TimeSpan.FromSeconds(15));
+
+            // ① 保守停驻：不得报成功、不得重发、责任未结清（台账未 Terminal ⇒ 结果不可考，禁止重发）
+            Assert.NotEqual("success", blocked.Status);
+            Assert.Equal(ResponsibilityState.Pending, blocked.ResponsibilityState);
+            Assert.Equal(1, _double.CountOf("ext.task.start"));
+            var arbitrationDir = Path.Combine(root, "arbitration");
+            var op = new ArbitrationLeaseStore(arbitrationDir).Read().File!.Handoff!.Operations.Single(o => o.LastSendSeq > 0);
+            var targetSubmission = op.SubmissionIdentity;
+            Assert.Equal(OperationRequestState.Accepted, op.RequestState);        // 未终局（责任保留）
+            Assert.NotNull(op.PendingTerminal);                                    // ② 待终局事实已持久化
+            Assert.Equal(LedgerEntryState.AcceptedPendingExecution,
+                new ExternalStartLedger(root).Read().File!.Entries.Single().State); // 台账未终局（写入失败）
+
+            // ③ 恢复写权限后重启：**未终结台账属恢复集合②** ⇒ 只保留观察责任（不得据此终局、不得重发）。
+            File.SetAttributes(ledgerPath, FileAttributes.Normal);
+            await host.ShutdownAsync();
+            var host2 = NewHost(root, client);
+            await ProbeRecoveryAsync(host2);
+            var kept = new ArbitrationLeaseStore(arbitrationDir).Read().File!.Handoff!.Operations
+                .Single(o => string.Equals(o.SubmissionIdentity, targetSubmission, StringComparison.Ordinal));
+            Assert.Equal(OperationRequestState.Accepted, kept.RequestState);        // 集合②：责任保留、不终局
+            Assert.Equal(1, _double.CountOf("ext.task.start"));                    // 恢复扫描不得重发
+            await host2.ShutdownAsync();
+
+            // ④ 造景「台账已 Terminal、Operation 未终局」⇒ 再次重启：恢复集合③ 用已持久化 `PendingTerminal` 补终局。
+            Assert.True(new ExternalStartLedger(root).MarkTerminal(targetSubmission, kept.LastSendSeq, "completed",
+                kept.PendingTerminal!.ObservedAtUtc, rawTerminal: "completed", jobId: kept.PendingTerminal.JobId,
+                operationType: OperationType.ExternalStart,
+                terminalEvidenceSource: kept.PendingTerminal.EvidenceSource).Success, "造景前置：台账终态写入失败");
+            var host3 = NewHost(root, client);
+            await ProbeRecoveryAsync(host3);
+            var repaired = new ArbitrationLeaseStore(arbitrationDir).Read().File!.Handoff!.Operations
+                .Single(o => string.Equals(o.SubmissionIdentity, targetSubmission, StringComparison.Ordinal));
+            Assert.Equal(OperationRequestState.TerminalCompleted, repaired.RequestState);   // 终局已补齐
+            Assert.Equal(LedgerEntryState.Terminal, new ExternalStartLedger(root).Read().File!.Entries
+                .Single(e => string.Equals(e.SubmissionIdentity, targetSubmission, StringComparison.Ordinal)).State);
+            Assert.Equal(1, _double.CountOf("ext.task.start"));                    // 全程无重发
+            await host3.ShutdownAsync();
+        }
+        finally
+        {
+            var ledgerPath = Path.Combine(root, "external-start-ledger.json");
+            try { if (File.Exists(ledgerPath)) File.SetAttributes(ledgerPath, FileAttributes.Normal); } catch { }
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    /// <summary>
+    /// **§24.4-7 冷启动独立拒绝**：ext 通道不可用（对端老 BGI）且 IPC 不可达（无服务端）⇒ 接线态**不得裸拉起**、
+    /// **不得发送**：入口响亮失败（`cold_start_required`）且两类发送面均为零。
+    /// </summary>
+    [Fact]
+    public async Task CompositionRoot_ColdStart_WiredPathRefusesWithoutSending()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "r5comp-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(root);
+        try
+        {
+            _double.AcceptHello = false;                       // ext 不可用
+            IpcClient.PipeNameOverrideForTest = _double.PipeName + ".dead";   // IPC 不可达（无服务端）
+            using var client = new BgiExternalClient();
+            var host = NewHost(root, client);
+            var executor = new CommandExecutor(null!, "unused",
+                externalClientProvider: () => client,
+                externalStartAdmission: (request, ct) => host.AdmitExternalStartAsync(request, ct));
+            await client.StartAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+            var result = await executor.ExecuteAsync(StartGroupCommand("冷启动组")).WaitAsync(TimeSpan.FromSeconds(20));
+
+            Assert.Equal("failed", result.Status);
+            // 接线态禁止裸拉起（**未发送**）：本夹具观察的是**适配器出口**，按 §24.6-1/2 的保守映射（§14 细化前
+            // 只有 `success` 才算受理证据、其余一律不可考）**必须**是 `result_unknown`——不得把核心层错误码
+            // 直接泄漏到出口（核心层 `cold_start_required` 的独立拒绝由未接线路径的夹具对照断言）。
+            Assert.Equal("result_unknown", result.ErrorCode);
+            Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);   // 责任保留、禁止重发
+            Assert.Equal(0, _double.CountOf("ext.task.start"));
+            Assert.Equal(0, _double.CountOf("task.start"));
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
     private static async Task WaitForAsync(Func<bool> condition, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
@@ -238,5 +440,67 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
             await Task.Delay(25);
         }
         Assert.Fail("等待条件超时：" + nameof(WaitForAsync));
+    }
+
+    /// <summary>
+    /// 触发宿主初始化（含 §24.12-3 恢复对齐）：用一枚**明确拒绝**的探针请求（不产生发送副作用）。
+    /// </summary>
+    private static async Task ProbeRecoveryAsync(TaskCenterHost host)
+    {
+        await host.AdmitExternalStartAsync(new ExternalStartAdmissionRequest
+        {
+            Namespace = "v2",
+            WorkflowId = "onedragon:恢复探针",
+            TriggerOccurrenceId = "v2:remote:{requestIdentity}",
+            ResourceRef = "onedragon:恢复探针",
+            SourceDetail = "fixture:recovery_probe",
+            ExecuteAsync = _ => Task.FromResult(ExternalStartExecution.RejectedWith("fixture_probe", false, "fixture")),
+        });
+    }
+    /// <summary>
+    /// **§24.4-7 宿主关闭交错**：受理后宿主关闭（租约释放）再送达权威终态 ⇒ 结算写入被拒 ⇒ **不得假成功、
+    /// 不得重发**，本笔保守停驻（责任 `Pending`、台账保持未终结，责任由恢复/当前所有者承接）。
+    /// </summary>
+    [Fact]
+    public async Task CompositionRoot_HostShutdownBeforeTerminal_NoFalseSuccessNoResend()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "r5comp-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var client = new BgiExternalClient();
+            var host = NewHost(root, client);
+            var executor = new CommandExecutor(null!, "unused",
+                externalClientProvider: () => client,
+                externalStartAdmission: (request, ct) => host.AdmitExternalStartAsync(request, ct));
+            await client.StartAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            await client.SubscribeAsync([]);
+
+            var start = executor.ExecuteAsync(StartGroupCommand("关闭交错组"));
+            await WaitForAsync(() => _double.CountOf("ext.task.start") == 1, TimeSpan.FromSeconds(10));
+            var handle = HandleOf(_double, 1);
+            // **先证明受理链已完成**（否则本夹具会退化为「未受理即释放租约」的另一种交错）：
+            // 台账 = AcceptedPendingExecution、Operation = Accepted、Submission 已关闭。
+            var arbitrationDir = Path.Combine(root, "arbitration");
+            await WaitForAsync(() =>
+                new ExternalStartLedger(root).Read().File?.Entries.SingleOrDefault()?.State == LedgerEntryState.AcceptedPendingExecution
+                && new ArbitrationLeaseStore(arbitrationDir).Read().File?.Handoff?.Submission is null,
+                TimeSpan.FromSeconds(10));
+            Assert.Equal(OperationRequestState.Accepted,
+                new ArbitrationLeaseStore(arbitrationDir).Read().File!.Handoff!.Operations.Single().RequestState);
+            await host.ShutdownAsync();                    // 交错：先关闭宿主（释放租约）
+            await _double.PushEventAsync("task.completed", handle);
+            var result = await start.WaitAsync(TimeSpan.FromSeconds(20));
+
+            Assert.NotEqual("success", result.Status);                   // 不得假成功
+            Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);   // 责任保留
+            Assert.Equal(1, _double.CountOf("ext.task.start"));          // 不得重发
+            Assert.Equal(LedgerEntryState.AcceptedPendingExecution,
+                new ExternalStartLedger(root).Read().File!.Entries.Single().State);  // 台账未终结（待承接）
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
     }
 }

@@ -2130,11 +2130,51 @@ public sealed class ArbitrationAdmissionService
         {
             var read = _store.Read();
             if (read.File?.Lease is null)
-                return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "未持有租约。", requestIdentity);
+            {
+                // §24.6-5（[§24.4 组合根验收发现；第三轮会诊收紧]）**按可证明事实分流**：
+                // ①能证明「已登记且有发送责任」＝请求身份＋完整发送身份（`submissionIdentity`＋`sendSeq≥1`）齐备
+                //   ⇒ 责任未结清＝`Pending`，并原样回显发送身份；
+                // ②不能证明（身份不完整）⇒ 维持 `None`（＝未登记/不适用，不得把「未知请求」误标为有责任）。
+                // 同时：**已观察到的完成事实不得被降级**——携带合法完成结果时保留其结果维/原始终态词/执行错误码/证据来源
+                // （§24.6-2：后续持久化异常不得把取消/失败改写成不可考）。
+                var identityComplete = !string.IsNullOrWhiteSpace(requestIdentity)
+                                       && !string.IsNullOrWhiteSpace(submissionIdentity)
+                                       && sendSeq >= 1;
+                var stop = AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "未持有租约（结算未执行）。", requestIdentity);
+                if (identityComplete)
+                {
+                    stop.ResponsibilityState = ResponsibilityState.Pending;
+                    stop.SubmissionIdentity = submissionIdentity;
+                    stop.SendSeq = sendSeq;
+                    stop.ExecutionDisposition = DispositionOf(completion);
+                    stop.RawTerminal = completion?.RawTerminal;
+                    stop.ExecutionErrorCode = completion?.ExecutionErrorCode;
+                    stop.EvidenceSource = completion?.EvidenceSource;
+                }
+                return stop;
+            }
             var lease = read.File.Lease;
             var op = FindOp(read.File, requestIdentity);
             if (op is null)
-                return AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "Operations 记录缺失=响亮拒绝。", requestIdentity);
+            {
+                // Operations 记录缺失＝**无法证明本笔已登记**（也可能是旧/错身份）⇒ 保守：身份齐备时按「关联不足」
+                // 记 `Pending`（§24.6-5），否则 `None`；已观察到的完成事实一律保留。
+                var identityComplete = !string.IsNullOrWhiteSpace(requestIdentity)
+                                       && !string.IsNullOrWhiteSpace(submissionIdentity)
+                                       && sendSeq >= 1;
+                var stop = AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "Operations 记录缺失=响亮拒绝。", requestIdentity);
+                if (identityComplete)
+                {
+                    stop.ResponsibilityState = ResponsibilityState.Pending;
+                    stop.SubmissionIdentity = submissionIdentity;
+                    stop.SendSeq = sendSeq;
+                    stop.ExecutionDisposition = DispositionOf(completion);
+                    stop.RawTerminal = completion?.RawTerminal;
+                    stop.ExecutionErrorCode = completion?.ExecutionErrorCode;
+                    stop.EvidenceSource = completion?.EvidenceSource;
+                }
+                return stop;
+            }
             // §24.17／§24.1-6（[Batch B 会诊阻断处置]）：本入口**只服务外部启动**（E3/E4/E5）——
             // 其余类型走各自终局入口；`Unknown` fail-closed（不得借完成入口跳过台账步而释放占用）。
             if (op.OperationType != OperationType.ExternalStart)
@@ -4136,4 +4176,16 @@ public sealed class ArbitrationAdmissionService
     internal static string SortKeyFingerprintOf(ArbitrationCandidate c, string? runBinding, string? cursorRef, long? cursorRevision)
         => ((int)c.Tier) + ":" + c.Priority + ":" + (c.ScheduledAt?.ToString("O") ?? "~")
            + "|" + (runBinding ?? "~") + "|" + (cursorRef ?? "~") + "|" + (cursorRevision?.ToString() ?? "~");
+    /// <summary>
+    /// 完成层结果 → 结果维（[§24.4 组合根验收发现] 结算无法执行时的**事实保留**用；不得把已观察到的
+    /// 取消/失败降级为 `Unknown`——§24.6-2）。
+    /// </summary>
+    private static ExecutionDisposition DispositionOf(ExternalStartCompletion? completion)
+        => completion?.Kind switch
+        {
+            ExternalStartCompletionKind.Cancelled => ExecutionDisposition.Cancelled,
+            ExternalStartCompletionKind.ExecutionFailed => ExecutionDisposition.ExecutionFailed,
+            ExternalStartCompletionKind.Succeeded => ExecutionDisposition.None,
+            _ => ExecutionDisposition.Unknown,
+        };
 }

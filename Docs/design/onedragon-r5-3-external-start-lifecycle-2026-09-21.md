@@ -625,3 +625,37 @@ E1 流程启动的发送窗口内提交的节点操作被并发轮次按占用�
 | 21 | 重要 | D9 贯通仍不完整：`RawTerminal`／`ExecutionErrorCode` 未贯通到适配器可见结果 | **已修**：`MapAdmissionOutcome` 各分支与「核心回执补齐」路径均投影 `RawTerminal`／`ExecutionErrorCode`。**口径说明**：`SubmissionIdentity`／`SendSeq` 属 `AdmissionResult`／`ExternalStartAdmissionOutcome` 合同（D9），**不在** D1 的 `CommandResult` 字段清单内——`CommandResult` 层不重复承载，避免两套权威发送身份 |
 | 22 | 重要 | §24.4-2「主槽位释放」断言不足（Submission 关闭 ≠ 计容释放） | **已修**：断言终局操作**已迁出 `Active` 计容区**（`Zone != Active`）且当次快照中**不存在 `Active` 操作**（§24.1-3） |
 | 23 | 建议 | 静态接缝未还原原值（无条件置 null） | **已修**：保存并还原初始化前的原值 |
+
+### 24.26 落地登记：§24.4 生产组合根闭环夹具（第二批）（[新增·2026-09-21]）
+
+**A. 已覆盖场景（`R5CompositionRootAcceptanceTests` 扩充至 8 枚夹具；仍为「真实组装、仅替换外部传输」）**
+
+| 场景 | 断言 |
+|---|---|
+| §24.4-6 **大于 32 笔** | 33 轮闭环全部 `success`；`ext.task.start` 恰 33 次（无重发）；结束时**无任何 `Active` 计容操作**；台账 33 条均为 `Terminal` |
+| §24.8-3 **默认未注入路径（生产门仍关闭）** | `CommandExecutor` 不注入准入委托（＝当前生产默认）⇒ 走既有直启 ext 队列通道（旧词表「队列通道」文案保留）、**不产生任何仲裁操作、不写外部启动台账**（门关闭的可观测证据） |
+| §24.4-5 **终态落盘失败** | 台账置只读 ⇒「台账 Terminal」步失败：入口**不得假成功**、责任 `Pending`、**零重发**；`PendingTerminal` 已持久化（§24.12-6 在飞责任保留） |
+| §24.12-3② **未终结台账**（承上） | 恢复写权限后重启：属集合② ⇒ **只保留观察责任**（不得据此终局、不得重发） |
+| §24.12-3③ **台账已终态、Operation 未终局**（承上） | 恢复终态副本后再重启 ⇒ 恢复扫描按已持久化 `PendingTerminal`**补终局**（台账 Terminal＋Operation `TerminalCompleted`，全程零重发） |
+| §24.4-7 **冷启动** | ext 不可用＋IPC 不可达 ⇒ 接线态**禁止裸拉起、零发送**；核心给 `cold_start_required`、适配器按保守口径映射为对外不可考，责任 `Pending`（§14 细化前不得升格为确定拒绝） |
+| §24.4-7 **宿主关闭交错** | 受理后宿主关闭（租约释放）再送达权威终态 ⇒ **不得假成功、不得重发**；责任 `Pending`、台账保持未终结（由恢复/当前所有者承接） |
+
+**B. 本批发现并修复的实现缺口**
+
+- **§24.6-5 责任维缺口（组合根关闭交错直接产出）**：`SettleCompletionAsync` 在「租约不可用／Operations 记录缺失」等**结算无法执行**的路径上返回 `ResponsibilityState=None`（语义＝不适用），会让调用方把「责任未结清」误读为「无责任」。已修：这两条路径在**携带完整发送身份**时回显 `ResponsibilityState.Pending`＋`SubmissionIdentity`＋`SendSeq`＋`ExecutionDisposition=Unknown`（§24.6-5：发送结果未知／关联不足／持久化失败 ⇒ `Pending`）。
+
+**C. 仍未覆盖（登记；归后续批次或 owner 实机）**
+
+1. §24.4-7 其余交错：**授权后纪元变化**（含旧 epoch 拒绝/待对账）、**切监控模式**；
+2. §24.8-3 的**控制热键**在组合根层面的接线/未接线双向断言（组件级已有夹具覆盖）；
+3. §24.4-3 的「关闭前 `Reconciling` 断言」细分（本地等待取消 vs 权威取消）；
+4. owner 实机项（十入口点、后台触发器、R-8 远程五场景、`task.single.native` 复核、真实 User 目录切换）——按 §23.4 门禁并集保留。
+
+**D. 本批会诊（第二轮，gpt-5.6-sol／medium）与逐条处置**
+
+| # | 严重度 | 发现摘要 | 处置 |
+|---|---|---|---|
+| 24 | 阻断 | `SettleCompletionAsync` 的「结算无法执行」返回把**未登记**与**已登记但无法结算**混同（无条件 `Pending`），且会把已观察的取消/失败降级为不可考 | **已修（按可证明事实分流）**：请求身份＋完整发送身份（`submissionIdentity`＋`sendSeq≥1`）齐备 ⇒ 责任 `Pending` 并回显发送身份；**不齐备 ⇒ 维持 `None`**（不得把未知请求误标为有责任）。同时以 `DispositionOf` **保留完成层事实**（`Cancelled`／`ExecutionFailed`／`Succeeded`／`Unknown`＋原始终态词＋执行错误码＋证据来源），不再一律降为 `Unknown`（§24.6-2／§24.6-5） |
+| 25 | 重要 | >32 容量夹具只断言「无 `Active`」，未覆盖**同样计容**的 `TerminalPendingTransfer` | **已修**：断言 `Active` 与 `TerminalPendingTransfer` **双双为 0**（容量公式 `Active + TerminalPendingTransfer ≤ 32`，§24.1-3／§24.1-8） |
+| 26 | 重要 | 关闭交错夹具仅等「替身收到 `ext.task.start`」即释放租约，可能实际覆盖「尚未受理即释放」等其它分支 | **已修**：关闭前等待并断言「台账 `AcceptedPendingExecution`＋Submission 已关闭＋Operation `Accepted`」，确保交错发生在**受理链完成之后**（§24.4-7／§24.15） |
+| 27 | 重要 | 冷启动错误码断言过宽（`cold_start_required` 与 `result_unknown` 二选一） | **已修**：本夹具观察**适配器出口**，精确断言 `result_unknown`（不得泄漏核心层错误码）；并在夹具注释说明 `cold_start_required` 只由**接线态核心**产生，未接线冷启动走既有裸拉起语义（另有组件级夹具） |
