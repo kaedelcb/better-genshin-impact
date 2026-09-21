@@ -512,6 +512,9 @@
 1. **D6 两段式 `_gate`（§24.14-2／§24.18-2）**：**已落地**（§24.22-A：外部启动的启动/取证在门面锁外执行＋锁外并发不改变本笔结算，两枚夹具）；**仍余**：①**流程登记/节点执行**的锁外窗口——实测放开后 `TaskCenterSuccessorPathGateTests` 两条既有夹具转红（E1 启动发送窗口内提交的节点操作被并发轮次按占用冲突拒绝 ⇒ 节点操作停留 `Queued`、`sends=0`、运行收敛 `Unknown`），故须与「**在飞父操作（已发布发送责任、尚未结算）的占用/合并判定**」（§3.1／§4.2a／§24.1-5/7）一并调整，归 **B2-γ 批次**；②端口形状按 §24.14-1 收敛为 `ExternalStartReply`（`EarlyAccepted／Rejected／Unknown`）＋完成观察（＝`CompletionObserver` 的正式化）；③恢复扫描**四类集合**（含**集合②未终结台账记录**）接线，使「无权威证据时长期保守停驻」具备**持续观察/重绑入口**（§24.12-3／§24.14-6；对应 §24.21-B 阻断 2 残余与阻断 3）。
 2. **同批夹具**（§24.14-5／§24.18-5／§24.4-4）：`CompletionTask` 未完成时其他请求取得门面锁（**本批已补**）、终态先于接管/关闭的唯一顺序、接管失败后终态由当前所有者/恢复路径结算、本地取消与调用方退出后的观察责任移交、换主接续、重复结算与等待器单次释放、**真实回退 core 的 v2 普通 success 保持 `Accepted/Pending`**（需 §24.4 组合根的真实传输接缝）。
 3. **归 R5.3 取消链批次**：§24.11 全阶段矩阵的**本地取消**实现（入口取消 + 责任 `Pending` + 后台观察继续的分离语义）与 `ct` 贯通。
+4. **[更新·2026-09-21 批次八]** 本清单第 1 条（D6 残项）现状：**②端口形状**已按证据处置（§24.23-B：保留 `ExternalStartExecution`＋事后可剔除入口）；**③恢复扫描集合②/③**已落地（§24.23-A），集合①（未决 `Submission.Submitting`→`Reconciling`）与集合④（`conflict.pending` 不得被通用恢复改写）由既有 `RecoverAfterRestart` 承载并有既有夹具；**仅①流程登记/节点执行的锁外窗口**仍待 B2-γ（须与在飞父操作占用判定一并调整）。
+
+5. **[更正·2026-09-21 批次八·第二轮验证会诊]** 上条措辞收窄（避免与 §24.23-C 矛盾）：**集合②/③的「扫描识别＋责任保留」已落地**（§24.23-A）；其中**持续观察重绑/重新取证未完成**，由 §24.4 组合根批次（真实传输接缝到位后）承接（§24.23-C#13）；**端口形状**为 **owner 裁决项·未完成**（§24.23-B）。
 
 ### 24.22 落地登记：Batch B 收尾之四（两段式 `_gate`·外部启动锁外窗口）（[新增·2026-09-21]）
 
@@ -525,15 +528,60 @@
 
 - **阻断 6 的加固（§24.18-3 全维度）**：`DetectSendResponsibilityAdvanced` 扩展为逐项核对「①当前租约 `leaseId／ownerEpoch` 仍等于**占位基线**（锁内以值快照捕获，不信对象引用）；②同名操作的**请求状态**未被他人推进；③`submissionIdentity＋sendSeq` 在操作与 Submission 两侧仍是占位那一轮」。任一不成立 ⇒ 保守停驻且**零台账写入**。新增夹具 `ExternalStartSend_OwnershipChangedDuringSend_LateAcceptStopsBeforeLedgerWrite`（换主但发送身份未变 ⇒ `owner_or_lease_changed_during_send`＋责任 `Pending`＋台账 `Entries` 为空）与 `ExternalStartSend_ResponsibilityAdvancedDuringSend_LateAcceptStopsBeforeLedgerWrite`（换主恢复把本笔转 `Reconciling` ⇒ `send_responsibility_advanced_during_send`）。
 - **残余（如实登记，非本批可闭合）**：本复核（读租约）与随后 `TakeoverPersist`（**独立文件**）之间不存在跨文件原子边界，跨进程处理者仍可能在此缝隙内推进；该缝隙按 §24.12 恢复集合②/③（未终结台账、台账已终态而 Operation 未终局）与冲突裁决处置。若后续要求更强的跨文件原子协议，需 owner 级裁决（本批不擅自引入新的事务机制）。
+
+### 24.23 落地登记：恢复扫描集合②/③ 与「早期层端口形状」处置（[Batch B 收尾之五·新增 2026-09-21]）
+
+**A. 落地事实（恢复扫描 = §24.12-3 集合②/③；D6 残项）**
+
+| 落地项 | 实现位置 | 条款 |
+|---|---|---|
+| **台账扫描钩子**：按完整发送身份返回「是否已终态」；不可读/未配置＝**不可确认**（保守停驻，不得当作「无记录」） | `AdmissionHooks.TakeoverLedgerScan`／`TakeoverLedgerScan`／`TakeoverLedgerFact` | §24.12-3／§24.16-3 |
+| **集合②未终结台账**：**保留观察责任**——不改状态、不写终态载体、不释放占用、不重发（无可用查询依据时长期保守停驻） | `ArbitrationAdmissionService.RecoverExternalStartObservationsAsync` | §24.12-3①／§24.16-3／§24.20-B |
+| **集合③台账已终态、Operation 未终局**：用**已持久化 `PendingTerminal`** 补终局（`Kind` 为唯一类别判据；`Unknown`／载荷缺失**不驱动**） | 同上 ＋ `CompletionFromPendingTerminal` | §24.12-3③／§24.15／§24.19-2 |
+| 其余不一致（台账终态缺 `PendingTerminal`／租约侧已终态而台账未终结／台账孤儿）**只计数登记**，不改动任何责任 | 同上（报告 `ExternalStartRecoveryReport`） | §24.12-6／§24.2-2″（禁止静默释放或补造事实） |
+| **冲突待决记录一律跳过**（`conflict.pending=true`）——即使台账已终态、本地已有 `PendingTerminal`，也**不走普通完成结算**（避免绕过裁决审计并误释放占用） | 同上（报告项 `ConflictPendingSkipped`） | §24.12-3④／§24.15 冲突行／§24.2-2″ |
+| **补终局不得补造载荷**：`PendingTerminal` 缺原始终态词/观察时点/证据来源，或 `Failed` 缺执行错误码 ⇒ **不驱动结算**（只登记） | `CompletionFromPendingTerminal` | §24.2-2／§24.6-2／§24.12-6 |
+| 报告成功判据＝**责任已结清**（`ResponsibilityState.Settled`），不得仅凭结果维（`Cancelled`／`ExecutionFailed`）记成功 | 同上 | §24.6-5／§24.15 |
+| 宿主接线：门面组装完成（心跳先行）后执行一次恢复对齐；**异常只记日志、绝不影响启动**；锁内不得 `await`（锁外执行） | `TaskCenterHost.EnsureAdmissionFacadeAsync`／`CompleteAdmissionInitAsync` | §24.12-3／§24.14-6 |
+| 夹具（+3） | 门面级 `RecoverObservations_UnterminatedLedger_KeepsResponsibilityOnly`／`RecoverObservations_LedgerTerminalButOperationNotFinal_TerminalizesFromPendingTerminal`；宿主级 `Recovery_UnterminatedLedger_KeepsObservationResponsibility` | §24.12-3（集合②/③ 的行为证据） |
+
+**B. 「早期层端口形状」＝待 owner 裁决项（对应 §24.21-C-1②；本批**不**视为已处置完成）**
+
+- §24.14-1 要求适配层 `StartAsync` 返回 `ExternalStartReply`（`EarlyAccepted(jobId, CompletionTask)`／`Rejected`／`Unknown`），且本仓实现对 `EarlyAccepted` **强校验非空句柄**（无句柄构造即抛）。
+- 但 **v2（E3 现网阻塞协议）不携带早期句柄**：发送成功时 `JobId` 为空，而 §24.4-4 明文要求「**v2 发送成功：入口 success**，但台账保持未终局」。若把端口返回类型**整体**收敛为 `ExternalStartReply`，该路径只能落 `Unknown`（§24.14-1 末句）⇒ 对外 `result_unknown`，与 §24.4-4 直接冲突（会回归既有 v2 启动语义）。
+- 故本批**保留**端口类型 `ExternalStartExecution`（其 `Accepted` 允许空句柄，正是 §24.7-2「无 JobId 路径必须登记替代查询依据」的载体），而**早期层回执类型 `ExternalStartReply` 在 ext 队列通道内部真实承载并经夹具断言**（批次六）。
+- **登记为 owner 裁决项**（[验证会诊阻断处置]）：冻结稿 §24.14-1 与本仓已验收的 §24.4-4 在 v2 阻塞协议上**互相冲突**，施工方无权以登记覆盖冻结合同，故本项**未完成**，须 owner 二选一：**(甲)** 修订 §24.14-1（为阻塞式协议增设「无句柄的已受理」变体，或明文声明 v2 结论归完成层）后本批按新合同收敛端口；**(乙)** 维持现状（端口 `ExternalStartExecution`＋`ExternalStartReply` 在 ext 队列通道内部承载），并在 §23.4 门禁并集登记该差异为「已书面接受」。任一选择前，**生产外部启动接线保持关闭**。
+
+**C. 本批会诊（批次八：gpt-5.6-sol／medium，一轮＋第二轮验证）与逐条处置**
+
+| # | 严重度 | 发现摘要 | 处置 |
+|---|---|---|---|
+| 10 | 阻断 | 恢复扫描未排除 `conflict.pending` ⇒ 冲突待决记录若同时具备台账 Terminal 与 `PendingTerminal`，会被普通结算绕过裁决审计 | **已修**：分类阶段遇 `ConflictPending` 一律跳过并计数（`ConflictPendingSkipped`）；夹具 `RecoverObservations_ConflictPendingRecord_IsSkippedNotSettled` |
+| 11 | 阻断 | 端口形状未按 §24.14-1 收敛，登记不能替代冻结合同 | **认领为 owner 裁决项**（见 §24.23-B：§24.14-1 与 §24.4-4 冲突，施工方无权自行覆盖）；本项**未完成**，生产接线保持关闭 |
+| 12 | 重要 | `CompletionFromPendingTerminal` 为缺失载荷补造事实（空证据来源补字符串、`Failed` 缺错误码补 `"unknown"`） | **已修**：字段不完整即返回 `null`（不驱动结算）；夹具 `RecoverObservations_IncompletePendingPayload_DoesNotTerminalize` |
+| 13 | 重要 | 集合②只有计数，未提供**持续观察重绑**；报告成功判据未看责任是否结清 | **部分处置**：`TakeoverLedgerFact` 增加 `JobId`（供重绑/重新取证使用）；报告成功判据改为**责任已结清**（`ResponsibilityState.Settled`）。**持续观察重绑（重新查询/重订阅）仍归 §24.4 组合根批次**（真实传输接缝到位后接线）；本批**只主张「识别＋保留责任」**，登记见 §24.21-C-1③（更新条目） |
+| 14 | 重要 | 宿主恢复异常路径未用 `TryLog`（日志委托抛异常会逸出并使初始化失败）；`ct` 未按约定传播 | **已修**：改用 `TryLog` ＋ `ct.ThrowIfCancellationRequested()` |
+| 15 | 重要 | 夹具未覆盖冲突待决旁路与载荷不完整路径 | **已修**：+2 夹具（见 #10／#12） |
+| 16 | 阻断 | **第二轮验证**：`SettleCompletionAsync` 自身对 `ConflictPending` 记录放行（设计原为裁决路径而设）⇒ 恢复扫描「检查后置冲突」的竞态仍可绕过裁决审计 | **已修（本轮）**：`SettleCompletionAsync` 新增 `adjudicationAuthorized`（默认 `false`）——冲突待决记录**只**允许裁决入口在**先声明方向**后放行（`AdjudicateConflictAsync` 内部传 `true`），其余调用者一律 `conflict_requires_adjudication` 保守停驻 |
+| 17 | 重要 | **第二轮验证**：载荷不完整路径未登记（`continue` 静默消失）；`ExecutionFailedWith` 仍留 `"unknown"` 合成回退 | **已修（本轮）**：新增报告项 `IncompletePendingPayload`（＋`ToString` 输出）并删除合成回退；夹具断言 `IncompletePendingPayload==1` |
+| 18 | 重要 | **第二轮验证**：`ct` 仅在调用前检查、未传入恢复过程 | **已修（本轮）**：门面 `RecoverExternalStartObservationsAsync(CancellationToken ct = default)` 在分类前与逐笔结算间检查；宿主透传 `ct` |
+| 19 | 重要 | **第二轮验证**：文档收窄不一致（§24.23-A／§24.21-C-1④ 仍称「集合②/③已落地」） | **已修（本轮）**：两处均收窄为「**扫描识别＋责任保留已落地；持续观察重绑未完成**（§24.4 组合根批次承接）」；另修正 §24.22 与 §24.23 的章节错位（批次七的 B/C 独立为 §24.24） |
+### 24.24 批次七补记：实测反例与会诊处置（[新增·2026-09-21]；内容归属 §24.22，因登记次序错位而独立成节）
+
+> **[更正·2026-09-21]** §24.22-A 表的两行（「锁外并发安全」与「夹具：外部启动发送窗口…」）此前误落在 §24.23-C 表尾；本轮已移回本节下表。
+
+| 落地项（§24.22-A 补） | 实现位置 | 条款 |
+|---|---|---|
 | 锁外并发安全：锁外期间其他请求可完成准入；返回后按既有写入时校验（`MutateHandoffLatest` 的 owner/epoch/revision）与逐回调发送身份校验结算——**换主/接管时旧身份写入一律响亮拒绝** | 同上 ＋ 既有 `Checks` | §24.18-3／§24.18-4（证据＝既有 `OwnershipChanged_OldFlowWrite_LeaseStaleGeneration`、`StateAdvancedExternally_OldRoundDoesNotOverwrite`） |
 | 夹具：外部启动发送窗口内另一笔请求可完成准入（旧实现超时失败）＋边界对照（流程登记仍串行） | `ArbitrationAdmissionServiceTests.ExternalStartSend_ReleasesGate_OtherRequestAdmittedDuringSend`／`FlowRegistrationSend_KeepsGate_SerializedUntilSendReturns` | §24.18-5（部分） |
 
-**B. 实测反例（登记为流程登记/节点执行放开的前置条件）**：把锁外窗口无条件放开后，`TaskCenterSuccessorPathGateTests` 的
+**A. 实测反例（登记为流程登记/节点执行放开的前置条件）**：把锁外窗口无条件放开后，`TaskCenterSuccessorPathGateTests` 的
 `AcceptedReceipt_PersistedBeforeSubmissionClose` 与 `ConcurrentRunWriteDuringSend_MergeRefused_ConvergesUnknown` 转红——
 E1 流程启动的发送窗口内提交的节点操作被并发轮次按占用冲突拒绝（节点操作停留 `Queued`、`sends=0`、运行收敛 `Unknown`）。
 结论：该两类的锁外窗口**不能**单独放开，须与「在飞父操作占用/合并判定」一并调整（见 §24.21-C-1①）。
 
-**C. 本批会诊（gpt-5.6-sol／medium，一轮）与逐条处置**
+
+**B. 本批会诊（批次七：gpt-5.6-sol／medium，一轮）与逐条处置**
 
 | # | 严重度 | 发现摘要 | 处置 |
 |---|---|---|---|

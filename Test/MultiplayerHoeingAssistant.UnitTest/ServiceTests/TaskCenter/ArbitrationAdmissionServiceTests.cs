@@ -3485,6 +3485,215 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.NotNull(await second.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
+    /// <summary>
+    /// **恢复扫描不得绕过冲突裁决（§24.12-3④）**：`conflict.pending=true` 的记录即使台账已终态、本地已有
+    /// `PendingTerminal`，也**只登记计数**（既不普通结算、也不改写状态/占用）。
+    /// </summary>
+    [Fact]
+    public async Task RecoverObservations_ConflictPendingRecord_IsSkippedNotSettled()
+    {
+        ExternalStartLedger? ledgerRef = null;
+        var (svc, store, ledger, hooks) = BuildFacade();
+        ledgerRef = ledger;
+        var r = Req(ns: "v2", workflow: "group:g1", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(r)).Kind);
+        var accepted = FindOp(r.RequestIdentity)!;
+        var observedAt = _now.AddSeconds(-5);
+        var lease = store.Read().File!.Lease!;
+        Assert.True(store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var op = file.Handoff!.Operations.First(o => string.Equals(o.RequestIdentity, r.RequestIdentity, StringComparison.Ordinal));
+            op.RequestState = OperationRequestState.Accepted;
+            op.ConflictPending = true;   // 冲突待决（归裁决入口）
+            op.PendingTerminal = new PendingTerminal
+            {
+                Kind = ExecutionResultKind.Succeeded, RawTerminal = "completed", JobId = "job-conflict",
+                EvidenceSource = "ext:task.event", SubmissionIdentity = accepted.SubmissionIdentity,
+                SendSeq = accepted.LastSendSeq, OperationType = OperationType.ExternalStart,
+                ObservedAtUtc = observedAt, RecordedAtUtc = observedAt,
+            };
+            return null;
+        }).Success);
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true,
+            [new TakeoverLedgerFact(accepted.SubmissionIdentity, accepted.LastSendSeq, Terminal: true, JobId: "job-conflict")]);
+
+        var report = await svc.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(1, report.ConflictPendingSkipped);
+        Assert.Equal(0, report.TerminalizationCompleted);
+        var after = FindOp(r.RequestIdentity)!;
+        Assert.True(after.ConflictPending);                                     // 冲突待决标记保留
+        Assert.Equal(OperationRequestState.Accepted, after.RequestState);       // 未被普通结算推进
+        Assert.Null(after.ExecutionResult);                                     // 未补造终态事实
+
+        // **旁路封堵（第三轮验证会诊）**：直接调用**公开**结算入口也不能绕过「未声明裁决方向」——
+        // 授权判据取自本快照内持久化的 `ConflictAdjudicationClaim`，任何调用方都无法用参数伪造放行。
+        var direct = await svc.SettleCompletionAsync(r.RequestIdentity, accepted.SubmissionIdentity, accepted.LastSendSeq,
+            ExternalStartCompletion.SucceededWith("completed", "ext:task.event", observedAt, "job-conflict"),
+            "ext:task.event", acceptanceRunId: null, acceptanceJobId: "job-conflict");
+        Assert.Equal("conflict_requires_adjudication", direct.ReasonCode);
+        Assert.Equal(ResponsibilityState.Pending, direct.ResponsibilityState);
+        var afterDirect = FindOp(r.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.Accepted, afterDirect.RequestState);
+        Assert.Null(afterDirect.ExecutionResult);
+    }
+
+    /// <summary>
+    /// **恢复补终局不得补造载荷**（§24.2-2／§24.12-6）：`PendingTerminal` 缺证据来源（或 `Failed` 缺执行错误码）时
+    /// **不驱动结算**——只登记，不写终局、不释放责任。
+    /// </summary>
+    [Fact]
+    public async Task RecoverObservations_IncompletePendingPayload_DoesNotTerminalize()
+    {
+        var (svc, store, ledger, hooks) = BuildFacade();
+        var r = Req(ns: "v2", workflow: "group:g1", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(r)).Kind);
+        var accepted = FindOp(r.RequestIdentity)!;
+        var observedAt = _now.AddSeconds(-5);
+        var lease = store.Read().File!.Lease!;
+        Assert.True(store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var op = file.Handoff!.Operations.First(o => string.Equals(o.RequestIdentity, r.RequestIdentity, StringComparison.Ordinal));
+            op.RequestState = OperationRequestState.Accepted;
+            op.PendingTerminal = new PendingTerminal
+            {
+                Kind = ExecutionResultKind.Failed, RawTerminal = "failed", JobId = "job-incomplete",
+                EvidenceSource = "",                       // 载荷缺失：证据来源为空
+                ExecutionErrorCode = null,                 // 且失败结果缺执行错误码
+                SubmissionIdentity = accepted.SubmissionIdentity, SendSeq = accepted.LastSendSeq,
+                OperationType = OperationType.ExternalStart, ObservedAtUtc = observedAt, RecordedAtUtc = observedAt,
+            };
+            return null;
+        }).Success);
+        Assert.True(ledger.MarkTerminal(accepted.SubmissionIdentity, accepted.LastSendSeq, "failed", observedAt,
+            rawTerminal: "failed", executionErrorCode: "E_X", jobId: "job-incomplete",
+            operationType: OperationType.ExternalStart, terminalEvidenceSource: "ext:task.event").Success);
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true,
+            [new TakeoverLedgerFact(accepted.SubmissionIdentity, accepted.LastSendSeq, Terminal: true, JobId: "job-incomplete")]);
+
+        var report = await svc.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(0, report.TerminalizationCompleted);
+        Assert.Equal(0, report.TerminalizationFailed);   // 不驱动 ⇒ 既不算成功也不算失败
+        Assert.Equal(1, report.IncompletePendingPayload); // 必须**如实登记**（不得静默消失）
+        var after = FindOp(r.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.Accepted, after.RequestState);   // 责任保留、未终局
+    }
+
+    // ── 恢复扫描集合②/③（R5.3 §24.12-3；[Batch B 收尾之五]）────────────────────────────────────
+
+    /// <summary>
+    /// **集合②未终结台账**：恢复扫描只**保留观察责任**——不改状态、不写终态载体、不释放占用、不重发。
+    /// </summary>
+    [Fact]
+    public async Task RecoverObservations_UnterminatedLedger_KeepsResponsibilityOnly()
+    {
+        var (svc, _, ledger, hooks) = BuildFacade();
+        var r = Req(ns: "v2", workflow: "group:g1", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(r)).Kind);
+        var op = FindOp(r.RequestIdentity)!;
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true,
+            [new TakeoverLedgerFact(op.SubmissionIdentity, op.LastSendSeq, Terminal: false)]);
+
+        var report = await svc.RecoverExternalStartObservationsAsync();
+
+        Assert.False(report.LedgerUnreadable);
+        Assert.Equal(1, report.ObservationKept);
+        Assert.Equal(0, report.TerminalizationCompleted);
+        var after = FindOp(r.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.Accepted, after.RequestState);   // 责任保留（未改写）
+        Assert.Null(after.PendingTerminal);                                 // 无权威终态 ⇒ 不得写终态载体
+        Assert.Null(after.ExecutionResult);
+        Assert.Contains(ledger.Read().File!.Entries, e => e.State == LedgerEntryState.AcceptedPendingExecution);
+    }
+
+    /// <summary>
+    /// **集合③台账已终态、Operation 未终局**：恢复扫描用**已持久化 `PendingTerminal`** 补终局
+    /// （§24.15 顺序：台账 Terminal 幂等 → 关闭 → Operation 终局），不得依赖重新取证、不得改写成别的结果。
+    /// </summary>
+    [Fact]
+    public async Task RecoverObservations_LedgerTerminalButOperationNotFinal_TerminalizesFromPendingTerminal()
+    {
+        ExternalStartLedger? ledgerRef = null;
+        var (svc, store, ledger, hooks) = BuildFacade(h =>
+        {
+            h.TakeoverTerminalPersist = (sub, seq, evidence, observedAt, raw, code, jobId, source) =>
+            {
+                var m = ledgerRef!.MarkTerminal(sub, seq, evidence, observedAt, raw, code,
+                    OperationType.ExternalStart, jobId, source);
+                return m.Success ? null : m.Reason;
+            };
+            h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, code, jobId, source, observedAt) =>
+            {
+                var read = ledgerRef!.Read();
+                if (!read.Valid || read.File is null) return false;
+                var e = read.File.Entries.FirstOrDefault(x =>
+                    string.Equals(x.SubmissionIdentity, sub, StringComparison.Ordinal) && x.SendSeq == seq);
+                return e is { State: LedgerEntryState.Terminal }
+                       && string.Equals(e.RawTerminal, raw, StringComparison.Ordinal)
+                       && string.Equals(e.ExecutionErrorCode, code, StringComparison.Ordinal)
+                       && string.Equals(e.JobId, jobId, StringComparison.Ordinal)
+                       && string.Equals(e.TerminalEvidenceSource, source, StringComparison.Ordinal)
+                       && e.TerminalObservedAtUtc == observedAt;
+            };
+            h.TakeoverJobIdRead = (sub, seq) =>
+            {
+                var read = ledgerRef!.Read();
+                if (!read.Valid) return LedgerHandleProbe.Unreadable();
+                var e = read.File?.Entries.FirstOrDefault(x =>
+                    string.Equals(x.SubmissionIdentity, sub, StringComparison.Ordinal) && x.SendSeq == seq);
+                return e is null || string.IsNullOrEmpty(e.JobId)
+                    ? LedgerHandleProbe.Absent()
+                    : LedgerHandleProbe.Present(e.JobId);
+            };
+        });
+        ledgerRef = ledger;
+
+        var r = Req(ns: "v2", workflow: "group:g1", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(r)).Kind);
+        var accepted = FindOp(r.RequestIdentity)!;
+        var submission = accepted.SubmissionIdentity;
+        var seq = accepted.LastSendSeq;
+        var observedAt = _now.AddSeconds(-5);
+
+        // 造景：权威终态已取得（PendingTerminal/ExecutionResult 已落盘）、台账已 Terminal，但 Operation 仍 Accepted。
+        var lease = store.Read().File!.Lease!;
+        var seeded = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var op = file.Handoff!.Operations.First(o => string.Equals(o.RequestIdentity, r.RequestIdentity, StringComparison.Ordinal));
+            op.RequestState = OperationRequestState.Accepted;
+            op.ExecutionResult = new ExecutionResult
+            {
+                Kind = ExecutionResultKind.Succeeded, RawTerminal = "completed", JobId = "job-fin",
+                EvidenceSource = "ext:task.event", SubmissionIdentity = submission, SendSeq = seq, ObservedAtUtc = observedAt,
+            };
+            op.PendingTerminal = new PendingTerminal
+            {
+                Kind = ExecutionResultKind.Succeeded, RawTerminal = "completed", JobId = "job-fin",
+                EvidenceSource = "ext:task.event", SubmissionIdentity = submission, SendSeq = seq,
+                OperationType = OperationType.ExternalStart, ObservedAtUtc = observedAt, RecordedAtUtc = observedAt,
+            };
+            return null;
+        });
+        Assert.True(seeded.Success, "造景写入失败：" + seeded.Reason);
+        Assert.True(ledger.MarkTerminal(submission, seq, "completed", observedAt, rawTerminal: "completed",
+            jobId: "job-fin", operationType: OperationType.ExternalStart,
+            terminalEvidenceSource: "ext:task.event").Success, "造景前置：台账终态写入失败");
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true,
+            [new TakeoverLedgerFact(submission, seq, Terminal: true)]);
+
+        var report = await svc.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(1, report.TerminalizationCompleted);
+        var repaired = FindOp(r.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.TerminalCompleted, repaired.RequestState);   // 终局已补齐
+        Assert.Equal(ExecutionResultKind.Succeeded, repaired.ExecutionResult!.Kind);
+        Assert.Equal("completed", repaired.ExecutionResult.RawTerminal);
+        Assert.Equal("job-fin", repaired.ExecutionResult.JobId);
+        Assert.Null(ReadLease().File!.Handoff!.Submission);                             // Submission 已关闭
+        Assert.Equal(LedgerEntryState.Terminal, ledger.Read().File!.Entries.Single().State);
+    }
+
     // ── 两段式 `_gate`（R5.3 §24.18-2／§24.14-2；[Batch B 收尾之四]）──────────────────────────────
 
     /// <summary>

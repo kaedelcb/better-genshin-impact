@@ -209,12 +209,54 @@ public enum LedgerHandleState
     Present = 2,
 }
 
-/// <summary>台账句柄读取结论（`TakeoverJobIdRead` 返回；三态判别式，避免 fail-open）。</summary>
-public sealed record LedgerHandleProbe(LedgerHandleState State, string? JobId)
+    /// <summary>台账句柄读取结论（`TakeoverJobIdRead` 返回；三态判别式，避免 fail-open）。</summary>
+    public sealed record LedgerHandleProbe(LedgerHandleState State, string? JobId)
 {
     public static LedgerHandleProbe Unreadable() => new(LedgerHandleState.Unreadable, null);
     public static LedgerHandleProbe Absent() => new(LedgerHandleState.Absent, null);
     public static LedgerHandleProbe Present(string jobId) => new(LedgerHandleState.Present, jobId);
+}
+
+/// <summary>
+/// **外部启动台账扫描结论**（`AdmissionHooks.TakeoverLedgerScan` 返回；R5.3 §24.12-3 恢复集合②/③；
+/// [Batch B 收尾之五] 新增）：`Readable=false`＝台账不可读/损坏 ⇒ 恢复扫描**保守停驻**（不推导、不释放）。
+/// </summary>
+public sealed record TakeoverLedgerScan(bool Readable, IReadOnlyList<TakeoverLedgerFact> Facts, string? Detail = null)
+{
+    public static TakeoverLedgerScan Unreadable(string? detail = null) => new(false, [], detail ?? "ledger_unreadable");
+}
+
+/// <summary>
+/// **台账记录事实**（恢复扫描只需「完整发送身份 ＋ 是否已终态 ＋ 可查询句柄」；终态**载荷**一律以本地持久化的
+/// `PendingTerminal` 为准，不得按原始终态词猜类别）。`JobId` 供**持续观察/重新取证**使用（§24.5-2／§24.16-3）。
+/// </summary>
+public sealed record TakeoverLedgerFact(string SubmissionIdentity, int SendSeq, bool Terminal, string? JobId = null);
+
+/// <summary>**外部启动观察恢复报告**（R5.3 §24.12-3 集合②/③；[Batch B 收尾之五] 新增）。</summary>
+public sealed record ExternalStartRecoveryReport(
+    bool LedgerUnreadable,
+    int ObservationKept,
+    int TerminalizationCompleted,
+    int TerminalizationFailed,
+    int TerminalWithoutPendingTerminal,
+    int LeaseTerminalButLedgerOpen,
+    int OrphanLedgerEntries,
+    int ConflictPendingSkipped = 0,
+    int IncompletePendingPayload = 0)
+{
+    public bool AnythingReported =>
+        LedgerUnreadable || ObservationKept > 0 || TerminalizationCompleted > 0 || TerminalizationFailed > 0
+        || TerminalWithoutPendingTerminal > 0 || LeaseTerminalButLedgerOpen > 0 || OrphanLedgerEntries > 0
+        || ConflictPendingSkipped > 0 || IncompletePendingPayload > 0;
+
+    public override string ToString()
+        => LedgerUnreadable
+            ? "台账不可读（保守停驻：责任保留、不释放、不重发）"
+            : "观察中保留 " + ObservationKept + "；终局补写成功 " + TerminalizationCompleted + "／失败 "
+              + TerminalizationFailed + "；台账终态缺 PendingTerminal " + TerminalWithoutPendingTerminal
+              + "；租约/台账终局不一致 " + LeaseTerminalButLedgerOpen + "；台账孤儿 " + OrphanLedgerEntries
+              + "；冲突待决（归裁决入口） " + ConflictPendingSkipped + "；载荷不完整（不驱动终局） "
+              + IncompletePendingPayload;
 }
 
 /// <summary>
@@ -264,6 +306,12 @@ public sealed class AdmissionHooks
     /// `Unreadable`（读取失败/损坏/不可确认）**不得**与 `Absent`（读取成功但无句柄）混淆：前者必须保守停驻。
     /// </summary>
     public Func<string, int, LedgerHandleProbe>? TakeoverJobIdRead { get; set; }
+    /// <summary>
+    /// **外部启动台账扫描**（R5.3 §24.12-3 恢复集合②/③；[Batch B 收尾之五] 新增）：返回**完整发送身份**维度的
+    /// 台账记录集合（至少含 `submissionIdentity`／`sendSeq`／是否已终态）。`Readable=false`＝台账不可读/损坏
+    /// ⇒ 恢复扫描**保守停驻**（不推导、不释放）。未配置＝不可读（不得当作「无记录」）。
+    /// </summary>
+    public Func<TakeoverLedgerScan>? TakeoverLedgerScan { get; set; }
     /// <summary>
     /// **权威未受理观察可信性校验**（R5.3 §24.2-2″；[第五轮验证会诊阻断处置] 新增）：
     /// 由可信观察层提供校验器——返回 `null`＝来源可信；非 `null`＝拒绝原因。
@@ -2166,6 +2214,15 @@ public sealed class ArbitrationAdmissionService
             // [Batch B 续] 冲突裁决里的「曾受理」分支：既有拒绝（`TerminalRejected`/`RetryableRejected`/墓碑）之后
             // 才取得的权威终态同样必须经本入口结算——否则冲突修正无路可走（既有拒绝本体不改写，仅作审计）。
             var conflicted = op.ConflictPending;
+            // [验证会诊阻断处置·第三轮] **冲突待决记录不得经普通完成结算**（§24.12-3④／§24.2-2″／§24.15 冲突行）：
+            // 授权判据**不看调用方参数、只看本快照内持久化的裁决方向声明**——`ConflictAdjudicationClaim` 只能由
+            // `ClaimAdjudicationAsync` 在裁决入口内写入（`ResolvedAcceptedTerminal`）。因此任何外部/新增调用者
+            // （含恢复扫描、对账转派）都无法用参数伪造放行，只会得到保守停驻。
+            if (conflicted && !string.Equals(
+                    op.ConflictAdjudicationClaim, nameof(ConflictResolutionKind.ResolvedAcceptedTerminal),
+                    StringComparison.Ordinal))
+                return LocatedStop(requestIdentity, op, "conflict_requires_adjudication",
+                    "冲突待决记录必须经裁决入口（先声明裁决方向）结算；不得走普通完成结算（保守停驻、责任保留）。");
             if (op.RequestState is not (OperationRequestState.Accepted or OperationRequestState.Reconciling) && !conflicted)
                 return LocatedStop(requestIdentity, op, "not_accepted",
                     "操作不在可结算状态（完成结算仅对已受理/待对账操作）。");
@@ -2715,7 +2772,7 @@ public sealed class ArbitrationAdmissionService
             var claimResult = await ClaimAdjudicationAsync(requestIdentity, submissionIdentity, sendSeq, resolution).ConfigureAwait(false);
             if (claimResult is not null) return claimResult;
             var settled = await SettleCompletionAsync(requestIdentity, submissionIdentity, sendSeq, terminalEvidence,
-                evidenceSource, null, terminalEvidence.JobId).ConfigureAwait(false);
+                evidenceSource, null, terminalEvidence.JobId).ConfigureAwait(false);   // 授权＝上一行已声明的裁决方向
             if (settled.ResponsibilityState != ResponsibilityState.Settled) return settled;
         }
 
@@ -3918,6 +3975,153 @@ public sealed class ArbitrationAdmissionService
            && string.Equals(pending.SuspendedRunIdentity, request.RunBinding ?? "", StringComparison.Ordinal)
            && string.Equals(pending.TargetEpoch, targetEpoch, StringComparison.Ordinal)
            && pending.Phase == HandoffPhase.RestorePending;
+
+    /// <summary>
+    /// **外部启动观察恢复（R5.3 §24.12-3 集合②/③；[Batch B 收尾之五] 新增）**：进程重启/接管后按**完整发送身份**
+    /// （`submissionIdentity＋sendSeq`）把本地租约与外部启动台账对齐：
+    /// ①**集合②未终结台账**：**保留观察责任与占用**——不写终态、不释放、不重发（无可用查询依据时长期保守停驻，
+    ///   §24.16-3「不可查询时保持 Unknown 且不释放占用」）；
+    /// ②**集合③台账已终态、本地 Operation 未终局**：用**已持久化的 `PendingTerminal`**（`Kind`／原词／错误码／
+    ///   句柄／证据来源／观察时点）驱动 `SettleCompletionAsync` 补终局（§24.15 唯一顺序；`Unknown`／载荷缺失不驱动）；
+    /// ③其余不一致（台账终态但缺 `PendingTerminal`／租约侧已终态而台账未终结／台账孤儿记录）**只登记计数**，
+    ///   不改变任何责任（禁止静默释放或补造事实）。
+    /// **锁边界**：单次权威串行快照完成分类与待补清单后**释放 `_gate`**，再逐笔调用自取锁的 `SettleCompletionAsync`
+    /// （SemaphoreSlim 不可重入）；除集合③补终局外不产生任何状态改动。台账不可读/未配置扫描 ⇒ 保守停驻。
+    /// </summary>
+    public async Task<ExternalStartRecoveryReport> RecoverExternalStartObservationsAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (_hooks.TakeoverLedgerScan is not { } scanHook)
+            return new ExternalStartRecoveryReport(true, 0, 0, 0, 0, 0, 0);
+        TakeoverLedgerScan scan;
+        try
+        {
+            scan = scanHook();
+        }
+        catch (Exception)
+        {
+            return new ExternalStartRecoveryReport(true, 0, 0, 0, 0, 0, 0);   // 读取失败＝不可确认（保守停驻）
+        }
+        if (!scan.Readable) return new ExternalStartRecoveryReport(true, 0, 0, 0, 0, 0, 0);
+
+        var kept = 0;
+        var completed = 0;
+        var failed = 0;
+        var noPending = 0;
+        var mismatch = 0;
+        var orphans = 0;
+        var conflictPendingSkipped = 0;
+        var incompletePayload = 0;
+        var pendingSettlements = new List<(string RequestIdentity, PendingTerminal Pending, ExternalStartCompletion Completion)>();
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var ops = _store.Read().File?.Handoff?.Operations;
+            if (ops is null) return new ExternalStartRecoveryReport(false, 0, 0, 0, 0, 0, 0);
+            foreach (var fact in scan.Facts)
+            {
+                var op = ops.FirstOrDefault(o => o is not null
+                    && string.Equals(o.SubmissionIdentity, fact.SubmissionIdentity, StringComparison.Ordinal)
+                    && o.LastSendSeq == fact.SendSeq);
+                if (op is null)
+                {
+                    orphans++;   // 台账孤儿（本地无对应发送轮次）：只登记，不删除台账记录
+                    continue;
+                }
+                // §24.12-3④（[验证会诊阻断处置]）：**冲突待决**记录的结算/审计一律归冲突裁决入口
+                // （`AdjudicateConflictAsync`）——恢复扫描**不得**走普通完成结算（否则会绕过审计并可能释放占用）。
+                if (op.ConflictPending)
+                {
+                    conflictPendingSkipped++;
+                    continue;
+                }
+                if (!fact.Terminal)
+                {
+                    if (op.RequestState is OperationRequestState.TerminalCompleted or OperationRequestState.TerminalRejected)
+                    {
+                        mismatch++;   // 租约侧已终局而台账未终结：保留双方事实，待冲突裁决
+                        continue;
+                    }
+                    kept++;   // 集合②：保留观察责任（禁止超时或重启转终局、禁止重发）
+                    continue;
+                }
+                if (op.RequestState == OperationRequestState.TerminalCompleted) continue;
+                if (op.PendingTerminal is not { } pending)
+                {
+                    noPending++;   // 台账已终态但无 PendingTerminal：保持责任、需重新取证（§24.12-6）
+                    continue;
+                }
+                var completion = CompletionFromPendingTerminal(pending);
+                if (completion is null)
+                {
+                    // `Unknown`／载荷不完整 ⇒ 不得驱动终局（§24.19-2／§24.12-6），且必须**如实登记**（不得静默消失）。
+                    incompletePayload++;
+                    continue;
+                }
+                pendingSettlements.Add((op.RequestIdentity, pending, completion));
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        foreach (var item in pendingSettlements)
+        {
+            ct.ThrowIfCancellationRequested();   // 取消＝停止后续补终局（已完成的保留；未完成的负责仍保留）
+            try
+            {
+                var result = await SettleCompletionAsync(
+                    item.RequestIdentity, item.Pending.SubmissionIdentity, item.Pending.SendSeq, item.Completion,
+                    item.Pending.EvidenceSource, acceptanceRunId: null, acceptanceJobId: item.Pending.JobId)
+                    .ConfigureAwait(false);
+                // [验证会诊重要项处置] **成功判据＝责任已结清**（§24.6-5）：仅凭结果维（`Cancelled`／
+                // `ExecutionFailed` 等）会把「台账/关闭/终局任一步失败但结果维保留」误记为补终局成功。
+                if (result.ResponsibilityState == ResponsibilityState.Settled
+                    && result.Kind is AdmissionResultKind.Accepted or AdmissionResultKind.Cancelled
+                        or AdmissionResultKind.ExecutionFailed or AdmissionResultKind.TerminalRejected)
+                    completed++;
+                else
+                    failed++;
+            }
+            catch (Exception)
+            {
+                failed++;   // 补终局异常＝责任保留（下一次恢复/对账再试），不影响其他记录
+            }
+        }
+
+        return new ExternalStartRecoveryReport(false, kept, completed, failed, noPending, mismatch, orphans,
+            conflictPendingSkipped, incompletePayload);
+    }
+
+    /// <summary>
+    /// **`PendingTerminal` → 完成层结果**（§24.15 补终局用；[Batch B 收尾之五] 新增）：`Kind` 是唯一类别判据
+    /// （不得按原始终态词猜类别——ext 取消＝`completed`＋取消位）；载荷缺失（原词/观察时点）或 `Unknown`
+    /// 一律返回 `null`（**不得**生成终态载体）。
+    /// </summary>
+    private static ExternalStartCompletion? CompletionFromPendingTerminal(PendingTerminal pending)
+    {
+        // [验证会诊重要项处置] **不得补造载荷**（§24.2-2／§24.6-2／§24.12-6）：终态所需字段缺失即返回 `null`
+        // （只登记异常、不驱动结算）；尤其 `ExecutionFailed` 缺执行错误码时不得用 `"unknown"` 合成。
+        if (string.IsNullOrEmpty(pending.RawTerminal) || pending.ObservedAtUtc == default
+            || string.IsNullOrEmpty(pending.EvidenceSource))
+            return null;
+        if (pending.Kind == ExecutionResultKind.Failed && string.IsNullOrEmpty(pending.ExecutionErrorCode))
+            return null;
+        var source = pending.EvidenceSource;
+        return pending.Kind switch
+        {
+            ExecutionResultKind.Succeeded => ExternalStartCompletion.SucceededWith(
+                pending.RawTerminal, source, pending.ObservedAtUtc, pending.JobId),
+            ExecutionResultKind.Cancelled => ExternalStartCompletion.CancelledWith(
+                pending.RawTerminal, source, pending.ObservedAtUtc, pending.JobId),
+            ExecutionResultKind.Failed => ExternalStartCompletion.ExecutionFailedWith(
+                // 前置检查已保证 `ExecutionErrorCode` 非空（缺码即返回 null）——此处不得保留 `"unknown"` 合成回退。
+                pending.RawTerminal, pending.ExecutionErrorCode!,
+                source, pending.ObservedAtUtc, pending.JobId),
+            _ => null,
+        };
+    }
 
     /// <summary>scope=bgi:{实例id}:{bgiEpoch}——epoch=首次构造时捕获并固定（I-1），提交时只比较不重写。</summary>
     internal static string ExtractEpoch(string scope)

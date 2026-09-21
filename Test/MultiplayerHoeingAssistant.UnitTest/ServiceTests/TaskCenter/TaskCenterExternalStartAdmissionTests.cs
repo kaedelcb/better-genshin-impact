@@ -52,6 +52,9 @@ public class TaskCenterExternalStartAdmissionTests
     private static IReadOnlyList<OperationRecord> Ops(string root)
         => new ArbitrationLeaseStore(Path.Combine(root, "arbitration")).Read().File?.Handoff?.Operations ?? [];
 
+    private static SubmissionRecord? ReadSubmission(string root)
+        => new ArbitrationLeaseStore(Path.Combine(root, "arbitration")).Read().File?.Handoff?.Submission;
+
     [Fact]
     public async Task ExternalStart_Accepted_ExecutesOnce_RecordsLedger_ClosesSubmission()
     {
@@ -476,6 +479,54 @@ public class TaskCenterExternalStartAdmissionTests
             Assert.Equal(LedgerEntryState.AcceptedPendingExecution,
                 new ExternalStartLedger(root).Read().File!.Entries.Single().State);
             await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    // ── 恢复扫描集合②/③（R5.3 §24.12-3；[Batch B 收尾之五]）────────────────────────────────
+
+    /// <summary>
+    /// **集合②未终结台账：恢复只保留观察责任**（§24.12-3／§24.16-3）——重启后按完整发送身份对齐时，
+    /// 未终结台账对应的操作**不得**被改写、**不得**释放占用、**不得**伪造终态（不可查询时长期保守停驻）。
+    /// </summary>
+    [Fact]
+    public async Task Recovery_UnterminatedLedger_KeepsObservationResponsibility()
+    {
+        var root = NewRoot();
+        try
+        {
+            var host1 = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            // 受理但**无完成事实**（普通受理）：台账保持未终结、操作保持 Accepted/Pending。
+            var outcome = await host1.AdmitExternalStartAsync(Request(
+                _ => Task.FromResult(ExternalStartExecution.AcceptedWith("job-keep", "ext:task.queue"))));
+            Assert.Equal(ExternalStartAdmissionStatus.Accepted, outcome.Status);
+            Assert.Equal(LedgerEntryState.AcceptedPendingExecution, new ExternalStartLedger(root).Read().File!.Entries.Single().State);
+            var keptSubmission = Ops(root).Single().SubmissionIdentity;
+            await host1.ShutdownAsync();
+
+            // 重启后（新宿主实例）触发恢复扫描：集合②只保留责任。
+            var host2 = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            await host2.AdmitExternalStartAsync(new ExternalStartAdmissionRequest
+            {
+                Namespace = "v2",
+                WorkflowId = "onedragon:恢复探针",
+                TriggerOccurrenceId = "v2:remote:{requestIdentity}",
+                ResourceRef = "onedragon:恢复探针",
+                SourceDetail = "fixture:recovery_probe",
+                ExecuteAsync = _ => Task.FromResult(ExternalStartExecution.AcceptedWith("job-probe2", "ext:task.queue")),
+            });
+
+            // 集合②的记录仍在册且**责任未结清、未写终态载体**（只保留观察责任）。
+            var keptOp = Ops(root).Single(o => string.Equals(o.SubmissionIdentity, keptSubmission, StringComparison.Ordinal));
+            Assert.Equal(OperationRequestState.Accepted, keptOp.RequestState);
+            Assert.Null(keptOp.PendingTerminal);                                                      // 无权威终态 ⇒ 不得写终态载体
+            Assert.Null(keptOp.ExecutionResult);
+            Assert.Equal(LedgerEntryState.AcceptedPendingExecution,
+                new ExternalStartLedger(root).Read().File!.Entries.First(e => e.JobId == "job-keep").State); // 台账未终结
+            await host2.ShutdownAsync();
         }
         finally
         {

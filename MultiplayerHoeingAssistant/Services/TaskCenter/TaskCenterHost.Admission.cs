@@ -210,6 +210,8 @@ public sealed partial class TaskCenterHost
         LeaseOpResult acq;
         var ttl = _admissionSeams?.OwnershipTtlSeconds ?? 15;
         var ownerKey = "pid:" + Environment.ProcessId;
+        // §24.12-3 集合②/③（外部启动观察恢复）需 `await`，不得在 `lock` 内执行——锁内只登记待办，出锁后执行。
+        ArbitrationAdmissionService? pendingObservationRecovery = null;
         lock (_admissionInitGate)
         {
             if (_admission is not null) return;
@@ -385,6 +387,26 @@ public sealed partial class TaskCenterHost
                     }
                 },
                 // §24.3-3 句柄合并读回（[第四轮验证会诊]）：门面据此取台账合并后的权威句柄，避免载体与台账分裂。
+                // §24.12-3 集合②/③（[Batch B 收尾之五]）：把外部启动台账的**完整发送身份＋是否已终态**交给
+                // 门面恢复扫描（终态**载荷**一律以本地 `PendingTerminal` 为准；台账不可读＝不可确认 ⇒ 保守停驻）。
+                TakeoverLedgerScan = () =>
+                {
+                    var root = _admissionRoot ?? Directory.GetParent(_runsDirPath!)?.FullName ?? _runsDirPath!;
+                    try
+                    {
+                        var read = new ExternalStartLedger(root).Read();
+                        if (!read.Valid) return TakeoverLedgerScan.Unreadable(read.Detail);
+                        var facts = (read.File?.Entries ?? [])
+                            .Select(e => new TakeoverLedgerFact(
+                                e.SubmissionIdentity, e.SendSeq, e.State == LedgerEntryState.Terminal, e.JobId))
+                            .ToList();
+                        return new TakeoverLedgerScan(true, facts);
+                    }
+                    catch (Exception ex)
+                    {
+                        return TakeoverLedgerScan.Unreadable("ledger_scan_exception:" + ex.GetType().Name);
+                    }
+                },
                 TakeoverJobIdRead = (submissionIdentity, sendSeq) =>
                 {
                     var root = _admissionRoot ?? Directory.GetParent(_runsDirPath!)?.FullName ?? _runsDirPath!;
@@ -421,12 +443,16 @@ public sealed partial class TaskCenterHost
                 _admissionOwnerEpoch = ownerKey;
                 facade.RecoverAfterRestart(); // 每进程一次（幂等；恢复五路径准入门面侧）
                 _admission = facade; // 保持恢复后赋值：并发首调者不得早退复用未完成恢复的实例
-                StartAdmissionLeaseHeartbeat(ttl); // 所有者存续期续期（TTL 到期=一切写入被拒）
-                return;
+                pendingObservationRecovery = facade; // 出锁后执行（见下方）；心跳同样先于该对齐启动
             }
-
-            if (acq.Reason != "held")
+            else if (acq.Reason != "held")
                 throw new InvalidOperationException("仲裁租约获取失败：" + acq.Reason);
+        }
+
+        if (pendingObservationRecovery is not null)
+        {
+            await CompleteAdmissionInitAsync(pendingObservationRecovery, ttl, ct).ConfigureAwait(false);
+            return;
         }
 
         // 阶段二（锁外有界等待）：held=旧所有者仍在 TTL 内——单调观察满 TTL 取证接管（§6.3 唯一依据）。
@@ -465,8 +491,8 @@ public sealed partial class TaskCenterHost
                     _admissionOwnerEpoch = ownerKey;
                     facade.RecoverAfterRestart();
                     _admission = facade;
-                    StartAdmissionLeaseHeartbeat(ttl);
-                    return;
+                    pendingObservationRecovery = facade; // 出锁后执行（同阶段一）
+                    break;
                 }
             }
 
@@ -474,6 +500,23 @@ public sealed partial class TaskCenterHost
             if (acq.Reason is not ("held" or "heartbeat_advanced"))
                 throw new InvalidOperationException("仲裁租约接管获取失败：" + acq.Reason);
         }
+
+        if (pendingObservationRecovery is not null)
+            await CompleteAdmissionInitAsync(pendingObservationRecovery, ttl, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// **准入门面初始化收尾（[Batch B 收尾之五] 新增）**：心跳续期先行（与恢复对齐解耦），随后执行
+    /// §24.12-3 集合②/③ 的外部启动观察恢复。该对齐**幂等且经门面串行**：并发首调者即便先复用门面，
+    /// 重复结算也只读回既有终局事实（不产生双重终局、不重复释放）。
+    /// </summary>
+    private async Task CompleteAdmissionInitAsync(ArbitrationAdmissionService facade, int ttl, CancellationToken ct)
+    {
+        StartAdmissionLeaseHeartbeat(ttl); // 所有者存续期续期（TTL 到期=一切写入被拒）
+        // 集合②：未终结台账**保留观察责任**（不可查询时长期保守停驻）；集合③：台账已终态而本地未终局 ⇒
+        // 用已持久化 `PendingTerminal` 补终局。
+        ct.ThrowIfCancellationRequested();   // [验证会诊重要项] 宿主取消按约定传播（未产生新副作用）
+        await RecoverExternalStartObservationsAsync(facade, ct).ConfigureAwait(false);
     }
 
     /// <summary>本进程单调钟（§6.3：接管观察用单调时间——UTC 前跳不提前撤权、回拨不续命）。</summary>
@@ -1559,6 +1602,37 @@ public sealed partial class TaskCenterHost
             result.JobId, result.ExecutionDisposition, result.ResponsibilityState,
             result.RawTerminal, result.ExecutionErrorCode, result.EvidenceSource,
             result.SubmissionIdentity, result.SendSeq);
+    }
+
+    /// <summary>
+    /// **外部启动观察恢复（R5.3 §24.12-3 集合②/③；[Batch B 收尾之五] 新增）**：进程重启/接管后按**完整发送身份**
+    /// （`submissionIdentity＋sendSeq`）把本地租约与外部启动台账对齐：
+    /// ①**集合②未终结台账**（`AcceptedPendingExecution`）：**保留观察责任与占用**——不写终态、不释放、不重发
+    ///   （重查依据＝台账 `jobId`／线上提交键；本进程无可用查询通道时按「不可查询」保守停驻，§24.16-3）。
+    /// ②**集合③台账已终态、本地 Operation 未终局**：用**已持久化的 `PendingTerminal`**（`Kind`／原词／错误码／
+    ///   句柄／证据来源／观察时点）驱动 `SettleCompletionAsync` 补终局（§24.15 唯一顺序；`Unknown` 不驱动）。
+    /// ③其余不一致（台账终态但缺 `PendingTerminal`／租约侧已终态而台账未终结／台账孤儿记录）**只计数登记**，
+    ///   不改变任何责任（禁止静默释放或补造事实）。
+    /// 纪律：**绝不使启动失败**（恢复对齐属诊断性动作，异常只记日志、责任保留）；`ct` 取消＝宿主退出，原样上抛。
+    /// </summary>
+    private async Task RecoverExternalStartObservationsAsync(ArbitrationAdmissionService facade, CancellationToken ct)
+    {
+        try
+        {
+            // 分类与补终局语义归**门面**（§24.12-3；`TakeoverLedgerScan` 提供台账事实）：本方法只调用＋记日志。
+            var report = await facade.RecoverExternalStartObservationsAsync(ct).ConfigureAwait(false);
+            if (report.AnythingReported)
+                TryLog("[任务中心] 外部启动观察恢复（§24.12-3）：" + report);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;   // 宿主退出＝放弃初始化（未产生新副作用）
+        }
+        catch (Exception ex)
+        {
+            // 恢复对齐属诊断性动作：失败只记录，绝不使启动失败、绝不改变既有责任。
+            TryLog("[任务中心] 外部启动观察恢复异常（保守停驻，责任保留）：" + ex.GetType().Name);
+        }
     }
 
     /// <summary>
