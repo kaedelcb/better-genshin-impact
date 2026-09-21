@@ -109,6 +109,9 @@ public sealed class CommandExecutorExternalStartAdmissionTests
         Assert.Equal("group:测试组", request.ResourceRef);
         Assert.Equal("v2:remote:{requestIdentity}", request.TriggerOccurrenceId); // 占位符由门面回填
         Assert.Equal("v2:start_group", request.SourceDetail);
+        // [批次三十八] 入参形状完整性：准入回调必须**自带执行委托与完成事实提供者**（适配器不得交出空壳请求）
+        Assert.NotNull(request.ExecuteAsync);
+        Assert.NotNull(request.CompletionProvider);
         Assert.Equal("failed", result.Status);
         Assert.Equal("f11_active", result.ErrorCode);
     }
@@ -206,6 +209,10 @@ public sealed class CommandExecutorExternalStartAdmissionTests
         Assert.Equal("onedragon:测试一条龙", request.ResourceRef);
         Assert.Equal("v2:remote:{requestIdentity}", request.TriggerOccurrenceId);
         Assert.Equal("v2:start_oneclick", request.SourceDetail);
+        // [批次三十八] 入参形状完整性（与 start_group 同口径）：三类委托均不得为空壳
+        Assert.NotNull(request.ExecuteAsync);
+        Assert.NotNull(request.CompletionProvider);
+        Assert.NotNull(request.CompletionObserver);
         Assert.Equal("failed", result.Status);
         Assert.Equal("need_preempt_confirm", result.ErrorCode);
     }
@@ -266,6 +273,16 @@ public sealed class CommandExecutorExternalStartAdmissionTests
         Assert.Equal("manual:hotkey:{requestIdentity}", request.TriggerOccurrenceId); // 占位符由门面回填
         Assert.Equal("v2", calls[1].Namespace);                               // 远程命令来源
         Assert.Equal("v2:hotkey:{requestIdentity}", calls[1].TriggerOccurrenceId);
+        // [批次三十八] 双来源**完整字段矩阵 + 三类委托非空**（此前 v2 侧仅断言两项）
+        Assert.Equal("hotkey:测试热键", calls[1].WorkflowId);
+        Assert.Equal("hotkey:测试热键", calls[1].ResourceRef);
+        Assert.Equal("v2:hotkey_execute", calls[1].SourceDetail);
+        Assert.NotNull(request.ExecuteAsync);
+        Assert.NotNull(request.CompletionProvider);
+        Assert.NotNull(request.CompletionObserver);
+        Assert.NotNull(calls[1].ExecuteAsync);
+        Assert.NotNull(calls[1].CompletionProvider);
+        Assert.NotNull(calls[1].CompletionObserver);
         Assert.Equal("failed", localResult.Status);
         Assert.Equal("f11_active", localResult.ErrorCode);
     }
