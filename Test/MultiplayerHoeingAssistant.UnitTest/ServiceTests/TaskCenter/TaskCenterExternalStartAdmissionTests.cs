@@ -97,6 +97,41 @@ public class TaskCenterExternalStartAdmissionTests
         }
     }
 
+    [Fact]
+    public async Task ExternalStart_HostShutdownDuringSend_CancelsSender_KeepsUnknownResponsibility()
+    {
+        var root = NewRoot();
+        var sendStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sends = 0;
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            var pending = host.SubmitExternalStartViaAdmissionAsync(Request(async ct =>
+            {
+                System.Threading.Interlocked.Increment(ref sends);
+                sendStarted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                return ExternalStartExecution.AcceptedWith("should-not-accept");
+            }), default);
+            await sendStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            await host.ShutdownAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            var result = await pending.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(1, sends);
+            // 宿主关停与门面结算交错：仍持租约时可回 NeedReconcile，先释放租约则回 Reconciling；
+            // 两者均保持原发送责任，不能写成确定拒绝或已受理。
+            Assert.True(result.Kind is AdmissionResultKind.NeedReconcile or AdmissionResultKind.Reconciling,
+                $"关闭交错返回 {result.Kind}/{result.ReasonCode}");
+            Assert.NotNull(ReadSubmission(root));
+            Assert.Empty(new ExternalStartLedger(root).Read().File?.Entries ?? []);
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
     /// <summary>
     /// **[§24.17／批次四十四 验证会诊取证]** 外部启动入口的操作类型**由调用位置决定**：入参**伪报**其他类型
     /// （此处 `NodeExecution`）也必须落盘为 `ExternalStart`——否则受污染调用可制造「外部副作用已执行、

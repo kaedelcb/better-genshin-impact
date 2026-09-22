@@ -184,10 +184,10 @@ public class CommandExecutor
             core: () => StartGroupCoreAsync(groupName, startFromIndex, generation, batchGroupNames, allowPreemption: false),
             // [Batch B 收尾之三／P38] ext 队列通道的「早期受理＋完成观察」拆分（§24.10／§24.14）：
             // 通道可用＝早期段提交一次并交回句柄，完成由观察段在**门面锁外**等待；
-            // 通道不可用＝返回 null（**未发送**）回退 `core`（既有 v2／裸拉起语义逐字不变）。
+            // 接线态通道不可用＝确定未发送并拒绝；不回退无句柄 v2。
             // 注：`start_group` 的 ext 队列投递不携带批次名单（与 `StartGroupCoreAsync` 既有调用逐字一致）。
-            earlyStart: () => TryStartViaQueueEarlyForAdmissionAsync(
-                groupName, null, startFromIndex, generation, batchGroupNames: null, startFromTaskId: null))
+            earlyStart: ct => TryStartViaQueueEarlyForAdmissionAsync(
+                groupName, null, startFromIndex, generation, batchGroupNames: null, startFromTaskId: null, ct))
             .ConfigureAwait(false);
 
     /// <summary>
@@ -207,8 +207,8 @@ public class CommandExecutor
             core: () => StartOneClickCoreAsync(configName, startFromTaskId, generation, batchGroupNamesRaw,
                 allowPreemption: false),
             // [Batch B 收尾之三／P38] 同 `start_group`：早期受理与完成观察分离。
-            earlyStart: () => TryStartViaQueueEarlyForAdmissionAsync(
-                null, configName, 0, generation, batchGroupNamesRaw, startFromTaskId))
+            earlyStart: ct => TryStartViaQueueEarlyForAdmissionAsync(
+                null, configName, 0, generation, batchGroupNamesRaw, startFromTaskId, ct))
             .ConfigureAwait(false);
 
     /// <summary>
@@ -224,8 +224,8 @@ public class CommandExecutor
         string ns, string workflowId, string trigger, string sourceDetail, string target,
         Func<Task<CommandResult>> core,
         // [Batch B 收尾之三／P38] 可选「早期受理＋完成观察」拆分（有早期 ack 的通道，§24.10／§24.14）。
-        // 返回 null ＝ 通道不可用/不适用 ⇒ 回退 `core`（**未发送**，既有含等待语义逐字不变）。
-        Func<Task<(ExternalStartExecution Early, Func<CancellationToken, Task<ExternalStartCompletion?>>? Observer)?>>? earlyStart = null)
+        // 返回 null 仅供不适用早期通道的入口走 `core`；E3 接线态队列不可用明确拒绝。
+        Func<CancellationToken, Task<(ExternalStartExecution Early, Func<CancellationToken, Task<ExternalStartCompletion?>>? Observer)?>>? earlyStart = null)
     {
         ExternalStartAdmissionOutcome outcome;
         CommandResult? coreResult = null;
@@ -240,7 +240,7 @@ public class CommandExecutor
                 TriggerOccurrenceId = trigger,
                 ResourceRef = workflowId,
                 SourceDetail = sourceDetail,
-                ExecuteAsync = async _ =>
+                ExecuteAsync = async sendToken =>
                 {
                     var previousContext = _requestContext.Value;
                     _requestContext.Value = capturedCommand; // 冻结的请求上下文（回调期间生效，结束即还原）
@@ -248,7 +248,7 @@ public class CommandExecutor
                     {
                         if (earlyStart is not null)
                         {
-                            var early = await earlyStart().ConfigureAwait(false);
+                            var early = await earlyStart(sendToken).ConfigureAwait(false);
                             if (early is { } e)
                             {
                                 earlyObserver = e.Observer;   // 完成等待交给观察委托（受理与完成分离）
@@ -1134,7 +1134,7 @@ public class CommandExecutor
     /// </summary>
     private async Task<QueueStartEarly> TryStartViaQueueEarlyAsync(
         BgiExternalClient ext, string? groupName, string? configName, int startFromIndex, int generation,
-        string? batchGroupNames = null, string? startFromTaskId = null)
+        string? batchGroupNames = null, string? startFromTaskId = null, CancellationToken cancellationToken = default)
     {
         var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
         if (ext is not { State: BgiExternalLinkState.Ready }
@@ -1149,6 +1149,7 @@ public class CommandExecutor
         {
             submit = await ext.SubmitTaskStartAsync(groupName, configName, startFromIndex, generation, batchGroupNames,
                 startFromTaskId: startFromTaskId,
+                cancellationToken: cancellationToken,
                 idempotencyKey: string.IsNullOrWhiteSpace(_requestContext.Value?.CommandId) ? null : _requestContext.Value.CommandId,
                 expectedConfigRevision: GetStringParam(_requestContext.Value?.Params, "expectedConfigRevision"),
                 bgiEpoch: _requestContext.Value?.Params?.GetValueOrDefault("bgiEpoch"),
@@ -1419,18 +1420,21 @@ public class CommandExecutor
         => errorCode is "queue_full" or "task_already_running" or "task_busy" or "execution_occupied";
 
     /// <summary>
-    /// **接线态早期段入口**：通道不可用（含无外部客户端）⇒ 返回 `null`（**未发送**）让门面回退 `core`。
+    /// **接线态早期段入口**：新版生产合同只用带句柄的队列通道；通道不可用＝可证实未发送，
+    /// 明确拒绝本笔，不回退无句柄的 v2 task.start。已出站而回执不可考仍走 Unknown。
     /// </summary>
     private async Task<(ExternalStartExecution Early, Func<CancellationToken, Task<ExternalStartCompletion?>>? Observer)?>
         TryStartViaQueueEarlyForAdmissionAsync(
             string? groupName, string? configName, int startFromIndex, int generation,
-            string? batchGroupNames, string? startFromTaskId)
+            string? batchGroupNames, string? startFromTaskId, CancellationToken cancellationToken)
     {
         var ext = _externalClientProvider?.Invoke();
-        if (ext is null) return null;
+        if (ext is null)
+            return (ExternalStartExecution.RejectedWith("task_queue_unavailable", evidenceSource: "adapter:queue_precheck"), null);
         var early = await TryStartViaQueueEarlyAsync(ext, groupName, configName, startFromIndex, generation,
-            batchGroupNames, startFromTaskId).ConfigureAwait(false);
-        if (early.Kind == QueueStartEarlyKind.ChannelUnavailable) return null;
+            batchGroupNames, startFromTaskId, cancellationToken).ConfigureAwait(false);
+        if (early.Kind == QueueStartEarlyKind.ChannelUnavailable)
+            return (ExternalStartExecution.RejectedWith("task_queue_unavailable", evidenceSource: "adapter:queue_precheck"), null);
         return MapQueueEarlyToAdmission(early);
     }
 

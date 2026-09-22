@@ -1466,7 +1466,7 @@ R5.2 稿 §16 行③与 §16-A 汇总裁**由「部分」升为「已覆盖（�
 
 **A. 本批落地事实（组合根级；未改生产行为）**
 
-1. 夹具 `R5CompositionRootAcceptanceTests.CompositionRoot_V2ConflictRejection_NoRetryResend`：
+1. 当时的 v2 冲突夹具（现因 owner 新合同改为 `R5CompositionRootAcceptanceTests.CompositionRoot_V2ConflictSetup_NoFallbackSend`；下列计数为**历史结果**，不是现行验收）：
    **v2 `task.start` 脚本化业务冲突**（替身 `AcceptV2TaskStart=false` ⇒ `task_already_running`）时，
    **接线态**（真实组合根 + `externalStartAdmission` 注入）必须**不得触发既有「冲突重试」的第二次发送**。
 2. **构造纠正（诊断证据，避免空过）**：首版直接脚本化 v2 冲突即运行 ⇒ **在 90s 预算内未返回**，诊断计数显示
@@ -2341,3 +2341,17 @@ R5.8 实机段（owner）。
 4. **事后补验入口（可剔除）**：下一批次的**首轮会诊**须**补验**本批最终状态（重点：22 支精确计数的
    逐类别覆盖、三类静默漏扫登记、43／94／96 计数自洽）；若补验提出阻断/重要项，按 §17.4-A ③ 照常处置，
    并在此处登记处置结果（本项为**流程性挂账**，非产品缺陷）。
+
+### 24.64 落地登记：`submission_conflict` 被拒请求释放主槽位（2026-09-23；owner 裁决 #2）
+
+1. **取代旧待决口径**：§24.41-C#19、§24.44 与交接稿 B 表 #2 的「被拒尝试留 `Queued/Active`」是**修复前事实**。owner 已选「被拒请求释放自己的名额、保留拒绝原因；原未决任务继续保留且绝不自动重发」。本项只处理**未签发本轮发送许可**的 `submission_conflict` 分支；不改变原未决 `Submission`、发送身份或许可水位。
+2. **实现**：`ArbitrationAdmissionService.ProcessWinnerAsync` 在占位锁内复核返回 `submission_conflict` 后，不再把本笔 `InRound` 回退为 `Queued/Active`；调用既有 `TerminatePrecheckAsync`，以 `TerminalRejected`＋`LastResult.ReasonCode=submission_conflict` 持久化并迁出主槽位。对外仍返回 `Error/submission_conflict`；后来者若重试，须**创建新请求**，不得复用原未决发送许可。持久化失败不报告未落盘的结论。
+3. **反例先行与回归**：新增 `SubmissionConflict_RepeatedRejections_ReleaseOwnSlots_KeepOriginalResponsibility`，改动前在首个被拒请求上实测 `Queued`（红）；改后连续 **32** 次拒绝均有终局状态、可查原因、零新许可、非 `Active`，原 `Submission` 身份与序号保持，权威对账关闭原责任后新请求获准且只新增一次发送。既有 `Capacity_MainSlotsExhausted_33rdCreateRejected` 的负例造景改为**32 个已受理未终结作业**真实占槽；不能再把 31 个冲突拒绝当作应占槽事实。该负例与恢复再次取许可、未知责任零重发三项定向夹具通过。
+4. **验证边界**：助手侧全量本轮 **1068 通过／2 跳过／1 失败／1071**；唯一失败为既有 `R410ProductionWiringTests.C5_StartupChain_HandoffDelegate_BindingAndNegativePaths` 枚举真实 `%APPDATA%/NexusBGI/runs` 时被本轮沙箱拒绝。显式排除此**单个环境受阻夹具**后，同轮其余 **1068 通过／2 跳过／1070（0 失败）**；这**不能**冒充全量绿。生产节点改道与外部启动接线仍关闭；R5.8 未签署。§24.41-C#19 状态更新为**组件层已交付、真实入口与生产开门未验收**。墓碑总量上限仍按既有 256/24h 容量合同，不把本批 32 次夹具外推为无限次拒绝永不背压。
+
+### 24.65 owner 新裁决：宿主关闭取消链与带编号队列必需（2026-09-23；#3／#5）
+
+1. **#3 范围**：E3/E4/E5 本期不提供单次点击撤销；宿主退出须取消在飞发送，已出站而结果不明须保留责任、禁止自动重发。`TaskCenterHost.SubmitExternalStartViaAdmissionAsync` 将 `_shutdownCts` 与入口令牌链接给门面 `CallerToken`；`DispatchExternalStartViaHostAsync` 将该令牌交给 `ExternalStartContext.ExecuteAsync`；E3 队列适配器再交给 `BgiExternalClient.SubmitTaskStartAsync(cancellationToken)`。宿主夹具 `ExternalStart_HostShutdownDuringSend_CancelsSender_KeepsUnknownResponsibility` 先因在飞发送无法取消而红，改后绿，核对一次发送、保守待对账、原 `Submission` 保留、无虚假受理台账；全套并行时发现关停与结算交错可分别回 `NeedReconcile` 或 `Reconciling`，两者均不结清责任，夹具按此真实状态表断言。**限定**：E4 热键尚无带编号通道，发送前／回执后与真实 ext 传输交错未验，恢复与 `RetryAsync` 另列。
+2. **#5 范围**：owner 要求所有参与方升级，新生产入口只走带任务编号的 ext 队列。E3 接线态的 `start_group`／`start_oneclick` 在 ext 对象缺失、非 Ready 或缺 `CapabilityTaskQueue` 时，现返回确定未发送的 `Rejected/task_queue_unavailable`，不落回 v2；发送已出站后断线／缺句柄仍是 Unknown、保留责任。`WiredStart_NoQueueChannel_RejectsBeforeAnyV2Fallback` 两支先红后绿；原组合根三支 v2 回退造景按新合同**改断言而未排除**，均检查两通道零发送及适配器明确失败。§24.4-4「v2 成功＝入口 success」保留为**旧合同历史证据**，不再作为新生产接线的成功判据。
+3. **热键新前置**：owner 另选 E4 热键也升级到有编号通道；当前 BGI/助手尚无热键的 ext 队列提交协议，旧 E4 新调度接线仍关闭，不能声称满足本条。需先建 BGI 协议、助手映射与编号回执／完成观察／取消／抢占证据。新旧合同的生产开门仍由 §23.4／§23.9 并集门禁和 R5.8 约束，不能凭本节局部夹具打开。
+4. **本批回归**：声明面清单按 `CLAIM_SURFACE_REGENERATE=1` 单独再生成，关闭该变量后声明／夹具引用／失败模式守卫 **22/22**；助手侧全量 **1071 通过／2 跳过／1 失败／1074**，唯一失败仍是既有 C5 用例枚举真实 `%APPDATA%/NexusBGI/runs` 被沙箱拒绝。显式排除这一个环境受阻用例后 **1071 通过／2 跳过／1073（0 失败）**。首次并行全套时新关停夹具暴露 `NeedReconcile`／`Reconciling` 两种合法关停结算交错，已按「两者均保留原 `Submission`」修正断言并复跑全套；不把环境排除结果称作全量绿。

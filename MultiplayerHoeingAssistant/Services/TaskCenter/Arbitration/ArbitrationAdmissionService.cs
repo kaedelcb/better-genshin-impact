@@ -2114,14 +2114,12 @@ public sealed class ArbitrationAdmissionService
             // 状态已由其他处理者推进：不回退——返回当前事实分类（B1）。
             case "state_changed":
                 return ClassifyCurrentState(request.RequestIdentity);
-            // 未决发送冲突：跨实例/跨流瞬态——回 Queued，响亮拒绝（续用可查当前状态）。
+            // 未决发送冲突：原未决责任保持；本笔尚未签发许可，终局拒绝并迁出主槽位，
+            // 留 reasonCode 审计。后续重试须新建操作，绝不复用原未决发送身份。
             case "submission_conflict":
-            {
-                var back = await TransitionSingleAsync(request.RequestIdentity, lease, OperationRequestState.Queued, expectedStates: OperationRequestState.InRound).ConfigureAwait(false);
-                return back.Success
-                    ? AdmissionResult.Of(AdmissionResultKind.Error, reason, "存在未决发送（至多一笔，不覆盖占位）——操作回 Queued。", request.RequestIdentity)
-                    : ClassifyCurrentState(request.RequestIdentity);
-            }
+                return (await TerminatePrecheckAsync(request, lease, reason, AdmissionResultKind.Error,
+                    "存在未决发送（至多一笔，不覆盖占位）——本笔终局拒绝并释放主槽位；原未决责任保持。")
+                    .ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             // 切换闸门/租约资格/存取故障：操作回 Queued（未发布发送许可），响亮拒绝。
             default:
             {

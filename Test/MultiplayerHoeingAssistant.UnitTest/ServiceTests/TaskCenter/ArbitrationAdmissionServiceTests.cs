@@ -3163,9 +3163,12 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     [Fact]
     public async Task Capacity_MainSlotsExhausted_33rdCreateRejected()
     {
-        // 占槽构造：Sender 返回 **Unknown** ⇒ 操作进入 Reconciling（**Active，不结清、不迁区**）持续占主槽位；
-        // 注意：`TerminalRejected` 会经 TerminalPendingTransfer→Tombstone **释放**主槽位，不适用于本负向夹具。
-        var (svc, _, _, _) = BuildFacade(h => h.Sender = _ => Task.FromResult<SendOutcome>(new SendOutcome.Unknown("fixture_unknown")));
+        // 占槽构造：32 笔各自已受理但尚未终结的远端作业保持 Active；
+        // Unknown 只允许一笔未决 Submission，后续 submission_conflict 已按 owner 裁决终局释放，
+        // 不再能用「32 次冲突拒绝」充当真实占槽反例。
+        var acceptedId = 0;
+        var (svc, _, _, _) = BuildFacade(h => h.Sender = _ => Task.FromResult<SendOutcome>(
+            new SendOutcome.Accepted("ext:accepted", null, "job-running-" + Interlocked.Increment(ref acceptedId))));
 
         for (var i = 1; i <= 32; i++)
         {
@@ -3175,7 +3178,8 @@ public class ArbitrationAdmissionServiceTests : IDisposable
             r.Candidate.ResourceRef = "node:n-" + i;
             r.CursorRef = "n-" + i + "#0#0";
             r.CursorRevision = 1;
-            var res = await svc.SubmitAsync(r); // 不可考路径：操作停在 Reconciling ⇒ 持续占主槽位
+            var res = await svc.SubmitAsync(r); // 已受理未终结：操作保持 Active，持续占主槽位
+            Assert.True(res.Kind == AdmissionResultKind.Accepted, $"第 {i} 笔：{res.Kind}/{res.ReasonCode}");
             Assert.False(res.ReasonCode.StartsWith("operations_capacity_full", StringComparison.Ordinal));
             // 占槽判据＝**Zone=Active**（主槽位＝Active+TerminalPendingTransfer；终局迁墓碑后才释放）
             Assert.Equal(OperationZone.Active, FindOp(r.RequestIdentity)!.Zone);
@@ -3196,6 +3200,61 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var last = await svc.SubmitAsync(overflow);
         Assert.Equal(AdmissionResultKind.Error, last.Kind);
         Assert.StartsWith("operations_capacity_full", last.ReasonCode, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// R5 owner 裁决：未决发送仍占原槽，因 submission_conflict 被拒的后续请求须留审计并释放自身主槽。
+    /// 连续 32 次被拒不得挤掉新的请求；权威对账关闭原责任后，新请求能获得自己的发送许可。
+    /// </summary>
+    [Fact]
+    public async Task SubmissionConflict_RepeatedRejections_ReleaseOwnSlots_KeepOriginalResponsibility()
+    {
+        var sends = 0;
+        var accept = false;
+        var (svc, _, _, _) = BuildFacade(h => h.Sender = _ =>
+        {
+            Interlocked.Increment(ref sends);
+            return Task.FromResult<SendOutcome>(accept
+                ? new SendOutcome.Accepted("ext:accepted", null, "job-after")
+                : new SendOutcome.Unknown("fixture_unknown"));
+        });
+
+        var original = Req(ns: "v2", workflow: "wf-original", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Reconciling, (await svc.SubmitAsync(original)).Kind);
+        var originalOp = FindOp(original.RequestIdentity)!;
+        var originalSubmission = ReadLease().File!.Handoff!.Submission!;
+        Assert.Equal(1, sends);
+
+        for (var i = 1; i <= 32; i++)
+        {
+            var rejected = Req(ns: "v2", workflow: "wf-blocked-" + i, operationType: OperationType.ExternalStart);
+            var result = await svc.SubmitAsync(rejected);
+            Assert.Equal(AdmissionResultKind.Error, result.Kind);
+            Assert.Equal("submission_conflict", result.ReasonCode);
+            var op = FindOp(rejected.RequestIdentity)!;
+            Assert.Equal(OperationRequestState.TerminalRejected, op.RequestState);
+            Assert.NotEqual(OperationZone.Active, op.Zone);
+            Assert.Equal("submission_conflict", op.LastResult?.ReasonCode);
+            Assert.Equal(0, op.LastSendSeq);
+            Assert.True(string.IsNullOrEmpty(op.SubmissionIdentity));
+        }
+
+        Assert.Equal(1, sends);
+        Assert.Single(ReadLease().File!.Handoff!.Operations.Where(o => o.Zone == OperationZone.Active));
+        Assert.Equal(originalOp.SubmissionIdentity, ReadLease().File!.Handoff!.Submission!.SubmissionIdentity);
+        Assert.Equal(originalSubmission.SendSeq, ReadLease().File!.Handoff!.Submission!.SendSeq);
+
+        var settled = await svc.SettleReconciledAsync(original.RequestIdentity,
+            new ReconcileSettlement.NotAccepted(originalOp.SubmissionIdentity, originalOp.LastSendSeq,
+                "bgi_rejected", Retryable: false, "fixture:权威对账确定未受理"));
+        Assert.Equal(AdmissionResultKind.TerminalRejected, settled.Kind);
+        Assert.Null(ReadLease().File!.Handoff!.Submission);
+
+        accept = true;
+        var after = Req(ns: "v2", workflow: "wf-after", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(after)).Kind);
+        Assert.Equal(2, sends);
+        Assert.Equal(1, FindOp(after.RequestIdentity)!.LastSendSeq);
     }
 
     // ── 42. R5.3.4：A6 票据压制 —— 授权抢占方保留资格、无关候选被压制（组件级） ──

@@ -573,6 +573,8 @@ public sealed partial class TaskCenterHost
             return AdmissionResult.Of(AdmissionResultKind.Error, "bgi_epoch_unknown",
                 "BGI 进程纪元未知（严格合同要求固定 bgiEpoch；未发送、未签发许可）。", "");
         ct.ThrowIfCancellationRequested();
+        using var sendLifetime = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
+        sendLifetime.Token.ThrowIfCancellationRequested();
 
         ArbitrationAdmissionService facade;
         try { await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false); facade = _admission!; }
@@ -597,6 +599,7 @@ public sealed partial class TaskCenterHost
             RequestIdentity = continuing ? request.RequestIdentity! : "",
             SourceDetail = string.IsNullOrEmpty(request.SourceDetail) ? "external:start" : request.SourceDetail,
             WireSubmitKey = request.WireSubmitKey,
+            CallerToken = sendLifetime.Token,
             ProcessLocalContext = new ExternalStartContext(request.ExecuteAsync),
             // §24.17（[批次四十四 验证会诊重要项处置]）：**本入口（E3/E4/E5 外部启动）的操作类型恒为
             // `ExternalStart`**——由**调用位置**决定，不采信入参字段：否则受污染调用可把真实外部启动登记成
@@ -932,7 +935,7 @@ public sealed partial class TaskCenterHost
         // B3（E3/E4/E5）：外部启动操作——**仅**在获准后执行适配层既有启动实现（进程内上下文缺失＝响亮拒绝，
         // 绝不退回直通启动；那会绕开占位/Pending/固定纪元校验）。
         if (d.ProcessLocalContext is ExternalStartContext ext)
-            return await DispatchExternalStartViaHostAsync(ext).ConfigureAwait(false);
+            return await DispatchExternalStartViaHostAsync(ext, d.CallerToken).ConfigureAwait(false);
         if (!d.ResourceRef.StartsWith("flow:", StringComparison.Ordinal))
             return new SendOutcome.Unknown("unsupported_dispatch_shape_b2a");
 
@@ -1834,12 +1837,12 @@ public sealed partial class TaskCenterHost
     /// **外部启动发送分派（B3／§6.1）**：调用适配层既有启动实现一次，并把其结论映射为 `SendOutcome`。
     /// 纪律：适配层异常一律 `Unknown`（**不得**凭异常推断未受理）；「确定未受理」只能由适配层给出关联验证后的结论。
     /// </summary>
-    private static async Task<SendOutcome> DispatchExternalStartViaHostAsync(ExternalStartContext ext)
+    private static async Task<SendOutcome> DispatchExternalStartViaHostAsync(ExternalStartContext ext, CancellationToken callerToken)
     {
         ExternalStartExecution execution;
         try
         {
-            execution = await ext.ExecuteAsync(CancellationToken.None).ConfigureAwait(false);
+            execution = await ext.ExecuteAsync(callerToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {

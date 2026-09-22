@@ -181,17 +181,16 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// **§24.4-4 v2 发送成功**：ext 通道不可用（对端老 BGI）⇒ 回退 v2 `task.start`；入口 `success`，
-    /// 但**台账保持未终局**（受理≠终态）、责任 `Pending`（不得以「发送成功」冒充终态）。
+    /// owner 新合同：队列通道不可用时明确拒绝，不能回退到无任务编号的 v2 `task.start`。
     /// </summary>
     [Fact]
-    public async Task CompositionRoot_V2Success_EntrySucceedsButLedgerStaysUnterminated()
+    public async Task CompositionRoot_QueueUnavailable_RejectsWithoutV2Fallback()
     {
         var root = Path.Combine(Path.GetTempPath(), "r5comp-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(root);
         try
         {
-            _double.AcceptHello = false;   // 老 BGI：ext 不可用 ⇒ v2 路径
+            _double.AcceptHello = false;   // 队列通道不可用，即使 v2 仍可达也不得回退
             using var client = new BgiExternalClient();
             var host = NewHost(root, client);
             var executor = new CommandExecutor(null!, "unused",
@@ -201,16 +200,14 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
 
             var result = await executor.ExecuteAsync(StartGroupCommand("组合根组D")).WaitAsync(TimeSpan.FromSeconds(15));
 
-            Assert.Equal("success", result.Status);                             // §24.4-4：v2 发送成功＝入口 success
-            Assert.False(result.IsTerminal);                                    // 受理≠终态
-            Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);
-            Assert.Equal(1, _double.CountOf("task.start"));                     // 恰一次（无换通道重发）
-            Assert.Equal(0, _double.CountOf("ext.task.start"));                 // ext 不可用 ⇒ 未走 ext
-            var ledger = new ExternalStartLedger(root).Read().File!.Entries.Single();
-            Assert.Equal(LedgerEntryState.AcceptedPendingExecution, ledger.State);   // 台账保持未终局
+            Assert.Equal("failed", result.Status);
+            Assert.Equal("task_queue_unavailable", result.ErrorCode);
+            Assert.Equal(0, _double.CountOf("task.start"));
+            Assert.Equal(0, _double.CountOf("ext.task.start"));
+            Assert.Empty(new ExternalStartLedger(root).Read().File?.Entries ?? []);
             var arbitrationDir = Path.Combine(root, "arbitration");
             var op = new ArbitrationLeaseStore(arbitrationDir).Read().File!.Handoff!.Operations.Single(o => o.LastSendSeq > 0);
-            Assert.Equal(OperationRequestState.Accepted, op.RequestState);
+            Assert.Equal(OperationRequestState.TerminalRejected, op.RequestState);
             Assert.Null(op.ExecutionResult);
             Assert.Null(op.PendingTerminal);
             await host.ShutdownAsync();
@@ -310,7 +307,7 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
 
             // 说明：`cold_start_required` 只由**接线态核心**（`allowPreemption=false`）产生；未接线路径的冷启动
             // 走既有「裸拉起回退」语义（不属本批范围，另有组件级夹具覆盖）。故接线态出口的对外合同＝
-            // `result_unknown`＋责任 `Pending`＋零发送（见 `CompositionRoot_ColdStart_WiredPathRefusesWithoutSending`）。
+            // 队列通道未就绪按新合同明确拒绝且零发送（见 `CompositionRoot_ColdStart_WiredPathRefusesWithoutSending`）。
             await host.ShutdownAsync();
         }
         finally
@@ -395,8 +392,8 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// **§24.4-7 冷启动独立拒绝**：ext 通道不可用（对端老 BGI）且 IPC 不可达（无服务端）⇒ 接线态**不得裸拉起**、
-    /// **不得发送**：入口响亮失败（`cold_start_required`）且两类发送面均为零。
+    /// **§24.4-7 冷启动独立拒绝**：ext 通道不可用且 IPC 不可达 ⇒ 接线态零发送，
+    /// 按新版队列必需合同报告可证实未发送的 `task_queue_unavailable`。
     /// </summary>
     [Fact]
     public async Task CompositionRoot_ColdStart_WiredPathRefusesWithoutSending()
@@ -417,11 +414,7 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
             var result = await executor.ExecuteAsync(StartGroupCommand("冷启动组")).WaitAsync(TimeSpan.FromSeconds(20));
 
             Assert.Equal("failed", result.Status);
-            // 接线态禁止裸拉起（**未发送**）：本夹具观察的是**适配器出口**，按 §24.6-1/2 的保守映射（§14 细化前
-            // 只有 `success` 才算受理证据、其余一律不可考）**必须**是 `result_unknown`——不得把核心层错误码
-            // 直接泄漏到出口（核心层 `cold_start_required` 的独立拒绝由未接线路径的夹具对照断言）。
-            Assert.Equal("result_unknown", result.ErrorCode);
-            Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);   // 责任保留、禁止重发
+            Assert.Equal("task_queue_unavailable", result.ErrorCode);
             Assert.Equal(0, _double.CountOf("ext.task.start"));
             Assert.Equal(0, _double.CountOf("task.start"));
             await host.ShutdownAsync();
@@ -568,22 +561,19 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
 
     /// <summary>
     /// **§24.41-C#7／S2·S3 组合根反例（冲突零重发）**（[新增·2026-09-21 批次三十九]）：
-    /// v2 `task.start` 返回**业务冲突**（替身脚本 `task_already_running`）时，**接线态**（经真实组合根准入）必须
-    /// **不得**触发既有「冲突重试」的第二次发送：断言 **`task.start` 恰一次**、`ext.task.start == 0`、
-    /// 适配器出口**不得报成功**，且仲裁面已登记该操作并**已签发本轮许可**（`LastSendSeq == 1`；责任保持）。
-    /// 依据：S2/S3 的两个静态发送点属**未接线**既有路径；接线态下「冲突」应经**准入结论/对账**表达，而非盲目重发。
+    /// 替身让 ext 不可用且 v2 即使发送也会回业务冲突；新合同必须在 v2 之前拒绝，
+    /// `task.start` 与 `ext.task.start` 都是零发送，不能借旧冲突重试旁路队列要求。
     /// </summary>
     [Fact]
-    public async Task CompositionRoot_V2ConflictRejection_NoRetryResend()
+    public async Task CompositionRoot_V2ConflictSetup_NoFallbackSend()
     {
         var root = Path.Combine(Path.GetTempPath(), "r5comp-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(root);
         try
         {
             using var client = new BgiExternalClient();
-            // [诊断纠正] 接线态 E3 优先走 **ext 队列**（`ext.task.start`）⇒ 要覆盖 **v2 冲突**必须先让 **ext 不可用**
-            // （`AcceptHello=false` ⇒ 客户端降级 `Legacy` ⇒ 回退既有关键路径 `core()`＝v2 `task.start`）。
-            _double.AcceptHello = false;                       // ext 通道不可用 ⇒ 回退 v2 路径
+            // ext 不可用；v2 被设为冲突，若误走回退便能从发送计数发现。
+            _double.AcceptHello = false;
             _double.AcceptV2TaskStart = false;                 // 脚本化 v2「业务冲突」回执（task_already_running）
             var host = new TaskCenterHost(
                 Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
@@ -601,12 +591,11 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
             if (client.State == BgiExternalLinkState.Ready) await client.SubscribeAsync([]);
             Assert.NotEqual(BgiExternalLinkState.Down, client.State);
 
-            // 冲突路径会先做**有界槽位等待**（`WaitTaskSlotSettledAsync` 等，最长约 36s/轮）后返回，故给足预算；
-            // [诊断] 若仍超时，先用下列计数确认「是否发生了第二次发送」而不是让断言静默通过。
+            // 新合同的无通道拒绝应有界返回；超时报告两种发送计数。
             CommandResult result;
             try
             {
-                result = await executor.ExecuteAsync(StartGroupCommand("冲突组")).WaitAsync(TimeSpan.FromSeconds(90));
+                result = await executor.ExecuteAsync(StartGroupCommand("冲突组")).WaitAsync(TimeSpan.FromSeconds(15));
             }
             catch (TimeoutException)
             {
@@ -617,12 +606,14 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
             }
 
             Assert.NotEqual("success", result.Status);                         // 冲突不得报成功
-            Assert.Equal(1, _double.CountOf("task.start"));                    // **冲突零重发**（未触发第二次发送）
-            Assert.Equal(0, _double.CountOf("ext.task.start"));                // ext 不可用 ⇒ 本笔不经 ext 队列
+            Assert.Equal("task_queue_unavailable", result.ErrorCode);
+            Assert.Equal(0, _double.CountOf("task.start"));                    // 无 v2 回退
+            Assert.Equal(0, _double.CountOf("ext.task.start"));
             var ops = new ArbitrationLeaseStore(Path.Combine(root, "arbitration")).Read().File?.Handoff?.Operations ?? [];
             var op = ops.SingleOrDefault(o => o.Candidate?.WorkflowId == "group:冲突组");
             Assert.NotNull(op);                                                // 已经仲裁面登记
-            Assert.Equal(1, op!.LastSendSeq);                                  // 本轮许可**已签发**（发送确已发生一次）
+            Assert.Equal(1, op!.LastSendSeq);                                  // 许可曾签发，适配器前检确定未发送
+            Assert.Equal(OperationRequestState.TerminalRejected, op.RequestState);
             await host.ShutdownAsync();
         }
         finally

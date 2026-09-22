@@ -14,6 +14,31 @@ public sealed class CommandExecutorExternalStartAdmissionTests
     private static RemoteCommand StartGroupCommand()
         => new() { Cmd = "start_group", Params = new() { ["groupName"] = "测试组" } };
 
+    [Theory]
+    [InlineData("start_group", "groupName")]
+    [InlineData("start_oneclick", "configName")]
+    public async Task WiredStart_NoQueueChannel_RejectsBeforeAnyV2Fallback(string command, string parameter)
+    {
+        ExternalStartExecution? execution = null;
+        var executor = new CommandExecutor(null!, "unused", externalStartAdmission: async (request, _) =>
+        {
+            execution = await request.ExecuteAsync(CancellationToken.None);
+            return new ExternalStartAdmissionOutcome(ExternalStartAdmissionStatus.Rejected,
+                execution.Reason ?? "missing_reason", "队列通道不可用");
+        });
+
+        var result = await executor.ExecuteAsync(new RemoteCommand
+        {
+            Cmd = command,
+            Params = new() { [parameter] = "测试任务" },
+        });
+
+        Assert.Equal(ExternalStartExecutionKind.Rejected, execution!.Kind);
+        Assert.Equal("task_queue_unavailable", execution.Reason);
+        Assert.Equal("failed", result.Status);
+        Assert.Equal("task_queue_unavailable", result.ErrorCode);
+    }
+
     // ── §24.2-5 v2 取消等价与「发送成功非终态」（[Batch B 收尾之二]）──────────────
 
     /// <summary>
