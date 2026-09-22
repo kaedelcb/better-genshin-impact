@@ -98,6 +98,8 @@
 
 **入口核对（2026-09-23）**：`MainViewModel.OnStartOneClick` 对应界面的普通「一条龙」按钮，产生 `start_oneclick`；界面「一键锄地」由 `QuickHoeingCommand` 经 `SendQuickStartAsync` 下发 `start_group`，远端在 `MainViewModel` 按 `key="一键锄地"` 分支执行绑定批次；上线锄地另由 `OnAllReadyConfirmedInternal` 触发。远端自报 `key` 只能作为待核查的命令资料，**不能单独证明可信的最高级来源**。当前 `ArbitrationOrdering.Compare` 同 tier／priority 时按较早 `ScheduledAt` 排序，亦**不能**拿该队列排序充当 owner 要求的「正在执行者与后来者同级抢占」；须单设并验证运行中抢占判定，不擅改已有候选队列合同。S4b 当前经 `StartSpecifiedTaskAsync` 直接 `StartViaV2IpcNoKillAsync`，S8b 经 `ExecuteResumeWithBusyRetryAsync` 直接 `ExecuteResumeAsync`，均仍需接线。
 
+**生产事实缺口**：`TaskCenterHost.CurrentArbitrationFacts()` 目前从 `ControlStatus` 只拿 `TaskRunning` 布尔值，并把外部启动台账压成另一个「有占用」布尔值；生产侧没有可靠的「当前占用任务身份、来源、优先级、可停止方式」。据此无法判断后来者高／同／低级，亦无法证明 `key="一键锄地"` 的可信来源。必须先把这组权威事实与任务级优先级配置跨 BGI／助手／任务中心端到端定义、持久化并用全格交错验证；仅给 `ArbitrationCandidate.Priority` 赋值或调整排序函数，不能兑现 owner 的抢占规则，不能开生产门。
+
 **B.2 owner 对 #4 的裁决（2026-09-23；取代上表 #4 的推荐乙，尚未构成实现验收）**：
 联机锄地结束后的两条自动动作均纳入本期新调度器：S4b「运行指定配置组／一条龙」按新任务优先级准入；S8b「恢复原任务」走恢复专用准入并保持原票据／责任身份，不得作为全新启动绕过检查。两条路径在获得相应许可、确认被切任务状态前均不得直接发送。#4 当前状态＝**产品行为已明确，接线与端到端夹具未交付**；旧「显式移交且保持直发」推荐作废。
 
