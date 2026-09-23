@@ -6256,6 +6256,7 @@ public sealed class ArbitrationAdmissionService
                              && o.MergedInto is null // 合并项由 ④ 专属处理（不得按孤儿登记中止）
                              && !o.ConflictPending  // [Batch B 续] 第四类集合：冲突待决不得被通用恢复改写
                              && !IsMergeConflictHeld(o)
+                             && !o.PreemptConfirmPending // 未确认交接有独立停止／继任责任，不是三无孤儿登记
                              && (o.RequestState == OperationRequestState.Queued || o.RequestState == OperationRequestState.InRound)
                              && o.LastSendSeq == 0
                              && (file.Handoff.Submission is null

@@ -2481,3 +2481,40 @@ Owner 选择 A 后，补齐如下持久化与恢复路径：
 先以 `PreemptConfirmPending_SetBeforeFinalOccupy_CannotCreateSubmission` 在轮次选中后、`ValidateAndOccupy` 前插入持久 `PreemptConfirmPending`：改前反例实际返回 `Accepted`，证明入口预检不足。现同一最终占位事务在建立 Submission 前检查该标记；拒绝后仅将本笔 `InRound` 退回 `Queued`，不清确认标记、不发送。回退写失败时返回磁盘当前事实，仍不得凭内存结果放行。普通与恢复拒绝分类均走此分支。定向夹具红转绿，仲裁类 215/215；助手全量 1170 通过／2 跳过／0 失败。此证据只覆盖“确认前零发送”，确认后放行、重启交接与 BGI 物理槽协议仍待实现和验证，生产入口继续关闭。
 
 本小切片安全复会诊请求使用 GPT-6-Astra／medium，尝试 1 次，执行器返回 `Codex exit code 1`，**未取得会诊结论**。该错误并非约定的超时、瞬时网络或 5xx，不重试，也不计为代码缺陷。独立审查已核对两处分流都不会在标记存在时调用 Sender；合同冻结仍需有效会诊及跨端枚举表。
+
+### 24.76 未完成路径跨端合同核对表（2026-09-24；待实现、非冻结）
+
+以下只列源码已核字段与开门前缺项。它约束后续单状态转换施工，不能把“建议新增”当作现有协议。场景、授权者、重启行为和证据逐行见[集中审查稿](onedragon-r5-unfinished-path-scenario-review-2026-09-23.md)。
+
+| 边界／代码入口 | 当前可核字段或动作 | 为满足 §24.74 必须补的合同及原子边界 | 缺失时行为 |
+|---|---|---|---|
+| 助手准入→锁外 Sender：`SubmissionDispatch`、`ValidateAndOccupy` | 已含请求／提交身份、轮次、候选、目标 epoch、可空 `WireSubmitKey`、进程内上下文和令牌；最终占位已检查 `PreemptConfirmPending` | 持久不可变 payload／配置版本、可信类别／任务级优先级及 revision、到达序号、绑定实例与 owner generation；Sender 认领和许可撤销共用串行边界 | 无完整授权包不得调用外部启动 Sender |
+| Sender→BGI `ext.task.start`：`TryStartViaQueueEarlyAsync`、`SubmitTaskStartAsync`、`DispatchTaskStartAsync` | 线路发送 `idempotencyKey` 取 `_requestContext.CommandId`、配置 revision／epoch／有效期；BGI `TaskSubmission` 有幂等键，但队列去重及最近执行信息在进程内 | 线路逐字段取自已持久包；BGI 校验 payload 哈希、目标 epoch、物理槽预留／fencing；远端按同一发送键可靠查询原受理编号及终态 | 可证实未出站才新建发送；出站未知只查询、零重发 |
+| BGI 停止→退出→新许可：`ExecutionScope.GetActiveSnapshot`、`StopActive`、`BgiTaskCoordinator` | 快照有实例 ID／revision／stopRequested；停止接口尚无预期实例 CAS，队列与执行槽未提供耐久预留消费 | `stop(expectedInstance,epoch,revision)`；旧实例真实终态＋槽释放凭证；同 epoch 物理槽预留、唯一继任者及一次性消费；原生入口和旧调度器同域 fencing | stop 成功或单次 idle 均不得许可后继发送 |
+| 旧 Sender→逐轮台账→新 owner：`RecordLateAcceptedReceipt`、`ClaimAdjudicationAsync` | 旧轮可追加受理／终态；裁决 claim 现只存方向，台账与租约为两个载体 | 追加见证与许可阻断共用水位；owner token、证据集 revision/hash、决定 ID；多历史轮逐轮结清，归档后保护区保留责任 | 任一载体/写入结果不明，保持 Pending 并阻断新许可 |
+| S4b／S8b：`StartSpecifiedTaskViaAdmissionAsync`、`ExecuteResumeAsync` | S4b 有测试准入适配；S8b 仍直发 `task.resume`，响应成功即 `ClearTicket` | S4b 事件身份＋动作序号稳定派生；S8b 原票据／Run／Workflow／Scope＋恢复动作身份，BGI 幂等消费、可查询恢复结果与新实例 | S4b 不接线；S8b 不以现有成功响应消除仲裁责任 |
+
+**运行中比较全格**（与等待候选的 `ArbitrationOrdering` 独立）：可信上线锄地／一键锄地均为最高级，二者互遇也由真正后到者申请抢占。普通任务从持久配置冻结有效级别；下表的“允许”仅表示可以发起带实例 CAS 的交接，**不直接授权发送**。
+
+| 新任务相对正在执行者 | 真正新身份 | 重复同一身份 | 交接已预留继任者 |
+|---|---|---|---|
+| 较高（含最高级对普通） | 允许申请停止→退出确认→预留→编号提交 | 返回原结论，原到达序号不变 | 先与继任者比，再在 Sender 认领前替换；认领后只对账 |
+| 同级（含两个最高级互遇） | 后到者允许按同一流程申请 | 不构成后到，不重复停止／提交 | 后到且未认领才可替换；认领后只对账 |
+| 较低 | 当前阶段明确拒绝并留原因，不进入未定义等待队列 | 返回原结论 | 不替换，不发送 |
+| 当前级别／来源／代际不可证 | Unknown，保留占用，零发送 | 返回原未决结果 | 原预留停驻并对账 |
+
+**队列原词与责任全表**（核对 `ExternalInterfaceCommandPlane.MapTaskStartQueueResult`、`CommandExecutor.ClassifyQueueSubmitEarly`，未列词不自动列为拒绝白名单）：
+
+| 线路事实 | 当前形状 | 可判定责任 | 待补证据／限制 |
+|---|---|---|---|
+| `queued`／`adopted` 且有效 `taskHandle` | 成功＋编号 | 已受理，执行终态另观察 | 句柄与原 `submissionIdentity/sendSeq/targetEpoch` 关联；不可把受理当完成 |
+| `already_executed` | 成功，当前 BGI 映射无编号 | 不能证明本轮有可观察句柄 | 本期只用带编号通道；此形状保留 Unknown，BGI 协议须升级返回原编号 |
+| `queue_full` | 失败；当前 `Submit` 在注册表记一条 Rejected，但队列未入 | 候选确定未受理白名单 | 以 BGI 原子入队位置证明无副作用；与助手本轮身份关联后才关闭责任 |
+| `queue_unavailable`、`invalid_request`、`service_unavailable`、`takeover_conflict` 及其他 `Success=false` | 当前 `ClassifyQueueSubmitEarly` 一律映射 Rejected | 逐词尚未完成无副作用证明，不能一律确定未受理 | 按原词与执行位置列白名单；不在白名单的响应或畸形帧一律 Unknown |
+| `queued/adopted` 无句柄、超时、断线、未知 status | 可能已出站／已入队 | Unknown，原轮 Pending，零自动重发 | 持久发送键远端查询；查询无结果本身不证明未受理 |
+
+**重启与交接状态全表**：`Reserved` 尚未被 Sender 认领，只有当前 owner 能撤销并改继任者；`Claimed` 至结果确证前禁止替换；`StopRequested` 只表示请求已发；`ExitConfirmed` 必须有旧实例终态、槽释放及旧进程存活／死亡证据；`SuccessorPermit` 只能在 BGI 物理预留有效且助手租约同代时消费一次。BGI 换 epoch 时旧停止／退出凭证只记历史；旧进程若未证实死亡，物理槽仍按占用处理。`Submitted/Unknown` 重启只按原键和原轮查询，不能换 epoch 改包重发；`Settled` 逐轮核对无未决责任后才能清保护区。原 `RecoverAfterRestart` 会把无 Submission 且 `LastSendSeq==0` 的 `Queued/InRound` 终局中止，未豁免 `PreemptConfirmPending`；红夹具实际恢复计数为 1。现已仅在该孤儿清理转换排除确认待定的继任者，保留 Active／Queued／标记且零发送。此为 **实现错误 I7 的局部修复**，交接确认后的恢复及跨进程实证仍待补。
+
+本表保留的高优先级**设计缺口**是 BGI 物理槽预留／退出凭证、远端发送键查询与幂等恢复、跨载体阻断水位及任务级可信优先级；`Success=false` 宽泛拒绝和恢复清理则是需逐状态修的**实现错误**。BGI 测试宿主崩溃属**既有测试失败／未执行范围无结论**，本次 Astra exit code 1 属**会诊工具失败、未取得会诊结论**。生产门禁及 R5.8 签署状态不变。
+
+I7 的 `Recovery_PreemptConfirmationPending_PreservesSuccessorWithoutSending` 先红（恢复计数误增 1），后绿；仲裁类 **216/216**、助手全量 **1171 通过／2 跳过／0 失败**。普通无交接标记的孤儿终局规则保留，完整交接恢复尚需后续状态与实机证据。

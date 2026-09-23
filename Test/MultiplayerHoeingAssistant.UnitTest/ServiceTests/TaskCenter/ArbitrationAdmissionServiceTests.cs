@@ -964,6 +964,44 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(0, sends);
     }
 
+    [Fact]
+    public async Task Recovery_PreemptConfirmationPending_PreservesSuccessorWithoutSending()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("fixture:must-not-send", null));
+            };
+            h.Barriers = new AdmissionBarriers
+            {
+                AfterRoundSnapshot = () => throw new InvalidOperationException("模拟交接确认期间崩溃"),
+            };
+        });
+        var request = Req(ns: "v2", workflow: "wf-recovery-preempt-pending", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Error, (await svc.SubmitAsync(request)).Kind);
+
+        var lease = store.Read().File!.Lease!;
+        var marked = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var operation = file.Handoff!.Operations.Single(op => op.RequestIdentity == request.RequestIdentity);
+            operation.PreemptConfirmPending = true;
+            return null;
+        });
+        Assert.True(marked.Success, marked.Reason);
+
+        var (recovered, _, _, _) = BuildFacade(takeover: true);
+        Assert.Equal(0, recovered.RecoverAfterRestart());
+        var retained = FindOp(request.RequestIdentity)!;
+        Assert.Equal(OperationZone.Active, retained.Zone);
+        Assert.Equal(OperationRequestState.Queued, retained.RequestState);
+        Assert.True(retained.PreemptConfirmPending);
+        Assert.True(string.IsNullOrEmpty(retained.SubmissionIdentity));
+        Assert.Equal(0, sends);
+    }
+
     // ── 18. Submission.Submitting 重启→Reconciling（不得仅因 Submitting 发送）──
 
     [Fact]
