@@ -67,11 +67,16 @@ public sealed class RunningOccupantFacts
     /// <summary>
     /// 占用者是否**已被证明**属于 B.1 的两类最高级（上线锄地／一键锄地）：
     /// true＝证明是；false＝证明不是；**null＝不可判定**（例如只知道"联机锄地在跑"，不足以等同最高级）。
-    /// 生产映射未接线该来源 ⇒ 恒 null（残余），因此普通任务不得据此判断"可以抢占锄地占用者"。
+    /// **当前仍无受信来源**（自报 key 不作证明；运行台账的候选快照也未携带最高级标记）⇒ 生产路径恒 null（残余），
+    /// 因此普通任务不得据此判断「可以抢占锄地占用者」。
     /// </summary>
     public bool? HighestClass { get; init; }
 
-    /// <summary>占用者级别／优先级：**只有能证明来源时才有值**（当前生产映射恒 null，来源关联待接线）。</summary>
+    /// <summary>
+    /// 占用者级别／优先级：**只有能证明来源时才有值**。生产路径由宿主 `TaskCenterHost.ResolveOccupantLevels`
+    /// 经 `OccupantLevelResolver`（BGI 执行运行 → 运行台账 `WireRunId` → 流程级登记操作的候选快照）填充；
+    /// 任一环节缺失、多命中或候选冲突 ⇒ 保持 null（不得凭空推断归属）。
+    /// </summary>
     public ArbitrationTier? Tier { get; init; }
     public int? Priority { get; init; }
 
@@ -81,6 +86,29 @@ public sealed class RunningOccupantFacts
         => new() { State = OccupantFactsState.Unknown, Reference = reference };
 
     public static RunningOccupantFacts Idle() => new() { State = OccupantFactsState.Idle };
+
+    /// <summary>
+    /// 用解析出的级别事实复制一份占用者事实（其余字段逐项保留）：仅当解析确实命中时才填 Tier/Priority/HighestClass；
+    /// 解析结果未知（null 值）时保持原样，**不得**用默认值冒充已知。
+    /// </summary>
+    public RunningOccupantFacts WithLevelFacts(ArbitrationTier? tier, int? priority, bool? highestClass)
+        => new()
+        {
+            State = State,
+            Reference = Reference,
+            HasTrustedIdentity = HasTrustedIdentity,
+            ExecutionInstanceId = ExecutionInstanceId,
+            RunId = RunId,
+            JobId = JobId,
+            Kind = Kind,
+            Source = Source,
+            Name = Name,
+            HoeingClass = HoeingClass,
+            HighestClass = highestClass ?? HighestClass,
+            Tier = tier ?? Tier,
+            Priority = priority ?? Priority,
+            StopRequested = StopRequested,
+        };
 
     /// <summary>
     /// 生产映射（单一事实点）：**不知道的一律留空**。

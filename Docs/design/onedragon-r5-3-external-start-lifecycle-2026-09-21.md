@@ -2889,6 +2889,52 @@ R5 要解决的是联机助手、BGI 与既有协调流程在**日常运行、�
 | 既有 14 项失败＋偶发失败 | ⚠ 基线身份不变；`BgiTaskCoordinatorTests.ClearQueue_CancelsAllQueuedItems_WithEvents` 曾在一次全量运行偶发失败（隔离 5/5 通过），**疑似时间敏感、是否既有尚未证实**，机制未定位 |
 | 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
 
+### 24.101 落地登记：占用者级别事实的生产来源（2026-09-24；A6 第二步，限定收口）
+
+**审计（关联键，带代码行）**
+
+- BGI 侧：`task.status.executionRunId` 来自执行根 `ExecutionScope.RunId`（＝`JobDescriptor.WorkflowRunId`）；
+  助手提交时传 `workflowRunId = run.WireRunId`（`BgiWorkflowExecutionBoundary.cs` 约 217 行）⇒
+  **`executionRunId` ≡ 运行台账 `WorkflowRunRecord.WireRunId`**。
+- 运行台账 `RunId` ≡ 租约里操作的 `OperationRecord.RunBinding`（`TaskCenterHost.Admission.cs` 两处
+  `RunBinding = run.RunId`）；级别/优先级取 `OperationRecord.Candidate`（登记时冻结的候选快照，含 `Tier`/`Priority`）。
+- **不可关联/不可采信点（审计结论）**：运行台账记录本身**没有** Tier/Priority 字段；同一个 run 可能派生多个执行根
+  （节点/重试/恢复），因此"run 级关联"不等于"执行根级归属"；**后继节点提交同样是 `RunBinding=run.RunId` 且
+  `Intent="start"`**（`OperationType.NodeExecution`）——只按 Intent 筛选会采信节点候选或把有效流程来源误判为冲突；
+  最高级锄地（上线锄地／一键锄地）**没有受信标记来源**（自报 `key` 不作证明）。
+
+**实现（唯一解析路径；未开生产门）**
+
+| 组成 | 位置 | 语义 |
+|---|---|---|
+| 级别解析纯函数 | `Services/TaskCenter/Arbitration/OccupantLevelResolver.cs`（新增） | `Resolve(bgiExecutionRunId, runs, operations)`：执行运行 ID 必须是合法 GUID；`WireRunId` 必须**唯一命中**一条运行记录；只采信 `RunBinding = RunId` **且 `OperationType = FlowRegistration`**（E1 面板启动的可信类型）的候选快照；候选 `(Tier, Priority)` 必须**完全一致**；缺失／多命中／类型排除后无来源／候选冲突 ⇒ 未知（`execution_run_id_missing_or_invalid`／`run_record_not_found`／`run_record_ambiguous`／`operation_record_not_found`／`operation_candidate_conflict`） |
+| 事实复制 | `RunningOccupantFacts.WithLevelFacts` | 命中才填 `Tier`/`Priority`/`HighestClass`；未知（null）**不覆盖**已有值；其余字段逐项保留，原对象不变 |
+| 生产接线 | `TaskCenterHost.ResolveOccupantLevels`（`TaskCenterHost.Admission.cs`） | 仅当"占用 + 身份可信 + 快照含 `CurrentExecution`"时解析：读运行台账与租约；**租约未组装 ⇒ 未知**；**`Status != Valid`（Absent/Expired/Corrupt/Unsupported）⇒ 留痕并保持未知**；解析未命中时留痕；异常 ⇒ 未知并留痕。接缝分支不读实况/台账 |
+
+**证据**
+
+- 定向夹具 `Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/OccupantLevelResolverTests.cs` **9/9**：
+  唯一命中、执行运行 ID 缺失/非法、运行记录缺失/多命中/RunId 空白、无操作、**真实节点形状（`NodeExecution`+`Intent=start`）被排除**、
+  外部启动与未知类型被排除、`RunBinding` 不匹配、候选一致、候选冲突（级别/优先级）、流程级与节点级并存时**只采信流程级**、
+  `WithLevelFacts` 逐字段保留/不覆盖/原对象不变/`HighestClass` true→true 与 true→false。
+- 受控突变（"多命中取首条"）⇒ **1 红**后还原。
+- 完整回归：助手全量 **1231 通过／2 跳过／0 失败／1233**（`r5_a6b_final_assistant_full_20260924.trx`）；
+  BGI 源码本批未改动，最近全量 **1025 通过／14 失败／1039**，失败身份与既有 14 项基线差集为空（原因未归因）。
+- 会诊：**GPT-6-Astra／medium 两轮各 1 次成功**。首轮 2 必改（`Intent="start"` 不能证明流程级／夹具构造失真）＋4 重要；
+  第二轮判 **①②闭合、③在代码层闭合（宿主分支缺测试证据）、无新增必改，并同意本批限定收口**。
+
+**残余（不因本批改变门禁）**
+
+| 项 | 状态 |
+|---|---|
+| 级别解析路径（run 级关联 → 流程级候选） | ✅ 限定收口：纯函数与解析路径的静态逻辑闭合（含"只采信流程级登记"与真实节点形状反例） |
+| **④ 生产时序与新鲜度** | ⚠ 生产解析**已接线**，但新增同步读取（运行台账 + 租约）的耗时、锁交错、以及读取后快照新鲜度/纪元一致性**尚未验证** |
+| **⑤ 执行根级归属** | ❌ 未闭合：只证明 **run 级**关联；同一 `WireRunId` 被多个执行根复用时是否共同继承流程级级别的合同未证 |
+| **⑥ `HighestClass` 来源** | ❌ 未接线：生产恒 null ⇒ **普通任务遇到锄地占用者可能长期保守等待**（已知可用性限制；权威空闲后应解除，重评估入口存在性未证） |
+| **宿主分支测试证据** | ❌ 未覆盖：`ResolveOccupantLevels` 的"租约未组装/非 Valid/解析未命中/异常"分支只有代码与日志路径，无夹具 |
+| 生产消费端 | ❌ 未接线：抢占执行、退出确认、恢复专用准入仍未消费本批事实（生产门保持关闭） |
+| 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
+
 ### 24.100 落地登记：A6 运行中占用与到来者相遇（2026-09-24；纯函数＋占用者事实，未开生产门）
 
 **审计（带代码行；批次开始时的真实口径）**

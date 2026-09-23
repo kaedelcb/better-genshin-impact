@@ -866,9 +866,53 @@ public sealed partial class TaskCenterHost
                 || !statusEpochMatches || ledgerUnknown,
             // [R5 批次 4／A6] 生产占用者事实（单一事实点）：身份/级别/优先级不知道的一律留空；
             // 注意 statusEpochMatches=false（旧纪元快照）⇒ FromStatus 只按新鲜度判定，故此处显式降级为未知。
-            RunningOccupant = RunningOccupantFacts.FromStatus(status, ledgerOccupied, ledgerUnknown,
-                bgiEpochVerified: statusEpochMatches),
+            RunningOccupant = ResolveOccupantLevels(
+                RunningOccupantFacts.FromStatus(status, ledgerOccupied, ledgerUnknown,
+                    bgiEpochVerified: statusEpochMatches),
+                status),
         };
+    }
+
+    /// <summary>
+    /// [R5 批次 5／A6 第二步] 占用者**级别事实**解析（唯一路径）：BGI `executionRunId` → 运行台账
+    /// （`WireRunId` 唯一命中）→ 该 run 的流程级登记操作（`RunBinding = RunId`）候选快照 → Tier/Priority。
+    /// 任一环节缺失、多命中或候选冲突 ⇒ 保持未知；读台账/租约失败也保持未知（**不得**凭空推断归属）。
+    /// `HighestClass` 目前**没有受信来源**（自报 key 不作证明）⇒ 恒 null（残余，见 §24.101）。
+    /// </summary>
+    private RunningOccupantFacts ResolveOccupantLevels(RunningOccupantFacts occupant, ControlStatus? status)
+    {
+        if (occupant.State != OccupantFactsState.Occupied || !occupant.HasTrustedIdentity) return occupant;
+        if (status?.CurrentExecution is not { } execution) return occupant;
+
+        try
+        {
+            var runs = _runs.List();
+            var read = _admissionStore?.Read();
+            if (read is null)
+            {
+                return occupant; // 仲裁面未组装的接缝态：级别未知
+            }
+            if (read.Status != ArbitrationLeaseStatus.Valid)
+            {
+                // 非 Valid（Absent/Expired/Corrupt/Unsupported）不得据其内容推级别；如实留痕并保持未知。
+                TryLog($"[任务中心] 占用者级别事实未知：租约读取状态={read.Status}（{read.Detail ?? "无明细"}）");
+                return occupant;
+            }
+            var operations = read.File?.Handoff?.Operations;
+            var level = OccupantLevelResolver.Resolve(execution.RunId.ToString("N"), runs, operations);
+            if (!level.Reference.StartsWith("resolved_", StringComparison.Ordinal))
+            {
+                // 级别解析未命中（缺运行记录/多命中/候选冲突等）：留痕但保持未知。
+                TryLog($"[任务中心] 占用者级别事实未知：{level.Reference}（执行运行={execution.RunId:N}）");
+            }
+            return occupant.WithLevelFacts(level.Tier, level.Priority, level.HighestClass);
+        }
+        catch (Exception ex)
+        {
+            // 台账/租约读取失败 ⇒ 级别事实未知（保守），不影响既有占用布尔语义。
+            TryLog("[任务中心] 占用者级别事实解析失败（按未知处理）：" + ex.Message);
+            return occupant;
+        }
     }
 
     /// <summary>外部启动台账占用判定（§4.2a）：已受理未终结（AcceptedPendingExecution/Running）＝占用；读取失败＝事实未知。</summary>

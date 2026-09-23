@@ -157,7 +157,9 @@ public sealed class ArbitrationFacts
     /// <summary>
     /// **当前占用者事实**（R5 批次 4／A6，纯增量，未知字段保持 null）：给
     /// <see cref="RunningOccupancyArbiter.Decide"/> 用的"是谁、级别多少、能否安全绑定停止"；
-    /// 生产映射唯一事实点＝<see cref="RunningOccupantFacts.FromStatus"/>。
+    /// 状态/身份来源＝<see cref="RunningOccupantFacts.FromStatus"/>（快照∪台账，含纪元核验），
+    /// 级别/优先级来源＝宿主 `TaskCenterHost.ResolveOccupantLevels` → `OccupantLevelResolver`
+    /// （执行运行 → 运行台账 `WireRunId` → **流程级登记**操作候选快照；缺失/歧义⇒保持未知）。
     /// 本属性**不改变**既有布尔 <see cref="ExecutionOccupied"/> 的语义（门禁仍关闭）。
     /// </summary>
     public RunningOccupantFacts? RunningOccupant { get; set; }
