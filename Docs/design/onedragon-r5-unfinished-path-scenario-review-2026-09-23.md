@@ -75,7 +75,7 @@
 
 | 触发条件／缺口 | 唯一授权者 | 允许执行的动作 | 回执及终态 | 重启后的恢复行为 | 对应代码入口 | 对应测试或实机证据 |
 |---|---|---|---|---|---|---|
-| A 退出前预留 B，或 A 已自然退出、B 尚未排队；D14 | BGI 物理槽门授予连续排他，当前 owner 指定 A/B | 先预留再定向停止；自然退出先发生则空槽 generation CAS；B 入队到起步全程保持槽权 | 预留回执不等于执行；B 起步后才绑定新实例，A 终态独立 | 读回预留持有人及 generation；不明就关闭新入口 | `BgiTaskCoordinator.WaitSlotFreeAsync`、`ExecutionScope.Start`、`TaskSemaphore` | 现无连续槽权协议或原生入口并发实测，待红夹具及 R5.8 实机 |
+| A 退出前预留 B，或 A 已自然退出、B 尚未排队；D14 | BGI 物理槽门授予连续排他，当前 owner 指定 A/B | 先预留再定向停止；自然退出先发生则空槽 generation CAS；B 入队到起步全程保持槽权 | 预留回执不等于执行；B 起步后才绑定新实例，A 终态独立 | `PhysicalSlotLedger.TryAcquire`（实验底座）、`BgiTaskCoordinator.WaitSlotFreeAsync`、`ExecutionScope.Start`、`TaskSemaphore` | 底座 7/7 证明锁句柄排他及测试子进程异常退出重获锁；未接真实入口，断电代际／目录回滚／逃逸执行树仍无证，待完整协议与 R5.8 实机 |
 | 取消 A 时 A 自然完成、C 接管，或 F11 同时清队列；D15 | BGI 同一物理门内按预期实例执行定向停止；用户全局停止另有权限 | 先比 epoch／实例／revision 再作全部副作用；AlreadyExited 保留自然完成，不停 C | `StopRequested` 与 `AlreadyExited` 分开；终态 revision 可合法增加 | 按 `stopAppliedRevision/terminalRevision/slotGeneration` 复核，不用旧 stop 回执补确认 | `DispatchTaskStop`、`DispatchTaskCancel`、`CancelByHandle`、`ExecutionScope.StopActive` | 现先 ClearQueue／锁外全局 stop，错停交错待夹具与实机 |
 | 第三挑战者 C 替换 B，BGI 改票据途中断线／崩溃；D16 | 当前 owner 准备替换，BGI 原子换预留并 fencing 旧 Sender | 固定 replacementId，待两端读回一致才放 C；不一致保持 handoff hold | `ReplacementPrepared/RemoteReplacementUnknown/ReplacementCommitted`，不能把本地写成功当远端成功 | 先查远端预留版本与本地认领代次，旧 B 不能恢复出站 | `ProcessWinnerAsync`、`AcceptanceClaim`、`PreemptionGate` | 现无发送前 claim／远端替换协议，待故障注入矩阵 |
 | 新 B 已拿许可但未被 BGI 受理，旧 A 迟到 Accepted；D17 | 旧者仅写见证，当前 owner 管责任；BGI 受理点执行 fencing | 同水位挂起已签未受理许可，不仅阻断未来许可；未知先对账 | A 证据 Pending，B 许可撤销须有远端确认；不能宣称 B 零受理 | 读回见证序号、B 的认领／受理事实；任一不明保持门禁 | `PersistLateAcceptanceReceiptAsync`、`ValidateAndOccupy`、BGI `Submit` | 组件旧轮夹具未覆盖已签未发交错；待跨端反例 |
