@@ -129,6 +129,26 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
         Assert.Null(ExecutionScope.Current);
     }
 
+    [Fact]
+    public void Start_AfterManualStopBetweenCheckAndRootCreation_RejectsOldWatermark()
+    {
+        var observedStopVersion = ExecutionScope.StopVersionNow;
+        ExecutionScope.StopActive(manual: true);
+        var admitted = false;
+
+        Assert.Throws<OperationCanceledException>(() => ExecutionScope.Start(
+            new JobDescriptor(JobKind.Group, "旧停止水位", JobSource.V2,
+                ExpectedStopVersion: observedStopVersion,
+                OnAdmitted: () => admitted = true)));
+        Assert.False(admitted);
+        Assert.False(ExecutionScope.HasActive);
+
+        using var current = ExecutionScope.Start(new JobDescriptor(
+            JobKind.Group, "新停止水位", JobSource.V2,
+            ExpectedStopVersion: ExecutionScope.StopVersionNow));
+        Assert.True(current.IsCurrentOwner);
+    }
+
     public void Dispose()
     {
         PreemptionGate.Disarm();

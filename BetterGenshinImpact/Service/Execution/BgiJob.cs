@@ -113,7 +113,9 @@ public sealed record JobDescriptor(
     /// <summary>R4.6 D10/E4'：本次调用收尾权限抑制（任务中心整龙调用固定 true；缺省 false 行为不变）。</summary>
     bool SuppressConfigCompletionAction = false,
     /// <summary>R4.6 B1：出现序号/尝试号（线协议 add-only 扩展，缺省 null）。</summary>
-    int? Occurrence = null, int? Attempt = null)
+    int? Occurrence = null, int? Attempt = null,
+    /// <summary>v2 启动在准备前读到的手动停止水位；建根时在同一锁内核对，null 为旧 UI 调用。</summary>
+    long? ExpectedStopVersion = null)
 {
     public JobExecutionIdentity? ExecutionIdentity => WorkflowRunId is { } run && NodeId is { } node && Iteration is { } iteration
         ? new(run, node, iteration, TaskId, ConfigRevision, Occurrence, Attempt) : null;

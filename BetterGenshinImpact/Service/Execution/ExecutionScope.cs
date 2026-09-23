@@ -90,6 +90,8 @@ public sealed class ExecutionScope : IDisposable
         ExecutionScope scope;
         lock (Sync)
         {
+            if (descriptor.ExpectedStopVersion is { } expectedStopVersion && expectedStopVersion != _stopVersion)
+                throw new OperationCanceledException("启动前已被用户停止");
             if (_active != null) throw new InvalidOperationException("task_busy: 另一流程尚未退出");
             if (!PreemptionGate.Authorize(descriptor.TakeoverTicket))
                 throw new InvalidOperationException("takeover_conflict: 执行权属于另一批次或票据已失效");

@@ -723,6 +723,7 @@ internal sealed class InstanceRequestHandler
                     TaskId: InstanceIpcProtocol.GetStringOrNull(executionRequest?.Data, "taskId"),
                     ConfigRevision: InstanceIpcProtocol.GetStringOrNull(executionRequest?.Data, "expectedConfigRevision"),
                     Occurrence: executionIdentity?.Occurrence, Attempt: executionIdentity?.Attempt, // R4.6 B1
+                    ExpectedStopVersion: stopVersion,
                     // R4.6 E2-9/E4'：期望 UID 复验 + 收尾抑制（仅严格合同请求携带；旧入口 null/false 零变化）
                     ExpectedUid: executionRequest == null ? null : ExecutionRequestContract.ReadExpectedUid(executionRequest.Data),
                     SuppressConfigCompletionAction: executionRequest != null && ExecutionRequestContract.ReadSuppressConfigCompletionAction(executionRequest.Data));
