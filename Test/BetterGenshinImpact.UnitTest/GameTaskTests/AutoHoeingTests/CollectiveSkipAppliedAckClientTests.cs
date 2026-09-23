@@ -29,6 +29,7 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
 ///   6) 旧的 RequestSkipToProgressReceived 事件仍照发（旧订阅方零感知）；
 ///   7) 集体跳段用专用异常类型，与落后追赶/卡死保护的异常类型互不混淆。
 /// </summary>
+[Collection("RemoteSkipGateState")] // 与 RouteAnchorCollectiveSkipIsolationTests 共享进程级 RemoteSkipGate 状态，必须串行
 public class CollectiveSkipAppliedAckClientTests : IDisposable
 {
     private const string SkipEvent = "sync.requestSkipToProgress";

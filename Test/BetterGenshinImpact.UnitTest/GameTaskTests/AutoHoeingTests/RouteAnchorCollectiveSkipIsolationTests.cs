@@ -13,12 +13,24 @@ using Xunit;
 namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
 
 /// <summary>
+/// [R5「task.stop 定向身份绑定」批次，测试基础设施修复] <c>RemoteSkipGate</c> 是**进程级静态**信号位，
+/// <c>RouteAnchorCollectiveSkipIsolationTests</c> 与 <c>CollectiveSkipAppliedAckClientTests</c>
+/// 分别 <c>Reset()</c>／取消它；默认并行调度下两者可交错，导致
+/// <c>AnchorActive_CollectiveSkipCommand_IsIgnored_NoSignalNoWake</c> 在 <c>Reset()</c> 后立刻看到
+/// 已被另一集合取消的令牌而误报。实测：单跑该用例 5/5 通过，完整套件里 4 次运行中出现 2 次该误报。
+/// 处置＝把这两个类放入同一不可并行集合（断言与用例一字未改）。
+/// </summary>
+[CollectionDefinition("RemoteSkipGateState", DisableParallelization = true)]
+public sealed class RemoteSkipGateStateCollection;
+
+/// <summary>
 /// 阶段 6 客户端半边：锚点模式激活时，旧集体跳段命令必须被忽略（route-anchor）。
 ///
 /// 两套控制器都会移动成员（旧机制"跳段"、锚点"跳路线"），同时生效正是"走散"的成因。
 /// 服务端半边已在附录 M 隔离（不判定/不武装定时器/不新建命令），本文件锁定客户端半边：
 /// 锚点激活时收到旧集体跳段命令 → 不登记、不置信号位、不唤醒等待（否则会提前放行正在等的同步点）。
 /// </summary>
+[Collection("RemoteSkipGateState")]
 public class RouteAnchorCollectiveSkipIsolationTests
 {
     private const string Capability = BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability;

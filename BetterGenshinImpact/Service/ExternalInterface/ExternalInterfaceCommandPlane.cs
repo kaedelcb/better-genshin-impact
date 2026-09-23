@@ -159,16 +159,27 @@ internal static class ExternalInterfaceCommandPlane
     /// <summary>
     /// [切片7] ext.task.stop：新增可选参数 clearQueue（ext 通道默认 true——"停止"含"别再继续"语义，
     /// 清空时在队项逐项发 task.queueCancelled）；v2 task.stop 无此参数，行为不变。
+    /// [R5 A4] 携带定向停止身份键的请求**不清队列、也不读 clearQueue**：队列清理属于全量停止语义，
+    /// 而定向请求可能因身份过期被拒绝——先清队列就构成"拒绝前已产生副作用"。
+    /// 协调器按需惰性取得（`factory`）：定向请求与 clearQueue=false 都不触碰进程级单例。
     /// </summary>
-    private static InstanceIpcEnvelope DispatchTaskStop(
+    internal static InstanceIpcEnvelope DispatchTaskStop(
         InstanceRequestHandler handler,
         InstanceConnection connection,
         InstanceIpcEnvelope request)
+        => DispatchTaskStop(handler, connection, request, () => BgiTaskCoordinator.Instance);
+
+    /// <summary>可注入协调器的内部重载（测试用；生产走进程级单例）。</summary>
+    internal static InstanceIpcEnvelope DispatchTaskStop(
+        InstanceRequestHandler handler,
+        InstanceConnection connection,
+        InstanceIpcEnvelope request,
+        Func<BgiTaskCoordinator> coordinatorFactory)
     {
-        var clearQueue = request.Data?["clearQueue"]?.ToObject<bool?>() ?? true;
-        if (clearQueue)
+        if (!InstanceRequestHandler.HasDirectionalStopIntent(request)
+            && (request.Data?["clearQueue"]?.ToObject<bool?>() ?? true))
         {
-            BgiTaskCoordinator.Instance.ClearQueue();
+            coordinatorFactory().ClearQueue();
         }
 
         return handler.HandleTaskStop(connection, request);
@@ -177,12 +188,20 @@ internal static class ExternalInterfaceCommandPlane
     /// <summary>
     /// [切片7] ext.task.cancel {taskHandle}：在队 → 移除+task.queueCancelled；
     /// 在跑且句柄匹配 → 等价 task.stop（复用 HandleTaskStop 单一事实源）；否则 task_not_found。
+    /// [R5 A4] 该操作不接受定向停止身份字段：一旦携带就在**任何状态变更之前**拒绝，
+    /// 避免"先按句柄取消、再因身份不匹配失败"的混合语义。
     /// </summary>
     private static InstanceIpcEnvelope DispatchTaskCancel(
         InstanceRequestHandler handler,
         InstanceConnection connection,
         InstanceIpcEnvelope request)
     {
+        if (InstanceRequestHandler.HasDirectionalStopIntent(request))
+        {
+            return InstanceIpcEnvelope.Failure(request, "invalid_request",
+                "ext.task.cancel 不接受执行身份字段；按执行身份定向停止请使用带 executionInstanceId 的 task.stop 通道");
+        }
+
         var handleRaw = request.Data?["taskHandle"]?.ToString();
         if (!Guid.TryParse(handleRaw, out var handle))
         {

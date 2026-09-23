@@ -2781,3 +2781,52 @@ R5 要解决的是联机助手、BGI 与既有协调流程在**日常运行、�
 | R5.6 配置迁移失败或软件版本回退 | 按迁移事务恢复旧配置；新旧调度器不能同时激活，未知状态拒绝恢复执行 | 总计划 R5.6 与 R5.8 迁移／回滚演练 |
 
 此前 §24.90–§24.95 将“完整旧备份被恢复后仍要自动识别历史”推成了强制防护目标，进而提出独立可信锚点、本机小服务和整机恢复选项。**这是设计范围错误**：没有用户需求或总计划依据，撤销其作为生产开门前置。完整旧备份人工恢复后的历史不可凭同一份被恢复的数据自行证明；本期不承诺自动识别这种操作，也不围绕它新增程序。已有 `PhysicalSlotLedger`／`DurableSubmissionIdentityStore` 仍是未接生产的保守实验组件，可保留其缺记录停驻行为，但后续是否复用以普通重启／回执丢失的实际接线价值为准。此修订不豁免真正的无双跑、停止后退出确认、崩溃恢复、完整回归和 R5.8 实机签署；生产入口继续关闭。
+
+### 24.97 落地登记：task.stop 定向身份绑定（2026-09-24；D6／D28 第一转移，退出证明仍未交付）
+
+**背景**：独立审计（[R5 独立审计交接](onedragon-r5-independent-audit-2026-09-24.md) A4）确认 `HandleTaskStop` 只有全局 `CancellationContext.ManualCancel()`，
+不按执行实例／状态修订号核对，也不产生退出凭证；迟到的停止请求会波及继任执行根；`ext.task.stop` 在身份校验前先清队列。
+本批只做**一个状态转换**：把"停止请求"绑定到当时那一颗执行根，并把不匹配的请求变成**零副作用拒绝**。**退出证明（执行树／叶子退出、槽释放凭证）仍不在本批，见文末残余。**
+
+**1. 生产接线（BGI 侧，`InstanceRequestHandler.HandleTaskStop`）**
+
+- `task.stop` 新增**可选字段** `executionInstanceId`／`executionStateRevision`／`bgiEpoch`（身份取值来源＝`task.status` 同名字段）。兼容边界**精确**表述：**两个定向身份键**（`executionInstanceId`／`executionStateRevision`）**都不出现**即逐字节走旧协议；任一出现（含显式 `null`）即进入严格定向校验，身份不完整一律拒绝。`bgiEpoch` 是 v2/ext 各操作共用的进程元数据，**单独出现不构成定向意图**（仍走旧协议）。据此：此前发送过这些身份键、依赖服务端忽略它们的调用方，行为确实改变（这正是本批要关闭的"旧键被静默忽略"缺口）。
+- 身份匹配（实例 ID ＋ 状态修订号）⇒ `ExecutionScope.TryRequestPreempt` 登记让位，回 `{ status = "stop_requested", executionInstanceId, matchedExecutionStateRevision, stopRequested = true, exitConfirmed = false }`；
+  **请求不等于退出**：停止请求本身不释放根（并发进行的正常退出仍可能随后发生），`task.status` 在真实退出前仍报 `executionIdle = false`。
+- **单次 CAS ＋ 请求后观测分类**：不再"先读快照预检、再调用"，而是直接 `TryRequestPreempt`；失败原因一律由**请求之后**的观测确定，因此"快照通过后换根／推进修订号"的结果也是确定的。
+- 不匹配分类（全部零副作用、**均不构成退出证据**）：`not_current`（无匹配活动根：未知／已结束／已被其他根取代；或修订号过期；或请求前后换根）、
+  `identity_unavailable`（任务槽被占用但没有可绑定执行根身份）、`stale_epoch`（**形状合法但**进程纪元不匹配）、`invalid_request`（形状不合法：身份键部分出现、GUID／修订号／`bgiEpoch` 或其二字段类型非法、缺字段）。
+- **形状先于取值**：三个字段（含 `bgiEpoch.processId`／`startTicksUtc` 必须是 JSON 整数）必须完整且类型合法，否则一律 `invalid_request`；只有形状合法才比较纪元取值。
+- 定向路径**不**武装"全部停止"语义：不改 `WasCancelled`／`LastManualCancelAtUtc`（30 秒手动停止冷却）、不清恢复现场、不撤销接管票据、不推进 `StopVersion`。
+- 两个定向身份键都不存在的旧协议 `task.stop`（含只带 `bgiEpoch` 的请求）行为逐字节保留：`ManualCancel()` ＋ `{ status = "stopped" }`，并照旧武装冷却、推进停止水位、清恢复现场、撤销票据。
+
+**2. ext 控制面（`ExternalInterfaceCommandPlane`）**
+
+- `ext.task.stop { clearQueue }`：携带定向身份键的请求**不清队列、也不读 `clearQueue`**——队列清理属全量停止语义，而定向请求可能因身份过期被拒绝，先清队列即"拒绝前已产生副作用"。协调器改成**惰性取得**（`Func<BgiTaskCoordinator>`）：定向请求与 `clearQueue=false` 都不触碰进程级单例（修复前那句 `BgiTaskCoordinator.Instance` 会在分流前求值）。
+- `ext.task.cancel { taskHandle }`：一旦携带定向身份键，在**任何状态变更之前**回 `invalid_request`，避免"先按句柄取消、再因身份不匹配失败"的混合语义；句柄尚未与执行根绑定，见残余表。
+
+**3. 证据**
+
+- 反例先行：`Test/BetterGenshinImpact.UnitTest/ServiceTests/Instance/TaskTakeoverIncidentTests.cs` 新增 5 条反例（迟到旧身份不得误停继任根、匹配身份只回 `stop_requested` 且真实退出前不报空闲、旧纪元拒绝、形状错误拒绝、槽占用无身份拒绝）＋ 保留旧协议一条；
+  实现前实测 **5 红／1 绿（旧协议）**；实现后该类 **37/37** 通过，状态矩阵含：未知身份、修订号过期（改单次 CAS 后即 CAS 失败支）、以新修订号重复请求、身份键部分出现×2、修订号类型错误、缺 `bgiEpoch`／`bgiEpoch` 非对象／`startTicksUtc` 非整数／`processId` 超 Int32 范围、`executionInstanceId` 为对象／数字／数组、修订号超出 Int64（触发转换异常支）、只带 `bgiEpoch` 仍全量停止、定向请求保持恢复现场／票据／冷却窗口、`ext.task.stop` 有身份不清队列且不取协调器（含畸形 `clearQueue` 不阻断分类）／无身份仍清队列／`clearQueue=false` 保留队列且不取协调器、生产包装层对定向请求不创建协调器单例、`ext.task.cancel` 带身份对**真实在队项**零变更拒绝。
+- **覆盖边界（如实）**：①`executionInstanceId` 必须是 JSON 字符串（不做隐式文本化），形状解析整体包 try/catch 归 `invalid_request`；②消费方（助手）如何使用这些错误码与 `executionIdle` 不在本批范围，代码未改，不能据本批断言其不会把 idle 当释放依据；③`task.status` 的 `executionIdle` 仍不纳入注册表占用，分段读取也非原子退出证明；④生产包装层"不提前取单例"的断言只在单例尚未被同进程其他测试创建时生效（条件断言，原因写在用例注释里）。
+- **完整回归（本批最终源码，`-p:DeployToBgiTools=false`）**：BGI 全量**最终**代码状态连续 2 次均为 **1012 通过／14 失败／1026**，失败用例名称与既有 14 项基线**逐名相同、差集为空**。TRX：`r5_stop_identity_bgi_final15/16_20260924.trx`（`Test/BetterGenshinImpact.UnitTest/TestResults/`）。会诊处置过程中的中间状态另有 3 次 **1005／14／1019**（`full4/5/6`）、2 次 **1007／14／1021**（`full7/8`）与 2 次 **1011／14／1025**（`full9/10`），失败身份差集同样为 0；`final11` 同差集为 0。**如实登记的波动与异常**：①更早一次同源运行出现 13 失败（`WaitPointReport_SyncPointIdValidation_WorksCorrectly` 这条 FsCheck 生成型用例通过，属既有生成型波动，不宣称修复）；②`final12/13` 各多出 1 条 `RouteAnchorCollectiveSkipIsolationTests.AnchorActive_CollectiveSkipCommand_IsIgnored_NoSignalNoWake`（既有 `RemoteSkipGate` 静态竞争，已按测试调度修复，见下）；③一次**主机级异常**（172 失败，2 秒结束，133 条 `TypeInitializationException: 'BetterGenshinImpact.App'`＋STA 报错），在其后连续同代码运行中未复现，且不含任何新失败身份；④`final14` 少 1 条（同①的生成型波动）。以上均如实登记为观察，不据此宣称稳定，也不把 `App` 静态初始化依赖的 STA 假设当作已验证。
+- 助手侧完整回归：**1177 通过／2 跳过／0 失败／1179**（`r5_stop_identity_assistant_full2_20260924.trx`），与既有基线同值；`ClaimSurfaceGuardTests` 已按 `CLAIM_SURFACE_REGENERATE=1` 再生声明面清单（本批新增 2 行），文档—夹具名守卫与失败模式覆盖守卫均通过。
+- **测试基础设施修复（非产品行为）**：`ManualStopCooldownTests` 的 `ManualCancel()` 会经 `CancellationContext.CancelCore` 调用**进程级静态** `ExecutionScope.StopActive(manual: true)`，与并行集合中任何 `ExecutionScope.Start` 竞争全局停止水位。反例：仅 `ManualStopCooldownTests`＋`ExecutionScopeSkippedTests` 同批运行 **6/6 次**让后者误报「根流程已停止或已让位」；单独运行分别 4/4、5/5 通过。处置＝把该夹具放入不可并行集合 `GlobalExecutionStopWatermark`（与 `TaskTakeoverIncident` 同纪律），用例与断言一字未改；修复后同批运行 **9/9 × 4 次**通过。本轮产品改动不涉及 `ExecutionScope.cs`／`CancellationContext.cs`，该竞争为既有测试调度缺陷。
+- **第二处测试基础设施修复（非产品行为）**：`RemoteSkipGate` 也是**进程级静态**信号位，`RouteAnchorCollectiveSkipIsolationTests` 与 `CollectiveSkipAppliedAckClientTests` 分别 `Reset()`／取消它；默认并行下两者可交错，使 `AnchorActive_CollectiveSkipCommand_IsIgnored_NoSignalNoWake` 在 `Reset()` 后立刻看到已被取消的令牌。证据：该用例单跑 **5/5** 通过；完整套件 `final12/13` 两次出现该误报，`final11/14` 未出现。处置＝把两个类放入同一不可并行集合 `RemoteSkipGateState`（断言与用例一字未改）；`final15/16` 复跑失败身份差集为 0、无额外失败。
+- 会诊第一轮：**GPT-6-Astra／medium／1 次成功**（差异复审，attempts=1）。结论含 2 条必改（`ext.task.stop` 前置副作用、`already_exited` 无退出证据的过度声明）、3 条重要（部分身份降级、`ext.task.cancel` 混合语义、测试矩阵不足）、1 条建议（错误分类与回显修订号语义）。处置：`already_exited` **整码删除**改 `not_current`；ext 两入口前置处置；矩阵补齐；回显改名 `matchedExecutionStateRevision`。
+- 会诊第二轮（验证轮）：**GPT-6-Astra／medium／1 次成功**（attempts=1）。结论：新增 1 条必改（身份形状校验漏掉整个 `bgiEpoch`，缺 epoch 会误报 `stale_epoch`、畸形 epoch 会落进通用 `task_stop_failed`）、3 条重要（`ext.task.stop` 生产包装层在分流前求值单例；测试仍有假绿空间：`ext.task.cancel` 用随机句柄、缺 ext 分支、缺"ID＋修订号齐全但缺 epoch"；"纯加法／旧调用方不受影响"表述过强）、若干建议（收窄 `HasActive` 与"矩阵补齐"措辞）。处置：形状优先＋纪元子字段严格解析、"只带 `bgiEpoch` 视为旧协议"的精确兼容边界、协调器惰性取得、`ext.task.cancel` 改用真实在队项、补缺 epoch／畸形 epoch 反例；以精确覆盖范围与残余表代替"全部处置"的笼统表述。
+- 会诊第三轮（窄范围复验）：**GPT-6-Astra／medium／1 次成功**（attempts=1）。结论：B（协调器惰性）已闭合；A 的纪元分类静态闭合，但要求补 GUID 类型／异常证据；C 仍有具体假绿路径（生产包装层、`clearQueue` 解析顺序、handler CAS 失败支、`startTicksUtc`／PID 范围检查）；D 文档仍有"三个字段都不出现"与"只带 epoch 也走旧协议"的矛盾。处置：`executionInstanceId` 强制 JSON 字符串＋整体 try/catch；改为**单次 CAS**（CAS 失败支现由修订号过期等用例确定性覆盖）；补 `startTicksUtc` 非整数、`processId` 超范围、畸形 `clearQueue`＋定向身份、`clearQueue=false` 保留队列反例；文档兼容边界改为"两个身份键"口径。
+- 会诊第四轮（收口确认）：**GPT-6-Astra／medium／1 次成功**（attempts=1）。结论：**无新增必改**；文档口径已闭合；仍要求补两点证据——GUID 对象／数组／数字与整数溢出的反例（已按上表补齐，第六组）**以及生产包装层"不提前取单例"的确定性证据**。后者在单进程测试内只能做条件断言（同进程其他集合可能已创建单例），需独立测试进程或单例重置钩子才能无条件证明，**登记为残余**，不声称该断言无条件成立。
+
+**4. 状态与残余（不因本批改变门禁）**
+
+| 项 | 状态 |
+|---|---|
+| `task.stop` 定向身份绑定（请求侧） | ✅ 组件／处理器层已交付；定向 **37/37** |
+| 停止后的**退出证明**（根／叶子／逃逸执行树实际退出、物理槽释放凭证） | ❌ 未交付：本批只登记请求，`exitConfirmed` 恒为 false；D6／D28 只完成了第一转移 |
+| `task.status` 作为退出证据 | ⚠ 不可用：`executionIdle` 未纳入注册表占用，且"空闲观察"与"派发"仍非原子（沿用 §24.43／A8 结论） |
+| 助手侧发送方接线（E3／E4／E5、S4b／S8b、热键） | ❌ 仍关闭：本批只提供 BGI 侧接受语义，未改任何生产入口开关 |
+| `ext.task.cancel` 按句柄的定向停止（含 `ownedOnly`） | ⚠ 未接入执行身份：本批只拒绝混用，未把句柄绑定到执行根 |
+| 生产包装层"定向请求不提前取协调器单例"的**确定性**证据 | ❌ 未闭合：单进程内只能条件断言；需独立测试进程或单例重置钩子（会诊第四轮提出） |
+| 生产入口门／真实 User 门／R5.8 实机无双跑签署 | ❌ **全部保持关闭／未签署** |

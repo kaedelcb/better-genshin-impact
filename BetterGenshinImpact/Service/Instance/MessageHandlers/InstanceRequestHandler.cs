@@ -544,10 +544,81 @@ internal sealed class InstanceRequestHandler
             response.ErrorMessage ?? response.ErrorCode ?? "实例 IPC 请求失败。");
     }
 
+    /// <summary>
+    /// [R5 A4 第一步] task.stop 支持**带执行身份的定向停止**（新增可选字段；旧形状请求行为不变，
+    /// 但**已经带身份键**的请求不再被忽略——兼容边界见下）。
+    /// <c>executionInstanceId</c> 或 <c>executionStateRevision</c> 任一键出现时，请求只作用于
+    /// "当时那一颗执行根"（身份取 `task.status` 的 `executionInstanceId`／`executionStateRevision`／`bgiEpoch`）：
+    ///   ①身份与修订号都匹配 ⇒ 登记让位请求并回 <c>stop_requested</c>，**不构成退出凭证**
+    ///     （真实退出由执行体收尾，`task.status` 在退出前不得报 <c>executionIdle</c>）；
+    ///   ②目标已不是当前活动根 ⇒ <c>not_current</c>（未知、已结束或被其他根取代）或 <c>identity_unavailable</c>
+    ///     （有任务槽占用但没有可绑定的执行根身份），零副作用，不波及继任执行；
+    ///   ③进程纪元不匹配或身份形状不合法 ⇒ <c>stale_epoch</c>／<c>invalid_request</c>，零副作用；
+    ///   ④定向身份键（`executionInstanceId`／`executionStateRevision`）**部分出现**（含显式 null／空串）
+    ///     一律按形状错误拒绝，绝不降级为全量停止；单独的 `bgiEpoch` 只是公共元数据，仍按旧协议处理。
+    /// 上述失败码只声明"请求未绑定到当前执行根"，**均不构成退出证据**，消费方不得据此释放执行权。
+    /// 定向停止**不**武装"全部停止"语义（不改 <c>WasCancelled</c>／<c>LastManualCancelAtUtc</c> 手动停止冷却、
+    /// 不清恢复意图、不撤销接管票据）——那些仍属于无身份旧协议的全量停止。
+    /// 兼容边界（精确）：两个定向身份键都**不存在**时——含只带公共 `bgiEpoch` 的请求——逐字节保留旧协议行为
+    /// （ManualCancel + status=stopped）。反之，**任一身份键出现即进入严格定向校验**：此前发送过这些键
+    /// 却依赖服务端忽略它们的调用方，行为确实改变（这也正是本批要关掉"旧键被静默忽略"的缺口）。
+    /// </summary>
     internal InstanceIpcEnvelope HandleTaskStop(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
         {
+            if (HasDirectionalStopIntent(request))
+            {
+                // 形状先于取值比较：三个字段（含 bgiEpoch 子字段）必须完整且类型合法，
+                // 否则一律 invalid_request；只有形状合法但进程纪元不匹配才回 stale_epoch。
+                if (!TryReadDirectionalIdentity(request,
+                        out var executionInstanceId, out var stateRevision,
+                        out var epochProcessId, out var epochStartTicksUtc))
+                {
+                    return InstanceIpcEnvelope.Failure(request, "invalid_request",
+                        "定向停止需要合法的 executionInstanceId／executionStateRevision／bgiEpoch；身份键部分出现或形状错误时不得退回全量停止");
+                }
+
+                if (epochProcessId != JobRegistry.CurrentEpoch.ProcessId
+                    || epochStartTicksUtc != JobRegistry.CurrentEpoch.StartTicksUtc)
+                {
+                    return InstanceIpcEnvelope.Failure(request, "stale_epoch",
+                        "BGI 进程身份已改变或未知，不能重放旧执行实例的停止请求");
+                }
+
+                // 单次 CAS：不再"先读快照预检再调用"，避免预检与 CAS 之间的重复窗口；
+                // 失败原因一律由**请求之后**的观测分类，因此"快照通过后换根"的结果也是确定的。
+                if (!BetterGenshinImpact.Service.Execution.ExecutionScope.TryRequestPreempt(
+                        executionInstanceId, stateRevision))
+                {
+                    var after = BetterGenshinImpact.Service.Execution.ExecutionScope.GetActiveSnapshot();
+                    if (after is null)
+                    {
+                        // 槽占用但无执行身份：身份不可用，既不授权停止也不当作空闲。
+                        return BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0
+                            ? InstanceIpcEnvelope.Failure(request, "identity_unavailable",
+                                "任务槽被占用但没有可用的执行根身份，停止请求无法绑定到执行实例；未产生任何副作用")
+                            : InstanceIpcEnvelope.Failure(request, "not_current",
+                                "没有与请求身份匹配的活动执行根（未知或已结束）；未产生任何副作用，也不构成退出证据");
+                    }
+
+                    return InstanceIpcEnvelope.Failure(request, "not_current",
+                        after.ExecutionInstanceId == executionInstanceId
+                            ? "调用方携带的执行状态修订号已过期，须重新读取执行身份后再请求停止"
+                            : "当前活动执行根不是请求的执行实例；未产生任何副作用，也不构成退出证据");
+                }
+
+                return InstanceIpcEnvelope.Response(request, new
+                {
+                    status = "stop_requested",
+                    executionInstanceId = executionInstanceId.ToString("N"),
+                    // 请求时匹配到的修订号（不是停止后的当前版本）；请求本身不等于退出。
+                    matchedExecutionStateRevision = stateRevision,
+                    stopRequested = true,
+                    exitConfirmed = false,
+                });
+            }
+
             var cancellationContext = BetterGenshinImpact.Core.Script.CancellationContext.Instance;
             cancellationContext.ManualCancel();
             return InstanceIpcEnvelope.Response(request, new { status = "stopped" });
@@ -555,6 +626,91 @@ internal sealed class InstanceRequestHandler
         catch (Exception ex)
         {
             return InstanceIpcEnvelope.Failure(request, "task_stop_failed", $"停止任务失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 定向停止**意图**探测（只看键存在性，不看值：显式 null／空串也算出现）。
+    /// 出现 `executionInstanceId` 或 `executionStateRevision` 即表示调用方意图使用定向停止协议：
+    /// 此时身份必须完整合法，缺项或形状错误一律拒绝，不得静默降级为全量停止。
+    /// 单独的 `bgiEpoch` **不算**定向意图——它是 v2/ext 各操作共用的进程元数据字段，
+    /// 只带它的请求保持旧协议（全量停止）语义。
+    /// </summary>
+    internal static bool HasDirectionalStopIntent(InstanceIpcEnvelope request)
+        => request.Data is { } data
+           && (data.ContainsKey("executionInstanceId")
+               || data.ContainsKey("executionStateRevision"));
+
+    /// <summary>
+    /// 严格读取定向停止身份：GUID 形状、修订号与进程纪元都必须是 JSON 整数且取值范围合法
+    /// （`bgiEpoch` 本身必须是对象）。任何形状／解析异常一律返回 false，由调用方映射为
+    /// <c>invalid_request</c>（不落进通用 <c>task_stop_failed</c>，也不降级为全量停止）。
+    /// </summary>
+    private static bool TryReadDirectionalIdentity(
+        InstanceIpcEnvelope request,
+        out Guid executionInstanceId,
+        out long stateRevision,
+        out int epochProcessId,
+        out long epochStartTicksUtc)
+    {
+        executionInstanceId = Guid.Empty;
+        stateRevision = 0;
+        epochProcessId = 0;
+        epochStartTicksUtc = 0;
+        try
+        {
+            // 必须是 JSON 字符串：不做 Newtonsoft 的隐式文本化，避免对象／数组／数字被"读成" GUID。
+            if (request.Data?["executionInstanceId"] is not { Type: Newtonsoft.Json.Linq.JTokenType.String } instanceToken
+                || !Guid.TryParse(instanceToken.ToObject<string>(), out executionInstanceId))
+            {
+                return false;
+            }
+
+            if (!TryReadJsonInteger(request.Data?["executionStateRevision"], out stateRevision) || stateRevision <= 0)
+            {
+                return false;
+            }
+
+            if (request.Data?["bgiEpoch"] is not { Type: Newtonsoft.Json.Linq.JTokenType.Object } epoch)
+            {
+                return false;
+            }
+
+            if (!TryReadJsonInteger(epoch["processId"], out var processId)
+                || !TryReadJsonInteger(epoch["startTicksUtc"], out epochStartTicksUtc)
+                || processId is < int.MinValue or > int.MaxValue)
+            {
+                return false;
+            }
+
+            epochProcessId = (int)processId;
+            return true;
+        }
+        catch (Exception ex) when (ex is Newtonsoft.Json.JsonException or InvalidOperationException
+                                      or FormatException or OverflowException or InvalidCastException)
+        {
+            // 任何形状异常都归形状错误，不落进通用 task_stop_failed，也不降级为全量停止。
+            return false;
+        }
+    }
+
+    /// <summary>JSON 整数读取（字符串数字／浮点／布尔一律视为形状错误）。</summary>
+    private static bool TryReadJsonInteger(Newtonsoft.Json.Linq.JToken? token, out long value)
+    {
+        value = 0;
+        if (token is null || token.Type != Newtonsoft.Json.Linq.JTokenType.Integer)
+        {
+            return false;
+        }
+
+        try
+        {
+            value = token.ToObject<long>();
+            return true;
+        }
+        catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException)
+        {
+            return false;
         }
     }
 
