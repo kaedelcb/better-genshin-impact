@@ -1588,7 +1588,8 @@ public sealed class ArbitrationLeaseStore
 
     /// <summary>
     /// §24.20-A′ 有序升级判定的第一步：旧格式代文件是否仍含**未决责任**
-    /// （`Submission`／未终结 `Pending`／`Granted`／`Sending`／`Reconciling`／`Accepted` 记录）。
+    /// （`Submission`／未终结 `Pending`／`Granted`／`Sending`／`Reconciling`／`Accepted` 记录，
+    /// 以及即使请求态已回退仍持有交接或冲突责任的覆盖标记）。
     /// 命中 ⇒ 必须走隔离态结算事务，**不得**就地升版（本批尚未实现该事务 ⇒ fail-closed 只读拒绝）。
     /// </summary>
     private static bool HasUnresolvedResponsibilityForLegacyUpgrade(LogicalOwnerLeaseFile file)
@@ -1597,10 +1598,12 @@ public sealed class ArbitrationLeaseStore
         if (handoff is null) return false;
         if (handoff.Submission is not null || handoff.Pending is not null) return true;
         return (handoff.Operations ?? []).Any(o => o is not null
-            && o.RequestState is OperationRequestState.Granted
-                or OperationRequestState.Sending
-                or OperationRequestState.Reconciling
-                or OperationRequestState.Accepted);
+            && (o.ConflictPending
+                || o.PreemptConfirmPending
+                || o.RequestState is OperationRequestState.Granted
+                    or OperationRequestState.Sending
+                    or OperationRequestState.Reconciling
+                    or OperationRequestState.Accepted));
     }
 
     /// <summary>可消解事实白名单（§6.2/§4.1）：权威退出四词 + settle 协议事实；未知/超时/未命中不在其列。</summary>

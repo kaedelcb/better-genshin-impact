@@ -308,6 +308,45 @@ public class ArbitrationLeaseStoreTests : IDisposable
         Assert.Equal(ArbitrationLeaseStatus.Corrupt, store.Read().Status);
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void Version3OverlayResponsibility_CannotBeReadForImplicitUpgrade(
+        bool conflictPending, bool preemptConfirmPending)
+    {
+        var store = new ArbitrationLeaseStore(_dir);
+        Directory.CreateDirectory(_dir);
+        var path = Path.Combine(_dir, "arbitration-lease.json");
+        var legacy = new LogicalOwnerLeaseFile
+        {
+            Version = 3,
+            Revision = 1,
+            Handoff = new LeaseHandoffSegment
+            {
+                Operations =
+                [
+                    new OperationRecord
+                    {
+                        RequestIdentity = "legacy-overlay",
+                        CandidateId = "candidate-overlay",
+                        RequestState = OperationRequestState.Queued,
+                        Zone = OperationZone.Active,
+                        ConflictPending = conflictPending,
+                        PreemptConfirmPending = preemptConfirmPending,
+                    },
+                ],
+            },
+        };
+        File.WriteAllText(path, JsonSerializer.Serialize(legacy));
+        var originalBytes = File.ReadAllBytes(path);
+
+        var read = store.Read();
+
+        Assert.Equal(ArbitrationLeaseStatus.Unsupported, read.Status);
+        Assert.Null(read.File);
+        Assert.Equal(originalBytes, File.ReadAllBytes(path));
+    }
+
     [Fact]
     public void ArchivedOperationIdentityCannotAlsoExistInHotOperations()
     {
