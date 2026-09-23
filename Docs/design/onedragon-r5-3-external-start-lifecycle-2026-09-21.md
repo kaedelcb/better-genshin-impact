@@ -2570,8 +2570,8 @@ I7 的 `Recovery_PreemptConfirmationPending_PreservesSuccessorWithoutSending` �
 | v5／台账 v2 均可读，所有操作和发送轮已结清，且无旧模式活跃执行 | 保留完整旧审计，显式写迁移完成版本／fencing generation；不能删历史键 | 完成迁移后仅进入观察／测试态 | 迁移中崩溃、旧二进制回滚读到更高版本 |
 | v5 有 `Submitting/Reconciling`、`Accepted` 未终态、`PreemptConfirmPending`、`ConflictPending`、未消费票据或归档迟到证据 | 保留原字节和引用；仅可从完全一致的租约＋台账＋BGI 权威事实构造逐轮责任。缺字段不得猜 owner token、发送 claim、物理预留或终态 | 原轮查询／旧 owner 证据追加受控；新执行许可关闭，待人工或权威对账 | 本地无编号但远端已受理、轮 1／轮 2 交错、归档满槽迟到回执 |
 | v5 有无发送的 `Queued/InRound`、`RetryableRejected` 有效窗口、合并待核查等非终局状态 | 逐态保留原操作与拒绝／合并依据；**不能**把普通无发送孤儿自动转换为新等待动作，亦不能先清理再声称已迁移 | 只可在可证实的原规则下结算或隔离；新等待／发送门关闭 | `facts_unknown` 回 Queued 后迁移前重启、重试窗口中迁移、合并目标丢失 |
-| v1–v3 命中**当前代码的**旧版未决判定：`Submission`、`Pending` 非空，或 Operation 为 `Granted/Sending/Reconciling/Accepted` | `ReadCore` 返回 `Unsupported` 且 `File=null`；普通变更／对账入口不可直接继续。须另设计只读隔离和专用迁移事务，不能宣称现 API 已可消解 | 原文件保留、只读诊断；专用流程实现前不出站 | v3 未决受理认领缺失、Unsupported 被误当 Absent |
-| v1–v3 未命中上述判定但有 `ConflictPending/PreemptConfirmPending` 等交接覆盖责任 | **现代码的判定未检查这两个标记**，可能兼容读取并在下一次写入时升至 v5；新迁移合同必须先扩充旧版责任识别，按有责任隔离，不得把“当前可读”解释为“已结清” | 修补判定并有反例前关闭迁移及新发送；保留原字节 | `TerminalRejected + ConflictPending` 且无 Submission/Pending 时被漏判、预留或停止责任丢失 |
+| v1–v3 命中**当前代码的**旧版未决判定：`Submission`、`Pending` 非空，Operation 为 `Granted/Sending/Reconciling/Accepted`，或 Operation 带 `ConflictPending/PreemptConfirmPending` | `ReadCore` 返回 `Unsupported` 且 `File=null`；普通变更／对账入口不可直接继续。须另设计只读隔离和专用迁移事务，不能宣称现 API 已可消解 | 原文件保留、只读诊断；专用流程实现前不出站 | v3 未决受理认领缺失、Unsupported 被误当 Absent；两种覆盖标记各有拒读反例 |
+| v1–v3 未命中上述判定但仍有其他交接覆盖责任 | 不凭当前白名单断言责任已全结；候选新格式迁移前须审查其余责任字段并写全状态反例 | 专用迁移实现前关闭新发送；保留原字节 | 新增责任字段未更新旧版判定、迁移默认值抹去责任 |
 | v1–v3 可证实无未决责任，或 v4 可兼容读取 | 现有读路径允许兼容，成功写入时升至 v5；v4 当前并不受上述旧版未决拒读条件约束。跨到候选新格式仍需完整引用及新字段校验 | 候选新格式仅在无未决责任或专用迁移成功后升级；不凭旧版可读或版本较低放行 | v4 未决责任被迁移默认值抹去、旧版本写入者并存 |
 | v5 与台账版本／引用不一致 | 两载体分别保留；没有跨文件原子证据前状态 Unknown，不能把缺少一方当空责任 | 只读核查和待实现的专用修复；不出站 | 两文件只迁一份、台账先有编号而租约缺 Submission |
 | 损坏、不可读、锁争用耗尽、残件未对账、版本高于本程序支持 | `Corrupt/Unsupported/residue_reconcile_pending` 保持 fail-closed；原件与残件留存 | 只允许无执行副作用的修复／隔离流程 | 访问被拒被误判 Absent、两个文件只迁一份 |
@@ -2602,6 +2602,23 @@ Owner 已明确选择：低优先级新任务遇到正在执行的高优先级�
 
 本轮只读复会诊发现六处，其中等待→发送的身份断链、持有预留者到期误终局为**阻断设计缺口**；旧场景表“被替换者终局”、旧轮次输家 `NotSelected`、登记应答丢失和 v1–v5 迁移表遗漏为**重要设计缺口**。已在 §24.80–§24.81 与七列场景表修订规则：① `PureWaiting→ActivationBound` 同事务绑定唯一 Operation，崩溃恢复不分配第二请求身份；②持有预留／停止责任者进入 `RevocationPending`，远端确认前不能 `ExpiredNotSent`；③被替换者退回等待而非终局；④低级请求在旧整轮前入等待，激活后落选也要原子保留等待绑定；⑤提交前稳定幂等身份区分确定未登记与登记结果 Unknown；⑥旧版命中**当前代码判定**的未决记录 `Unsupported/File=null`，而覆盖标记仍有漏判风险；v5 无发送非终局状态逐态保留。
 
-同模型同强度的**第二次只读复核**（GPT-6-Astra／medium／1 次成功）又指出两处重要设计缺口：`ActivationBound` 到期／取消后缺安全退出，及旧版 `HasUnresolvedResponsibilityForLegacyUpgrade` 未检查 `ConflictPending/PreemptConfirmPending`。前者已补“等待与绑定 Operation 同事务结算”规则；后者已逐项核对源码，修正 §24.80 对现行为的描述，并把补全旧版责任判定列为实现前置与反例。两处仍待实现及验证，不据此降低门禁。
+同模型同强度的**第二次只读复核**（GPT-6-Astra／medium／1 次成功）又指出两处重要设计缺口：`ActivationBound` 到期／取消后缺安全退出，及旧版 `HasUnresolvedResponsibilityForLegacyUpgrade` 未检查 `ConflictPending/PreemptConfirmPending`。前者已补“等待与绑定 Operation 同事务结算”规则，仍待实现；后者经红夹具先证实两支漏判，随后在 `ee9e415ed` 将两个标记加入旧版拒读判定。租约定向 **30/30**，助手全量 **1176 通过／2 跳过／0 失败**；其余旧版责任字段全表迁移审查仍待做，不据此降低门禁。
 
-分类编号：**D23**＝等待激活与 Operation 原子绑定／旧轮次交接，**D24**＝等待登记应答丢失及预留撤销后的到期资格，**D25**＝旧格式与无发送非终局迁移全状态。当前源码没有等待集合、持久到达序号、`Deferred/ExpiredNotSent` 或上述迁移专用入口；以上是**设计修订，不是实现交付**。会诊实际模型 GPT-6-Astra，强度 medium，尝试 1 次成功；未发生需要重试的错误。生产入口关闭，R5.8 未签署。
+分类编号：**D23**＝等待激活与 Operation 原子绑定／旧轮次交接，**D24**＝等待登记应答丢失及预留撤销后的到期资格，**D25**＝旧格式与无发送非终局迁移全状态。当前源码没有等待集合、持久到达序号、`Deferred/ExpiredNotSent` 或迁移专用入口；**仅旧版两种覆盖标记拒读已实现**，其余为设计修订。两轮会诊各使用 GPT-6-Astra／medium、各尝试 1 次成功；未发生需要重试的错误。生产入口关闭，R5.8 未签署。
+
+### 24.83 BGI 物理执行槽集中复审（2026-09-24；提案，未冻结）
+
+以 §24.79 的物理入口清单为起点，只读会诊 GPT-6-Astra／medium **1 次成功**，随后核对 `BgiTaskCoordinator`、`ExternalInterfacePrerequisitePlane`、`ExecutionScope` 与 `InstanceRequestHandler` 源码。会诊未获 UI `TaskRunner`、`OneDragonFlowViewModel`、`ScriptService.RunMulti`、`PreemptionGate` 的完整实现，因此这些入口的实际锁序仍须逐点复核；下表不把局部根锁、semaphore、队列锁、注册表锁拼成已实现的统一门。
+
+| 物理阶段／触发 | 唯一授权者的候选规则 | 当前代码事实 | 必须补齐的状态与反例 |
+|---|---|---|---|
+| 请求受理／排队 | 目标 BGI 的耐久受理索引以 `{targetEpoch,submitKey,payloadHash}` 判同一请求；当前 owner 只签发同一轮许可 | `Submit` 先写 Channel 再写内存 `_pending` 和注册表；注册表异常只记录并继续；同键未绑定 payloadHash，终态缓存有界 | 先耐久登记后使 Executor 可见；同键异载荷拒绝；受理回执丢失、重启、缓存淘汰后的同键重复仍不双发。此为 **D26 设计缺口**，未实现 |
+| 等待空槽／预留继任者 | BGI 槽门在同一原子转移中保留旧执行身份及唯一 successor 预留，旧者退出后仅该 successor 可消费 | `WaitSlotFreeAsync` 读根与 semaphore 空闲，不占槽；`_pending→_current` 后先发 `TaskStarted`、标 `Running`，Executor 才尝试建根 | `Queued/Dispatching/Reserved/Executing` 分离；空闲观察后插 UI 根、`_current` 后尚未建根、叶任务间隙插入另一入口，实际副作用并发数≤1。**D27 设计缺口** |
+| 定向停止／旧实例自然完成 | BGI 比较 `{epoch,executionInstanceId,slotGeneration}` 后锁内记录停止意图，锁外取消捕获实例；退出事务单次释放／转移槽权 | `HandleTaskStop` 全局 `ManualCancel` 随即回 `stopped`；`task.suspend` 有 epoch 比对但无预期实例；`WaitSlotReleasedBoundedAsync` 只看 `!HasActive && semaphore>0`。`ExecutionScope.Dispose` 按对象引用清根，阻止旧 scope 清新 scope，但没有可查询的退出凭证 | A 自然完成、C 已起步后迟到 A-stop 不得错停 C；旧 epoch 退出不授权新 epoch；业务终态早于资源释放也不能放行继任者。**D28 设计缺口** |
+| ext 前置／收尾的执行与终态 | 统一结果须区分 `Succeeded/Failed/Cancelled/Unknown` 与物理退出；不可逆动作先落不可重放 intent，实际结果另记 | `RunOpAsync` 失败返回 `false`，协调器将 `false` 记为 `completed`；排队登记按 GroupName 推断 kind，前置/收尾会被记为 OneDragon；破坏性收尾动作前预记 `Succeeded` 且 `ct` 未参与提交前检查 | 切号失败／槽忙时队列与注册表失败同向；收尾取消赢在动作提交前则副作用 0；动作抛错后不得留假成功。**I8–I10 实现错误**，但不可逆提交的新状态合同先冻结，再改代码 |
+| v2/UI/solo／恢复／热键实际起步 | 每一物理入口在任何资源副作用前取得统一槽许可；叶任务持父身份，恢复消费原票据，热键启动有编号 | v2 core 在 `ExecutionScope.Start` 外检查停止水位；`task.resume` 的 `OnAdmitted` 在根建立阶段清票据并回 `resumed`；热键直接调用 Action、无编号。UI 入口内部执行序尚未在本轮证实 | 停止落在最后水位检查与建根之间须零起步；恢复建根后失败／回执丢失不得第二次恢复；热键控制与起步分类逐项验证。**D29 设计缺口／候选实现错误**，待入口源码与反例确认 |
+| 关闭／重启与事实读取 | 关闭后禁止新派发，已占物理槽的任务须有退出证据；安全准入只认同一槽门的事实快照 | 协调器 Dispose 取消 pump、等待 1 秒，但未定向取消 `_current`；`task.status` 分段读取根、semaphore、注册表、协调器 | Dispose 与派发交错后零新增执行；状态读取中插新根不能输出可授权的拼接 idle；进程重启先证明旧者死亡或仍活着。**D30 设计缺口／候选实现错误** |
+
+**合同纠正**：协调器的 `Preempt=true` 仅缩短等待并在超时后尝试 Executor；v2 core 的 `preempt` 参数未用于主动停止，忙时仍拒绝。core `await dispatch.Task.Unwrap()`，配置组根在其返回前退出；不能把“v2 core 提前返回、根尚未 Dispose”写成已确认缺陷。`TaskStarted` 与注册表 `Running` 目前表示**调度派发**，不是物理槽已持有；后续应改名或增加明确阶段，不能以它签发继任许可。
+
+**分类与施工次序**：D26–D30 是尚未冻结／未实现的高优先级设计缺口；I8＝前置失败被队列记 `completed`，I9＝前置／收尾排队 kind 错误，I10＝破坏性收尾取消／预记成功，两者的真实代码分支已确认，需先冻结不可逆提交和结构化回执。BGI 全量 **942 通过／14 失败／956** 的 14 个失败与既有基线按用例身份一致（§24.77），属于**既有测试失败**，不算本节反例已通过。本次会诊 **1 次成功、无工具失败**。先完成槽状态／退出／收尾合同全状态枚举及红夹具，再逐转移实施；生产入口和真实 User 门保持关闭，R5.8 仍未签署。
