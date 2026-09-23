@@ -27,12 +27,25 @@ public class TaskCenterExternalStartAdmissionTests
         try { Directory.Delete(root, recursive: true); } catch { }
     }
 
-    private static TaskCenterHost NewHost(string root, TaskCenterAdmissionSeams seams, Func<ControlStatus?>? status = null)
+    private static TaskCenterHost NewHost(string root, TaskCenterAdmissionSeams? seams, Func<ControlStatus?>? status = null)
         => new(Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
             () => null, log: null, runnerFactory: null, readinessOverride: () => (true, null),
             localExecutionCapability: () => true,
-            statusSnapshotProvider: status ?? (() => new ControlStatus { TaskRunning = false }),
+            statusSnapshotProvider: status ?? (() => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false }),
             admissionWired: true, admissionSeams: seams);
+
+    private static BgiExternalClient NewClientWithEpoch()
+    {
+        var client = new BgiExternalClient();
+        typeof(BgiExternalClient).GetProperty(nameof(BgiExternalClient.ServerEpoch),
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)!
+            .SetValue(client, new BgiEpoch { ProcessId = 9, StartTicksUtc = 900 });
+        return client;
+    }
+
+    private static TaskCenterHost NewProductionHost(string root, BgiExternalClient client, Func<ControlStatus?> status)
+        => new(Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
+            () => client, localExecutionCapability: () => true, statusSnapshotProvider: status);
 
     private static ExternalStartAdmissionRequest Request(Func<System.Threading.CancellationToken, Task<ExternalStartExecution>> execute,
         string ns = "v2", Func<ExternalStartCompletion?>? completion = null,
@@ -77,6 +90,104 @@ public class TaskCenterExternalStartAdmissionTests
             Assert.Equal(ArbitrationTier.Fixed, op.Candidate!.Tier);
             Assert.Equal(17, op.Candidate.Priority);
             Assert.Equal(DateTimeOffset.Parse("2026-09-23T10:00:00+08:00"), op.Candidate.ScheduledAt);
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    [Fact]
+    public async Task ExternalStart_UnavailableTaskStatus_IsUnknownAndNeverSent()
+    {
+        var root = NewRoot();
+        var sends = 0;
+        try
+        {
+            using var client = NewClientWithEpoch();
+            var host = NewProductionHost(root, client,
+                () => new ControlStatus { TaskStatusAvailable = false, TaskRunning = false });
+
+            var result = await host.SubmitExternalStartViaAdmissionAsync(
+                Request(_ =>
+                {
+                    System.Threading.Interlocked.Increment(ref sends);
+                    return Task.FromResult(ExternalStartExecution.AcceptedWith("must-not-send"));
+                }), default);
+
+            Assert.True(result.Kind == AdmissionResultKind.NeedReconcile,
+                $"Expected NeedReconcile; got {result.Kind}/{result.ReasonCode}: {result.Detail}");
+            Assert.Equal("facts_unknown", result.ReasonCode);
+            Assert.Equal(0, System.Threading.Volatile.Read(ref sends));
+            Assert.Null(ReadSubmission(root));
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    [Fact]
+    public async Task ExternalStart_FreshAvailableIdleStatus_MatchingBgiEpoch_AllowsExactlyOneSend()
+    {
+        var root = NewRoot();
+        var sends = 0;
+        try
+        {
+            using var client = NewClientWithEpoch();
+            var host = NewProductionHost(root, client, () => new ControlStatus
+            {
+                TaskStatusAvailable = true,
+                TaskStatusBgiEpoch = "9:900",
+                TaskStatusObservedAtUtc = DateTimeOffset.UtcNow,
+                TaskRunning = false,
+            });
+
+            var result = await host.SubmitExternalStartViaAdmissionAsync(Request(_ =>
+            {
+                System.Threading.Interlocked.Increment(ref sends);
+                return Task.FromResult(ExternalStartExecution.AcceptedWith("job-fresh-idle"));
+            }), default);
+
+            Assert.Equal(AdmissionResultKind.Accepted, result.Kind);
+            Assert.Equal(1, System.Threading.Volatile.Read(ref sends));
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    [Theory]
+    [InlineData("9:900", -21)]
+    [InlineData("8:800", 0)]
+    public async Task ExternalStart_StaleOrWrongEpochStatus_IsUnknownAndNeverSent(string statusEpoch, int observedSecondsAgo)
+    {
+        var root = NewRoot();
+        var sends = 0;
+        try
+        {
+            using var client = NewClientWithEpoch();
+            var host = NewProductionHost(root, client, () => new ControlStatus
+            {
+                TaskStatusAvailable = true,
+                TaskStatusBgiEpoch = statusEpoch,
+                TaskStatusObservedAtUtc = DateTimeOffset.UtcNow.AddSeconds(observedSecondsAgo),
+                TaskRunning = false,
+            });
+
+            var result = await host.SubmitExternalStartViaAdmissionAsync(Request(_ =>
+            {
+                System.Threading.Interlocked.Increment(ref sends);
+                return Task.FromResult(ExternalStartExecution.AcceptedWith("must-not-send"));
+            }), default);
+
+            Assert.Equal(AdmissionResultKind.NeedReconcile, result.Kind);
+            Assert.Equal("facts_unknown", result.ReasonCode);
+            Assert.Equal(0, System.Threading.Volatile.Read(ref sends));
             await host.ShutdownAsync();
         }
         finally

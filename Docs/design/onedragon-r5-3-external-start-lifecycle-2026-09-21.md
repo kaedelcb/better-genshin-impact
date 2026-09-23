@@ -2428,3 +2428,12 @@ Owner 选择 A 后，补齐如下持久化与恢复路径：
 **验收证据**：`HistoricalAcceptedReceiptCannotBeClearedByCurrentRoundNotAcceptedAdjudication` 覆盖“先阻止当前轮拒绝清旧冲突→旧轮终态到达→按两轮快照结清→重复恢复幂等→重试不发送→写侧不得擦掉历史跟踪状态”；`StaleOwner_AppendsLateAcceptedTerminalToOriginalRound_WithoutFinalizingOperation` 覆盖宿主换主交错：旧发送者仅更新原轮台账；随后新的宿主取得租约并恢复同一轮终态，操作结清且发送计数仍为 1。两个定向用例 **2/2**；准入、租约、外部启动宿主等相关类 **258/258**；助手全量 **1133 通过／2 跳过／0 失败（1135 总数）**。两个 Skip 是受控负载诊断入口。BGI 全量三次分别 **938/14、939/13、938/14（总数均 952）**，FsCheck 生成型用例失败计数有波动；`BgiTaskCoordinatorTests` 定向 **19/19**。Astra 中档只读会诊本次未启动成功（GPT 执行器返回 exit code 1），因此不记会诊结论。
 
 **范围边界**：此项只关闭迟到旧轮受理及其权威终态的责任恢复；不签署 R5.8「无双跑」验收单、不打开生产接线或真实 User 门禁，也不替代其他待闭合交错与全量 BGI 回归。
+
+### 24.71 状态快照可用性与新鲜度 fail-closed（2026-09-23）
+
+1. **BGI 状态来源**：`task.status` 与只读状态响应现在带 `bgiEpoch.processId/startTicksUtc`，来源为 `JobRegistry.CurrentEpoch`。助手公共解析器仅当 `running` 是布尔值且 epoch 的 PID/启动 ticks 合法时将状态标记为可用；`stateRevision` 可解析但仅 ext 路径要求存在。
+2. **轮询及 ext 缓存**：v2／observer 成功响应记录本地观测时点。ext 路径每轮状态轮询调用 `RefreshStatusSnapshotAsync`，在同一锁下读取 JSON 与接收时点；快照必须有 `stateRevision`、年龄在 0–20 秒内且 epoch 等于当前 SDK `ServerEpoch`。外部连接离开 `Ready` 会清掉 JSON 和时点；本轮状态采集异常使上一轮 `LatestLocalStatus` 的 `TaskStatusAvailable=false` 且清观测时点，避免旧的 idle 展示值延续为准入证据。
+3. **准入影响**：`ControlStatus` 新增状态可用性、BGI epoch、观测时间及 `HasFreshTaskStatus`。生产 `CurrentArbitrationFacts` 在快照不可用/过期、宿主 epoch 缺失或不匹配、外部台账未知时报告 `ExecutionFactsUnknown`，阻止将默认 `TaskRunning=false` 当成空闲。start/resume 移交等待新鲜快照；存在宿主 epoch 时必须与快照一致。`armTrigger` 仍不受快照限制。宿主 epoch 缺失时保持既有登记行为，但不产生 `AdmissionSourceScope`，后继执行仍 fail-closed。
+4. **反例与验证**：助手生产路径夹具覆盖 unavailable、stale、wrong epoch 的 `NeedReconcile/facts_unknown`＋零发送，以及 matching fresh idle 的正向恰一次发送；解析夹具覆盖合法 busy/idle 与缺失/畸形 `running`/epoch。修正一处旧夹具误用 `9:900`（与 `RoutingFakePort.Epoch` 不同）后，相关助手类 **216/216 通过**、另有 **2 个受控 P50 用例 Skip**（总数 218）；助手全量 **1155/2/1157（0 失败）**。BGI `TaskStatus_IncludesCurrentProcessEpoch` 与 `BgiTaskCoordinatorTests` **20/20**；BGI 全量 **939 通过／14 失败／953**，§24.70 同配置三次对照失败数为 14／13／14，本次失败数未超既有波动范围、总数因新增 1 个 BGI 状态纪元测试增加 1；该套件仍不全绿。
+5. **会诊记录**：GPT-6-Astra／medium 对本批 diff 的只读审查尝试 1 次，执行器返回 `Codex exit code 1`，未取得报告。此错误不属于约定的超时、瞬时网络或 5xx 类，未重试；不得记为会诊通过。
+6. **未闭合边界与门禁**：状态快照仍不是 BGI 原子执行快照；查询后到发送前仍可能变化。当前无权威执行实例身份/任务类别优先级，也无绑定具体被抢占任务的停止后退出确认。因此本批不实现抢占，不证明“busy 零发送”覆盖所有入口，不开放 E3/E4/E5 或节点生产门。真实 User 门禁保持关闭，R5.8「无双跑」验收单未签署。

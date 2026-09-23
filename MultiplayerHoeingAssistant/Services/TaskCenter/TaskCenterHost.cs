@@ -421,12 +421,14 @@ public sealed partial class TaskCenterHost
     /// <summary>快照辅助判定（R4.9 §6.1 辅助证据 + ASTRA 三轮 B1：在宿主内、台账查询之后、仅对未命中新受理执行——受理事实优先）：
     /// start/resume 要求快照可考（不可考 → StatusUncertain，锚点 3 授权判断必须可考）且 BGI 空闲（在跑 → BgiBusy 含任务名）；
     /// armTrigger 不受限（挂载等待不占槽位，到点执行由引擎边界权威裁决）。返回 null=通过。</summary>
-    internal static HandoffRegisterResult? SnapshotPrecheck(ControlStatus? snapshot, string mode)
+    internal static HandoffRegisterResult? SnapshotPrecheck(ControlStatus? snapshot, string mode, string? expectedBgiEpoch)
     {
         if (mode == StartupHandoffModes.ArmTrigger) return null;
-        if (snapshot is null)
+        if (snapshot is null || !snapshot.HasFreshTaskStatus(DateTimeOffset.UtcNow)
+            || (!string.IsNullOrWhiteSpace(expectedBgiEpoch)
+                && !string.Equals(snapshot.TaskStatusBgiEpoch, expectedBgiEpoch, StringComparison.Ordinal)))
             return HandoffRegisterResult.Rejected(HandoffReasonCodes.StatusUncertain,
-                "BGI 任务状态快照不可考（尚无快照），授权判断要求可考（锚点 3）");
+                "BGI 任务状态快照不可考、已过期或进程纪元不匹配，授权判断要求当前可考快照（锚点 3）");
         if (snapshot.TaskRunning)
         {
             var name = snapshot.CurrentTaskGroupName is { Length: > 0 } g
@@ -634,7 +636,8 @@ public sealed partial class TaskCenterHost
             var snapshot = request.Mode == StartupHandoffModes.ArmTrigger
                 ? _statusSnapshotProvider()
                 : await AwaitSnapshotIfMissingAsync(ensureCts.Token).ConfigureAwait(false);
-            if (SnapshotPrecheck(snapshot, request.Mode) is { } snapRejected)
+            var expectedBgiEpoch = request.Mode == StartupHandoffModes.ArmTrigger ? null : CurrentBgiEpoch();
+            if (SnapshotPrecheck(snapshot, request.Mode, expectedBgiEpoch) is { } snapRejected)
                 return RejectedWithLedgerRecheck(request, snapRejected.ReasonCode!, snapRejected.Reason!);
         }
 
@@ -939,7 +942,7 @@ public sealed partial class TaskCenterHost
     {
         if (_statusSnapshotProvider is null) return null;
         var snapshot = _statusSnapshotProvider();
-        if (snapshot is not null) return snapshot;
+        if (IsCurrentTaskSnapshotUsable(snapshot)) return snapshot;
         var deadline = DateTime.UtcNow.Add(_snapshotWaitBudget);
         while (DateTime.UtcNow < deadline)
         {
@@ -949,9 +952,17 @@ public sealed partial class TaskCenterHost
             if (slice <= TimeSpan.Zero) break;
             await Task.Delay(slice < TimeSpan.FromMilliseconds(500) ? slice : TimeSpan.FromMilliseconds(500), ct).ConfigureAwait(false);
             snapshot = _statusSnapshotProvider();
-            if (snapshot is not null) return snapshot;
+            if (IsCurrentTaskSnapshotUsable(snapshot)) return snapshot;
         }
         return null;
+    }
+
+    private bool IsCurrentTaskSnapshotUsable(ControlStatus? snapshot)
+    {
+        if (snapshot is null || !snapshot.HasFreshTaskStatus(DateTimeOffset.UtcNow)) return false;
+        var currentEpoch = CurrentBgiEpoch();
+        return string.IsNullOrWhiteSpace(currentEpoch)
+            || string.Equals(snapshot.TaskStatusBgiEpoch, currentEpoch, StringComparison.Ordinal);
     }
 
     private (bool Ready, string? Reason) ExecutionReadiness()

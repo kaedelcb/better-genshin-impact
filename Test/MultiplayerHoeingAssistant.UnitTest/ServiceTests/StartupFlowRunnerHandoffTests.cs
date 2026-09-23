@@ -513,30 +513,62 @@ public class StartupFlowRunnerHandoffTests
     public void SnapshotPrecheck_NoSnapshot_StartResumeRejected_ArmPasses()
     {
         // 快照不可考 + start/resume → StatusUncertain（授权判断必须可考，锚点 3）
-        var start = TaskCenterHost.SnapshotPrecheck(null, StartupHandoffModes.Start);
+        var start = TaskCenterHost.SnapshotPrecheck(null, StartupHandoffModes.Start, "9:900");
         Assert.NotNull(start);
         Assert.Equal(HandoffOutcome.Rejected, start!.Outcome);
         Assert.Equal(HandoffReasonCodes.StatusUncertain, start.ReasonCode);
 
-        var resume = TaskCenterHost.SnapshotPrecheck(null, StartupHandoffModes.Resume);
+        var resume = TaskCenterHost.SnapshotPrecheck(null, StartupHandoffModes.Resume, "9:900");
         Assert.Equal(HandoffReasonCodes.StatusUncertain, resume!.ReasonCode);
 
         // armTrigger 不受快照限制（挂载等待不占槽位）
-        Assert.Null(TaskCenterHost.SnapshotPrecheck(null, StartupHandoffModes.ArmTrigger));
+        Assert.Null(TaskCenterHost.SnapshotPrecheck(null, StartupHandoffModes.ArmTrigger, null));
     }
 
     [Fact]
     public void SnapshotPrecheck_TaskRunning_BgiBusyWithTaskName()
     {
-        var busy = new ControlStatus { TaskRunning = true, CurrentTaskName = "锄地", CurrentTaskGroupName = "日常" };
-        var r = TaskCenterHost.SnapshotPrecheck(busy, StartupHandoffModes.Start);
+        var busy = new ControlStatus
+        {
+            TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow,
+            TaskRunning = true, CurrentTaskName = "锄地", CurrentTaskGroupName = "日常"
+        };
+        var r = TaskCenterHost.SnapshotPrecheck(busy, StartupHandoffModes.Start, "9:900");
         Assert.NotNull(r);
         Assert.Equal(HandoffReasonCodes.BgiBusy, r!.ReasonCode);
         Assert.Contains("锄地", r.Reason);
 
-        var idle = new ControlStatus { TaskRunning = false };
-        Assert.Null(TaskCenterHost.SnapshotPrecheck(idle, StartupHandoffModes.Start));
-        Assert.Null(TaskCenterHost.SnapshotPrecheck(idle, StartupHandoffModes.Resume));
-        Assert.Null(TaskCenterHost.SnapshotPrecheck(idle, StartupHandoffModes.ArmTrigger));
+        var idle = new ControlStatus
+        {
+            TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow,
+            TaskRunning = false
+        };
+        Assert.Null(TaskCenterHost.SnapshotPrecheck(idle, StartupHandoffModes.Start, "9:900"));
+        Assert.Null(TaskCenterHost.SnapshotPrecheck(idle, StartupHandoffModes.Resume, "9:900"));
+        Assert.Null(TaskCenterHost.SnapshotPrecheck(idle, StartupHandoffModes.ArmTrigger, null));
+    }
+
+    [Fact]
+    public void SnapshotPrecheck_UnavailableStaleOrWrongEpoch_IsUncertainButArmStillPasses()
+    {
+        var unavailable = new ControlStatus { TaskRunning = false, TaskStatusAvailable = false };
+        var stale = new ControlStatus
+        {
+            TaskRunning = false, TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900",
+            TaskStatusObservedAtUtc = DateTimeOffset.UtcNow - ControlStatus.TaskStatusFreshnessWindow - TimeSpan.FromSeconds(1)
+        };
+        var wrongEpoch = new ControlStatus
+        {
+            TaskRunning = false, TaskStatusAvailable = true, TaskStatusBgiEpoch = "8:800",
+            TaskStatusObservedAtUtc = DateTimeOffset.UtcNow
+        };
+
+        Assert.Equal(HandoffReasonCodes.StatusUncertain,
+            TaskCenterHost.SnapshotPrecheck(unavailable, StartupHandoffModes.Start, "9:900")?.ReasonCode);
+        Assert.Equal(HandoffReasonCodes.StatusUncertain,
+            TaskCenterHost.SnapshotPrecheck(stale, StartupHandoffModes.Resume, "9:900")?.ReasonCode);
+        Assert.Equal(HandoffReasonCodes.StatusUncertain,
+            TaskCenterHost.SnapshotPrecheck(wrongEpoch, StartupHandoffModes.Start, "9:900")?.ReasonCode);
+        Assert.Null(TaskCenterHost.SnapshotPrecheck(unavailable, StartupHandoffModes.ArmTrigger, null));
     }
 }

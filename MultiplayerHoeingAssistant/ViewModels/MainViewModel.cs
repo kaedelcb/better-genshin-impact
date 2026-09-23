@@ -510,8 +510,11 @@ public partial class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>task.status 解析结果（v2 轮询与 ext 事件驱动快照共用，字段语义逐条对齐）。</summary>
-    private sealed record TaskStatusPollResult(
+    internal sealed record TaskStatusPollResult(
         bool BgiRunning,
+        bool TaskStatusAvailable,
+        string? TaskStatusBgiEpoch,
+        long? StateRevision,
         string? CurrentTaskName,
         string? CurrentTaskGroupName,
         string? CurrentRouteDisplay,
@@ -523,9 +526,13 @@ public partial class MainViewModel : INotifyPropertyChanged
         int RoomPlayerCount = 0,
         string? FriendshipProgress = null);
 
-    private static TaskStatusPollResult ParseTaskStatusData(JsonElement sdata)
+    internal static TaskStatusPollResult ParseTaskStatusData(JsonElement sdata)
     {
         var bgiRunning = false;
+        var hasValidRunning = false;
+        var taskStatusAvailable = false;
+        string? taskStatusBgiEpoch = null;
+        long? stateRevision = null;
         string? currentTaskName = null;
         string? currentTaskGroupName = null;
         string? currentRouteDisplay = null;
@@ -536,8 +543,31 @@ public partial class MainViewModel : INotifyPropertyChanged
         string? friendshipProgress = null;
         var wasCancelled = false;
 
-        if (sdata.TryGetProperty("running", out var running))
+        if (sdata.TryGetProperty("running", out var running)
+            && running.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
             bgiRunning = running.GetBoolean();
+            hasValidRunning = true;
+        }
+        if (sdata.TryGetProperty("bgiEpoch", out var epoch)
+            && epoch.ValueKind == JsonValueKind.Object
+            && epoch.TryGetProperty("processId", out var processId)
+            && processId.ValueKind == JsonValueKind.Number
+            && processId.TryGetInt32(out var pid)
+            && pid > 0
+            && epoch.TryGetProperty("startTicksUtc", out var startTicks)
+            && startTicks.ValueKind == JsonValueKind.Number
+            && startTicks.TryGetInt64(out var ticks)
+            && ticks > 0)
+        {
+            taskStatusBgiEpoch = $"{pid}:{ticks}";
+        }
+        if (sdata.TryGetProperty("stateRevision", out var revision)
+            && revision.ValueKind == JsonValueKind.Number
+            && revision.TryGetInt64(out var parsedRevision)
+            && parsedRevision >= 0)
+            stateRevision = parsedRevision;
+        taskStatusAvailable = hasValidRunning && taskStatusBgiEpoch is not null;
         // 任务停止后（bgiRunning=false），taskName 可能仍有残留值，必须忽略避免状态停留
         if (bgiRunning && sdata.TryGetProperty("taskName", out var tn) && tn.ValueKind == JsonValueKind.String)
             currentTaskName = tn.GetString();
@@ -576,7 +606,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             roomPlayerCount = rpc.GetInt32();
 
         return new TaskStatusPollResult(
-            bgiRunning, currentTaskName, currentTaskGroupName,
+            bgiRunning, taskStatusAvailable, taskStatusBgiEpoch, stateRevision, currentTaskName, currentTaskGroupName,
             currentRouteDisplay, currentScriptRouteName, autoHoeingRunning, autoHoeingProgress, scriptTaskProgress, wasCancelled,
             roomPlayerCount, friendshipProgress);
     }
@@ -598,6 +628,17 @@ public partial class MainViewModel : INotifyPropertyChanged
         try
         {
             await ReportStatusCoreAsync();
+        }
+        catch (Exception ex)
+        {
+            // 本轮采集若在发布新快照前异常，旧 TaskRunning=false 不能继续作为空闲证据。
+            if (LatestLocalStatus is { } last)
+            {
+                last.TaskStatusAvailable = false;
+                last.TaskStatusObservedAtUtc = null;
+            }
+            try { AddLog($"状态采集失败，任务占用事实已标记未知: {ex.GetType().Name}: {ex.Message}"); }
+            catch { /* 关机期间日志不可用不改变失效结果 */ }
         }
         finally
         {
@@ -639,6 +680,9 @@ public partial class MainViewModel : INotifyPropertyChanged
         var roomPlayerCount = 0;
 
         var bgiRunning = false;
+        var taskStatusAvailable = false;
+        string? taskStatusBgiEpoch = null;
+        DateTimeOffset? taskStatusObservedAtUtc = null;
         // 本轮 IPC 会话校验结果：不可信（跨会话/无法确认）时不采信管道返回的任何任务状态
         var ipcSessionTrusted = true;
 
@@ -656,6 +700,9 @@ public partial class MainViewModel : INotifyPropertyChanged
                 {
                     var observerStatus = ParseTaskStatusData(JsonSerializer.Deserialize<JsonElement>(observerResp.Data));
                     bgiRunning = observerStatus.BgiRunning;
+                    taskStatusAvailable = observerStatus.TaskStatusAvailable;
+                    taskStatusBgiEpoch = observerStatus.TaskStatusBgiEpoch;
+                    taskStatusObservedAtUtc = taskStatusAvailable ? DateTimeOffset.UtcNow : null;
                     currentTaskName = observerStatus.CurrentTaskName;
                     currentTaskGroupName = observerStatus.CurrentTaskGroupName;
                     currentRouteDisplay = observerStatus.CurrentRouteDisplay;
@@ -698,14 +745,16 @@ public partial class MainViewModel : INotifyPropertyChanged
             var cache = _cacheManager?.Load();
             bool hasCache = cache != null && (cache.ConfigGroups.Count > 0 || cache.OneClickConfigs.Count > 0);
 
-            // [切片4] ext 通道活跃：task.status 不再周期轮询——由事件驱动 SDK 快照刷新维护
-            // （订阅基线 / 事件触发 / revision 跳号自动校准），config.list 走 ext 长连接（不再每轮新建管道）；
+            // [切片4/R5] ext 通道仍由事件与 revision 跳号维护快照；另在本地 10s 状态轮询中刷新一次，
+            // 使准入使用的快照具有明确观测时间，而不是无限期复用最后一次事件缓存。
+            // config.list 走 ext 长连接（不再每轮新建管道）；
             // 通道不可用（老 BGI/未连接/刚断线）→ 原 v2 轮询路径（兜底，逐字节保留）
             if (await TryEstablishExternalChannelAsync())
             {
                 // SDK 的 ext.hello 已完成同会话校验（跨会话在 SDK 侧即被拒绝），通道 Ready 即可信
                 ipcSessionTrusted = true;
                 UpdateExtSessionTrust();
+                await _externalClient!.RefreshStatusSnapshotAsync("assistant-status-poll").ConfigureAwait(false);
 
                 IpcResponse? extConfigResponse = null;
                 try
@@ -763,12 +812,34 @@ public partial class MainViewModel : INotifyPropertyChanged
                 }
 
                 // 任务状态：事件驱动快照缓存（字段解析与 v2 task.status 轮询同款）
-                if (_latestExtStatusJson is { } extStatusJson)
+                string? extStatusJson;
+                DateTimeOffset? extStatusObservedAtUtc;
+                lock (_latestExtStatusGate)
+                {
+                    extStatusJson = _latestExtStatusJson;
+                    extStatusObservedAtUtc = _latestExtStatusObservedAtUtc;
+                }
+                if (extStatusJson is not null)
                 {
                     try
                     {
                         var parsedStatus = ParseTaskStatusData(JsonSerializer.Deserialize<JsonElement>(extStatusJson));
                         bgiRunning = parsedStatus.BgiRunning;
+                        var nowUtc = DateTimeOffset.UtcNow;
+                        var snapshotAge = extStatusObservedAtUtc is { } observedAt
+                            ? nowUtc - observedAt
+                            : Timeout.InfiniteTimeSpan;
+                        var serverEpoch = _externalClient?.ServerEpoch;
+                        var expectedEpoch = serverEpoch is null
+                            ? null
+                            : $"{serverEpoch.ProcessId}:{serverEpoch.StartTicksUtc}";
+                        taskStatusAvailable = parsedStatus.TaskStatusAvailable
+                            && parsedStatus.StateRevision.HasValue
+                            && snapshotAge >= TimeSpan.Zero
+                            && snapshotAge <= ControlStatus.TaskStatusFreshnessWindow
+                            && string.Equals(parsedStatus.TaskStatusBgiEpoch, expectedEpoch, StringComparison.Ordinal);
+                        taskStatusBgiEpoch = parsedStatus.TaskStatusBgiEpoch;
+                        taskStatusObservedAtUtc = taskStatusAvailable ? extStatusObservedAtUtc : null;
                         currentTaskName = parsedStatus.CurrentTaskName;
                         currentTaskGroupName = parsedStatus.CurrentTaskGroupName;
                         currentRouteDisplay = parsedStatus.CurrentRouteDisplay;
@@ -855,6 +926,9 @@ public partial class MainViewModel : INotifyPropertyChanged
                 {
                     var parsedStatus = ParseTaskStatusData(JsonSerializer.Deserialize<JsonElement>(statusResp.Data));
                     bgiRunning = parsedStatus.BgiRunning;
+                    taskStatusAvailable = parsedStatus.TaskStatusAvailable;
+                    taskStatusBgiEpoch = parsedStatus.TaskStatusBgiEpoch;
+                    taskStatusObservedAtUtc = taskStatusAvailable ? DateTimeOffset.UtcNow : null;
                     currentTaskName = parsedStatus.CurrentTaskName;
                     currentTaskGroupName = parsedStatus.CurrentTaskGroupName;
                     currentRouteDisplay = parsedStatus.CurrentRouteDisplay;
@@ -924,6 +998,9 @@ public partial class MainViewModel : INotifyPropertyChanged
             OneClickTasksWithStatus = oneClickTasksWithStatus,
             Hotkeys = hotkeys,
             TaskRunning = bgiRunning,
+            TaskStatusAvailable = taskStatusAvailable,
+            TaskStatusBgiEpoch = taskStatusBgiEpoch,
+            TaskStatusObservedAtUtc = taskStatusObservedAtUtc,
             CurrentTaskName = currentTaskName,
             CurrentTaskGroupName = currentTaskGroupName,
             CurrentRouteDisplay = currentRouteDisplay,
@@ -6927,6 +7004,9 @@ public partial class MainViewModel : INotifyPropertyChanged
         {
             BgiStatus = parsed.BgiRunning ? "running" : "idle",
             TaskRunning = parsed.BgiRunning,
+            TaskStatusAvailable = parsed.TaskStatusAvailable,
+            TaskStatusBgiEpoch = parsed.TaskStatusBgiEpoch,
+            TaskStatusObservedAtUtc = DateTimeOffset.UtcNow,
             CurrentTaskName = parsed.CurrentTaskName,
             CurrentTaskGroupName = parsed.CurrentTaskGroupName,
             CurrentRouteDisplay = parsed.CurrentRouteDisplay,

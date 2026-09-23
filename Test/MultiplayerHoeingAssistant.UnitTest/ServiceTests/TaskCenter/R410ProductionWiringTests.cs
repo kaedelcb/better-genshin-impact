@@ -112,7 +112,7 @@ public class R410ProductionWiringTests : IDisposable
             (_, w, r) => new WorkflowRunner(w, r, boundary, new NoopPrerequisite(), new NoopTerminal()),
             () => (true, null),
             () => true,
-            () => new ControlStatus { TaskRunning = false });
+            () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false });
         return (host, boundary);
     }
 
@@ -298,7 +298,7 @@ public class R410ProductionWiringTests : IDisposable
         // 快照提供方：实时跟随 LatestLocalStatus（同一对象引用穿透）
         var snapshotProvider = GetPrivateField<Func<ControlStatus?>>(host, "_statusSnapshotProvider");
         Assert.Null(snapshotProvider());
-        var sentinel = new ControlStatus { TaskRunning = true, CurrentTaskName = "哨兵任务" };
+        var sentinel = new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = true, CurrentTaskName = "哨兵任务" };
         SetPrivateField(mainVm, "<LatestLocalStatus>k__BackingField", sentinel);
         Assert.Same(sentinel, snapshotProvider());
     }

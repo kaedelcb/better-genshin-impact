@@ -939,6 +939,7 @@ internal sealed class InstanceRequestHandler
             var currentTaskHandle = coordinatorCreated
                 ? BgiTaskCoordinator.Instance.CurrentTaskHandle?.ToString("N")
                 : null;
+            var taskStatusEpoch = BetterGenshinImpact.Service.Execution.JobRegistry.CurrentEpoch;
 
             return InstanceIpcEnvelope.Response(request, new
             {
@@ -978,7 +979,8 @@ internal sealed class InstanceRequestHandler
                 slotOccupied = BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0
                                || registryRunningJob != null, // [A3.3] 与 running 同并集口径
                 queueDepth,        // 协调器在队任务数（未协商 task.queue 的老客户端不受影响）
-                currentTaskHandle  // 在跑任务的 handle（协调器派发时登记，手动任务为 null）
+                currentTaskHandle, // 在跑任务的 handle（协调器派发时登记，手动任务为 null）
+                bgiEpoch = new { processId = taskStatusEpoch.ProcessId, startTicksUtc = taskStatusEpoch.StartTicksUtc }
             });
         }
         catch (Exception ex)
@@ -995,12 +997,14 @@ internal sealed class InstanceRequestHandler
             throw new InvalidOperationException(response.ErrorMessage ?? "任务状态读取失败");
         var data = response.Data;
         using var currentProcess = Process.GetCurrentProcess();
+        var taskStatusEpoch = BetterGenshinImpact.Service.Execution.JobRegistry.CurrentEpoch;
         return new
         {
             windowsSessionId = _context.WindowsSessionId,
             processId = _context.ProcessId,
             startedAt = _context.StartedAt,
             processStartTicks = currentProcess.StartTime.ToUniversalTime().Ticks,
+            bgiEpoch = new { processId = taskStatusEpoch.ProcessId, startTicksUtc = taskStatusEpoch.StartTicksUtc },
             running = data["running"]?.ToObject<bool>() ?? false,
             taskName = data["taskName"]?.ToObject<string>(),
             groupName = data["groupName"]?.ToObject<string>(),

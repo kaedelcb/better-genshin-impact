@@ -59,7 +59,7 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
                 Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
                 () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null),
                 localExecutionCapability: () => true,
-                statusSnapshotProvider: () => new ControlStatus { TaskRunning = false },
+                statusSnapshotProvider: () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false },
                 admissionWired: true,
                 admissionSeams: new TaskCenterAdmissionSeams { Epoch = "1:1" });
             // 真实组装：E3 的准入由宿主仲裁面承担（= 生产组合根的接线形状）；传输=进程内管道替身。
@@ -222,7 +222,7 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
         => new(Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
             () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null),
             localExecutionCapability: () => true,
-            statusSnapshotProvider: () => new ControlStatus { TaskRunning = false },
+            statusSnapshotProvider: () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false },
             admissionWired: true,
             admissionSeams: new TaskCenterAdmissionSeams { Epoch = "1:1" });
 
@@ -500,7 +500,7 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
                 Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
                 () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null),
                 localExecutionCapability: () => true,
-                statusSnapshotProvider: () => new ControlStatus { TaskRunning = false },
+                statusSnapshotProvider: () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false },
                 admissionWired: true,
                 admissionSeams: new TaskCenterAdmissionSeams { Epoch = "1:1", F11Active = true });
             var executor = new CommandExecutor(null!, "unused",
@@ -565,7 +565,7 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
                 Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
                 () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null),
                 localExecutionCapability: () => true,
-                statusSnapshotProvider: () => new ControlStatus { TaskRunning = false },
+                statusSnapshotProvider: () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false },
                 admissionWired: true,
                 admissionSeams: new TaskCenterAdmissionSeams { Epoch = "1:1" });
             var executor = new CommandExecutor(null!, "unused",

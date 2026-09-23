@@ -91,7 +91,7 @@ public class TaskCenterEnsureReadyTests : IDisposable
             (_, w, r) => new WorkflowRunner(w, r, boundary, new NoopPrerequisite(), new NoopTerminal()),
             () => readyRef() ? (true, null) : (false, "BGI 离线（测试就绪判定）"),
             () => true,
-            snapshotProvider ?? (() => new ControlStatus { TaskRunning = false }),
+            snapshotProvider ?? (() => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false }),
             ensure, snapshotBudget);
         return (host, boundary);
     }
@@ -367,7 +367,7 @@ public class TaskCenterEnsureReadyTests : IDisposable
         var (host, _) = MakeHost(() => true, null, () =>
         {
             snapshotCalls++;
-            return snapshotCalls > 2 ? new ControlStatus { TaskRunning = false } : null;
+            return snapshotCalls > 2 ? new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false } : null;
         });
 
         var result = await host.RegisterHandoffAsync(Req(workflowId, "manual:snap-1"), CancellationToken.None);
@@ -399,7 +399,7 @@ public class TaskCenterEnsureReadyTests : IDisposable
         // 会诊二轮 建议：兜底窗口内到达的是忙态快照 → BgiBusy 冲突拒绝（就绪≠可跑，无双跑纪律不破）
         var workflowId = Seed("日常流程");
         var (host, _) = MakeHost(() => true, null,
-            () => new ControlStatus { TaskRunning = true, CurrentTaskName = "别处在跑" });
+            () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = true, CurrentTaskName = "别处在跑" });
 
         var result = await host.RegisterHandoffAsync(Req(workflowId, "manual:snap-3"), CancellationToken.None);
 

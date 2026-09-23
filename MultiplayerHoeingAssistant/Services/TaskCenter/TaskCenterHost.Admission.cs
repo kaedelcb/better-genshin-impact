@@ -834,6 +834,10 @@ public sealed partial class TaskCenterHost
         }
 
         var status = _statusSnapshotProvider?.Invoke();
+        var currentEpoch = CurrentBgiEpoch();
+        var statusEpochMatches = status is not null
+            && !string.IsNullOrWhiteSpace(currentEpoch)
+            && string.Equals(status.TaskStatusBgiEpoch, currentEpoch, StringComparison.Ordinal);
         return new ArbitrationFacts
         {
             ExecutionOccupied = status?.TaskRunning == true || ledgerOccupied,
@@ -842,7 +846,10 @@ public sealed partial class TaskCenterHost
             // （fail-closed）处置，缺口登记为「控制面需暴露带来源的占用事实（runBinding/jobId/来源）」，
             // 属 R5.8 真实入口层前置；在生产节点改道门验收前本项不影响任何生产路径（门仍关闭）。
             OwnInFlightRunBindings = null,
-            ExecutionFactsUnknown = status is null || ledgerUnknown,
+            // 查询失败/响应缺 running 字段时 MainViewModel 仍会构造用于 UI 的默认 TaskRunning=false；
+            // 该展示默认值不是空闲证据。超过 20 秒或 BGI 进程纪元变化也必须待核查。
+            ExecutionFactsUnknown = status is null || !status.HasFreshTaskStatus(DateTimeOffset.UtcNow)
+                || !statusEpochMatches || ledgerUnknown,
         };
     }
 

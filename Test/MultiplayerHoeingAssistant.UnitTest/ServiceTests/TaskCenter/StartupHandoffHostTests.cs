@@ -775,13 +775,13 @@ public class StartupHandoffHostTests : IDisposable
     {
         // 三轮 阻断1 核心回归：受理事实优先——同 IntentKey 重放时即使快照显示 BGI 忙，也回 AlreadyAccepted（不得 BgiBusy 遮蔽）
         var wf = Seed("流程A");
-        var (host, _) = MakeHost(snapshot: () => new ControlStatus { TaskRunning = false });
+        var (host, _) = MakeHost(snapshot: () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false });
         var req = Req(wf, "timer:t1:2026-09-19");
         var first = await host.RegisterHandoffAsync(req);
         Assert.Equal(HandoffOutcome.Accepted, first.Outcome);
 
         // 重放：快照变为忙（如正是该受理运行在跑）——台账命中优先
-        var (host2, _) = MakeHost(snapshot: () => new ControlStatus { TaskRunning = true, CurrentTaskName = "锄地" });
+        var (host2, _) = MakeHost(snapshot: () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = true, CurrentTaskName = "锄地" });
         var replay = await host2.RegisterHandoffAsync(Req(wf, "timer:t1:2026-09-19"));
         Assert.Equal(HandoffOutcome.AlreadyAccepted, replay.Outcome);
         Assert.Equal(first.RunId, replay.RunId);
@@ -792,7 +792,7 @@ public class StartupHandoffHostTests : IDisposable
     {
         // 三轮 阻断1：快照在跑 + 新意图（台账未命中）→ BgiBusy 拒绝且不留运行记录
         var wf = Seed("流程A");
-        var (host, _) = MakeHost(snapshot: () => new ControlStatus { TaskRunning = true, CurrentTaskName = "锄地" });
+        var (host, _) = MakeHost(snapshot: () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = true, CurrentTaskName = "锄地" });
 
         var r = await host.RegisterHandoffAsync(Req(wf, "manual:exec-x"));
 
@@ -833,7 +833,7 @@ public class StartupHandoffHostTests : IDisposable
             (_, w, r) => new WorkflowRunner(w, r, new FakeBoundary(), new NoopPrerequisite(), new NoopTerminal()),
             () => (true, null),
             () => ++capabilityCalls <= 1,
-            () => new ControlStatus { TaskRunning = true });
+            () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = true });
 
         var r = await host2.RegisterHandoffAsync(Req(wf, "manual:exec-cap"));
 
@@ -858,7 +858,7 @@ public class StartupHandoffHostTests : IDisposable
             () => null, null,
             (_, w, r) => new WorkflowRunner(w, r, new FakeBoundary(), new NoopPrerequisite(), new NoopTerminal()),
             () => (true, null), () => true,
-            () => new ControlStatus { TaskRunning = false },
+            () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false },
             admissionWired: true, admissionSeams: new TaskCenterAdmissionSeams { Epoch = "9:900" });
         try
         {
@@ -898,7 +898,7 @@ public class StartupHandoffHostTests : IDisposable
             () => null, null,
             (_, w, r) => new WorkflowRunner(w, r, new FakeBoundary(), new NoopPrerequisite(), new NoopTerminal()),
             () => (true, null), () => true,
-            () => new ControlStatus { TaskRunning = false });
+            () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false });
         try
         {
             var reg = await host.RegisterHandoffAsync(Req(wf, "manual:exec-no-epoch"));
@@ -1081,7 +1081,7 @@ public class StartupHandoffHostTests : IDisposable
                 Interlocked.Increment(ref providerCalls);
                 if (!barrier.SignalAndWait(TimeSpan.FromSeconds(10)))
                     throw new TimeoutException("双 Miss 屏障超时——未形成确定性竞态汇合");
-                return new ControlStatus { TaskRunning = false };
+                return new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false };
             });
         host2.EnsureRecovered();
 
@@ -1368,7 +1368,7 @@ public class StartupHandoffHostTests : IDisposable
             },
             () => (true, null),
             () => true,
-            () => new ControlStatus { TaskRunning = false });
+            () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false });
 
         var result = await host.RegisterHandoffAsync(Req(wf, "timer:t1:2026-09-19", mode: StartupHandoffModes.ArmTrigger));
 
@@ -1396,7 +1396,7 @@ public class StartupHandoffHostTests : IDisposable
             Path.Combine(_dir, "flows"), Path.Combine(_dir, "runs"), Path.Combine(_dir, "catalog-cache.json"),
             () => null, logs.Enqueue,
             (_, w, r) => new WorkflowRunner(w, r, boundary, new NoopPrerequisite(), new NoopTerminal()),
-            () => (true, null), () => true, () => new ControlStatus { TaskRunning = false });
+            () => (true, null), () => true, () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false });
         host.StateChanged += (_, _) => throw new InvalidOperationException("订阅者爆炸");
 
         var result = await host.RegisterHandoffAsync(Req(wf, "timer:t1:2026-09-19"));
@@ -1423,7 +1423,7 @@ public class StartupHandoffHostTests : IDisposable
             () => null,
             msg => { if (msg.Contains("状态通知订阅者异常")) throw new InvalidOperationException("日志爆炸"); },
             (_, w, r) => new WorkflowRunner(w, r, boundary, new NoopPrerequisite(), new NoopTerminal()),
-            () => (true, null), () => true, () => new ControlStatus { TaskRunning = false });
+            () => (true, null), () => true, () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false });
         host.StateChanged += (_, _) => throw new InvalidOperationException("订阅者爆炸");
 
         var result = await host.RegisterHandoffAsync(Req(wf, "timer:t1:2026-09-19"));
@@ -1472,7 +1472,7 @@ public class StartupHandoffHostTests : IDisposable
                 {
                     DelayAsync = (_, _) => { delayCalls++; throw new InvalidOperationException("延时爆炸"); },
                 }),
-            () => (true, null), () => true, () => new ControlStatus { TaskRunning = false });
+            () => (true, null), () => true, () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = "9:900", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false });
 
         var result = await host.RegisterHandoffAsync(Req(wf, "timer:t1:2026-09-19", mode: StartupHandoffModes.ArmTrigger));
 

@@ -2,6 +2,8 @@
 
 public class ControlStatus
 {
+    public static readonly TimeSpan TaskStatusFreshnessWindow = TimeSpan.FromSeconds(20);
+
     public string RoomCode { get; set; } = string.Empty;
     public string PlayerUid { get; set; } = string.Empty;
     public string PlayerName { get; set; } = string.Empty;
@@ -23,6 +25,12 @@ public class ControlStatus
     public Dictionary<string, List<string>> OneClickTasks { get; set; } = [];
     /// <summary>是否正在执行任务（任意任务，包括锄地、一条龙、配置组等）。</summary>
     public bool TaskRunning { get; set; }
+    /// <summary>本轮 task.status 查询是否成功且含合法 running 字段；false 表示执行占用未知，不能视为空闲。</summary>
+    public bool TaskStatusAvailable { get; set; }
+    /// <summary>BGI 响应携带的进程纪元（PID:StartTicks）；用于拒绝重启前的旧快照。</summary>
+    public string? TaskStatusBgiEpoch { get; set; }
+    /// <summary>该状态快照实际取得时间；超过有效期、来自未来或缺失时不得用于准入。</summary>
+    public DateTimeOffset? TaskStatusObservedAtUtc { get; set; }
     /// <summary>最近一次任务是否被用户手动取消（BGI wasCancelled，置位保留到下个任务启动；桌宠表情用）。</summary>
     public bool WasCancelled { get; set; }
     /// <summary>当前正在执行的任务名称（如"锄地一条龙"、"传奇"等）。</summary>
@@ -57,4 +65,14 @@ public class ControlStatus
     public Dictionary<string, string> QuickCommands { get; set; } = new();
     /// <summary>预期开锄人数（默认 4）。服务端取所有已上线成员的最小值作为触发阈值。</summary>
     public int ExpectedHoeingPlayers { get; set; } = 4;
+
+    public bool HasFreshTaskStatus(DateTimeOffset nowUtc)
+    {
+        if (!TaskStatusAvailable || string.IsNullOrWhiteSpace(TaskStatusBgiEpoch)
+            || TaskStatusObservedAtUtc is not { } observedAtUtc)
+            return false;
+
+        var age = nowUtc - observedAtUtc;
+        return age >= TimeSpan.Zero && age <= TaskStatusFreshnessWindow;
+    }
 }

@@ -164,6 +164,8 @@ public partial class MainViewModel
     private DateTime _externalNextProbeUtc = DateTime.MinValue;
     /// <summary>[切片4] 事件驱动维护的 ext.task.status 快照（SDK 基线/跳号/事件触发刷新产物）；null = 尚未取得。</summary>
     private string? _latestExtStatusJson;
+    private readonly object _latestExtStatusGate = new();
+    private DateTimeOffset? _latestExtStatusObservedAtUtc;
 
     /// <summary>
     /// [切片1/4] 确保 ext.* 通道接管 BGI 状态同步：切片1 只订阅 online.triggered；
@@ -358,6 +360,14 @@ public partial class MainViewModel
     {
         try
         {
+            if (state != BgiExternalConnectionState.Ready)
+            {
+                lock (_latestExtStatusGate)
+                {
+                    _latestExtStatusJson = null;
+                    _latestExtStatusObservedAtUtc = null;
+                }
+            }
             AddLog($"[ext] BGI 外部接口通道状态 → {state}");
         }
         catch
@@ -375,7 +385,11 @@ public partial class MainViewModel
     {
         try
         {
-            _latestExtStatusJson = snapshot.DataJson;
+            lock (_latestExtStatusGate)
+            {
+                _latestExtStatusJson = snapshot.DataJson;
+                _latestExtStatusObservedAtUtc = DateTimeOffset.UtcNow;
+            }
 
             using var doc = System.Text.Json.JsonDocument.Parse(snapshot.DataJson);
             if (!doc.RootElement.TryGetProperty("onlineGeneration", out var ogEl)

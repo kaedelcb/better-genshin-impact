@@ -32,6 +32,26 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
         typeof(CancellationContext).GetProperty(nameof(CancellationContext.LastManualCancelAtUtc))!.SetValue(CancellationContext.Instance, null);
     }
 
+    [Fact]
+    public void TaskStatus_IncludesCurrentProcessEpoch()
+    {
+        var request = InstanceIpcEnvelope.Request(InstanceOperations.TaskStatus);
+        var response = handler.HandleTaskStatus(null!, request);
+        var epoch = JobRegistry.CurrentEpoch;
+        var actual = response.Data!["bgiEpoch"]!;
+
+        Assert.Equal(epoch.ProcessId, (int)actual["processId"]!);
+        Assert.Equal(epoch.StartTicksUtc, (long)actual["startTicksUtc"]!);
+
+        var readOnlyHandler = new InstanceRequestHandler(
+            new InstanceContext(BetterGiInstanceType.Primary, "test-readonly-status", null),
+            null!, null!, _ => { }, _ => { }, NullLogger.Instance);
+        var readOnlySnapshot = readOnlyHandler.CreateReadOnlyStatusSnapshot();
+        var readOnlyEpoch = readOnlySnapshot.GetType().GetProperty("bgiEpoch")!.GetValue(readOnlySnapshot)!;
+        Assert.Equal(epoch.ProcessId, (int)readOnlyEpoch.GetType().GetProperty("processId")!.GetValue(readOnlyEpoch)!);
+        Assert.Equal(epoch.StartTicksUtc, (long)readOnlyEpoch.GetType().GetProperty("startTicksUtc")!.GetValue(readOnlyEpoch)!);
+    }
+
     public void Dispose()
     {
         PreemptionGate.Disarm();

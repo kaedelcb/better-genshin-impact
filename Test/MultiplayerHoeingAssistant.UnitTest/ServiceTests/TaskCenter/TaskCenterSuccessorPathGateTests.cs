@@ -449,7 +449,7 @@ public class TaskCenterSuccessorPathGateTests
                 Path.Combine(root, "flows"), runsDir, Path.Combine(root, "catalog.json"),
                 () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null),
                 localExecutionCapability: () => true,
-                statusSnapshotProvider: () => new ControlStatus { TaskRunning = false },
+                statusSnapshotProvider: () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = RoutingFakePort.Epoch, TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false },
                 admissionWired: true, successorAdmissionWired: true,
                 admissionSeams: new TaskCenterAdmissionSeams
                 {
@@ -586,7 +586,7 @@ public class TaskCenterSuccessorPathGateTests
                 flowsDir, runsDir, Path.Combine(root, "catalog.json"),
                 () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null),
                 localExecutionCapability: () => true,
-                statusSnapshotProvider: () => new ControlStatus { TaskRunning = false },
+                statusSnapshotProvider: () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = RoutingFakePort.Epoch, TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false },
                 admissionWired: true, successorAdmissionWired: true,
                 admissionSeams: new TaskCenterAdmissionSeams
                 {
@@ -726,7 +726,7 @@ public class TaskCenterSuccessorPathGateTests
                 flowsDir, runsDir, Path.Combine(root, "catalog.json"),
                 () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null),
                 localExecutionCapability: () => true,
-                statusSnapshotProvider: () => new ControlStatus { TaskRunning = false },
+                statusSnapshotProvider: () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = RoutingFakePort.Epoch, TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false },
                 admissionWired: true, successorAdmissionWired: true,
                 admissionSeams: new TaskCenterAdmissionSeams
                 {
@@ -1085,7 +1085,7 @@ public class TaskCenterSuccessorPathGateTests
                 flowsDir, runsDir, Path.Combine(root, "catalog.json"),
                 () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null),
                 localExecutionCapability: () => true,
-                statusSnapshotProvider: () => new ControlStatus { TaskRunning = false },
+                statusSnapshotProvider: () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = RoutingFakePort.Epoch, TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false },
                 admissionWired: true, successorAdmissionWired: true,
                 admissionSeams: new TaskCenterAdmissionSeams
                 {
@@ -1244,7 +1244,7 @@ public class TaskCenterSuccessorPathGateTests
                 Path.Combine(root, "flows"), runsDir, Path.Combine(root, "catalog.json"),
                 () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null),
                 localExecutionCapability: () => true,
-                statusSnapshotProvider: () => new ControlStatus { TaskRunning = false },
+                statusSnapshotProvider: () => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = RoutingFakePort.Epoch, TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false },
                 admissionWired: true, successorAdmissionWired: true,
                 admissionSeams: new TaskCenterAdmissionSeams
                 {
@@ -1600,7 +1600,7 @@ public class TaskCenterSuccessorPathGateTests
             runnerFactory: null, readinessOverride: () => (true, null),
             localExecutionCapability: () => true,
             // 启动移交受理带快照预检（生产语义）⇒ 该分支需可用快照；节点路径在接缝下不消费快照。
-            statusSnapshotProvider: startViaHandoff ? (() => new ControlStatus { TaskRunning = false }) : (() => null),
+            statusSnapshotProvider: startViaHandoff ? (() => new ControlStatus { TaskStatusAvailable = true, TaskStatusBgiEpoch = RoutingFakePort.Epoch, TaskStatusObservedAtUtc = DateTimeOffset.UtcNow, TaskRunning = false }) : (() => null),
             admissionWired: true,
             admissionSeams: seams,
             successorAdmissionWired: successorWired);
@@ -1616,7 +1616,8 @@ public class TaskCenterSuccessorPathGateTests
                     WorkflowId = doc.WorkflowId!,
                     Mode = StartupHandoffModes.Start,
                 });
-                Assert.Equal(HandoffOutcome.Accepted, reg.Outcome);
+                Assert.True(reg.Outcome == HandoffOutcome.Accepted,
+                    $"启动移交应受理；实际={reg.Outcome}，reasonCode={reg.ReasonCode}，reason={reg.Reason}");
             }
             else
             {
