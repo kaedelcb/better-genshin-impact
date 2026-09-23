@@ -830,6 +830,20 @@ public sealed partial class TaskCenterHost
                 // 夹具注入的归属**不得覆盖外部启动台账占用**（台账有未终结记录时一律不给归属）。
                 OwnInFlightRunBindings = ledgerOccupied ? null : s.OwnInFlightRunBindingsProvider?.Invoke(),
                 ExecutionFactsUnknown = (s.FactsUnknown ?? false) || ledgerUnknown,
+                // [R5 批次 4／A6] 占用者事实：接缝的占用是**测试事实**（无 BGI 身份）⇒ 如实标注"无身份"，
+                // 若接缝声明事实未知则直接未知。绝不把接缝事实伪装成可核验的 BGI 占用者。
+                // 接缝态只表达"测试声称的占用/未知"，**不**回读实况快照（避免新旧事实混用与纪元旁路）：
+                // 未声明占用即测试意义上的空闲；声明占用恒为"无身份"（不可被抢占）。
+                RunningOccupant = (s.FactsUnknown ?? false) || ledgerUnknown
+                    ? RunningOccupantFacts.Unknown("facts_unknown")
+                    : occupied || ledgerOccupied
+                        ? new RunningOccupantFacts
+                        {
+                            State = OccupantFactsState.Occupied,
+                            HasTrustedIdentity = false,
+                            Reference = "test_seam_occupied",
+                        }
+                        : RunningOccupantFacts.Idle(),
             };
         }
 
@@ -850,6 +864,10 @@ public sealed partial class TaskCenterHost
             // 该展示默认值不是空闲证据。超过 20 秒或 BGI 进程纪元变化也必须待核查。
             ExecutionFactsUnknown = status is null || !status.HasFreshTaskStatus(DateTimeOffset.UtcNow)
                 || !statusEpochMatches || ledgerUnknown,
+            // [R5 批次 4／A6] 生产占用者事实（单一事实点）：身份/级别/优先级不知道的一律留空；
+            // 注意 statusEpochMatches=false（旧纪元快照）⇒ FromStatus 只按新鲜度判定，故此处显式降级为未知。
+            RunningOccupant = RunningOccupantFacts.FromStatus(status, ledgerOccupied, ledgerUnknown,
+                bgiEpochVerified: statusEpochMatches),
         };
     }
 

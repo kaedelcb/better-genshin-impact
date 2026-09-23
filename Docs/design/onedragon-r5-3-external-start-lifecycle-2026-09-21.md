@@ -2889,6 +2889,56 @@ R5 要解决的是联机助手、BGI 与既有协调流程在**日常运行、�
 | 既有 14 项失败＋偶发失败 | ⚠ 基线身份不变；`BgiTaskCoordinatorTests.ClearQueue_CancelsAllQueuedItems_WithEvents` 曾在一次全量运行偶发失败（隔离 5/5 通过），**疑似时间敏感、是否既有尚未证实**，机制未定位 |
 | 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
 
+### 24.100 落地登记：A6 运行中占用与到来者相遇（2026-09-24；纯函数＋占用者事实，未开生产门）
+
+**审计（带代码行；批次开始时的真实口径）**
+
+- `TaskCenterHost.CurrentArbitrationFacts()`（`TaskCenterHost.Admission.cs` §811 起）**生产只产出布尔占用**：
+  `ExecutionOccupied = status?.TaskRunning == true || ledgerOccupied`，且源码自带如实限定"占用被压成布尔值，
+  不足以区分 §6.2 的原生/托管占用与重试资格"、"生产恒不填归属（`OwnInFlightRunBindings = null`）"。
+- `TaskCenterMechanismPolicy.PriorityOfNode`（§74）是**节点级**修饰（缺省 0），检索仅被测试消费——**生产准入尚未消费**，
+  schema 存在不等于优先级已生效。
+- 旧条款冲突：R5.2 §6.2 矩阵写"原生任务不抢占"，而 owner 2026-09-23 裁决 B.1 要求"上线锄地／一键锄地无论当前是什么
+  任务都停止当前后执行、同级后来者打断"。B.1 取代旧条款——本批按 B.1 实现比较规则。
+- owner 裁决还要求：低优先级到来者**本地持久等待**（不是拒绝，也不是提前进 BGI 队列）；抢占须绑定被切任务身份并完成
+  权威退出确认；**未知事实不是空闲**；远程自报 `key` 不能单独证明最高级来源。
+
+**实现（未开生产门）**
+
+| 组成 | 位置 | 语义 |
+|---|---|---|
+| 占用者事实 | `Models/TaskCenter/RunningOccupantModels.cs`（新增） | `OccupantFactsState{Unknown,Idle,Occupied}`＋执行身份/RunId/JobId/Kind/Source/Name/`HoeingClass`/**`HighestClass` 三态**/`Tier`/`Priority`/`StopRequested`；`Unknown` **不是**空闲 |
+| 生产映射唯一事实点 | `RunningOccupantFacts.FromStatus(status, ledgerOccupied, ledgerUnknown, bgiEpochVerified)` | 台账不可读／快照缺失／**纪元未核验**／快照过期 ⇒ Unknown；台账有已受理未终结 ⇒ 占用但**无身份**；显式 `running=false` 且新鲜且纪元核验 ⇒ Idle；占用时取执行身份（空 GUID 视为无效），**级别/优先级来源未接线 ⇒ 保持 null**；`HighestClass` 恒 null（残余） |
+| 相遇判定（冻结纯函数） | `Services/TaskCenter/Arbitration/RunningOccupancyArbiter.Decide` | 未知 ⇒ `HoldFactsUnknown`；空闲 ⇒ `ProceedIdle`；占用且**目标不可绑定**（无身份/实例 ID 非法） ⇒ `HoldUnknownOccupant`；到来者来源不可信 ⇒ `WaitLocally`；最高级锄地到来 ⇒ `PreemptNow`（**owner B.1 书面例外：不比较占用者级别**，但仍要求身份可核验）；占用者已证明 `HighestClass=true` ⇒ 普通到来者 `WaitLocally`；锄地类但 `HighestClass` 不可判定 ⇒ 普通到来者 `HoldUnknownOccupant`；占用者级别/优先级未知 ⇒ `HoldUnknownOccupant`；更高或**同级（后来者打断）** ⇒ `PreemptNow`；更低 ⇒ `WaitLocally` |
+| 等待集合选择 | 同上 `SelectNextFromWaitSet` | 最高级优先 → 级别降序 → 优先级降序 → **有值时刻先于 null**（独立排序键）→ 时刻升序 → 稳定身份 Ordinal → 候选号 Ordinal；前置未就绪不参选；空集/全不合格 ⇒ null |
+| 恢复资格 | 同上 `DecideResume` | 票据无效 ⇒ `RefuseTicketInvalid`；被暂停身份缺失 ⇒ `RefuseSuspendedIdentityUnknown`；占用未知 ⇒ `HoldFactsUnknown`；空闲 ⇒ `AllowResume`；占用者可核验且被暂停实例**按 GUID 值**相同 ⇒ `RefuseAlreadyOwner`；其余 ⇒ `RefuseOccupiedByOther`；双方实例 ID 非法/空 ⇒ `HoldFactsUnknown` |
+| 事实接线 | `Models/TaskCenter/ArbitrationModels.cs`（`ArbitrationFacts.RunningOccupant` 纯增量）＋`TaskCenterHost.CurrentArbitrationFacts()` | 生产分支传 `statusEpochMatches` 作为纪元核验；**接缝分支不再回读实况快照**（未声明占用 ⇒ `Idle()`，声明占用 ⇒ 占用但无身份）；既有 `ExecutionOccupied`/`ExecutionFactsUnknown` 表达式**未改** |
+
+**证据**
+
+- 定向夹具 `Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/RunningOccupancyArbiterTests.cs` **29/29**：
+  未知/空闲/占用 × 最高级/更高/同级/更低、已证明最高级占用者被最高级打断但不被普通任务打断、锄地类最高级不可判定 ⇒ 普通到来者停驻、
+  可信标记真但目标缺失/空 GUID、不可信到来者、跨级与负优先级、仅缺 Tier 或 Priority、等待集合（同级高优先级胜出、null 时刻排最后、
+  MaxValue vs null、前置未就绪、全键相同排列无关）、恢复六种结果、FromStatus（纪元未核验/空 GUID/台账占用+快照空闲）。
+- **三次受控突变**（各红一次、随后还原）："未知当空闲" ⇒ 1 红；"同级不打断" ⇒ 3 红；"null 时刻与真实 MaxValue 打平" ⇒ 1 红
+  （第三个突变还暴露并修正了夹具自身的证明力不足：改为让 null 项稳定身份字典序更小，旧口径必定选错）。
+- 完整回归：助手全量 **1222 通过／2 跳过／0 失败／1224**（`r5_a6_final_assistant_full_20260924.trx`）；
+  BGI 源码本批未改动，最近一次全量 **1025 通过／14 失败／1039**，失败身份与既有 14 项基线**差集为空**（原因未归因）。
+- 会诊：**GPT-6-Astra／medium 三轮各 1 次成功**。首轮 3 必改＋3 重要（占用者恒最高级未比较／最高级绕过级别停驻／`PreemptNow` 可能空目标＋
+  到来者可信标记未消费／FromStatus 无纪元输入＋接缝混用实况／恢复输入不足／夹具证明力不足）；第二轮判 ①②③④限定闭合、**⑤未完全闭合**＋排序边界；
+  第三轮判**两点闭合、无新增必改**，并要求收窄"全格"表述与加强 MaxValue 夹具（均已处置）。
+
+**残余（不因本批改变门禁）**
+
+| 项 | 状态 |
+|---|---|
+| 相遇判定与等待选择纯函数 | ✅ 限定闭合（含 owner B.1 最高级例外的书面依据与夹具） |
+| **占用者级别/优先级与 `HighestClass` 的生产来源** | ❌ 未接线：生产映射恒 null/未知 ⇒ 生产上普通任务对占用者一律保守停驻；需运行台账↔执行身份关联（后续批次） |
+| **本地持久等待的落盘与重判** | ❌ 未实现：本批只交付"判定＋集合选择"纯函数，不代表持久等待/重启恢复/后续执行已落地 |
+| 夹具范围 | ⚠ 只覆盖已列场景，**不称"全格"**；排列无关仅限最终排序键可区分的候选 |
+| 生产消费端 | ❌ 未接线：抢占执行、退出确认、恢复专用准入端到端仍未消费本批事实（生产门保持关闭） |
+| 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
+
 ### 24.99 落地登记：助手侧退出判定接线（2026-09-24；生产行为变更，流程级回归仍待补）
 
 **本批做了什么**：把助手端"看到空闲／`running=false` 就当原任务已停止"的判定，改为**按 BGI 的执行根退出凭证**判断。

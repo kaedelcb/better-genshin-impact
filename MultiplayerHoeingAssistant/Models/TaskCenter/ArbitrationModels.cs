@@ -154,6 +154,13 @@ public sealed class ArbitrationFacts
     public IReadOnlyCollection<string>? OwnInFlightRunBindings { get; set; }
     /// <summary>请求方持有有效租约（§6.2 过期即禁启：代次相等≠有效）。</summary>
     public bool RequesterHoldsValidLease { get; set; } = true;
+    /// <summary>
+    /// **当前占用者事实**（R5 批次 4／A6，纯增量，未知字段保持 null）：给
+    /// <see cref="RunningOccupancyArbiter.Decide"/> 用的"是谁、级别多少、能否安全绑定停止"；
+    /// 生产映射唯一事实点＝<see cref="RunningOccupantFacts.FromStatus"/>。
+    /// 本属性**不改变**既有布尔 <see cref="ExecutionOccupied"/> 的语义（门禁仍关闭）。
+    /// </summary>
+    public RunningOccupantFacts? RunningOccupant { get; set; }
     /// <summary>关联事实引用（NeedReconcile 载荷必填：待对账的提交身份/动作号等；无=空串）。</summary>
     public string FactsReference { get; set; } = "";
 }
