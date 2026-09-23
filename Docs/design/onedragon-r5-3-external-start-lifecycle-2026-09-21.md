@@ -2543,3 +2543,19 @@ I7 的 `Recovery_PreemptConfirmationPending_PreservesSuccessorWithoutSending` �
 | D22／B1/B0 进程死亡与发送认领 | 对“BGI 停止／确认／下一发送中重启”分 `PhysicalReleaseProof` 与 `ExecutionOutcome`。物理证明是正常终态＋槽释放，或绑定旧进程对象/PID/启动 ticks 的死亡证明；死亡不补造任务终态。换代分未认领、已认领且可靠零发送并封禁旧 sender、已认领不可考、已受理四格；前两格才可结束旧发送权后新授权，后两格只对账。旧 epoch 凭证不消费新 epoch 槽位。 | §24.74 允许进程死亡解除物理占用疑问，§24.76 却要求退出终态必备，两句冲突；本条改为两种物理证明并保留独立业务责任。 |
 
 **合同冻结前全格门槛**：BGI 每个物理入口（队列、原生、旧调度器、热键、恢复）的授权与排他映射；交接阶段 × Sender 认领阶段 × 进程代际 × F11 的状态转换；远端回执原词白名单；所有历史轮结算与归档容量；字段旧 schema 读入／迁移／拒绝表。上述矩阵没有实现与反例之前，E3/E4/E5、节点改道、真实 User 门持续关闭，R5.8 未签署。
+
+### 24.79 BGI 物理执行入口清点（2026-09-24；源码静态核对，未验收）
+
+§24.78-D14 的“所有入口共享槽权”必须覆盖以下实际起步点。`ExecutionScope` 当前只防止另一个**已建立**的逻辑根，`TaskSemaphore` 只在叶任务中取得；两者都没有“旧实例退出至继任者入队／起步”的连续预留身份。`JobRegistry` 是作业事实源，不能代替物理槽许可。
+
+| 实际入口 | 根与物理槽取得位置 | 当前身份／排他事实 | R5 合同接线和反例 |
+|---|---|---|---|
+| `ext.task.start` 带编号队列 | `ExternalInterfaceCommandPlane.DispatchTaskStartAsync → BgiTaskCoordinator.Submit/pump → InstanceRequestHandler.ExecuteTaskStartCoreAsync`；组／龙进入 `ExecutionScope.Start`，组叶进入 `TaskRunner` | 队列在 `_pending/_current` 先收件，`WaitSlotFreeAsync` 只读；入队编号不等于拥有物理槽 | 入队时保留同一 `handoffId/slotGeneration`，pump 能识别自有预留；过期／F11／撤销后不能迟到起步；队列外另一入口竞争的实测 |
+| v2 `task.start` 旧入口及命令行／助手旧调度器 | `InstanceRequestHandler.HandleTaskStart → ExecuteTaskStartCoreAsync`；命令行最终进入组／龙根 | v2 返回完成型旧回执；当前 `TaskSemaphore.CurrentCount` 是先读后起步，旧入口无新预留字段 | 模式 fencing 后仅指定一方可启动；旧 v2 请求不得在新预留期间偷入；切换／回滚／重启矩阵 |
+| BGI UI 配置组、一条龙与独立任务 | `ScriptService.RunMulti`、`OneDragonFlowViewModel`、`TaskRunner.RunCurrentAsync` | 组／龙有 `ExecutionScope` 根；叶在 `TaskRunner` 取 `TaskSemaphore`，组间空隙仍有根 | 原生起步检查统一物理槽门；既有组内叶继续按同一逻辑任务身份，不能被新请求当空槽插入 |
+| 路线与自动追踪旁路 | `AutoTrackPathTask.Start`、`AutoTrackTask.Start` | 各自尝试 `ExecutionScope.Start`，随后直接 `TaskSemaphore.WaitAsync(0)`；未全部走 `TaskRunner`／注册表 | 预留存在时必须阻断旁路；裸 semaphore 持有者身份未知时不授权抢占；async void 完成边沿实测 |
+| ext 前置／收尾作业 | `ExternalInterfacePrerequisitePlane.RunOpAsync` | 协调器排队，直接 `ExecutionScope.Start`＋`TaskSemaphore.WaitAsync(0)`；注册失败仍可能退化登记并执行 | 区分绝不启动执行的控制动作与占物理槽的前置／收尾；后者纳入统一预留与 F11 取消确认 |
+| `task.resume` 和暂停续行 | `InstanceRequestHandler.HandleTaskResume`，按上下文调用 `ExecuteTaskStartCoreAsync` 或独立 `ExecutionScope.Start` | 当前检查根／信号量空闲再恢复；无稳定恢复动作及预留消费，助手成功回执提前清票据 | S8b 原票据 CAS 幂等；暂停续行只解除调度暂停，后继实际节点仍检查同一排他域 |
+| 热键／触发器间接起步 | `InstanceRequestHandler` 热键分派、UI 调用各自最终落入上述根；`TaskTriggerDispatcher` 只读 `TaskSemaphore.CurrentCount` 用于画中画等展示 | 热键控制动作与任务启动动作混杂；只读计数不是物理许可 | 逐热键列“会起步／仅控制／会恢复”，任务热键走带编号通道；展示读数不作准入证据 |
+
+**分界**：旧代码中的忙检查、根互斥和 `TaskSemaphore.WaitAsync(0)` 各有局部保护，但不能证明 R5.8 跨入口无双跑。后续 BGI 施工先为“物理槽预留→队列持有→执行实例持有→终态释放”写全状态枚举和反例，再选择收束上述入口的最小公共门；不在助手侧凭一帧 idle 模拟这个门。
