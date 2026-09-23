@@ -13,11 +13,20 @@ public sealed class ExecutionScope : IDisposable
     private static ExecutionScope? _active;
     private static long _stopVersion;
     private static long _stateRevisionCounter;
+    /// <summary>[R5 A4 第二步] 执行根**释放顺序号**：在根锁内分配，作为退出凭证的线性化顺序（防迟到旧记录覆盖继任根）。</summary>
+    private static long _exitOrderCounter;
     private readonly ExecutionScope? _previous;
     private readonly CancellationTokenSource _stop = new();
     private readonly System.Collections.Generic.Dictionary<string, string> _configurationRevisions = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
+    /// <summary>本次执行根已**被接纳并交给调用方**（Start 成功返回）。只有这类根的生命周期结束才产生退出凭证。</summary>
+    private bool _admitted;
     private bool _stopRequested;
+    /// <summary>[R5 A4 第二步] 停止/让位的**来源归属**：只有确实由某个入口发起时才赋值，未发起时为 null。
+    /// 与 <see cref="StopReason"/> 分开——后者是既有字段（默认 CancelledUser），不能被当作退出凭证的真实原因。</summary>
+    private string? _stopAttribution;
+    /// <summary>[R5 A4 第二步] 是否观测到过任何终态（<see cref="Observe"/> 至少调用一次）；未观测时凭证不得报结果。</summary>
+    private bool _outcomeObserved;
     private readonly Timer? _leaseWatch;
     public string StopReason { get; private set; } = JobErrorCodes.CancelledUser;
     /// <summary>此根作用域的一次性身份；RunId 是工作流身份，可能被多个执行尝试共享。</summary>
@@ -76,7 +85,7 @@ public sealed class ExecutionScope : IDisposable
                         if (_disposed) return;
                         StopReason = "lease_expired";
                         Observe(TaskRunResult.Cancelled);
-                        MarkStopRequestedLocked();
+                        MarkStopRequestedLocked("lease_expired");
                     }
                     try { _stop.Cancel(); } catch (AggregateException) { }
                 }
@@ -103,9 +112,21 @@ public sealed class ExecutionScope : IDisposable
         {
             scope.ThrowIfStopped();
             descriptor.OnAdmitted?.Invoke();
-            return scope;
         }
         catch { scope.Dispose(); throw; }
+        // [R5 A4 第二步] 接纳握手在根锁内闭合：接纳期间已被释放的根不得再交付（也不产生退出凭证，它从未被交付使用）。
+        lock (Sync)
+        {
+            if (scope._disposed)
+            {
+                // 该根可能是在**继承上下文的子任务**里被释放的（Dispose 只在那个上下文恢复 Ambient）。
+                // 拒绝交付时必须先恢复本上下文的悬挂引用，否则父上下文会一直指向已释放的根。
+                if (ReferenceEquals(Ambient.Value, scope)) Ambient.Value = scope._previous;
+                throw new InvalidOperationException("task_busy: 执行根在接纳期间已被释放");
+            }
+            scope._admitted = true;
+        }
+        return scope;
     }
 
     // Carries only the validated invocation's authority through async hotkey callbacks.
@@ -128,7 +149,7 @@ public sealed class ExecutionScope : IDisposable
         {
             if (_disposed) return;
             Observe(TaskRunResult.Preempted);
-            MarkStopRequestedLocked();
+            MarkStopRequestedLocked("cancel_requested");
         }
         try { _stop.Cancel(); } catch (AggregateException) { }
     }
@@ -145,6 +166,7 @@ public sealed class ExecutionScope : IDisposable
         lock (Sync)
         {
             if (_disposed) return;
+            _outcomeObserved = true;
             var previousResult = Result;
             if (result == TaskRunResult.Failed) FailureCount++;
             // R4.7 D6 聚合：Cancelled/Preempted 始终覆盖；Failed 覆盖 Ran/Skipped（失败不被跳过覆盖）；
@@ -217,7 +239,7 @@ public sealed class ExecutionScope : IDisposable
             if (active != null)
             {
                 active.Observe(TaskRunResult.Preempted);
-                active.MarkStopRequestedLocked();
+                active.MarkStopRequestedLocked("suspend");
             }
         }
         try { active?._stop.Cancel(); } catch (AggregateException) { }
@@ -233,7 +255,7 @@ public sealed class ExecutionScope : IDisposable
             if (active != null)
             {
                 active.Observe(manual ? TaskRunResult.Cancelled : TaskRunResult.Preempted);
-                active.MarkStopRequestedLocked();
+                active.MarkStopRequestedLocked(manual ? "manual_stop" : "preempt_requested");
             }
         }
         // Cancellation callbacks can reenter execution; never invoke them under the admission lock.
@@ -255,7 +277,7 @@ public sealed class ExecutionScope : IDisposable
                 return false;
             target = active;
             target.Observe(TaskRunResult.Preempted);
-            target.MarkStopRequestedLocked();
+            target.MarkStopRequestedLocked("directional_stop_requested");
         }
         // 取消回调可能重入，始终在根锁外执行；迟到回调只触及被捕获的旧实例。
         try { target._stop.Cancel(); } catch (AggregateException) { }
@@ -263,23 +285,62 @@ public sealed class ExecutionScope : IDisposable
     }
     public void Dispose()
     {
+        ExecutionExitReceipt? receipt = null;
         lock (Sync)
         {
             if (!_disposed)
             {
                 _disposed = true;
                 if (ReferenceEquals(_active, this)) _active = null;
+                // [R5 A4 第二步] 被接纳的执行根在生命周期结束时留下**一次性退出凭证**（未接生产门）。
+                // 它只声明"这一颗执行根已结束"，不声明叶子／逃逸任务已退出，也不构成任务槽释放凭证。
+                if (_admitted)
+                {
+                    var exitOrder = ++_exitOrderCounter;
+                    receipt = new ExecutionExitReceipt(
+                        JobRegistry.CurrentEpoch.ProcessId,
+                        JobRegistry.CurrentEpoch.StartTicksUtc,
+                        ExecutionInstanceId,
+                        RunId,
+                        Descriptor.JobId,
+                        Descriptor.Name,
+                        Descriptor.Kind.ToString(),
+                        Descriptor.Source.ToString(),
+                        ObservedOutcome: _outcomeObserved,
+                        // 未观测到终态时不报结果：默认值 Ran 不是事实（例如取得执行权后、首个副作用前抛异常的路径）。
+                        Result: _outcomeObserved ? Result : null,
+                        StopRequested: _stopRequested,
+                        // 未请求停止时来源为 null；已请求时只报**来源归属**，不报默认值 StopReason（默认 CancelledUser 不是事实）。
+                        StopAttribution: _stopRequested ? _stopAttribution : null,
+                        StopVersion,
+                        DateTime.UtcNow,
+                        SlotObservedFree: false,
+                        Order: exitOrder);
+                }
             }
         }
+
+        if (receipt is not null)
+        {
+            // 槽位状态是**释放后采样**：在根锁外读取，避免与执行/释放路径互相等待；
+            // 采样可能已看到继任根占用，因此既不保证空闲，也不构成释放凭证。台账按顺序号守卫，迟到旧记录不会覆盖继任根。
+            ExecutionExitLedger.Record(receipt with
+            {
+                SlotObservedFree = BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount != 0
+            });
+        }
+
         if (ReferenceEquals(Ambient.Value, this)) Ambient.Value = _previous;
         _leaseWatch?.Dispose();
         // Do not dispose: in-flight token registrations may still unwind after root cancellation.
     }
 
-    private void MarkStopRequestedLocked()
+    /// <summary>登记让位请求并记录**来源归属**（第一个来源生效；重复请求不覆盖原始原因）。</summary>
+    private void MarkStopRequestedLocked(string attribution)
     {
         if (_stopRequested) return;
         _stopRequested = true;
+        _stopAttribution ??= attribution;
         AdvanceStateRevisionLocked();
     }
 

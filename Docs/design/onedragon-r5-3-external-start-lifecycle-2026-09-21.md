@@ -2830,4 +2830,62 @@ R5 要解决的是联机助手、BGI 与既有协调流程在**日常运行、�
 | 助手侧发送方接线（E3／E4／E5、S4b／S8b、热键） | ❌ 仍关闭：本批只提供 BGI 侧接受语义，未改任何生产入口开关 |
 | `ext.task.cancel` 按句柄的定向停止（含 `ownedOnly`） | ⚠ 未接入执行身份：本批只拒绝混用，未把句柄绑定到执行根 |
 | 生产包装层"定向请求不提前取协调器单例"的**确定性**证据 | ❌ 未闭合：单进程内只能条件断言；需独立测试进程或单例重置钩子（会诊第四轮提出） |
+
+### 24.98 落地登记：执行根一次性退出凭证（2026-09-24；D6／D28 第二转移，仍未接生产决策）
+
+**背景与边界**：§24.97 只把"停止请求"绑定到执行身份，`exitConfirmed` 恒为 false。本批把"请求已登记"与
+"执行根已结束"分开，产出一份**按身份查询的一次性退出凭证**。凭证**只**声明：这一颗**已接纳**的执行作用域
+完成了释放状态迁移。它**不**声明：调用方执行体已返回、叶子／逃逸执行树已退出、任务槽已释放（槽状态只是
+释放后采样）、或执行权已交还调用方；也**未接入任何生产决策**（生产门保持关闭）。
+
+**1. 实现**
+
+| 组成 | 位置 | 语义 |
+|---|---|---|
+| 凭证台账（单槽） | `BetterGenshinImpact/Service/Execution/ExecutionExitLedger.cs`（新增，未接生产门） | 只保留顺序号最大的一次"根释放"事实；**按 ExecutionInstanceId 精确匹配**；**顺序守卫**只接受更大顺序号（迟到旧记录不覆盖继任根）；被覆盖者查询返回"无凭证" |
+| 写入点 | `ExecutionScope.Dispose`（`_admitted` 为真才写） | 顺序号在**根锁内**分配（同 `Sync` 线性化）；槽状态在**锁外采样**（`SlotObservedFree`，可能已见继任根） |
+| 接纳握手 | `ExecutionScope.Start` | 接纳回调后回到根锁内校验：根已在他处释放 ⇒ 恢复本上下文 Ambient 并抛 `task_busy`，**不交付、不记凭证** |
+| 观测标记 | `ObservedOutcome`／`StopAttribution` | 未观测终态时 `Result` 为 null；停止来源只在确有入口发起时赋值（`manual_stop`／`directional_stop_requested`／`preempt_requested`／`cancel_requested`／`suspend`／`lease_expired`），**不复用默认 `StopReason`** |
+| 查询面 | `task.status`（纯增量字段） | `executionExitConfirmed`／`executionExitReason`（`identity_required`／`invalid_identity`／`stale_epoch`／`confirmed`／`not_exited`／`unknown_instance`）／`executionExitQueryInstanceId`（回答对象身份，与当前活动根身份分开）／`executionExitAtUtc`／`executionExitObservedOutcome`／`executionExitResult`／`executionExitStopRequested`／`executionExitStopSource`／`executionExitOrder` |
+
+形状规则与 `task.stop` 同口径：身份／纪元**形状非法**一律归形状错误（不抛异常、不落进 `task_status_failed`），
+只有形状合法但纪元不同才 `stale_epoch`。**显式 null 只有在线上 JSON 真带该键时才构成"出现"**——
+本仓库序列化用 `NullValueHandling.Ignore`，用匿名对象构造会把 null 丢掉，因此覆盖该情形的夹具必须直接构造
+`JObject`（本轮已如此）。
+
+**2. 证据**
+
+- 反例先行：先只加"台账＋查询字段"（无写入点）⇒ 定向 **2 红／40 绿**（两句断言为 `exitConfirmed` 期望 true 实际 false）；
+  补上真实写入点后 **42/42 绿**。会诊处置后最终 **50/50 绿**（含顺序守卫、回调内释放、回调抛异常、无终态观测、
+  停止来源归属、畸形身份形状、查询身份与活动根分离、重复 Dispose 幂等）。
+- 完整回归（最终源码，`-p:DeployToBgiTools=false`）：BGI 全量两次 **1025 通过／14 失败／1039**，失败名称与既有 14 项基线**差集为空**；
+  助手全量 **1177 通过／2 跳过／0 失败／1179**。TRX：`r5_exitfix2_bgi_full1|2_20260924.trx`、
+  `r5_exitfix2_assistant_full_20260924.trx`（`Test/*/TestResults/`）。
+- 会诊：**GPT-6-Astra／medium 三轮各 1 次成功**（首轮 3 必改＋3 重要；验证轮判 ①闭合、③未闭合并新增必改 c；
+  收口轮判 ③与 c 闭合、**无新必改**、无未登记重要项）。
+
+**3. 首轮会诊处置对照**
+
+| 首轮发现 | 处置 |
+|---|---|
+| 必改：锁外写入可让迟到旧根覆盖继任根 | 顺序号改在根锁内分配＋台账顺序守卫；补顺序守卫夹具 |
+| 必改：`_admitted` 与 `Dispose` 未同步，已交付根可能漏记 | 接纳握手在根锁内闭合；回调内释放 ⇒ 拒绝交付且不记凭证；回调抛异常 ⇒ 不记凭证且不挤掉既有凭证（两条夹具） |
+| 必改：凭证会给出错误事实（默认 `Ran`／默认 `CancelledUser`） | `ObservedOutcome` 门控 `Result`；`StopAttribution` 取代默认 `StopReason`；补"无终态观测不发布""来源归属"夹具 |
+| 重要：退出查询未沿用严格身份校验 | 抽出 `TryReadEpochIdentity` 共用（对象＋JSON 整数＋范围，不抛异常）；补 4 例畸形形状夹具并断言响应仍成功 |
+| 重要：凭证被当执行体／执行树完成，槽采样边界不清 | 注释与本节统一改写为"已接纳作用域完成释放状态迁移"；`SlotObservedFree` 标注释放后采样；叶子／逃逸与槽释放明确排除 |
+| 重要：响应身份易混淆 | 新增 `executionExitQueryInstanceId`；补"查询 A 已退出而活动根是 B"夹具 |
+| 验证轮新必改 c：拒绝路径遗留悬挂 Ambient | 拒绝前恢复本上下文 Ambient；补"子任务继承上下文释放"夹具 |
+
+**4. 残余（不因本批改变门禁）**
+
+| 项 | 状态 |
+|---|---|
+| 执行根释放凭证（本批） | ✅ 组件／处理器层已交付（**未接任何生产决策**）；定向 50/50 |
+| 叶子与**逃逸执行树**退出证明 | ❌ 未交付：凭证只覆盖"已接纳作用域的释放"，不覆盖派生任务与逃逸任务 |
+| 物理任务槽释放凭证 | ❌ 未交付：`SlotObservedFree` 只是释放后采样，可能已见继任根；不得当释放凭证 |
+| 凭证接入准入／接管／恢复决策 | ❌ 未接线：生产入口门全部保持关闭；本批只提供查询面 |
+| 无凭证的语义 | ⚠ 单槽覆盖＋释放后延迟写入会让查询**暂时或永久无凭证**：`unknown_instance` 不等于"未退出"，`not_exited` 也只是当时快照 |
+| 停止来源的强度 | ⚠ 是**首次登记的入口归属**，不是最终退出原因；`ObservedOutcome` 也不代表整棵执行树完成 |
+| 既有 14 项失败＋偶发失败 | ⚠ 基线身份不变；`BgiTaskCoordinatorTests.ClearQueue_CancelsAllQueuedItems_WithEvents` 曾在一次全量运行偶发失败（隔离 5/5 通过），**疑似时间敏感、是否既有尚未证实**，机制未定位 |
+| 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
 | 生产入口门／真实 User 门／R5.8 实机无双跑签署 | ❌ **全部保持关闭／未签署** |

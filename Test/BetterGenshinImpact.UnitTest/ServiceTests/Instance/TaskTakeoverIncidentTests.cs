@@ -31,6 +31,7 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
         ConfigProperty.SetValue(null, config);
         PreemptionGate.Disarm();
         CancellationContext.Instance.Set();
+        ExecutionExitLedger.ResetForTest();
         typeof(CancellationContext).GetProperty(nameof(CancellationContext.LastManualCancelAtUtc))!.SetValue(CancellationContext.Instance, null);
     }
 
@@ -736,6 +737,302 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
         Assert.True(root.Token.IsCancellationRequested);
         Assert.True(CancellationContext.Instance.WasCancelled);
         Assert.NotNull(CancellationContext.Instance.LastManualCancelAtUtc);
+    }
+
+    // ===== R5 A4 第二步：退出凭证（反例先行）=====
+    // 语义：停止请求登记 ≠ 退出；只有执行根生命周期真实结束才产生**一次性**凭证，
+    // 且凭证只按执行身份匹配——不得由 executionIdle 反推，不得跨代复用。
+
+    private static InstanceIpcEnvelope ExitQueryRequest(Guid instanceId, int? processId = null, long? startTicksUtc = null)
+        => InstanceIpcEnvelope.Request(InstanceOperations.TaskStatus, new
+        {
+            executionInstanceId = instanceId.ToString("N"),
+            bgiEpoch = new
+            {
+                processId = processId ?? JobRegistry.CurrentEpoch.ProcessId,
+                startTicksUtc = startTicksUtc ?? JobRegistry.CurrentEpoch.StartTicksUtc
+            }
+        });
+
+    [Fact]
+    public void TaskStatus_StopRequestedButRootNotExited_ReportsNotExitedInsteadOfConfirmed()
+    {
+        using var root = ExecutionScope.Start(new(JobKind.Group, "未退出的根", JobSource.Ui));
+        var fact = ExecutionScope.GetActiveSnapshot()!;
+        Assert.True(ExecutionScope.TryRequestPreempt(fact.ExecutionInstanceId, fact.StateRevision));
+        Assert.True(ExecutionScope.HasActive); // 请求已登记，根尚未退出
+
+        var data = handler.HandleTaskStatus(null!,
+            ExitQueryRequest(fact.ExecutionInstanceId)).Data!;
+
+        Assert.False(data["executionExitConfirmed"]!.ToObject<bool>());
+        Assert.Equal("not_exited", data["executionExitReason"]!.ToString());
+        Assert.False(data["executionIdle"]!.ToObject<bool>()); // 退出前不得报空闲
+        Assert.True(data["executionStopRequested"]!.ToObject<bool>());
+    }
+
+    [Fact]
+    public void TaskStatus_AfterRealRootExit_ConfirmsExitForThatInstanceOnly()
+    {
+        var root = ExecutionScope.Start(new(JobKind.Group, "真实退出的根", JobSource.Ui));
+        var fact = ExecutionScope.GetActiveSnapshot()!;
+        root.Cancel();
+        root.Dispose(); // 生命周期真实结束
+
+        var confirmed = handler.HandleTaskStatus(null!,
+            ExitQueryRequest(fact.ExecutionInstanceId)).Data!;
+        Assert.True(confirmed["executionExitConfirmed"]!.ToObject<bool>());
+        Assert.Equal("confirmed", confirmed["executionExitReason"]!.ToString());
+        Assert.Equal("Preempted", confirmed["executionExitResult"]!.ToString());
+        Assert.NotNull(confirmed["executionExitAtUtc"]!.ToObject<DateTime?>());
+        Assert.True(confirmed["executionExitObservedOutcome"]!.ToObject<bool>());
+        Assert.True(confirmed["executionExitStopRequested"]!.ToObject<bool>());
+        Assert.Equal("cancel_requested", confirmed["executionExitStopSource"]!.ToString()); // 来源归属，不是默认 StopReason
+        Assert.True(confirmed["executionExitOrder"]!.ToObject<long>() > 0);
+        Assert.Equal(fact.ExecutionInstanceId.ToString("N"),
+            confirmed["executionExitQueryInstanceId"]!.ToObject<string>());
+
+        var other = handler.HandleTaskStatus(null!,
+            ExitQueryRequest(Guid.NewGuid())).Data!;
+        Assert.False(other["executionExitConfirmed"]!.ToObject<bool>());
+        Assert.Equal("unknown_instance", other["executionExitReason"]!.ToString());
+    }
+
+    [Fact]
+    public void TaskStatus_ExitReceipt_DoesNotCrossGenerations()
+    {
+        var first = ExecutionScope.Start(new(JobKind.Group, "第一代", JobSource.Ui));
+        var firstFact = ExecutionScope.GetActiveSnapshot()!;
+        first.Dispose();
+
+        using (var second = ExecutionScope.Start(new(JobKind.Group, "第二代", JobSource.Ui)))
+        {
+            var secondFact = ExecutionScope.GetActiveSnapshot()!;
+            var forSecond = handler.HandleTaskStatus(null!,
+                ExitQueryRequest(secondFact.ExecutionInstanceId)).Data!;
+
+            Assert.False(forSecond["executionExitConfirmed"]!.ToObject<bool>()); // 旧代凭证不得证明新代
+            Assert.Equal("not_exited", forSecond["executionExitReason"]!.ToString());
+            var forFirst = handler.HandleTaskStatus(null!,
+                ExitQueryRequest(firstFact.ExecutionInstanceId)).Data!;
+            Assert.True(forFirst["executionExitConfirmed"]!.ToObject<bool>()); // 第一代确实退出过：如实回答
+        }
+
+        // 第二代退出后单槽被覆盖：旧代查询返回"无凭证"（保守，不伪造成立也不伪造失败）
+        var afterSecondExit = handler.HandleTaskStatus(null!,
+            ExitQueryRequest(firstFact.ExecutionInstanceId)).Data!;
+        Assert.False(afterSecondExit["executionExitConfirmed"]!.ToObject<bool>());
+        Assert.Equal("unknown_instance", afterSecondExit["executionExitReason"]!.ToString());
+    }
+
+    [Fact]
+    public void TaskStatus_ExitQuery_WithoutIdentityOrWithStaleEpoch_NeverClaimsExit()
+    {
+        // 完全空闲：executionIdle 可以为 true，但退出凭证不得因此成立
+        var idleData = handler.HandleTaskStatus(null!,
+            InstanceIpcEnvelope.Request(InstanceOperations.TaskStatus)).Data!;
+        Assert.True(idleData["executionIdle"]!.ToObject<bool>());
+        Assert.False(idleData["executionExitConfirmed"]!.ToObject<bool>());
+        Assert.Equal("identity_required", idleData["executionExitReason"]!.ToString());
+
+        var root = ExecutionScope.Start(new(JobKind.Group, "旧纪元退出查询", JobSource.Ui));
+        var fact = ExecutionScope.GetActiveSnapshot()!;
+        root.Dispose();
+
+        var staleEpoch = handler.HandleTaskStatus(null!,
+            ExitQueryRequest(fact.ExecutionInstanceId,
+                startTicksUtc: JobRegistry.CurrentEpoch.StartTicksUtc - 1)).Data!;
+        Assert.False(staleEpoch["executionExitConfirmed"]!.ToObject<bool>());
+        Assert.Equal("stale_epoch", staleEpoch["executionExitReason"]!.ToString());
+    }
+
+    [Fact]
+    public void ExecutionExitLedger_SingleSlot_MatchesOnlySameExecutionInstance()
+    {
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        Assert.True(ExecutionExitLedger.Record(new ExecutionExitReceipt(
+            JobRegistry.CurrentEpoch.ProcessId, JobRegistry.CurrentEpoch.StartTicksUtc,
+            first, Guid.NewGuid(), null, "台账A", "Group", "Ui",
+            ObservedOutcome: true, Result: TaskRunResult.Ran, StopRequested: false, StopAttribution: null,
+            StopVersion: 0, ExitedAtUtc: DateTime.UtcNow, SlotObservedFree: true, Order: 10)));
+        Assert.True(ExecutionExitLedger.TryGet(first, out var firstReceipt));
+        Assert.True(firstReceipt!.SlotObservedFree); // 槽状态是释放后采样值，如实记录
+
+        Assert.True(ExecutionExitLedger.Record(firstReceipt with { ExecutionInstanceId = second, Order = 11 }));
+        Assert.False(ExecutionExitLedger.TryGet(first, out _)); // 单槽覆盖：旧代不再有凭证
+        Assert.True(ExecutionExitLedger.TryGet(second, out var secondReceipt));
+        Assert.True(secondReceipt!.Order > firstReceipt.Order); // 顺序号单调
+
+        // 顺序守卫：迟到但顺序更小的旧记录不得覆盖更晚的退出事实
+        Assert.False(ExecutionExitLedger.Record(firstReceipt with { Order = 9 }));
+        Assert.True(ExecutionExitLedger.TryGet(second, out var stillSecond));
+        Assert.Equal(11, stillSecond!.Order);
+        Assert.False(ExecutionExitLedger.TryGet(first, out _));
+    }
+
+    [Fact]
+    public void ExecutionScope_AdmissionCallbackReleasingRoot_DoesNotDeliverDeadScopeNorRecordReceipt()
+    {
+        Guid instanceId = Guid.Empty;
+        var start = () => ExecutionScope.Start(new JobDescriptor(JobKind.Group, "接纳期被释放", JobSource.Ui,
+            OnAdmitted: () =>
+            {
+                instanceId = ExecutionScope.Current!.ExecutionInstanceId;
+                ExecutionScope.Current!.Dispose(); // 接纳回调里释放本根
+            }));
+
+        var ex = Assert.Throws<InvalidOperationException>(start);
+        Assert.Contains("task_busy", ex.Message);
+        Assert.False(ExecutionScope.HasActive);
+
+        var data = handler.HandleTaskStatus(null!, ExitQueryRequest(instanceId)).Data!;
+        Assert.False(data["executionExitConfirmed"]!.ToObject<bool>()); // 从未交付使用的根不留退出凭证
+    }
+
+    [Fact]
+    public void ExecutionScope_AdmissionCallbackThrowing_DoesNotRecordReceiptNorDisturbPreviousOne()
+    {
+        var witness = ExecutionScope.Start(new(JobKind.Group, "既有退出事实", JobSource.Ui));
+        var witnessFact = ExecutionScope.GetActiveSnapshot()!;
+        witness.Dispose();
+
+        Assert.Throws<InvalidOperationException>(() => ExecutionScope.Start(new JobDescriptor(
+            JobKind.Group, "接纳回调抛异常", JobSource.Ui,
+            OnAdmitted: () => throw new InvalidOperationException("admission_failed"))));
+        Assert.False(ExecutionScope.HasActive);
+
+        var data = handler.HandleTaskStatus(null!, ExitQueryRequest(witnessFact.ExecutionInstanceId)).Data!;
+        Assert.True(data["executionExitConfirmed"]!.ToObject<bool>()); // 既有凭证不被未接纳的根挤掉
+    }
+
+    [Fact]
+    public void ExecutionScope_AdmissionCallbackReleasingRootInInheritedContext_DoesNotLeaveAmbientDangling()
+    {
+        // 子任务继承 AsyncLocal 并释放同一颗根：Dispose 只在**子上下文**恢复 Ambient，
+        // 拒绝交付的路径必须把父上下文的悬挂引用一并恢复，否则父上下文会一直指向已释放的根。
+        var start = () => ExecutionScope.Start(new JobDescriptor(JobKind.Group, "继承上下文释放", JobSource.Ui,
+            OnAdmitted: () => Task.Run(() => ExecutionScope.Current!.Dispose()).GetAwaiter().GetResult()));
+
+        Assert.Throws<InvalidOperationException>(start);
+
+        Assert.Null(ExecutionScope.Current); // 父上下文不得残留已释放的根
+        Assert.False(ExecutionScope.HasActive);
+    }
+
+    [Fact]
+    public void TaskStatus_ExitQuery_WithMalformedIdentityShape_ReportsInvalidIdentityNotFailure()
+    {
+        var guidAsObject = InstanceIpcEnvelope.Request(InstanceOperations.TaskStatus, new
+        {
+            executionInstanceId = new { value = Guid.NewGuid().ToString("N") },
+            bgiEpoch = new { processId = JobRegistry.CurrentEpoch.ProcessId, startTicksUtc = JobRegistry.CurrentEpoch.StartTicksUtc }
+        });
+        var epochAsString = InstanceIpcEnvelope.Request(InstanceOperations.TaskStatus, new
+        {
+            executionInstanceId = Guid.NewGuid().ToString("N"),
+            bgiEpoch = "primary"
+        });
+        var epochFieldAsString = InstanceIpcEnvelope.Request(InstanceOperations.TaskStatus, new
+        {
+            executionInstanceId = Guid.NewGuid().ToString("N"),
+            bgiEpoch = new { processId = JobRegistry.CurrentEpoch.ProcessId.ToString(), startTicksUtc = JobRegistry.CurrentEpoch.StartTicksUtc }
+        });
+        // 显式 null 必须按**线上形状**构造：匿名对象经 NullValueHandling.Ignore 序列化会把 null 字段整条丢掉，
+        // 那样测的是"缺字段"而不是"字段存在但为 null"（后者才是 fail-closed 要覆盖的线上情形）。
+        var explicitNullIdentity = new InstanceIpcEnvelope
+        {
+            Operation = InstanceOperations.TaskStatus,
+            Data = new Newtonsoft.Json.Linq.JObject
+            {
+                ["executionInstanceId"] = Newtonsoft.Json.Linq.JValue.CreateNull(),
+                ["bgiEpoch"] = new Newtonsoft.Json.Linq.JObject
+                {
+                    ["processId"] = JobRegistry.CurrentEpoch.ProcessId,
+                    ["startTicksUtc"] = JobRegistry.CurrentEpoch.StartTicksUtc
+                }
+            }
+        };
+        Assert.True(explicitNullIdentity.Data!.ContainsKey("executionInstanceId"));
+
+        foreach (var request in new[] { guidAsObject, epochAsString, epochFieldAsString, explicitNullIdentity })
+        {
+            var response = handler.HandleTaskStatus(null!, request);
+            Assert.True(response.Success); // 形状错误不得落进通用 task_status_failed
+            Assert.False(response.Data!["executionExitConfirmed"]!.ToObject<bool>());
+            Assert.Equal("invalid_identity", response.Data["executionExitReason"]!.ToString());
+        }
+    }
+
+    [Fact]
+    public void TaskStatus_ExitReceipt_ReportsQueryIdentitySeparatelyFromActiveRoot()
+    {
+        var finished = ExecutionScope.Start(new(JobKind.Group, "已退出根", JobSource.Ui));
+        var finishedFact = ExecutionScope.GetActiveSnapshot()!;
+        finished.Cancel();
+        finished.Dispose();
+
+        using var current = ExecutionScope.Start(new(JobKind.Group, "当前活动根", JobSource.Ui));
+        var currentFact = ExecutionScope.GetActiveSnapshot()!;
+        var data = handler.HandleTaskStatus(null!, ExitQueryRequest(finishedFact.ExecutionInstanceId)).Data!;
+
+        Assert.True(data["executionExitConfirmed"]!.ToObject<bool>());
+        Assert.Equal(finishedFact.ExecutionInstanceId.ToString("N"),
+            data["executionExitQueryInstanceId"]!.ToObject<string>());
+        Assert.Equal(currentFact.ExecutionInstanceId.ToString("N"),
+            data["executionInstanceId"]!.ToObject<string>()); // 两个身份字段必须分开读，不得混用
+        Assert.False(data["executionIdle"]!.ToObject<bool>());
+    }
+
+    [Fact]
+    public void TaskStatus_ExitReceipt_WithoutObservedOutcome_DoesNotPublishResultOrStopReason()
+    {
+        var root = ExecutionScope.Start(new(JobKind.Group, "无终态观测", JobSource.Ui));
+        var fact = ExecutionScope.GetActiveSnapshot()!;
+        root.Dispose(); // 既未取消也未观察结果：默认值不是事实
+
+        var data = handler.HandleTaskStatus(null!, ExitQueryRequest(fact.ExecutionInstanceId)).Data!;
+
+        Assert.True(data["executionExitConfirmed"]!.ToObject<bool>());
+        Assert.False(data["executionExitObservedOutcome"]!.ToObject<bool>());
+        Assert.Null(data["executionExitResult"]?.ToObject<string>());
+        Assert.False(data["executionExitStopRequested"]!.ToObject<bool>());
+        Assert.Null(data["executionExitStopSource"]?.ToObject<string>());
+    }
+
+    [Fact]
+    public void TaskStatus_ExitReceipt_StopSourceReflectsAttributedEntry_NotDefaultStopReason()
+    {
+        // 定向停止：来源应为 directional_stop_requested，而不是默认的 CancelledUser（伪事实）
+        var preempted = ExecutionScope.Start(new(JobKind.Group, "定向来源", JobSource.Ui));
+        var preemptedFact = ExecutionScope.GetActiveSnapshot()!;
+        Assert.True(ExecutionScope.TryRequestPreempt(preemptedFact.ExecutionInstanceId, preemptedFact.StateRevision));
+        preempted.Dispose();
+        var preemptData = handler.HandleTaskStatus(null!, ExitQueryRequest(preemptedFact.ExecutionInstanceId)).Data!;
+        Assert.Equal("directional_stop_requested", preemptData["executionExitStopSource"]!.ToString());
+
+        // 手动停止（F11/停止热键语义）：来源应为 manual_stop
+        var manual = ExecutionScope.Start(new(JobKind.Group, "手动来源", JobSource.Ui));
+        var manualFact = ExecutionScope.GetActiveSnapshot()!;
+        CancellationContext.Instance.ManualCancel();
+        manual.Dispose();
+        var manualData = handler.HandleTaskStatus(null!, ExitQueryRequest(manualFact.ExecutionInstanceId)).Data!;
+        Assert.Equal("manual_stop", manualData["executionExitStopSource"]!.ToString());
+    }
+
+    [Fact]
+    public void TaskStatus_ExitReceipt_RepeatedDispose_DoesNotBumpOrder()
+    {
+        var root = ExecutionScope.Start(new(JobKind.Group, "重复释放", JobSource.Ui));
+        var fact = ExecutionScope.GetActiveSnapshot()!;
+        root.Dispose();
+        var first = handler.HandleTaskStatus(null!, ExitQueryRequest(fact.ExecutionInstanceId)).Data!;
+        var firstOrder = first["executionExitOrder"]!.ToObject<long>();
+
+        root.Dispose(); // 幂等：不得再产生一条凭证
+
+        var second = handler.HandleTaskStatus(null!, ExitQueryRequest(fact.ExecutionInstanceId)).Data!;
+        Assert.Equal(firstOrder, second["executionExitOrder"]!.ToObject<long>());
     }
 
     [Fact]

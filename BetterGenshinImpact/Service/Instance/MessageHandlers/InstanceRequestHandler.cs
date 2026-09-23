@@ -671,20 +671,7 @@ internal sealed class InstanceRequestHandler
                 return false;
             }
 
-            if (request.Data?["bgiEpoch"] is not { Type: Newtonsoft.Json.Linq.JTokenType.Object } epoch)
-            {
-                return false;
-            }
-
-            if (!TryReadJsonInteger(epoch["processId"], out var processId)
-                || !TryReadJsonInteger(epoch["startTicksUtc"], out epochStartTicksUtc)
-                || processId is < int.MinValue or > int.MaxValue)
-            {
-                return false;
-            }
-
-            epochProcessId = (int)processId;
-            return true;
+            return TryReadEpochIdentity(request.Data, out epochProcessId, out epochStartTicksUtc);
         }
         catch (Exception ex) when (ex is Newtonsoft.Json.JsonException or InvalidOperationException
                                       or FormatException or OverflowException or InvalidCastException)
@@ -692,6 +679,33 @@ internal sealed class InstanceRequestHandler
             // 任何形状异常都归形状错误，不落进通用 task_stop_failed，也不降级为全量停止。
             return false;
         }
+    }
+
+    /// <summary>
+    /// 严格读取进程纪元（task.stop 定向停止与 task.status 退出查询共用）：`bgiEpoch` 必须是对象，
+    /// `processId`／`startTicksUtc` 必须是 JSON 整数且在取值范围内。任何形状／类型问题一律返回 false，
+    /// **不抛异常**，由调用方映射成各自的形状错误码（不得落进通用失败码）。
+    /// </summary>
+    private static bool TryReadEpochIdentity(
+        Newtonsoft.Json.Linq.JObject? data, out int processId, out long startTicksUtc)
+    {
+        processId = 0;
+        startTicksUtc = 0;
+        var epoch = data?["bgiEpoch"];
+        if (epoch is not { Type: Newtonsoft.Json.Linq.JTokenType.Object })
+        {
+            return false;
+        }
+
+        if (!TryReadJsonInteger(epoch["processId"], out var rawProcessId)
+            || !TryReadJsonInteger(epoch["startTicksUtc"], out startTicksUtc)
+            || rawProcessId is < int.MinValue or > int.MaxValue)
+        {
+            return false;
+        }
+
+        processId = (int)rawProcessId;
+        return true;
     }
 
     /// <summary>JSON 整数读取（字符串数字／浮点／布尔一律视为形状错误）。</summary>
@@ -1103,6 +1117,60 @@ internal sealed class InstanceRequestHandler
                 : null;
             var taskStatusEpoch = BetterGenshinImpact.Service.Execution.JobRegistry.CurrentEpoch;
 
+            // [R5 A4 第二步] 退出凭证按**执行身份**查询（纯增量字段）。口径（形状先于取值，全部不抛异常）：
+            // ①身份键不存在 ⇒ identity_required（不允许消费方用 executionIdle 推断"已退出"）；
+            // ②身份或纪元**形状非法** ⇒ invalid_identity；③形状合法但进程纪元不同 ⇒ stale_epoch；
+            // ④只有台账里存在**同一执行实例**的凭证才 confirmed=true；否则按当前活动根区分 not_exited／unknown_instance。
+            string? exitReason;
+            DateTime? exitAtUtc = null;
+            bool? exitObservedOutcome = null;
+            string? exitResult = null;
+            bool? exitStopRequested = null;
+            string? exitStopSource = null;
+            long? exitOrder = null;
+            var exitConfirmed = false;
+            Guid? exitQueryInstanceId = null;
+            var exitIdentityKeyPresent = request.Data?.ContainsKey("executionInstanceId") == true;
+            var exitQueryRaw = InstanceIpcProtocol.GetStringOrNull(request.Data, "executionInstanceId");
+            if (!exitIdentityKeyPresent)
+            {
+                exitReason = "identity_required";
+            }
+            else if (exitQueryRaw is null || !Guid.TryParse(exitQueryRaw, out var parsedExitInstanceId))
+            {
+                exitReason = "invalid_identity";
+            }
+            else if (!TryReadEpochIdentity(request.Data, out var exitQueryProcessId, out var exitQueryStartTicks))
+            {
+                exitReason = "invalid_identity";
+            }
+            else if (exitQueryProcessId != JobRegistry.CurrentEpoch.ProcessId
+                     || exitQueryStartTicks != JobRegistry.CurrentEpoch.StartTicksUtc)
+            {
+                exitReason = "stale_epoch";
+            }
+            else
+            {
+                exitQueryInstanceId = parsedExitInstanceId;
+                if (BetterGenshinImpact.Service.Execution.ExecutionExitLedger.TryGet(parsedExitInstanceId, out var exitReceipt))
+                {
+                    exitConfirmed = true;
+                    exitReason = "confirmed";
+                    exitAtUtc = exitReceipt!.ExitedAtUtc;
+                    exitObservedOutcome = exitReceipt.ObservedOutcome;
+                    exitResult = exitReceipt.Result?.ToString();
+                    exitStopRequested = exitReceipt.StopRequested;
+                    exitStopSource = exitReceipt.StopAttribution;
+                    exitOrder = exitReceipt.Order;
+                }
+                else
+                {
+                    exitReason = executionSnapshot?.ExecutionInstanceId == parsedExitInstanceId
+                        ? "not_exited"
+                        : "unknown_instance";
+                }
+            }
+
             return InstanceIpcEnvelope.Response(request, new
             {
                 // [A3.3] 并集：逻辑执行根 ∨ 信号量占用 ∨ 注册表在跑作业；
@@ -1153,7 +1221,20 @@ internal sealed class InstanceRequestHandler
                 executionKind = executionSnapshot?.Kind.ToString(),
                 executionSource = executionSnapshot?.Source.ToString(),
                 executionName = executionSnapshot?.Name,
-                executionStopRequested = executionSnapshot?.StopRequested
+                executionStopRequested = executionSnapshot?.StopRequested,
+                // [R5 A4 第二步] 退出凭证查询结果：只按身份回答，绝不由 executionIdle 反推。
+                // executionExitQueryInstanceId 明确回答"这条 confirmed 说的是哪一颗执行根"——
+                // 它与本响应里的 executionInstanceId（当前活动根）可能不同，消费方不得混用。
+                executionExitConfirmed = exitConfirmed,
+                executionExitReason = exitReason,
+                executionExitQueryInstanceId = exitQueryInstanceId?.ToString("N"),
+                executionExitAtUtc = exitAtUtc,
+                executionExitObservedOutcome = exitObservedOutcome,
+                executionExitResult = exitResult,
+                executionExitStopRequested = exitStopRequested,
+                // 停止来源归属（manual_stop／directional_stop_requested／lease_expired 等）；未发起停止时为 null。
+                executionExitStopSource = exitStopSource,
+                executionExitOrder = exitOrder
             });
         }
         catch (Exception ex)
