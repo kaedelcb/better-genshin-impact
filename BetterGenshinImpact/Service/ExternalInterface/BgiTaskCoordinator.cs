@@ -52,6 +52,12 @@ internal sealed class BgiTaskCoordinator : IDisposable
 
         /// <summary>协调器已销毁（进程退出中）。</summary>
         Unavailable,
+
+        /// <summary>相同发送键已绑定不同请求内容；旧任务保持原样。</summary>
+        IdempotencyConflict,
+
+        /// <summary>带发送键的请求缺少可信请求指纹；未入队。</summary>
+        InvalidSubmission,
     }
 
     public enum CancelOutcome
@@ -84,6 +90,8 @@ internal sealed class BgiTaskCoordinator : IDisposable
         /// 未果则转入执行段的主动抢占（有界退出契约）。默认 false = 旧 15s 等槽语义不变。</summary>
         public bool Preempt { get; init; }
         public string? IdempotencyKey { get; init; }
+        /// <summary>可信入口按完整 ext 请求计算的规范化指纹；与发送键共同确定一次提交。</summary>
+        public string? PayloadFingerprint { get; init; }
         public JobExecutionIdentity? Identity { get; init; }
         /// <summary>非配置组作业由可信提交入口指定真实类型及名称；缺省保持任务启动旧映射。</summary>
         public JobKind? RegistryKind { get; init; }
@@ -173,7 +181,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
     /// <summary>结果未明的编号必须持续可查询，不能被终态历史 FIFO 淘汰。</summary>
     private readonly ConcurrentDictionary<Guid, TerminalRecord> _unresolved = new();
     /// <summary>同键未决请求采用原句柄，阻止进程内再次执行；由 _submitLock 串行。</summary>
-    private readonly Dictionary<string, Guid> _unresolvedByKey = new();
+    private readonly Dictionary<string, (Guid Handle, string Fingerprint)> _unresolvedByKey = new();
 
     /// <summary>终态登记顺序（容量淘汰用），与 _terminals 写入一起由 _terminalsLock 串行。</summary>
     private readonly Queue<Guid> _terminalOrder = new();
@@ -319,12 +327,20 @@ internal sealed class BgiTaskCoordinator : IDisposable
                 return new SubmitResult(SubmitStatus.Unavailable, Guid.Empty, 0);
             }
 
+            if (submission.IdempotencyKey is { } key && string.IsNullOrWhiteSpace(submission.PayloadFingerprint))
+                return new SubmitResult(SubmitStatus.InvalidSubmission, Guid.Empty, 0);
+
+            // 未决发送键跨入口共享：普通 task.start 不能绕过前置／收尾的 Unknown 占用。
+            if (submission.IdempotencyKey is { } pendingKey
+                && _unresolvedByKey.TryGetValue(pendingKey, out var unresolved))
+                return string.Equals(unresolved.Fingerprint, submission.PayloadFingerprint, StringComparison.Ordinal)
+                    ? new SubmitResult(SubmitStatus.Adopted, unresolved.Handle, 0)
+                    : new SubmitResult(SubmitStatus.IdempotencyConflict, Guid.Empty, 0);
+
             if (submission.ProjectRegistryOutcome)
             {
                 if (string.IsNullOrWhiteSpace(submission.IdempotencyKey))
-                    return new SubmitResult(SubmitStatus.Unavailable, Guid.Empty, 0);
-                if (_unresolvedByKey.TryGetValue(submission.IdempotencyKey, out var unresolvedHandle))
-                    return new SubmitResult(SubmitStatus.Adopted, unresolvedHandle, 0);
+                    return new SubmitResult(SubmitStatus.InvalidSubmission, Guid.Empty, 0);
             }
 
             if (submission.Generation > 0 || submission.IdempotencyKey != null)
@@ -342,6 +358,9 @@ internal sealed class BgiTaskCoordinator : IDisposable
 
                 if (adopted is not null)
                 {
+                    if (submission.IdempotencyKey is not null
+                        && !string.Equals(adopted.Submission.PayloadFingerprint, submission.PayloadFingerprint, StringComparison.Ordinal))
+                        return new SubmitResult(SubmitStatus.IdempotencyConflict, Guid.Empty, 0);
                     _logger.LogInformation(
                         "[task.queue] generation={Gen} name={Name} 在队/在跑，采用既有 taskHandle={Handle}",
                         submission.Generation, name, adopted.TaskHandle);
@@ -684,8 +703,8 @@ internal sealed class BgiTaskCoordinator : IDisposable
         lock (_submitLock)
         {
             _unresolved[item.TaskHandle] = new TerminalRecord("result_unknown", false, errorCode, message);
-            if (item.Submission.IdempotencyKey is { } key)
-                _unresolvedByKey[key] = item.TaskHandle;
+            if (item.Submission.IdempotencyKey is { } key && item.Submission.PayloadFingerprint is { } fingerprint)
+                _unresolvedByKey[key] = (item.TaskHandle, fingerprint);
         }
     }
 

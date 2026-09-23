@@ -118,6 +118,7 @@ internal static class ExternalInterfaceCommandPlane
         {
             Preempt = preempt,
             IdempotencyKey = InstanceIpcProtocol.GetStringOrNull(request.Data, "idempotencyKey"),
+            PayloadFingerprint = BetterGenshinImpact.Service.Execution.ExecutionRequestContract.Fingerprint(request),
             Identity = identity,
         };
 
@@ -145,6 +146,10 @@ internal static class ExternalInterfaceCommandPlane
                 request, new { status = "already_executed", generation }),
             BgiTaskCoordinator.SubmitStatus.QueueFull => InstanceIpcEnvelope.Failure(
                 request, "queue_full", $"任务队列已满（容量 {BgiTaskCoordinator.QueueCapacity}），请稍后重试或先取消排队项"),
+            BgiTaskCoordinator.SubmitStatus.IdempotencyConflict => InstanceIpcEnvelope.Failure(
+                request, "idempotency_conflict", "同一发送键已绑定不同的任务内容"),
+            BgiTaskCoordinator.SubmitStatus.InvalidSubmission => InstanceIpcEnvelope.Failure(
+                request, "invalid_request", "带发送键的任务缺少可信请求指纹"),
             // 仅当调用发生在提交之前，Unavailable 才会到达这里；明确零发送拒绝，不回退 v2。
             BgiTaskCoordinator.SubmitStatus.Unavailable => InstanceIpcEnvelope.Failure(
                 request, "queue_unavailable", "任务队列协调器不可用；未切换到 v2 task.start，请恢复连接后重新发起"),

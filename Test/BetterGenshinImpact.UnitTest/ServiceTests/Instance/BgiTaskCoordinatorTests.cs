@@ -435,6 +435,7 @@ public class BgiTaskCoordinatorTests
             RegistryName = "prerequisite.account",
             ProjectRegistryOutcome = true,
             IdempotencyKey = Guid.NewGuid().ToString("N"),
+            PayloadFingerprint = "test-payload",
         });
 
         Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status == "failed"));
@@ -460,6 +461,7 @@ public class BgiTaskCoordinatorTests
             RegistryName = "prerequisite.account",
             ProjectRegistryOutcome = true,
             IdempotencyKey = Guid.NewGuid().ToString("N"),
+            PayloadFingerprint = "test-payload",
         });
 
         Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status == "result_unknown"));
@@ -490,6 +492,7 @@ public class BgiTaskCoordinatorTests
             RegistryName = "prerequisite.account",
             ProjectRegistryOutcome = true,
             IdempotencyKey = Guid.NewGuid().ToString("N"),
+            PayloadFingerprint = "test-payload",
         });
 
         Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status == "completed"));
@@ -513,6 +516,7 @@ public class BgiTaskCoordinatorTests
             RegistryName = "terminal.completionAction",
             ProjectRegistryOutcome = true,
             IdempotencyKey = Guid.NewGuid().ToString("N"),
+            PayloadFingerprint = "test-payload",
         });
 
         Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status == "result_unknown"));
@@ -534,6 +538,7 @@ public class BgiTaskCoordinatorTests
             RegistryName = "prerequisite.account",
             ProjectRegistryOutcome = true,
             IdempotencyKey = Guid.NewGuid().ToString("N"),
+            PayloadFingerprint = "test-payload",
         });
 
         Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status == "result_unknown"));
@@ -559,6 +564,7 @@ public class BgiTaskCoordinatorTests
             RegistryName = "prerequisite.account",
             ProjectRegistryOutcome = true,
             IdempotencyKey = Guid.NewGuid().ToString("N"),
+            PayloadFingerprint = "test-payload",
         });
 
         Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status == "result_unknown"));
@@ -566,12 +572,133 @@ public class BgiTaskCoordinatorTests
     }
 
     [Fact]
-    public void Prerequisite_UnknownSameKey_AdoptsOriginalWithoutExecutingAgain()
+    public void Submit_SameKeyDifferentPayloadWhileQueued_RejectsWithoutReplacingOriginal()
+    {
+        using var h = new Harness(slotFree: false);
+        var key = Guid.NewGuid().ToString("N");
+        BgiTaskCoordinator.TaskSubmission Request(string group, string fingerprint) =>
+            new(0, group, null, 0, (_, _) => Task.FromResult(false))
+            {
+                IdempotencyKey = key,
+                PayloadFingerprint = fingerprint,
+            };
+
+        var first = h.Coordinator.Submit(Request("组A", "payload-a"));
+        var same = h.Coordinator.Submit(Request("组A", "payload-a"));
+        var collision = h.Coordinator.Submit(Request("组B", "payload-b"));
+        Assert.Equal(BgiTaskCoordinator.SubmitStatus.Queued, first.Status);
+        Assert.Equal(BgiTaskCoordinator.SubmitStatus.Adopted, same.Status);
+        Assert.Equal(first.TaskHandle, same.TaskHandle);
+        Assert.Equal(BgiTaskCoordinator.SubmitStatus.IdempotencyConflict, collision.Status);
+        Assert.Equal(Guid.Empty, collision.TaskHandle);
+        Assert.Equal("pending", h.Coordinator.QueryItemStatus(first.TaskHandle).Status);
+        Assert.Equal(1, h.Coordinator.QueueDepth);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void Submit_KeyWithoutFingerprint_FailsBeforeQueueRegistration(string? fingerprint)
+    {
+        using var h = new Harness(slotFree: false);
+        var executions = 0;
+        var result = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(
+            0, "组A", null, 0, (_, _) =>
+            {
+                Interlocked.Increment(ref executions);
+                return Task.FromResult(false);
+            })
+        {
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
+            PayloadFingerprint = fingerprint,
+        });
+        Assert.Equal(BgiTaskCoordinator.SubmitStatus.InvalidSubmission, result.Status);
+        Assert.Equal(Guid.Empty, result.TaskHandle);
+        Assert.Equal(0, h.Coordinator.QueueDepth);
+        Assert.Empty(h.Events);
+        Assert.Equal(0, executions);
+    }
+
+    [Fact]
+    public async Task Submit_SameKeyDifferentPayloadWhileRunning_RejectsAndKeepsOriginal()
+    {
+        using var h = new Harness(slotFree: true);
+        var key = Guid.NewGuid().ToString("N");
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        BgiTaskCoordinator.TaskSubmission Request(string fingerprint) =>
+            new(0, "组A", null, 0, async (_, _) =>
+            {
+                entered.TrySetResult();
+                await release.Task;
+                return false;
+            })
+            {
+                IdempotencyKey = key,
+                PayloadFingerprint = fingerprint,
+            };
+
+        var first = h.Coordinator.Submit(Request("payload-a"));
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(BgiTaskCoordinator.SubmitStatus.Adopted,
+                h.Coordinator.Submit(Request("payload-a")).Status);
+            var collision = h.Coordinator.Submit(Request("payload-b"));
+            Assert.Equal(BgiTaskCoordinator.SubmitStatus.IdempotencyConflict, collision.Status);
+            Assert.Equal(Guid.Empty, collision.TaskHandle);
+            Assert.Equal(first.TaskHandle, h.Coordinator.CurrentTaskHandle);
+        }
+        finally
+        {
+            release.TrySetResult();
+        }
+        Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(first.TaskHandle).Status == "completed"));
+    }
+
+    [Fact]
+    public void TaskStartFingerprint_CanonicalizesPropertyOrderAndIncludesPayload()
+    {
+        var a = InstanceIpcEnvelope.Request(ExternalInterfaceOperations.TaskStart,
+            new { groupName = "组A", generation = 3, idempotencyKey = "k1" });
+        var same = InstanceIpcEnvelope.Request(ExternalInterfaceOperations.TaskStart,
+            new { idempotencyKey = "k2", generation = 3, groupName = "组A" });
+        var changed = InstanceIpcEnvelope.Request(ExternalInterfaceOperations.TaskStart,
+            new { groupName = "组B", generation = 3, idempotencyKey = "k1" });
+        var changedStart = InstanceIpcEnvelope.Request(ExternalInterfaceOperations.TaskStart,
+            new { groupName = "组A", generation = 3, startFromIndex = 2, idempotencyKey = "k1" });
+        var changedOperation = InstanceIpcEnvelope.Request(ExternalInterfaceOperations.PrerequisiteAccount,
+            new { groupName = "组A", generation = 3, idempotencyKey = "k1" });
+        Assert.Equal(BetterGenshinImpact.Service.Execution.ExecutionRequestContract.Fingerprint(a),
+            BetterGenshinImpact.Service.Execution.ExecutionRequestContract.Fingerprint(same));
+        Assert.NotEqual(BetterGenshinImpact.Service.Execution.ExecutionRequestContract.Fingerprint(a),
+            BetterGenshinImpact.Service.Execution.ExecutionRequestContract.Fingerprint(changed));
+        Assert.NotEqual(BetterGenshinImpact.Service.Execution.ExecutionRequestContract.Fingerprint(a),
+            BetterGenshinImpact.Service.Execution.ExecutionRequestContract.Fingerprint(changedStart));
+        Assert.NotEqual(BetterGenshinImpact.Service.Execution.ExecutionRequestContract.Fingerprint(a),
+            BetterGenshinImpact.Service.Execution.ExecutionRequestContract.Fingerprint(changedOperation));
+
+        var response = ExternalInterfaceCommandPlane.MapTaskStartQueueResult(a,
+            new BgiTaskCoordinator.SubmitResult(BgiTaskCoordinator.SubmitStatus.IdempotencyConflict, Guid.Empty, 0), 3);
+        Assert.False(response.Success);
+        Assert.Equal("idempotency_conflict", response.ErrorCode);
+        var invalid = ExternalInterfaceCommandPlane.MapTaskStartQueueResult(a,
+            new BgiTaskCoordinator.SubmitResult(BgiTaskCoordinator.SubmitStatus.InvalidSubmission, Guid.Empty, 0), 3);
+        Assert.False(invalid.Success);
+        Assert.Equal("invalid_request", invalid.ErrorCode);
+    }
+
+    [Theory]
+    [InlineData(BetterGenshinImpact.Service.Execution.JobKind.Prerequisite)]
+    [InlineData(BetterGenshinImpact.Service.Execution.JobKind.Terminal)]
+    public void Projected_UnknownSameKey_AdoptsOriginalWithoutExecutingAgain(
+        BetterGenshinImpact.Service.Execution.JobKind kind)
     {
         using var h = new Harness(slotFree: true);
         var key = Guid.NewGuid().ToString("N");
         var executions = 0;
-        BgiTaskCoordinator.TaskSubmission Create() => new(0, null, null, 0, (handle, _) =>
+        BgiTaskCoordinator.TaskSubmission Create(string fingerprint = "test-payload") => new(0, null, null, 0, (handle, _) =>
         {
             Interlocked.Increment(ref executions);
             BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryMarkUnknown(handle,
@@ -579,10 +706,12 @@ public class BgiTaskCoordinatorTests
             return Task.FromResult(false);
         })
         {
-            RegistryKind = BetterGenshinImpact.Service.Execution.JobKind.Prerequisite,
-            RegistryName = "prerequisite.account",
+            RegistryKind = kind,
+            RegistryName = kind == BetterGenshinImpact.Service.Execution.JobKind.Terminal
+                ? "terminal.completionAction" : "prerequisite.account",
             ProjectRegistryOutcome = true,
             IdempotencyKey = key,
+            PayloadFingerprint = fingerprint,
         };
 
         var first = h.Coordinator.Submit(Create());
@@ -590,6 +719,18 @@ public class BgiTaskCoordinatorTests
         var second = h.Coordinator.Submit(Create());
         Assert.Equal(BgiTaskCoordinator.SubmitStatus.Adopted, second.Status);
         Assert.Equal(first.TaskHandle, second.TaskHandle);
+        var collision = h.Coordinator.Submit(Create("different-payload"));
+        Assert.Equal(BgiTaskCoordinator.SubmitStatus.IdempotencyConflict, collision.Status);
+        Assert.Equal(Guid.Empty, collision.TaskHandle);
+        var crossEntryCollision = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(
+            0, "其他配置组", null, 0, (_, _) => Task.FromResult(false))
+        {
+            IdempotencyKey = key,
+            PayloadFingerprint = "ordinary-task-payload",
+        });
+        Assert.Equal(BgiTaskCoordinator.SubmitStatus.IdempotencyConflict, crossEntryCollision.Status);
+        Assert.Equal(Guid.Empty, crossEntryCollision.TaskHandle);
+        Assert.Equal("result_unknown", h.Coordinator.QueryItemStatus(first.TaskHandle).Status);
         Assert.Equal(1, executions);
     }
 
@@ -609,6 +750,7 @@ public class BgiTaskCoordinatorTests
             RegistryName = "prerequisite.account",
             ProjectRegistryOutcome = true,
             IdempotencyKey = Guid.NewGuid().ToString("N"),
+            PayloadFingerprint = "test-payload",
         });
         Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(unknown.TaskHandle).Status == "result_unknown"));
         for (var i = 0; i < 33; i++)

@@ -38,6 +38,7 @@ internal static class ExternalInterfacePrerequisitePlane
             (handle, token) => RunOpAsync(request.Operation, data, identity, handle, token))
         {
             IdempotencyKey = InstanceIpcProtocol.GetStringOrNull(data, "idempotencyKey"),
+            PayloadFingerprint = ExecutionRequestContract.Fingerprint(request),
             Identity = identity,
             RegistryKind = request.Operation == ExternalInterfaceOperations.TerminalCompletionAction
                 ? JobKind.Terminal : JobKind.Prerequisite,
@@ -54,6 +55,10 @@ internal static class ExternalInterfacePrerequisitePlane
                 InstanceIpcEnvelope.Response(request, new { status = "already_executed" }),
             BgiTaskCoordinator.SubmitStatus.QueueFull =>
                 InstanceIpcEnvelope.Failure(request, "queue_full", "任务队列已满，前置/收尾操作未受理"),
+            BgiTaskCoordinator.SubmitStatus.IdempotencyConflict =>
+                InstanceIpcEnvelope.Failure(request, "idempotency_conflict", "同一发送键已绑定不同的前置/收尾内容"),
+            BgiTaskCoordinator.SubmitStatus.InvalidSubmission =>
+                InstanceIpcEnvelope.Failure(request, "invalid_request", "带发送键的前置/收尾请求缺少可信请求指纹"),
             _ => InstanceIpcEnvelope.Failure(request, "service_unavailable", "任务协调器不可用"),
         };
     }
