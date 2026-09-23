@@ -368,6 +368,27 @@ public class BgiTaskCoordinatorTests
         Assert.Equal("组A", job.Name);
     }
 
+    [Theory]
+    [InlineData(BetterGenshinImpact.Service.Execution.JobKind.Prerequisite, "prerequisite.account")]
+    [InlineData(BetterGenshinImpact.Service.Execution.JobKind.Terminal, "terminal.completionAction")]
+    public void JobRegistry_Submit_UsesExplicitOperationKindAndName(
+        BetterGenshinImpact.Service.Execution.JobKind kind, string name)
+    {
+        using var h = new Harness(slotFree: false);
+        var submitted = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(
+            0, null, null, 0, (_, _) => Task.FromResult(false))
+        {
+            RegistryKind = kind,
+            RegistryName = name,
+        });
+
+        var job = BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(submitted.TaskHandle);
+        Assert.NotNull(job);
+        Assert.Equal(BetterGenshinImpact.Service.Execution.JobState.Queued, job.State);
+        Assert.Equal(kind, job.Kind);
+        Assert.Equal(name, job.Name);
+    }
+
     [Fact]
     public void JobRegistry_QueueCancelled_MarkedTerminalInRegistry()
     {

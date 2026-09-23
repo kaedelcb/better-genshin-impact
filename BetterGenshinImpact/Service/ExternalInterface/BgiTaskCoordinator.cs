@@ -85,6 +85,9 @@ internal sealed class BgiTaskCoordinator : IDisposable
         public bool Preempt { get; init; }
         public string? IdempotencyKey { get; init; }
         public JobExecutionIdentity? Identity { get; init; }
+        /// <summary>非配置组作业由可信提交入口指定真实类型及名称；缺省保持任务启动旧映射。</summary>
+        public JobKind? RegistryKind { get; init; }
+        public string? RegistryName { get; init; }
     }
 
     public readonly record struct SubmitResult(SubmitStatus Status, Guid TaskHandle, int QueuePosition);
@@ -699,8 +702,9 @@ internal sealed class BgiTaskCoordinator : IDisposable
     {
         try
         {
-            var kind = !string.IsNullOrEmpty(item.Submission.GroupName) ? JobKind.Group : JobKind.OneDragon;
-            JobRegistry.Instance.Submit(kind, item.Submission.Name ?? "未知", JobSource.Ext,
+            var kind = item.Submission.RegistryKind
+                ?? (!string.IsNullOrEmpty(item.Submission.GroupName) ? JobKind.Group : JobKind.OneDragon);
+            JobRegistry.Instance.Submit(kind, item.Submission.RegistryName ?? item.Submission.Name ?? "未知", JobSource.Ext,
                 item.Submission.Generation > 0 ? item.Submission.Generation : null,
                 idempotencyKey: item.Submission.IdempotencyKey,
                 jobId: item.TaskHandle, identity: item.Submission.Identity);

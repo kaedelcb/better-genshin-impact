@@ -39,6 +39,9 @@ internal static class ExternalInterfacePrerequisitePlane
         {
             IdempotencyKey = InstanceIpcProtocol.GetStringOrNull(data, "idempotencyKey"),
             Identity = identity,
+            RegistryKind = request.Operation == ExternalInterfaceOperations.TerminalCompletionAction
+                ? JobKind.Terminal : JobKind.Prerequisite,
+            RegistryName = request.Operation[ExternalInterfaceOperations.Prefix.Length..],
         };
         var result = BgiTaskCoordinator.Instance.Submit(submission);
         return result.Status switch
