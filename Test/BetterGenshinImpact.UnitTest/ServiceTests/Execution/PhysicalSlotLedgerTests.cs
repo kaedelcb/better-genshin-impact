@@ -22,9 +22,53 @@ public sealed class PhysicalSlotLedgerTests : IDisposable
     }
 
     [Fact]
+    public void MissingDomain_RequiresExplicitProvisioning()
+    {
+        var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
+        Assert.Equal(PhysicalSlotAcquireStatus.Uncertain, ledger.TryAcquire().Status);
+        Assert.False(Directory.Exists(_directory));
+        Assert.True(ledger.InitializeFreshForProvisioning());
+        var acquired = ledger.TryAcquire();
+        Assert.Equal(PhysicalSlotAcquireStatus.Acquired, acquired.Status);
+        using var lease = Assert.IsType<PhysicalSlotLease>(acquired.Lease);
+    }
+
+    [Fact]
+    public void FailedProvisioning_DoesNotRepairMissingLock()
+    {
+        var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
+        Assert.True(ledger.InitializeFreshForProvisioning());
+        File.Delete(ledger.LockPath);
+        Assert.Equal(PhysicalSlotAcquireStatus.Uncertain, ledger.TryAcquire().Status);
+        Assert.False(ledger.InitializeFreshForProvisioning());
+        Assert.Equal(PhysicalSlotAcquireStatus.Uncertain, ledger.TryAcquire().Status);
+    }
+
+    [Fact]
+    public void IncompleteGenerationZeroRecord_DoesNotGrantFirstGeneration()
+    {
+        var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
+        Assert.True(ledger.InitializeFreshForProvisioning());
+        var record = JsonNode.Parse(File.ReadAllText(ledger.RecordPath))!;
+        record.AsObject().Remove("Generation");
+        File.WriteAllText(ledger.RecordPath, record.ToJsonString());
+        Assert.Equal(PhysicalSlotAcquireStatus.Uncertain, ledger.TryAcquire().Status);
+    }
+
+    [Fact]
+    public void IncompleteProvisioningMarker_BlocksAcquisition()
+    {
+        var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
+        Assert.True(ledger.InitializeFreshForProvisioning());
+        File.WriteAllText(ledger.ProvisioningPath, "interrupted");
+        Assert.Equal(PhysicalSlotAcquireStatus.Uncertain, ledger.TryAcquire().Status);
+    }
+
+    [Fact]
     public void Acquisition_BindsRecordedOwnerToActualProcess()
     {
         var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
+        Assert.True(ledger.InitializeFreshForProvisioning());
         var result = ledger.TryAcquire();
         Assert.Equal(PhysicalSlotAcquireStatus.Acquired, result.Status);
         using var lease = Assert.IsType<PhysicalSlotLease>(result.Lease);
@@ -40,6 +84,7 @@ public sealed class PhysicalSlotLedgerTests : IDisposable
     public void SameSlot_IsExclusive_AndReacquireAdvancesGeneration()
     {
         var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
+        Assert.True(ledger.InitializeFreshForProvisioning());
         var first = ledger.TryAcquire();
         Assert.Equal(PhysicalSlotAcquireStatus.Acquired, first.Status);
         using var firstLease = Assert.IsType<PhysicalSlotLease>(first.Lease);
@@ -62,6 +107,7 @@ public sealed class PhysicalSlotLedgerTests : IDisposable
     public void MissingOrCorruptRecordAfterPriorUse_FailsClosed()
     {
         var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
+        Assert.True(ledger.InitializeFreshForProvisioning());
         using (var first = Assert.IsType<PhysicalSlotLease>(ledger.TryAcquire().Lease)) { }
         File.WriteAllText(ledger.RecordPath, "{bad json");
 
@@ -79,6 +125,7 @@ public sealed class PhysicalSlotLedgerTests : IDisposable
     public void InterruptedPublishResidue_BlocksReacquisition()
     {
         var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
+        Assert.True(ledger.InitializeFreshForProvisioning());
         using (var first = Assert.IsType<PhysicalSlotLease>(ledger.TryAcquire().Lease)) { }
         File.WriteAllText(ledger.RecordPath + ".tmp-crash", "partial");
 
@@ -91,6 +138,7 @@ public sealed class PhysicalSlotLedgerTests : IDisposable
     public void ExhaustedGeneration_IsRejectedWithoutChangingExistingRecord()
     {
         var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
+        Assert.True(ledger.InitializeFreshForProvisioning());
         using (var first = Assert.IsType<PhysicalSlotLease>(ledger.TryAcquire().Lease)) { }
         var record = JsonNode.Parse(File.ReadAllText(ledger.RecordPath))!;
         record["Generation"] = long.MaxValue;
@@ -106,6 +154,7 @@ public sealed class PhysicalSlotLedgerTests : IDisposable
     public void LockHandle_ExcludesAnotherWindowsProcess()
     {
         var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
+        Assert.True(ledger.InitializeFreshForProvisioning());
         using (var first = Assert.IsType<PhysicalSlotLease>(ledger.TryAcquire().Lease))
             Assert.Equal("busy", ProbeFromChildProcess(ledger.LockPath));
         Assert.Equal("acquired", ProbeFromChildProcess(ledger.LockPath));
@@ -115,6 +164,7 @@ public sealed class PhysicalSlotLedgerTests : IDisposable
     public async Task AbortedLockHolder_ReleasesOsHandle_AndNextAcquisitionAdvancesGeneration()
     {
         var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
+        Assert.True(ledger.InitializeFreshForProvisioning());
         using (var initial = Assert.IsType<PhysicalSlotLease>(ledger.TryAcquire().Lease)) { }
         var path64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(ledger.LockPath));
         var script = "$p=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + path64 + "'));" +

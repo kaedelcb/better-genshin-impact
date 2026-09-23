@@ -40,6 +40,38 @@ internal sealed class PhysicalSlotLedger
 
     internal string RecordPath => Path.Combine(_directory, _slotId + ".state.json");
     internal string LockPath => Path.Combine(_directory, _slotId + ".lock");
+    internal string ProvisioningPath => Path.Combine(_directory, _slotId + ".provisioning");
+
+    /// <summary>仅供受控首次配置；运行取得不得据空目录自行初始化。</summary>
+    internal bool InitializeFreshForProvisioning()
+    {
+        try
+        {
+            Directory.CreateDirectory(_directory);
+            if (File.Exists(LockPath) || File.Exists(RecordPath) || File.Exists(ProvisioningPath))
+                return false;
+            using (var marker = new FileStream(ProvisioningPath, FileMode.CreateNew, FileAccess.Write,
+                       FileShare.None, 4096, FileOptions.WriteThrough))
+            {
+                marker.WriteByte(1);
+                marker.Flush(flushToDisk: true);
+            }
+            using var heldLock = new FileStream(LockPath, FileMode.CreateNew, FileAccess.ReadWrite,
+                FileShare.None, 4096, FileOptions.WriteThrough);
+            var initial = new SlotRecord(FormatVersion, _slotId, 0, Guid.NewGuid(), 0, 0);
+            using var state = new FileStream(RecordPath, FileMode.CreateNew, FileAccess.Write,
+                FileShare.None, 4096, FileOptions.WriteThrough);
+            JsonSerializer.Serialize(state, initial);
+            state.Flush(flushToDisk: true);
+            heldLock.Flush(flushToDisk: true);
+            File.Delete(ProvisioningPath);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return false;
+        }
+    }
 
     public PhysicalSlotAcquireResult TryAcquire()
     {
@@ -59,30 +91,17 @@ internal sealed class PhysicalSlotLedger
         FileStream? heldLock = null;
         try
         {
-            Directory.CreateDirectory(_directory);
-            bool lockExisted;
             try
             {
-                // CreateNew 是首次初始化的唯一证明；锁前 File.Exists 会与其他进程建锁竞态。
-                heldLock = new FileStream(LockPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
-                lockExisted = false;
-            }
-            catch (IOException ex) when ((ex.HResult & 0xffff) is 80 or 183)
-            {
-                lockExisted = true;
-                try
-                {
-                    heldLock = new FileStream(LockPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-                }
-                catch (IOException busy) when ((busy.HResult & 0xffff) is 32 or 33)
-                {
-                    return new(PhysicalSlotAcquireStatus.Busy, null, "slot_lock_held");
-                }
+                heldLock = new FileStream(LockPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
             }
             catch (IOException ex) when ((ex.HResult & 0xffff) is 32 or 33)
             {
                 return new(PhysicalSlotAcquireStatus.Busy, null, "slot_lock_held");
             }
+
+            if (Directory.EnumerateFiles(_directory, Path.GetFileName(ProvisioningPath)).Any())
+                return new(PhysicalSlotAcquireStatus.Uncertain, null, "incomplete_provisioning");
 
             // 旧写入残件意味着提交点不明；不靠猜测重建代际。
             if (Directory.EnumerateFiles(_directory, Path.GetFileName(RecordPath) + ".tmp-*").Any())
@@ -93,18 +112,26 @@ internal sealed class PhysicalSlotLedger
             try
             {
                 // File.Exists 会把访问失败也折成 false；只有真正的 FileNotFound 才能初始化。
-                previous = JsonSerializer.Deserialize<SlotRecord>(File.ReadAllText(RecordPath));
+                var stateJson = File.ReadAllText(RecordPath);
+                using var parsed = JsonDocument.Parse(stateJson);
+                var root = parsed.RootElement;
+                if (root.ValueKind != JsonValueKind.Object
+                    || !root.TryGetProperty(nameof(SlotRecord.Generation), out _)
+                    || !root.TryGetProperty(nameof(SlotRecord.OwnerProcessId), out _)
+                    || !root.TryGetProperty(nameof(SlotRecord.OwnerStartTicksUtc), out _))
+                    return new(PhysicalSlotAcquireStatus.Uncertain, null, "incomplete_slot_record");
+                previous = JsonSerializer.Deserialize<SlotRecord>(stateJson);
                 if (previous is null || previous.Version != FormatVersion || previous.SlotId != _slotId
-                    || previous.Generation < 1 || previous.Nonce == Guid.Empty
-                    || previous.OwnerProcessId <= 0 || previous.OwnerStartTicksUtc <= 0
+                    || previous.Generation < 0 || previous.Nonce == Guid.Empty
+                    || (previous.Generation == 0 && (previous.OwnerProcessId != 0 || previous.OwnerStartTicksUtc != 0))
+                    || (previous.Generation > 0 && (previous.OwnerProcessId <= 0 || previous.OwnerStartTicksUtc <= 0))
                     || previous.Generation == long.MaxValue)
                     return new(PhysicalSlotAcquireStatus.Uncertain, null, "invalid_slot_record");
                 previousGeneration = previous.Generation;
             }
             catch (FileNotFoundException)
             {
-                if (lockExisted)
-                    return new(PhysicalSlotAcquireStatus.Uncertain, null, "missing_slot_record");
+                return new(PhysicalSlotAcquireStatus.Uncertain, null, "missing_slot_record");
             }
 
             var next = new SlotRecord(FormatVersion, _slotId, checked(previousGeneration + 1),
