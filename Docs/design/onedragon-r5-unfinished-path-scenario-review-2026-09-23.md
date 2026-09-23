@@ -17,11 +17,28 @@
 
 ## 发现分级与先后
 
+### 对抗交错补表（每行均需独立证据）
+
+| 触发条件 | 唯一授权者 | 允许动作 | 回执及终态 | 重启后恢复 | 对应代码入口 | 当前证据／状态 |
+|---|---|---|---|---|---|---|
+| 旧发送者在写回前暂停，租约换主后恢复 | 仅新 owner 可结算；旧者限原轮追加 | 旧者写逐轮证据，不改 Operation／Submission | 迟到编号保留为 Pending，不借新租约结案 | 新 owner 按原轮读回接纳 | `TaskCenterHost.Admission`、`ExternalStartLedger.RecordLateAcceptedReceipt` | 旧轮宿主夹具覆盖部分；跨进程换主仍待证，D4／I3 |
+| 远端已受理，本地落编号前崩溃 | 当前 owner | 先用发送前已持久键远端查询，不再提交；新许可核对迟到证据阻断水位 | 找到编号才记 Accepted；查不到也不证明未受理 | 原 Submission 保留，观察器继续查询或人工核查 | `DispatchExternalStartViaHostAsync`、BGI `ext.job.status`／队列查询 | 远端按发送键查询合同缺失，D9 |
+| 同级请求重复到达／真正后到者到达 | 当前 owner | 重复沿用原到达序号、不抢占自己；新身份后到才比较 | 重复回原结论；后到须经退出确认 | 到达序号持久化，重启不变 | `ArbitrationOrdering`、外部启动适配器 | 现有排序用 scheduledAt，运行中比较未接，D10 |
+| 第三挑战者在停止与发送之间到达 | 当前 owner 的交接事务 | 仅旧继任许可尚未被发送者认领、且新请求高于或同级时原子撤销并替换；已认领须先证实未受理，否则只对账 | 被替换请求记明确终局，原停止票据仍须结算；不双发 | 只恢复一笔保留的继任者，旧发送若 Unknown 先对账 | `PreemptConfirmPending`、`ValidateAndOccupy` | 交接替换状态尚未冻结／测试，D10／I4 |
+| 被切任务在 stop 请求同时自然完成 | BGI 目标实例提供终态，owner 确认 | 保留真实完成结果，确认槽位释放后再签新许可 | 停止回执不覆盖真实完成终态 | 旧终态与交接票据一并恢复，禁止补造“已取消” | `ExecutionScope.StopActive`／`Dispose`、BGI 协调器 | 无原子退出凭证，D11 |
+| BGI 在 stop／确认／下一发送任一点重启 | 当前 owner，且只认新 epoch 事实 | 旧 epoch 确认作废；对账新进程无旧任务后重新裁决 | 旧回执只入历史，不授权新发送 | 新 owner 先证明旧进程死亡或仍活着，再验新管道 PID／启动 ticks；旧发送责任独立保留 | `IpcClient.VerifyRemoteSessionAsync`、`ExecutionScope`、`ArbitrationAdmissionService` | 状态 epoch 有反例；交接 CAS 与实机重启缺，D11 |
+| 裁决 claim 后新增相反证据／多历史受理轮 | 当前 owner，按完整证据集合 | 冻结证据 revision/hash 后裁决；新证据使旧 claim 失效 | 不清其他未决轮；责任仍 Pending | 按轮重扫，不复用旧 claim | `ClaimAdjudicationAsync`、`SettleCompletionAsync` | claim 只存方向且发布失败结果未拦，I5 |
+| Operation 归档、主槽满后收到旧轮编号 | 当前 owner；旧者限追加证据 | 在非主槽责任区保留迟到受理并阻断新发送，不为记录证据挤占主槽 | 记录 Accepted 与冲突 Pending，拒绝假空闲 | 归档感知查询与游标仍可定位原轮 | `RehydrateArchivedOperationForLateAcceptanceReceipt`、`MigrateAndClean` | 现重载为 `TerminalPendingTransfer`，容量边界未证，D13 |
+| `PreemptConfirmPending` 期间崩溃重启 | 接管 owner | 保留 successor Run 与停止责任，先查旧实例退出，不清孤儿 | 无确认不新发；确认凭证只能用一次 | 恢复先识别交接，再做普通 Queued 清理 | `RecoverAfterRestart`、`SubmitFlowStartViaAdmissionAsync` | 入口阻断部分已证，恢复保持未证，I7 |
+| F11 在槽位预留后、ext 排队期间到达 | 当前 owner 负责撤销；BGI 执行门执行 F11 | 撤销未发 successor；已入队则按编号取消并确认，不重发 | 未确认取消留 Unknown，不能报完成 | 继承取消责任，禁止队列迟到启动 | `ProcessWinnerAsync`、`BgiExternalClient.SubmitTaskStartAsync`／`CancelTaskAsync` | 组件 F11 零发送已证；排队与实机交错待证，D7/D8 |
+| 恢复观察器断线／超时 | 当前 owner 的受监督观察器 | 用持久句柄重绑订阅或轮询；不可用时目标保持关闭 | 不把观察失败当终态 | 接管先确认 observer-ready，再开放相关新提交 | `TaskCenterHost` 恢复扫描、外部台账 | 重绑字段有证，运行时替换观察器未证，D13 |
+| 新仲裁请求与旧调度器／BGI 原生执行撞车 | 目标 BGI 的物理执行门＋当前租约 owner，各守各自边界 | 旧新模式仅一方可活跃，原生执行也占同一物理槽；新发送仍需 owner 许可 | 双方都不能以对方布尔空闲推断自己有权发送 | 持久模式和进程 fencing 后再启对应入口 | `TaskCenterHost` 组合根、BGI `JobRegistry`／`TaskSemaphore` | 七合成候选只证组件；真实跨入口无双跑未验，D8/D13 |
+
 ### 先修订的规则（施工提案，待集中会诊核对；不自动开放入口）
 
 1. **运行中任务比较独立于候选队列排序。** 候选队列原有 `tier/priority/scheduledAt/id` 全序保持；新请求与“当前正在执行者”的比较另用任务级优先级。可信来源才能赋予上线锄地／一键锄地最高级；普通任务读持久化配置，缺省同级时后来者胜。较低级请求得到明确拒绝或进入明确定义的等待队列，不可直接发；不得把现有 ext 队列的排队能力误当成已授权抢占。
 2. **停止确认是独立事实。** `stopRequested`、`suspend` 回执、`running=false` 单次观察各自不能单独授权下一发送。确认凭证至少绑定被切 `executionInstanceId`、BGI `processId/startTicksUtc`、停止前后 `stateRevision`、旧实例终态及执行槽已释放；随后由当前 owner 在同一仲裁事务核对占用未换人并签发新许可。任一字段缺失或变化进入待核查，零新发送。确认凭证只能消费一次，旧轮、旧进程、换实例均不能复用。
-3. **所有未知结果保留原责任。** 已出站但没有有效编号、编号迟到、发送异常后无法证明零字节写入、宿主关闭及恢复扫描中证据不全，均不能推断“未受理”。旧发送者只可追加原轮证据；当前 owner 只可依据同轮完整载荷结算。正向 `Accepted` 与负向 `NotAccepted`／`RetryableRejected` 须按 `submissionIdentity + sendSeq` 持久化互斥，不能先写两个独立载体再靠后续扫描修复。
+3. **所有未知结果保留原责任。** 已出站但没有有效编号、编号迟到、发送异常后无法证明零字节写入、宿主关闭及恢复扫描中证据不全，均不能推断“未受理”。旧发送者只可追加原轮证据；当前 owner 只可依据同轮完整载荷结算。同轮正向 `Accepted` 与负向 `NotAccepted`／`RetryableRejected` 证据可以并存；互斥的是最终结算决定。新增证据须即时阻断基于旧证据集签发的许可，不能靠下次扫描才发现。
 4. **恢复和自动收尾沿用原身份。** S4b 是新任务，走任务级比较、停止确认、编号提交；S8b 是原任务的恢复，必须引用原票据和执行身份，经恢复专用准入，绝不借新任务 ID 绕开。定时器触发前的完成边沿和触发时的复核必须同一进程代际、同一执行实例，且仍有原上下文；否则保留责任待核查。
 5. **崩溃后先对账。** 新 owner 获取租约后先读取操作、提交轮、外部台账与 BGI 作业登记，并逐项校验引用和清理后历史凭证；未决轮不能自动重发。`MigrateAndClean` 删除主 Operation 后，审计、预观察及分页游标必须仍有独立可验证来源，不能把缺引用当空记录。
 
@@ -33,7 +50,7 @@
 |---|---|---|---|
 | **设计缺口 D9＋实现错误候选** | `SubmissionDispatch` 有目标 epoch／发送键，但外部启动发送链是否逐字段使用该已授权身份尚未闭合；会诊指出 `CommandExecutor` 仍可能从 `_requestContext` 取 wire 身份。 | E3/E5/S4b、迟到回执、崩溃恢复：冻结不可变授权发送包，包含请求身份、发送轮、幂等键、目标 epoch、配置指纹、owner generation；发送者只能使用包内字段。远端必须可按**发送前持久化**的键查“已受理但本地尚未记编号”，查询不等于重发。S4b 每次自动动作产生新动作身份，不借触发它的旧 CommandId。 | 沿 `DispatchViaHostAsync → CommandExecutor → ext.task.start` 逐字段取证；丢回执后远端按键查询反例。 |
 | **实现错误候选 I3** | 会诊指出 `SubmitAsync`、结算、裁决等入口多处读取磁盘当前 Lease 后直接拿它作写凭据。源码 `ClaimAdjudicationAsync` 确实如此；是否有更外层身份绑定仍需逐入口核对。 | 所有改变 Operation/Submission/责任的路径：服务实例持不可变 owner token；磁盘读取只提供事实，不授予调用者权力。旧发送者仅有独立追加证据权。 | 旧 owner 在换主后暂停／恢复写入的并发反例；逐入口权限表。 |
-| **实现错误 I4（已核实）** | `ValidateAndOccupy` 锁内占位路径没有检查 `op.PreemptConfirmPending`，已有 `ContinueUseAsync`／`RetryAsync` 的入口检查不能代替最终门。 | 优先级抢占、停止确认、无双跑：同一原子占位事务必须拒绝未确认交接；确认事务消费一次性证据并保留指定继任者，普通重驱动／镜像不得清除标记。 | 已排队请求与确认标记交错：最终占位拒绝、零 Submission／零发送；确认后同身份一次放行。 |
+| **实现错误 I4（局部修复）** | `ValidateAndOccupy` 原先未检查 `op.PreemptConfirmPending`；先红夹具实际返回 `Accepted`，发送安全门缺失。现最终占位锁内检查并把本轮 `InRound` 退回 `Queued`，保留确认标记。 | 优先级抢占、停止确认、无双跑：同一原子占位事务拒绝未确认交接；确认事务消费一次性证据并保留指定继任者，普通重驱动／镜像不得清除标记。 | `PreemptConfirmPending_SetBeforeFinalOccupy_CannotCreateSubmission` 红转绿，仲裁类 215/215，助手全量 1170 通过／2 跳过／0 失败。确认后放行及重启仍待证。 |
 | **设计缺口 D10** | 原规则把候选排序、运行中抢占、恢复资格混用；第三个更高优先级请求在交接中到达、重复请求与“后到”混淆、配置中途变化均无明确转移。 | 独立冻结三个纯函数；持久化可信类别、有效优先级、策略版本和服务端分配的到达序号。重复请求沿用原序号。当前阶段低优先级请求明确拒绝，暂不引入未定义等待队列。已有交接票据不能被最高级请求直接绕过；第三请求的替换政策须先写全格。 | 高/同/低＋两最高级＋重复／第三挑战者／配置变化全格夹具。 |
 | **设计缺口 D11** | `GetActiveSnapshot` 是只读进程内事实；`StopActive`／`Suspend` 现未按预期执行实例 CAS，`Dispose` 与 `TaskSemaphore` 的释放也未形成耐久退出凭证。 | 停止确认、重启、无双跑：BGI 端停止命令须指定预期实例，旧实例退出记录与槽位释放在同一可核查代际内发布；助手不得仅凭 `running=false`、取消标志或 stop 回执开新发送。 | 目标实例换人、自然完成与停止同时发生、BGI 重启夹具，逐次断言零错停／零抢发。 |
 | **实现错误候选 I5** | 会诊指出裁决 claim 写失败可能返回 `null`（继续），且 claim 只存方向；源码 `ClaimAdjudicationAsync` 确有 `mutate` 结果未用于返回。 | 迟到回执、冲突裁决：claim 持 owner token、轮次、证据集 revision/hash、决定 ID；发布失败或不确定须读回确认。新证据到达使旧 claim 失效；执行终态可先存在，但责任直到审计与清冲突事务提交前仍 Pending。 | 发布故障、新证据插入、两历史轮冲突及复跑幂等反例。 |
@@ -47,7 +64,7 @@
 - **设计缺口 D1–D8**：先修订权威规则、上表受影响场景及 R5.3／R5.8 门禁，再按单个状态转换施工。D1、D3、D5、D6、D8 为生产开门前高优先级矛盾；D4、D7 涉及恢复安全同级阻断。任何“已有限定组件证据”均不改写为生产验收。
 - **实现错误 I1–I2**：I1 限于 S8b 仍直发；S4b 适配边界已交付但生产接线与新动作身份未验。I2 的状态未知误用按明确场景逐步修；当前安全切片仅局部完成，需负向反例与完整回归。相同代码若没有授权依据，只记录缺口，不通过猜测放开门禁。
 - **既有测试失败 T1**：本轮助手全量 1169 通过、2 跳过、0 失败；BGI 全量一次于 539 通过、4 失败后测试宿主崩溃，定向复跑亦宿主崩溃。已打印的 4 个身份 `OcrResultTests.Text_PreservesOfficialDetectionOrder`、`PostTeleportStuckProtectionDecisionsUnitTest.IsEligible_Stuck_BeyondWindow_ReturnsFalse`、`PostTeleportRevivalProtectionBugConditionTest.BugCondition_A2_RevivalAtExactly10s_ShouldNotSkipToNextSegment`、`...BugCondition_A1_RevivalWithin2s_ShouldNotSkipToNextSegment`，与既有 `codex_r5_bgi_latest_20260923.trx` 的失败身份**逐名一致**；这只证明已执行部分未出现新失败，宿主中止使未执行部分无结论。单测 `TaskStatus_IncludesCurrentProcessEpoch` 和 `BgiTaskCoordinatorTests` 均复现宿主崩溃，需继续定位，不能把 BGI 全套记为通过。
-- **会诊工具失败 C1**：既往 §24.71 Astra/medium 一次执行器 exit code 1，未取得会诊结论，不记代码缺陷。本轮 Astra/medium 安全复审取得结论，共两次各 1 次尝试（第一次 3 项、第二次 4 项重要发现），其发现以代码和测试复核为准；无符合重试规则的失败。
+- **会诊工具失败 C1**：既往 §24.71 Astra/medium 一次执行器 exit code 1，未取得会诊结论，不记代码缺陷。本轮早期 Astra/medium 安全复审两次各 1 次成功（第一次 3 项、第二次 4 项重要发现）；本次 I4 小切片复会诊 Astra/medium 尝试 1 次返回 exit code 1，**未取得会诊结论**，不记为代码缺陷且不属于约定的重试类别。已完成独立代码核查与回归，后续冻结审查仍需有效会诊结论。
 
 ## 执行门禁
 

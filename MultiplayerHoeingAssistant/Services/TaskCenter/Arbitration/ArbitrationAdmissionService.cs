@@ -1034,6 +1034,8 @@ public sealed class ArbitrationAdmissionService
     {
         switch (reason)
         {
+            case "preempt_confirm_pending":
+                return ReturnPreemptPendingToQueued(lease, request.RequestIdentity);
             // 执行占用：无损拒绝类可重试（窗口派生不重置；恢复不重驱动——占用解除后由入口新操作重新发起）。
             case "execution_occupied":
                 return (await RetryablePrecheckRejectAsync(request, lease, "execution_occupied", "执行占用（锁内复核——按无损拒绝类可重试处理）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
@@ -2248,6 +2250,8 @@ public sealed class ArbitrationAdmissionService
                 return "facts_unknown";
             var op = (file.Handoff?.Operations ?? []).FirstOrDefault(o => string.Equals(o.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal));
             if (op is null || op.Zone != OperationZone.Active) return "stale_operation_identity";
+            // 最终许可闸门：入口预检不能覆盖轮次快照后、占位前才出现的交接标记。
+            if (op.PreemptConfirmPending) return "preempt_confirm_pending";
             if (op.AcceptanceClaim is not null)
             {
                 special = "acceptance_claim_pending";
@@ -2720,7 +2724,7 @@ public sealed class ArbitrationAdmissionService
                     ResponsibilityState = ResponsibilityState.Pending,
                 };
             case "preempt_confirm_pending":
-                return ClassifyCurrentState(request.RequestIdentity);
+                return ReturnPreemptPendingToQueued(lease, request.RequestIdentity);
             case "merged_operation":
             {
                 var read = _store.Read();
@@ -2805,6 +2809,22 @@ public sealed class ArbitrationAdmissionService
                     : ClassifyCurrentState(request.RequestIdentity);
             }
         }
+    }
+
+    private AdmissionResult ReturnPreemptPendingToQueued(LeaseSegment lease, string requestIdentity)
+    {
+        // 轮次已把待交接候选推进 InRound；最终占位拒绝后只退回 Queued，保留确认责任。
+        _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var op = FindOp(file, requestIdentity);
+            if (op is null || !op.PreemptConfirmPending || op.RequestState != OperationRequestState.InRound)
+                return "state_changed";
+            op.RequestState = OperationRequestState.Queued;
+            op.UpdatedRevision = file.Revision + 1;
+            op.UpdatedAtUtc = _utcNow();
+            return null;
+        });
+        return ClassifyCurrentState(requestIdentity);
     }
 
     /// <summary>状态已被其他处理者推进时的当前事实分类（B1：不回退不覆盖——返回既有事实；I5：压制依据随持久化结果恢复）。</summary>

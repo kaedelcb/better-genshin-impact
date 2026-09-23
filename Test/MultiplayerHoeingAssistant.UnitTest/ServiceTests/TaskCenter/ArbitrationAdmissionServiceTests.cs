@@ -4329,6 +4329,50 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task PreemptConfirmPending_SetBeforeFinalOccupy_CannotCreateSubmission()
+    {
+        ArbitrationLeaseStore? storeRef = null;
+        AdmissionRequest? requestRef = null;
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts { ExecutionOccupied = false };
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("fixture:must-not-send", null));
+            };
+            h.Barriers = new AdmissionBarriers
+            {
+                BeforeOccupyPublish = () =>
+                {
+                    var read = storeRef!.Read();
+                    var lease = read.File!.Lease!;
+                    var changed = storeRef.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+                    {
+                        var operation = file.Handoff!.Operations.Single(op => op.RequestIdentity == requestRef!.RequestIdentity);
+                        operation.PreemptConfirmPending = true;
+                        return null;
+                    });
+                    Assert.True(changed.Success, changed.Reason);
+                    return Task.CompletedTask;
+                },
+            };
+        });
+        storeRef = store;
+        var request = Req(ns: "v2", workflow: "wf-final-preempt-gate", operationType: OperationType.ExternalStart);
+        requestRef = request;
+
+        var result = await svc.SubmitAsync(request);
+
+        Assert.Equal(AdmissionResultKind.NeedPreemptConfirm, result.Kind);
+        Assert.True(FindOp(request.RequestIdentity)!.PreemptConfirmPending);
+        Assert.Equal(OperationRequestState.Queued, FindOp(request.RequestIdentity)!.RequestState);
+        Assert.True(string.IsNullOrEmpty(FindOp(request.RequestIdentity)!.SubmissionIdentity));
+        Assert.Equal(0, sends);
+    }
+
+    [Fact]
     public async Task SweepExpiredRetryableWinner_DoesNotRewriteConflictPendingMirror()
     {
         var sends = 0;
