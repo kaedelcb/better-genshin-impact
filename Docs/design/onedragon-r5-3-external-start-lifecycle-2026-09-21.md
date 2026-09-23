@@ -2650,3 +2650,9 @@ Owner 已明确选择：低优先级新任务遇到正在执行的高优先级�
 **施工门槛**：先枚举受理、提交、结果、物理退出四种状态及非法组合，冻结 BGI 耐久记录字段／同键异载荷规则／容量保留／旧消费者能力；红夹具逐一覆盖上表的取消赢、提交赢、动作抛错、三处写入故障和各崩溃窗。I8 可先处理“确定拒绝／确定失败不再被队列报成功”，但必须显式保留 `PrerequisiteOutcomeUnknown` 作为非终态残项；不能以这一步声称 I8 完成。I10 在耐久提交、查询及取消裁决都未实现前不得开放生产破坏性收尾。改变状态词或成功含义属语义变更，按 §17.4-A 复会诊并再生 `ClaimSurfaceGuardTests` 清单。两轮会诊工具均成功；BGI 既有 14 失败仍与修复错误分账。
 
 **验证会诊处置**：GPT-6-Astra／medium **1 次成功**，报告 2 阻断（均为代码尚未实现：I8/I10）和 2 重要（上述 `RecordTerminal` 事实纠错、共用 Executor/Skipped/旧消费者映射未闭合）。无会诊工具失败。§24.84 继续标注候选；高优先级设计矛盾尚未清零，不能据此批量改状态或开放生产入口。
+
+### 24.85 v2 停止水位与建根原子核对（2026-09-24；单转移施工规则）
+
+`ExecuteTaskStartCoreAsync` 当前在 Dispatcher 委托中读 `stopVersion`，配置组文件准备后又核一次；随后 `ExecutionScope.Start` 内只捕获**当时最新** `_stopVersion`。如果手动停止恰落在最后一次核对与 `Start` 建根之间，新的根可把停止后的版本当起点。新增可空 `JobDescriptor.ExpectedStopVersion` 仅由该 v2 启动请求在入口首次读取后固定传入；`ExecutionScope.Start` 在现有 `Sync` 锁内、建立新根与调用 `OnAdmitted` **之前**比较期望值与 `_stopVersion`。不等则抛取消，零建根、零 `OnAdmitted`、零业务副作用。配置组和一条龙均由同一 descriptor 抵达建根点；未携此字段的旧 UI 本地调用保持现行规则。此修复只封闭手动停止水位到建根之间的竞态，**不代替** D28 的执行实例定向停止、物理退出确认或统一槽预留。红夹具应在旧水位读取后触发 `StopActive(manual:true)` 再尝试建根，并以新水位正向对照；仍需真实 v2 入口交错证据。
+
+**施工与证据**：`71f1d90ca` 已按上述单转移落地；反例先以缺 `ExpectedStopVersion` 编译红，再在 `Sync` 内比较后转绿。`TaskTakeoverIncidentTests` **12/12**；BGI 全量 **945 通过／14 失败／959**，失败身份与既有 14 项基线完全相同；助手全量 **1176 通过／2 跳过／0 失败**。代码安全复核 GPT-6-Astra／medium **1 次成功**，未发现本次 diff 可确认的高优先级正确性缺陷；指出测试只钉住 `ExecutionScope.Start`，删除 handler 透传行后仍会绿，所以**真实 group／OneDragon 入口交错未验收**。一条龙 `with { JobId=... }` 保留水位字段；`OperationCanceledException` 传播为 `task_start_failed`，不假报成功但取消分类待后续协议处理。生产门与 R5.8 签署保持关闭。
