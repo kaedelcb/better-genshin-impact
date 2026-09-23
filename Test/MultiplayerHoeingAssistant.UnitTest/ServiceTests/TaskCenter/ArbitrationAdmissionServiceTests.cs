@@ -2840,6 +2840,29 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ConflictAdjudicate_ClaimRejectedByExpiredLease_DoesNotStartCompletionSettlement()
+    {
+        var (svc, ledger, _) = BuildRejectedExternalFacade();
+        var (rid, sub, seq) = await RejectedExternalOpAsync(svc);
+        _ = await svc.RegisterConflictEvidenceAsync(rid, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-expired-claim", RawTerminal = "completed", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = sub, SendSeq = seq,
+        });
+        _mono += TimeSpan.FromSeconds(60); // 读快照仍在，锁内 owner TTL 已失效
+
+        var result = await svc.AdjudicateConflictAsync(rid, ConflictResolutionKind.ResolvedAcceptedTerminal,
+            "owner:reconcile_query", ExternalStartCompletion.SucceededWith("completed", "owner:reconcile_query", _now));
+
+        Assert.Equal("claim_publish_failed:lease_stale_generation", result.ReasonCode);
+        Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);
+        var op = FindOp(rid)!;
+        Assert.True(op.ConflictPending);
+        Assert.Null(op.ExecutionResult);
+        Assert.Empty(ledger.Read().File?.Entries ?? []);
+    }
+
+    [Fact]
     public async Task ConflictAdjudicate_AcceptedTerminal_ClearsTerminalMirrorConflictState()
     {
         var (svc, _, store) = BuildRejectedExternalFacade();

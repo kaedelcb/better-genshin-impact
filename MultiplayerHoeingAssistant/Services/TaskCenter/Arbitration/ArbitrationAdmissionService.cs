@@ -4589,7 +4589,7 @@ public sealed class ArbitrationAdmissionService
                 if (op is null) return "state_changed";
                 if (!string.Equals(op.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal) || op.LastSendSeq != sendSeq)
                     return "state_changed";
-                if (!op.ConflictPending) return null; // 已裁决：交由幂等重放路径
+                if (!op.ConflictPending) return "no_pending_conflict"; // 并发已裁决：本轮不继续终态链
                 var want = resolution.ToString();
                 if (op.ConflictAdjudicationClaim is { Length: > 0 } claim
                     && !string.Equals(claim, want, StringComparison.Ordinal))
@@ -4603,7 +4603,18 @@ public sealed class ArbitrationAdmissionService
                 op.UpdatedAtUtc = _utcNow();
                 return null;
             });
-            return reject;
+            if (reject is not null) return reject;
+            if (!mutate.Success)
+            {
+                var op = FindOp(read.File, requestIdentity);
+                var reason = "claim_publish_failed:" + (mutate.Reason ?? "unknown");
+                return op is null
+                    ? AdmissionResult.Of(AdmissionResultKind.Error, reason,
+                        "裁决声明未能确认落盘，禁止进入完成结算。", requestIdentity)
+                    : LocatedStop(requestIdentity, op, reason,
+                        "裁决声明未能确认落盘，禁止进入完成结算。", conflictPending: true);
+            }
+            return null;
         }
         finally
         {
