@@ -63,6 +63,10 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
     /// <summary>ext 握手脚本：false＝对端老 BGI（`unsupported_operation` ⇒ 客户端 `Legacy`，ext 通道不可用）。</summary>
     public bool AcceptHello { get; set; } = true;
 
+    public int? ReportedProcessIdOverride { get; set; }
+    public long? ReportedStartTicksOverride { get; set; }
+    public bool OmitHelloData { get; set; }
+
     public void Start() => _acceptLoop ??= Task.Run(AcceptLoopAsync);
 
     public int CountOf(string operation)
@@ -235,14 +239,33 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
         switch (operation)
         {
             case "ping":
-                return (true, null, null, new
+                using (var process = System.Diagnostics.Process.GetCurrentProcess())
                 {
-                    windowsSessionId = System.Diagnostics.Process.GetCurrentProcess().SessionId,
-                    processId = System.Diagnostics.Process.GetCurrentProcess().Id,
-                });
+                    return (true, null, null, new
+                    {
+                        windowsSessionId = process.SessionId,
+                        processId = ReportedProcessIdOverride ?? process.Id,
+                        processStartTicks = ReportedStartTicksOverride ?? process.StartTime.ToUniversalTime().Ticks,
+                    });
+                }
             case "task.status":
+            case "ext.task.status":
                 // 空闲且无中断上下文（组合根夹具的起点事实）。
-                return (true, null, null, new { taskRunning = false, hasSuspendedTaskContext = false });
+                using (var process = System.Diagnostics.Process.GetCurrentProcess())
+                {
+                    return (true, null, null, new
+                    {
+                        running = false,
+                        taskRunning = false,
+                        bgiEpoch = new
+                        {
+                            processId = process.Id,
+                            startTicksUtc = process.StartTime.ToUniversalTime().Ticks
+                        },
+                        stateRevision = 1,
+                        hasSuspendedTaskContext = false
+                    });
+                }
             case "task.start":
                 return AcceptV2TaskStart
                     ? (true, null, null, new { status = "success" })
@@ -251,17 +274,29 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
                 if (!AcceptHello)
                     // 老版本 BGI：`unsupported_operation` ⇒ 客户端优雅降级（Legacy，ext 通道不可用，v2 路径继续）。
                     return (false, "unsupported_operation", "夹具：对端老 BGI", null);
-                return (true, null, null, new
+                if (OmitHelloData)
+                    return (true, null, null, null);
+                using (var process = System.Diagnostics.Process.GetCurrentProcess())
                 {
-                    bgiVersion = "fixture-1.0",
-                    sessionId = "fixture-session",
-                    capabilities = new Dictionary<string, bool>
+                    return (true, null, null, new
                     {
-                        ["event.push"] = true,
-                        ["task.queue"] = true,
-                        ["execution.contract.v1"] = false,
-                    },
-                });
+                        bgiVersion = "fixture-1.0",
+                        sessionId = "fixture-session",
+                        windowsSessionId = process.SessionId,
+                        processId = ReportedProcessIdOverride ?? process.Id,
+                        bgiEpoch = new
+                        {
+                            processId = ReportedProcessIdOverride ?? process.Id,
+                            startTicksUtc = ReportedStartTicksOverride ?? process.StartTime.ToUniversalTime().Ticks
+                        },
+                        capabilities = new Dictionary<string, bool>
+                        {
+                            ["event.push"] = true,
+                            ["task.queue"] = true,
+                            ["execution.contract.v1"] = false,
+                        },
+                    });
+                }
             case "ext.task.start":
                 if (!AcceptTaskStart)
                     return (false, "queue_full", "夹具：队列已满", new { });

@@ -471,6 +471,17 @@ public partial class MainViewModel
                     extOp,
                     payloadJson is null ? null : JsonSerializer.Deserialize<JsonElement>(payloadJson),
                     TimeSpan.FromMilliseconds(Math.Max(connectTimeoutMs, 2000)));
+                if (v2OpCode == "task.status" && extResp.Success
+                    && !IpcClient.IsTaskStatusFromRemoteProcess(extResp.Data,
+                        ext.ServerEpoch?.ProcessId, ext.ServerEpoch?.StartTicksUtc))
+                {
+                    return new IpcResponse
+                    {
+                        Success = false,
+                        ErrorCode = "status_identity_mismatch",
+                        ErrorMessage = "ext task.status 的 bgiEpoch 与已验证 Ping/Hello 进程身份不一致"
+                    };
+                }
                 return new IpcResponse
                 {
                     Success = extResp.Success,
@@ -489,7 +500,28 @@ public partial class MainViewModel
         {
             using var ipc = new IpcClient();
             await ipc.ConnectAsync(connectTimeoutMs);
-            return await ipc.SendCommandAsync(new IpcRequest { OpCode = v2OpCode, Payload = payloadJson });
+            if (v2OpCode == "task.status" && !ipc.IsSessionTrusted)
+            {
+                return new IpcResponse
+                {
+                    Success = false,
+                    ErrorCode = "ipc_identity_unverified",
+                    ErrorMessage = "v2 task.status 的 Ping 身份未能确认，拒绝采信"
+                };
+            }
+            var ipcResponse = await ipc.SendCommandAsync(new IpcRequest { OpCode = v2OpCode, Payload = payloadJson });
+            if (v2OpCode == "task.status" && ipcResponse.Success
+                && !IpcClient.IsTaskStatusFromRemoteProcess(ipcResponse.Data,
+                    ipc.RemoteProcessId, ipc.RemoteProcessStartTicksUtc))
+            {
+                return new IpcResponse
+                {
+                    Success = false,
+                    ErrorCode = "status_identity_mismatch",
+                    ErrorMessage = "v2 task.status 的 bgiEpoch 与已验证 Ping 进程身份不一致"
+                };
+            }
+            return ipcResponse;
         }
         catch
         {

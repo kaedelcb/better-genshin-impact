@@ -490,10 +490,12 @@ internal sealed class InstanceRequestHandler
         int sessionId)
     {
         var startedAt = DateTimeOffset.UtcNow;
+        long? processStartTicks = null;
         try
         {
             using var process = Process.GetProcessById(processId);
             startedAt = new DateTimeOffset(process.StartTime.ToUniversalTime());
+            processStartTicks = process.StartTime.ToUniversalTime().Ticks;
         }
         catch (Exception exception) when (exception is ArgumentException
                                           or InvalidOperationException
@@ -507,6 +509,7 @@ internal sealed class InstanceRequestHandler
             InstanceType = instanceType,
             ProcessId = processId,
             WindowsSessionId = sessionId,
+            ProcessStartTicks = processStartTicks,
             StartedAt = startedAt
         };
     }
@@ -797,6 +800,8 @@ internal sealed class InstanceRequestHandler
                 && BetterGenshinImpact.Core.Script.CancellationContext.Instance.IsCancellationRequested;
 
             var hoeing = AutoHoeingProgress.IsRunning;
+            var executionSnapshot = BetterGenshinImpact.Service.Execution.ExecutionScope.GetActiveSnapshot();
+            var taskSlotOccupied = BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0;
 
             // 从 RunnerContext 获取当前脚本项目信息
             string? taskName = null;
@@ -824,7 +829,7 @@ internal sealed class InstanceRequestHandler
             }
 
             // 任务已取消时，taskName 可能有残留值，必须清空避免下游误报
-            if (isCancelled || (!ExecutionScope.HasActive && BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount > 0))
+            if (isCancelled || (executionSnapshot is null && !taskSlotOccupied))
             {
                 taskName = null;
                 groupName = null;
@@ -943,9 +948,10 @@ internal sealed class InstanceRequestHandler
 
             return InstanceIpcEnvelope.Response(request, new
             {
-                // [A3.3] 并集：信号量占用 ∨ 注册表在跑作业（前者覆盖未登记持锁路径，后者覆盖已登记作业）
-                executionIdle = !ExecutionScope.HasActive && BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount > 0,
-                running = ExecutionScope.HasActive || BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0
+                // [A3.3] 并集：逻辑执行根 ∨ 信号量占用 ∨ 注册表在跑作业；
+                // 执行身份只来自原子作用域快照。裸锁持有但没有作用域时仍是占用，身份不可用。
+                executionIdle = executionSnapshot is null && !taskSlotOccupied,
+                running = executionSnapshot is not null || taskSlotOccupied
                           || registryRunningJob != null,
                 // 说明：用单任务锁权威判断“是否有任务在跑”，不再依赖 taskName 是否残留。
                 // 任务运行期间 TaskRunner.RunCurrentAsync 持有锁（CurrentCount==0），结束释放（CurrentCount==1）。
@@ -973,14 +979,24 @@ internal sealed class InstanceRequestHandler
                 onlineGeneration = NotifyOnlineTask.CurrentGeneration, // 新：上线事件代序号，无任务时返回 0
                 onlineTriggeredAt = NotifyOnlineTask.LastTriggeredAt, // 新：上线事件触发时间
                 hasSuspendedTaskContext,
+                suspendedTakeoverTicket = suspendedCtx?.TakeoverTicket,
                 suspendedTaskType,
                 suspendedTaskName,
                 // [切片7] 任务协调层扩展（spec §4.4，纯增量字段）
-                slotOccupied = BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0
+                slotOccupied = taskSlotOccupied
                                || registryRunningJob != null, // [A3.3] 与 running 同并集口径
                 queueDepth,        // 协调器在队任务数（未协商 task.queue 的老客户端不受影响）
                 currentTaskHandle, // 在跑任务的 handle（协调器派发时登记，手动任务为 null）
-                bgiEpoch = new { processId = taskStatusEpoch.ProcessId, startTicksUtc = taskStatusEpoch.StartTicksUtc }
+                bgiEpoch = new { processId = taskStatusEpoch.ProcessId, startTicksUtc = taskStatusEpoch.StartTicksUtc },
+                executionIdentityAvailable = executionSnapshot is not null,
+                executionInstanceId = executionSnapshot?.ExecutionInstanceId.ToString("N"),
+                executionStateRevision = executionSnapshot?.StateRevision,
+                executionRunId = executionSnapshot?.RunId.ToString("N"),
+                executionJobId = executionSnapshot?.JobId?.ToString("N"),
+                executionKind = executionSnapshot?.Kind.ToString(),
+                executionSource = executionSnapshot?.Source.ToString(),
+                executionName = executionSnapshot?.Name,
+                executionStopRequested = executionSnapshot?.StopRequested
             });
         }
         catch (Exception ex)
@@ -1008,6 +1024,15 @@ internal sealed class InstanceRequestHandler
             running = data["running"]?.ToObject<bool>() ?? false,
             taskName = data["taskName"]?.ToObject<string>(),
             groupName = data["groupName"]?.ToObject<string>(),
+            executionIdentityAvailable = data["executionIdentityAvailable"]?.ToObject<bool>() ?? false,
+            executionInstanceId = data["executionInstanceId"]?.ToObject<string>(),
+            executionStateRevision = data["executionStateRevision"]?.ToObject<long?>(),
+            executionRunId = data["executionRunId"]?.ToObject<string>(),
+            executionJobId = data["executionJobId"]?.ToObject<string>(),
+            executionKind = data["executionKind"]?.ToObject<string>(),
+            executionSource = data["executionSource"]?.ToObject<string>(),
+            executionName = data["executionName"]?.ToObject<string>(),
+            executionStopRequested = data["executionStopRequested"]?.ToObject<bool?>(),
             // 任务详情字段（监控端桌宠面板按执行端显示完整信息用；旧客户端忽略未知字段无兼容风险）
             wasCancelled = data["wasCancelled"]?.ToObject<bool>() ?? false,
             autoHoeingRunning = data["autoHoeingRunning"]?.ToObject<bool>() ?? false,

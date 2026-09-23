@@ -524,7 +524,16 @@ public partial class MainViewModel : INotifyPropertyChanged
         string? ScriptTaskProgress,
         bool WasCancelled,
         int RoomPlayerCount = 0,
-        string? FriendshipProgress = null);
+        string? FriendshipProgress = null,
+        bool ExecutionIdentityAvailable = false,
+        Guid? ExecutionInstanceId = null,
+        long? ExecutionStateRevision = null,
+        Guid? ExecutionRunId = null,
+        Guid? ExecutionJobId = null,
+        string? ExecutionKind = null,
+        string? ExecutionSource = null,
+        string? ExecutionName = null,
+        bool? ExecutionStopRequested = null);
 
     internal static TaskStatusPollResult ParseTaskStatusData(JsonElement sdata)
     {
@@ -537,6 +546,15 @@ public partial class MainViewModel : INotifyPropertyChanged
         string? currentTaskGroupName = null;
         string? currentRouteDisplay = null;
         string? currentScriptRouteName = null;
+        var executionIdentityAvailable = false;
+        Guid? executionInstanceId = null;
+        long? executionStateRevision = null;
+        Guid? executionRunId = null;
+        Guid? executionJobId = null;
+        string? executionKind = null;
+        string? executionSource = null;
+        string? executionName = null;
+        bool? executionStopRequested = null;
         var autoHoeingRunning = false;
         string? autoHoeingProgress = null;
         string? scriptTaskProgress = null;
@@ -568,6 +586,28 @@ public partial class MainViewModel : INotifyPropertyChanged
             && parsedRevision >= 0)
             stateRevision = parsedRevision;
         taskStatusAvailable = hasValidRunning && taskStatusBgiEpoch is not null;
+        if (taskStatusAvailable && bgiRunning
+            && sdata.TryGetProperty("executionIdentityAvailable", out var identityAvailable)
+            && identityAvailable.ValueKind == JsonValueKind.True
+            && TryReadGuidN(sdata, "executionInstanceId", out var parsedInstanceId)
+            && TryReadPositiveLong(sdata, "executionStateRevision", out var parsedExecutionRevision)
+            && TryReadGuidN(sdata, "executionRunId", out var parsedRunId)
+            && TryReadNullableGuidN(sdata, "executionJobId", out var parsedJobId)
+            && TryReadNonEmptyString(sdata, "executionKind", out var parsedKind)
+            && TryReadNonEmptyString(sdata, "executionSource", out var parsedSource)
+            && TryReadNonEmptyString(sdata, "executionName", out var parsedName)
+            && TryReadBoolean(sdata, "executionStopRequested", out var parsedStopRequested))
+        {
+            executionIdentityAvailable = true;
+            executionInstanceId = parsedInstanceId;
+            executionStateRevision = parsedExecutionRevision;
+            executionRunId = parsedRunId;
+            executionJobId = parsedJobId;
+            executionKind = parsedKind;
+            executionSource = parsedSource;
+            executionName = parsedName;
+            executionStopRequested = parsedStopRequested;
+        }
         // 任务停止后（bgiRunning=false），taskName 可能仍有残留值，必须忽略避免状态停留
         if (bgiRunning && sdata.TryGetProperty("taskName", out var tn) && tn.ValueKind == JsonValueKind.String)
             currentTaskName = tn.GetString();
@@ -608,7 +648,115 @@ public partial class MainViewModel : INotifyPropertyChanged
         return new TaskStatusPollResult(
             bgiRunning, taskStatusAvailable, taskStatusBgiEpoch, stateRevision, currentTaskName, currentTaskGroupName,
             currentRouteDisplay, currentScriptRouteName, autoHoeingRunning, autoHoeingProgress, scriptTaskProgress, wasCancelled,
-            roomPlayerCount, friendshipProgress);
+            roomPlayerCount, friendshipProgress, executionIdentityAvailable, executionInstanceId, executionStateRevision,
+            executionRunId, executionJobId, executionKind, executionSource, executionName, executionStopRequested);
+    }
+
+    private static bool TryReadGuidN(JsonElement data, string propertyName, out Guid value)
+    {
+        value = Guid.Empty;
+        return data.TryGetProperty(propertyName, out var element)
+               && element.ValueKind == JsonValueKind.String
+               && Guid.TryParseExact(element.GetString(), "N", out value)
+               && value != Guid.Empty;
+    }
+
+    private static bool TryReadNullableGuidN(JsonElement data, string propertyName, out Guid? value)
+    {
+        value = null;
+        if (!data.TryGetProperty(propertyName, out var element) || element.ValueKind == JsonValueKind.Null)
+            return true;
+        if (element.ValueKind != JsonValueKind.String
+            || !Guid.TryParseExact(element.GetString(), "N", out var parsed)
+            || parsed == Guid.Empty)
+            return false;
+        value = parsed;
+        return true;
+    }
+
+    private static bool TryReadPositiveLong(JsonElement data, string propertyName, out long value)
+    {
+        value = 0;
+        return data.TryGetProperty(propertyName, out var element)
+               && element.ValueKind == JsonValueKind.Number
+               && element.TryGetInt64(out value)
+               && value > 0;
+    }
+
+    private static bool TryReadNonEmptyString(JsonElement data, string propertyName, out string? value)
+    {
+        value = null;
+        if (!data.TryGetProperty(propertyName, out var element)
+            || element.ValueKind != JsonValueKind.String
+            || string.IsNullOrWhiteSpace(element.GetString()))
+            return false;
+        value = element.GetString();
+        return true;
+    }
+
+    private static bool TryReadBoolean(JsonElement data, string propertyName, out bool value)
+    {
+        value = false;
+        if (!data.TryGetProperty(propertyName, out var element)
+            || element.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            return false;
+        value = element.GetBoolean();
+        return true;
+    }
+
+    private static TaskExecutionIdentitySnapshot? ToCurrentExecution(
+        TaskStatusPollResult status, bool statusAvailable)
+    {
+        if (!statusAvailable || !status.ExecutionIdentityAvailable
+            || status.ExecutionInstanceId is not { } instanceId
+            || status.ExecutionStateRevision is not { } revision
+            || status.ExecutionRunId is not { } runId
+            || status.ExecutionKind is not { Length: > 0 } kind
+            || status.ExecutionSource is not { Length: > 0 } source
+            || status.ExecutionName is not { Length: > 0 } name
+            || status.ExecutionStopRequested is not { } stopRequested)
+            return null;
+        return new TaskExecutionIdentitySnapshot(instanceId, revision, runId, status.ExecutionJobId,
+            kind, source, name, stopRequested);
+    }
+
+    internal static bool IsStatusEpochForProcess(TaskStatusPollResult status, int processId, long processStartTicksUtc)
+        => processId > 0 && processStartTicksUtc > 0 && status.TaskStatusAvailable
+           && string.Equals(status.TaskStatusBgiEpoch, $"{processId}:{processStartTicksUtc}", StringComparison.Ordinal);
+
+    internal static bool IsDelayedHoeingTeardownAuthorized(JsonElement confirmed, string? expectedEpoch,
+        string? expectedTicket, string? currentTicket)
+    {
+        if (string.IsNullOrWhiteSpace(expectedEpoch) || string.IsNullOrWhiteSpace(expectedTicket)
+            || !string.Equals(expectedTicket, currentTicket, StringComparison.Ordinal)) return false;
+        var status = ParseTaskStatusData(confirmed);
+        return status.TaskStatusAvailable
+               && string.Equals(status.TaskStatusBgiEpoch, expectedEpoch, StringComparison.Ordinal)
+               && confirmed.TryGetProperty("suspendedTakeoverTicket", out var ticket)
+               && ticket.ValueKind == JsonValueKind.String
+               && string.Equals(ticket.GetString(), expectedTicket, StringComparison.Ordinal)
+               && confirmed.TryGetProperty("autoHoeingRunning", out var hoeing)
+               && hoeing.ValueKind == JsonValueKind.False
+               && confirmed.TryGetProperty("hasSuspendedTaskContext", out var context)
+               && context.ValueKind == JsonValueKind.True;
+    }
+
+    internal static bool IsTaskStatusPublishable(ControlStatus status, DateTimeOffset nowUtc,
+        bool fromExternal, string? observedExternalEpoch, string? currentExternalEpoch)
+    {
+        if (!status.HasFreshTaskStatus(nowUtc)) return false;
+        if (!fromExternal) return true;
+        return observedExternalEpoch is not null
+               && currentExternalEpoch is not null
+               && string.Equals(status.TaskStatusBgiEpoch, observedExternalEpoch, StringComparison.Ordinal)
+               && string.Equals(observedExternalEpoch, currentExternalEpoch, StringComparison.Ordinal);
+    }
+
+    private static void InvalidateTaskStatus(ControlStatus status)
+    {
+        status.TaskStatusAvailable = false;
+        status.TaskStatusObservedAtUtc = null;
+        status.CurrentExecution = null;
     }
 
     /// <summary>本地状态采集循环（10s）幂等启动。[离线优先] 采集独立于 SignalR 连接运行：
@@ -634,8 +782,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             // 本轮采集若在发布新快照前异常，旧 TaskRunning=false 不能继续作为空闲证据。
             if (LatestLocalStatus is { } last)
             {
-                last.TaskStatusAvailable = false;
-                last.TaskStatusObservedAtUtc = null;
+                InvalidateTaskStatus(last);
             }
             try { AddLog($"状态采集失败，任务占用事实已标记未知: {ex.GetType().Name}: {ex.Message}"); }
             catch { /* 关机期间日志不可用不改变失效结果 */ }
@@ -683,6 +830,9 @@ public partial class MainViewModel : INotifyPropertyChanged
         var taskStatusAvailable = false;
         string? taskStatusBgiEpoch = null;
         DateTimeOffset? taskStatusObservedAtUtc = null;
+        TaskExecutionIdentitySnapshot? currentExecution = null;
+        var taskStatusFromExternal = false;
+        string? taskStatusExpectedExternalEpoch = null;
         // 本轮 IPC 会话校验结果：不可信（跨会话/无法确认）时不采信管道返回的任何任务状态
         var ipcSessionTrusted = true;
 
@@ -703,6 +853,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                     taskStatusAvailable = observerStatus.TaskStatusAvailable;
                     taskStatusBgiEpoch = observerStatus.TaskStatusBgiEpoch;
                     taskStatusObservedAtUtc = taskStatusAvailable ? DateTimeOffset.UtcNow : null;
+                    currentExecution = ToCurrentExecution(observerStatus, taskStatusAvailable);
                     currentTaskName = observerStatus.CurrentTaskName;
                     currentTaskGroupName = observerStatus.CurrentTaskGroupName;
                     currentRouteDisplay = observerStatus.CurrentRouteDisplay;
@@ -833,6 +984,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                         var expectedEpoch = serverEpoch is null
                             ? null
                             : $"{serverEpoch.ProcessId}:{serverEpoch.StartTicksUtc}";
+                        taskStatusFromExternal = true;
+                        taskStatusExpectedExternalEpoch = expectedEpoch;
                         taskStatusAvailable = parsedStatus.TaskStatusAvailable
                             && parsedStatus.StateRevision.HasValue
                             && snapshotAge >= TimeSpan.Zero
@@ -840,6 +993,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                             && string.Equals(parsedStatus.TaskStatusBgiEpoch, expectedEpoch, StringComparison.Ordinal);
                         taskStatusBgiEpoch = parsedStatus.TaskStatusBgiEpoch;
                         taskStatusObservedAtUtc = taskStatusAvailable ? extStatusObservedAtUtc : null;
+                        currentExecution = ToCurrentExecution(parsedStatus, taskStatusAvailable);
                         currentTaskName = parsedStatus.CurrentTaskName;
                         currentTaskGroupName = parsedStatus.CurrentTaskGroupName;
                         currentRouteDisplay = parsedStatus.CurrentRouteDisplay;
@@ -926,9 +1080,12 @@ public partial class MainViewModel : INotifyPropertyChanged
                 {
                     var parsedStatus = ParseTaskStatusData(JsonSerializer.Deserialize<JsonElement>(statusResp.Data));
                     bgiRunning = parsedStatus.BgiRunning;
-                    taskStatusAvailable = parsedStatus.TaskStatusAvailable;
+                    taskStatusAvailable = parsedStatus.TaskStatusAvailable
+                        && IpcClient.IsTaskStatusFromRemoteProcess(statusResp.Data,
+                            ipcClient.RemoteProcessId, ipcClient.RemoteProcessStartTicksUtc);
                     taskStatusBgiEpoch = parsedStatus.TaskStatusBgiEpoch;
                     taskStatusObservedAtUtc = taskStatusAvailable ? DateTimeOffset.UtcNow : null;
+                    currentExecution = ToCurrentExecution(parsedStatus, taskStatusAvailable);
                     currentTaskName = parsedStatus.CurrentTaskName;
                     currentTaskGroupName = parsedStatus.CurrentTaskGroupName;
                     currentRouteDisplay = parsedStatus.CurrentRouteDisplay;
@@ -1001,6 +1158,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             TaskStatusAvailable = taskStatusAvailable,
             TaskStatusBgiEpoch = taskStatusBgiEpoch,
             TaskStatusObservedAtUtc = taskStatusObservedAtUtc,
+            CurrentExecution = currentExecution,
             CurrentTaskName = currentTaskName,
             CurrentTaskGroupName = currentTaskGroupName,
             CurrentRouteDisplay = currentRouteDisplay,
@@ -1034,7 +1192,8 @@ public partial class MainViewModel : INotifyPropertyChanged
             if (recentTaskClient.IsSessionTrusted)
             {
             var statusResp = await recentTaskClient.SendCommandAsync(new IpcRequest { OpCode = "task.status" });
-            if (statusResp.Success && !string.IsNullOrEmpty(statusResp.Data))
+            if (statusResp.Success && IpcClient.IsTaskStatusFromRemoteProcess(
+                    statusResp.Data, recentTaskClient.RemoteProcessId, recentTaskClient.RemoteProcessStartTicksUtc))
             {
                 var sdata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(statusResp.Data);
                     // 优先读 onlineGeneration（新字段，边沿检测）
@@ -1076,23 +1235,37 @@ public partial class MainViewModel : INotifyPropertyChanged
         // 通过 IPC 查询 BGI 是否有中断上下文，不使用 _config 引用
         // IPC 会话不可信时跳过：autoHoeingRunning 此时恒为默认值 false，
         // 若之前同会话锄地中突变为跨会话，边沿条件会误触发"锄地结束"并启动恢复定时器，必须压住
-        if (!ipcSessionTrusted)
+        var edgeExternalEpoch = _externalClient?.ServerEpoch is { } edgeServerEpoch
+            ? $"{edgeServerEpoch.ProcessId}:{edgeServerEpoch.StartTicksUtc}"
+            : null;
+        var edgeStatusTrusted = IsTaskStatusPublishable(status, DateTimeOffset.UtcNow,
+            taskStatusFromExternal, taskStatusExpectedExternalEpoch, edgeExternalEpoch);
+        if (!ipcSessionTrusted || !edgeStatusTrusted)
         {
-            _wasAutoHoeingRunning = false;
+            // 状态未知时保留上一轮边沿基线，不能制造“已结束”边沿。
         }
         else if (_wasAutoHoeingRunning && !autoHoeingRunning)
         {
             // 检查 BGI 是否有中断上下文（[切片4] ext 通道优先，v2 短连接兜底）
             bool hasContext = false;
+            string? edgeTicket = null;
+            var edgeOriginEpoch = status.TaskStatusBgiEpoch;
             try
             {
                 var ctxResp = await SendBgiIpcPreferredAsync("task.status", null);
                 if (ctxResp is { Success: true } && !string.IsNullOrEmpty(ctxResp.Data))
                 {
                     var ctxData = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(ctxResp.Data);
-                    if (ctxData.TryGetProperty("hasSuspendedTaskContext", out var hsc))
+                    var contextStatus = ParseTaskStatusData(ctxData);
+                    if (string.Equals(contextStatus.TaskStatusBgiEpoch, edgeOriginEpoch, StringComparison.Ordinal)
+                        && ctxData.TryGetProperty("hasSuspendedTaskContext", out var hsc)
+                        && hsc.ValueKind == System.Text.Json.JsonValueKind.True
+                        && ctxData.TryGetProperty("suspendedTakeoverTicket", out var contextTicket)
+                        && contextTicket.ValueKind == System.Text.Json.JsonValueKind.String)
                     {
-                        hasContext = hsc.GetBoolean();
+                        edgeTicket = contextTicket.GetString();
+                        hasContext = !string.IsNullOrWhiteSpace(edgeTicket)
+                            && string.Equals(edgeTicket, _commandExecutor?.TakeoverTicketSnapshot, StringComparison.Ordinal);
                     }
                 }
             }
@@ -1120,10 +1293,28 @@ public partial class MainViewModel : INotifyPropertyChanged
                     {
                     if (_commandExecutor != null)
                     {
+                        if (!string.Equals(_commandExecutor.TakeoverTicketSnapshot, edgeTicket, StringComparison.Ordinal))
+                        {
+                            AddLog("接管票据已变化，跳过迟到的联机锄地自动收尾");
+                            return;
+                        }
+                        var confirmation = await SendBgiIpcPreferredAsync("task.status", null);
+                        if (confirmation is not { Success: true } || string.IsNullOrWhiteSpace(confirmation.Data))
+                        {
+                            AddLog("联机锄地结束状态无法复核，暂停自动收尾");
+                            return;
+                        }
+                        var confirmed = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(confirmation.Data);
+                        if (!IsDelayedHoeingTeardownAuthorized(confirmed, edgeOriginEpoch, edgeTicket,
+                                _commandExecutor.TakeoverTicketSnapshot))
+                        {
+                            AddLog("联机锄地结束条件已变化，跳过自动收尾");
+                            return;
+                        }
                         // [任务冲突策略] 第二个恢复触发器（10s 轮询边沿检测）：与批次内收尾走同一策略闭环
                         if (batchAtEdge != null)
                         {
-                            await ApplyPolicyTeardownOnceAsync(batchAtEdge, "联机锄地", userCancelled: false);
+                            await ApplyPolicyTeardownOnceAsync(batchAtEdge, "联机锄地", userCancelled: false, edgeTicket);
                         }
                         else
                         {
@@ -1138,7 +1329,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                             }
                             else
                             {
-                                await _commandExecutor.ApplyPolicyTeardownAsync(SnapshotOnlineHoeingPolicy(), "联机锄地", userCancelled: false, AddLog);
+                                await _commandExecutor.ApplyPolicyTeardownAsync(SnapshotOnlineHoeingPolicy(), "联机锄地", userCancelled: false, AddLog, edgeTicket);
                                 lock (_teardownGate) { _lastTeardownUtc = DateTime.UtcNow; }
                             }
                         }
@@ -1158,6 +1349,12 @@ public partial class MainViewModel : INotifyPropertyChanged
         // 若漏掉会作为未观察任务异常冒泡到全局 TaskScheduler.UnobservedTaskException → App 弹"未处理异常"框。
         // 这里捕获并仅记日志（断线状态已由 Closed 事件同步 IsConnected=false，右上角徽章变"离线"）。
         // 嘟嘟可卡死心跳检测用：缓存最近一次本地任务状态快照（10s 状态轮询产物，不新起 IPC）。
+        var currentExternalEpoch = _externalClient?.ServerEpoch is { } currentServerEpoch
+            ? $"{currentServerEpoch.ProcessId}:{currentServerEpoch.StartTicksUtc}"
+            : null;
+        if (!IsTaskStatusPublishable(status, DateTimeOffset.UtcNow, taskStatusFromExternal,
+                taskStatusExpectedExternalEpoch, currentExternalEpoch))
+            InvalidateTaskStatus(status);
         LatestLocalStatus = status;
         // [离线优先] 单机模式/刷新重建窗口 signalRClient 为 null：跳过上报，采集结果已落 LatestLocalStatus
         if (signalRClient == null) return;
@@ -7000,6 +7197,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         if (root.GetProperty("running").ValueKind is not (JsonValueKind.True or JsonValueKind.False))
             throw new InvalidDataException("任务状态缺少有效 running 字段");
         var parsed = ParseTaskStatusData(root);
+        if (!IsStatusEpochForProcess(parsed, process.Id, expectedStartTicks))
+            throw new InvalidDataException("只读任务状态 epoch 与已验证进程不一致，拒绝采信");
         return new ControlStatus
         {
             BgiStatus = parsed.BgiRunning ? "running" : "idle",
@@ -7007,6 +7206,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             TaskStatusAvailable = parsed.TaskStatusAvailable,
             TaskStatusBgiEpoch = parsed.TaskStatusBgiEpoch,
             TaskStatusObservedAtUtc = DateTimeOffset.UtcNow,
+            CurrentExecution = ToCurrentExecution(parsed, parsed.TaskStatusAvailable),
             CurrentTaskName = parsed.CurrentTaskName,
             CurrentTaskGroupName = parsed.CurrentTaskGroupName,
             CurrentRouteDisplay = parsed.CurrentRouteDisplay,

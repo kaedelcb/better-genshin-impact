@@ -1081,6 +1081,19 @@ public sealed class BgiExternalClient : IDisposable
             {
                 using var doc = JsonDocument.Parse(hello.Data);
                 var root = doc.RootElement;
+                var pipeServer = WindowsSessionIdentity.GetPipeServerIdentity(pipe);
+                var reportedEpoch = ParseEpoch(root);
+                if (!root.TryGetProperty("windowsSessionId", out var claimedSession)
+                    || claimedSession.ValueKind != JsonValueKind.Number
+                    || !claimedSession.TryGetInt32(out var claimedSessionId)
+                    || !root.TryGetProperty("processId", out var claimedProcess)
+                    || claimedProcess.ValueKind != JsonValueKind.Number
+                    || !claimedProcess.TryGetInt32(out var claimedProcessId)
+                    || claimedSessionId != pipeServer.SessionId
+                    || claimedProcessId != pipeServer.ProcessId
+                    || reportedEpoch?.ProcessId != pipeServer.ProcessId
+                    || reportedEpoch.StartTicksUtc != pipeServer.StartTicksUtc)
+                    throw new InvalidOperationException("ext.hello 进程身份与实际管道服务端不符");
                 if (root.TryGetProperty("sessionId", out var sidEl)
                     && sidEl.ValueKind == JsonValueKind.String)
                 {
@@ -1100,7 +1113,7 @@ public sealed class BgiExternalClient : IDisposable
 
                     SessionId = sidEl.GetString();
                 }
-                ServerEpoch = ParseEpoch(root);
+                ServerEpoch = reportedEpoch;
 
                 if (root.TryGetProperty("bgiVersion", out var verEl)
                     && verEl.ValueKind == JsonValueKind.String)
@@ -1139,6 +1152,13 @@ public sealed class BgiExternalClient : IDisposable
                 SetConnectionState(BgiExternalConnectionState.Degraded);
                 return false;
             }
+        }
+        else
+        {
+            DisposePipe();
+            State = BgiExternalLinkState.Down;
+            SetConnectionState(BgiExternalConnectionState.Degraded);
+            return false;
         }
 
         State = BgiExternalLinkState.Ready;
@@ -1333,6 +1353,7 @@ public sealed class BgiExternalClient : IDisposable
 
     private void DisposePipe()
     {
+        ServerEpoch = null;
         try
         {
             _pipe?.Dispose();

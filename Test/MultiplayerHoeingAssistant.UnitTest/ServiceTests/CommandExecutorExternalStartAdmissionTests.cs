@@ -410,7 +410,7 @@ public sealed class CommandExecutorExternalStartAdmissionTests
     /// **解析本身不产生副作用**（清上下文/恢复取消/suspend 均在决策之后的动作阶段执行）。
     /// </summary>
     [Theory]
-    [InlineData("unknown", false, "Idle")]                          // 状态未知（查询失败）
+    [InlineData("unknown", false, "StatusUnavailable")]             // 状态未知（查询失败）
     [InlineData("idleNoContext", false, "Idle")]                    // 空闲无上下文
     [InlineData("idleWithContext", false, "IdleAfterClearingEndedContext")] // 已结束但上下文未消费（孤儿）
     [InlineData("idleWithContext", true, "Idle")]                   // 已结束带上下文且批次在跑＝正常间隙态（不清）

@@ -2,6 +2,7 @@ using System.Reflection;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Script;
 using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.Service;
 using BetterGenshinImpact.Service.Execution;
 using BetterGenshinImpact.Service.Instance;
@@ -43,6 +44,10 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
         Assert.Equal(epoch.ProcessId, (int)actual["processId"]!);
         Assert.Equal(epoch.StartTicksUtc, (long)actual["startTicksUtc"]!);
 
+        var endpoint = new InstanceContext(BetterGiInstanceType.Primary, "test-ping-identity", null).ToEndpoint();
+        Assert.Equal(epoch.ProcessId, endpoint.ProcessId);
+        Assert.Equal(epoch.StartTicksUtc, endpoint.ProcessStartTicks);
+
         var readOnlyHandler = new InstanceRequestHandler(
             new InstanceContext(BetterGiInstanceType.Primary, "test-readonly-status", null),
             null!, null!, _ => { }, _ => { }, NullLogger.Instance);
@@ -50,6 +55,78 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
         var readOnlyEpoch = readOnlySnapshot.GetType().GetProperty("bgiEpoch")!.GetValue(readOnlySnapshot)!;
         Assert.Equal(epoch.ProcessId, (int)readOnlyEpoch.GetType().GetProperty("processId")!.GetValue(readOnlyEpoch)!);
         Assert.Equal(epoch.StartTicksUtc, (long)readOnlyEpoch.GetType().GetProperty("startTicksUtc")!.GetValue(readOnlyEpoch)!);
+    }
+
+    [Fact]
+    public void TaskStatus_ExposesVersionedExecutionIdentity_OnBothStatusChannels()
+    {
+        var runId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        using var scope = ExecutionScope.Start(new(JobKind.OneDragon, "抢占身份测试", JobSource.Hotkey,
+            JobId: jobId, WorkflowRunId: runId));
+
+        var request = InstanceIpcEnvelope.Request(InstanceOperations.TaskStatus);
+        var response = handler.HandleTaskStatus(null!, request);
+        Assert.True(response.Success);
+        var data = response.Data!;
+        Assert.True(data["executionIdentityAvailable"]!.ToObject<bool>());
+        var instanceId = Guid.Parse(data["executionInstanceId"]!.ToObject<string>()!);
+        var firstRevision = data["executionStateRevision"]!.ToObject<long>();
+        Assert.NotEqual(Guid.Empty, instanceId);
+        Assert.True(firstRevision > 0);
+        Assert.Equal(runId.ToString("N"), data["executionRunId"]!.ToObject<string>());
+        Assert.Equal(jobId.ToString("N"), data["executionJobId"]!.ToObject<string>());
+        Assert.Equal(nameof(JobKind.OneDragon), data["executionKind"]!.ToObject<string>());
+        Assert.Equal(nameof(JobSource.Hotkey), data["executionSource"]!.ToObject<string>());
+        Assert.Equal("抢占身份测试", data["executionName"]!.ToObject<string>());
+        Assert.False(data["executionStopRequested"]!.ToObject<bool>());
+
+        var readOnlyHandler = new InstanceRequestHandler(
+            new InstanceContext(BetterGiInstanceType.Primary, "test-readonly-status", null),
+            null!, null!, _ => { }, _ => { }, NullLogger.Instance);
+        var snapshot = readOnlyHandler.CreateReadOnlyStatusSnapshot();
+        Assert.Equal(instanceId.ToString("N"), snapshot.GetType().GetProperty("executionInstanceId")!.GetValue(snapshot));
+        Assert.Equal(firstRevision, snapshot.GetType().GetProperty("executionStateRevision")!.GetValue(snapshot));
+
+        scope.Cancel();
+        var stopped = handler.HandleTaskStatus(null!, request).Data!;
+        Assert.Equal(instanceId.ToString("N"), stopped["executionInstanceId"]!.ToObject<string>());
+        Assert.True(stopped["executionStateRevision"]!.ToObject<long>() > firstRevision);
+        Assert.True(stopped["executionStopRequested"]!.ToObject<bool>());
+    }
+
+    [Fact]
+    public async Task TaskStatus_BusySemaphoreWithoutExecutionScope_LeavesIdentityUnknown()
+    {
+        Assert.True(await TaskControl.TaskSemaphore.WaitAsync(0));
+        try
+        {
+            Assert.Null(ExecutionScope.GetActiveSnapshot());
+            var response = handler.HandleTaskStatus(null!,
+                InstanceIpcEnvelope.Request(InstanceOperations.TaskStatus));
+
+            Assert.True(response.Success);
+            Assert.True(response.Data!["running"]!.ToObject<bool>());
+            Assert.True(response.Data["slotOccupied"]!.ToObject<bool>());
+            Assert.False(response.Data["executionIdentityAvailable"]!.ToObject<bool>());
+            Assert.Null(response.Data["executionInstanceId"]?.ToObject<string>());
+        }
+        finally
+        {
+            TaskControl.TaskSemaphore.Release();
+        }
+    }
+
+    [Fact]
+    public async Task Dispose_FromInheritedExecutionContext_DoesNotSkipParentAmbientRestore()
+    {
+        var root = ExecutionScope.Start(new(JobKind.Group, "父作用域", JobSource.Ui));
+
+        await Task.Run(root.Dispose);
+
+        Assert.Same(root, ExecutionScope.Current);
+        root.Dispose();
+        Assert.Null(ExecutionScope.Current);
     }
 
     public void Dispose()
@@ -70,8 +147,8 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
         var ticket = Guid.NewGuid().ToString("N");
         var response = await handler.HandleTaskSuspend(null!, Request("task.suspend", ticket));
         Assert.True(response.Success);
-        Assert.Equal(false, response.Data!["liveTask"]!.ToObject<bool>());
-        Assert.Equal(true, response.Data["quiesceConfirmed"]!.ToObject<bool>());
+        Assert.False(response.Data!["liveTask"]!.ToObject<bool>());
+        Assert.True(response.Data["quiesceConfirmed"]!.ToObject<bool>());
         Assert.Null(config.SuspendedTaskContext);
         var release = await handler.HandleTaskResume(null!, Request("task.resume", ticket));
         Assert.Equal("cleared_not_resumed", release.Data!["status"]!.ToString());

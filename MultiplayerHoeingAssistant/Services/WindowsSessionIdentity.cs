@@ -1,10 +1,22 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace MultiplayerHoeingAssistant.Services;
 
 internal static class WindowsSessionIdentity
 {
+    public static (int ProcessId, int SessionId, long StartTicksUtc) GetPipeServerIdentity(System.IO.Pipes.NamedPipeClientStream pipe)
+    {
+        if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle, out var pid))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        if (pid == 0 || pid > int.MaxValue) throw new InvalidOperationException("状态管道服务端 PID 无效");
+        using var process = Process.GetProcessById((int)pid);
+        var startTicks = process.StartTime.ToUniversalTime().Ticks;
+        if (process.HasExited || startTicks <= 0) throw new InvalidOperationException("状态管道服务端进程已退出");
+        return ((int)pid, process.SessionId, startTicks);
+    }
+
     public static void VerifyPipeServer(System.IO.Pipes.NamedPipeClientStream pipe, int expectedPid)
     {
         if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle, out var pid))

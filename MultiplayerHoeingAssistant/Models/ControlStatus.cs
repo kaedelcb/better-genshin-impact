@@ -2,6 +2,7 @@
 
 public class ControlStatus
 {
+    private TaskExecutionIdentitySnapshot? _currentExecution;
     public static readonly TimeSpan TaskStatusFreshnessWindow = TimeSpan.FromSeconds(20);
 
     public string RoomCode { get; set; } = string.Empty;
@@ -29,6 +30,29 @@ public class ControlStatus
     public bool TaskStatusAvailable { get; set; }
     /// <summary>BGI 响应携带的进程纪元（PID:StartTicks）；用于拒绝重启前的旧快照。</summary>
     public string? TaskStatusBgiEpoch { get; set; }
+    /// <summary>
+    /// 当前 BGI 逻辑执行根的版本化身份；为空表示没有可核验的执行根，不能按任务名称推断身份。
+    /// 这是本机状态采集字段，不进入房间成员的公开状态载荷。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public TaskExecutionIdentitySnapshot? CurrentExecution
+    {
+        get => GetFreshCurrentExecution(DateTimeOffset.UtcNow);
+        set => _currentExecution = value is not null && HasFreshTaskStatus(DateTimeOffset.UtcNow) ? value : null;
+    }
+
+    /// <summary>按观测时效及可选的当前 BGI epoch 读取执行身份；失效身份会从缓存清除。</summary>
+    public TaskExecutionIdentitySnapshot? GetFreshCurrentExecution(DateTimeOffset nowUtc, string? expectedBgiEpoch = null)
+    {
+        if (!HasFreshTaskStatus(nowUtc)
+            || (expectedBgiEpoch is not null
+                && !string.Equals(TaskStatusBgiEpoch, expectedBgiEpoch, StringComparison.Ordinal)))
+        {
+            _currentExecution = null;
+            return null;
+        }
+        return _currentExecution;
+    }
     /// <summary>该状态快照实际取得时间；超过有效期、来自未来或缺失时不得用于准入。</summary>
     public DateTimeOffset? TaskStatusObservedAtUtc { get; set; }
     /// <summary>最近一次任务是否被用户手动取消（BGI wasCancelled，置位保留到下个任务启动；桌宠表情用）。</summary>
@@ -76,3 +100,13 @@ public class ControlStatus
         return age >= TimeSpan.Zero && age <= TaskStatusFreshnessWindow;
     }
 }
+
+public sealed record TaskExecutionIdentitySnapshot(
+    Guid ExecutionInstanceId,
+    long StateRevision,
+    Guid RunId,
+    Guid? JobId,
+    string Kind,
+    string Source,
+    string Name,
+    bool StopRequested);

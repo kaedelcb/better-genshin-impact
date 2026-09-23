@@ -23,6 +23,7 @@ public sealed class InstanceContext
         RootSessionId = rootSessionId;
         ProcessId = Environment.ProcessId;
         WindowsSessionId = Process.GetCurrentProcess().SessionId;
+        ProcessStartTicks = BetterGenshinImpact.Service.Execution.JobRegistry.CurrentEpoch.StartTicksUtc;
         StartedAt = DateTimeOffset.UtcNow;
     }
 
@@ -35,6 +36,9 @@ public sealed class InstanceContext
     public int ProcessId { get; }
 
     public int WindowsSessionId { get; }
+
+    /// <summary>与任务状态 bgiEpoch 共用的 UTC 进程启动 ticks。</summary>
+    public long ProcessStartTicks { get; }
 
 
     /// <summary>每个 BGI 进程独立的只读状态管道名，避免同一用户多会话共享根管道。</summary>
@@ -56,6 +60,7 @@ public sealed class InstanceContext
             InstanceType = InstanceType,
             ProcessId = ProcessId,
             WindowsSessionId = WindowsSessionId,
+            ProcessStartTicks = ProcessStartTicks,
             StartedAt = StartedAt
         };
     }
@@ -68,6 +73,8 @@ public sealed class InstanceEndpoint
     public int ProcessId { get; init; }
 
     public int WindowsSessionId { get; init; }
+
+    public long? ProcessStartTicks { get; init; }
 
     public DateTimeOffset StartedAt { get; init; }
 }

@@ -28,6 +28,7 @@ public class CommandExecutor
     /// 三处判定把该窗口视同批次在跑，不误清上下文。</summary>
     private int _resumeRetryInFlight;
     private string? _takeoverTicket;
+    internal string? TakeoverTicketSnapshot => _takeoverTicket;
     private BgiEpoch? _takeoverEpoch;
     private readonly SemaphoreSlim _suspendGate = new(1, 1);
     private readonly AsyncLocal<RemoteCommand?> _requestContext = new();
@@ -94,8 +95,10 @@ public class CommandExecutor
     /// </summary>
     internal enum StartConflictDecision
     {
-        /// <summary>空闲/状态未知：直接启动（原语义）。</summary>
+        /// <summary>已确认空闲：直接启动。</summary>
         Idle,
+        /// <summary>状态未确认：不得发送新任务或执行依赖空闲的动作。</summary>
+        StatusUnavailable,
         /// <summary>任务已结束但中断上下文未消费（孤儿）：先清上下文，再按空闲启动。</summary>
         IdleAfterClearingEndedContext,
         /// <summary>有任务在跑且无中断上下文：需先 suspend 再启动。</summary>
@@ -112,6 +115,7 @@ public class CommandExecutor
         // 注意：**不得**在此用 ConfigureAwait(false)——本方法由既有 `ShouldPreemptKeyPressAsync` 调用，
         // 旧实现会在调用方（可能是 UI）上下文继续执行 Log/动作；改变上下文＝改变既有行为（会诊重要项）。
         var status = await QueryTaskStatusAsync();
+        if (status is null) return StartConflictDecision.StatusUnavailable;
         // 本机忙标志**按需读取**（与旧实现的调用点一致：只在带上下文的分支才触达注入委托）。
         if (status is not { Running: true })
         {
@@ -751,7 +755,10 @@ public class CommandExecutor
         // 已有中断上下文（上线锄地批次进行中）不二次抢占，走原有无损拒绝；空闲直接走下方原路径。
         // 接线态（allowPreemption=false）：**获准后不得追加抢占**——「安全交接/抢占确认」语义归 R5.3；
         // 本层只做「获准即启动」，对端仍有任务在跑时由下方发送返回冲突（不盲目重发、不追加 suspend）。
-        if (allowPreemption && await ShouldPreemptKeyPressAsync($"配置组「{groupName}」"))
+        var groupPreemption = allowPreemption ? await ShouldPreemptKeyPressAsync($"配置组「{groupName}」") : false;
+        if (groupPreemption is null)
+            return new CommandResult { Status = "failed", ErrorCode = "status_unknown", Message = "BGI 任务状态未确认，配置组未下发" };
+        if (groupPreemption.Value)
         {
             return await StartWithPreemptionAsync(FixedKeyPolicy, groupName, null, startFromIndex, generation);
         }
@@ -919,7 +926,10 @@ public class CommandExecutor
         // [任务策略] 按键门控（同 StartGroupAsync，固定行为：立即执行 + 执行完停止）：
         // 本机忙且无既有中断上下文时 suspend 抢占强制 v2；已有中断上下文走无损拒绝；空闲走原路径。
         // 接线态（allowPreemption=false）：同 StartGroupCoreAsync——获准后不得追加抢占（R5.3 语义）。
-        if (allowPreemption && await ShouldPreemptKeyPressAsync($"一条龙「{configName}」"))
+        var oneClickPreemption = allowPreemption ? await ShouldPreemptKeyPressAsync($"一条龙「{configName}」") : false;
+        if (oneClickPreemption is null)
+            return new CommandResult { Status = "failed", ErrorCode = "status_unknown", Message = "BGI 任务状态未确认，一条龙未下发" };
+        if (oneClickPreemption.Value)
         {
             // 抢占路径不透传批次名单（批次场景 MainViewModel 已先行 suspend，抢占极少命中批次项；
             // 不携带时 BGI 不跳过任何组，退化为老助手兼容行为，探针日志可观测）
@@ -1804,15 +1814,19 @@ public class CommandExecutor
     }
 
     /// <summary>恢复原任务：IPC 发 task.resume。cancel=true 时清除上下文但不恢复。</summary>
-    public async Task<CommandResult> ExecuteResumeAsync(bool cancel = false)
+    public async Task<CommandResult> ExecuteResumeAsync(bool cancel = false, string? expectedTicket = null)
     {
         var ticket = _takeoverTicket;
+        if (expectedTicket is not null && !string.Equals(ticket, expectedTicket, StringComparison.Ordinal))
+            return new CommandResult { Status = "failed", ErrorCode = "stale_ticket", Message = "接管票据已变化，恢复未执行" };
         try
         {
             using var client = new IpcClient();
             await client.ConnectAsync(3000);
             var blocked = CheckCrossSessionBlock(client, "task.resume");
             if (blocked != null) return blocked;
+            if (expectedTicket is not null && !string.Equals(_takeoverTicket, expectedTicket, StringComparison.Ordinal))
+                return new CommandResult { Status = "failed", ErrorCode = "stale_ticket", Message = "接管票据已变化，恢复未执行" };
             var payload = System.Text.Json.JsonSerializer.Serialize(new { cancel, takeoverTicket = ticket });
             var response = await client.SendCommandAsync(new IpcRequest { OpCode = "task.resume", Payload = payload }, TimeSpan.FromSeconds(35));
             if (!response.Success)
@@ -1844,7 +1858,7 @@ public class CommandExecutor
     /// 不误清待重试的上下文。重试耗尽返回最后一次失败结果——上下文仍保留在 BGI 侧，
     /// 由孤儿对账按死账清理（既有行为）并留痕。
     /// </summary>
-    private async Task<CommandResult> ExecuteResumeWithBusyRetryAsync(Action<string>? log)
+    private async Task<CommandResult> ExecuteResumeWithBusyRetryAsync(Action<string>? log, string? expectedTicket = null)
     {
         const int maxAttempts = 3;
         var busySeen = false;
@@ -1852,7 +1866,7 @@ public class CommandExecutor
         {
             for (var attempt = 1; ; attempt++)
             {
-                var result = await ExecuteResumeAsync();
+                var result = await ExecuteResumeAsync(expectedTicket: expectedTicket);
                 if (result.Status == "success" || result.ErrorCode != "task_busy" || attempt >= maxAttempts)
                 {
                     return result;
@@ -1903,6 +1917,17 @@ public class CommandExecutor
                     extOp,
                     payloadJson is null ? null : System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(payloadJson),
                     TimeSpan.FromMilliseconds(Math.Max(connectTimeoutMs, 2000)));
+                if (v2OpCode == "task.status" && extResp.Success
+                    && !IpcClient.IsTaskStatusFromRemoteProcess(extResp.Data,
+                        ext.ServerEpoch?.ProcessId, ext.ServerEpoch?.StartTicksUtc))
+                {
+                    return new IpcResponse
+                    {
+                        Success = false,
+                        ErrorCode = "status_identity_mismatch",
+                        ErrorMessage = "ext task.status 的 bgiEpoch 与已验证 Hello 进程身份不一致"
+                    };
+                }
                 return new IpcResponse
                 {
                     Success = extResp.Success,
@@ -1921,7 +1946,28 @@ public class CommandExecutor
         {
             using var ipc = new IpcClient();
             await ipc.ConnectAsync(connectTimeoutMs);
-            return await ipc.SendCommandAsync(new IpcRequest { OpCode = v2OpCode, Payload = payloadJson });
+            if (v2OpCode == "task.status" && !ipc.IsSessionTrusted)
+            {
+                return new IpcResponse
+                {
+                    Success = false,
+                    ErrorCode = "ipc_identity_unverified",
+                    ErrorMessage = "v2 task.status 的 Ping 身份未能确认，拒绝采信"
+                };
+            }
+            var ipcResponse = await ipc.SendCommandAsync(new IpcRequest { OpCode = v2OpCode, Payload = payloadJson });
+            if (v2OpCode == "task.status" && ipcResponse.Success
+                && !IpcClient.IsTaskStatusFromRemoteProcess(ipcResponse.Data,
+                    ipc.RemoteProcessId, ipc.RemoteProcessStartTicksUtc))
+            {
+                return new IpcResponse
+                {
+                    Success = false,
+                    ErrorCode = "status_identity_mismatch",
+                    ErrorMessage = "v2 task.status 的 bgiEpoch 与已验证 Ping 进程身份不一致"
+                };
+            }
+            return ipcResponse;
         }
         catch
         {
@@ -1940,10 +1986,14 @@ public class CommandExecutor
         try
         {
             var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(resp.Data);
-            var running = data.TryGetProperty("running", out var rEl)
-                && rEl.ValueKind == System.Text.Json.JsonValueKind.True;
-            var hasCtx = data.TryGetProperty("hasSuspendedTaskContext", out var hEl)
-                && hEl.ValueKind == System.Text.Json.JsonValueKind.True;
+            if (data.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !data.TryGetProperty("running", out var rEl)
+                || rEl.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+                || !data.TryGetProperty("hasSuspendedTaskContext", out var hEl)
+                || hEl.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False))
+                return null;
+            var running = rEl.ValueKind == System.Text.Json.JsonValueKind.True;
+            var hasCtx = hEl.ValueKind == System.Text.Json.JsonValueKind.True;
             // [协议加法] 中断上下文身份（BGI 新增可选字段，旧版 BGI 无此字段时为 null，判定自动失效退化为原行为）
             string? suspendedType = data.TryGetProperty("suspendedTaskType", out var stEl)
                 && stEl.ValueKind == System.Text.Json.JsonValueKind.String ? stEl.GetString() : null;
@@ -2029,7 +2079,7 @@ public class CommandExecutor
     /// 不抢占（再 suspend 会用锄地任务覆盖原任务上下文），走原有无损拒绝路径；
     /// 有中断上下文但本机无批次在跑：[P3 对账] 判孤儿，清上下文后照常抢占。
     /// </summary>
-    private async Task<bool> ShouldPreemptKeyPressAsync(string desc)
+    private async Task<bool?> ShouldPreemptKeyPressAsync(string desc)
     {
         // [B3 第 3 步] 判定改为**无副作用解析**（ResolveStartConflictAsync 只读状态）＋**动作后置**：
         // 判定表与动作一一对应，行为与拆分前等价（含既有日志文案与清上下文顺序），但决策本身不再产生副作用。
@@ -2054,8 +2104,10 @@ public class CommandExecutor
                 // [另案②] 恢复重试窗口内的上下文是"待重试的恢复"而非孤儿，同样无损拒绝
                 Log($"[任务策略] 检测到 BGI 已有中断上下文（上线锄地批次进行中或恢复重试中），按键启动 {desc} 不抢占，走原有无损拒绝路径");
                 return false;
+            case StartConflictDecision.StatusUnavailable:
+                return null;
             default:
-                return false; // 空闲或状态未知：不抢占
+                return false; // 已确认空闲：不抢占
         }
     }
 
@@ -2068,6 +2120,8 @@ public class CommandExecutor
     private async Task<CommandResult> StopWithKeyPolicyAsync()
     {
         var status = await QueryTaskStatusAsync();
+        if (status is null)
+            return new CommandResult { Status = "failed", ErrorCode = "status_unknown", Message = "BGI 任务状态未确认，停止键未执行" };
         if (status is { Running: true, HasContext: true })
         {
             Log("[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中），停止键不二次抢占，走无损拒绝");
@@ -2116,6 +2170,8 @@ public class CommandExecutor
     private async Task<CommandResult> CloseGameWithKeyPolicyAsync()
     {
         var status = await QueryTaskStatusAsync();
+        if (status is null)
+            return new CommandResult { Status = "failed", ErrorCode = "status_unknown", Message = "BGI 任务状态未确认，关闭游戏未执行" };
         if (status is { Running: true, HasContext: true })
         {
             Log("[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中），关闭游戏键不二次抢占，走无损拒绝");
@@ -2162,6 +2218,8 @@ public class CommandExecutor
 
         // [B3 第 3 步] **准入前**完成冲突策略解析（只读，且不改变 BGI 任务状态）。
         var decision = await ResolveStartConflictAsync();
+        if (decision == StartConflictDecision.StatusUnavailable)
+            return new CommandResult { Status = "failed", ErrorCode = "status_unknown", Message = $"{desc} 未执行：BGI 任务状态未确认" };
         if (decision == StartConflictDecision.RefuseContextHeld)
         {
             // 无损拒绝（保护进行中批次/恢复重试）：**不进入准入**（不产候选、不签发许可）。
@@ -2198,6 +2256,8 @@ public class CommandExecutor
     /// </summary>
     private async Task<CommandResult> ExecuteHotkeyCoreAsync(string hotkeyConfigName, string desc, StartConflictDecision decision)
     {
+        if (decision == StartConflictDecision.StatusUnavailable)
+            return new CommandResult { Status = "failed", ErrorCode = "status_unknown", Message = $"{desc} 未执行：BGI 任务状态未确认" };
         if (decision == StartConflictDecision.IdleAfterClearingEndedContext)
         {
             // [P3 对账] 原「开头先清孤儿上下文」语义（任务已结束但上下文未消费），避免残留把热键永久卡在无损拒绝
@@ -2243,15 +2303,19 @@ public class CommandExecutor
 
         // 热键可能不启动任务：15s 内 task.status 未变 running 则直接清上下文收尾
         var started = false;
+        var latestProbeConfirmedIdle = false;
         var detectDeadline = DateTime.UtcNow + HotkeyTaskDetectTimeout;
         while (DateTime.UtcNow < detectDeadline)
         {
             var probe = await QueryTaskStatusAsync();
             if (probe is { Running: true }) { started = true; break; }
+            latestProbeConfirmedIdle = probe is { Running: false };
             await Task.Delay(1000);
         }
         if (!started)
         {
+            if (!latestProbeConfirmedIdle)
+                return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 已下发，但无法确认 BGI 是否启动任务；保留中断上下文等待核查" };
             Log($"[任务策略] {desc} 下发后 {HotkeyTaskDetectTimeout.TotalSeconds}s 内未启动新任务，直接清上下文收尾（固定行为：执行完停止）");
             await ApplyPolicyTeardownAsync(FixedKeyPolicy, desc, userCancelled: false);
             return execResult;
@@ -2259,13 +2323,16 @@ public class CommandExecutor
 
         Log($"[任务策略] {desc} 已启动新任务，等待其结束后清上下文收尾（上限 {HotkeyTaskRunTimeout.TotalHours}h，5s 轮询）...");
         var runDeadline = DateTime.UtcNow + HotkeyTaskRunTimeout;
+        var confirmedStopped = false;
         while (DateTime.UtcNow < runDeadline)
         {
             var probe = await QueryTaskStatusAsync();
-            if (probe is { Running: false }) break;
+            if (probe is { Running: false }) { confirmedStopped = true; break; }
             // 查询失败（BGI 忙/重启中）：按容错继续等下一轮
             await Task.Delay(TaskPollInterval);
         }
+        if (!confirmedStopped)
+            return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 结束状态未确认；保留中断上下文等待核查" };
         await ApplyPolicyTeardownAsync(FixedKeyPolicy, desc, userCancelled: false);
         return execResult;
     }
@@ -2305,6 +2372,7 @@ public class CommandExecutor
         var startResult = await StartViaV2IpcNoKillAsync(groupName, configName, startFromIndex, generation, startFromTaskId);
 
         // 4. 策略收尾（F11 取消永远压过配置策略）
+        if (startResult.ErrorCode == "result_unknown") return startResult;
         await ApplyPolicyTeardownAsync(policy, desc, startResult.Status == "cancelled");
 
         return startResult;
@@ -2387,6 +2455,8 @@ public class CommandExecutor
         }
         if (probe is not { Running: true })
         {
+            if (probe is null)
+                return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 启动回执丢失且 BGI 状态不可用，结果待核查" };
             return new CommandResult { Status = "failed", Message = $"{desc} 启动失败：{reason}（已核实 BGI 侧无任务在跑，启动未生效或任务随进程终止）" };
         }
 
@@ -2406,7 +2476,7 @@ public class CommandExecutor
                 // BGI 持续不可达 = 进程已死（任务随进程终止）或卡死，按失败定性，不无限等
                 if (++consecutiveProbeFailures >= 12)
                 {
-                    return new CommandResult { Status = "failed", Message = $"{desc} 执行中 BGI 持续不可达（1 分钟），任务可能已随进程终止，请检查 BGI 状态" };
+                    return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 执行中 BGI 持续不可达（1 分钟），终态待核查" };
                 }
             }
             else
@@ -2414,7 +2484,7 @@ public class CommandExecutor
                 consecutiveProbeFailures = 0;
             }
         }
-        return new CommandResult { Status = "failed", Message = $"{desc} 执行中但等待超时（{V2TaskStartCommandTimeout.TotalHours}h 兜底），请检查 BGI 状态" };
+        return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 执行中但等待超时（{V2TaskStartCommandTimeout.TotalHours}h 兜底），终态待核查" };
     }
 
     /// <summary>
@@ -2424,14 +2494,14 @@ public class CommandExecutor
     /// RunSpecified：resume(cancel:true) 后校验并启动指定配置组/一条龙；名称为空或不存在则日志报错退化为停止。
     /// 供按键抢占闭环（CommandExecutor 内部）与上线锄地两条恢复触发路径（MainViewModel）复用。
     /// </summary>
-    public async Task ApplyPolicyTeardownAsync(TaskConflictPolicySettings policy, string executedDesc, bool userCancelled, Action<string>? log = null)
+    public async Task ApplyPolicyTeardownAsync(TaskConflictPolicySettings policy, string executedDesc, bool userCancelled, Action<string>? log = null, string? expectedTicket = null)
     {
         log ??= _log;
 
         if (userCancelled)
         {
             log?.Invoke($"[任务冲突策略] {executedDesc}被用户取消（F11），优先于配置策略：清除中断上下文，不执行后续动作");
-            await ExecuteResumeAsync(cancel: true);
+            await ExecuteResumeAsync(cancel: true, expectedTicket: expectedTicket);
             return;
         }
 
@@ -2442,10 +2512,15 @@ public class CommandExecutor
                 // WasCancelled/丢上下文守卫：BGI 侧用户刚 F11 时 suspend 不保存上下文（BGI 既有行为），
                 // 或 BGI 曾被重启导致内存上下文丢失，此时"恢复"必然失败，退化为停止
                 var status = await QueryTaskStatusAsync();
+                if (status is null)
+                {
+                    log?.Invoke("[任务冲突策略] BGI 状态未确认，保留中断上下文，暂不恢复");
+                    return;
+                }
                 if (status is { HasContext: false })
                 {
                     log?.Invoke("[任务冲突策略] 无原任务需要恢复，释放本批次执行权");
-                    await ExecuteResumeAsync(cancel: true);
+                    await ExecuteResumeAsync(cancel: true, expectedTicket: expectedTicket);
                     return;
                 }
                 // [兜底 2026-09-08] 被中断的是「联机锄地上线」信号任务本身：恢复会重复触发上线（无限循环），
@@ -2453,12 +2528,12 @@ public class CommandExecutor
                 if (IsOnlineSignalContext(status))
                 {
                     log?.Invoke("[任务冲突策略] 被中断的是上线触发任务本身，恢复会重复触发上线，退化为停止（清除中断上下文）");
-                    await ExecuteResumeAsync(cancel: true);
+                    await ExecuteResumeAsync(cancel: true, expectedTicket: expectedTicket);
                     return;
                 }
                 // [另案②] task_busy（槽位占用/派发未起步，BGI 已保留上下文）走 10s×3 有限重试；
                 // 其他失败（无上下文/传输失败/重试耗尽）直接响亮失败
-                var resumeResult = await ExecuteResumeWithBusyRetryAsync(log);
+                var resumeResult = await ExecuteResumeWithBusyRetryAsync(log, expectedTicket);
                 if (resumeResult.Status == "success")
                 {
                     log?.Invoke(resumeResult.ErrorCode == "no_context"
@@ -2472,13 +2547,13 @@ public class CommandExecutor
             }
             case TaskConflictPolicy.Stop:
             {
-                await ExecuteResumeAsync(cancel: true);
+                await ExecuteResumeAsync(cancel: true, expectedTicket: expectedTicket);
                 log?.Invoke("[任务冲突策略] 已按策略清除中断上下文，不恢复原任务（执行完停止）");
                 break;
             }
             case TaskConflictPolicy.RunSpecified:
             {
-                var release = await ExecuteResumeAsync(cancel: true);
+                var release = await ExecuteResumeAsync(cancel: true, expectedTicket: expectedTicket);
                 if (release.Status != "success")
                 {
                     log?.Invoke($"[任务冲突策略] 执行权未确认释放，不启动指定任务: {release.Message}");

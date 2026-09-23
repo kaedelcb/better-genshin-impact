@@ -12,12 +12,18 @@ public sealed class ExecutionScope : IDisposable
     private static readonly AsyncLocal<string?> AdmissionTicket = new();
     private static ExecutionScope? _active;
     private static long _stopVersion;
+    private static long _stateRevisionCounter;
     private readonly ExecutionScope? _previous;
     private readonly CancellationTokenSource _stop = new();
     private readonly System.Collections.Generic.Dictionary<string, string> _configurationRevisions = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
+    private bool _stopRequested;
     private readonly Timer? _leaseWatch;
     public string StopReason { get; private set; } = JobErrorCodes.CancelledUser;
+    /// <summary>此根作用域的一次性身份；RunId 是工作流身份，可能被多个执行尝试共享。</summary>
+    public Guid ExecutionInstanceId { get; } = Guid.NewGuid();
+    /// <summary>此执行实例最近一次状态变化的单调修订号，用于调用方 CAS 绑定。</summary>
+    private long StateRevision { get; set; }
     public Guid RunId { get; }
     public JobDescriptor Descriptor { get; }
 
@@ -37,6 +43,22 @@ public sealed class ExecutionScope : IDisposable
     public static bool HasActive { get { lock (Sync) return _active != null; } }
     public static long StopVersionNow { get { lock (Sync) return _stopVersion; } }
 
+    /// <summary>
+    /// 当前逻辑执行根的原子只读快照。它不声称某个 TaskSemaphore 裸锁持有者的身份；
+    /// 若任务槽占用但此快照为空，消费者必须将执行身份视为未知。
+    /// </summary>
+    public static ExecutionScopeSnapshot? GetActiveSnapshot()
+    {
+        lock (Sync)
+        {
+            var active = _active;
+            if (active is null || active._disposed) return null;
+            return new ExecutionScopeSnapshot(active.ExecutionInstanceId, active.StateRevision, active.RunId,
+                active.Descriptor.JobId, active.Descriptor.Kind, active.Descriptor.Source,
+                active.Descriptor.Name, active._stopRequested, active.Result);
+        }
+    }
+
     private ExecutionScope(JobDescriptor descriptor)
     {
         Descriptor = descriptor;
@@ -49,8 +71,13 @@ public sealed class ExecutionScope : IDisposable
             {
                 if (!PreemptionGate.Authorize(descriptor.TakeoverTicket))
                 {
-                    StopReason = "lease_expired";
-                    Observe(TaskRunResult.Cancelled);
+                    lock (Sync)
+                    {
+                        if (_disposed) return;
+                        StopReason = "lease_expired";
+                        Observe(TaskRunResult.Cancelled);
+                        MarkStopRequestedLocked();
+                    }
                     try { _stop.Cancel(); } catch (AggregateException) { }
                 }
             }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
@@ -68,6 +95,7 @@ public sealed class ExecutionScope : IDisposable
                 throw new InvalidOperationException("takeover_conflict: 执行权属于另一批次或票据已失效");
             scope = new ExecutionScope(descriptor);
             _active = scope;
+            scope.AdvanceStateRevisionLocked();
         }
         try
         {
@@ -98,6 +126,7 @@ public sealed class ExecutionScope : IDisposable
         {
             if (_disposed) return;
             Observe(TaskRunResult.Preempted);
+            MarkStopRequestedLocked();
         }
         try { _stop.Cancel(); } catch (AggregateException) { }
     }
@@ -113,6 +142,8 @@ public sealed class ExecutionScope : IDisposable
     {
         lock (Sync)
         {
+            if (_disposed) return;
+            var previousResult = Result;
             if (result == TaskRunResult.Failed) FailureCount++;
             // R4.7 D6 聚合：Cancelled/Preempted 始终覆盖；Failed 覆盖 Ran/Skipped（失败不被跳过覆盖）；
             // Skipped 只覆盖 Ran（正常跳过分别表达，既不算成功执行也不算失败）。
@@ -120,6 +151,7 @@ public sealed class ExecutionScope : IDisposable
                 || (Result == TaskRunResult.Skipped && result == TaskRunResult.Failed)
                 || result is TaskRunResult.Cancelled or TaskRunResult.Preempted)
                 Result = result;
+            if (Result != previousResult) AdvanceStateRevisionLocked();
         }
     }
     internal void SetCheckpoint(SuspendContextCapture.Snapshot snapshot)
@@ -180,7 +212,11 @@ public sealed class ExecutionScope : IDisposable
         {
             active = _active;
             checkpoint = active?.IsCurrentOwner == true ? active.Checkpoint : null;
-            active?.Observe(TaskRunResult.Preempted);
+            if (active != null)
+            {
+                active.Observe(TaskRunResult.Preempted);
+                active.MarkStopRequestedLocked();
+            }
         }
         try { active?._stop.Cancel(); } catch (AggregateException) { }
         return checkpoint;
@@ -192,7 +228,11 @@ public sealed class ExecutionScope : IDisposable
         {
             if (manual) _stopVersion++;
             active = _active;
-            active?.Observe(manual ? TaskRunResult.Cancelled : TaskRunResult.Preempted);
+            if (active != null)
+            {
+                active.Observe(manual ? TaskRunResult.Cancelled : TaskRunResult.Preempted);
+                active.MarkStopRequestedLocked();
+            }
         }
         // Cancellation callbacks can reenter execution; never invoke them under the admission lock.
         try { active?._stop.Cancel(); } catch (AggregateException) { }
@@ -201,11 +241,35 @@ public sealed class ExecutionScope : IDisposable
     {
         lock (Sync)
         {
-            _disposed = true;
-            if (ReferenceEquals(_active, this)) _active = null;
+            if (!_disposed)
+            {
+                _disposed = true;
+                if (ReferenceEquals(_active, this)) _active = null;
+            }
         }
         if (ReferenceEquals(Ambient.Value, this)) Ambient.Value = _previous;
         _leaseWatch?.Dispose();
         // Do not dispose: in-flight token registrations may still unwind after root cancellation.
     }
+
+    private void MarkStopRequestedLocked()
+    {
+        if (_stopRequested) return;
+        _stopRequested = true;
+        AdvanceStateRevisionLocked();
+    }
+
+    private void AdvanceStateRevisionLocked() => StateRevision = ++_stateRevisionCounter;
 }
+
+/// <summary>进程内执行根的版本化只读身份；无活动根时不产生快照。</summary>
+public sealed record ExecutionScopeSnapshot(
+    Guid ExecutionInstanceId,
+    long StateRevision,
+    Guid RunId,
+    Guid? JobId,
+    JobKind Kind,
+    JobSource Source,
+    string Name,
+    bool StopRequested,
+    TaskRunResult Result);

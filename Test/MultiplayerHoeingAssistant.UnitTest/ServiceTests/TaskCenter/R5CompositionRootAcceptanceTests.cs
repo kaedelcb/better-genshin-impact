@@ -48,6 +48,30 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
         => new() { Cmd = "start_group", Params = new() { ["groupName"] = groupName } };
 
     [Fact]
+    public async Task PipeIdentity_ForgedPingCannotAuthorizeTaskStatus()
+    {
+        _double.ReportedStartTicksOverride = System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks + 1;
+        using var client = new IpcClient();
+        await client.ConnectAsync(2000);
+        Assert.Equal(IpcSessionCheck.Unknown, client.SessionCheck);
+        Assert.False(client.IsSessionTrusted);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PipeIdentity_InvalidHelloCannotBecomeReady(bool omitData)
+    {
+        _double.OmitHelloData = omitData;
+        if (!omitData)
+            _double.ReportedProcessIdOverride = System.Diagnostics.Process.GetCurrentProcess().Id + 1;
+        using var client = new BgiExternalClient();
+        await client.StartAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.NotEqual(BgiExternalLinkState.Ready, client.State);
+        Assert.Null(client.ServerEpoch);
+    }
+
+    [Fact]
     public async Task CompositionRoot_ExtQueue_TwoConsecutiveStarts_SettleAndReleaseSlot()
     {
         var root = Path.Combine(Path.GetTempPath(), "r5comp-" + Guid.NewGuid().ToString("N")[..8]);

@@ -20,7 +20,7 @@ public partial class MainViewModel
     /// 守卫单调不减、新一轮 AllReady 不重置（重置会让旧轮次迟到的恢复定时器在新一轮里重跑收尾）；
     /// generation ≤ 0 的异常批次不进门，保持原行为直接执行。
     /// </summary>
-    private async Task ApplyPolicyTeardownOnceAsync(OnlineHoeingBatch batch, string executedDesc, bool userCancelled)
+    private async Task ApplyPolicyTeardownOnceAsync(OnlineHoeingBatch batch, string executedDesc, bool userCancelled, string? expectedTicket = null)
     {
         // Online batches are finalized only by the all-member authority, never by a per-task falling edge.
         if (!batch.CoordinatedSucceeded && !userCancelled) return;
@@ -31,7 +31,7 @@ public partial class MainViewModel
         }
         if (_commandExecutor != null)
         {
-            await _commandExecutor.ApplyPolicyTeardownAsync(SnapshotOnlineHoeingPolicy(), executedDesc, userCancelled, AddLog);
+            await _commandExecutor.ApplyPolicyTeardownAsync(SnapshotOnlineHoeingPolicy(), executedDesc, userCancelled, AddLog, expectedTicket);
             // 记录实际执行时间：10s 恢复定时器的无批次键直接路径据此跳过 30s 内的迟到边沿
             lock (_teardownGate) { _lastTeardownUtc = DateTime.UtcNow; }
         }

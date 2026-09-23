@@ -44,6 +44,9 @@ public class IpcClient : IDisposable
     /// <summary>对端 BGI 的进程 ID（Ping 响应；未确认时为 null）。</summary>
     public int? RemoteProcessId { get; private set; }
 
+    /// <summary>对端 BGI 的 UTC 进程启动 ticks（Ping 响应；未确认时为 null）。</summary>
+    public long? RemoteProcessStartTicksUtc { get; private set; }
+
     /// <summary>管道是否可信：仅同一会话可信；跨会话或无法确认均不可信。</summary>
     public bool IsSessionTrusted => SessionCheck == IpcSessionCheck.SameSession;
 
@@ -86,10 +89,8 @@ public class IpcClient : IDisposable
     }
 
     /// <summary>
-    /// 会话校验握手：发送 ping，解析对端 BGI 返回的端点信息（windowsSessionId/processId），
-    /// 与本进程会话比对。Ping 是 v2 协议固有操作，响应 data 为 InstanceEndpoint
-    /// （BGI 侧 Newtonsoft camelCase 序列化，windowsSessionId 为非空 int 必然存在）；
-    /// 因此 Unknown 只会在管道本身异常时出现，此时按不可信处理（不静默放行）。
+    /// 会话及进程代次校验握手：发送 ping，解析对端 BGI 的 Windows 会话、PID 和启动 ticks。
+    /// task.status 的 bgiEpoch 必须与这组握手身份一致；字段缺失或异常按 Unknown 处理。
     /// </summary>
     private async Task VerifyRemoteSessionAsync()
     {
@@ -99,36 +100,87 @@ public class IpcClient : IDisposable
             if (response.Success && !string.IsNullOrEmpty(response.Data))
             {
                 var data = JsonSerializer.Deserialize<JsonElement>(response.Data);
-                if (data.TryGetProperty("windowsSessionId", out var sidEl)
-                    && sidEl.ValueKind == JsonValueKind.Number
-                    && sidEl.TryGetInt32(out var remoteSid))
+                if (TryReadRemoteProcessIdentity(data, out var remoteSid, out var remotePid, out var remoteStartTicks))
                 {
+                    var pipeServer = WindowsSessionIdentity.GetPipeServerIdentity(_pipeClient!);
+                    if (pipeServer.ProcessId != remotePid || pipeServer.SessionId != remoteSid
+                        || pipeServer.StartTicksUtc != remoteStartTicks)
+                        throw new InvalidOperationException("Ping 进程身份与实际管道服务端不符");
                     RemoteSessionId = remoteSid;
-                    if (data.TryGetProperty("processId", out var pidEl)
-                        && pidEl.ValueKind == JsonValueKind.Number
-                        && pidEl.TryGetInt32(out var remotePid))
-                    {
-                        RemoteProcessId = remotePid;
-                    }
+                    RemoteProcessId = remotePid;
+                    RemoteProcessStartTicksUtc = remoteStartTicks;
 
                     var localSid = System.Diagnostics.Process.GetCurrentProcess().SessionId;
                     SessionCheck = remoteSid == localSid
                         ? IpcSessionCheck.SameSession
                         : IpcSessionCheck.CrossSession;
                     System.Diagnostics.Debug.WriteLine(
-                        $"[IPC] 会话校验: 对端 Session={remoteSid} PID={RemoteProcessId?.ToString() ?? "?"}，本进程 Session={localSid} → {SessionCheck}");
+                        $"[IPC] 会话校验: 对端 Session={remoteSid} PID={remotePid} StartTicks={remoteStartTicks}，本进程 Session={localSid} → {SessionCheck}");
                     return;
                 }
             }
 
             SessionCheck = IpcSessionCheck.Unknown;
             System.Diagnostics.Debug.WriteLine(
-                $"[IPC] 会话校验无法确认: Ping 未返回 windowsSessionId（Success={response.Success} Error={response.ErrorMessage ?? "无"}）");
+                $"[IPC] 会话校验无法确认: Ping 未返回有效的 windowsSessionId/processId/processStartTicks（Success={response.Success} Error={response.ErrorMessage ?? "无"}）");
         }
         catch (Exception ex)
         {
             SessionCheck = IpcSessionCheck.Unknown;
             System.Diagnostics.Debug.WriteLine($"[IPC] 会话校验握手失败: {ex.Message}");
+        }
+    }
+
+    internal static bool TryReadRemoteProcessIdentity(
+        JsonElement endpoint, out int sessionId, out int processId, out long processStartTicksUtc)
+    {
+        sessionId = 0;
+        processId = 0;
+        processStartTicksUtc = 0;
+        return endpoint.ValueKind == JsonValueKind.Object
+               && endpoint.TryGetProperty("windowsSessionId", out var sidElement)
+               && sidElement.ValueKind == JsonValueKind.Number
+               && sidElement.TryGetInt32(out sessionId)
+               && sessionId >= 0
+               && endpoint.TryGetProperty("processId", out var pidElement)
+               && pidElement.ValueKind == JsonValueKind.Number
+               && pidElement.TryGetInt32(out processId)
+               && processId > 0
+               && endpoint.TryGetProperty("processStartTicks", out var startElement)
+               && startElement.ValueKind == JsonValueKind.Number
+               && startElement.TryGetInt64(out processStartTicksUtc)
+               && processStartTicksUtc > 0;
+    }
+
+    internal static bool IsTaskStatusFromRemoteProcess(
+        string? statusJson, int? remoteProcessId, long? remoteProcessStartTicksUtc)
+    {
+        if (string.IsNullOrWhiteSpace(statusJson)
+            || remoteProcessId is not > 0
+            || remoteProcessStartTicksUtc is not > 0)
+            return false;
+
+        try
+        {
+            using var document = JsonDocument.Parse(statusJson);
+            var status = document.RootElement;
+            if (status.ValueKind != JsonValueKind.Object
+                || !status.TryGetProperty("bgiEpoch", out var epoch)
+                || epoch.ValueKind != JsonValueKind.Object
+                || !epoch.TryGetProperty("processId", out var pidElement)
+                || pidElement.ValueKind != JsonValueKind.Number
+                || !pidElement.TryGetInt32(out var processId)
+                || !epoch.TryGetProperty("startTicksUtc", out var startElement)
+                || startElement.ValueKind != JsonValueKind.Number
+                || !startElement.TryGetInt64(out var startTicksUtc))
+                return false;
+
+            return processId == remoteProcessId.Value
+                   && startTicksUtc == remoteProcessStartTicksUtc.Value;
+        }
+        catch (JsonException)
+        {
+            return false;
         }
     }
 
