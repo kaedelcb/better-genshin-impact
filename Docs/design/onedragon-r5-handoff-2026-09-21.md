@@ -101,8 +101,10 @@
 | 确认空闲 | 任一级任务 | 受理后执行 | 准入及发送许可仍必需 |
 | 当前较低 | 较高级任务（含最高级锄地） | 停止当前，确认退出，再执行到来者 | 退出未确认＝零新发送 |
 | 当前同级 | 后来的同级任务（含两种最高级互遇） | 停止当前，确认退出，再执行后来的 | 退出未确认＝零新发送 |
-| 当前较高 | 较低级任务 | 不打断当前；到来者须得到明确拒绝或按经批准的排队合同等待 | 不得抢发 |
+| 当前较高 | 较低级任务 | 不打断当前；到来者在调度器本地持久等待，当前结束后重新比较（owner 2026-09-24 裁决） | 等待期间不得抢发，也不得提前放入 BGI 执行队列 |
 | 当前占用／级别／退出结果不明 | 任一级任务 | 保留原责任并查证；不把未知当空闲 | 零新发送、零自动重发 |
+
+**2026-09-24 owner 追加裁决**：上表“当前较高／较低级到来者”选择**本地持久等待**，不是立即拒绝；当前任务结束后重新比较，等待期间更高级的新任务先执行。等待不是 BGI 已入队或已受理，不能提前向 ext 队列发送。具体身份、到期、重启和替换规则见 R5.3 §24.81；生产接线仍关闭。
 
 **入口核对（2026-09-23）**：`MainViewModel.OnStartOneClick` 对应界面的普通「一条龙」按钮，产生 `start_oneclick`；界面「一键锄地」由 `QuickHoeingCommand` 经 `SendQuickStartAsync` 下发 `start_group`，远端在 `MainViewModel` 按 `key="一键锄地"` 分支执行绑定批次；上线锄地另由 `OnAllReadyConfirmedInternal` 触发。远端自报 `key` 只能作为待核查的命令资料，**不能单独证明可信的最高级来源**。当前 `ArbitrationOrdering.Compare` 同 tier／priority 时按较早 `ScheduledAt` 排序，亦**不能**拿该队列排序充当 owner 要求的「正在执行者与后来者同级抢占」；须单设并验证运行中抢占判定，不擅改已有候选队列合同。S4b 当前经 `StartSpecifiedTaskAsync` 直接 `StartViaV2IpcNoKillAsync`，S8b 经 `ExecuteResumeWithBusyRetryAsync` 直接 `ExecuteResumeAsync`，均仍需接线。
 
