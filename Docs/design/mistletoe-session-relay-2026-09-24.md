@@ -70,6 +70,8 @@
 - **`create_thread` 创建成功但后继任务无法运行**：后继 `01a0d069-2d30-7e10-8431-f279ba304401`（标题「R5 A4 第二步：停止后退出确认（执行树退出凭证）」）首轮与随后一次 `send_message_to_thread` 均失败，错误为
   `unexpected status 422 Unprocessable Entity: Failed to deserialize the JSON body into the target type: input: missing field 'call_id' ... url: https://api.deepseek.com/v1/responses`。
 - **对照实验排除提示词因素**：另建最小诊断任务 `01a0d06b-1b40-7822-ae4d-97511f910887`（提示词仅「只回复两个字：可以」）同样首轮即以同一错误失败 ⇒ 问题在**新建任务的请求构造/模型路由层**（新任务历史里带一个缺少 `call_id` 的 `create_thread` 工具输出项），与批次内容、提示词长度、manifest 无关。
+- **第二条创建路径同样失败（2026-09-24 追加）**：改用同目录 `fork_thread`（源＝首任务，产物 `01a0d06d-00d3-7cc3-9e5f-4d37015943ee`）后 `send_message_to_thread` 亦以同一 422 失败（`missing field 'call_id'`）。
+  ⇒ 结论收紧为：**本环境下任何"新任务"都无法运行首轮**，与创建机制无关（`create_thread`、`fork_thread`、最小提示词三组独立证据一致），不是提示词、批次或 manifest 问题；也不能靠"换个建任务方式"绕过。
 - 因此：`create_thread → 后继运行` 这条自动接续**首次实测未成功**；按 §4「不确定调用处理」，不重复盲目创建、不声称已接上；当前保持单写者（首任务只写了仓库外记录与一次小提交，产品仓库无并发写者）。
 - **需要的用户动作（最小）**：修复该模型路由/工具输出兼容问题后，用户手动新建一个任务并粘贴
   `C:\Users\Administrator\.codex\handoffs\faaf45f1f54d3735\01a0d04d-179b-7e41-ba15-aab7034ba26e\98755805705081e4cab4d635485a4b6e788687ed851b6eea2aa7c9e3d920a4b9.prompt.txt` 的内容即可继续同一批剩余工作；在问题修复前，每个批次预计都需要一次手动粘贴（本链的自动建任务能力不可用，不是提示词问题）。
