@@ -2510,11 +2510,14 @@ Owner 选择 A 后，补齐如下持久化与恢复路径：
 | `queued`／`adopted` 且有效 `taskHandle` | 成功＋编号 | 已受理，执行终态另观察 | 句柄与原 `submissionIdentity/sendSeq/targetEpoch` 关联；不可把受理当完成 |
 | `already_executed` | 成功，当前 BGI 映射无编号 | 不能证明本轮有可观察句柄 | 本期只用带编号通道；此形状保留 Unknown，BGI 协议须升级返回原编号 |
 | `queue_full` | 失败；当前 `Submit` 在注册表记一条 Rejected，但队列未入 | 候选确定未受理白名单 | 以 BGI 原子入队位置证明无副作用；与助手本轮身份关联后才关闭责任 |
-| `queue_unavailable`、`invalid_request`、`service_unavailable`、`takeover_conflict` 及其他 `Success=false` | 当前 `ClassifyQueueSubmitEarly` 一律映射 Rejected | 逐词尚未完成无副作用证明，不能一律确定未受理 | 按原词与执行位置列白名单；不在白名单的响应或畸形帧一律 Unknown |
+| `queue_unavailable` | BGI 协调器在 `Submit` 前或不可用时返回失败 | 经源码核实为确定未受理白名单 | 与原发送轮关联，允许关闭本轮；通道恢复后新操作再试 |
+| `invalid_request`、`service_unavailable`、`takeover_conflict` 及其他 `Success=false` | 原实现一律映射 Rejected | 本轮已修为 Unknown，保留原轮责任 | 逐词及全部产生位置证明无副作用后，才能扩大白名单 |
 | `queued/adopted` 无句柄、超时、断线、未知 status | 可能已出站／已入队 | Unknown，原轮 Pending，零自动重发 | 持久发送键远端查询；查询无结果本身不证明未受理 |
 
 **重启与交接状态全表**：`Reserved` 尚未被 Sender 认领，只有当前 owner 能撤销并改继任者；`Claimed` 至结果确证前禁止替换；`StopRequested` 只表示请求已发；`ExitConfirmed` 必须有旧实例终态、槽释放及旧进程存活／死亡证据；`SuccessorPermit` 只能在 BGI 物理预留有效且助手租约同代时消费一次。BGI 换 epoch 时旧停止／退出凭证只记历史；旧进程若未证实死亡，物理槽仍按占用处理。`Submitted/Unknown` 重启只按原键和原轮查询，不能换 epoch 改包重发；`Settled` 逐轮核对无未决责任后才能清保护区。原 `RecoverAfterRestart` 会把无 Submission 且 `LastSendSeq==0` 的 `Queued/InRound` 终局中止，未豁免 `PreemptConfirmPending`；红夹具实际恢复计数为 1。现已仅在该孤儿清理转换排除确认待定的继任者，保留 Active／Queued／标记且零发送。此为 **实现错误 I7 的局部修复**，交接确认后的恢复及跨进程实证仍待补。
 
-本表保留的高优先级**设计缺口**是 BGI 物理槽预留／退出凭证、远端发送键查询与幂等恢复、跨载体阻断水位及任务级可信优先级；`Success=false` 宽泛拒绝和恢复清理则是需逐状态修的**实现错误**。BGI 测试宿主崩溃属**既有测试失败／未执行范围无结论**，本次 Astra exit code 1 属**会诊工具失败、未取得会诊结论**。生产门禁及 R5.8 签署状态不变。
+本表保留的高优先级**设计缺口**是 BGI 物理槽预留／退出凭证、远端发送键查询与幂等恢复、跨载体阻断水位及任务级可信优先级；`Success=false` 宽泛拒绝和恢复清理原为需逐状态修的**实现错误**，本轮各修一处，其他入口仍待审。BGI 测试宿主崩溃属**既有测试失败／未执行范围无结论**，本次 Astra exit code 1 属**会诊工具失败、未取得会诊结论**。生产门禁及 R5.8 签署状态不变。
 
 I7 的 `Recovery_PreemptConfirmationPending_PreservesSuccessorWithoutSending` 先红（恢复计数误增 1），后绿；仲裁类 **216/216**、助手全量 **1171 通过／2 跳过／0 失败**。普通无交接标记的孤儿终局规则保留，完整交接恢复尚需后续状态与实机证据。
+
+队列失败分类反例先红：远端回显本地零字节错误词、`service_unavailable`、`task_busy`、未登记错误词原先都会关闭发送责任。现仅 `queue_full`／`queue_unavailable` 按已核 BGI 入队位置记确定拒绝，其余保留原错误词与 Unknown，绝不因 `retryable=false` 推定“未受理”。`CommandExecutorExternalStartAdmissionTests` **43/43**，助手全量 **1174 通过／2 跳过／0 失败**。这只覆盖失败词分类；成功但未知 status、远端发送键查询及真实线路仍待证。

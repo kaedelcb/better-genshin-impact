@@ -563,8 +563,25 @@ public sealed class CommandExecutorExternalStartAdmissionTests
         }, "配置组「A」", 0, DateTimeOffset.UtcNow);
         var remoteMapped = CommandExecutor.MapQueueEarlyToAdmission(remoteEcho);
         Assert.False(remoteEcho.ProvenNotSent);
-        Assert.Equal(ExternalStartExecutionKind.Rejected, remoteMapped.Early.Kind);
+        Assert.Equal(ExternalStartExecutionKind.Unknown, remoteMapped.Early.Kind);
         Assert.False(remoteMapped.Early.Retryable);
+    }
+
+    [Theory]
+    [InlineData("service_unavailable")]
+    [InlineData("task_busy")]
+    [InlineData("future_error")]
+    public void QueueEarly_UnprovedRemoteFailure_DoesNotCloseSubmission(string errorCode)
+    {
+        var early = CommandExecutor.ClassifyQueueSubmitEarly(new BgiTaskSubmitResult
+        {
+            Success = false,
+            ErrorCode = errorCode,
+            ErrorMessage = "fixture:failure outside verified no-enqueue whitelist",
+        }, "配置组「A」", 0, DateTimeOffset.UtcNow);
+
+        Assert.Equal(CommandExecutor.QueueStartEarlyKind.Unknown, early.Kind);
+        Assert.Equal(ExternalStartExecutionKind.Unknown, CommandExecutor.MapQueueEarlyToAdmission(early).Early.Kind);
     }
 
     [Theory]
@@ -776,8 +793,8 @@ public sealed class CommandExecutorExternalStartAdmissionTests
     }
 
     /// <summary>
-    /// **可重试白名单（§24.2-2″／§24.11 第 3′ 行）**：只有**无损拒绝类**才开重试窗口；
-    /// 未列入的错误码一律**终局拒绝**（保守方向，防止「可能已产生副作用」的失败进入可重试分类）。
+    /// **已证未入队白名单**：只有无损拒绝类可关闭本轮并打开重试窗口；
+    /// 未列入的远端失败保持 Unknown，不能把不可重试误写成确定拒绝。
     /// </summary>
     [Fact]
     public void QueueEarly_RejectionRetryability_IsClosedWhitelist()
@@ -789,16 +806,15 @@ public sealed class CommandExecutorExternalStartAdmissionTests
 
         Assert.True(CommandExecutor.IsRetryableQueueRejection("queue_full"));
         Assert.True(CommandExecutor.IsRetryableQueueRejection("queue_unavailable"));
-        Assert.True(CommandExecutor.IsRetryableQueueRejection("task_already_running"));
-        Assert.False(CommandExecutor.IsRetryableQueueRejection("contract_violation"));  // 未列入 ⇒ 终局拒绝
+        Assert.False(CommandExecutor.IsRetryableQueueRejection("task_already_running")); // 尚无本通道入队前证明
+        Assert.False(CommandExecutor.IsRetryableQueueRejection("contract_violation"));  // 未列入 ⇒ Unknown
         Assert.False(CommandExecutor.IsRetryableQueueRejection(null));
 
         Assert.True(MapRejected("queue_full").Retryable);
         Assert.Equal(ExternalStartExecutionKind.Rejected, MapRejected("queue_full").Kind);
-        var terminalReject = MapRejected("unknown_side_effect_code");
-        Assert.Equal(ExternalStartExecutionKind.Rejected, terminalReject.Kind);
-        Assert.False(terminalReject.Retryable);
-        Assert.Equal("unknown_side_effect_code", terminalReject.Reason);
+        var unknown = MapRejected("unknown_side_effect_code");
+        Assert.Equal(ExternalStartExecutionKind.Unknown, unknown.Kind);
+        Assert.False(unknown.Retryable);
     }
 
     /// <summary>

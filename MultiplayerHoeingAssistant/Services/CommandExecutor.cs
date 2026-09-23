@@ -1249,7 +1249,7 @@ public class CommandExecutor
 
     /// <summary>
     /// **早期受理段分类（纯函数，内部可见供夹具驱动）**：把一次 `ext.task.start` 回执分类为早期结论。
-    /// 副作用前拒绝＝**确定未受理**；缺/空白句柄＝协议违例（不可考）；`already_executed` 保留为独立幂等结论，
+    /// 经 BGI 入队前白名单证明的拒绝＝**确定未受理**；其他失败及缺/空白句柄＝不可考；`already_executed` 保留为独立幂等结论，
     /// 可携带 BGI 给出的既有句柄。旧直启投影保留既有成功文案；新准入路径只把带句柄的结论转入句柄观察，
     /// 无句柄时映射 Unknown 并保留责任。探针文案与拆分前逐字一致。
     /// </summary>
@@ -1259,8 +1259,14 @@ public class CommandExecutor
         if (!submit.Success)
         {
             ProbeLog($"[CommandExecutor][切片7] ext.task.start 被队列拒绝 {desc} errorCode={submit.ErrorCode}");
-            return new QueueStartEarly(QueueStartEarlyKind.Rejected,
-                ReasonCode: submit.ErrorCode, Detail: submit.ErrorMessage);
+            // 只有 BGI 命令面明确在 Submit 前或入队失败处产生的原词可关闭本轮责任。
+            // 未登记错误词、远端回显本地未发送码及未证明无副作用的失败都保留 Unknown。
+            return submit.ErrorCode is "queue_full" or "queue_unavailable"
+                ? new QueueStartEarly(QueueStartEarlyKind.Rejected,
+                    ReasonCode: submit.ErrorCode, Detail: submit.ErrorMessage)
+                : new QueueStartEarly(QueueStartEarlyKind.Unknown,
+                    ReasonCode: submit.ErrorCode,
+                    Detail: $"{submit.ErrorCode ?? "unknown"}: {submit.ErrorMessage ?? "无详情"}");
         }
 
         if (submit.Status == "already_executed")
@@ -1497,14 +1503,11 @@ public class CommandExecutor
         => await task.WaitAsync(ct).ConfigureAwait(false);
 
     /// <summary>
-    /// **队列通道「副作用前拒绝」的可重试白名单**（§24.2-2″／§24.11 第 3′ 行）：
-    /// 只有**无损拒绝类**（队列满／执行中占用／任务槽繁忙）才开重试窗口；**未列入者一律 `retryable=false`**
-    /// （终局拒绝，保守方向——不得让「可能已产生副作用」的失败进入可重试分类）。
-    /// 依据（BGI 侧现状，`ExternalInterfaceCommandPlane.DispatchTaskStart`）：队列满与协调器不可用均在入队前明确拒绝；
-    /// `task_already_running` 等业务拒绝也不产生新队列项。新增错误码默认终局拒绝。
+    /// **已核 BGI 入队前拒绝白名单**：队列满与协调器不可用均在 `Submit` 前或入队失败处明确拒绝。
+    /// 其余原词不能仅凭“不可重试”推成“确定未受理”；必须先保留 Unknown，再核对产生位置。
     /// </summary>
     internal static bool IsRetryableQueueRejection(string? errorCode)
-        => errorCode is "queue_full" or "queue_unavailable" or "task_already_running" or "task_busy" or "execution_occupied";
+        => errorCode is "queue_full" or "queue_unavailable";
 
     internal static QueueStartEarly ClassifyQueueSubmitFailure(Exception exception)
         => exception is BgiNotSentException notSent
