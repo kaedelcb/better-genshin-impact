@@ -239,6 +239,28 @@ public sealed class ExecutionScope : IDisposable
         // Cancellation callbacks can reenter execution; never invoke them under the admission lock.
         try { active?._stop.Cancel(); } catch (AggregateException) { }
     }
+
+    /// <summary>
+    /// 仅向同一执行实例的同一状态修订请求让位。返回 true 只证明请求已登记，
+    /// 不证明业务执行体退出，也不释放物理任务槽。
+    /// </summary>
+    public static bool TryRequestPreempt(Guid expectedInstanceId, long expectedStateRevision)
+    {
+        ExecutionScope target;
+        lock (Sync)
+        {
+            if (_active is not { } active || active._disposed
+                || active.ExecutionInstanceId != expectedInstanceId
+                || active.StateRevision != expectedStateRevision)
+                return false;
+            target = active;
+            target.Observe(TaskRunResult.Preempted);
+            target.MarkStopRequestedLocked();
+        }
+        // 取消回调可能重入，始终在根锁外执行；迟到回调只触及被捕获的旧实例。
+        try { target._stop.Cancel(); } catch (AggregateException) { }
+        return true;
+    }
     public void Dispose()
     {
         lock (Sync)

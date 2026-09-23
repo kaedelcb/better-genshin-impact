@@ -149,6 +149,72 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
         Assert.True(current.IsCurrentOwner);
     }
 
+    [Fact]
+    public void TryRequestPreempt_StopsOnlyMatchingExecutionInstanceAndRevision()
+    {
+        using (var first = ExecutionScope.Start(new(JobKind.Group, "待抢占根", JobSource.Ui)))
+        {
+            var fact = ExecutionScope.GetActiveSnapshot()!;
+            Assert.False(ExecutionScope.TryRequestPreempt(Guid.NewGuid(), fact.StateRevision));
+            Assert.False(ExecutionScope.TryRequestPreempt(fact.ExecutionInstanceId, fact.StateRevision - 1));
+            Assert.False(ExecutionScope.GetActiveSnapshot()!.StopRequested);
+
+            first.Observe(TaskRunResult.Skipped);
+            Assert.False(ExecutionScope.TryRequestPreempt(fact.ExecutionInstanceId, fact.StateRevision));
+            fact = ExecutionScope.GetActiveSnapshot()!;
+
+            Assert.True(ExecutionScope.TryRequestPreempt(fact.ExecutionInstanceId, fact.StateRevision));
+            Assert.True(ExecutionScope.GetActiveSnapshot()!.StopRequested);
+            Assert.True(first.Token.IsCancellationRequested);
+            Assert.Equal(TaskRunResult.Preempted, first.Result);
+            Assert.True(ExecutionScope.HasActive); // 请求已发不等于根退出
+            Assert.False(ExecutionScope.TryRequestPreempt(fact.ExecutionInstanceId, fact.StateRevision));
+
+            var oldFact = fact;
+            first.Dispose();
+            using var successor = ExecutionScope.Start(new(JobKind.Group, "继任根", JobSource.Ui));
+            Assert.False(ExecutionScope.TryRequestPreempt(oldFact.ExecutionInstanceId, oldFact.StateRevision));
+            var fresh = ExecutionScope.GetActiveSnapshot()!;
+            Assert.Equal(successor.ExecutionInstanceId, fresh.ExecutionInstanceId);
+            Assert.False(fresh.StopRequested);
+            Assert.False(successor.Token.IsCancellationRequested);
+        }
+    }
+
+    [Fact]
+    public async Task TryRequestPreempt_RunsCallbacksOutsideRootLock_AndCannotCancelReplacement()
+    {
+        using var old = ExecutionScope.Start(new(JobKind.Group, "旧根", JobSource.Ui));
+        var oldFact = ExecutionScope.GetActiveSnapshot()!;
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var lockWasFree = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = old.Token.Register(() =>
+        {
+            entered.TrySetResult();
+            var read = Task.Run(ExecutionScope.GetActiveSnapshot);
+            lockWasFree.TrySetResult(read.Wait(TimeSpan.FromSeconds(2)));
+            release.Task.GetAwaiter().GetResult();
+        });
+
+        var request = Task.Run(() => ExecutionScope.TryRequestPreempt(oldFact.ExecutionInstanceId, oldFact.StateRevision));
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        try
+        {
+            Assert.True(await lockWasFree.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+            old.Dispose();
+            using var successor = ExecutionScope.Start(new(JobKind.Group, "新根", JobSource.Ui));
+            release.TrySetResult();
+            Assert.True(await request.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.False(successor.Token.IsCancellationRequested);
+            Assert.Equal(successor.ExecutionInstanceId, ExecutionScope.GetActiveSnapshot()!.ExecutionInstanceId);
+        }
+        finally
+        {
+            release.TrySetResult();
+        }
+    }
+
     public void Dispose()
     {
         PreemptionGate.Disarm();
