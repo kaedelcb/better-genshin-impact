@@ -2888,4 +2888,54 @@ R5 要解决的是联机助手、BGI 与既有协调流程在**日常运行、�
 | 停止来源的强度 | ⚠ 是**首次登记的入口归属**，不是最终退出原因；`ObservedOutcome` 也不代表整棵执行树完成 |
 | 既有 14 项失败＋偶发失败 | ⚠ 基线身份不变；`BgiTaskCoordinatorTests.ClearQueue_CancelsAllQueuedItems_WithEvents` 曾在一次全量运行偶发失败（隔离 5/5 通过），**疑似时间敏感、是否既有尚未证实**，机制未定位 |
 | 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
+
+### 24.99 落地登记：助手侧退出判定接线（2026-09-24；生产行为变更，流程级回归仍待补）
+
+**本批做了什么**：把助手端"看到空闲／`running=false` 就当原任务已停止"的判定，改为**按 BGI 的执行根退出凭证**判断。
+审计出的消费点（带代码行，批次开始时）：`CommandExecutor.WaitTaskSlotSettledAsync`（以 `executionIdle` 判"原流程已退出"，
+被上线锄地 `MainViewModel.OnlineBatch`、关闭游戏键、热键抢占、按键抢占四处调用）、`ExecuteHotkeyCoreAsync` 的
+"执行完等待"循环（以 `Running:false` 判 `confirmedStopped`）、以及其 15s 检测窗（以最后一次 `Running:false` 判"未启动"）。
+
+**实现**
+
+| 组成 | 内容 |
+|---|---|
+| 证据类型 | `ExecutionExitProof`（Confirmed／Reason／QueryInstanceId／AtUtc／ObservedOutcome／Result／StopRequested／StopSource／Order） |
+| 严格解析 | `ParseExecutionIdentity`／`TryParseEpoch`／`ParseExecutionExitProof`／`IsExecutionIdle`／`IsRunningTrue`：全部纯函数、只认显式 JSON 类型；**纪元独立解析**（不要求顶层仍有活动根——退出后 `executionInstanceId` 正当为 null），回答对象由 `executionExitQueryInstanceId` 回显校验，`confirmed=true` 必须 `reason="confirmed"` 且带可解析 `executionExitAtUtc` 与整数 `executionExitOrder`，否则按 `reason_conflict`／`shape_incomplete`／`identity_mismatch`／`identity_unproven` 判**未确认** |
+| 三态能力 | `ExitContractSupport{Unknown,Unsupported,Supported}` ＋ `ExecutionStateProbe`；`ClassifyStatus`：`running` 必须显式布尔，缺失／类型错误 ⇒ `(Unknown,Unknown)`（不得当作"没有活动根"，也不得降级为"旧版"）；只有显式 `running=false` 才 ⇒ `NoActiveRoot`；身份畸形且 `running=true` ⇒ `IdentityUnavailable` |
+| settle 放行条件 | 有身份时**两条件同时成立**：该身份退出凭证 + 当前 `executionIdle`；无身份时：Supported+`NoActiveRoot` → 有证据地"没有活动根"直接放行，Supported+有根/身份不可用 → 保守拒绝，Unsupported／Unknown → 保留既有空闲弱证据并标注 |
+| 热键三态 | 检测与结束判定共用三态：有身份 → 只认凭证；**仅确认 Unsupported** 才允许空闲弱证据收尾；Supported／Unknown／身份缺失 → 保守未确认（保留上下文，返回 `result_unknown`）；能力累计用可空初值（首次实际探测决定），`Unknown` 不降级 |
+| 身份先取 | 四处 settle 调用点与上线锄地在 `task.suspend` **之前**抓取执行根身份（暂停后原根已消失，只能靠凭证） |
+
+**生产行为变更（如实标注）**：本批改的是**正在生产使用**的路径（联机锄地、热键、关闭游戏键、按键抢占）。
+当对端**支持**退出凭证但本次拿不到身份／凭证时，这些路径会**中止或返回 `result_unknown` 并保留中断上下文**（旧行为是凭空闲继续）。
+确认不支持的旧版 BGI 仍走既有空闲弱证据路径。此变更未在任何真实 BGI/实机上演练。
+
+**证据**
+
+- 反例/突变证据：受控突变（临时把 settle 的"当前空闲"合取去掉）⇒ `WaitTaskSlotSettled_WithIdentity_RequiresIdleConjunct_…` **1 红**，
+  还原后 **16/16 绿**；另有"旧规则镜像"断言留在夹具里（`ParseExecutionIdentity(无活动根凭证响应) == null`），
+  证明修复前的解析规则会把合法退出凭证判成无证据。
+- 定向夹具：`Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/CommandExecutorExecutionExitProofTests.cs` 16 条
+  （严格解析／矛盾确认／无活动根仍接受凭证／身份不匹配／纪元不同／能力三态与合并不降级／无身份三态放行与拒绝／旧版弱证据）。
+- 完整回归：助手全量 **1193 通过／2 跳过／0 失败／1195**（`r5_assist_exit_final_assistant_full_20260924.trx`）；
+  BGI 源码本批未改动，最近一次全量 **1025 通过／14 失败／1039**，失败身份与既有 14 项基线**差集为空**
+  （`r5_assist_exit3_bgi_full_20260924.trx`）——仅"身份差集为空"，**不等于**那 14 项的失败原因已归因。
+- 会诊：**GPT-6-Astra／medium 五轮各 1 次成功**。首轮 4 必改＋3 重要（矛盾确认放行／纪元依赖当前身份／热键未知态当旧版／凭证被当槽位证据等）；
+  第二轮判 ③ 未闭合、④ 部分闭合，并新增 P1（`running` 缺失被当作"没有活动根"＋15s 分支绕过三态）；第三轮判 P1 闭合、新增 P2
+  （能力累计把"尚未采样"当"探测未知"，旧版合法收尾不可达）；第四轮判 **P2 闭合、无新必改、建议本轮收口**。
+
+**残余（不因本批改变门禁）**
+
+| 项 | 状态 |
+|---|---|
+| 有身份路径的退出判定 | ✅ 局部闭合：必须"该身份退出凭证 + 当前空闲"同时成立；突变与夹具可复现 |
+| 与接管票据／同纪元当前占用的**绑定** | ❌ 未闭合：凭证与空闲是两次查询，未与本次接管票据及同一纪元的占用交叉校验；不能声称"接管绑定完整闭合" |
+| 无身份路径的兼容性证据边界 | ⚠ 能力 Unknown 的 settle 仍可能凭 `executionIdle=true` 放行；旧版热键结束仍用空闲弱证据——**不能**登记为"按身份退出凭证闭环" |
+| 流程级回归覆盖 | ❌ 待补：完整热键检测→运行→结束→收尾链路、真实 IPC 时序、15s 检测窗漏短任务等未由夹具覆盖 |
+| 版本矩阵 | ❌ 未在真实旧版 BGI 上验证 |
+| 外层告警措辞 | ⚠ 仍会把"凭证不足／查询失败"表述为"槽位未释放／疑似卡死" |
+| 既有弱判定消费点 | ⚠ 登记：`StopWithKeyPolicyAsync` 仅凭 suspend 成功即清上下文（suspend 本身已要求 `quiesceConfirmed=true` 与票据匹配，缺的是独立根退出凭证校验）；`ResolveStartConflictAsync` 仍以 `running=false` 判空闲 |
+| BGI 既有 14 项失败 | ⚠ 身份差集为空，**原因未归因**；不得表述为 BGI 全绿或本轮新增回归 |
+| 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
 | 生产入口门／真实 User 门／R5.8 实机无双跑签署 | ❌ **全部保持关闭／未签署** |

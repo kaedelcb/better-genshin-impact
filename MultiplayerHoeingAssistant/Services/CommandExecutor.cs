@@ -51,6 +51,9 @@ public class CommandExecutor
     private static readonly TimeSpan HotkeyTaskDetectTimeout = TimeSpan.FromSeconds(15);
     /// <summary>[任务策略] 快捷键启动了新任务时，等待其结束的上限（防永久挂起）。</summary>
     private static readonly TimeSpan HotkeyTaskRunTimeout = TimeSpan.FromHours(4);
+
+    /// <summary>[R5 批次 3] 任务已空闲后，为取得该执行根退出凭证给出的**有界**宽限（到期未取得 ⇒ 未确认）。</summary>
+    private static readonly TimeSpan HotkeyStopProofGrace = TimeSpan.FromSeconds(6);
     /// <summary>[分层超时 2026-09-12] v2 task.start 的命令超时：BGI 侧 task.start 刻意阻塞到任务
     /// 真正执行完才响应（cancelled 回传依赖此契约），与 ext TaskTerminalWaitTimeout 对齐。
     /// 本地命名管道在 BGI 进程死亡时立刻断流，不存在无限挂死；24h 帽只兜 BGI 活着但 handler 死锁。</summary>
@@ -81,6 +84,78 @@ public class CommandExecutor
     /// </summary>
     internal Func<int, Task<(bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)?>>?
         TaskStatusQueryOverride { get; set; }
+
+    /// <summary>
+    /// **[夹具接缝] BGI 执行根退出凭证查询覆盖**（null＝真实 IPC）。同 <see cref="TaskStatusQueryOverride"/>：
+    /// 只替换「读事实」，不改变判定/动作逻辑；生产构造不注入。
+    /// </summary>
+    internal Func<Guid, int, long, Task<ExecutionExitProof?>>? TaskExecutionExitQueryOverride { get; set; }
+
+    /// <summary>[夹具接缝] 退出/落定等待的轮询预算（生产 null＝默认 30 轮 × 200ms）。</summary>
+    internal int? TaskSettlePollBudgetForTest { get; set; }
+
+    /// <summary>[夹具接缝] `executionIdle` 读取覆盖（null＝真实 IPC）。</summary>
+    internal Func<Task<bool>>? ExecutionIdleQueryOverride { get; set; }
+
+    /// <summary>[夹具接缝] 执行根状态探测覆盖（能力+身份+根状态；null＝真实 IPC）。</summary>
+    internal Func<Task<ExecutionStateProbe>>? ExecutionStateProbeOverride { get; set; }
+
+    /// <summary>助手侧已知的**执行根身份**（来自 BGI `task.status` 的 executionInstanceId ＋ bgiEpoch）。</summary>
+    internal readonly record struct ExecutionIdentity(Guid InstanceId, int ProcessId, long StartTicksUtc);
+
+    /// <summary>
+    /// 助手侧"执行根已退出"的**证据**：只由 BGI 的按身份退出查询产生，**不等于**"看到空闲"。
+    /// <see cref="Confirmed"/> 为 true 才表示 BGI 明确回答"这一颗执行根已完成退出状态迁移"。
+    /// </summary>
+    internal sealed record ExecutionExitProof(
+        Guid QueryInstanceId,
+        bool Confirmed,
+        string Reason,
+        DateTime? ExitedAtUtc,
+        bool? ObservedOutcome,
+        string? Result,
+        bool? StopRequested,
+        string? StopSource,
+        long? Order);
+
+    /// <summary>BGI 唯一表示"已确认退出"的 reason 词；其他 reason 一律不得与 confirmed=true 同时出现。</summary>
+    internal const string ConfirmedExitReason = "confirmed";
+
+    /// <summary>对端对退出凭证合同的支持程度：**必须区分"确认不支持（旧版）"与"本次探测未知"**，后者不得降级。</summary>
+    internal enum ExitContractSupport
+    {
+        Unknown = 0,
+        Unsupported = 1,
+        Supported = 2
+    }
+
+    /// <summary>当前执行根状态（探测结果）。</summary>
+    internal enum ExecutionRootState
+    {
+        Unknown = 0,
+        NoActiveRoot = 1,
+        ActiveRoot = 2,
+        IdentityUnavailable = 3
+    }
+
+    internal readonly record struct ExecutionStateProbe(
+        ExecutionRootState State, ExecutionIdentity? Identity, ExitContractSupport Support);
+
+    /// <summary>能力合并：任一次观察到 Supported 即 Supported；否则任一次 Unknown 保持 Unknown（保守，不降级为旧版）。</summary>
+    internal static ExitContractSupport MergeExitContractSupport(ExitContractSupport left, ExitContractSupport right)
+        => left == ExitContractSupport.Supported || right == ExitContractSupport.Supported
+            ? ExitContractSupport.Supported
+            : left == ExitContractSupport.Unknown || right == ExitContractSupport.Unknown
+                ? ExitContractSupport.Unknown
+                : ExitContractSupport.Unsupported;
+
+    /// <summary>
+    /// 带"尚未采样"状态的合并：**首次实际探测决定初值**（null＝尚未采样），之后按
+    /// <see cref="MergeExitContractSupport(ExitContractSupport, ExitContractSupport)"/> 保守合并。
+    /// 这样"旧版（Unsupported）"不会被"还没采样"永久压成 Unknown（否则旧版合法收尾不可达）。
+    /// </summary>
+    internal static ExitContractSupport? MergeExitContractSupport(ExitContractSupport? current, ExitContractSupport sampled)
+        => current is null ? sampled : MergeExitContractSupport(current.Value, sampled);
 
     /// <summary>[夹具接缝] 恢复重试窗口标志（生产仅由恢复路径自身切换；此 setter 只供组件级决策表验收）。</summary>
     internal bool ResumeRetryInFlightForTest
@@ -1985,6 +2060,288 @@ public class CommandExecutor
         }
     }
 
+    /// <summary>同一次状态读里取「对端是否支持退出凭证」与「当前执行根身份」（两者必须同源，避免跨轮错配）。</summary>
+    private async Task<ExecutionStateProbe> ProbeExecutionStateAsync(int connectTimeoutMs = 1500)
+    {
+        if (ExecutionStateProbeOverride is { } probeOverride)
+            return await probeOverride().ConfigureAwait(false);
+        var resp = await SendIpcPreferredAsync("task.status", null, connectTimeoutMs);
+        if (resp is not { Success: true } || string.IsNullOrEmpty(resp.Data))
+            return new ExecutionStateProbe(ExecutionRootState.Unknown, null, ExitContractSupport.Unknown);
+        return ClassifyStatus(resp.Data);
+    }
+
+    /// <summary>
+    /// 把一次 `task.status` 响应分类为（根状态 × 能力支持度）。**保守三原则**：
+    /// ①`running` 必须是显式 JSON 布尔；缺失／类型错误一律 `Unknown`（**不得**当作"没有活动根"）；
+    /// ②能力判定只对**有效状态响应**（含合法 `running`）生效，否则为 `Unknown`，不得降级为"旧版不支持"；
+    /// ③身份解析失败且 running=true ⇒ `IdentityUnavailable`（有根但拿不到身份，对支持契约的对端必须保守）。
+    /// </summary>
+    internal static ExecutionStateProbe ClassifyStatus(string? json)
+    {
+        var unknown = new ExecutionStateProbe(ExecutionRootState.Unknown, null, ExitContractSupport.Unknown);
+        if (string.IsNullOrEmpty(json)) return unknown;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+            if (data.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !data.TryGetProperty("running", out var runningEl)
+                || runningEl.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False))
+            {
+                return unknown;
+            }
+
+            var support = SupportsExecutionExitProof(json)
+                ? ExitContractSupport.Supported
+                : ExitContractSupport.Unsupported;
+            if (ParseExecutionIdentity(json) is { } identity)
+                return new ExecutionStateProbe(ExecutionRootState.ActiveRoot, identity, support);
+            return new ExecutionStateProbe(
+                runningEl.ValueKind == System.Text.Json.JsonValueKind.True
+                    ? ExecutionRootState.IdentityUnavailable
+                    : ExecutionRootState.NoActiveRoot,
+                null, support);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return unknown;
+        }
+    }
+
+    /// <summary>严格读取 `running` 布尔（纯函数）。</summary>
+    internal static bool IsRunningTrue(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return false;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+            return data.ValueKind == System.Text.Json.JsonValueKind.Object
+                   && data.TryGetProperty("running", out var rEl)
+                   && rEl.ValueKind == System.Text.Json.JsonValueKind.True;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// [R5 批次 3] 读取当前执行根身份（executionInstanceId ＋ bgiEpoch）。**必须严格解析**：
+    /// 字段缺失、类型不对、GUID 非法一律返回 null（未知身份不得被当成"已退出"或"空闲"）。
+    /// </summary>
+    internal async Task<ExecutionIdentity?> CaptureExecutionIdentityAsync(int connectTimeoutMs = 1500)
+    {
+        var resp = await SendIpcPreferredAsync("task.status", null, connectTimeoutMs);
+        return resp is { Success: true } ? ParseExecutionIdentity(resp.Data) : null;
+    }
+
+    /// <summary>严格解析执行根身份（纯函数，便于夹具直接喂线上 JSON）。</summary>
+    internal static ExecutionIdentity? ParseExecutionIdentity(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return null;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+            if (data.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !data.TryGetProperty("executionInstanceId", out var idEl)
+                || idEl.ValueKind != System.Text.Json.JsonValueKind.String
+                || !Guid.TryParse(idEl.GetString(), out var instanceId)
+                || !data.TryGetProperty("bgiEpoch", out var epochEl)
+                || epochEl.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !epochEl.TryGetProperty("processId", out var pidEl)
+                || pidEl.ValueKind != System.Text.Json.JsonValueKind.Number
+                || !pidEl.TryGetInt32(out var processId)
+                || !epochEl.TryGetProperty("startTicksUtc", out var ticksEl)
+                || ticksEl.ValueKind != System.Text.Json.JsonValueKind.Number
+                || !ticksEl.TryGetInt64(out var startTicks))
+            {
+                return null;
+            }
+
+            return new ExecutionIdentity(instanceId, processId, startTicks);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>只解析进程纪元（bgiEpoch），**不要求**顶层存在活动执行根（退出后 executionInstanceId 正当为 null）。</summary>
+    internal static bool TryParseEpoch(string? json, out int processId, out long startTicksUtc)
+    {
+        processId = 0;
+        startTicksUtc = 0;
+        if (string.IsNullOrEmpty(json)) return false;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+            return data.ValueKind == System.Text.Json.JsonValueKind.Object
+                   && data.TryGetProperty("bgiEpoch", out var epochEl)
+                   && epochEl.ValueKind == System.Text.Json.JsonValueKind.Object
+                   && epochEl.TryGetProperty("processId", out var pidEl)
+                   && pidEl.ValueKind == System.Text.Json.JsonValueKind.Number
+                   && pidEl.TryGetInt32(out processId)
+                   && epochEl.TryGetProperty("startTicksUtc", out var ticksEl)
+                   && ticksEl.ValueKind == System.Text.Json.JsonValueKind.Number
+                   && ticksEl.TryGetInt64(out startTicksUtc);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 对端是否支持退出凭证合同：`task.status` 响应里出现退出凭证字段（`executionExitReason`／`executionExitConfirmed`）。
+    /// 用于版本矩阵：不支持（旧版 BGI）→ 保留既有空闲判定；支持但本次取不到身份/凭证 → 保守未确认。
+    /// </summary>
+    internal static bool SupportsExecutionExitProof(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return false;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+            return data.ValueKind == System.Text.Json.JsonValueKind.Object
+                   && (data.TryGetProperty("executionExitReason", out _) || data.TryGetProperty("executionExitConfirmed", out _));
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// [R5 批次 3] 按身份查询 BGI 的**执行根退出凭证**：只有 BGI 明确回答"这一颗执行根已完成退出状态迁移"
+    /// 才返回 <see cref="ExecutionExitProof.Confirmed"/>＝true。查询失败/形状错误/身份或纪元不匹配一律返回 null
+    /// （未知，**不得**当作已退出）。
+    /// </summary>
+    private async Task<ExecutionExitProof?> QueryExecutionExitAsync(ExecutionIdentity target, int connectTimeoutMs = 1000)
+    {
+        if (TaskExecutionExitQueryOverride is { } queryOverride)
+            return await queryOverride(target.InstanceId, target.ProcessId, target.StartTicksUtc).ConfigureAwait(false);
+        var payload = new System.Text.Json.Nodes.JsonObject
+        {
+            ["executionInstanceId"] = target.InstanceId.ToString("N"),
+            ["bgiEpoch"] = new System.Text.Json.Nodes.JsonObject
+            {
+                ["processId"] = target.ProcessId,
+                ["startTicksUtc"] = target.StartTicksUtc
+            }
+        }.ToJsonString();
+        var resp = await SendIpcPreferredAsync("task.status", payload, connectTimeoutMs);
+        return resp is { Success: true } ? ParseExecutionExitProof(resp.Data, target) : null;
+    }
+
+    /// <summary>
+    /// 严格解析退出凭证查询结果（纯函数）：`executionExitConfirmed` 必须是布尔；
+    /// 声明 confirmed 时必须回显同一执行实例且纪元一致，否则按"未确认"处理；
+    /// `reason` 必须是已知词表之一。任何形状问题返回 null（未知）。
+    /// </summary>
+    internal static ExecutionExitProof? ParseExecutionExitProof(string? json, ExecutionIdentity requested)
+    {
+        if (string.IsNullOrEmpty(json)) return null;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+            if (data.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !data.TryGetProperty("executionExitConfirmed", out var confirmedEl)
+                || confirmedEl.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+                || !data.TryGetProperty("executionExitReason", out var reasonEl)
+                || reasonEl.ValueKind != System.Text.Json.JsonValueKind.String)
+            {
+                return null;
+            }
+
+            var confirmed = confirmedEl.ValueKind == System.Text.Json.JsonValueKind.True;
+            var reason = reasonEl.GetString()!;
+            if (reason.Length == 0) return null;
+
+            // 纪元必须与请求一致，否则视为未确认（保守：不信任跨进程/跨代的回答）。
+            // 注意：**不**要求响应顶层仍有活动执行根——目标退出后 BGI 的 executionInstanceId 正当为 null，
+            // 回答对象由 executionExitQueryInstanceId 回显（见下），不能拿"当前身份"代替"回答对象"。
+            if (!TryParseEpoch(json, out var echoedProcessId, out var echoedStartTicks)
+                || echoedProcessId != requested.ProcessId
+                || echoedStartTicks != requested.StartTicksUtc)
+            {
+                return null;
+            }
+
+            Guid queryInstanceId = requested.InstanceId;
+            if (data.TryGetProperty("executionExitQueryInstanceId", out var qEl)
+                && qEl.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                if (!Guid.TryParse(qEl.GetString(), out queryInstanceId) || queryInstanceId != requested.InstanceId)
+                {
+                    // 回答说的是**别的**执行根：一律按未确认处理（不得把 A 的退出当成 B 的）。
+                    return new ExecutionExitProof(requested.InstanceId, false, "identity_mismatch", null, null, null, null, null, null);
+                }
+            }
+            else if (confirmed)
+            {
+                // 声明已确认却没有回答对象身份：保守拒绝。
+                return new ExecutionExitProof(requested.InstanceId, false, "identity_unproven", null, null, null, null, null, null);
+            }
+
+            if (confirmed)
+            {
+                // "已确认"必须自洽：reason 恰为 confirmed，且时刻与顺序号齐备；否则按未确认（形状不完整）处理。
+                if (reason != ConfirmedExitReason)
+                {
+                    return new ExecutionExitProof(requested.InstanceId, false, "reason_conflict", null, null, null, null, null, null);
+                }
+                if (!data.TryGetProperty("executionExitAtUtc", out var confirmedAt)
+                    || confirmedAt.ValueKind != System.Text.Json.JsonValueKind.String
+                    || !confirmedAt.TryGetDateTime(out _)
+                    || !data.TryGetProperty("executionExitOrder", out var confirmedOrder)
+                    || confirmedOrder.ValueKind != System.Text.Json.JsonValueKind.Number
+                    || !confirmedOrder.TryGetInt64(out _))
+                {
+                    return new ExecutionExitProof(requested.InstanceId, false, "shape_incomplete", null, null, null, null, null, null);
+                }
+            }
+
+            DateTime? exitedAt = data.TryGetProperty("executionExitAtUtc", out var atEl)
+                && atEl.ValueKind == System.Text.Json.JsonValueKind.String
+                && atEl.TryGetDateTime(out var parsedAt) ? parsedAt : null;
+            bool? observedOutcome = data.TryGetProperty("executionExitObservedOutcome", out var ooEl)
+                && ooEl.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False
+                ? ooEl.ValueKind == System.Text.Json.JsonValueKind.True : null;
+            string? result = data.TryGetProperty("executionExitResult", out var resEl)
+                && resEl.ValueKind == System.Text.Json.JsonValueKind.String ? resEl.GetString() : null;
+            bool? stopRequested = data.TryGetProperty("executionExitStopRequested", out var srEl)
+                && srEl.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False
+                ? srEl.ValueKind == System.Text.Json.JsonValueKind.True : null;
+            string? stopSource = data.TryGetProperty("executionExitStopSource", out var ssEl)
+                && ssEl.ValueKind == System.Text.Json.JsonValueKind.String ? ssEl.GetString() : null;
+            long? order = data.TryGetProperty("executionExitOrder", out var ordEl)
+                && ordEl.ValueKind == System.Text.Json.JsonValueKind.Number
+                && ordEl.TryGetInt64(out var parsedOrder) ? parsedOrder : null;
+
+            return new ExecutionExitProof(queryInstanceId, confirmed, reason, exitedAt, observedOutcome, result, stopRequested, stopSource, order);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// [R5 批次 3] 等待指定执行根**取得退出凭证**（有界）。只认凭证，**空闲观察不算**。
+    /// 返回 true 仅当 BGI 明确确认该执行根已退出；时间耗尽/查询失败返回 false（调用方保守处理）。
+    /// </summary>
+    internal async Task<bool> WaitExecutionExitAsync(ExecutionIdentity target, TimeSpan timeout, TimeSpan pollInterval)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await QueryExecutionExitAsync(target).ConfigureAwait(false) is { Confirmed: true })
+                return true;
+            await Task.Delay(pollInterval);
+        }
+
+        return await QueryExecutionExitAsync(target).ConfigureAwait(false) is { Confirmed: true };
+    }
+
     /// <summary>[任务冲突策略] 查询 BGI 任务状态（running / hasSuspendedTaskContext / 中断上下文身份）。查询失败返回 null（按现状容错）。</summary>
     private async Task<(bool Running, bool HasContext, string? SuspendedType, string? SuspendedName)?> QueryTaskStatusAsync(int connectTimeoutMs = 1500)
     {
@@ -2061,25 +2418,90 @@ public class CommandExecutor
     /// 保持旧容错语义照常继续（task.start 自有无损拒绝/裸拉起回退，不因一次查询失败误中止）。
     /// 供上线锄地（OnAllReadyConfirmedInternal）与按键抢占两条路径复用。
     /// </summary>
-    public async Task<bool> WaitTaskSlotSettledAsync(string logTag, Action<string>? log = null)
+    internal async Task<bool> WaitTaskSlotSettledAsync(string logTag, Action<string>? log = null,
+        ExecutionIdentity? target = null)
     {
-        for (var i = 0; i < 30; i++)
+        var budget = TaskSettlePollBudgetForTest ?? 30;
+        if (target is { } identity)
         {
-            var response = await SendIpcPreferredAsync("task.status", null, 1000);
-            if (response is { Success: true } && !string.IsNullOrEmpty(response.Data))
+            // [R5 批次 3] 有执行根身份时，放行需要**两个条件同时成立**：
+            // ①该执行根已取得退出凭证（按身份匹配，空闲不能替代）；
+            // ②当前观察为空闲（防止"A 已退出但继任根 B 正在跑"被 A 的凭证放行）。
+            ExecutionExitProof? evidence = null;
+            var slotIdle = false;
+            for (var i = 0; i < budget; i++)
             {
-                try
+                evidence = await QueryExecutionExitAsync(identity).ConfigureAwait(false);
+                if (evidence is { Confirmed: true })
                 {
-                    using var doc = System.Text.Json.JsonDocument.Parse(response.Data);
-                    if (doc.RootElement.TryGetProperty("executionIdle", out var idle)
-                        && idle.ValueKind == System.Text.Json.JsonValueKind.True) return true;
+                    slotIdle = await IsExecutionIdleAsync().ConfigureAwait(false);
+                    if (slotIdle)
+                    {
+                        (log ?? _log)?.Invoke($"{logTag} 已取得原执行根退出凭证且当前空闲（执行实例 {identity.InstanceId:N}），继续后续动作");
+                        return true;
+                    }
                 }
-                catch (System.Text.Json.JsonException) { }
+                await Task.Delay(200);
             }
+
+            (log ?? _log)?.Invoke(logTag + $" 未同时满足「原执行根退出凭证 + 当前空闲」（凭证 {evidence?.Reason ?? "unknown"}，空闲 {slotIdle}），本次动作中止（无凭证不作已退出）");
+            return false;
+        }
+
+        // 调用方没给身份：先探测对端能力与当前状态，再决定能否使用空闲弱证据。
+        var probe = await ProbeExecutionStateAsync();
+        if (probe.Support == ExitContractSupport.Supported)
+        {
+            switch (probe.State)
+            {
+                case ExecutionRootState.NoActiveRoot:
+                    // 有证据地"没有活动执行根"：没有可等的退出，直接放行（这不是空闲实例观察）。
+                    (log ?? _log)?.Invoke(logTag + " 当前没有活动执行根（无对象可等退出），继续后续动作");
+                    return true;
+                case ExecutionRootState.ActiveRoot:
+                    (log ?? _log)?.Invoke(logTag + " 对端支持退出凭证且当前有活动执行根，但调用方未提供其身份——空闲不足以判定退出（保守未确认）");
+                    return false;
+                default:
+                    (log ?? _log)?.Invoke(logTag + " 对端支持退出凭证但本次身份不可用（可能查询失败/形状异常），不得以空闲代替退出（保守未确认）");
+                    return false;
+            }
+        }
+
+        // 确认不支持（旧版 BGI）或能力未知：保留既有空闲判定以不破坏既有行为，但如实标注这是**弱证据**。
+        (log ?? _log)?.Invoke(logTag + $" 对端未确认支持退出凭证（{probe.Support}），落回空闲观察判定（弱证据：不是退出凭证）");
+        for (var i = 0; i < budget; i++)
+        {
+            if (await IsExecutionIdleAsync().ConfigureAwait(false)) return true;
             await Task.Delay(200);
         }
         (log ?? _log)?.Invoke(logTag + " 未确认原流程退出，本次启动中止（未知不作空闲）");
         return false;
+    }
+
+    /// <summary>读一次 `executionIdle`（缺失／类型不对一律 false：未知不作空闲）。</summary>
+    private async Task<bool> IsExecutionIdleAsync(int connectTimeoutMs = 1000)
+    {
+        if (ExecutionIdleQueryOverride is { } idleOverride)
+            return await idleOverride().ConfigureAwait(false);
+        var resp = await SendIpcPreferredAsync("task.status", null, connectTimeoutMs);
+        return resp is { Success: true } && IsExecutionIdle(resp.Data);
+    }
+
+    /// <summary>严格读取 `executionIdle`（纯函数）。</summary>
+    internal static bool IsExecutionIdle(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return false;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+            return data.ValueKind == System.Text.Json.JsonValueKind.Object
+                   && data.TryGetProperty("executionIdle", out var idleEl)
+                   && idleEl.ValueKind == System.Text.Json.JsonValueKind.True;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -2193,6 +2615,7 @@ public class CommandExecutor
         }
 
         Log("[任务策略] 本机任务运行中，关闭游戏键先中断当前任务（固定行为：执行完停止，不恢复）");
+        var closeGameStopTarget = await CaptureExecutionIdentityAsync(); // 先记身份：暂停后才查不到原根
         var suspendResult = await ExecuteSuspendAsync("关闭游戏键");
         if (suspendResult.Status != "success")
         {
@@ -2201,7 +2624,7 @@ public class CommandExecutor
         }
         // [A6] settle 状态确认：复核仍忙 → 中止 + 响亮告警（不静默继续动作；中断上下文保留在 BGI 侧，
         // 旧任务卡死时由用户或下一轮孤儿对账处置，绝不杀进程）
-        if (!await WaitTaskSlotSettledAsync("[任务策略]", _log))
+        if (!await WaitTaskSlotSettledAsync("[任务策略]", _log, closeGameStopTarget))
         {
             NotifyLoud("BGI 任务疑似卡死", "关闭游戏键中止：BGI 任务在 suspend 后超时未释放槽位（旧任务可能卡死），未执行关闭游戏；请检查 BGI 状态");
             return new CommandResult { Status = "failed", Message = "关闭游戏未执行：BGI 任务槽位在 suspend 后超时未释放（旧任务可能卡死），按有界退出语义中止（不杀进程），请检查 BGI 状态后重试" };
@@ -2291,6 +2714,7 @@ public class CommandExecutor
             return await ExecuteHotkeyAsync(hotkeyConfigName); // 空闲/状态未知：原语义（无被中断任务，无收尾）
 
         Log($"[任务策略] 本机任务运行中，{desc} 先中断当前任务（固定行为：执行完停止，不恢复）");
+        var hotkeyPreemptStopTarget = await CaptureExecutionIdentityAsync(); // 先记身份：暂停后才查不到原根
         var suspendResult = await ExecuteSuspendAsync(desc);
         if (suspendResult.Status != "success")
         {
@@ -2298,7 +2722,7 @@ public class CommandExecutor
             return new CommandResult { Status = "failed", Message = $"抢占中断失败：{suspendResult.Message}（按键路径绝不杀进程，请稍后重试或先手动停止当前任务）" };
         }
         // [A6] settle 状态确认：复核仍忙 → 中止 + 响亮告警（中断上下文保留在 BGI 侧，不杀进程）
-        if (!await WaitTaskSlotSettledAsync("[任务策略]", _log))
+        if (!await WaitTaskSlotSettledAsync("[任务策略]", _log, hotkeyPreemptStopTarget))
         {
             NotifyLoud("BGI 任务疑似卡死", $"{desc} 中止：BGI 任务在 suspend 后超时未释放槽位（旧任务可能卡死），热键未下发；请检查 BGI 状态");
             return new CommandResult { Status = "failed", Message = $"{desc} 未执行：BGI 任务槽位在 suspend 后超时未释放（旧任务可能卡死），按有界退出语义中止（不杀进程），请检查 BGI 状态后重试" };
@@ -2314,17 +2738,35 @@ public class CommandExecutor
         // 热键可能不启动任务：15s 内 task.status 未变 running 则直接清上下文收尾
         var started = false;
         var latestProbeConfirmedIdle = false;
+        // [R5 批次 3] 与身份同源记录"对端对退出凭证的支持程度"，供结束判定区分
+        // 「确认不支持（旧版）」「支持」「本次探测未知」三态——未知**不得**降级为旧版。
+        // null＝**尚未采样**（与"探测失败"区分）：避免旧版对端被"未采样"永久压成 Unknown 而无法正常收尾。
+        ExitContractSupport? exitContractSupport = null;
+        ExecutionIdentity? runTarget = null;
         var detectDeadline = DateTime.UtcNow + HotkeyTaskDetectTimeout;
         while (DateTime.UtcNow < detectDeadline)
         {
-            var probe = await QueryTaskStatusAsync();
-            if (probe is { Running: true }) { started = true; break; }
-            latestProbeConfirmedIdle = probe is { Running: false };
+            // [R5 批次 3] 检测窗也走三态分类：只有"显式 running=false"才算观察到空闲；
+            // 探测失败（能力/形状未知）记录下来，最终不得据此宣布"未启动任务"。
+            var state = await ProbeExecutionStateAsync();
+            exitContractSupport = MergeExitContractSupport(exitContractSupport, state.Support);
+            if (state.State is ExecutionRootState.ActiveRoot or ExecutionRootState.IdentityUnavailable)
+            {
+                started = true;
+                // 任务可能很快结束：**同一轮**就取能力与身份，拖到下一轮会漏掉身份。
+                runTarget = state.Identity;
+                break;
+            }
+            latestProbeConfirmedIdle = state.State == ExecutionRootState.NoActiveRoot;
             await Task.Delay(1000);
         }
         if (!started)
         {
-            if (!latestProbeConfirmedIdle)
+            // 只有在"显式观察到没有活动根 + 能力不为未知 + 当前确为空闲"时才允许按未启动收尾。
+            var idleNow = await IsExecutionIdleAsync();
+            if (!latestProbeConfirmedIdle
+                || exitContractSupport is null or ExitContractSupport.Unknown
+                || !idleNow)
                 return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = $"{desc} 已下发，但无法确认 BGI 是否启动任务；保留中断上下文等待核查" };
             Log($"[任务策略] {desc} 下发后 {HotkeyTaskDetectTimeout.TotalSeconds}s 内未启动新任务，直接清上下文收尾（固定行为：执行完停止）");
             await ApplyPolicyTeardownAsync(FixedKeyPolicy, desc, userCancelled: false);
@@ -2337,7 +2779,38 @@ public class CommandExecutor
         while (DateTime.UtcNow < runDeadline)
         {
             var probe = await QueryTaskStatusAsync();
-            if (probe is { Running: false }) { confirmedStopped = true; break; }
+            if (probe is { Running: true })
+            {
+                if (runTarget is null)
+                {
+                    var state = await ProbeExecutionStateAsync();
+                    exitContractSupport = MergeExitContractSupport(exitContractSupport, state.Support);
+                    runTarget = state.Identity;
+                }
+                await Task.Delay(TaskPollInterval);
+                continue;
+            }
+            if (probe is { Running: false })
+            {
+                if (runTarget is { } target)
+                {
+                    confirmedStopped = await WaitExecutionExitAsync(target, HotkeyStopProofGrace, TimeSpan.FromMilliseconds(200));
+                    if (!confirmedStopped)
+                        Log($"[任务策略] {desc} 已空闲但未取得执行根退出凭证（执行实例 {target.InstanceId:N}）——空闲不是退出凭证，按未确认处理");
+                }
+                else if (exitContractSupport == ExitContractSupport.Unsupported)
+                {
+                    // 只有**确认不支持**（旧版 BGI）才允许降级为空闲弱证据。
+                    Log($"[任务策略] {desc} 对端为旧版（不支持退出凭证），按空闲观察判定结束（弱证据：不是退出凭证）");
+                    confirmedStopped = true;
+                }
+                else
+                {
+                    // 对端支持契约、或能力探测未知/失败、或本次未取得身份：一律保守未确认（保留上下文）。
+                    Log($"[任务策略] {desc} 未取得执行根退出凭证（能力={exitContractSupport}），空闲不足以确认结束（保守未确认）");
+                }
+                break;
+            }
             // 查询失败（BGI 忙/重启中）：按容错继续等下一轮
             await Task.Delay(TaskPollInterval);
         }
@@ -2360,6 +2833,8 @@ public class CommandExecutor
         Log($"[任务冲突策略] 本机任务运行中，按键启动 {desc} 按策略（{policy.PolicyDisplayName}）抢占：先中断当前任务");
 
         // 1. suspend（跨会话守卫阻断/失败 → 直接失败返回，不杀进程）
+        // [R5 批次 3] 先记原执行根身份：suspend 之后原根可能已消失，届时只能靠凭证判断。
+        var preemptStopTarget = await CaptureExecutionIdentityAsync();
         var suspendResult = await ExecuteSuspendAsync(desc);
         if (suspendResult.Status != "success")
         {
@@ -2371,7 +2846,7 @@ public class CommandExecutor
         // [A6] settle 状态确认：复核仍忙 → 中止本次启动尝试 + 响亮告警，不再静默继续 task.start。
         // 不做策略收尾：旧任务卡死仍持槽，resume 无意义、清上下文会白丢恢复点——中断上下文保留在
         // BGI 侧，由用户处置或下一轮孤儿对账清理（按键路径绝不杀进程）。
-        if (!await WaitTaskSlotSettledAsync("[任务冲突策略]", _log))
+        if (!await WaitTaskSlotSettledAsync("[任务冲突策略]", _log, preemptStopTarget))
         {
             NotifyLoud("BGI 任务疑似卡死", $"按键启动 {desc} 中止：BGI 任务在 suspend 后超时未释放槽位（旧任务可能卡死），新任务未下发；请检查 BGI 状态");
             return new CommandResult { Status = "failed", Message = $"抢占启动 {desc} 中止：BGI 任务槽位在 suspend 后超时未释放（旧任务可能卡死），按有界退出语义未下发新任务（不杀进程），请检查 BGI 状态后重试" };

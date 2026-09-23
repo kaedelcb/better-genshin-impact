@@ -132,6 +132,8 @@ public partial class MainViewModel
         else
         {
         // 先 task.suspend 中断当前任务
+        // [R5 批次 3] 先记原执行根身份：suspend 之后原根可能已消失，届时只能凭**退出凭证**判断"确已退出"。
+        var onlineBatchStopTarget = await _commandExecutor.CaptureExecutionIdentityAsync();
         var suspendResult = await _commandExecutor.ExecuteSuspendAsync(groupName);
         if (suspendResult.Status != "success")
         {
@@ -151,7 +153,7 @@ public partial class MainViewModel
         // （ext slotReleased 事件 + 快照探测 + 200ms×30 轮询兜底），按键抢占路径复用同一实现。
         // [A6 状态确认 ADR-2026-09-16] 超时后复核槽位仍忙 = 旧任务可能卡死：中止本批启动尝试并
         // 响亮告警，不再静默进入批次 task.start（事故教训：每组一行执行失败然后无人知晓）。
-        if (!await _commandExecutor.WaitTaskSlotSettledAsync("[上线探针]", AddLog))
+        if (!await _commandExecutor.WaitTaskSlotSettledAsync("[上线探针]", AddLog, onlineBatchStopTarget))
         {
             _isAllReadyProcessing = 0;
             NotifyBatchLoud("联机锄地批次中止",
