@@ -154,6 +154,33 @@ public class BgiTaskCoordinatorTests
     }
 
     [Fact]
+    public async Task Dispose_CancelsCurrentExecutorBeforeReturning()
+    {
+        using var h = new Harness(slotFree: true);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(
+            0, "关停时在跑任务", null, 0, async (_, token) =>
+            {
+                started.TrySetResult();
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    cancelled.TrySetResult();
+                }
+
+                return true;
+            }));
+
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        h.Coordinator.Dispose();
+        await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
     public void Submit_Dedup_SameGenerationAndNameInQueue_ReturnsAdopted()
     {
         using var h = new Harness(slotFree: false); // 槽位占用，项停在队中

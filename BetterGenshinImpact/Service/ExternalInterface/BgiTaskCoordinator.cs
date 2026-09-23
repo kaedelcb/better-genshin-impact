@@ -562,7 +562,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
         // 2. 进入执行转换（与取消路径在 _submitLock 下串行，消除"取消与执行"竞态窗口）
         lock (_submitLock)
         {
-            if (item.Cts.IsCancellationRequested)
+            if (_disposed || item.Cts.IsCancellationRequested)
             {
                 // 下一行 return 前由锁外统一处理终态
             }
@@ -744,6 +744,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
     /// <summary>进程退出前调用（App.OnExit）：停 pump、在队项 CTS 全部 Cancel+Dispose（防句柄泄漏）。</summary>
     public void Dispose()
     {
+        PendingTask? current;
         lock (_submitLock)
         {
             if (_disposed)
@@ -752,10 +753,22 @@ internal sealed class BgiTaskCoordinator : IDisposable
             }
 
             _disposed = true;
+            current = _current;
         }
 
         _channel.Writer.TryComplete();
         _disposeCts.Cancel();
+
+        // 在跑项已从 _pending 移走，关停必须单独通知其执行委托。
+        // CTS 可能恰在执行 finally 中释放，取消在锁外并容忍该竞态。
+        try
+        {
+            current?.Cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // 执行已退出。
+        }
 
         List<PendingTask> remaining;
         lock (_submitLock)
