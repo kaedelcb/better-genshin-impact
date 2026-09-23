@@ -416,6 +416,209 @@ public class BgiTaskCoordinatorTests
         Assert.Equal(name, job.Name);
     }
 
+    [Theory]
+    [InlineData(BetterGenshinImpact.Service.Execution.JobState.Rejected, BetterGenshinImpact.Service.Execution.JobErrorCodes.TaskBusy)]
+    [InlineData(BetterGenshinImpact.Service.Execution.JobState.Failed, BetterGenshinImpact.Service.Execution.JobErrorCodes.AccountMismatch)]
+    public void Prerequisite_DefiniteFailure_IsNotReportedCompleted(
+        BetterGenshinImpact.Service.Execution.JobState outcome, string code)
+    {
+        using var h = new Harness(slotFree: true);
+        var submitted = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(
+            0, null, null, 0, (handle, _) =>
+            {
+                BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryMarkTerminal(
+                    handle, outcome, code, "确定失败", false);
+                return Task.FromResult(false);
+            })
+        {
+            RegistryKind = BetterGenshinImpact.Service.Execution.JobKind.Prerequisite,
+            RegistryName = "prerequisite.account",
+            ProjectRegistryOutcome = true,
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
+        });
+
+        Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status == "failed"));
+        Assert.Equal(code, h.Coordinator.QueryItemStatus(submitted.TaskHandle).ErrorCode);
+        Assert.Contains(h.Events, e => e.Name == ExternalInterfaceEventNames.TaskFailed && e.ErrorCode == code);
+        Assert.DoesNotContain(h.Events, e => e.Name == ExternalInterfaceEventNames.TaskCompleted);
+    }
+
+    [Fact]
+    public void Prerequisite_UnknownResult_RemainsNonterminal()
+    {
+        using var h = new Harness(slotFree: true);
+        var submitted = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(
+            0, null, null, 0, (handle, _) =>
+            {
+                BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryMarkUnknown(
+                    handle, BetterGenshinImpact.Service.Execution.JobErrorCodes.PrerequisiteOutcomeUnknown,
+                    "切号结果不明");
+                return Task.FromResult(false);
+            })
+        {
+            RegistryKind = BetterGenshinImpact.Service.Execution.JobKind.Prerequisite,
+            RegistryName = "prerequisite.account",
+            ProjectRegistryOutcome = true,
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
+        });
+
+        Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status == "result_unknown"));
+        Assert.DoesNotContain(h.Events, e => e.Name is ExternalInterfaceEventNames.TaskCompleted or ExternalInterfaceEventNames.TaskFailed);
+        Assert.Equal(BetterGenshinImpact.Service.Execution.JobState.ResultUnknown,
+            BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(submitted.TaskHandle)?.State);
+        var request = InstanceIpcEnvelope.Request(ExternalInterfaceOperations.JobStatus,
+            new { jobId = submitted.TaskHandle.ToString("N") });
+        Assert.True(ExternalInterfaceQueryPlane.TryDispatch(null!, null!, request, out var response));
+        Assert.Equal("result_unknown", response.Data?["status"]?.ToString());
+        Assert.Equal("result_unknown", response.Data?["job"]?["state"]?.ToString());
+    }
+
+    [Fact]
+    public void Prerequisite_VerifiedSuccess_ReportsCompleted()
+    {
+        using var h = new Harness(slotFree: true);
+        var submitted = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(
+            0, null, null, 0, (handle, _) =>
+            {
+                BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryMarkTerminal(
+                    handle, BetterGenshinImpact.Service.Execution.JobState.Succeeded,
+                    errorMessage: "switched_and_verified");
+                return Task.FromResult(false);
+            })
+        {
+            RegistryKind = BetterGenshinImpact.Service.Execution.JobKind.Prerequisite,
+            RegistryName = "prerequisite.account",
+            ProjectRegistryOutcome = true,
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
+        });
+
+        Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status == "completed"));
+        Assert.Contains(h.Events, e => e.Name == ExternalInterfaceEventNames.TaskCompleted);
+    }
+
+    [Fact]
+    public void Terminal_PrecommitMarker_DoesNotProveCompletion()
+    {
+        using var h = new Harness(slotFree: true);
+        var submitted = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(
+            0, null, null, 0, (handle, _) =>
+            {
+                BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryMarkTerminal(
+                    handle, BetterGenshinImpact.Service.Execution.JobState.Succeeded,
+                    errorMessage: "executed_pre_commit:shutdown");
+                return Task.FromResult(false);
+            })
+        {
+            RegistryKind = BetterGenshinImpact.Service.Execution.JobKind.Terminal,
+            RegistryName = "terminal.completionAction",
+            ProjectRegistryOutcome = true,
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
+        });
+
+        Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status == "result_unknown"));
+        Assert.DoesNotContain(h.Events, e => e.Name == ExternalInterfaceEventNames.TaskCompleted);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Prerequisite_MissingResultOrEscapedException_RemainsUnknown(bool throws)
+    {
+        using var h = new Harness(slotFree: true);
+        var submitted = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(
+            0, null, null, 0, (_, _) => throws
+                ? Task.FromException<bool>(new InvalidOperationException("结果未写回"))
+                : Task.FromResult(false))
+        {
+            RegistryKind = BetterGenshinImpact.Service.Execution.JobKind.Prerequisite,
+            RegistryName = "prerequisite.account",
+            ProjectRegistryOutcome = true,
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
+        });
+
+        Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status == "result_unknown"));
+        Assert.DoesNotContain(h.Events, e => e.Name is ExternalInterfaceEventNames.TaskCompleted or ExternalInterfaceEventNames.TaskFailed);
+        Assert.Equal(BetterGenshinImpact.Service.Execution.JobState.ResultUnknown,
+            BetterGenshinImpact.Service.Execution.JobRegistry.Instance.Query(submitted.TaskHandle)?.State);
+    }
+
+    [Fact]
+    public void Prerequisite_ExecutionCancellation_DoesNotClaimCompleted()
+    {
+        using var h = new Harness(slotFree: true);
+        var submitted = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(
+            0, null, null, 0, (handle, _) =>
+            {
+                BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryMarkTerminal(handle,
+                    BetterGenshinImpact.Service.Execution.JobState.Cancelled,
+                    BetterGenshinImpact.Service.Execution.JobErrorCodes.CancelledUser, wasCancelled: true);
+                return Task.FromResult(true);
+            })
+        {
+            RegistryKind = BetterGenshinImpact.Service.Execution.JobKind.Prerequisite,
+            RegistryName = "prerequisite.account",
+            ProjectRegistryOutcome = true,
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
+        });
+
+        Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(submitted.TaskHandle).Status == "result_unknown"));
+        Assert.DoesNotContain(h.Events, e => e.Name == ExternalInterfaceEventNames.TaskCompleted);
+    }
+
+    [Fact]
+    public void Prerequisite_UnknownSameKey_AdoptsOriginalWithoutExecutingAgain()
+    {
+        using var h = new Harness(slotFree: true);
+        var key = Guid.NewGuid().ToString("N");
+        var executions = 0;
+        BgiTaskCoordinator.TaskSubmission Create() => new(0, null, null, 0, (handle, _) =>
+        {
+            Interlocked.Increment(ref executions);
+            BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryMarkUnknown(handle,
+                BetterGenshinImpact.Service.Execution.JobErrorCodes.PrerequisiteOutcomeUnknown, "未确认");
+            return Task.FromResult(false);
+        })
+        {
+            RegistryKind = BetterGenshinImpact.Service.Execution.JobKind.Prerequisite,
+            RegistryName = "prerequisite.account",
+            ProjectRegistryOutcome = true,
+            IdempotencyKey = key,
+        };
+
+        var first = h.Coordinator.Submit(Create());
+        Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(first.TaskHandle).Status == "result_unknown"));
+        var second = h.Coordinator.Submit(Create());
+        Assert.Equal(BgiTaskCoordinator.SubmitStatus.Adopted, second.Status);
+        Assert.Equal(first.TaskHandle, second.TaskHandle);
+        Assert.Equal(1, executions);
+    }
+
+    [Fact]
+    public void Prerequisite_UnknownObservation_SurvivesTerminalHistoryEviction()
+    {
+        using var h = new Harness(slotFree: true);
+        var unknown = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(0, null, null, 0,
+            (handle, _) =>
+            {
+                BetterGenshinImpact.Service.Execution.JobRegistry.Instance.TryMarkUnknown(handle,
+                    BetterGenshinImpact.Service.Execution.JobErrorCodes.PrerequisiteOutcomeUnknown, "未确认");
+                return Task.FromResult(false);
+            })
+        {
+            RegistryKind = BetterGenshinImpact.Service.Execution.JobKind.Prerequisite,
+            RegistryName = "prerequisite.account",
+            ProjectRegistryOutcome = true,
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
+        });
+        Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(unknown.TaskHandle).Status == "result_unknown"));
+        for (var i = 0; i < 33; i++)
+        {
+            var ordinary = h.Submit("完成历史" + i, generation: 0);
+            Assert.True(Harness.WaitFor(() => h.Coordinator.QueryItemStatus(ordinary.TaskHandle).Status == "completed"));
+        }
+        Assert.Equal("result_unknown", h.Coordinator.QueryItemStatus(unknown.TaskHandle).Status);
+    }
+
     [Fact]
     public void JobRegistry_QueueCancelled_MarkedTerminalInRegistry()
     {

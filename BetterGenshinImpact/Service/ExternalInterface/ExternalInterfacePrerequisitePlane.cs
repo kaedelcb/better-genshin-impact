@@ -42,6 +42,7 @@ internal static class ExternalInterfacePrerequisitePlane
             RegistryKind = request.Operation == ExternalInterfaceOperations.TerminalCompletionAction
                 ? JobKind.Terminal : JobKind.Prerequisite,
             RegistryName = request.Operation[ExternalInterfaceOperations.Prefix.Length..],
+            ProjectRegistryOutcome = true,
         };
         var result = BgiTaskCoordinator.Instance.Submit(submission);
         return result.Status switch
@@ -118,17 +119,25 @@ internal static class ExternalInterfacePrerequisitePlane
 
                 if (cancelled)
                 {
-                    // B3：本地 OCE 只证明本地执行段停止；终态如实 Cancelled，由助手侧确认链对账
-                    registry.TryMarkTerminal(handle, JobState.Cancelled, JobErrorCodes.CancelledUser, null, true);
-                    return true;
+                    // OCE 不证明切号／兑换／收尾副作用未发生；保留原编号待核查。
+                    registry.TryMarkUnknown(handle, "result_unknown", "cancelled_effect_unconfirmed");
+                    return false;
                 }
                 if (failureCode != null)
                 {
                     _logger.LogWarning("[{Op}] 作业失败：{Code} {Message}", name, failureCode, failureMessage);
-                    registry.TryMarkTerminal(handle, JobState.Failed, failureCode, failureMessage, false);
+                    if (failureCode is JobErrorCodes.PrerequisiteOutcomeUnknown or JobErrorCodes.TaskStartFailed)
+                        registry.TryMarkUnknown(handle, failureCode, failureMessage);
+                    else
+                        registry.TryMarkTerminal(handle, JobState.Failed, failureCode, failureMessage, false);
                     return false;
                 }
-                // B8：破坏性收尾已在动作前预登 Succeeded（executed_pre_commit），此处 Try 语义不覆盖
+                if (isTerminal)
+                {
+                    // 动作返回不等于独立效果证明，尤其软件退出／关机不能由自身确认。
+                    registry.TryMarkUnknown(handle, "result_unknown", successDetail);
+                    return false;
+                }
                 registry.TryMarkTerminal(handle, JobState.Succeeded, null, successDetail, false);
                 return false;
             }
@@ -174,6 +183,9 @@ internal static class ExternalInterfacePrerequisitePlane
         var result = await capability.CheckAndRedeemCodeStrictAsync(uid, ct);
         if (result.Status == "failed")
             throw new PrerequisiteFailedException(JobErrorCodes.PrerequisiteFailed, result.Reason ?? "兑换失败");
+        if (result.Status is not ("disabled" or "alreadyCheckedToday" or "noNewCodes" or "redeemed"))
+            throw new PrerequisiteFailedException(JobErrorCodes.PrerequisiteOutcomeUnknown,
+                "兑换结果未列入可确认词表，不自动重试：" + result.Status);
         // disabled / alreadyCheckedToday / noNewCodes / redeemed 均为真实结果放行语义，明细随终态 message 回执
         return $"{result.Status}:{result.SubmittedCount}/{result.CandidateCount}";
     }
@@ -188,10 +200,9 @@ internal static class ExternalInterfacePrerequisitePlane
         if (JobRegistry.Instance.Snapshot().Any(j => !j.IsTerminal && j.JobId != handle))
             throw new PrerequisiteFailedException(JobErrorCodes.TerminalConflict, "存在其他活动作业，收尾拒绝执行");
 
-        var destructive = action is "closeSoftware" or "closeGameAndSoftware" or "shutdown";
-        if (destructive)
-            // 不可逆提交点：进程将终止，回执可能丢失——先登终态（尽力 executed），再执行动作
-            JobRegistry.Instance.TryMarkTerminal(handle, JobState.Succeeded, null, "executed_pre_commit:" + action, false);
+        ct.ThrowIfCancellationRequested();
+        // 当前没有可核查的耐久提交／效果证明；动作前只能记非终态意图。
+        JobRegistry.Instance.TryMarkUnknown(handle, "result_unknown", "effect_unconfirmed:" + action);
 
         _logger.LogInformation("[terminal.completionAction] 执行收尾动作：{Action}", action);
         switch (action)

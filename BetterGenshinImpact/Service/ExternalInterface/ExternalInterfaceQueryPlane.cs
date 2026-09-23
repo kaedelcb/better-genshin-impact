@@ -75,7 +75,7 @@ internal static class ExternalInterfaceQueryPlane
         name = job.Name,
         source = job.Source.ToString(),
         generation = job.Generation,
-        state = job.State.ToString().ToLowerInvariant(),
+        state = JobStateWord(job.State),
         errorCode = job.ErrorCode,
         errorMessage = job.ErrorMessage,
         wasCancelled = job.WasCancelled,
@@ -112,11 +112,15 @@ internal static class ExternalInterfaceQueryPlane
 
         return InstanceIpcEnvelope.Response(request, new
         {
-            status = job.State.ToString().ToLowerInvariant(),
+            status = JobStateWord(job.State),
             job = SerializeJob(job),
             bgiEpoch = EpochPayload(),
         });
     }
+
+    private static string JobStateWord(BetterGenshinImpact.Service.Execution.JobState state) =>
+        state == BetterGenshinImpact.Service.Execution.JobState.ResultUnknown
+            ? "result_unknown" : state.ToString().ToLowerInvariant();
 
     /// <summary>[A3.2] ext.job.list：全量快照（reconcile 输入）。附带触发器总开关状态（A2.5 只读视图出口）。</summary>
     private static InstanceIpcEnvelope HandleJobList(InstanceIpcEnvelope request)

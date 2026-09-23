@@ -88,6 +88,8 @@ internal sealed class BgiTaskCoordinator : IDisposable
         /// <summary>非配置组作业由可信提交入口指定真实类型及名称；缺省保持任务启动旧映射。</summary>
         public JobKind? RegistryKind { get; init; }
         public string? RegistryName { get; init; }
+        /// <summary>前置／收尾入口显式启用作业结果投影；普通 Task&lt;bool&gt; 执行体保持旧合同。</summary>
+        public bool ProjectRegistryOutcome { get; init; }
     }
 
     public readonly record struct SubmitResult(SubmitStatus Status, Guid TaskHandle, int QueuePosition);
@@ -163,11 +165,15 @@ internal sealed class BgiTaskCoordinator : IDisposable
     private const int TerminalRegistryCapacity = 32;
 
     /// <summary>
-    /// [终态可拉取] 队列项终态登记表：事件推送（task.completed/failed/queueCancelled）只是快速路径，
+    /// [终态可拉取] 队列项结果观察表（含非终态 result_unknown）：事件推送只是快速路径，
     /// 单帧事件丢失时助手端按 taskHandle 拉取本表校准（实机确诊：completed 帧丢失会让批次循环永久挂起）。
     /// 每项终态唯一（取消/执行路径互斥），覆盖写安全。
     /// </summary>
     private readonly ConcurrentDictionary<Guid, TerminalRecord> _terminals = new();
+    /// <summary>结果未明的编号必须持续可查询，不能被终态历史 FIFO 淘汰。</summary>
+    private readonly ConcurrentDictionary<Guid, TerminalRecord> _unresolved = new();
+    /// <summary>同键未决请求采用原句柄，阻止进程内再次执行；由 _submitLock 串行。</summary>
+    private readonly Dictionary<string, Guid> _unresolvedByKey = new();
 
     /// <summary>终态登记顺序（容量淘汰用），与 _terminals 写入一起由 _terminalsLock 串行。</summary>
     private readonly Queue<Guid> _terminalOrder = new();
@@ -244,15 +250,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
     /// <summary>[终态可拉取] 登记队列项终态（每个终态发布点调用，与事件发布同源同事）。</summary>
     private void RecordTerminal(Guid taskHandle, string status, bool cancelled = false, string? errorCode = null, string? message = null)
     {
-        _terminals[taskHandle] = new TerminalRecord(status, cancelled, errorCode, message);
-        lock (_terminalsLock)
-        {
-            _terminalOrder.Enqueue(taskHandle);
-            while (_terminalOrder.Count > TerminalRegistryCapacity)
-            {
-                _terminals.TryRemove(_terminalOrder.Dequeue(), out _);
-            }
-        }
+        RecordQueueObservation(taskHandle, status, cancelled, errorCode, message);
 
         // [A2.4] 终态同源进统一注册表（幂等仲裁：执行过的项漏斗已先写终态，此处 TryMark 返回 false 自然无操作；
         // 漏斗不可达的路径——排队取消/等槽超时/Executor 抛异常——由本点兜底，保证注册表不留 Running 僵尸）。
@@ -265,6 +263,21 @@ internal sealed class BgiTaskCoordinator : IDisposable
         TryRegistryTerminal(taskHandle, state, code, message, cancelled);
     }
 
+    private void RecordQueueObservation(Guid taskHandle, string status, bool cancelled = false,
+        string? errorCode = null, string? message = null)
+    {
+        _terminals[taskHandle] = new TerminalRecord(status, cancelled, errorCode, message);
+        lock (_terminalsLock)
+        {
+            _terminalOrder.Enqueue(taskHandle);
+            while (_terminalOrder.Count > TerminalRegistryCapacity)
+            {
+                _terminals.TryRemove(_terminalOrder.Dequeue(), out _);
+            }
+        }
+
+    }
+
     /// <summary>
     /// [终态可拉取] 按句柄查询队列项生命周期（ext.task.queueStatus 的唯一事实源）。
     /// 终态优先于在跑/在队判定：completed 发布与 _current 清理之间存在微秒级窗口，
@@ -272,22 +285,19 @@ internal sealed class BgiTaskCoordinator : IDisposable
     /// </summary>
     public QueueItemStatusResult QueryItemStatus(Guid taskHandle)
     {
-        if (_terminals.TryGetValue(taskHandle, out var terminal))
-        {
-            return new QueueItemStatusResult(terminal.Status, terminal.Cancelled, terminal.ErrorCode, terminal.Message);
-        }
-
         lock (_submitLock)
         {
+            // 与 _current 清理及未决登记共用锁；同一查询不能先漏看未决、后漏看当前。
+            if (_unresolved.TryGetValue(taskHandle, out var unresolved))
+                return new QueueItemStatusResult(unresolved.Status, unresolved.Cancelled, unresolved.ErrorCode, unresolved.Message);
+            if (_terminals.TryGetValue(taskHandle, out var terminal))
+                return new QueueItemStatusResult(terminal.Status, terminal.Cancelled, terminal.ErrorCode, terminal.Message);
             if (_current is { } current && current.TaskHandle == taskHandle)
             {
                 return new QueueItemStatusResult("running", false, null, null);
             }
-        }
-
-        if (_pending.ContainsKey(taskHandle))
-        {
-            return new QueueItemStatusResult("pending", false, null, null);
+            if (_pending.ContainsKey(taskHandle))
+                return new QueueItemStatusResult("pending", false, null, null);
         }
 
         return new QueueItemStatusResult("not_found", false, null, null);
@@ -307,6 +317,14 @@ internal sealed class BgiTaskCoordinator : IDisposable
             if (_disposed)
             {
                 return new SubmitResult(SubmitStatus.Unavailable, Guid.Empty, 0);
+            }
+
+            if (submission.ProjectRegistryOutcome)
+            {
+                if (string.IsNullOrWhiteSpace(submission.IdempotencyKey))
+                    return new SubmitResult(SubmitStatus.Unavailable, Guid.Empty, 0);
+                if (_unresolvedByKey.TryGetValue(submission.IdempotencyKey, out var unresolvedHandle))
+                    return new SubmitResult(SubmitStatus.Adopted, unresolvedHandle, 0);
             }
 
             if (submission.Generation > 0 || submission.IdempotencyKey != null)
@@ -339,6 +357,9 @@ internal sealed class BgiTaskCoordinator : IDisposable
                     return new SubmitResult(SubmitStatus.AlreadyExecuted, Guid.Empty, 0);
                 }
             }
+
+            if (submission.ProjectRegistryOutcome && _unresolvedByKey.Count >= QueueCapacity)
+                return new SubmitResult(SubmitStatus.QueueFull, Guid.Empty, 0);
 
             var item = new PendingTask
             {
@@ -600,6 +621,11 @@ internal sealed class BgiTaskCoordinator : IDisposable
             TryRegistryRunning(item.TaskHandle);
 
             var cancelled = await item.Submission.Executor(item.TaskHandle, item.Cts.Token).ConfigureAwait(false);
+            if (item.Submission.ProjectRegistryOutcome)
+            {
+                PublishProjectedRegistryOutcome(item, cancelled, startedAt);
+                return;
+            }
             if (!cancelled && item.Submission.Generation > 0)
                 RegisterExecuted(item.Submission.Generation, item.Submission.Name);
             var durationMs = (long)(DateTime.UtcNow - startedAt).TotalMilliseconds;
@@ -616,6 +642,13 @@ internal sealed class BgiTaskCoordinator : IDisposable
         catch (Exception exception)
         {
             _logger.LogError(exception, "[task.queue] 任务执行失败 taskHandle={Handle}", item.TaskHandle);
+            if (item.Submission.ProjectRegistryOutcome)
+            {
+                // 前置／收尾可能已产生副作用；逃逸异常本身不证明动作未发生。
+                JobRegistry.Instance.TryMarkUnknown(item.TaskHandle, "result_unknown", exception.GetBaseException().Message);
+                RecordUnknown(item, "result_unknown", exception.GetBaseException().Message);
+                return;
+            }
             if (item.TryMarkTerminalEventPublished())
             {
                 // [A6] 抢占超界是可重试瞬态（reconcile 按 ADR-2026-09-16 分类重试），错误码独立于通用失败
@@ -643,6 +676,60 @@ internal sealed class BgiTaskCoordinator : IDisposable
 
             item.DisposeCtsOnce();
         }
+    }
+
+    private void RecordUnknown(PendingTask item, string errorCode, string? message)
+    {
+        // 在 _current 清理前登记同键未决身份，Submit 不会跨过这一转换重发。
+        lock (_submitLock)
+        {
+            _unresolved[item.TaskHandle] = new TerminalRecord("result_unknown", false, errorCode, message);
+            if (item.Submission.IdempotencyKey is { } key)
+                _unresolvedByKey[key] = item.TaskHandle;
+        }
+    }
+
+    private void PublishProjectedRegistryOutcome(PendingTask item, bool cancelled, DateTime startedAt)
+    {
+        var snapshot = JobRegistry.Instance.QueryOutcomeSnapshot(item.TaskHandle);
+        var expectedKind = item.Submission.RegistryKind;
+        var valid = expectedKind is JobKind.Prerequisite or JobKind.Terminal
+            && snapshot?.JobId == item.TaskHandle && snapshot.Kind == expectedKind;
+        if (valid && snapshot is not null)
+        {
+            var definiteFailure = snapshot.State == JobState.Rejected && !string.IsNullOrWhiteSpace(snapshot.ErrorCode)
+                || snapshot.State == JobState.Failed && snapshot.ErrorCode is
+                    JobErrorCodes.TaskBusy or JobErrorCodes.AccountMismatch or
+                    JobErrorCodes.PrerequisiteFailed or JobErrorCodes.TerminalConflict;
+            if (definiteFailure)
+            {
+                RecordTerminal(item.TaskHandle, "failed", errorCode: snapshot.ErrorCode, message: snapshot.ErrorMessage);
+                PublishSafe(ExternalInterfaceEventNames.TaskFailed, new
+                {
+                    taskHandle = item.TaskHandle.ToString("N"),
+                    errorCode = snapshot.ErrorCode,
+                    message = snapshot.ErrorMessage,
+                });
+                return;
+            }
+            if (snapshot.State == JobState.Succeeded && expectedKind == JobKind.Prerequisite && !cancelled)
+            {
+                RecordTerminal(item.TaskHandle, "completed");
+                PublishSafe(ExternalInterfaceEventNames.TaskCompleted, new
+                {
+                    taskHandle = item.TaskHandle.ToString("N"),
+                    groupName = item.Submission.GroupName,
+                    cancelled = false,
+                    durationMs = (long)(DateTime.UtcNow - startedAt).TotalMilliseconds,
+                });
+                return;
+            }
+        }
+
+        // 注册表缺失、类型不符或效果不明时只暴露非终态观察，不发布终态事件。
+        if (snapshot is { State: JobState.Queued or JobState.Running or JobState.Cancelling })
+            JobRegistry.Instance.TryMarkUnknown(item.TaskHandle, snapshot.ErrorCode ?? "result_unknown", snapshot.ErrorMessage);
+        RecordUnknown(item, snapshot?.ErrorCode ?? "result_unknown", snapshot?.ErrorMessage);
     }
 
     /// <summary>等槽位空：只读轮询 + 项级取消可打断 + 兜底超时。返回 false = 超时或被取消。

@@ -49,6 +49,9 @@ public enum JobState
 
     /// <summary>正常跳过（R4.7 结果通道：子项显式上报 SkippedNormal；终态，与成功/失败分别表达，D6）。尾部追加不改既有数值。</summary>
     Skipped,
+
+    /// <summary>结果无法确认；保留原句柄和对账责任，不能作为成功／失败终态。</summary>
+    ResultUnknown,
 }
 
 /// <summary>[A1.4] 终态失败/结束原因受控词表（总计划 §4.6，死信可排查）。</summary>

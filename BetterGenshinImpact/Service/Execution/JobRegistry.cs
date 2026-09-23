@@ -146,6 +146,37 @@ public sealed partial class JobRegistry
     /// <summary>推进到 Running。作业不存在或已是终态时返回 false。</summary>
     public bool TryMarkRunning(Guid jobId) => Transition(jobId, JobState.Running, null);
 
+    /// <summary>记录不可判定的执行结果；保持非终态，后续仅凭独立证据结算。</summary>
+    public bool TryMarkUnknown(Guid jobId, string errorCode, string? message)
+    {
+        BgiJob? transitioned;
+        lock (_gate)
+        {
+            if (!_jobs.TryGetValue(jobId, out var job) || job.IsTerminal)
+                return false;
+            job.ErrorCode = errorCode;
+            job.ErrorMessage = message;
+            job.TransitionTo(JobState.ResultUnknown, message ?? errorCode);
+            transitioned = job;
+        }
+        FireTransitioned(transitioned);
+        return true;
+    }
+
+    /// <summary>在同一注册表锁内复制结果，避免 Query 返回的可变 Job 在投影时变化。</summary>
+    public JobOutcomeSnapshot? QueryOutcomeSnapshot(Guid jobId)
+    {
+        lock (_gate)
+        {
+            return _jobs.TryGetValue(jobId, out var job)
+                ? new JobOutcomeSnapshot(job.JobId, job.Kind, job.State, job.ErrorCode, job.ErrorMessage, job.WasCancelled)
+                : null;
+        }
+    }
+
+    public sealed record JobOutcomeSnapshot(Guid JobId, JobKind Kind, JobState State,
+        string? ErrorCode, string? ErrorMessage, bool WasCancelled);
+
     /// <summary>推进到 Cancelling（取消已请求、执行体未退出）。</summary>
     public bool TryMarkCancelling(Guid jobId, string? reason = null) => Transition(jobId, JobState.Cancelling, reason);
 
