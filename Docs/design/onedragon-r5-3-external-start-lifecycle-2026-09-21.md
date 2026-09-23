@@ -2622,3 +2622,31 @@ Owner 已明确选择：低优先级新任务遇到正在执行的高优先级�
 **合同纠正**：协调器的 `Preempt=true` 仅缩短等待并在超时后尝试 Executor；v2 core 的 `preempt` 参数未用于主动停止，忙时仍拒绝。core `await dispatch.Task.Unwrap()`，配置组根在其返回前退出；不能把“v2 core 提前返回、根尚未 Dispose”写成已确认缺陷。`TaskStarted` 与注册表 `Running` 目前表示**调度派发**，不是物理槽已持有；后续应改名或增加明确阶段，不能以它签发继任许可。
 
 **分类与施工次序**：D26–D30 是尚未冻结／未实现的高优先级设计缺口；I8＝前置失败被队列记 `completed`，I9＝前置／收尾排队 kind 错误，I10＝破坏性收尾取消／预记成功。I9 已按“可信入口显式携带作业类型和名称”先红后修，协调器定向 **21/21**；BGI 全量复跑 **944 通过／14 失败／958**，失败身份与 `r410_bgi_full_c2_20260919.trx` 的 14 项完全相同。首轮 943/15 多出 `ExecutionScopeSkippedTests`，单独复跑通过，完整复跑不再出现；记为一次并行干扰观察，不把它记成已稳定修复。其余 I8/I10 需先冻结不可逆提交和结构化回执。本次会诊 **GPT-6-Astra／medium／1 次成功、无工具失败**。继续完成槽状态／退出／收尾合同全状态枚举及红夹具，再逐转移实施；生产入口和真实 User 门保持关闭，R5.8 仍未签署。
+
+### 24.84 前置／收尾结果与不可逆提交状态全表（2026-09-24；候选合同，未实现）
+
+第二次聚焦会诊使用 GPT-6-Astra／medium **1 次成功**，只读核对 I8/I10。`BgiTaskCoordinator.RecordTerminal` **先写队列 `_terminals`、再尝试写 JobRegistry，两步不原子**；`RunOpAsync` 也可先写 job 终态，因此两侧会分裂：执行体先记失败／拒绝，协调器随后按 `false` 记队列 `completed`，再尝试记 job 成功但被“先终态者赢”拒绝。`TaskSubmission.Executor: Task<bool>` 仅表达取消；`RunOpAsync` 的确定失败／拒绝写 job 后返回 `false`。破坏性收尾在动作前写 `Succeeded`，`ct` 未参与提交前裁决；进程自终止可能失去回执，不能用预记成功掩盖结果未知。此前本节第一版“RecordTerminal 只写队列”的说法经验证会诊指出并按源码改正。
+
+**单一权威提案**：BGI 端新增耐久受理／提交／结果记录，统一发布入口校验同一 `{epoch,jobId,actionId,submitKey,payloadHash}`；Executor 只返回绑定身份的执行证据，job 查询、队列查询和事件从同一已发布结果投影。队列编号受理、业务结果、物理退出分列；`TaskStarted` 不代表已经持有物理槽。作业结果枚举 `Succeeded/Failed/Cancelled/Rejected/Unknown`，其中 Unknown 非终态；正交提交阶段 `NotCommitted/Committing/EffectConfirmed`，`Committing` 只证明一次性调用许可已签发，**不证明动作已经发生**。发送已受理后 BGI 本地 Rejected 在 R5 完成层映射 `ExecutionFailed`，不能倒退为发送层“未受理”。上述字段及版本是 **BGI 新载体候选**，不借用助手租约 v6／台账 v3 的提案号。
+
+| 交错／事实 | 唯一裁决与动作许可 | 持久结果及对外回执 | 重启／重复动作规则 |
+|---|---|---|---|
+| 入队前确定拒绝 | 受理入口证明没有登记、没有让 pump 可见 | 发送层 `Rejected`，无作业完成结果 | 原 key 查证；可重试范围限封闭白名单 |
+| 编号已受理后，执行校验或槽位确定拒绝 | 执行者证明没有进入业务动作，结果发布者记录原错误码 | job `Rejected`、队列 `failed`；R5 完成层 `ExecutionFailed` | 保留原编号及受理历史，不能伪装为“未发”换 key |
+| 确定业务失败／成功 | Executor 提供动作级失败或完成证据；统一结果发布后才通知 | 失败为 job/queue 同源 `Failed/failed`；成功为 `Succeeded/completed` | 回原结果与原观察时间，不再次执行 |
+| 账号切换结果不明、兑换返回未列明状态或副作用后抛错 | 原动作事实不充分；不能靠异常类型推定未生效 | `Unknown` 非终态，保留原错误词／步骤；不发 `TaskCompleted` | 仅查询原动作或人工裁决；不自动重发 |
+| 排队期取消先赢 | 队列受理权威在派发前原子取消 | `Cancelled/queueCancelled`，业务动作数 0 | 原编号保持取消结果 |
+| 执行段取消先于不可逆提交 | 取消与 `TryBeginCommit` 在同一权威边界竞争；取消赢则不发 permit | `Cancelled`，明确 `CancelledBeforeCommit`；动作数 0 | 不得由旧执行者晚到后继续动作 |
+| `Committing` 先于取消持久落盘 | 当前执行者取得一次性、不可跨进程恢复的 permit；后到取消只记意向 | 有效果完成证据才 `Succeeded`；否则 `Unknown/Committing`，不得报 Cancelled | 新进程只查原动作，不重发 permit／不补做 |
+| 不可逆动作抛错且能证明零效果；或已部分执行 | 按各步骤独立证据判断，抛错本身不证明零效果 | 前者可 `Failed`；后者 `Unknown/Committing`，保留已完成步骤 | 部分效果不得整体重放；需动作专用对账 |
+| `Committing` 后动作前崩溃，或动作后结果落盘前崩溃 | 旧进程死亡只证明旧执行者失权，不能区分两个窗口 | `Unknown/Committing`，不补造成功或取消 | 同 key 查询；无权威效果证明则停驻待核查 |
+| 完整结果已耐久，通知／队列投影前崩溃 | 耐久结果版本唯一 | 查询同一 `resultId/revision`；事件可补发 | 投影及通知重建，不再执行 |
+| 受理、提交、结果任一点写入失败或写后抛错 | 同 key 读回；提交发布不明不给动作 permit，结果发布不明不报权威终态 | 确定未写与 Unknown 明确区分；原字节和原责任保留 | 不重放业务动作；只重试存证／查询，冲突隔离 |
+
+**动作成功证据下界**：切号需严格 UID 后验；兑换只接受明确列出的成功／无需操作词；`closeGame` 需目标游戏进程退出事实；`closeSoftware` 需独立观察 BGI 进程退出；`closeGameAndSoftware` 两步分别存证；`shutdown` 的“OS 接受请求”和“机器已关机”不得混称。当前 `SystemControl` 和能力内部实现尚未逐项核实，暂不为这些动作宣称效果成功。直接关闭软件、关机等无法由执行进程自身在退出后落终态，必须允许 `Committing/Unknown` 持续对账。
+
+**共用 Executor 与旧结果兼容表（冻结前待逐调用点核实）**：`TaskSubmission.Executor` 同时供普通配置组／一条龙和前置／收尾使用，不能只改前置委托却让普通 `false` 自动变成未经核验的成功。当前 v2 `ExecuteTaskStartCoreAsync` 的已核实出口是 `Ran→false`、`Cancelled→true`、其他结果抛异常；新合同只允许该**具体已核验适配器**按对应原始结果转为 `Succeeded/Cancelled/Failed`，任意 `Task<bool>` 不得作通用兼容包装。前置／收尾必须改为显式结构化证据。`JobState.Skipped` 为独立终态；已核实 `TaskRunner` 在一条龙子项上报 `OneDragonItemOutcome.SkippedNormal` 且无失败/取消时写 `Skipped`，不能映射 `Succeeded` 或由 `false` 推断；R5 完成层只接受 `skippedUser/skippedFilter` 等封闭结果词，`SkippedNormal` 的跨端映射仍待核对。旧消费者不识别 `Unknown/Committing` 时，新协议能力不开放该入口；不能把 Unknown 塞进 `failed` 或把 Committing 塞进 `completed` 冒充兼容。此表尚有生产调用点待核，**不构成已冻结接口**。
+
+**施工门槛**：先枚举受理、提交、结果、物理退出四种状态及非法组合，冻结 BGI 耐久记录字段／同键异载荷规则／容量保留／旧消费者能力；红夹具逐一覆盖上表的取消赢、提交赢、动作抛错、三处写入故障和各崩溃窗。I8 可先处理“确定拒绝／确定失败不再被队列报成功”，但必须显式保留 `PrerequisiteOutcomeUnknown` 作为非终态残项；不能以这一步声称 I8 完成。I10 在耐久提交、查询及取消裁决都未实现前不得开放生产破坏性收尾。改变状态词或成功含义属语义变更，按 §17.4-A 复会诊并再生 `ClaimSurfaceGuardTests` 清单。两轮会诊工具均成功；BGI 既有 14 失败仍与修复错误分账。
+
+**验证会诊处置**：GPT-6-Astra／medium **1 次成功**，报告 2 阻断（均为代码尚未实现：I8/I10）和 2 重要（上述 `RecordTerminal` 事实纠错、共用 Executor/Skipped/旧消费者映射未闭合）。无会诊工具失败。§24.84 继续标注候选；高优先级设计矛盾尚未清零，不能据此批量改状态或开放生产入口。
