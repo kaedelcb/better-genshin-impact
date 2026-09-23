@@ -1281,6 +1281,13 @@ public class CommandExecutor
                     : null);
         }
 
+        if (submit.Status is not ("queued" or "adopted"))
+        {
+            ProbeLog($"[CommandExecutor] ext.task.start 成功响应状态词未登记（status={submit.Status}），结果未知 {desc}");
+            return new QueueStartEarly(QueueStartEarlyKind.Unknown,
+                Detail: $"未登记的成功状态词：{submit.Status ?? "null"}，taskHandle={submit.TaskHandle ?? "null"}");
+        }
+
         if (string.IsNullOrWhiteSpace(submit.TaskHandle))
         {
             // 畸形响应（queued/adopted 但无句柄）：受理结果未知，禁止换通道重发，

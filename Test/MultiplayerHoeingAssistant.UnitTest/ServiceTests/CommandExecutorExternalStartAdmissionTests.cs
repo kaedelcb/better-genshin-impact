@@ -508,6 +508,13 @@ public sealed class CommandExecutorExternalStartAdmissionTests
             CommandExecutor.MapQueueEarlyToAdmission(whitespaceHandle).Early.Kind);
         Assert.Null(CommandExecutor.MapQueueEarlyToAdmission(whitespaceHandle).Observer);
 
+        var unknownStatus = CommandExecutor.ClassifyQueueSubmitEarly(
+            new BgiTaskSubmitResult { Success = true, Status = "future_status", TaskHandle = "h-unverified" },
+            "配置组「A」", 3, observedAt);
+        Assert.Equal(CommandExecutor.QueueStartEarlyKind.Unknown, unknownStatus.Kind);
+        Assert.Equal(ExternalStartExecutionKind.Unknown,
+            CommandExecutor.MapQueueEarlyToAdmission(unknownStatus).Early.Kind);
+
         var faulted = new CommandExecutor.QueueStartEarly(
             CommandExecutor.QueueStartEarlyKind.Unknown, Detail: "pipe broken");
         Assert.Equal(ExternalStartExecutionKind.Unknown, CommandExecutor.MapQueueEarlyToAdmission(faulted).Early.Kind);
