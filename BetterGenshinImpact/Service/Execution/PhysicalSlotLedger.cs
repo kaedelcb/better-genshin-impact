@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -40,8 +41,18 @@ internal sealed class PhysicalSlotLedger
     internal string RecordPath => Path.Combine(_directory, _slotId + ".state.json");
     internal string LockPath => Path.Combine(_directory, _slotId + ".lock");
 
-    public PhysicalSlotAcquireResult TryAcquire((int ProcessId, long StartTicksUtc) ownerEpoch)
+    public PhysicalSlotAcquireResult TryAcquire()
     {
+        (int ProcessId, long StartTicksUtc) ownerEpoch;
+        try
+        {
+            using var current = Process.GetCurrentProcess();
+            ownerEpoch = (current.Id, current.StartTime.ToUniversalTime().Ticks);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or NotSupportedException)
+        {
+            return new(PhysicalSlotAcquireStatus.Uncertain, null, "owner_epoch_unavailable");
+        }
         if (ownerEpoch.ProcessId <= 0 || ownerEpoch.StartTicksUtc <= 0)
             return new(PhysicalSlotAcquireStatus.Uncertain, null, "invalid_owner_epoch");
 

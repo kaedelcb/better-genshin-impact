@@ -22,40 +22,55 @@ public sealed class PhysicalSlotLedgerTests : IDisposable
     }
 
     [Fact]
+    public void Acquisition_BindsRecordedOwnerToActualProcess()
+    {
+        var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
+        var result = ledger.TryAcquire();
+        Assert.Equal(PhysicalSlotAcquireStatus.Acquired, result.Status);
+        using var lease = Assert.IsType<PhysicalSlotLease>(result.Lease);
+        using var current = Process.GetCurrentProcess();
+        Assert.Equal(current.Id, lease.OwnerEpoch.ProcessId);
+        Assert.Equal(current.StartTime.ToUniversalTime().Ticks, lease.OwnerEpoch.StartTicksUtc);
+        var record = JsonNode.Parse(File.ReadAllText(ledger.RecordPath))!;
+        Assert.Equal(current.Id, (int)record["OwnerProcessId"]!);
+        Assert.Equal(current.StartTime.ToUniversalTime().Ticks, (long)record["OwnerStartTicksUtc"]!);
+    }
+
+    [Fact]
     public void SameSlot_IsExclusive_AndReacquireAdvancesGeneration()
     {
         var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
-        var first = ledger.TryAcquire((101, 111));
+        var first = ledger.TryAcquire();
         Assert.Equal(PhysicalSlotAcquireStatus.Acquired, first.Status);
         using var firstLease = Assert.IsType<PhysicalSlotLease>(first.Lease);
         Assert.Equal(1, firstLease.Generation);
 
-        var contender = new PhysicalSlotLedger(_directory, "session-1-genshin").TryAcquire((202, 222));
+        var contender = new PhysicalSlotLedger(_directory, "session-1-genshin").TryAcquire();
         Assert.Equal(PhysicalSlotAcquireStatus.Busy, contender.Status);
         Assert.Null(contender.Lease);
 
         firstLease.Dispose();
-        var successor = ledger.TryAcquire((202, 222));
+        var successor = ledger.TryAcquire();
         Assert.Equal(PhysicalSlotAcquireStatus.Acquired, successor.Status);
         using var successorLease = Assert.IsType<PhysicalSlotLease>(successor.Lease);
         Assert.Equal(2, successorLease.Generation);
         Assert.NotEqual(firstLease.Nonce, successorLease.Nonce);
-        Assert.Equal((202, 222), successorLease.OwnerEpoch);
+        Assert.Equal(firstLease.OwnerEpoch, successorLease.OwnerEpoch);
     }
 
     [Fact]
     public void MissingOrCorruptRecordAfterPriorUse_FailsClosed()
     {
         var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
-        using (var first = Assert.IsType<PhysicalSlotLease>(ledger.TryAcquire((101, 111)).Lease)) { }
+        using (var first = Assert.IsType<PhysicalSlotLease>(ledger.TryAcquire().Lease)) { }
         File.WriteAllText(ledger.RecordPath, "{bad json");
 
-        var corrupt = ledger.TryAcquire((202, 222));
+        var corrupt = ledger.TryAcquire();
         Assert.Equal(PhysicalSlotAcquireStatus.Uncertain, corrupt.Status);
         Assert.Null(corrupt.Lease);
 
         File.Delete(ledger.RecordPath);
-        var missing = ledger.TryAcquire((202, 222));
+        var missing = ledger.TryAcquire();
         Assert.Equal(PhysicalSlotAcquireStatus.Uncertain, missing.Status);
         Assert.Null(missing.Lease);
     }
@@ -64,10 +79,10 @@ public sealed class PhysicalSlotLedgerTests : IDisposable
     public void InterruptedPublishResidue_BlocksReacquisition()
     {
         var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
-        using (var first = Assert.IsType<PhysicalSlotLease>(ledger.TryAcquire((101, 111)).Lease)) { }
+        using (var first = Assert.IsType<PhysicalSlotLease>(ledger.TryAcquire().Lease)) { }
         File.WriteAllText(ledger.RecordPath + ".tmp-crash", "partial");
 
-        var result = ledger.TryAcquire((202, 222));
+        var result = ledger.TryAcquire();
         Assert.Equal(PhysicalSlotAcquireStatus.Uncertain, result.Status);
         Assert.Null(result.Lease);
     }
@@ -76,13 +91,13 @@ public sealed class PhysicalSlotLedgerTests : IDisposable
     public void ExhaustedGeneration_IsRejectedWithoutChangingExistingRecord()
     {
         var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
-        using (var first = Assert.IsType<PhysicalSlotLease>(ledger.TryAcquire((101, 111)).Lease)) { }
+        using (var first = Assert.IsType<PhysicalSlotLease>(ledger.TryAcquire().Lease)) { }
         var record = JsonNode.Parse(File.ReadAllText(ledger.RecordPath))!;
         record["Generation"] = long.MaxValue;
         File.WriteAllText(ledger.RecordPath, record.ToJsonString());
         var before = File.ReadAllBytes(ledger.RecordPath);
 
-        var result = ledger.TryAcquire((202, 222));
+        var result = ledger.TryAcquire();
         Assert.Equal(PhysicalSlotAcquireStatus.Uncertain, result.Status);
         Assert.Equal(before, File.ReadAllBytes(ledger.RecordPath));
     }
@@ -91,16 +106,16 @@ public sealed class PhysicalSlotLedgerTests : IDisposable
     public void LockHandle_ExcludesAnotherWindowsProcess()
     {
         var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
-        using (var first = Assert.IsType<PhysicalSlotLease>(ledger.TryAcquire((101, 111)).Lease))
+        using (var first = Assert.IsType<PhysicalSlotLease>(ledger.TryAcquire().Lease))
             Assert.Equal("busy", ProbeFromChildProcess(ledger.LockPath));
         Assert.Equal("acquired", ProbeFromChildProcess(ledger.LockPath));
     }
 
     [Fact]
-    public void AbortedLockHolder_ReleasesOsHandle_AndNextAcquisitionAdvancesGeneration()
+    public async Task AbortedLockHolder_ReleasesOsHandle_AndNextAcquisitionAdvancesGeneration()
     {
         var ledger = new PhysicalSlotLedger(_directory, "session-1-genshin");
-        using (var initial = Assert.IsType<PhysicalSlotLease>(ledger.TryAcquire((101, 111)).Lease)) { }
+        using (var initial = Assert.IsType<PhysicalSlotLease>(ledger.TryAcquire().Lease)) { }
         var path64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(ledger.LockPath));
         var script = "$p=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + path64 + "'));" +
                      "$s=[IO.File]::Open($p,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None);" +
@@ -108,12 +123,11 @@ public sealed class PhysicalSlotLedgerTests : IDisposable
         using var child = Process.Start(CreatePowerShellStart(script))!;
         try
         {
-            Assert.Equal("held", child.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(8))
-                .GetAwaiter().GetResult());
-            Assert.Equal(PhysicalSlotAcquireStatus.Busy, ledger.TryAcquire((202, 222)).Status);
+            Assert.Equal("held", await child.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(8)));
+            Assert.Equal(PhysicalSlotAcquireStatus.Busy, ledger.TryAcquire().Status);
             child.Kill(entireProcessTree: true);
             Assert.True(child.WaitForExit(5000));
-            var after = ledger.TryAcquire((303, 333));
+            var after = ledger.TryAcquire();
             Assert.Equal(PhysicalSlotAcquireStatus.Acquired, after.Status);
             using var lease = Assert.IsType<PhysicalSlotLease>(after.Lease);
             Assert.Equal(2, lease.Generation);
