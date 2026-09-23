@@ -2521,3 +2521,25 @@ Owner 选择 A 后，补齐如下持久化与恢复路径：
 I7 的 `Recovery_PreemptConfirmationPending_PreservesSuccessorWithoutSending` 先红（恢复计数误增 1），后绿；仲裁类 **216/216**、助手全量 **1171 通过／2 跳过／0 失败**。普通无交接标记的孤儿终局规则保留，完整交接恢复尚需后续状态与实机证据。
 
 队列失败分类反例先红：远端回显本地零字节错误词、`service_unavailable`、`task_busy`、未登记错误词原先都会关闭发送责任。现仅 `queue_full`／`queue_unavailable` 按已核 BGI 入队位置记确定拒绝，其余保留原错误词与 Unknown，绝不因 `retryable=false` 推定“未受理”。随后同一回执边界的独立红夹具证明“成功＋编号＋未知 status”原被误记 Accepted，现只允许 `queued`／`adopted`＋编号进入受理，未知 status 保留 Unknown。`CommandExecutorExternalStartAdmissionTests` **43/43**，助手全量 **1174 通过／2 跳过／0 失败**。远端发送键查询及真实线路仍待证。
+
+### 24.77 BGI 全量回归与基线逐名比对（2026-09-24）
+
+用户关闭运行中的 BGI 后，以 `DeployToBgiTools=false`、`--no-build` 重跑 BGI 全量：**942 通过／14 失败／956 总计**，测试宿主完整结束。失败身份集合与 `r410_bgi_full_c2_20260919.trx` 的 **14 个失败逐名相同**，差集为空；9 月 19 日另一份完整基线同为 14 失败。关闭 BGI 前的崩溃运行只完成 91 项，不能据此定位代码缺陷；现本轮全量的“未执行范围无结论”限制已解除，但 14 个既有失败仍为**既有测试失败**，不是全绿。助手全量结论与 BGI 全量结论分别报告，不代替实际入口／R5.8 无双跑验收。
+
+### 24.78 §24.76 集中设计会诊修订（2026-09-24；GPT-6-Astra／medium／1 次成功，仍非冻结）
+
+本轮只读会诊指出以下九处高优先级合同缺口；已逐项核对所列代码入口，受影响场景同步登记在[集中审查稿](onedragon-r5-unfinished-path-scenario-review-2026-09-23.md)。未提供的 Store／handler 内部行为不作推定。**B0 表示可能错停、重复执行或错误结清责任；B1 表示合法恢复可能永久停驻。**这些是规则修订，不代表协议已实现。
+
+| 编号与级别 | 规则修订及受影响场景 | 源码核对与待证边界 |
+|---|---|---|
+| D14／B0 物理槽预留顺序 | 对“高级／同级抢占、停止后退出、原生入口撞车”统一为**先绑定被切实例和继任者建立排他预留，再定向停止**。自然完成先于预留时，对空槽 generation CAS 建立预留；入队后预留连续归属该队列项，pump 识别自有预留，起步时转为继任执行实例，不在“已排队、尚未执行”时释放排他。 | `BgiTaskCoordinator.WaitSlotFreeAsync` 只读空闲、`ExecutionScope.Start` 用另一个锁且明确不拥有 `TaskSemaphore`；当前无跨入口连续槽权。§24.76“停止→退出→预留”顺序被本条覆盖。 |
+| D15／B0 停止副作用先后 | 对“被切任务自然完成、停止时换实例、F11”分**定向交接停止**和用户全局停止。定向操作在同一门中先核 `epoch/instance/expectedRevision` 再捕获目标取消对象，不默认清队列；记录 `stopAppliedRevision/terminalRevision/slotGeneration` 的合法推进。`AlreadyExited` 保留自然完成结果。 | `DispatchTaskStop` 先 `ClearQueue`；非 `ownedOnly` 的 `CancelByHandle` 匹配后锁外走全局 stop；`StopActive/Suspend` 无实例 CAS，`Dispose` 无耐久退出凭证。不能要求 revision 全程不变，因为停止本身会更新它。 |
+| D16／B0 第三挑战者换位 | 对“停止与发送间第三挑战者、F11、换主”采用 BGI 原子替换预留 `replacementId+expectedReservationVersion`。若协议只能撤销再建立，必须保持禁止全部入口执行的 handoff hold，并有 `ReplacementPrepared/RemoteReplacementUnknown/ReplacementCommitted` 及两端读回。Sender 认领是与交接阶段正交的独立维度；旧认领代次撤销须由 BGI fencing，不能仅本地取消。 | 当前 `AcceptanceClaim` 发生在受理事实后，不是发送前认领；本地事务不能原子改远端 `AuthorizedPreemptor`。§24.74“同一事务撤销并更新两端”按本条拆成可恢复协议。 |
+| D17／B0 迟到见证拦在受理点 | 对“旧 Sender 换主、迟到受理、新许可已签未发”增加稳定见证 ID、排他域、原轮身份、单调序号及阶段。新许可和 Sender 认领必须消费同一水位；见证追加时还要把**已签未被远端受理**的许可纳入待对账。要求见证后零新受理时，BGI 受理点必须执行代次 fencing／撤销确认；双文件本地顺序不够。见证首写失败维持持久故障门。 | `PersistLateAcceptanceReceiptAsync` 当前追加台账后等待 owner 扫描，`ValidateAndOccupy` 无台账水位核对；即使补读一次仍有读后出站窗口。 |
+| D18／B0 发送键远端耐久索引 | 对“远端受理本地落编号前崩溃、重启对账”要求 BGI **先耐久登记 `{目标身份域,key,payloadHash,handle,state}`，后入队/执行**；同键异载荷拒绝，同键同载荷返回原记录。查询分已受理／权威未受理／未找到／过期／存储不可读，后三者均不能解除 Unknown；定义跨重启保留、清理握手。 | 当前 `Submit` 先 TryWrite 再 `TryRegistrySubmitQueued`，注册失败仍执行；`SameSubmission` 带键只比较 key；终态缓存仅 32 项且按句柄查；助手线路键仍取 `_requestContext.CommandId`。 |
+| D19／B0 S8b 恢复一次性 | 对“S8b、回执丢失、崩溃恢复”固定原逻辑任务、稳定 `restoreActionIdentity`、本地发送尝试三种身份。BGI 按原票据 CAS 消费并永久关联获胜动作，同动作查询原记录，异动作返回已消费引用。完整状态至少 `RestorePrepared/ConsumedAwaitingStart/Started/StartFailed/Cancelled/Unknown`；暂停续行独立分支，只解除调度暂停。助手验证并持久化带身份的 `restore_confirmed` 后清票据。 | `RecoveryAdmissionRequest` 无原票据／动作／被切实例；`AdmitRecoveryAsync` 每次新 GUID；现 `ExecuteResumeAsync` 成功即先清票据再解析，`{}` 亦可按成功返回。§24.76“重新取许可”只允许**原动作身份**重取，不生成第二恢复动作。 |
+| D20／B0 多历史轮责任 | 对“多个迟到受理轮、裁决后新证据”建立逐轮责任与 resolution 引用；操作级 Pending 是所有未决轮和见证的聚合。结清一轮不能清另一轮，不用单个 `ExecutionResult` 证明全部结清。 | `ResolveHistoricalAcceptanceTerminal` 只核当前 `fact` 的 receipt／terminal 后写单个结果、清整个 `ConflictPending` 并终局；未遍历其余历史轮。Store 若拒绝写入，表现为结算失败，仍需明确可完成路径。 |
+| D21／B0 owner 与裁决 claim | 对“换主旧 Sender、裁决后新证据、审计后结案”服务实例绑定不可变 owner token。发送认领、受理事实认领、裁决认领分开；裁决认领携决定 ID、owner token、轮次、证据 revision/hash。发布失败读回，新增证据使旧 claim 失效。对外 `Settled` 只能在审计与清冲突同次提交后返回。 | 多个入口读取最新 Lease 作写凭据；`ClaimAdjudicationAsync` 只存方向且未检查 mutate 成功；完成链在审计后置之前可能返回 Settled。 |
+| D22／B1/B0 进程死亡与发送认领 | 对“BGI 停止／确认／下一发送中重启”分 `PhysicalReleaseProof` 与 `ExecutionOutcome`。物理证明是正常终态＋槽释放，或绑定旧进程对象/PID/启动 ticks 的死亡证明；死亡不补造任务终态。换代分未认领、已认领且可靠零发送并封禁旧 sender、已认领不可考、已受理四格；前两格才可结束旧发送权后新授权，后两格只对账。旧 epoch 凭证不消费新 epoch 槽位。 | §24.74 允许进程死亡解除物理占用疑问，§24.76 却要求退出终态必备，两句冲突；本条改为两种物理证明并保留独立业务责任。 |
+
+**合同冻结前全格门槛**：BGI 每个物理入口（队列、原生、旧调度器、热键、恢复）的授权与排他映射；交接阶段 × Sender 认领阶段 × 进程代际 × F11 的状态转换；远端回执原词白名单；所有历史轮结算与归档容量；字段旧 schema 读入／迁移／拒绝表。上述矩阵没有实现与反例之前，E3/E4/E5、节点改道、真实 User 门持续关闭，R5.8 未签署。

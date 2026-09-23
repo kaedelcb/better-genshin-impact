@@ -61,10 +61,26 @@
 
 **新增必测交错**：旧 owner 换主后恢复写入；远端先受理本地后存编号；同级重复与真正后到；第三挑战者插入交接；旧任务自然完成与停止竞态；停止／确认／新发送之间 BGI 重启；裁决中追加证据或多历史轮；归档满槽后迟到受理；`PreemptConfirmPending` 中重启；F11 发生于预留槽或队列等待；观察者断线；新准入与旧／原生执行碰撞。每格先写唯一授权者与应留责任，再写夹具；不能以“零新增失败”代替这些反例。
 
+### 第二轮集中会诊后的场景合同修订（GPT-6-Astra／medium，1 次成功）
+
+下表续接前两张七列清单，修正物理槽、发送认领和重启的交错。D14–D22 的权威规则及源码核对细目见外部启动设计 §24.78；这些格均为**设计缺口**，所列代码只证明当前边界，不证明修订已实现。
+
+| 触发条件／缺口 | 唯一授权者 | 允许执行的动作 | 回执及终态 | 重启后的恢复行为 | 对应代码入口 | 对应测试或实机证据 |
+|---|---|---|---|---|---|---|
+| A 退出前预留 B，或 A 已自然退出、B 尚未排队；D14 | BGI 物理槽门授予连续排他，当前 owner 指定 A/B | 先预留再定向停止；自然退出先发生则空槽 generation CAS；B 入队到起步全程保持槽权 | 预留回执不等于执行；B 起步后才绑定新实例，A 终态独立 | 读回预留持有人及 generation；不明就关闭新入口 | `BgiTaskCoordinator.WaitSlotFreeAsync`、`ExecutionScope.Start`、`TaskSemaphore` | 现无连续槽权协议或原生入口并发实测，待红夹具及 R5.8 实机 |
+| 取消 A 时 A 自然完成、C 接管，或 F11 同时清队列；D15 | BGI 同一物理门内按预期实例执行定向停止；用户全局停止另有权限 | 先比 epoch／实例／revision 再作全部副作用；AlreadyExited 保留自然完成，不停 C | `StopRequested` 与 `AlreadyExited` 分开；终态 revision 可合法增加 | 按 `stopAppliedRevision/terminalRevision/slotGeneration` 复核，不用旧 stop 回执补确认 | `DispatchTaskStop`、`DispatchTaskCancel`、`CancelByHandle`、`ExecutionScope.StopActive` | 现先 ClearQueue／锁外全局 stop，错停交错待夹具与实机 |
+| 第三挑战者 C 替换 B，BGI 改票据途中断线／崩溃；D16 | 当前 owner 准备替换，BGI 原子换预留并 fencing 旧 Sender | 固定 replacementId，待两端读回一致才放 C；不一致保持 handoff hold | `ReplacementPrepared/RemoteReplacementUnknown/ReplacementCommitted`，不能把本地写成功当远端成功 | 先查远端预留版本与本地认领代次，旧 B 不能恢复出站 | `ProcessWinnerAsync`、`AcceptanceClaim`、`PreemptionGate` | 现无发送前 claim／远端替换协议，待故障注入矩阵 |
+| 新 B 已拿许可但未被 BGI 受理，旧 A 迟到 Accepted；D17 | 旧者仅写见证，当前 owner 管责任；BGI 受理点执行 fencing | 同水位挂起已签未受理许可，不仅阻断未来许可；未知先对账 | A 证据 Pending，B 许可撤销须有远端确认；不能宣称 B 零受理 | 读回见证序号、B 的认领／受理事实；任一不明保持门禁 | `PersistLateAcceptanceReceiptAsync`、`ValidateAndOccupy`、BGI `Submit` | 组件旧轮夹具未覆盖已签未发交错；待跨端反例 |
+| BGI 接受键 K 后登记失败、回执丢失、助手重启；D18 | BGI 先耐久登记键 K 与载荷再执行；当前 owner 只查询 | 同键同载荷返原编号，异载荷拒绝；不得换键重发 | 查询分受理／权威未受理／未找到／过期／存储故障，后三者 Unknown | 原 K 按保留期查询；记录不可靠时保持 Pending | `BgiTaskCoordinator.Submit`、`SameSubmission`、`JobRegistry`、`SubmitTaskStartAsync` | 当前先入队后登记且失败仍执行、缓存仅 32；待磁盘故障与重启夹具 |
+| S8b 消费原票据后、执行实例起步前崩溃；D19 | BGI 原票据 CAS 唯一消费，原 owner 仅持稳定动作身份查询 | 同动作查询原记录；异动作只返已消费引用，暂停续行独立处理 | `ConsumedAwaitingStart` 非成功；只有身份匹配的 `restore_confirmed` 才结清助手责任 | 重用原 restoreActionIdentity，不产生第二恢复动作 | `AdmitRecoveryAsync`、`ExecuteResumeAsync`、BGI `task.resume` | 现每次新 GUID 且成功先清票据；无此窗口端到端夹具 |
+| 历史轮 1 已受理终态、轮 2 仅受理，当前轮 3 拒绝；D20 | 当前 owner 逐轮结算，台账为每轮事实来源 | 只结轮 1，轮 2 保持 Pending；操作级占用由全部轮聚合 | 一个终态不能代表三个轮；审计引用各自轮次 | 逐轮扫描及保留归档责任，轮 2 未结不放行 | `ResolveHistoricalAcceptanceTerminal`、`RecoverExternalStartObservationsAsync` | 当前方法清整个 ConflictPending，待多轮红夹具及 Store 校验 |
+| 旧 owner 换主后调用结算，或裁决 claim 后新证据到来；D21 | 不可变 owner token 所属实例，旧 Sender 仅原轮证据追加 | 认领绑定证据 hash／决定 ID；审计与清冲突同次提交后才 Settled | 终态可先记，责任 Pending 至审计完成 | 新证据失效旧 claim，接管者重读重裁 | `ClaimAdjudicationAsync`、`SettleCompletionAsync`、`AdjudicateConflictAsync` | 现多个入口读最新 Lease、claim 只存方向；待换主及写失败反例 |
+| BGI 旧进程死亡但无业务终态，Sender 已认领发送权；D22 | OS 进程死亡证明只解除旧物理占用；当前 owner 另管发送责任 | 分未认领／已认领且可靠零发送并封禁旧者／已认领不可考／已受理四格，后两格只查询 | 死亡证明不是任务成功／取消；旧 epoch 受理只归原轮 | 证明旧进程对象死亡后核新 epoch；旧包不改目标重发 | `IpcClient.VerifyRemoteSessionAsync`、`ExecutionScope`、`SubmissionDispatch` | 只有快照身份夹具；进程死亡＋发送阶段全格未验 |
+
 - **设计缺口 D1–D8**：先修订权威规则、上表受影响场景及 R5.3／R5.8 门禁，再按单个状态转换施工。D1、D3、D5、D6、D8 为生产开门前高优先级矛盾；D4、D7 涉及恢复安全同级阻断。任何“已有限定组件证据”均不改写为生产验收。
 - **实现错误 I1–I2**：I1 限于 S8b 仍直发；S4b 适配边界已交付但生产接线与新动作身份未验。I2 的状态未知误用按明确场景逐步修；当前安全切片仅局部完成，需负向反例与完整回归。相同代码若没有授权依据，只记录缺口，不通过猜测放开门禁。
-- **既有测试失败 T1**：本轮助手全量 1169 通过、2 跳过、0 失败；BGI 全量一次于 539 通过、4 失败后测试宿主崩溃，定向复跑亦宿主崩溃。已打印的 4 个身份 `OcrResultTests.Text_PreservesOfficialDetectionOrder`、`PostTeleportStuckProtectionDecisionsUnitTest.IsEligible_Stuck_BeyondWindow_ReturnsFalse`、`PostTeleportRevivalProtectionBugConditionTest.BugCondition_A2_RevivalAtExactly10s_ShouldNotSkipToNextSegment`、`...BugCondition_A1_RevivalWithin2s_ShouldNotSkipToNextSegment`，与既有 `codex_r5_bgi_latest_20260923.trx` 的失败身份**逐名一致**；这只证明已执行部分未出现新失败，宿主中止使未执行部分无结论。单测 `TaskStatus_IncludesCurrentProcessEpoch` 和 `BgiTaskCoordinatorTests` 均复现宿主崩溃，需继续定位，不能把 BGI 全套记为通过。
-- **会诊工具失败 C1**：既往 §24.71 Astra/medium 一次执行器 exit code 1，未取得会诊结论，不记代码缺陷。本轮早期 Astra/medium 安全复审两次各 1 次成功（第一次 3 项、第二次 4 项重要发现）；本次 I4 小切片复会诊 Astra/medium 尝试 1 次返回 exit code 1，**未取得会诊结论**，不记为代码缺陷且不属于约定的重试类别。已完成独立代码核查与回归，后续冻结审查仍需有效会诊结论。
+- **既有测试失败 T1**：早前助手全量 1169 通过、2 跳过、0 失败；BGI 在运行程序尚未关闭时多次测试宿主崩溃，先前 539 通过／4 失败那次的四个失败身份与旧 TRX 相同，但当时未执行范围无结论。用户关闭 BGI 后，同参数 BGI 全量完整结束：**942 通过／14 失败／956 总计**；14 个失败身份与 `r410_bgi_full_c2_20260919.trx` **逐名完全相同**，差集为空。当前助手全量 **1174 通过／2 跳过／0 失败**。BGI 的 14 个既有失败仍需如实保留，不能称全绿，也不替代实机验收。
+- **会诊工具失败 C1**：既往 §24.71 Astra/medium 一次执行器 exit code 1，未取得会诊结论，不记代码缺陷。本轮早期 Astra/medium 安全复审两次各 1 次成功（第一次 3 项、第二次 4 项重要发现）；I4 小切片复会诊 Astra/medium 尝试 1 次返回 exit code 1，**未取得该次会诊结论**，不记代码缺陷且不属于约定重试类别。随后独立的 §24.76 集中设计会诊 GPT-6-Astra／medium **1 次成功**，得到 D14–D22 九项规则修订；其结论已按源码核对，不代替代码验收。
 
 ## 执行门禁
 
