@@ -65,11 +65,10 @@ public sealed class ArbitrationLeaseStore
     /// <summary>
     /// 当前支持/写入的租约文件格式代。
     /// R5.2 §4.0：新增 Submission/Operations 字段＝格式代 2；
-    /// **R5.3 §24.20-A**：新增 `OperationType`／`PendingTerminal`／`ExecutionResult`／`PreObservations[]`／
-    /// `ConflictResolutionAudits[]`／`ReconciledNotAcceptedEvidence[]` 等**责任事实**字段＝格式代 **3**
-    /// （旧 ≤2 消费者遇 3＝`unsupported_version` 响亮拒绝；新代码读 ≤2＝兼容读并按 §24.20-A′ 在写入时升 3）。
+    /// **R5.3 §24.20-A**：责任事实字段使用格式代 **3**；发送轮次受理认领使用格式代 **4**；到期墓碑历史归档使用格式代 **5**。
+    /// v5 旧消费者遇到时响亮拒绝；≤v3 含未决责任不得就地升版，避免丢失受理认领；v4 的受理认领字段可安全迁移至 v5。
     /// </summary>
-    public const int SupportedVersion = 3;
+    public const int SupportedVersion = 5;
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
     private readonly string _configDir;
@@ -102,7 +101,7 @@ public sealed class ArbitrationLeaseStore
     /// 只读盘读租约（§6.4 五态）。
     /// - 正式文件不存在 → Absent（若目录存在且发现残留临时文件 → Detail 注明残件按无正式文件处理）；
     /// - 存在但 JSON 解析失败/反序列化为 null → Corrupt（原件保留留痕，绝不降级 Absent、绝不改写原件）；
-    /// - Version &gt; SupportedVersion(2) → Unsupported；v1 向后读兼容（Pending 段原样保留，Submission/Operations 视为空，缺字段保守拒绝不默认为无责任）；
+    /// - Version &gt; SupportedVersion → Unsupported；v1 向后读兼容（Pending 段原样保留，Submission/Operations 视为空，缺字段保守拒绝不默认为无责任）；
     ///   Lease 段非空 → (LastHeartbeatUtc + TtlSeconds 秒) &lt; utcNow() 为 Expired 否则 Valid；
     /// - Lease 段空 → Absent。
     /// 本方法只读不写盘（残件留痕只写进返回的 Detail）；配置目录不存在时直接判 Absent（不建目录、不建文件）。
@@ -225,20 +224,37 @@ public sealed class ArbitrationLeaseStore
         if (version < 1)
             return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = $"租约文件 version={version} 非法，原件保留留痕。" };
 
-        // 当前格式代（v3）责任段原始 JSON 预检（区分「字段缺失」与合法空值——handoff 段存在则
+        // v3+ 责任段原始 JSON 预检（区分「字段缺失」与合法空值——handoff 段存在则
         // operations 与 §24.20-A′ 的追加式集合（preObservations／conflictResolutionAudits／
         // reconciledNotAcceptedEvidence）必填，缺字段不得默认为合法空责任；**既有 v3 文件缺字段＝损坏，fail-closed**）。
-        if (version == SupportedVersion)
+        if (version >= 3)
         {
             using var doc2 = JsonDocument.Parse(text);
-            if (doc2.RootElement.ValueKind == JsonValueKind.Object
-                && doc2.RootElement.TryGetProperty("handoff", out var handoffEl)
-                && handoffEl.ValueKind == JsonValueKind.Object
+            JsonElement handoffEl = default;
+            var hasHandoff = doc2.RootElement.ValueKind == JsonValueKind.Object
+                             && doc2.RootElement.TryGetProperty("handoff", out handoffEl);
+            if (hasHandoff && handoffEl.ValueKind == JsonValueKind.Object
                 && (!handoffEl.TryGetProperty("operations", out var opsEl) || opsEl.ValueKind != JsonValueKind.Array
                     || !handoffEl.TryGetProperty("preObservations", out var preEl) || preEl.ValueKind != JsonValueKind.Array
                     || !handoffEl.TryGetProperty("conflictResolutionAudits", out var auditEl) || auditEl.ValueKind != JsonValueKind.Array
                     || !handoffEl.TryGetProperty("reconciledNotAcceptedEvidence", out var evEl) || evEl.ValueKind != JsonValueKind.Array))
-                return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = "租约文件 v3 Handoff 责任段集合缺失（Operations／PreObservations／ConflictResolutionAudits／ReconciledNotAcceptedEvidence），原件保留留痕。" };
+                return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = $"租约文件 v{version} Handoff 责任段集合缺失（Operations／PreObservations／ConflictResolutionAudits／ReconciledNotAcceptedEvidence），原件保留留痕。" };
+            if (version >= 5 && hasHandoff && handoffEl.ValueKind == JsonValueKind.Object
+                && (!handoffEl.TryGetProperty("archivedOperations", out var archivesEl) || archivesEl.ValueKind != JsonValueKind.Array))
+                return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = "租约文件 v5 Handoff 缺少 ArchivedOperations 历史归档集合，原件保留留痕。" };
+            if (version >= 4 && hasHandoff && handoffEl.ValueKind == JsonValueKind.Object
+                && handoffEl.TryGetProperty("operations", out var v4Ops)
+                && v4Ops.ValueKind == JsonValueKind.Array
+                && v4Ops.EnumerateArray().Any(op => op.ValueKind != JsonValueKind.Object || !op.TryGetProperty("acceptanceClaim", out _)))
+                return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = "租约文件 v4 Operation 缺少 acceptanceClaim 字段，原件保留留痕。" };
+            if (version >= 5 && hasHandoff && handoffEl.ValueKind == JsonValueKind.Object
+                && handoffEl.TryGetProperty("archivedOperations", out var rawArchives)
+                && rawArchives.ValueKind == JsonValueKind.Array
+                && rawArchives.EnumerateArray().Any(archive => archive.ValueKind != JsonValueKind.Object
+                    || !archive.TryGetProperty("operation", out var archivedOperation)
+                    || archivedOperation.ValueKind != JsonValueKind.Object
+                    || !archivedOperation.TryGetProperty("acceptanceClaim", out _)))
+                return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = "租约文件 v5 历史归档 Operation 缺少 acceptanceClaim 字段，原件保留留痕。" };
         }
 
         LogicalOwnerLeaseFile? file;
@@ -254,30 +270,25 @@ public sealed class ArbitrationLeaseStore
             return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = "租约文件反序列化为空，原件保留留痕。" };
 
         // §24.20-A′（[R5.3 落地批次会诊阻断处置]）**有序升级第一步＝先判未决责任**：
-        // 旧格式代（≤2）仍含未决责任（Submission／未终结 Pending／Granted／Sending／Reconciling／Accepted）时，
-        // **禁止就地升版**——必须走隔离态结算事务（本批尚未实现 ⇒ 响亮拒绝、原文件保持只读、不做任何写入）。
+        // 旧格式代（≤3）仍含未决责任时**禁止就地升版**：v3 写者不持久化受理认领，不能安全推断 claim 为空。
+        // 必须先通过旧责任核对/隔离流程消解；拒绝时原文件保持只读。
         // 无未决责任的旧文件仍兼容读，写入时由 Publish 单点升为当前格式代。
-        if (version < SupportedVersion && HasUnresolvedResponsibilityForLegacyUpgrade(file))
+        if (version < 4 && HasUnresolvedResponsibilityForLegacyUpgrade(file))
             return new LeaseReadResult
             {
                 Status = ArbitrationLeaseStatus.Unsupported,
                 File = null,
-                Detail = $"租约文件 version={version} 仍含未决责任（§24.20-A′：须走隔离态结算事务，禁止就地升版），响亮拒绝执行。",
+                Detail = $"租约文件 version={version} 仍含未决责任（§24.20-A′：旧写者不持久化受理认领，禁止就地升版），响亮拒绝执行。",
             };
 
         // Lease 段结构校验（§6.2 复核：缺失身份/零代次等非法取值 = Corrupt，不得当作可获取）。
         var lease = file.Lease;
-        if (lease is not null
-            && (string.IsNullOrWhiteSpace(lease.LeaseId)
-                || string.IsNullOrWhiteSpace(lease.OwnerEpoch)
-                || lease.Generation < 1
-                || lease.HeartbeatSeq < 1
-                || lease.TtlSeconds <= 0))
+        if (!ValidateLeaseSegment(lease, out _))
             return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = "租约文件 Lease 段结构/取值非法（缺身份或零代次等），原件保留留痕。" };
 
         // v2 责任段结构校验（R5.2 §4.0：v1 兼容默认值与 v2 责任完整性分开——version==2 时
         // Handoff 段存在则 Operations 必填、记录身份/枚举/唯一性非法=Corrupt，不降级为空责任）。
-        if (version == SupportedVersion && !ValidateHandoffSegment(file.Handoff, out var handoffDetail))
+        if (version >= 3 && !ValidateHandoffSegment(file.Handoff, version, out var handoffDetail))
             return new LeaseReadResult { Status = ArbitrationLeaseStatus.Corrupt, File = null, Detail = handoffDetail };
 
         // Lease 段空 → Absent；非空按 UTC 诊断性判 Expired/Valid（§6.3：接管依据另需单调观察+锁内复核，UTC 仅诊断）。
@@ -801,6 +812,12 @@ public sealed class ArbitrationLeaseStore
             read.File.Revision += 1;
             lease.HeartbeatSeq += 1;
             lease.LastHeartbeatUtc = now;
+            // Validate the exact candidate that would be published. Read-side validation alone is too late:
+            // it would let a successful mutation replace a valid lease with a file that every later reader
+            // classifies as Corrupt. The in-memory candidate is discarded on rejection, leaving disk intact.
+            if (!ValidateLeaseSegment(read.File.Lease, out _)
+                || !ValidateHandoffSegment(read.File.Handoff, SupportedVersion, out _))
+                return MutateReject("invalid_mutation_state");
             Publish(read.File);
             _lastOwnerWriteMono = _monotonic(); // 一律 Publish 成功后刷新（R5.1 四轮 P1-② 纪律延伸）
             return new LeaseMutateResult { Success = true, Reason = null, File = read.File };
@@ -907,7 +924,14 @@ public sealed class ArbitrationLeaseStore
     /// <summary>原子发布：UTF8 无 BOM + 临时文件（同目录 ".guid.tmp"）→ 同目录原子替换（overwrite），finally 清残件。</summary>
     private void Publish(LogicalOwnerLeaseFile file)
     {
-        file.Version = SupportedVersion; // §4.0：写入一律 version 2（v1 向后读兼容只发生在读取方向）
+        file.Version = SupportedVersion; // v5：发布必须保留受理认领字段、历史归档与校验合同
+        var detail = !ValidateLeaseSegment(file.Lease, out var leaseDetail)
+            ? leaseDetail
+            : !ValidateHandoffSegment(file.Handoff, SupportedVersion, out var handoffDetail)
+                ? handoffDetail
+                : null;
+        if (detail is not null)
+            throw new InvalidOperationException("拒绝发布无效租约候选状态：" + detail);
         var bytes = Utf8NoBom.GetBytes(JsonSerializer.Serialize(file, JsonOptions));
         var tmp = Path.Combine(_configDir, ".lease-" + Guid.NewGuid().ToString("N") + ".tmp");
         try
@@ -939,13 +963,17 @@ public sealed class ArbitrationLeaseStore
         => lease.LastHeartbeatUtc.AddSeconds(lease.TtlSeconds) < now;
 
     /// <summary>v2 责任段结构校验：Submission 完整身份/枚举、Operations 必填身份与状态枚举合法、RequestIdentity 唯一。</summary>
-    private static bool ValidateHandoffSegment(LeaseHandoffSegment? handoff, out string detail)
+    private static bool ValidateHandoffSegment(LeaseHandoffSegment? handoff, int version, out string detail)
     {
         detail = "";
         if (handoff is null) return true;
-        if (handoff.Operations is null)
+        if (handoff.Operations is null
+            || handoff.ArchivedOperations is null
+            || (version >= 3 && (handoff.PreObservations is null
+                || handoff.ConflictResolutionAudits is null
+                || handoff.ReconciledNotAcceptedEvidence is null)))
         {
-            detail = "租约文件 v2 Handoff.Operations 缺失（责任完整性校验失败），原件保留留痕。";
+            detail = "租约文件 Handoff 必需责任集合缺失（责任完整性校验失败），原件保留留痕。";
             return false;
         }
 
@@ -986,8 +1014,35 @@ public sealed class ArbitrationLeaseStore
             }
         }
 
+        // v5 历史归档只接纳已经过最短保留期的终局墓碑；有未决责任的记录仍留在热 Operations。
+        foreach (var archived in handoff.ArchivedOperations)
+        {
+            var archivedOp = archived?.Operation;
+            if (archived is null
+                || archivedOp is null
+                || archived.ArchivedAtUtc == default
+                || archivedOp.UpdatedAtUtc == default
+                || archivedOp.Zone is not (OperationZone.Tombstone or OperationZone.TerminalPendingTransfer)
+                || archivedOp.RequestState is not (OperationRequestState.TerminalCompleted
+                    or OperationRequestState.TerminalRejected or OperationRequestState.NotSelected)
+                || archivedOp.ConflictPending
+                || (archivedOp.AcceptanceClaim is not null
+                    && !ArbitrationRetentionPolicy.IsSettledAcceptanceClaim(archivedOp))
+                || archivedOp.ConflictAdjudicationClaim is not null
+                || (archivedOp.PendingTerminal is not null
+                    && (archivedOp.RequestState != OperationRequestState.TerminalCompleted
+                        || archivedOp.ConflictResolutionState != "ResolvedHistoricalAcceptedTerminal"))
+                || archived.ArchivedAtUtc < archivedOp.UpdatedAtUtc
+                || archived.ArchivedAtUtc - archivedOp.UpdatedAtUtc < ArbitrationRetentionPolicy.TombstoneMinimumAge)
+            {
+                detail = "租约文件 v5 ArchivedOperations 只能包含已满 24h 且无未决责任的终局操作（墓碑或待迁墓碑），原件保留留痕。";
+                return false;
+            }
+        }
+
+        var allOperations = handoff.Operations.Concat(handoff.ArchivedOperations.Select(a => a.Operation)).ToList();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var op in handoff.Operations)
+        foreach (var op in allOperations)
         {
             if (op is null
                 || string.IsNullOrWhiteSpace(op.RequestIdentity)
@@ -999,10 +1054,57 @@ public sealed class ArbitrationLeaseStore
                 detail = "租约文件 v2 Operations 记录身份/枚举/唯一性非法，原件保留留痕。";
                 return false;
             }
+            if (version >= 4 && op.AcceptanceClaim is { } claim
+                && (claim.SendSeq < 1
+                    || !string.Equals(claim.SubmissionIdentity,
+                        $"sub:{op.RequestIdentity}:{claim.SendSeq.ToString(System.Globalization.CultureInfo.InvariantCulture)}", StringComparison.Ordinal)
+                    || claim.SendSeq > op.LastSendSeq
+                    || (claim.SendSeq != op.LastSendSeq && !op.ConflictPending)
+                    || string.IsNullOrWhiteSpace(claim.RequestIdentity)
+                    || !string.Equals(claim.RequestIdentity, op.RequestIdentity, StringComparison.Ordinal)
+                    || string.IsNullOrWhiteSpace(claim.SubmissionIdentity)
+                    || string.IsNullOrWhiteSpace(claim.OwnerLeaseId)
+                    || string.IsNullOrWhiteSpace(claim.OwnerEpoch)
+                    || claim.ClaimedAtUtc == default
+                    || string.IsNullOrWhiteSpace(claim.EvidenceSource)
+                    || op.OperationType != OperationType.ExternalStart))
+            {
+                detail = "租约文件 v4 AcceptanceClaim 身份/轮次/所有者/证据不匹配，原件保留留痕。";
+                return false;
+            }
             // [Batch B 续 会诊] 冲突证据必须**结构化且字段完整**（自由字符串无法执行幂等/关联校验）。
             var seenConflictEvidence = new HashSet<string>(StringComparer.Ordinal);
             foreach (var ce in op.ConflictEvidence ?? [])
             {
+                var hasHistoricalAudit = ce is not null && (handoff.ConflictResolutionAudits ?? []).Any(a => a is not null
+                    && string.Equals(a.RequestIdentity, op.RequestIdentity, StringComparison.Ordinal)
+                    && string.Equals(a.SubmissionIdentity, ce.SubmissionIdentity, StringComparison.Ordinal)
+                    && a.SendSeq == ce.SendSeq);
+                var hasAcceptedTerminalAudit = ce is not null && (handoff.ConflictResolutionAudits ?? []).Any(a => a is not null
+                    && a.Resolution is (ConflictResolutionKind.ResolvedAcceptedTerminal
+                        or ConflictResolutionKind.ResolvedHistoricalAcceptedTerminal)
+                    && string.Equals(a.RequestIdentity, op.RequestIdentity, StringComparison.Ordinal)
+                    && string.Equals(a.SubmissionIdentity, ce.SubmissionIdentity, StringComparison.Ordinal)
+                    && a.SendSeq == ce.SendSeq
+                    && a.ResolutionEvidenceSnapshot is { } snapshot
+                    && string.Equals(snapshot.SubmissionIdentity, ce.SubmissionIdentity, StringComparison.Ordinal)
+                    && snapshot.SendSeq == ce.SendSeq);
+                var conflictingExecution = ce?.ConflictingExecutionResultSnapshot;
+                var isAcceptedReceipt = ce is not null
+                    && string.Equals(ce.RawTerminal, "accepted_receipt", StringComparison.Ordinal);
+                var historicalAcceptedReceipt = ce is not null && (op.ConflictEvidence ?? []).Any(receipt => receipt is not null
+                    && string.Equals(receipt.RawTerminal, "accepted_receipt", StringComparison.Ordinal)
+                    && string.Equals(receipt.SubmissionIdentity, ce.SubmissionIdentity, StringComparison.Ordinal)
+                    && receipt.SendSeq == ce.SendSeq
+                    && !string.IsNullOrWhiteSpace(receipt.JobId)
+                    && string.Equals(receipt.JobId, ce.JobId, StringComparison.Ordinal));
+                var isHistoricalAcceptedTerminalObservation = ce is not null
+                    && op.ConflictResolutionState is ("AcceptedTerminalObserved" or "ResolvedHistoricalAcceptedTerminal")
+                    && historicalAcceptedReceipt
+                    && ce.SendSeq < op.LastSendSeq
+                    && ce.ConflictingExecutionResultSnapshot is not null
+                    && !string.Equals(ce.RawTerminal, "accepted_receipt", StringComparison.Ordinal)
+                    && !string.IsNullOrWhiteSpace(ce.JobId);
                 if (ce is null
                     || string.IsNullOrWhiteSpace(ce.EvidenceId)
                     || string.IsNullOrWhiteSpace(ce.RawTerminal)
@@ -1010,14 +1112,68 @@ public sealed class ArbitrationLeaseStore
                     || ce.ObservedAtUtc == default
                     || string.IsNullOrWhiteSpace(ce.SubmissionIdentity)
                     || ce.SendSeq < 1
-                    // [第二轮验证会诊] 冲突证据的发送身份必须**与所属 Operation 全等**（不得错挂他笔责任）。
-                    || !string.Equals(ce.SubmissionIdentity, op.SubmissionIdentity, StringComparison.Ordinal)
-                    || ce.SendSeq != op.LastSendSeq
+                    // 当前轮证据须命中当前身份；历史轮证据须有同轮裁决审计，唯一先行保留例外是显式非终态受理回执。
+                    || ((!string.Equals(ce.SubmissionIdentity, op.SubmissionIdentity, StringComparison.Ordinal)
+                         || ce.SendSeq != op.LastSendSeq) && !hasHistoricalAudit
+                        && !isAcceptedReceipt && !isHistoricalAcceptedTerminalObservation)
+                    // 迟到受理回执是逐轮台账中的非终态事实，允许先追加为待决历史证据；不得伪装为执行终态载荷。
+                    || (isAcceptedReceipt && (conflictingExecution is not null
+                        || op.OperationType != OperationType.ExternalStart
+                        || ce.SendSeq > op.LastSendSeq
+                        || !string.Equals(ce.SubmissionIdentity,
+                            $"sub:{op.RequestIdentity}:{ce.SendSeq.ToString(CultureInfo.InvariantCulture)}", StringComparison.Ordinal)
+                        || (!op.ConflictPending && !hasAcceptedTerminalAudit)))
+                    || (conflictingExecution is not null
+                        && (!Enum.IsDefined(conflictingExecution.Kind)
+                            || conflictingExecution.Kind is not (ExecutionResultKind.Succeeded or ExecutionResultKind.Failed or ExecutionResultKind.Cancelled)
+                            || !string.Equals(conflictingExecution.SubmissionIdentity, ce.SubmissionIdentity, StringComparison.Ordinal)
+                            || conflictingExecution.SendSeq != ce.SendSeq
+                            || !string.Equals(conflictingExecution.RawTerminal, ce.RawTerminal, StringComparison.Ordinal)
+                            || !string.Equals(conflictingExecution.ExecutionErrorCode, ce.ExecutionErrorCode, StringComparison.Ordinal)
+                            || !string.Equals(conflictingExecution.EvidenceSource, ce.EvidenceSource, StringComparison.Ordinal)
+                            || conflictingExecution.ObservedAtUtc != ce.ObservedAtUtc
+                            || conflictingExecution.ObservedAtUtc == default
+                            || (conflictingExecution.Kind == ExecutionResultKind.Failed && string.IsNullOrWhiteSpace(conflictingExecution.ExecutionErrorCode))))
                     || !seenConflictEvidence.Add(ce.EvidenceId))
                 {
                     detail = "租约文件 v3 冲突证据记录字段/唯一性非法（保守待对账）。";
                     return false;
                 }
+            }
+            var hasHistoricalAcceptedReceipt = (op.ConflictEvidence ?? []).Any(e => e is not null
+                && string.Equals(e.RawTerminal, "accepted_receipt", StringComparison.Ordinal)
+                && e.SendSeq < op.LastSendSeq
+                && string.Equals(e.SubmissionIdentity,
+                    $"sub:{op.RequestIdentity}:{e.SendSeq.ToString(CultureInfo.InvariantCulture)}", StringComparison.Ordinal));
+            var hasHistoricalAcceptedTerminal = (op.ConflictEvidence ?? []).Any(terminal => terminal is not null
+                && terminal.SendSeq < op.LastSendSeq
+                && !string.Equals(terminal.RawTerminal, "accepted_receipt", StringComparison.Ordinal)
+                && terminal.ConflictingExecutionResultSnapshot is not null
+                && (op.ConflictEvidence ?? []).Any(receipt => receipt is not null
+                    && string.Equals(receipt.RawTerminal, "accepted_receipt", StringComparison.Ordinal)
+                    && string.Equals(receipt.SubmissionIdentity, terminal.SubmissionIdentity, StringComparison.Ordinal)
+                    && receipt.SendSeq == terminal.SendSeq
+                    && !string.IsNullOrWhiteSpace(receipt.JobId)
+                    && string.Equals(receipt.JobId, terminal.JobId, StringComparison.Ordinal)));
+            if (hasHistoricalAcceptedReceipt && string.IsNullOrWhiteSpace(op.ConflictResolutionState))
+            {
+                detail = "历史受理回执缺少逐轮跟踪状态（保守待对账）。";
+                return false;
+            }
+            if (op.ConflictResolutionState is { } acceptedState
+                && (acceptedState is not ("AcceptedAwaitingTerminal" or "AcceptedTerminalObserved"
+                        or "ResolvedHistoricalAcceptedTerminal")
+                    || op.OperationType != OperationType.ExternalStart
+                    || !hasHistoricalAcceptedReceipt
+                    || (acceptedState is "AcceptedTerminalObserved" or "ResolvedHistoricalAcceptedTerminal"
+                        && !hasHistoricalAcceptedTerminal)
+                    || (acceptedState is "AcceptedAwaitingTerminal" or "AcceptedTerminalObserved"
+                        && !op.ConflictPending)
+                    || (acceptedState == "ResolvedHistoricalAcceptedTerminal"
+                        && !IsHistoricalAcceptedTerminalResolved(handoff, op))))
+            {
+                detail = "租约文件 v3 历史受理跟踪状态缺少同轮回执/终态证据或与冲突状态不匹配（保守待对账）。";
+                return false;
             }
         }
 
@@ -1052,48 +1208,96 @@ public sealed class ArbitrationLeaseStore
                 || audit.SendSeq < 1
                 || audit.ResolvedAtUtc == default
                 || !Enum.IsDefined(audit.Resolution)
-                || audit.SupersededRejectedResultSnapshot is null
+                || (audit.Resolution == ConflictResolutionKind.ResolvedHistoricalAcceptedTerminal
+                    ? audit.SupersededRejectedResultSnapshot is not null || audit.SupersededExecutionResultSnapshot is not null
+                    : (audit.SupersededRejectedResultSnapshot is null) == (audit.SupersededExecutionResultSnapshot is null))
+                || (audit.Resolution == ConflictResolutionKind.ResolvedNotAccepted
+                    && (audit.SupersededRejectedResultSnapshot is null || audit.SupersededExecutionResultSnapshot is not null))
                 || !seenAudits.Add(audit.AuditId))
             {
-                detail = "租约文件 v3 ConflictResolutionAudits 记录身份/枚举/唯一性/拒绝快照非法，原件保留留痕。";
+                detail = "租约文件 v3 ConflictResolutionAudits 记录身份/枚举/唯一性/被覆盖事实快照非法，原件保留留痕。";
                 return false;
             }
 
             // 判别式两字段**严格互斥且必需**（§24.2-2″ 分支必需载荷）：受理终态⇒快照；未受理⇒证据引用。
-            var expectSnapshot = audit.Resolution == ConflictResolutionKind.ResolvedAcceptedTerminal;
+            var expectSnapshot = audit.Resolution is ConflictResolutionKind.ResolvedAcceptedTerminal
+                or ConflictResolutionKind.ResolvedHistoricalAcceptedTerminal;
             var hasSnapshot = audit.ResolutionEvidenceSnapshot is not null;
             var hasRef = !string.IsNullOrWhiteSpace(audit.ResolutionEvidenceRef?.EvidenceId);
-            if (expectSnapshot != hasSnapshot || hasSnapshot == hasRef)
+            var expectRelatedCurrentRoundRejection = audit.Resolution == ConflictResolutionKind.ResolvedHistoricalAcceptedTerminal;
+            if (expectSnapshot != hasSnapshot || hasSnapshot == hasRef
+                || expectRelatedCurrentRoundRejection != (audit.RelatedCurrentRoundRejectedResultSnapshot is not null))
             {
                 detail = "租约文件 v3 裁决审计的 resolutionEvidence 判别式字段非法（必需载荷缺失或两字段并存）。";
                 return false;
             }
 
-            // 关联 Operation（唯一命中：requestIdentity＋submissionIdentity＋sendSeq 全等）。
-            var op = handoff.Operations.FirstOrDefault(o => o is not null
+            // 审计可属于该操作的历史发送轮；RetryAsync 推进当前轮不得抹掉历史责任证据。
+            var op = allOperations.FirstOrDefault(o => o is not null
                 && string.Equals(o.RequestIdentity, audit.RequestIdentity, StringComparison.Ordinal));
+            var expectedAuditSubmission = $"sub:{audit.RequestIdentity}:{audit.SendSeq.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+            var expectedMergedSubmission = op?.MergedInto is { Length: > 0 } mergedIdentity
+                ? $"sub:{mergedIdentity}:{audit.SendSeq.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+                : null;
             if (op is null
-                || !string.Equals(op.SubmissionIdentity, audit.SubmissionIdentity, StringComparison.Ordinal)
-                || op.LastSendSeq != audit.SendSeq)
+                || (!string.Equals(audit.SubmissionIdentity, expectedAuditSubmission, StringComparison.Ordinal)
+                    && !string.Equals(audit.SubmissionIdentity, expectedMergedSubmission, StringComparison.Ordinal)))
             {
                 detail = "租约文件 v3 裁决审计与 Operation 关联不一致（引用完整性失败）。";
                 return false;
             }
 
-            // 拒绝快照必须与事务前不可变拒绝结果逐字段一致（不得自引用、不得篡改）。
-            var snapshot = audit.SupersededRejectedResultSnapshot!;
-            // [验证会诊阻断处置] **拒绝侧权威依据必须存在**：`LastResult` 缺失时不得默认通过（那会让「无拒绝依据」的审计被接受）。
-            if (op.LastResult is null
-                || snapshot.Outcome != OperationOutcome.Rejected
-                || snapshot.AnsweredSendSeq != audit.SendSeq
-                || op.LastResult.Outcome != snapshot.Outcome
-                || op.LastResult.AnsweredSendSeq != snapshot.AnsweredSendSeq
-                || op.LastResult.Retryable != snapshot.Retryable
-                || !string.Equals(op.LastResult.ReasonCode, snapshot.ReasonCode, StringComparison.Ordinal)
-                || !string.Equals(op.LastResult.EvidenceSource, snapshot.EvidenceSource, StringComparison.Ordinal))
+            // 被覆盖事实快照必须有且只有一种，并与仍保留的权威事实逐字段一致。
+            // 常规路径保存拒绝快照；“已有执行终态后收到未受理回执”路径保存执行终态快照。
+            var rejectionSnapshot = audit.SupersededRejectedResultSnapshot;
+            var auditIsCurrentRound = string.Equals(op.SubmissionIdentity, audit.SubmissionIdentity, StringComparison.Ordinal)
+                                      && op.LastSendSeq == audit.SendSeq;
+            if (rejectionSnapshot is not null && (rejectionSnapshot.Outcome != OperationOutcome.Rejected
+                || rejectionSnapshot.AnsweredSendSeq != audit.SendSeq
+                || string.IsNullOrWhiteSpace(rejectionSnapshot.ReasonCode)
+                || string.IsNullOrWhiteSpace(rejectionSnapshot.EvidenceSource)
+                || (auditIsCurrentRound && (op.LastResult is null
+                    || op.LastResult.Outcome != rejectionSnapshot.Outcome
+                    || op.LastResult.AnsweredSendSeq != rejectionSnapshot.AnsweredSendSeq
+                    || op.LastResult.Retryable != rejectionSnapshot.Retryable
+                    || !string.Equals(op.LastResult.ReasonCode, rejectionSnapshot.ReasonCode, StringComparison.Ordinal)
+                    || !string.Equals(op.LastResult.EvidenceSource, rejectionSnapshot.EvidenceSource, StringComparison.Ordinal)))))
             {
                 detail = "租约文件 v3 裁决审计的拒绝快照与既有拒绝结果不一致（逐字段校验失败）。";
                 return false;
+            }
+            if (audit.RelatedCurrentRoundRejectedResultSnapshot is { } relatedRejection
+                && (relatedRejection.Outcome != OperationOutcome.Rejected
+                    || relatedRejection.AnsweredSendSeq != op.LastSendSeq
+                    || op.LastResult is not { Outcome: OperationOutcome.Rejected } currentRejected
+                    || currentRejected.AnsweredSendSeq != relatedRejection.AnsweredSendSeq
+                    || currentRejected.Retryable != relatedRejection.Retryable
+                    || currentRejected.RetryBudgetUsed != relatedRejection.RetryBudgetUsed
+                    || !string.Equals(currentRejected.ReasonCode, relatedRejection.ReasonCode, StringComparison.Ordinal)
+                    || !string.Equals(currentRejected.EvidenceSource, relatedRejection.EvidenceSource, StringComparison.Ordinal)))
+            {
+                detail = "租约文件 v3 历史轮受理终态审计的当前轮拒绝关联快照与现存结果不一致。";
+                return false;
+            }
+            if (audit.SupersededExecutionResultSnapshot is { } executionSnapshot)
+            {
+                var result = op.ExecutionResult;
+                if (audit.Resolution != ConflictResolutionKind.ResolvedAcceptedTerminal
+                    || result is null
+                    || !string.Equals(executionSnapshot.SubmissionIdentity, audit.SubmissionIdentity, StringComparison.Ordinal)
+                    || executionSnapshot.SendSeq != audit.SendSeq
+                    || executionSnapshot.Kind != result.Kind
+                    || !string.Equals(executionSnapshot.RawTerminal, result.RawTerminal, StringComparison.Ordinal)
+                    || !string.Equals(executionSnapshot.ExecutionErrorCode, result.ExecutionErrorCode, StringComparison.Ordinal)
+                    || !string.Equals(executionSnapshot.JobId, result.JobId, StringComparison.Ordinal)
+                    || !string.Equals(executionSnapshot.EvidenceSource, result.EvidenceSource, StringComparison.Ordinal)
+                    || executionSnapshot.ObservedAtUtc != result.ObservedAtUtc
+                    || !string.Equals(executionSnapshot.SubmissionIdentity, result.SubmissionIdentity, StringComparison.Ordinal)
+                    || executionSnapshot.SendSeq != result.SendSeq)
+                {
+                    detail = "租约文件 v3 裁决审计的执行终态快照与权威 ExecutionResult 不一致（逐字段校验失败）。";
+                    return false;
+                }
             }
 
             if (expectSnapshot)
@@ -1183,7 +1387,7 @@ public sealed class ArbitrationLeaseStore
             var preRequestIdentity = preIdentity[4..lastColon];
             var preOp = string.IsNullOrEmpty(preRequestIdentity)
                 ? null
-                : handoff.Operations.FirstOrDefault(o => o is not null
+                : allOperations.FirstOrDefault(o => o is not null
                     && string.Equals(o.RequestIdentity, preRequestIdentity, StringComparison.Ordinal));
             if (preOp is null || preOp.OperationType != pre.OperationType)
             {
@@ -1213,28 +1417,39 @@ public sealed class ArbitrationLeaseStore
             return false;
         }
 
-        // Operation 侧的裁决引用必须能唯一命中审计项（§24.2-2″ 引用完整性）。
-        // [第三轮验证会诊阻断处置] **双向绑定**：①Operation→Audit 必须身份/轮次全等且**同一审计不得被多个 Operation 引用**；
-        // ②每条审计必须有**对应 Operation 以同一 `AuditId` 反向引用**（否则「四项/三项事务漏写 Operation 引用」会被误判为已提交）。
+        // 当前审计引用＋历史审计 ID 集合构成双向关系；每个 AuditId 仍只能归属一个 Operation。
         var auditIdToOperation = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var op in handoff.Operations)
+        foreach (var op in allOperations)
         {
-            if (op.ConflictResolutionAuditId is not { Length: > 0 } auditId) continue;
-            var bound = (handoff.ConflictResolutionAudits ?? [])
-                .FirstOrDefault(a => a is not null && string.Equals(a.AuditId, auditId, StringComparison.Ordinal));
-            if (bound is null
-                || !string.Equals(bound.RequestIdentity, op.RequestIdentity, StringComparison.Ordinal)
-                || !string.Equals(bound.SubmissionIdentity, op.SubmissionIdentity, StringComparison.Ordinal)
-                || bound.SendSeq != op.LastSendSeq)
+            var auditIds = (op.ConflictResolutionAuditHistoryIds ?? []).ToList();
+            if (auditIds.Count != auditIds.Distinct(StringComparer.Ordinal).Count())
             {
-                detail = "租约文件 v3 Operation 引用的裁决审计不存在或与自身身份/轮次不匹配（引用完整性失败）。";
+                detail = "租约文件 v3 Operation 的历史裁决审计引用重复（引用完整性失败）。";
                 return false;
             }
-
-            if (!auditIdToOperation.TryAdd(auditId, op.RequestIdentity))
+            if (op.ConflictResolutionAuditId is { Length: > 0 } currentAuditId
+                && !auditIds.Contains(currentAuditId, StringComparer.Ordinal))
+                auditIds.Add(currentAuditId);
+            if (op.ConflictResolutionAuditId is { Length: > 0 } currentId
+                && !(handoff.ConflictResolutionAudits ?? []).Any(a => a is not null
+                    && string.Equals(a.AuditId, currentId, StringComparison.Ordinal)
+                    && string.Equals(a.RequestIdentity, op.RequestIdentity, StringComparison.Ordinal)
+                    && string.Equals(a.SubmissionIdentity, op.SubmissionIdentity, StringComparison.Ordinal)
+                    && a.SendSeq == op.LastSendSeq))
             {
-                detail = "租约文件 v3 同一裁决审计被多个 Operation 引用（引用完整性失败）。";
+                detail = "租约文件 v3 Operation 的当前裁决审计与当前发送轮不匹配（引用完整性失败）。";
                 return false;
+            }
+            foreach (var auditId in auditIds)
+            {
+                var bound = (handoff.ConflictResolutionAudits ?? []).FirstOrDefault(a => a is not null
+                    && string.Equals(a.AuditId, auditId, StringComparison.Ordinal)
+                    && string.Equals(a.RequestIdentity, op.RequestIdentity, StringComparison.Ordinal));
+                if (bound is null || !auditIdToOperation.TryAdd(auditId, op.RequestIdentity))
+                {
+                    detail = "租约文件 v3 Operation 的历史裁决审计引用缺失或被多个 Operation 共享（引用完整性失败）。";
+                    return false;
+                }
             }
         }
 
@@ -1251,6 +1466,105 @@ public sealed class ArbitrationLeaseStore
 
         return true;
     }
+
+    private static bool ValidateLeaseSegment(LeaseSegment? lease, out string detail)
+    {
+        detail = "";
+        if (lease is null) return true;
+        if (string.IsNullOrWhiteSpace(lease.LeaseId)
+            || string.IsNullOrWhiteSpace(lease.OwnerEpoch)
+            || lease.Generation < 1
+            || lease.HeartbeatSeq < 1
+            || lease.TtlSeconds <= 0)
+        {
+            detail = "租约文件 Lease 段结构/取值非法（缺身份或零代次等），原件保留留痕。";
+            return false;
+        }
+        return true;
+    }
+
+    private static bool IsHistoricalAcceptedTerminalResolved(LeaseHandoffSegment handoff, OperationRecord op)
+    {
+        if (op.ConflictPending
+            || op.RequestState != OperationRequestState.TerminalCompleted
+            || op.Zone is not (OperationZone.TerminalPendingTransfer or OperationZone.Tombstone)
+            || op.ConflictAdjudicationClaim is not null
+            || op.AcceptanceClaim is not null
+            || op.ExecutionResult is not { } result
+            || op.PendingTerminal is not { } pending
+            || op.LastResult is not { Outcome: OperationOutcome.Rejected } currentRejection
+            || currentRejection.AnsweredSendSeq != op.LastSendSeq
+            || result.SendSeq >= op.LastSendSeq
+            || !string.Equals(result.SubmissionIdentity,
+                $"sub:{op.RequestIdentity}:{result.SendSeq.ToString(CultureInfo.InvariantCulture)}", StringComparison.Ordinal))
+            return false;
+
+        var receipt = (op.ConflictEvidence ?? []).FirstOrDefault(e => e is not null
+            && string.Equals(e.RawTerminal, "accepted_receipt", StringComparison.Ordinal)
+            && string.Equals(e.SubmissionIdentity, result.SubmissionIdentity, StringComparison.Ordinal)
+            && e.SendSeq == result.SendSeq
+            && !string.IsNullOrWhiteSpace(e.JobId)
+            && string.Equals(e.JobId, result.JobId, StringComparison.Ordinal));
+        var terminal = (op.ConflictEvidence ?? []).FirstOrDefault(e => e is not null
+            && e.SendSeq == result.SendSeq
+            && string.Equals(e.SubmissionIdentity, result.SubmissionIdentity, StringComparison.Ordinal)
+            && e.ConflictingExecutionResultSnapshot is { } snapshot
+            && ExecutionResultPayloadMatches(snapshot, result));
+        if (receipt is null || terminal is null
+            || !Enum.IsDefined(result.Kind)
+            || result.Kind is not (ExecutionResultKind.Succeeded or ExecutionResultKind.Failed or ExecutionResultKind.Cancelled)
+            || string.IsNullOrWhiteSpace(result.JobId)
+            || (result.Kind == ExecutionResultKind.Failed && string.IsNullOrWhiteSpace(result.ExecutionErrorCode))
+            || !PendingTerminalPayloadMatches(pending, result))
+            return false;
+
+        var auditId = (op.ConflictResolutionAuditHistoryIds ?? []).FirstOrDefault(id =>
+            (handoff.ConflictResolutionAudits ?? []).Any(a => a is not null
+                && string.Equals(a.AuditId, id, StringComparison.Ordinal)
+                && a.Resolution == ConflictResolutionKind.ResolvedHistoricalAcceptedTerminal
+                && string.Equals(a.RequestIdentity, op.RequestIdentity, StringComparison.Ordinal)
+                && string.Equals(a.SubmissionIdentity, result.SubmissionIdentity, StringComparison.Ordinal)
+                && a.SendSeq == result.SendSeq
+                && a.SupersededRejectedResultSnapshot is null
+                && a.SupersededExecutionResultSnapshot is null
+                && a.ResolutionEvidenceRef is null
+                && a.ResolutionEvidenceSnapshot is { } resolutionSnapshot
+                && ExecutionResultPayloadMatches(resolutionSnapshot, result)
+                && a.RelatedCurrentRoundRejectedResultSnapshot is { } related
+                && OperationRejectionMatches(related, currentRejection)));
+        return !string.IsNullOrWhiteSpace(auditId);
+    }
+
+    private static bool ExecutionResultPayloadMatches(ExecutionResult left, ExecutionResult right)
+        => left.Kind == right.Kind
+           && string.Equals(left.RawTerminal, right.RawTerminal, StringComparison.Ordinal)
+           && string.Equals(left.ExecutionErrorCode, right.ExecutionErrorCode, StringComparison.Ordinal)
+           && string.Equals(left.JobId, right.JobId, StringComparison.Ordinal)
+           && string.Equals(left.EvidenceSource, right.EvidenceSource, StringComparison.Ordinal)
+           && string.Equals(left.SubmissionIdentity, right.SubmissionIdentity, StringComparison.Ordinal)
+           && left.SendSeq == right.SendSeq
+           && left.ObservedAtUtc == right.ObservedAtUtc;
+
+    private static bool PendingTerminalPayloadMatches(PendingTerminal pending, ExecutionResult result)
+        => pending.Kind == result.Kind
+           && string.Equals(pending.RawTerminal, result.RawTerminal, StringComparison.Ordinal)
+           && string.Equals(pending.ExecutionErrorCode, result.ExecutionErrorCode, StringComparison.Ordinal)
+           && string.Equals(pending.JobId, result.JobId, StringComparison.Ordinal)
+           && string.Equals(pending.EvidenceSource, result.EvidenceSource, StringComparison.Ordinal)
+           && string.Equals(pending.SubmissionIdentity, result.SubmissionIdentity, StringComparison.Ordinal)
+           && pending.SendSeq == result.SendSeq
+           && pending.OperationType == OperationType.ExternalStart
+           && pending.ObservedAtUtc == result.ObservedAtUtc
+           && pending.RecordedAtUtc != default;
+
+    private static bool OperationRejectionMatches(OperationResult left, OperationResult right)
+        => left.Outcome == OperationOutcome.Rejected
+           && right.Outcome == OperationOutcome.Rejected
+           && left.AnsweredSendSeq == right.AnsweredSendSeq
+           && left.Retryable == right.Retryable
+           && left.RetryBudgetUsed == right.RetryBudgetUsed
+           && string.Equals(left.ReasonCode, right.ReasonCode, StringComparison.Ordinal)
+           && string.Equals(left.EvidenceSource, right.EvidenceSource, StringComparison.Ordinal);
 
     /// <summary>残件匹配（P2-⑥复核：仅本组件专属命名 ".lease-*.tmp"，不波及配置根其他文件）。</summary>
     private static bool IsLeaseResidueFileName(string name)

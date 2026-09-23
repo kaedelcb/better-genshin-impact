@@ -133,6 +133,10 @@ public class AssistConfig
     [JsonPropertyName("onlineHoeingSpecifiedTaskName")]
     public string OnlineHoeingSpecifiedTaskName { get; set; } = "";
 
+    /// <summary>上线锄地完成后指定任务的普通仲裁优先级（int32，大者优先；缺省 0）。</summary>
+    [JsonPropertyName("onlineHoeingSpecifiedTaskPriority")]
+    public int OnlineHoeingSpecifiedTaskPriority { get; set; }
+
     // 注意：成员卡片 6 个按键（配置组/一条龙/快捷键/停止/启动BGI/关闭游戏）的策略为固定行为：
     // 本机忙时一律「立即执行 + 执行完停止」（suspend 抢占 → 执行键动作 → 清上下文不恢复），无 UI、无配置项、不持久化。
 }

@@ -11,13 +11,15 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 /// 提交边界（Submission 先于发送/发布失败不发送/未知 Reconciling 不重发/锁内复核失败拒发/受理→台账→关闭顺序）、
 /// 授权记录（外部自报无效）、F11 优先级（激活时无租约副作用）、故障注入（Corrupt/Expired/占用未知）、
 /// 热键双路竞争、容量公式（primarySlotsUsed/迁移后重判/诊断四项）、重试窗口持久化与到期转终局、
-/// 登记后入队前崩溃恢复、清理安全（到期墓碑确实删除+旧身份 stale_operation_identity）、
+/// 登记后入队前崩溃恢复、清理安全（到期墓碑归档+旧身份 stale_operation_identity）、
 /// 接管台账（幂等合并/身份冲突/权威终态）、租约文件 v1 向后读/v3 Unsupported/写入一律 v2。
 /// 涉盘用例走临时目录，finally 清理；场景全部内置，owner 0 点击。
 /// </summary>
 public class ArbitrationAdmissionServiceTests : IDisposable
 {
     private readonly string _dir;
+    private ArbitrationLeaseStore? _lastStore;
+    private AdmissionHooks? _lastHooks;
     private DateTimeOffset _now = new(2026, 9, 20, 12, 0, 0, TimeSpan.Zero);
     private TimeSpan _mono = TimeSpan.Zero;
 
@@ -40,6 +42,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Action<AdmissionHooks>? configure = null, bool takeover = false, string ownerPid = "pid:test")
     {
         var store = NewStore();
+        _lastStore = store;
         var ledger = new ExternalStartLedger(_dir, () => _now);
         var hooks = new AdmissionHooks
         {
@@ -49,10 +52,17 @@ public class ArbitrationAdmissionServiceTests : IDisposable
             {
                 var r = ledger.RecordAccepted(entry);
                 if (!r.Success) return Task.FromResult<string?>("record_failed:" + r.Reason);
-                return Task.FromResult<string?>(ledger.ConfirmRebuildable(entry.SubmissionIdentity, entry.SendSeq) ? null : "not_rebuildable");
+                return Task.FromResult<string?>(ledger.ConfirmRebuildable(entry) ? null : "not_rebuildable");
+            },
+            LateAcceptanceReceiptPersist = entry =>
+            {
+                var r = ledger.RecordAccepted(entry);
+                if (!r.Success) return Task.FromResult<string?>("record_failed:" + r.Reason);
+                return Task.FromResult<string?>(ledger.ConfirmRebuildable(entry) ? null : "not_rebuildable");
             },
         };
         configure?.Invoke(hooks);
+        _lastHooks = hooks;
         var svc = new ArbitrationAdmissionService(store, hooks, () => _now);
         if (!takeover)
         {
@@ -480,6 +490,51 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Contains(ledger.Read().File!.Entries, e => e.SubmissionIdentity == second.SubmissionIdentity && e.SendSeq == 2);
     }
 
+    [Fact]
+    public async Task RetryablePrecheckReject_PreservesPriorSendIdentityAndSettledResponsibility()
+    {
+        var injectOccupiedAtPublish = false;
+        var occupied = false;
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts { ExecutionOccupied = occupied };
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Rejected("task_running", Retryable: true, "fixture:first_rejection"));
+            };
+            h.Barriers = new AdmissionBarriers
+            {
+                BeforeOccupyPublish = () =>
+                {
+                    if (injectOccupiedAtPublish) occupied = true;
+                    return Task.CompletedTask;
+                },
+            };
+        });
+
+        var request = Req(ns: "v2", workflow: "wf-precheck-prior-send", operationType: OperationType.ExternalStart);
+        var first = await svc.SubmitAsync(request);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, first.Kind);
+        var prior = FindOp(request.RequestIdentity)!;
+        Assert.Equal(1, prior.LastSendSeq);
+        injectOccupiedAtPublish = true;
+
+        var precheck = await svc.RetryAsync(request.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, precheck.Kind);
+        Assert.Equal(ResponsibilityState.Settled, precheck.ResponsibilityState);
+        Assert.Equal(prior.SubmissionIdentity, precheck.SubmissionIdentity);
+        Assert.Equal(prior.LastSendSeq, precheck.SendSeq);
+        var afterPrecheck = FindOp(request.RequestIdentity)!;
+        Assert.Equal("task_running", afterPrecheck.LastResult?.ReasonCode);
+        Assert.Equal("fixture:first_rejection", afterPrecheck.LastResult?.EvidenceSource);
+        Assert.Equal(1, afterPrecheck.LastResult?.AnsweredSendSeq);
+        Assert.Equal("execution_occupied", afterPrecheck.LastPrecheckResult?.ReasonCode);
+        Assert.Equal("final_precheck", afterPrecheck.LastPrecheckResult?.EvidenceSource);
+        Assert.Equal(1, Volatile.Read(ref sends));
+    }
+
     // ── 13. 重试窗口：持久化不重置（重启沿用）+到期锁内复核转终局+Unknown/Reconciling 不动 ──
 
     [Fact]
@@ -599,10 +654,10 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.True(m.Success, "预填失败 " + m.Reason);
     }
 
-    // ── 16. 清理安全：到期墓碑确实删除→重启→旧身份重放=stale_operation_identity ──
+    // ── 16. 清理安全：到期墓碑移出热区并保留归档→重启→旧身份重放=stale_operation_identity ──
 
     [Fact]
-    public async Task Cleanup_ExpiredTombstonePhysicallyRemoved_OldIdentityRejected()
+    public async Task Cleanup_ExpiredTombstoneArchived_OldIdentityRejected()
     {
         var (svc, store, _, _) = BuildFacade();
         Prefill(store, tombstones: 1, pendingTransfers: 0);
@@ -610,7 +665,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         RenewLease(store);
         var ok = await svc.SubmitAsync(Req()); // 触发同边界清理迁移
         Assert.Equal(AdmissionResultKind.Accepted, ok.Kind);
-        Assert.DoesNotContain(ReadLease().File!.Handoff!.Operations, o => o.RequestIdentity == "tomb0"); // 确实删除
+        var cleaned = ReadLease().File!.Handoff!;
+        Assert.DoesNotContain(cleaned.Operations, o => o.RequestIdentity == "tomb0");
+        Assert.Contains(cleaned.ArchivedOperations, o => o.Operation.RequestIdentity == "tomb0");
 
         // 重启（接管新实例）→重新注入旧身份：不发送/不重新绑定/响亮拒绝
         var (svc2, _, _, _) = BuildFacade(takeover: true);
@@ -622,6 +679,263 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         });
         Assert.Equal(AdmissionResultKind.Error, replay.Kind);
         Assert.Equal("stale_operation_identity", replay.ReasonCode);
+    }
+
+    [Fact]
+    public async Task ArchivedFlowRegistrationStillProvidesParentBindingForNewNode()
+    {
+        var (svc, store, _, _) = BuildFacade();
+        var parentIdentity = "archived-flow-parent";
+        var oldAt = _now.AddHours(-25);
+        var lease = ReadLease().File!.Lease!;
+        var seeded = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            file.Handoff ??= new LeaseHandoffSegment();
+            file.Handoff!.ArchivedOperations.Add(new ArchivedOperationRecord
+            {
+                Operation = new OperationRecord
+                {
+                    RequestIdentity = parentIdentity,
+                    CandidateId = "candidate-archived-flow-parent",
+                    Candidate = new ArbitrationCandidate
+                    {
+                        WorkflowId = "workflow-archive-parent",
+                        NodeId = "",
+                    },
+                    RunBinding = "run:archive-parent",
+                    RequestState = OperationRequestState.TerminalCompleted,
+                    LastSendSeq = 1,
+                    SubmissionIdentity = $"sub:{parentIdentity}:1",
+                    Zone = OperationZone.Tombstone,
+                    UpdatedAtUtc = oldAt,
+                    UpdatedRevision = file.Revision + 1,
+                    OperationType = OperationType.FlowRegistration,
+                    Intent = "start",
+                    ResourceRef = "flow:workflow-archive-parent",
+                },
+                ArchivedAtUtc = _now,
+            });
+            return null;
+        });
+        Assert.True(seeded.Success, seeded.Reason);
+
+        var child = Req(ns: "archived-parent-child", workflow: "workflow-archive-parent",
+            operationType: OperationType.NodeExecution);
+        child.RunBinding = "run:archive-parent";
+        child.Candidate.NodeId = "node:next";
+        var result = await svc.SubmitAsync(child);
+
+        Assert.Equal(AdmissionResultKind.Accepted, result.Kind);
+        Assert.Equal(parentIdentity, FindOp(result.RequestIdentity!)!.ParentRequestIdentity);
+    }
+
+    [Fact]
+    public async Task Cleanup_ExpiredTombstonesWithCompletedHistory_FreeCapacityAndKeepCursorConsumed()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h => h.Sender = _ =>
+        {
+            Interlocked.Increment(ref sends);
+            return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("ext:accepted", null));
+        });
+        var oldAt = _now.AddHours(-25);
+        var lease = ReadLease().File!.Lease!;
+        var seeded = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            file.Handoff ??= new LeaseHandoffSegment();
+            for (var i = 0; i < ArbitrationAdmissionService.TombstoneLimit; i++)
+            {
+                var identity = "history-tomb-" + i;
+                var type = i == 0 ? OperationType.NodeExecution : OperationType.ExternalStart;
+                var submissionIdentity = $"sub:{identity}:1";
+                file.Handoff.Operations.Add(new OperationRecord
+                {
+                    RequestIdentity = identity,
+                    CandidateId = "cand-" + identity,
+                    RequestState = i == 0 ? OperationRequestState.TerminalCompleted : OperationRequestState.TerminalRejected,
+                    Zone = OperationZone.Tombstone,
+                    UpdatedAtUtc = oldAt,
+                    UpdatedRevision = file.Revision + 1,
+                    OperationType = type,
+                    TargetEpoch = "ep1",
+                    SubmissionIdentity = submissionIdentity,
+                    LastSendSeq = 1,
+                    RunBinding = i == 0 ? "run:archive-cursor" : null,
+                    CursorRef = i == 0 ? "node-0" : null,
+                    CursorRevision = i == 0 ? 12 : null,
+                });
+                file.Handoff.PreObservations.Add(new PreObservationRecord
+                {
+                    SubmissionIdentity = submissionIdentity,
+                    SendSeq = 1,
+                    OperationType = type,
+                    TargetEpoch = "ep1",
+                    QueryBasis = "fixture:completed-history",
+                    OwnerEpoch = "owner:old",
+                    CreatedAtUtc = oldAt,
+                    State = "completed",
+                });
+            }
+            return null;
+        });
+        Assert.True(seeded.Success, "历史墓碑夹具写入失败 " + seeded.Reason);
+
+        _now += TimeSpan.FromHours(25);
+        RenewLease(store);
+        var created = await svc.SubmitAsync(Req(ns: "after-history-cleanup", workflow: "group:after-history-cleanup"));
+
+        Assert.Equal(AdmissionResultKind.Accepted, created.Kind);
+        Assert.Equal(1, sends);
+        var cleaned = ReadLease();
+        Assert.Equal(ArbitrationLeaseStatus.Valid, cleaned.Status);
+        Assert.Equal(ArbitrationAdmissionService.TombstoneLimit + 1, cleaned.File!.Handoff!.PreObservations.Count);
+        Assert.Equal(ArbitrationAdmissionService.TombstoneLimit, cleaned.File.Handoff.ArchivedOperations.Count);
+        Assert.Contains(cleaned.File.Handoff.ArchivedOperations,
+            archived => archived.Operation.RequestIdentity == "history-tomb-0"
+                && archived.Operation.CursorRef == "node-0"
+                && archived.Operation.CursorRevision == 12);
+
+        var staleReplay = await svc.SubmitAsync(new AdmissionRequest
+        {
+            Kind = AdmissionKind.ContinueUse,
+            RequestIdentity = "history-tomb-0",
+            Candidate = Req().Candidate,
+        });
+        Assert.Equal(AdmissionResultKind.Error, staleReplay.Kind);
+        Assert.Equal("stale_operation_identity", staleReplay.ReasonCode);
+
+        var cursorReplayRequest = Req(ns: "cursor-replay", workflow: "group:cursor-replay",
+            operationType: OperationType.NodeExecution);
+        cursorReplayRequest.RunBinding = "run:archive-cursor";
+        cursorReplayRequest.CursorRef = "node-0";
+        cursorReplayRequest.CursorRevision = 12;
+        var cursorReplay = await svc.SubmitAsync(cursorReplayRequest);
+        Assert.Equal(AdmissionResultKind.TerminalRejected, cursorReplay.Kind);
+        Assert.Equal("cursor_already_consumed", cursorReplay.ReasonCode);
+        Assert.Equal(1, sends);
+    }
+
+    [Fact]
+    public async Task Cleanup_ArchivesLinkedTombstonesTogether_AndKeepsChainWithHotDependency()
+    {
+        var (svc, store, _, _) = BuildFacade();
+        var oldAt = _now.AddHours(-25);
+        var lease = ReadLease().File!.Lease!;
+        var seeded = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            file.Handoff ??= new LeaseHandoffSegment();
+            file.Handoff.Operations.AddRange(
+            [
+                new OperationRecord
+                {
+                    RequestIdentity = "archive-chain-a", CandidateId = "candidate-archive-chain-a",
+                    RequestState = OperationRequestState.TerminalRejected, Zone = OperationZone.Tombstone,
+                    UpdatedAtUtc = oldAt, UpdatedRevision = file.Revision + 1, MergedInto = "archive-chain-b",
+                },
+                new OperationRecord
+                {
+                    RequestIdentity = "archive-chain-b", CandidateId = "candidate-archive-chain-b",
+                    RequestState = OperationRequestState.TerminalRejected, Zone = OperationZone.Tombstone,
+                    UpdatedAtUtc = oldAt, UpdatedRevision = file.Revision + 1, MergedInto = "archive-chain-c",
+                },
+                new OperationRecord
+                {
+                    RequestIdentity = "archive-chain-c", CandidateId = "candidate-archive-chain-c",
+                    RequestState = OperationRequestState.TerminalRejected, Zone = OperationZone.Tombstone,
+                    UpdatedAtUtc = oldAt, UpdatedRevision = file.Revision + 1,
+                },
+                new OperationRecord
+                {
+                    RequestIdentity = "archive-pair-a", CandidateId = "candidate-archive-pair-a",
+                    RequestState = OperationRequestState.TerminalRejected, Zone = OperationZone.Tombstone,
+                    UpdatedAtUtc = oldAt, UpdatedRevision = file.Revision + 1, MergedInto = "archive-pair-b",
+                },
+                new OperationRecord
+                {
+                    RequestIdentity = "archive-pair-b", CandidateId = "candidate-archive-pair-b",
+                    RequestState = OperationRequestState.TerminalRejected, Zone = OperationZone.Tombstone,
+                    UpdatedAtUtc = oldAt, UpdatedRevision = file.Revision + 1,
+                },
+            ]);
+            return null;
+        });
+        Assert.True(seeded.Success, "关联墓碑夹具写入失败 " + seeded.Reason);
+
+        _now += TimeSpan.FromHours(25);
+        var keepChainHot = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var dependency = file.Handoff!.Operations.Single(o => o.RequestIdentity == "archive-chain-c");
+            dependency.UpdatedAtUtc = _now;
+            dependency.UpdatedRevision = file.Revision + 1;
+            return null;
+        });
+        Assert.True(keepChainHot.Success, "更新关联热记录失败 " + keepChainHot.Reason);
+        RenewLease(store);
+
+        var created = await svc.SubmitAsync(Req(ns: "after-linked-archive", workflow: "group:after-linked-archive"));
+
+        Assert.Equal(AdmissionResultKind.Accepted, created.Kind);
+        var cleaned = ReadLease();
+        Assert.Equal(ArbitrationLeaseStatus.Valid, cleaned.Status);
+        var handoff = cleaned.File!.Handoff!;
+        Assert.Equal(2, handoff.ArchivedOperations.Count);
+        Assert.Contains(handoff.ArchivedOperations, archived => archived.Operation.RequestIdentity == "archive-pair-a");
+        Assert.Contains(handoff.ArchivedOperations, archived => archived.Operation.RequestIdentity == "archive-pair-b");
+        Assert.DoesNotContain(handoff.ArchivedOperations,
+            archived => archived.Operation.RequestIdentity is "archive-chain-a" or "archive-chain-b" or "archive-chain-c");
+        Assert.Contains(handoff.Operations, operation => operation.RequestIdentity == "archive-chain-a");
+        Assert.Contains(handoff.Operations, operation => operation.RequestIdentity == "archive-chain-b");
+        Assert.Contains(handoff.Operations, operation => operation.RequestIdentity == "archive-chain-c");
+    }
+
+    [Fact]
+    public async Task Cleanup_ExpiredSettledExternalAcceptanceClaim_ReclaimsHistoryCapacity()
+    {
+        var (svc, _) = BuildExternalFacadeWithCompletion();
+        var (requestIdentity, submissionIdentity, sendSeq) = await AcceptedExternalOpAsync(svc);
+        var terminal = await svc.SettleCompletionAsync(requestIdentity, submissionIdentity, sendSeq,
+            ExternalStartCompletion.SucceededWith("completed", "owner:archive-claim", _now, "job-1"));
+        Assert.Equal(ResponsibilityState.Settled, terminal.ResponsibilityState);
+
+        var settled = FindOp(requestIdentity)!;
+        Assert.Equal(OperationRequestState.TerminalCompleted, settled.RequestState);
+        Assert.True(settled.AcceptanceClaim is { LedgerPersisted: true });
+
+        _now += TimeSpan.FromHours(25);
+        RenewLease(_lastStore!);
+        var next = await svc.SubmitAsync(Req(ns: "after-settled-claim", workflow: "group:after-settled-claim"));
+
+        Assert.Equal(AdmissionResultKind.Accepted, next.Kind);
+        var archived = Assert.Single(ReadLease().File!.Handoff!.ArchivedOperations,
+            item => item.Operation.RequestIdentity == requestIdentity);
+        Assert.True(archived.Operation.AcceptanceClaim is { LedgerPersisted: true });
+    }
+
+    [Fact]
+    public async Task Cleanup_FullTombstonesWithMatureRelatedTerminalTransfer_ArchivesGroup()
+    {
+        var (svc, store, _, _) = BuildFacade();
+        Prefill(store, tombstones: ArbitrationAdmissionService.TombstoneLimit, pendingTransfers: 1);
+        var lease = ReadLease().File!.Lease!;
+        var linked = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            foreach (var tombstone in file.Handoff!.Operations.Where(o => o.RequestIdentity.StartsWith("tomb", StringComparison.Ordinal)))
+                tombstone.MergedInto = "pend0";
+            return null;
+        });
+        Assert.True(linked.Success, "满墓碑关联夹具写入失败 " + linked.Reason);
+
+        _now += TimeSpan.FromHours(25);
+        RenewLease(store);
+        var created = await svc.SubmitAsync(Req(ns: "after-full-linked-archive", workflow: "group:after-full-linked-archive"));
+
+        Assert.Equal(AdmissionResultKind.Accepted, created.Kind);
+        var read = ReadLease();
+        Assert.Equal(ArbitrationLeaseStatus.Valid, read.Status);
+        Assert.Contains(read.File!.Handoff!.ArchivedOperations,
+            archived => archived.Operation.RequestIdentity == "pend0");
+        Assert.Equal(ArbitrationAdmissionService.TombstoneLimit + 1, read.File.Handoff.ArchivedOperations.Count);
+        Assert.Empty(read.File.Handoff.Operations.Where(o => o.RequestIdentity.StartsWith("tomb", StringComparison.Ordinal)));
     }
 
     // ── 17. 登记后入队前崩溃恢复（八轮实施关注 1）：终局中止、槽位释放、无发送 ──
@@ -645,7 +959,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(1, svc2.RecoverAfterRestart());
         var op = FindOp(r.RequestIdentity)!;
         Assert.Equal(OperationRequestState.TerminalRejected, op.RequestState);
-        Assert.Equal("abandoned_before_send", op.LastResult!.ReasonCode);
+        Assert.Equal("abandoned_before_send", op.LastPrecheckResult!.ReasonCode);
         Assert.Equal(OperationZone.Tombstone, op.Zone); // 槽位最终可释放
         Assert.Equal(0, sends);
     }
@@ -682,27 +996,63 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         {
             SubmissionIdentity = "sub:1:1", SendSeq = 1, CandidateId = "cand-a", ResourceRef = "group:g1",
             ActionId = "act-a", TargetBgiEpoch = "ep1", AcceptedAtUtc = _now, EvidenceSource = "ipc:queued",
+            OperationType = OperationType.ExternalStart,
         };
         Assert.True(ledger.RecordAccepted(entry).Success);
         Assert.True(ledger.RecordAccepted(entry).Success); // 重复接管幂等
         Assert.Single(ledger.Read().File!.Entries);
+        Assert.True(ledger.ConfirmRebuildable(entry));
+        Assert.False(ledger.ConfirmRebuildable(new ExternalStartLedgerEntry
+        {
+            SubmissionIdentity = entry.SubmissionIdentity, SendSeq = entry.SendSeq,
+            CandidateId = entry.CandidateId, ResourceRef = entry.ResourceRef, ActionId = entry.ActionId,
+            TargetBgiEpoch = entry.TargetBgiEpoch, AcceptedAtUtc = entry.AcceptedAtUtc,
+            EvidenceSource = "different-source", OperationType = entry.OperationType,
+        }));
+        Assert.False(ledger.ConfirmRebuildable(new ExternalStartLedgerEntry
+        {
+            SubmissionIdentity = entry.SubmissionIdentity, SendSeq = entry.SendSeq,
+            CandidateId = entry.CandidateId, ResourceRef = entry.ResourceRef, ActionId = entry.ActionId,
+            TargetBgiEpoch = entry.TargetBgiEpoch, AcceptedAtUtc = entry.AcceptedAtUtc.AddSeconds(1),
+            EvidenceSource = entry.EvidenceSource, OperationType = entry.OperationType,
+        }));
+        Assert.False(ledger.ConfirmRebuildable(new ExternalStartLedgerEntry
+        {
+            SubmissionIdentity = entry.SubmissionIdentity, SendSeq = entry.SendSeq,
+            CandidateId = entry.CandidateId, ResourceRef = entry.ResourceRef, ActionId = entry.ActionId,
+            TargetBgiEpoch = entry.TargetBgiEpoch, AcceptedAtUtc = entry.AcceptedAtUtc,
+            EvidenceSource = entry.EvidenceSource, OperationType = OperationType.NodeExecution,
+        }));
+        var enriched = new ExternalStartLedgerEntry
+        {
+            SubmissionIdentity = entry.SubmissionIdentity, SendSeq = entry.SendSeq,
+            CandidateId = entry.CandidateId, ResourceRef = entry.ResourceRef, ActionId = entry.ActionId,
+            TargetBgiEpoch = entry.TargetBgiEpoch, AcceptedAtUtc = entry.AcceptedAtUtc,
+            EvidenceSource = entry.EvidenceSource, OperationType = entry.OperationType, JobId = "job-1",
+        };
+        Assert.True(ledger.RecordAccepted(enriched).Success); // 台账句柄只允许从空补齐
+        Assert.True(ledger.ConfirmRebuildable(entry)); // claim 无句柄时允许单调后补
+        Assert.True(ledger.ConfirmRebuildable(enriched));
+        enriched.JobId = "job-2";
+        Assert.False(ledger.ConfirmRebuildable(enriched));
 
         var conflict = ledger.RecordAccepted(new ExternalStartLedgerEntry
         {
             SubmissionIdentity = "sub:1:1", SendSeq = 1, CandidateId = "cand-OTHER", ResourceRef = "group:g1",
             ActionId = "act-a", TargetBgiEpoch = "ep1", AcceptedAtUtc = _now, EvidenceSource = "ipc:queued",
+            OperationType = OperationType.ExternalStart,
         });
         Assert.False(conflict.Success);
         Assert.Equal("identity_conflict", conflict.Reason);
         Assert.Single(ledger.Read().File!.Entries); // 不产第二份
 
-        Assert.True(ledger.ConfirmRebuildable("sub:1:1", 1));
+        Assert.True(ledger.ConfirmRebuildable(entry));
         // §24.2-2″：观察时点由调用方传入（首写保存、幂等重试严格比对）；缺参数/空证据=响亮拒绝。
         Assert.False(ledger.MarkTerminal("sub:1:1", 1, "", _now).Success); // 空证据=evidence_required
         Assert.True(ledger.MarkTerminal("sub:1:1", 1, "bgi_snapshot_terminal", _now).Success);
         Assert.Empty(ledger.GetOccupancy().Entries); // Terminal 不再占用
         Assert.False(ledger.GetOccupancy().Unknown);
-        Assert.True(ledger.ConfirmRebuildable("sub:1:1", 1)); // 完整终态记录同样证明「曾受理」（快速完成 job 不阻断结清）
+        Assert.True(ledger.ConfirmRebuildable(entry)); // 完整终态记录同样证明「曾受理」（快速完成 job 不阻断结清）
         File.WriteAllText(Path.Combine(_dir, "external-start-ledger.json"), "{\"version\":0,\"entries\":[]}"); // 非法版本=损坏台账：Unknown=true（保守待对账，绝不推导空闲）
         Assert.True(ledger.GetOccupancy().Unknown);
         Assert.Empty(ledger.GetOccupancy().Entries);
@@ -731,6 +1081,37 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(0, sends); // 不抢占在跑执行
         var winner = results.First(r => r.Kind == AdmissionResultKind.NeedPreemptConfirm);
         Assert.Equal(OperationRequestState.Queued, FindOp(winner.RequestIdentity)!.RequestState); // 交接存续非终局
+    }
+
+    [Fact]
+    public async Task Occupied_DeduplicatedPreemptConfirm_KeepsMirrorLinkedAndNonterminal()
+    {
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts { ExecutionOccupied = true };
+            h.Sender = _ => { Interlocked.Increment(ref sends); return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("unused", null)); };
+            h.Barriers = GatedBarrier(2);
+        });
+        var first = Req(trigger: "manual:busy-dedupe");
+        var second = Req(trigger: "manual:busy-dedupe");
+
+        var results = await Task.WhenAll(svc.SubmitAsync(first), svc.SubmitAsync(second));
+
+        Assert.All(results, result => Assert.Contains(result.Kind,
+            new[] { AdmissionResultKind.NeedPreemptConfirm, AdmissionResultKind.NeedReconcile }));
+        Assert.Contains(results, result => result.Kind == AdmissionResultKind.NeedPreemptConfirm);
+        Assert.Equal(0, sends);
+        var operations = ReadLease().File!.Handoff!.Operations.Where(operation =>
+            operation.RequestIdentity == first.RequestIdentity || operation.RequestIdentity == second.RequestIdentity).ToList();
+        var winner = operations.Single(operation => operation.MergedInto is null);
+        var mirror = operations.Single(operation => operation.MergedInto is not null);
+        Assert.Equal(winner.RequestIdentity, mirror.MergedInto);
+        Assert.Equal(OperationRequestState.Queued, winner.RequestState);
+        Assert.Equal(OperationRequestState.Queued, mirror.RequestState);
+        var continued = await svc.SubmitAsync(ContinueOf(mirror.RequestIdentity == first.RequestIdentity ? first : second));
+        Assert.Equal(AdmissionResultKind.NeedPreemptConfirm, continued.Kind);
+        Assert.Equal(0, sends);
     }
 
     // ── 21. 租约文件 v1 向后读兼容（Pending 保留/接管写入升 3，R5.3 §24.20-A）──
@@ -1075,6 +1456,8 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         {
             Assert.Equal(AdmissionResultKind.NeedReconcile, res.Kind);
             Assert.Equal("facts_unknown", res.ReasonCode);
+            Assert.Equal(ExecutionDisposition.Unknown, res.ExecutionDisposition);
+            Assert.Equal(ResponsibilityState.Pending, res.ResponsibilityState);
             Assert.Equal(OperationRequestState.Queued, op.RequestState);
         }
         else
@@ -1160,8 +1543,8 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var opB = FindOp(b.RequestIdentity)!;
         Assert.Equal(OperationRequestState.TerminalRejected, opA.RequestState);
         Assert.Equal(OperationRequestState.TerminalRejected, opB.RequestState);
-        Assert.Equal("identity_conflict", opA.LastResult?.ReasonCode);
-        Assert.Equal("identity_conflict", opB.LastResult?.ReasonCode);
+        Assert.Equal("identity_conflict", opA.LastPrecheckResult?.ReasonCode);
+        Assert.Equal("identity_conflict", opB.LastPrecheckResult?.ReasonCode);
         Assert.Equal(0, opA.LastSendSeq);
         Assert.Equal(0, opB.LastSendSeq);
         Assert.Null(ReadLease().File?.Handoff?.Submission);
@@ -1240,7 +1623,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(OperationRequestState.Queued, op.RequestState); // 非终局（可再驱动）
         Assert.Null(ReadLease().File?.Handoff?.Submission);
         Assert.All(results, r => Assert.NotEqual(AdmissionResultKind.Accepted, r.Kind)); // 两侧均未获准
-        Assert.Equal("not_due", FindOp(notDue.RequestIdentity)!.LastResult?.ReasonCode);  // 子裁决确为「资格不成立」
+        Assert.Equal("not_due", FindOp(notDue.RequestIdentity)!.LastPrecheckResult?.ReasonCode);  // 子裁决确为「资格不成立」
     }
 
     /// <summary>
@@ -1573,9 +1956,9 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Null(ReadLease().File?.Handoff?.Submission);                      // 占位已关闭（无开放未决发送）
         var op = FindOp(node.RequestIdentity);
         Assert.Equal(OperationRequestState.TerminalRejected, op!.RequestState);
-        Assert.Equal("f11_active", op.LastResult?.ReasonCode);
-        Assert.Equal("local_not_sent_pre_send", op.LastResult?.EvidenceSource);  // §4.2c 本地未发送证明
-        Assert.Equal(op.LastSendSeq, op.LastResult?.AnsweredSendSeq);            // 拒绝答复本笔轮次
+        Assert.Equal("f11_active", op.LastPrecheckResult?.ReasonCode);
+        Assert.Equal("local_not_sent_pre_send", op.LastPrecheckResult?.EvidenceSource);  // §4.2c 本地未发送证明
+        Assert.Equal(0, op.LastPrecheckResult?.AnsweredSendSeq);                          // 本地预检不伪装为远端发送回执
     }
 
     /// <summary>
@@ -1628,14 +2011,14 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     }
 
     /// <summary>
-    /// **[§12.3 M1⑤ 会诊证据补强]** 既有 v3 租约中**缺 `parentRequestIdentity`** 的操作：读侧必须**仍判合法**
+    /// **[§12.3 M1⑤ 会诊证据补强]** 既有 v4 租约中**缺 `parentRequestIdentity`** 的操作：读侧必须**仍判合法**
     /// （该字段是可选加法字段，缺省＝「父子关系不可证明」，**不是**损坏），且**不得**被读侧补造出任何值。
     /// 构造：走通 `exempt` 场景（父登记 + 已受理节点操作，绑定已落盘）后，把该字段从盘上 JSON 剥掉，重新读取。
     /// **范围**：只证明读取/反序列化口径与「不补造」；该记录当时为 `Accepted`（不可重驱动），故不重驱动；
     /// 也不证明历史 v2→v3 迁移路径（另由 §24.20-A′ 迁移口径覆盖）。
     /// </summary>
     [Fact]
-    public async Task ParentBinding_MissingFieldInExistingV3_ReadsValidAndNotBackfilled()
+    public async Task ParentBinding_MissingFieldInExistingV4_ReadsValidAndNotBackfilled()
     {
         const string run = "run-m1";
         const string wf = "wf-m1";
@@ -1673,7 +2056,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(node)).Kind);
         Assert.Equal(parent.RequestIdentity, FindOp(node.RequestIdentity)!.ParentRequestIdentity); // 前置：绑定确已落盘
 
-        // 剥掉该字段（模拟本批之前写入的既有 v3 记录）
+        // 剥掉该字段（parentRequestIdentity 是可选字段，不属于 v4 新增的必备 acceptanceClaim）
         var path = Path.Combine(_dir, "arbitration-lease.json");
         var text = File.ReadAllText(path);
         var stripped = System.Text.RegularExpressions.Regex.Replace(
@@ -1691,7 +2074,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     }
 
     [Fact]
-    public void LeaseV1_BackwardRead_TakeoverWritesUpgradeToV3()
+    public void LeaseV1_BackwardRead_TakeoverWritesUpgradeToV4()
     {
         var v1 = """
         {
@@ -1720,7 +2103,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Null(read.File.Handoff?.Pending); // Pending 段原样保留
         Assert.Empty(read.File.Handoff?.Operations ?? []); // 缺字段视为空（向后读）
 
-        // 写入一律 version 3（接管路径：单调观察满 TTL+锁内复核）
+        // 写入一律 version 5（接管路径：单调观察满 TTL+锁内复核）
         var observer = new LeaseTakeoverObserver(() => _mono);
         Assert.Null(observer.Observe(store.Read()));
         _mono += TimeSpan.FromSeconds(20);
@@ -1728,18 +2111,18 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.NotNull(evidence);
         var acq = store.TryAcquire("pid:test2", evidence: evidence);
         Assert.True(acq.Success, "接管失败 " + acq.Reason);
-        Assert.Equal(3, store.Read().File!.Version); // 发布单点升级（v2→v3：承载责任事实字段）
+        Assert.Equal(5, store.Read().File!.Version); // 发布单点升级到历史归档格式
         Assert.Null(store.Read().File!.Handoff?.Pending); // Pending 段保留
         Assert.Equal(6, store.Read().File!.Revision); // 修订单调延续不回退
     }
 
-    // ── 22. 更高版本 Unsupported + 写入一律 version 3（R5.3 §24.20-A）─────────────────
+    // ── 22. 更高版本 Unsupported + 写入一律 version 5（R5.3 §24）─────────────────
 
     [Fact]
     public async Task LeaseFutureVersion_Unsupported_LoudReject()
     {
         var (svc, _, _, _) = BuildFacade();
-        var text = File.ReadAllText(Path.Combine(_dir, "arbitration-lease.json")).Replace("\"version\": 3", "\"version\": 4");
+        var text = File.ReadAllText(Path.Combine(_dir, "arbitration-lease.json")).Replace("\"version\": 5", "\"version\": 6");
         File.WriteAllText(Path.Combine(_dir, "arbitration-lease.json"), text);
         var result = await svc.SubmitAsync(Req());
         Assert.Equal(AdmissionResultKind.Error, result.Kind);
@@ -1748,13 +2131,13 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Publish_AlwaysVersion3()
+    public async Task Publish_AlwaysVersion5()
     {
         var (svc, _, _, _) = BuildFacade();
         _ = await svc.SubmitAsync(Req());
         var text = File.ReadAllText(Path.Combine(_dir, "arbitration-lease.json"));
-        Assert.Contains("\"version\": 3", text);
-        Assert.Equal(3, NewStore().Read().File!.Version);
+        Assert.Contains("\"version\": 5", text);
+        Assert.Equal(5, NewStore().Read().File!.Version);
     }
 
     // ── 23. 混合冲突组+合法胜者（逐候选分流：冲突组整组终局拒绝、合法候选照常获选受理）──
@@ -2179,12 +2562,12 @@ public class ArbitrationAdmissionServiceTests : IDisposable
             h.Sender = _ => Task.FromResult<SendOutcome>(new SendOutcome.Rejected("fixture_reject", retryable, "fixture:reject"));
             // [第五轮会诊] 权威未受理观察可信性校验器（夹具：仅接受 owner:* 来源）。
             h.NotAcceptedObservationVerifier = o => o.EvidenceSource.StartsWith("owner:", StringComparison.Ordinal) ? null : "untrusted_source";
-            h.TakeoverTerminalPersist = (sub, seq, evidence, observed, raw, err, job, source) =>
+            h.TakeoverTerminalPersist = (sub, seq, evidence, observed, raw, err, job, source, kind) =>
             {
-                var r = ledger.MarkTerminal(sub, seq, evidence, observed, raw, err, OperationType.ExternalStart, job, source);
+                var r = ledger.MarkTerminal(sub, seq, evidence, observed, raw, err, OperationType.ExternalStart, job, source, kind);
                 return r.Success ? null : "ledger_terminal_failed:" + (r.Reason ?? "unknown");
             };
-            h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, err, job, source, observed) =>
+            h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, err, job, source, observed, kind) =>
             {
                 var read = ledger.Read();
                 if (!read.Valid) return false;
@@ -2196,7 +2579,8 @@ public class ArbitrationAdmissionServiceTests : IDisposable
                     && string.Equals(e.ExecutionErrorCode, err, StringComparison.Ordinal)
                     && string.Equals(e.JobId, job, StringComparison.Ordinal)
                     && string.Equals(e.TerminalEvidenceSource, source, StringComparison.Ordinal)
-                    && e.TerminalObservedAtUtc == observed;
+                    && e.TerminalObservedAtUtc == observed
+                    && e.TerminalKind == kind;
             };
             h.TakeoverJobIdRead = (sub, seq) =>
             {
@@ -2272,6 +2656,66 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Cleanup_ExpiredTombstoneWithAuditAndEvidence_ArchivesCompleteReferences()
+    {
+        var (svc, _, store) = BuildRejectedExternalFacade();
+        var (rid, sub, seq) = await RejectedExternalOpAsync(svc);
+        _ = await svc.RegisterConflictEvidenceAsync(rid, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-archive",
+            RawTerminal = "completed",
+            EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now,
+            SubmissionIdentity = sub,
+            SendSeq = seq,
+        });
+        var settled = await svc.AdjudicateConflictAsync(rid, ConflictResolutionKind.ResolvedNotAccepted,
+            "owner:reconcile_query", notAccepted: new NotAcceptedObservation(
+                ReconciledNotAcceptedFactKinds.ReconcileQueryNotAccepted, "rejected", "owner:reconcile_query", _now, sub, seq));
+        Assert.Equal(AdmissionResultKind.TerminalRejected, settled.Kind);
+
+        var oldAt = _now.AddHours(-25);
+        var lease = store.Read().File!.Lease!;
+        var seeded = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var handoff = file.Handoff!;
+            var audited = handoff.Operations.Single(op => op.RequestIdentity == rid);
+            audited.Zone = OperationZone.Tombstone;
+            audited.UpdatedAtUtc = oldAt;
+            audited.UpdatedRevision = file.Revision + 1;
+            for (var i = 0; i < ArbitrationAdmissionService.TombstoneLimit - 1; i++)
+                handoff.Operations.Add(new OperationRecord
+                {
+                    RequestIdentity = "audit-capacity-" + i,
+                    CandidateId = "candidate-audit-capacity-" + i,
+                    RequestState = OperationRequestState.TerminalRejected,
+                    Zone = OperationZone.Tombstone,
+                    UpdatedAtUtc = oldAt,
+                    UpdatedRevision = file.Revision + 1,
+                    OperationType = OperationType.FlowRegistration,
+                });
+            return null;
+        });
+        Assert.True(seeded.Success, seeded.Reason);
+
+        _now += TimeSpan.FromHours(25);
+        RenewLease(store);
+        var next = await svc.SubmitAsync(Req(ns: "after-audit-archive", workflow: "group:after-audit-archive"));
+
+        Assert.Equal(AdmissionResultKind.TerminalRejected, next.Kind);
+        Assert.NotEqual("operations_capacity_full", next.ReasonCode);
+        var read = store.Read();
+        Assert.Equal(ArbitrationLeaseStatus.Valid, read.Status);
+        var handoffAfter = read.File!.Handoff!;
+        var archived = Assert.Single(handoffAfter.ArchivedOperations, item => item.Operation.RequestIdentity == rid);
+        Assert.Equal(OperationZone.Tombstone, archived.Operation.Zone);
+        Assert.Equal("ev-archive", Assert.Single(archived.Operation.ConflictEvidence!).EvidenceId);
+        Assert.Single(handoffAfter.ConflictResolutionAudits);
+        Assert.Single(handoffAfter.ReconciledNotAcceptedEvidence);
+        Assert.DoesNotContain(handoffAfter.Operations, op => op.RequestIdentity == rid);
+    }
+
+    [Fact]
     public async Task ConflictAdjudicate_Idempotent_ReusesAuditAndEvidenceIds()
     {
         var (svc, _, _) = BuildRejectedExternalFacade();
@@ -2292,6 +2736,43 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var lease = ReadLease();
         Assert.Single(lease.File!.Handoff!.ConflictResolutionAudits!);         // 幂等：复用同一 auditId，不产第二份
         Assert.Single(lease.File.Handoff.ReconciledNotAcceptedEvidence!);      // 证据同理
+    }
+
+    [Fact]
+    public async Task ConflictAdjudicate_NotAccepted_RetryableRoundKeepsRetryAndHistoricalAuditValid()
+    {
+        var (svc, _, store) = BuildRejectedExternalFacade(retryable: true);
+        var request = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-retry-after-adjudication",
+            operationType: OperationType.ExternalStart);
+        var rejected = await svc.SubmitAsync(request);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, rejected.Kind);
+        var first = FindOp(rejected.RequestIdentity)!;
+        var sub1 = first.SubmissionIdentity!;
+        var seq1 = first.LastSendSeq;
+        _ = await svc.RegisterConflictEvidenceAsync(first.RequestIdentity, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-retry-adjudication", RawTerminal = "completed", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = sub1, SendSeq = seq1,
+        });
+        var adjudicated = await svc.AdjudicateConflictAsync(first.RequestIdentity,
+            ConflictResolutionKind.ResolvedNotAccepted, "owner:reconcile_query",
+            notAccepted: new NotAcceptedObservation(ReconciledNotAcceptedFactKinds.ReconcileQueryNotAccepted,
+                "rejected", "owner:reconcile_query", _now, sub1, seq1));
+        Assert.Equal(AdmissionResultKind.RetryableRejected, adjudicated.Kind);
+        Assert.Equal(ResponsibilityState.Settled, adjudicated.ResponsibilityState);
+        Assert.Equal(OperationRequestState.RetryableRejected, FindOp(first.RequestIdentity)!.RequestState);
+
+        var retried = await svc.RetryAsync(first.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, retried.Kind);
+        Assert.Equal(2, FindOp(first.RequestIdentity)!.LastSendSeq);
+        var read = store.Read();
+        Assert.Equal(ArbitrationLeaseStatus.Valid, read.Status);
+        var lease = Assert.IsType<LogicalOwnerLeaseFile>(read.File);
+        var history = Assert.Single(lease.Handoff!.ConflictResolutionAudits!);
+        Assert.Equal(sub1, history.SubmissionIdentity);
+        Assert.Equal(seq1, history.SendSeq);
+        Assert.Contains(history.AuditId, FindOp(first.RequestIdentity)!.ConflictResolutionAuditHistoryIds);
+        Assert.Single(FindOp(first.RequestIdentity)!.ConflictEvidence!);
     }
 
     [Fact]
@@ -2318,6 +2799,368 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.NotNull(audit.ResolutionEvidenceSnapshot);
         Assert.Equal(op.ExecutionResult.RawTerminal, audit.ResolutionEvidenceSnapshot!.RawTerminal);
         Assert.Equal(LedgerEntryState.Terminal, Assert.Single(ledger.Read().File!.Entries).State);
+    }
+
+    [Fact]
+    public async Task ConflictAdjudicate_AcceptedTerminal_ClearsTerminalMirrorConflictState()
+    {
+        var (svc, _, store) = BuildRejectedExternalFacade();
+        _lastHooks!.Barriers = GatedBarrier(2);
+        var first = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-mirror-conflict",
+            trigger: "manual:panel:mirror-conflict", operationType: OperationType.ExternalStart);
+        var duplicate = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-mirror-conflict",
+            trigger: "manual:panel:mirror-conflict", operationType: OperationType.ExternalStart);
+        var submitted = await Task.WhenAll(svc.SubmitAsync(first), svc.SubmitAsync(duplicate));
+        Assert.All(submitted, result => Assert.Equal(AdmissionResultKind.TerminalRejected, result.Kind));
+        var linked = store.Read().File!.Handoff!.Operations.Where(op => op.MergedInto is not null).ToArray();
+        var mirror = Assert.Single(linked);
+        var winnerId = mirror.MergedInto!;
+        var winner = FindOp(winnerId)!;
+        Assert.Equal(winner.SubmissionIdentity, mirror.SubmissionIdentity);
+        Assert.Equal(winner.LastSendSeq, mirror.LastSendSeq);
+
+        _ = await svc.RegisterConflictEvidenceAsync(mirror.RequestIdentity, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-terminal-mirror-own", RawTerminal = "completed", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = winner.SubmissionIdentity!, SendSeq = winner.LastSendSeq,
+        });
+        var mirrorDone = await svc.AdjudicateConflictAsync(mirror.RequestIdentity,
+            ConflictResolutionKind.ResolvedAcceptedTerminal,
+            "owner:reconcile_query", ExternalStartCompletion.SucceededWith("completed", "owner:reconcile_query", _now));
+        Assert.Equal(ResponsibilityState.Settled, mirrorDone.ResponsibilityState);
+        var afterMirrorAudit = ReadLease();
+        Assert.True(afterMirrorAudit.File is not null, afterMirrorAudit.Detail);
+        var mirrorAuditId = FindOp(mirror.RequestIdentity)!.ConflictResolutionAuditId;
+        Assert.NotNull(mirrorAuditId);
+
+        _ = await svc.RegisterConflictEvidenceAsync(winnerId, new ConflictEvidenceRecord
+        {
+            EvidenceId = "ev-terminal-winner", RawTerminal = "completed", EvidenceSource = "owner:late_evidence",
+            ObservedAtUtc = _now, SubmissionIdentity = winner.SubmissionIdentity!, SendSeq = winner.LastSendSeq,
+        });
+        var done = await svc.AdjudicateConflictAsync(winnerId, ConflictResolutionKind.ResolvedAcceptedTerminal,
+            "owner:reconcile_query", ExternalStartCompletion.SucceededWith("completed", "owner:reconcile_query", _now));
+
+        Assert.True(done.ResponsibilityState == ResponsibilityState.Settled,
+            $"{done.Kind}/{done.ReasonCode}: {done.Detail}");
+        var resolvedWinner = FindOp(winnerId)!;
+        var resolvedMirror = FindOp(mirror.RequestIdentity)!;
+        Assert.False(resolvedWinner.ConflictPending);
+        Assert.False(resolvedMirror.ConflictPending);
+        Assert.Equal(OperationRequestState.TerminalCompleted, resolvedMirror.RequestState);
+        Assert.Equal(ExecutionResultKind.Succeeded, resolvedMirror.ExecutionResult!.Kind);
+        Assert.Equal(resolvedWinner.ExecutionResult!.RawTerminal, resolvedMirror.ExecutionResult.RawTerminal);
+        Assert.Equal(mirrorAuditId, resolvedMirror.ConflictResolutionAuditId);
+        Assert.Equal(2, ReadLease().File!.Handoff!.ConflictResolutionAudits!.Count);
+    }
+
+    [Fact]
+    public async Task RejectedClose_RacingTerminalPublication_PersistsConflictAndKeepsSubmissionOpen()
+    {
+        var (svc, store, _, hooks) = BuildFacade(h =>
+        {
+            h.Sender = _ => Task.FromResult<SendOutcome>(new SendOutcome.Unknown("adapter_unknown", "ext:adapter"));
+            h.NotAcceptedObservationVerifier = _ => null;
+        });
+        var request = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-reject-terminal-race",
+            operationType: OperationType.ExternalStart);
+        var unknown = await svc.SubmitAsync(request);
+        Assert.Equal(AdmissionResultKind.Reconciling, unknown.Kind);
+
+        var atClose = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var continueClose = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        hooks.Barriers = new AdmissionBarriers
+        {
+            BeforeRejectedSubmissionClose = async () =>
+            {
+                atClose.TrySetResult();
+                await continueClose.Task;
+            },
+        };
+
+        var rejectionTask = svc.SettleReconciledAsync(request.RequestIdentity,
+            new ReconcileSettlement.NotAccepted(unknown.SubmissionIdentity!, unknown.SendSeq,
+                "bgi_rejected", Retryable: true, "owner:race-probe"));
+        await atClose.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // 模拟另一个进程在拒绝快照之后、关闭事务之前，原子发布了执行终态载体。
+        var lease = store.Read().File!.Lease!;
+        var now = _now;
+        var seeded = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var op = file.Handoff!.Operations.Single(o => o.RequestIdentity == request.RequestIdentity);
+            op.ExecutionResult = new ExecutionResult
+            {
+                Kind = ExecutionResultKind.Cancelled,
+                RawTerminal = "cancelled",
+                EvidenceSource = "ext:task.event",
+                SubmissionIdentity = unknown.SubmissionIdentity!,
+                SendSeq = unknown.SendSeq,
+                ObservedAtUtc = now,
+            };
+            op.PendingTerminal = new PendingTerminal
+            {
+                Kind = ExecutionResultKind.Cancelled,
+                RawTerminal = "cancelled",
+                EvidenceSource = "ext:task.event",
+                SubmissionIdentity = unknown.SubmissionIdentity!,
+                SendSeq = unknown.SendSeq,
+                OperationType = OperationType.ExternalStart,
+                ObservedAtUtc = now,
+                RecordedAtUtc = now,
+            };
+            return null;
+        });
+        Assert.True(seeded.Success, "并发终态载体造景失败：" + seeded.Reason);
+
+        continueClose.TrySetResult();
+        var rejected = await rejectionTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(AdmissionResultKind.NeedReconcile, rejected.Kind);
+        var current = FindOp(request.RequestIdentity)!;
+        Assert.True(current.ConflictPending);
+        Assert.NotNull(current.ExecutionResult);
+        Assert.NotNull(current.PendingTerminal);
+        Assert.NotEqual(OperationRequestState.RetryableRejected, current.RequestState);
+        Assert.NotNull(ReadLease().File!.Handoff!.Submission); // 拒绝不得关闭仍需裁决的责任
+        Assert.Contains(current.ConflictEvidence!, e => e.SupersededReasonCode == "authoritative_execution_fact_exists");
+    }
+
+    [Fact]
+    public async Task CompletionStage_RacingClosedRetryableRejection_CannotPublishExecutionFact()
+    {
+        var (svc, ledger) = BuildExternalFacadeWithCompletion(senderUnknown: true);
+        var hooks = _lastHooks!;
+        var concurrentSvc = new ArbitrationAdmissionService(_lastStore!, hooks, () => _now);
+        hooks.NotAcceptedObservationVerifier = _ => null;
+        var request = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-completion-before-stage",
+            operationType: OperationType.ExternalStart);
+        var unknown = await svc.SubmitAsync(request);
+        Assert.Equal(AdmissionResultKind.Reconciling, unknown.Kind);
+        var atStage = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var continueStage = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        hooks.Barriers = new AdmissionBarriers
+        {
+            BeforeTerminalCarrierStage = async () =>
+            {
+                atStage.TrySetResult();
+                await continueStage.Task;
+            },
+        };
+        var completionTask = svc.SettleCompletionAsync(request.RequestIdentity, unknown.SubmissionIdentity!, unknown.SendSeq,
+            ExternalStartCompletion.CancelledWith("cancelled", "ext:task.event", _now));
+        await atStage.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var rejection = await concurrentSvc.SettleReconciledAsync(request.RequestIdentity,
+            new ReconcileSettlement.NotAccepted(unknown.SubmissionIdentity!, unknown.SendSeq,
+                "bgi_rejected", Retryable: true, "owner:race-probe"));
+        Assert.Equal(AdmissionResultKind.NeedReconcile, rejection.Kind);
+        continueStage.TrySetResult();
+        var completion = await completionTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var current = FindOp(request.RequestIdentity)!;
+        Assert.NotEqual(OperationRequestState.RetryableRejected, current.RequestState);
+        Assert.True(current.ConflictPending);
+        Assert.NotNull(current.AcceptanceClaim);
+        Assert.True(current.AcceptanceClaim!.LedgerPersisted);
+        Assert.NotNull(ReadLease().File!.Handoff!.Submission);
+        Assert.NotEqual(ResponsibilityState.Settled, completion.ResponsibilityState);
+        Assert.Equal(LedgerEntryState.AcceptedPendingExecution, Assert.Single(ledger.Read().File!.Entries).State);
+        var retry = await svc.RetryAsync(request.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.NeedReconcile, retry.Kind);
+        Assert.Equal(unknown.SendSeq, FindOp(request.RequestIdentity)!.LastSendSeq);
+    }
+
+    [Fact]
+    public async Task AcceptanceClaimRecovery_ReplaysLedgerAndClosesMatchingSubmission_WithoutResend()
+    {
+        ExternalStartLedger? ledgerRef = null;
+        var persistCalls = 0;
+        var sends = 0;
+        var (svc, store, ledger, hooks) = BuildFacade(h =>
+        {
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("owner:accepted", "run-recovery", "job-recovery"));
+            };
+            h.TakeoverPersist = entry =>
+            {
+                if (Interlocked.Increment(ref persistCalls) == 1)
+                    return Task.FromResult<string?>("injected_before_ledger_write");
+                var recorded = ledgerRef!.RecordAccepted(entry);
+                return Task.FromResult<string?>(recorded.Success
+                    && ledgerRef.ConfirmRebuildable(entry)
+                    ? null
+                    : "recovery_ledger_write_failed");
+            };
+        });
+        ledgerRef = ledger;
+        var request = Req(operationType: OperationType.ExternalStart);
+
+        var first = await svc.SubmitAsync(request);
+        Assert.Equal(AdmissionResultKind.Reconciling, first.Kind);
+        Assert.Equal(1, sends);
+        var beforeRecovery = FindOp(request.RequestIdentity)!;
+        Assert.NotNull(beforeRecovery.AcceptanceClaim);
+        Assert.False(beforeRecovery.AcceptanceClaim!.LedgerPersisted);
+        Assert.NotNull(ReadLease().File!.Handoff!.Submission);
+
+        var ownerBeforeTakeover = ReadLease().File!.Lease!;
+        var observer = new LeaseTakeoverObserver(() => _mono);
+        Assert.Null(observer.Observe(store.Read()));
+        _mono += TimeSpan.FromSeconds(ownerBeforeTakeover.TtlSeconds + 1);
+        var takeoverEvidence = observer.Observe(store.Read());
+        Assert.NotNull(takeoverEvidence);
+        var acquired = store.TryAcquire("pid:acceptance-recovery", evidence: takeoverEvidence);
+        Assert.True(acquired.Success, "模拟重启接管失败 " + acquired.Reason);
+        var recoveredSvc = new ArbitrationAdmissionService(store, hooks, () => _now);
+
+        var report = await recoveredSvc.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(1, report.AcceptanceClaimsReconciled);
+        Assert.Equal(0, report.AcceptanceClaimFailures);
+        Assert.Equal(1, sends);
+        var recovered = FindOp(request.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.Accepted, recovered.RequestState);
+        Assert.True(recovered.AcceptanceClaim!.LedgerPersisted);
+        Assert.Null(ReadLease().File!.Handoff!.Submission);
+        var entry = Assert.Single(ledger.Read().File!.Entries);
+        Assert.Equal(beforeRecovery.SubmissionIdentity, entry.SubmissionIdentity);
+        Assert.Equal(beforeRecovery.LastSendSeq, entry.SendSeq);
+        Assert.Equal("job-recovery", entry.JobId);
+    }
+
+    [Fact]
+    public async Task AcceptanceClaimRecovery_PersistsClaimUsingItsOriginalRoundAfterOperationAdvanced()
+    {
+        var sends = 0;
+        var (svc, store, ledger, _) = BuildFacade(h => h.Sender = _ =>
+        {
+            var send = Interlocked.Increment(ref sends);
+            return Task.FromResult<SendOutcome>(send == 1
+                ? new SendOutcome.Rejected("first_round_rejected", Retryable: true, "sender")
+                : new SendOutcome.Unknown("second_round_unknown", "sender"));
+        });
+        var request = Req(operationType: OperationType.ExternalStart);
+        var first = await svc.SubmitAsync(request);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, first.Kind);
+        var originalSubmissionIdentity = first.SubmissionIdentity!;
+        var originalSendSeq = first.SendSeq;
+        var second = await svc.RetryAsync(request.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.Reconciling, second.Kind);
+        Assert.True(second.SendSeq > originalSendSeq);
+
+        var lease = store.Read().File!.Lease!;
+        Assert.True(store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var op = file.Handoff!.Operations.Single(o => o.RequestIdentity == request.RequestIdentity);
+            op.ConflictPending = true;
+            op.AcceptanceClaim = new AcceptanceClaimRecord
+            {
+                RequestIdentity = op.RequestIdentity,
+                SubmissionIdentity = originalSubmissionIdentity,
+                SendSeq = originalSendSeq,
+                OwnerLeaseId = lease.LeaseId,
+                OwnerEpoch = lease.OwnerEpoch,
+                ClaimedAtUtc = _now,
+                EvidenceSource = "owner:late-round-one",
+                RunId = "run-round-one",
+                JobId = "job-round-one",
+                LedgerPersisted = false,
+            };
+            return null;
+        }).Success);
+
+        var recovery = await svc.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(1, recovery.AcceptanceClaimsReconciled);
+        Assert.Equal(0, recovery.AcceptanceClaimFailures);
+        Assert.Equal(2, sends);
+        var entry = Assert.Single(ledger.Read().File!.Entries);
+        Assert.Equal(originalSubmissionIdentity, entry.SubmissionIdentity);
+        Assert.Equal(originalSendSeq, entry.SendSeq);
+        Assert.Equal("job-round-one", entry.JobId);
+        Assert.Equal(second.SubmissionIdentity, store.Read().File!.Handoff!.Submission!.SubmissionIdentity);
+    }
+
+    [Fact]
+    public async Task CompletionFinalize_RacingConflictRegistration_CannotCloseSubmissionOrSettle()
+    {
+        var (svc, ledger) = BuildExternalFacadeWithCompletion(senderUnknown: true);
+        var hooks = _lastHooks!;
+        var concurrentSvc = new ArbitrationAdmissionService(_lastStore!, hooks, () => _now);
+        hooks.NotAcceptedObservationVerifier = _ => null;
+        var request = Req(ns: "manual", workflow: "onedragon:cfg", payload: "p-completion-before-finalize",
+            operationType: OperationType.ExternalStart);
+        var unknown = await svc.SubmitAsync(request);
+        Assert.Equal(AdmissionResultKind.Reconciling, unknown.Kind);
+        var atFinalize = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var continueFinalize = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        hooks.Barriers = new AdmissionBarriers
+        {
+            BeforeTerminalFinalize = async () =>
+            {
+                atFinalize.TrySetResult();
+                await continueFinalize.Task;
+            },
+        };
+        var completionTask = svc.SettleCompletionAsync(request.RequestIdentity, unknown.SubmissionIdentity!, unknown.SendSeq,
+            ExternalStartCompletion.CancelledWith("cancelled", "ext:task.event", _now));
+        await atFinalize.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var rejection = await concurrentSvc.SettleReconciledAsync(request.RequestIdentity,
+            new ReconcileSettlement.NotAccepted(unknown.SubmissionIdentity!, unknown.SendSeq,
+                "bgi_rejected", Retryable: true, "owner:race-probe"));
+        Assert.Equal(AdmissionResultKind.NeedReconcile, rejection.Kind);
+        continueFinalize.TrySetResult();
+        var completion = await completionTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var current = FindOp(request.RequestIdentity)!;
+        Assert.True(current.ConflictPending);
+        Assert.NotNull(current.ExecutionResult);
+        Assert.NotNull(current.PendingTerminal);
+        Assert.NotNull(ReadLease().File!.Handoff!.Submission);
+        Assert.NotEqual(OperationRequestState.TerminalCompleted, current.RequestState);
+        Assert.Equal(LedgerEntryState.Terminal, Assert.Single(ledger.Read().File!.Entries).State);
+        Assert.NotEqual(ResponsibilityState.Settled, completion.ResponsibilityState);
+    }
+
+    [Fact]
+    public async Task CompletionFinalize_ReadbackAfterAnotherSettlementAndNewConflict_RemainsPending()
+    {
+        var (svc, _) = BuildExternalFacadeWithCompletion();
+        var hooks = _lastHooks!;
+        var store = _lastStore!;
+        var concurrentSvc = new ArbitrationAdmissionService(store, hooks, () => _now);
+        var (requestIdentity, submissionIdentity, sendSeq) = await AcceptedExternalOpAsync(svc);
+        var atFirstFinalize = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstFinalize = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finalizeCalls = 0;
+        hooks.Barriers = new AdmissionBarriers
+        {
+            BeforeTerminalFinalize = async () =>
+            {
+                if (Interlocked.Increment(ref finalizeCalls) != 1) return;
+                atFirstFinalize.TrySetResult();
+                await releaseFirstFinalize.Task;
+            },
+        };
+        var completion = ExternalStartCompletion.CancelledWith("cancelled", "owner:completion-A", _now);
+        var first = svc.SettleCompletionAsync(requestIdentity, submissionIdentity, sendSeq, completion);
+        await atFirstFinalize.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var settled = await concurrentSvc.SettleCompletionAsync(requestIdentity, submissionIdentity, sendSeq, completion);
+        Assert.Equal(ResponsibilityState.Settled, settled.ResponsibilityState);
+        var contradictory = await concurrentSvc.SettleCompletionAsync(requestIdentity, submissionIdentity, sendSeq,
+            ExternalStartCompletion.CancelledWith("cancelled-different", "owner:completion-B", _now));
+        Assert.NotEqual(ResponsibilityState.Settled, contradictory.ResponsibilityState);
+        Assert.True(FindOp(requestIdentity)!.ConflictPending);
+
+        releaseFirstFinalize.TrySetResult();
+        var firstResult = await first.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var final = FindOp(requestIdentity)!;
+        Assert.True(final.ConflictPending);
+        Assert.NotEqual(ResponsibilityState.Settled, firstResult.ResponsibilityState);
     }
 
     [Fact]
@@ -2593,6 +3436,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         {
             var op = file.Handoff!.Operations.First(o => string.Equals(o.RequestIdentity, accepted.RequestIdentity, StringComparison.Ordinal));
             op.OperationType = OperationType.Unknown;   // 模拟旧格式代隔离产物
+            op.AcceptanceClaim = null;                  // 历史未知类型记录不承载 v4 ExternalStart 认领
             op.RequestState = OperationRequestState.Queued;
             // 与预观察记录的类型关联保持一致（否则读侧会按 v3 引用完整性判损坏）。
             foreach (var pre in file.Handoff.PreObservations ?? [])
@@ -2640,6 +3484,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
                         {
                             var op = file.Handoff!.Operations.First();
                             op.OperationType = OperationType.Unknown;
+                            op.AcceptanceClaim = null;
                             return null;
                         });
                     }
@@ -2681,8 +3526,10 @@ public class ArbitrationAdmissionServiceTests : IDisposable
             var winner = file.Handoff!.Operations.First(o => string.Equals(o.RequestIdentity, wa.RequestIdentity, StringComparison.Ordinal));
             var merged = file.Handoff.Operations.First(o => string.Equals(o.RequestIdentity, wm.RequestIdentity, StringComparison.Ordinal));
             winner.ConflictPending = true;                                   // 胜者冲突待决
+            winner.AcceptanceClaim = null;                                    // 夹具模拟无认领的历史冲突快照
             merged.MergedInto = winner.RequestIdentity;                      // 合并项指向胜者
             merged.OperationType = OperationType.Unknown;                    // 合并项类型缺失（旧格式代隔离产物）
+            merged.AcceptanceClaim = null;                                    // v4 认领只允许绑定 ExternalStart 类型
             merged.RequestState = OperationRequestState.RetryableRejected;   // 触发合并共享分类分支
             foreach (var pre in file.Handoff.PreObservations ?? [])
                 if (string.Equals(pre.SubmissionIdentity, merged.SubmissionIdentity, StringComparison.Ordinal)
@@ -2698,6 +3545,71 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(AdmissionResultKind.NeedReconcile, result.Kind);
         Assert.Equal("conflict_pending", result.ReasonCode);   // 冲突优先（不得先报类型隔离）
         Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);
+    }
+
+    [Fact]
+    public async Task ContinueUseRacingRetry_OnlyOnePathReservesTheIdentity()
+    {
+        var continuePassedCheck = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseContinue = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var retryReserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRetry = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pauseContinue = false;
+        var pauseRetry = false;
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ =>
+            {
+                var seq = Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(seq == 1
+                    ? new SendOutcome.Rejected("task_running", Retryable: true, "fixture:retryable")
+                    : new SendOutcome.Accepted("fixture:accepted", null));
+            };
+            h.Barriers = new AdmissionBarriers
+            {
+                AfterContinueInFlightCheck = () =>
+                {
+                    if (!pauseContinue) return Task.CompletedTask;
+                    continuePassedCheck.TrySetResult();
+                    return releaseContinue.Task;
+                },
+                AfterRetryReservation = () =>
+                {
+                    if (!pauseRetry) return Task.CompletedTask;
+                    retryReserved.TrySetResult();
+                    return releaseRetry.Task;
+                },
+            };
+        });
+
+        var request = Req(ns: "v2", workflow: "wf-continue-retry-reservation", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, (await svc.SubmitAsync(request)).Kind);
+        var lease = store.Read().File!.Lease!;
+        Assert.True(store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            file.Handoff!.Operations.Single(o => o.RequestIdentity == request.RequestIdentity).RequestState = OperationRequestState.Queued;
+            return null;
+        }).Success);
+
+        pauseContinue = true;
+        var continueTask = svc.SubmitAsync(ContinueOf(request));
+        await continuePassedCheck.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        pauseRetry = true;
+        var retryTask = Task.Run(() => svc.RetryAsync(request.RequestIdentity));
+        await retryReserved.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        releaseContinue.TrySetResult();
+        var continued = await continueTask.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(AdmissionResultKind.NeedReconcile, continued.Kind);
+        Assert.Equal(ResponsibilityState.Pending, continued.ResponsibilityState);
+
+        releaseRetry.TrySetResult();
+        var retried = await retryTask.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(AdmissionResultKind.Accepted, retried.Kind);
+        Assert.Equal(2, Volatile.Read(ref sends));
+        Assert.Equal(2, FindOp(request.RequestIdentity)!.LastSendSeq);
     }
 
     [Fact]
@@ -2810,6 +3722,646 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var after = ReadLease().File!.Handoff!.Operations.First(o => o.RequestIdentity == merged.RequestIdentity);
         Assert.Equal(OperationRequestState.Accepted, after.RequestState);
         Assert.StartsWith("merged:", after.LastResult!.EvidenceSource);
+    }
+
+    [Fact]
+    public async Task RetryAsync_MergedMirrorWithRetryableWinner_DoesNotCreateIndependentSend()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.Barriers = GatedBarrier(2);
+            h.Sender = _ =>
+            {
+                var seq = Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(seq == 1
+                    ? new SendOutcome.Rejected("task_running", Retryable: true, "fixture:retryable")
+                    : new SendOutcome.Accepted("fixture:accepted", null));
+            };
+        });
+        var winnerRequest = Req(trigger: "manual:retry-merged");
+        var mirrorRequest = Req(trigger: "manual:retry-merged");
+        var submissions = await Task.WhenAll(svc.SubmitAsync(winnerRequest), svc.SubmitAsync(mirrorRequest));
+        Assert.All(submissions, result => Assert.Equal(AdmissionResultKind.RetryableRejected, result.Kind));
+        Assert.Equal(1, sends);
+
+        var mirror = ReadLease().File!.Handoff!.Operations.Single(o => o.MergedInto is not null);
+        var winner = ReadLease().File!.Handoff!.Operations.Single(o => o.RequestIdentity == mirror.MergedInto);
+        var retry = await svc.RetryAsync(mirror.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, retry.Kind);
+        Assert.Equal(ResponsibilityState.Settled, retry.ResponsibilityState);
+        Assert.Equal(winner.SubmissionIdentity, retry.SubmissionIdentity);
+        Assert.Equal(winner.LastSendSeq, retry.SendSeq);
+        Assert.Equal(1, sends);
+
+        var winnerRetry = await svc.RetryAsync(winner.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.Accepted, winnerRetry.Kind);
+        Assert.Equal(2, sends);
+        var mirrorContinue = await svc.SubmitAsync(ContinueOf(mirrorRequest));
+        var mirrorRetry = await svc.RetryAsync(mirror.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.Accepted, mirrorContinue.Kind);
+        Assert.Equal(AdmissionResultKind.Accepted, mirrorRetry.Kind);
+        Assert.Equal(winnerRetry.SubmissionIdentity, mirrorContinue.SubmissionIdentity);
+        Assert.Equal(winnerRetry.SubmissionIdentity, mirrorRetry.SubmissionIdentity);
+        Assert.Equal(winnerRetry.SendSeq, mirrorContinue.SendSeq);
+        Assert.Equal(winnerRetry.SendSeq, mirrorRetry.SendSeq);
+
+        var lease = store.Read().File!.Lease!;
+        Assert.True(store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            file.Handoff!.Operations.Single(o => o.RequestIdentity == mirror.RequestIdentity).ConflictPending = true;
+            return null;
+        }).Success);
+        var conflicted = await svc.RetryAsync(mirror.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.NeedReconcile, conflicted.Kind);
+        Assert.Equal("conflict_pending", conflicted.ReasonCode);
+        Assert.Equal(ResponsibilityState.Pending, conflicted.ResponsibilityState);
+        Assert.Equal(2, sends);
+    }
+
+    [Fact]
+    public async Task PrecheckRetryableWinner_MirrorsRelationBeforeWinnerCanRetry()
+    {
+        var occupied = false;
+        var injectOccupiedAtPublish = false;
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts { ExecutionOccupied = occupied };
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("fixture:accepted", null));
+            };
+            var barriers = GatedBarrier(2);
+            barriers.BeforeOccupyPublish = () =>
+            {
+                if (injectOccupiedAtPublish) occupied = true;
+                return Task.CompletedTask;
+            };
+            h.Barriers = barriers;
+        });
+
+        var a = Req(ns: "v2", workflow: "wf-precheck-merge", trigger: "manual:precheck-merge", operationType: OperationType.ExternalStart);
+        var b = Req(ns: "v2", workflow: "wf-precheck-merge", trigger: "manual:precheck-merge", operationType: OperationType.ExternalStart);
+        injectOccupiedAtPublish = true;
+        var firstRound = await Task.WhenAll(svc.SubmitAsync(a), svc.SubmitAsync(b));
+        Assert.All(firstRound, result => Assert.Equal(AdmissionResultKind.RetryableRejected, result.Kind));
+        Assert.Equal(0, sends);
+        var mirror = ReadLease().File!.Handoff!.Operations.Single(o => o.MergedInto is not null);
+        var winner = FindOp(mirror.MergedInto!)!;
+        Assert.Equal(OperationRequestState.RetryableRejected, mirror.RequestState);
+        Assert.Equal(OperationZone.Active, mirror.Zone);
+        Assert.Equal(OperationRequestState.RetryableRejected, winner.RequestState);
+        Assert.Equal("execution_occupied", mirror.LastPrecheckResult?.ReasonCode);
+
+        occupied = false;
+        injectOccupiedAtPublish = false;
+        var retried = await svc.RetryAsync(winner.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.Accepted, retried.Kind);
+        Assert.Equal(1, sends);
+        var continuedMirror = await svc.SubmitAsync(ContinueOf(a.RequestIdentity == mirror.RequestIdentity ? a : b));
+        var retriedMirror = await svc.RetryAsync(mirror.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.Accepted, continuedMirror.Kind);
+        Assert.Equal(AdmissionResultKind.Accepted, retriedMirror.Kind);
+        Assert.Equal(retried.SubmissionIdentity, continuedMirror.SubmissionIdentity);
+        Assert.Equal(retried.SubmissionIdentity, retriedMirror.SubmissionIdentity);
+        Assert.Equal(1, sends);
+    }
+
+    [Fact]
+    public async Task RetryAsync_IncompatibleMergeAppearingAfterSnapshot_IsHeldAtAtomicOccupy()
+    {
+        var reserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRetry = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pauseReservation = false;
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ =>
+            {
+                var seq = Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(seq switch
+                {
+                    2 => new SendOutcome.Rejected("task_running", Retryable: true, "fixture:retryable"),
+                    3 => new SendOutcome.Unknown("fixture:unknown"),
+                    _ => new SendOutcome.Accepted("fixture:accepted", null),
+                });
+            };
+            h.Barriers = new AdmissionBarriers
+            {
+                AfterRetryReservation = () =>
+                {
+                    if (!pauseReservation) return Task.CompletedTask;
+                    reserved.TrySetResult();
+                    return releaseRetry.Task;
+                },
+            };
+        });
+
+        var targetRequest = Req(ns: "v2", workflow: "wf-merge-target", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(targetRequest)).Kind);
+        var retryRequest = Req(ns: "v2", workflow: "wf-merge-late", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, (await svc.SubmitAsync(retryRequest)).Kind);
+        var blocker = Req(ns: "v2", workflow: "wf-merge-global-submission", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Reconciling, (await svc.SubmitAsync(blocker)).Kind);
+        Assert.Equal(3, sends);
+        Assert.NotNull(store.Read().File!.Handoff!.Submission); // 有未决发送时也必须先镜像分类，不得终局化/释放
+
+        pauseReservation = true;
+        var retryTask = Task.Run(() => svc.RetryAsync(retryRequest.RequestIdentity));
+        await reserved.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var lease = store.Read().File!.Lease!;
+        Assert.True(store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            file.Handoff!.Operations.Single(o => o.RequestIdentity == retryRequest.RequestIdentity).MergedInto = targetRequest.RequestIdentity;
+            return null;
+        }).Success);
+
+        releaseRetry.TrySetResult();
+        var result = await retryTask.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(AdmissionResultKind.NeedReconcile, result.Kind);
+        Assert.Equal("merged_target_conflict", result.ReasonCode);
+        Assert.Equal(retryRequest.RequestIdentity, result.RequestIdentity);
+        Assert.Equal(3, sends); // late MergedInto mutation blocked a fourth independent send permit
+        Assert.Equal(FindOp(blocker.RequestIdentity)!.SubmissionIdentity, store.Read().File!.Handoff!.Submission!.SubmissionIdentity);
+        var mirror = FindOp(retryRequest.RequestIdentity)!;
+        var target = FindOp(targetRequest.RequestIdentity)!;
+        Assert.True(mirror.RequestState == OperationRequestState.InRound,
+            $"mirror={mirror.RequestState}/{mirror.Zone}/merged={mirror.MergedInto}, target={target.RequestState}/{target.Zone}, result={result.Kind}/{result.ReasonCode}/{result.Detail}");
+        Assert.Equal(OperationZone.Active, mirror.Zone);
+        Assert.Equal(targetRequest.RequestIdentity, mirror.MergedInto);
+        Assert.NotEqual(target.SubmissionIdentity, mirror.SubmissionIdentity);
+    }
+
+    [Fact]
+    public async Task RetryablePrecheckReject_ExpiresBeforeFirstSend_WithoutCallingSender()
+    {
+        var occupied = false;
+        var injectOccupiedAtPublish = true;
+        var advanceClockAtPublish = false;
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts { ExecutionOccupied = occupied };
+            h.Barriers = new AdmissionBarriers
+            {
+                BeforeOccupyPublish = () =>
+                {
+                    if (injectOccupiedAtPublish) occupied = true;
+                    if (advanceClockAtPublish)
+                    {
+                        _now += TimeSpan.FromDays(1);
+                        advanceClockAtPublish = false;
+                    }
+                    return Task.CompletedTask;
+                },
+            };
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("fixture:must-not-send", null));
+            };
+        });
+
+        var request = Req(ns: "v2", workflow: "wf-precheck-expiry", operationType: OperationType.ExternalStart);
+        var rejected = await svc.SubmitAsync(request);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, rejected.Kind);
+        Assert.Equal(0, sends);
+        Assert.Equal(0, FindOp(request.RequestIdentity)!.LastSendSeq);
+
+        occupied = false;
+        injectOccupiedAtPublish = false;
+        advanceClockAtPublish = true;
+        var expired = await svc.RetryAsync(request.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.TerminalRejected, expired.Kind);
+        Assert.Equal("retry_window_expired", expired.ReasonCode);
+        Assert.Equal(0, sends);
+        var operation = FindOp(request.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.TerminalRejected, operation.RequestState);
+        Assert.Equal(OperationZone.Tombstone, operation.Zone);
+        Assert.Equal("retry_window_expired", operation.LastPrecheckResult?.ReasonCode);
+    }
+
+    [Fact]
+    public async Task SweepExpiredRetryWindow_UsesClockInsideAtomicPublish()
+    {
+        var occupied = false;
+        var injectOccupied = true;
+        Action? beforeExpiryPublish = null;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts { ExecutionOccupied = occupied };
+            h.Barriers = new AdmissionBarriers
+            {
+                BeforeOccupyPublish = () =>
+                {
+                    if (injectOccupied) occupied = true;
+                    return Task.CompletedTask;
+                },
+                BeforeRetryExpiryPublish = () => beforeExpiryPublish?.Invoke(),
+            };
+            h.Sender = _ => throw new Xunit.Sdk.XunitException("预检拒绝不得发送");
+        });
+        var request = Req(ns: "v2", workflow: "wf-sweep-lock-clock", operationType: OperationType.ExternalStart);
+        var rejected = await svc.SubmitAsync(request);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, rejected.Kind);
+        occupied = false;
+        injectOccupied = false;
+        var operation = FindOp(request.RequestIdentity)!;
+        var deadline = Assert.IsType<DateTimeOffset>(operation.RetryWindowDeadlineUtc);
+
+        _now = deadline + TimeSpan.FromSeconds(1); // 外层预筛看到已过期
+        beforeExpiryPublish = () => _now = deadline - TimeSpan.FromSeconds(1); // 锁前回拨：锁内时间尚未过期
+        Assert.Equal(0, svc.SweepExpiredRetryWindows());
+        Assert.Equal(OperationRequestState.RetryableRejected, FindOp(request.RequestIdentity)!.RequestState);
+
+        beforeExpiryPublish = null;
+        _now = deadline + TimeSpan.FromSeconds(1);
+        Assert.Equal(1, svc.SweepExpiredRetryWindows());
+        Assert.Equal(OperationRequestState.TerminalRejected, FindOp(request.RequestIdentity)!.RequestState);
+    }
+
+    [Fact]
+    public async Task DedupeWithDifferentOperationType_IsHeldWithoutLinkingOrSending()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.Barriers = GatedBarrier(2);
+            h.FactsProvider = () => new ArbitrationFacts { ExecutionOccupied = true };
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("fixture:must-not-send", null));
+            };
+        });
+        var node = Req(ns: "v2", workflow: "wf-incompatible-merge", trigger: "manual:incompatible-merge", operationType: OperationType.NodeExecution);
+        var external = Req(ns: "v2", workflow: "wf-incompatible-merge", trigger: "manual:incompatible-merge", operationType: OperationType.ExternalStart);
+
+        var results = await Task.WhenAll(svc.SubmitAsync(node), svc.SubmitAsync(external));
+        Assert.All(results, result =>
+        {
+            Assert.Equal(AdmissionResultKind.NeedReconcile, result.Kind);
+            Assert.Equal("merged_target_conflict", result.ReasonCode);
+            Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);
+        });
+        Assert.Equal(0, sends);
+        var lease = store.Read().File!.Lease!;
+        Assert.True(store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            // Simulate an old two-publication crash image: both peers are InRound but the compatibility hold
+            // had not been published yet.
+            foreach (var operation in file.Handoff!.Operations.Where(operation =>
+                         operation.RequestIdentity == node.RequestIdentity || operation.RequestIdentity == external.RequestIdentity))
+                operation.LastPrecheckResult = null;
+            return null;
+        }).Success);
+        _ = svc.RecoverAfterRestart();
+        var operations = new[] { FindOp(node.RequestIdentity)!, FindOp(external.RequestIdentity)! };
+        Assert.All(operations, operation =>
+        {
+            Assert.Equal(OperationRequestState.InRound, operation.RequestState);
+            Assert.Equal(OperationZone.Active, operation.Zone);
+            Assert.Null(operation.MergedInto);
+            Assert.Equal("merged_target_conflict", operation.LastPrecheckResult?.ReasonCode);
+            Assert.Equal("merge_conflict_hold", operation.LastPrecheckResult?.EvidenceSource);
+        });
+    }
+
+    [Fact]
+    public async Task Recovery_HoldsIncompatibleUnlinkedGroupWithPriorSendHistory()
+    {
+        var sends = 0;
+        var (svc, store, _, hooks) = BuildFacade(h => h.Sender = _ =>
+        {
+            sends++;
+            return Task.FromResult<SendOutcome>(new SendOutcome.Rejected("task_running", Retryable: true, "fixture:retryable"));
+        });
+        var prior = Req(ns: "v2", workflow: "wf-incompatible-retry-recovery", trigger: "manual:incompatible-retry-recovery",
+            operationType: OperationType.NodeExecution);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, (await svc.SubmitAsync(prior)).Kind);
+        Assert.Equal(1, FindOp(prior.RequestIdentity)!.LastSendSeq);
+
+        var barriers = GatedBarrier(2);
+        hooks.Barriers = barriers;
+        var incoming = Req(ns: "v2", workflow: "wf-incompatible-retry-recovery", trigger: "manual:incompatible-retry-recovery",
+            operationType: OperationType.ExternalStart);
+        var results = await Task.WhenAll(svc.RetryAsync(prior.RequestIdentity), svc.SubmitAsync(incoming));
+        Assert.All(results, result => Assert.Equal("merged_target_conflict", result.ReasonCode));
+        Assert.Equal(1, sends);
+
+        var lease = store.Read().File!.Lease!;
+        Assert.True(store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            // Recreate the legacy crash image with an unlinked retry winner that has real send history.
+            foreach (var operation in file.Handoff!.Operations.Where(operation =>
+                         operation.RequestIdentity == prior.RequestIdentity || operation.RequestIdentity == incoming.RequestIdentity))
+                operation.LastPrecheckResult = null;
+            return null;
+        }).Success);
+        _ = svc.RecoverAfterRestart();
+
+        var winner = FindOp(prior.RequestIdentity)!;
+        var mirror = FindOp(incoming.RequestIdentity)!;
+        Assert.Equal(1, winner.LastSendSeq);
+        foreach (var operation in new[] { winner, mirror })
+        {
+            Assert.Equal(OperationRequestState.InRound, operation.RequestState);
+            Assert.Equal(OperationZone.Active, operation.Zone);
+            Assert.Equal("merged_target_conflict", operation.LastPrecheckResult?.ReasonCode);
+            Assert.Equal("merge_conflict_hold", operation.LastPrecheckResult?.EvidenceSource);
+        }
+        Assert.Equal(1, sends);
+    }
+
+    [Fact]
+    public async Task RetryablePrecheckMirror_PreservesPriorSendEvidenceAndCurrentReason()
+    {
+        var occupied = false;
+        var injectOccupiedAtPublish = false;
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Barriers = GatedBarrier(2);
+            h.Barriers.BeforeOccupyPublish = () =>
+            {
+                if (injectOccupiedAtPublish) occupied = true;
+                return Task.CompletedTask;
+            };
+            h.FactsProvider = () => new ArbitrationFacts { ExecutionOccupied = occupied };
+            h.Sender = _ =>
+            {
+                var seq = Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(seq == 1
+                    ? new SendOutcome.Rejected("task_running", Retryable: true, "fixture:first_rejection")
+                    : new SendOutcome.Accepted("fixture:accepted", null));
+            };
+        });
+        var a = Req(ns: "v2", workflow: "wf-precheck-evidence", trigger: "manual:precheck-evidence", operationType: OperationType.ExternalStart);
+        var b = Req(ns: "v2", workflow: "wf-precheck-evidence", trigger: "manual:precheck-evidence", operationType: OperationType.ExternalStart);
+        var firstRound = await Task.WhenAll(svc.SubmitAsync(a), svc.SubmitAsync(b));
+        Assert.All(firstRound, result => Assert.Equal(AdmissionResultKind.RetryableRejected, result.Kind));
+        var mirror = ReadLease().File!.Handoff!.Operations.Single(operation => operation.MergedInto is not null);
+        var winner = FindOp(mirror.MergedInto!)!;
+
+        injectOccupiedAtPublish = true;
+        var precheck = await svc.RetryAsync(winner.RequestIdentity);
+        injectOccupiedAtPublish = false;
+        Assert.Equal(AdmissionResultKind.RetryableRejected, precheck.Kind);
+        Assert.Equal("execution_occupied", precheck.ReasonCode);
+        Assert.Equal(1, sends);
+        var currentWinner = FindOp(winner.RequestIdentity)!;
+        var currentMirror = FindOp(mirror.RequestIdentity)!;
+        Assert.Equal("task_running", currentWinner.LastResult?.ReasonCode);
+        Assert.Equal("execution_occupied", currentWinner.LastPrecheckResult?.ReasonCode);
+        Assert.Equal("task_running", currentMirror.LastResult?.ReasonCode);
+        Assert.Equal("execution_occupied", currentMirror.LastPrecheckResult?.ReasonCode);
+        var continued = await svc.SubmitAsync(ContinueOf(a.RequestIdentity == mirror.RequestIdentity ? a : b));
+        Assert.Equal(AdmissionResultKind.RetryableRejected, continued.Kind);
+        Assert.Equal("execution_occupied", continued.ReasonCode);
+        Assert.Equal(1, sends);
+    }
+
+    [Fact]
+    public async Task NewMirrorJoiningRetryableWinner_PreservesWinnerSendEvidence()
+    {
+        var occupied = false;
+        var sends = 0;
+        var (svc, _, _, hooks) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts { ExecutionOccupied = occupied };
+            h.Sender = _ =>
+            {
+                var seq = Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(seq == 1
+                    ? new SendOutcome.Rejected("task_running", Retryable: true, "fixture:prior-send-rejection")
+                    : new SendOutcome.Accepted("fixture:must-not-send", null));
+            };
+        });
+        var prior = Req(trigger: "manual:new-mirror-history");
+        Assert.Equal(AdmissionResultKind.RetryableRejected, (await svc.SubmitAsync(prior)).Kind);
+        Assert.Equal(1, sends);
+
+        var injectOccupied = true;
+        var barriers = GatedBarrier(2);
+        barriers.BeforeOccupyPublish = () =>
+        {
+            if (injectOccupied) occupied = true;
+            return Task.CompletedTask;
+        };
+        hooks.Barriers = barriers;
+        var incoming = Req(trigger: "manual:new-mirror-history"); // 同候选的新请求加入既有拒绝操作的重试轮
+        var retryTask = svc.RetryAsync(prior.RequestIdentity);
+        var incomingTask = svc.SubmitAsync(incoming);
+        var results = await Task.WhenAll(retryTask, incomingTask);
+        injectOccupied = false;
+
+        Assert.All(results, result => Assert.Equal(AdmissionResultKind.RetryableRejected, result.Kind));
+        Assert.Equal(1, sends);
+        var mirror = ReadLease().File!.Handoff!.Operations.Single(operation => operation.MergedInto is not null);
+        Assert.Equal("task_running", mirror.LastResult?.ReasonCode);
+        Assert.Equal("execution_occupied", mirror.LastPrecheckResult?.ReasonCode);
+    }
+
+    [Fact]
+    public async Task Recovery_DoesNotCopyTransientWinnerStateIntoMergedMirror()
+    {
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Barriers = GatedBarrier(2);
+            h.Barriers.AfterOccupyBeforeSend = () => Task.FromException(new InvalidOperationException("simulated crash after durable occupy"));
+            h.Sender = _ => throw new Xunit.Sdk.XunitException("the crash barrier must prevent send");
+        });
+        var a = Req(ns: "v2", workflow: "wf-recovery-merge-state", trigger: "manual:recovery-merge-state", operationType: OperationType.ExternalStart);
+        var b = Req(ns: "v2", workflow: "wf-recovery-merge-state", trigger: "manual:recovery-merge-state", operationType: OperationType.ExternalStart);
+        _ = await Task.WhenAll(svc.SubmitAsync(a), svc.SubmitAsync(b));
+        var mirror = ReadLease().File!.Handoff!.Operations.Single(operation => operation.MergedInto is not null);
+        var winnerId = mirror.MergedInto!;
+
+        Assert.True(svc.RecoverAfterRestart() > 0);
+        mirror = FindOp(mirror.RequestIdentity)!;
+        var winner = FindOp(winnerId)!;
+        Assert.Equal(OperationRequestState.InRound, mirror.RequestState);
+        Assert.Equal(OperationRequestState.Reconciling, winner.RequestState);
+
+        var continued = await svc.SubmitAsync(ContinueOf(a.RequestIdentity == mirror.RequestIdentity ? a : b));
+        Assert.Equal(AdmissionResultKind.Reconciling, continued.Kind);
+        Assert.Equal(winner.SubmissionIdentity, continued.SubmissionIdentity);
+    }
+
+    [Fact]
+    public async Task UnknownMergedWinner_RemainsLinkedUntilReconciliationClosesBoth()
+    {
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Barriers = GatedBarrier(2);
+            h.Sender = _ => Task.FromResult<SendOutcome>(new SendOutcome.Unknown("fixture:unknown"));
+        });
+        var a = Req(trigger: "manual:unknown-merged");
+        var b = Req(trigger: "manual:unknown-merged");
+        var results = await Task.WhenAll(svc.SubmitAsync(a), svc.SubmitAsync(b));
+        Assert.All(results, result => Assert.Equal(AdmissionResultKind.Reconciling, result.Kind));
+
+        var mirror = ReadLease().File!.Handoff!.Operations.Single(operation => operation.MergedInto is not null);
+        var winner = FindOp(mirror.MergedInto!)!;
+        Assert.Equal(OperationRequestState.InRound, mirror.RequestState);
+        Assert.Equal(OperationRequestState.Reconciling, winner.RequestState);
+        Assert.Equal(ResponsibilityState.Pending, (await svc.SubmitAsync(ContinueOf(a.RequestIdentity == mirror.RequestIdentity ? a : b))).ResponsibilityState);
+
+        var settled = await svc.SettleReconciledAsync(winner.RequestIdentity,
+            new ReconcileSettlement.Accepted(winner.SubmissionIdentity!, winner.LastSendSeq, "fixture:reconciled", "run:merged"));
+        Assert.Equal(AdmissionResultKind.Accepted, settled.Kind);
+        var finalMirror = FindOp(mirror.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.Accepted, finalMirror.RequestState);
+        Assert.Equal(winner.SubmissionIdentity, finalMirror.SubmissionIdentity);
+    }
+
+    [Fact]
+    public async Task SweepExpiredRetryWindow_TerminalizesPrecheckWinnerAndMirrorsTogether()
+    {
+        var occupied = false;
+        var injectOccupiedAtPublish = true;
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Barriers = GatedBarrier(2);
+            h.Barriers.BeforeOccupyPublish = () =>
+            {
+                if (injectOccupiedAtPublish) occupied = true;
+                return Task.CompletedTask;
+            };
+            h.FactsProvider = () => new ArbitrationFacts { ExecutionOccupied = occupied };
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("fixture:must-not-send", null));
+            };
+        });
+        var a = Req(ns: "v2", workflow: "wf-precheck-sweep", trigger: "manual:precheck-sweep", operationType: OperationType.ExternalStart);
+        var b = Req(ns: "v2", workflow: "wf-precheck-sweep", trigger: "manual:precheck-sweep", operationType: OperationType.ExternalStart);
+        var firstRound = await Task.WhenAll(svc.SubmitAsync(a), svc.SubmitAsync(b));
+        Assert.All(firstRound, result => Assert.Equal(AdmissionResultKind.RetryableRejected, result.Kind));
+        injectOccupiedAtPublish = false;
+        var mirror = ReadLease().File!.Handoff!.Operations.Single(operation => operation.MergedInto is not null);
+        var winnerIdentity = mirror.MergedInto!;
+
+        _now += TimeSpan.FromDays(1);
+        Assert.Equal(1, svc.SweepExpiredRetryWindows());
+        Assert.Equal(0, sends);
+        foreach (var identity in new[] { winnerIdentity, mirror.RequestIdentity })
+        {
+            var expired = FindOp(identity)!;
+            Assert.Equal(OperationRequestState.TerminalRejected, expired.RequestState);
+            Assert.Equal(OperationZone.Tombstone, expired.Zone);
+            Assert.Equal("retry_window_expired", expired.LastPrecheckResult?.ReasonCode);
+        }
+    }
+
+    [Fact]
+    public async Task SweepExpiredQueuedPrecheck_AfterPreemptConfirmReleasesSlot()
+    {
+        var occupied = false;
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts { ExecutionOccupied = occupied };
+            h.Barriers = new AdmissionBarriers
+            {
+                BeforeOccupyPublish = () =>
+                {
+                    occupied = true;
+                    return Task.CompletedTask;
+                },
+            };
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("fixture:must-not-send", null));
+            };
+        });
+        var request = Req(ns: "v2", workflow: "wf-precheck-queued-expiry", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, (await svc.SubmitAsync(request)).Kind);
+        Assert.Equal(0, sends);
+
+        _now += TimeSpan.FromDays(1);
+        var blockedRetry = await svc.RetryAsync(request.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.NeedPreemptConfirm, blockedRetry.Kind);
+        Assert.Equal(OperationRequestState.Queued, FindOp(request.RequestIdentity)!.RequestState);
+        Assert.Equal(1, svc.SweepExpiredRetryWindows());
+        var expired = FindOp(request.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.TerminalRejected, expired.RequestState);
+        Assert.Equal(OperationZone.Tombstone, expired.Zone);
+        Assert.Equal("retry_window_expired", expired.LastPrecheckResult?.ReasonCode);
+        Assert.False(expired.PreemptConfirmPending);
+        Assert.Equal(AdmissionResultKind.TerminalRejected, (await svc.RetryAsync(request.RequestIdentity)).Kind);
+        Assert.Equal(AdmissionResultKind.TerminalRejected, (await svc.SubmitAsync(ContinueOf(request))).Kind);
+        Assert.Equal(0, sends);
+    }
+
+    [Fact]
+    public async Task PreemptConfirmPending_FreeOccupancyDoesNotAuthorizeContinueOrRetry()
+    {
+        var occupied = true;
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.FactsProvider = () => new ArbitrationFacts { ExecutionOccupied = occupied };
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("fixture:must-not-send", null));
+            };
+        });
+        var request = Req(ns: "v2", workflow: "wf-preempt-confirm-gate", operationType: OperationType.ExternalStart);
+
+        var first = await svc.SubmitAsync(request);
+        Assert.Equal(AdmissionResultKind.NeedPreemptConfirm, first.Kind);
+        Assert.True(FindOp(request.RequestIdentity)!.PreemptConfirmPending);
+
+        occupied = false;
+        Assert.Equal(AdmissionResultKind.NeedPreemptConfirm,
+            (await svc.SubmitAsync(ContinueOf(request))).Kind);
+        Assert.Equal(AdmissionResultKind.NeedPreemptConfirm,
+            (await svc.RetryAsync(request.RequestIdentity)).Kind);
+        Assert.True(FindOp(request.RequestIdentity)!.PreemptConfirmPending);
+        Assert.Equal(0, sends);
+    }
+
+    [Fact]
+    public async Task SweepExpiredRetryableWinner_DoesNotRewriteConflictPendingMirror()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.Barriers = GatedBarrier(2);
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Rejected("task_running", Retryable: true, "fixture:retryable"));
+            };
+        });
+        var a = Req(trigger: "manual:conflicted-expiry-mirror");
+        var b = Req(trigger: "manual:conflicted-expiry-mirror");
+        var results = await Task.WhenAll(svc.SubmitAsync(a), svc.SubmitAsync(b));
+        Assert.All(results, result => Assert.Equal(AdmissionResultKind.RetryableRejected, result.Kind));
+        var mirror = ReadLease().File!.Handoff!.Operations.Single(operation => operation.MergedInto is not null);
+        var winner = FindOp(mirror.MergedInto!)!;
+        var lease = store.Read().File!.Lease!;
+        Assert.True(store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            file.Handoff!.Operations.Single(operation => operation.RequestIdentity == mirror.RequestIdentity).ConflictPending = true;
+            return null;
+        }).Success);
+
+        _now += TimeSpan.FromDays(1);
+        Assert.Equal(0, svc.SweepExpiredRetryWindows());
+        Assert.Equal(1, sends);
+        Assert.Equal(OperationRequestState.RetryableRejected, FindOp(winner.RequestIdentity)!.RequestState);
+        var conflictedMirror = FindOp(mirror.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.RetryableRejected, conflictedMirror.RequestState);
+        Assert.True(conflictedMirror.ConflictPending);
+        Assert.Equal("task_running", conflictedMirror.LastResult?.ReasonCode);
     }
 
     // ── 37. B7：续用绑定不一致=终局拒绝；同候选不同绑定并发创建=身份冲突（不去重共享）──
@@ -3090,7 +4642,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.NotNull(loser.WinnerCandidateId); // 含胜者引用
         var loserOp = FindOp(loser.RequestIdentity)!;
         Assert.Equal(OperationRequestState.NotSelected, loserOp.RequestState);
-        Assert.Equal(loser.WinnerCandidateId, loserOp.LastResult!.WinnerRef); // 压制依据持久化（I5）
+        Assert.Equal(loser.WinnerCandidateId, loserOp.LastPrecheckResult!.WinnerRef); // 压制依据持久化（I5）
         Assert.Equal(1, sends);
     }
 
@@ -3229,14 +4781,30 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         {
             var rejected = Req(ns: "v2", workflow: "wf-blocked-" + i, operationType: OperationType.ExternalStart);
             var result = await svc.SubmitAsync(rejected);
-            Assert.Equal(AdmissionResultKind.Error, result.Kind);
+            Assert.Equal(AdmissionResultKind.TerminalRejected, result.Kind);
+            Assert.Equal(ResponsibilityState.Settled, result.ResponsibilityState);
             Assert.Equal("submission_conflict", result.ReasonCode);
             var op = FindOp(rejected.RequestIdentity)!;
             Assert.Equal(OperationRequestState.TerminalRejected, op.RequestState);
             Assert.NotEqual(OperationZone.Active, op.Zone);
-            Assert.Equal("submission_conflict", op.LastResult?.ReasonCode);
+            Assert.Equal("submission_conflict", op.LastPrecheckResult?.ReasonCode);
             Assert.Equal(0, op.LastSendSeq);
             Assert.True(string.IsNullOrEmpty(op.SubmissionIdentity));
+
+            if (i == 1)
+            {
+                var continueUse = Req(ns: "v2", workflow: "wf-blocked-1", operationType: OperationType.ExternalStart);
+                continueUse.Kind = AdmissionKind.ContinueUse;
+                continueUse.RequestIdentity = rejected.RequestIdentity;
+                continueUse.Candidate = ArbitrationAdmissionService.CloneCandidate(op.Candidate!);
+                var repeated = await svc.SubmitAsync(continueUse);
+                Assert.Equal(AdmissionResultKind.TerminalRejected, repeated.Kind);
+                Assert.True(repeated.ResponsibilityState == ResponsibilityState.Settled,
+                    $"kind={repeated.Kind}, responsibility={repeated.ResponsibilityState}, reason={repeated.ReasonCode}, detail={repeated.Detail}, identity={repeated.RequestIdentity}");
+                Assert.Equal(rejected.RequestIdentity, repeated.RequestIdentity);
+                Assert.Equal("submission_conflict", repeated.ReasonCode);
+                Assert.Equal(1, sends);
+            }
         }
 
         Assert.Equal(1, sends);
@@ -3255,6 +4823,44 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(AdmissionResultKind.Accepted, (await svc.SubmitAsync(after)).Kind);
         Assert.Equal(2, sends);
         Assert.Equal(1, FindOp(after.RequestIdentity)!.LastSendSeq);
+    }
+
+    /// <summary>
+    /// Tombstones keep the frozen 256-entry / 24-hour capacity contract: the 256th
+    /// audited conflict rejection releases its primary slot, and the next create
+    /// is loudly backpressured until a tombstone becomes cleanable.
+    /// </summary>
+    [Fact]
+    public async Task SubmissionConflict_LastTombstoneSlot_ReleasesPrimarySlot_ThenCapacityBackpressures()
+    {
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h => h.Sender = _ =>
+        {
+            sends++;
+            return Task.FromResult<SendOutcome>(new SendOutcome.Unknown("fixture_unknown"));
+        });
+        Prefill(store, tombstones: ArbitrationAdmissionService.TombstoneLimit - 1, pendingTransfers: 0);
+
+        var original = Req(ns: "v2", workflow: "wf-original-capacity", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.Reconciling, (await svc.SubmitAsync(original)).Kind);
+        var rejected = Req(ns: "v2", workflow: "wf-conflict-last-tombstone", operationType: OperationType.ExternalStart);
+
+        var result = await svc.SubmitAsync(rejected);
+        Assert.Equal(AdmissionResultKind.TerminalRejected, result.Kind);
+        Assert.Equal(ResponsibilityState.Settled, result.ResponsibilityState);
+        Assert.Equal("submission_conflict", result.ReasonCode);
+        Assert.Equal(OperationZone.Tombstone, FindOp(rejected.RequestIdentity)!.Zone);
+        Assert.Single(ReadLease().File!.Handoff!.Operations.Where(o => o.Zone == OperationZone.Active));
+        Assert.Equal(1, sends);
+
+        var blocked = Req(ns: "v2", workflow: "wf-after-tombstone-capacity", operationType: OperationType.ExternalStart);
+        var blockedResult = await svc.SubmitAsync(blocked);
+        Assert.Equal(AdmissionResultKind.Error, blockedResult.Kind);
+        Assert.StartsWith("operations_capacity_full", blockedResult.ReasonCode, StringComparison.Ordinal);
+        Assert.Contains("tombstone=256", blockedResult.ReasonCode, StringComparison.Ordinal);
+        Assert.Null(FindOp(blocked.RequestIdentity));
+        Assert.Equal(1, sends);
+        Assert.Single(ReadLease().File!.Handoff!.Operations.Where(o => o.Zone == OperationZone.Active));
     }
 
     // ── 42. R5.3.4：A6 票据压制 —— 授权抢占方保留资格、无关候选被压制（组件级） ──
@@ -3334,8 +4940,8 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var op = FindOp(unrelated.RequestIdentity);
         Assert.NotNull(op);
         Assert.Equal(OperationRequestState.NotSelected, op!.RequestState);
-        Assert.Equal("ticket_suppressed", op.LastResult!.ReasonCode);  // 原因持久化
-        Assert.Equal("ticket", op.LastResult.SuppressionSource);       // 压制来源持久化
+        Assert.Equal("ticket_suppressed", op.LastPrecheckResult!.ReasonCode);  // 原因持久化
+        Assert.Equal("ticket", op.LastPrecheckResult.SuppressionSource);       // 压制来源持久化
         Assert.Equal(0, op.LastSendSeq);                               // 未发布发送许可
         Assert.True(string.IsNullOrEmpty(op.SubmissionIdentity));      // 发送身份为空
         Assert.Null(ReadLease().File!.Handoff!.Submission);            // 未占位（无发送许可）
@@ -3998,7 +5604,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         bool senderUnknown = false, bool acceptanceFails = false,
         bool noTerminalHooks = false, bool terminalPersistFailsWithMismatchedPayload = false,
         bool ledgerConfirmFailsOnce = false, string? jobIdReadLate = null, bool ledgerUnreadableInFinalize = false,
-        bool noJobIdReadHook = false)
+        bool noJobIdReadHook = false, bool gateDuplicates = false, Func<int, SendOutcome>? senderOverride = null)
     {
         var ledger = new ExternalStartLedger(_dir, () => _now);
         var jobCounter = 0;
@@ -4006,11 +5612,17 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var jobIdReadCalls = 0;
         var (svc, _, _, _) = BuildFacade(h =>
         {
+            if (gateDuplicates) h.Barriers = GatedBarrier(2);
             // 每笔发送各自独立句柄（台账禁止同一 jobId 归属两笔发送：夹具按真实语义给唯一句柄）。
-            h.Sender = _ => senderUnknown
-                ? Task.FromResult<SendOutcome>(new SendOutcome.Unknown("adapter_unknown", "ext:adapter"))
-                : Task.FromResult<SendOutcome>(new SendOutcome.Accepted(
-                    "ext:accepted", null, "job-" + System.Threading.Interlocked.Increment(ref jobCounter)));
+            h.Sender = _ =>
+            {
+                var sequence = System.Threading.Interlocked.Increment(ref jobCounter);
+                if (senderOverride is not null) return Task.FromResult(senderOverride(sequence));
+                return senderUnknown
+                    ? Task.FromResult<SendOutcome>(new SendOutcome.Unknown("adapter_unknown", "ext:adapter"))
+                    : Task.FromResult<SendOutcome>(new SendOutcome.Accepted(
+                        "ext:accepted", null, "job-" + sequence));
+            };
             if (acceptanceFails) h.TakeoverPersist = _ => Task.FromResult<string?>("record_failed:fixture");
             // §24.3-3 句柄合并读回（**所有分支都需要**：钩子缺失/不匹配分支同样要能读出台账权威句柄）。
             if (!noJobIdReadHook) h.TakeoverJobIdRead = (sub, seq) =>
@@ -4035,13 +5647,13 @@ public class ArbitrationAdmissionServiceTests : IDisposable
             {
                 // **真实 MarkTerminal 写入不同载荷**（原始终态词/证据词加后缀）⇒ 生产式**逐字段**读回必然不确认
                 // ⇒ 必须停驻（不得用宽松确认继续关闭/终局）。此处不使用硬编码 false，以真实台账驱动反例。
-                h.TakeoverTerminalPersist = (sub, seq, evidence, observed, raw, err, job, source) =>
+                h.TakeoverTerminalPersist = (sub, seq, evidence, observed, raw, err, job, source, kind) =>
                 {
                     var r = ledger.MarkTerminal(sub, seq, evidence + "-mismatch", observed,
-                        (raw ?? "") + "-mismatch", err, OperationType.ExternalStart, job, source);
+                        (raw ?? "") + "-mismatch", err, OperationType.ExternalStart, job, source, kind);
                     return r.Success ? null : "ledger_terminal_failed:" + (r.Reason ?? "unknown");
                 };
-                h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, err, job, source, observed) =>
+                h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, err, job, source, observed, kind) =>
                 {
                     var entry = ledger.Read().File?.Entries.FirstOrDefault(e =>
                         string.Equals(e.SubmissionIdentity, sub, StringComparison.Ordinal) && e.SendSeq == seq);
@@ -4051,7 +5663,8 @@ public class ArbitrationAdmissionServiceTests : IDisposable
                         && string.Equals(entry.ExecutionErrorCode, err, StringComparison.Ordinal)
                         && string.Equals(entry.JobId, job, StringComparison.Ordinal)
                         && string.Equals(entry.TerminalEvidenceSource, source, StringComparison.Ordinal)
-                        && entry.TerminalObservedAtUtc == observed;
+                        && entry.TerminalObservedAtUtc == observed
+                        && entry.TerminalKind == kind;
                 };
                 h.TakeoverJobIdRead = (sub, seq) =>
                 {
@@ -4065,12 +5678,12 @@ public class ArbitrationAdmissionServiceTests : IDisposable
                 };
                 return;
             }
-            h.TakeoverTerminalPersist = (sub, seq, evidence, observed, raw, err, job, source) =>
+            h.TakeoverTerminalPersist = (sub, seq, evidence, observed, raw, err, job, source, kind) =>
             {
-                var r = ledger.MarkTerminal(sub, seq, evidence, observed, raw, err, OperationType.ExternalStart, job, source);
+                var r = ledger.MarkTerminal(sub, seq, evidence, observed, raw, err, OperationType.ExternalStart, job, source, kind);
                 return r.Success ? null : "ledger_terminal_failed:" + (r.Reason ?? "unknown");
             };
-            h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, err, job, source, observed) =>
+            h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, err, job, source, observed, kind) =>
             {
                 // 反例支持：首次读回不确认（模拟「发布结果不明」），随后按真实台账逐字段确认。
                 if (ledgerConfirmFailsOnce && System.Threading.Interlocked.Increment(ref confirmCalls) == 1) return false;
@@ -4081,7 +5694,8 @@ public class ArbitrationAdmissionServiceTests : IDisposable
                     && string.Equals(entry.ExecutionErrorCode, err, StringComparison.Ordinal)
                     && string.Equals(entry.JobId, job, StringComparison.Ordinal)
                     && string.Equals(entry.TerminalEvidenceSource, source, StringComparison.Ordinal)
-                    && entry.TerminalObservedAtUtc == observed;
+                    && entry.TerminalObservedAtUtc == observed
+                    && entry.TerminalKind == kind;
             };
             // §24.3-3 句柄合并读回由上方**统一**赋值（含 `jobIdReadLate` 反例支持，不得在此覆盖）。
         });
@@ -4163,6 +5777,237 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SettleCompletion_FinalizesActiveMergedExternalMirrorAtomically()
+    {
+        var (svc, _) = BuildExternalFacadeWithCompletion(gateDuplicates: true);
+        var first = Req(ns: "manual", workflow: "onedragon:completion-merge", payload: "p-ext",
+            trigger: "manual:completion-merge", operationType: OperationType.ExternalStart);
+        var second = Req(ns: "manual", workflow: "onedragon:completion-merge", payload: "p-ext",
+            trigger: "manual:completion-merge", operationType: OperationType.ExternalStart);
+        var accepted = await Task.WhenAll(svc.SubmitAsync(first), svc.SubmitAsync(second));
+        Assert.All(accepted, result => Assert.Equal(AdmissionResultKind.Accepted, result.Kind));
+
+        var mirror = ReadLease().File!.Handoff!.Operations.Single(operation => operation.MergedInto is not null);
+        var winner = FindOp(mirror.MergedInto!)!;
+        var completed = await svc.SettleCompletionAsync(winner.RequestIdentity, winner.SubmissionIdentity!, winner.LastSendSeq,
+            ExternalStartCompletion.SucceededWith("completed", "ext:watch", _now));
+        Assert.Equal(ResponsibilityState.Settled, completed.ResponsibilityState);
+
+        var finalMirror = FindOp(mirror.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.TerminalCompleted, finalMirror.RequestState);
+        Assert.NotEqual(OperationZone.Active, finalMirror.Zone);
+        Assert.Equal(winner.SubmissionIdentity, finalMirror.SubmissionIdentity);
+        Assert.Equal(winner.LastSendSeq, finalMirror.LastSendSeq);
+        var continued = await svc.SubmitAsync(ContinueOf(first.RequestIdentity == mirror.RequestIdentity ? first : second));
+        Assert.Equal(AdmissionResultKind.Accepted, continued.Kind);
+        Assert.Equal(ResponsibilityState.Settled, continued.ResponsibilityState);
+    }
+
+    [Fact]
+    public async Task ReconcilingExecutionFact_IsNotDowngradedForWinnerOrMirror()
+    {
+        var (svc, _) = BuildExternalFacadeWithCompletion(senderUnknown: true, noTerminalHooks: true, gateDuplicates: true);
+        var first = Req(ns: "manual", workflow: "onedragon:reconciling-merge", payload: "p-ext",
+            trigger: "manual:reconciling-merge", operationType: OperationType.ExternalStart);
+        var second = Req(ns: "manual", workflow: "onedragon:reconciling-merge", payload: "p-ext",
+            trigger: "manual:reconciling-merge", operationType: OperationType.ExternalStart);
+        var initial = await Task.WhenAll(svc.SubmitAsync(first), svc.SubmitAsync(second));
+        Assert.All(initial, result => Assert.Equal(AdmissionResultKind.Reconciling, result.Kind));
+
+        var mirror = ReadLease().File!.Handoff!.Operations.Single(operation => operation.MergedInto is not null);
+        var winner = FindOp(mirror.MergedInto!)!;
+        var observed = await svc.SettleCompletionAsync(winner.RequestIdentity, winner.SubmissionIdentity!, winner.LastSendSeq,
+            ExternalStartCompletion.CancelledWith("cancelled", "owner:reconcile_query", _now));
+        Assert.Equal(AdmissionResultKind.Cancelled, observed.Kind);
+        Assert.Equal(ResponsibilityState.Pending, observed.ResponsibilityState); // carriers are durable; terminal-ledger step is intentionally unavailable
+        var winnerAfter = FindOp(winner.RequestIdentity)!;
+        var mirrorAfter = FindOp(mirror.RequestIdentity)!;
+        Assert.Equal(winnerAfter.SubmissionIdentity, winnerAfter.ExecutionResult?.SubmissionIdentity);
+        Assert.Equal(winnerAfter.LastSendSeq, winnerAfter.ExecutionResult?.SendSeq);
+        Assert.Equal(winnerAfter.SubmissionIdentity, mirrorAfter.SubmissionIdentity);
+        Assert.Equal(winnerAfter.LastSendSeq, mirrorAfter.LastSendSeq);
+
+        var winnerView = await svc.SubmitAsync(ContinueOf(winner.RequestIdentity == first.RequestIdentity ? first : second));
+        var mirrorView = await svc.SubmitAsync(ContinueOf(mirror.RequestIdentity == first.RequestIdentity ? first : second));
+        foreach (var view in new[] { winnerView, mirrorView })
+        {
+            Assert.Equal(AdmissionResultKind.Cancelled, view.Kind);
+            Assert.Equal(ExecutionDisposition.Cancelled, view.ExecutionDisposition);
+            Assert.Equal(ResponsibilityState.Pending, view.ResponsibilityState);
+        }
+    }
+
+    [Fact]
+    public async Task NotAcceptedReconciliation_CannotDowngradeExistingExecutionFactOrAuthorizeRetry()
+    {
+        var (svc, _) = BuildExternalFacadeWithCompletion(senderUnknown: true, noTerminalHooks: true);
+        var request = Req(ns: "manual", workflow: "onedragon:contradictory-reconcile", payload: "p-ext",
+            trigger: "manual:contradictory-reconcile", operationType: OperationType.ExternalStart);
+        var initial = await svc.SubmitAsync(request);
+        Assert.Equal(AdmissionResultKind.Reconciling, initial.Kind);
+        var op = FindOp(request.RequestIdentity)!;
+
+        var observed = await svc.SettleCompletionAsync(op.RequestIdentity, op.SubmissionIdentity!, op.LastSendSeq,
+            ExternalStartCompletion.CancelledWith("cancelled", "owner:terminal-query", _now));
+        Assert.Equal(AdmissionResultKind.Cancelled, observed.Kind);
+        Assert.Equal(ResponsibilityState.Pending, observed.ResponsibilityState);
+        var executionBefore = FindOp(request.RequestIdentity)!.ExecutionResult;
+        Assert.NotNull(executionBefore);
+
+        var contradictory = await svc.SettleReconciledAsync(request.RequestIdentity,
+            new ReconcileSettlement.NotAccepted(op.SubmissionIdentity!, op.LastSendSeq,
+                "not_accepted", Retryable: true, EvidenceSource: "owner:contradictory-query"));
+
+        Assert.Equal(AdmissionResultKind.NeedReconcile, contradictory.Kind);
+        Assert.Equal(ResponsibilityState.Pending, contradictory.ResponsibilityState);
+        var after = FindOp(request.RequestIdentity)!;
+        Assert.NotNull(after.ExecutionResult);
+        Assert.Equal(executionBefore!.Kind, after.ExecutionResult!.Kind);
+        Assert.Equal(executionBefore.SubmissionIdentity, after.ExecutionResult.SubmissionIdentity);
+        Assert.Equal(executionBefore.SendSeq, after.ExecutionResult.SendSeq);
+        Assert.Equal(executionBefore.RawTerminal, after.ExecutionResult.RawTerminal);
+        Assert.True(after.ConflictPending);
+        Assert.NotEqual(OperationRequestState.RetryableRejected, after.RequestState);
+        Assert.Equal(op.LastSendSeq, after.LastSendSeq);
+    }
+
+    [Fact]
+    public async Task RetryUnknownWinner_AtomicallyAdvancesExistingMirrorSendIdentity()
+    {
+        var (svc, _) = BuildExternalFacadeWithCompletion(
+            senderOverride: seq => seq == 1
+                ? new SendOutcome.Rejected("task_running", Retryable: true, "fixture:first")
+                : new SendOutcome.Unknown("fixture:second_unknown"),
+            gateDuplicates: true);
+        var first = Req(ns: "manual", workflow: "onedragon:retry-mirror-identity", payload: "p-ext",
+            trigger: "manual:retry-mirror-identity", operationType: OperationType.ExternalStart);
+        var second = Req(ns: "manual", workflow: "onedragon:retry-mirror-identity", payload: "p-ext",
+            trigger: "manual:retry-mirror-identity", operationType: OperationType.ExternalStart);
+        var initial = await Task.WhenAll(svc.SubmitAsync(first), svc.SubmitAsync(second));
+        Assert.All(initial, result => Assert.Equal(AdmissionResultKind.RetryableRejected, result.Kind));
+        var mirror = ReadLease().File!.Handoff!.Operations.Single(operation => operation.MergedInto is not null);
+        var winnerId = mirror.MergedInto!;
+
+        var retry = await svc.RetryAsync(winnerId);
+
+        Assert.Equal(AdmissionResultKind.Reconciling, retry.Kind);
+        var winner = FindOp(winnerId)!;
+        var updatedMirror = FindOp(mirror.RequestIdentity)!;
+        Assert.Equal(2, winner.LastSendSeq);
+        Assert.Equal(winner.SubmissionIdentity, updatedMirror.SubmissionIdentity);
+        Assert.Equal(winner.LastSendSeq, updatedMirror.LastSendSeq);
+        Assert.Equal(2, winner.LastSendSeq);
+        Assert.Equal(ResponsibilityState.Pending, retry.ResponsibilityState);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Recovery_FinalizesAcceptedMirrorsWithWinnerInSamePublication(bool injectConflictAfterClassification)
+    {
+        var (svc, ledger) = BuildExternalFacadeWithCompletion(gateDuplicates: true);
+        var hooks = _lastHooks!;
+        var first = Req(ns: "manual", workflow: "onedragon:recovery-merge-terminal", payload: "p-ext",
+            trigger: "manual:recovery-merge-terminal", operationType: OperationType.ExternalStart);
+        var second = Req(ns: "manual", workflow: "onedragon:recovery-merge-terminal", payload: "p-ext",
+            trigger: "manual:recovery-merge-terminal", operationType: OperationType.ExternalStart);
+        var accepted = await Task.WhenAll(svc.SubmitAsync(first), svc.SubmitAsync(second));
+        Assert.All(accepted, result => Assert.Equal(AdmissionResultKind.Accepted, result.Kind));
+        var mirror = ReadLease().File!.Handoff!.Operations.Single(operation => operation.MergedInto is not null);
+        var winnerId = mirror.MergedInto!;
+        var winner = FindOp(winnerId)!;
+        var terminal = ExternalStartCompletion.CancelledWith("cancelled", "fixture:crash-window", _now);
+        var completed = await svc.SettleCompletionAsync(winnerId, winner.SubmissionIdentity!, winner.LastSendSeq, terminal);
+        Assert.Equal(AdmissionResultKind.Cancelled, completed.Kind);
+        winner = FindOp(winnerId)!;
+        mirror = FindOp(mirror.RequestIdentity)!;
+        var mirrorSnapshot = mirror;
+        var ledgerEntry = ledger.Read().File!.Entries.Single(entry => entry.SubmissionIdentity == winner.SubmissionIdentity);
+        var lease = ReadLease().File!.Lease!;
+        var crashWindow = _lastStore!.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var restoredWinner = file.Handoff!.Operations.Single(operation => operation.RequestIdentity == winnerId);
+            restoredWinner.RequestState = OperationRequestState.Accepted;
+            restoredWinner.Zone = OperationZone.Active;
+            restoredWinner.ExecutionResult = new ExecutionResult
+            {
+                Kind = ExecutionResultKind.Cancelled,
+                RawTerminal = terminal.RawTerminal,
+                JobId = ledgerEntry.JobId,
+                EvidenceSource = terminal.EvidenceSource,
+                SubmissionIdentity = winner.SubmissionIdentity,
+                SendSeq = winner.LastSendSeq,
+                ObservedAtUtc = _now,
+            };
+            restoredWinner.PendingTerminal = new PendingTerminal
+            {
+                Kind = ExecutionResultKind.Cancelled,
+                RawTerminal = terminal.RawTerminal,
+                JobId = ledgerEntry.JobId,
+                EvidenceSource = terminal.EvidenceSource,
+                SubmissionIdentity = winner.SubmissionIdentity,
+                SendSeq = winner.LastSendSeq,
+                OperationType = OperationType.ExternalStart,
+                ObservedAtUtc = _now,
+                RecordedAtUtc = _now,
+            };
+            var restoredMirror = file.Handoff.Operations.Single(operation => operation.RequestIdentity == mirrorSnapshot.RequestIdentity);
+            restoredMirror.RequestState = OperationRequestState.Accepted;
+            restoredMirror.Zone = OperationZone.Active;
+            restoredMirror.SubmissionIdentity = restoredWinner.SubmissionIdentity;
+            restoredMirror.LastSendSeq = restoredWinner.LastSendSeq;
+            restoredMirror.PendingTerminal = null;
+            restoredMirror.ExecutionResult = null;
+            file.Handoff.Submission = null;
+            return null;
+        });
+        Assert.True(crashWindow.Success, crashWindow.Reason);
+
+        if (injectConflictAfterClassification)
+        {
+            hooks.BeforeRestartTerminalPersist = () =>
+            {
+                var latest = _lastStore!.Read().File!;
+                var currentLease = latest.Lease!;
+                var conflict = _lastStore.MutateHandoffLatest(currentLease.LeaseId, currentLease.OwnerEpoch, file =>
+                {
+                    var current = file.Handoff!.Operations.Single(operation => operation.RequestIdentity == winnerId);
+                    current.ConflictPending = true;
+                    current.ConflictEvidence ??= [];
+                    current.ConflictEvidence.Add(new ConflictEvidenceRecord
+                    {
+                        EvidenceId = "accepted-receipt-arrived-after-classification",
+                        RawTerminal = "accepted_receipt",
+                        EvidenceSource = "fixture:late-acceptance",
+                        ObservedAtUtc = _now,
+                        SubmissionIdentity = current.SubmissionIdentity,
+                        SendSeq = current.LastSendSeq,
+                    });
+                    return null;
+                });
+                Assert.True(conflict.Success, conflict.Reason);
+            };
+        }
+
+        var recoveredCount = svc.RecoverAfterRestart();
+        if (injectConflictAfterClassification)
+        {
+            var held = FindOp(winnerId)!;
+            Assert.Equal(OperationRequestState.Accepted, held.RequestState);
+            Assert.Equal(OperationZone.Active, held.Zone);
+            Assert.True(held.ConflictPending);
+            Assert.NotNull(held.PendingTerminal);
+            Assert.NotNull(held.ExecutionResult);
+            Assert.Equal(OperationRequestState.Accepted, FindOp(mirrorSnapshot.RequestIdentity)!.RequestState);
+            return;
+        }
+        Assert.True(recoveredCount > 0);
+        Assert.Equal(OperationRequestState.TerminalCompleted, FindOp(winnerId)!.RequestState);
+        Assert.Equal(OperationRequestState.TerminalCompleted, FindOp(mirrorSnapshot.RequestIdentity)!.RequestState);
+        Assert.NotEqual(OperationZone.Active, FindOp(mirrorSnapshot.RequestIdentity)!.Zone);
+    }
+
+    [Fact]
     public async Task SettleCompletion_CancelledAndFailed_MapResultDimension()
     {
         var (svc, ledger) = BuildExternalFacadeWithCompletion();
@@ -4226,6 +6071,96 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Recovery_ResumesDurableTerminalWhenLedgerIsStillAcceptedPending()
+    {
+        var (svc, ledger) = BuildExternalFacadeWithCompletion(senderUnknown: false, noTerminalHooks: true);
+        var hooks = _lastHooks!;
+        var (requestIdentity, submissionIdentity, sendSeq) = await AcceptedExternalOpAsync(svc);
+        var observedAt = _now.AddSeconds(-3);
+        var held = await svc.SettleCompletionAsync(requestIdentity, submissionIdentity, sendSeq,
+            ExternalStartCompletion.SucceededWith("completed", "ext:task.event", observedAt, "job-1"));
+        Assert.Equal("terminal_persist_not_configured", held.ReasonCode);
+        Assert.Equal(LedgerEntryState.AcceptedPendingExecution, ledger.Read().File!.Entries.Single().State);
+
+        hooks.TakeoverTerminalPersist = (sub, seq, evidence, observed, raw, error, job, source, kind) =>
+        {
+            var result = ledger.MarkTerminal(sub, seq, evidence, observed, raw, error,
+                OperationType.ExternalStart, job, source, kind);
+            return result.Success ? null : result.Reason;
+        };
+        hooks.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, error, job, source, observed, kind) =>
+        {
+            var item = ledger.Read().File?.Entries.SingleOrDefault(e => e.SubmissionIdentity == sub && e.SendSeq == seq);
+            return item is { State: LedgerEntryState.Terminal }
+                && item.RawTerminal == raw && item.ExecutionErrorCode == error && item.JobId == job
+                && item.TerminalEvidenceSource == source && item.TerminalObservedAtUtc == observed
+                && item.TerminalKind == kind;
+        };
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true,
+            [new TakeoverLedgerFact(submissionIdentity, sendSeq, Terminal: false, JobId: "job-1",
+                EvidenceSource: "ext:task.event", OperationType: OperationType.ExternalStart)]);
+
+        var recovery = await svc.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(1, recovery.TerminalizationCompleted);
+        Assert.Equal(OperationRequestState.TerminalCompleted, FindOp(requestIdentity)!.RequestState);
+        Assert.Null(ReadLease().File!.Handoff!.Submission);
+        Assert.Equal(LedgerEntryState.Terminal, ledger.Read().File!.Entries.Single().State);
+    }
+
+    [Fact]
+    public async Task Recovery_DoesNotFinalizeCarrierChangedAfterClassification()
+    {
+        var (svc, ledger) = BuildExternalFacadeWithCompletion(senderUnknown: false, noTerminalHooks: true);
+        var hooks = _lastHooks!;
+        var (requestIdentity, submissionIdentity, sendSeq) = await AcceptedExternalOpAsync(svc);
+        var observedAt = _now.AddSeconds(-3);
+        var held = await svc.SettleCompletionAsync(requestIdentity, submissionIdentity, sendSeq,
+            ExternalStartCompletion.SucceededWith("completed", "ext:task.event", observedAt, "job-1"));
+        Assert.Equal("terminal_persist_not_configured", held.ReasonCode);
+
+        hooks.TakeoverTerminalPersist = (sub, seq, evidence, observed, raw, error, job, source, kind) =>
+        {
+            var result = ledger.MarkTerminal(sub, seq, evidence, observed, raw, error,
+                OperationType.ExternalStart, job, source, kind);
+            return result.Success ? null : result.Reason;
+        };
+        hooks.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, error, job, source, observed, kind) =>
+        {
+            var item = ledger.Read().File?.Entries.SingleOrDefault(e => e.SubmissionIdentity == sub && e.SendSeq == seq);
+            return item is { State: LedgerEntryState.Terminal }
+                && item.RawTerminal == raw && item.JobId == job && item.TerminalEvidenceSource == source
+                && item.TerminalObservedAtUtc == observed && item.TerminalKind == kind;
+        };
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true,
+            [new TakeoverLedgerFact(submissionIdentity, sendSeq, Terminal: false, JobId: "job-1",
+                EvidenceSource: "ext:task.event", OperationType: OperationType.ExternalStart)]);
+        hooks.Barriers ??= new AdmissionBarriers();
+        hooks.Barriers.BeforeTerminalFinalize = () =>
+        {
+            var lease = ReadLease().File!.Lease!;
+            var mutate = _lastStore!.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            {
+                var op = file.Handoff!.Operations.Single(o => o.RequestIdentity == requestIdentity);
+                op.ExecutionResult!.RawTerminal = "changed-after-classification";
+                op.PendingTerminal!.RawTerminal = "changed-after-classification";
+                return null;
+            });
+            Assert.True(mutate.Success, mutate.Reason);
+            return Task.CompletedTask;
+        };
+
+        var recovery = await svc.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(0, recovery.TerminalizationCompleted);
+        Assert.Equal(1, recovery.TerminalizationFailed);
+        var current = FindOp(requestIdentity)!;
+        Assert.NotEqual(OperationRequestState.TerminalCompleted, current.RequestState);
+        Assert.Equal("changed-after-classification", current.ExecutionResult!.RawTerminal);
+        Assert.NotNull(current.PendingTerminal);
+    }
+
+    [Fact]
     public async Task SettleCompletion_NonExternalOperationType_FailClosed()
     {
         var (svc, ledger) = BuildExternalFacadeWithCompletion();
@@ -4260,11 +6195,75 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         // 同一发送轮次再来一个**不同**终态：不得覆盖既有事实（冲突/损坏 fail-closed，且不写第二次台账）。
         var conflict = await svc.SettleCompletionAsync(rid, sub, seq,
             ExternalStartCompletion.SucceededWith("completed", "ext:watch", _now));
-        Assert.Equal(AdmissionResultKind.Error, conflict.Kind);
-        Assert.Equal("terminal_conflict", conflict.ReasonCode); // 冲突终态：不覆盖、不重放、不释放占用（§24.13-3）
+        Assert.Equal(AdmissionResultKind.NeedReconcile, conflict.Kind);
+        Assert.Equal("conflict_pending", conflict.ReasonCode); // 冲突终态已持久化：不覆盖、不重放、不释放占用（§24.13-3）
         Assert.Equal(ResponsibilityState.Pending, conflict.ResponsibilityState); // 冲突断言需权威裁决
-        Assert.Equal(ExecutionResultKind.Cancelled, FindOp(rid)!.ExecutionResult!.Kind);
+        var conflicted = FindOp(rid)!;
+        Assert.True(conflicted.ConflictPending);
+        Assert.Single(conflicted.ConflictEvidence!);
+        Assert.Equal(ExecutionResultKind.Cancelled, conflicted.ExecutionResult!.Kind);
         Assert.Equal("cancelled", Assert.Single(ledger.Read().File!.Entries).TerminalEvidence); // 台账仍为首次终态
+
+        var replay = await svc.SettleCompletionAsync(rid, sub, seq,
+            ExternalStartCompletion.CancelledWith("cancelled", "ext:watch", _now));
+        Assert.Equal(AdmissionResultKind.NeedReconcile, replay.Kind);
+        Assert.Equal(ResponsibilityState.Pending, replay.ResponsibilityState);
+        Assert.True(FindOp(rid)!.ConflictPending);
+
+        // 同轮迟到 Accepted 只是额外回执证据；有匹配的权威同轮终态审计后，必须允许解除 pending 并保留证据。
+        var lease = ReadLease().File!.Lease!;
+        Assert.True(_lastStore!.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            file.Handoff!.Operations.Single(o => o.RequestIdentity == rid).ConflictEvidence!.Add(new ConflictEvidenceRecord
+            {
+                EvidenceId = "accepted-receipt-fixture:" + seq,
+                RawTerminal = "accepted_receipt",
+                EvidenceSource = "sender:late-accepted",
+                ObservedAtUtc = _now,
+                SubmissionIdentity = sub,
+                SendSeq = seq,
+            });
+            return null;
+        }).Success);
+
+        var adjudicated = await svc.AdjudicateConflictAsync(rid, ConflictResolutionKind.ResolvedAcceptedTerminal,
+            "owner:terminal-audit", ExternalStartCompletion.CancelledWith("cancelled", "ext:watch", _now));
+        Assert.Equal(AdmissionResultKind.Cancelled, adjudicated.Kind);
+        Assert.Equal(ResponsibilityState.Settled, adjudicated.ResponsibilityState);
+        var settled = FindOp(rid)!;
+        Assert.False(settled.ConflictPending, $"result={adjudicated.ReasonCode} claim={settled.ConflictAdjudicationClaim} audit={settled.ConflictResolutionAuditId}");
+        Assert.Equal(ExecutionResultKind.Cancelled, settled.ExecutionResult!.Kind);
+        var audit = Assert.Single(ReadLease().File!.Handoff!.ConflictResolutionAudits!);
+        Assert.Null(audit.SupersededRejectedResultSnapshot);
+        Assert.Equal(ExecutionResultKind.Cancelled, audit.SupersededExecutionResultSnapshot!.Kind);
+        Assert.Equal(ArbitrationLeaseStatus.Valid, ReadLease().Status);
+        Assert.Contains(settled.ConflictEvidence!, e => e.RawTerminal == "accepted_receipt");
+    }
+
+    [Fact]
+    public async Task SettleCompletion_TerminalConflictEvidence_PreservesJobIdAndTypedPayload()
+    {
+        var (svc, _) = BuildExternalFacadeWithCompletion();
+        var (rid, sub, seq) = await AcceptedExternalOpAsync(svc);
+        var first = ExternalStartCompletion.SucceededWith("completed", "ext:watch", _now, "job-1");
+        Assert.Equal(AdmissionResultKind.Accepted,
+            (await svc.SettleCompletionAsync(rid, sub, seq, first)).Kind);
+
+        // All visible words/source/time match; only the remote task handle differs.
+        var contradictory = ExternalStartCompletion.SucceededWith("completed", "ext:watch", _now, "job-other");
+        var conflict = await svc.SettleCompletionAsync(rid, sub, seq, contradictory);
+        Assert.Equal(AdmissionResultKind.NeedReconcile, conflict.Kind);
+        var op = FindOp(rid)!;
+        Assert.True(op.ConflictPending);
+        var evidence = Assert.Single(op.ConflictEvidence!);
+        var snapshot = Assert.IsType<ExecutionResult>(evidence.ConflictingExecutionResultSnapshot);
+        Assert.Equal(ExecutionResultKind.Succeeded, snapshot.Kind);
+        Assert.Equal("completed", snapshot.RawTerminal);
+        Assert.Equal("job-other", snapshot.JobId);
+        Assert.Equal(sub, snapshot.SubmissionIdentity);
+        Assert.Equal(seq, snapshot.SendSeq);
+        Assert.Equal("job-1", op.ExecutionResult!.JobId);
+        Assert.Equal(ArbitrationLeaseStatus.Valid, ReadLease().Status);
     }
 
     [Fact]
@@ -4377,16 +6376,15 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     }
 
     /// <summary>
-    /// **锁外发送期间换主（发送身份未变）**：租约被他人接管（`leaseId`/`ownerEpoch` 更替）而本笔
-    /// `submissionIdentity＋sendSeq` 未变时，旧层迟到的 `Accepted` **仍须**停驻（不得写接管台账——否则会出现
-    /// 「旧身份写台账、新所有者名下租约侧拒绝」的分裂；§24.18-3/4）。
+    /// **锁外发送期间换主（发送身份未变）**：租约被他人接管后，旧层迟到的 `Accepted` 只按本轮身份写入共享台账；
+    /// 旧层不得关闭 Submission 或改 Operation。当前所有者恢复扫描后接纳此回执并关闭发送占位。
     /// </summary>
     [Fact]
-    public async Task ExternalStartSend_OwnershipChangedDuringSend_LateAcceptStopsBeforeLedgerWrite()
+    public async Task ExternalStartSend_OwnershipChangedDuringSend_LateAcceptIsAdoptedByCurrentOwner()
     {
         var inSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var (svc, store, ledger, _) = BuildFacade(h => h.Sender = async _ =>
+        var (svc, store, ledger, hooks) = BuildFacade(h => h.Sender = async _ =>
         {
             inSend.TrySetResult();
             await releaseSend.Task;
@@ -4408,9 +6406,306 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var result = await submit.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal(AdmissionResultKind.NeedReconcile, result.Kind);
-        Assert.Equal("owner_or_lease_changed_during_send", result.ReasonCode);
+        Assert.Equal("late_acceptance_receipt_saved", result.ReasonCode);
         Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);
-        Assert.True(ledger.Read().File?.Entries is null or { Count: 0 });   // 旧身份**未**写接管台账
+        var receipt = Assert.Single(ledger.Read().File!.Entries);
+        Assert.Equal(result.SubmissionIdentity, receipt.SubmissionIdentity);
+        Assert.Equal(result.SendSeq, receipt.SendSeq);
+        Assert.Equal("ext:accepted", receipt.EvidenceSource);
+        Assert.Equal(OperationType.ExternalStart, receipt.OperationType);
+        Assert.Equal(OperationRequestState.Granted, FindOp(result.RequestIdentity!)!.RequestState); // 旧所有者只记事实
+        Assert.NotNull(store.Read().File!.Handoff!.Submission); // 旧所有者未关闭占位
+        var staleCompletion = await svc.SettleCompletionAsync(result.RequestIdentity!, result.SubmissionIdentity!, result.SendSeq,
+            null, expectedOwnerLeaseId: result.CapturedLeaseId, expectedOwnerEpoch: result.CapturedOwnerEpoch);
+        Assert.Equal("lease_stale_generation", staleCompletion.ReasonCode); // 旧完成观察不能借新租约
+        Assert.NotNull(store.Read().File!.Handoff!.Submission);
+
+        // 新所有者从共享逐轮台账读回事实，按正常受理结算关闭占位，不再次发送。
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true, ledger.Read().File!.Entries
+            .Select(e => new TakeoverLedgerFact(e.SubmissionIdentity, e.SendSeq,
+                Terminal: e.State == LedgerEntryState.Terminal, JobId: e.JobId,
+                AcceptedReceipt: true, EvidenceSource: e.EvidenceSource, AcceptedAtUtc: e.AcceptedAtUtc,
+                RunId: e.RunId, OperationType: e.OperationType)).ToList());
+        var currentOwner = new ArbitrationAdmissionService(store, hooks, () => _now);
+        var recovered = await currentOwner.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(1, recovered.AcceptanceReceiptsAdopted);
+        Assert.Equal(OperationRequestState.Accepted, FindOp(result.RequestIdentity!)!.RequestState);
+        Assert.Null(store.Read().File!.Handoff!.Submission);
+        Assert.Single(ledger.Read().File!.Entries);
+    }
+
+    [Fact]
+    public async Task HistoricalAcceptedReceiptCannotBeClearedByCurrentRoundNotAcceptedAdjudication()
+    {
+        var sends = 0;
+        var (svc, store, ledger, hooks) = BuildFacade(h =>
+        {
+            h.Sender = _ =>
+            {
+                sends++;
+                return Task.FromResult<SendOutcome>(new SendOutcome.Rejected("not_accepted", true, "owner:reconcile"));
+            };
+            h.NotAcceptedObservationVerifier = _ => null;
+        });
+        var request = Req(ns: "v2", workflow: "group:historical-late-accept", operationType: OperationType.ExternalStart);
+        var first = await svc.SubmitAsync(request);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, first.Kind);
+        var requestIdentity = first.RequestIdentity;
+        var firstOp = FindOp(requestIdentity)!;
+        var oldSubmissionIdentity = firstOp.SubmissionIdentity;
+        Assert.Equal(1, firstOp.LastSendSeq);
+
+        var second = await svc.RetryAsync(requestIdentity);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, second.Kind);
+        var current = FindOp(request.RequestIdentity)!;
+        Assert.Equal(2, current.LastSendSeq);
+        var lateReceipt = new ExternalStartLedgerEntry
+        {
+            SubmissionIdentity = oldSubmissionIdentity,
+            SendSeq = 1,
+            CandidateId = current.CandidateId,
+            ResourceRef = current.ResourceRef ?? "",
+            ActionId = current.Candidate!.ActionId ?? ArbitrationOrdering.DeriveActionId(current.CandidateId),
+            TargetBgiEpoch = current.TargetEpoch,
+            AcceptedAtUtc = _now,
+            EvidenceSource = "owner:late-round-1",
+            State = LedgerEntryState.AcceptedPendingExecution,
+            RunId = current.RunBinding,
+            JobId = "job-old-round",
+            OperationType = OperationType.ExternalStart,
+        };
+        Assert.True(ledger.RecordAccepted(lateReceipt).Success);
+        Assert.True(ledger.ConfirmRebuildable(lateReceipt));
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true, ledger.Read().File!.Entries
+            .Select(e => new TakeoverLedgerFact(e.SubmissionIdentity, e.SendSeq,
+                Terminal: e.State == LedgerEntryState.Terminal, JobId: e.JobId,
+                AcceptedReceipt: true, EvidenceSource: e.EvidenceSource, AcceptedAtUtc: e.AcceptedAtUtc,
+                RunId: e.RunId, OperationType: e.OperationType,
+                TerminalEvidence: e.TerminalEvidence, RawTerminal: e.RawTerminal, ExecutionErrorCode: e.ExecutionErrorCode,
+                TerminalObservedAtUtc: e.TerminalObservedAtUtc, TerminalEvidenceSource: e.TerminalEvidenceSource,
+                TerminalKind: e.TerminalKind)).ToList());
+        hooks.TakeoverTerminalPayloadConfirmed = (submissionIdentity, sendSeq, rawTerminal, executionErrorCode,
+            jobId, evidenceSource, observedAt, terminalKind) =>
+        {
+            var entry = ledger.Read().File?.Entries.FirstOrDefault(e => e.SubmissionIdentity == submissionIdentity && e.SendSeq == sendSeq);
+            return entry is { State: LedgerEntryState.Terminal }
+                   && entry.TerminalEvidence == rawTerminal && entry.RawTerminal == rawTerminal
+                   && entry.ExecutionErrorCode == executionErrorCode && entry.JobId == jobId
+                   && entry.TerminalEvidenceSource == evidenceSource && entry.TerminalObservedAtUtc == observedAt
+                   && entry.TerminalKind == terminalKind;
+        };
+
+        var recovered = await svc.RecoverExternalStartObservationsAsync();
+        Assert.Equal(1, recovered.HistoricalAcceptanceReceiptsHeld);
+        var held = store.Read().File?.Handoff?.Operations.FirstOrDefault(o => o.RequestIdentity == requestIdentity);
+        Assert.True(held is not null, "request=" + requestIdentity + "; status=" + store.Read().Status
+            + "; operations=" + string.Join(",", store.Read().File?.Handoff?.Operations?.Select(o => o.RequestIdentity + "/" + o.Zone + "/" + o.RequestState) ?? []));
+        Assert.True(held!.ConflictPending);
+        Assert.Equal("AcceptedAwaitingTerminal", held.ConflictResolutionState);
+        Assert.Contains(held.ConflictEvidence!, e => e.SubmissionIdentity == oldSubmissionIdentity && e.SendSeq == 1
+            && e.RawTerminal == "accepted_receipt" && e.JobId == "job-old-round");
+        var earlyAdjudication = await svc.AdjudicateConflictAsync(requestIdentity,
+            ConflictResolutionKind.ResolvedNotAccepted, "owner:round-2-check",
+            notAccepted: new NotAcceptedObservation(ReconciledNotAcceptedFactKinds.ReconcileQueryNotAccepted,
+                "rejected", "owner:round-2-check", _now, held!.SubmissionIdentity, held.LastSendSeq));
+        Assert.Equal("historical_acceptance_receipt_pending", earlyAdjudication.ReasonCode);
+        var terminalObservedAt = _now.AddSeconds(5);
+        Assert.True(ledger.MarkTerminal(oldSubmissionIdentity, 1, "completed", terminalObservedAt,
+            rawTerminal: "completed", operationType: OperationType.ExternalStart, jobId: "job-old-round",
+            terminalEvidenceSource: "observer:job-old-round", terminalKind: ExecutionResultKind.Succeeded).Success);
+        var terminalRecovery = await svc.RecoverExternalStartObservationsAsync();
+        Assert.True(terminalRecovery.HistoricalAcceptanceReceiptsHeld == 2, terminalRecovery.ToString());
+        Assert.Equal(1, terminalRecovery.HistoricalAcceptanceTerminalsFinalized);
+        var terminalHeld = FindOp(requestIdentity)!;
+        Assert.False(terminalHeld.ConflictPending);
+        Assert.Equal("ResolvedHistoricalAcceptedTerminal", terminalHeld.ConflictResolutionState);
+        Assert.Equal(OperationRequestState.TerminalCompleted, terminalHeld.RequestState);
+        Assert.True(terminalHeld.Zone is OperationZone.TerminalPendingTransfer or OperationZone.Tombstone,
+            "终态可在同一事务的 MigrateAndClean 中迁入墓碑；两种状态都已结清而非占槽待决。");
+        Assert.Equal(oldSubmissionIdentity, terminalHeld.ExecutionResult!.SubmissionIdentity);
+        Assert.Equal(1, terminalHeld.ExecutionResult.SendSeq);
+        Assert.Equal(ExecutionResultKind.Succeeded, terminalHeld.ExecutionResult.Kind);
+        Assert.Contains(terminalHeld.ConflictEvidence!, e => e.SubmissionIdentity == oldSubmissionIdentity && e.SendSeq == 1
+            && e.RawTerminal == "completed" && e.JobId == "job-old-round"
+            && e.EvidenceSource == "observer:job-old-round" && e.ObservedAtUtc == terminalObservedAt
+            && e.ConflictingExecutionResultSnapshot?.Kind == ExecutionResultKind.Succeeded);
+        var historicalAudit = Assert.Single(store.Read().File!.Handoff!.ConflictResolutionAudits!
+            .Where(a => a.Resolution == ConflictResolutionKind.ResolvedHistoricalAcceptedTerminal));
+        Assert.Equal(oldSubmissionIdentity, historicalAudit.SubmissionIdentity);
+        Assert.Equal(1, historicalAudit.SendSeq);
+        Assert.Equal(2, historicalAudit.RelatedCurrentRoundRejectedResultSnapshot!.AnsweredSendSeq);
+        Assert.Equal(terminalHeld.LastResult!.ReasonCode, historicalAudit.RelatedCurrentRoundRejectedResultSnapshot.ReasonCode);
+        var adjudication = await svc.AdjudicateConflictAsync(requestIdentity,
+            ConflictResolutionKind.ResolvedNotAccepted, "owner:round-2-check",
+            notAccepted: new NotAcceptedObservation(ReconciledNotAcceptedFactKinds.ReconcileQueryNotAccepted,
+                "rejected", "owner:round-2-check", _now, terminalHeld.SubmissionIdentity, terminalHeld.LastSendSeq));
+        Assert.Equal("historical_acceptance_receipt_pending", adjudication.ReasonCode);
+        var repeatedScan = await svc.RecoverExternalStartObservationsAsync();
+        Assert.False(FindOp(requestIdentity)!.ConflictPending);
+        Assert.Equal("ResolvedHistoricalAcceptedTerminal", FindOp(requestIdentity)!.ConflictResolutionState);
+        Assert.Single(store.Read().File!.Handoff!.ConflictResolutionAudits!
+            .Where(a => a.Resolution == ConflictResolutionKind.ResolvedHistoricalAcceptedTerminal));
+        var retry = await svc.RetryAsync(requestIdentity);
+        Assert.Equal(ResponsibilityState.Settled, retry.ResponsibilityState);
+        Assert.Equal(2, FindOp(requestIdentity)!.LastSendSeq);
+        Assert.Equal(2, sends);
+        Assert.Null(store.Read().File!.Handoff!.Submission);
+
+        // 写侧校验拒绝会令后续读取损坏的候选状态；原租约与历史轮终态审计必须保持有效。
+        var lease = store.Read().File!.Lease!;
+        var invalidMutation = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            file.Handoff!.Operations.Single(o => o.RequestIdentity == requestIdentity).ConflictResolutionState = null;
+            return null;
+        });
+        Assert.False(invalidMutation.Success);
+        Assert.Equal("invalid_mutation_state", invalidMutation.Reason);
+        Assert.Equal(ArbitrationLeaseStatus.Valid, store.Read().Status);
+        Assert.Equal("ResolvedHistoricalAcceptedTerminal", FindOp(requestIdentity)!.ConflictResolutionState);
+
+        var nullRequiredSet = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            file.Handoff!.PreObservations = null!;
+            return null;
+        });
+        Assert.False(nullRequiredSet.Success);
+        Assert.Equal("invalid_mutation_state", nullRequiredSet.Reason);
+        Assert.Equal(ArbitrationLeaseStatus.Valid, store.Read().Status);
+
+        var invalidLease = store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            file.Lease!.TtlSeconds = 0;
+            return null;
+        });
+        Assert.False(invalidLease.Success);
+        Assert.Equal("invalid_mutation_state", invalidLease.Reason);
+        Assert.Equal(ArbitrationLeaseStatus.Valid, store.Read().Status);
+    }
+
+    [Fact]
+    public async Task LateAcceptanceFromRoundOneAfterRoundTwoCannotOverwriteCurrentClaim()
+    {
+        var firstSendEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sends = 0;
+        var (oldOwnerService, store, ledger, hooks) = BuildFacade(h => h.Sender = async _ =>
+        {
+            if (Interlocked.Increment(ref sends) == 1)
+            {
+                firstSendEntered.TrySetResult();
+                await releaseFirstSend.Task;
+                return new SendOutcome.Accepted("owner:late-round-1", null, "job-round-1");
+            }
+            return new SendOutcome.Rejected("not_accepted", false, "owner:round-reconcile");
+        });
+        hooks.NotAcceptedObservationVerifier = _ => null;
+        var request = Req(ns: "v2", workflow: "group:late-round-1-after-round-2", operationType: OperationType.ExternalStart);
+        var firstSend = oldOwnerService.SubmitAsync(request);
+        await firstSendEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var firstSubmission = store.Read().File!.Handoff!.Submission!;
+
+        var observer = new LeaseTakeoverObserver(() => _mono);
+        Assert.Null(observer.Observe(store.Read()));
+        _mono += TimeSpan.FromSeconds(20);
+        var takeoverEvidence = observer.Observe(store.Read());
+        Assert.NotNull(takeoverEvidence);
+        Assert.True(store.TryAcquire("pid:late-round-owner", evidence: takeoverEvidence).Success);
+        var currentOwnerService = new ArbitrationAdmissionService(store, hooks, () => _now);
+
+        var rejectedRoundOne = await currentOwnerService.SettleReconciledAsync(request.RequestIdentity,
+            new ReconcileSettlement.NotAccepted(firstSubmission.SubmissionIdentity, firstSubmission.SendSeq,
+                "not_accepted", Retryable: true, "owner:round-1-reconcile"));
+        Assert.Equal(AdmissionResultKind.RetryableRejected, rejectedRoundOne.Kind);
+        var rejectedRoundTwo = await currentOwnerService.RetryAsync(request.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.TerminalRejected, rejectedRoundTwo.Kind);
+        Assert.Equal(2, FindOp(request.RequestIdentity)!.LastSendSeq);
+        Assert.Equal(OperationRequestState.TerminalRejected, FindOp(request.RequestIdentity)!.RequestState);
+
+        releaseFirstSend.TrySetResult();
+        var lateRoundOne = await firstSend.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal("late_acceptance_receipt_saved", lateRoundOne.ReasonCode);
+        var receipt = Assert.Single(ledger.Read().File!.Entries);
+        Assert.Equal(firstSubmission.SubmissionIdentity, receipt.SubmissionIdentity);
+        Assert.Equal(1, receipt.SendSeq);
+        Assert.Equal("job-round-1", receipt.JobId);
+
+        var currentOperationBeforeArchive = FindOp(request.RequestIdentity)!;
+        Assert.Equal(2, currentOperationBeforeArchive.LastSendSeq);
+        Assert.False(currentOperationBeforeArchive.ConflictPending); // 旧发送者只追加台账，冲突由当前 owner 的恢复扫描登记
+
+        // 归档发生在旧回执已进入共享台账、但当前 owner 尚未扫描这条事实时。
+        _now += TimeSpan.FromHours(25);
+        RenewLease(store);
+        await currentOwnerService.SubmitAsync(Req(ns: "archive-trigger", workflow: "group:archive-trigger"));
+        Assert.Contains(store.Read().File!.Handoff!.ArchivedOperations,
+            archived => archived.Operation.RequestIdentity == request.RequestIdentity);
+
+        var archivedBeforeRecovery = Assert.Single(store.Read().File!.Handoff!.ArchivedOperations,
+            archived => archived.Operation.RequestIdentity == request.RequestIdentity);
+        Assert.Equal(2, archivedBeforeRecovery.Operation.LastSendSeq);
+        Assert.False(archivedBeforeRecovery.Operation.ConflictPending); // 旧发送者只能追加台账，不能改当前任务
+        Assert.Null(store.Read().File!.Handoff!.Submission);
+
+        hooks.TakeoverLedgerScan = () => new TakeoverLedgerScan(true, ledger.Read().File!.Entries
+            .Select(entry => new TakeoverLedgerFact(entry.SubmissionIdentity, entry.SendSeq,
+                Terminal: entry.State == LedgerEntryState.Terminal, JobId: entry.JobId,
+                AcceptedReceipt: true, EvidenceSource: entry.EvidenceSource, AcceptedAtUtc: entry.AcceptedAtUtc,
+                RunId: entry.RunId, OperationType: entry.OperationType,
+                TerminalEvidence: entry.TerminalEvidence, RawTerminal: entry.RawTerminal,
+                ExecutionErrorCode: entry.ExecutionErrorCode, TerminalObservedAtUtc: entry.TerminalObservedAtUtc,
+                TerminalEvidenceSource: entry.TerminalEvidenceSource, TerminalKind: entry.TerminalKind)).ToList());
+        var recovery = await currentOwnerService.RecoverExternalStartObservationsAsync();
+
+        Assert.Equal(0, recovery.OrphanLedgerEntries);
+        Assert.Equal(1, recovery.HistoricalAcceptanceReceiptsHeld);
+        Assert.DoesNotContain(store.Read().File!.Handoff!.ArchivedOperations,
+            archived => archived.Operation.RequestIdentity == request.RequestIdentity);
+        var op = FindOp(request.RequestIdentity)!;
+        Assert.Equal(2, op.LastSendSeq);
+        Assert.Equal(OperationZone.TerminalPendingTransfer, op.Zone); // 当前 owner 重新占槽并等待核查
+        Assert.True(op.ConflictPending);
+        Assert.Contains(op.ConflictEvidence!, evidence => evidence.SubmissionIdentity == firstSubmission.SubmissionIdentity
+            && evidence.SendSeq == 1 && evidence.RawTerminal == "accepted_receipt");
+        var retry = await currentOwnerService.RetryAsync(request.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.NeedReconcile, retry.Kind);
+        Assert.Equal(3, sends);
+    }
+
+    [Fact]
+    public async Task AcceptedReceiptIsSavedWhenOwnershipChangesImmediatelyBeforeClaim()
+    {
+        var sends = 0;
+        var (svc, store, ledger, hooks) = BuildFacade(h => h.Sender = _ =>
+        {
+            Interlocked.Increment(ref sends);
+            return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("owner:accepted", null, "job-race"));
+        });
+        var ownershipChanged = false;
+        hooks.BeforeAcceptanceClaim = () =>
+        {
+            var observer = new LeaseTakeoverObserver(() => _mono);
+            Assert.Null(observer.Observe(store.Read()));
+            _mono += TimeSpan.FromSeconds(20);
+            var evidence = observer.Observe(store.Read());
+            Assert.NotNull(evidence);
+            Assert.True(store.TryAcquire("pid:new-owner", evidence: evidence).Success);
+            ownershipChanged = true;
+            return Task.CompletedTask;
+        };
+
+        var result = await svc.SubmitAsync(Req(ns: "v2", workflow: "group:claim-takeover-race",
+            operationType: OperationType.ExternalStart));
+
+        Assert.True(ownershipChanged);
+        Assert.Equal(1, sends);
+        var receipt = Assert.Single(ledger.Read().File!.Entries);
+        Assert.Equal(result.SubmissionIdentity, receipt.SubmissionIdentity);
+        Assert.Equal(result.SendSeq, receipt.SendSeq);
+        Assert.Equal("owner:accepted", receipt.EvidenceSource);
+        Assert.Equal("job-race", receipt.JobId);
+        Assert.NotNull(store.Read().File!.Handoff!.Submission);
+        Assert.NotEqual(OperationRequestState.Accepted, FindOp(result.RequestIdentity!)!.RequestState);
     }
 
     /// <summary>
@@ -4419,7 +6714,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     /// 不得释放占用，必须保守停驻（`NeedReconcile`／责任 `Pending`／禁止重发）。
     /// </summary>
     [Fact]
-    public async Task ExternalStartSend_ResponsibilityAdvancedDuringSend_LateAcceptStopsBeforeLedgerWrite()
+    public async Task ExternalStartSend_ReconcilingSameRound_LateAcceptPersistsAndCloses()
     {
         var inSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -4433,8 +6728,8 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var submit = svc.SubmitAsync(Req(ns: "v2", workflow: "group:g1", operationType: OperationType.ExternalStart));
         await inSend.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        // 锁外期间：另一入口推进本笔责任（恢复扫描/对账把本笔操作转为 Reconciling；发送身份保持不变）——
-        // 旧层不得再按占位快照写台账/关闭/释放。
+        // 锁外期间：另一入口把本笔操作转为 Reconciling，但发送身份保持不变。Sender 随后返回的受理
+        // 是同一发送轮的权威事实，必须继续落账并关闭，不能因状态标签变化而丢弃。
         var read = store.Read();
         var lease = read.File!.Lease!;
         Assert.True(store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
@@ -4446,10 +6741,101 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         releaseSend.TrySetResult();
         var result = await submit.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.Equal(AdmissionResultKind.NeedReconcile, result.Kind);
-        Assert.Equal("send_responsibility_advanced_during_send", result.ReasonCode);
-        Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);   // 责任未结清
-        Assert.True(ledger.Read().File?.Entries is null or { Count: 0 });        // **未**写接管台账（无分裂）
+        Assert.Equal(AdmissionResultKind.Accepted, result.Kind);
+        Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);
+        Assert.Equal(OperationRequestState.Accepted, FindOp(result.RequestIdentity!)!.RequestState);
+        Assert.Null(store.Read().File!.Handoff!.Submission);
+        Assert.Single(ledger.Read().File!.Entries);
+    }
+
+    [Fact]
+    public async Task ExternalStartLateAcceptanceAfterRetryableRejection_PersistsConflictAndBlocksAnotherRetry()
+    {
+        var inSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (svc, store, ledger, hooks) = BuildFacade(h => h.Sender = async _ =>
+        {
+            inSend.TrySetResult();
+            await releaseSend.Task;
+            return new SendOutcome.Accepted("owner:late-accepted", "run-late", "job-late");
+        });
+        hooks.NotAcceptedObservationVerifier = _ => null;
+        var concurrentSvc = new ArbitrationAdmissionService(store, hooks, () => _now);
+        var request = Req(ns: "v2", workflow: "group:late-accept", operationType: OperationType.ExternalStart);
+        var submit = svc.SubmitAsync(request);
+        await inSend.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var snapshot = store.Read().File!;
+        var oldSubmission = snapshot.Handoff!.Submission!;
+
+        var rejected = await concurrentSvc.SettleReconciledAsync(request.RequestIdentity,
+            new ReconcileSettlement.NotAccepted(oldSubmission.SubmissionIdentity, oldSubmission.SendSeq,
+                "retryable_rejection", Retryable: true, "owner:reconcile"));
+        Assert.Equal(AdmissionResultKind.RetryableRejected, rejected.Kind);
+
+        releaseSend.TrySetResult();
+        var lateAccepted = await submit.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(AdmissionResultKind.Reconciling, lateAccepted.Kind);
+        var op = FindOp(request.RequestIdentity)!;
+        Assert.True(op.ConflictPending);
+        Assert.Equal(oldSubmission.SubmissionIdentity, op.AcceptanceClaim!.SubmissionIdentity);
+        Assert.Equal(oldSubmission.SendSeq, op.AcceptanceClaim.SendSeq);
+        Assert.True(op.AcceptanceClaim.LedgerPersisted);
+        Assert.Equal(LedgerEntryState.AcceptedPendingExecution, Assert.Single(ledger.Read().File!.Entries).State);
+        var retry = await svc.RetryAsync(request.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.NeedReconcile, retry.Kind);
+        Assert.Equal(oldSubmission.SendSeq, FindOp(request.RequestIdentity)!.LastSendSeq);
+    }
+
+    [Fact]
+    public async Task AcceptanceClaimBeforeLedger_RacingNotAcceptedKeepsSubmissionOpenForAdjudication()
+    {
+        var atLedger = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseLedger = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sends = 0;
+        var (svc, store, ledger, hooks) = BuildFacade(h =>
+        {
+            h.Sender = _ =>
+            {
+                Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(new SendOutcome.Accepted("owner:accepted", null));
+            };
+            h.NotAcceptedObservationVerifier = _ => null;
+            h.Barriers = new AdmissionBarriers
+            {
+                AfterAcceptBeforeLedger = async () =>
+                {
+                    atLedger.TrySetResult();
+                    await releaseLedger.Task;
+                },
+            };
+        });
+        var concurrentSvc = new ArbitrationAdmissionService(store, hooks, () => _now);
+        var request = Req(ns: "v2", workflow: "group:acceptance-claim-race", operationType: OperationType.ExternalStart);
+        var submissionTask = svc.SubmitAsync(request);
+        await atLedger.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var initial = FindOp(request.RequestIdentity)!;
+        var submission = ReadLease().File!.Handoff!.Submission!;
+        Assert.NotNull(initial.AcceptanceClaim);
+        Assert.False(initial.AcceptanceClaim!.LedgerPersisted);
+
+        var rejected = await concurrentSvc.SettleReconciledAsync(request.RequestIdentity,
+            new ReconcileSettlement.NotAccepted(submission.SubmissionIdentity, submission.SendSeq,
+                "reported_not_accepted", Retryable: true, "owner:reconcile"));
+        Assert.Equal(AdmissionResultKind.NeedReconcile, rejected.Kind);
+        Assert.True(FindOp(request.RequestIdentity)!.ConflictPending);
+
+        releaseLedger.TrySetResult();
+        var accepted = await submissionTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(AdmissionResultKind.Reconciling, accepted.Kind);
+        var final = FindOp(request.RequestIdentity)!;
+        Assert.True(final.ConflictPending);
+        Assert.True(final.AcceptanceClaim!.LedgerPersisted);
+        Assert.NotNull(ReadLease().File!.Handoff!.Submission);
+        Assert.Equal(LedgerEntryState.AcceptedPendingExecution, Assert.Single(ledger.Read().File!.Entries).State);
+        Assert.Equal(1, sends);
+        Assert.Equal(AdmissionResultKind.NeedReconcile, (await svc.RetryAsync(request.RequestIdentity)).Kind);
     }
 
     /// <summary>
@@ -4540,12 +6926,11 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(OperationRequestState.Accepted, after.RequestState);       // 未被普通结算推进
         Assert.Null(after.ExecutionResult);                                     // 未补造终态事实
 
-        // **旁路封堵（第三轮验证会诊）**：直接调用**公开**结算入口也不能绕过「未声明裁决方向」——
-        // 授权判据取自本快照内持久化的 `ConflictAdjudicationClaim`，任何调用方都无法用参数伪造放行。
+        // **旁路封堵**：直接调用公开完成结算也不能绕过待决冲突；必须先走冲突裁决。
         var direct = await svc.SettleCompletionAsync(r.RequestIdentity, accepted.SubmissionIdentity, accepted.LastSendSeq,
             ExternalStartCompletion.SucceededWith("completed", "ext:task.event", observedAt, "job-conflict"),
             "ext:task.event", acceptanceRunId: null, acceptanceJobId: "job-conflict");
-        Assert.Equal("conflict_requires_adjudication", direct.ReasonCode);
+        Assert.Equal("conflict_pending", direct.ReasonCode);
         Assert.Equal(ResponsibilityState.Pending, direct.ResponsibilityState);
         var afterDirect = FindOp(r.RequestIdentity)!;
         Assert.Equal(OperationRequestState.Accepted, afterDirect.RequestState);
@@ -4636,7 +7021,8 @@ public class ArbitrationAdmissionServiceTests : IDisposable
             RestoreBranch = "interrupted-relocate",
             Scope = "bgi:inst:ep1",
         });
-        Assert.Equal(AdmissionResultKind.Error, blocked.Kind);
+        Assert.Equal(AdmissionResultKind.TerminalRejected, blocked.Kind);
+        Assert.Equal(ResponsibilityState.Settled, blocked.ResponsibilityState);
         Assert.Equal("submission_conflict", blocked.ReasonCode);
         Assert.Equal(sendsAfterUnresolved, sends);                       // 零新增发送
         var blockedOp = FindOp(blocked.RequestIdentity)!;
@@ -4644,7 +7030,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.True(string.IsNullOrEmpty(blockedOp.SubmissionIdentity));
         // **终局中止**的直接证据（不只断返回码）：操作终局拒绝＋原因码＋迁区（不悬置在活跃区）
         Assert.Equal(OperationRequestState.TerminalRejected, blockedOp.RequestState);
-        Assert.Equal("submission_conflict", blockedOp.LastResult?.ReasonCode);
+        Assert.Equal("submission_conflict", blockedOp.LastPrecheckResult?.ReasonCode);
         Assert.NotEqual(OperationZone.Active, blockedOp.Zone);
         Assert.Single(dispatches);                                       // 被拒的恢复**未派发**给 Sender（仍只有甲那一次）
         Assert.NotNull(ReadLease().File!.Handoff!.Submission);           // 原未决发送**未被复用/未被动过**
@@ -4688,6 +7074,195 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Null(ReadLease().File!.Handoff!.Submission);              // 新许可已按唯一顺序结算关闭
     }
 
+    [Fact]
+    public async Task InFlightContinueAndRetry_PreservePendingResponsibilityAndSendIdentity()
+    {
+        var inSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (svc, _, _, _) = BuildFacade(h => h.Sender = async _ =>
+        {
+            inSend.TrySetResult();
+            await releaseSend.Task;
+            return new SendOutcome.Unknown("fixture_unknown");
+        });
+
+        var request = Req(ns: "v2", workflow: "wf-inflight-classification", operationType: OperationType.ExternalStart);
+        var submit = svc.SubmitAsync(request);
+        await inSend.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var op = FindOp(request.RequestIdentity)!;
+        Assert.Equal(OperationRequestState.Granted, op.RequestState);
+
+        var continued = await svc.SubmitAsync(ContinueOf(request));
+        Assert.Equal(AdmissionResultKind.NeedReconcile, continued.Kind);
+        Assert.Equal(ExecutionDisposition.None, continued.ExecutionDisposition);
+        Assert.Equal(ResponsibilityState.Pending, continued.ResponsibilityState);
+        Assert.Equal(op.SubmissionIdentity, continued.SubmissionIdentity);
+        Assert.Equal(op.LastSendSeq, continued.SendSeq);
+
+        var retried = await svc.RetryAsync(request.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.NeedReconcile, retried.Kind);
+        Assert.Equal(ExecutionDisposition.None, retried.ExecutionDisposition);
+        Assert.Equal(ResponsibilityState.Pending, retried.ResponsibilityState);
+        Assert.Equal(op.SubmissionIdentity, retried.SubmissionIdentity);
+        Assert.Equal(op.LastSendSeq, retried.SendSeq);
+
+        releaseSend.TrySetResult();
+        var original = await submit.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(AdmissionResultKind.Reconciling, original.Kind);
+        Assert.Single(ReadLease().File!.Handoff!.Operations.Where(o => o.RequestIdentity == request.RequestIdentity));
+    }
+
+    [Fact]
+    public async Task ConcurrentRetry_DuringEnqueueBeforeStateTransition_ReturnsPendingInsteadOfRetryable()
+    {
+        var retryEnqueued = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRetry = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pauseRetryEnqueue = false;
+        var sends = 0;
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ =>
+            {
+                var seq = Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(seq == 1
+                    ? new SendOutcome.Rejected("task_running", Retryable: true, "fixture:retryable")
+                    : new SendOutcome.Accepted("fixture:accepted", null));
+            };
+            h.Barriers = new AdmissionBarriers
+            {
+                AfterRetryReservation = () =>
+                {
+                    if (!pauseRetryEnqueue) return Task.CompletedTask;
+                    retryEnqueued.TrySetResult();
+                    return releaseRetry.Task;
+                },
+            };
+        });
+
+        var request = Req(ns: "v2", workflow: "wf-concurrent-retry", operationType: OperationType.ExternalStart);
+        var first = await svc.SubmitAsync(request);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, first.Kind);
+        var prior = FindOp(request.RequestIdentity)!;
+        pauseRetryEnqueue = true;
+
+        var retryTask = Task.Run(() => svc.RetryAsync(request.RequestIdentity));
+        await retryEnqueued.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(OperationRequestState.RetryableRejected, FindOp(request.RequestIdentity)!.RequestState);
+
+        var concurrent = await svc.RetryAsync(request.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.NeedReconcile, concurrent.Kind);
+        Assert.Equal(ResponsibilityState.Pending, concurrent.ResponsibilityState);
+        Assert.Equal(prior.SubmissionIdentity, concurrent.SubmissionIdentity);
+        Assert.Equal(prior.LastSendSeq, concurrent.SendSeq);
+        Assert.Equal(1, Volatile.Read(ref sends));
+
+        releaseRetry.TrySetResult();
+        var retried = await retryTask.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(AdmissionResultKind.Accepted, retried.Kind);
+        Assert.Equal(2, Volatile.Read(ref sends));
+        Assert.Equal(2, FindOp(request.RequestIdentity)!.LastSendSeq);
+    }
+
+    [Fact]
+    public async Task ContinueUseRacingRetry_UsesSingleIdentityReservationAndSingleSend()
+    {
+        var continueChecked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseContinue = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var retryReserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRetry = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pauseContinue = false;
+        var pauseRetry = false;
+        var sends = 0;
+        var (svc, store, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ =>
+            {
+                var seq = Interlocked.Increment(ref sends);
+                return Task.FromResult<SendOutcome>(seq == 1
+                    ? new SendOutcome.Rejected("task_running", Retryable: true, "fixture:retryable")
+                    : new SendOutcome.Accepted("fixture:accepted", null));
+            };
+            h.Barriers = new AdmissionBarriers
+            {
+                AfterContinueInFlightCheck = () =>
+                {
+                    if (!pauseContinue) return Task.CompletedTask;
+                    continueChecked.TrySetResult();
+                    return releaseContinue.Task;
+                },
+                AfterRetryReservation = () =>
+                {
+                    if (!pauseRetry) return Task.CompletedTask;
+                    retryReserved.TrySetResult();
+                    return releaseRetry.Task;
+                },
+            };
+        });
+
+        var request = Req(ns: "v2", workflow: "wf-continue-retry-race", operationType: OperationType.ExternalStart);
+        Assert.Equal(AdmissionResultKind.RetryableRejected, (await svc.SubmitAsync(request)).Kind);
+        var lease = store.Read().File!.Lease!;
+        Assert.True(store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            file.Handoff!.Operations.Single(o => o.RequestIdentity == request.RequestIdentity).RequestState = OperationRequestState.Queued;
+            return null;
+        }).Success);
+
+        pauseContinue = true;
+        var continueTask = svc.SubmitAsync(ContinueOf(request));
+        await continueChecked.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        pauseRetry = true;
+        var retryTask = Task.Run(() => svc.RetryAsync(request.RequestIdentity));
+        await retryReserved.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        releaseContinue.TrySetResult();
+        var continued = await continueTask.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(AdmissionResultKind.NeedReconcile, continued.Kind);
+        Assert.Equal(ResponsibilityState.Pending, continued.ResponsibilityState);
+
+        releaseRetry.TrySetResult();
+        var retried = await retryTask.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(AdmissionResultKind.Accepted, retried.Kind);
+        Assert.Equal(2, Volatile.Read(ref sends));
+        Assert.Equal(2, FindOp(request.RequestIdentity)!.LastSendSeq);
+    }
+
+    [Fact]
+    public async Task LateRetry_AfterTerminalCommitBeforeInflightRelease_ReturnsSettledTerminalFact()
+    {
+        var terminalCommitted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRound = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (svc, _, _, _) = BuildFacade(h =>
+        {
+            h.Sender = _ => Task.FromResult<SendOutcome>(new SendOutcome.Rejected("permanent_reject", Retryable: false, "fixture:terminal"));
+            h.Barriers = new AdmissionBarriers
+            {
+                BeforeInFlightRelease = () =>
+                {
+                    terminalCommitted.TrySetResult();
+                    return releaseRound.Task;
+                },
+            };
+        });
+
+        var request = Req(ns: "v2", workflow: "wf-late-retry", operationType: OperationType.ExternalStart);
+        var submit = svc.SubmitAsync(request);
+        await terminalCommitted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(OperationRequestState.TerminalRejected, FindOp(request.RequestIdentity)!.RequestState);
+
+        var lateRetry = await svc.RetryAsync(request.RequestIdentity);
+        Assert.Equal(AdmissionResultKind.TerminalRejected, lateRetry.Kind);
+        Assert.Equal(ResponsibilityState.Settled, lateRetry.ResponsibilityState);
+        Assert.Equal("permanent_reject", lateRetry.ReasonCode);
+        Assert.Equal(1, lateRetry.SendSeq);
+        Assert.Equal(FindOp(request.RequestIdentity)!.SubmissionIdentity, lateRetry.SubmissionIdentity);
+
+        releaseRound.TrySetResult();
+        var original = await submit.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(AdmissionResultKind.TerminalRejected, original.Kind);
+    }
+
     /// <summary>夹具辅助：把某笔外部启动操作**推进到下一发送轮次**（模拟「扫描快照后责任被并发推进」）。</summary>
     private string? PromoteToNextSendSeq(ArbitrationLeaseStore store, string requestIdentity)
     {
@@ -4698,6 +7273,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
             var op = file.Handoff!.Operations.FirstOrDefault(o => o.RequestIdentity == requestIdentity);
             if (op is null) return "operation_missing";
             op.LastSendSeq += 1;                       // 责任被推进到新一轮（身份随之改变）
+            op.AcceptanceClaim = null;                  // 夹具模拟没有持久认领的历史状态推进
             op.UpdatedRevision = file.Revision + 1;
             op.UpdatedAtUtc = _now;
             return null;
@@ -4946,8 +7522,8 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var opB = FindOp(b.RequestIdentity)!;
         var observedAt = _now;
         hooks.F11Active = () => false;
-        hooks.TakeoverTerminalPersist = (sub, seq, evidence, at, raw, code, jobId, source) => null;
-        hooks.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, code, jobId, source, at) => true;
+        hooks.TakeoverTerminalPersist = (sub, seq, evidence, at, raw, code, jobId, source, kind) => null;
+        hooks.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, code, jobId, source, at, kind) => true;
         hooks.TakeoverJobIdRead = (sub, seq) => LedgerHandleProbe.Present("job-seam");
         var seeded = store.MutateHandoff(store.Read().File!.Lease!.LeaseId, store.Read().File!.Lease.OwnerEpoch,
             store.Read().File!.Revision, file =>
@@ -5031,13 +7607,13 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         ExternalStartLedger? ledgerRef = null;
         var (svc, store, ledger, hooks) = BuildFacade(h =>
         {
-            h.TakeoverTerminalPersist = (sub, seq, evidence, observedAt, raw, code, jobId, source) =>
+            h.TakeoverTerminalPersist = (sub, seq, evidence, observedAt, raw, code, jobId, source, kind) =>
             {
                 var m = ledgerRef!.MarkTerminal(sub, seq, evidence, observedAt, raw, code,
-                    OperationType.ExternalStart, jobId, source);
+                    OperationType.ExternalStart, jobId, source, kind);
                 return m.Success ? null : m.Reason;
             };
-            h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, code, jobId, source, observedAt) => true;
+            h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, code, jobId, source, observedAt, kind) => true;
             h.TakeoverJobIdRead = (sub, seq) => LedgerHandleProbe.Present("job-settle");
         });
         ledgerRef = ledger;
@@ -5100,13 +7676,13 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         ExternalStartLedger? ledgerRef = null;
         var (svc, store, ledger, hooks) = BuildFacade(h =>
         {
-            h.TakeoverTerminalPersist = (sub, seq, evidence, observedAt, raw, code, jobId, source) =>
+            h.TakeoverTerminalPersist = (sub, seq, evidence, observedAt, raw, code, jobId, source, kind) =>
             {
                 var m = ledgerRef!.MarkTerminal(sub, seq, evidence, observedAt, raw, code,
-                    OperationType.ExternalStart, jobId, source);
+                    OperationType.ExternalStart, jobId, source, kind);
                 return m.Success ? null : m.Reason;
             };
-            h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, code, jobId, source, observedAt) =>
+            h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, code, jobId, source, observedAt, kind) =>
             {
                 var read = ledgerRef!.Read();
                 if (!read.Valid || read.File is null) return false;
@@ -5183,13 +7759,13 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         ExternalStartLedger? ledgerRef = null;
         var (svc, store, ledger, hooks) = BuildFacade(h =>
         {
-            h.TakeoverTerminalPersist = (sub, seq, evidence, observedAt, raw, code, jobId, source) =>
+            h.TakeoverTerminalPersist = (sub, seq, evidence, observedAt, raw, code, jobId, source, kind) =>
             {
                 var m = ledgerRef!.MarkTerminal(sub, seq, evidence, observedAt, raw, code,
-                    OperationType.ExternalStart, jobId, source);
+                    OperationType.ExternalStart, jobId, source, kind);
                 return m.Success ? null : m.Reason;
             };
-            h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, code, jobId, source, observedAt) =>
+            h.TakeoverTerminalPayloadConfirmed = (sub, seq, raw, code, jobId, source, observedAt, kind) =>
             {
                 var read = ledgerRef!.Read();
                 if (!read.Valid || read.File is null) return false;
@@ -5366,7 +7942,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         var preObsBefore = ReadLease().File!.Handoff!.PreObservations?.Count ?? 0;
         var r2 = NewSameIdentity();
         var second = await svcB.SubmitAsync(r2);
-        Assert.Equal(AdmissionResultKind.Error, second.Kind);
+        Assert.Equal(AdmissionResultKind.TerminalRejected, second.Kind);
         Assert.Equal("submission_conflict", second.ReasonCode);
         Assert.Equal(0, sendsB);                                          // **B 侧零发送**
         Assert.NotEqual(r1.RequestIdentity, r2.RequestIdentity);          // 两笔为**新创建**
@@ -5400,7 +7976,7 @@ public class ArbitrationAdmissionServiceTests : IDisposable
     /// `Reconciling` 且**保留完整发送身份**；此时对**同一候选**发起新的创建（**绕过运行器意图预检**，直接进门面），
     /// 门面必须因**未决发送**拒绝（`submission_conflict`），并保证：**零新增发送**、**许可水位不推进**
     /// （`LastSendSeq` 仍为 1）、**未决发送身份与状态不变**（提交键/身份不被替换、`Reconciling` 保持）。
-    /// 说明：本夹具钉住「**阻挡**」这一预期语义；「被拒尝试是否应占主槽位」是另一独立问题（§24.44／C#19）。
+    /// 说明：本夹具钉住「**阻挡**」这一预期语义；后来被拒请求释放自己的槽位并保留墓碑审计记录。
     /// </summary>
     [Fact]
     public async Task UnresolvedSubmission_BlocksRedrive_NoSendNoSeqAdvance()
@@ -5448,11 +8024,22 @@ public class ArbitrationAdmissionServiceTests : IDisposable
         Assert.Equal(op1.SubmissionIdentity, sub1.SubmissionIdentity);
         Assert.Equal(SubmissionState.Reconciling, sub1.State);
 
+        var continuation = NewSameIdentity();
+        continuation.Kind = AdmissionKind.ContinueUse;
+        continuation.RequestIdentity = r1.RequestIdentity;
+        var continued = await svc.SubmitAsync(continuation);
+        Assert.Equal(AdmissionResultKind.Reconciling, continued.Kind);
+        Assert.Equal(ResponsibilityState.Pending, continued.ResponsibilityState);
+        Assert.Equal(ExecutionDisposition.Unknown, continued.ExecutionDisposition);
+        Assert.Equal(op1.SubmissionIdentity, continued.SubmissionIdentity);
+        Assert.Equal(op1.LastSendSeq, continued.SendSeq);
+        Assert.Equal(1, sends);
+
         // **绕过运行器意图预检**：直接对同一候选再发起创建 ⇒ 门面必须因未决发送拒绝
         var preObsBefore = ReadLease().File!.Handoff!.PreObservations?.Count ?? 0;
         var r2 = NewSameIdentity();
         var second = await svc.SubmitAsync(r2);
-        Assert.Equal(AdmissionResultKind.Error, second.Kind);
+        Assert.Equal(AdmissionResultKind.TerminalRejected, second.Kind);
         Assert.Equal("submission_conflict", second.ReasonCode);
         Assert.Equal(1, sends);                                        // **零新增发送**
 

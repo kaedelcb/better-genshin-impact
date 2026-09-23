@@ -31,6 +31,9 @@ public class TaskConflictPolicySettings
     /// <summary>指定任务名称。仅 RunSpecified 策略使用；执行时校验存在性，不存在则日志报错退化为停止。</summary>
     public string SpecifiedTaskName { get; set; } = "";
 
+    /// <summary>指定任务的普通仲裁优先级（int32，大者优先；缺省 0）。</summary>
+    public int SpecifiedTaskPriority { get; set; }
+
     /// <summary>策略显示名（日志用）。</summary>
     public string PolicyDisplayName => Policy switch
     {

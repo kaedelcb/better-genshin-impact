@@ -1634,7 +1634,9 @@ public partial class MainViewModel : INotifyPropertyChanged
             ["ok"] = "true",
             ["policy"] = _config?.OnlineHoeingCompletionPolicy ?? "resume",
             ["specifiedType"] = _config?.OnlineHoeingSpecifiedTaskType ?? "group",
-            ["specifiedName"] = _config?.OnlineHoeingSpecifiedTaskName ?? ""
+            ["specifiedName"] = _config?.OnlineHoeingSpecifiedTaskName ?? "",
+            ["specifiedPriority"] = (_config?.OnlineHoeingSpecifiedTaskPriority ?? 0)
+                .ToString(System.Globalization.CultureInfo.InvariantCulture)
         };
         var reply = new RemoteCommand
         {
@@ -1668,6 +1670,10 @@ public partial class MainViewModel : INotifyPropertyChanged
             var specifiedName = GetRemoteParam(cmd.Params, "specifiedName");
             if (specifiedName != null)
                 _config.OnlineHoeingSpecifiedTaskName = specifiedName;
+            var specifiedPriority = GetRemoteParam(cmd.Params, "specifiedPriority");
+            if (int.TryParse(specifiedPriority, System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out var parsedPriority))
+                _config.OnlineHoeingSpecifiedTaskPriority = parsedPriority;
             _configManager?.Save(_config);
             applied.Add("上线锄地完成后动作（已持久化）");
         }
@@ -2867,6 +2873,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         var initPolicy = PolicyFromString(_config?.OnlineHoeingCompletionPolicy);
         var initSpecifiedType = _config?.OnlineHoeingSpecifiedTaskType ?? "group";
         var initSpecifiedName = _config?.OnlineHoeingSpecifiedTaskName ?? "";
+        var initSpecifiedPriority = _config?.OnlineHoeingSpecifiedTaskPriority ?? 0;
         // 拉取失败时：弹窗里的「完成后动作」并非对方真实值，直接保存会把默认值覆盖到对方配置上。
         // 因此此时不静默放过，而是在弹窗内显示醒目警告 + 默认禁止保存，由用户显式确认后才允许提交。
         var policyPullFailed = false;
@@ -2898,6 +2905,10 @@ public partial class MainViewModel : INotifyPropertyChanged
                     initPolicy = PolicyFromString(pulled.GetValueOrDefault("policy"));
                     initSpecifiedType = pulled.GetValueOrDefault("specifiedType") ?? "group";
                     initSpecifiedName = pulled.GetValueOrDefault("specifiedName") ?? "";
+                    if (int.TryParse(pulled.GetValueOrDefault("specifiedPriority"),
+                            System.Globalization.NumberStyles.Integer,
+                            System.Globalization.CultureInfo.InvariantCulture, out var pulledPriority))
+                        initSpecifiedPriority = pulledPriority;
                 }
                 else
                 {
@@ -3334,7 +3345,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         // ========== 完成后动作（上线锄地打断的原任务如何处置；全员就绪触发上线锄地固定打断，此处只配完成后动作）==========
         var completionPanel = new CompletionActionPanel(
-            initPolicy, initSpecifiedType, initSpecifiedName, allGroups, allOneClicks,
+            initPolicy, initSpecifiedType, initSpecifiedName, initSpecifiedPriority, allGroups, allOneClicks,
             isSelf
                 ? "全员就绪触发上线锄地必定打断当前任务（固定行为）。此处配置锄地完成后如何处置被中断的原任务；配置持久化保存，重启保留。"
                 : $"全员就绪触发上线锄地必定打断当前任务（固定行为）。此处配置 {targetMember?.PlayerName ?? "对方"} 锄地完成后如何处置被中断的原任务；保存后落到对方本机配置并持久化。");
@@ -3462,11 +3473,22 @@ public partial class MainViewModel : INotifyPropertyChanged
             var completionPolicy = completionPanel.Policy;
             var completionType = completionPanel.SpecifiedType;
             var completionName = completionPanel.SpecifiedName;
+            var completionPriority = initSpecifiedPriority;
             if (completionPolicy == TaskConflictPolicy.RunSpecified && string.IsNullOrEmpty(completionName))
             {
                 MessageBox.Show("已选择「执行动作 → 执行指定任务」，但未填写指定任务名称。\n请填写或改选其他完成后动作。",
                     "提示", MessageBoxButton.OK, MessageBoxImage.Information);
                 return; // 不关闭弹窗，让用户补填
+            }
+            var priorityTextValid = int.TryParse(completionPanel.SpecifiedPriorityText,
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var parsedCompletionPriority);
+            if (priorityTextValid) completionPriority = parsedCompletionPriority;
+            if (completionPolicy == TaskConflictPolicy.RunSpecified && !priorityTextValid)
+            {
+                MessageBox.Show("指定任务优先级必须是 32 位整数。数值越大，优先级越高。",
+                    "优先级格式错误", MessageBoxButton.OK, MessageBoxImage.Information);
+                return; // 不关闭弹窗，让用户修正
             }
             var completionDesc = completionPolicy switch
             {
@@ -3561,6 +3583,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                     _config.OnlineHoeingCompletionPolicy = PolicyToString(completionPolicy);
                     _config.OnlineHoeingSpecifiedTaskType = completionType;
                     _config.OnlineHoeingSpecifiedTaskName = completionName;
+                    _config.OnlineHoeingSpecifiedTaskPriority = completionPriority;
                     _configManager?.Save(_config);
                     AddLog($"已保存上线锄地「完成后动作」: {completionDesc}");
                 }
@@ -3577,7 +3600,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                     {
                         ["policy"] = PolicyToString(completionPolicy),
                         ["specifiedType"] = completionType,
-                        ["specifiedName"] = completionName
+                        ["specifiedName"] = completionName,
+                        ["specifiedPriority"] = completionPriority.ToString(System.Globalization.CultureInfo.InvariantCulture)
                     });
                     AddLog(pushResult switch
                     {
@@ -3594,6 +3618,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         _config.OnlineHoeingCompletionPolicy = PolicyToString(completionPolicy);
                         _config.OnlineHoeingSpecifiedTaskType = completionType;
                         _config.OnlineHoeingSpecifiedTaskName = completionName;
+                        _config.OnlineHoeingSpecifiedTaskPriority = completionPriority;
                         _configManager?.Save(_config);
                     }
                 }
@@ -3703,6 +3728,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         private readonly ComboBox _layer2Combo;    // 0=停止 1=执行指定任务
         private readonly ComboBox _typeCombo;      // 0=配置组 1=一条龙
         private readonly ComboBox _nameCombo;      // IsEditable，候选随类型切换
+        private readonly TextBox _specifiedPriorityBox;
         private readonly StackPanel _layer2Panel;
         private readonly StackPanel _specifiedPanel;
         private readonly StackPanel _root;
@@ -3712,7 +3738,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         public UIElement Root => _root;
 
-        public CompletionActionPanel(TaskConflictPolicy policy, string specifiedType, string specifiedName,
+        public CompletionActionPanel(TaskConflictPolicy policy, string specifiedType, string specifiedName, int specifiedPriority,
             List<string> groups, List<string> oneClicks, string description)
         {
             _groups = groups;
@@ -3780,6 +3806,35 @@ public partial class MainViewModel : INotifyPropertyChanged
                 FontSize = 10, Foreground = dim, TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 4, 0, 0)
             });
+            var priorityRow = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+            priorityRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            priorityRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            priorityRow.Children.Add(new TextBlock
+            {
+                Text = "任务优先级",
+                FontSize = 11,
+                Foreground = gold,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0)
+            });
+            _specifiedPriorityBox = new TextBox
+            {
+                Text = specifiedPriority.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                MinWidth = 96,
+                Padding = new Thickness(6, 3, 6, 3),
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1F, 0x1D, 0x3A)),
+                Foreground = System.Windows.Media.Brushes.White,
+                BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x56, 0x50, 0x78))
+            };
+            Grid.SetColumn(_specifiedPriorityBox, 1);
+            priorityRow.Children.Add(_specifiedPriorityBox);
+            _specifiedPanel.Children.Add(priorityRow);
+            _specifiedPanel.Children.Add(new TextBlock
+            {
+                Text = "32 位整数；数值越大越优先，默认 0。",
+                FontSize = 10, Foreground = dim, TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 3, 0, 0)
+            });
             _layer2Panel.Children.Add(_specifiedPanel);
             inner.Children.Add(_layer2Panel);
 
@@ -3841,6 +3896,9 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         /// <summary>指定任务名称（手动输入或候选选择）。</summary>
         public string SpecifiedName => _nameCombo.Text.Trim();
+
+        /// <summary>指定任务优先级原文；调用方按 int32 严格校验后持久化。</summary>
+        public string SpecifiedPriorityText => _specifiedPriorityBox.Text.Trim();
     }
 
     /// <summary>完全退出助手软件（先弹确认框）。</summary>
@@ -5483,7 +5541,8 @@ public partial class MainViewModel : INotifyPropertyChanged
     {
         Policy = PolicyFromString(_config?.OnlineHoeingCompletionPolicy),
         SpecifiedTaskType = _config?.OnlineHoeingSpecifiedTaskType ?? "group",
-        SpecifiedTaskName = _config?.OnlineHoeingSpecifiedTaskName ?? ""
+        SpecifiedTaskName = _config?.OnlineHoeingSpecifiedTaskName ?? "",
+        SpecifiedTaskPriority = _config?.OnlineHoeingSpecifiedTaskPriority ?? 0
     };
 
     /// <summary>任务策略远程互改通道（惰性构造，与 RemoteConfigEditService 同模式）。</summary>

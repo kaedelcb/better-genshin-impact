@@ -14,6 +14,56 @@ public sealed class CommandExecutorExternalStartAdmissionTests
     private static RemoteCommand StartGroupCommand()
         => new() { Cmd = "start_group", Params = new() { ["groupName"] = "测试组" } };
 
+    [Fact]
+    public async Task RunSpecified_AdmissionUnavailable_FailsClosedWithoutLegacySend()
+    {
+        var executor = new CommandExecutor(null!, "unused");
+
+        var result = await executor.StartSpecifiedTaskViaAdmissionAsync(new TaskConflictPolicySettings
+        {
+            SpecifiedTaskType = "group",
+            SpecifiedTaskName = "收尾任务",
+            SpecifiedTaskPriority = 17,
+        });
+
+        Assert.Equal("failed", result.Status);
+        Assert.Equal("r5_external_start_admission_unwired", result.ErrorCode);
+        Assert.Contains("未回退到旧通道", result.Message);
+    }
+
+    [Theory]
+    [InlineData("group", "group:收尾任务")]
+    [InlineData("onedragon", "onedragon:收尾任务")]
+    public async Task RunSpecified_UsesR5AdmissionAndCarriesConfiguredPlanPriority(string type, string workflowId)
+    {
+        ExternalStartAdmissionRequest? captured = null;
+        var executor = new CommandExecutor(null!, "unused", externalStartAdmission: (request, _) =>
+        {
+            captured = request;
+            return Task.FromResult(new ExternalStartAdmissionOutcome(
+                ExternalStartAdmissionStatus.Blocked, "execution_occupied", "当前任务优先级更高"));
+        });
+
+        var result = await executor.StartSpecifiedTaskViaAdmissionAsync(new TaskConflictPolicySettings
+        {
+            SpecifiedTaskType = type,
+            SpecifiedTaskName = "收尾任务",
+            SpecifiedTaskPriority = 17,
+        });
+
+        Assert.NotNull(captured);
+        Assert.Equal("system", captured!.Namespace);
+        Assert.Equal(workflowId, captured.WorkflowId);
+        Assert.Equal(workflowId, captured.ResourceRef);
+        Assert.Equal("system:post-hoeing:{requestIdentity}", captured.TriggerOccurrenceId);
+        Assert.Equal("system:post-hoeing", captured.SourceDetail);
+        Assert.Equal(ArbitrationTier.Plan, captured.Tier);
+        Assert.Equal(17, captured.Priority);
+        Assert.NotNull(captured.ExecuteAsync);
+        Assert.Equal("failed", result.Status);
+        Assert.Equal("execution_occupied", result.ErrorCode);
+    }
+
     [Theory]
     [InlineData("start_group", "groupName")]
     [InlineData("start_oneclick", "configName")]
@@ -397,11 +447,11 @@ public sealed class CommandExecutorExternalStartAdmissionTests
 
     /// <summary>
     /// **早期受理段分类（§24.14-1）**：一次 `ext.task.start` 回执只产出一个早期结论；副作用前拒绝＝
-    /// **确定未受理（可重试）**；`already_executed`＝**等同 executed**（完成层给权威终态、不得凭空生成句柄）；
+    /// **确定未受理（可重试）**；新准入映射中，无任务编号的 `already_executed` 不能证明有编号提交；
     /// 缺句柄＝协议违例（不可考）；queued/adopted＋句柄＝已受理（句柄随早期受理全链传递，§24.5-1）。
     /// </summary>
     [Fact]
-    public void QueueEarly_ClassifySubmit_SingleConclusionPerReceipt()
+    public async Task QueueEarly_ClassifySubmit_SingleConclusionPerReceipt()
     {
         var observedAt = DateTimeOffset.UtcNow;
 
@@ -419,13 +469,29 @@ public sealed class CommandExecutorExternalStartAdmissionTests
             new BgiTaskSubmitResult { Success = true, Status = "already_executed" }, "配置组「A」", 3, observedAt);
         Assert.Equal(CommandExecutor.QueueStartEarlyKind.AlreadyExecuted, already.Kind);
         var alreadyMapped = CommandExecutor.MapQueueEarlyToAdmission(already);
-        Assert.Equal(ExternalStartExecutionKind.Accepted, alreadyMapped.Early.Kind);
-        Assert.Null(alreadyMapped.Early.JobId);                // 无句柄 ⇒ 不得凭空生成
-        var alreadyCompletion = alreadyMapped.Observer!(CancellationToken.None).GetAwaiter().GetResult();
-        Assert.Equal(ExternalStartCompletionKind.Succeeded, alreadyCompletion!.Kind);  // R4 既有口径：等同 executed
-        Assert.Equal("already_executed", alreadyCompletion.RawTerminal);
-        Assert.Equal("ext:idempotency", alreadyCompletion.EvidenceSource);
-        Assert.Equal(observedAt, alreadyCompletion.ObservedAtUtc);                     // 观察时点＝回执接收时点
+        Assert.Equal(ExternalStartExecutionKind.Unknown, alreadyMapped.Early.Kind);    // 缺编号不能记为本次已受理
+        Assert.Null(alreadyMapped.Early.JobId);
+        Assert.Null(alreadyMapped.Observer);                                           // 无句柄就没有可查询的完成观察
+
+        var alreadyWhitespaceHandle = CommandExecutor.ClassifyQueueSubmitEarly(
+            new BgiTaskSubmitResult { Success = true, Status = "already_executed", TaskHandle = "  " },
+            "配置组「A」", 3, observedAt);
+        Assert.Equal(CommandExecutor.QueueStartEarlyKind.AlreadyExecuted, alreadyWhitespaceHandle.Kind);
+        Assert.Equal(ExternalStartExecutionKind.Unknown,
+            CommandExecutor.MapQueueEarlyToAdmission(alreadyWhitespaceHandle).Early.Kind);
+
+        var alreadyWithHandle = CommandExecutor.ClassifyQueueSubmitEarly(
+            new BgiTaskSubmitResult { Success = true, Status = "already_executed", TaskHandle = "job-existing" },
+            "配置组「A」", 3, observedAt);
+        Assert.Equal(CommandExecutor.QueueStartEarlyKind.AlreadyExecuted, alreadyWithHandle.Kind);
+        Assert.Equal("job-existing", alreadyWithHandle.TaskHandle);                   // 分类保留幂等事实及其权威编号
+        var alreadyForAdmission = CommandExecutor.PrepareQueueEarlyForAdmission(alreadyWithHandle);
+        Assert.Equal(CommandExecutor.QueueStartEarlyKind.Accepted, alreadyForAdmission.Kind);
+        Assert.Equal("job-existing", alreadyForAdmission.TaskHandle);                 // 新准入仅带编号进入观察路径
+        var legacyAlreadyWithHandle = await CommandExecutor.MapQueueEarlyToLegacyResultAsync(
+            alreadyWithHandle, "配置组「A」", 3);
+        Assert.Equal("success", legacyAlreadyWithHandle.Status);
+        Assert.Contains("已执行过（generation=3，幂等跳过）", legacyAlreadyWithHandle.Message);
 
         var missing = CommandExecutor.ClassifyQueueSubmitEarly(
             new BgiTaskSubmitResult { Success = true, Status = "queued" }, "配置组「A」", 3, observedAt);
@@ -433,6 +499,14 @@ public sealed class CommandExecutorExternalStartAdmissionTests
         Assert.Equal(ExternalStartExecutionKind.Unknown,
             CommandExecutor.MapQueueEarlyToAdmission(missing).Early.Kind);             // 协议违例 ⇒ 不可考
         Assert.Null(CommandExecutor.MapQueueEarlyToAdmission(missing).Observer);
+
+        var whitespaceHandle = CommandExecutor.ClassifyQueueSubmitEarly(
+            new BgiTaskSubmitResult { Success = true, Status = "queued", TaskHandle = "  " },
+            "配置组「A」", 3, observedAt);
+        Assert.Equal(CommandExecutor.QueueStartEarlyKind.MissingHandle, whitespaceHandle.Kind);
+        Assert.Equal(ExternalStartExecutionKind.Unknown,
+            CommandExecutor.MapQueueEarlyToAdmission(whitespaceHandle).Early.Kind);
+        Assert.Null(CommandExecutor.MapQueueEarlyToAdmission(whitespaceHandle).Observer);
 
         var faulted = new CommandExecutor.QueueStartEarly(
             CommandExecutor.QueueStartEarlyKind.Unknown, Detail: "pipe broken");
@@ -462,6 +536,188 @@ public sealed class CommandExecutorExternalStartAdmissionTests
         Assert.Equal(ExternalStartCompletionKind.Succeeded, completion!.Kind);
         Assert.Equal("h-1", completion.JobId);
         Assert.Equal("ext:task.event", completion.EvidenceSource);
+    }
+
+    [Theory]
+    [InlineData(BgiNotSentException.ChannelNotReady)]
+    [InlineData(BgiNotSentException.PipeNotConnected)]
+    [InlineData(BgiNotSentException.LocalRequestRejected)]
+    public void QueueEarly_PreWriteEvidence_IsRetryableDefiniteReject(string evidenceCode)
+    {
+        var failure = CommandExecutor.ClassifyQueueSubmitFailure(
+            new BgiNotSentException(evidenceCode, "fixture:写入前拒绝"));
+        var mapped = CommandExecutor.MapQueueEarlyToAdmission(failure);
+
+        Assert.Equal(CommandExecutor.QueueStartEarlyKind.Rejected, failure.Kind);
+        Assert.Equal(evidenceCode, failure.ReasonCode);
+        Assert.True(failure.ProvenNotSent);
+        Assert.Equal(ExternalStartExecutionKind.Rejected, mapped.Early.Kind);
+        Assert.True(mapped.Early.Retryable);
+        Assert.Null(mapped.Observer);
+
+        var remoteEcho = CommandExecutor.ClassifyQueueSubmitEarly(new BgiTaskSubmitResult
+        {
+            Success = false,
+            ErrorCode = evidenceCode,
+            ErrorMessage = "fixture:远端回显同名错误码",
+        }, "配置组「A」", 0, DateTimeOffset.UtcNow);
+        var remoteMapped = CommandExecutor.MapQueueEarlyToAdmission(remoteEcho);
+        Assert.False(remoteEcho.ProvenNotSent);
+        Assert.Equal(ExternalStartExecutionKind.Rejected, remoteMapped.Early.Kind);
+        Assert.False(remoteMapped.Early.Retryable);
+    }
+
+    [Theory]
+    [InlineData("io")]
+    [InlineData("timeout")]
+    public void QueueEarly_PostWriteOrUnclassifiedFailure_RemainsUnknown(string kind)
+    {
+        Exception failure = kind == "io" ? new IOException("fixture:pipe failed") : new TimeoutException("fixture:timeout");
+        var classified = CommandExecutor.ClassifyQueueSubmitFailure(failure);
+
+        Assert.Equal(CommandExecutor.QueueStartEarlyKind.Unknown, classified.Kind);
+        Assert.Equal(ExternalStartExecutionKind.Unknown, CommandExecutor.MapQueueEarlyToAdmission(classified).Early.Kind);
+    }
+
+    [Fact]
+    public async Task QueueEarly_AdmissionObserverCancellation_StopsUnderlyingObservation()
+    {
+        using var hostShutdown = new CancellationTokenSource();
+        var request = new ExternalStartAdmissionRequest { HostLifetimeToken = hostShutdown.Token };
+        var hostToken = CommandExecutor.ResolveObservationHostLifetimeToken(request);
+        using var observationCancellation = CommandExecutor.CreateObservationCancellation(
+            forAdmission: true, CancellationToken.None, hostToken);
+        Assert.NotNull(observationCancellation);
+        var observationStopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var observedAt = DateTimeOffset.UtcNow;
+        var observation = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, observationCancellation!.Token);
+                throw new InvalidOperationException("observation unexpectedly completed");
+            }
+            catch (OperationCanceledException)
+            {
+                observationStopped.TrySetResult();
+                return new CommandExecutor.QueueTerminalObservation(
+                    CommandExecutor.QueueTerminalSource.Faulted, null, false, null, null,
+                    "h-shutdown", false, "local wait cancelled", observedAt);
+            }
+        });
+        var accepted = new CommandExecutor.QueueStartEarly(
+            CommandExecutor.QueueStartEarlyKind.Accepted,
+            TaskHandle: "h-shutdown",
+            Observation: observation,
+            Reply: new ExternalStartReply.EarlyAccepted("h-shutdown", CommandExecutor.MapObservationTaskAsync(observation)),
+            ObservationCancellation: observationCancellation);
+
+        var mapped = CommandExecutor.MapQueueEarlyToAdmission(accepted);
+        var pendingCompletion = mapped.Observer!(hostShutdown.Token);
+        hostShutdown.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await pendingCompletion.WaitAsync(TimeSpan.FromSeconds(5)));
+
+        await observationStopped.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task QueueEarly_AdmissionObserverCallerCancellation_DoesNotStopHostObservation()
+    {
+        using var callerCancellation = new CancellationTokenSource();
+        using var hostShutdown = new CancellationTokenSource();
+        using var observationCancellation = CommandExecutor.CreateObservationCancellation(
+            forAdmission: true, callerCancellation.Token, hostShutdown.Token);
+        Assert.NotNull(observationCancellation);
+        var terminal = new TaskCompletionSource<CommandExecutor.QueueTerminalObservation>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var observation = terminal.Task.WaitAsync(observationCancellation!.Token);
+        var early = new CommandExecutor.QueueStartEarly(
+            CommandExecutor.QueueStartEarlyKind.Accepted,
+            TaskHandle: "h-caller-cancel",
+            Observation: observation,
+            Reply: new ExternalStartReply.EarlyAccepted("h-caller-cancel", CommandExecutor.MapObservationTaskAsync(observation)),
+            ObservationCancellation: observationCancellation);
+        var observer = CommandExecutor.MapQueueEarlyToAdmission(early).Observer!;
+        var waiting = observer(callerCancellation.Token);
+
+        callerCancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await waiting.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.False(observation.IsCompleted);
+
+        terminal.TrySetResult(new CommandExecutor.QueueTerminalObservation(
+            CommandExecutor.QueueTerminalSource.Event, "completed", false, null, null,
+            "h-caller-cancel", false, null, DateTimeOffset.UtcNow));
+        var completion = await CommandExecutor.MapObservationTaskAsync(observation).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(ExternalStartCompletionKind.Succeeded, completion!.Kind);
+        Assert.Equal("h-caller-cancel", completion.JobId);
+        Assert.False(hostShutdown.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task QueueEarly_AdmissionObservationIgnoresSendCancellation_ButStopsOnHostShutdown()
+    {
+        using var sendCancellation = new CancellationTokenSource();
+        using var hostShutdown = new CancellationTokenSource();
+        using var observationCancellation = CommandExecutor.CreateObservationCancellation(
+            forAdmission: true, sendCancellation.Token, hostShutdown.Token);
+        Assert.NotNull(observationCancellation);
+
+        var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var observation = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, observationCancellation!.Token);
+                throw new InvalidOperationException("observation unexpectedly completed");
+            }
+            catch (OperationCanceledException)
+            {
+                stopped.TrySetResult();
+            }
+        });
+
+        sendCancellation.Cancel();
+        await Task.Delay(30);
+        Assert.False(observation.IsCompleted);
+
+        hostShutdown.Cancel();
+        await stopped.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await observation.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task QueueEarly_AdmissionObservationWithoutHostToken_DoesNotFallBackToSendCancellation()
+    {
+        using var sendCancellation = new CancellationTokenSource();
+        using var observationCancellation = CommandExecutor.CreateObservationCancellation(
+            forAdmission: true, sendCancellation.Token, CancellationToken.None);
+        Assert.NotNull(observationCancellation);
+        var terminal = new TaskCompletionSource<CommandExecutor.QueueTerminalObservation>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var observation = terminal.Task.WaitAsync(observationCancellation!.Token);
+
+        sendCancellation.Cancel();
+        await Task.Delay(30);
+        Assert.False(observation.IsCompleted);
+
+        terminal.TrySetResult(new CommandExecutor.QueueTerminalObservation(
+            CommandExecutor.QueueTerminalSource.Event, "completed", false, null, null,
+            "h-no-host-token", false, null, DateTimeOffset.UtcNow));
+        Assert.Equal("completed", (await observation.WaitAsync(TimeSpan.FromSeconds(5))).RawTerminal);
+    }
+
+    [Fact]
+    public void QueueEarly_AdmissionMissingRequest_ResolvesToNoncancelableHostToken()
+    {
+        using var sendCancellation = new CancellationTokenSource();
+        var hostLifetimeToken = CommandExecutor.ResolveObservationHostLifetimeToken(request: null);
+        using var observationCancellation = CommandExecutor.CreateObservationCancellation(
+            forAdmission: true, sendCancellation.Token, hostLifetimeToken);
+
+        Assert.False(hostLifetimeToken.CanBeCanceled);
+        Assert.NotNull(observationCancellation);
+        sendCancellation.Cancel();
+        Assert.False(observationCancellation!.IsCancellationRequested);
     }
 
     /// <summary>
@@ -532,6 +788,7 @@ public sealed class CommandExecutorExternalStartAdmissionTests
                 "配置组「A」", 1, DateTimeOffset.UtcNow)).Early;
 
         Assert.True(CommandExecutor.IsRetryableQueueRejection("queue_full"));
+        Assert.True(CommandExecutor.IsRetryableQueueRejection("queue_unavailable"));
         Assert.True(CommandExecutor.IsRetryableQueueRejection("task_already_running"));
         Assert.False(CommandExecutor.IsRetryableQueueRejection("contract_violation"));  // 未列入 ⇒ 终局拒绝
         Assert.False(CommandExecutor.IsRetryableQueueRejection(null));

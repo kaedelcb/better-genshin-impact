@@ -52,7 +52,7 @@ public sealed class R58DualRunContestTests : IDisposable
             {
                 var r = ledger.RecordAccepted(entry);
                 if (!r.Success) return Task.FromResult<string?>("record_failed:" + r.Reason);
-                return Task.FromResult<string?>(ledger.ConfirmRebuildable(entry.SubmissionIdentity, entry.SendSeq) ? null : "not_rebuildable");
+                return Task.FromResult<string?>(ledger.ConfirmRebuildable(entry) ? null : "not_rebuildable");
             },
             Barriers = barriers,
         };

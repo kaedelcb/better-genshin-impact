@@ -430,12 +430,12 @@ public class HandoffTransitionPolicyTests : IDisposable
         var store = new ArbitrationLeaseStore(_dir);
         var leasePath = Path.Combine(_dir, "arbitration-lease.json");
 
-        // version 超前（>3，R5.3 §24.20-A：v3＝当前支持格式代）+ lease 垃圾类型 → 先判版本 → Unsupported（不降级解析、不当 Corrupt）。
-        File.WriteAllText(leasePath, "{\"version\":4,\"lease\":\"垃圾类型\"}");
+        // version 超前（>5：当前历史归档格式代）+ lease 垃圾类型 → 先判版本 → Unsupported（不降级解析、不当 Corrupt）。
+        File.WriteAllText(leasePath, "{\"version\":6,\"lease\":\"垃圾类型\"}");
         Assert.Equal(ArbitrationLeaseStatus.Unsupported, store.Read().Status);
 
-        // version=3（当前支持格式代）+ lease 垃圾类型 → 结构解析失败 = Corrupt。
-        File.WriteAllText(leasePath, "{\"version\":3,\"lease\":\"垃圾类型\"}");
+        // version=5（当前支持格式代）+ lease 垃圾类型 → 结构解析失败 = Corrupt。
+        File.WriteAllText(leasePath, "{\"version\":5,\"lease\":\"垃圾类型\"}");
         Assert.Equal(ArbitrationLeaseStatus.Corrupt, store.Read().Status);
 
         // version 缺失 → Corrupt（不当作合法 v1）。

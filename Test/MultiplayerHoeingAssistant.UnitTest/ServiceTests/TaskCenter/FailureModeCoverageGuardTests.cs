@@ -6,8 +6,8 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 /// <summary>
 /// **失败模式覆盖守卫**（[§17.4-A 第 2／6 条]；[批次四十七 首轮会诊阻断项处置后重写]）：
 /// §17.4-A 第 2 条要求「生产构造开门」类实现**反例先行**且「失败模式清单覆盖面**不得小于**已登记清单」。
-/// 本守卫把「已登记清单」（三份来源表）与「覆盖映射表」（`§24.58`）机械对齐，并**按来源分别锁定结构**：
-/// ①**逐来源固定行数**（`§23.8`＝7／`§24.41-C`＝19／`§24.55`＝3）：任一来源增删行即失败（不给全局下界留补偿空间）；
+/// 本守卫把「已登记清单」（四份来源表）与「覆盖映射表」（`§24.58`）机械对齐，并**按来源分别锁定结构**：
+/// ①**逐来源固定行数**（`§23.8`＝7／`§24.41-C`＝19／`§24.55`＝3／`§24.67`＝4）：任一来源增删行即失败（不给全局下界留补偿空间）；
 /// ②**行号必须恰为 1..N**：重复编号/跳号/非数字行（疑似未解析的数据行）一律失败；
 /// ③映射表**每行恰一条**且**每个来源的映射集合＝1..N**；
 /// ④映射行必须给出**指针类型**（`完成证据`／`残项登记`／`owner 裁决`）与**非占位**指针：
@@ -30,6 +30,7 @@ public sealed class FailureModeCoverageGuardTests
         new("§23.8", R52Doc, "### 23.8 ", 7, "\n### "),
         new("§24.41-C", LifecycleDoc, "**C. B4 残项移交（逐条：承接＋完成证据要求＋门禁＋状态）**", 19, "\n**D. "),
         new("§24.55", LifecycleDoc, "### 24.55 ", 3, "\n### "),
+        new("§24.67", LifecycleDoc, "### 24.67 ", 4, "\n### 24.68 "),
     ];
 
     private static readonly Regex DataRow = new(@"^\|\s*(\d+)\s*\|", RegexOptions.Compiled | RegexOptions.Multiline);
@@ -139,7 +140,7 @@ public sealed class FailureModeCoverageGuardTests
             "映射表存在**未能解析的数据行**（结构漂移）：" + string.Join(" ｜ ", mapSuspicious.Take(5)));
         var expectedTotal = Sources.Sum(s => s.ExpectedCount);
         Assert.True(mapped.Count == expectedTotal,
-            "映射表解析出的数据行数应为 " + expectedTotal + "（7＋19＋3），实际 " + mapped.Count);
+            "映射表解析出的数据行数应为 " + expectedTotal + "（7＋19＋3＋4），实际 " + mapped.Count);
 
         // ① 逐来源：映射集合必须**恰好等于**该来源行号集合（不多不少）
         foreach (var spec in Sources)

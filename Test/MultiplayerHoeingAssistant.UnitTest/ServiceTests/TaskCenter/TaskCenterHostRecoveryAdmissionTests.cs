@@ -442,11 +442,37 @@ public class TaskCenterHostRecoveryAdmissionTests : IDisposable
             {
                 Assert.Contains(loser.RequestState, new[] { OperationRequestState.TerminalRejected, OperationRequestState.RetryableRejected });
                 if (loser.RequestState == OperationRequestState.TerminalRejected)
-                    Assert.Contains(loser.LastResult!.ReasonCode, new[] { "submission_conflict", "run_state_changed" });
+                {
+                    var terminalReason = loser.LastPrecheckResult?.ReasonCode ?? loser.LastResult?.ReasonCode;
+                    Assert.Contains(terminalReason, new[] { "submission_conflict", "run_state_changed" });
+                    if (terminalReason == "submission_conflict")
+                    {
+                        Assert.Equal("submission_conflict", loser.LastPrecheckResult?.ReasonCode);
+                        Assert.Null(loser.LastResult);
+                    }
+                    else
+                    {
+                        Assert.Equal("run_state_changed", loser.LastResult?.ReasonCode);
+                        Assert.Null(loser.LastPrecheckResult);
+                    }
+                }
                 else if (loser.RequestState == OperationRequestState.RetryableRejected)
                     // 两条来源：①宿主发送侧在飞=task_running（ReconcileOutcome 原样保存远端/宿主原因码，不做改写）
                     // ②门面锁内执行占用复核=execution_occupied（FactsProvider 报占用时）。
-                    Assert.Contains(loser.LastResult!.ReasonCode, new[] { "task_running", "execution_occupied" });
+                {
+                    var retryReason = loser.LastPrecheckResult?.ReasonCode ?? loser.LastResult?.ReasonCode;
+                    Assert.Contains(retryReason, new[] { "task_running", "execution_occupied" });
+                    if (retryReason == "execution_occupied")
+                    {
+                        Assert.Equal("execution_occupied", loser.LastPrecheckResult?.ReasonCode);
+                        Assert.Null(loser.LastResult);
+                    }
+                    else
+                    {
+                        Assert.Equal("task_running", loser.LastResult?.ReasonCode);
+                        Assert.Null(loser.LastPrecheckResult);
+                    }
+                }
             }
             await WaitUntilAsync(() => _runs.Load(seeded.RunId!)!.State == WorkflowRunState.Succeeded);
             Assert.Equal(WorkflowRunState.Succeeded, _runs.Load(seeded.RunId!)!.State);
@@ -660,8 +686,8 @@ public class TaskCenterHostRecoveryAdmissionTests : IDisposable
             Assert.Equal("bgi:local:1:100", resumeOp.Candidate!.Scope);
             // 精确锁定：本地预检的**终局拒绝**（非可重试拒绝），且**未取得发送许可**
             Assert.Equal(OperationRequestState.TerminalRejected, resumeOp.RequestState);
-            Assert.Equal("stale_epoch", resumeOp.LastResult!.ReasonCode);
-            Assert.False(resumeOp.LastResult.Retryable);
+            Assert.Equal("stale_epoch", resumeOp.LastPrecheckResult!.ReasonCode);
+            Assert.False(resumeOp.LastPrecheckResult.Retryable);
             Assert.Equal(0, resumeOp.LastSendSeq);
             Assert.True(string.IsNullOrEmpty(resumeOp.SubmissionIdentity));
             Assert.Null(ReadLease().File!.Handoff!.Submission);                  // 无新增未决发送

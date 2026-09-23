@@ -2104,6 +2104,7 @@ Assert.True(probe.Converged, Diag("运行必须收敛后才允许读取最终台
                                 ResourceRef = "flow:外部占用占位",
                                 ActionId = "act-fixture-external",
                                 TargetBgiEpoch = RoutingFakePort.Epoch,
+                                AcceptedAtUtc = DateTimeOffset.UtcNow,
                                 EvidenceSource = "fixture_ledger_occupation",
                             });
                             Assert.True(recorded.Success, "夹具前置：外部启动台账未终结记录写入失败 " + recorded.Reason);

@@ -186,8 +186,8 @@ public class CommandExecutor
             // 通道可用＝早期段提交一次并交回句柄，完成由观察段在**门面锁外**等待；
             // 接线态通道不可用＝确定未发送并拒绝；不回退无句柄 v2。
             // 注：`start_group` 的 ext 队列投递不携带批次名单（与 `StartGroupCoreAsync` 既有调用逐字一致）。
-            earlyStart: ct => TryStartViaQueueEarlyForAdmissionAsync(
-                groupName, null, startFromIndex, generation, batchGroupNames: null, startFromTaskId: null, ct))
+            earlyStart: (sendToken, hostToken) => TryStartViaQueueEarlyForAdmissionAsync(
+                groupName, null, startFromIndex, generation, batchGroupNames: null, startFromTaskId: null, sendToken, hostToken))
             .ConfigureAwait(false);
 
     /// <summary>
@@ -207,8 +207,8 @@ public class CommandExecutor
             core: () => StartOneClickCoreAsync(configName, startFromTaskId, generation, batchGroupNamesRaw,
                 allowPreemption: false),
             // [Batch B 收尾之三／P38] 同 `start_group`：早期受理与完成观察分离。
-            earlyStart: ct => TryStartViaQueueEarlyForAdmissionAsync(
-                null, configName, 0, generation, batchGroupNamesRaw, startFromTaskId, ct))
+            earlyStart: (sendToken, hostToken) => TryStartViaQueueEarlyForAdmissionAsync(
+                null, configName, 0, generation, batchGroupNamesRaw, startFromTaskId, sendToken, hostToken))
             .ConfigureAwait(false);
 
     /// <summary>
@@ -225,21 +225,27 @@ public class CommandExecutor
         Func<Task<CommandResult>> core,
         // [Batch B 收尾之三／P38] 可选「早期受理＋完成观察」拆分（有早期 ack 的通道，§24.10／§24.14）。
         // 返回 null 仅供不适用早期通道的入口走 `core`；E3 接线态队列不可用明确拒绝。
-        Func<CancellationToken, Task<(ExternalStartExecution Early, Func<CancellationToken, Task<ExternalStartCompletion?>>? Observer)?>>? earlyStart = null)
+        Func<CancellationToken, CancellationToken,
+            Task<(ExternalStartExecution Early, Func<CancellationToken, Task<ExternalStartCompletion?>>? Observer)?>>? earlyStart = null,
+        ArbitrationTier tier = ArbitrationTier.Plan, int priority = 0, DateTimeOffset? scheduledAt = null)
     {
         ExternalStartAdmissionOutcome outcome;
         CommandResult? coreResult = null;
         Func<CancellationToken, Task<ExternalStartCompletion?>>? earlyObserver = null;
         var capturedCommand = _requestContext.Value;
+        ExternalStartAdmissionRequest? admissionRequest = null;
         try
         {
-            outcome = await admit(new ExternalStartAdmissionRequest
+            admissionRequest = new ExternalStartAdmissionRequest
             {
                 Namespace = ns,
                 WorkflowId = workflowId,
                 TriggerOccurrenceId = trigger,
                 ResourceRef = workflowId,
                 SourceDetail = sourceDetail,
+                Tier = tier,
+                Priority = priority,
+                ScheduledAt = scheduledAt,
                 ExecuteAsync = async sendToken =>
                 {
                     var previousContext = _requestContext.Value;
@@ -248,7 +254,8 @@ public class CommandExecutor
                     {
                         if (earlyStart is not null)
                         {
-                            var early = await earlyStart(sendToken).ConfigureAwait(false);
+                            var early = await earlyStart(sendToken, ResolveObservationHostLifetimeToken(admissionRequest))
+                                .ConfigureAwait(false);
                             if (early is { } e)
                             {
                                 earlyObserver = e.Observer;   // 完成等待交给观察委托（受理与完成分离）
@@ -271,7 +278,8 @@ public class CommandExecutor
                 CompletionObserver = async ct => earlyObserver is { } observer
                     ? await observer(ct).ConfigureAwait(false)
                     : null,
-            }, CancellationToken.None).ConfigureAwait(false);
+            };
+            outcome = await admit(admissionRequest, CancellationToken.None).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -1073,7 +1081,7 @@ public class CommandExecutor
         ChannelUnavailable,
         /// <summary>确定未受理（对端副作用前拒绝：queue_full／协调器不可用／合同校验）。</summary>
         Rejected,
-        /// <summary>幂等命中（同 generation+name 已执行）：**等同 executed，不产生第二次执行**。</summary>
+        /// <summary>幂等命中（同 generation+name 已执行）：区分于本轮新入队，可附带已有任务句柄。</summary>
         AlreadyExecuted,
         /// <summary>受理回执缺句柄（协议违例）：受理与否不可考，禁止换通道重发。</summary>
         MissingHandle,
@@ -1108,7 +1116,9 @@ public class CommandExecutor
         string? Detail = null,
         DateTimeOffset? ObservedAtUtc = null,
         Task<QueueTerminalObservation>? Observation = null,
-        ExternalStartReply? Reply = null);
+        ExternalStartReply? Reply = null,
+        CancellationTokenSource? ObservationCancellation = null,
+        bool ProvenNotSent = false);
 
     /// <summary>
     /// **完成观察结论**（单一等待实现的事实投影，§24.7-3）：由两个映射器分别投影到
@@ -1134,7 +1144,8 @@ public class CommandExecutor
     /// </summary>
     private async Task<QueueStartEarly> TryStartViaQueueEarlyAsync(
         BgiExternalClient ext, string? groupName, string? configName, int startFromIndex, int generation,
-        string? batchGroupNames = null, string? startFromTaskId = null, CancellationToken cancellationToken = default)
+        string? batchGroupNames = null, string? startFromTaskId = null, CancellationToken cancellationToken = default,
+        CancellationToken hostLifetimeToken = default, bool forAdmission = false)
     {
         var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
         if (ext is not { State: BgiExternalLinkState.Ready }
@@ -1159,11 +1170,28 @@ public class CommandExecutor
         {
             // 发送后断线/超时不等于未执行：保留未知结果，不做第二次启动。
             waiter.Dispose();
+            var failure = ClassifyQueueSubmitFailure(ex);
+            if (failure.Kind == QueueStartEarlyKind.Rejected)
+            {
+                ProbeLog($"[CommandExecutor] 队列通道在写入前拒绝 {desc}: {failure.ReasonCode}");
+                return failure;
+            }
             ProbeLog($"[CommandExecutor] 队列提交/等待结果未知，禁止跨通道重发 {desc}: {ex.Message}");
-            return new QueueStartEarly(QueueStartEarlyKind.Unknown, Detail: ex.Message);
+            return failure;
         }
 
         var classified = ClassifyQueueSubmitEarly(submit, desc, generation, DateTimeOffset.UtcNow);
+        if (forAdmission)
+        {
+            classified = PrepareQueueEarlyForAdmission(classified);
+        }
+        else if (classified.Kind == QueueStartEarlyKind.AlreadyExecuted)
+        {
+            // Keep the unconnected legacy response path unchanged; it does not adopt a handle-less result as admission.
+            waiter.Dispose();
+            return classified;
+        }
+
         if (classified.Kind != QueueStartEarlyKind.Accepted)
         {
             waiter.Dispose();
@@ -1171,19 +1199,49 @@ public class CommandExecutor
         }
 
         // 已受理：等待器所有权转交观察段（观察段在自己的 `finally` 释放；等待器已先于提交建立）。
-        var observation = ObserveQueueTerminalAsync(ext, waiter, classified.TaskHandle!, desc, CancellationToken.None);
+        var observationCancellation = CreateObservationCancellation(forAdmission, cancellationToken, hostLifetimeToken);
+        var observationToken = observationCancellation?.Token ?? cancellationToken;
+        var observation = ObserveQueueTerminalAsync(ext, waiter, classified.TaskHandle!, desc, observationToken);
+        if (observationCancellation is not null)
+        {
+            _ = observation.ContinueWith(
+                _ => observationCancellation.Dispose(),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
         return classified with
         {
             Observation = observation,
             Reply = new ExternalStartReply.EarlyAccepted(classified.TaskHandle!, MapObservationTaskAsync(observation)),
+            ObservationCancellation = observationCancellation,
         };
     }
 
+    internal static CancellationTokenSource? CreateObservationCancellation(
+        bool forAdmission, CancellationToken sendToken, CancellationToken hostLifetimeToken)
+    {
+        if (forAdmission)
+        {
+            // The host owns observation after an early receipt; later cancellation of the send phase
+            // must not stop terminal evidence collection. If no host token was supplied, use a
+            // noncancelable linked token rather than falling back to the send token.
+            return CancellationTokenSource.CreateLinkedTokenSource(hostLifetimeToken);
+        }
+
+        return !forAdmission && sendToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(sendToken)
+            : null;
+    }
+
+    internal static CancellationToken ResolveObservationHostLifetimeToken(ExternalStartAdmissionRequest? request)
+        => request?.HostLifetimeToken ?? CancellationToken.None;
+
     /// <summary>
     /// **早期受理段分类（纯函数，内部可见供夹具驱动）**：把一次 `ext.task.start` 回执分类为早期结论。
-    /// 依据 R4 既有口径（`BgiWorkflowTerminalExecutor`／`BgiWorkflowPrerequisiteAdapter`）：
-    /// 副作用前拒绝＝**确定未受理**；缺句柄＝协议违例（不可考）；`already_executed`＝**等同 executed**
-    /// （幂等命中，不产生第二次执行）。探针文案与拆分前逐字一致。
+    /// 副作用前拒绝＝**确定未受理**；缺/空白句柄＝协议违例（不可考）；`already_executed` 保留为独立幂等结论，
+    /// 可携带 BGI 给出的既有句柄。旧直启投影保留既有成功文案；新准入路径只把带句柄的结论转入句柄观察，
+    /// 无句柄时映射 Unknown 并保留责任。探针文案与拆分前逐字一致。
     /// </summary>
     internal static QueueStartEarly ClassifyQueueSubmitEarly(
         BgiTaskSubmitResult submit, string desc, int generation, DateTimeOffset observedAtUtc)
@@ -1197,12 +1255,17 @@ public class CommandExecutor
 
         if (submit.Status == "already_executed")
         {
-            // 与 v2 路径一致：幂等命中按成功处理（同 generation+name 已执行过）
-            ProbeLog($"[CommandExecutor][切片7] ext.task.start 幂等命中 already_executed {desc} generation={generation}");
-            return new QueueStartEarly(QueueStartEarlyKind.AlreadyExecuted, ObservedAtUtc: observedAtUtc);
+            ProbeLog(string.IsNullOrWhiteSpace(submit.TaskHandle)
+                ? $"[CommandExecutor][切片7] ext.task.start 幂等回执缺少 taskHandle {desc} generation={generation}"
+                : $"[CommandExecutor][切片7] ext.task.start 幂等命中已有编号 {desc} taskHandle={submit.TaskHandle}");
+            return new QueueStartEarly(QueueStartEarlyKind.AlreadyExecuted,
+                TaskHandle: submit.TaskHandle,
+                Detail: string.IsNullOrWhiteSpace(submit.TaskHandle)
+                    ? "already_executed 回执未返回 taskHandle，不能按本轮编号提交确认"
+                    : null);
         }
 
-        if (string.IsNullOrEmpty(submit.TaskHandle))
+        if (string.IsNullOrWhiteSpace(submit.TaskHandle))
         {
             // 畸形响应（queued/adopted 但无句柄）：受理结果未知，禁止换通道重发，
             // 避免 null 句柄穿透 WaitForHandleAsync（ArgumentNullException 不在 catch 过滤器内）
@@ -1212,6 +1275,18 @@ public class CommandExecutor
 
         ProbeLog($"[CommandExecutor][切片7] ext.task.start 已入队 {desc} status={submit.Status} taskHandle={submit.TaskHandle} queuePosition={submit.QueuePosition}");
         return new QueueStartEarly(QueueStartEarlyKind.Accepted, TaskHandle: submit.TaskHandle);
+    }
+
+    /// <summary>
+    /// Admission uses an already-executed idempotency response only when BGI supplies its authoritative task handle;
+    /// the legacy projection keeps the distinct AlreadyExecuted classification and its existing wording.
+    /// </summary>
+    internal static QueueStartEarly PrepareQueueEarlyForAdmission(QueueStartEarly early)
+    {
+        if (early.Kind != QueueStartEarlyKind.AlreadyExecuted) return early;
+        return string.IsNullOrWhiteSpace(early.TaskHandle)
+            ? early
+            : early with { Kind = QueueStartEarlyKind.Accepted };
     }
 
     /// <summary>
@@ -1260,7 +1335,7 @@ public class CommandExecutor
                 BgiTaskQueueStatus? queueStatus = null;
                 try
                 {
-                    queueStatus = await ext.QueryTaskQueueStatusAsync(taskHandle).ConfigureAwait(false);
+                    queueStatus = await ext.QueryTaskQueueStatusAsync(taskHandle, ct).ConfigureAwait(false);
                 }
                 catch (Exception pollEx) when (IsQueueTransportFault(pollEx))
                 {
@@ -1379,15 +1454,15 @@ public class CommandExecutor
                     early.ReasonCode ?? "external_rejected",
                     // §24.2-2″：只有**无损拒绝类**（可证明未入队/未占用副作用）才开重试窗口；
                     // 其余错误码按**终局拒绝**（`retryable=false`，默认保守方向）。
-                    retryable: IsRetryableQueueRejection(early.ReasonCode),
+                    retryable: early.ProvenNotSent || IsRetryableQueueRejection(early.ReasonCode),
                     evidenceSource: "ext:task.queue"),
                 null),
-            // 幂等命中：R4 既有口径「等同 executed，不产生第二次执行」
-            // （`BgiWorkflowTerminalExecutor`／`BgiWorkflowPrerequisiteAdapter`）——完成层给权威终态。
+            // 新准入合同只接受带真实句柄的回执；无句柄的 legacy 幂等事实保留责任并禁止重发。
             QueueStartEarlyKind.AlreadyExecuted => (
-                ExternalStartExecution.AcceptedWith(null, "ext:idempotency"),
-                _ => Task.FromResult<ExternalStartCompletion?>(ExternalStartCompletion.SucceededWith(
-                    "already_executed", "ext:idempotency", early.ObservedAtUtc ?? DateTimeOffset.UtcNow))),
+                ExternalStartExecution.UnknownWith(
+                    early.Detail ?? "already_executed 回执缺少 taskHandle：结果未知、保留责任且不重发",
+                    "ext:idempotency"),
+                null),
             QueueStartEarlyKind.MissingHandle => (
                 ExternalStartExecution.UnknownWith(
                     $"ext.task.start 受理回执缺 taskHandle（status={early.Detail ?? "unknown"}）：受理与否不可考、禁止换通道重发",
@@ -1401,23 +1476,31 @@ public class CommandExecutor
             _ => (
                 ExternalStartExecution.AcceptedWith(early.TaskHandle, "ext:task.queue"),
                 early.Reply is ExternalStartReply.EarlyAccepted accepted
-                    ? _ => AwaitCompletionTaskAsync(accepted.CompletionTask)
+                    ? ct => AwaitCompletionTaskAsync(accepted.CompletionTask, ct)
                     : null),
         };
 
-    private static async Task<ExternalStartCompletion?> AwaitCompletionTaskAsync(Task<ExternalStartCompletion> task)
-        => await task.ConfigureAwait(false);
+    private static async Task<ExternalStartCompletion?> AwaitCompletionTaskAsync(
+        Task<ExternalStartCompletion> task, CancellationToken ct)
+        // Cancelling this wait must not cancel the underlying evidence task, which owns a separate
+        // host-lifetime token. This lets callers stop waiting while evidence collection continues.
+        => await task.WaitAsync(ct).ConfigureAwait(false);
 
     /// <summary>
     /// **队列通道「副作用前拒绝」的可重试白名单**（§24.2-2″／§24.11 第 3′ 行）：
     /// 只有**无损拒绝类**（队列满／执行中占用／任务槽繁忙）才开重试窗口；**未列入者一律 `retryable=false`**
     /// （终局拒绝，保守方向——不得让「可能已产生副作用」的失败进入可重试分类）。
-    /// 依据（BGI 侧现状，`ExternalInterfaceCommandPlane.DispatchTaskStart`）：队列通道的非受理失败只有
-    /// `queue_full`（副作用前，未入队）；`Unavailable` 由 BGI 回退 v2 处理，其业务拒绝（`task_already_running` 等）
-    /// 同为副作用前拒绝。新增错误码默认终局拒绝。
+    /// 依据（BGI 侧现状，`ExternalInterfaceCommandPlane.DispatchTaskStart`）：队列满与协调器不可用均在入队前明确拒绝；
+    /// `task_already_running` 等业务拒绝也不产生新队列项。新增错误码默认终局拒绝。
     /// </summary>
     internal static bool IsRetryableQueueRejection(string? errorCode)
-        => errorCode is "queue_full" or "task_already_running" or "task_busy" or "execution_occupied";
+        => errorCode is "queue_full" or "queue_unavailable" or "task_already_running" or "task_busy" or "execution_occupied";
+
+    internal static QueueStartEarly ClassifyQueueSubmitFailure(Exception exception)
+        => exception is BgiNotSentException notSent
+            ? new QueueStartEarly(QueueStartEarlyKind.Rejected, ReasonCode: notSent.EvidenceCode,
+                Detail: notSent.Message, ProvenNotSent: true)
+            : new QueueStartEarly(QueueStartEarlyKind.Unknown, Detail: exception.Message);
 
     /// <summary>
     /// **接线态早期段入口**：新版生产合同只用带句柄的队列通道；通道不可用＝可证实未发送，
@@ -1426,13 +1509,14 @@ public class CommandExecutor
     private async Task<(ExternalStartExecution Early, Func<CancellationToken, Task<ExternalStartCompletion?>>? Observer)?>
         TryStartViaQueueEarlyForAdmissionAsync(
             string? groupName, string? configName, int startFromIndex, int generation,
-            string? batchGroupNames, string? startFromTaskId, CancellationToken cancellationToken)
+            string? batchGroupNames, string? startFromTaskId, CancellationToken cancellationToken,
+            CancellationToken hostLifetimeToken)
     {
         var ext = _externalClientProvider?.Invoke();
         if (ext is null)
             return (ExternalStartExecution.RejectedWith("task_queue_unavailable", evidenceSource: "adapter:queue_precheck"), null);
         var early = await TryStartViaQueueEarlyAsync(ext, groupName, configName, startFromIndex, generation,
-            batchGroupNames, startFromTaskId, cancellationToken).ConfigureAwait(false);
+            batchGroupNames, startFromTaskId, cancellationToken, hostLifetimeToken, forAdmission: true).ConfigureAwait(false);
         if (early.Kind == QueueStartEarlyKind.ChannelUnavailable)
             return (ExternalStartExecution.RejectedWith("task_queue_unavailable", evidenceSource: "adapter:queue_precheck"), null);
         return MapQueueEarlyToAdmission(early);
@@ -2412,8 +2496,8 @@ public class CommandExecutor
     }
 
     /// <summary>
-    /// [任务冲突策略] RunSpecified 收尾：校验指定配置组/一条龙存在后 v2 task.start 启动。
-    /// 名称不存在（或 config.list 查询失败）则日志报错退化为停止；启动失败不杀进程。
+    /// [任务冲突策略] RunSpecified 收尾：校验指定配置组/一条龙存在后，经 R5 准入和带编号队列启动。
+    /// 名称不存在（或 config.list 查询失败）则日志报错退化为停止；准入未接线时 fail-closed，不回退 v2 task.start。
     /// </summary>
     private async Task StartSpecifiedTaskAsync(TaskConflictPolicySettings policy, Action<string>? log)
     {
@@ -2451,7 +2535,62 @@ public class CommandExecutor
         }
 
         log?.Invoke($"[任务冲突策略] 按策略启动指定{typeDesc}「{name}」");
-        var startResult = await StartViaV2IpcNoKillAsync(isOneDragon ? null : name, isOneDragon ? name : null, 0, 0);
+        var startResult = await StartSpecifiedTaskViaAdmissionAsync(policy).ConfigureAwait(false);
         log?.Invoke($"[任务冲突策略] 指定{typeDesc}「{name}」: {startResult.Message}");
+    }
+
+    /// <summary>
+    /// S4b 的普通优先级准入边界。配置清单预检由调用方完成；本方法仅在已注入 R5 准入委托时创建候选，
+    /// 并且 earlyStart 任何异常/通道不可用都形成拒绝或 Unknown，绝不落到无编号 core 直启。
+    /// internal 供适配器边界夹具验证身份和排序字段，不访问真实 BGI。
+    /// </summary>
+    internal Task<CommandResult> StartSpecifiedTaskViaAdmissionAsync(TaskConflictPolicySettings policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        if (_externalStartAdmission is null)
+        {
+            return Task.FromResult(new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = "r5_external_start_admission_unwired",
+                Message = "R5 外部启动准入尚未开放；指定任务未发送，也未回退到旧通道。",
+            });
+        }
+
+        var isOneDragon = string.Equals(policy.SpecifiedTaskType, "onedragon", StringComparison.Ordinal);
+        var name = policy.SpecifiedTaskName?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return Task.FromResult(new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = "specified_task_missing",
+                Message = "未配置指定任务；本次没有发送。",
+            });
+        }
+
+        var workflowId = (isOneDragon ? "onedragon:" : "group:") + name;
+        var target = $"指定{(isOneDragon ? "一条龙" : "配置组")}「{name}」";
+        return StartViaAdmissionAsync(_externalStartAdmission,
+            ns: "system",
+            workflowId: workflowId,
+            trigger: "system:post-hoeing:{requestIdentity}",
+            sourceDetail: "system:post-hoeing",
+            target: target,
+            core: () => throw new InvalidOperationException("S4b 必须使用带编号队列通道；禁止进入 core 直启。"),
+            earlyStart: async (sendToken, hostToken) =>
+                await TryStartViaQueueEarlyForAdmissionAsync(
+                    isOneDragon ? null : name,
+                    isOneDragon ? name : null,
+                    startFromIndex: 0,
+                    generation: 0,
+                    batchGroupNames: null,
+                    startFromTaskId: null,
+                    sendToken,
+                    hostToken).ConfigureAwait(false)
+                ?? (ExternalStartExecution.RejectedWith("numbered_channel_required",
+                        evidenceSource: "adapter:queue_required"), null),
+            tier: ArbitrationTier.Plan,
+            priority: policy.SpecifiedTaskPriority);
     }
 }

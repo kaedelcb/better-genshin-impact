@@ -36,7 +36,9 @@ public class TaskCenterExternalStartAdmissionTests
 
     private static ExternalStartAdmissionRequest Request(Func<System.Threading.CancellationToken, Task<ExternalStartExecution>> execute,
         string ns = "v2", Func<ExternalStartCompletion?>? completion = null,
-        Func<System.Threading.CancellationToken, Task<ExternalStartCompletion?>>? observer = null)
+        Func<System.Threading.CancellationToken, Task<ExternalStartCompletion?>>? observer = null,
+        ArbitrationTier tier = ArbitrationTier.Plan, int priority = 0,
+        DateTimeOffset? scheduledAt = null)
         => new()
         {
             Namespace = ns,
@@ -44,6 +46,9 @@ public class TaskCenterExternalStartAdmissionTests
             TriggerOccurrenceId = ns + ":remote:{requestIdentity}",
             ResourceRef = "group:测试组",
             SourceDetail = "fixture:external_start",
+            Tier = tier,
+            Priority = priority,
+            ScheduledAt = scheduledAt,
             ExecuteAsync = execute,
             CompletionProvider = completion,
             CompletionObserver = observer,
@@ -54,6 +59,31 @@ public class TaskCenterExternalStartAdmissionTests
 
     private static SubmissionRecord? ReadSubmission(string root)
         => new ArbitrationLeaseStore(Path.Combine(root, "arbitration")).Read().File?.Handoff?.Submission;
+
+    [Fact]
+    public async Task ExternalStart_TrustedTierAndPriority_AreFrozenIntoCandidate()
+    {
+        var root = NewRoot();
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            var result = await host.SubmitExternalStartViaAdmissionAsync(
+                Request(_ => Task.FromResult(ExternalStartExecution.RejectedWith("fixture_stop")),
+                    ns: "system", tier: ArbitrationTier.Fixed, priority: 17,
+                    scheduledAt: DateTimeOffset.Parse("2026-09-23T10:00:00+08:00")), default);
+
+            Assert.Equal(AdmissionResultKind.TerminalRejected, result.Kind);
+            var op = Assert.Single(Ops(root));
+            Assert.Equal(ArbitrationTier.Fixed, op.Candidate!.Tier);
+            Assert.Equal(17, op.Candidate.Priority);
+            Assert.Equal(DateTimeOffset.Parse("2026-09-23T10:00:00+08:00"), op.Candidate.ScheduledAt);
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
 
     [Fact]
     public async Task ExternalStart_Accepted_ExecutesOnce_RecordsLedger_ClosesSubmission()
@@ -88,7 +118,7 @@ public class TaskCenterExternalStartAdmissionTests
             Assert.Equal("group:测试组", entry.ResourceRef);
             Assert.Equal("9:900", entry.TargetBgiEpoch);
             Assert.Equal(LedgerEntryState.AcceptedPendingExecution, entry.State);
-            Assert.True(new ExternalStartLedger(root).ConfirmRebuildable(entry.SubmissionIdentity, entry.SendSeq));
+            Assert.True(new ExternalStartLedger(root).ConfirmRebuildable(entry));
             await host.ShutdownAsync(); // 显式关闭（释放心跳/门面生命周期）
         }
         finally
@@ -128,6 +158,164 @@ public class TaskCenterExternalStartAdmissionTests
         }
         finally
         {
+            TryDelete(root);
+        }
+    }
+
+    [Fact]
+    public async Task ExternalStart_HostShutdownDuringCompletionObservation_CancelsObserver_KeepsUnknownResponsibility()
+    {
+        var root = NewRoot();
+        var observerStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sends = 0;
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            var pending = host.AdmitExternalStartAsync(Request(
+                _ =>
+                {
+                    System.Threading.Interlocked.Increment(ref sends);
+                    return Task.FromResult(ExternalStartExecution.AcceptedWith("job-observe-shutdown"));
+                },
+                observer: async ct =>
+                {
+                    observerStarted.TrySetResult();
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                    return null;
+                }), default);
+
+            await observerStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await host.ShutdownAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            var result = await pending.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(1, sends);
+            Assert.Equal(ExternalStartAdmissionStatus.NeedReconcile, result.Status);
+            Assert.Equal(ResponsibilityState.Pending, result.ResponsibilityState);
+            var ledgerEntry = new ExternalStartLedger(root).Read().File!.Entries.Single();
+            Assert.Equal("job-observe-shutdown", ledgerEntry.JobId);
+            Assert.Equal(LedgerEntryState.AcceptedPendingExecution, ledgerEntry.State);
+            Assert.Null(Ops(root).Single().ExecutionResult);
+            Assert.Null(ReadSubmission(root));
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    [Fact]
+    public async Task StaleOwner_AppendsLateAcceptedTerminalToOriginalRound_WithoutFinalizingOperation()
+    {
+        var root = NewRoot();
+        var sendStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSend = new TaskCompletionSource<ExternalStartExecution>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var observerStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseObserver = new TaskCompletionSource<ExternalStartCompletion?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sends = 0;
+        TaskCenterHost? staleOwner = null;
+        TaskCenterHost? currentOwner = null;
+        TaskCenterHost? recoveryOwner = null;
+        try
+        {
+            staleOwner = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            var staleAttempt = staleOwner.AdmitExternalStartAsync(Request(
+                _ =>
+                {
+                    System.Threading.Interlocked.Increment(ref sends);
+                    sendStarted.TrySetResult();
+                    return releaseSend.Task;
+                },
+                observer: async _ =>
+                {
+                    observerStarted.TrySetResult();
+                    return await releaseObserver.Task;
+                }));
+            await sendStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var inFlight = Assert.IsType<SubmissionRecord>(ReadSubmission(root));
+            var requestIdentity = Assert.Single(Ops(root)).RequestIdentity;
+
+            // Simulate the old process leaving while its transport call is still waiting on a late response.
+            await staleOwner.ShutdownAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            currentOwner = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:901" });
+            var takeover = await currentOwner.AdmitExternalStartAsync(new ExternalStartAdmissionRequest
+            {
+                RequestIdentity = requestIdentity,
+                Namespace = "v2",
+                WorkflowId = "group:测试组",
+                TriggerOccurrenceId = "v2:remote:{requestIdentity}",
+                ResourceRef = "group:测试组",
+                SourceDetail = "fixture:takeover_reconcile",
+                ExecuteAsync = _ =>
+                {
+                    System.Threading.Interlocked.Increment(ref sends);
+                    return Task.FromResult(ExternalStartExecution.AcceptedWith("must-not-resend"));
+                },
+            });
+            Assert.NotEqual(ExternalStartAdmissionStatus.Accepted, takeover.Status);
+            Assert.Equal(1, System.Threading.Volatile.Read(ref sends));
+
+            releaseSend.TrySetResult(ExternalStartExecution.AcceptedWith("job-old-round", "ext:task.queue"));
+            await observerStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var acceptedReceipt = Assert.Single(new ExternalStartLedger(root).Read().File!.Entries);
+            Assert.Equal(inFlight.SubmissionIdentity, acceptedReceipt.SubmissionIdentity);
+            Assert.Equal(inFlight.SendSeq, acceptedReceipt.SendSeq);
+            Assert.Equal(LedgerEntryState.AcceptedPendingExecution, acceptedReceipt.State);
+            Assert.Equal("job-old-round", acceptedReceipt.JobId);
+
+            var terminalAt = DateTimeOffset.UtcNow;
+            releaseObserver.TrySetResult(ExternalStartCompletion.SucceededWith(
+                "completed", "ext:task.event", terminalAt, "job-old-round"));
+            var staleResult = await staleAttempt.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(ResponsibilityState.Pending, staleResult.ResponsibilityState);
+            Assert.Equal(1, System.Threading.Volatile.Read(ref sends));
+            var ledgerTerminal = Assert.Single(new ExternalStartLedger(root).Read().File!.Entries);
+            Assert.Equal(LedgerEntryState.Terminal, ledgerTerminal.State);
+            Assert.Equal(ExecutionResultKind.Succeeded, ledgerTerminal.TerminalKind);
+            Assert.Equal("completed", ledgerTerminal.RawTerminal);
+            Assert.Equal(terminalAt, ledgerTerminal.TerminalObservedAtUtc);
+
+            var operation = Assert.Single(Ops(root));
+            Assert.Equal(inFlight.SendSeq, operation.LastSendSeq);
+            Assert.NotEqual(OperationRequestState.TerminalCompleted, operation.RequestState);
+            Assert.Null(operation.ExecutionResult);
+            Assert.Null(operation.PendingTerminal);
+
+            await currentOwner.ShutdownAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            currentOwner = null;
+            recoveryOwner = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:902" });
+            await recoveryOwner.AdmitExternalStartAsync(new ExternalStartAdmissionRequest
+            {
+                RequestIdentity = requestIdentity,
+                Namespace = "v2",
+                WorkflowId = "group:测试组",
+                TriggerOccurrenceId = "v2:remote:{requestIdentity}",
+                ResourceRef = "group:测试组",
+                SourceDetail = "fixture:recover_late_terminal",
+                ExecuteAsync = _ =>
+                {
+                    System.Threading.Interlocked.Increment(ref sends);
+                    return Task.FromResult(ExternalStartExecution.AcceptedWith("must-not-resend"));
+                },
+            });
+
+            var recovered = Assert.Single(Ops(root));
+            Assert.Equal(OperationRequestState.TerminalCompleted, recovered.RequestState);
+            Assert.True(recovered.Zone is OperationZone.TerminalPendingTransfer or OperationZone.Tombstone);
+            Assert.Equal("job-old-round", recovered.ExecutionResult!.JobId);
+            Assert.Equal(inFlight.SubmissionIdentity, recovered.ExecutionResult.SubmissionIdentity);
+            Assert.Equal(inFlight.SendSeq, recovered.ExecutionResult.SendSeq);
+            Assert.Equal(1, System.Threading.Volatile.Read(ref sends));
+            Assert.Null(ReadSubmission(root));
+        }
+        finally
+        {
+            releaseSend.TrySetResult(ExternalStartExecution.AcceptedWith("job-old-round", "ext:task.queue"));
+            releaseObserver.TrySetResult(ExternalStartCompletion.SucceededWith(
+                "completed", "ext:task.event", DateTimeOffset.UtcNow, "job-old-round"));
+            if (currentOwner is not null) await currentOwner.ShutdownAsync();
+            if (recoveryOwner is not null) await recoveryOwner.ShutdownAsync();
+            if (staleOwner is not null) await staleOwner.ShutdownAsync();
             TryDelete(root);
         }
     }
@@ -445,6 +633,110 @@ public class TaskCenterExternalStartAdmissionTests
     }
 
     [Fact]
+    public async Task ExternalStart_AlreadyExecutedWithoutHandle_KeepsSubmissionUnknown_AndNeverResends()
+    {
+        var root = NewRoot();
+        var sends = 0;
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            var early = CommandExecutor.ClassifyQueueSubmitEarly(
+                new BgiTaskSubmitResult { Success = true, Status = "already_executed" },
+                "配置组「测试组」", 1, DateTimeOffset.UtcNow);
+            var mapped = CommandExecutor.MapQueueEarlyToAdmission(early);
+
+            var first = await host.AdmitExternalStartAsync(Request(_ =>
+            {
+                System.Threading.Interlocked.Increment(ref sends);
+                return Task.FromResult(mapped.Early);
+            }), default);
+
+            Assert.Equal(ExternalStartAdmissionStatus.NeedReconcile, first.Status);
+            Assert.Equal(ResponsibilityState.Pending, first.ResponsibilityState);
+            var originalSubmission = Assert.IsType<SubmissionRecord>(ReadSubmission(root));
+            Assert.Equal(SubmissionState.Reconciling, originalSubmission.State);
+            Assert.Equal(1, originalSubmission.SendSeq);
+            var originalOperation = Ops(root).Single();
+            Assert.Equal(originalSubmission.SendSeq, originalOperation.LastSendSeq);
+            Assert.Equal(originalSubmission.SubmissionIdentity, originalOperation.SubmissionIdentity);
+            Assert.Empty(new ExternalStartLedger(root).Read().File?.Entries ?? []);
+            Assert.Equal(1, sends);
+
+            var repeated = await host.AdmitExternalStartAsync(Request(_ =>
+            {
+                System.Threading.Interlocked.Increment(ref sends);
+                return Task.FromResult(ExternalStartExecution.AcceptedWith("must-not-send"));
+            }), default);
+
+            Assert.Equal(ExternalStartAdmissionStatus.Rejected, repeated.Status);
+            Assert.Equal("submission_conflict", repeated.Code);
+            Assert.Equal(1, sends);
+            var stillPending = Assert.IsType<SubmissionRecord>(ReadSubmission(root));
+            Assert.Equal(SubmissionState.Reconciling, stillPending.State);
+            Assert.Equal(originalSubmission.SubmissionIdentity, stillPending.SubmissionIdentity);
+            Assert.Equal(originalSubmission.SendSeq, stillPending.SendSeq);
+            Assert.Equal(originalOperation.LastSendSeq,
+                Ops(root).Single(o => o.SubmissionIdentity == originalSubmission.SubmissionIdentity).LastSendSeq);
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    [Fact]
+    public async Task ExternalStart_AlreadyExecutedWithHandle_ObservesAndSettlesExistingNumberedJob()
+    {
+        var root = NewRoot();
+        var sends = 0;
+        try
+        {
+            var host = NewHost(root, new TaskCenterAdmissionSeams { Epoch = "9:900" });
+            var early = CommandExecutor.ClassifyQueueSubmitEarly(
+                new BgiTaskSubmitResult { Success = true, Status = "already_executed", TaskHandle = "job-existing" },
+                "配置组「测试组」", 1, DateTimeOffset.UtcNow);
+            var prepared = CommandExecutor.PrepareQueueEarlyForAdmission(early);
+            Assert.Equal(CommandExecutor.QueueStartEarlyKind.Accepted, prepared.Kind);
+            Assert.Equal("job-existing", prepared.TaskHandle);
+
+            var observedAt = DateTimeOffset.UtcNow;
+            var observation = Task.FromResult(new CommandExecutor.QueueTerminalObservation(
+                CommandExecutor.QueueTerminalSource.Event, "completed", false, null, null,
+                "job-existing", false, null, observedAt));
+            prepared = prepared with
+            {
+                Observation = observation,
+                Reply = new ExternalStartReply.EarlyAccepted(
+                    "job-existing", CommandExecutor.MapObservationTaskAsync(observation)),
+            };
+            var mapped = CommandExecutor.MapQueueEarlyToAdmission(prepared);
+            Assert.Equal(ExternalStartExecutionKind.Accepted, mapped.Early.Kind);
+            Assert.Equal("job-existing", mapped.Early.JobId);
+            Assert.NotNull(mapped.Observer);
+
+            var outcome = await host.AdmitExternalStartAsync(Request(_ =>
+            {
+                System.Threading.Interlocked.Increment(ref sends);
+                return Task.FromResult(mapped.Early);
+            }, observer: mapped.Observer), default);
+
+            Assert.Equal(ResponsibilityState.Settled, outcome.ResponsibilityState);
+            Assert.Equal("job-existing", outcome.JobId);
+            Assert.Equal(1, sends);
+            var ledger = new ExternalStartLedger(root).Read();
+            Assert.True(ledger.Valid);
+            Assert.Equal(LedgerEntryState.Terminal, Assert.Single(ledger.File!.Entries).State);
+            Assert.Contains(Ops(root), o => o.RequestState == OperationRequestState.TerminalCompleted);
+            await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    [Fact]
     public async Task ExternalStart_NoCompletionProvider_KeepsAcceptedPending()
     {
         var root = NewRoot();
@@ -694,6 +986,97 @@ public class TaskCenterExternalStartAdmissionTests
             Assert.Equal(ExternalStartAdmissionStatus.Accepted, first.Status);
             Assert.Equal(ResponsibilityState.Settled, first.ResponsibilityState);
             await host.ShutdownAsync();
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    [Fact]
+    public void ExternalStartLedger_RejectsCandidateThatWouldDuplicateJobIdAcrossRounds()
+    {
+        var root = NewRoot();
+        try
+        {
+            var ledger = new ExternalStartLedger(root);
+            ExternalStartLedgerEntry Entry(string identity) => new()
+            {
+                SubmissionIdentity = identity,
+                SendSeq = 1,
+                CandidateId = "candidate:" + identity,
+                ResourceRef = "group:测试组",
+                ActionId = "action:" + identity,
+                TargetBgiEpoch = "9:900",
+                AcceptedAtUtc = DateTimeOffset.UtcNow,
+                EvidenceSource = "fixture:accepted",
+                State = LedgerEntryState.AcceptedPendingExecution,
+                JobId = "same-remote-job",
+                OperationType = OperationType.ExternalStart,
+            };
+
+            Assert.True(ledger.RecordAccepted(Entry("sub:round-one:1")).Success);
+            var revision = ledger.Read().File!.Revision;
+            var duplicate = ledger.RecordAccepted(Entry("sub:round-two:1"));
+
+            Assert.False(duplicate.Success);
+            Assert.Equal("invalid_mutation_state", duplicate.Reason);
+            var read = ledger.Read();
+            Assert.True(read.Valid, read.Detail);
+            Assert.Equal(revision, read.File!.Revision);
+            Assert.Equal("sub:round-one:1", Assert.Single(read.File.Entries).SubmissionIdentity);
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    [Fact]
+    public void ExternalStartLedger_LateReceiptReplayPreservesFirstObservationAndEnrichesHandle()
+    {
+        var root = NewRoot();
+        try
+        {
+            var ledger = new ExternalStartLedger(root);
+            var firstAt = DateTimeOffset.UtcNow;
+            var first = new ExternalStartLedgerEntry
+            {
+                SubmissionIdentity = "sub:late-replay:1",
+                SendSeq = 1,
+                CandidateId = "candidate:late-replay",
+                ResourceRef = "group:测试组",
+                ActionId = "action:late-replay",
+                TargetBgiEpoch = "9:900",
+                AcceptedAtUtc = firstAt,
+                EvidenceSource = "sender:first-observation",
+                State = LedgerEntryState.AcceptedPendingExecution,
+                OperationType = OperationType.ExternalStart,
+            };
+            Assert.True(ledger.RecordLateAcceptedReceipt(first).Success);
+
+            var replay = new ExternalStartLedgerEntry
+            {
+                SubmissionIdentity = first.SubmissionIdentity,
+                SendSeq = first.SendSeq,
+                CandidateId = first.CandidateId,
+                ResourceRef = first.ResourceRef,
+                ActionId = first.ActionId,
+                TargetBgiEpoch = first.TargetBgiEpoch,
+                AcceptedAtUtc = firstAt.AddMinutes(1),
+                EvidenceSource = "recovery:second-observation",
+                State = LedgerEntryState.AcceptedPendingExecution,
+                RunId = "run-late-replay",
+                JobId = "job-late-replay",
+                OperationType = OperationType.ExternalStart,
+            };
+            Assert.True(ledger.RecordLateAcceptedReceipt(replay).Success);
+
+            var stored = Assert.Single(ledger.Read().File!.Entries);
+            Assert.Equal(firstAt, stored.AcceptedAtUtc);
+            Assert.Equal(first.EvidenceSource, stored.EvidenceSource);
+            Assert.Equal("run-late-replay", stored.RunId);
+            Assert.Equal("job-late-replay", stored.JobId);
         }
         finally
         {

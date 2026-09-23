@@ -140,6 +140,9 @@ public sealed class AdmissionResult
     public string? ExecutionErrorCode { get; set; }
     /// <summary>证据来源（原始回执词/对账结论+产生端）。</summary>
     public string? EvidenceSource { get; set; }
+    /// <summary>Internal owner proof captured when this sender was admitted; completion cannot borrow a later lease.</summary>
+    internal string? CapturedLeaseId { get; set; }
+    internal string? CapturedOwnerEpoch { get; set; }
 
     public static AdmissionResult Of(AdmissionResultKind kind, string reasonCode, string detail, string requestIdentity = "")
         => new() { Kind = kind, ReasonCode = reasonCode, Detail = detail, RequestIdentity = requestIdentity };
@@ -244,7 +247,14 @@ public sealed record TakeoverLedgerScan(bool Readable, IReadOnlyList<TakeoverLed
 /// **台账记录事实**（恢复扫描只需「完整发送身份 ＋ 是否已终态 ＋ 可查询句柄」；终态**载荷**一律以本地持久化的
 /// `PendingTerminal` 为准，不得按原始终态词猜类别）。`JobId` 供**持续观察/重新取证**使用（§24.5-2／§24.16-3）。
 /// </summary>
-public sealed record TakeoverLedgerFact(string SubmissionIdentity, int SendSeq, bool Terminal, string? JobId = null);
+public sealed record TakeoverLedgerFact(
+    string SubmissionIdentity, int SendSeq, bool Terminal, string? JobId = null,
+    bool AcceptedReceipt = false, string? EvidenceSource = null,
+    DateTimeOffset? AcceptedAtUtc = null, string? RunId = null,
+    OperationType OperationType = OperationType.Unknown,
+    string? TerminalEvidence = null, string? RawTerminal = null, string? ExecutionErrorCode = null,
+    DateTimeOffset? TerminalObservedAtUtc = null, string? TerminalEvidenceSource = null,
+    ExecutionResultKind? TerminalKind = null);
 
 /// <summary>**外部启动观察恢复报告**（R5.3 §24.12-3 集合②/③；[Batch B 收尾之五] 新增）。</summary>
 public sealed record ExternalStartRecoveryReport(
@@ -262,13 +272,27 @@ public sealed record ExternalStartRecoveryReport(
     /// <summary>观察责任重绑**写盘失败**原因（非 null ⇒ 本轮未落盘，责任仍保留、下轮再试）。</summary>
     string? ObservationRebindFailure = null,
     /// <summary>**扫描事实自相矛盾**的完整发送身份组数（同组终态标志矛盾或非空句柄不一致 ⇒ 整组不处理）。</summary>
-    int ScanFactConflicts = 0)
+    int ScanFactConflicts = 0,
+    /// <summary>从租约中的 durable acceptance claim 幂等续写并确认台账的笔数。</summary>
+    int AcceptanceClaimsReconciled = 0,
+    /// <summary>受理认领续写失败数；失败后 claim 仍保留且禁止重发。</summary>
+    int AcceptanceClaimFailures = 0,
+    string? AcceptanceClaimFailure = null,
+    /// <summary>从共享台账导入迟到 Accepted 回执并由当前所有者处理的笔数。</summary>
+    int AcceptanceReceiptsAdopted = 0,
+    /// <summary>旧发送轮 Accepted 回执被记录为冲突阻断的笔数。</summary>
+    int HistoricalAcceptanceReceiptsHeld = 0,
+    string? HistoricalAcceptanceTerminalFailure = null,
+    int HistoricalAcceptanceTerminalsFinalized = 0)
 {
     public bool AnythingReported =>
         LedgerUnreadable || ObservationKept > 0 || TerminalizationCompleted > 0 || TerminalizationFailed > 0
         || TerminalWithoutPendingTerminal > 0 || LeaseTerminalButLedgerOpen > 0 || OrphanLedgerEntries > 0
         || ConflictPendingSkipped > 0 || IncompletePendingPayload > 0 || ObservationRebound > 0
-        || ObservationRebindFailure is not null || ScanFactConflicts > 0;
+        || ObservationRebindFailure is not null || ScanFactConflicts > 0
+        || AcceptanceClaimsReconciled > 0 || AcceptanceClaimFailures > 0
+        || AcceptanceReceiptsAdopted > 0 || HistoricalAcceptanceReceiptsHeld > 0
+        || HistoricalAcceptanceTerminalFailure is not null || HistoricalAcceptanceTerminalsFinalized > 0;
 
     public override string ToString()
         => LedgerUnreadable
@@ -278,8 +302,12 @@ public sealed record ExternalStartRecoveryReport(
               + "；租约/台账终局不一致 " + LeaseTerminalButLedgerOpen + "；台账孤儿 " + OrphanLedgerEntries
               + "；冲突待决（归裁决入口） " + ConflictPendingSkipped + "；载荷不完整（不驱动终局） "
               + IncompletePendingPayload + "；观察责任重绑 " + ObservationRebound
+              + "；迟到受理回执接管 " + AcceptanceReceiptsAdopted
+              + "；旧轮受理回执冲突阻断 " + HistoricalAcceptanceReceiptsHeld
+              + "；旧轮 Accepted 终态结案 " + HistoricalAcceptanceTerminalsFinalized
               + (ObservationRebindFailure is null ? "" : "（本轮重绑未全部落盘：" + ObservationRebindFailure + "）")
-              + (ScanFactConflicts > 0 ? "；扫描事实自相矛盾组 " + ScanFactConflicts : "");
+              + (ScanFactConflicts > 0 ? "；扫描事实自相矛盾组 " + ScanFactConflicts : "")
+              + (HistoricalAcceptanceTerminalFailure is null ? "" : "；旧轮 Accepted 终态证据未落盘：" + HistoricalAcceptanceTerminalFailure);
 }
 
 /// <summary>
@@ -304,6 +332,12 @@ public sealed class AdmissionHooks
     /// 返回 null=已持久化且可跨重启重建；非 null=失败原因（Submission 保持未决，保守待对账）。
     /// </summary>
     public Func<ExternalStartLedgerEntry, Task<string?>> TakeoverPersist { get; set; } = _ => Task.FromResult<string?>("takeover_persist_not_configured");
+    /// <summary>Append an already-issued ExternalStart receipt by its immutable send-round identity, even after the operation advances.</summary>
+    public Func<ExternalStartLedgerEntry, Task<string?>> LateAcceptanceReceiptPersist { get; set; } = _ => Task.FromResult<string?>("late_acceptance_receipt_persist_not_configured");
+    /// <summary>Test seam immediately before durable acceptance claim publication.</summary>
+    public Func<Task> BeforeAcceptanceClaim { get; set; } = () => Task.CompletedTask;
+    /// <summary>Test seam between restart terminal classification and its owner-checked commit.</summary>
+    public Action? BeforeRestartTerminalPersist { get; set; }
     /// <summary>
     /// 台账权威终态交叉确认（MarkOperationTerminal 前置：关联 job 权威终态+台账一致才允许 Accepted→TerminalCompleted）。
     /// 未配置=一律不允许终局完成（保守）。
@@ -315,14 +349,14 @@ public sealed class AdmissionHooks
     /// 返回 `null`＝已提交（含幂等：同观察时点同载荷）；非 `null`＝失败原因 ⇒ 门面**保守停驻**（不继续后续步骤、不重发）。
     /// **仅外部启动操作**会走本钩子（其余类型不写外部台账）；未配置 ⇒ 门面按「终态回写钩子缺失」保守停驻。
     /// </summary>
-    public Func<string, int, string, DateTimeOffset, string?, string?, string?, string?, string?>? TakeoverTerminalPersist { get; set; }
+    public Func<string, int, string, DateTimeOffset, string?, string?, string?, string?, ExecutionResultKind, string?>? TakeoverTerminalPersist { get; set; }
     /// <summary>
     /// **台账终态载荷读回确认**（R5.3 §24.15 读回验证；[第二轮验证会诊阻断处置] 新增）：
     /// 台账回写失败/结果不明时，必须按**同一发送身份**读回并核对终态载荷（原始终态词／错误码／句柄／证据来源／观察时点）
     /// 是否与本次事实**逐字段等值**——仅「记录存在且为 Terminal」不足以判定本次提交成功。
     /// 未配置 ⇒ 门面按「未确认」保守停驻（不使用宽松布尔确认代替）。
     /// </summary>
-    public Func<string, int, string?, string?, string?, string?, DateTimeOffset, bool>? TakeoverTerminalPayloadConfirmed { get; set; }
+    public Func<string, int, string?, string?, string?, string?, DateTimeOffset, ExecutionResultKind, bool>? TakeoverTerminalPayloadConfirmed { get; set; }
     /// <summary>
     /// **台账已登记句柄读回**（R5.3 §24.3-3「一侧为空＝补齐」；[第四轮验证会诊] 新增；[第八轮] 改为三态）：
     /// 返回该 `submissionIdentity+sendSeq` 在接管台账中的**合并后权威句柄**及其**读取状态**——
@@ -358,16 +392,30 @@ public sealed class AdmissionBarriers
     public Func<Task>? BeforeRoundSnapshot { get; set; }
     /// <summary>入队完成后（锁外同步调用，须同步完成）——夹具计数收齐并发入队后放行 <see cref="BeforeRoundSnapshot"/>。</summary>
     public Func<Task>? AfterEnqueue { get; set; }
+    /// <summary>ContinueUse 已检查无在途处理者、准备原子预留同身份槽位前（并发续用/重试交错）。</summary>
+    public Func<Task>? AfterContinueInFlightCheck { get; set; }
+    /// <summary>RetryAsync 已原子预留同身份在途槽、加入队列前（用于验证并发重试者无法重复登记）。</summary>
+    public Func<Task>? AfterRetryReservation { get; set; }
+    /// <summary>轮次已结算、释放同身份在途槽之前（用于验证迟到重试按终局事实分类）。</summary>
+    public Func<Task>? BeforeInFlightRelease { get; set; }
     /// <summary>轮次快照后、裁决前。</summary>
     public Func<Task>? AfterRoundSnapshot { get; set; }
     /// <summary>占位发布前（锁内最终校验链在占位事务内复核——本屏障用于注入「校验后事实变化」反例）。</summary>
     public Func<Task>? BeforeOccupyPublish { get; set; }
+    /// <summary>重试窗口过期原子复核发布前（仅夹具，用于验证锁内时钟而非预筛时钟决定终局）。</summary>
+    public Action? BeforeRetryExpiryPublish { get; set; }
     /// <summary>占位发布后、锁外发送前。</summary>
     public Func<Task>? AfterOccupyBeforeSend { get; set; }
     /// <summary>受理后、台账接管持久化前。</summary>
     public Func<Task>? AfterAcceptBeforeLedger { get; set; }
     /// <summary>台账已持久化、Submission 关闭前。</summary>
     public Func<Task>? AfterLedgerBeforeClose { get; set; }
+    /// <summary>确定拒绝回执抵达、原子关闭 Submission 前（跨服务竞态反例）。</summary>
+    public Func<Task>? BeforeRejectedSubmissionClose { get; set; }
+    /// <summary>台账接管/句柄读取后、终态载体原子发布前（completion 与拒绝交错）。</summary>
+    public Func<Task>? BeforeTerminalCarrierStage { get; set; }
+    /// <summary>台账终态确认后、终态关闭事务前（completion 与冲突登记交错）。</summary>
+    public Func<Task>? BeforeTerminalFinalize { get; set; }
 }
 
 /// <summary>
@@ -384,7 +432,7 @@ public sealed class ArbitrationAdmissionService
     /// <summary>墓碑环形上限。</summary>
     public const int TombstoneLimit = 256;
     /// <summary>墓碑最短保留（重放安全：兼容重试预算窗口为秒级有界，24h 墓碑 ≫ 合法重放窗口）。</summary>
-    public static readonly TimeSpan TombstoneRetain = TimeSpan.FromHours(24);
+    public static readonly TimeSpan TombstoneRetain = ArbitrationRetentionPolicy.TombstoneMinimumAge;
     /// <summary>重试预算上限（既有无损拒绝 1s×6 语义的次数口径）。</summary>
     public const int RetryBudgetMax = 6;
     /// <summary>有界重试窗口（首次确定拒绝派生，持久化不得重置）。</summary>
@@ -571,7 +619,10 @@ public sealed class ArbitrationAdmissionService
         if (request.Kind == AdmissionKind.ContinueUse)
         {
             var continueIdentity = ArbitrationOrdering.BuildStableIdentity(request.Candidate);
-            return await ContinueUseAsync(request, read.File, continueIdentity).ConfigureAwait(false);
+            var continued = await ContinueUseAsync(request, read.File, continueIdentity).ConfigureAwait(false);
+            continued.CapturedLeaseId = read.File.Lease.LeaseId;
+            continued.CapturedOwnerEpoch = read.File.Lease.OwnerEpoch;
+            return continued;
         }
 
         request.RequestIdentity = requestIdentity!; // 身份回显=API 合同；其余字段一律不回调用方持有的可变对象
@@ -581,10 +632,13 @@ public sealed class ArbitrationAdmissionService
         // —— 入队→仲裁轮次（原子入队快照：进入串行段时快照并清空；登记时所有者身份随排队快照，B8）——
         var pending = Enqueue(frozen!, read.File.Lease);
         _ = Task.Run(() => DrainRoundAsync());
-        return await pending.Completion.Task.ConfigureAwait(false);
+        var admitted = await pending.Completion.Task.ConfigureAwait(false);
+        admitted.CapturedLeaseId = pending.CapturedLeaseId;
+        admitted.CapturedOwnerEpoch = pending.CapturedOwnerEpoch;
+        return admitted;
     }
 
-    private PendingAdmission Enqueue(AdmissionRequest request, LeaseSegment captured)
+    private PendingAdmission Enqueue(AdmissionRequest request, LeaseSegment captured, bool identityReserved = false)
     {
         var pending = new PendingAdmission
         {
@@ -595,7 +649,7 @@ public sealed class ArbitrationAdmissionService
         lock (_queueLock)
         {
             _queue.Add(pending);
-            _inflight.Add(request.RequestIdentity);
+            if (!identityReserved) _inflight.Add(request.RequestIdentity);
         }
 
         // AfterEnqueue 屏障：夹具确定性收齐信号（测试接缝，锁外同步调用须同步完成——配合 BeforeRoundSnapshot 计数放行）。
@@ -640,6 +694,8 @@ public sealed class ArbitrationAdmissionService
                 ExecutionDisposition = ExecutionDisposition.Unknown,
                 ResponsibilityState = ResponsibilityState.Pending,
             };
+        if (op.PreemptConfirmPending)
+            return NeedPreemptConfirmation(request.RequestIdentity, op);
         // [Batch B 收尾 会诊阻断处置] **持久化类型 fail-closed 必须早于重新入队/仲裁**——
         // 否则未知类型记录可能先被裁决改写为 `NotSelected`/`TerminalRejected` 并迁区，绕过隔离语义。
         // （顺序纪律：**冲突待决优先于类型隔离**——本记录冲突、**以及合并目标的冲突**都必须先于类型判断。）
@@ -709,28 +765,52 @@ public sealed class ArbitrationAdmissionService
                 };
             // [第五轮验证会诊阻断处置] 目标**已有执行事实**（含裁决后的取消/失败/成功）⇒ 共享目标事实，
             // 无论本（镜像）记录自身处于何种状态（历史镜像的 `TerminalRejected` 不得回放旧事实）。
-            if (target is { ExecutionResult: not null }
-                && target.RequestState is OperationRequestState.Accepted or OperationRequestState.TerminalCompleted)
-                return ClassifyFromExecutionResult(request.RequestIdentity, target,
-                    settled: target.RequestState == OperationRequestState.TerminalCompleted,
-                    "already_accepted", "去重合并：共享胜者结果事实（含取消/失败，不新增发送者）。");
+            if (target is not null && !IsMergeCompatible(op, target))
+                return ClassifyMergedTargetConflict(request.RequestIdentity, op,
+                    "合并关联的候选身份、载荷、排序键、操作类型或运行绑定不一致；保留待核查，不发送。");
+            if (target?.ExecutionResult is { } targetResult
+                && target.RequestState is OperationRequestState.Accepted or OperationRequestState.TerminalCompleted or OperationRequestState.Reconciling)
+                return string.Equals(op.SubmissionIdentity, target.SubmissionIdentity, StringComparison.Ordinal)
+                       && op.LastSendSeq == target.LastSendSeq
+                       && ExecutionResultMatchesOperation(target, targetResult)
+                    ? ClassifyFromExecutionResult(request.RequestIdentity, target,
+                        settled: target.RequestState == OperationRequestState.TerminalCompleted,
+                        "already_accepted", "去重合并：共享胜者结果事实（含取消/失败，不新增发送者）。")
+                    : ClassifyExecutionFactMismatch(request.RequestIdentity, target, "合并执行事实与本轮发送身份不匹配，保留待核查。");
             // 未镜像完成前的共享结果分类；已镜像终态的落到下方 switch（按本记录状态分类）。
             if (op.RequestState is OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected)
                 return target?.RequestState switch
             {
+                OperationRequestState.Queued when target.PreemptConfirmPending =>
+                    new AdmissionResult { Kind = AdmissionResultKind.NeedPreemptConfirm, ReasonCode = "execution_occupied", Detail = "去重合并：共享胜者保留安全交接确认资格。", RequestIdentity = request.RequestIdentity, WinnerCandidateId = target.CandidateId },
                 OperationRequestState.Accepted or OperationRequestState.TerminalCompleted =>
                     // 共享胜者的**结果事实**（含取消/失败）；不得固定返回 Accepted（§24.6-4）。
                     ClassifyFromExecutionResult(request.RequestIdentity, target,
                         settled: target.RequestState == OperationRequestState.TerminalCompleted,
                         "already_accepted", "去重合并：共享胜者受理结果（不新增发送者）。"),
                 OperationRequestState.TerminalRejected =>
-                    AdmissionResult.Of(AdmissionResultKind.TerminalRejected, target.LastResult?.ReasonCode ?? "terminal_rejected", "去重合并：共享胜者终局拒绝。", request.RequestIdentity),
+                    ClassifyTerminalRejected(request.RequestIdentity, target, "去重合并：共享胜者终局拒绝。"),
                 OperationRequestState.NotSelected =>
-                    new AdmissionResult { Kind = AdmissionResultKind.NotSelected, ReasonCode = target.LastResult?.ReasonCode ?? "not_selected", Detail = "去重合并：共享胜者未获选终局。", RequestIdentity = request.RequestIdentity, WinnerCandidateId = target.LastResult?.WinnerRef, SuppressionSource = target.LastResult?.SuppressionSource ?? "" },
+                    new AdmissionResult { Kind = AdmissionResultKind.NotSelected, ReasonCode = target.LastPrecheckResult?.ReasonCode ?? target.LastResult?.ReasonCode ?? "not_selected", Detail = "去重合并：共享胜者未获选终局。", RequestIdentity = request.RequestIdentity, WinnerCandidateId = target.LastPrecheckResult?.WinnerRef ?? target.LastResult?.WinnerRef, SuppressionSource = target.LastPrecheckResult?.SuppressionSource ?? target.LastResult?.SuppressionSource ?? "" },
+                OperationRequestState.RetryableRejected =>
+                    ClassifyRetryableRejected(request.RequestIdentity, target, "去重合并：共享胜者本轮已确定未受理（经 RetryAsync 重新准入）。"),
+                OperationRequestState.Reconciling =>
+                    new AdmissionResult { Kind = AdmissionResultKind.Reconciling, ReasonCode = "reconciling", Detail = "去重合并：共享胜者发送结果未知，保守待对账（不重发）。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = target.SubmissionIdentity, SendSeq = target.LastSendSeq, ExecutionDisposition = ExecutionDisposition.Unknown, ResponsibilityState = ResponsibilityState.Pending },
                 null => AdmissionResult.Of(AdmissionResultKind.Error, "merged_target_missing", "合并目标记录缺失=响亮拒绝。", request.RequestIdentity),
-                _ => AdmissionResult.Of(AdmissionResultKind.NeedReconcile, "in_flight", "去重合并：胜者处理在途（合并，不新增发送者）。", request.RequestIdentity),
+                _ => ClassifyInFlight(request.RequestIdentity, target, "去重合并：胜者处理在途（合并，不新增发送者）。"),
             };
         }
+        if (IsMergeConflictHeld(op))
+            return ClassifyMergedTargetConflict(request.RequestIdentity, op,
+                "合并兼容性冲突已持久化为待核查状态；不改写责任、不发送。");
+        if (AcceptanceClaimNeedsResolution(op, file))
+            return AcceptanceClaimPending(request.RequestIdentity, op);
+
+        if (op.RequestState == OperationRequestState.Reconciling && op.ExecutionResult is { } reconcilingFact)
+            return ExecutionResultMatchesOperation(op, reconcilingFact)
+                ? ClassifyFromExecutionResult(request.RequestIdentity, op, settled: false,
+                    "execution_result", "待对账但已有权威执行结果（结果维保留事实，责任仍待结清）。")
+                : ClassifyExecutionFactMismatch(request.RequestIdentity, op, "待对账执行事实与本操作发送身份不匹配，保留待核查。");
 
         switch (op.RequestState)
         {
@@ -741,7 +821,9 @@ public sealed class ArbitrationAdmissionService
                 bool inFlight;
                 lock (_queueLock) inFlight = _inflight.Contains(request.RequestIdentity);
                 if (inFlight)
-                    return AdmissionResult.Of(AdmissionResultKind.NeedReconcile, "in_flight", "已有处理在途（合并，不新增发送者）。", request.RequestIdentity);
+                    return ClassifyRetryInFlight(request.RequestIdentity);
+                if (_hooks.Barriers?.AfterContinueInFlightCheck is { } afterCheck)
+                    await afterCheck().ConfigureAwait(false);
                 // 重新驱动：按 Operations 权威快照重建请求再准入（不凭调用方重报——候选取自持久化快照）。
                 var redrive = new AdmissionRequest
                 {
@@ -762,17 +844,33 @@ public sealed class ArbitrationAdmissionService
                     // 重新落回 `CancellationToken.None`，使该路径的发送窗口取消失效。
                     CallerToken = request.CallerToken,
                 };
-                var pending = Enqueue(redrive, file.Lease!);
+                lock (_queueLock)
+                {
+                    if (!_inflight.Add(request.RequestIdentity))
+                        return ClassifyRetryInFlight(request.RequestIdentity);
+                }
+                var pending = Enqueue(redrive, file.Lease!, identityReserved: true);
                 _ = Task.Run(() => DrainRoundAsync());
                 return await pending.Completion.Task.ConfigureAwait(false);
             }
             // 已占位/发送中：合并到已有处理，不新增发送者。
             case OperationRequestState.Granted:
             case OperationRequestState.Sending:
-                return AdmissionResult.Of(AdmissionResultKind.NeedReconcile, "in_flight", "已有发送责任在途（合并，不新增发送者）。", request.RequestIdentity);
+                return ClassifyInFlight(request.RequestIdentity, op,
+                    "已有发送责任在途（合并，不新增发送者）。");
             // 未知/待对账：返回对账状态，不重发。
             case OperationRequestState.Reconciling:
-                return AdmissionResult.Of(AdmissionResultKind.Reconciling, "reconciling", "发送结果未知，保守待对账（不重发）。", request.RequestIdentity);
+                return new AdmissionResult
+                {
+                    Kind = AdmissionResultKind.Reconciling,
+                    ReasonCode = "reconciling",
+                    Detail = "发送结果未知，保守待对账（不重发）。",
+                    RequestIdentity = request.RequestIdentity,
+                    SubmissionIdentity = op.SubmissionIdentity,
+                    SendSeq = op.LastSendSeq,
+                    ExecutionDisposition = ExecutionDisposition.Unknown,
+                    ResponsibilityState = ResponsibilityState.Pending,
+                };
             // 已受理/终局完成：返回既有结果。
             case OperationRequestState.Accepted:
                 return ClassifyFromExecutionResult(request.RequestIdentity, op, settled: false,
@@ -780,14 +878,16 @@ public sealed class ArbitrationAdmissionService
             case OperationRequestState.TerminalCompleted:
                 return ClassifyFromExecutionResult(request.RequestIdentity, op, settled: true,
                     "already_terminal", "终局完成（返回既有结果）。");
+            case OperationRequestState.TerminalRejected:
+                return ClassifyTerminalRejected(request.RequestIdentity, op, "终局拒绝（返回既有结果）。");
             // 可重试拒绝：预算/窗口内由唯一重试者重新 Admit（RetryAsync）。
             case OperationRequestState.RetryableRejected:
-                return AdmissionResult.Of(AdmissionResultKind.RetryableRejected, op.LastResult?.ReasonCode ?? "retryable_rejected", "可重试拒绝（经 RetryAsync 重新 Admit；并发重试者合并）。", request.RequestIdentity);
+                return ClassifyRetryableRejected(request.RequestIdentity, op, "可重试拒绝（经 RetryAsync 重新 Admit；并发重试者合并）。");
             // 终局拒绝/未获选：返回终局拒绝——不得静默返回成功。
             case OperationRequestState.NotSelected:
-                return new AdmissionResult { Kind = AdmissionResultKind.NotSelected, ReasonCode = op.LastResult?.ReasonCode ?? "not_selected", Detail = "未获选终局（含胜者引用与压制来源）。", RequestIdentity = request.RequestIdentity, WinnerCandidateId = op.LastResult?.WinnerRef, SuppressionSource = op.LastResult?.SuppressionSource ?? "" };
+                return new AdmissionResult { Kind = AdmissionResultKind.NotSelected, ReasonCode = op.LastPrecheckResult?.ReasonCode ?? op.LastResult?.ReasonCode ?? "not_selected", Detail = "未获选终局（含胜者引用与压制来源）。", RequestIdentity = request.RequestIdentity, WinnerCandidateId = op.LastPrecheckResult?.WinnerRef ?? op.LastResult?.WinnerRef, SuppressionSource = op.LastPrecheckResult?.SuppressionSource ?? op.LastResult?.SuppressionSource ?? "" };
             default:
-                return AdmissionResult.Of(AdmissionResultKind.TerminalRejected, op.LastResult?.ReasonCode ?? "terminal_rejected", "终局拒绝。", request.RequestIdentity);
+                return AdmissionResult.Of(AdmissionResultKind.TerminalRejected, op.LastPrecheckResult?.ReasonCode ?? op.LastResult?.ReasonCode ?? "terminal_rejected", "终局拒绝。", request.RequestIdentity);
         }
     }
 
@@ -904,6 +1004,7 @@ public sealed class ArbitrationAdmissionService
         var occupy = ValidateAndOccupy(inner, lease, stableIdentity, candidateId, targetEpoch,
             OperationRequestState.InRound, mergedIdentities: null, now, out var special);
         if (!occupy.Success) return await ClassifyRecoveryOccupyRejectAsync(inner, lease, occupy.Reason ?? "invalid_request").ConfigureAwait(false);
+        if (special == "acceptance_claim_pending") return AcceptanceClaimPending(rid, FindOp(occupy.File!, rid)!);
         if (special is not null) return AdmissionResult.Of(AdmissionResultKind.Error, special, "占位事务异常分支。", rid);
 
         // [批次四十四 第九轮验证会诊处置] **恢复准入同样必须先做发送前 F11 复核**（占位后、未发送）——
@@ -941,7 +1042,7 @@ public sealed class ArbitrationAdmissionService
                 return (await TerminatePrecheckAsync(request, lease, "facts_unknown", AdmissionResultKind.NeedReconcile, "权威执行事实未知→待对账（恢复操作终局中止：未发布发送许可；对账后由入口新操作重新发起）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             // 未决发送冲突：并发恢复仅一胜者——本操作终局中止（未发布发送许可）。
             case "submission_conflict":
-                return (await TerminatePrecheckAsync(request, lease, "submission_conflict", AdmissionResultKind.Error, "存在未决发送（至多一笔）——恢复操作终局中止（并发恢复仅一胜者，未发布发送许可）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
+                return (await TerminatePrecheckAsync(request, lease, "submission_conflict", AdmissionResultKind.TerminalRejected, "存在未决发送（至多一笔）——恢复操作终局中止（并发恢复仅一胜者，未发布发送许可）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             // 状态已由其他处理者推进：不回退——返回当前事实分类（B1）。
             case "state_changed":
                 return ClassifyCurrentState(request.RequestIdentity);
@@ -998,6 +1099,11 @@ public sealed class ArbitrationAdmissionService
         }
         finally
         {
+            if (round is not null && _hooks.Barriers?.BeforeInFlightRelease is { } beforeRelease)
+            {
+                try { await beforeRelease().ConfigureAwait(false); }
+                catch (Exception) { /* 仅测试屏障；不能覆盖已完成的轮次结果。 */ }
+            }
             if (round is not null)
                 lock (_queueLock) foreach (var r in round) _inflight.Remove(r.Request.RequestIdentity);
             _gate.Release();
@@ -1042,20 +1148,36 @@ public sealed class ArbitrationAdmissionService
     {
         if (!_hooks.F11Active()) return null;
         if (occupiedFile.Handoff?.Submission is not { } submission) return null;
-        var close = CloseSubmission(lease, submission, file =>
+        var close = CloseSubmission(lease, submission, request.RequestIdentity, file =>
         {
             var op = FindOp(file, request.RequestIdentity);
             if (op is null) return "operation_missing";
+            var mirrors = (file.Handoff?.Operations ?? []).Where(m =>
+                string.Equals(m.MergedInto, op.RequestIdentity, StringComparison.Ordinal)
+                && m.Zone == OperationZone.Active).ToList();
+            if (mirrors.Any(m => !IsMergeCompatible(m, op) || m.ConflictPending
+                                 || m.PendingTerminal is not null || m.ExecutionResult is not null))
+                return "merged_target_conflict";
             op.RequestState = OperationRequestState.TerminalRejected;
-            op.LastResult = new OperationResult
+            op.LastPrecheckResult = new OperationResult
             {
                 Outcome = OperationOutcome.Rejected,
                 ReasonCode = "f11_active",
                 Retryable = false,
                 RetryBudgetUsed = op.LastResult?.RetryBudgetUsed ?? 0,
                 EvidenceSource = "local_not_sent_pre_send",
-                AnsweredSendSeq = submission.SendSeq,
+                AnsweredSendSeq = 0,
             };
+            MirrorMergedInPlace(file, op, _utcNow(), OperationRequestState.TerminalRejected,
+                (mirror, winner) => new OperationResult
+                {
+                    Outcome = OperationOutcome.Rejected,
+                    ReasonCode = winner.LastPrecheckResult?.ReasonCode ?? "f11_active",
+                    Retryable = false,
+                    RetryBudgetUsed = mirror.LastResult?.RetryBudgetUsed ?? 0,
+                    EvidenceSource = "merged:local_not_sent_pre_send",
+                    AnsweredSendSeq = 0,
+                });
             op.Zone = OperationZone.TerminalPendingTransfer;
             return null;
         });
@@ -1122,11 +1244,7 @@ public sealed class ArbitrationAdmissionService
     /// <summary>
     /// **「执行占用→需安全交接确认」结清**（§4.2a／R5.3 交接状态机的前置）：非胜者按裁决结清；
     /// **胜者**（去重组首位）回 `Queued`（非终局）并回传 `NeedPreemptConfirm`。
-    /// **去重镜像的现状（[第四轮验证会诊处置] 如实登记，不冒充等价）**：镜像走 `MirrorMergedAsync(…,
-    /// winnerAccepted:false)` ⇒ 落盘为 `NotSelected`＋`merged_duplicate`（终局迁区），而本笔调用方拿到的是
-    /// `NeedPreemptConfirm`——**即时结果与随后续用分类不一致、镜像失去交接后继续资格**。该行为系从既有分支
-    /// **原样抽取**（非本轮引入），属既有语义、需设计确认后统一整改，已登记为残余（§24.55），本批不改写
-    /// 已验收的合并/镜像合同。
+    /// 去重镜像与胜者保持关联并一起保留在 Queued；交接确认成功/失败后由胜者事务共同结清。
     /// [批次四十四 验证会诊重要项处置] 抽为独立方法：**占用豁免按候选分流**后，被分流出去的候选
     /// （非豁免者）也按同一语义结清，而不是把同轮合法节点一并改判。
     /// </summary>
@@ -1139,7 +1257,9 @@ public sealed class ArbitrationAdmissionService
         foreach (var w in preemptWinners.Take(1))
         {
             // 胜者交接存续：操作回 Queued 待交接闭环（非终局；R5.3 交接状态机接管后续准入）。
-            var back = await TransitionSingleAsync(w.Request.RequestIdentity, lease, OperationRequestState.Queued, expectedStates: OperationRequestState.InRound).ConfigureAwait(false);
+            var back = await TransitionSingleAsync(w.Request.RequestIdentity, lease, OperationRequestState.Queued,
+                mutateOperation: operation => operation.PreemptConfirmPending = true,
+                expectedStates: OperationRequestState.InRound).ConfigureAwait(false);
             w.Completion.TrySetResult(back.Success
                 ? new AdmissionResult { Kind = AdmissionResultKind.NeedPreemptConfirm, ReasonCode = "execution_occupied", Detail = "执行占用→需安全交接确认（分流交接状态机，R5.3）。", RequestIdentity = w.Request.RequestIdentity, WinnerCandidateId = decision.WinnerCandidateId, Decision = decision }
                 : ClassifyCurrentState(w.Request.RequestIdentity)); // 状态已推进=不覆盖，返回当前事实
@@ -1147,7 +1267,7 @@ public sealed class ArbitrationAdmissionService
 
         if (preemptWinners.Count > 1)
             await MirrorMergedAsync(preemptWinners.Skip(1).ToList(), lease, decision,
-                new AdmissionResult { Kind = AdmissionResultKind.NeedPreemptConfirm, ReasonCode = "execution_occupied", Detail = "执行占用→需安全交接确认。", WinnerCandidateId = decision.WinnerCandidateId, Decision = decision }, winnerAccepted: false).ConfigureAwait(false);
+                new AdmissionResult { Kind = AdmissionResultKind.NeedPreemptConfirm, ReasonCode = "execution_occupied", Detail = "执行占用→需安全交接确认。", RequestIdentity = preemptWinners[0].Request.RequestIdentity, WinnerCandidateId = decision.WinnerCandidateId, Decision = decision }, winnerAccepted: false).ConfigureAwait(false);
     }
 
     private async Task ProcessRoundAsync(List<PendingAdmission> round)
@@ -1195,6 +1315,9 @@ public sealed class ArbitrationAdmissionService
                         advanced.Add(op.RequestIdentity);
                     }
                 }
+                // The InRound transition and incompatible-group hold share one durable publication. Recovery
+                // repeats this classification before orphan cleanup for leases written by an older two-step run.
+                _ = HoldIncompatibleDedupeGroups(file, ids, now0);
                 return null;
             });
             if (!mark.Success)
@@ -1209,6 +1332,59 @@ public sealed class ArbitrationAdmissionService
                     r => ClassifyCurrentState(r.Request.RequestIdentity));
                 round = round.Where(r => !advanced.Contains(r.Request.RequestIdentity)).ToList();
                 if (round.Count == 0) return;
+            }
+
+            // Candidate identity dedupe cannot merge different operation types or execution bindings.
+            // Hold the whole otherwise-deduplicable group before occupancy/preemption classification so no
+            // incompatible peer is terminalized or inherits the winner's responsibility.
+            var incompatibleDedupeGroups = round
+                .GroupBy(r => CandidateIdOf(r.Request), StringComparer.Ordinal)
+                .Where(group => group.Count() > 1)
+                .Where(group =>
+                {
+                    var operations = group.Select(item => FindOp(mark.File!, item.Request.RequestIdentity)).ToList();
+                    if (operations.Any(operation => operation is null)) return true;
+                    var first = operations[0]!;
+                    var samePayloadAndSort = operations.All(operation =>
+                        string.Equals(operation!.PayloadFingerprint, first.PayloadFingerprint, StringComparison.Ordinal)
+                        && string.Equals(operation.SortKeyFingerprint, first.SortKeyFingerprint, StringComparison.Ordinal));
+                    return samePayloadAndSort && operations.Skip(1).Any(operation => !IsMergeCompatible(first, operation!));
+                })
+                .ToList();
+            if (incompatibleDedupeGroups.Count > 0)
+            {
+                var held = incompatibleDedupeGroups.SelectMany(group => group).Distinct().ToList();
+                var heldIds = held.Select(item => item.Request.RequestIdentity).ToHashSet(StringComparer.Ordinal);
+                var holdNow = _utcNow();
+                var hold = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+                {
+                    foreach (var operation in (file.Handoff?.Operations ?? []).Where(item => heldIds.Contains(item.RequestIdentity)))
+                    {
+                        if (operation.Zone != OperationZone.Active || operation.RequestState != OperationRequestState.InRound)
+                            return "state_changed";
+                        RecordMergeConflictHold(operation, file.Revision + 1, holdNow);
+                    }
+                    return null;
+                });
+                if (!hold.Success)
+                {
+                    CompleteAll(held, item => ClassifyMutateReject(hold.Reason ?? "merged_target_conflict", item.Request.RequestIdentity));
+                    round = round.Except(held).ToList();
+                    if (round.Count == 0) return;
+                }
+                else
+                {
+                CompleteAll(held, item =>
+                {
+                    var operation = mark.File is null ? null : FindOp(mark.File, item.Request.RequestIdentity);
+                    return operation is null
+                        ? AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "不兼容合并请求记录缺失，保留响亮失败。", item.Request.RequestIdentity)
+                        : ClassifyMergedTargetConflict(item.Request.RequestIdentity, operation,
+                            "同轮候选号与载荷相同，但操作类型或运行绑定不兼容；保留责任待核查，不发送。");
+                });
+                round = round.Except(held).ToList();
+                if (round.Count == 0) return;
+                }
             }
 
             // [批次四十四 会诊＋验证会诊重要项处置] 占用豁免**按候选**生效——不得因同轮混入无关候选而把
@@ -1286,7 +1462,18 @@ public sealed class ArbitrationAdmissionService
                 case ArbitrationOutcome.NeedReconcile:
                     // 未发布发送许可的操作回 Queued（可经续用重新驱动）——不转 Reconciling（无发送责任则无对账对象）。
                     await TransitionRoundAsync(round, lease, OperationRequestState.Queued,
-                        r => new AdmissionResult { Kind = AdmissionResultKind.NeedReconcile, ReasonCode = "facts_unknown", Detail = decision.Reason, RequestIdentity = r.Request.RequestIdentity, SuppressionSource = decision.SuppressionSource, Decision = decision }).ConfigureAwait(false);
+                        r =>
+                        {
+                            var result = ClassifyCurrentState(r.Request.RequestIdentity);
+                            if (result.Kind != AdmissionResultKind.NeedReconcile) return result;
+                            result.ReasonCode = "facts_unknown";
+                            result.Detail = decision.Reason;
+                            result.ExecutionDisposition = ExecutionDisposition.Unknown;
+                            result.ResponsibilityState = ResponsibilityState.Pending;
+                            result.SuppressionSource = decision.SuppressionSource;
+                            result.Decision = decision;
+                            return result;
+                        }).ConfigureAwait(false);
                     return;
                 case ArbitrationOutcome.NeedPreemptConfirm:
                     await HandleNeedPreemptConfirmAsync(round, decision, lease).ConfigureAwait(false);
@@ -1299,6 +1486,8 @@ public sealed class ArbitrationAdmissionService
                     var mergedWin = round.Where(IsWinner(decision)).Skip(1).ToList();
                     var winnerResult = await ProcessWinnerAsync(winnerPending.Request, lease, decision,
                         mergedWin.Select(m => m.Request.RequestIdentity).ToList()).ConfigureAwait(false);
+                    winnerResult.CapturedLeaseId = lease.LeaseId;
+                    winnerResult.CapturedOwnerEpoch = lease.OwnerEpoch;
                     winnerPending.Completion.TrySetResult(winnerResult);
                     if (mergedWin.Count > 0)
                         await MirrorMergedAsync(mergedWin, lease, decision, winnerResult, winnerAccepted: winnerResult.Kind == AdmissionResultKind.Accepted).ConfigureAwait(false);
@@ -1329,9 +1518,93 @@ public sealed class ArbitrationAdmissionService
             CompleteAll(merged, m =>
             {
                 var op = read.File?.Handoff?.Operations.FirstOrDefault(o => string.Equals(o.RequestIdentity, m.Request.RequestIdentity, StringComparison.Ordinal));
-                return op?.RequestState == OperationRequestState.Accepted
-                    ? new AdmissionResult { Kind = AdmissionResultKind.Accepted, ReasonCode = "already_accepted", Detail = "去重合并：共享胜者受理结果（不新增发送者）。", RequestIdentity = m.Request.RequestIdentity, SubmissionIdentity = winnerResult.SubmissionIdentity, SendSeq = winnerResult.SendSeq, Decision = decision }
+                return op?.MergedInto is not null
+                    ? ClassifyCurrentState(m.Request.RequestIdentity)
                     : AdmissionResult.Of(AdmissionResultKind.Error, "mirror_not_persisted", "合并镜像未落盘（不报告未持久化事实——续用可查当前状态）。", m.Request.RequestIdentity);
+            });
+            await Task.CompletedTask.ConfigureAwait(false);
+        }
+        else if (winnerResult.Kind is AdmissionResultKind.RetryableRejected or AdmissionResultKind.NeedPreemptConfirm)
+        {
+            // Retryable and preempt-confirm winners remain active. Mirrors keep their link and send/handoff identity;
+            // neither path may terminalize a mirror as NotSelected.
+            var now = _utcNow();
+            var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+            {
+                var winner = FindOp(file, winnerResult.RequestIdentity);
+                if (winner is null || (winnerResult.Kind == AdmissionResultKind.RetryableRejected
+                        ? winner.RequestState != OperationRequestState.RetryableRejected
+                        : winner.RequestState != OperationRequestState.Queued))
+                    return "state_changed";
+                if (winner.ConflictPending) return "conflict_pending";
+                if (winner.PendingTerminal is not null || winner.ExecutionResult is not null || IsMergeConflictHeld(winner))
+                    return "merged_target_conflict";
+                foreach (var item in merged)
+                {
+                    var mirror = FindOp(file, item.Request.RequestIdentity);
+                    if (mirror is null || mirror.Zone != OperationZone.Active
+                        || mirror.RequestState is not (OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected))
+                        return "state_changed";
+                    if (!IsMergeCompatible(mirror, winner)) return "merged_target_conflict";
+                    if (mirror.MergedInto is not null
+                        && !string.Equals(mirror.MergedInto, winner.RequestIdentity, StringComparison.Ordinal))
+                        return "merged_target_conflict";
+                    if (mirror.ConflictPending || mirror.PendingTerminal is not null || mirror.ExecutionResult is not null)
+                        return "merged_target_conflict";
+                    mirror.MergedInto = winner.RequestIdentity;
+                }
+                MirrorMergedInPlace(file, winner, now, winner.RequestState,
+                    (mirror, currentWinner) => new OperationResult
+                    {
+                        Outcome = OperationOutcome.Rejected,
+                        ReasonCode = currentWinner.LastResult?.ReasonCode ?? winnerResult.ReasonCode,
+                        Retryable = true,
+                        RetryBudgetUsed = currentWinner.LastResult?.RetryBudgetUsed ?? 0,
+                        EvidenceSource = "merged:" + (currentWinner.LastResult?.EvidenceSource ?? winnerResult.EvidenceSource ?? "retryable_rejected"),
+                        AnsweredSendSeq = currentWinner.LastResult?.AnsweredSendSeq ?? currentWinner.LastSendSeq,
+                        WinnerRef = currentWinner.LastResult?.WinnerRef,
+                        SuppressionSource = currentWinner.LastResult?.SuppressionSource,
+                    });
+                return null;
+            });
+            var read = _store.Read();
+            CompleteAll(merged, m =>
+            {
+                var op = read.File is null ? null : FindOp(read.File, m.Request.RequestIdentity);
+                return op?.RequestState == OperationRequestState.RetryableRejected
+                    ? ClassifyCurrentState(m.Request.RequestIdentity)
+                    : mutate.Reason == "merged_target_conflict" && op is not null
+                        ? ClassifyMergedTargetConflict(m.Request.RequestIdentity, op,
+                            "合并请求与胜者的身份或绑定不兼容；责任保留待核查，不发送。")
+                    : op is not null
+                        ? ClassifyCurrentState(m.Request.RequestIdentity)
+                        : AdmissionResult.Of(AdmissionResultKind.Error, mutate.Reason ?? "mirror_not_persisted", "可重试合并镜像未可靠落盘（不报告未持久化事实）。", m.Request.RequestIdentity);
+            });
+        }
+        else if (winnerResult.ResponsibilityState == ResponsibilityState.Pending
+                 || winnerResult.Kind is AdmissionResultKind.Reconciling or AdmissionResultKind.NeedReconcile)
+        {
+            // Unknown/in-flight winner responsibility must stay linked and active. Terminating the mirrors as
+            // NotSelected would sever later reconciliation/close fan-out and replay a false settled result.
+            var read = _store.Read();
+            CompleteAll(merged, item =>
+            {
+                var mirror = read.File is null ? null : FindOp(read.File, item.Request.RequestIdentity);
+                return mirror is not null
+                    ? ClassifyCurrentState(item.Request.RequestIdentity)
+                    : AdmissionResult.Of(AdmissionResultKind.Error, "mirror_not_persisted", "待对账合并记录缺失，无法分类当前责任。", item.Request.RequestIdentity);
+            });
+        }
+        else if (winnerResult.ReasonCode == "merged_target_conflict")
+        {
+            var current = _store.Read();
+            CompleteAll(merged, m =>
+            {
+                var op = current.File is null ? null : FindOp(current.File, m.Request.RequestIdentity);
+                return op is null
+                    ? AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "合并请求记录缺失，保留响亮失败。", m.Request.RequestIdentity)
+                    : ClassifyMergedTargetConflict(m.Request.RequestIdentity, op,
+                        "候选身份相同但操作类型或运行绑定不兼容；保留责任待核查，不发送。");
             });
             await Task.CompletedTask.ConfigureAwait(false);
         }
@@ -1350,13 +1623,30 @@ public sealed class ArbitrationAdmissionService
         foreach (var m in (file.Handoff?.Operations ?? []).Where(o =>
                      string.Equals(o.MergedInto, winner.RequestIdentity, StringComparison.Ordinal)
                      && o.Zone == OperationZone.Active
-                     && o.RequestState is OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected))
+                     && o.RequestState is OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected or OperationRequestState.Accepted
+                     && !o.ConflictPending && o.PendingTerminal is null && o.ExecutionResult is null
+                     && IsMergeCompatible(o, winner)))
         {
+            var hadOwnSendEvidence = m.LastSendSeq > 0 || m.LastResult is not null;
             m.RequestState = state;
+            m.PreemptConfirmPending = winner.PreemptConfirmPending;
             m.SubmissionIdentity = winner.SubmissionIdentity;
             m.LastSendSeq = winner.LastSendSeq;
             m.TakeoverRef = winner.TakeoverRef;
-            m.LastResult = resultOf(m, winner);
+            if (state is OperationRequestState.RetryableRejected or OperationRequestState.TerminalRejected
+                && winner.LastPrecheckResult is { } precheck)
+            {
+                m.LastPrecheckResult = CloneOperationResult(precheck);
+                if (!hadOwnSendEvidence && winner.LastResult is { } senderFact)
+                    m.LastResult = CloneOperationResult(senderFact);
+            }
+            else
+            {
+                m.LastResult = resultOf(m, winner);
+                m.LastPrecheckResult = winner.LastPrecheckResult is { } latestPrecheck
+                    ? CloneOperationResult(latestPrecheck)
+                    : null;
+            }
             if (state is OperationRequestState.TerminalRejected or OperationRequestState.NotSelected)
                 m.Zone = OperationZone.TerminalPendingTransfer;
             if (state == OperationRequestState.RetryableRejected)
@@ -1364,6 +1654,189 @@ public sealed class ArbitrationAdmissionService
             m.UpdatedRevision = file.Revision + 1;
             m.UpdatedAtUtc = now;
         }
+    }
+
+    private static OperationResult CloneOperationResult(OperationResult value) => new()
+    {
+        Outcome = value.Outcome,
+        ReasonCode = value.ReasonCode,
+        Retryable = value.Retryable,
+        RetryBudgetUsed = value.RetryBudgetUsed,
+        EvidenceSource = value.EvidenceSource,
+        AnsweredSendSeq = value.AnsweredSendSeq,
+        WinnerRef = value.WinnerRef,
+        SuppressionSource = value.SuppressionSource,
+    };
+
+    private static ExecutionResult CloneExecutionResult(ExecutionResult value) => new()
+    {
+        Kind = value.Kind,
+        RawTerminal = value.RawTerminal,
+        ExecutionErrorCode = value.ExecutionErrorCode,
+        JobId = value.JobId,
+        EvidenceSource = value.EvidenceSource,
+        SubmissionIdentity = value.SubmissionIdentity,
+        SendSeq = value.SendSeq,
+        ObservedAtUtc = value.ObservedAtUtc,
+    };
+
+    private static bool ExecutionSnapshotsEqual(ExecutionResult? left, ExecutionResult right)
+        => left is not null
+           && left.Kind == right.Kind
+           && string.Equals(left.RawTerminal, right.RawTerminal, StringComparison.Ordinal)
+           && string.Equals(left.ExecutionErrorCode, right.ExecutionErrorCode, StringComparison.Ordinal)
+           && string.Equals(left.JobId, right.JobId, StringComparison.Ordinal)
+           && string.Equals(left.EvidenceSource, right.EvidenceSource, StringComparison.Ordinal)
+           && string.Equals(left.SubmissionIdentity, right.SubmissionIdentity, StringComparison.Ordinal)
+           && left.SendSeq == right.SendSeq
+           && left.ObservedAtUtc == right.ObservedAtUtc;
+
+    private static bool PendingTerminalMatchesExecutionResult(PendingTerminal pending, ExecutionResult result)
+        => pending.Kind == result.Kind
+           && string.Equals(pending.RawTerminal, result.RawTerminal, StringComparison.Ordinal)
+           && string.Equals(pending.ExecutionErrorCode, result.ExecutionErrorCode, StringComparison.Ordinal)
+           && string.Equals(pending.JobId, result.JobId, StringComparison.Ordinal)
+           && string.Equals(pending.EvidenceSource, result.EvidenceSource, StringComparison.Ordinal)
+           && string.Equals(pending.SubmissionIdentity, result.SubmissionIdentity, StringComparison.Ordinal)
+           && pending.SendSeq == result.SendSeq
+           && pending.OperationType == OperationType.ExternalStart
+           && pending.ObservedAtUtc == result.ObservedAtUtc
+           && pending.RecordedAtUtc != default;
+
+    private static void CopyWinnerFactsToMirror(OperationRecord mirror, OperationRecord winner, long revision, DateTimeOffset now)
+    {
+        // A mirror can be adjudicated independently. Winner fanout must not mutate facts covered by that audit.
+        if (mirror.ConflictResolutionAuditId is { Length: > 0 }) return;
+        // A mirror with its own registered evidence still requires its own adjudication.
+        if (mirror.ConflictPending && mirror.ConflictEvidence is { Count: > 0 }) return;
+        // Keep each active mirror in a classifiable state while the winner is Granted/Sending/Reconciling/Accepted.
+        // ContinueUse resolves MergedInto against the winner; copying those transient states stranded mirrors after
+        // recovery because close transactions only advance queued/in-round/retryable mirrors.
+        if (winner.RequestState is OperationRequestState.RetryableRejected
+            or OperationRequestState.Accepted
+            or OperationRequestState.TerminalRejected
+            or OperationRequestState.NotSelected
+            or OperationRequestState.TerminalCompleted)
+            mirror.RequestState = winner.RequestState;
+        mirror.SubmissionIdentity = winner.SubmissionIdentity;
+        mirror.LastSendSeq = winner.LastSendSeq;
+        mirror.TakeoverRef = winner.TakeoverRef;
+        mirror.LastResult = winner.LastResult is { } result ? CloneOperationResult(result) : null;
+        if (mirror.LastResult is { } mirroredResult)
+            mirroredResult.EvidenceSource = "merged:" + mirroredResult.EvidenceSource;
+        mirror.LastPrecheckResult = winner.LastPrecheckResult is { } precheck ? CloneOperationResult(precheck) : null;
+        mirror.PreemptConfirmPending = winner.PreemptConfirmPending;
+        mirror.RetryWindowDeadlineUtc = winner.RetryWindowDeadlineUtc;
+        var winnerIsTerminal = winner.RequestState is OperationRequestState.TerminalRejected
+            or OperationRequestState.NotSelected or OperationRequestState.TerminalCompleted;
+        mirror.ExecutionResult = winnerIsTerminal && winner.ExecutionResult is { } execution ? new ExecutionResult
+        {
+            Kind = execution.Kind,
+            RawTerminal = execution.RawTerminal,
+            ExecutionErrorCode = execution.ExecutionErrorCode,
+            JobId = execution.JobId,
+            EvidenceSource = execution.EvidenceSource,
+            SubmissionIdentity = execution.SubmissionIdentity,
+            SendSeq = execution.SendSeq,
+            ObservedAtUtc = execution.ObservedAtUtc,
+        } : null;
+        mirror.PendingTerminal = winnerIsTerminal && winner.PendingTerminal is { } terminal ? new PendingTerminal
+        {
+            Kind = terminal.Kind,
+            RawTerminal = terminal.RawTerminal,
+            ExecutionErrorCode = terminal.ExecutionErrorCode,
+            JobId = terminal.JobId,
+            EvidenceSource = terminal.EvidenceSource,
+            SubmissionIdentity = terminal.SubmissionIdentity,
+            SendSeq = terminal.SendSeq,
+            OperationType = terminal.OperationType,
+            ObservedAtUtc = terminal.ObservedAtUtc,
+            RecordedAtUtc = terminal.RecordedAtUtc,
+            LocalCancelRequested = terminal.LocalCancelRequested,
+        } : null;
+        mirror.LocalCancelRequested = winner.LocalCancelRequested;
+        mirror.ConflictPending = winner.ConflictPending;
+        mirror.ConflictResolutionState = winner.ConflictResolutionState;
+        // The audit is bound to exactly one Operation identity. Mirrors inherit the resolved facts and clear their
+        // transient claim, but must never point at the winner's audit ID (the lease validator enforces 1:1 binding).
+        mirror.ConflictResolutionAuditId = null;
+        mirror.ConflictAdjudicationClaim = null;
+        if (winner.Zone != OperationZone.Active) mirror.Zone = winner.Zone;
+        mirror.UpdatedRevision = revision;
+        mirror.UpdatedAtUtc = now;
+    }
+
+    private string? TerminalizeExpiredRetryable(LogicalOwnerLeaseFile file, OperationRecord winner,
+        IReadOnlyCollection<string>? roundMergedIdentities, DateTimeOffset now)
+    {
+        if (winner.RequestState is not (OperationRequestState.RetryableRejected or OperationRequestState.InRound or OperationRequestState.Queued)
+            || winner.RetryWindowDeadlineUtc is not { } deadline || deadline > now)
+            return "state_changed";
+        if (file.Handoff?.Submission is { } submission
+            && string.Equals(submission.SubmissionIdentity, winner.SubmissionIdentity, StringComparison.Ordinal))
+            return "submission_conflict";
+
+        var isPrecheckOnly = winner.LastPrecheckResult is
+        {
+            Outcome: OperationOutcome.Rejected,
+            Retryable: true,
+            AnsweredSendSeq: 0,
+            EvidenceSource: "final_precheck",
+        };
+        var isSendRejected = winner.LastSendSeq > 0
+            && winner.LastResult is { Outcome: OperationOutcome.Rejected } sendResult
+            && sendResult.AnsweredSendSeq == winner.LastSendSeq;
+        if (!isPrecheckOnly && !isSendRejected) return "review_inconclusive";
+
+        var roundIds = roundMergedIdentities?.ToHashSet(StringComparer.Ordinal) ?? [];
+        var mirrors = (file.Handoff?.Operations ?? [])
+            .Where(o => string.Equals(o.MergedInto, winner.RequestIdentity, StringComparison.Ordinal)
+                        || roundIds.Contains(o.RequestIdentity))
+            .ToList();
+        foreach (var mirror in mirrors)
+        {
+            if (mirror.RequestIdentity == winner.RequestIdentity
+                || mirror.Zone != OperationZone.Active
+                || mirror.RequestState is not (OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected)
+                || !IsMergeCompatible(mirror, winner)
+                || mirror.ConflictPending || mirror.PendingTerminal is not null || mirror.ExecutionResult is not null
+                || (mirror.MergedInto is not null && !string.Equals(mirror.MergedInto, winner.RequestIdentity, StringComparison.Ordinal)))
+                return "merged_target_conflict";
+        }
+
+        winner.RequestState = OperationRequestState.TerminalRejected;
+        winner.PreemptConfirmPending = false;
+        winner.LastPrecheckResult = new OperationResult
+        {
+            Outcome = OperationOutcome.Rejected,
+            ReasonCode = "retry_window_expired",
+            Retryable = false,
+            RetryBudgetUsed = winner.LastResult?.RetryBudgetUsed ?? 0,
+            EvidenceSource = "retry_window_expired_precheck",
+            AnsweredSendSeq = 0,
+        };
+        winner.Zone = OperationZone.TerminalPendingTransfer;
+        winner.UpdatedRevision = file.Revision + 1;
+        winner.UpdatedAtUtc = now;
+
+        foreach (var mirror in mirrors)
+        {
+            mirror.MergedInto = winner.RequestIdentity;
+            mirror.RequestState = OperationRequestState.TerminalRejected;
+            mirror.PreemptConfirmPending = false;
+            mirror.SubmissionIdentity = winner.SubmissionIdentity;
+            mirror.LastSendSeq = winner.LastSendSeq;
+            mirror.TakeoverRef = winner.TakeoverRef;
+            mirror.LastResult = winner.LastResult is { } sendFact ? CloneOperationResult(sendFact) : null;
+            if (mirror.LastResult is { } mirroredSendFact)
+                mirroredSendFact.EvidenceSource = "merged:" + mirroredSendFact.EvidenceSource;
+            mirror.LastPrecheckResult = winner.LastPrecheckResult is { } precheckFact ? CloneOperationResult(precheckFact) : null;
+            mirror.Zone = OperationZone.TerminalPendingTransfer;
+            mirror.UpdatedRevision = file.Revision + 1;
+            mirror.UpdatedAtUtc = now;
+        }
+        MigrateAndClean(file, now);
+        return null;
     }
 
     /// <summary>未获选/冲突分流（身份冲突=终局拒绝；其余=NotSelected——混合冲突组逐候选判定，不统一降级）。</summary>
@@ -1416,14 +1889,14 @@ public sealed class ArbitrationAdmissionService
 
                 var (state, reason) = outcomeOf(byId[op.RequestIdentity]);
                 op.RequestState = state;
-                op.LastResult = new OperationResult
+                op.LastPrecheckResult = new OperationResult
                 {
                     Outcome = OperationOutcome.Rejected,
                     ReasonCode = reason,
                     Retryable = false,
                     RetryBudgetUsed = op.LastResult?.RetryBudgetUsed ?? 0,
                     EvidenceSource = "arbitration_decision",
-                    AnsweredSendSeq = op.LastSendSeq,
+                    AnsweredSendSeq = 0,
                     WinnerRef = state == OperationRequestState.NotSelected ? decision.WinnerCandidateId : null, // I5：压制依据持久化
                     SuppressionSource = state == OperationRequestState.NotSelected ? decision.SuppressionSource : null,
                 };
@@ -1492,9 +1965,15 @@ public sealed class ArbitrationAdmissionService
         if (_hooks.Barriers?.BeforeOccupyPublish is { } beforeOccupy) await beforeOccupy().ConfigureAwait(false);
         var occupy = ValidateAndOccupy(request, lease, stableIdentity, candidateId, targetEpoch,
             OperationRequestState.InRound, mergedIdentities, now, out var special);
-        if (!occupy.Success) return await ClassifyOccupyRejectAsync(request, lease, occupy.Reason ?? "invalid_request").ConfigureAwait(false);
+        if (!occupy.Success) return await ClassifyOccupyRejectAsync(request, lease, occupy.Reason ?? "invalid_request", mergedIdentities).ConfigureAwait(false);
         if (special == "retry_window_expired_terminal")
             return new AdmissionResult { Kind = AdmissionResultKind.TerminalRejected, ReasonCode = "retry_window_expired", Detail = "重试窗口到期→锁内复核确定未受理，转终局。", RequestIdentity = request.RequestIdentity };
+        if (special == "merged_operation")
+            return await ClassifyOccupyRejectAsync(request, lease, special, mergedIdentities).ConfigureAwait(false);
+        if (special == "merged_target_conflict")
+            return await ClassifyOccupyRejectAsync(request, lease, special, mergedIdentities).ConfigureAwait(false);
+        if (special == "acceptance_claim_pending") return AcceptanceClaimPending(request.RequestIdentity,
+            FindOp(occupy.File!, request.RequestIdentity)!);
         if (special is not null) return AdmissionResult.Of(AdmissionResultKind.Error, special, "占位事务异常分支。", request.RequestIdentity);
 
         if (_hooks.Barriers?.AfterOccupyBeforeSend is { } afterOccupy) await afterOccupy().ConfigureAwait(false);
@@ -1554,8 +2033,16 @@ public sealed class ArbitrationAdmissionService
         // 覆盖新所有者名下的责任。仅在**锁外窗口**生效（流程登记/节点执行保持逐字不变）。
         if (releaseGateDuringSend)
         {
-            var advanced = DetectSendResponsibilityAdvanced(request, occupyBaseline);
-            if (advanced is not null) return advanced;
+            var advanced = DetectSendResponsibilityAdvanced(request, occupyBaseline,
+                acceptedOutcome: outcome is SendOutcome.Accepted);
+            if (advanced is not null)
+            {
+                if (outcome is SendOutcome.Accepted accepted
+                    && FindOp(occupy.File!, request.RequestIdentity) is { OperationType: OperationType.ExternalStart } acceptedOp)
+                    return await PersistLateAcceptanceReceiptAsync(acceptedOp, occupyBaseline, accepted, advanced)
+                        .ConfigureAwait(false);
+                return advanced;
+            }
         }
 
         // §24.18-3 其余口径由既有机制承担（**以既有已验证夹具为证**）：每次写入都由
@@ -1564,6 +2051,75 @@ public sealed class ArbitrationAdmissionService
         // `OwnershipChanged_OldFlowWrite_LeaseStaleGeneration`（换主 ⇒ Reconciling＋`lease_stale_generation`＋
         // 未决事实不被旧身份推进）与 `StateAdvancedExternally_OldRoundDoesNotOverwrite`。
         return await ReconcileOutcomeAsync(request, lease, occupy.File!, outcome).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The sender may learn that BGI accepted a task after this process lost lease ownership. Persist that
+    /// per-round fact in the shared external ledger, but never use the old lease to close the Submission or
+    /// change Operation state. The current owner adopts the receipt during recovery.
+    /// </summary>
+    private async Task<AdmissionResult> PersistLateAcceptanceReceiptAsync(
+        OperationRecord op, OccupyBaseline baseline, SendOutcome.Accepted accepted, AdmissionResult stop)
+    {
+        var acceptedAt = _utcNow();
+        var entry = new ExternalStartLedgerEntry
+        {
+            SubmissionIdentity = baseline.SubmissionIdentity,
+            SendSeq = baseline.SendSeq,
+            CandidateId = op.CandidateId,
+            ResourceRef = op.ResourceRef ?? "",
+            ActionId = op.Candidate?.ActionId ?? ArbitrationOrdering.DeriveActionId(op.CandidateId),
+            TargetBgiEpoch = op.TargetEpoch,
+            AcceptedAtUtc = acceptedAt,
+            EvidenceSource = accepted.EvidenceSource,
+            State = LedgerEntryState.AcceptedPendingExecution,
+            RunId = accepted.RunId ?? op.RunBinding,
+            JobId = accepted.JobId,
+            OperationType = OperationType.ExternalStart,
+        };
+        string? failure;
+        try
+        {
+            failure = await _hooks.LateAcceptanceReceiptPersist(entry).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            failure = "persist_exception:" + ex.GetType().Name;
+        }
+        if (failure is null)
+        {
+            var latest = _store.Read().File;
+            var currentLease = latest?.Lease;
+            var currentOp = latest?.Handoff?.Operations?.FirstOrDefault(o =>
+                string.Equals(o.RequestIdentity, op.RequestIdentity, StringComparison.Ordinal));
+            if (currentLease is not null && currentOp is not null
+                && string.Equals(currentLease.LeaseId, baseline.LeaseId, StringComparison.Ordinal)
+                && string.Equals(currentLease.OwnerEpoch, baseline.OwnerEpoch, StringComparison.Ordinal)
+                && (currentOp.LastSendSeq > baseline.SendSeq
+                    || !string.Equals(currentOp.SubmissionIdentity, baseline.SubmissionIdentity, StringComparison.Ordinal)))
+            {
+                var receiptFact = new TakeoverLedgerFact(entry.SubmissionIdentity, entry.SendSeq, Terminal: false,
+                    JobId: entry.JobId, AcceptedReceipt: true, EvidenceSource: entry.EvidenceSource,
+                    AcceptedAtUtc: entry.AcceptedAtUtc, RunId: entry.RunId, OperationType: entry.OperationType);
+                if (!HoldHistoricalAcceptanceReceipt(currentLease, currentOp.RequestIdentity, receiptFact))
+                    failure = "historical_acceptance_conflict_hold_failed";
+            }
+        }
+        return new AdmissionResult
+        {
+            Kind = AdmissionResultKind.NeedReconcile,
+            ReasonCode = failure is null ? "late_acceptance_receipt_saved" : "late_acceptance_receipt_persist_failed",
+            Detail = failure is null
+                ? "租约换主/发送责任推进后收到的 Accepted 已按原发送轮写入共享台账；旧所有者未关闭任务，等待当前所有者恢复处理。"
+                : $"租约换主/发送责任推进后收到 Accepted，但逐轮回执写入失败（{failure}）；责任保持待核查且禁止重发。",
+            RequestIdentity = op.RequestIdentity,
+            SubmissionIdentity = baseline.SubmissionIdentity,
+            SendSeq = baseline.SendSeq,
+            JobId = accepted.JobId,
+            EvidenceSource = accepted.EvidenceSource,
+            ExecutionDisposition = ExecutionDisposition.Unknown,
+            ResponsibilityState = ResponsibilityState.Pending,
+        };
     }
 
     /// <summary>
@@ -1587,7 +2143,7 @@ public sealed class ArbitrationAdmissionService
     /// **归属边界**：非终态「曾受理」证据与「确定未受理」之间的冲突词表口径归冲突批次（登记 §24.21-C-1③）。
     /// </summary>
     private AdmissionResult? DetectSendResponsibilityAdvanced(
-        AdmissionRequest request, OccupyBaseline baseline)
+        AdmissionRequest request, OccupyBaseline baseline, bool acceptedOutcome)
     {
         var file = _store.Read().File;
         if (file?.Lease is not { } currentLease)
@@ -1598,6 +2154,17 @@ public sealed class ArbitrationAdmissionService
 
         var liveOp = file.Handoff?.Operations?.FirstOrDefault(o =>
             string.Equals(o.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal));
+        // Same-round Acceptance is evidence, not a stale command. Once the operation advanced to another send
+        // round, preserve this receipt by its original identity and let the current owner hold the conflict;
+        // never funnel an older round through the single current AcceptanceClaim slot.
+        if (acceptedOutcome && liveOp is not null)
+        {
+            if (!string.Equals(liveOp.SubmissionIdentity, baseline.SubmissionIdentity, StringComparison.Ordinal)
+                || liveOp.LastSendSeq != baseline.SendSeq)
+                return Stop(request.RequestIdentity, "send_responsibility_advanced_during_send",
+                    "迟到 Accepted 属于已推进的旧发送轮；仅按原轮追加回执并保留冲突，不得写入当前轮认领。", baseline);
+            return null;
+        }
         var liveSub = file.Handoff?.Submission;
         var responsibilityIntact = liveOp is not null
             && liveOp.RequestState == baseline.RequestState
@@ -1669,6 +2236,9 @@ public sealed class ArbitrationAdmissionService
 
         var result = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
         {
+            // The callback runs under the cross-process file lock. Refresh time here so a barrier or queue delay
+            // cannot make an expired retry window pass using ProcessWinnerAsync's pre-lock timestamp.
+            now = _utcNow();
             // ① F11 独立停止闸门（锁内复核——校验后激活同样阻断占位与发送）。
             if (_hooks.F11Active()) return "f11_active";
             var facts = _hooks.FactsProvider();
@@ -1676,6 +2246,77 @@ public sealed class ArbitrationAdmissionService
             // 必须在此全局阻断新启动；不得只依赖可能漏接线的外部事实源）。
             if ((file.Handoff?.Operations ?? []).Any(o => o is not null && o.ConflictPending))
                 return "facts_unknown";
+            var op = (file.Handoff?.Operations ?? []).FirstOrDefault(o => string.Equals(o.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal));
+            if (op is null || op.Zone != OperationZone.Active) return "stale_operation_identity";
+            if (op.AcceptanceClaim is not null)
+            {
+                special = "acceptance_claim_pending";
+                return null;
+            }
+            var existingMirrors = (file.Handoff?.Operations ?? []).Where(m =>
+                string.Equals(m.MergedInto, op.RequestIdentity, StringComparison.Ordinal)
+                && m.Zone == OperationZone.Active).ToList();
+            var roundMirrors = (mergedIdentities ?? [])
+                .Select(identity => (file.Handoff?.Operations ?? []).FirstOrDefault(m => string.Equals(m.RequestIdentity, identity, StringComparison.Ordinal)))
+                .Where(m => m is not null).Cast<OperationRecord>().ToList();
+            var incompatibleMirrors = existingMirrors.Concat(roundMirrors)
+                .Where(m => !IsMergeCompatible(m, op) || m.ConflictPending || m.PendingTerminal is not null || m.ExecutionResult is not null
+                            || (m.MergedInto is not null && !string.Equals(m.MergedInto, op.RequestIdentity, StringComparison.Ordinal)))
+                .Distinct().ToList();
+            if (incompatibleMirrors.Count > 0)
+            {
+                RecordMergeConflictHold(op, file.Revision + 1, now);
+                foreach (var mirror in incompatibleMirrors)
+                    RecordMergeConflictHold(mirror, file.Revision + 1, now);
+                special = "merged_target_conflict";
+                return null;
+            }
+            if (IsMergeConflictHeld(op))
+            {
+                special = "merged_target_conflict";
+                return null;
+            }
+            if (!string.IsNullOrWhiteSpace(op.MergedInto))
+            {
+                var winner = (file.Handoff?.Operations ?? []).FirstOrDefault(o =>
+                    string.Equals(o.RequestIdentity, op.MergedInto, StringComparison.Ordinal));
+                if (winner is null) return "merged_target_missing";
+                if (!IsMergeCompatible(op, winner))
+                {
+                    RecordMergeConflictHold(op, file.Revision + 1, now);
+                    RecordMergeConflictHold(winner, file.Revision + 1, now);
+                    special = "merged_target_conflict";
+                    return null;
+                }
+                if (op.PendingTerminal is not null || op.ExecutionResult is not null)
+                {
+                    RecordMergeConflictHold(op, file.Revision + 1, now);
+                    special = "merged_target_conflict";
+                    return null;
+                }
+                if (op.RequestState is not (OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected))
+                    return "state_changed";
+                if (winner.RequestState == OperationRequestState.RetryableRejected
+                    && winner.RetryWindowDeadlineUtc is { } winnerDeadline && winnerDeadline <= now)
+                {
+                    var expireReason = TerminalizeExpiredRetryable(file, winner, mergedIdentities, now);
+                    if (expireReason is not null) return expireReason;
+                    special = "retry_window_expired_terminal";
+                    return null;
+                }
+                CopyWinnerFactsToMirror(op, winner, file.Revision + 1, now);
+                MigrateAndClean(file, now);
+                special = "merged_operation";
+                return null;
+            }
+            if (op.RequestState == OperationRequestState.RetryableRejected
+                && op.RetryWindowDeadlineUtc is { } retryDeadline && retryDeadline <= now)
+            {
+                var expireReason = TerminalizeExpiredRetryable(file, op, mergedIdentities, now);
+                if (expireReason is not null) return expireReason;
+                special = "retry_window_expired_terminal";
+                return null;
+            }
             var pending = file.Handoff?.Pending;
             var bgiEpoch = _hooks.BgiEpochProvider();
             // ② 票据三要素（§5 / P55③）：无关候选不得占位；授权抢占方保留资格，但**须通过三要素校验**。
@@ -1756,11 +2397,6 @@ public sealed class ArbitrationAdmissionService
                     return "pending_conflict";
             }
 
-            // ⑧ 当前未决发送至多一笔（不覆盖占位）。
-            if (file.Handoff.Submission is not null) return "submission_conflict";
-
-            var op = (file.Handoff.Operations ?? []).FirstOrDefault(o => string.Equals(o.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal));
-            if (op is null || op.Zone != OperationZone.Active) return "stale_operation_identity";
             // [Batch B 收尾 会诊阻断处置] **持久化类型 fail-closed**：续用/重试（本回调是唯一签发发送许可处）
             // 一律以**持久化 `OperationType`** 为准——旧格式代隔离产物（`Unknown`）不得重新占位/发送。
             if (!Enum.IsDefined(op.OperationType) || op.OperationType == OperationType.Unknown)
@@ -1768,6 +2404,8 @@ public sealed class ArbitrationAdmissionService
             // [Batch B 续 会诊阻断处置] **冲突待决＝最高优先级阻断**：不得签发新发送轮次（禁止重发，
             // 重试资格在冲突期间一律失效——不得靠外部配置或调用方自觉）。
             if (op.ConflictPending) return "conflict_pending";
+            // ⑧ 当前未决发送至多一笔（不覆盖占位）。先完成已登记镜像与胜者的共同分类/收敛。
+            if (file.Handoff.Submission is not null) return "submission_conflict";
             // ⑨ 不可变消费记录比对（占位按持久化快照校验——调用方后置可变对象不得改变发送目标/载荷）。
             if (!string.Equals(op.CandidateId, candidateId, StringComparison.Ordinal)
                 || !string.Equals(op.PayloadFingerprint, request.Candidate.PayloadFingerprint ?? "", StringComparison.Ordinal)
@@ -1777,43 +2415,28 @@ public sealed class ArbitrationAdmissionService
             // ⑩ 操作状态原子复核（跨实例一致性：已受理/已在途不得再签发发送许可，§3.2a）。
             if (op.RequestState != expectedState) return "state_changed";
             // ⑪ 曾发送=后续发送（由持久化发送史推导，不由调用路径决定，B2——经 Queued 重入同样受约束）：
-            //    最近发送确定未受理（结果对应最后发送轮次）+预算+持久化窗口，全部锁内复核。
+            //    最近发送确定未受理+预算；首次发送前的本地预检拒绝也受同一持久化窗口约束。
+            OperationResult? retryEvidence = null;
             if (op.LastSendSeq > 0)
             {
                 if (op.LastResult is not { Outcome: OperationOutcome.Rejected, Retryable: true } lastResult
                     || lastResult.AnsweredSendSeq != op.LastSendSeq)
                     return "state_changed"; // 仅「可重试的确定拒绝」构成重试资格（N5 防御：非可重试拒结果不得签发后续发送）
                 if (lastResult.RetryBudgetUsed >= RetryBudgetMax) return "retry_budget_exhausted";
-                if (op.RetryWindowDeadlineUtc is { } deadline && deadline <= now)
-                {
-                    // 窗口到期：锁内复核成立（最近发送确定未受理+无更新发送责任——⑧已排除未决 Submission）→同边界转终局。
-                    op.RequestState = OperationRequestState.TerminalRejected;
-                    lastResult.ReasonCode = "retry_window_expired";
-                    op.Zone = OperationZone.TerminalPendingTransfer;
-                    op.UpdatedRevision = file.Revision + 1;
-                    op.UpdatedAtUtc = now;
-                    // 合并项同边界共终局（N4：共享胜者结果——不留 MergedInto 未落/分类不一致窗口）。
-                    if (mergedIdentities is { Count: > 0 })
-                    {
-                        foreach (var m in (file.Handoff.Operations ?? []).Where(o => mergedIdentities.Contains(o.RequestIdentity)))
-                        {
-                            if (m.Zone != OperationZone.Active || m.RequestState != OperationRequestState.InRound) return "state_changed";
-                            m.MergedInto = op.RequestIdentity;
-                            m.RequestState = OperationRequestState.TerminalRejected;
-                            m.LastResult = new OperationResult { Outcome = OperationOutcome.Rejected, ReasonCode = "retry_window_expired", Retryable = false, RetryBudgetUsed = m.LastResult?.RetryBudgetUsed ?? 0, EvidenceSource = "merged:" + op.RequestIdentity, AnsweredSendSeq = m.LastSendSeq };
-                            m.Zone = OperationZone.TerminalPendingTransfer;
-                            m.UpdatedRevision = file.Revision + 1;
-                            m.UpdatedAtUtc = now;
-                        }
-                    }
-
-                    MigrateAndClean(file, now);
-                    special = "retry_window_expired_terminal";
-                    return null;
-                }
-
-                lastResult.RetryBudgetUsed += 1; // 无损拒绝重试不增加业务 attempt（预算水位随重试签发递增）
+                retryEvidence = lastResult;
             }
+            else if (op.RetryWindowDeadlineUtc is not null
+                     && op.LastPrecheckResult is not { Outcome: OperationOutcome.Rejected, Retryable: true, AnsweredSendSeq: 0, EvidenceSource: "final_precheck" })
+                return "state_changed";
+            if (op.RetryWindowDeadlineUtc is { } deadline && deadline <= now)
+            {
+                var expireReason = TerminalizeExpiredRetryable(file, op, mergedIdentities, now);
+                if (expireReason is not null) return expireReason;
+                special = "retry_window_expired_terminal";
+                return null;
+            }
+            if (retryEvidence is not null)
+                retryEvidence.RetryBudgetUsed += 1; // 无损拒绝重试不增加业务 attempt（预算水位随重试签发递增）
 
             // ⑪b 游标唯一消费（B7：同 runBinding+cursorRef+cursorRevision 不得被两个操作消费——锁内核验，防双跑）。
             // **不按 Zone 过滤**（会诊重要项）：消费记录经 TerminalPendingTransfer→Tombstone 迁区后**仍在盘上**，
@@ -1823,7 +2446,9 @@ public sealed class ArbitrationAdmissionService
             // 缺 RunBinding 会把他们互判为「同一游标已消费」而误拒合法提交。加运行归属只会**减少误拒**，
             // 不削弱同 run 内「同一游标只消费一次」的约束。
             if (request.CursorRef is { } cursorRefToCheck
-                && (file.Handoff.Operations ?? []).Any(other =>
+                && (file.Handoff.Operations ?? [])
+                    .Concat((file.Handoff.ArchivedOperations ?? []).Select(archive => archive.Operation))
+                    .Any(other =>
                     !string.Equals(other.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal)
                     && string.Equals(other.RunBinding, request.RunBinding, StringComparison.Ordinal)
                     && string.Equals(other.CursorRef, cursorRefToCheck, StringComparison.Ordinal)
@@ -1862,6 +2487,8 @@ public sealed class ArbitrationAdmissionService
             // ⑬ 占位（授权签发/身份绑定/消费关系/Submission=同一次原子发布）。
             var sendSeq = op.LastSendSeq + 1;
             var submissionIdentity = "sub:" + request.RequestIdentity + ":" + sendSeq.ToString();
+            op.LastPrecheckResult = null; // 新发送轮次开始；保留 LastResult 作为上一笔真实发送证据。
+            op.ConflictResolutionAuditId = null; // 当前轮引用清空；历史裁决继续保存在审计集合中。
             op.RequestState = OperationRequestState.Granted;
             op.LastSendSeq = sendSeq;
             op.SubmissionIdentity = submissionIdentity;
@@ -1904,13 +2531,21 @@ public sealed class ArbitrationAdmissionService
                     CreatedAtUtc = now,
                     State = "pending",
                 });
-            // ⑭ 去重合并关联发送前落盘（B6：合并项由本胜者承担发送责任；共同结清/恢复时镜像终态）。
-            if (mergedIdentities is { Count: > 0 })
+            // ⑭ 去重合并关联与本轮身份发送前落盘（B6）：新加入的镜像和此前已链接的活跃镜像
+            // 必须在同一事务内看到新发送身份，避免重试结果未知后镜像仍关联旧轮次。
+            var mirrorsToSync = existingMirrors.Concat(roundMirrors)
+                .DistinctBy(m => m.RequestIdentity).ToList();
+            if (mirrorsToSync.Count > 0)
             {
-                foreach (var m in (file.Handoff.Operations ?? []).Where(o => mergedIdentities.Contains(o.RequestIdentity)))
+                foreach (var m in mirrorsToSync)
                 {
-                    if (m.Zone != OperationZone.Active || m.RequestState != OperationRequestState.InRound) return "state_changed";
+                    if (m.Zone != OperationZone.Active
+                        || m.RequestState is not (OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected)
+                        || !IsMergeCompatible(m, op) || m.ConflictPending || m.PendingTerminal is not null || m.ExecutionResult is not null
+                        || (m.MergedInto is not null && !string.Equals(m.MergedInto, op.RequestIdentity, StringComparison.Ordinal)))
+                        return "merged_target_conflict";
                     m.MergedInto = op.RequestIdentity;
+                    CopyWinnerFactsToMirror(m, op, file.Revision + 1, now);
                     m.UpdatedRevision = file.Revision + 1;
                     m.UpdatedAtUtc = now;
                 }
@@ -1971,6 +2606,7 @@ public sealed class ArbitrationAdmissionService
     {
         if (handoff is null || string.IsNullOrEmpty(runBinding) || string.IsNullOrEmpty(workflowId)) return null;
         var parents = (handoff.Operations ?? [])
+            .Concat((handoff.ArchivedOperations ?? []).Select(archive => archive.Operation))
             .Where(o => o is not null
                         && IsFlowRegistrationParent(o, runBinding!)
                         && string.Equals(o.Candidate?.WorkflowId, workflowId, StringComparison.Ordinal))
@@ -2016,6 +2652,7 @@ public sealed class ArbitrationAdmissionService
         // ③ 全局未决发送槽为空（其他节点在飞/父未结清 ⇒ 不豁免）
         if (handoff.Submission is not null) return false;
         var parents = (handoff.Operations ?? [])
+            .Concat((handoff.ArchivedOperations ?? []).Select(archive => archive.Operation))
             .Where(o => o is not null && IsFlowRegistrationParent(o, runBinding)
                         && string.Equals(o.Candidate?.WorkflowId, op.Candidate?.WorkflowId, StringComparison.Ordinal))
             .ToList();
@@ -2045,7 +2682,8 @@ public sealed class ArbitrationAdmissionService
     }
 
     /// <summary>占位拒绝分类（原因→终局/可重试/回队/对账；一切状态迁移同样经权威串行边界且校验发布成功；状态已推进=不覆盖，分类返回当前事实）。</summary>
-    private async Task<AdmissionResult> ClassifyOccupyRejectAsync(AdmissionRequest request, LeaseSegment lease, string reason)
+    private async Task<AdmissionResult> ClassifyOccupyRejectAsync(AdmissionRequest request, LeaseSegment lease, string reason,
+        IReadOnlyCollection<string>? mergedIdentities = null)
     {
         switch (reason)
         {
@@ -2081,6 +2719,30 @@ public sealed class ArbitrationAdmissionService
                     ExecutionDisposition = ExecutionDisposition.Unknown,
                     ResponsibilityState = ResponsibilityState.Pending,
                 };
+            case "preempt_confirm_pending":
+                return ClassifyCurrentState(request.RequestIdentity);
+            case "merged_operation":
+            {
+                var read = _store.Read();
+                var op = read.File is null ? null : FindOp(read.File, request.RequestIdentity);
+                if (op is null) return ClassifyCurrentState(request.RequestIdentity);
+                if (op.ConflictPending)
+                    return new AdmissionResult
+                    {
+                        Kind = AdmissionResultKind.NeedReconcile,
+                        ReasonCode = "conflict_pending",
+                        Detail = "合并镜像自身存在待决冲突（不签发独立发送许可）。",
+                        RequestIdentity = request.RequestIdentity,
+                        SubmissionIdentity = op.SubmissionIdentity,
+                        SendSeq = op.LastSendSeq,
+                        ExecutionDisposition = ExecutionDisposition.Unknown,
+                        ResponsibilityState = ResponsibilityState.Pending,
+                    };
+                var target = op.MergedInto is { } mergedInto ? FindOp(read.File!, mergedInto) : null;
+                return target is null
+                    ? ClassifyCurrentState(request.RequestIdentity)
+                    : ClassifyMergedTarget(request.RequestIdentity, op, target, "操作已合并为镜像，不能签发独立发送许可。");
+            }
             // [Batch B 收尾] 持久化类型未知（旧格式代隔离产物）⇒ **不签发发送许可**（fail-closed，责任保留）。
             case "legacy_operation_type_unresolved":
             {
@@ -2105,21 +2767,35 @@ public sealed class ArbitrationAdmissionService
             case "facts_unknown":
             {
                 var back = await TransitionSingleAsync(request.RequestIdentity, lease, OperationRequestState.Queued, expectedStates: OperationRequestState.InRound).ConfigureAwait(false);
-                return back.Success
-                    ? AdmissionResult.Of(AdmissionResultKind.NeedReconcile, "facts_unknown", "权威执行事实未知→待对账（禁止换键重跑；操作回 Queued 可再驱动）。", request.RequestIdentity)
-                    : ClassifyCurrentState(request.RequestIdentity);
+                if (!back.Success) return ClassifyCurrentState(request.RequestIdentity);
+                var factsUnknown = ClassifyCurrentState(request.RequestIdentity);
+                if (factsUnknown.Kind != AdmissionResultKind.NeedReconcile) return factsUnknown;
+                factsUnknown.ReasonCode = "facts_unknown";
+                factsUnknown.Detail = "权威执行事实未知→待对账（禁止换键重跑；操作回 Queued 可再驱动）。";
+                factsUnknown.ExecutionDisposition = ExecutionDisposition.Unknown;
+                factsUnknown.ResponsibilityState = ResponsibilityState.Pending;
+                return factsUnknown;
             }
             case "execution_occupied":
-                return (await RetryablePrecheckRejectAsync(request, lease, "execution_occupied", "执行占用（锁内复核——按无损拒绝类可重试处理）。").ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
+                return (await RetryablePrecheckRejectAsync(request, lease, "execution_occupied", "执行占用（锁内复核——按无损拒绝类可重试处理）。", mergedIdentities).ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
             // 状态已由其他处理者推进：不回退——返回当前事实分类（B1）。
             case "state_changed":
                 return ClassifyCurrentState(request.RequestIdentity);
             // 未决发送冲突：原未决责任保持；本笔尚未签发许可，终局拒绝并迁出主槽位，
             // 留 reasonCode 审计。后续重试须新建操作，绝不复用原未决发送身份。
             case "submission_conflict":
-                return (await TerminatePrecheckAsync(request, lease, reason, AdmissionResultKind.Error,
+                return (await TerminatePrecheckAsync(request, lease, reason, AdmissionResultKind.TerminalRejected,
                     "存在未决发送（至多一笔，不覆盖占位）——本笔终局拒绝并释放主槽位；原未决责任保持。")
                     .ConfigureAwait(false)) ?? ClassifyCurrentState(request.RequestIdentity);
+            case "merged_target_conflict":
+            {
+                var read = _store.Read();
+                var mirror = read.File is null ? null : FindOp(read.File, request.RequestIdentity);
+                return mirror is null
+                    ? ClassifyCurrentState(request.RequestIdentity)
+                    : ClassifyMergedTargetConflict(request.RequestIdentity, mirror,
+                        "合并关联的候选身份、载荷、排序键、操作类型或运行绑定不一致；保留待核查，不发送。");
+            }
             // 切换闸门/租约资格/存取故障：操作回 Queued（未发布发送许可），响亮拒绝。
             default:
             {
@@ -2151,19 +2827,104 @@ public sealed class ArbitrationAdmissionService
                 ExecutionDisposition = ExecutionDisposition.Unknown,
                 ResponsibilityState = ResponsibilityState.Pending,
             };
+        if (op.PreemptConfirmPending)
+            return NeedPreemptConfirmation(requestIdentity, op);
+        if (IsMergeConflictHeld(op))
+            return ClassifyMergedTargetConflict(requestIdentity, op,
+                "合并兼容性冲突已持久化为待核查状态；不改写责任、不发送。");
+        if (op.MergedInto is { } mergedTargetIdentity)
+        {
+            var mergedTarget = FindOp(read.File!, mergedTargetIdentity);
+            return mergedTarget is null
+                ? AdmissionResult.Of(AdmissionResultKind.Error, "merged_target_missing", "合并目标记录缺失=响亮拒绝。", requestIdentity)
+                : ClassifyMergedTarget(requestIdentity, op, mergedTarget, "去重镜像共享胜者当前结果，不新增发送者。");
+        }
+        if (op.PreemptConfirmPending && op.RequestState is OperationRequestState.Queued or OperationRequestState.InRound)
+            return NeedPreemptConfirmation(requestIdentity, op);
+        if (op.ExecutionResult is { } ownExecutionResult
+            && op.RequestState is OperationRequestState.Accepted or OperationRequestState.TerminalCompleted or OperationRequestState.Reconciling)
+            return ExecutionResultMatchesOperation(op, ownExecutionResult)
+                ? ClassifyFromExecutionResult(requestIdentity, op, settled: op.RequestState == OperationRequestState.TerminalCompleted,
+                    "execution_result", "按已持久化执行结果返回（责任状态独立判定）。")
+                : ClassifyExecutionFactMismatch(requestIdentity, op, "执行事实与本操作当前发送身份不匹配，保留待核查。");
         return op.RequestState switch
         {
             // [第四轮验证会诊阻断处置] **续用/重启分类必须保持同一结果事实**（§24.6-4／§24.13-2）：
             // 已取得 `ExecutionResult` 者按其类别返回（取消/执行失败不得被改写成成功），责任维按是否结清区分。
             OperationRequestState.Accepted => ClassifyFromExecutionResult(requestIdentity, op, settled: false, "already_accepted", "已受理（返回既有结果）。"),
             OperationRequestState.TerminalCompleted => ClassifyFromExecutionResult(requestIdentity, op, settled: true, "already_terminal", "终局完成（返回既有结果）。"),
-            OperationRequestState.TerminalRejected => AdmissionResult.Of(AdmissionResultKind.TerminalRejected, op.LastResult?.ReasonCode ?? "terminal_rejected", "终局拒绝（返回既有结果）。", requestIdentity),
-            OperationRequestState.NotSelected => new AdmissionResult { Kind = AdmissionResultKind.NotSelected, ReasonCode = op.LastResult?.ReasonCode ?? "not_selected", Detail = "未获选终局（返回既有结果）。", RequestIdentity = requestIdentity, WinnerCandidateId = op.LastResult?.WinnerRef, SuppressionSource = op.LastResult?.SuppressionSource ?? "" },
-            OperationRequestState.RetryableRejected => AdmissionResult.Of(AdmissionResultKind.RetryableRejected, op.LastResult?.ReasonCode ?? "retryable_rejected", "可重试拒绝（经 RetryAsync 重新 Admit）。", requestIdentity),
-            OperationRequestState.Reconciling => AdmissionResult.Of(AdmissionResultKind.Reconciling, "reconciling", "发送结果未知，保守待对账（不重发）。", requestIdentity),
-            _ => AdmissionResult.Of(AdmissionResultKind.NeedReconcile, "in_flight", "已有处理在途（合并，不新增发送者）。", requestIdentity),
+            OperationRequestState.TerminalRejected => ClassifyTerminalRejected(requestIdentity, op, "终局拒绝（返回既有结果）。"),
+            OperationRequestState.NotSelected => new AdmissionResult { Kind = AdmissionResultKind.NotSelected, ReasonCode = op.LastPrecheckResult?.ReasonCode ?? op.LastResult?.ReasonCode ?? "not_selected", Detail = "未获选终局（返回既有结果）。", RequestIdentity = requestIdentity, WinnerCandidateId = op.LastPrecheckResult?.WinnerRef ?? op.LastResult?.WinnerRef, SuppressionSource = op.LastPrecheckResult?.SuppressionSource ?? op.LastResult?.SuppressionSource ?? "" },
+            OperationRequestState.RetryableRejected => ClassifyRetryableRejected(requestIdentity, op, "可重试拒绝（经 RetryAsync 重新 Admit）。"),
+            OperationRequestState.Reconciling => new AdmissionResult
+            {
+                Kind = AdmissionResultKind.Reconciling,
+                ReasonCode = "reconciling",
+                Detail = "发送结果未知，保守待对账（不重发）。",
+                RequestIdentity = requestIdentity,
+                SubmissionIdentity = op.SubmissionIdentity,
+                SendSeq = op.LastSendSeq,
+                ExecutionDisposition = ExecutionDisposition.Unknown,
+                ResponsibilityState = ResponsibilityState.Pending,
+            },
+            _ => ClassifyInFlight(requestIdentity, op, "已有处理在途（合并，不新增发送者）。"),
         };
     }
+
+    private static AdmissionResult NeedPreemptConfirmation(string requestIdentity, OperationRecord op)
+        => new()
+        {
+            Kind = AdmissionResultKind.NeedPreemptConfirm,
+            ReasonCode = "execution_occupied",
+            Detail = "该操作仍有未完成的安全交接确认；占用快照变化、普通续用和重试均不能代替确认。",
+            RequestIdentity = requestIdentity,
+            SubmissionIdentity = op.SubmissionIdentity,
+            SendSeq = op.LastSendSeq,
+            WinnerCandidateId = op.CandidateId,
+            ExecutionDisposition = ExecutionDisposition.Unknown,
+            ResponsibilityState = ResponsibilityState.Pending,
+        };
+
+    private static AdmissionResult ClassifyInFlight(string requestIdentity, OperationRecord op, string detail)
+        => new()
+        {
+            Kind = AdmissionResultKind.NeedReconcile,
+            ReasonCode = "in_flight",
+            Detail = detail,
+            RequestIdentity = requestIdentity,
+            SubmissionIdentity = op.SubmissionIdentity,
+            SendSeq = op.LastSendSeq,
+            ExecutionDisposition = op.RequestState is OperationRequestState.Sending or OperationRequestState.Reconciling
+                ? ExecutionDisposition.Unknown
+                : ExecutionDisposition.None,
+            ResponsibilityState = ResponsibilityState.Pending,
+        };
+
+    private static AdmissionResult ClassifyTerminalRejected(string requestIdentity, OperationRecord op, string detail)
+        => new()
+        {
+            Kind = AdmissionResultKind.TerminalRejected,
+            ReasonCode = op.LastPrecheckResult?.ReasonCode ?? op.LastResult?.ReasonCode ?? "terminal_rejected",
+            Detail = detail,
+            RequestIdentity = requestIdentity,
+            SubmissionIdentity = op.SubmissionIdentity,
+            SendSeq = op.LastSendSeq,
+            ResponsibilityState = ResponsibilityState.Settled,
+            EvidenceSource = op.LastPrecheckResult?.EvidenceSource ?? op.LastResult?.EvidenceSource,
+        };
+
+    private static AdmissionResult ClassifyRetryableRejected(string requestIdentity, OperationRecord op, string detail)
+        => new()
+        {
+            Kind = AdmissionResultKind.RetryableRejected,
+            ReasonCode = op.LastPrecheckResult?.ReasonCode ?? op.LastResult?.ReasonCode ?? "retryable_rejected",
+            Detail = detail,
+            RequestIdentity = requestIdentity,
+            SubmissionIdentity = op.SubmissionIdentity,
+            SendSeq = op.LastSendSeq,
+            ResponsibilityState = ResponsibilityState.Settled,
+            EvidenceSource = op.LastPrecheckResult?.EvidenceSource ?? op.LastResult?.EvidenceSource,
+        };
 
     /// <summary>终局落盘（本地权威裁决+无未决发送责任；发布失败=不报告未持久化终局，响亮 Error）。</summary>
     private async Task<AdmissionResult?> TerminatePrecheckAsync(AdmissionRequest request, LeaseSegment lease, string reasonCode, AdmissionResultKind kind, string detail)
@@ -2172,14 +2933,49 @@ public sealed class ArbitrationAdmissionService
         var read = _store.Read();
         if (read.File?.Lease is null)
             return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "终局落盘前租约丢失（操作保持 Active，未持久化终局不报告）。", request.RequestIdentity);
+        string? resultSubmissionIdentity = null;
+        var resultSendSeq = 0;
         var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var op = FindOp(file, request.RequestIdentity);
             if (op is null || op.Zone != OperationZone.Active) return "state_changed";
             // B1：仅未发布发送许可的操作可终局预检拒绝（已占位/在途/已受理/待对账=状态已推进，不覆盖不迁墓碑）。
             if (op.RequestState is not (OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected)) return "state_changed";
+            if (IsMergeConflictHeld(op)) return "merged_target_conflict";
+            if (op.MergedInto is { } mergedInto)
+            {
+                var target = FindOp(file, mergedInto);
+                if (target is null || !IsMergeCompatible(op, target)) return "merged_target_conflict";
+                return "merged_operation";
+            }
+            var mirrors = (file.Handoff?.Operations ?? []).Where(m =>
+                string.Equals(m.MergedInto, op.RequestIdentity, StringComparison.Ordinal)
+                && m.Zone == OperationZone.Active).ToList();
+            if (mirrors.Any(m => !IsMergeCompatible(m, op) || m.ConflictPending
+                                 || m.PendingTerminal is not null || m.ExecutionResult is not null))
+                return "merged_target_conflict";
+            resultSubmissionIdentity = op.SubmissionIdentity;
+            resultSendSeq = op.LastSendSeq;
             op.RequestState = OperationRequestState.TerminalRejected;
-            op.LastResult = new OperationResult { Outcome = OperationOutcome.Rejected, ReasonCode = reasonCode, Retryable = false, RetryBudgetUsed = op.LastResult?.RetryBudgetUsed ?? 0, EvidenceSource = "final_precheck", AnsweredSendSeq = op.LastSendSeq };
+            op.LastPrecheckResult = new OperationResult
+            {
+                Outcome = OperationOutcome.Rejected,
+                ReasonCode = reasonCode,
+                Retryable = false,
+                RetryBudgetUsed = op.LastResult?.RetryBudgetUsed ?? 0,
+                EvidenceSource = "final_precheck",
+                AnsweredSendSeq = 0,
+            };
+            MirrorMergedInPlace(file, op, now, OperationRequestState.TerminalRejected,
+                (mirror, winner) => new OperationResult
+                {
+                    Outcome = OperationOutcome.Rejected,
+                    ReasonCode = winner.LastPrecheckResult?.ReasonCode ?? reasonCode,
+                    Retryable = false,
+                    RetryBudgetUsed = mirror.LastResult?.RetryBudgetUsed ?? 0,
+                    EvidenceSource = "merged:" + (winner.LastPrecheckResult?.EvidenceSource ?? "final_precheck"),
+                    AnsweredSendSeq = 0,
+                });
             op.Zone = OperationZone.TerminalPendingTransfer;
             op.UpdatedRevision = file.Revision + 1;
             op.UpdatedAtUtc = now;
@@ -2188,35 +2984,127 @@ public sealed class ArbitrationAdmissionService
         });
         await Task.CompletedTask.ConfigureAwait(false);
         if (!mutate.Success && mutate.Reason == "state_changed") return null; // 状态已推进→调用方分类当前事实
+        if (!mutate.Success && mutate.Reason == "merged_operation")
+        {
+            var current = _store.Read();
+            var mirror = current.File is null ? null : FindOp(current.File, request.RequestIdentity);
+            var target = mirror?.MergedInto is { } targetId && current.File is not null ? FindOp(current.File, targetId) : null;
+            return mirror is null || target is null
+                ? AdmissionResult.Of(AdmissionResultKind.Error, "merged_target_missing", "合并目标记录缺失，保留响亮失败。", request.RequestIdentity)
+                : ClassifyMergedTarget(request.RequestIdentity, mirror, target,
+                    "操作已合并为镜像，不能独立终局化。");
+        }
+        if (!mutate.Success && mutate.Reason == "merged_target_conflict")
+        {
+            var current = _store.Read();
+            var currentOp = current.File is null ? null : FindOp(current.File, request.RequestIdentity);
+            return currentOp is null
+                ? AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "预检拒绝时操作记录缺失。", request.RequestIdentity)
+                : ClassifyMergedTargetConflict(request.RequestIdentity, currentOp,
+                    "预检拒绝时发现合并关系不兼容；保留责任待核查，不发送。");
+        }
         return mutate.Success
-            ? AdmissionResult.Of(kind, reasonCode, detail, request.RequestIdentity)
+            ? new AdmissionResult
+            {
+                Kind = kind,
+                ReasonCode = reasonCode,
+                Detail = detail,
+                RequestIdentity = request.RequestIdentity,
+                SubmissionIdentity = resultSubmissionIdentity,
+                SendSeq = resultSendSeq,
+                // 已原子落盘为本地终局拒绝并迁出 Active；责任维按持久化结算事实，而非对外 Kind 分类。
+                ResponsibilityState = ResponsibilityState.Settled,
+                EvidenceSource = "final_precheck",
+            }
             : AdmissionResult.Of(AdmissionResultKind.Error, mutate.Reason ?? "invalid_request", "终局落盘失败（未持久化终局不报告；操作保持 Active）。", request.RequestIdentity);
     }
 
     /// <summary>可重试拒绝落盘（预算/窗口内经 RetryAsync 重新 Admit；窗口持久化不重置）。</summary>
-    private async Task<AdmissionResult?> RetryablePrecheckRejectAsync(AdmissionRequest request, LeaseSegment lease, string reasonCode, string detail)
+    private async Task<AdmissionResult?> RetryablePrecheckRejectAsync(AdmissionRequest request, LeaseSegment lease, string reasonCode, string detail,
+        IReadOnlyCollection<string>? mergedIdentities = null)
     {
         var now = _utcNow();
         var read = _store.Read();
         if (read.File?.Lease is null)
             return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "可重试拒绝落盘前租约丢失。", request.RequestIdentity);
+        string? resultSubmissionIdentity = null;
+        var resultSendSeq = 0;
         var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
         {
             var op = FindOp(file, request.RequestIdentity);
             if (op is null || op.Zone != OperationZone.Active) return "state_changed";
+            if (op.ConflictPending) return "conflict_pending";
+            if (op.AcceptanceClaim is not null) return "acceptance_claim_pending";
+            if (op.PendingTerminal is not null || op.ExecutionResult is not null || IsMergeConflictHeld(op)
+                || op.MergedInto is not null) return "merged_target_conflict";
             // B1：仅未发布发送许可的操作可落可重试拒绝（状态已推进=不覆盖）。
             if (op.RequestState is not (OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected)) return "state_changed";
+            resultSubmissionIdentity = op.SubmissionIdentity;
+            resultSendSeq = op.LastSendSeq;
             op.RequestState = OperationRequestState.RetryableRejected;
-            op.LastResult = new OperationResult { Outcome = OperationOutcome.Rejected, ReasonCode = reasonCode, Retryable = true, RetryBudgetUsed = op.LastResult?.RetryBudgetUsed ?? 0, EvidenceSource = "final_precheck", AnsweredSendSeq = op.LastSendSeq };
+            op.LastPrecheckResult = new OperationResult
+            {
+                Outcome = OperationOutcome.Rejected,
+                ReasonCode = reasonCode,
+                Retryable = true,
+                RetryBudgetUsed = op.LastResult?.RetryBudgetUsed ?? 0,
+                EvidenceSource = "final_precheck",
+                AnsweredSendSeq = 0,
+            };
             op.RetryWindowDeadlineUtc ??= now + RetryWindow; // 首次确定拒绝派生；持久化后不得重置（§3.3-6）
+            var incomingIds = (mergedIdentities ?? []).ToHashSet(StringComparer.Ordinal);
+            var incoming = incomingIds.Select(identity => FindOp(file, identity)).ToList();
+            if (incoming.Any(mirror => mirror is null)) return "merged_target_conflict";
+            var mirrors = (file.Handoff?.Operations ?? []).Where(m =>
+                string.Equals(m.MergedInto, op.RequestIdentity, StringComparison.Ordinal)
+                || incomingIds.Contains(m.RequestIdentity)).ToList();
+            if (mirrors.Any(m => m.Zone != OperationZone.Active
+                                 || m.RequestState is not (OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected)))
+                return "merged_target_conflict";
+            if (mirrors.Any(m => !IsMergeCompatible(m, op) || m.ConflictPending
+                                 || m.PendingTerminal is not null || m.ExecutionResult is not null
+                                 || (m.MergedInto is not null && !string.Equals(m.MergedInto, op.RequestIdentity, StringComparison.Ordinal))))
+                return "merged_target_conflict";
+            foreach (var mirror in mirrors) mirror.MergedInto = op.RequestIdentity;
+            MirrorMergedInPlace(file, op, now, OperationRequestState.RetryableRejected,
+                (mirror, winner) => new OperationResult
+                {
+                    Outcome = OperationOutcome.Rejected,
+                    ReasonCode = winner.LastPrecheckResult?.ReasonCode ?? reasonCode,
+                    Retryable = true,
+                    RetryBudgetUsed = mirror.LastResult?.RetryBudgetUsed ?? 0,
+                    EvidenceSource = "merged:" + (winner.LastPrecheckResult?.EvidenceSource ?? "final_precheck"),
+                    AnsweredSendSeq = 0,
+                });
             op.UpdatedRevision = file.Revision + 1;
             op.UpdatedAtUtc = now;
             return null;
         });
         await Task.CompletedTask.ConfigureAwait(false);
         if (!mutate.Success && mutate.Reason == "state_changed") return null; // 状态已推进→调用方分类当前事实
+        if (!mutate.Success && mutate.Reason == "conflict_pending") return ClassifyCurrentState(request.RequestIdentity);
+        if (!mutate.Success && mutate.Reason == "acceptance_claim_pending") return ClassifyCurrentState(request.RequestIdentity);
+        if (!mutate.Success && mutate.Reason == "merged_target_conflict")
+        {
+            var current = _store.Read();
+            var op = current.File is null ? null : FindOp(current.File, request.RequestIdentity);
+            return op is null
+                ? AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "预检拒绝时操作记录缺失。", request.RequestIdentity)
+                : ClassifyMergedTargetConflict(request.RequestIdentity, op,
+                    "预检拒绝时发现关联或责任状态冲突；保留待核查，不发送。");
+        }
         return mutate.Success
-            ? AdmissionResult.Of(AdmissionResultKind.RetryableRejected, reasonCode, detail, request.RequestIdentity)
+            ? new AdmissionResult
+            {
+                Kind = AdmissionResultKind.RetryableRejected,
+                ReasonCode = reasonCode,
+                Detail = detail,
+                RequestIdentity = request.RequestIdentity,
+                SubmissionIdentity = resultSubmissionIdentity,
+                SendSeq = resultSendSeq,
+                ResponsibilityState = ResponsibilityState.Settled,
+                EvidenceSource = "final_precheck",
+            }
             : AdmissionResult.Of(AdmissionResultKind.Error, mutate.Reason ?? "invalid_request", "可重试拒绝落盘失败。", request.RequestIdentity);
     }
 
@@ -2225,7 +3113,8 @@ public sealed class ArbitrationAdmissionService
     // ============================================================
 
     /// <summary>三态对账（发送回调与显式对账共用——两分支统一关闭接口，无第三路）。</summary>
-    private async Task<AdmissionResult> ReconcileOutcomeAsync(AdmissionRequest request, LeaseSegment lease, LogicalOwnerLeaseFile occupiedFile, SendOutcome outcome)
+    private async Task<AdmissionResult> ReconcileOutcomeAsync(AdmissionRequest request, LeaseSegment lease, LogicalOwnerLeaseFile occupiedFile,
+        SendOutcome outcome, DateTimeOffset? acceptedAtUtc = null)
     {
         var op = occupiedFile.Handoff!.Operations.First(o => string.Equals(o.RequestIdentity, request.RequestIdentity, StringComparison.Ordinal));
         var submission = occupiedFile.Handoff.Submission!;
@@ -2235,38 +3124,58 @@ public sealed class ArbitrationAdmissionService
         {
             case SendOutcome.Accepted accepted:
             {
-                if (_hooks.Barriers?.AfterAcceptBeforeLedger is { } b1) await b1().ConfigureAwait(false);
-                // 受理→先持久化接管台账→确认可跨重启重建→关闭 Submission（B-2：两记录不得同时缺失）。
-                var ledgerEntry = new ExternalStartLedgerEntry
+                // ExternalStart 的外部接管台账写入前先持久化本地发送轮次认领；普通节点受理不写该台账。
+                var claimRequired = op.OperationType == OperationType.ExternalStart;
+                AdmissionResult? claimFailure;
+                if (claimRequired)
                 {
-                    SubmissionIdentity = submission.SubmissionIdentity,
-                    SendSeq = submission.SendSeq,
-                    CandidateId = submission.CandidateId,
-                    ResourceRef = op.ResourceRef,
-                    ActionId = submission.ActionId,
-                    TargetBgiEpoch = submission.TargetEpoch,
-                    AcceptedAtUtc = now,
-                    EvidenceSource = accepted.EvidenceSource,
-                    State = LedgerEntryState.AcceptedPendingExecution,
-                    RunId = accepted.RunId,
-                    JobId = accepted.JobId, // §24.3-2：JobId 全链传递（不得在准入层丢弃已取得的句柄）
-                    OperationType = op.OperationType, // §24.17：类型相关判定只按持久化类型（不得用 RunId 空值推断）
-                };
-                string? persistFailure;
-                try
-                {
-                    persistFailure = await _hooks.TakeoverPersist(ledgerEntry).ConfigureAwait(false);
+                    claimFailure = await PersistAcceptanceTakeoverAsync(op, lease,
+                        accepted.EvidenceSource, accepted.RunId, accepted.JobId, acceptedAtUtc: acceptedAtUtc).ConfigureAwait(false);
                 }
-                catch (Exception ex)
+                else
                 {
-                    persistFailure = "persist_exception:" + ex.GetType().Name; // I1：持久化回调异常=失败原因（Submission 保持未决，保守待对账）
+                    if (_hooks.Barriers?.AfterAcceptBeforeLedger is { } beforeLedger)
+                        await beforeLedger().ConfigureAwait(false);
+                    var ledgerEntry = new ExternalStartLedgerEntry
+                    {
+                        SubmissionIdentity = submission.SubmissionIdentity,
+                        SendSeq = submission.SendSeq,
+                        CandidateId = submission.CandidateId,
+                        ResourceRef = op.ResourceRef,
+                        ActionId = submission.ActionId,
+                        TargetBgiEpoch = submission.TargetEpoch,
+                        AcceptedAtUtc = now,
+                        EvidenceSource = accepted.EvidenceSource,
+                        State = LedgerEntryState.AcceptedPendingExecution,
+                        RunId = accepted.RunId,
+                        JobId = accepted.JobId,
+                        OperationType = op.OperationType,
+                    };
+                    string? persistFailure;
+                    try { persistFailure = await _hooks.TakeoverPersist(ledgerEntry).ConfigureAwait(false); }
+                    catch (Exception ex) { persistFailure = "persist_exception:" + ex.GetType().Name; }
+                    claimFailure = persistFailure is null
+                        ? null
+                        : LocatedStop(request.RequestIdentity, op, "takeover_persist_failed",
+                            "接管台账持久化失败（" + persistFailure + "）——Submission 保持未决，保守待对账。");
                 }
-
-                if (persistFailure is not null)
+                if (claimFailure is not null)
                 {
                     var markPersist = await MarkReconcilingAsync(request.RequestIdentity, lease, submission.SubmissionIdentity, submission.SendSeq).ConfigureAwait(false);
                     return markPersist.Success
-                        ? new AdmissionResult { Kind = AdmissionResultKind.Reconciling, ReasonCode = "takeover_persist_failed", Detail = "接管台账持久化失败（" + persistFailure + "）——Submission 保持未决，保守待对账。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq, ExecutionDisposition = ExecutionDisposition.Unknown, ResponsibilityState = ResponsibilityState.Pending, JobId = accepted.JobId, EvidenceSource = accepted.EvidenceSource }
+                        ? new AdmissionResult
+                        {
+                            Kind = AdmissionResultKind.Reconciling,
+                            ReasonCode = claimFailure.ReasonCode ?? "takeover_persist_failed",
+                            Detail = claimFailure.Detail ?? "接管台账未确认；Submission 保持未决，保守待对账。",
+                            RequestIdentity = request.RequestIdentity,
+                            SubmissionIdentity = submission.SubmissionIdentity,
+                            SendSeq = submission.SendSeq,
+                            ExecutionDisposition = ExecutionDisposition.Unknown,
+                            ResponsibilityState = ResponsibilityState.Pending,
+                            JobId = accepted.JobId,
+                            EvidenceSource = accepted.EvidenceSource,
+                        }
                         // [终审会诊阻断处置] 已登记且已签发发送责任 ⇒ 二次持久化失败**不得**回落 `ResponsibilityState.None`（那是「不适用」），
                         // 责任仍未结清 = `Pending`（`Unknown` 结果维）；只是未能把状态落到盘上。
                         : new AdmissionResult
@@ -2285,16 +3194,21 @@ public sealed class ArbitrationAdmissionService
                 }
 
                 if (_hooks.Barriers?.AfterLedgerBeforeClose is { } b2) await b2().ConfigureAwait(false);
-                var close = CloseSubmission(lease, submission, file =>
+                var close = CloseSubmission(lease, submission, request.RequestIdentity, file =>
                 {
                     var op2 = FindOp(file, request.RequestIdentity)!;
+                    if ((file.Handoff?.Operations ?? []).Any(m =>
+                            string.Equals(m.MergedInto, op2.RequestIdentity, StringComparison.Ordinal)
+                            && m.Zone == OperationZone.Active
+                            && (!IsMergeCompatible(m, op2) || m.ConflictPending || m.PendingTerminal is not null || m.ExecutionResult is not null)))
+                        return "merged_target_conflict";
                     op2.RequestState = OperationRequestState.Accepted;
                     op2.LastResult = new OperationResult { Outcome = OperationOutcome.Accepted, ReasonCode = "", Retryable = false, RetryBudgetUsed = op2.LastResult?.RetryBudgetUsed ?? 0, EvidenceSource = accepted.EvidenceSource, AnsweredSendSeq = submission.SendSeq };
                     op2.TakeoverRef = submission.SubmissionIdentity;
                     MirrorMergedInPlace(file, op2, now, OperationRequestState.Accepted,
                         (m, _) => new OperationResult { Outcome = OperationOutcome.Accepted, ReasonCode = "", Retryable = false, RetryBudgetUsed = m.LastResult?.RetryBudgetUsed ?? 0, EvidenceSource = "merged:" + submission.SubmissionIdentity, AnsweredSendSeq = submission.SendSeq });
                     return null;
-                });
+                }, acceptanceClaimClose: claimRequired);
                 if (!close.Success)
                     return new AdmissionResult { Kind = AdmissionResultKind.Reconciling, ReasonCode = close.Reason ?? "close_failed", Detail = "Submission 关闭失败——台账已在册（重复接管幂等），保守待对账。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq, ExecutionDisposition = ExecutionDisposition.Unknown, ResponsibilityState = ResponsibilityState.Pending, JobId = accepted.JobId, EvidenceSource = accepted.EvidenceSource };
 
@@ -2319,9 +3233,54 @@ public sealed class ArbitrationAdmissionService
                 // 一切经关联验证的确定未受理都先关闭对应 Submission（无论是否可重试，§3.3 退出与再入场-1）。
                 var budget = op.LastResult?.RetryBudgetUsed ?? 0;
                 var canRetry = rejected.Retryable && budget < RetryBudgetMax;
-                var close = CloseSubmission(lease, submission, file =>
+                var terminalConflictPersisted = false;
+                var conflictObservedAt = _utcNow();
+                var terminalConflictId = "send-rejected-after-terminal:" + ShortHash(
+                    $"{submission.SubmissionIdentity}|{submission.SendSeq}|{rejected.ReasonCode}|{rejected.EvidenceSource}|{conflictObservedAt:O}");
+                if (_hooks.Barriers?.BeforeRejectedSubmissionClose is { } beforeRejectedClose)
+                    await beforeRejectedClose().ConfigureAwait(false);
+                var close = CloseSubmission(lease, submission, request.RequestIdentity, file =>
                 {
                     var op2 = FindOp(file, request.RequestIdentity)!;
+                    // The execution fact may have arrived in another process after the caller's snapshot. Decide
+                    // atomically with the close: retain both claims and keep Submission open for adjudication.
+                    if (op2.AcceptanceClaim is not null || op2.ExecutionResult is not null || op2.PendingTerminal is not null)
+                    {
+                        op2.ConflictEvidence ??= [];
+                        var existingConflict = op2.ConflictEvidence.FirstOrDefault(e =>
+                            string.Equals(e.EvidenceId, terminalConflictId, StringComparison.Ordinal));
+                        var rawRejected = "not_accepted:" + rejected.ReasonCode;
+                        if (existingConflict is not null
+                            && (!string.Equals(existingConflict.RawTerminal, rawRejected, StringComparison.Ordinal)
+                                || !string.Equals(existingConflict.EvidenceSource, rejected.EvidenceSource ?? "", StringComparison.Ordinal)
+                                || existingConflict.ObservedAtUtc != conflictObservedAt))
+                            return "conflict_evidence_conflict";
+                        if (existingConflict is null)
+                            op2.ConflictEvidence.Add(new ConflictEvidenceRecord
+                            {
+                                EvidenceId = terminalConflictId,
+                                RawTerminal = rawRejected,
+                                EvidenceSource = rejected.EvidenceSource ?? "",
+                                ObservedAtUtc = conflictObservedAt,
+                                SubmissionIdentity = submission.SubmissionIdentity,
+                                SendSeq = submission.SendSeq,
+                                SupersededRawTerminal = op2.ExecutionResult?.RawTerminal ?? op2.PendingTerminal?.RawTerminal
+                                                        ?? (op2.AcceptanceClaim is not null ? "acceptance_claim_pending" : "terminal_fact_pending"),
+                                SupersededReasonCode = op2.AcceptanceClaim is not null
+                                    ? "durable_acceptance_claim_exists"
+                                    : "authoritative_execution_fact_exists",
+                            });
+                        op2.ConflictPending = true;
+                        op2.UpdatedRevision = file.Revision + 1;
+                        op2.UpdatedAtUtc = conflictObservedAt;
+                        terminalConflictPersisted = true;
+                        return null;
+                    }
+                    if ((file.Handoff?.Operations ?? []).Any(m =>
+                            string.Equals(m.MergedInto, op2.RequestIdentity, StringComparison.Ordinal)
+                            && m.Zone == OperationZone.Active
+                            && (!IsMergeCompatible(m, op2) || m.ConflictPending || m.PendingTerminal is not null || m.ExecutionResult is not null)))
+                        return "merged_target_conflict";
                     op2.LastResult = new OperationResult
                     {
                         Outcome = OperationOutcome.Rejected,
@@ -2354,9 +3313,18 @@ public sealed class ArbitrationAdmissionService
                         });
                     MigrateAndClean(file, now);
                     return null;
-                });
+                }, keepOpenWhenOwnerConflictPending: true, allowClaimConflictRecording: true);
                 if (!close.Success)
                     return new AdmissionResult { Kind = AdmissionResultKind.Reconciling, ReasonCode = close.Reason ?? "close_failed", Detail = "拒绝关闭失败——保守待对账。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq, ExecutionDisposition = ExecutionDisposition.Unknown, ResponsibilityState = ResponsibilityState.Pending, EvidenceSource = rejected.EvidenceSource };
+                if (terminalConflictPersisted)
+                {
+                    var current = _store.Read();
+                    var conflictOp = current.File is null ? null : FindOp(current.File, request.RequestIdentity);
+                    return conflictOp is null
+                        ? AdmissionResult.Of(AdmissionResultKind.Error, "terminal_conflict_record_failed", "终态与未受理冲突已检测，责任保留。", request.RequestIdentity)
+                        : ClassifyConflictPending(request.RequestIdentity, conflictOp,
+                            "同一轮执行终态与未受理发送回执竞态到达；冲突已原子记录，Submission 保留且禁止重发。");
+                }
                 return canRetry
                     ? new AdmissionResult { Kind = AdmissionResultKind.RetryableRejected, ReasonCode = rejected.ReasonCode, Detail = "可重试拒绝（窗口内经 RetryAsync 重新 Admit）。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq, ResponsibilityState = ResponsibilityState.Settled, EvidenceSource = rejected.EvidenceSource }
                     : new AdmissionResult { Kind = AdmissionResultKind.TerminalRejected, ReasonCode = rejected.ReasonCode, Detail = "终局拒绝。", RequestIdentity = request.RequestIdentity, SubmissionIdentity = submission.SubmissionIdentity, SendSeq = submission.SendSeq, ResponsibilityState = ResponsibilityState.Settled, EvidenceSource = rejected.EvidenceSource };
@@ -2407,10 +3375,16 @@ public sealed class ArbitrationAdmissionService
         // [Batch B 会诊阻断处置] 携带**完成层结果**的受理对账统一进入完成结算状态机（§24.3-4 三分支的唯一实现）：
         // 必须在取 `_gate` 之前转派（`SettleCompletionAsync` 自取门面锁；SemaphoreSlim 不可重入）。
         if (settlement is ReconcileSettlement.Accepted { Completion: not null } withCompletion)
+        {
+            var owner = _store.Read().File?.Lease;
+            if (owner is null)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "未持有租约。", requestIdentity);
             return await SettleCompletionAsync(requestIdentity, withCompletion.SubmissionIdentity, withCompletion.SendSeq,
                 withCompletion.Completion,
                 // [第二轮验证会诊阻断处置] 外层对账字段必须**完整携带**（否则受理接管会丢证据/运行绑定/句柄）。
-                withCompletion.EvidenceSource, withCompletion.RunId, withCompletion.JobId).ConfigureAwait(false);
+                withCompletion.EvidenceSource, withCompletion.RunId, withCompletion.JobId,
+                expectedOwnerLeaseId: owner.LeaseId, expectedOwnerEpoch: owner.OwnerEpoch).ConfigureAwait(false);
+        }
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
@@ -2442,6 +3416,57 @@ public sealed class ArbitrationAdmissionService
             };
             if (!string.Equals(evidenceSubmission, op.SubmissionIdentity, StringComparison.Ordinal) || evidenceSeq != op.LastSendSeq)
                 return AdmissionResult.Of(AdmissionResultKind.Error, "stale_evidence", "对账证据与当前发送轮次不关联（旧证据不得关闭新责任）。", requestIdentity);
+
+            if (settlement is ReconcileSettlement.NotAccepted notAccepted
+                && (op.ExecutionResult is not null || op.PendingTerminal is not null))
+            {
+                // A later negative reconciliation cannot erase a previously persisted execution fact. Preserve both
+                // claims as an explicit conflict and keep the submission responsibility pending.
+                var now = _utcNow();
+                var conflictId = "not-accepted-after-terminal:" + ShortHash($"{notAccepted.SubmissionIdentity}|{notAccepted.SendSeq}|{notAccepted.ReasonCode}|{notAccepted.EvidenceSource}|{now:O}");
+                var marked = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+                {
+                    var current = FindOp(file, requestIdentity);
+                    if (current is null || current.ConflictPending
+                        || !string.Equals(current.SubmissionIdentity, notAccepted.SubmissionIdentity, StringComparison.Ordinal)
+                        || current.LastSendSeq != notAccepted.SendSeq
+                        || (current.ExecutionResult is null && current.PendingTerminal is null)) return "state_changed";
+                    current.ConflictEvidence ??= [];
+                    var priorConflict = current.ConflictEvidence.FirstOrDefault(e => string.Equals(e.EvidenceId, conflictId, StringComparison.Ordinal));
+                    if (priorConflict is not null)
+                    {
+                        if (!string.Equals(priorConflict.RawTerminal, "not_accepted:" + notAccepted.ReasonCode, StringComparison.Ordinal)
+                            || !string.Equals(priorConflict.EvidenceSource, notAccepted.EvidenceSource ?? "", StringComparison.Ordinal)
+                            || priorConflict.ObservedAtUtc != now)
+                            return "conflict_evidence_conflict";
+                    }
+                    else
+                    {
+                        current.ConflictEvidence.Add(new ConflictEvidenceRecord
+                        {
+                            EvidenceId = conflictId,
+                            RawTerminal = "not_accepted:" + notAccepted.ReasonCode,
+                            EvidenceSource = notAccepted.EvidenceSource ?? "",
+                            ObservedAtUtc = now,
+                            SubmissionIdentity = notAccepted.SubmissionIdentity,
+                            SendSeq = notAccepted.SendSeq,
+                            SupersededRawTerminal = current.ExecutionResult?.RawTerminal ?? current.PendingTerminal?.RawTerminal ?? "terminal_fact_pending",
+                            SupersededReasonCode = "authoritative_execution_fact_exists",
+                        });
+                    }
+                    current.ConflictPending = true;
+                    current.UpdatedRevision = file.Revision + 1;
+                    current.UpdatedAtUtc = now;
+                    return null;
+                });
+                var refreshed = _store.Read();
+                var currentOp = refreshed.File is null ? null : FindOp(refreshed.File, requestIdentity);
+                if (!marked.Success || currentOp is null)
+                    return AdmissionResult.Of(AdmissionResultKind.Error, "terminal_conflict_record_failed",
+                        "执行终态与未受理对账冲突；待对账责任保留，冲突标记未确认。", requestIdentity);
+                return ClassifyConflictPending(requestIdentity, currentOp,
+                    "对账报告未受理，但同一发送身份已有权威执行终态；冲突已保留，责任不释放且禁止重发。");
+            }
 
             var candidate = op.Candidate ?? new ArbitrationCandidate();
             var request = new AdmissionRequest
@@ -2483,7 +3508,9 @@ public sealed class ArbitrationAdmissionService
     /// </summary>
     public async Task<AdmissionResult> SettleCompletionAsync(
         string requestIdentity, string submissionIdentity, int sendSeq, ExternalStartCompletion? completion,
-        string? acceptanceEvidenceSource = null, string? acceptanceRunId = null, string? acceptanceJobId = null)
+        string? acceptanceEvidenceSource = null, string? acceptanceRunId = null, string? acceptanceJobId = null,
+        DateTimeOffset? acceptanceAcceptedAtUtc = null, string? expectedOwnerLeaseId = null, string? expectedOwnerEpoch = null,
+        PendingTerminal? expectedPendingTerminal = null, ExecutionResult? expectedExecutionResult = null)
     {
         if (string.IsNullOrWhiteSpace(requestIdentity))
             return AdmissionResult.Of(AdmissionResultKind.Error, "invalid_request", "请求身份必填。", requestIdentity);
@@ -2516,6 +3543,14 @@ public sealed class ArbitrationAdmissionService
                 return stop;
             }
             var lease = read.File.Lease;
+            if (expectedOwnerLeaseId is not null || expectedOwnerEpoch is not null)
+            {
+                if (string.IsNullOrWhiteSpace(expectedOwnerLeaseId) || string.IsNullOrWhiteSpace(expectedOwnerEpoch)
+                    || !string.Equals(lease.LeaseId, expectedOwnerLeaseId, StringComparison.Ordinal)
+                    || !string.Equals(lease.OwnerEpoch, expectedOwnerEpoch, StringComparison.Ordinal))
+                    return AdmissionResult.Of(AdmissionResultKind.Error, "lease_stale_generation",
+                        "完成观察者持有的所有权已失效；旧观察者只可追加回执，不能借当前租约结算。", requestIdentity);
+            }
             var op = FindOp(read.File, requestIdentity);
             if (op is null)
             {
@@ -2551,6 +3586,15 @@ public sealed class ArbitrationAdmissionService
                 || op.LastSendSeq != sendSeq)
                 return LocatedStop(requestIdentity, op, "stale_evidence",
                     "完成结果与当前发送轮次不关联（旧证据不得结算新责任，也不得替换本笔身份）。");
+            if (expectedPendingTerminal is not null || expectedExecutionResult is not null)
+            {
+                if (expectedPendingTerminal is null || expectedExecutionResult is null
+                    || op.PendingTerminal is null || op.ExecutionResult is null
+                    || !PendingTerminalSnapshotMatches(op.PendingTerminal, expectedPendingTerminal)
+                    || !ExecutionResultSnapshotMatches(op.ExecutionResult, expectedExecutionResult))
+                    return LocatedStop(requestIdentity, op, "recovery_terminal_snapshot_changed",
+                        "恢复分类后的终态载荷已变化；本轮不代替新载荷结算，责任保持待核查。");
+            }
             // 完成层载荷**封闭校验**（[Batch B 会诊阻断处置]）：非法枚举/缺必填字段一律 fail-closed——
             // 必须**先于**任何重放/结算分支（否则非法载荷可借「已终局重放」路径绕过校验）。
             if (completion is not null)
@@ -2572,6 +3616,11 @@ public sealed class ArbitrationAdmissionService
                 }
             }
             // 已受理/待对账之外的状态不得走完成结算（未占位/终局/未获选各有各的判据）。
+            // 未裁决冲突优先于终局重放：即使原 ExecutionResult 可幂等重放，也不能把整体责任报告为 Settled。
+            if (op.ConflictPending && !string.Equals(op.ConflictAdjudicationClaim,
+                    nameof(ConflictResolutionKind.ResolvedAcceptedTerminal), StringComparison.Ordinal))
+                return ClassifyConflictPending(requestIdentity, op,
+                    "终态记录仍有待裁决冲突；普通完成重放不得报告责任已结清。");
             // 已终局者按 §24.13-2 返回**既有终态事实**（幂等重放，不重复写盘、不改变责任状态）。
             if (op.RequestState == OperationRequestState.TerminalCompleted)
             {
@@ -2584,8 +3633,8 @@ public sealed class ArbitrationAdmissionService
                 if (completion is not null && completion.Kind != ExternalStartCompletionKind.Unknown
                     && !CompletionMatchesExecutionResult(existing, completion, completion.ObservedAtUtc ?? default,
                         submissionIdentity, sendSeq))
-                    return LocatedStop(requestIdentity, op, "terminal_conflict",
-                        "既有权威终态与本次完成结果不一致（冲突对账：不覆盖、不重放、不释放占用）。", conflictPending: true);
+                    return PersistTerminalConflict(requestIdentity, submissionIdentity, sendSeq, lease, completion,
+                        "既有权威终态与本次完成结果不一致（冲突已持久化：不覆盖、不释放占用）。");
                 return new AdmissionResult
                 {
                     Kind = existing.Kind switch
@@ -2616,6 +3665,8 @@ public sealed class ArbitrationAdmissionService
             // [Batch B 续] 冲突裁决里的「曾受理」分支：既有拒绝（`TerminalRejected`/`RetryableRejected`/墓碑）之后
             // 才取得的权威终态同样必须经本入口结算——否则冲突修正无路可走（既有拒绝本体不改写，仅作审计）。
             var conflicted = op.ConflictPending;
+            var adjudicationAuthorized = conflicted && string.Equals(op.ConflictAdjudicationClaim,
+                nameof(ConflictResolutionKind.ResolvedAcceptedTerminal), StringComparison.Ordinal);
             // [验证会诊阻断处置·第三轮] **冲突待决记录不得经普通完成结算**（§24.12-3④／§24.2-2″／§24.15 冲突行）：
             // 授权判据**不看调用方参数、只看本快照内持久化的裁决方向声明**——`ConflictAdjudicationClaim` 只能由
             // `ClaimAdjudicationAsync` 在裁决入口内写入（`ResolvedAcceptedTerminal`）。因此任何外部/新增调用者
@@ -2628,6 +3679,12 @@ public sealed class ArbitrationAdmissionService
             if (op.RequestState is not (OperationRequestState.Accepted or OperationRequestState.Reconciling) && !conflicted)
                 return LocatedStop(requestIdentity, op, "not_accepted",
                     "操作不在可结算状态（完成结算仅对已受理/待对账操作）。");
+            if (completion is not null && completion.Kind != ExternalStartCompletionKind.Unknown
+                && op.ExecutionResult is { } existingExecution
+                && !CompletionMatchesExecutionResult(existingExecution, completion, completion.ObservedAtUtc ?? default,
+                    submissionIdentity, sendSeq))
+                return PersistTerminalConflict(requestIdentity, submissionIdentity, sendSeq, lease, completion,
+                    "既有权威终态与本次完成结果不一致（冲突已持久化：不覆盖、不释放占用）。");
             // 外部启动的固定目标纪元必须已持久化（不可改写；未知纪元不签发也不结算）。
             if (op.OperationType == OperationType.ExternalStart && string.IsNullOrEmpty(op.TargetEpoch))
                 return LocatedStop(requestIdentity, op, "epoch_missing", "外部启动缺少固定目标纪元（不结算）。");
@@ -2648,7 +3705,7 @@ public sealed class ArbitrationAdmissionService
                 if (op.RequestState != OperationRequestState.Accepted)
                 {
                     var acceptance = await AcceptOrdinaryAsync(op, lease, read.File,
-                        acceptanceEvidenceSource, acceptanceRunId, acceptanceJobId).ConfigureAwait(false);
+                        acceptanceEvidenceSource, acceptanceRunId, acceptanceJobId, acceptanceAcceptedAtUtc).ConfigureAwait(false);
                     if (acceptance is not null) return acceptance;
                 }
                 return new AdmissionResult
@@ -2694,9 +3751,26 @@ public sealed class ArbitrationAdmissionService
             // 关闭由下方 finalize 完成（不得在此提前关闭，否则违反 §24.15 顺序）。
             if (op.RequestState != OperationRequestState.Accepted)
             {
-                var takeover = await PersistAcceptanceTakeoverAsync(op, lease,
+                // 合并镜像不拥有独立发送身份；接管认领必须绑定实际发送者（胜者），否则
+                // `sub:<winner>:<seq>` 会被错误地按镜像 requestIdentity 校验并 fail-closed。
+                var isMergedMirror = op.MergedInto is { Length: > 0 };
+                var claimOwner = isMergedMirror
+                    ? FindOp(read.File, op.MergedInto!)
+                    : op;
+                if (claimOwner is null)
+                    return LocatedStop(requestIdentity, op, "merged_acceptance_owner_missing",
+                        "合并镜像的实际发送者记录缺失；不得为镜像伪造受理认领或写入台账。");
+                if (isMergedMirror && !IsMergeCompatible(op, claimOwner))
+                    return LocatedStop(requestIdentity, op, "merged_acceptance_owner_incompatible",
+                        "合并镜像与实际发送者属性不兼容；不得为镜像伪造受理认领或写入台账。");
+                if (!string.Equals(claimOwner.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+                    || claimOwner.LastSendSeq != sendSeq)
+                    return LocatedStop(requestIdentity, op, "merged_acceptance_identity_mismatch",
+                        "合并镜像与实际发送者的当前发送轮不一致；不得为镜像伪造受理认领或写入台账。");
+                var takeover = await PersistAcceptanceTakeoverAsync(claimOwner, lease,
                     acceptanceEvidenceSource ?? completion.EvidenceSource, acceptanceRunId,
-                    acceptanceJobId ?? completion.JobId).ConfigureAwait(false);
+                    acceptanceJobId ?? completion.JobId,
+                    allowAdjudicatedHistorical: adjudicationAuthorized).ConfigureAwait(false);
                 if (takeover is not null) return takeover;
             }
             // [第四轮验证会诊阻断处置] 句柄必须取**台账合并后的权威值**（含正常受理时已登记的句柄），
@@ -2722,15 +3796,30 @@ public sealed class ArbitrationAdmissionService
                 .FirstOrDefault(v => !string.IsNullOrEmpty(v));
 
             // ① 同次权威发布写 ExecutionResult ＋ PendingTerminal（§24.12-7 合法中间态：责任尚未结算）。
+            if (_hooks.Barriers?.BeforeTerminalCarrierStage is { } beforeCarrierStage)
+                await beforeCarrierStage().ConfigureAwait(false);
             var stageResult = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
             {
                 var op2 = FindOp(file, requestIdentity);
                 if (op2 is null) return "stale_operation_identity";
+                var currentAdjudicationAuthorized = adjudicationAuthorized && op2.ConflictPending
+                    && string.Equals(op2.ConflictAdjudicationClaim,
+                        nameof(ConflictResolutionKind.ResolvedAcceptedTerminal), StringComparison.Ordinal);
+                if (op2.ConflictPending && !currentAdjudicationAuthorized) return "conflict_requires_adjudication";
+                if (!op2.ConflictPending && conflicted) return "conflict_state_changed";
+                if (!currentAdjudicationAuthorized
+                    && op2.RequestState is not (OperationRequestState.Accepted or OperationRequestState.Reconciling))
+                    return "state_changed";
                 // 冲突裁决允许在**已迁墓碑/待迁移**的记录上补写权威终态载体（既有拒绝/墓碑事实不改写）。
-                if (!op2.ConflictPending && op2.Zone != OperationZone.Active) return "state_changed";
+                if (!currentAdjudicationAuthorized && op2.Zone != OperationZone.Active) return "state_changed";
                 if (!string.Equals(op2.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
                     || op2.LastSendSeq != sendSeq)
                     return "state_changed";
+                if (expectedPendingTerminal is not null
+                    && (expectedExecutionResult is null || op2.PendingTerminal is null || op2.ExecutionResult is null
+                        || !PendingTerminalSnapshotMatches(op2.PendingTerminal, expectedPendingTerminal)
+                        || !ExecutionResultSnapshotMatches(op2.ExecutionResult, expectedExecutionResult)))
+                    return "recovery_terminal_snapshot_changed";
                 // [Batch B 会诊阻断处置] **已写终态事实不可改写**：重复结算必须逐字段等值（幂等续跑），
                 // 不等值＝冲突/损坏，fail-closed（不得用新终态覆盖旧终态，也不得形成新 ExecutionResult＋旧 PendingTerminal）。
                 if (op2.ExecutionResult is { } priorResult)
@@ -2785,6 +3874,9 @@ public sealed class ArbitrationAdmissionService
             });
             if (!stageResult.Success)
             {
+                if (stageResult.Reason == "terminal_conflict")
+                    return PersistTerminalConflict(requestIdentity, submissionIdentity, sendSeq, lease, completion,
+                        "结算事务内发现同一发送身份已有不同权威终态（冲突已持久化）。");
                 // §24.15 读回验证（[Batch B 会诊阻断处置]）：发布结果不明时先读回——载体**实际已提交且与本次终态等值**
                 // ⇒ 视为提交成功（继续后续步骤）；确未提交/值不符才保守停驻。
                 var readBack = _store.Read();
@@ -2812,7 +3904,7 @@ public sealed class ArbitrationAdmissionService
                 {
                     persistReason = persistTerminal(submissionIdentity, sendSeq,
                         completion.RawTerminal ?? "", observedAt,
-                        completion.RawTerminal, completion.ExecutionErrorCode, effectiveJobId, completion.EvidenceSource);
+                        completion.RawTerminal, completion.ExecutionErrorCode, effectiveJobId, completion.EvidenceSource, resultKind);
                 }
                 catch (Exception ex)
                 {
@@ -2822,7 +3914,7 @@ public sealed class ArbitrationAdmissionService
                 // 「台账终态**逐字段等值**读回」作为继续关闭/终局的前置条件（仅 API 返回成功不足）。
                 var actuallyTerminal = _hooks.TakeoverTerminalPayloadConfirmed?.Invoke(
                     submissionIdentity, sendSeq, completion.RawTerminal, completion.ExecutionErrorCode,
-                    effectiveJobId, completion.EvidenceSource, observedAt) == true;
+                    effectiveJobId, completion.EvidenceSource, observedAt, resultKind) == true;
                 if (!actuallyTerminal)
                         return SettleStop(requestIdentity, submissionIdentity, sendSeq,
                             "terminal_persist_unconfirmed:" + (persistReason ?? "payload_mismatch"),
@@ -2831,15 +3923,39 @@ public sealed class ArbitrationAdmissionService
             }
 
             // ③ 关闭 Submission（若仍在册）＋ ④ 同一边界内完成 Operation 终局与迁移（不重入 `_gate`）。
+            if (_hooks.Barriers?.BeforeTerminalFinalize is { } beforeTerminalFinalize)
+                await beforeTerminalFinalize().ConfigureAwait(false);
             var finalize = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
             {
                 var op3 = FindOp(file, requestIdentity);
                 if (op3 is null) return "state_changed";
+                var claimOwner = op3.MergedInto is { Length: > 0 } mergedOwnerId
+                    ? FindOp(file, mergedOwnerId)
+                    : op3;
+                if (claimOwner is null || (claimOwner != op3 && !IsMergeCompatible(op3, claimOwner))
+                    || claimOwner.AcceptanceClaim is not { LedgerPersisted: true } claim
+                    || !AcceptanceClaimMatches(claim, claimOwner, claim.EvidenceSource, claim.RunId, claim.JobId)
+                    || !string.Equals(claim.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+                    || claim.SendSeq != sendSeq)
+                    return "acceptance_claim_missing_or_unconfirmed";
+                var currentAdjudicationAuthorized = adjudicationAuthorized && op3.ConflictPending
+                    && string.Equals(op3.ConflictAdjudicationClaim,
+                        nameof(ConflictResolutionKind.ResolvedAcceptedTerminal), StringComparison.Ordinal);
+                if (op3.ConflictPending && !currentAdjudicationAuthorized) return "conflict_requires_adjudication";
+                if (!op3.ConflictPending && conflicted) return "conflict_state_changed";
+                if (!currentAdjudicationAuthorized
+                    && op3.RequestState is not (OperationRequestState.Accepted or OperationRequestState.Reconciling))
+                    return "state_changed";
                 // 冲突裁决：墓碑/待迁移记录同样允许补终局（终局后仍在墓碑区，受保护不被裁剪）。
-                if (!op3.ConflictPending && op3.Zone != OperationZone.Active) return "state_changed";
+                if (!currentAdjudicationAuthorized && op3.Zone != OperationZone.Active) return "state_changed";
                 if (!string.Equals(op3.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
                     || op3.LastSendSeq != sendSeq)
                     return "state_changed";
+                if (expectedPendingTerminal is not null
+                    && (expectedExecutionResult is null || op3.PendingTerminal is null || op3.ExecutionResult is null
+                        || !PendingTerminalSnapshotMatches(op3.PendingTerminal, expectedPendingTerminal)
+                        || !ExecutionResultSnapshotMatches(op3.ExecutionResult, expectedExecutionResult)))
+                    return "recovery_terminal_snapshot_changed";
                 // [第二轮验证会诊阻断处置] 释放占用前必须复核**四类事实一致**：本次完成结果 ↔ ExecutionResult ↔ PendingTerminal。
                 if (op3.ExecutionResult is not { } ready
                     || !CompletionMatchesExecutionResult(ready, completion, observedAt, submissionIdentity, sendSeq)
@@ -2854,6 +3970,17 @@ public sealed class ArbitrationAdmissionService
                     && (!string.Equals(ready.JobId, effectiveJobId, StringComparison.Ordinal)
                         || !string.Equals(readyPending.JobId, effectiveJobId, StringComparison.Ordinal)))
                     return "terminal_job_id_mismatch";
+                var activeMirrors = (file.Handoff?.Operations ?? []).Where(m =>
+                    string.Equals(m.MergedInto, op3.RequestIdentity, StringComparison.Ordinal)
+                    && m.Zone == OperationZone.Active).ToList();
+                if (activeMirrors.Any(m => !IsMergeCompatible(m, op3) || m.ConflictPending
+                                           || m.PendingTerminal is not null || m.ExecutionResult is not null
+                                           || m.RequestState is not (OperationRequestState.Queued or OperationRequestState.InRound
+                                               or OperationRequestState.RetryableRejected or OperationRequestState.Accepted
+                                               or OperationRequestState.Reconciling)
+                                           || !string.Equals(m.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+                                           || m.LastSendSeq != sendSeq))
+                    return "merged_target_conflict";
                 // [第六轮验证会诊阻断处置] **台账句柄 TOCTOU**：提交事务内重读台账句柄——若台账此时已有句柄
                 // 而两载体仍为空（并发对账/接管刚刚补入），本轮**不得**终局（先补齐，下一轮一致后再释放占用）。
                 // 说明：本钩子只读**台账文件**（不读租约），故在租约变更回调内调用不构成自锁。
@@ -2885,6 +4012,8 @@ public sealed class ArbitrationAdmissionService
                 op3.PendingTerminal = null; // 责任已结清：终态事实由 ExecutionResult 长期承载（§24.12-7）
                 op3.UpdatedRevision = file.Revision + 1;
                 op3.UpdatedAtUtc = now;
+                foreach (var mirror in activeMirrors)
+                    CopyWinnerFactsToMirror(mirror, op3, file.Revision + 1, now);
                 MigrateAndClean(file, now); // 主槽位随迁移释放
                 return null;
             });
@@ -2898,9 +4027,14 @@ public sealed class ArbitrationAdmissionService
                     || !string.Equals(stillOpen2.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal);
                 // [第三轮验证会诊] 读回必须**逐字段等值**（并发写入的不同终态不得被当成本次提交成功）。
                 var committedAfter = opAfter?.RequestState == OperationRequestState.TerminalCompleted
+                    && opAfter.ConflictPending == false
+                    && string.IsNullOrEmpty(opAfter.ConflictAdjudicationClaim)
                     && closedAfter
                     && opAfter.ExecutionResult is { } rb2
-                    && CompletionMatchesExecutionResult(rb2, completion, observedAt, submissionIdentity, sendSeq);
+                    && CompletionMatchesExecutionResult(rb2, completion, observedAt, submissionIdentity, sendSeq)
+                    && (expectedPendingTerminal is null || (opAfter.PendingTerminal is null
+                        && expectedExecutionResult is not null
+                        && ExecutionResultSnapshotMatches(rb2, expectedExecutionResult)));
                 if (!committedAfter)
                 {
                     var reason = finalize.Reason ?? "invalid_request";
@@ -3105,13 +4239,22 @@ public sealed class ArbitrationAdmissionService
 
         string submissionIdentity;
         int sendSeq;
+        string ownerLeaseId;
+        string ownerEpoch;
         {
             var read0 = _store.Read();
             var op0 = read0.File is null ? null : FindOp(read0.File, requestIdentity);
             if (op0 is null)
                 return AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "Operations 记录缺失=响亮拒绝。", requestIdentity);
+            if (read0.File?.Lease is not { } owner0)
+                return AdmissionResult.Of(AdmissionResultKind.Error, "lease_not_valid", "未持有租约。", requestIdentity);
+            ownerLeaseId = owner0.LeaseId;
+            ownerEpoch = owner0.OwnerEpoch;
             submissionIdentity = op0.SubmissionIdentity;
             sendSeq = op0.LastSendSeq;
+            if (HasHistoricalAcceptanceReceiptConflict(op0, submissionIdentity, sendSeq))
+                return LocatedStop(requestIdentity, op0, "historical_acceptance_receipt_pending",
+                    "存在更早发送轮次的已受理回执；当前轮未受理结论不能替它解冲突，继续保留占用并禁止重发。");
             if (!op0.ConflictPending)
             {
                 // [Batch B 续] **幂等重放**：已裁决且审计在册（同 resolution／同来源）⇒ 返回既有结论，不重复写盘。
@@ -3153,6 +4296,11 @@ public sealed class ArbitrationAdmissionService
                 }
                 return LocatedStop(requestIdentity, op0, "no_pending_conflict", "该操作没有待决冲突（不得据无冲突记录补审计）。");
             }
+            if (resolution == ConflictResolutionKind.ResolvedNotAccepted && op0.AcceptanceClaim is not null)
+                return AcceptanceClaimPending(requestIdentity, op0);
+            if (resolution == ConflictResolutionKind.ResolvedNotAccepted && op0.ExecutionResult is not null)
+                return LocatedStop(requestIdentity, op0, "execution_fact_prevents_not_accepted_resolution",
+                    "已有同一发送身份的权威执行终态；不得以未受理裁决覆盖该事实。");
             if (string.IsNullOrEmpty(submissionIdentity) || sendSeq < 1)
                 return LocatedStop(requestIdentity, op0, "identity_missing", "缺少完整发送身份（不得裁决）。");
             // 未受理观察必须与本笔完整发送身份全等（不得据他人/旧轮观察裁决）。
@@ -3174,7 +4322,8 @@ public sealed class ArbitrationAdmissionService
             var claimResult = await ClaimAdjudicationAsync(requestIdentity, submissionIdentity, sendSeq, resolution).ConfigureAwait(false);
             if (claimResult is not null) return claimResult;
             var settled = await SettleCompletionAsync(requestIdentity, submissionIdentity, sendSeq, terminalEvidence,
-                evidenceSource, null, terminalEvidence.JobId).ConfigureAwait(false);   // 授权＝上一行已声明的裁决方向
+                evidenceSource, null, terminalEvidence.JobId,
+                expectedOwnerLeaseId: ownerLeaseId, expectedOwnerEpoch: ownerEpoch).ConfigureAwait(false);   // 授权＝上一行已声明的裁决方向
             if (settled.ResponsibilityState != ResponsibilityState.Settled) return settled;
         }
 
@@ -3205,11 +4354,23 @@ public sealed class ArbitrationAdmissionService
                 && op.ConflictAdjudicationClaim is { Length: > 0 })
                 return LocatedStop(requestIdentity, op, "conflict_adjudication_in_progress",
                     "已有相反方向的裁决声明在处理中（不得并发写入第二份审计）。");
-            if (op.LastResult is not { Outcome: OperationOutcome.Rejected } rejectedHistory)
+            var rejectedHistory = op.LastResult is { Outcome: OperationOutcome.Rejected } rejected
+                                  && rejected.AnsweredSendSeq == sendSeq
+                ? rejected
+                : null;
+            var executionHistory = resolution == ConflictResolutionKind.ResolvedAcceptedTerminal
+                                   && op.ExecutionResult is { } existingExecution
+                                   && ExecutionResultMatchesOperation(op, existingExecution)
+                                   && (op.ConflictEvidence ?? []).Any(e => e is not null
+                                       && string.Equals(e.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+                                       && e.SendSeq == sendSeq)
+                ? existingExecution
+                : null;
+            if (rejectedHistory is null && executionHistory is null)
                 return LocatedStop(requestIdentity, op, "conflict_requires_rejected_history",
-                    "冲突裁决要求存在「被取代的拒绝结果」快照（否则不得声称拒绝了本笔发送）。");
+                    "冲突裁决要求存在本轮拒绝快照，或存在与本轮关联的权威执行终态冲突记录。");
             // 拒绝快照必须属于**本笔当前轮次**（不得把旧轮拒绝伪造成本轮快照）。
-            if (rejectedHistory.AnsweredSendSeq != sendSeq)
+            if (rejectedHistory is not null && rejectedHistory.AnsweredSendSeq != sendSeq)
                 return LocatedStop(requestIdentity, op, "conflict_rejection_not_current_round",
                     "既有拒绝结果不属于本笔当前轮次（不得据此写审计）。");
 
@@ -3225,6 +4386,8 @@ public sealed class ArbitrationAdmissionService
                 // [第二轮验证会诊阻断处置] 待决与当前轮拒绝复核必须**在原子回调内**（`_gate` 只保护本进程：
                 // 两个进程可能同时通过外层检查，随后依次进入存储锁——缺此复核会写入第二份审计并覆盖引用）。
                 if (!op2.ConflictPending) return "no_pending_conflict";
+                if (HasHistoricalAcceptanceReceiptConflict(op2, submissionIdentity, sendSeq))
+                    return "historical_acceptance_receipt_pending";
                 // [第四轮验证会诊阻断处置] 方向声明必须在**原子回调内**复核（`_gate` 只保护本进程；
                 // 相反方向可在外层检查之后、本回调之前写入声明）。
                 if (resolution == ConflictResolutionKind.ResolvedNotAccepted
@@ -3234,9 +4397,25 @@ public sealed class ArbitrationAdmissionService
                     && !string.Equals(op2.ConflictAdjudicationClaim,
                         nameof(ConflictResolutionKind.ResolvedAcceptedTerminal), StringComparison.Ordinal))
                     return "conflict_adjudication_in_progress";
-                if (op2.LastResult is not { Outcome: OperationOutcome.Rejected } currentRejection
-                    || currentRejection.AnsweredSendSeq != sendSeq)
+                var currentRejection = op2.LastResult is { Outcome: OperationOutcome.Rejected } rejection
+                                       && rejection.AnsweredSendSeq == sendSeq ? rejection : null;
+                var currentExecutionConflict = resolution == ConflictResolutionKind.ResolvedAcceptedTerminal
+                                               && op2.ExecutionResult is { } execution
+                                               && executionHistory is not null
+                                               && ExecutionResultMatchesOperation(op2, execution)
+                                               && (op2.ConflictEvidence ?? []).Any(e => e is not null
+                                                   && string.Equals(e.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+                                                   && e.SendSeq == sendSeq);
+                if (currentRejection is null && !currentExecutionConflict)
                     return "conflict_rejection_not_current_round";
+                var mirrors = (file.Handoff?.Operations ?? []).Where(m =>
+                    string.Equals(m.MergedInto, op2.RequestIdentity, StringComparison.Ordinal)
+                    && string.Equals(m.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+                    && m.LastSendSeq == sendSeq).ToList();
+                if (mirrors.Any(m => !IsMergeCompatible(m, op2)
+                                     || (m.ExecutionResult is not null && (op2.ExecutionResult is null
+                                         || !ExecutionResultMatchesOperation(m, op2.ExecutionResult)))))
+                    return "merged_target_conflict";
                 var audits = file.Handoff!.ConflictResolutionAudits ??= [];
                 var existingAudit = audits.FirstOrDefault(a => a is not null
                     && string.Equals(a.AuditId, auditId, StringComparison.Ordinal));
@@ -3292,7 +4471,7 @@ public sealed class ArbitrationAdmissionService
                         SendSeq = sendSeq,
                         Resolution = resolution,
                         ResolvedAtUtc = now,
-                        SupersededRejectedResultSnapshot = new OperationResult
+                        SupersededRejectedResultSnapshot = rejectedHistory is null ? null : new OperationResult
                         {
                             Outcome = OperationOutcome.Rejected,
                             ReasonCode = rejectedHistory.ReasonCode,
@@ -3301,6 +4480,9 @@ public sealed class ArbitrationAdmissionService
                             EvidenceSource = rejectedHistory.EvidenceSource,
                             AnsweredSendSeq = sendSeq,
                         },
+                        SupersededExecutionResultSnapshot = rejectedHistory is not null || executionHistory is null
+                            ? null
+                            : CloneExecutionResult(executionHistory),
                         ResolutionEvidenceSnapshot = resolution == ConflictResolutionKind.ResolvedAcceptedTerminal
                             ? op2.ExecutionResult
                             : null,
@@ -3308,30 +4490,15 @@ public sealed class ArbitrationAdmissionService
                     });
                 }
                 op2.ConflictResolutionAuditId = auditId;
+                op2.ConflictResolutionAuditHistoryIds ??= [];
+                if (!op2.ConflictResolutionAuditHistoryIds.Contains(auditId, StringComparer.Ordinal))
+                    op2.ConflictResolutionAuditHistoryIds.Add(auditId);
                 op2.ConflictPending = false; // 只清活动覆盖层；审计/证据/拒绝快照一律保留
                 op2.ConflictResolutionState = null;
                 op2.ConflictAdjudicationClaim = null; // 审计落盘同一次发布清方向声明
                 // [第五轮验证会诊阻断处置] **镜像合并项到胜者的结果事实**（否则镜像记录会继续回放历史拒绝）。
-                foreach (var m in (file.Handoff.Operations ?? []).Where(o => o is not null
-                    && string.Equals(o.MergedInto, requestIdentity, StringComparison.Ordinal)))
-                {
-                    if (m.Zone != OperationZone.Active) continue;
-                    m.ExecutionResult = op2.ExecutionResult is null ? null : new ExecutionResult
-                    {
-                        Kind = op2.ExecutionResult.Kind,
-                        RawTerminal = op2.ExecutionResult.RawTerminal,
-                        ExecutionErrorCode = op2.ExecutionResult.ExecutionErrorCode,
-                        JobId = op2.ExecutionResult.JobId,
-                        EvidenceSource = op2.ExecutionResult.EvidenceSource,
-                        SubmissionIdentity = op2.ExecutionResult.SubmissionIdentity,
-                        SendSeq = op2.ExecutionResult.SendSeq,
-                        ObservedAtUtc = op2.ExecutionResult.ObservedAtUtc,
-                    };
-                    m.RequestState = op2.RequestState;
-                    m.Zone = op2.Zone == OperationZone.Tombstone ? OperationZone.TerminalPendingTransfer : op2.Zone;
-                    m.UpdatedRevision = file.Revision + 1;
-                    m.UpdatedAtUtc = now;
-                }
+                foreach (var m in mirrors)
+                    CopyWinnerFactsToMirror(m, op2, file.Revision + 1, now);
                 op2.UpdatedRevision = file.Revision + 1;
                 op2.UpdatedAtUtc = now;
                 return null;
@@ -3340,7 +4507,7 @@ public sealed class ArbitrationAdmissionService
             {
                 var failReason = mutate.Reason ?? "invalid_request";
                 // [第四轮验证会诊阻断处置] 已知审计/方向冲突码**原样透传**（不得被 `conflict_adjudication_failed:` 包装）。
-                if (failReason is "conflict_audit_conflict" or "conflict_adjudication_in_progress" or "no_pending_conflict"
+                if (failReason is "conflict_audit_conflict" or "conflict_adjudication_in_progress" or "no_pending_conflict" or "merged_target_conflict"
                     or "conflict_rejection_not_current_round")
                     return LocatedStop(requestIdentity, op, failReason,
                         "裁决审计未提交（保守停驻：保持冲突待决，不释放占用、不重发）。");
@@ -3351,7 +4518,9 @@ public sealed class ArbitrationAdmissionService
             return new AdmissionResult
             {
                 Kind = resolution == ConflictResolutionKind.ResolvedNotAccepted
-                    ? AdmissionResultKind.TerminalRejected
+                    ? op.RequestState == OperationRequestState.RetryableRejected
+                        ? AdmissionResultKind.RetryableRejected
+                        : AdmissionResultKind.TerminalRejected
                     : MapResultKindFromExecution(op.ExecutionResult?.Kind),
                 ReasonCode = resolution == ConflictResolutionKind.ResolvedNotAccepted
                     ? "conflict_resolved_not_accepted"
@@ -3535,6 +4704,75 @@ public sealed class ArbitrationAdmissionService
         => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)))
             .ToLowerInvariant()[..16];
 
+    private AdmissionResult PersistTerminalConflict(string requestIdentity, string submissionIdentity, int sendSeq, LeaseSegment lease,
+        ExternalStartCompletion completion, string detail)
+    {
+        var observedAt = completion.ObservedAtUtc ?? _utcNow();
+        var evidenceId = "terminal-conflict-" + ShortHash(
+            $"{requestIdentity}|{submissionIdentity}|{sendSeq}|{completion.Kind}|{completion.RawTerminal}|{completion.ExecutionErrorCode}|{completion.JobId}|{completion.EvidenceSource}|{observedAt:O}");
+        var conflictingExecution = new ExecutionResult
+        {
+            Kind = completion.Kind switch
+            {
+                ExternalStartCompletionKind.Succeeded => ExecutionResultKind.Succeeded,
+                ExternalStartCompletionKind.Cancelled => ExecutionResultKind.Cancelled,
+                ExternalStartCompletionKind.ExecutionFailed => ExecutionResultKind.Failed,
+                _ => ExecutionResultKind.Unknown,
+            },
+            RawTerminal = completion.RawTerminal ?? "",
+            ExecutionErrorCode = completion.ExecutionErrorCode,
+            JobId = completion.JobId,
+            EvidenceSource = completion.EvidenceSource ?? "",
+            SubmissionIdentity = submissionIdentity,
+            SendSeq = sendSeq,
+            ObservedAtUtc = observedAt,
+        };
+        var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var current = FindOp(file, requestIdentity);
+            if (current is null || !string.Equals(current.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+                || current.LastSendSeq != sendSeq || current.ExecutionResult is null)
+                return "state_changed";
+            current.ConflictEvidence ??= [];
+            var prior = current.ConflictEvidence.FirstOrDefault(e => string.Equals(e.EvidenceId, evidenceId, StringComparison.Ordinal));
+            if (prior is not null)
+            {
+                if (!string.Equals(prior.RawTerminal, completion.RawTerminal ?? completion.Kind.ToString(), StringComparison.Ordinal)
+                    || !string.Equals(prior.EvidenceSource, completion.EvidenceSource ?? "", StringComparison.Ordinal)
+                    || prior.ObservedAtUtc != observedAt
+                    || prior.ExecutionErrorCode != completion.ExecutionErrorCode
+                    || !ExecutionSnapshotsEqual(prior.ConflictingExecutionResultSnapshot, conflictingExecution))
+                    return "conflict_evidence_conflict";
+            }
+            else
+            {
+                current.ConflictEvidence.Add(new ConflictEvidenceRecord
+                {
+                    EvidenceId = evidenceId,
+                    RawTerminal = completion.RawTerminal ?? completion.Kind.ToString(),
+                    ExecutionErrorCode = completion.ExecutionErrorCode,
+                    EvidenceSource = completion.EvidenceSource ?? "",
+                    ObservedAtUtc = observedAt,
+                    SubmissionIdentity = submissionIdentity,
+                    SendSeq = sendSeq,
+                    SupersededRawTerminal = current.ExecutionResult.RawTerminal,
+                    SupersededReasonCode = "authoritative_execution_result:" + current.ExecutionResult.Kind,
+                    ConflictingExecutionResultSnapshot = CloneExecutionResult(conflictingExecution),
+                });
+            }
+            current.ConflictPending = true;
+            current.UpdatedRevision = file.Revision + 1;
+            current.UpdatedAtUtc = _utcNow();
+            return null;
+        });
+        var read = _store.Read();
+        var updated = read.File is null ? null : FindOp(read.File, requestIdentity);
+        if (!mutate.Success || updated is null)
+            return AdmissionResult.Of(AdmissionResultKind.Error, "terminal_conflict_record_failed",
+                detail + "冲突载荷未能确认落盘，责任仍需对账。", requestIdentity);
+        return ClassifyConflictPending(requestIdentity, updated, detail);
+    }
+
     /// <summary>完成结算中途失败：责任保留（`Pending`），返回可对账原因（不重发、不释放占用）。</summary>
     private static AdmissionResult SettleStop(
         string requestIdentity, string submissionIdentity, int sendSeq, string reasonCode,
@@ -3585,7 +4823,9 @@ public sealed class ArbitrationAdmissionService
             JobId = op.ExecutionResult?.JobId,
             ExecutionDisposition = ExecutionDisposition.Unknown,
             // 冲突证据到达（`conflictPending=true`）时**不得**报「已结清」：冲突断言本身是需要权威裁决的未结清责任。
-            ResponsibilityState = !conflictPending && op.RequestState == OperationRequestState.TerminalCompleted
+            ResponsibilityState = !conflictPending && !op.ConflictPending
+                && string.IsNullOrEmpty(op.ConflictAdjudicationClaim)
+                && op.RequestState == OperationRequestState.TerminalCompleted
                 ? ResponsibilityState.Settled
                 : ResponsibilityState.Pending,
             EvidenceSource = op.ExecutionResult?.EvidenceSource,
@@ -3630,22 +4870,141 @@ public sealed class ArbitrationAdmissionService
     /// 关闭必须排在同一顺序的「台账 Terminal」之后。返回 `null`＝接管已落盘；非 null＝保守停驻结果。
     /// </summary>
     private async Task<AdmissionResult?> PersistAcceptanceTakeoverAsync(
-        OperationRecord op, LeaseSegment lease, string? evidenceSource, string? runId, string? jobId)
+        OperationRecord op, LeaseSegment lease, string? evidenceSource, string? runId, string? jobId,
+        bool allowAdjudicatedHistorical = false, DateTimeOffset? acceptedAtUtc = null,
+        string? acceptedSubmissionIdentity = null, int? acceptedSendSeq = null)
     {
-        if (op.RequestState == OperationRequestState.Accepted) return null; // 已受理（无需补接管）
+        // Recovery can replay a durable claim from an earlier send round after the Operation has advanced.
+        // Always keep the receipt's stored identity separate from the Operation's current identity.
+        var claimSubmissionIdentity = acceptedSubmissionIdentity ?? op.SubmissionIdentity;
+        var claimSendSeq = acceptedSendSeq ?? op.LastSendSeq;
+        var source = evidenceSource ?? "reconcile:accepted";
+        if (string.IsNullOrWhiteSpace(source))
+            return LocatedStop(op.RequestIdentity, op, "acceptance_evidence_missing", "受理认领缺少证据来源；保守保留发送责任。");
+        var acceptedRunId = string.IsNullOrWhiteSpace(runId ?? op.RunBinding) ? null : (runId ?? op.RunBinding);
+        var acceptedJobId = string.IsNullOrWhiteSpace(jobId) ? null : jobId;
+        var claimTime = op.AcceptanceClaim?.ClaimedAtUtc ?? acceptedAtUtc ?? _utcNow();
+        if (_hooks.BeforeAcceptanceClaim is { } beforeClaim) await beforeClaim().ConfigureAwait(false);
+        string? claimFailure;
+        var claimResult = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var current = FindOp(file, op.RequestIdentity);
+            if (current is null
+                || !string.Equals(current.RequestIdentity, op.RequestIdentity, StringComparison.Ordinal)
+                || !IsCanonicalSubmissionIdentity(op.RequestIdentity, claimSubmissionIdentity, claimSendSeq)
+                || current.LastSendSeq < claimSendSeq)
+                return "acceptance_claim_stale_identity";
+            var existing = current.AcceptanceClaim;
+            if (existing is not null)
+            {
+                if (!string.Equals(existing.SubmissionIdentity, claimSubmissionIdentity, StringComparison.Ordinal)
+                    || existing.SendSeq != claimSendSeq)
+                    return "acceptance_claim_round_conflict";
+                if (!AcceptanceClaimMatches(existing, current, existing.EvidenceSource, existing.RunId, existing.JobId)
+                    || (existing.RunId is not null && acceptedRunId is not null && !string.Equals(existing.RunId, acceptedRunId, StringComparison.Ordinal))
+                    || (existing.JobId is not null && acceptedJobId is not null && !string.Equals(existing.JobId, acceptedJobId, StringComparison.Ordinal)))
+                    return "acceptance_claim_payload_conflict";
+                claimTime = existing.ClaimedAtUtc;
+                // A claim is immutable after publication. Later handle discovery is carried by the ledger/terminal
+                // evidence path; replay the exact payload originally claimed so older writers cannot mark a newer
+                // enrichment as confirmed after overwriting its ledger value.
+                return null;
+            }
+            var submission = file.Handoff?.Submission;
+            var openRound = submission is not null
+                && string.Equals(submission.SubmissionIdentity, claimSubmissionIdentity, StringComparison.Ordinal)
+                && submission.SendSeq == claimSendSeq
+                && current.RequestState is OperationRequestState.Granted or OperationRequestState.Sending or OperationRequestState.Reconciling;
+            var rejectionWonSameRound = current.LastResult?.Outcome == OperationOutcome.Rejected
+                && current.LastResult.AnsweredSendSeq == claimSendSeq
+                && string.Equals(current.SubmissionIdentity, claimSubmissionIdentity, StringComparison.Ordinal)
+                && submission is null;
+            var authorizedHistorical = allowAdjudicatedHistorical
+                && current.ConflictPending
+                && string.Equals(current.ConflictAdjudicationClaim,
+                    nameof(ConflictResolutionKind.ResolvedAcceptedTerminal), StringComparison.Ordinal)
+                && string.Equals(current.SubmissionIdentity, claimSubmissionIdentity, StringComparison.Ordinal)
+                && current.LastSendSeq == claimSendSeq;
+            var lateAcceptanceAfterAdvance = current.LastSendSeq > claimSendSeq;
+            var currentAcceptance = openRound || rejectionWonSameRound || authorizedHistorical || lateAcceptanceAfterAdvance;
+            if ((!currentAcceptance && current.Zone != OperationZone.Active)
+                || (!openRound && !rejectionWonSameRound && !authorizedHistorical && !lateAcceptanceAfterAdvance))
+                return "acceptance_claim_requires_open_current_submission";
+            current.AcceptanceClaim = new AcceptanceClaimRecord
+            {
+                RequestIdentity = current.RequestIdentity,
+                SubmissionIdentity = claimSubmissionIdentity,
+                SendSeq = claimSendSeq,
+                OwnerLeaseId = lease.LeaseId,
+                OwnerEpoch = lease.OwnerEpoch,
+                ClaimedAtUtc = claimTime,
+                EvidenceSource = source,
+                RunId = acceptedRunId,
+                JobId = acceptedJobId,
+                LedgerPersisted = false,
+            };
+            if (rejectionWonSameRound || lateAcceptanceAfterAdvance)
+            {
+                current.ConflictPending = true;
+                if (rejectionWonSameRound)
+                {
+                    var rejected = current.LastResult!;
+                    var observedAt = _utcNow();
+                    var evidenceId = "not-accepted-before-acceptance-claim:" + ShortHash(
+                        $"{current.SubmissionIdentity}|{current.LastSendSeq}|{rejected.ReasonCode}|{rejected.EvidenceSource}|{observedAt:O}");
+                    current.ConflictEvidence ??= [];
+                    if (!current.ConflictEvidence.Any(e => string.Equals(e.EvidenceId, evidenceId, StringComparison.Ordinal)))
+                        current.ConflictEvidence.Add(new ConflictEvidenceRecord
+                        {
+                            EvidenceId = evidenceId,
+                            RawTerminal = "not_accepted:" + rejected.ReasonCode,
+                            EvidenceSource = rejected.EvidenceSource ?? "",
+                            ObservedAtUtc = observedAt,
+                            SubmissionIdentity = current.SubmissionIdentity,
+                            SendSeq = current.LastSendSeq,
+                            SupersededRawTerminal = "acceptance_claim_pending",
+                            SupersededReasonCode = "durable_acceptance_claim_exists",
+                        });
+                }
+            }
+            current.UpdatedRevision = file.Revision + 1;
+            current.UpdatedAtUtc = claimTime;
+            return null;
+        });
+        if (!claimResult.Success)
+        {
+            claimFailure = claimResult.Reason ?? "acceptance_claim_failed";
+            if (claimFailure is "lease_stale_generation" or "lease_expired_no_renew" or "acceptance_claim_round_conflict")
+                return await PersistHistoricalAcceptanceReceiptAsync(op, lease, source, acceptedRunId, acceptedJobId, claimTime,
+                        claimSubmissionIdentity, claimSendSeq)
+                    .ConfigureAwait(false);
+            return LocatedStop(op.RequestIdentity, op, claimFailure,
+                "发送轮次的受理认领未能先行持久化；不得写外部台账或关闭责任。");
+        }
+
+        var claimed = claimResult.File?.Handoff?.Operations.FirstOrDefault(o =>
+            string.Equals(o.RequestIdentity, op.RequestIdentity, StringComparison.Ordinal))?.AcceptanceClaim;
+        if (claimed is null || !AcceptanceClaimMatches(claimed,
+                claimResult.File!.Handoff!.Operations.First(o => string.Equals(o.RequestIdentity, op.RequestIdentity, StringComparison.Ordinal)),
+                claimed.EvidenceSource, claimed.RunId, claimed.JobId))
+            return LocatedStop(op.RequestIdentity, op, "acceptance_claim_readback_unconfirmed",
+                "受理认领写后读回不匹配；保守保留发送责任。");
+
+        if (_hooks.Barriers?.AfterAcceptBeforeLedger is { } afterClaim) await afterClaim().ConfigureAwait(false);
+
         var entry = new ExternalStartLedgerEntry
         {
-            SubmissionIdentity = op.SubmissionIdentity,
-            SendSeq = op.LastSendSeq,
+            SubmissionIdentity = claimSubmissionIdentity,
+            SendSeq = claimSendSeq,
             CandidateId = op.CandidateId,
             ResourceRef = op.ResourceRef ?? "",
             ActionId = op.Candidate?.ActionId ?? ArbitrationOrdering.DeriveActionId(op.CandidateId),
             TargetBgiEpoch = op.TargetEpoch,
-            AcceptedAtUtc = _utcNow(),
-            EvidenceSource = evidenceSource ?? "reconcile:accepted",
+            AcceptedAtUtc = claimed.ClaimedAtUtc,
+            EvidenceSource = claimed.EvidenceSource,
             State = LedgerEntryState.AcceptedPendingExecution,
-            RunId = runId,
-            JobId = jobId,
+            RunId = claimed.RunId,
+            JobId = claimed.JobId,
             OperationType = op.OperationType,
         };
         string? failure;
@@ -3657,11 +5016,48 @@ public sealed class ArbitrationAdmissionService
         {
             failure = "persist_exception:" + ex.GetType().Name;
         }
-        return failure is null
+        if (failure is not null)
+            return LocatedStop(op.RequestIdentity, op, "takeover_persist_failed",
+                "受理接管台账落盘失败（" + failure + "）；持久化认领保留，保守停驻、不关闭、不重发。");
+
+        var markPersisted = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var current = FindOp(file, op.RequestIdentity);
+            var currentClaim = current?.AcceptanceClaim;
+            if (current is null || currentClaim is null
+                || !AcceptanceClaimMatches(currentClaim, current, currentClaim.EvidenceSource, currentClaim.RunId, currentClaim.JobId))
+                return "acceptance_claim_changed_after_ledger";
+            if (!AcceptanceClaimMatches(currentClaim, current, claimed.EvidenceSource, claimed.RunId, claimed.JobId))
+                return "acceptance_claim_payload_changed_after_ledger";
+            currentClaim.LedgerPersisted = true;
+            current.UpdatedRevision = file.Revision + 1;
+            current.UpdatedAtUtc = _utcNow();
+            return null;
+        });
+        return markPersisted.Success
             ? null
-            : LocatedStop(op.RequestIdentity, op, "takeover_persist_failed",
-                "终态先到：受理接管台账落盘失败（" + failure + "）——保守停驻，不写终态载体、不关闭、不重发。");
+            : LocatedStop(op.RequestIdentity, op, markPersisted.Reason ?? "acceptance_claim_confirmation_failed",
+                "外部台账已写但租约认领确认未落盘；认领保留，禁止重发并待恢复重查。");
     }
+
+    private static bool AcceptanceClaimMatches(AcceptanceClaimRecord claim, OperationRecord op,
+        string evidenceSource, string? runId, string? jobId)
+        => string.Equals(claim.RequestIdentity, op.RequestIdentity, StringComparison.Ordinal)
+           && IsCanonicalSubmissionIdentity(op.RequestIdentity, claim.SubmissionIdentity, claim.SendSeq)
+           && claim.SendSeq <= op.LastSendSeq
+           && !string.IsNullOrWhiteSpace(claim.OwnerLeaseId)
+           && !string.IsNullOrWhiteSpace(claim.OwnerEpoch)
+           && claim.ClaimedAtUtc != default
+           && string.Equals(claim.EvidenceSource, evidenceSource, StringComparison.Ordinal)
+           && string.Equals(claim.RunId, runId, StringComparison.Ordinal)
+           && string.Equals(claim.JobId, jobId, StringComparison.Ordinal)
+           && op.OperationType == OperationType.ExternalStart;
+
+    private static bool IsCanonicalSubmissionIdentity(string requestIdentity, string? submissionIdentity, int sendSeq)
+        => sendSeq >= 1
+           && string.Equals(submissionIdentity,
+               $"sub:{requestIdentity}:{sendSeq.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+               StringComparison.Ordinal);
 
     /// <summary>
     /// 普通受理补完（[Batch B]）：`null`/`Unknown` 完成结果到达而 Submission 仍未关闭时，
@@ -3669,7 +5065,7 @@ public sealed class ArbitrationAdmissionService
     /// 返回 `null`＝已完成；非 null＝保守停驻结果（责任 `Pending`）。
     /// </summary>
     private async Task<AdmissionResult?> AcceptOrdinaryAsync(OperationRecord op, LeaseSegment lease, LogicalOwnerLeaseFile file,
-        string? evidenceSource = null, string? runId = null, string? jobId = null)
+        string? evidenceSource = null, string? runId = null, string? jobId = null, DateTimeOffset? acceptedAtUtc = null)
     {
         var candidate = op.Candidate ?? new ArbitrationCandidate();
         var request = new AdmissionRequest
@@ -3685,7 +5081,7 @@ public sealed class ArbitrationAdmissionService
         };
         var acceptance = await ReconcileOutcomeAsync(request, lease, file,
             // 对账取得的证据来源/运行绑定/句柄**完整携带**（不得用合成值替代，否则接管台账丢关联字段）。
-            new SendOutcome.Accepted(evidenceSource ?? "reconcile:accepted", runId ?? op.RunBinding, jobId))
+            new SendOutcome.Accepted(evidenceSource ?? "reconcile:accepted", runId ?? op.RunBinding, jobId), acceptedAtUtc)
             .ConfigureAwait(false);
         // [第二轮验证会诊阻断处置] **只有 `Accepted` 才算补完成功**：`Reconciling` 恰恰可能是
         // 接管落盘失败/关闭失败——把它当成功会让上层错误报告「普通受理已完成」。原样返回其失败原因与载荷。
@@ -3757,6 +5153,29 @@ public sealed class ArbitrationAdmissionService
                && result.Kind is ExecutionResultKind.Succeeded or ExecutionResultKind.Failed or ExecutionResultKind.Cancelled;
     }
 
+    private static bool PendingTerminalSnapshotMatches(PendingTerminal current, PendingTerminal expected)
+        => current.Kind == expected.Kind
+           && string.Equals(current.RawTerminal, expected.RawTerminal, StringComparison.Ordinal)
+           && string.Equals(current.ExecutionErrorCode, expected.ExecutionErrorCode, StringComparison.Ordinal)
+           && string.Equals(current.JobId, expected.JobId, StringComparison.Ordinal)
+           && string.Equals(current.EvidenceSource, expected.EvidenceSource, StringComparison.Ordinal)
+           && string.Equals(current.SubmissionIdentity, expected.SubmissionIdentity, StringComparison.Ordinal)
+           && current.SendSeq == expected.SendSeq
+           && current.OperationType == expected.OperationType
+           && current.ObservedAtUtc == expected.ObservedAtUtc
+           && current.RecordedAtUtc == expected.RecordedAtUtc
+           && current.LocalCancelRequested == expected.LocalCancelRequested;
+
+    private static bool ExecutionResultSnapshotMatches(ExecutionResult current, ExecutionResult expected)
+        => current.Kind == expected.Kind
+           && string.Equals(current.RawTerminal, expected.RawTerminal, StringComparison.Ordinal)
+           && string.Equals(current.ExecutionErrorCode, expected.ExecutionErrorCode, StringComparison.Ordinal)
+           && string.Equals(current.JobId, expected.JobId, StringComparison.Ordinal)
+           && string.Equals(current.EvidenceSource, expected.EvidenceSource, StringComparison.Ordinal)
+           && string.Equals(current.SubmissionIdentity, expected.SubmissionIdentity, StringComparison.Ordinal)
+           && current.SendSeq == expected.SendSeq
+           && current.ObservedAtUtc == expected.ObservedAtUtc;
+
     /// <summary>
     /// 权威终态完成（§4.1a 判据表第三行：关联执行权威终态+接管台账一致才允许 Accepted→TerminalCompleted——
     /// 正常操作的主槽位出口；无本入口 Accepted 永驻 Active）。
@@ -3809,7 +5228,11 @@ public sealed class ArbitrationAdmissionService
     }
 
     /// <summary>统一关闭接口（§4.2c 两个合法分支共用：当前所有者+当前 revision+目标发送身份匹配；绝不消解 Pending；关闭即同次原子发布更新 Operations 并移除 Submission）。</summary>
-    private LeaseMutateResult CloseSubmission(LeaseSegment lease, SubmissionRecord submission, Func<LogicalOwnerLeaseFile, string?> applyOutcome)
+    private LeaseMutateResult CloseSubmission(LeaseSegment lease, SubmissionRecord submission, string ownerRequestIdentity,
+        Func<LogicalOwnerLeaseFile, string?> applyOutcome,
+        bool keepOpenWhenOwnerConflictPending = false,
+        bool acceptanceClaimClose = false,
+        bool allowClaimConflictRecording = false)
     {
         // 修订号锁内就地读取（MutateHandoffLatest）：本方法原「Read()→MutateHandoff(捕获修订)」在并发下会被
         // 任何一次同胞写入顶掉修订号而误判 lease_stale_generation（⑤c 并发实证）。回调内身份关联校验保证
@@ -3822,20 +5245,44 @@ public sealed class ArbitrationAdmissionService
                 || !string.Equals(current.SubmissionIdentity, submission.SubmissionIdentity, StringComparison.Ordinal)
                 || current.SendSeq != submission.SendSeq)
                 return "submission_identity_mismatch";
+            var owner = FindSubmissionOwner(file, current);
+            if (owner is null
+                || !string.Equals(owner.RequestIdentity, ownerRequestIdentity, StringComparison.Ordinal)
+                || !string.Equals(owner.SubmissionIdentity, submission.SubmissionIdentity, StringComparison.Ordinal)
+                || owner.LastSendSeq != submission.SendSeq)
+                return "submission_owner_mismatch";
+            if (owner.ConflictPending && !keepOpenWhenOwnerConflictPending)
+                return "conflict_requires_adjudication";
+            if (owner.AcceptanceClaim is { } claim)
+            {
+                if (acceptanceClaimClose)
+                {
+                    if (!claim.LedgerPersisted
+                        || !string.Equals(claim.SubmissionIdentity, submission.SubmissionIdentity, StringComparison.Ordinal)
+                        || claim.SendSeq != submission.SendSeq)
+                        return "acceptance_claim_unconfirmed";
+                }
+                else if (!allowClaimConflictRecording)
+                {
+                    return "acceptance_claim_pending";
+                }
+            }
+            else if (acceptanceClaimClose)
+            {
+                return "acceptance_claim_missing";
+            }
             var reason = applyOutcome(file);
             if (reason is not null) return reason;
+            if (keepOpenWhenOwnerConflictPending && owner.ConflictPending)
+                return null; // evidence/conflict publication committed; do not close responsibility as a rejection
             // R5.3 §24.16-4：正式接管台账/PendingTerminal 落盘后（本处＝受理或确定拒绝的关闭事务内）同一权威发布内
             // 把对应预观察记录标记 `completed`——清理仍归 R5.6 统一裁决（本批不删除唯一恢复依据）。
             var pre = (file.Handoff!.PreObservations ?? []).FirstOrDefault(p => p is not null
                 && string.Equals(p.SubmissionIdentity, submission.SubmissionIdentity, StringComparison.Ordinal)
                 && p.SendSeq == submission.SendSeq);
             if (pre is not null) pre.State = "completed";
-            var op = FindOp(file, submission);
-            if (op is not null)
-            {
-                op.UpdatedRevision = file.Revision + 1;
-                op.UpdatedAtUtc = _utcNow();
-            }
+            owner.UpdatedRevision = file.Revision + 1;
+            owner.UpdatedAtUtc = _utcNow();
 
             file.Handoff!.Submission = null; // Pending 独立存续——绝不顺带消解（票据压制与恢复责任保持至 settle/restore 闭环）
             return null;
@@ -3845,10 +5292,27 @@ public sealed class ArbitrationAdmissionService
     private static OperationRecord? FindOp(LogicalOwnerLeaseFile file, string requestIdentity)
         => (file.Handoff?.Operations ?? []).FirstOrDefault(o => string.Equals(o.RequestIdentity, requestIdentity, StringComparison.Ordinal));
 
-    private static OperationRecord? FindOp(LogicalOwnerLeaseFile file, SubmissionRecord submission)
-        => (file.Handoff?.Operations ?? []).FirstOrDefault(o =>
-            string.Equals(o.SubmissionIdentity, submission.SubmissionIdentity, StringComparison.Ordinal)
-            && o.LastSendSeq == submission.SendSeq);
+    private static OperationRecord? FindSubmissionOwner(LogicalOwnerLeaseFile file, SubmissionRecord submission)
+    {
+        var identity = submission.SubmissionIdentity;
+        var lastColon = identity.LastIndexOf(':');
+        var seqText = lastColon > 4 ? identity[(lastColon + 1)..] : "";
+        var parsed = int.TryParse(seqText, System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out var identitySeq);
+        if (lastColon <= 4 || !identity.StartsWith("sub:", StringComparison.Ordinal)
+            || !parsed
+            || !string.Equals(identitySeq.ToString(System.Globalization.CultureInfo.InvariantCulture), seqText, StringComparison.Ordinal)
+            || identitySeq != submission.SendSeq)
+            return null;
+        var requestIdentity = identity[4..lastColon];
+        var owner = FindOp(file, requestIdentity);
+        return owner is not null
+               && owner.MergedInto is null
+               && string.Equals(owner.SubmissionIdentity, submission.SubmissionIdentity, StringComparison.Ordinal)
+               && owner.LastSendSeq == submission.SendSeq
+            ? owner
+            : null;
+    }
 
     /// <summary>
     /// 待对账迁移（会诊 P2 处置：必须校验「结果对应的发送轮次」完整关联身份，不能只看状态枚举）。
@@ -3858,11 +5322,11 @@ public sealed class ArbitrationAdmissionService
     private Task<LeaseMutateResult> MarkReconcilingAsync(string requestIdentity, LeaseSegment lease, string submissionIdentity, int sendSeq)
         => TransitionSingleAsync(requestIdentity, lease, OperationRequestState.Reconciling, markSubmissionReconciling: true,
             expectedSubmissionIdentity: submissionIdentity, expectedSendSeq: sendSeq,
-            OperationRequestState.Granted, OperationRequestState.Sending, OperationRequestState.Reconciling);
+            expectedStates: [OperationRequestState.Granted, OperationRequestState.Sending, OperationRequestState.Reconciling]);
 
     private async Task<LeaseMutateResult> TransitionSingleAsync(string requestIdentity, LeaseSegment lease, OperationRequestState state,
         bool markSubmissionReconciling = false, string? expectedSubmissionIdentity = null, int? expectedSendSeq = null,
-        params OperationRequestState[] expectedStates)
+        Action<OperationRecord>? mutateOperation = null, params OperationRequestState[] expectedStates)
     {
         var read = _store.Read();
         if (read.File?.Lease is null)
@@ -3872,6 +5336,9 @@ public sealed class ArbitrationAdmissionService
         {
             var op = FindOp(file, requestIdentity);
             if (op is null || op.Zone != OperationZone.Active) return "stale_operation_identity";
+            // This is the final cross-process permit gate. Never infer confirmation from a fresh free-occupancy
+            // snapshot; only an evidence-bound handoff-confirmation flow may clear the durable marker.
+            if (op.PreemptConfirmPending) return "preempt_confirm_pending";
             // 轮次关联校验（会诊 P2）：迟到结果不得改写更新轮次的责任（answeredSendSeq 语义的写入侧护栏）。
             if (expectedSendSeq is { } seq
                 && (op.LastSendSeq != seq
@@ -3880,6 +5347,7 @@ public sealed class ArbitrationAdmissionService
             // B1：状态已被其他处理者推进=不覆盖（响亮失败，调用方分类返回当前事实）。
             if (expectedStates.Length > 0 && !expectedStates.Contains(op.RequestState)) return "state_changed";
             op.RequestState = state;
+            mutateOperation?.Invoke(op);
             op.UpdatedRevision = file.Revision + 1;
             op.UpdatedAtUtc = now;
             if (markSubmissionReconciling
@@ -3919,11 +5387,13 @@ public sealed class ArbitrationAdmissionService
         if (_hooks.F11Active())
             return AdmissionResult.Of(AdmissionResultKind.F11Blocked, "f11_active", "F11 独立停止闸门激活。", requestIdentity);
         // 并发重试合并（I2）：本进程已有在途处理者=合并不新增发送者。
+        bool alreadyInFlight;
         lock (_queueLock)
         {
-            if (_inflight.Contains(requestIdentity))
-                return AdmissionResult.Of(AdmissionResultKind.NeedReconcile, "in_flight", "已有重试/处理在途（合并，不新增发送者）。", requestIdentity);
+            alreadyInFlight = _inflight.Contains(requestIdentity);
         }
+        if (alreadyInFlight)
+            return ClassifyRetryInFlight(requestIdentity);
 
         // N2：读快照+状态分类在同一进程内串行段（跨线程并发不争用存取锁）。
         AdmissionResult? early = null;
@@ -3954,11 +5424,53 @@ public sealed class ArbitrationAdmissionService
                 }
                 else
                 {
+                    if (op.ConflictPending)
+                    {
+                        early = ClassifyConflictPending(requestIdentity, op, "存在待决冲突：重试资格失效（禁止重发，必须先经权威裁决）。");
+                        goto RetryOperationClassified;
+                    }
+                    if (op.AcceptanceClaim is not null
+                        && (op.RequestState is OperationRequestState.RetryableRejected or OperationRequestState.Queued
+                            or OperationRequestState.InRound or OperationRequestState.Granted or OperationRequestState.Sending
+                            or OperationRequestState.Reconciling
+                            || read.File.Handoff?.Submission is { } claimedSubmission
+                            && string.Equals(claimedSubmission.SubmissionIdentity, op.AcceptanceClaim.SubmissionIdentity, StringComparison.Ordinal)
+                            && claimedSubmission.SendSeq == op.AcceptanceClaim.SendSeq))
+                    {
+                        early = AcceptanceClaimPending(requestIdentity, op);
+                        goto RetryOperationClassified;
+                    }
+                    if (IsMergeConflictHeld(op))
+                    {
+                        early = ClassifyMergedTargetConflict(requestIdentity, op,
+                            "合并兼容性冲突已持久化为待核查状态；不改写责任、不发送。");
+                        goto RetryOperationClassified;
+                    }
+                    if (op.MergedInto is { } mergedInto)
+                    {
+                        var target = FindOp(read.File, mergedInto);
+                        early = target is null
+                            ? AdmissionResult.Of(AdmissionResultKind.Error, "merged_target_missing", "合并目标记录缺失=响亮拒绝。", requestIdentity)
+                            : ClassifyMergedTarget(requestIdentity, op, target, "RetryAsync 不得为合并镜像签发独立发送许可。");
+                        goto RetryOperationClassified;
+                    }
+                    bool inFlight;
+                    lock (_queueLock) inFlight = _inflight.Contains(requestIdentity);
+                    if (inFlight)
+                    {
+                        early = ClassifyInFlight(requestIdentity, op, "已有重试/处理在途（合并，不新增发送者）。");
+                        goto RetryOperationClassified;
+                    }
                     switch (op.RequestState)
                     {
                         case OperationRequestState.RetryableRejected:
                         case OperationRequestState.Queued:
                         case OperationRequestState.InRound:
+                            if (op.PreemptConfirmPending)
+                            {
+                                early = NeedPreemptConfirmation(requestIdentity, op);
+                                break;
+                            }
                             // [Batch B 续 会诊阻断处置] 冲突待决 ⇒ **重试资格失效**（不重新入队、不改写状态）。
                             if (op.ConflictPending)
                             {
@@ -3968,6 +5480,8 @@ public sealed class ArbitrationAdmissionService
                                     ReasonCode = "conflict_pending",
                                     Detail = "存在待决冲突：重试资格失效（禁止重发，必须先经权威裁决）。",
                                     RequestIdentity = requestIdentity,
+                                    SubmissionIdentity = op.SubmissionIdentity,
+                                    SendSeq = op.LastSendSeq,
                                     ExecutionDisposition = ExecutionDisposition.Unknown,
                                     ResponsibilityState = ResponsibilityState.Pending,
                                 };
@@ -4007,12 +5521,22 @@ public sealed class ArbitrationAdmissionService
                                 OperationType = op.OperationType,
                             };
                             captured = read.File.Lease;
+                            lock (_queueLock)
+                            {
+                                if (!_inflight.Add(requestIdentity))
+                                {
+                                    early = ClassifyInFlight(requestIdentity, op, "已有重试/处理在途（合并，不新增发送者）。");
+                                    retryRequest = null;
+                                    captured = null;
+                                }
+                            }
                             break;
                         default:
                             // I2：迟到/并发重试按当前事实返回——不重复消耗预算、不把已受理误报终局拒绝。
                             early = ClassifyCurrentState(requestIdentity);
                             break;
                     }
+                RetryOperationClassified:;
                 }
             }
         }
@@ -4023,10 +5547,592 @@ public sealed class ArbitrationAdmissionService
 
         if (early is not null) return early;
 
+        // Same-identity responsibility was reserved under _gate before releasing it; this point is intentionally
+        // outside the gate so fixtures can assert that concurrent callers see the reservation before queue insertion.
+        try
+        {
+            if (_hooks.Barriers?.AfterRetryReservation is { } afterReservation)
+                await afterReservation().ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            lock (_queueLock) _inflight.Remove(requestIdentity);
+            return AdmissionResult.Of(AdmissionResultKind.Error, "internal_error", "重试预留后屏障异常（响亮失败不静默）。", requestIdentity);
+        }
+
         // 入队走统一轮次（I2：与排队候选同一仲裁面排序，并发重试经去重合并）。
-        var pending = Enqueue(retryRequest!, captured!);
+        var pending = Enqueue(retryRequest!, captured!, identityReserved: true);
         _ = Task.Run(() => DrainRoundAsync());
         return await pending.Completion.Task.ConfigureAwait(false);
+    }
+
+    private AdmissionResult ClassifyRetryInFlight(string requestIdentity)
+    {
+        var read = _store.Read();
+        var op = read.File is null ? null : FindOp(read.File, requestIdentity);
+        if (op is null) return ClassifyCurrentState(requestIdentity);
+        if (op.ConflictPending)
+            return ClassifyConflictPending(requestIdentity, op, "存在待决冲突：重试资格失效（禁止重发，必须先经权威裁决）。");
+        if (AcceptanceClaimNeedsResolution(op, read.File!))
+            return AcceptanceClaimPending(requestIdentity, op);
+        if (op.MergedInto is { } mergedInto)
+        {
+            var target = FindOp(read.File!, mergedInto);
+            return target is null
+                ? AdmissionResult.Of(AdmissionResultKind.Error, "merged_target_missing", "合并目标记录缺失=响亮拒绝。", requestIdentity)
+                : ClassifyMergedTarget(requestIdentity, op, target, "已有处理在途；合并镜像不得独立重发。");
+        }
+        return op.RequestState is OperationRequestState.RetryableRejected
+            or OperationRequestState.Queued or OperationRequestState.InRound
+            or OperationRequestState.Granted or OperationRequestState.Sending
+            ? ClassifyInFlight(requestIdentity, op, "已有重试/处理在途（合并，不新增发送者）。")
+            : ClassifyCurrentState(requestIdentity);
+    }
+
+    private static AdmissionResult ClassifyConflictPending(string requestIdentity, OperationRecord op, string detail)
+        => new()
+        {
+            Kind = AdmissionResultKind.NeedReconcile,
+            ReasonCode = "conflict_pending",
+            Detail = detail,
+            RequestIdentity = requestIdentity,
+            SubmissionIdentity = op.SubmissionIdentity,
+            SendSeq = op.LastSendSeq,
+            ExecutionDisposition = ExecutionDisposition.Unknown,
+            ResponsibilityState = ResponsibilityState.Pending,
+        };
+
+    private static AdmissionResult AcceptanceClaimPending(string requestIdentity, OperationRecord op)
+        => new()
+        {
+            Kind = AdmissionResultKind.NeedReconcile,
+            ReasonCode = "acceptance_claim_pending",
+            Detail = "本发送轮已有持久化受理认领；禁止负向关闭和重发，须先续写/核验接管台账。",
+            RequestIdentity = requestIdentity,
+            SubmissionIdentity = op.AcceptanceClaim?.SubmissionIdentity ?? op.SubmissionIdentity,
+            SendSeq = op.AcceptanceClaim?.SendSeq ?? op.LastSendSeq,
+            ExecutionDisposition = ExecutionDisposition.Unknown,
+            ResponsibilityState = ResponsibilityState.Pending,
+            JobId = op.AcceptanceClaim?.JobId,
+            EvidenceSource = op.AcceptanceClaim?.EvidenceSource,
+        };
+
+    private bool HoldHistoricalAcceptanceReceipt(LeaseSegment lease, string requestIdentity, TakeoverLedgerFact fact)
+    {
+        if (fact.AcceptedAtUtc is not { } acceptedAt || acceptedAt == default
+            || string.IsNullOrWhiteSpace(fact.EvidenceSource)) return false;
+        var evidenceId = "accepted-receipt:" + ShortHash(fact.SubmissionIdentity + "|" + fact.SendSeq);
+        var result = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var op = FindOp(file, requestIdentity);
+            if (op is null || op.OperationType != OperationType.ExternalStart || op.LastSendSeq < fact.SendSeq)
+                return "acceptance_receipt_operation_stale";
+            op.ConflictEvidence ??= [];
+            var existing = op.ConflictEvidence.FirstOrDefault(e => e is not null
+                && string.Equals(e.EvidenceId, evidenceId, StringComparison.Ordinal));
+            if (existing is not null)
+            {
+                if (!string.Equals(existing.RawTerminal, "accepted_receipt", StringComparison.Ordinal)
+                    || !string.Equals(existing.SubmissionIdentity, fact.SubmissionIdentity, StringComparison.Ordinal)
+                    || existing.SendSeq != fact.SendSeq)
+                    return "acceptance_receipt_evidence_conflict";
+                var existingJobId = existing.JobId ?? "";
+                var incomingJobId = fact.JobId ?? "";
+                if (existingJobId.Length > 0 && incomingJobId.Length > 0
+                    && !string.Equals(existingJobId, incomingJobId, StringComparison.Ordinal))
+                    return "acceptance_receipt_job_id_conflict";
+                if (existingJobId.Length == 0 && incomingJobId.Length > 0)
+                    existing.JobId = incomingJobId;
+                if (!op.ConflictPending)
+                {
+                    op.ConflictPending = true;
+                    op.UpdatedRevision = file.Revision + 1;
+                    op.UpdatedAtUtc = _utcNow();
+                }
+                op.ConflictResolutionState ??= "AcceptedAwaitingTerminal";
+                // Same durable round receipt can be re-observed by another owner/process; preserve the first
+                // source/time rather than treating a later receive timestamp as a conflicting identity.
+                return null;
+            }
+            op.ConflictEvidence.Add(new ConflictEvidenceRecord
+            {
+                EvidenceId = evidenceId,
+                RawTerminal = "accepted_receipt", // 受理回执，不表示执行终态
+                EvidenceSource = fact.EvidenceSource,
+                ObservedAtUtc = acceptedAt,
+                SubmissionIdentity = fact.SubmissionIdentity,
+                SendSeq = fact.SendSeq,
+                JobId = fact.JobId,
+            });
+            op.ConflictPending = true;
+            op.ConflictResolutionState = "AcceptedAwaitingTerminal";
+            op.UpdatedRevision = file.Revision + 1;
+            op.UpdatedAtUtc = _utcNow();
+            return null;
+        });
+        return result.Success;
+    }
+
+    private string? HoldHistoricalAcceptanceTerminal(LeaseSegment lease, string requestIdentity, TakeoverLedgerFact fact)
+    {
+        if (!fact.Terminal
+            || string.IsNullOrWhiteSpace(fact.SubmissionIdentity)
+            || fact.SendSeq < 1
+            || string.IsNullOrWhiteSpace(fact.JobId)
+            || string.IsNullOrWhiteSpace(fact.TerminalEvidence)
+            || string.IsNullOrWhiteSpace(fact.RawTerminal)
+            || string.IsNullOrWhiteSpace(fact.TerminalEvidenceSource)
+            || fact.TerminalKind is not { } terminalKind
+            || !Enum.IsDefined(terminalKind)
+            || terminalKind is not (ExecutionResultKind.Succeeded or ExecutionResultKind.Failed or ExecutionResultKind.Cancelled)
+            || (terminalKind == ExecutionResultKind.Failed && string.IsNullOrWhiteSpace(fact.ExecutionErrorCode))
+            || fact.TerminalObservedAtUtc is not { } observedAt
+            || observedAt == default)
+            return "historical_acceptance_terminal_payload_incomplete";
+
+        var terminalResult = new ExecutionResult
+        {
+            Kind = terminalKind,
+            RawTerminal = fact.RawTerminal,
+            ExecutionErrorCode = fact.ExecutionErrorCode,
+            JobId = fact.JobId,
+            EvidenceSource = fact.TerminalEvidenceSource,
+            SubmissionIdentity = fact.SubmissionIdentity,
+            SendSeq = fact.SendSeq,
+            ObservedAtUtc = observedAt,
+        };
+
+        var evidenceId = "historical-accepted-terminal:" + ShortHash(fact.SubmissionIdentity + "|" + fact.SendSeq);
+        var result = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var op = FindOp(file, requestIdentity);
+            if (op is null || op.OperationType != OperationType.ExternalStart
+                || op.LastSendSeq <= fact.SendSeq || !op.ConflictPending
+                || op.ConflictResolutionState is not ("AcceptedAwaitingTerminal" or "AcceptedTerminalObserved"))
+                return "historical_acceptance_terminal_state_changed";
+
+            var receipt = (op.ConflictEvidence ?? []).FirstOrDefault(e => e is not null
+                && string.Equals(e.RawTerminal, "accepted_receipt", StringComparison.Ordinal)
+                && string.Equals(e.SubmissionIdentity, fact.SubmissionIdentity, StringComparison.Ordinal)
+                && e.SendSeq == fact.SendSeq);
+            if (receipt is null || string.IsNullOrWhiteSpace(receipt.JobId)
+                || !string.Equals(receipt.JobId, fact.JobId, StringComparison.Ordinal))
+                return "historical_acceptance_terminal_receipt_mismatch";
+
+            op.ConflictEvidence ??= [];
+            var existing = op.ConflictEvidence.FirstOrDefault(e => e is not null
+                && string.Equals(e.EvidenceId, evidenceId, StringComparison.Ordinal));
+            if (existing is not null)
+            {
+                if (!string.Equals(existing.RawTerminal, fact.RawTerminal, StringComparison.Ordinal)
+                    || !string.Equals(existing.ExecutionErrorCode, fact.ExecutionErrorCode, StringComparison.Ordinal)
+                    || !string.Equals(existing.EvidenceSource, fact.TerminalEvidenceSource, StringComparison.Ordinal)
+                    || existing.ObservedAtUtc != observedAt
+                    || !string.Equals(existing.SubmissionIdentity, fact.SubmissionIdentity, StringComparison.Ordinal)
+                    || existing.SendSeq != fact.SendSeq
+                    || !string.Equals(existing.JobId, fact.JobId, StringComparison.Ordinal))
+                    return "historical_acceptance_terminal_conflict";
+                if (existing.ConflictingExecutionResultSnapshot is { } existingResult
+                    && !ExecutionSnapshotsEqual(existingResult, terminalResult))
+                    return "historical_acceptance_terminal_conflict";
+                existing.ConflictingExecutionResultSnapshot ??= CloneExecutionResult(terminalResult);
+            }
+            else
+            {
+                op.ConflictEvidence.Add(new ConflictEvidenceRecord
+                {
+                    EvidenceId = evidenceId,
+                    RawTerminal = fact.RawTerminal,
+                    ExecutionErrorCode = fact.ExecutionErrorCode,
+                    EvidenceSource = fact.TerminalEvidenceSource,
+                    ObservedAtUtc = observedAt,
+                    SubmissionIdentity = fact.SubmissionIdentity,
+                    SendSeq = fact.SendSeq,
+                    JobId = fact.JobId,
+                    ConflictingExecutionResultSnapshot = CloneExecutionResult(terminalResult),
+                });
+            }
+
+            op.ConflictResolutionState = "AcceptedTerminalObserved";
+            op.UpdatedRevision = file.Revision + 1;
+            op.UpdatedAtUtc = _utcNow();
+            return null;
+        });
+        return result.Success ? null : result.Reason ?? "historical_acceptance_terminal_persist_failed";
+    }
+
+    private string? ResolveHistoricalAcceptanceTerminal(LeaseSegment lease, string requestIdentity,
+        TakeoverLedgerFact fact, out bool newlyFinalized)
+    {
+        newlyFinalized = false;
+        if (!fact.Terminal
+            || fact.TerminalKind is not { } terminalKind
+            || !Enum.IsDefined(terminalKind)
+            || terminalKind is not (ExecutionResultKind.Succeeded or ExecutionResultKind.Failed or ExecutionResultKind.Cancelled)
+            || string.IsNullOrWhiteSpace(fact.SubmissionIdentity)
+            || fact.SendSeq < 1
+            || string.IsNullOrWhiteSpace(fact.JobId)
+            || string.IsNullOrWhiteSpace(fact.RawTerminal)
+            || string.IsNullOrWhiteSpace(fact.TerminalEvidenceSource)
+            || fact.TerminalObservedAtUtc is not { } observedAt
+            || observedAt == default
+            || (terminalKind == ExecutionResultKind.Failed && string.IsNullOrWhiteSpace(fact.ExecutionErrorCode)))
+            return "historical_acceptance_terminal_payload_incomplete";
+
+        var terminalResult = new ExecutionResult
+        {
+            Kind = terminalKind,
+            RawTerminal = fact.RawTerminal,
+            ExecutionErrorCode = fact.ExecutionErrorCode,
+            JobId = fact.JobId,
+            EvidenceSource = fact.TerminalEvidenceSource,
+            SubmissionIdentity = fact.SubmissionIdentity,
+            SendSeq = fact.SendSeq,
+            ObservedAtUtc = observedAt,
+        };
+        var pending = new PendingTerminal
+        {
+            Kind = terminalKind,
+            RawTerminal = fact.RawTerminal,
+            ExecutionErrorCode = fact.ExecutionErrorCode,
+            JobId = fact.JobId,
+            EvidenceSource = fact.TerminalEvidenceSource,
+            SubmissionIdentity = fact.SubmissionIdentity,
+            SendSeq = fact.SendSeq,
+            OperationType = OperationType.ExternalStart,
+            ObservedAtUtc = observedAt,
+            RecordedAtUtc = _utcNow(),
+        };
+        var evidenceId = "historical-accepted-terminal:" + ShortHash(fact.SubmissionIdentity + "|" + fact.SendSeq);
+        var auditId = DeriveConflictAuditId(requestIdentity, fact.SubmissionIdentity, fact.SendSeq,
+            ConflictResolutionKind.ResolvedHistoricalAcceptedTerminal);
+        if (_hooks.TakeoverTerminalPayloadConfirmed?.Invoke(fact.SubmissionIdentity, fact.SendSeq,
+                fact.RawTerminal, fact.ExecutionErrorCode, fact.JobId, fact.TerminalEvidenceSource,
+                observedAt, terminalKind) != true)
+            return "historical_acceptance_terminal_ledger_unconfirmed";
+
+        var didFinalize = false;
+        var now = _utcNow();
+        var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var op = FindOp(file, requestIdentity);
+            if (op is null || op.OperationType != OperationType.ExternalStart
+                || op.LastSendSeq <= fact.SendSeq
+                || !string.Equals(op.SubmissionIdentity,
+                    $"sub:{requestIdentity}:{op.LastSendSeq.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+                    StringComparison.Ordinal))
+                return "historical_acceptance_terminal_operation_identity_mismatch";
+
+            var terminalEvidence = (op.ConflictEvidence ?? []).FirstOrDefault(e => e is not null
+                && string.Equals(e.EvidenceId, evidenceId, StringComparison.Ordinal));
+            var receipt = (op.ConflictEvidence ?? []).FirstOrDefault(e => e is not null
+                && string.Equals(e.RawTerminal, "accepted_receipt", StringComparison.Ordinal)
+                && string.Equals(e.SubmissionIdentity, fact.SubmissionIdentity, StringComparison.Ordinal)
+                && e.SendSeq == fact.SendSeq);
+            if (receipt is null || !string.Equals(receipt.JobId, fact.JobId, StringComparison.Ordinal)
+                || terminalEvidence?.ConflictingExecutionResultSnapshot is not { } storedTerminal
+                || !ExecutionSnapshotsEqual(storedTerminal, terminalResult))
+                return "historical_acceptance_terminal_evidence_mismatch";
+
+            if (string.Equals(op.ConflictResolutionState, "ResolvedHistoricalAcceptedTerminal", StringComparison.Ordinal))
+            {
+                var audit = (file.Handoff?.ConflictResolutionAudits ?? []).FirstOrDefault(a => a is not null
+                    && string.Equals(a.AuditId, auditId, StringComparison.Ordinal));
+                return !op.ConflictPending
+                       && op.RequestState == OperationRequestState.TerminalCompleted
+                       && op.Zone is OperationZone.TerminalPendingTransfer or OperationZone.Tombstone
+                       && ExecutionSnapshotsEqual(op.ExecutionResult, terminalResult)
+                       && audit is { Resolution: ConflictResolutionKind.ResolvedHistoricalAcceptedTerminal }
+                       && audit.ResolutionEvidenceSnapshot is { } existingSnapshot
+                       && ExecutionSnapshotsEqual(existingSnapshot, terminalResult)
+                    ? null
+                    : "historical_acceptance_terminal_resolution_conflict";
+            }
+
+            if (!op.ConflictPending
+                || op.ConflictResolutionState != "AcceptedTerminalObserved"
+                || op.RequestState is not (OperationRequestState.RetryableRejected or OperationRequestState.TerminalRejected)
+                || op.LastResult is not { Outcome: OperationOutcome.Rejected } currentRejection
+                || currentRejection.AnsweredSendSeq != op.LastSendSeq)
+                return "historical_acceptance_terminal_current_round_not_rejected";
+
+            var openSubmission = file.Handoff?.Submission;
+            if (openSubmission is not null
+                && string.Equals(openSubmission.SubmissionIdentity, op.SubmissionIdentity, StringComparison.Ordinal)
+                && openSubmission.SendSeq == op.LastSendSeq)
+                return "historical_acceptance_terminal_current_submission_open";
+
+            if (op.AcceptanceClaim is { } claim
+                && (!claim.LedgerPersisted
+                    || !string.Equals(claim.SubmissionIdentity, fact.SubmissionIdentity, StringComparison.Ordinal)
+                    || claim.SendSeq != fact.SendSeq))
+                return "historical_acceptance_terminal_acceptance_claim_conflict";
+
+            if (op.ExecutionResult is { } existingExecution && !ExecutionSnapshotsEqual(existingExecution, terminalResult))
+                return "historical_acceptance_terminal_execution_conflict";
+            if (op.PendingTerminal is { } existingPending
+                && !PendingTerminalMatchesExecutionResult(existingPending, terminalResult))
+                return "historical_acceptance_terminal_pending_conflict";
+
+            var activeMirrors = (file.Handoff?.Operations ?? []).Where(m =>
+                string.Equals(m.MergedInto, op.RequestIdentity, StringComparison.Ordinal)
+                && m.Zone == OperationZone.Active).ToList();
+            if (activeMirrors.Count > 0)
+                return "historical_acceptance_terminal_merged_targets_require_reconcile";
+
+            var audits = file.Handoff!.ConflictResolutionAudits ??= [];
+            var existingAudit = audits.FirstOrDefault(a => a is not null
+                && string.Equals(a.AuditId, auditId, StringComparison.Ordinal));
+            if (existingAudit is not null)
+                return "historical_acceptance_terminal_audit_conflict";
+
+            audits.Add(new ConflictResolutionAudit
+            {
+                AuditId = auditId,
+                RequestIdentity = requestIdentity,
+                SubmissionIdentity = fact.SubmissionIdentity,
+                SendSeq = fact.SendSeq,
+                Resolution = ConflictResolutionKind.ResolvedHistoricalAcceptedTerminal,
+                ResolvedAtUtc = now,
+                ResolutionEvidenceSnapshot = CloneExecutionResult(terminalResult),
+                RelatedCurrentRoundRejectedResultSnapshot = CloneOperationResult(currentRejection),
+            });
+            op.ExecutionResult = CloneExecutionResult(terminalResult);
+            op.PendingTerminal = pending;
+            op.TakeoverRef = fact.SubmissionIdentity;
+            op.AcceptanceClaim = null;
+            op.RequestState = OperationRequestState.TerminalCompleted;
+            op.Zone = OperationZone.TerminalPendingTransfer;
+            op.ConflictPending = false;
+            op.ConflictResolutionState = "ResolvedHistoricalAcceptedTerminal";
+            op.ConflictResolutionAuditHistoryIds ??= [];
+            if (!op.ConflictResolutionAuditHistoryIds.Contains(auditId, StringComparer.Ordinal))
+                op.ConflictResolutionAuditHistoryIds.Add(auditId);
+            // The operation's current audit pointer is reserved for the current send round; retain it if present.
+            op.ConflictAdjudicationClaim = null;
+            op.UpdatedRevision = file.Revision + 1;
+            op.UpdatedAtUtc = now;
+            MigrateAndClean(file, now);
+            didFinalize = true;
+            return null;
+        });
+        if (!mutate.Success) return mutate.Reason ?? "historical_acceptance_terminal_finalize_failed";
+        newlyFinalized = didFinalize;
+        return null;
+    }
+
+    private static bool HasHistoricalAcceptanceReceiptConflict(OperationRecord op, string currentSubmissionIdentity, int currentSendSeq)
+        => (op.ConflictEvidence ?? []).Any(e => e is not null
+            && string.Equals(e.RawTerminal, "accepted_receipt", StringComparison.Ordinal)
+            && (!string.Equals(e.SubmissionIdentity, currentSubmissionIdentity, StringComparison.Ordinal)
+                || e.SendSeq != currentSendSeq));
+
+    private static string? RequestIdentityFromSubmissionIdentity(string submissionIdentity, int sendSeq)
+    {
+        if (string.IsNullOrWhiteSpace(submissionIdentity) || sendSeq < 1) return null;
+        var suffix = ":" + sendSeq.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (!submissionIdentity.StartsWith("sub:", StringComparison.Ordinal)
+            || !submissionIdentity.EndsWith(suffix, StringComparison.Ordinal)) return null;
+        var requestIdentity = submissionIdentity.Substring(4, submissionIdentity.Length - 4 - suffix.Length);
+        return IsCanonicalSubmissionIdentity(requestIdentity, submissionIdentity, sendSeq)
+            ? requestIdentity
+            : null;
+    }
+
+    private static bool AcceptanceClaimNeedsResolution(OperationRecord op, LogicalOwnerLeaseFile file)
+    {
+        var claim = op.AcceptanceClaim;
+        if (claim is null) return false;
+        if (op.ExecutionResult is not null || op.PendingTerminal is not null) return false;
+        if (!claim.LedgerPersisted || op.ConflictPending
+            || !string.IsNullOrEmpty(op.ConflictAdjudicationClaim)) return true;
+        var submission = file.Handoff?.Submission;
+        return submission is not null
+            && string.Equals(submission.SubmissionIdentity, claim.SubmissionIdentity, StringComparison.Ordinal)
+            && submission.SendSeq == claim.SendSeq;
+    }
+
+    private AdmissionResult ClassifyMergedTarget(string requestIdentity, OperationRecord mirror, OperationRecord target, string detail)
+    {
+        if (mirror.ConflictPending)
+            return ClassifyConflictPending(requestIdentity, mirror, "合并镜像自身存在待决冲突（禁止重发）。");
+        if (IsMergeConflictHeld(mirror))
+            return ClassifyMergedTargetConflict(requestIdentity, mirror, "合并镜像兼容性待核查；不释放责任、不发送。");
+        if (target.ConflictPending)
+            return new AdmissionResult
+            {
+                Kind = AdmissionResultKind.NeedReconcile,
+                ReasonCode = "conflict_pending",
+                Detail = "合并目标存在待决冲突（不释放责任、不签发新发送）。",
+                RequestIdentity = requestIdentity,
+                SubmissionIdentity = target.SubmissionIdentity,
+                SendSeq = target.LastSendSeq,
+                ExecutionDisposition = ExecutionDisposition.Unknown,
+                ResponsibilityState = ResponsibilityState.Pending,
+            };
+        if (!IsMergeCompatible(mirror, target))
+            return ClassifyMergedTargetConflict(requestIdentity, mirror,
+                "合并关联的候选身份、载荷、排序键、操作类型或运行绑定不一致；保留待核查，不发送。");
+        if (target.ExecutionResult is { } execution
+            && target.RequestState is OperationRequestState.Accepted or OperationRequestState.TerminalCompleted or OperationRequestState.Reconciling)
+            return string.Equals(mirror.SubmissionIdentity, target.SubmissionIdentity, StringComparison.Ordinal)
+                   && mirror.LastSendSeq == target.LastSendSeq
+                   && ExecutionResultMatchesOperation(target, execution)
+                ? ClassifyFromExecutionResult(requestIdentity, target,
+                    settled: target.RequestState == OperationRequestState.TerminalCompleted, "already_accepted", detail)
+                : ClassifyExecutionFactMismatch(requestIdentity, target, "合并执行事实与本轮发送身份不匹配，保留待核查。");
+        return target.RequestState switch
+        {
+            OperationRequestState.Accepted => ClassifyFromExecutionResult(requestIdentity, target, settled: false,
+                "already_accepted", detail),
+            OperationRequestState.TerminalCompleted => ClassifyFromExecutionResult(requestIdentity, target, settled: true,
+                "already_terminal", detail),
+            OperationRequestState.TerminalRejected => ClassifyTerminalRejected(requestIdentity, target, detail),
+            OperationRequestState.RetryableRejected => ClassifyRetryableRejected(requestIdentity, target, detail),
+            OperationRequestState.NotSelected => new AdmissionResult
+            {
+                Kind = AdmissionResultKind.NotSelected,
+                ReasonCode = target.LastPrecheckResult?.ReasonCode ?? target.LastResult?.ReasonCode ?? "not_selected",
+                Detail = detail,
+                RequestIdentity = requestIdentity,
+                SubmissionIdentity = target.SubmissionIdentity,
+                SendSeq = target.LastSendSeq,
+                WinnerCandidateId = target.LastPrecheckResult?.WinnerRef ?? target.LastResult?.WinnerRef,
+                SuppressionSource = target.LastPrecheckResult?.SuppressionSource ?? target.LastResult?.SuppressionSource ?? "",
+                ResponsibilityState = ResponsibilityState.Settled,
+            },
+            OperationRequestState.Reconciling => new AdmissionResult
+            {
+                Kind = AdmissionResultKind.Reconciling,
+                ReasonCode = "reconciling",
+                Detail = detail,
+                RequestIdentity = requestIdentity,
+                SubmissionIdentity = target.SubmissionIdentity,
+                SendSeq = target.LastSendSeq,
+                ExecutionDisposition = ExecutionDisposition.Unknown,
+                ResponsibilityState = ResponsibilityState.Pending,
+            },
+            _ => ClassifyInFlight(requestIdentity, target, detail),
+        };
+    }
+
+    private static bool ExecutionResultMatchesOperation(OperationRecord operation, ExecutionResult result)
+        => (!string.IsNullOrWhiteSpace(operation.SubmissionIdentity)
+            && string.Equals(result.SubmissionIdentity, operation.SubmissionIdentity, StringComparison.Ordinal)
+            && result.SendSeq == operation.LastSendSeq)
+           || HistoricalResolvedExecutionMatchesOperation(operation, result);
+
+    private static bool HistoricalResolvedExecutionMatchesOperation(OperationRecord operation, ExecutionResult result)
+    {
+        if (operation.OperationType != OperationType.ExternalStart
+            || operation.ConflictPending
+            || !string.Equals(operation.ConflictResolutionState, "ResolvedHistoricalAcceptedTerminal", StringComparison.Ordinal)
+            || operation.RequestState != OperationRequestState.TerminalCompleted
+            || operation.Zone is not (OperationZone.TerminalPendingTransfer or OperationZone.Tombstone)
+            || result.SendSeq < 1
+            || result.SendSeq >= operation.LastSendSeq
+            || operation.LastResult is not { Outcome: OperationOutcome.Rejected } rejection
+            || rejection.AnsweredSendSeq != operation.LastSendSeq
+            || !ExecutionSnapshotsEqual(operation.ExecutionResult, result))
+            return false;
+
+        var expectedAuditId = DeriveConflictAuditId(operation.RequestIdentity, result.SubmissionIdentity,
+            result.SendSeq, ConflictResolutionKind.ResolvedHistoricalAcceptedTerminal);
+        return (operation.ConflictResolutionAuditHistoryIds ?? []).Contains(expectedAuditId, StringComparer.Ordinal)
+               && (operation.ConflictEvidence ?? []).Any(terminal => terminal is not null
+                   && terminal.SendSeq == result.SendSeq
+                   && string.Equals(terminal.SubmissionIdentity, result.SubmissionIdentity, StringComparison.Ordinal)
+                   && string.Equals(terminal.JobId, result.JobId, StringComparison.Ordinal)
+                   && ExecutionSnapshotsEqual(terminal.ConflictingExecutionResultSnapshot, result)
+                   && (operation.ConflictEvidence ?? []).Any(receipt => receipt is not null
+                       && string.Equals(receipt.RawTerminal, "accepted_receipt", StringComparison.Ordinal)
+                       && receipt.SendSeq == result.SendSeq
+                       && string.Equals(receipt.SubmissionIdentity, result.SubmissionIdentity, StringComparison.Ordinal)
+                       && string.Equals(receipt.JobId, result.JobId, StringComparison.Ordinal)));
+    }
+
+    private static AdmissionResult ClassifyExecutionFactMismatch(string requestIdentity, OperationRecord operation, string detail)
+        => new()
+        {
+            Kind = AdmissionResultKind.NeedReconcile,
+            ReasonCode = "execution_result_identity_mismatch",
+            Detail = detail,
+            RequestIdentity = requestIdentity,
+            SubmissionIdentity = operation.SubmissionIdentity,
+            SendSeq = operation.LastSendSeq,
+            ExecutionDisposition = ExecutionDisposition.Unknown,
+            ResponsibilityState = ResponsibilityState.Pending,
+        };
+
+    private static bool IsMergeCompatible(OperationRecord mirror, OperationRecord target)
+        => !string.Equals(mirror.RequestIdentity, target.RequestIdentity, StringComparison.Ordinal)
+           && string.Equals(mirror.CandidateId, target.CandidateId, StringComparison.Ordinal)
+           && string.Equals(mirror.PayloadFingerprint, target.PayloadFingerprint, StringComparison.Ordinal)
+           && string.Equals(mirror.SortKeyFingerprint, target.SortKeyFingerprint, StringComparison.Ordinal)
+           && mirror.OperationType == target.OperationType
+           && string.Equals(mirror.RunBinding, target.RunBinding, StringComparison.Ordinal)
+           && string.Equals(mirror.CursorRef, target.CursorRef, StringComparison.Ordinal)
+           && mirror.CursorRevision == target.CursorRevision
+           && string.Equals(mirror.Candidate?.ActionId ?? "", target.Candidate?.ActionId ?? "", StringComparison.Ordinal);
+
+    private static AdmissionResult ClassifyMergedTargetConflict(string requestIdentity, OperationRecord mirror, string detail)
+        => new()
+        {
+            Kind = AdmissionResultKind.NeedReconcile,
+            ReasonCode = "merged_target_conflict",
+            Detail = detail,
+            RequestIdentity = requestIdentity,
+            SubmissionIdentity = mirror.SubmissionIdentity,
+            SendSeq = mirror.LastSendSeq,
+            ExecutionDisposition = ExecutionDisposition.Unknown,
+            ResponsibilityState = ResponsibilityState.Pending,
+        };
+
+    private static bool IsMergeConflictHeld(OperationRecord operation)
+        => string.Equals(operation.LastPrecheckResult?.ReasonCode, "merged_target_conflict", StringComparison.Ordinal)
+           && string.Equals(operation.LastPrecheckResult?.EvidenceSource, "merge_conflict_hold", StringComparison.Ordinal);
+
+    private static HashSet<string> HoldIncompatibleDedupeGroups(
+        LogicalOwnerLeaseFile file, IReadOnlySet<string> candidateIdentities, DateTimeOffset now)
+    {
+        var held = new HashSet<string>(StringComparer.Ordinal);
+        var candidates = (file.Handoff?.Operations ?? [])
+            .Where(operation => candidateIdentities.Contains(operation.RequestIdentity)
+                               && operation.Zone == OperationZone.Active
+                               && operation.MergedInto is null
+                               && operation.RequestState is OperationRequestState.Queued or OperationRequestState.InRound)
+            .ToList();
+        foreach (var group in candidates.GroupBy(operation => operation.CandidateId, StringComparer.Ordinal).Where(group => group.Count() > 1))
+        {
+            var members = group.ToList();
+            var first = members[0];
+            var samePayloadAndSort = members.All(operation =>
+                string.Equals(operation.PayloadFingerprint, first.PayloadFingerprint, StringComparison.Ordinal)
+                && string.Equals(operation.SortKeyFingerprint, first.SortKeyFingerprint, StringComparison.Ordinal));
+            if (!samePayloadAndSort || members.Skip(1).All(operation => IsMergeCompatible(first, operation))) continue;
+
+            foreach (var operation in members)
+            {
+                RecordMergeConflictHold(operation, file.Revision + 1, now);
+                held.Add(operation.RequestIdentity);
+            }
+        }
+        return held;
+    }
+
+    private static void RecordMergeConflictHold(OperationRecord operation, long revision, DateTimeOffset now)
+    {
+        operation.LastPrecheckResult = new OperationResult
+        {
+            Outcome = OperationOutcome.Rejected,
+            ReasonCode = "merged_target_conflict",
+            Retryable = false,
+            RetryBudgetUsed = operation.LastResult?.RetryBudgetUsed ?? 0,
+            EvidenceSource = "merge_conflict_hold",
+            AnsweredSendSeq = 0,
+        };
+        operation.UpdatedRevision = revision;
+        operation.UpdatedAtUtc = now;
     }
 
     /// <summary>重试窗口到期扫描（§3.3-6：仅针对有确定拒绝证据的操作；Unknown/Reconciling 一律不动）。</summary>
@@ -4039,8 +6145,9 @@ public sealed class ArbitrationAdmissionService
             if (read.File?.Lease is null) return 0;
             var now = _utcNow();
             var expired = (read.File.Handoff?.Operations ?? [])
-                .Where(o => o.RequestState == OperationRequestState.RetryableRejected
+                .Where(o => o.RequestState is OperationRequestState.RetryableRejected or OperationRequestState.Queued
                             && o.Zone == OperationZone.Active
+                            && string.IsNullOrWhiteSpace(o.MergedInto)
                             && o.RetryWindowDeadlineUtc is { } d && d <= now)
                 .Select(o => o.RequestIdentity)
                 .ToList();
@@ -4065,25 +6172,17 @@ public sealed class ArbitrationAdmissionService
     {
         var current = _store.Read();
         if (current.File?.Lease is null) return false;
+        _hooks.Barriers?.BeforeRetryExpiryPublish?.Invoke();
         var mutate = _store.MutateHandoffLatest(captured.LeaseId, captured.OwnerEpoch, file =>
         {
+            var lockedNow = _utcNow();
             var op = FindOp(file, requestIdentity);
-            if (op is null || op.RequestState != OperationRequestState.RetryableRejected) return "state_changed";
+            if (op is null || op.RequestState is not (OperationRequestState.RetryableRejected or OperationRequestState.Queued)) return "state_changed";
+            // Retryable mirrors inherit the winner's retry lifecycle; only the winner's own retry window may expire.
+            if (!string.IsNullOrWhiteSpace(op.MergedInto)) return "state_changed";
             // [Batch B 续 会诊阻断处置] 冲突待决 ⇒ 窗口到期**不得**据此转终局中止（重试资格在冲突期间失效）。
             if (op.ConflictPending) return "conflict_pending";
-            // 锁内复核：最近发送确定未受理（结果对应最后发送轮次）且无更新发送责任（无匹配未决 Submission）。
-            var determinedNotAccepted = op.LastResult is { Outcome: OperationOutcome.Rejected } r
-                                        && r.AnsweredSendSeq == op.LastSendSeq;
-            var noNewerSendDuty = file.Handoff?.Submission is null
-                                  || !string.Equals(file.Handoff.Submission.SubmissionIdentity, op.SubmissionIdentity, StringComparison.Ordinal);
-            if (!determinedNotAccepted || !noNewerSendDuty) return "review_inconclusive";
-            op.RequestState = OperationRequestState.TerminalRejected;
-            op.LastResult!.ReasonCode = "retry_window_expired";
-            op.Zone = OperationZone.TerminalPendingTransfer;
-            op.UpdatedRevision = file.Revision + 1;
-            op.UpdatedAtUtc = now;
-            MigrateAndClean(file, now);
-            return null;
+            return TerminalizeExpiredRetryable(file, op, roundMergedIdentities: null, lockedNow);
         });
         return mutate.Success;
     }
@@ -4109,11 +6208,20 @@ public sealed class ArbitrationAdmissionService
             var mutate = _store.MutateHandoffLatest(read.File.Lease.LeaseId, read.File.Lease.OwnerEpoch, file =>
             {
                 if (file.Handoff is null) return null;
+                // Recheck incompatible unlinked peers atomically with restart orphan cleanup. This protects leases
+                // written between the old two-publication InRound transition and hold, including crash recovery.
+                var unlinkedRoundIdentities = file.Handoff.Operations
+                    .Where(operation => operation.Zone == OperationZone.Active
+                                        && operation.MergedInto is null
+                                        && operation.RequestState is OperationRequestState.Queued or OperationRequestState.InRound)
+                    .Select(operation => operation.RequestIdentity)
+                    .ToHashSet(StringComparer.Ordinal);
+                _ = HoldIncompatibleDedupeGroups(file, unlinkedRoundIdentities, now);
                 // ① 未决发送责任保守转对账（不重新触发发送）。
                 if (file.Handoff.Submission is { State: SubmissionState.Submitting } sub)
                 {
                     sub.State = SubmissionState.Reconciling;
-                    var owner = FindOp(file, sub);
+                    var owner = FindSubmissionOwner(file, sub);
                     if (owner is not null)
                     {
                         owner.RequestState = OperationRequestState.Reconciling;
@@ -4127,13 +6235,14 @@ public sealed class ArbitrationAdmissionService
                              o.Zone == OperationZone.Active
                              && o.MergedInto is null // 合并项由 ④ 专属处理（不得按孤儿登记中止）
                              && !o.ConflictPending  // [Batch B 续] 第四类集合：冲突待决不得被通用恢复改写
+                             && !IsMergeConflictHeld(o)
                              && (o.RequestState == OperationRequestState.Queued || o.RequestState == OperationRequestState.InRound)
                              && o.LastSendSeq == 0
                              && (file.Handoff.Submission is null
                                  || !string.Equals(file.Handoff.Submission.SubmissionIdentity, o.SubmissionIdentity, StringComparison.Ordinal))))
                 {
                     op.RequestState = OperationRequestState.TerminalRejected;
-                    op.LastResult = new OperationResult { Outcome = OperationOutcome.Rejected, ReasonCode = "abandoned_before_send", Retryable = false, RetryBudgetUsed = 0, EvidenceSource = "restart_recovery", AnsweredSendSeq = 0 };
+                    op.LastPrecheckResult = new OperationResult { Outcome = OperationOutcome.Rejected, ReasonCode = "abandoned_before_send", Retryable = false, RetryBudgetUsed = op.LastResult?.RetryBudgetUsed ?? 0, EvidenceSource = "restart_recovery", AnsweredSendSeq = 0 };
                     op.Zone = OperationZone.TerminalPendingTransfer;
                     op.UpdatedRevision = file.Revision + 1;
                     op.UpdatedAtUtc = now;
@@ -4145,41 +6254,25 @@ public sealed class ArbitrationAdmissionService
                 foreach (var m in file.Handoff.Operations.Where(o =>
                              o.Zone == OperationZone.Active && o.MergedInto is not null
                              && !o.ConflictPending  // [Batch B 续] 同上
-                             && o.RequestState is OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected))
+                             && !IsMergeConflictHeld(o)
+                             && o.RequestState is OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected or OperationRequestState.Accepted))
                 {
                     var target = file.Handoff.Operations.FirstOrDefault(o => string.Equals(o.RequestIdentity, m.MergedInto, StringComparison.Ordinal));
-                    switch (target?.RequestState)
+                    if (target?.ConflictPending == true) continue;
+                    if (m.PendingTerminal is not null || m.ExecutionResult is not null)
                     {
-                        case OperationRequestState.Accepted or OperationRequestState.TerminalCompleted:
-                            m.RequestState = OperationRequestState.Accepted;
-                            m.SubmissionIdentity = target.SubmissionIdentity;
-                            m.LastSendSeq = target.LastSendSeq;
-                            m.TakeoverRef = target.TakeoverRef;
-                            m.LastResult = new OperationResult { Outcome = OperationOutcome.Accepted, ReasonCode = "", Retryable = false, RetryBudgetUsed = m.LastResult?.RetryBudgetUsed ?? 0, EvidenceSource = "merged:" + target.SubmissionIdentity, AnsweredSendSeq = target.LastSendSeq };
-                            m.UpdatedRevision = file.Revision + 1;
-                            m.UpdatedAtUtc = now;
-                            recovered++;
-                            break;
-                        case OperationRequestState.TerminalRejected:
-                        case OperationRequestState.NotSelected:
-                            m.RequestState = target.RequestState;
-                            m.LastResult = new OperationResult { Outcome = OperationOutcome.Rejected, ReasonCode = target.LastResult?.ReasonCode ?? "terminal_rejected", Retryable = false, RetryBudgetUsed = m.LastResult?.RetryBudgetUsed ?? 0, EvidenceSource = "merged:restart_recovery", AnsweredSendSeq = m.LastSendSeq, WinnerRef = target.LastResult?.WinnerRef, SuppressionSource = target.LastResult?.SuppressionSource };
-                            m.Zone = OperationZone.TerminalPendingTransfer;
-                            m.UpdatedRevision = file.Revision + 1;
-                            m.UpdatedAtUtc = now;
-                            recovered++;
-                            break;
-                        case null:
-                            m.RequestState = OperationRequestState.TerminalRejected;
-                            m.LastResult = new OperationResult { Outcome = OperationOutcome.Rejected, ReasonCode = "merged_target_missing", Retryable = false, RetryBudgetUsed = m.LastResult?.RetryBudgetUsed ?? 0, EvidenceSource = "restart_recovery", AnsweredSendSeq = m.LastSendSeq };
-                            m.Zone = OperationZone.TerminalPendingTransfer;
-                            m.UpdatedRevision = file.Revision + 1;
-                            m.UpdatedAtUtc = now;
-                            recovered++;
-                            break;
-                        default:
-                            break; // 目标未终局——保持合并关联（目标结清时共同镜像）
+                        RecordMergeConflictHold(m, file.Revision + 1, now);
+                        recovered++;
+                        continue;
                     }
+                    if (target is null || !IsMergeCompatible(m, target))
+                    {
+                        RecordMergeConflictHold(m, file.Revision + 1, now);
+                        recovered++;
+                        continue;
+                    }
+                    CopyWinnerFactsToMirror(m, target, file.Revision + 1, now);
+                    recovered++;
                 }
 
                 MigrateAndClean(file, now);
@@ -4228,14 +6321,15 @@ public sealed class ArbitrationAdmissionService
                                     && o.SubmissionIdentity is not null
                                     // [第三轮验证会诊] 台账侧必须**逐字段**确认（原始词/错误码/句柄/来源/观察时点），
                                     // 仅「记录存在且 Terminal」不足以证明台账终态属于本次载荷。
-                                    && _hooks.TakeoverTerminalPayloadConfirmed?.Invoke(o.SubmissionIdentity, o.LastSendSeq,
-                                        o.PendingTerminal!.RawTerminal, o.PendingTerminal.ExecutionErrorCode,
-                                        o.PendingTerminal.JobId, o.PendingTerminal.EvidenceSource,
-                                        o.PendingTerminal.ObservedAtUtc) == true
+                                     && _hooks.TakeoverTerminalPayloadConfirmed?.Invoke(o.SubmissionIdentity, o.LastSendSeq,
+                                         o.PendingTerminal!.RawTerminal, o.PendingTerminal.ExecutionErrorCode,
+                                         o.PendingTerminal.JobId, o.PendingTerminal.EvidenceSource,
+                                         o.PendingTerminal.ObservedAtUtc, o.PendingTerminal.Kind) == true
                                     && (mutate.File!.Handoff?.Submission is not { } stillOpen
                                         || !string.Equals(stillOpen.SubmissionIdentity, o.SubmissionIdentity, StringComparison.Ordinal)))
                         .Select(o => o.RequestIdentity)
                         .ToList();
+                _hooks.BeforeRestartTerminalPersist?.Invoke();
                 foreach (var identity in confirmed.Concat(externalReady))
                 {
                     var terminalNow = _utcNow();
@@ -4244,6 +6338,18 @@ public sealed class ArbitrationAdmissionService
                         var op = FindOp(file, identity);
                         if (op is null || op.Zone != OperationZone.Active || op.RequestState != OperationRequestState.Accepted)
                             return "state_changed";
+                        if (op.ConflictPending) return "conflict_pending";
+                        var activeMirrors = (file.Handoff?.Operations ?? []).Where(m =>
+                            string.Equals(m.MergedInto, op.RequestIdentity, StringComparison.Ordinal)
+                            && m.Zone == OperationZone.Active).ToList();
+                        if (activeMirrors.Any(m => !IsMergeCompatible(m, op) || m.ConflictPending
+                            || m.RequestState is not (OperationRequestState.Queued or OperationRequestState.InRound
+                                or OperationRequestState.RetryableRejected or OperationRequestState.Accepted)
+                            || !string.Equals(m.SubmissionIdentity, op.SubmissionIdentity, StringComparison.Ordinal)
+                            || m.LastSendSeq != op.LastSendSeq
+                            || (m.ExecutionResult is not null && op.ExecutionResult is not null
+                                && !ExecutionResultMatchesOperation(m, op.ExecutionResult))))
+                            return "merged_target_conflict";
                         // [第三轮验证会诊] 提交事务内**重新**执行四类事实一致性复核（消除「快照检查→提交」窗口）。
                         if (op.OperationType == OperationType.ExternalStart)
                         {
@@ -4265,6 +6371,13 @@ public sealed class ArbitrationAdmissionService
                         if (op.OperationType == OperationType.ExternalStart) op.PendingTerminal = null;
                         op.UpdatedRevision = file.Revision + 1;
                         op.UpdatedAtUtc = terminalNow;
+                        foreach (var mirror in activeMirrors)
+                        {
+                            CopyWinnerFactsToMirror(mirror, op, file.Revision + 1, terminalNow);
+                            mirror.Zone = OperationZone.TerminalPendingTransfer;
+                            mirror.UpdatedRevision = file.Revision + 1;
+                            mirror.UpdatedAtUtc = terminalNow;
+                        }
                         MigrateAndClean(file, terminalNow);
                         return null;
                     });
@@ -4293,42 +6406,72 @@ public sealed class ArbitrationAdmissionService
         var active = ops.Count(o => o.Zone == OperationZone.Active);
         var pendingTransfer = ops.Count(o => o.Zone == OperationZone.TerminalPendingTransfer);
         var tombstones = ops.Count(o => o.Zone == OperationZone.Tombstone);
-        if (active + pendingTransfer >= PrimarySlotLimit)
-            return CapacityReject(active, pendingTransfer, tombstones, ops, now);
-        // 受保护（冲突待决）墓碑**不构成可清理额度**（不得据其宣称容量可用）。
-        var cleanable = ops.Where(o => o.Zone == OperationZone.Tombstone && !o.ConflictPending
-                                       && o.UpdatedAtUtc + TombstoneRetain <= now)
+        // 只有真实清理事务能够删除的墓碑才计入可清理额度。
+        var cleanable = GetArchivableTerminalOperations(file, now)
             .OrderBy(o => o.UpdatedAtUtc).FirstOrDefault()?.UpdatedAtUtc;
+        if (active + pendingTransfer >= PrimarySlotLimit)
+            return CapacityReject(active, pendingTransfer, tombstones, cleanable);
         if (tombstones >= TombstoneLimit && cleanable is null)
-            return CapacityReject(active, pendingTransfer, tombstones, ops, now);
+            return CapacityReject(active, pendingTransfer, tombstones, cleanable);
         return null;
     }
 
-    private static string CapacityReject(int active, int pendingTransfer, int tombstones, IReadOnlyCollection<OperationRecord> ops, DateTimeOffset now)
+    private async Task<AdmissionResult> PersistHistoricalAcceptanceReceiptAsync(
+        OperationRecord op, LeaseSegment previousOwner, string evidenceSource, string? runId, string? jobId,
+        DateTimeOffset acceptedAtUtc, string? submissionIdentity = null, int? sendSeq = null)
     {
-        var earliest = ops.Where(o => o.Zone == OperationZone.Tombstone).OrderBy(o => o.UpdatedAtUtc).FirstOrDefault()?.UpdatedAtUtc;
-        var earliestCleanable = earliest is { } e ? e + TombstoneRetain : (DateTimeOffset?)null;
+        var receiptSubmissionIdentity = submissionIdentity ?? op.SubmissionIdentity;
+        var receiptSendSeq = sendSeq ?? op.LastSendSeq;
+        var entry = new ExternalStartLedgerEntry
+        {
+            SubmissionIdentity = receiptSubmissionIdentity,
+            SendSeq = receiptSendSeq,
+            CandidateId = op.CandidateId,
+            ResourceRef = op.ResourceRef ?? "",
+            ActionId = op.Candidate?.ActionId ?? ArbitrationOrdering.DeriveActionId(op.CandidateId),
+            TargetBgiEpoch = op.TargetEpoch,
+            AcceptedAtUtc = acceptedAtUtc,
+            EvidenceSource = evidenceSource,
+            State = LedgerEntryState.AcceptedPendingExecution,
+            RunId = runId,
+            JobId = jobId,
+            OperationType = op.OperationType,
+        };
+        string? failure;
+        try { failure = await _hooks.LateAcceptanceReceiptPersist(entry).ConfigureAwait(false); }
+        catch (Exception ex) { failure = "late_receipt_persist_exception:" + ex.GetType().Name; }
+        // A late sender has no authority to borrow the current owner's lease generation and mutate Operation.
+        // It only appends the exact send-round receipt; the current owner's recovery scan materializes any conflict.
+        return LocatedStop(op.RequestIdentity, op,
+            failure is null ? "late_acceptance_receipt_saved" : "late_acceptance_receipt_persist_failed",
+            failure is null
+                ? "原发送轮的迟到 Accepted 已单独追加；当前认领不变，等待当前负责人处理。"
+                : "原发送轮的迟到 Accepted 未能完整追加（" + failure + "）；责任保持待核查，禁止重发。");
+    }
+
+    private static string CapacityReject(int active, int pendingTransfer, int tombstones, DateTimeOffset? earliestCleanable)
+    {
         // 拒绝诊断四项：Active 数/待迁移数/墓碑数/最早到期可清理时间（七轮建议②——可观测可处置）。
         return "operations_capacity_full(active=" + active + ",pendingTransfer=" + pendingTransfer + ",tombstone=" + tombstones
                + ",earliestCleanable=" + (earliestCleanable?.ToString("O") ?? "none") + ")";
     }
 
-    /// <summary>清理迁移（权威串行边界内）：到期墓碑（≥24h）确实删除→TerminalPendingTransfer 按终局时刻序迁入墓碑空位（迁入即释放主槽位）。</summary>
+    /// <summary>清理迁移（权威串行边界内）：到期终局操作成组归档→释放容量→剩余 TerminalPendingTransfer 按终局时刻迁入墓碑。</summary>
     private void MigrateAndClean(LogicalOwnerLeaseFile file, DateTimeOffset now)
     {
         if (file.Handoff is null) return;
         var ops = file.Handoff.Operations;
-        // §24.2-2″／§24.12-3（[Batch B 续]）：**带冲突待决的墓碑不得被保留期裁剪**（那会删掉唯一恢复依据）。
-        // 曾进入冲突覆盖层（已有裁决审计引用）的墓碑只有在该审计引用**唯一命中且身份匹配**时才允许清理。
-        var auditsByld = (file.Handoff.ConflictResolutionAudits ?? [])
-            .Where(a => a is not null).ToDictionary(a => a.AuditId, a => a, StringComparer.Ordinal);
-        ops.RemoveAll(o => o.Zone == OperationZone.Tombstone && !o.ConflictPending
-                           && o.UpdatedAtUtc + TombstoneRetain <= now
-                           && (o.ConflictResolutionAuditId is not { Length: > 0 } auditId
-                               || (auditsByld.TryGetValue(auditId, out var audit)
-                                   && string.Equals(audit.RequestIdentity, o.RequestIdentity, StringComparison.Ordinal)
-                                   && string.Equals(audit.SubmissionIdentity, o.SubmissionIdentity, StringComparison.Ordinal)
-                                   && audit.SendSeq == o.LastSendSeq)));
+        // 到期后移入同一租约文件的完整历史档案，保留外键、审计、预观察、游标消费和已结清认领事实。
+        // 成熟的待迁移终局记录可与墓碑一并归档，避免满墓碑容量下互相关联的热记录循环等待。
+        var archivable = GetArchivableTerminalOperations(file, now);
+        if (archivable.Count > 0)
+        {
+            file.Handoff.ArchivedOperations ??= [];
+            foreach (var op in archivable)
+                file.Handoff.ArchivedOperations.Add(new ArchivedOperationRecord { Operation = op, ArchivedAtUtc = now });
+            var archivedIds = archivable.Select(o => o.RequestIdentity).ToHashSet(StringComparer.Ordinal);
+            ops.RemoveAll(o => archivedIds.Contains(o.RequestIdentity));
+        }
         var tombstones = ops.Count(o => o.Zone == OperationZone.Tombstone);
         foreach (var op in ops.Where(o => o.Zone == OperationZone.TerminalPendingTransfer).OrderBy(o => o.UpdatedAtUtc))
         {
@@ -4340,6 +6483,104 @@ public sealed class ArbitrationAdmissionService
             op.UpdatedRevision = file.Revision + 1;
             tombstones++;
         }
+    }
+
+    private static List<OperationRecord> GetArchivableTerminalOperations(LogicalOwnerLeaseFile file, DateTimeOffset now)
+    {
+        var handoff = file.Handoff;
+        if (handoff is null) return [];
+        var operations = handoff.Operations ?? [];
+        var candidates = operations.Where(op => (op.Zone is OperationZone.Tombstone or OperationZone.TerminalPendingTransfer)
+                && (op.RequestState is OperationRequestState.TerminalCompleted
+                    or OperationRequestState.TerminalRejected or OperationRequestState.NotSelected)
+                && !op.ConflictPending
+                && (op.AcceptanceClaim is null || ArbitrationRetentionPolicy.IsSettledAcceptanceClaim(op))
+                && op.ConflictAdjudicationClaim is null
+                && (op.PendingTerminal is null
+                    || (op.RequestState == OperationRequestState.TerminalCompleted
+                        && op.ConflictResolutionState == "ResolvedHistoricalAcceptedTerminal"))
+                && op.UpdatedAtUtc != default
+                && now >= op.UpdatedAtUtc
+                && now - op.UpdatedAtUtc >= TombstoneRetain
+                && (handoff.Submission is null
+                    || !IsSubmissionForRequest(handoff.Submission.SubmissionIdentity, op.RequestIdentity)))
+            .ToList();
+        var remainingIds = candidates.Select(o => o.RequestIdentity).ToHashSet(StringComparer.Ordinal);
+
+        // Remove a candidate from the batch if any related operation is not also eligible in this pass.
+        // Repeat to a fixed point so a chain A→B→C cannot archive A after discovering that C must stay hot.
+        bool changed;
+        do
+        {
+            changed = false;
+            foreach (var candidate in candidates.Where(o => remainingIds.Contains(o.RequestIdentity)).ToList())
+            {
+                var hasHotRelatedOperation = operations.Any(other =>
+                    !string.Equals(other.RequestIdentity, candidate.RequestIdentity, StringComparison.Ordinal)
+                    && !remainingIds.Contains(other.RequestIdentity)
+                    && AreOperationRecordsLinked(candidate, other));
+                if (hasHotRelatedOperation && remainingIds.Remove(candidate.RequestIdentity)) changed = true;
+            }
+        } while (changed);
+
+        return candidates.Where(o => remainingIds.Contains(o.RequestIdentity)).ToList();
+    }
+
+    private static bool AreOperationRecordsLinked(OperationRecord left, OperationRecord right)
+        => string.Equals(left.ParentRequestIdentity, right.RequestIdentity, StringComparison.Ordinal)
+           || string.Equals(right.ParentRequestIdentity, left.RequestIdentity, StringComparison.Ordinal)
+           || string.Equals(left.MergedInto, right.RequestIdentity, StringComparison.Ordinal)
+           || string.Equals(right.MergedInto, left.RequestIdentity, StringComparison.Ordinal);
+
+    private static bool IsSubmissionForRequest(string submissionIdentity, string requestIdentity)
+    {
+        if (!submissionIdentity.StartsWith("sub:", StringComparison.Ordinal)) return false;
+        var lastColon = submissionIdentity.LastIndexOf(':');
+        return lastColon > 4
+            && string.Equals(submissionIdentity[4..lastColon], requestIdentity, StringComparison.Ordinal);
+    }
+
+    /// <summary>当前所有者把已归档、终局拒绝的操作重新纳入责任热区，以处理之后才到达的旧轮 Accepted 回执。</summary>
+    private string? RehydrateArchivedOperationForLateAcceptanceReceipt(
+        LeaseSegment lease, string requestIdentity, TakeoverLedgerFact fact)
+    {
+        var now = _utcNow();
+        var mutate = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var handoff = file.Handoff;
+            if (handoff is null) return "archived_acceptance_handoff_missing";
+            var hot = FindOp(file, requestIdentity);
+            if (hot is not null)
+                return hot.OperationType == OperationType.ExternalStart
+                       && hot.LastSendSeq >= fact.SendSeq
+                       && IsCanonicalSubmissionIdentity(requestIdentity, fact.SubmissionIdentity, fact.SendSeq)
+                    ? null
+                    : "archived_acceptance_hot_operation_conflict";
+
+            var archived = handoff.ArchivedOperations.FirstOrDefault(item => item is not null
+                && item.Operation is not null
+                && string.Equals(item.Operation.RequestIdentity, requestIdentity, StringComparison.Ordinal));
+            var operation = archived?.Operation;
+            if (operation is null
+                || operation.OperationType != OperationType.ExternalStart
+                || operation.RequestState != OperationRequestState.TerminalRejected
+                || operation.LastResult is not { Outcome: OperationOutcome.Rejected } rejection
+                || rejection.AnsweredSendSeq != operation.LastSendSeq
+                || operation.LastSendSeq < fact.SendSeq
+                || !IsCanonicalSubmissionIdentity(requestIdentity, fact.SubmissionIdentity, fact.SendSeq)
+                || (operation.LastSendSeq == fact.SendSeq
+                    && !string.Equals(operation.SubmissionIdentity, fact.SubmissionIdentity, StringComparison.Ordinal)))
+                return "archived_acceptance_operation_not_reopenable";
+
+            if (!handoff.ArchivedOperations.Remove(archived!))
+                return "archived_acceptance_archive_changed";
+            operation.Zone = OperationZone.TerminalPendingTransfer; // 重新占用主槽位，直到当前所有者裁决该受理冲突
+            operation.UpdatedAtUtc = now;
+            operation.UpdatedRevision = file.Revision + 1;
+            handoff.Operations.Add(operation);
+            return null;
+        });
+        return mutate.Success ? null : mutate.Reason ?? "archived_acceptance_rehydrate_failed";
     }
 
     // ============================================================
@@ -4397,8 +6638,102 @@ public sealed class ArbitrationAdmissionService
     public async Task<ExternalStartRecoveryReport> RecoverExternalStartObservationsAsync(CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        var acceptanceClaimsReconciled = 0;
+        var acceptanceClaimFailures = 0;
+        string? acceptanceClaimFailure = null;
+        var claimSnapshot = _store.Read();
+        if (claimSnapshot.File?.Lease is { } claimLease)
+        {
+            foreach (var claimOp in claimSnapshot.File.Handoff?.Operations ?? [])
+            {
+                if (claimOp?.AcceptanceClaim is not { } claim) continue;
+                var snapshotSubmission = claimSnapshot.File.Handoff?.Submission;
+                var hasOpenClaimSubmission = snapshotSubmission is not null
+                    && string.Equals(snapshotSubmission.SubmissionIdentity, claim.SubmissionIdentity, StringComparison.Ordinal)
+                    && snapshotSubmission.SendSeq == claim.SendSeq;
+                if (claim.LedgerPersisted && !hasOpenClaimSubmission) continue;
+                ct.ThrowIfCancellationRequested();
+                try
+                {
+                    var result = await PersistAcceptanceTakeoverAsync(claimOp, claimLease,
+                        claim.EvidenceSource, claim.RunId, claim.JobId,
+                        acceptedAtUtc: claim.ClaimedAtUtc,
+                        acceptedSubmissionIdentity: claim.SubmissionIdentity,
+                        acceptedSendSeq: claim.SendSeq).ConfigureAwait(false);
+                    if (result is null)
+                    {
+                        var latest = _store.Read();
+                        var current = latest.File is null ? null : FindOp(latest.File, claimOp.RequestIdentity);
+                        var currentSubmission = latest.File?.Handoff?.Submission;
+                        if (current is { ConflictPending: false, ExecutionResult: null, PendingTerminal: null }
+                            && current.AcceptanceClaim is { LedgerPersisted: true } confirmed
+                            && currentSubmission is not null
+                            && string.Equals(currentSubmission.SubmissionIdentity, confirmed.SubmissionIdentity, StringComparison.Ordinal)
+                            && currentSubmission.SendSeq == confirmed.SendSeq)
+                        {
+                            var now = _utcNow();
+                            var close = CloseSubmission(claimLease, currentSubmission, current.RequestIdentity, file =>
+                            {
+                                var owner = FindOp(file, current.RequestIdentity);
+                                if (owner is null || owner.ConflictPending
+                                    || owner.ExecutionResult is not null || owner.PendingTerminal is not null)
+                                    return "acceptance_claim_close_conflict";
+                                if ((file.Handoff?.Operations ?? []).Any(m =>
+                                        string.Equals(m.MergedInto, owner.RequestIdentity, StringComparison.Ordinal)
+                                        && m.Zone == OperationZone.Active
+                                        && (!IsMergeCompatible(m, owner) || m.ConflictPending
+                                            || m.PendingTerminal is not null || m.ExecutionResult is not null)))
+                                    return "merged_target_conflict";
+                                owner.RequestState = OperationRequestState.Accepted;
+                                owner.LastResult = new OperationResult
+                                {
+                                    Outcome = OperationOutcome.Accepted,
+                                    ReasonCode = "",
+                                    Retryable = false,
+                                    RetryBudgetUsed = owner.LastResult?.RetryBudgetUsed ?? 0,
+                                    EvidenceSource = confirmed.EvidenceSource,
+                                    AnsweredSendSeq = confirmed.SendSeq,
+                                };
+                                owner.TakeoverRef = confirmed.SubmissionIdentity;
+                                MirrorMergedInPlace(file, owner, now, OperationRequestState.Accepted,
+                                    (mirror, _) => new OperationResult
+                                    {
+                                        Outcome = OperationOutcome.Accepted,
+                                        ReasonCode = "",
+                                        Retryable = false,
+                                        RetryBudgetUsed = mirror.LastResult?.RetryBudgetUsed ?? 0,
+                                        EvidenceSource = "merged:" + confirmed.SubmissionIdentity,
+                                        AnsweredSendSeq = confirmed.SendSeq,
+                                    });
+                                return null;
+                            }, acceptanceClaimClose: true);
+                            if (!close.Success)
+                            {
+                                acceptanceClaimFailures++;
+                                acceptanceClaimFailure ??= close.Reason ?? "acceptance_claim_close_failed";
+                                continue;
+                            }
+                        }
+                        acceptanceClaimsReconciled++;
+                    }
+                    else
+                    {
+                        acceptanceClaimFailures++;
+                        acceptanceClaimFailure ??= result.ReasonCode;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    acceptanceClaimFailures++;
+                    acceptanceClaimFailure ??= "acceptance_claim_recovery_exception:" + ex.GetType().Name;
+                }
+            }
+        }
         if (_hooks.TakeoverLedgerScan is not { } scanHook)
-            return new ExternalStartRecoveryReport(true, 0, 0, 0, 0, 0, 0);
+            return new ExternalStartRecoveryReport(true, 0, 0, 0, 0, 0, 0,
+                AcceptanceClaimsReconciled: acceptanceClaimsReconciled,
+                AcceptanceClaimFailures: acceptanceClaimFailures,
+                AcceptanceClaimFailure: acceptanceClaimFailure);
         TakeoverLedgerScan scan;
         try
         {
@@ -4406,9 +6741,15 @@ public sealed class ArbitrationAdmissionService
         }
         catch (Exception)
         {
-            return new ExternalStartRecoveryReport(true, 0, 0, 0, 0, 0, 0);   // 读取失败＝不可确认（保守停驻）
+            return new ExternalStartRecoveryReport(true, 0, 0, 0, 0, 0, 0,
+                AcceptanceClaimsReconciled: acceptanceClaimsReconciled,
+                AcceptanceClaimFailures: acceptanceClaimFailures,
+                AcceptanceClaimFailure: acceptanceClaimFailure);   // 读取失败＝不可确认（保守停驻）
         }
-        if (!scan.Readable) return new ExternalStartRecoveryReport(true, 0, 0, 0, 0, 0, 0);
+        if (!scan.Readable) return new ExternalStartRecoveryReport(true, 0, 0, 0, 0, 0, 0,
+            AcceptanceClaimsReconciled: acceptanceClaimsReconciled,
+            AcceptanceClaimFailures: acceptanceClaimFailures,
+            AcceptanceClaimFailure: acceptanceClaimFailure);
 
         var kept = 0;
         var completed = 0;
@@ -4421,29 +6762,51 @@ public sealed class ArbitrationAdmissionService
         var rebound = 0;
         string? rebindFailure = null;
         var scanFactConflicts = 0;
+        var acceptanceReceiptsAdopted = 0;
+        var historicalAcceptanceReceiptsHeld = 0;
+        var historicalAcceptanceTerminalsFinalized = 0;
+        string? historicalAcceptanceTerminalFailure = null;
+        string? recoveryLeaseId = null;
+        string? recoveryOwnerEpoch = null;
         var rebindTargets = new List<(string RequestIdentity, string SubmissionIdentity, int SendSeq, string? JobId)>();
-        var pendingSettlements = new List<(string RequestIdentity, PendingTerminal Pending, ExternalStartCompletion Completion)>();
+        var pendingSettlements = new List<(string RequestIdentity, PendingTerminal Pending,
+            ExternalStartCompletion Completion, ExecutionResult Result)>();
+        var pendingAcceptanceReceipts = new List<TakeoverLedgerFact>();
+        var pendingRecoveredAcceptedTerminals = new List<(string RequestIdentity, TakeoverLedgerFact Fact,
+            ExternalStartCompletion Completion)>();
 
         // **扫描事实规范化（按完整发送身份分组）**（[批次四十六 第二轮验证会诊处置]）：
         //  ·句柄：忽略空值稳定合并（null + job-A ⇒ job-A，与事实顺序无关）；两个**不同非空**句柄 ⇒ 冲突；
         //  ·终态标志：同组同时出现 `Terminal=true` 与 `false` ⇒ 冲突；
         //  冲突组**整组不处理**（既不重绑也不补终局），只登记计数 —— 责任保留，待下一轮权威证据。
-        var normalized = new Dictionary<(string SubmissionIdentity, int SendSeq), (bool Terminal, string? JobId, bool Conflict)>();
+        var normalized = new Dictionary<(string SubmissionIdentity, int SendSeq),
+            (bool Terminal, string? JobId, bool Conflict, TakeoverLedgerFact SourceFact)>();
         foreach (var fact in scan.Facts)
         {
             var key = (fact.SubmissionIdentity, fact.SendSeq);
             if (!normalized.TryGetValue(key, out var agg))
             {
-                normalized[key] = (fact.Terminal, string.IsNullOrEmpty(fact.JobId) ? null : fact.JobId, false);
+                normalized[key] = (fact.Terminal, string.IsNullOrEmpty(fact.JobId) ? null : fact.JobId, false, fact);
                 continue;
             }
             var conflict = agg.Conflict
                            || agg.Terminal != fact.Terminal
                            || (!string.IsNullOrEmpty(agg.JobId) && !string.IsNullOrEmpty(fact.JobId)
-                               && !string.Equals(agg.JobId, fact.JobId, StringComparison.Ordinal));
+                               && !string.Equals(agg.JobId, fact.JobId, StringComparison.Ordinal))
+                           || agg.SourceFact.AcceptedReceipt != fact.AcceptedReceipt
+                           || !string.Equals(agg.SourceFact.EvidenceSource, fact.EvidenceSource, StringComparison.Ordinal)
+                           || agg.SourceFact.AcceptedAtUtc != fact.AcceptedAtUtc
+                           || !string.Equals(agg.SourceFact.RunId, fact.RunId, StringComparison.Ordinal)
+                           || agg.SourceFact.OperationType != fact.OperationType
+                           || !string.Equals(agg.SourceFact.TerminalEvidence, fact.TerminalEvidence, StringComparison.Ordinal)
+                           || !string.Equals(agg.SourceFact.RawTerminal, fact.RawTerminal, StringComparison.Ordinal)
+                            || !string.Equals(agg.SourceFact.ExecutionErrorCode, fact.ExecutionErrorCode, StringComparison.Ordinal)
+                            || agg.SourceFact.TerminalObservedAtUtc != fact.TerminalObservedAtUtc
+                            || !string.Equals(agg.SourceFact.TerminalEvidenceSource, fact.TerminalEvidenceSource, StringComparison.Ordinal)
+                            || agg.SourceFact.TerminalKind != fact.TerminalKind;
             var mergedJobId = !string.IsNullOrEmpty(agg.JobId) ? agg.JobId
                 : string.IsNullOrEmpty(fact.JobId) ? null : fact.JobId;
-            normalized[key] = (agg.Terminal, mergedJobId, conflict);
+            normalized[key] = (agg.Terminal, mergedJobId, conflict, agg.SourceFact with { JobId = mergedJobId });
         }
         await _gate.WaitAsync().ConfigureAwait(false);
         try
@@ -4451,24 +6814,197 @@ public sealed class ArbitrationAdmissionService
             var read = _store.Read();
             var lease = read.File?.Lease;
             var ops = read.File?.Handoff?.Operations;
-            if (lease is null || ops is null) return new ExternalStartRecoveryReport(false, 0, 0, 0, 0, 0, 0);
+            var archivedOps = read.File?.Handoff?.ArchivedOperations;
+            if (lease is null || ops is null || archivedOps is null)
+                return new ExternalStartRecoveryReport(false, 0, 0, 0, 0, 0, 0);
+            recoveryLeaseId = lease.LeaseId;
+            recoveryOwnerEpoch = lease.OwnerEpoch;
             foreach (var (factKey, agg) in normalized)
             {
                 if (agg.Conflict) { scanFactConflicts++; continue; }   // 矛盾扫描结果 ⇒ 整组不处理（fail-closed）
-                var fact = new TakeoverLedgerFact(factKey.SubmissionIdentity, factKey.SendSeq, agg.Terminal, agg.JobId);
-                var op = ops.FirstOrDefault(o => o is not null
+                var fact = agg.SourceFact with { Terminal = agg.Terminal, JobId = agg.JobId };
+                var acceptedRequestIdentity = fact.AcceptedReceipt
+                    ? RequestIdentityFromSubmissionIdentity(fact.SubmissionIdentity, fact.SendSeq)
+                    : null;
+                var archivedMatch = acceptedRequestIdentity is null
+                    ? null
+                    : archivedOps.FirstOrDefault(item => item is not null
+                        && item.Operation is not null
+                        && string.Equals(item.Operation.RequestIdentity, acceptedRequestIdentity, StringComparison.Ordinal));
+                var op = fact.AcceptedReceipt && acceptedRequestIdentity is not null
+                    ? ops.FirstOrDefault(o => o is not null
+                        && string.Equals(o.RequestIdentity, acceptedRequestIdentity, StringComparison.Ordinal))
+                    : null;
+                op ??= ops.FirstOrDefault(o => o is not null
                     && string.Equals(o.SubmissionIdentity, fact.SubmissionIdentity, StringComparison.Ordinal)
                     && o.LastSendSeq == fact.SendSeq);
+                op ??= archivedMatch?.Operation;
                 if (op is null)
                 {
                     orphans++;   // 台账孤儿（本地无对应发送轮次）：只登记，不删除台账记录
                     continue;
+                }
+                if (fact.AcceptedReceipt
+                    && (fact.OperationType != OperationType.ExternalStart
+                        || acceptedRequestIdentity is null
+                        || !string.Equals(acceptedRequestIdentity, op.RequestIdentity, StringComparison.Ordinal)
+                        || string.IsNullOrWhiteSpace(fact.EvidenceSource)
+                        || fact.AcceptedAtUtc is not { } receiptAt || receiptAt == default))
+                {
+                    scanFactConflicts++;
+                    continue;
+                }
+                if (archivedMatch is not null)
+                {
+                    var rehydrateFailure = RehydrateArchivedOperationForLateAcceptanceReceipt(lease,
+                        archivedMatch.Operation.RequestIdentity, fact);
+                    if (rehydrateFailure is not null)
+                    {
+                        scanFactConflicts++;
+                        continue;
+                    }
+                    read = _store.Read();
+                    if (read.File?.Lease is not { } latestLease
+                        || !string.Equals(latestLease.LeaseId, recoveryLeaseId, StringComparison.Ordinal)
+                        || !string.Equals(latestLease.OwnerEpoch, recoveryOwnerEpoch, StringComparison.Ordinal))
+                    {
+                        scanFactConflicts++;
+                        continue;
+                    }
+                    lease = latestLease;
+                    ops = read.File.Handoff?.Operations;
+                    archivedOps = read.File.Handoff?.ArchivedOperations;
+                    op = ops?.FirstOrDefault(o => string.Equals(o.RequestIdentity,
+                        archivedMatch.Operation.RequestIdentity, StringComparison.Ordinal));
+                    if (ops is null || archivedOps is null || op is null)
+                    {
+                        scanFactConflicts++;
+                        continue;
+                    }
+                }
+                if (fact.AcceptedReceipt && (op.LastSendSeq > fact.SendSeq
+                    || !string.Equals(op.SubmissionIdentity, fact.SubmissionIdentity, StringComparison.Ordinal)))
+                {
+                    if (string.Equals(op.ConflictResolutionState, "ResolvedHistoricalAcceptedTerminal", StringComparison.Ordinal))
+                    {
+                        if (!fact.Terminal)
+                        {
+                            scanFactConflicts++;
+                            continue;
+                        }
+                        var replayFailure = ResolveHistoricalAcceptanceTerminal(lease, op.RequestIdentity, fact, out var replayFinalized);
+                        if (replayFailure is null)
+                            historicalAcceptanceTerminalsFinalized += replayFinalized ? 1 : 0;
+                        else
+                        {
+                            incompletePayload++;
+                            historicalAcceptanceTerminalFailure ??= replayFailure;
+                        }
+                        continue;
+                    }
+                    var held = HoldHistoricalAcceptanceReceipt(lease, op.RequestIdentity, fact);
+                    if (held) historicalAcceptanceReceiptsHeld++;
+                    else scanFactConflicts++;
+                    if (held && fact.Terminal)
+                    {
+                        var terminalFailure = HoldHistoricalAcceptanceTerminal(lease, op.RequestIdentity, fact);
+                        if (terminalFailure is null)
+                        {
+                            historicalAcceptanceReceiptsHeld++;
+                            terminalFailure = ResolveHistoricalAcceptanceTerminal(lease, op.RequestIdentity, fact, out var newlyFinalized);
+                            historicalAcceptanceTerminalsFinalized += newlyFinalized ? 1 : 0;
+                        }
+                        if (terminalFailure is not null)
+                        {
+                            incompletePayload++;
+                            historicalAcceptanceTerminalFailure ??= terminalFailure;
+                        }
+                    }
+                    continue; // 旧轮终态只经历史 Accepted 专用审计结案，绝不冒充当前轮 PendingTerminal
+                }
+                if (fact.AcceptedReceipt && !fact.Terminal)
+                {
+                    if (fact.OperationType != OperationType.ExternalStart
+                        || acceptedRequestIdentity is null
+                        || string.IsNullOrWhiteSpace(fact.EvidenceSource)
+                        || fact.AcceptedAtUtc is not { } acceptedAt || acceptedAt == default)
+                    {
+                        scanFactConflicts++;
+                        continue;
+                    }
+                    var openAcceptedSubmission = read.File!.Handoff?.Submission is { } acceptedSubmission
+                        && string.Equals(acceptedSubmission.SubmissionIdentity, fact.SubmissionIdentity, StringComparison.Ordinal)
+                        && acceptedSubmission.SendSeq == fact.SendSeq;
+                    if (openAcceptedSubmission
+                        && op.RequestState is OperationRequestState.Granted or OperationRequestState.Sending or OperationRequestState.Reconciling)
+                    {
+                        if (op.ConflictPending)
+                        {
+                            conflictPendingSkipped++;
+                            continue;
+                        }
+                        if (op.RequestState is OperationRequestState.Granted or OperationRequestState.Sending)
+                        {
+                            var promote = _store.MutateHandoffLatest(lease.LeaseId, lease.OwnerEpoch, file =>
+                            {
+                                var current = FindOp(file, op.RequestIdentity);
+                                if (current is null || current.ConflictPending
+                                    || current.RequestState is not (OperationRequestState.Granted or OperationRequestState.Sending)
+                                    || !string.Equals(current.SubmissionIdentity, fact.SubmissionIdentity, StringComparison.Ordinal)
+                                    || current.LastSendSeq != fact.SendSeq)
+                                    return "acceptance_receipt_state_advanced";
+                                current.RequestState = OperationRequestState.Reconciling;
+                                current.UpdatedAtUtc = _utcNow();
+                                current.UpdatedRevision = file.Revision + 1;
+                                return null;
+                            });
+                            if (!promote.Success)
+                            {
+                                scanFactConflicts++;
+                                continue;
+                            }
+                        }
+                        pendingAcceptanceReceipts.Add(fact);
+                        continue;
+                    }
+                    if (op.LastResult is { Outcome: OperationOutcome.Rejected } rejected
+                        && rejected.AnsweredSendSeq == fact.SendSeq)
+                    {
+                        var held = HoldHistoricalAcceptanceReceipt(lease, op.RequestIdentity, fact);
+                        if (held) historicalAcceptanceReceiptsHeld++;
+                        else scanFactConflicts++;
+                        continue;
+                    }
                 }
                 // §24.12-3④（[验证会诊阻断处置]）：**冲突待决**记录的结算/审计一律归冲突裁决入口
                 // （`AdjudicateConflictAsync`）——恢复扫描**不得**走普通完成结算（否则会绕过审计并可能释放占用）。
                 if (op.ConflictPending)
                 {
                     conflictPendingSkipped++;
+                    continue;
+                }
+                // A crash may occur after the durable terminal carrier is written but before the ledger's
+                // Terminal transition. Resume that exact carrier even though the ledger scan still says pending.
+                if (!fact.Terminal
+                    && op.OperationType == OperationType.ExternalStart
+                    && op.PendingTerminal is { } durablePending
+                    && op.ExecutionResult is { } durableResult
+                    && string.Equals(durablePending.SubmissionIdentity, fact.SubmissionIdentity, StringComparison.Ordinal)
+                    && durablePending.SendSeq == fact.SendSeq
+                    && string.Equals(durableResult.SubmissionIdentity, fact.SubmissionIdentity, StringComparison.Ordinal)
+                    && durableResult.SendSeq == fact.SendSeq
+                    && durablePending.Kind == durableResult.Kind
+                    && string.Equals(durablePending.RawTerminal, durableResult.RawTerminal, StringComparison.Ordinal)
+                    && string.Equals(durablePending.ExecutionErrorCode, durableResult.ExecutionErrorCode, StringComparison.Ordinal)
+                    && string.Equals(durablePending.JobId, durableResult.JobId, StringComparison.Ordinal)
+                    && string.Equals(durablePending.EvidenceSource, durableResult.EvidenceSource, StringComparison.Ordinal)
+                    && durablePending.ObservedAtUtc == durableResult.ObservedAtUtc)
+                {
+                    var resumedCompletion = CompletionFromPendingTerminal(durablePending);
+                    if (resumedCompletion is not null && TerminalFactsConsistent(op))
+                        pendingSettlements.Add((op.RequestIdentity, durablePending, resumedCompletion, op.ExecutionResult!));
+                    else
+                        incompletePayload++;
                     continue;
                 }
                 if (!fact.Terminal)
@@ -4485,6 +7021,46 @@ public sealed class ArbitrationAdmissionService
                     continue;
                 }
                 if (op.RequestState == OperationRequestState.TerminalCompleted) continue;
+                // A stale sender may append its already-observed terminal to the external ledger after ownership
+                // changed. If this is still the current round, the new owner may materialize the exact confirmed
+                // ledger payload through the ordinary settlement transaction. This narrow path does not apply to
+                // rejected, conflicted, advanced, or partially-carried operations.
+                if (fact.AcceptedReceipt
+                    && fact.Terminal
+                    && op.OperationType == OperationType.ExternalStart
+                    && op.LastSendSeq == fact.SendSeq
+                    && string.Equals(op.SubmissionIdentity, fact.SubmissionIdentity, StringComparison.Ordinal)
+                    && op.RequestState is OperationRequestState.Accepted or OperationRequestState.Reconciling
+                    && op.ExecutionResult is null
+                    && op.PendingTerminal is null
+                    && op.LastResult is not { Outcome: OperationOutcome.Rejected })
+                {
+                    var recoveredCompletion = CompletionFromTakeoverFact(fact);
+                    if (recoveredCompletion is null)
+                    {
+                        incompletePayload++;
+                        continue;
+                    }
+                    bool terminalConfirmed;
+                    try
+                    {
+                        terminalConfirmed = _hooks.TakeoverTerminalPayloadConfirmed?.Invoke(
+                            fact.SubmissionIdentity, fact.SendSeq, fact.RawTerminal, fact.ExecutionErrorCode,
+                            fact.JobId, fact.TerminalEvidenceSource, fact.TerminalObservedAtUtc!.Value,
+                            fact.TerminalKind!.Value) == true;
+                    }
+                    catch (Exception)
+                    {
+                        terminalConfirmed = false;
+                    }
+                    if (!terminalConfirmed)
+                    {
+                        mismatch++;
+                        continue;
+                    }
+                    pendingRecoveredAcceptedTerminals.Add((op.RequestIdentity, fact, recoveredCompletion));
+                    continue;
+                }
                 if (op.PendingTerminal is not { } pending)
                 {
                     noPending++;   // 台账已终态但无 PendingTerminal：保持责任、需重新取证（§24.12-6）
@@ -4497,7 +7073,12 @@ public sealed class ArbitrationAdmissionService
                     incompletePayload++;
                     continue;
                 }
-                pendingSettlements.Add((op.RequestIdentity, pending, completion));
+                if (op.ExecutionResult is not { } result || !TerminalFactsConsistent(op))
+                {
+                    mismatch++;
+                    continue;
+                }
+                pendingSettlements.Add((op.RequestIdentity, pending, completion, result));
             }
 
             // **观察责任重绑写盘**（同一权威串行边界内；只写观察载体，不改责任状态/不释放占用/不重发）：
@@ -4594,6 +7175,35 @@ public sealed class ArbitrationAdmissionService
             _gate.Release();
         }
 
+        foreach (var fact in pendingAcceptanceReceipts)
+        {
+            ct.ThrowIfCancellationRequested();
+            var requestIdentity = RequestIdentityFromSubmissionIdentity(fact.SubmissionIdentity, fact.SendSeq);
+            if (requestIdentity is null)
+            {
+                scanFactConflicts++;
+                continue;
+            }
+            try
+            {
+                var result = await SettleCompletionAsync(requestIdentity, fact.SubmissionIdentity, fact.SendSeq, null,
+                    fact.EvidenceSource, fact.RunId, fact.JobId, fact.AcceptedAtUtc,
+                    expectedOwnerLeaseId: recoveryLeaseId, expectedOwnerEpoch: recoveryOwnerEpoch).ConfigureAwait(false);
+                if (result.Kind == AdmissionResultKind.Accepted && result.ResponsibilityState == ResponsibilityState.Pending)
+                    acceptanceReceiptsAdopted++;
+                else
+                {
+                    acceptanceClaimFailures++;
+                    acceptanceClaimFailure ??= result.ReasonCode;
+                }
+            }
+            catch (Exception ex)
+            {
+                acceptanceClaimFailures++;
+                acceptanceClaimFailure ??= "acceptance_receipt_adoption_exception:" + ex.GetType().Name;
+            }
+        }
+
         foreach (var item in pendingSettlements)
         {
             ct.ThrowIfCancellationRequested();   // 取消＝停止后续补终局（已完成的保留；未完成的负责仍保留）
@@ -4601,7 +7211,9 @@ public sealed class ArbitrationAdmissionService
             {
                 var result = await SettleCompletionAsync(
                     item.RequestIdentity, item.Pending.SubmissionIdentity, item.Pending.SendSeq, item.Completion,
-                    item.Pending.EvidenceSource, acceptanceRunId: null, acceptanceJobId: item.Pending.JobId)
+                    item.Pending.EvidenceSource, acceptanceRunId: null, acceptanceJobId: item.Pending.JobId,
+                    expectedOwnerLeaseId: recoveryLeaseId, expectedOwnerEpoch: recoveryOwnerEpoch,
+                    expectedPendingTerminal: item.Pending, expectedExecutionResult: item.Result)
                     .ConfigureAwait(false);
                 // [验证会诊重要项处置] **成功判据＝责任已结清**（§24.6-5）：仅凭结果维（`Cancelled`／
                 // `ExecutionFailed` 等）会把「台账/关闭/终局任一步失败但结果维保留」误记为补终局成功。
@@ -4618,8 +7230,38 @@ public sealed class ArbitrationAdmissionService
             }
         }
 
+        foreach (var item in pendingRecoveredAcceptedTerminals)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var fact = item.Fact;
+                var result = await SettleCompletionAsync(
+                    item.RequestIdentity, fact.SubmissionIdentity, fact.SendSeq, item.Completion,
+                    acceptanceEvidenceSource: fact.EvidenceSource,
+                    acceptanceRunId: fact.RunId,
+                    acceptanceJobId: fact.JobId,
+                    acceptanceAcceptedAtUtc: fact.AcceptedAtUtc,
+                    expectedOwnerLeaseId: recoveryLeaseId,
+                    expectedOwnerEpoch: recoveryOwnerEpoch).ConfigureAwait(false);
+                if (result.ResponsibilityState == ResponsibilityState.Settled
+                    && result.Kind is AdmissionResultKind.Accepted or AdmissionResultKind.Cancelled
+                        or AdmissionResultKind.ExecutionFailed or AdmissionResultKind.TerminalRejected)
+                    completed++;
+                else
+                    failed++;
+            }
+            catch (Exception)
+            {
+                failed++;
+            }
+        }
+
         return new ExternalStartRecoveryReport(false, kept, completed, failed, noPending, mismatch, orphans,
-            conflictPendingSkipped, incompletePayload, rebound, rebindFailure, scanFactConflicts);
+            conflictPendingSkipped, incompletePayload, rebound, rebindFailure, scanFactConflicts,
+            acceptanceClaimsReconciled, acceptanceClaimFailures, acceptanceClaimFailure,
+            acceptanceReceiptsAdopted, historicalAcceptanceReceiptsHeld, historicalAcceptanceTerminalFailure,
+            historicalAcceptanceTerminalsFinalized);
     }
 
     /// <summary>
@@ -4647,6 +7289,35 @@ public sealed class ArbitrationAdmissionService
                 // 前置检查已保证 `ExecutionErrorCode` 非空（缺码即返回 null）——此处不得保留 `"unknown"` 合成回退。
                 pending.RawTerminal, pending.ExecutionErrorCode!,
                 source, pending.ObservedAtUtc, pending.JobId),
+            _ => null,
+        };
+    }
+
+    private static ExternalStartCompletion? CompletionFromTakeoverFact(TakeoverLedgerFact fact)
+    {
+        if (!fact.AcceptedReceipt || !fact.Terminal
+            || fact.TerminalKind is not { } kind
+            || !Enum.IsDefined(kind)
+            || kind is not (ExecutionResultKind.Succeeded or ExecutionResultKind.Failed or ExecutionResultKind.Cancelled)
+            || string.IsNullOrWhiteSpace(fact.SubmissionIdentity)
+            || fact.SendSeq < 1
+            || string.IsNullOrWhiteSpace(fact.JobId)
+            || string.IsNullOrWhiteSpace(fact.RawTerminal)
+            || !string.Equals(fact.TerminalEvidence, fact.RawTerminal, StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(fact.TerminalEvidenceSource)
+            || fact.TerminalObservedAtUtc is not { } observedAt
+            || observedAt == default
+            || (kind == ExecutionResultKind.Failed && string.IsNullOrWhiteSpace(fact.ExecutionErrorCode)))
+            return null;
+
+        return kind switch
+        {
+            ExecutionResultKind.Succeeded => ExternalStartCompletion.SucceededWith(
+                fact.RawTerminal, fact.TerminalEvidenceSource, observedAt, fact.JobId),
+            ExecutionResultKind.Cancelled => ExternalStartCompletion.CancelledWith(
+                fact.RawTerminal, fact.TerminalEvidenceSource, observedAt, fact.JobId),
+            ExecutionResultKind.Failed => ExternalStartCompletion.ExecutionFailedWith(
+                fact.RawTerminal, fact.ExecutionErrorCode!, fact.TerminalEvidenceSource, observedAt, fact.JobId),
             _ => null,
         };
     }

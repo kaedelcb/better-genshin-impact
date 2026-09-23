@@ -240,7 +240,8 @@ public sealed class LeaseSegment
 /// <summary>
 /// 交接上下文段（§6.4：获取新租约只替换所有权部分、保留未决 handoff；释放不删除未决事实）。
 /// R5.2 冻结稿 §4.1 三字段结构：Pending（交接责任，六值阶段机不动）+ Submission（当前未决发送，至多一笔）+
-/// Operations（逻辑操作权威记录=恢复权威，不依赖可缺失的镜像）。关闭事务=同一次锁内原子发布内
+/// Operations（逻辑操作权威记录=恢复权威，不依赖可缺失的镜像）；v5 ArchivedOperations 保存到期墓碑的完整历史快照，
+/// 不占热墓碑容量，但继续为追加式审计、预观察与历史游标提供可校验引用。关闭事务=同一次锁内原子发布内
 /// 「更新 Operations 记录 + 移除 Submission」，无「已关闭、状态未记录」崩窗。
 /// </summary>
 public sealed class LeaseHandoffSegment
@@ -250,6 +251,8 @@ public sealed class LeaseHandoffSegment
     [JsonPropertyName("submission")] public SubmissionRecord? Submission { get; set; }
     /// <summary>逻辑操作权威记录（本段新增，恢复权威）：runBinding/cursorRef/submissionIdentity/targetEpoch 不可改写。</summary>
     [JsonPropertyName("operations")] public List<OperationRecord> Operations { get; set; } = [];
+    /// <summary>保留期届满的完整终局墓碑快照；身份不再可续用，但审计、预观察与游标消费事实仍可读校验。</summary>
+    [JsonPropertyName("archivedOperations")] public List<ArchivedOperationRecord> ArchivedOperations { get; set; } = [];
     /// <summary>
     /// **预观察记录**（§24.16；租约 v3 加法字段）：与发送许可占位同一权威发布写入，未持久化不得发送。
     /// </summary>
@@ -262,6 +265,13 @@ public sealed class LeaseHandoffSegment
     /// **权威未受理证据**（§24.2-2″；租约 v3 加法字段）：四项裁决事务的证据载体，同不计容、本轮不裁剪。
     /// </summary>
     [JsonPropertyName("reconciledNotAcceptedEvidence")] public List<ReconciledNotAcceptedEvidence> ReconciledNotAcceptedEvidence { get; set; } = [];
+}
+
+/// <summary>到期操作的独立历史凭证；完整操作快照保留所有跨记录校验与游标唯一消费所需的原始字段。</summary>
+public sealed class ArchivedOperationRecord
+{
+    [JsonPropertyName("operation")] public OperationRecord Operation { get; set; } = new();
+    [JsonPropertyName("archivedAtUtc")] public DateTimeOffset ArchivedAtUtc { get; set; }
 }
 
 /// <summary>未决交接/提交意图（§6.2 原子准入边界：意图先在跨进程锁内持久化再发送；消解必须基于关联的权威证据）。</summary>
@@ -318,6 +328,38 @@ public enum OperationZone
     TerminalPendingTransfer,
     /// <summary>终局墓碑：环形上限 256 且最短保留 24h；迁入即释放主槽位。</summary>
     Tombstone,
+}
+
+/// <summary>跨服务共享的墓碑最短保留时长；到期只迁入历史档案，不删除操作身份与审计依据。</summary>
+public static class ArbitrationRetentionPolicy
+{
+    public static readonly TimeSpan TombstoneMinimumAge = TimeSpan.FromHours(24);
+
+    /// <summary>已结清的受理认领作为终局操作的历史凭据保留；未确认或仍关联未决责任的认领不得进入归档。</summary>
+    public static bool IsSettledAcceptanceClaim(OperationRecord operation)
+    {
+        var claim = operation.AcceptanceClaim;
+        var execution = operation.ExecutionResult;
+        if (claim is not { LedgerPersisted: true } || execution is null) return false;
+        var expectedSubmission = $"sub:{operation.RequestIdentity}:{claim.SendSeq.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+        return operation.OperationType == OperationType.ExternalStart
+               && operation.RequestState == OperationRequestState.TerminalCompleted
+               && (operation.Zone is OperationZone.TerminalPendingTransfer or OperationZone.Tombstone)
+               && !operation.ConflictPending
+               && string.IsNullOrEmpty(operation.ConflictAdjudicationClaim)
+               && operation.PendingTerminal is null
+               && claim.SendSeq > 0
+               && claim.SendSeq == operation.LastSendSeq
+               && string.Equals(claim.RequestIdentity, operation.RequestIdentity, StringComparison.Ordinal)
+               && string.Equals(claim.SubmissionIdentity, expectedSubmission, StringComparison.Ordinal)
+               && string.Equals(claim.SubmissionIdentity, operation.SubmissionIdentity, StringComparison.Ordinal)
+               && string.Equals(operation.TakeoverRef, claim.SubmissionIdentity, StringComparison.Ordinal)
+               && (execution.Kind is ExecutionResultKind.Succeeded or ExecutionResultKind.Failed or ExecutionResultKind.Cancelled)
+               && execution.ObservedAtUtc != default
+               && string.Equals(execution.SubmissionIdentity, claim.SubmissionIdentity, StringComparison.Ordinal)
+               && execution.SendSeq == claim.SendSeq
+               && (string.IsNullOrEmpty(claim.JobId) || string.Equals(claim.JobId, execution.JobId, StringComparison.Ordinal));
+    }
 }
 
 /// <summary>请求状态（§3.3 分类表——操作身份与处理状态分离；状态读取/迁移在权威串行边界内完成）。</summary>
@@ -449,6 +491,25 @@ public sealed class PendingTerminal
 }
 
 /// <summary>
+/// Durable, send-round-bound acceptance intent. Its existence is fail-closed: the round cannot be declared not accepted
+/// or redriven until the ledger write is reconciled and the submission is closed. The owner identity records who first
+/// claimed the fact; takeover owners may resume the same payload but may not replace its identity.
+/// </summary>
+public sealed class AcceptanceClaimRecord
+{
+    [JsonPropertyName("requestIdentity")] public string RequestIdentity { get; set; } = "";
+    [JsonPropertyName("submissionIdentity")] public string SubmissionIdentity { get; set; } = "";
+    [JsonPropertyName("sendSeq")] public int SendSeq { get; set; }
+    [JsonPropertyName("ownerLeaseId")] public string OwnerLeaseId { get; set; } = "";
+    [JsonPropertyName("ownerEpoch")] public string OwnerEpoch { get; set; } = "";
+    [JsonPropertyName("claimedAtUtc")] public DateTimeOffset ClaimedAtUtc { get; set; }
+    [JsonPropertyName("evidenceSource")] public string EvidenceSource { get; set; } = "";
+    [JsonPropertyName("runId")] public string? RunId { get; set; }
+    [JsonPropertyName("jobId")] public string? JobId { get; set; }
+    [JsonPropertyName("ledgerPersisted")] public bool LedgerPersisted { get; set; }
+}
+
+/// <summary>
 /// **预观察记录**（§24.16；加法字段，租约 v3 `PreObservations[]`）：与**发送许可占位同一权威发布**写入；
 /// **未持久化不得发送**（杜绝「已发送、尚无句柄」的不可恢复窗口）。取得 JobId 后在同一权威边界转为正式接管台账并标记完成。
 /// </summary>
@@ -474,6 +535,8 @@ public enum ConflictResolutionKind
     ResolvedAcceptedTerminal,
     /// <summary>确认未受理：原拒绝终局继续有效。</summary>
     ResolvedNotAccepted,
+    /// <summary>较早发送轮已受理且终态，较新轮拒绝不覆盖它；以旧轮终态结算并保留新轮拒绝快照。</summary>
+    ResolvedHistoricalAcceptedTerminal,
 }
 
 /// <summary>裁决证据引用（§24.2-2″：`{ evidenceId }` 对象，**不内嵌**证据字段）。</summary>
@@ -497,9 +560,13 @@ public sealed class ConflictEvidenceRecord
     [JsonPropertyName("observedAtUtc")] public DateTimeOffset ObservedAtUtc { get; set; }
     [JsonPropertyName("submissionIdentity")] public string SubmissionIdentity { get; set; } = "";
     [JsonPropertyName("sendSeq")] public int SendSeq { get; set; }
+    /// <summary>迟到 Accepted 回执的远端句柄；仅 accepted_receipt 使用，用于按原发送轮次继续观察。</summary>
+    [JsonPropertyName("jobId")] public string? JobId { get; set; }
     /// <summary>被取代的拒绝结果侧原始词/原因（审计关联；不得伪造）。</summary>
     [JsonPropertyName("supersededRawTerminal")] public string? SupersededRawTerminal { get; set; }
     [JsonPropertyName("supersededReasonCode")] public string? SupersededReasonCode { get; set; }
+    /// <summary>冲突完成回执的不可变全载荷快照（保留类别与 JobId，避免仅存 raw 词丢失关联差异）。</summary>
+    [JsonPropertyName("conflictingExecutionResultSnapshot")] public ExecutionResult? ConflictingExecutionResultSnapshot { get; set; }
 }
 
 /// <summary>
@@ -525,10 +592,14 @@ public sealed class ConflictResolutionAudit
     [JsonPropertyName("resolvedAtUtc")] public DateTimeOffset ResolvedAtUtc { get; set; }
     /// <summary>被取代的拒绝结果快照（`Outcome=Rejected`＋`AnsweredSendSeq`＋`Retryable`＋`ReasonCode`＋`EvidenceSource`）。</summary>
     [JsonPropertyName("supersededRejectedResultSnapshot")] public OperationResult? SupersededRejectedResultSnapshot { get; set; }
+    /// <summary>当冲突出现在既有权威终态之后时，准确保存被保留的执行事实，不伪造为拒绝结果。</summary>
+    [JsonPropertyName("supersededExecutionResultSnapshot")] public ExecutionResult? SupersededExecutionResultSnapshot { get; set; }
     /// <summary>仅 `ResolvedAcceptedTerminal` 使用：完整终态证据快照（业务字段与匹配的 `ExecutionResult` 逐字段一致）。</summary>
     [JsonPropertyName("resolutionEvidenceSnapshot")] public ExecutionResult? ResolutionEvidenceSnapshot { get; set; }
     /// <summary>仅 `ResolvedNotAccepted` 使用：`{ evidenceId }` 引用（**不内嵌**证据字段）。</summary>
     [JsonPropertyName("resolutionEvidenceRef")] public ConflictResolutionEvidenceRef? ResolutionEvidenceRef { get; set; }
+    /// <summary>仅历史受理终态裁决使用：被较早 Accepted 任务取代的当前轮拒绝快照。</summary>
+    [JsonPropertyName("relatedCurrentRoundRejectedResultSnapshot")] public OperationResult? RelatedCurrentRoundRejectedResultSnapshot { get; set; }
 }
 
 /// <summary>
@@ -621,6 +692,8 @@ public sealed class OperationRecord
     /// <summary>首次确定拒绝派生的有界重试窗口截止（§3.3-6：持久化后不得重置；到期锁内复核才转终局，不用于 Unknown/Reconciling）。</summary>
     [JsonPropertyName("retryWindowDeadlineUtc")] public DateTimeOffset? RetryWindowDeadlineUtc { get; set; }
     [JsonPropertyName("lastResult")] public OperationResult? LastResult { get; set; }
+    /// <summary>最近一次未发送的本地预检拒绝；与 LastResult 分开保存，避免覆写已关联的远端发送证据。</summary>
+    [JsonPropertyName("lastPrecheckResult")] public OperationResult? LastPrecheckResult { get; set; }
     /// <summary>接管台账关联引用（受理分支关闭前已持久化并可重建）。</summary>
     [JsonPropertyName("takeoverRef")] public string? TakeoverRef { get; set; }
     [JsonPropertyName("zone")] public OperationZone Zone { get; set; } = OperationZone.Active;
@@ -656,19 +729,23 @@ public sealed class OperationRecord
     [JsonPropertyName("observationRebindCount")] public int ObservationRebindCount { get; set; }
 
     // ============================================================
-    // R5.3 §24（B3 外部启动生命周期补全）——加法字段（租约 v3；旧 ≤2 记录缺字段按 §24.20-A′ 迁移/隔离口径处置）
+    // R5.3 §24（B3 外部启动生命周期补全）——v3 责任字段；v4 新增发送轮次受理认领
     // ============================================================
 
     /// <summary>
     /// **可信持久化操作类型**（§24.17）：创建时由可信适配器提供、与 Operation 同次原子发布；缺失/`Unknown` ⇒ 类型相关判定 fail-closed。
     /// </summary>
     [JsonPropertyName("operationType")] public OperationType OperationType { get; set; } = OperationType.Unknown;
+    /// <summary>在外部接管台账 I/O 前持久化的受理认领；存在时拒绝负向关闭和重发。</summary>
+    [JsonPropertyName("acceptanceClaim")] public AcceptanceClaimRecord? AcceptanceClaim { get; set; }
     /// <summary>**待终局处置**（§24.12-1）：已取得权威终态、接管/关闭/终局未完成的唯一责任载体。</summary>
     [JsonPropertyName("pendingTerminal")] public PendingTerminal? PendingTerminal { get; set; }
     /// <summary>**执行结果**（§24.13-1）：与责任状态分列保存（`TerminalCompleted` 只表示责任结清）。</summary>
     [JsonPropertyName("executionResult")] public ExecutionResult? ExecutionResult { get; set; }
     /// <summary>本地取消意向（§24.13-5；不写入 `ExecutionResult.cancelled`）。</summary>
     [JsonPropertyName("localCancelRequested")] public bool LocalCancelRequested { get; set; }
+    /// <summary>交接确认待继续标记；与预检拒绝证据分开保存，避免覆盖重试窗口依据。</summary>
+    [JsonPropertyName("preemptConfirmPending")] public bool PreemptConfirmPending { get; set; }
     /// <summary>冲突对账待决标志（§24.2-2″：活动覆盖层；已裁决后清除，但审计与证据不删除）。</summary>
     [JsonPropertyName("conflictPending")] public bool ConflictPending { get; set; }
     /// <summary>冲突证据集合（结构化；追加式，不覆盖既有事实——[Batch B 续] 会诊要求：不得用自由字符串承载责任事实）。</summary>
@@ -677,6 +754,8 @@ public sealed class OperationRecord
     [JsonPropertyName("conflictResolutionState")] public string? ConflictResolutionState { get; set; }
     /// <summary>裁决审计引用（§24.2-2″：**仅存 ID**，指向租约 `ConflictResolutionAudits[]`）。</summary>
     [JsonPropertyName("conflictResolutionAuditId")] public string? ConflictResolutionAuditId { get; set; }
+    /// <summary>本操作全部历史裁决审计引用；单数引用仍表示当前发送轮的审计，历史记录不得随重试丢失。</summary>
+    [JsonPropertyName("conflictResolutionAuditHistoryIds")] public List<string> ConflictResolutionAuditHistoryIds { get; set; } = [];
     /// <summary>
     /// **裁决方向声明**（[第二轮验证会诊阻断处置] 新增，进程内实现细节）：`ResolvedAcceptedTerminal` 裁决需先
     /// 完成 §24.15 终态链再写审计，中间窗口不得被**相反方向**裁决穿插——故先原子声明方向；

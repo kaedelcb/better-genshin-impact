@@ -261,6 +261,46 @@ public sealed partial class TaskCenterHost
                 // - 其他（流程登记/恢复等非节点操作）：沿用流程级验证（run 记录在册）。
                 TakeoverPersist = entry =>
                 {
+                    if (entry.OperationType == OperationType.ExternalStart)
+                    {
+                        // ExternalStart 可能在 Operation 已推进后恢复旧轮 AcceptanceClaim；按 entry 自带的
+                        // 完整轮次反查请求，并要求该旧轮仍有持久 claim/Submission/终态依据，不能拿当前轮冒充。
+                        var separator = entry.SubmissionIdentity.LastIndexOf(':');
+                        var requestIdentity = separator > 4
+                            && entry.SubmissionIdentity.StartsWith("sub:", StringComparison.Ordinal)
+                            && int.TryParse(entry.SubmissionIdentity[(separator + 1)..],
+                                System.Globalization.NumberStyles.None,
+                                System.Globalization.CultureInfo.InvariantCulture, out var parsedSeq)
+                            && parsedSeq == entry.SendSeq
+                            ? entry.SubmissionIdentity[4..separator]
+                            : null;
+                        var file = _admissionStore?.Read().File;
+                        var externalOp = requestIdentity is null ? null : file?.Handoff?.Operations?.FirstOrDefault(o =>
+                            string.Equals(o.RequestIdentity, requestIdentity, StringComparison.Ordinal));
+                        if (externalOp is null || externalOp.OperationType != OperationType.ExternalStart
+                            || externalOp.LastSendSeq < entry.SendSeq
+                            || !string.Equals(externalOp.CandidateId, entry.CandidateId, StringComparison.Ordinal)
+                            || !string.Equals(externalOp.ResourceRef ?? "", entry.ResourceRef, StringComparison.Ordinal)
+                            || !string.Equals(externalOp.TargetEpoch, entry.TargetBgiEpoch, StringComparison.Ordinal)
+                            || !string.Equals(externalOp.Candidate?.ActionId ?? ArbitrationOrdering.DeriveActionId(externalOp.CandidateId),
+                                entry.ActionId, StringComparison.Ordinal))
+                            return Task.FromResult<string?>("external_start_receipt_identity_mismatch");
+                        var claimMatches = externalOp.AcceptanceClaim is { } claim
+                            && string.Equals(claim.SubmissionIdentity, entry.SubmissionIdentity, StringComparison.Ordinal)
+                            && claim.SendSeq == entry.SendSeq
+                            && string.Equals(claim.EvidenceSource, entry.EvidenceSource, StringComparison.Ordinal)
+                            && string.Equals(claim.RunId, entry.RunId, StringComparison.Ordinal)
+                            && string.Equals(claim.JobId, entry.JobId, StringComparison.Ordinal);
+                        var submissionMatches = file!.Handoff!.Submission is { } submission
+                            && string.Equals(submission.SubmissionIdentity, entry.SubmissionIdentity, StringComparison.Ordinal)
+                            && submission.SendSeq == entry.SendSeq;
+                        var terminalMatches = externalOp.ExecutionResult is { } terminal
+                            && string.Equals(terminal.SubmissionIdentity, entry.SubmissionIdentity, StringComparison.Ordinal)
+                            && terminal.SendSeq == entry.SendSeq;
+                        if (!claimMatches && !submissionMatches && !terminalMatches)
+                            return Task.FromResult<string?>("external_start_receipt_basis_missing");
+                        return Task.FromResult<string?>(PersistExternalStartReceiptLedger(entry));
+                    }
                     // **接管路径必须按「权威操作类型」选择**（会诊阻断）：不得用 `entry.RunId` 是否为空来判定外部启动——
                     // 该字段来自回执/对账方（`SendOutcome.Accepted.RunId`／`ReconcileSettlement.Accepted.RunId`），
                     // 不是持久化的操作类型。节点/流程操作若缺 runId 必须**失败**，绝不能自动转成外部启动台账而跳过
@@ -275,8 +315,7 @@ public sealed partial class TaskCenterHost
                     switch (op.OperationType)
                     {
                         case OperationType.ExternalStart:
-                            // §4.2a：E3/E4/E5 的受理接管台账＝external-start-ledger.json（修订守卫、可跨重启重建）。
-                            return Task.FromResult<string?>(PersistExternalStartLedger(entry));
+                            return Task.FromResult<string?>("external_start_receipt_identity_unresolved");
                         case OperationType.FlowRegistration:
                             // [验证会诊重要项处置] **类型与来源记录不得冲突**（§24.17-3）：流程登记的 resourceRef 必为 `flow:`。
                             if (!(op.ResourceRef ?? "").StartsWith("flow:", StringComparison.Ordinal))
@@ -328,6 +367,10 @@ public sealed partial class TaskCenterHost
                         return Task.FromResult<string?>("receipt_epoch_mismatch");
                     return Task.FromResult<string?>(null);
                 },
+                LateAcceptanceReceiptPersist = entry => Task.FromResult(
+                    entry.OperationType == OperationType.ExternalStart
+                        ? PersistExternalStartReceiptLedger(entry)
+                        : "late_receipt_operation_type_mismatch"),
                 TakeoverTerminalConfirmed = (submissionIdentity, _) =>
                 {
                     var read = _admissionStore?.Read();
@@ -367,7 +410,7 @@ public sealed partial class TaskCenterHost
                 },
                 // R5.3 §24.15 完成结算事务的「台账 Terminal」步（[Batch B]）：仅外部启动操作写外部台账；
                 // 其余类型不写（由各自载体承载），未知类型 fail-closed。失败原因原样回传门面 ⇒ 保守停驻。
-                TakeoverTerminalPersist = (submissionIdentity, sendSeq, terminalEvidence, observedAtUtc, rawTerminal, executionErrorCode, jobId, terminalEvidenceSource) =>
+                TakeoverTerminalPersist = (submissionIdentity, sendSeq, terminalEvidence, observedAtUtc, rawTerminal, executionErrorCode, jobId, terminalEvidenceSource, terminalKind) =>
                 {
                     var read = _admissionStore?.Read();
                     var op = read?.File?.Handoff?.Operations?.FirstOrDefault(
@@ -379,7 +422,7 @@ public sealed partial class TaskCenterHost
                     {
                         var marked = new ExternalStartLedger(root).MarkTerminal(
                             submissionIdentity, sendSeq, terminalEvidence, observedAtUtc,
-                            rawTerminal, executionErrorCode, op.OperationType, jobId, terminalEvidenceSource);
+                            rawTerminal, executionErrorCode, op.OperationType, jobId, terminalEvidenceSource, terminalKind);
                         if (marked.Success) return null;
                         return "ledger_terminal_failed:" + (marked.Reason ?? "unknown");
                     }
@@ -390,7 +433,7 @@ public sealed partial class TaskCenterHost
                 },
                 // §24.15 读回验证（[第二轮验证会诊阻断处置]）：按同一发送身份读回台账终态，并**逐字段**核对
                 // 原始终态词／错误码／句柄／证据来源／观察时点是否与本次事实等值（仅「记录存在且 Terminal」不算确认）。
-                TakeoverTerminalPayloadConfirmed = (submissionIdentity, sendSeq, rawTerminal, executionErrorCode, jobId, evidenceSource, observedAtUtc) =>
+                TakeoverTerminalPayloadConfirmed = (submissionIdentity, sendSeq, rawTerminal, executionErrorCode, jobId, evidenceSource, observedAtUtc, terminalKind) =>
                 {
                     var root = _admissionRoot ?? Directory.GetParent(_runsDirPath!)?.FullName ?? _runsDirPath!;
                     try
@@ -405,8 +448,9 @@ public sealed partial class TaskCenterHost
                                && string.Equals(entry.RawTerminal, rawTerminal, StringComparison.Ordinal)
                                && string.Equals(entry.ExecutionErrorCode, executionErrorCode, StringComparison.Ordinal)
                                && string.Equals(entry.JobId, jobId, StringComparison.Ordinal)
-                               && string.Equals(entry.TerminalEvidenceSource, evidenceSource, StringComparison.Ordinal)
-                               && entry.TerminalObservedAtUtc == observedAtUtc;
+                                && string.Equals(entry.TerminalEvidenceSource, evidenceSource, StringComparison.Ordinal)
+                                && entry.TerminalObservedAtUtc == observedAtUtc
+                                && entry.TerminalKind == terminalKind;
                     }
                     catch (IOException)
                     {
@@ -425,7 +469,14 @@ public sealed partial class TaskCenterHost
                         if (!read.Valid) return TakeoverLedgerScan.Unreadable(read.Detail);
                         var facts = (read.File?.Entries ?? [])
                             .Select(e => new TakeoverLedgerFact(
-                                e.SubmissionIdentity, e.SendSeq, e.State == LedgerEntryState.Terminal, e.JobId))
+                                e.SubmissionIdentity, e.SendSeq, e.State == LedgerEntryState.Terminal, e.JobId,
+                                AcceptedReceipt: true, EvidenceSource: e.EvidenceSource,
+                                AcceptedAtUtc: e.AcceptedAtUtc, RunId: e.RunId, OperationType: e.OperationType,
+                                TerminalEvidence: e.TerminalEvidence, RawTerminal: e.RawTerminal,
+                                ExecutionErrorCode: e.ExecutionErrorCode,
+                                TerminalObservedAtUtc: e.TerminalObservedAtUtc,
+                                TerminalEvidenceSource: e.TerminalEvidenceSource,
+                                TerminalKind: e.TerminalKind))
                             .ToList();
                         return new TakeoverLedgerScan(true, facts);
                     }
@@ -559,6 +610,14 @@ public sealed partial class TaskCenterHost
     internal async Task<AdmissionResult> SubmitExternalStartViaAdmissionAsync(
         ExternalStartAdmissionRequest request, CancellationToken ct)
     {
+        using var sendLifetime = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
+        return await SubmitExternalStartViaAdmissionCoreAsync(request, sendLifetime.Token).ConfigureAwait(false);
+    }
+
+    private async Task<AdmissionResult> SubmitExternalStartViaAdmissionCoreAsync(
+        ExternalStartAdmissionRequest request, CancellationToken sendToken)
+    {
+        request.HostLifetimeToken = _shutdownCts.Token;
         // §7.1-1：F11 判定先于租约获取。
         if (CurrentArbitrationFacts().F11Active)
             return AdmissionResult.Of(AdmissionResultKind.F11Blocked, "f11_active",
@@ -572,9 +631,7 @@ public sealed partial class TaskCenterHost
         if (string.IsNullOrEmpty(externalEpoch))
             return AdmissionResult.Of(AdmissionResultKind.Error, "bgi_epoch_unknown",
                 "BGI 进程纪元未知（严格合同要求固定 bgiEpoch；未发送、未签发许可）。", "");
-        ct.ThrowIfCancellationRequested();
-        using var sendLifetime = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
-        sendLifetime.Token.ThrowIfCancellationRequested();
+        sendToken.ThrowIfCancellationRequested();
 
         ArbitrationAdmissionService facade;
         try { await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false); facade = _admission!; }
@@ -599,7 +656,7 @@ public sealed partial class TaskCenterHost
             RequestIdentity = continuing ? request.RequestIdentity! : "",
             SourceDetail = string.IsNullOrEmpty(request.SourceDetail) ? "external:start" : request.SourceDetail,
             WireSubmitKey = request.WireSubmitKey,
-            CallerToken = sendLifetime.Token,
+            CallerToken = sendToken,
             ProcessLocalContext = new ExternalStartContext(request.ExecuteAsync),
             // §24.17（[批次四十四 验证会诊重要项处置]）：**本入口（E3/E4/E5 外部启动）的操作类型恒为
             // `ExternalStart`**——由**调用位置**决定，不采信入参字段：否则受污染调用可把真实外部启动登记成
@@ -618,7 +675,10 @@ public sealed partial class TaskCenterHost
                     : request.TriggerOccurrenceId,
                 ResourceRef = request.ResourceRef,
                 Intent = "start",
-                // §2.2：start 候选 runId/节点身份为空、轮次/attempt=0、排序键缺省（tier=plan/priority=0/scheduledAt=null）。
+                Tier = request.Tier,
+                Priority = request.Priority,
+                ScheduledAt = request.ScheduledAt,
+                // §2.2：start 候选 runId/节点身份为空、轮次/attempt=0；tier/priority/scheduledAt 由可信入口冻结提供。
             },
         };
 
@@ -1606,8 +1666,8 @@ public sealed partial class TaskCenterHost
     /// **外部启动受理接管落盘（§4.2a／B3）**：把 `external-start-ledger.json` 写成「已受理待执行」并**读回确认**——
     /// 返回 null＝接管完成（门面才允许关闭 Submission）；返回原因＝接管未完成（保守待对账）。
     /// 台账损坏/读取失败一律视为**未完成**（不推导空闲、不冒充成功）。
-    /// **如实限定**：`ConfirmRebuildable` 证明的是**本地记录可读回**；远端作业关联（jobId/受理词）尚未随台账落盘，
-    /// 故「远端关联可重建」未成立（登记为启用前置，见设计稿 §14）。
+    /// **如实限定**：`ConfirmRebuildable` 按本次受理认领的完整载荷读回核验（含证据来源、受理时点、操作类型及已知句柄）；
+    /// 句柄尚未知时只确认受理记录本身，不推断远端作业句柄已可重建。
     /// </summary>
     private string? PersistExternalStartLedger(ExternalStartLedgerEntry entry)
     {
@@ -1630,13 +1690,114 @@ public sealed partial class TaskCenterHost
                 return "ledger_record_failed:" + (recorded.Reason ?? "unknown")
                        + (missing.Count > 0 ? "（缺：" + string.Join(",", missing) + "）" : "");
             }
-            return ledger.ConfirmRebuildable(entry.SubmissionIdentity, entry.SendSeq)
+            return ledger.ConfirmRebuildable(entry)
                 ? null
                 : "ledger_not_rebuildable";
         }
         catch (Exception ex)
         {
             return "ledger_exception:" + ex.GetType().Name;
+        }
+    }
+
+    /// <summary>追加式接收 E3/E4/E5 逐轮受理回执；重复回执沿用首次观察元数据并只单调补齐缺失句柄。</summary>
+    private string? PersistExternalStartReceiptLedger(ExternalStartLedgerEntry entry)
+    {
+        var root = _admissionRoot ?? Directory.GetParent(_runsDirPath!)?.FullName ?? _runsDirPath!;
+        try
+        {
+            var ledger = new ExternalStartLedger(root);
+            var recorded = ledger.RecordLateAcceptedReceipt(entry);
+            if (!recorded.Success)
+                return "late_receipt_ledger_record_failed:" + (recorded.Reason ?? "unknown");
+            var read = ledger.Read();
+            if (!read.Valid || read.File is null)
+                return "late_receipt_ledger_readback_unavailable";
+            var canonical = read.File.Entries.FirstOrDefault(e =>
+                string.Equals(e.SubmissionIdentity, entry.SubmissionIdentity, StringComparison.Ordinal)
+                && e.SendSeq == entry.SendSeq);
+            return canonical is not null && ledger.ConfirmRebuildable(canonical)
+                ? null
+                : "late_receipt_ledger_readback_mismatch";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return "late_receipt_ledger_io:" + ex.GetType().Name;
+        }
+    }
+
+    /// <summary>
+    /// An obsolete sender may finish observing after ownership changed. It can append the terminal fact to the exact
+    /// accepted send round, but it cannot settle the Operation or release its slot; the current owner imports it later.
+    /// </summary>
+    private string? PersistLateExternalStartTerminal(AdmissionResult accepted, ExternalStartCompletion completion)
+    {
+        if (accepted.ReasonCode != "late_acceptance_receipt_saved"
+            || string.IsNullOrWhiteSpace(accepted.RequestIdentity)
+            || string.IsNullOrWhiteSpace(accepted.SubmissionIdentity)
+            || accepted.SendSeq < 1
+            || !string.Equals(accepted.SubmissionIdentity,
+                $"sub:{accepted.RequestIdentity}:{accepted.SendSeq.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+                StringComparison.Ordinal))
+            return "late_terminal_send_identity_invalid";
+
+        var terminalKind = completion.Kind switch
+        {
+            ExternalStartCompletionKind.Succeeded => ExecutionResultKind.Succeeded,
+            ExternalStartCompletionKind.ExecutionFailed => ExecutionResultKind.Failed,
+            ExternalStartCompletionKind.Cancelled => ExecutionResultKind.Cancelled,
+            _ => (ExecutionResultKind?)null,
+        };
+        if (terminalKind is not { } kind
+            || string.IsNullOrWhiteSpace(completion.RawTerminal)
+            || string.IsNullOrWhiteSpace(completion.EvidenceSource)
+            || completion.ObservedAtUtc is not { } observedAt
+            || observedAt == default
+            || (kind == ExecutionResultKind.Failed && string.IsNullOrWhiteSpace(completion.ExecutionErrorCode))
+            || string.IsNullOrWhiteSpace(accepted.JobId)
+            || !string.Equals(accepted.JobId, completion.JobId, StringComparison.Ordinal))
+            return "late_terminal_payload_incomplete_or_mismatched";
+
+        var root = _admissionRoot ?? Directory.GetParent(_runsDirPath!)?.FullName ?? _runsDirPath!;
+        try
+        {
+            var ledger = new ExternalStartLedger(root);
+            var read = ledger.Read();
+            if (!read.Valid || read.File is null) return "late_terminal_ledger_unreadable";
+            var entry = read.File.Entries.FirstOrDefault(e =>
+                string.Equals(e.SubmissionIdentity, accepted.SubmissionIdentity, StringComparison.Ordinal)
+                && e.SendSeq == accepted.SendSeq);
+            if (entry is null
+                || entry.OperationType != OperationType.ExternalStart
+                || string.IsNullOrWhiteSpace(entry.JobId)
+                || !string.Equals(entry.JobId, accepted.JobId, StringComparison.Ordinal))
+                return "late_terminal_acceptance_receipt_mismatch";
+
+            var marked = ledger.MarkTerminal(accepted.SubmissionIdentity, accepted.SendSeq,
+                completion.RawTerminal!, observedAt, completion.RawTerminal, completion.ExecutionErrorCode,
+                OperationType.ExternalStart, accepted.JobId, completion.EvidenceSource, kind);
+            if (!marked.Success) return "late_terminal_ledger_write_failed:" + (marked.Reason ?? "unknown");
+
+            var readback = ledger.Read();
+            if (!readback.Valid || readback.File is null) return "late_terminal_ledger_readback_unavailable";
+            var canonical = readback.File.Entries.FirstOrDefault(e =>
+                string.Equals(e.SubmissionIdentity, accepted.SubmissionIdentity, StringComparison.Ordinal)
+                && e.SendSeq == accepted.SendSeq);
+            return canonical is { State: LedgerEntryState.Terminal }
+                   && canonical.OperationType == OperationType.ExternalStart
+                   && string.Equals(canonical.TerminalEvidence, completion.RawTerminal, StringComparison.Ordinal)
+                   && string.Equals(canonical.RawTerminal, completion.RawTerminal, StringComparison.Ordinal)
+                   && string.Equals(canonical.ExecutionErrorCode, completion.ExecutionErrorCode, StringComparison.Ordinal)
+                   && string.Equals(canonical.JobId, accepted.JobId, StringComparison.Ordinal)
+                   && string.Equals(canonical.TerminalEvidenceSource, completion.EvidenceSource, StringComparison.Ordinal)
+                   && canonical.TerminalObservedAtUtc == observedAt
+                   && canonical.TerminalKind == kind
+                ? null
+                : "late_terminal_ledger_readback_mismatch";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return "late_terminal_ledger_io:" + ex.GetType().Name;
         }
     }
 
@@ -1648,7 +1809,10 @@ public sealed partial class TaskCenterHost
     public async Task<ExternalStartAdmissionOutcome> AdmitExternalStartAsync(
         ExternalStartAdmissionRequest request, CancellationToken ct = default)
     {
-        var result = await SubmitExternalStartViaAdmissionAsync(request, ct).ConfigureAwait(false);
+        // Keep the linked send lifetime alive through completion observation. The queue observer is started
+        // while the send runs, and must remain linked to host shutdown after the early receipt returns.
+        using var sendLifetime = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
+        var result = await SubmitExternalStartViaAdmissionCoreAsync(request, sendLifetime.Token).ConfigureAwait(false);
         // [Batch B 收尾之二] §24.10／§24.14 完成观察接线：受理成功后取完成层结果并交完成结算入口——
         // `CompletionProvider` 缺失/返回 null ⇒ 保持普通受理（责任 Pending）；返回 `Unknown` ⇒ 不写终态载体、保守待对账；
         // 返回权威终态 ⇒ 由门面按 §24.15 唯一顺序结算（终态载体→台账 Terminal→关闭→终局）并回传结算事实。
@@ -1670,7 +1834,7 @@ public sealed partial class TaskCenterHost
                 // 不得据此走完成结算（否则 v2 普通受理会被误判成待对账）。
                 completion = request.CompletionProvider?.Invoke();
                 if (completion is null && request.CompletionObserver is { } observer)
-                    completion = await observer(CancellationToken.None).ConfigureAwait(false);
+                    completion = await observer(_shutdownCts.Token).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -1685,7 +1849,9 @@ public sealed partial class TaskCenterHost
                         result.EvidenceSource,
                         // §24.6-2／D9：**已取得的 JobId 不得在适配器边界断链**——受理时拿到的句柄必须随
                         // 完成结算一路传递（也是「完成层 Unknown／失败但句柄已取得」时对调用方回显的来源）。
-                        acceptanceJobId: result.JobId).ConfigureAwait(false);
+                        acceptanceJobId: result.JobId,
+                        expectedOwnerLeaseId: result.CapturedLeaseId,
+                        expectedOwnerEpoch: result.CapturedOwnerEpoch).ConfigureAwait(false);
                     // [验证会诊阻断处置] 结算入口可能因「操作不在可结算状态」返回**停止结论**（`not_accepted` 等）：
                     // 此时**不得**用停止结论覆盖既有的 Rejected/RetryableRejected 事实；但若本次确有**权威终态**证据，
                     // 属于 §24.2-2″／§24.15「已拒绝后收到冲突证据」——必须原子追加冲突证据并置冲突待决
@@ -1698,7 +1864,32 @@ public sealed partial class TaskCenterHost
                     }
                     else
                     {
-                        result = settled;
+                        var staleLateAcceptedSender = settled.ReasonCode == "lease_stale_generation"
+                            && result.ReasonCode == "late_acceptance_receipt_saved";
+                        if (staleLateAcceptedSender && completion.Kind != ExternalStartCompletionKind.Unknown)
+                        {
+                            var terminalFailure = PersistLateExternalStartTerminal(result, completion);
+                            result.RawTerminal = completion.RawTerminal;
+                            result.ExecutionErrorCode = completion.ExecutionErrorCode;
+                            result.EvidenceSource = completion.EvidenceSource;
+                            result.ExecutionDisposition = completion.Kind switch
+                            {
+                                ExternalStartCompletionKind.Cancelled => ExecutionDisposition.Cancelled,
+                                ExternalStartCompletionKind.ExecutionFailed => ExecutionDisposition.ExecutionFailed,
+                                _ => ExecutionDisposition.None,
+                            };
+                            result.ResponsibilityState = ResponsibilityState.Pending;
+                            result.Detail += terminalFailure is null
+                                ? "；旧负责人仅将该发送轮终态追加到共享台账，等待当前负责人恢复结案。"
+                                : "；旧负责人未能确认旧发送轮终态入账，当前负责人仍须按原 JobId 对账：" + terminalFailure;
+                            if (terminalFailure is not null)
+                            {
+                                result.Kind = AdmissionResultKind.NeedReconcile;
+                                result.ReasonCode = "late_acceptance_terminal_persist_failed";
+                            }
+                        }
+                        else if (!staleLateAcceptedSender)
+                            result = settled;
                     }
                 }
                 catch (Exception ex)

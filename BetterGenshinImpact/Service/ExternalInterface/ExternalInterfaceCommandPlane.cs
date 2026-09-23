@@ -12,7 +12,7 @@ namespace BetterGenshinImpact.Service.ExternalInterface;
 /// InstanceRequestHandler 私有实现（单一事实源，§8 风险对策），旧入口与 ext 入口
 /// 跑的是同一份代码，行为逐字节一致。幂等窗口在会话层。
 /// [切片7] ext.task.start 按 capability task.queue 接 BgiTaskCoordinator（入队拿 taskHandle
-/// 立即返回，执行结果走事件）；协调器不可用时回退 v2 逐字节旧路径。
+/// 立即返回，执行结果走事件）；协调器不可用时明确拒绝，不回退到无编号的 v2 task.start。
 /// </summary>
 internal static class ExternalInterfaceCommandPlane
 {
@@ -61,16 +61,16 @@ internal static class ExternalInterfaceCommandPlane
 
     /// <summary>
     /// [切片7] ext.task.start：入队拿 taskHandle 立即返回（拒绝式语义退役，Actor Mailbox）。
-    /// 执行段仍走 ExecuteTaskStartCoreAsync（v2 同一事实源）。协调器不可用（进程退出中）时
-    /// 回退 v2 逐字节旧路径（spec §4.5 防御性分支）。
+    /// 执行段仍走 ExecuteTaskStartCoreAsync（与 v2 共用执行事实源）。协调器不可用（进程退出中）时
+    /// 明确拒绝并保持零发送；此带编号通道绝不回退到 v2。
     /// </summary>
-    private static async Task<InstanceIpcEnvelope> DispatchTaskStartAsync(
+    private static Task<InstanceIpcEnvelope> DispatchTaskStartAsync(
         InstanceRequestHandler handler,
         InstanceConnection connection,
         InstanceIpcEnvelope request)
     {
         // 显式 "key":null 归一化为 C# null（否则 Name 被 "" 短路、幂等去重误判，见 GetStringOrNull 注释）
-        if (Execution.ExecutionRequestContract.Validate(request) is { } invalid) return invalid;
+        if (Execution.ExecutionRequestContract.Validate(request) is { } invalid) return Task.FromResult(invalid);
         var identity = Execution.ExecutionRequestContract.ReadIdentity(request.Data);
         var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
         var configName = InstanceIpcProtocol.GetStringOrNull(request.Data, "configName");
@@ -86,25 +86,25 @@ internal static class ExternalInterfaceCommandPlane
         // ext 通道直接拒绝、绝不入队。v2 通道行为冻结，不加此校验。
         if (groupName is null && configName is null)
         {
-            return InstanceIpcEnvelope.Failure(request, "invalid_request", "task.start 需要提供 groupName 或 configName");
+            return Task.FromResult(InstanceIpcEnvelope.Failure(request, "invalid_request", "task.start 需要提供 groupName 或 configName"));
         }
 
         // [手动停止冷却] 先于入队：F11/停止热键后窗口内拒绝外部 task.start（与 v2 同守卫，零副作用）
         if (InstanceRequestHandler.CheckManualStopCooldown(request, "ext") is { } cooldownRejection)
         {
-            return cooldownRejection;
+            return Task.FromResult(cooldownRejection);
         }
 
         var scriptService = App.ServiceProvider.GetService<BetterGenshinImpact.Service.Interface.IScriptService>();
         if (scriptService == null)
         {
-            return InstanceIpcEnvelope.Failure(request, "service_unavailable", "脚本服务不可用");
+            return Task.FromResult(InstanceIpcEnvelope.Failure(request, "service_unavailable", "脚本服务不可用"));
         }
 
         var takeoverTicket = InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket");
         if (!BetterGenshinImpact.Service.Execution.PreemptionGate.Authorize(takeoverTicket)
             || preempt && string.IsNullOrEmpty(takeoverTicket))
-            return InstanceIpcEnvelope.Failure(request, "takeover_conflict", "接管票据无效或原流程尚未完成可靠接管");
+            return Task.FromResult(InstanceIpcEnvelope.Failure(request, "takeover_conflict", "接管票据无效或原流程尚未完成可靠接管"));
         var submission = new BgiTaskCoordinator.TaskSubmission(
             generation,
             groupName,
@@ -122,7 +122,12 @@ internal static class ExternalInterfaceCommandPlane
         };
 
         var result = BgiTaskCoordinator.Instance.Submit(submission);
-        return result.Status switch
+        return Task.FromResult(MapTaskStartQueueResult(request, result, generation));
+    }
+
+    internal static InstanceIpcEnvelope MapTaskStartQueueResult(
+        InstanceIpcEnvelope request, BgiTaskCoordinator.SubmitResult result, int generation)
+        => result.Status switch
         {
             BgiTaskCoordinator.SubmitStatus.Queued => InstanceIpcEnvelope.Response(request, new
             {
@@ -140,10 +145,11 @@ internal static class ExternalInterfaceCommandPlane
                 request, new { status = "already_executed", generation }),
             BgiTaskCoordinator.SubmitStatus.QueueFull => InstanceIpcEnvelope.Failure(
                 request, "queue_full", $"任务队列已满（容量 {BgiTaskCoordinator.QueueCapacity}），请稍后重试或先取消排队项"),
-            // Unavailable：协调器已销毁（进程退出中）——回退 v2 逐字节旧路径（spec §4.5 防御性分支）
-            _ => await handler.HandleTaskStart(connection, request),
+            // 仅当调用发生在提交之前，Unavailable 才会到达这里；明确零发送拒绝，不回退 v2。
+            BgiTaskCoordinator.SubmitStatus.Unavailable => InstanceIpcEnvelope.Failure(
+                request, "queue_unavailable", "任务队列协调器不可用；未切换到 v2 task.start，请恢复连接后重新发起"),
+            _ => InstanceIpcEnvelope.Failure(request, "service_unavailable", "任务队列返回了未知状态；未切换到 v2 task.start"),
         };
-    }
 
     /// <summary>
     /// [切片7] ext.task.stop：新增可选参数 clearQueue（ext 通道默认 true——"停止"含"别再继续"语义，

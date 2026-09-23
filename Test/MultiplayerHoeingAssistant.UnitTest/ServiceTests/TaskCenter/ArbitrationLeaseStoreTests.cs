@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 using Xunit;
@@ -244,15 +246,19 @@ public class ArbitrationLeaseStoreTests : IDisposable
         Assert.Equal(bytesBefore, File.ReadAllBytes(leasePath));
         Assert.Equal(ArbitrationLeaseStatus.Corrupt, store.Read().Status);
 
-        // 手写 version=4（高于支持版本 3，R5.3 §24.20-A：v3＝承载责任事实的当前格式代）→ Unsupported
-        File.WriteAllText(leasePath, "{\"version\":4}");
+        // 手写 version=6（高于当前支持版本 5，v5 承载完整历史归档）→ Unsupported
+        File.WriteAllText(leasePath, "{\"version\":6}");
         Assert.Equal(ArbitrationLeaseStatus.Unsupported, store.Read().Status);
 
-        // 手写 version=3（当前支持格式代）无 Lease 段 → Absent（v3 责任段集合校验在 handoff 存在时才生效）
-        File.WriteAllText(leasePath, "{\"version\":3}");
+        // 手写 version=5（当前支持格式代）无 Lease 段 → Absent（责任段集合校验在 handoff 存在时才生效）
+        File.WriteAllText(leasePath, "{\"version\":5}");
         Assert.Equal(ArbitrationLeaseStatus.Absent, store.Read().Status);
 
-        // 手写 version=2（旧格式代）无 Lease 段 → Absent（≤2 兼容读：写入时才升 3）
+        // 手写 version=4（缺省历史归档字段的可迁移版本）无 Lease 段 → Absent
+        File.WriteAllText(leasePath, "{\"version\":4}");
+        Assert.Equal(ArbitrationLeaseStatus.Absent, store.Read().Status);
+
+        // 手写 version=2（旧格式代）无 Lease 段 → Absent（≤2 兼容读：写入时升至当前格式代）
         File.WriteAllText(leasePath, "{\"version\":2}");
         Assert.Equal(ArbitrationLeaseStatus.Absent, store.Read().Status);
 
@@ -264,6 +270,80 @@ public class ArbitrationLeaseStoreTests : IDisposable
         // 时钟快进 → Expired
         now = now.AddSeconds(20);
         Assert.Equal(ArbitrationLeaseStatus.Expired, store.Read().Status);
+    }
+
+    [Fact]
+    public void Version4WithoutArchiveField_ReadsAndUpgradesAtomicallyToVersion5()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var store = new ArbitrationLeaseStore(_dir, () => now);
+        var acquired = store.TryAcquire("pid:v4-upgrade");
+        Assert.True(acquired.Success);
+        var handoff = store.MutateHandoffLatest(acquired.Lease!.LeaseId, acquired.Lease.OwnerEpoch, file =>
+        {
+            file.Handoff = new LeaseHandoffSegment();
+            return null;
+        });
+        Assert.True(handoff.Success, handoff.Reason);
+
+        var leasePath = Path.Combine(_dir, "arbitration-lease.json");
+        var root = JsonNode.Parse(File.ReadAllText(leasePath))!.AsObject();
+        root["version"] = 4;
+        root["handoff"]!.AsObject().Remove("archivedOperations");
+        File.WriteAllText(leasePath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+        var legacy = store.Read();
+        Assert.Equal(ArbitrationLeaseStatus.Valid, legacy.Status);
+        Assert.Empty(legacy.File!.Handoff!.ArchivedOperations);
+        var upgraded = store.MutateHandoffLatest(legacy.File.Lease!.LeaseId, legacy.File.Lease.OwnerEpoch, _ => null);
+        Assert.True(upgraded.Success, upgraded.Reason);
+        var written = store.Read();
+        Assert.Equal(ArbitrationLeaseStatus.Valid, written.Status);
+        Assert.Equal(5, written.File!.Version);
+        Assert.Empty(written.File.Handoff!.ArchivedOperations);
+
+        var v5WithoutArchive = JsonNode.Parse(File.ReadAllText(leasePath))!.AsObject();
+        v5WithoutArchive["handoff"]!.AsObject().Remove("archivedOperations");
+        File.WriteAllText(leasePath, v5WithoutArchive.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        Assert.Equal(ArbitrationLeaseStatus.Corrupt, store.Read().Status);
+    }
+
+    [Fact]
+    public void ArchivedOperationIdentityCannotAlsoExistInHotOperations()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var store = new ArbitrationLeaseStore(_dir, () => now);
+        var acquired = store.TryAcquire("pid:archive-identity");
+        Assert.True(acquired.Success);
+        var seeded = store.MutateHandoffLatest(acquired.Lease!.LeaseId, acquired.Lease.OwnerEpoch, file =>
+        {
+            file.Handoff = new LeaseHandoffSegment();
+            file.Handoff.ArchivedOperations.Add(new ArchivedOperationRecord
+            {
+                Operation = new OperationRecord
+                {
+                    RequestIdentity = "archived-identity",
+                    CandidateId = "candidate-archived-identity",
+                    RequestState = OperationRequestState.TerminalRejected,
+                    Zone = OperationZone.Tombstone,
+                    UpdatedAtUtc = now.AddHours(-25),
+                    UpdatedRevision = file.Revision + 1,
+                    OperationType = OperationType.FlowRegistration,
+                },
+                ArchivedAtUtc = now,
+            });
+            return null;
+        });
+        Assert.True(seeded.Success, seeded.Reason);
+        Assert.Equal(ArbitrationLeaseStatus.Valid, store.Read().Status);
+
+        var leasePath = Path.Combine(_dir, "arbitration-lease.json");
+        var root = JsonNode.Parse(File.ReadAllText(leasePath))!.AsObject();
+        var archivedOperation = root["handoff"]!["archivedOperations"]![0]!["operation"]!.DeepClone();
+        root["handoff"]!["operations"]!.AsArray().Add(archivedOperation);
+        File.WriteAllText(leasePath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+        Assert.Equal(ArbitrationLeaseStatus.Corrupt, store.Read().Status);
     }
 
     // ── 8. 原子准入边界：过期代次发布被拒 ────────────────────────

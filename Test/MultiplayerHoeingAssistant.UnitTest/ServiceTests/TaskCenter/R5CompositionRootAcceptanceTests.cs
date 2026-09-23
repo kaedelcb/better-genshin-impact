@@ -357,31 +357,17 @@ public sealed class R5CompositionRootAcceptanceTests : IAsyncLifetime
             Assert.Equal(LedgerEntryState.AcceptedPendingExecution,
                 new ExternalStartLedger(root).Read().File!.Entries.Single().State); // 台账未终局（写入失败）
 
-            // ③ 恢复写权限后重启：**未终结台账属恢复集合②** ⇒ 只保留观察责任（不得据此终局、不得重发）。
+            // ③ 恢复写权限后重启：本地已有完整权威 PendingTerminal，恢复流程续跑台账 Terminal → 关闭 → 终局。
             File.SetAttributes(ledgerPath, FileAttributes.Normal);
             await host.ShutdownAsync();
             var host2 = NewHost(root, client);
             await ProbeRecoveryAsync(host2);
-            var kept = new ArbitrationLeaseStore(arbitrationDir).Read().File!.Handoff!.Operations
-                .Single(o => string.Equals(o.SubmissionIdentity, targetSubmission, StringComparison.Ordinal));
-            Assert.Equal(OperationRequestState.Accepted, kept.RequestState);        // 集合②：责任保留、不终局
-            Assert.Equal(1, _double.CountOf("ext.task.start"));                    // 恢复扫描不得重发
-            await host2.ShutdownAsync();
-
-            // ④ 造景「台账已 Terminal、Operation 未终局」⇒ 再次重启：恢复集合③ 用已持久化 `PendingTerminal` 补终局。
-            Assert.True(new ExternalStartLedger(root).MarkTerminal(targetSubmission, kept.LastSendSeq, "completed",
-                kept.PendingTerminal!.ObservedAtUtc, rawTerminal: "completed", jobId: kept.PendingTerminal.JobId,
-                operationType: OperationType.ExternalStart,
-                terminalEvidenceSource: kept.PendingTerminal.EvidenceSource).Success, "造景前置：台账终态写入失败");
-            var host3 = NewHost(root, client);
-            await ProbeRecoveryAsync(host3);
             var repaired = new ArbitrationLeaseStore(arbitrationDir).Read().File!.Handoff!.Operations
                 .Single(o => string.Equals(o.SubmissionIdentity, targetSubmission, StringComparison.Ordinal));
-            Assert.Equal(OperationRequestState.TerminalCompleted, repaired.RequestState);   // 终局已补齐
-            Assert.Equal(LedgerEntryState.Terminal, new ExternalStartLedger(root).Read().File!.Entries
-                .Single(e => string.Equals(e.SubmissionIdentity, targetSubmission, StringComparison.Ordinal)).State);
-            Assert.Equal(1, _double.CountOf("ext.task.start"));                    // 全程无重发
-            await host3.ShutdownAsync();
+            Assert.Equal(OperationRequestState.TerminalCompleted, repaired.RequestState);
+            Assert.Equal(LedgerEntryState.Terminal, new ExternalStartLedger(root).Read().File!.Entries.Single().State);
+            Assert.Equal(1, _double.CountOf("ext.task.start"));                    // 恢复扫描续跑，不重发
+            await host2.ShutdownAsync();
         }
         finally
         {

@@ -52,6 +52,8 @@ public sealed class ExternalStartLedgerEntry
     [JsonPropertyName("executionErrorCode")] public string? ExecutionErrorCode { get; set; }
     /// <summary>终态副本：**完成观察证据来源**（[第三轮验证会诊] 新增，供 §24.15 读回逐字段比对）。</summary>
     [JsonPropertyName("terminalEvidenceSource")] public string? TerminalEvidenceSource { get; set; }
+    /// <summary>终态类别（历史轮观察恢复使用；缺失的旧记录不得从原始终态词反推）。</summary>
+    [JsonPropertyName("terminalKind")] public ExecutionResultKind? TerminalKind { get; set; }
     /// <summary>终态副本：持久化操作类型（§24.17；类型相关判定 fail-closed 的依据）。</summary>
     [JsonPropertyName("operationType")] public OperationType OperationType { get; set; } = OperationType.Unknown;
 }
@@ -177,25 +179,8 @@ public sealed class ExternalStartLedger
                                                       && x.TerminalObservedAtUtc is null))
                 e.TerminalObservedAtUtc = e.TerminalAtUtc ?? e.AcceptedAtUtc;
         }
-        var seenIdentities = new HashSet<string>(StringComparer.Ordinal);
-        var seenJobIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var e in file.Entries)
-        {
-            if (e is null || string.IsNullOrWhiteSpace(e.SubmissionIdentity) || e.SendSeq < 1 || !Enum.IsDefined(e.State)
-                || string.IsNullOrWhiteSpace(e.CandidateId) || string.IsNullOrWhiteSpace(e.ResourceRef)
-                || string.IsNullOrWhiteSpace(e.ActionId) || string.IsNullOrWhiteSpace(e.TargetBgiEpoch)
-                || string.IsNullOrWhiteSpace(e.EvidenceSource)
-                || !Enum.IsDefined(e.OperationType)
-                || (e.State == LedgerEntryState.Terminal
-                    && (string.IsNullOrWhiteSpace(e.TerminalEvidence)
-                        // §24.20-A：v1 兼容读——旧终态记录缺观察时点副本视为「未取得」（≠「无责任」），
-                        // 只有当前格式代（≥2）才要求该字段完整，否则旧终态记录会被误判损坏。
-                        || (file.Version >= 2 && e.TerminalObservedAtUtc is null)))
-                // 同一 jobId 只能归属一笔发送（非空才比较；跨记录重复句柄＝交叉不一致，保守待对账）
-                || (!string.IsNullOrWhiteSpace(e.JobId) && !seenJobIds.Add(e.JobId!))
-                || !seenIdentities.Add(e.SubmissionIdentity + "#" + e.SendSeq))
-                return new LedgerReadResult { Valid = false, File = null, Detail = "台账记录身份/关联字段/枚举/唯一性/终态证据/作业句柄非法（保守待对账——不完整记录不得充当占用证明）。" };
-        }
+        if (!ValidateEntries(file, out var validationDetail))
+            return new LedgerReadResult { Valid = false, File = null, Detail = validationDetail };
 
         return new LedgerReadResult { Valid = true, File = file, Detail = null };
     }
@@ -218,7 +203,10 @@ public sealed class ExternalStartLedger
         var reason = mutate(file);
         if (reason is not null) return new LedgerMutateResult { Success = false, Reason = reason, File = null };
 
+        file.Version = SupportedVersion;
         file.Revision += 1;
+        if (!ValidateEntries(file, out _))
+            return new LedgerMutateResult { Success = false, Reason = "invalid_mutation_state", File = null };
         Publish(file);
         return new LedgerMutateResult { Success = true, Reason = null, File = file };
     }
@@ -232,10 +220,14 @@ public sealed class ExternalStartLedger
     {
         ArgumentNullException.ThrowIfNull(entry);
         // 写侧同口径校验（N6：与 ReadCore 严格读一致——缺关联字段的记录不得落盘，杜绝「自造损坏台账」）。
-        if (string.IsNullOrWhiteSpace(entry.SubmissionIdentity) || entry.SendSeq < 1
+        if (entry.State != LedgerEntryState.AcceptedPendingExecution
+            || entry.TerminalEvidence is not null || entry.TerminalAtUtc is not null
+            || entry.TerminalObservedAtUtc is not null
+            || string.IsNullOrWhiteSpace(entry.SubmissionIdentity) || entry.SendSeq < 1
             || string.IsNullOrWhiteSpace(entry.CandidateId) || string.IsNullOrWhiteSpace(entry.ResourceRef)
             || string.IsNullOrWhiteSpace(entry.ActionId) || string.IsNullOrWhiteSpace(entry.TargetBgiEpoch)
-            || string.IsNullOrWhiteSpace(entry.EvidenceSource))
+            || string.IsNullOrWhiteSpace(entry.EvidenceSource) || entry.AcceptedAtUtc == default
+            || !Enum.IsDefined(entry.OperationType))
             return new LedgerMutateResult { Success = false, Reason = "invalid_request", File = null };
         return Mutate(-1, file =>
         {
@@ -248,7 +240,10 @@ public sealed class ExternalStartLedger
                            && string.Equals(existing.ResourceRef, entry.ResourceRef, StringComparison.Ordinal)
                            && string.Equals(existing.ActionId, entry.ActionId, StringComparison.Ordinal)
                            && string.Equals(existing.TargetBgiEpoch, entry.TargetBgiEpoch, StringComparison.Ordinal)
-                           && string.Equals(existing.RunId, entry.RunId, StringComparison.Ordinal);
+                           && string.Equals(existing.RunId, entry.RunId, StringComparison.Ordinal)
+                           && string.Equals(existing.EvidenceSource, entry.EvidenceSource, StringComparison.Ordinal)
+                           && existing.AcceptedAtUtc == entry.AcceptedAtUtc
+                           && existing.OperationType == entry.OperationType;
                 if (!same) return "identity_conflict"; // 重复接管幂等（含 RunId 与既有状态）；同身份不同要素=响亮拒绝
                 // 终态不得被降级回未终结（R5.3 §24.7-1：迟到活动态不得降级 Terminal）——
                 // [第五轮验证会诊] 本函数**从不改写既有 State/终态副本**，故「不降级」已由「不写入」保证；
@@ -269,16 +264,75 @@ public sealed class ExternalStartLedger
     }
 
     /// <summary>
-    /// 确认台账记录足以跨重启重建（受理分支第二段：读回校验完整身份在册）。
-    /// 完整终态记录同样证明「曾受理」（快速完成 job 在记录后、确认前转 Terminal 不得阻断责任结清）。
+    /// Persist an additional receipt for an already identified external-start round. The round identity is
+    /// canonical; later observations may have a different receive time/source, so preserve the first receipt
+    /// metadata and only enrich a missing RunId/JobId. Conflicting non-empty handles remain fail-closed.
     /// </summary>
-    public bool ConfirmRebuildable(string submissionIdentity, int sendSeq)
+    public LedgerMutateResult RecordLateAcceptedReceipt(ExternalStartLedgerEntry entry)
     {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (entry.State != LedgerEntryState.AcceptedPendingExecution
+            || entry.TerminalEvidence is not null || entry.TerminalAtUtc is not null
+            || entry.TerminalObservedAtUtc is not null
+            || string.IsNullOrWhiteSpace(entry.SubmissionIdentity) || entry.SendSeq < 1
+            || string.IsNullOrWhiteSpace(entry.CandidateId) || string.IsNullOrWhiteSpace(entry.ResourceRef)
+            || string.IsNullOrWhiteSpace(entry.ActionId) || string.IsNullOrWhiteSpace(entry.TargetBgiEpoch)
+            || string.IsNullOrWhiteSpace(entry.EvidenceSource) || entry.AcceptedAtUtc == default
+            || entry.OperationType != OperationType.ExternalStart)
+            return new LedgerMutateResult { Success = false, Reason = "invalid_request", File = null };
+
+        return Mutate(-1, file =>
+        {
+            var existing = file.Entries.FirstOrDefault(e =>
+                string.Equals(e.SubmissionIdentity, entry.SubmissionIdentity, StringComparison.Ordinal)
+                && e.SendSeq == entry.SendSeq);
+            if (existing is null)
+            {
+                file.Entries.Add(entry);
+                return null;
+            }
+            if (existing.OperationType != OperationType.ExternalStart
+                || !string.Equals(existing.CandidateId, entry.CandidateId, StringComparison.Ordinal)
+                || !string.Equals(existing.ResourceRef, entry.ResourceRef, StringComparison.Ordinal)
+                || !string.Equals(existing.ActionId, entry.ActionId, StringComparison.Ordinal)
+                || !string.Equals(existing.TargetBgiEpoch, entry.TargetBgiEpoch, StringComparison.Ordinal)
+                || (existing.RunId is not null && entry.RunId is not null
+                    && !string.Equals(existing.RunId, entry.RunId, StringComparison.Ordinal)))
+                return "identity_conflict";
+            if (existing.RunId is null && entry.RunId is not null) existing.RunId = entry.RunId;
+            var oldJob = existing.JobId ?? "";
+            var newJob = entry.JobId ?? "";
+            if (oldJob.Length == 0 && newJob.Length > 0) existing.JobId = newJob;
+            else if (oldJob.Length > 0 && newJob.Length > 0
+                     && !string.Equals(oldJob, newJob, StringComparison.Ordinal))
+                return "job_id_conflict";
+            return null;
+        });
+    }
+
+    /// <summary>
+    /// Confirm that the exact claimed acceptance payload is durably readable. A ledger-side JobId discovered
+    /// after a claim with no JobId is a monotonic enrichment; all other claim fields must match exactly.
+    /// A complete terminal entry still proves acceptance (a fast job may finish before the confirmation read).
+    /// </summary>
+    public bool ConfirmRebuildable(ExternalStartLedgerEntry expected)
+    {
+        ArgumentNullException.ThrowIfNull(expected);
         var read = Read();
         return read.Valid
-               && read.File?.Entries.Any(e =>
-                   string.Equals(e.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
-                   && e.SendSeq == sendSeq) == true;
+               && read.File?.Entries.Any(actual =>
+                   string.Equals(actual.SubmissionIdentity, expected.SubmissionIdentity, StringComparison.Ordinal)
+                   && actual.SendSeq == expected.SendSeq
+                   && string.Equals(actual.CandidateId, expected.CandidateId, StringComparison.Ordinal)
+                   && string.Equals(actual.ResourceRef, expected.ResourceRef, StringComparison.Ordinal)
+                   && string.Equals(actual.ActionId, expected.ActionId, StringComparison.Ordinal)
+                   && string.Equals(actual.TargetBgiEpoch, expected.TargetBgiEpoch, StringComparison.Ordinal)
+                   && actual.AcceptedAtUtc == expected.AcceptedAtUtc
+                   && string.Equals(actual.EvidenceSource, expected.EvidenceSource, StringComparison.Ordinal)
+                   && actual.OperationType == expected.OperationType
+                   && string.Equals(actual.RunId, expected.RunId, StringComparison.Ordinal)
+                   && (string.IsNullOrEmpty(expected.JobId)
+                       || string.Equals(actual.JobId, expected.JobId, StringComparison.Ordinal))) == true;
     }
 
     /// <summary>
@@ -292,12 +346,18 @@ public sealed class ExternalStartLedger
         string submissionIdentity, int sendSeq, string terminalEvidence, DateTimeOffset observedAtUtc,
         string? rawTerminal = null, string? executionErrorCode = null,
         OperationType operationType = OperationType.Unknown, string? jobId = null,
-        string? terminalEvidenceSource = null)
+        string? terminalEvidenceSource = null, ExecutionResultKind? terminalKind = null)
     {
         if (string.IsNullOrWhiteSpace(terminalEvidence))
             return new LedgerMutateResult { Success = false, Reason = "evidence_required", File = null };
         if (observedAtUtc == default)
             return new LedgerMutateResult { Success = false, Reason = "observed_at_required", File = null };
+        if (terminalKind is { } kind
+            && (!Enum.IsDefined(kind)
+                || kind is not (ExecutionResultKind.Succeeded or ExecutionResultKind.Failed or ExecutionResultKind.Cancelled)))
+            return new LedgerMutateResult { Success = false, Reason = "terminal_kind_invalid", File = null };
+        if (terminalKind == ExecutionResultKind.Failed && string.IsNullOrWhiteSpace(executionErrorCode))
+            return new LedgerMutateResult { Success = false, Reason = "terminal_error_code_required", File = null };
         return Mutate(-1, file =>
         {
             var entry = file.Entries.FirstOrDefault(e =>
@@ -342,6 +402,13 @@ public sealed class ExternalStartLedger
                 }
                 else if (terminalEvidenceSource is { Length: > 0 }) entry.TerminalEvidenceSource = terminalEvidenceSource;
 
+                if (entry.TerminalKind is { } recordedKind)
+                {
+                    if (terminalKind is null) return "terminal_payload_required";
+                    if (recordedKind != terminalKind.Value) return "terminal_payload_conflict";
+                }
+                else if (terminalKind is { } incomingKind) entry.TerminalKind = incomingKind;
+
                 if (entry.OperationType is not OperationType.Unknown)
                 {
                     if (operationType == OperationType.Unknown) return "terminal_payload_required";
@@ -357,6 +424,7 @@ public sealed class ExternalStartLedger
             entry.RawTerminal ??= rawTerminal;
             entry.ExecutionErrorCode ??= executionErrorCode;
             entry.TerminalEvidenceSource ??= terminalEvidenceSource;
+            entry.TerminalKind ??= terminalKind;
             if (operationType != OperationType.Unknown) entry.OperationType = operationType;
             // 句柄补齐（一空一非空=补齐；两侧非空且不同=拒绝并保守待对账，§24.3-3）。
             var existingJob = entry.JobId ?? "";
@@ -397,5 +465,32 @@ public sealed class ExternalStartLedger
         {
             if (File.Exists(tmp)) File.Delete(tmp);
         }
+    }
+
+    private static bool ValidateEntries(ExternalStartLedgerFile file, out string detail)
+    {
+        detail = "台账记录身份/关联字段/枚举/唯一性/终态证据/作业句柄非法（保守待对账——不完整记录不得充当占用证明）。";
+        if (file.Version < 1 || file.Entries is null) return false;
+        var seenIdentities = new HashSet<string>(StringComparer.Ordinal);
+        var seenJobIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var e in file.Entries)
+        {
+            if (e is null || string.IsNullOrWhiteSpace(e.SubmissionIdentity) || e.SendSeq < 1 || !Enum.IsDefined(e.State)
+                || string.IsNullOrWhiteSpace(e.CandidateId) || string.IsNullOrWhiteSpace(e.ResourceRef)
+                || string.IsNullOrWhiteSpace(e.ActionId) || string.IsNullOrWhiteSpace(e.TargetBgiEpoch)
+                || string.IsNullOrWhiteSpace(e.EvidenceSource) || e.AcceptedAtUtc == default
+                || !Enum.IsDefined(e.OperationType)
+                || (e.State == LedgerEntryState.Terminal
+                    && (string.IsNullOrWhiteSpace(e.TerminalEvidence)
+                        || (file.Version >= 2 && e.TerminalObservedAtUtc is null)))
+                || (e.TerminalKind is { } terminalKind
+                    && (!Enum.IsDefined(terminalKind)
+                        || terminalKind is not (ExecutionResultKind.Succeeded or ExecutionResultKind.Failed or ExecutionResultKind.Cancelled)
+                        || e.State != LedgerEntryState.Terminal))
+                || (!string.IsNullOrWhiteSpace(e.JobId) && !seenJobIds.Add(e.JobId!))
+                || !seenIdentities.Add(e.SubmissionIdentity + "#" + e.SendSeq))
+                return false;
+        }
+        return true;
     }
 }

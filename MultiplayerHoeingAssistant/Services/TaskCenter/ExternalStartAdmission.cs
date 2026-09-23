@@ -11,6 +11,9 @@ namespace MultiplayerHoeingAssistant.Services;
 /// </summary>
 public sealed class ExternalStartAdmissionRequest
 {
+    /// <summary>宿主生命周期令牌（进程内，仅用于观察/收敛；不来自单次调用者）。由 TaskCenterHost 在提交前固定。</summary>
+    internal CancellationToken HostLifetimeToken { get; set; }
+
     /// <summary>来源命名空间：E3/E5 远程=v2；E4 本地热键=manual（§2.1 可信上下文）。</summary>
     public string Namespace { get; init; } = "";
 
@@ -25,6 +28,15 @@ public sealed class ExternalStartAdmissionRequest
 
     /// <summary>诊断用来源说明（入口名/操作者），不参与判定。</summary>
     public string SourceDetail { get; init; } = "";
+
+    /// <summary>可信入口给出的仲裁层级；不能由远程自报字段推断。缺省为普通计划层。</summary>
+    public MultiplayerHoeingAssistant.Models.ArbitrationTier Tier { get; init; } = MultiplayerHoeingAssistant.Models.ArbitrationTier.Plan;
+
+    /// <summary>可信入口给出的 int32 优先级；数值越大越优先，缺省 0。</summary>
+    public int Priority { get; init; }
+
+    /// <summary>计划时刻；非计划入口缺省 null。</summary>
+    public System.DateTimeOffset? ScheduledAt { get; init; }
 
     /// <summary>线上提交键（无法确定性推导时显式携带；可空＝由适配器按既有派生规则另行提供）。</summary>
     public string? WireSubmitKey { get; init; }

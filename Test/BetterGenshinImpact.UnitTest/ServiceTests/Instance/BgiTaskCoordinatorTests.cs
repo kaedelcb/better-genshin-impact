@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using BetterGenshinImpact.Service.ExternalInterface;
+using BetterGenshinImpact.Service.Instance;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace BetterGenshinImpact.UnitTest.ServiceTests.Instance;
@@ -112,6 +113,44 @@ public class BgiTaskCoordinatorTests
         var handle = result.TaskHandle.ToString("N");
         Assert.All(h.Events, e => Assert.Equal(handle, e.TaskHandle));
         Assert.False(h.Events.First(e => e.Name == ExternalInterfaceEventNames.TaskCompleted).Cancelled);
+    }
+
+    [Fact]
+    public void TaskStartQueueUnavailable_ReturnsFailureInsteadOfV2Fallback()
+    {
+        var request = InstanceIpcEnvelope.Request(ExternalInterfaceOperations.TaskStart,
+            new { groupName = "测试组" });
+        var unavailable = new BgiTaskCoordinator.SubmitResult(
+            BgiTaskCoordinator.SubmitStatus.Unavailable, Guid.Empty, 0);
+
+        var response = ExternalInterfaceCommandPlane.MapTaskStartQueueResult(request, unavailable, generation: 3);
+
+        Assert.False(response.Success);
+        Assert.Equal("queue_unavailable", response.ErrorCode);
+        Assert.Contains("未切换到 v2", response.ErrorMessage);
+    }
+
+    [Fact]
+    public void Submit_AfterDispose_IsUnavailableWithoutExecutionOrEvents()
+    {
+        using var h = new Harness(slotFree: true);
+        h.Coordinator.Dispose();
+        var executed = 0;
+        var result = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(
+            1,
+            "关停后任务",
+            null,
+            0,
+            (_, _) =>
+            {
+                Interlocked.Increment(ref executed);
+                return Task.FromResult(false);
+            }));
+
+        Assert.Equal(BgiTaskCoordinator.SubmitStatus.Unavailable, result.Status);
+        Assert.Equal(Guid.Empty, result.TaskHandle);
+        Assert.Equal(0, executed);
+        Assert.Empty(h.Events);
     }
 
     [Fact]
