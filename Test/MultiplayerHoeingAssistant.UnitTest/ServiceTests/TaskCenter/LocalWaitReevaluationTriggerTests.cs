@@ -404,9 +404,23 @@ public sealed class LocalWaitReevaluationTriggerTests
             store.Upsert(WaitItem("s-1"));
             var before = File.ReadAllText(store.FilePath);
 
+            // [批次17 写入→读回自证] 本夹具「Decide 不碰 store」判据的前提是：store 里就是我们刚写入的
+            // 那条一致项。若该前提被外部因素破坏（历史实例：b15e 帧 D2 探针无锚定窗口改写本批内容 ⇒
+            // 本夹具表现为无头的 Assert.Single 空集合，机制与闭合见 §24.110 真残余第2项），此处**先行
+            // 响亮失败并点名存储层**，不把症状留给下方空集合断言。只加前置判据，不改任何既有断言。
+            var decideInput = store.Load().ToList();
+            Assert.True(decideInput.Count == 1
+                         && string.Equals(decideInput[0].ItemId, LocalWaitQueuePolicy.DeriveItemId("s-1"), StringComparison.Ordinal)
+                         && string.Equals(decideInput[0].StableIdentity, "s-1", StringComparison.Ordinal)
+                         && decideInput[0].State == LocalWaitItemState.Waiting,
+                "存储层写入→读回自证失败（Decide 输入与写入项不一致 ⇒ 先查存储层/进程级探针，不是触发器问题）："
+                + $"count={decideInput.Count}"
+                + (decideInput.Count > 0
+                    ? $"，itemId={decideInput[0].ItemId}，stableIdentity={decideInput[0].StableIdentity}，state={decideInput[0].State}"
+                    : "（Load 返回空集合）"));
+
             var trigger = NewTrigger();
-            var requests = Requests(Decision(trigger, TriggerPoint("OccupancyEnded"),
-                store.Load().ToList()));
+            var requests = Requests(Decision(trigger, TriggerPoint("OccupancyEnded"), decideInput));
             Assert.Single(requests);
 
             var after = File.ReadAllText(store.FilePath);
@@ -485,17 +499,18 @@ public sealed class LocalWaitReevaluationTriggerTests
         const int threads = 8;
         var trigger = NewTrigger();
         var items = new List<LocalWaitItem> { WaitItem("s-1"), WaitItem("s-2"), WaitItem("s-3") };
-        using var gate = new ManualResetEventSlim(false);
-        var ready = new CountdownEvent(threads);
         var collected = new ConcurrentBag<string>();
         var failures = new ConcurrentBag<Exception>();
+        // [批次17 B17-R6-02] 生命周期改用**共享运行器** ConcurrentGateRunner（授权守卫的唯一实现）：
+        // 后台线程＋统一清理路径＋「清理唤醒 ≠ 授权执行」，与常驻守卫夹具共用同一实现，
+        // 授权守卫的反向突变（MUT-B17-5b）直接命中真实修复点。
+        var runner = new ConcurrentGateRunner(threads);
 
         var workers = Enumerable.Range(0, threads).Select(_ => new Thread(() =>
         {
             try
             {
-                ready.Signal();
-                gate.Wait();
+                if (!runner.WaitAuthorized()) return;   // 清理唤醒：不得执行被测调用
                 var requests = Requests(Decision(trigger, TriggerPoint("OccupancyEnded"), items));
                 foreach (var r in requests) collected.Add(ItemIdOf(r) ?? "");
             }
@@ -506,11 +521,10 @@ public sealed class LocalWaitReevaluationTriggerTests
             }
         })).ToList();
 
-        foreach (var w in workers) w.Start();
-        Assert.True(ready.Wait(TimeSpan.FromSeconds(30)), "并发线程未能全部就绪。");
-        gate.Set();
-        foreach (var w in workers) Assert.True(w.Join(TimeSpan.FromSeconds(30)), "并发线程未在时限内结束。");
+        runner.Run(workers);
 
+        Assert.False(runner.ReadyFailed, "并发线程未能全部就绪。");
+        Assert.Equal(0, runner.JoinTimeouts);
         Assert.Empty(failures);
         // 每个等待项恰好一条，总数恰为 3（不是 8×3）
         Assert.Equal(3, collected.Count);
@@ -527,23 +541,32 @@ public sealed class LocalWaitReevaluationTriggerTests
         const int threads = 6;
         var trigger = NewTrigger();
         var items = new List<LocalWaitItem> { WaitItem("s-1"), WaitItem("s-2") };
-        using var gate = new ManualResetEventSlim(false);
-        var ready = new CountdownEvent(threads);
         var requests = new ConcurrentBag<object>();
+        // [批次17 B17-03 加固] 工作线程体必须捕获异常：普通 Thread 的未处理异常会直接终止测试宿主，
+        // 而不是记为本用例的失败；捕获后统一断言，异常路径照常红。
+        // [批次17 B17-R6-02] 生命周期改用共享运行器（与上一夹具及常驻守卫夹具同一授权实现）。
+        var workerFailures = new ConcurrentBag<Exception>();
+        var runner = new ConcurrentGateRunner(threads);
 
         var workers = Enumerable.Range(0, threads).Select(_ => new Thread(() =>
         {
-            ready.Signal();
-            gate.Wait();
-            foreach (var r in Requests(Decision(trigger, TriggerPoint("StartupRecovery"), items)))
-                requests.Add(r);
+            try
+            {
+                if (!runner.WaitAuthorized()) return;   // 清理唤醒：不得执行被测调用
+                foreach (var r in Requests(Decision(trigger, TriggerPoint("StartupRecovery"), items)))
+                    requests.Add(r);
+            }
+            catch (Exception ex)
+            {
+                workerFailures.Add(ex);
+            }
         })).ToList();
 
-        foreach (var w in workers) w.Start();
-        Assert.True(ready.Wait(TimeSpan.FromSeconds(30)));
-        gate.Set();
-        foreach (var w in workers) Assert.True(w.Join(TimeSpan.FromSeconds(30)));
+        runner.Run(workers);
 
+        Assert.False(runner.ReadyFailed, "并发线程未能全部就绪。");
+        Assert.Equal(0, runner.JoinTimeouts);
+        Assert.Empty(workerFailures);
         Assert.Equal(2, requests.Count);
         foreach (var r in requests) AssertNoSendPermit(r);
     }

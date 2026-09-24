@@ -4098,6 +4098,40 @@ owner 待决项一次批量交付」，本批**不**自称「会诊已闭环」�
    (b) 单开一个**小批次**只补做这两项突变取证（预期夹具文件不动，仅做突变-验证-还原循环）；(c) 不补，
    在接线前风险登记中如实标注「这两条判别点仅有正测证据」。
 
+**〔批次 17 闭合登记，2026-09-25：owner 裁决①选 (b)／②选 (b)，上文真·残余第 2、3 两项均已闭合；本批只动测试文件与测试配置，生产源码零改动（ZCode 施工，HEAD `3adb13abd` 之上）〕**
+
+- **第 2 项（D3 夹具全量偶发红）＝机制已查明＋确定性复现＋修复落地，闭合**。机制：批次 15e（`8bff943c4`）的
+  `Persist_MaterializedSnapshot_IsValidatedAsAWhole_PerLoadShapeRules` 以**裸赋值**安装进程级 DEBUG 探针
+  `LocalWaitQueueStore.WriteSnapshotProbeMutator`（无 CAS／无首调用者门），窗口＝其 `Upsert` 全程（含文件 I/O）；
+  且该类当时**没有** `[Collection("LocalWaitSnapshotProbe")]`（该属性为批次 16 所加；本批以三集合对照探针实证
+  xUnit 2.5.3 的 `DisableParallelization=true` **确实**延后串行——A/C 普通集合交叠、B 延后串行）⇒ 15e 时该类完全并行；
+  其突变体按「批内第一条非本行 second 的项」**无身份锚定**选择改写对象。D3 夹具 `Upsert(WaitItem("s-1"))` 落入窗口 ⇒
+  外来批首项被 `duplicate-itemid` 行改写成该行 second 的**合法但失配** ItemId ⇒ 写入侧形状校验通过、**静默写出**失配文件 ⇒
+  `Load` 正常读回 ⇒ `Decide` 的身份一致性校验（批次 15b 修复 #3）**正确**跳过失配项 ⇒ 空产出 ⇒ line 410 `Assert.Single` 红
+  （＝ `b15e_full5.trx` 唯一失败的精确签名）；D2 行自身因裸赋值对窗口内**每一次** Persist 都执行突变体而**保持绿**
+  （probeRan=1、caught=Corrupt）——与 full5「唯一失败＝D3 夹具、D2 四行全绿」一致，并解释了此前「任何碰撞都必令 D2 行红」推断
+  与实测矛盾的原因（该推断用的是批次 16 加了 CAS 首调用者门的现行代码）。**确定性复现**：新增存档夹具
+  `LocalWaitSnapshotProbeMechanismArchiveTests`（`#if DEBUG`＋加入 `LocalWaitSnapshotProbe` 非并行集合，自身窗口不与他人重叠）
+  三例——b15e 式无锚定窗口内两种调用顺序均复现「外来批空产出＋D2 行保持绿」，锚定对照复绿
+  （TRX `Test/MultiplayerHoeingAssistant.UnitTest/TestResults/_b17_fixed_targeted3.trx`，定向 62/62）。
+  **修复（四层，均在测试文件内）**：批次 16 已有集合串行＋CAS 门；批次 17 补 ①D2 Theory 突变体 victim 按**本行身份锚定**
+  （对 D2 自身批的行为逐字节不变，外来批绝不命中）、②`Persist_WriteSnapshotMaterialization_IsLoadBearing` 裸赋值改
+  **CAS 安装/清除**、③D3 夹具加「写入→读回自证」前置判据（存储层被扰时**点名存储层**，不再以无头空集合呈现）、
+  ④新增 **D2 锚定源文本守卫** `D2MutatorAnchorGuard_SourceText`（禁旧无锚定 victim 选择 `if (!isSecond)`、禁裸赋值
+  安装/清除形态回归；源文本级能力边界已在夹具头注如实声明）。
+  **R3 口径（显式收窄）**：本项只主张「**已识别机制已排除并加防护**」；不主张、也不得被引用为「全量下再无任何未知失败形态」。
+- **第 3 项 (i)(ii)＝两项反向突变取证已补做，闭合**。MUT-B17-1（安全网到期分支逐项校验状态）：把逐项状态过滤改为
+  「安全网分支不查状态」⇒ 目标夹具 `Decide_SafetyNetDue_StillChecksItemStatePerItem` 红（`_b17_mut1_red.trx`＝34 条 32/1，
+  唯一失败即目标夹具——其余夹具用默认「未到期」判定在进入逐项判定前短路，故不波及）⇒ 还原（`git diff -- MultiplayerHoeingAssistant/`
+  为空）⇒ 复绿（`_b17_mut_restored_green.trx`＝34/34）。MUT-B17-2（产出侧身份一致性校验）：整段移除该校验 ⇒
+  目标夹具 `Decide_ItemIdNotDerivedFromStableIdentity_ProducesNothingAndKeepsKeyFree` 红 ＋
+  `ReevaluationKey_StableIdentityDigest_Utf8Equivalence面…`（其 ⑤ 段同钉同一行为）连带红（`_b17_mut2_red.trx`＝34 条 32/2，
+  属同一被保护行为的预期爆炸半径）⇒ 还原 ⇒ 复绿（同上 34/34）。日志：`_batch17/b17_mutation_log.md`。
+- **回归对照**：最终形态（共享运行器重构＋全部守卫夹具落位后，干净重建）全量 2 次 **1378 通过／2 跳过／0 失败／1380**（`TestResults/_b17_full_final1/2.trx`），与批次 16 基线 1373/2/0/1375（`TestResults/_b17_full_pre1.trx`）**逐名差集＝新增恰为 5 条（机制存档夹具 3＋D2 锚定守卫 1＋运行器守卫 CleanupWake_DoesNotAuthorizeTestedCall 1）、移除 0**；两帧逐名一致；中间形态帧 `_b17_full_post1..8` 如实留档（post1..6＝1376–1377 通过／0 失败；post7/8 各含 **1 失败**＝文档变更后声明面清单未再生、守卫正确拦截——按守卫指引再生＋复验通过后以干净重建重跑最终帧，守卫拦截本身即其有效性的旁证）。
+- **会诊（gpt-6-astra/medium 共 12 轮，auto 预判均自选 astra；台账 `C:\Users\Administrator\.tools\zcode-relay\test\ledger-b17.json`）**：第 1–11 轮逐轮处置（材料完整性／清理路径／判据升级／归因更正／共享运行器／归属划分／确定性守卫构造／计数守恒／Stopwatch／共享回收预算／预算耗尽零等待核实），全部发现逐项处置并附真实文件证据；第 12 轮机械检查全绿（未闭合强制项 0、纪律违规 0），唯一保留项＝残项 B17-R4-02/R5-01/R6-01（owner 已裁决 (a) 移交接线前批）——会诊按其 R2 严格口径不判「无必改」，本批按纪律第三章书面拒绝五要素认为义务已清偿；解释分歧经 **owner 裁断＝授权收口**（gate≠0 记为 owner 授权例外，不写「无必改」，本段即如实记载）。第 12 轮会诊原文裁定： `C:\Users\Administrator\.tools\zcode-relay\test\ledger-b17.json`）**：第 1 轮 2 必改/2 重要；第 2 轮 2 必改/1 重要；第 3 轮 2 必改/1 重要；第 4 轮 1 必改/1 重要（根因之一＝送审工具 --extra 参数非叠加，附件未达会诊方）；第 5 轮 1 必改/2 重要；第 6 轮 1 必改/2 重要。处置覆盖：材料完整性（存档夹具全文／代码节选／突变日志／TRX 摘录／逐名差集／归档清单）、并发夹具生命周期（统一清理路径→授权与清理分离→**共享运行器 ConcurrentGateRunner**，真实夹具与常驻守卫夹具共用同一授权实现）、判据升级（probeRan/probeNote＋精确异常类型）、突变日志归因更正（MUT-B17-3 实际红于命中自证而非精确类型断言，另立 MUT-B17-3b 独立验证）、源文本守卫（D2 锚定）、机器清单归属一致化。全部发现逐项处置；每项处置均附真实文件证据。
+- **门禁不变**：本批未改任何生产源码、未接任何生产入口、不产生发送；生产入口门、真实 User 门与 R5.8 签署**继续关闭**；批次 14 的接线前残项与 §24.106 未闭合项**全部仍然有效**。
+- **批次 17 新增残项（B17-R4-02/R5-01/R6-01：书面拒绝＋R3 三要素＋尝试记录；owner 2026-09-25 已裁决＝(a) 归入接线前批，见下）**：两个并发夹具对「被测调用在宿主内持续自旋」**无终止手段**——已做：共享运行器（后台线程＋统一清理＋「清理唤醒≠授权执行」）＋成功路径 Join 超时断言红；**尝试记录（R3）**：①`Thread.Abort` 在 .NET 8 实测抛 `PlatformNotSupportedException`（`_b17_abort_probe.trx`）⇒ 线程级终止原语不可用；②协作取消＝被测 `Decide` 契约（取消令牌仅进入时检查），本批禁改生产代码；③进程隔离需新增测试承载工程（runner＋协议＋维护面），与「被测组件未接线、生产零消费点、纯内存计算、无已知自旋机制」的风险不成比例 ⇒ **owner 已裁决（2026-09-25，批次 17 会话内）＝选项 (a)**：残项归入**接线前测试基础设施批**做进程隔离改造，与批次 14 的 5 项接线前残项同挂接线前必办清单，接线前强制重审；(b)(c) 未采纳。**未做端到端自旋场景故障注入**（如实；已做的是授权守卫的注入红绿＝MUT-B17-5b）。
+
 **另：第 ⑦ 项引用的「1370 通过／2 跳过／1 失败／1373」已核实成立**（`_batch15/trx/b15e_full1.trx`＝`1370/2/1/1373`，唯一失败＝`(mutation:"duplicate-itemid")`）。**本批全量共跑 9 次**（`b15e_full1…9.trx`）：**7 次**＝`1371 通过／2 跳过／0 失败／1373`（`full2`／`full3`／`full4`／`full6`／`full7`／`full8`／`full9`），**2 次各 1 失败且**同一次内唯一失败**在两次间不同**——`full1`＝上述 D2 `(duplicate-itemid)`（隔离 **6/6 稳定红** ⇒ **可稳定复现、尚未消解**；**根因未定**）、`full5`＝本批 D3 夹具 `LocalWaitReevaluationTriggerTests.Decide_DoesNotTouchWaitQueueStore`（隔离 **8/8 稳定绿** ⇒ **全量条件下观察到失败、机制未查明**，已登记残项）。故第 ⑦ 项的「未达字面判据」表述**有效**；须更正的是它把该失败**归因为摇摆／D2 在途已消解**这一点。
 
 **本轮（批次 15e）对上述第 ⑧ 项的错误更正（不淡化，如实登记）**：原第 ⑧ 项按**最新一次**全量运行（当时末轮恰为一轮含 D2

@@ -900,8 +900,12 @@ public sealed class LocalWaitPrerequisiteContractTests
                     var matchedInBatch = 0;
                     foreach (var victim in items)
                     {
-                        // 唯一键：只认 enqueuedAtUtc（本行实例独有）；不得退回身份串匹配。
-                        if (victim.EnqueuedAtUtc == secondEnqueuedAtUtc)
+                        // [批次17 锚定] 命中键＝**本行自己的身份**（rowTag 派生，行间唯一）＋ enqueuedAtUtc。
+                        // b15e 时代身份未按行派生（四行共用 "s-whole-second"）才需要靠时刻键防串行干扰；
+                        // 现身份已按行唯一，补身份锚定把命中面收窄到本行记录 ⇒ 外来测试批**绝不**命中
+                        // （b15e_full5 的 D3 夹具偶发红机制＝无锚定窗口改写外来批，见 §24.110 真残余第2项闭合登记）。
+                        if (victim.EnqueuedAtUtc == secondEnqueuedAtUtc
+                            && string.Equals(victim.StableIdentity, secondIdentity, StringComparison.Ordinal))
                         {
                             matchedInBatch++;
                             victim.ItemId = string.Empty;
@@ -931,7 +935,14 @@ public sealed class LocalWaitPrerequisiteContractTests
                         continue;
                     }
 
-                    if (!isSecond) // 批内唯一「不是 second」的那条 = baseline
+                    // [批次17 锚定] 改写目标显式锚定为**本行自己的 baseline 记录**（StableIdentity 行间唯一）。
+                    // b15e 时代此处为「批内任何非本行 second 的项」——并行窗口内会把**外来测试**批内首项
+                    // 一并改写（b15e_full5：D3 夹具 `Decide_DoesNotTouchWaitQueueStore` 被改成失配 ItemId 后
+                    // 写盘成功、Decide 身份校验跳过 ⇒ 空产出 ⇒ Assert.Single 红，且 D2 行自身仍绿——
+                    // 因裸赋值下突变体对窗口内每次 Persist 都执行，本行自己的批随后照常被改写）。
+                    // 锚定后本行批内行为逐字节不变，外来批**绝不**命中。机制存档夹具：
+                    // `LocalWaitSnapshotProbeMechanismArchiveTests`。
+                    if (string.Equals(victim.StableIdentity, baselineIdentity, StringComparison.Ordinal))
                     {
                         switch (mutation)
                         {
@@ -1038,24 +1049,55 @@ public sealed class LocalWaitPrerequisiteContractTests
             var before = File.ReadAllBytes(store.FilePath);
 
             // 探针挂在「Persist 校验之前」：把即将被写出的那一批里的合法引用改写成非法形状。
-            LocalWaitQueueStore.WriteSnapshotProbeMutator = items =>
+            // [批次17] 安装/清除由裸赋值改为 **CAS**（与 Persist_MaterializedSnapshot_... 同法）：
+            // 裸赋值会**覆盖**他人已装的探针、裸 null 会**清掉**他人窗口（b15e 帧事故的安装形态，
+            // 见 §24.110 真残余第2项闭合登记）。本类集合已 DisableParallelization ⇒ CAS 正常一次成功；
+            // spin 耗尽 ⇒ 响亮失败，不得静默降级。突变体自身已按身份锚定（只命中 s-probe-baseline）。
+            // [批次17 B17-04 判据升级] 探针自带命中/改写自证（probeRan/probeNote，与 Theory 同法）：
+            // 探针未命中 ⇒ probeNote 置位 ⇒ 断言红；探针脚手架自身抛错 ⇒ 异常逃出探针被 caught 捕获 ⇒
+            // 精确类型断言红——两条「异常替代路径假绿」均被原层封死（会诊 B17-04）。
+            var probeRan = 0;
+            string? probeNote = null;
+            var materializeGuardedAction = (Action<List<LocalWaitItem>>)(items =>
             {
+                probeRan = 0;
+                probeNote = null;
+                var matched = 0;
                 foreach (var each in items)
-                    if (each.StableIdentity == "s-probe-baseline") SetPrerequisiteReference(each, "   ");
-            };
+                {
+                    if (each.StableIdentity == "s-probe-baseline")
+                    {
+                        matched++;
+                        SetPrerequisiteReference(each, "   ");
+                        probeRan = 1;
+                    }
+                }
+                if (matched == 0) probeNote = "探针未命中本行 baseline（s-probe-baseline），改写未发生";
+            });
+            var materializeInstalled = false;
+            for (var spin = 0; spin < 20000 && !materializeInstalled; spin++)
+                materializeInstalled = Interlocked.CompareExchange(ref LocalWaitQueueStore.WriteSnapshotProbeMutator, materializeGuardedAction, null) is null;
+            Assert.True(materializeInstalled, "本行未能挂上写盘探针（进程级静态字段被并发占用且未及时释放）。");
+            Exception? caught = null;
             try
             {
                 // 触发一次必然写盘：写前物化 ⇒ 读到空白 ⇒ 拒绝（异常），且拒绝发生在**任何**写盘动作之前。
                 var second = Item("s-probe-second");
                 SetPrerequisiteReference(second, "ref-probe-second");
-                Assert.ThrowsAny<Exception>(() => store.Upsert(second)); // 探针改写的是**已在队列中**的实例 ⇒ 走「复用/重激活」分支
+                try { store.Upsert(second); }   // 探针改写的是**已在队列中**的实例 ⇒ 走「复用/重激活」分支
+                catch (Exception ex) { caught = ex; }
             }
             finally
             {
-                LocalWaitQueueStore.WriteSnapshotProbeMutator = null;
+                Interlocked.CompareExchange(ref LocalWaitQueueStore.WriteSnapshotProbeMutator, null, materializeGuardedAction);
             }
 
-            // 不变量：拒绝零副作用 ⇒ 既有文件逐字节不变，且仍可读回。
+            // [批次17 B17-04 判据升级] ①探针确实命中并完成改写；②拒绝必须是存储守卫的
+            // LocalWaitQueueCorruptException（探针脚手架异常或其它异常不得顶替）；③不变量：拒绝零副作用
+            // ⇒ 既有文件逐字节不变，且仍可读回。
+            Assert.Null(probeNote);
+            Assert.Equal(1, probeRan);
+            Assert.IsType<LocalWaitQueueCorruptException>(caught);
             Assert.Equal(before, File.ReadAllBytes(store.FilePath));
             var loaded = store.Load();
             Assert.DoesNotContain(loaded,
