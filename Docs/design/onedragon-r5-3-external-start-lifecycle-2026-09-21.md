@@ -3791,10 +3791,10 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
 `Models/TaskCenter/LocalWaitPrerequisiteModels.cs`、`Services/TaskCenter/Arbitration/LocalWaitQueuePolicy.cs`、
 `Services/TaskCenter/LocalWaitQueueStore.cs` ⇒ **无调用方、无发送依赖**。本批**不接任何生产入口**。
 
-**全局回归（本批提交时快照；同一工作区有批次 15 在途作业会持续加夹具，故快照计数会随之增长）**：助手全量 **1362 通过／2 跳过／0 失败／1364**
-（`_batch16/batch16_full.trx`；后续帧 `batch16_final.trx` 已为 **1363／2／0／1365**，增量均归批次 15 在途），
+**全局回归（本批提交时快照；同一工作区有批次 15 在途作业会持续加夹具，故快照计数会随之增长）**：助手全量 **1371 通过／2 跳过／0 失败／1373**
+（`TestResults/_batch16_final_full2.trx`；早前帧 `batch16_full.trx` 为 1362／2／0／1364、`batch16_final.trx` 为 1363／2／0／1365，增量均归批次 15 在途与第三轮收口），
 与批次 15 基线 **1337 通过／2 跳过／0 失败／1339**（`batch15_assistant_full_final.trx`）逐名 `Compare-Object`
-⇒ **新增 25 条、移除 0 条**（净 Δ 1364−1339＝**+25**，与逐名差集**一致、无口径冲突**；**任何时点的取值都必须满足「移除 0」与「新增均属已登记批次」两条不变量**）。
+⇒ **新增 34 条、移除 0 条**（净 Δ 1373−1339＝**+34**，与逐名差集**一致、无口径冲突**；**任何时点的取值都必须满足「移除 0」与「新增均属已登记批次」两条不变量**）。
 新增中**归本批 D2 自身的只有 `LocalWaitPrerequisiteContractTests` 19 个测试方法（23 个测试情形）**（该类为**本批新建**，基线中不存在）；
 另 **8 条**属**同一工作区在位、归批次 15b纪元（D3 后续在途工作）的 `LocalWaitReevaluationTriggerTests`**
 （`Decide_CancelledToken_DoesNotConsumeKey_RetryStillProduces`／`Decide_EnumeratorThrows_DoesNotConsumeIdempotencyKey`／
@@ -3805,10 +3805,12 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
 `LocalWaitQueueTests` 16 条为**改写既有夹具**（方法名未变，故不计入差集）。未移动、未排除任何既有测试。
 定向回归（本批相关六类：`RunningOccupancyArbiterStateTableTests` ＋ `AdmissionWaitLocallyContractTests`
 ＋ `CoordinatedBatchAdmissionRelationTests` ＋ `LocalWaitReevaluationTriggerTests` ＋
-`LocalWaitPrerequisiteContractTests` ＋ `LocalWaitQueueTests`）＝**130/130** 全绿。
+`LocalWaitPrerequisiteContractTests` ＋ `LocalWaitQueueTests`）在第三轮收口前的帧为 **130/130** 全绿；
+第三轮把 `LocalWaitPrerequisiteContractTests` 的突变夹具改为「对批内已存在实例改写身份」后，**该类定向 23/23 绿**
+（`TestResults/_batch16_fixtfix.trx`；反向突变 4/4 红见 `_batch16_mutE3.trx`）。
 ⚠ **口径声明（须如实）**：批次 15 基线来自**批次 15 最终全量**（1337/2/0/1339，`batch15_assistant_full_final.trx`）；
-本批全量帧（1364）**含**批次 15b纪元在途的 8 条新夹具，故该帧 25 条差集**不等于**「本批恰新增 19 条」——本批
-**自身**新增夹具为 **19 个方法（23 个情形）**，其余 8 条归批次 15b纪元，**不得**读作本批扩批次。批次 15 在途触发器
+本批全量帧（1373）**含**批次 15b纪元在途的 15 条新夹具（`LocalWaitReevaluationTriggerTests`），故该帧 34 条差集**不等于**「本批恰新增 19 条」——本批
+**自身**新增夹具为 **19 个方法（23 个情形）**，其余 15 条归批次 15b纪元，**不得**读作本批扩批次。批次 15 在途触发器
 （`LocalWaitReevaluationTrigger.cs`）原先有 5 处语法／语义缺陷（多余语句、`generation` 变量遮蔽、未定义局部
 `repeated`、方法签名行残留），**由本批一并修复**（归批次 15 在途改动，不属 D2 范围）。
 逐条证据见 `_batch16/batch16_full_diff_evidence.txt`（**不入提交**，仅本地复核）。
