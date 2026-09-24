@@ -38,8 +38,9 @@ public sealed class LocalWaitItem
     /// 与引用串做 `==` 比较）都要求字段**取值即稳定引用串**，故落盘类型取 <see cref="string"/> 而非包装对象
     /// （包装对象会在反射写入时产生类型形状冲突）。引用**结构版本**仍是独立契约面：
     /// 见 <c>PrerequisiteReference.CurrentVersion</c>（本批**未落盘、未参与求值**）。
-    /// **不得读强**：<c>LocalWaitQueueStore</c> 响亮拒绝的是**队列文件版本**字段
-    /// （`"version"`，合法范围 `[MinimumSupportedVersion, CurrentVersion]`），**不是**本字段携带的引用结构版本。
+    /// **不得读强**：<c>LocalWaitQueueStore</c> 响亮拒绝的版本是**队列文件版本**字段
+    /// （`"version"`，合法范围 `[MinimumSupportedVersion, CurrentVersion]`），**不是**本字段携带的引用结构版本；
+    /// 本字段只承载**引用串本身**，引用结构版本（<c>PrerequisiteReference.CurrentVersion</c>）本批**未落盘**。
     /// </summary>
     [JsonPropertyName("prerequisiteReference")] public string? PrerequisiteReference { get; set; }
 

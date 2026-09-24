@@ -98,8 +98,9 @@ public sealed class PrerequisiteReference : IEquatable<PrerequisiteReference>
     /// <summary>
     /// 稳定引用串（**只读视图**）：`ToString()` 只回引用串本身。
     /// **本批证明边界**：真实落盘的只有引用串（`LocalWaitItem.PrerequisiteReference` 是 `string?`，键 `prerequisiteReference`）。
-    /// <see cref="Version"/> **未落盘**（故落盘字段**不是** `version`＋`value`）、**未参与求值**；
-    /// 上述 `[JsonPropertyName]` 只描述**将来**若按本类型整体序列化时的形状，本批**不**走该路径。
+    /// <see cref="Version"/> **未落盘**（故本类型**不**按 `version`＋`value` 两个字段写入落盘；
+    /// 落盘面上引用就是**一个**字符串字段）、**未参与求值**，也**未**绑定任何真实代际／租约纪元。
+    /// 下列 `[JsonPropertyName]` 标注只描述**将来**若把本类型**整体**序列化时的形状，本批**不**走该路径。
     /// </summary>
     public override string ToString()
         => Value ?? "";
