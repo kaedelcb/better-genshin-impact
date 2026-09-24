@@ -3806,8 +3806,10 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
 定向回归（本批相关六类：`RunningOccupancyArbiterStateTableTests` ＋ `AdmissionWaitLocallyContractTests`
 ＋ `CoordinatedBatchAdmissionRelationTests` ＋ `LocalWaitReevaluationTriggerTests` ＋
 `LocalWaitPrerequisiteContractTests` ＋ `LocalWaitQueueTests`）在第三轮收口前的帧为 **130/130** 全绿；
-第三轮把 `LocalWaitPrerequisiteContractTests` 的突变夹具改为「对批内已存在实例改写身份」后，**该类定向 23/23 绿**
-（`TestResults/_batch16_fixtfix.trx`；反向突变 4/4 红见 `_batch16_mutE3.trx`）。
+第三轮定稿夹具把突变**按内容**落在「将被校验的那一份记录」上（`Load()`／`Upsert` 都会重新物化记录，
+按引用身份定位会漏改、按 `DeriveItemId` 派生身份定位也会落空 —— 写入侧**不**重派生 `ItemId`），**该类定向 23/23 绿**
+（`TestResults/_batch16_fix3_cls.trx`）；反向突变 4/4 红见 `_batch16_mutE4.trx`。
+**全量负载复核**：`TestResults/_batch16_ship_full2.trx` 与 `_batch16_ship_full3.trx` **两次连续 1371/2/0/1373 全绿**。
 ⚠ **口径声明（须如实）**：批次 15 基线来自**批次 15 最终全量**（1337/2/0/1339，`batch15_assistant_full_final.trx`）；
 本批全量帧（1373）**含**批次 15b纪元在途的 15 条新夹具（`LocalWaitReevaluationTriggerTests`），故该帧 34 条差集**不等于**「本批恰新增 19 条」——本批
 **自身**新增夹具为 **19 个方法（23 个情形）**，其余 15 条归批次 15b纪元，**不得**读作本批扩批次。批次 15 在途触发器
@@ -3944,7 +3946,7 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
 | B：`RevalidateBeforeSend` 直接返回 `Ready`（模拟沿用排队快照直接发送） | **红**，已还原复绿 |
 | C：`Persist` 写前物化改回直接序列化调用方对象（`var payloadItems = items;`） | `Persist_WriteSnapshotMaterialization_IsLoadBearing` **红（1 失败／18 通过）**，已还原复绿 |
 | D：`EvaluateOne` 缺引用分支删去，令其继续调用恒 `Ready` 求值器 | 2 条红（2 失败／17 通过），已还原复绿 |
-| **E（第三轮新增）：删去 `MaterializeAndValidatePayload` 中的 `ValidatePersistableItemShape(...)` 调用与 `itemId` 去重整段** | `Persist_MaterializedSnapshot_IsValidatedAsAWhole_PerLoadShapeRules` **4/4 红**（首次 `TestResults/_batch16_mutE2.trx`；**本批自审修正夹具后复测** `TestResults/_batch16_mutE3.trx` 仍 4/4 红），已还原 **23/23 绿**（`TestResults/_batch16_fixtfix.trx`／`_batch16_restored3.trx`） |
+| **E（第三轮新增）：删去 `MaterializeAndValidatePayload` 中的 `ValidatePersistableItemShape(...)` 调用与 `itemId` 去重整段** | **4/4 红**（`TestResults/_batch16_mutE2.trx` → 自审修正夹具 `_batch16_mutE3.trx` → 全量负载暴露缺陷后定稿夹具 `_batch16_mutE4.trx`，三轮均 4/4 红），已还原 **23/23 绿**（`TestResults/_batch16_fix3_cls.trx`） |
 
 **证明边界（第三轮新增行，须如实）**
 
@@ -4002,12 +4004,29 @@ owner 待决项一次批量交付」，本批**不**自称「会诊已闭环」�
 模型文件**逐字节相同**；测试文件**只多 1 行注释**。三份第 13 轮末基线以临时未跟踪文件形式与受审文件并置送审，
 **不进入本批提交清单**。
 
-**声明面变更（须纳入本批提交评审）**：本批**触及**声明面（本文档新增本节含「未接线」「未签署」等门禁词，
-交接稿与总计划状态行同步追加）⇒ 设 `CLAIM_SURFACE_REGENERATE=1` 再生 `ClaimSurfaceManifest.txt`，
-随后**不带环境变量**复跑 `ClaimSurfaceGuardTests` **通过**（`_batch15/trx/b15d_r16_claim_regen.trx`／
-`b15d_r16_claim_verify.trx`）。按 [R5 交接稿「会诊与执行纪律」](onedragon-r5-handoff-2026-09-21.md)，
-本批**不得**援引 §17.4-A 第 1 条「措辞类豁免」（声明面已变，等同语义必改项）。
+**声明面变更（须纳入本批提交评审；本条已按实测更正，不淡化）**：
+`ClaimSurfaceManifest.txt` 相对 HEAD 的差异＝**新增 1 行／移除 2 行**（`git diff --numstat HEAD`＝`1 2`）：
+①**移除**本文档（`onedragon-r5-3-external-start-lifecycle-2026-09-21.md`）声明行 1 条（指纹 `E248CBB3…`）——
+该条系**本批 15b/15c 期间**写入本节的「声明面变更」声明，**本批未提交、不属于 HEAD**；本轮本条改写（更正事实错误）后该句被替换，
+故相对 HEAD 表现为「移除一条从未存在于 HEAD 的声明」。②**移除**交接稿 `0F5F5892…` 行、**新增** `1195E8E6…` 行——
+即交接稿批次 15 状态行其后的追加文本（15c 更正尾注 → **15d 收口尾注**），行改写＝**移除＋新增**。
+故 **「本批新增声明面 0 行」的旧表述不成立**（本批属**新增行**型变更，新增的两节本身携带门禁词），
+**本批不得**援引 §17.4-A 第 1 条「措辞类豁免」（见 [R5 交接稿「会诊与执行纪律」](onedragon-r5-handoff-2026-09-21.md)）。
+**复跑证据（实测）**：设 `CLAIM_SURFACE_REGENERATE=1` 再生 `ClaimSurfaceManifest.txt`（`_batch15/trx/b15e_claim_regen.trx`），
+随后**不带环境变量**复跑 `ClaimSurfaceGuardTests` **通过**（`_batch15/trx/b15e_claim_verify.trx`）；
+**旧记录作废**：本节一度引用的 `b15d_r16_claim_regen3.trx`／`b15d_r16_claim_verify2.trx`（以及 `b15d_final_precommit3/4/5.trx`、
+`b15d_r16_dir.trx`、`b15d_final_bis2.trx` 等）**在磁盘上并不存在**，不得再作为证据引用；凡引用 TRX 必须先核实文件存在。
 
 **边界（本批结束时如实状态）**：D3 **仍生产零消费点**（无事件源订阅、无定时器、无启动扫描、无消费方）；
 `ReevaluationKey` 只表达「须重新走一次完整准入」，**不含**发送许可；批次 14 的接线前残项、D2 及 §24.106 的
 未闭合项**全部仍然有效**；事件源送达／安全网调度者仍缺；生产入口门、真实 User 门与 R5.8 签署**全部保持关闭**。
+
+**本轮（批次 15e）对上述第 ⑧ 项的错误更正（不淡化，如实登记）**：原第 ⑧ 项按**最新一次**全量运行（当时末轮恰为一轮含 D2
+「顺序代价摇摆」的运行）记「**1 失败**」，并由此把 `LocalWaitPrerequisiteContractTests.Persist_MaterializedSnapshot_
+IsValidatedAsAWhole_PerLoadShapeRules` 判为**摇摆**、归 D2 在途。**该判断是错的**：本轮以**干净重建后的测试程序集**、
+**只跑该类 23 条（串行、无全量负载）**并重复运行，`(mutation:"duplicate-itemid")` **6/6 稳定失败**、同 Theory 其余 3 例稳定通过，
+**不依赖任何时序／负载**（证据 `_batch15/trx/b15e_pc_iso.trx`、`b15e_pc_theory.trx` 与本轮 6 次重复）。同一根因在本批早前
+全量帧中表现为 `(blank-itemid)`／`(undefined-tier)`／`(empty-itemid)`／`(duplicate-itemid)` **四例逐帧移动**——**逐帧换名**正是
+「Theory 单例失败 + 用例顺序/载荷变化」的特征，而非「某一例自身摇摆」。⇒ **正确口径**：这是 D2 在途的**确定性根因**
+（写盘批在**写前物化** `MaterializeAndValidatePayload` 之后仍能被挪动，见 D2 夹具自身注释），**不由本批（D3）修复**，
+**也不得再记为本批的「摇摆／已消解」**；D2 的 15d 段与 §24.111-R3 中同源的「已消解／已移除」表述须由 D2 侧同口径更正；D2（批次 16）须以「自足夹具在干净重建+隔离串行下可重复转绿」为完成判据重新核验。
