@@ -3634,3 +3634,185 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
 | D2 前置就绪 | ❌ 未闭合（`PrerequisiteReady` 恒 true，§24.106 C4）——属批次 16（D2）范围，本批只登记 |
 | 批次 14 接线前残项 | ❌ 全部仍然有效（边界等待专型／`RecomputeSuccessor` 取 `waitLocally` 的 `Next`／镜像不保证共享等待结论／`MapAdmissionOutcome` 消费方识别未经运行验证）；D3 接线时须一并处理 |
 | 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
+**批次 15c 更正（2026-09-24；四轮会诊后修复，**未改接线状态**，仍生产零消费点）**
+
+本小节的 15b 版本文档与实现有**两类不一致**，四轮会诊（gpt-6-sol/medium）判为「必改」，已修复并复验；下方原文**保留**以便追溯，**以本更正为准**：
+
+| 会诊轮次 | 级别 | 原发现 | 处置（已修复） | 证据 |
+|---|---|---|---|---|
+| 第 3 轮 | 必改 #1 | 公共面同时公开 4 参 `CancellationToken` 与 4 参 `string? generation` 重载 ⇒ `Decide(t, items, now, default)` 报 `CS0121`、`Decide(t, items, now, null)` **静默改绑** | **两个 4 参重载均已收窄为 `private`**；公共面**只保留 5 参主重载**（末参 `generation` 可省略），取消与代际都经该入口 | 真实编译器探针 `_batch15/m4probe/probeC.cs`（0 错误）；红夹具 `PublicDecide_NoFourArgCancellationTokenAndGenerationOverloadAmbiguity`；突变 MUT-1 |
+| 第 3 轮 | 必改 #2 | 旧键 `reval-[<scope>:]<摘要>[|<代际>]` 原样拼接 ⇒ 含 `:`／`|` 的不同三元组可映射到同一键（跨作用域键别名） | 键形状改为 `reval-key-v2|<摘要>|<作用域字段>|<代际字段>`，字段带长度前缀（见 `ComposeKeyPart`/`EncodeKeyField`） | 红夹具 `ReevaluationKey_DistinctScopeGenerationTriples_NeverAlias`；突变 MUT-2 |
+| 第 4 轮 | 必改 #2 | 新编码用 `Encoding.UTF8.GetBytes`，而 UTF-8 **不是单射**：孤立代理项（`"\uD800"`）被替换字符 U+FFFD 取代 ⇒ `"a\uD800"` 与 `"a\uFFFD"` 同键 | `EncodeKeyField` 改为**码元级**编码（`char` 的 UTF-16 码元按小端写 2 字节再转十六进制；`Convert.ToHexString` 输出**大写**）；对任意 .NET 字符串（含孤立代理项）单射 | 红夹具 `ReevaluationKey_LoneSurrogateScope_NeverAliasesReplacementChar`；突变 MUT-4 |
+| 第 4 轮 | 重要 | 原文多处描述与实现不符：①称 `digest == EncodeKeyField(digest)`（**错**，编码串以 `=` 开头、含长度与冒号）②称"16 位十六进制作用域跨形状别名"（旧形状 `reval-<摘要>` 与新形状 `reval-key-v2\|…` **字面前缀不同 ⇒ 不可能相等**，该别名构造不出来）③称编码载荷"小写"（实际为大写）④`StateScope` 注释仍写旧形状 `reval-<scope>:<摘要>` ⑤候选构造处称作用域与批次 15"逐字符一致" ⑥`NormalizeGeneration` 注释称归一化为"空串"（实际返回 `null`） | **全部更正**（见下「更正后的键与归一化口径」） | 文档逐条复核；`LocalWaitReevaluationModels.cs` 的 `Generation` doc 同步更正 |
+| 第 4 轮 | 重要 | 校验后仍持可变 `LocalWaitItem` 引用，原文"到这里已无……校验失败点"易被读成"产物字段已冻结" | 收窄为：**仅**保证枚举/校验期内不消费幂等键；**不**宣称产物字段已冻结，接线方须保证调用期间 `items` 不被并发改写 | 实现注释更正 |
+| 第 4 轮 | 重要 | 降为 `private` 削弱了**四参数委托方法组转换**契约（`Decide` 赋给 4 参委托不再能绑定）；原文"无源码级破坏"过宽 | 收窄为"**直接调用**形式不减损"；本组件未接线、仓库内无调用点/委托绑定，接线方需显式 lambda 包一层调 5 参主重载 | 实现 doc 更正；本批零调用点已核 |
+
+**更正后的键与归一化口径（以实现为准）**
+
+- 新形状：`reval-key-v2|<摘要>|<作用域字段>|<代际字段>`；`<摘要>`＝`DeriveReevaluationKey` 去掉 `reval-` 前缀后的 **16 位小写十六进制**；字段编码 `null ⇒ "-"`，非 null ⇒ `"=" + 载荷长度（字符数） + ":" + UTF-16 码元十六进制（大写）`。
+- **唯一**与批次 15 逐字符相同的形态：`scope == null && generation == null ⇒ reval-<摘要>`；该旧形状与新形状**字面前缀不同 ⇒ 两者不可能相等**（故不存在"伪造作用域撞摘要字段"的跨形状别名）。
+- **无归一化**：载荷不做 Unicode 归一化、不做 UTF-8 变换 ⇒ 规范等价对（`"é"` vs `"e"+组合尖音符`）与孤立代理项都**异键**。
+- `NormalizeGeneration`：空白/null ⇒ **`null`**（原文"空串"为笔误）。
+- **残余面（如实保留）**：摘要固定 **64 位** ⇒ 两个**不同稳定身份**的摘要仍可能碰撞（生日界约 2^32 个身份）；本文档与夹具只主张「同口径、同前缀长度、无系统性别名」。
+
+**键形状变更的兼容性（如实）**：带**非空作用域**（或带代际）的键**有意**不再与批次 15 逐字符一致——旧形状的别名不可修复，只能改字面形状换取消歧义。这不改变**本实例内**的在飞去重语义（`StateScope` 不可变 ⇒ 每身份键仍单射，"同一等待项至多产一条"不变）；受影响的是**跨实例／跨进程按旧形状对账**的消费方，须按新形状比对。本批**未接线**，无既有消费方受影响。
+
+**重验证据（批次 15c）**
+
+- 定向夹具 **31/31 全绿**（`_batch15/trx/b15c_final_green.trx`；较 15b 的 30 条 **+1**：新增孤立代理项红夹具）。
+- 突变验证 **4/4 全部按要求变红**（`_batch15/b15c_mutation_log.md`）：MUT-1 公共 4 参重载、MUT-2 去长度前缀、MUT-3 键忽略代际、MUT-4 回退 UTF-8 编码。
+- 未突变验证的夹具（只证既有行为）已在突变日志逐条标注。
+- **未接线状态不变**：生产零消费点、无事件订阅/定时器/后台线程/启动扫描；生产入口门、真实 User 门与 R5.8 签署**全部保持关闭／未签署**；**零发送**。
+### 24.111 落地登记：本地等待稳定前置引用＋只读 evaluator＋发送前再次验算（D2）（2026-09-24；**未接线组件＋反例夹具，生产零消费点**）
+
+**本批做了什么**：只实现 owner 2026-09-24 裁决的 **D2＝推荐项 A**（裁决登记 `012f5fa02`，决策单见
+[R5 owner 决策单](onedragon-r5-owner-decisions-2026-09-24.md) 的「D2：前置就绪怎么表达」全节与文末裁决表，
+裁决范围见 §24.107）：把 §24.106 **C4「`SelectNext` 投影把 `PrerequisiteReady` 固定 true」**换成
+**可持久化的稳定前置引用 ＋ 只读三态 evaluator ＋ 发送前再次验算**。交付物是**生产零消费点、未接任何生产入口**
+的组件面改造与夹具。本批**不越过 D1 出口**：**绝不**产生发送、**绝不**产生发送许可——被选出项在取得发送许可
+**之前**只有「重新求值」接缝，其结论**仍须**交给 `ArbitrationAdmissionService.SubmitAsync` 重新走完整准入；
+本批**不解除生产门**：生产入口门、真实 User 门与 R5.8 签署全部保持**关闭／未签署**；**不改第三方 JS**；
+**不改冻结合同语义**（只做纯加法，见下「改动性质」）。§24.106 **C5「发送前须重新取得事实」**由本批的
+`RevalidateBeforeSend` 接缝**部分**落地（接缝已存在且被夹具钉死为「永不许可发送」；真实发送路径接线仍属后续批次）。
+
+**新增／改动文件**
+
+| 文件 | 性质 | 内容 |
+|---|---|---|
+| `MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitPrerequisiteModels.cs` | **新增** | `enum LocalWaitPrerequisiteReadiness`（三态：`Ready`／`NotReady`／`Undetermined`，取值 0–2 **唯一不别名**）＋`delegate LocalWaitPrerequisiteEvaluator`＋`sealed record LocalWaitPrerequisiteReference`（**稳定引用**：结构版本＋引用键，纯数据、无时钟无 I/O）＋`sealed record LocalWaitPrerequisiteEvaluation`＋`sealed record LocalWaitPrerequisiteDecision`（含 `Item`，`[JsonIgnore]`） |
+| `MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs` | 纯加法 | `LocalWaitItem` 追加 `PrerequisiteReference`（可空，缺省 `null`）；`LocalWaitQueueFile.CurrentVersion`＝**2**、`MinimumSupportedVersion`＝**1** |
+| `MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs` | 纯加法 | 版本范围放宽为 `>= MinimumSupportedVersion && <= CurrentVersion`；`ParsePrerequisiteReference` **严格解析**（形状非法即抛，不静默降级为 null）；`HasSamePrerequisiteReference` 按 **ordinal** 比较 |
+| `MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitQueuePolicy.cs` | 改口径（见下） | `ToWaitingFacts` **不再硬编码** `PrerequisiteReady = true`；新增只读 `EvaluatePrerequisites*`（`IReadOnlyList` 视图，不改动入参）；`SelectNext` 走三态判定；新增 `RevalidateBeforeSend`（**两个重载**，均返回模型层 `LocalWaitPrerequisiteDecision`，**不产生**任何发送许可） |
+| `Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitPrerequisiteContractTests.cs` | **新增夹具 17 条** | 见下「夹具与判别力」 |
+| `Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitQueueTests.cs` | 夹具迁移 | 形状规则夹具改经 `WithShapeRuleReference`（**引用＝稳定身份**＋注入恒 `Ready` 求值器）与 `SelectByShapeRule`；**批次 6 的排序断言对象不变** |
+
+**改动性质（逐项说明，含两处取舍）**
+
+| 项 | 判定 | 理由 |
+|---|---|---|
+| 冻结合同 | ✅ **纯加法** | 未新增／未删除任何既有枚举值、状态词或门禁词；`AdmissionResultKind` 等冻结项未被触碰 |
+| **取舍 1：删除 `SelectNext(items)` 旧签名** | ⚠ **唯一删除的既有签名**（**合同例外，须 owner 确认**，见下） | 该单参重载**无求值器** ⇒ 缺引用时只能**静默**把项判为「已就绪」，**正是 C4 缺陷的重演**。保留即等于把恒 true 换个地方藏起来。夹具已断言 `SelectNext` **所有公共重载的参数个数都是 2**（参数个数 1 即红）。批次 15 会诊「重要 5」已指出该风险 |
+| **取舍 2：合并 `Services.LocalWaitPrerequisiteDecision` 到模型层** | ⚠ 合并新增类型 | 原设计存在两个同名 record（`Services.*` 与 `Models.*`），而 `RevalidateBeforeSend` 两个重载原先都返回 `Services` 类型 ⇒ `Models.LocalWaitPrerequisiteDecision` **是死别名、无任何产出者**。两份同名类型并存会让「发送前验算」的返回类型在接线时**取错**。现**删除** `Services` 侧、两个重载统一返回 `Models.*`。这是**本批新增类型内部**的合并，**未触碰任何冻结合同** |
+| **取舍 2′：合并为「合同例外」裁定请求（会诊必改 2 处置）** | ⚠ **待 owner 确认** | 批约束字面为「不自行改冻结合同（**只允许纯加法**）」。「删除 `SelectNext(items)` 旧签名」与「合并 `Services.LocalWaitPrerequisiteDecision`」都是**删除**，严格按字面**超出「纯加法」**。本批**不是**自行把冻结合同当可改，而是**显式登记为合同例外**并请 owner 确认：①两项删除均**未触碰**任何冻结枚举值／状态词／门禁词（`AdmissionResultKind` 等一律未变）；②两项均为**本批新增类型／本批要闭合的缺陷路径**内部，删除后**不存在**任何旧行为的替换形态（`SelectNext(items)` 保留＝C4 缺陷原地重演；`Services.*Decision` 保留＝死别名，接线时易取错返回类型）；③若 owner 不认此例外，替代方案是**恢复旧签名并让它抛 `NotSupportedException`／标记 `[Obsolete(error: true)]`**，但这会保留一个**编译期可达**的恒就绪路径，本批**不建议**。裁决前本批按「已删除＋已登记」交付，**不**再扩大改动面。 |
+| 值视图面更名 | ✅ 内部 | `SelectNextView`／`EvaluatePrerequisitesViewCore`／`EvaluatePrerequisitesModelView` 均为本批新增的 internal 视图接缝，供夹具只读断言使用，**不引入**发送面 |
+
+**三态判定口径（逐条可断言；生产默认：无默认）**
+
+| 情形 | 结论 | 说明 |
+|---|---|---|
+| `evaluator == null` | `Undetermined` | 无求值器 ⇒ **不可判定**，**不参选** |
+| `PrerequisiteReference` 为空白 | `Undetermined` | **先于**求值器判断：缺引用一律不可判定，**不得**退回「已就绪」 |
+| 求值器抛异常 | `Undetermined` | 异常**不**改写成成功，也**不**改写成已证实失败 |
+| 其余 | 取求值器结论 | `Ready` 才可参选；`NotReady`／`Undetermined` **一律不参选** |
+
+**`ScheduledAt` 口径**：仍**只**参与排序，**不**参与就绪判定；`ScheduledAt` 早**不**等于前置已就绪（夹具
+`ScheduledAt_RemainsSortOnly_AndNeverDecidesReadiness` 钉死）。
+
+**夹具与判别力（本批证据核心）**
+
+| 夹具 | 钉死的性质 |
+|---|---|
+| `WaitItem_CarriesPersistentPrerequisiteReference_NotAnExpiredBoolean` | 前置是**可持久化引用**，不是一次性布尔快照 |
+| `PrerequisiteReference_RoundTripsThroughStore` | 引用**逐字段往返**落盘／读回一致 |
+| `PrerequisiteVerdict_HasThreeDistinctStates` | 三态**取值唯一不别名**，互不相等 |
+| `SelectNext_NotReadyItemNeverWins_EvenAtHighestPriority` | **未就绪即便优先级最高也不参选** |
+| `SelectNext_UndeterminedReadinessIsConservative_NotSelectable` | **不可判定保守不参选** |
+| `SelectNext_MissingReferenceOrDefaultEvaluator_IsConservative` | 缺引用／缺求值器 ⇒ 保守不参选 |
+| `SelectNext_ReferencePresentButNoLegacyReadyDefault_HardCodedTrueIsGone` | **无**「恒就绪」遗留默认 |
+| `PolicySource_NoHardCodedPrerequisiteReadyTrue` | 策略源文本**不再**出现硬编码恒 true |
+| `EvaluatePrerequisites_IsReadOnly_AndReportsPerItemVerdict` | 求值面是**只读**的（不改动入参）且**逐项**给结论 |
+| `ScheduledAt_RemainsSortOnly_AndNeverDecidesReadiness` | 排序与就绪**分离** |
+| `SendTimeRevalidation_ExistsAndNeverPermitsSend_WhenPrerequisiteLost` | **发送前再次验算**接缝存在，且**前置丢失时绝不许可发送** |
+| `SelectionPath_HasNoSendCapableSurface` | 选择路径**结构上无**发送面成员 |
+| `Store_VersionAdvanced_AndLegacyV1FileStillReads_WithUndeterminedDefault` | 版本升到 **2**、**v1 旧文件仍可读**，缺字段读为「不可判定」而非「已就绪」 |
+| `PrerequisiteSurface_HasNoProductionConsumptionPoint` | **生产零消费点** |
+| `Upsert_RejectsShapeThatLoadWouldReject_AndLeavesFileByteIdentical` | **写入侧与读取侧同口径**：空白引用在 `Upsert` 侧响亮拒绝，且原文件**逐字节不变**（会诊 #1 必改） |
+| `SendTimeRevalidation_ReEvaluates_NotReusingQueuedSnapshot` | 发送前验算**必须重新求值**，不得沿用排队快照（会诊 #3 重要；与突变 B **不同方向**） |
+| `LegacyV1Item_StaysUndetermined_ThroughSelectionAndSendRevalidation` | v1 缺字段项送入**选择**与**发送前再验算**下游端到端仍为 `Undetermined`（会诊建议级，已采纳） |
+
+**会诊处置登记（gpt-6-sol／medium，一轮 1 次；发现分级按 R5 纪律）**
+
+| # | 分级 | 发现 | 处置 |
+|---|---|---|---|
+| 1 | **必改** | `Upsert` 能成功写出自己随后 `Load` 拒读的文件（空白 `PrerequisiteReference`）⇒ 写入成功、重启即损坏 | ✅ **已修**：`Upsert` 在取锁与读盘**之前**执行 `ValidatePrerequisiteReferenceShape`（与 `ParsePrerequisiteReference` **同口径**）⇒ 响亮拒绝、**零副作用**；红夹具 `Upsert_RejectsShapeThatLoadWouldReject_AndLeavesFileByteIdentical` **先红（实测 `Assert.ThrowsAny` 失败：未抛异常）后绿** |
+| 2 | **必改** | 删除单参 `SelectNext(items)` 不符合批约束「只允许纯加法」的字面边界 | ⚠ **已登记为显式「合同例外」并请 owner 确认**（见上「改动性质」表「取舍 2′」）：两项删除均未触碰冻结枚举／状态词／门禁词；裁决前按「已删除＋已登记」交付 |
+| 3 | **重要** | 发送前夹具未证明「就绪→未就绪」会被识别；`NoEvaluator()` 实为返回 `Undetermined` 的委托而非真 `null`；缺独立方向 | ✅ **已补**：新增 `SendTimeRevalidation_ReEvaluates_NotReusingQueuedSnapshot`（先以「就绪」选出，再把求值器改为「未就绪」⇒ **必须再次调用求值器**并拦下）——与突变 B 是**不同方向**；`NoEvaluator()` 的证明边界已收窄为「**求值器返回 `Undetermined`**」（见下「证明边界」） |
+| 4 | **重要** | 声明里「结构版本」**未进入**落盘／求值路径（`LocalWaitItem` 上只存 `string?` 引用）⇒ 声明面比实现强 | ✅ **已收窄 §24.111 声明**（见下「证明边界」）：`LocalWaitPrerequisiteReference` 的结构版本属**模型层纯数据**，**未**与任何真实代际／租约纪元绑定，也**不**参与落盘与求值 |
+| 5 | **重要** | 「只读 evaluator」是**约定**而非**类型级保证** | ✅ **已收窄表述**（见下「证明边界」）：只读性是**委托契约约定**＋夹具只读快照断言，**不是**编译器／类型系统保证的不可变面 |
+| 6 | **建议** | v1 项送入选择与再验算的**下游端到端**反例缺失 | ✅ **已采纳**（未书面拒绝）：新增 `LegacyV1Item_StaysUndetermined_ThroughSelectionAndSendRevalidation` |
+
+**证明边界（不得读强；会诊重要 3／4／5 的收窄）**
+
+| 边界 | 如实口径 |
+|---|---|
+| 「只读 evaluator」 | 指**委托契约**约定的只读＋夹具对入参的快照断言；**不**是类型级／编译器级不可变保证。求值器**可以**再捕获外部可变状态——真实性由**注入方**负责，本批不提供沙箱 |
+| 「结构版本」 | `LocalWaitPrerequisiteReference.StructuralVersion` 是**模型层纯数据字段**，**未**落盘（`LocalWaitItem` 只持久化 `string? PrerequisiteReference`），**未**参与求值；「引用指向什么权威事实源、版本绑哪个真实代际」**仍属未接线** |
+| 「缺求值器 ⇒ `Undetermined`」 | 夹具可表达的是**求值器缺失／返回 `Undetermined`** 两种路径；本批**不**主张「真实 `null` 委托在生产路径上必然出现」（生产无调用方） |
+| 「发送前再次验算」 | 只证明**接缝存在且永不许可发送**；「真实发送前确实调用了它」**未经运行验证** |
+
+**判别力实测（反向突变，两条方向都已证）**
+
+| 突变 | 结果 |
+|---|---|
+| **A**：把 `ToWaitingFacts` 的 `PrerequisiteReady = readiness == PrerequisiteReadiness.Ready` 改回 `= true` | **6 条红**（`SelectNext_NotReadyItemNeverWins_EvenAtHighestPriority`／`SelectNext_UndeterminedReadinessIsConservative_NotSelectable`／`SelectNext_MissingReferenceOrDefaultEvaluator_IsConservative`／`SelectNext_ReferencePresentButNoLegacyReadyDefault_HardCodedTrueIsGone`／`ScheduledAt_RemainsSortOnly_AndNeverDecidesReadiness`／`PolicySource_NoHardCodedPrerequisiteReadyTrue`），已还原并复绿 |
+| **B**：把 `RevalidateBeforeSend` 改成直接返回 `Ready`（模拟「沿用排队快照直接发送」） | `SendTimeRevalidation_ExistsAndNeverPermitsSend_WhenPrerequisiteLost` **红**，已还原并复绿 |
+
+> **判别力结论**：本批夹具**不是**「照着实现写」的同义重述——**两条**独立方向（恒 true 回退／发送前沿用旧快照）
+> 都被夹具**实测**判红。突变 A 同时钉死「排序面」与「策略源文本」两侧，突变 B 钉死「发送前不得沿用旧快照」。
+
+**落盘兼容（C4 的持久化面）**
+
+| 项 | 结论 |
+|---|---|
+| `CurrentVersion` | **2** |
+| `MinimumSupportedVersion` | **1** |
+| v1 旧文件（无前置字段） | ✅ **仍可读**；缺字段 ⇒ `PrerequisiteReference` 为 `null` ⇒ 判定为 **`Undetermined`（保守不参选）**，**不是**「已就绪」；**不**因缺字段而静默放行 |
+| 更高版本（如 `{"version":999}`） | ✅ **响亮拒绝**（`LocalWaitQueueException`），不降级为「空队列」 |
+| 损坏／不可读路径 | ✅ 仍按**损坏**处理（`Store_UnreadablePathIsCorrupt_NotTreatedAsEmptyQueue`），不当作空队列 |
+
+**生产零消费点（判据④）**：`rg` 实测命中**仅 4 个文件**——`Models/TaskCenter/LocalWaitModels.cs`、
+`Models/TaskCenter/LocalWaitPrerequisiteModels.cs`、`Services/TaskCenter/Arbitration/LocalWaitQueuePolicy.cs`、
+`Services/TaskCenter/LocalWaitQueueStore.cs` ⇒ **无调用方、无发送依赖**。本批**不接任何生产入口**。
+
+**全局回归（最终口径，权威帧）**：助手全量 **1362 通过／2 跳过／0 失败／1364**
+（`_batch16/batch16_full.trx`），
+与批次 15 基线 **1337 通过／2 跳过／0 失败／1339**（`batch15_assistant_full_final.trx`）逐名 `Compare-Object`
+⇒ **新增 25 条、移除 0 条**（净 Δ 1364−1339＝**+25**，与逐名差集**一致、无口径冲突**）。
+新增中**归本批 D2 自身的只有 `LocalWaitPrerequisiteContractTests` 17 条**（该类为**本批新建**，基线中不存在）；
+另 **8 条**属**同一工作区在位、归批次 15b纪元（D3 后续在途工作）的 `LocalWaitReevaluationTriggerTests`**
+（`Decide_CancelledToken_DoesNotConsumeKey_RetryStillProduces`／`Decide_EnumeratorThrows_DoesNotConsumeIdempotencyKey`／
+`Decide_ItemIdNotDerivedFromStableIdentity_ProducesNothingAndKeepsKeyFree`／`Decide_NewGeneration_SameInstance_ProducesAgain`／
+`Decide_SafetyNetDue_StillChecksItemStatePerItem`／`PublicDecide_NoFourArgCancellationTokenAndGenerationOverloadAmbiguity`／
+`ReevaluationKey_DistinctScopeGenerationTriples_NeverAlias`／`ReevaluationKey_LoneSurrogateScope_NeverAliasesReplacementChar`），
+**不计入本批 D2**；
+`LocalWaitQueueTests` 16 条为**改写既有夹具**（方法名未变，故不计入差集）。未移动、未排除任何既有测试。
+定向回归（本批相关六类：`RunningOccupancyArbiterStateTableTests` ＋ `AdmissionWaitLocallyContractTests`
+＋ `CoordinatedBatchAdmissionRelationTests` ＋ `LocalWaitReevaluationTriggerTests` ＋
+`LocalWaitPrerequisiteContractTests` ＋ `LocalWaitQueueTests`）＝**130/130** 全绿。
+⚠ **口径声明（须如实）**：批次 15 基线来自**批次 15 最终全量**（1337/2/0/1339，`batch15_assistant_full_final.trx`）；
+本批全量帧（1364）**含**批次 15b纪元在途的 8 条新夹具，故 25 条差集**不等于**「本批恰新增 17 条」——本批
+**自身**新增夹具为 **17 条**，其余 8 条归批次 15b纪元，**不得**读作本批扩批次。批次 15 在途触发器
+（`LocalWaitReevaluationTrigger.cs`）原先有 5 处语法／语义缺陷（多余语句、`generation` 变量遮蔽、未定义局部
+`repeated`、方法签名行残留），**由本批一并修复**（归批次 15 在途改动，不属 D2 范围）。
+逐条证据见 `_batch16/batch16_full_diff_evidence.txt`（**不入提交**，仅本地复核）。
+
+**残余与门禁（不因本批改变门禁）**
+
+| 项 | 状态 |
+|---|---|
+| §24.106 **C4**（`PrerequisiteReady` 恒 true） | ✅ **本批闭合**（三态只读 evaluator ＋ 缺引用／缺求值器保守不参选 ＋ 判别力突变实测） |
+| §24.106 **C5**（发送前须重新取得事实） | ⚠ **部分**：`RevalidateBeforeSend` 接缝**存在且被钉死为永不许可发送**（含「重新求值、不得沿用排队快照」的独立方向夹具）；**真实发送路径**上的接线、以及「重新取得的**事实源**是什么」仍属后续批次 |
+| 前置引用真实来源 | ❌ **未接线**：本批**不**实现「谁写引用、引用指向什么权威事实源」；结构版本语义**未与**任何真实代际／租约纪元绑定 |
+| 求值器真实实现 | ❌ **未接线**：本批只交付**委托形状**与三态口径；任何**真实**前置判定（占用、退出、任务槽等）均**未**实现、**未**注入生产 |
+| 发送前验算接线 | ❌ **未接线**：无生产调用方 ⇒「真发送前确实再验算一次」**未经运行验证** |
+| 未就绪与不可判别的下游语义 | ⚠ 排队层只表达「不参选」；**等待时长提示／失败反馈／是否终局**等下游语义**未定**，未在未定语义上堆实现 |
+| 事件源送达／安全网调度者 | ❌ 仍缺（承接批次 15 残余：无事件源订阅、无启动恢复扫描、无低频后台唤醒器） |
+| 批次 14 接线前残项 | ❌ 全部仍然有效（边界等待专型／`RecomputeSuccessor` 取 `waitLocally` 的 `Next`／镜像不保证共享等待结论／`MapAdmissionOutcome` 消费方识别未经运行验证） |
+| 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
+
+**声明面变更（须纳入本批提交评审）**：本批**触及**声明面（本文档新增 §24.111 全节含「未接线」「未闭合／已闭合」
+「未签署」等**门禁词**，交接稿批次 16 状态行，总计划状态行）：设 `CLAIM_SURFACE_REGENERATE=1` 再生
+`ClaimSurfaceManifest.txt` ⇒ **+7 行／-0 行**（实测逐行：本文档 §24.111 全节**标题行**；4 条**残余声明行**「前置引用真实来源」「求值器真实实现」「发送前验算接线」「「结构版本」」；本节**声明面变更段**；交接稿**批次 16 状态行**），随后**不带环境变量**复跑
+`ClaimSurfaceGuardTests` **通过** ⇒ 清单已与文档一致。按 [R5 交接稿「会诊与执行纪律」](onedragon-r5-handoff-2026-09-21.md)，
+本批**不得**援引 §17.4-A 第 1 条「措辞类豁免」——声明面已变，等同语义必改项，变更清单已随本批一并提交评审。
+
