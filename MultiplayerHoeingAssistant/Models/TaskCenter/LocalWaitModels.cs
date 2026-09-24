@@ -29,6 +29,18 @@ public sealed class LocalWaitItem
     /// <summary>是否为最高级锄地类（由**可信入口**判定；自报 key 不作证明）。</summary>
     [JsonPropertyName("isHoeingHighest")] public bool IsHoeingHighest { get; set; }
     [JsonPropertyName("scheduledAt")] public DateTimeOffset? ScheduledAt { get; set; }
+
+    /// <summary>
+    /// **[批次 16／D2] 持久化稳定前置引用**（§24.106 **C4**）：落盘为**稳定引用串**（workflow／node／ticket 等稳定标识组合），
+    /// 缺字段／显式 null ⇒ <c>null</c> ⇒ **保守按不可判定**（不得默认「已就绪」）。
+    /// **不得**用本地时间戳／随机值填充（重启后不可复核）；就绪**永远**由 evaluator 在读取时求得。
+    /// **类型选择依据**：本批内该字段的**全部契约用法**（落盘往返后 `ToString()` 逐字符一致、evaluator 收到后
+    /// 与引用串做 `==` 比较）都要求字段**取值即稳定引用串**，故落盘类型取 <see cref="string"/> 而非包装对象
+    /// （包装对象会在反射写入时产生类型形状冲突）。引用**结构版本**仍是独立契约面：
+    /// 见 <c>PrerequisiteReference.CurrentVersion</c> 与 <c>LocalWaitQueueStore</c> 对非法版本的响亮拒绝。
+    /// </summary>
+    [JsonPropertyName("prerequisiteReference")] public string? PrerequisiteReference { get; set; }
+
     /// <summary>
     /// 到来者的级别/优先级是否来自可信入口（false ⇒ 选择时不得据此越级）。
     /// **默认 false（保守）**：调用方遗漏赋值时一律按不可信处理，避免"忘记设置＝默认可信"。
@@ -42,10 +54,17 @@ public sealed class LocalWaitItem
     [JsonPropertyName("reason")] public string? Reason { get; set; }
 }
 
-/// <summary>等待队列落盘文件（自版本化；更高版本＝响亮拒绝，不降级解析）。</summary>
+/// <summary>
+/// 等待队列落盘文件（自版本化；更高版本＝响亮拒绝，不降级解析）。
+/// **版本 2（批次 16／D2）**：新增 `prerequisiteReference` 持久化稳定前置引用；
+/// **版本 1 旧文件仍可读**（缺字段 ⇒ `PrerequisiteReference` 为 null ⇒ 保守按不可判定，不得默认就绪）。
+/// </summary>
 public sealed class LocalWaitQueueFile
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
+
+    /// <summary>仍可读取的最低版本（读兼容下界；低于此值响亮拒绝）。</summary>
+    public const int MinimumSupportedVersion = 1;
 
     [JsonPropertyName("version")] public int Version { get; set; } = CurrentVersion;
     [JsonPropertyName("items")] public List<LocalWaitItem> Items { get; set; } = [];

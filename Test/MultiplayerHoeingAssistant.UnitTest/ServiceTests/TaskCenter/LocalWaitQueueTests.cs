@@ -42,6 +42,42 @@ public sealed class LocalWaitQueueTests
         }
     }
 
+    /// <summary>
+    /// **批次 16／D2 迁移辅助**：本类既有夹具针对的是批次 6 的**选择规则形状**（最高级→级别→优先级→有值时刻→身份→候选号），
+    /// 其项**不带**任何持久化前置引用。批次 16 的**生产选择入口已删除「无 evaluator」旧签名**（缺引用／缺求值器
+    /// 一律**不可判定 ⇒ 不参选**，§24.106 C4 的恒 true 硬编码即为该缺陷）。
+    ///
+    /// 为了让「选择规则形状」夹具与本批的**前置引用**夹具职责分离，此处显式注入一个「**缺引用 ⇒ 就绪**」的只读
+    /// 求值器：它**不是**生产默认值（生产无默认），只在夹具内复现批次 6 的断言对象；批次 16 的保守默认由
+    /// <c>LocalWaitPrerequisiteContractTests</c> 独立钉死。
+    /// </summary>
+    private static LocalWaitItem? SelectByShapeRule(IReadOnlyList<LocalWaitItem>? items)
+        => LocalWaitQueuePolicy.SelectNext(WithShapeRuleReference(items), _ => PrerequisiteReadiness.Ready);
+
+    /// <summary>
+    /// 为批次 6 形状夹具的项补上一条**夹具内**持久化前置引用（值取稳定身份本身，确定性、可复核），
+    /// 使其满足「**缺引用 ⇒ 不可判定 ⇒ 不参选**」这一批次 16 前置条件，从而求值器有机会被询问。
+    /// <para>
+    /// 这里**不**改动生产默认，也**不**改动 <c>ToWaitingFacts</c> 的保守方向：它只是让形状夹具的断言对象
+    /// （批次 6 的选择规则）与批次 16 的前置规则**同时成立**；前置规则的保守默认另由
+    /// <c>LocalWaitPrerequisiteContractTests</c> 独立钉死。
+    /// </para>
+    /// <para>
+    /// **注意**：入参可能是 <c>LocalWaitQueueStore.Load()</c> 的**新实例**（落盘往返后的对象），
+    /// 故此处就地补引用——不依赖夹具构造期的实例被同一对象引用。
+    /// </para>
+    /// </summary>
+    private static IReadOnlyList<LocalWaitItem>? WithShapeRuleReference(IReadOnlyList<LocalWaitItem>? items)
+    {
+        if (items is null) return null;
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.PrerequisiteReference) && !string.IsNullOrWhiteSpace(item.StableIdentity))
+                item.PrerequisiteReference = item.StableIdentity;
+        }
+        return items;
+    }
+
     [Fact]
     public void DecideEnqueue_OnlyWaitLocallyEnqueues_AndNeverPermitsSend()
     {
@@ -114,13 +150,13 @@ public sealed class LocalWaitQueueTests
             // 重启：新实例从落盘恢复并重新比较
             var reloaded = new LocalWaitQueueStore(dir);
             Assert.Equal(3, reloaded.Load().Count);
-            Assert.Equal("s-hoeing", LocalWaitQueuePolicy.SelectNext(reloaded.Load())!.StableIdentity);
+            Assert.Equal("s-hoeing", SelectByShapeRule(reloaded.Load())!.StableIdentity);
 
             reloaded.Remove(LocalWaitQueuePolicy.DeriveItemId("s-hoeing"));
-            Assert.Equal("s-sys", LocalWaitQueuePolicy.SelectNext(reloaded.Load())!.StableIdentity);
+            Assert.Equal("s-sys", SelectByShapeRule(reloaded.Load())!.StableIdentity);
 
             reloaded.Remove(LocalWaitQueuePolicy.DeriveItemId("s-sys"));
-            Assert.Equal("s-plan", LocalWaitQueuePolicy.SelectNext(reloaded.Load())!.StableIdentity);
+            Assert.Equal("s-plan", SelectByShapeRule(reloaded.Load())!.StableIdentity);
         }
         finally
         {
@@ -150,7 +186,7 @@ public sealed class LocalWaitQueueTests
             Assert.Equal(LocalWaitItemState.Cancelled, cancelled.State);
             Assert.Equal("ticket_invalidated", cancelled.Reason);
             Assert.NotNull(cancelled.CancelledAtUtc);
-            Assert.Equal("s-sys", LocalWaitQueuePolicy.SelectNext(items)!.StableIdentity);
+            Assert.Equal("s-sys", SelectByShapeRule(items)!.StableIdentity);
             // 幂等：无变化不再写
             Assert.Equal(0, store.PersistCleanup(_ => null, DateTimeOffset.UtcNow).Cancelled);
         }
@@ -242,7 +278,7 @@ public sealed class LocalWaitQueueTests
         var system = Item("s-sys", ArbitrationTier.System, 1);
 
         // 自报 key 等不可信来源不得被当作最高级：System 项优先
-        Assert.Equal("s-sys", LocalWaitQueuePolicy.SelectNext([untrusted, system])!.StableIdentity);
+        Assert.Equal("s-sys", SelectByShapeRule([untrusted, system])!.StableIdentity);
     }
 
     [Fact]
@@ -252,7 +288,7 @@ public sealed class LocalWaitQueueTests
         var untrustedHigh = Item("s-untrusted-high", ArbitrationTier.System, 99, trusted: false);
         var trustedLow = Item("s-trusted-low", ArbitrationTier.Plan, 0);
 
-        Assert.Equal("s-trusted-low", LocalWaitQueuePolicy.SelectNext([untrustedHigh, trustedLow])!.StableIdentity);
+        Assert.Equal("s-trusted-low", SelectByShapeRule([untrustedHigh, trustedLow])!.StableIdentity);
     }
 
     [Fact]
@@ -335,7 +371,7 @@ public sealed class LocalWaitQueueTests
             Assert.False(item.HasTrustedIdentity); // 缺失 ⇒ 保守按不可信
             // 不可信项仍可被选中，但**不得越级**：可信 Plan/0 项必须排在它前面
             var trusted = Item("s-trusted", ArbitrationTier.Plan, 0);
-            Assert.Equal("s-trusted", LocalWaitQueuePolicy.SelectNext([item, trusted])!.StableIdentity);
+            Assert.Equal("s-trusted", SelectByShapeRule([item, trusted])!.StableIdentity);
         }
         finally
         {
@@ -355,10 +391,10 @@ public sealed class LocalWaitQueueTests
     [Fact]
     public void SelectNext_ReturnsNullWhenEmptyOrAllCancelled()
     {
-        Assert.Null(LocalWaitQueuePolicy.SelectNext([]));
-        Assert.Null(LocalWaitQueuePolicy.SelectNext(null));
+        Assert.Null(SelectByShapeRule([]));
+        Assert.Null(SelectByShapeRule(null));
         var cancelled = Item("s-x", ArbitrationTier.System, 9);
         cancelled.State = LocalWaitItemState.Cancelled;
-        Assert.Null(LocalWaitQueuePolicy.SelectNext([cancelled]));
+        Assert.Null(SelectByShapeRule([cancelled]));
     }
 }

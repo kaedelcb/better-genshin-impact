@@ -89,8 +89,9 @@ public sealed class LocalWaitQueueStore
             if (node is not JsonObject root) throw new LocalWaitQueueCorruptException("等待队列文件根节点必须是对象（原件保留）。");
             if (root["version"] is not JsonValue versionValue || !versionValue.TryGetValue<int>(out var version))
                 throw new LocalWaitQueueCorruptException("等待队列文件缺少整数 version 字段（原件保留）。");
-            if (version < 1 || version > LocalWaitQueueFile.CurrentVersion)
-                throw new LocalWaitQueueCorruptException($"等待队列文件版本 {version} 不在支持范围 [1,{LocalWaitQueueFile.CurrentVersion}]：响亮拒绝。");
+            if (version < LocalWaitQueueFile.MinimumSupportedVersion || version > LocalWaitQueueFile.CurrentVersion)
+                throw new LocalWaitQueueCorruptException(
+                    $"等待队列文件版本 {version} 不在支持范围 [{LocalWaitQueueFile.MinimumSupportedVersion},{LocalWaitQueueFile.CurrentVersion}]：响亮拒绝。");
             if (root["items"] is not JsonArray items)
                 throw new LocalWaitQueueCorruptException("等待队列文件缺少 items 数组（原件保留）。");
 
@@ -120,6 +121,12 @@ public sealed class LocalWaitQueueStore
         ArgumentNullException.ThrowIfNull(item);
         if (string.IsNullOrWhiteSpace(item.ItemId) || string.IsNullOrWhiteSpace(item.StableIdentity))
             throw new ArgumentException("等待项必须携带 ItemId 与 StableIdentity", nameof(item));
+
+        // [批次 16／D2] **写入侧与读取侧同口径**（会诊 #1 必改）：`ParsePrerequisiteReference` 把
+        // 「键存在但形状非法（非字符串／空白）」判为损坏，写入侧就必须同样**响亮拒绝**，
+        // 否则 `Upsert` 能成功写出自己随后 `Load` 拒读的文件（写入成功、重启即损坏＝把未知结果改写成成功）。
+        // 拒绝发生在**取锁与读盘之前**：零副作用，原文件逐字节不变。
+        ValidatePrerequisiteReferenceShape(item.PrerequisiteReference, item.ItemId);
 
         lock (_sync)
         {
@@ -198,7 +205,8 @@ public sealed class LocalWaitQueueStore
            && left.Priority == right.Priority
            && left.IsHoeingHighest == right.IsHoeingHighest
            && left.HasTrustedIdentity == right.HasTrustedIdentity
-           && Nullable.Compare(left.ScheduledAt, right.ScheduledAt) == 0;
+           && Nullable.Compare(left.ScheduledAt, right.ScheduledAt) == 0
+           && HasSamePrerequisiteReference(left.PrerequisiteReference, right.PrerequisiteReference);
 
     /// <summary>严格解析单条等待项：必需字段缺失、类型错误或枚举未定义一律响亮拒绝（缺失 hasTrustedIdentity ⇒ 保守 false）。</summary>
     private static LocalWaitItem ParseItem(JsonObject itemObject)
@@ -241,7 +249,52 @@ public sealed class LocalWaitQueueStore
             CancelledAtUtc = OptionalDateTimeOffset(itemObject, "cancelledAtUtc"),
             State = (LocalWaitItemState)stateRaw,
             Reason = OptionalString(itemObject, "reason"),
+            // [批次 16／D2] 持久化稳定前置引用（稳定引用串）：键**存在**即必须是**非空字符串**
+            // （JSON null／数字／对象／数组都算损坏，不得落到「缺字段＝不可判定」这一合法默认上）；
+            // 缺字段 ⇒ null（v1 旧文件读兼容，保守按不可判定，不得默认就绪）。
+            PrerequisiteReference = ParsePrerequisiteReference(itemObject, itemId),
         };
+    }
+
+    /// <summary>
+    /// [批次 16／D2] **写入侧形状校验**：与 <see cref="ParsePrerequisiteReference"/> 完全同口径。
+    /// 缺省（<c>null</c>）合法＝不可判定（v1 旧文件兼容）；给定则必须**非空白字符串**。
+    /// 形状非法一律 <see cref="LocalWaitQueueCorruptException"/>（响亮拒绝，零副作用）。
+    /// </summary>
+    private static void ValidatePrerequisiteReferenceShape(string? reference, string itemId)
+    {
+        if (reference is null) return;
+        if (string.IsNullOrWhiteSpace(reference))
+            throw new LocalWaitQueueCorruptException(
+                $"等待项 {itemId} 的 prerequisiteReference 为空字符串：写入侧拒绝（该形状读取侧判损坏，不得写出）。");
+    }
+
+    /// <summary>
+    /// [批次 16／D2] 严格解析**持久化稳定前置引用**（稳定引用串）。
+    /// 缺字段／显式 null ⇒ null（**保守按不可判定**，不得默认就绪；v1 旧文件即走此路径）。
+    /// 键存在则其值必须是**非空字符串** —— 形状非法（数字／对象／数组／空串）一律响亮拒绝，不降级解析。
+    /// **就绪**永不落盘：本字段只回答「前置是谁」，就绪由只读 evaluator 在读取时求得。
+    /// </summary>
+    private static string? ParsePrerequisiteReference(JsonObject itemObject, string itemId)
+    {
+        if (!itemObject.ContainsKey("prerequisiteReference")) return null;
+        if (itemObject["prerequisiteReference"] is null) return null;
+        if (itemObject["prerequisiteReference"] is not JsonValue node || !node.TryGetValue<string>(out var value))
+            throw new LocalWaitQueueCorruptException(
+                $"等待项 {itemId} 的 prerequisiteReference 不是字符串（原件保留）。");
+        if (string.IsNullOrWhiteSpace(value))
+            throw new LocalWaitQueueCorruptException(
+                $"等待项 {itemId} 的 prerequisiteReference 为空字符串（原件保留）。");
+
+        return value;
+    }
+
+    /// <summary>[批次 16／D2] 前置引用逐字符一致（ordinal；稳定身份口径）；两侧皆缺省视为一致。</summary>
+    private static bool HasSamePrerequisiteReference(string? left, string? right)
+    {
+        if (left is null && right is null) return true;
+        if (left is null || right is null) return false;
+        return string.Equals(left, right, StringComparison.Ordinal);
     }
 
     private static string RequiredString(JsonObject o, string name)
@@ -289,3 +342,4 @@ public sealed class LocalWaitQueueStore
         }
     }
 }
+
