@@ -595,6 +595,40 @@ public class BgiTaskCoordinatorTests
         Assert.Equal(1, h.Coordinator.QueueDepth);
     }
 
+    [Fact]
+    public void Submit_UnknownOccupancyInterleave_SameKeyAdoptsDifferentKeyConflicts_NoDuplicateHandle()
+    {
+        // R5 批次 8 交错夹具（BGI 侧）：槽位被占（未决占用）时——
+        // ①同键同载荷 ⇒ Adopted（沿用既有句柄，不新增执行身份、不重复发 task.queued）；
+        // ②同键异载荷 ⇒ IdempotencyConflict（不得静默替换原作业，句柄为空）；
+        // ③同键缺载荷指纹 ⇒ InvalidSubmission（不得注册）。
+        using var h = new Harness(slotFree: false);
+        var key = Guid.NewGuid().ToString("N");
+        BgiTaskCoordinator.TaskSubmission Request(string group, string? fingerprint) =>
+            new(0, group, null, 0, (_, _) => Task.FromResult(false))
+            {
+                IdempotencyKey = key,
+                PayloadFingerprint = fingerprint,
+            };
+
+        var first = h.Coordinator.Submit(Request("组A", "payload-a"));
+        var adopted = h.Coordinator.Submit(Request("组A", "payload-a"));
+        var conflict = h.Coordinator.Submit(Request("组A", "payload-b"));
+        var invalid = h.Coordinator.Submit(Request("组A", null));
+
+        Assert.Equal(BgiTaskCoordinator.SubmitStatus.Queued, first.Status);
+        Assert.Equal(BgiTaskCoordinator.SubmitStatus.Adopted, adopted.Status);
+        Assert.Equal(first.TaskHandle, adopted.TaskHandle);
+        Assert.Equal(BgiTaskCoordinator.SubmitStatus.IdempotencyConflict, conflict.Status);
+        Assert.Equal(Guid.Empty, conflict.TaskHandle);
+        Assert.Equal(BgiTaskCoordinator.SubmitStatus.InvalidSubmission, invalid.Status);
+        Assert.Equal(Guid.Empty, invalid.TaskHandle);
+
+        // 只有一次入队/一个句柄：冲突与非法提交都没有产生第二条执行身份
+        Assert.Equal(1, h.Coordinator.QueueDepth);
+        Assert.Equal(1, h.Events.Count(e => e.Name == ExternalInterfaceEventNames.TaskQueued));
+        Assert.Equal("pending", h.Coordinator.QueryItemStatus(first.TaskHandle).Status);
+    }
     [Theory]
     [InlineData(null)]
     [InlineData("")]

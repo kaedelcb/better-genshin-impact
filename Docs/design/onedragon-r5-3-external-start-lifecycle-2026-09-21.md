@@ -2936,6 +2936,57 @@ R5 要解决的是联机助手、BGI 与既有协调流程在**日常运行、�
 | 生产者身份继承 | ⚠ 本批让 `TaskRunner` 隐含一条龙子作业继承 `WorkflowRunId`；其它调用方自建子作业仍可能无身份（⇒ 该链不可判定） |
 | 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
 
+### 24.104 落地登记：联机全队批次直发与统一准入的关系（2026-09-24；**发现缺口，不接生产门**）
+
+**本批做了什么**：只做**审计＋夹具**，**不实现任何生产接线**。审计对象是联机"全队批次"直发路径，问题是它是否绕过了
+owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求键能否当作"最高级来源"的证明。
+
+**审计结论（带代码位置）**
+
+| 项 | 事实 |
+|---|---|
+| 直发点 | `MultiplayerHoeingAssistant/ViewModels/MainViewModel.CoordinatedBatch.cs` 第 145-148 行：`ext.SubmitTaskStartAsync(..., preempt: true, idempotencyKey: item.RequestKey, coordinatedHoeing: true)` |
+| 与统一准入的关系 | 该文件**不出现** `ArbitrationAdmissionService`／`ExternalStartAdmission` 任何符号 ⇒ 全队批次**不经过**助手统一准入门，是独立于 E1/E3/E4/E5/节点后继的**第四条路径** |
+| 房间授权能证明什么 | 只能证明"本次全队批次在房间内被授权发起"；**不能证明**该请求属于 owner B.1 的两类最高级（上线锄地／一键锄地） |
+| 请求键（幂等键）能证明什么 | 只证明"同键重发是同一执行身份"（跨入口共享未决键的 `BgiTaskCoordinator._unresolvedByKey`）；**不是**级别／优先级来源 |
+| `preempt: true` 能证明什么 | 只影响 BGI 协调器的槽窗口等待（3s 短窗，`task_busy`／`preempt_timeout` 分类），**不等于**最高优先级仲裁结论 |
+| 缺口判定 | **存在**"绕过统一准入"缺口：全队批次不经 owner B.1 相遇判定，其"最高级"地位既未被证明也未被拒绝；`RunningOccupantFacts.HighestClass` 在生产路径恒 `null`，因此它**也不能**作为占用者被其它入口据以抢占的依据。**修复必须改生产接线 ⇒ 属开门动作，本批不擅自开门，登记为残余待 owner 放行。** |
+
+**现有真实保护（已由夹具锁定，不是设计意图）**
+
+| 保护 | 夹具断言 |
+|---|---|
+| 接受未知时不产生第二次执行身份 | 同请求键重发（`Resubmit`），请求键不变；快照命中同键作业时只 `Attach`，**零 `Submit`** |
+| 已受理句柄消失不重放 | `ConfirmTerminal(..., "lost_job")`，零 `Resubmit`／零 `Submit` |
+| 纪元变化不跨纪元重放 | 单 `EpochChanged`，零发送 |
+| 重发预算耗尽如实收口 | `ConfirmTerminal(..., "result_unknown")`，不冒充成功 |
+| 缺失／未知终态不是成功 | `CoordinatedBatchOutcome.Classify` 对 null／未知状态一律 `unknown`；`stopping` 与结果正交（`completed && !Cancelled` 仍是 `succeeded`） |
+| BGI 侧键语义 | 同键同载荷 ⇒ `Adopted`（沿用既有句柄，不重复 `task.queued`）；同键异载荷 ⇒ `IdempotencyConflict`（句柄为空）；同键缺指纹 ⇒ `InvalidSubmission` |
+
+**证据**
+
+- 定向夹具（助手）`Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/CoordinatedBatchAdmissionRelationTests.cs` **31/31**：
+  终态分类表 14 例、缺失／空状态 ⇒ `unknown`、未知接受同键重发、预算耗尽 `result_unknown`、句柄消失 `lost_job`、纪元变化、同键 `Attach` 不 `Submit`，
+  以及交错组：全队批次遇锄地占用者但**无法证明**最高级 ⇒ `HoldUnknownOccupant`；自报键非受信来源 ⇒ `WaitLocally`；已证明最高级占用者 vs 普通到来者 ⇒ `WaitLocally`；
+  两类最高级相遇 ⇒ `PreemptNow` 且**必须**给出可绑定目标身份；无受信身份占用者 ⇒ 停驻且无可抢占目标；三类未知占用引用 ⇒ `HoldFactsUnknown`；
+  低优先级到来者进本地等待集合且最高级优先；同键重发后 `Attach` 保持单一身份；**重复广播不同键不被静默合并**（不得把"键相同"当跨端最高级证明）。
+- 定向夹具（BGI）`Test/BetterGenshinImpact.UnitTest/ServiceTests/Instance/BgiTaskCoordinatorTests.cs` 新增 1 条：
+  槽位被占时同键 `Adopted`／异载荷 `IdempotencyConflict`／缺指纹 `InvalidSubmission`，且 `QueueDepth==1`、`task.queued` 仅 1 次 ⇒ **无第二条执行身份**。
+- 结构守卫（审计结论的机械证据）：同文件 `CoordinatedBatch_DoesNotReferenceUnifiedAdmissionSymbols` 断言直发路径不引用统一准入符号；
+  日后接线本守卫会红，届时须连同本节合同一起更新。
+- 完整回归：助手全量 **1278 通过／2 跳过／0 失败／1280**（`r58_assistant_full_20260924_091612.trx`）；
+  BGI 全量 **1035 通过／14 失败／1049**（`r58_bgi_full_20260924.trx`），失败身份与既有 14 项基线**差集为空**
+  （新增 0、消失 0）——仅"身份差集为空"，**不等于**那 14 项的失败原因已归因。
+
+**残余（不因本批改变门禁）**
+
+| 项 | 状态 |
+|---|---|
+| 全队批次与统一准入门的关系 | ❌ **缺口已登记**：绕过统一准入（无 owner B.1 相遇判定、无最高级来源证明）；修复属开门动作，**待 owner 放行** |
+| 全队批次的"最高级"来源 | ❌ 不存在：房间授权与请求键都不构成级别证明；`HighestClass` 生产路径恒 `null` |
+| 交错夹具覆盖范围 | ⚠ 只覆盖已列场景（助手纯函数 + BGI 提交键语义），**不称"全格"**；真实 IPC 时序、跨端同时广播、网络重发窗口未覆盖 |
+| 端到端接线验证 | ❌ 未做：未在真实 BGI/实机上演练全队批次与其它入口互遇 |
+| 生产入口门／真实 User 门／R5.8 实机无双跑签署 | ❌ **全部保持关闭／未签署** |
 ### 24.102 落地登记：低优先级本地持久等待（基础组件，未接线）（2026-09-24；B.1）
 
 **审计（载体与现状，带代码位置）**
