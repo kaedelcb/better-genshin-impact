@@ -135,35 +135,65 @@ public sealed class CoordinatedBatchAdmissionRelationTests
     }
 
     [Fact]
-    public void BatchReconcile_LostJobConfirmation_CurrentlyAlsoReturnsComplete_ExposedNotEndorsed()
+    public void BatchReconcile_LostJobConfirmation_ReturnsCompleteWithUnresolved_NotCompleteSucceeded()
     {
-        // 风险登记（未接线决策器的**潜在合同风险**，本夹具只暴露当前行为、不作肯定结论）：
-        // 已知句柄消失 ⇒ ConfirmTerminal("lost_job")，随后"全部确认"分支会同时返回 Complete；
-        // 而 Complete 的既有注释关联"完成后动作（RunSpecified 收尾）"（BatchReconcilePlan.cs:112-113）。
-        // ⇒ "按未证退出收口"不等于"不会触发完成/成功收尾"。接线前必须由 owner 裁决
-        //   该 Complete 是否应携带"结果未知"标记（或改由 Abort/失败收尾），见 §24.104 残项。
+        // R5 批次 13（D5，owner 2026-09-24 裁决 A 的落地）：完成类型拆分的**反例先行夹具**。
+        // 旧行为（_CurrentlyAlsoReturnsComplete_ExposedNotEndorsed）：已知句柄消失 ⇒ ConfirmTerminal("lost_job")，
+        // 同一拍"全部确认"分支再返回**无载荷**的 Complete；而该 Complete 的既有注释关联
+        // "完成后动作（RunSpecified 收尾）"——等于把"未证退出"当成"可以执行完成动作"。
+        // 新语义（D5）：只有**全部项均以成功终态确认**时才产生 CompleteSucceeded；
+        // 任何"有未确认/未决结果"的收口（此处 lost_job）只产生 CompleteWithUnresolved，
+        // 且**绝不**产生 CompleteSucceeded，也不把未知改写为成功或已证实失败。
         var items = new List<BatchExpectedItem> { Submitted("组A", jobId: Guid.NewGuid().ToString("N")) };
 
         var actions = BatchReconcileDecider.Decide(items, [], epochMatch: true, generation: 1, nowUtc: Now);
 
+        // 先落地本拍动作（调用方语义镜像）：ConfirmTerminal(lost_job) 会把该项标为 TerminalConfirmed；
+        // 再看**收口之后**的拍次产出什么类型的完成动作，避免把"同一拍的确认+完成"混读为同一帧事实。
+        ApplyCallerSemantics(items, actions);
+        var tick2 = BatchReconcileDecider.Decide(items, [], epochMatch: true, generation: 1, nowUtc: Now.AddSeconds(1));
+
         Assert.Equal("lost_job", Assert.Single(actions.OfType<BatchReconcileAction.ConfirmTerminal>()).ErrorCode);
-        // 当前真实行为：同一拍内也返回 Complete（本断言刻意固定该事实，便于接线前裁决时看到差异）
-        Assert.Single(actions.OfType<BatchReconcileAction.Complete>());
-        // 且 Complete 不携带任何"结果未知"信息 ⇒ 调用方无法从动作本身区分"真成功"与"未证退出"
+        // 新语义：有未决项 ⇒ 只能是 CompleteWithUnresolved（同一批次的后续拍）
+        var unresolved = Assert.Single(tick2.OfType<BatchReconcileAction.CompleteWithUnresolved>());
+        // 关键安全断言：不得产出"可执行 RunSpecified 收尾"的全成功完成
+        Assert.Empty(tick2.OfType<BatchReconcileAction.CompleteSucceeded>());
+        // 未决项必须可枚举（承载证据，不得改写成成功或已证实失败）
+        var entry = Assert.Single(unresolved.Unresolved);
+        Assert.Equal(0, entry.Index);
+        Assert.Equal("组A", entry.Name);
+        Assert.Equal("lost_job", entry.ErrorCode);
+        Assert.False(entry.Cancelled);
         Assert.DoesNotContain(actions, a => a is BatchReconcileAction.AbortUserCancelled);
     }
 
     [Fact]
-    public void BatchReconcile_ExhaustedAttemptsUnknownResult_CurrentlyAlsoReturnsComplete_ExposedNotEndorsed()
+    public void BatchReconcile_ExhaustedAttemptsUnknownResult_ReturnsCompleteWithUnresolved_NotCompleteSucceeded()
     {
-        // 同上：重提耗尽 ⇒ ConfirmTerminal("result_unknown")，同拍仍返回 Complete（当前行为，非背书）。
+        // 同上：重提耗尽 ⇒ ConfirmTerminal("result_unknown")，收口只能是有未决的完成。
+        // 未知结果**不得**被改写为成功；也**不得**被改写为已证实失败（errorCode 原样保留 result_unknown）。
         var items = new List<BatchExpectedItem> { Submitted("组A", attempts: BatchReconcileDecider.MaxSubmitAttempts) };
 
         var actions = BatchReconcileDecider.Decide(items, [], epochMatch: true, generation: 1, nowUtc: Now);
 
         Assert.Equal("result_unknown", Assert.Single(actions.OfType<BatchReconcileAction.ConfirmTerminal>()).ErrorCode);
-        Assert.Single(actions.OfType<BatchReconcileAction.Complete>());
+        // [D5 同拍] 单期望项：确认与收口在同一拍发生，同拍就不得授予收尾许可（与 lost_job 同拍反例同强度）。
+        Assert.Empty(actions.OfType<BatchReconcileAction.CompleteSucceeded>());
+        var unresolvedSameTick = Assert.Single(actions.OfType<BatchReconcileAction.CompleteWithUnresolved>());
+        var sameTickEntry = Assert.Single(unresolvedSameTick.Unresolved);
+        Assert.Equal("result_unknown", sameTickEntry.ErrorCode);
+        // 下一拍：已确认的未决结论保持（幂等复现，不退化为 CompleteSucceeded）
+        ApplyCallerSemantics(items, actions);
+        var tick2 = BatchReconcileDecider.Decide(items, [], epochMatch: true, generation: 1, nowUtc: Now.AddSeconds(1));
+
+        Assert.Empty(tick2.OfType<BatchReconcileAction.CompleteSucceeded>());
+        var unresolved = Assert.Single(tick2.OfType<BatchReconcileAction.CompleteWithUnresolved>());
+        var entry = Assert.Single(unresolved.Unresolved);
+        Assert.Equal("组A", entry.Name);
+        Assert.Equal("result_unknown", entry.ErrorCode);
+        Assert.False(entry.Cancelled);
     }
+
     [Fact]
     public void CoordinatedBatch_DoesNotReferenceUnifiedAdmissionSymbols()
     {
@@ -347,6 +377,172 @@ public sealed class CoordinatedBatchAdmissionRelationTests
         Assert.Empty(actions.OfType<BatchReconcileAction.Resubmit>());
         Assert.Empty(actions.OfType<BatchReconcileAction.Attach>());
     }
+    // ------------------------------------------------------------------
+    // [D5 / R5 批次 13] 完成类型拆分的正向与边界夹具：
+    // ①全成功 ⇒ CompleteSucceeded（唯一可执行 RunSpecified 收尾的完成动作）；
+    // ②未决/取消收口 ⇒ CompleteWithUnresolved 且**不**产生 CompleteSucceeded；
+    // ③空批次归类（CompleteSucceeded，空集合全成功为真，另见调用方空批次守卫）；
+    // ④"此前各拍已确认的取消项"归 CompleteWithUnresolved（本拍取消走 AbortUserCancelled，不到本分支）。
+    // 局限：只断言决策器返回值，不观测生产接线/发送/收尾行为（生产仍零消费点）。
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void BatchReconcile_AllItemsSucceeded_ReturnsCompleteSucceededOnly()
+    {
+        var items = new List<BatchExpectedItem> { Confirmed("组A"), Confirmed("组B") };
+
+        var actions = BatchReconcileDecider.Decide(items, [], epochMatch: true, generation: 1, nowUtc: Now);
+
+        Assert.Single(actions.OfType<BatchReconcileAction.CompleteSucceeded>());
+        Assert.Empty(actions.OfType<BatchReconcileAction.CompleteWithUnresolved>());
+    }
+
+    [Fact]
+    public void BatchReconcile_NeverStartedItem_ReturnsCompleteWithUnresolved()
+    {
+        // 业务拒绝（如配置组不存在）：Started=false 却已终态确认 ⇒ 从未真正执行，
+        // 不得据此执行 RunSpecified 收尾（2026-09-13 空批次事故的同类风险，见 BatchExpectedItem.Started 注解）。
+        var business = new BatchExpectedItem("组A", isOneDragon: false)
+        {
+            State = BatchItemState.TerminalConfirmed,
+            Started = false,
+            TerminalErrorCode = "group_not_found",
+        };
+        var items = new List<BatchExpectedItem> { Confirmed("组B"), business };
+
+        var actions = BatchReconcileDecider.Decide(items, [], epochMatch: true, generation: 1, nowUtc: Now);
+
+        Assert.Empty(actions.OfType<BatchReconcileAction.CompleteSucceeded>());
+        var unresolved = Assert.Single(actions.OfType<BatchReconcileAction.CompleteWithUnresolved>());
+        var entry = Assert.Single(unresolved.Unresolved);
+        Assert.Equal(1, entry.Index);
+        Assert.Equal("组A", entry.Name);
+        Assert.Equal("group_not_found", entry.ErrorCode);
+    }
+
+    [Fact]
+    public void BatchReconcile_PreviouslyConfirmedCancellation_ReturnsCompleteWithUnresolved()
+    {
+        // 用户取消收尾（TerminalWasCancelled=true）：不是成功收尾 ⇒ 只能是 CompleteWithUnresolved。
+        // 本拍取消的项在第 257–264 行已提前 return（AbortUserCancelled），故此处覆盖"此前各拍已确认"的可达情形。
+        var cancelled = new BatchExpectedItem("组A", isOneDragon: false)
+        {
+            State = BatchItemState.TerminalConfirmed,
+            Started = true,
+            TerminalWasCancelled = true,
+        };
+        var items = new List<BatchExpectedItem> { cancelled, Confirmed("组B") };
+
+        var actions = BatchReconcileDecider.Decide(items, [], epochMatch: true, generation: 1, nowUtc: Now);
+
+        Assert.Empty(actions.OfType<BatchReconcileAction.CompleteSucceeded>());
+        var unresolved = Assert.Single(actions.OfType<BatchReconcileAction.CompleteWithUnresolved>());
+        var entry = Assert.Single(unresolved.Unresolved);
+        Assert.True(entry.Cancelled);
+        Assert.Equal("组A", entry.Name);
+        Assert.Null(entry.ErrorCode);
+    }
+
+    [Fact]
+    public void BatchReconcile_EmptyBatch_ReturnsCompleteSucceeded_VacuousTruth()
+    {
+        // [D5] 空批次归类 CompleteSucceeded：全成功判据在空集合上为真，且无未决项。
+        // 这不等于"真的锄过地"——空批次误触发 RunSpecified 的那次实机事故由调用方的
+        // "全部项未启动"守卫兜住（本决策器只回答"有无未决结果"）。
+        var actions = BatchReconcileDecider.Decide([], [], epochMatch: true, generation: 1, nowUtc: Now);
+
+        Assert.Single(actions.OfType<BatchReconcileAction.CompleteSucceeded>());
+        Assert.Empty(actions.OfType<BatchReconcileAction.CompleteWithUnresolved>());
+    }
+
+    [Fact]
+    public void BatchReconcile_LastItemLostJob_SameTick_ReturnsCompleteWithUnresolved_NotCompleteSucceeded()
+    {
+        // [D5 必改反例 / gpt-6-sol 第 1 项] 未决判据必须按**本拍确认动作与既有状态合成后**的逐项结果分类：
+        // 最后一项在本拍才被 ConfirmTerminal("lost_job") 时，items 上的 TerminalErrorCode 在本拍仍是 null（动作未应用），
+        // 若只读旧字段就会在同一拍产出 CompleteSucceeded —— 直接违反"只有全成功才能执行 RunSpecified 收尾"。
+        // 本夹具锁定"同一拍"的完成类型（不是只看下一拍），故它能抓住该类误判。
+        var items = new List<BatchExpectedItem>
+        {
+            Confirmed("组A"),
+            Submitted("组B", jobId: Guid.NewGuid().ToString("N")),
+        };
+
+        var actions = BatchReconcileDecider.Decide(items, [], epochMatch: true, generation: 1, nowUtc: Now);
+
+        Assert.Equal("lost_job",
+            Assert.Single(actions.OfType<BatchReconcileAction.ConfirmTerminal>()).ErrorCode);
+        // 同拍：不得授予收尾许可
+        Assert.Empty(actions.OfType<BatchReconcileAction.CompleteSucceeded>());
+        var unresolved = Assert.Single(actions.OfType<BatchReconcileAction.CompleteWithUnresolved>());
+        var entry = Assert.Single(unresolved.Unresolved);
+        Assert.Equal(1, entry.Index);
+        Assert.Equal("组B", entry.Name);
+        Assert.Equal("lost_job", entry.ErrorCode);
+    }
+
+    [Fact]
+    public void BatchReconcile_LastItemSucceeded_SameTick_ReturnsCompleteSucceeded()
+    {
+        // 对照组：同一形态但最后一项真成功 ⇒ 同拍必须授予收尾许可（证明拆分不是"一律不完成"）。
+        var items = new List<BatchExpectedItem>
+        {
+            Confirmed("组A"),
+            Submitted("组B", jobId: Guid.NewGuid().ToString("N")),
+        };
+
+        var actions = BatchReconcileDecider.Decide(items,
+            [Observed(items[1].JobId!, "succeeded")], epochMatch: true, generation: 1, nowUtc: Now);
+
+        Assert.Single(actions.OfType<BatchReconcileAction.CompleteSucceeded>());
+        Assert.Empty(actions.OfType<BatchReconcileAction.CompleteWithUnresolved>());
+    }
+
+    [Fact]
+    public void BatchReconcile_ReprojectedSuccessTicket_DoesNotRegressOnRepeatTicks()
+    {
+        // 水平触发对账：同一"全部可证成功"的批次在后续拍重复返回 CompleteSucceeded（幂等，未决列表恒为空）。
+        var items = new List<BatchExpectedItem> { Confirmed("组A") };
+
+        Assert.Single(BatchReconcileDecider.Decide(items, [], epochMatch: true, generation: 1, nowUtc: Now)
+            .OfType<BatchReconcileAction.CompleteSucceeded>());
+        Assert.Single(BatchReconcileDecider.Decide(items, [], epochMatch: true, generation: 1, nowUtc: Now.AddSeconds(1))
+            .OfType<BatchReconcileAction.CompleteSucceeded>());
+    }
+
+    /// <summary>调用方语义镜像（**只**做本文件用得到的子集）：ConfirmTerminal 推进为已确认终态；
+    /// Submit 之后**受理成立**才记 `Started=true`。`Started` 的生产定义是「真正被 BGI 接受启动过」
+    /// （`BatchReconcilePlan.cs` 第 43–46 行），故镜像是「提交动作 ⇒ 视为本条已被受理」的**夹具假设**，
+    /// **不是**「发出提交意图即等受理事实」；真实调用方（未接线）须以应答／幂等命中／附着找回为受理证据。
+    /// 业务拒绝（配置组不存在等）应保持 `Started=false`。</summary>
+    private static void ApplyCallerSemantics(List<BatchExpectedItem> items, IReadOnlyList<BatchReconcileAction> actions)
+    {
+        foreach (var action in actions)
+        {
+            switch (action)
+            {
+                case BatchReconcileAction.Submit s:
+                    items[s.Index].State = BatchItemState.Submitted;
+                    items[s.Index].SubmitAttempts++;
+                    items[s.Index].Started = true;
+                    break;
+                case BatchReconcileAction.ConfirmTerminal c:
+                    items[c.Index].State = BatchItemState.TerminalConfirmed;
+                    items[c.Index].TerminalWasCancelled = c.Cancelled;
+                    items[c.Index].TerminalErrorCode = c.ErrorCode;
+                    break;
+            }
+        }
+    }
+
+    /// <summary>已确认成功终态项（Started ∧ TerminalConfirmed ∧ 未取消 ∧ 无 errorCode）。</summary>
+    private static BatchExpectedItem Confirmed(string name)
+        => new(name, isOneDragon: false)
+        {
+            State = BatchItemState.TerminalConfirmed,
+            Started = true,
+        };
+
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

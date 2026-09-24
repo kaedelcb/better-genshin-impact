@@ -26,6 +26,17 @@ public class BatchSubmitRejectionA6Tests
 
     private static BatchJobObservation Obs(string jobId, string name, string state, string? errorCode = null, bool cancelled = false)
         => new(jobId, name, Gen, state, cancelled, errorCode);
+    /// <summary>调用方语义镜像（本文件用到的子集）：ConfirmTerminal 推进为已确认终态。</summary>
+    private static void ApplyCallerSemantics(IReadOnlyList<BatchExpectedItem> items, IReadOnlyList<BatchReconcileAction> actions)
+    {
+        foreach (var action in actions.OfType<BatchReconcileAction.ConfirmTerminal>())
+        {
+            items[action.Index].State = BatchItemState.TerminalConfirmed;
+            items[action.Index].TerminalWasCancelled = action.Cancelled;
+            items[action.Index].TerminalErrorCode = action.ErrorCode;
+        }
+    }
+
 
     // ---------- ClassifySubmitRejection ----------
 
@@ -91,7 +102,8 @@ public class BatchSubmitRejectionA6Tests
         // 不确认终态、不完成批次：退回重发（本拍仍视为在飞 → 附带 Wait）
         Assert.Contains(actions, a => a is BatchReconcileAction.RetryFromFailure { Index: 0, ErrorCode: "preempt_timeout" });
         Assert.DoesNotContain(actions, a => a is BatchReconcileAction.ConfirmTerminal);
-        Assert.DoesNotContain(actions, a => a is BatchReconcileAction.Complete);
+        Assert.DoesNotContain(actions, a => a is BatchReconcileAction.CompleteSucceeded);
+        Assert.DoesNotContain(actions, a => a is BatchReconcileAction.CompleteWithUnresolved);
     }
 
     [Fact]
@@ -106,7 +118,13 @@ public class BatchSubmitRejectionA6Tests
 
         Assert.Contains(actions, a => a is BatchReconcileAction.ConfirmTerminal { Index: 0, Cancelled: false, ErrorCode: "preempt_timeout" });
         Assert.DoesNotContain(actions, a => a is BatchReconcileAction.RetryFromFailure);
-        Assert.Contains(actions, a => a is BatchReconcileAction.Complete); // 全部终态 → 批次完成
+        // [D5] 全部终态 → 收口；但 preempt_timeout 重试耗尽仍是非成功结果 ⇒ 下一拍只能是
+        // CompleteWithUnresolved（**不得**产出可执行 RunSpecified 的 CompleteSucceeded）
+        ApplyCallerSemantics([item], actions);
+        var tick2 = BatchReconcileDecider.Decide([item], [], true, Gen, Now.AddSeconds(1));
+        Assert.Empty(tick2.OfType<BatchReconcileAction.CompleteSucceeded>());
+        Assert.Equal("preempt_timeout",
+            Assert.Single(Assert.Single(tick2.OfType<BatchReconcileAction.CompleteWithUnresolved>()).Unresolved).ErrorCode);
     }
 
     [Fact]
@@ -202,7 +220,8 @@ public class BatchSubmitRejectionA6Tests
         var a2 = BatchReconcileDecider.Decide(items, [Obs("j1", "联机队长-精英", "failed", "preempt_timeout")], true, Gen, Now);
         var retry = Assert.IsType<BatchReconcileAction.RetryFromFailure>(Assert.Single(a2, a => a is BatchReconcileAction.RetryFromFailure));
         Assert.DoesNotContain(a2, a => a is BatchReconcileAction.ConfirmTerminal);
-        Assert.DoesNotContain(a2, a => a is BatchReconcileAction.Complete);
+        Assert.DoesNotContain(a2, a => a is BatchReconcileAction.CompleteSucceeded);
+        Assert.DoesNotContain(a2, a => a is BatchReconcileAction.CompleteWithUnresolved);
         items[retry.Index].State = BatchItemState.PendingSubmit;
         items[retry.Index].JobId = null;
         items[retry.Index].RejectionRetries++;
@@ -220,6 +239,7 @@ public class BatchSubmitRejectionA6Tests
         var a4 = BatchReconcileDecider.Decide(items, [Obs("j1b", "联机队长-精英", "succeeded")], true, Gen, Now);
         Assert.Contains(a4, a => a is BatchReconcileAction.ConfirmTerminal { Index: 0 });
         Assert.Contains(a4, a => a is BatchReconcileAction.Submit { Index: 1 });
-        Assert.DoesNotContain(a4, a => a is BatchReconcileAction.Complete);
+        Assert.DoesNotContain(a4, a => a is BatchReconcileAction.CompleteSucceeded);
+        Assert.DoesNotContain(a4, a => a is BatchReconcileAction.CompleteWithUnresolved);
     }
 }

@@ -7,7 +7,8 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 /// [A4.2] BatchReconcileDecider 纯函数穷尽测试（总计划 §4.5 reconcile 决策）。
 /// 锚点用例 = 本次事故形态："锄地继续"式收尾（Complete）严格在全部期望项终态确认之后才允许输出。
 /// 测试内 ApplyActions 模拟调用方语义（ConfirmTerminal→TerminalConfirmed，Attach→记录 jobId，
-/// Submit/Resubmit→Submitted+SubmitAttempts++，EpochChanged→Submitted 退回 PendingSubmit）。
+/// Submit/Resubmit→Submitted+SubmitAttempts++，EpochChanged→Submitted 退回 PendingSubmit）；
+/// 另按 [D5] 记 Started=true（"真正被 BGI 接受启动过"）——未启动项不得构成成功收尾。
 /// </summary>
 public class BatchReconcileDeciderTests
 {
@@ -32,12 +33,16 @@ public class BatchReconcileDeciderTests
                 case BatchReconcileAction.Submit s:
                     items[s.Index].State = BatchItemState.Submitted;
                     items[s.Index].SubmitAttempts++;
+                    // 调用方语义：被 BGI 接受启动 ⇒ Started=true（业务拒绝则保持 false）
+                    items[s.Index].Started = true;
                     break;
                 case BatchReconcileAction.Resubmit r:
                     items[r.Index].SubmitAttempts++;
+                    items[r.Index].Started = true;
                     break;
                 case BatchReconcileAction.Attach a:
                     items[a.Index].JobId = a.JobId;
+                    items[a.Index].Started = true;
                     break;
                 case BatchReconcileAction.RetryFromFailure rf:
                     items[rf.Index].State = BatchItemState.PendingSubmit;
@@ -73,7 +78,9 @@ public class BatchReconcileDeciderTests
     public void EmptyBatch_CompletesImmediately()
     {
         var actions = BatchReconcileDecider.Decide([], [], true, Gen, Now);
-        Assert.Contains(actions, a => a is BatchReconcileAction.Complete);
+        // [D5] 空批次归类 CompleteSucceeded（空集合的全成功为真）；但调用方仍有空批次守卫（2026-09-13 事故）
+        Assert.Contains(actions, a => a is BatchReconcileAction.CompleteSucceeded);
+        Assert.DoesNotContain(actions, a => a is BatchReconcileAction.CompleteWithUnresolved);
     }
 
     [Fact]
@@ -125,25 +132,44 @@ public class BatchReconcileDeciderTests
         Tick(items, []);
         items[0].JobId = "j1";
         var a1 = Tick(items, [Obs("j1", "联机队长-传奇", "running")]);
-        Assert.DoesNotContain(a1, a => a is BatchReconcileAction.Complete);
+        Assert.DoesNotContain(a1, a => a is BatchReconcileAction.CompleteSucceeded);
+        Assert.DoesNotContain(a1, a => a is BatchReconcileAction.CompleteWithUnresolved);
 
         // 拍2：组1完成 → 确认+下发组2；组2 running
         Tick(items, [Obs("j1", "联机队长-传奇", "succeeded")]);
         items[1].JobId = "j2";
         var a2 = Tick(items, [Obs("j2", "联机队长-次数盾", "running")]);
-        Assert.DoesNotContain(a2, a => a is BatchReconcileAction.Complete);
+        Assert.DoesNotContain(a2, a => a is BatchReconcileAction.CompleteSucceeded);
+        Assert.DoesNotContain(a2, a => a is BatchReconcileAction.CompleteWithUnresolved);
         Assert.DoesNotContain(a2, a => a is BatchReconcileAction.Submit);
 
         // 拍3：组2 failed（记 errorCode 继续），组3 queued → 仍不得 Complete
         Tick(items, [Obs("j2", "联机队长-次数盾", "failed", errorCode: "task_start_failed")]);
         items[2].JobId = "j3";
         var a3 = Tick(items, [Obs("j3", "联机队长-精英", "queued")]);
-        Assert.DoesNotContain(a3, a => a is BatchReconcileAction.Complete);
+        Assert.DoesNotContain(a3, a => a is BatchReconcileAction.CompleteSucceeded);
+        Assert.DoesNotContain(a3, a => a is BatchReconcileAction.CompleteWithUnresolved);
 
-        // 拍4：组3 succeeded → 这一刻才允许 Complete
+        // 拍4：组3 succeeded → 这一刻才允许收口。本拍真正的完成动作断言（**同拍**，不是只看下一拍）：
+        // 组2 是 failed（未决）⇒ 同拍 actions 里**不得**出现可执行 RunSpecified 收尾的 CompleteSucceeded，
+        // 只能是 CompleteWithUnresolved（D5）。
         var a4 = Tick(items, [Obs("j3", "联机队长-精英", "succeeded")]);
-        Assert.Contains(a4, a => a is BatchReconcileAction.Complete);
         Assert.All(items, i => Assert.Equal(BatchItemState.TerminalConfirmed, i.State));
+        // [D5 同拍] 收口与最后一项确认发生在同一拍：不得授予收尾许可
+        Assert.Empty(a4.OfType<BatchReconcileAction.CompleteSucceeded>());
+        var unresolved4 = Assert.Single(a4.OfType<BatchReconcileAction.CompleteWithUnresolved>());
+        var failedEntry4 = Assert.Single(unresolved4.Unresolved);
+        Assert.Equal("联机队长-次数盾", failedEntry4.Name);
+        Assert.Equal("task_start_failed", failedEntry4.ErrorCode);
+        Assert.Equal(1, failedEntry4.Index);
+        // 拍5：收口的**幂等复现**（同一未决结论在后续拍保持，不退化为 CompleteSucceeded）
+        var a5 = Tick(items, []);
+        Assert.Empty(a5.OfType<BatchReconcileAction.CompleteSucceeded>());
+        var unresolved5 = Assert.Single(a5.OfType<BatchReconcileAction.CompleteWithUnresolved>());
+        var failedEntry = Assert.Single(unresolved5.Unresolved);
+        Assert.Equal("联机队长-次数盾", failedEntry.Name);
+        Assert.Equal("task_start_failed", failedEntry.ErrorCode);
+        Assert.Equal(1, failedEntry.Index);
     }
 
     [Fact]
@@ -158,7 +184,8 @@ public class BatchReconcileDeciderTests
         Assert.Contains(actions, a => a is BatchReconcileAction.ConfirmTerminal { Index: 0, Cancelled: true });
         Assert.Contains(actions, a => a is BatchReconcileAction.AbortUserCancelled { Index: 0 });
         Assert.DoesNotContain(actions, a => a is BatchReconcileAction.Submit);
-        Assert.DoesNotContain(actions, a => a is BatchReconcileAction.Complete);
+        Assert.DoesNotContain(actions, a => a is BatchReconcileAction.CompleteSucceeded);
+        Assert.DoesNotContain(actions, a => a is BatchReconcileAction.CompleteWithUnresolved);
     }
 
     [Fact]
@@ -224,9 +251,11 @@ public class BatchReconcileDeciderTests
         Assert.Contains(a2, a => a is BatchReconcileAction.ConfirmTerminal { Index: 0, ErrorCode: "lost_job" });
         Assert.Equal(BatchItemState.TerminalConfirmed, items[0].State);
 
-        // 全部确认 → Complete（lost_job 也推进批次，与旧循环"失败记日志继续"同语义）
+        // 全部确认 → 收口，但 lost_job 是未决结果 ⇒ [D5] 只能是 CompleteWithUnresolved（**不**授予收尾许可）
         var a3 = Tick(items, []);
-        Assert.Contains(a3, a => a is BatchReconcileAction.Complete);
+        Assert.Empty(a3.OfType<BatchReconcileAction.CompleteSucceeded>());
+        var unresolved3 = Assert.Single(a3.OfType<BatchReconcileAction.CompleteWithUnresolved>());
+        Assert.Equal("lost_job", Assert.Single(unresolved3.Unresolved).ErrorCode);
     }
 
     [Fact]

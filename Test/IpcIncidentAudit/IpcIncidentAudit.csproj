@@ -22,6 +22,7 @@
     <Compile Include="../../BetterGenshinImpact/Service/Execution/SuspendContextCapture.cs" Link="Production/SuspendContextCapture.cs" />
     <Compile Include="../../BetterGenshinImpact/Service/Execution/BgiJob.cs" Link="Production/BgiJob.cs" />
     <Compile Include="../../BetterGenshinImpact/Service/Execution/JobRegistry.cs" Link="Production/JobRegistry.cs" />
+    <Compile Include="../../BetterGenshinImpact/Service/Execution/ExecutionExitLedger.cs" Link="Production/ExecutionExitLedger.cs" />
     <Compile Include="../../BetterGenshinImpact/Core/Script/CancellationContext.cs" Link="Production/CancellationContext.cs" />
     <Compile Include="../../BetterGenshinImpact/Core/Config/SuspendedTaskContext.cs" Link="Production/SuspendedTaskContext.cs" />
     <Compile Include="../../MultiplayerHoeingAssistant/Services/BatchReconcilePlan.cs" Link="Production/BatchReconcilePlan.cs" />

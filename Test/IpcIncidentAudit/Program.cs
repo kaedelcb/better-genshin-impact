@@ -223,7 +223,10 @@ await Check("accepted missing handle is unknown and never replayed",()=>{
     var item=new BatchExpectedItem("task",true){State=BatchItemState.Submitted,JobId="accepted",SubmitAttempts=1};
     var actions=BatchReconcileDecider.Decide([item],[],true,3,DateTime.UtcNow);
     A(!actions.Any(a=>a is BatchReconcileAction.Resubmit),"unknown execution replayed");
-    A(actions.OfType<BatchReconcileAction.ConfirmTerminal>().Single().ErrorCode=="lost_job","unknown became success");return Done();
+    A(actions.OfType<BatchReconcileAction.ConfirmTerminal>().Single().ErrorCode=="lost_job","unknown became success");
+    // [D5] 未决收口不得授予收尾许可：只能 CompleteWithUnresolved
+    A(!actions.Any(a=>a is BatchReconcileAction.CompleteSucceeded),"unresolved batch granted teardown");
+    A(actions.OfType<BatchReconcileAction.CompleteWithUnresolved>().Single().Unresolved.Single().Name=="task","unresolved evidence missing");return Done();
 });
 await Check("concurrent roots admit exactly one owner",async()=>{
     const int contenders=32;
@@ -280,6 +283,14 @@ await Check("lost acknowledgement retry is bounded and retains request key",()=>
     var exhausted=BatchReconcileDecider.Decide([item],[],true,3,DateTime.UtcNow);
     A(!exhausted.Any(a=>a is BatchReconcileAction.Resubmit),"unbounded retries");
     A(exhausted.OfType<BatchReconcileAction.ConfirmTerminal>().Single().ErrorCode=="result_unknown","unknown result called success");
+    // [D5] result_unknown 同样是未决收口：不得 CompleteSucceeded；收口发生在下一拍（本拍先落确认动作）
+    A(!exhausted.Any(a=>a is BatchReconcileAction.CompleteSucceeded),"unknown result called success");
+    item.State=BatchItemState.TerminalConfirmed;
+    item.TerminalErrorCode=exhausted.OfType<BatchReconcileAction.ConfirmTerminal>().Single().ErrorCode;
+    item.TerminalWasCancelled=false;
+    var settled=BatchReconcileDecider.Decide([item],[],true,3,DateTime.UtcNow.AddSeconds(1));
+    A(!settled.Any(a=>a is BatchReconcileAction.CompleteSucceeded),"unknown result called success");
+    A(settled.OfType<BatchReconcileAction.CompleteWithUnresolved>().Single().Unresolved.Single().ErrorCode=="result_unknown","unknown result rewritten");
     A(item.RequestKey==key,"exhaustion changed request identity");return Done();
 });
 await Check("v2 runner registers workflow identity and preserves it in checkpoint", async () => {

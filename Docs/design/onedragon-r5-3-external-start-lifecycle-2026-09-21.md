@@ -2904,6 +2904,123 @@ R5 要解决的是联机助手、BGI 与既有协调流程在**日常运行、�
 
 **未决默认与一致性**：冻结语义与生产门保持不变；未知结果不得表述为成功**也不得**改写为已证实失败；等待队列继续保持未接线。D2 的"占用结束后重新比较"只是入队原因文本表达的意图，自动重评本身尚未实现，触发方式由 D3 决定——D2 与 D3 的当前状态都是**"未实现"，不等同于已选择 C**（C 均只是待选方案）；两者不冲突，也不能被读成"已具备自动重评"。
 
+### 24.108 落地登记：批次完成类型拆分（D5）（2026-09-24；**纯函数＋夹具，生产零消费点，未接线**）
+
+**本批做了什么**：只实现 owner 2026-09-24 裁决的 **D5＝推荐项 A（类型拆分）**（裁决登记
+[`012f5fa02`]，决策单见 [R5 owner 决策单](onedragon-r5-owner-decisions-2026-09-24.md)，裁决范围见 §24.107）。
+把 `BatchReconcileDecider` 原来**无载荷**的 `Complete` 拆成两类，并**只**给其中一类保留"可执行完成后动作
+（RunSpecified 收尾）"的许可。本批**未接任何生产入口**：`BatchReconcileDecider` 在全仓库生产源码中
+**没有任何消费点**（见下表"调用方审计"），因此本批**不改变任何正在运行的行为**。
+
+**类型拆分（`MultiplayerHoeingAssistant/Services/BatchReconcilePlan.cs`）**
+
+| 动作 | 语义 | 许可 |
+|---|---|---|
+| `CompleteSucceeded()` | 全部期望项**均可证成功**（逐项 `Started ∧ TerminalWasCancelled != true ∧ TerminalErrorCode == null`） | **唯一**获准触发"完成后动作"（`TaskConflictPolicy.RunSpecified` 收尾）的完成动作 |
+| `CompleteWithUnresolved(IReadOnlyList<BatchUnresolvedItem> Unresolved)` | 全部期望项**已到终态**，但**至少一项**不是可证成功 | **不携带**任何"成功/可收尾"许可；调用方**不得**据此执行 `RunSpecified` 收尾 |
+
+`BatchUnresolvedItem(int Index, string Name, bool Cancelled, string? ErrorCode)` 逐项承载**事实证据**：
+`ErrorCode` **原样保留**（`lost_job`／`result_unknown`／`task_failed`／瞬态重试耗尽的 `preempt_timeout` 等），
+`ToString()` 产出诊断文本 `[未决:组A=lost_job]`。**未决 ≠ 已证实失败**，**也绝不**被改写成成功——
+本批只是把"未知/未决"从"可触发收尾"里剔除，没有给未决结果加任何新的肯定结论。
+旧的无载荷 `sealed record Complete()` 已删除（不再存在同名类型），因此**不存在**"沿用旧语义的默认路径"。
+
+**两处指定分支的归类裁定（逐条，含依据）**
+
+| 位置（现文件行号） | 原位置 | 归类裁定 | 依据 |
+|---|---|---|---|
+| 第 191–199 行 空批次早退（`items.Count == 0`） | 第 166–170 行 | **`CompleteSucceeded`**（**未**改为 `CompleteWithUnresolved`） | 全成功判据是"**全部项均可证成功**"，空集合上为真（vacuous truth）；空批次不含任何未确认结果，故不属"有未决"。但这**不等于"真的锄过地"**：2026-09-13 空批次误触发 `RunSpecified` 的实机事故，兜底在**调用方**的"全部项未启动"守卫（`BatchExpectedItem.Started` 注解），**不在**本决策器——本决策器只回答"有无未决结果"，不承担"是否值得收尾" |
+| 第 311–366 行"全部确认→完成"分支 | 第 282–289 行 | **按逐项投影分两类**：投影后无未决 ⇒ `CompleteSucceeded`；有未决 ⇒ `CompleteWithUnresolved(unresolved)` | 该分支此前在**同一拍**无条件追加无载荷 `Complete()`。新语义先做"**本拍确认投影**"，再按"可证成功"判据逐项分类，两类互斥且穷尽 |
+
+**"本拍确认投影"是必改项（首轮会诊第 1 项）**：未决判据必须按"**本拍动作已应用后**"的逐项状态分类。
+本拍才 `ConfirmTerminal` 的项在 `items` 上仍是确认前状态（`TerminalWasCancelled`／`TerminalErrorCode` 都还是确认前的值），
+只读旧字段会把本拍才确认的 `lost_job`／`result_unknown`／`task_failed`／重试耗尽的 `preempt_timeout`
+误判为"可证成功"，从而**在同一拍**产出 `CompleteSucceeded`——直接违反"只有全成功才能执行完成后动作"。
+故实现（第 316–335 行）先用本拍 `ConfirmTerminal` 动作载荷建 `pendingConfirm` 字典，对**本拍确认项**取
+`(Started=true, confirm.Cancelled, confirm.ErrorCode)`，对其余项回退读 `items` 的
+`(Started, TerminalWasCancelled == true, TerminalErrorCode)`，再逐项展开未决判据：
+
+- **a. `Started == false`**：业务拒绝（配置组不存在等）⇒ 从未真正执行，不构成成功；
+- **b. `Cancelled == true`**：应用户取消收尾（F11）⇒ 不是成功收尾；
+- **c. `ErrorCode != null`**：`lost_job`／`result_unknown`／`task_failed`／瞬态重试耗尽后的 `preempt_timeout` 等 ⇒ 结果未知或非成功，**原样承载**。
+
+**可达子情形（如实）**：本拍带用户取消的项在第 257–264 行已提前 `return`（`AbortUserCancelled`），
+所以本分支**不会**出现"本拍新确认的取消项"；但仍可出现"**此前各拍**已 `TerminalConfirmed` 的取消项"。
+只有 a/b/c 投影后**都不成立**时才产出 `CompleteSucceeded`。
+
+**调用方审计（本批结论，带代码位置）**
+
+| 检查对象 | 结论 |
+|---|---|
+| `BatchReconcileAction`／`BatchReconcileDecider` 的生产消费点 | **零消费点**：`git grep -n "BatchReconcileAction\|BatchReconcileDecider" -- "MultiplayerHoeingAssistant/*"` **只命中定义文件** `MultiplayerHoeingAssistant/Services/BatchReconcilePlan.cs` 本身；该结论是**文本扫描**，不含反射/动态调用，也不排除未来批次接线 |
+| `TaskCenterHost.*` 消费点 | **不存在**：`TaskCenterHost` 的 `SendTaskStartInternalAsync` 分支（`{E3…}` 节点后继等）与本决策器无符号引用；本批**未**在 `TaskCenterHost` 增加任何接线 |
+| UI 文案 switch | **无 `Complete`/完成类型文案 switch 需迁移**：`BatchReconcileAction` 的完成类型从未进入任何 XAML/View 文案分支（无消费点） |
+| `MainViewModel.CoordinatedBatch.cs` 第 19／20／117 行 | 第 19 行 `var complete = false;` 是**本地 bool**，第 75–78 行仅当服务端 `team.Phase == "completed"` 时置 `true` 并写 `batch.CoordinatedSucceeded = true`；第 20／117 行的 `BatchExpectedItem? item`／`item ??= new BatchExpectedItem(...)` **从不设为 `Started=true`、也从不被读取**。此文件与 `BatchReconcileDecider` **无符号引用** |
+| 真实收尾链路 | `MainViewModel.OnlineBatch.cs` 第 23–38 行 `ApplyPolicyTeardownOnceAsync`：第 26 行 `if (!batch.CoordinatedSucceeded && !userCancelled) return;` ⇒ `CommandExecutor.ApplyPolicyTeardownAsync`（`RunSpecified` 分支第 3039–3054 行）。`batch.CoordinatedSucceeded` 只在上表 `team.Phase == "completed"` 分支被置真 |
+| 生产上"有未确认也收尾"是否可达 | **当前不可达**：`BgiCoordinatorServer/Services/CoordinatedBatchState.cs` 第 98–105 行只在**全部成员 `Result == "succeeded"`** 时才推进 `Index++` / `Phase = "completed"`；成员结果含 `failed`／`stopped`／`cancelled`／`unknown` 时进入 `stopping` 或 `aborted`，拿不到 `completed` ⇒ `CoordinatedSucceeded` 保持 `false` ⇒ `ApplyPolicyTeardownOnceAsync` 提前 `return` |
+| 因此本批的"调用方迁移" | **只需测试/夹具层**：生产侧无需修改一行；本批**未**改 `MainViewModel.*`、**未**改 `CommandExecutor`、**未**改协调器服务端 |
+
+**测试（反例先行；全部在未接线纯函数与夹具层）**
+
+- **反例先行（红）**：先把 `CoordinatedBatchAdmissionRelationTests.cs` 第 137–166 行两条
+  `_CurrentlyAlsoReturnsComplete_ExposedNotEndorsed` 夹具改为期望新语义（改名为
+  `BatchReconcile_LostJobConfirmation_ReturnsCompleteWithUnresolved_NotCompleteSucceeded` 与
+  `BatchReconcile_ExhaustedAttemptsUnknownResult_ReturnsCompleteWithUnresolved_NotCompleteSucceeded`），
+  在**旧实现**下跑 **13 红／64 绿／77**。TRX：`batch13_red_core.trx`
+  （＝`batch13_red_newwemantics2.trx` 副本）。红名单（13 项，含两条原夹具与同拍类）：
+  `BatchReconcile_LostJobConfirmation_ReturnsCompleteWithUnresolved_NotCompleteSucceeded`、
+  `BatchReconcile_ExhaustedAttemptsUnknownResult_ReturnsCompleteWithUnresolved_NotCompleteSucceeded`、
+  `BatchReconcile_LastItemLostJob_SameTick_ReturnsCompleteWithUnresolved_NotCompleteSucceeded`、
+  `BatchReconcile_LastItemSucceeded_SameTick_ReturnsCompleteSucceeded`、
+  `BatchReconcile_AllItemsSucceeded_ReturnsCompleteSucceededOnly`、
+  `BatchReconcile_NeverStartedItem_ReturnsCompleteWithUnresolved`、
+  `BatchReconcile_PreviouslyConfirmedCancellation_ReturnsCompleteWithUnresolved`、
+  `BatchReconcile_EmptyBatch_ReturnsCompleteSucceeded_VacuousTruth`、
+  `BatchReconcile_ReprojectedSuccessTicket_DoesNotRegressOnRepeatTicks`、
+  `BatchReconcileDeciderTests.EmptyBatch_CompletesImmediately`、
+  `BatchReconcileDeciderTests.AccidentReplay_CompleteNeverBeforeAllThreeGroupsTerminal`、
+  `BatchReconcileDeciderTests.AttachedJobVanished_SameEpoch_IsUnknown_AndNeverReplayed`、
+  `BatchSubmitRejectionA6Tests.FailedJob_PreemptTimeout_CountCapExhausted_TerminalConfirmed`。
+- **实现后定向三类全绿 77/77**：`CoordinatedBatchAdmissionRelationTests` 40
+  ＋ `BatchReconcileDeciderTests` 11 ＋ `BatchSubmitRejectionA6Tests` 26。TRX：`batch13_green_core4.trx`。
+- **助手全量回归**：**1303 通过／2 跳过／0 失败／1305**（TRX：`batch13_assistant_full3.trx`）。
+  基线为批次 9 的 **1296 通过／2 跳过**（`r5_batch9_assistant_full_sol_final.trx`）；本批净增 7 条夹具，
+  **失败差集为空**。
+- **IPC 事故审计**：`Test/IpcIncidentAudit` **37/37**（控制台 `Regression total=37; passed=37; failed=0`）。
+- **本批新增/强化的关键夹具**（名字均存在于测试源码）：`BatchReconcile_LastItemLostJob_SameTick_ReturnsCompleteWithUnresolved_NotCompleteSucceeded`
+  （同拍反例：最后一项在本拍才 `lost_job`，同拍**不得** `CompleteSucceeded`）、
+  `BatchReconcile_LastItemSucceeded_SameTick_ReturnsCompleteSucceeded`（同拍对照，证明拆分不是"一律不完成"）、
+  `BatchReconcile_AllItemsSucceeded_ReturnsCompleteSucceededOnly`、`BatchReconcile_NeverStartedItem_ReturnsCompleteWithUnresolved`、
+  `BatchReconcile_PreviouslyConfirmedCancellation_ReturnsCompleteWithUnresolved`、
+  `BatchReconcile_EmptyBatch_ReturnsCompleteSucceeded_VacuousTruth`、
+  `BatchReconcile_ReprojectedSuccessTicket_DoesNotRegressOnRepeatTicks`；`BatchReconcileDeciderTests`
+  事故回放**拍 4** 增同拍 `CompleteWithUnresolved` 断言、空批次断言改 `CompleteSucceeded`；
+  `BatchSubmitRejectionA6Tests.FailedJob_PreemptTimeout_CountCapExhausted_TerminalConfirmed` 增"重试耗尽 ⇒ 有未决"断言。
+
+**会诊（`gpt-6-sol`／medium／`gpt_review`，2 轮各 1 次成功）**
+
+- **首轮**：必改 1（**同拍投影**：未决判据必须先应用本拍 `ConfirmTerminal` 再分类，否则同拍误产
+  `CompleteSucceeded`）＋重要 2（夹具镜像可能掩盖错误、"反例先行"缺红证据）＋重要 3（空批次
+  `Started` 守卫未获行为夹具验证）＋建议 4（需写清不可达性）。结论："本批**暂不通过** D5 验收"。**均已处置**：
+  必改 1 改为投影实现并由两条同拍夹具锁定；重要 2 补红证据（13 红 TRX）并按生产语义改准镜像注释；
+  重要 3 在下方"残余"如实登记；建议 4 见"调用方审计"。
+- **第二轮**：**必改：无**；重要 1（事故回放"拍 4 断言"陈述不实 ⇒ 已补拍 4 同拍断言）；建议 2（补同拍
+  `result_unknown` 正向断言、对齐镜像 `Started` 注释 ⇒ 均已做）。判定：**可以据此通过 D5 批内验收，
+  生产门保持关闭**；并声明该判定**不构成**对真实收尾行为、服务端完成条件或 TRX 数字的独立验证。
+
+**残余（不因本批改变门禁）**
+
+| 项 | 状态 |
+|---|---|
+| 决策器生产消费点 | ❌ **零消费点、未接线**：本批的类型拆分没有接入任何生产决策；`CompleteWithUnresolved` 目前只有夹具读者 |
+| 空批次 `Started` 守卫 | ⚠ 仅**静态读码**（`BatchExpectedItem.Started` 注解 + `MainViewModel.CoordinatedBatch.cs` 第 20／117 行从不置真）说明"空批次误收尾"被兜住；本批**未**取得该守卫的**行为夹具**证据 |
+| 真实收尾行为 / 服务端完成条件 | ⚠ 只由**文本审计**陈述（上表），**未**由夹具证明；本批夹具**不观测**任何实际发送或收尾 |
+| 未决项的下游处置（显示/登记/未成功收尾路径） | ❌ 未交付：调用方迁移只做了测试层；`CompleteWithUnresolved` 的"未成功收尾路径"尚未接线 |
+| 其它 D 项（D1–D4） | ❌ 未开工：本批只做 D5；D1 → D3 → D2 → D4 按依赖顺序排在后续批次 |
+| 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
+
+---
+
 ### 24.103 落地登记：已登记派生作业的退出观测（2026-09-24；只暴露观测事实，不作肯定结论）
 
 **审计（执行体／叶子／派生的退出点，带代码位置）**
