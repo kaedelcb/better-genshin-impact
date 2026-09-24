@@ -230,8 +230,10 @@ public sealed class LocalWaitPrerequisiteContractTests
         Assert.True(overloads.Count >= 1,
             "LocalWaitQueuePolicy 必须提供 `SelectNext(IReadOnlyList<LocalWaitItem>, <只读 evaluator>)` 重载"
             + "（选择阶段须由 evaluator 求就绪，而**不是**读过期布尔；当前 2 参重载数=" + overloads.Count + "。");
-        // 按**第二参数精确类型**取重载：owner 裁定 A 保留了**旧签名** `SelectNext(items)`
+        // 按**第二参数精确类型**取重载：**按批约束「冻结合同只允许纯加法」**保留了**旧签名** `SelectNext(items)`
         // 作为二进制入口（`[Obsolete(error: true)]` + 抛异常），故不能再用「参数个数」反推旧签名已消失。
+        // **更正（会诊第 9 轮必改 1）**：此处原写「owner 裁定 A 保留了旧签名」系**归因错误**——owner 的 D2 裁决原文
+        // **未提及**该重载的处置；保留签名是本批为满足批约束所做的**实现选择**（详见 §24.111-R6）。
         var method = overloads.Single(m =>
             m.GetParameters()[1].ParameterType == RequireType(EvaluatorDelegateTypeName));
         // 双重保证：被取到的必须是接受**只读 evaluator**的那个重载。
@@ -552,12 +554,12 @@ public sealed class LocalWaitPrerequisiteContractTests
             "必须提供**发送前再次验算**的接缝（名称须含 Revalidate）："
             + "选出项在取得发送许可前重新求值；不得沿用排队时快照直接发送。");
 
-        // `RevalidateBeforeSend` 有两个公开重载，分别返回服务层与**模型层**类型。
-        // 本夹具钉死的是**模型层登记面**，故必须选取**返回该类型**的重载，
-        // 而不能按参数个数盲选（否则会用服务层实例去取模型层属性 ⇒ 夹具自身失败）。
-        // 会诊第二轮（重要）：不得按**参数个数**盲选重载。若日后出现另一个同参数个数重载
-        // （如「只读视图重载」），按个数取到的可能是另一个重载而本夹具**假绿**。
-        // 故必须按**第二参数精确类型**（模型层 evaluator 委托）选型。
+        // `RevalidateBeforeSend` 的两个公开重载**均返回模型层** `LocalWaitPrerequisiteDecision`
+        // （服务层同名类型属本批新增面、已在批内合并删除——它是无产出者的死别名，见 §24.111「取舍 2」）。
+        // **更正（会诊第 9 轮必改 1）**：此处原写「两个公开重载分别返回服务层与模型层类型」，与现实现**不符**。
+        // 会诊第二轮（重要）＋本轮：不得按**参数个数**盲选重载；本夹具钉死的是**模型层登记面**，
+        // 故必须按**第二参数精确类型**（模型层 evaluator 委托）选取**返回该类型**的重载——
+        // 否则日后新增同参数个数重载（如只读视图重载）时可能取错另一个重载，本夹具**假绿**。
         var method = methods.Single(m => m.GetParameters().Length == 2
             && m.GetParameters()[1].ParameterType == RequireType(EvaluatorDelegateTypeName));
         Assert.True(method is not null,
