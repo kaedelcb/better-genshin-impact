@@ -3774,10 +3774,10 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
 `Models/TaskCenter/LocalWaitPrerequisiteModels.cs`、`Services/TaskCenter/Arbitration/LocalWaitQueuePolicy.cs`、
 `Services/TaskCenter/LocalWaitQueueStore.cs` ⇒ **无调用方、无发送依赖**。本批**不接任何生产入口**。
 
-**全局回归（最终口径，权威帧）**：助手全量 **1362 通过／2 跳过／0 失败／1364**
-（`_batch16/batch16_full.trx`），
+**全局回归（本批提交时快照；同一工作区有批次 15 在途作业会持续加夹具，故快照计数会随之增长）**：助手全量 **1362 通过／2 跳过／0 失败／1364**
+（`_batch16/batch16_full.trx`；后续帧 `batch16_final.trx` 已为 **1363／2／0／1365**，增量均归批次 15 在途），
 与批次 15 基线 **1337 通过／2 跳过／0 失败／1339**（`batch15_assistant_full_final.trx`）逐名 `Compare-Object`
-⇒ **新增 25 条、移除 0 条**（净 Δ 1364−1339＝**+25**，与逐名差集**一致、无口径冲突**）。
+⇒ **新增 25 条、移除 0 条**（净 Δ 1364−1339＝**+25**，与逐名差集**一致、无口径冲突**；**任何时点的取值都必须满足「移除 0」与「新增均属已登记批次」两条不变量**）。
 新增中**归本批 D2 自身的只有 `LocalWaitPrerequisiteContractTests` 17 条**（该类为**本批新建**，基线中不存在）；
 另 **8 条**属**同一工作区在位、归批次 15b纪元（D3 后续在途工作）的 `LocalWaitReevaluationTriggerTests`**
 （`Decide_CancelledToken_DoesNotConsumeKey_RetryStillProduces`／`Decide_EnumeratorThrows_DoesNotConsumeIdempotencyKey`／
