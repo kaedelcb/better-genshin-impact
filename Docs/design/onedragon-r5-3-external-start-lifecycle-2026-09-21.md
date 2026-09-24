@@ -3259,3 +3259,55 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
 | 生产事实来源 | ❌ 未改变：`HighestClass` 生产路径仍恒 `null`，占用者级别接线仍受既有残余约束 |
 | `Complete` 与“未证退出”语义冲突 | ❌ 仍待 owner 裁决；本批不把未知结果表述为成功 |
 | 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
+
+### 24.106 落地登记：本地等待队列接线前审计（2026-09-24；纯审计，零生产接线）
+
+**本批做了什么**：只审计 `LocalWaitQueuePolicy`／`LocalWaitQueueStore` 的生产调用图、入口接线位置、与
+`RunningOccupancyArbiter.SelectNextFromWaitSet` 的复用关系及接线前合同缺口；**未改生产代码、未改冻结合同、未接任何入口**。`LocalWaitQueue` 组件自身没有发送调用；这不表示其它既有发送路径不存在发送。
+
+**调用图审计（带代码位置）**
+
+| 面 | 事实 | 结论 |
+|---|---|---|
+| 等待策略 | `Services/TaskCenter/Arbitration/LocalWaitQueuePolicy.cs` | 只有定义与测试引用；本会话生产源码扫描**未发现调用方** |
+| 等待落盘 | `Services/TaskCenter/LocalWaitQueueStore.cs` | 同上；构造后没有宿主启动、恢复、清理或热键路径实例化 |
+| 等待模型 | `Models/TaskCenter/LocalWaitModels.cs` | 仅承载调度意愿；没有发送许可、租约责任或受理状态 |
+| 排序复用 | `LocalWaitQueuePolicy.SelectNext` 第 73–83 行调用 `RunningOccupancyArbiter.SelectNextFromWaitSet`；后者第 124–139 行实现排序与 `PrerequisiteReady` 过滤 | 排序规则复用成立；投影层第 104–113 行把 `PrerequisiteReady` **固定为 true** |
+| 外部启动入口 | `CommandExecutor` 第 24、815、988、2665、3110 行仅在 `_externalStartAdmission` 已注入时走统一准入；未注入走既有直启 | 等待队列没有接入这些入口 |
+| 恢复入口 | `TaskCenterHost.Admission.cs` 第 1175、1221 行走 `AdmitRecoveryAsync` | 恢复路径没有等待结果或重新入队点 |
+| 后继节点入口 | `TaskCenterAdmissionSeams`／`_successorAdmissionWired` 只提供测试接缝与门位 | 生产节点改道门保持关闭；没有等待消费者 |
+| 准入结果 | `AdmissionResultKind`（`ArbitrationAdmissionService.cs` 第 87 行起）枚举为 Accepted／TerminalRejected／RetryableRejected／NotSelected／F11Blocked／NeedPreemptConfirm／NeedReconcile／Reconciling／Error／Cancelled／ExecutionFailed，**列举中没有** `WaitLocally`／`Deferred`；`ArbitrationOutcome` 也没有等待结果 | 当前准入面只能拒绝、待确认、待对账、取消/失败或接受，不能无损表达“本地等待” |
+| B.1 抢占面 | `PreemptConfirmPending`（`ArbitrationModels.cs` 第 757 行；准入服务第 697、784、1263 行等）是独立交接状态；本会话扫描的调用图未发现它与等待组件互转 | 接线合同要求二者不能互相冒充或静默转换；不主张已核查其余全部历史转换入口 |
+
+**接线前合同（建议；未获 owner 前不实现）**
+
+| 条款 | 必须冻结的内容 |
+|---|---|
+| C1 结果类型 | 准入层需要一个新的**不发许可**结果，明确区分“低优先级本地等待”与 `NeedPreemptConfirm`／`NeedReconcile`／拒绝；是否向冻结 `AdmissionResultKind` 加值须 owner 裁决 |
+| C2 入队边界 | 只有 `LocalWaitQueuePolicy.DecideEnqueue` 对 `WaitLocally` 返回可入队；入队恒 `SendPermitted=false`，不得放入 BGI 队列 |
+| C3 选择语义 | `SelectNext` 的返回值只是“下一个应重新走完整准入的候选”，不得直接揭示为发送动作；`CandidateId` 与 `StableIdentity` 的关系须在接线时逐项复核 |
+| C4 前置就绪 | `LocalWaitItem` 当前没有 `PrerequisiteReady`／可执行时刻字段，且 `ScheduledAt` 只参与排序，**不会阻止未来项被选中**；必须选择“持久化前置快照”或“读取时注入只读求值器”之一并补版本/迁移 |
+| C5 发送前复核 | 被选出的项在取得发送许可前必须重新取得纪元、占用者事实、身份、级别和票据；任一变化按完整准入重新判定，不得沿用排队时快照直接发送 |
+| C6 重评触发 | 至少需要占用结束／权威退出、当前流程终局、新候选到达、恢复启动、取消与失效清理五类触发；本批不指定具体线程模型或轮询间隔 |
+| C7 重启恢复 | 启动时必须严格读取等待文件；文件不存在才可视为空集，损坏／版本不支持／权限错误必须响亮停驻，不得按空队列放行；恢复后所有项重新验身份和前置 |
+| C8 与抢占确认关系 | `PreemptConfirmPending` 与等待项互不覆盖；若同身份同时出现等待与待确认，必须停驻并显式裁决，禁止隐式降级或重复发送 |
+| C9 单写者与耐久 | `LocalWaitQueueStore` 当前只有进程内静态锁；跨进程读改写、树外并发、断电耐久和目录级回滚**尚未实现/证明**，须与租约／运行台账的事务边界一并设计 |
+| C10 可观测性 | 入队、被选、重新验证失败、取消、裁剪和恢复读取都需结构化原因；不得用“已等待”代替“已授予执行”或“已入 BGI 队列” |
+
+**证据**
+
+- 生产引用扫描（本会话，工作区现有源码）：`rg -l "LocalWaitQueuePolicy|LocalWaitQueueStore|LocalWaitItem|LocalWaitQueueFile" MultiplayerHoeingAssistant`
+  只返回 `LocalWaitModels.cs`、`LocalWaitQueuePolicy.cs`、`LocalWaitQueueStore.cs` 三个定义文件，未发现入口/宿主调用者；该文本扫描不覆盖反射、动态调用或未来未提交文件。
+- 定向夹具：`LocalWaitQueueTests` **16/16**（`r5_batch10_local_wait_audit.trx`），证明现有纯函数与落盘组件基线仍绿；不证明尚未存在的接线行为。
+- 路由审计：上述入口行号与 `_externalStartAdmission` 注入点逐项核对；所有未注入路径保持原直启行为，未新增等待调用。
+
+**残余（不因本批改变门禁）**
+
+| 项 | 状态 |
+|---|---|
+| 生产接线 | ❌ 未发现接线：无入队、无重评触发、无发送前复核、无启动恢复扫描；等待组件自身不发送 |
+| 结果合同 | ❌ 待 owner：冻结准入结果是否新增等待值、如何与 `PreemptConfirmPending` 并存 |
+| 前置模型 | ❌ 未闭合：`ScheduledAt` 只排序、不阻止选中；缺少声明的前置就绪来源 |
+| 零发送证据 | ❌ 未取得：接线后必须以 sender／BGI 队列写入点替身断言等待期间零调用 |
+| 跨进程／断电 | ❌ 未验证：进程内锁不等于跨进程单写者，原子替换不等于断电耐久 |
+| 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
