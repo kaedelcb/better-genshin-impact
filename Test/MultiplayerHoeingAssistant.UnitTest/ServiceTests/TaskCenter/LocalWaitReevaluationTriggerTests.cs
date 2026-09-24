@@ -101,8 +101,13 @@ public sealed class LocalWaitReevaluationTriggerTests
         var candidates = type.GetMethods(BindingFlags.Public | BindingFlags.Instance)
             .Where(m => m.Name == method).ToList();
         Assert.True(candidates.Count > 0, $"{type.Name} 必须提供公共方法 {method}（D3 触发器语义接缝）。");
-        var matched = candidates.FirstOrDefault(m => m.GetParameters().Length == args.Length);
-        Assert.True(matched is not null, $"{type.Name}.{method} 没有 {args.Length} 个参数的重载。");
+        // 按**可赋值性**绑定，而非仅按参数个数：批次 15b 新增的 `Decide(…, string? generation)` 与既有
+        // `Decide(…, CancellationToken)` **同为 4 参**；批次 15c 已把后者改为 private。夹具**绝不**写
+        // `Decide(t, items, now, null)` —— 若公共面恢复成双 4 参，该调用会被静默改绑到代际重载。
+        var matched = candidates.FirstOrDefault(m => ArgsAssignable(m.GetParameters(), args));
+        Assert.True(matched is not null,
+            $"{type.Name}.{method} 没有 {args.Length} 个可按可赋值性绑定的重载；现有重载："
+            + string.Join(" / ", candidates.Select(m => "(" + string.Join(", ", m.GetParameters().Select(x => x.ParameterType.Name)) + ")")));
         try
         {
             return matched!.Invoke(target, args)!;
@@ -189,9 +194,12 @@ public sealed class LocalWaitReevaluationTriggerTests
     }
 
     /// <summary>
-    /// **幂等键必须与等待项标识同一口径**：等待项的 `ItemId` 由 `LocalWaitQueuePolicy.DeriveItemId`
-    /// 派生，触发器的去重键必须能**唯一指回该等待项**（否则「同一等待项重复触发不得重复产」无法成立）。
-    /// 本夹具断言：同稳定身份下，键与 `ItemId` 一一对应且稳定（允许不同前缀，但不得碰撞）。
+    /// **幂等键与等待项标识同一口径（批次 15d 收窄表述）**：等待项的 `ItemId` 由 `LocalWaitQueuePolicy.DeriveItemId`
+    /// 派生，触发器的去重键按**同一**摘要口径派生（仅字面前缀不同）⇒ 夹具在**样例身份集**上断言
+    /// 「同身份 ⇒ 同键；异身份 ⇒ 异键」。
+    /// **不得**读成"全空间一一对应"：该口径对含孤立代理项的身份**不是单射**（可复现等价面，见
+    /// `ReevaluationKey_StableIdentityDigest_Utf8Equivalence面_已披露_且ItemId校验同口径`），另有 64 位截断的
+    /// **概率**碰撞。本夹具只钉"样例身份集上无系统性别名 + 口径稳定"。
     /// </summary>
     [Fact]
     public void ReevaluationKey_CorrespondsOneToOneWithWaitItemId()
@@ -205,7 +213,7 @@ public sealed class LocalWaitReevaluationTriggerTests
 
         Assert.Equal(identities.Length, keys.Distinct().Count());
         Assert.Equal(identities.Length, itemIds.Distinct().Count());
-        // 同身份 ⇒ 同键；异身份 ⇒ 异键（键到等待项的映射必须单射）
+        // 同身份 ⇒ 同键；样例身份集内异身份 ⇒ 异键（**不**声称全空间单射：见等价面夹具）
         Assert.Equal(keys.Count, keys.Zip(itemIds).Select(p => p.First).Distinct().Count());
     }
 
@@ -215,7 +223,9 @@ public sealed class LocalWaitReevaluationTriggerTests
     /// 因此同稳定身份下**摘要逐字符相同**必须可机械断言——若某人把触发器的摘要长度、大小写或归一化口径改掉
     /// （例如截断到 8 位、改用大写、或对身份做额外加盐），此夹具立刻变红。
     ///
-    /// **边界**：本断言只覆盖"同口径、同前缀长度、无系统性别名"，**不**主张密码学强度或全空间零碰撞。
+    /// **边界（批次 15d 收窄）**：本断言只覆盖"同口径、同前缀长度、样例身份集上无别名"，
+    /// **不**主张密码学强度、全空间零碰撞或对**任意**身份串的单射性（孤立代理项的等价面见
+    /// `ReevaluationKey_StableIdentityDigest_Utf8Equivalence面_已披露_且ItemId校验同口径`）。
     /// </summary>
     [Fact]
     public void ReevaluationKey_DigestPrefixMatchesWaitItemIdDigest()
@@ -266,6 +276,34 @@ public sealed class LocalWaitReevaluationTriggerTests
 
     private static object Decision(object trigger, object point, IReadOnlyList<LocalWaitItem> items)
         => Invoke(trigger, "Decide", point, items);
+
+    /// <summary>
+    /// **按显式「等待项代际」求值**（批次 15b 语义接缝）：`Decide` 必须接受一个名为 `generation`
+    /// 的入参，使**同一实例**内「同一代际重复触发不重复产、新代际重新产」。夹具按**参数名**定位该入参，
+    /// 故实现不得用位置参数顶替（否则按名绑定失败＝红）。
+    ///
+    /// **批次 15c（重载收窄后）**：公共面**只保留 5 参主重载**（末参 `generation` 可省略），
+    /// `Decide(point, items, nowUtc, CancellationToken.None, generation)` 是代际的**唯一**公共入口。
+    /// 两个 4 参重载（`CancellationToken` 与 `string? generation`）**均已不公开**：公开 4 参 `string? generation`
+    /// 与 4 参 `CancellationToken` 并存会让 `Decide(t, items, now, default)` 报 `CS0121`、`Decide(t, items, now, null)`
+    /// 被**静默改绑**（评审第 3 轮必改 #1；两个 4 参形态的私有副本见实现）。
+    /// 本夹具按参数**名**定位 `generation` 形参，故实现不得用位置参数顶替（否则按名绑定失败＝红）。
+    /// </summary>
+    private static object Gen(object trigger, object point, IReadOnlyList<LocalWaitItem> items, string? generation)
+    {
+        var type = trigger.GetType();
+        var all = type.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .Where(m => m.Name == "Decide").ToList();
+        var candidates = all.Where(m => m.GetParameters().Any(p => p.Name == "generation")).ToList();
+        Assert.True(candidates.Count > 0,
+            $"{type.Name}.Decide 必须提供名为 generation 的公共代际入参（批次 15b：去重键须显式按等待项代际，不得依赖不可变 StateScope）。现有重载："
+            + string.Join(" / ", all.Select(m => "(" + string.Join(", ", m.GetParameters().Select(x => x.Name)) + ")")));
+        var fiveArg = candidates.FirstOrDefault(m => m.GetParameters().Length == 5);
+        Assert.True(fiveArg is not null,
+            "代际的 5 参主重载缺失（`Decide(point, items, nowUtc, cancellationToken, generation = null)`）；"
+            + "批次 15c 后公共面只保留 5 参主重载，代际必经此入口。");
+        return fiveArg!.Invoke(trigger, new object?[] { point, items, DateTimeOffset.UnixEpoch, CancellationToken.None, generation })!;
+    }
 
     private static IReadOnlyList<object> Requests(object decision)
     {
@@ -410,8 +448,14 @@ public sealed class LocalWaitReevaluationTriggerTests
         var keyB = StringOf(b1[0], "ReevaluationKey");
         Assert.False(string.IsNullOrWhiteSpace(keyA));
         Assert.NotEqual(keyA, keyB);
-        Assert.Contains("epoch-a", keyA!);
-        Assert.Contains("epoch-b", keyB!);
+        // 批次 15c：作用域字段**不再明文进键**（`reval-key-v2|` ＋ 长度前缀 ＋ **UTF-16 码元**十六进制载荷），
+        // 故此处**不**断言作用域字样出现在键里；区分作用域由上面的 `Assert.NotEqual(keyA, keyB)` 承担。
+        Assert.StartsWith("reval-key-v2|", keyA!);
+        Assert.StartsWith("reval-key-v2|", keyB!);
+        // 键字段是 `=长度:十六进制` 编码 ⇒ 作用域明文（及任何非 ASCII 明文）都不应出现在键里；
+        // 作用域的**区分**由上面的 `Assert.NotEqual(keyA, keyB)` 独立承担（不依赖编码细节）。
+        Assert.Equal(0, CountOccurrences(keyA!, "epoch-a"));
+        Assert.Equal(0, CountOccurrences(keyB!, "epoch-b"));
 
         // 同一作用域内重复触发 ⇒ 零请求（幂等仍然成立）
         Assert.Empty(Requests(Decision(scopeA, TriggerPoint("OccupancyEnded"), items)));
@@ -455,6 +499,7 @@ public sealed class LocalWaitReevaluationTriggerTests
                 var requests = Requests(Decision(trigger, TriggerPoint("OccupancyEnded"), items));
                 foreach (var r in requests) collected.Add(ItemIdOf(r) ?? "");
             }
+
             catch (Exception ex)
             {
                 failures.Add(ex);
@@ -553,7 +598,8 @@ public sealed class LocalWaitReevaluationTriggerTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        var decision = Invoke(trigger, "Decide", TriggerPoint("OccupancyEnded"), (object)items, DateTimeOffset.UnixEpoch, cts.Token);
+        // 令牌路径只经 5 参主重载（批次 15c：4 参 CancellationToken 重载已 private）
+        var decision = Invoke(trigger, "Decide", (object)TriggerPoint("OccupancyEnded"), (object)items, (object)DateTimeOffset.UnixEpoch, (object)cts.Token, (object?)null);
         Assert.Empty(Requests(decision));
     }
 
@@ -638,6 +684,428 @@ public sealed class LocalWaitReevaluationTriggerTests
                || name.Contains("SubmissionDispatch", StringComparison.Ordinal);
     }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ⑨ 批次 15b：第二轮会诊反例（首轮被降级拒绝的三条缺陷）——反例先行，先红后修
+// ─────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// **枚举器中途抛异常 ⇒ 不得留下被消费的幂等键**（第二轮会诊 #2 反例，推翻首轮"预留与 return
+    /// 间无可观察失败界限"的拒绝理由）。
+    ///
+    /// 首轮实现先在 `_handled.TryAdd` 占键、**之后**仍继续枚举 `items`。传入一个**合法**的
+    /// `IReadOnlyList`：首个元素是 `Waiting` 项、下一次 `MoveNext` 抛异常 ⇒ 键已被占用却**没有**
+    /// 任何决策被交付；此后用正常集合重试同一等待项得到**空请求**，该等待项被**永久**屏蔽。
+    ///
+    /// 修复口径：先完成全部读与校验、构造出完整决策，**再**原子占键；异常发生在占键之前 ⇒ 不消费键。
+    /// </summary>
+    [Fact]
+    public void Decide_EnumeratorThrows_DoesNotConsumeIdempotencyKey()
+    {
+        var trigger = NewTrigger();
+        var good = WaitItem("s-throw");
+
+        // 合法实现 IReadOnlyList<T> 的集合：枚举一次后在下一次 MoveNext 抛异常。
+        var throwing = new ThrowingAfterFirstReadOnlyList(good);
+
+        // 本次触发不得把异常变成"已处理"：异常可以抛出，但**键不得被消费**。
+        try { Invoke(trigger, "Decide", TriggerPoint("OccupancyEnded"), throwing); }
+        catch (InvalidOperationException) { /* 反例注入的异常类型；键是否被消费才是断言点 */ }
+
+        // 关键断言：用正常集合重试同一等待项，**必须**仍能产出请求。
+        var retry = Requests(Decision(trigger, TriggerPoint("OccupancyEnded"), new List<LocalWaitItem> { good }));
+        Assert.True(retry.Count == 1,
+            $"枚举期间发生异常时不得消费幂等键：首调用抛异常后，重试同一等待项应仍产出 1 条请求，实际 {retry.Count} 条"
+            + "（首轮实现先 TryAdd 后继续枚举 ⇒ 键被占、请求未交付、该项被永久屏蔽）。");
+    }
+
+    /// <summary>
+    /// **`ItemId` 与 `StableIdentity` 派生不一致 ⇒ 不产请求、不占键**（第二轮会诊 #3 反例，推翻首轮
+    /// "接收方可重新派生校验"的拒绝理由）。
+    ///
+    /// 首轮实现先按 `StableIdentity` 占键、再原样复制可写的 `item.ItemId` ⇒ 产物指向**错误**等待项；
+    /// 接收方即使拒收，之后改正 `ItemId` 重试**仍被永久屏蔽**——接收方校验**撤销不了**已经作出的预留。
+    ///
+    /// 修复口径：产出前校验 `item.ItemId == LocalWaitQueuePolicy.DeriveItemId(item.StableIdentity)`；
+    /// 不一致 ⇒ **不占键、不产请求**；改正后重试应能正常产出。
+    /// </summary>
+    [Fact]
+    public void Decide_ItemIdNotDerivedFromStableIdentity_ProducesNothingAndKeepsKeyFree()
+    {
+        var trigger = NewTrigger();
+
+        // 稳定身份 s-a，但 ItemId 指向另一个身份 s-b 的派生结果 ⇒ 不一致。
+        var mismatched = WaitItem("s-a");
+        mismatched.ItemId = LocalWaitQueuePolicy.DeriveItemId("s-b");
+
+        var first = Requests(Decision(trigger, TriggerPoint("OccupancyEnded"), new List<LocalWaitItem> { mismatched }));
+        Assert.True(first.Count == 0,
+            $"ItemId 与 StableIdentity 派生不一致时不得产出请求（产物会指向错误等待项），实际 {first.Count} 条。");
+
+        // 接收方拒收后改正 ItemId 再重试：因为不一致输入**没有**占键，本次必须能正常产出。
+        var corrected = WaitItem("s-a");
+        var second = Requests(Decision(trigger, TriggerPoint("OccupancyEnded"), new List<LocalWaitItem> { corrected }));
+        Assert.True(second.Count == 1,
+            $"不一致输入不得消费幂等键：改正 ItemId 后重试应产出 1 条请求，实际 {second.Count} 条"
+            + "（首轮实现先按身份占键 ⇒ 接收方校验撤销不了该预留）。");
+    }
+
+    /// <summary>
+    /// **同一实例内按"等待项代际"重新求值**：新代际**必须**重新产请求（第二轮会诊 #1/#4 反例，
+    /// 推翻首轮 `StateScope` 的"部分采纳"——它构造后不可变、`_handled` 随实例存活，
+    /// 故**没有**在原问题发生的那一层（同一实例生命周期）生效）。
+    ///
+    /// 语义接缝：`Decide` 需接受一个**显式代际**入参（本轮实现取 `LocalWaitItem.PrerequisiteReference`
+    /// 之外的新增可选入参，或以等待项上的代际字段承载）；同一代际重复触发不重复产，**新代际必须重新产**。
+    /// </summary>
+    [Fact]
+    public void Decide_NewGeneration_SameInstance_ProducesAgain()
+    {
+        var trigger = NewTrigger();
+        var identity = "s-gen";
+
+        var gen1 = WaitItem(identity);
+        var first = Requests(Gen(trigger, TriggerPoint("OccupancyEnded"), new List<LocalWaitItem> { gen1 }, "gen-1"));
+        Assert.True(first.Count == 1, $"首个代际应产出 1 条请求，实际 {first.Count} 条。");
+
+        // 同一代际重复触发：不重复产（幂等仍须成立）。
+        var repeated = Requests(Gen(trigger, TriggerPoint("OccupancyEnded"), new List<LocalWaitItem> { gen1 }, "gen-1"));
+        Assert.True(repeated.Count == 0, $"同一代际重复触发不得重复产，实际 {repeated.Count} 条。");
+
+        // 新代际（取消后重新等待的合法新生命周期）：**必须**重新产出。
+        var gen2 = WaitItem(identity);
+        var second = Requests(Gen(trigger, TriggerPoint("OccupancyEnded"), new List<LocalWaitItem> { gen2 }, "gen-2"));
+        Assert.True(second.Count == 1,
+            $"同一实例内新代际必须重新产出请求，实际 {second.Count} 条"
+            + "（首轮 StateScope 构造后不可变、_handled 随实例存活 ⇒ 原问题发生在同一实例生命周期内时未解决）。");
+    }
+
+    /// <summary>
+    /// **键编码必须无歧义 ⇒ 不同作用域/代际三元组不得映射到同一键**（批次 15c，评审第 3 轮必改 #2
+    /// 的**红夹具先行**：旧实现用 `reval-[&lt;scope&gt;:]&lt;摘要&gt;[|&lt;代际&gt;]` 原样拼接，评审给出的反例是
+    /// `(scope=null, 代际="x:"+h+"|z")` 与 `(scope=h+"|x", 代际="z")` 同为 `reval-h|x:h|z`）。
+    ///
+    /// **判别力设计（批次 15c 修订）**：夹具按**反例构造**给出两个必须不同键的三元组——①无作用域＋代际
+    /// `"x:" + &lt;摘要&gt; + "|z"`；②作用域 `&lt;摘要&gt; + "|x"` ＋代际 `"z"`。二者在**任何**"字段间无边界/无长度前缀"
+    /// 的原样拼接下必然同键（这正是必改 #2 的可利用通道）；而在长度前缀编码下两字段载荷不同、长度不同 ⇒ 异键。
+    /// 另加**辅助**计数：摘要文本在本样例的键内出现一次（旧形状 `reval-h|x:h|z` 含两个 `h`）。
+    /// **第 9 轮重要 #2 更正**：这**不是**"结构不变量证明"——摘要文本是十六进制串，作用域／代际载荷同样可由
+    /// 十六进制字符构成、也可能含该文本，故计数并不证明字段来源。真正的判别力由上面的 `Assert.NotEqual(key1, key2)` 承担。
+    /// </summary>
+    [Fact]
+    public void ReevaluationKey_DistinctScopeGenerationTriples_NeverAlias()
+    {
+        // 先取稳定身份 s-1 的摘要（与键同口径：DeriveReevaluationKey 去掉 `reval-` 前缀后的 16 位十六进制）。
+        var probe = NewTrigger();
+        var digest = ((string)Invoke(probe, "DeriveReevaluationKey", "s-1"))["reval-".Length..];
+        Assert.Equal(16, digest.Length);
+
+        // 评审反例变体 A：作用域＝摘要＋"|x"（旧原样拼接下会与被摘要字段"吃掉"边界）
+        var scopeOtherwiseUnsafe = digest + "|x";
+        var genWithDigest = "x:" + digest + "|z";
+
+        var key1 = KeyOf(Gen(NewTrigger(), TriggerPoint("OccupancyEnded"),
+            new List<LocalWaitItem> { WaitItem("s-1") }, genWithDigest), 0);
+        var key2 = KeyOf(Gen(NewTriggerWithScope(scopeOtherwiseUnsafe), TriggerPoint("OccupancyEnded"),
+            new List<LocalWaitItem> { WaitItem("s-1") }, "z"), 0);
+
+        Assert.False(string.IsNullOrWhiteSpace(key1));
+        Assert.False(string.IsNullOrWhiteSpace(key2));
+        Assert.NotEqual(key1, key2);
+
+        // 辅助计数（**非**结构不变量证明，见上方逐字收窄）：摘要文本在本样例键内出现一次。
+        Assert.Equal(1, CountOccurrences(key1!, digest));
+        Assert.Equal(1, CountOccurrences(key2!, digest));
+        // 判别力核心（批次 15c）：两个三元组必须**异键**。旧原样拼接下二者同键 ⇒ 该断言只须 `NotEqual` 即失效；
+        // 新编码下才成立（长度前缀保证边界）。上方两行计数只作**辅助**观察：needle 恰为十六进制串，
+        // 作用域／代际载荷也可含该文本 ⇒ 计数**不证明**字段来源。
+    }
+
+    /// <summary>
+    /// **键字段编码必须对任意 .NET 字符串单射 ⇒ 孤立代理项不得与替换字符同键**（批次 15c 第二轮，
+    /// 评审第 4 轮必改 #2 的**红夹具先行**）：第一版 `EncodeKeyField` 用 `Encoding.UTF8.GetBytes(value)`，
+    /// 而 UTF-8 编码**不是单射**——孤立代理项（如 `"\uD800"`）被替换字符 U+FFFD 取代（同样 `EF BF BD`）⇒
+    /// `"a\uD800"` 与 `"a\uFFFD"`（同身份、同代际）映射到**同一键**，跨作用域/代际去重被错误合并。
+    ///
+    /// 判别力设计：夹具把这两个字符串分别作为**作用域**（同身份 `s-1`、同代际 `null`）⇒ 断言两键**不同**。
+    /// 旧 UTF-8 实现下二者同键 ⇒ 本断言失败（红）；改为 UTF-16 码元级编码后成立。
+    /// </summary>
+    [Fact]
+    public void ReevaluationKey_LoneSurrogateScope_NeverAliasesReplacementChar()
+    {
+        var loneSurrogate = "a\uD800";
+        var replacement = "a\uFFFD";
+
+        var key1 = KeyOf(Decision(NewTriggerWithScope(loneSurrogate), TriggerPoint("OccupancyEnded"),
+            new List<LocalWaitItem> { WaitItem("s-1") }), 0);
+        var key2 = KeyOf(Decision(NewTriggerWithScope(replacement), TriggerPoint("OccupancyEnded"),
+            new List<LocalWaitItem> { WaitItem("s-1") }), 0);
+
+        Assert.False(string.IsNullOrWhiteSpace(key1));
+        Assert.False(string.IsNullOrWhiteSpace(key2));
+        Assert.NotEqual(loneSurrogate, replacement);
+        Assert.NotEqual(key1, key2);
+
+        // 反向：同一字符串（含孤立代理项）重复 ⇒ 同键（编码确定性，不引入随机/时间依赖）。
+        var key1Again = KeyOf(Decision(NewTriggerWithScope(loneSurrogate), TriggerPoint("OccupancyEnded"),
+            new List<LocalWaitItem> { WaitItem("s-1") }), 0);
+        Assert.Equal(key1, key1Again);
+    }
+
+    /// <summary>
+    /// **稳定身份摘要路径的等价面：已披露的既有口径**（批次 15c，评审第 5 轮必改 #1 的**红夹具先行**）。
+    ///
+    /// **反例（请按此构造函数）**：`DeriveReevaluationKey`／`DeriveItemId` 都用 `Encoding.UTF8.GetBytes`，
+    /// 而 UTF-8 编码**不是**对任意 .NET 字符串的单射：孤立代理项被替换字符 U+FFFD（`EF BF BD`）取代 ⇒
+    /// `S1 = "a\uD800"` 与 `S2 = "a\uFFFD"` 得到**同一**摘要、同一 `ItemId`。
+    ///
+    /// **本夹具钉死批内可观测后果（不是"没问题"，而是"已界定"）**：
+    /// ①两项都能通过产出侧 `ItemId` 一致性校验（因为校验按**同一**口径派生）⇒ 互相屏蔽**不是**校验漏检；
+    /// ②同一次 `Decide` 传入两项 ⇒ 键相同 ⇒ `seenInBatch` 只保留**第一项**（产 1 条，指向 S1）；
+    /// ③分两次调用 ⇒ `_handled` 屏蔽第二次（产 0 条）。
+    /// **等价面本身的效果（与上一条同向，不是反例）**：因为 `S1` 与 `S2` 的 `ItemId` **相同**，无论把该项的
+    /// `StableIdentity` 写成 `S1` 还是 `S2`，它与自派生 `ItemId` 都**一致** ⇒ 都**能**通过产出侧校验。
+    /// 真正的"另一侧"校验反例见 ⑤：改写为**无关身份**的派生 `ItemId` ⇒ 不一致 ⇒ 不产、**不占键**。
+    ///
+    /// **本夹具的性质＝"既有缺陷的特征化断言"，不是正确性要求**（评审第 6 轮重要 #4 已明确要求声明）：
+    /// 其中"同键"断言**故意**钉住当前（有缺陷的）口径；若某天把摘要改成码元级编码等**正确修复**，
+    /// 该断言会变红 —— 此时**应当**同步改写本夹具（把断言反转为"异键"），而**不得**据此认为修复是错的。
+    /// 本夹具的正向价值是：①防止等价面在未被察觉时被重新引入；②把后果逐条固定成可核对事实。
+    ///
+    /// **废弃该缺陷需要改动 `DeriveItemId` 口径（批次 14 的既有语义面／去重键形状），本批按 owner 约束
+    /// 不扩面**：此等价面**已披露**，生产接线必须假定 `StableIdentity` 来自权威身份面（非任意 UTF-16 串），
+    /// 且 64 位摘要的概率碰撞边界另见 `DocumentedHashPrefixLength`（**概率碰撞**与**可复现等价面**分开表述）。
+    /// </summary>
+    [Fact]
+    public void ReevaluationKey_StableIdentityDigest_Utf8Equivalence面_已披露_且ItemId校验同口径()
+    {
+        var s1 = "a\uD800";
+        var s2 = "a\uFFFD";
+        Assert.NotEqual(s1, s2);
+
+        var trigger = NewTrigger();
+        var key1 = (string)Invoke(trigger, "DeriveReevaluationKey", s1);
+        var key2 = (string)Invoke(trigger, "DeriveReevaluationKey", s2);
+
+        // ①两个不同字符串得到同一键（既有摘要口径的等价面，已披露）
+        Assert.Equal(key1, key2);
+        // ②与 DeriveItemId 同口径：同一等价面 ⇒ 同一 ItemId（故身份校验不会把等价面挡下）
+        Assert.Equal(LocalWaitQueuePolicy.DeriveItemId(s1), LocalWaitQueuePolicy.DeriveItemId(s2));
+
+        // ③同批：两项同键 ⇒ 只产一条（同批去重结果如实）
+        var batchItem1 = WaitItem(s1);
+        var batchItem2 = WaitItem(s2);
+        Assert.Equal(batchItem1.ItemId, batchItem2.ItemId);   // 两者都通过 ItemId 一致性校验
+        var batched = Requests(Decision(NewTrigger(), TriggerPoint("OccupancyEnded"),
+            new List<LocalWaitItem> { batchItem1, batchItem2 }));
+        Assert.True(batched.Count == 1,
+            $"同批内仅在该 UTF-8 等价面上等价的两个身份 ⇒ 同键 ⇒ 只产 1 条（已披露），实际 {batched.Count} 条。");
+        Assert.Equal(s1, StringOf(batched[0], "StableIdentity"));   // 保留的是批内第一项
+
+        // ④跨调用：新实例内第二项被在飞去重屏蔽（产 0 条）
+        var single = NewTrigger();
+        Assert.Single(Requests(Decision(single, TriggerPoint("OccupancyEnded"), new List<LocalWaitItem> { batchItem2 })));
+        Assert.Empty(Requests(Decision(single, TriggerPoint("OccupancyEnded"), new List<LocalWaitItem> { batchItem1 })));
+
+        // ⑤另一侧：伪造 ItemId（取**无关身份**的派生值）⇒ 不一致 ⇒ 不产、**且不占键**（必须用**同一实例**改正后重试来证明"不占键"：
+        //    若实现改成"先占键再校验"或"用身份占键"，这里会因 `_handled` 已被占而产 0 条 ⇒ 夹具变红）。
+        var forged = WaitItem(s2);
+        forged.ItemId = LocalWaitQueuePolicy.DeriveItemId("s-mut-OTHER");   // 伪造：取**无关身份**的 ItemId ⇒ 与自身身份摘要不一致
+        Assert.NotEqual(forged.ItemId, LocalWaitQueuePolicy.DeriveItemId(forged.StableIdentity));
+        var forgedTrigger = NewTrigger();
+        Assert.Empty(Requests(Decision(forgedTrigger, TriggerPoint("OccupancyEnded"), new List<LocalWaitItem> { forged })));
+        forged.ItemId = LocalWaitQueuePolicy.DeriveItemId(s2);      // 改正 ⇒ 同一实例内必须仍能产出（证明上面未占键）
+        Assert.Single(Requests(Decision(forgedTrigger, TriggerPoint("OccupancyEnded"), new List<LocalWaitItem> { forged })));
+    }
+
+    /// <summary>
+    /// **4 参 `Decide` 不得存在「`CancellationToken` 与 `string? generation` 并存」的重载歧义**
+    /// （批次 15c，评审第 3 轮必改 #1 的**红夹具先行**）：旧实现同时公开
+    /// `Decide(…, CancellationToken)` 与 `Decide(…, string?)`（同为 4 参）⇒ 源码层
+    /// `Decide(t, items, now, default)` 变成**歧义**、`Decide(t, items, now, null)` 被**静默改绑**到代际重载。
+    ///
+    /// 本夹具断言公共面**不得**具备**任何** 4 参 `Decide` 形态（两个 4 参重载都已收窄为 private）；
+    /// 取消语义与代际都只经 5 参主重载可达。
+    /// 反例（旧实现 / 只收窄一个的中间态）：任一 4 参形态仍然公开 ⇒ 本断言失败（红）。
+    /// </summary>
+    [Fact]
+    public void PublicDecide_NoFourArgCancellationTokenAndGenerationOverloadAmbiguity()
+    {
+        var type = RequireType(TriggerTypeName);
+        var fourArg = type.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .Where(m => m.Name == "Decide" && m.GetParameters().Length == 4)
+            .ToList();
+        Assert.True(fourArg.Count == 0,
+            "公共面不得有任何 4 参 `Decide` 重载（第 10 轮建议收窄：**歧义源自**`CancellationToken` 与 "
+            + "`string? generation` 两个 4 参重载**并存** ⇒ `Decide(t, items, now, default)` 歧义、"
+            + "`Decide(t, items, now, null)` 静默改绑；批次 15c 已把 `CancellationToken` 与 `string? generation` 两个 4 参重载都收窄为 private）。现有 4 参重载："
+            + string.Join(" / ", fourArg.Select(m => "(" + string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name)) + ")")));
+
+        foreach (var m in fourArg)
+        {
+            Assert.Fail("4 参 `Decide` 重载不得公开（第 9 轮建议收窄：**歧义源自**`CancellationToken` 与 `string? generation`"
+            + "两个 4 参重载**并存**——`Decide(t, items, now, default)` 会 `CS0121`、`Decide(t, items, now, null)` 会被静默改绑；"
+            + "令牌与代际两条路径都经 5 参主重载可达）：(" + string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name)) + ")");
+        }
+
+        // 令牌路径必须仍可用：5 参主重载（0 参默认代际）可绑定 `CancellationToken`。
+        var mainOverload = type.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(m => m.Name == "Decide"
+                && m.GetParameters().Length == 5
+                && m.GetParameters()[3].ParameterType == typeof(CancellationToken));
+        Assert.True(mainOverload is not null, "必须保留 5 参主重载（含 CancellationToken）作为取消语义的唯一可达入口。");
+
+        // 可赋值性绑定（与 C# 重载解析一致）：`CancellationToken` 实参**恰好**绑定到该 5 参重载，不得落到 string 形参。
+        var token = new CancellationToken(canceled: false);
+        var matches = type.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .Where(m => m.Name == "Decide")
+            .Where(m => ArgsAssignable(m.GetParameters(), new object?[] { TriggerPoint("OccupancyEnded"), new List<LocalWaitItem>(), DateTimeOffset.UnixEpoch, token }))
+            .ToList();
+        Assert.True(matches.Count == 0,
+            "4 参 `CancellationToken` 调用点在可赋值性绑定下不得命中任何公共重载（必须只经 5 参主重载显式传入令牌）。");
+        Assert.True(ArgsAssignable(mainOverload!.GetParameters(), new object?[] { TriggerPoint("OccupancyEnded"), new List<LocalWaitItem>(), DateTimeOffset.UnixEpoch, token, null }));
+    }
+
+    /// <summary>
+    /// **取消后重试 ⇒ 仍可再评估**（第二轮会诊指出的首轮无判别力夹具：原夹具只检查"已取消 ⇒ 空集"，
+    /// **没有**在取消后重试，故证明不了"取消不消费幂等键"）。
+    ///
+    /// **批次 15c（评审第 5 轮重要 #2）补断言**：必须同时断言"取消 ⇒ 空集"。否则一个错误实现若在取消时
+    /// **产出请求但不占键**，只断言重试仍能产出的夹具照样通过 —— 判别力不足。
+    /// </summary>
+    [Fact]
+    public void Decide_CancelledToken_DoesNotConsumeKey_RetryStillProduces()
+    {
+        var trigger = NewTrigger();
+        var item = WaitItem("s-cancel-retry");
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var cancelled = Requests(Invoke(trigger, "Decide", (object)TriggerPoint("OccupancyEnded"), (object)new List<LocalWaitItem> { item }, (object)DateTimeOffset.UnixEpoch, (object)cts.Token, (object?)null));
+        Assert.True(cancelled.Count == 0,
+            $"已取消令牌必须返回空集（只短路请求，不消费幂等键），实际 {cancelled.Count} 条。");
+
+        // 判别力关键：重试必须仍能产出 ⇒ 证明取消**没有**消费幂等键。
+        var retry = Requests(Decision(trigger, TriggerPoint("OccupancyEnded"), new List<LocalWaitItem> { item }));
+        Assert.True(retry.Count == 1,
+            $"取消不得消费幂等键：取消后重试应产出 1 条请求，实际 {retry.Count} 条（原夹具未做此重试，故无判别力）。");
+    }
+
+    /// <summary>
+    /// **`SafetyNet` 到期分支也必须逐项检查等待项状态**（第二轮会诊指出的首轮无判别力夹具：
+    /// 原夹具的 `SafetyNet` 分支默认"未到期"⇒ 直接短路返回空集，即使**完全不检查**项状态也会通过）。
+    /// 本夹具注入"已到期"，故必须真的走逐项判定：`Waiting` 项产出、`Cancelled` 项不产出。
+    /// </summary>
+    [Fact]
+    public void Decide_SafetyNetDue_StillChecksItemStatePerItem()
+    {
+        var type = RequireType(TriggerTypeName);
+        var ctor = type.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(c => c.GetParameters().Any(p => p.ParameterType == typeof(Func<DateTimeOffset, bool>)));
+        Assert.True(ctor is not null, "触发器必须提供可注入的安全网判定构造参数。");
+        var args = ctor!.GetParameters().Select(p =>
+            p.ParameterType == typeof(Func<DateTimeOffset, bool>)
+                ? (object)(Func<DateTimeOffset, bool>)(_ => true)   // 恒"已到期"：强制走逐项判定
+                : p.HasDefaultValue ? p.DefaultValue! : (p.ParameterType.IsValueType ? Activator.CreateInstance(p.ParameterType)! : null!))
+            .ToArray();
+        var trigger = ctor.Invoke(args);
+
+        var items = new List<LocalWaitItem>
+        {
+            WaitItem("s-net-waiting"),
+            WaitItem("s-net-cancelled", LocalWaitItemState.Cancelled),
+        };
+
+        var requests = Requests(Decision(trigger, TriggerPoint("SafetyNet"), items));
+        Assert.True(requests.Count == 1,
+            $"安全网到期时仍须逐项检查状态：仅 Waiting 项产出，实际 {requests.Count} 条"
+            + "（原夹具在默认'未到期'下短路返回空集，不检查项状态也会通过 ⇒ 无判别力）。");
+        Assert.Equal(LocalWaitQueuePolicy.DeriveItemId("s-net-waiting"), ItemIdOf(requests[0]));
+    }
+
+    /// <summary>
+    /// **可枚举 `IReadOnlyList`：首元素被读取后，在下一次 `MoveNext` 里把它"改写"。**
+    ///
+    /// **批次 15d 修复 #1（评审第 6 轮必改 #1）的反例构造器**：原实现枚举期校验 `ItemId`，却把
+    /// `LocalWaitItem` **引用**存进候选、并在**占键之后**才从引用读取产物字段 ⇒ 本适配器可以在"校验已过、
+    /// 产物未取"的窗口里把 `ItemId` 改成**另一身份**的派生值，使产出的请求 `ItemId` 与 `StableIdentity`
+    /// **不一致**且键**已不可撤销地占用**（改正后同实例重试被屏蔽）。
+    /// 修复后实现取的是**值快照**⇒ 该改写**不再**影响任何结论（夹具断言产物仍是校验时的值）。
+    /// </summary>
+    private sealed class MutatingAfterFirstReadList : IReadOnlyList<LocalWaitItem>
+    {
+        private readonly LocalWaitItem _item;
+        private readonly Action<LocalWaitItem> _mutate;
+        private int _moveNextCount;
+        public MutatingAfterFirstReadList(LocalWaitItem item, Action<LocalWaitItem> mutate)
+        {
+            _item = item;
+            _mutate = mutate;
+        }
+
+        public int Count => 1;
+        public LocalWaitItem this[int index] => _item;
+
+        public IEnumerator<LocalWaitItem> GetEnumerator()
+        {
+            yield return _item;
+            // 第二次 MoveNext：在"校验已完成、候选已被收下"之后改写该项（反例注入窗口）
+            _moveNextCount++;
+            if (_moveNextCount == 1) _mutate(_item);
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    /// <summary>
+    /// **枚举与产物之间被改写 ⇒ 产物必须仍是"校验过的取值"且键不被浪费**（批次 15d 修复 #1 的
+    /// **红夹具先行**，评审第 6 轮必改 #1）。
+    ///
+    /// 反例（旧实现下）：`ItemId` 在枚举结束后被改成另一身份的值 ⇒ 旧实现产出
+    /// `ItemId != DeriveItemId(StableIdentity)` 的请求（违反"不一致 ⇒ 不产、不占键"契约），且键已占用。
+    /// 修复后：产物字段取自**校验时的值快照** ⇒ `ItemId` 仍与 `StableIdentity` 一致。
+    /// </summary>
+    [Fact]
+    public void Decide_ItemMutatedDuringEnumeration_ProducesRequestWithValidatedValues()
+    {
+        var item = WaitItem("s-mut-1");
+        var validatedItemId = item.ItemId;
+        var validatedIdentity = item.StableIdentity;
+        var validatedCandidateId = item.CandidateId;
+
+        var list = new MutatingAfterFirstReadList(item, x =>
+        {
+            x.ItemId = LocalWaitQueuePolicy.DeriveItemId("s-mut-OTHER");   // 改成"另一身份"的派生值
+            x.CandidateId = "cand-forged";
+        });
+
+        var trigger = NewTrigger();
+        var requests = Requests(Decision(trigger, TriggerPoint("OccupancyEnded"), list));
+        Assert.True(requests.Count == 1, $"改写不应改变产出条数，实际 {requests.Count} 条。");
+
+        // 产物必须仍是**校验过的**取值（不得出现 ItemId 与 StableIdentity 失配的请求）
+        Assert.Equal(validatedItemId, ItemIdOf(requests[0]));
+        Assert.Equal(validatedIdentity, StringOf(requests[0], "StableIdentity"));
+        Assert.Equal(validatedCandidateId, StringOf(requests[0], "CandidateId"));
+    }
+
+    /// <summary>可注入异常的可枚举 `IReadOnlyList`：首元素读完后在下一次 `MoveNext` 抛异常。</summary>
+    private sealed class ThrowingAfterFirstReadOnlyList : IReadOnlyList<LocalWaitItem>
+    {
+        private readonly LocalWaitItem _first;
+        public ThrowingAfterFirstReadOnlyList(LocalWaitItem first) => _first = first;
+
+        public int Count => 2;
+        public LocalWaitItem this[int index] => index == 0 ? _first : throw new InvalidOperationException("反例注入：枚举中途失败");
+
+        public IEnumerator<LocalWaitItem> GetEnumerator()
+        {
+            yield return _first;
+            throw new InvalidOperationException("反例注入：枚举中途失败");
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
 // ─────────────────────────────────────────────────────────────────────────────
 // ⑦ 低频安全网：注入式纯判定（不引入真实定时器／后台线程）
 // ─────────────────────────────────────────────────────────────────────────────
@@ -781,5 +1249,245 @@ public sealed class LocalWaitReevaluationTriggerTests
             root = root.Parent;
         }
         return null;
+    }
+
+
+    /// <summary>实参能否逐个赋给候选形参（含 null 与非值类型引用；隐式数值提升不做，夹具用不到）。</summary>
+    private static bool ArgsAssignable(System.Reflection.ParameterInfo[] ps, object?[] args)
+    {
+        if (ps.Length != args.Length) return false;
+        for (var i = 0; i < ps.Length; i++)
+        {
+            var actual = args[i];
+            if (actual is null)
+            {
+                if (ps[i].ParameterType.IsValueType && System.Nullable.GetUnderlyingType(ps[i].ParameterType) is null)
+                    return false;
+                continue;
+            }
+            if (!ps[i].ParameterType.IsInstanceOfType(actual)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>取产物集合中第 <paramref name="index"/> 条的 <c>ReevaluationKey</c>。</summary>
+    private static string? KeyOf(object decision, int index)
+    {
+        var requests = Requests(decision);
+        Assert.True(requests.Count > index, $"期望至少 {index + 1} 条重评请求，实际 {requests.Count} 条。");
+        return StringOf(requests[index], "ReevaluationKey");
+    }
+
+    /// <summary>
+    /// 计数键串中出现 <paramref name="needle"/> 的次数。**批次 15c（评审第 5 轮重要 #1 更正）**：本方法
+    /// **只**校验 needle 非空；**不**校验其是否为十六进制载荷（原注释声称"校验合法十六进制奇偶长"与实现不符）。
+    /// 计数只用于**辅助观察**（第 10 轮建议更正：**不宜**称"结构不变量断言"——见下方"使用边界"），不解读字段语义。
+    /// **使用边界（评审第 6/7/8 轮重要 #5）**：本计数**可能假阳性**——needle 若恰为十六进制串，可以命中
+    /// 载荷的十六进制文本。本文件的调用点**并非都**满足"含非十六进制字符"：请求构造反例夹具以**摘要
+    /// 十六进制串**为 needle（第 8 轮更正：**不得**再以"量级远大于 16 位十六进制载荷"为由声称实际不会碰撞
+    /// ——作用域／代际载荷同样可由任意长度的十六进制字符构成，长度差异不构成证明）。**该计数不构成严格
+    /// 结构不变量证明**；凡以十六进制串作 needle 的断言只作**辅助**观察，判别力由同一夹具的**异键**断言承担。
+    /// </summary>
+    private static int CountOccurrences(string haystack, string needle)
+    {
+        Assert.False(string.IsNullOrEmpty(needle), "计数 needle 不得为空。");
+        var count = 0;
+        var at = 0;
+        while ((at = haystack.IndexOf(needle, at, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            at += needle.Length;
+        }
+        return count;
+    }
+    // ─────────────────────────────────────────────────────────────────────────────
+    // ⑧ 单元素处理期内的重复读值窗口（评审第 7 轮必改 #1——反例先行）
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// **可重入 `IReadOnlyList` 反例注入器**：每次**从集合取元素**时先计数；在指定序号的那一次取值点上
+    /// **成对**改写元素的 `StableIdentity` 与 `ItemId`（保持互相一致，不制造撕裂），随后返回**同一**实例。
+    /// 因每次返回同一实例，**只要实现之后再次从集合取出该元素**（本次计数的那一次），它读到的字段就已是改写后的值。
+    /// **注意（第 9 轮必改 #1 收窄）**：改写**只在"从集合取元素"这一刻**发生。若实现**只从集合取一次**该元素、
+    /// 随后在**同一引用**上重复读取字段，本注入器**不会**触发改写 —— 那种形态下面几段的边界②适用。
+    ///
+    /// **覆盖边界（评审第 8／9 轮必改 #1，重要，须如实声明）**：
+    /// ①本注入器**能**覆盖的错误形态是"实现**再次从集合取出同一元素**再读字段"（例如把 `items[i]` 放回循环体、
+    ///    或在两遍遍历中都从集合取元素）——此时第 2 次取值会命中改写，产物失配、夹具变红。
+    /// ②它**不能**覆盖"实现只从集合取一次元素（`foreach` 只取一次引用），却在该引用上**重复读取字段**"这一形态：
+    ///    该形态下取元素计数仍为 1，改写不生效、夹具**也**通过。**故本夹具不得被读成"能捕获第 7 轮原反例
+    ///    （同一 `item` 引用上字段重复读取）"的证据**；那一形态的判别**只能靠实现层面"每元素只读一次"的
+    ///    局部值快照本身（代码走查／实现文件注释口径），本夹具无法机械判定。
+    /// ③若实现把"从集合取元素"改成"每次取同一实例的**副本**"，改写不影响结论 —— 但那样的实现本身即满足
+    ///    "每元素只读一次"契约，夹具**也**通过（与契约同向，不能靠"改成副本"绕过）。见红夹具
+    ///    `Decide_SingleElement_MutationDuringPostValidationRead_ProducesConsistentRequest`。
+    /// </summary>
+    private sealed class RecallingItemList : IReadOnlyList<LocalWaitItem>
+    {
+        private readonly ItemAccessCounter _counter;
+        private readonly int _mutateOnAccess;
+        private readonly Action<LocalWaitItem>? _mutate;
+
+        public RecallingItemList(ItemAccessCounter counter, int mutateOnAccess, Action<LocalWaitItem>? mutate = null)
+        {
+            _counter = counter;
+            _mutateOnAccess = mutateOnAccess;
+            _mutate = mutate;
+        }
+
+        public int Count => 1;
+
+        public LocalWaitItem this[int index]
+        {
+            get
+            {
+                var access = _counter.AccessCount + 1;
+                if (access == _mutateOnAccess) _mutate?.Invoke(_counter.Item);
+                return _counter.Observe();
+            }
+        }
+
+        public IEnumerator<LocalWaitItem> GetEnumerator()
+        {
+            var access = _counter.AccessCount + 1;
+            if (access == _mutateOnAccess) _mutate?.Invoke(_counter.Item);
+            yield return _counter.Observe();
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    /// <summary>
+    /// **取值计数器**：包住一个**普通** `LocalWaitItem`，只统计"**从集合取出元素的次数**"（＝遍历取值次数），
+    /// **不**改写元素。用途：把"实现是否在单个元素处理期内**重复从集合取元素**"变成一个**可探测的计数**。
+    /// **边界（第 9 轮必改 #1）**：它**不**度量"在同一引用上重复读取字段"——那种形态下计数仍为 1。
+    /// 与适配器 <see cref="RecallingItemList"/> 配合使用（每次取值返回同一实例）。
+    /// **第 12 轮（纯文本）**：本摘要保持上述收窄口径不变，仅由本轮回送窄增量 diff 以证"仅文本变更"。
+    /// </summary>
+    private sealed class ItemAccessCounter
+    {
+        public LocalWaitItem Item { get; }
+
+        public int AccessCount { get; private set; }
+
+        public ItemAccessCounter(LocalWaitItem item) => Item = item;
+
+        /// <summary>每次集合被取值时调用一次。</summary>
+        public LocalWaitItem Observe()
+        {
+            AccessCount++;
+            return Item;
+        }
+    }
+
+    /// <summary>
+    /// **可重入 `IReadOnlyList` 反例注入器**：每次**从集合取元素**时先计数；在指定序号的那一次取值点上
+    /// **成对**改写元素的 `StableIdentity` 与 `ItemId`（保持互相一致，不制造撕裂），随后返回**同一**实例。
+    /// 因每次返回同一实例，**只要实现之后再次从集合取出该元素**（即本次计数的那一次），它读到的字段就已是改写后的值。
+    /// **第 10 轮必改 #1 收窄**：改写**只在"从集合取元素"这一刻**发生；若实现**只从集合取一次**该元素、
+    /// 随后在**同一引用**上重复读取字段，本注入器**不会**触发改写（见下方边界②）。
+    ///
+    /// **覆盖边界（重要，须如实声明）**：
+    /// ①本注入器**能**覆盖的错误形态是"实现**再次从集合取出同一元素**再读字段"（例如把 `items[i]` 放回循环体、
+    ///    或在两遍遍历中都从集合取元素）——此时第 2 次取值会命中改写，产物失配、夹具变红。
+    /// ②它**不能**覆盖"实现只从集合取一次元素（`foreach` 只取一次引用），却在该引用上**重复读取字段**"这一形态：
+    ///    该形态下取元素计数仍为 1，改写不生效、夹具**也**通过。**故本夹具不得被读成"能捕获第 7 轮原反例
+    ///    （同一 `item` 引用上字段重复读取）"的证据**；那一形态的判别**只能靠实现层面的"每元素只读一次"
+    ///    局部值快照本身（代码走查／本文件的注释口径），本夹具无法机械判定。
+    /// ③若实现把"从集合取元素"改成"每次取同一实例的**副本**"，改写不影响结论 —— 但那样的实现本身即满足
+    ///    "每元素只读一次"契约，夹具**也**通过（与契约同向，不能靠"改成副本"绕过）。
+    /// </summary>
+    [Fact]
+    public void Decide_SingleElement_MutationDuringPostValidationRead_ProducesConsistentRequest()
+    {
+        // 基准：先求一次"当前口径"下的合法取值，避免对派生算法细节硬编码。
+        var baseline = new LocalWaitItem
+        {
+            ItemId = LocalWaitQueuePolicy.DeriveItemId("s-base"),
+            StableIdentity = "s-base",
+            CandidateId = "cand-s-base",
+            Namespace = "manual",
+            WorkflowId = "wf",
+            Tier = ArbitrationTier.Plan,
+            Priority = 0,
+            HasTrustedIdentity = true,
+            EnqueuedAtUtc = DateTimeOffset.UnixEpoch,
+            State = LocalWaitItemState.Waiting,
+        };
+        Assert.Single(Requests(Decision(NewTrigger(), TriggerPoint("OccupancyEnded"), new List<LocalWaitItem> { baseline })));
+
+        // 探测：此处先用"永不触发改写"的计数器量出**实际从集合取元素的次数**（本计数**不**度量
+        // "在同一引用上重复读取字段"——那种形态下计数仍为 1，见断言 ③ 的覆盖边界）。
+        var probeItem = new LocalWaitItem
+        {
+            ItemId = LocalWaitQueuePolicy.DeriveItemId("s-probe"),
+            StableIdentity = "s-probe",
+            CandidateId = "cand-s-probe",
+            Namespace = "manual",
+            WorkflowId = "wf",
+            Tier = ArbitrationTier.Plan,
+            Priority = 0,
+            HasTrustedIdentity = true,
+            EnqueuedAtUtc = DateTimeOffset.UnixEpoch,
+            State = LocalWaitItemState.Waiting,
+        };
+        var probeCounter = new ItemAccessCounter(probeItem);
+        Assert.Single(Requests(Decision(NewTrigger(), TriggerPoint("OccupancyEnded"),
+            new RecallingItemList(probeCounter, mutateOnAccess: int.MaxValue))));
+        Assert.Equal(1, probeCounter.AccessCount);
+
+        // 反例注入：身份 A／ItemId(A)，在**第 2 次取元素**时成对改成身份 B／ItemId(B)。
+        var item = new LocalWaitItem
+        {
+            ItemId = LocalWaitQueuePolicy.DeriveItemId("s-mut-single"),
+            StableIdentity = "s-mut-single",
+            CandidateId = "cand-s-mut-single",
+            Namespace = "manual",
+            WorkflowId = "wf",
+            Tier = ArbitrationTier.Plan,
+            Priority = 0,
+            HasTrustedIdentity = true,
+            EnqueuedAtUtc = DateTimeOffset.UnixEpoch,
+            State = LocalWaitItemState.Waiting,
+        };
+        var validatedItemId = item.ItemId;
+        var validatedIdentity = item.StableIdentity;
+        var validatedCandidateId = item.CandidateId;
+
+        var mutatedIdentity = "s-mut-single-OTHER";
+        var mutatedItemId = LocalWaitQueuePolicy.DeriveItemId(mutatedIdentity);
+        Assert.NotEqual(validatedItemId, mutatedItemId);
+        Assert.NotEqual(validatedIdentity, mutatedIdentity);
+
+        var counter = new ItemAccessCounter(item);
+        var list = new RecallingItemList(counter, mutateOnAccess: 2, mutate: x =>
+        {
+            x.StableIdentity = mutatedIdentity;   // 成对改写：身份与 ItemId 始终互相一致（不制造撕裂）
+            x.ItemId = mutatedItemId;
+        });
+
+        var requests = Requests(Decision(NewTrigger(), TriggerPoint("OccupancyEnded"), list));
+
+        // ③ 机械断言：实现必须在单个元素处理期内**只从集合取一次元素**。
+        //    覆盖边界（第 8／9 轮必改 #1 收窄）：本计数**能**发现"再次从集合取出元素再读字段"的形态；
+        //    **不能**发现"只取一次引用、却在同一引用上重复读字段"的形态（那形态下计数仍为 1、本夹具也通过）。
+        Assert.Equal(1, counter.AccessCount);
+
+        // ① 修复后必须仍产 1 条。
+        Assert.True(requests.Count == 1,
+            $"单元素处理期内**成对**改写不应改变产出条数，实际 {requests.Count} 条"
+            + $"（本实例被取值 {counter.AccessCount} 次；第 2 次取值即说明实现**再次从集合取出了该元素**）。");
+
+        // ② 产物身份必须**一致**：ItemId 必须等于产物自身 StableIdentity 的派生值。
+        //    边界（第 9 轮必改 #1 收窄）：仅当旧实现**再次从集合取出该元素**去构造 Pending 时，
+        //    本次注入的改写才会生效并在这里失配变红；"同一引用重读字段"形态下本夹具不触发改写（见 ③ 边界②）。
+        var producedItemId = ItemIdOf(requests[0]);
+        var producedIdentity = StringOf(requests[0], "StableIdentity");
+        Assert.Equal(LocalWaitQueuePolicy.DeriveItemId(producedIdentity!), producedItemId);
+
+        // ④ 产物必须**完全等于改写前（校验时）的取值**：不得取自改写后的值。
+        Assert.Equal(validatedItemId, producedItemId);
+        Assert.Equal(validatedIdentity, producedIdentity);
+        Assert.Equal(validatedCandidateId, StringOf(requests[0], "CandidateId"));
     }
 }

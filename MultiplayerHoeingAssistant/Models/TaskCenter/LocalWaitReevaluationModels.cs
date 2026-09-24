@@ -47,7 +47,15 @@ public enum LocalWaitReevaluationTriggerPoint
 /// </summary>
 public sealed class LocalWaitReevaluationRequest
 {
-    /// <summary>等待项幂等标识（复用 <c>LocalWaitQueuePolicy.DeriveItemId</c> 口径，可直接指回等待项）。</summary>
+    /// <summary>
+    /// 等待项幂等标识（复用 <c>LocalWaitQueuePolicy.DeriveItemId</c> 口径）。
+    ///
+    /// **边界（批次 15d 如实披露）**：`LocalWaitQueuePolicy.DeriveItemId` 的编码口径对含**孤立代理项**的
+    /// `StableIdentity` **不是单射**（实测 `"a\uD800"` 与 `"a\uFFFD"` 得同值）⇒ "唯一指回等待项"不是全空间
+    /// 保证，仅在**权威身份面**（不含非正规码元）假设下成立。其内部实现细节**不**由本文档断言（本批材料未含
+    /// 该源码，只按实测行为陈述）；本批不改其口径。详情见 <c>LocalWaitReevaluationTrigger.Decide</c> 的
+    /// 契约 ⑤ 与 <see cref="ReevaluationKey"/>。
+    /// </summary>
     [JsonPropertyName("itemId")] public string ItemId { get; init; } = "";
 
     /// <summary>候选稳定身份（去重与审计的权威身份）。</summary>
@@ -59,14 +67,34 @@ public sealed class LocalWaitReevaluationRequest
     /// <summary>触发点（本次重评的原因，须回填以便对账）。</summary>
     [JsonPropertyName("trigger")] public LocalWaitReevaluationTriggerPoint Trigger { get; init; }
 
-    /// <summary>重评幂等键（同一等待项确定性派生；同键重复触发不得重复产）。</summary>
+    /// <summary>
+    /// 重评幂等键（同一等待项确定性派生；同键重复触发不得重复产）。
+    ///
+    /// **边界（批次 15d 如实披露）**：与 <see cref="ItemId"/> **实测同口径**（UTF-8 取 SHA-256 前缀，仅字面前缀
+    /// 不同）⇒ 同受"孤立代理项 ⇒ 同摘要"这一**可复现**等价面影响（两个不同身份可同键 ⇒ 同批只产一条、
+    /// 跨调用后者被在飞去重屏蔽）。**另一侧**：指纹仅 64 位 ⇒ 另有**概率**碰撞。二者必须分开表述。
+    /// **合并的确切条件**：按 <see cref="ItemId"/> 对账/幂等**恒**合并（与作用域、代际无关）；按本键对账/幂等
+    /// 仅**同作用域且同代际**时合并；更换作用域/代际只能区分重评键、**不能**区分既有 <see cref="ItemId"/>。
+    /// </summary>
     [JsonPropertyName("reevaluationKey")] public string ReevaluationKey { get; init; } = "";
 
     /// <summary>
     /// 恒为 true：本产物**只**表达「须重新走一次完整准入」。
     /// 属性无 setter ⇒ 不可由调用方伪造成「已获发送许可」或改为 false 来暗示可直接发送。
     /// </summary>
+
     [JsonPropertyName("requiresFullAdmission")] public bool RequiresFullAdmission => true;
+    /// <summary>
+    /// **等待项代际**（批次 15b 修复 #1／#4；`null` ⇒ 无代际，沿用批次 15 的**无代际**去重语义）。
+    /// 与 <see cref="ReevaluationKey"/> 的关系（**批次 15c 更正，第二轮修订**）：作用域与代际均走
+    /// `reval-key-v2|&lt;摘要&gt;|&lt;作用域字段&gt;|&lt;代际字段&gt;` 的**长度前缀编码**（字段载荷为 **UTF-16 码元的
+    /// 十六进制**，大写——`char` 级编码，对含孤立代理项的任意字符串**单射**；`null` 编码为单字符 `-`）；
+    /// **仅** `Generation == null 且触发器的 StateScope == null` 时键才与批次 15 逐字符相同（`reval-&lt;摘要&gt;`，
+    /// 且该旧形状与新形状字面前缀不同 ⇒ 不可能互相相等）。此更正消除了评审第 3 轮必改 #2 的跨作用域**键别名**
+    /// （旧的 `:`／`|` 原样拼接可被构造出不同三元组同键）与第 4 轮必改 #2 的 UTF-8 孤立代理项合并别名。
+    /// 本字段**只**用于对账与幂等键复核，**不**承载发送许可、优先级或执行承诺。
+    /// </summary>
+    [JsonPropertyName("generation")] public string? Generation { get; init; }
 }
 
 /// <summary>
