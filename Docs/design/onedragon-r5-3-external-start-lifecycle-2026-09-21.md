@@ -2889,6 +2889,46 @@ R5 要解决的是联机助手、BGI 与既有协调流程在**日常运行、�
 | 既有 14 项失败＋偶发失败 | ⚠ 基线身份不变；`BgiTaskCoordinatorTests.ClearQueue_CancelsAllQueuedItems_WithEvents` 曾在一次全量运行偶发失败（隔离 5/5 通过），**疑似时间敏感、是否既有尚未证实**，机制未定位 |
 | 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
 
+### 24.102 落地登记：低优先级本地持久等待（基础组件，未接线）（2026-09-24；B.1）
+
+**审计（载体与现状，带代码位置）**
+
+- owner B.1 要求"低优先级到来者**本地持久等待**，当前结束后重新比较；等待期间不得抢发、也不得提前放入 BGI 执行队列"。
+- 现有可承载持久状态的载体：冻结的**租约文件**（`LeaseHandoffSegment`，格式代 v5，加字段即需升版与迁移）、**运行台账**（`WorkflowRunRecord`，无级别字段）、以及新增独立文件。三者的**责任归属**不同：租约承载"责任与发送授权"，等待只是"调度意愿"。
+- 现有拒绝语义：低优先级到来者在准入面**没有**"等待"这一结果——比较失败即被结构化拒绝（`ArbitrationOrdering.Decide` 只产出 Allow／NeedPreemptConfirm／TicketSuppressed／NoEligibleCandidate 等），`PreemptConfirmPending` 亦无"确认后继续"入口（A9）。
+- 结论：等待语义的**新结果类型、落盘载体与重判触发**均属冻结合同的加法改动，需先立合同再接线（本批**不**改冻结格式代、不新增结果类型、不在生产准入里入队/重判）。
+
+**实现（基础组件，未接线）**
+
+| 组成 | 位置 | 语义 |
+|---|---|---|
+| 等待项模型 | `Models/TaskCenter/LocalWaitModels.cs`（新增） | `LocalWaitItem`（身份/候选号/命名空间/流程/级别/优先级/最高级标记/可信标记/计划时刻/状态/原因/取消时刻）；**`HasTrustedIdentity` 默认 false（保守）**；`LocalWaitQueueFile` 自版本化（v1） |
+| 登记与选择纯函数 | `Services/TaskCenter/Arbitration/LocalWaitQueuePolicy.cs`（新增） | `DecideEnqueue`：**只有 `WaitLocally` 入队**；结论类型**不可由调用方构造**，`SendPermitted` 恒 false；`DeriveItemId` 由稳定身份确定性派生；`SelectNext` 复用批次 4 `SelectNextFromWaitSet`（最高级→级别→优先级→有值时刻先于 null→身份→候选号），**只取 Waiting 项**，不可信项按最低处理（Tier=Plan／Priority=int.MinValue／最高级=false）；`Cleanup` 为**纯函数**，返回 `LocalWaitCleanup` 决策集合 |
+| 落盘载体 | `Services/TaskCenter/LocalWaitQueueStore.cs`（新增） | 独立文件 `wait-queue.json`；**严格读取**（`version` 必需且在支持范围、`items` 必需为数组、元素必须对象、`itemId`/`stableIdentity` 非空且唯一、`Tier`/`State` 必须已定义枚举、`state` 键存在但非整数（含 null）即损坏）——只有真正"文件不存在"才是空集合，其余 I/O/权限问题按损坏**响亮拒绝**；`Upsert` 幂等（逐字段比较不可变登记载荷，异载荷响亮冲突且原文件不变；**已取消的同载荷重登记重新激活**）；`Remove`；`PersistCleanup`（应用清理决策 + 取消墓碑 **24h 保留期裁剪**，可注入更短）；**同路径进程级锁** + 原子写（临时文件 → `File.Move(overwrite)`，`WriteAllBytes` 在 try 内，写失败不破坏原文件） |
+
+**证据**
+
+- 定向夹具 `Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitQueueTests.cs` **16/16**：
+  入队判定与"零发送"（仅 WaitLocally 入队、`SendPermitted` 恒 false 且类型不可构造）、稳定性标识、幂等与逐字段冲突（含原文件不变）、重启后重载与选择顺序、
+  清理后不再竞争、取消后重登记**重新激活**、保留期到期裁剪、损坏/版本/坏记录/重复 id/未定义枚举/`state` 字符串与 null/目录占位等拒绝路径、
+  不可信项不得越级、缺可信标记默认不可信、`Cleanup` 纯函数。
+- **两次受控突变**各红一次后还原（"冲突时覆盖既有记录" ⇒ 1 红；"选择时不排除 Cancelled" ⇒ 2 红）。
+- 完整回归：助手全量 **1247 通过／2 跳过／0 失败／1249**（`r5_waitq_final_assistant_full_20260924.trx`）；
+  BGI 源码本批未改动，最近全量 1025 通过／14 失败／1039，失败身份与既有 14 项基线差集为空（原因未归因）。
+- 会诊：**四轮各 1 次成功**（首轮 `gpt-6-astra`／medium：4 必改＋3 重要；随后按**配置默认** `gpt-6-sol`／medium 三轮：第二轮 3 项未闭合必改、第三轮 `state:null` 必改、第四轮**全部闭合且无新必改、同意限定收口**）。
+  说明：首轮系施工方自行选择 Astra（越出默认模型）；自第二轮起改为按会诊插件**配置默认**（评审模型＝`gpt-6-sol`、强度＝medium）执行。
+
+**残余（不因本批改变门禁）**
+
+| 项 | 状态 |
+|---|---|
+| 等待基础组件（落盘/幂等/选择/清理/裁剪） | ✅ 限定收口（**未接线**：不进生产准入、不入 BGI 队列） |
+| 生产接线与零发送验证 | ❌ 未做：接线后须以 sender／队列写入点的记录型替身断言等待、恢复、取消、未知事实与损坏路径**零调用** |
+| 接线前合同 | ❌ 待立：等待结果类型、重判触发（占用结束/新候选到来/事实变化/启动恢复）、发送前再次校验、与 `PreemptConfirmPending` 的互斥或转移、墓碑回收、启动时损坏阻断范围 |
+| 跨进程单写者与断电耐久 | ⚠ 同路径进程级锁已实现；**跨进程**单写者合同与断电耐久性未验证（独立文件与租约之间**非**跨文件事务） |
+| 夹具范围 | ⚠ 只覆盖已列反例；"更高优先级插队""重启后完整重判"仅为静态排序与重载证据 |
+| 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
+
 ### 24.101 落地登记：占用者级别事实的生产来源（2026-09-24；A6 第二步，限定收口）
 
 **审计（关联键，带代码行）**
