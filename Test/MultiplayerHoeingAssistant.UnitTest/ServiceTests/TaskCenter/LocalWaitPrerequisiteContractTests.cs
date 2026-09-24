@@ -181,8 +181,11 @@ public sealed class LocalWaitPrerequisiteContractTests
         => value => (TOut)fn(value)!;
 
     /// <summary>
-    /// **显式传入「无求值器」**（不是“默认重载”）：本批**删除了**「无 evaluator 的旧签名」，因此
-    /// 「缺 evaluator」这一场景只能由 <c>null</c> 注入来表达——它必须保守落**不可判定**（不参选）。
+    /// **显式传入「无求值器」的保守语义代理物**：本批**废除**了「无 evaluator 的旧签名」的**语义**
+    /// （签名按批约束保留、调用即抛；见 `SelectNext(items)` 重载）。
+    /// **注意口径**（会诊 R6／R7／R8 重要项）：本方法返回的是一个**非空**委托，其结论恒为「不可判定」——
+    /// 它证明的是「求值器给出不可判定 ⇒ 不参选」，**不**证明「求值器为真正的 `null`」这条分支；
+    /// 后者由 `SelectNext_NullEvaluatorExactly_IsConservative`（透传真正的 <c>null</c>）单独证明。
     /// 若产品把「未注入求值器」当成「无前置要求 ⇒ 已就绪」，本包装会把该错误结论原样回传 ⇒ 夹具红。
     /// </summary>
     private static Delegate NoEvaluator() => Evaluator(null);
@@ -422,22 +425,27 @@ public sealed class LocalWaitPrerequisiteContractTests
         Assert.Equal("s-ready", SelectNextWithEvaluator([noReference, ready], evaluator)!.StableIdentity);
         Assert.Null(SelectNextWithEvaluator([noReference], evaluator));
 
-        // **owner 裁定 A**：旧签名 `SelectNext(items)` 保留为**二进制入口**，但已废除且**不实现旧语义**。
-        // 测试必须钉死两件事：①该重载仍在（二进制兼容）；②它**不**能被当作「缺引用即就绪」的退路——调用即抛异常。
+        // **批次 16／D2**：旧签名 `SelectNext(items)` 按批约束「冻结合同只允许纯加法」**保留为公开签名**，
+        // 但其**语义**已废除（owner 裁决原文未提及该重载处置；保留只为不让签名集合做减法）。
+        // 测试必须钉死两件事：①该重载仍在（签名不做减法）；②它**不**能被当作「缺引用即就绪」的退路——调用即抛异常。
         var legacyOverload = typeof(LocalWaitQueuePolicy)
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
             .Single(m => m.Name == "SelectNext" && m.GetParameters().Length == 1);
         var obsolete = legacyOverload.GetCustomAttributes(typeof(ObsoleteAttribute), inherit: false)
             .Cast<ObsoleteAttribute>().SingleOrDefault();
         Assert.True(obsolete is not null && obsolete.IsError,
-            "批次 16／D2（owner 裁定 A）：旧 `SelectNext(items)` 必须标注 "
+            "批次 16／D2：旧 `SelectNext(items)` 必须标注 "
             + "`[Obsolete(..., error: true)]`，以**编译期**封死任何源码调用点。");
         var legacyThrown = Record.Exception(() =>
             legacyOverload.Invoke(null, [new List<LocalWaitItem>()]));
         Assert.True(legacyThrown is not null,
-            "批次 16／D2（owner 裁定 A）：旧 `SelectNext(items)` 不得实现旧语义——"
+            "批次 16／D2：旧 `SelectNext(items)` 不得实现旧语义——"
             + "它必须抛异常，而**不能**在缺前置引用时静默退回「已就绪」"
             + "（§24.106 C4 的恒 true 硬编码即为该缺陷）。");
+        // 收紧断言（会诊 R8 建议 1）：仅「有异常」不足以证明「调用即抛」——绑定错误也会产生异常。
+        // 必须检查反射包装后的**内层异常**是 `NotSupportedException`（即方法体真的执行并主动抛出）。
+        var legacyInner = (legacyThrown as TargetInvocationException)?.InnerException ?? legacyThrown;
+        Assert.IsType<NotSupportedException>(legacyInner);
         Assert.Null(SelectNextWithEvaluator([noReference], NoEvaluator()));
         Assert.Null(SelectNextWithEvaluator([Item("s-plain", ArbitrationTier.System, 99)], NoEvaluator()));
     }
@@ -445,8 +453,8 @@ public sealed class LocalWaitPrerequisiteContractTests
     /// <summary>
     /// **无 evaluator 时不得再恒为就绪**：`SelectNext(items, null)`（显式「无求值器」）在项携带引用时必须
     /// 走保守默认。反例：现状 `ToWaitingFacts` 硬编码 `PrerequisiteReady = true` ⇒ 该断言失败（红）。
-    /// 批次 16／D2（owner 裁定 A）：旧签名仅作为**二进制入口**保留且调用即抛异常（不可用），
-    /// 故本夹具一律走 2 参数重载并显式传 `null`。
+    /// 批次 16／D2：旧签名按批约束**保留为公开签名**但调用即抛异常（不可用），
+    /// 真正的 `null` 求值器路径见 `SelectNext_NullEvaluatorExactly_IsConservative`。
     /// </summary>
     [Fact]
     public void SelectNext_ReferencePresentButNoLegacyReadyDefault_HardCodedTrueIsGone()
@@ -1184,6 +1192,43 @@ public sealed class LocalWaitPrerequisiteContractTests
             if (dir.StartsWith(Path.GetTempPath(), StringComparison.OrdinalIgnoreCase) && Directory.Exists(dir))
                 Directory.Delete(dir, recursive: true);
         }
+    }
+
+    /// <summary>
+    /// **[会诊 R6／R7／R8 重要项处置] 真正的 `null` 求值器**：上面的 `NoEvaluator()` 传的是**非空**委托，
+    /// 不能证明「未注入求值器（<c>null</c>）」这条保守分支。本夹具把**真正的 <c>null</c>** 透传给
+    /// `SelectNext(items, evaluator)` 与 `RevalidateBeforeSend(item, evaluator)`，钉死：
+    /// ①项带引用时仍**不可判定 ⇒ 不参选**（不得退回 C4 的恒 true）；
+    /// ②该结论恒**不可判定**且 `RequiresFullAdmission` 恒 true（无发送许可、无抛出自异常）；
+    /// ③发送前验算的结论 `RequiresFullAdmission` 恒 true（无发送许可）。
+    /// 本夹具**不**引入任何生产消费点，**零发送**。
+    /// </summary>
+    [Fact]
+    public void SelectNext_NullEvaluatorExactly_IsConservative()
+    {
+        var referenced = Item("s-null-ref", ArbitrationTier.System, 99);
+        SetPrerequisiteReference(referenced, "wf|node|ticket");
+
+        // 直接把真正的 null 作为第二参数：选择阶段不得参选、不得恒就绪
+        Assert.Null(SelectNextWithEvaluator([referenced], null!));
+        Assert.Null(SelectNextWithEvaluator([Item("s-null-plain", ArbitrationTier.System, 99)], null!));
+
+        // 发送前再次验算：null 求值器必须响亮失败（不得据此取得发送许可）
+        var revalidate = typeof(LocalWaitQueuePolicy)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Where(m => m.Name == "RevalidateBeforeSend")
+            .Single(m => m.GetParameters()[1].ParameterType == RequireType(EvaluatorDelegateTypeName));
+        var decision = revalidate.Invoke(null, [referenced, null]);
+        var decisionType = RequireType("MultiplayerHoeingAssistant.Models.LocalWaitPrerequisiteDecision");
+        Assert.True(decisionType.IsInstanceOfType(decision), "RevalidateBeforeSend 必须返回模型层决策对象。");
+        var readinessProp = decisionType.GetProperty("Readiness")!;
+        var requiresFullAdmission = decisionType.GetProperty("RequiresFullAdmission")!;
+        // **null 求值器**下必须保守落「不可判定」，绝不能因缺求值器而回退「已就绪」。
+        var readinessName = readinessProp.GetValue(decision)!.ToString()!;
+        Assert.NotEqual("Ready", readinessName);
+        Assert.Equal(UndeterminedName(), readinessName);
+        // 结论永远不含发送许可：唯一合法后继是重新走完整准入。
+        Assert.True((bool)requiresFullAdmission.GetValue(decision)!, "发送前验算不得给出发送许可。");
     }
 }
 

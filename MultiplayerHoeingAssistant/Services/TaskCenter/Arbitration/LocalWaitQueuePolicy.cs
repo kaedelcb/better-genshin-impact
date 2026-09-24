@@ -96,22 +96,42 @@ public static class LocalWaitQueuePolicy
     /// **[批次 16／D2] 前置就绪不再由过期布尔承载**：就绪**只**由调用方注入的**只读 evaluator** 求得
     /// （见带 <see cref="PrerequisiteEvaluator"/> 的重载）。
     ///
-    /// **批次 16／D2 已删除「无 evaluator 的旧签名 `SelectNext(items)`」**：若保留，则「缺前置引用」的项
-    /// 会静默退回「无前置要求 ⇒ 已就绪」，恰恰重演 §24.106 C4 的恒 true 硬编码（只是换了取值来源）。
+    /// **[批次 16／D2] 旧签名 `SelectNext(items)` 已**废除**，但为满足批约束「冻结合同只允许纯加法」而**保留公开签名**：
+    /// 见本类中标注 <c>[Obsolete(error: true)]</c> 的同名重载（调用即抛异常，**不**实现旧语义）。
+    /// 保留仅为「签名集合不做减法」；**不**表示 owner 对该重载另有裁决——owner 裁决原文未提及本重载。
+    /// **旧语义（缺前置引用 ⇒ 视为已就绪）绝不复活**——它正是 §24.106 C4 的恒 true 硬编码缺陷。
     /// 缺引用／缺求值器**一律不可判定 ⇒ 不参选**；需要选择等待项的调用方**必须**显式注入只读求值器，
     /// 且选择结果仍**只**表示「下一个应重新走完整准入的对象」（不含发送许可）。
     /// </summary>
+    /// <remarks>
+    /// **[批次 16／D2] 逐步语义（只读）**：
+    /// **①保守默认**：<paramref name="evaluator"/> 为 null、或缺引用、或求值器给出未就绪／不可判定
+    /// ⇒ 该项不参选（不得当作已就绪，也不得当作「空闲」而抢发）。
+    /// **②`ScheduledAt` 仍只参与排序**：未来时刻不阻止参选，也不构成就绪证明。
+    /// **③返回值只表示「下一个应重新走完整准入的对象」**，不含发送许可。
+    /// **④只读求值视图重载**：<see cref="SelectNextView"/> 与「发送前再次验算」复用**同一**求值结果类型。
+    /// </remarks>
     public static LocalWaitItem? SelectNext(IReadOnlyList<LocalWaitItem>? items, PrerequisiteEvaluator? evaluator)
         => SelectNextView(items, ToReadOnlyEvaluator(evaluator));
 
     /// <summary>
-    /// **[批次 16／D2] 选择下一个候选，前置就绪由注入的只读 evaluator 在**读取时**求得。**
-    /// **保守默认**：<paramref name="evaluator"/> 为 null、或缺引用、或求值器给出未就绪／不可判定
-    /// ⇒ 该项不参选（不得当作已就绪，也不得当作「空闲」而抢发）。
-    /// **`ScheduledAt` 仍只参与排序**：未来时刻不阻止参选，也不构成就绪证明。
+    /// **[批次 16／D2] 旧签名 `SelectNext(items)` 已**废除**，但为满足「冻结合同只允许纯加法」而**保留公开签名**。**
     ///
-    /// 返回值仍然**只表示「下一个应重新走完整准入的对象」**，不含发送许可。
+    /// 保留原因：批约束要求冻结合同**不得做减法**（既有公开签名的删除须 owner 另裁为合同例外）；
+    /// 直接删除公开静态方法即构成一次签名减法。故以 <see cref="ObsoleteAttribute"/>（<c>error: true</c>）
+    /// **编译期**封死（任何源码调用点立即编译失败），并在**运行期**（反射／旧二进制调用）抛出明确异常。
+    ///
+    /// **绝不实现旧语义**：旧实现把前置就绪硬编码为 <c>true</c>（§24.106 C4 的恒 true 缺陷）。
+    /// 因此本重载**没有任何**「缺引用即视为已就绪」的退回路径——它只会抛异常，要求调用方显式注入只读 evaluator。
     /// </summary>
+    [Obsolete("批次 16／D2：`SelectNext(items)` 已废除（前置就绪改由注入的只读 evaluator 求得）。"
+        + "请改用 `SelectNext(items, evaluator)`；本重载仅为保留二进制入口而存在，调用即抛异常。", error: true)]
+    public static LocalWaitItem? SelectNext(IReadOnlyList<LocalWaitItem>? items)
+        => throw new NotSupportedException(
+            "批次 16／D2：`SelectNext(items)` 已废除——禁止「缺前置引用 ⇒ 视为已就绪」的旧语义"
+            + "（§24.106 C4 恒 true 缺陷）。请改用 `SelectNext(items, evaluator)` 显式注入只读求值器"
+            + "（缺引用／缺求值器一律不可判定 ⇒ 不参选）。");
+
     /// <summary>
     /// **[批次 16／D2] 选择下一个候选（只读求值视图重载）。**
     /// 与 <see cref="SelectNext(IReadOnlyList{LocalWaitItem}, PrerequisiteEvaluator)"/> 同语义；
