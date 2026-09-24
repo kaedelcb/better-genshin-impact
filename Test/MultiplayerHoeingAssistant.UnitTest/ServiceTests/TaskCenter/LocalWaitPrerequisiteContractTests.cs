@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Threading;
 using System.Text;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
@@ -26,6 +27,22 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 /// **不能证明**：任何生产接线行为、真实事件源是否送达、真实发送是否发生、跨进程单 writer、断电耐久；
 /// 本组**不**证明 evaluator 的权威来源在生产上已具备（权威来源与失败语义的冻结是接线前事项）。
 /// </summary>
+/// <summary>
+/// [第四轮会诊处置] 本类的两个 **DEBUG 探针**用例（<see cref="LocalWaitPrerequisiteContractTests."/>
+/// 中的 `Persist_MaterializedSnapshot_...` 与 `Persist_WriteSnapshotMaterialization_...`）通过
+/// **进程级静态字段** `LocalWaitQueueStore.WriteSnapshotProbeMutator` 注入窗口。
+/// 该字段在 xUnit 默认并行下会被**其它 collection 的用例**在「挂上 → 触发写盘」之间的窗口内并发读写，
+/// 导致本行探针被**别人的调用**抢先消费、或被提前清空 ⇒ 夹具**假红**（全量负载下已实测）。
+/// 故把本类单独放进一个 collection，使本类的用例与其它 collection **不并发**；
+/// 并发写入则由探针内的「捕获一次」(CAS) 守卫兜住：只有**第一个**调用者能生效，
+/// 其余并发调用一律**立即返回**，从而不会改写／吞掉本行的目标记录。
+/// </summary>
+[CollectionDefinition("LocalWaitSnapshotProbe", DisableParallelization = true)]
+public sealed class LocalWaitSnapshotProbeCollection
+{
+}
+
+[Collection("LocalWaitSnapshotProbe")]
 public sealed class LocalWaitPrerequisiteContractTests
 {
     // ── 反射取值辅助（类型/成员缺失 ⇒ 断言失败＝红；不产生编译期错误）────────────────
@@ -772,12 +789,29 @@ public sealed class LocalWaitPrerequisiteContractTests
     ///
     /// **判别力**：把 <c>MaterializeAndValidatePayload</c> 中的 <c>ValidatePersistableItemShape(...)</c>
     /// 与重复 <c>itemId</c> 去重整段删去（只保留原「校验引用」一项）⇒ 本夹具必红；保留则绿。
+    ///
+    /// **第三轮会诊 #1 补的行（新一轮）**：<c>empty-itemid-reactivation</c> 覆盖**重新激活**写盘路径——
+    /// 该路径是**另一条会再次写盘**的分支（`Upsert` 命中「已取消的同载荷墓碑」时把 `existing.State` 置回
+    /// `Waiting` 后再次 `Persist`），且它写的是 `Load().ToList()` 出来的那条 `existing`、**不是**调用方传入的 `item`
+    /// （本批实现**不**把调用方实例放进批内——这是实测到的事实更正，原先此处「把调用方实例放进批内」的写法是错的）。
+    /// 因此本行的目的是：证明**该分支也**同样经过写前全字段形状校验，而非重复 `empty-itemid` 的语义。
+    ///
+    /// **证据帧口径**：DEBUG 探针（<c>WriteSnapshotProbeMutator</c>）与引用它的夹具行都只在 **Debug** 构建存在；
+    /// **Release** 构建下探针与依赖它的 5 条（<c>empty-itemid</c>／<c>undefined-tier</c>／<c>undefined-state</c>／
+    /// <c>duplicate-itemid</c>／<c>empty-itemid-reactivation</c>）由 <c>[Fact]</c> 上的
+    /// <c>#if DEBUG</c> 行守卫（Release 构建下不生成 ⇒ 不会因缺探针而编译失败）。
+    /// 本夹具的**绿色帧**为 Debug 帧；Release 构建仅作**编译可用性**核对（不声称 Release 下跑过这些探针行）。
     /// </summary>
+#if DEBUG
+    // DEBUG 专用探针（`LocalWaitQueueStore.WriteSnapshotProbeMutator`）只在 Debug 构建存在；
+    // 本方法依赖它注入「读盘后、写盘前」的窗口。Release 构建下探针字段不存在，故**整个方法**门控。
+    // 本方法的**绿色证据帧**因此是 Debug 帧（见 §24.111 与本节 XML 注释）。
     [Theory]
     [InlineData("empty-itemid")]
     [InlineData("undefined-tier")]
     [InlineData("undefined-state")]
     [InlineData("duplicate-itemid")]
+    [InlineData("empty-itemid-reactivation")]
     public void Persist_MaterializedSnapshot_IsValidatedAsAWhole_PerLoadShapeRules(string mutation)
     {
         var dir = Path.Combine(Path.GetTempPath(), "waitq-whole-shape-" + Guid.NewGuid().ToString("N"));
@@ -785,18 +819,48 @@ public sealed class LocalWaitPrerequisiteContractTests
         try
         {
             var store = new LocalWaitQueueStore(dir);
-            var baseline = Item("s-whole-baseline");
-            SetPrerequisiteReference(baseline, "ref-whole-baseline");
+            // **每一行用互不相同的身份**（按突变名派生）：避免与同 Theory 其它行共享静态探针时互相命中，
+            // 也避免上一行残留的探针在下一行的批内「碰巧」匹配到同名记录（全量负载下已实测到这一干扰）。
+            var rowTag = mutation;
+            var baselineIdentity = "s-whole-baseline-" + rowTag;
+            var baseline = Item(baselineIdentity);
+            SetPrerequisiteReference(baseline, "ref-whole-baseline-" + rowTag);
             Assert.True(store.Upsert(baseline)); // 首次登记：探针此时尚未挂上
             var before = File.ReadAllBytes(store.FilePath);
 
             // ItemId 由稳定身份确定性派生 ⇒ 必须**实证**换一个身份确实得到不同的 ItemId，
             // 否则本夹具会因「第二条与既有项同 Id ⇒ 被幂等路径拦下、根本走不到写盘」而假绿。
-            var secondIdentity = "s-whole-second";
+            var secondIdentity = "s-whole-second-" + rowTag;
             var second = Item(secondIdentity);
             Assert.NotEqual(baseline.ItemId, second.ItemId);
             Assert.NotEqual(baseline.StableIdentity, second.StableIdentity);
             SetPrerequisiteReference(second, "ref-whole-second");
+            // [第四轮会诊处置] 与 `baseline` 逐字段比对：除身份/候选号/itemId/计划载荷外，**只**让
+            // `enqueuedAtUtc` 成为「批内唯一可匹配键」。原实现里 `second.StableIdentity` 虽含突变名，但
+            // 与 `Item(baselineIdentity)` 仅差一个前缀 ⇒ 不能作为唯一键：同一 Theory 的其它行（共享静态探针）
+            // 或上一行的残留探针会**碰巧匹配**到本行记录，把改写落到错误对象上 ⇒ 探针自证失败（全量负载下已实测）。
+            // 故此处把「唯一可匹配键」显式钉在 `enqueuedAtUtc` 这个每实例不同的时刻上，并在使用前自证其非空。
+            var secondEnqueuedAtUtc = new DateTimeOffset(2026, 9, 24, 12, 34, 56, TimeSpan.Zero);
+            second.EnqueuedAtUtc = secondEnqueuedAtUtc;
+            Assert.True(second.EnqueuedAtUtc == secondEnqueuedAtUtc,
+                "本夹具要求 second 携带**可作唯一键**的 enqueuedAtUtc（用于批内定位）；若该字段被改写作其它值，定位将失效。");
+
+            // [第三轮会诊 #1 补] `empty-itemid-reactivation` 覆盖**重新激活**写盘路径：先登记 second，
+            // 再把它清理成 `Cancelled` 墓碑；随后同身份同载荷的再次 `Upsert` 会走重新激活分支并再次写盘。
+            // 该分支写的是 `Load` 出来的 `existing` 记录（**不是**调用方实例）；该路径同样必须经写前全字段校验，
+            // 否则「激活后写回」这一步可能写出 `Load` 读不回的文件。
+            if (mutation == "empty-itemid-reactivation")
+            {
+                Assert.True(store.Upsert(second));
+                store.PersistCleanup(i => string.Equals(i.StableIdentity, secondIdentity, StringComparison.Ordinal)
+                    ? "test-cancel" : null, DateTimeOffset.UtcNow);
+                // 断言确实是 Cancelled 墓碑（否则下面那次 Upsert 会走幂等「已等待」路径、不写盘 ⇒ 空转）
+                Assert.Contains(store.Load(), i => string.Equals(i.StableIdentity, secondIdentity, StringComparison.Ordinal)
+                    && i.State == LocalWaitItemState.Cancelled);
+                // 该路径自身已经写过一次盘 ⇒ 「写盘前」的基线必须在此**之后**重新取样，
+                // 否则断言会落成「与更早的文件比」而假红（本轮已实测到这一假红来源）。
+                before = File.ReadAllBytes(store.FilePath);
+            }
 
             // 探针只在**第二次** Upsert（登记 second、真正把它写进这一批）时挂上；
             // 探针内**不得**使用会自己抛异常的脚手架断言 —— 否则 `Assert.ThrowsAny` 会把
@@ -805,13 +869,39 @@ public sealed class LocalWaitPrerequisiteContractTests
             // 独立的 `probeFailed` 标记回报，断言阶段再区分「守卫拒绝」与「探针没跑成」。
             var probeRan = 0;
             string? probeNote = null;
-            LocalWaitQueueStore.WriteSnapshotProbeMutator = items =>
+            // [第四轮会诊处置] **捕获一次**（CAS）守卫：本字段是**进程级静态**，默认并行下可能被
+            // 其它 collection 的写盘路径并发调用。若不加守卫，第二个调用者会（a）在第一次改写之后
+            // 再次改写（改写落到已被校验的副本上，无意义），(b) 更糟的是把本行的目标值改掉后
+            // 「自证位数」对不上。故只有**第一个**调用者执行探针体，其余立即返回。
+            var thisRowAction = (Action<List<LocalWaitItem>>)(items =>
             {
                 // [本批自审修正] 实现在物化**前**先复制一份快照（`new List<LocalWaitItem>(items)`），
                 // 再遍历**副本**做校验。因此探针**必须**把改写落到**批内副本已持有的那个实例**上、
                 // 并且**不得**新增条目（新增条目在复制之后不会进入被校验的副本 ⇒ 探针就成了空转）。
                 // 故此处对调用方同一批的每个实例逐一（用引用身份）匹配后改写；`probeRan` 只在**改动确实生效**时置 1。
                 probeRan = 0;
+                if (mutation == "empty-itemid-reactivation")
+                {
+                    // [第三轮会诊 #1 补] **重新激活**写盘路径：`Upsert` 命中已取消的同载荷墓碑时，
+                    // 走的是 `Load().ToList()` 出来的那条 `existing`（**不是**调用方传入的 `item`）——
+                    // 本批实现**不**把调用方实例放进批内（这是本轮实测到的事实修正：原假设「重新激活把 item 放进批内」是错的）。
+                    // 因此这里与其余突变同法：**按内容**定位批内那条 `second` 记录，当场把其 `ItemId` 改成**空串**。
+                    // 该批随后会连同激活后的 `existing` 一起写盘 ⇒ 若写前不校验 `itemId`，空串被写出 ⇒ `Load` 拒读 ⇒ 本行红。
+                    var matchedInBatch = 0;
+                    foreach (var victim in items)
+                    {
+                        // 唯一键：只认 enqueuedAtUtc（本行实例独有）；不得退回身份串匹配。
+                        if (victim.EnqueuedAtUtc == secondEnqueuedAtUtc)
+                        {
+                            matchedInBatch++;
+                            victim.ItemId = string.Empty;
+                            if (victim.ItemId.Length == 0) probeRan = 1;
+                        }
+                    }
+                    if (matchedInBatch != 1)
+                        probeNote = "重新激活路径：批内唯一键命中 " + matchedInBatch + " 条（期望 1，突变：" + mutation + "）";
+                    return;
+                }
                 // [本批自审修正 2] 实现走的是 `Load().ToList()` 路径：写盘批**只含**「`Load` 出来的记录
                 // ＋本次 `item`」，`baseline` 这个**调用方实例**默认**不在**批内（只有重新激活分支才会命中它）。
                 // 因此探针一律**按内容定位**「批内那条 baseline 记录」（而不是按引用身份），并对**它**改写；
@@ -858,7 +948,21 @@ public sealed class LocalWaitPrerequisiteContractTests
                     }
                 }
                 if (probeRan == 0) probeNote = "探针对批内记录未产生任何生效改写（突变：" + mutation + "）";
-            };
+            });
+            // 让探针体本身只跑第一个调用者（并发抢占时后续调用直接返回，不产生任何改写）。
+            var firstCallerGate = 1;
+            var guardedAction = (Action<List<LocalWaitItem>>)(items =>
+            {
+                if (Interlocked.CompareExchange(ref firstCallerGate, 0, 1) == 1) thisRowAction(items);
+            });
+            // [第五轮会诊 #2 重要] **先**构造好带守卫的委托，**再一次** CAS 装上——
+            // 不得先发布无守卫的委托、随后用普通赋值换成守卫版：两步之间若有写盘调用，会执行到**无守卫**的探针，
+            // 从而破坏注释所声称的「只有第一个调用者生效」这一保证（本轮会诊指出的真缺口，已修）。
+            var installed = false;
+            for (var spin = 0; spin < 20000 && !installed; spin++)
+                installed = Interlocked.CompareExchange(ref LocalWaitQueueStore.WriteSnapshotProbeMutator, guardedAction, null) is null;
+            Assert.True(installed, "本行未能挂上写盘探针（进程级静态字段被并发占用且未及时释放）。");
+
             Exception? caught = null;
             try
             {
@@ -870,7 +974,8 @@ public sealed class LocalWaitPrerequisiteContractTests
             }
             finally
             {
-                LocalWaitQueueStore.WriteSnapshotProbeMutator = null;
+                // 只清空**自己装上的那个引用**（避免并发下清掉别人的探针）。
+                Interlocked.CompareExchange(ref LocalWaitQueueStore.WriteSnapshotProbeMutator, null, guardedAction);
             }
 
             // ①探针必须确实跑成（否则本夹具不具判别力，直接红，不得靠脚手架异常充数）
@@ -888,6 +993,7 @@ public sealed class LocalWaitPrerequisiteContractTests
                 Directory.Delete(dir, recursive: true);
         }
     }
+#endif
 
     // ─────────────────────────────────────────────────────────────────────────────
     // ⑥″ 写前物化的**判别力取证**（第二轮会诊「必改 2」）：DEBUG 专用探针 + 反向突变
@@ -905,6 +1011,9 @@ public sealed class LocalWaitPrerequisiteContractTests
     ///
     /// 该反向突变已实测：突变后本夹具红；还原后全绿（见 §24.111 落地登记）。
     /// </summary>
+#if DEBUG
+    // DEBUG 专用探针门控（同 Persist_MaterializedSnapshot_...；Release 下探针字段不存在）：
+    // 整段方法（含特性与签名）都在 DEBUG 内，Release 下不生成，避免出现「有签名无方法体」。
     [Fact]
     public void Persist_WriteSnapshotMaterialization_IsLoadBearing()
     {
@@ -948,7 +1057,7 @@ public sealed class LocalWaitPrerequisiteContractTests
                 Directory.Delete(dir, recursive: true);
         }
     }
-
+#endif
     // ─────────────────────────────────────────────────────────────────────────────
     // ⑦ 发送前验算的独立方向（会诊 #3 重要）：必须**重新求值**，不得沿用排队快照
     // ─────────────────────────────────────────────────────────────────────────────
