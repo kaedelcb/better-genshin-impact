@@ -3719,9 +3719,9 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
 | 项 | 判定 | 理由 |
 |---|---|---|
 | 冻结合同 | ✅ **纯加法** | 未新增／未删除任何既有枚举值、状态词或门禁词；`AdmissionResultKind` 等冻结项未被触碰 |
-| **取舍 1：`SelectNext(items)` 旧签名** | ✅ **按 owner 裁定 A 已闭合（不再是删除、不再是例外）** | 该单参重载**无求值器** ⇒ 缺引用时只能**静默**把项判为「已就绪」，**正是 C4 缺陷的重演**。保留即等于把恒 true 换个地方藏起来。夹具已断言 `SelectNext` **所有公共重载的参数个数都是 2**（参数个数 1 即红）。批次 15 会诊「重要 5」已指出该风险 |
+| **取舍 1：`SelectNext(items)` 旧签名** | ✅ **已闭合：按批约束「冻结合同只允许纯加法」保留公开签名（纯加法），语义废除** | 该单参重载**无求值器** ⇒ 缺引用时只能**静默**把项判为「已就绪」，**正是 C4 缺陷的重演**；故其**语义**必须废除。保留**签名**只为不让既有公开方法签名集合做减法；实现为 `[Obsolete(error: true)]`（编译期封死源码调用点）＋调用即抛 `NotSupportedException`（反射／旧二进制安全失败）。**更正（R6）**：本行原写「按 owner 裁定 A 已闭合」及「夹具断言所有公共重载参数个数都是 2」两处**均不准确**——owner 裁决原文**未提及**该重载；夹具实际断言的是「1 参重载**存在**＋`Obsolete.IsError`＋调用即抛」。→ 见 §24.111-R6 |
 | **取舍 2：合并 `Services.LocalWaitPrerequisiteDecision` 到模型层** | ⚠ 合并新增类型 | 原设计存在两个同名 record（`Services.*` 与 `Models.*`），而 `RevalidateBeforeSend` 两个重载原先都返回 `Services` 类型 ⇒ `Models.LocalWaitPrerequisiteDecision` **是死别名、无任何产出者**。两份同名类型并存会让「发送前验算」的返回类型在接线时**取错**。现**删除** `Services` 侧、两个重载统一返回 `Models.*`。这是**本批新增类型内部**的合并，**未触碰任何冻结合同** |
-| **取舍 2′：合同例外已**撤回**（owner 2026-09-24 裁定 A）** | ✅ **不再是例外** | owner 裁定 A 后，两项删除均已**消化**：①单参 `SelectNext(items)` **不再是删除**——按 A 恢复为公开重载，标 `[Obsolete(..., error: true)]`（编译期封死任何源码调用点）＋调用即抛 `NotSupportedException`（反射／旧二进制安全失败，**绝不**实现「缺引用 ⇒ 已就绪」的旧语义）；②`Services.LocalWaitPrerequisiteDecision` 为**本批新增类型**（`be49ec46a` 新增 `LocalWaitPrerequisiteModels.cs` 引入），其删除属**本批新增面内部整理**、**未触碰**任何冻结枚举值／状态词／门禁词。⇒ 本批对**冻结合同**恢复为**严格纯加法**，**无需**任何合同例外。 |
+| **取舍 2′：合同例外** | ✅ **已按批约束闭合（无 owner 例外在身）** | 两项删除均已**消化**：①单参 `SelectNext(items)` 按批约束「冻结合同只允许纯加法」**保留为公开签名**（`[Obsolete(error: true)]`＋调用即抛，**绝不**实现「缺引用 ⇒ 已就绪」的旧语义），**签名面**因此无减法；②`Services.LocalWaitPrerequisiteDecision` 为**本批新增类型**（`be49ec46a` 新增 `LocalWaitPrerequisiteModels.cs` 引入），其删除属**本批新增面内部整理**、**未触碰**任何冻结枚举值／状态词／门禁词。**更正（R6）**：原写「按 owner 裁定 A 恢复」系**归因错误**——保留签名是本批为满足批约束所做的实现选择，**不**来自 owner 对该重载的裁决；且保留签名只证明「签名集合无减法」，**不**证明「旧调用**语义**仍兼容」（旧语义已废除）。旧调用方兼容性如需另有裁决，见 §24.111-R6 的 owner 待决项。**本行不再使用「严格纯加法／无需任何合同例外」这一过强结论**。 |
 | 值视图面更名 | ✅ 内部 | `SelectNextView`／`EvaluatePrerequisitesViewCore`／`EvaluatePrerequisitesModelView` 均为本批新增的 internal 视图接缝，供夹具只读断言使用，**不引入**发送面 |
 
 **三态判定口径（逐条可断言；生产默认：无默认）**
@@ -3763,7 +3763,7 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
 | # | 分级 | 发现 | 处置 |
 |---|---|---|---|
 | 1 | **必改** | `Upsert` 能成功写出自己随后 `Load` 拒读的文件（空白 `PrerequisiteReference`）⇒ 写入成功、重启即损坏 | ✅ **已修**：`Upsert` 在取锁与读盘**之前**执行 `ValidatePrerequisiteReferenceShape`（与 `ParsePrerequisiteReference` **同口径**）⇒ 响亮拒绝、**零副作用**；红夹具 `Upsert_RejectsShapeThatLoadWouldReject_AndLeavesFileByteIdentical` **先红（实测 `Assert.ThrowsAny` 失败：未抛异常）后绿** |
-| 2 | **必改** | 删除单参 `SelectNext(items)` 不符合批约束「只允许纯加法」的字面边界 | ✅ **已按 owner 裁定 A 闭合**：「删除」改为「**保留旧签名＋`[Obsolete(error: true)]`＋抛异常**」⇒ 二进制入口保留、编译期无人可调用、运行期安全失败、旧语义不复活；本批对冻结合同回归**严格纯加法**（详见下「第二轮会诊闭环」表） |
+| 2 | **必改** | 删除单参 `SelectNext(items)` 不符合批约束「只允许纯加法」的边界 | ✅ **已闭合（更正归因，见 §24.111-R6）**：「删除」改为「**保留公开签名＋`[Obsolete(error: true)]`＋调用即抛**」⇒ 签名面保留、编译期无人可调用、运行期安全失败、旧语义不复活。**更正**：此处原写「按 owner 裁定 A」不准确（owner 裁决原文未提及该重载）；保留签名是本批满足批约束的实现选择。**签名面**无减法成立；**旧调用语义兼容**不在本行声明内 |
 | 3 | **重要** | 发送前夹具未证明「就绪→未就绪」会被识别；`NoEvaluator()` 实为返回 `Undetermined` 的委托而非真 `null`；缺独立方向 | ✅ **已补**：新增 `SendTimeRevalidation_ReEvaluates_NotReusingQueuedSnapshot`（先以「就绪」选出，再把求值器改为「未就绪」⇒ **必须再次调用求值器**并拦下）——与突变 B 是**不同方向**；`NoEvaluator()` 的证明边界已收窄为「**求值器返回 `Undetermined`**」（见下「证明边界」） |
 | 4 | **重要** | 声明里「结构版本」**未进入**落盘／求值路径（`LocalWaitItem` 上只存 `string?` 引用）⇒ 声明面比实现强 | ✅ **已收窄 §24.111 声明**（见下「证明边界」）：`LocalWaitPrerequisiteReference` 的结构版本属**模型层纯数据**，**未**与任何真实代际／租约纪元绑定，也**不**参与落盘与求值 |
 | 5 | **重要** | 「只读 evaluator」是**约定**而非**类型级保证** | ✅ **已收窄表述**（见下「证明边界」）：只读性是**委托契约约定**＋夹具只读快照断言，**不是**编译器／类型系统保证的不可变面 |
@@ -4249,6 +4249,56 @@ D2 仍为**未接线组件＋反例夹具**：**生产零消费点**、**零发�
 | 修前稳定帧（连续 4 次） | `_batch16_r4_full5/6/7/8.trx` |
 
 #### 本批边界（不因本轮处置而改变）
+
+D2 仍为**未接线组件＋反例夹具**：**生产零消费点**、**零发送**、未接 E3/E4/E5／节点改道／S4b/S8b／热键；
+生产门、真实 User 门与 R5.8 签署**继续关闭**；批次 14 的 5 项接线前残项与 §24.106 未闭合项**全部仍然有效**。
+
+#### §24.111-R6 收口会诊（gpt-6-sol／medium，第 8 轮，2026-09-25）：实现/夹具互斥已被实测定性并处置
+
+**背景**：前 7 轮会诊始终存在 1 条无法自行消解的必改项（「HEAD 实现删除了单参 `SelectNext(items)`，而夹具要求它存在」）。本轮先用**受控 A/B 实验**把该矛盾定性（不再停留在推理），再按会诊结论处置。
+
+**受控 A/B 实验（同一夹具、同一构建命令，仅替换实现文件；`-t:Rebuild`，0 错误）**
+
+| 组合 | 结果 |
+|---|---|
+| HEAD 实现（`impl_HEAD_delete_variant`，blob `63679db3…`，**无** 1 参重载）＋ HEAD 夹具 | **23 通过／1 失败**；失败者＝`SelectNext_MissingReferenceOrDefaultEvaluator_IsConservative`，异常 `InvalidOperationException : Sequence contains no matching element`（夹具第 429 行 `.Single(...Length == 1)`） |
+| 保留版实现（`impl_WORKKEEP_obsolete_variant`，blob `f7b79991…`，**含** 1 参重载＋`[Obsolete(error:true)]`＋抛 `NotSupportedException`）＋ 同一 HEAD 夹具 | **24/24 通过** |
+
+⇒ 结论：**HEAD（`10ba91597`）当时的实现与夹具自相矛盾**（夹具常红），且 **§24.111 原「已按 owner 裁定 A 保留／严格纯加法」口径与 HEAD 实现不符**（**文档失实**）。矛盾**不是**构建滞后或引用错位所致（已用反射直读程序集确认 1 参重载在两种实现中存在性差异）。
+
+**第 8 轮会诊结论**：`必改: 2 / 重要: 2 / 建议: 1`，其中必改＝①HEAD 实现与夹具直接冲突（定性同上）；②**采用案 B**——恢复单参公开签名，使实现与夹具及批约束一致；③更正文档的**裁决归因**与**相互矛盾的声明**（owner 的 D2 选项 A **未**裁定该重载处置；同一节一处称「所有公共重载均为双参」、另一处称「已恢复」亦为自相矛盾）。原始回报：`_batch16/round8/result.json`（`attempts=1`）、`report_raw.txt`。
+
+**本轮处置（全部为未接线组件／夹具／文档面，零发送）**
+
+| # | 会诊分级 | 发现 | 处置 |
+|---|---|---|---|
+| R6-1 | **必改** | HEAD 实现删除了单参 `SelectNext(items)`，而其自身夹具（第 425–440 行）要求它存在 ⇒ 夹具常红、文档失实 | ✅ **已按案 B 闭合**：提交恢复该公开签名（`[Obsolete(error: true)]`＋调用即抛 `NotSupportedException`，**不**实现旧语义）。夹具 `SelectNext_MissingReferenceOrDefaultEvaluator_IsConservative` 与全类 **25/25** 转绿；已用突变（MUT-1：`EvaluateOne` 把「无求值器」改判 `Ready`）验证该类反例**确实变红** |
+| R6-2 | **必改** | 文档裁决归因错误（称「按 owner 裁定 A 保留」）＋同一节两处声明互相矛盾 | ✅ **已修**：`取舍 1`／`取舍 2′`／会诊登记 #2 三行均改为「按批约束保留签名」，并显式声明 owner 裁决原文未提及该重载；§24.111-R6 登记本条更正 |
+| R6-3 | **必改** | 需在批约束下收口「既有公开签名的删除」 | ✅ **已闭合**：采用案 B 恢复签名 ⇒ **签名面**无减法（纯加法成立）；**旧调用语义**已废除（源码编译期封死＋运行期抛异常） |
+| R6-4 | **重要** | 「旧调用语义兼容」仍可能超出本批授权（仓内零调用方不能证明仓外无消费者） | ⏳ **owner 待决（见下三选一）**；未裁决期间不改现状、不扩批 |
+| R6-5 | **重要** | 夹具未直接证明**真正的 `null`** 求值器路径（`NoEvaluator()` 传的是返回 `Undetermined` 的**非空**委托） | ✅ **已补**：新增 `SelectNext_NullEvaluatorExactly_IsConservative`，把**真正的 `null`** 透传给 `SelectNext(items, evaluator)`（⇒ 不参选）与 `RevalidateBeforeSend`（⇒ `Readiness == Undetermined` 且 `RequiresFullAdmission == true`）；并收窄 `NoEvaluator()` 的注释口径 |
+| R6-6 | **建议** | 旧重载「调用即抛」的断言过宽（`Record.Exception` 也可能被绑定错误满足） | ✅ **已采纳（未书面拒绝）**：收紧为检查反射包装后的**内层异常**必须为 `NotSupportedException` |
+
+**本轮证据（全部实测，路径可复核）**
+
+| 用途 | 证据 |
+| --- | --- |
+| A/B 实验（HEAD 删除版 ⇒ 23/1） | `_batch16/probe/headcombo_focus.trx`、`headcombo_test.log`、`headcombo_build.log` |
+| A/B 实验（保留版 ⇒ 24/24） | `_batch16/probe/keepcombo_test.log`、`keepcombo_build.log` |
+| 反射直读两种实现 | `_batch16/probe/`（`Probe.cs` 输出：HEAD＝无 1 参重载；保留版＝有 1 参重载且调用抛 `NotSupportedException`） |
+| 修后定向绿（25 情形） | `Test/MultiplayerHoeingAssistant.UnitTest/TestResults/_b16_r8_focus3.trx` 等（**25/25**） |
+| 突变验证（反例不放水） | `_b16_mut1.trx`（MUT-1 ⇒ 新增夹具红）、`_b16_mut2.trx`（MUT-2 ⇒ 发送前验算类 3 条＋新增夹具红） |
+| 会诊原始回报 | `_batch16/round8/result.json`、`report_raw.txt` |
+
+**owner 待决项（一次性批量交付，请三选一；未裁决期间不在未定语义上堆实现）**
+
+| 选项 | 内容 | 影响 |
+|---|---|---|
+| **选项 1（现状）** | 认可现状：**签名面**按批约束保留（纯加法成立）、**旧调用语义**已废除（编译期封死＋运行期抛异常） | 无需改动；「旧二进制调用方需重编」这一后果仍如实登记 |
+| **选项 2（登记例外）** | 承认这是**调度器组件内部的未接线 API**（生产**零**调用方），补记一条「内部未接线 API 例外」，并把「旧调用语义兼容」明确排除在本批声明之外 | 保留现状；在 owner 决策单补登记例外条目，后续接线前复核 |
+| **选项 3（更保守）** | 反转 R6-1 的案 B：**恢复旧语义**（`SelectNext(items)` 缺引用时……）—— ⚠ 该案会**重演 §24.106 C4 恒 true 缺陷**，与 D2 裁决目标直接冲突 | **不推荐**；若 owner 选择，需同时重开 D2 语义 |
+
+**本批边界（不因本轮处置而改变）**
 
 D2 仍为**未接线组件＋反例夹具**：**生产零消费点**、**零发送**、未接 E3/E4/E5／节点改道／S4b/S8b／热键；
 生产门、真实 User 门与 R5.8 签署**继续关闭**；批次 14 的 5 项接线前残项与 §24.106 未闭合项**全部仍然有效**。
