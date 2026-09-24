@@ -34,6 +34,14 @@ public sealed class LocalWaitQueueStore
 
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+
+#if DEBUG
+    /// <summary>
+    /// [批次 16／D2 第二轮会诊 #2 判别力取证专用] 测试探针：在 <see cref="Persist"/> **校验之前**调用。
+    /// 仅存在于 DEBUG 构建（生产 Release 构建下该字段与调用点均被编译剔除）。默认 null ⇒ 无行为。
+    /// </summary>
+    internal static Action<List<LocalWaitItem>>? WriteSnapshotProbeMutator;
+#endif
     private readonly object _sync;
     private readonly string _file;
 
@@ -126,6 +134,12 @@ public sealed class LocalWaitQueueStore
         // 「键存在但形状非法（非字符串／空白）」判为损坏，写入侧就必须同样**响亮拒绝**，
         // 否则 `Upsert` 能成功写出自己随后 `Load` 拒读的文件（写入成功、重启即损坏＝把未知结果改写成成功）。
         // 拒绝发生在**取锁与读盘之前**：零副作用，原文件逐字节不变。
+        //
+        // [批次 16／D2 第二轮会诊 #2 必改] **不得只校验一次可变对象**：`item` 是调用方持有的**可变对象**，
+        // 若在「校验之后、序列化之前」被改写为非法形状，仍会写出 `Load` 拒读的文件（写入成功、重启即损坏）。
+        // 因此①此处只做**快速失败**（尽早响亮拒绝，零副作用）；②**真正**的守卫是在持锁、读盘之后，
+        // 对「即将写入的那个对象」**在写盘前最后一次**校验（见下 `ValidatePersistableItems`）——
+        // 该点在 `Persist` 之前且不可被其它线程插入，故不变量为「**已写出的文件必定可被 `Load` 读回**」。
         ValidatePrerequisiteReferenceShape(item.PrerequisiteReference, item.ItemId);
 
         lock (_sync)
@@ -318,11 +332,104 @@ public sealed class LocalWaitQueueStore
     private static DateTimeOffset? OptionalDateTimeOffset(JsonObject o, string name)
         => o[name] is JsonValue value && value.TryGetValue<DateTimeOffset>(out var parsed) ? parsed : null;
 
+    /// <summary>
+    /// [批次 16／D2 第二轮会诊 #2 必改／第三轮会诊 #1 必改] **写盘前按 <see cref="Load"/> 的同一形状规则
+    /// 校验（并物化）即将写出的记录**。
+    ///
+    /// 不变量：**已写出的文件必定可被 <see cref="Load"/> 读回**。为此必须满足两点：
+    /// ①**全字段校验**——`Load` 判为损坏的所有形状，在写盘**之前**都必须同样响亮拒绝：
+    ///   `itemId`／`stableIdentity` 非空（<see cref="RequiredString"/>）；`tier` 已定义；`state` 已定义；
+    ///   `prerequisiteReference` 形状合法；`itemId` **唯一**（去重按 ordinal）。**只校验
+    ///   `PrerequisiteReference` 是不够的**。
+    /// ②**校验的必须是「即将被序列化的那份对象」**——具体做法是**边校验、边物化**：
+    ///   每个字段只读一次，**先校验读到的那个值**，**再把同一个值**放进副本，后续只序列化副本。
+    ///   因此不存在「先整体复制、再校验副本」的时间窗：任何在物化前一刻发生的改写都会被这一遍读取
+    ///   读到并当场拒绝；而副本内的值全部来自**已通过校验的同一次读取**，故副本必定满足 `Load` 的形状规则。
+    ///
+    /// 拒绝一律发生在**任何**写盘动作之前，故「拒绝即零副作用，原文件逐字节不变」仍然成立。
+    /// </summary>
+    private static List<LocalWaitItem> MaterializeAndValidatePayload(List<LocalWaitItem> items)
+    {
+        var snapshot = new List<LocalWaitItem>(items.Count);
+        var seenIds = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var item in items)
+        {
+            if (item is null) continue;
+            // ①一次读取 → ②校验该值 → ③把**该值**放进副本；后续写盘只用副本
+            var itemId = item.ItemId;
+            var stableIdentity = item.StableIdentity;
+            var reference = item.PrerequisiteReference;
+            var tier = item.Tier;
+            var state = item.State;
+
+            ValidatePersistableItemShape(itemId, stableIdentity, tier, state, reference);
+            if (!seenIds.Add(itemId ?? string.Empty))
+                throw new LocalWaitQueueCorruptException(
+                    $"等待队列存在重复 itemId：{itemId}（写入侧拒绝：该形状读取侧判损坏，不得写出）。");
+
+            snapshot.Add(new LocalWaitItem
+            {
+                ItemId = itemId ?? string.Empty,
+                StableIdentity = stableIdentity ?? string.Empty,
+                CandidateId = item.CandidateId,
+                Namespace = item.Namespace,
+                WorkflowId = item.WorkflowId,
+                Tier = tier,
+                Priority = item.Priority,
+                IsHoeingHighest = item.IsHoeingHighest,
+                ScheduledAt = item.ScheduledAt,
+                PrerequisiteReference = reference,
+                HasTrustedIdentity = item.HasTrustedIdentity,
+                EnqueuedAtUtc = item.EnqueuedAtUtc,
+                CancelledAtUtc = item.CancelledAtUtc,
+                State = state,
+                Reason = item.Reason,
+            });
+        }
+        return snapshot;
+    }
+
+    /// <summary>
+    /// [批次 16／D2 第三轮会诊 #1 必改] **写盘前全字段形状校验**：与 <see cref="Load"/> 同口径。
+    /// 「读取侧判损坏」的形状必须在这里**响亮拒绝**，否则会写出自己随后读不回来的文件。
+    /// 校验的是**已物化的值**（而非调用方对象），故不受之后发生的改写影响。
+    /// </summary>
+    private static void ValidatePersistableItemShape(
+        string? itemId,
+        string? stableIdentity,
+        ArbitrationTier tier,
+        LocalWaitItemState state,
+        string? reference)
+    {
+        if (string.IsNullOrEmpty(itemId))
+            throw new LocalWaitQueueCorruptException(
+                "等待项缺少非空 itemId：写入侧拒绝（该形状读取侧判损坏，不得写出）。");
+        if (string.IsNullOrEmpty(stableIdentity))
+            throw new LocalWaitQueueCorruptException(
+                $"等待项 {itemId} 缺少非空 stableIdentity：写入侧拒绝（该形状读取侧判损坏，不得写出）。");
+        if (!Enum.IsDefined(typeof(ArbitrationTier), tier))
+            throw new LocalWaitQueueCorruptException(
+                $"等待项 {itemId} 的 tier={(int)tier} 不是已定义取值：写入侧拒绝（该形状读取侧判损坏，不得写出）。");
+        if (!Enum.IsDefined(typeof(LocalWaitItemState), state))
+            throw new LocalWaitQueueCorruptException(
+                $"等待项 {itemId} 的 state={(int)state} 不是已定义取值：写入侧拒绝（该形状读取侧判损坏，不得写出）。");
+        ValidatePrerequisiteReferenceShape(reference, itemId);
+    }
+
     private void Persist(List<LocalWaitItem> items)
     {
+#if DEBUG
+        // 测试专用探针（Release／生产构建下**编译期不存在**）：用于证明「写盘前物化」确实生效。
+        // 会诊第二轮 #2 的判别力取证需要确定性复现「校验通过后、序列化前改写调用方实例」这一窗口；
+        // 该窗口无法从公开 API 之外触发，故以 DEBUG 专用钩子取证，而不是新增生产可见接缝。
+        WriteSnapshotProbeMutator?.Invoke(items);
+#endif
+        var payloadItems = MaterializeAndValidatePayload(items);
+
         var directory = Path.GetDirectoryName(_file)!;
         Directory.CreateDirectory(directory);
-        var payload = Utf8NoBom.GetBytes(JsonSerializer.Serialize(new LocalWaitQueueFile { Items = items }, JsonOptions));
+        var payload = Utf8NoBom.GetBytes(JsonSerializer.Serialize(new LocalWaitQueueFile { Items = payloadItems }, JsonOptions));
         var tmp = Path.Combine(directory, $".wait-queue.{Guid.NewGuid():N}.tmp");
         try
         {

@@ -207,10 +207,15 @@ public sealed class LocalWaitPrerequisiteContractTests
             .Where(m => m.Name == "SelectNext")
             .Where(m => m.GetParameters().Length == 2)
             .ToList();
-        Assert.True(overloads.Count == 1,
+        Assert.True(overloads.Count >= 1,
             "LocalWaitQueuePolicy 必须提供 `SelectNext(IReadOnlyList<LocalWaitItem>, <只读 evaluator>)` 重载"
-            + "（选择阶段须由 evaluator 求就绪，而**不是**读过期布尔；当前重载数=" + overloads.Count + "）。");
-        var method = overloads[0];
+            + "（选择阶段须由 evaluator 求就绪，而**不是**读过期布尔；当前 2 参重载数=" + overloads.Count + "。");
+        // 按**第二参数精确类型**取重载：owner 裁定 A 保留了**旧签名** `SelectNext(items)`
+        // 作为二进制入口（`[Obsolete(error: true)]` + 抛异常），故不能再用「参数个数」反推旧签名已消失。
+        var method = overloads.Single(m =>
+            m.GetParameters()[1].ParameterType == RequireType(EvaluatorDelegateTypeName));
+        // 双重保证：被取到的必须是接受**只读 evaluator**的那个重载。
+        Assert.Equal(RequireType(EvaluatorDelegateTypeName), method.GetParameters()[1].ParameterType);
         try
         {
             return (LocalWaitItem?)method.Invoke(null, [items, evaluator]);
@@ -400,14 +405,22 @@ public sealed class LocalWaitPrerequisiteContractTests
         Assert.Equal("s-ready", SelectNextWithEvaluator([noReference, ready], evaluator)!.StableIdentity);
         Assert.Null(SelectNextWithEvaluator([noReference], evaluator));
 
-        // **已删除**「无 evaluator 的旧签名」：缺 evaluator 只能显式传 null；
-        // 且缺引用／缺 evaluator 都必须保守按**不可判定**（不得凭空认定已就绪）
-        Assert.True(
-            typeof(LocalWaitQueuePolicy).GetMethods(BindingFlags.Public | BindingFlags.Static)
-                .Where(m => m.Name == "SelectNext")
-                .All(m => m.GetParameters().Length == 2),
-            "批次 16／D2 已删除「无求值器」的旧 `SelectNext(items)` 重载："
-            + "缺前置引用时不得静默退回「已就绪」（§24.106 C4 的恒 true 硬编码即为该缺陷）。");
+        // **owner 裁定 A**：旧签名 `SelectNext(items)` 保留为**二进制入口**，但已废除且**不实现旧语义**。
+        // 测试必须钉死两件事：①该重载仍在（二进制兼容）；②它**不**能被当作「缺引用即就绪」的退路——调用即抛异常。
+        var legacyOverload = typeof(LocalWaitQueuePolicy)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Single(m => m.Name == "SelectNext" && m.GetParameters().Length == 1);
+        var obsolete = legacyOverload.GetCustomAttributes(typeof(ObsoleteAttribute), inherit: false)
+            .Cast<ObsoleteAttribute>().SingleOrDefault();
+        Assert.True(obsolete is not null && obsolete.IsError,
+            "批次 16／D2（owner 裁定 A）：旧 `SelectNext(items)` 必须标注 "
+            + "`[Obsolete(..., error: true)]`，以**编译期**封死任何源码调用点。");
+        var legacyThrown = Record.Exception(() =>
+            legacyOverload.Invoke(null, [new List<LocalWaitItem>()]));
+        Assert.True(legacyThrown is not null,
+            "批次 16／D2（owner 裁定 A）：旧 `SelectNext(items)` 不得实现旧语义——"
+            + "它必须抛异常，而**不能**在缺前置引用时静默退回「已就绪」"
+            + "（§24.106 C4 的恒 true 硬编码即为该缺陷）。");
         Assert.Null(SelectNextWithEvaluator([noReference], NoEvaluator()));
         Assert.Null(SelectNextWithEvaluator([Item("s-plain", ArbitrationTier.System, 99)], NoEvaluator()));
     }
@@ -415,7 +428,8 @@ public sealed class LocalWaitPrerequisiteContractTests
     /// <summary>
     /// **无 evaluator 时不得再恒为就绪**：`SelectNext(items, null)`（显式「无求值器」）在项携带引用时必须
     /// 走保守默认。反例：现状 `ToWaitingFacts` 硬编码 `PrerequisiteReady = true` ⇒ 该断言失败（红）。
-    /// 批次 16／D2 已删除「无 evaluator 的旧签名」，故本夹具显式传 `null`。
+    /// 批次 16／D2（owner 裁定 A）：旧签名仅作为**二进制入口**保留且调用即抛异常（不可用），
+    /// 故本夹具一律走 2 参数重载并显式传 `null`。
     /// </summary>
     [Fact]
     public void SelectNext_ReferencePresentButNoLegacyReadyDefault_HardCodedTrueIsGone()
@@ -516,8 +530,11 @@ public sealed class LocalWaitPrerequisiteContractTests
         // `RevalidateBeforeSend` 有两个公开重载，分别返回服务层与**模型层**类型。
         // 本夹具钉死的是**模型层登记面**，故必须选取**返回该类型**的重载，
         // 而不能按参数个数盲选（否则会用服务层实例去取模型层属性 ⇒ 夹具自身失败）。
-        var method = methods.Where(m => m.ReturnType == decisionType)
-            .OrderBy(m => m.GetParameters().Length).FirstOrDefault();
+        // 会诊第二轮（重要）：不得按**参数个数**盲选重载。若日后出现另一个同参数个数重载
+        // （如「只读视图重载」），按个数取到的可能是另一个重载而本夹具**假绿**。
+        // 故必须按**第二参数精确类型**（模型层 evaluator 委托）选型。
+        var method = methods.Single(m => m.GetParameters().Length == 2
+            && m.GetParameters()[1].ParameterType == RequireType(EvaluatorDelegateTypeName));
         Assert.True(method is not null,
             "必须提供返回 `" + decisionType.FullName + "` 的发送前验算接缝。");
         var parameters = method!.GetParameters();
@@ -688,6 +705,242 @@ public sealed class LocalWaitPrerequisiteContractTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
+    // ⑥′ 写入侧不变量的**真正**判据（第二轮会诊「必改 2」）：写出即读回
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// **不变量：已写出的文件必定可被 `Load` 读回**（第二轮会诊「必改 2」）。
+    ///
+    /// 会诊指出：只在**函数入口**校验一次**可变对象**不够 —— 若对象在「校验之后、序列化之前」被改写为
+    /// 非法形状（键存在但空白），仍会写出 `Load` 拒读的文件。本夹具以**确定性**方式复现「校验后、
+    /// 写盘前对象被改写」这一交错：`Upsert` 会把**调用方持有的同一个对象实例**加入队列，因此
+    /// 在 `Upsert` **返回之后**立即把该实例改写成非法形状，再触发**下一次必然写盘**的路径
+    /// （`PersistCleanup`）——夹具并不断言「不可能被改写」，而是断言**不变量**：
+    /// 任何一次写盘之后，`Load()` 必须成功，且文件里**不得**出现「键存在但空白」的形状。
+    ///
+    /// **判别力（诚实口径）**：本夹具只证明「**存量写盘路径** 不会把调用方后续改写泄露到磁盘」，
+    /// **不足以**证明写前物化本身的判别力（该窗口无法从公开 API 触发：现有写路径均先 `Load()` 出新对象再写）。
+    /// 写前物化的**反向突变判别力**由 <see cref="Persist_WriteSnapshotMaterialization_IsLoadBearing"/> 以 DEBUG 专用探针取证。
+    /// </summary>
+    [Fact]
+    public void Upsert_MutationAfterEntryValidation_NeverWritesAFileThatLoadRejects()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "waitq-write-race-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var store = new LocalWaitQueueStore(dir);
+            var item = Item("s-race");
+            SetPrerequisiteReference(item, "ref-valid");
+            Assert.True(store.Upsert(item));
+
+            // ①「入口校验之后」改写同一实例 → 下一次写盘必须仍然写出可读回的文件
+            item.PrerequisiteReference = "   ";
+            var second = Item("s-race-second");
+            SetPrerequisiteReference(second, "ref-second");
+            Assert.True(store.Upsert(second)); // 该路径写盘：写前必须按物化后的值判定
+            Assert.NotNull(store.Load());
+
+            // ②触发 cancel 写盘路径（写的是内存对象，非入口参数）
+            store.PersistCleanup(i => i.StableIdentity == "s-race" ? "test" : null, DateTimeOffset.UtcNow);
+
+            var loaded = store.Load(); // 任何一次写盘都必须留下可读回的文件
+            // null（缺字段／v1 兼容）是**合法**形状；被拒的只是「键存在但空白」这一形状。
+            Assert.DoesNotContain(loaded,
+                i => i.PrerequisiteReference is not null && string.IsNullOrWhiteSpace(i.PrerequisiteReference));
+        }
+        finally
+        {
+            if (dir.StartsWith(Path.GetTempPath(), StringComparison.OrdinalIgnoreCase) && Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // ⑥‴ 写前物化的**全字段校验**（第三轮会诊「必改 1」）：把「已写出必可读回」真正做实
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// **不变量：已写出的文件必定可被 `Load` 读回 —— 对全部必需字段成立，而非只对引用字段成立**（第三轮会诊「必改 1」）。
+    ///
+    /// 第三轮会诊指出：<c>MaterializeAndValidatePayload</c> 只校验了 <c>PrerequisiteReference</c>，
+    /// 调用方仍可在入口校验后、物化前把同一对象的 <c>ItemId</c> 改成空白／把 <c>Tier</c> 改成未定义值／
+    /// 制造重复 <c>ItemId</c>，副本会照样写出这些非法值，随后 <c>Load()</c> 拒读。
+    ///
+    /// 本夹具用同一 DEBUG 专用探针把上述改写注入「读盘之后、写盘之前」的窗口（该窗口在探针所处位置即成立），
+    /// 逐例断言：①写盘被**响亮拒绝**；②原文件**逐字节不变**（零副作用）；③<c>Load()</c> 仍成功。
+    ///
+    /// **判别力**：把 <c>MaterializeAndValidatePayload</c> 中的 <c>ValidatePersistableItemShape(...)</c>
+    /// 与重复 <c>itemId</c> 去重整段删去（只保留原「校验引用」一项）⇒ 本夹具必红；保留则绿。
+    /// </summary>
+    [Theory]
+    [InlineData("empty-itemid")]
+    [InlineData("undefined-tier")]
+    [InlineData("undefined-state")]
+    [InlineData("duplicate-itemid")]
+    public void Persist_MaterializedSnapshot_IsValidatedAsAWhole_PerLoadShapeRules(string mutation)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "waitq-whole-shape-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var store = new LocalWaitQueueStore(dir);
+            var baseline = Item("s-whole-baseline");
+            SetPrerequisiteReference(baseline, "ref-whole-baseline");
+            Assert.True(store.Upsert(baseline)); // 首次登记：探针此时尚未挂上
+            var before = File.ReadAllBytes(store.FilePath);
+
+            // ItemId 由稳定身份确定性派生 ⇒ 必须**实证**换一个身份确实得到不同的 ItemId，
+            // 否则本夹具会因「第二条与既有项同 Id ⇒ 被幂等路径拦下、根本走不到写盘」而假绿。
+            var secondIdentity = "s-whole-second";
+            var second = Item(secondIdentity);
+            Assert.NotEqual(baseline.ItemId, second.ItemId);
+            Assert.NotEqual(baseline.StableIdentity, second.StableIdentity);
+            SetPrerequisiteReference(second, "ref-whole-second");
+
+            // 探针只在**第二次** Upsert（登记 second、真正把它写进这一批）时挂上；
+            // 探针内**不得**使用会自己抛异常的脚手架断言 —— 否则 `Assert.ThrowsAny` 会把
+            // 「探针脚手架抛的异常」误当成「守卫响亮拒绝」（本轮已实测到这一假绿）。
+            // 因此：探针只做**最小改写**（改写前用局部变量读出旧值做自证），任何自证失败以
+            // 独立的 `probeFailed` 标记回报，断言阶段再区分「守卫拒绝」与「探针没跑成」。
+            var probeRan = 0;
+            string? probeNote = null;
+            LocalWaitQueueStore.WriteSnapshotProbeMutator = items =>
+            {
+                // [本批自审修正] 实现在物化**前**先复制一份快照（`new List<LocalWaitItem>(items)`），
+                // 再遍历**副本**做校验。因此探针**必须**把改写落到**批内副本已持有的那个实例**上、
+                // 并且**不得**新增条目（新增条目在复制之后不会进入被校验的副本 ⇒ 探针就成了空转）。
+                // 故此处对调用方同一批的每个实例逐一（用引用身份）匹配后改写；`probeRan` 只在**改动确实生效**时置 1。
+                probeRan = 0;
+                foreach (var victim in items.ToList())
+                {
+                    if (ReferenceEquals(victim, second))
+                    {
+                        // 触发写盘的那条（second）自身携带**空串** ItemId。
+                        // 读取侧规则是 `RequiredString`：`Length > 0` 即可读回；空白串**能被读回**，
+                        // 故「空白 itemId」不是读取侧判损坏的形状。真正会被 `Load` 拒读的是**空串**。
+                        victim.ItemId = "";
+                        if (victim.ItemId.Length == 0) probeRan = 1;
+                    }
+                    else if (string.Equals(victim.StableIdentity, "s-whole-baseline", StringComparison.Ordinal))
+                    {
+                        switch (mutation)
+                        {
+                            case "undefined-tier":
+                                victim.Tier = (ArbitrationTier)987;
+                                if (victim.Tier == (ArbitrationTier)987) probeRan = 1;
+                                break;
+                            case "undefined-state":
+                                victim.State = (LocalWaitItemState)987;
+                                if (victim.State == (LocalWaitItemState)987) probeRan = 1;
+                                break;
+                            case "duplicate-itemid":
+                                // 同一批内**第二条**（同 Id、同载荷）只能这样制造：把既有项的 StableIdentity
+                                // 改成与 second 相同，使 `DeriveItemId` 派生出同一个 ItemId ⇒ 写前去重必须拦下。
+                                victim.StableIdentity = second.StableIdentity;
+                                if (string.Equals(victim.StableIdentity, second.StableIdentity, StringComparison.Ordinal)
+                                    && string.Equals(victim.ItemId, second.ItemId, StringComparison.Ordinal))
+                                    probeRan = 1;
+                                break;
+                            case "empty-itemid":
+                                // 本突变的目标是 second 自身，不在此分支。
+                                break;
+                        }
+                    }
+                }
+                if (probeRan == 0) probeNote = "探针对批内实例未产生任何生效改写（突变：" + mutation + "）";
+            };
+            Exception? caught = null;
+            try
+            {
+                store.Upsert(second);
+            }
+            catch (Exception ex)
+            {
+                caught = ex;
+            }
+            finally
+            {
+                LocalWaitQueueStore.WriteSnapshotProbeMutator = null;
+            }
+
+            // ①探针必须确实跑成（否则本夹具不具判别力，直接红，不得靠脚手架异常充数）
+            Assert.Null(probeNote);
+            Assert.Equal(1, probeRan);
+            // ②必须是**守卫**的响亮拒绝（而不是任何其它异常）
+            Assert.IsType<LocalWaitQueueCorruptException>(caught);
+
+            Assert.Equal(before, File.ReadAllBytes(store.FilePath));
+            Assert.NotNull(store.Load());
+        }
+        finally
+        {
+            if (dir.StartsWith(Path.GetTempPath(), StringComparison.OrdinalIgnoreCase) && Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // ⑥″ 写前物化的**判别力取证**（第二轮会诊「必改 2」）：DEBUG 专用探针 + 反向突变
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// **写前物化是承重的（load-bearing）**：第二轮会诊「必改 2」要求证明「写盘前把引用物化为不可变快照」
+    /// 这一处理真的在起作用，而不只是「看起来更安全」。
+    ///
+    /// 取证方式：用 <c>LocalWaitQueueStore.WriteSnapshotProbeMutator</c>（**仅 DEBUG 编译存在**）在
+    /// `Persist` 校验之前把调用方实例的引用改写成**非法形状**（键存在但空白）。此时：
+    /// - 若实现保留写前物化（现状）⇒ 物化时读出的是空白值 ⇒ **在任何写盘动作之前**拒绝 ⇒ 文件逐字节不变、`Load()` 仍成功；
+    /// - 若把 `MaterializeAndValidatePayload(items)` 突变回 `items`（直接序列化调用方对象）⇒ 非法值被写出
+    ///   ⇒ `Load()` 抛异常（本夹具红）。
+    ///
+    /// 该反向突变已实测：突变后本夹具红；还原后全绿（见 §24.111 落地登记）。
+    /// </summary>
+    [Fact]
+    public void Persist_WriteSnapshotMaterialization_IsLoadBearing()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "waitq-snapshot-probe-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var store = new LocalWaitQueueStore(dir);
+            var baseline = Item("s-probe-baseline");
+            SetPrerequisiteReference(baseline, "ref-probe-baseline");
+            Assert.True(store.Upsert(baseline));
+            var before = File.ReadAllBytes(store.FilePath);
+
+            // 探针挂在「Persist 校验之前」：把即将被写出的那一批里的合法引用改写成非法形状。
+            LocalWaitQueueStore.WriteSnapshotProbeMutator = items =>
+            {
+                foreach (var each in items)
+                    if (each.StableIdentity == "s-probe-baseline") SetPrerequisiteReference(each, "   ");
+            };
+            try
+            {
+                // 触发一次必然写盘：写前物化 ⇒ 读到空白 ⇒ 拒绝（异常），且拒绝发生在**任何**写盘动作之前。
+                var second = Item("s-probe-second");
+                SetPrerequisiteReference(second, "ref-probe-second");
+                Assert.ThrowsAny<Exception>(() => store.Upsert(second)); // 探针改写的是**已在队列中**的实例 ⇒ 走「复用/重激活」分支
+            }
+            finally
+            {
+                LocalWaitQueueStore.WriteSnapshotProbeMutator = null;
+            }
+
+            // 不变量：拒绝零副作用 ⇒ 既有文件逐字节不变，且仍可读回。
+            Assert.Equal(before, File.ReadAllBytes(store.FilePath));
+            var loaded = store.Load();
+            Assert.DoesNotContain(loaded,
+                i => i.PrerequisiteReference is not null && string.IsNullOrWhiteSpace(i.PrerequisiteReference));
+        }
+        finally
+        {
+            if (dir.StartsWith(Path.GetTempPath(), StringComparison.OrdinalIgnoreCase) && Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
     // ⑦ 发送前验算的独立方向（会诊 #3 重要）：必须**重新求值**，不得沿用排队快照
     // ─────────────────────────────────────────────────────────────────────────────
 
@@ -706,7 +959,9 @@ public sealed class LocalWaitPrerequisiteContractTests
             .Where(m => m.ReturnType == decisionType)
             .ToList();
         Assert.True(methods.Count > 0, "必须提供返回模型层结论的发送前验算接缝。");
-        var method = methods.OrderBy(m => m.GetParameters().Length).First();
+        // 会诊第二轮（重要）：同上，不得按参数个数盲选，按**第二参数精确类型**取重载。
+        var method = methods.Single(m => m.GetParameters().Length == 2
+            && m.GetParameters()[1].ParameterType == RequireType(EvaluatorDelegateTypeName));
 
         var item = Item("s-reval-again");
         SetPrerequisiteReference(item, "ref-reval-again");
@@ -779,12 +1034,13 @@ public sealed class LocalWaitPrerequisiteContractTests
 
             // 发送前验算同样不得通过
             var decisionType = RequireType("MultiplayerHoeingAssistant.Models.LocalWaitPrerequisiteDecision");
+                // 会诊第二轮（重要）：同上，不得按参数个数盲选，按**第二参数精确类型**取重载。
             var method = typeof(LocalWaitQueuePolicy)
                 .GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .Where(m => m.Name.Contains("Revalidate", StringComparison.OrdinalIgnoreCase) && m.IsPublic)
                 .Where(m => m.ReturnType == decisionType)
-                .OrderBy(m => m.GetParameters().Length)
-                .First();
+                .Single(m => m.GetParameters().Length == 2
+                    && m.GetParameters()[1].ParameterType == RequireType(EvaluatorDelegateTypeName));
             var args = method.GetParameters().Select(p => p.ParameterType == typeof(LocalWaitItem)
                     ? (object?)legacy
                     : p.ParameterType == RequireType(EvaluatorDelegateTypeName)

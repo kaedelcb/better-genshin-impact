@@ -48,10 +48,16 @@ public delegate PrerequisiteReadiness PrerequisiteEvaluator(object? reference);
 /// <summary>
 /// **持久化稳定前置引用**（R5 批次 16／D2）：落盘可复核的引用，**不是**布尔就绪快照。
 ///
-/// 采用「**结构化版本 ＋ 稳定引用串**」形态：
-/// ①<see cref="ReferenceVersion"/> 是**引用结构版本**（未来引用形状变化时可响亮区分，不降级解析）；
+/// 采用「**结构版本 ＋ 稳定引用串**」形态：
+/// ①<see cref="Version"/> 是**引用结构版本**（未来引用形状变化时可响亮区分，不降级解析）；
 /// ②<see cref="Value"/> 是**稳定引用串**（例如 workflow／node／ticket 的稳定标识组合），
 ///   要求属于**稳定身份族**——**不得**用本地时间戳或随机值填充（否则重启后不可复核）。
+///
+/// ⚠ **本批的证明边界（已收窄，不得读强）**：真实**落盘**的只有引用串
+/// （`LocalWaitItem.PrerequisiteReference` 是 <c>string?</c>，落盘键 `prerequisiteReference`），
+/// <see cref="Version"/> **未落盘**、**未参与求值**，也**未**绑定任何真实代际／租约纪元；
+/// 「引用指向什么权威事实源、版本绑哪个真实纪元」仍属接线前事项。
+/// 本类型在本批是**模型层纯数据**（供将来引用形状演进时的登记面），不是已生效的持久格式。
 ///
 /// **它不是"就绪"**：就绪**永远由 evaluator 在读取时求得**；本类型只回答「前置是谁」。
 /// </summary>
@@ -60,7 +66,9 @@ public sealed class PrerequisiteReference : IEquatable<PrerequisiteReference>
     /// <summary>当前支持的引用结构版本（唯一权威常量）。</summary>
     public const int CurrentVersion = 1;
 
-    /// <summary>引用结构版本（落盘；不在支持范围 ⇒ 求值器无结论 ⇒ 不可判定，不降级解析）。</summary>
+    /// <summary>
+    /// 引用结构版本（**本批未落盘、未参与求值**——见类型注释的证明边界；不在支持范围时按不可求值处理，不降级解析）。
+    /// </summary>
     [JsonPropertyName("version")] public int Version { get; set; } = CurrentVersion;
 
     /// <summary>稳定引用串（workflow／node／ticket 等稳定标识组合；不得用时间戳或随机值）。</summary>
@@ -87,7 +95,12 @@ public sealed class PrerequisiteReference : IEquatable<PrerequisiteReference>
     /// <inheritdoc />
     public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(Value ?? "");
 
-    /// <summary>稳定引用串（**只读视图**）：落盘字段是 `version`＋`value`，`ToString()` 只回引用串本身。</summary>
+    /// <summary>
+    /// 稳定引用串（**只读视图**）：`ToString()` 只回引用串本身。
+    /// **本批证明边界**：真实落盘的只有引用串（`LocalWaitItem.PrerequisiteReference` 是 `string?`，键 `prerequisiteReference`）。
+    /// <see cref="Version"/> **未落盘**（故落盘字段**不是** `version`＋`value`）、**未参与求值**；
+    /// 上述 `[JsonPropertyName]` 只描述**将来**若按本类型整体序列化时的形状，本批**不**走该路径。
+    /// </summary>
     public override string ToString()
         => Value ?? "";
 
