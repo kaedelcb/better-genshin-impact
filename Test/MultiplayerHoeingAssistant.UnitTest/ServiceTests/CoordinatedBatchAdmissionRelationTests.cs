@@ -6,13 +6,18 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 
 /// <summary>
 /// **R5 批次 8：联机全队批次直发与统一准入的关系**（不接生产门）。
-/// 本文件锁定"全队批次直发"路径在**当前真实实现**下的安全语义：
+/// 范围声明：本文件是**未接线纯函数（`BatchReconcileDecider.Decide`／`CoordinatedBatchOutcome.Classify`）
+/// 与仲裁器（`RunningOccupancyArbiter.Decide`）的契约夹具**，外加对指定直发文件的**文本**结构守卫。
+/// 它**不**观测直发路径（`MainViewModel.CoordinatedBatch.cs`）的实际发送、超时或收尾行为；
+/// 该路径的审计结论另行陈述（见 §24.104），不由此夹具证明。
+/// 夹具所锁定的安全语义：
 /// ①接受未知时不产生第二次执行身份（同一请求键重查/重发，且不自行换键）；
 /// ②已受理句柄消失时按"未证退出"收口，**绝不重放**；
 /// ③纪元变化使在飞项失效并退回待提交；
 /// ④终态分类里"缺失/未知"永远不是成功。
-/// 说明：该路径**不经过**助手统一准入面（`ArbitrationAdmissionService`／`ExternalStartAdmission`），
+/// 说明：直发路径**不经过**助手统一准入面（`ArbitrationAdmissionService`／`ExternalStartAdmission`），
 /// 与 owner B.1 最高优先级/抢占合同的关系见 R5.3 §24.104（缺口已登记，修复需 owner 放行）。
+/// 该"不经过"结论由本文件的**文本守卫**与 §24.104 的审计陈述共同支撑，不等于运行调用链证明。
 /// </summary>
 public sealed class CoordinatedBatchAdmissionRelationTests
 {
@@ -61,7 +66,7 @@ public sealed class CoordinatedBatchAdmissionRelationTests
     }
 
     [Fact]
-    public void BatchReconcile_UnknownAcceptance_ResubmitsSameRequestKeyOnly()
+    public void BatchReconcile_UnknownAcceptance_ReturnsResubmitForSameRequestKey_ThisTickOnly()
     {
         // 已提交但无 jobId、快照里也找不到（应答丢失）：只能在**同一请求键**下重发，不换键、不新增执行身份
         var items = new List<BatchExpectedItem> { Submitted("组A") };
@@ -89,9 +94,9 @@ public sealed class CoordinatedBatchAdmissionRelationTests
     }
 
     [Fact]
-    public void BatchReconcile_KnownHandleDisappears_ConfirmsLostJobWithoutReplay()
+    public void BatchReconcile_KnownHandleDisappears_ReturnsLostJobConfirm_WithoutSubmitOrResubmitThisTick()
     {
-        // 已受理句柄消失（终态淘汰/权限丢失）**不证明未执行** ⇒ 按未证退出收口，绝不重发
+        // 已受理句柄消失（终态淘汰/权限丢失）**不证明未执行** ⇒ 按未证退出收口；本拍不返回 Submit/Resubmit
         var items = new List<BatchExpectedItem> { Submitted("组A", jobId: Guid.NewGuid().ToString("N")) };
 
         var actions = BatchReconcileDecider.Decide(items, [], epochMatch: true, generation: 1, nowUtc: Now);
@@ -103,7 +108,7 @@ public sealed class CoordinatedBatchAdmissionRelationTests
     }
 
     [Fact]
-    public void BatchReconcile_EpochChanged_InvalidatesInFlightWithoutResubmitInSameTick()
+    public void BatchReconcile_EpochChanged_ReturnsEpochChanged_WithoutSubmitOrResubmitThisTick()
     {
         var items = new List<BatchExpectedItem> { Submitted("组A", jobId: Guid.NewGuid().ToString("N")) };
 
@@ -115,7 +120,7 @@ public sealed class CoordinatedBatchAdmissionRelationTests
     }
 
     [Fact]
-    public void BatchReconcile_AttachesExistingJobByRequestKey_WithoutSubmittingAgain()
+    public void BatchReconcile_AttachesExistingJobByRequestKey_ReturnsNoSubmitThisTick()
     {
         // 重复广播/应答丢失后按请求键找回：只 Attach，不 Submit
         var items = new List<BatchExpectedItem> { Submitted("组A") };
@@ -130,10 +135,42 @@ public sealed class CoordinatedBatchAdmissionRelationTests
     }
 
     [Fact]
+    public void BatchReconcile_LostJobConfirmation_CurrentlyAlsoReturnsComplete_ExposedNotEndorsed()
+    {
+        // 风险登记（未接线决策器的**潜在合同风险**，本夹具只暴露当前行为、不作肯定结论）：
+        // 已知句柄消失 ⇒ ConfirmTerminal("lost_job")，随后"全部确认"分支会同时返回 Complete；
+        // 而 Complete 的既有注释关联"完成后动作（RunSpecified 收尾）"（BatchReconcilePlan.cs:112-113）。
+        // ⇒ "按未证退出收口"不等于"不会触发完成/成功收尾"。接线前必须由 owner 裁决
+        //   该 Complete 是否应携带"结果未知"标记（或改由 Abort/失败收尾），见 §24.104 残项。
+        var items = new List<BatchExpectedItem> { Submitted("组A", jobId: Guid.NewGuid().ToString("N")) };
+
+        var actions = BatchReconcileDecider.Decide(items, [], epochMatch: true, generation: 1, nowUtc: Now);
+
+        Assert.Equal("lost_job", Assert.Single(actions.OfType<BatchReconcileAction.ConfirmTerminal>()).ErrorCode);
+        // 当前真实行为：同一拍内也返回 Complete（本断言刻意固定该事实，便于接线前裁决时看到差异）
+        Assert.Single(actions.OfType<BatchReconcileAction.Complete>());
+        // 且 Complete 不携带任何"结果未知"信息 ⇒ 调用方无法从动作本身区分"真成功"与"未证退出"
+        Assert.DoesNotContain(actions, a => a is BatchReconcileAction.AbortUserCancelled);
+    }
+
+    [Fact]
+    public void BatchReconcile_ExhaustedAttemptsUnknownResult_CurrentlyAlsoReturnsComplete_ExposedNotEndorsed()
+    {
+        // 同上：重提耗尽 ⇒ ConfirmTerminal("result_unknown")，同拍仍返回 Complete（当前行为，非背书）。
+        var items = new List<BatchExpectedItem> { Submitted("组A", attempts: BatchReconcileDecider.MaxSubmitAttempts) };
+
+        var actions = BatchReconcileDecider.Decide(items, [], epochMatch: true, generation: 1, nowUtc: Now);
+
+        Assert.Equal("result_unknown", Assert.Single(actions.OfType<BatchReconcileAction.ConfirmTerminal>()).ErrorCode);
+        Assert.Single(actions.OfType<BatchReconcileAction.Complete>());
+    }
+    [Fact]
     public void CoordinatedBatch_DoesNotReferenceUnifiedAdmissionSymbols()
     {
-        // 结构守卫（审计结论的机械证据）：全队批次直发路径**不引用**统一准入面；
-        // 若日后接线，本守卫会红——届时必须连同 §24.104 的合同说明一起更新。
+        // 结构守卫（审计结论的机械证据）：**指定直发文件** `MainViewModel.CoordinatedBatch.cs`
+        // 的**原始文本**中不含统一准入面符号；若日后接线，本守卫会红——届时必须连同
+        // §24.104 的合同说明一起更新。局限：只覆盖该单一文件的文本，注释提及符号也会红，
+        // 且不能证明所有 partial 文件或运行调用链均未经过统一准入。
         var root = RepoRoot();
         var text = File.ReadAllText(Path.Combine(root, "MultiplayerHoeingAssistant", "ViewModels", "MainViewModel.CoordinatedBatch.cs"));
 
@@ -144,7 +181,7 @@ public sealed class CoordinatedBatchAdmissionRelationTests
 
     // ------------------------------------------------------------------
     // 交错夹具（R5 批次 8 ②）：全队批次 × E1/E3 × 最高级 × 未知占用 × 请求键冲突。
-    // 夹具只断言**现有真实行为**（零发送／保守停驻／不重复发送），不改生产接线。
+    // 夹具只断言**仲裁器/决策器返回值**（保守停驻判定、本拍不返回提交动作），不观测实际发送、不改生产接线。
     // ------------------------------------------------------------------
 
     private const string OccupantInstance = "11111111-1111-1111-1111-111111111111";
@@ -168,7 +205,7 @@ public sealed class CoordinatedBatchAdmissionRelationTests
         => new() { IsHoeingHighest = highest, Tier = tier, Priority = priority, HasTrustedIdentity = trustedIdentity };
 
     [Fact]
-    public void Interleave_BatchArrivesWhileHoeingOccupantUnprovenHighest_HoldsLocallyWithoutSending()
+    public void Interleave_BatchArrivesWhileHoeingOccupantUnprovenHighest_HoldsWithoutPreemptTarget()
     {
         // 联机全队批次属"锄地类"但**不能证明**是 owner B.1 的两类最高级（房间授权/请求键不是最高级来源）
         // ⇒ 到来者不得据此抢占；占用者又无法证明是否最高级 ⇒ 保守停驻、零新发送。
@@ -181,7 +218,7 @@ public sealed class CoordinatedBatchAdmissionRelationTests
     }
 
     [Fact]
-    public void Interleave_BatchWithSelfReportedKeyIsNotTrustedSource_HoldsWithoutPreempting()
+    public void Interleave_UntrustedIncomingIdentity_HoldsWithoutPreemptTarget()
     {
         // 远程/房间自报 key（HasTrustedIdentity=false）不构成级别证明 ⇒ 不得抢占，按本地等待处理。
         var encounter = RunningOccupancyArbiter.Decide(
@@ -227,9 +264,9 @@ public sealed class CoordinatedBatchAdmissionRelationTests
     }
 
     [Fact]
-    public void Interleave_UnknownOccupancyFactsAreNeverIdle_ZeroSend()
+    public void Interleave_UnknownOccupancyFacts_HoldFactsUnknown_WithoutPreemptTarget()
     {
-        // 未知占用事实（快照缺失/纪元未核验/台账不可读）**不是空闲**：不得按常规准入放行。
+        // 未知占用事实（快照缺失/纪元未核验/台账不可读）**不是空闲**：判定为 HoldFactsUnknown，本拍不返回可抢占目标。
         foreach (var reference in new[] { "bgi_status_unavailable", "bgi_epoch_unverified", "external_start_ledger_unreadable" })
         {
             var encounter = RunningOccupancyArbiter.Decide(RunningOccupantFacts.Unknown(reference), Incoming(highest: true));
@@ -298,9 +335,9 @@ public sealed class CoordinatedBatchAdmissionRelationTests
     }
 
     [Fact]
-    public void Interleave_UnknownOccupantThenEpochChange_NoReplayAcrossEpoch()
+    public void Interleave_EpochChange_ReturnsEpochChangedOnly_NoSubmitThisTick()
     {
-        // 纪元变化（BGI 重启）与未知占用叠加：在飞项失效并退回待提交，本拍零发送；不跨纪元重放。
+        // 纪元变化（BGI 重启）：本拍只返回 EpochChanged，不返回 Submit/Resubmit/Attach；跨拍重放不在此夹具范围。
         var items = new List<BatchExpectedItem> { Submitted("组A", jobId: Guid.NewGuid().ToString("N")) };
 
         var actions = BatchReconcileDecider.Decide(items, [], epochMatch: false, generation: 1, nowUtc: Now);

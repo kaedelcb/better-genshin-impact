@@ -12,7 +12,7 @@ public sealed class BatchExpectedItem
         IsOneDragon = isOneDragon;
     }
 
-    /// <summary>配置组名 / 一条龙配置名（下发参数 + 快照按名附着的匹配键）。</summary>
+    /// <summary>配置组名 / 一条龙配置名（下发参数用）。注意：快照附着**不按名**匹配，实际按 RequestKey（见 Decider 注释）。</summary>
     public string Name { get; }
 
     public bool IsOneDragon { get; }
@@ -20,7 +20,7 @@ public sealed class BatchExpectedItem
     /// <summary>PendingSubmit → Submitted → TerminalConfirmed（单调推进，不回退；纪元失效除外见 Decider）。</summary>
     public BatchItemState State { get; set; } = BatchItemState.PendingSubmit;
 
-    /// <summary>提交应答拿到的 jobId（== taskHandle 别名）。应答帧丢失时为 null，靠按名附着找回。</summary>
+    /// <summary>提交应答拿到的 jobId（== taskHandle 别名）。应答帧丢失时为 null，靠 RequestKey 幂等键附着找回。</summary>
     public string? JobId { get; set; }
     public string RequestKey { get; set; } = Guid.NewGuid().ToString("N");
 
@@ -93,13 +93,13 @@ public abstract record BatchReconcileAction
     /// <summary>提交第 Index 项（首次或重提交）。调用方须用幂等键（rid/key 由 SDK 层保证）。</summary>
     public sealed record Submit(int Index) : BatchReconcileAction;
 
-    /// <summary>第 Index 项的作业在快照中出现（含按名附着找回 jobId）：记录 JobId。</summary>
+    /// <summary>第 Index 项的作业在快照中出现（按 RequestKey 幂等键附着找回 jobId）：记录 JobId。</summary>
     public sealed record Attach(int Index, string JobId) : BatchReconcileAction;
 
     /// <summary>第 Index 项作业已达终态：确认并推进（ cancelled/errorCode 入档）。</summary>
     public sealed record ConfirmTerminal(int Index, bool Cancelled, string? ErrorCode) : BatchReconcileAction;
 
-    /// <summary>第 Index 项已提交但快照中查无此作业（同纪元 not_found = 句柄淘汰/帧丢失）：重提交。</summary>
+    /// <summary>第 Index 项已提交但快照中查无此作业（同纪元 not_found = 句柄淘汰/帧丢失）：按同一请求键重提交。</summary>
     public sealed record Resubmit(int Index) : BatchReconcileAction;
 
     /// <summary>[A6] 第 Index 项作业终态失败但错误码是可重试瞬态（preempt_timeout 等）且在重试预算内：
@@ -124,7 +124,7 @@ public abstract record BatchReconcileAction
 /// 输入 = 期望批次（含状态）+ BGI 注册表快照 + 纪元匹配标记；输出 = 本拍动作序列。
 /// 纯函数零副作用零依赖——批次推进、F11 取消、终态确认的判定全部集中在此，单测可穷尽。
 /// 不变量：①同时至多一项在飞（串行）；②已 TerminalConfirmed 的项是事实，任何情况下不回退；
-/// ③jobId 未知的项可经 generation+name 在快照中附着找回（提交应答帧丢失的自愈）。
+/// ③jobId 未知的项可经 **RequestKey（幂等键）** 在快照中附着找回（提交应答帧丢失的自愈）。
 /// [A6] ④瞬态拒绝/失败分类（ClassifySubmitRejection/CanRetryRejection）：可重试码在单项 2 分钟
 /// 预算内输出 RetryFromFailure 退回重发；manual_stop_cooldown 与未知码绝不重试（ADR-2026-09-16）。
 /// </summary>
@@ -184,7 +184,7 @@ public static class BatchReconcileDecider
         // 本拍内确认的项（动作由调用方正式应用；此处仅作本拍后续步骤的推进依据，绝不改写 items 状态）
         var confirmedThisTick = new HashSet<int>();
 
-        // 1) 附着找回：已提交但无 jobId 的项，按 generation+name 在快照里找活跃作业
+        // 1) 附着找回：已提交但无 jobId 的项，按 RequestKey（幂等键）在快照里找活跃作业
         for (var i = 0; i < items.Count; i++)
         {
             var item = items[i];

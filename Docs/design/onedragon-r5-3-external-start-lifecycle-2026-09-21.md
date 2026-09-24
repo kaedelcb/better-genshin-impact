@@ -2925,6 +2925,21 @@ R5 要解决的是联机助手、BGI 与既有协调流程在**日常运行、�
 - 会诊：**六轮各 1 次成功**（首轮与本批安全敏感面用 `gpt-6-astra`／medium，其余按配置默认 `gpt-6-sol`／medium）。前三轮逐步暴露
   "无根 ID 给肯定结论""父作业淘汰漏检""身份缺失连接节点漏检"，第四至六轮确认**改为只暴露观测事实后不再存在肯定结论类反例**。
 
+**会诊记录（2026-09-24）**
+
+- 模型／强度／次数：`gpt-6-sol` / `medium`，共 3 轮（第 1 轮因子进程 shell 被策略拦截、未能读取 diff 而判无效；第 2、3 轮各成功 1 次，取第 3 轮为定稿）。
+  通道方式：直接调用 `codex.exe exec`（`--ignore-user-config --ephemeral --sandbox read-only`），文件内容以 `<workspace_file>` 内联传入；
+  MCP 的 `gpt_review` 工具路径在本环境仍不可用（子进程无法写临时目录，os error 5），故不使用。
+- 裁定：必改 1（夹具声称锁定直发路径）**成立** ⇒ 已按"收窄措辞"处置（本节新增范围声明、类级 summary 改写）；
+  必改 2（结构守卫证明范围）**部分成立** ⇒ 已限定为"指定直发文件的文本守卫"并写明三条局限，未扩大扫描范围；
+  重要 3（`Attach` 匹配规则注释与实现不一致）**成立** ⇒ 已改准注释（实际按 `IdempotencyKey == RequestKey`），**未改匹配实现**；
+  重要 4（零发送／无重放命名过强）**成立** ⇒ 已将测试名与注释限定为"本拍不返回提交动作／停驻判定"。
+- 会诊额外发现：`lost_job`／`result_unknown` 确认后同一拍仍可返回 `Complete`，而 `Complete` 关联"完成后动作（RunSpecified 收尾）"
+  ⇒ 已补 2 条精确断言暴露当前行为，并登记为"接线前须由 owner 裁决"的残项（见下表）。
+- 会诊同时确认：夹具无并行／静态状态竞争（`Now` 只读、各测试新建项）；`Classify(null)` 与未知状态确实返回 `"unknown"`，非成功。
+- 收口判定（会诊原话）：可按"纯函数契约夹具＋指定直发文件的结构审计＋既有不一致及 `Complete` 风险登记"收口；
+  **不可**按"已由夹具验证直发路径零发送、无重放和成功收尾安全性"收口。
+
 **残余（不因本批改变门禁）**
 
 | 项 | 状态 |
@@ -2952,31 +2967,56 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
 | `preempt: true` 能证明什么 | 只影响 BGI 协调器的槽窗口等待（3s 短窗，`task_busy`／`preempt_timeout` 分类），**不等于**最高优先级仲裁结论 |
 | 缺口判定 | **存在**"绕过统一准入"缺口：全队批次不经 owner B.1 相遇判定，其"最高级"地位既未被证明也未被拒绝；`RunningOccupantFacts.HighestClass` 在生产路径恒 `null`，因此它**也不能**作为占用者被其它入口据以抢占的依据。**修复必须改生产接线 ⇒ 属开门动作，本批不擅自开门，登记为残余待 owner 放行。** |
 
-**现有真实保护（已由夹具锁定，不是设计意图）**
+**夹具范围声明（2026-09-24 会诊收窄后）**
 
-| 保护 | 夹具断言 |
+上表与下表所列为**未接线纯函数（`BatchReconcileDecider.Decide`／`CoordinatedBatchOutcome.Classify`）与仲裁器
+（`RunningOccupancyArbiter.Decide`）的返回值契约**，外加对指定直发文件的**文本**守卫。夹具**不观测**直发路径
+（`MainViewModel.CoordinatedBatch.cs`）的实际发送、30 秒查询超时或收尾行为；直发路径的结论只由本节"审计结论"表陈述，
+**不由此夹具证明**。因此本节**不得**按"已由夹具验证直发路径零发送、无重放、成功收尾安全"收口。
+
+**现有真实保护（已由夹具锁定的返回值契约，不是设计意图）**
+
+| 保护 | 夹具断言（范围为返回值／本拍动作列表） |
 |---|---|
-| 接受未知时不产生第二次执行身份 | 同请求键重发（`Resubmit`），请求键不变；快照命中同键作业时只 `Attach`，**零 `Submit`** |
-| 已受理句柄消失不重放 | `ConfirmTerminal(..., "lost_job")`，零 `Resubmit`／零 `Submit` |
-| 纪元变化不跨纪元重放 | 单 `EpochChanged`，零发送 |
-| 重发预算耗尽如实收口 | `ConfirmTerminal(..., "result_unknown")`，不冒充成功 |
+| 接受未知时不产生第二次执行身份 | 同请求键返回 `Resubmit`，请求键不变；快照命中同键作业时只返回 `Attach`，**本拍不返回 `Submit`** |
+| 已受理句柄消失不重放 | 返回 `ConfirmTerminal(..., "lost_job")`，本拍不返回 `Resubmit`／`Submit` |
+| 纪元变化不跨纪元重放 | 单 `EpochChanged`，本拍不返回 `Submit`／`Resubmit`／`Attach` |
+| 重发预算耗尽如实收口 | 返回 `ConfirmTerminal(..., "result_unknown")`，不冒充成功 |
 | 缺失／未知终态不是成功 | `CoordinatedBatchOutcome.Classify` 对 null／未知状态一律 `unknown`；`stopping` 与结果正交（`completed && !Cancelled` 仍是 `succeeded`） |
 | BGI 侧键语义 | 同键同载荷 ⇒ `Adopted`（沿用既有句柄，不重复 `task.queued`）；同键异载荷 ⇒ `IdempotencyConflict`（句柄为空）；同键缺指纹 ⇒ `InvalidSubmission` |
 
 **证据**
 
-- 定向夹具（助手）`Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/CoordinatedBatchAdmissionRelationTests.cs` **31/31**：
+- 定向夹具（助手）`Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/CoordinatedBatchAdmissionRelationTests.cs` **33/33**：
   终态分类表 14 例、缺失／空状态 ⇒ `unknown`、未知接受同键重发、预算耗尽 `result_unknown`、句柄消失 `lost_job`、纪元变化、同键 `Attach` 不 `Submit`，
   以及交错组：全队批次遇锄地占用者但**无法证明**最高级 ⇒ `HoldUnknownOccupant`；自报键非受信来源 ⇒ `WaitLocally`；已证明最高级占用者 vs 普通到来者 ⇒ `WaitLocally`；
   两类最高级相遇 ⇒ `PreemptNow` 且**必须**给出可绑定目标身份；无受信身份占用者 ⇒ 停驻且无可抢占目标；三类未知占用引用 ⇒ `HoldFactsUnknown`；
   低优先级到来者进本地等待集合且最高级优先；同键重发后 `Attach` 保持单一身份；**重复广播不同键不被静默合并**（不得把"键相同"当跨端最高级证明）。
 - 定向夹具（BGI）`Test/BetterGenshinImpact.UnitTest/ServiceTests/Instance/BgiTaskCoordinatorTests.cs` 新增 1 条：
   槽位被占时同键 `Adopted`／异载荷 `IdempotencyConflict`／缺指纹 `InvalidSubmission`，且 `QueueDepth==1`、`task.queued` 仅 1 次 ⇒ **无第二条执行身份**。
-- 结构守卫（审计结论的机械证据）：同文件 `CoordinatedBatch_DoesNotReferenceUnifiedAdmissionSymbols` 断言直发路径不引用统一准入符号；
-  日后接线本守卫会红，届时须连同本节合同一起更新。
+- 结构守卫（审计结论的机械证据）：同文件 `CoordinatedBatch_DoesNotReferenceUnifiedAdmissionSymbols` 断言**指定直发文件**
+  `MainViewModel.CoordinatedBatch.cs` 的**原始文本**不含统一准入符号；日后接线本守卫会红，届时须连同本节合同一起更新。
+  局限：只覆盖该单一文件的文本，注释提及符号也会红，且**不能证明**所有 partial 文件或运行调用链均未经过统一准入。
+- 新增 2 条风险暴露夹具（`..._CurrentlyAlsoReturnsComplete_ExposedNotEndorsed`）：固定"`lost_job`／`result_unknown` 确认与 `Complete`
+  同拍返回"的当前行为，用于接线前裁决时看到差异；**不是**对该行为的背书。
 - 完整回归：助手全量 **1278 通过／2 跳过／0 失败／1280**（`r58_assistant_full_20260924_091612.trx`）；
   BGI 全量 **1035 通过／14 失败／1049**（`r58_bgi_full_20260924.trx`），失败身份与既有 14 项基线**差集为空**
   （新增 0、消失 0）——仅"身份差集为空"，**不等于**那 14 项的失败原因已归因。
+
+**会诊记录（2026-09-24）**
+
+- 模型／强度／次数：`gpt-6-sol` / `medium`，共 3 轮（第 1 轮因子进程 shell 被策略拦截、未能读取 diff 而判无效；第 2、3 轮各成功 1 次，取第 3 轮为定稿）。
+  通道方式：直接调用 `codex.exe exec`（`--ignore-user-config --ephemeral --sandbox read-only`），文件内容以 `<workspace_file>` 内联传入；
+  MCP 的 `gpt_review` 工具路径在本环境仍不可用（子进程无法写临时目录，os error 5），故不使用。
+- 裁定：必改 1（夹具声称锁定直发路径）**成立** ⇒ 已按"收窄措辞"处置（本节新增范围声明、类级 summary 改写）；
+  必改 2（结构守卫证明范围）**部分成立** ⇒ 已限定为"指定直发文件的文本守卫"并写明三条局限，未扩大扫描范围；
+  重要 3（`Attach` 匹配规则注释与实现不一致）**成立** ⇒ 已改准注释（实际按 `IdempotencyKey == RequestKey`），**未改匹配实现**；
+  重要 4（零发送／无重放命名过强）**成立** ⇒ 已将测试名与注释限定为"本拍不返回提交动作／停驻判定"。
+- 会诊额外发现：`lost_job`／`result_unknown` 确认后同一拍仍可返回 `Complete`，而 `Complete` 关联"完成后动作（RunSpecified 收尾）"
+  ⇒ 已补 2 条精确断言暴露当前行为，并登记为"接线前须由 owner 裁决"的残项（见下表）。
+- 会诊同时确认：夹具无并行／静态状态竞争（`Now` 只读、各测试新建项）；`Classify(null)` 与未知状态确实返回 `"unknown"`，非成功。
+- 收口判定（会诊原话）：可按"纯函数契约夹具＋指定直发文件的结构审计＋既有不一致及 `Complete` 风险登记"收口；
+  **不可**按"已由夹具验证直发路径零发送、无重放和成功收尾安全性"收口。
 
 **残余（不因本批改变门禁）**
 
@@ -2986,6 +3026,8 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
 | 全队批次的"最高级"来源 | ❌ 不存在：房间授权与请求键都不构成级别证明；`HighestClass` 生产路径恒 `null` |
 | 交错夹具覆盖范围 | ⚠ 只覆盖已列场景（助手纯函数 + BGI 提交键语义），**不称"全格"**；真实 IPC 时序、跨端同时广播、网络重发窗口未覆盖 |
 | 端到端接线验证 | ❌ 未做：未在真实 BGI/实机上演练全队批次与其它入口互遇 |
+| `Complete` 与"未证退出"的语义冲突 | ❌ **已登记（会诊发现）**：`lost_job`／`result_unknown` 确认同拍返回 `Complete`，而 `Complete` 关联完成后动作；当前仅由夹具暴露事实，**接线前须由 owner 裁决**（是否需带"结果未知"标记或改走 `Abort`／失败收尾）。不得在裁决前把未知结果表述为成功。 |
+| `BatchReconcileDecider` 注释与实现一致性 | ⚠ 本批已改准受影响注释（`Attach` 实际按 `IdempotencyKey == RequestKey`，非 `generation+name`／按名）；匹配实现未改，仍属未接线组件 |
 | 生产入口门／真实 User 门／R5.8 实机无双跑签署 | ❌ **全部保持关闭／未签署** |
 ### 24.102 落地登记：低优先级本地持久等待（基础组件，未接线）（2026-09-24；B.1）
 
@@ -3015,6 +3057,21 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
   BGI 源码本批未改动，最近全量 1025 通过／14 失败／1039，失败身份与既有 14 项基线差集为空（原因未归因）。
 - 会诊：**四轮各 1 次成功**（首轮 `gpt-6-astra`／medium：4 必改＋3 重要；随后按**配置默认** `gpt-6-sol`／medium 三轮：第二轮 3 项未闭合必改、第三轮 `state:null` 必改、第四轮**全部闭合且无新必改、同意限定收口**）。
   说明：首轮系施工方自行选择 Astra（越出默认模型）；自第二轮起改为按会诊插件**配置默认**（评审模型＝`gpt-6-sol`、强度＝medium）执行。
+
+**会诊记录（2026-09-24）**
+
+- 模型／强度／次数：`gpt-6-sol` / `medium`，共 3 轮（第 1 轮因子进程 shell 被策略拦截、未能读取 diff 而判无效；第 2、3 轮各成功 1 次，取第 3 轮为定稿）。
+  通道方式：直接调用 `codex.exe exec`（`--ignore-user-config --ephemeral --sandbox read-only`），文件内容以 `<workspace_file>` 内联传入；
+  MCP 的 `gpt_review` 工具路径在本环境仍不可用（子进程无法写临时目录，os error 5），故不使用。
+- 裁定：必改 1（夹具声称锁定直发路径）**成立** ⇒ 已按"收窄措辞"处置（本节新增范围声明、类级 summary 改写）；
+  必改 2（结构守卫证明范围）**部分成立** ⇒ 已限定为"指定直发文件的文本守卫"并写明三条局限，未扩大扫描范围；
+  重要 3（`Attach` 匹配规则注释与实现不一致）**成立** ⇒ 已改准注释（实际按 `IdempotencyKey == RequestKey`），**未改匹配实现**；
+  重要 4（零发送／无重放命名过强）**成立** ⇒ 已将测试名与注释限定为"本拍不返回提交动作／停驻判定"。
+- 会诊额外发现：`lost_job`／`result_unknown` 确认后同一拍仍可返回 `Complete`，而 `Complete` 关联"完成后动作（RunSpecified 收尾）"
+  ⇒ 已补 2 条精确断言暴露当前行为，并登记为"接线前须由 owner 裁决"的残项（见下表）。
+- 会诊同时确认：夹具无并行／静态状态竞争（`Now` 只读、各测试新建项）；`Classify(null)` 与未知状态确实返回 `"unknown"`，非成功。
+- 收口判定（会诊原话）：可按"纯函数契约夹具＋指定直发文件的结构审计＋既有不一致及 `Complete` 风险登记"收口；
+  **不可**按"已由夹具验证直发路径零发送、无重放和成功收尾安全性"收口。
 
 **残余（不因本批改变门禁）**
 
@@ -3060,6 +3117,21 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
   BGI 源码本批未改动，最近全量 **1025 通过／14 失败／1039**，失败身份与既有 14 项基线差集为空（原因未归因）。
 - 会诊：**GPT-6-Astra／medium 两轮各 1 次成功**。首轮 2 必改（`Intent="start"` 不能证明流程级／夹具构造失真）＋4 重要；
   第二轮判 **①②闭合、③在代码层闭合（宿主分支缺测试证据）、无新增必改，并同意本批限定收口**。
+
+**会诊记录（2026-09-24）**
+
+- 模型／强度／次数：`gpt-6-sol` / `medium`，共 3 轮（第 1 轮因子进程 shell 被策略拦截、未能读取 diff 而判无效；第 2、3 轮各成功 1 次，取第 3 轮为定稿）。
+  通道方式：直接调用 `codex.exe exec`（`--ignore-user-config --ephemeral --sandbox read-only`），文件内容以 `<workspace_file>` 内联传入；
+  MCP 的 `gpt_review` 工具路径在本环境仍不可用（子进程无法写临时目录，os error 5），故不使用。
+- 裁定：必改 1（夹具声称锁定直发路径）**成立** ⇒ 已按"收窄措辞"处置（本节新增范围声明、类级 summary 改写）；
+  必改 2（结构守卫证明范围）**部分成立** ⇒ 已限定为"指定直发文件的文本守卫"并写明三条局限，未扩大扫描范围；
+  重要 3（`Attach` 匹配规则注释与实现不一致）**成立** ⇒ 已改准注释（实际按 `IdempotencyKey == RequestKey`），**未改匹配实现**；
+  重要 4（零发送／无重放命名过强）**成立** ⇒ 已将测试名与注释限定为"本拍不返回提交动作／停驻判定"。
+- 会诊额外发现：`lost_job`／`result_unknown` 确认后同一拍仍可返回 `Complete`，而 `Complete` 关联"完成后动作（RunSpecified 收尾）"
+  ⇒ 已补 2 条精确断言暴露当前行为，并登记为"接线前须由 owner 裁决"的残项（见下表）。
+- 会诊同时确认：夹具无并行／静态状态竞争（`Now` 只读、各测试新建项）；`Classify(null)` 与未知状态确实返回 `"unknown"`，非成功。
+- 收口判定（会诊原话）：可按"纯函数契约夹具＋指定直发文件的结构审计＋既有不一致及 `Complete` 风险登记"收口；
+  **不可**按"已由夹具验证直发路径零发送、无重放和成功收尾安全性"收口。
 
 **残余（不因本批改变门禁）**
 
@@ -3112,6 +3184,21 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
   到来者可信标记未消费／FromStatus 无纪元输入＋接缝混用实况／恢复输入不足／夹具证明力不足）；第二轮判 ①②③④限定闭合、**⑤未完全闭合**＋排序边界；
   第三轮判**两点闭合、无新增必改**，并要求收窄"全格"表述与加强 MaxValue 夹具（均已处置）。
 
+**会诊记录（2026-09-24）**
+
+- 模型／强度／次数：`gpt-6-sol` / `medium`，共 3 轮（第 1 轮因子进程 shell 被策略拦截、未能读取 diff 而判无效；第 2、3 轮各成功 1 次，取第 3 轮为定稿）。
+  通道方式：直接调用 `codex.exe exec`（`--ignore-user-config --ephemeral --sandbox read-only`），文件内容以 `<workspace_file>` 内联传入；
+  MCP 的 `gpt_review` 工具路径在本环境仍不可用（子进程无法写临时目录，os error 5），故不使用。
+- 裁定：必改 1（夹具声称锁定直发路径）**成立** ⇒ 已按"收窄措辞"处置（本节新增范围声明、类级 summary 改写）；
+  必改 2（结构守卫证明范围）**部分成立** ⇒ 已限定为"指定直发文件的文本守卫"并写明三条局限，未扩大扫描范围；
+  重要 3（`Attach` 匹配规则注释与实现不一致）**成立** ⇒ 已改准注释（实际按 `IdempotencyKey == RequestKey`），**未改匹配实现**；
+  重要 4（零发送／无重放命名过强）**成立** ⇒ 已将测试名与注释限定为"本拍不返回提交动作／停驻判定"。
+- 会诊额外发现：`lost_job`／`result_unknown` 确认后同一拍仍可返回 `Complete`，而 `Complete` 关联"完成后动作（RunSpecified 收尾）"
+  ⇒ 已补 2 条精确断言暴露当前行为，并登记为"接线前须由 owner 裁决"的残项（见下表）。
+- 会诊同时确认：夹具无并行／静态状态竞争（`Now` 只读、各测试新建项）；`Classify(null)` 与未知状态确实返回 `"unknown"`，非成功。
+- 收口判定（会诊原话）：可按"纯函数契约夹具＋指定直发文件的结构审计＋既有不一致及 `Complete` 风险登记"收口；
+  **不可**按"已由夹具验证直发路径零发送、无重放和成功收尾安全性"收口。
+
 **残余（不因本批改变门禁）**
 
 | 项 | 状态 |
@@ -3159,6 +3246,21 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
   第二轮判 ③ 未闭合、④ 部分闭合，并新增 P1（`running` 缺失被当作"没有活动根"＋15s 分支绕过三态）；第三轮判 P1 闭合、新增 P2
   （能力累计把"尚未采样"当"探测未知"，旧版合法收尾不可达）；第四轮判 **P2 闭合、无新必改、建议本轮收口**。
 
+**会诊记录（2026-09-24）**
+
+- 模型／强度／次数：`gpt-6-sol` / `medium`，共 3 轮（第 1 轮因子进程 shell 被策略拦截、未能读取 diff 而判无效；第 2、3 轮各成功 1 次，取第 3 轮为定稿）。
+  通道方式：直接调用 `codex.exe exec`（`--ignore-user-config --ephemeral --sandbox read-only`），文件内容以 `<workspace_file>` 内联传入；
+  MCP 的 `gpt_review` 工具路径在本环境仍不可用（子进程无法写临时目录，os error 5），故不使用。
+- 裁定：必改 1（夹具声称锁定直发路径）**成立** ⇒ 已按"收窄措辞"处置（本节新增范围声明、类级 summary 改写）；
+  必改 2（结构守卫证明范围）**部分成立** ⇒ 已限定为"指定直发文件的文本守卫"并写明三条局限，未扩大扫描范围；
+  重要 3（`Attach` 匹配规则注释与实现不一致）**成立** ⇒ 已改准注释（实际按 `IdempotencyKey == RequestKey`），**未改匹配实现**；
+  重要 4（零发送／无重放命名过强）**成立** ⇒ 已将测试名与注释限定为"本拍不返回提交动作／停驻判定"。
+- 会诊额外发现：`lost_job`／`result_unknown` 确认后同一拍仍可返回 `Complete`，而 `Complete` 关联"完成后动作（RunSpecified 收尾）"
+  ⇒ 已补 2 条精确断言暴露当前行为，并登记为"接线前须由 owner 裁决"的残项（见下表）。
+- 会诊同时确认：夹具无并行／静态状态竞争（`Now` 只读、各测试新建项）；`Classify(null)` 与未知状态确实返回 `"unknown"`，非成功。
+- 收口判定（会诊原话）：可按"纯函数契约夹具＋指定直发文件的结构审计＋既有不一致及 `Complete` 风险登记"收口；
+  **不可**按"已由夹具验证直发路径零发送、无重放和成功收尾安全性"收口。
+
 **残余（不因本批改变门禁）**
 
 | 项 | 状态 |
@@ -3172,4 +3274,6 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
 | 既有弱判定消费点 | ⚠ 登记：`StopWithKeyPolicyAsync` 仅凭 suspend 成功即清上下文（suspend 本身已要求 `quiesceConfirmed=true` 与票据匹配，缺的是独立根退出凭证校验）；`ResolveStartConflictAsync` 仍以 `running=false` 判空闲 |
 | BGI 既有 14 项失败 | ⚠ 身份差集为空，**原因未归因**；不得表述为 BGI 全绿或本轮新增回归 |
 | 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
+| `Complete` 与"未证退出"的语义冲突 | ❌ **已登记（会诊发现）**：`lost_job`／`result_unknown` 确认同拍返回 `Complete`，而 `Complete` 关联完成后动作；当前仅由夹具暴露事实，**接线前须由 owner 裁决**（是否需带"结果未知"标记或改走 `Abort`／失败收尾）。不得在裁决前把未知结果表述为成功。 |
+| `BatchReconcileDecider` 注释与实现一致性 | ⚠ 本批已改准受影响注释（`Attach` 实际按 `IdempotencyKey == RequestKey`，非 `generation+name`／按名）；匹配实现未改，仍属未接线组件 |
 | 生产入口门／真实 User 门／R5.8 实机无双跑签署 | ❌ **全部保持关闭／未签署** |
