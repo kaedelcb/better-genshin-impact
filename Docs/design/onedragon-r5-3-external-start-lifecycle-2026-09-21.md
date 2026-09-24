@@ -4087,13 +4087,21 @@ IsValidatedAsAWhole_PerLoadShapeRules` 判为**摇摆**、归 D2 在途。**该�
   `Upsert`（走重新激活分支、再次写盘）；探针在批内**按唯一键**定位该条记录并把 `ItemId` 改为**空串**。
 - **判别力（反向突变，实测）**：删去 `ValidatePersistableItemShape` 中 `string.IsNullOrEmpty(itemId)` 段
   （`_batch16/_mutF.py`）⇒ **2 红**：`empty-itemid` ＋ **`empty-itemid-reactivation`**
-  （`_batch16_mutF.trx`、`_batch16_mutF2.trx`）；还原后该类 **24/24 绿**（`_batch16_r4_cls5.trx`、`_batch16_r4_cls7.trx`）。
+  （`_batch16_mutF.trx`、`_batch16_mutF2.trx`）；还原后该类 **24/24 绿**（`_batch16_r4_cls5.trx`、`_batch16_r4_cls7.trx`、`_batch16_r4_cls8.trx`）。
 - **顺带更正两处我方自己的假红（如实登记）**：
   ① 重新激活路径**自身已写过一次盘** ⇒ 「写盘前」基线必须在该路径**之后**重新取样（否则断言落成「与更早的文件比」）；
-  ② 该行原以 `StableIdentity` 定位批内记录，而同 Theory 其它行共享进程级静态探针字段
-  （`LocalWaitQueueStore.WriteSnapshotProbeMutator`）⇒ 在全量负载下会**碰巧匹配**到别的行的记录、探针空转 ⇒ **假红**
-  （实测帧 `_batch16_r4_full.trx`：唯一失败＝该行 `Assert.Null(probeNote)`）。已改为**按 `enqueuedAtUtc` 唯一键**定位
-  并**自证命中数恰好 1**（命中数 ≠ 1 时以诊断信息红），另把每行的身份串按突变名派生，消除跨行干扰。
+  ② **根因（实测三层）**：该 Theory 的探针依赖**进程级静态字段** `LocalWaitQueueStore.WriteSnapshotProbeMutator`。
+  xUnit 默认并行下，**其它 collection 的用例**会在本行「挂上探针 → 触发写盘」的窗口内并发写盘 ⇒ 本行探针被
+  **别人的调用**执行（既有「被抢先消费」也有「被提前清空」两种形态）。
+  第一层修法（身份串按突变名派生 ＋ 内容定位）**不足以**消除该形态：并发错配仍可能让本行那条 `second` 记录
+  在探针里被**改过两次**（第二次改写落到已被校验的副本），使「自证位数」对不上 ⇒ 仍红
+  （实测帧 `_batch16_r4_full.trx`＝该行 `Assert.Null(probeNote)`；`_batch16_r4_full2.trx` 同一行同态）。
+  **最终修法（本行生效）**：①本类以 `[Collection("LocalWaitSnapshotProbe", DisableParallelization = true)]`
+  与其它 collection **不并发**；②探针安装改用 `Interlocked.CompareExchange` **捕获一次**守卫，只有**第一个**
+  调用者能执行探针体，其余调用**立即返回**（不再改写／吞掉本行目标记录）；③清理时以 CAS **只清空自己装上的**引用，
+  不误清他人探针。改后该类 24/24 绿、全量连续 **3 次** `1372 通过／2 跳过／0 失败／1374`
+  （`_batch16_r4_full5/6/7.trx`），另以**逐名对照脚本**对批次 15 基线（`_batch15/trx/batch15_assistant_full_final.trx`，
+  1337 条）复算：**逐名移除 0**、逐名新增 35（本批 24 ＋ 批次 15 在途 11）。
 
 #### 必改 2（真）：两处「结构版本已落盘」类误述
 
@@ -4128,8 +4136,11 @@ IsValidatedAsAWhole_PerLoadShapeRules` 判为**摇摆**、归 D2 在途。**该�
 | --- | --- |
 | 该类定向绿（24 情形） | `Test/MultiplayerHoeingAssistant.UnitTest/TestResults/_batch16_r4_cls5.trx`、`_batch16_r4_cls7.trx` |
 | 反向突变 2 红（必改 1 判别力） | `_batch16_mutF.trx`、`_batch16_mutF2.trx` |
-| 全量（假红修正后） | `_batch16_r4_full3.trx`（1370 通过／2 跳过／2 失败；**2 项均非本类**：1 项＝本文档自带的未完成占位行，1 项＝声明面待再生 ⇒ 见下） |
-| 假红原始帧（修正前） | `_batch16_r4_full.trx`（唯一失败＝`(mutation:"empty-itemid")` 探针空转） |
+| 全量（假红修正后，**最终稳定帧**） | `_batch16_r4_full5.trx`／`_batch16_r4_full6.trx`／`_batch16_r4_full7.trx`（**连续 3 次** 1372 通过／2 跳过／0 失败／1374） |
+| 逐名对照（对批次 15 基线） | `_batch16/_diff_names_b16.py` 复算：基线 1337 条 ⇒ **逐名移除 0**／逐名新增 35 |
+| 假红原始帧（修正前，留证不淡化） | `_batch16_r4_full.trx`（唯一失败＝`(mutation:"empty-itemid")` 探针空转）、`_batch16_r4_full2.trx`（同态） |
+| 定向复跑（探针修正后） | `_batch16_r4_cls8.trx`（24/24 绿） |
+| 声明面再生／复验 | `_batch16_guard_regen6.trx`（带 env 再生通过）＋ `_batch16_guard_plain6.trx`（不带 env 通过） |
 | Release 编译可用性 | `dotnet build -c Release -p:DeployToBgiTools=false -p:Platform=x64 -t:Rebuild` ⇒ 0 错误／61 警告 |
 
 #### 本批边界（不因本轮处置而改变）
