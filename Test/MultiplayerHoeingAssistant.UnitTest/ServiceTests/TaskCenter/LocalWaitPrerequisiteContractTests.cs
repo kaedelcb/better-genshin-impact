@@ -812,17 +812,26 @@ public sealed class LocalWaitPrerequisiteContractTests
                 // 并且**不得**新增条目（新增条目在复制之后不会进入被校验的副本 ⇒ 探针就成了空转）。
                 // 故此处对调用方同一批的每个实例逐一（用引用身份）匹配后改写；`probeRan` 只在**改动确实生效**时置 1。
                 probeRan = 0;
+                // [本批自审修正 2] 实现走的是 `Load().ToList()` 路径：写盘批**只含**「`Load` 出来的记录
+                // ＋本次 `item`」，`baseline` 这个**调用方实例**默认**不在**批内（只有重新激活分支才会命中它）。
+                // 因此探针一律**按内容定位**「批内那条 baseline 记录」（而不是按引用身份），并对**它**改写；
+                // 对 `second` 一例同理按 `ItemId` 定位，确保改写一定落在**将被校验的那一份**上。
+                // 本夹具只改「不是 second 的那条」（=基线条），用以制造**同批内两条记录**的非法形状，
+                // 从而在去重之前就由形状校验拦下；不改 `second`，避免与 `empty-itemid` 以外的突变语义混淆。
                 foreach (var victim in items.ToList())
                 {
-                    if (ReferenceEquals(victim, second))
+                    var isSecond = string.Equals(victim.ItemId, second.ItemId, StringComparison.Ordinal)
+                        && string.Equals(victim.StableIdentity, second.StableIdentity, StringComparison.Ordinal);
+                    if (mutation == "empty-itemid")
                     {
                         // 触发写盘的那条（second）自身携带**空串** ItemId。
                         // 读取侧规则是 `RequiredString`：`Length > 0` 即可读回；空白串**能被读回**，
                         // 故「空白 itemId」不是读取侧判损坏的形状。真正会被 `Load` 拒读的是**空串**。
-                        victim.ItemId = "";
-                        if (victim.ItemId.Length == 0) probeRan = 1;
+                        if (isSecond) { victim.ItemId = ""; if (victim.ItemId.Length == 0) probeRan = 1; }
+                        continue;
                     }
-                    else if (string.Equals(victim.StableIdentity, "s-whole-baseline", StringComparison.Ordinal))
+
+                    if (!isSecond) // 批内唯一「不是 second」的那条 = baseline
                     {
                         switch (mutation)
                         {
@@ -835,20 +844,20 @@ public sealed class LocalWaitPrerequisiteContractTests
                                 if (victim.State == (LocalWaitItemState)987) probeRan = 1;
                                 break;
                             case "duplicate-itemid":
-                                // 同一批内**第二条**（同 Id、同载荷）只能这样制造：把既有项的 StableIdentity
+                                // 同一批内**第二条**（同 Id、同载荷）只能这样制造：把基线条的 StableIdentity
                                 // 改成与 second 相同，使 `DeriveItemId` 派生出同一个 ItemId ⇒ 写前去重必须拦下。
-                                victim.StableIdentity = second.StableIdentity;
-                                if (string.Equals(victim.StableIdentity, second.StableIdentity, StringComparison.Ordinal)
-                                    && string.Equals(victim.ItemId, second.ItemId, StringComparison.Ordinal))
+                                // 键是 `ItemId`、去重也按 `ItemId`：必须**显式**把基线条的 `ItemId` 改成
+                                // 与 second 相同。本批实现**不**在写入侧把 `ItemId` 重新派生自 `StableIdentity`
+                                // （`Upsert`/`Persist` 都不调用 `DeriveItemId`），故只改 `StableIdentity` 不会
+                                // 让两条记录同 Id ⇒ 该突变会变成空转（本轮已实测到这一假红来源）。
+                                victim.ItemId = second.ItemId;
+                                if (string.Equals(victim.ItemId, second.ItemId, StringComparison.Ordinal))
                                     probeRan = 1;
-                                break;
-                            case "empty-itemid":
-                                // 本突变的目标是 second 自身，不在此分支。
                                 break;
                         }
                     }
                 }
-                if (probeRan == 0) probeNote = "探针对批内实例未产生任何生效改写（突变：" + mutation + "）";
+                if (probeRan == 0) probeNote = "探针对批内记录未产生任何生效改写（突变：" + mutation + "）";
             };
             Exception? caught = null;
             try
