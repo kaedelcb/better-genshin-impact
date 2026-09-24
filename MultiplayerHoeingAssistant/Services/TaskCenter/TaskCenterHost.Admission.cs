@@ -1035,6 +1035,12 @@ public sealed partial class TaskCenterHost
         if (result.Kind == AdmissionResultKind.Accepted)
             return HostActionResult.Registered($"已受理启动（流程「{snapshot.Document.Name}」，运行 {run.RunId}）");
 
+        // **[批次 14／D1]** WaitLocally＝**确定结论**（零发送、已登记本地持久等待）：既不是「发送已尝试、结果不可考」
+        // （不得按 Reconciling 悬置观察），也不是终局未受理（**不得**按下面统一清理把运行终态化成 Cancelled——
+        // 那会把「等待中」记录成「已拒绝取消」，属事实改写）。本批该值**无生产方**，分支为显式闭环、不改既有行为。
+        if (result.Kind == AdmissionResultKind.WaitLocally)
+            return HostActionResult.Unavailable("已登记本地持久等待（未获准入前零发送，不进 BGI 执行队列）：" + result.Detail);
+
         // Reconciling=发送已尝试但结果不可考：运行记录不臆断取消（驱动或在飞），留待既有收敛/对账；
         // 其余未受理（确定未发送/未获选/拒绝/闸门）一律终态化清理留痕。
         if (result.Kind != AdmissionResultKind.Reconciling)
@@ -1042,8 +1048,11 @@ public sealed partial class TaskCenterHost
         return HostActionResult.Unavailable(result.Kind switch
         {
             AdmissionResultKind.F11Blocked => "F11 独立停止闸门激活（未产生任何租约副作用）",
-            AdmissionResultKind.NeedPreemptConfirm => "BGI 执行占用中（需先停止在跑任务；抢占确认归后续阶段）",
+            // **[批次 14／D1 显式闭环]** `WaitLocally` 必须命中显式分支：不得落进 `_ =>` 通用「仲裁拒绝」文案
+            // （会把「已登记等待」表述成「被拒绝」，属结论改写）。本批该值无生产方，不改既有行为。
+            AdmissionResultKind.WaitLocally => "已登记本地持久等待（未获准入前零发送，不进 BGI 执行队列）：" + result.Detail,
             AdmissionResultKind.Reconciling or AdmissionResultKind.NeedReconcile => "执行事实待对账，已保守拒绝：" + result.Detail,
+            AdmissionResultKind.NeedPreemptConfirm => "BGI 执行占用中（需先停止在跑任务；抢占确认归后续阶段）",
             AdmissionResultKind.RetryableRejected => "提交被确定拒绝（窗口内可重试）：" + result.Detail,
             AdmissionResultKind.TerminalRejected => "提交被终局拒绝：" + result.Detail,
             AdmissionResultKind.NotSelected => "并发仲裁未获选：" + result.Detail,
@@ -1237,6 +1246,10 @@ public sealed partial class TaskCenterHost
             AdmissionResultKind.RetryableRejected => "恢复被确定拒绝（窗口内可重试）：" + result.Detail,
             AdmissionResultKind.Reconciling or AdmissionResultKind.NeedReconcile => "执行事实待对账，恢复已保守停驻：" + result.Detail,
             AdmissionResultKind.TerminalRejected => "恢复被终局拒绝：" + result.Detail,
+            AdmissionResultKind.WaitLocally => "恢复未发送，已登记本地持久等待（未获准入前零发送，不进 BGI 执行队列）：" + result.Detail,
+            // **[批次 14／D1 显式闭环]** 等待＝**确定未发送**（已登记本地持久等待），与「恢复准入拒绝」分开表述；
+            // **不得**删除下面的 `_ =>`：`Error`/`NotSelected`/`NeedPreemptConfirm`/`Cancelled`/`ExecutionFailed`
+            // 等既有可达值仍需保守文案（删掉会让这些值抛 `SwitchExpressionException`＝当前可达回归）。
             _ => $"恢复准入拒绝（{result.Kind}/{result.ReasonCode}）：{result.Detail}",
         });
     }
@@ -1603,6 +1616,15 @@ public sealed partial class TaskCenterHost
                 => BoundarySubmitResult.UnknownWith(
                     "仲裁待对账（事实不可考，不猜成功也不猜失败）：" + result.Kind + "/" + result.ReasonCode
                     + "：" + result.Detail),
+            // **[批次 14／D1]** `WaitLocally`**单独分流**：门面给出**确定结论**——本笔**未进入发送面、零发送**、
+            // 已登记本地持久等待。因此**既不** `Uncertain`（不是「事实不可考」），**也不**开重试窗口
+            // （`Retryable` 会给出「可重发」语义 ⇒ 等于绕过「重新走一次完整准入」的要求），`JobId` 必须为空。
+            // 语义与「确定未受理」分开表述：本批该值**无生产方**；若把它落进 `_ =>` 未知兜底，等于把
+            // 「已确定的零发送等待」改写成「事实不可考」（事实改写），故必须先命中本分支。
+            AdmissionResultKind.WaitLocally
+                => BoundarySubmitResult.Rejected(
+                    "仲裁本地持久等待（已确定未发送、零发送；等待项就绪后须重新走完整准入；"
+                    + result.Kind + "/" + result.ReasonCode + "）：" + result.Detail),
             _ => BoundarySubmitResult.UnknownWith(
                 "仲裁面事实不可考（" + result.Kind + "/" + result.ReasonCode + "）：" + result.Detail
                 + "（不臆断未发送，待对账）"),
@@ -1869,6 +1891,30 @@ public sealed partial class TaskCenterHost
             return "late_terminal_ledger_io:" + ex.GetType().Name;
         }
     }
+    /// <summary>
+    /// **[批次 14／D1 可测接缝] 结果维 → 适配层三态折叠（原为 AdmitExternalStartAsync 内的内联 switch）。**
+    /// 纯函数抽取，**不改变**任何既有分支顺序与结论；仅新增 WaitLocally 显式分支。
+    /// 纪律：Accepted 之外的未知值一律 NeedReconcile（不得重发、保守待对账）。
+    /// </summary>
+    internal static ExternalStartAdmissionStatus MapAdmissionResultToExternalStartStatus(AdmissionResult result)
+    {
+        return result.Kind switch
+        {
+            AdmissionResultKind.Accepted => ExternalStartAdmissionStatus.Accepted,
+            // R5.3 §24.2-2／§24.9：取消与确定执行失败各自成列（**不得**压成 Unknown/Rejected──前者会丢取消信号、后者会诱发重发）。
+            AdmissionResultKind.Cancelled => ExternalStartAdmissionStatus.Cancelled,
+            AdmissionResultKind.ExecutionFailed => ExternalStartAdmissionStatus.ExecutionFailed,
+            AdmissionResultKind.F11Blocked or AdmissionResultKind.NeedPreemptConfirm =>
+                ExternalStartAdmissionStatus.Blocked,
+            AdmissionResultKind.TerminalRejected or AdmissionResultKind.RetryableRejected
+                or AdmissionResultKind.NotSelected => ExternalStartAdmissionStatus.Rejected,
+            // **[批次 14／D1]** `WaitLocally` 显式成列：这是**确定结论**（零发送、已登记本地持久等待），
+            // 若落入 `_ =>` 会被适配层当成「事实不可考 ⇒ 需对账」（事实改写：把确定事实说成不可考）。
+            // 与 `Rejected` 分开：适配层据此按「已在本地排队、稍后重评」回执，而不是走失败回执语义。
+            AdmissionResultKind.WaitLocally => ExternalStartAdmissionStatus.WaitLocally,
+            _ => ExternalStartAdmissionStatus.NeedReconcile,
+        };
+    }
 
     /// <summary>
     /// **适配层可见的外部启动准入（B3）**：把门面内部 `AdmissionResult` 折叠为
@@ -1994,18 +2040,7 @@ public sealed partial class TaskCenterHost
                 }
             }
         }
-        var status = result.Kind switch
-        {
-            AdmissionResultKind.Accepted => ExternalStartAdmissionStatus.Accepted,
-            // R5.3 §24.2-2／§24.9：取消与确定执行失败各自成列（**不得**压成 Unknown/Rejected──前者会丢取消信号、后者会诱发重发）。
-            AdmissionResultKind.Cancelled => ExternalStartAdmissionStatus.Cancelled,
-            AdmissionResultKind.ExecutionFailed => ExternalStartAdmissionStatus.ExecutionFailed,
-            AdmissionResultKind.F11Blocked or AdmissionResultKind.NeedPreemptConfirm =>
-                ExternalStartAdmissionStatus.Blocked,
-            AdmissionResultKind.TerminalRejected or AdmissionResultKind.RetryableRejected
-                or AdmissionResultKind.NotSelected => ExternalStartAdmissionStatus.Rejected,
-            _ => ExternalStartAdmissionStatus.NeedReconcile,
-        };
+        var status = MapAdmissionResultToExternalStartStatus(result);
         // 回显本次操作身份（§2.1）：适配器据此在**同次用户操作**的内部重试上发起 ContinueUse。
         // **不得用 `??`**：`AdmissionResult.RequestIdentity` 默认是空串（门面各前置/异常分支也显式返回空串），
         // `??` 会让「已有身份续用时被前置阻断」回显空串 ⇒ 调用方可能把下一次续用误变成新建操作（会诊重要项）。

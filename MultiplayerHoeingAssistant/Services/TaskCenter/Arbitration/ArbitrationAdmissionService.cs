@@ -111,6 +111,22 @@ public enum AdmissionResultKind
     Cancelled,
     /// <summary>**确定执行失败**（R5.3 §24.9／§24.13-1：完成层 `ExecutionFailed` 驱动；与拒绝/未知分离、**不得触发重发**）。</summary>
     ExecutionFailed,
+    /// <summary>
+    /// **本地持久等待（R5 批次 14／D1：owner 2026-09-24 裁决 D1＝推荐项 A；R5.3 §24.109）。**
+    /// 语义**唯一且单列**：门面给出**确定结论**——**本笔未进入发送面、零发送**，只登记本地持久等待
+    /// （队列项见 LocalWaitItem），待前置条件满足后**重新走一次完整准入**。
+    /// **不授予任何发送许可**（与 LocalWaitQueuePolicy 的 SendPermitted 恒 false 同向），
+    /// **不携带** SubmissionIdentity／SendSeq／JobId。
+    /// 与相邻值严格区分：**不是** RetryableRejected（那含重试窗口语义，会诱发重发）；
+    /// **不是** NeedReconcile／Reconciling／Error（那是「事实不可考」，要求对账且禁重发）；
+    /// **不是** Accepted／ExecutionFailed／Cancelled。
+    /// **调用方纪律**：按值分流的调用方必须**显式**处理本值，**不得**落进 _ =&gt; 的「未知即放行/即失败」兜底
+    /// （那会把它改写成成功或已证实失败）：TaskCenterHost.Admission.cs 的流程启动文案与终态化清理判定、
+    /// 恢复准入文案、MapAdmissionResultToBoundary、MapAdmissionResultToExternalStartStatus，
+    /// 以及 CommandExecutor.MapAdmissionOutcome。
+    /// **本批未接线**：无生产方产生该值，**不解除任何生产门**（E3/E4/E5／节点改道／S4b-S8b／热键继续关闭）。
+    /// </summary>
+    WaitLocally,
 }
 
 /// <summary>许可结果（结构化载荷：原因码/胜者引用/压制来源/完整判定——日志与夹具按载荷断言）。</summary>
@@ -1523,6 +1539,26 @@ public sealed class ArbitrationAdmissionService
                 return op?.MergedInto is not null
                     ? ClassifyCurrentState(m.Request.RequestIdentity)
                     : AdmissionResult.Of(AdmissionResultKind.Error, "mirror_not_persisted", "合并镜像未落盘（不报告未持久化事实——续用可查当前状态）。", m.Request.RequestIdentity);
+            });
+            await Task.CompletedTask.ConfigureAwait(false);
+        }
+        else if (winnerResult.Kind == AdmissionResultKind.WaitLocally)
+        {
+            // **[批次 14／D1 显式闭环]** 等待＝**确定未发送**：镜像**不得被终态化**（保持挂接、返回当前分类）。
+            // **如实边界**（不得宣称更强的保障）：本分支只保证①镜像**不被终态化**、②返回镜像**当前分类**；
+            // 它**不**建立/核验 `MergedInto` 关联，也**不**保证镜像结果为 `WaitLocally`（未与胜者挂接、仍处 `InRound`
+            // 的镜像会被按在途分类为 `NeedReconcile`）。这与本文件对 `RetryableRejected`／待对账胜者的既有写法同族
+            // （同样只保持非终态、返回当前分类）。「等待镜像与胜者共享等待结论」属**接线前残项**，本批不实现。
+            // 若落进末尾 `else`（`TerminateRoundAsync` → `NotSelected`/`merged_duplicate`）会把「已登记等待」
+            // 终态化成「未获选」（既违反 D1 的「等待不得终态化」，也与 `RetryableRejected`/待对账胜者的
+            // 既有纪律不一致）。本批该值无生产方，分支为显式闭环、不改既有行为。
+            var waitRead = _store.Read();
+            CompleteAll(merged, m =>
+            {
+                var op = waitRead.File is null ? null : FindOp(waitRead.File, m.Request.RequestIdentity);
+                return op is not null
+                    ? ClassifyCurrentState(m.Request.RequestIdentity)
+                    : AdmissionResult.Of(AdmissionResultKind.Error, "mirror_not_persisted", "等待合并镜像未落盘（不报告未持久化事实——续用可查当前状态）。", m.Request.RequestIdentity);
             });
             await Task.CompletedTask.ConfigureAwait(false);
         }

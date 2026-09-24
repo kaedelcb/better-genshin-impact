@@ -532,6 +532,24 @@ public class CommandExecutor
                 ExecutionErrorCode = outcome.ExecutionErrorCode,
                 EvidenceSource = outcome.EvidenceSource,
             },
+            // **[批次 14／D1]** `WaitLocally` 显式成列：门面/宿主给出**确定结论**——本笔**未进入发送面、零发送**，
+            // 已登记本地持久等待。**不得**落进 `_ =>` 的 `result_unknown`（那会把「已确定未发送的排队」
+            // 报成「启动结果不可考」＝事实改写）。线路词表不改（`Status` 仍只在 success/failed 内），
+            // 但错误码用**独立词**，避免调用方按「未知」触发对账或按「拒绝」触发重发；
+            // `ExecutionDisposition` 保持 `None`（未进入执行面），`JobId` 不得携带（等待不含发送身份）。
+            ExternalStartAdmissionStatus.WaitLocally => new CommandResult
+            {
+                Status = "failed",
+                ErrorCode = string.IsNullOrEmpty(outcome.Code) ? "local_wait" : outcome.Code,
+                Message = $"{target}：已登记本地持久等待（未获准入前零发送，不进 BGI 执行队列）：{outcome.Message}",
+                IsTerminal = false,
+                JobId = null,
+                ExecutionDisposition = ExecutionDisposition.None,
+                ResponsibilityState = outcome.ResponsibilityState,
+                RawTerminal = outcome.RawTerminal,
+                ExecutionErrorCode = outcome.ExecutionErrorCode,
+                EvidenceSource = outcome.EvidenceSource,
+            },
             _ => new CommandResult
             {
                 Status = "failed",

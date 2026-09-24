@@ -184,7 +184,19 @@ public sealed class WorkflowRunner
     private readonly IWorkflowPrerequisiteAdapter _prerequisites;
     private readonly IWorkflowTerminalExecutor _terminal;
     private readonly WorkflowRunnerOptions _opt;
+    /// <summary>
+    /// **[批次 14／D1] 本地持久等待登记口（可选注入）。** 与 WorkflowRunner 的提交面**无耦合**：
+    /// 只把「确定零发送的等待」落盘成可审计的等待项；`null`（未注入）⇒ 等待短路不生效（既有行为不变）。
+    /// </summary>
+    private readonly LocalWaitQueueStore? _localWaitQueue;
+
     private readonly ConcurrentDictionary<string, RunControl> _controls = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 等待结果的受控原因码（`AdmissionResultKind.WaitLocally` 的**唯一**呈现词）。适配层与持久化层共用，
+    /// 避免多处手写字面量漂移出「未知/失败」词表。
+    /// </summary>
+    public const string LocalWaitReasonCode = "local_wait";
 
     /// <summary>跳过请求（B4：绑定请求时的出现身份；身份漂移则丢弃，不误伤后续节点）。</summary>
     private sealed record SkipRequest(string NodeId, int Occurrence, int LoopIteration)
@@ -208,7 +220,7 @@ public sealed class WorkflowRunner
 
     public WorkflowRunner(WorkflowStore workflows, RunStore runs, IWorkflowExecutionBoundary boundary,
         IWorkflowPrerequisiteAdapter prerequisites, IWorkflowTerminalExecutor terminal,
-        WorkflowRunnerOptions? options = null)
+        WorkflowRunnerOptions? options = null, LocalWaitQueueStore? localWaitQueue = null)
     {
         _workflows = workflows;
         _runs = runs;
@@ -216,6 +228,7 @@ public sealed class WorkflowRunner
         _prerequisites = prerequisites;
         _terminal = terminal;
         _opt = options ?? new WorkflowRunnerOptions();
+        _localWaitQueue = localWaitQueue;
     }
 
     /// <summary>运行控制登记实况（R4.8 一轮 I5：宿主动作结构化反馈用——Paused/终态运行无登记，动作不得无声吞）。</summary>
@@ -477,6 +490,15 @@ public sealed class WorkflowRunner
 
                 // 提交（意图先行 → 提交 → 终态；观察终态+结果+游标单次落盘，B2/B3）
                 var outcome = await SubmitAndAwaitAsync(run, plan, node, occurrence, control).ConfigureAwait(false);
+                if (outcome.Result is "waitLocally")
+                {
+                    // **[批次 14／D1] 本地持久等待＝确定零发送的停驻**：与 unknown/cancelUnconfirmed 同族——
+                    // **游标不推进**（`ApplyRelocation(run, occurrence)` 留在当前出现）、**不终态化**运行、
+                    // **不触发收尾**、**不标 Unknown**（等待不是「结果不确定」，标 Unknown 会错误要求按幂等键+job 对账，
+                    // 而本笔从未进入发送面 ⇒ 无 job 可查 ⇒ 永久无法收敛）。因此运行状态保持可继续驱动。
+                    CommitOutcome(run, plan, occurrence, outcome.Result, outcome.Reason, rawTerminal: null);
+                    return run;
+                }
                 if (outcome.Result is "cancelUnconfirmed" or "unknown")
                 {
                     // B4/四轮阻断 5：远端终态未确认——先置状态再 CommitOutcome（单次原子落盘，游标不推进）；
@@ -607,6 +629,17 @@ public sealed class WorkflowRunner
             LoopIteration = occurrence.LoopIteration,
             Attempt = attempt,
         };
+        // **[批次 14／D1] 本地持久等待短路（必须在 RecordIntent 之前）。**
+        // 门面给出**确定结论**「本笔未进入发送面、零发送」（AdmissionResultKind.WaitLocally）时：
+        // ①**登记本地持久等待项**（持久化，含 ItemId 幂等键与登记载荷）；
+        // ②**不**走提交：`RecordIntent` 会把提交落成 `IntentRecorded/Submitted`，从而在 `WorkflowSubmission.InFlight`
+        //    留下「疑似在飞提交」，把「确定零发送的等待」永久记成「可能已发送」——属事实改写，禁止；
+        // ③返回 `("waitLocally", …)`：调用点**游标不推进、不终态化**（与 `unknown/cancelUnconfirmed` 同族的停驻语义），
+        //    等待项就绪后按「重新走一次完整准入」重评。
+        // **本批未接线**：没有生产方返回该结论，此处为显式闭环（不可落进 `_ =>` 未知兜底）。
+        if (TryRegisterLocalWait(run, occurrence) is { } waitReason)
+            return ("waitLocally", waitReason, null);
+
         _runs.RecordIntent(run, submission); // 提交意图先行（B2/B3：崩溃后按意图对账，不重跑）
 
         // B6/E4' 定案：任务中心提交固定 suppress=true（与流程是否声明 terminal 无关；原生手动入口缺省 false 不变）
@@ -1069,6 +1102,42 @@ public sealed class WorkflowRunner
     /// 四轮阻断 5：unknown/cancelUnconfirmed 游标不推进（调用方先置 Unknown 状态再进本方法，保持单次原子落盘）；
     /// I3/四轮重要 10：持久化原因统一脱敏。
     /// </summary>
+    /// <summary>
+    /// **[批次 14／D1] 本地持久等待登记（确定零发送的停驻路径）。**
+    /// 只有**确实存在等待结论**时才返回非 null（当前仅「门面已给出 WaitLocally 结论」一种来源），
+    /// 其余一律返回 null ⇒ 走既有提交路径，**行为不变**。
+    /// 登记动作**不含任何发送许可**：只把等待项落盘（<see cref="LocalWaitQueuePolicy.DeriveItemId"/> 幂等键，
+    /// 同身份重复登记复用同一条）；未注入队列（`_localWaitQueue is null`）时**不登记**且不短路。
+    /// 纪律：这里是「确定未发送」的本地登记，**不得**借此推进游标或终态化运行。
+    /// </summary>
+    internal string? TryRegisterLocalWait(WorkflowRunRecord run, WorkflowNodeOccurrence occurrence)
+    {
+        // 本批未接线：没有生产方返回 WaitLocally 结论，故等待来源判定固定为「否」。
+        // R5 后续批次（D3/D2/D4）接入门面结论后，在此读取结论并登记；判定函数与登记口已就位。
+        if (!ShouldRegisterLocalWait(occurrence)) return null;
+        if (_localWaitQueue is null) return null;
+
+        var stableIdentity = run.RunId + "|" + occurrence.NodeId + "|" + occurrence.Occurrence + "|" + occurrence.LoopIteration;
+        _localWaitQueue.Upsert(new LocalWaitItem
+        {
+            ItemId = LocalWaitQueuePolicy.DeriveItemId(stableIdentity),
+            StableIdentity = stableIdentity,
+            Namespace = run.WorkflowId,
+            WorkflowId = run.WorkflowId,
+            EnqueuedAtUtc = DateTimeOffset.UtcNow,
+            State = LocalWaitItemState.Waiting,
+            // HasTrustedIdentity 保持默认 false（保守）：等待登记不构成「可信入口」证据。
+            Reason = "低优先级本地持久等待（未获准入前零发送，不进入 BGI 执行队列）",
+        });
+        return "本地持久等待已登记（" + LocalWaitReasonCode + "）：未获准入前零发送，等待项就绪后重新走完整准入。";
+    }
+
+    /// <summary>
+    /// **[批次 14／D1] 等待结论判定接缝。** 门面结论尚未接线（本批明确不接生产入口）⇒ 恒 false。
+    /// 该函数的存在使「等待短路」是**显式判定**而非隐式兜底：后续批次只改这里，不靠在提交路径上加 `_ =&gt;`。
+    /// </summary>
+    private static bool ShouldRegisterLocalWait(WorkflowNodeOccurrence occurrence) => false;
+
     private void CommitOutcome(WorkflowRunRecord run, WorkflowPlan plan, WorkflowNodeOccurrence occurrence,
         string result, string? reason, string? rawTerminal = null)
     {
@@ -1098,8 +1167,11 @@ public sealed class WorkflowRunner
             // 使「节点操作独立终局」可证明该结果属于**这一笔发送**（提交键在同 attempt 多 sendSeq 间可复用）。
             AcceptedSendIdentity = rawTerminal is not null ? producing?.AcceptedSendIdentity : null,
         });
-        if (result is "unknown" or "cancelUnconfirmed")
-            ApplyRelocation(run, occurrence); // 结果不确定：游标留在当前出现（恢复回到本节点对账），绝不推进
+        // **[批次 14／D1]** `waitLocally` 与 `unknown`/`cancelUnconfirmed` 同族：**游标不推进**
+        // （等待项就绪后须从同一节点重走完整准入）。若落进 `else` 分支推进游标，等于把「已登记等待」
+        // 当成「已完成」——既跳过该节点（作业静默丢步），也让「重新走完整准入」的要求不成立。
+        if (result is "unknown" or "cancelUnconfirmed" or "waitLocally")
+            ApplyRelocation(run, occurrence); // 结果不确定／确定等待：游标留在当前出现，绝不推进
         else
             ApplyRelocation(run, plan.Next(occurrence));
         _runs.Update(run);

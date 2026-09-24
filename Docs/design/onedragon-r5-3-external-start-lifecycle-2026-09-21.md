@@ -3021,6 +3021,73 @@ R5 要解决的是联机助手、BGI 与既有协调流程在**日常运行、�
 
 ---
 
+### 24.109 落地登记：新增 `AdmissionResultKind.WaitLocally`（D1）（2026-09-24；**生产零消费点，未接线**）
+
+**本批做了什么**：只实现 owner 2026-09-24 裁决的 **D1 = 推荐项 A（新增独立等待结果值）**（裁决登记
+`012f5fa02`，决策单见 [R5 owner 决策单](onedragon-r5-owner-decisions-2026-09-24.md)，裁决范围见 §24.107）。
+在**冻结枚举** `AdmissionResultKind` 尾部**追加唯一等待值** `WaitLocally`，并让 4 处**按值分流**的调用方
+**显式闭环**该值。本批**不接任何生产入口**、**不产生发送**、**不解除生产门**、**不授予发送许可**；
+生产门、真实 User 门与 R5.8 签署全部保持**关闭／未签署**。
+
+**值语义（唯一，不得与其他结果重叠）**：`WaitLocally` ＝**已确定未发送**（尚未取得准入、**零发送**）、
+**只登记本地持久等待**、**不含发送许可**；重新完整走一遍准入才可能发送。它**不是**「可重试拒绝」、
+**不是**「待抢占确认」、**不是**「待对账」、**更不是**「受理/成功」。值本身**不携带**发送身份
+（无 `SubmissionIdentity`／`SendSeq`）与 `JobId`。
+
+**4 处调用方分流（逐条，带代码位置）**
+
+| 分流点 | 位置 | 本批处置 |
+|---|---|---|
+| ① 流程启动：终态化清理判定 | `TaskCenterHost.Admission.cs` 第 1037–1041 行 | 在 `CleanupRejectedFlowRun` **之前**提前 `return`：等待**不得**被当成「未受理 → 终态化 `Cancelled`」（否则把「等待」改写成「已取消」这一事实） |
+| ① 流程启动：文案 switch | 同上 第 1050–1059 行 | 新增显式 `WaitLocally` 分支；**同时复原**既有 `F11Blocked`、`NeedPreemptConfirm` 专用分支（首轮实现曾误删二者，第二轮会诊「重要」项） |
+| ② 恢复准入文案 switch | 同上 第 1232–1243 行 | 新增显式 `WaitLocally` 分支；**同时复原** `_ =>` 保守兜底（`Error`／`NotSelected`／`NeedPreemptConfirm`／`Cancelled`／`ExecutionFailed` 等既有可达值删掉兜底会抛 `SwitchExpressionException`，第二轮会诊「重要」项） |
+| ③ `MapAdmissionResultToBoundary` | 同上 第 1600–1628 行 | 显式分支 → `Rejected(Uncertain=false, Retryable=false, JobId=null)`（**确定拒绝**形状），不落 `_ =>` 未知兜底 |
+| ④ `MapAdmissionResultToExternalStartStatus` | 同上 第 1907–1914 行；枚举新值见 `ExternalStartAdmission.cs` 第 269–276 行 | 抽出 `internal static` 可测接缝＋显式分支 → `ExternalStartAdmissionStatus.WaitLocally`；保留 `_ => NeedReconcile` |
+| 执行体适配（第 5 处，`ErrorCode` 面） | `Services/CommandExecutor.cs` `MapAdmissionOutcome` | 显式等待分支：`ErrorCode` 为空则 `"local_wait"`、`IsTerminal=false`、`JobId=null`、`ExecutionDisposition=None`；第 554 行 `_ => result_unknown` 兜底**保持不动** |
+| 仲裁镜像（终态化面） | `ArbitrationAdmissionService.cs` 第 1545–1560 行 | `MirrorMergedAsync` 新增 `else if (winnerResult.Kind == AdmissionResultKind.WaitLocally)`：**只**保证①不被终态化成 `NotSelected`②返回当前分类；**不**建立／核验 `MergedInto` 挂接 |
+| 运行器短路（登记面） | `WorkflowRunner.cs`（`SubmitAndAwaitAsync` 短路、`DriveAsync` `waitLocally` 短路、`CommitOutcome` 游标条件含 `waitLocally`） | 等待**不**推进节点游标、**不**终态化、**不**标 `Unknown`；`ShouldRegisterLocalWait` 接缝**恒 false**（＝尚无生产方产生该值） |
+
+**调用方审计**
+
+| 面 | 事实 | 结论 |
+|---|---|---|
+| 枚举生产方 | 全仓库生产源码**无任何**构造 `AdmissionResultKind.WaitLocally` 的点；`ShouldRegisterLocalWait` 恒 `false` | ❌ **生产零消费点、未接线** |
+| 本批是否改变运行行为 | 4 处闭环都是**新增分支**＋**复原被误删分支**；在无生产方产生该值时**不可达** | **不改变任何正在运行的行为** |
+| 既有分支残留回归 | 已用**全文件分支差集**证明：HEAD 33 命中行 vs 当前 36 命中行，**HEAD 有而当前无 = 0 行**，新增恰为 3 条 `WaitLocally` 分支 | ✅ 无既有分支丢失 |
+| 等待组件 | `LocalWaitQueuePolicy`／`LocalWaitQueueStore`／`LocalWaitModels` 仍无生产调用方（见 §24.106） | ❌ 仍**未接线** |
+
+**夹具（`AdmissionWaitLocallyContractTests.cs`，11 条）**
+
+反例先行：红灯阶段**编译通过、8 红 1 绿**（原始 9 条夹具）；实现后**11/11 全绿**。
+其中 2 条为**源文本断言**夹具（`PanelStartCopySwitch_KeepsExistingF11AndPreemptBranches_AlongsideWaitBranch`、
+`ResumeAdmissionCopySwitch_KeepsConservativeFallback_AlongsideWaitBranch`），用于机械检出「既有分支被删」
+这类**无法从返回值观察**的事故面。
+**判别力已实测**：删除 `NeedPreemptConfirm` 专用分支 → 夹具失败（`Not found: "AdmissionResultKind.NeedPreemptConfirm =>"`）；
+删除恢复准入 `_ =>` 兜底行 → 夹具失败。二者均已复原并复绿。
+**全局回归**：助手全量 1314 通过／2 跳过／0 失败／1316，与批次 13 基线（1303／2／0／1305）差集＝**恰好新增夹具 11 条**。
+三处定向类（含新增 2 条）187／2／0／189。
+
+**会诊（gpt-6-sol／medium，共三轮）**
+
+- **第一轮**：重要 5 → 全部核验属实；**已修 4**（①游标推进；③恢复准入兜底；④仲裁镜像遗漏；⑤流程启动既有分支），
+  **登记残项 1**（②边界等待专型＝扩冻结合同，按纪律交 owner）。
+- **第二轮**：重要 2（①面板 `NeedPreemptConfirm` 被施工方自己误删；②镜像分支注释**声称**了它并未实现的结果）
+  → **均已处置**；其中②的注释已改为**如实边界**。建议 3 登记为接线前残项。
+- **第三轮（收敛轮）**：**必改 0**；接线行为全部标注 `prefix-residual`；测试穷尽性不足标 `advisory`。
+
+**残余（不因本批改变门禁）**
+
+| 项 | 状态 |
+|---|---|
+| 边界等待专型 | ❌ **接线前必须登记并关闭**：`MapAdmissionResultToBoundary` 目前用普通 `Rejected` 承载等待，Runner 接线时若不区分，会按拒绝推进游标（首轮会诊 #2，按纪律交 owner 三选一，不自动扩批次） |
+| 等待后重载跳过待执行节点 | ❌ 接线前残项：`RecomputeSuccessor` 把最后一条 `NodeOutcome` 当已完成；等待路径也经 `CommitOutcome` 写一条 `waitLocally`，定义修订后重定位可能取其 `Next`（当前 `ShouldRegisterLocalWait` 恒 false，无生产影响） |
+| 镜像不保证共享等待结论 | ❌ 接线前残项：`MirrorMergedAsync` 的等待分支**不**建立／核验 `MergedInto` 挂接；「共享等待结论」未交付 |
+| `MapAdmissionOutcome` 的 `Status="failed"` | ⚠ 接线前必须验证消费方识别 `local_wait`（本批 `IsTerminal=false` 已给出信号，但消费方识别**未经运行验证**） |
+| 夹具穷尽性 | ⚠ `advisory`：遍历枚举的夹具只断言「映射不抛异常」，无法证明每个值都走显式分支（switch 带 `_` 时编译器也不证明逐值穷尽） |
+| 其它 D 项（D2–D5） | ❌ D5 见 §24.108；D3 → D2 → D4 按依赖顺序排在后续批次（D1 是前置） |
+| 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
+
+---
 ### 24.103 落地登记：已登记派生作业的退出观测（2026-09-24；只暴露观测事实，不作肯定结论）
 
 **审计（执行体／叶子／派生的退出点，带代码位置）**

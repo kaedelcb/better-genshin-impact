@@ -266,6 +266,14 @@ public enum ExternalStartAdmissionStatus
     Cancelled,
     /// <summary>**确定执行失败**（R5.3 §24.9／§24.13-1：完成层 `ExecutionFailed` 驱动；与 `Rejected`/`Unknown` 分离、**不得触发重发**）。</summary>
     ExecutionFailed,
+    /// <summary>
+    /// **本地持久等待（R5 批次 14／D1：对应 `AdmissionResultKind.WaitLocally`；R5.3 §24.109）。**
+    /// 门面给出**确定结论**：本笔**未进入发送面、零发送**，已登记本地持久等待。适配层据此按「已在本地排队、
+    /// 稍后重评」处置（**不是** `Rejected` 的失败回执、**不是** `NeedReconcile` 的「事实不可考且需对账」、
+    /// **不是** `Blocked` 的门禁/占用阻断），且**不得**当作可重发或已受理。
+    /// 本批**未接线**：无生产方产生该状态。
+    /// </summary>
+    WaitLocally,
 }
 
 /// <summary>
