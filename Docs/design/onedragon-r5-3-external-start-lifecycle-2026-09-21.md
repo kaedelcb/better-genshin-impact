@@ -2889,6 +2889,21 @@ R5 要解决的是联机助手、BGI 与既有协调流程在**日常运行、�
 | 既有 14 项失败＋偶发失败 | ⚠ 基线身份不变；`BgiTaskCoordinatorTests.ClearQueue_CancelsAllQueuedItems_WithEvents` 曾在一次全量运行偶发失败（隔离 5/5 通过），**疑似时间敏感、是否既有尚未证实**，机制未定位 |
 | 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
 
+### 24.107 owner 决策单：本地等待合同与批次完成未知语义（2026-09-24；待裁决）
+
+本批只整理裁决材料，不选择语义、不改生产代码、不接入口、不产生发送。完整选项、影响、推荐、逐项证据索引（代码位置／夹具指针／能证明／不能证明）与忽略裁决时的默认行为见
+[R5 owner 决策单](onedragon-r5-owner-decisions-2026-09-24.md)。
+
+| 决策 | 现有事实（带位置） | 提供的选项 |
+|---|---|---|
+| D1 等待结果 | 冻结 `AdmissionResultKind` 无等待值（`ArbitrationAdmissionService.cs` 第 87–112 行；调用方按值分流见 `TaskCenterHost.Admission.cs` 第 1042–1051、1232–1240、1589–1609、1999–2007 行）；等待组件未接线 | 新增 `WaitLocally`／复用 `RetryableRejected`／保持未接线 |
+| D2 前置就绪 | `LocalWaitItem` 无前置字段、文件版本 1；`LocalWaitQueuePolicy.cs` 第 104–113 行把 `PrerequisiteReady` 投影为恒 true；`ScheduledAt` 只作排序键（`RunningOccupancyArbiter.cs` 第 124–138 行），**未来时刻不阻止选中** | 稳定引用＋只读 evaluator／持久 boolean／仅占用结束重评 |
+| D3 重评触发 | 当前无触发器：`rg -n "WaitLocally"` 只命中判定与枚举本身，**没有**调度/定时/订阅点；现有 16 项等待夹具全为纯函数与落盘单测 | 事件＋启动＋新候选＋安全网／周期轮询／仅手动 |
+| D4 抢占确认关系 | `PreemptConfirmPending`（`ArbitrationModels.cs` 第 757 行）是操作记录上的独立交接状态；当前无等待项与它的转换实现（等待侧无调用方） | 严格互斥／显式状态迁移／并存择优 |
+| D5 `Complete` 未知语义 | `BatchReconcilePlan.cs` 第 232／245 行先写 `ConfirmTerminal(lost_job／result_unknown)`，第 282–289 行"全部确认"分支在**同一拍**追加无载荷 `Complete()`（第 113 行）；两条风险暴露夹具（`CoordinatedBatchAdmissionRelationTests.cs` 第 137–166 行）固定该行为并声明不背书 | 类型拆分／载荷字段／失败或 Abort 收尾／**保留无载荷 Complete ＋调用方禁止 `RunSpecified`** |
+
+**未决默认与一致性**：冻结语义与生产门保持不变；未知结果不得表述为成功**也不得**改写为已证实失败；等待队列继续保持未接线。D2 的"占用结束后重新比较"只是入队原因文本表达的意图，自动重评本身尚未实现，触发方式由 D3 决定——D2 与 D3 的当前状态都是**"未实现"，不等同于已选择 C**（C 均只是待选方案）；两者不冲突，也不能被读成"已具备自动重评"。
+
 ### 24.103 落地登记：已登记派生作业的退出观测（2026-09-24；只暴露观测事实，不作肯定结论）
 
 **审计（执行体／叶子／派生的退出点，带代码位置）**

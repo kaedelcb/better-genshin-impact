@@ -33,6 +33,7 @@ public sealed class ClaimSurfaceGuardTests
         Path.Combine("Docs", "design", "onedragon-r5-2-entry-arbitration-wiring-2026-09-20.md"),
         Path.Combine("Docs", "design", "onedragon-r5-3-external-start-lifecycle-2026-09-21.md"),
         Path.Combine("Docs", "design", "onedragon-r5-closure-audit-2026-09-22.md"),
+        Path.Combine("Docs", "design", "onedragon-r5-owner-decisions-2026-09-24.md"),
         Path.Combine("Docs", "design", "onedragon-r5-handoff-2026-09-21.md"),
     };
 
