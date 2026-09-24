@@ -2889,6 +2889,53 @@ R5 要解决的是联机助手、BGI 与既有协调流程在**日常运行、�
 | 既有 14 项失败＋偶发失败 | ⚠ 基线身份不变；`BgiTaskCoordinatorTests.ClearQueue_CancelsAllQueuedItems_WithEvents` 曾在一次全量运行偶发失败（隔离 5/5 通过），**疑似时间敏感、是否既有尚未证实**，机制未定位 |
 | 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
 
+### 24.103 落地登记：已登记派生作业的退出观测（2026-09-24；只暴露观测事实，不作肯定结论）
+
+**审计（执行体／叶子／派生的退出点，带代码位置）**
+
+- 执行根：`ExecutionScope`（`Start`/`Dispose`）持有准入并覆盖叶子间隙；`TaskRunner.RunCurrentAsync` 在服务它的那把 `TaskSemaphore` 上运行执行体，
+  `finally` 里推进注册表终态、释放槽位并发布 `task.slotReleased`/`task.stopped`，随后 `using var rootLifetime` 释放自建根。
+- 叶子：`ScriptService.RunCurrent/RunMulti`、`TaskRunner.RunSoloTaskAsync` 等经 `TaskRunner` 运行；`TaskRunner` 为一条龙根下的隐含子作业
+  自动补 `ParentJobId`（本批同时让它**继承 `WorkflowRunId`**）。
+- 派生／逃逸：`TaskRunner.FireAndForget` 起独立任务；未登记作业（`job == null` 且非一条龙根）**不进入 `JobRegistry`**，注册表**看不见**它们。
+- 可查事实：`JobRegistry` 有 `ParentJobId` 与 `Snapshot()`（终态作业只保留有限条数，父作业被淘汰会使父链断裂）；
+  **能证明**"按 `ParentJobId` 链可达的已登记作业是否终局"；**不能证明**未登记叶子、逃逸任务、身份缺失作业已退出。
+
+**实现（观测事实，不给肯定结论）**
+
+| 组成 | 内容 |
+|---|---|
+| 快照 | `JobRegistry.JobTreeSnapshot()`：在注册表锁内复制**不可变** `JobTreeNode(JobId, ParentJobId, IsTerminal, WorkflowRunId, EnqueuedAtUtc)`（消除锁外读可变对象的采样错位；仍只是一次采样） |
+| 收集 | `ExecutionScope.Dispose` 写凭证时按 `ParentJobId` **可达性**收集未终局派生作业（可穿过无 run 身份的连接节点）；根无 `JobId`／无 run 身份／注册表未创建／读取异常／同 run 范围内父链断裂（父缺失且父不是本次根，**不按终局豁免**）⇒ 标记为**不可判定** |
+| 暴露 | `task.status` 新增 `executionExitRegisteredSameRunDescendantsAtExit`（退出采样时未终局数，null＝不可判定）与 `executionExitRegisteredSameRunDescendantsStillOpenNow`（对该名单逐项现查仍未终局数）；**不提供任何"已全部退出"的布尔字段**，也不接入放行 |
+
+**为什么删掉"全部终局"字段（设计决定）**：会诊连续构造出"肯定结论"的反例（无根 `JobId`、父作业被淘汰、身份缺失的连接节点、跨身份父链等）。
+与其不断堆判据去逼近一个**无法从注册表证明**的命题，不如只暴露可核验的观测事实：**非零计数是真实证据**（确有未终局的可达派生作业），
+而 `0` 只是"本次采样未观察到"，**永不**等于"叶子/逃逸任务已退出"。
+
+**证据**
+
+- 定向夹具 `TaskTakeoverIncidentTests` **59/59**：同 run 存活派生（AtExit=1/StillOpen=1）、派生终局后（AtExit 仍 1、StillOpen=0）、
+  深层派生（中间节点终局、孙作业未终局）、穿过无身份祖先的可达同 run 派生、终局祖先被淘汰 ⇒ 不可判定、孤儿派生 ⇒ 不可判定、
+  无根 `JobId` ⇒ 不可判定、**无 run 身份 ⇒ 不可判定**、无同 run 派生 ⇒ 0/0、**无身份遗留作业不污染同 run 结论**。
+- 受控突变 1 次（现查忽略 `IsTerminal`）⇒ 1 红后还原。
+- 完整回归：BGI 全量多次 **1034 通过／14 失败／1048**（失败身份与既有 14 项基线差集为空）。TRX：`r5_leafexit6/7_bgi_full_20260924.trx`；
+  另有一次同源运行多出 `BgiTaskCoordinatorTests.QueryItemStatus_CancelledWhileQueued_ReturnsQueueCancelled`（expected `queueCancelled`／actual `not_found`）——
+  该用例隔离复跑 5/5 通过、历史 TRX 从未失败，与本项目已登记的 `ClearQueue_CancelsAllQueuedItems_WithEvents` 同属"泵派发与在队查询竞态"家族，本批未改协调器。
+- 会诊：**六轮各 1 次成功**（首轮与本批安全敏感面用 `gpt-6-astra`／medium，其余按配置默认 `gpt-6-sol`／medium）。前三轮逐步暴露
+  "无根 ID 给肯定结论""父作业淘汰漏检""身份缺失连接节点漏检"，第四至六轮确认**改为只暴露观测事实后不再存在肯定结论类反例**。
+
+**残余（不因本批改变门禁）**
+
+| 项 | 状态 |
+|---|---|
+| 已登记派生作业的**观测**（退出时未终局数 / 现在仍开放数） | ✅ 限定交付；**未接入任何放行判断** |
+| 叶子/逃逸任务的**退出证明** | ❌ 未交付：未登记作业、run 身份缺失作业、父链被淘汰的深层作业都可能**少计**；`0` 不等于已退出 |
+| 采样原子性 | ⚠ 快照与执行根释放不是同一原子事务；与槽位释放、`task.stopped` 事件也无共同事务边界 |
+| 真实淘汰与并发采样夹具 | ❌ 未补：未做真实触发 64 条终态淘汰的用例，也未做并发登记/终态推进下的采样夹具 |
+| 生产者身份继承 | ⚠ 本批让 `TaskRunner` 隐含一条龙子作业继承 `WorkflowRunId`；其它调用方自建子作业仍可能无身份（⇒ 该链不可判定） |
+| 生产入口门／真实 User 门／R5.8 签署 | ❌ 全部保持关闭／未签署 |
+
 ### 24.102 落地登记：低优先级本地持久等待（基础组件，未接线）（2026-09-24；B.1）
 
 **审计（载体与现状，带代码位置）**

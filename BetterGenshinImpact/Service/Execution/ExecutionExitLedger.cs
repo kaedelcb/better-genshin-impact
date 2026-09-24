@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using BetterGenshinImpact.GameTask;
 
 namespace BetterGenshinImpact.Service.Execution;
@@ -31,7 +32,14 @@ internal sealed record ExecutionExitReceipt(
     long StopVersion,
     DateTime ExitedAtUtc,
     bool SlotObservedFree,
-    long Order);
+    long Order,
+    /// <summary>
+    /// 执行根释放那一刻，**已登记**（JobRegistry 内 ParentJobId 链可达）且**未终局**的派生子作业集合。
+    /// <see cref="DescendantScanAvailable"/> 为 false 时该集合为空但**不构成证据**（注册表未创建/读取失败）。
+    /// 该事实**不覆盖**未登记叶子与逃逸任务（见 §24.103）。
+    /// </summary>
+    bool DescendantScanAvailable,
+    IReadOnlyList<Guid> OutstandingRegisteredDescendantJobIds);
 
 /// <summary>
 /// [R5 A4 第二步] 进程级**单槽**退出凭证台账：只保留顺序号最大的一次执行根退出事实，按执行实例身份查询。

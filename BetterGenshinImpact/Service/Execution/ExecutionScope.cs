@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using BetterGenshinImpact.GameTask;
 
@@ -297,6 +298,8 @@ public sealed class ExecutionScope : IDisposable
                 if (_admitted)
                 {
                     var exitOrder = ++_exitOrderCounter;
+                    var descendantScan = CollectOutstandingRegisteredDescendants(
+                        Descriptor.JobId, Descriptor.WorkflowRunId);
                     receipt = new ExecutionExitReceipt(
                         JobRegistry.CurrentEpoch.ProcessId,
                         JobRegistry.CurrentEpoch.StartTicksUtc,
@@ -315,7 +318,9 @@ public sealed class ExecutionScope : IDisposable
                         StopVersion,
                         DateTime.UtcNow,
                         SlotObservedFree: false,
-                        Order: exitOrder);
+                        Order: exitOrder,
+                        DescendantScanAvailable: descendantScan.Available,
+                        OutstandingRegisteredDescendantJobIds: descendantScan.OutstandingJobIds);
                 }
             }
         }
@@ -345,6 +350,81 @@ public sealed class ExecutionScope : IDisposable
     }
 
     private void AdvanceStateRevisionLocked() => StateRevision = ++_stateRevisionCounter;
+
+    /// <summary>
+    /// [R5 批次 7] 执行根释放时收集**已登记**且**未终局**的派生子作业（按 `ParentJobId` 链可达）。
+    /// 只读；`JobRegistry` 未创建或读取失败 ⇒ `Available=false`（**不构成"没有派生任务"的证据**）。
+    /// 未登记的叶子/逃逸任务不在注册表内，本方法**看不见**它们。
+    /// </summary>
+    private static (bool Available, IReadOnlyList<Guid> OutstandingJobIds) CollectOutstandingRegisteredDescendants(
+        Guid? rootJobId, Guid? rootRunId)
+    {
+        // 无根作业 ID ⇒ 无法按 ParentJobId 定界 ⇒ **不可判定**（不得给出"没有派生任务"的肯定结论）。
+        if (rootJobId is not { } root) return (false, System.Array.Empty<Guid>());
+        // 无 run 身份 ⇒ 无法把"派生作业"与无关历史/其它运行区分开 ⇒ **不可判定**（保守，不给肯定结论）。
+        if (rootRunId is not { } run) return (false, System.Array.Empty<Guid>());
+        if (!JobRegistry.IsCreated) return (false, System.Array.Empty<Guid>());
+
+        try
+        {
+            // 不可变树快照（锁内复制）：避免锁外逐项读可变对象造成采样错位。
+            var snapshot = JobRegistry.Instance.JobTreeSnapshot();
+            var present = new System.Collections.Generic.HashSet<Guid>();
+            foreach (var node in snapshot) present.Add(node.JobId);
+
+            // 证据范围＝**从本根按 ParentJobId 链可达**的已登记作业（可穿过"无 run 身份"的连接节点：
+            // 反例"根 → A(无身份、仍在表) → B(同一 run、未终局)"若按 run 过滤收集会漏掉 B ⇒ 误报 0/0/true）。
+            // 链完整性检查另行按**同一 run** 限定（见下），run 身份缺失本身不使结论降级。
+            // 链完整性（保守，**不按终局豁免**）：范围内若存在"父链缺失且父不是本次根"的作业 ⇒ 某祖先可能已被
+            // 淘汰（注册表只保留有限终态作业），从根遍历可能漏掉更深后代 ⇒ 证据不可用（不可判定）。
+            // 反例形态：根 → A(已淘汰) → B(终局仍在表) → C(未终局)。
+            foreach (var node in snapshot)
+            {
+                if (node.WorkflowRunId != run) continue;
+                if (node.ParentJobId is not { } parent) continue;
+                if (parent == root) continue;
+                if (!present.Contains(parent)) return (false, System.Array.Empty<Guid>());
+            }
+
+            var childrenByParent = new System.Collections.Generic.Dictionary<Guid, System.Collections.Generic.List<Guid>>();
+            var terminalByJob = new System.Collections.Generic.Dictionary<Guid, bool>();
+            foreach (var node in snapshot)
+            {
+                terminalByJob[node.JobId] = node.IsTerminal;
+                if (node.ParentJobId is not { } parent) continue;
+                if (!childrenByParent.TryGetValue(parent, out var list))
+                {
+                    list = new System.Collections.Generic.List<Guid>();
+                    childrenByParent[parent] = list;
+                }
+
+                list.Add(node.JobId);
+            }
+
+            var outstanding = new System.Collections.Generic.List<Guid>();
+            var queue = new System.Collections.Generic.Queue<Guid>();
+            queue.Enqueue(root);
+            var visited = new System.Collections.Generic.HashSet<Guid> { root };
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                if (!childrenByParent.TryGetValue(current, out var children)) continue;
+                foreach (var child in children)
+                {
+                    if (!visited.Add(child)) continue;
+                    if (terminalByJob.TryGetValue(child, out var terminal) && !terminal) outstanding.Add(child);
+                    queue.Enqueue(child);
+                }
+            }
+
+            return (true, outstanding);
+        }
+        catch (Exception)
+        {
+            // 读取失败 ⇒ 证据不可用（保守：不得据此宣称派生任务已退出）
+            return (false, System.Array.Empty<Guid>());
+        }
+    }
 }
 
 /// <summary>进程内执行根的版本化只读身份；无活动根时不产生快照。</summary>

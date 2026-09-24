@@ -374,6 +374,25 @@ public sealed partial class JobRegistry
         }
     }
 
+    /// <summary>
+    /// [R5 批次 7] **不可变作业树快照**（身份 + 父链 + 终局状态）：在同一把注册表锁内复制为值元组，
+    /// 供"派生作业退出证据"等只读派生使用（避免在锁外逐项读可变对象造成的采样错位）。
+    /// 注意：快照本身仍只是**一次采样**，与执行根释放不是同一个原子事务。
+    /// </summary>
+    public IReadOnlyList<JobTreeNode> JobTreeSnapshot()
+    {
+        lock (_gate)
+        {
+            return _jobs.Values
+                .Select(j => new JobTreeNode(j.JobId, j.ParentJobId, j.IsTerminal, j.WorkflowRunId, j.EnqueuedAtUtc))
+                .ToList();
+        }
+    }
+
+    /// <summary>作业树节点（不可变）。</summary>
+    public readonly record struct JobTreeNode(
+        Guid JobId, Guid? ParentJobId, bool IsTerminal, Guid? WorkflowRunId, DateTime EnqueuedAtUtc);
+
     /// <summary>[A3-心跳] 在跑作业心跳事件（job.heartbeat 的事实源）：每拍刷新 LastHeartbeatAtUtc 并锁外触发。
     /// 纪律同 Transitioned：订阅方异常吞咽（留痕在 EventHub 出口侧），绝不反噬状态机。</summary>
     public event Action<BgiJob>? Heartbeated;

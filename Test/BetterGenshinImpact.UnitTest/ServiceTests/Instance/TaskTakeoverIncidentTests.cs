@@ -855,7 +855,8 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
             JobRegistry.CurrentEpoch.ProcessId, JobRegistry.CurrentEpoch.StartTicksUtc,
             first, Guid.NewGuid(), null, "台账A", "Group", "Ui",
             ObservedOutcome: true, Result: TaskRunResult.Ran, StopRequested: false, StopAttribution: null,
-            StopVersion: 0, ExitedAtUtc: DateTime.UtcNow, SlotObservedFree: true, Order: 10)));
+            StopVersion: 0, ExitedAtUtc: DateTime.UtcNow, SlotObservedFree: true, Order: 10,
+            DescendantScanAvailable: true, OutstandingRegisteredDescendantJobIds: Array.Empty<Guid>())));
         Assert.True(ExecutionExitLedger.TryGet(first, out var firstReceipt));
         Assert.True(firstReceipt!.SlotObservedFree); // 槽状态是释放后采样值，如实记录
 
@@ -1033,6 +1034,193 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
 
         var second = handler.HandleTaskStatus(null!, ExitQueryRequest(fact.ExecutionInstanceId)).Data!;
         Assert.Equal(firstOrder, second["executionExitOrder"]!.ToObject<long>());
+    }
+
+    // ===== R5 批次 7：已登记派生作业的退出证据（**不覆盖**未登记叶子/逃逸任务）=====
+
+    [Fact]
+    public void TaskStatus_ExitReceipt_ReportsOutstandingRegisteredDescendants_AndDoesNotClaimLeafExit()
+    {
+        _ = JobRegistry.Instance; // 确保注册表可用（生产通常已创建）
+        var rootJobId = Guid.NewGuid();
+        var runId = Guid.NewGuid();
+        var root = ExecutionScope.Start(new JobDescriptor(JobKind.OneDragon, "带派生作业的根", JobSource.Ui,
+            JobId: rootJobId, WorkflowRunId: runId));
+        var fact = ExecutionScope.GetActiveSnapshot()!;
+
+        // 已登记的派生子作业（ParentJobId 链可达）且未终局
+        var child = JobRegistry.Instance.Submit(JobKind.Solo, "派生叶子", JobSource.OneDragonInternal,
+            parentJobId: rootJobId, identity: new JobExecutionIdentity(runId, "node-child", 0)).Job;
+        root.Dispose();
+
+        var first = handler.HandleTaskStatus(null!, ExitQueryRequest(fact.ExecutionInstanceId)).Data!;
+        Assert.True(first["executionExitConfirmed"]!.ToObject<bool>());
+        Assert.Equal(1, first["executionExitRegisteredSameRunDescendantsAtExit"]!.ToObject<int>());
+        Assert.Equal(1, first["executionExitRegisteredSameRunDescendantsStillOpenNow"]!.ToObject<int>());
+
+        // 派生作业终局后：仍在"退出时未终局"名单里，但当前已全部终局
+        Assert.True(JobRegistry.Instance.TryMarkTerminal(child.JobId, JobState.Succeeded));
+        var second = handler.HandleTaskStatus(null!, ExitQueryRequest(fact.ExecutionInstanceId)).Data!;
+        Assert.Equal(1, second["executionExitRegisteredSameRunDescendantsAtExit"]!.ToObject<int>());
+        Assert.Equal(0, second["executionExitRegisteredSameRunDescendantsStillOpenNow"]!.ToObject<int>());
+    }
+
+    [Fact]
+    public void TaskStatus_ExitReceipt_WithoutRegisteredDescendants_IsNotEvidenceAboutUnregisteredLeaves()
+    {
+        _ = JobRegistry.Instance;
+        var root = ExecutionScope.Start(new JobDescriptor(JobKind.Group, "无登记派生的根", JobSource.Ui,
+            JobId: Guid.NewGuid(), WorkflowRunId: Guid.NewGuid()));
+        var fact = ExecutionScope.GetActiveSnapshot()!;
+        root.Dispose();
+
+        var data = handler.HandleTaskStatus(null!, ExitQueryRequest(fact.ExecutionInstanceId)).Data!;
+
+        // 注册表证据：没有未终局的已登记派生作业（**这不等于**"所有叶子/逃逸任务都已退出"）
+        Assert.Equal(0, data["executionExitRegisteredSameRunDescendantsAtExit"]!.ToObject<int>());
+        Assert.Equal(0, data["executionExitRegisteredSameRunDescendantsStillOpenNow"]!.ToObject<int>());
+    }
+
+    [Fact]
+    public void TaskStatus_ExitReceipt_RunIdentitylessJobsAreOutOfScope_AndDoNotPoisonSameRunVerdict()
+    {
+        _ = JobRegistry.Instance;
+        // run 身份缺失、父链缺失的无关作业（典型遗留形态）：**不在证据范围**，不得让本次同 run 结论降级为不可判定
+        var leftover = JobRegistry.Instance.Submit(JobKind.Solo, "无身份遗留作业", JobSource.OneDragonInternal,
+            parentJobId: Guid.NewGuid()).Job;
+        Assert.Null(JobRegistry.Instance.Query(leftover.JobId)!.WorkflowRunId);
+
+        var root = ExecutionScope.Start(new JobDescriptor(JobKind.Group, "同 run 无派生", JobSource.Ui,
+            JobId: Guid.NewGuid(), WorkflowRunId: Guid.NewGuid()));
+        var fact = ExecutionScope.GetActiveSnapshot()!;
+        root.Dispose();
+
+        var data = handler.HandleTaskStatus(null!, ExitQueryRequest(fact.ExecutionInstanceId)).Data!;
+
+        Assert.Equal(0, data["executionExitRegisteredSameRunDescendantsAtExit"]!.ToObject<int>());
+        Assert.True(JobRegistry.Instance.TryMarkTerminal(leftover.JobId, JobState.Succeeded)); // 清理
+    }
+
+    [Fact]
+    public void TaskStatus_ExitReceipt_WithoutRunIdentity_ReportsUnknownInsteadOfZero()
+    {
+        _ = JobRegistry.Instance;
+        // 有根作业 ID 但**没有 run 身份**（`WorkflowRunId` 为空）⇒ 无法把派生作业与无关作业区分 ⇒ 不可判定
+        var root = ExecutionScope.Start(new JobDescriptor(JobKind.Group, "无 run 身份", JobSource.Ui, JobId: Guid.NewGuid()));
+        var fact = ExecutionScope.GetActiveSnapshot()!;
+        root.Dispose();
+
+        var data = handler.HandleTaskStatus(null!, ExitQueryRequest(fact.ExecutionInstanceId)).Data!;
+
+        Assert.Null(data["executionExitRegisteredSameRunDescendantsAtExit"]?.ToObject<int?>());
+    }
+
+    [Fact]
+    public void TaskStatus_ExitReceipt_ReachesSameRunDescendantThroughIdentitylessAncestor()
+    {
+        _ = JobRegistry.Instance;
+        var rootJobId = Guid.NewGuid();
+        var runId = Guid.NewGuid();
+        var root = ExecutionScope.Start(new JobDescriptor(JobKind.OneDragon, "穿过无身份祖先", JobSource.Ui,
+            JobId: rootJobId, WorkflowRunId: runId));
+        var fact = ExecutionScope.GetActiveSnapshot()!;
+        // 反例形态：根 → A(无 run 身份、仍在表) → B(同一 run、未终局)。
+        // 按 run 过滤收集会漏掉 B；按**可达性**收集必须把它算作存活派生。
+        var a = JobRegistry.Instance.Submit(JobKind.Solo, "无身份中间节点", JobSource.OneDragonInternal,
+            parentJobId: rootJobId).Job;
+        var b = JobRegistry.Instance.Submit(JobKind.Solo, "同 run 存活孙作业", JobSource.OneDragonInternal,
+            parentJobId: a.JobId, identity: new JobExecutionIdentity(runId, "node-b2", 0)).Job;
+        root.Dispose();
+
+        var data = handler.HandleTaskStatus(null!, ExitQueryRequest(fact.ExecutionInstanceId)).Data!;
+
+        // 可达的非终局派生子作业 ≥1（本例为 A 与 B，两者均未终局）
+        Assert.True(data["executionExitRegisteredSameRunDescendantsAtExit"]!.ToObject<int>() >= 1);
+        Assert.True(JobRegistry.Instance.TryMarkTerminal(a.JobId, JobState.Succeeded)); // 清理
+        Assert.True(JobRegistry.Instance.TryMarkTerminal(b.JobId, JobState.Succeeded));
+    }
+
+    [Fact]
+    public void TaskStatus_ExitReceipt_WithoutRootJobId_ReportsUnknownInsteadOfZero()
+    {
+        _ = JobRegistry.Instance;
+        // 根没有作业 ID ⇒ 无法按 ParentJobId 定界 ⇒ 三个字段都必须是"不可判定"（null），不得报 0/0/true
+        var root = ExecutionScope.Start(new JobDescriptor(JobKind.Group, "无根作业 ID", JobSource.Ui));
+        var fact = ExecutionScope.GetActiveSnapshot()!;
+        root.Dispose();
+
+        var data = handler.HandleTaskStatus(null!, ExitQueryRequest(fact.ExecutionInstanceId)).Data!;
+
+        Assert.Null(data["executionExitRegisteredSameRunDescendantsAtExit"]?.ToObject<int?>());
+        Assert.Null(data["executionExitRegisteredSameRunDescendantsStillOpenNow"]?.ToObject<int?>());
+    }
+
+    [Fact]
+    public void TaskStatus_ExitReceipt_DetectsDeepOutstandingDescendant()
+    {
+        _ = JobRegistry.Instance;
+        var rootJobId = Guid.NewGuid();
+        var runId = Guid.NewGuid();
+        var root = ExecutionScope.Start(new JobDescriptor(JobKind.OneDragon, "深层派生", JobSource.Ui,
+            JobId: rootJobId, WorkflowRunId: runId));
+        var fact = ExecutionScope.GetActiveSnapshot()!;
+        var child = JobRegistry.Instance.Submit(JobKind.Solo, "中间节点", JobSource.OneDragonInternal,
+            parentJobId: rootJobId, identity: new JobExecutionIdentity(runId, "node-mid", 0)).Job;
+        var grandChild = JobRegistry.Instance.Submit(JobKind.Solo, "孙作业", JobSource.OneDragonInternal,
+            parentJobId: child.JobId, identity: new JobExecutionIdentity(runId, "node-grand", 0)).Job;
+        Assert.True(JobRegistry.Instance.TryMarkTerminal(child.JobId, JobState.Succeeded)); // 中间节点已终局，孙作业仍未终局
+        root.Dispose();
+
+        var data = handler.HandleTaskStatus(null!, ExitQueryRequest(fact.ExecutionInstanceId)).Data!;
+
+        Assert.Equal(1, data["executionExitRegisteredSameRunDescendantsAtExit"]!.ToObject<int>());
+        Assert.Equal(1, data["executionExitRegisteredSameRunDescendantsStillOpenNow"]!.ToObject<int>());
+        Assert.True(JobRegistry.Instance.TryMarkTerminal(grandChild.JobId, JobState.Succeeded)); // 清理，避免污染其它用例
+    }
+
+    [Fact]
+    public void TaskStatus_ExitReceipt_BrokenParentChainIsUnknownNotZero()
+    {
+        _ = JobRegistry.Instance;
+        var rootJobId = Guid.NewGuid();
+        var runId = Guid.NewGuid();
+        var root = ExecutionScope.Start(new JobDescriptor(JobKind.OneDragon, "父链断裂", JobSource.Ui,
+            JobId: rootJobId, WorkflowRunId: runId));
+        var fact = ExecutionScope.GetActiveSnapshot()!;
+        // 同一 run 内、未终局、父 ID 不存在且不是本次的根 ⇒ 父节点可能已被淘汰 ⇒ 证据不可用
+        var orphan = JobRegistry.Instance.Submit(JobKind.Solo, "孤儿派生", JobSource.OneDragonInternal,
+            parentJobId: Guid.NewGuid(),
+            identity: new JobExecutionIdentity(runId, "node-orphan", 0)).Job;
+        root.Dispose();
+
+        var data = handler.HandleTaskStatus(null!, ExitQueryRequest(fact.ExecutionInstanceId)).Data!;
+
+        Assert.Null(data["executionExitRegisteredSameRunDescendantsAtExit"]?.ToObject<int?>());
+        Assert.True(JobRegistry.Instance.TryMarkTerminal(orphan.JobId, JobState.Succeeded)); // 清理污染
+    }
+
+    [Fact]
+    public void TaskStatus_ExitReceipt_EvictedTerminalAncestorWithLiveGrandchildIsUnknown()
+    {
+        _ = JobRegistry.Instance;
+        var rootJobId = Guid.NewGuid();
+        var runId = Guid.NewGuid();
+        var root = ExecutionScope.Start(new JobDescriptor(JobKind.OneDragon, "终局祖先被淘汰", JobSource.Ui,
+            JobId: rootJobId, WorkflowRunId: runId));
+        var fact = ExecutionScope.GetActiveSnapshot()!;
+        // 形态：根 → A(未登记/已淘汰) → B(终局、仍在表中) → C(未终局)。
+        // B 的父 A 缺失且不是本次根 ⇒ 链不完整 ⇒ 证据不可用（不得报 0/0/true）。
+        var b = JobRegistry.Instance.Submit(JobKind.Solo, "终局中间节点", JobSource.OneDragonInternal,
+            parentJobId: Guid.NewGuid(), identity: new JobExecutionIdentity(runId, "node-b", 0)).Job;
+        var c = JobRegistry.Instance.Submit(JobKind.Solo, "存活孙作业", JobSource.OneDragonInternal,
+            parentJobId: b.JobId, identity: new JobExecutionIdentity(runId, "node-c", 0)).Job;
+        Assert.True(JobRegistry.Instance.TryMarkTerminal(b.JobId, JobState.Succeeded));
+        root.Dispose();
+
+        var data = handler.HandleTaskStatus(null!, ExitQueryRequest(fact.ExecutionInstanceId)).Data!;
+
+        Assert.Null(data["executionExitRegisteredSameRunDescendantsAtExit"]?.ToObject<int?>());
+        Assert.True(JobRegistry.Instance.TryMarkTerminal(c.JobId, JobState.Succeeded)); // 清理污染
     }
 
     [Fact]

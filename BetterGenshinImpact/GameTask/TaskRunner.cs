@@ -52,7 +52,9 @@ public class TaskRunner
             return TaskRunResult.RejectedSlotBusy;
         if (job == null && ExecutionScope.Current?.Descriptor.Kind == JobKind.OneDragon)
             job = new JobDescriptor(JobKind.Solo, soloTaskName ?? "一条龙前置或收尾",
-                JobSource.OneDragonInternal, ParentJobId: ExecutionScope.Current.Descriptor.JobId);
+                JobSource.OneDragonInternal, ParentJobId: ExecutionScope.Current.Descriptor.JobId,
+                // [R5 批次 7] 隐含子作业**继承运行身份**：否则其 WorkflowRunId 为空，退出凭证无法按 run 追溯它。
+                WorkflowRunId: ExecutionScope.Current.Descriptor.WorkflowRunId);
         // [A2 统一注册表] 登记点在抢锁之前：连"被拒"也是注册表里的一条事实（Rejected 终态），不再静默丢失。
         // 观察性故障不影响执行：登记/推进全部容错留痕。
         // [A2.4] job.JobId 非空 = 认领协调器入队时已建的 Queued 作业（taskHandle==jobId 别名）；

@@ -1128,6 +1128,10 @@ internal sealed class InstanceRequestHandler
             bool? exitStopRequested = null;
             string? exitStopSource = null;
             long? exitOrder = null;
+            // [R5 批次 7] 已登记派生作业证据（只覆盖 JobRegistry 里 ParentJobId 链可达的作业；
+            // **不覆盖**未登记叶子与逃逸任务，见 §24.103）。
+            int? exitDescendantsAtExit = null;
+            int? exitDescendantsStillOpen = null;
             var exitConfirmed = false;
             Guid? exitQueryInstanceId = null;
             var exitIdentityKeyPresent = request.Data?.ContainsKey("executionInstanceId") == true;
@@ -1162,6 +1166,18 @@ internal sealed class InstanceRequestHandler
                     exitStopRequested = exitReceipt.StopRequested;
                     exitStopSource = exitReceipt.StopAttribution;
                     exitOrder = exitReceipt.Order;
+                    if (exitReceipt.DescendantScanAvailable)
+                    {
+                        exitDescendantsAtExit = exitReceipt.OutstandingRegisteredDescendantJobIds.Count;
+                        var stillOpen = 0;
+                        foreach (var descendantJobId in exitReceipt.OutstandingRegisteredDescendantJobIds)
+                        {
+                            var job = JobRegistry.IsCreated ? JobRegistry.Instance.Query(descendantJobId) : null;
+                            if (job is not null && !job.IsTerminal) stillOpen++;
+                        }
+
+                        exitDescendantsStillOpen = stillOpen;
+                    }
                 }
                 else
                 {
@@ -1234,7 +1250,13 @@ internal sealed class InstanceRequestHandler
                 executionExitStopRequested = exitStopRequested,
                 // 停止来源归属（manual_stop／directional_stop_requested／lease_expired 等）；未发起停止时为 null。
                 executionExitStopSource = exitStopSource,
-                executionExitOrder = exitOrder
+                executionExitOrder = exitOrder,
+                // **同一 run 身份**的已登记派生作业证据（null＝不可判定：注册表未创建/读取失败/无根作业 ID/
+                // 无 run 身份/链不完整；**不是**"没有派生任务"）。不覆盖未登记叶子、逃逸任务与 run 身份缺失的作业。
+                // 只暴露**观测事实**，不给任何肯定结论：`AtExit=0` 仅表示本次采样未观察到可达且未终局的派生作业，
+                // **不得**据此宣称叶子/逃逸任务已退出，也不得作为放行条件（见 §24.103）。
+                executionExitRegisteredSameRunDescendantsAtExit = exitDescendantsAtExit,
+                executionExitRegisteredSameRunDescendantsStillOpenNow = exitDescendantsStillOpen
             });
         }
         catch (Exception ex)
