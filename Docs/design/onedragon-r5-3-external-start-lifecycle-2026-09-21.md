@@ -3804,7 +3804,7 @@ owner B.1 的最高优先级／抢占合同，以及它的房间授权与请求�
 `Services/TaskCenter/LocalWaitQueueStore.cs` ⇒ **无调用方、无发送依赖**。本批**不接任何生产入口**。
 
 **全局回归（本批提交时快照；同一工作区有批次 15 在途作业会持续加夹具，故快照计数会随之增长）**：助手全量 **1371 通过／2 跳过／0 失败／1373**
-（`TestResults/_batch16_final_full2.trx`；早前帧 `batch16_full.trx` 为 1362／2／0／1364、`batch16_final.trx` 为 1363／2／0／1365，增量均归批次 15 在途与第三轮收口），
+（`TestResults/_batch16_final_full2.trx`；早前帧 `_batch16/batch16_full.trx` 为 1362／2／0／1364、`batch16_final.trx` 为 1363／2／0／1365，增量均归批次 15 在途与第三轮收口；〔消歧注，2026-09-26 证据审计 ev4〕裸名 `batch16_full.trx` 另有两处同内容副本（`Test/…/TestResults/` 与 `_batch15/trx/`，均 1361／0／1363），按 TRX 计数器对号确定本行所指＝`_batch16/` 处），
 与批次 15 基线 **1337 通过／2 跳过／0 失败／1339**（`batch15_assistant_full_final.trx`）逐名 `Compare-Object`
 ⇒ **新增 34 条、移除 0 条**（净 Δ 1373−1339＝**+34**，与逐名差集**一致、无口径冲突**；**任何时点的取值都必须满足「移除 0」与「新增均属已登记批次」两条不变量**）。
 新增中**归本批 D2 自身的只有 `LocalWaitPrerequisiteContractTests` 19 个测试方法（23 个测试情形）**（该类为**本批新建**，基线中不存在）；
@@ -3986,7 +3986,7 @@ owner 待决项一次批量交付」，本批**不**自称「会诊已闭环」�
 **建议级**限定语，而**文件中实际未改**（评审逐字核出）⇒ 同判**必改（收口材料与声明不符，非代码缺陷）**。
 两条教训已固化为约束：**基线快照必须取自真实历史版本并逐文件核对差异**；
 
-**会诊记录口径更正（2026-09-24 本轮，不淡化）**：**旧口径「第 13–16 轮只有汇总记录、无逐轮原文」已实测证伪**——本轮用 `Get-ChildItem _batch15 -Filter "consult*_report.md"` 核实：`consult_report.md` 与 `consult2_report.md` … `consult16_report.md` **共 17 份逐轮原文均实存于磁盘**（上方本表第 13–16 行所依据的逐轮报告包括在内），上文「未落盘」与接力稿「传阅时无逐轮原文」两处表述均**作废**，正确口径为：第 2–16 轮均有逐轮报告原文（`_batch15/consult{N}_report.md`），第 17 轮原文为 `_batch15/trx/consult17_payload.json` 与本节登记；任何「无逐轮原文」类描述均算事实错误。（`_batch15/` 为未跟踪工作区，不入提交，仅作证据。）
+**会诊记录口径更正（2026-09-24 本轮，不淡化；〔再更正，2026-09-26 证据审计 ev4〕逐轮 report 实数＝16 份，第 17 件为 payload 非 report 命名，合计 17 件）**：**旧口径「第 13–16 轮只有汇总记录、无逐轮原文」已实测证伪**——本轮用 `Get-ChildItem _batch15 -Filter "consult*_report.md"` 核实：`_batch15/consult_report.md` 与 `_batch15/consult2_report.md` … `_batch15/consult16_report.md` **共 16 份逐轮 report 原文均实存于磁盘**（原写「共 17 份」系计数口径偏差，report 实数 16；第 17 件＝`_batch15/trx/consult17_payload.json`，非 report 命名——本行下句的「第 17 轮原文为 payload」口径不受影响）（上方本表第 13–16 行所依据的逐轮报告包括在内），上文「未落盘」与接力稿「传阅时无逐轮原文」两处表述均**作废**，正确口径为：第 2–16 轮均有逐轮报告原文（`_batch15/consult{N}_report.md`），第 17 轮原文为 `_batch15/trx/consult17_payload.json` 与本节登记；任何「无逐轮原文」类描述均算事实错误。（`_batch15/` 为未跟踪工作区，不入提交，仅作证据。）
 **objective 里写明的处置必须先在文件里改完**（不得先写后改或只写不改）。
 
 **会诊轮次与处置（15b–15d 全量）**
@@ -4277,7 +4277,7 @@ D2 仍为**未接线组件＋反例夹具**：**生产零消费点**、**零发�
 
 | 用途 | 证据 |
 | --- | --- |
-| 会诊原始回报 | `_batch16/round5/result.json`、`report_raw.txt`（`attempts=1`／`diff_included=true`） |
+| 会诊原始回报 | `_batch16/round5/result.json`、`_batch16/round5/report_raw.txt`（`attempts=1`／`diff_included=true`） |
 | 送审材料 | `_batch16/round5/payload.json`（不入提交） |
 | 定向绿（修后 24 情形） | `Test/MultiplayerHoeingAssistant.UnitTest/TestResults/_batch16_r5_cls1.trx` |
 | 全量（修后 0 失败） | `_batch16_r5_full1.trx`（1372 通过／2 跳过／0 失败／1374） |
@@ -4297,7 +4297,7 @@ D2 仍为**未接线组件＋反例夹具**：**生产零消费点**、**零发�
 | 组合 | 结果 |
 |---|---|
 | HEAD 实现（`impl_HEAD_delete_variant`，blob `63679db3…`，**无** 1 参重载）＋ HEAD 夹具 | **23 通过／1 失败**；失败者＝`SelectNext_MissingReferenceOrDefaultEvaluator_IsConservative`，异常 `InvalidOperationException : Sequence contains no matching element`（夹具第 429 行 `.Single(...Length == 1)`） |
-| 保留版实现（`impl_WORKKEEP_obsolete_variant`，blob `f7b79991…`，**含** 1 参重载＋`[Obsolete(error:true)]`＋抛 `NotSupportedException`）＋ 同一 HEAD 夹具 | **24/24 通过** |
+| 保留版实现（`impl_WORKKEEP_obsolete_variant`，blob `f7b79991…`，**含** 1 参重载＋`[Obsolete(error:true)]`＋抛 `NotSupportedException`）＋ 同一 HEAD 夹具 | **24/24 通过**（〔注，2026-09-26 证据审计 ev4〕该 blob 前缀在审计核实时刻（2026-09-25）对象库与工作区均未能解析，原因未验证——「保留版」实现内容当前不可复核；A/B 实验结论已由案 B 落地提交 `1fe2c5ceb` 承接，未知原因不作事实写入） |
 
 ⇒ 结论：**HEAD（`10ba91597`）当时的实现与夹具自相矛盾**（夹具常红），且 **§24.111 原「已按 owner 裁定 A 保留／严格纯加法」口径与 HEAD 实现不符**（**文档失实**）。矛盾**不是**构建滞后或引用错位所致（已用反射直读程序集确认 1 参重载在两种实现中存在性差异）。
 
@@ -4320,10 +4320,10 @@ D2 仍为**未接线组件＋反例夹具**：**生产零消费点**、**零发�
 | --- | --- |
 | A/B 实验（HEAD 删除版 ⇒ 23/1） | `_batch16/probe/headcombo_focus.trx`、`headcombo_test.log`、`headcombo_build.log` |
 | A/B 实验（保留版 ⇒ 24/24） | `_batch16/probe/keepcombo_test.log`、`keepcombo_build.log` |
-| 反射直读两种实现 | `_batch16/probe/`（`Probe.cs` 输出：HEAD＝无 1 参重载；保留版＝有 1 参重载且调用抛 `NotSupportedException`） |
+| 反射直读两种实现 | `_batch16/probe/`（`_batch16/probe/Probe.cs` 输出：HEAD＝无 1 参重载；保留版＝有 1 参重载且调用抛 `NotSupportedException`；〔消歧注，2026-09-26 证据审计 ev4〕另存在内容不同的 `_batch16/Probe.cs`＝evaluator 委托形状探针，非本行所指） |
 | 修后定向绿（25 情形） | `Test/MultiplayerHoeingAssistant.UnitTest/TestResults/_b16_r8_focus3.trx` 等（**25/25**） |
 | 突变验证（反例不放水） | `_b16_mut1.trx`（MUT-1 ⇒ 新增夹具红）、`_b16_mut2.trx`（MUT-2 ⇒ 发送前验算类 3 条＋新增夹具红） |
-| 会诊原始回报 | `_batch16/round8/result.json`、`report_raw.txt` |
+| 会诊原始回报 | `_batch16/round8/result.json`、`_batch16/round8/report_raw.txt` |
 
 **owner 裁决项（已裁定；2026-09-25 owner 选定「选项 1」，见 §24.111-R7）**
 
@@ -4339,7 +4339,7 @@ D2 仍为**未接线组件＋反例夹具**：**生产零消费点**、**零发�
 
 | # | 分级 | 发现 | 处置 |
 |---|---|---|---|
-| R7-1 | **必改** | ①`SelectNextWithEvaluator` 注释写「owner 裁定 A 保留了旧签名」，与「owner 原文未提及该重载、保留签名出于批约束」冲突；②`SendTimeRevalidation_ExistsAndNeverPermitsSend_WhenPrerequisiteLost` 注释称两个 `RevalidateBeforeSend` 公开重载**分别返回服务层与模型层**类型，而实现中**两者都返回模型层** `LocalWaitPrerequisiteDecision` | ✅ **已修并提交**：两处均删除错误口径、改为正确表述并就地标注「更正（会诊第 9 轮必改 1）」；同时清掉一处重复段落。见提交 `0ea1ba6a7` |
+| R7-1 | **必改** | ①`SelectNextWithEvaluator` 注释写「owner 裁定 A 保留了旧签名」，与「owner 原文未提及该重载、保留签名出于批约束」冲突；②`SendTimeRevalidation_ExistsAndNeverPermitsSend_WhenPrerequisiteLost` 注释称两个 `RevalidateBeforeSend` 公开重载**分别返回服务层与模型层**类型，而实现中**两者都返回模型层** `LocalWaitPrerequisiteDecision` | ✅ **已修并提交**：两处均删除错误口径、改为正确表述并就地标注「更正（会诊第 9 轮必改 1）」；同时清掉一处重复段落。见提交 `82522dae5`（〔更正，2026-09-26 证据审计 ev4〕本行原引 `0ea1ba6a7`——`git cat-file` 报无效对象名、全历史无此前缀；实际对应提交＝`82522dae5`，提交信息／stat（仅改 LocalWaitPrerequisiteContractTests.cs +9/-7）/patch 内容三重吻合，详见 §24.116） |
 
 第 9 轮其余判断（如实转录，不淡化）：①「实现与夹具冲突」列为**证据不足以判定闭合**——当轮未提供运行记录，无法独立核验 25/25；②「案 B 恢复签名」判定**闭合**；③「§24.111 更正」列为**证据不足以判定闭合**（未提供正文／diff）；④旧二进制调用抛异常按已登记 **owner 待决**处理，不单独阻止收口。结论：**必改 1／重要 1（owner 待决）／建议 0**。
 
@@ -4359,7 +4359,7 @@ D2 仍为**未接线组件＋反例夹具**：**生产零消费点**、**零发�
 | 用途 | 证据 |
 | --- | --- |
 | 第 9／10 轮原文 | `_batch16/round9/_utf8.txt`、`_batch16/round10/_utf8.txt` |
-| 夹具注释更正提交 | `0ea1ba6a7` |
+| 夹具注释更正提交 | `82522dae5`（〔更正，2026-09-26 证据审计 ev4〕原引 `0ea1ba6a7` 系无效对象名，实际对应提交详见 §24.116） |
 | 全量（单次运行，干净 rebuild 后） | `Test/MultiplayerHoeingAssistant.UnitTest/TestResults/_r5verify.trx`（**1373 通过／2 跳过／0 失败／1375**） |
 | 声明面再生＋无变量复跑 | `CLAIM_SURFACE_REGENERATE=1` 再生后，`ClaimSurfaceGuardTests` 不带 env 通过 |
 
@@ -4492,3 +4492,64 @@ D2 仍为**未接线组件＋反例夹具**：**生产零消费点**、**零发�
 测试与 _ev3 证据）；未接任何生产入口、不改变 §24.103 观测面语义；叶子/逃逸任务退出证明、
 采样原子性、生产者身份继承等残项**不因本批改变**；生产入口门、真实 User 门与 R5.8 签署
 **继续关闭**。
+
+### 24.115 落地登记：D 族等待语义组件跨组件交互复审（顾问件登记；2026-09-26，ev4 文档批，零代码改动）
+
+**来源与性质**：顾问件 `C:\Users\Administrator\.tools\zcode-relay\docs\dfamily-interaction-review-20260925.md`
+（锚定提交 `3adb13abd`；4 轮 gpt-6-astra/medium 会诊＋施工方逐条对照 HEAD 快照核对；台账
+`test\consult-ledger-dfamily.json`）。本节为**主链登记**：按残项流程把其发现登记入册，逐条保留
+原分级（顾问性不影响发现强度，R1-R6 分级约束照常承载）；owner 待决方向性裁决汇总归 ev5 待决表。
+
+**审查对象接线状态（复审独立核实，HEAD `3adb13abd`）**：B.1 等待队列存储／D1 WaitLocally／
+D2 前置引用＋evaluator／D3 重评触发／D5 完成类型拆分五组件生产**全部未接线**（休眠合同）——
+全部 IW 级发现为**接线后可达**的组合级发现，当前生产不可达。**不因登记而接线，门禁不变。**
+
+**重要发现登记（IW-01~09；全部挂接线前必办清单，接线前强制重审；方向性裁决归 owner 待决表）**
+
+| # | 一句话事实（锚点详见顾问件 §3） | 接线后后果 | 归属 |
+|---|---|---|---|
+| IW-01 | `_handled` 实例级全生命周期占键 × 等待项无代际载体 ⇒ 同代际内首次重评即永久沉默 | owner D3 裁决 A「每次触发重新走完整准入」在同实例同代际内不可满足＝**活性缺口**（安全网无法兜回） | 接线批必须先定键语义（三方向见顾问件，触及幂等键口径须重新裁决）→ **owner 待决** |
+| IW-02 | Store 写入侧不校验 `ItemId==DeriveItemId(StableIdentity)`、不按 StableIdentity 去重；D3 产出侧强校验 | 登记成功≠可重评；同身份两条并存的取消/审计分叉；响亮拒绝 vs 静默跳过的组合哲学不对称 | 接线批先写显式合同（谁拒绝/谁清理） |
+| IW-03 | Store 路径锁仅进程内；跨进程读改写丢失更新（C9 的组合级新证据）；类注释「多实例也不会互相覆盖」易误读 | 跨进程取消被静默回滚、等待项丢失 | 归 §24.106 C9 残项加重；注释口径限定随手修 |
+| IW-04 | 取消/重激活 ABA：在途重评请求与队列状态无生命周期绑定（无持久化 revision/代际） | 取消前产出的请求延迟消费时无法判过期 | 接线批先定消费前复核合同 |
+| IW-05 | D1 登记载荷缺 `PrerequisiteReference` 等 ⇒ D1 登记项在 D2 三态下**结构性永不参选**；4 段裸拼身份与准入面 9 元组不是同一身份空间且不足以恢复 | D1→D2→B.1 组合链在登记点死锁；重入需身份翻译层（未见） | §24.111「前置引用来源」残项的组合级 sharpening；接线批先定登记载荷与身份空间 |
+| IW-06 | `PrerequisiteReference` 在不可变载荷内 ⇒ v1 旧项引用不可经 Upsert 原地补全 | v1 兼容项永久 Undetermined，无合法补全通道 | 迁移路径（原地补全放宽/批量迁移）→ **owner 待决** |
+| IW-07 | 等待停驻后 run 停在 Running 且三重驱入口全不接、宿主扫描不覆盖；`WorkflowRunState.Waiting` 名被 trigger 等待占用 | 等待项被选出≠运行能继续；`:498` 注释承诺原层未落实（R4 口径） | 接线批补状态语义或重驱通道（新批次面） |
+| IW-08 | D3 产请求不征询 evaluator；façade 第二道资格门（`EligibilityProvider.PrerequisiteReady`，默认恒 true）与 D2 三态**同词不同义、映射合同缺失**（初稿「准入面无前置概念」经第 4 轮反证收窄重写） | NotReady 项直通 façade 第二道门形同虚设 | 接线批先定映射合同（provider 谁填/按哪个身份空间查/Undetermined 映射） |
+| IW-09 | `BatchItemState` 无「等待」表达位；等待→D5 三态三种投影（逐拍重复 Submit 首提无上限／误 Submitted→result_unknown／TerminalConfirmed+local_wait）的适配层不存在 | 重复副作用面＋终态分类正确性风险 | 接线批先定投影合同（原 SW-04 按第 4 轮 R4-03 升级） |
+
+**建议级（SW-01~03；登记备考，不阻断）**：SW-01 `Waiting` 状态名复用（接线时显式区分或另立状态词）；
+SW-02 `_handled` 单调增长无界（随 IW-01 键语义一并定）；SW-03 D5 完成分类语义当前不治理任何生产行为
+（不证明生产有错；是否接线属 owner 决策）。**已知残项复核确认（K-01~05）**：边界等待专型（后果链补全）、
+`RecomputeSuccessor`、镜像保证范围限定、`local_wait` 消费方未验证（生产循环不消费 CommandResult 的边界
+事实新增）、C9 组合级新证据（＝IW-03）——均为既有残项的复核确认，不新增登记。**无交互接缝（N-01~04）**
+备案于顾问件 §6（附理由与尝试记录）。**未验证边界（如实）**：全部反例为静态构造未运行；「生产零调用方」
+为文本扫描口径；`TaskCenterHost.cs` 仅施工方直读未经会诊方正文复核（R4-02）。
+
+**随件登记会诊基建缺陷（工具残项，非产品发现）**：`consult.py prepare` 快照环节存在 **400KB 总预算静默跳过**
+（`consult.py:116`），超预算文件被静默丢弃且 manifest 仍列名——dfamily 第 1-3 轮「manifest 列出不等于正文
+已送达」的根因（与既有「工具缺陷 3 个已修」同系列，为已知第 4 缺陷）；对策＝大文件一律 `--file` 直读。
+
+### 24.116 落地登记：证据健康审计 7 条建议处置（顾问件登记；2026-09-26，ev4 文档批，零代码改动）
+
+**来源**：顾问件 `C:\Users\Administrator\.tools\zcode-relay\docs\evidence-audit-20260925\report.md`
+（222 项核实：存在 185／歧义 4／缺失 2；21/21 头条 TRX 计数一致；10 轮复核收口；台账
+`test\consult-ledger-evidaudit.json`）。审计结论总体：**证据文件面健康**，缺失仅提交号/blob 各 1。
+7 条建议逐条处置如下：
+
+| # | 审计建议 | 处置（2026-09-26，ev4） |
+|---|---|---|
+| 1 | `0ea1ba6a7`→`82522dae5`（三处） | ✅ **已更正**：交接稿批次 16 行＋R5.3 §24.111-R7 两处（R7-1 表行＋证据表行）就地更正并附更正注（无效对象名；实际提交三重吻合：提交信息/stat +9/-7/patch）。三处引用不再指向错误哈希 |
+| 2 | blob `f7b79991`（A/B 保留版实现）加注 | ✅ **已加注**：§24.111-R6 A/B 表行附注「核实时刻对象库与工作区均未能解析，原因未验证；实现内容当前不可复核；实验结论由案 B 落地 `1fe2c5ceb` 承接」。补档路径保留：若 owner 会话/备份存有该变体文件可后续补档并登记哈希（归 ev5 待决表知悉项） |
+| 3 | 下一次声明面登记落当前值 | ✅ **已落**：ev4 开工时（ev3 登记再生 +5 行、随 `4868eb552` 入库后）清单值＝579 行／`14664EBA`；随本批两节登记与更正注再生后提交值＝**580 行／`5EC051FB`**（`CLAIM_SURFACE_REGENERATE=1` 再生＋无变量复跑守卫通过）。此后每次声明面再生以当批登记落值 |
+| 4 | 「共 17 份」计数口径 | ✅ **已更正**：§24.111 期更正段改为「16 份 report＋第 17 轮 payload（非 report 命名）合计 17 件」并附再更正注。`.tools/zcode-relay/task-relays/next-batch-prompt.md`（历史接力提示词，仓库外）中的同源表述不改（已被后续提示词取代，历史件保持原样，此处登记即为更正记录） |
+| 5 | 4 处裸名歧义补目录 | ✅ **已消歧**：`batch16_full.trx`→`_batch16/`（TRX 计数器对号：本行断言 1362/2/0/1364 仅该候选相符，另两处同内容副本均 1361/0/1363）；`report_raw.txt`→round5/round8 各自补目录（行内语境直接定性）；`Probe.cs`→`_batch16/probe/Probe.cs`（SelectNext 反射探针；另 `_batch16/Probe.cs`＝evaluator 委托探针，内容不同，已附消歧注） |
+| 6 | Release 编译／会诊服务端元数据类断言补留痕 | ⚠ **登记为限定语义务**：相关断言（构建 0 错误 61 警告、attempts=1/diff_included=true 回报等）继续按原文「我方实测、无独立凭证」口径引用；后续批次若有同形态断言，构建日志/回报原文落盘后引用 |
+| 7 | 历史 TRX 归档策略（批次 13-15 期与两树同内容副本） | ❌ **归 owner 裁决**（ev5 待决表）：清理时两树同步＋保留「曾作废、现实存、成因未考」的 b15d 系列（其存在被现行文档引用）；本批不擅自清理证据树 |
+
+**审计缺失两件的处置交叉引用**：缺失-1（`0ea1ba6a7`）＝上表 #1 已更正；缺失-2（blob `f7b79991`）＝上表 #2 已加注。
+**审计其余登记面**：歧义 4 项＝#5 已消歧；机制性引用 `ownership.json`（按需 CAS 创建型）与非缺失项维持原文口径；
+8 条无文件锚叙述类断言按 #6 限定语口径维持。
+
+**边界**：本批零代码改动（diff 仅两设计文档＋声明面清单再生）；更正均以可见更正注保留原引用痕迹
+（不静默改写历史）；生产入口门、真实 User 门与 R5.8 签署**继续关闭**。
