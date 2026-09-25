@@ -4402,3 +4402,46 @@ D2 仍为**未接线组件＋反例夹具**：**生产零消费点**、**零发�
 
 **边界**：本批生产改动仅上述两处判定顺序修复（不改门禁、不接任何新生产入口、不产生发送）；
 生产入口门、真实 User 门与 R5.8 签署**继续关闭**；`mistletoe-session-relay` 与 `unified-job-registry` 两文档不入提交。
+
+### 24.113 落地登记：证据族 ev2 RecordTerminal 两侧分裂表征＋观测边界固化（2026-09-25；纯测试/观测面，零生产改动）
+
+**交付（提交 `d62534e87`，2026-09-25）**
+
+- §24.83-84 登记事实的表征落位：`BgiTaskCoordinator.RecordTerminal`（:259-272）先写队列
+  `_terminals` 再 `TryRegistryTerminal`，两步不原子；普通 `Task<bool>` 路径执行体（漏斗/RunOpAsync）
+  可先写 job 终态后返回 false ⇒ **队列报 completed、注册表保留执行体终态**（先终态者赢 ⇒
+  协调器写入被拒）＝§24.84 所载两侧分裂的确定性表征。
+- 新增 `BgiTaskCoordinatorTerminalSplitCharacterizationTests` **10 例**（分裂面 3＝Theory×2＋取消变体、
+  同源面 3、兜底面 4）：钉住**现存**可观测行为（含分裂面本身）——不是对分裂的背书，任何改变
+  （含「顺手修复」I8 族）必须先过 §24.84 候选合同批会诊并由该批同步更新夹具。
+  边界局限（如实）：两步写入之间的瞬态窗口无生产接缝、不可确定性钉住；夹具以终态事件为
+  同步锚点，只钉最终态两侧。
+- 反向突变 **7 组**（M1-M7：队列状态改写／注册表兜底拆除／映射表三处／M6＝TryMarkTerminal
+  摘除已终态拒绝守卫（方向反转，波及佐证帧 JobRegistryTests 7 总 2 红实跑）／M7＝队列满路径
+  注册表写入拆除）全部红→还原→复绿；18 帧 TRX 归档＋SHA 清单＋zip 自锚＋逐行解压比对入仓。
+- **串行化闭合**：四个 `JobRegistry.Instance` 单例写者（BgiTaskCoordinatorTests、
+  TaskTakeoverIncidentTests、本批新类、CoordinatedTaskQueueTests——末者经 v2 扫描以
+  target-typed new 形态补发现）同挂 `TaskTakeoverIncident` 非并行集合，淘汰/污染交错不可达
+  （扫描产物与定义摘录哈希锚随批入库）。
+- 全量回归：**1059 总／1045 通过／14 失败**，失败身份与
+  `r58_bgi_full_20260924.trx` 既有 14 项基线逐名差集为空（新增 0/消失 0）；
+  差集核验产物 `_ev2/ev2_full_diff_baseline.md`。
+
+**会诊（10 轮；台账 `test\ledger-ev2.json`；kimi-k3 通道单一渠道）**
+
+- 逐轮要点：R1 判据笔误与差集产物缺位；R2 处置脚本未入暂存、串行化事实载体缺位；
+  R3 单例写者 v2 扫描（target-typed new 漏判）、FIX-7 同构窗口、帧身份显式映射；
+  R4-R5 清单计数三度漂移后改规则式（随批文件集＝暂存集本身）＋停止新增登记脚本；
+  R6 消息提取 ElementTree 真值缺陷（`or` 短路在纯文本元素上失效）原层根治；
+  R8 manifest 双列矛盾（scope 与 staged 不一致）修复＋zip/台账机械自证；R10 收口轮
+  **无必改、无未闭合重要项**，机械闸门绿——**收口未用例外**。
+
+**残项（本批登记，归 §24.83-84 候选合同批）**
+
+- RecordTerminal 两侧分裂本身（I8 族）：本批只表征不修，归宿＝§24.84 候选合同＋夹具
+  观测边界冻结声明（R5.3 §24.112 所在文件同批入库的 `_ev2/ev2_objective.txt` §四）。
+- 生产 `WaitSlotFreeAsync` 超时事件消息硬编码「15s」与可注入 `_slotWaitTimeout` 可能不符
+  （文案/事实错位，非状态错误）——文案残项，归同一合同批。
+
+**边界**：零生产改动（BgiTaskCoordinator.cs/JobRegistry.cs 与 HEAD 一致）；未接任何生产入口、
+不产生发送；生产入口门、真实 User 门与 R5.8 签署**继续关闭**。
