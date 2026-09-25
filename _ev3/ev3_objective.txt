@@ -1,0 +1,55 @@
+﻿ev3 目标书（证据族清理阶段第 3 批；会话 sess_efe18559-f636-4204-ac5f-fe7f9e3373b9，2026-09-26）
+
+【Goal 三要素】
+结果：补齐 R5.3 §24.103 残项表「真实淘汰与并发采样夹具 ❌ 未补」——新增夹具文件
+  Test/BetterGenshinImpact.UnitTest/ServiceTests/Instance/JobTreeEvictionAndSamplingTests.cs
+  （挂 TaskTakeoverIncident 非并行集合），含 3 组夹具：
+  FIX-1 真实触发 64 条终态 FIFO 淘汰（JobRegistry.TerminalCapacity 容量守卫：终态数恰 64、
+        最旧本批条目被逐、其余 64 条在场且 IsTerminal=true）；
+  FIX-2 真实容量淘汰把终态祖先挤出注册表 ⇒ 退出观测不可判定（AtExit/StillOpen 均为 null，
+        不是 0）——祖先缺席由 TryMarkTerminal 容量淘汰真实造成，区别于 §24.103 既有夹具的
+        "未登记模拟缺席"（Guid.NewGuid() 伪造父 ID）；
+  FIX-3 并发登记/终态推进下的 JobTreeSnapshot 采样不变量（6 写者×60 op＋4 读者×300 快照）：
+        不抛异常、JobId 唯一、终局不可逆（按读者本地已见终态集）、终态数 ≤ 64、
+        终态表最终 64 条全部来自本批、非终态作业永不淘汰。
+约束：只加测试，生产代码零改动（JobRegistry.cs／ExecutionScope.cs 全批 git diff 0 差异收口）；
+  R1-R6 处置纪律（.agents/knowledge/domains/review-disposition-discipline.md，开工已读）；
+  会诊走 KIMI 通道（consult_run.py --provider kimi --model auto --max-tokens 32000，
+  台账 C:/Users/Administrator/.tools/zcode-relay/test/ledger-ev3.json）；
+  关键断言反向突变 ≥3 组：apply → 定向红帧留档 → revert（git diff 0 差异核验）→ 终帧复绿；
+  提交只显式列文件路径；mistletoe-session-relay 与 unified-job-registry 两文档不入提交；
+  不在证据批顺手修生产（ev2 残项 I8 族分裂与 15s 文案归 §24.83-84 候选合同批）。
+完成判据：定向夹具全绿（3/3，并发夹具重复跑稳定）＋TaskTakeoverIncident 集合级 59/59 绿
+  ＋BGI 全量回归失败身份与 r58_bgi_full_20260924.trx 既有 14 项基线逐名差集为空
+  ＋M1-M3 各红且守护面与预期一致＋会诊至无必改项（或 owner 授权例外如实登记）
+  ＋提交＋R5.3 §24.114 登记节＋R5 交接稿 ev3 批次行＋台账 closure 节。
+
+【范围边界（§24.103 同一口径，如实）】
+- 本批不证明未登记叶子/逃逸任务已退出；`0` 只表示"本次采样未观察到"。
+- FIX-3 的不变量是注册表观测面的结构性质，不构成"派生作业已全部退出"的肯定结论。
+- 本批不接入任何放行判断，不改变 §24.103 的门禁状态；生产门／真实 User 门／R5.8 继续关闭。
+
+【隔离前提（2026-09-26 复核，写权依据）】
+触碰 JobRegistry.Instance 的全部测试类均挂 TaskTakeoverIncident 非并行集合：
+TaskTakeoverIncidentTests／BgiTaskCoordinatorTests／CoordinatedTaskQueueTests／
+BgiTaskCoordinatorTerminalSplitCharacterizationTests／JobTreeEvictionAndSamplingTests（本批）。
+集合外两文件只 Start 根与只读快照、无 Submit（已逐一核实）：
+- ExecutionScopeSkippedTests.cs：Submit 0 处；
+- ManualStopCooldownTests.cs（GlobalExecutionStopWatermark 集合）：BgiTaskCoordinator 0 处、
+  JobRegistry 0 处、Enqueue 0 处。
+因此本批精确计数断言（终态数恰 64、剩余 64 条全部来自本批）不与其它集合的注册表写入竞争。
+
+【夹具落点与既有夹具的关系】
+- §24.103 既有退出观测夹具 59 例（TaskTakeoverIncidentTests，R5 批次 7）覆盖的是"退出时按
+  ParentJobId 可达性收集"的语义面，其中"终局祖先被淘汰 ⇒ 不可判定"用未登记形态模拟；
+- 本批 FIX-2 把该形态升级为真实容量淘汰链路（A 真实登记→真实终局→被 64 条填充真实挤出），
+  FIX-1 把容量淘汰本身从推断变为直接断言，FIX-3 把 §24.103 残项表中"并发登记/终态推进下的
+  采样夹具"从无到有落地。
+
+【初版夹具缺陷（如实登记，R3）】
+FIX-3 初版把"已见终态集"做成跨读者共享（ConcurrentDictionary），存在假阳性通道：
+不同读者的快照之间无时间全序——读者 R1 在 T5 记录"X 已终局"后，读者 R2 在 T6 才检查它
+T0（X 尚未终局时）拍的旧快照，被误判为"终态回退"。首轮定向跑即触发 4 条假阳性
+（2 个不同 JobId，_ev3_targeted_green1.trx 红帧留档）。修正为按读者本地 HashSet
+（同一读者内快照严格按拍摄顺序处理，"终态→非终态"才真是采样错位信号）。
+生产侧 JobTreeSnapshot 为锁内复制，本事件不构成生产采样错位证据。
