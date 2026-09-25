@@ -1,0 +1,269 @@
+﻿ev2 批目标书：RecordTerminal 两侧分裂的确定性表征＋观测边界固化
+（槲寄生证据族清理阶段第 2 批；R5.3 §24.83-84 登记事实的表征落位）
+
+一、Goal（结果＋约束＋完成判据）
+- 结果：为 BgiTaskCoordinator.RecordTerminal（BetterGenshinImpact/Service/ExternalInterface/BgiTaskCoordinator.cs:259 起）
+  的「队列 completed 与 JobRegistry 终态分裂」落确定性表征夹具，固化观测边界（§24.83-84）；
+  表征批不改变生产行为。
+- 约束：零生产源码改动（纯测试/观测面）；生产门/真实 User 门/R5.8 继续关闭；不产生发送；
+  会诊闭环（无未闭合必改/重要，或 owner 授权例外如实登记）后才提交；只显式列文件提交。
+- 完成判据：表征夹具全绿＋关键断言反向突变红→还原→复绿证据落盘；全量回归与基线失败差集为空；
+  会诊闭环；提交并登记 R5.3/交接稿。
+
+二、被表征的生产事实（带代码行；批次开始时的真实口径）
+1. RecordTerminal（:259-272）：先 RecordQueueObservation 写队列 _terminals（:261），
+   再 TryRegistryTerminal 写统一注册表（:271），两步不原子（§24.84「两步不原子」）。
+2. 普通 Task<bool> 路径（DispatchItemAsync :642-659）：Executor 返回值只表达取消
+   （true=取消/false=未取消，TaskSubmission 注释 :76）；false ⇒ :652 RecordTerminal("completed")
+   ⇒ TaskCompleted 事件（:653）。
+3. 注册表侧先终态者赢：JobRegistry.TryMarkTerminal（JobRegistry.cs:187-230）对已终态作业返回 false。
+4. 分裂面（§24.84 原文）：「执行体先记失败／拒绝，协调器随后按 false 记队列 completed，
+   再尝试记 job 成功但被『先终态者赢』拒绝」。生产执行体（漏斗/RunOpAsync）的该行为
+   在测试中以同形状 lambda 复现（既有夹具先例：BgiTaskCoordinatorTests 投影路径同模式）。
+5. 映射表（:265-270）：completed→(Succeeded|cancelled 时 Cancelled+cancelled_user)；
+   failed→(Failed, errorCode ?? task_start_failed)；其余→(Cancelled, cancelled_user)。
+6. 兜底面（:263-264 注释声明）：漏斗不可达路径（排队取消/等槽超时/Executor 抛异常）由
+   RecordTerminal 兜底注册表写入，「保证注册表不留 Running 僵尸」。
+7. 队列满路径（:392-409）：TryRegistrySubmitQueued+TryRegistryTerminal(Rejected,queue_full)，
+   句柄未返回调用方、无事件、无队列观察条目——Rejected 只存在于注册表。
+
+三、本批成果归属对照（第 7 轮必改1 根治后口径）
+随批文件集＝**提交时暂存集本身**（git status 的 A/M 条目为权威，不手写总数——
+历轮三次计数漂移的根因＝每轮新增 _record_rN.py 使枚举失效；自第 7 轮起处置登记
+不再新增脚本文件，见 §十二）。构成（终态）：
+本批新增测试文件（1）：
+- Test/BetterGenshinImpact.UnitTest/ServiceTests/Instance/BgiTaskCoordinatorTerminalSplitCharacterizationTests.cs
+  （10 例：分裂面 3＝Theory×2+取消变体、同源面 3、兜底面 4）
+本批修改的既有测试文件（2，各 +4 行＝类头注释＋[Collection("TaskTakeoverIncident")]）：
+- Test/BetterGenshinImpact.UnitTest/ServiceTests/Instance/BgiTaskCoordinatorTests.cs
+  （第 1 轮重要项 3 的串行化闭合，使 JobRegistry.Instance 单例写者互不并行）
+- Test/BetterGenshinImpact.UnitTest/ServiceTests/Instance/CoordinatedTaskQueueTests.cs
+  （第 3 轮重要项 2 的 v2 扫描发现其为单例写者（target-typed new 形态此前被漏），补挂串行集合）
+本批证据与工具文件（_ev2/，17 个，全部已暂存）：
+- ev2_objective.txt（本文件）、ev2_mutation_log.md、ev2_trx_excerpts.md、ev2_trx_sha256.md、
+  ev2_full_diff_baseline.md、ev2_singleton_writers_scan.md、ev2_collection_definition_excerpt.md、
+  _apply_mutation.py、_build_evidence.py、_record_r1.py、_record_r2.py、_record_r3.py、
+  _record_r4.py、_record_r5.py、_record_r6.py、_record_r7.py、ev2_trx_archive.zip
+本批生产改动：无（BgiTaskCoordinator.cs 与 JobRegistry.cs 均保持与 HEAD 一致：
+git diff 0 差异＋git status 干净；hash-object 双证：BgiTaskCoordinator.cs 的
+git hash-object 与 HEAD blob 同值＝b8679dd6d54d51d497a4ef7ea929d153ff8c4762，
+见第 1 轮对账「建议5」处置与 _record_r1.py。）
+  〔如实登记〕突变脚本曾以 universal-newlines 直写把协调器工作副本行尾改为 LF
+  （git diff 仍为 0＝规范化等价）；已 git restore --source=HEAD 归位；脚本本身已在
+  第 4 轮建议 6 重构为行尾保持式（apply→revert 字节级往返）。
+材料外变更（不计入本批成果）：mistletoe-session-relay 与 unified-job-registry 两份约定文档、
+TestResults/ 目录其他历史帧、各 .bak 文件。
+
+四、观测边界固化声明
+- 本文件钉住的是 §24.83-84 登记的现存可观测行为，包括分裂面本身——这不是对分裂的背书：
+  任何改变（含「顺手修复」I8 族）必须先过 §24.84 候选合同批的会诊（改语义按 §17.4-A
+  复会诊并再生声明面清单），并由该合同批同步更新夹具。
+- 边界局限（如实，R3）：RecordQueueObservation 与 TryRegistryTerminal 之间的瞬态窗口
+  （队列已写、注册表未写）无生产接缝、不可确定性钉住——尝试记录：两处为同一私有方法内
+  相邻同步调用，类 sealed、方法 private，无拦截点；夹具只钉最终态两侧可观测面。
+- 同步纪律：各终态路径的事件发布在两步写入之后同步执行（Publish 为注入委托），夹具以
+  终态事件为唯一等待锚点 ⇒ 事件可见 ⇒ 两步写入均已完成 ⇒ 读数无窗口竞态。
+- 非 ProjectRegistryOutcome 投影路径的既有同源面（Prerequisite_DefiniteFailure 等）由
+  既有 BgiTaskCoordinatorTests 覆盖，本批不重复。
+
+五、验收判据（第 6 轮会诊后更新版）
+1. 定向 10/10 绿；终帧＝_build_evidence.py FRAMES 中标注「终帧」的定向绿帧
+   （当前＝green6，第 5 轮 FIX-8 断言补强后形态）——规则式引用，不硬编码帧名。
+2. 反向突变 7 组（M1-M7；M6＝方向反转、M7＝队列满注册表写入拆除，分别为第 4/5 轮
+   建议采纳新增）全部红→还原（git diff 0 差异）→复绿；红帧一律以**当前送审夹具形态**
+   重做（终形态红数 M1-M5＝6/5/1/1/1、M6＝3＝FIX-1×2+FIX-2、M7＝1＝FIX-9）。
+   帧数权威以 _ev2_trx_sha256.md 帧清单为准（18 帧：6 定向绿＋7 突变红＋
+   1 M6 波及佐证帧＋4 全量），全部归档 _ev2/ev2_trx_archive.zip。
+   帧身份标签由 _build_evidence.py 显式映射生成（第 3 轮必改4 处置）。复绿口径＝
+   逐突变组以 git diff 0 差异保证实现回到原形，统一定向终帧（＝FRAMES 中标注
+   「终帧」的定向绿帧，当前 green6）复绿，不逐组单跑复绿帧（如实登记）。
+3. BGI 全量回归失败身份与既有 14 项基线（r58_bgi_full_20260924.trx）逐名差集为空；
+   差集核验产物落盘 _ev2/ev2_full_diff_baseline.md（14 项逐名清单＋新增/消失空集），
+   以最终全量帧 _ev2_bgi_full_final5.trx 为准。
+4. 会诊闭环后按文件提交。
+
+六、第 1 轮会诊处置对账（kimi-k3／medium；2026-09-25）
+- 必改1（判据 16 帧笔误）→ 本文件 §五.2 已更正（8 帧，后续因补帧演进为「以 SHA 清单为准」，见 §五.2）＋复绿口径明示。
+- 必改2（全量差集无产物）→ 新增 _ev2/ev2_full_diff_baseline.md（逐名清单＋差集），
+  并以夹具加固后的最终全量帧重算。
+- 重要3（单例淘汰/污染并发风险）→ 采纳闭合路径①：三个 JobRegistry.Instance 写者
+  （BgiTaskCoordinatorTests、TaskTakeoverIncidentTests、本批新类）同挂既有非并行集合
+  TaskTakeoverIncident（DisableParallelization=true）→ 单例写者互不并行，淘汰/反向污染的
+  并发交错在本批夹具执行窗口内不可达；另 FIX-9 末尾 ClearQueue 把 8 个占位项终态化，
+  消除 Queued 非终态作业跨用例滞留（非终态作业本就不进淘汰 FIFO）。并行配置事实：
+  工程无 xunit.runner.json、无程序集级 CollectionBehavior（xunit 2.5.3 默认跨集合并行），
+  单例写者全集经 grep 核实仅上述三个测试文件。
+- 建议4（M1「四夹具」笔误＋FIX 编号无对照）→ 突变日志已更正＋补编号对照表；
+  夹具文件头注补同一对照表。
+- 建议5（材料 status 显示假 M）→ git restore --source=HEAD 归位＋update-index --really-refresh，
+  行尾副作用如实登记（§三）；后续轮次材料以干净 status 为准。
+
+七、第 2 轮会诊处置对账（kimi-k3／medium；2026-09-25）
+- 必改1（_record_r1.py 未跟踪无快照）→ 该处置登记脚本显式暂存随批提交（处置工具链留痕，
+  与 _apply_mutation.py/_build_evidence.py 同性质）。
+- 重要2（串行化闭合的两个事实载体不在材料内）→ ①TaskTakeoverIncidentTests.cs 纳入
+  本轮 scope（集合定义全文随材料快照送审——闭合在定义层成立，R4）；②新增
+  _ev2/ev2_singleton_writers_scan.md（集合定义 grep 输出＋单例写者全集 grep 输出＋
+  并行配置事实：无 xunit.runner.json、无程序集级禁并行）。
+- 建议3（突变脚本注释旧编号）→ _apply_mutation.py PAIRS 各组注释更新为权威对照
+  （M1→FIX-1/2/3/4/5、M2→FIX-3/5/6/7/8＋方向对照说明、M3→FIX-5、M4→FIX-7、M5→FIX-8）。
+- 建议4（摘录标题硬编码 8 帧）→ _build_evidence.py 标题改为 len(FRAMES) 派生，
+  SHA 清单同口径（帧数权威以 SHA 清单为准）。
+- 建议5（FIX-9 清理无 finally＋5s 超时窗口）→ 采纳：ClearQueue 移入 finally
+  （断言中途失败也必须清理）；Harness 的 slotWaitTimeout 拉长到 30s（占位项在用例期间
+  绝不因等槽超时移出 _pending）。修复后全部证据帧按当前夹具形态重做：
+  M1-M5 突变红帧重跑（红数 6/5/1/1/1 与此前一致）、定向绿帧 _ev2_targeted_green4.trx
+  （10/10）、全量终帧 _ev2_bgi_full_final3.trx（差集产物同步重算）。
+
+八、第 3 轮会诊处置对账（kimi-k3／medium；2026-09-25）
+- 必改4（帧身份叙述矛盾）→ 采纳全部四点：①_build_evidence.py 的身份标签改为显式
+  FRAMES 映射（不再子串匹配推断，green4/final3 不可能再误标）；②final3 身份更正为
+  「第 2 轮修复后留档」；③目标书帧叙述更正（final2＝第 1 轮加固后留档、final3＝
+  第 2 轮修复后留档、final4＝最终帧；加固前帧 final1 不在归档内，如实登记）；
+  ④突变日志终帧叙述随第 3 轮重做更新（green5/final4）。
+- 重要1（摘录无机械核验载体）→ 承认偏差：第 2 轮处置原文写「定义全文随材料快照送审」，
+  实际因全文快照致材料 292K 字符触发上游 504/EOF，只送了自述摘录。补齐：
+  ev2_collection_definition_excerpt.md 增加字节数/SHA-256/git blob 三重哈希锚
+  （git blob 与 HEAD blob 同值＝文件零改动可机械证明），口径改为「摘录＋机械核验锚」；
+  处置文本与本节如实登记该偏差。
+- 重要2（写者全集扫描不足）→ 承认 v1 扫描缺陷（裸类型名 pattern 漏 target-typed new；
+  中介符号未扫）。v2 扫描（ev2_singleton_writers_scan.md）：裸类型名＋五个中介符号
+  全集重扫 ⇒ 新发现 CoordinatedTaskQueueTests（经 BgiTaskCoordinator.Submit 写单例，
+  target-typed new 形态）⇒ 补挂 TaskTakeoverIncident 串行集合（+4 行）；另核
+  TaskSuspendOnlineSignalTests＝静态纯名称分类、无注册表触及，不挂（逐文件定性表在
+  扫描产物中）。串行集合成员从 3 类扩为 4 类。
+- 重要3（FIX-7 同构 5s 窗口）→ 采纳：FIX-7 的 Harness slotWaitTimeout 同样拉长到 30s
+  （用例语义不需要短超时；消除「环境性冻结 >5s ⇒ pump 先 task_busy 超时 ⇒ CancelByHandle
+  转 NotFound」的伪装红形态）。
+- 建议5（WaitForTerminalEvent 返回值未带 errorCode 过滤）→ 采纳：返回值改用与等待
+  谓词相同的过滤（含 errorCode），消除未来同句柄同名多事件时读到非预期记录的可能。
+- 修复后全帧按当前形态重做：定向绿 green5（10/10）、M1-M5 突变红（当前形态）、
+  全量 final4（最终帧，差集产物同步重算）。
+九、第 4 轮会诊处置对账（kimi-k3／medium；2026-09-25）
+- 必改1（判据 1 终帧仍指 green4）→ 已更正为 green5（§五.1），并如实注明属第 3 轮
+  必改4 同类漏改。
+- 必改2（§三 权威清单缺 5 个已暂存文件）→ §三 重写：16 个随批文件全枚举
+  （1 新增测试＋2 修改测试＋13 个 _ev2 文件），与 git status 暂存集一一对应。
+- 重要3（摘录末行「三个类＝写者全集」未随 v2 扫描同步）→ 已改为四个类并指向
+  扫描产物逐文件定性表。
+- 建议4（复绿口径句「终帧 green2」指称错误）→ 已更正为 green5（突变日志口径节，
+  含更正登记）。
+- 建议5（FIX-1/2 方向缺直接突变守护）→ 采纳：新增 M6＝JobRegistry.TryMarkTerminal
+  摘除已终态拒绝守卫（方向反转＝可覆盖）⇒ 3 红（FIX-1×2＋FIX-2，执行体终态被
+  协调器映射值改写）；M6 对 JobRegistryTests 既有合同夹具的影响如实登记。
+- 建议6（突变脚本 universal-newlines 直写副作用）→ 根治：_apply_mutation.py 重构为
+  按文件探测换行风格写回（字节级 apply→revert 往返），M6 已在该新实现下执行并
+  diff=0 核验；不再依赖 git restore 收拾行尾。
+- 本轮无测试文件/生产文件净变更（M6 施突后已还原，两生产文件 status 干净），
+  green5/final4 终帧继续有效；仅新增 M6 红帧证据（归档重建为 14 帧）。
+
+
+十、第 5 轮会诊处置对账（kimi-k3／medium；2026-09-25）
+- 必改1（§三 清单 16≠17，缺 _record_r4.py）→ §三 已补全为 17 个随批文件
+  （14 个 _ev2 文件含 _record_r4.py），与暂存集一一对应；本轮新增 _record_r5.py 与
+  _fix_objective_r5.py 后，最终提交清单以本文件 §十 末尾的「提交清单」为准。
+- 建议2（FIX-9/FIX-4 判别力缺口）→ FIX-9：采纳新增 M7＝Submit 队列满路径注册表
+  Rejected 写入拆除 ⇒ 1 红（FIX-9）；Channel 物理满兜底路径如实登记为未钉边界。
+  FIX-4：其注册表侧值与协调器映射值同值（Succeeded），可覆盖突变下被覆盖为同值
+  ⇒ 不可判别属结构性边界，如实登记于突变日志（方向安全由 M6 间接守护）。
+- 建议3（章节倒序＋悬空指针）→ 对账节已按轮次重排（六=第1轮…九=第4轮）；
+  「hash-object 双证见 §六」改为内联哈希值（b8679dd6…）并指向第 1 轮对账建议5 处置。
+- 建议4（M6 波及为未实跑的全称肯定）→ 已实跑佐证帧：M6 下 JobRegistryTests
+  7 总/2 红/5 过（_ev2_mutM6_jobregistry_red.trx），「会红」升级为实跑留档。
+- 建议5（FIX-8 未用赋值＋摘录消息列空）→ ①FIX-8 补 Assert.Equal(task_busy,
+  failed.ErrorCode)（赋值产生判别力）；②_build_evidence.py 消息提取改取
+  ErrorInfo/Message（回退 Output/Message），重建后摘录含失败断言消息。
+- 修复后全帧按终形态重做：green6（10/10）、M1-M7 红（6/5/1/1/1/3/1）、
+  M6 波及佐证帧（7 总/2 红）、final5（1059/1045/14 差集空）。归档重建为 18 帧。
+
+提交清单（独立小节·最终口径；随批文件集＝提交时暂存集，共 20 个＝测试 3＋_ev2 17；
+自第 7 轮起不再新增脚本文件，本清单不再漂移）：
+- 测试文件 3 个：BgiTaskCoordinatorTerminalSplitCharacterizationTests.cs（新增）、
+  BgiTaskCoordinatorTests.cs（+5 行＝[Collection] 属性＋类头注释）、
+  CoordinatedTaskQueueTests.cs（+4 行＝[Collection] 属性＋注释；第 10 轮建议 1 更正行数）
+- _ev2/ 17 个：ev2_objective.txt、ev2_mutation_log.md、ev2_trx_excerpts.md、
+  ev2_trx_sha256.md、ev2_full_diff_baseline.md、ev2_singleton_writers_scan.md、
+  ev2_collection_definition_excerpt.md、_apply_mutation.py、_build_evidence.py、
+  _record_r1.py、_record_r2.py、_record_r3.py、_record_r4.py、_record_r5.py、
+  _record_r6.py、_record_r7.py、ev2_trx_archive.zip
+- 例外：_fix_objective_r5.py 为一次性文档重排脚本、无证据价值，不随批提交。
+
+十一、第 6 轮会诊处置对账（kimi-k3／medium；2026-09-25）
+- 必改1（消息提取 or 短路 bug，R4 原层未生效）→ 采纳并根治：ElementTree 的 Element
+  真值＝子元素数，纯文本 <Message> 恒为 falsy ⇒ `or` 回退永不生效（处置声称与产物矛盾
+  成立，产物即反证）。改为 `is None` 显式判定（脚本内注释注明该陷阱）；重建后摘录的
+  8 个 mutM 帧 19 行失败记录全部带断言级消息（如 M1＝Expected "completed" /
+  Actual "failed"），第 5 轮建议5② 在原层真正生效。
+- 建议2（复绿口径 green5 第二次漏改）→ 改为规则式引用：终帧＝_build_evidence.py
+  FRAMES 中标注「终帧」的定向绿帧（当前 green6），不再硬编码帧名；更正史（green2→
+  green5→green6 两次漏改）如实登记于突变日志。
+- 建议3（§三 17 口径与暂存集矛盾）→ §三 同步为 18 个随批文件（_ev2 15 个，补
+  _record_r5.py），标题注明「最终提交口径以 §十 提交清单为准」。
+- 建议4（佐证帧第二红归因叙述缺失）→ 已查明并补入突变日志：两红均为先终态者赢
+  合同断言——①TryMarkTerminal_FirstWriterWins_SecondMarkIsNoop（主体即该合同）；
+  ②Submit_WithParentJobId_ChildrenLinkToDragonParent 的尾部两行显式断言同一合同
+  （Assert.False(父二次终态写)），M6 下二次写成功 ⇒ 红。非环境性/无关失败。
+- 建议5（三处笔误）→ 脚本用法注释 M1..M6→M1..M7；§五.2 括号补齐；§五 标题更新为
+  第 6 轮。
+- 本轮无测试/生产文件变更，green6/final5 终帧继续有效；证据产物（摘录/SHA/归档）
+  重建（帧数不变＝18）。
+
+十二、第 7 轮会诊处置对账（kimi-k3／medium；2026-09-25）
+- 必改1（清单口径第三次漂移：_record_r6.py 未入枚举）→ 根治：①§三 与 §十 提交清单
+  改为规则式口径（随批文件集＝提交时暂存集本身，git status A/M 条目为权威；构成描述
+  给出类别与当前清单，不再手写会失效的总数）；②自第 7 轮起处置登记不再新增
+  _record_rN.py 脚本文件（本轮为最后一个，_record_r7.py），后续处置直接编辑台账并在
+  对账节注明 ⇒ 计数漂移的根源消除。终态：测试 3＋_ev2 17＝20 个随批文件。
+- 建议2（口径行 revert 命令只覆盖协调器文件）→ 口径行已改为「对被突文件
+  （BgiTaskCoordinator.cs／JobRegistry.cs 按 TARGETS 表）各自 git diff 0 差异＋
+  git status 干净双核验」，M6 的还原核验不再空真。
+- 建议3（章节号「十」重复）→ 第 6 轮节顺延为「十一」；本轮为「十二」；§十 提交清单
+  标注「独立小节」。
+- 建议4（baseline 首行父注滞后＋_record_r1.py 计数笔误）→ ①baseline 首行改为
+  「final5＝第 5 轮修复后形态（FIX-8 断言补强后重做）」；②_record_r1.py 必改2 处置文本
+  的「1059 通过/1045/14 失败」正确读法＝1045 通过/14 失败/1059 总——因该文本同时是
+  已登记台账内容，按项目更正惯例不改写历史文件，以本更正为准。
+- 建议5（§五.1 硬编码 green6 与规则式并存）→ §五.1 已改为与突变日志同口径的
+  规则式引用。
+- 建议6（范围外残项复述）→ 确认：RecordTerminal 两侧分裂为现存生产可观测不一致，
+  本批按目标书只表征不修；残项归宿＝§24.84 候选合同（I8 族）＋本文件 §四 观测边界
+  冻结声明（修复必须先过合同批会诊并同步更新夹具）。无新增阻断。
+- 本轮无测试/生产文件变更，green6/final5 终帧继续有效。
+
+十三、第 8 轮会诊处置对账（kimi-k3／medium；2026-09-25；本轮起处置直接编辑台账，脚本在仓库外）
+- 必改1（§十 枚举缺 _record_r6/r7）→ 枚举补全为 17 个 _ev2；〔第 9 轮补记〕列表标签
+  「_ev2/ 15 个」当时漏改，第 9 轮必改1 处置中更正为 17（见 §十四）。
+- 必改2（manifest 双列矛盾：两测试文件同时在 batch_files 与 out_of_batch_changes）→
+  根因＝第 6 轮瘦身把二者移出 scope_patterns 而 staged 文件仍入 batch_files；恢复二者入
+  scope（第 9 轮材料 manifest 可证：batch_files 21、双列 0）；为对冲体量换出已审参照
+  JobRegistry.cs/BgiJob.cs 快照（M6/M7 锚点行由突变日志逐字引用）。
+- 建议3（§五.2 硬编码 green6）→ 改规则式（＝FRAMES 中标注「终帧」者）。
+- 建议4（夹具头注缺 M6/M7）→ 头注补齐（纯注释变更，不改测试行为）。
+- 建议5（zip/台账不可由会诊方机械核验）→ 施工方就地自证：zip vs SHA 清单逐行比对
+  18/18 一致、台账 9 轮全部 findings closed，写入台账顶层 evidence_self_verification。
+
+十四、第 9 轮会诊处置对账（kimi-k3／medium；2026-09-25）
+- 必改1（§十 列表标签 15≠枚举 17）→ 标签更正为 17；枚举本就 17 项正确。第 7 轮
+  「根治」补了标题与规则声明、漏了该标签——计数类缺陷至此第 5 次暴露，本轮起
+  §十/§三 的计数不再手工维护（暂存集为权威），提交前以 git status 逐项对照。
+- 必改2（第 8 轮对账节缺失，R2 无法核验）→ §十三 已补录第 8 轮五项处置
+  （对账承诺兑现；台账同步可审计）。
+- 重要3（BgiTaskCoordinatorTests 头注「三个单例写者」未随 v2 扫描同步）→ 已更正为
+  「四个」并注明更正史（第 4 轮只修摘录、第 9 轮补本头注——同一陈旧表述的最后一处
+  载体）。纯注释变更。
+- 建议4（zip 无自锚）→ ev2_trx_sha256.md 追加 zip 自身字节数/SHA-256 自锚节
+  （zip 生成后计算，无自引用循环）；台账 evidence_self_verification 重建后复验
+  18/18 一致。
+- 建议5（生产 WaitSlotFreeAsync 超时消息硬编码「15s」与可注入窗口可能不符）→
+  采纳登记为范围外生产文案残项（本批表征不改生产）：见 R5.3 §24.112 ev2 残项行。
+- 本轮无测试/生产行为变更（两处头注为纯注释），green6/final5 终帧继续有效。
+
+十五、第 10 轮会诊处置对账（kimi-k3／medium；收口轮——无必改、无未闭合重要项）
+- 建议1（「各 +4 行」与 staged hunk 不符，实为 +5/+4）→ 目标书两处已更正。
+- 建议2（规则式引用「终帧」子串非唯一解）→ FRAMES 的 final2/3/4 标签改为「被最新帧
+  取代留档」（消除非锚帧的「终帧」子串）；规则表述补唯一性说明。
+- 建议3（逐行比对记录载体在仓库外）→ _build_evidence.py 生成清单时执行 zip vs 清单
+  逐行比对并写入 ev2_trx_sha256.md「逐行解压比对」节（18/18 一致），仓内可复核。
+- 机械闸门：✅ 可以收口（共 10 轮，末轮 10：无必改、无未闭合重要项）；
+  gate 前修正两处台账书账（第 8 轮 #2 证据词元改绝对路径；第 2/3 轮两条处置文本的
+  「绝不/不可能」R3 违规改写并补尝试记录——均为施工方自身措辞，非会诊发现内容）。

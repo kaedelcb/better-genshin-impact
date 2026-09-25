@@ -9,7 +9,12 @@ namespace BetterGenshinImpact.UnitTest.ServiceTests.Instance;
 /// [切片7] BgiTaskCoordinator 队列语义单测：入队 / 去重(adopted / already_executed) /
 /// 取消 / 派发顺序 / 背压 queue_full / 等槽超时 task_busy。
 /// 协调器的槽位判定、事件发布、等锁节奏全部构造注入，测试不触碰 TaskSemaphore/Dispatcher。
+/// [Collection]：本类经协调器写 JobRegistry.Instance 进程级单例，与 TaskTakeoverIncidentTests、
+/// BgiTaskCoordinatorTerminalSplitCharacterizationTests、CoordinatedTaskQueueTests 同挂该非并行集合，
+/// 四个单例写者互不重叠（ev2 第 1 轮重要项 3 串行化闭合；第 3 轮重要项 2 v2 扫描补入
+/// CoordinatedTaskQueueTests 后由「三个」更正为「四个」，第 9 轮重要项 3 同步本头注）。
 /// </summary>
+[Collection("TaskTakeoverIncident")]
 public class BgiTaskCoordinatorTests
 {
     /// <summary>事件记录：(事件名, taskHandle 字符串, errorCode, cancelled)。</summary>

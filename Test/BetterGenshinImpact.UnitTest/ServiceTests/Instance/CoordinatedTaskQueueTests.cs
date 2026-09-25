@@ -4,6 +4,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace BetterGenshinImpact.UnitTest.ServiceTests.Instance;
 
+// [Collection]：本类经 BgiTaskCoordinator.Submit 写 JobRegistry.Instance 进程级单例
+//（Create() 为 target-typed new，裸类型名 grep 才能覆盖），与单例写者全集同挂非并行集合
+//（ev2 第 3 轮重要项 2 处置，2026-09-25）。
+[Collection("TaskTakeoverIncident")]
 public class CoordinatedTaskQueueTests
 {
     private static BgiTaskCoordinator Create() => new(() => true, (_, _) => { }, NullLogger.Instance,
