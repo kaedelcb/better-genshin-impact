@@ -1,0 +1,58 @@
+【ev-1 批次目标与验收判据（送审材料）】
+
+批次身份：槲寄生 R5「证据族清理」阶段 ev-1（用户派发的插队阶段；链上批次 17 已于 8499aa4c8 收口、批次 18 提示词已备，本批不接线、不开门、不与 D5 冲突）。
+
+一、目标
+为 TaskCenterHost.ResolveOccupantLevels（§24.99 生产接线唯一路径）的宿主分支补齐测试证据：
+§24.99 残余表登记「宿主分支测试证据 ❌ 未覆盖：'租约未组装/非 Valid/解析未命中/异常'分支只有代码与日志路径，无夹具」。
+本批新增 13 条夹具（同一新测试文件）；生产源码仅**两处同族真缺陷修复**（第 6/7 轮会诊重要项：`ResolveOccupantLevels` 未组装判定前置＋台账读取后移到非 Valid 判定之后，各反例先行红→修复→绿，合计 4 行注释＋2 行语句移动，不接线、不开门、不改任何门禁）。
+
+二、交付物
+1. 新测试文件：Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostOccupantLevelResolutionTests.cs（15 例＝13＋2 例有效租约/台账钩子版早出）：
+   ① 租约未组装（_admissionStore 未装配接缝态）⇒ 级别事实不变、无解析留痕；
+   ② 非 Valid 四态（Absent/Expired/Corrupt/Unsupported，Expired 用共享注入时钟确定性判定）⇒ 不变＋"租约读取状态=…"留痕；
+   ③ 解析未命中两例（run_record_not_found / operation_record_not_found）⇒ 不变＋原因留痕；
+   ④ 正向命中（Valid 租约＋WireRunId 唯一命中＋流程级登记操作）⇒ Tier/Priority 填充、HighestClass 恒 null（§24.100 残余⑥：无受信来源）、其余字段逐项保留；
+   ⑤ 运行台账读取异常（RunStore 故障注入，非争用异常即时抛出）⇒ 不变＋"解析失败"留痕；
+   ⑥ 早出两例（Idle / Occupied+身份不可信）⇒ 返回原对象（Assert.Same）、不触台账、无解析留痕。
+2. 反向突变验证 MUT-EV1-1..5（R5）：见 _ev1/ev1_mutation_log.md——每条关键断言被至少一个突变命中
+   （红 8/4/1/1/2 → 反向替换还原 → git diff 0 差异 → 复绿 11/11）；5 份红 TRX＋1 份绿 TRX 落盘。
+3. 技术口径（须会诊审查）：
+   - 宿主分支为 private ⇒ 夹具经反射调用（InternalsVisibleTo 已开）；零生产可见性/签名改动。
+   - 租约库/运行台账用真实文件组件（独立临时目录）；Expired 用两实例共享注入时钟，不依赖 sleep。
+   - 突变为临时生产编辑：施突→TRX→反向替换→逐字节核验（cmp＋status 双重核验），过程日志如实含一次脚本缺陷与修复（损坏态未产生任何测试结果）。
+   - 早出四夹具带「计数时钟＋台账钩子」探针（第 9/10/11 轮会诊迭代终版）：计数时钟版（注入 _utcNow 计数，任何租约读取含零痕静默必使计数 >0——确定性、无墙钟）＋有效租约/台账钩子版（绕过守卫直达 List 必留「解析失败」痕）⇒ 读租约/读台账/State 守卫移除/守卫整体移除类突变全部必红；墙钟计时断言已按第 10 轮裁定移除（调度暂停可假红）。
+
+三、边界（不在本批、不得据此开门）
+- §24.99 残余 ④生产时序与新鲜度（同步读取耗时/锁交错/读取后新鲜度）⑤执行根级归属 ⑥HighestClass 生产来源：未接线/未验证状态不变，归 owner 待决。
+- 【第 12 轮会诊重要项 2 确认】Valid 路径为「先取租约快照→读台账→按先前快照填级别」，返回前**未复核**租约修订或
+  执行快照新鲜度＝残余④的原层表述；本批 15 条分支夹具**不闭合**该项，跨代际/并发语义仍归接线前批次。
+- 【第 12 轮会诊重要项 1 登记·残项 EV1-R1】`RunStore.List()` 遇 JsonException 静默跳过坏记录 ⇒ 解析器的
+  「WireRunId 唯一命中」只在**可解析子集**中唯一：占用者记录损坏 ⇒ 保守 Unknown（无害）；但**同 WireRunId 双记录、
+  其一损坏**时歧义被掩盖为唯一命中，级别可能取自幸存记录而未察觉歧义——涉及身份一致性，属既有存储行为，
+  修复（List 暴露损坏记录面/Resolve 拒绝含 UnknownFiles 的台账）为生产改动 ⇒ 交 owner 待决，本批不实施。
+- 生产入口门、真实 User 门、R5.8 签署继续关闭；本批零发送、零接线。
+
+三.5 本批成果归属对照（第 3 轮会诊必改 1 处置；R6）
+- prepare 的 batch_files 只能列 scope 命中的**已跟踪**文件；本批新增交付为未跟踪文件，manifest 将其列入
+  out_of_batch_changes 属工具口径限制。本批成果的权威清单＝下表，会诊以本表＋--file 附送全文为准：
+  1) Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/TaskCenterHostOccupantLevelResolutionTests.cs（新增，15 夹具，已暂存）
+  2) _ev1/ev1_mutation_log.md、_ev1/ev1_full_pernames.txt、_ev1/ev1_trx_excerpts.md、_ev1/_apply_mutation.py（新增，证据与脚本）
+  3) MultiplayerHoeingAssistant/Services/TaskCenter/TaskCenterHost.Admission.cs：本批生产改动＝**两处同族真缺陷修复**
+     （第 6/7 轮会诊重要项：未组装判定前置＋台账读取后移到非 Valid 判定之后；反例先行红→修复→绿；已暂存，staged diff
+     ＝+5/−1 行），无其他生产改动。
+  材料外变更＝两个约定不提交文档（mistletoe-session-relay / unified-job-registry）＋用户自有 .bak/.stale 等未跟踪文件。
+- 全量最终帧（计数时钟终版）：Test/MultiplayerHoeingAssistant.UnitTest/TestResults/_ev1_full_final.trx＝
+  **1393 通过/2 跳过/0 失败/1395**；逐名差集＝**+15/−0**（_ev1/ev1_full_pernames.txt）；各帧计数与失败名单＝
+  _ev1/ev1_trx_excerpts.md（终版 17 帧）。
+
+四、验收判据
+1. 新夹具定向 15/15 绿（TRX _ev1_targeted_green.trx）。
+2. 每条关键断言有反向突变红→还原→复绿记录（_ev1/ev1_mutation_log.md＋5 份红 TRX）。
+3. 助手全量与批次 17 基线（1378 通过/2 跳过/0 失败/1380，Test/MultiplayerHoeingAssistant.UnitTest/TestResults/_b17_full_final1.trx）逐名对照：差集＝恰为新增 15 条、移除 0（终帧 1393/2/0/1395）。本批生产改动仅限两处会诊裁决的同族真缺陷修复（+5/−1 行），无其他生产变更。
+4. 会诊闭环（机械 gate＝未闭合强制项 0＋纪律违规 0）后按文件提交。
+   【第 5 轮会诊必改处置更新】_ev1/ 证据文件（突变日志/逐名差集/TRX 摘录/施突脚本/目标书）已**显式暂存**并纳入 manifest
+   batch_files（随本批提交）。12 份 ev1 TRX 曾一并暂存，但会诊请求体实测 3.17MB 被端点 400 拒收（同 dfamily 复审登记的
+   会诊基建缺陷族），故 TRX 不进快照/暂存、以 untracked 留档：其**计数与失败名单已由 _ev1/ev1_trx_excerpts.md 全文送审**，
+   **文件存在性由 consult.py gate 的证据先验存在机制逐路径核验**（与台账 evidence 路径同口径）——这是工具体量上限下的
+   如实归属口径，非证据缺失。

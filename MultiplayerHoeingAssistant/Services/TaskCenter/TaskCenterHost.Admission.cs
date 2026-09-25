@@ -886,7 +886,8 @@ public sealed partial class TaskCenterHost
 
         try
         {
-            var runs = _runs.List();
+            // [ev-1 会诊重要项修复] 未组装判定先于台账读取：避免「门面未组装＋台账读取故障」被误记为
+            // 「解析失败」（本分支合同＝原样返回、无解析留痕），也使未组装态不承担台账读取/争用等待成本。
             var read = _admissionStore?.Read();
             if (read is null)
             {
@@ -898,6 +899,9 @@ public sealed partial class TaskCenterHost
                 TryLog($"[任务中心] 占用者级别事实未知：租约读取状态={read.Status}（{read.Detail ?? "无明细"}）");
                 return occupant;
             }
+            // [ev-1 会诊重要项修复②] 台账读取后移到非 Valid 判定之后：租约已判非 Valid 时，
+            // 运行台账故障不得把留痕改写成「解析失败」（与未组装判定前置同族，第 7 轮会诊）。
+            var runs = _runs.List();
             var operations = read.File?.Handoff?.Operations;
             var level = OccupantLevelResolver.Resolve(execution.RunId.ToString("N"), runs, operations);
             if (!level.Reference.StartsWith("resolved_", StringComparison.Ordinal))
