@@ -28,3 +28,11 @@
 - Post-reconciliation targeted regression: `Batch21WiringRedTests` passed **4/4, 0 failed** at `post-r9-targeted/batch21-wiring-post-r9-4of4.trx` (SHA-256 `BBB810EF64311CB13D69426274FF8B2FFB0FFFE283201DD3BBFC43218FD2E17A`).
 - Because §24.121 wording was appended, `ClaimSurfaceGuardTests` was regenerated with `CLAIM_SURFACE_REGENERATE=1` and rerun without the variable; both passed 1/1. TRXs: `post-r9-claim-regen/claim-surface-post-r9-regen.trx` (SHA-256 `B406F9092F15974ED65F17B315456FC5228496CB5C1D5AF1A6E0FCDECFD30790`) and `post-r9-claim-verify/claim-surface-post-r9-no-env.trx` (SHA-256 `0F4589F03E81ECBDA393BB91AE2F3DE9620E69DBE75D55A22EB920FADFE2C256`). Manifest remained 590 lines, SHA-256 `1F29901BF9C2C816BA167AE9E36CB9D03F64F33A6791CDB84ADA3DCD9E7DCAD6`.
 - The changes above repair the evidence omissions mechanically. There has been no second GPT acceptance of those additions, and no claim of such acceptance. The full assistant regression remains the previously recorded 1479/2/0/1481 run plus exact four-Fact source-name projection; the historical 1477-case baseline was not rerun. Production gates remain closed.
+
+## Owner 收口裁决（2026-09-27）
+
+owner 指令据本地机械证据关闭 SB21-1。R9 两项原级必改证据缺口均已补齐并可复核：11 组有效反向突变/恢复 TRX 与各自命名结果、哈希对照；R16 完整 §24.63 U、锚点 blob、当前源码哈希与 104/104 TRX。R9 未复核后补材料，不声称顾问接受；没有追加 SB21-1 会诊。原 R16 独立会诊历史上未取得的事实仍保留为后续处理债务。生产入口及真实 User 等门继续关闭。
+
+## Owner closeout claim-surface verification (2026-09-27)
+
+After adding the closeout statements to the guarded R5.3 and R5 handoff documents, `ClaimSurfaceGuardTests` passed 1/1 with `CLAIM_SURFACE_REGENERATE=1` and passed 1/1 again without the variable. Both used `-p:DeployToBgiTools=false`. TRXs: `_batch21/sb21-1-closeout/claim-regen/sb21-1-owner-closeout-claim-regen.trx` and `_batch21/sb21-1-closeout/claim-verify/sb21-1-owner-closeout-claim-verify.trx`. Current `ClaimSurfaceManifest.txt` is 591 lines, SHA-256 `C49D950F90FB51ED91ED46FB697F9AA49D541E650A67A714DCB31767942F7D29`; the prior R9 snapshot remains documented as 590 lines.
