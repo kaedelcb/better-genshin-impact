@@ -193,6 +193,23 @@ public sealed class LocalWaitQueueStore
         }
     }
 
+    /// <summary>显式恢复/撤销时保留取消墓碑，避免同一 itemId 被删除后重登记回到旧代际。</summary>
+    public bool Cancel(string itemId, string reason, DateTimeOffset nowUtc)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
+        lock (_sync)
+        {
+            var items = Load().ToList();
+            var item = items.FirstOrDefault(i => string.Equals(i.ItemId, itemId, StringComparison.Ordinal));
+            if (item is null || item.State == LocalWaitItemState.Cancelled) return false;
+            item.State = LocalWaitItemState.Cancelled;
+            item.Reason = string.IsNullOrWhiteSpace(reason) ? "显式恢复撤销旧等待" : reason;
+            item.CancelledAtUtc = nowUtc.ToUniversalTime();
+            Persist(items);
+            return true;
+        }
+    }
+
     /// <summary>
     /// 应用失效清理（置 Cancelled 并记录原因/时刻），并按保留期裁剪过期墓碑；有变化才写盘。
     /// 写入失败不会破坏原文件（先写临时文件，成功后才替换）。

@@ -12,6 +12,10 @@ public sealed class RunRecordConflictException : Exception
     public RunRecordConflictException(string message) : base(message) { }
 }
 
+internal sealed record RunStoreListSnapshot(
+    IReadOnlyList<WorkflowRunRecord> Records,
+    IReadOnlyList<string> UnknownFiles);
+
 /// <summary>
 /// 槲寄生 · 任务中心——RunStore（运行水位持久化，R4.2）。
 /// 路径：默认 %APPDATA%/NexusBGI/runs/（按 Windows 用户隔离，不走 SignalR 同步）；
@@ -60,32 +64,7 @@ public sealed class RunStore
     /// <summary>无法解析的记录文件（隔离展示用；原件保留，绝不自动删改）。</summary>
     public IReadOnlyList<string> UnknownFiles
     {
-        get
-        {
-            var bad = new List<string>();
-            foreach (var file in EnumerateRunFilesOrEmpty())   // 目录未建=空集；拒绝访问⇒响亮上抛（见枚举助手）
-            {
-                try
-                {
-                    var text = TryReadAllTextOrNull(file, "read-unknown");
-                    if (text is null) continue;               // 读取前已被移除＝已确认不存在
-                    var rec = JsonSerializer.Deserialize<WorkflowRunRecord>(text, JsonOptions);
-                    if (rec is null || string.IsNullOrWhiteSpace(rec.RunId)) bad.Add(file);
-                }
-                catch (Exception ex) when (IsFileContention(ex))
-                {
-                    // [第一／二轮会诊重要项处置] **争用家族预算耗尽后必须响亮**（`IOException` 与
-                    // `UnauthorizedAccessException` 同族）：不得被当作「坏记录」而静默隐藏。
-                    throw;
-                }
-                catch (JsonException)
-                {
-                    bad.Add(file);
-                }
-            }
-            bad.Sort(StringComparer.Ordinal);
-            return bad;
-        }
+        get => ListWithIntegrity("read-unknown").UnknownFiles;
     }
 
     /// <summary>创建运行记录（初始 Planned + 固定幂等键；RecordRevision 从 1 起）。
@@ -230,9 +209,13 @@ public sealed class RunStore
     /// 恢复时经 ReconcileAsync 对账」，标 Unknown 会绕过该合同（RecoverOnStart_PrerequisiteInFlight 回归证明）。
     /// </summary>
     public static bool HasUnresolvedExternalFact(WorkflowRunRecord rec)
-        => rec.CurrentSubmission is { InFlight: true }
-           || rec.State == WorkflowRunState.Completing
-           || rec.PendingCompletion is not null;
+        => rec.State == WorkflowRunState.Completing
+           || rec.PendingCompletion is not null
+           || rec.CurrentSubmission is { ObservedTerminal: null } sub
+              && (sub.Intent == SubmitIntentState.Accepted
+                  || sub.InFlight || sub.SendAttempted
+                  || !string.IsNullOrEmpty(sub.JobId)
+                  || !string.IsNullOrEmpty(sub.AcceptedSendIdentity));
 
     /// <summary>推进记录（提交受理/终态/水位/等待/收尾状态更新；记录修订单调递增）。</summary>
     public void Update(WorkflowRunRecord rec) => Persist(rec, rec.RecordRevision);
@@ -318,33 +301,50 @@ public sealed class RunStore
         return text is null ? null : JsonSerializer.Deserialize<WorkflowRunRecord>(text, JsonOptions);
     }
 
-    /// <summary>列出全部可解析记录（按创建时间排序）。</summary>
-    public IReadOnlyList<WorkflowRunRecord> List()
+    /// <summary>
+    /// 同一次目录枚举中读取可解析运行和损坏文件清单（记录按创建时间排序）。
+    /// 锁覆盖本 RunStore 实例的写入与读取；不承诺跨不同 RunStore 实例/进程的全局快照。
+    /// </summary>
+    internal RunStoreListSnapshot ListWithIntegrity(string readOperation = "read-list")
     {
-        var list = new List<WorkflowRunRecord>();
-        foreach (var file in EnumerateRunFilesOrEmpty())   // 目录未建=空集；拒绝访问⇒响亮上抛（见枚举助手）
+        lock (_gate)
         {
-            try
+            var list = new List<WorkflowRunRecord>();
+            var bad = new List<string>();
+            foreach (var file in EnumerateRunFilesOrEmpty())   // 目录未建=空集；拒绝访问⇒响亮上抛（见枚举助手）
             {
-                var text = TryReadAllTextOrNull(file, "read-list");
-                if (text is null) continue;               // 读取前已被移除＝已确认不存在
-                var rec = JsonSerializer.Deserialize<WorkflowRunRecord>(text, JsonOptions);
-                if (rec is not null && !string.IsNullOrWhiteSpace(rec.RunId)) list.Add(rec);
+                try
+                {
+                    var text = TryReadAllTextOrNull(file, readOperation);
+                    if (text is null) continue;               // 读取前已被移除＝已确认不存在
+                    var rec = JsonSerializer.Deserialize<WorkflowRunRecord>(text, JsonOptions);
+                    if (rec is null || string.IsNullOrWhiteSpace(rec.RunId))
+                    {
+                        bad.Add(file);
+                        continue;
+                    }
+                    list.Add(rec);
+                }
+                catch (Exception ex) when (IsFileContention(ex))
+                {
+                    // [第一／二轮会诊重要项处置] **争用家族预算耗尽后必须响亮**：不得当作「内容损坏」静默隐藏。
+                    throw;
+                }
+                catch (JsonException)
+                {
+                    // 隔离：坏文件不参与列表，但与本次记录集合一并返回完整性信息；原件保留。
+                    bad.Add(file);
+                }
             }
-            catch (Exception ex) when (IsFileContention(ex))
-            {
-                // [第一／二轮会诊重要项处置] **争用家族预算耗尽后必须响亮**：不得当作「内容损坏」静默丢弃
-                // （否则活动运行会被隐藏 ⇒ 有双跑/误判风险）。
-                throw;
-            }
-            catch (JsonException)
-            {
-                // 隔离：坏文件不参与列表（UnknownFiles 另行展示），原件保留
-            }
+
+            list.Sort((a, b) => a.CreatedAt.CompareTo(b.CreatedAt));
+            bad.Sort(StringComparer.Ordinal);
+            return new RunStoreListSnapshot(list.AsReadOnly(), bad.AsReadOnly());
         }
-        list.Sort((a, b) => a.CreatedAt.CompareTo(b.CreatedAt));
-        return list;
     }
+
+    /// <summary>列出全部可解析记录（按创建时间排序）；需同时核验完整性时使用 <see cref="ListWithIntegrity"/>。</summary>
+    public IReadOnlyList<WorkflowRunRecord> List() => ListWithIntegrity().Records;
 
     /// <summary>
     /// 启动恢复扫描：非终态记录 → 显式标 Interrupted/Unknown（§7.2：重启换纪元后未证实终态不标成功）。
@@ -359,36 +359,40 @@ public sealed class RunStore
         foreach (var rec in List())
         {
             if (rec.IsTerminal) continue;
+            var hasUnresolvedExternalFact = HasUnresolvedExternalFact(rec);
             // R4.8（宿主夹具连带发现）：Unknown 已是保守收敛终点（结果不确定待对账）——再扫描不改动、不追加笔记、
             // 更不降级 Interrupted（否则 ResumeAsync 的 Unknown 守卫被绕过，前置未知记录场景可未经对账恢复）；
             // 仍返回供 Reconciler/宿主对账决策（幂等保持，CrashWindow2 合同不变）。
-            // R4.9（ASTRA 二轮 I4）：Interrupted 同样幂等保持——重新 Persist 会刷新 UpdatedAt
-            // 重排 resume「最新」候选并重复追加留痕；扫描不得改变业务排序依据。
-            if (rec.State is WorkflowRunState.Unknown or WorkflowRunState.Interrupted)
+            if (rec.State == WorkflowRunState.Unknown)
+            {
+                recovered.Add(rec);
+                continue;
+            }
+            // Interrupted 通常幂等保持，但必须先检查未决外部事实；旧/冲突记录不得借 Interrupted 绕过对账。
+            if (rec.State == WorkflowRunState.Interrupted && !hasUnresolvedExternalFact)
             {
                 recovered.Add(rec);
                 continue;
             }
             string note;
-            // [批次 20／Wave3／C11=(a)] **本地等待停驻运行的独立谓词**（BO-5 交叉面闭合）：停驻运行
-            // 无在飞提交（登记在 RecordIntent 之前）⇒ 收敛为 **Interrupted（可显式恢复）**——不落入
-            // Unknown（无 job 可对账，R11 F-A 合同）；不走下方通用 else（语义等价但显式列出＝独立谓词，
-            // 波次裁决留痕）。等待项就绪后经 ResumeAsync 重驱。
-            if (rec.State == WorkflowRunState.LocalWaitParking)
-            {
-                rec.State = WorkflowRunState.Interrupted;
-                note = "助手重启：本地等待停驻运行，标 Interrupted（等待项就绪后可显式重驱）。";
-            }
-            else if (rec.State == WorkflowRunState.Completing || rec.PendingCompletion is not null)
+            // 先核验任何尚未闭合的外部事实；即使 State/LocalWaitDecision 声称本地等待，只要发送/收尾事实
+            // 有矛盾或含混，仍必须 Unknown，不能让停驻标签遮住对账义务。
+            if (hasUnresolvedExternalFact && (rec.State == WorkflowRunState.Completing || rec.PendingCompletion is not null))
             {
                 // B5：收尾意图已落盘但执行结果未知——结果不确定，禁止自动补发收尾
                 rec.State = WorkflowRunState.Unknown;
                 note = "助手重启：收尾动作在飞（执行结果未证实），标 Unknown，需人工对账，禁止自动补发收尾。";
             }
-            else if (rec.CurrentSubmission is { } sub && sub.InFlight)
+            else if (hasUnresolvedExternalFact && rec.CurrentSubmission is { } sub)
             {
                 rec.State = WorkflowRunState.Unknown;
-                note = $"助手重启：提交在飞且终态未证实（{sub.Key}，节点 {sub.NodeId}），标 Unknown，需按幂等键+job 查询对账，禁止自动重跑。";
+                note = $"助手重启：提交存在未闭合发送事实（{sub.Key}，节点 {sub.NodeId}），标 Unknown，需按幂等键+job 查询对账，禁止自动重跑。";
+            }
+            else if (rec.State == WorkflowRunState.LocalWaitParking)
+            {
+                // [批次 20／Wave3／C11=(a)] 本地等待仅在上方已排除收尾/发送事实后收敛为 Interrupted。
+                rec.State = WorkflowRunState.Interrupted;
+                note = "助手重启：本地等待停驻运行，标 Interrupted（等待项绑定可由显式恢复重建）。";
             }
             else
             {
@@ -406,6 +410,8 @@ public sealed class RunStore
     {
         lock (_gate)
         {
+        if (rec.LocalWaitDecision is { } waitDecision)
+            rec.LocalWaitDecision = WorkflowRunner.SanitizeWaitDecision(waitDecision);
         // [P50 根因修复·批次四十九] Windows 文件争用家族：目标文件被其他句柄占用（并发读/原子替换窗口）时，
         // 既可能抛 `IOException`，也可能抛 `UnauthorizedAccessException`（"Access to the path is denied"）。
         // 两者都按**有界重试**处理；预算耗尽后**原样抛出**（响亮失败不静默，仍走既有 Unknown/冲突归类）。

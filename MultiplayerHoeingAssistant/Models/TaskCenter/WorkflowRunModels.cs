@@ -47,6 +47,8 @@ public enum SubmitIntentState
     Accepted,
     /// <summary>BGI 拒绝（响亮拒绝，带原因）。</summary>
     Rejected,
+    /// <summary>门面给出确定零发送等待；本地停驻已原子落盘，可显式重评。</summary>
+    LocalWaitDeferred,
 }
 
 /// <summary>节点游标：节点出现身份 = nodeId + 出现位置 + 循环轮次 + 尝试（§3.4 身份合同）。</summary>
@@ -234,6 +236,10 @@ public sealed class WorkflowRunRecord
     /// <summary>当前提交（B2：一提交一身份——幂等键/意图/jobId/观察终态同属一个提交身份，不跨节点复用残留）。</summary>
     [JsonPropertyName("currentSubmission")]
     public WorkflowSubmission? CurrentSubmission { get; set; }
+
+    /// <summary>本地等待/保持的类型化决定与不可变队列绑定；Hold 可无 binding，且无 binding 不可重建队列。</summary>
+    [JsonPropertyName("localWaitDecision")]
+    public LocalWaitDecisionRecord? LocalWaitDecision { get; set; }
 
     /// <summary>链尾已达（B3：游标 null 消歧——false+null=未开始/中断；true+null=全部节点已完成）。</summary>
     [JsonPropertyName("tailReached")]

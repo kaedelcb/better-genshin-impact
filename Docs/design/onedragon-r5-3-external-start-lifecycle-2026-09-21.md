@@ -4769,3 +4769,27 @@ R29-R47 期间修复的**真缺陷**（均有反例构造与突变钉死）：�
 ### §24.120.5 门禁与边界
 
 生产入口门、真实 User 门与 R5.8 签署**继续关闭**；停驻语义生产不可达（ShouldRegisterLocalWait 生产恒 null、waitLocally 无生产产出方）。**不援引措辞类豁免**；声明面清单变更随本批提交评审。R44 起新发现按 owner 止损裁决登记台账残项（BO-14 起），未修复项已在 §24.120.4 与台账逐条登记归属。
+
+## §24.121 SB21-1 收口登记——生产等待裁定接线（2026-09-27）
+
+### §24.121.1 授权范围与实现
+
+Owner 授权本子批有限扩展：加入类型化 pre-intent Wait/Hold/Continue 判定、来源与运行身份绑定、队列/运行恢复一致性；BO-6/BO-8 留 SB21-4，不据本条标记完成。
+
+- `TaskCenterHost` 默认构造组装 `LocalWaitQueueStore` 与 `WaitDecisionSource`，`CreateRunner` 将两者注入 `WorkflowRunner`；既有引用与 scope providers 仍由宿主提供。
+- 同步判定在 `RecordIntent` 前读取一次冻结上下文。`ContinueAdmission` 只表示继续走完整准入，不是发送许可；`Wait` 与 `Hold` 各自留类型化理由。运行、流程修订、记录修订、游标、出现/循环/尝试、来源身份、scope、候选身份和排序事实绑定到判定快照。
+- 队列无 trusted identity、无发送授权。运行记录先持久化 Wait 绑定，再发布队列镜像；发布失败保留运行侧绑定供显式 Resume 重建。来源或身份漂移时撤销旧绑定并 Hold。未决发送/收尾事实优先于停车标签，不能被 Wait/Hold 覆盖；Hold 不得被稍后的 Wait 快照降级。
+- 门禁配置保持改动前值：生产公开构造已有 `_admissionWired=true`，而 `_successorAdmissionWired` 仍为默认 false；判定源只在两者均开时评估等待，否则返回 ContinueAdmission。SB21-1 不改这两个开关、不启用后继消费路径，也不启用真实 User/R5.8 最终入口。
+
+### §24.121.2 R8 发现处置与验证
+
+SB21-1 累计会诊 **8/8 次**（R1 Kimi、R2–R8 GPT；失败/超时请求同计，本轮后不再加会诊）。R8 的 1 项必改与 4 项重要按原等级逐项处置：补齐 BO-1/EV1 精确守卫突变证据；未决外部事实覆盖 Accepted、jobId、独立 SendAttempted 与 PendingCompletion 的启动恢复及直接 Resume；同步与异步 successor 候选共用显式 Plan/0 映射；边界 Hold 优先保留；诊断 Reason 与 Resume Note 脱敏并验证持久化 JSON。处置和逐项证据见 `_batch21/sb21-1-r8-review/current-source-reverse-mutations.md`、`test-evidence.md` 与本批暂停交接稿。
+
+- `Batch21WiringRedTests`：**4/4 通过**；定向 TRX：`_batch21/sb21-1-r8-review/final-targeted/batch21-wiring-4of4-final.trx`。
+- 助手全量：**1479 通过 / 2 跳过 / 0 失败 / 1481**；claim regen 后最终 TRX：`_batch21/sb21-1-r8-review/final-full-after-claim/sb21-1-assistant-full-final-after-claim.trx`。两个跳过均为既有 opt-in P50 负载诊断。逐名差集投影：新增恰为 Batch21WiringRedTests 四个 Fact、移除/改名 0，故请求基线为 **1475/2/0/1477**。仓库未找到旧 1477 项基线 TRX；该基线值是 HEAD 测试声明名对当前 TRX 的精确投影，不称为旧 HEAD 重跑。
+- 当前源码反向突变 **11/11** 均由命名断言检出，突变源文件逐字节恢复到原 SHA-256，恢复态目标夹具通过；首轮 4 个脚本编译错误无 TRX 项不计作检出，修正选择器后另行通过。详细日志/TRX 位于 `_batch21/sb21-1-r8-review/`。
+- ClaimSurfaceGuardTests 使用 `CLAIM_SURFACE_REGENERATE=1` 再生后，无变量复跑与最终文档复跑均通过；`ClaimSurfaceManifest.txt` 保持 **590 行**、SHA-256 `1F29901BF9C2C816BA167AE9E36CB9D03F64F33A6791CDB84ADA3DCD9E7DCAD6`，与生成前一致。TRX：`_batch21/sb21-1-r8-review/claim-surface-regen/claim-surface-regen.trx`、`claim-surface-verify/claim-surface-verify-no-env.trx`、`claim-surface-final-docs2/claim-surface-verify-final-docs2.trx`。
+
+### §24.121.3 收口边界
+
+本批只证明助手侧源码与夹具；不声称 BGI 实机执行验证。BO-6/BO-8 及计划中的 BO-4、BO-10/BO-12、BO-11/BO-13 按 `_batch21/b21_plan.md` 归后续子批；生产入口门、真实 User 门、R5.8 签署、E3/E4/E5 与热键面继续关闭。本批提交采用 `git commit --only` 明确文件清单；材料外历史 `.bak`/`.stale` 与两个 relay 文档不进入提交。

@@ -2,6 +2,126 @@ using System.Text.Json.Serialization;
 
 namespace MultiplayerHoeingAssistant.Models;
 
+/// <summary>同步提交前等待裁定；ContinueAdmission 不是发送许可。</summary>
+public enum LocalWaitDecisionKind
+{
+    ContinueAdmission = 0,
+    Wait = 1,
+    Hold = 2,
+}
+
+/// <summary>来源证明的种类；移交 runId 不伪装成面板 RequestIdentity。</summary>
+public enum LocalWaitSourceKind
+{
+    PanelFlowRegistration = 0,
+    StartupHandoff = 1,
+}
+
+/// <summary>不可变的同步等待判定输入，锁定一次运行与节点出现。</summary>
+public sealed record WaitDecisionRequest
+{
+    public string RunId { get; init; } = "";
+    public string WorkflowId { get; init; } = "";
+    public string WorkflowRevision { get; init; } = "";
+    public int RecordRevision { get; init; }
+    public string? CursorNodeId { get; init; }
+    public int CursorOccurrence { get; init; }
+    public int CursorLoopIteration { get; init; }
+    public string NodeId { get; init; } = "";
+    public int SequenceIndex { get; init; }
+    public int Occurrence { get; init; }
+    public int LoopIteration { get; init; }
+    public int Attempt { get; init; }
+}
+
+/// <summary>等待裁定观察到的运行、来源与候选身份。缺失来源或排序证明时允许持久化为 Hold。</summary>
+public sealed record LocalWaitDecisionContext
+{
+    [JsonPropertyName("runId")] public string RunId { get; init; } = "";
+    [JsonPropertyName("workflowId")] public string WorkflowId { get; init; } = "";
+    [JsonPropertyName("workflowRevision")] public string WorkflowRevision { get; init; } = "";
+    [JsonPropertyName("recordRevision")] public int RecordRevision { get; init; }
+    [JsonPropertyName("cursorNodeId")] public string? CursorNodeId { get; init; }
+    [JsonPropertyName("cursorOccurrence")] public int CursorOccurrence { get; init; }
+    [JsonPropertyName("cursorLoopIteration")] public int CursorLoopIteration { get; init; }
+    [JsonPropertyName("nodeId")] public string NodeId { get; init; } = "";
+    [JsonPropertyName("sequenceIndex")] public int SequenceIndex { get; init; }
+    [JsonPropertyName("occurrence")] public int Occurrence { get; init; }
+    [JsonPropertyName("loopIteration")] public int LoopIteration { get; init; }
+    [JsonPropertyName("attempt")] public int Attempt { get; init; }
+    [JsonPropertyName("sourceKind")] public LocalWaitSourceKind? SourceKind { get; init; }
+    /// <summary>面板来源为真实 RequestIdentity；移交来源为 RunId，与 RequestIdentity 分列。</summary>
+    [JsonPropertyName("sourceIdentity")] public string? SourceIdentity { get; init; }
+    [JsonPropertyName("scope")] public string? Scope { get; init; }
+    [JsonPropertyName("candidateId")] public string? CandidateId { get; init; }
+    [JsonPropertyName("admissionIdentity")] public string? AdmissionIdentity { get; init; }
+    [JsonPropertyName("tier")] public ArbitrationTier? Tier { get; init; }
+    [JsonPropertyName("priority")] public int? Priority { get; init; }
+    [JsonPropertyName("isHoeingHighest")] public bool IsHoeingHighest { get; init; }
+    [JsonPropertyName("hasTrustedRankingFacts")] public bool HasTrustedRankingFacts { get; init; }
+}
+
+/// <summary>等待队列不可变登记载荷＋其运行/来源绑定；可由运行记录重建队列项。</summary>
+public sealed record LocalWaitBinding
+{
+    [JsonPropertyName("itemId")] public string ItemId { get; init; } = "";
+    [JsonPropertyName("stableIdentity")] public string StableIdentity { get; init; } = "";
+    [JsonPropertyName("candidateId")] public string CandidateId { get; init; } = "";
+    [JsonPropertyName("admissionIdentity")] public string AdmissionIdentity { get; init; } = "";
+    [JsonPropertyName("namespace")] public string Namespace { get; init; } = "";
+    [JsonPropertyName("workflowId")] public string WorkflowId { get; init; } = "";
+    [JsonPropertyName("sourceKind")] public LocalWaitSourceKind SourceKind { get; init; }
+    [JsonPropertyName("sourceIdentity")] public string SourceIdentity { get; init; } = "";
+    [JsonPropertyName("runId")] public string RunId { get; init; } = "";
+    [JsonPropertyName("scope")] public string Scope { get; init; } = "";
+    [JsonPropertyName("workflowRevision")] public string WorkflowRevision { get; init; } = "";
+    [JsonPropertyName("nodeId")] public string NodeId { get; init; } = "";
+    [JsonPropertyName("sequenceIndex")] public int SequenceIndex { get; init; }
+    [JsonPropertyName("recordRevision")] public int RecordRevision { get; init; }
+    [JsonPropertyName("cursorNodeId")] public string? CursorNodeId { get; init; }
+    [JsonPropertyName("cursorOccurrence")] public int CursorOccurrence { get; init; }
+    [JsonPropertyName("cursorLoopIteration")] public int CursorLoopIteration { get; init; }
+    [JsonPropertyName("occurrence")] public int Occurrence { get; init; }
+    [JsonPropertyName("loopIteration")] public int LoopIteration { get; init; }
+    [JsonPropertyName("attempt")] public int Attempt { get; init; }
+    [JsonPropertyName("tier")] public ArbitrationTier Tier { get; init; }
+    [JsonPropertyName("priority")] public int Priority { get; init; }
+    [JsonPropertyName("isHoeingHighest")] public bool IsHoeingHighest { get; init; }
+    [JsonPropertyName("scheduledAt")] public DateTimeOffset? ScheduledAt { get; init; }
+    [JsonPropertyName("prerequisiteReference")] public string PrerequisiteReference { get; init; } = "";
+    [JsonPropertyName("enqueuedAtUtc")] public DateTimeOffset EnqueuedAtUtc { get; init; }
+
+    public LocalWaitItem ToQueueItem() => new()
+    {
+        ItemId = ItemId,
+        StableIdentity = StableIdentity,
+        CandidateId = CandidateId,
+        AdmissionIdentity = AdmissionIdentity,
+        Namespace = Namespace,
+        WorkflowId = WorkflowId,
+        Tier = Tier,
+        Priority = Priority,
+        IsHoeingHighest = IsHoeingHighest,
+        ScheduledAt = ScheduledAt,
+        PrerequisiteReference = PrerequisiteReference,
+        EnqueuedAtUtc = EnqueuedAtUtc,
+        State = LocalWaitItemState.Waiting,
+        // Queue membership is not a proof of authority or a send permit.
+        HasTrustedIdentity = false,
+        Reason = "本地等待（未获准入前零发送）",
+    };
+}
+
+/// <summary>运行台账中的等待裁定；Hold 可无完整 binding，但无 binding 时不得重建队列。</summary>
+public sealed record LocalWaitDecisionRecord
+{
+    [JsonPropertyName("kind")] public LocalWaitDecisionKind Kind { get; init; }
+    [JsonPropertyName("context")] public LocalWaitDecisionContext Context { get; init; } = new();
+    [JsonPropertyName("binding")] public LocalWaitBinding? Binding { get; init; }
+    [JsonPropertyName("reason")] public string Reason { get; init; } = "";
+    [JsonPropertyName("noSendConfirmed")] public bool NoSendConfirmed { get; init; }
+}
+
 /// <summary>本地等待项状态（等待不是 BGI 已入队、也不是已受理）。</summary>
 public enum LocalWaitItemState
 {

@@ -116,6 +116,7 @@ public sealed partial class TaskCenterHost
         _snapshotWaitBudget = snapshotWaitBudget ?? TimeSpan.FromSeconds(15);
         _workflows = new WorkflowStore(flowsDir);
         _runs = new RunStore(runsDir);
+        LocalWaitQueue = new LocalWaitQueueStore(runsDir);
         _catalog = new ResourceCatalogService(
             () => clientAccessor() is { } c ? new BgiExternalCatalogTransport(c) : null, catalogCacheFile);
         _clientAccessor = clientAccessor ?? throw new ArgumentNullException(nameof(clientAccessor));
@@ -129,7 +130,9 @@ public sealed partial class TaskCenterHost
         _successorAdmissionWired = successorAdmissionWired;
         _arbitrationDir = arbitrationDir;
         _admissionSeams = admissionSeams;
-        _runsDirPath = runsDir;    }
+        _runsDirPath = runsDir;
+        WaitDecisionSource = new WaitDecisionSource(DecideLocalWait);
+    }
 
     /// <summary>运行状态变更通知（终态/动作后触发；UI 以 2s 轮询为主、本事件为辅）。</summary>
     public event EventHandler? StateChanged;
@@ -137,6 +140,8 @@ public sealed partial class TaskCenterHost
     public WorkflowStore Workflows => _workflows;
     public RunStore Runs => _runs;
     public ResourceCatalogService Catalog => _catalog;
+    public LocalWaitQueueStore LocalWaitQueue { get; }
+    public WaitDecisionSource WaitDecisionSource { get; }
 
     /// <summary>启动屏障（一轮 B5）：任何 Start/Resume 前完成一次恢复扫描（Interrupted/Unknown 标记+留痕，绝不自动恢复）。幂等。</summary>
     public void EnsureRecovered() => EnsureRecoveredAsync().GetAwaiter().GetResult();
@@ -992,7 +997,11 @@ public sealed partial class TaskCenterHost
         return new WorkflowRunner(_workflows, _runs,
             effective,
             new BgiWorkflowPrerequisiteAdapter(c, _runs),
-            new BgiWorkflowTerminalExecutor(c, _runs));
+            new BgiWorkflowTerminalExecutor(c, _runs),
+            localWaitQueue: LocalWaitQueue,
+            localWaitPrerequisiteReferenceProvider: LocalWaitPrerequisiteReference,
+            localWaitAdmissionScopeProvider: run => TryGetAdmissionScope(run.RunId!, run.WorkflowId),
+            waitDecisionSource: WaitDecisionSource);
     }
 
     /// <summary>登记驱动任务并观察至收敛（异常按在飞事实收敛 Unknown/Interrupted，绝不留 Running 僵尸）。</summary>

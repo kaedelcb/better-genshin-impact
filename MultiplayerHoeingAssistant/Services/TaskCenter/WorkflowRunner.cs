@@ -11,27 +11,50 @@ public sealed record WorkflowSubmitRequest(
     WorkflowNode Node,
     bool SuppressConfigCompletionAction);
 
-/// <summary>提交受理结果（accepted/rejected/unknown 与终态分开，§7.1）。
-/// R4.8 一轮 B1 三态化：Uncertain=受理与否不可考（传输异常/回执畸形/对账未命中/无法解释的 already_executed）——
-/// 引擎走 Unknown 停驻（游标不推进、ObservedTerminal 保持空、禁止自动重跑），绝不按拒绝/失败推进；
-/// Rejected 仅限可证实的未受理（本地校验失败或对端副作用前协议拒绝）。不猜成功，也不猜失败/拒绝。</summary>
-/// <param name="Uncertain">true＝结果不可考（`Unknown` 停驻：保留未决责任、禁重发）。</param>
-/// <param name="Retryable">
-/// **[P8／§24.62]** true＝**确定拒绝 ＋ 可证实未发送**（远端不存在本笔受理事实）⇒ 按 §3.2a「无损拒绝类」
-/// 开**重试窗口**（重试须新许可）；默认 false（既有确定拒绝保持终局语义，不因本字段改动）。
-/// </param>
-public sealed record BoundarySubmitResult(bool Accepted, string? JobId, string? RejectReason, bool Uncertain = false,
-    bool Retryable = false)
+public enum BoundarySubmitKind
 {
-    public static BoundarySubmitResult AcceptedWith(string jobId) => new(true, jobId, null);
-    public static BoundarySubmitResult Rejected(string reason) => new(false, null, reason);
+    Accepted,
+    Rejected,
+    Unknown,
+    Wait,
+    Hold,
+}
+
+/// <summary>提交边界的互斥判别结果；Wait/Hold 不等于拒绝，也不授予发送许可。</summary>
+public sealed record BoundarySubmitResult
+{
+    private BoundarySubmitResult(BoundarySubmitKind kind, string? jobId, string? rejectReason,
+        bool retryable, LocalWaitDecisionRecord? waitDecision)
+    {
+        Kind = kind;
+        JobId = jobId;
+        RejectReason = rejectReason;
+        Retryable = retryable;
+        WaitDecision = waitDecision;
+    }
+
+    public BoundarySubmitKind Kind { get; }
+    public bool Accepted => Kind == BoundarySubmitKind.Accepted;
+    public string? JobId { get; }
+    public string? RejectReason { get; }
+    public bool Uncertain => Kind == BoundarySubmitKind.Unknown;
+    public bool Retryable { get; }
+    public LocalWaitDecisionRecord? WaitDecision { get; }
+
+    public static BoundarySubmitResult AcceptedWith(string jobId) => new(BoundarySubmitKind.Accepted, jobId, null, false, null);
+    public static BoundarySubmitResult Rejected(string reason) => new(BoundarySubmitKind.Rejected, null, reason, false, null);
     /// <summary>
     /// **[P8／§24.62]** 确定拒绝·**开重试窗口**（§3.2a）：证据＝**可证实未发送**（`BgiNotSentException`）
     /// 或门面已结清的等值无损拒绝（`AdmissionResultKind.RetryableRejected`）。语义与普通「终局确定拒绝」
     /// 分开：窗口内可经**新许可**（`RetryAsync`）再入场。
     /// </summary>
-    public static BoundarySubmitResult RejectedWithRetryWindow(string reason) => new(false, null, reason, Retryable: true);
-    public static BoundarySubmitResult UnknownWith(string reason) => new(false, null, reason, Uncertain: true);
+    public static BoundarySubmitResult RejectedWithRetryWindow(string reason)
+        => new(BoundarySubmitKind.Rejected, null, reason, true, null);
+    public static BoundarySubmitResult UnknownWith(string reason) => new(BoundarySubmitKind.Unknown, null, reason, false, null);
+    public static BoundarySubmitResult WaitWith(string reason, LocalWaitDecisionRecord? decision = null)
+        => new(BoundarySubmitKind.Wait, null, reason, false, decision);
+    public static BoundarySubmitResult HoldWith(string reason, LocalWaitDecisionRecord? decision = null)
+        => new(BoundarySubmitKind.Hold, null, reason, false, decision);
 }
 
 /// <summary>边界观察终态（R4.8 一轮 B1/I3 结构化：远端原词与本地查询不可考分开）。
@@ -185,6 +208,7 @@ public sealed class LocalWaitRegistrationOutcome
 
     /// <summary>停驻原因（审计用；不适用时为空串）。</summary>
     public string Reason { get; init; } = "";
+    public LocalWaitDecisionRecord? Decision { get; init; }
 
     /// <summary>
     /// **[Wave1 R17 建议-2] 当前无产出方**（<see cref="WorkflowRunner.TryRegisterLocalWait"/> 全部出口
@@ -222,6 +246,7 @@ public sealed class WorkflowRunner
     /// 只把「确定零发送的等待」落盘成可审计的等待项；`null`（未注入）⇒ 等待短路不生效（既有行为不变）。
     /// </summary>
     private readonly LocalWaitQueueStore? _localWaitQueue;
+    private readonly WaitDecisionSource? _waitDecisionSource;
 
     /// <summary>
     /// **[批次 20／C4①] 等待登记前置引用来源（可选注入；生产未接线）。**
@@ -281,7 +306,8 @@ public sealed class WorkflowRunner
         IWorkflowPrerequisiteAdapter prerequisites, IWorkflowTerminalExecutor terminal,
         WorkflowRunnerOptions? options = null, LocalWaitQueueStore? localWaitQueue = null,
         Func<WorkflowRunRecord, WorkflowNodeOccurrence, string?>? localWaitPrerequisiteReferenceProvider = null,
-        Func<WorkflowRunRecord, string?>? localWaitAdmissionScopeProvider = null)
+        Func<WorkflowRunRecord, string?>? localWaitAdmissionScopeProvider = null,
+        WaitDecisionSource? waitDecisionSource = null)
     {
         _workflows = workflows;
         _runs = runs;
@@ -290,6 +316,7 @@ public sealed class WorkflowRunner
         _terminal = terminal;
         _opt = options ?? new WorkflowRunnerOptions();
         _localWaitQueue = localWaitQueue;
+        _waitDecisionSource = waitDecisionSource;
         _localWaitPrerequisiteReferenceProvider = localWaitPrerequisiteReferenceProvider;
         _localWaitAdmissionScopeProvider = localWaitAdmissionScopeProvider;
     }
@@ -422,36 +449,127 @@ public sealed class WorkflowRunner
     /// </summary>
     public async Task<WorkflowRunRecord> ResumeAsync(string runId, CancellationToken ct = default)
     {
-        var run = _runs.Load(runId) ?? throw new FileNotFoundException("运行记录不存在：" + runId);
-        if (run.State == WorkflowRunState.Unknown)
-            throw new InvalidOperationException("运行结果不确定（Unknown），需先按幂等键+job 查询对账，禁止自动恢复。");
-        if (run.State is not (WorkflowRunState.Interrupted or WorkflowRunState.Paused
-            or WorkflowRunState.LocalWaitParking))
-            throw new InvalidOperationException($"仅 Interrupted/Paused/LocalWaitParking 可显式恢复（当前 {run.State}）。"
-                + "LocalWaitParking＝等待停驻（[批次 20／Wave3／C11=(a)]）：等待项就绪后显式重驱入口。");
-
-        var snapshot = _workflows.LoadSnapshot(run.WorkflowId);
-        var plan = new WorkflowPlan(snapshot.Document);
-        var preflight = plan.Preflight(_boundary.SingleNativeSupported, _prerequisites.SupportedKinds, _terminal.SupportedKinds,
-            _boundary.SuppressConfigCompletionSupported); // R4.6 I1/B6：能力协商预检（含 suppress 能力）
-        if (!preflight.Executable)
-            throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
-
-        run.WorkflowRevision = snapshot.Revision; // 恢复即对账到当前修订（节点边界语义）
-        run.State = WorkflowRunState.Running;
-        run.Note = AppendNote(run.Note, "显式恢复运行（游标身份重定位，不重放已完成节点）。");
-        _runs.Update(run);
-
         var control = new RunControl { RunCts = CancellationTokenSource.CreateLinkedTokenSource(ct) };
-        if (!_controls.TryAdd(run.RunId, control))
-            throw new InvalidOperationException("运行登记冲突：" + run.RunId);
+        if (!_controls.TryAdd(runId, control))
+        {
+            control.RunCts.Dispose();
+            throw new InvalidOperationException("运行登记冲突：" + runId);
+        }
         try
         {
+            // 先取得本 Runner 的运行控制，再读取与修改记录；控制冲突不得先写 Running/修订。
+            var run = _runs.Load(runId) ?? throw new FileNotFoundException("运行记录不存在：" + runId);
+            if (run.State == WorkflowRunState.Unknown)
+                throw new InvalidOperationException("运行结果不确定（Unknown），需先按幂等键+job 查询对账，禁止自动恢复。");
+            if (run.State is not (WorkflowRunState.Interrupted or WorkflowRunState.Paused
+                or WorkflowRunState.LocalWaitParking))
+                throw new InvalidOperationException($"仅 Interrupted/Paused/LocalWaitParking 可显式恢复（当前 {run.State}）。"
+                    + "LocalWaitParking＝等待停驻（[批次 20／Wave3／C11=(a)]）：等待项就绪后显式重驱入口。");
+            if (RunStore.HasUnresolvedExternalFact(run))
+            {
+                run.State = WorkflowRunState.Unknown;
+                run.Note = AppendNote(run.Note, "显式恢复发现未决发送/收尾事实，标 Unknown，必须先对账，禁止重驱。");
+                _runs.Update(run);
+                throw new InvalidOperationException("运行记录含未决发送/收尾事实，已保留事实并标 Unknown；必须先对账，禁止自动恢复。");
+            }
+
+            var snapshot = _workflows.LoadSnapshot(run.WorkflowId);
+            var plan = new WorkflowPlan(snapshot.Document);
+            var preflight = plan.Preflight(_boundary.SingleNativeSupported, _prerequisites.SupportedKinds, _terminal.SupportedKinds,
+                _boundary.SuppressConfigCompletionSupported); // R4.6 I1/B6：能力协商预检（含 suppress 能力）
+            if (!preflight.Executable)
+                throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
+
+            if (run.LocalWaitDecision is { Kind: LocalWaitDecisionKind.Wait or LocalWaitDecisionKind.Hold } priorDecision
+                && run.CurrentSubmission?.Intent == SubmitIntentState.LocalWaitDeferred)
+            {
+                var sameRevision = string.Equals(run.WorkflowRevision, snapshot.Revision, StringComparison.Ordinal);
+                WorkflowNodeOccurrence? waitOccurrence = null;
+                var sameCursor = false;
+                if (run.Cursor is { } savedCursor
+                    && plan.TryLocate(savedCursor.NodeId, savedCursor.Occurrence, savedCursor.LoopIteration, out var located))
+                {
+                    waitOccurrence = located;
+                    sameCursor = true;
+                }
+                if (sameRevision && sameCursor)
+                {
+                    var currentOccurrence = waitOccurrence!;
+                    var resumeRequest = CreateWaitDecisionRequest(run, currentOccurrence, run.Cursor!.Attempt);
+                    var decision = DecideLocalWait(resumeRequest, currentOccurrence)
+                        ?? new LocalWaitDecisionRecord
+                        {
+                            Kind = LocalWaitDecisionKind.ContinueAdmission,
+                            Context = ContextFromRequest(resumeRequest),
+                            Reason = "测试接缝恢复按显式请求重驱",
+                        };
+                    if (decision.Kind is LocalWaitDecisionKind.Wait or LocalWaitDecisionKind.Hold)
+                    {
+                        if (decision.Kind == LocalWaitDecisionKind.Wait)
+                        {
+                            var prepared = TryRegisterLocalWait(run, currentOccurrence, run.Cursor!.Attempt, decision);
+                            if (prepared.Decision?.Binding is { } refreshedBinding)
+                            {
+                                if (priorDecision.Binding is { } priorBinding
+                                    && !SameWaitBindingPayload(priorBinding, refreshedBinding))
+                                {
+                                    CancelPersistedLocalWait(priorBinding, "恢复复核发现等待绑定身份/载荷漂移");
+                        run.LocalWaitDecision = SanitizeWaitDecision(decision with
+                        {
+                            Kind = LocalWaitDecisionKind.Hold,
+                            Binding = null,
+                            Reason = "恢复复核发现来源、候选或队列载荷已漂移；旧绑定已取消，不以新快照替换。",
+                            NoSendConfirmed = true,
+                        });
+                                }
+                                else
+                                {
+                                    // 已存在的绑定不可被当前快照替换（包含其来源、身份、scope 与登记载荷）。
+                                    run.LocalWaitDecision = SanitizeWaitDecision(prepared.Decision with
+                                        { Binding = priorDecision.Binding ?? refreshedBinding });
+                                }
+                            }
+                            else
+                            {
+                                CancelPersistedLocalWait(priorDecision.Binding, "恢复复核无法重建可信等待绑定");
+                                run.LocalWaitDecision = SanitizeWaitDecision(decision with
+                                {
+                                    Kind = LocalWaitDecisionKind.Hold,
+                                    Binding = null,
+                                    Reason = prepared.Reason,
+                                    NoSendConfirmed = true,
+                                });
+                            }
+                        }
+                        else
+                        {
+                            CancelPersistedLocalWait(priorDecision.Binding, "等待复核转为 Hold");
+                            run.LocalWaitDecision = SanitizeWaitDecision(decision with { Binding = null });
+                        }
+                        run.State = WorkflowRunState.LocalWaitParking;
+                        run.Note = AppendNote(run.Note, "显式恢复复核仍需本地等待/保持，未启动驱动、未发送。"
+                            + Sanitize(run.LocalWaitDecision.Reason));
+                        _runs.Update(run);
+                        PublishPersistedLocalWait(run);
+                        return run;
+                    }
+                }
+
+                // 继续准入或身份/修订漂移：先墓碑化旧队列项，再清除活动绑定；若写入失败则维持原停驻。
+                CancelPersistedLocalWait(priorDecision.Binding, sameRevision && sameCursor
+                    ? "显式恢复重新进入完整准入" : "流程修订或游标身份已漂移");
+                run.LocalWaitDecision = null;
+            }
+
+            run.WorkflowRevision = snapshot.Revision; // 恢复即对账到当前修订（节点边界语义）
+            run.State = WorkflowRunState.Running;
+            run.Note = AppendNote(run.Note, "显式恢复运行（游标身份重定位，不重放已完成节点）。");
+            _runs.Update(run);
             return await DriveAsync(run, plan, control).ConfigureAwait(false);
         }
         finally
         {
-            _controls.TryRemove(run.RunId, out _);
+            _controls.TryRemove(runId, out _);
             control.RunCts.Dispose();
         }
     }
@@ -565,8 +683,19 @@ public sealed class WorkflowRunner
                     // Running/Waiting）——运行无活动驱动、等待项就绪后可显式重驱（ResumeAsync 接受本状态）；
                     // 重启恢复扫描将其收敛为 Interrupted（可恢复）——「无重驱句柄的永久 Running」形态消除
                     // （Wave1 R11 F-A/R25 处置链的闭环）。同代际再次重驱同一出现 ⇒ 再停驻 ⇒ 状态保持 LocalWaitParking。
+                    // [批次 21／BO-1] 停驻原因留痕到运行级 Note（与 unknown 分支同族的可观测性义务）：
+                    // 登记未完成／被拒的原文经 Sanitize 追加，运行记录盘上可查（夹具钉死「登记未完成＋异常」子串）。
                     run.State = WorkflowRunState.LocalWaitParking;
+                    run.Note = AppendNote(run.Note, "本地等待登记停驻（零发送，游标不推进）：" + Sanitize(outcome.Reason));
+                    if (run.CurrentSubmission is { } deferred
+                        && deferred.Intent == SubmitIntentState.IntentRecorded
+                        && !deferred.SendAttempted
+                        && string.IsNullOrEmpty(deferred.JobId)
+                        && string.IsNullOrEmpty(deferred.AcceptedSendIdentity)
+                        && deferred.ObservedTerminal is null)
+                        deferred.Intent = SubmitIntentState.LocalWaitDeferred;
                     CommitOutcome(run, plan, occurrence, outcome.Result, outcome.Reason, rawTerminal: null);
+                    PublishPersistedLocalWait(run);
                     return run;
                 }
                 if (outcome.Result is "cancelUnconfirmed" or "unknown")
@@ -699,23 +828,32 @@ public sealed class WorkflowRunner
             LoopIteration = occurrence.LoopIteration,
             Attempt = attempt,
         };
-        // **[批次 14／D1] 本地持久等待短路（必须在 RecordIntent 之前）。**
-        // 门面给出**确定结论**「本笔未进入发送面、零发送」（AdmissionResultKind.WaitLocally）时：
-        // ①**登记本地持久等待项**（持久化，含 ItemId 幂等键与登记载荷）；
-        // ②**不**走提交：`RecordIntent` 会把提交落成 `IntentRecorded/Submitted`，从而在 `WorkflowSubmission.InFlight`
-        //    留下「疑似在飞提交」，把「确定零发送的等待」永久记成「可能已发送」——属事实改写，禁止；
-        // ③返回 `("waitLocally", …)`：调用点**游标不推进、不终态化**（与 `unknown/cancelUnconfirmed` 同族的停驻语义），
-        //    等待项就绪后按「重新走一次完整准入」重评。
-        // **本批未接线**：没有生产方返回该结论，此处为显式闭环（不可落进 `_ =>` 未知兜底）。
-        // [批次 20／C4①] 登记产物结构化：Park=true 涵盖「已登记」与「登记被拒（载荷合同）」两种零发送停驻；
-        // 登记被拒**不**回落到提交（门面零发送结论不可被改写成发送尝试）。
-        // 等待来源判定（ShouldRegisterLocalWait 接缝）由**调用点**显式应用：
-        // TryRegisterLocalWait 是登记机制本体，可独立被验证（含登记被拒路径）。
-        if (ShouldRegisterLocalWait(this, occurrence))
+        // 预检 Hold 只适用于没有未决外部事实的当前提交；不能用 LocalWaitDeferred 覆盖旧受理/发送事实。
+        if (RunStore.HasUnresolvedExternalFact(run))
+            return ("unknown", "提交前发现未决发送/收尾事实，保留原提交记录并待对账。", null);
+        // 同步类型化裁定必须先于 RecordIntent。ContinueAdmission 不是许可：后续异步边界仍完整准入。
+        var waitRequest = CreateWaitDecisionRequest(run, occurrence, attempt);
+        var waitDecision = DecideLocalWait(waitRequest, occurrence);
+        if (waitDecision is { Kind: not LocalWaitDecisionKind.ContinueAdmission })
         {
-            var localWait = TryRegisterLocalWait(run, occurrence, attempt);
-            if (localWait.Park)
-                return (LocalWaitResultWord, localWait.Reason, null);
+            var prepared = waitDecision.Kind == LocalWaitDecisionKind.Wait
+                ? TryRegisterLocalWait(run, occurrence, attempt, waitDecision)
+                : new LocalWaitRegistrationOutcome
+                {
+                    Park = true,
+                    Reason = waitDecision.Reason,
+                    Decision = waitDecision with { Binding = null },
+                };
+            run.LocalWaitDecision = SanitizeWaitDecision(prepared.Decision ?? waitDecision with
+            {
+                Kind = LocalWaitDecisionKind.Hold,
+                Binding = null,
+                Reason = string.IsNullOrWhiteSpace(prepared.Reason) ? "等待登记未完成" : prepared.Reason,
+                NoSendConfirmed = true,
+            });
+            submission.Intent = SubmitIntentState.LocalWaitDeferred;
+            run.CurrentSubmission = submission;
+            return (LocalWaitResultWord, prepared.Reason, null);
         }
 
         _runs.RecordIntent(run, submission); // 提交意图先行（B2/B3：崩溃后按意图对账，不重跑）
@@ -724,6 +862,57 @@ public sealed class WorkflowRunner
         var submit = await _boundary.SubmitAsync(
             new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true), ct)
             .ConfigureAwait(false);
+        if (submit.Kind is BoundarySubmitKind.Wait or BoundarySubmitKind.Hold)
+        {
+            if (submission.Intent != SubmitIntentState.IntentRecorded
+                || submission.SendAttempted
+                || !string.IsNullOrEmpty(submission.JobId)
+                || !string.IsNullOrEmpty(submission.AcceptedSendIdentity)
+                || submission.ObservedTerminal is not null)
+                return ("unknown", "等待裁定与提交发送事实冲突，保留事实并待对账。", null);
+
+            var boundaryWaitRequest = CreateWaitDecisionRequest(run, occurrence, attempt);
+            var boundaryHold = submit.Kind == BoundarySubmitKind.Hold
+                || submit.WaitDecision?.Kind == LocalWaitDecisionKind.Hold;
+            var boundaryDecision = boundaryHold
+                ? new LocalWaitDecisionRecord
+                {
+                    Kind = LocalWaitDecisionKind.Hold,
+                    Context = ContextFromRequest(boundaryWaitRequest),
+                    Reason = !string.IsNullOrWhiteSpace(submit.RejectReason)
+                        ? submit.RejectReason!
+                        : submit.WaitDecision?.Reason ?? "提交边界要求保持，未创建等待队列项",
+                    NoSendConfirmed = true,
+                }
+                : DecideLocalWait(boundaryWaitRequest, occurrence)
+                ?? new LocalWaitDecisionRecord
+                {
+                    Kind = LocalWaitDecisionKind.Hold,
+                    Context = ContextFromRequest(boundaryWaitRequest),
+                    Reason = "边界返回等待但缺少宿主等待判定来源",
+                    NoSendConfirmed = true,
+                };
+            if (boundaryDecision.Kind == LocalWaitDecisionKind.ContinueAdmission)
+                boundaryDecision = boundaryDecision with
+                {
+                    Kind = LocalWaitDecisionKind.Hold,
+                    Binding = null,
+                    Reason = "边界返回等待但同步快照未能确认等待条件",
+                    NoSendConfirmed = true,
+                };
+            var settled = boundaryDecision.Kind == LocalWaitDecisionKind.Wait
+                ? TryRegisterLocalWait(run, occurrence, attempt, boundaryDecision)
+                : new LocalWaitRegistrationOutcome { Park = true, Reason = boundaryDecision.Reason, Decision = boundaryDecision };
+            run.LocalWaitDecision = SanitizeWaitDecision(settled.Decision ?? boundaryDecision with
+            {
+                Kind = LocalWaitDecisionKind.Hold,
+                Binding = null,
+                Reason = string.IsNullOrWhiteSpace(settled.Reason) ? boundaryDecision.Reason : settled.Reason,
+                NoSendConfirmed = true,
+            });
+            submission.Intent = SubmitIntentState.LocalWaitDeferred;
+            return (LocalWaitResultWord, settled.Reason, null);
+        }
         if (submit.Uncertain)
         {
             // R4.8 一轮 B1：受理与否不可考——Intent 保持 Submitted（发送已尝试事实），走 Unknown 停驻（调用点）；
@@ -1015,6 +1204,9 @@ public sealed class WorkflowRunner
     /// <summary>I3：持久化备注脱敏——长数字串（UID 形态）打码；受控原因码+脱敏摘要，不存原始敏感面。</summary>
     internal static string Sanitize(string? text)
         => string.IsNullOrEmpty(text) ? "" : System.Text.RegularExpressions.Regex.Replace(text, "\\d{5,}", "***");
+
+    internal static LocalWaitDecisionRecord SanitizeWaitDecision(LocalWaitDecisionRecord decision)
+        => decision with { Reason = Sanitize(decision.Reason) };
 
     /// <summary>顶层触发器等待（多触发器取最近；未知触发器响亮失败；暂停可打断）。</summary>
     private async Task AwaitFlowTriggersAsync(WorkflowRunRecord run, WorkflowPlan plan, RunControl control, CancellationToken ct)
@@ -1426,7 +1618,8 @@ public sealed class WorkflowRunner
     /// 队列缺失＝接线缺陷，须零发送停驻；批次 14 的「不登记且不短路」口径在本批已按 fail-closed 收紧）。
     /// 纪律：这里是「确定未发送」的本地登记，**不得**借此推进游标或终态化运行。
     /// </summary>
-    internal LocalWaitRegistrationOutcome TryRegisterLocalWait(WorkflowRunRecord run, WorkflowNodeOccurrence occurrence, int attempt)
+    internal LocalWaitRegistrationOutcome TryRegisterLocalWait(WorkflowRunRecord run, WorkflowNodeOccurrence occurrence,
+        int attempt, LocalWaitDecisionRecord decision)
     {
         // 等待来源判定（ShouldRegisterLocalWait 接缝）由**调用点**显式应用，不在此处重复——
         // 本方法是登记机制本体（含登记被拒路径），须可独立验证；判定函数与登记口均已就位，
@@ -1441,6 +1634,18 @@ public sealed class WorkflowRunner
                 Park = true,
                 Reason = "本地持久等待**拒绝登记**（local_wait）：登记接缝命中但未注入等待队列"
                     + "（接线缺陷）——维持零发送停驻，**不回落提交路径**（门面零发送结论不得被改写成发送）。",
+            };
+        }
+        if (decision.Kind != LocalWaitDecisionKind.Wait
+            || !decision.NoSendConfirmed
+            || !decision.Context.HasTrustedRankingFacts
+            || decision.Context.Tier is null
+            || decision.Context.Priority is null)
+        {
+            return new LocalWaitRegistrationOutcome
+            {
+                Park = true,
+                Reason = "本地等待**保持**（local_wait）：缺少可绑定的来源、排序或零发送证明，不创建队列项。",
             };
         }
 
@@ -1466,7 +1671,23 @@ public sealed class WorkflowRunner
         //   attempt=1 下可达**（R11 F-B）：停驻→取消→队列项置 Cancelled→重驱再停驻时，若前置引用含
         //   ticket 且 ticket 已轮换（"…@ticket-7"→"…@ticket-8"），重登记即撞上「已取消同身份项、
         //   载荷不同 ⇒ 响亮冲突」——收敛义务同 R3-F3①（异常不得使运行收敛为 Unknown）。
-        var reference = _localWaitPrerequisiteReferenceProvider?.Invoke(run, occurrence);
+        // [批次 21／BO-1] provider.Invoke 异常收敛（R3-F3① 同形）：折为 Park=true「登记未完成」零发送停驻，
+        // 绝不穿透驱动循环按「在飞事实」收敛 Unknown/Interrupted（登记路径在 RecordIntent 之前，无 job 可查
+        // ⇒ Unknown 无法对账，批次 14 注释明载禁止该形态）；重驱时按可重试停驻重新登记。
+        string? reference;
+        try
+        {
+            reference = _localWaitPrerequisiteReferenceProvider?.Invoke(run, occurrence);
+        }
+        catch (Exception ex)
+        {
+            return new LocalWaitRegistrationOutcome
+            {
+                Park = true,
+                Reason = "本地持久等待**登记未完成**（local_wait）：前置引用来源异常（" + ex.GetType().Name
+                    + "，「" + ex.Message + "」）——维持零发送停驻，不回落提交路径。",
+            };
+        }
         var referenceAvailable = !string.IsNullOrWhiteSpace(reference);
         if (!referenceAvailable)
         {
@@ -1498,7 +1719,20 @@ public sealed class WorkflowRunner
         // 恒等（provider 无从分歧）、面板来源行为不变（台账字段本为空）。
         var admissionScope = run.AdmissionSourceScope;
         if (string.IsNullOrWhiteSpace(admissionScope))
-            admissionScope = _localWaitAdmissionScopeProvider?.Invoke(run);
+            // [批次 21／BO-1] 同上面：scope provider 异常 ⇒ 登记未完成零发送停驻，绝不 Unknown 收敛。
+            try
+            {
+                admissionScope = _localWaitAdmissionScopeProvider?.Invoke(run);
+            }
+            catch (Exception ex)
+            {
+                return new LocalWaitRegistrationOutcome
+                {
+                    Park = true,
+                    Reason = "本地持久等待**登记未完成**（local_wait）：授权 scope 反查来源异常（" + ex.GetType().Name
+                        + "，「" + ex.Message + "」）——维持零发送停驻，不回落提交路径。",
+                };
+            }
         var scopeAvailable = TaskCenterHost.IsCanonicalAdmissionScope(admissionScope);
         if (!scopeAvailable)
         {
@@ -1508,6 +1742,26 @@ public sealed class WorkflowRunner
                 Reason = "本地持久等待**拒绝登记**（local_wait）：C4① 登记载荷合同——拿不到运行的"
                     + "**规范形状**固定授权 Scope（来源缺供或非 `bgi:local:{完整 epoch}`；非规范 scope 的"
                     + "身份与 successor 提交面不同身份空间，结构性永不可重入）。维持零发送停驻，不回落提交路径。",
+            };
+        }
+        var context = decision.Context;
+        if (!string.Equals(context.RunId, run.RunId, StringComparison.Ordinal)
+            || !string.Equals(context.WorkflowId, run.WorkflowId, StringComparison.Ordinal)
+            || !string.Equals(context.WorkflowRevision, run.WorkflowRevision, StringComparison.Ordinal)
+            || context.RecordRevision != run.RecordRevision
+            || !string.Equals(context.NodeId, occurrence.NodeId, StringComparison.Ordinal)
+            || context.SequenceIndex != occurrence.SequenceIndex
+            || context.Occurrence != occurrence.Occurrence
+            || context.LoopIteration != occurrence.LoopIteration
+            || context.Attempt != attempt
+            || !string.Equals(context.CursorNodeId, run.Cursor?.NodeId, StringComparison.Ordinal)
+            || context.CursorOccurrence != (run.Cursor?.Occurrence ?? 0)
+            || context.CursorLoopIteration != (run.Cursor?.LoopIteration ?? 0))
+        {
+            return new LocalWaitRegistrationOutcome
+            {
+                Park = true,
+                Reason = "本地等待**保持**（local_wait）：判定身份与当前运行/游标不一致，不创建队列项。",
             };
         }
 
@@ -1522,52 +1776,100 @@ public sealed class WorkflowRunner
         // 该工厂与 successor 提交路径（TaskCenterHost.Admission.cs）**共用**（namespace/triggerOccurrenceId
         // 口径只此一处；锚定夹具 SuccessorCandidateComposition_AnchoredToSharedFactory 机械保证两侧同改）。
         // scope 取上文解析的权威值（台账字段优先，provider 仅补缺；两者皆缺已拒绝登记——R23 重要-1）。
-        var (admissionIdentity, candidateId) = LocalWaitIdentityTranslation.BuildAdmissionIdentity(
-            TaskCenterHost.BuildSuccessorIdentityCandidate(admissionScope, run.WorkflowId,
-                run.RunId, occurrence.NodeId, occurrence.Occurrence, occurrence.LoopIteration, attempt));
+        // [批次 21／BO-1] 身份构造异常（含①'：Occurrence/LoopIteration/Attempt 越界 >99,999,999 抛
+        // ArgumentOutOfRangeException）⇒ 同形收敛：Park=true 登记未完成零发送停驻，绝不 Unknown。
+        (string, string) admissionIdentityPair;
         try
         {
-            _localWaitQueue.Upsert(new LocalWaitItem
-            {
-                ItemId = LocalWaitQueuePolicy.DeriveItemId(stableIdentity),
-                StableIdentity = stableIdentity,
-                CandidateId = candidateId,
-                AdmissionIdentity = admissionIdentity,
-                Namespace = run.WorkflowId,
-                WorkflowId = run.WorkflowId,
-                // [Wave1 R7 建议-1] 登记时刻走注入时钟（与引擎全计时可注入口径一致）；
-                // [Wave1 R8 建议-2] 统一转 UTC 偏移（Clock 默认源为本地 Now，字段名是 *Utc——归一偏移）。
-                EnqueuedAtUtc = _opt.Clock().ToUniversalTime(),
-                State = LocalWaitItemState.Waiting,
-                // [批次 20／C4①] 登记载荷合同（第二步）：引用来自注入的权威来源；来源缺失时已在上文
-                // 拒绝登记，本行不可达于「缺引用登记」路径。
-                PrerequisiteReference = reference,
-                // HasTrustedIdentity 保持默认 false（保守）：等待登记不构成「可信入口」证据。
-                Reason = "低优先级本地持久等待（未获准入前零发送，不进入 BGI 执行队列）",
-            });
+            admissionIdentityPair = LocalWaitIdentityTranslation.BuildAdmissionIdentity(
+                TaskCenterHost.BuildSuccessorIdentityCandidate(admissionScope, run.WorkflowId,
+                    run.RunId, occurrence.NodeId, occurrence.Occurrence, occurrence.LoopIteration, attempt));
         }
-        // [Wave1 R28 重要-1] 折叠边界按**故障类别**对齐（而非异常类型）：LocalWaitQueueCorruptException
-        // （载荷冲突／文件损坏／版本不支持——读侧存储事故已被 Load 包装为此类型）与写侧 Persist 的裸
-        // IOException/UnauthorizedAccessException（写满／句柄占用／权限）同属「队列存储事故」，处置必须
-        // 对称——读侧停驻、写侧也停驻，写侧不再穿透驱动循环。provider.Invoke 异常仍归 BO-1。
-        catch (Exception ex) when (ex is LocalWaitQueueCorruptException
-                                   or System.IO.IOException
-                                   or UnauthorizedAccessException)
+        catch (Exception ex)
         {
-            // Reason **不断言具体原因**（该异常面覆盖业务冲突与存储事故两类，外层文案不得指认内层
-            // 事实），原文随 ex.Message 留痕。
             return new LocalWaitRegistrationOutcome
             {
                 Park = true,
-                Reason = "本地持久等待**登记未完成**（local_wait）：等待队列拒绝写入或存储异常"
-                    + "（原因见引文，涵盖载荷冲突与队列文件异常两类，以引文为准）——「" + ex.Message + "」；"
-                    + "维持零发送停驻，不回落提交路径。",
+                Reason = "本地持久等待**登记未完成**（local_wait）：登记身份构造异常（" + ex.GetType().Name
+                    + "，「" + ex.Message + "」）——维持零发送停驻，不回落提交路径。",
             };
         }
+        var admissionIdentity = admissionIdentityPair.Item1;
+        var candidateId = admissionIdentityPair.Item2;
+        if (context.Scope is { } decisionScope
+            && !string.Equals(decisionScope, admissionScope, StringComparison.Ordinal))
+        {
+            return new LocalWaitRegistrationOutcome
+            {
+                Park = true,
+                Reason = "本地等待**保持**（local_wait）：来源 scope 与当前权威 scope 不一致，不创建队列项。",
+            };
+        }
+        if (context.AdmissionIdentity is { } expectedIdentity
+            && !string.Equals(expectedIdentity, admissionIdentity, StringComparison.Ordinal)
+            || context.CandidateId is { } expectedCandidate
+            && !string.Equals(expectedCandidate, candidateId, StringComparison.Ordinal))
+        {
+            return new LocalWaitRegistrationOutcome
+            {
+                Park = true,
+                Reason = "本地等待**保持**（local_wait）：登记候选身份与判定快照不一致，不创建队列项。",
+            };
+        }
+        if (context.SourceKind is null || string.IsNullOrWhiteSpace(context.SourceIdentity))
+        {
+            return new LocalWaitRegistrationOutcome
+            {
+                Park = true,
+                Reason = "本地等待**保持**（local_wait）：缺少来源类别/身份绑定，不创建队列项。",
+            };
+        }
+        var sourceKind = context.SourceKind
+            ?? LocalWaitSourceKind.PanelFlowRegistration;
+        DateTimeOffset enqueuedAtUtc;
+        try { enqueuedAtUtc = _opt.Clock().ToUniversalTime(); }
+        catch (Exception ex)
+        {
+            return new LocalWaitRegistrationOutcome
+            {
+                Park = true,
+                Reason = "本地持久等待**登记未完成**（local_wait）：登记时钟异常（" + ex.GetType().Name
+                    + "，「" + ex.Message + "」）——维持零发送停驻，不创建队列项。",
+            };
+        }
+        var binding = new LocalWaitBinding
+        {
+            ItemId = LocalWaitQueuePolicy.DeriveItemId(stableIdentity),
+            StableIdentity = stableIdentity,
+            CandidateId = candidateId,
+            AdmissionIdentity = admissionIdentity,
+            Namespace = run.WorkflowId,
+            WorkflowId = run.WorkflowId,
+            SourceKind = sourceKind,
+            SourceIdentity = context.SourceIdentity ?? run.RunId!,
+            RunId = run.RunId!,
+            Scope = admissionScope!,
+            WorkflowRevision = run.WorkflowRevision,
+            NodeId = occurrence.NodeId,
+            SequenceIndex = occurrence.SequenceIndex,
+            RecordRevision = run.RecordRevision,
+            CursorNodeId = run.Cursor?.NodeId,
+            CursorOccurrence = run.Cursor?.Occurrence ?? 0,
+            CursorLoopIteration = run.Cursor?.LoopIteration ?? 0,
+            Occurrence = occurrence.Occurrence,
+            LoopIteration = occurrence.LoopIteration,
+            Attempt = attempt,
+            Tier = context.Tier.Value,
+            Priority = context.Priority.Value,
+            IsHoeingHighest = false,
+            PrerequisiteReference = reference,
+            EnqueuedAtUtc = enqueuedAtUtc,
+        };
         return new LocalWaitRegistrationOutcome
         {
             Park = true,
-            Reason = "本地持久等待已登记（" + LocalWaitReasonCode + "）：未获准入前零发送，等待项就绪后重新走完整准入。",
+            Reason = "本地等待绑定已形成（" + LocalWaitReasonCode + "）：运行停驻先落盘，之后发布等待队列项；未获准入前零发送。",
+            Decision = decision with { Binding = binding },
         };
     }
 
@@ -1581,8 +1883,152 @@ public sealed class WorkflowRunner
     /// **实例级**（非进程级静态）——避免跨测试类/跨运行的并行污染（R43 重要-6）。
     /// 判定接缝由调用点显式应用；本方法为登记机制本体（TryRegisterLocalWait）的入口闸。
     /// </summary>
-    private static bool ShouldRegisterLocalWait(WorkflowRunner runner, WorkflowNodeOccurrence occurrence)
-        => runner._opt.ShouldRegisterLocalWait?.Invoke(occurrence) ?? false;
+    private LocalWaitDecisionRecord? DecideLocalWait(WaitDecisionRequest request, WorkflowNodeOccurrence occurrence)
+    {
+        if (_waitDecisionSource is not null) return _waitDecisionSource.Decide(request);
+        if (_opt.ShouldRegisterLocalWait?.Invoke(occurrence) != true) return null;
+        // 旧测试接缝只用于异常/状态夹具；生产装配始终注入类型化宿主来源。
+        return new LocalWaitDecisionRecord
+        {
+            Kind = LocalWaitDecisionKind.Wait,
+            Context = ContextFromRequest(request) with
+            {
+                SourceKind = LocalWaitSourceKind.PanelFlowRegistration,
+                SourceIdentity = request.RunId,
+                Tier = ArbitrationTier.Plan,
+                Priority = 0,
+                HasTrustedRankingFacts = true,
+            },
+            Reason = "测试接缝命中本地等待",
+            NoSendConfirmed = true,
+        };
+    }
+
+    internal LocalWaitRegistrationOutcome TryRegisterLocalWait(WorkflowRunRecord run,
+        WorkflowNodeOccurrence occurrence, int attempt)
+    {
+        var request = CreateWaitDecisionRequest(run, occurrence, attempt);
+        var context = ContextFromRequest(request) with
+        {
+            SourceKind = LocalWaitSourceKind.PanelFlowRegistration,
+            SourceIdentity = request.RunId,
+            Scope = run.AdmissionSourceScope,
+            Tier = ArbitrationTier.Plan,
+            Priority = 0,
+            HasTrustedRankingFacts = true,
+        };
+        var prepared = TryRegisterLocalWait(run, occurrence, attempt, new LocalWaitDecisionRecord
+        {
+            Kind = LocalWaitDecisionKind.Wait,
+            Context = context,
+            Reason = "直接登记测试接缝",
+            NoSendConfirmed = true,
+        });
+        if (prepared.Decision?.Binding is not { } binding) return prepared;
+        try
+        {
+            _localWaitQueue!.Upsert(binding.ToQueueItem());
+            return new LocalWaitRegistrationOutcome
+            {
+                Park = true,
+                Reason = "本地持久等待已登记（" + LocalWaitReasonCode + "）：测试直调路径。",
+                Decision = prepared.Decision,
+            };
+        }
+        catch (Exception ex)
+        {
+            return new LocalWaitRegistrationOutcome
+            {
+                Park = true,
+                Reason = "本地持久等待**登记未完成**（local_wait）：等待队列拒绝写入或存储异常（"
+                    + ex.GetType().Name + "）——「" + ex.Message + "」；维持零发送停驻，不回落提交路径。",
+                Decision = prepared.Decision with { Kind = LocalWaitDecisionKind.Hold, Binding = null, Reason = ex.Message },
+            };
+        }
+    }
+
+    private static WaitDecisionRequest CreateWaitDecisionRequest(WorkflowRunRecord run,
+        WorkflowNodeOccurrence occurrence, int attempt)
+        => new()
+        {
+            RunId = run.RunId ?? "",
+            WorkflowId = run.WorkflowId ?? "",
+            WorkflowRevision = run.WorkflowRevision ?? "",
+            RecordRevision = run.RecordRevision,
+            CursorNodeId = run.Cursor?.NodeId,
+            CursorOccurrence = run.Cursor?.Occurrence ?? 0,
+            CursorLoopIteration = run.Cursor?.LoopIteration ?? 0,
+            NodeId = occurrence.NodeId,
+            SequenceIndex = occurrence.SequenceIndex,
+            Occurrence = occurrence.Occurrence,
+            LoopIteration = occurrence.LoopIteration,
+            Attempt = attempt,
+        };
+
+    private static LocalWaitDecisionContext ContextFromRequest(WaitDecisionRequest request)
+        => new()
+        {
+            RunId = request.RunId,
+            WorkflowId = request.WorkflowId,
+            WorkflowRevision = request.WorkflowRevision,
+            RecordRevision = request.RecordRevision,
+            CursorNodeId = request.CursorNodeId,
+            CursorOccurrence = request.CursorOccurrence,
+            CursorLoopIteration = request.CursorLoopIteration,
+            NodeId = request.NodeId,
+            SequenceIndex = request.SequenceIndex,
+            Occurrence = request.Occurrence,
+            LoopIteration = request.LoopIteration,
+            Attempt = request.Attempt,
+        };
+
+    private void PublishPersistedLocalWait(WorkflowRunRecord run)
+    {
+        if (run.LocalWaitDecision is not { Kind: LocalWaitDecisionKind.Wait, Binding: { } binding }) return;
+        try
+        {
+            _localWaitQueue?.Upsert(binding.ToQueueItem());
+        }
+        catch (Exception ex)
+        {
+            run.Note = AppendNote(run.Note,
+                "等待队列发布失败（运行台账已保存绑定，可在显式恢复时重建；" + ex.GetType().Name + "）。");
+            _runs.Update(run);
+        }
+    }
+
+    private void CancelPersistedLocalWait(LocalWaitBinding? binding, string reason)
+    {
+        if (binding is null) return;
+        if (_localWaitQueue is null)
+            throw new InvalidOperationException("存在等待绑定但 LocalWaitQueue 未注入；拒绝继续恢复。");
+        _localWaitQueue.Cancel(binding.ItemId, reason, _opt.Clock());
+    }
+
+    private static bool SameWaitBindingPayload(LocalWaitBinding left, LocalWaitBinding right)
+        => string.Equals(left.ItemId, right.ItemId, StringComparison.Ordinal)
+           && string.Equals(left.StableIdentity, right.StableIdentity, StringComparison.Ordinal)
+           && string.Equals(left.CandidateId, right.CandidateId, StringComparison.Ordinal)
+           && string.Equals(left.AdmissionIdentity, right.AdmissionIdentity, StringComparison.Ordinal)
+           && string.Equals(left.Namespace, right.Namespace, StringComparison.Ordinal)
+           && string.Equals(left.WorkflowId, right.WorkflowId, StringComparison.Ordinal)
+           && left.SourceKind == right.SourceKind
+           && string.Equals(left.SourceIdentity, right.SourceIdentity, StringComparison.Ordinal)
+           && string.Equals(left.RunId, right.RunId, StringComparison.Ordinal)
+           && string.Equals(left.Scope, right.Scope, StringComparison.Ordinal)
+           && string.Equals(left.WorkflowRevision, right.WorkflowRevision, StringComparison.Ordinal)
+           && string.Equals(left.NodeId, right.NodeId, StringComparison.Ordinal)
+           && left.SequenceIndex == right.SequenceIndex
+           && left.CursorNodeId == right.CursorNodeId
+           && left.CursorOccurrence == right.CursorOccurrence
+           && left.CursorLoopIteration == right.CursorLoopIteration
+           && left.Occurrence == right.Occurrence
+           && left.LoopIteration == right.LoopIteration
+           && left.Attempt == right.Attempt
+           && left.Tier == right.Tier
+           && left.Priority == right.Priority
+           && left.IsHoeingHighest == right.IsHoeingHighest
+           && string.Equals(left.PrerequisiteReference, right.PrerequisiteReference, StringComparison.Ordinal);
 
     /// <summary>
     /// 结果提交（B3-①：观察终态 + 节点结果 + 游标推进单次原子落盘，无中间态窗口）。

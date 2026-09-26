@@ -74,7 +74,12 @@ public sealed class LocalWaitParkingStateContractTests : IDisposable
         Assert.Equal("n1", run.Cursor!.NodeId); // 游标不推进
         Assert.Single(queue.Load());            // 等待项已登记
         Assert.Equal("n1", Assert.Single(queue.Load()).StableIdentity.Split('|')[1]);
-        Assert.Null(run.CurrentSubmission);     // 零发送（无在飞提交）
+        Assert.Equal(SubmitIntentState.LocalWaitDeferred, run.CurrentSubmission?.Intent); // 零发送事实显式持久化
+        Assert.False(run.CurrentSubmission?.InFlight ?? true);
+        var binding = Assert.IsType<LocalWaitBinding>(run.LocalWaitDecision?.Binding);
+        Assert.Equal(run.RunId, binding.RunId);
+        Assert.Equal(Assert.Single(queue.Load()).ItemId, binding.ItemId);
+        Assert.False(Assert.Single(queue.Load()).HasTrustedIdentity); // 队列成员不是发送许可
     }
 
     /// <summary>【Wave1 R25 形态端到端化】登记被拒（provider 缺失＝接线缺陷）⇒ 同样停驻于 LocalWaitParking。</summary>

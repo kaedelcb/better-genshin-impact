@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using MultiplayerHoeingAssistant.Models;
 
@@ -901,7 +902,18 @@ public sealed partial class TaskCenterHost
             }
             // [ev-1 会诊重要项修复②] 台账读取后移到非 Valid 判定之后：租约已判非 Valid 时，
             // 运行台账故障不得把留痕改写成「解析失败」（与未组装判定前置同族，第 7 轮会诊）。
-            var runs = _runs.List();
+            // [批次 21／EV1-R1] 台账存在未解析记录（UnknownFiles 非空）⇒ 「WireRunId 唯一命中」只在可解析
+            // 子集成立，损坏的同 WireRunId 记录会被静默跳过、把歧义掩盖成唯一命中（非保守方向；
+            // owner ev1 裁决选项 a 归占用者级别接线批修复）：整组级别解析按未知收敛＋留痕，
+            // 不得据被静默缩减的子集推级别（预填级别事实保留，不覆盖）。
+            var runSnapshot = _runs.ListWithIntegrity();
+            if (runSnapshot.UnknownFiles.Count > 0)
+            {
+                TryLog("[任务中心] 占用者级别事实未知：运行台账存在未解析记录（"
+                    + string.Join("、", runSnapshot.UnknownFiles) + "），唯一命中判定拒绝在缩减子集上进行");
+                return occupant;
+            }
+            var runs = runSnapshot.Records;
             var operations = read.File?.Handoff?.Operations;
             var level = OccupantLevelResolver.Resolve(execution.RunId.ToString("N"), runs, operations);
             if (!level.Reference.StartsWith("resolved_", StringComparison.Ordinal))
@@ -1356,7 +1368,10 @@ public sealed partial class TaskCenterHost
     internal static ArbitrationCandidate BuildSuccessorIdentityCandidate(
         string? scope, string workflowId, string runId, string nodeId,
         int occurrence, int loopIteration, int attempt)
-        => new()
+    {
+        // 工作流节点后继沿用可信启动入口的既有固定映射：普通计划层、优先级 0；最高级标记无受信来源。
+        // 明确写入候选，避免实际异步准入依赖 ArbitrationCandidate 的缺省值；同步等待预检复用本候选映射。
+        return new ArbitrationCandidate
         {
             Scope = scope,
             Namespace = "successor",
@@ -1367,7 +1382,10 @@ public sealed partial class TaskCenterHost
             Occurrence = occurrence,
             LoopIteration = loopIteration,
             Attempt = attempt,
+            Tier = ArbitrationTier.Plan,
+            Priority = 0,
         };
+    }
 
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, BoundarySubmitResult> _successorSendResults = new();
 
@@ -1658,7 +1676,7 @@ public sealed partial class TaskCenterHost
             // 语义与「确定未受理」分开表述：本批该值**无生产方**；若把它落进 `_ =>` 未知兜底，等于把
             // 「已确定的零发送等待」改写成「事实不可考」（事实改写），故必须先命中本分支。
             AdmissionResultKind.WaitLocally
-                => BoundarySubmitResult.Rejected(
+                => BoundarySubmitResult.WaitWith(
                     "仲裁本地持久等待（已确定未发送、零发送；等待项就绪后须重新走完整准入；"
                     + result.Kind + "/" + result.ReasonCode + "）：" + result.Detail),
             _ => BoundarySubmitResult.UnknownWith(
@@ -1689,27 +1707,33 @@ public sealed partial class TaskCenterHost
     /// `ArbitrationLeaseStore.Read()` 既不改写也不新建文件/目录），失败/不可解析 ⇒ null（调用方响亮拒绝）。
     /// </summary>
     private string? TryGetAdmissionScopeForResume(string runId, string? workflowId)
+        => string.IsNullOrEmpty(workflowId)
+            ? null
+            : ResolveAdmissionParent(TryReadAdmissionSources(), _runs.Load(runId), runId, workflowId)?.Scope;
+
+    private IReadOnlyList<OperationRecord>? TryReadAdmissionSources()
     {
-        if (string.IsNullOrEmpty(workflowId)) return null;
-        IReadOnlyList<OperationRecord>? sources = null;
         try
         {
+            LeaseHandoffSegment? handoff;
             if (_admissionStore is not null)
-                sources = _admissionStore.Read().File?.Handoff?.Operations;
+                handoff = _admissionStore.Read().File?.Handoff;
             else
             {
-                // 门面未初始化：按门面同一公式解析租约目录（只读；目录不存在=Absent，不建目录/文件）
+                // 门面未初始化：同一租约目录只读读取；目录不存在时 Read 返回 Absent，不创建文件。
                 var root = _admissionRoot ?? Directory.GetParent(_runsDirPath ?? "")?.FullName;
                 var dir = _arbitrationDir ?? (root is null ? null : Path.Combine(root, "arbitration"));
-                if (dir is not null)
-                    sources = new ArbitrationLeaseStore(dir).Read().File?.Handoff?.Operations;
+                handoff = dir is null ? null : new ArbitrationLeaseStore(dir).Read().File?.Handoff;
             }
+            return handoff is null
+                ? null
+                : (handoff.Operations ?? []).Concat((handoff.ArchivedOperations ?? [])
+                    .Where(a => a?.Operation is not null).Select(a => a.Operation)).ToList();
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            sources = null;   // 租约锁瞬时争用：按「面板来源不可判」处理（仍可回落运行台账来源）
+            return null;
         }
-        return ResolveAdmissionParent(sources, _runs.Load(runId), runId, workflowId)?.Scope;
     }
 
     /// <summary>
@@ -1732,9 +1756,133 @@ public sealed partial class TaskCenterHost
     private (string RequestIdentity, string Scope)? TryGetAdmissionParent(string runId, string? workflowId)
     {
         if (string.IsNullOrEmpty(workflowId)) return null;
-        var read = _admissionStore?.Read();
-        return ResolveAdmissionParent(read?.File?.Handoff?.Operations, _runs.Load(runId), runId, workflowId);
+        return ResolveAdmissionParent(TryReadAdmissionSources(), _runs.Load(runId), runId, workflowId);
     }
+
+    private LocalWaitDecisionRecord DecideLocalWait(WaitDecisionRequest request)
+    {
+        var context = new LocalWaitDecisionContext
+        {
+            RunId = request.RunId,
+            WorkflowId = request.WorkflowId,
+            WorkflowRevision = request.WorkflowRevision,
+            RecordRevision = request.RecordRevision,
+            CursorNodeId = request.CursorNodeId,
+            CursorOccurrence = request.CursorOccurrence,
+            CursorLoopIteration = request.CursorLoopIteration,
+            NodeId = request.NodeId,
+            SequenceIndex = request.SequenceIndex,
+            Occurrence = request.Occurrence,
+            LoopIteration = request.LoopIteration,
+            Attempt = request.Attempt,
+        };
+        LocalWaitDecisionRecord Hold(string reason, LocalWaitDecisionContext? observed = null) => new()
+        {
+            Kind = LocalWaitDecisionKind.Hold,
+            Context = observed ?? context,
+            Reason = reason,
+            NoSendConfirmed = true,
+        };
+        LocalWaitDecisionRecord Continue(string reason, LocalWaitDecisionContext observed) => new()
+        {
+            Kind = LocalWaitDecisionKind.ContinueAdmission,
+            Context = observed,
+            Reason = reason,
+            NoSendConfirmed = false,
+        };
+
+        // SB21-1 装配不打开双门；门关闭时只保留现有直通提交语义。
+        if (!_admissionWired || !_successorAdmissionWired)
+            return Continue("节点准入双门仍关闭", context);
+
+        WorkflowRunRecord? run;
+        try { run = _runs.Load(request.RunId); }
+        catch (Exception ex) { return Hold("运行来源读取失败（" + ex.GetType().Name + "）"); }
+        if (run is null
+            || run.RecordRevision != request.RecordRevision
+            || !string.Equals(run.WorkflowId, request.WorkflowId, StringComparison.Ordinal)
+            || !string.Equals(run.WorkflowRevision, request.WorkflowRevision, StringComparison.Ordinal)
+            || run.Cursor is not { } cursor
+            || !string.Equals(cursor.NodeId, request.CursorNodeId, StringComparison.Ordinal)
+            || cursor.Occurrence != request.CursorOccurrence
+            || cursor.LoopIteration != request.CursorLoopIteration
+            || !string.Equals(cursor.NodeId, request.NodeId, StringComparison.Ordinal)
+            || cursor.Occurrence != request.Occurrence
+            || cursor.LoopIteration != request.LoopIteration)
+            return Hold("等待判定运行修订或游标身份已漂移");
+
+        // 来源证明先于占用比较；面板取唯一流程登记父，启动移交取运行台账固定 Scope。
+        var parent = TryGetAdmissionParent(request.RunId, request.WorkflowId);
+        if (parent is null || !IsCanonicalAdmissionScope(parent.Value.Scope))
+            return Hold("等待判定缺少唯一且规范的授权来源，未创建队列项");
+        var handoffIdentity = "run-source:" + request.RunId;
+        var sourceKind = string.Equals(parent.Value.RequestIdentity, handoffIdentity, StringComparison.Ordinal)
+            ? LocalWaitSourceKind.StartupHandoff
+            : LocalWaitSourceKind.PanelFlowRegistration;
+        var candidate = BuildSuccessorIdentityCandidate(parent.Value.Scope, request.WorkflowId, request.RunId,
+            request.NodeId, request.Occurrence, request.LoopIteration, request.Attempt);
+        (string AdmissionIdentity, string CandidateId) translated;
+        try { translated = LocalWaitIdentityTranslation.BuildAdmissionIdentity(candidate); }
+        catch (Exception ex) { return Hold("等待候选身份无法构造（" + ex.GetType().Name + "）"); }
+        var observed = context with
+        {
+            SourceKind = sourceKind,
+            SourceIdentity = sourceKind == LocalWaitSourceKind.StartupHandoff
+                ? request.RunId : parent.Value.RequestIdentity,
+            Scope = parent.Value.Scope,
+            CandidateId = translated.CandidateId,
+            AdmissionIdentity = translated.AdmissionIdentity,
+            Tier = candidate.Tier,
+            Priority = candidate.Priority,
+            IsHoeingHighest = false, // ArbitrationCandidate 无可信最高级标记；后继节点不得从父候选继承。
+            HasTrustedRankingFacts = true,
+        };
+
+        ArbitrationFacts facts;
+        try { facts = CurrentArbitrationFacts(); }
+        catch (Exception ex) { return Hold("占用事实读取失败（" + ex.GetType().Name + "）", observed); }
+        var occupant = facts.RunningOccupant;
+        if (facts.ExecutionFactsUnknown || occupant.State == OccupantFactsState.Unknown)
+            return Hold("权威占用事实未知，保持停驻，不按空闲处理", observed);
+        if (facts.ExecutionOccupied
+            && facts.OwnInFlightRunBindings is { Count: 1 } ownBindings
+            && string.Equals(ownBindings.First(), request.RunId, StringComparison.Ordinal))
+        {
+            // 仅在事实快照能把占用唯一归属到当前 run 时跳过本地预停驻；Continue 仍不是发送许可，
+            // 异步门面会按持久化父子绑定/未决发送槽再次执行完整豁免校验。生产快照不提供此归属（null）。
+            return Continue("占用由当前宿主运行唯一归属；继续完整异步准入并由门面复核", observed);
+        }
+        if (occupant.State == OccupantFactsState.Idle)
+            return Continue("占用事实确认空闲，继续完整异步准入", observed);
+
+        var encounter = RunningOccupancyArbiter.Decide(occupant, new IncomingRequestFacts
+        {
+            IsHoeingHighest = false,
+            Tier = candidate.Tier,
+            Priority = candidate.Priority,
+            HasTrustedIdentity = observed.HasTrustedRankingFacts,
+        });
+        return encounter.Verdict switch
+        {
+            RunningEncounterVerdict.WaitLocally => new LocalWaitDecisionRecord
+            {
+                Kind = LocalWaitDecisionKind.Wait,
+                Context = observed,
+                Reason = encounter.Reason,
+                NoSendConfirmed = true,
+            },
+            RunningEncounterVerdict.HoldFactsUnknown or RunningEncounterVerdict.HoldUnknownOccupant => Hold(encounter.Reason, observed),
+            _ => Continue(encounter.Reason + "；仍须经过完整异步准入", observed),
+        };
+    }
+
+    /// <summary>本地等待的稳定身份引用；仅标识该运行游标，不宣称前置已就绪或授予发送权。</summary>
+    private static string LocalWaitPrerequisiteReference(WorkflowRunRecord run, WorkflowNodeOccurrence occurrence)
+        => "taskcenter-localwait/run/" + Uri.EscapeDataString(run.RunId ?? "")
+           + "/workflow/" + Uri.EscapeDataString(run.WorkflowId ?? "")
+           + "/node/" + Uri.EscapeDataString(occurrence.NodeId)
+           + "/occurrence/" + occurrence.Occurrence.ToString(System.Globalization.CultureInfo.InvariantCulture)
+           + "/loop/" + occurrence.LoopIteration.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// **准入来源解析判据（G4a；纯函数，便于逐支取证）**：
