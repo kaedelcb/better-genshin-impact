@@ -4806,3 +4806,10 @@ SB21-1 累计会诊 **8/8 次**（R1 Kimi、R2–R8 GPT；失败/超时请求同
 
 
 - **Owner 收口裁决（2026-09-27）**：owner 本轮指令要求收尾 SB21-1；据 R9 两项原级必改的补证已完成本地机械核验，关闭本子批且不追加会诊。反向突变审计中的 11 组 mutant/restored TRX、命名 Fact 结果、TRX SHA 与当前恢复态源码 SHA 均逐项复核；R16 补齐完整 §24.63 U，锚点与当前源码 Git blob 相等，104/104 TRX 结果及 SHA 可复核。原发现等级保留。R9 未审阅后补材料，**不声称顾问接受补证**；此裁决关闭的是本批证据材料缺口，不补造历史 R16 会诊结果。历史 R16 独立会诊未取得，仍按 §24.63 U 留给后续适用批次处理。生产门禁不变。
+
+### §24.121.5 当前现场复核与回归（2026-09-27）
+
+本轮重新读取工作区与证据，不沿用暂停稿中的历史现场快照。三项 SB21-1 目标源码/夹具在测试基线分支 main-OldTeaBag-B168、HEAD 14e22f2d578e2c7b005e3d2ef5b0e07a4ae4a987 均与提交内容一致。SHA-256：WorkflowRunner.cs 781087DA6377F18E53E8E904A8CEBC1A904D804B28D9FD2E3A826A7679100D06；TaskCenterHost.Admission.cs 1CEBB2D3FCBA2BF594B8A78DCAB0E036B767ECD816F1E9AA859994347210AF7C；Batch21WiringRedTests.cs E5DB0FC0124CA0ACE0F144FB359C8C279E5C4D07B3CE3B7232AB7B8E3BAC6A72。
+
+- 定向 Batch21WiringRedTests：4/4 通过，0 失败；相邻 LocalWait/Batch21/OccupantLevel/StartupHandoff/Resume：278/278 通过，0 失败。助手测试项目全量：1479 通过、2 个 opt-in P50 诊断未执行、0 失败，共 1481 项。三次运行均使用 DeployToBgiTools=false；TRX 与 SHA-256 见 _batch21/sb21-1-r8-review/test-evidence.md。
+- 本节只记录助手测试证据；未据此声称 BGI 实机、真实 User 或生产入口运行验证。生产入口、真实 User、R5.8 签署、E3/E4/E5 与热键门保持关闭。

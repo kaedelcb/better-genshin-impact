@@ -36,3 +36,17 @@ owner 指令据本地机械证据关闭 SB21-1。R9 两项原级必改证据缺�
 ## Owner closeout claim-surface verification (2026-09-27)
 
 After adding the closeout statements to the guarded R5.3 and R5 handoff documents, `ClaimSurfaceGuardTests` passed 1/1 with `CLAIM_SURFACE_REGENERATE=1` and passed 1/1 again without the variable. Both used `-p:DeployToBgiTools=false`. TRXs: `_batch21/sb21-1-closeout/claim-regen/sb21-1-owner-closeout-claim-regen.trx` and `_batch21/sb21-1-closeout/claim-verify/sb21-1-owner-closeout-claim-verify.trx`. Current `ClaimSurfaceManifest.txt` is 591 lines, SHA-256 `C49D950F90FB51ED91ED46FB697F9AA49D541E650A67A714DCB31767942F7D29`; the prior R9 snapshot remains documented as 590 lines.
+
+## Current checkout audit and regressions (2026-09-27)
+
+These fresh regressions were run against branch main-OldTeaBag-B168, HEAD 14e22f2d578e2c7b005e3d2ef5b0e07a4ae4a987. All three target source/test files matched that HEAD byte-for-byte; recorded SHA-256 values are listed in R5.3 §24.121.5. Test runs used DeployToBgiTools=false and exited successfully.
+
+- Targeted Batch21WiringRedTests: 4 passed / 0 failed / 4 total. TRX _batch21/current-audit-20260927/targeted/sb21-1-current-targeted-20260927.trx; SHA-256 C3925EBCEC3B3B628A94499C12CB9FF32BCA55D8D047169F0D03C34FE070696C.
+- Adjacent LocalWait|Batch21|OccupantLevel|StartupHandoff|Resume: 278 passed / 0 failed / 278 total. TRX _batch21/current-audit-20260927/adjacent/sb21-1-current-adjacent-20260927.trx; SHA-256 74166DF9D48DACFB08F3F786278E95739344709F124DA76350C5EFA2F807634C.
+- Full assistant test project: 1479 passed / 2 not executed / 0 failed / 1481 total. The two not-executed cases are TaskCenterSuccessorPathGateTests.P50_DiagnosticRepeat_OptIn and TaskCenterSuccessorPathGateTests.P50_LoadRepro_WholeClass_UnderControlledLoad. TRX _batch21/current-audit-20260927/full/sb21-1-current-assistant-full-20260927.trx; SHA-256 F080B2312DE81A1AD10B5AF2E9E6A6A476116CEB5E669CFA784586196291F4D3.
+
+No product source or fixture changed during this current-checkout audit. The historical R16 consultation result remains unavailable; §24.63 U retains that process debt. No additional consultation was sent after R9.
+
+## Claim-surface guard for current audit (2026-09-27)
+
+After adding the current audit record to R5.3, ClaimSurfaceGuardTests.DesignDocs_ClaimSurface_MatchesReviewedManifest passed 1/1 with CLAIM_SURFACE_REGENERATE=1 and passed 1/1 again with the variable absent; both runs used DeployToBgiTools=false. The manifest gained one reviewed record for the new R5.3 claim line and is now 592 lines, SHA-256 50100BE5E54BF65122AD203BB1803DD67E84BFA50305E4FC13C61D6468865ECD. Regen TRX _batch21/current-audit-20260927/claim-regen/sb21-1-current-claim-regen.trx (SHA-256 B37B5542C536EF1FA71E0EE585802B0C3DC2846C489A7C2CCEC32FCCA753C17); no-env TRX _batch21/current-audit-20260927/claim-verify/sb21-1-current-claim-verify.trx (SHA-256 D3054A0F91C821D81FF73B70D4134E8D452CD53AE8FEAB74FFD66B87075784BE).
