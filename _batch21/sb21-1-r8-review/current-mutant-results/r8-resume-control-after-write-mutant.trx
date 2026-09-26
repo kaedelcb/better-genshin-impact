@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="81239913-399b-4aa6-ac8f-675d912c118c" name="kaedelcb@KAEDELCBPC 2026-09-27 05:20:15" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-27T05:20:15.4596922+08:00" queuing="2026-09-27T05:20:15.4596923+08:00" start="2026-09-27T05:20:14.8226405+08:00" finish="2026-09-27T05:20:15.4631783+08:00" />
+  <TestSettings name="default" id="edebfc76-5f37-4ca5-b8b4-550b0cc37da7">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-09-27_05_20_15" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="a57a2c03-fc9f-4e35-b541-6257cb827d4e" testId="39215c65-fa73-b560-b0e3-ccc7a040f2ef" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.RegistrationFailures_ParkZeroSend_NotUnknownConvergence" computerName="KAEDELCBPC" duration="00:00:00.1381753" startTime="2026-09-27T05:20:15.4070490+08:00" endTime="2026-09-27T05:20:15.4070578+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a57a2c03-fc9f-4e35-b541-6257cb827d4e">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: Interrupted&#xD;
+Actual:   Running</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.RegistrationFailures_ParkZeroSend_NotUnknownConvergence() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\Batch21WiringRedTests.cs:line 145&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.RegistrationFailures_ParkZeroSend_NotUnknownConvergence" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="39215c65-fa73-b560-b0e3-ccc7a040f2ef">
+      <Execution id="a57a2c03-fc9f-4e35-b541-6257cb827d4e" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests" name="RegistrationFailures_ParkZeroSend_NotUnknownConvergence" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="39215c65-fa73-b560-b0e3-ccc7a040f2ef" executionId="a57a2c03-fc9f-4e35-b541-6257cb827d4e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.10]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.37]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.37]       Expected: Interrupted&#xD;
+[xUnit.net 00:00:00.37]       Actual:   Running&#xD;
+[xUnit.net 00:00:00.37]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.37]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\Batch21WiringRedTests.cs(145,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.RegistrationFailures_ParkZeroSend_NotUnknownConvergence()&#xD;
+[xUnit.net 00:00:00.37]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.38]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-09-27T05:20:15.4060324+08:00">
+        <Text>[xUnit.net 00:00:00.37]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.RegistrationFailures_ParkZeroSend_NotUnknownConvergence [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

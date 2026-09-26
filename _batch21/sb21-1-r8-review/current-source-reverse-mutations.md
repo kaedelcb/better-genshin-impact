@@ -6,7 +6,7 @@ Scope: exact current guards/policies named in GPT R8 plus the accepted-without-j
 |---|---|---|---|---|
 | BO-1 reference-provider catch disabled | `RegistrationFailures_ParkZeroSend_NotUnknownConvergence` | named test Failed | `781087DA6377F18E53E8E904A8CEBC1A904D804B28D9FD2E3A826A7679100D06` | Pass |
 | BO-1 scope-provider catch disabled (balanced catch replacement) | `ScopeAndQueueFailures_ParkZeroSend_NotUnknownConvergence` | named test Failed | `781087DA6377F18E53E8E904A8CEBC1A904D804B28D9FD2E3A826A7679100D06` | Pass |
-| BO-1 identity-construction catch disabled (balanced catch replacement) | `RegistrationFailures_ParkZeroSend_NotUnknownConvergence` | named test Failed | `781087DA6377F18E8E904A8CEBC1A904D804B28D9FD2E3A826A7679100D06` | Pass |
+| BO-1 identity-construction catch disabled (balanced catch replacement) | `RegistrationFailures_ParkZeroSend_NotUnknownConvergence` | named test Failed | `781087DA6377F18E53E8E904A8CEBC1A904D804B28D9FD2E3A826A7679100D06` | Pass |
 | EV1-R1 integrity guard bypassed | `OccupantLevels_CorruptRunRecord_KeepsUnknownAndLogs` | named test Failed | `1CEBB2D3FCBA2BF594B8A78DCAB0E036B767ECD816F1E9AA859994347210AF7C` | Pass |
 | EV1-R1 two scans restored | `OccupantLevels_CorruptRunRecord_KeepsUnknownAndLogs` | named test Failed (enumeration interleaving assertion) | `1CEBB2D3FCBA2BF594B8A78DCAB0E036B767ECD816F1E9AA859994347210AF7C` | Pass |
 | Resume control check moved after run write | `RegistrationFailures_ParkZeroSend_NotUnknownConvergence` | named test Failed (state/revision changed before rejection) | `781087DA6377F18E53E8E904A8CEBC1A904D804B28D9FD2E3A826A7679100D06` | Pass |
@@ -23,3 +23,5 @@ The first R8 harness run produced four compile-error/no-TRX attempts (scope catc
 One intermediate attempt removed only the explicit `Intent == Accepted` clause and remained green because the canonical `WorkflowSubmission.InFlight` predicate also covers Accepted with no observed terminal. That redundant-clause mutation is not a detection claim; the valid accepted-without-job mutant removed both terms, produced the named Unknown-vs-Interrupted failure, and restored green.
 
 Total valid current-source mutants in this file: **11/11 detected**, exact source restoration confirmed for each, restored targeted baseline passed for each. Earlier BO-1/EV1 historical mutations remain separately recorded in `previous-reverse-mutants.md` and `reverse-mutation-evidence.md`.
+
+Per-mutant raw TRX paths, parsed one-test outcomes, failure assertions, and artifact SHA-256 values are indexed in `current-source-reverse-mutation-audit.md`. The first four compile-error/no-TRX attempts and other exploratory non-detections are excluded from the 11 valid rows.

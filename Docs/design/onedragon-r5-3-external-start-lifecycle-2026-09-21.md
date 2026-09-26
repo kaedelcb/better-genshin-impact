@@ -4793,3 +4793,13 @@ SB21-1 累计会诊 **8/8 次**（R1 Kimi、R2–R8 GPT；失败/超时请求同
 ### §24.121.3 收口边界
 
 本批只证明助手侧源码与夹具；不声称 BGI 实机执行验证。BO-6/BO-8 及计划中的 BO-4、BO-10/BO-12、BO-11/BO-13 按 `_batch21/b21_plan.md` 归后续子批；生产入口门、真实 User 门、R5.8 签署、E3/E4/E5 与热键面继续关闭。本批提交采用 `git commit --only` 明确文件清单；材料外历史 `.bak`/`.stale` 与两个 relay 文档不进入提交。
+
+### §24.121.4 Owner 批准的 R9 收口复核与补证
+
+原会诊预算 R1–R8 为 8 次。Owner 随后明确批准 **1 次** GPT 只读收口复核，限定 R8 五项与 R2 的 Batch 51 R16 证据项；R9 使用 `gpt-6-astra`／medium，工具报告 `attempts=1`，累计已发请求 **9 次（8 次原预算＋1 次明确批准的例外）**。一次 allowlist 路径预检错误在本地被拒，未发出，不计次。R9 在送审快照中判 R8 反向突变证据 **必改**仍开、R2 R16 证据 **必改**部分仍开，并支持其余四项 R8 重要项的代码／夹具处置。完整审查与会诊前后边界见 `_batch21/sb21-1-r8-review/post-cap-gpt-review/gpt-r9-closeout-review.md`。
+
+- R8 反向突变证据修正：改正身份构造突变源 SHA-256 的漏字，将逐项 mutant/restored TRX、命名 Fact、结果／断言、TRX SHA-256 和当前恢复态源码 SHA 对照登记在 `_batch21/sb21-1-r8-review/current-source-reverse-mutation-audit.md`。本地重新解析 11 个有效突变／恢复 TRX：11 个 mutant 均为命名 Fact Failed、11 个恢复态均 Passed；4 个编译错误且无 TRX 的初始尝试仍排除。原始 TRX 逐项保存在对应目录。另跑 `Batch21WiringRedTests` 定向回归 **4/4、0 失败**，TRX 为 `post-r9-targeted/batch21-wiring-post-r9-4of4.trx`，SHA-256 `BBB810EF64311CB13D69426274FF8B2FFB0FFFE283201DD3BBFC43218FD2E17A`。
+- R2 R16 证据修正：把完整 §24.63 U 补入 `_batch21/sb21-1-r8-review/post-cap-gpt-review/batch51-r16-u-excerpt.md`；本地核验当前与锚点提交的测试源 blob 相同、当前 SHA-256 和既有 104/104 TRX 哈希及结果。§24.63 U 关于 R16 历史上未取得会诊结论及后续批次补验入口的原意保持不变。
+- 上述补证发生在 R9 返回之后，没有第二次 GPT 复核；**不声称顾问已接受补充材料**。这是补证快照，不是改写 R9 当时结论。其余四项重要发现保持原级与 R9 支持意见。全量助手回归仍为既有 **1479/2/0/1481**，与 1475/2/0/1477 的关系仍是精确测试名投影，不冒称旧 HEAD 重跑。
+- 声明面按本次 §24.121.4 文档变化执行再生和无变量复跑；两次 `ClaimSurfaceGuardTests` 均 1/1 通过，manifest 仍为 590 行、SHA-256 `1F29901BF9C2C816BA167AE9E36CB9D03F64F33A6791CDB84ADA3DCD9E7DCAD6`，未产生清单差异。TRX 与 SHA 见 `_batch21/sb21-1-r8-review/test-evidence.md`。
+- 门禁不变：生产入口、真实 User、R5.8 签署、E3/E4/E5 与热键面继续关闭；不据 R9 开放生产行为。后续如 owner 要求 consultant 对补证作复核，须先另批明确范围和次数。

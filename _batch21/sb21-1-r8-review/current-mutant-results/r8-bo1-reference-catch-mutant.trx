@@ -1,0 +1,61 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="bcced73c-2e5a-4a9b-9c65-b2c730749f4c" name="kaedelcb@KAEDELCBPC 2026-09-27 05:19:47" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-27T05:19:47.1527786+08:00" queuing="2026-09-27T05:19:47.1527787+08:00" start="2026-09-27T05:19:46.6074945+08:00" finish="2026-09-27T05:19:47.1562818+08:00" />
+  <TestSettings name="default" id="a08fa17f-920a-4ad3-84a3-b148d661f5e6">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-09-27_05_19_47" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="71d420f7-3602-4e7a-8df6-caa791ef416e" testId="39215c65-fa73-b560-b0e3-ccc7a040f2ef" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.RegistrationFailures_ParkZeroSend_NotUnknownConvergence" computerName="KAEDELCBPC" duration="00:00:00.0740622" startTime="2026-09-27T05:19:47.0979505+08:00" endTime="2026-09-27T05:19:47.0979589+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="71d420f7-3602-4e7a-8df6-caa791ef416e">
+      <Output>
+        <ErrorInfo>
+          <Message>System.InvalidOperationException : 引用来源故障</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.&lt;&gt;c.&lt;RegistrationFailures_ParkZeroSend_NotUnknownConvergence&gt;b__4_2(WorkflowRunRecord _, WorkflowNodeOccurrence _) in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\Batch21WiringRedTests.cs:line 45&#xD;
+   at MultiplayerHoeingAssistant.Services.WorkflowRunner.TryRegisterLocalWait(WorkflowRunRecord run, WorkflowNodeOccurrence occurrence, Int32 attempt, LocalWaitDecisionRecord decision) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\WorkflowRunner.cs:line 1680&#xD;
+   at MultiplayerHoeingAssistant.Services.WorkflowRunner.SubmitAndAwaitAsync(WorkflowRunRecord run, WorkflowPlan plan, WorkflowNode node, WorkflowNodeOccurrence occurrence, RunControl control) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\WorkflowRunner.cs:line 839&#xD;
+   at MultiplayerHoeingAssistant.Services.WorkflowRunner.DriveAsync(WorkflowRunRecord run, WorkflowPlan plan, RunControl control) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\WorkflowRunner.cs:line 675&#xD;
+   at MultiplayerHoeingAssistant.Services.WorkflowRunner.StartAsync(String workflowId, CancellationToken ct) in E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\WorkflowRunner.cs:line 378&#xD;
+   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.RegistrationFailures_ParkZeroSend_NotUnknownConvergence() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\Batch21WiringRedTests.cs:line 47&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.RegistrationFailures_ParkZeroSend_NotUnknownConvergence" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="39215c65-fa73-b560-b0e3-ccc7a040f2ef">
+      <Execution id="71d420f7-3602-4e7a-8df6-caa791ef416e" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests" name="RegistrationFailures_ParkZeroSend_NotUnknownConvergence" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="39215c65-fa73-b560-b0e3-ccc7a040f2ef" executionId="71d420f7-3602-4e7a-8df6-caa791ef416e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.08]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.18]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.18]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.28]       System.InvalidOperationException : 引用来源故障&#xD;
+[xUnit.net 00:00:00.28]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.28]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\Batch21WiringRedTests.cs(45,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.&lt;&gt;c.&lt;RegistrationFailures_ParkZeroSend_NotUnknownConvergence&gt;b__4_2(WorkflowRunRecord _, WorkflowNodeOccurrence _)&#xD;
+[xUnit.net 00:00:00.28]         E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\WorkflowRunner.cs(1680,0): at MultiplayerHoeingAssistant.Services.WorkflowRunner.TryRegisterLocalWait(WorkflowRunRecord run, WorkflowNodeOccurrence occurrence, Int32 attempt, LocalWaitDecisionRecord decision)&#xD;
+[xUnit.net 00:00:00.28]         E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\WorkflowRunner.cs(839,0): at MultiplayerHoeingAssistant.Services.WorkflowRunner.SubmitAndAwaitAsync(WorkflowRunRecord run, WorkflowPlan plan, WorkflowNode node, WorkflowNodeOccurrence occurrence, RunControl control)&#xD;
+[xUnit.net 00:00:00.28]         E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\WorkflowRunner.cs(675,0): at MultiplayerHoeingAssistant.Services.WorkflowRunner.DriveAsync(WorkflowRunRecord run, WorkflowPlan plan, RunControl control)&#xD;
+[xUnit.net 00:00:00.28]         E:\Program Files\better-genshin-impact-LCB\MultiplayerHoeingAssistant\Services\TaskCenter\WorkflowRunner.cs(378,0): at MultiplayerHoeingAssistant.Services.WorkflowRunner.StartAsync(String workflowId, CancellationToken ct)&#xD;
+[xUnit.net 00:00:00.28]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\Batch21WiringRedTests.cs(47,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.RegistrationFailures_ParkZeroSend_NotUnknownConvergence()&#xD;
+[xUnit.net 00:00:00.28]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:00.28]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-09-27T05:19:47.0969078+08:00">
+        <Text>[xUnit.net 00:00:00.28]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.Batch21WiringRedTests.RegistrationFailures_ParkZeroSend_NotUnknownConvergence [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>
