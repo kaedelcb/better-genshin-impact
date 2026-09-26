@@ -1,0 +1,24 @@
+批次 19 本批文件清单（4 项权威口径＋逐项归因）——2026-09-26
+（回应 B19R3-F1：显式枚举＋逐项归因；本件随提交入库，与 b19_commit_verify.txt 的提交后路径核对互为印证）
+
+1. Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md
+   归因：本批主登记面——§24.117 待决表六行就地已裁决标记＋§24.119 owner 裁决登记新增（六项值＋
+   D-E2 两条附带义务＋D-E6 五步执行形态＋出处链）＋声明面段。
+
+2. Docs/design/onedragon-r5-handoff-2026-09-21.md
+   归因：链路指针交接面——页首批次 19 登记行（位于批次 18 行之后、证据族 ev5 行之前）。
+
+3. Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt
+   归因：声明面守卫再生 +3 行（§24.119 D-E5 裁决值行、§24.119 会诊裁定行、交接稿批次 19 行；
+   §24.119 声明面段义务「清单变更随本批提交评审」）。
+
+4. _batch19/（证据目录，未跟踪新建，随本批显式入库）
+   归因：批次 19 证据——b19_objective.txt（目标与验收判据＋本批文件清单原文）、consult_r1.md／
+   consult_r2.md／consult_r3.md（会诊原始输出）、b19_batch_files.txt（本件）、b19_sha256.txt
+   （证据哈希）。先例＝批次 18 §24.118「本批文件清单」原文：_batch18/ 证据目录「未跟踪新建，
+   随本批显式入库」（consult_r1-r3.md 在列）——会诊 artifacts 入库是先例本体。
+
+排除项（显式）：Docs/design/mistletoe-session-relay-2026-09-24.md 与
+Docs/design/unified-job-registry-master-plan.md 的未提交修改不属本批、不入提交、留工作区
+（relay 协议登记面；其未来提交须出示 owner 依据，见 B19R3-S2）。
+91 项未跟踪残留（.bak/.stale/TestResults/log/dll 等）一律不入提交。

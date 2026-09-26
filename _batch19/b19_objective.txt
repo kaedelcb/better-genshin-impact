@@ -1,0 +1,33 @@
+批次 19（owner 裁决登记批，文档批）目标与验收判据——2026-09-26
+
+结果：owner 2026-09-26 裁决「全部按推荐执行」（待决表 D-E2~D-E7 六项）落册——
+R5.3 新增 §24.119（六项裁决值＋D-E2 两条附带义务＋D-E6 五步执行形态＋出处链）、
+§24.117 待决表六行就地已裁决标记、R5 交接稿页首批次 19 行、relay 副本
+task-relays\ev5-owner-pending.md 裁决注记；声明面清单按守卫再生并纳入提交评审。
+
+约束：零生产代码改动、不接线；生产入口门／真实 User 门／R5.8 签署继续关闭；
+mistletoe-session-relay 与 unified-job-registry 两文档不入提交；提交只显式列文件路径；
+会诊至少 1 轮 kimi，处置按 R1-R6。
+
+完成判据：
+① §24.119 与 §24.117 行内标记逐值一致，且与 owner 裁决原话「全部按推荐执行」及推荐包
+  （owner-decisions-analysis.md v3，经 owner-decisions 会诊 2 轮收口）逐值相符——不得有越权
+  语义添加或遗漏附带义务（D-E2 两条义务：_handled 按代际修剪规则；裁决 A 收窄候选措辞、
+  最终措辞归合同批 D3 口径重裁＋会诊确认）。
+② ClaimSurfaceGuardTests 不带 env 通过（已达成：再生 585→588 行 / 631D5643→8848E2B1，
+  +3 行与拦截列名一致；终值随提交信息登记）。
+③ 会诊末轮无必改、无未闭合重要项（consult.py gate exit 0）。
+④ 提交 diff 仅含声明文件（见下清单）。
+
+本批文件清单（批次 18 F1 处置口径；prepare 无 --scope 时会把已跟踪修改与未跟踪新建机械
+列入 out_of_batch，与本清单的差异以本清单为准）：
+  1. Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md（已跟踪修改：
+     §24.117 六行标记＋§24.119 新增＋声明面段）
+  2. Docs/design/onedragon-r5-handoff-2026-09-21.md（已跟踪修改：页首批次 19 行）
+  3. Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt
+     （已跟踪修改：守卫再生 +3 行）
+  4. _batch19/（未跟踪新建证据目录：b19_objective.txt／consult_r1.md 等／b19_sha256.txt）
+
+材料外变更（不属本批）：两份禁改文档（mistletoe-session-relay-2026-09-24.md、
+unified-job-registry-master-plan.md）的既有未提交修改＝接力协议登记面；工作区大量 .bak/.stale
+残留件＝既有状态（D-E6 裁决 (a) 的执行批将盘点）；均不随本批提交。
