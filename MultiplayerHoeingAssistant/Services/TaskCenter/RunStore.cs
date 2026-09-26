@@ -370,7 +370,16 @@ public sealed class RunStore
                 continue;
             }
             string note;
-            if (rec.State == WorkflowRunState.Completing || rec.PendingCompletion is not null)
+            // [批次 20／Wave3／C11=(a)] **本地等待停驻运行的独立谓词**（BO-5 交叉面闭合）：停驻运行
+            // 无在飞提交（登记在 RecordIntent 之前）⇒ 收敛为 **Interrupted（可显式恢复）**——不落入
+            // Unknown（无 job 可对账，R11 F-A 合同）；不走下方通用 else（语义等价但显式列出＝独立谓词，
+            // 波次裁决留痕）。等待项就绪后经 ResumeAsync 重驱。
+            if (rec.State == WorkflowRunState.LocalWaitParking)
+            {
+                rec.State = WorkflowRunState.Interrupted;
+                note = "助手重启：本地等待停驻运行，标 Interrupted（等待项就绪后可显式重驱）。";
+            }
+            else if (rec.State == WorkflowRunState.Completing || rec.PendingCompletion is not null)
             {
                 // B5：收尾意图已落盘但执行结果未知——结果不确定，禁止自动补发收尾
                 rec.State = WorkflowRunState.Unknown;

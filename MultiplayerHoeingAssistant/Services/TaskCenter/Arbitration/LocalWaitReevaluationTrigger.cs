@@ -22,12 +22,13 @@ namespace MultiplayerHoeingAssistant.Services;
 /// 纯判定给出，时间由调用方传入（判定本身不读时钟、不随机、不做 I/O）。
 ///
 /// **幂等与去重**：①幂等键按稳定身份确定性派生（同身份 ⇒ 同键，异身份 ⇒ 异键是同口径设计意图，非零碰撞保证）；
-/// ②同一批内同（稳定身份＋代际）的重复条目**只产一条**；③本实例内**已产出过**的（稳定身份＋代际）**不再产**
+/// ②同一批内同（稳定身份＋作用域＋触发类别＋代际）的重复条目**只产一条**；③本实例内**已产出过**的
+/// （稳定身份＋作用域＋触发类别＋代际）**不再产**
 /// （在飞去重，见 <see cref="_handled"/>；配置 <see cref="StateScope"/> 时限定在该作用域内）；
 /// ④取消令牌已取消 ⇒ 直接返回空集（且**不消费**幂等键，取消不算"已处理"）。
 ///
 /// **键的编码（批次 15c 起）**：ReevaluationKey 的新形状见
-/// <see cref="ComposeKeyPart"/>：`reval-key-v2|&lt;摘要&gt;|&lt;作用域字段&gt;|&lt;代际字段&gt;`，
+/// <see cref="ComposeKeyPart"/>：`reval-key-v2|&lt;摘要&gt;|&lt;作用域字段&gt;|&lt;触发类别&gt;|&lt;代际字段&gt;`，
 /// 各字段带**长度前缀**且载荷为 **UTF-16 码元**十六进制（大写）⇒ 可**无歧义还原**（消除评审第 3 轮必改 #2 里
 /// `:`／`|` 拼接造成的跨作用域**键别名**）。**唯一**与批次 15 逐字符相同的形态是
 /// `scope == null &amp;&amp; generation == null` ⇒ `reval-&lt;摘要&gt;`；**带作用域的非空形态有意改为新编码**
@@ -44,8 +45,11 @@ namespace MultiplayerHoeingAssistant.Services;
 /// **至多一条**请求。<see cref="_handled"/> 是**进程内**状态：**不等于**跨进程单写者，也**不**声称断电耐久；
 /// 多实例/多进程/重启均可重复产，接收方须自行幂等。
 ///
-/// **取消／失效**：`LocalWaitItemState.Cancelled` 的项一律不产；已产过的项即使之后取消/再次 `Waiting` 也不再产
-/// （取消**不**复活执行意愿）。
+/// **取消／失效（[Wave2 R38 重要] 已按 D-E2=① 更正）**：`LocalWaitItemState.Cancelled` 的项一律不产；
+/// **同代际**内已产过的项即使之后取消/再次 `Waiting` 也不再产（取消**不**复活执行意愿——同代际同类别沉默）；
+/// **跨代际必复活**：取消→同载荷重登记＝Store 递增代际 ⇒ 以新代际调用 Decide **必重新参选**
+/// （裁决 A 收窄措辞「跨代际（取消→重激活等）必重新参选」；夹具 Decide_GenerationScoping_AndPruneKeepsKeysBounded
+/// 钉死）。**调用方必须在重激活后以新代际调用 Decide**——否则该路径产出的请求在消费侧必过期。
 /// </summary>
 public sealed class LocalWaitReevaluationTrigger
 {
@@ -132,11 +136,20 @@ public sealed class LocalWaitReevaluationTrigger
     /// </summary>
     private const string ReevaluationKeyEncodingPrefix = "reval-key-v2|";
 
-    /// <summary>**批次 15c 新编码**：`reval-key-v2|&lt;摘要&gt;|&lt;作用域字段&gt;|&lt;代际字段&gt;`（各字段见 <see cref="EncodeKeyField"/>）。</summary>
-    private string ComposeKeyPart(string stableIdentity, string? generation, string? scope)
+    /// <summary>
+    /// **批次 15c 新编码**：`reval-key-v2|&lt;摘要&gt;|&lt;作用域字段&gt;|&lt;触发类别&gt;|&lt;代际字段&gt;`；
+    /// **[批次 20／Wave2／R32 必改-F1 幂等键口径重裁]** 增补**触发类别段**：
+    /// `reval-key-v2|&lt;摘要&gt;|&lt;作用域字段&gt;|&lt;触发类别&gt;|&lt;代际字段&gt;`——
+    /// 使裁决 A 收窄措辞「**每代际内每类触发**首次重走完整准入」成立（每类通道独立：
+    /// 占用结束已产请求的同代际内，安全网/启动恢复/新候选的首次触发**不被抑制**——
+    /// 安全网兜底依赖此独立性）。各字段编码见 <see cref="EncodeKeyField"/>。
+    /// </summary>
+    private string ComposeKeyPart(string stableIdentity, string? generation, string? scope,
+        LocalWaitReevaluationTriggerPoint trigger)
         => ReevaluationKeyEncodingPrefix
            + DeriveReevaluationKey(stableIdentity)["reval-".Length..]
            + "|" + EncodeKeyField(scope)
+           + "|" + EncodeKeyField(trigger.ToString())
            + "|" + EncodeKeyField(generation);
 
     /// <summary>
@@ -150,10 +163,11 @@ public sealed class LocalWaitReevaluationTrigger
     /// 该放弃**不影响**在飞去重语义：同一实例内 `StateScope` 不可变 ⇒ 不同作用域的键**不再互相别名**（长度前缀编码），
     /// "同一等待项在同一实例内至多产一条"不变；改变的是**键的字符形状**（跨实例对账者需按新形状比对）。
     /// </summary>
-    private string ComposeKey(string stableIdentity, string? generation, string? scope)
+    private string ComposeKey(string stableIdentity, string? generation, string? scope,
+        LocalWaitReevaluationTriggerPoint trigger)
         => scope is null && generation is null
             ? DeriveReevaluationKey(stableIdentity)
-            : ComposeKeyPart(stableIdentity, generation, scope);
+            : ComposeKeyPart(stableIdentity, generation, scope, trigger);
 
     /// <summary>
     /// **重评幂等键**：由稳定身份确定性派生（与 <see cref="LocalWaitQueuePolicy.DeriveItemId"/> 同口径、
@@ -182,11 +196,55 @@ public sealed class LocalWaitReevaluationTrigger
     /// **限定在该标识的作用域内**：
     /// ①`null`（默认）⇒ 与批内既有语义一致；
     /// ②非空 ⇒ 与稳定身份共同构成去重键 **且**写入产物的 <see cref="LocalWaitReevaluationRequest.ReevaluationKey"/>
-    ///   （批次 15c 起形如 `reval-key-v2|&lt;摘要&gt;|&lt;作用域字段&gt;|&lt;代际字段&gt;`；**不是**旧的 `reval-&lt;scope&gt;:&lt;摘要&gt;` 形状），
+    ///   （批次 15c 起形如 `reval-key-v2|&lt;摘要&gt;|&lt;作用域字段&gt;|&lt;触发类别&gt;|&lt;代际字段&gt;`；**不是**旧的 `reval-&lt;scope&gt;:&lt;摘要&gt;` 形状），
     /// **接线边界**：作用域由**调用方**提供；生产接线时该值必须来自权威的等待项代际／租约纪元，**不得**用
     /// 本地时间戳或随机值绕过去重（否则等同关闭幂等）。本批**不接线**，不实现任何代际来源。
     /// </summary>
     public string? StateScope { get; }
+
+    /// <summary>
+    /// **[批次 20／Wave2／D-E2=① 附带义务 i] `_handled` 按（身份×代际）修剪**（SW-02 无界增长的
+    /// 闭合路径；[Wave2 R32 重要-F2 更正] 修剪范围为**指定身份**的键——Generation 是逐项载体，
+    /// 单项重激活不得撤销**其余项**的同代际幂等）：移除该身份、代际 ≠ <paramref name="liveGeneration"/>
+    /// 的键。**迁移期键保留**（[Wave2 R32 重要-F3 对称化]）：无代际旧形状键 `reval-&lt;摘要&gt;` 与
+    /// 「新形状、代际段为 "-"」（scope 非 null 且 generation 为 null 的 15c 形态）同处迁移窗口，
+    /// 一律**保留**——删除会改变「同实例已产即不再产」语义；其有界性由调用方恒传代际自然达成。
+    /// 返回移除的键数。纯内存操作；不接线（调用方属接线批）。
+    /// </summary>
+    public int PruneHandledExceptGeneration(string stableIdentity, string generation)
+    {
+        if (string.IsNullOrWhiteSpace(stableIdentity) || string.IsNullOrWhiteSpace(generation)) return 0;
+        // [Wave2 R34 必改-F3] liveGeneration 规范形校验（与消费侧同一映射合同）：非 int InvariantCulture
+        // 逐字符产物（"01"/"+1"/" 1"）**不得执行删除**——否则会误删当前规范代际的幂等键。
+        if (!int.TryParse(generation, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var liveGen)
+            || !string.Equals(generation, liveGen.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                StringComparison.Ordinal))
+        {
+            return 0;
+        }
+        var identityDigest = DeriveReevaluationKey(stableIdentity)["reval-".Length..];
+        var keepTail = EncodeKeyField(NormalizeGeneration(generation));
+        var removed = 0;
+        foreach (var key in _handled.Keys)
+        {
+            // 键形 reval-key-v2|<摘要>|<scope>|<trigger>|<generation>（EncodeKeyField 长度前缀编码，末段即代际）。
+            // 迁移期键保留：无代际旧形状键（非 v2 前缀）与 v2 形状但代际段为 "-"（EncodeKeyField(null)）。
+            if (!key.StartsWith(ReevaluationKeyEncodingPrefix, StringComparison.Ordinal)) continue;
+            var digestEnd = key.IndexOf('|', ReevaluationKeyEncodingPrefix.Length);
+            if (digestEnd < 0) continue;
+            if (!string.Equals(key[ReevaluationKeyEncodingPrefix.Length..digestEnd], identityDigest, StringComparison.Ordinal))
+                continue; // 其他身份的键不修剪（R32 重要-F2）
+            var lastPipe = key.LastIndexOf('|');
+            if (lastPipe < 0 || lastPipe == digestEnd) continue;
+            var genTail = key[(lastPipe + 1)..];
+            if (string.Equals(genTail, EncodeKeyField(null), StringComparison.Ordinal)) continue; // 迁移期键（R32 重要-F3）
+            if (!string.Equals(genTail, keepTail, StringComparison.Ordinal)
+                && _handled.TryRemove(key, out _))
+                removed++;
+        }
+        return removed;
+    }
 
     /// <summary>
     /// 判定本次触发应产出的重评请求（可不带时间；安全网判定以 <see cref="DateTimeOffset.UnixEpoch"/> 为输入）。
@@ -235,16 +293,31 @@ public sealed class LocalWaitReevaluationTrigger
     /// <summary>
     /// 判定本次触发应产出的重评请求。
     ///
+    /// **裁决 A 收窄措辞（[批次 20／Wave2／D-E2=① 附带义务 ii] 合同批落字，经 Wave2 会诊确认）**：
+    /// **「每代际内每类触发首次重走完整准入；跨代际（取消→重激活等）必重新参选」**——
+    /// 即同代际同触发类别的重复触发不重复产请求（幂等保持）；代际递增（取消→重激活）后
+    /// 必然重新参选（本实例内不再被旧代际键屏蔽）。
+    /// **兼容路径界限（[Wave2 R33 重要-2] 落字）**：无代际公共重载（2 参/3 参，generation 缺省 null）走
+    /// ComposeKey 兼容分支——**无代际键四类触发共键**（不含触发类别段），且其产出的请求（Generation=null）
+    /// 在消费侧（LocalWaitReevaluationConsumer）**一律过期不可消费** ⇒ 该组合是**自我矛盾的可调用形态**：
+    /// **接线只许走 5 参主重载**（恒传 item.Generation.ToString(InvariantCulture)）；无代际重载仅为批次 15
+    /// 二进制兼容保留（D-E2 落地后不再产生可消费请求）。
+    /// **代际映射合同（[Wave2 R31 重要-3] 落字）**：<paramref name="generation"/> 入参**必须**为
+    /// `item.Generation.ToString(CultureInfo.InvariantCulture)`（Store 唯一写入口的权威代际，int 的
+    /// InvariantCulture 串）；一批 items 含不同代际时，调用方必须**按代际分组、逐代际一次 Decide**
+    /// （一次调用一个代际作用于整批）。消费侧（LocalWaitReevaluationConsumer）按同一映射合同解析；
+    /// 任何其它格式在消费侧一律过期（fail-closed）。
+    ///
     /// **取消规则**：<paramref name="cancellationToken"/> 已取消 ⇒ **空集**（且**不**消费幂等键：
     /// 取消不算"已处理"，取消后仍可再次评估）。
     /// **安全网规则**：<see cref="LocalWaitReevaluationTriggerPoint.SafetyNet"/> 且注入判定给出"未到期"
     /// ⇒ **空集**（不消费幂等键：未到期不是"已处理"）。
-    /// **幂等规则（如实口径）**：只对 `Waiting` 项产请求；同批同（稳定身份＋代际）只产一条；**本实例内**
-    /// 已产过的（稳定身份＋代际）不再产。
+    /// **幂等规则（如实口径）**：只对 `Waiting` 项产请求；同批同（稳定身份＋作用域＋触发类别＋代际）只产一条；**本实例内**
+    /// 已产过的（稳定身份＋作用域＋触发类别＋代际）不再产。
     ///
     /// **代际（批次 15b 修复 #1／#4）**：<paramref name="generation"/> 是**显式的等待项代际**，与稳定身份
     /// 共同构成去重键 ⇒ **同一实例内**取消后以**新代际**重新等待**可以重新产出**（不再被实例级永久屏蔽）；
-    /// 同一代际重复触发仍**不重复产**。`null`／空白 ⇒ 沿用批次 15 的**无代际**去重（"同一实例内已产过即不再产"
+    /// 同一代际同一触发类别重复触发仍**不重复产**（异类别首次独立产——[Wave2 R32 必改-F1] 键含触发类别段）。`null`／空白 ⇒ 沿用批次 15 的**无代际**去重（"同一实例内已产过即不再产"
     /// 仍成立）。**键形状（批次 15c 更正）**：仅 `generation == null &amp;&amp; StateScope == null` 时与批次 15
     /// **逐字符相同**；带代际（或带作用域）⇒ 走 `reval-key-v2|…` 的**长度前缀编码**，不再用 `|` 原样拼接
     /// （见 <see cref="ComposeKeyPart"/>；此为消除评审第 3 轮必改 #2 的键别名所必需）。代际值**必须**来自
@@ -348,7 +421,7 @@ public sealed class LocalWaitReevaluationTrigger
             var itemGeneration = effectiveGeneration;
             // 批次 15b 修复 #1/#4：#4 去重键显式携带**等待项代际**（不再依赖构造后不可变的 StateScope）
             // ⇒ 同一实例内取消后以**新代际**重新等待可重新产出，同一代际重复触发仍不重复产。
-            var key = ComposeKey(stableIdentity, itemGeneration, itemScope);
+            var key = ComposeKey(stableIdentity, itemGeneration, itemScope, trigger);
 
             // 同批去重：同一等待项在同一批里只产一条（不按条目数放大）——同样在占键之前完成。
             if (!seenInBatch.Add(key)) continue;

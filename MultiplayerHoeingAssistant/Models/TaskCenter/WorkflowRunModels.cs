@@ -26,6 +26,12 @@ public enum WorkflowRunState
     Unknown,
     /// <summary>收尾动作执行中（B5：成功边界先落盘收尾意图再执行；恢复扫描见此状态标 Unknown）。尾部追加，不改既有枚举数值。</summary>
     Completing,
+    /// <summary>
+    /// **[批次 20／Wave3／C11=(a)] 本地等待停驻**（D-E4=(a)：等待停驻**不复用** Waiting/Running）：
+    /// 门面已给出确定零发送等待结论、等待项已登记（或登记被拒＝接线缺陷停驻），运行**无活动驱动**、
+    /// 游标停在停驻出现、等待项就绪后**可显式重驱**（ResumeAsync 接受本状态）。尾部追加，不改既有枚举数值。
+    /// </summary>
+    LocalWaitParking,
 }
 
 /// <summary>提交意图状态（D11：提交意图先行持久化，回执丢失按账本+job 查询对账）。</summary>

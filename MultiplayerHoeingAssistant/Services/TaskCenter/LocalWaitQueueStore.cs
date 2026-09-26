@@ -20,8 +20,12 @@ public sealed record LocalWaitCleanupResult(int Cancelled, int Pruned);
 /// 边界（如实登记）：不改动冻结的租约格式代，也不新增第二个"责任"权威——本文件只承载**调度意愿**，
 /// 不含发送许可、不参与责任判定。
 /// 合同：①**严格读取**——`version`/`items` 必需、版本必须在支持范围、元素不得为空、`itemId` 必须唯一且非空、
-/// 枚举必须是已定义值，缺失/非法一律响亮拒绝；②**单写者**——写路径对**同一路径**取进程级锁
-/// （多实例也不会互相覆盖），原子写＝临时文件 + `File.Move(overwrite)`，写失败不破坏原文件；
+/// 枚举必须是已定义值，缺失/非法一律响亮拒绝；②**单写者（口径限同进程）**——写路径对**同一路径**取
+/// **进程级**锁（`PathLocks` 为进程内静态表）⇒ **同进程**并发写者不会互相覆盖；**跨进程不保证**：
+/// 两个进程各自持锁、互不相知，Upsert 的 Load→改→Persist 读改写序列在跨进程并发下会 lost update
+/// （原子 `File.Move` 只保证文件不撕裂，后写者整篇覆盖前者）⇒ **跨进程访问须由调用方保证单写者**
+/// （[批次 20／Wave4 C9] 合同口径，R17 建议-3 提前落地）；原子写＝临时文件 + `File.Move(overwrite)`，
+/// 写失败不破坏原文件；
 /// ③**取消墓碑保留 24h** 后裁剪（防无界增长），保留期内可被同身份同载荷重登记**重新激活**。
 /// </summary>
 public sealed class LocalWaitQueueStore
@@ -141,6 +145,9 @@ public sealed class LocalWaitQueueStore
         // 对「即将写入的那个对象」**在写盘前最后一次**校验（见下 `ValidatePersistableItems`）——
         // 该点在 `Persist` 之前且不可被其它线程插入，故不变量为「**已写出的文件必定可被 `Load` 读回**」。
         ValidatePrerequisiteReferenceShape(item.PrerequisiteReference, item.ItemId);
+        // [批次 20／C3] admissionIdentity 同口径快速失败（R3-F6 建议采纳：拒绝时点提前到取锁前；
+        // 真正守卫仍是 Persist 前的 MaterializeAndValidatePayload，不变量不变）。
+        ValidateAdmissionIdentityShape(item.AdmissionIdentity, item.ItemId);
 
         lock (_sync)
         {
@@ -164,6 +171,11 @@ public sealed class LocalWaitQueueStore
             existing.State = LocalWaitItemState.Waiting;
             existing.Reason = null;
             existing.CancelledAtUtc = null;
+            // [批次 20／Wave2／D-E2=①] 重激活＝新代际：取消→同载荷重登记时代际**递增**（取消→重激活
+            // 产生 N 个代际 ⇒ _handled 按代际修剪有界；消费前复核按代际判 ABA 过期）。**重激活分支的
+            // 代际由 Store 递增收敛（调用方不可自报）**；**新登记分支**以调用方值为准（生产唯一调用方
+            // TryRegisterLocalWait 恒为默认 0；[Wave2 R33 建议-1] 文档收窄）。
+            existing.Generation = existing.Generation + 1;
             Persist(items);
             return true;
         }
@@ -212,9 +224,14 @@ public sealed class LocalWaitQueueStore
     /// <summary>不可变登记载荷逐字段比较（登记时刻、状态与原因属生命周期，不参与）。</summary>
     private static bool HasSameRegistrationPayload(LocalWaitItem left, LocalWaitItem right)
         => string.Equals(left.StableIdentity, right.StableIdentity, StringComparison.Ordinal)
-           && string.Equals(left.CandidateId, right.CandidateId, StringComparison.Ordinal)
-           && string.Equals(left.Namespace, right.Namespace, StringComparison.Ordinal)
-           && string.Equals(left.WorkflowId, right.WorkflowId, StringComparison.Ordinal)
+           // [Wave1 R11 F-D] 非空注解字段按归一值比较（null ≡ ""）：与读取侧 ParseItem 的 `?? ""`
+           // 及写侧物化归一同一口径，否则内存 null vs 读回 "" 会误判「载荷不同」破坏幂等登记。
+           && string.Equals(left.CandidateId ?? "", right.CandidateId ?? "", StringComparison.Ordinal)
+           // [批次 20／C4①·Wave1 会诊 F3] 准入绑定属登记载荷：补全/漂移都必须响亮冲突，
+           // 不得被无声吞掉（重新激活只重置状态，不改写载荷）。
+           && string.Equals(left.AdmissionIdentity, right.AdmissionIdentity, StringComparison.Ordinal)
+           && string.Equals(left.Namespace ?? "", right.Namespace ?? "", StringComparison.Ordinal)
+           && string.Equals(left.WorkflowId ?? "", right.WorkflowId ?? "", StringComparison.Ordinal)
            && left.Tier == right.Tier
            && left.Priority == right.Priority
            && left.IsHoeingHighest == right.IsHoeingHighest
@@ -267,7 +284,37 @@ public sealed class LocalWaitQueueStore
             // （JSON null／数字／对象／数组都算损坏，不得落到「缺字段＝不可判定」这一合法默认上）；
             // 缺字段 ⇒ null（v1 旧文件读兼容，保守按不可判定，不得默认就绪）。
             PrerequisiteReference = ParsePrerequisiteReference(itemObject, itemId),
+            // [批次 20／C3/C4①] 准入面稳定身份（9 元组）：键**存在**即必须是**非空字符串**
+            // （形状非法一律损坏，与前置引用同口径）；缺字段 ⇒ null（版本 1/2 旧文件读兼容 ⇒
+            // 登记例外：永不参选＋显式标注，C4②/D-E3=(c)）。
+            AdmissionIdentity = ParseAdmissionIdentity(itemObject, itemId),
+            Generation = ParseGeneration(itemObject, itemId),
         };
+    }
+
+    /// <summary>
+    /// [批次 20／C3/C4①] 严格解析**准入面稳定身份**（9 元组字符串；与
+    /// <see cref="ParsePrerequisiteReference"/> 完全同口径）。
+    /// 缺字段／显式 null ⇒ null（版本 1/2 旧文件读兼容 ⇒ 登记例外：永不参选，不得默认可翻译）；
+    /// 键存在且为**非字符串值**（数字／对象／数组）或**空白串** ⇒ 响亮拒绝，不降级解析。
+    /// **显式 JSON null ⇒ null（R9-F2 口径，fail-closed 非「损坏」）**：当前格式（v3）文件中
+    /// null 绑定是**合法持久化形态**——C4② 合同前存量项经重激活路径在 v3 文件中保留 null 绑定
+    /// （<c>Upsert_V1LegacyReactivation</c> 夹具钉死；owner 裁决 D-E3=(c) 要求存量留存且永不参选）。
+    /// 若判 v3 显式 null 为损坏，重激活路径即被破坏。代价：篡改/半写坏只能把项**降级**为
+    /// 「永不参选」（保守方向），不会产生发送面后果——这是无 MAC 存储的信任边界内正确取向。
+    /// </summary>
+    private static string? ParseAdmissionIdentity(JsonObject itemObject, string itemId)
+    {
+        if (!itemObject.ContainsKey("admissionIdentity")) return null;
+        if (itemObject["admissionIdentity"] is null) return null;
+        if (itemObject["admissionIdentity"] is not JsonValue node || !node.TryGetValue<string>(out var value))
+            throw new LocalWaitQueueCorruptException(
+                $"等待项 {itemId} 的 admissionIdentity 不是字符串（原件保留）。");
+        if (string.IsNullOrWhiteSpace(value))
+            throw new LocalWaitQueueCorruptException(
+                $"等待项 {itemId} 的 admissionIdentity 为空字符串（原件保留）。");
+
+        return value;
     }
 
     /// <summary>
@@ -284,9 +331,47 @@ public sealed class LocalWaitQueueStore
     }
 
     /// <summary>
+    /// [批次 20／Wave2／D-E2=①] 代际解析：缺字段 ⇒ 0（D-E2 引入前登记的项，合法形态）；
+    /// 键存在必须是非负整数（负数／非整数 ⇒ 响亮拒绝，与 state 同口径）。
+    /// </summary>
+    private static int ParseGeneration(JsonObject itemObject, string itemId)
+    {
+        if (!itemObject.ContainsKey("generation")) return 0;
+        int value;
+        // [Wave2 R39 M-2] TryGetValue<int> 对字符串 JSON 种类的行为（返回 false 或抛 InvalidOperationException/
+        // FormatException）已探针实证并统一包装为合同类型——非 Number 种类一律响亮 LocalWaitQueueCorruptException。
+        try
+        {
+            if (itemObject["generation"] is not JsonValue node || !node.TryGetValue<int>(out value))
+                throw new LocalWaitQueueCorruptException($"等待项 {itemId} 的 generation 不是整数（原件保留）。");
+        }
+        catch (LocalWaitQueueCorruptException) { throw; }
+        catch (Exception ex)
+        {
+            throw new LocalWaitQueueCorruptException($"等待项 {itemId} 的 generation 不是整数（原件保留）：{ex.Message}");
+        }
+        if (value < 0)
+            throw new LocalWaitQueueCorruptException($"等待项 {itemId} 的 generation 为负数（原件保留）。");
+        return value;
+    }
+
+    /// <summary>
+    /// [批次 20／C3] <see cref="LocalWaitItem.AdmissionIdentity"/> 的写侧形状快速失败：
+    /// 与读取侧 <c>ParseAdmissionIdentity</c>／物化校验同口径——null 放行（合同前存量形状），
+    /// 空白串响亮拒绝（该形状读取侧判损坏，不得写出）。
+    /// </summary>
+    private static void ValidateAdmissionIdentityShape(string? admissionIdentity, string itemId)
+    {
+        if (admissionIdentity is null) return;
+        if (string.IsNullOrWhiteSpace(admissionIdentity))
+            throw new LocalWaitQueueCorruptException(
+                $"等待项 {itemId} 的 admissionIdentity 为空字符串：写入侧拒绝（该形状读取侧判损坏，不得写出）。");
+    }
+
+    /// <summary>
     /// [批次 16／D2] 严格解析**持久化稳定前置引用**（稳定引用串）。
-    /// 缺字段／显式 null ⇒ null（**保守按不可判定**，不得默认就绪；v1 旧文件即走此路径）。
-    /// 键存在则其值必须是**非空字符串** —— 形状非法（数字／对象／数组／空串）一律响亮拒绝，不降级解析。
+    /// 缺字段／显式 JSON null ⇒ null（**保守按不可判定**，不得默认就绪；v1 旧文件即走此路径）。
+    /// 键存在且为非字符串值（数字／对象／数组）或**空串／空白串** ⇒ 响亮拒绝，不降级解析。
     /// **就绪**永不落盘：本字段只回答「前置是谁」，就绪由只读 evaluator 在读取时求得。
     /// </summary>
     private static string? ParsePrerequisiteReference(JsonObject itemObject, string itemId)
@@ -355,15 +440,31 @@ public sealed class LocalWaitQueueStore
 
         foreach (var item in items)
         {
-            if (item is null) continue;
+            // [Wave1 R12 建议-3] null 元素**响亮拒绝**（与读取侧「非对象元素判损坏」对称；写侧不得静默裁剪
+            // 等待项）。现有三个 Persist 调用点（Upsert/Remove/PersistCleanup）的列表均来自 Load()
+            // （ParseItem 产非空对象）或单条已空检的 Upsert 入参 ⇒ 该分支当前不可达，仅作未来写者护栏。
+            if (item is null)
+                throw new LocalWaitQueueCorruptException(
+                    "等待队列包含 null 元素：写入侧拒绝（该形状读取侧判损坏，不得静默裁剪）。");
             // ①一次读取 → ②校验该值 → ③把**该值**放进副本；后续写盘只用副本
             var itemId = item.ItemId;
             var stableIdentity = item.StableIdentity;
             var reference = item.PrerequisiteReference;
+            var admissionIdentity = item.AdmissionIdentity;
+            var generation = item.Generation;
             var tier = item.Tier;
             var state = item.State;
+            // [Wave1 R11 F-D] 非空注解字段 null→"" 归一（与读取侧 ParseItem 的 `?? ""` 同口径）：
+            // 否则内存对象持 null、落盘 JSON null、读回归一 "" ⇒ 同身份重登记时载荷比较 "" vs null
+            // 判不等 ⇒ 响亮冲突，「同身份重复登记复用同一条」的幂等合同对该形状不成立。
+            var candidateId = item.CandidateId ?? string.Empty;
+            var itemNamespace = item.Namespace ?? string.Empty;
+            var workflowId = item.WorkflowId ?? string.Empty;
 
-            ValidatePersistableItemShape(itemId, stableIdentity, tier, state, reference);
+            ValidatePersistableItemShape(itemId, stableIdentity, tier, state, reference, admissionIdentity);
+            if (generation < 0)
+                throw new LocalWaitQueueCorruptException(
+                    $"等待项 {itemId} 的 generation 为负数：写入侧拒绝（该形状读取侧判损坏，不得写出）。");
             if (!seenIds.Add(itemId ?? string.Empty))
                 throw new LocalWaitQueueCorruptException(
                     $"等待队列存在重复 itemId：{itemId}（写入侧拒绝：该形状读取侧判损坏，不得写出）。");
@@ -372,14 +473,16 @@ public sealed class LocalWaitQueueStore
             {
                 ItemId = itemId ?? string.Empty,
                 StableIdentity = stableIdentity ?? string.Empty,
-                CandidateId = item.CandidateId,
-                Namespace = item.Namespace,
-                WorkflowId = item.WorkflowId,
+                CandidateId = candidateId,
+                Namespace = itemNamespace,
+                WorkflowId = workflowId,
                 Tier = tier,
                 Priority = item.Priority,
                 IsHoeingHighest = item.IsHoeingHighest,
                 ScheduledAt = item.ScheduledAt,
                 PrerequisiteReference = reference,
+                AdmissionIdentity = admissionIdentity,
+                Generation = generation,
                 HasTrustedIdentity = item.HasTrustedIdentity,
                 EnqueuedAtUtc = item.EnqueuedAtUtc,
                 CancelledAtUtc = item.CancelledAtUtc,
@@ -400,7 +503,8 @@ public sealed class LocalWaitQueueStore
         string? stableIdentity,
         ArbitrationTier tier,
         LocalWaitItemState state,
-        string? reference)
+        string? reference,
+        string? admissionIdentity)
     {
         if (string.IsNullOrEmpty(itemId))
             throw new LocalWaitQueueCorruptException(
@@ -415,6 +519,10 @@ public sealed class LocalWaitQueueStore
             throw new LocalWaitQueueCorruptException(
                 $"等待项 {itemId} 的 state={(int)state} 不是已定义取值：写入侧拒绝（该形状读取侧判损坏，不得写出）。");
         ValidatePrerequisiteReferenceShape(reference, itemId);
+        // [批次 20／C3/C4①] 准入身份形状：null（合同前存量读兼容）或非空字符串；空白串＝读取侧判损坏。
+        if (admissionIdentity is not null && string.IsNullOrWhiteSpace(admissionIdentity))
+            throw new LocalWaitQueueCorruptException(
+                $"等待项 {itemId} 的 admissionIdentity 为空字符串：写入侧拒绝（该形状读取侧判损坏，不得写出）。");
     }
 
     private void Persist(List<LocalWaitItem> items)

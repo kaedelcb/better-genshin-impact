@@ -4734,3 +4734,38 @@ C5/C6（键语义/判过期）按 ① 及两条附带义务、C11（新状态词
 `ClaimSurfaceManifest.txt`，随后**不带 env 复跑通过**。终值行数与哈希以提交时清单本体为准并记载于
 本批提交信息（本段无数字，避免自指再生）。按 §17.4-A 第 1 条，本批不援引「措辞类豁免」，清单变更
 随本批提交评审。
+
+
+## §24.120 批次 20 收口登记——等待队列接线前合同批（冻结收口）
+
+**登记日期**：2026-09-26。**分支**：main-OldTeaBag-B168（基线 eccc08995）。
+
+### §24.120.1 交付面
+
+| Wave | 交付内容 | 收口状态 |
+|---|---|---|
+| Wave1 | C3 身份翻译层（LocalWaitIdentityTranslation 新组件：BuildAdmissionIdentity 权威委托／Translate 形状+规范形回环+同源校验／ValidateReentry 全序防护）＋C4① 登记载荷合同（TryRegisterLocalWait 四分支 fail-closed：缺队列/缺引用/缺 scope/非规范 scope）＋C4② v1 例外（缺字段/显式 null ⇒ 永不参选＋LegacyPreContract 标注）＋Store v3 格式（generation/admissionIdentity 字段） | ✅ 30 轮收口 |
+| Wave2 | D-E2=① 代际载体（LocalWaitItem.Generation 重激活递增＋Store 唯一写入口）＋义务 i（PruneHandledExceptGeneration 按身份×代际修剪＋迁移键保留）＋义务 ii（D3 幂等键口径重裁落字：键含触发类别段，**「每代际内每类触发首次重走完整准入；跨代际必重新参选」**经会诊确认）＋C5 消费前复核组件（LocalWaitReevaluationConsumer：ABA 判过期＋StableIdentity 权威身份比对＋fail-closed） | ✅ 42 轮收口 |
+| Wave3 | C11=(a) 停驻态显式化（WorkflowRunState.LocalWaitParking 枚举真尾部追加）＋停驻分支置新状态＋ResumeAsync/宿主 ResumeRunAsync/移交 resume 白名单/恢复扫描独立谓词/ActiveStates 全链打通＋ShouldRegisterLocalWait 实例级注入接缝 | 🔶 冻结收口（约 80%，见 §24.120.3） |
+| Wave4 | C10 大部分已顺带完成（R25 折停驻＋Reason 留痕＋R26 文案更正）；C12 已登记 BO-4 归接线批；C9 已在 Wave1 R17 落地（Store 单写者口径同进程收窄） | 名义缺口登记 |
+
+### §24.120.2 验证与质量
+
+- 助手侧全量：**1475 通过/2 跳过/0 失败/1477**（基线 1393＋82；差集恰为本批夹具，逐名核对）。
+- BGI 侧全量：1062 总/**14 失败**（与基线失败数一致；本批零 BGI 侧文件改动，失败与本批无关）。
+- 突变验证：**M1-M63**（`_batch20/b20_wave1_mutations.md`；M40/M45 无独立判别力、M62 首轮打写侧无判别力均已如实登记）。
+- ClaimSurfaceGuardTests 不带 env 通过（多轮实测）。
+
+### §24.120.3 会诊过程与 owner 止损裁决
+
+会诊共 **49 轮**（台账 test/ledger-batch20.json rounds 1-49；KIMI k3 通道）。**R11 起会诊将「停驻标记 × 流程修订重算 × 驱动线性推进」交互面拉入本批**，该面形态空间发散：每轮修复引入新分支、下轮挖出新冲突（R12/R14/R15/R18/R19/R21/R24 链）。R44 owner 三选项裁决＝**选项 1 立即冻结收口**；R49 后 owner 三次质询死循环、裁决再次确认＝**会诊循环终止，R48/R49 起全部发现一律登记残项，不再修复、不再复会诊**（owner 裁决优先于 R2 机械收口条件；AGENTS.md 纪律⑤）。
+
+R29-R47 期间修复的**真缺陷**（均有反例构造与突变钉死）：已完成节点重复执行（R29 继承缺陷登记 BO-8）、停驻任务静默丢失（R12/R15/R19/R21）、运行假成功（R14）、枚举持久化数值漂移（R43 阻断）、消费侧 fail-open（R31）、测试并行污染（R43 重要-6 实证）。
+
+### §24.120.4 残项清单（BO-1~BO-13，归后续批次）
+
+台账 test/ledger-batch20.json batch_obligations 数组：BO-1 登记异常收敛（接线批）、BO-2 面板 scope 注入源（接线批）、BO-3 跨代际重登记通道（Wave2 期间裁决＝冲突即合同信号，已 R35 落字）、BO-4 facade WaitLocally 映射（Wave4/接线批）、BO-5 停驻×孤儿扫描（已闭合）、BO-6 停驻重排冲突保守裁决＋端到端（Wave3 C11）、BO-7 停驻救援全序裁决（Wave3 C11）、BO-8 恢复点后推进段完成过滤（继承缺陷，Wave3 C11）、BO-9 多有效停驻跨轮次推进（Wave3 C11）、BO-10 代际单调性边界（接线批）、BO-11 Wave3 冻结残项打包（接线批）、BO-12 Remove/裁剪→重登记代际回绕（Wave3/接线批 C5）、BO-13 停驻运行会话内终局处置出口（接线批）。
+
+### §24.120.5 门禁与边界
+
+生产入口门、真实 User 门与 R5.8 签署**继续关闭**；停驻语义生产不可达（ShouldRegisterLocalWait 生产恒 null、waitLocally 无生产产出方）。**不援引措辞类豁免**；声明面清单变更随本批提交评审。R44 起新发现按 owner 止损裁决登记台账残项（BO-14 起），未修复项已在 §24.120.4 与台账逐条登记归属。

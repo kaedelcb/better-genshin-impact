@@ -151,6 +151,13 @@ public sealed class WorkflowRunnerOptions
 
     public Func<DateTimeOffset> Clock { get; init; } = () => DateTimeOffset.Now;
 
+    /// <summary>
+    /// **[批次 20／Wave3／C11] 本地等待判定委托（可选；默认 null ⇒ 恒 false＝未接线）**。
+    /// 接线批注入门面等待结论判定；测试注入停驻触发判定。**实例级**——随 Runner 生命周期，
+    /// 无进程级静态污染（R43 重要-6）。
+    /// </summary>
+    public Func<WorkflowNodeOccurrence, bool>? ShouldRegisterLocalWait { get; init; }
+
     /// <summary>可取消延时（测试用手动时钟快进；生产 Task.Delay）。</summary>
     public Func<TimeSpan, CancellationToken, Task> DelayAsync { get; init; } = Task.Delay;
 
@@ -159,6 +166,32 @@ public sealed class WorkflowRunnerOptions
 
     /// <summary>日志出口（留痕纪律；不含敏感账号字段）。</summary>
     public Action<string>? Log { get; init; }
+}
+
+/// <summary>
+/// **[批次 20／C4①] 本地等待登记结果**（D1 登记点的结构化产物）。
+/// <see cref="Park"/>＝运行应按「确定零发送」停驻（登记成功**或**登记被拒都停驻——门面已给出零发送
+/// 结论，**不得**回落到提交路径把停驻改写成发送尝试）；<see cref="Reason"/> 区分两种停驻与不适用。
+/// </summary>
+public sealed class LocalWaitRegistrationOutcome
+{
+    /// <summary>
+    /// true＝零发送停驻（已登记／登记被拒／**接缝命中而队列缺失＝接线缺陷**，三种来源都停驻）。
+    /// **[Wave1 R15 重要-2／R17 重要-1]** 当前**不存在 Park=false 的产出路径**（登记接缝命中后
+    /// 队列缺失也属接线缺陷，必须以零发送停驻收场——不得回落提交把门面零发送结论改写成真实发送）；
+    /// <c>NotParked</c> 仅为接缝未命中场景预留的防御形态、当前无产出方。
+    /// </summary>
+    public bool Park { get; init; }
+
+    /// <summary>停驻原因（审计用；不适用时为空串）。</summary>
+    public string Reason { get; init; } = "";
+
+    /// <summary>
+    /// **[Wave1 R17 建议-2] 当前无产出方**（<see cref="WorkflowRunner.TryRegisterLocalWait"/> 全部出口
+    /// 均为 Park=true）：保留为「登记接缝未命中」场景的防御形态，**不是**「未注入队列 ⇒ 走提交路径」的
+    /// 合法出口（该组合＝接线缺陷，须停驻——[Wave1 R15 重要-2]）。
+    /// </summary>
+    public static LocalWaitRegistrationOutcome NotParked { get; } = new();
 }
 
 /// <summary>
@@ -190,6 +223,25 @@ public sealed class WorkflowRunner
     /// </summary>
     private readonly LocalWaitQueueStore? _localWaitQueue;
 
+    /// <summary>
+    /// **[批次 20／C4①] 等待登记前置引用来源（可选注入；生产未接线）。**
+    /// D1 登记点载荷合同要求登记项携带持久化稳定前置引用；引用的**权威来源**属接线批事项（§24.111
+    /// 「前置引用来源」残项），本注入点即其合同落点。`null` 或返回空白 ⇒ 登记点**拒绝登记**
+    /// （不得登记结构性永不参选的等待项——那是 C4② 合同前存量的专属形态，不是新登记的合法产物）。
+    /// </summary>
+    private readonly Func<WorkflowRunRecord, WorkflowNodeOccurrence, string?>? _localWaitPrerequisiteReferenceProvider;
+
+    /// <summary>
+    /// **[批次 20／Wave1 R9-F1] 等待登记准入 Scope 来源（可选注入；生产未接线）。**
+    /// 登记点要求**权威 scope**；其权威来源按运行来源类别分流——移交来源运行＝运行台账
+    /// <c>AdmissionSourceScope</c>（受理时捕获、只比较不重写）；面板来源运行＝租约侧
+    /// <c>FlowRegistration</c> 反查（<c>ResolveAdmissionParent</c>，宿主职责，Runner 不可达）⇒
+    /// 由本注入点供给（接线批接宿主反查）。解析次序（[Wave1 R23 重要-1／R24 重要-1 同步]）：**台账字段规范非空 ⇒ 恒取台账字段**；provider 仅在台账字段缺省（面板来源运行）时取用；
+    /// 否则回落运行台账字段；两者皆缺 ⇒ 登记点**拒绝登记**（空段身份与提交面不同空间，
+    /// 结构性永不可重入——R7 重要-2 合同不变；「面板来源＝无权威 scope」是错误等式，R9-F1 更正）。
+    /// </summary>
+    private readonly Func<WorkflowRunRecord, string?>? _localWaitAdmissionScopeProvider;
+
     private readonly ConcurrentDictionary<string, RunControl> _controls = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -197,6 +249,13 @@ public sealed class WorkflowRunner
     /// 避免多处手写字面量漂移出「未知/失败」词表。
     /// </summary>
     public const string LocalWaitReasonCode = "local_wait";
+
+    /// <summary>
+    /// **[批次 20／C3] 等待停驻的结果词**（NodeOutcomes.Result 与提交产物用的**唯一**停驻词）。
+    /// 它**不是完成词**：RecomputeSuccessor 的「最后完成身份」锚**必须**排除它（停驻项零发送、
+    /// 未完成；把它当锚会把未发送节点静默跳过——批次 14 明文禁止「作业静默丢步」）。
+    /// </summary>
+    public const string LocalWaitResultWord = "waitLocally";
 
     /// <summary>跳过请求（B4：绑定请求时的出现身份；身份漂移则丢弃，不误伤后续节点）。</summary>
     private sealed record SkipRequest(string NodeId, int Occurrence, int LoopIteration)
@@ -220,7 +279,9 @@ public sealed class WorkflowRunner
 
     public WorkflowRunner(WorkflowStore workflows, RunStore runs, IWorkflowExecutionBoundary boundary,
         IWorkflowPrerequisiteAdapter prerequisites, IWorkflowTerminalExecutor terminal,
-        WorkflowRunnerOptions? options = null, LocalWaitQueueStore? localWaitQueue = null)
+        WorkflowRunnerOptions? options = null, LocalWaitQueueStore? localWaitQueue = null,
+        Func<WorkflowRunRecord, WorkflowNodeOccurrence, string?>? localWaitPrerequisiteReferenceProvider = null,
+        Func<WorkflowRunRecord, string?>? localWaitAdmissionScopeProvider = null)
     {
         _workflows = workflows;
         _runs = runs;
@@ -229,6 +290,8 @@ public sealed class WorkflowRunner
         _terminal = terminal;
         _opt = options ?? new WorkflowRunnerOptions();
         _localWaitQueue = localWaitQueue;
+        _localWaitPrerequisiteReferenceProvider = localWaitPrerequisiteReferenceProvider;
+        _localWaitAdmissionScopeProvider = localWaitAdmissionScopeProvider;
     }
 
     /// <summary>运行控制登记实况（R4.8 一轮 I5：宿主动作结构化反馈用——Paused/终态运行无登记，动作不得无声吞）。</summary>
@@ -362,8 +425,10 @@ public sealed class WorkflowRunner
         var run = _runs.Load(runId) ?? throw new FileNotFoundException("运行记录不存在：" + runId);
         if (run.State == WorkflowRunState.Unknown)
             throw new InvalidOperationException("运行结果不确定（Unknown），需先按幂等键+job 查询对账，禁止自动恢复。");
-        if (run.State is not (WorkflowRunState.Interrupted or WorkflowRunState.Paused))
-            throw new InvalidOperationException($"仅 Interrupted/Paused 可显式恢复（当前 {run.State}）。");
+        if (run.State is not (WorkflowRunState.Interrupted or WorkflowRunState.Paused
+            or WorkflowRunState.LocalWaitParking))
+            throw new InvalidOperationException($"仅 Interrupted/Paused/LocalWaitParking 可显式恢复（当前 {run.State}）。"
+                + "LocalWaitParking＝等待停驻（[批次 20／Wave3／C11=(a)]）：等待项就绪后显式重驱入口。");
 
         var snapshot = _workflows.LoadSnapshot(run.WorkflowId);
         var plan = new WorkflowPlan(snapshot.Document);
@@ -490,12 +555,17 @@ public sealed class WorkflowRunner
 
                 // 提交（意图先行 → 提交 → 终态；观察终态+结果+游标单次落盘，B2/B3）
                 var outcome = await SubmitAndAwaitAsync(run, plan, node, occurrence, control).ConfigureAwait(false);
-                if (outcome.Result is "waitLocally")
+                if (outcome.Result is LocalWaitResultWord)
                 {
                     // **[批次 14／D1] 本地持久等待＝确定零发送的停驻**：与 unknown/cancelUnconfirmed 同族——
                     // **游标不推进**（`ApplyRelocation(run, occurrence)` 留在当前出现）、**不终态化**运行、
                     // **不触发收尾**、**不标 Unknown**（等待不是「结果不确定」，标 Unknown 会错误要求按幂等键+job 对账，
-                    // 而本笔从未进入发送面 ⇒ 无 job 可查 ⇒ 永久无法收敛）。因此运行状态保持可继续驱动。
+                    // 而本笔从未进入发送面 ⇒ 无 job 可查 ⇒ 永久无法收敛）。
+                    // **[批次 20／Wave3／C11=(a)] 停驻态显式化**：置 **LocalWaitParking**（D-E4=(a) 不复用
+                    // Running/Waiting）——运行无活动驱动、等待项就绪后可显式重驱（ResumeAsync 接受本状态）；
+                    // 重启恢复扫描将其收敛为 Interrupted（可恢复）——「无重驱句柄的永久 Running」形态消除
+                    // （Wave1 R11 F-A/R25 处置链的闭环）。同代际再次重驱同一出现 ⇒ 再停驻 ⇒ 状态保持 LocalWaitParking。
+                    run.State = WorkflowRunState.LocalWaitParking;
                     CommitOutcome(run, plan, occurrence, outcome.Result, outcome.Reason, rawTerminal: null);
                     return run;
                 }
@@ -637,8 +707,16 @@ public sealed class WorkflowRunner
         // ③返回 `("waitLocally", …)`：调用点**游标不推进、不终态化**（与 `unknown/cancelUnconfirmed` 同族的停驻语义），
         //    等待项就绪后按「重新走一次完整准入」重评。
         // **本批未接线**：没有生产方返回该结论，此处为显式闭环（不可落进 `_ =>` 未知兜底）。
-        if (TryRegisterLocalWait(run, occurrence) is { } waitReason)
-            return ("waitLocally", waitReason, null);
+        // [批次 20／C4①] 登记产物结构化：Park=true 涵盖「已登记」与「登记被拒（载荷合同）」两种零发送停驻；
+        // 登记被拒**不**回落到提交（门面零发送结论不可被改写成发送尝试）。
+        // 等待来源判定（ShouldRegisterLocalWait 接缝）由**调用点**显式应用：
+        // TryRegisterLocalWait 是登记机制本体，可独立被验证（含登记被拒路径）。
+        if (ShouldRegisterLocalWait(this, occurrence))
+        {
+            var localWait = TryRegisterLocalWait(run, occurrence, attempt);
+            if (localWait.Park)
+                return (LocalWaitResultWord, localWait.Reason, null);
+        }
 
         _runs.RecordIntent(run, submission); // 提交意图先行（B2/B3：崩溃后按意图对账，不重跑）
 
@@ -1052,16 +1130,254 @@ public sealed class WorkflowRunner
         return (newPlan, relocated);
     }
 
-    /// <summary>按稳定出现身份重算后继：最后完成节点在新定义中的 Next；无完成节点取链首；锚失效按链尾（不静默重排）。</summary>
-    private WorkflowNodeOccurrence? RecomputeSuccessor(WorkflowRunRecord run, WorkflowPlan plan)
+    /// <summary>
+    /// 按稳定出现身份重算后继（B1：修订插入/删除/重排不错位）。
+    /// **[批次 20／Wave1 R5 重要-2]** 锚＝最后一条**完成**结果（排除 <see cref="LocalWaitResultWord"/>
+    /// 停驻标记——它零发送、未完成；**不得**按停驻节点算 Next 或按链尾放行）。
+    /// **裁决次序（与实现逐字对齐，R15 建议-4）**：①完成锚（含回溯）算出候选；②候选为 null 或
+    /// 存在可定位停驻出现时，**停驻义务优先**（不变量②：含前插保全）；③无停驻义务时取候选；
+    /// ④完成锚全不可定位且无停驻 ⇒ 链尾。**「无完成节点 ⇒ 取链首」仅在无停驻义务时成立。**
+    /// unknown/cancelUnconfirmed 同为非完成词，但其锚污染被 Unknown 禁恢复态挡住（恢复前必先对账并追加
+    /// 真实终态词），维持既有口径不动（本批不扩改既有恢复语义）。
+    /// **两条不变量（本批会诊逐轮收敛所得）**：
+    /// ①**不重跑已完成出现**——**仅限返回点本身**：返回的出现若已有完成结果，沿链继续向后跳过
+    /// （R12 重要-1）。**已知缺口（R29 重要，继承缺陷——批次 20 前旧实现 plan.Next(lastOcc) 行为相同）**：
+    /// 返回点**之后**的线性推进段（DriveAsync/Relocate）无完成过滤，修订重排把已完成节点挪到恢复点
+    /// 之后时该节点会被二次提交（反例：[n3,n2,Y] 执行 n3✓n2✓ 后修订为 [n2,X,n3,Y] ⇒ 返回 X ⇒ X 完成
+    /// 后推进撞 n3）。修复归驱动推进层（DriveAsync/Relocate 完成过滤）＝台账 BO-8（Wave3 C11），
+    /// 本批不改生产推进机制；
+    /// ②**不吞停驻出现**——引擎自己立下的重驱义务（<see cref="LocalWaitResultWord"/>）：任何返回链尾
+    ///   （null/TailReached）的路径都必须先复核「计划中是否仍有可定位的停驻出现」，有则按它继续
+    ///   （R14 F2）；停驻出现之前若有**从未执行**的出现，则按更早者继续（R12 建议-1／R14 F1，
+    ///   且探针必须**与停驻同轮次**起步，不得锁死在第 0 轮）。
+    /// </summary>
+    internal WorkflowNodeOccurrence? RecomputeSuccessor(WorkflowRunRecord run, WorkflowPlan plan)
     {
-        var last = run.NodeOutcomes.LastOrDefault();
-        if (last is null) return plan.FirstOccurrence();
-        if (plan.TryLocate(last.NodeId, last.Occurrence, last.LoopIteration, out var lastOcc))
-            return plan.Next(lastOcc);
-        Log(run, $"最后完成身份 {last.NodeId}#{last.Occurrence} 在新修订中已消失，按链尾处理（已完成节点不重跑）。");
+        var completionOutcomes = run.NodeOutcomes.Where(o => o.Result != LocalWaitResultWord).ToList();
+        var parkedOutcomes = run.NodeOutcomes.Where(o => o.Result == LocalWaitResultWord).ToList();
+
+        // 锚回溯：最后完成节点在新修订中已删除时，回溯更早的仍可定位完成节点（R11 F-C）。
+        for (var i = completionOutcomes.Count - 1; i >= 0; i--)
+        {
+            var anchor = completionOutcomes[i];
+            if (!plan.TryLocate(anchor.NodeId, anchor.Occurrence, anchor.LoopIteration, out var anchorOcc)) continue;
+            if (i != completionOutcomes.Count - 1)
+            {
+                Log(run, $"最后完成身份 {completionOutcomes[^1].NodeId}#{completionOutcomes[^1].Occurrence} "
+                         + $"在新修订中已消失，回溯到更早可定位完成身份 {anchor.NodeId}#{anchor.Occurrence} 重算后继。");
+            }
+            var candidate = plan.Next(anchorOcc);
+            while (candidate is not null && HasCompletedOutcome(run, candidate))
+                candidate = plan.Next(candidate); // 不变量①：跳过已完成出现
+            // 锚可定位路径的返回可能落在**链尾**（candidate == null），也可能落在「锚之后仍有未完成工作」
+            // 的节点上——两者都不得吞掉停驻义务（不变量②）：
+            // ·链尾（R14 F2）：修订把停驻点重排到锚之前 ⇒ 纯向后走至 null ⇒ 假成功＋零发送节点被吞；
+            // ·非链尾（R15 重要-1）：修订把停驻点重排到锚之前**且锚之后还有未执行节点** ⇒ 返回那个
+            //   未执行节点、停驻点再也不被重驱 ⇒ 运行最终仍 Succeeded（同一可观察后果、另一条分支）。
+            // 故此处**无条件**复核停驻义务：有可定位停驻出现 ⇒ 以停驻义务为准（含其前插保全）；
+            // 无停驻 ⇒ 才用纯锚路径结果（保持 B1 修订语义不变）。
+            // [Wave1 R18 必改-1] 下界：锚候选非 null ⇒ 候选本身；candidate 为 null（锚在链尾）⇒
+            // **最后一条可定位停驻点**——探针不得返回早于下界的未执行出现：线性推进会从该早节点
+            // 依次穿越中途**已完成**出现（含锚及其后节点）并重复提交（不变量①）。停驻点之前的
+            // 新插节点不在此路径承载（其重驱义务由 C11 重驱合同覆盖，属接线批语义面）。
+            // [Wave1 R19 必改-1 补强] 锚可定位且 candidate 非 null 时，仍须检查有效停驻点的
+            // **位置安全性**：有效停驻点（未过期、可定位）若不在锚之后的安全路径上（同轮次早于锚，
+            // 或轮次早于锚）⇒ 返回 candidate 会吞掉它（R15 形态）、返回它又会隔着已完成出现
+            // （R19 形态）⇒ 两不变量冲突 ⇒ 保守 null ＋ 响亮日志（BO-6）。
+            // [Wave1 R25 重要-1] **全部**有效停驻点逐一做位置安全性检查（不得因最后一条安全而
+            // 跳过更早的）：任一有效停驻不在锚后安全路径 ⇒ 保守 null ＋ 响亮日志（BO-6）。
+            // R25 反例（删除 P1→执行越过→同身份加回锚前）中更早有效停驻逃出检测的形态由此封死。
+            for (var pi = parkedOutcomes.Count - 1; pi >= 0; pi--)
+            {
+                var po = parkedOutcomes[pi];
+                if (!plan.TryLocate(po.NodeId, po.Occurrence, po.LoopIteration, out var unsafeParked)) continue;
+                if (HasCompletedOutcome(run, unsafeParked)) continue;
+                var onSafePathAfterAnchor = unsafeParked.LoopIteration > anchorOcc.LoopIteration
+                    || (unsafeParked.LoopIteration == anchorOcc.LoopIteration
+                        && unsafeParked.SequenceIndex > anchorOcc.SequenceIndex);
+                if (!onSafePathAfterAnchor)
+                {
+                    Log(run, $"有效停驻点 {unsafeParked.NodeId}#{unsafeParked.Occurrence} 被修订重排到已完成锚 "
+                             + $"{anchorOcc.NodeId}#{anchorOcc.Occurrence} 之前：返回任一侧都会违反不变量①或②"
+                             + "（保守：本轮重算按链尾处理），停驻重驱的推进语义归台账 BO-6（Wave3 C11）。");
+                    return null;
+                }
+            }
+            WorkflowNodeOccurrence? lowerBound = candidate;
+            if (lowerBound is null)
+            {
+                // [Wave1 R19 重要-2；R23 重要-2 更正；R34 重要-F5 口径统一] **跨代际高轮次停驻标记路径**
+                // （TryLocate 透传 loopIteration ⇒ 高轮次标记可定位）。下界取**计划全序最早**的有效停驻点
+                //（与 ParkedRescue 选取同口径，[R34 重要-F5]——追加序最后者会漏更早有效停驻所在的低轮次，
+                // 使其前插探针被过期高轮次位置误挡）。
+                foreach (var po in parkedOutcomes)
+                {
+                    if (!plan.TryLocate(po.NodeId, po.Occurrence, po.LoopIteration, out var tailBound)) continue;
+                    if (HasCompletedOutcome(run, tailBound)) continue;
+                    if (lowerBound is not null
+                        && (tailBound.LoopIteration > lowerBound.LoopIteration
+                            || (tailBound.LoopIteration == lowerBound.LoopIteration
+                                && tailBound.SequenceIndex > lowerBound.SequenceIndex)))
+                    {
+                        continue; // 已有更早（全序）的有效停驻点作下界
+                    }
+                    lowerBound = tailBound;
+                }
+            }
+            var parkedRescue = ParkedRescue(run, plan, parkedOutcomes, completionOutcomes,
+                lowerBound: lowerBound, out var rescueConflict);
+            // [Wave1 R20 重要-1] rescueConflict=true（真冲突）⇒ **不得**回落锚候选——保守裁决对
+            // 「锚<停驻<已完成」形态同样成立（candidate 可能是被重排保护的已完成节点之后的未执行项，
+            // 停驻点仍会被吞）；按链尾处理（日志已由 ParkedRescue 留痕）。
+            if (rescueConflict) return null;
+            // [Wave1 R24 重要-2] rescue 与 candidate 都非 null 时按**计划全序取较早者**：
+            // 线性推进（从返回点沿 Next 走到链尾再回绕）保证较晚者自然到达（未完成 ⇒ 会被执行），
+            // 两个义务都不丢。固定 rescue 覆盖 candidate 的旧形态（R24 反例：修订在锚后插入 C@0、
+            // 停驻在更晚轮次 A@1 ⇒ 旧代码返回 A@1 ⇒ C@0 永不进 NodeOutcomes ⇒ 假成功丢步）。
+            if (parkedRescue is not null && candidate is not null
+                && (candidate.LoopIteration < parkedRescue.LoopIteration
+                    || (candidate.LoopIteration == parkedRescue.LoopIteration
+                        && candidate.SequenceIndex < parkedRescue.SequenceIndex)))
+            {
+                return candidate; // candidate 早于 rescue ⇒ 先执行 candidate，线性推进自然到达 rescue
+            }
+            return parkedRescue ?? candidate;
+        }
+
+        if (completionOutcomes.Count == 0)
+        {
+            var noAnchorRescue = ParkedRescue(run, plan, parkedOutcomes, completionOutcomes,
+                lowerBound: null, out var noAnchorConflict);
+            // [Wave1 R20 重要-1] 无完成锚分支：candidate 语义＝链首；真冲突时同样不得按链首放行
+            //（冲突形态已含「停驻点之后有已完成」⇒ 链首起线性推进同样会撞已完成），保守 null。
+            return noAnchorConflict ? null : (noAnchorRescue ?? plan.FirstOccurrence());
+        }
+
+        // 全部完成锚在新修订中不可定位（R7 重要-1）
+        var rescue = ParkedRescue(run, plan, parkedOutcomes, completionOutcomes, lowerBound: null, out _);
+        if (rescue is not null) return rescue;
+        Log(run, "完成身份与停驻身份在新修订中均已消失，按链尾处理（已完成节点不重跑）。");
         return null;
     }
+
+    /// <summary>
+    /// **停驻义务复核**（不变量②）：计划中仍有可定位停驻出现 ⇒ 返回恢复应继续的出现；
+    /// 无可定位停驻 ⇒ null（调用方决定链首/链尾）。取最后一条可定位停驻标记为基准；
+    /// 若其之前（**同一轮次内**）存在从未执行的出现，返回更早者（不静默跳过未执行节点，
+    /// R12 建议-1／R14 F1：探针从**该停驻所在轮次的链首**起步——由基准沿 Next 反向不可行，
+    /// 改为从链首逐轮推进到目标轮次，避免 R14 F1 的「锁死第 0 轮」缺陷）。
+    ///
+    /// **返回语义**（[Wave1 R20 重要-1] 两种 null 必须可区分）：
+    /// 返回出现＝按停驻义务继续；null＋<paramref name="conflict"/>=false＝无有效停驻义务
+    /// （调用方可回落锚候选）；null＋<paramref name="conflict"/>=true＝检测到不变量①/②真冲突
+    /// （保守裁决：调用方**不得**回落锚候选，按链尾处理＋日志已留痕，归台账 BO-6）。
+    /// </summary>
+    private WorkflowNodeOccurrence? ParkedRescue(WorkflowRunRecord run, WorkflowPlan plan,
+        List<WorkflowNodeOutcome> parkedOutcomes, List<WorkflowNodeOutcome> completionOutcomes,
+        WorkflowNodeOccurrence? lowerBound, out bool conflict)
+    {
+        conflict = false;
+        // [Wave1 R25 重要-1] 取**计划全序最早**的有效停驻点（不再「最后追加者首中即返回」）：
+        // 更早的有效停驻点（如「删除→执行越过→同身份加回锚前」舞步复活的标记）同样承载重驱义务，
+        // 首中即返回会让它逃出救援与冲突检测（静默吞）。最早者不可承载（之后同轮次有已完成）⇒
+        // 保守 null（更晚者重驱后推进亦会撞已完成，且最早被吞问题无解）。
+        var hasEarliest = false;
+        var earliestOcc = default(WorkflowNodeOccurrence);
+        foreach (var po in parkedOutcomes)
+        {
+            if (!plan.TryLocate(po.NodeId, po.Occurrence, po.LoopIteration, out var candidateOcc)) continue;
+            if (HasCompletedOutcome(run, candidateOcc)) continue; // 过期标记（R16 必改-1）
+            if (!hasEarliest
+                || candidateOcc.LoopIteration < earliestOcc.LoopIteration
+                || (candidateOcc.LoopIteration == earliestOcc.LoopIteration
+                    && candidateOcc.SequenceIndex < earliestOcc.SequenceIndex))
+            {
+                earliestOcc = candidateOcc;
+                hasEarliest = true;
+            }
+        }
+        if (!hasEarliest) return null;
+        for (var i = parkedOutcomes.Count - 1; i >= 0; i--)
+        {
+            var parked = parkedOutcomes[i];
+            if (!plan.TryLocate(parked.NodeId, parked.Occurrence, parked.LoopIteration, out var parkedOcc)) continue;
+            if (!parkedOcc.Equals(earliestOcc)) continue;
+            // [Wave1 R16 必改-1] **过期停驻标记**：同一出现先停驻、恢复后完成（NodeOutcomes 为追加式，
+            // 旧 waitLocally 条目不删除）⇒ 该标记已失去重驱义务，**不得**把它当恢复点，否则会把恢复点
+            // 拖回已完成出现并重复提交（违反不变量①「不重跑已完成出现」）。
+            if (HasCompletedOutcome(run, parkedOcc)) continue;
+            // 直接构造**与停驻同轮次**的链首出现并向前探查（R14 F1：不得从第 0 轮起步；
+            // 也不经 Next 回绕——计划可能无循环段，越尾即 null，会导致探针整体失效）。
+            for (var probe = plan.FirstOccurrence() is { } head
+                     ? new WorkflowNodeOccurrence(head.NodeId, head.SequenceIndex, head.Occurrence, parkedOcc.LoopIteration)
+                     : null;
+                 probe is not null && probe.SequenceIndex < parkedOcc.SequenceIndex;
+                 probe = plan.Next(probe))
+            {
+                if (HasCompletedOutcome(run, probe)) continue;
+                // [Wave1 R18 必改-1] **下界约束**：锚可定位路径下，探针结果不得早于锚候选——
+                // 否则救援返回的早节点完成后，驱动循环按线性推进（DriveAsync/Relocate 无完成跳过）
+                // 会穿越中途的**已完成**出现并重复提交（外部副作用二次发生），违反不变量①。
+                // 早于下界的未执行出现由「锚可定位路径的 candidate」自身或其后续承载（修订语义内）。
+                // [Wave1 R21 必改-F1] 比较必须用计划全序 **(LoopIteration, SequenceIndex) 字典序**——
+                // 序列号与轮次拆成两条独立条件会把「轮次更晚但序列号更小」（实际在下界之后）的错误排除。
+                if (lowerBound is not null
+                    && (probe.LoopIteration < lowerBound.LoopIteration
+                        || (probe.LoopIteration == lowerBound.LoopIteration
+                            && probe.SequenceIndex < lowerBound.SequenceIndex)))
+                {
+                    continue;
+                }
+                Log(run, $"停驻点 {parkedOcc.NodeId}#{parkedOcc.Occurrence} 前存在从未执行的出现 "
+                         + $"{probe.NodeId}#{probe.Occurrence}（轮次 {probe.LoopIteration}），按其继续。");
+                return probe;
+            }
+            if (completionOutcomes.Count == 0 || !completionOutcomes.Any(c =>
+                    plan.TryLocate(c.NodeId, c.Occurrence, c.LoopIteration, out _)))
+            {
+                Log(run, $"完成身份在新修订中不可定位；存在停驻标记 {parked.NodeId}#{parked.Occurrence}，"
+                         + "按停驻出现继续（不按链尾放行，零发送节点不得被静默吞）。");
+            }
+            else
+            {
+                Log(run, $"锚可定位但向后走至链尾；存在停驻标记 {parked.NodeId}#{parked.Occurrence}，"
+                         + "按停驻出现继续（不按链尾放行，零发送节点不得被静默吞）。");
+            }
+            // [Wave1 R19 必改-1] **停驻点之后（同轮次）存在已完成出现 ⇒ 不得返回停驻点**：
+            // 停驻点重驱完成后，驱动循环线性推进（DriveAsync/Relocate 无完成跳过）会穿越那些
+            // **已完成**出现并重复提交（外部副作用二次发生）——不变量①（不重跑）与不变量②
+            // （不吞停驻）在「停驻点被修订重排到已完成锚之前」的形态下**真冲突**，本批取
+            // 保守方向（①优先）：返回 null（链尾）＋ 响亮日志，语义归台账条目 BO-6
+            // （Wave3 C11：带完成过滤的推进 / 显式失败态，接线批实现），不得静默。
+            for (var after = plan.Next(parkedOcc);
+                 after is not null && after.LoopIteration == parkedOcc.LoopIteration;
+                 after = plan.Next(after))
+            {
+                if (HasCompletedOutcome(run, after))
+                {
+                    Log(run, $"停驻点 {parkedOcc.NodeId}#{parkedOcc.Occurrence} 在新修订中被重排到"
+                             + $"已完成出现 {after.NodeId}#{after.Occurrence} 之前：线性推进将重复提交"
+                             + "已完成节点（不变量①优先），本轮重算按链尾处理；停驻重驱的推进语义归 "
+                             + "台账 BO-6（Wave3 C11 裁决）。");
+                    conflict = true;
+                    return null;
+                }
+            }
+            return parkedOcc;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 该出现是否**已在 NodeOutcomes 中有完成结果**（[Wave1 R12 重要-1] 重定位完成性过滤；
+    /// 停驻标记 <see cref="LocalWaitResultWord"/> 不算完成——它零发送、未完成，
+    /// 与 <see cref="RecomputeSuccessor"/> 的锚口径一致）。
+    /// </summary>
+    private static bool HasCompletedOutcome(WorkflowRunRecord run, WorkflowNodeOccurrence occurrence)
+        => run.NodeOutcomes.Any(o => o.Result != LocalWaitResultWord
+            && string.Equals(o.NodeId, occurrence.NodeId, StringComparison.Ordinal)
+            && o.Occurrence == occurrence.Occurrence
+            && o.LoopIteration == occurrence.LoopIteration);
 
     /// <summary>游标 → 当前计划中的出现（恢复/推进共用；身份失效按最后完成身份重算，不回链首重跑）。</summary>
     private WorkflowNodeOccurrence? Relocate(WorkflowRunRecord run, WorkflowPlan plan)
@@ -1097,47 +1413,183 @@ public sealed class WorkflowRunner
     }
 
     /// <summary>
-    /// 结果提交（B3-①：观察终态 + 节点结果 + 游标推进单次原子落盘，无中间态窗口）。
-    /// I2/四轮重要 9：ObservedTerminal 只存原始线协议词（rawTerminal），业务词与「未确认」（null）绝不写入；
-    /// 四轮阻断 5：unknown/cancelUnconfirmed 游标不推进（调用方先置 Unknown 状态再进本方法，保持单次原子落盘）；
-    /// I3/四轮重要 10：持久化原因统一脱敏。
-    /// </summary>
-    /// <summary>
-    /// **[批次 14／D1] 本地持久等待登记（确定零发送的停驻路径）。**
-    /// 只有**确实存在等待结论**时才返回非 null（当前仅「门面已给出 WaitLocally 结论」一种来源），
-    /// 其余一律返回 null ⇒ 走既有提交路径，**行为不变**。
-    /// 登记动作**不含任何发送许可**：只把等待项落盘（<see cref="LocalWaitQueuePolicy.DeriveItemId"/> 幂等键，
-    /// 同身份重复登记复用同一条）；未注入队列（`_localWaitQueue is null`）时**不登记**且不短路。
+    /// **[批次 14／D1] 本地持久等待登记（确定零发送的停驻路径）；[批次 20／C4①] 登记载荷合同。**
+    /// 产物为结构化 <see cref="LocalWaitRegistrationOutcome"/>：<c>Park=true</c>＝零发送停驻
+    /// （**已登记**／**登记被拒**／**接缝命中而队列缺失（接线缺陷）** 三种——[Wave1 R15 重要-2／R17 重要-1]
+    /// 后者同样停驻，**不得**回落提交把门面零发送结论改写成真实发送）。当前本方法**全部出口均为
+    /// Park=true**；<c>Park=false</c> 仅为接缝未命中预留、无产出方。
+    /// 登记动作**不含任何发送许可**：只把等待项落盘（队列本地 <see cref="LocalWaitQueuePolicy.DeriveItemId"/> 幂等键；
+    /// **[批次 20／C3]** 准入面 9 元组身份在登记时点由权威组成函数求得并随项落盘）。
+    /// **[批次 20／C4①] 登记载荷合同**：新登记**必须**携带持久化稳定前置引用（来自注入的权威来源）；
+    /// 来源缺失 ⇒ **拒绝登记**（零发送停驻、不回落提交、队列零变化）——不得登记结构性永不参选的等待项
+    /// （那是 C4② 合同前存量的专属形态）。未注入队列时**同样停驻**（[Wave1 R15 重要-2]：接缝命中而
+    /// 队列缺失＝接线缺陷，须零发送停驻；批次 14 的「不登记且不短路」口径在本批已按 fail-closed 收紧）。
     /// 纪律：这里是「确定未发送」的本地登记，**不得**借此推进游标或终态化运行。
     /// </summary>
-    internal string? TryRegisterLocalWait(WorkflowRunRecord run, WorkflowNodeOccurrence occurrence)
+    internal LocalWaitRegistrationOutcome TryRegisterLocalWait(WorkflowRunRecord run, WorkflowNodeOccurrence occurrence, int attempt)
     {
-        // 本批未接线：没有生产方返回 WaitLocally 结论，故等待来源判定固定为「否」。
-        // R5 后续批次（D3/D2/D4）接入门面结论后，在此读取结论并登记；判定函数与登记口已就位。
-        if (!ShouldRegisterLocalWait(occurrence)) return null;
-        if (_localWaitQueue is null) return null;
-
-        var stableIdentity = run.RunId + "|" + occurrence.NodeId + "|" + occurrence.Occurrence + "|" + occurrence.LoopIteration;
-        _localWaitQueue.Upsert(new LocalWaitItem
+        // 等待来源判定（ShouldRegisterLocalWait 接缝）由**调用点**显式应用，不在此处重复——
+        // 本方法是登记机制本体（含登记被拒路径），须可独立验证；判定函数与登记口均已就位，
+        // R5 后续批次（D3/D2/D4）接入门面结论后只改判定接缝，不改本方法。
+        // [Wave1 R15 重要-2] 队列未注入**不是**「不适用」：调用点只有在接缝命中（门面已给出确定
+        // 零发送等待结论）时才会走到这里 ⇒ 此时队列缺失是**接线缺陷**，必须以**零发送停驻**收场
+        // （返回 NotParked 会让调用点落进提交路径，把零发送结论改写成真实发送——不可逆 fail-open）。
+        if (_localWaitQueue is null)
         {
-            ItemId = LocalWaitQueuePolicy.DeriveItemId(stableIdentity),
-            StableIdentity = stableIdentity,
-            Namespace = run.WorkflowId,
-            WorkflowId = run.WorkflowId,
-            EnqueuedAtUtc = DateTimeOffset.UtcNow,
-            State = LocalWaitItemState.Waiting,
-            // HasTrustedIdentity 保持默认 false（保守）：等待登记不构成「可信入口」证据。
-            Reason = "低优先级本地持久等待（未获准入前零发送，不进入 BGI 执行队列）",
-        });
-        return "本地持久等待已登记（" + LocalWaitReasonCode + "）：未获准入前零发送，等待项就绪后重新走完整准入。";
+            return new LocalWaitRegistrationOutcome
+            {
+                Park = true,
+                Reason = "本地持久等待**拒绝登记**（local_wait）：登记接缝命中但未注入等待队列"
+                    + "（接线缺陷）——维持零发送停驻，**不回落提交路径**（门面零发送结论不得被改写成发送）。",
+            };
+        }
+
+        // [批次 20／C4①] 登记载荷合同（第一步）：前置引用来源未提供 ⇒ **拒绝登记**。
+        // 登记结构性永不参选的等待项＝把死锁写进队列（§24.115 IW-05）；零发送停驻结论不被改写成提交，
+        // 也不回落到既有提交路径（门面已给出「零发送」结论，提交即越过准入）。
+        // [批次 20／Wave1 R3-F3 合同点登记（接线批必答）]
+        // ①异常收敛语义：本方法（含 provider.Invoke 与 Upsert）在 RecordIntent **之前**执行，
+        //   任何异常上抛都发生在「确定零发送」停驻路径上，零发送性质不被破坏；接线批必须保证
+        //   该异常在驱动循环的收敛终态**不得为 Unknown**（无 job 可查 ⇒ 无法对账收敛，批次 14
+        //   注释明文禁止该形态）——应收敛为可重试停驻或显式失败态，并在接线批会诊验证。
+        // ①'异常面补充（[Wave1 R26 建议-1]）：BuildAdmissionIdentity → 权威 EncodeInt 对
+        //   Occurrence/LoopIteration/Attempt 越界（>99,999,999）抛 ArgumentOutOfRangeException
+        //   （结构性循环无轮次封顶，LoopIteration 理论无界、实际 1e8 轮不可达）——同样适用本条
+        //   收敛义务（不得收敛为 Unknown）。
+        // ②跨代际重登记（**已裁决落地**，[Wave1 R3-F3② → Wave2 R35 重要-2 落字]）：ItemId（4 段裸拼，
+        //   无 attempt）× AdmissionIdentity（9 元组，含 attempt）⇒ 同一出现以新 attempt 再停驻、或载荷
+        //   漂移（ticket 轮换）时，Upsert 载荷比较不通过 ⇒ **响亮冲突＝合同信号**（owner 裁决方向：不设
+        //   「显式新通道」）⇒ 本方法 catch 折为 **Park=true「登记未完成」零发送停驻**（R25 建议采纳，
+        //   冲突原文随 Reason 留痕）。收敛义务：收敛终态不得为 Unknown（见①）——Upsert 分支已在本层
+        //   闭合，provider 分支仍归 BO-1。
+        //   **attempt 维度本批不可达**（SubmitAndAwaitAsync const attempt = 1），但**载荷漂移在
+        //   attempt=1 下可达**（R11 F-B）：停驻→取消→队列项置 Cancelled→重驱再停驻时，若前置引用含
+        //   ticket 且 ticket 已轮换（"…@ticket-7"→"…@ticket-8"），重登记即撞上「已取消同身份项、
+        //   载荷不同 ⇒ 响亮冲突」——收敛义务同 R3-F3①（异常不得使运行收敛为 Unknown）。
+        var reference = _localWaitPrerequisiteReferenceProvider?.Invoke(run, occurrence);
+        var referenceAvailable = !string.IsNullOrWhiteSpace(reference);
+        if (!referenceAvailable)
+        {
+            return new LocalWaitRegistrationOutcome
+            {
+                Park = true,
+                Reason = "本地持久等待**拒绝登记**（local_wait）：C4① 登记载荷合同——"
+                    + "前置引用来源未提供（PrerequisiteReference 缺失的等待项结构性永不参选，"
+                    + "登记即把死锁写进队列）；维持零发送停驻，不回落提交路径。",
+            };
+        }
+
+        // [批次 20／Wave1 R7 重要-2；R9-F1 更正；R10 重要-1 补 canonical] 登记载荷合同（第三步）：
+        // 拿不到**权威且规范**的 scope ⇒ **拒绝登记**。
+        // scope 权威来源按运行来源类别分流：移交来源运行＝运行台账 AdmissionSourceScope；面板来源运行＝
+        // 租约侧 FlowRegistration 反查（宿主职责，经 _localWaitAdmissionScopeProvider 注入——面板来源
+        // 运行**并非没有**权威 scope，R9-F1 更正「字段缺省＝无权威 scope」的错误等式）。
+        // 解析次序（R23 重要-1）：台账字段规范非空 ⇒ 恒取；provider 仅补缺；两者皆缺 ⇒ 拒绝登记。
+        // **采纳判据必须与提交面完全同源**（R10 重要-1）：提交面 ResolveAdmissionParent 对两条来源路径
+        // 均强制 TaskCenterHost.IsCanonicalAdmissionScope（`bgi:local:{非空完整 epoch}`）——登记点若只判
+        // 「非空白」，接受坏 scope（"garbage"／截断纪元）会把准入身份持久化成提交面永不产生的空间 ⇒
+        // 项结构性永不可重入（C4① 禁止形态，从「缺 scope」换成「坏 scope」）。故复用**同一谓词**，
+        // 不复制规则；不通过 ⇒ 并入既有拒绝登记分支（零发送停驻、不回落提交）。
+        // [Wave1 R23 重要-1] 解析次序＝**台账字段优先，provider 仅补缺**：移交来源运行的权威 scope
+        // ＝运行台账 AdmissionSourceScope（受理时捕获、只比较不重写）；provider 只在台账字段缺省
+        // （面板来源运行）时取用。若允许 provider 覆盖台账字段，纪元轮换后 provider 返回当前纪元
+        // 而台账字段是受理时固定纪元 ⇒ 登记身份与提交面（ResolveAdmissionParent 回落支恒取台账字段）
+        // 逐字符不等 ⇒ 等待项结构性永不可参选（双源分歧死锁，IW-05 变体）。台账优先 ⇒ 移交来源双源
+        // 恒等（provider 无从分歧）、面板来源行为不变（台账字段本为空）。
+        var admissionScope = run.AdmissionSourceScope;
+        if (string.IsNullOrWhiteSpace(admissionScope))
+            admissionScope = _localWaitAdmissionScopeProvider?.Invoke(run);
+        var scopeAvailable = TaskCenterHost.IsCanonicalAdmissionScope(admissionScope);
+        if (!scopeAvailable)
+        {
+            return new LocalWaitRegistrationOutcome
+            {
+                Park = true,
+                Reason = "本地持久等待**拒绝登记**（local_wait）：C4① 登记载荷合同——拿不到运行的"
+                    + "**规范形状**固定授权 Scope（来源缺供或非 `bgi:local:{完整 epoch}`；非规范 scope 的"
+                    + "身份与 successor 提交面不同身份空间，结构性永不可重入）。维持零发送停驻，不回落提交路径。",
+            };
+        }
+
+        // [Wave1 R27 重要-1] 整数段显式 **InvariantCulture**：与 Translate ③' 重建侧（InvariantCulture）
+        // 同一口径——隐式 int.ToString() 取 CurrentCulture，非拉丁数字文化（fa-IR 等）下写侧落盘本土数字、
+        // 校验侧重建 ASCII ⇒ 同源校验必败 ⇒ 合法登记项被判「不同源」结构性永不参选。两侧显式统一后
+        // 争议彻底消除（R22 曾撤回该怀疑、R27 复提——与其依赖运行时文化数据行为，不如一行确定性消除）。
+        var stableIdentity = run.RunId + "|" + occurrence.NodeId + "|"
+            + occurrence.Occurrence.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|"
+            + occurrence.LoopIteration.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        // [批次 20／C3] 身份翻译在登记时点完成：准入面 9 元组经**共享权威工厂**求得并随项落盘。
+        // 该工厂与 successor 提交路径（TaskCenterHost.Admission.cs）**共用**（namespace/triggerOccurrenceId
+        // 口径只此一处；锚定夹具 SuccessorCandidateComposition_AnchoredToSharedFactory 机械保证两侧同改）。
+        // scope 取上文解析的权威值（台账字段优先，provider 仅补缺；两者皆缺已拒绝登记——R23 重要-1）。
+        var (admissionIdentity, candidateId) = LocalWaitIdentityTranslation.BuildAdmissionIdentity(
+            TaskCenterHost.BuildSuccessorIdentityCandidate(admissionScope, run.WorkflowId,
+                run.RunId, occurrence.NodeId, occurrence.Occurrence, occurrence.LoopIteration, attempt));
+        try
+        {
+            _localWaitQueue.Upsert(new LocalWaitItem
+            {
+                ItemId = LocalWaitQueuePolicy.DeriveItemId(stableIdentity),
+                StableIdentity = stableIdentity,
+                CandidateId = candidateId,
+                AdmissionIdentity = admissionIdentity,
+                Namespace = run.WorkflowId,
+                WorkflowId = run.WorkflowId,
+                // [Wave1 R7 建议-1] 登记时刻走注入时钟（与引擎全计时可注入口径一致）；
+                // [Wave1 R8 建议-2] 统一转 UTC 偏移（Clock 默认源为本地 Now，字段名是 *Utc——归一偏移）。
+                EnqueuedAtUtc = _opt.Clock().ToUniversalTime(),
+                State = LocalWaitItemState.Waiting,
+                // [批次 20／C4①] 登记载荷合同（第二步）：引用来自注入的权威来源；来源缺失时已在上文
+                // 拒绝登记，本行不可达于「缺引用登记」路径。
+                PrerequisiteReference = reference,
+                // HasTrustedIdentity 保持默认 false（保守）：等待登记不构成「可信入口」证据。
+                Reason = "低优先级本地持久等待（未获准入前零发送，不进入 BGI 执行队列）",
+            });
+        }
+        // [Wave1 R28 重要-1] 折叠边界按**故障类别**对齐（而非异常类型）：LocalWaitQueueCorruptException
+        // （载荷冲突／文件损坏／版本不支持——读侧存储事故已被 Load 包装为此类型）与写侧 Persist 的裸
+        // IOException/UnauthorizedAccessException（写满／句柄占用／权限）同属「队列存储事故」，处置必须
+        // 对称——读侧停驻、写侧也停驻，写侧不再穿透驱动循环。provider.Invoke 异常仍归 BO-1。
+        catch (Exception ex) when (ex is LocalWaitQueueCorruptException
+                                   or System.IO.IOException
+                                   or UnauthorizedAccessException)
+        {
+            // Reason **不断言具体原因**（该异常面覆盖业务冲突与存储事故两类，外层文案不得指认内层
+            // 事实），原文随 ex.Message 留痕。
+            return new LocalWaitRegistrationOutcome
+            {
+                Park = true,
+                Reason = "本地持久等待**登记未完成**（local_wait）：等待队列拒绝写入或存储异常"
+                    + "（原因见引文，涵盖载荷冲突与队列文件异常两类，以引文为准）——「" + ex.Message + "」；"
+                    + "维持零发送停驻，不回落提交路径。",
+            };
+        }
+        return new LocalWaitRegistrationOutcome
+        {
+            Park = true,
+            Reason = "本地持久等待已登记（" + LocalWaitReasonCode + "）：未获准入前零发送，等待项就绪后重新走完整准入。",
+        };
     }
 
     /// <summary>
     /// **[批次 14／D1] 等待结论判定接缝。** 门面结论尚未接线（本批明确不接生产入口）⇒ 恒 false。
     /// 该函数的存在使「等待短路」是**显式判定**而非隐式兜底：后续批次只改这里，不靠在提交路径上加 `_ =&gt;`。
     /// </summary>
-    private static bool ShouldRegisterLocalWait(WorkflowNodeOccurrence occurrence) => false;
+    /// <summary>
+    /// **[批次 20／Wave3／C11] 等待判定（实例级注入）**：<see cref="WorkflowRunnerOptions.ShouldRegisterLocalWait"/>
+    /// 非 null ⇒ 由其判定（测试/接线批注入门面结论判定）；null ⇒ 恒 false（批次 14 既有语义，未接线）。
+    /// **实例级**（非进程级静态）——避免跨测试类/跨运行的并行污染（R43 重要-6）。
+    /// 判定接缝由调用点显式应用；本方法为登记机制本体（TryRegisterLocalWait）的入口闸。
+    /// </summary>
+    private static bool ShouldRegisterLocalWait(WorkflowRunner runner, WorkflowNodeOccurrence occurrence)
+        => runner._opt.ShouldRegisterLocalWait?.Invoke(occurrence) ?? false;
 
+    /// <summary>
+    /// 结果提交（B3-①：观察终态 + 节点结果 + 游标推进单次原子落盘，无中间态窗口）。
+    /// I2/四轮重要 9：ObservedTerminal 只存原始线协议词（rawTerminal），业务词与「未确认」（null）绝不写入；
+    /// 四轮阻断 5：unknown/cancelUnconfirmed 游标不推进（调用方先置 Unknown 状态再进本方法，保持单次原子落盘）；
+    /// I3/四轮重要 10：持久化原因统一脱敏。
+    /// </summary>
     private void CommitOutcome(WorkflowRunRecord run, WorkflowPlan plan, WorkflowNodeOccurrence occurrence,
         string result, string? reason, string? rawTerminal = null)
     {
@@ -1170,7 +1622,7 @@ public sealed class WorkflowRunner
         // **[批次 14／D1]** `waitLocally` 与 `unknown`/`cancelUnconfirmed` 同族：**游标不推进**
         // （等待项就绪后须从同一节点重走完整准入）。若落进 `else` 分支推进游标，等于把「已登记等待」
         // 当成「已完成」——既跳过该节点（作业静默丢步），也让「重新走完整准入」的要求不成立。
-        if (result is "unknown" or "cancelUnconfirmed" or "waitLocally")
+        if (result is "unknown" or "cancelUnconfirmed" or LocalWaitResultWord)
             ApplyRelocation(run, occurrence); // 结果不确定／确定等待：游标留在当前出现，绝不推进
         else
             ApplyRelocation(run, plan.Next(occurrence));

@@ -46,6 +46,7 @@ public sealed partial class TaskCenterHost
     [
         WorkflowRunState.Planned, WorkflowRunState.Running, WorkflowRunState.Waiting,
         WorkflowRunState.Completing, WorkflowRunState.Paused,
+        WorkflowRunState.LocalWaitParking, // [批次 20／Wave3／C11=(a)] 停驻运行＝活跃需关注（等待项就绪后重驱；历史清单自动排除）
     ];
 
     private readonly WorkflowStore _workflows;
@@ -200,7 +201,7 @@ public sealed partial class TaskCenterHost
     public IReadOnlyList<WorkflowRunRecord> ListActiveRuns()
         => _runs.List()
             .Where(r => ActiveStates.Contains(r.State)
-                        || r.State is WorkflowRunState.Unknown or WorkflowRunState.Interrupted)
+                        || r.State is WorkflowRunState.Unknown or WorkflowRunState.Interrupted) // [批次 20／Wave3／C11] 停驻运行经 ActiveStates 含于活动清单（冗余析取移除——R46 建议-2）
             .OrderByDescending(r => r.UpdatedAt).ToList();
 
     /// <summary>历史运行（终态，UpdatedAt 倒序，至多 historyLimit 条只读展示）。</summary>
@@ -310,8 +311,10 @@ public sealed partial class TaskCenterHost
         if (run is null) return HostActionResult.Unavailable("运行记录不存在：" + runId);
         if (run.State == WorkflowRunState.Unknown)
             return HostActionResult.Unavailable("运行结果不确定（Unknown），需先按幂等键+job 查询对账，禁止自动恢复");
-        if (run.State is not (WorkflowRunState.Interrupted or WorkflowRunState.Paused))
-            return HostActionResult.Unavailable($"仅 Interrupted/Paused 可恢复（当前 {run.State}）");
+        if (run.State is not (WorkflowRunState.Interrupted or WorkflowRunState.Paused
+            or WorkflowRunState.LocalWaitParking)) // [批次 20／Wave3／C11=(a)] 停驻运行可宿主重驱
+            return HostActionResult.Unavailable($"仅 Interrupted/Paused/LocalWaitParking 可恢复（当前 {run.State}）"
+                + "——[批次 20／Wave3／C11=(a)] 停驻运行经宿主恢复即重驱");
 
         // 环境确保（同 Start：锁外有界等待，仍不就绪响亮拒绝；等待随宿主退出取消）
         try
@@ -397,7 +400,7 @@ public sealed partial class TaskCenterHost
         lock (_gate) _drives.TryGetValue(run.WorkflowId, out entry);
         if (entry is null || !entry.Runner.HasActiveControl(runId))
             return HostActionResult.Unavailable(
-                $"运行当前不在驱动中（状态 {run.State}）：Interrupted/Paused 请用「恢复」，终态运行无需动作");
+                $"运行当前不在驱动中（状态 {run.State}）：Interrupted/Paused/LocalWaitParking 请用「恢复」，终态运行无需动作");
         entry.Runner.RequestAction(runId, action);
         return HostActionResult.Registered(action switch
         {
@@ -810,7 +813,8 @@ public sealed partial class TaskCenterHost
                 return HandoffRegisterResult.Rejected(HandoffReasonCodes.Unknown,
                     "该流程存在结果不确定（Unknown）的运行，需先对账再恢复");
             var target = sameFlow
-                .Where(r => r.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused)
+                .Where(r => r.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused
+                    or WorkflowRunState.LocalWaitParking) // [批次 20／Wave3／C11=(a)；R46 重要-1 补齐]
                 .OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
             if (target is null)
                 return HandoffRegisterResult.Rejected(HandoffReasonCodes.NoResumableRun,
@@ -849,6 +853,7 @@ public sealed partial class TaskCenterHost
             if (TryAppendHandoffBinding(id => _runs.Load(id), r => _runs.Update(r), target.RunId, request,
                     $"启动中心移交受理（resume 绑定，执行 {shortId}）。",
                     r => r.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused
+                        or WorkflowRunState.LocalWaitParking // [批次 20／Wave3／C11=(a)] 停驻运行可移交 resume
                         ? null
                         : (HandoffReasonCodes.NoResumableRun, "目标运行状态已变化，请刷新后重试"),
                     ct, out committedBind) is { } bindError)

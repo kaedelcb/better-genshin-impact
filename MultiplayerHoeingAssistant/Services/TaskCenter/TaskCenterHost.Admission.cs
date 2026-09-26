@@ -1133,7 +1133,8 @@ public sealed partial class TaskCenterHost
         var run = _runs.Load(runId);
         if (run is null)
             return new SendOutcome.Rejected("run_record_missing", false, "host:runstore"); // 台账缺失=本地权威确定拒绝
-        if (run.State is not (WorkflowRunState.Interrupted or WorkflowRunState.Paused))
+        if (run.State is not (WorkflowRunState.Interrupted or WorkflowRunState.Paused
+                                    or WorkflowRunState.LocalWaitParking)) // [批次 20／Wave3／C11=(a)] 停驻运行可恢复重驱
             return new SendOutcome.Rejected("run_state_changed", false, "host:runstore"); // 准入→发送窗口状态已变（本地权威）
 
         var workflowId = run.WorkflowId!;
@@ -1146,7 +1147,8 @@ public sealed partial class TaskCenterHost
             // 目标仍可恢复 + 同流程无其他活动态/Unknown，任何一项不成立即响亮拒绝、不预留、不驱动。
             var fresh = _runs.Load(runId);
             if (fresh is null) return new SendOutcome.Rejected("run_record_missing", false, "host:runstore");
-            if (fresh.State is not (WorkflowRunState.Interrupted or WorkflowRunState.Paused))
+            if (fresh.State is not (WorkflowRunState.Interrupted or WorkflowRunState.Paused
+                                    or WorkflowRunState.LocalWaitParking)) // [批次 20／Wave3／C11=(a)] 停驻运行可恢复重驱
                 return new SendOutcome.Rejected("run_state_changed", false, "host:runstore"); // 准入→发送窗口状态已变（本地权威）
             var siblings = _runs.List().Where(r => r.WorkflowId == workflowId && r.RunId != runId).ToList();
             if (siblings.Any(r => ActiveStates.Contains(r.State)))
@@ -1328,6 +1330,45 @@ public sealed partial class TaskCenterHost
             System.Text.Encoding.UTF8.GetBytes(content)))[..24].ToLowerInvariant();
     }
 
+    /// <summary>在共享身份工厂产物上填充发送注解（<c>C3</c>：注解不参与 <c>BuildStableIdentity</c> 身份组成）。</summary>
+    private static ArbitrationCandidate WithSuccessorSendAnnotations(
+        ArbitrationCandidate candidate, string? payloadFingerprint, string nodeId)
+    {
+        candidate.PayloadFingerprint = payloadFingerprint;
+        candidate.ResourceRef = "node:" + nodeId;
+        candidate.Intent = "start";
+        return candidate;
+    }
+
+    /// <summary>
+    /// **[批次 20／C3] successor 候选的「身份字段」构造唯一权威**。namespace/triggerOccurrenceId 口径
+    /// 只此一处定义：后继提交路径（本文件）与等待登记翻译（WorkflowRunner.TryRegisterLocalWait）
+    /// **共用本工厂**——两处同改的合同由锚定夹具
+    /// <c>SuccessorCandidateComposition_AnchoredToSharedFactory</c> 机械锚定（单侧改口径 ⇒ 夹具红）。
+    /// 只含 <c>BuildStableIdentity</c> 消费的 9 个身份字段；发送注解（PayloadFingerprint/ResourceRef/Intent）
+    /// 由调用方在工厂产物上另行填充，不参与身份组成。
+    /// **scope 语义（如实；R9-F1 更正）**：移交来源运行 ⇒ 取值即运行台账 <c>AdmissionSourceScope</c>
+    /// （<see cref="ResolveAdmissionParent"/> 回落支返回的正是该字段）；面板来源运行的权威 scope＝
+    /// 租约侧 FlowRegistration 反查（本宿主职责）⇒ 等待登记经 <c>localWaitAdmissionScopeProvider</c>
+    /// 注入取得（面板来源**并非没有**权威 scope，只是不在台账字段里）；来源缺供 ⇒ 登记点拒绝登记
+    /// （[批次 20／Wave1 R7 重要-2]：空段 scope 身份与提交面不同空间，结构性永不可重入）。
+    /// </summary>
+    internal static ArbitrationCandidate BuildSuccessorIdentityCandidate(
+        string? scope, string workflowId, string runId, string nodeId,
+        int occurrence, int loopIteration, int attempt)
+        => new()
+        {
+            Scope = scope,
+            Namespace = "successor",
+            WorkflowId = workflowId,
+            TriggerOccurrenceId = "successor:" + runId,
+            RunId = runId,
+            NodeId = nodeId,
+            Occurrence = occurrence,
+            LoopIteration = loopIteration,
+            Attempt = attempt,
+        };
+
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, BoundarySubmitResult> _successorSendResults = new();
 
     /// <summary>
@@ -1449,21 +1490,12 @@ public sealed partial class TaskCenterHost
                 CursorRevision = cursorRevision,
                 // §17 P6：调用方取消令牌**入队冻结**并随获选项传到 Sender ⇒ 发送段可中止在飞发送（取消≠关闭依据）
                 CallerToken = ct,
-                Candidate = new ArbitrationCandidate
-                {
-                    Scope = scope,
-                    Namespace = "successor",
-                    WorkflowId = run.WorkflowId,
-                    PayloadFingerprint = payloadFingerprint,
-                    TriggerOccurrenceId = "successor:" + run.RunId,
-                    RunId = run.RunId,
-                    NodeId = occ.NodeId,
-                    Occurrence = occ.Occurrence,
-                    LoopIteration = occ.LoopIteration,
-                    Attempt = sub.Attempt,
-                    ResourceRef = "node:" + occ.NodeId,
-                    Intent = "start",
-                },
+                // [批次 20／C3] 身份字段经共享权威工厂构造（与等待登记翻译同口径，夹具锚定）；
+                // 发送注解不参与身份组成，在工厂产物上另行填充。
+                Candidate = WithSuccessorSendAnnotations(
+                    BuildSuccessorIdentityCandidate(scope, run.WorkflowId, run.RunId,
+                        occ.NodeId, occ.Occurrence, occ.LoopIteration, sub.Attempt),
+                    payloadFingerprint, occ.NodeId),
             }).ConfigureAwait(false);
         }
         catch (Exception ex)

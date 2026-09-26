@@ -1201,6 +1201,9 @@ public sealed class LocalWaitReevaluationTriggerTests
         {
             Path.Combine(root, "Services", "TaskCenter", "Arbitration", "LocalWaitReevaluationTrigger.cs"),
             Path.Combine(root, "Models", "TaskCenter", "LocalWaitReevaluationModels.cs"),
+            // [批次 20／Wave2] C5 消费前复核组件（D-E2=① 代际载体／IW-04）——同一合同族的未接线姊妹
+            // 组件（定义文件自身豁免，与触发器同精神）；生产零消费点约束不变（其调用方属接线批）。
+            Path.Combine(root, "Services", "TaskCenter", "Arbitration", "LocalWaitReevaluationConsumer.cs"),
         };
 
         var hits = new List<string>();
