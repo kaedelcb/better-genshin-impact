@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="b620a650-ba5e-4f69-8d8e-c392eaa9d9e3" name="kaedelcb@KAEDELCBPC 2026-09-27 10:27:18" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-27T10:27:18.6929079+08:00" queuing="2026-09-27T10:27:18.6929082+08:00" start="2026-09-27T10:27:18.0810191+08:00" finish="2026-09-27T10:27:18.6973308+08:00" />
+  <TestSettings name="default" id="79aff228-438e-4f93-839d-eaffed0813eb">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-09-27_10_27_18" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="9b67d4e1-3764-4647-bf3b-44025111e216" testId="3914599a-8bcb-17d5-0b53-3717e2394a25" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Load_V4ItemGenerationOverflowWithValidHighWater_FailsClosedWithoutMutation" computerName="KAEDELCBPC" duration="00:00:00.0103669" startTime="2026-09-27T10:27:18.6327173+08:00" endTime="2026-09-27T10:27:18.6327258+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9b67d4e1-3764-4647-bf3b-44025111e216">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Throws() Failure: No exception was thrown&#xD;
+Expected: typeof(MultiplayerHoeingAssistant.Services.LocalWaitQueueCorruptException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Load_V4ItemGenerationOverflowWithValidHighWater_FailsClosedWithoutMutation() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitGenerationContractTests.cs:line 253&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Load_V4ItemGenerationOverflowWithValidHighWater_FailsClosedWithoutMutation" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="3914599a-8bcb-17d5-0b53-3717e2394a25">
+      <Execution id="9b67d4e1-3764-4647-bf3b-44025111e216" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests" name="Load_V4ItemGenerationOverflowWithValidHighWater_FailsClosedWithoutMutation" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="3914599a-8bcb-17d5-0b53-3717e2394a25" executionId="9b67d4e1-3764-4647-bf3b-44025111e216" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.19]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.19]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.23]       Assert.Throws() Failure: No exception was thrown&#xD;
+[xUnit.net 00:00:00.23]       Expected: typeof(MultiplayerHoeingAssistant.Services.LocalWaitQueueCorruptException)&#xD;
+[xUnit.net 00:00:00.23]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.23]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitGenerationContractTests.cs(253,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Load_V4ItemGenerationOverflowWithValidHighWater_FailsClosedWithoutMutation()&#xD;
+[xUnit.net 00:00:00.23]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.23]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.23]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-09-27T10:27:18.6316950+08:00">
+        <Text>[xUnit.net 00:00:00.23]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Load_V4ItemGenerationOverflowWithValidHighWater_FailsClosedWithoutMutation [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

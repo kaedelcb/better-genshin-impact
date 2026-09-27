@@ -1,0 +1,11 @@
+{
+  "originalSourceSha256": "731EDB6F8796B5D4AEE66DE5E36486FAAF928A4780515CDE7C658D687D141289",
+  "strictSourceBeforeSha256": "8C8DA03E002658E4D5B2E8ADB62F3240D1EDEB92A7AAF5BAEF20364B8885A1F4",
+  "restoredSourceSha256": "8C8DA03E002658E4D5B2E8ADB62F3240D1EDEB92A7AAF5BAEF20364B8885A1F4",
+  "nonIncrementalBuildExit": 0,
+  "originalParseTestExit": 0,
+  "restoredExact": true,
+  "interpretation": "Binary identity for this probe is ambiguous: originalSourceSha256 differs from strictSourceBeforeSha256 and restoredSourceSha256. Do not use this probe to infer why the earlier failure occurred or as evidence against the original implementation. The separate mutations-r4/item-generation-overflow-original-parser evidence has matching original/restored hashes and is authoritative for exact restoration.",
+  "originalParseRejectedOverflow": true,
+  "originalParseAcceptedOverflow": false
+}

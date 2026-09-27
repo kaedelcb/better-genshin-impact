@@ -1,0 +1,98 @@
+[
+  {
+    "id": "remove-highwater",
+    "file": "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs",
+    "filter": "RemoveThenReregister_SameIdentity",
+    "baseline_sha256": "731EDB6F8796B5D4AEE66DE5E36486FAAF928A4780515CDE7C658D687D141289",
+    "mutant_sha256": "8A01C2A31EE924AB63496D6B043643DC3CD0E4762774AA822937EB164098CEE6",
+    "restored_sha256": "731EDB6F8796B5D4AEE66DE5E36486FAAF928A4780515CDE7C658D687D141289",
+    "exact_restore": true,
+    "mutant_caught": true,
+    "exit_code": 1,
+    "log": "_batch21\\sb21-2-review\\mutations-r3\\remove-highwater\\mutant.log"
+  },
+  {
+    "id": "prune-highwater",
+    "file": "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs",
+    "filter": "PrunedTombstoneThenReregister_SameIdentity",
+    "baseline_sha256": "731EDB6F8796B5D4AEE66DE5E36486FAAF928A4780515CDE7C658D687D141289",
+    "mutant_sha256": "FAF1A78782F509C0A583EF85722C94F637DB348D461559BBEE4EF32C8FCC8040",
+    "restored_sha256": "731EDB6F8796B5D4AEE66DE5E36486FAAF928A4780515CDE7C658D687D141289",
+    "exact_restore": true,
+    "mutant_caught": true,
+    "exit_code": 1,
+    "log": "_batch21\\sb21-2-review\\mutations-r3\\prune-highwater\\mutant.log"
+  },
+  {
+    "id": "legacy-reservation",
+    "file": "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs",
+    "filter": "LegacyV3WithDeletedHigherGeneration_ReservesWholeIntRange",
+    "baseline_sha256": "731EDB6F8796B5D4AEE66DE5E36486FAAF928A4780515CDE7C658D687D141289",
+    "mutant_sha256": "673375429B299620FE69484227BC6CCF461475A12DBE2AE0B9D3201C21DD0B49",
+    "restored_sha256": "731EDB6F8796B5D4AEE66DE5E36486FAAF928A4780515CDE7C658D687D141289",
+    "exact_restore": true,
+    "mutant_caught": true,
+    "exit_code": 1,
+    "log": "_batch21\\sb21-2-review\\mutations-r3\\legacy-reservation\\mutant.log"
+  },
+  {
+    "id": "v4-highwater-required",
+    "file": "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs",
+    "filter": "Load_V4MissingOrInvalidHighWaterAndItemGeneration_FailsClosed",
+    "baseline_sha256": "731EDB6F8796B5D4AEE66DE5E36486FAAF928A4780515CDE7C658D687D141289",
+    "mutant_sha256": "81DDD266B0BD6152DC72026A44B4EAD1391FF15EB2269B5D21A536264480EF20",
+    "restored_sha256": "731EDB6F8796B5D4AEE66DE5E36486FAAF928A4780515CDE7C658D687D141289",
+    "exact_restore": true,
+    "mutant_caught": true,
+    "exit_code": 1,
+    "log": "_batch21\\sb21-2-review\\mutations-r3\\v4-highwater-required\\mutant.log"
+  },
+  {
+    "id": "cleanup-byte-conflict",
+    "file": "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs",
+    "filter": "Cleanup_RejectsRawByteChangeEvenWhenQueueStillParsesTheSame",
+    "baseline_sha256": "731EDB6F8796B5D4AEE66DE5E36486FAAF928A4780515CDE7C658D687D141289",
+    "mutant_sha256": "E61A317303861EBB4864A4C896C39444B2FA192C7690702EC8B318E23B601A78",
+    "restored_sha256": "731EDB6F8796B5D4AEE66DE5E36486FAAF928A4780515CDE7C658D687D141289",
+    "exact_restore": true,
+    "mutant_caught": true,
+    "exit_code": 1,
+    "log": "_batch21\\sb21-2-review\\mutations-r3\\cleanup-byte-conflict\\mutant.log"
+  },
+  {
+    "id": "c5-generation-check",
+    "file": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationConsumer.cs",
+    "filter": "RemoveThenReregister_SameIdentity",
+    "baseline_sha256": "CCACFF30CB464409C323F1C7ABAD3AEA828BFB0887C6BFB74316DA1EEDA9D324",
+    "mutant_sha256": "10F3312FC4B71563EEC2608110C6B121C11833E61261642E70685D1D4AA1DFFB",
+    "restored_sha256": "CCACFF30CB464409C323F1C7ABAD3AEA828BFB0887C6BFB74316DA1EEDA9D324",
+    "exact_restore": true,
+    "mutant_caught": true,
+    "exit_code": 1,
+    "log": "_batch21\\sb21-2-review\\mutations-r3\\c5-generation-check\\mutant.log"
+  },
+  {
+    "id": "trigger-long-prune",
+    "file": "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationTrigger.cs",
+    "filter": "LongGeneration_RoundTripsThroughStoreTriggerConsumerAndPruning",
+    "baseline_sha256": "122D5D5ECB2097A9AFE771ADBBC9876396A02C07A97094A22DB34AF175A070EC",
+    "mutant_sha256": "0346398A249835050A1C525E54F5C49569E45421769EA6FE1C4D8758DA1418E6",
+    "restored_sha256": "122D5D5ECB2097A9AFE771ADBBC9876396A02C07A97094A22DB34AF175A070EC",
+    "exact_restore": true,
+    "mutant_caught": true,
+    "exit_code": 1,
+    "log": "_batch21\\sb21-2-review\\mutations-r3\\trigger-long-prune\\mutant.log"
+  },
+  {
+    "id": "max-allocation-guard",
+    "file": "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs",
+    "filter": "LongMaxValue_LastAllocationSucceeds_ThenRejectsNewGenerationsWithoutChangingFile",
+    "baseline_sha256": "731EDB6F8796B5D4AEE66DE5E36486FAAF928A4780515CDE7C658D687D141289",
+    "mutant_sha256": "39443269546C3148BCFAF3C33A5004D0BF616AD75D56B3EC4824B6EEE4EC2DE2",
+    "restored_sha256": "731EDB6F8796B5D4AEE66DE5E36486FAAF928A4780515CDE7C658D687D141289",
+    "exact_restore": true,
+    "mutant_caught": true,
+    "exit_code": 1,
+    "log": "_batch21\\sb21-2-review\\mutations-r3\\max-allocation-guard\\mutant.log"
+  }
+]

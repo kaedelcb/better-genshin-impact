@@ -1,0 +1,176 @@
+{
+  "baselineCount": 1498,
+  "finalCount": 1508,
+  "sharedCount": 1497,
+  "removed": [
+    {
+      "id": "89e52975-566b-2c30-6266-326c2bb664b2",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Consume_ItemIdMismatch_And_NoGeneration_AreExpired",
+      "outcome": "Passed"
+    }
+  ],
+  "added": [
+    {
+      "id": "1a6fd421-c147-72bd-bf97-4f0f29722972",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Consume_CorruptStoreFailsLoudly",
+      "outcome": "Passed"
+    },
+    {
+      "id": "1b770f31-fabf-108e-9cff-f320a659957a",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Persist_ReplaceFailurePreservesPreviousQueueBytes",
+      "outcome": "Passed"
+    },
+    {
+      "id": "3914599a-8bcb-17d5-0b53-3717e2394a25",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Load_V4ItemGenerationOverflowWithValidHighWater_FailsClosedWithoutMutation",
+      "outcome": "Passed"
+    },
+    {
+      "id": "63f367d0-1178-dd85-c327-26e5e7e0df0f",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Consume_UnknownItemId_And_NoGeneration_AreExpired",
+      "outcome": "Passed"
+    },
+    {
+      "id": "7395ccf0-334a-b58c-49e3-cce9c8e13508",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.NonEmptyLegacyV1V2_PreservesGen0RequestAndReservesRangeForNewLifecycle(version: 2)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "abc66a89-927d-2d67-5ee9-72b7a78a24bd",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.LongMaxValue_LastAllocationSucceeds_ThenRejectsNewGenerationsWithoutChangingFile",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c35068d3-257e-584b-f218-84cd364ab584",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.NonEmptyLegacyV1V2_PreservesGen0RequestAndReservesRangeForNewLifecycle(version: 1)",
+      "outcome": "Passed"
+    },
+    {
+      "id": "c578c4d1-8c94-6d45-4c82-97dde6ed6292",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Cleanup_RejectsRawByteChangeEvenWhenQueueStillParsesTheSame",
+      "outcome": "Passed"
+    },
+    {
+      "id": "cc29b660-0a24-79a5-53e6-7ce49d55af0e",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Persist_PartialTemporaryWriteFailurePreservesPreviousQueueBytesAndCleansTemp",
+      "outcome": "Passed"
+    },
+    {
+      "id": "cf17108e-f657-1dcf-4459-357a89b39b47",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.LongMaxValue_CleanupCancelAndPruneRemainAvailableWithoutLoweringHighWater",
+      "outcome": "Passed"
+    },
+    {
+      "id": "ef3d8eef-ad86-0910-7c0b-550eeb8f5451",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.LongGeneration_RoundTripsThroughStoreTriggerConsumerAndPruning",
+      "outcome": "Passed"
+    }
+  ],
+  "changed": [
+    {
+      "id": "0f1b4b43-2174-bb8e-2959-449657fcc9d8",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Consume_RemovedCachedSnapshot_IsExpired",
+      "baseline": "Failed",
+      "final": "Passed"
+    },
+    {
+      "id": "16c35e31-f480-a72b-fc90-21246e4e2c42",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.PruneHandledExceptGeneration_SupportsLongGeneration",
+      "baseline": "Failed",
+      "final": "Passed"
+    },
+    {
+      "id": "38be1be3-a879-fd2e-16de-405fc8ff2688",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Cleanup_CallbackMutationCannotAlterPersistedIdentityOrGeneration",
+      "baseline": "Failed",
+      "final": "Passed"
+    },
+    {
+      "id": "4cb96399-456d-c567-088d-863b7508577c",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.PrunedTombstoneThenReregister_SameIdentity_AdvancesGenerationAndExpiresOldRequest",
+      "baseline": "Failed",
+      "final": "Passed"
+    },
+    {
+      "id": "517f96ad-7e82-6368-ec96-b9b30cbcaec7",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Cleanup_ReentrantSamePathUpsert_IsNotLostByOuterSnapshot",
+      "baseline": "Failed",
+      "final": "Passed"
+    },
+    {
+      "id": "53ab48b1-5f5c-a1a9-8155-3c4e89f10323",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Upsert_NonzeroCallerGeneration_Rejected",
+      "baseline": "Failed",
+      "final": "Passed"
+    },
+    {
+      "id": "82fbdb40-2ad8-7b1e-4831-8a5d4d4b7dab",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.EmptyLegacyFile_ReservesLegacyIntRangeWithoutLoadMutation(version: 3)",
+      "baseline": "Failed",
+      "final": "Passed"
+    },
+    {
+      "id": "8393d549-abb1-af1f-e6f6-03a52fb289d8",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.LegacyV3WithDeletedHigherGeneration_ReservesWholeIntRange",
+      "baseline": "Failed",
+      "final": "Passed"
+    },
+    {
+      "id": "a02885b6-4038-8229-b4cd-d25ee1158162",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.LegacyMigration_RemoveHighestItemOnFirstWrite_PreservesMigratedHighWater",
+      "baseline": "Failed",
+      "final": "Passed"
+    },
+    {
+      "id": "b4e46616-068c-bf5c-8169-c99dce4a5a09",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.RemoveThenReregister_SameIdentity_AdvancesGenerationAndExpiresOldRequest",
+      "baseline": "Failed",
+      "final": "Passed"
+    },
+    {
+      "id": "bad4e68b-9422-901d-fa68-24049aa9f961",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Upsert_MutableCallerObjectCannotRewriteAllocatedGenerationBeforePersist",
+      "baseline": "Failed",
+      "final": "Passed"
+    },
+    {
+      "id": "c6bfe26a-d9dc-545e-e8b2-f26eb0797bae",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.Load_V4MissingOrInvalidHighWaterAndItemGeneration_FailsClosed",
+      "baseline": "Failed",
+      "final": "Passed"
+    },
+    {
+      "id": "d8716125-dfe6-69c4-eb64-c8a8da2c2128",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.EmptyLegacyFile_ReservesLegacyIntRangeWithoutLoadMutation(version: 2)",
+      "baseline": "Failed",
+      "final": "Passed"
+    },
+    {
+      "id": "e2d79df7-7b4c-88ab-daeb-402665514a88",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.EmptyLegacyFile_ReservesLegacyIntRangeWithoutLoadMutation(version: 1)",
+      "baseline": "Failed",
+      "final": "Passed"
+    },
+    {
+      "id": "ea0be47e-99ed-ca63-8386-c5d2c5caaef6",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.QueueFileVersion_AdvancesForPersistedHighWater",
+      "baseline": "Failed",
+      "final": "Passed"
+    },
+    {
+      "id": "fb199ce7-c83e-19ee-ddd3-cb678550198e",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.LegacyMigration_PruneLastTombstoneOnFirstWrite_PreservesMigratedHighWater",
+      "baseline": "Failed",
+      "final": "Passed"
+    },
+    {
+      "id": "fe1be7b9-f02e-daf5-2bb4-2fdcdfefe12b",
+      "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.ReactivationAfterIntMaxGeneration_DoesNotWrap",
+      "baseline": "Failed",
+      "final": "Passed"
+    }
+  ],
+  "unchangedSharedCount": 1480,
+  "baselineTrx": "_batch21/sb21-2-review/assistant-full-red-baseline-final/sb21-2-assistant-full-red-baseline-final.trx",
+  "finalTrx": "_batch21/sb21-2-review/assistant-full-r5-restored-final/sb21-2-assistant-full-restored-final.trx"
+}

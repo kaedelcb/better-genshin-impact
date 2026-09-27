@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="45c0e086-08a9-4a95-a22c-c6b377ecf9a5" name="kaedelcb@KAEDELCBPC 2026-09-27 09:36:27" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-27T09:36:27.1425159+08:00" queuing="2026-09-27T09:36:27.1425161+08:00" start="2026-09-27T09:36:26.4892682+08:00" finish="2026-09-27T09:36:27.1464537+08:00" />
+  <TestSettings name="default" id="028ef838-cbea-4d9d-8e88-786c36c6f168">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-09-27_09_36_27" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="3b735361-ab59-425e-aa28-adb0a4f81eec" testId="b4e46616-068c-bf5c-8169-c99dce4a5a09" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.RemoveThenReregister_SameIdentity_AdvancesGenerationAndExpiresOldRequest" computerName="KAEDELCBPC" duration="00:00:00.0479462" startTime="2026-09-27T09:36:27.0725554+08:00" endTime="2026-09-27T09:36:27.0725666+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3b735361-ab59-425e-aa28-adb0a4f81eec">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: 1&#xD;
+Actual:   0</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.RemoveThenReregister_SameIdentity_AdvancesGenerationAndExpiresOldRequest() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitGenerationContractTests.cs:line 706&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.RemoveThenReregister_SameIdentity_AdvancesGenerationAndExpiresOldRequest" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="b4e46616-068c-bf5c-8169-c99dce4a5a09">
+      <Execution id="3b735361-ab59-425e-aa28-adb0a4f81eec" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests" name="RemoveThenReregister_SameIdentity_AdvancesGenerationAndExpiresOldRequest" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="b4e46616-068c-bf5c-8169-c99dce4a5a09" executionId="3b735361-ab59-425e-aa28-adb0a4f81eec" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.09]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.21]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.29]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:00.29]       Expected: 1&#xD;
+[xUnit.net 00:00:00.29]       Actual:   0&#xD;
+[xUnit.net 00:00:00.29]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.29]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitGenerationContractTests.cs(706,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.RemoveThenReregister_SameIdentity_AdvancesGenerationAndExpiresOldRequest()&#xD;
+[xUnit.net 00:00:00.29]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.29]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.29]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-09-27T09:36:27.0712179+08:00">
+        <Text>[xUnit.net 00:00:00.29]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.RemoveThenReregister_SameIdentity_AdvancesGenerationAndExpiresOldRequest [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

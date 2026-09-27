@@ -1,0 +1,11 @@
+{
+  "test": "RemoveThenReregister_SameIdentity_AdvancesGenerationAndExpiresOldRequest",
+  "mutation": "replace request-generation/current-item comparison with false",
+  "originalSha256": "CCACFF30CB464409C323F1C7ABAD3AEA828BFB0887C6BFB74316DA1EEDA9D324",
+  "mutantSha256": "10F3312FC4B71563EEC2608110C6B121C11833E61261642E70685D1D4AA1DFFB",
+  "restoredSha256": "CCACFF30CB464409C323F1C7ABAD3AEA828BFB0887C6BFB74316DA1EEDA9D324",
+  "mutantBuildExitCode": 0,
+  "mutantTestExitCode": 1,
+  "sourceRestored": true,
+  "validEvidence": true
+}

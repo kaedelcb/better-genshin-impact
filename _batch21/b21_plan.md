@@ -21,7 +21,7 @@ SB21-1 已完成生产接线、4/4 定向夹具、当前源码 11/11 反向突�
 ## 子批状态与划分
 
 - **SB21-1 等待判定接线（收口完成）**：TaskCenterHost 装配 `LocalWaitQueueStore`＋`WaitDecisionSource` 并由 `CreateRunner` 注入；类型化 pre-intent Wait/Hold/Continue、身份绑定与队列/运行恢复规则按 owner 有限扩展实现。BO-1、BO-2、EV1-R1 与批次 14 残项 #1 有本批代码/测试证据。owner 按 R5.3 §24.121.4 依据本地可复核材料收口：R9 两项必改证据缺口已机械补齐，原等级保留；不声称顾问接受后补证，也不追加 SB21-1 会诊。R16 历史会诊缺失继续作为 §24.63 U 的后续处理债务。现有生产构造的后继门 `_successorAdmissionWired` 仍关闭，未开放等待消费路径或真实 User/R5.8 最终入口。
-- **SB21-2 代际边界**：BO-10（Remove→新登记 gen0）、BO-12（Remove/裁剪→重登记代际回绕 ABA 判别例外，C5 消费前复核联动）。
+- **SB21-2 代际边界（实现、R5 复核与恢复态回归完成）**：只含 BO-10（Remove 后重登的 HWM 单调边界）和 BO-12（Remove/裁剪后不降 HWM、legacy int 隔离、long 回绕/ABA、C5 Store 消费前复核）。GPT 会诊独立台账累计 5/8，R5 未发现新 MUST/IMPORTANT，并认可 R4-1/2 重要级证据闭环；另 2 次本地预检未发送、不计次。助手项目和测试项目分别非增量构建 0 错误/58 警告、0 错误/79 警告；恢复态 generation 定向 45/45、LocalWait 190/190、助手全量 1506/2/0/1508。Remove/prune 重登使用同一重开 Store 读回持久状态，C5 旧/新请求消费计数为过期 1、有效 1；组件无 sender 依赖、无生产调用点，本批发送数为 0，生产门继续关闭。主矩阵 10 个保护点、legacy 强化、R5 C5 代际比较及 long-generation `long.TryParse` 边界均由命名断言反向突变检出并精确恢复。最新 testId 差集：共享 1497、移除 1、新增 11、变化 17、不变 1480，见 `sb21-2-review/assistant-full-test-diff-r5-counter.md/.json`。R5 后复验及声明面最终守卫证据见 R5.3 §24.122 与 `_batch21/sb21-2-review/`。生产入口、真实 User、R5.8 签署、E3/E4/E5 与热键面继续关闭；未做实机验证。
 - **SB21-3 facade 映射**：BO-4（facade WaitLocally 映射合同＋消费方识别运行验证）。
 - **SB21-4 停驻出口**：BO-13（停驻运行会话内终局处置出口）＋BO-11（Wave3 冻结残项打包：BO-6/7/8/9 处置或显式登记）。
 - 横向：EV1-R1（RunStore.List 静默跳过修复）随 SB21-1 同批（占用者级别事实源的同族面）。

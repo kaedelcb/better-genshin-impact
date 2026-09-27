@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "batch": "batch21-sb21-2",
+  "scope": [
+    "BO-10 Remove后新登记代际边界",
+    "BO-12 Remove/裁剪后重登记代际回绕、ABA及C5消费前复核"
+  ],
+  "authority": "Owner明确划定的独立子批SB21-2；沿用已有批次21主计划，不改写SB21-1累计记录。",
+  "parent_ledger": "C:\\Users\\Administrator\\.tools\\zcode-relay\\test\\ledger-batch21.json",
+  "parent_ledger_existing_count": 9,
+  "parent_ledger_existing_scope": "SB21-1 only; original 8 plus owner-authorized R9 extension",
+  "consultation_cap": 8,
+  "consultation_requests_sent": 4,
+  "preflight_rejections_not_sent": 2,
+  "rounds": [
+    {
+      "effort": "medium",
+      "scope": [
+        "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationConsumer.cs",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitReevaluationModels.cs",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitGenerationContractTests.cs",
+        "_batch21/b21_plan.md"
+      ],
+      "requested_at": "2026-09-27T08:42:15+08:00",
+      "round": 1,
+      "provider": "GPT",
+      "request_status": "completed",
+      "evidence": [
+        "_batch21/sb21-2-review/contract.md",
+        "_batch21/sb21-2-review/source-bo-records.md",
+        "_batch21/sb21-2-review/r5_3_anchor_excerpt.md",
+        "_batch21/sb21-2-review/red-results-summary.md",
+        "_batch21/sb21-2-review/review-r1-status.txt",
+        "_batch21/sb21-2-review/review-r1-related-diff.patch"
+      ],
+      "objective": "只读审查 SB21-2 BO-10/BO-12 状态边界、持久 generationHighWater（v4、v1-v3 迁移、long.MaxValue fail-closed）和 C5 Store 回读消费 API；报告可反例化的重要/必改问题，不扩展其他 BO。",
+      "model": "gpt-6-astra",
+      "returned_at": "2026-09-27T08:49:00+08:00",
+      "review_report": "_batch21/sb21-2-review/gpt-r1-review.md",
+      "disposition": "5 important findings retained; implementation required before closeout"
+    },
+    {
+      "provider": "GPT",
+      "objective": "Re-review all five R1 important findings against revised transition/migration/Cleanup/C5/long contract and independent red fixtures before implementation.",
+      "effort": "medium",
+      "model": "gpt-6-astra",
+      "scope": [
+        "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationConsumer.cs",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationTrigger.cs",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs",
+        "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitReevaluationModels.cs",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitGenerationContractTests.cs",
+        "_batch21/b21_plan.md"
+      ],
+      "evidence": [
+        "_batch21/sb21-2-review/contract.md",
+        "_batch21/sb21-2-review/gpt-r1-review.md",
+        "_batch21/sb21-2-review/red-results-summary.md",
+        "_batch21/sb21-2-review/review-r2-status.txt",
+        "_batch21/sb21-2-review/review-r2-related-diff.patch",
+        "_batch21/sb21-2-review/consultation-ledger.json"
+      ],
+      "request_status": "completed",
+      "round": 2,
+      "requested_at": "2026-09-27T08:54:48+08:00",
+      "returned_at": "2026-09-27T08:57:22+08:00",
+      "review_report": "_batch21/sb21-2-review/gpt-r2-review.md",
+      "disposition": "R1 five important findings remain open; contract direction accepted for implementation with additional raw-byte/lock/cross-thread/migration/full-long requirements"
+    },
+    {
+      "round": 3,
+      "provider": "GPT",
+      "model": "gpt-6-astra",
+      "effort": "medium",
+      "request_status": "completed_returned",
+      "requested_at": "2026-09-27T09:29:00+08:00",
+      "returned_at": "2026-09-27T09:30:11+08:00",
+      "objective": "只读复核 SB21-2 BO-10/BO-12 当前实现与红夹具，核验 R1/R2 重要项闭环、long/legacy/C5/Cleanup/Max 与路径锁边界；附完整git状态及本批、材料外差异。",
+      "scope": [
+        "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationConsumer.cs",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationTrigger.cs",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitGenerationContractTests.cs",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs"
+      ],
+      "evidence": [
+        "_batch21/sb21-2-review/contract.md",
+        "_batch21/sb21-2-review/red-results-summary.md",
+        "_batch21/sb21-2-review/review-r3-status.txt",
+        "_batch21/sb21-2-review/review-r3-staged-in-scope.diff",
+        "_batch21/sb21-2-review/review-r3-related-unstaged-in-scope.diff",
+        "_batch21/sb21-2-review/review-r3-material-out-status.txt",
+        "_batch21/sb21-2-review/review-r3-material-out-unstaged.diff",
+        "_batch21/sb21-2-review/gpt-r3-review.md"
+      ],
+      "review_report": "_batch21/sb21-2-review/gpt-r3-review.md",
+      "disposition": "core same-path implementation fixed; important evidence gaps and path alias boundary remain open"
+    },
+    {
+      "round": 4,
+      "provider": "GPT",
+      "model": "gpt-6-astra",
+      "effort": "medium",
+      "request_status": "completed_returned",
+      "requested_at": "2026-09-27 (exact time not captured; after attempt 5 local preflight rejection)",
+      "returned_at": "2026-09-27 (exact time not captured; before 10:02 +08:00)",
+      "objective": "只读复核 SB21-2 BO-10/BO-12 当前实现、反例和全量差集；检查 R1-R3 重要发现闭环及路径/并发边界，不扩批。",
+      "scope": [
+        "MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationConsumer.cs",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationTrigger.cs",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitGenerationContractTests.cs",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs"
+      ],
+      "review_report": "_batch21/sb21-2-review/gpt-r4-review.md",
+      "disposition": "No new implementation defect identified; retained two IMPORTANT evidence gaps: item-generation overflow fixture was masked by root overflow, and full TRX diff lacked execution-case arithmetic. Both are now independently closed and sent for R5 verification.",
+      "post_review_verification": {
+        "status": "R4-1/2 evidence gaps remain IMPORTANT pending R5 verification",
+        "finding": "R4-1 original fixture allowed root H overflow to mask item generation overflow. Original Store source was rebuilt non-incrementally and root/item tests passed 2/2; no original production parser defect confirmed. R4-2 TRX diff now uses testId with exact count conservation.",
+        "attempted_fix": "Keep production parser unchanged; add independent valid-root item overflow assertion with file-byte preservation, then mutate the original TryGetValue<long> fail branch to saturate and show the named assertion fails. Recompute full diff by testId.",
+        "evidence": [
+          "_batch21/sb21-2-review/item-generation-overflow-original-source-probe/",
+          "_batch21/sb21-2-review/mutations-r4/item-generation-overflow-original-parser/",
+          "_batch21/sb21-2-review/original-parser-confirmation/",
+          "_batch21/sb21-2-review/targeted-r5-original-parser-final/",
+          "_batch21/sb21-2-review/localwait-r5-original-parser-final/",
+          "_batch21/sb21-2-review/assistant-full-r5-original-parser-final/",
+          "_batch21/sb21-2-review/assistant-full-test-diff.md"
+        ],
+        "owner_acceptance": "R5 GPT review required before closure"
+      }
+    }
+  ],
+  "created_at": "2026-09-27T08:36:43+08:00",
+  "status": "active",
+  "attempts": [
+    {
+      "effort": "medium",
+      "model": "gpt-6-astra",
+      "attempted_at": "2026-09-27T08:41:03+08:00",
+      "reason": "Allowlisted full R5.3 document exceeded 524288-byte input limit; tool rejected before dispatch.",
+      "attempt": 1,
+      "counted": false,
+      "status": "local_preflight_rejected_not_sent"
+    },
+    {
+      "effort": "medium",
+      "model": "gpt-6-astra",
+      "attempted_at": "2026-09-27T08:42:15+08:00",
+      "reason": "Corrected allowlist uses exact R5.3 anchor excerpt.",
+      "attempt": 2,
+      "counted": true,
+      "status": "completed_returned",
+      "result": "5 important findings; see gpt-r1-review.md"
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "medium",
+      "attempt": 3,
+      "status": "completed_returned",
+      "reason": "R2 review tool request dispatched for revised rules and independent red fixtures.",
+      "attempted_at": "2026-09-27T08:54:48+08:00",
+      "counted": true,
+      "result": "All five R1 findings remain important; see gpt-r2-review.md"
+    },
+    {
+      "attempt": 4,
+      "model": "gpt-6-astra",
+      "effort": "medium",
+      "attempted_at": "2026-09-27T09:29:00+08:00",
+      "counted": true,
+      "status": "completed_returned",
+      "reason": "第三次 GPT review 已发送并返回，保留未闭合重要项。",
+      "result": "R1 findings implementation closure evidence incomplete; path alias support boundary needs resolution; see gpt-r3-review.md"
+    },
+    {
+      "attempt": 5,
+      "model": "gpt-6-astra",
+      "effort": "medium",
+      "attempted_at": "2026-09-27T09:54:44+08:00",
+      "counted": false,
+      "status": "local_preflight_rejected_not_sent",
+      "reason": "R4 allowlist included full R5.3 document larger than tool maximum 524288 bytes; rejected before dispatch. Retry will use exact current excerpt."
+    },
+    {
+      "attempt": 6,
+      "model": "gpt-6-astra",
+      "effort": "medium",
+      "attempted_at": "2026-09-27 (exact time not captured; after attempt 5 local preflight rejection)",
+      "counted": true,
+      "status": "completed_returned",
+      "reason": "R4 GPT review was dispatched after correcting the oversized R5.3 input to a bounded current excerpt.",
+      "result": "Two IMPORTANT evidence gaps retained; see gpt-r4-review.md."
+    }
+  ],
+  "current_disposition": "R4-1/2 evidence gaps remain IMPORTANT pending R5 review; original parser preserved; no production gate opened."
+}

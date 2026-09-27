@@ -1,0 +1,91 @@
+diff --git a/Docs/design/mistletoe-session-relay-2026-09-24.md b/Docs/design/mistletoe-session-relay-2026-09-24.md
+index 24881f1d6..c7b2e74ee 100644
+--- a/Docs/design/mistletoe-session-relay-2026-09-24.md
++++ b/Docs/design/mistletoe-session-relay-2026-09-24.md
+@@ -1,7 +1,7 @@
+ # 槲寄生计划：串行任务接续规则
+ 
+-> 用户授权（2026-09-24）：用户只在第一个新任务粘贴启动提示词；该任务及其后继任务按本文件串行推进既定计划，自动生成交接并创建下一任务，不要求用户逐轮输入“继续”。本次准备阶段只修改文档，不启动任务链。
+-> 能力状态：桌面 `create_thread`、`wait_threads` 等工具在准备会话可用；现有语义钩子的桌面事件及交接接续审计已有证据。**本任务链尚未启动，自动建任务和交棒仍待首次实际运行验证**。本文件是执行约定，不是已安装的后台调度服务。
++> 用户授权（2026-09-24，准备阶段原文）：用户只在第一个新任务粘贴启动提示词；该任务及其后继任务按本文件串行推进既定计划，自动生成交接并创建下一任务，不要求用户逐轮输入“继续”。本次准备阶段只修改文档，不启动任务链。
++> 能力状态（2026-09-24 首次实测后更新）：桌面 `create_thread`、`wait_threads` 等工具可用，串行链也已实际启动；但跨任务自动接力**首次实测失败**，`create_thread`／`fork_thread` 的后继首轮均返回 422 `missing field 'call_id'`。当前按[接力手册](mistletoe-relay-runbook-2026-09-24.md)方式 A 在同一任务内完成批次后建立下一批 Goal 续跑；应用／模型通道修复并通过探针后再恢复跨任务自动接力。本文件是执行约定，不是已安装的后台调度服务。
+ 
+ ## 1. 总目标、范围与完成标准
+ 
+@@ -36,17 +36,19 @@
+ 
+ 链路账放在仓库外 `C:\Users\Administrator\.codex\task-relays\mistletoe\`，不放入产品 Git 快照或交接证据集合，避免接力元数据自己制造业务漂移。首次任务以排他创建文件方式认领 `active.json`，记录 runId、ownerThreadId、状态及时间。已有活动链时读取身份并核对真实任务状态；不得因超时就抢占、删除锁或并发另起链。用户取消的链不得自动复活。
+ 
+-每次移交使用唯一 transferId（runId + 前任任务 ID + 本批次 ID），分别保存不可覆盖的 `offer`、`created`、`ack`、`taken` 记录。记录至少含前任/后继 ID、hostId、cwd、manifest 绝对路径、下一批范围及工具返回状态；落盘用临时文件+原子替换，首次占位用排他创建。该账仅辅助串行与幂等，不能替代真实工具状态或 manifest 审计。
++每次移交使用唯一 transferId（runId + 前任任务 ID + 本批次 ID），分别保存不可覆盖的 `offer`、`created`、`ack`，并用**唯一**的 `<transferId>.ownership.json` 作为所有权转换：前任尝试发布 `{kind:"cancelled"}`，后继尝试发布 `{kind:"taken"}`，两者用同一“完整临时文件 + 同目录原子 rename 且禁止覆盖”竞争，**至多一者成功；两者都失败时没有权威**。`taken`／`cancelled` 只是该决定的事后投影。发布步骤必须是：①把完整 JSON 写入同目录唯一临时文件并 flush；②原子 rename 为目标名，目标已存在即失败；③rename 成功后才算赢得所有权。`ownership.json` **缺失只表示尚未决出所有权**：前任回合结束前后继仍可写只读 `ack` 并等待，但不得修改产品仓库；前任结束后才可尝试发布 `taken`。空文件、截断 JSON、校验失败或 I/O 错误一律**保持只读并停驻**，不得解除封存、写 ack/taken 或开始修改产品仓库；临时文件残留不代表所有权。记录至少含前任/后继 ID、hostId、cwd、manifest 绝对路径、下一批范围及工具返回状态。该账仅辅助串行与幂等，不能替代真实工具状态或 manifest 审计。
+ 
+ 1. **准备**：完成写入/测试，更新计划状态并核对 Git；提交 handoff 判断，生成 JSON/Markdown/prompt 三件套并 audit 通过。offer 保存确切产物路径和剩余工作。正常路径要求 submit 在当前回合内返回真实三件套并 audit 通过，然后继续第2步。若返回 handoff_pending，不在工具里轮询等待本回合 Stop；按现有引擎的首次 Stop 行为结束输出，让可信钩子生成产物并以 decision=block 触发同任务续做。续做收到真实产物链接后先 audit，再执行本次交棒（不是开启新的产品批次）。源码依据为 semantic_handoff.py event_main 的 handoff 分支：首次生成且 stop_hook_active=false 时返回 block。若实际没有该续做信号、产物仍缺失或钩子报错，自动派发路径即为外部阻塞，明确报告；不声称在已结束的回合仍能调用工具，也不制造事件。
+-2. **封存**：产物成功后前任停止修改产品仓库和被 manifest 引用的材料；交棒记录仅写仓库外。后续若必须修仓库，先取消这次派发且确认后继没有写权，再重新生成交接，不能边写边叫后继接手。
++2. **封存**：产物成功后前任停止修改产品仓库和被 manifest 引用的材料；交棒记录仅写仓库外。后续若必须修仓库，先通过 `ownership.json` CAS 取消这次派发并确认后继没有写权，再重新生成交接，不能边写边叫后继接手。
+ 3. **创建唯一后继**：先检查此 transferId 是否已有后继；有则复用，不能重复创建。用 `create_thread` 选择已核对 projectId、`environment.type=local`，不指定模型/强度（沿用用户当前默认设置，除非已有明确指定）。标题写实际下一批工作。提示词含：持续授权、前任 ID、transferId/链路账路径、三件套路径、权威入口、下一批结果/约束/验收；明确“先只读确认接收，待前任回合完成才审计并获得仓库写权”。**只创建后继，不 fork 整段旧聊天。**
+-4. **核实接收**：保存返回的 threadId/hostId；若仅返回 clientThreadId，属于建立中，不能冒充成功或传给需要 threadId 的工具，应经任务列表/状态找到真实任务。前任调用 `wait_threads(timeoutMs=0)` 只取一次即时状态，并直接读取仓库外的 ack 文件核对 transferId、后继 threadId 和 manifest；尚未出现时用短暂等待后重读并检查真实状态。**前任绝不通过阻塞式 wait_threads 等待后继完成或等待 ack**，因为写 ack 不是该工具的唤醒事件。后继只读核对链路身份/材料可读，先写自己的 ack，然后才用有界 `wait_threads` 等前任回合完成；前任收到匹配 ack 立即执行第5步退出。这样前任等文件、后继等前任回合，不形成双方等任务完成的环。
++4. **核实接收**：保存返回的 threadId/hostId；若仅返回 clientThreadId，属于建立中，不能冒充成功或传给需要 threadId 的工具，应经任务列表/状态找到真实任务。前任调用 `wait_threads(timeoutMs=0)` 只取一次即时状态，并直接读取仓库外的 ack 文件核对 transferId、后继 threadId 和 manifest；尚未出现时用短暂等待后重读并检查真实状态。**前任绝不通过阻塞式 wait_threads 等待后继完成或等待 ack**，因为写 ack 不是该工具的唤醒事件。后继只读核对链路身份/材料可读，先写自己的 ack（此时 `ownership.json` 正常缺失，不需要也不得据此取得写权），然后才用有界 `wait_threads` 等前任回合完成；前任收到匹配 ack 立即执行第5步退出。这样前任等文件、后继等前任回合，不形成双方等任务完成的环。
+ 5. **前任退出**：接收确认后，批次 Goal 只有在其既定验收和交棒要求确实达到时才标 complete，语义状态仍如实为 handoff，不把总计划标完；最终答复给交接链接和 `::created-thread{threadId="..."}`。此后前任不再改仓库，也不自动恢复本批写权。安全中途交接若批次未完成，不得伪标 Goal complete；须在建立 Goal 时把“可审计的安全交棒”明列为该执行批次的合法退出结果，同时保留产品未完成状态。
+-6. **后继接管**：真实状态证明前任回合结束、交接有效且无取消/冲突后，重新 audit 冻结 manifest，核对 Git 和语义；写 taken 并将链路 owner 转为自己，随后创建自己的批次 Goal并开始修改。不要只凭 ack/文件存在或 Goal 标完判定前任结束。若前任 Stop 续做、外部任务正在同范围写入、或审计漂移，继续只读核查，不能同时施工。
++6. **后继接管**：真实状态证明前任回合结束、交接有效且无其它冲突后，重新 audit 冻结 manifest，核对 Git 和语义；随后按**本节开头**的“完整临时文件 + 原子 rename 禁止覆盖”尝试发布 `ownership.json={kind:"taken"}`。**只有本次发布成功才是所有权转移**；若目标已存在，读取赢家：`cancelled` ⇒ 停止接管并保持只读，`taken` ⇒ 已有写者，当前后继也不得接管；文件损坏 ⇒ 保持只读。成功后把链路 owner 转为自己，随后创建自己的批次 Goal并开始修改。不要只凭 ack/文件存在或 Goal 标完判定前任结束。若前任 Stop 续做、外部任务正在同范围写入、或审计漂移，继续只读核查，不能同时施工。
+ 7. **重复上述流程直到总完成**；最后任务不再创建后继，将链路记 complete 并交付总验收报告。旧任务无需用户逐个点“继续”或复制提示词。
+ 
+-**不确定调用处理**：创建工具超时/回包不明时，先用 transferId、任务列表和近期状态查明是否已创建；不盲目重发。创建失败则记录真实错误并保持单写者，仍可在当前任务安全继续的工作继续；任务工具不可用、账号/额度/应用退出等导致无法接续时如实报告，不能写“已自动接上”。这不是绕过使用限制的任务轮换器。
++**不确定调用处理**：创建工具超时/回包不明时，先用 transferId、任务列表和近期状态查明是否已创建；不盲目重发。**只有确认没有可运行后继且没有 `ack`／`taken` 后**，才可按第 3 节原子发布 `ownership.json={kind:"cancelled"}`；成功后才解除封存并在当前任务继续，输给 `taken` 或目标损坏则不得恢复写权。创建工具报错本身不等于“未创建”。任务工具不可用、账号/额度/应用退出等导致无法接续时如实报告，不能写“已自动接上”。这不是绕过使用限制的任务轮换器。
++
++**后继创建成功但首轮失败的回退（2026-09-24 实测）**：`create_thread` 返回成功不等于后继可运行。若后继任务首轮或接收前即返回 422 `missing field 'call_id'`（或持续无法运行），视为本次跨任务派发失败：保留 `offer`／`created` 与原始错误，**不重复创建**；确认没有后继写者与 `ack`／`taken` 后，按第 3 节原子发布 `ownership.json={kind:"cancelled"}`（含 threadId、错误、去重结论、时间）。发布成功才解除前任封存并回到当前任务按[接力手册](mistletoe-relay-runbook-2026-09-24.md)方式 A 为下一批建立新 Goal；输给 `taken` 或目标损坏则保持只读，不得依据旧 `created` 成为写者。根因修复并探针通过前，§4 第 3–6 步的跨任务流程暂停。
+ 
+ ## 5. 允许停止与用户参与
+ 
+@@ -69,9 +71,10 @@
+ - 链路账（仓库外）：`C:\Users\Administrator\.codex\task-relays\mistletoe\` 的 `active.json`、`<transferId>.offer.json`、`<transferId>.created.json`；transferId = `mistletoe-r5-r6-20260924--01a0d04d-179b-7e41-ba15-aab7034ba26e--R5-A4-step1-task-stop-directional-identity`。
+ - **`create_thread` 创建成功但后继任务无法运行**：后继 `01a0d069-2d30-7e10-8431-f279ba304401`（标题「R5 A4 第二步：停止后退出确认（执行树退出凭证）」）首轮与随后一次 `send_message_to_thread` 均失败，错误为
+   `unexpected status 422 Unprocessable Entity: Failed to deserialize the JSON body into the target type: input: missing field 'call_id' ... url: https://api.deepseek.com/v1/responses`。
++- **首次派发取消的实际记录**：仓库外链路账的 `<transferId>.blocked.json`（SHA-256 `1F85BB0EDE74D5D2C874ECE977C9264F0DD32A5441DB04B7BD6E7945A5BCC7C9`）记录后继不可运行、`ackWritten=false`、`takenWritten=false`；`batch2-in-task-continuation.json`（SHA-256 `5062FCDC88ED7D88A0578A2B6F447F0D55A9D6F1B15C1EB40E96A4B1BEB7B9FC`）进一步记录后继 `01a0d069`／诊断 `01a0d06b`／fork `01a0d06d` 均为 systemError、未写 `ack`／`taken`，单写者保持为原任务并转为同任务内逐批 Goal 推进。该既有记录是本次 `cancelled` 语义的历史投影，**不是**新 `ownership.json` 协议的运行证明；新协议尚未跨任务实测，自动接力在修复探针前保持关闭。
++- **原子发布原语的受控验证（2026-09-24）**：在 `_r5_test_temp/relay_ownership_cas_20260924T054254881/` 启动两个并发 writer，各自写完整 temp 并 flush，再对同一 `ownership.json` 执行 `[IO.File]::Move(temp,target)`（目标存在即失败）。结果 **1 won／1 lost**；目标完整可解析，SHA-256 `7446AAA85391AEBA0F8787CDDC4733D5E9120B5570EEF034457BC2994CCDCE7B`。该证据只证明本机同目录原子发布原语，不证明后继任务链路、损坏恢复或端到端交接；新协议仍待修复后的独立探针，当前继续方式 A。
+ - **对照实验排除提示词因素**：另建最小诊断任务 `01a0d06b-1b40-7822-ae4d-97511f910887`（提示词仅「只回复两个字：可以」）同样首轮即以同一错误失败 ⇒ 问题在**新建任务的请求构造/模型路由层**（新任务历史里带一个缺少 `call_id` 的 `create_thread` 工具输出项），与批次内容、提示词长度、manifest 无关。
+ - **第二条创建路径同样失败（2026-09-24 追加）**：改用同目录 `fork_thread`（源＝首任务，产物 `01a0d06d-00d3-7cc3-9e5f-4d37015943ee`）后 `send_message_to_thread` 亦以同一 422 失败（`missing field 'call_id'`）。
+   ⇒ 结论收紧为：**本环境下任何"新任务"都无法运行首轮**，与创建机制无关（`create_thread`、`fork_thread`、最小提示词三组独立证据一致），不是提示词、批次或 manifest 问题；也不能靠"换个建任务方式"绕过。
+ - 因此：`create_thread → 后继运行` 这条自动接续**首次实测未成功**；按 §4「不确定调用处理」，不重复盲目创建、不声称已接上；当前保持单写者（首任务只写了仓库外记录与一次小提交，产品仓库无并发写者）。
+-- **需要的用户动作（最小）**：修复该模型路由/工具输出兼容问题后，用户手动新建一个任务并粘贴
+-  `C:\Users\Administrator\.codex\handoffs\faaf45f1f54d3735\01a0d04d-179b-7e41-ba15-aab7034ba26e\98755805705081e4cab4d635485a4b6e788687ed851b6eea2aa7c9e3d920a4b9.prompt.txt` 的内容即可继续同一批剩余工作；在问题修复前，每个批次预计都需要一次手动粘贴（本链的自动建任务能力不可用，不是提示词问题）。
++- **当前用户动作（最小）**：**无需逐批手动粘贴或新建任务**。按[接力手册](mistletoe-relay-runbook-2026-09-24.md)方式 A，在当前任务内完成批次后建立下一批 Goal 继续；交接三件套与 `next-batch-prompt.md` 仍按批次更新，供应用退出后的恢复或修复后的新任务使用。模型路由／工具输出兼容问题修复并探针通过后，再恢复 `create_thread` 自动接力。
+diff --git a/Docs/design/unified-job-registry-master-plan.md b/Docs/design/unified-job-registry-master-plan.md
+index 511460203..d8b2de1ec 100644
+--- a/Docs/design/unified-job-registry-master-plan.md
++++ b/Docs/design/unified-job-registry-master-plan.md
+@@ -1,6 +1,6 @@
+ # BGI 统一作业注册表与槲寄生调度接管 · 总计划
+ 
+-> 状态：v3 执行计划修订（2026-09-17）；A0–A6 保留历史实施记录，**用户先审查，明确下令前不启动 R0–R6 产品实施**。
++> 状态：v3 产品执行路线与 A0–A6 历史记录保留；后续 R0–R5 已有实施记录，不沿用 2026-09-17 的“未获开工授权”作为当前阻断。2026-09-24 串行接续授权以[总计划](../../槲寄生调度器总计划.md)和[任务接续规则](mistletoe-session-relay-2026-09-24.md)为准，生产门和验收条件不变。
+ > 差异审查入口：[公版与茶包逐项对照](onedragon-public-vs-teabag-comparison-2026-09-17.md)。共有功能只统一实现；不把“从此开始”、指定树脂次数、JSON 等误归茶包新增。
+ > 当前方向：恢复公版一条龙，茶包编排增强迁入槲寄生。旧 B1→B2→C1 已替代，见 §7/§13。
+ > 产品主入口：[槲寄生调度器总计划](../../槲寄生调度器总计划.md)。详细字段迁移、功能审计及验收：[2026-09-17 执行方案](onedragon-public-compatibility-audit-2026-09-17.md)。
+@@ -298,7 +298,7 @@ A0–A6 已有地基（保留；缺口按本轮审计补验收）
+   → R5 接管与迁移切换 → R6 发布验收与 diff 收敛
+ ```
+ 
+-R1 候选不改用户数据；R2 必须先于新格式切换；R3 可以先开发，默认切换要等 R4/R5 完成，避免丢失旧用户增强功能。以下是待用户明确授权后执行的顺序。具体交付和勾选项以 [执行方案 §8](onedragon-public-compatibility-audit-2026-09-17.md#8-实施阶段与退出条件) 为准。
++R1 候选不改用户数据；R2 必须先于新格式切换；R3 可以先开发，默认切换要等 R4/R5 完成，避免丢失旧用户增强功能。以下保留阶段依赖顺序；“待用户明确授权”是 2026-09-17 历史口径，现由 2026-09-24 首次粘贴启动授权取代，按任务接续规则持续推进，生产/真实 User/签署门禁不变。具体交付和勾选项以 [执行方案 §8](onedragon-public-compatibility-audit-2026-09-17.md#8-实施阶段与退出条件) 为准。
+ 
+ ### 阶段 A0：助手健壮性前置 ✅ 已完成 2026-09-13（见 §12）
+ 
+@@ -558,4 +558,4 @@ UI 手动启动 = 让位给锄地并通知原因（F11 永远是否决键）。
+ 
+ **发布条件**：候选迁移先于切换，BGI 原生恢复和增强承接都通过后才对既有用户默认启用；转换后的标准文件与增强包分离。缺依赖、非法水位、特殊路由投影或时间回退差异必须出报告，不能静默丢失。助手失联/重启未知状态不得自动当成功或整链重发。
+ 
+-**执行入口与状态**：[审计执行方案 §8](onedragon-public-compatibility-audit-2026-09-17.md#8-实施阶段与退出条件) 列 R0–R6 依赖、清单与退出条件，§9 列验证矩阵；[槲寄生主计划 §3](../../槲寄生调度器总计划.md#3-任务中心与恢复公版实施路线2026-09-17-生效) 维护产品进度。本轮完成审计/文档，产品阶段均等待用户审查并明确下令，没有引用旧 A6 测试计数作为本轮结果。补查确认公版已有四类树脂次数与 JSON 分支；页面后台/选择器依赖、原粹 20/40、地脉 JSON/局部参数、奖励等待、壶截图、幽境重试差异已纳入执行方案 R3/R6，详见逐项对照表。
++**执行入口与状态**：[审计执行方案 §8](onedragon-public-compatibility-audit-2026-09-17.md#8-实施阶段与退出条件) 列 R0–R6 依赖、清单与退出条件，§9 列验证矩阵；[槲寄生主计划 §3](../../槲寄生调度器总计划.md#3-任务中心与恢复公版实施路线2026-09-17-生效) 维护产品进度。2026-09-17 本轮仅做审计/文档且等待开工的说明属于历史记录；2026-09-24 首次粘贴启动后按现行总计划授权串行推进，不再逐批等待开工命令，生产和签署仍按原门禁。历史审计没有引用旧 A6 测试计数作为当轮结果。补查确认公版已有四类树脂次数与 JSON 分支；页面后台/选择器依赖、原粹 20/40、地脉 JSON/局部参数、奖励等待、壶截图、幽境重试差异已纳入执行方案 R3/R6，详见逐项对照表。
+diff --git a/槲寄生调度器总计划.md b/槲寄生调度器总计划.md
+index 698a0d5f3..1fea55c63 100644
+--- a/槲寄生调度器总计划.md
++++ b/槲寄生调度器总计划.md
+@@ -5,6 +5,7 @@
+ > 当前主线：**恢复公版一条龙，茶包编排增强迁入槲寄生**。本文 §3 与 [完整代码审计及执行方案](Docs/design/onedragon-public-compatibility-audit-2026-09-17.md) 为后续执行依据。
+ > 本轮状态：**R0、R1、R2 已完成**（R0 见 [基线与合同](Docs/design/onedragon-r0-baseline-2026-09-18.md)；R1 只读迁移器见 `Test/OneDragonMigration/`，合同回归 16/16；R2 兼容桥见 [兼容矩阵](Docs/design/onedragon-r2-compat-matrix-2026-09-18.md)，合同回归 68/68）；**R3 施工终审有条件通过**（ASTRA 四轮复核，2026-09-19；结果传播挂账已于 R4.7 清账，能力开放 `task.single.native` 及既定集成/实机验收继续跟踪）；**R4 已完成**（R4.1–R4.10 十阶段落地，组件/组装验证完成，收口硬门槛 A/B/C1 真实段于 2026-09-19 晚实机窗口**补验通过**（跳过决策同日被补验取代；期间实锤修复 ext.task.start 受理回执词汇 bug `ed04355d`），`task.single.native` 维持 false（开放前置 2/3 未做），见 [R4.10 集成验收单](Docs/design/onedragon-r4-10-integration-run-sheet-2026-09-19.md)）；R5 正在施工但整体未收口，当前状态以 [R5 交接稿页首](Docs/design/onedragon-r5-handoff-2026-09-21.md)、R5.3 §24.96（范围纠偏）、§24.97–§24.108（最新批次）与 [R5 owner 决策单](Docs/design/onedragon-r5-owner-decisions-2026-09-24.md)（**D1–D5 已于 2026-09-24 裁决为全选推荐项 A**；实施按状态面拆分批次，生产门与 R5.8 仍关闭）为准；R6 待满足依赖后推进。2026-09-24 用户授权从新任务持续执行剩余路线，按 [串行任务接续规则](Docs/design/mistletoe-session-relay-2026-09-24.md) 交棒；**串行链已首次启动，但跨任务自动接力实测失败**（链路账 `C:\Users\Administrator\.codex\task-relays\mistletoe\`，首任务负责人 `01a0d04d-179b-7e41-ba15-aab7034ba26e`；`create_thread`／`fork_thread` 后继首轮均为 422 `missing field 'call_id'`）。当前按 [接力手册](Docs/design/mistletoe-relay-runbook-2026-09-24.md) **方式 A** 在同一任务内完成本批后建立下一批 Goal 继续，不重复盲目建任务；待应用／模型通道修复后再恢复跨任务自动接力并重新探针。
+ > 用户审查入口：[公版与茶包一条龙逐项对照表](Docs/design/onedragon-public-vs-teabag-comparison-2026-09-17.md)，区分共有能力、实现差异、茶包新增与公版缺口。
++> 后续施工工序（2026-09-27 owner 授权接入）：[辅助设施接入计划](Docs/design/mistletoe-workflow-facilities.md) 已纳入本计划。后续新批次/自然接力由执行者自行建立清单并调用证据检查、送审预检和索引；owner 无需逐批导入。原会诊、回归、实机及生产门不变；不向当前活动任务插入指令。
+ > 姊妹篇：`联机助手重构总控计划.md`（管"路与货"的重构）；本文只管助手侧调度器这个功能面。
+ 
+ ---

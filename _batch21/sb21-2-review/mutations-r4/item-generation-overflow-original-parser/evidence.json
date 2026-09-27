@@ -1,0 +1,11 @@
+{
+  "test": "Load_V4ItemGenerationOverflowWithValidHighWater_FailsClosedWithoutMutation",
+  "originalSourceSha256": "731EDB6F8796B5D4AEE66DE5E36486FAAF928A4780515CDE7C658D687D141289",
+  "mutantSha256": "9726E89B312EFB9722EE44C386C9008550A25DD95C1E88A0682866D09BE418C4",
+  "restoredSha256": "731EDB6F8796B5D4AEE66DE5E36486FAAF928A4780515CDE7C658D687D141289",
+  "nonIncrementalBuildExit": 0,
+  "testExitCode": 1,
+  "mutation": "Original item TryGetValue<long> false branch accepts by saturating to long.MaxValue",
+  "expected": "Assertion fails because overflow item is accepted",
+  "sourceRestored": true
+}

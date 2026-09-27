@@ -1,0 +1,1474 @@
+diff --git a/Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md b/Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md
+index b0a8b19cf..663f979ed 100644
+--- a/Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md
++++ b/Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md
+@@ -4813,3 +4813,57 @@ SB21-1 累计会诊 **8/8 次**（R1 Kimi、R2–R8 GPT；失败/超时请求同
+ 
+ - 定向 Batch21WiringRedTests：4/4 通过，0 失败；相邻 LocalWait/Batch21/OccupantLevel/StartupHandoff/Resume：278/278 通过，0 失败。助手测试项目全量：1479 通过、2 个 opt-in P50 诊断未执行、0 失败，共 1481 项。三次运行均使用 DeployToBgiTools=false；TRX 与 SHA-256 见 _batch21/sb21-1-r8-review/test-evidence.md。
+ - 本节只记录助手测试证据；未据此声称 BGI 实机、真实 User 或生产入口运行验证。生产入口、真实 User、R5.8 签署、E3/E4/E5 与热键门保持关闭。
++
++## §24.122 SB21-2 收口登记——Remove 后代际单调性与 C5 复核（2026-09-27）
++
++### §24.122.1 范围与历史等级
++
++本子批只处理 BO-10（Remove 后新登记 gen0 的代际单调性边界）与 BO-12（Remove/裁剪后重登记的回绕、ABA 与 C5 消费前复核）。BO-10 原始 R37、BO-12 原始 R46 均按历史台账保留为重要-2；本批没有降级历史等级，也不把更强实现描述成历史会诊背书。BO-4 留 SB21-3；BO-6/BO-8/BO-11/BO-13 留 SB21-4。
++
++会诊使用独立台账 `C:\Users\Administrator\.tools\zcode-relay\test\ledger-batch21-sb21-2.json`，不重置 SB21-1 的累计台账。GPT R1-R3 均为 `gpt-6-astra`／medium；R3 已发出并返回 3 次（额度 3/8），另有 1 次本地预检未发送且不计次。每轮材料附完整 `git status --porcelain`、暂存与本批相关未暂存差异，并单独列出材料外变更。
++
++### §24.122.2 状态、身份与代际转移规则
++
++代际为**单个队列文件内由 Store 分配的生命周期序号**，不要求不同身份从零开始，也不要求同一项重激活等于其上次代际加一。`ItemId`/`StableIdentity` 仍用于请求身份绑定；代际仅判定同一身份登记生命周期是否已过期，不含准入或发送许可。
++
++| 当前状态 | 动作 | 持久结果 |
++|---|---|---|
++| v4 `H=-1` 且空 items | 首次登记（来件 Generation=0） | Store 分配 gen0，写 Waiting(0)、H=0 |
++| Waiting(g) | 同 ItemId、同登记载荷重登记 | 幂等复用 g；不分配 |
++| Waiting(g) | 同 ItemId、不同登记载荷 | 响亮冲突；原文件不变 |
++| Cancelled(g) | 同载荷登记重激活（来件 Generation=0） | Store 分配 H+1，写 Waiting(H+1) 并推进 H |
++| 已分配 H | 新 ItemId 登记（来件 Generation=0） | Store 分配 H+1，不能由调用方自报 |
++| 任意记录 | Cancel 或失效清理 | 保留原 generation 与 H，只更新状态/原因/时间 |
++| 任意记录 | Remove 或到期墓碑裁剪 | 删除项但保留 H，不能回到 gen0 |
++| H=long.MaxValue-1 | 新登记或重激活 | 最后一次分配 long.MaxValue 成功 |
++| H=long.MaxValue | 需要新代际 | 抛 `LocalWaitGenerationExhaustedException`，字节不变；幂等、Cancel、Remove、清理/裁剪仍可用且 H 不下降 |
++
++所有 `Upsert` 输入的 Generation 必须为 0；Store 先物化调用方登记载荷，在自己的快照上分配并持久化。v4 根必需整数 `generationHighWater`，合法范围 `[-1,long.MaxValue]`；H=-1 仅允许空 items，每项必须带规范非负 long `generation` 且 `generation≤H`，取消墓碑同样受约束。缺失、null、非整数、小数、溢出、负数或上下界冲突均响亮拒绝。
++
++v1-v3 的历史 generation 是 Int32；这些格式无法恢复已删除历史代际。迁移统一取 `H=max(int.MaxValue,现存项最大generation)`，现存项代际保持原值；Load 只读不改文件，首次实际写入才原子写 v4 并同时保存 H。这样任一合法旧 int 请求（包括已删除身份的 `R_A(10)`、`R_A(int.MaxValue)`）都不能与新生命周期代际相等。迁移不覆盖 Store API 以外的删档/回滚。
++
++### §24.122.3 Cleanup 并发与文件持久化边界
++
++`PersistCleanup` 在路径锁内读取并解析一次快照，同时留存文件存在性与原始字节；释放锁后只对隔离副本执行外部清理回调，并把结果按输入对象引用关联回原始项；重新取得同一锁后逐字节比较快照，任一变化抛 `LocalWaitQueueConcurrentUpdateException`。比较到原子替换持续持锁；失败不回滚或覆盖内层提交，也不重跑回调。替换/部分临时写失败夹具分别验证原文件字节不变与临时残件清理。
++
++**路径别名边界**：进程锁键是 `Path.GetFullPath` 后的完整路径字符串（忽略大小写），不解析 junction/symlink 等物理别名；并发协调只保证锁键相同的 Store 实例。当前生产接线由 `App.xaml.cs:98` 创建唯一 `MainViewModel`，其 `TaskCenterHost` 属性经 `RunStore.DefaultRunsDir()` 构造一个队列 Store（证据：`MainViewModel.BgiExternal.cs:37`、`TaskCenterHost.cs:119`、`RunStore.cs:59`）；仓库无第二个生产构造点。其它多 Store 写者必须使用同一规范路径表示或自行保证单写者。跨进程写者仍不受本批保证。
++
++### §24.122.4 C5 消费前复核
++
++公开消费入口只接受 `Consume(request, store)`；每次调用从 Store 加载快照，读取时点检查同身份项存在、状态 Waiting、请求代际为规范非负 long 十进制且与项当前代际相同。由于 Store 按请求 ItemId 查询，返回项的 ItemId 即匹配键；Store 损坏响亮失败。Remove 后只持有缓存项不能通过此 API；重登记后旧代际请求过期。有效结果只允许重新走完整准入，不是发送许可。
++
++线性化点为 Store 的 Load 快照；Load 返回后再并发 Remove 不撤销已计算出的 Valid，连续重复调用也可能都 Valid。本批不声称 at-most-once 消费或请求领取去重。助手仓库仍无生产 `LocalWaitReevaluationConsumer` 调用点，不声称完整准入下游已执行，也不据组件夹具推导发送或实机行为。
++
++### §24.122.5 当前定向证据（助手侧）
++
++- 独立红基线：实现前 generation 定向夹具 35 项中 18 通过、17 个本批预期反例失败；同条件助手全量基线 1479 通过、2 跳过、17 失败、1498 总计。17 个失败均为本批具名红夹具，两个跳过为既有 P50 opt-in 诊断。后加的 long/错误路径验收用例未计入这份实现前红基线。
++- 最终定向：`LocalWaitGenerationContractTests` **44/44**；`FullyQualifiedName~LocalWait` **189/189**。覆盖 Remove/裁剪后重登、legacy v1-v3、旧 int 边界请求、v4 schema、long 2147483648 端到端、long.MaxValue、Cleanup 重入/原始字节/部分写失败、C5 缓存 Remove 与损坏 Store。
++- 当前分支反向突变：9 项（Remove H、prune H、legacy int 全域预留、v4 根 H 必需、Cleanup 原始字节冲突、C5 代际比较、Trigger long 修剪、Max 分配拒绝、来件不能自报代际）均使各自唯一命名测试失败；每次测试后源码按原始字节恢复且 SHA-256 相同。legacy 预留另以“已删 A(10)、仅余 B(9)”增补直接 ABA 断言，强化突变使 `LegacyV3WithDeletedHigherGeneration_ReservesWholeIntRange` 因旧请求通过而失败。日志/TRX/hash 见 `_batch21/sb21-2-review/mutations-r3/`。
++- 助手项目独立构建：0 错误、1 个既有 NU1902 警告。最终 generation 定向 **44/44**，全部 `FullyQualifiedName~LocalWait` **189/189**。TRX：`_batch21/sb21-2-review/targeted-final/sb21-2-targeted-final.trx`、`localwait-suite-final/sb21-2-localwait-suite-final.trx`。
++- 助手全量：**1505 通过 / 2 跳过 / 0 失败 / 1507**。与实现前红基线 1479/2/17/1498 逐名比较：1493 个同名用例中 17 个原失败转通过，其余结果不变；移除旧测试名 `Consume_ItemIdMismatch_And_NoGeneration_AreExpired`、以语义更准确的 `Consume_UnknownItemId_And_NoGeneration_AreExpired` 替换，并新增 9 个绿色夹具；两个 P50 opt-in 跳过不变，没有丢失材料外基线用例。最终 TRX：`_batch21/sb21-2-review/assistant-full-final/sb21-2-assistant-full-final.trx`；差集摘要见 `_batch21/sb21-2-review/red-results-summary.md`。
++- 声明面：ClaimSurfaceGuardTests 再生及无变量复跑均 **1/1**；相对 HEAD manifest 592 行新增 1 行，当前 593 行，SHA-256 `A857167570E7E433E1795FCF2718F760E7877C1A79397EB4A3B899BEB3C566A0`。TRX 在 `_batch21/sb21-2-review/claim-regen/` 与 `claim-noenv/`。
++- 当前分支 9 个关键保护点反向突变及 legacy 强化重试均被命名业务断言检出，源码逐字节恢复；详见 `_batch21/sb21-2-review/reverse-mutations.md`。所有构建/测试均用 `-p:DeployToBgiTools=false`。
++
++### §24.122.6 门禁与未声称事项
++
++本子批不启用生产等待消费入口，不触碰真实 User，不签署 R5.8，也不开 E3/E4/E5 或热键面。未做 BGI 实机验证。跨进程并发、外部删档/回滚、物理路径别名协同、断电持久性及实际发送路径均不是本批保证；路径别名靠当前单生产 Store 接线及调用方单写者约束界定，未来增加第二个写者时必须重新审查。
+diff --git a/MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs b/MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs
+index e1809ce16..db0c521bf 100644
+--- a/MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs
++++ b/MultiplayerHoeingAssistant/Models/TaskCenter/LocalWaitModels.cs
+@@ -152,7 +152,7 @@ public sealed class LocalWaitItem
+     /// **[批次 20／C3/C4①] 准入面稳定身份（9 元组）**——由**权威组成函数**
+     /// <c>ArbitrationOrdering.BuildStableIdentity</c> 在**登记时点**求得并持久化（身份翻译在登记时完成：
+     /// 队列本地身份——D1 裸拼 4 段——**不足以**事后恢复准入候选，§24.115 IW-05／§24.117 C3）。
+-    /// **合同前存量（C4②，owner 裁决 D-E3=(c)）**：版本 1/2 时期文件**缺字段**，或**当前格式（v3）
++    /// **合同前存量（C4②，owner 裁决 D-E3=(c)）**：版本 1/2 时期文件**缺字段**，或**当前格式（v3/v4）
+     /// 文件中显式 null**（重激活存量在 v3 文件里合法保留 null 绑定——见 LocalWaitQueueStore
+     /// ParseAdmissionIdentity 注释；显式 null 不判损坏、按存量降级为永不参选，fail-closed）⇒
+     /// <c>null</c> ⇒ 永不参选＋显式标注（<c>LocalWaitIdentityTranslation.Translate</c> 给出
+@@ -161,11 +161,13 @@ public sealed class LocalWaitItem
+     /// </summary>
+     [JsonPropertyName("admissionIdentity")] public string? AdmissionIdentity { get; set; }
+     /// <summary>
+-    /// **[批次 20／Wave2／D-E2=①] 权威代际载体**：取消→同载荷重登记（重激活）时**递增**；
+-    /// 0＝D-E2 引入前登记的项（v3 早期文件缺字段 ⇒ 0，合法形态）。消费前复核（C5/IW-04）按它
+-    /// 判「在途重评请求」是否过期（ABA：请求携带的代际 ≠ 项当前代际 ⇒ 过期）。**不**含发送许可。
++    /// **[SB21-2／D-E2=①] 权威代际载体**：由所属队列文件的持久全局高水位分配，标识一次登记生命周期；
++    /// 首次新文件登记为 0，此后新登记、取消后重激活均严格大于该文件曾分配的所有代际。不同等待项不保证
++    /// 都从 0 开始，某项重激活也不保证等于该项旧代际 +1。legacy v1-v3 缺字段读为 0；迁移时为整个旧 int
++    /// 代际域预留高水位以避免重用已删除项历史值。消费前复核（C5/IW-04）按它判在途请求是否过期。
++    /// 仅表示生命周期，不含发送许可。
+     /// </summary>
+-    [JsonPropertyName("generation")] public int Generation { get; set; }
++    [JsonPropertyName("generation")] public long Generation { get; set; }
+     [JsonPropertyName("namespace")] public string Namespace { get; set; } = "";
+     [JsonPropertyName("workflowId")] public string WorkflowId { get; set; } = "";
+     /// <summary>级别（System&gt;Fixed&gt;Plan）。</summary>
+@@ -206,18 +208,21 @@ public sealed class LocalWaitItem
+ /// 等待队列落盘文件（自版本化；更高版本＝响亮拒绝，不降级解析）。
+ /// **版本 2（批次 16／D2）**：新增 `prerequisiteReference` 持久化稳定前置引用；
+ /// **版本 3（批次 20／C3/C4①；Wave2 增补）**：新增 `admissionIdentity` 准入面稳定身份（9 元组）＋
+-/// `candidateId` 升格为准入绑定字段＋**`generation` 权威代际载体（[Wave2 R35 重要-1] D-E2=①：
+-/// 重激活时 Store 递增；缺字段 ⇒ 0＝D-E2 引入前登记的合法形态）**；
++/// `candidateId` 升格为准入绑定字段＋`generation` 权威代际载体（缺字段 ⇒ 0＝D-E2 引入前形态）；
++/// **版本 4（SB21-2）**：新增必需的 `generationHighWater`，Remove/墓碑裁剪后仍保留已分配代际；
++/// Store 按全队列高水位分配新生命周期代际。v1-v3 首次写入时至少预留到 `int.MaxValue`，覆盖可能已删除的 legacy 请求代际。
+ /// **版本 1/2 旧文件仍可读**（缺字段 ⇒ `PrerequisiteReference`/`AdmissionIdentity` 为 null ⇒
+-/// 保守按不可判定／登记例外（C4②：永不参选＋显式标注），不得默认就绪；`generation` 同理缺字段 ⇒ 0）。
++/// 保守按不可判定／登记例外处理，不得默认就绪；`generation` 缺字段 ⇒ 0）。
+ /// </summary>
+ public sealed class LocalWaitQueueFile
+ {
+-    public const int CurrentVersion = 3;
++    public const int CurrentVersion = 4;
+ 
+     /// <summary>仍可读取的最低版本（读兼容下界；低于此值响亮拒绝）。</summary>
+     public const int MinimumSupportedVersion = 1;
+ 
+     [JsonPropertyName("version")] public int Version { get; set; } = CurrentVersion;
+     [JsonPropertyName("items")] public List<LocalWaitItem> Items { get; set; } = [];
++    /// <summary>队列文件内已分配的最大代际；-1 只允许与空 Items 同现，v4 必须持久化。</summary>
++    [JsonPropertyName("generationHighWater")] public long GenerationHighWater { get; set; } = -1;
+ }
+diff --git a/MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationConsumer.cs b/MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationConsumer.cs
+index d4635f2bc..06994c6bf 100644
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationConsumer.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationConsumer.cs
+@@ -24,11 +24,11 @@ public sealed class LocalWaitConsumptionDecision
+ 
+ /// <summary>
+ /// 槲寄生 · R5 批次 20 Wave2（§24.117 C5 sharpening／§24.115 IW-04；D-E2=① 代际载体）：
+-/// **在途重评请求的消费前复核**（纯函数合同层；未接线；生产零消费点）。
++/// **在途重评请求的消费前复核**（组件合同层；未接线；生产零消费点）。
+ ///
+ /// **它解决什么（IW-04 ABA）**：在途重评请求从产出到消费存在延迟窗口；窗口内等待项可能被
+-/// 取消→同载荷重登记（重激活 ⇒ 代际递增，D-E2=①）——旧请求若被盲目消费，会把**旧代际**的
+-/// 重评意图作用于**新代际**的等待项（ABA）。本组件在消费时点回读队列项，按**代际**判过期。
++/// 取消→同载荷重登记（重激活 ⇒ 代际由队列高水位单调分配，D-E2=①）——旧请求若被盲目消费，会把**旧代际**的
++/// 重评意图作用于**新代际**的等待项（ABA）。本组件每次调用都从 Store 回读队列项，按**代际**判过期。
+ ///
+ /// **合同（C5 sharpening）**：
+ /// ①项不存在（已被移除/清理）⇒ 过期；
+@@ -36,22 +36,33 @@ public sealed class LocalWaitConsumptionDecision
+ /// ③请求携带代际 ≠ 项当前代际 ⇒ 过期（取消→重激活＝新代际，旧请求作废）；
+ /// ④请求的 ItemId 与项 ItemId 不一致 ⇒ 过期（身份错位，不得跨项消费）；
+ /// ⑤全部通过 ⇒ 有效消费——**唯一后继仍是「重新走一次完整准入」**（RequiresFullAdmission 恒 true；
+-///   本组件不产生发送许可、不推进执行、不读时钟、不做 I/O）。
++///   本组件不产生发送许可、不推进执行、不读时钟；Store 损坏时响亮失败）。
+ ///
+-/// **代际语义（D-E2=①）**：代际载体由 Store 唯一写入口在重激活时递增（调用方不可自报）；
++/// **线性化边界**：Store 读取在 `Load()` 快照处线性化；本方法不是消费去重/at-most-once 账本，调用方仍须执行完整准入。
++///
++/// **代际语义（D-E2=①）**：代际载体由 Store 唯一写入口按队列高水位分配（调用方不可自报）；
+ /// 请求携带的代际来自产出时点的项代际。请求未携带代际（null/空白）⇒ 视为批次 15 无代际形态，
+ /// **按过期处理**（D-E2 落地后无代际请求不再具消费资格——保守方向；迁移期形态由接线批裁决）。
+ /// </summary>
+ public static class LocalWaitReevaluationConsumer
+ {
+     /// <summary>
+-    /// 消费前复核：在途重评请求 × 当前队列项（调用方从 Store 回读；本组件不做 I/O）。
++    /// 消费前复核：只接受 Store 入口；每次调用回读当前队列快照，判断针对该 Load 时点。
+     /// </summary>
+     public static LocalWaitConsumptionDecision Consume(
+-        LocalWaitReevaluationRequest request, LocalWaitItem? currentItem)
++        LocalWaitReevaluationRequest request, LocalWaitQueueStore store)
+     {
+         ArgumentNullException.ThrowIfNull(request);
++        ArgumentNullException.ThrowIfNull(store);
++
++        var currentItem = store.Load().FirstOrDefault(item =>
++            string.Equals(item.ItemId, request.ItemId, StringComparison.Ordinal));
++        return Evaluate(request, currentItem);
++    }
+ 
++    private static LocalWaitConsumptionDecision Evaluate(
++        LocalWaitReevaluationRequest request, LocalWaitItem? currentItem)
++    {
+         if (currentItem is null)
+             return Expired("消费前复核：等待项不存在（已被移除或清理）——请求过期丢弃。");
+ 
+@@ -68,7 +79,7 @@ public static class LocalWaitReevaluationConsumer
+             return Expired($"消费前复核：等待项当前状态为 {currentItem.State}（非 Waiting）——请求过期丢弃。");
+ 
+         // ABA 判过期（D-E2=① 代际载体）：请求代际 ≠ 项当前代际 ⇒ 窗口内发生过取消→重激活。
+-        // [Wave2 R31 必改-F1] **fail-closed**：不可解析为 int 的代际串**不可能等于**项当前代际（int），
++        // [Wave2 R31 必改-F1] **fail-closed**：不可解析为 long 的代际串**不可能等于**项当前代际（long），
+         // 按合同③必须过期——TryParse 失败不得放行（否则「gen-1」类格式漂移整体绕过 ABA 防护）。
+         // **代际映射合同（[Wave2 R31 重要-3] 落字）**：Decide 的 generation 入参**必须**为
+         // `item.Generation.ToString(CultureInfo.InvariantCulture)`（逐项取值）；一批 items 含不同代际时
+@@ -80,11 +91,11 @@ public static class LocalWaitReevaluationConsumer
+         // [Wave2 R32 重要-F4] **规范形回环**：NumberStyles.None（拒绝符号/空白）＋解析结果回环
+         // （s == reqGen.ToString(InvariantCulture)）——"+1"/"01"/"-0" 等「可解析但非 ToString 产物」
+         // 的形态按映射合同一律过期（格式漂移即过期，fail-closed）。
+-        if (!int.TryParse(requestGeneration, System.Globalization.NumberStyles.None,
++        if (!long.TryParse(requestGeneration, System.Globalization.NumberStyles.None,
+                 System.Globalization.CultureInfo.InvariantCulture, out var reqGen)
+             || !string.Equals(requestGeneration, reqGen.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                 StringComparison.Ordinal))
+-            return Expired($"消费前复核：请求代际串（{requestGeneration}）非规范整数代际"
++            return Expired($"消费前复核：请求代际串（{requestGeneration}）非规范 long 代际"
+                 + "（映射合同要求 item.Generation.ToString(InvariantCulture) 的逐字符产物）——"
+                 + "格式漂移即过期（fail-closed）。");
+         if (reqGen != currentItem.Generation)
+diff --git a/MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationTrigger.cs b/MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationTrigger.cs
+index 44e2b857e..18945ccf2 100644
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationTrigger.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/Arbitration/LocalWaitReevaluationTrigger.cs
+@@ -214,9 +214,9 @@ public sealed class LocalWaitReevaluationTrigger
+     public int PruneHandledExceptGeneration(string stableIdentity, string generation)
+     {
+         if (string.IsNullOrWhiteSpace(stableIdentity) || string.IsNullOrWhiteSpace(generation)) return 0;
+-        // [Wave2 R34 必改-F3] liveGeneration 规范形校验（与消费侧同一映射合同）：非 int InvariantCulture
++        // [Wave2 R34 必改-F3] liveGeneration 规范形校验（与消费侧同一映射合同）：非负 long InvariantCulture
+         // 逐字符产物（"01"/"+1"/" 1"）**不得执行删除**——否则会误删当前规范代际的幂等键。
+-        if (!int.TryParse(generation, System.Globalization.NumberStyles.None,
++        if (!long.TryParse(generation, System.Globalization.NumberStyles.None,
+                 System.Globalization.CultureInfo.InvariantCulture, out var liveGen)
+             || !string.Equals(generation, liveGen.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                 StringComparison.Ordinal))
+@@ -303,7 +303,7 @@ public sealed class LocalWaitReevaluationTrigger
+     /// **接线只许走 5 参主重载**（恒传 item.Generation.ToString(InvariantCulture)）；无代际重载仅为批次 15
+     /// 二进制兼容保留（D-E2 落地后不再产生可消费请求）。
+     /// **代际映射合同（[Wave2 R31 重要-3] 落字）**：<paramref name="generation"/> 入参**必须**为
+-    /// `item.Generation.ToString(CultureInfo.InvariantCulture)`（Store 唯一写入口的权威代际，int 的
++    /// `item.Generation.ToString(CultureInfo.InvariantCulture)`（Store 唯一写入口的权威代际，long 的
+     /// InvariantCulture 串）；一批 items 含不同代际时，调用方必须**按代际分组、逐代际一次 Decide**
+     /// （一次调用一个代际作用于整批）。消费侧（LocalWaitReevaluationConsumer）按同一映射合同解析；
+     /// 任何其它格式在消费侧一律过期（fail-closed）。
+diff --git a/MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs b/MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs
+index 869af04b1..13d01ef71 100644
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/LocalWaitQueueStore.cs
+@@ -12,6 +12,12 @@ namespace MultiplayerHoeingAssistant.Services;
+ /// <summary>等待队列文件不可读／损坏／版本不支持／契约冲突（响亮拒绝，不降级按空队列处理）。</summary>
+ public sealed class LocalWaitQueueCorruptException(string message) : Exception(message);
+ 
++/// <summary>清理回调运行期间队列已被另一写事务更新；拒绝用旧快照覆盖新快照。</summary>
++public sealed class LocalWaitQueueConcurrentUpdateException(string message) : Exception(message);
++
++/// <summary>队列代际高水位已耗尽；不分配、不写盘，非分配操作仍可继续。</summary>
++public sealed class LocalWaitGenerationExhaustedException(string message) : InvalidOperationException(message);
++
+ /// <summary>清理结果：因失效被取消的条数 + 因保留期到期被裁剪的墓碑条数。</summary>
+ public sealed record LocalWaitCleanupResult(int Cancelled, int Pruned);
+ 
+@@ -27,9 +33,17 @@ public sealed record LocalWaitCleanupResult(int Cancelled, int Pruned);
+ /// （[批次 20／Wave4 C9] 合同口径，R17 建议-3 提前落地）；原子写＝临时文件 + `File.Move(overwrite)`，
+ /// 写失败不破坏原文件；
+ /// ③**取消墓碑保留 24h** 后裁剪（防无界增长），保留期内可被同身份同载荷重登记**重新激活**。
++/// **代际边界（SB21-2）**：v4 以 `generationHighWater` 持久化全队列已分配最大值；Remove 和墓碑裁剪都保留它。
++/// v1-v3 的 `generation` 是 Int32，迁移时至少预留至 `int.MaxValue`，避免已删除 legacy 请求在重登记后重新匹配；
++/// 达到 `long.MaxValue` 后仅拒绝需要新代际的登记/重激活，非分配操作仍可用。
++/// **路径别名边界（SB21-2）**：进程锁按 `Path.GetFullPath` 后的路径字符串（忽略大小写）共享，不解析 junction/symlink 等物理别名；
++/// 保证只覆盖锁键相同的实例。当前生产接线在 `MainViewModel.TaskCenterHost` 单例中以 `RunStore.DefaultRunsDir()` 构造一个 Store；
++/// 其他多 Store 写者须使用相同规范路径表示或自行保证单写者，不能依赖物理路径别名共享锁。
+ /// </summary>
+ public sealed class LocalWaitQueueStore
+ {
++    private sealed record QueueSnapshot(List<LocalWaitItem> Items, long GenerationHighWater, byte[]? OriginalBytes);
++
+     /// <summary>取消墓碑保留期（超过即裁剪；可由夹具注入更短值）。</summary>
+     public static readonly TimeSpan DefaultCancelledRetention = TimeSpan.FromHours(24);
+ 
+@@ -45,6 +59,8 @@ public sealed class LocalWaitQueueStore
+     /// 仅存在于 DEBUG 构建（生产 Release 构建下该字段与调用点均被编译剔除）。默认 null ⇒ 无行为。
+     /// </summary>
+     internal static Action<List<LocalWaitItem>>? WriteSnapshotProbeMutator;
++    /// <summary>DEBUG-only 故障注入：模拟临时文件写入部分完成后失败；Release 构建不存在。</summary>
++    internal static Action<string, byte[]>? BeforeTemporaryFileWriteProbe;
+ #endif
+     private readonly object _sync;
+     private readonly string _file;
+@@ -69,64 +85,102 @@ public sealed class LocalWaitQueueStore
+     {
+         lock (_sync)
+         {
+-            string text;
+-            try
+-            {
+-                // 只有"文件确实不存在"才是空集合；其余 I/O／权限问题按损坏处理（不得当作空队列放行）。
+-                text = File.ReadAllText(_file);
+-            }
+-            catch (FileNotFoundException)
+-            {
+-                return [];
+-            }
+-            catch (DirectoryNotFoundException)
+-            {
+-                return [];
+-            }
+-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+-            {
+-                throw new LocalWaitQueueCorruptException($"等待队列文件不可读（原件保留）：{ex.Message}");
+-            }
++            return ReadSnapshotLocked().Items;
++        }
++    }
+ 
+-            JsonNode? node;
+-            try
+-            {
+-                node = JsonNode.Parse(text);
+-            }
+-            catch (JsonException ex)
+-            {
+-                throw new LocalWaitQueueCorruptException($"等待队列文件 JSON 非法（原件保留）：{ex.Message}");
+-            }
++    /// <summary>调用方持有路径锁时读取一份与原始文件字节对应的完整队列快照。</summary>
++    private QueueSnapshot ReadSnapshotLocked()
++    {
++        byte[]? originalBytes;
++        try
++        {
++            // 保留原始字节供 Cleanup 乐观提交比较；null 表示文件不存在，零字节文件仍是损坏输入。
++            originalBytes = File.ReadAllBytes(_file);
++        }
++        catch (FileNotFoundException)
++        {
++            return new QueueSnapshot([], -1, null);
++        }
++        catch (DirectoryNotFoundException)
++        {
++            return new QueueSnapshot([], -1, null);
++        }
++        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
++        {
++            throw new LocalWaitQueueCorruptException($"等待队列文件不可读（原件保留）：{ex.Message}");
++        }
++
++        string text;
++        using (var stream = new MemoryStream(originalBytes!, writable: false))
++        using (var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
++            text = reader.ReadToEnd();
+ 
+-            if (node is not JsonObject root) throw new LocalWaitQueueCorruptException("等待队列文件根节点必须是对象（原件保留）。");
+-            if (root["version"] is not JsonValue versionValue || !versionValue.TryGetValue<int>(out var version))
+-                throw new LocalWaitQueueCorruptException("等待队列文件缺少整数 version 字段（原件保留）。");
+-            if (version < LocalWaitQueueFile.MinimumSupportedVersion || version > LocalWaitQueueFile.CurrentVersion)
++        JsonNode? node;
++        try
++        {
++            node = JsonNode.Parse(text);
++        }
++        catch (JsonException ex)
++        {
++            throw new LocalWaitQueueCorruptException($"等待队列文件 JSON 非法（原件保留）：{ex.Message}");
++        }
++
++        if (node is not JsonObject root) throw new LocalWaitQueueCorruptException("等待队列文件根节点必须是对象（原件保留）。");
++        if (root["version"] is not JsonValue versionValue || !versionValue.TryGetValue<int>(out var version))
++            throw new LocalWaitQueueCorruptException("等待队列文件缺少整数 version 字段（原件保留）。");
++        if (version < LocalWaitQueueFile.MinimumSupportedVersion || version > LocalWaitQueueFile.CurrentVersion)
++            throw new LocalWaitQueueCorruptException(
++                $"等待队列文件版本 {version} 不在支持范围 [{LocalWaitQueueFile.MinimumSupportedVersion},{LocalWaitQueueFile.CurrentVersion}]：响亮拒绝。");
++        if (root["items"] is not JsonArray items)
++            throw new LocalWaitQueueCorruptException("等待队列文件缺少 items 数组（原件保留）。");
++
++        long generationHighWater = -1;
++        if (version == LocalWaitQueueFile.CurrentVersion)
++        {
++            if (root["generationHighWater"] is not JsonValue highWaterValue
++                || !highWaterValue.TryGetValue<long>(out generationHighWater))
+                 throw new LocalWaitQueueCorruptException(
+-                    $"等待队列文件版本 {version} 不在支持范围 [{LocalWaitQueueFile.MinimumSupportedVersion},{LocalWaitQueueFile.CurrentVersion}]：响亮拒绝。");
+-            if (root["items"] is not JsonArray items)
+-                throw new LocalWaitQueueCorruptException("等待队列文件缺少 items 数组（原件保留）。");
++                    "v4 等待队列缺少整数 generationHighWater（原件保留；不得降级迁移）。");
++            if (generationHighWater < -1)
++                throw new LocalWaitQueueCorruptException("v4 generationHighWater 小于 -1（原件保留）。");
++        }
+ 
+-            var parsed = new List<LocalWaitItem>(items.Count);
+-            var seenIds = new HashSet<string>(StringComparer.Ordinal);
+-            foreach (var element in items)
+-            {
+-                if (element is not JsonObject itemObject)
+-                    throw new LocalWaitQueueCorruptException("等待队列存在非对象元素（原件保留）。");
+-                var item = ParseItem(itemObject);
+-                if (!seenIds.Add(item.ItemId))
+-                    throw new LocalWaitQueueCorruptException($"等待队列存在重复 itemId：{item.ItemId}（原件保留）。");
+-                parsed.Add(item);
+-            }
++        var parsed = new List<LocalWaitItem>(items.Count);
++        var seenIds = new HashSet<string>(StringComparer.Ordinal);
++        foreach (var element in items)
++        {
++            if (element is not JsonObject itemObject)
++                throw new LocalWaitQueueCorruptException("等待队列存在非对象元素（原件保留）。");
++            var item = ParseItem(itemObject, version);
++            if (!seenIds.Add(item.ItemId))
++                throw new LocalWaitQueueCorruptException($"等待队列存在重复 itemId：{item.ItemId}（原件保留）。");
++            parsed.Add(item);
++        }
+ 
+-            return parsed;
++        var maximumItemGeneration = parsed.Count == 0 ? -1 : parsed.Max(item => item.Generation);
++        if (version == LocalWaitQueueFile.CurrentVersion)
++        {
++            if (generationHighWater == -1 && parsed.Count != 0)
++                throw new LocalWaitQueueCorruptException("v4 generationHighWater=-1 只允许空 items（原件保留）。");
++            if (maximumItemGeneration > generationHighWater)
++                throw new LocalWaitQueueCorruptException(
++                    $"v4 generationHighWater={generationHighWater} 小于现存项最大代际 {maximumItemGeneration}（原件保留）。");
++        }
++        else
++        {
++            // v1-v3 Generation 的历史载体为 Int32；为任何已删 legacy 项可能携带的合法旧请求预留整个 int 域。
++            generationHighWater = Math.Max((long)int.MaxValue, maximumItemGeneration);
+         }
++
++        return new QueueSnapshot(parsed, generationHighWater, originalBytes);
+     }
+ 
+     /// <summary>
+-    /// 幂等登记：同 <c>ItemId</c> 且**不可变登记载荷**（身份/候选号/命名空间/流程/级别/优先级/最高级标记/可信标记/计划时刻）
++    /// 幂等登记：输入 <c>Generation</c> 必须为 0（登记请求不能自报代际）；同 <c>ItemId</c> 且**不可变登记载荷**
++    /// （身份/候选号/命名空间/流程/级别/优先级/最高级标记/可信标记/计划时刻）
+     /// 完全一致 ⇒ 复用（返回 false，不新增）；等待中但载荷不同 ⇒ 响亮冲突；
+-    /// 已取消的同载荷项 ⇒ **重新激活**（视为同一请求再次到来，返回 true）。
++    /// 已取消的同载荷项 ⇒ **重新激活**（视为同一请求再次到来，返回 true）；新生命周期使用队列文件高水位的下一值。
+     /// </summary>
+     public bool Upsert(LocalWaitItem item)
+     {
+@@ -151,19 +205,27 @@ public sealed class LocalWaitQueueStore
+ 
+         lock (_sync)
+         {
+-            var items = Load().ToList();
+-            var existing = items.FirstOrDefault(i => string.Equals(i.ItemId, item.ItemId, StringComparison.Ordinal));
++            var snapshot = ReadSnapshotLocked();
++            var items = snapshot.Items;
++            var incoming = MaterializeAndValidatePayload([item])[0];
++            if (incoming.Generation != 0)
++                throw new LocalWaitQueueCorruptException(
++                    $"等待项 {incoming.ItemId} 的登记请求 generation 必须为 0；代际由 Store 分配。");
++
++            var existing = items.FirstOrDefault(i => string.Equals(i.ItemId, incoming.ItemId, StringComparison.Ordinal));
+             if (existing is null)
+             {
+-                items.Add(item);
+-                Persist(items);
++                var generation = AllocateNextGeneration(snapshot.GenerationHighWater);
++                incoming.Generation = generation;
++                items.Add(incoming);
++                Persist(items, generation);
+                 return true;
+             }
+ 
+-            if (!HasSameRegistrationPayload(existing, item))
++            if (!HasSameRegistrationPayload(existing, incoming))
+             {
+                 throw new LocalWaitQueueCorruptException(
+-                    $"等待项 {item.ItemId} 已存在且登记载荷不同：拒绝覆盖（原记录保留）。");
++                    $"等待项 {incoming.ItemId} 已存在且登记载荷不同：拒绝覆盖（原记录保留）。");
+             }
+ 
+             if (existing.State == LocalWaitItemState.Waiting) return false;
+@@ -171,12 +233,10 @@ public sealed class LocalWaitQueueStore
+             existing.State = LocalWaitItemState.Waiting;
+             existing.Reason = null;
+             existing.CancelledAtUtc = null;
+-            // [批次 20／Wave2／D-E2=①] 重激活＝新代际：取消→同载荷重登记时代际**递增**（取消→重激活
+-            // 产生 N 个代际 ⇒ _handled 按代际修剪有界；消费前复核按代际判 ABA 过期）。**重激活分支的
+-            // 代际由 Store 递增收敛（调用方不可自报）**；**新登记分支**以调用方值为准（生产唯一调用方
+-            // TryRegisterLocalWait 恒为默认 0；[Wave2 R33 建议-1] 文档收窄）。
+-            existing.Generation = existing.Generation + 1;
+-            Persist(items);
++            // 重激活是新的登记生命周期；高水位按整个队列文件单调推进，不能从剩余项或调用方对象推导。
++            var nextGeneration = AllocateNextGeneration(snapshot.GenerationHighWater);
++            existing.Generation = nextGeneration;
++            Persist(items, nextGeneration);
+             return true;
+         }
+     }
+@@ -186,9 +246,10 @@ public sealed class LocalWaitQueueStore
+     {
+         lock (_sync)
+         {
+-            var items = Load().ToList();
++            var snapshot = ReadSnapshotLocked();
++            var items = snapshot.Items;
+             var removed = items.RemoveAll(i => string.Equals(i.ItemId, itemId, StringComparison.Ordinal)) > 0;
+-            if (removed) Persist(items);
++            if (removed) Persist(items, snapshot.GenerationHighWater);
+             return removed;
+         }
+     }
+@@ -199,41 +260,60 @@ public sealed class LocalWaitQueueStore
+         ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
+         lock (_sync)
+         {
+-            var items = Load().ToList();
++            var snapshot = ReadSnapshotLocked();
++            var items = snapshot.Items;
+             var item = items.FirstOrDefault(i => string.Equals(i.ItemId, itemId, StringComparison.Ordinal));
+             if (item is null || item.State == LocalWaitItemState.Cancelled) return false;
+             item.State = LocalWaitItemState.Cancelled;
+             item.Reason = string.IsNullOrWhiteSpace(reason) ? "显式恢复撤销旧等待" : reason;
+             item.CancelledAtUtc = nowUtc.ToUniversalTime();
+-            Persist(items);
++            Persist(items, snapshot.GenerationHighWater);
+             return true;
+         }
+     }
+ 
+     /// <summary>
+     /// 应用失效清理（置 Cancelled 并记录原因/时刻），并按保留期裁剪过期墓碑；有变化才写盘。
++    /// 回调在路径锁外对隔离副本运行；提交前在路径锁内核对原始文件快照，冲突时拒绝覆盖并保留并发写入。
+     /// 写入失败不会破坏原文件（先写临时文件，成功后才替换）。
+     /// </summary>
+     public LocalWaitCleanupResult PersistCleanup(Func<LocalWaitItem, string?> invalidationReason, DateTimeOffset nowUtc)
+     {
+-        lock (_sync)
++        ArgumentNullException.ThrowIfNull(invalidationReason);
++
++        QueueSnapshot snapshot;
++        lock (_sync) snapshot = ReadSnapshotLocked();
++
++        // 外部回调在路径锁外执行，并且只接触隔离副本。
++        var callbackItems = MaterializeAndValidatePayload(snapshot.Items);
++        var originalIds = new Dictionary<LocalWaitItem, string>(ReferenceEqualityComparer.Instance);
++        for (var index = 0; index < callbackItems.Count; index++)
++            originalIds.Add(callbackItems[index], snapshot.Items[index].ItemId);
++
++        var decisions = LocalWaitQueuePolicy.Cleanup(callbackItems, invalidationReason, nowUtc);
++        foreach (var decision in decisions)
+         {
+-            var items = Load().ToList();
+-            var decisions = LocalWaitQueuePolicy.Cleanup(items, invalidationReason, nowUtc);
+-            foreach (var decision in decisions)
+-            {
+-                var target = items.First(i => ReferenceEquals(i, decision.Item));
+-                target.State = LocalWaitItemState.Cancelled;
+-                target.Reason = decision.Reason;
+-                target.CancelledAtUtc = decision.DecidedAtUtc;
+-            }
++            if (!originalIds.TryGetValue(decision.Item, out var originalItemId))
++                throw new LocalWaitQueueCorruptException("清理策略返回了不属于输入快照的等待项：拒绝提交。");
++            var target = snapshot.Items.First(i => string.Equals(i.ItemId, originalItemId, StringComparison.Ordinal));
++            target.State = LocalWaitItemState.Cancelled;
++            target.Reason = decision.Reason;
++            target.CancelledAtUtc = decision.DecidedAtUtc;
++        }
+ 
+-            var cutoff = nowUtc - CancelledRetention;
+-            var pruned = items.RemoveAll(i => i.State == LocalWaitItemState.Cancelled
+-                                              && i.CancelledAtUtc is { } cancelledAt
+-                                              && cancelledAt <= cutoff);
++        var cutoff = nowUtc - CancelledRetention;
++        var pruned = snapshot.Items.RemoveAll(i => i.State == LocalWaitItemState.Cancelled
++                                                   && i.CancelledAtUtc is { } cancelledAt
++                                                   && cancelledAt <= cutoff);
++        var changed = decisions.Count > 0 || pruned > 0;
+ 
+-            if (decisions.Count > 0 || pruned > 0) Persist(items);
++        lock (_sync)
++        {
++            var current = ReadSnapshotLocked();
++            if (!SameFileSnapshot(snapshot.OriginalBytes, current.OriginalBytes))
++                throw new LocalWaitQueueConcurrentUpdateException(
++                    "清理回调运行期间等待队列文件已变化：拒绝用旧快照覆盖内层提交。");
++            if (changed) Persist(snapshot.Items, snapshot.GenerationHighWater);
+             return new LocalWaitCleanupResult(decisions.Count, pruned);
+         }
+     }
+@@ -257,7 +337,7 @@ public sealed class LocalWaitQueueStore
+            && HasSamePrerequisiteReference(left.PrerequisiteReference, right.PrerequisiteReference);
+ 
+     /// <summary>严格解析单条等待项：必需字段缺失、类型错误或枚举未定义一律响亮拒绝（缺失 hasTrustedIdentity ⇒ 保守 false）。</summary>
+-    private static LocalWaitItem ParseItem(JsonObject itemObject)
++    private static LocalWaitItem ParseItem(JsonObject itemObject, int version)
+     {
+         var itemId = RequiredString(itemObject, "itemId");
+         var stableIdentity = RequiredString(itemObject, "stableIdentity");
+@@ -305,7 +385,7 @@ public sealed class LocalWaitQueueStore
+             // （形状非法一律损坏，与前置引用同口径）；缺字段 ⇒ null（版本 1/2 旧文件读兼容 ⇒
+             // 登记例外：永不参选＋显式标注，C4②/D-E3=(c)）。
+             AdmissionIdentity = ParseAdmissionIdentity(itemObject, itemId),
+-            Generation = ParseGeneration(itemObject, itemId),
++            Generation = ParseGeneration(itemObject, itemId, version),
+         };
+     }
+ 
+@@ -348,19 +428,33 @@ public sealed class LocalWaitQueueStore
+     }
+ 
+     /// <summary>
+-    /// [批次 20／Wave2／D-E2=①] 代际解析：缺字段 ⇒ 0（D-E2 引入前登记的项，合法形态）；
+-    /// 键存在必须是非负整数（负数／非整数 ⇒ 响亮拒绝，与 state 同口径）。
++    /// v1-v3 代际沿用历史 Int32 形状，缺字段 ⇒ 0；v4 必须显式保存非负 Int64 代际。
+     /// </summary>
+-    private static int ParseGeneration(JsonObject itemObject, string itemId)
++    private static long ParseGeneration(JsonObject itemObject, string itemId, int version)
+     {
+-        if (!itemObject.ContainsKey("generation")) return 0;
+-        int value;
+-        // [Wave2 R39 M-2] TryGetValue<int> 对字符串 JSON 种类的行为（返回 false 或抛 InvalidOperationException/
+-        // FormatException）已探针实证并统一包装为合同类型——非 Number 种类一律响亮 LocalWaitQueueCorruptException。
++        if (!itemObject.ContainsKey("generation"))
++        {
++            if (version == LocalWaitQueueFile.CurrentVersion)
++                throw new LocalWaitQueueCorruptException($"v4 等待项 {itemId} 缺少 generation（原件保留）。");
++            return 0;
++        }
++
++        long value;
+         try
+         {
+-            if (itemObject["generation"] is not JsonValue node || !node.TryGetValue<int>(out value))
++            if (itemObject["generation"] is not JsonValue node)
+                 throw new LocalWaitQueueCorruptException($"等待项 {itemId} 的 generation 不是整数（原件保留）。");
++            if (version == LocalWaitQueueFile.CurrentVersion)
++            {
++                if (!node.TryGetValue<long>(out value))
++                    throw new LocalWaitQueueCorruptException($"v4 等待项 {itemId} 的 generation 不是 Int64 整数（原件保留）。");
++            }
++            else
++            {
++                if (!node.TryGetValue<int>(out var legacyValue))
++                    throw new LocalWaitQueueCorruptException($"legacy 等待项 {itemId} 的 generation 不是 Int32 整数（原件保留）。");
++                value = legacyValue;
++            }
+         }
+         catch (LocalWaitQueueCorruptException) { throw; }
+         catch (Exception ex)
+@@ -542,7 +636,24 @@ public sealed class LocalWaitQueueStore
+                 $"等待项 {itemId} 的 admissionIdentity 为空字符串：写入侧拒绝（该形状读取侧判损坏，不得写出）。");
+     }
+ 
+-    private void Persist(List<LocalWaitItem> items)
++    private static long AllocateNextGeneration(long generationHighWater)
++    {
++        if (generationHighWater == long.MaxValue)
++            throw new LocalWaitGenerationExhaustedException(
++                "等待队列 generationHighWater 已达 long.MaxValue：拒绝分配下一代际，队列文件不变。");
++        if (generationHighWater < -1)
++            throw new LocalWaitQueueCorruptException("等待队列 generationHighWater 小于 -1：拒绝分配。");
++        return generationHighWater + 1;
++    }
++
++    private static bool SameFileSnapshot(byte[]? left, byte[]? right)
++    {
++        if (left is null || right is null) return left is null && right is null;
++        return left.AsSpan().SequenceEqual(right);
++    }
++
++    /// <summary>调用方须持有该文件的规范路径锁；items 与 generationHighWater 必须来自同一根快照。</summary>
++    private void Persist(List<LocalWaitItem> items, long generationHighWater)
+     {
+ #if DEBUG
+         // 测试专用探针（Release／生产构建下**编译期不存在**）：用于证明「写盘前物化」确实生效。
+@@ -551,13 +662,26 @@ public sealed class LocalWaitQueueStore
+         WriteSnapshotProbeMutator?.Invoke(items);
+ #endif
+         var payloadItems = MaterializeAndValidatePayload(items);
++        if (generationHighWater < -1)
++            throw new LocalWaitQueueCorruptException("写入 generationHighWater 小于 -1：拒绝提交。");
++        if (generationHighWater == -1 && payloadItems.Count != 0)
++            throw new LocalWaitQueueCorruptException("写入 generationHighWater=-1 但 items 非空：拒绝提交。");
++        if (payloadItems.Any(item => item.Generation > generationHighWater))
++            throw new LocalWaitQueueCorruptException("写入 generationHighWater 小于现存项代际：拒绝提交。");
+ 
+         var directory = Path.GetDirectoryName(_file)!;
+         Directory.CreateDirectory(directory);
+-        var payload = Utf8NoBom.GetBytes(JsonSerializer.Serialize(new LocalWaitQueueFile { Items = payloadItems }, JsonOptions));
++        var payload = Utf8NoBom.GetBytes(JsonSerializer.Serialize(new LocalWaitQueueFile
++        {
++            Items = payloadItems,
++            GenerationHighWater = generationHighWater,
++        }, JsonOptions));
+         var tmp = Path.Combine(directory, $".wait-queue.{Guid.NewGuid():N}.tmp");
+         try
+         {
++#if DEBUG
++            BeforeTemporaryFileWriteProbe?.Invoke(tmp, payload);
++#endif
+             File.WriteAllBytes(tmp, payload);
+             File.Move(tmp, _file, overwrite: true);
+         }
+diff --git a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt
+index 89d905cf1..927299c55 100644
+--- a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt
++++ b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt
+@@ -409,6 +409,7 @@ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdD70F5C9283B48C
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdD821DD962AE251871B1482D7E6DC0857D25FD94994EAD659F0C3F434EA9AC3291| §24.41-C | 15 | §24.40 范围残余（`RetryableRejected` 责任维／适配器入参形状） | 已交付（组件层） | 完成证据 | §24.45／§24.49 |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdD830E9DFAB07053AACA25785EE5812B68D4C1F87CEBDED33A26EFB36CE82A7791| **声明面变更（须纳入本批提交评审）** | 本批**触及声明面**（新增「生产接线 ❌ 未接线」「等待组件接线状态 ❌ 仍未接线」「D2 前置模型 ⚠ 未闭合，属 D2 范围」等承载门禁词的声明行，以及交接稿批次 15 状态行）：设 `CLAIM_SURFACE_REGENERATE=1` 再生 `ClaimSu…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdD890DEAC87E4FBBF0F042C6A745C524C4C91112934FF5FEFDF7A0358AC049B151| §23.8 | 7 | 缺生产组合根闭环夹具 | 已交付（**测试接线态**，生产注入仍关闭）：12 枚组合根夹具 | 完成证据 | §24.42 |
++Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdD93DBC5CD967D951A7FD10BE78437D0CAF925DE0F5BBAC82DC1024A71608272D1线性化点为 Store 的 Load 快照；Load 返回后再并发 Remove 不撤销已计算出的 Valid，连续重复调用也可能都 Valid。本批不声称 at-most-once 消费或请求领取去重。助手仓库仍无生产 `LocalWaitReevaluationConsumer` 调用点，不声称完整准入下游已执行，…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdDA117543326E94DF516E2A08580129F28AF1363491F51EB73F0C10114D9D33A71| 预留≠交付 | ⚠ 契约边界（会诊 #2）：`TryAdd` 是**状态预留**，**不等于**"请求已交付／消费方已接收"；同一调用内无可观察的失败界限，但登记**先于**调用方看到产物。**不得**把该实现读成"保证请求已被处理" |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdDD4E339BDFFA9D9E56D734AB71449F8747F560D04F9715A9B94CA3E9C4116E371（不再透传入参字段），避免「已执行外部副作用、接管按错误持久化类型分派」。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdDD7F4B3B696A52E8497D50B556D536491F99D4C3BC01443CA243811BDA3577A91`OpCode = <表达式>` 4 文件）；**保留门禁**＝外部启用门；**残余**（IL 级间接分析、Roslyn 化降误报）为**可选加固**。
+diff --git a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitGenerationContractTests.cs b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitGenerationContractTests.cs
+index d7244cb69..0553b9ba8 100644
+--- a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitGenerationContractTests.cs
++++ b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitGenerationContractTests.cs
+@@ -1,5 +1,8 @@
+ using System;
+ using System.Linq;
++using System.Text.Json;
++using System.Threading;
++using System.Threading.Tasks;
+ using MultiplayerHoeingAssistant.Models;
+ using MultiplayerHoeingAssistant.Services;
+ using Xunit;
+@@ -25,7 +28,7 @@ public sealed class LocalWaitGenerationContractTests : IDisposable
+         try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); } catch { }
+     }
+ 
+-    private static LocalWaitItem GenItem(int generation = 0)
++    private static LocalWaitItem GenItem(long generation = 0)
+     {
+         var stable = "run-gen|n1|0|0";
+         return new LocalWaitItem
+@@ -40,6 +43,56 @@ public sealed class LocalWaitGenerationContractTests : IDisposable
+         };
+     }
+ 
++    private void WriteLegacyGenerationItem(LocalWaitItem item, long generation, int version = 3)
++    {
++        var json = $$"""
++        {
++          "version": {{version}},
++          "items": [
++            {
++              "itemId": "{{item.ItemId}}",
++              "stableIdentity": "{{item.StableIdentity}}",
++              "generation": {{generation}},
++              "tier": {{(int)item.Tier}},
++              "priority": {{item.Priority}}
++            }
++          ]
++        }
++        """;
++        File.WriteAllText(new LocalWaitQueueStore(_dir).FilePath, json);
++    }
++
++    private void WriteV4Queue(string directory, params LocalWaitItem[] items)
++    {
++        var highWater = items.Length == 0 ? -1 : items.Max(item => item.Generation);
++        WriteV4Queue(directory, highWater, items);
++    }
++
++    private void WriteV4Queue(string directory, long highWater, params LocalWaitItem[] items)
++    {
++        Directory.CreateDirectory(directory);
++        var queueFile = new LocalWaitQueueFile
++        {
++            Version = LocalWaitQueueFile.CurrentVersion,
++            Items = items.ToList(),
++            GenerationHighWater = highWater,
++        };
++        File.WriteAllText(new LocalWaitQueueStore(directory).FilePath,
++            JsonSerializer.Serialize(queueFile, new JsonSerializerOptions { WriteIndented = true }));
++    }
++
++    private LocalWaitConsumptionDecision ConsumeUsingStore(
++        LocalWaitReevaluationRequest request, LocalWaitItem? currentItem)
++    {
++        var directory = Path.Combine(_dir, "consume-" + Guid.NewGuid().ToString("N"));
++        var store = new LocalWaitQueueStore(directory);
++        if (currentItem is null)
++            WriteV4Queue(directory);
++        else
++            WriteV4Queue(directory, currentItem);
++        return LocalWaitReevaluationConsumer.Consume(request, store);
++    }
++
+     // ---------- 代际载体落盘（D-E2=① 主裁决） ----------
+ 
+     /// <summary>
+@@ -99,8 +152,7 @@ public sealed class LocalWaitGenerationContractTests : IDisposable
+     }
+ 
+     /// <summary>
+-    /// 【突变验证 ✔（M63：写侧 generation&lt;0 校验移除 ⇒ 红，独立于读侧 M62）】【Wave2】
+-    /// 负代际写侧响亮拒绝（读取侧同判损坏）——写侧/读侧为两个独立分支，各自有反向突变证据。
++    /// 输入负代际响亮拒绝；当前 Store 同时由非负形状校验与“登记输入必须为 0”两条守卫阻止它。
+     /// </summary>
+     [Fact]
+     public void Upsert_NegativeGeneration_Rejected()
+@@ -111,6 +163,89 @@ public sealed class LocalWaitGenerationContractTests : IDisposable
+         Assert.Throws<MultiplayerHoeingAssistant.Services.LocalWaitQueueCorruptException>(() => store.Upsert(item));
+     }
+ 
++    /// <summary>【实现前红夹具：R2 重要-3】登记请求不能自报非零代际。</summary>
++    [Fact]
++    public void Upsert_NonzeroCallerGeneration_Rejected()
++    {
++        var store = new LocalWaitQueueStore(_dir);
++        var item = GenItem(1);
++
++        Assert.Throws<MultiplayerHoeingAssistant.Services.LocalWaitQueueCorruptException>(() => store.Upsert(item));
++        Assert.Empty(store.Load());
++    }
++
++#if DEBUG
++    /// <summary>【实现前红夹具：R2 重要-3】Store 持久化私有物化副本，不得二次读取可变来件。</summary>
++    [Fact]
++    public void Upsert_MutableCallerObjectCannotRewriteAllocatedGenerationBeforePersist()
++    {
++        var store = new LocalWaitQueueStore(_dir);
++        var item = GenItem();
++        var previous = LocalWaitQueueStore.WriteSnapshotProbeMutator;
++        LocalWaitQueueStore.WriteSnapshotProbeMutator = _ => item.Generation = 99;
++        try
++        {
++            Assert.True(store.Upsert(item));
++        }
++        finally
++        {
++            LocalWaitQueueStore.WriteSnapshotProbeMutator = previous;
++        }
++
++        Assert.Equal(0L, Assert.Single(store.Load()).Generation);
++        Assert.Equal(0L, System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(store.FilePath))!["generationHighWater"]!.GetValue<long>());
++    }
++#endif
++
++    /// <summary>【实现前红夹具：R2 重要-3】v4 根 H 与项代际必须严格匹配，不得按 legacy 回退。</summary>
++    [Fact]
++    public void Load_V4MissingOrInvalidHighWaterAndItemGeneration_FailsClosed()
++    {
++        var item = $$"""
++        { "itemId": "wait-0123456789abcdef", "stableIdentity": "run-a|n1|0|0", "tier": 2, "priority": 0, "state": 0 }
++        """;
++        var itemWithGeneration = item.Replace("\"state\": 0", "\"generation\": 0, \"state\": 0", StringComparison.Ordinal);
++        var itemWithNullGeneration = itemWithGeneration.Replace("\"generation\": 0", "\"generation\": null", StringComparison.Ordinal);
++        var itemWithStringGeneration = itemWithGeneration.Replace("\"generation\": 0", "\"generation\": \"0\"", StringComparison.Ordinal);
++        var cases = new[]
++        {
++            ("missing-root", "{ \"version\": 4, \"items\": [] }", "generationHighWater"),
++            ("null-root", "{ \"version\": 4, \"generationHighWater\": null, \"items\": [] }", "generationHighWater"),
++            ("string-root", "{ \"version\": 4, \"generationHighWater\": \"0\", \"items\": [] }", "generationHighWater"),
++            ("negative-root", "{ \"version\": 4, \"generationHighWater\": -2, \"items\": [] }", "generationHighWater"),
++            ("fractional-root", "{ \"version\": 4, \"generationHighWater\": 1.5, \"items\": [] }", "generationHighWater"),
++            ("overflow-root", "{ \"version\": 4, \"generationHighWater\": 9223372036854775808, \"items\": [] }", "generationHighWater"),
++            ("unallocated-with-item", $"{{ \"version\": 4, \"generationHighWater\": -1, \"items\": [{itemWithGeneration}] }}", "generationHighWater"),
++            ("root-below-cancelled-item", $"{{ \"version\": 4, \"generationHighWater\": 0, \"items\": [{{ \"itemId\": \"wait-0123456789abcdef\", \"stableIdentity\": \"run-a|n1|0|0\", \"generation\": 1, \"tier\": 2, \"priority\": 0, \"state\": 1 }}] }}", "generationHighWater"),
++            ("missing-item-generation", $"{{ \"version\": 4, \"generationHighWater\": 0, \"items\": [{item}] }}", "generation"),
++            ("null-item-generation", $"{{ \"version\": 4, \"generationHighWater\": 0, \"items\": [{itemWithNullGeneration}] }}", "generation"),
++            ("string-item-generation", $"{{ \"version\": 4, \"generationHighWater\": 0, \"items\": [{itemWithStringGeneration}] }}", "generation"),
++            ("negative-item-generation", "{ \"version\": 4, \"generationHighWater\": 0, \"items\": [{ \"itemId\": \"wait-0123456789abcdef\", \"stableIdentity\": \"run-a|n1|0|0\", \"generation\": -1, \"tier\": 2, \"priority\": 0, \"state\": 1 }] }", "generation"),
++            ("fractional-item-generation", "{ \"version\": 4, \"generationHighWater\": 0, \"items\": [{ \"itemId\": \"wait-0123456789abcdef\", \"stableIdentity\": \"run-a|n1|0|0\", \"generation\": 0.5, \"tier\": 2, \"priority\": 0, \"state\": 1 }] }", "generation"),
++            ("overflow-item-generation", "{ \"version\": 4, \"generationHighWater\": 9223372036854775808, \"items\": [{ \"itemId\": \"wait-0123456789abcdef\", \"stableIdentity\": \"run-a|n1|0|0\", \"generation\": 9223372036854775808, \"tier\": 2, \"priority\": 0, \"state\": 1 }] }", "generation"),
++        };
++
++        foreach (var (name, json, expectedMarker) in cases)
++        {
++            var dir = Path.Combine(_dir, name);
++            Directory.CreateDirectory(dir);
++            var path = Path.Combine(dir, "wait-queue.json");
++            File.WriteAllText(path, json);
++            var originalBytes = File.ReadAllBytes(path);
++            var exception = Assert.Throws<MultiplayerHoeingAssistant.Services.LocalWaitQueueCorruptException>(
++                () => new LocalWaitQueueStore(dir).Load());
++            Assert.True(exception.Message.Contains(expectedMarker, StringComparison.OrdinalIgnoreCase),
++                $"{name}: expected diagnostic marker '{expectedMarker}', actual '{exception.Message}'");
++            Assert.Equal(Convert.ToHexString(originalBytes), Convert.ToHexString(File.ReadAllBytes(path)));
++        }
++    }
++
++    [Fact]
++    public void QueueFileVersion_AdvancesForPersistedHighWater()
++    {
++        Assert.Equal(4, LocalWaitQueueFile.CurrentVersion);
++    }
++
+     /// <summary>[R39 M-2 探针] 实证 TryGetValue&lt;int&gt; 对字符串 JSON 值的行为（抛 vs false）。</summary>
+     [Fact]
+     public void Probe_TryGetValueInt_WithStringJsonKind()
+@@ -307,10 +442,10 @@ public sealed class LocalWaitGenerationContractTests : IDisposable
+         var item = GenItem(1);
+         foreach (var bad in new[] { "+1", "01", "-0" })
+         {
+-            var r = LocalWaitReevaluationConsumer.Consume(Req(item.ItemId, bad), item);
++            var r = ConsumeUsingStore(Req(item.ItemId, bad), item);
+             Assert.False(r.Valid, $"非规范整数形 '{bad}' 按映射合同必须过期");
+         }
+-        Assert.True(LocalWaitReevaluationConsumer.Consume(Req(item.ItemId, "1"), item).Valid);
++        Assert.True(ConsumeUsingStore(Req(item.ItemId, "1"), item).Valid);
+     }
+ 
+     /// <summary>
+@@ -324,7 +459,7 @@ public sealed class LocalWaitGenerationContractTests : IDisposable
+         var item = GenItem(1);
+         foreach (var bad in new[] { " 1", "1 " })
+         {
+-            var r = LocalWaitReevaluationConsumer.Consume(Req(item.ItemId, bad), item);
++            var r = ConsumeUsingStore(Req(item.ItemId, bad), item);
+             Assert.False(r.Valid, $"带空白代际串 '{bad}' 必须过期（fail-closed）");
+         }
+     }
+@@ -340,7 +475,7 @@ public sealed class LocalWaitGenerationContractTests : IDisposable
+         var item = GenItem(1);
+         var impostor = GenItem(1);
+         impostor.StableIdentity = "run-impostor|n1|0|0"; // 同 ItemId、异权威身份
+-        var r = LocalWaitReevaluationConsumer.Consume(Req(item.ItemId, "1"), impostor);
++        var r = ConsumeUsingStore(Req(item.ItemId, "1"), impostor);
+         Assert.False(r.Valid);
+         Assert.Contains("StableIdentity", r.Reason);
+     }
+@@ -363,6 +498,115 @@ public sealed class LocalWaitGenerationContractTests : IDisposable
+         Assert.Empty(again.Requests); // 幂等保持（未被误删）
+     }
+ 
++    /// <summary>【实现前红夹具：R2 重要-5】修剪必须接受规范 long 代际，不能把 int 范围外代际当作无效。</summary>
++    [Fact]
++    public void PruneHandledExceptGeneration_SupportsLongGeneration()
++    {
++        var trigger = new LocalWaitReevaluationTrigger(_ => true);
++        var items = new[] { GenItem(0) };
++        var oldGeneration = "2147483648";
++        var liveGeneration = "2147483649";
++
++        Assert.Single(trigger.Decide(LocalWaitReevaluationTriggerPoint.OccupancyEnded, items,
++            DateTimeOffset.UnixEpoch, CancellationToken.None, generation: oldGeneration).Requests);
++        Assert.Single(trigger.Decide(LocalWaitReevaluationTriggerPoint.OccupancyEnded, items,
++            DateTimeOffset.UnixEpoch, CancellationToken.None, generation: liveGeneration).Requests);
++
++        Assert.Equal(1, trigger.PruneHandledExceptGeneration("run-gen|n1|0|0", liveGeneration));
++        Assert.Empty(trigger.Decide(LocalWaitReevaluationTriggerPoint.OccupancyEnded, items,
++            DateTimeOffset.UnixEpoch, CancellationToken.None, generation: liveGeneration).Requests);
++    }
++
++    [Fact]
++    public void LongGeneration_RoundTripsThroughStoreTriggerConsumerAndPruning()
++    {
++        const string oldGeneration = "2147483648";
++        var first = GenItem(2_147_483_648L);
++        WriteV4Queue(_dir, first);
++        var store = new LocalWaitQueueStore(_dir);
++        var currentFirst = Assert.Single(store.Load());
++        Assert.Equal(2_147_483_648L, currentFirst.Generation);
++
++        var other = GenItem();
++        other.StableIdentity = "run-other|n1|0|0";
++        other.ItemId = LocalWaitQueuePolicy.DeriveItemId(other.StableIdentity);
++        var trigger = new LocalWaitReevaluationTrigger(_ => true, stateScope: "epoch-a");
++        var migration = trigger.Decide(LocalWaitReevaluationTriggerPoint.OccupancyEnded, new[] { currentFirst, other },
++            DateTimeOffset.UnixEpoch, CancellationToken.None);
++        Assert.Equal(2, migration.Requests.Count);
++        var oldBatch = trigger.Decide(LocalWaitReevaluationTriggerPoint.OccupancyEnded, new[] { currentFirst, other },
++            DateTimeOffset.UnixEpoch, CancellationToken.None, generation: oldGeneration);
++        Assert.Equal(2, oldBatch.Requests.Count);
++        var oldRequest = Assert.Single(oldBatch.Requests.Where(request => request.ItemId == currentFirst.ItemId));
++        Assert.True(LocalWaitReevaluationConsumer.Consume(oldRequest, store).Valid);
++
++        Assert.True(store.Cancel(currentFirst.ItemId, "advance long generation", DateTimeOffset.UtcNow));
++        Assert.True(store.Upsert(GenItem()));
++        var current = Assert.Single(store.Load());
++        Assert.Equal(2_147_483_649L, current.Generation);
++        var liveGeneration = current.Generation.ToString(System.Globalization.CultureInfo.InvariantCulture);
++        var liveRequest = Assert.Single(trigger.Decide(LocalWaitReevaluationTriggerPoint.OccupancyEnded,
++            new[] { current }, DateTimeOffset.UnixEpoch, CancellationToken.None, generation: liveGeneration).Requests);
++
++        Assert.False(LocalWaitReevaluationConsumer.Consume(oldRequest, store).Valid);
++        Assert.True(LocalWaitReevaluationConsumer.Consume(liveRequest, store).Valid);
++        Assert.Equal(1, trigger.PruneHandledExceptGeneration(current.StableIdentity, liveGeneration));
++        Assert.Empty(trigger.Decide(LocalWaitReevaluationTriggerPoint.OccupancyEnded, new[] { current },
++            DateTimeOffset.UnixEpoch, CancellationToken.None).Requests); // 保留无代际迁移键
++        Assert.Empty(trigger.Decide(LocalWaitReevaluationTriggerPoint.OccupancyEnded, new[] { current },
++            DateTimeOffset.UnixEpoch, CancellationToken.None, generation: liveGeneration).Requests); // 保留当前键
++        Assert.Empty(trigger.Decide(LocalWaitReevaluationTriggerPoint.OccupancyEnded, new[] { other },
++            DateTimeOffset.UnixEpoch, CancellationToken.None, generation: oldGeneration).Requests); // 保留其他身份键
++    }
++
++    [Fact]
++    public void LongMaxValue_LastAllocationSucceeds_ThenRejectsNewGenerationsWithoutChangingFile()
++    {
++        WriteV4Queue(_dir, long.MaxValue - 1);
++        var store = new LocalWaitQueueStore(_dir);
++        var registration = GenItem();
++
++        Assert.True(store.Upsert(registration));
++        var current = Assert.Single(store.Load());
++        Assert.Equal(long.MaxValue, current.Generation);
++        var atMaximumBytes = File.ReadAllBytes(store.FilePath);
++
++        Assert.False(store.Upsert(GenItem())); // Waiting 幂等操作不需要新代际
++        Assert.Equal(Convert.ToHexString(atMaximumBytes), Convert.ToHexString(File.ReadAllBytes(store.FilePath)));
++        Assert.True(store.Cancel(current.ItemId, "maximum reached", DateTimeOffset.UtcNow));
++        var afterCancel = File.ReadAllBytes(store.FilePath);
++        var reactivation = Record.Exception(() => store.Upsert(GenItem()));
++        Assert.IsType<LocalWaitGenerationExhaustedException>(reactivation);
++        Assert.Equal(Convert.ToHexString(afterCancel), Convert.ToHexString(File.ReadAllBytes(store.FilePath)));
++
++        Assert.True(store.Remove(current.ItemId));
++        var emptyAtMaximum = File.ReadAllBytes(store.FilePath);
++        Assert.Empty(store.Load());
++        var newItem = Record.Exception(() => store.Upsert(GenItem()));
++        Assert.IsType<LocalWaitGenerationExhaustedException>(newItem);
++        Assert.Equal(Convert.ToHexString(emptyAtMaximum), Convert.ToHexString(File.ReadAllBytes(store.FilePath)));
++        Assert.Equal(long.MaxValue, System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(store.FilePath))!["generationHighWater"]!.GetValue<long>());
++    }
++
++    [Fact]
++    public void LongMaxValue_CleanupCancelAndPruneRemainAvailableWithoutLoweringHighWater()
++    {
++        var item = GenItem(long.MaxValue);
++        WriteV4Queue(_dir, item);
++        var store = new LocalWaitQueueStore(_dir, TimeSpan.FromMinutes(1));
++        var now = DateTimeOffset.Parse("2026-09-27T00:00:00+00:00");
++
++        var cancelled = store.PersistCleanup(_ => "max generation cleanup", now);
++        Assert.Equal(1, cancelled.Cancelled);
++        Assert.Equal(long.MaxValue, Assert.Single(store.Load()).Generation);
++
++        var pruned = store.PersistCleanup(_ => null, now.AddMinutes(2));
++        Assert.Equal(1, pruned.Pruned);
++        Assert.Empty(store.Load());
++        Assert.Equal(long.MaxValue,
++            System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(store.FilePath))!["generationHighWater"]!.GetValue<long>());
++    }
++
+     // ---------- C5 消费前复核（IW-04 ABA） ----------
+ 
+     private static LocalWaitReevaluationRequest Req(string itemId, string? generation)
+@@ -379,11 +623,11 @@ public sealed class LocalWaitGenerationContractTests : IDisposable
+     public void Consume_GenerationMismatch_IsExpired_MatchIsValid()
+     {
+         var item = GenItem(2);
+-        var ok = LocalWaitReevaluationConsumer.Consume(Req(item.ItemId, "2"), item);
++        var ok = ConsumeUsingStore(Req(item.ItemId, "2"), item);
+         Assert.True(ok.Valid, ok.Reason);
+         Assert.False(ok.Expired);
+ 
+-        var aba = LocalWaitReevaluationConsumer.Consume(Req(item.ItemId, "1"), item);
++        var aba = ConsumeUsingStore(Req(item.ItemId, "1"), item);
+         Assert.False(aba.Valid);
+         Assert.True(aba.Expired);
+         Assert.Contains("代际", aba.Reason);
+@@ -394,20 +638,30 @@ public sealed class LocalWaitGenerationContractTests : IDisposable
+     public void Consume_MissingOrNotWaiting_IsExpired()
+     {
+         var item = GenItem(1);
+-        Assert.False(LocalWaitReevaluationConsumer.Consume(Req(item.ItemId, "1"), null).Valid);
++        Assert.False(ConsumeUsingStore(Req(item.ItemId, "1"), null).Valid);
+ 
+         var cancelled = GenItem(1);
+         cancelled.State = LocalWaitItemState.Cancelled;
+-        Assert.False(LocalWaitReevaluationConsumer.Consume(Req(item.ItemId, "1"), cancelled).Valid);
++        Assert.False(ConsumeUsingStore(Req(item.ItemId, "1"), cancelled).Valid);
+     }
+ 
+-    /// <summary>【突变验证 ✔（M51：身份错位检查移除 ⇒ 红）＋无代际请求过期】【C5】</summary>
++    /// <summary>【C5】未知 ItemId 因 Store 查无此项而过期；已找到的项若请求无代际也过期。</summary>
+     [Fact]
+-    public void Consume_ItemIdMismatch_And_NoGeneration_AreExpired()
++    public void Consume_UnknownItemId_And_NoGeneration_AreExpired()
+     {
+         var item = GenItem(1);
+-        Assert.False(LocalWaitReevaluationConsumer.Consume(Req("wait-deadbeefdeadbeef", "1"), item).Valid);
+-        Assert.False(LocalWaitReevaluationConsumer.Consume(Req(item.ItemId, null), item).Valid);
++        Assert.False(ConsumeUsingStore(Req("wait-deadbeefdeadbeef", "1"), item).Valid); // Store 按未知 ItemId 查无此项
++        Assert.False(ConsumeUsingStore(Req(item.ItemId, null), item).Valid); // 已找到项，但请求无代际
++    }
++
++    [Fact]
++    public void Consume_CorruptStoreFailsLoudly()
++    {
++        var store = new LocalWaitQueueStore(_dir);
++        File.WriteAllText(store.FilePath, "{ corrupt queue");
++
++        Assert.Throws<LocalWaitQueueCorruptException>(() =>
++            LocalWaitReevaluationConsumer.Consume(Req("wait-unknown", "0"), store));
+     }
+ 
+     /// <summary>
+@@ -421,13 +675,389 @@ public sealed class LocalWaitGenerationContractTests : IDisposable
+         var item = GenItem(1);
+         foreach (var bad in new[] { "gen-1", "abc", "99999999999999999999" })
+         {
+-            var r = LocalWaitReevaluationConsumer.Consume(Req(item.ItemId, bad), item);
++            var r = ConsumeUsingStore(Req(item.ItemId, bad), item);
+             Assert.False(r.Valid, $"代际串 '{bad}' 不可解析必须过期（fail-closed）");
+         }
+ 
+         // fail-open 核心形态：Generation=0 的项＋不可解析串 ⇒ TryParse 失败 reqGen=0 == 0 ⇒ 旧实现放行
+         var zeroItem = GenItem(0);
+-        var r0 = LocalWaitReevaluationConsumer.Consume(Req(zeroItem.ItemId, "gen-1"), zeroItem);
++        var r0 = ConsumeUsingStore(Req(zeroItem.ItemId, "gen-1"), zeroItem);
+         Assert.False(r0.Valid, "Generation=0 的项对不可解析代际串同样必须过期（fail-open 核心形态）");
+     }
++
++    /// <summary>
++    /// 【红夹具（实现前预期失败）：BO-10/BO-12】Remove 是终局，但不能把 Store 文件内已发代际退回 gen0。
++    /// 反例：gen0 请求在途 → Remove → 同身份新登记；新项必须有更高代际，旧请求必须过期。
++    /// </summary>
++    [Fact]
++    public void RemoveThenReregister_SameIdentity_AdvancesGenerationAndExpiresOldRequest()
++    {
++        var store = new LocalWaitQueueStore(_dir);
++        var first = GenItem();
++        store.Upsert(first);
++        var oldRequest = Req(first.ItemId, "0");
++
++        Assert.Equal(0L, Assert.Single(store.Load()).Generation);
++        Assert.True(store.Remove(first.ItemId));
++
++        var afterRestart = new LocalWaitQueueStore(_dir);
++        Assert.True(afterRestart.Upsert(GenItem()));
++        var current = Assert.Single(afterRestart.Load());
++        Assert.Equal(1L, current.Generation);
++
++        var stale = ConsumeUsingStore(oldRequest, current);
++        Assert.False(stale.Valid);
++        Assert.True(stale.Expired);
++        Assert.Contains("代际", stale.Reason);
++    }
++
++    /// <summary>
++    /// 【红夹具（实现前预期失败）：BO-12】24h 墓碑裁剪移除记录后仍须保存高水位，避免同身份重登回绕。
++    /// </summary>
++    [Fact]
++    public void PrunedTombstoneThenReregister_SameIdentity_AdvancesGenerationAndExpiresOldRequest()
++    {
++        var store = new LocalWaitQueueStore(_dir, TimeSpan.FromMinutes(10));
++        var item = GenItem();
++        store.Upsert(item);
++        var oldRequest = Req(item.ItemId, "0");
++        var cancelledAt = DateTimeOffset.UtcNow;
++
++        Assert.True(store.Cancel(item.ItemId, "fixture cancel", cancelledAt));
++        var cleanup = store.PersistCleanup(_ => null, cancelledAt.AddMinutes(11));
++        Assert.Equal(1, cleanup.Pruned);
++        Assert.Empty(store.Load());
++
++        var afterRestart = new LocalWaitQueueStore(_dir, TimeSpan.FromMinutes(10));
++        Assert.True(afterRestart.Upsert(GenItem()));
++        var current = Assert.Single(afterRestart.Load());
++        Assert.Equal(1L, current.Generation);
++
++        var stale = ConsumeUsingStore(oldRequest, current);
++        Assert.False(stale.Valid);
++        Assert.True(stale.Expired);
++    }
++
++    /// <summary>
++    /// 【实现前红夹具：R1 重要-1】Cleanup 回调重入另一同路径 Store 写入后，外层旧快照不得覆盖新项。
++    /// </summary>
++    [Fact]
++    public async Task Cleanup_ReentrantSamePathUpsert_IsNotLostByOuterSnapshot()
++    {
++        var store = new LocalWaitQueueStore(_dir);
++        var otherStore = new LocalWaitQueueStore(_dir);
++        var existing = GenItem();
++        store.Upsert(existing);
++
++        var nested = GenItem();
++        nested.StableIdentity = "run-nested|n1|0|0";
++        nested.ItemId = LocalWaitQueuePolicy.DeriveItemId(nested.StableIdentity);
++
++        using var releaseCallback = new ManualResetEventSlim(false);
++        var callbackEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
++        var cleanupTask = Task.Run(() => store.PersistCleanup(_ =>
++        {
++            callbackEntered.TrySetResult(true);
++            if (!releaseCallback.Wait(TimeSpan.FromSeconds(10)))
++                throw new TimeoutException("Test did not release the cleanup callback barrier.");
++            return "outer cleanup decision";
++        }, DateTimeOffset.UtcNow));
++
++        await callbackEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
++        var innerWrite = Task.Run(() => otherStore.Upsert(nested));
++        var innerFinishedWhileCallbackActive = await Task.WhenAny(innerWrite, Task.Delay(TimeSpan.FromSeconds(5))) == innerWrite;
++        byte[]? innerCommittedBytes = innerFinishedWhileCallbackActive ? File.ReadAllBytes(store.FilePath) : null;
++        releaseCallback.Set();
++
++        var innerWriteException = await Record.ExceptionAsync(async () => await innerWrite);
++        var exception = await Record.ExceptionAsync(async () => await cleanupTask);
++
++        Assert.True(innerFinishedWhileCallbackActive,
++            "another same-path Store write must complete while the external cleanup callback is still active");
++        Assert.Null(innerWriteException);
++        Assert.Equal("LocalWaitQueueConcurrentUpdateException", exception?.GetType().Name);
++        Assert.NotNull(innerCommittedBytes);
++        Assert.Equal(Convert.ToHexString(innerCommittedBytes!), Convert.ToHexString(File.ReadAllBytes(store.FilePath)));
++        var persisted = store.Load();
++        Assert.Equal(LocalWaitItemState.Waiting, Assert.Single(persisted.Where(item => item.ItemId == existing.ItemId)).State);
++        Assert.Equal(1L, Assert.Single(persisted.Where(item => item.ItemId == nested.ItemId)).Generation);
++        Assert.Equal(1L, System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(store.FilePath))!["generationHighWater"]!.GetValue<long>());
++    }
++
++    [Fact]
++    public void Cleanup_CallbackMutationCannotAlterPersistedIdentityOrGeneration()
++    {
++        var store = new LocalWaitQueueStore(_dir);
++        var item = GenItem();
++        store.Upsert(item);
++        var originalId = item.ItemId;
++        var originalIdentity = item.StableIdentity;
++
++        store.PersistCleanup(callbackItem =>
++        {
++            callbackItem.ItemId = "wait-mutated-by-callback";
++            callbackItem.StableIdentity = "run-mutated-by-callback";
++            callbackItem.Generation = 99;
++            callbackItem.State = LocalWaitItemState.Cancelled;
++            return "fixture invalidation";
++        }, DateTimeOffset.UtcNow);
++
++        var persisted = Assert.Single(store.Load());
++        Assert.Equal(originalId, persisted.ItemId);
++        Assert.Equal(originalIdentity, persisted.StableIdentity);
++        Assert.Equal(0L, persisted.Generation);
++        Assert.Equal(LocalWaitItemState.Cancelled, persisted.State);
++    }
++
++    [Fact]
++    public void Cleanup_RejectsRawByteChangeEvenWhenQueueStillParsesTheSame()
++    {
++        var store = new LocalWaitQueueStore(_dir);
++        var item = GenItem();
++        store.Upsert(item);
++        byte[]? externallyChangedBytes = null;
++
++        var exception = Record.Exception(() => store.PersistCleanup(_ =>
++        {
++            File.AppendAllText(store.FilePath, Environment.NewLine + " ");
++            externallyChangedBytes = File.ReadAllBytes(store.FilePath);
++            return "outer cleanup must detect any raw snapshot change";
++        }, DateTimeOffset.UtcNow));
++
++        Assert.IsType<LocalWaitQueueConcurrentUpdateException>(exception);
++        Assert.NotNull(externallyChangedBytes);
++        Assert.Equal(Convert.ToHexString(externallyChangedBytes!), Convert.ToHexString(File.ReadAllBytes(store.FilePath)));
++        Assert.Equal(LocalWaitItemState.Waiting, Assert.Single(store.Load()).State);
++    }
++
++    [Fact]
++    public void Persist_ReplaceFailurePreservesPreviousQueueBytes()
++    {
++        var store = new LocalWaitQueueStore(_dir);
++        var item = GenItem();
++        store.Upsert(item);
++        var before = File.ReadAllBytes(store.FilePath);
++
++        Exception? writeFailure;
++        using (new FileStream(store.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
++        {
++            writeFailure = Record.Exception(() => store.Cancel(item.ItemId, "replace failure probe", DateTimeOffset.UtcNow));
++        }
++
++        Assert.NotNull(writeFailure);
++        Assert.Equal(Convert.ToHexString(before), Convert.ToHexString(File.ReadAllBytes(store.FilePath)));
++        Assert.Equal(LocalWaitItemState.Waiting, Assert.Single(store.Load()).State);
++    }
++
++#if DEBUG
++    [Fact]
++    public void Persist_PartialTemporaryWriteFailurePreservesPreviousQueueBytesAndCleansTemp()
++    {
++        var store = new LocalWaitQueueStore(_dir);
++        var item = GenItem();
++        store.Upsert(item);
++        var before = File.ReadAllBytes(store.FilePath);
++        var previous = LocalWaitQueueStore.BeforeTemporaryFileWriteProbe;
++        LocalWaitQueueStore.BeforeTemporaryFileWriteProbe = (tempPath, payload) =>
++        {
++            File.WriteAllBytes(tempPath, payload[..Math.Max(1, payload.Length / 2)]);
++            throw new IOException("injected partial temporary-file write failure");
++        };
++
++        try
++        {
++            Assert.Throws<IOException>(() => store.Cancel(item.ItemId, "partial write failure", DateTimeOffset.UtcNow));
++        }
++        finally
++        {
++            LocalWaitQueueStore.BeforeTemporaryFileWriteProbe = previous;
++        }
++
++        Assert.Equal(Convert.ToHexString(before), Convert.ToHexString(File.ReadAllBytes(store.FilePath)));
++        Assert.Empty(Directory.GetFiles(_dir, ".wait-queue.*.tmp"));
++        Assert.Equal(LocalWaitItemState.Waiting, Assert.Single(store.Load()).State);
++    }
++#endif
++
++    /// <summary>
++    /// 【实现前红夹具：R1 重要-2】迁移必须预留所有 legacy int 代际；只看仍存项会重用已删除项历史代际。
++    /// </summary>
++    [Fact]
++    public void LegacyV3WithDeletedHigherGeneration_ReservesWholeIntRange()
++    {
++        var legacyRemaining = GenItem();
++        legacyRemaining.StableIdentity = "run-legacy-remains|n1|0|0";
++        legacyRemaining.ItemId = LocalWaitQueuePolicy.DeriveItemId(legacyRemaining.StableIdentity);
++        WriteLegacyGenerationItem(legacyRemaining, 9);
++
++        var store = new LocalWaitQueueStore(_dir);
++        var newLifecycle = GenItem();
++        // 反例历史可为已删除 A(10)，而文件只剩 B(9)；H 不能仅从当前存项最大值恢复。
++        var oldDeletedRequest = Req(newLifecycle.ItemId, "10");
++        var oldMaximumRequest = Req(newLifecycle.ItemId, int.MaxValue.ToString(System.Globalization.CultureInfo.InvariantCulture));
++        Assert.True(store.Upsert(newLifecycle));
++
++        var reopened = new LocalWaitQueueStore(_dir);
++        var newPersisted = Assert.Single(reopened.Load().Where(item => item.ItemId == newLifecycle.ItemId));
++        var deletedRequestDecision = LocalWaitReevaluationConsumer.Consume(oldDeletedRequest, reopened);
++        Assert.False(deletedRequestDecision.Valid);
++        Assert.Contains("代际", deletedRequestDecision.Reason);
++        var oldRequestDecision = LocalWaitReevaluationConsumer.Consume(oldMaximumRequest, reopened);
++        Assert.False(oldRequestDecision.Valid);
++        Assert.True(oldRequestDecision.Expired);
++        Assert.Contains("代际", oldRequestDecision.Reason);
++        Assert.True(newPersisted.Generation > int.MaxValue,
++            "旧文件曾删除的代际可能高于当前最大项；新分配必须越过 legacy int 全范围。");
++    }
++
++    [Theory]
++    [InlineData(1)]
++    [InlineData(2)]
++    public void NonEmptyLegacyV1V2_PreservesGen0RequestAndReservesRangeForNewLifecycle(int version)
++    {
++        var legacyItem = GenItem(0);
++        var legacyJson = $$"""
++        {
++          "version": {{version}},
++          "items": [{
++            "itemId": "{{legacyItem.ItemId}}",
++            "stableIdentity": "{{legacyItem.StableIdentity}}",
++            "tier": {{(int)legacyItem.Tier}},
++            "priority": {{legacyItem.Priority}},
++            "state": 0
++          }]
++        }
++        """;
++        var path = new LocalWaitQueueStore(_dir).FilePath;
++        File.WriteAllText(path, legacyJson);
++        var originalBytes = File.ReadAllBytes(path);
++        var store = new LocalWaitQueueStore(_dir);
++        var oldRequest = Req(legacyItem.ItemId, "0");
++
++        Assert.Equal(0L, Assert.Single(store.Load()).Generation);
++        Assert.Equal(Convert.ToHexString(originalBytes), Convert.ToHexString(File.ReadAllBytes(path)));
++        Assert.True(LocalWaitReevaluationConsumer.Consume(oldRequest, store).Valid);
++
++        var newItem = GenItem();
++        newItem.StableIdentity = $"run-v{version}-new|n1|0|0";
++        newItem.ItemId = LocalWaitQueuePolicy.DeriveItemId(newItem.StableIdentity);
++        Assert.True(store.Upsert(newItem));
++        var reopened = new LocalWaitQueueStore(_dir);
++        Assert.Equal((long)int.MaxValue + 1,
++            Assert.Single(reopened.Load().Where(item => item.ItemId == newItem.ItemId)).Generation);
++        Assert.True(LocalWaitReevaluationConsumer.Consume(oldRequest, reopened).Valid);
++    }
++
++    [Fact]
++    public void LegacyMigration_RemoveHighestItemOnFirstWrite_PreservesMigratedHighWater()
++    {
++        var item = GenItem();
++        WriteLegacyGenerationItem(item, int.MaxValue);
++        var path = new LocalWaitQueueStore(_dir).FilePath;
++        var beforeLoad = File.ReadAllBytes(path);
++        var store = new LocalWaitQueueStore(_dir);
++
++        Assert.Equal((long)int.MaxValue, Assert.Single(store.Load()).Generation);
++        Assert.Equal(Convert.ToHexString(beforeLoad), Convert.ToHexString(File.ReadAllBytes(path)));
++        Assert.True(store.Remove(item.ItemId));
++
++        var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!;
++        Assert.Equal(4, root["version"]!.GetValue<int>());
++        Assert.Equal((long)int.MaxValue, root["generationHighWater"]!.GetValue<long>());
++        Assert.Empty(root["items"]!.AsArray());
++    }
++
++    [Fact]
++    public void LegacyMigration_PruneLastTombstoneOnFirstWrite_PreservesMigratedHighWater()
++    {
++        var item = GenItem();
++        var json = $$"""
++        {
++          "version": 3,
++          "items": [{
++            "itemId": "{{item.ItemId}}",
++            "stableIdentity": "{{item.StableIdentity}}",
++            "generation": 7,
++            "tier": {{(int)item.Tier}},
++            "priority": {{item.Priority}},
++            "state": 1,
++            "cancelledAtUtc": "2020-01-01T00:00:00+00:00"
++          }]
++        }
++        """;
++        File.WriteAllText(new LocalWaitQueueStore(_dir).FilePath, json);
++        var store = new LocalWaitQueueStore(_dir, TimeSpan.FromMinutes(1));
++
++        var result = store.PersistCleanup(_ => null, DateTimeOffset.Parse("2020-01-01T00:02:00+00:00"));
++
++        Assert.Equal(1, result.Pruned);
++        var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(store.FilePath))!;
++        Assert.Equal(4, root["version"]!.GetValue<int>());
++        Assert.Equal((long)int.MaxValue, root["generationHighWater"]!.GetValue<long>());
++        Assert.Empty(root["items"]!.AsArray());
++    }
++
++    [Theory]
++    [InlineData(1)]
++    [InlineData(2)]
++    [InlineData(3)]
++    public void EmptyLegacyFile_ReservesLegacyIntRangeWithoutLoadMutation(int version)
++    {
++        File.WriteAllText(new LocalWaitQueueStore(_dir).FilePath, $$"""
++        { "version": {{version}}, "items": [] }
++        """);
++        var beforeLoad = File.ReadAllBytes(new LocalWaitQueueStore(_dir).FilePath);
++        var store = new LocalWaitQueueStore(_dir);
++
++        Assert.Empty(store.Load());
++        Assert.Equal(Convert.ToHexString(beforeLoad), Convert.ToHexString(File.ReadAllBytes(store.FilePath)));
++        Assert.True(store.Upsert(GenItem()));
++        Assert.Equal((long)int.MaxValue + 1, Assert.Single(store.Load()).Generation);
++    }
++
++    /// <summary>
++    /// 【红夹具（实现前预期失败）：代际不应在 int.MaxValue 处回绕为负数；v3 读入后须安全扩展。
++    /// </summary>
++    [Fact]
++    public void ReactivationAfterIntMaxGeneration_DoesNotWrap()
++    {
++        var item = GenItem();
++        WriteLegacyGenerationItem(item, int.MaxValue);
++        var store = new LocalWaitQueueStore(_dir);
++        var now = DateTimeOffset.UtcNow;
++
++        Assert.Equal((long)int.MaxValue, Assert.Single(store.Load()).Generation);
++        Assert.True(store.Cancel(item.ItemId, "fixture cancel", now));
++
++        var reactivationRequest = Assert.Single(store.Load()); // 保留同载荷快照，但调用方不得自报已分配代际。
++        reactivationRequest.Generation = 0;
++        Assert.Equal(0, reactivationRequest.Generation);
++        var exception = Record.Exception(() => store.Upsert(reactivationRequest));
++        Assert.Null(exception);
++        Assert.Equal(2_147_483_648L, Assert.Single(store.Load()).Generation);
++    }
++
++    /// <summary>
++    /// 【实现前红夹具：R1 重要-4】单独证明仅 Remove 后把旧缓存项传给旧 API 仍会放行；不依赖重登代际断言。
++    /// </summary>
++    [Fact]
++    public void Consume_RemovedCachedSnapshot_IsExpired()
++    {
++        var store = new LocalWaitQueueStore(_dir);
++        var item = GenItem();
++        store.Upsert(item);
++        var request = Req(item.ItemId, "0");
++        var cachedSnapshot = Assert.Single(store.Load());
++
++        Assert.True(store.Remove(item.ItemId));
++        Assert.Equal(item.ItemId, cachedSnapshot.ItemId);
++        var decision = LocalWaitReevaluationConsumer.Consume(request, store);
++        Assert.False(decision.Valid);
++        Assert.True(decision.Expired);
++        Assert.DoesNotContain(
++            typeof(LocalWaitReevaluationConsumer).GetMethods()
++                .Where(method => method.Name == nameof(LocalWaitReevaluationConsumer.Consume))
++                .SelectMany(method => method.GetParameters()),
++            parameter => parameter.ParameterType == typeof(LocalWaitItem));
++    }
+ }
+diff --git a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs
+index ce3da01a3..0040df82b 100644
+--- a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs
++++ b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs
+@@ -356,11 +356,11 @@ public sealed class LocalWaitIdentityTranslationTests : IDisposable
+         var loaded = Assert.Single(store.Load());
+         Assert.Equal(item.AdmissionIdentity, loaded.AdmissionIdentity);
+         Assert.Equal(item.CandidateId, loaded.CandidateId);
+-        Assert.Equal(LocalWaitQueueFile.CurrentVersion, 3);
++        Assert.Equal(LocalWaitQueueFile.CurrentVersion, 4);
+         // 【Wave1 会诊 F2】直接断言落盘文件内容：版本号＝3 且 admissionIdentity 键真实写入
+         //（不只断言内存常量——Store 静默丢字段/写错版本时此处必红）。
+         var raw = File.ReadAllText(Path.Combine(_dir, "wait-queue.json"));
+-        Assert.Contains("\"version\": 3", raw);
++        Assert.Contains("\"version\": 4", raw);
+         Assert.Contains("\"admissionIdentity\"", raw);
+     }
+ 

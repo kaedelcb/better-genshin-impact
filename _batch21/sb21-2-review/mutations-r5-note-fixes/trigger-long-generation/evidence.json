@@ -1,0 +1,17 @@
+{
+  "test": "LongGeneration_RoundTripsThroughStoreTriggerConsumerAndPruning",
+  "mutation": "Change PruneHandledExceptGeneration numeric parser from long.TryParse to int.TryParse",
+  "originalSourceSha256": "122D5D5ECB2097A9AFE771ADBBC9876396A02C07A97094A22DB34AF175A070EC",
+  "mutantSourceSha256": "0346398A249835050A1C525E54F5C49569E45421769EA6FE1C4D8758DA1418E6",
+  "restoredSourceSha256": "122D5D5ECB2097A9AFE771ADBBC9876396A02C07A97094A22DB34AF175A070EC",
+  "originalLengthBytes": 40660,
+  "restoredLengthBytes": 40660,
+  "nonIncrementalBuildExitCode": 0,
+  "mutantTestExitCode": 1,
+  "mutantTestOutcome": "Failed",
+  "assertionFailure": "Assert.Equal() expected 1 actual 0 at LocalWaitGenerationContractTests.cs:577",
+  "sourceRestoredExact": true,
+  "evidenceValid": true,
+  "testTrx": "_batch21/sb21-2-review/mutations-r5-note-fixes/trigger-long-generation/test-results/long-generation-intparse-mutant.trx",
+  "note": "Failure is read from the target test output/TRX. The mutant test does not print the assertion detail to a separate mutant log."
+}

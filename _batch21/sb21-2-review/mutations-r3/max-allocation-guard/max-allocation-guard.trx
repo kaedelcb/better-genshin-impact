@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="1e2b2c91-7be4-4169-b363-d70b30bd77fd" name="kaedelcb@KAEDELCBPC 2026-09-27 09:37:01" runUser="KAEDELCBPC\kaedelcb" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-27T09:37:01.1006447+08:00" queuing="2026-09-27T09:37:01.1006450+08:00" start="2026-09-27T09:37:00.3839304+08:00" finish="2026-09-27T09:37:01.1046868+08:00" />
+  <TestSettings name="default" id="0f4e8768-7623-4021-8307-37ecdb4d3501">
+    <Deployment runDeploymentRoot="kaedelcb_KAEDELCBPC_2026-09-27_09_37_01" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="345ad13a-b1b6-4d18-980a-4b3027f97699" testId="abc66a89-927d-2d67-5ee9-72b7a78a24bd" testName="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.LongMaxValue_LastAllocationSucceeds_ThenRejectsNewGenerationsWithoutChangingFile" computerName="KAEDELCBPC" duration="00:00:00.0439924" startTime="2026-09-27T09:37:01.0405091+08:00" endTime="2026-09-27T09:37:01.0405177+08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="345ad13a-b1b6-4d18-980a-4b3027f97699">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.IsType() Failure: Value is not the exact type&#xD;
+Expected: typeof(MultiplayerHoeingAssistant.Services.LocalWaitGenerationExhaustedException)&#xD;
+Actual:   typeof(MultiplayerHoeingAssistant.Services.LocalWaitQueueCorruptException)</Message>
+          <StackTrace>   at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.LongMaxValue_LastAllocationSucceeds_ThenRejectsNewGenerationsWithoutChangingFile() in E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitGenerationContractTests.cs:line 579&#xD;
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.LongMaxValue_LastAllocationSucceeds_ThenRejectsNewGenerationsWithoutChangingFile" storage="e:\program files\better-genshin-impact-lcb\test\multiplayerhoeingassistant.unittest\bin\debug\net8.0-windows\multiplayerhoeingassistant.unittest.dll" id="abc66a89-927d-2d67-5ee9-72b7a78a24bd">
+      <Execution id="345ad13a-b1b6-4d18-980a-4b3027f97699" />
+      <TestMethod codeBase="E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\bin\Debug\net8.0-windows\MultiplayerHoeingAssistant.UnitTest.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests" name="LongMaxValue_LastAllocationSucceeds_ThenRejectsNewGenerationsWithoutChangingFile" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="abc66a89-927d-2d67-5ee9-72b7a78a24bd" executionId="345ad13a-b1b6-4d18-980a-4b3027f97699" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="列表中未列出的结果" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="所有已加载的结果" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.14)&#xD;
+[xUnit.net 00:00:00.06]   Discovering: MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.18]   Discovered:  MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.18]   Starting:    MultiplayerHoeingAssistant.UnitTest&#xD;
+[xUnit.net 00:00:00.26]       Assert.IsType() Failure: Value is not the exact type&#xD;
+[xUnit.net 00:00:00.26]       Expected: typeof(MultiplayerHoeingAssistant.Services.LocalWaitGenerationExhaustedException)&#xD;
+[xUnit.net 00:00:00.26]       Actual:   typeof(MultiplayerHoeingAssistant.Services.LocalWaitQueueCorruptException)&#xD;
+[xUnit.net 00:00:00.26]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.26]         E:\Program Files\better-genshin-impact-LCB\Test\MultiplayerHoeingAssistant.UnitTest\ServiceTests\TaskCenter\LocalWaitGenerationContractTests.cs(579,0): at MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.LongMaxValue_LastAllocationSucceeds_ThenRejectsNewGenerationsWithoutChangingFile()&#xD;
+[xUnit.net 00:00:00.26]            at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)&#xD;
+[xUnit.net 00:00:00.26]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.26]   Finished:    MultiplayerHoeingAssistant.UnitTest&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="KAEDELCBPC" outcome="Error" timestamp="2026-09-27T09:37:01.0393610+08:00">
+        <Text>[xUnit.net 00:00:00.26]     MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitGenerationContractTests.LongMaxValue_LastAllocationSucceeds_ThenRejectsNewGenerationsWithoutChangingFile [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

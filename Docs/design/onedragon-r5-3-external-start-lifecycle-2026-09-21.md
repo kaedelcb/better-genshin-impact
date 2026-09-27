@@ -4813,3 +4813,62 @@ SB21-1 累计会诊 **8/8 次**（R1 Kimi、R2–R8 GPT；失败/超时请求同
 
 - 定向 Batch21WiringRedTests：4/4 通过，0 失败；相邻 LocalWait/Batch21/OccupantLevel/StartupHandoff/Resume：278/278 通过，0 失败。助手测试项目全量：1479 通过、2 个 opt-in P50 诊断未执行、0 失败，共 1481 项。三次运行均使用 DeployToBgiTools=false；TRX 与 SHA-256 见 _batch21/sb21-1-r8-review/test-evidence.md。
 - 本节只记录助手测试证据；未据此声称 BGI 实机、真实 User 或生产入口运行验证。生产入口、真实 User、R5.8 签署、E3/E4/E5 与热键门保持关闭。
+
+## §24.122 SB21-2 收口登记——Remove 后代际单调性与 C5 复核（2026-09-27）
+
+### §24.122.1 范围与历史等级
+
+本子批只处理 BO-10（Remove 后新登记 gen0 的代际单调性边界）与 BO-12（Remove/裁剪后重登记的回绕、ABA 与 C5 消费前复核）。BO-10 原始 R37、BO-12 原始 R46 均按历史台账保留为重要-2；本批没有降级历史等级，也不把更强实现描述成历史会诊背书。BO-4 留 SB21-3；BO-6/BO-8/BO-11/BO-13 留 SB21-4。
+
+会诊使用独立台账 `C:\Users\Administrator\.tools\zcode-relay\test\ledger-batch21-sb21-2.json`，不重置 SB21-1 的累计台账。GPT R1-R5 均为 `gpt-6-astra`／medium；已发送并返回 5 次（额度 5/8），另有 2 次本地预检未发送且不计次。每次实际送审材料附完整 `git status --porcelain`、暂存与本批相关未暂存差异，并单独列出材料外变更。R5 未发现新的 MUST/IMPORTANT，认可 R4-1/2 的重要级证据可闭环；R5 的非阻断证据修订和复验见 §24.122.7。
+
+### §24.122.2 状态、身份与代际转移规则
+
+代际为**单个队列文件内由 Store 分配的生命周期序号**，不要求不同身份从零开始，也不要求同一项重激活等于其上次代际加一。`ItemId`/`StableIdentity` 仍用于请求身份绑定；代际仅判定同一身份登记生命周期是否已过期，不含准入或发送许可。
+
+| 当前状态 | 动作 | 持久结果 |
+|---|---|---|
+| v4 `H=-1` 且空 items | 首次登记（来件 Generation=0） | Store 分配 gen0，写 Waiting(0)、H=0 |
+| Waiting(g) | 同 ItemId、同登记载荷重登记 | 幂等复用 g；不分配 |
+| Waiting(g) | 同 ItemId、不同登记载荷 | 响亮冲突；原文件不变 |
+| Cancelled(g) | 同载荷登记重激活（来件 Generation=0） | Store 分配 H+1，写 Waiting(H+1) 并推进 H |
+| 已分配 H | 新 ItemId 登记（来件 Generation=0） | Store 分配 H+1，不能由调用方自报 |
+| 任意记录 | Cancel 或失效清理 | 保留原 generation 与 H，只更新状态/原因/时间 |
+| 任意记录 | Remove 或到期墓碑裁剪 | 删除项但保留 H，不能回到 gen0 |
+| H=long.MaxValue-1 | 新登记或重激活 | 最后一次分配 long.MaxValue 成功 |
+| H=long.MaxValue | 需要新代际 | 抛 `LocalWaitGenerationExhaustedException`，字节不变；幂等、Cancel、Remove、清理/裁剪仍可用且 H 不下降 |
+
+所有 `Upsert` 输入的 Generation 必须为 0；Store 先物化调用方登记载荷，在自己的快照上分配并持久化。v4 根必需整数 `generationHighWater`，合法范围 `[-1,long.MaxValue]`；H=-1 仅允许空 items，每项必须带规范非负 long `generation` 且 `generation≤H`，取消墓碑同样受约束。缺失、null、非整数、小数、溢出、负数或上下界冲突均响亮拒绝。
+
+v1-v3 的历史 generation 是 Int32；这些格式无法恢复已删除历史代际。迁移统一取 `H=max(int.MaxValue,现存项最大generation)`，现存项代际保持原值；Load 只读不改文件，首次实际写入才原子写 v4 并同时保存 H。这样任一合法旧 int 请求（包括已删除身份的 `R_A(10)`、`R_A(int.MaxValue)`）都不能与新生命周期代际相等。迁移不覆盖 Store API 以外的删档/回滚。
+
+### §24.122.3 Cleanup 并发与文件持久化边界
+
+`PersistCleanup` 在路径锁内读取并解析一次快照，同时留存文件存在性与原始字节；释放锁后只对隔离副本执行外部清理回调，并把结果按输入对象引用关联回原始项；重新取得同一锁后重读并解析快照，再逐字节比较原件。可解析但字节不同的快照抛 `LocalWaitQueueConcurrentUpdateException`；若外部文件已损坏，读取阶段可先抛 `LocalWaitQueueCorruptException`。两种失败都拒绝旧快照提交，不回滚或覆盖外部/内层状态，也不重跑回调。比较到原子替换持续持锁；替换/部分临时写失败夹具分别验证原文件字节不变与临时残件清理。
+
+**路径别名边界**：进程锁键是 `Path.GetFullPath` 后的完整路径字符串（忽略大小写），不解析 junction/symlink 等物理别名；并发协调只保证锁键相同的 Store 实例。当前生产接线由 `App.xaml.cs:98` 创建唯一 `MainViewModel`，其 `TaskCenterHost` 属性经 `RunStore.DefaultRunsDir()` 构造一个队列 Store（证据：`MainViewModel.BgiExternal.cs:37`、`TaskCenterHost.cs:119`、`RunStore.cs:59`）；仓库无第二个生产构造点。其它多 Store 写者必须使用同一规范路径表示或自行保证单写者。跨进程写者仍不受本批保证。
+
+### §24.122.4 C5 消费前复核
+
+公开消费入口只接受 `Consume(request, store)`；每次调用从 Store 加载快照，读取时点检查同身份项存在、状态 Waiting、请求代际为规范非负 long 十进制且与项当前代际相同。由于 Store 按请求 ItemId 查询，返回项的 ItemId 即匹配键；Store 损坏响亮失败。Remove 后只持有缓存项不能通过此 API；重登记后旧代际请求过期。有效结果只允许重新走完整准入，不是发送许可。
+
+线性化点为 Store 的 Load 快照；Load 返回后再并发 Remove 不撤销已计算出的 Valid，连续重复调用也可能都 Valid。本批不声称 at-most-once 消费或请求领取去重。助手仓库仍无生产 `LocalWaitReevaluationConsumer` 调用点，不声称完整准入下游已执行，也不据组件夹具推导发送或实机行为。
+
+### §24.122.5 当前定向证据（助手侧）
+
+- 独立红基线：实现前 generation 定向夹具 35 项中 18 通过、17 个本批预期反例失败；同条件助手全量基线 1479 通过、2 跳过、17 失败、1498 总计。17 个失败均为本批具名红夹具，两个跳过为既有 P50 opt-in 诊断。后加的 long/错误路径验收用例未计入这份实现前红基线。
+- 最终恢复态定向：`LocalWaitGenerationContractTests` **45/45**；`FullyQualifiedName~LocalWait` **190/190**。覆盖 Remove/裁剪后重登、legacy v1-v3、旧 int 边界请求、v4 schema 与独立 item overflow、long 2147483648 端到端、long.MaxValue、Cleanup 重入/原始字节/部分写失败、C5 缓存 Remove 与损坏 Store。long-generation 夹具将不同代际条目拆为各自显式代际批次；修复后的助手测试项目先经 `--no-incremental` 重建，避免突变源码恢复后使用旧产物。最终 TRX：`_batch21/sb21-2-review/targeted-r5-restored-final/`、`localwait-r5-restored-final/`。
+- 当前分支反向突变：10 项（Remove H、prune H、legacy int 全域预留、v4 根 H 必需、v4 item generation 溢出、Cleanup 原始字节冲突、C5 代际比较、Trigger long 修剪、Max 分配拒绝、来件不能自报代际）均使各自目标命名测试因业务断言失败；每次测试后源码按原始字节恢复且 SHA-256 相同。legacy 预留另以“已删 A(10)、仅余 B(9)”增补直接 ABA 断言，强化突变使 `LegacyV3WithDeletedHigherGeneration_ReservesWholeIntRange` 因旧请求通过而失败。item 溢出的权威突变日志/TRX/hash 位于 `_batch21/sb21-2-review/mutations-r4/item-generation-overflow-original-parser/`；旧 mutant DLL 运行不作为验收证据，其它证据见 `mutations-r3/`。
+- 助手项目与助手测试项目独立非增量构建：分别 0 错误、58 与 79 个警告（含既有 SharpCompress NU1902 及现有 nullable/analyzer 警告）；恢复态测试项目最终构建日志 `_batch21/sb21-2-review/test-project-build-r5-final-nonincr.log`。R5 C5 突变构建 0 错误、81 个警告（含预期 unreachable-code 警告）；R5 long-generation 反突变构建 0 错误、79 个警告。Remove/prune 后 C5 旧/新请求消费结果各为过期 1、有效 1，读取同一个重开 Store 的持久项。恢复态 generation 定向 **45/45**，全部 `FullyQualifiedName~LocalWait` **190/190**，TRX 分别在 `targeted-r5-restored-final/`、`localwait-r5-restored-final/`。
+- 助手全量恢复态：**1506 通过 / 2 跳过 / 0 失败 / 1508**。按 TRX `testId` 比较：基线 1498 项、最终 1508 项，共享 1497 项，移除 1 项旧 C5 测试名，新增 11 项（含该用例更名版本、另 9 项绿夹具和 1 项 item overflow 独立夹具）；17 项共享用例由 Failed 转 Passed，其余 1480 项共享结果不变，2 个 P50 opt-in 跳过在不变集合内。算术守恒：1497+1=1498、1497+11=1508；无材料外基线用例被删除或改名。逐项 testId 差集见 `_batch21/sb21-2-review/assistant-full-test-diff-r5-counter.md` 和 `.json`；最终 TRX 为 `_batch21/sb21-2-review/assistant-full-r5-restored-final/sb21-2-assistant-full-restored-final.trx`。
+- R4-1 的独立 item overflow 夹具以合法根 H=`long.MaxValue` 检查溢出 item；权威突变证据在 `mutations-r4/item-generation-overflow-original-parser/`，原/恢复 Store SHA 均 `731EDB6F8796B5D4AEE66DE5E36486FAAF928A4780515CDE7C658D687D141289`。较早 `item-generation-overflow-original-source-probe/evidence.json` 的 original 与 strict-source/restored 哈希不一致，二进制身份和早期失败原因未定；不据该 probe 归因或声称精确恢复。R5 接受权威独立突变证据闭环，且未发现新的 MUST/IMPORTANT。R4-2 的差集现按 testId 守恒复核；R4 原始会诊见 `_batch21/sb21-2-review/gpt-r4-review.md`，R5 结果见 `gpt-r5-review.md`。
+- 声明面：最终 R5.3 文本 regen/no-env 均 **1/1**；regen TRX：`_batch21/sb21-2-review/claim-r5-closeout-final-regen/sb21-2-claim-r5-closeout-final-regen.trx`，当前 R5.3 引用更新后的 no-env TRX：`claim-r5-post-pathrefs-noenv/sb21-2-claim-r5-post-pathrefs-noenv.trx`。相对 HEAD 的 592 行新增 1 行声明，当前 manifest 593 行，SHA-256 `A857167570E7E433E1795FCF2718F760E7877C1A79397EB4A3B899BEB3C566A0`；收口文本未再改变声明集合。另有一次错误项目路径导致无变量测试未启动，已保留日志并以正确路径完成复跑。
+- 当前分支 10 个主矩阵保护点、legacy 强化重试、R5 C5 代际比较及修正后 long-generation `long.TryParse` 边界均经命名断言反向突变；源码逐字节恢复。C5 计数断言关闭代际比较后旧请求失败；long 解析退回 int 后长代际裁剪断言预期 1、实际 0。详见 `_batch21/sb21-2-review/reverse-mutations.md`、`mutations-r5/c5-consume-generation-valid/` 和 `mutations-r5-note-fixes/trigger-long-generation/`。所有构建/测试均用 `-p:DeployToBgiTools=false`。
+
+### §24.122.6 门禁与未声称事项
+
+本子批不启用生产等待消费入口，不触碰真实 User，不签署 R5.8，也不开 E3/E4/E5 或热键面。未做 BGI 实机验证。跨进程并发、外部删档/回滚、物理路径别名协同、断电持久性及实际发送路径均不是本批保证；路径别名靠当前单生产 Store 接线及调用方单写者约束界定，未来增加第二个写者时必须重新审查。
+
+### §24.122.7 会诊处置与收口状态
+
+GPT R5（`gpt-6-astra`／medium，SB21-2 第 5/8 次已发送请求）未发现新的 MUST/IMPORTANT，并认可 R4-1、R4-2 的证据闭环；历史重要等级不降。R5 的非阻断意见均已处理：早期 overflow probe 改为身份不确定且不作因果推断；long-generation 夹具按每次 Trigger 调用单一显式代际拆分，并对相应长代际裁剪断言反向突变；testId 差集占位符替换为最终 TRX 路径；Cleanup 错误类型表述限制为可解析变化并说明损坏输入可能先抛 Corrupt；突变具体失败断言引用目标测试/TRX，不单靠 mutant.log。修订后恢复态测试项目非增量构建 0 错误/79 警告，定向 45/45、LocalWait 190/190、助手全量 1506/2/0/1508；差集仍为 shared 1497 / removed 1 / added 11 / changed 17 / unchanged 1480。送审快照及材料外变更分类见 `_batch21/sb21-2-review/review-r5-*`，结果与处置见 `_batch21/sb21-2-review/gpt-r5-review.md`。GPT 未运行本机命令或独立重算底层 TRX/哈希；验证仍按本机日志、TRX 与源码哈希陈述。

@@ -356,11 +356,11 @@ public sealed class LocalWaitIdentityTranslationTests : IDisposable
         var loaded = Assert.Single(store.Load());
         Assert.Equal(item.AdmissionIdentity, loaded.AdmissionIdentity);
         Assert.Equal(item.CandidateId, loaded.CandidateId);
-        Assert.Equal(LocalWaitQueueFile.CurrentVersion, 3);
+        Assert.Equal(LocalWaitQueueFile.CurrentVersion, 4);
         // 【Wave1 会诊 F2】直接断言落盘文件内容：版本号＝3 且 admissionIdentity 键真实写入
         //（不只断言内存常量——Store 静默丢字段/写错版本时此处必红）。
         var raw = File.ReadAllText(Path.Combine(_dir, "wait-queue.json"));
-        Assert.Contains("\"version\": 3", raw);
+        Assert.Contains("\"version\": 4", raw);
         Assert.Contains("\"admissionIdentity\"", raw);
     }
 

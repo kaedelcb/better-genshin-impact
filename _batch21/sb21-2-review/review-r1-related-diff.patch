@@ -1,0 +1,244 @@
+# SB21-2 R1 submission patch
+# Tracked related unstaged diff follows; material-out edits are distinguished in the status file.
+diff --git a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitGenerationContractTests.cs b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitGenerationContractTests.cs
+index d7244cb69..1580bc20c 100644
+--- a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitGenerationContractTests.cs
++++ b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitGenerationContractTests.cs
+@@ -40,6 +40,25 @@ public sealed class LocalWaitGenerationContractTests : IDisposable
+         };
+     }
+ 
++    private void WriteLegacyGenerationItem(LocalWaitItem item, long generation)
++    {
++        var json = $$"""
++        {
++          "version": 3,
++          "items": [
++            {
++              "itemId": "{{item.ItemId}}",
++              "stableIdentity": "{{item.StableIdentity}}",
++              "generation": {{generation}},
++              "tier": {{(int)item.Tier}},
++              "priority": {{item.Priority}}
++            }
++          ]
++        }
++        """;
++        File.WriteAllText(new LocalWaitQueueStore(_dir).FilePath, json);
++    }
++
+     // ---------- 代际载体落盘（D-E2=① 主裁决） ----------
+ 
+     /// <summary>
+@@ -430,4 +449,97 @@ public sealed class LocalWaitGenerationContractTests : IDisposable
+         var r0 = LocalWaitReevaluationConsumer.Consume(Req(zeroItem.ItemId, "gen-1"), zeroItem);
+         Assert.False(r0.Valid, "Generation=0 的项对不可解析代际串同样必须过期（fail-open 核心形态）");
+     }
++
++    /// <summary>
++    /// 【红夹具（实现前预期失败）：BO-10/BO-12】Remove 是终局，但不能把 Store 文件内已发代际退回 gen0。
++    /// 反例：gen0 请求在途 → Remove → 同身份新登记；新项必须有更高代际，旧请求必须过期。
++    /// </summary>
++    [Fact]
++    public void RemoveThenReregister_SameIdentity_AdvancesGenerationAndExpiresOldRequest()
++    {
++        var store = new LocalWaitQueueStore(_dir);
++        var first = GenItem();
++        store.Upsert(first);
++        var oldRequest = Req(first.ItemId, "0");
++
++        Assert.Equal(0L, Assert.Single(store.Load()).Generation);
++        Assert.True(store.Remove(first.ItemId));
++
++        var afterRestart = new LocalWaitQueueStore(_dir);
++        Assert.True(afterRestart.Upsert(GenItem()));
++        var current = Assert.Single(afterRestart.Load());
++        Assert.Equal(1L, current.Generation);
++
++        var stale = LocalWaitReevaluationConsumer.Consume(oldRequest, current);
++        Assert.False(stale.Valid);
++        Assert.True(stale.Expired);
++        Assert.Contains("代际", stale.Reason);
++    }
++
++    /// <summary>
++    /// 【红夹具（实现前预期失败）：BO-12】24h 墓碑裁剪移除记录后仍须保存高水位，避免同身份重登回绕。
++    /// </summary>
++    [Fact]
++    public void PrunedTombstoneThenReregister_SameIdentity_AdvancesGenerationAndExpiresOldRequest()
++    {
++        var store = new LocalWaitQueueStore(_dir, TimeSpan.FromMinutes(10));
++        var item = GenItem();
++        store.Upsert(item);
++        var oldRequest = Req(item.ItemId, "0");
++        var cancelledAt = DateTimeOffset.UtcNow;
++
++        Assert.True(store.Cancel(item.ItemId, "fixture cancel", cancelledAt));
++        var cleanup = store.PersistCleanup(_ => null, cancelledAt.AddMinutes(11));
++        Assert.Equal(1, cleanup.Pruned);
++        Assert.Empty(store.Load());
++
++        var afterRestart = new LocalWaitQueueStore(_dir, TimeSpan.FromMinutes(10));
++        Assert.True(afterRestart.Upsert(GenItem()));
++        var current = Assert.Single(afterRestart.Load());
++        Assert.Equal(1L, current.Generation);
++
++        var stale = LocalWaitReevaluationConsumer.Consume(oldRequest, current);
++        Assert.False(stale.Valid);
++        Assert.True(stale.Expired);
++    }
++
++    /// <summary>
++    /// 【红夹具（实现前预期失败）：代际不应在 int.MaxValue 处回绕为负数；v3 读入后须安全扩展。
++    /// </summary>
++    [Fact]
++    public void ReactivationAfterIntMaxGeneration_DoesNotWrap()
++    {
++        var item = GenItem();
++        WriteLegacyGenerationItem(item, int.MaxValue);
++        var store = new LocalWaitQueueStore(_dir);
++        var now = DateTimeOffset.UtcNow;
++
++        Assert.Equal((long)int.MaxValue, Assert.Single(store.Load()).Generation);
++        Assert.True(store.Cancel(item.ItemId, "fixture cancel", now));
++
++        var exception = Record.Exception(() => store.Upsert(Assert.Single(store.Load())));
++        Assert.Null(exception);
++        Assert.Equal(2_147_483_648L, Assert.Single(store.Load()).Generation);
++    }
++
++    /// <summary>
++    /// 【红夹具（实现前预期失败）：C5 必须消费时回读 Store；调用方传入 Remove 前缓存对象会绕过复核。
++    /// </summary>
++    [Fact]
++    public void Consume_StaleSnapshotAfterRemoveAndReregister_IsExpired()
++    {
++        var store = new LocalWaitQueueStore(_dir);
++        var item = GenItem();
++        store.Upsert(item);
++        var request = Req(item.ItemId, "0");
++        var staleSnapshot = Assert.Single(store.Load());
++
++        Assert.True(store.Remove(item.ItemId));
++        Assert.True(store.Upsert(GenItem()));
++        Assert.Equal(1L, Assert.Single(store.Load()).Generation);
++
++        var decision = LocalWaitReevaluationConsumer.Consume(request, staleSnapshot);
++        Assert.False(decision.Valid);
++        Assert.True(decision.Expired);
++    }
+ }
+diff --git a/_batch21/sb21-2-review/contract.md b/_batch21/sb21-2-review/contract.md
+new file mode 100644
+index 000000000..91c1d7e7a
+--- /dev/null
++++ b/_batch21/sb21-2-review/contract.md
+@@ -0,0 +1,39 @@
++# SB21-2 代际与消费规则（红夹具前基线）
++
++## 审计边界
++
++- 批次计划将 BO-10 与 BO-12 独立划给 SB21-2；BO-4 仍属 SB21-3，BO-6/8/11/13 仍属 SB21-4。
++- `ledger-batch21.json` 是 SB21-1 台账，记有原预算 8 次及 owner 批准追加的 R9（共 9 次）；该累计记录保持不变。
++- 在仓库 `_batch21/` 与 `.tools/zcode-relay/test/` 未发现 SB21-2 独立台账。已新建 `ledger-batch21-sb21-2.json`，初始已发送会诊 0/8；之后每个已发出的 GPT 请求（含失败/超时）逐次记入，不与 SB21-1 混计。
++- BO 原始来源为 `.tools/zcode-relay/test/ledger-batch20.json`：BO-10 来自 R37 重要-2，原处置接受 Remove 终结代际、gen0 重登记只会多走一次完整准入；BO-12 来自 R46 重要-2，明确 Remove/24h 裁剪后回到 gen0 会使旧 gen0 请求通过 C5，并将彻底修复归入后续 C5 合同面。两项原始等级与证据保留。
++
++## 当前实现状态
++
++`LocalWaitQueueStore.Upsert` 对仍保留的取消墓碑做 `Generation + 1`；新登记分支直接采用来件代际（生产调用通常为 0）。`Remove` 物理删除记录；`PersistCleanup` 可裁剪过期取消墓碑。两者均不保留代际高水位。`LocalWaitReevaluationConsumer.Consume(request, currentItem)` 是纯校验函数，消费方负责传入 Store 回读项；仓库内无生产调用点。故 Remove/裁剪后重登同一 `ItemId` 与 `StableIdentity` 时，旧 gen0 请求能通过现有 ItemId、StableIdentity、Waiting、Generation 校验；不同 loopIteration 则由 StableIdentity 隔离。有效请求没有发送许可，唯一后继是完整准入。
++
++## SB21-2 规则与转移
++
+warning: in the working copy of '_batch21/sb21-2-review/contract.md', LF will be replaced by CRLF the next time Git touches it
++本子批按当前 owner 指定范围，将代际分配改为**每个等待队列文件内的持久单调高水位**，从根字段 `generationHighWater` 分配，避免依赖仍在列表内的墓碑。首个登记代际为 0；此后新登记和取消后重激活都取高水位加一。重复登记仍在等待中的同载荷项不增代；同 `ItemId` 的不同载荷仍响亮冲突。
++
++| 当前状态 | 动作 | 新状态／代际 |
++|---|---|---|
++| 文件不存在或无记录 | 新登记 | `Waiting(0)`（仅当这是此队列文件首次代际分配） |
++| `Waiting(g)` | 同载荷重复登记 | `Waiting(g)`，幂等复用 |
++| `Waiting(g)` | 取消或失效清理 | `Cancelled(g)`，保留代际 |
++| `Cancelled(g)` | 同载荷重登记 | `Waiting(highWater + 1)` |
++| 任意记录 | `Remove` 终局删除 | 记录消失，高水位保留 |
++| 到期 `Cancelled(g)` | 裁剪墓碑 | 记录消失，高水位保留 |
++| 删除／裁剪后的同身份重登记 | 新生命周期 | `Waiting(highWater + 1)`；不得复用旧 gen0 |
++| 高水位为 `long.MaxValue` | 任何需要新代际的登记/重激活 | 持久化前响亮失败；文件与高水位不变，不回绕 |
++
++`generationHighWater` 与 `items` 在同一原子替换文件中落盘，所以 Store API 的 Remove、取消和裁剪均保留计数，即使 `items` 为空或 Store 重建也不回绕。新文件格式升至 v4；v1-v3 继续读取，缺少高水位时以文件内最大现存代际迁移，空文件按尚未分配处理。旧版空文件已无法恢复历史已删除代际；这属于迁移边界，且重启会丢弃内存中的在途重评请求。本批不声称防护对队列文件被 Store API 之外整体删除/回滚仍成立。
++
++## C5 消费前复核
++
++消费入口只接受 `LocalWaitQueueStore`，每次调用先从 Store 读取当前项，再依次核对存在、ItemId、StableIdentity、`Waiting` 状态及请求代际的规范十进制表示与当前代际相等。Remove/裁剪后同身份重登时，旧代际必须过期；相同当前代际才有效。有效只表示“消费一次并重新走完整准入”（请求 `RequiresFullAdmission` 恒为 true），既不含也不授予发送许可。队列损坏保持响亮失败，不按空队列处理。
++
++当前组件无生产消费调用点，故本批只验证助手 Store/Consumer 组件合同与本地计数夹具；不把它描述成已接入真实发送路径或实机验证。生产入口、真实 User、R5.8、E3/E4/E5 与热键门保持关闭。
++
++## 红夹具判据
++
++在 Store/Consumer 修复前，定向夹具必须分别复现：Remove 后同身份重登复用 gen0；过期墓碑裁剪后同身份重登复用 gen0；旧请求在 ABA 后被判有效；消费方可把 Remove 前缓存的对象交给纯函数而绕过消费时 Store 回读；以及 int 代际上限递增回绕成负数并造成异常。实现后改为断言跨 Remove/裁剪代际仍严格增加、旧请求过期、消费 API 自行回读 Store、`int.MaxValue` 之后正常递增到 `2147483648`，并在真正的 `long.MaxValue` 拒绝且原子文件不变。
+warning: in the working copy of '_batch21/sb21-2-review/source-bo-records.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/_batch21/sb21-2-review/source-bo-records.md b/_batch21/sb21-2-review/source-bo-records.md
+new file mode 100644
+index 000000000..548ff05d9
+--- /dev/null
++++ b/_batch21/sb21-2-review/source-bo-records.md
+@@ -0,0 +1,23 @@
++# SB21-2 原始 BO 来源摘录
++
++来源原件：`C:\Users\Administrator\.tools\zcode-relay\test\ledger-batch20.json`，以及 R5.3 §24.120.4 的 BO-10/BO-12 指针。原件只读，未修改。
++
++## BO-10（Wave2 R37 重要-2）
++
++原发现：代际单调性只在“取消墓碑仍在册→重激活”路径成立；`Remove` 或 24h 墓碑裁剪后，同身份重登记走新项分支、Generation 归零，旧 gen0 请求可能通过 ItemId、StableIdentity、Waiting、Generation 全部校验。
++
++R37 原处置：接受有界良性论证——Remove 后旧生命周期请求只会让新项多走一次完整准入，重评请求不含发送许可；合同边界写为“代际生命周期以 Remove/清理终局，非仅重激活”。该处置当时没有持久化移除后的高水位。
++
++R37 同轮建议：同一 `int` 代际到 `int.MaxValue` 后递增会溢出为负数，写侧拒绝、方向 fail-closed，但该项会无法再次重激活；原处置以极低可达性采纳登记，未做高水位修复。
++
++## BO-12（Wave2 R46 重要-2）
++
++原发现：构造并确认以下序列可达：`gen0 → Trigger 产出请求 R(gen0) → Remove → 同身份重登记(gen0) → Consume(R)`。旧请求的 ItemId、StableIdentity、Waiting、代际均匹配，C5 判有效。对称地，`PruneHandledExceptGeneration(identity,"0")` 会保留旧 gen0 键，使新生命周期同代际在同实例中被抑制。不同 loopIteration 由 StableIdentity 隔离；墓碑仍在时重激活递增可正确过期旧请求。
++
++原后果判断：旧请求仅造成确实仍等待的项多走一次完整准入，保守且无发送许可；但 C5 对 Remove/裁剪重登记的 ABA 判别按合同字面静默失效。
++
++R46 原处置：owner 冻结时把问题登记为 BO-12，不修；彻底修复（移除时代际外置记录或墓碑代际延续）归后续 Wave3/接线批 C5 合同面。同 loopIteration 异身份形态由 StableIdentity 隔离。
++
++## 当前子批处理
++
++本次 owner 明确把 BO-10 与 BO-12 划给 SB21-2。SB21-2 将上述原级重要问题落到持久代际高水位和 C5 Store 回读夹具；历史的“gen0 多走一次准入可接受”保留为旧处置记录，但被本批更强的 ABA 修复取代，不伪称历史顾问复核已接受新方案。
+warning: in the working copy of '_batch21/sb21-2-review/r5_3_anchor_excerpt.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/_batch21/sb21-2-review/r5_3_anchor_excerpt.md b/_batch21/sb21-2-review/r5_3_anchor_excerpt.md
+new file mode 100644
+index 000000000..7ae20f38d
+--- /dev/null
++++ b/_batch21/sb21-2-review/r5_3_anchor_excerpt.md
+@@ -0,0 +1,15 @@
++# R5.3 权威锚点（SB21-2）
++
++来源：`Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md`。
++
++## §24.120.4（BO 原始归属）
++
++`BO-10 代际单调性边界（接线批）`；`BO-12 Remove/裁剪→重登记代际回绕（Wave3/接线批 C5）`。计划 `_batch21/b21_plan.md` 随后把 BO-10 与 BO-12 细化分配到 SB21-2。
++
++## §24.121.3（SB21-1 与门禁边界）
++
++SB21-1 只证明助手侧源码与夹具，不声称 BGI 实机执行验证。BO-6/BO-8 及计划中的 BO-4、BO-10/BO-12、BO-11/BO-13 归后续子批；生产入口门、真实 User 门、R5.8 签署、E3/E4/E5 与热键面继续关闭。
++
++## §24.120.5（生产门）
++
++生产入口门、真实 User 门与 R5.8 签署继续关闭；停驻语义生产不可达。未修复项按 §24.120.4 与台账保留归属。
+warning: in the working copy of '_batch21/sb21-2-review/red-results-summary.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/_batch21/sb21-2-review/red-results-summary.md b/_batch21/sb21-2-review/red-results-summary.md
+new file mode 100644
+index 000000000..aadf1a384
+--- /dev/null
++++ b/_batch21/sb21-2-review/red-results-summary.md
+@@ -0,0 +1,7 @@
++# SB21-2 红夹具运行摘要
++
++- 命令：`dotnet test Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj -p:DeployToBgiTools=false --filter FullyQualifiedName~LocalWaitGenerationContractTests --no-restore --logger "trx;LogFileName=sb21-2-red-confirmed.trx" --results-directory _batch21/sb21-2-review/red`
++- 结果：22 项中 18 通过、4 失败、0 跳过。TRX：`_batch21/sb21-2-review/red/sb21-2-red-confirmed.trx`。
++- 4 个命名失败分别是：Remove 后重登代际预期 1、墓碑裁剪后重登代际预期 1、`int.MaxValue` 重激活不得回绕、C5 不得接受 Remove 前缓存的快照。
++- 第一轮红跑的回绕用例曾因测试载荷与 Store 记录不同而命中载荷冲突；已将第二次登记改为使用 Store 读回的同载荷对象并重跑。以上 4 项为校正后红跑结果，不把第一次失败计为有效缺陷证据。
++- 构建成功；既有 SharpCompress NU1902 与若干 nullable/xUnit warnings 存在。该红跑只证明现实现下的定向反例，不证明助手全量状态。
+# Staged related diff
+
