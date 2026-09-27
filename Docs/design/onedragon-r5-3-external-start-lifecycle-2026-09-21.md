@@ -4872,3 +4872,41 @@ v1-v3 的历史 generation 是 Int32；这些格式无法恢复已删除历史�
 ### §24.122.7 会诊处置与收口状态
 
 GPT R5（`gpt-6-astra`／medium，SB21-2 第 5/8 次已发送请求）未发现新的 MUST/IMPORTANT，并认可 R4-1、R4-2 的证据闭环；历史重要等级不降。R5 的非阻断意见均已处理：早期 overflow probe 改为身份不确定且不作因果推断；long-generation 夹具按每次 Trigger 调用单一显式代际拆分，并对相应长代际裁剪断言反向突变；testId 差集占位符替换为最终 TRX 路径；Cleanup 错误类型表述限制为可解析变化并说明损坏输入可能先抛 Corrupt；突变具体失败断言引用目标测试/TRX，不单靠 mutant.log。修订后恢复态测试项目非增量构建 0 错误/79 警告，定向 45/45、LocalWait 190/190、助手全量 1506/2/0/1508；差集仍为 shared 1497 / removed 1 / added 11 / changed 17 / unchanged 1480。送审快照及材料外变更分类见 `_batch21/sb21-2-review/review-r5-*`，结果与处置见 `_batch21/sb21-2-review/gpt-r5-review.md`。GPT 未运行本机命令或独立重算底层 TRX/哈希；验证仍按本机日志、TRX 与源码哈希陈述。
+
+## §24.123 SB21-3 收口登记——facade WaitLocally 映射与消费方识别（2026-09-27）
+
+### §24.123.1 范围与原始等级
+
+本子批只处理 BO-4：facade WaitLocally 映射合同与消费方识别运行验证。原始 BO-4 台账见 C:/Users/Administrator/.tools/zcode-relay/test/ledger-batch20.json（Wave1 R13、重要等级，Wave4 C12 归属）；原问题描述 WaitLocally 经 MapAdmissionResultToBoundary 映射为 Rejected，与 Runner 本地停驻消费相斥。SB21-3 不重开 SB21-2 的 BO-10/BO-12，也不并入 SB21-4 的 BO-6/BO-8/BO-11/BO-13。
+
+### §24.123.2 状态、转移与身份合同
+
+AdmissionResultKind.WaitLocally 表示 facade 已确定本笔未进入发送面、零发送，并要求在本地持久等待；它既不是确定拒绝，也不是可重试拒绝或事实不可考。
+
+| 当前阶段 | 输入/动作 | 应有状态与边界 |
+|---|---|---|
+| facade → WorkflowRunner boundary | WaitLocally 经 MapAdmissionResultToBoundary | 显式 BoundarySubmitKind.Wait；不得变成 Rejected、RetryableRejected 或 Unknown。 |
+| Runner 准入前 | WaitDecisionSource 返回 ContinueAdmission | 只表示继续完整 facade 准入，不授予发送许可。 |
+| facade 返回 Wait 后 | Runner 按当前请求再次识别等待裁定 | 同一 run、workflow/revision、cursor node/occurrence/loop、node sequence/occurrence/loop、attempt；快照不匹配时 fail-closed 停驻，不以旧出现身份登记。 |
+| 确认 Wait | 记录停驻并发布等待队列镜像 | 当前 run 状态 LocalWaitParking、当前提交意图 LocalWaitDeferred；游标留在同一出现；RunStore 持久保存完整 LocalWaitBinding，Waiting 队列项以 ItemId/StableIdentity 镜像该绑定。队列项不单独存 SourceKind/SourceIdentity；来源身份权威字段由 run 决策上下文和 binding 保存。没有 JobId、AcceptedSendIdentity、SendAttempted 或终态观察。 |
+| WaitLocally → 外部启动适配 | MapAdmissionResultToExternalStartStatus → CommandExecutor | WaitLocally 映射到独立 local_wait 识别码；既有线路 Status 保持 failed，但结果为非终态、无 JobId、ExecutionDisposition.None，不生成发送许可。 |
+
+稳定等待身份以当前 runId、nodeId、occurrence、loopIteration 构造；完整持久绑定另含 workflowId/revision、record revision、cursor、sequenceIndex、attempt、source kind/identity 与 scope。source kind/identity 从同一等待裁定快照传入 RunStore 的决策上下文和 binding；PanelFlowRegistration 身份代表唯一流程登记父记录的 RequestIdentity，StartupHandoff 身份代表 runId。LocalWaitItem 是排程镜像，仅以 ItemId/StableIdentity 关联完整 run binding，不重复保存来源字段。Runner 必须校验裁定快照中的运行/游标身份与当前请求一致，失配时只保守停驻、不创建队列项。record revision 随意图/停驻持久化递增，判定请求和队列绑定使用提交边界处的快照修订，不与最终停车记录修订混为一谈。reason/detail 只作诊断文本，不是等待身份输入。
+
+### §24.123.3 运行证据与边界
+
+新增助手夹具把真实 MapAdmissionResultToBoundary 接入 ArbitrationWorkflowExecutionBoundary 和 WorkflowRunner，并读回 RunStore/LocalWaitQueueStore 持久化状态；另从 facade 外部状态映射进入 CommandExecutor 的启动结果消费入口。正向 Runner 测试构造带真实 `RequestIdentity` 字段的流程登记 `OperationRecord`，经生产纯函数 `TaskCenterHost.ResolveAdmissionParent` 取得身份，再作为注入等待裁定的 source identity；逐项断言裁定、内存 binding、重开 RunStore 后的决策上下文全部字段及完整 binding 全部公开字段均等于提交边界快照。重开 LocalWaitQueueStore 后核对其 ItemId/StableIdentity 与持久 RunStore binding 对应；LocalWaitItem 本身没有来源字段，不能声称队列 JSON 单独持久化了来源身份。该测试仍未执行 TaskCenterHost 生产组合根或真实 facade 调度，准入结果/等待裁定由测试委托注入。失配用例把当前 cursor 快照改成旧 node，要求持久化 Hold、零发送且不创建等待队列项。先后顺序来自源码调用次序核对：CommitOutcome 内 `_runs.Update` 完成后返回，调用方再执行 PublishPersistedLocalWait；本批未把该顺序表述为时间观测型实机证据。
+
+原始 BO-4 的错误 Rejected 映射在本批开工前的当前源码中已不存在，现源码已映射为 Wait；本批映射与消费夹具在该基线上通过，生产代码差异为空。故本批**未形成“当前基线先红、再生产修复”的证据，也不归属该错误映射的修复成果**。Wait→Rejected 反向突变只证明夹具能检出后续回归。该字面验收门槛保留为原始 IMPORTANT，待 owner 裁决，不伪记本轮修复或通过。
+
+最终定向回归 **14/14**（`AdmissionWaitLocallyContractTests` 与 `FacadeWaitLocallyConsumerTests`）；助手全量基线 1508 项、最终 1511 项，最终 **1509 通过 / 2 跳过 / 0 失败 / 1511**。按 testId 共享 1508、移除 0、新增 3、结果变化 0、共享不变 1508；新增项为 `0223a883-d0f3-d8be-d213-a74a83e4f9f3`（CommandExecutor local_wait）、`7487b1f9-a2ad-0cd1-c098-3f74b9ff3e11`（过期 cursor fail-closed）与 `a0d1b2fa-c2df-669a-fbd8-d2c452733fdf`（同出现停驻及 RequestIdentity 持久绑定）。最终 TRX testId 差集见 `_batch21/sb21-3-review/final-current-v10/full/testid-diff.json`，全量 TRX/日志在 `final-current-v10/full/`；夹具与绑定突变见 `source-identity-v1/`、`mutations/v5/bo4-request-identity-persistence/` 与 `mutations/v6/persisted-request-identity-readback/`。
+
+助手项目及助手测试项目均以 `-p:DeployToBgiTools=false --no-incremental` 构建，分别为 0 错误/59 警告、0 错误/80 警告；BO-4 定向为 14/14，助手全量为 1509/2/0/1511，testId 差集为 shared 1508 / removed 0 / added 3 / changed 0 / unchanged 1508。定向、全量与两个构建的最终源码绑定证据位于 `_batch21/sb21-3-review/final-current-v10/`；测试差集逐项列出三条新增 testId。声明面清单经 regen 与无环境变量验证均为 1/1；最终记录位于 `_batch21/sb21-3-review/claim-surface/closeout-regen-final-v5/` 与 `closeout-noenv-final-v5/`，对应日志、TRX、清单验证与环境状态见 evidence.json。此前 noenv-v7 捕获到声明更新时的差异并失败，保留为历史失败；修复后无环境变量验证通过。构建和测试均显式禁用 BGI 部署；助手组件运行证据不代表真实 facade 调度或生产进程验证。
+
+关键反向突变包含：Wait→Rejected（映射与 Runner 消费测试失败）、绑定 occurrence 改为下一出现、跳过等待队列持久发布、CommandExecutor 的 local_wait 改为 result_unknown、忽略过期 cursor node 身份（失配测试失败）、把 Runner binding 的 SourceIdentity 改为 RunId，以及把 RunStore.Load 重开后 binding 的 SourceIdentity 改为 RunId。v5 Runner 突变在内存断言处失败，不作为持久读回断言证据；v6 Load 突变通过内存阶段并在 `AssertBindingFieldsEqual` 的持久 SourceIdentity 断言处失败，恢复态具名测试 1/1。每项均按原始字节恢复并核对 SHA；v5 WorkflowRunner 原/恢复 SHA 为 `781087da6377f18e53e8e904a8cebc1a904d804b28d9fd2e3a826a7679100d06`，v6 RunStore 原/恢复 SHA 为 `f7de1021d384872e99a6c05c42f2d35ba5fd86515880c2f67354a3f087ce612c`。证据见 `_batch21/sb21-3-review/mutations/`。这些测试证明回归判别力；当前实现通过恢复态测试。由于 BO-4 原错误在开工前源码已修复，本批最小变化是合同断言与消费方运行证据，不改生产源码；反向突变不得代替当前基线先红或本轮生产修复证据。
+
+本批证据是助手组件/消费路径测试，不是 BGI 生产进程验证。静态源码核对显示 `MainViewModel.BgiExternal.cs:37-40` 调用 TaskCenterHost 公开生产构造，该构造将 `_admissionWired` 设为 true（E1/E2 已接入）；生产构造未开启内部测试接缝 `_successorAdmissionWired`，`CreateRunner` 因而仍不把 BO-4 successor 节点改道至仲裁边界。以上是源码接线状态，不是生产进程运行证据；本批未改变 E1/E2 接线，也未打开 BO-4 后继改道门。真实 facade 调度、BGI 实机、真实 User、R5.8 签署、E3/E4/E5 与热键面均未验证/未开放。
+
+### §24.123.4 会诊与收口
+
+SB21-3 有独立 GPT 会诊台账 `C:/Users/Administrator/.tools/zcode-relay/test/ledger-batch21-sb21-3.json`，最多 8 次；SB21-1 的 9 次和 SB21-2 的 5 次不继承。每次送审快照包含 git status --porcelain、本批暂存/未暂存差异及材料外变更分类。GPT round1–4 均为 `gpt-6-sol` / medium；累计已发送 4/8。attempt 1、2、6 在本地预检被拦截、未发送、不计次，已发送请求对应 attempt 3–5、7。IMPORTANT #1（当前基线先红／本批生产修复归属缺证）四轮均保留原等级，交 owner 核实历史提交、源码快照、责任与对应测试并书面裁决；在裁决前不记作本批修复或通过。IMPORTANT #2（RequestIdentity 完整持久读回）经补充重开 Store 全字段对照与 v6 `RunStore.Load` 突变后，GPT 第4轮接受其组件范围证据并闭合该证据缺口；这不证明生产组合根或真实 facade 调度。第4轮新增一项 SHOULD 指出计划将 E1/E2 误写为休眠；已按当前公开构造 `admissionWired=true`、BO-4 successor 节点门仍关闭的源码事实修正 `_batch21/b21_plan.md`。GPT 未执行本机命令，底层计数仍以本机日志、TRX、哈希为证。旧交接材料当时不存在，故新建 `_batch21/sb21-3-handoff-2026-09-27.md`；声明面和最终回归复验路径见本节。会诊报告为 `_batch21/sb21-3-review/gpt-round1-review.md` 至 `gpt-round4-review.md`，独立台账记录所有发送与预检尝试。

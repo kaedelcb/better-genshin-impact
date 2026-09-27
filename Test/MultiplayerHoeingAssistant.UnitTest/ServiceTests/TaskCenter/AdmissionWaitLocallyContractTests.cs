@@ -127,6 +127,7 @@ public sealed class AdmissionWaitLocallyContractTests
             Detail = "低优先级本地持久等待（未获准入前零发送）。",
         });
 
+        Assert.Equal(BoundarySubmitKind.Wait, mapped.Kind);
         Assert.False(mapped.Uncertain, "等待是确定结论（已确定未发送地排队），不得降级为「事实不可考」。");
         Assert.False(mapped.Accepted);
         Assert.False(mapped.Retryable, "等待**不得**开重试窗口：开窗口等于给出「可重发」语义。");
