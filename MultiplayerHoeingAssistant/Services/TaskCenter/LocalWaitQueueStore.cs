@@ -21,6 +21,15 @@ public sealed class LocalWaitGenerationExhaustedException(string message) : Inva
 /// <summary>清理结果：因失效被取消的条数 + 因保留期到期被裁剪的墓碑条数。</summary>
 public sealed record LocalWaitCleanupResult(int Cancelled, int Pruned);
 
+/// <summary>结果 of a cancellation bound to the immutable run-side queue payload.</summary>
+public enum LocalWaitBindingCancelResult
+{
+    Cancelled,
+    AlreadyCancelled,
+    Missing,
+    PayloadMismatch,
+}
+
 /// <summary>
 /// 槲寄生 · R5 批次 6：本地持久等待队列的落盘载体（独立文件 wait-queue.json）。
 /// 边界（如实登记）：不改动冻结的租约格式代，也不新增第二个"责任"权威——本文件只承载**调度意愿**，
@@ -271,6 +280,45 @@ public sealed class LocalWaitQueueStore
             return true;
         }
     }
+
+    /// <summary>
+    /// Cancel only the queue lifecycle whose persisted immutable payload still matches the run binding.
+    /// A reused itemId with changed payload is left untouched so a stale run cannot cancel a newer identity.
+    /// </summary>
+    public LocalWaitBindingCancelResult Cancel(LocalWaitBinding binding, string reason, DateTimeOffset nowUtc)
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+        ArgumentException.ThrowIfNullOrWhiteSpace(binding.ItemId);
+        lock (_sync)
+        {
+            var snapshot = ReadSnapshotLocked();
+            var item = snapshot.Items.FirstOrDefault(i => string.Equals(i.ItemId, binding.ItemId, StringComparison.Ordinal));
+            if (item is null) return LocalWaitBindingCancelResult.Missing;
+            if (!MatchesBindingPayload(binding, item)) return LocalWaitBindingCancelResult.PayloadMismatch;
+            if (item.State == LocalWaitItemState.Cancelled) return LocalWaitBindingCancelResult.AlreadyCancelled;
+
+            item.State = LocalWaitItemState.Cancelled;
+            item.Reason = string.IsNullOrWhiteSpace(reason) ? "停驻运行显式停止" : reason;
+            item.CancelledAtUtc = nowUtc.ToUniversalTime();
+            Persist(snapshot.Items, snapshot.GenerationHighWater);
+            return LocalWaitBindingCancelResult.Cancelled;
+        }
+    }
+
+    private static bool MatchesBindingPayload(LocalWaitBinding binding, LocalWaitItem item)
+        => string.Equals(item.ItemId, binding.ItemId, StringComparison.Ordinal)
+           && string.Equals(item.StableIdentity, binding.StableIdentity, StringComparison.Ordinal)
+           && string.Equals(item.CandidateId, binding.CandidateId, StringComparison.Ordinal)
+           && string.Equals(item.AdmissionIdentity, binding.AdmissionIdentity, StringComparison.Ordinal)
+           && string.Equals(item.Namespace, binding.Namespace, StringComparison.Ordinal)
+           && string.Equals(item.WorkflowId, binding.WorkflowId, StringComparison.Ordinal)
+           && item.Tier == binding.Tier
+           && item.Priority == binding.Priority
+           && item.IsHoeingHighest == binding.IsHoeingHighest
+           && item.ScheduledAt == binding.ScheduledAt
+           && string.Equals(item.PrerequisiteReference, binding.PrerequisiteReference, StringComparison.Ordinal)
+           && item.EnqueuedAtUtc == binding.EnqueuedAtUtc
+           && !item.HasTrustedIdentity;
 
     /// <summary>
     /// 应用失效清理（置 Cancelled 并记录原因/时刻），并按保留期裁剪过期墓碑；有变化才写盘。

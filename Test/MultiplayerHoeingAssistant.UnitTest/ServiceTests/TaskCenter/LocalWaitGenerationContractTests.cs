@@ -13,6 +13,7 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 /// **R5 批次 20 Wave2（D-E2=① 代际载体＋C5/IW-04 消费前复核＋义务 i/ii）夹具**。
 /// 突变验证标注见各夹具注释（M48-M51，突变实测结果已逐条登记本批台账（§24.120 收口时逐条收录 M48-M63））。
 /// </summary>
+[Collection("LocalWaitSnapshotProbe")]
 public sealed class LocalWaitGenerationContractTests : IDisposable
 {
     private readonly string _dir;

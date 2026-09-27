@@ -4910,3 +4910,41 @@ AdmissionResultKind.WaitLocally 表示 facade 已确定本笔未进入发送面�
 ### §24.123.4 会诊与收口
 
 SB21-3 有独立 GPT 会诊台账 C:/Users/Administrator/.tools/zcode-relay/test/ledger-batch21-sb21-3.json，上限 8 次；SB21-1 的 9 次和 SB21-2 的 5 次不继承。round1–4 均为 GPT gpt-6-sol / medium，累计已发送 4/8；attempt 1、2、6 为本地预检未发送、不计次。每轮原始分级与报告保留：IMPORTANT #1（修复归属缺证）由 owner 于 2026-09-27 根据历史提交 47571736f27bfbc1a20e4d7bb67ce6db967cc0b5、历史与当前测试证据，明确接受“历史已修复＋本批补齐验证”并关闭验收项；原等级仍为 IMPORTANT，历史生产修复不归本批。IMPORTANT #2 经 GPT 第4轮接受为组件范围证据闭合，不证明生产组合根。第4轮 SHOULD 已按公开构造接入 E1/E2、successor 门仍关闭的事实修正计划。所有会诊报告和尝试记录保留，无新增 GPT 请求。consult.py gate 的现有评估器要求 rounds[].round、findings[].description/disposition/evidence；SB21-3 原台账使用 number/location/closure 等字段，故其 9 项未闭合和 1 项 R1 降级输出不能表示 owner 后续裁决，机械结果不记作通过或顾问结论；owner 裁决与可定位证据另列交接/工作流材料，不改写旧报告或等级。最终声明面 regen/no-env 路径见 _batch21/sb21-3-review/owner-closeout-20260927-v1/。生产入口、真实 User、R5.8 签署、E3/E4/E5、热键及 BO-4 successor 改道门继续关闭；真实 facade、BGI 实机和生产运行未验证。
+
+## §24.124 SB21-4 收口登记——停驻运行终局出口与 Wave3 冻结残项
+
+### §24.124.1 范围与原始等级
+
+本子批只处理 BO-13 会话内 Stop 出口，以及 BO-11 对 BO-6/7/8/9 的逐项登记。BO-13 原等级为 batch20 R47 **重要**；BO-6 原等级为 R19 **必改**、同族 R21 F4 **重要**；BO-7 的 R21 F1、F2 均 **必改**；BO-8 的 R29 与 BO-9 的 R34 F5 均 **重要**。本批不重开 BO-4、BO-10 或 BO-12。原始来源与本批边界见 `_workflow/sb21-4/raw-bo-obligations.json` 和 `_workflow/sb21-4/scope-and-state-table.md`。
+
+### §24.124.2 停驻运行终局状态与队列绑定
+
+仅对已持久化 `LocalWaitParking` 记录、明确 NoSend、完整 Wait/Hold 裁定身份、无同流程 drive/reservation 且无未决外部发送/收尾事实及前置动作责任的 run 接受同步 Stop。入口与 gate 内复读都验证请求 runId 与记录体 runId；读取异常返回 `Unavailable`。Wait 清理使用 `LocalWaitBinding` 全部队列可见不可变载荷作锁内比较；只把精确匹配项写为 `Cancelled` 墓碑，不降低 generation/high-water、不改无关项。身份漂移、队列损坏或读写异常返回不可用，保留停驻运行；缺少队列项或已有墓碑不伪造新项；持久 Hold 无 binding 时只终态化 run，不写队列。Wait 决策同时绑定当前 run/workflow/revision、cursor snapshot、同 key 的 `LocalWaitDeferred` submission、完整 context/binding 与共享身份 factory 的规范候选身份；decision/binding revision 可小于后续 run revision，但不能在未来。完成后同一 run 以 `Cancelled` 留在历史并释放 `ActiveStates` 槽位；run、cursor occurrence/loop/attempt、submission key、旧 outcomes、裁定和 binding 保留，不调用 flow 收尾或发送，并在 gate 外回写 admission registration 终态。若队列墓碑已落盘但 run 终态写入失败，结果明确提示可重试；重试识别墓碑后完成 run 终态化且不重复写队列。
+
+### §24.124.3 实现、反例与关键断言判别
+改动包括 `TaskCenterHost.RequestRunAction/StopParkedRun`、`LocalWaitQueueStore.Cancel(LocalWaitBinding, ...)`、新增 `LocalWaitFinalizationContractTests` 17 个 Fact，以及测试互斥元数据。开工 HEAD `5e7e7e22f11daad0c86795368e9a21bb14d79b19` 的首轮 6 项中 3 项因旧 Host 不支持停驻 Stop 而按预期失败；R1 修复前 16 项另有 7 项目标行为失败，定位前置动作责任、cursor/deferred submission/规范准入身份、runId 文件错绑、读取异常和 admission terminal 回写。生产 Host/queue 源码恢复 SHA 与编辑前源字节一致；当前具名 Host 事实 17/17。
+
+最终 23 个独立关键反向突变均通过构建、在指定断言失败、再逐字节恢复并通过具名测试。覆盖终态与精确墓碑、payload/run/cursor/submission/admission identity、前置责任、损坏队列、读/写异常及重试、Resume reservation、admission terminal 回写、HWM/无关项、重复 Stop 与 ActiveStates。一个与其他护栏重叠的旧突变不计独立数，原始尝试保留；全部日志、TRX、testId 和 SHA 在 `_workflow/sb21-4/mutations-review-r1-retry2/`。Host 原/恢复 SHA-256 `E050959933CD28D1CA2F9EDE28AB59B55359F262BBC9A7EAC01ECF69C218B260`；queue 为 `E08BD825E113B23A7439F8D9769D10569D93008C74D5976A35B9CE728D87FB5B`。
+
+回归实际发现 `LocalWaitGenerationContractTests` 与本批具名事实会并发改写同一个进程级 `BeforeTemporaryFileWriteProbe`，使目标测试在 fixture seed 的 queue Upsert 阶段被其他测试注入。复现记录保留于 `_workflow/sb21-4/final/final-current/full/assistant-full-current.trx` 与相邻日志。为限定共享可变探针的范围，这两个测试类加入仓库既有 `LocalWaitSnapshotProbe` 禁并行 collection；隔离后具名 17/17 和助手回归全绿。此测试调度修复不改变生产行为。
+### §24.124.4 BO-11 Wave3 残项处置
+
+BO-6 的现行 helper 在停驻与已完成锚点冲突时返回 `null` 并记录诊断，但 Runner 的 `hadBadOutcome` 不把 `waitLocally` 计作坏结果；当前证据不能证明冲突成为显式失败并阻止聚合成功。原 R19 必改与 R21 F4 重要风险均保留未闭合并交 owner。BO-7 现有 `(LoopIteration, SequenceIndex)` 全序与多有效停驻遍历有组件用例；它们未驱动救援后的真实推进，原 F1/F2 必改随 BO-6 端到端验收未闭合并交 owner。BO-8 源码仍承认恢复点之后推进没有完成过滤，原重要项未闭合并交 owner。BO-9 只有 helper/loop 组件全序证据，没有 Runner 跨轮次恢复推进证明，原重要项未闭合并交 owner。各项证据、风险、尝试与具体验收条件见状态表；方案、注释和组件用例均未被记作端到端闭合。BO-11 本批完成的是残项逐项打包登记，不表示 Wave3 已清零。C12→BO-4 已按 SB21-3 owner 接受路径收口，本条不重开。
+
+### §24.124.5 验证、会诊与门禁
+助手项目与助手测试项目均使用 `dotnet build --no-incremental -p:DeployToBgiTools=false` 并成功，分别 59/80 warning、0 error。最终具名 Host 事实 17/17、curated BO-13/LocalWait/Runner 定向 233/233，扩展 TaskCenter/LocalWait 定向 277/277，助手全量 1526 pass / 2 skip / 0 fail / 1528。与开工工作区 HEAD 下新增本批事实前的 1511 项基线按真实 testId 比较：shared 1511 / added 17 / removed 0 / changed 0 / unchanged 1511；17 项均为 `LocalWaitFinalizationContractTests`，最终差集见 `_workflow/sb21-4/settled-final-r4/testid-diff.md`。
+
+隔离修正前曾有一次定向 232/233 及一次全量 1 fail；失败都在 `SeedParkedRun` 的队列准备阶段，由 `LocalWaitGenerationContractTests` 静态临时写入探针并发拦截，不是 BO-13 目标断言。两测试类加入既有禁并行集合后，curated 定向 233/233、扩展定向 277/277、助手全量 1526/2/0/1528。首跑、失败TRX与修复后成功日志保留在 `_workflow/sb21-4/final/`、`review-prep-r2/` 与 `settled-final-r4/`；测试宿主证据不表示产品真实运行。
+
+GPT 会诊与 owner 检查点：R1 为 GPT `gpt-6-astra` / medium，已发 1 次并提出五项 BO-13 **IMPORTANT**。R2 review 请求于 2026-09-27 20:00 UTC 已发，但会诊执行器返回 `GPT consultation failed for gpt-6-astra (Codex exit code 1). Start a new task and retry.`，未提供 GPT 报告或质量结论；按失败已发送计入累计 2/8。失败记录、R2 送审包与快照见 `_workflow/sb21-4/review/gpt-r2-attempt1-failure.md`、`review-snapshot-r2-retry3/`、`review-snapshot-r2-retry4/`。所以五项重要发现仍全部**未闭合并交 owner**：
+
+| R1 原级与风险 | 本批尝试/证据 | owner 验收条件 |
+|---|---|---|
+| IMPORTANT 1：恢复扫描谓词未覆盖 Intent/Submitted/Unknown、SendAttempted、jobId 等前置责任，误 Stop 会让责任失去原 run 对账身份。 | Stop 专用责任谓词；具名 Unknown/SendAttempted 行为测试、目标突变及保留 run/queue 字节证据。 | 核对外部责任状态枚举/交错，确认所有未决发送或收尾来源均拒绝终态化，零发送责任可安全收敛。 |
+| IMPORTANT 2：Wait/Hold 裁定须绑定 run/cursor/context/submission、规范 successor 与 admission 身份；repark 旧 revision 关系需符合生命周期。 | 17 个 Host facts 和多个身份/提交/游标独立突变、修复前命名失败；允许较早但非未来 revision。 | 核对字段全表及恢复/repark 代际语义；每种身份错配均不能清队列或终态化，规范候选由共享 factory 得出。 |
+| IMPORTANT 3：请求文件 runId 与嵌入记录 runId 不一致会误操作其他运行。 | 入口与 gate 内复读比较，misbound 文件用例和双位置突变；A/B/queue 字节精确保留。 | 验收坏读、空值、A-file/B-record 与并发替换均在入口和最终 gate 拒绝且全文件字节不变。 |
+| IMPORTANT 4：Stop 持久成功后 admission registration 可能仍 Accepted。 | 已关联注册的 Host 事实观察 TerminalCompleted；删除回写调用的突变在目标断言失败。 | 验收成功终态回写的时序、异常/无映射调用者可观测性及重复调用幂等，不出现 run 已 Cancelled 而注册仍活跃。 |
+| IMPORTANT 5：queue/run/read/reservation 故障与墓碑先写窗口缺行为证据。 | 具名 queue 发布失败、run 发布失败可重试、读损坏、Resume reservation 竞争和 23 个目标断言突变。 | 验收每个失败返回、必要身份保留、exact-byte 责任与重试收敛；覆盖 tombstone 后 run 写失败窗口及其他外部责任源。 |
+
+以上均仅有施工方实现/本地证据，因 R2 未返回**不能记为会诊确认或原级闭环**。BO-11 的 BO-6 R19 MUST/R21 F4 IMPORTANT、BO-7 R21 F1/F2 MUST、BO-8 R29 IMPORTANT、BO-9 R34 F5 IMPORTANT 仍按 §24.124.4 原级交 owner；组件/helper 不作为 Runner 端到端闭合。
+生产入口、真实 User、R5.8 签署、E3/E4/E5、热键面及 BGI 生产进程门继续关闭。所列是源码、助手构建/测试和组件/Host 接缝证据，不是 BGI 实机、真实 facade 调度或生产 User 验证。BO-6/7/8/9 的重要/必改风险仍未排除；不得据本收口开放其 successor/推进或收尾生产门。

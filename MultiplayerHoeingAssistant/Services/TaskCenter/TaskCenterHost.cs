@@ -379,8 +379,20 @@ public sealed partial class TaskCenterHost
     /// </summary>
     public HostActionResult RequestRunAction(string runId, WorkflowRunAction action)
     {
-        var run = _runs.Load(runId);
+        WorkflowRunRecord? run;
+        try { run = _runs.Load(runId); }
+        catch (Exception ex)
+        {
+            return HostActionResult.Unavailable("运行记录读取失败，未执行动作："
+                + ex.GetType().Name + "（" + ex.Message + "）");
+        }
         if (run is null) return HostActionResult.Unavailable("运行记录不存在：" + runId);
+        if (string.IsNullOrWhiteSpace(runId) || string.IsNullOrWhiteSpace(run.RunId)
+            || !string.Equals(run.RunId, runId, StringComparison.Ordinal))
+            return HostActionResult.Unavailable("运行文件名与记录内 runId 不一致，拒绝执行动作");
+
+        if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.LocalWaitParking)
+            return StopParkedRun(runId);
 
         if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.Paused)
         {
@@ -415,6 +427,189 @@ public sealed partial class TaskCenterHost
             WorkflowRunAction.ReloadDefinition => "重载修订已登记（下一节点边界生效）",
             _ => "动作已登记",
         });
+    }
+
+    /// <summary>停驻运行的显式放弃：先按完整队列绑定取消等待项，再把同一运行记为终态；绝不收尾或发送。</summary>
+    private HostActionResult StopParkedRun(string runId)
+    {
+        lock (_gate)
+        {
+            WorkflowRunRecord? fresh;
+            try { fresh = _runs.Load(runId); }
+            catch (Exception ex)
+            {
+                return HostActionResult.Unavailable("停驻运行记录复核失败，未清理等待项："
+                    + ex.GetType().Name + "（" + ex.Message + "）");
+            }
+            if (fresh is null || string.IsNullOrWhiteSpace(fresh.RunId)
+                || !string.Equals(fresh.RunId, runId, StringComparison.Ordinal))
+                return HostActionResult.Unavailable("运行文件名与记录内 runId 不一致，拒绝终态化");
+            if (fresh?.State != WorkflowRunState.LocalWaitParking)
+                return HostActionResult.Unavailable("运行状态已变化，请刷新后重试");
+            if (_reservedWorkflows.Contains(fresh.WorkflowId) || _drives.ContainsKey(fresh.WorkflowId))
+                return HostActionResult.Unavailable("停驻运行仍处于启动或驱动收敛窗口，请稍后重试");
+            if (RunStore.HasUnresolvedExternalFact(fresh))
+                return HostActionResult.Unavailable("存在未决发送或收尾事实，必须先按原身份对账；未停止运行、未清理等待项");
+            if (HasUnresolvedPrerequisiteResponsibility(fresh))
+                return HostActionResult.Unavailable("存在未决前置动作责任，必须按原身份对账；未停止运行、未清理等待项");
+            if (!HasValidParkedDecision(fresh, out var binding))
+                return HostActionResult.Unavailable("停驻运行的零发送裁定或游标绑定不完整，拒绝终态化");
+
+            var cleanup = LocalWaitBindingCancelResult.Missing;
+            if (binding is not null)
+            {
+                try
+                {
+                    cleanup = LocalWaitQueue.Cancel(binding, "停驻运行显式停止", DateTimeOffset.UtcNow);
+                }
+                catch (Exception ex)
+                {
+                    return HostActionResult.Unavailable("等待项清理失败，运行保持停驻以便重试："
+                        + ex.GetType().Name + "（" + ex.Message + "）");
+                }
+                if (cleanup == LocalWaitBindingCancelResult.PayloadMismatch)
+                    return HostActionResult.Unavailable("等待项身份或载荷已变化，拒绝取消并保留停驻运行");
+            }
+
+            fresh.State = WorkflowRunState.Cancelled;
+            fresh.Note = (fresh.Note is null ? "" : fresh.Note + " ")
+                + (binding is null
+                    ? "持久拒登停驻已显式放弃（无等待绑定；零发送；不触发收尾）。"
+                    : cleanup is LocalWaitBindingCancelResult.Cancelled or LocalWaitBindingCancelResult.AlreadyCancelled
+                        ? "本地等待停驻已显式放弃（等待项已墓碑化；零发送；不触发收尾）。"
+                        : "本地等待停驻已显式放弃（绑定等待项已不存在；零发送；不触发收尾）。");
+            try
+            {
+                _runs.Update(fresh);
+            }
+            catch (Exception ex)
+            {
+                return HostActionResult.Unavailable("等待项处置已提交，但运行终态落盘失败；保留原运行记录并可重试："
+                    + ex.GetType().Name + "（" + ex.Message + "）");
+            }
+        }
+
+        MarkAdmissionTerminalIfAny(runId);
+        NotifyStateChanged();
+        return HostActionResult.Effective("已放弃停驻运行（终态化，未触发收尾）");
+    }
+
+    /// <summary>Stop 专用的前置动作责任护栏；恢复扫描的既有状态分类保持不变。</summary>
+    private static bool HasUnresolvedPrerequisiteResponsibility(WorkflowRunRecord run)
+        => run.PrerequisiteActions?.Any(action => action.SendAttempted
+            || !string.IsNullOrWhiteSpace(action.JobId)
+            || action.State is PrerequisiteActionState.Intent or PrerequisiteActionState.Submitted
+                or PrerequisiteActionState.Unknown) == true;
+
+    private static bool HasValidParkedDecision(WorkflowRunRecord run, out LocalWaitBinding? binding)
+    {
+        binding = null;
+        var decision = run.LocalWaitDecision;
+        if (decision is null || !decision.NoSendConfirmed
+            || decision.Kind is not (LocalWaitDecisionKind.Wait or LocalWaitDecisionKind.Hold)
+            || run.Cursor is not { } cursor
+            || string.IsNullOrWhiteSpace(run.RunId)
+            || string.IsNullOrWhiteSpace(run.WorkflowId)
+            || string.IsNullOrWhiteSpace(run.WorkflowRevision)
+            || string.IsNullOrWhiteSpace(cursor.NodeId)
+            || cursor.Occurrence < 0 || cursor.Occurrence > 99_999_999
+            || cursor.LoopIteration < 0 || cursor.LoopIteration > 99_999_999
+            || cursor.Attempt <= 0 || cursor.Attempt > 99_999_999)
+            return false;
+
+        var context = decision.Context;
+        if (context is null
+            || string.IsNullOrWhiteSpace(context.RunId)
+            || string.IsNullOrWhiteSpace(context.WorkflowId)
+            || string.IsNullOrWhiteSpace(context.WorkflowRevision)
+            || string.IsNullOrWhiteSpace(context.NodeId)
+            || run.RecordRevision <= 0
+            || context.RecordRevision <= 0 || context.RecordRevision > run.RecordRevision
+            || context.SequenceIndex < 0 || context.Occurrence < 0
+            || context.Occurrence > 99_999_999
+            || context.LoopIteration < 0 || context.Attempt <= 0
+            || context.LoopIteration > 99_999_999 || context.Attempt > 99_999_999
+            || !string.Equals(context.RunId, run.RunId, StringComparison.Ordinal)
+            || !string.Equals(context.WorkflowId, run.WorkflowId, StringComparison.Ordinal)
+            || !string.Equals(context.WorkflowRevision, run.WorkflowRevision, StringComparison.Ordinal)
+            || !string.Equals(context.CursorNodeId, cursor.NodeId, StringComparison.Ordinal)
+            || context.CursorOccurrence != cursor.Occurrence
+            || context.CursorLoopIteration != cursor.LoopIteration
+            || !string.Equals(context.NodeId, cursor.NodeId, StringComparison.Ordinal)
+            || context.Occurrence != cursor.Occurrence
+            || context.LoopIteration != cursor.LoopIteration
+            || context.Attempt != cursor.Attempt
+            || run.CurrentSubmission is not { } submission
+            || submission.Intent != SubmitIntentState.LocalWaitDeferred
+            || submission.SendAttempted
+            || !string.IsNullOrEmpty(submission.JobId)
+            || !string.IsNullOrEmpty(submission.AcceptedSendIdentity)
+            || submission.ObservedTerminal is not null
+            || !string.Equals(submission.NodeId, context.NodeId, StringComparison.Ordinal)
+            || submission.Occurrence != context.Occurrence
+            || submission.LoopIteration != context.LoopIteration
+            || submission.Attempt != context.Attempt
+            || !string.Equals(submission.Key,
+                RunStore.DeriveSubmissionKey(run.RunId, context.NodeId, context.Occurrence,
+                    context.LoopIteration, context.Attempt), StringComparison.Ordinal))
+            return false;
+
+        if (decision.Kind == LocalWaitDecisionKind.Hold)
+            return decision.Binding is null;
+        if (decision.Binding is not { } waitBinding
+            || string.IsNullOrWhiteSpace(waitBinding.ItemId)
+            || string.IsNullOrWhiteSpace(waitBinding.StableIdentity)
+            || string.IsNullOrWhiteSpace(waitBinding.CandidateId)
+            || string.IsNullOrWhiteSpace(waitBinding.AdmissionIdentity)
+            || string.IsNullOrWhiteSpace(waitBinding.Namespace)
+            || string.IsNullOrWhiteSpace(waitBinding.SourceIdentity)
+            || string.IsNullOrWhiteSpace(waitBinding.Scope)
+            || string.IsNullOrWhiteSpace(waitBinding.WorkflowRevision)
+            || string.IsNullOrWhiteSpace(waitBinding.NodeId)
+            || string.IsNullOrWhiteSpace(waitBinding.PrerequisiteReference)
+            || waitBinding.RecordRevision <= 0 || waitBinding.RecordRevision > run.RecordRevision
+            || waitBinding.SequenceIndex != context.SequenceIndex
+            || !string.Equals(waitBinding.RunId, run.RunId, StringComparison.Ordinal)
+            || !string.Equals(waitBinding.WorkflowId, run.WorkflowId, StringComparison.Ordinal)
+            || !string.Equals(waitBinding.Namespace, run.WorkflowId, StringComparison.Ordinal)
+            || !string.Equals(waitBinding.WorkflowRevision, run.WorkflowRevision, StringComparison.Ordinal)
+            || !string.Equals(waitBinding.NodeId, cursor.NodeId, StringComparison.Ordinal)
+            || !string.Equals(waitBinding.CursorNodeId, cursor.NodeId, StringComparison.Ordinal)
+            || waitBinding.CursorOccurrence != cursor.Occurrence
+            || waitBinding.CursorLoopIteration != cursor.LoopIteration
+            || waitBinding.Occurrence != cursor.Occurrence
+            || waitBinding.LoopIteration != cursor.LoopIteration
+            || waitBinding.Attempt != cursor.Attempt
+            || waitBinding.SourceKind != context.SourceKind
+            || !string.Equals(context.SourceIdentity, waitBinding.SourceIdentity, StringComparison.Ordinal)
+            || !string.Equals(context.Scope, waitBinding.Scope, StringComparison.Ordinal)
+            || !string.Equals(context.CandidateId, waitBinding.CandidateId, StringComparison.Ordinal)
+            || !string.Equals(context.AdmissionIdentity, waitBinding.AdmissionIdentity, StringComparison.Ordinal)
+            || context.Tier != waitBinding.Tier
+            || context.Priority != waitBinding.Priority
+            || context.IsHoeingHighest != waitBinding.IsHoeingHighest
+            || !context.HasTrustedRankingFacts
+            || waitBinding.IsHoeingHighest
+            || !Enum.IsDefined(waitBinding.SourceKind)
+            || !Enum.IsDefined(waitBinding.Tier)
+            || !IsCanonicalAdmissionScope(waitBinding.Scope)
+            || !string.Equals(waitBinding.StableIdentity,
+                run.RunId + "|" + cursor.NodeId + "|" + cursor.Occurrence + "|" + cursor.LoopIteration,
+                StringComparison.Ordinal)
+            || !string.Equals(waitBinding.ItemId, LocalWaitQueuePolicy.DeriveItemId(waitBinding.StableIdentity),
+                StringComparison.Ordinal)
+            || !LocalWaitIdentityTranslation.Translate(waitBinding.ToQueueItem()).Ok)
+            return false;
+
+        var candidate = BuildSuccessorIdentityCandidate(waitBinding.Scope, run.WorkflowId, run.RunId,
+            cursor.NodeId, cursor.Occurrence, cursor.LoopIteration, cursor.Attempt);
+        var expectedIdentity = LocalWaitIdentityTranslation.BuildAdmissionIdentity(candidate);
+        if (!string.Equals(waitBinding.AdmissionIdentity, expectedIdentity.AdmissionIdentity, StringComparison.Ordinal)
+            || !string.Equals(waitBinding.CandidateId, expectedIdentity.CandidateId, StringComparison.Ordinal))
+            return false;
+
+        binding = waitBinding;
+        return true;
     }
 
     // ================= R4.9 启动移交受理入口 =================
