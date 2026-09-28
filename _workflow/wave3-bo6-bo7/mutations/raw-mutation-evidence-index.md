@@ -1,0 +1,35 @@
+# Raw mutation evidence index
+
+Each listed mutation has an exact isolated diff, independent baseline/mutant/restored build and test logs, and raw TRX. `experiment.json` identifies source/test hashes and target test ID. All source and log hashes are verified while generating this index.
+
+| Mutation | Current test-source SHA in run | Source original/mutant/restored SHA | Target / baseline-mutant-restored | Raw artifacts |
+|---|---|---|---|---|
+| `bo6-resume-live-park-v3` | `c1197ed5b6f79029104b7949247ac19d9e224fe72dde4c4a23eef0c24e680cd9` | `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` → `96212d01e57a66bc57c6def40b80e936ce12814bf94a01680ee068c8a83fb13e` → `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` | `WorkflowRunnerTests.cs:line 1008`; baseline Passed / mutant Failed / restored Passed | `_workflow/wave3-bo6-bo7/mutations/bo6-resume-live-park-v3/experiment.json`, `mutation.patch`, and all `baseline/`, `mutant/`, `restored/` `*.trx`, `build.log`, `test.log` |
+| `bo6-tail-fail-closed-v3` | `c1197ed5b6f79029104b7949247ac19d9e224fe72dde4c4a23eef0c24e680cd9` | `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` → `ff0ff5bf3594f471acadaeddfcd2449b14e648deca509ad34541ecbf27bb5062` → `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` | `WorkflowRunnerTests.cs:line 1071`; baseline Passed / mutant Failed / restored Passed | `_workflow/wave3-bo6-bo7/mutations/bo6-tail-fail-closed-v3/experiment.json`, `mutation.patch`, and all `baseline/`, `mutant/`, `restored/` `*.trx`, `build.log`, `test.log` |
+| `bo6-completed-filter-v3` | `c1197ed5b6f79029104b7949247ac19d9e224fe72dde4c4a23eef0c24e680cd9` | `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` → `3115f2c3a4d81f0dce7097009f73d289287fd65e1b12eddfcc734ffb74dfd22e` → `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` | `WorkflowRunnerTests.cs:line 1008`; baseline Passed / mutant Failed / restored Passed | `_workflow/wave3-bo6-bo7/mutations/bo6-completed-filter-v3/experiment.json`, `mutation.patch`, and all `baseline/`, `mutant/`, `restored/` `*.trx`, `build.log`, `test.log` |
+| `bo7-candidate-first-v3` | `c1197ed5b6f79029104b7949247ac19d9e224fe72dde4c4a23eef0c24e680cd9` | `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` → `ef6ed36b1b8bc2b6a30ac64d3fd087540601264b33bed5722fb00c024c0f5562` → `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` | `WorkflowRunnerTests.cs:line 1121`; baseline Passed / mutant Failed / restored Passed | `_workflow/wave3-bo6-bo7/mutations/bo7-candidate-first-v3/experiment.json`, `mutation.patch`, and all `baseline/`, `mutant/`, `restored/` `*.trx`, `build.log`, `test.log` |
+| `bo7-rescue-first-v3` | `c1197ed5b6f79029104b7949247ac19d9e224fe72dde4c4a23eef0c24e680cd9` | `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` → `e5fcb0af5aec40d9b6aeadb101e3854a0af12cab8c134b98193c5296d75a705c` → `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` | `WorkflowRunnerTests.cs:line 1163`; baseline Passed / mutant Failed / restored Passed | `_workflow/wave3-bo6-bo7/mutations/bo7-rescue-first-v3/experiment.json`, `mutation.patch`, and all `baseline/`, `mutant/`, `restored/` `*.trx`, `build.log`, `test.log` |
+| `bo7-earliest-park-v3` | `c1197ed5b6f79029104b7949247ac19d9e224fe72dde4c4a23eef0c24e680cd9` | `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` → `8668d00c7f7ec8d9fcf3b39100c79834fc5b70f8a8b9b17d6d8a7ae4adbc84e4` → `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` | `WorkflowRunnerTests.cs:line 1008`; baseline Passed / mutant Failed / restored Passed | `_workflow/wave3-bo6-bo7/mutations/bo7-earliest-park-v3/experiment.json`, `mutation.patch`, and all `baseline/`, `mutant/`, `restored/` `*.trx`, `build.log`, `test.log` |
+| `bo7-stable-identity-v3` | `c1197ed5b6f79029104b7949247ac19d9e224fe72dde4c4a23eef0c24e680cd9` | `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` → `f04db2ad71114112ba5114d57df4114f062497ae48f0b5e6caefb3542d3b3df8` → `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` | `WorkflowRunnerTests.cs:line 1008`; baseline Passed / mutant Failed / restored Passed | `_workflow/wave3-bo6-bo7/mutations/bo7-stable-identity-v3/experiment.json`, `mutation.patch`, and all `baseline/`, `mutant/`, `restored/` `*.trx`, `build.log`, `test.log` |
+| `bo6-tail-persisted-failure-v4` | `b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711` | `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` → `a04531dc4871fc692e8c4661984b59783fee89ff46f22192ff1d8eda1f7dcce0` → `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` | `WorkflowRunnerTests.cs:line 1080`; baseline Passed / mutant Failed / restored Passed; expected Failed, mutant disk state Running | `_workflow/wave3-bo6-bo7/mutations/bo6-tail-persisted-failure-v4/experiment.json`, `mutation.patch`, and all `baseline/`, `mutant/`, `restored/` `*.trx`, `build.log`, `test.log` |
+
+## Verification notes
+
+- For v3 mutations, `source-original.cs` in each directory hashes to `5470cfcb…1f190f96`; each reconstructed mutant matches its recorded `mutant_sha256`; `mutation.patch` is generated from those exact bytes.
+- V3 runs used the exact test-source snapshot `test-source-v3-original.cs` (SHA `c1197ed5…e680cd9`); `test-source-v3-to-v4.patch` reconstructs the later persistence assertion change to current `WorkflowRunnerTests.cs` (SHA `b5f37948…e274711`). The v4 baseline/mutant/restored run uses that current source.
+- The v4 mutant removes only the `_runs.Update(run)` in the unresolved parked aggregation branch. The returned object remains Failed, while the persisted record stays Running; the new post-return RunStore assertion fails at the intended line.
+- Logs are retained per mutation and phase even where build outputs are byte-identical. No log or TRX is synthesized.
+## 行尾规范化（2026-09-28）
+
+反向突变实验执行时，本批三个受影响源码/夹具文件在本地为 Windows 行尾（CRLF）；随后按该仓库提交形态统一为 LF。
+两者内容逐字节相同，差异仅为 CRLF 与 LF；以下散列一一对应，实验期记录值与规范化后的记录值都可复核：
+
+| 文件 | 实验期（CRLF 形态）SHA-256 | 规范化后（LF 形态）SHA-256 |
+|---|---|---|
+| `MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs` | `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96` | `181aa93e000be99d8eed9ce192587a56194d270e47f67bd561297a57476f14c9` |
+| `Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs` | `b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711` | `050040e9b24e1a2ffe413c589acf641cbb4df784b4a17db1591abe73df2f23fc` |
+| `Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs` | `8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6` | `2228c9cf26442d4aaef65de5f1763d4a880b50c469660aa480a28881adde5e85` |
+
+校验方式：对当前内容再做一次 CRLF 转换后计算 SHA-256，等于实验期记录值；因此该规范化只涉及行尾，未触及任何语句、断言或注释文本。
+
+`manifest.json` 的 `original_sha256`／`restored_sha256` 现记录 LF 规范化形态，`mutant_sha256` 等实验期字段保留当时的 CRLF 形态值，两者含义已在 manifest 的 `line_ending_normalization` 段落说明。

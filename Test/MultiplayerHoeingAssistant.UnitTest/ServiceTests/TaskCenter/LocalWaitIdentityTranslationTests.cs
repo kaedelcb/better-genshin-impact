@@ -693,17 +693,17 @@ public sealed class LocalWaitIdentityTranslationTests : IDisposable
     }
 
     /// <summary>
-    /// 【R19 必改-1 裁决改写（原 M38 链尾夹具）】同上保守语义：新链 [nPre, n2, n0, n1] 中
-    /// 停驻点 n2 之后（同轮次）有已完成 n0/n1 ⇒ 返回 n2 会让线性推进穿越它们 ⇒ 不变量①优先 ⇒
-    /// 返回 null（nPre/n2 的重驱配对归 BO-6/Wave3）。
+    /// 【BO-6 完成过滤推进】锚位于链尾时既有 tail 下界返回 n2；真实 Runner 随后重驱 n2，
+    /// 并由恢复推进层过滤已完成 n0/n1。
     /// </summary>
     [Fact]
-    public void RecomputeSuccessor_AnchorAtTail_ParkedFollowedByCompleted_ConservativeNoRerun()
+    public void RecomputeSuccessor_AnchorAtTail_ParkedFollowedByCompleted_ReturnsParkedMarker()
     {
         var runner = MakeRunner(Path.Combine(_dir, "q-anchor14"), referenceProvider: null);
         var run = RunWithOutcomes(("n0", "succeeded"), ("n1", "succeeded"), ("n2", WorkflowRunner.LocalWaitResultWord));
         var relocated = runner.RecomputeSuccessor(run, TwoNodePlan("nPre", "n2", "n0", "n1"));
-        Assert.Null(relocated);
+        Assert.NotNull(relocated);
+        Assert.Equal("n2", relocated!.NodeId); // tail 下界保护有效停驻义务；前插由候选路径另行承载
     }
 
     /// <summary>
@@ -733,30 +733,28 @@ public sealed class LocalWaitIdentityTranslationTests : IDisposable
     }
 
     /// <summary>
-    /// 【R19 必改-1 裁决改写（原 M34 夹具）】同上保守语义：停驻点 n2 重排到已完成锚之前
-    /// （即便锚之后还有未执行 n3）⇒ 返回停驻点会让线性推进穿越已完成 n0/n1 ⇒ 不变量①优先 ⇒
-    /// 返回 null ＋ 响亮日志（BO-6）。n3 与 n2 的重驱配对归 BO-6/Wave3 承载。
+    /// 【BO-6 完成过滤推进】停驻点 n2 重排到已完成锚之前，恢复从 n2 开始，
+    /// 然后跳过已完成 n0/n1 并继续执行 n3。
     /// </summary>
     [Fact]
-    public void RecomputeSuccessor_AnchorLocatableParkedBeforeItAndWorkAfter_ConservativeNoRerun()
+    public void RecomputeSuccessor_AnchorLocatableParkedBeforeItAndWorkAfter_ReturnsParkedMarker()
     {
         var runner = MakeRunner(Path.Combine(_dir, "q-anchor11"), referenceProvider: null);
         var run = RunWithOutcomes(("n0", "succeeded"), ("n1", "succeeded"), ("n2", WorkflowRunner.LocalWaitResultWord));
         var relocated = runner.RecomputeSuccessor(run, TwoNodePlan("n2", "n0", "n1", "n3"));
-        Assert.Null(relocated);
+        Assert.NotNull(relocated);
+        Assert.Equal("n2", relocated!.NodeId);
     }
 
     /// <summary>
-    /// 【R19 裁决改写（原 M40 夹具）】多停驻标记＋过期＋前插＋锚链尾的组合场景：
-    /// P1（pa）有效但其后同轮次有已完成 pb（P2 过期）⇒ 按 R19 必改-1 保守裁决，pa/pb 重驱推进
-    /// 会穿越已完成出现 ⇒ **整个形态落台账 BO-6**（返回 null，不重复执行）。
+    /// 【BO-6 完成过滤推进】多停驻标记＋过期＋前插＋锚链尾的组合场景：
+    /// P1（pa）有效、P2（pb）已完成而过期；返回 pa，由真实 Runner 重驱 pa 并过滤 pb。
     /// **tailBound 过期过滤（R19 重要-2 修复）如实登记**：已实现为与 ParkedRescue 主循环对称的
     /// 结构性防御（下界选取共用 HasCompletedOutcome 过滤）；其**独立**可观察行为需要「loop 计划＋
-    /// 有效停驻在锚后安全路径＋更晚过期标记」的组合——该组合在保守裁决下同样返回 null（BO-6），
-    /// 过滤的判别力被保守语义遮蔽 ⇒ 无独立突变（R5：非唯一证据不强制；已如实登记）。
+    /// 有效停驻在锚后安全路径＋更晚过期标记」的组合仍由既有锚下界过滤保障。
     /// </summary>
     [Fact]
-    public void RecomputeSuccessor_MultiParkingWithStale_ConservativeNoRerun()
+    public void RecomputeSuccessor_MultiParkingWithStale_ReturnsEarliestActiveMarker()
     {
         var runner = MakeRunner(Path.Combine(_dir, "q-anchor15"), referenceProvider: null);
         var run = MakeRun();
@@ -764,7 +762,8 @@ public sealed class LocalWaitIdentityTranslationTests : IDisposable
         run.NodeOutcomes.Add(new WorkflowNodeOutcome { NodeId = "pb", SequenceIndex = 1, Occurrence = 0, LoopIteration = 0, Result = WorkflowRunner.LocalWaitResultWord, Reason = "P2 停驻" });
         run.NodeOutcomes.Add(new WorkflowNodeOutcome { NodeId = "pb", SequenceIndex = 1, Occurrence = 0, LoopIteration = 0, Result = "succeeded", Reason = "P2 随后完成＝过期" });
         var relocated = runner.RecomputeSuccessor(run, TwoNodePlan("pre", "pa", "pb"));
-        Assert.Null(relocated);
+        Assert.NotNull(relocated);
+        Assert.Equal("pa", relocated!.NodeId);
     }
 
     /// <summary>
@@ -899,8 +898,8 @@ public sealed class LocalWaitIdentityTranslationTests : IDisposable
 
     /// <summary>
     /// 【突变验证 ✔（M47：安全性检查恢复 break 首中即返回 ⇒ 红，实测见突变记录）】【Wave1 R25 重要-1】
-    /// 多有效停驻：P1（同身份加回锚前）＋P2（锚后）——最后一条 P2 在安全路径上不得短路跳过 P1 的
-    /// 安全性检查：P1 在锚前 ⇒ 保守 null（响亮日志），P1 的重驱义务不得被静默吞。
+    /// 多有效停驻：P1（同身份加回锚前）＋P2（锚后）——最后一条 P2 在安全路径上不得短路跳过 P1；
+    /// 最早有效停驻 P1 必须先作为救援点返回，随后 Runner 过滤已完成锚。
     /// </summary>
     [Fact]
     public void RecomputeSuccessor_AllValidParkingChecked_EarlierUnsafeOneNotSilentlySwallowed()
@@ -919,8 +918,9 @@ public sealed class LocalWaitIdentityTranslationTests : IDisposable
                 Ref = new WorkflowResourceRef { Config = "c-" + id, ConfigKey = "c-" + id + "#k", Revision = "rev-1" },
             }).ToList(),
         }));
-        // P1 被重排到已完成锚 B 之前 ⇒ 两不变量冲突 ⇒ 保守 null（不得因 P2 安全而静默吞 P1）。
-        Assert.Null(relocated);
+        // P1 被重排到已完成锚 B 之前 ⇒ P1 义务优先，不得因 P2 安全而静默吞掉它。
+        Assert.NotNull(relocated);
+        Assert.Equal("P1", relocated!.NodeId);
     }
 
     /// <summary>
@@ -978,10 +978,8 @@ public sealed class LocalWaitIdentityTranslationTests : IDisposable
     }
 
     /// <summary>
-    /// 【突变验证 ✔（M41：锚路径把「真冲突」当「无义务」回落锚候选 ⇒ 红，实测见突变记录）】
-    /// 【Wave1 R20 重要-1】修订 [Y, n2, X]（X=n2 之后同轮次已完成）：锚 Y 可定位 ⇒ candidate=n2
-    /// （未完成）⇒ ParkedRescue 检测到 n2 之后有已完成 X ⇒ 真冲突 ⇒ 必须**整体按链尾**（null），
-    /// **不得**回落返回 n2——否则 n2 重驱完成后线性推进穿越已完成 X，重复提交（不变量①）。
+    /// 【BO-6 完成过滤推进】修订 [Y, n2, X]（X=n2 之后同轮次已完成）：锚 Y 可定位、n2 为有效停驻；
+    /// 恢复从 n2 开始，真实 Runner 重驱后过滤已完成 X，不得把停驻义务改写成普通链尾。
     /// </summary>
     [Fact]
     public void RecomputeSuccessor_ParkingConflictNotFallenBackToCandidate()
@@ -989,23 +987,23 @@ public sealed class LocalWaitIdentityTranslationTests : IDisposable
         var runner = MakeRunner(Path.Combine(_dir, "q-anchor16"), referenceProvider: null);
         var run = RunWithOutcomes(("X", "succeeded"), ("Y", "succeeded"), ("n2", WorkflowRunner.LocalWaitResultWord));
         var relocated = runner.RecomputeSuccessor(run, TwoNodePlan("Y", "n2", "X"));
-        Assert.Null(relocated);
+        Assert.NotNull(relocated);
+        Assert.Equal("n2", relocated!.NodeId);
     }
 
     /// <summary>
-    /// 【R19 必改-1 裁决改写（原 M33 夹具）】停驻点被重排到**已完成**锚之前 ⇒ 两不变量真冲突
-    /// （返回停驻点 ⇒ 重驱后线性推进穿越已完成节点重复提交；返回链尾 ⇒ 停驻被吞＋假成功）。
-    /// 本批取保守方向：**不变量①优先** ⇒ 返回 null ＋ 响亮日志，语义归台账 BO-6
-    /// （Wave3 C11：带完成过滤的推进／显式失败态）。本夹具钉死该保守语义。
+    /// 【BO-6 完成过滤推进】停驻点重排到已完成锚之前时返回停驻点；真实 Runner 重驱它，
+    /// 并在推进中跳过已完成节点，不允许以链尾成功吞掉停驻义务。
     /// </summary>
     [Fact]
-    public void RecomputeSuccessor_ParkedReorderedBeforeCompletedAnchor_ConservativeNoRerun()
+    public void RecomputeSuccessor_ParkedReorderedBeforeCompletedAnchor_ReturnsParkedMarker()
     {
         var runner = MakeRunner(Path.Combine(_dir, "q-anchor10"), referenceProvider: null);
         var run = RunWithOutcomes(("n0", "succeeded"), ("n1", "succeeded"), ("n2", WorkflowRunner.LocalWaitResultWord));
-        // 新链把停驻点 n2 重排到锚 n1 之前，且 n2 之后（同轮次）有已完成 n0/n1 ⇒ 不得返回 n2。
+        // 新链把停驻点 n2 重排到锚 n1 之前；救援优先返回 n2，推进过滤由真实 Runner 覆盖。
         var relocated = runner.RecomputeSuccessor(run, TwoNodePlan("n2", "n0", "n1"));
-        Assert.Null(relocated);
+        Assert.NotNull(relocated);
+        Assert.Equal("n2", relocated!.NodeId);
     }
 
     /// <summary>

@@ -4764,6 +4764,9 @@ R29-R47 期间修复的**真缺陷**（均有反例构造与突变钉死）：�
 
 ### §24.120.4 残项清单（BO-1~BO-13，归后续批次）
 
+> 时点说明：本清单记录 batch20 冻结归属；BO-6/BO-7 的后续独立子批结果见 §24.125。BO-8/BO-9 仍保持原级未闭合。
+
+
 台账 test/ledger-batch20.json batch_obligations 数组：BO-1 登记异常收敛（接线批）、BO-2 面板 scope 注入源（接线批）、BO-3 跨代际重登记通道（Wave2 期间裁决＝冲突即合同信号，已 R35 落字）、BO-4 facade WaitLocally 映射（Wave4/接线批）、BO-5 停驻×孤儿扫描（已闭合）、BO-6 停驻重排冲突保守裁决＋端到端（Wave3 C11）、BO-7 停驻救援全序裁决（Wave3 C11）、BO-8 恢复点后推进段完成过滤（继承缺陷，Wave3 C11）、BO-9 多有效停驻跨轮次推进（Wave3 C11）、BO-10 代际单调性边界（接线批）、BO-11 Wave3 冻结残项打包（接线批）、BO-12 Remove/裁剪→重登记代际回绕（Wave3/接线批 C5）、BO-13 停驻运行会话内终局处置出口（接线批）。
 
 ### §24.120.5 门禁与边界
@@ -4913,6 +4916,9 @@ SB21-3 有独立 GPT 会诊台账 C:/Users/Administrator/.tools/zcode-relay/test
 
 ## §24.124 SB21-4 收口登记——停驻运行终局出口与 Wave3 冻结残项
 
+> 本节冻结 BO-6/BO-7 的状态截至 SB21-4 收口时点；后续独立子批当前状态见 §24.125。
+
+
 ### §24.124.1 范围与原始等级
 
 本子批只处理 BO-13 会话内 Stop 出口，以及 BO-11 对 BO-6/7/8/9 的逐项冻结登记。BO-13 原等级为 batch20 R47 **重要**；BO-6 原等级为 R19 **必改**、同族 R21 F4 **重要**；BO-7 的 R21 F1、F2 均 **必改**；BO-8 的 R29 与 BO-9 的 R34 F5 均 **重要**。本批不重开 BO-4、BO-10 或 BO-12。原始来源见 `_workflow/sb21-4/raw-bo-obligations.json` 和独立机器台账；状态与交错矩阵见 `_workflow/sb21-4/scope-and-state-table.md`。
@@ -4943,3 +4949,98 @@ GPT R8（gpt-6-astra / medium，独立台账累计 8/8）对 BO-13 原始 R1 #1�
 
 最终声明面清单在上述文档修正后以 `CLAIM_SURFACE_REGENERATE=1` 再生，再清除环境变量复跑；两次均通过且 SHA 稳定，确切 SHA 与独立 TRX 见 `_workflow/sb21-4/review/r8-review-20260928-v1/postreview-closeout/claim-surface-evidence.json`。R8 两项目构建和定向/助手全量结果见同目录。未验证 BGI 生产进程、真实 User、R5.8、E3/E4/E5、热键面或实机；所有生产入口及运行门保持关闭。
 生产入口门、真实 User 门与 R5.8 签署继续关闭；停驻语义生产不可达（`ShouldRegisterLocalWait` 生产恒 null，`waitLocally` 无生产产出方）。不援引措辞类豁免；声明面清单变更随本批提交评审。R44 起新发现按 owner 止损裁决登记台账残项（BO-14 起），未修复项已在 §24.120.4 与台账逐条登记归属。E3/E4/E5、热键面及 BGI 生产进程也保持关闭。以上均为源码、助手构建和组件/Host 测试接缝证据，不是 BGI 实机、真实 facade 调度或生产 User 验证；BO-6/7/8/9 的重要/必改风险尚未排除，不据此打开推进或收尾生产门。
+## §24.125 Wave3 独立子批——BO-6 停驻冲突与 BO-7 救援全序（2026-09-28）
+
+### §24.125.1 范围、原级与实现决策
+
+本子批承接 §24.124 冻结项，只施工 BO-6 及直接依赖它的 BO-7 R21 F1/F2。BO-6 R19 **MUST**、关联 R21 F4 **IMPORTANT**、BO-7 R21 F1/F2 **MUST** 按原等级处置；不重开 BO-13、SB21-3 BO-4、SB21-2 BO-10/12，不纳入 BO-8/9。原始等级与合同仍以 `_workflow/sb21-4/raw-bo-obligations.json` 及机器台账为准。
+
+实现选择 BO-6 允许的**恢复推进时完成过滤**。当恢复记录含持久 `waitLocally` 历史，显式 `ResumeAsync` 在覆盖当前修订号前重算恢复 successor；即使保存游标在新 plan 仍可定位，也必须审查所有未完成停驻义务。`RecomputeSuccessor` 逐一检查仍有效停驻义务，锚前冲突优先保留最早有效停驻点；candidate 与 rescue 按 `(LoopIteration, SequenceIndex)` 计划全序选择。`DriveAsync` 按稳定出现身份逐步推进，跳过同一 run 已完成的 occurrence，未完成节点照常运行；不含停驻历史的普通修订推进仍留在 BO-8 范围之外。若带有未清偿停驻的持久记录已标记 `TailReached`，不得重开为成功；聚合保护将其置 `Failed`，不创建 `PendingCompletion`、不执行收尾。
+
+### §24.125.2 真实 Runner/loop 反例与覆盖
+
+修复前真实 Runner/loop 反例证明锚前冲突会错误执行终态动作；第 3 次会诊另构造一个保留当前有效游标 R 的交错，未修复时仅提交 `R, stop`，漏掉更早的 P1/Q 停驻。最终 mixed Runner fact 让 P1 初始序号为 1、删除期间推进 A/Q/B/R，再把 P1 同身份插回序号 0；保留 R 游标，验证显式恢复仍依全序救援 P1/Q/R、过滤 lead/A/B，随后继续到 loop 第 1 轮，且旧第 0 轮身份各只完成一次。另有独立真实 Runner 防御夹具用持久 `TailReached`＋仍有效未清偿停驻，断言 `Failed`、无 pending 收尾、无终态动作。两条跨 loop Runner facts 覆盖 candidate@0/rescue probe@1 及 rescue P@0/candidate P@1。helper/排序组件测试不替代上述真实 Runner/loop 事实。
+
+### §24.125.3 反向突变与回归证据
+
+最终 Runner 源共完成 8 项独立反向突变。v3 七项覆盖显式 Resume 停驻重算、独立链尾失败保护、恢复推进完成过滤、candidate/rescue 两方向全序、同轮最早停驻、稳定身份；它们均保留各阶段独立 baseline/build/mutant/restored 日志和 TRX，mutant 构建成功并命中目标断言，baseline 与精确恢复通过。v3 执行时 Runner SHA original/restored 为 `5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96`，测试源 SHA 为 `c1197ed5b6f79029104b7949247ac19d9e224fe72dde4c4a23eef0c24e680cd9`；每项的实际 mutation diff、完整 experiment、TRX 和构建/测试日志已列入 `_workflow/wave3-bo6-bo7/mutations/raw-mutation-evidence-index.md`。
+
+GPT 第 4 次会诊还要求独立验证尾部 Failed 状态落盘。已新增返回后重新 `_runs.Load(run.RunId)` 的真实 Runner 断言，检查盘上 `Failed`、`TailReached`、P1/Q 停驻义务保留和无 `PendingCompletion`。第 8 项 v4 突变只移除该分支的 `_runs.Update(run)`：内存返回对象仍是 Failed，但盘上状态为 Running；测试在 `WorkflowRunnerTests.cs:line 1080` 命中目标断言。v4 baseline/build 通过，mutant build 成功且目标测试失败，源码恢复后的 build/test 通过；Runner 源 original/restored SHA 相同，当前测试源 SHA 为 `b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711`。该新断言的完整独立材料位于 `mutations/bo6-tail-persisted-failure-v4/`。行尾规范化说明：反向突变实验当时使用 Windows 行尾，之后本批源码按该仓库提交形态统一为 LF；两者内容逐字节相同，差异仅为 CRLF 与 LF。实验期散列与规范化后散列一一对应，映射表见 `_workflow/wave3-bo6-bo7/manifest.json` 的 `line_ending_normalization` 与 `_workflow/wave3-bo6-bo7/mutations/raw-mutation-evidence-index.md`；规范化后已重新执行定向与全量回归。
+
+助手主项目与测试项目使用 `-p:DeployToBgiTools=false` Rebuild 均 exit 0；最终 Runner/LocalWait/LocalWaitParking 状态合同定向套件为 93/93，助手全量为 1562 passed / 2 skipped / 0 failed / 1564。开工 HEAD 基线为 1558/2/0/1560。最终全量 testId 差集为 1556 unchanged、8 added、4 removed、0 changed：4 项是真实 Runner facts，4 项是更名后的 helper facts，4 个旧 helper ID 对应其更新后的 4 个 ID。另有两个保留 testId 的 helper 改了断言，因此 `0 changed` 只表示 testId/name 成员对照结果，不表示既有测试语义没有变化。旧的 88/88 结果是较窄 filter，遗漏 5 个仍相关的 `LocalWaitParkingStateContractTests`；最终 93 项包含开工 92 项全部 ID 和新增的 TailReached Runner fact。逐项映射见 `_workflow/wave3-bo6-bo7/regression/final/testid-comparison-final.json` 与 `runner-localwait-comparison.json`。
+
+声明面守卫曾因本节旧预算摘要与当前状态不一致而精确失败。修正 R5.3 状态/预算声明后重新执行 regen 与 no-env 守卫，二者均 1/1 通过；清单 SHA 稳定为 `9EAA1A7F6EFAECCB763DA8EE10520E01B128F3129E6DBFB831295EA58CD083DC`。最终同源码版本复跑的 Runner/LocalWait/Parking 定向套件为 93/93、助手全量为 1562/2/0/1564，独立 build/log/TRX、前后散列与 testId 差集见 `_workflow/wave3-bo6-bo7/regression/owner-checkpoint/claim-surface-post-correction/`。这些本地工具结果只证明清单与测试一致，不构成原级会诊裁决；四项义务继续阻断。
+
+### §24.125.4 会诊状态、预算与 owner 检查点（阶段记录）
+
+本独立子批固定会诊模型/强度为 gpt-6-astra / medium。两次早期发送结果因本地回收脚本分别缺少 TextEncoder、btoa 而未保存报告；第 3、4 次取得报告并提出原级 MUST/IMPORTANT 与后续证据要求。之后另有两次 BO-6 R19 MUST / R21 F4 IMPORTANT 同范围 GPT 工具调用：分别于 2026-09-28 07:13:36Z 与 08:15:18Z 返回 Codex exit code 1、Attempts: 2，均无报告。原始返回见 consultation/gpt-r5-failure.json、consultation/gpt-request7-8-failure.json；两次调用均非附件超限。具体错误根因未从返回中获知，只能记为会诊执行器/Codex worker 退出的可能，不能断言是上下文或网络问题。
+
+计数并列记录为 **GPT 会诊工具调用 6 次**、**工具错误与台账报告的服务尝试 8 次**。前四次工具调用各按一个已发送请求计数，后两次各报告 Attempts: 2，保守各计两次。保存的错误没有逐个 retry 的底层 dispatch/接受遥测，所以“实际底层送达次数”不能独立确认；预算按最保守已发送失败口径保持 **8/8，余额 0**，不得改回未耗尽。第 1、2 次未回收和两次错误调用都不能当作无发现。外部 task-relay 曾显示旧的 6/8 和 request 7 未发，现已依据 request7 原始元数据与工具返回对账；详见 consultation/current-ledger-reconciliation.json。
+
+会诊材料选择有两个权威时点：78e201af3 提交中的设施规则对应附件传输超限后才本地回退；当前主工作区的设施文件、AGENTS.md 与项目 Skill 又增加完整 prompt token 估算、有效上下文余量，以及同范围经允许重试无报告且输入达到有效上下文三分之一的条件。隔离 worktree 设施副本仍旧，按用户指示只读主工作区与提交内容、保留本地旧文件且未把设施/Skill 纳入本批提交。当前 request7 最终 24 个路径共 1,728,816 bytes，最大文件 228,706 bytes，低于已知 30 文件、单文件 524,288 bytes、总量 2,097,152 bytes 附件限制。送审记录没有 token 数估算或当前 GPT 通道有效上下文测量，因此不能证明满足新规则的三分之一回退阈值，也不能把执行器退出单独当成超限。按当前用户要求，owner 检查点完成前不发送任何 GPT 或本地 CLI 会诊；本地 CLI 未启动、未试跑、没有报告。
+
+上述阶段四项原级义务曾逐项登记为开放，并作为 owner 检查点提交；后续 owner 批准追加两次独立会诊，已按原等级逐项闭环，见 §24.125.5。
+
+owner 随后批准追加 2 次独立会诊；两次均已按批准的固定范围执行并取得原级裁决（§24.125.5）。追加额度 2/2 用尽、余额 0，原 8/8 计数不变；不再新增会诊请求。
+
+提交与收口登记：本子批代码与文档提交为 `10675950a`，workflow 证据、反向突变原始材料与收口快照提交为 `600f9ef8c`；提交后收口快照与 verify 记录见 `_workflow/wave3-bo6-bo7/closeout-owner-20260928-v8/`。大量中间审计快照与重复 TRX 按既有批次惯例留在工作区，未纳入提交。
+
+最终修订上的送审准备度：review 阶段 `workflow.py audit` 与 `verify` 机械核验均通过，快照 `_workflow/wave3-bo6-bo7/review-owner-ready-20260928-v1`；两个拟议范围（BO-6 R19/F4、BO-7 R21 F1/F2）的精确清单与本地通道预检（18 文件 / 1,487,029 字节与 19 文件 / 1,509,710 字节，最大单文件 228,706 字节）见 `consultation/owner-ready-preflight.json`，均落在已知附件限制内。GPT 通道有效上下文窗口未测量，故不据字节数主张满足本地 CLI 回退条件；该预检只做本地估算与清单固定，未发送任何 GPT 或本地 CLI 请求。
+
+### §24.125.5 Owner 批准追加会诊与原级闭环（2026-09-28）
+
+owner 依据 §24.125.4 检查点明确批准本子批**额外最多 2 次**独立会诊，原 8/8 保留、不重置、不滚动追加，并要求优先使用独立本地 GPT/Codex CLI 只读通道、保持 gpt-6-astra / medium。附加约束：正式发起前先做不消耗会诊次数的模型/登录/只读权限/源码版本/证据路径/完整 diff/上下文容量预检；若本地通道不满足条件先报阻断，不自行换模型或改回原工具；每次实际发出的失败或超时也从这 2 次扣除。
+
+**通道与预检**：本地 Codex CLI 包装脚本 `ask_codex.ps1` 因存在 `~/.codex-deepseek/config.toml` 会自动选择 DeepSeek 运行时并拒绝 `medium`（该运行时为 deepseek-flash，非 gpt-6-astra），无法表达 owner 指定的模型/强度，故改用直接调用 `codex exec`；未修改任何本地配置。预检全部为本地命令、未派发模型请求：目录含 `gpt-6-astra`（窗口 272,000、有效 95% ≈ 258,400、默认 medium、支持 medium）；`codex doctor` 报 auth 已配置（chatgpt tokens，有效期约 8.7 天）且 provider 端点 HTTP 可达；`-s read-only` 可用、工作区受信任；HEAD 固定 `0f46128fbba75ea346a9e05b94ec12f55f062b3e` 且 6 个 manifest 源文件哈希全部匹配；两范围证据路径齐备；完整批次 diff 已生成并登记。运行期以 `-c features.hooks=false` 与 `-c notify=[]` 排除本地钩子与桌面通知干扰。容量预算：整读全部长格式原件约 45.3 万 token 会超有效窗口，故提供紧凑判定包并限制总阅读量约 12 万 token，长格式原件按需分片读取。记录见 `consultation/owner-approved-cli-preflight.json`。
+
+**两次请求**：请求 9 仅审 BO-6 R19 MUST 与 R21 F4 IMPORTANT，exit 0、182.8 秒，报告 `review-cli-a-bo6/run/review.md`（sha256 `de8a8176…b4e8bc`，thread `01a0e788-ec95-7803-b183-97b0fbd6898b`）；请求 10 仅审 BO-7 R21 F1/F2 MUST，exit 0、183.0 秒，报告 `review-cli-b-bo7/run/review.md`（sha256 `5b886136…b438479`，thread `01a0e78c-3293-7b93-90f9-bd32eb461ed5`）。模型与强度由本地 rollout 记录证实为 `gpt-6-astra` / `medium`；无失败、无超时、未换模型、未降强度、未改回原工具。**追加额度 2/2 用尽，余额 0**；原 8/8 不变。
+
+**逐项原级裁决**：BO-6 R19 **MUST** closed；BO-6 R21 F4 **IMPORTANT** closed；BO-7 R21 F1 **MUST** closed；BO-7 R21 F2 **MUST** closed。两份报告的收尾结论均为"本范围仍有未闭合的 MUST/IMPORTANT：否"，且都未提出新的 MUST/IMPORTANT。关键证据链：`WorkflowRunner.cs:568–571`／`:1503–1516`／`:655–662`／`:1575–1579`／`:745–759`（BO-6）；`:1460–1467`／`:1541–1546`／`:1411–1426`（BO-7）；真实 Runner facts 见 `WorkflowRunnerTests.cs:1005–1016`、`:1023–1029`、`:1071–1086`、`:1090–1135`、`:1138–1175`；8 项反向突变经两人分别逐项解析原始 baseline/mutant/restored TRX 并核对补丁重建与恢复散列。逐项处置见 `consultation/owner-approved-requests-9-10.md`。
+
+**报告新发现与处置**：两项建议级。①请求 9 指出送审汇编包 `review-r9/raw-mutation-bundles/bo6-tail-persisted-failure-v4.txt` 内嵌 experiment.json 快照的全路径 `mutation.patch` 哈希为旧值 `d7dfbe59…`，当前原件为 `fd6da338…`——**采纳并以说明注明版本差异**（该包为修正前冻结快照；权威 `experiment.json` 的 11 项 artifact 哈希与 `owner-checkpoint-recheck.json` 已全部匹配磁盘实际文件），说明见该目录 `METADATA-CURRENCY-NOTE.md`，不改写证据。②请求 9 与请求 10 独立指出同一处注释陈旧：`WorkflowRunner.cs:1486` 仍写"取最后一条可定位停驻标记为基准"，`1535–1537` 仍以"DriveAsync/Relocate 无完成跳过"为下界理由——**接受观察但本批不改动源码，登记为具名文档残项 BO-6/7-D1**。理由是三条可复核事实：会诊裁决绑定当前字节（两份报告均记录当时源码 SHA 并据此核验突变绑定），改动后追加额度已用尽、无法再取得同等级复审；改动会作废 manifest 源哈希、8 项突变绑定与送审汇编包内嵌哈希，需重跑约 24 次构建/测试并重新生成审查者已核验的汇编包；两位审查者均评定为建议级且明确未据此发现运行正确性缺陷。修复条件为"在下一次重新绑定 `WorkflowRunner.cs` 哈希的改动中一并修正，并按该次改动自身要求重跑反向突变与受影响回归"；owner 亦可选择立即另批修正或仅接受为文档说明。
+
+**边界**：会诊结论只覆盖助手侧源码与已保存的真实 Runner/驱动夹具证据，外部执行边界为 fake；BO-8/9 不并入，R5.6／R6.1／R6 diff guard 未提前集成，BGI 生产入口、真实 User、R5.8、E3/E4/E5、热键面与生产进程继续关闭，未做实机或生产验证。
+
+C1 矩阵措辞歧义仍以 current-clarifications.md 解释，并保留 opening.json 与 risk-matrix.json 原文；不改写冻结矩阵。BO-8 R29 IMPORTANT 与 BO-9 R34 F5 IMPORTANT 仍不并入。所有 BGI 产品入口、真实 User、R5.8、E3/E4/E5、热键面和生产进程继续关闭；未进行实机或生产验证。
+
+
+## §24.126 Wave3 BO-6/BO-7 主线接收与集成验证（2026-09-28）
+
+### §24.126.1 接收对象与来源绑定
+
+本批是**接收批**：把已独立交付、并按原等级闭环的 BO-6/BO-7 修复接入茶包主线。不施工 BO-8/BO-9，不提前集成 R5.6、R6.1 或 R6 diff guard，也不重开已闭合的 BO-13、SB21-3 BO-4、SB21-2 BO-10/12。
+
+- 来源交付 ID `wave3-bo6-bo7-2026-09-28`；隔离 worktree `C:\Users\Administrator\.codex\worktrees\wave3-bo6-bo7\better-genshin-impact-LCB`，交付 HEAD `e009068e22b18d89f4eb9f8947fa937dfa8c925c`，开工基线 `e2613a851bd45c28fdd56b84dfc10784e1d9c9b8`。
+- 权威检查点 `_workflow/wave3-bo6-bo7/owner-checkpoint.md`；登记 SHA-256 `A4AB77476298FD7AB3847930C0A92BA72F234424EC6A4D3B1706AB17809C75B1`，接收时逐字节复核一致。
+- 交付提交链：`10675950a`（代码与状态文档）→ `600f9ef8c`（workflow 证据与反向突变原始材料）→ `fb691f56a`（owner 批准追加会诊按原级闭环）→ `e009068e2`（最终 HEAD 收口快照 v13）。
+- 四项原级义务在来源侧由 owner 批准的两次追加独立会诊按**原等级**裁定 closed：BO-6 R19 **MUST**、BO-6 R21 F4 **IMPORTANT**、BO-7 R21 F1 **MUST**、BO-7 R21 F2 **MUST**；两份报告的收尾结论均为「本范围仍有未闭合的 MUST/IMPORTANT：否」。报告原件随本批收录于 `_workflow/wave3-bo6-bo7/review-cli-a-bo6/`、`_workflow/wave3-bo6-bo7/review-cli-b-bo7/`；逐项处置见 `_workflow/wave3-bo6-bo7/consultation/owner-approved-requests-9-10.md`。
+
+### §24.126.2 接收方式（最小且逐字节可核）
+
+只接收交付相对基线的**产品／测试／状态文档增量**，不合并整个隔离分支，也不搬入重复的大型中间证据（6 份 closeout 快照的 report.json／packet.md 与逐突变 TRX 日志包仍只保留在来源 worktree，并保留到本次接收验证完成）。
+
+- 逐字节导入的产品与夹具文件：`MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs`、`Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs`、`.../LocalWaitIdentityTranslationTests.cs`、`.../ClaimSurfaceManifest.txt`。
+- 逐字节导入的状态文档：本文件 R5.3、`_batch21/b21_plan.md`、`_batch21/sb21-4-handoff-2026-09-28.md`、`槲寄生调度器总计划.md`。
+- 逐字节导入的少量权威证据（`_workflow/wave3-bo6-bo7/` 下的检查点、上下文／发现／预算、风险矩阵、两次追加会诊报告与运行元数据、会诊台账对账、突变证据索引、testId 对照）；该目录在主线上属**部分收录**，边界与未收录清单见 `_workflow/wave3-bo6-bo7/INTAKE-NOTE.md`。
+- 导入以 `git checkout e009068e2 -- <路径>` 完成：导入后 8 个产品／文档文件在主线的 `git diff HEAD` 与来源 `git diff e2613a851 e009068e2` 逐字节相同，未做任何改写或适配。
+- 主线工作区按 `core.autocrlf=true` 为 CRLF 检出，仓库 blob 为 LF；两种形态内容逐字节相同（仅行尾差异）。因此本节后续记录的主线 SHA-256 为工作区 CRLF 形态，来源清单记录的是仓库 LF 形态。
+
+### §24.126.3 集成版本证据（在主线上重跑，不复用来源数字）
+
+- 构建：`dotnet build MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj -t:Rebuild -p:DeployToBgiTools=false` 与测试项目同参数 Rebuild 均 exit 0。部署目标（`BetterGenshinImpact/bin/x64/Debug/net8.0-windows10.0.22621.0/Tools/MultiplayerHoeingAssistant`）在全部构建与测试前后未被写入。
+- 同条件主线基线（接收前 HEAD `6fd6207e5`）：定向三类 89/89；助手全量 **1558 通过／2 跳过／0 失败／1560**，与来源开工基线 1558/2/0/1560 同值。
+- 集成后定向三类（`LocalWaitIdentityTranslationTests`＋`LocalWaitParkingStateContractTests`＋`WorkflowRunnerTests`）**93/93**；其 93 个 testId、测试名与结果与来源交付最终定向 TRX **完全相同**。助手全量 **1562 通过／2 跳过／0 失败／1564**。
+- testId 差集（接收前基线 → 集成后）：**1556 unchanged／8 added／4 removed／0 changed**，与来源交付逐 ID 相同：4 个新增为真实 Runner facts，4 个 removed 与 4 个 renamed helper 一一对应。两个保留 testId 的 helper 断言语义已变更，故 `0 changed` 只表示 testId／名称／结果层面的成员一致，不表示既有测试语义未变。
+- 8 项反向突变在**集成后的字节上重新执行**（不复制来源记录）：全部 baseline Passed／mutant Failed／restored Passed，构建三阶段 exit 0，命中同一批具名目标与断言行（`WorkflowRunnerTests.cs:1008／1071／1080／1131／1173`），源码逐字节精确恢复；8 个 mutant SHA-256 与来源交付记录**完全相同**，证明是同一批突变作用于同一份内容。
+
+### §24.126.4 声明面处置与两处版本关系
+
+追加本节即改变声明面，按 §17.4-A 第 1 条本批**不得**援引措辞类豁免：先再生 `ClaimSurfaceManifest.txt`，评审清单差异，再清除 `CLAIM_SURFACE_REGENERATE` 复跑守卫，再生结果随本批提交并作为本批源文件纳入受审范围。
+
+接收时发现一处**声明面版本引用陈旧**（建议级材料问题）：§24.125.3、`_workflow/wave3-bo6-bo7/owner-checkpoint.md`、`_batch21/b21_plan.md`、`_batch21/sb21-4-handoff-2026-09-28.md` 与总计划均把清单 SHA 记为 `9EAA1A7F6EFAECCB763DA8EE10520E01B128F3129E6DBFB831295EA58CD083DC`，而随交付提交的清单实际为 `84E1D93DCC4D8B4B13EEB82C8CD9C25163FF9C18E59E3F772184997528B6D10D`。原因已核清：`9EAA1A7F…` 是「修正 §24.125 状态／预算声明」那一步的中间值；其后 §24.125.5 的 owner 批准追加会诊闭环文本再次改变声明面，交付侧随后执行了 `regression/claim-surface-post-consultation/` 的再生（`manifest-before`=`9EAA1A7F…` → 再生后 `84E1D93D…`）却未回改前述散文引用。**处置**：本批不改写已审并与登记哈希绑定的来源工件（改写会使检查点登记哈希失效），改为在本节登记权威口径——**最终权威值以随提交的清单文件为准**；`9EAA1A7F…` 只作该步中间值，不得再被引用为最终值。另核：交付清单记录 `original_sha256`/`restored_sha256` 为 LF 形态 `181aa93e…`，而 8 个 `mutant_sha256` 为 CRLF 形态，属同一内容的不同行尾形态；本批记录全部统一为工作区 CRLF 形态，内部自洽。
+
+### §24.126.5 剩余项与边界
+
+- **BO-6/7-D1（建议级，注释陈旧）**：状态不变。两位来源审查者独立指出 `WorkflowRunner.cs` 中两处注释与实现不一致（`:1486`、`:1535–1537`），均评为建议级且明确未据此发现运行正确性缺陷。本批不为它单独改写已审源码；按既定处置留待下一次重新绑定 `WorkflowRunner.cs` 哈希的批次一并修正，并按该批质量门验证。
+- **BO-8 R29 IMPORTANT、BO-9 R34 F5 IMPORTANT** 仍未并入、仍未闭合；R5.6、R6.1、R6 diff guard 未提前集成。
+- BGI 产品入口、真实 User、R5.8、E3/E4/E5、热键面与生产进程门继续关闭；本批只给助手侧源码、真实 Runner 驱动夹具与主线集成回归证据，外部执行边界仍为 fake，不声称实机或生产验收。

@@ -1,0 +1,4 @@
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
+@@ bo7-rescue-first-v3 @@
+- return parkedRescue ?? candidate;  ==>  return candidate ?? parkedRescue;

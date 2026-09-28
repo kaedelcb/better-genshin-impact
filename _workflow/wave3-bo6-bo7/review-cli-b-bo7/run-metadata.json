@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "batch": "wave3-bo6-bo7",
+  "kind": "owner-approved additional consultation (local read-only CLI)",
+  "request_number": 10,
+  "scope": "BO-7 R21 F1/F2 MUST",
+  "channel": "local Codex CLI (codex exec), default runtime / aiotto provider",
+  "invocation": "codex exec -m gpt-6-astra -c model_reasoning_effort=\"medium\" -s read-only -C <fixed worktree> -c features.hooks=false -c notify=[] --json -o review.md -",
+  "fixed_snapshot": {
+    "head": "0f46128fbba75ea346a9e05b94ec12f55f062b3e",
+    "worktree": "C:\\Users\\Administrator\\.codex\\worktrees\\wave3-bo6-bo7\\better-genshin-impact-LCB"
+  },
+  "model": "gpt-6-astra",
+  "reasoning_effort": "medium",
+  "read_only": true,
+  "thread_id": "01a0e78c-3293-7b93-90f9-bd32eb461ed5",
+  "rollout_path": "C:\\Users\\Administrator\\.codex\\sessions\\2026\\09\\28\\rollout-2026-09-28T18-25-20-01a0e78c-3293-7b93-90f9-bd32eb461ed5.jsonl",
+  "exit_code": 0,
+  "elapsed_seconds": 183.0,
+  "started_at_utc": "2026-09-28T10:25:19.9254443Z",
+  "usage": {
+    "input_tokens": 1189776,
+    "cached_input_tokens": 1073536,
+    "cache_write_input_tokens": 0,
+    "output_tokens": 5794,
+    "reasoning_output_tokens": 904
+  },
+  "artifacts": {
+    "review.md": {
+      "bytes": 5008,
+      "sha256": "5b886136bafb77634c898aba2292e5b06cc4723e283974784824c5abbb438479"
+    },
+    "events.jsonl": {
+      "bytes": 429627,
+      "sha256": "3f7978c7cde8df34595975caaab1f121cc2b1d4c804b6cc32fee0fc27f2b3b56"
+    },
+    "stderr.log": {
+      "bytes": 739,
+      "sha256": "a772d202e44faa9f596139ca38f8eadbe9e332c7704e29e8905c8c4ce189a448"
+    },
+    "exit-code.txt": {
+      "bytes": 1,
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+    },
+    "elapsed-seconds.txt": {
+      "bytes": 3,
+      "sha256": "b8aed072d29403ece56ae9641638ddd50d420f950bde0eefc092ee8879554141"
+    }
+  },
+  "report_recovered": true,
+  "model_verified_from_rollout": true
+}

@@ -1,0 +1,529 @@
+{
+  "meaning": "Compact, independently checkable verification record for the eight reverse mutations re-executed on the integrated mainline bytes. Raw TRX XML and build logs remain under _workflow/wave3-bo6bo7-receive/mutations/<id>/; this record carries the outcome, target identity, assertion location, digests and the source-vs-receive hash comparison so the claim can be checked without shipping ~24 TRX files.",
+  "source_of_recorded_values": "The source delivery accepted-state values are read from the source batch manifest (_workflow/wave3-bo6-bo7/manifest.json at commit e009068e2); the live per-mutation experiment records in the source worktree are untracked and are not re-read here.",
+  "original_sha256_worktree_form": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+  "note_on_hash_forms": "original/restored are the same working-tree bytes for every mutation (CRLF form, 5470cfcb...). The source batch manifest recorded 181aa93e... for original/restored (the LF repository-blob form of the same content) and recorded mutant hashes in the CRLF form; this batch records every hash in the CRLF working-tree form, so original/restored differ from the source manifest text while all eight mutant hashes match it exactly.",
+  "mutations": [
+    {
+      "id": "bo6-resume-live-park-v3",
+      "description": "Disable the explicit-Resume parked recomputation so a still-locatable R cursor hides the earlier P1/Q parks.",
+      "mutation_label": "if (!run.TailReached && run.NodeOutcomes.Any(o => o.Result == LocalWaitResultWord))  ==>  if (false && run.NodeOutcomes.Any(o => o.Result == LocalWaitResultWord))",
+      "target_test_id": "398aed81-8691-87dd-a9cd-c62780f5f924",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+      "baseline": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo6-resume-live-park-v3/baseline/bo6-resume-live-park-v3-baseline.trx",
+        "file_sha256": "8bf3f29a24c193ca82afb8dbdbf1a180bf030d8a39ce7652318d1a2b9834983e",
+        "coverage": {
+          "total": "1",
+          "passed": "1",
+          "failed": "0"
+        },
+        "outcome": "Passed",
+        "testId": "398aed81-8691-87dd-a9cd-c62780f5f924",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+        "assertion_line": null,
+        "message": ""
+      },
+      "mutant": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo6-resume-live-park-v3/mutant/bo6-resume-live-park-v3-mutant.trx",
+        "file_sha256": "d6a3f4f682663361062426245b6e69e4bd98ea4030008e35076bc4de1c73624e",
+        "coverage": {
+          "total": "1",
+          "passed": "0",
+          "failed": "1"
+        },
+        "outcome": "Failed",
+        "testId": "398aed81-8691-87dd-a9cd-c62780f5f924",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+        "assertion_line": "WorkflowRunnerTests.cs:line 1008",
+        "message": "Assert.Equal() Failure: Collections differ\r\n                                                                             ↓ (pos 0)\r\nExpected: string[]                                                          [\"P1\", \"Q\", \"R\", \"stop\"]\r\nActual:   SelectListPartitionIterator<ValueTuple<string, int, int>, string> [\"R\", \"stop\"]\r\n                                                                             ↑ (pos 0)"
+      },
+      "restored": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo6-resume-live-park-v3/restored/bo6-resume-live-park-v3-restored.trx",
+        "file_sha256": "0c63a36e50901e08e0c5a41e28c79418fa7ed34710bcba673e1a21f586bc0f75",
+        "coverage": {
+          "total": "1",
+          "passed": "1",
+          "failed": "0"
+        },
+        "outcome": "Passed",
+        "testId": "398aed81-8691-87dd-a9cd-c62780f5f924",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+        "assertion_line": null,
+        "message": ""
+      },
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "original_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutant_sha256": "96212d01e57a66bc57c6def40b80e936ce12814bf94a01680ee068c8a83fb13e",
+      "restored_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "source_manifest_original_sha256": "181aa93e000be99d8eed9ce192587a56194d270e47f67bd561297a57476f14c9",
+      "source_manifest_mutant_sha256": "96212d01e57a66bc57c6def40b80e936ce12814bf94a01680ee068c8a83fb13e",
+      "mutant_sha256_matches_source_record": true,
+      "source_original_sha256_is_LF_form_of_same_content": true,
+      "source_original_cs_file_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutation_patch_sha256": "549dbc87309136b1839e29ed9c8bd48b4d1a40dec0da1ab21947f5502c1d9d51",
+      "build_log_sha256": "4f78510c9d56e7fd94b169910c8636a96df7db0a086b9ea8875cdfd232e1dba9",
+      "restored_equals_original": true,
+      "target_passed_failed_passed": true
+    },
+    {
+      "id": "bo6-completed-filter-v3",
+      "description": "Disable the completed-identity filter inside park-recovery advancement.",
+      "mutation_label": "if (filterCompletedDuringParkRecovery && HasCompletedOutcome(run, occurrence))  ==>  if (false && HasCompletedOutcome(run, occurrence))",
+      "target_test_id": "398aed81-8691-87dd-a9cd-c62780f5f924",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+      "baseline": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo6-completed-filter-v3/baseline/bo6-completed-filter-v3-baseline.trx",
+        "file_sha256": "20fc150bf2827e518d7ea9d4616f7603ff88d1ad0fca6127c7c668896613f79d",
+        "coverage": {
+          "total": "1",
+          "passed": "1",
+          "failed": "0"
+        },
+        "outcome": "Passed",
+        "testId": "398aed81-8691-87dd-a9cd-c62780f5f924",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+        "assertion_line": null,
+        "message": ""
+      },
+      "mutant": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo6-completed-filter-v3/mutant/bo6-completed-filter-v3-mutant.trx",
+        "file_sha256": "b6e699dbac2a61943a310f35f8345ee1377e3a6829f713dda2ecbfad20ee9660",
+        "coverage": {
+          "total": "1",
+          "passed": "0",
+          "failed": "1"
+        },
+        "outcome": "Failed",
+        "testId": "398aed81-8691-87dd-a9cd-c62780f5f924",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+        "assertion_line": "WorkflowRunnerTests.cs:line 1008",
+        "message": "Assert.Equal() Failure: Collections differ\r\n                                                                                   ↓ (pos 1)\r\nExpected: string[]                                                          [\"P1\", \"Q\", \"R\", \"stop\"]\r\nActual:   SelectListPartitionIterator<ValueTuple<string, int, int>, string> [\"P1\", \"lead\", \"A\", \"B\", \"Q\", ···]\r\n                                                                                   ↑ (pos 1)"
+      },
+      "restored": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo6-completed-filter-v3/restored/bo6-completed-filter-v3-restored.trx",
+        "file_sha256": "915cb9325f3c5865c3b841fec8e39c62b8a6214b0e6ac901f741fd42b80d2268",
+        "coverage": {
+          "total": "1",
+          "passed": "1",
+          "failed": "0"
+        },
+        "outcome": "Passed",
+        "testId": "398aed81-8691-87dd-a9cd-c62780f5f924",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+        "assertion_line": null,
+        "message": ""
+      },
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "original_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutant_sha256": "3115f2c3a4d81f0dce7097009f73d289287fd65e1b12eddfcc734ffb74dfd22e",
+      "restored_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "source_manifest_original_sha256": "181aa93e000be99d8eed9ce192587a56194d270e47f67bd561297a57476f14c9",
+      "source_manifest_mutant_sha256": "3115f2c3a4d81f0dce7097009f73d289287fd65e1b12eddfcc734ffb74dfd22e",
+      "mutant_sha256_matches_source_record": true,
+      "source_original_sha256_is_LF_form_of_same_content": true,
+      "source_original_cs_file_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutation_patch_sha256": "b4e75aa73e23c6ad00e71333201ca9643207a862d0e3f37200202d1c399dc243",
+      "build_log_sha256": "72b2828bd8e63f8957e23f43ca3722f6cc0786922e4b1194b41c09edc7018121",
+      "restored_equals_original": true,
+      "target_passed_failed_passed": true
+    },
+    {
+      "id": "bo6-tail-fail-closed-v3",
+      "description": "Disable only the unresolved-parked tail fail-closed aggregation.",
+      "mutation_label": "if (hadBadOutcome || unresolvedParkedOutcome || flowFailure)  ==>  if (hadBadOutcome || flowFailure)",
+      "target_test_id": "113f020c-1c29-e336-4c1a-3a50b69cbcc8",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_TailWithUnresolvedParkedObligationsFailsWithoutTerminalCompletion",
+      "baseline": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-fail-closed-v3/baseline/bo6-tail-fail-closed-v3-baseline.trx",
+        "file_sha256": "f6ec6490bcb0ce619548eb71edfdb2590318ada24be3828db54a85defbe408f5",
+        "coverage": {
+          "total": "1",
+          "passed": "1",
+          "failed": "0"
+        },
+        "outcome": "Passed",
+        "testId": "113f020c-1c29-e336-4c1a-3a50b69cbcc8",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_TailWithUnresolvedParkedObligationsFailsWithoutTerminalCompletion",
+        "assertion_line": null,
+        "message": ""
+      },
+      "mutant": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-fail-closed-v3/mutant/bo6-tail-fail-closed-v3-mutant.trx",
+        "file_sha256": "d059c50cce72323ebf7c8e5d5cdda79fe707f2c86cdb241e9ea77ecd9a56ff94",
+        "coverage": {
+          "total": "1",
+          "passed": "0",
+          "failed": "1"
+        },
+        "outcome": "Failed",
+        "testId": "113f020c-1c29-e336-4c1a-3a50b69cbcc8",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_TailWithUnresolvedParkedObligationsFailsWithoutTerminalCompletion",
+        "assertion_line": "WorkflowRunnerTests.cs:line 1071",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: Failed\r\nActual:   Succeeded"
+      },
+      "restored": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-fail-closed-v3/restored/bo6-tail-fail-closed-v3-restored.trx",
+        "file_sha256": "30fc2e81678876cb952945fc960c3b0ef8627f6530e9b4af4f226faa9baf08e5",
+        "coverage": {
+          "total": "1",
+          "passed": "1",
+          "failed": "0"
+        },
+        "outcome": "Passed",
+        "testId": "113f020c-1c29-e336-4c1a-3a50b69cbcc8",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_TailWithUnresolvedParkedObligationsFailsWithoutTerminalCompletion",
+        "assertion_line": null,
+        "message": ""
+      },
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "original_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutant_sha256": "ff0ff5bf3594f471acadaeddfcd2449b14e648deca509ad34541ecbf27bb5062",
+      "restored_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "source_manifest_original_sha256": "181aa93e000be99d8eed9ce192587a56194d270e47f67bd561297a57476f14c9",
+      "source_manifest_mutant_sha256": "ff0ff5bf3594f471acadaeddfcd2449b14e648deca509ad34541ecbf27bb5062",
+      "mutant_sha256_matches_source_record": true,
+      "source_original_sha256_is_LF_form_of_same_content": true,
+      "source_original_cs_file_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutation_patch_sha256": "0f156c0c2bceb701df76a7ec3405376dc285333be671ea9066eabbe515d4e8de",
+      "build_log_sha256": "17db5f948646939fc9c15f67eda57b9934dc4c543d670eba16b3ef33e4c58439",
+      "restored_equals_original": true,
+      "target_passed_failed_passed": true
+    },
+    {
+      "id": "bo7-candidate-first-v3",
+      "description": "Invert the cross-loop candidate/rescue full-order comparison.",
+      "mutation_label": "candidate.LoopIteration < parkedRescue.LoopIteration  ==>  candidate.LoopIteration > parkedRescue.LoopIteration",
+      "target_test_id": "1d029d1b-a82f-69cc-f8ee-1ba7c7957cdc",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_CandidateAndRescueAcrossLoop_UsesFullPlanOrderAndAdvancesThroughRunner",
+      "baseline": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo7-candidate-first-v3/baseline/bo7-candidate-first-v3-baseline.trx",
+        "file_sha256": "dbf2facae257ac1f9b10c21a81b7f88cca7ccd5ba5025ba0472f4d67567f7bf1",
+        "coverage": {
+          "total": "1",
+          "passed": "1",
+          "failed": "0"
+        },
+        "outcome": "Passed",
+        "testId": "1d029d1b-a82f-69cc-f8ee-1ba7c7957cdc",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_CandidateAndRescueAcrossLoop_UsesFullPlanOrderAndAdvancesThroughRunner",
+        "assertion_line": null,
+        "message": ""
+      },
+      "mutant": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo7-candidate-first-v3/mutant/bo7-candidate-first-v3-mutant.trx",
+        "file_sha256": "822227cb694cf6543359b38c6a7385ac433cdb2435b3b9e39d1c499eadc5891c",
+        "coverage": {
+          "total": "1",
+          "passed": "0",
+          "failed": "1"
+        },
+        "outcome": "Failed",
+        "testId": "1d029d1b-a82f-69cc-f8ee-1ba7c7957cdc",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_CandidateAndRescueAcrossLoop_UsesFullPlanOrderAndAdvancesThroughRunner",
+        "assertion_line": "WorkflowRunnerTests.cs:line 1131",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: Tuple (\"candidate\", 1, 0)\r\nActual:   Tuple (\"anchor\", 0, 1)"
+      },
+      "restored": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo7-candidate-first-v3/restored/bo7-candidate-first-v3-restored.trx",
+        "file_sha256": "b1cc35d6d90b905f6879102e3ad5d3774244269e97ed82e032e1d08a5bde6668",
+        "coverage": {
+          "total": "1",
+          "passed": "1",
+          "failed": "0"
+        },
+        "outcome": "Passed",
+        "testId": "1d029d1b-a82f-69cc-f8ee-1ba7c7957cdc",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_CandidateAndRescueAcrossLoop_UsesFullPlanOrderAndAdvancesThroughRunner",
+        "assertion_line": null,
+        "message": ""
+      },
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "original_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutant_sha256": "ef6ed36b1b8bc2b6a30ac64d3fd087540601264b33bed5722fb00c024c0f5562",
+      "restored_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "source_manifest_original_sha256": "181aa93e000be99d8eed9ce192587a56194d270e47f67bd561297a57476f14c9",
+      "source_manifest_mutant_sha256": "ef6ed36b1b8bc2b6a30ac64d3fd087540601264b33bed5722fb00c024c0f5562",
+      "mutant_sha256_matches_source_record": true,
+      "source_original_sha256_is_LF_form_of_same_content": true,
+      "source_original_cs_file_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutation_patch_sha256": "aa45c6c6f971dc64853cd8a35c4a9df093e10eecd5d9ab6696319a3f6056c3dd",
+      "build_log_sha256": "51a5183171d07fc9c3f924f798e88384be3e2b32ead6dc8649673bf02786ae4b",
+      "restored_equals_original": true,
+      "target_passed_failed_passed": true
+    },
+    {
+      "id": "bo7-rescue-first-v3",
+      "description": "Let the candidate unconditionally override an earlier parked rescue point.",
+      "mutation_label": "return parkedRescue ?? candidate;  ==>  return candidate ?? parkedRescue;",
+      "target_test_id": "7a665a8f-f8e9-11b4-598f-a1f8d24b805a",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_RescueBeforeNextLoopCandidate_UsesFullPlanOrderAndFiltersCompletedAnchor",
+      "baseline": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo7-rescue-first-v3/baseline/bo7-rescue-first-v3-baseline.trx",
+        "file_sha256": "84b6517c42b86a133289532245cfe35e9393526c777c1a41f49adb9c3b8ab27b",
+        "coverage": {
+          "total": "1",
+          "passed": "1",
+          "failed": "0"
+        },
+        "outcome": "Passed",
+        "testId": "7a665a8f-f8e9-11b4-598f-a1f8d24b805a",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_RescueBeforeNextLoopCandidate_UsesFullPlanOrderAndFiltersCompletedAnchor",
+        "assertion_line": null,
+        "message": ""
+      },
+      "mutant": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo7-rescue-first-v3/mutant/bo7-rescue-first-v3-mutant.trx",
+        "file_sha256": "b1f79ccce057681e2b86235da445eadeda48420a61b29b0b978676eb90dd943b",
+        "coverage": {
+          "total": "1",
+          "passed": "0",
+          "failed": "1"
+        },
+        "outcome": "Failed",
+        "testId": "7a665a8f-f8e9-11b4-598f-a1f8d24b805a",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_RescueBeforeNextLoopCandidate_UsesFullPlanOrderAndFiltersCompletedAnchor",
+        "assertion_line": "WorkflowRunnerTests.cs:line 1173",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: Tuple (\"P\", 0, 0)\r\nActual:   Tuple (\"P\", 0, 1)"
+      },
+      "restored": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo7-rescue-first-v3/restored/bo7-rescue-first-v3-restored.trx",
+        "file_sha256": "b5cf834adaa98cce2c344867d936ce023cafbf78c716a1c22181b5a1d37927e7",
+        "coverage": {
+          "total": "1",
+          "passed": "1",
+          "failed": "0"
+        },
+        "outcome": "Passed",
+        "testId": "7a665a8f-f8e9-11b4-598f-a1f8d24b805a",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_RescueBeforeNextLoopCandidate_UsesFullPlanOrderAndFiltersCompletedAnchor",
+        "assertion_line": null,
+        "message": ""
+      },
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "original_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutant_sha256": "e5fcb0af5aec40d9b6aeadb101e3854a0af12cab8c134b98193c5296d75a705c",
+      "restored_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "source_manifest_original_sha256": "181aa93e000be99d8eed9ce192587a56194d270e47f67bd561297a57476f14c9",
+      "source_manifest_mutant_sha256": "e5fcb0af5aec40d9b6aeadb101e3854a0af12cab8c134b98193c5296d75a705c",
+      "mutant_sha256_matches_source_record": true,
+      "source_original_sha256_is_LF_form_of_same_content": true,
+      "source_original_cs_file_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutation_patch_sha256": "a52ceb43423599ad9e4565303ec33a2ff1bb3786e182cdf96af7044f7f4ae06b",
+      "build_log_sha256": "14a00a57dac75993904d9b7020c5eaf594da951a9cff537f0524518a3bd45928",
+      "restored_equals_original": true,
+      "target_passed_failed_passed": true
+    },
+    {
+      "id": "bo7-earliest-park-v3",
+      "description": "Invert the plan-order selection among multiple active parks in one loop iteration.",
+      "mutation_label": "candidateOcc.SequenceIndex < earliestOcc.SequenceIndex  ==>  candidateOcc.SequenceIndex > earliestOcc.SequenceIndex",
+      "target_test_id": "398aed81-8691-87dd-a9cd-c62780f5f924",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+      "baseline": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo7-earliest-park-v3/baseline/bo7-earliest-park-v3-baseline.trx",
+        "file_sha256": "edd5bc2505babe56fb9227e2d93ec6476927a99ebc52d25b08efb85d8d1d94a9",
+        "coverage": {
+          "total": "1",
+          "passed": "1",
+          "failed": "0"
+        },
+        "outcome": "Passed",
+        "testId": "398aed81-8691-87dd-a9cd-c62780f5f924",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+        "assertion_line": null,
+        "message": ""
+      },
+      "mutant": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo7-earliest-park-v3/mutant/bo7-earliest-park-v3-mutant.trx",
+        "file_sha256": "f0d0f5b75323777bc4a448c598e56ba5c2b630dada7e3f111207817d904f4c75",
+        "coverage": {
+          "total": "1",
+          "passed": "0",
+          "failed": "1"
+        },
+        "outcome": "Failed",
+        "testId": "398aed81-8691-87dd-a9cd-c62780f5f924",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+        "assertion_line": "WorkflowRunnerTests.cs:line 1008",
+        "message": "Assert.Equal() Failure: Collections differ\r\n                                                                             ↓ (pos 0)\r\nExpected: string[]                                                          [\"P1\", \"Q\", \"R\", \"stop\"]\r\nActual:   SelectListPartitionIterator<ValueTuple<string, int, int>, string> [\"Q\", \"R\", \"stop\"]\r\n                                                                             ↑ (pos 0)"
+      },
+      "restored": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo7-earliest-park-v3/restored/bo7-earliest-park-v3-restored.trx",
+        "file_sha256": "1ccb088eb2cf29737635334890da0ff72c460670452ded3b6a7651982921c0c8",
+        "coverage": {
+          "total": "1",
+          "passed": "1",
+          "failed": "0"
+        },
+        "outcome": "Passed",
+        "testId": "398aed81-8691-87dd-a9cd-c62780f5f924",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+        "assertion_line": null,
+        "message": ""
+      },
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "original_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutant_sha256": "8668d00c7f7ec8d9fcf3b39100c79834fc5b70f8a8b9b17d6d8a7ae4adbc84e4",
+      "restored_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "source_manifest_original_sha256": "181aa93e000be99d8eed9ce192587a56194d270e47f67bd561297a57476f14c9",
+      "source_manifest_mutant_sha256": "8668d00c7f7ec8d9fcf3b39100c79834fc5b70f8a8b9b17d6d8a7ae4adbc84e4",
+      "mutant_sha256_matches_source_record": true,
+      "source_original_sha256_is_LF_form_of_same_content": true,
+      "source_original_cs_file_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutation_patch_sha256": "4c57632e515ab187793ff7cb987aafcbaadd7e8f40c3d611f20c1048c62e2003",
+      "build_log_sha256": "d049a4ea1a3d4a9bfa090551d9bc2bb961b78b8e1e293e0706f91660aa7c0a29",
+      "restored_equals_original": true,
+      "target_passed_failed_passed": true
+    },
+    {
+      "id": "bo7-stable-identity-v3",
+      "description": "Wrongly fold the mutable SequenceIndex into the stable completion identity.",
+      "mutation_label": "&& o.LoopIteration == occurrence.LoopIteration);  ==>  && o.LoopIteration == occurrence.LoopIteration && o.SequenceIndex == occurrence.SequenceIndex);",
+      "target_test_id": "398aed81-8691-87dd-a9cd-c62780f5f924",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+      "baseline": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo7-stable-identity-v3/baseline/bo7-stable-identity-v3-baseline.trx",
+        "file_sha256": "05fd726af4ed95e3b3f28814e35460fd100b570c95eb99fcdc4dbd8e87e9e4ff",
+        "coverage": {
+          "total": "1",
+          "passed": "1",
+          "failed": "0"
+        },
+        "outcome": "Passed",
+        "testId": "398aed81-8691-87dd-a9cd-c62780f5f924",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+        "assertion_line": null,
+        "message": ""
+      },
+      "mutant": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo7-stable-identity-v3/mutant/bo7-stable-identity-v3-mutant.trx",
+        "file_sha256": "4f6ffdb4431dd95e7f21ec87388a00f6304293db5396fd95383f63a406ab046d",
+        "coverage": {
+          "total": "1",
+          "passed": "0",
+          "failed": "1"
+        },
+        "outcome": "Failed",
+        "testId": "398aed81-8691-87dd-a9cd-c62780f5f924",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+        "assertion_line": "WorkflowRunnerTests.cs:line 1008",
+        "message": "Assert.Equal() Failure: Collections differ\r\n                                                                                   ↓ (pos 1)\r\nExpected: string[]                                                          [\"P1\", \"Q\", \"R\", \"stop\"]\r\nActual:   SelectListPartitionIterator<ValueTuple<string, int, int>, string> [\"P1\", \"lead\", \"A\", \"B\", \"Q\", ···]\r\n                                                                                   ↑ (pos 1)"
+      },
+      "restored": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo7-stable-identity-v3/restored/bo7-stable-identity-v3-restored.trx",
+        "file_sha256": "cfbb3b146221960e40992dcdefb3b938056e910ac16e16ae753369ad18116851",
+        "coverage": {
+          "total": "1",
+          "passed": "1",
+          "failed": "0"
+        },
+        "outcome": "Passed",
+        "testId": "398aed81-8691-87dd-a9cd-c62780f5f924",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+        "assertion_line": null,
+        "message": ""
+      },
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "original_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutant_sha256": "f04db2ad71114112ba5114d57df4114f062497ae48f0b5e6caefb3542d3b3df8",
+      "restored_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "source_manifest_original_sha256": "181aa93e000be99d8eed9ce192587a56194d270e47f67bd561297a57476f14c9",
+      "source_manifest_mutant_sha256": "f04db2ad71114112ba5114d57df4114f062497ae48f0b5e6caefb3542d3b3df8",
+      "mutant_sha256_matches_source_record": true,
+      "source_original_sha256_is_LF_form_of_same_content": true,
+      "source_original_cs_file_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutation_patch_sha256": "40656319385881e297159ec8ba0995e9cc21960d6e0a531439b73a48c5171092",
+      "build_log_sha256": "00ca174a0b6b79610a1b281c0c5530bfa53802f57ba658cb0c0ae94da934c7fc",
+      "restored_equals_original": true,
+      "target_passed_failed_passed": true
+    },
+    {
+      "id": "bo6-tail-persisted-failure-v4",
+      "description": "Remove only the durable _runs.Update(run) from the unresolved-parked aggregation branch; the in-memory record still returns Failed.",
+      "mutation_label": "remove _runs.Update(run); from the unresolved parked aggregation branch",
+      "target_test_id": "113f020c-1c29-e336-4c1a-3a50b69cbcc8",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_TailWithUnresolvedParkedObligationsFailsWithoutTerminalCompletion",
+      "baseline": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-persisted-failure-v4/baseline/bo6-tail-persisted-failure-v4-baseline.trx",
+        "file_sha256": "99d681953b1b71146ba63d74795089c39a0b712dfff2540368d47c3e94baeade",
+        "coverage": {
+          "total": "1",
+          "passed": "1",
+          "failed": "0"
+        },
+        "outcome": "Passed",
+        "testId": "113f020c-1c29-e336-4c1a-3a50b69cbcc8",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_TailWithUnresolvedParkedObligationsFailsWithoutTerminalCompletion",
+        "assertion_line": null,
+        "message": ""
+      },
+      "mutant": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-persisted-failure-v4/mutant/bo6-tail-persisted-failure-v4-mutant.trx",
+        "file_sha256": "0fef1e43d23dc13525e0fef8a5e79936cb449913fead8c430e3f6b7836cda56c",
+        "coverage": {
+          "total": "1",
+          "passed": "0",
+          "failed": "1"
+        },
+        "outcome": "Failed",
+        "testId": "113f020c-1c29-e336-4c1a-3a50b69cbcc8",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_TailWithUnresolvedParkedObligationsFailsWithoutTerminalCompletion",
+        "assertion_line": "WorkflowRunnerTests.cs:line 1080",
+        "message": "Assert.Equal() Failure: Values differ\r\nExpected: Failed\r\nActual:   Running"
+      },
+      "restored": {
+        "path": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-persisted-failure-v4/restored/bo6-tail-persisted-failure-v4-restored.trx",
+        "file_sha256": "dc6512827e67e94e59148a4b44411c095ca16a0371f8ae43bb582544d714fc3f",
+        "coverage": {
+          "total": "1",
+          "passed": "1",
+          "failed": "0"
+        },
+        "outcome": "Passed",
+        "testId": "113f020c-1c29-e336-4c1a-3a50b69cbcc8",
+        "testName": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_TailWithUnresolvedParkedObligationsFailsWithoutTerminalCompletion",
+        "assertion_line": null,
+        "message": ""
+      },
+      "build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "original_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutant_sha256": "a04531dc4871fc692e8c4661984b59783fee89ff46f22192ff1d8eda1f7dcce0",
+      "restored_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "source_manifest_original_sha256": "181aa93e000be99d8eed9ce192587a56194d270e47f67bd561297a57476f14c9",
+      "source_manifest_mutant_sha256": "a04531dc4871fc692e8c4661984b59783fee89ff46f22192ff1d8eda1f7dcce0",
+      "mutant_sha256_matches_source_record": true,
+      "source_original_sha256_is_LF_form_of_same_content": true,
+      "source_original_cs_file_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutation_patch_sha256": "683aa364efaceb229e7f4fa0d0c6d08321f765bc88411a3f5c401cedca4f61be",
+      "build_log_sha256": "2a7eadc509cae5fbe1775a039c97a23a948109aaa999c2d2d623790ef9e6c6ae",
+      "restored_equals_original": true,
+      "target_passed_failed_passed": true
+    }
+  ],
+  "all_eight_mutant_hashes_match_source_records": true
+}

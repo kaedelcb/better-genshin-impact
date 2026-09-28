@@ -936,4 +936,242 @@ public class WorkflowRunnerTests : IDisposable
         Assert.Contains("未确认", run.Note); // 远端未确认事实标注
         Assert.Null(run.CurrentSubmission!.ObservedTerminal); // 不猜远端已停
     }
+
+    [Fact]
+    public async Task Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences()
+    {
+        // 真实 Runner/loop 复现 BO-6 R19 + R21 F4 与 BO-7 R21 F2：P1 先停驻，
+        // 被删除期间 A、Q、B 依次推进并让 Q 停驻；最终 P1 同身份插回完成锚前、Q 留在完成锚后，
+        // 最新游标 R 保持可定位。较晚安全的 Q 不得遮蔽较早冲突的 P1；恢复需重驱两处并过滤 A/B。
+        var workflowId = SeedFlow(new WorkflowDocument
+        {
+            Name = "删除后插回的多个停驻",
+            Nodes = [DragonNode("lead", "配置前置"), DragonNode("P1", "配置P1")],
+            Terminal = [new WorkflowTerminalAction
+            {
+                Kind = "terminal.completionAction",
+                Params = new Dictionary<string, System.Text.Json.JsonElement>
+                { ["action"] = System.Text.Json.JsonSerializer.SerializeToElement("误触发收尾") },
+            }],
+        }).Split('|')[1];
+        var (runner, boundary, terminal) = MakeRunner();
+        var submitted = new List<(string NodeId, int SequenceIndex, int LoopIteration)>();
+        string? waitNode = "P1";
+        var waitLoop = 0;
+        boundary.OnSubmit = req =>
+        {
+            submitted.Add((req.Occurrence.NodeId, req.Occurrence.SequenceIndex, req.Occurrence.LoopIteration));
+            boundary.SubmitOverride = req.Occurrence.NodeId == waitNode && req.Occurrence.LoopIteration == waitLoop
+                ? BoundarySubmitResult.WaitWith("测试夹具要求本地停驻")
+                : null;
+            return Task.CompletedTask;
+        };
+
+        string Revise(params string[] ids)
+        {
+            var revision = _workflows.List().Single(x => x.WorkflowId == workflowId).Revision;
+            var document = _workflows.Load(workflowId);
+            document.Nodes = ids.Select(id => DragonNode(id, "配置" + id)).ToList();
+            document.Loop = ids.Contains("stop", StringComparer.Ordinal)
+                ? new WorkflowLoop { Mode = "immediate" }
+                : null;
+            return _workflows.Save(document, revision);
+        }
+
+        var first = await runner.StartAsync(workflowId);
+        Assert.Equal(WorkflowRunState.LocalWaitParking, first.State);
+        Assert.Contains(first.NodeOutcomes, o => o is { NodeId: "P1", LoopIteration: 0, Result: WorkflowRunner.LocalWaitResultWord });
+
+        // 删除 P1 后，Runner 必须能走到 A，再在 Q 停驻；P1 的历史义务仍保留。
+        waitNode = "Q";
+        Revise("lead", "A", "Q");
+        var second = await runner.ResumeAsync(first.RunId);
+        Assert.Equal(WorkflowRunState.LocalWaitParking, second.State);
+        Assert.Contains(second.NodeOutcomes, o => o is { NodeId: "A", Result: "succeeded" });
+        Assert.Contains(second.NodeOutcomes, o => o is { NodeId: "Q", LoopIteration: 0, Result: WorkflowRunner.LocalWaitResultWord });
+
+        // 再删除 Q，让 B 推进并在 R 停驻；最终让 P1 位于已完成 A/B 前、Q 位于其后。
+        waitNode = "R";
+        Revise("lead", "A", "B", "R");
+        var third = await runner.ResumeAsync(first.RunId);
+        Assert.Equal(WorkflowRunState.LocalWaitParking, third.State);
+        Assert.Contains(third.NodeOutcomes, o => o is { NodeId: "B", Result: "succeeded" });
+
+        waitNode = "stop";
+        Revise("P1", "lead", "A", "B", "Q", "R", "stop");
+        var finalStart = submitted.Count;
+        var final = await runner.ResumeAsync(first.RunId);
+
+        Assert.Empty(terminal.Actions); // 冲突不得按普通链尾成功或触发流程收尾
+        Assert.NotEqual(WorkflowRunState.Succeeded, final.State);
+        Assert.False(final.TailReached);
+        Assert.Equal(new[] { "P1", "Q", "R", "stop" }, submitted.Skip(finalStart).Select(x => x.NodeId));
+        Assert.Equal(WorkflowRunState.LocalWaitParking, final.State);
+        Assert.All(submitted.Skip(finalStart), x => Assert.Equal(0, x.LoopIteration));
+        Assert.Equal(1, final.NodeOutcomes.Count(o => o is { NodeId: "A", LoopIteration: 0, Result: "succeeded" }));
+        Assert.Equal(1, final.NodeOutcomes.Count(o => o is { NodeId: "B", LoopIteration: 0, Result: "succeeded" }));
+        Assert.Equal(1, final.NodeOutcomes.Count(o => o is { NodeId: "lead", LoopIteration: 0, Result: "succeeded" }));
+        Assert.Contains(final.NodeOutcomes, o => o is { NodeId: "P1", LoopIteration: 0, Result: "succeeded" });
+        Assert.Contains(final.NodeOutcomes, o => o is { NodeId: "Q", LoopIteration: 0, Result: "succeeded" });
+        Assert.Contains(final.NodeOutcomes, o => o is { NodeId: "R", LoopIteration: 0, Result: "succeeded" });
+
+        // 进入下一轮仍不能把 P1@1/Q@1 当成 P1@0/Q@0；旧义务已在第 0 轮被清偿。
+        waitNode = "P1";
+        waitLoop = 1;
+        var nextRoundStart = submitted.Count;
+        var nextRound = await runner.ResumeAsync(first.RunId);
+        Assert.Equal(WorkflowRunState.LocalWaitParking, nextRound.State);
+        Assert.Equal(new[] { ("stop", 0), ("P1", 1) },
+            submitted.Skip(nextRoundStart).Select(x => (x.NodeId, x.LoopIteration)));
+        Assert.Equal(1, nextRound.NodeOutcomes.Count(o => o is { NodeId: "P1", LoopIteration: 0, Result: "succeeded" }));
+        Assert.Equal(1, nextRound.NodeOutcomes.Count(o => o is { NodeId: "lead", LoopIteration: 0, Result: "succeeded" }));
+        Assert.Equal(1, nextRound.NodeOutcomes.Count(o => o is { NodeId: "Q", LoopIteration: 0, Result: "succeeded" }));
+        Assert.Contains(nextRound.NodeOutcomes, o => o is { NodeId: "P1", LoopIteration: 1, Result: WorkflowRunner.LocalWaitResultWord });
+    }
+
+    [Fact]
+    public async Task Resume_TailWithUnresolvedParkedObligationsFailsWithoutTerminalCompletion()
+    {
+        var seed = SeedFlow(new WorkflowDocument
+        {
+            Name = "仍有效停驻不得链尾假成功",
+            Nodes = [DragonNode("P1", "配置P1"), DragonNode("A", "配置A"),
+                DragonNode("B", "配置B"), DragonNode("Q", "配置Q"), DragonNode("R", "配置R")],
+            Terminal = [new WorkflowTerminalAction
+            {
+                Kind = "terminal.completionAction",
+                Params = new Dictionary<string, System.Text.Json.JsonElement>
+                { ["action"] = System.Text.Json.JsonSerializer.SerializeToElement("不应执行收尾") },
+            }],
+        }).Split('|');
+        var workflowRevision = seed[0];
+        var workflowId = seed[1];
+
+        // 构造防御性恢复快照：旧 TailReached 标志与当前计划中仍有效且未完成的零发送义务并存。
+        // 正常路径由上面的 Runner 救援测试推进；本夹具单独证明该持久化不一致只能显式失败。
+        var run = _runs.CreateRun(workflowId, workflowRevision);
+        run.State = WorkflowRunState.Interrupted;
+        run.TriggerConsumed = true;
+        run.WorkflowRevision = workflowRevision;
+        run.TailReached = true;
+        run.NodeOutcomes.Add(new WorkflowNodeOutcome
+        { NodeId = "P1", SequenceIndex = 0, Occurrence = 0, LoopIteration = 0, Result = WorkflowRunner.LocalWaitResultWord });
+        run.NodeOutcomes.Add(new WorkflowNodeOutcome
+        { NodeId = "A", SequenceIndex = 1, Occurrence = 0, LoopIteration = 0, Result = "succeeded" });
+        run.NodeOutcomes.Add(new WorkflowNodeOutcome
+        { NodeId = "B", SequenceIndex = 2, Occurrence = 0, LoopIteration = 0, Result = "succeeded" });
+        run.NodeOutcomes.Add(new WorkflowNodeOutcome
+        { NodeId = "Q", SequenceIndex = 3, Occurrence = 0, LoopIteration = 0, Result = WorkflowRunner.LocalWaitResultWord });
+        _runs.Update(run);
+
+        var (runner, boundary, terminal) = MakeRunner();
+        var failed = await runner.ResumeAsync(run.RunId);
+
+        Assert.Empty(boundary.Submissions);
+        Assert.Equal(WorkflowRunState.Failed, failed.State);
+        Assert.True(failed.TailReached);
+        Assert.Contains(failed.NodeOutcomes, o => o is { NodeId: "P1", Result: WorkflowRunner.LocalWaitResultWord });
+        Assert.Contains(failed.NodeOutcomes, o => o is { NodeId: "Q", Result: WorkflowRunner.LocalWaitResultWord });
+        Assert.Null(failed.PendingCompletion);
+        Assert.Empty(terminal.Actions);
+
+        // 验收真实 Runner 的持久化结果，而不是只检查 ResumeAsync 返回的内存对象。
+        var persisted = _runs.Load(run.RunId)!;
+        Assert.Equal(WorkflowRunState.Failed, persisted.State);
+        Assert.True(persisted.TailReached);
+        Assert.Contains(persisted.NodeOutcomes, o => o is
+            { NodeId: "P1", Result: WorkflowRunner.LocalWaitResultWord });
+        Assert.Contains(persisted.NodeOutcomes, o => o is
+            { NodeId: "Q", Result: WorkflowRunner.LocalWaitResultWord });
+        Assert.Null(persisted.PendingCompletion);
+    }
+
+    [Fact]
+    public async Task Resume_CandidateAndRescueAcrossLoop_UsesFullPlanOrderAndAdvancesThroughRunner()
+    {
+        // 新修订在已跑完的第 0 轮 anchor 后插入 candidate；仍有效的 park 在第 1 轮。
+        // SequenceIndex 较小的 rescue probe 位于更晚 loop，故真实 Runner 必须先执行 candidate@0。
+        var workflowId = SeedFlow(new WorkflowDocument
+        {
+            Name = "跨轮次 candidate/rescue 全序",
+            Nodes = [DragonNode("anchor", "配置A"), DragonNode("removed", "配置旧"),
+                DragonNode("park", "配置P"), DragonNode("tail", "配置T")],
+            Loop = new WorkflowLoop { Mode = "immediate" },
+        }).Split('|')[1];
+        var revision = _workflows.List().Single(x => x.WorkflowId == workflowId).Revision;
+        var current = _workflows.Load(workflowId);
+        current.Nodes = [DragonNode("anchor", "配置A"), DragonNode("candidate", "配置C"),
+            DragonNode("park", "配置P"), DragonNode("tail", "配置T")];
+        _workflows.Save(current, revision);
+
+        var run = _runs.CreateRun(workflowId, revision);
+        run.State = WorkflowRunState.Interrupted;
+        run.TriggerConsumed = true;
+        run.Cursor = new WorkflowNodeCursor { NodeId = "removed", Occurrence = 0, LoopIteration = 1, Attempt = 1 };
+        run.NodeOutcomes.Add(new WorkflowNodeOutcome
+        { NodeId = "anchor", SequenceIndex = 0, Occurrence = 0, LoopIteration = 0, Result = "succeeded" });
+        run.NodeOutcomes.Add(new WorkflowNodeOutcome
+        { NodeId = "park", SequenceIndex = 2, Occurrence = 0, LoopIteration = 1, Result = WorkflowRunner.LocalWaitResultWord });
+        _runs.Update(run);
+
+        var (runner, boundary, _) = MakeRunner();
+        var submitted = new List<(string NodeId, int SequenceIndex, int LoopIteration)>();
+        boundary.OnSubmit = req =>
+        {
+            submitted.Add((req.Occurrence.NodeId, req.Occurrence.SequenceIndex, req.Occurrence.LoopIteration));
+            boundary.SubmitOverride = req.Occurrence.NodeId == "park" && req.Occurrence.LoopIteration == 1
+                ? BoundarySubmitResult.WaitWith("到达第 1 轮停驻")
+                : null;
+            return Task.CompletedTask;
+        };
+
+        var resumed = await runner.ResumeAsync(run.RunId);
+
+        Assert.Equal(WorkflowRunState.LocalWaitParking, resumed.State);
+        Assert.Equal(("candidate", 1, 0), submitted[0]); // candidate@0 < rescue probe anchor@1 的计划全序
+        Assert.DoesNotContain(submitted, x => x is { NodeId: "anchor", LoopIteration: 0 });
+        Assert.Equal(("park", 2, 1), submitted[^1]);
+        Assert.Empty(resumed.NodeOutcomes.Where(o => o is { NodeId: "candidate", LoopIteration: 0, Result: "waitLocally" }));
+    }
+
+    [Fact]
+    public async Task Resume_RescueBeforeNextLoopCandidate_UsesFullPlanOrderAndFiltersCompletedAnchor()
+    {
+        // 锚 A@0 位于循环计划尾，candidate 是 P@1；有效停驻 P@0 全序更早。
+        // Runner 必须先重驱 P@0，过滤已完成 A@0，再按计划推进到 P@1。
+        var workflowId = SeedFlow(new WorkflowDocument
+        {
+            Name = "跨轮次 rescue 早于 candidate",
+            Nodes = [DragonNode("P", "配置P"), DragonNode("A", "配置A")],
+            Loop = new WorkflowLoop { Mode = "immediate" },
+        }).Split('|')[1];
+        var revision = _workflows.List().Single(x => x.WorkflowId == workflowId).Revision;
+        var run = _runs.CreateRun(workflowId, revision);
+        run.State = WorkflowRunState.Interrupted;
+        run.TriggerConsumed = true;
+        run.Cursor = new WorkflowNodeCursor { NodeId = "removed", Occurrence = 0, LoopIteration = 1, Attempt = 1 };
+        run.NodeOutcomes.Add(new WorkflowNodeOutcome
+        { NodeId = "A", SequenceIndex = 1, Occurrence = 0, LoopIteration = 0, Result = "succeeded" });
+        run.NodeOutcomes.Add(new WorkflowNodeOutcome
+        { NodeId = "P", SequenceIndex = 0, Occurrence = 0, LoopIteration = 0, Result = WorkflowRunner.LocalWaitResultWord });
+        _runs.Update(run);
+
+        var (runner, boundary, _) = MakeRunner();
+        var submitted = new List<(string NodeId, int SequenceIndex, int LoopIteration)>();
+        boundary.OnSubmit = req =>
+        {
+            submitted.Add((req.Occurrence.NodeId, req.Occurrence.SequenceIndex, req.Occurrence.LoopIteration));
+            boundary.SubmitOverride = req.Occurrence is { NodeId: "P", LoopIteration: 1 }
+                ? BoundarySubmitResult.WaitWith("到达下一轮停驻")
+                : null;
+            return Task.CompletedTask;
+        };
+
+        var resumed = await runner.ResumeAsync(run.RunId);
+
+        Assert.Equal(WorkflowRunState.LocalWaitParking, resumed.State);
+        Assert.Equal(("P", 0, 0), submitted[0]); // rescue P@0 < candidate P@1
+        Assert.DoesNotContain(submitted, x => x is { NodeId: "A", LoopIteration: 0 });
+        Assert.Equal(("P", 0, 1), submitted[^1]);
+    }
 }

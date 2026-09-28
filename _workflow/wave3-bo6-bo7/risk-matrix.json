@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "batch": "wave3-bo6-bo7",
+  "rows": [
+    {
+      "critical": true,
+      "id": "S1",
+      "scenario": "有效停驻 P1 经修订移到已完成锚 n2 之前，锚后仍有候选；真实 Runner/loop 处理冲突",
+      "expected": "停驻重驱义务不丢；已完成锚不重提交；run 不得错误聚合为 Succeeded 或触发完成收尾",
+      "dimension": "state",
+      "status": "covered",
+      "counterexample_ids": [
+        "runner-localwait-final-93"
+      ],
+      "test_ids": [
+        "398aed81-8691-87dd-a9cd-c62780f5f924",
+        "113f020c-1c29-e336-4c1a-3a50b69cbcc8"
+      ],
+      "mutation_ids": [
+        "bo6-resume-live-park-v3",
+        "bo6-tail-fail-closed-v3",
+        "bo6-completed-filter-v3",
+        "bo6-tail-persisted-failure-v4"
+      ]
+    },
+    {
+      "critical": true,
+      "id": "S2",
+      "scenario": "救援返回后沿新计划推进，经过已完成出现再推进 N 步",
+      "expected": "只跳过相同稳定身份的已完成出现；新的未完成出现按计划执行，已完成节点提交次数保持 0 次新增",
+      "dimension": "state",
+      "status": "covered",
+      "counterexample_ids": [
+        "runner-localwait-final-93"
+      ],
+      "test_ids": [
+        "398aed81-8691-87dd-a9cd-c62780f5f924"
+      ],
+      "mutation_ids": [
+        "bo6-resume-live-park-v3",
+        "bo6-completed-filter-v3",
+        "bo7-rescue-first-v3",
+        "bo7-stable-identity-v3"
+      ]
+    },
+    {
+      "critical": true,
+      "id": "S3",
+      "scenario": "同一 loop 中存在两个以上有效停驻义务且中间含已完成锚",
+      "expected": "完整消费每个仍有效停驻义务；不得因末一个停驻安全而忽略更早有效停驻",
+      "dimension": "state",
+      "status": "covered",
+      "counterexample_ids": [
+        "runner-localwait-final-93"
+      ],
+      "test_ids": [
+        "398aed81-8691-87dd-a9cd-c62780f5f924"
+      ],
+      "mutation_ids": [
+        "bo7-earliest-park-v3"
+      ]
+    },
+    {
+      "critical": true,
+      "id": "S4",
+      "scenario": "连续修订先删除停驻身份 P1，再以相同 node/occurrence/loop 身份插回",
+      "expected": "按最新 plan 全序重算，恢复 P1 的义务且不复用过期位置、不漏执行",
+      "dimension": "state",
+      "status": "covered",
+      "counterexample_ids": [
+        "runner-localwait-final-93"
+      ],
+      "test_ids": [
+        "398aed81-8691-87dd-a9cd-c62780f5f924"
+      ],
+      "mutation_ids": [
+        "bo7-earliest-park-v3",
+        "bo7-stable-identity-v3"
+      ]
+    },
+    {
+      "critical": true,
+      "id": "C1",
+      "scenario": "rescue 与尚未完成 candidate 跨 loop 候选竞争，candidate 的序号更早但轮次更晚",
+      "expected": "以 (LoopIteration, SequenceIndex) 全序比较，rescue 覆盖更早未完成 candidate 时推进决策稳定且确定",
+      "dimension": "concurrency",
+      "status": "covered",
+      "counterexample_ids": [
+        "runner-localwait-final-93"
+      ],
+      "test_ids": [
+        "1d029d1b-a82f-69cc-f8ee-1ba7c7957cdc",
+        "7a665a8f-f8e9-11b4-598f-a1f8d24b805a"
+      ],
+      "mutation_ids": [
+        "bo7-candidate-first-v3",
+        "bo7-rescue-first-v3"
+      ]
+    },
+    {
+      "critical": true,
+      "id": "C2",
+      "scenario": "多有效停驻点跨轮次分布，最后一条在锚后而更早一条在锚前；反复重算/Resume",
+      "expected": "按全序逐一裁决每个有效身份；反复恢复结果一致，停驻义务不丢且不重做已完成出现",
+      "dimension": "concurrency",
+      "status": "not_applicable",
+      "reason": "跨 loop 的多个有效停驻联合推进属于 BO-9 R34 F5（IMPORTANT），明确不纳入本批；BO-7 R21 F2 的同 loop 多有效停驻和 P1 删除后同身份插回由 S3/S4 真实 Runner fact 覆盖，candidate/rescue 跨 loop 全序由 C1 覆盖。"
+    },
+    {
+      "critical": true,
+      "id": "F1",
+      "scenario": "有效停驻与完成过滤后无可安全推进点，或停驻身份在当前 plan 中无法定位",
+      "expected": "显式失败/不可用，不吞停驻义务，不把 waitLocally/null 当成功，不触发错误收尾",
+      "dimension": "fault",
+      "status": "not_applicable",
+      "reason": "稳定身份若在新 plan 不存在即已被修订删除，按既有合同不再是当前有效义务；既有 AnchorAndParkedBothRemoved_TailReached 保留此行为，且本批须允许 P1 删除期间继续到 Q。仍可定位的锚前停驻由 S1 覆盖；未把 fail-on-deleted-marker 引入 BO-6/7。"
+    },
+    {
+      "critical": true,
+      "id": "F2",
+      "scenario": "救援推进期间新修订删除/插回身份或完成 outcome 中出现旧 SequenceIndex",
+      "expected": "按稳定身份和当前 plan 重新校验；失效数据不导致重复提交、错误全序或虚假成功",
+      "dimension": "fault",
+      "status": "covered",
+      "counterexample_ids": [
+        "runner-localwait-final-93"
+      ],
+      "test_ids": [
+        "398aed81-8691-87dd-a9cd-c62780f5f924"
+      ],
+      "mutation_ids": [
+        "bo6-completed-filter-v3",
+        "bo7-earliest-park-v3",
+        "bo7-stable-identity-v3"
+      ]
+    }
+  ]
+}

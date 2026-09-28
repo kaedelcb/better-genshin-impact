@@ -1,0 +1,4 @@
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
+@@ bo6-completed-filter-v3 @@
+- if (filterCompletedDuringParkRecovery && HasCompletedOutcome(run, occurrence))  ==>  if (false && HasCompletedOutcome(run, occurrence))

@@ -1,0 +1,224 @@
+{
+  "schema_version": 1,
+  "batch": "wave3-bo6-bo7",
+  "status": "blocked_owner_checkpoint",
+  "budget": {
+    "maximum_sent_requests": 8,
+    "conservatively_counted_sent_requests": 8,
+    "remaining": 0,
+    "gpt_tool_invocations": 6,
+    "provider_reported_service_attempts": 8,
+    "actual_lower_level_dispatches": "not independently observable",
+    "counting_rule": "Count provider-reported retries from dispatched tool calls conservatively as sent failures; uncertainty does not restore allowance."
+  },
+  "unreported_tool_invocations": [
+    {
+      "tool_invocation": 5,
+      "counted_requests": [
+        5,
+        6
+      ],
+      "observed_at_utc": "2026-09-28T07:13:36Z",
+      "scope": [
+        "BO-6 R19 MUST",
+        "BO-6 R21 F4 IMPORTANT"
+      ],
+      "model": "gpt-6-astra",
+      "effort": "medium",
+      "preflight": {
+        "file_count": 14,
+        "total_bytes": 1850827,
+        "attachment_limit_rejection": false
+      },
+      "error": "GPT consultation failed for gpt-6-astra (Codex exit code 1). Start a new task and retry. Attempts: 2.",
+      "report_recovered": false,
+      "possible_cause": "GPT/Codex review executor or worker exited without a report; exact root cause is unknown. The saved return does not prove context, network, authentication, quota, or model availability failure.",
+      "raw_error": "_workflow/wave3-bo6-bo7/consultation/gpt-r5-failure.json",
+      "raw_metadata": "_workflow/wave3-bo6-bo7/consultation/gpt-r5-meta.json"
+    },
+    {
+      "tool_invocation": 6,
+      "counted_requests": [
+        7,
+        8
+      ],
+      "observed_at_utc": "2026-09-28T08:15:18Z",
+      "scope": [
+        "BO-6 R19 MUST",
+        "BO-6 R21 F4 IMPORTANT"
+      ],
+      "model": "gpt-6-astra",
+      "effort": "medium",
+      "preflight": {
+        "file_count": 24,
+        "total_bytes": 1728816,
+        "largest_file_bytes": 228706,
+        "known_limits": {
+          "maximum_files": 30,
+          "maximum_file_bytes": 524288,
+          "maximum_total_bytes": 2097152
+        },
+        "attachment_limit_rejection": false,
+        "complete_prompt_token_estimate_saved": false,
+        "effective_context_measured": false,
+        "local_cli_fallback_threshold_proven": false
+      },
+      "error": "GPT consultation failed for gpt-6-astra (Codex exit code 1). Start a new task and retry. Attempts: 2.",
+      "report_recovered": false,
+      "possible_cause": "GPT/Codex review executor or worker exited without a report; exact root cause is unknown. Attachment size was within known caps. No evidence establishes context overflow or a specific service failure category.",
+      "raw_error": "_workflow/wave3-bo6-bo7/consultation/gpt-request7-8-failure.json",
+      "raw_metadata": "_workflow/wave3-bo6-bo7/consultation/gpt-request7-meta.json"
+    }
+  ],
+  "prior_unrecovered_reports": [
+    {
+      "requests": [
+        1,
+        2
+      ],
+      "sent": true,
+      "recovery_errors": [
+        "TextEncoder is not defined",
+        "btoa unavailable"
+      ],
+      "counted": true,
+      "disposition": "No report was preserved; neither call closes any finding."
+    }
+  ],
+  "stale_mirror_reconciliation": {
+    "prior_state": {
+      "sent_requests": 6,
+      "remaining_requests": 2,
+      "request_7": "not_sent"
+    },
+    "authoritative_evidence": [
+      "_workflow/wave3-bo6-bo7/consultation/gpt-request7-meta.json",
+      "_workflow/wave3-bo6-bo7/consultation/gpt-request7-8-failure.json"
+    ],
+    "current_external_mirror": {
+      "path": "C:/Users/Administrator/.tools/zcode-relay/task-relays/wave3-bo6-bo7-ledger.json",
+      "status": "closed_original_grade",
+      "sent_requests": 8,
+      "remaining_requests": 0,
+      "gpt_tool_invocations": 6,
+      "provider_reported_service_attempts": 8,
+      "last_write_local": "2026-09-28T20:05:00+08:00",
+      "sha256": "E9829F6B5C94E2126E434D0289AB671EC7D0B44BCD40B299D23717B14DCDA14A",
+      "owner_checkpoint_path": "_workflow/wave3-bo6-bo7/owner-checkpoint.md",
+      "latest_validation": {
+        "runner_targeted": "93/93",
+        "assistant_full": "1562 passed / 2 skipped / 0 failed / 1564",
+        "claim_surface_sha256": "9EAA1A7F6EFAECCB763DA8EE10520E01B128F3129E6DBFB831295EA58CD083DC",
+        "new_consultation_sent": false,
+        "production_gates": "closed"
+      }
+    },
+    "result": "The stale 6/8 pre-dispatch snapshot was reconciled. Do not count its request-7-not-sent state as current."
+  },
+  "open_original_grade_obligations": [
+    {
+      "id": "BO-6 R19",
+      "severity": "MUST",
+      "status": "closed_at_original_grade_by_owner_approved_consultation"
+    },
+    {
+      "id": "BO-6 R21 F4",
+      "severity": "IMPORTANT",
+      "status": "closed_at_original_grade_by_owner_approved_consultation"
+    },
+    {
+      "id": "BO-7 R21 F1",
+      "severity": "MUST",
+      "status": "closed_at_original_grade_by_owner_approved_consultation"
+    },
+    {
+      "id": "BO-7 R21 F2",
+      "severity": "MUST",
+      "status": "closed_at_original_grade_by_owner_approved_consultation"
+    }
+  ],
+  "additional_consultation_recommendation": {
+    "fixed_additional_requests": 2,
+    "requires_explicit_owner_approval": true,
+    "model": "gpt-6-astra",
+    "effort": "medium",
+    "scopes": [
+      "BO-6 R19 MUST and BO-6 R21 F4 IMPORTANT",
+      "BO-7 R21 F1/F2 MUST"
+    ],
+    "sent": false,
+    "acceptance": "Each original-grade obligation receives an explicit original-grade disposition after independent review of fixed source, raw mutation evidence, Runner/loop behavior, persistent state, regression and testId evidence; no new MUST/IMPORTANT remains open. Any failure or new original-grade finding keeps production gates closed and returns to an owner checkpoint."
+  },
+  "no_new_consultation_sent_before_checkpoint": true,
+  "result": "The stale 6/8 pre-dispatch snapshot was reconciled; the external mirror now links the owner checkpoint and final regression evidence. Do not treat its former request-7-not-sent state as current.",
+  "owner_approved_additional": {
+    "approved": 2,
+    "used": 2,
+    "remaining": 0,
+    "rolling": false,
+    "original_budget_retained": "8/8 unchanged",
+    "channel": "independent local Codex CLI read-only (default runtime / aiotto provider)",
+    "model": "gpt-6-astra",
+    "reasoning_effort": "medium",
+    "preflight": "_workflow/wave3-bo6-bo7/consultation/owner-approved-cli-preflight.json",
+    "disposition": "_workflow/wave3-bo6-bo7/consultation/owner-approved-requests-9-10.md",
+    "requests": [
+      {
+        "number": 9,
+        "scope": "BO-6 R19 MUST and BO-6 R21 F4 IMPORTANT",
+        "exit_code": 0,
+        "elapsed_seconds": 182.8,
+        "thread_id": "01a0e788-ec95-7803-b183-97b0fbd6898b",
+        "report": "_workflow/wave3-bo6-bo7/review-cli-a-bo6/run/review.md",
+        "report_sha256": "de8a8176c101e5fd5fa3cca111ee9203655cbd6917355adf006ae44dc6b4e8bc",
+        "verdicts": {
+          "BO-6 R19": "closed_must",
+          "BO-6 R21 F4": "closed_important"
+        },
+        "new_must_or_important": 0,
+        "suggestions": 2,
+        "metadata": "_workflow/wave3-bo6-bo7/review-cli-a-bo6/run-metadata.json"
+      },
+      {
+        "number": 10,
+        "scope": "BO-7 R21 F1/F2 MUST",
+        "exit_code": 0,
+        "elapsed_seconds": 183.0,
+        "thread_id": "01a0e78c-3293-7b93-90f9-bd32eb461ed5",
+        "report": "_workflow/wave3-bo6-bo7/review-cli-b-bo7/run/review.md",
+        "report_sha256": "5b886136bafb77634c898aba2292e5b06cc4723e283974784824c5abbb438479",
+        "verdicts": {
+          "BO-7 R21 F1": "closed_must",
+          "BO-7 R21 F2": "closed_must"
+        },
+        "new_must_or_important": 0,
+        "suggestions": 1,
+        "metadata": "_workflow/wave3-bo6-bo7/review-cli-b-bo7/run-metadata.json"
+      }
+    ],
+    "failures_or_timeouts": 0
+  },
+  "residuals": [
+    {
+      "id": "BO-6/7-D1",
+      "severity": "suggestion",
+      "source": "requests 9 and 10 (both reviewers)",
+      "summary": "WorkflowRunner.cs:1486 comment still says the last located parked marker is the baseline, and :1535-1537 still justifies the lower bound with \"DriveAsync/Relocate无完成跳过\"; both are stale relative to the verified behavior.",
+      "disposition": "accepted as a documentation residual; source not modified in this batch because the verdicts bind the current bytes and the additional review allowance is exhausted",
+      "location": [
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:1486",
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs:1535-1537"
+      ],
+      "fix_condition": "correct together with the next change that rebinds WorkflowRunner.cs hashes, with that change own mutation and regression reruns",
+      "owner_options": [
+        "fix_now_with_a_new_small_allowance",
+        "fix_in_next_batch_that_rebinds_hashes",
+        "accept_as_documentation_only"
+      ]
+    }
+  ],
+  "updated_at_utc": "2026-09-28T12:05:00Z",
+  "owner_decision_pending": [
+    "BO-6/7-D1"
+  ]
+}

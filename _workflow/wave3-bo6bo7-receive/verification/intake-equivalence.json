@@ -1,0 +1,151 @@
+{
+  "batch": "wave3-bo6bo7-receive",
+  "statement": "The staged (imported) delta over the eight source files is byte-identical to the source delivery delta base..delivery. The unstaged delta over those files contains this batch's own registration appends to four status documents plus the mandated declaration-surface regeneration of ClaimSurfaceManifest.txt; therefore \"eight files imported verbatim\" is an import-time statement, not a claim about the final tree.",
+  "compared_command_imported": "git diff --cached --no-ext-diff --no-textconv -- <8 files>",
+  "compared_command_source": "git diff --no-ext-diff --no-textconv e2613a851 e009068e2 -- <8 files>",
+  "imported_delta_bytes": 107209,
+  "imported_delta_sha256": "0642971729f3eff09bde3bf4a437865710ac4966ffd814cb42e36d55d910b3b4",
+  "source_delta_bytes": 107209,
+  "source_delta_sha256": "0642971729f3eff09bde3bf4a437865710ac4966ffd814cb42e36d55d910b3b4",
+  "delta_byte_identical": true,
+  "post_import_delta_bytes": 26508,
+  "post_import_delta_sha256": "a6dc2a9cfc343599372a0219431a4a36507a2f2cfdd74914d57457ce078fe960",
+  "per_file": {
+    "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md": {
+      "blob_at_source_base": "2793f384b174007032af42f78c35ed639ac7f95a",
+      "blob_at_delivery": "142385e5d519847fd05ede5707039726d6aa018b",
+      "blob_at_opening_head": "2793f384b174007032af42f78c35ed639ac7f95a",
+      "blob_staged_index": "142385e5d519847fd05ede5707039726d6aa018b",
+      "changed_by_source_delta": true,
+      "imported_index_equals_delivery_blob": true,
+      "imported_index_bytes_lf_normalized_sha256": "941cabde12ab0e3b4b988b672ffc68813ece32b96c1244fe30d8a39fd6e4df87",
+      "delivery_blob_lf_normalized_sha256": "941cabde12ab0e3b4b988b672ffc68813ece32b96c1244fe30d8a39fd6e4df87",
+      "final_worktree_sha256": "d2714836883cee0d96d9a730e4ef60bf5ad4da261679c2bd2ac4462778bf26ae",
+      "final_worktree_lf_normalized_sha256": "606f6056b127fa307866685de64d15556b2c87c7bc7c5424cd9428e9c9247ccf",
+      "worktree_differs_from_imported_index": true
+    },
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": {
+      "blob_at_source_base": "8b0bb5d933a79e71c9da24f6cb040000288403db",
+      "blob_at_delivery": "d07ea7926a76ea1d3a63d5e345a804078c1269e9",
+      "blob_at_opening_head": "8b0bb5d933a79e71c9da24f6cb040000288403db",
+      "blob_staged_index": "d07ea7926a76ea1d3a63d5e345a804078c1269e9",
+      "changed_by_source_delta": true,
+      "imported_index_equals_delivery_blob": true,
+      "imported_index_bytes_lf_normalized_sha256": "181aa93e000be99d8eed9ce192587a56194d270e47f67bd561297a57476f14c9",
+      "delivery_blob_lf_normalized_sha256": "181aa93e000be99d8eed9ce192587a56194d270e47f67bd561297a57476f14c9",
+      "final_worktree_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "final_worktree_lf_normalized_sha256": "181aa93e000be99d8eed9ce192587a56194d270e47f67bd561297a57476f14c9",
+      "worktree_differs_from_imported_index": false
+    },
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": {
+      "blob_at_source_base": "84b9e01e7137f4ac46774df10649c88b832dabf6",
+      "blob_at_delivery": "292bfd75aabe2625b45520924a507cd7a33ab58f",
+      "blob_at_opening_head": "84b9e01e7137f4ac46774df10649c88b832dabf6",
+      "blob_staged_index": "292bfd75aabe2625b45520924a507cd7a33ab58f",
+      "changed_by_source_delta": true,
+      "imported_index_equals_delivery_blob": true,
+      "imported_index_bytes_lf_normalized_sha256": "84e1d93dcc4d8b4b13eeb82c8cd9c25163ff9c18e59e3f772184997528b6d10d",
+      "delivery_blob_lf_normalized_sha256": "84e1d93dcc4d8b4b13eeb82c8cd9c25163ff9c18e59e3f772184997528b6d10d",
+      "final_worktree_sha256": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267",
+      "final_worktree_lf_normalized_sha256": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267",
+      "worktree_differs_from_imported_index": true
+    },
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": {
+      "blob_at_source_base": "0040df82b6ce04a6ff3d7adf276ff59180d7eeaf",
+      "blob_at_delivery": "5f1374cf0cfbd367d4eb8f8cf36f3be9365a0042",
+      "blob_at_opening_head": "0040df82b6ce04a6ff3d7adf276ff59180d7eeaf",
+      "blob_staged_index": "5f1374cf0cfbd367d4eb8f8cf36f3be9365a0042",
+      "changed_by_source_delta": true,
+      "imported_index_equals_delivery_blob": true,
+      "imported_index_bytes_lf_normalized_sha256": "2228c9cf26442d4aaef65de5f1763d4a880b50c469660aa480a28881adde5e85",
+      "delivery_blob_lf_normalized_sha256": "2228c9cf26442d4aaef65de5f1763d4a880b50c469660aa480a28881adde5e85",
+      "final_worktree_sha256": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+      "final_worktree_lf_normalized_sha256": "2228c9cf26442d4aaef65de5f1763d4a880b50c469660aa480a28881adde5e85",
+      "worktree_differs_from_imported_index": false
+    },
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": {
+      "blob_at_source_base": "31846f9ee788f2ee0f291cb954726086c5bce97b",
+      "blob_at_delivery": "1dffbac49dbe6e62fee8a43000780742b46a025d",
+      "blob_at_opening_head": "31846f9ee788f2ee0f291cb954726086c5bce97b",
+      "blob_staged_index": "1dffbac49dbe6e62fee8a43000780742b46a025d",
+      "changed_by_source_delta": true,
+      "imported_index_equals_delivery_blob": true,
+      "imported_index_bytes_lf_normalized_sha256": "050040e9b24e1a2ffe413c589acf641cbb4df784b4a17db1591abe73df2f23fc",
+      "delivery_blob_lf_normalized_sha256": "050040e9b24e1a2ffe413c589acf641cbb4df784b4a17db1591abe73df2f23fc",
+      "final_worktree_sha256": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+      "final_worktree_lf_normalized_sha256": "050040e9b24e1a2ffe413c589acf641cbb4df784b4a17db1591abe73df2f23fc",
+      "worktree_differs_from_imported_index": false
+    },
+    "_batch21/b21_plan.md": {
+      "blob_at_source_base": "a763ab774dbaa1dba1f47cfb47a21fb3dd9d75f8",
+      "blob_at_delivery": "d2907366b7e43022bf57aaf73095ef771e33d57f",
+      "blob_at_opening_head": "a763ab774dbaa1dba1f47cfb47a21fb3dd9d75f8",
+      "blob_staged_index": "d2907366b7e43022bf57aaf73095ef771e33d57f",
+      "changed_by_source_delta": true,
+      "imported_index_equals_delivery_blob": true,
+      "imported_index_bytes_lf_normalized_sha256": "02d006a60a8ff9c62f7f2c2f40329a911281b3284f1bc7f13563e7f48aa234d4",
+      "delivery_blob_lf_normalized_sha256": "02d006a60a8ff9c62f7f2c2f40329a911281b3284f1bc7f13563e7f48aa234d4",
+      "final_worktree_sha256": "4f1007ad4eaf7bb6e9396624c8ee9ff8a2241f083187a9249103545e618df5d0",
+      "final_worktree_lf_normalized_sha256": "49044e94781f4f6506aaa4c4e389fba650dec66b7c3fad43e28a5453169d0b81",
+      "worktree_differs_from_imported_index": true
+    },
+    "_batch21/sb21-4-handoff-2026-09-28.md": {
+      "blob_at_source_base": "f54b9c50b0b4d6292ca9b03e1f2aa916a1245017",
+      "blob_at_delivery": "fd01f02ec72474a7e28e9e1f6a90a180a95eb6fc",
+      "blob_at_opening_head": "f54b9c50b0b4d6292ca9b03e1f2aa916a1245017",
+      "blob_staged_index": "fd01f02ec72474a7e28e9e1f6a90a180a95eb6fc",
+      "changed_by_source_delta": true,
+      "imported_index_equals_delivery_blob": true,
+      "imported_index_bytes_lf_normalized_sha256": "6832f30cac1aef6ee9dd51b0248a604aaeb5917872ceaf518878c1872716e54d",
+      "delivery_blob_lf_normalized_sha256": "6832f30cac1aef6ee9dd51b0248a604aaeb5917872ceaf518878c1872716e54d",
+      "final_worktree_sha256": "f473e93d9ac5601f53ce359edc895475237d2e64967579cb6e765b70bd4b79c9",
+      "final_worktree_lf_normalized_sha256": "05167e7aa240db787dbbfa4cb978f33471355330246feea3600fbe3247a079bb",
+      "worktree_differs_from_imported_index": true
+    },
+    "槲寄生调度器总计划.md": {
+      "blob_at_source_base": "8eaafbc4a50ca94fd0647697bdf425333d23ff75",
+      "blob_at_delivery": "f900d0cf9621d5f15527a751e9395030b288ff9e",
+      "blob_at_opening_head": "8eaafbc4a50ca94fd0647697bdf425333d23ff75",
+      "blob_staged_index": "f900d0cf9621d5f15527a751e9395030b288ff9e",
+      "changed_by_source_delta": true,
+      "imported_index_equals_delivery_blob": true,
+      "imported_index_bytes_lf_normalized_sha256": "d06a2fc2fe218b6afee99aec726a2ae62df7d78cf78ebdbc628a26cb773ea4c3",
+      "delivery_blob_lf_normalized_sha256": "d06a2fc2fe218b6afee99aec726a2ae62df7d78cf78ebdbc628a26cb773ea4c3",
+      "final_worktree_sha256": "7f8d3300da7e429356caf8169057fb539a2e130ed61b2916ad599fba03335c2c",
+      "final_worktree_lf_normalized_sha256": "7444c80572ce02b2c4cc603fb8b9897daede883827bbf7d5f1407b5225cd053c",
+      "worktree_differs_from_imported_index": true
+    }
+  },
+  "post_import_changes": {
+    "status_documents_appended": [
+      "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md",
+      "_batch21/b21_plan.md",
+      "_batch21/sb21-4-handoff-2026-09-28.md",
+      "槲寄生调度器总计划.md"
+    ],
+    "regenerated_file": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt",
+    "reason": "R5.3 24.126 registration text (required by the batch closeout) and the rule-mandated CLAIM_SURFACE_REGENERATE=1 regeneration; no source, fixture or assertion was edited.",
+    "unchanged_after_import": [
+      "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+      "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs"
+    ]
+  },
+  "verification_notes": [
+    "imported_index_equals_delivery_blob is the per-file import-fidelity check (index after `git checkout e009068e2 -- <path>` equals the delivery blob).",
+    "worktree_differs_from_imported_index is the post-import-modification check; false means the file still byte-matches the import (modulo the repository-wide CRLF checkout convention, which affects the index blob and the worktree identically per side).",
+    "Only ClaimSurfaceManifest.txt (mandated regeneration) and the four status documents (this batch registration) are marked modified after import; the product source and both fixture files are not."
+  ],
+  "post_import_modified_files": [
+    "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt",
+    "_batch21/b21_plan.md",
+    "_batch21/sb21-4-handoff-2026-09-28.md",
+    "槲寄生调度器总计划.md"
+  ],
+  "post_import_unmodified_files": [
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs"
+  ]
+}

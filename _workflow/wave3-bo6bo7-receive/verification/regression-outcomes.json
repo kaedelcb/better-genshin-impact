@@ -1,0 +1,268 @@
+{
+  "meaning": "Corrected outcome accounting for every run cited by this batch. The TRX Counters element reports notExecuted=\"0\" for these VSTest/xUnit runs while two result rows carry outcome NotExecuted (the two opt-in P50 diagnostics). Row-level counts are therefore authoritative here, and total = passed + failed + notExecuted_rows holds exactly in every run.",
+  "counter_semantics": "VSTest xUnit shape: Counters@notExecuted is 0 even though NotExecuted rows exist. tools/mistletoe/workflow.py already parses sketched rows this way (it returns row-based skipped) - the error being corrected was in this batch's own summary script, which read the counter attribute.",
+  "runs": {
+    "opening-baseline-full": {
+      "path": "_workflow/wave3-bo6bo7-receive/baseline/assistant-full-baseline.trx",
+      "file_sha256": "b39b4db49ca099364f8dfc83dbbfdc4490ec2e730972187a6914e99dab4548c7",
+      "render_counters": {
+        "total": "1560",
+        "executed": "1558",
+        "passed": "1558",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "row_outcome_counts": {
+        "Passed": 1558,
+        "NotExecuted": 2
+      },
+      "not_executed": [
+        "P50_DiagnosticRepeat_OptIn",
+        "P50_LoadRepro_WholeClass_UnderControlledLoad"
+      ],
+      "failed": []
+    },
+    "integrated-full": {
+      "path": "_workflow/wave3-bo6bo7-receive/regression/final/assistant-full-1564.trx",
+      "file_sha256": "2881fcb25d1ffe7c590783ae8a07436d213ef928e72b895ebbd8debd10353f92",
+      "render_counters": {
+        "total": "1564",
+        "executed": "1562",
+        "passed": "1562",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "row_outcome_counts": {
+        "Passed": 1562,
+        "NotExecuted": 2
+      },
+      "not_executed": [
+        "P50_LoadRepro_WholeClass_UnderControlledLoad",
+        "P50_DiagnosticRepeat_OptIn"
+      ],
+      "failed": []
+    },
+    "opening-baseline-targeted": {
+      "path": "_workflow/wave3-bo6bo7-receive/baseline/targeted-baseline.trx",
+      "file_sha256": "4762e8edbadce100cdfef099b1e1474bf46a9fb36411ea0d7f6a18f4d5faf283",
+      "render_counters": {
+        "total": "89",
+        "executed": "89",
+        "passed": "89",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "row_outcome_counts": {
+        "Passed": 89
+      },
+      "not_executed": [],
+      "failed": []
+    },
+    "integrated-targeted": {
+      "path": "_workflow/wave3-bo6bo7-receive/regression/final/targeted-93.trx",
+      "file_sha256": "3769703968a4bad368d1be4a57a9994ccfd7e794820a39d9f9fe991650406fbe",
+      "render_counters": {
+        "total": "93",
+        "executed": "93",
+        "passed": "93",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "row_outcome_counts": {
+        "Passed": 93
+      },
+      "not_executed": [],
+      "failed": []
+    },
+    "claim-surface-regen": {
+      "path": "_workflow/wave3-bo6bo7-receive/regression/claim-surface/regen/claim-surface-regen.trx",
+      "file_sha256": "f4d6d70716f74af1a231005c768c72bb543e72409a3acd0f29701fbbd20be0d6",
+      "render_counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "row_outcome_counts": {
+        "Passed": 1
+      },
+      "not_executed": [],
+      "failed": []
+    },
+    "claim-surface-no-env": {
+      "path": "_workflow/wave3-bo6bo7-receive/regression/claim-surface/no-env/claim-surface-no-env.trx",
+      "file_sha256": "b7eb70498b9d44d549fabeb837307823a72c45e235e9d92cb0f1809c3d394187",
+      "render_counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "row_outcome_counts": {
+        "Passed": 1
+      },
+      "not_executed": [],
+      "failed": []
+    },
+    "preRegen-integrated-full": {
+      "path": "_workflow/wave3-bo6bo7-receive/regression/assistant-full-integrated.trx",
+      "file_sha256": "ce938dbbc4fe434e15d4d6135e1318efc45bc671eb35e11049ee511fef14c56c",
+      "render_counters": {
+        "total": "1564",
+        "executed": "1562",
+        "passed": "1562",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "row_outcome_counts": {
+        "Passed": 1562,
+        "NotExecuted": 2
+      },
+      "not_executed": [
+        "P50_LoadRepro_WholeClass_UnderControlledLoad",
+        "P50_DiagnosticRepeat_OptIn"
+      ],
+      "failed": []
+    },
+    "preRegen-integrated-targeted": {
+      "path": "_workflow/wave3-bo6bo7-receive/regression/targeted-integrated-93.trx",
+      "file_sha256": "f9ff310392b9bf46382164425f2a3630a5f11b2bd587b1f208d6bfbb855829ec",
+      "render_counters": {
+        "total": "93",
+        "executed": "93",
+        "passed": "93",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "row_outcome_counts": {
+        "Passed": 93
+      },
+      "not_executed": [],
+      "failed": []
+    }
+  },
+  "headline": {
+    "opening_baseline_full": {
+      "total": 1560,
+      "passed": 1558,
+      "failed": 0,
+      "not_executed_rows": 2,
+      "names": [
+        "P50_DiagnosticRepeat_OptIn",
+        "P50_LoadRepro_WholeClass_UnderControlledLoad"
+      ]
+    },
+    "integrated_full": {
+      "total": 1564,
+      "passed": 1562,
+      "failed": 0,
+      "not_executed_rows": 2,
+      "names": [
+        "P50_LoadRepro_WholeClass_UnderControlledLoad",
+        "P50_DiagnosticRepeat_OptIn"
+      ]
+    },
+    "opening_baseline_targeted": {
+      "total": 89,
+      "passed": 89,
+      "failed": 0,
+      "not_executed_rows": 0
+    },
+    "integrated_targeted": {
+      "total": 93,
+      "passed": 93,
+      "failed": 0,
+      "not_executed_rows": 0
+    }
+  }
+}

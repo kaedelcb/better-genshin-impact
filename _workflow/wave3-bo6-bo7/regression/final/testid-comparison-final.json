@@ -1,0 +1,87 @@
+{
+  "baseline": {
+    "path": "_workflow/wave3-bo6-bo7/baseline/full/assistant-full-baseline.trx",
+    "sha256": "54721a1ca9f081b7f1a29ba934ef8e98213c523cd78507f046911bbd78f2ae80",
+    "total": 1560,
+    "passed": 1558,
+    "failed": 0,
+    "skipped": 2
+  },
+  "final": {
+    "path": "_workflow/wave3-bo6-bo7/regression/final/assistant-full-final.trx",
+    "sha256": "e09137fd0aeba69e8607a53253d4ab8bde03881a7d614834b41b019cae963691",
+    "total": 1564,
+    "passed": 1562,
+    "failed": 0,
+    "skipped": 2
+  },
+  "testId_difference": {
+    "unchanged": 1556,
+    "added": [
+      {
+        "testId": "7a665a8f-f8e9-11b4-598f-a1f8d24b805a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_RescueBeforeNextLoopCandidate_UsesFullPlanOrderAndFiltersCompletedAnchor"
+      },
+      {
+        "testId": "398aed81-8691-87dd-a9cd-c62780f5f924",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences"
+      },
+      {
+        "testId": "c9b4acef-4348-1bd4-9f96-d3adfec68fca",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitIdentityTranslationTests.RecomputeSuccessor_MultiParkingWithStale_ReturnsEarliestActiveMarker"
+      },
+      {
+        "testId": "76ead242-85b8-7dc7-3c8a-579e6740c3c7",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitIdentityTranslationTests.RecomputeSuccessor_ParkedReorderedBeforeCompletedAnchor_ReturnsParkedMarker"
+      },
+      {
+        "testId": "1d029d1b-a82f-69cc-f8ee-1ba7c7957cdc",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_CandidateAndRescueAcrossLoop_UsesFullPlanOrderAndAdvancesThroughRunner"
+      },
+      {
+        "testId": "ce995f4c-484d-a224-3003-9641fa1549d2",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitIdentityTranslationTests.RecomputeSuccessor_AnchorLocatableParkedBeforeItAndWorkAfter_ReturnsParkedMarker"
+      },
+      {
+        "testId": "113f020c-1c29-e336-4c1a-3a50b69cbcc8",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_TailWithUnresolvedParkedObligationsFailsWithoutTerminalCompletion"
+      },
+      {
+        "testId": "90289ea3-1298-e377-5adf-bed75acd6fed",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitIdentityTranslationTests.RecomputeSuccessor_AnchorAtTail_ParkedFollowedByCompleted_ReturnsParkedMarker"
+      }
+    ],
+    "removed": [
+      {
+        "testId": "824155ca-d685-4a01-ff0e-b72a09954715",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitIdentityTranslationTests.RecomputeSuccessor_MultiParkingWithStale_ConservativeNoRerun"
+      },
+      {
+        "testId": "f228c3af-9398-da9e-a651-19b8d435ffc3",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitIdentityTranslationTests.RecomputeSuccessor_AnchorAtTail_ParkedFollowedByCompleted_ConservativeNoRerun"
+      },
+      {
+        "testId": "71655608-dafa-0dad-93d1-6e1a857f7a62",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitIdentityTranslationTests.RecomputeSuccessor_ParkedReorderedBeforeCompletedAnchor_ConservativeNoRerun"
+      },
+      {
+        "testId": "077c8f75-7e70-9bd3-24d2-ab5b2e0f340a",
+        "name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.LocalWaitIdentityTranslationTests.RecomputeSuccessor_AnchorLocatableParkedBeforeItAndWorkAfter_ConservativeNoRerun"
+      }
+    ],
+    "changed_name": []
+  },
+  "semantic_changes_with_retained_testIds": [
+    {
+      "testId": "ec3b4575-60e7-a499-c37f-c9ae12b11e0e",
+      "test": "RecomputeSuccessor_ParkingConflictNotFallenBackToCandidate",
+      "change": "expected null chain-tail to expected parked marker n2"
+    },
+    {
+      "testId": "14addbd1-4d7d-814d-ec3d-c070098441ad",
+      "test": "RecomputeSuccessor_AllValidParkingChecked_EarlierUnsafeOneNotSilentlySwallowed",
+      "change": "expected null to earliest valid P1 marker"
+    }
+  ],
+  "interpretation": "testId diff counts identity/name/outcome-level membership only. It does not prove assertions stayed the same: the two listed helper tests retained testIds while their assertions changed. Four renamed helper tests account for the four removed and four added helper IDs; four real Runner facts account for the remaining additions."
+}

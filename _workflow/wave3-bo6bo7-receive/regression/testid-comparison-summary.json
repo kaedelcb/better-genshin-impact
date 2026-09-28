@@ -1,0 +1,96 @@
+{
+  "meaning": "testId-level structural comparison of the opening baseline (pre-intake HEAD 6fd6207e5) against the integrated mainline run. Identity basis is testId; names are carried for readability only and do not prove assertion equality.",
+  "baseline": {
+    "path": "_workflow/wave3-bo6bo7-receive/baseline/assistant-full-baseline.trx",
+    "total": 1560,
+    "passed": 1558,
+    "failed": 0,
+    "skipped": 2,
+    "not_executed_rows": 2,
+    "counters_note": "TRX Counters@notExecuted is 0 in this VSTest/xUnit shape; 2 result rows carry outcome NotExecuted (P50_LoadRepro_WholeClass_UnderControlledLoad, P50_DiagnosticRepeat_OptIn). Row-level accounting is authoritative: total = passed + failed + NotExecuted rows."
+  },
+  "final": {
+    "path": "_workflow/wave3-bo6bo7-receive/regression/final/assistant-full-1564.trx",
+    "total": 1564,
+    "passed": 1562,
+    "failed": 0,
+    "skipped": 2,
+    "not_executed_rows": 2,
+    "counters_note": "TRX Counters@notExecuted is 0 in this VSTest/xUnit shape; 2 result rows carry outcome NotExecuted (P50_LoadRepro_WholeClass_UnderControlledLoad, P50_DiagnosticRepeat_OptIn). Row-level accounting is authoritative: total = passed + failed + NotExecuted rows."
+  },
+  "counts": {
+    "unchanged": 1556,
+    "added": 8,
+    "removed": 4,
+    "changed": 0,
+    "not_executed_rows_baseline": 2,
+    "not_executed_rows_final": 2
+  },
+  "added": [
+    {
+      "testId": "113f020c-1c29-e336-4c1a-3a50b69cbcc8",
+      "name": "Resume_TailWithUnresolvedParkedObligationsFailsWithoutTerminalCompletion"
+    },
+    {
+      "testId": "1d029d1b-a82f-69cc-f8ee-1ba7c7957cdc",
+      "name": "Resume_CandidateAndRescueAcrossLoop_UsesFullPlanOrderAndAdvancesThroughRunner"
+    },
+    {
+      "testId": "398aed81-8691-87dd-a9cd-c62780f5f924",
+      "name": "Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences"
+    },
+    {
+      "testId": "76ead242-85b8-7dc7-3c8a-579e6740c3c7",
+      "name": "RecomputeSuccessor_ParkedReorderedBeforeCompletedAnchor_ReturnsParkedMarker"
+    },
+    {
+      "testId": "7a665a8f-f8e9-11b4-598f-a1f8d24b805a",
+      "name": "Resume_RescueBeforeNextLoopCandidate_UsesFullPlanOrderAndFiltersCompletedAnchor"
+    },
+    {
+      "testId": "90289ea3-1298-e377-5adf-bed75acd6fed",
+      "name": "RecomputeSuccessor_AnchorAtTail_ParkedFollowedByCompleted_ReturnsParkedMarker"
+    },
+    {
+      "testId": "c9b4acef-4348-1bd4-9f96-d3adfec68fca",
+      "name": "RecomputeSuccessor_MultiParkingWithStale_ReturnsEarliestActiveMarker"
+    },
+    {
+      "testId": "ce995f4c-484d-a224-3003-9641fa1549d2",
+      "name": "RecomputeSuccessor_AnchorLocatableParkedBeforeItAndWorkAfter_ReturnsParkedMarker"
+    }
+  ],
+  "removed": [
+    {
+      "testId": "077c8f75-7e70-9bd3-24d2-ab5b2e0f340a",
+      "name": "RecomputeSuccessor_AnchorLocatableParkedBeforeItAndWorkAfter_ConservativeNoRerun"
+    },
+    {
+      "testId": "71655608-dafa-0dad-93d1-6e1a857f7a62",
+      "name": "RecomputeSuccessor_ParkedReorderedBeforeCompletedAnchor_ConservativeNoRerun"
+    },
+    {
+      "testId": "824155ca-d685-4a01-ff0e-b72a09954715",
+      "name": "RecomputeSuccessor_MultiParkingWithStale_ConservativeNoRerun"
+    },
+    {
+      "testId": "f228c3af-9398-da9e-a651-19b8d435ffc3",
+      "name": "RecomputeSuccessor_AnchorAtTail_ParkedFollowedByCompleted_ConservativeNoRerun"
+    }
+  ],
+  "changed": [],
+  "semantics_changed_with_retained_testIds": [
+    {
+      "testId": "ec3b4575-60e7-a499-c37f-c9ae12b11e0e",
+      "test": "RecomputeSuccessor_ParkingConflictNotFallenBackToCandidate",
+      "change": "expected null (conservative chain tail) -> expected parked marker n2"
+    },
+    {
+      "testId": "14addbd1-4d7d-814d-ec3d-c070098441ad",
+      "test": "RecomputeSuccessor_AllValidParkingChecked_EarlierUnsafeOneNotSilentlySwallowed",
+      "change": "expected null -> expected earliest valid marker P1"
+    }
+  ],
+  "note": "The generator output (testid-comparison-receive.json, ~1.0 MB) additionally embeds both full parsed TRX row sets, which is why it is not attached as review material; this summary plus findings.md carry the reviewable substance. The source delivery comparison is _workflow/wave3-bo6-bo7/regression/final/testid-comparison-final.json; its added/removed testId sets were independently checked to be identical to the ones above.",
+  "corrected_note": "CORRECTED after review round 1: the earlier version of this summary read skipped from Counters@notExecuted, which is 0 despite two NotExecuted rows. Corrected accounting is in this file and in verification/regression-outcomes.json."
+}

@@ -1,0 +1,4 @@
+--- a/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
++++ b/MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs
+@@ bo7-candidate-first-v3 @@
+- candidate.LoopIteration < parkedRescue.LoopIteration  ==>  candidate.LoopIteration > parkedRescue.LoopIteration

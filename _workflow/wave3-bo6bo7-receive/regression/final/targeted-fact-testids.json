@@ -1,0 +1,12 @@
+{
+  "Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences": "398aed81-8691-87dd-a9cd-c62780f5f924",
+  "Resume_TailWithUnresolvedParkedObligationsFailsWithoutTerminalCompletion": "113f020c-1c29-e336-4c1a-3a50b69cbcc8",
+  "Resume_CandidateAndRescueAcrossLoop_UsesFullPlanOrderAndAdvancesThroughRunner": "1d029d1b-a82f-69cc-f8ee-1ba7c7957cdc",
+  "Resume_RescueBeforeNextLoopCandidate_UsesFullPlanOrderAndFiltersCompletedAnchor": "7a665a8f-f8e9-11b4-598f-a1f8d24b805a",
+  "RecomputeSuccessor_ParkingConflictNotFallenBackToCandidate": "ec3b4575-60e7-a499-c37f-c9ae12b11e0e",
+  "RecomputeSuccessor_AllValidParkingChecked_EarlierUnsafeOneNotSilentlySwallowed": "14addbd1-4d7d-814d-ec3d-c070098441ad",
+  "RecomputeSuccessor_MultiParkingWithStale_ReturnsEarliestActiveMarker": "c9b4acef-4348-1bd4-9f96-d3adfec68fca",
+  "RecomputeSuccessor_ParkedReorderedBeforeCompletedAnchor_ReturnsParkedMarker": "76ead242-85b8-7dc7-3c8a-579e6740c3c7",
+  "RecomputeSuccessor_AnchorLocatableParkedBeforeItAndWorkAfter_ReturnsParkedMarker": "ce995f4c-484d-a224-3003-9641fa1549d2",
+  "RecomputeSuccessor_AnchorAtTail_ParkedFollowedByCompleted_ReturnsParkedMarker": "90289ea3-1298-e377-5adf-bed75acd6fed"
+}

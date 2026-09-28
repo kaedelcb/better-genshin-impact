@@ -1,0 +1,108 @@
+diff --git a/Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md b/Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md
+index 142385e5d..ac9a556dc 100644
+--- a/Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md
++++ b/Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md
+@@ -5002,3 +5002,45 @@ owner 依据 §24.125.4 检查点明确批准本子批**额外最多 2 次**独
+ **边界**：会诊结论只覆盖助手侧源码与已保存的真实 Runner/驱动夹具证据，外部执行边界为 fake；BO-8/9 不并入，R5.6／R6.1／R6 diff guard 未提前集成，BGI 生产入口、真实 User、R5.8、E3/E4/E5、热键面与生产进程继续关闭，未做实机或生产验证。
+ 
+ C1 矩阵措辞歧义仍以 current-clarifications.md 解释，并保留 opening.json 与 risk-matrix.json 原文；不改写冻结矩阵。BO-8 R29 IMPORTANT 与 BO-9 R34 F5 IMPORTANT 仍不并入。所有 BGI 产品入口、真实 User、R5.8、E3/E4/E5、热键面和生产进程继续关闭；未进行实机或生产验证。
++
++
++## §24.126 Wave3 BO-6/BO-7 主线接收与集成验证（2026-09-28）
++
++### §24.126.1 接收对象与来源绑定
++
++本批是**接收批**：把已独立交付、并按原等级闭环的 BO-6/BO-7 修复接入茶包主线。不施工 BO-8/BO-9，不提前集成 R5.6、R6.1 或 R6 diff guard，也不重开已闭合的 BO-13、SB21-3 BO-4、SB21-2 BO-10/12。
++
++- 来源交付 ID `wave3-bo6-bo7-2026-09-28`；隔离 worktree `C:\Users\Administrator\.codex\worktrees\wave3-bo6-bo7\better-genshin-impact-LCB`，交付 HEAD `e009068e22b18d89f4eb9f8947fa937dfa8c925c`，开工基线 `e2613a851bd45c28fdd56b84dfc10784e1d9c9b8`。
++- 权威检查点 `_workflow/wave3-bo6-bo7/owner-checkpoint.md`；登记 SHA-256 `A4AB77476298FD7AB3847930C0A92BA72F234424EC6A4D3B1706AB17809C75B1`，接收时逐字节复核一致。
++- 交付提交链：`10675950a`（代码与状态文档）→ `600f9ef8c`（workflow 证据与反向突变原始材料）→ `fb691f56a`（owner 批准追加会诊按原级闭环）→ `e009068e2`（最终 HEAD 收口快照 v13）。
++- 四项原级义务在来源侧由 owner 批准的两次追加独立会诊按**原等级**裁定 closed：BO-6 R19 **MUST**、BO-6 R21 F4 **IMPORTANT**、BO-7 R21 F1 **MUST**、BO-7 R21 F2 **MUST**；两份报告的收尾结论均为「本范围仍有未闭合的 MUST/IMPORTANT：否」。报告原件随本批收录于 `_workflow/wave3-bo6-bo7/review-cli-a-bo6/`、`_workflow/wave3-bo6-bo7/review-cli-b-bo7/`；逐项处置见 `_workflow/wave3-bo6-bo7/consultation/owner-approved-requests-9-10.md`。
++
++### §24.126.2 接收方式（最小且逐字节可核）
++
++只接收交付相对基线的**产品／测试／状态文档增量**，不合并整个隔离分支，也不搬入重复的大型中间证据（6 份 closeout 快照的 report.json／packet.md 与逐突变 TRX 日志包仍只保留在来源 worktree，并保留到本次接收验证完成）。
++
++- 逐字节导入的产品与夹具文件：`MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs`、`Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs`、`.../LocalWaitIdentityTranslationTests.cs`、`.../ClaimSurfaceManifest.txt`。
++- 逐字节导入的状态文档：本文件 R5.3、`_batch21/b21_plan.md`、`_batch21/sb21-4-handoff-2026-09-28.md`、`槲寄生调度器总计划.md`。
++- 逐字节导入的少量权威证据（`_workflow/wave3-bo6-bo7/` 下的检查点、上下文／发现／预算、风险矩阵、两次追加会诊报告与运行元数据、会诊台账对账、突变证据索引、testId 对照）；该目录在主线上属**部分收录**，边界与未收录清单见 `_workflow/wave3-bo6-bo7/INTAKE-NOTE.md`。
++- 导入以 `git checkout e009068e2 -- <路径>` 完成：导入后 8 个产品／文档文件在主线的 `git diff HEAD` 与来源 `git diff e2613a851 e009068e2` 逐字节相同，未做任何改写或适配。
++- 主线工作区按 `core.autocrlf=true` 为 CRLF 检出，仓库 blob 为 LF；两种形态内容逐字节相同（仅行尾差异）。因此本节后续记录的主线 SHA-256 为工作区 CRLF 形态，来源清单记录的是仓库 LF 形态。
++
++### §24.126.3 集成版本证据（在主线上重跑，不复用来源数字）
++
++- 构建：`dotnet build MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj -t:Rebuild -p:DeployToBgiTools=false` 与测试项目同参数 Rebuild 均 exit 0。部署目标（`BetterGenshinImpact/bin/x64/Debug/net8.0-windows10.0.22621.0/Tools/MultiplayerHoeingAssistant`）在全部构建与测试前后未被写入。
++- 同条件主线基线（接收前 HEAD `6fd6207e5`）：定向三类 89/89；助手全量 **1558 通过／2 跳过／0 失败／1560**，与来源开工基线 1558/2/0/1560 同值。
++- 集成后定向三类（`LocalWaitIdentityTranslationTests`＋`LocalWaitParkingStateContractTests`＋`WorkflowRunnerTests`）**93/93**；其 93 个 testId、测试名与结果与来源交付最终定向 TRX **完全相同**。助手全量 **1562 通过／2 跳过／0 失败／1564**。
++- testId 差集（接收前基线 → 集成后）：**1556 unchanged／8 added／4 removed／0 changed**，与来源交付逐 ID 相同：4 个新增为真实 Runner facts，4 个 removed 与 4 个 renamed helper 一一对应。两个保留 testId 的 helper 断言语义已变更，故 `0 changed` 只表示 testId／名称／结果层面的成员一致，不表示既有测试语义未变。
++- 8 项反向突变在**集成后的字节上重新执行**（不复制来源记录）：全部 baseline Passed／mutant Failed／restored Passed，构建三阶段 exit 0，命中同一批具名目标与断言行（`WorkflowRunnerTests.cs:1008／1071／1080／1131／1173`），源码逐字节精确恢复；8 个 mutant SHA-256 与来源交付记录**完全相同**，证明是同一批突变作用于同一份内容。
++
++### §24.126.4 声明面处置与两处版本关系
++
++追加本节即改变声明面，按 §17.4-A 第 1 条本批**不得**援引措辞类豁免：先再生 `ClaimSurfaceManifest.txt`，评审清单差异，再清除 `CLAIM_SURFACE_REGENERATE` 复跑守卫，再生结果随本批提交并作为本批源文件纳入受审范围。
++
++接收时发现一处**声明面版本引用陈旧**（建议级材料问题）：§24.125.3、`_workflow/wave3-bo6-bo7/owner-checkpoint.md`、`_batch21/b21_plan.md`、`_batch21/sb21-4-handoff-2026-09-28.md` 与总计划均把清单 SHA 记为 `9EAA1A7F6EFAECCB763DA8EE10520E01B128F3129E6DBFB831295EA58CD083DC`，而随交付提交的清单实际为 `84E1D93DCC4D8B4B13EEB82C8CD9C25163FF9C18E59E3F772184997528B6D10D`。原因已核清：`9EAA1A7F…` 是「修正 §24.125 状态／预算声明」那一步的中间值；其后 §24.125.5 的 owner 批准追加会诊闭环文本再次改变声明面，交付侧随后执行了 `regression/claim-surface-post-consultation/` 的再生（`manifest-before`=`9EAA1A7F…` → 再生后 `84E1D93D…`）却未回改前述散文引用。**处置**：本批不改写已审并与登记哈希绑定的来源工件（改写会使检查点登记哈希失效），改为在本节登记权威口径——**最终权威值以随提交的清单文件为准**；`9EAA1A7F…` 只作该步中间值，不得再被引用为最终值。另核：交付清单记录 `original_sha256`/`restored_sha256` 为 LF 形态 `181aa93e…`，而 8 个 `mutant_sha256` 为 CRLF 形态，属同一内容的不同行尾形态；本批记录全部统一为工作区 CRLF 形态，内部自洽。
++
++### §24.126.5 剩余项与边界
++
++- **BO-6/7-D1（建议级，注释陈旧）**：状态不变。两位来源审查者独立指出 `WorkflowRunner.cs` 中两处注释与实现不一致（`:1486`、`:1535–1537`），均评为建议级且明确未据此发现运行正确性缺陷。本批不为它单独改写已审源码；按既定处置留待下一次重新绑定 `WorkflowRunner.cs` 哈希的批次一并修正，并按该批质量门验证。
++- **BO-8 R29 IMPORTANT、BO-9 R34 F5 IMPORTANT** 仍未并入、仍未闭合；R5.6、R6.1、R6 diff guard 未提前集成。
++- BGI 产品入口、真实 User、R5.8、E3/E4/E5、热键面与生产进程门继续关闭；本批只给助手侧源码、真实 Runner 驱动夹具与主线集成回归证据，外部执行边界仍为 fake，不声称实机或生产验收。
+diff --git a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt
+index 292bfd75a..8f88d903e 100644
+--- a/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt
++++ b/Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt
+@@ -235,6 +235,7 @@ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md383977C52DA4D3
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md3A0EB9288B61ADA73AA983061EAEE1415BEE6B3D13CE2F91E88A3144FD27CDC01| **占用者级别/优先级与 `HighestClass` 的生产来源** | ❌ 未接线：生产映射恒 null/未知 ⇒ 生产上普通任务对占用者一律保守停驻；需运行台账↔执行身份关联（后续批次） |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md3AF9DFCAB38EAFDAE46FE371108FF498D3CF1FD076D9572C15F39FAF3E967E641| 9 | **外部启动（E3/E4/E5/E6）路径接管失败映射端点；子进程级重启；E4 取消入口映射** | R5.8 真实入口层（§23.1；施工方：入口夹具负责人） | 该路径上的端到端夹具或实机证据 | 外部启用门＋R5.8 门 | 已移交·**未验收** |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md3C169B077F2D8344F9F877CE1F207F7969D2B0C1BD06CECE13C37EB61DC82F081| 3 | **首节点绑定（§12.3 M1）**：父子关系与首节点绑定持久化 | R5.8 实现闭合序列（施工方：宿主实现＋夹具负责人） | 持久化父子/首节点绑定＋「E1 关闭后首节点另行取许可」夹具 | 节点改道门 | **部分已交付·未验收**（[批次四十四] §24.54：父子绑定由门面自行反查写入＋首/后继…
++Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md3D08ED876CA155691F693248D0B93254D9E4549AA77AAA3A6899C0306F1146081- **BO-8 R29 IMPORTANT、BO-9 R34 F5 IMPORTANT** 仍未并入、仍未闭合；R5.6、R6.1、R6 diff guard 未提前集成。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md3D57EDF6804F0853C382DEE2947263C10F966E08EDD2BD730411F39AC6290D2D1| 1 | **P50 负载敏感诊断套件**（33 节点端到端暂停，须覆盖整个用例类） | 独立诊断批（施工方） | 可单独重复运行的负载复现入口＋根因定位＋该类夹具稳定 | 节点改道门保留；Skip 与严格断言不放宽 | **已交付（组件/宿主层）**（[批次四十九] §24.61：负载复现入口（`BGI_R5_P5…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md3DDDE11B9941D8B8B9F2DC64BD8F981E4F8FB26D298E420A52CE8F78DD4280BA1| 等待组件 | `LocalWaitQueuePolicy`／`LocalWaitQueueStore`／`LocalWaitModels` 仍无生产调用方（见 §24.106） | ❌ 仍**未接线** |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md3DDFA6587CB2D67F687F3F47B950D21DDA76BDD7ED9E0FA055539074677EF6491**键形状变更的兼容性（如实）**：带**非空作用域**（或带代际）的键**有意**不再与批次 15 逐字符一致——旧形状的别名不可修复，只能改字面形状换取消歧义。这不改变**本实例内**的在飞去重语义（`StateScope` 不可变 ⇒ 每身份键仍单射，"同一等待项至多产一条"不变）；受影响的是**跨实例／跨进程按…
+@@ -332,6 +333,7 @@ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md8796CBCB8D6621
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md87E6B96129FEA9419AD3C226322C884888F572B83C496E2AB7BB2DB31822D3F31- 会诊：**GPT-6-Astra／medium 三轮各 1 次成功**（首轮 3 必改＋3 重要；验证轮判 ①闭合、③未闭合并新增必改 c；
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md894EAEF276AD4510FA2CAA45B7D2D0A101051DDE448D98A0C051B62079D19BFE1**局部施工与复审**：代码以入口显式 `ProjectRegistryOutcome` 为边界，注册表锁内复制结果；明确拒绝／可证失败才投影 `failed`，已确认的前置成功才投影 `completed`。未知、取消、逃逸异常及仅有破坏性动作意图时保留 `ResultUnknown/result_unknown`，…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md8AD6D948ADF86C971E26BA1EF60E7C52C5837FED5BA6B6C4EA38AE5AEB60D3D01- **R3**（收口轮，**无必改、无未闭合重要项**；3 建议全采纳）：页首「仅含 owner 既有未提交文件」与
++Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md8BB3C28725E15D48B2F7205F587007050DE5591AF604693BA44A00E96F15AC771- 四项原级义务在来源侧由 owner 批准的两次追加独立会诊按**原等级**裁定 closed：BO-6 R19 **MUST**、BO-6 R21 F4 **IMPORTANT**、BO-7 R21 F1 **MUST**、BO-7 R21 F2 **MUST**；两份报告的收尾结论均为「本范围仍有未闭合的 MUS…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md8CDDAB59B6593D428556E9311CFB817E513D9AE79607642326FCA912BCDBA1891⇒ 本批**不声称会诊已闭环**，按纪律以「owner 一次性批量裁决项」登记。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md8E2883FCF8EACA5C9AA4023C7419F6F7F0CFD1123DA9BB30E87B848A0F5D833613. **终态（完成层报 `Succeeded`／`Cancelled`／`ExecutionFailed`）且接管一致性验证通过**：受理→接管台账落盘→**同一次权威发布写 `ExecutionResult` ＋ `PendingTerminal`**→台账转 `Terminal`→关闭 Submission（或按…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md8EB3FD01AA65CAB8F38B8D7FA4F33F1A4C17F7E09BCA2F93DB31D7F4E8BF030F1**与旧轮次的接入边界**：运行中低级请求必须先进入等待登记，不能先走 `ProcessRoundAsync` 再把输家回队列；现有整轮会把落选者写为终局 `NotSelected`，占用分支只保留获选者。等待激活后仍由唯一绑定的 Operation 进入原轮，但落选时应回到其等待绑定而非按普通 `NotSelecte…
+@@ -449,6 +451,7 @@ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdF9394E678D87C6
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdFA57DD5BD68AC7A2D10EB26F4F850385A4905DB2B11C62573B4353E841E499D11| D2 前置模型 | `SelectNext` 投影把 `PrerequisiteReady` **固定 true**（§24.106 C4） | ⚠ **未闭合，属 D2 范围，本批不动** |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdFB944D03EB853B3A359D85ABCF4A88B46FAB522D0F048B1CCD465FEDDE9FD11C1| 生产消费端 | ❌ 未接线：抢占执行、退出确认、恢复专用准入仍未消费本批事实（生产门保持关闭） |
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdFBE89153DB0A570A1832D57B78495F3EC946CA01CC65CD8D3F4F37229ABA16121| **④ 生产时序与新鲜度** | ⚠ 生产解析**已接线**，但新增同步读取（运行台账 + 租约）的耗时、锁交错、以及读取后快照新鲜度/纪元一致性**尚未验证** |
++Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdFC153C1C4E1F5B6CFFEBBC5CCB331E2304C86AC1D4838E206C499EA4E2163EA91本批是**接收批**：把已独立交付、并按原等级闭环的 BO-6/BO-7 修复接入茶包主线。不施工 BO-8/BO-9，不提前集成 R5.6、R6.1 或 R6 diff guard，也不重开已闭合的 BO-13、SB21-3 BO-4、SB21-2 BO-10/12。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdFCE6B4691F864A07829278D1C3670C068E38976805218538157254EC16F957801| 2 | **P19① 原因码逐次取证**（批次三十二原诊断已按 owner 裁决更新） | R5.8 真实入口与拒绝审计验收（施工方：门面/宿主夹具负责人） | 组件层已验证 `submission_conflict` 释放被拒请求槽位、保留拒绝原因与原未决责任；尚需真实入口端到端核对拒绝映射、审计可查与解除冲突后…
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdFE3C9DA096826D54AA3505702CCBA877AB65B6B6F2C1622E5E941C2835F8A88B1但 Runner 的 `attempt` 仍固定为 1、未驱动 `RetryAsync` ⇒ **重试链未闭环**（窗口只能由显式恢复/后续批次消费）。
+ Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.mdFE6A5508ED80DF42F43A81D61D9DE8D844DFF7A49E80AB474566B07C4AE650131- **Owner 收口裁决（2026-09-27）**：owner 本轮指令要求收尾 SB21-1；据 R9 两项原级必改的补证已完成本地机械核验，关闭本子批且不追加会诊。反向突变审计中的 11 组 mutant/restored TRX、命名 Fact 结果、TRX SHA 与当前恢复态源码 SHA 均逐项复核；R…
+diff --git a/_batch21/b21_plan.md b/_batch21/b21_plan.md
+index d2907366b..004ee918d 100644
+--- a/_batch21/b21_plan.md
++++ b/_batch21/b21_plan.md
+@@ -32,3 +32,4 @@ SB21-3 仅处理 BO-4。owner 于 2026-09-27 核实历史源码与测试后，
+ ## 开工纪律
+ 反例先行（每子批先红夹具）；会诊刹车（≤8 轮、严重度地板）；提交 --only；声明面变更再生＋无 env 复跑；每子批收尾刷新接力文件。
+ - **独立 Wave3 子批 BO-6/7（2026-09-28，原级闭环，含 1 项建议级残项）**：实现选择恢复推进时完成过滤；显式 Resume 对 waitLocally 历史重算有效停驻全序，救援后按稳定身份过滤已完成 occurrence；持久 TailReached 与未清偿停驻并存时显式 Failed。修复前真实 Runner/loop 在可定位 R 游标下只提交 R/stop、遗漏 P1/Q。修复后四条 Runner facts；适用定向 93/93。助手全量 1562/2/0/1564，基线 1558/2/0/1560；testId 1556 unchanged、8 added、4 removed、0 changed，含两个保留 ID helper 断言语义变化说明。8 项 v3/v4 反向突变保留独立日志、TRX、patch 和具名目标断言，原始包 SHA 复核 8/8。R5.3 状态对账更新后重新执行 ClaimSurface regen/no-env，清单 SHA 稳定为 `9EAA1A7F6EFAECCB763DA8EE10520E01B128F3129E6DBFB831295EA58CD083DC`；最新 TRX 与差集见 `_workflow/wave3-bo6-bo7/regression/owner-checkpoint/claim-surface-post-correction/`。GPT 会诊工具调用 6 次、工具报告服务尝试 8 次；保守预算 8/8 用尽，两个同范围失败调用各报 Codex exit code 1 / Attempts: 2，均无报告，四项原级义务一度交 owner 检查点。owner 随后批准额外 2 次独立会诊：请求 9（本地 Codex CLI 只读，exit 0，182.8 秒）裁定 BO-6 R19 MUST、R21 F4 IMPORTANT closed；请求 10（同通道，exit 0，183.0 秒）裁定 BO-7 R21 F1/F2 MUST closed；追加额度 2/2 用尽、余额 0，原 8/8 不变，两份报告均无新增 MUST/IMPORTANT。唯一残项为两位审查者独立指出的建议级注释陈旧（`WorkflowRunner.cs:1486`、`:1535–1537`），登记 `BO-6/7-D1` 并给出 owner 三选一，本批未改动源码。BO-8/9 不纳入，生产门关闭。详见 _workflow/wave3-bo6-bo7/owner-checkpoint.md。 提交：代码/文档 10675950a、证据与收口材料 600f9ef8c；提交后收口快照见 `_workflow/wave3-bo6-bo7/closeout-owner-20260928-v8/`。
++- **BO-6/7 主线接收（2026-09-28）**：由主线唯一写者按最小方式接收独立 Wave3 子批交付——逐字节导入 8 个产品/测试/状态文档文件（`WorkflowRunner.cs`、3 个 TaskCenter 夹具/清单、R5.3、本计划、sb21-4 交接稿、总计划），未合并隔离分支、未搬入重复的大型中间证据。集成后主线 HEAD 重跑：定向三类 93/93（93 个 testId 与来源最终 TRX 完全相同）、助手全量 1562/2/0/1564（接收前同条件基线 1558/2/0/1560；testId 1556 unchanged/8 added/4 removed/0 changed），8 项反向突变重新执行为 P/F/P 且 mutant SHA 与来源记录完全相同；部署目标未被写入，声明面再生后无变量复跑通过。剩余 BO-8/BO-9 未并入、BO-6/7-D1（建议级注释陈旧）留待下一次绑定 `WorkflowRunner.cs` 的批次修正；生产门与实机门继续关闭。详见 R5.3 §24.126。
+diff --git a/_batch21/sb21-4-handoff-2026-09-28.md b/_batch21/sb21-4-handoff-2026-09-28.md
+index fd01f02ec..b623751a3 100644
+--- a/_batch21/sb21-4-handoff-2026-09-28.md
++++ b/_batch21/sb21-4-handoff-2026-09-28.md
+@@ -104,3 +104,7 @@ owner 批准额外 2 次独立会诊后，四项原级义务均已按原等级
+ ### 工作区与收口
+ 
+ 当前仍在隔离 managed worktree，HEAD 固定为开工 SHA e2613a851bd45c28fdd56b84dfc10784e1d9c9b8；本批实现和材料外改动均保留。review-r9-audit11 的旧 review audit/verify 通过，但当前文档、ledger 与 mutation v4 hash reconciliation 已更新，需对最终快照重新运行 workflow closeout audit/verify 和 deliveries 检查。助手全量首跑曾因 ClaimSurfaceManifest 与旧预算声明不一致而有一条具名守卫失败；更新 R5.3 状态后重新 regen/no-env，ClaimSurface SHA 稳定为 `9EAA1A7F6EFAECCB763DA8EE10520E01B128F3129E6DBFB831295EA58CD083DC`，最新 93 项定向及全量 1562/2/0/1564 证据记录在 `_workflow/wave3-bo6-bo7/regression/owner-checkpoint/claim-surface-post-correction/`。提交已按明确路径完成：代码与文档为 10675950a（8 文件），workflow 证据、反向突变原始材料与收口快照为 600f9ef8c（212 文件）；提交后仅剩刻意留在工作区的原始审计/中间工件与一个误建临时文件，均未纳入提交。提交后收口快照与 verify 记录见 `_workflow/wave3-bo6-bo7/closeout-owner-20260928-v8/`。owner checkpoint 已由 owner 授权追加会诊解除原级阻断；唯一残项为建议级注释陈旧（BO-6/7-D1），生产门保持关闭。
++
++### 主线接收（2026-09-28）
++
++BO-6/7 独立子批的交付已由主线唯一写者在茶包主线按最小方式接收：逐字节导入该子批的产品、夹具与状态文档增量（`e009068e2` 相对 `e2613a851` 的 8 个非 `_workflow` 文件），不合并隔离分支、不搬入重复的大型中间证据。集成后主线 HEAD 重跑同条件基线（1558/2/0/1560）与集成回归（定向三类 93/93、助手全量 1562/2/0/1564、testId 1556/8/4/0），并重新执行 8 项反向突变（全部 P/F/P，mutant SHA 与来源记录完全相同）；部署目标未被写入。R5.3 追加 §24.126 登记接收口径，并纠正该子批散文中把中间值 `9EAA1A7F…` 当作最终清单 SHA 的引用（最终权威值以随提交的 `ClaimSurfaceManifest.txt` 为准）。BO-8/BO-9 仍未并入，BO-6/7-D1（建议级注释陈旧）仍按既定处置留待下一次绑定 `WorkflowRunner.cs` 的批次；生产门、真实 User、R5.8 与实机门继续关闭。来源 worktree 与未跟踪证据保留至本次接收验证完成。
+diff --git a/槲寄生调度器总计划.md b/槲寄生调度器总计划.md
+index f900d0cf9..0245e126d 100644
+--- a/槲寄生调度器总计划.md
++++ b/槲寄生调度器总计划.md
+@@ -401,3 +401,4 @@ BGI 的一条龙恢复 `origin-lcb/main` 的配置格式、原生页面和默认
+ - **回归与 testId**：主助手项目与测试项目 Rebuild 均使用 `-p:DeployToBgiTools=false`、exit 0；最终定向 93/93，全量 1562 passed / 2 skipped / 0 failed / 1564。基线 1558/2/0/1560；testId 1556 unchanged、8 added、4 removed、0 changed。4 个删除 helper ID 与更新后的 4 个 helper ID 对应，4 个新 Runner facts 占其余 added；另有两个保留 ID 的 helper 断言语义变化。历史 88/88 filter 遗漏 5 个仍适用停驻状态契约测试，最终定向范围已恢复开工 92 项并增加 1 项 TailReached Runner fact。映射见 `_workflow/wave3-bo6-bo7/regression/final/`。
+ - **反向突变与声明面**：8 项 reverse mutation 均有单独 baseline/build/mutant/restored 日志/TRX、具名目标断言、精确 source hash 与真实 mutation diff；v3 七项及落盘失败态 v4 均在目标断言命中，源码恢复后通过。细节见 `_workflow/wave3-bo6-bo7/mutations/raw-mutation-evidence-index.md`。R5.3 状态/预算对账更新改变了声明面；随后重新执行 ClaimSurface regen/no-env，清单 SHA 在两次运行间稳定为 `9EAA1A7F6EFAECCB763DA8EE10520E01B128F3129E6DBFB831295EA58CD083DC`，build/TRX 与源码前后依据见 `_workflow/wave3-bo6-bo7/regression/owner-checkpoint/claim-surface-post-correction/`。
+ - **会诊与状态（阶段）**：本子批 GPT 工具调用 6 次、provider/tool 返回报告服务尝试 8 次；底层 retry dispatch 数没有独立遥测，保守会诊预算保持 8/8 用尽。第 5、6 次工具调用为 BO-6 R19/F4 同范围，均返回 Codex exit code 1 / Attempts: 2 且无报告；附件限制未触发，token 上下文阈值无估算证据，未启动本地 CLI。四项原级义务一度交 owner 检查点。owner 随后批准额外 2 次独立会诊：请求 9 与 10 均经独立本地 Codex CLI 只读通道发出（gpt-6-astra / medium，exit 0，分别 182.8 秒与 183.0 秒），裁定 BO-6 R19 MUST、R21 F4 IMPORTANT、BO-7 R21 F1/F2 MUST 全部 closed，且无新增 MUST/IMPORTANT；追加额度 2/2 用尽、余额 0，原 8/8 不变。唯一残项为两位审查者独立指出的建议级注释陈旧（`WorkflowRunner.cs:1486`、`:1535–1537`，登记 BO-6/7-D1，owner 三选一，本批未改源码）。BO-8/9 不纳入；生产门关闭。详见 _workflow/wave3-bo6-bo7/owner-checkpoint.md。
++- **主线接收（2026-09-28）**：BO-6/BO-7 独立子批交付已按最小方式接入茶包主线（逐字节导入 8 个产品/测试/状态文档文件，未合并隔离分支、未搬入重复的大型中间证据）。集成后主线 HEAD 重跑：定向三类 93/93（testId 与来源最终 TRX 完全相同）、助手全量 1562/2/0/1564（接收前同条件基线 1558/2/0/1560；testId 1556/8/4/0）、8 项反向突变重新执行为 P/F/P 且 mutant SHA 与来源记录完全相同；部署目标未被写入，声明面再生后无变量复跑通过。剩余 BO-8/BO-9 未并入、BO-6/7-D1（建议级注释陈旧）保留待下一次绑定 `WorkflowRunner.cs` 的批次修正；生产门与实机门继续关闭。详见 R5.3 §24.126。

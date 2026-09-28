@@ -1,0 +1,901 @@
+{
+  "schema_version": 2,
+  "batch": "wave3-bo6bo7-receive",
+  "mode": "code",
+  "sources": [
+    "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs",
+    "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt"
+  ],
+  "risk_matrix": "_workflow/wave3-bo6bo7-receive/risk-matrix.json",
+  "opening_snapshot": "_workflow/wave3-bo6bo7-receive/opening.json",
+  "review_control": {
+    "existing_results": {
+      "decision": "none",
+      "reason": "来源独立交付的 93/93、1562/2/0/1564 与 8 项突变均绑定隔离 worktree 的字节，不是本主线集成版本的运行结果；本批必须在集成后的主线 HEAD 重跑定向、全量与突变，不能复用为当前回归证明。"
+    },
+    "review_round": 2,
+    "prior_findings": [
+      {
+        "id": "R1-IMPORTANT-1",
+        "severity": "important",
+        "source_review_evidence_id": "receive-consult-outcome-v1",
+        "disposition": "candidate_fixed",
+        "repair_evidence_ids": [
+          "verify-intake-equivalence",
+          "verify-import-delta",
+          "verify-post-import-delta"
+        ]
+      },
+      {
+        "id": "R1-IMPORTANT-2",
+        "severity": "important",
+        "source_review_evidence_id": "receive-consult-outcome-v1",
+        "disposition": "candidate_fixed",
+        "repair_evidence_ids": [
+          "verify-regression-outcomes",
+          "receive-testid-comparison-summary"
+        ]
+      },
+      {
+        "id": "R1-SUGGESTION-1",
+        "severity": "suggestion",
+        "source_review_evidence_id": "receive-consult-outcome-v1",
+        "disposition": "accepted",
+        "reason": "D1 comment scope widened to ~1400-1403 in findings.md (no source edit, deferral unchanged); the 93-entry comparison and compact mutation/hash chain were added as verification/targeted-93-ids.json and verification/mutation-verification.json."
+      }
+    ],
+    "criticality_reason": "",
+    "subagents": {
+      "decision": "not_used",
+      "reason": "本接收批的验证主体是把来源修复导入后由唯一写者重新执行定向/全量回归与 8 项反向突变（Runner 为共享状态链，设施计划禁止多子 Agent 并行改代码或操作测试产物）。固定开工 ref 上的只读子 Agent 只能重derive 两名独立审查者已在同一字节上给出结论的材料（会诊报告、突变 TRX、testId 差集），无新增独立信息，故不派遣。"
+    },
+    "repair_batch_id": "wave3-bo6bo7-receive-repair-r1"
+  },
+  "evidence": [
+    {
+      "id": "receive-assistant-project-rebuild",
+      "path": "_workflow/wave3-bo6bo7-receive/regression/final/assistant-project-rebuild.log",
+      "level": "build",
+      "binding": "current",
+      "purpose": "Integrated mainline rebuild of the assistant product project with deployment disabled.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "dotnet build MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj -t:Rebuild -p:DeployToBgiTools=false; exit 0. Deployment target BetterGenshinImpact/bin/x64/Debug/net8.0-windows10.0.22621.0/Tools/MultiplayerHoeingAssistant (and the non-x64 twin) still had LastWriteTimeUtc 09/26/2026 21:41:14 UTC and 1158 files after every build and test run of this batch; capture before the first build is recorded in _workflow/wave3-bo6bo7-receive/deploy-target-before.txt and restated in findings.md."
+    },
+    {
+      "id": "receive-testproject-rebuild",
+      "path": "_workflow/wave3-bo6bo7-receive/regression/final/testproject-rebuild.log",
+      "level": "build",
+      "binding": "current",
+      "purpose": "Integrated mainline rebuild of the assistant unit-test project.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "dotnet build Test/MultiplayerHoeingAssistant.UnitTest/MultiplayerHoeingAssistant.UnitTest.csproj -t:Rebuild -p:DeployToBgiTools=false; exit 0."
+    },
+    {
+      "id": "receive-targeted-93",
+      "path": "_workflow/wave3-bo6bo7-receive/regression/final/targeted-93.trx",
+      "level": "test",
+      "binding": "current",
+      "purpose": "Integrated-version targeted runner/local-wait suite (3 classes); the counterexample evidence for the behaviour risk rows.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "dotnet test --no-build --filter <LocalWaitIdentityTranslationTests|LocalWaitParkingStateContractTests|WorkflowRunnerTests>; 93/93 passed; executed after the final claim-surface regeneration so the binding is exact."
+    },
+    {
+      "id": "receive-full-1564",
+      "path": "_workflow/wave3-bo6bo7-receive/regression/final/assistant-full-1564.trx",
+      "level": "test",
+      "binding": "current",
+      "purpose": "Integrated-version full assistant regression.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "dotnet test --no-build (no filter); 1562 passed / 2 skipped / 0 failed / 1564; executed after the final claim-surface regeneration."
+    },
+    {
+      "id": "receive-claim-surface-regen",
+      "path": "_workflow/wave3-bo6bo7-receive/regression/claim-surface/regen/claim-surface-regen.trx",
+      "level": "test",
+      "binding": "current",
+      "purpose": "Declaration-surface regeneration after the R5.3 24.126 registration was added.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "CLAIM_SURFACE_REGENERATE=1; ClaimSurfaceGuardTests 1/1 passed; manifest 599 -> 602 lines (+3/-0)."
+    },
+    {
+      "id": "receive-claim-surface-no-env",
+      "path": "_workflow/wave3-bo6bo7-receive/regression/claim-surface/no-env/claim-surface-no-env.trx",
+      "level": "test",
+      "binding": "current",
+      "purpose": "Declaration-surface guard re-run with the regeneration variable cleared.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "CLAIM_SURFACE_REGENERATE unset; ClaimSurfaceGuardTests 1/1 passed; manifest SHA stable at 5D914611... across regen and no-env."
+    },
+    {
+      "id": "receive-fact-testids",
+      "path": "_workflow/wave3-bo6bo7-receive/regression/final/targeted-fact-testids.json",
+      "level": "document",
+      "binding": "current",
+      "purpose": "testIds of the four new real-Runner facts and the six relocated/changed helper fixtures.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Extracted from receive-targeted-93.trx by testMethod name."
+    },
+    {
+      "id": "receive-testid-comparison",
+      "path": "_workflow/wave3-bo6bo7-receive/regression/testid-comparison-receive.json",
+      "level": "document",
+      "binding": "current",
+      "purpose": "testId-level structural comparison of the opening baseline full TRX against the integrated full TRX.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "tools/mistletoe/workflow.py trx --baseline <opening full> --final <integrated full>; 1556 unchanged / 8 added / 4 removed / 0 changed; added and removed id sets identical to the source delivery."
+    },
+    {
+      "id": "receive-mutation-records",
+      "path": "_workflow/wave3-bo6bo7-receive/mutation-records.json",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Machine-readable records of the eight reverse mutations re-executed on the integrated bytes.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Produced by _workflow/wave3-bo6bo7-receive/run-receive-mutants.ps1 under pwsh 7; per-mutation build/test logs and TRX under _workflow/wave3-bo6bo7-receive/mutations/<id>/; compact per-mutation verification and source-hash comparison in verification/mutation-verification.json."
+    },
+    {
+      "id": "receive-manifest-diff",
+      "path": "_workflow/wave3-bo6bo7-receive/regression/claim-surface/manifest-diff-summary.json",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Reviewed diff of the declaration-surface regeneration.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Exactly 3 added lines (all from the new R5.3 24.126 text), 0 removed, no pre-existing claim line altered."
+    },
+    {
+      "id": "receive-intake-note",
+      "path": "_workflow/wave3-bo6-bo7/INTAKE-NOTE.md",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Boundary note for the partially imported source evidence directory.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "States what is imported and what remains only in the retained source worktree."
+    },
+    {
+      "id": "receive-findings",
+      "path": "_workflow/wave3-bo6bo7-receive/findings.md",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Batch findings, mutation summary, regressions, and residual items.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Packet findings role."
+    },
+    {
+      "id": "receive-budget",
+      "path": "_workflow/wave3-bo6bo7-receive/budget.md",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Consultation budget, fixed model/strength, original severities, unclosed items.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Packet budget role."
+    },
+    {
+      "id": "receive-context",
+      "path": "_workflow/wave3-bo6bo7-receive/context.md",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Batch objective and completion criteria.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Packet objective role."
+    },
+    {
+      "id": "source-owner-checkpoint",
+      "path": "_workflow/wave3-bo6-bo7/owner-checkpoint.md",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Authoritative source checkpoint; SHA-256 A4AB77476298FD7AB3847930C0A92BA72F234424EC6A4D3B1706AB17809C75B1 verified at intake.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Imported byte-for-byte from the source delivery commit; context for the intake, not a re-verification by this batch."
+    },
+    {
+      "id": "source-risk-matrix",
+      "path": "_workflow/wave3-bo6-bo7/risk-matrix.json",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Source batch risk matrix and its coverage mapping.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Imported byte-for-byte from the source delivery commit; context for the intake, not a re-verification by this batch."
+    },
+    {
+      "id": "source-mutation-index",
+      "path": "_workflow/wave3-bo6-bo7/mutations/raw-mutation-evidence-index.md",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Source batch mutation evidence index.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Imported byte-for-byte from the source delivery commit; context for the intake, not a re-verification by this batch."
+    },
+    {
+      "id": "source-ledger-reconciliation",
+      "path": "_workflow/wave3-bo6-bo7/consultation/current-ledger-reconciliation.json",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Source consultation ledger reconciliation (8/8 conservative count, balance 0).",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Imported byte-for-byte; the source sub-batch budget (8/8 plus owner-approved 2/2) stays recorded and is not reset by this receive batch."
+    },
+    {
+      "id": "source-disposition-9-10",
+      "path": "_workflow/wave3-bo6-bo7/consultation/owner-approved-requests-9-10.md",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Item-by-item disposition of the two owner-approved additional consultations.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Imported byte-for-byte from the source delivery commit; context for the intake, not a re-verification by this batch."
+    },
+    {
+      "id": "source-testid-comparison",
+      "path": "_workflow/wave3-bo6-bo7/regression/final/testid-comparison-final.json",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Source delivery testId comparison used for the independent cross-check.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Imported byte-for-byte; used for the independent added/removed testId cross-check reported in verification/targeted-93-ids.json."
+    },
+    {
+      "id": "source-review-a-bo6",
+      "path": "_workflow/wave3-bo6-bo7/review-cli-a-bo6/run/review.md",
+      "level": "consult",
+      "binding": "current",
+      "purpose": "Independent read-only review report closing BO-6 R19 MUST and BO-6 R21 F4 IMPORTANT at the delivered bytes.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Local Codex CLI read-only, gpt-6-astra / medium, exit 0, 182.8 s, fixed snapshot HEAD 0f46128f; report SHA-256 de8a8176...b4e8bc."
+    },
+    {
+      "id": "source-review-b-bo7",
+      "path": "_workflow/wave3-bo6-bo7/review-cli-b-bo7/run/review.md",
+      "level": "consult",
+      "binding": "current",
+      "purpose": "Independent read-only review report closing BO-7 R21 F1/F2 MUST at the delivered bytes.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Local Codex CLI read-only, gpt-6-astra / medium, exit 0, 183.0 s, fixed snapshot HEAD 0f46128f; report SHA-256 5b886136...438479."
+    },
+    {
+      "id": "source-review-a-meta",
+      "path": "_workflow/wave3-bo6-bo7/review-cli-a-bo6/run-metadata.json",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Run metadata (model, strength, read-only, exit code, usage) for the BO-6 review.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Request 9; model verified from the local rollout record."
+    },
+    {
+      "id": "source-review-b-meta",
+      "path": "_workflow/wave3-bo6-bo7/review-cli-b-bo7/run-metadata.json",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Run metadata (model, strength, read-only, exit code, usage) for the BO-7 review.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Request 10; model verified from the local rollout record."
+    },
+    {
+      "id": "opening-baseline-build",
+      "path": "_workflow/wave3-bo6bo7-receive/baseline/testproject-build.log",
+      "level": "build",
+      "binding": "historical",
+      "purpose": "Pre-intake mainline baseline build (opening HEAD 6fd6207e5).",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "781087da6377f18e53e8e904a8cebc1a904d804b28d9fd2e3a826a7679100d06",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "858c3ba6be3385c4a7701efe41efc3a6cff56f262cad0549996d72f1a3515972",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "6f206e3bd36e97ac9b5f6faaf2c5fcab90ebc9510313570829bbf071f4292270",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "bd03b0a75b6895d51aab717e1d11ec8b7072b7ac7a697d888f65dc704e15ac3e"
+      },
+      "conditions": "dotnet build -t:Rebuild -p:DeployToBgiTools=false; exit 0; executed before any file was imported."
+    },
+    {
+      "id": "opening-baseline-targeted",
+      "path": "_workflow/wave3-bo6bo7-receive/baseline/targeted-baseline.trx",
+      "level": "test",
+      "binding": "historical",
+      "purpose": "Pre-intake targeted three-class baseline (89 tests) for the testId differential.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "781087da6377f18e53e8e904a8cebc1a904d804b28d9fd2e3a826a7679100d06",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "858c3ba6be3385c4a7701efe41efc3a6cff56f262cad0549996d72f1a3515972",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "6f206e3bd36e97ac9b5f6faaf2c5fcab90ebc9510313570829bbf071f4292270",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "bd03b0a75b6895d51aab717e1d11ec8b7072b7ac7a697d888f65dc704e15ac3e"
+      },
+      "conditions": "Same filter as receive-targeted-93; 89/89 passed; 4 helper tests carry their pre-intake names."
+    },
+    {
+      "id": "opening-baseline-full",
+      "path": "_workflow/wave3-bo6bo7-receive/baseline/assistant-full-baseline.trx",
+      "level": "test",
+      "binding": "historical",
+      "purpose": "Pre-intake full assistant baseline; same-condition reference for the comparison.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "781087da6377f18e53e8e904a8cebc1a904d804b28d9fd2e3a826a7679100d06",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "858c3ba6be3385c4a7701efe41efc3a6cff56f262cad0549996d72f1a3515972",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "6f206e3bd36e97ac9b5f6faaf2c5fcab90ebc9510313570829bbf071f4292270",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "bd03b0a75b6895d51aab717e1d11ec8b7072b7ac7a697d888f65dc704e15ac3e"
+      },
+      "conditions": "1558 passed / 2 skipped / 0 failed / 1560; matches the source delivery opening baseline."
+    },
+    {
+      "id": "receive-testid-comparison-summary",
+      "path": "_workflow/wave3-bo6bo7-receive/regression/testid-comparison-summary.json",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Reviewable testId differential summary (counts, added/removed id sets, and the two retained-id tests whose assertions changed).",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Derived from testid-comparison-receive.json; the generator output itself (~1.0 MB) is not attached because it embeds two full parsed TRX row sets."
+    },
+    {
+      "id": "receive-consult-request",
+      "path": "_workflow/wave3-bo6bo7-receive/consultation/review-request-v1.md",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Frozen consultation request: objective, six questions, boundaries, material list, exclusions.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Written before dispatch so the reviewed scope cannot drift with the result."
+    },
+    {
+      "id": "receive-consult-preflight",
+      "path": "_workflow/wave3-bo6bo7-receive/consultation/preflight-v1.json",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Capacity pre-check record: allowed files, bytes, token estimate, transport limits, exclusions, fallback assessment.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      },
+      "conditions": "Local computation only; no request dispatched by this step."
+    },
+    {
+      "id": "verify-intake-equivalence",
+      "path": "_workflow/wave3-bo6bo7-receive/verification/intake-equivalence.json",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Per-file import fidelity (index blob == delivery blob) plus byte-identical comparison of the imported delta against the source delivery delta, and the post-import modification list. (Review round 1 IMPORTANT-1 repair evidence.)",
+      "conditions": "delta_byte_identical=true; both deltas SHA-256 0642971729f3eff0...; only the four status documents and ClaimSurfaceManifest.txt changed after import.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      }
+    },
+    {
+      "id": "verify-import-delta",
+      "path": "_workflow/wave3-bo6bo7-receive/verification/import-delta-8files.diff",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Complete imported delta over all eight source files, including the four status-document patches that review round 1 found missing. (IMPORTANT-1 repair evidence.)",
+      "conditions": "git diff --cached --no-ext-diff --no-textconv -- <8 files>; byte-identical to the source delivery delta.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      }
+    },
+    {
+      "id": "verify-post-import-delta",
+      "path": "_workflow/wave3-bo6bo7-receive/verification/post-import-delta.diff",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Everything this batch changed after the verbatim import, so imported bytes are distinguishable from registration edits. (IMPORTANT-1 repair evidence.)",
+      "conditions": "git diff -- <8 files>; contains the four registration appends and the mandated declaration-surface regeneration only.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      }
+    },
+    {
+      "id": "verify-regression-outcomes",
+      "path": "_workflow/wave3-bo6bo7-receive/verification/regression-outcomes.json",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Corrected row-level outcome accounting for every cited run, including the two NotExecuted rows that the earlier summary mis-stated. (Review round 1 IMPORTANT-2 repair evidence.)",
+      "conditions": "Counters@notExecuted is 0 in this VSTest/xUnit shape while two rows carry NotExecuted: P50_LoadRepro_WholeClass_UnderControlledLoad and P50_DiagnosticRepeat_OptIn; total = passed + failed + NotExecuted rows in every run.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      }
+    },
+    {
+      "id": "verify-targeted-93-ids",
+      "path": "_workflow/wave3-bo6bo7-receive/verification/targeted-93-ids.json",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Complete 93-entry testId/name/outcome comparison against the source delivery final targeted TRX. (Review round 1 suggestion repair evidence.)",
+      "conditions": "testId sets identical; name and outcome identical for every testId; zero mismatches.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      }
+    },
+    {
+      "id": "verify-mutation-verification",
+      "path": "_workflow/wave3-bo6bo7-receive/verification/mutation-verification.json",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Compact per-mutation verification: outcomes, target identity, assertion location, file digests, and the source-vs-receive mutant SHA equality. (Review round 1 suggestion repair evidence.)",
+      "conditions": "All eight mutant SHA-256 values equal the source delivery manifest records; every mutation is Passed/Failed/Passed on the integrated bytes.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      }
+    },
+    {
+      "id": "receive-consult-outcome-v1",
+      "path": "_workflow/wave3-bo6bo7-receive/consultation/review-outcome-v1.md",
+      "level": "consult",
+      "binding": "current",
+      "purpose": "Round 1 consultation outcome and item-by-item disposition (2 IMPORTANT kept at original severity, 1 suggestion accepted).",
+      "conditions": "gpt-6-astra / medium, existing GPT tool, attempts=1, read-only; batch counter 1/8.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      }
+    },
+    {
+      "id": "receive-consult-request-v2",
+      "path": "_workflow/wave3-bo6bo7-receive/consultation/review-request-v2.md",
+      "level": "document",
+      "binding": "current",
+      "purpose": "Verification-round request (round 2): strict scope of the two IMPORTANT items and the no-new-findings question.",
+      "conditions": "Frozen before dispatch so the reviewed scope cannot drift with the result.",
+      "source_sha256": {
+        "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs": "8a334e394acf307e8040d72961c1db412b9a1dcb189423a81aa17c057b6a5ad6",
+        "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt": "5d91461178da98729562b486060a4322f6a96c3469778a064dca52b7d8b4d267"
+      }
+    }
+  ],
+  "tests": [
+    {
+      "id": "receive-targeted-93",
+      "path": "_workflow/wave3-bo6bo7-receive/regression/final/targeted-93.trx",
+      "expect_success": true
+    },
+    {
+      "id": "receive-full-1564",
+      "path": "_workflow/wave3-bo6bo7-receive/regression/final/assistant-full-1564.trx",
+      "expect_success": true
+    },
+    {
+      "id": "receive-claim-surface-regen",
+      "path": "_workflow/wave3-bo6bo7-receive/regression/claim-surface/regen/claim-surface-regen.trx",
+      "expect_success": true
+    },
+    {
+      "id": "receive-claim-surface-no-env",
+      "path": "_workflow/wave3-bo6bo7-receive/regression/claim-surface/no-env/claim-surface-no-env.trx",
+      "expect_success": true
+    }
+  ],
+  "mutation_scope": "Eight independent reverse mutations re-executed on the integrated mainline bytes: seven v3 Runner-behaviour mutations (explicit-Resume parked recomputation, park-recovery completion filter, unresolved-parked tail fail-closed aggregation, cross-loop candidate/rescue ordering both directions, earliest park selection, stable completion identity) plus v4 (removal of the durable _runs.Update(run) in the Failed aggregation branch, assertion at WorkflowRunnerTests.cs:1080). Every mutation has its own baseline/mutant/restored build log and TRX, a named target assertion, exact restore and a recorded mutant SHA-256 that matches the source delivery record. Not covered: no mutation is taken against the production entry points, real User state, hotkeys or live processes, because those gates stay closed in this receive batch; BO-8/BO-9 behaviours (ordinary revision progression filtering, multi-park cross-loop advancement) are deliberately outside scope and are not mutated.",
+  "mutations": [
+    {
+      "id": "bo6-resume-live-park-v3",
+      "description": "Disable the explicit-Resume parked recomputation so a still-locatable R cursor hides the earlier P1/Q parks.",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "test_source": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+      "test_source_sha256": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+      "original_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutant_sha256": "96212d01e57a66bc57c6def40b80e936ce12814bf94a01680ee068c8a83fb13e",
+      "restored_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "target_test_id": "398aed81-8691-87dd-a9cd-c62780f5f924",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+      "failure_contains": "Assert.Equal() Failure",
+      "assertion_contains": "WorkflowRunnerTests.cs:line 1008",
+      "assertion_message": "Assert.Equal() Failure: Collections differ\r\n                                                                             ↓ (pos 0)\r\nExpected: string[]                                                          [\"P1\", \"Q\", \"R\", \"stop\"]\r\nActual:   SelectListPartitionIterator<ValueTuple<string, int, int>, string> [\"R\", \"stop\"]\r\n                                                                             ↑ (pos 0)",
+      "baseline_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo6-resume-live-park-v3/baseline/bo6-resume-live-park-v3-baseline.trx",
+      "mutant_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo6-resume-live-park-v3/mutant/bo6-resume-live-park-v3-mutant.trx",
+      "restored_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo6-resume-live-park-v3/restored/bo6-resume-live-park-v3-restored.trx",
+      "baseline_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo6-resume-live-park-v3/baseline/build.log",
+      "mutant_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo6-resume-live-park-v3/mutant/build.log",
+      "restored_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo6-resume-live-park-v3/restored/build.log",
+      "build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo6-resume-live-park-v3/mutant/build.log",
+      "build_exit": 0,
+      "baseline_build_exit": 0,
+      "restored_build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "mutation_label": "if (!run.TailReached && run.NodeOutcomes.Any(o => o.Result == LocalWaitResultWord))  ==>  if (false && run.NodeOutcomes.Any(o => o.Result == LocalWaitResultWord))"
+    },
+    {
+      "id": "bo6-completed-filter-v3",
+      "description": "Disable the completed-identity filter inside park-recovery advancement.",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "test_source": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+      "test_source_sha256": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+      "original_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutant_sha256": "3115f2c3a4d81f0dce7097009f73d289287fd65e1b12eddfcc734ffb74dfd22e",
+      "restored_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "target_test_id": "398aed81-8691-87dd-a9cd-c62780f5f924",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+      "failure_contains": "Assert.Equal() Failure",
+      "assertion_contains": "WorkflowRunnerTests.cs:line 1008",
+      "assertion_message": "Assert.Equal() Failure: Collections differ\r\n                                                                                   ↓ (pos 1)\r\nExpected: string[]                                                          [\"P1\", \"Q\", \"R\", \"stop\"]\r\nActual:   SelectListPartitionIterator<ValueTuple<string, int, int>, string> [\"P1\", \"lead\", \"A\", \"B\", \"Q\", ···]\r\n                                                                                   ↑ (pos 1)",
+      "baseline_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo6-completed-filter-v3/baseline/bo6-completed-filter-v3-baseline.trx",
+      "mutant_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo6-completed-filter-v3/mutant/bo6-completed-filter-v3-mutant.trx",
+      "restored_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo6-completed-filter-v3/restored/bo6-completed-filter-v3-restored.trx",
+      "baseline_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo6-completed-filter-v3/baseline/build.log",
+      "mutant_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo6-completed-filter-v3/mutant/build.log",
+      "restored_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo6-completed-filter-v3/restored/build.log",
+      "build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo6-completed-filter-v3/mutant/build.log",
+      "build_exit": 0,
+      "baseline_build_exit": 0,
+      "restored_build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "mutation_label": "if (filterCompletedDuringParkRecovery && HasCompletedOutcome(run, occurrence))  ==>  if (false && HasCompletedOutcome(run, occurrence))"
+    },
+    {
+      "id": "bo6-tail-fail-closed-v3",
+      "description": "Disable only the unresolved-parked tail fail-closed aggregation.",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "test_source": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+      "test_source_sha256": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+      "original_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutant_sha256": "ff0ff5bf3594f471acadaeddfcd2449b14e648deca509ad34541ecbf27bb5062",
+      "restored_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "target_test_id": "113f020c-1c29-e336-4c1a-3a50b69cbcc8",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_TailWithUnresolvedParkedObligationsFailsWithoutTerminalCompletion",
+      "failure_contains": "Assert.Equal() Failure",
+      "assertion_contains": "WorkflowRunnerTests.cs:line 1071",
+      "assertion_message": "Assert.Equal() Failure: Values differ\r\nExpected: Failed\r\nActual:   Succeeded",
+      "baseline_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-fail-closed-v3/baseline/bo6-tail-fail-closed-v3-baseline.trx",
+      "mutant_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-fail-closed-v3/mutant/bo6-tail-fail-closed-v3-mutant.trx",
+      "restored_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-fail-closed-v3/restored/bo6-tail-fail-closed-v3-restored.trx",
+      "baseline_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-fail-closed-v3/baseline/build.log",
+      "mutant_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-fail-closed-v3/mutant/build.log",
+      "restored_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-fail-closed-v3/restored/build.log",
+      "build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-fail-closed-v3/mutant/build.log",
+      "build_exit": 0,
+      "baseline_build_exit": 0,
+      "restored_build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "mutation_label": "if (hadBadOutcome || unresolvedParkedOutcome || flowFailure)  ==>  if (hadBadOutcome || flowFailure)"
+    },
+    {
+      "id": "bo7-candidate-first-v3",
+      "description": "Invert the cross-loop candidate/rescue full-order comparison.",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "test_source": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+      "test_source_sha256": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+      "original_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutant_sha256": "ef6ed36b1b8bc2b6a30ac64d3fd087540601264b33bed5722fb00c024c0f5562",
+      "restored_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "target_test_id": "1d029d1b-a82f-69cc-f8ee-1ba7c7957cdc",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_CandidateAndRescueAcrossLoop_UsesFullPlanOrderAndAdvancesThroughRunner",
+      "failure_contains": "Assert.Equal() Failure",
+      "assertion_contains": "WorkflowRunnerTests.cs:line 1131",
+      "assertion_message": "Assert.Equal() Failure: Values differ\r\nExpected: Tuple (\"candidate\", 1, 0)\r\nActual:   Tuple (\"anchor\", 0, 1)",
+      "baseline_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo7-candidate-first-v3/baseline/bo7-candidate-first-v3-baseline.trx",
+      "mutant_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo7-candidate-first-v3/mutant/bo7-candidate-first-v3-mutant.trx",
+      "restored_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo7-candidate-first-v3/restored/bo7-candidate-first-v3-restored.trx",
+      "baseline_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo7-candidate-first-v3/baseline/build.log",
+      "mutant_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo7-candidate-first-v3/mutant/build.log",
+      "restored_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo7-candidate-first-v3/restored/build.log",
+      "build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo7-candidate-first-v3/mutant/build.log",
+      "build_exit": 0,
+      "baseline_build_exit": 0,
+      "restored_build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "mutation_label": "candidate.LoopIteration < parkedRescue.LoopIteration  ==>  candidate.LoopIteration > parkedRescue.LoopIteration"
+    },
+    {
+      "id": "bo7-rescue-first-v3",
+      "description": "Let the candidate unconditionally override an earlier parked rescue point.",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "test_source": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+      "test_source_sha256": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+      "original_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutant_sha256": "e5fcb0af5aec40d9b6aeadb101e3854a0af12cab8c134b98193c5296d75a705c",
+      "restored_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "target_test_id": "7a665a8f-f8e9-11b4-598f-a1f8d24b805a",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_RescueBeforeNextLoopCandidate_UsesFullPlanOrderAndFiltersCompletedAnchor",
+      "failure_contains": "Assert.Equal() Failure",
+      "assertion_contains": "WorkflowRunnerTests.cs:line 1173",
+      "assertion_message": "Assert.Equal() Failure: Values differ\r\nExpected: Tuple (\"P\", 0, 0)\r\nActual:   Tuple (\"P\", 0, 1)",
+      "baseline_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo7-rescue-first-v3/baseline/bo7-rescue-first-v3-baseline.trx",
+      "mutant_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo7-rescue-first-v3/mutant/bo7-rescue-first-v3-mutant.trx",
+      "restored_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo7-rescue-first-v3/restored/bo7-rescue-first-v3-restored.trx",
+      "baseline_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo7-rescue-first-v3/baseline/build.log",
+      "mutant_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo7-rescue-first-v3/mutant/build.log",
+      "restored_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo7-rescue-first-v3/restored/build.log",
+      "build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo7-rescue-first-v3/mutant/build.log",
+      "build_exit": 0,
+      "baseline_build_exit": 0,
+      "restored_build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "mutation_label": "return parkedRescue ?? candidate;  ==>  return candidate ?? parkedRescue;"
+    },
+    {
+      "id": "bo7-earliest-park-v3",
+      "description": "Invert the plan-order selection among multiple active parks in one loop iteration.",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "test_source": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+      "test_source_sha256": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+      "original_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutant_sha256": "8668d00c7f7ec8d9fcf3b39100c79834fc5b70f8a8b9b17d6d8a7ae4adbc84e4",
+      "restored_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "target_test_id": "398aed81-8691-87dd-a9cd-c62780f5f924",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+      "failure_contains": "Assert.Equal() Failure",
+      "assertion_contains": "WorkflowRunnerTests.cs:line 1008",
+      "assertion_message": "Assert.Equal() Failure: Collections differ\r\n                                                                             ↓ (pos 0)\r\nExpected: string[]                                                          [\"P1\", \"Q\", \"R\", \"stop\"]\r\nActual:   SelectListPartitionIterator<ValueTuple<string, int, int>, string> [\"Q\", \"R\", \"stop\"]\r\n                                                                             ↑ (pos 0)",
+      "baseline_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo7-earliest-park-v3/baseline/bo7-earliest-park-v3-baseline.trx",
+      "mutant_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo7-earliest-park-v3/mutant/bo7-earliest-park-v3-mutant.trx",
+      "restored_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo7-earliest-park-v3/restored/bo7-earliest-park-v3-restored.trx",
+      "baseline_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo7-earliest-park-v3/baseline/build.log",
+      "mutant_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo7-earliest-park-v3/mutant/build.log",
+      "restored_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo7-earliest-park-v3/restored/build.log",
+      "build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo7-earliest-park-v3/mutant/build.log",
+      "build_exit": 0,
+      "baseline_build_exit": 0,
+      "restored_build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "mutation_label": "candidateOcc.SequenceIndex < earliestOcc.SequenceIndex  ==>  candidateOcc.SequenceIndex > earliestOcc.SequenceIndex"
+    },
+    {
+      "id": "bo7-stable-identity-v3",
+      "description": "Wrongly fold the mutable SequenceIndex into the stable completion identity.",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "test_source": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+      "test_source_sha256": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+      "original_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutant_sha256": "f04db2ad71114112ba5114d57df4114f062497ae48f0b5e6caefb3542d3b3df8",
+      "restored_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "target_test_id": "398aed81-8691-87dd-a9cd-c62780f5f924",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_ReinsertedParksBeforeCompletedAnchors_RedrivesAllParksAndSkipsCompletedOccurrences",
+      "failure_contains": "Assert.Equal() Failure",
+      "assertion_contains": "WorkflowRunnerTests.cs:line 1008",
+      "assertion_message": "Assert.Equal() Failure: Collections differ\r\n                                                                                   ↓ (pos 1)\r\nExpected: string[]                                                          [\"P1\", \"Q\", \"R\", \"stop\"]\r\nActual:   SelectListPartitionIterator<ValueTuple<string, int, int>, string> [\"P1\", \"lead\", \"A\", \"B\", \"Q\", ···]\r\n                                                                                   ↑ (pos 1)",
+      "baseline_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo7-stable-identity-v3/baseline/bo7-stable-identity-v3-baseline.trx",
+      "mutant_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo7-stable-identity-v3/mutant/bo7-stable-identity-v3-mutant.trx",
+      "restored_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo7-stable-identity-v3/restored/bo7-stable-identity-v3-restored.trx",
+      "baseline_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo7-stable-identity-v3/baseline/build.log",
+      "mutant_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo7-stable-identity-v3/mutant/build.log",
+      "restored_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo7-stable-identity-v3/restored/build.log",
+      "build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo7-stable-identity-v3/mutant/build.log",
+      "build_exit": 0,
+      "baseline_build_exit": 0,
+      "restored_build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "mutation_label": "&& o.LoopIteration == occurrence.LoopIteration);  ==>  && o.LoopIteration == occurrence.LoopIteration && o.SequenceIndex == occurrence.SequenceIndex);"
+    },
+    {
+      "id": "bo6-tail-persisted-failure-v4",
+      "description": "Remove only the durable _runs.Update(run) from the unresolved-parked aggregation branch; the in-memory record still returns Failed.",
+      "source": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "test_source": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+      "test_source_sha256": "b5f379488b464c0b5808bb3f1bc5c4916e8ffa7ed1cc185b7127b408ee274711",
+      "original_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "mutant_sha256": "a04531dc4871fc692e8c4661984b59783fee89ff46f22192ff1d8eda1f7dcce0",
+      "restored_sha256": "5470cfcb2a8792ca123d0ac2e46afc2c0046a96b293ca141a1517d1d1f190f96",
+      "target_test_id": "113f020c-1c29-e336-4c1a-3a50b69cbcc8",
+      "target_name": "MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter.WorkflowRunnerTests.Resume_TailWithUnresolvedParkedObligationsFailsWithoutTerminalCompletion",
+      "failure_contains": "Assert.Equal() Failure",
+      "assertion_contains": "WorkflowRunnerTests.cs:line 1080",
+      "assertion_message": "Assert.Equal() Failure: Values differ\r\nExpected: Failed\r\nActual:   Running",
+      "baseline_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-persisted-failure-v4/baseline/bo6-tail-persisted-failure-v4-baseline.trx",
+      "mutant_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-persisted-failure-v4/mutant/bo6-tail-persisted-failure-v4-mutant.trx",
+      "restored_trx": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-persisted-failure-v4/restored/bo6-tail-persisted-failure-v4-restored.trx",
+      "baseline_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-persisted-failure-v4/baseline/build.log",
+      "mutant_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-persisted-failure-v4/mutant/build.log",
+      "restored_build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-persisted-failure-v4/restored/build.log",
+      "build_log": "_workflow/wave3-bo6bo7-receive/mutations/bo6-tail-persisted-failure-v4/mutant/build.log",
+      "build_exit": 0,
+      "baseline_build_exit": 0,
+      "restored_build_exit": 0,
+      "baseline_exit": 0,
+      "mutant_exit": 1,
+      "restored_exit": 0,
+      "mutation_label": "remove _runs.Update(run); from the unresolved parked aggregation branch"
+    }
+  ],
+  "outside_changes": "本批只改下列路径：接收批工作目录 `_workflow/wave3-bo6bo7-receive/**`（新增，本批证据与登记）、`_workflow/wave3-bo6-bo7/**` 的 14 个逐字节导入文件 + 新增 `INTAKE-NOTE.md`、以及导入并追加登记的 8 个来源文件（WorkflowRunner.cs、WorkflowRunnerTests.cs、LocalWaitIdentityTranslationTests.cs、ClaimSurfaceManifest.txt、R5.3、_batch21/b21_plan.md、_batch21/sb21-4-handoff-2026-09-28.md、槲寄生调度器总计划.md）。材料外变更（非本批写入者）：`Docs/design/mistletoe-session-relay-2026-09-24.md` 与 `Docs/design/unified-job-registry-master-plan.md` 的既有未提交修改（开工前即存在，本批未触碰、未提交）；工作区另有大量既有未跟踪的 `.bak`/`.stale`/历史批次目录/TestResults/日志/截图与 `_workflow/sb21-4/**`、`_batch21/**` 未跟踪工件，均保持原样。本批不据路径推断这些材料外变更的写者，也不清理它们。",
+  "packet_limit_bytes": 524288,
+  "packet": [
+    {
+      "path": "_workflow/wave3-bo6bo7-receive/context.md",
+      "role": "objective"
+    },
+    {
+      "path": "_workflow/wave3-bo6bo7-receive/findings.md",
+      "role": "findings"
+    },
+    {
+      "path": "_workflow/wave3-bo6bo7-receive/budget.md",
+      "role": "budget"
+    },
+    {
+      "path": "MultiplayerHoeingAssistant/Services/TaskCenter/WorkflowRunner.cs",
+      "role": "source"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/WorkflowRunnerTests.cs",
+      "role": "source"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/LocalWaitIdentityTranslationTests.cs",
+      "role": "source"
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt",
+      "role": "source",
+      "start_line": 237,
+      "end_line": 239,
+      "coverage_notes": "Declaration-surface manifest entry added by the new R5.3 24.126 registration text (generated file; 1 of 3). The manifest is a generated 220 KB list of 602 claim lines; only the entries this batch introduced are excerpted. The complete file hash is bound in every evidence source_sha256 and the whole-file regeneration result is proven by receive-claim-surface-regen / -no-env."
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt",
+      "role": "source",
+      "start_line": 335,
+      "end_line": 337,
+      "coverage_notes": "Declaration-surface manifest entry added by the new R5.3 24.126 registration text (generated file; 2 of 3). The manifest is a generated 220 KB list of 602 claim lines; only the entries this batch introduced are excerpted. The complete file hash is bound in every evidence source_sha256 and the whole-file regeneration result is proven by receive-claim-surface-regen / -no-env."
+    },
+    {
+      "path": "Test/MultiplayerHoeingAssistant.UnitTest/ServiceTests/TaskCenter/ClaimSurfaceManifest.txt",
+      "role": "source",
+      "start_line": 453,
+      "end_line": 455,
+      "coverage_notes": "Declaration-surface manifest entry added by the new R5.3 24.126 registration text (generated file; 3 of 3). The manifest is a generated 220 KB list of 602 claim lines; only the entries this batch introduced are excerpted. The complete file hash is bound in every evidence source_sha256 and the whole-file regeneration result is proven by receive-claim-surface-regen / -no-env."
+    }
+  ],
+  "comparison": {
+    "baseline": "_workflow/wave3-bo6bo7-receive/baseline/assistant-full-baseline.trx",
+    "final": "_workflow/wave3-bo6bo7-receive/regression/final/assistant-full-1564.trx"
+  },
+  "packet_pruning_note": "Compliant de-duplication to stay inside the local 524288-byte packet limit: removed are the two superseded pre-regeneration regression runs (files retained on disk, outcome restated in findings.md), the three source-batch documents whose content duplicates packet roles already carried in the source checkpoint, the targeted-identity file subsumed by verification/targeted-93-ids.json, and the deploy-target capture restated in the rebuild conditions and findings.md. No required raw evidence was deleted; no excerpt was trimmed to fit."
+}

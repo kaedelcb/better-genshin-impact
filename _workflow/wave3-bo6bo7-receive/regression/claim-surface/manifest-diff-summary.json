@@ -1,0 +1,9 @@
+{
+  "added": [
+    "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md\u00013D08ED876CA155691F693248D0B93254D9E4549AA77AAA3A6899C0306F114608\u00011\u0001- **BO-8 R29 IMPORTANT、BO-9 R34 F5 IMPORTANT** 仍未并入、仍未闭合；R5.6、R6.1、R6 diff guard 未提前集成。",
+    "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md\u00018BB3C28725E15D48B2F7205F587007050DE5591AF604693BA44A00E96F15AC77\u00011\u0001- 四项原级义务在来源侧由 owner 批准的两次追加独立会诊按**原等级**裁定 closed：BO-6 R19 **MUST**、BO-6 R21 F4 **IMPORTANT**、BO-7 R21 F1 **MUST**、BO-7 R21 F2 **MUST**；两份报告的收尾结论均为「本范围仍有未闭合的 MUS…",
+    "Docs/design/onedragon-r5-3-external-start-lifecycle-2026-09-21.md\u0001FC153C1C4E1F5B6CFFEBBC5CCB331E2304C86AC1D4838E206C499EA4E2163EA9\u00011\u0001本批是**接收批**：把已独立交付、并按原等级闭环的 BO-6/BO-7 修复接入茶包主线。不施工 BO-8/BO-9，不提前集成 R5.6、R6.1 或 R6 diff guard，也不重开已闭合的 BO-13、SB21-3 BO-4、SB21-2 BO-10/12。"
+  ],
+  "removed": [],
+  "interpretation": "Only the newly added §24.126 registration lines carrying claim/gate vocabulary enter the manifest; no pre-existing claim line changed or disappeared."
+}
